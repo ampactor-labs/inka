@@ -18,8 +18,8 @@ use std::fmt;
 use std::sync::{Arc, Mutex};
 
 use crate::ast::{
-    self, BinOp, Expr, HandlerOp, Item, LitPattern, MatchArm, Pattern, Program, Stmt, StringPart,
-    UnaryOp,
+    self, BinOp, Expr, HandlerOp, ImplBlock, Item, LitPattern, MatchArm, Pattern, Program, Stmt,
+    StringPart, UnaryOp,
 };
 use crate::env::Environment;
 use crate::error::{LuxError, RuntimeError, RuntimeErrorKind};
@@ -150,6 +150,36 @@ impl PartialEq for Value {
     }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────
+
+/// Returns a canonical type name string for a runtime value.
+fn value_type_name(val: &Value) -> &'static str {
+    match val {
+        Value::Int(_) => "Int",
+        Value::Float(_) => "Float",
+        Value::String(_) => "String",
+        Value::Bool(_) => "Bool",
+        Value::Unit => "Unit",
+        Value::List(_) => "List",
+        Value::Tuple(_) => "Tuple",
+        Value::Function { .. } | Value::BuiltinFn { .. } => "Function",
+        Value::AdtVariant { .. } => "Adt",
+        Value::Generator { .. } => "Generator",
+    }
+}
+
+/// Convert a TypeExpr in an impl block to its canonical type name.
+fn impl_type_name(te: &crate::ast::TypeExpr) -> String {
+    use crate::ast::TypeExpr;
+    match te {
+        TypeExpr::Named { name, .. } => name.clone(),
+        TypeExpr::List(_, _) => "List".to_string(),
+        TypeExpr::Tuple(_, _) => "Tuple".to_string(),
+        TypeExpr::Function { .. } => "Function".to_string(),
+        TypeExpr::Inferred(_) => "_".to_string(),
+    }
+}
+
 // ── Signal — internal control flow ───────────────────────────────
 
 /// Signals that interrupt normal evaluation.
@@ -219,6 +249,8 @@ pub struct Interpreter {
     /// The channel is a rendezvous (capacity 0): `send` blocks until the
     /// receiver calls `recv`, naturally pausing the generator between yields.
     generator_sender: Option<std::sync::mpsc::SyncSender<Option<Value>>>,
+    /// Method dispatch table: (type_name, method_name) -> function value
+    impl_methods: HashMap<(String, String), Value>,
 }
 
 const MAX_CALL_DEPTH: usize = 512;
@@ -233,6 +265,7 @@ impl Interpreter {
             effect_ops: HashMap::new(),
             call_depth: 0,
             generator_sender: None,
+            impl_methods: HashMap::new(),
         };
         interp.register_builtins();
         interp.register_builtin_variants();
@@ -366,6 +399,21 @@ impl Interpreter {
             .insert("yield".to_string(), ("Yield".to_string(), 1));
     }
 
+    fn register_impl_block(&mut self, decl: &ImplBlock) {
+        let type_name = impl_type_name(&decl.target_type);
+        for method in &decl.methods {
+            let params: Vec<String> = method.params.iter().map(|p| p.name.clone()).collect();
+            let val = Value::Function {
+                name: Some(method.name.clone()),
+                params,
+                body: method.body.clone(),
+                closure_env: self.env.clone_flat(),
+            };
+            self.impl_methods
+                .insert((type_name.clone(), method.name.clone()), val);
+        }
+    }
+
     fn register_builtin_variants(&mut self) {
         // Option variants
         self.variant_constructors.insert("None".to_string(), 0);
@@ -473,6 +521,14 @@ impl Interpreter {
                     self.effect_ops
                         .insert(op.name.clone(), (decl.name.clone(), op.params.len()));
                 }
+                Ok(None)
+            }
+            Item::TraitDecl(_decl) => {
+                // Trait declarations have no runtime representation.
+                Ok(None)
+            }
+            Item::ImplBlock(decl) => {
+                self.register_impl_block(decl);
                 Ok(None)
             }
             Item::Expr(expr) => {
@@ -883,6 +939,23 @@ impl Interpreter {
             }
         }
 
+        // Method call: `obj.method(args)` dispatched via impl table
+        if let Expr::FieldAccess { object, field, .. } = func_expr {
+            let obj_val = self.eval_expr(object)?;
+            let type_name = value_type_name(&obj_val).to_string();
+            if let Some(method_fn) = self.impl_methods.get(&(type_name, field.clone())).cloned() {
+                let mut evaluated_args: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval_expr(a))
+                    .collect::<Result<_, _>>()?;
+                // Prepend self as first argument
+                evaluated_args.insert(0, obj_val);
+                return self.call_value(method_fn, evaluated_args, span);
+            }
+            // Fall through to normal field access eval if not in impl table
+            // (e.g. list.len, string.is_empty)
+        }
+
         let func = self.eval_expr(func_expr)?;
         let evaluated_args: Vec<Value> = args
             .iter()
@@ -1039,6 +1112,7 @@ impl Interpreter {
             effect_ops: self.effect_ops.clone(),
             call_depth: 0,
             generator_sender: Some(value_tx.clone()),
+            impl_methods: self.impl_methods.clone(),
         };
 
         std::thread::spawn(move || {

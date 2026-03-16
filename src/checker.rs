@@ -6,8 +6,8 @@
 use std::collections::HashMap;
 
 use crate::ast::{
-    self, BinOp, EffectDecl, Expr, FnDecl, HandlerOp, Item, LetDecl, LitPattern, MatchArm, Pattern,
-    Program, Stmt, StringPart, TypeDecl, TypeExpr, UnaryOp,
+    self, BinOp, EffectDecl, Expr, FnDecl, HandlerOp, ImplBlock, Item, LetDecl, LitPattern,
+    MatchArm, Pattern, Program, Stmt, StringPart, TraitDecl, TypeDecl, TypeExpr, UnaryOp,
 };
 use crate::error::{LuxError, TypeError, TypeErrorKind};
 use crate::token::Span;
@@ -15,6 +15,36 @@ use crate::types::{
     AdtDef, EffectDef, EffectOpDef, EffectRow, EffectVar, Type, TypeVar, VariantDef,
 };
 use std::collections::BTreeSet;
+
+// ── Helpers ───────────────────────────────────────────────────
+
+/// Convert a TypeExpr to a canonical type name string for impl dispatch.
+fn type_expr_to_name(te: &TypeExpr) -> String {
+    match te {
+        TypeExpr::Named { name, .. } => name.clone(),
+        TypeExpr::List(_, _) => "List".to_string(),
+        TypeExpr::Tuple(_, _) => "Tuple".to_string(),
+        TypeExpr::Function { .. } => "Function".to_string(),
+        TypeExpr::Inferred(_) => "_".to_string(),
+    }
+}
+
+/// Convert a resolved Type to a canonical type name string for impl dispatch.
+fn type_name_from_type(ty: &crate::types::Type) -> String {
+    use crate::types::Type;
+    match ty {
+        Type::Int => "Int".to_string(),
+        Type::Float => "Float".to_string(),
+        Type::String => "String".to_string(),
+        Type::Bool => "Bool".to_string(),
+        Type::Unit => "Unit".to_string(),
+        Type::List(_) => "List".to_string(),
+        Type::Tuple(_) => "Tuple".to_string(),
+        Type::Function { .. } => "Function".to_string(),
+        Type::Adt { name, .. } => name.clone(),
+        _ => "_".to_string(),
+    }
+}
 
 // ── Public API ────────────────────────────────────────────────
 
@@ -24,12 +54,14 @@ pub fn check(program: &Program) -> Result<Program, LuxError> {
     let mut env = TypeEnv::new();
     env.populate_builtins();
 
-    // First pass: register all type and effect declarations so they're
+    // First pass: register all type, effect, and trait declarations so they're
     // visible to all top-level items regardless of order.
     for item in &program.items {
         match item {
             Item::TypeDecl(td) => env.register_type_decl(td)?,
             Item::EffectDecl(ed) => env.register_effect_decl(ed)?,
+            Item::TraitDecl(td) => env.register_trait_decl(td)?,
+            Item::ImplBlock(ib) => env.register_impl_block(ib)?,
             _ => {}
         }
     }
@@ -77,6 +109,10 @@ struct TypeEnv {
     resume_type: Option<Type>,
     /// Parent scope (for scoped bindings)
     parent: Option<Box<TypeEnv>>,
+    /// Registered traits: trait_name -> list of (method_name, param_types, return_type)
+    traits: HashMap<String, Vec<(String, Vec<Type>, Type)>>,
+    /// Impl methods: (type_name, method_name) -> function type
+    impl_methods: HashMap<(String, String), Type>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -95,6 +131,8 @@ impl TypeEnv {
             in_handler: false,
             resume_type: None,
             parent: None,
+            traits: HashMap::new(),
+            impl_methods: HashMap::new(),
         }
     }
 
@@ -113,6 +151,8 @@ impl TypeEnv {
             in_handler: self.in_handler,
             resume_type: self.resume_type.clone(),
             parent: None,
+            traits: self.traits.clone(),
+            impl_methods: self.impl_methods.clone(),
         }
     }
 
@@ -125,6 +165,12 @@ impl TypeEnv {
         self.next_eff_var = child.next_eff_var;
         for (k, v) in &child.eff_subst {
             self.eff_subst.insert(*k, v.clone());
+        }
+        for (k, v) in &child.traits {
+            self.traits.insert(k.clone(), v.clone());
+        }
+        for (k, v) in &child.impl_methods {
+            self.impl_methods.insert(k.clone(), v.clone());
         }
     }
 
@@ -757,6 +803,58 @@ impl TypeEnv {
         Ok(())
     }
 
+    fn register_trait_decl(&mut self, td: &TraitDecl) -> Result<(), TypeError> {
+        let mut methods = Vec::new();
+        for m in &td.methods {
+            let param_types: Vec<Type> = m
+                .params
+                .iter()
+                .map(|p| {
+                    p.type_ann
+                        .as_ref()
+                        .map(|t| self.resolve_type_expr(t).unwrap_or(Type::Error))
+                        .unwrap_or_else(|| self.fresh_var())
+                })
+                .collect();
+            let return_type = m
+                .return_type
+                .as_ref()
+                .map(|t| self.resolve_type_expr(t).unwrap_or(Type::Error))
+                .unwrap_or(Type::Unit);
+            methods.push((m.name.clone(), param_types, return_type));
+        }
+        self.traits.insert(td.name.clone(), methods);
+        Ok(())
+    }
+
+    fn register_impl_block(&mut self, ib: &ImplBlock) -> Result<(), TypeError> {
+        let type_name = type_expr_to_name(&ib.target_type);
+        for method in &ib.methods {
+            let mut param_types = Vec::new();
+            for p in &method.params {
+                let ty = p
+                    .type_ann
+                    .as_ref()
+                    .map(|t| self.resolve_type_expr(t).unwrap_or(Type::Error))
+                    .unwrap_or_else(|| self.fresh_var());
+                param_types.push(ty);
+            }
+            let return_type = method
+                .return_type
+                .as_ref()
+                .map(|t| self.resolve_type_expr(t).unwrap_or(Type::Error))
+                .unwrap_or(Type::Unit);
+            let fn_type = Type::Function {
+                params: param_types,
+                return_type: Box::new(return_type),
+                effects: EffectRow::pure(),
+            };
+            self.impl_methods
+                .insert((type_name.clone(), method.name.clone()), fn_type);
+        }
+        Ok(())
+    }
+
     // ── Item checking (second pass) ───────────────────────────
 
     fn check_item(&mut self, item: &Item) -> Result<(), TypeError> {
@@ -764,6 +862,7 @@ impl TypeEnv {
             Item::FnDecl(fd) => self.check_fn_decl(fd),
             Item::LetDecl(ld) => self.check_let_decl(ld),
             Item::TypeDecl(_) | Item::EffectDecl(_) => Ok(()), // already registered
+            Item::TraitDecl(_) | Item::ImplBlock(_) => Ok(()), // already registered in first pass
             Item::Expr(e) => {
                 self.infer_expr(e)?;
                 Ok(())
@@ -1332,6 +1431,45 @@ impl TypeEnv {
             // Special case: ADT constructor
             if let Some((adt_name, idx)) = self.lookup_constructor(name) {
                 return self.infer_constructor_call(&adt_name, idx, args, span);
+            }
+        }
+
+        // Special case: method call `obj.method(args)` dispatched via impl table
+        if let Expr::FieldAccess { object, field, .. } = func {
+            let (obj_ty, obj_effs) = self.infer_expr(object)?;
+            let obj_ty = self.apply_subst(&obj_ty);
+            let type_name = type_name_from_type(&obj_ty);
+            if let Some(method_ty) = self.impl_methods.get(&(type_name, field.clone())).cloned() {
+                let method_ty = self.apply_subst(&method_ty);
+                if let Type::Function {
+                    params,
+                    return_type,
+                    effects,
+                } = &method_ty
+                {
+                    // args to checker don't include self — self is the object
+                    let mut arg_effs = obj_effs;
+                    let mut arg_types = vec![obj_ty]; // self is first param
+                    for arg in args {
+                        let (ty, eff) = self.infer_expr(arg)?;
+                        arg_types.push(ty);
+                        arg_effs = arg_effs.union(&eff);
+                    }
+                    if params.len() != arg_types.len() {
+                        return Err(TypeError {
+                            kind: TypeErrorKind::WrongArity {
+                                expected: params.len(),
+                                found: arg_types.len(),
+                            },
+                            span: span.clone(),
+                        });
+                    }
+                    for (param, arg) in params.iter().zip(arg_types.iter()) {
+                        self.unify(param, arg, span)?;
+                    }
+                    let ret = self.apply_subst(return_type);
+                    return Ok((ret, arg_effs.union(effects)));
+                }
             }
         }
 

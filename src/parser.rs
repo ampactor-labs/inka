@@ -178,6 +178,8 @@ impl Parser {
             TokenKind::Let => Ok(Item::LetDecl(self.parse_let_decl()?)),
             TokenKind::Type => Ok(Item::TypeDecl(self.parse_type_decl()?)),
             TokenKind::Effect => Ok(Item::EffectDecl(self.parse_effect_decl()?)),
+            TokenKind::Trait => Ok(Item::TraitDecl(self.parse_trait_decl()?)),
+            TokenKind::Impl => Ok(Item::ImplBlock(self.parse_impl_block()?)),
             _ => {
                 let expr = self.parse_expr()?;
                 Ok(Item::Expr(expr))
@@ -422,6 +424,86 @@ impl Parser {
             params,
             return_type,
             span: op_span,
+        })
+    }
+
+    fn parse_trait_decl(&mut self) -> Result<TraitDecl, LuxError> {
+        let start_span = self.peek_span();
+        self.expect(&TokenKind::Trait)?;
+        let (name, _) = self.expect_ident()?;
+        self.expect(&TokenKind::LBrace)?;
+        self.skip_semis();
+        let mut methods = Vec::new();
+        while !self.at_exact(&TokenKind::RBrace) && !self.at_exact(&TokenKind::Eof) {
+            let method_start = self.peek_span();
+            self.expect(&TokenKind::Fn)?;
+            let (method_name, _) = self.expect_ident()?;
+            self.expect(&TokenKind::LParen)?;
+            let params = self.parse_params()?;
+            self.expect(&TokenKind::RParen)?;
+            let return_type = if self.at_exact(&TokenKind::Arrow) {
+                self.advance();
+                Some(self.parse_type_expr()?)
+            } else {
+                None
+            };
+            let method_end = return_type
+                .as_ref()
+                .map(|t| t.span().end)
+                .unwrap_or(method_start.end);
+            let method_span = Span::new(
+                method_start.start,
+                method_end,
+                method_start.line,
+                method_start.column,
+            );
+            methods.push(TraitMethod {
+                name: method_name,
+                params,
+                return_type,
+                span: method_span,
+            });
+            self.skip_semis();
+        }
+        let end_tok = self.expect(&TokenKind::RBrace)?;
+        let span = Span::new(
+            start_span.start,
+            end_tok.span.end,
+            start_span.line,
+            start_span.column,
+        );
+        Ok(TraitDecl {
+            name,
+            methods,
+            span,
+        })
+    }
+
+    fn parse_impl_block(&mut self) -> Result<ImplBlock, LuxError> {
+        let start_span = self.peek_span();
+        self.expect(&TokenKind::Impl)?;
+        let (trait_name, _) = self.expect_ident()?;
+        self.expect(&TokenKind::For)?;
+        let target_type = self.parse_type_expr()?;
+        self.expect(&TokenKind::LBrace)?;
+        self.skip_semis();
+        let mut methods = Vec::new();
+        while !self.at_exact(&TokenKind::RBrace) && !self.at_exact(&TokenKind::Eof) {
+            methods.push(self.parse_fn_decl()?);
+            self.skip_semis();
+        }
+        let end_tok = self.expect(&TokenKind::RBrace)?;
+        let span = Span::new(
+            start_span.start,
+            end_tok.span.end,
+            start_span.line,
+            start_span.column,
+        );
+        Ok(ImplBlock {
+            trait_name,
+            target_type,
+            methods,
+            span,
         })
     }
 }

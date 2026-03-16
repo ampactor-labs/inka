@@ -21,8 +21,37 @@ pub enum Item {
     TypeDecl(TypeDecl),
     /// `effect Name { op1(...) -> T, op2(...) -> T }`
     EffectDecl(EffectDecl),
+    /// `trait Name { fn_decls }`
+    TraitDecl(TraitDecl),
+    /// `impl Trait for Type { fn_decls }`
+    ImplBlock(ImplBlock),
     /// A bare expression (for REPL / scripts)
     Expr(Expr),
+}
+
+// ── Trait declarations ────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct TraitDecl {
+    pub name: String,
+    pub methods: Vec<TraitMethod>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct TraitMethod {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub return_type: Option<TypeExpr>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImplBlock {
+    pub trait_name: String,
+    pub target_type: TypeExpr,
+    pub methods: Vec<FnDecl>,
+    pub span: Span,
 }
 
 // ── Declarations ──────────────────────────────────────────────

@@ -1,0 +1,378 @@
+/// AST node types for Lux.
+///
+/// The AST is the shared interface between the parser (produces it),
+/// the type checker (annotates it), and the interpreter (evaluates it).
+
+use crate::token::Span;
+
+/// A complete Lux program.
+#[derive(Debug, Clone)]
+pub struct Program {
+    pub items: Vec<Item>,
+}
+
+/// Top-level items.
+#[derive(Debug, Clone)]
+pub enum Item {
+    /// `fn name(params) -> RetType with Effects { body }`
+    FnDecl(FnDecl),
+    /// `let name = expr` at top level
+    LetDecl(LetDecl),
+    /// `type Name = Variant1(T) | Variant2(T)`
+    TypeDecl(TypeDecl),
+    /// `effect Name { op1(...) -> T, op2(...) -> T }`
+    EffectDecl(EffectDecl),
+    /// A bare expression (for REPL / scripts)
+    Expr(Expr),
+}
+
+// ── Declarations ──────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct FnDecl {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub return_type: Option<TypeExpr>,
+    pub effects: Vec<EffectRef>,
+    pub body: Expr,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct Param {
+    pub name: String,
+    pub type_ann: Option<TypeExpr>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct LetDecl {
+    pub name: String,
+    pub type_ann: Option<TypeExpr>,
+    pub value: Expr,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeDecl {
+    pub name: String,
+    pub type_params: Vec<String>,
+    pub variants: Vec<Variant>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct Variant {
+    pub name: String,
+    pub fields: Vec<TypeExpr>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct EffectDecl {
+    pub name: String,
+    pub type_params: Vec<String>,
+    pub operations: Vec<EffectOp>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct EffectOp {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub return_type: TypeExpr,
+    pub span: Span,
+}
+
+// ── Expressions ───────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub enum Expr {
+    /// Integer literal
+    IntLit(i64, Span),
+    /// Float literal
+    FloatLit(f64, Span),
+    /// String literal (with interpolation already resolved)
+    StringLit(String, Span),
+    /// Bool literal
+    BoolLit(bool, Span),
+    /// Variable reference
+    Var(String, Span),
+    /// List literal `[a, b, c]`
+    List(Vec<Expr>, Span),
+
+    /// Binary operation `a + b`
+    BinOp {
+        op: BinOp,
+        left: Box<Expr>,
+        right: Box<Expr>,
+        span: Span,
+    },
+    /// Unary operation `!a`, `-a`
+    UnaryOp {
+        op: UnaryOp,
+        operand: Box<Expr>,
+        span: Span,
+    },
+
+    /// Function call `f(a, b)`
+    Call {
+        func: Box<Expr>,
+        args: Vec<Expr>,
+        span: Span,
+    },
+    /// Field access `a.b`
+    FieldAccess {
+        object: Box<Expr>,
+        field: String,
+        span: Span,
+    },
+    /// Index `a[b]`
+    Index {
+        object: Box<Expr>,
+        index: Box<Expr>,
+        span: Span,
+    },
+
+    /// Lambda `|params| body`
+    Lambda {
+        params: Vec<Param>,
+        body: Box<Expr>,
+        span: Span,
+    },
+
+    /// Block `{ stmt1; stmt2; expr }`
+    Block {
+        stmts: Vec<Stmt>,
+        expr: Option<Box<Expr>>,
+        span: Span,
+    },
+
+    /// `if cond { then } else { otherwise }`
+    If {
+        condition: Box<Expr>,
+        then_branch: Box<Expr>,
+        else_branch: Option<Box<Expr>>,
+        span: Span,
+    },
+
+    /// `match scrutinee { pat => expr, ... }`
+    Match {
+        scrutinee: Box<Expr>,
+        arms: Vec<MatchArm>,
+        span: Span,
+    },
+
+    /// `let name = value` as expression (in blocks)
+    Let {
+        name: String,
+        type_ann: Option<TypeExpr>,
+        value: Box<Expr>,
+        span: Span,
+    },
+
+    /// Pipe `expr |> func`
+    Pipe {
+        left: Box<Expr>,
+        right: Box<Expr>,
+        span: Span,
+    },
+
+    /// String interpolation `"Hello, {name}!"`
+    StringInterp {
+        parts: Vec<StringPart>,
+        span: Span,
+    },
+
+    /// `handle expr { handler_clauses }`
+    Handle {
+        expr: Box<Expr>,
+        handlers: Vec<HandlerClause>,
+        span: Span,
+    },
+
+    /// `resume(value)` — resume a suspended effect computation
+    Resume {
+        value: Box<Expr>,
+        span: Span,
+    },
+
+    /// Perform an effect operation (implicitly: just call it like a function)
+    /// The checker resolves plain `Call` nodes that reference effect ops into this.
+    Perform {
+        effect: String,
+        operation: String,
+        args: Vec<Expr>,
+        span: Span,
+    },
+
+    /// `return expr`
+    Return {
+        value: Box<Expr>,
+        span: Span,
+    },
+}
+
+impl Expr {
+    pub fn span(&self) -> &Span {
+        match self {
+            Expr::IntLit(_, s)
+            | Expr::FloatLit(_, s)
+            | Expr::StringLit(_, s)
+            | Expr::BoolLit(_, s)
+            | Expr::Var(_, s)
+            | Expr::List(_, s) => s,
+            Expr::BinOp { span, .. }
+            | Expr::UnaryOp { span, .. }
+            | Expr::Call { span, .. }
+            | Expr::FieldAccess { span, .. }
+            | Expr::Index { span, .. }
+            | Expr::Lambda { span, .. }
+            | Expr::Block { span, .. }
+            | Expr::If { span, .. }
+            | Expr::Match { span, .. }
+            | Expr::Let { span, .. }
+            | Expr::Pipe { span, .. }
+            | Expr::StringInterp { span, .. }
+            | Expr::Handle { span, .. }
+            | Expr::Resume { span, .. }
+            | Expr::Perform { span, .. }
+            | Expr::Return { span, .. } => span,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Stmt {
+    Let(LetDecl),
+    Expr(Expr),
+    FnDecl(FnDecl),
+}
+
+// ── Operators ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Eq,
+    Neq,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+    And,
+    Or,
+    Concat, // ++
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum UnaryOp {
+    Neg,
+    Not,
+}
+
+// ── Patterns ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub guard: Option<Expr>,
+    pub body: Expr,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum Pattern {
+    /// `_` — matches anything
+    Wildcard(Span),
+    /// `name` — binds to a variable
+    Binding(String, Span),
+    /// `42`, `"hello"`, `true`
+    Literal(LitPattern, Span),
+    /// `Some(x)` or `Cons(head, tail)`
+    Variant {
+        name: String,
+        fields: Vec<Pattern>,
+        span: Span,
+    },
+    /// `(a, b, c)`
+    Tuple(Vec<Pattern>, Span),
+}
+
+#[derive(Debug, Clone)]
+pub enum LitPattern {
+    Int(i64),
+    Float(f64),
+    String(String),
+    Bool(bool),
+}
+
+// ── Types ─────────────────────────────────────────────────────
+
+/// Type expressions as written in source code (before inference).
+#[derive(Debug, Clone)]
+pub enum TypeExpr {
+    /// Named type: `Int`, `String`, `Option<T>`
+    Named {
+        name: String,
+        args: Vec<TypeExpr>,
+        span: Span,
+    },
+    /// Function type: `(A, B) -> C with E1, E2`
+    Function {
+        params: Vec<TypeExpr>,
+        return_type: Box<TypeExpr>,
+        effects: Vec<EffectRef>,
+        span: Span,
+    },
+    /// Tuple type: `(A, B, C)`
+    Tuple(Vec<TypeExpr>, Span),
+    /// List type: `List<T>` or `[T]`
+    List(Box<TypeExpr>, Span),
+    /// Inferred (no annotation provided)
+    Inferred(Span),
+}
+
+/// Reference to an effect in type annotations.
+#[derive(Debug, Clone)]
+pub struct EffectRef {
+    pub name: String,
+    pub type_args: Vec<TypeExpr>,
+    pub span: Span,
+}
+
+// ── String interpolation ──────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub enum StringPart {
+    Literal(String),
+    Expr(Expr),
+}
+
+// ── Effect handling ───────────────────────────────────────────
+
+/// A clause in a `handle` expression.
+#[derive(Debug, Clone)]
+pub struct HandlerClause {
+    /// The operation being handled (e.g., "print", "fail").
+    /// `None` means a `use SomeHandler` clause.
+    pub operation: HandlerOp,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum HandlerOp {
+    /// Handle a specific effect operation: `op(params) => body`
+    OpHandler {
+        effect_name: Option<String>,
+        op_name: String,
+        params: Vec<String>,
+        body: Expr,
+    },
+    /// `use HandlerName` — delegate to a named handler
+    UseHandler { name: String },
+}

@@ -11,7 +11,10 @@ use crate::ast::{
 };
 use crate::error::{LuxError, TypeError, TypeErrorKind};
 use crate::token::Span;
-use crate::types::{AdtDef, EffectDef, EffectOpDef, EffectSet, Type, TypeVar, VariantDef};
+use crate::types::{
+    AdtDef, EffectDef, EffectOpDef, EffectRow, EffectVar, Type, TypeVar, VariantDef,
+};
+use std::collections::BTreeSet;
 
 // ── Public API ────────────────────────────────────────────────
 
@@ -64,6 +67,10 @@ struct TypeEnv {
     subst: HashMap<TypeVar, Type>,
     /// Type variable counter
     next_var: u32,
+    /// Substitution map for effect row variables
+    eff_subst: HashMap<EffectVar, EffectRow>,
+    /// Effect row variable counter
+    next_eff_var: u32,
     /// Whether we're currently inside a handler body (for Resume checking)
     in_handler: bool,
     /// Expected resume type when inside a handler
@@ -83,6 +90,8 @@ impl TypeEnv {
             op_index: HashMap::new(),
             subst: HashMap::new(),
             next_var: 0,
+            eff_subst: HashMap::new(),
+            next_eff_var: 0,
             in_handler: false,
             resume_type: None,
             parent: None,
@@ -99,6 +108,8 @@ impl TypeEnv {
             op_index: self.op_index.clone(),
             subst: self.subst.clone(),
             next_var: self.next_var,
+            eff_subst: self.eff_subst.clone(),
+            next_eff_var: self.next_eff_var,
             in_handler: self.in_handler,
             resume_type: self.resume_type.clone(),
             parent: None,
@@ -111,12 +122,104 @@ impl TypeEnv {
         for (k, v) in &child.subst {
             self.subst.insert(*k, v.clone());
         }
+        self.next_eff_var = child.next_eff_var;
+        for (k, v) in &child.eff_subst {
+            self.eff_subst.insert(*k, v.clone());
+        }
     }
 
     fn fresh_var(&mut self) -> Type {
         let v = TypeVar(self.next_var);
         self.next_var += 1;
         Type::Var(v)
+    }
+
+    fn fresh_eff_var(&mut self) -> EffectRow {
+        let var = EffectVar(self.next_eff_var);
+        self.next_eff_var += 1;
+        EffectRow::Open {
+            known: BTreeSet::new(),
+            var,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn apply_eff_subst(&self, row: &EffectRow) -> EffectRow {
+        match row {
+            EffectRow::Closed(_) => row.clone(),
+            EffectRow::Open { known, var } => {
+                if let Some(resolved) = self.eff_subst.get(var) {
+                    let resolved = self.apply_eff_subst(resolved);
+                    match resolved {
+                        EffectRow::Closed(mut s) => {
+                            s.extend(known.iter().cloned());
+                            EffectRow::Closed(s)
+                        }
+                        EffectRow::Open {
+                            known: mut rk,
+                            var: rv,
+                        } => {
+                            rk.extend(known.iter().cloned());
+                            EffectRow::Open { known: rk, var: rv }
+                        }
+                    }
+                } else {
+                    row.clone()
+                }
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    fn unify_effects(
+        &mut self,
+        a: &EffectRow,
+        b: &EffectRow,
+        _span: &Span,
+    ) -> Result<(), TypeError> {
+        let a = self.apply_eff_subst(a);
+        let b = self.apply_eff_subst(b);
+        match (&a, &b) {
+            (EffectRow::Closed(_), EffectRow::Closed(_)) => Ok(()),
+            (EffectRow::Open { known: ka, var: va }, EffectRow::Closed(sb)) => {
+                if ka.is_subset(sb) {
+                    let remaining: BTreeSet<_> = sb.difference(ka).cloned().collect();
+                    self.eff_subst.insert(*va, EffectRow::Closed(remaining));
+                }
+                Ok(())
+            }
+            (EffectRow::Closed(sa), EffectRow::Open { known: kb, var: vb }) => {
+                if kb.is_subset(sa) {
+                    let remaining: BTreeSet<_> = sa.difference(kb).cloned().collect();
+                    self.eff_subst.insert(*vb, EffectRow::Closed(remaining));
+                }
+                Ok(())
+            }
+            (EffectRow::Open { known: ka, var: va }, EffectRow::Open { known: kb, var: vb }) => {
+                if va == vb {
+                    return Ok(());
+                }
+                let fresh = EffectVar(self.next_eff_var);
+                self.next_eff_var += 1;
+                let b_minus_a: BTreeSet<_> = kb.difference(ka).cloned().collect();
+                let a_minus_b: BTreeSet<_> = ka.difference(kb).cloned().collect();
+                self.eff_subst.insert(
+                    *va,
+                    EffectRow::Open {
+                        known: b_minus_a,
+                        var: fresh,
+                    },
+                );
+                self.eff_subst.insert(
+                    *vb,
+                    EffectRow::Open {
+                        known: a_minus_b,
+                        var: fresh,
+                    },
+                );
+                Ok(())
+            }
+        }
     }
 
     fn bind(&mut self, name: impl Into<String>, ty: Type) {
@@ -400,7 +503,7 @@ impl TypeEnv {
                     .map(|p| self.resolve_type_expr(p))
                     .collect::<Result<_, _>>()?;
                 let ret = self.resolve_type_expr(return_type)?;
-                let mut eff_set = EffectSet::pure();
+                let mut eff_set = EffectRow::pure();
                 for eff_ref in effects {
                     eff_set.insert(&eff_ref.name);
                 }
@@ -437,7 +540,7 @@ impl TypeEnv {
             Type::Function {
                 params: vec![Type::String],
                 return_type: Box::new(Type::Unit),
-                effects: EffectSet::single("Console"),
+                effects: EffectRow::single("Console"),
             },
         );
 
@@ -447,7 +550,7 @@ impl TypeEnv {
             Type::Function {
                 params: vec![],
                 return_type: Box::new(Type::String),
-                effects: EffectSet::single("Console"),
+                effects: EffectRow::single("Console"),
             },
         );
 
@@ -458,7 +561,7 @@ impl TypeEnv {
             Type::Function {
                 params: vec![t],
                 return_type: Box::new(Type::String),
-                effects: EffectSet::pure(),
+                effects: EffectRow::pure(),
             },
         );
 
@@ -469,7 +572,7 @@ impl TypeEnv {
             Type::Function {
                 params: vec![Type::List(Box::new(t))],
                 return_type: Box::new(Type::Int),
-                effects: EffectSet::pure(),
+                effects: EffectRow::pure(),
             },
         );
 
@@ -480,7 +583,7 @@ impl TypeEnv {
             Type::Function {
                 params: vec![Type::List(Box::new(t))],
                 return_type: Box::new(Type::Bool),
-                effects: EffectSet::pure(),
+                effects: EffectRow::pure(),
             },
         );
 
@@ -491,7 +594,94 @@ impl TypeEnv {
             Type::Function {
                 params: vec![Type::List(Box::new(t.clone())), t.clone()],
                 return_type: Box::new(Type::List(Box::new(t))),
-                effects: EffectSet::pure(),
+                effects: EffectRow::pure(),
+            },
+        );
+
+        // println: (T) -> () with Console
+        let t = self.fresh_var();
+        self.bind(
+            "println",
+            Type::Function {
+                params: vec![t],
+                return_type: Box::new(Type::Unit),
+                effects: EffectRow::single("Console"),
+            },
+        );
+
+        // parse_int: (String) -> Int
+        self.bind(
+            "parse_int",
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::Int),
+                effects: EffectRow::pure(),
+            },
+        );
+
+        // range: (Int, Int) -> List<Int>
+        self.bind(
+            "range",
+            Type::Function {
+                params: vec![Type::Int, Type::Int],
+                return_type: Box::new(Type::List(Box::new(Type::Int))),
+                effects: EffectRow::pure(),
+            },
+        );
+
+        // generate: (() -> ()) -> Generator
+        // Generator is an opaque ADT with no type parameters.
+        self.bind(
+            "generate",
+            Type::Function {
+                params: vec![Type::Function {
+                    params: vec![],
+                    return_type: Box::new(Type::Unit),
+                    effects: EffectRow::single("Yield"),
+                }],
+                return_type: Box::new(Type::Adt {
+                    name: "Generator".into(),
+                    type_args: vec![],
+                }),
+                effects: EffectRow::pure(),
+            },
+        );
+
+        // next: (Generator) -> T  (return type is a fresh var — unconstrained for now)
+        let t = self.fresh_var();
+        self.bind(
+            "next",
+            Type::Function {
+                params: vec![Type::Adt {
+                    name: "Generator".into(),
+                    type_args: vec![],
+                }],
+                return_type: Box::new(t),
+                effects: EffectRow::pure(),
+            },
+        );
+
+        // Builtin Yield effect: yield(T) -> ()
+        // Registered so that `yield(val)` inside generator functions type-checks.
+        let t = self.fresh_var();
+        let yield_op = EffectOpDef {
+            name: "yield".into(),
+            param_types: vec![t],
+            return_type: Type::Unit,
+        };
+        self.op_index.insert(
+            "yield".into(),
+            OpInfo {
+                effect_name: "Yield".into(),
+                param_types: yield_op.param_types.clone(),
+                return_type: yield_op.return_type.clone(),
+            },
+        );
+        self.effects.insert(
+            "Yield".into(),
+            EffectDef {
+                name: "Yield".into(),
+                operations: vec![yield_op],
             },
         );
     }
@@ -597,10 +787,20 @@ impl TypeEnv {
 
         // Pre-bind function name for recursion (with fresh return type var)
         let ret_var = child.fresh_var();
+        // If effects are declared, use a closed row; otherwise open (polymorphic)
+        let prelim_effects = if fd.effects.is_empty() {
+            child.fresh_eff_var()
+        } else {
+            let mut closed = EffectRow::pure();
+            for eff_ref in &fd.effects {
+                closed.insert(&eff_ref.name);
+            }
+            closed
+        };
         let preliminary_fn_type = Type::Function {
             params: param_types.clone(),
             return_type: Box::new(ret_var.clone()),
-            effects: EffectSet::pure(),
+            effects: prelim_effects,
         };
         child.bind(&fd.name, preliminary_fn_type);
 
@@ -616,11 +816,11 @@ impl TypeEnv {
 
         // Check effect annotations: inferred effects must be a subset of declared
         if !fd.effects.is_empty() {
-            let mut declared = EffectSet::pure();
+            let mut declared = EffectRow::pure();
             for eff_ref in &fd.effects {
                 declared.insert(&eff_ref.name);
             }
-            for eff in &body_effects.effects {
+            for eff in body_effects.effects() {
                 if !declared.contains(&eff.name) {
                     return Err(TypeError {
                         kind: TypeErrorKind::UnhandledEffect(eff.name.clone()),
@@ -653,18 +853,18 @@ impl TypeEnv {
 
     // ── Expression inference ──────────────────────────────────
 
-    fn infer_expr(&mut self, expr: &Expr) -> Result<(Type, EffectSet), TypeError> {
+    fn infer_expr(&mut self, expr: &Expr) -> Result<(Type, EffectRow), TypeError> {
         match expr {
-            Expr::IntLit(_, _) => Ok((Type::Int, EffectSet::pure())),
-            Expr::FloatLit(_, _) => Ok((Type::Float, EffectSet::pure())),
-            Expr::StringLit(_, _) => Ok((Type::String, EffectSet::pure())),
-            Expr::BoolLit(_, _) => Ok((Type::Bool, EffectSet::pure())),
+            Expr::IntLit(_, _) => Ok((Type::Int, EffectRow::pure())),
+            Expr::FloatLit(_, _) => Ok((Type::Float, EffectRow::pure())),
+            Expr::StringLit(_, _) => Ok((Type::String, EffectRow::pure())),
+            Expr::BoolLit(_, _) => Ok((Type::Bool, EffectRow::pure())),
 
             Expr::Var(name, span) => {
                 // Check if it's an effect operation — treat as Perform with 0 args
                 if let Some(op_info) = self.lookup_op(name) {
                     if op_info.param_types.is_empty() {
-                        let mut effs = EffectSet::pure();
+                        let mut effs = EffectRow::pure();
                         effs.insert(&op_info.effect_name);
                         return Ok((op_info.return_type.clone(), effs));
                     }
@@ -672,9 +872,9 @@ impl TypeEnv {
                     let fn_ty = Type::Function {
                         params: op_info.param_types.clone(),
                         return_type: Box::new(op_info.return_type.clone()),
-                        effects: EffectSet::single(&op_info.effect_name),
+                        effects: EffectRow::single(&op_info.effect_name),
                     };
-                    return Ok((fn_ty, EffectSet::pure()));
+                    return Ok((fn_ty, EffectRow::pure()));
                 }
 
                 // Check if it's an ADT constructor
@@ -693,7 +893,7 @@ impl TypeEnv {
                                         .map(|_| self.fresh_var())
                                         .collect(),
                                 },
-                                EffectSet::pure(),
+                                EffectRow::pure(),
                             ));
                         }
                         // Constructor with fields — return as function
@@ -710,15 +910,15 @@ impl TypeEnv {
                             Type::Function {
                                 params: variant.fields.clone(),
                                 return_type: Box::new(ret_ty),
-                                effects: EffectSet::pure(),
+                                effects: EffectRow::pure(),
                             },
-                            EffectSet::pure(),
+                            EffectRow::pure(),
                         ));
                     }
                 }
 
                 match self.lookup(name) {
-                    Some(ty) => Ok((ty, EffectSet::pure())),
+                    Some(ty) => Ok((ty, EffectRow::pure())),
                     None => Err(TypeError {
                         kind: TypeErrorKind::UnboundVariable(name.clone()),
                         span: span.clone(),
@@ -728,7 +928,7 @@ impl TypeEnv {
 
             Expr::List(elems, span) => {
                 let elem_ty = self.fresh_var();
-                let mut effs = EffectSet::pure();
+                let mut effs = EffectRow::pure();
                 for e in elems {
                     let (ty, eff) = self.infer_expr(e)?;
                     self.unify(&ty, &elem_ty, span)?;
@@ -808,7 +1008,7 @@ impl TypeEnv {
                         return_type: Box::new(self.apply_subst(&body_ty)),
                         effects: body_effs,
                     },
-                    EffectSet::pure(), // Lambda itself is pure; effects happen when called
+                    EffectRow::pure(), // Lambda itself is pure; effects happen when called
                 ))
             }
 
@@ -889,7 +1089,7 @@ impl TypeEnv {
                         let fn_ty = Type::Function {
                             params: vec![left_ty],
                             return_type: Box::new(ret_ty.clone()),
-                            effects: EffectSet::pure(),
+                            effects: EffectRow::pure(),
                         };
                         self.unify(&func_ty, &fn_ty, span)?;
                         Ok((self.apply_subst(&ret_ty), effs1.union(&effs2)))
@@ -902,7 +1102,7 @@ impl TypeEnv {
             }
 
             Expr::StringInterp { parts, span: _ } => {
-                let mut effs = EffectSet::pure();
+                let mut effs = EffectRow::pure();
                 for part in parts {
                     if let StringPart::Expr(e) = part {
                         let (_, eff) = self.infer_expr(e)?;
@@ -948,7 +1148,7 @@ impl TypeEnv {
 
             Expr::Tuple(elements, _span) => {
                 let mut types = Vec::new();
-                let mut effs = EffectSet::pure();
+                let mut effs = EffectRow::pure();
                 for elem in elements {
                     let (t, e) = self.infer_expr(elem)?;
                     types.push(t);
@@ -982,7 +1182,14 @@ impl TypeEnv {
             } => {
                 let (iter_ty, mut effs) = self.infer_expr(iterable)?;
                 let elem_ty = self.fresh_var();
-                self.unify(&iter_ty, &Type::List(Box::new(elem_ty.clone())), span)?;
+                // Accept either List<T> or Generator (opaque) as the iterable.
+                let is_generator = matches!(
+                    self.apply_subst(&iter_ty),
+                    Type::Adt { ref name, .. } if name == "Generator"
+                );
+                if !is_generator {
+                    self.unify(&iter_ty, &Type::List(Box::new(elem_ty.clone())), span)?;
+                }
                 let mut child = self.child();
                 child.bind(binding.clone(), elem_ty);
                 let (_, body_effs) = child.infer_expr(body)?;
@@ -996,11 +1203,11 @@ impl TypeEnv {
                     let (_, effs) = self.infer_expr(expr)?;
                     Ok((Type::Unit, effs))
                 } else {
-                    Ok((Type::Unit, EffectSet::pure()))
+                    Ok((Type::Unit, EffectRow::pure()))
                 }
             }
 
-            Expr::Continue { .. } => Ok((Type::Unit, EffectSet::pure())),
+            Expr::Continue { .. } => Ok((Type::Unit, EffectRow::pure())),
         }
     }
 
@@ -1012,7 +1219,7 @@ impl TypeEnv {
         left: &Expr,
         right: &Expr,
         span: &Span,
-    ) -> Result<(Type, EffectSet), TypeError> {
+    ) -> Result<(Type, EffectRow), TypeError> {
         let (l_ty, effs1) = self.infer_expr(left)?;
         let (r_ty, effs2) = self.infer_expr(right)?;
         let effs = effs1.union(&effs2);
@@ -1082,7 +1289,7 @@ impl TypeEnv {
         op: &UnaryOp,
         operand: &Expr,
         span: &Span,
-    ) -> Result<(Type, EffectSet), TypeError> {
+    ) -> Result<(Type, EffectRow), TypeError> {
         let (ty, effs) = self.infer_expr(operand)?;
         match op {
             UnaryOp::Neg => {
@@ -1116,7 +1323,7 @@ impl TypeEnv {
         func: &Expr,
         args: &[Expr],
         span: &Span,
-    ) -> Result<(Type, EffectSet), TypeError> {
+    ) -> Result<(Type, EffectRow), TypeError> {
         // Special case: if func is a Var naming an effect operation
         if let Expr::Var(name, _) = func {
             if let Some(op_info) = self.lookup_op(name) {
@@ -1132,7 +1339,7 @@ impl TypeEnv {
         let func_ty = self.apply_subst(&func_ty);
 
         let mut arg_types = Vec::new();
-        let mut arg_effs = EffectSet::pure();
+        let mut arg_effs = EffectRow::pure();
         for arg in args {
             let (ty, eff) = self.infer_expr(arg)?;
             arg_types.push(ty);
@@ -1166,7 +1373,7 @@ impl TypeEnv {
                 let fn_ty = Type::Function {
                     params: arg_types,
                     return_type: Box::new(ret.clone()),
-                    effects: EffectSet::pure(),
+                    effects: EffectRow::pure(),
                 };
                 self.unify(&func_ty, &fn_ty, span)?;
                 Ok((self.apply_subst(&ret), effs1.union(&arg_effs)))
@@ -1184,7 +1391,7 @@ impl TypeEnv {
         variant_idx: usize,
         args: &[Expr],
         span: &Span,
-    ) -> Result<(Type, EffectSet), TypeError> {
+    ) -> Result<(Type, EffectRow), TypeError> {
         let adt_def = self
             .lookup_adt(adt_name)
             .cloned()
@@ -1204,7 +1411,7 @@ impl TypeEnv {
             });
         }
 
-        let mut effs = EffectSet::pure();
+        let mut effs = EffectRow::pure();
         // Create a mapping from type params to fresh vars for this instantiation
         let type_args: Vec<Type> = adt_def
             .type_params
@@ -1234,9 +1441,9 @@ impl TypeEnv {
         stmts: &[Stmt],
         final_expr: &Option<Box<Expr>>,
         _span: &Span,
-    ) -> Result<(Type, EffectSet), TypeError> {
+    ) -> Result<(Type, EffectRow), TypeError> {
         let mut child = self.child();
-        let mut effs = EffectSet::pure();
+        let mut effs = EffectRow::pure();
 
         for stmt in stmts {
             match stmt {
@@ -1278,7 +1485,7 @@ impl TypeEnv {
         scrutinee: &Expr,
         arms: &[MatchArm],
         span: &Span,
-    ) -> Result<(Type, EffectSet), TypeError> {
+    ) -> Result<(Type, EffectRow), TypeError> {
         let (scrut_ty, mut effs) = self.infer_expr(scrutinee)?;
         let scrut_ty = self.apply_subst(&scrut_ty);
 
@@ -1389,12 +1596,12 @@ impl TypeEnv {
         expr: &Expr,
         handlers: &[ast::HandlerClause],
         span: &Span,
-    ) -> Result<(Type, EffectSet), TypeError> {
+    ) -> Result<(Type, EffectRow), TypeError> {
         let (expr_ty, mut expr_effs) = self.infer_expr(expr)?;
         let result_ty = self.fresh_var();
         self.unify(&result_ty, &expr_ty, span)?;
 
-        let mut effs = EffectSet::pure();
+        let mut effs = EffectRow::pure();
 
         for handler in handlers {
             match &handler.operation {
@@ -1414,7 +1621,7 @@ impl TypeEnv {
                     let eff_name = effect_name.as_ref().unwrap_or(&op_info.effect_name).clone();
 
                     // Remove this effect from the expression's effect set
-                    expr_effs.effects.retain(|e| e.name != eff_name);
+                    expr_effs = expr_effs.without(&eff_name);
 
                     // Type-check the handler body in a child scope
                     let mut child = self.child();
@@ -1438,7 +1645,7 @@ impl TypeEnv {
                 }
                 HandlerOp::UseHandler { name } => {
                     // For MVP, `use HandlerName` just removes the named effect
-                    expr_effs.effects.retain(|e| e.name != *name);
+                    expr_effs = expr_effs.without(name);
                 }
             }
         }
@@ -1453,7 +1660,7 @@ impl TypeEnv {
         operation: &str,
         args: &[Expr],
         span: &Span,
-    ) -> Result<(Type, EffectSet), TypeError> {
+    ) -> Result<(Type, EffectRow), TypeError> {
         let op_info = self.lookup_op(operation).ok_or_else(|| TypeError {
             kind: TypeErrorKind::UnboundEffectOp(operation.to_string()),
             span: span.clone(),
@@ -1469,7 +1676,7 @@ impl TypeEnv {
             });
         }
 
-        let mut effs = EffectSet::single(&op_info.effect_name);
+        let mut effs = EffectRow::single(&op_info.effect_name);
         for (param_ty, arg) in op_info.param_types.iter().zip(args) {
             let (arg_ty, eff) = self.infer_expr(arg)?;
             self.unify(param_ty, &arg_ty, span)?;

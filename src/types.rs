@@ -28,7 +28,7 @@ pub enum Type {
     Function {
         params: Vec<Type>,
         return_type: Box<Type>,
-        effects: EffectSet,
+        effects: EffectRow,
     },
 
     /// An algebraic data type (after resolution)
@@ -148,11 +148,9 @@ impl fmt::Display for Type {
 
 // ── Effects ───────────────────────────────────────────────────
 
-/// A set of effects that a computation may perform.
-#[derive(Debug, Clone, PartialEq)]
-pub struct EffectSet {
-    pub effects: BTreeSet<EffectName>,
-}
+/// A unique identifier for effect row variables during inference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct EffectVar(pub u32);
 
 /// A named effect, possibly with type arguments.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -161,45 +159,121 @@ pub struct EffectName {
     // Type args omitted for MVP — effects are identified by name only
 }
 
-impl EffectSet {
+/// A row-polymorphic effect row.
+///
+/// `Closed(effects)` — exactly these effects, no more (like the old EffectSet).
+/// `Open { known, var }` — at least `known` effects, plus whatever `var` resolves to.
+#[derive(Debug, Clone, PartialEq)]
+pub enum EffectRow {
+    /// A closed set of effects — no polymorphism.
+    Closed(BTreeSet<EffectName>),
+    /// An open row: known effects + a row variable that may unify with more.
+    Open {
+        known: BTreeSet<EffectName>,
+        var: EffectVar,
+    },
+}
+
+impl EffectRow {
+    /// The pure (empty, closed) effect row.
     pub fn pure() -> Self {
-        Self {
-            effects: BTreeSet::new(),
-        }
+        EffectRow::Closed(BTreeSet::new())
     }
 
+    /// A closed row with a single effect.
     pub fn single(name: impl Into<String>) -> Self {
         let mut effects = BTreeSet::new();
         effects.insert(EffectName { name: name.into() });
-        Self { effects }
+        EffectRow::Closed(effects)
     }
 
+    /// True if this row is definitely pure (closed and empty).
     pub fn is_pure(&self) -> bool {
-        self.effects.is_empty()
+        matches!(self, EffectRow::Closed(s) if s.is_empty())
     }
 
-    pub fn union(&self, other: &EffectSet) -> EffectSet {
-        EffectSet {
-            effects: self.effects.union(&other.effects).cloned().collect(),
+    /// Union two rows. Result is Open if either input is Open.
+    pub fn union(&self, other: &EffectRow) -> EffectRow {
+        match (self, other) {
+            (EffectRow::Closed(a), EffectRow::Closed(b)) => {
+                EffectRow::Closed(a.union(b).cloned().collect())
+            }
+            (EffectRow::Open { known, var }, EffectRow::Closed(b))
+            | (EffectRow::Closed(b), EffectRow::Open { known, var }) => EffectRow::Open {
+                known: known.union(b).cloned().collect(),
+                var: *var,
+            },
+            (EffectRow::Open { known: a, var }, EffectRow::Open { known: b, .. }) => {
+                // Keep the first var — the second will be unified separately
+                EffectRow::Open {
+                    known: a.union(b).cloned().collect(),
+                    var: *var,
+                }
+            }
         }
     }
 
+    /// Check if a named effect is definitely in this row.
     pub fn contains(&self, name: &str) -> bool {
-        self.effects.iter().any(|e| e.name == name)
+        match self {
+            EffectRow::Closed(s) | EffectRow::Open { known: s, .. } => {
+                s.iter().any(|e| e.name == name)
+            }
+        }
     }
 
+    /// Insert an effect name into the known set.
     pub fn insert(&mut self, name: impl Into<String>) {
-        self.effects.insert(EffectName { name: name.into() });
+        let eff = EffectName { name: name.into() };
+        match self {
+            EffectRow::Closed(s) | EffectRow::Open { known: s, .. } => {
+                s.insert(eff);
+            }
+        }
+    }
+
+    /// Get the known effects (for iteration/display).
+    pub fn effects(&self) -> &BTreeSet<EffectName> {
+        match self {
+            EffectRow::Closed(s) | EffectRow::Open { known: s, .. } => s,
+        }
+    }
+
+    /// Remove effects by name (used in handle — removes handled effects).
+    pub fn without(&self, name: &str) -> EffectRow {
+        match self {
+            EffectRow::Closed(s) => {
+                let filtered: BTreeSet<_> = s.iter().filter(|e| e.name != name).cloned().collect();
+                EffectRow::Closed(filtered)
+            }
+            EffectRow::Open { known, var } => {
+                let filtered: BTreeSet<_> =
+                    known.iter().filter(|e| e.name != name).cloned().collect();
+                EffectRow::Open {
+                    known: filtered,
+                    var: *var,
+                }
+            }
+        }
     }
 }
 
-impl fmt::Display for EffectSet {
+impl fmt::Display for EffectRow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.is_pure() {
-            write!(f, "Pure")
-        } else {
-            let names: Vec<&str> = self.effects.iter().map(|e| e.name.as_str()).collect();
-            write!(f, "{}", names.join(", "))
+        match self {
+            EffectRow::Closed(s) if s.is_empty() => write!(f, "Pure"),
+            EffectRow::Closed(s) => {
+                let names: Vec<&str> = s.iter().map(|e| e.name.as_str()).collect();
+                write!(f, "{}", names.join(", "))
+            }
+            EffectRow::Open { known, var } => {
+                if known.is_empty() {
+                    write!(f, "E{}", var.0)
+                } else {
+                    let names: Vec<&str> = known.iter().map(|e| e.name.as_str()).collect();
+                    write!(f, "{}, E{}", names.join(", "), var.0)
+                }
+            }
         }
     }
 }

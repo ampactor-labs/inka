@@ -4,9 +4,18 @@
 //! Evaluates AST nodes produced by the parser. The key feature is algebraic
 //! effect handling: `perform` signals an effect, `handle` installs handlers,
 //! and `resume` continues the suspended computation.
+//!
+//! # Generators
+//!
+//! Generators are implemented via OS threads and channels. `generate(func)`
+//! spawns a thread that runs `func` with a special `yield` interceptor. The
+//! interceptor sends values through a channel and blocks until `next()` is
+//! called. `next(gen)` signals the thread to continue and receives the next
+//! yielded value as `Some(val)`, or `None` when the generator is exhausted.
 
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::{Arc, Mutex};
 
 use crate::ast::{
     self, BinOp, Expr, HandlerOp, Item, LitPattern, MatchArm, Pattern, Program, Stmt, StringPart,
@@ -45,6 +54,15 @@ pub enum Value {
         name: String,
         fields: Vec<Value>,
     },
+    /// A lazy generator backed by a thread.
+    ///
+    /// `receiver` delivers yielded values one at a time. The channel is a
+    /// rendezvous (capacity 0), so the generator thread blocks after each
+    /// `yield` until `next()` consumes the value — providing natural
+    /// backpressure. `None` signals exhaustion.
+    Generator {
+        receiver: Arc<Mutex<std::sync::mpsc::Receiver<Option<Value>>>>,
+    },
 }
 
 impl fmt::Display for Value {
@@ -80,6 +98,7 @@ impl fmt::Display for Value {
             }
             Value::Function { .. } => write!(f, "<function>"),
             Value::BuiltinFn { name, .. } => write!(f, "<builtin:{name}>"),
+            Value::Generator { .. } => write!(f, "<generator>"),
             Value::AdtVariant { name, fields } if fields.is_empty() => write!(f, "{name}"),
             Value::AdtVariant { name, fields } => {
                 write!(f, "{name}(")?;
@@ -125,6 +144,7 @@ impl PartialEq for Value {
                     fields: f2,
                 },
             ) => n1 == n2 && f1 == f2,
+            (Value::Generator { .. }, Value::Generator { .. }) => false,
             _ => false,
         }
     }
@@ -193,6 +213,12 @@ pub struct Interpreter {
     /// Known effect operation names → (effect_name, param_count).
     effect_ops: HashMap<String, (String, usize)>,
     call_depth: usize,
+    /// When running inside a generator thread, holds the sender used to
+    /// deliver yielded values to `next()` callers.
+    ///
+    /// The channel is a rendezvous (capacity 0): `send` blocks until the
+    /// receiver calls `recv`, naturally pausing the generator between yields.
+    generator_sender: Option<std::sync::mpsc::SyncSender<Option<Value>>>,
 }
 
 const MAX_CALL_DEPTH: usize = 512;
@@ -206,9 +232,11 @@ impl Interpreter {
             variant_constructors: HashMap::new(),
             effect_ops: HashMap::new(),
             call_depth: 0,
+            generator_sender: None,
         };
         interp.register_builtins();
         interp.register_builtin_variants();
+        interp.register_builtin_effects();
         interp
     }
 
@@ -282,6 +310,36 @@ impl Interpreter {
                 span: Span::dummy(),
             }),
         });
+        self.register_builtin("range", |args| match (args.first(), args.get(1)) {
+            (Some(Value::Int(start)), Some(Value::Int(end))) => {
+                let start = *start;
+                let end = *end;
+                let items = (start..end).map(Value::Int).collect();
+                Ok(Value::List(items))
+            }
+            _ => Err(RuntimeError {
+                kind: RuntimeErrorKind::TypeError(
+                    "range expects two Int arguments: range(start, end)".into(),
+                ),
+                span: Span::dummy(),
+            }),
+        });
+        // `next` is registered as a placeholder; the real logic lives in
+        // `call_value` which can pattern-match on Value::Generator.
+        self.register_builtin("next", |_args| {
+            Err(RuntimeError {
+                kind: RuntimeErrorKind::TypeError("next: argument is not a generator".into()),
+                span: Span::dummy(),
+            })
+        });
+        // `generate` is registered as a placeholder; the real logic lives in
+        // `call_value` which can clone the interpreter and spawn a thread.
+        self.register_builtin("generate", |_args| {
+            Err(RuntimeError {
+                kind: RuntimeErrorKind::TypeError("generate: argument must be a function".into()),
+                span: Span::dummy(),
+            })
+        });
     }
 
     fn register_builtin(
@@ -296,6 +354,16 @@ impl Interpreter {
                 func,
             },
         );
+    }
+
+    fn register_builtin_effects(&mut self) {
+        // Register `yield` as a known effect operation so that `eval_call`
+        // routes `yield(val)` through `dispatch_effect`. Inside a generator
+        // thread, `dispatch_effect` intercepts it natively via
+        // `generator_channels`. Outside a generator, a user-installed handler
+        // (or an unhandled-effect error) applies as normal.
+        self.effect_ops
+            .insert("yield".to_string(), ("Yield".to_string(), 1));
     }
 
     fn register_builtin_variants(&mut self) {
@@ -590,23 +658,45 @@ impl Interpreter {
                 ..
             } => {
                 let iter_val = self.eval_expr(iterable)?;
-                let items = match iter_val {
-                    Value::List(items) => items,
-                    _ => return Err(self.type_err("for loop requires a list", iterable.span())),
-                };
-                for item in items {
-                    let saved = self.env.clone();
-                    self.env.set(binding, item);
-                    let result = self.eval_expr(body);
-                    self.env = saved;
-                    match result {
-                        Ok(_) => {}
-                        Err(Signal::Break(v)) => return Ok(v),
-                        Err(Signal::Continue) => continue,
-                        Err(e) => return Err(e),
+                match iter_val {
+                    Value::List(items) => {
+                        for item in items {
+                            let saved = self.env.clone();
+                            self.env.set(binding, item);
+                            let result = self.eval_expr(body);
+                            self.env = saved;
+                            match result {
+                                Ok(_) => {}
+                                Err(Signal::Break(v)) => return Ok(v),
+                                Err(Signal::Continue) => continue,
+                                Err(e) => return Err(e),
+                            }
+                        }
+                        Ok(Value::Unit)
+                    }
+                    Value::Generator { receiver } => {
+                        loop {
+                            let val = match receiver.lock().unwrap().recv() {
+                                Ok(Some(v)) => v,
+                                _ => break,
+                            };
+                            let saved = self.env.clone();
+                            self.env.set(binding, val);
+                            let result = self.eval_expr(body);
+                            self.env = saved;
+                            match result {
+                                Ok(_) => {}
+                                Err(Signal::Break(v)) => return Ok(v),
+                                Err(Signal::Continue) => continue,
+                                Err(e) => return Err(e),
+                            }
+                        }
+                        Ok(Value::Unit)
+                    }
+                    _ => {
+                        Err(self.type_err("for loop requires a list or generator", iterable.span()))
                     }
                 }
-                Ok(Value::Unit)
             }
 
             Expr::Break { value, .. } => {
@@ -803,6 +893,18 @@ impl Interpreter {
     }
 
     fn call_value(&mut self, func: Value, args: Vec<Value>, span: &Span) -> EvalResult {
+        // Intercept `next` and `generate` before normal dispatch: these builtins
+        // need access to interpreter state (channels / cloning) that plain fn
+        // pointers cannot carry.
+        if let Value::BuiltinFn { ref name, .. } = func {
+            if name == "next" {
+                return self.builtin_next(args, span);
+            }
+            if name == "generate" {
+                return self.builtin_generate(args, span);
+            }
+        }
+
         self.call_depth += 1;
         if self.call_depth > MAX_CALL_DEPTH {
             self.call_depth -= 1;
@@ -887,6 +989,67 @@ impl Interpreter {
             }
             _ => Err(self.type_err("indexing requires a list and integer", span)),
         }
+    }
+
+    // ── Generator builtins ───────────────────────────────────────
+
+    /// `next(gen)` — advance the generator and return the next value.
+    ///
+    /// Returns `Some(val)` for each yielded value, or `None` when exhausted.
+    /// Blocks until the generator yields or finishes. The rendezvous channel
+    /// (capacity 0) means the generator is paused between yields, so this
+    /// never busy-waits.
+    fn builtin_next(&mut self, args: Vec<Value>, span: &Span) -> EvalResult {
+        match args.into_iter().next() {
+            Some(Value::Generator { receiver }) => match receiver.lock().unwrap().recv() {
+                Ok(Some(val)) => Ok(Value::AdtVariant {
+                    name: "Some".into(),
+                    fields: vec![val],
+                }),
+                Ok(None) | Err(_) => Ok(Value::AdtVariant {
+                    name: "None".into(),
+                    fields: vec![],
+                }),
+            },
+            _ => Err(self.type_err("next: argument must be a generator", span)),
+        }
+    }
+
+    /// `generate(func)` — create a generator from a zero-argument function.
+    ///
+    /// Spawns a thread that runs `func()`. Inside `func`, `yield(val)` sends
+    /// values to the caller one at a time. The rendezvous channel (capacity 0)
+    /// means the generator thread pauses after each yield until `next()`
+    /// receives the value, providing natural backpressure.
+    fn builtin_generate(&mut self, args: Vec<Value>, span: &Span) -> EvalResult {
+        let func = match args.into_iter().next() {
+            Some(f @ Value::Function { .. }) => f,
+            _ => return Err(self.type_err("generate: argument must be a function", span)),
+        };
+
+        // Rendezvous channel (capacity 0): generator blocks after each send
+        // until `next()` receives, naturally pausing between yields.
+        let (value_tx, value_rx) = std::sync::mpsc::sync_channel::<Option<Value>>(0);
+
+        // Build a minimal interpreter for the generator thread.
+        let mut gen_interp = Interpreter {
+            env: self.env.clone_flat(),
+            handler_stack: self.handler_stack.clone(),
+            variant_constructors: self.variant_constructors.clone(),
+            effect_ops: self.effect_ops.clone(),
+            call_depth: 0,
+            generator_sender: Some(value_tx.clone()),
+        };
+
+        std::thread::spawn(move || {
+            let _ = gen_interp.call_value(func, vec![], &Span::dummy());
+            // Signal exhaustion after the function returns.
+            let _ = value_tx.send(None);
+        });
+
+        Ok(Value::Generator {
+            receiver: Arc::new(Mutex::new(value_rx)),
+        })
     }
 
     fn eval_block(&mut self, stmts: &[Stmt], tail: Option<&Expr>) -> EvalResult {
@@ -1086,7 +1249,26 @@ impl Interpreter {
     /// Dispatch an effect operation call directly to the nearest handler.
     /// If the handler calls resume(val), val is returned and execution continues.
     /// If the handler doesn't resume, Signal::HandleDone propagates up.
+    ///
+    /// When running inside a generator thread (i.e. `generator_channels` is
+    /// `Some`), a `yield` operation is handled natively: the yielded value is
+    /// sent through the value channel and the thread blocks until the next
+    /// signal arrives, then resumes with `()`.
     fn dispatch_effect(&mut self, op_name: &str, args: &[Value], span: &Span) -> EvalResult {
+        // Native yield interception for generator threads.
+        if op_name == "yield" {
+            if let Some(ref value_tx) = self.generator_sender {
+                let val = args.first().cloned().unwrap_or(Value::Unit);
+                // Send the yielded value. The rendezvous channel (capacity 0)
+                // blocks here until `next()` receives, providing the pause
+                // between yields. If the caller dropped the generator, stop.
+                match value_tx.send(Some(val)) {
+                    Ok(()) => return Ok(Value::Unit),
+                    Err(_) => return Err(Signal::Break(Value::Unit)),
+                }
+            }
+        }
+
         // Search handler stack from top to bottom for a matching handler
         let handler = self
             .handler_stack

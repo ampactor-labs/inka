@@ -1,0 +1,36 @@
+// Generator examples — yield effect + generate builtin
+
+// Simple generator: yields 1, 2, 3
+let gen = generate(|| {
+  yield(1)
+  yield(2)
+  yield(3)
+})
+
+let a = next(gen)
+let b = next(gen)
+let c = next(gen)
+let d = next(gen)
+
+println(to_string(a))
+println(to_string(b))
+println(to_string(c))
+println(to_string(d))
+
+// For-loop over a generator
+println("--- for loop ---")
+let gen2 = generate(|| {
+  yield(10)
+  yield(20)
+  yield(30)
+})
+
+for x in gen2 {
+  println(to_string(x))
+}
+
+// range builtin
+println("--- range ---")
+for i in range(0, 5) {
+  println(to_string(i))
+}

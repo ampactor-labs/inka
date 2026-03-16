@@ -2,7 +2,6 @@
 ///
 /// The AST is the shared interface between the parser (produces it),
 /// the type checker (annotates it), and the interpreter (evaluates it).
-
 use crate::token::Span;
 
 /// A complete Lux program.
@@ -179,10 +178,7 @@ pub enum Expr {
     },
 
     /// String interpolation `"Hello, {name}!"`
-    StringInterp {
-        parts: Vec<StringPart>,
-        span: Span,
-    },
+    StringInterp { parts: Vec<StringPart>, span: Span },
 
     /// `handle expr { handler_clauses }`
     Handle {
@@ -192,10 +188,7 @@ pub enum Expr {
     },
 
     /// `resume(value)` — resume a suspended effect computation
-    Resume {
-        value: Box<Expr>,
-        span: Span,
-    },
+    Resume { value: Box<Expr>, span: Span },
 
     /// Perform an effect operation (implicitly: just call it like a function)
     /// The checker resolves plain `Call` nodes that reference effect ops into this.
@@ -207,10 +200,33 @@ pub enum Expr {
     },
 
     /// `return expr`
-    Return {
-        value: Box<Expr>,
+    Return { value: Box<Expr>, span: Span },
+
+    /// Tuple literal `(a, b, c)`
+    Tuple(Vec<Expr>, Span),
+
+    /// `while condition { body }`
+    While {
+        condition: Box<Expr>,
+        body: Box<Expr>,
         span: Span,
     },
+    /// `loop { body }`
+    Loop { body: Box<Expr>, span: Span },
+    /// `for binding in iterable { body }`
+    For {
+        binding: String,
+        iterable: Box<Expr>,
+        body: Box<Expr>,
+        span: Span,
+    },
+    /// `break` or `break value`
+    Break {
+        value: Option<Box<Expr>>,
+        span: Span,
+    },
+    /// `continue`
+    Continue { span: Span },
 }
 
 impl Expr {
@@ -237,7 +253,13 @@ impl Expr {
             | Expr::Handle { span, .. }
             | Expr::Resume { span, .. }
             | Expr::Perform { span, .. }
-            | Expr::Return { span, .. } => span,
+            | Expr::Return { span, .. }
+            | Expr::While { span, .. }
+            | Expr::Loop { span, .. }
+            | Expr::For { span, .. }
+            | Expr::Break { span, .. }
+            | Expr::Continue { span, .. } => span,
+            Expr::Tuple(_, s) => s,
         }
     }
 }

@@ -1,4 +1,4 @@
-/// Token types for the Lux lexer.
+//! Token types for the Lux lexer.
 
 /// Source location for error reporting.
 #[derive(Debug, Clone, PartialEq)]
@@ -98,13 +98,13 @@ pub enum TokenKind {
     Or,
     Bang,
     Pipe,
-    PipeGt, // |>
-    Arrow,  // ->
+    PipeGt,   // |>
+    Arrow,    // ->
     FatArrow, // =>
-    DotDot, // ..
+    DotDot,   // ..
     Dot,
     ColonColon, // ::
-    PlusPlus, // ++
+    PlusPlus,   // ++
 
     // Delimiters
     LParen,
@@ -122,6 +122,18 @@ pub enum TokenKind {
     Hash,
     Underscore,
 
+    // String interpolation: `"hello {expr} world"`
+    StringInterp(Vec<StringInterpPart>),
+
     // Special
     Eof,
+}
+
+/// A part of an interpolated string.
+#[derive(Debug, Clone, PartialEq)]
+pub enum StringInterpPart {
+    /// A literal string segment.
+    Literal(String),
+    /// Tokens from an embedded `{expr}` that the parser will sub-parse.
+    Tokens(Vec<Token>),
 }

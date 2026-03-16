@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err, clippy::collapsible_if)]
+
 pub mod ast;
 pub mod checker;
 pub mod env;

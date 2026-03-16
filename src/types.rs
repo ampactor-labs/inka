@@ -2,7 +2,6 @@
 ///
 /// These are the types the checker works with — distinct from `ast::TypeExpr`
 /// which represents what the programmer wrote.
-
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 
@@ -79,9 +78,7 @@ impl Type {
                 effects: effects.clone(),
             },
             Type::List(inner) => Type::List(Box::new(inner.substitute(subst))),
-            Type::Tuple(elems) => {
-                Type::Tuple(elems.iter().map(|e| e.substitute(subst)).collect())
-            }
+            Type::Tuple(elems) => Type::Tuple(elems.iter().map(|e| e.substitute(subst)).collect()),
             Type::Adt { name, type_args } => Type::Adt {
                 name: name.clone(),
                 type_args: type_args.iter().map(|a| a.substitute(subst)).collect(),

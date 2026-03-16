@@ -1,0 +1,1149 @@
+#![allow(clippy::result_large_err, clippy::large_enum_variant)]
+//! Tree-walking interpreter for the Lux language.
+//!
+//! Evaluates AST nodes produced by the parser. The key feature is algebraic
+//! effect handling: `perform` signals an effect, `handle` installs handlers,
+//! and `resume` continues the suspended computation.
+
+use std::collections::HashMap;
+use std::fmt;
+
+use crate::ast::{
+    self, BinOp, Expr, HandlerOp, Item, LitPattern, MatchArm, Pattern, Program, Stmt, StringPart,
+    UnaryOp,
+};
+use crate::env::Environment;
+use crate::error::{LuxError, RuntimeError, RuntimeErrorKind};
+use crate::token::Span;
+
+// ── Value ────────────────────────────────────────────────────────
+
+/// A runtime value in the Lux interpreter.
+#[derive(Debug, Clone)]
+pub enum Value {
+    Int(i64),
+    Float(f64),
+    String(String),
+    Bool(bool),
+    Unit,
+    List(Vec<Value>),
+    Tuple(Vec<Value>),
+    /// A closure: captured env + param names + body.
+    Function {
+        name: Option<String>,
+        params: Vec<String>,
+        body: Expr,
+        closure_env: Environment,
+    },
+    /// A built-in function.
+    BuiltinFn {
+        name: String,
+        func: fn(Vec<Value>) -> Result<Value, RuntimeError>,
+    },
+    /// An ADT variant value: `Some(42)` becomes `AdtVariant { name: "Some", fields: [Int(42)] }`.
+    AdtVariant {
+        name: String,
+        fields: Vec<Value>,
+    },
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Int(n) => write!(f, "{n}"),
+            Value::Float(v) => write!(f, "{v}"),
+            Value::String(s) => write!(f, "\"{s}\""),
+            Value::Bool(b) => write!(f, "{b}"),
+            Value::Unit => write!(f, "()"),
+            Value::List(vs) => {
+                write!(f, "[")?;
+                for (i, v) in vs.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{v}")?;
+                }
+                write!(f, "]")
+            }
+            Value::Tuple(vs) => {
+                write!(f, "(")?;
+                for (i, v) in vs.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{v}")?;
+                }
+                if vs.len() == 1 {
+                    write!(f, ",")?;
+                }
+                write!(f, ")")
+            }
+            Value::Function { .. } => write!(f, "<function>"),
+            Value::BuiltinFn { name, .. } => write!(f, "<builtin:{name}>"),
+            Value::AdtVariant { name, fields } if fields.is_empty() => write!(f, "{name}"),
+            Value::AdtVariant { name, fields } => {
+                write!(f, "{name}(")?;
+                for (i, v) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{v}")?;
+                }
+                write!(f, ")")
+            }
+        }
+    }
+}
+
+impl Value {
+    /// Display a value for `print`/`println` — strings without quotes.
+    pub fn display_print(&self) -> String {
+        match self {
+            Value::String(s) => s.clone(),
+            other => format!("{other}"),
+        }
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Unit, Value::Unit) => true,
+            (Value::List(a), Value::List(b)) => a == b,
+            (Value::Tuple(a), Value::Tuple(b)) => a == b,
+            (
+                Value::AdtVariant {
+                    name: n1,
+                    fields: f1,
+                },
+                Value::AdtVariant {
+                    name: n2,
+                    fields: f2,
+                },
+            ) => n1 == n2 && f1 == f2,
+            _ => false,
+        }
+    }
+}
+
+// ── Signal — internal control flow ───────────────────────────────
+
+/// Signals that interrupt normal evaluation.
+#[derive(Debug)]
+enum Signal {
+    /// `return expr` — unwind to function boundary.
+    Return(Value),
+    /// An effect was performed and no handler was found.
+    #[allow(dead_code)]
+    Perform {
+        effect: String,
+        operation: String,
+        args: Vec<Value>,
+        span: Span,
+    },
+    /// `resume(val)` inside a handler body.
+    Resume(Value),
+    /// A handler completed without calling resume — short-circuit back to handle expr.
+    HandleDone(Value),
+    /// `break` or `break value` — unwind to loop boundary.
+    Break(Value),
+    /// `continue` — skip to next loop iteration.
+    Continue,
+}
+
+type EvalResult = Result<Value, Signal>;
+
+impl From<RuntimeError> for Signal {
+    fn from(e: RuntimeError) -> Self {
+        Signal::Perform {
+            effect: "Fail".to_string(),
+            operation: "fail".to_string(),
+            args: vec![Value::String(format!("{e}"))],
+            span: e.span,
+        }
+    }
+}
+
+// ── Handler frames ───────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+struct EffectHandler {
+    params: Vec<String>,
+    body: Expr,
+    env: Environment,
+}
+
+#[derive(Debug, Clone)]
+struct HandlerFrame {
+    handlers: HashMap<String, EffectHandler>,
+}
+
+// ── Interpreter ──────────────────────────────────────────────────
+
+/// The Lux interpreter. Holds runtime state across evaluations.
+pub struct Interpreter {
+    env: Environment,
+    handler_stack: Vec<HandlerFrame>,
+    /// Known variant constructor names (0-field variants act as constants).
+    variant_constructors: HashMap<String, usize>,
+    /// Known effect operation names → (effect_name, param_count).
+    effect_ops: HashMap<String, (String, usize)>,
+    call_depth: usize,
+}
+
+const MAX_CALL_DEPTH: usize = 512;
+
+impl Interpreter {
+    /// Create a new interpreter with built-in functions registered.
+    pub fn new() -> Self {
+        let mut interp = Self {
+            env: Environment::new(),
+            handler_stack: Vec::new(),
+            variant_constructors: HashMap::new(),
+            effect_ops: HashMap::new(),
+            call_depth: 0,
+        };
+        interp.register_builtins();
+        interp.register_builtin_variants();
+        interp
+    }
+
+    fn register_builtins(&mut self) {
+        self.register_builtin("print", |args| {
+            if let Some(v) = args.first() {
+                print!("{}", v.display_print());
+            }
+            Ok(Value::Unit)
+        });
+        self.register_builtin("println", |args| {
+            if let Some(v) = args.first() {
+                println!("{}", v.display_print());
+            } else {
+                println!();
+            }
+            Ok(Value::Unit)
+        });
+        self.register_builtin("len", |args| match args.first() {
+            Some(Value::List(vs)) => Ok(Value::Int(vs.len() as i64)),
+            Some(Value::String(s)) => Ok(Value::Int(s.len() as i64)),
+            _ => Err(RuntimeError {
+                kind: RuntimeErrorKind::TypeError("len expects a list or string".into()),
+                span: Span::dummy(),
+            }),
+        });
+        self.register_builtin("is_empty", |args| match args.first() {
+            Some(Value::List(vs)) => Ok(Value::Bool(vs.is_empty())),
+            Some(Value::String(s)) => Ok(Value::Bool(s.is_empty())),
+            _ => Err(RuntimeError {
+                kind: RuntimeErrorKind::TypeError("is_empty expects a list or string".into()),
+                span: Span::dummy(),
+            }),
+        });
+        self.register_builtin("push", |args| {
+            if args.len() != 2 {
+                return Err(RuntimeError {
+                    kind: RuntimeErrorKind::TypeError("push expects 2 arguments".into()),
+                    span: Span::dummy(),
+                });
+            }
+            let mut args = args;
+            let val = args.remove(1);
+            match args.into_iter().next() {
+                Some(Value::List(mut vs)) => {
+                    vs.push(val);
+                    Ok(Value::List(vs))
+                }
+                _ => Err(RuntimeError {
+                    kind: RuntimeErrorKind::TypeError(
+                        "push expects a list as first argument".into(),
+                    ),
+                    span: Span::dummy(),
+                }),
+            }
+        });
+        self.register_builtin("to_string", |args| match args.first() {
+            Some(v) => Ok(Value::String(v.display_print())),
+            None => Ok(Value::String(String::new())),
+        });
+        self.register_builtin("parse_int", |args| match args.first() {
+            Some(Value::String(s)) => match s.parse::<i64>() {
+                Ok(n) => Ok(Value::Int(n)),
+                Err(_) => Err(RuntimeError {
+                    kind: RuntimeErrorKind::TypeError(format!("cannot parse '{s}' as Int")),
+                    span: Span::dummy(),
+                }),
+            },
+            _ => Err(RuntimeError {
+                kind: RuntimeErrorKind::TypeError("parse_int expects a string".into()),
+                span: Span::dummy(),
+            }),
+        });
+    }
+
+    fn register_builtin(
+        &mut self,
+        name: &str,
+        func: fn(Vec<Value>) -> Result<Value, RuntimeError>,
+    ) {
+        self.env.set(
+            name,
+            Value::BuiltinFn {
+                name: name.to_string(),
+                func,
+            },
+        );
+    }
+
+    fn register_builtin_variants(&mut self) {
+        // Option variants
+        self.variant_constructors.insert("None".to_string(), 0);
+        self.variant_constructors.insert("Some".to_string(), 1);
+        // Result variants
+        self.variant_constructors.insert("Ok".to_string(), 1);
+        self.variant_constructors.insert("Err".to_string(), 1);
+
+        // Register 0-field variants as values in the environment.
+        self.env.set(
+            "None",
+            Value::AdtVariant {
+                name: "None".to_string(),
+                fields: vec![],
+            },
+        );
+    }
+
+    // ── Public API ───────────────────────────────────────────────
+
+    /// Evaluate a single expression string (for the REPL).
+    pub fn eval_line(&mut self, program: &Program) -> Result<Option<Value>, LuxError> {
+        let mut last = None;
+        for item in &program.items {
+            last = self
+                .exec_item(item)
+                .map_err(|sig| self.signal_to_error(sig))?;
+        }
+        Ok(last)
+    }
+
+    fn signal_to_error(&self, sig: Signal) -> LuxError {
+        match sig {
+            Signal::Return(v) => LuxError::Runtime(RuntimeError {
+                kind: RuntimeErrorKind::Internal(format!("unexpected return: {v}")),
+                span: Span::dummy(),
+            }),
+            Signal::Perform {
+                effect,
+                operation,
+                span,
+                ..
+            } => LuxError::Runtime(RuntimeError {
+                kind: RuntimeErrorKind::UnhandledEffect { effect, operation },
+                span,
+            }),
+            Signal::Resume(v) => LuxError::Runtime(RuntimeError {
+                kind: RuntimeErrorKind::Internal(format!("resume outside handler: {v}")),
+                span: Span::dummy(),
+            }),
+            Signal::HandleDone(v) => LuxError::Runtime(RuntimeError {
+                kind: RuntimeErrorKind::Internal(format!("handle done outside handle: {v}")),
+                span: Span::dummy(),
+            }),
+            Signal::Break(_) => LuxError::Runtime(RuntimeError {
+                kind: RuntimeErrorKind::Internal("break outside of loop".to_string()),
+                span: Span::dummy(),
+            }),
+            Signal::Continue => LuxError::Runtime(RuntimeError {
+                kind: RuntimeErrorKind::Internal("continue outside of loop".to_string()),
+                span: Span::dummy(),
+            }),
+        }
+    }
+
+    // ── Items ────────────────────────────────────────────────────
+
+    fn exec_item(&mut self, item: &Item) -> Result<Option<Value>, Signal> {
+        match item {
+            Item::FnDecl(decl) => {
+                let params: Vec<String> = decl.params.iter().map(|p| p.name.clone()).collect();
+                let val = Value::Function {
+                    name: Some(decl.name.clone()),
+                    params,
+                    body: decl.body.clone(),
+                    closure_env: self.env.clone_flat(),
+                };
+                self.env.set(&decl.name, val);
+                Ok(None)
+            }
+            Item::LetDecl(decl) => {
+                let val = self.eval_expr(&decl.value)?;
+                self.env.set(&decl.name, val);
+                Ok(None)
+            }
+            Item::TypeDecl(decl) => {
+                for variant in &decl.variants {
+                    let arity = variant.fields.len();
+                    self.variant_constructors
+                        .insert(variant.name.clone(), arity);
+                    if arity == 0 {
+                        self.env.set(
+                            &variant.name,
+                            Value::AdtVariant {
+                                name: variant.name.clone(),
+                                fields: vec![],
+                            },
+                        );
+                    }
+                }
+                Ok(None)
+            }
+            Item::EffectDecl(decl) => {
+                for op in &decl.operations {
+                    self.effect_ops
+                        .insert(op.name.clone(), (decl.name.clone(), op.params.len()));
+                }
+                Ok(None)
+            }
+            Item::Expr(expr) => {
+                let val = self.eval_expr(expr)?;
+                match &val {
+                    Value::Unit => Ok(None),
+                    _ => Ok(Some(val)),
+                }
+            }
+        }
+    }
+
+    // ── Expression evaluation ────────────────────────────────────
+
+    fn eval_expr(&mut self, expr: &Expr) -> EvalResult {
+        match expr {
+            Expr::IntLit(n, _) => Ok(Value::Int(*n)),
+            Expr::FloatLit(f, _) => Ok(Value::Float(*f)),
+            Expr::StringLit(s, _) => Ok(Value::String(s.clone())),
+            Expr::BoolLit(b, _) => Ok(Value::Bool(*b)),
+
+            Expr::Var(name, span) => self.eval_var(name, span),
+            Expr::List(elems, _) => {
+                let vals: Vec<Value> = elems
+                    .iter()
+                    .map(|e| self.eval_expr(e))
+                    .collect::<Result<_, _>>()?;
+                Ok(Value::List(vals))
+            }
+
+            Expr::BinOp {
+                op,
+                left,
+                right,
+                span,
+            } => self.eval_binop(*op, left, right, span),
+
+            Expr::UnaryOp { op, operand, span } => self.eval_unaryop(*op, operand, span),
+
+            Expr::Call { func, args, span } => self.eval_call(func, args, span),
+
+            Expr::FieldAccess {
+                object,
+                field,
+                span,
+            } => self.eval_field_access(object, field, span),
+
+            Expr::Index {
+                object,
+                index,
+                span,
+            } => self.eval_index(object, index, span),
+
+            Expr::Lambda { params, body, .. } => {
+                let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+                Ok(Value::Function {
+                    name: None,
+                    params: param_names,
+                    body: *body.clone(),
+                    closure_env: self.env.clone_flat(),
+                })
+            }
+
+            Expr::Block { stmts, expr, .. } => self.eval_block(stmts, expr.as_deref()),
+
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+                span,
+            } => self.eval_if(condition, then_branch, else_branch.as_deref(), span),
+
+            Expr::Match {
+                scrutinee,
+                arms,
+                span,
+            } => self.eval_match(scrutinee, arms, span),
+
+            Expr::Let { name, value, .. } => {
+                let val = self.eval_expr(value)?;
+                self.env.set(name, val);
+                Ok(Value::Unit)
+            }
+
+            Expr::Pipe { left, right, span } => {
+                let arg = self.eval_expr(left)?;
+                let func = self.eval_expr(right)?;
+                self.call_value(func, vec![arg], span)
+            }
+
+            Expr::StringInterp { parts, .. } => {
+                let mut result = String::new();
+                for part in parts {
+                    match part {
+                        StringPart::Literal(s) => result.push_str(s),
+                        StringPart::Expr(e) => {
+                            let val = self.eval_expr(e)?;
+                            result.push_str(&val.display_print());
+                        }
+                    }
+                }
+                Ok(Value::String(result))
+            }
+
+            Expr::Handle {
+                expr,
+                handlers,
+                span,
+            } => self.eval_handle(expr, handlers, span),
+
+            Expr::Resume { value, .. } => {
+                let val = self.eval_expr(value)?;
+                Err(Signal::Resume(val))
+            }
+
+            Expr::Perform {
+                effect,
+                operation,
+                args,
+                span,
+            } => {
+                let evaluated_args: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval_expr(a))
+                    .collect::<Result<_, _>>()?;
+                Err(Signal::Perform {
+                    effect: effect.clone(),
+                    operation: operation.clone(),
+                    args: evaluated_args,
+                    span: span.clone(),
+                })
+            }
+
+            Expr::Return { value, .. } => {
+                let val = self.eval_expr(value)?;
+                Err(Signal::Return(val))
+            }
+
+            Expr::Tuple(elements, _span) => {
+                let mut vals = Vec::with_capacity(elements.len());
+                for elem in elements {
+                    vals.push(self.eval_expr(elem)?);
+                }
+                Ok(Value::Tuple(vals))
+            }
+
+            Expr::While {
+                condition, body, ..
+            } => {
+                loop {
+                    let cond = self.eval_expr(condition)?;
+                    match cond {
+                        Value::Bool(false) => break,
+                        Value::Bool(true) => {}
+                        _ => {
+                            return Err(self
+                                .type_err("while condition must be a boolean", condition.span()));
+                        }
+                    }
+                    match self.eval_expr(body) {
+                        Ok(_) => {}
+                        Err(Signal::Break(v)) => return Ok(v),
+                        Err(Signal::Continue) => continue,
+                        Err(e) => return Err(e),
+                    }
+                }
+                Ok(Value::Unit)
+            }
+
+            Expr::Loop { body, .. } => loop {
+                match self.eval_expr(body) {
+                    Ok(_) => {}
+                    Err(Signal::Break(v)) => return Ok(v),
+                    Err(Signal::Continue) => continue,
+                    Err(e) => return Err(e),
+                }
+            },
+
+            Expr::For {
+                binding,
+                iterable,
+                body,
+                ..
+            } => {
+                let iter_val = self.eval_expr(iterable)?;
+                let items = match iter_val {
+                    Value::List(items) => items,
+                    _ => return Err(self.type_err("for loop requires a list", iterable.span())),
+                };
+                for item in items {
+                    let saved = self.env.clone();
+                    self.env.set(binding, item);
+                    let result = self.eval_expr(body);
+                    self.env = saved;
+                    match result {
+                        Ok(_) => {}
+                        Err(Signal::Break(v)) => return Ok(v),
+                        Err(Signal::Continue) => continue,
+                        Err(e) => return Err(e),
+                    }
+                }
+                Ok(Value::Unit)
+            }
+
+            Expr::Break { value, .. } => {
+                let val = match value {
+                    Some(expr) => self.eval_expr(expr)?,
+                    None => Value::Unit,
+                };
+                Err(Signal::Break(val))
+            }
+
+            Expr::Continue { .. } => Err(Signal::Continue),
+        }
+    }
+
+    fn eval_var(&self, name: &str, span: &Span) -> EvalResult {
+        // Check environment first
+        if let Some(val) = self.env.get(name) {
+            return Ok(val.clone());
+        }
+        // Check if it's a variant constructor with fields (used as a function)
+        if let Some(&arity) = self.variant_constructors.get(name) {
+            if arity == 0 {
+                return Ok(Value::AdtVariant {
+                    name: name.to_string(),
+                    fields: vec![],
+                });
+            }
+            // Multi-field constructors are handled in Call.
+            // Return a placeholder that Call will recognize.
+            return Ok(Value::AdtVariant {
+                name: name.to_string(),
+                fields: vec![],
+            });
+        }
+        Err(Signal::from(RuntimeError {
+            kind: RuntimeErrorKind::TypeError(format!("unbound variable '{name}'")),
+            span: span.clone(),
+        }))
+    }
+
+    fn eval_binop(&mut self, op: BinOp, left: &Expr, right: &Expr, span: &Span) -> EvalResult {
+        // Short-circuit for boolean operators.
+        if op == BinOp::And {
+            let l = self.eval_expr(left)?;
+            return match l {
+                Value::Bool(false) => Ok(Value::Bool(false)),
+                Value::Bool(true) => self.eval_expr(right),
+                _ => Err(self.type_err("&& requires Bool operands", span)),
+            };
+        }
+        if op == BinOp::Or {
+            let l = self.eval_expr(left)?;
+            return match l {
+                Value::Bool(true) => Ok(Value::Bool(true)),
+                Value::Bool(false) => self.eval_expr(right),
+                _ => Err(self.type_err("|| requires Bool operands", span)),
+            };
+        }
+
+        let l = self.eval_expr(left)?;
+        let r = self.eval_expr(right)?;
+
+        match op {
+            BinOp::Add => self.numeric_op(&l, &r, |a, b| a + b, |a, b| a + b, span),
+            BinOp::Sub => self.numeric_op(&l, &r, |a, b| a - b, |a, b| a - b, span),
+            BinOp::Mul => self.numeric_op(&l, &r, |a, b| a * b, |a, b| a * b, span),
+            BinOp::Div => {
+                // Check division by zero.
+                match (&l, &r) {
+                    (Value::Int(_), Value::Int(0)) => {
+                        return Err(Signal::from(RuntimeError {
+                            kind: RuntimeErrorKind::DivisionByZero,
+                            span: span.clone(),
+                        }));
+                    }
+                    (Value::Float(_), Value::Float(d)) if *d == 0.0 => {
+                        return Err(Signal::from(RuntimeError {
+                            kind: RuntimeErrorKind::DivisionByZero,
+                            span: span.clone(),
+                        }));
+                    }
+                    _ => {}
+                }
+                self.numeric_op(&l, &r, |a, b| a / b, |a, b| a / b, span)
+            }
+            BinOp::Mod => {
+                if let (Value::Int(_), Value::Int(0)) = (&l, &r) {
+                    return Err(Signal::from(RuntimeError {
+                        kind: RuntimeErrorKind::DivisionByZero,
+                        span: span.clone(),
+                    }));
+                }
+                self.numeric_op(&l, &r, |a, b| a % b, |a, b| a % b, span)
+            }
+
+            BinOp::Eq => Ok(Value::Bool(l == r)),
+            BinOp::Neq => Ok(Value::Bool(l != r)),
+
+            BinOp::Lt => self.compare_op(&l, &r, |ord| ord.is_lt(), span),
+            BinOp::LtEq => self.compare_op(&l, &r, |ord| ord.is_le(), span),
+            BinOp::Gt => self.compare_op(&l, &r, |ord| ord.is_gt(), span),
+            BinOp::GtEq => self.compare_op(&l, &r, |ord| ord.is_ge(), span),
+
+            BinOp::Concat => match (l, r) {
+                (Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
+                (Value::List(mut a), Value::List(b)) => {
+                    a.extend(b);
+                    Ok(Value::List(a))
+                }
+                _ => Err(self.type_err("++ requires String or List operands", span)),
+            },
+
+            BinOp::And | BinOp::Or => unreachable!("handled above"),
+        }
+    }
+
+    fn numeric_op(
+        &self,
+        l: &Value,
+        r: &Value,
+        int_op: impl FnOnce(i64, i64) -> i64,
+        float_op: impl FnOnce(f64, f64) -> f64,
+        span: &Span,
+    ) -> EvalResult {
+        match (l, r) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Int(int_op(*a, *b))),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Float(float_op(*a, *b))),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Float(float_op(*a as f64, *b))),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Float(float_op(*a, *b as f64))),
+            _ => Err(self.type_err("arithmetic requires numeric operands", span)),
+        }
+    }
+
+    fn compare_op(
+        &self,
+        l: &Value,
+        r: &Value,
+        pred: impl FnOnce(std::cmp::Ordering) -> bool,
+        span: &Span,
+    ) -> EvalResult {
+        let ord = match (l, r) {
+            (Value::Int(a), Value::Int(b)) => a.cmp(b),
+            (Value::Float(a), Value::Float(b)) => {
+                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+            }
+            (Value::String(a), Value::String(b)) => a.cmp(b),
+            _ => return Err(self.type_err("comparison requires same-type operands", span)),
+        };
+        Ok(Value::Bool(pred(ord)))
+    }
+
+    fn eval_unaryop(&mut self, op: UnaryOp, operand: &Expr, span: &Span) -> EvalResult {
+        let val = self.eval_expr(operand)?;
+        match (op, &val) {
+            (UnaryOp::Neg, Value::Int(n)) => Ok(Value::Int(-n)),
+            (UnaryOp::Neg, Value::Float(f)) => Ok(Value::Float(-f)),
+            (UnaryOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
+            _ => Err(self.type_err("invalid unary operand type", span)),
+        }
+    }
+
+    fn eval_call(&mut self, func_expr: &Expr, args: &[Expr], span: &Span) -> EvalResult {
+        // Check if calling an effect operation by name.
+        if let Expr::Var(name, _) = func_expr {
+            if let Some((_effect_name, _)) = self.effect_ops.get(name).cloned() {
+                let evaluated_args: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval_expr(a))
+                    .collect::<Result<_, _>>()?;
+                return self.dispatch_effect(name, &evaluated_args, span);
+            }
+            // Check variant constructors with arity > 0 that aren't in env.
+            if self.env.get(name).is_none()
+                && self.variant_constructors.get(name).is_some_and(|&a| a > 0)
+            {
+                let evaluated_args: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval_expr(a))
+                    .collect::<Result<_, _>>()?;
+                return Ok(Value::AdtVariant {
+                    name: name.clone(),
+                    fields: evaluated_args,
+                });
+            }
+        }
+
+        let func = self.eval_expr(func_expr)?;
+        let evaluated_args: Vec<Value> = args
+            .iter()
+            .map(|a| self.eval_expr(a))
+            .collect::<Result<_, _>>()?;
+
+        self.call_value(func, evaluated_args, span)
+    }
+
+    fn call_value(&mut self, func: Value, args: Vec<Value>, span: &Span) -> EvalResult {
+        self.call_depth += 1;
+        if self.call_depth > MAX_CALL_DEPTH {
+            self.call_depth -= 1;
+            return Err(Signal::from(RuntimeError {
+                kind: RuntimeErrorKind::StackOverflow,
+                span: span.clone(),
+            }));
+        }
+
+        let result = match func {
+            Value::Function {
+                name: fn_name,
+                params,
+                body,
+                closure_env,
+            } => {
+                let mut call_env = Environment::with_parent(closure_env);
+                // Self-bind for recursion: named functions can call themselves
+                if let Some(ref name) = fn_name {
+                    call_env.set(
+                        name,
+                        Value::Function {
+                            name: fn_name.clone(),
+                            params: params.clone(),
+                            body: body.clone(),
+                            closure_env: call_env.clone(),
+                        },
+                    );
+                }
+                for (param, arg) in params.iter().zip(args.into_iter()) {
+                    call_env.set(param, arg);
+                }
+                let saved_env = std::mem::replace(&mut self.env, call_env);
+                let result = self.eval_expr(&body);
+                self.env = saved_env;
+                // Catch Return signals at function boundary.
+                match result {
+                    Err(Signal::Return(v)) => Ok(v),
+                    other => other,
+                }
+            }
+            Value::BuiltinFn { func: f, .. } => f(args).map_err(Signal::from),
+            Value::AdtVariant { name, fields } if fields.is_empty() => {
+                // Variant constructor being called with args.
+                Ok(Value::AdtVariant { name, fields: args })
+            }
+            _ => Err(self.type_err(&format!("cannot call value: {func}"), span)),
+        };
+
+        self.call_depth -= 1;
+        result
+    }
+
+    fn eval_field_access(&mut self, object: &Expr, field: &str, span: &Span) -> EvalResult {
+        let obj = self.eval_expr(object)?;
+        match (&obj, field) {
+            (Value::List(vs), "len") => Ok(Value::Int(vs.len() as i64)),
+            (Value::List(vs), "is_empty") => Ok(Value::Bool(vs.is_empty())),
+            (Value::String(s), "len") => Ok(Value::Int(s.len() as i64)),
+            (Value::String(s), "is_empty") => Ok(Value::Bool(s.is_empty())),
+            _ => Err(self.type_err(&format!("no field '{field}' on {obj}"), span)),
+        }
+    }
+
+    fn eval_index(&mut self, object: &Expr, index: &Expr, span: &Span) -> EvalResult {
+        let obj = self.eval_expr(object)?;
+        let idx = self.eval_expr(index)?;
+        match (&obj, &idx) {
+            (Value::List(vs), Value::Int(i)) => {
+                let i = *i;
+                if i < 0 || i as usize >= vs.len() {
+                    Err(Signal::from(RuntimeError {
+                        kind: RuntimeErrorKind::IndexOutOfBounds {
+                            index: i,
+                            length: vs.len(),
+                        },
+                        span: span.clone(),
+                    }))
+                } else {
+                    Ok(vs[i as usize].clone())
+                }
+            }
+            _ => Err(self.type_err("indexing requires a list and integer", span)),
+        }
+    }
+
+    fn eval_block(&mut self, stmts: &[Stmt], tail: Option<&Expr>) -> EvalResult {
+        let saved_env = self.env.clone();
+        let result = self.eval_block_inner(stmts, tail);
+        self.env = saved_env;
+        result
+    }
+
+    fn eval_block_inner(&mut self, stmts: &[Stmt], tail: Option<&Expr>) -> EvalResult {
+        for stmt in stmts {
+            match stmt {
+                Stmt::Let(decl) => {
+                    let val = self.eval_expr(&decl.value)?;
+                    self.env.set(&decl.name, val);
+                }
+                Stmt::Expr(expr) => {
+                    self.eval_expr(expr)?;
+                }
+                Stmt::FnDecl(decl) => {
+                    let params: Vec<String> = decl.params.iter().map(|p| p.name.clone()).collect();
+                    let val = Value::Function {
+                        name: Some(decl.name.clone()),
+                        params,
+                        body: decl.body.clone(),
+                        closure_env: self.env.clone_flat(),
+                    };
+                    self.env.set(&decl.name, val);
+                }
+            }
+        }
+        match tail {
+            Some(expr) => self.eval_expr(expr),
+            None => Ok(Value::Unit),
+        }
+    }
+
+    fn eval_if(
+        &mut self,
+        condition: &Expr,
+        then_branch: &Expr,
+        else_branch: Option<&Expr>,
+        span: &Span,
+    ) -> EvalResult {
+        let cond = self.eval_expr(condition)?;
+        match cond {
+            Value::Bool(true) => self.eval_expr(then_branch),
+            Value::Bool(false) => match else_branch {
+                Some(e) => self.eval_expr(e),
+                None => Ok(Value::Unit),
+            },
+            _ => Err(self.type_err("if condition must be Bool", span)),
+        }
+    }
+
+    // ── Pattern matching ─────────────────────────────────────────
+
+    fn eval_match(&mut self, scrutinee: &Expr, arms: &[MatchArm], span: &Span) -> EvalResult {
+        let val = self.eval_expr(scrutinee)?;
+
+        for arm in arms {
+            let mut bindings = HashMap::new();
+            if self.match_pattern(&arm.pattern, &val, &mut bindings) {
+                // Check guard if present.
+                if let Some(guard) = &arm.guard {
+                    let saved = self.env.clone();
+                    for (k, v) in &bindings {
+                        self.env.set(k, v.clone());
+                    }
+                    let guard_result = self.eval_expr(guard);
+                    self.env = saved;
+                    match guard_result? {
+                        Value::Bool(true) => {}
+                        Value::Bool(false) => continue,
+                        _ => return Err(self.type_err("match guard must be Bool", span)),
+                    }
+                }
+                // Bind pattern variables and evaluate body.
+                let saved = self.env.clone();
+                for (k, v) in bindings {
+                    self.env.set(&k, v);
+                }
+                let result = self.eval_expr(&arm.body);
+                self.env = saved;
+                return result;
+            }
+        }
+        Err(Signal::from(RuntimeError {
+            kind: RuntimeErrorKind::MatchFailed,
+            span: span.clone(),
+        }))
+    }
+
+    fn match_pattern(
+        &self,
+        pattern: &Pattern,
+        value: &Value,
+        bindings: &mut HashMap<String, Value>,
+    ) -> bool {
+        match pattern {
+            Pattern::Wildcard(_) => true,
+            Pattern::Binding(name, _) => {
+                bindings.insert(name.clone(), value.clone());
+                true
+            }
+            Pattern::Literal(lit, _) => match (lit, value) {
+                (LitPattern::Int(a), Value::Int(b)) => a == b,
+                (LitPattern::Float(a), Value::Float(b)) => a == b,
+                (LitPattern::String(a), Value::String(b)) => a == b,
+                (LitPattern::Bool(a), Value::Bool(b)) => a == b,
+                _ => false,
+            },
+            Pattern::Variant {
+                name, fields: pats, ..
+            } => match value {
+                Value::AdtVariant {
+                    name: vname,
+                    fields,
+                } => {
+                    if name != vname || pats.len() != fields.len() {
+                        return false;
+                    }
+                    pats.iter()
+                        .zip(fields.iter())
+                        .all(|(p, v)| self.match_pattern(p, v, bindings))
+                }
+                // A 0-field variant pattern matching a Binding-like scenario:
+                // e.g., pattern `None` vs value `None`.
+                _ if pats.is_empty() => {
+                    // Check if the value is a variant with the same name.
+                    matches!(value, Value::AdtVariant { name: vn, fields } if vn == name && fields.is_empty())
+                }
+                _ => false,
+            },
+            Pattern::Tuple(pats, _) => {
+                let vs = match value {
+                    Value::Tuple(vs) | Value::List(vs) => vs,
+                    _ => return false,
+                };
+                if pats.len() != vs.len() {
+                    return false;
+                }
+                pats.iter()
+                    .zip(vs.iter())
+                    .all(|(p, v)| self.match_pattern(p, v, bindings))
+            }
+        }
+    }
+
+    // ── Effect handling ──────────────────────────────────────────
+
+    fn eval_handle(
+        &mut self,
+        body: &Expr,
+        handler_clauses: &[ast::HandlerClause],
+        _span: &Span,
+    ) -> EvalResult {
+        // Build handler frame from clauses.
+        let mut handlers = HashMap::new();
+        for clause in handler_clauses {
+            match &clause.operation {
+                HandlerOp::OpHandler {
+                    op_name,
+                    params,
+                    body,
+                    ..
+                } => {
+                    handlers.insert(
+                        op_name.clone(),
+                        EffectHandler {
+                            params: params.clone(),
+                            body: body.clone(),
+                            env: self.env.clone_flat(),
+                        },
+                    );
+                }
+                HandlerOp::UseHandler { .. } => {
+                    // Skip for MVP.
+                }
+            }
+        }
+
+        let frame = HandlerFrame { handlers };
+        self.handler_stack.push(frame);
+
+        let result = self.eval_expr(body);
+        self.handler_stack.pop();
+
+        match result {
+            Ok(val) => Ok(val),
+            // A handler completed without resume — its value replaces the handle expr
+            Err(Signal::HandleDone(val)) => Ok(val),
+            Err(other) => Err(other),
+        }
+    }
+
+    /// Dispatch an effect operation call directly to the nearest handler.
+    /// If the handler calls resume(val), val is returned and execution continues.
+    /// If the handler doesn't resume, Signal::HandleDone propagates up.
+    fn dispatch_effect(&mut self, op_name: &str, args: &[Value], span: &Span) -> EvalResult {
+        // Search handler stack from top to bottom for a matching handler
+        let handler = self
+            .handler_stack
+            .iter()
+            .rev()
+            .find_map(|frame| frame.handlers.get(op_name))
+            .cloned();
+
+        if let Some(handler) = handler {
+            let mut handler_env = Environment::with_parent(handler.env.clone());
+            for (param, arg) in handler.params.iter().zip(args.iter()) {
+                handler_env.set(param, arg.clone());
+            }
+            let saved_env = std::mem::replace(&mut self.env, handler_env);
+            let result = self.eval_expr(&handler.body);
+            self.env = saved_env;
+
+            match result {
+                // Handler called resume(val) — return val, continue execution
+                Err(Signal::Resume(val)) => Ok(val),
+                // Handler returned without resume (like fail) — short-circuit
+                Ok(val) => Err(Signal::HandleDone(val)),
+                // Propagate other signals
+                Err(other) => Err(other),
+            }
+        } else {
+            // No handler found — unhandled effect
+            Err(Signal::from(RuntimeError {
+                kind: RuntimeErrorKind::UnhandledEffect {
+                    effect: String::new(),
+                    operation: op_name.to_string(),
+                },
+                span: span.clone(),
+            }))
+        }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────
+
+    fn type_err(&self, msg: &str, span: &Span) -> Signal {
+        Signal::from(RuntimeError {
+            kind: RuntimeErrorKind::TypeError(msg.to_string()),
+            span: span.clone(),
+        })
+    }
+}
+
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ── Public execute function ──────────────────────────────────────
+
+/// Execute a parsed program and return the last expression's value.
+pub fn execute(program: &Program) -> Result<Option<Value>, LuxError> {
+    let mut interp = Interpreter::new();
+    interp.eval_line(program)
+}

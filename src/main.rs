@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 use std::env;
 use std::fs;
 use std::process;
@@ -32,7 +34,10 @@ fn main() {
                 }
             };
             if let Err(e) = run_source(&source) {
-                eprintln!("{e}");
+                eprintln!(
+                    "{}",
+                    lux::error::format_error_with_source(&e, &source, Some(path))
+                );
                 process::exit(1);
             }
         }

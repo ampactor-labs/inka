@@ -1,5 +1,4 @@
 /// Error types and pretty-printing for Lux.
-
 use crate::token::Span;
 use crate::types::Type;
 use std::fmt;
@@ -80,9 +79,15 @@ pub struct RuntimeError {
 #[derive(Debug, Clone)]
 pub enum RuntimeErrorKind {
     DivisionByZero,
-    IndexOutOfBounds { index: i64, length: usize },
+    IndexOutOfBounds {
+        index: i64,
+        length: usize,
+    },
     TypeError(String),
-    UnhandledEffect { effect: String, operation: String },
+    UnhandledEffect {
+        effect: String,
+        operation: String,
+    },
     MatchFailed,
     StackOverflow,
     /// User-triggered failure via the Fail effect
@@ -188,11 +193,7 @@ impl fmt::Display for TypeError {
                 )
             }
             TypeErrorKind::UnhandledEffect(name) => {
-                write!(
-                    f,
-                    "unhandled effect '{name}' at line {}",
-                    self.span.line
-                )
+                write!(f, "unhandled effect '{name}' at line {}", self.span.line)
             }
             TypeErrorKind::InfiniteType => {
                 write!(f, "infinite type at line {}", self.span.line)
@@ -228,6 +229,110 @@ impl fmt::Display for RuntimeError {
             RuntimeErrorKind::Internal(msg) => write!(f, "internal error: {msg}"),
         }
     }
+}
+
+impl LuxError {
+    /// Returns the span associated with this error.
+    pub fn span(&self) -> &Span {
+        match self {
+            LuxError::Lexer(e) => &e.span,
+            LuxError::Parser(e) => &e.span,
+            LuxError::Type(e) => &e.span,
+            LuxError::Runtime(e) => &e.span,
+        }
+    }
+
+    /// Short description suitable for the caret line of a diagnostic.
+    pub fn short_message(&self) -> String {
+        match self {
+            LuxError::Lexer(e) => match &e.kind {
+                LexErrorKind::UnexpectedChar(c) => format!("unexpected character '{c}'"),
+                LexErrorKind::UnterminatedString => "unterminated string".to_string(),
+                LexErrorKind::InvalidNumber(s) => format!("invalid number '{s}'"),
+                LexErrorKind::InvalidEscape(c) => format!("invalid escape '\\{c}'"),
+            },
+            LuxError::Parser(e) => match &e.kind {
+                ParseErrorKind::UnexpectedToken { expected, found } => {
+                    format!("expected {expected}, found {found}")
+                }
+                ParseErrorKind::UnexpectedEof => "unexpected end of file".to_string(),
+                ParseErrorKind::InvalidPattern => "invalid pattern".to_string(),
+                ParseErrorKind::InvalidTypeExpr => "invalid type expression".to_string(),
+                ParseErrorKind::InvalidExpression => "invalid expression".to_string(),
+            },
+            LuxError::Type(e) => match &e.kind {
+                TypeErrorKind::Mismatch { expected, found } => {
+                    format!("expected {expected}, found {found}")
+                }
+                TypeErrorKind::UnboundVariable(name) => format!("unbound variable '{name}'"),
+                TypeErrorKind::UnboundType(name) => format!("unknown type '{name}'"),
+                TypeErrorKind::UnboundEffect(name) => format!("unknown effect '{name}'"),
+                TypeErrorKind::UnboundEffectOp(name) => {
+                    format!("unknown effect operation '{name}'")
+                }
+                TypeErrorKind::NotAFunction(ty) => format!("expected function, found {ty}"),
+                TypeErrorKind::WrongArity { expected, found } => {
+                    format!("expected {expected} args, found {found}")
+                }
+                TypeErrorKind::UnhandledEffect(name) => format!("unhandled effect '{name}'"),
+                TypeErrorKind::InfiniteType => "infinite type".to_string(),
+                TypeErrorKind::NonExhaustiveMatch => "non-exhaustive match".to_string(),
+                TypeErrorKind::DuplicateDefinition(name) => {
+                    format!("duplicate definition '{name}'")
+                }
+            },
+            LuxError::Runtime(e) => match &e.kind {
+                RuntimeErrorKind::DivisionByZero => "division by zero".to_string(),
+                RuntimeErrorKind::IndexOutOfBounds { index, length } => {
+                    format!("index {index} out of bounds (length {length})")
+                }
+                RuntimeErrorKind::TypeError(msg) => msg.clone(),
+                RuntimeErrorKind::UnhandledEffect { effect, operation } => {
+                    format!("unhandled effect: {effect}.{operation}")
+                }
+                RuntimeErrorKind::MatchFailed => "no pattern matched".to_string(),
+                RuntimeErrorKind::StackOverflow => "stack overflow".to_string(),
+                RuntimeErrorKind::UserFail(msg) => format!("fail: {msg}"),
+                RuntimeErrorKind::Internal(msg) => format!("internal: {msg}"),
+            },
+        }
+    }
+}
+
+/// Format an error with source context: header, file/line/col pointer, source
+/// line, and a caret underline. Falls back to a plain `"error: <message>"` if
+/// the span references a line that does not exist in `source`.
+pub fn format_error_with_source(error: &LuxError, source: &str, filename: Option<&str>) -> String {
+    let span = error.span();
+    let short_msg = error.short_message();
+    let filename = filename.unwrap_or("<input>");
+
+    // span.line and span.column are 1-based (from lexer)
+    let display_line = span.line;
+    let display_col = span.column;
+
+    if display_line == 0 || source.is_empty() {
+        return format!("error: {short_msg}");
+    }
+
+    let lines: Vec<&str> = source.lines().collect();
+    let Some(source_line) = lines.get(display_line - 1) else {
+        return format!("error: {short_msg}");
+    };
+
+    let line_num_width = display_line.to_string().len();
+    let padding = " ".repeat(line_num_width);
+    let caret_padding = " ".repeat(display_col.saturating_sub(1));
+
+    let span_len = span.end.saturating_sub(span.start).max(1);
+    let col_offset = display_col.saturating_sub(1);
+    let available = source_line.len().saturating_sub(col_offset);
+    let underline_len = span_len.min(available).max(1);
+    let underline = "^".repeat(underline_len);
+
+    format!(
+        "error: {short_msg}\n  --> {filename}:{display_line}:{display_col}\n{padding} |\n{display_line} | {source_line}\n{padding} | {caret_padding}{underline}"
+    )
 }
 
 impl std::error::Error for LuxError {}

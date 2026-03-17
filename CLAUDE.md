@@ -49,7 +49,9 @@ Standard library: `std/prelude.lux` (self-hosted in Lux — this part stays)
 | `src/parser.rs` | Recursive descent, Pratt precedence climbing | Rewritten in Lux |
 | `src/types.rs` | Internal types, row-polymorphic effects, ADT defs | Rewritten in Lux |
 | `src/checker.rs` | HM inference, effect tracking, trait resolution | Rewritten in Lux |
-| `src/interpreter.rs` | Tree-walking eval (replaced by codegen) | Deleted |
+| `src/interpreter.rs` | Tree-walking eval, multi-shot continuations | Deleted |
+| `src/builtins.rs` | Built-in function registration | Deleted |
+| `src/patterns.rs` | Pattern matching (list, or, record patterns) | Deleted |
 | `src/env.rs` | Arc-shared lexical scoping (Rust runtime) | Deleted |
 | `src/error.rs` | Error types, source-context formatting | Rewritten in Lux |
 | `std/prelude.lux` | Self-hosted stdlib (map, filter, fold, etc.) | **YES — Lux forever** |
@@ -93,14 +95,15 @@ One mechanism replaces: exceptions, state, generators, async, DI, backtracking.
 | 2 | Strings, loops, tuples, match guards, error formatting | 2f5f88a |
 | 3 | Row-polymorphic effects, generators, traits, 5 examples | ce9fc26 |
 | 4 | Generics, stdlib prelude, TCO, Arc environments | 1de80df |
-| 5 | Stateful effect handlers (handler-local state) | HEAD |
+| 5 | Stateful effect handlers (handler-local state) | 1985aad |
+| 6A | Named record fields, list patterns, or-patterns | HEAD |
+| 6B | Multi-shot continuations via replay-based re-evaluation | HEAD |
 
 ## Roadmap (beyond interpreter)
 
 | Phase | Layer | Deliverable |
 |-------|-------|-------------|
-| 5B | Continuations | Multi-shot resume, backtracking, async as library |
-| 6 | Modules + VM | Module system, bytecode compiler, stack-based VM, WASM playground |
+| 6C | Modules + VM | Module system, bytecode compiler, stack-based VM, WASM playground |
 | 7 | Evidence-passing | Koka-style effect compilation, near-native performance |
 | 8 | Codegen | Cranelift backend, native binaries (Linux/Mac/Windows) |
 | 9 | Ownership | own/ref/gc inference, borrow checking |

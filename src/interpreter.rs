@@ -18,12 +18,21 @@ use std::fmt;
 use std::sync::{Arc, Mutex};
 
 use crate::ast::{
-    self, BinOp, Expr, HandlerOp, ImplBlock, Item, LitPattern, MatchArm, Pattern, Program, Stmt,
-    StringPart, UnaryOp,
+    self, BinOp, Expr, HandlerOp, ImplBlock, Item, MatchArm, Pattern, Program, Stmt, StringPart,
+    UnaryOp,
 };
 use crate::env::Environment;
 use crate::error::{LuxError, RuntimeError, RuntimeErrorKind};
 use crate::token::Span;
+
+// ── Replay (multi-shot continuations) ────────────────────────────
+
+/// One replay entry: what resume returned + state updates at that point.
+#[derive(Debug, Clone)]
+pub struct ReplayEntry {
+    pub(crate) resume_value: Value,
+    pub(crate) state_updates: Vec<(String, Value)>,
+}
 
 // ── Value ────────────────────────────────────────────────────────
 
@@ -66,6 +75,17 @@ pub enum Value {
     Generator {
         receiver: Arc<Mutex<std::sync::mpsc::Receiver<Option<Value>>>>,
     },
+    /// A captured continuation: calling `resume(val)` replays the handle body
+    /// with the extended effect log and returns the body's completion value.
+    Continuation {
+        body: Arc<Expr>,
+        handler_clauses: Arc<Vec<ast::HandlerClause>>,
+        state_bindings: Arc<Vec<ast::StateBinding>>,
+        initial_state: HashMap<String, Value>,
+        replay_log: Vec<ReplayEntry>,
+        env: Arc<Environment>,
+        handler_stack_snapshot: Vec<HandlerFrame>,
+    },
 }
 
 impl fmt::Display for Value {
@@ -102,6 +122,7 @@ impl fmt::Display for Value {
             Value::Function { .. } => write!(f, "<function>"),
             Value::BuiltinFn { name, .. } => write!(f, "<builtin:{name}>"),
             Value::Generator { .. } => write!(f, "<generator>"),
+            Value::Continuation { .. } => write!(f, "<continuation>"),
             Value::AdtVariant { name, fields } if fields.is_empty() => write!(f, "{name}"),
             Value::AdtVariant { name, fields } => {
                 write!(f, "{name}(")?;
@@ -148,6 +169,7 @@ impl PartialEq for Value {
                 },
             ) => n1 == n2 && f1 == f2,
             (Value::Generator { .. }, Value::Generator { .. }) => false,
+            (Value::Continuation { .. }, Value::Continuation { .. }) => false,
             _ => false,
         }
     }
@@ -168,6 +190,7 @@ fn value_type_name(val: &Value) -> &'static str {
         Value::Function { .. } | Value::BuiltinFn { .. } => "Function",
         Value::AdtVariant { .. } => "Adt",
         Value::Generator { .. } => "Generator",
+        Value::Continuation { .. } => "Continuation",
     }
 }
 
@@ -232,16 +255,28 @@ impl From<RuntimeError> for Signal {
 // ── Handler frames ───────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
-struct EffectHandler {
-    params: Vec<String>,
-    body: Expr,
-    env: Environment,
+pub struct EffectHandler {
+    pub(crate) params: Vec<String>,
+    pub(crate) body: Expr,
+    pub(crate) env: Environment,
 }
 
 #[derive(Debug, Clone)]
-struct HandlerFrame {
-    handlers: HashMap<String, EffectHandler>,
-    state: HashMap<String, Value>,
+pub struct HandlerFrame {
+    pub(crate) handlers: HashMap<String, EffectHandler>,
+    pub(crate) state: HashMap<String, Value>,
+}
+
+// ── Continuation context ─────────────────────────────────────────
+
+/// Context captured for building continuations during effect dispatch.
+#[derive(Clone)]
+struct ContinuationContext {
+    body: Arc<Expr>,
+    handler_clauses: Arc<Vec<ast::HandlerClause>>,
+    state_bindings: Arc<Vec<ast::StateBinding>>,
+    initial_state: HashMap<String, Value>,
+    env: Arc<Environment>,
 }
 
 // ── Interpreter ──────────────────────────────────────────────────
@@ -254,6 +289,8 @@ pub struct Interpreter {
     variant_constructors: HashMap<String, usize>,
     /// Known effect operation names → (effect_name, param_count).
     effect_ops: HashMap<String, (String, usize)>,
+    /// Named field order for record variants: variant_name → [field_name, ...]
+    variant_field_names: HashMap<String, Vec<String>>,
     call_depth: usize,
     /// Name of the function currently executing, used for tail call detection.
     current_fn_name: Option<String>,
@@ -269,6 +306,12 @@ pub struct Interpreter {
     generator_sender: Option<std::sync::mpsc::SyncSender<Option<Value>>>,
     /// Method dispatch table: (type_name, method_name) -> function value
     impl_methods: HashMap<(String, String), Value>,
+    /// Replay log for multi-shot continuation re-evaluation. `None` = normal mode.
+    replay_log: Option<Vec<ReplayEntry>>,
+    /// Current position in the replay log.
+    replay_pos: usize,
+    /// Context for building continuations during handle body evaluation.
+    continuation_context: Option<ContinuationContext>,
 }
 
 const MAX_CALL_DEPTH: usize = 512;
@@ -281,11 +324,15 @@ impl Interpreter {
             handler_stack: Vec::new(),
             variant_constructors: HashMap::new(),
             effect_ops: HashMap::new(),
+            variant_field_names: HashMap::new(),
             call_depth: 0,
             current_fn_name: None,
             in_tail_position: false,
             generator_sender: None,
             impl_methods: HashMap::new(),
+            replay_log: None,
+            replay_pos: 0,
+            continuation_context: None,
         };
         interp.register_builtins();
         interp.register_builtin_variants();
@@ -294,237 +341,10 @@ impl Interpreter {
     }
 
     fn register_builtins(&mut self) {
-        self.register_builtin("print", |args| {
-            if let Some(v) = args.first() {
-                print!("{}", v.display_print());
-            }
-            Ok(Value::Unit)
-        });
-        self.register_builtin("println", |args| {
-            if let Some(v) = args.first() {
-                println!("{}", v.display_print());
-            } else {
-                println!();
-            }
-            Ok(Value::Unit)
-        });
-        self.register_builtin("len", |args| match args.first() {
-            Some(Value::List(vs)) => Ok(Value::Int(vs.len() as i64)),
-            Some(Value::String(s)) => Ok(Value::Int(s.len() as i64)),
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("len expects a list or string".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("is_empty", |args| match args.first() {
-            Some(Value::List(vs)) => Ok(Value::Bool(vs.is_empty())),
-            Some(Value::String(s)) => Ok(Value::Bool(s.is_empty())),
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("is_empty expects a list or string".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("push", |args| {
-            if args.len() != 2 {
-                return Err(RuntimeError {
-                    kind: RuntimeErrorKind::TypeError("push expects 2 arguments".into()),
-                    span: Span::dummy(),
-                });
-            }
-            let mut args = args;
-            let val = args.remove(1);
-            match args.into_iter().next() {
-                Some(Value::List(mut vs)) => {
-                    vs.push(val);
-                    Ok(Value::List(vs))
-                }
-                _ => Err(RuntimeError {
-                    kind: RuntimeErrorKind::TypeError(
-                        "push expects a list as first argument".into(),
-                    ),
-                    span: Span::dummy(),
-                }),
-            }
-        });
-        self.register_builtin("to_string", |args| match args.first() {
-            Some(v) => Ok(Value::String(v.display_print())),
-            None => Ok(Value::String(String::new())),
-        });
-        self.register_builtin("parse_int", |args| match args.first() {
-            Some(Value::String(s)) => match s.parse::<i64>() {
-                Ok(n) => Ok(Value::Int(n)),
-                Err(_) => Err(RuntimeError {
-                    kind: RuntimeErrorKind::TypeError(format!("cannot parse '{s}' as Int")),
-                    span: Span::dummy(),
-                }),
-            },
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("parse_int expects a string".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("range", |args| match (args.first(), args.get(1)) {
-            (Some(Value::Int(start)), Some(Value::Int(end))) => {
-                let start = *start;
-                let end = *end;
-                let items = (start..end).map(Value::Int).collect();
-                Ok(Value::List(items))
-            }
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError(
-                    "range expects two Int arguments: range(start, end)".into(),
-                ),
-                span: Span::dummy(),
-            }),
-        });
-        // String builtins
-        self.register_builtin("split", |args| match (args.first(), args.get(1)) {
-            (Some(Value::String(s)), Some(Value::String(sep))) => {
-                let parts: Vec<Value> = s
-                    .split(sep.as_str())
-                    .map(|p| Value::String(p.to_string()))
-                    .collect();
-                Ok(Value::List(parts))
-            }
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("split expects two strings".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("trim", |args| match args.first() {
-            Some(Value::String(s)) => Ok(Value::String(s.trim().to_string())),
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("trim expects a string".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("contains", |args| match (args.first(), args.get(1)) {
-            (Some(Value::String(s)), Some(Value::String(sub))) => {
-                Ok(Value::Bool(s.contains(sub.as_str())))
-            }
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("contains expects two strings".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("starts_with", |args| match (args.first(), args.get(1)) {
-            (Some(Value::String(s)), Some(Value::String(prefix))) => {
-                Ok(Value::Bool(s.starts_with(prefix.as_str())))
-            }
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("starts_with expects two strings".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("replace", |args| {
-            match (args.first(), args.get(1), args.get(2)) {
-                (Some(Value::String(s)), Some(Value::String(from)), Some(Value::String(to))) => {
-                    Ok(Value::String(s.replace(from.as_str(), to.as_str())))
-                }
-                _ => Err(RuntimeError {
-                    kind: RuntimeErrorKind::TypeError("replace expects three strings".into()),
-                    span: Span::dummy(),
-                }),
-            }
-        });
-        self.register_builtin("chars", |args| match args.first() {
-            Some(Value::String(s)) => {
-                let chars: Vec<Value> = s.chars().map(|c| Value::String(c.to_string())).collect();
-                Ok(Value::List(chars))
-            }
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("chars expects a string".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("join", |args| match (args.first(), args.get(1)) {
-            (Some(Value::List(items)), Some(Value::String(sep))) => {
-                let strings: Vec<String> = items
-                    .iter()
-                    .map(|v| match v {
-                        Value::String(s) => s.clone(),
-                        other => other.display_print(),
-                    })
-                    .collect();
-                Ok(Value::String(strings.join(sep.as_str())))
-            }
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("join expects a list and string".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("slice", |args| {
-            match (args.first(), args.get(1), args.get(2)) {
-                (Some(Value::List(items)), Some(Value::Int(start)), Some(Value::Int(end))) => {
-                    let len = items.len() as i64;
-                    let s = (*start).max(0).min(len) as usize;
-                    let e = (*end).max(0).min(len) as usize;
-                    let slice = items[s..e].to_vec();
-                    Ok(Value::List(slice))
-                }
-                _ => Err(RuntimeError {
-                    kind: RuntimeErrorKind::TypeError("slice expects (List, Int, Int)".into()),
-                    span: Span::dummy(),
-                }),
-            }
-        });
-
-        // Numeric builtins
-        self.register_builtin("abs", |args| match args.first() {
-            Some(Value::Int(n)) => Ok(Value::Int(n.abs())),
-            Some(Value::Float(f)) => Ok(Value::Float(f.abs())),
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("abs expects a number".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("min", |args| match (args.first(), args.get(1)) {
-            (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Int(*a.min(b))),
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("min expects two integers".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("max", |args| match (args.first(), args.get(1)) {
-            (Some(Value::Int(a)), Some(Value::Int(b))) => Ok(Value::Int(*a.max(b))),
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("max expects two integers".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("floor", |args| match args.first() {
-            Some(Value::Float(f)) => Ok(Value::Int(f.floor() as i64)),
-            Some(Value::Int(n)) => Ok(Value::Int(*n)),
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("floor expects a number".into()),
-                span: Span::dummy(),
-            }),
-        });
-        self.register_builtin("ceil", |args| match args.first() {
-            Some(Value::Float(f)) => Ok(Value::Int(f.ceil() as i64)),
-            Some(Value::Int(n)) => Ok(Value::Int(*n)),
-            _ => Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("ceil expects a number".into()),
-                span: Span::dummy(),
-            }),
-        });
-
-        // `next` is registered as a placeholder; the real logic lives in
-        // `call_value` which can pattern-match on Value::Generator.
-        self.register_builtin("next", |_args| {
-            Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("next: argument is not a generator".into()),
-                span: Span::dummy(),
-            })
-        });
-        // `generate` is registered as a placeholder; the real logic lives in
-        // `call_value` which can clone the interpreter and spawn a thread.
-        self.register_builtin("generate", |_args| {
-            Err(RuntimeError {
-                kind: RuntimeErrorKind::TypeError("generate: argument must be a function".into()),
-                span: Span::dummy(),
-            })
-        });
+        let mut register = |name: &str, func: fn(Vec<Value>) -> Result<Value, RuntimeError>| {
+            self.register_builtin(name, func);
+        };
+        crate::builtins::register_builtins(&mut register);
     }
 
     fn register_builtin(
@@ -660,6 +480,17 @@ impl Interpreter {
                     let arity = variant.fields.len();
                     self.variant_constructors
                         .insert(variant.name.clone(), arity);
+                    // Register field names for named-field variants
+                    let field_names: Vec<String> = variant
+                        .fields
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, f)| f.name.clone().unwrap_or_else(|| format!("_{idx}")))
+                        .collect();
+                    if variant.fields.iter().any(|f| f.name.is_some()) {
+                        self.variant_field_names
+                            .insert(variant.name.clone(), field_names);
+                    }
                     if arity == 0 {
                         self.env.set(
                             &variant.name,
@@ -805,13 +636,17 @@ impl Interpreter {
             Expr::Resume {
                 value,
                 state_updates,
-                ..
+                span: _,
             } => {
                 let val = self.eval_expr(value)?;
                 let updates = state_updates
                     .iter()
                     .map(|su| Ok((su.name.clone(), self.eval_expr(&su.value)?)))
                     .collect::<Result<Vec<_>, Signal>>()?;
+
+                // Always use Signal::Resume for the `resume(val)` keyword.
+                // Multi-shot (calling resume multiple times) requires using resume
+                // as a first-class function value, which goes through call_value.
                 Err(Signal::Resume {
                     value: val,
                     state_updates: updates,
@@ -940,6 +775,12 @@ impl Interpreter {
             }
 
             Expr::Continue { .. } => Err(Signal::Continue),
+
+            Expr::RecordConstruct {
+                name,
+                fields: named_fields,
+                span,
+            } => self.eval_record_construct(name, named_fields, span),
         }
     }
 
@@ -1177,6 +1018,17 @@ impl Interpreter {
             if name == "generate" {
                 return self.builtin_generate(args, span);
             }
+            if name == "find" {
+                return self.builtin_find(args, span);
+            }
+            if name == "resume" {
+                // Stateful handler resume — emit Signal::Resume
+                let val = args.into_iter().next().unwrap_or(Value::Unit);
+                return Err(Signal::Resume {
+                    value: val,
+                    state_updates: vec![],
+                });
+            }
         }
 
         self.call_depth += 1;
@@ -1273,6 +1125,44 @@ impl Interpreter {
                     // Variant constructor being called with args.
                     break 'trampoline Ok(Value::AdtVariant { name, fields: args });
                 }
+                Value::Continuation {
+                    body,
+                    handler_clauses,
+                    state_bindings,
+                    initial_state,
+                    replay_log: mut log,
+                    env: cont_env,
+                    handler_stack_snapshot,
+                } => {
+                    // Calling a continuation: extend replay log and re-evaluate body.
+                    let resume_value = args.into_iter().next().unwrap_or(Value::Unit);
+                    // Collect state updates from the Resume signal if present
+                    // (for `resume(val) with state = x` syntax)
+                    let state_updates = Vec::new();
+                    log.push(ReplayEntry {
+                        resume_value,
+                        state_updates,
+                    });
+
+                    // Save and restore interpreter state around re-evaluation
+                    let saved_handler_stack =
+                        std::mem::replace(&mut self.handler_stack, handler_stack_snapshot);
+                    let saved_env =
+                        std::mem::replace(&mut self.env, Environment::with_arc_parent(cont_env));
+
+                    let result = self.eval_handle_body(
+                        &body,
+                        &handler_clauses,
+                        &state_bindings,
+                        &initial_state,
+                        &log,
+                    );
+
+                    self.handler_stack = saved_handler_stack;
+                    self.env = saved_env;
+
+                    break 'trampoline result;
+                }
                 _ => {
                     break 'trampoline Err(
                         self.type_err(&format!("cannot call value: {func}"), span)
@@ -1296,7 +1186,63 @@ impl Interpreter {
             (Value::List(vs), "is_empty") => Ok(Value::Bool(vs.is_empty())),
             (Value::String(s), "len") => Ok(Value::Int(s.len() as i64)),
             (Value::String(s), "is_empty") => Ok(Value::Bool(s.is_empty())),
+            (Value::AdtVariant { name, fields }, _) => {
+                // Look up variant definition to resolve field name → index
+                if let Some(field_names) = self.variant_field_names.get(name) {
+                    if let Some(idx) = field_names.iter().position(|n| n == field) {
+                        if idx < fields.len() {
+                            return Ok(fields[idx].clone());
+                        }
+                    }
+                }
+                Err(self.type_err(&format!("no field '{field}' on {name}"), span))
+            }
             _ => Err(self.type_err(&format!("no field '{field}' on {obj}"), span)),
+        }
+    }
+
+    /// Evaluate `Name { field: expr, ... }` — record construction.
+    fn eval_record_construct(
+        &mut self,
+        variant_name: &str,
+        named_fields: &[(String, Expr)],
+        span: &Span,
+    ) -> EvalResult {
+        // Evaluate all field values
+        let mut field_map: Vec<(String, Value)> = Vec::new();
+        for (name, expr) in named_fields {
+            let val = self.eval_expr(expr)?;
+            field_map.push((name.clone(), val));
+        }
+
+        // Look up the variant's field order from the declaration
+        if let Some(field_names) = self.variant_field_names.get(variant_name) {
+            // Reorder values to match declaration order
+            let mut positional = Vec::with_capacity(field_names.len());
+            for decl_name in field_names {
+                let val = field_map
+                    .iter()
+                    .find(|(n, _)| n == decl_name)
+                    .map(|(_, v)| v.clone())
+                    .ok_or_else(|| {
+                        self.type_err(
+                            &format!("missing field '{decl_name}' in {variant_name} {{ ... }}"),
+                            span,
+                        )
+                    })?;
+                positional.push(val);
+            }
+            Ok(Value::AdtVariant {
+                name: variant_name.to_string(),
+                fields: positional,
+            })
+        } else {
+            // No field names registered — treat values in source order
+            let fields: Vec<Value> = field_map.into_iter().map(|(_, v)| v).collect();
+            Ok(Value::AdtVariant {
+                name: variant_name.to_string(),
+                fields,
+            })
         }
     }
 
@@ -1370,11 +1316,15 @@ impl Interpreter {
             handler_stack: self.handler_stack.clone(),
             variant_constructors: self.variant_constructors.clone(),
             effect_ops: self.effect_ops.clone(),
+            variant_field_names: self.variant_field_names.clone(),
             call_depth: 0,
             current_fn_name: None,
             in_tail_position: false,
             generator_sender: Some(value_tx.clone()),
             impl_methods: self.impl_methods.clone(),
+            replay_log: None,
+            replay_pos: 0,
+            continuation_context: None,
         };
 
         std::thread::spawn(move || {
@@ -1386,6 +1336,35 @@ impl Interpreter {
         Ok(Value::Generator {
             receiver: Arc::new(Mutex::new(value_rx)),
         })
+    }
+
+    /// `find(list, fn)` — return first element where fn returns true, or None.
+    fn builtin_find(&mut self, args: Vec<Value>, span: &Span) -> EvalResult {
+        let mut args_iter = args.into_iter();
+        let list = args_iter
+            .next()
+            .ok_or_else(|| self.type_err("find expects 2 arguments", span))?;
+        let func = args_iter
+            .next()
+            .ok_or_else(|| self.type_err("find expects 2 arguments", span))?;
+        match list {
+            Value::List(items) => {
+                for item in items {
+                    let result = self.call_value(func.clone(), vec![item.clone()], span)?;
+                    if result == Value::Bool(true) {
+                        return Ok(Value::AdtVariant {
+                            name: "Some".into(),
+                            fields: vec![item],
+                        });
+                    }
+                }
+                Ok(Value::AdtVariant {
+                    name: "None".into(),
+                    fields: vec![],
+                })
+            }
+            _ => Err(self.type_err("find expects a list as first argument", span)),
+        }
     }
 
     fn eval_block(&mut self, stmts: &[Stmt], tail: Option<&Expr>) -> EvalResult {
@@ -1495,54 +1474,7 @@ impl Interpreter {
         value: &Value,
         bindings: &mut HashMap<String, Value>,
     ) -> bool {
-        match pattern {
-            Pattern::Wildcard(_) => true,
-            Pattern::Binding(name, _) => {
-                bindings.insert(name.clone(), value.clone());
-                true
-            }
-            Pattern::Literal(lit, _) => match (lit, value) {
-                (LitPattern::Int(a), Value::Int(b)) => a == b,
-                (LitPattern::Float(a), Value::Float(b)) => a == b,
-                (LitPattern::String(a), Value::String(b)) => a == b,
-                (LitPattern::Bool(a), Value::Bool(b)) => a == b,
-                _ => false,
-            },
-            Pattern::Variant {
-                name, fields: pats, ..
-            } => match value {
-                Value::AdtVariant {
-                    name: vname,
-                    fields,
-                } => {
-                    if name != vname || pats.len() != fields.len() {
-                        return false;
-                    }
-                    pats.iter()
-                        .zip(fields.iter())
-                        .all(|(p, v)| self.match_pattern(p, v, bindings))
-                }
-                // A 0-field variant pattern matching a Binding-like scenario:
-                // e.g., pattern `None` vs value `None`.
-                _ if pats.is_empty() => {
-                    // Check if the value is a variant with the same name.
-                    matches!(value, Value::AdtVariant { name: vn, fields } if vn == name && fields.is_empty())
-                }
-                _ => false,
-            },
-            Pattern::Tuple(pats, _) => {
-                let vs = match value {
-                    Value::Tuple(vs) | Value::List(vs) => vs,
-                    _ => return false,
-                };
-                if pats.len() != vs.len() {
-                    return false;
-                }
-                pats.iter()
-                    .zip(vs.iter())
-                    .all(|(p, v)| self.match_pattern(p, v, bindings))
-            }
-        }
+        crate::patterns::match_pattern(pattern, value, bindings)
     }
 
     // ── Effect handling ──────────────────────────────────────────
@@ -1553,6 +1485,29 @@ impl Interpreter {
         handler_clauses: &[ast::HandlerClause],
         state_bindings: &[ast::StateBinding],
         _span: &Span,
+    ) -> EvalResult {
+        // Evaluate state binding init expressions
+        let mut initial_state = HashMap::new();
+        for binding in state_bindings {
+            let val = self.eval_expr(&binding.init)?;
+            initial_state.insert(binding.name.clone(), val);
+        }
+
+        self.eval_handle_body(body, handler_clauses, state_bindings, &initial_state, &[])
+    }
+
+    /// Evaluate a handle body with replay support for multi-shot continuations.
+    ///
+    /// When `replay_log` is non-empty, effect operations consume from the log
+    /// instead of dispatching to handlers. When the log is exhausted, the next
+    /// effect dispatches normally and builds a new Continuation.
+    fn eval_handle_body(
+        &mut self,
+        body: &Expr,
+        handler_clauses: &[ast::HandlerClause],
+        state_bindings: &[ast::StateBinding],
+        initial_state: &HashMap<String, Value>,
+        replay_log: &[ReplayEntry],
     ) -> EvalResult {
         // Build handler frame from clauses.
         let mut handlers = HashMap::new();
@@ -1573,52 +1528,60 @@ impl Interpreter {
                         },
                     );
                 }
-                HandlerOp::UseHandler { .. } => {
-                    // Skip for MVP.
-                }
+                HandlerOp::UseHandler { .. } => {}
             }
-        }
-
-        // Evaluate state binding init expressions
-        let mut initial_state = HashMap::new();
-        for binding in state_bindings {
-            let val = self.eval_expr(&binding.init)?;
-            initial_state.insert(binding.name.clone(), val);
         }
 
         let frame = HandlerFrame {
             handlers,
-            state: initial_state,
+            state: initial_state.clone(),
         };
         self.handler_stack.push(frame);
 
+        // Set up replay state
+        let saved_replay = self.replay_log.take();
+        let saved_replay_pos = self.replay_pos;
+        self.replay_log = if !replay_log.is_empty() {
+            Some(replay_log.to_vec())
+        } else {
+            None
+        };
+        self.replay_pos = 0;
+
+        // Store context needed by dispatch_effect to build continuations
+        let saved_ctx = self.continuation_context.take();
+        self.continuation_context = Some(ContinuationContext {
+            body: Arc::new(body.clone()),
+            handler_clauses: Arc::new(handler_clauses.to_vec()),
+            state_bindings: Arc::new(state_bindings.to_vec()),
+            initial_state: initial_state.clone(),
+            env: self.env.capture(),
+        });
+
         let result = self.eval_expr(body);
+
+        // Restore state
+        self.replay_log = saved_replay;
+        self.replay_pos = saved_replay_pos;
+        self.continuation_context = saved_ctx;
         self.handler_stack.pop();
 
         match result {
             Ok(val) => Ok(val),
-            // A handler completed without resume — its value replaces the handle expr
             Err(Signal::HandleDone(val)) => Ok(val),
             Err(other) => Err(other),
         }
     }
 
-    /// Dispatch an effect operation call directly to the nearest handler.
-    /// If the handler calls resume(val), val is returned and execution continues.
-    /// If the handler doesn't resume, Signal::HandleDone propagates up.
+    /// Dispatch an effect operation to the nearest handler.
     ///
-    /// When running inside a generator thread (i.e. `generator_channels` is
-    /// `Some`), a `yield` operation is handled natively: the yielded value is
-    /// sent through the value channel and the thread blocks until the next
-    /// signal arrives, then resumes with `()`.
+    /// In replay mode, returns the logged value. Otherwise, builds a
+    /// `Value::Continuation` and binds it as `resume` in the handler body.
     fn dispatch_effect(&mut self, op_name: &str, args: &[Value], span: &Span) -> EvalResult {
         // Native yield interception for generator threads.
         if op_name == "yield" {
             if let Some(ref value_tx) = self.generator_sender {
                 let val = args.first().cloned().unwrap_or(Value::Unit);
-                // Send the yielded value. The rendezvous channel (capacity 0)
-                // blocks here until `next()` receives, providing the pause
-                // between yields. If the caller dropped the generator, stop.
                 match value_tx.send(Some(val)) {
                     Ok(()) => return Ok(Value::Unit),
                     Err(_) => return Err(Signal::Break(Value::Unit)),
@@ -1626,8 +1589,22 @@ impl Interpreter {
             }
         }
 
-        // Search handler stack from top to bottom for a matching handler.
-        // We need the frame index to write state updates back.
+        // Replay mode: consume from log if available
+        if let Some(ref log) = self.replay_log {
+            if self.replay_pos < log.len() {
+                let entry = log[self.replay_pos].clone();
+                self.replay_pos += 1;
+                // Apply state updates to the current handler frame
+                if let Some(frame) = self.handler_stack.last_mut() {
+                    for (name, val) in &entry.state_updates {
+                        frame.state.insert(name.clone(), val.clone());
+                    }
+                }
+                return Ok(entry.resume_value);
+            }
+        }
+
+        // Normal dispatch: search handler stack for a matching handler.
         let found = self
             .handler_stack
             .iter()
@@ -1636,21 +1613,94 @@ impl Interpreter {
             .find_map(|(idx, frame)| frame.handlers.get(op_name).map(|h| (idx, h.clone())));
 
         if let Some((frame_idx, handler)) = found {
+            // Build a Continuation value from the replay log so far
+            let replay_log_so_far: Vec<ReplayEntry> = self
+                .replay_log
+                .as_ref()
+                .map(|log| log[..self.replay_pos].to_vec())
+                .unwrap_or_default();
+
+            let continuation = if let Some(ref ctx) = self.continuation_context {
+                Value::Continuation {
+                    body: ctx.body.clone(),
+                    handler_clauses: ctx.handler_clauses.clone(),
+                    state_bindings: ctx.state_bindings.clone(),
+                    initial_state: ctx.initial_state.clone(),
+                    replay_log: replay_log_so_far,
+                    env: ctx.env.clone(),
+                    handler_stack_snapshot: self.handler_stack
+                        [..self.handler_stack.len().saturating_sub(1)]
+                        .to_vec(),
+                }
+            } else {
+                // No continuation context — use old signal-based resume (generators, etc.)
+                let mut handler_env = Environment::with_parent(handler.env.clone());
+                for (param, arg) in handler.params.iter().zip(args.iter()) {
+                    handler_env.set(param, arg.clone());
+                }
+                for (name, val) in &self.handler_stack[frame_idx].state {
+                    handler_env.set(name, val.clone());
+                }
+
+                let saved_env = std::mem::replace(&mut self.env, handler_env);
+                let result = self.eval_expr(&handler.body);
+                self.env = saved_env;
+
+                return match result {
+                    Err(Signal::Resume {
+                        value,
+                        state_updates,
+                    }) => {
+                        for (name, val) in state_updates {
+                            self.handler_stack[frame_idx].state.insert(name, val);
+                        }
+                        Ok(value)
+                    }
+                    Ok(val) => Err(Signal::HandleDone(val)),
+                    Err(other) => Err(other),
+                };
+            };
+
+            // Set up handler environment with params + state + resume as continuation
             let mut handler_env = Environment::with_parent(handler.env.clone());
             for (param, arg) in handler.params.iter().zip(args.iter()) {
                 handler_env.set(param, arg.clone());
             }
-            // Inject handler state vars into the handler's environment
             for (name, val) in &self.handler_stack[frame_idx].state {
                 handler_env.set(name, val.clone());
             }
+            // For stateless handlers: bind resume as a Continuation (multi-shot capable).
+            // For stateful handlers: bind resume as a simple function that emits
+            // Signal::Resume (state evolves and can't be replayed correctly).
+            if self.handler_stack[frame_idx].state.is_empty() {
+                handler_env.set("resume", continuation);
+            } else {
+                // Stateful handlers: bind resume as a builtin placeholder.
+                // The actual Signal::Resume is emitted in call_value's "resume" intercept.
+                handler_env.set(
+                    "resume",
+                    Value::BuiltinFn {
+                        name: "resume".to_string(),
+                        func: |_| Ok(Value::Unit), // placeholder; intercepted in call_value
+                    },
+                );
+            }
 
             let saved_env = std::mem::replace(&mut self.env, handler_env);
+            // Save and clear continuation context during handler body eval
+            let saved_ctx = self.continuation_context.take();
+            let saved_replay = self.replay_log.take();
+            let saved_replay_pos = self.replay_pos;
+
             let result = self.eval_expr(&handler.body);
+
+            self.continuation_context = saved_ctx;
+            self.replay_log = saved_replay;
+            self.replay_pos = saved_replay_pos;
             self.env = saved_env;
 
             match result {
-                // Handler called resume(val) — apply state updates and return val
+                // Old signal-based resume (backward compat for `resume(val) with state = x`)
                 Err(Signal::Resume {
                     value,
                     state_updates,
@@ -1660,13 +1710,11 @@ impl Interpreter {
                     }
                     Ok(value)
                 }
-                // Handler returned without resume (like fail) — short-circuit
+                // Handler returned a value — this becomes the handle expr's result
                 Ok(val) => Err(Signal::HandleDone(val)),
-                // Propagate other signals
                 Err(other) => Err(other),
             }
         } else {
-            // No handler found — unhandled effect
             Err(Signal::from(RuntimeError {
                 kind: RuntimeErrorKind::UnhandledEffect {
                     effect: String::new(),

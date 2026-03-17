@@ -785,10 +785,12 @@ impl TypeEnv {
                 effects: EffectRow::pure(),
             },
         );
+        // contains: polymorphic — works on strings and lists
+        let t_contains = self.fresh_var();
         self.bind(
             "contains",
             Type::Function {
-                params: vec![Type::String, Type::String],
+                params: vec![t_contains.clone(), t_contains],
                 return_type: Box::new(Type::Bool),
                 effects: EffectRow::pure(),
             },
@@ -880,6 +882,94 @@ impl TypeEnv {
             },
         );
 
+        // sort: (List<T>) -> List<T>
+        let t_sort = self.fresh_var();
+        self.bind(
+            "sort",
+            Type::Function {
+                params: vec![Type::List(Box::new(t_sort.clone()))],
+                return_type: Box::new(Type::List(Box::new(t_sort))),
+                effects: EffectRow::pure(),
+            },
+        );
+        // zip: (List<A>, List<B>) -> List<(A, B)>
+        let t_a = self.fresh_var();
+        let t_b = self.fresh_var();
+        self.bind(
+            "zip",
+            Type::Function {
+                params: vec![
+                    Type::List(Box::new(t_a.clone())),
+                    Type::List(Box::new(t_b.clone())),
+                ],
+                return_type: Box::new(Type::List(Box::new(Type::Tuple(vec![t_a, t_b])))),
+                effects: EffectRow::pure(),
+            },
+        );
+        // enumerate: (List<T>) -> List<(Int, T)>
+        let t_enum = self.fresh_var();
+        self.bind(
+            "enumerate",
+            Type::Function {
+                params: vec![Type::List(Box::new(t_enum.clone()))],
+                return_type: Box::new(Type::List(Box::new(Type::Tuple(vec![Type::Int, t_enum])))),
+                effects: EffectRow::pure(),
+            },
+        );
+        // find: (List<T>, (T) -> Bool) -> Option<T>
+        let t_find = self.fresh_var();
+        self.bind(
+            "find",
+            Type::Function {
+                params: vec![
+                    Type::List(Box::new(t_find.clone())),
+                    Type::Function {
+                        params: vec![t_find.clone()],
+                        return_type: Box::new(Type::Bool),
+                        effects: EffectRow::pure(),
+                    },
+                ],
+                return_type: Box::new(t_find),
+                effects: EffectRow::pure(),
+            },
+        );
+        // string_length: (String) -> Int
+        self.bind(
+            "string_length",
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::Int),
+                effects: EffectRow::pure(),
+            },
+        );
+        // string_contains: (String, String) -> Bool
+        self.bind(
+            "string_contains",
+            Type::Function {
+                params: vec![Type::String, Type::String],
+                return_type: Box::new(Type::Bool),
+                effects: EffectRow::pure(),
+            },
+        );
+        // string_split: (String, String) -> List<String>
+        self.bind(
+            "string_split",
+            Type::Function {
+                params: vec![Type::String, Type::String],
+                return_type: Box::new(Type::List(Box::new(Type::String))),
+                effects: EffectRow::pure(),
+            },
+        );
+        // string_trim: (String) -> String
+        self.bind(
+            "string_trim",
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::String),
+                effects: EffectRow::pure(),
+            },
+        );
+
         // Builtin Yield effect: yield(T) -> ()
         // Registered so that `yield(val)` inside generator functions type-checks.
         let t = self.fresh_var();
@@ -910,11 +1000,15 @@ impl TypeEnv {
     fn register_type_decl(&mut self, td: &TypeDecl) -> Result<(), TypeError> {
         let mut variants = Vec::new();
         for (i, v) in td.variants.iter().enumerate() {
-            // For MVP, variant field types that reference type params become fresh vars
-            let fields: Vec<Type> = v
+            let fields: Vec<(String, Type)> = v
                 .fields
                 .iter()
-                .map(|f| self.resolve_type_expr(f).unwrap_or(Type::Error))
+                .enumerate()
+                .map(|(idx, f)| {
+                    let name = f.name.clone().unwrap_or_else(|| format!("_{idx}"));
+                    let ty = self.resolve_type_expr(&f.ty).unwrap_or(Type::Error);
+                    (name, ty)
+                })
                 .collect();
             variants.push(VariantDef {
                 name: v.name.clone(),
@@ -1185,9 +1279,11 @@ impl TypeEnv {
                             name: adt_name,
                             type_args,
                         };
+                        let param_types: Vec<Type> =
+                            variant.fields.iter().map(|(_, ty)| ty.clone()).collect();
                         return Ok((
                             Type::Function {
-                                params: variant.fields.clone(),
+                                params: param_types,
                                 return_type: Box::new(ret_ty),
                                 effects: EffectRow::pure(),
                             },
@@ -1506,6 +1602,59 @@ impl TypeEnv {
             }
 
             Expr::Continue { .. } => Ok((Type::Unit, EffectRow::pure())),
+
+            Expr::RecordConstruct {
+                name,
+                fields: named_fields,
+                span,
+            } => {
+                // Look up the variant constructor
+                let (adt_name, idx) = self.lookup_constructor(name).ok_or_else(|| TypeError {
+                    kind: TypeErrorKind::UnboundVariable(name.clone()),
+                    span: span.clone(),
+                })?;
+                let adt_def = self
+                    .lookup_adt(&adt_name)
+                    .cloned()
+                    .ok_or_else(|| TypeError {
+                        kind: TypeErrorKind::UnboundType(adt_name.clone()),
+                        span: span.clone(),
+                    })?;
+                let variant = &adt_def.variants[idx];
+                let type_args: Vec<Type> = adt_def
+                    .type_params
+                    .iter()
+                    .map(|_| self.fresh_var())
+                    .collect();
+
+                let mut effs = EffectRow::pure();
+                // Type check each named field
+                for (field_name, field_expr) in named_fields {
+                    let field_ty = variant
+                        .fields
+                        .iter()
+                        .find(|(n, _)| n == field_name)
+                        .map(|(_, ty)| ty.clone())
+                        .ok_or_else(|| TypeError {
+                            kind: TypeErrorKind::UnboundVariable(format!(
+                                "{}.{}",
+                                name, field_name
+                            )),
+                            span: span.clone(),
+                        })?;
+                    let (arg_ty, eff) = self.infer_expr(field_expr)?;
+                    self.unify(&field_ty, &arg_ty, span)?;
+                    effs = effs.union(&eff);
+                }
+
+                Ok((
+                    Type::Adt {
+                        name: adt_name,
+                        type_args,
+                    },
+                    effs,
+                ))
+            }
         }
     }
 
@@ -1564,9 +1713,9 @@ impl TypeEnv {
                 match &resolved {
                     Type::String | Type::List(_) => Ok((resolved, effs)),
                     Type::Var(_) => {
-                        // Default to String
-                        self.unify(&resolved, &Type::String, span)?;
-                        Ok((Type::String, effs))
+                        // Keep as type variable — will be resolved when more
+                        // context is available (e.g. multi-shot resume returns List)
+                        Ok((resolved, effs))
                     }
                     _ => Err(TypeError {
                         kind: TypeErrorKind::Mismatch {
@@ -1757,7 +1906,7 @@ impl TypeEnv {
             .map(|_| self.fresh_var())
             .collect();
 
-        for (field_ty, arg) in variant.fields.iter().zip(args) {
+        for ((_, field_ty), arg) in variant.fields.iter().zip(args) {
             let (arg_ty, eff) = self.infer_expr(arg)?;
             self.unify(field_ty, &arg_ty, span)?;
             effs = effs.union(&eff);
@@ -1910,8 +2059,55 @@ impl TypeEnv {
                 };
                 self.unify(expected_ty, &adt_ty, pat_span)?;
 
-                for (field_pat, field_ty) in fields.iter().zip(variant.fields.iter()) {
+                for (field_pat, (_, field_ty)) in fields.iter().zip(variant.fields.iter()) {
                     self.check_pattern(field_pat, field_ty, pat_span)?;
+                }
+                Ok(())
+            }
+            Pattern::Record {
+                name,
+                fields,
+                span: pat_span,
+            } => {
+                let (adt_name, idx) = self.lookup_constructor(name).ok_or_else(|| TypeError {
+                    kind: TypeErrorKind::UnboundVariable(name.clone()),
+                    span: pat_span.clone(),
+                })?;
+                let adt_def = self
+                    .lookup_adt(&adt_name)
+                    .cloned()
+                    .ok_or_else(|| TypeError {
+                        kind: TypeErrorKind::UnboundType(adt_name.clone()),
+                        span: pat_span.clone(),
+                    })?;
+                let variant = &adt_def.variants[idx];
+                // Unify scrutinee type with the ADT type
+                let type_args: Vec<Type> = adt_def
+                    .type_params
+                    .iter()
+                    .map(|_| self.fresh_var())
+                    .collect();
+                let adt_ty = Type::Adt {
+                    name: adt_name,
+                    type_args,
+                };
+                self.unify(expected_ty, &adt_ty, pat_span)?;
+
+                // Resolve field names to types
+                for (field_name, field_pat) in fields {
+                    let field_ty = variant
+                        .fields
+                        .iter()
+                        .find(|(n, _)| n == field_name)
+                        .map(|(_, ty)| ty.clone())
+                        .ok_or_else(|| TypeError {
+                            kind: TypeErrorKind::UnboundVariable(format!(
+                                "{}.{}",
+                                name, field_name
+                            )),
+                            span: pat_span.clone(),
+                        })?;
+                    self.check_pattern(field_pat, &field_ty, pat_span)?;
                 }
                 Ok(())
             }
@@ -1921,6 +2117,29 @@ impl TypeEnv {
                 self.unify(expected_ty, &tuple_ty, pat_span)?;
                 for (pat, ty) in pats.iter().zip(elem_types.iter()) {
                     self.check_pattern(pat, ty, pat_span)?;
+                }
+                Ok(())
+            }
+            Pattern::List {
+                elements,
+                rest,
+                span: pat_span,
+            } => {
+                let elem_ty = self.fresh_var();
+                let list_ty = Type::List(Box::new(elem_ty.clone()));
+                self.unify(expected_ty, &list_ty, pat_span)?;
+                for elem_pat in elements {
+                    self.check_pattern(elem_pat, &elem_ty, pat_span)?;
+                }
+                if let Some(rest_pat) = rest {
+                    let rest_ty = Type::List(Box::new(elem_ty));
+                    self.check_pattern(rest_pat, &rest_ty, pat_span)?;
+                }
+                Ok(())
+            }
+            Pattern::Or(alternatives, pat_span) => {
+                for alt in alternatives {
+                    self.check_pattern(alt, expected_ty, pat_span)?;
                 }
                 Ok(())
             }
@@ -1989,6 +2208,17 @@ impl TypeEnv {
                     for (name, ty) in &state_types {
                         child.bind(name, ty.clone());
                     }
+
+                    // Bind `resume` as a callable function: (ReturnType) -> T
+                    let resume_ret = child.fresh_var();
+                    child.bind(
+                        "resume",
+                        Type::Function {
+                            params: vec![op_info.return_type.clone()],
+                            return_type: Box::new(resume_ret),
+                            effects: EffectRow::pure(),
+                        },
+                    );
 
                     let (body_ty, body_effs) = child.infer_expr(body)?;
                     self.merge_child(&child);

@@ -468,7 +468,9 @@ impl<'src> Lexer<'src> {
             "effect" => TokenKind::Effect,
             "handle" => TokenKind::Handle,
             "with" => TokenKind::With,
-            "resume" => TokenKind::Resume,
+            // "resume" is NOT a keyword — it's a regular identifier bound as a
+            // Continuation value in handler bodies. This allows multi-shot:
+            // `resume(true) ++ resume(false)` goes through call_value.
             "pub" => TokenKind::Pub,
             "own" => TokenKind::Own,
             "ref" => TokenKind::Ref,

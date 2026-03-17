@@ -1,0 +1,79 @@
+// Named Record Fields — Phase 6A
+//
+// ADT variants with named fields. Construction uses `Name { field: value }`,
+// destructuring uses `Name { field }` in patterns, and fields are accessible
+// via `.field_name`. Positional variants are unchanged.
+
+// ── Named field variants ────────────────────────────────────────
+
+type Person = Person { name: String, age: Int }
+type Shape = Circle { radius: Float } | Rect { w: Float, h: Float }
+
+// ── Construction ────────────────────────────────────────────────
+
+let alice = Person { name: "Alice", age: 30 }
+let bob = Person { name: "Bob", age: 25 }
+
+print("=== Record Construction ===")
+print("Alice: " ++ alice.name ++ ", age " ++ to_string(alice.age))
+print("Bob: " ++ bob.name ++ ", age " ++ to_string(bob.age))
+
+// ── Pattern matching with named fields ──────────────────────────
+
+fn describe(p: Person) -> String = match p {
+  Person { name, age } if age >= 30 => name ++ " is 30+",
+  Person { name, age } => name ++ " is " ++ to_string(age),
+}
+
+print("")
+print("=== Record Patterns ===")
+print(describe(alice))
+print(describe(bob))
+
+// ── Shapes with mixed variant styles ────────────────────────────
+
+fn area(s: Shape) -> Float = match s {
+  Circle { radius } => 3.14159 * radius * radius,
+  Rect { w, h } => w * h,
+}
+
+let c = Circle { radius: 5.0 }
+let r = Rect { w: 3.0, h: 4.0 }
+
+print("")
+print("=== Shape Areas ===")
+print("Circle area: " ++ to_string(area(c)))
+print("Rect area: " ++ to_string(area(r)))
+
+// ── List patterns ───────────────────────────────────────────────
+
+fn describe_list(items) = match items {
+  [] => "empty",
+  [only] => "just " ++ to_string(only),
+  [first, second, ...rest] => to_string(first) ++ ", " ++ to_string(second) ++ " and " ++ to_string(len(rest)) ++ " more",
+}
+
+print("")
+print("=== List Patterns ===")
+print(describe_list([]))
+print(describe_list([42]))
+print(describe_list([1, 2, 3, 4, 5]))
+
+// ── Or-patterns ─────────────────────────────────────────────────
+
+type Color = Red | Green | Blue | Yellow | Purple
+
+fn is_primary(c: Color) -> Bool = match c {
+  Red | Blue | Yellow => true,
+  _ => false,
+}
+
+print("")
+print("=== Or-Patterns ===")
+print("Red primary? " ++ to_string(is_primary(Red)))
+print("Green primary? " ++ to_string(is_primary(Green)))
+print("Blue primary? " ++ to_string(is_primary(Blue)))
+print("Purple primary? " ++ to_string(is_primary(Purple)))
+
+print("")
+print("Records, list patterns, and or-patterns: clarity through structure.")

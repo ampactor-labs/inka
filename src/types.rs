@@ -306,8 +306,13 @@ pub struct AdtDef {
 }
 
 /// A resolved ADT variant.
+///
+/// Fields are stored as `(name, type)` pairs. For positional variants,
+/// names are synthetic: `"_0"`, `"_1"`, etc. Named fields keep their
+/// declared names. The positional order in the Vec is canonical —
+/// runtime `Value::AdtVariant.fields` uses the same indices.
 #[derive(Debug, Clone)]
 pub struct VariantDef {
     pub name: String,
-    pub fields: Vec<Type>,
+    pub fields: Vec<(String, Type)>,
 }

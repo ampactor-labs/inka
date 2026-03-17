@@ -90,10 +90,17 @@ pub struct TypeDecl {
     pub span: Span,
 }
 
+/// A field in an ADT variant — either positional (name is None) or named.
+#[derive(Debug, Clone)]
+pub struct VariantField {
+    pub name: Option<String>,
+    pub ty: TypeExpr,
+}
+
 #[derive(Debug, Clone)]
 pub struct Variant {
     pub name: String,
-    pub fields: Vec<TypeExpr>,
+    pub fields: Vec<VariantField>,
     pub span: Span,
 }
 
@@ -262,6 +269,13 @@ pub enum Expr {
     },
     /// `continue`
     Continue { span: Span },
+
+    /// Record construction: `Name { field: expr, ... }`
+    RecordConstruct {
+        name: String,
+        fields: Vec<(String, Expr)>,
+        span: Span,
+    },
 }
 
 impl Expr {
@@ -293,7 +307,8 @@ impl Expr {
             | Expr::Loop { span, .. }
             | Expr::For { span, .. }
             | Expr::Break { span, .. }
-            | Expr::Continue { span, .. } => span,
+            | Expr::Continue { span, .. }
+            | Expr::RecordConstruct { span, .. } => span,
             Expr::Tuple(_, s) => s,
         }
     }
@@ -350,14 +365,28 @@ pub enum Pattern {
     Binding(String, Span),
     /// `42`, `"hello"`, `true`
     Literal(LitPattern, Span),
-    /// `Some(x)` or `Cons(head, tail)`
+    /// `Some(x)` or `Cons(head, tail)` — positional variant pattern
     Variant {
         name: String,
         fields: Vec<Pattern>,
         span: Span,
     },
+    /// `Person { name, age }` — named field variant pattern
+    Record {
+        name: String,
+        fields: Vec<(String, Pattern)>,
+        span: Span,
+    },
     /// `(a, b, c)`
     Tuple(Vec<Pattern>, Span),
+    /// `[a, b, c]` or `[head, ...tail]` — list destructuring
+    List {
+        elements: Vec<Pattern>,
+        rest: Option<Box<Pattern>>,
+        span: Span,
+    },
+    /// `A | B | C` — or-pattern (all alternatives must bind same variables)
+    Or(Vec<Pattern>, Span),
 }
 
 #[derive(Debug, Clone)]

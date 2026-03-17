@@ -14,3 +14,5 @@ fn any(pred, xs) = if len(xs) == 0 { false } else { if pred(xs[0]) { true } else
 fn all(pred, xs) = if len(xs) == 0 { true } else { if pred(xs[0]) { all(pred, slice(xs, 1, len(xs))) } else { false } }
 fn sum(xs) = fold(xs, 0, |acc, x| acc + x)
 fn product(xs) = fold(xs, 1, |acc, x| acc * x)
+fn concat(xss) = flatten(xss)
+fn zip_with(f, xs, ys) = if len(xs) == 0 { [] } else { if len(ys) == 0 { [] } else { [f(xs[0], ys[0])] ++ zip_with(f, slice(xs, 1, len(xs)), slice(ys, 1, len(ys))) } }

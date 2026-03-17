@@ -157,6 +157,20 @@ impl Parser {
             self.advance();
         }
     }
+
+    /// Lookahead: is the current `{` the start of a record construction?
+    ///
+    /// Returns true if the tokens after `{` match `ident :` (field: value).
+    /// This disambiguates `Name { field: value }` from `Name { block_expr }`.
+    fn is_record_construction_ahead(&self) -> bool {
+        // Current token is `{`. Check pos+1 and pos+2.
+        let tok1 = self.tokens.get(self.pos + 1).map(|t| &t.kind);
+        let tok2 = self.tokens.get(self.pos + 2).map(|t| &t.kind);
+        matches!(
+            (tok1, tok2),
+            (Some(TokenKind::Ident(_)), Some(TokenKind::Colon))
+        )
+    }
 }
 
 // ── Program & top-level items ────────────────────────────────────
@@ -363,18 +377,57 @@ impl Parser {
         let (name, span) = self.expect_ident()?;
         let mut fields = Vec::new();
         if self.at_exact(&TokenKind::LParen) {
+            // Positional fields: Variant(Type, Type, ...)
             self.advance();
             if !self.at_exact(&TokenKind::RParen) {
-                fields.push(self.parse_type_expr()?);
+                fields.push(VariantField {
+                    name: None,
+                    ty: self.parse_type_expr()?,
+                });
                 while self.at_exact(&TokenKind::Comma) {
                     self.advance();
                     if self.at_exact(&TokenKind::RParen) {
                         break;
                     }
-                    fields.push(self.parse_type_expr()?);
+                    fields.push(VariantField {
+                        name: None,
+                        ty: self.parse_type_expr()?,
+                    });
                 }
             }
             let end_tok = self.expect(&TokenKind::RParen)?;
+            let end_span = Span::new(span.start, end_tok.span.end, span.line, span.column);
+            Ok(Variant {
+                name,
+                fields,
+                span: end_span,
+            })
+        } else if self.at_exact(&TokenKind::LBrace) {
+            // Named fields: Variant { name: Type, name: Type, ... }
+            self.advance();
+            if !self.at_exact(&TokenKind::RBrace) {
+                let (field_name, _) = self.expect_ident()?;
+                self.expect(&TokenKind::Colon)?;
+                let ty = self.parse_type_expr()?;
+                fields.push(VariantField {
+                    name: Some(field_name),
+                    ty,
+                });
+                while self.at_exact(&TokenKind::Comma) {
+                    self.advance();
+                    if self.at_exact(&TokenKind::RBrace) {
+                        break;
+                    }
+                    let (field_name, _) = self.expect_ident()?;
+                    self.expect(&TokenKind::Colon)?;
+                    let ty = self.parse_type_expr()?;
+                    fields.push(VariantField {
+                        name: Some(field_name),
+                        ty,
+                    });
+                }
+            }
+            let end_tok = self.expect(&TokenKind::RBrace)?;
             let end_span = Span::new(span.start, end_tok.span.end, span.line, span.column);
             Ok(Variant {
                 name,
@@ -896,6 +949,105 @@ impl Parser {
                     TokenKind::Ident(n) => n,
                     _ => unreachable!(),
                 };
+
+                // `resume(val) with state = expr` — stateful resume
+                // Plain `resume(val)` is a normal call (handled by postfix parsing).
+                if name == "resume" && self.at_exact(&TokenKind::LParen) {
+                    // Peek ahead: does `)` follow by `with`?
+                    // Save pos, try parsing, backtrack if no `with`.
+                    let saved = self.pos;
+                    self.advance(); // consume `(`
+                    let value = self.parse_expr()?;
+                    self.expect(&TokenKind::RParen)?;
+                    if self.at_exact(&TokenKind::With) {
+                        // Stateful resume: parse state updates
+                        self.advance();
+                        let mut state_updates = Vec::new();
+                        let mut end;
+                        loop {
+                            let update_span = self.peek_span();
+                            let (uname, _) = self.expect_ident()?;
+                            self.expect(&TokenKind::Eq)?;
+                            let val_expr = self.parse_expr()?;
+                            end = val_expr.span().end;
+                            state_updates.push(StateUpdate {
+                                name: uname,
+                                value: val_expr,
+                                span: Span::new(
+                                    update_span.start,
+                                    end,
+                                    update_span.line,
+                                    update_span.column,
+                                ),
+                            });
+                            if !self.at_exact(&TokenKind::Comma) {
+                                break;
+                            }
+                            let next = self
+                                .tokens
+                                .get(self.pos + 1)
+                                .map(|t| &t.kind)
+                                .unwrap_or(&TokenKind::Eof);
+                            let next2 = self
+                                .tokens
+                                .get(self.pos + 2)
+                                .map(|t| &t.kind)
+                                .unwrap_or(&TokenKind::Eof);
+                            if matches!(next, TokenKind::Ident(_)) && next2 == &TokenKind::Eq {
+                                self.advance();
+                            } else {
+                                break;
+                            }
+                        }
+                        let span = Span::new(tok.span.start, end, tok.span.line, tok.span.column);
+                        return Ok(Expr::Resume {
+                            value: Box::new(value),
+                            state_updates,
+                            span,
+                        });
+                    }
+                    // No `with` — backtrack and let it be a normal call
+                    self.pos = saved;
+                }
+
+                // Record construction: `Name { field: expr, ... }`
+                // Only for uppercase names, and only when lookahead confirms
+                // `{ ident : ...}` pattern (to avoid ambiguity with `Name { block }`)
+                if name.chars().next().is_some_and(|c| c.is_uppercase())
+                    && self.at_exact(&TokenKind::LBrace)
+                    && self.is_record_construction_ahead()
+                {
+                    self.advance(); // consume `{`
+                    let mut fields = Vec::new();
+                    if !self.at_exact(&TokenKind::RBrace) {
+                        loop {
+                            let (field_name, _) = self.expect_ident()?;
+                            let value = if self.at_exact(&TokenKind::Colon) {
+                                self.advance();
+                                self.parse_expr()?
+                            } else {
+                                // Shorthand: `{ name }` = `{ name: name }`
+                                Expr::Var(field_name.clone(), self.peek_span())
+                            };
+                            fields.push((field_name, value));
+                            if !self.at_exact(&TokenKind::Comma) {
+                                break;
+                            }
+                            self.advance();
+                            if self.at_exact(&TokenKind::RBrace) {
+                                break;
+                            }
+                        }
+                    }
+                    let end_tok = self.expect(&TokenKind::RBrace)?;
+                    let span = Span::new(
+                        tok.span.start,
+                        end_tok.span.end,
+                        tok.span.line,
+                        tok.span.column,
+                    );
+                    return Ok(Expr::RecordConstruct { name, fields, span });
+                }
                 Ok(Expr::Var(name, tok.span))
             }
 
@@ -996,14 +1148,16 @@ impl Parser {
             // Handle expression
             TokenKind::Handle => self.parse_handle_expr(),
 
-            // Resume expression: resume(val) [with name = expr, ...]
+            // Resume expression: resume(val) with name = expr, ...
+            // Only parsed when `with` state updates follow. Plain `resume(val)` is
+            // a normal function call (resume is an Ident, goes through call_value).
             TokenKind::Resume => {
+                // Legacy: if TokenKind::Resume still appears, handle it
                 let tok = self.advance();
                 self.expect(&TokenKind::LParen)?;
                 let value = self.parse_expr()?;
                 let rparen_tok = self.expect(&TokenKind::RParen)?;
 
-                // Parse optional state updates: `with name = expr, ...`
                 let mut state_updates = Vec::new();
                 let mut end = rparen_tok.span.end;
                 if self.at_exact(&TokenKind::With) {
@@ -1490,14 +1644,35 @@ impl Pattern {
             Pattern::Wildcard(s)
             | Pattern::Binding(_, s)
             | Pattern::Literal(_, s)
-            | Pattern::Tuple(_, s) => s,
-            Pattern::Variant { span, .. } => span,
+            | Pattern::Tuple(_, s)
+            | Pattern::Or(_, s) => s,
+            Pattern::Variant { span, .. }
+            | Pattern::Record { span, .. }
+            | Pattern::List { span, .. } => span,
         }
     }
 }
 
 impl Parser {
     fn parse_pattern(&mut self) -> Result<Pattern, LuxError> {
+        let pat = self.parse_single_pattern()?;
+        // Check for or-pattern: `A | B | C`
+        if self.at_exact(&TokenKind::Pipe) {
+            let start_span = pat.span().clone();
+            let mut alternatives = vec![pat];
+            while self.at_exact(&TokenKind::Pipe) {
+                self.advance();
+                alternatives.push(self.parse_single_pattern()?);
+            }
+            let end = alternatives.last().unwrap().span().end;
+            let span = Span::new(start_span.start, end, start_span.line, start_span.column);
+            Ok(Pattern::Or(alternatives, span))
+        } else {
+            Ok(pat)
+        }
+    }
+
+    fn parse_single_pattern(&mut self) -> Result<Pattern, LuxError> {
         match self.peek().clone() {
             TokenKind::Underscore => {
                 let tok = self.advance();
@@ -1558,6 +1733,59 @@ impl Parser {
                 );
                 Ok(Pattern::Tuple(pats, span))
             }
+            // List pattern: [a, b, ...rest]
+            TokenKind::LBracket => {
+                let start_span = self.peek_span();
+                self.advance();
+                let mut elements = Vec::new();
+                let mut rest = None;
+                if !self.at_exact(&TokenKind::RBracket) {
+                    // Check for `...name` spread
+                    if self.at_exact(&TokenKind::DotDot) {
+                        // We use `..` + ident for spread (parser sees DotDot then Dot then Ident, or we handle `...`)
+                        // Actually `...` is not a single token. Let's check: DotDot followed by something.
+                        // The lexer produces DotDot (..) and Dot (.). So `...name` = DotDot + Dot? No.
+                        // Let me handle this: `...` is DotDot + the next char. Actually the lexer
+                        // would lex `...x` as DotDot, then `.x` or Dot + Ident.
+                        // Simpler approach: use `...` as DotDot followed immediately by Dot.
+                        self.advance(); // consume DotDot
+                        if self.at_exact(&TokenKind::Dot) {
+                            self.advance(); // consume Dot — now we have `...`
+                        }
+                        rest = Some(Box::new(self.parse_single_pattern()?));
+                    } else {
+                        elements.push(self.parse_pattern()?);
+                        while self.at_exact(&TokenKind::Comma) {
+                            self.advance();
+                            if self.at_exact(&TokenKind::RBracket) {
+                                break;
+                            }
+                            // Check for `...name` spread
+                            if self.at_exact(&TokenKind::DotDot) {
+                                self.advance();
+                                if self.at_exact(&TokenKind::Dot) {
+                                    self.advance();
+                                }
+                                rest = Some(Box::new(self.parse_single_pattern()?));
+                                break;
+                            }
+                            elements.push(self.parse_pattern()?);
+                        }
+                    }
+                }
+                let end_tok = self.expect(&TokenKind::RBracket)?;
+                let span = Span::new(
+                    start_span.start,
+                    end_tok.span.end,
+                    start_span.line,
+                    start_span.column,
+                );
+                Ok(Pattern::List {
+                    elements,
+                    rest,
+                    span,
+                })
+            }
             TokenKind::Ident(_) => {
                 let tok = self.advance();
                 let name = match tok.kind {
@@ -1565,7 +1793,7 @@ impl Parser {
                     _ => unreachable!(),
                 };
 
-                // Check if it's a variant pattern: Name(fields)
+                // Check if it's a variant pattern with positional fields: Name(fields)
                 if self.at_exact(&TokenKind::LParen) {
                     self.advance();
                     let mut fields = Vec::new();
@@ -1587,6 +1815,38 @@ impl Parser {
                         tok.span.column,
                     );
                     Ok(Pattern::Variant { name, fields, span })
+                } else if self.at_exact(&TokenKind::LBrace) {
+                    // Record pattern: Name { field_name, field_name: pat, ... }
+                    self.advance();
+                    let mut fields = Vec::new();
+                    if !self.at_exact(&TokenKind::RBrace) {
+                        loop {
+                            let (field_name, field_span) = self.expect_ident()?;
+                            let pat = if self.at_exact(&TokenKind::Colon) {
+                                self.advance();
+                                self.parse_pattern()?
+                            } else {
+                                // Shorthand: `{ name }` is sugar for `{ name: name }`
+                                Pattern::Binding(field_name.clone(), field_span)
+                            };
+                            fields.push((field_name, pat));
+                            if !self.at_exact(&TokenKind::Comma) {
+                                break;
+                            }
+                            self.advance();
+                            if self.at_exact(&TokenKind::RBrace) {
+                                break;
+                            }
+                        }
+                    }
+                    let end_tok = self.expect(&TokenKind::RBrace)?;
+                    let span = Span::new(
+                        tok.span.start,
+                        end_tok.span.end,
+                        tok.span.line,
+                        tok.span.column,
+                    );
+                    Ok(Pattern::Record { name, fields, span })
                 } else {
                     // Simple binding — but uppercase names are likely variants with no fields
                     if name.chars().next().is_some_and(|c| c.is_uppercase()) {

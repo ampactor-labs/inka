@@ -210,15 +210,20 @@ pub enum Expr {
     /// String interpolation `"Hello, {name}!"`
     StringInterp { parts: Vec<StringPart>, span: Span },
 
-    /// `handle expr { handler_clauses }`
+    /// `handle expr [with state = init, ...] { handler_clauses }`
     Handle {
         expr: Box<Expr>,
         handlers: Vec<HandlerClause>,
+        state_bindings: Vec<StateBinding>,
         span: Span,
     },
 
-    /// `resume(value)` — resume a suspended effect computation
-    Resume { value: Box<Expr>, span: Span },
+    /// `resume(value) [with name = expr, ...]` — resume a suspended effect computation
+    Resume {
+        value: Box<Expr>,
+        state_updates: Vec<StateUpdate>,
+        span: Span,
+    },
 
     /// Perform an effect operation (implicitly: just call it like a function)
     /// The checker resolves plain `Call` nodes that reference effect ops into this.
@@ -406,6 +411,22 @@ pub enum StringPart {
 }
 
 // ── Effect handling ───────────────────────────────────────────
+
+/// A state binding in a `handle ... with name = expr { ... }` expression.
+#[derive(Debug, Clone)]
+pub struct StateBinding {
+    pub name: String,
+    pub init: Expr,
+    pub span: Span,
+}
+
+/// A state update in `resume(val) with name = expr`.
+#[derive(Debug, Clone)]
+pub struct StateUpdate {
+    pub name: String,
+    pub value: Expr,
+    pub span: Span,
+}
 
 /// A clause in a `handle` expression.
 #[derive(Debug, Clone)]

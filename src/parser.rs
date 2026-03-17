@@ -996,20 +996,62 @@ impl Parser {
             // Handle expression
             TokenKind::Handle => self.parse_handle_expr(),
 
-            // Resume expression
+            // Resume expression: resume(val) [with name = expr, ...]
             TokenKind::Resume => {
                 let tok = self.advance();
                 self.expect(&TokenKind::LParen)?;
                 let value = self.parse_expr()?;
-                let end_tok = self.expect(&TokenKind::RParen)?;
-                let span = Span::new(
-                    tok.span.start,
-                    end_tok.span.end,
-                    tok.span.line,
-                    tok.span.column,
-                );
+                let rparen_tok = self.expect(&TokenKind::RParen)?;
+
+                // Parse optional state updates: `with name = expr, ...`
+                let mut state_updates = Vec::new();
+                let mut end = rparen_tok.span.end;
+                if self.at_exact(&TokenKind::With) {
+                    self.advance();
+                    loop {
+                        let update_span = self.peek_span();
+                        let (name, _) = self.expect_ident()?;
+                        self.expect(&TokenKind::Eq)?;
+                        let val_expr = self.parse_expr()?;
+                        end = val_expr.span().end;
+                        state_updates.push(StateUpdate {
+                            name,
+                            value: val_expr,
+                            span: Span::new(
+                                update_span.start,
+                                end,
+                                update_span.line,
+                                update_span.column,
+                            ),
+                        });
+                        // Comma is ambiguous: `resume(()) with a = 1, b = 2`
+                        // vs handler clause separator `resume(()) with a = 1, next_op(...)`
+                        // Disambiguate: comma followed by ident then `=` is another update.
+                        if !self.at_exact(&TokenKind::Comma) {
+                            break;
+                        }
+                        let next = self
+                            .tokens
+                            .get(self.pos + 1)
+                            .map(|t| &t.kind)
+                            .unwrap_or(&TokenKind::Eof);
+                        let next2 = self
+                            .tokens
+                            .get(self.pos + 2)
+                            .map(|t| &t.kind)
+                            .unwrap_or(&TokenKind::Eof);
+                        if matches!(next, TokenKind::Ident(_)) && next2 == &TokenKind::Eq {
+                            self.advance(); // consume the comma
+                        } else {
+                            break; // comma belongs to handler clause separator
+                        }
+                    }
+                }
+
+                let span = Span::new(tok.span.start, end, tok.span.line, tok.span.column);
                 Ok(Expr::Resume {
                     value: Box::new(value),
+                    state_updates,
                     span,
                 })
             }
@@ -1318,6 +1360,34 @@ impl Parser {
         let start_span = self.peek_span();
         self.expect(&TokenKind::Handle)?;
         let expr = self.parse_expr()?;
+
+        // Parse optional state bindings: `with name = expr, ...`
+        let mut state_bindings = Vec::new();
+        if self.at_exact(&TokenKind::With) {
+            self.advance();
+            loop {
+                let binding_span = self.peek_span();
+                let (name, _) = self.expect_ident()?;
+                self.expect(&TokenKind::Eq)?;
+                let init = self.parse_expr()?;
+                let end = init.span().end;
+                state_bindings.push(StateBinding {
+                    name,
+                    init,
+                    span: Span::new(
+                        binding_span.start,
+                        end,
+                        binding_span.line,
+                        binding_span.column,
+                    ),
+                });
+                if !self.at_exact(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+            }
+        }
+
         self.expect(&TokenKind::LBrace)?;
         self.skip_semis();
 
@@ -1340,6 +1410,7 @@ impl Parser {
         Ok(Expr::Handle {
             expr: Box::new(expr),
             handlers,
+            state_bindings,
             span,
         })
     }

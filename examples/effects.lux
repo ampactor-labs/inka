@@ -74,7 +74,7 @@ fn increment() -> () with State {
   set(x + 1)
 }
 
-// Handle State with a simple initial value
+// Handle State with handler-local state
 print("")
 print("=== State Effect ===")
 let final_val = handle {
@@ -82,10 +82,8 @@ let final_val = handle {
   increment()
   increment()
   get()
-} {
-  get() => resume(0),
-  set(v) => resume(())
+} with state = 0 {
+  get() => resume(state),
+  set(v) => resume(()) with state = v,
 }
-print("Counter after 3 increments (simple handler): " ++ to_string(final_val))
-print("(Note: simple handler always resumes get() with 0)")
-print("(True stateful handlers need continuations — Phase 2)")
+print("Counter after 3 increments: " ++ to_string(final_val))

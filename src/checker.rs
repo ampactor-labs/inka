@@ -107,6 +107,8 @@ struct TypeEnv {
     in_handler: bool,
     /// Expected resume type when inside a handler
     resume_type: Option<Type>,
+    /// Types of handler state bindings (for Resume state update checking)
+    handler_state_types: HashMap<String, Type>,
     /// Parent scope (for scoped bindings)
     parent: Option<Box<TypeEnv>>,
     /// Registered traits: trait_name -> list of (method_name, param_types, return_type)
@@ -133,6 +135,7 @@ impl TypeEnv {
             next_eff_var: 0,
             in_handler: false,
             resume_type: None,
+            handler_state_types: HashMap::new(),
             parent: None,
             traits: HashMap::new(),
             impl_methods: HashMap::new(),
@@ -153,6 +156,7 @@ impl TypeEnv {
             next_eff_var: self.next_eff_var,
             in_handler: self.in_handler,
             resume_type: self.resume_type.clone(),
+            handler_state_types: self.handler_state_types.clone(),
             parent: None,
             traits: self.traits.clone(),
             impl_methods: self.impl_methods.clone(),
@@ -1390,19 +1394,38 @@ impl TypeEnv {
             Expr::Handle {
                 expr,
                 handlers,
+                state_bindings,
                 span,
-            } => self.infer_handle(expr, handlers, span),
+            } => self.infer_handle(expr, handlers, state_bindings, span),
 
-            Expr::Resume { value, span } => {
+            Expr::Resume {
+                value,
+                state_updates,
+                span,
+            } => {
                 if !self.is_in_handler() {
                     return Err(TypeError {
                         kind: TypeErrorKind::UnboundVariable("resume".into()),
                         span: span.clone(),
                     });
                 }
-                let (val_ty, effs) = self.infer_expr(value)?;
+                let (val_ty, mut effs) = self.infer_expr(value)?;
                 if let Some(expected) = self.get_resume_type() {
                     self.unify(&val_ty, &expected, span)?;
+                }
+                // Type-check state updates
+                for su in state_updates {
+                    let declared_ty =
+                        self.handler_state_types
+                            .get(&su.name)
+                            .cloned()
+                            .ok_or_else(|| TypeError {
+                                kind: TypeErrorKind::UnboundStateVar(su.name.clone()),
+                                span: su.span.clone(),
+                            })?;
+                    let (update_ty, update_effs) = self.infer_expr(&su.value)?;
+                    self.unify(&update_ty, &declared_ty, &su.span)?;
+                    effs = effs.union(&update_effs);
                 }
                 // Resume returns the body type of the handler (for MVP, use fresh var)
                 let ret = self.fresh_var();
@@ -1910,11 +1933,19 @@ impl TypeEnv {
         &mut self,
         expr: &Expr,
         handlers: &[ast::HandlerClause],
+        state_bindings: &[ast::StateBinding],
         span: &Span,
     ) -> Result<(Type, EffectRow), TypeError> {
         let (expr_ty, mut expr_effs) = self.infer_expr(expr)?;
         let result_ty = self.fresh_var();
         self.unify(&result_ty, &expr_ty, span)?;
+
+        // Infer types for state bindings
+        let mut state_types = HashMap::new();
+        for binding in state_bindings {
+            let (init_ty, _) = self.infer_expr(&binding.init)?;
+            state_types.insert(binding.name.clone(), init_ty);
+        }
 
         let mut effs = EffectRow::pure();
 
@@ -1942,6 +1973,7 @@ impl TypeEnv {
                     let mut child = self.child();
                     child.in_handler = true;
                     child.resume_type = Some(op_info.return_type.clone());
+                    child.handler_state_types = state_types.clone();
 
                     // Bind handler parameters
                     for (i, param_name) in params.iter().enumerate() {
@@ -1951,6 +1983,11 @@ impl TypeEnv {
                             .cloned()
                             .unwrap_or_else(|| child.fresh_var());
                         child.bind(param_name, param_ty);
+                    }
+
+                    // Bind state variables in handler scope
+                    for (name, ty) in &state_types {
+                        child.bind(name, ty.clone());
                     }
 
                     let (body_ty, body_effs) = child.infer_expr(body)?;

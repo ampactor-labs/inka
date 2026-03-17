@@ -66,6 +66,7 @@ pub enum TypeErrorKind {
     InfiniteType,
     NonExhaustiveMatch,
     DuplicateDefinition(String),
+    UnboundStateVar(String),
 }
 
 // ── Runtime errors ────────────────────────────────────────────
@@ -208,6 +209,13 @@ impl fmt::Display for TypeError {
                     self.span.line
                 )
             }
+            TypeErrorKind::UnboundStateVar(name) => {
+                write!(
+                    f,
+                    "unknown handler state variable '{name}' at line {}",
+                    self.span.line
+                )
+            }
         }
     }
 }
@@ -279,6 +287,9 @@ impl LuxError {
                 TypeErrorKind::NonExhaustiveMatch => "non-exhaustive match".to_string(),
                 TypeErrorKind::DuplicateDefinition(name) => {
                     format!("duplicate definition '{name}'")
+                }
+                TypeErrorKind::UnboundStateVar(name) => {
+                    format!("unknown handler state variable '{name}'")
                 }
             },
             LuxError::Runtime(e) => match &e.kind {

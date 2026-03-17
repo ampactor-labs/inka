@@ -198,8 +198,11 @@ enum Signal {
         args: Vec<Value>,
         span: Span,
     },
-    /// `resume(val)` inside a handler body.
-    Resume(Value),
+    /// `resume(val)` inside a handler body, with optional state updates.
+    Resume {
+        value: Value,
+        state_updates: Vec<(String, Value)>,
+    },
     /// A handler completed without calling resume — short-circuit back to handle expr.
     HandleDone(Value),
     /// `break` or `break value` — unwind to loop boundary.
@@ -238,6 +241,7 @@ struct EffectHandler {
 #[derive(Debug, Clone)]
 struct HandlerFrame {
     handlers: HashMap<String, EffectHandler>,
+    state: HashMap<String, Value>,
 }
 
 // ── Interpreter ──────────────────────────────────────────────────
@@ -608,8 +612,8 @@ impl Interpreter {
                 kind: RuntimeErrorKind::UnhandledEffect { effect, operation },
                 span,
             }),
-            Signal::Resume(v) => LuxError::Runtime(RuntimeError {
-                kind: RuntimeErrorKind::Internal(format!("resume outside handler: {v}")),
+            Signal::Resume { value, .. } => LuxError::Runtime(RuntimeError {
+                kind: RuntimeErrorKind::Internal(format!("resume outside handler: {value}")),
                 span: Span::dummy(),
             }),
             Signal::HandleDone(v) => LuxError::Runtime(RuntimeError {
@@ -794,12 +798,24 @@ impl Interpreter {
             Expr::Handle {
                 expr,
                 handlers,
+                state_bindings,
                 span,
-            } => self.eval_handle(expr, handlers, span),
+            } => self.eval_handle(expr, handlers, state_bindings, span),
 
-            Expr::Resume { value, .. } => {
+            Expr::Resume {
+                value,
+                state_updates,
+                ..
+            } => {
                 let val = self.eval_expr(value)?;
-                Err(Signal::Resume(val))
+                let updates = state_updates
+                    .iter()
+                    .map(|su| Ok((su.name.clone(), self.eval_expr(&su.value)?)))
+                    .collect::<Result<Vec<_>, Signal>>()?;
+                Err(Signal::Resume {
+                    value: val,
+                    state_updates: updates,
+                })
             }
 
             Expr::Perform {
@@ -1535,6 +1551,7 @@ impl Interpreter {
         &mut self,
         body: &Expr,
         handler_clauses: &[ast::HandlerClause],
+        state_bindings: &[ast::StateBinding],
         _span: &Span,
     ) -> EvalResult {
         // Build handler frame from clauses.
@@ -1562,7 +1579,17 @@ impl Interpreter {
             }
         }
 
-        let frame = HandlerFrame { handlers };
+        // Evaluate state binding init expressions
+        let mut initial_state = HashMap::new();
+        for binding in state_bindings {
+            let val = self.eval_expr(&binding.init)?;
+            initial_state.insert(binding.name.clone(), val);
+        }
+
+        let frame = HandlerFrame {
+            handlers,
+            state: initial_state,
+        };
         self.handler_stack.push(frame);
 
         let result = self.eval_expr(body);
@@ -1599,26 +1626,40 @@ impl Interpreter {
             }
         }
 
-        // Search handler stack from top to bottom for a matching handler
-        let handler = self
+        // Search handler stack from top to bottom for a matching handler.
+        // We need the frame index to write state updates back.
+        let found = self
             .handler_stack
             .iter()
+            .enumerate()
             .rev()
-            .find_map(|frame| frame.handlers.get(op_name))
-            .cloned();
+            .find_map(|(idx, frame)| frame.handlers.get(op_name).map(|h| (idx, h.clone())));
 
-        if let Some(handler) = handler {
+        if let Some((frame_idx, handler)) = found {
             let mut handler_env = Environment::with_parent(handler.env.clone());
             for (param, arg) in handler.params.iter().zip(args.iter()) {
                 handler_env.set(param, arg.clone());
             }
+            // Inject handler state vars into the handler's environment
+            for (name, val) in &self.handler_stack[frame_idx].state {
+                handler_env.set(name, val.clone());
+            }
+
             let saved_env = std::mem::replace(&mut self.env, handler_env);
             let result = self.eval_expr(&handler.body);
             self.env = saved_env;
 
             match result {
-                // Handler called resume(val) — return val, continue execution
-                Err(Signal::Resume(val)) => Ok(val),
+                // Handler called resume(val) — apply state updates and return val
+                Err(Signal::Resume {
+                    value,
+                    state_updates,
+                }) => {
+                    for (name, val) in state_updates {
+                        self.handler_stack[frame_idx].state.insert(name, val);
+                    }
+                    Ok(value)
+                }
                 // Handler returned without resume (like fail) — short-circuit
                 Ok(val) => Err(Signal::HandleDone(val)),
                 // Propagate other signals

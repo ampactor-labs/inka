@@ -6,6 +6,7 @@
 //! Build order: pure expressions (6C-2) → closures/calls (6C-4) → effects (6C-5/6)
 
 mod compiler;
+mod effects;
 mod patterns;
 mod scope;
 

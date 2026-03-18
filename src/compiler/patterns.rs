@@ -108,14 +108,22 @@ impl Compiler {
             }
             Pattern::Tuple(pats, _) => {
                 for (i, pat) in pats.iter().enumerate() {
+                    // Dup the scrutinee (tuple), extract element i.
                     self.emit_op(OpCode::Dup, line);
                     self.emit_op(OpCode::LoadInt, line);
                     self.emit_u8(i as u8, line);
                     self.emit_op(OpCode::ListIndex, line);
-                    self.compile_pattern_bind(pat, line)?;
-                    if !matches!(pat, Pattern::Binding(_, _)) {
-                        self.emit_op(OpCode::Pop, line);
+                    // Bind the extracted element. For simple bindings,
+                    // use StoreLocal to place the value at the right slot
+                    // without disturbing the scrutinee below.
+                    if let Pattern::Binding(name, _) = pat {
+                        let slot = self.scope.declare_local(name);
+                        self.emit_op(OpCode::StoreLocal, line);
+                        self.emit_u16(slot, line);
+                    } else {
+                        self.compile_pattern_bind(pat, line)?;
                     }
+                    self.emit_op(OpCode::Pop, line); // pop extracted element
                 }
             }
             Pattern::Wildcard(_) | Pattern::Literal(_, _) => {

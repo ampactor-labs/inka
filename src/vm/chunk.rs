@@ -31,14 +31,14 @@ pub struct FnProto {
     pub name: Option<String>,
 }
 
-/// Handler table entry — maps effect operations to handler code offsets.
+/// Handler table entry — maps effect operations to handler body FnProtos.
 #[derive(Debug, Clone)]
 pub struct HandlerEntry {
-    /// Name index of the effect operation.
+    /// Name index of the effect operation (in the chunk's name table).
     pub op_name_idx: u16,
-    /// Offset into the chunk's code where the handler body starts.
-    pub handler_offset: usize,
-    /// Number of parameters the handler expects.
+    /// Index into the chunk's constant pool (a `FnProto` for the handler body).
+    pub proto_idx: u16,
+    /// Number of effect operation parameters (not including state vars).
     pub param_count: u8,
 }
 
@@ -205,8 +205,14 @@ impl Chunk {
                 OpCode::Resume => {
                     let count = self.code[offset];
                     offset += 1;
+                    let mut offsets = Vec::new();
+                    for _ in 0..count {
+                        let off = self.read_u16(offset);
+                        offset += 2;
+                        offsets.push(off);
+                    }
                     out.push_str(&format!(
-                        "{start:04}  {line:4} | {op:?} state_updates={count}\n"
+                        "{start:04}  {line:4} | {op:?} state_updates={count} offsets={offsets:?}\n"
                     ));
                 }
                 // u16 operand

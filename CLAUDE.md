@@ -24,6 +24,7 @@ the thesis prover; the compiler is the destination.
 - `cargo check` — type check the compiler
 - `cargo clippy` — lint
 - `for f in examples/*.lux; do cargo run --quiet -- "$f"; done` — run all examples
+- `/lux-feature` — guided workflow for adding new language constructs
 
 ## Architecture (Rust prototype — temporary scaffolding)
 

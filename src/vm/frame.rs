@@ -23,6 +23,9 @@ pub struct CallFrame {
     pub ip: usize,
     /// Stack base — index into `Vm.stack` where this frame's locals start.
     pub stack_base: usize,
+    /// True if there's a function value slot at `stack_base - 1` that
+    /// must be cleaned up on Return (frames pushed via `Call`).
+    pub has_func_slot: bool,
 }
 
 impl CallFrame {
@@ -58,20 +61,39 @@ impl CallFrame {
     }
 }
 
+/// A resolved handler entry — operation name + compiled handler body.
+///
+/// Created at `PushHandler` time by resolving the chunk's `HandlerTable`
+/// entries to concrete strings and FnProtos. Stored in `VmHandlerFrame`
+/// so that `Perform` can dispatch across frames (different chunks).
+#[derive(Debug)]
+pub struct VmHandlerEntry {
+    /// Resolved effect operation name (e.g., "get", "set", "fail").
+    pub op_name: String,
+    /// Compiled handler body function prototype.
+    pub proto: Arc<FnProto>,
+    /// Number of effect operation parameters (not including state vars).
+    pub param_count: u8,
+}
+
 /// An active effect handler on the handler stack.
 ///
 /// Tracks which effects are being handled, handler state variables,
 /// and the execution context needed to dispatch and resume effects.
 #[derive(Debug)]
 pub struct VmHandlerFrame {
-    /// Index into the chunk's handler table.
-    pub handler_table_idx: u16,
+    /// Resolved handler entries (name + FnProto for each operation).
+    pub entries: Vec<VmHandlerEntry>,
     /// Call frame index when the handler was pushed.
     pub frame_idx: usize,
     /// Stack height when the handler was pushed (for unwinding).
     pub stack_height: usize,
-    /// Handler-local state values.
+    /// Handler-local state values (updated by `Resume`).
     pub state: Vec<VmValue>,
-    /// Instruction pointer to resume at after handler completes.
+    /// IP in the performing frame to resume at (set by `Perform`).
     pub resume_ip: usize,
+    /// Frame index where `Perform` happened (set by `Perform`).
+    pub resume_frame_idx: usize,
+    /// Stack height at the `Perform` site after popping args (set by `Perform`).
+    pub resume_stack_height: usize,
 }

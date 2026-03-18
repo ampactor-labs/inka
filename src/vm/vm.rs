@@ -18,11 +18,11 @@ pub type BuiltinFn = fn(&[VmValue]) -> Result<VmValue, String>;
 /// The Lux bytecode virtual machine.
 pub struct Vm {
     /// Call frame stack.
-    frames: Vec<CallFrame>,
+    pub(super) frames: Vec<CallFrame>,
     /// Value stack.
-    stack: Vec<VmValue>,
+    pub(super) stack: Vec<VmValue>,
     /// Effect handler stack.
-    handler_stack: Vec<VmHandlerFrame>,
+    pub(super) handler_stack: Vec<VmHandlerFrame>,
     /// Global variables (by name index).
     globals: HashMap<u16, VmValue>,
     /// Global name → name_idx mapping (for cross-chunk resolution).
@@ -33,6 +33,10 @@ pub struct Vm {
     builtin_map: HashMap<String, BuiltinId>,
     /// Output buffer (for WASM compatibility — captures print output).
     pub output: String,
+    /// Active handler dispatch stack: `(handler_stack_idx, body_frame_idx)`.
+    /// Pushed by Perform, popped by Resume. A stack (not scalar) so nested
+    /// effects don't clobber outer dispatch state.
+    pub(super) handler_dispatch_stack: Vec<(usize, usize)>,
 }
 
 impl Vm {
@@ -46,6 +50,7 @@ impl Vm {
             builtins: Vec::new(),
             builtin_map: HashMap::new(),
             output: String::new(),
+            handler_dispatch_stack: Vec::new(),
         };
         vm.register_builtins();
         vm
@@ -64,6 +69,7 @@ impl Vm {
             upvalues: Vec::new(),
             ip: 0,
             stack_base,
+            has_func_slot: false, // top-level frame
         });
 
         let result = self.execute()?;
@@ -338,16 +344,55 @@ impl Vm {
                         self.stack.push(result);
                         return Ok(self.stack.pop());
                     }
+
+                    // Check if this is a handler body returning without Resume
+                    // (HandleDone). The handler's return value becomes the handle
+                    // expression's result.
+                    if let Some(&(h_idx, body_idx)) = self.handler_dispatch_stack.last() {
+                        if frame_idx == body_idx {
+                            self.handler_dispatch_stack.pop();
+                            let stack_height = self.handler_stack[h_idx].stack_height;
+
+                            // Pop handler body frame.
+                            let base = self.frames[frame_idx].stack_base;
+                            self.stack.truncate(base);
+                            self.frames.pop();
+
+                            // Unwind to handler's installation point.
+                            self.stack.truncate(stack_height);
+
+                            // Pop the handler frame.
+                            self.handler_stack.remove(h_idx);
+
+                            // Push result as handle expression's value.
+                            self.stack.push(result);
+
+                            // Skip past PopHandler in the handle frame.
+                            let handle_frame = self.frames.len() - 1;
+                            self.skip_past_pop_handler(handle_frame);
+
+                            continue;
+                        }
+                    }
+
                     let frame = &self.frames[frame_idx];
                     let base = frame.stack_base;
-                    self.stack.truncate(base);
+                    let has_func_slot = frame.has_func_slot;
+                    let truncate_to = if has_func_slot {
+                        base.saturating_sub(1)
+                    } else {
+                        base
+                    };
+                    self.stack.truncate(truncate_to);
                     self.frames.pop();
                     self.stack.push(result);
                 }
                 OpCode::CallBuiltin => {
                     let id = self.frames[frame_idx].read_u16();
                     let argc = self.frames[frame_idx].read_byte() as usize;
-                    self.call_builtin(BuiltinId(id), argc)?;
+                    let start = self.stack.len() - argc;
+                    let args: Vec<VmValue> = self.stack.drain(start..).collect();
+                    self.call_builtin_with_args(BuiltinId(id), &args)?;
                 }
 
                 // ── Collections ───────────────────────────────────
@@ -377,7 +422,6 @@ impl Vm {
                             }
                         }
                         (VmValue::Variant { fields, .. }, VmValue::Int(i)) => {
-                            // Field access by index on variants
                             let idx = *i as usize;
                             if idx < fields.len() {
                                 self.stack.push(fields[idx].clone());
@@ -412,7 +456,6 @@ impl Vm {
                     let obj = self.stack.pop().unwrap_or(VmValue::Unit);
                     match &obj {
                         VmValue::Tuple(elems) => {
-                            // Numeric field access: .0, .1, etc.
                             if let Ok(idx) = name.parse::<usize>() {
                                 if idx < elems.len() {
                                     self.stack.push(elems[idx].clone());
@@ -424,8 +467,6 @@ impl Vm {
                             }
                         }
                         VmValue::Variant { fields, .. } => {
-                            // Named field access — for now push Unit
-                            // TODO: proper field name resolution
                             let _ = fields;
                             self.stack.push(VmValue::Unit);
                         }
@@ -542,21 +583,30 @@ impl Vm {
                     self.stack.push(VmValue::String(Arc::new(result)));
                 }
 
-                // ── Effects (placeholder) ─────────────────────────
-                OpCode::Perform
-                | OpCode::PushHandler
-                | OpCode::PopHandler
-                | OpCode::Resume
-                | OpCode::MakeContinuation => {
-                    // Placeholder — will be implemented in Phase 6C-5
+                // ── Effects ─────────────────────────────────────
+                OpCode::PushHandler => {
+                    self.op_push_handler(frame_idx)?;
+                }
+                OpCode::PopHandler => {
+                    self.op_pop_handler();
+                }
+                OpCode::Perform => {
+                    self.op_perform(frame_idx)?;
+                }
+                OpCode::Resume => {
+                    self.op_resume(frame_idx)?;
+                }
+                OpCode::MakeContinuation => {
+                    // Phase 6C-6: multi-shot continuations
                     let line = self.frames[frame_idx].current_line();
-                    return Err(VmError::new("effects not yet implemented in VM", line));
+                    return Err(VmError::new(
+                        "multi-shot continuations not yet implemented in VM",
+                        line,
+                    ));
                 }
 
                 // ── Loops ─────────────────────────────────────────
                 OpCode::BreakLoop | OpCode::ContinueLoop => {
-                    // These are handled by Jump instructions during compilation.
-                    // If we get here, it's a compiler error.
                     let line = self.frames[frame_idx].current_line();
                     return Err(VmError::new("unexpected loop control opcode", line));
                 }
@@ -565,6 +615,97 @@ impl Vm {
     }
 
     // ── Helpers ───────────────────────────────────────────────
+
+    /// Advance IP past the next PopHandler opcode, properly decoding
+    /// instructions (not byte-scanning) and tracking nesting depth.
+    fn skip_past_pop_handler(&mut self, handle_frame_idx: usize) {
+        let frame = &mut self.frames[handle_frame_idx];
+        let code = &frame.proto.chunk.code;
+        let mut depth: i32 = 0;
+        while frame.ip < code.len() {
+            let byte = code[frame.ip];
+            frame.ip += 1;
+            let Some(op) = OpCode::from_byte(byte) else {
+                continue;
+            };
+            // Track nesting: PushHandler increases depth, PopHandler decreases.
+            if op == OpCode::PushHandler {
+                depth += 1;
+            } else if op == OpCode::PopHandler {
+                if depth == 0 {
+                    return; // Found the matching PopHandler
+                }
+                depth -= 1;
+            }
+            // Skip operands for this instruction.
+            frame.ip += Self::operand_size(op);
+        }
+    }
+
+    /// Return the total operand byte count for an opcode.
+    fn operand_size(op: OpCode) -> usize {
+        match op {
+            // No operands
+            OpCode::Add
+            | OpCode::Sub
+            | OpCode::Mul
+            | OpCode::Div
+            | OpCode::Mod
+            | OpCode::Neg
+            | OpCode::Not
+            | OpCode::Eq
+            | OpCode::Neq
+            | OpCode::Lt
+            | OpCode::LtEq
+            | OpCode::Gt
+            | OpCode::GtEq
+            | OpCode::Concat
+            | OpCode::Pop
+            | OpCode::Dup
+            | OpCode::Return
+            | OpCode::LoadUnit
+            | OpCode::ListIndex
+            | OpCode::MatchListEmpty
+            | OpCode::MatchWildcard
+            | OpCode::PopHandler
+            | OpCode::MakeContinuation
+            | OpCode::BreakLoop
+            | OpCode::ContinueLoop => 0,
+            // u8
+            OpCode::LoadBool | OpCode::LoadInt | OpCode::MatchBool => 1,
+            // u8 (argc)
+            OpCode::Call | OpCode::TailCall => 1,
+            // u16
+            OpCode::LoadConst
+            | OpCode::LoadLocal
+            | OpCode::StoreLocal
+            | OpCode::LoadUpval
+            | OpCode::LoadGlobal
+            | OpCode::StoreGlobal
+            | OpCode::MakeList
+            | OpCode::MakeTuple
+            | OpCode::FieldAccess
+            | OpCode::MatchString
+            | OpCode::MatchVariant
+            | OpCode::MatchTuple
+            | OpCode::MatchListCons
+            | OpCode::BindLocal
+            | OpCode::StringInterp
+            | OpCode::MatchInt => 2,
+            // i16 (jump offset)
+            OpCode::Jump | OpCode::JumpIfFalse | OpCode::JumpIfTrue => 2,
+            // u16 + u8
+            OpCode::CallBuiltin | OpCode::Perform => 3,
+            // u16 + u16
+            OpCode::MakeVariant => 4,
+            // u16 + u16 + u8
+            OpCode::PushHandler => 5,
+            // MakeClosure: u16 proto idx (upvalues handled dynamically)
+            OpCode::MakeClosure => 2, // base; upval descriptors skipped separately
+            // Resume: u8 count + count * u16
+            OpCode::Resume => 1, // base; state offsets handled by caller
+        }
+    }
 
     fn load_constant(&self, frame_idx: usize, idx: u16) -> Result<VmValue, VmError> {
         let constant = self.frames[frame_idx]
@@ -628,7 +769,6 @@ impl Vm {
             (VmValue::Int(a), VmValue::Float(b)) => f(*a as f64, *b),
             (VmValue::Float(a), VmValue::Int(b)) => f(*a, *b as f64),
             (VmValue::String(a), VmValue::String(b)) => {
-                // String comparison by lexicographic order
                 let ord = a.cmp(b);
                 f(ord as i32 as f64, 0.0)
             }
@@ -653,9 +793,7 @@ impl Vm {
                     ));
                 }
 
-                // Set up new frame
-                let stack_base = func_idx + 1; // args start after the function
-                // Extend stack for local slots beyond parameters
+                let stack_base = func_idx + 1;
                 let extra_locals = closure.proto.local_count as usize - argc;
                 for _ in 0..extra_locals {
                     self.stack.push(VmValue::Unit);
@@ -666,33 +804,20 @@ impl Vm {
                     upvalues: closure.upvalues.clone(),
                     ip: 0,
                     stack_base,
+                    has_func_slot: true, // function value at stack_base - 1
                 });
-                // Remove the function value from below args
-                // Actually the function is at func_idx, args are at func_idx+1..
-                // The stack_base points at the first arg. We need to remove the
-                // function slot. For simplicity, swap it out.
                 self.stack[func_idx] = VmValue::Unit;
 
                 Ok(())
             }
             VmValue::Builtin(id) => {
-                // Collect args
                 let start = self.stack.len() - argc;
                 let args: Vec<VmValue> = self.stack.drain(start..).collect();
                 self.stack.pop(); // remove function value
-                self.call_builtin(id, argc)?;
-                // call_builtin already pushed args back... actually let's fix this.
-                // We already drained args, so re-push them and call.
-                for arg in &args {
-                    self.stack.push(arg.clone());
-                }
                 self.call_builtin_with_args(id, &args)?;
-                // Remove the pushed args
-                self.stack.truncate(self.stack.len() - args.len());
                 Ok(())
             }
             VmValue::Variant { name, fields } if fields.is_empty() => {
-                // Constructor call — create variant with args as fields
                 let start = self.stack.len() - argc;
                 let args: Vec<VmValue> = self.stack.drain(start..).collect();
                 self.stack.pop(); // remove function value
@@ -707,11 +832,6 @@ impl Vm {
                 Err(VmError::new(format!("cannot call value: {func}"), line))
             }
         }
-    }
-
-    fn call_builtin(&mut self, _id: BuiltinId, _argc: usize) -> Result<(), VmError> {
-        // Stub — actual builtin dispatch handled by call_builtin_with_args
-        Ok(())
     }
 
     fn call_builtin_with_args(&mut self, id: BuiltinId, args: &[VmValue]) -> Result<(), VmError> {

@@ -3,6 +3,7 @@
 //! Single-pass compilation with forward jump patching.
 //! Tail position tracking for TCO.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::ast::*;
@@ -10,6 +11,7 @@ use crate::error::LuxError;
 use crate::vm::chunk::{Chunk, Constant, FnProto};
 use crate::vm::opcode::OpCode;
 
+use super::effects::HandlerCtx;
 use super::scope::Scope;
 
 /// Compile a Lux program to a top-level bytecode chunk.
@@ -30,6 +32,12 @@ pub(super) struct Compiler {
     pub(super) in_tail: bool,
     /// Loop context for break/continue: (loop_start, break_patches).
     loop_stack: Vec<LoopCtx>,
+    /// Handler context for Resume state-update name resolution.
+    pub(super) handler_ctx: Option<HandlerCtx>,
+    /// Known effect operations: op_name → effect_name.
+    /// Used to compile `Call(op_name, args)` as `Perform` when the callee
+    /// is a registered effect operation.
+    pub(super) effect_ops: HashMap<String, String>,
 }
 
 /// Loop compilation context.
@@ -41,17 +49,19 @@ struct LoopCtx {
 }
 
 impl Compiler {
-    fn new(name: &str) -> Self {
+    pub(super) fn new(name: &str) -> Self {
         Self {
             chunk: Chunk::new(name),
             scope: Scope::new(),
             in_tail: false,
             loop_stack: Vec::new(),
+            handler_ctx: None,
+            effect_ops: HashMap::new(),
         }
     }
 
     /// Finish compilation, returning the FnProto.
-    fn finish(self) -> FnProto {
+    pub(super) fn finish(self) -> FnProto {
         let local_count = self.scope.local_count();
         let upval_count = self.scope.upvalues.len() as u16;
         FnProto {
@@ -108,7 +118,7 @@ impl Compiler {
         self.chunk.emit_i16(delta as i16, line);
     }
 
-    fn current_line(span: &crate::token::Span) -> u32 {
+    pub(super) fn current_line(span: &crate::token::Span) -> u32 {
         span.line as u32
     }
 
@@ -120,13 +130,21 @@ impl Compiler {
             Item::LetDecl(ld) => self.compile_let_decl(ld),
             Item::Expr(e) => {
                 self.compile_expr(e)?;
-                // Top-level expressions: keep value on stack (last becomes result)
+                // Pop the result — top-level expressions are side-effect-only
+                // (e.g. print calls). Without this, stale values accumulate
+                // on the stack and corrupt handler stack_height tracking.
+                self.emit_op(OpCode::Pop, 0);
                 Ok(())
             }
-            // Type/effect/trait/impl declarations don't generate code
-            Item::TypeDecl(_) | Item::EffectDecl(_) | Item::TraitDecl(_) | Item::ImplBlock(_) => {
+            // Register effect operations for Perform dispatch.
+            Item::EffectDecl(decl) => {
+                for op in &decl.operations {
+                    self.effect_ops.insert(op.name.clone(), decl.name.clone());
+                }
                 Ok(())
             }
+            // Type/trait/impl declarations don't generate code.
+            Item::TypeDecl(_) | Item::TraitDecl(_) | Item::ImplBlock(_) => Ok(()),
         }
     }
 
@@ -135,6 +153,7 @@ impl Compiler {
 
         // Compile function body in a nested compiler
         let mut fn_compiler = Compiler::new(&fd.name);
+        fn_compiler.effect_ops = self.effect_ops.clone();
         fn_compiler.scope.begin_scope();
 
         // Declare parameters as locals
@@ -184,7 +203,7 @@ impl Compiler {
 
     // ── Expression compilation ────────────────────────────────
 
-    fn compile_expr(&mut self, expr: &Expr) -> Result<(), LuxError> {
+    pub(super) fn compile_expr(&mut self, expr: &Expr) -> Result<(), LuxError> {
         match expr {
             Expr::IntLit(n, span) => {
                 let line = Self::current_line(span);
@@ -316,20 +335,17 @@ impl Compiler {
                 }
 
                 let pops = self.scope.end_scope();
-                // Pop locals but keep the result on top
+                // Pop locals but keep the result on top.
+                // Strategy: save result to a temp global, pop locals, reload.
                 if pops > 0 {
-                    // The result is on top, locals are below it.
-                    // We need to swap result past locals then pop.
-                    // Simple approach: use StoreLocal to temp slot, pop locals, restore.
-                    // For now, just pop each local individually under the result.
-                    // This is O(n) but correct. Optimize later with a SwapN opcode.
+                    let temp_idx = self.chunk.intern_name("__blk_tmp__");
+                    self.emit_op(OpCode::StoreGlobal, line);
+                    self.emit_u16(temp_idx, line);
                     for _ in 0..pops {
-                        // Result is TOS, local is TOS-1. We need to drop TOS-1.
-                        // No direct "drop below top" opcode yet, so we accept the
-                        // stack layout as-is. The result is already on top and the
-                        // local slots are abandoned. They'll be reclaimed when the
-                        // call frame exits.
+                        self.emit_op(OpCode::Pop, line);
                     }
+                    self.emit_op(OpCode::LoadGlobal, line);
+                    self.emit_u16(temp_idx, line);
                 }
             }
 
@@ -526,6 +542,14 @@ impl Compiler {
 
             // ── Expressions that need closures/calls/effects (Phase 6C-4+) ──
             Expr::Call { func, args, span } => {
+                // Check if calling a known effect operation → emit Perform.
+                if let Expr::Var(name, _) = func.as_ref() {
+                    if let Some(effect_name) = self.effect_ops.get(name).cloned() {
+                        self.compile_perform(&effect_name, name, args, span)?;
+                        return Ok(());
+                    }
+                }
+
                 let line = Self::current_line(span);
                 self.compile_expr(func)?;
                 for arg in args {
@@ -547,6 +571,7 @@ impl Compiler {
                 // Save enclosing scope, give it to the lambda compiler
                 let outer_scope = std::mem::replace(&mut self.scope, Scope::new());
                 let mut fn_compiler = Compiler::new("<lambda>");
+                fn_compiler.effect_ops = self.effect_ops.clone();
                 fn_compiler.scope.enclosing = Some(Box::new(outer_scope));
                 fn_compiler.scope.begin_scope();
 
@@ -667,21 +692,31 @@ impl Compiler {
                 self.emit_u16(fields.len() as u16, line);
             }
 
-            // ── Effects (Phase 6C-5+) ─────────────────────────────
-            Expr::Handle { span, .. } => {
-                let line = Self::current_line(span);
-                // Placeholder: will be implemented in Phase 6C-5
-                self.emit_op(OpCode::LoadUnit, line);
+            // ── Effects ───────────────────────────────────────────
+            Expr::Handle {
+                expr,
+                handlers,
+                state_bindings,
+                span,
+            } => {
+                self.compile_handle(expr, handlers, state_bindings, span)?;
             }
 
-            Expr::Perform { span, .. } => {
-                let line = Self::current_line(span);
-                self.emit_op(OpCode::LoadUnit, line);
+            Expr::Perform {
+                effect,
+                operation,
+                args,
+                span,
+            } => {
+                self.compile_perform(effect, operation, args, span)?;
             }
 
-            Expr::Resume { span, .. } => {
-                let line = Self::current_line(span);
-                self.emit_op(OpCode::LoadUnit, line);
+            Expr::Resume {
+                value,
+                state_updates,
+                span,
+            } => {
+                self.compile_resume(value, state_updates, span)?;
             }
         }
         Ok(())

@@ -76,7 +76,6 @@ impl Parser {
                 if name == "resume" && self.at_exact(&TokenKind::LParen) {
                     // Peek ahead: does `)` follow by `with`?
                     // Save pos, try parsing, backtrack if no `with`.
-                    let saved = self.pos;
                     self.advance(); // consume `(`
                     let value = self.parse_expr()?;
                     self.expect(&TokenKind::RParen)?;
@@ -127,8 +126,18 @@ impl Parser {
                             span,
                         });
                     }
-                    // No `with` — backtrack and let it be a normal call
-                    self.pos = saved;
+                    // No `with` — plain `resume(val)` with no state updates.
+                    let span = Span::new(
+                        tok.span.start,
+                        value.span().end,
+                        tok.span.line,
+                        tok.span.column,
+                    );
+                    return Ok(Expr::Resume {
+                        value: Box::new(value),
+                        state_updates: Vec::new(),
+                        span,
+                    });
                 }
 
                 // Record construction: `Name { field: expr, ... }`

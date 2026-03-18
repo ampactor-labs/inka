@@ -3,6 +3,7 @@
 use std::env;
 use std::fs;
 use std::process;
+use std::sync::Arc;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -45,7 +46,7 @@ fn main() {
             let result = if use_interpreter {
                 run_source_interpret(&source)
             } else {
-                run_source_interpret(&source) // Default to interpreter until VM is ready
+                run_source_vm(&source)
             };
             if let Err(e) = result {
                 eprintln!(
@@ -86,5 +87,50 @@ fn run_source_interpret(source: &str) -> Result<(), lux::error::LuxError> {
     if let Some(val) = result {
         println!("{val}");
     }
+    Ok(())
+}
+
+fn run_source_vm(source: &str) -> Result<(), lux::error::LuxError> {
+    let mut checker = lux::checker::ReplChecker::new();
+
+    // Load and check prelude.
+    let prelude = lux::load_prelude();
+    let mut prelude_program = None;
+    if !prelude.is_empty() {
+        let tokens = lux::lexer::lex(&prelude)?;
+        let program = lux::parser::parse(tokens)?;
+        let _ = checker.check_line(&program);
+        checker.freeze();
+        prelude_program = Some(program);
+    }
+
+    let tokens = lux::lexer::lex(source)?;
+    let program = lux::parser::parse(tokens)?;
+    checker.check_line(&program)?;
+
+    // Compile: prepend prelude items to the user program.
+    let mut combined = lux::ast::Program { items: Vec::new() };
+    if let Some(prelude) = prelude_program {
+        combined.items.extend(prelude.items);
+    }
+    combined.items.extend(program.items);
+
+    let proto = lux::compiler::compile(&combined)?;
+    let mut vm = lux::vm::vm::Vm::new();
+    let result = vm.run(Arc::new(proto)).map_err(|e| {
+        lux::error::LuxError::Runtime(lux::error::RuntimeError {
+            kind: lux::error::RuntimeErrorKind::TypeError(e.message),
+            span: lux::token::Span {
+                line: e.line as usize,
+                column: 0,
+                start: 0,
+                end: 0,
+            },
+        })
+    })?;
+
+    // Don't print the final value — file execution uses println for output.
+    // (REPL would print it, but that's a different path.)
+    let _ = result;
     Ok(())
 }

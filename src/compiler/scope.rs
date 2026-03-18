@@ -34,6 +34,8 @@ pub struct Scope {
     pub upvalues: Vec<Upvalue>,
     pub scope_depth: u32,
     pub next_slot: u16,
+    /// High-water mark of local slots (peak usage across all scopes).
+    pub max_slots: u16,
     /// Enclosing scope (for upvalue resolution across function boundaries).
     pub enclosing: Option<Box<Scope>>,
 }
@@ -45,6 +47,7 @@ impl Scope {
             upvalues: Vec::new(),
             scope_depth: 0,
             next_slot: 0,
+            max_slots: 0,
             enclosing: None,
         }
     }
@@ -79,6 +82,9 @@ impl Scope {
             is_captured: false,
         });
         self.next_slot += 1;
+        if self.next_slot > self.max_slots {
+            self.max_slots = self.next_slot;
+        }
         slot
     }
 

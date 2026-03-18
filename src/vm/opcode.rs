@@ -114,6 +114,8 @@ pub enum OpCode {
     MatchWildcard = 97,
     /// Bind matched value to local slot. Operand: u16 slot.
     BindLocal = 98,
+    /// Match list with exactly N elements. Operand: u16 count. Pushes bool.
+    MatchListExact = 99,
 
     // ── Effects ───────────────────────────────────────────
     /// Perform effect operation. Operand: u16 op name index, u8 arg count.
@@ -191,6 +193,7 @@ impl OpCode {
             96 => Some(Self::MatchListEmpty),
             97 => Some(Self::MatchWildcard),
             98 => Some(Self::BindLocal),
+            99 => Some(Self::MatchListExact),
             110 => Some(Self::Perform),
             111 => Some(Self::PushHandler),
             112 => Some(Self::PopHandler),

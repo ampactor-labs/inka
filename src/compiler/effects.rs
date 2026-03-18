@@ -117,6 +117,11 @@ impl Compiler {
             sub.scope.declare_local(name);
         }
 
+        // Declare `resume` as a local. For stateless handlers, the VM will
+        // pass a VmContinuation as this parameter. For stateful handlers,
+        // it stays Unit and the Resume opcode is used instead.
+        sub.scope.declare_local("resume");
+
         // Set handler context so Resume can resolve state update names.
         sub.handler_ctx = Some(HandlerCtx {
             state_names: state_names.to_vec(),
@@ -130,7 +135,8 @@ impl Compiler {
         sub.emit_op(OpCode::Return, line);
 
         let mut proto = sub.finish();
-        proto.arity = (params.len() + state_names.len()) as u16;
+        // +1 for the `resume` parameter
+        proto.arity = (params.len() + state_names.len() + 1) as u16;
         Ok(proto)
     }
 
@@ -163,8 +169,9 @@ impl Compiler {
 
     /// Compile a `resume(value) [with name = expr, ...]` expression.
     ///
-    /// Stack before Resume: `[resume_value, update_val_0, update_val_1, ...]`
-    /// Operands after Resume: `u8 count`, then `count` x `u16 state_offset`.
+    /// For stateless handlers (no state updates): compiles as a call to the
+    /// `resume` local (which holds a VmContinuation at runtime).
+    /// For stateful handlers: uses the Resume opcode for direct stack unwinding.
     pub(super) fn compile_resume(
         &mut self,
         value: &Expr,
@@ -173,19 +180,47 @@ impl Compiler {
     ) -> Result<(), LuxError> {
         let line = Self::current_line(span);
 
-        // Compile resume value.
-        self.compile_expr(value)?;
+        // Multi-shot path: call the `resume` local/upvalue as a continuation.
+        // Only when there are no state updates AND we know the handler is stateless.
+        //
+        // Three cases:
+        // 1. handler_ctx with empty state_names → stateless handler body, use local
+        // 2. handler_ctx with non-empty state_names → stateful handler, use Resume opcode
+        // 3. handler_ctx is None → inside a lambda; if resume is an upvalue, it was
+        //    captured from a handler body and IS a continuation, so use the call path
+        let handler_is_stateful = self
+            .handler_ctx
+            .as_ref()
+            .is_some_and(|ctx| !ctx.state_names.is_empty());
 
-        // Compile state update value expressions.
+        if state_updates.is_empty() && !handler_is_stateful {
+            if let Some(slot) = self.scope.resolve_local("resume") {
+                self.emit_op(OpCode::LoadLocal, line);
+                self.emit_u16(slot, line);
+                self.compile_expr(value)?;
+                self.emit_op(OpCode::Call, line);
+                self.emit_u8(1, line);
+                return Ok(());
+            }
+            // Also handle the case where resume is captured as an upvalue
+            // (e.g., inside a lambda: `map(|x| resume(x), xs)`).
+            if let Some(idx) = self.scope.resolve_upvalue("resume") {
+                self.emit_op(OpCode::LoadUpval, line);
+                self.emit_u16(idx, line);
+                self.compile_expr(value)?;
+                self.emit_op(OpCode::Call, line);
+                self.emit_u8(1, line);
+                return Ok(());
+            }
+        }
+
+        // Stateful resume: use the Resume opcode for direct stack unwinding.
+        self.compile_expr(value)?;
         for update in state_updates {
             self.compile_expr(&update.value)?;
         }
-
-        // Emit Resume opcode.
         self.emit_op(OpCode::Resume, line);
         self.emit_u8(state_updates.len() as u8, line);
-
-        // Emit state slot offsets for each update.
         for update in state_updates {
             let offset = self
                 .handler_ctx

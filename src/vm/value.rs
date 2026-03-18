@@ -73,17 +73,29 @@ pub struct BuiltinId(pub u16);
 
 /// Captured continuation for replay-based multi-shot effects.
 ///
-/// Contains the full state needed to resume execution from a perform site.
+/// When called with `resume(val)`, replays the handle body from the start
+/// with the extended replay log. Previous performs consume from the log;
+/// the next perform past the log dispatches normally.
 #[derive(Debug)]
 pub struct VmContinuation {
-    /// Replay log: sequence of values returned by previous resumes.
+    /// Replay log: values returned by previous performs during replay.
     pub replay_log: Vec<VmValue>,
-    /// The handler frame index this continuation belongs to.
-    pub handler_idx: usize,
-    /// Snapshot of stack at the point of capture.
+    /// The function proto containing the handle expression.
+    pub proto: Arc<FnProto>,
+    /// IP of the body start (right after PushHandler operands).
+    pub body_start_ip: usize,
+    /// Resolved handler entries for the handle block.
+    pub handler_entries: Vec<super::frame::VmHandlerEntry>,
+    /// Initial state values for the handler.
+    pub initial_state: Vec<VmValue>,
+    /// Stack snapshot: locals from the enclosing frame at the time PushHandler ran.
     pub stack_snapshot: Vec<VmValue>,
-    /// Snapshot of call frames at the point of capture.
-    pub frame_count: usize,
+    /// Upvalues from the enclosing frame.
+    pub upvalues: Vec<VmValue>,
+    /// Handler stack snapshot (outer handlers, excluding the current one).
+    pub outer_handler_stack: Vec<super::frame::VmHandlerFrame>,
+    /// Number of frames (outer) when the handler was installed.
+    pub outer_frame_count: usize,
 }
 
 /// Generator state for coroutine-based yield.

@@ -66,7 +66,7 @@ impl CallFrame {
 /// Created at `PushHandler` time by resolving the chunk's `HandlerTable`
 /// entries to concrete strings and FnProtos. Stored in `VmHandlerFrame`
 /// so that `Perform` can dispatch across frames (different chunks).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VmHandlerEntry {
     /// Resolved effect operation name (e.g., "get", "set", "fail").
     pub op_name: String,
@@ -80,7 +80,7 @@ pub struct VmHandlerEntry {
 ///
 /// Tracks which effects are being handled, handler state variables,
 /// and the execution context needed to dispatch and resume effects.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VmHandlerFrame {
     /// Resolved handler entries (name + FnProto for each operation).
     pub entries: Vec<VmHandlerEntry>,
@@ -96,4 +96,12 @@ pub struct VmHandlerFrame {
     pub resume_frame_idx: usize,
     /// Stack height at the `Perform` site after popping args (set by `Perform`).
     pub resume_stack_height: usize,
+    /// IP of the handle body start (right after PushHandler operands).
+    /// Used for multi-shot continuation replay.
+    pub body_start_ip: usize,
+    /// Stack snapshot at PushHandler time (for continuation replay).
+    /// Captures locals from the enclosing frame's base to the handler's stack_height.
+    pub stack_snapshot: Vec<VmValue>,
+    /// Initial state values (snapshot at PushHandler time, for replay).
+    pub initial_state: Vec<VmValue>,
 }

@@ -58,8 +58,13 @@ impl Compiler {
             Pattern::List { elements, rest, .. } => {
                 if elements.is_empty() && rest.is_none() {
                     self.emit_op(OpCode::MatchListEmpty, line);
-                } else {
+                } else if rest.is_some() {
+                    // Has rest pattern: match lists with >= N elements
                     self.emit_op(OpCode::MatchListCons, line);
+                    self.emit_u16(elements.len() as u16, line);
+                } else {
+                    // No rest pattern: match lists with exactly N elements
+                    self.emit_op(OpCode::MatchListExact, line);
                     self.emit_u16(elements.len() as u16, line);
                 }
             }
@@ -69,12 +74,23 @@ impl Compiler {
                 self.emit_u16(name_idx, line);
             }
             Pattern::Or(alternatives, _) => {
-                // Compile first alternative; if true, done.
-                // Otherwise try next, etc.
-                if let Some(first) = alternatives.first() {
-                    self.compile_pattern_test(first, line)?;
-                    // For a full implementation, chain alternatives with JumpIfTrue.
-                    // Simplified for now — just test first.
+                // Chain alternatives: test each, short-circuit on first match.
+                let mut end_patches = Vec::new();
+                for (i, alt) in alternatives.iter().enumerate() {
+                    if i > 0 {
+                        // Previous alternative was false — pop it and try next
+                        self.emit_op(OpCode::Pop, line);
+                    }
+                    self.compile_pattern_test(alt, line)?;
+                    if i < alternatives.len() - 1 {
+                        // If true, skip remaining alternatives
+                        let jump = self.emit_jump(OpCode::JumpIfTrue, line);
+                        end_patches.push(jump);
+                    }
+                }
+                // All end_patches jump here (with true on stack)
+                for patch in end_patches {
+                    self.patch_jump(patch);
                 }
             }
         }
@@ -89,33 +105,34 @@ impl Compiler {
     ) -> Result<(), LuxError> {
         match pattern {
             Pattern::Binding(name, _) => {
-                // Dup the scrutinee and bind it
+                // Dup the scrutinee and bind it (value stays on stack as local)
                 self.emit_op(OpCode::Dup, line);
                 self.scope.declare_local(name);
             }
             Pattern::Variant { fields, .. } => {
+                // Same approach as Tuple: StoreLocal + Pop for each field
+                // binding, keeping the scrutinee at TOS across iterations.
                 for (i, field_pat) in fields.iter().enumerate() {
-                    // For each field: dup scrutinee, extract field i, bind
-                    self.emit_op(OpCode::Dup, line);
-                    self.emit_op(OpCode::LoadInt, line);
-                    self.emit_u8(i as u8, line);
-                    self.emit_op(OpCode::ListIndex, line); // reuse for field extraction
-                    self.compile_pattern_bind(field_pat, line)?;
-                    if !matches!(field_pat, Pattern::Binding(_, _)) {
-                        self.emit_op(OpCode::Pop, line);
-                    }
-                }
-            }
-            Pattern::Tuple(pats, _) => {
-                for (i, pat) in pats.iter().enumerate() {
-                    // Dup the scrutinee (tuple), extract element i.
                     self.emit_op(OpCode::Dup, line);
                     self.emit_op(OpCode::LoadInt, line);
                     self.emit_u8(i as u8, line);
                     self.emit_op(OpCode::ListIndex, line);
-                    // Bind the extracted element. For simple bindings,
-                    // use StoreLocal to place the value at the right slot
-                    // without disturbing the scrutinee below.
+                    if let Pattern::Binding(name, _) = field_pat {
+                        let slot = self.scope.declare_local(name);
+                        self.emit_op(OpCode::StoreLocal, line);
+                        self.emit_u16(slot, line);
+                    } else {
+                        self.compile_pattern_bind(field_pat, line)?;
+                    }
+                    self.emit_op(OpCode::Pop, line);
+                }
+            }
+            Pattern::Tuple(pats, _) => {
+                for (i, pat) in pats.iter().enumerate() {
+                    self.emit_op(OpCode::Dup, line);
+                    self.emit_op(OpCode::LoadInt, line);
+                    self.emit_u8(i as u8, line);
+                    self.emit_op(OpCode::ListIndex, line);
                     if let Pattern::Binding(name, _) = pat {
                         let slot = self.scope.declare_local(name);
                         self.emit_op(OpCode::StoreLocal, line);
@@ -123,7 +140,7 @@ impl Compiler {
                     } else {
                         self.compile_pattern_bind(pat, line)?;
                     }
-                    self.emit_op(OpCode::Pop, line); // pop extracted element
+                    self.emit_op(OpCode::Pop, line);
                 }
             }
             Pattern::Wildcard(_) | Pattern::Literal(_, _) => {
@@ -135,10 +152,14 @@ impl Compiler {
                     let name_idx = self.chunk.intern_name(field_name);
                     self.emit_op(OpCode::FieldAccess, line);
                     self.emit_u16(name_idx, line);
-                    self.compile_pattern_bind(field_pat, line)?;
-                    if !matches!(field_pat, Pattern::Binding(_, _)) {
-                        self.emit_op(OpCode::Pop, line);
+                    if let Pattern::Binding(name, _) = field_pat {
+                        let slot = self.scope.declare_local(name);
+                        self.emit_op(OpCode::StoreLocal, line);
+                        self.emit_u16(slot, line);
+                    } else {
+                        self.compile_pattern_bind(field_pat, line)?;
                     }
+                    self.emit_op(OpCode::Pop, line);
                 }
             }
             Pattern::List { elements, rest, .. } => {
@@ -147,14 +168,55 @@ impl Compiler {
                     self.emit_op(OpCode::LoadInt, line);
                     self.emit_u8(i as u8, line);
                     self.emit_op(OpCode::ListIndex, line);
-                    self.compile_pattern_bind(elem_pat, line)?;
-                    if !matches!(elem_pat, Pattern::Binding(_, _)) {
-                        self.emit_op(OpCode::Pop, line);
+                    if let Pattern::Binding(name, _) = elem_pat {
+                        let slot = self.scope.declare_local(name);
+                        self.emit_op(OpCode::StoreLocal, line);
+                        self.emit_u16(slot, line);
+                    } else {
+                        self.compile_pattern_bind(elem_pat, line)?;
                     }
+                    self.emit_op(OpCode::Pop, line);
                 }
                 if let Some(rest_pat) = rest {
-                    // Bind rest as list slice — simplified
-                    self.compile_pattern_bind(rest_pat, line)?;
+                    if let Pattern::Binding(name, _) = rest_pat.as_ref() {
+                        // Bind rest = slice(list, N, len(list)).
+                        // TOS is the scrutinee list. Save it to a temp global
+                        // so we can build the slice() call.
+                        let temp_idx = self.chunk.intern_name("__rest_tmp__");
+                        self.emit_op(OpCode::Dup, line);
+                        self.emit_op(OpCode::StoreGlobal, line);
+                        self.emit_u16(temp_idx, line);
+                        // StoreGlobal pops the dup. TOS is still scrutinee.
+
+                        // Emit: slice(__rest_tmp__, N, len(__rest_tmp__))
+                        self.compile_var_load("slice", line);
+                        self.emit_op(OpCode::LoadGlobal, line);
+                        self.emit_u16(temp_idx, line);
+                        let n = elements.len();
+                        if n <= 127 {
+                            self.emit_op(OpCode::LoadInt, line);
+                            self.emit_u8(n as u8, line);
+                        } else {
+                            let idx = self.chunk.add_constant(Constant::Int(n as i64));
+                            self.emit_op(OpCode::LoadConst, line);
+                            self.emit_u16(idx, line);
+                        }
+                        self.compile_var_load("len", line);
+                        self.emit_op(OpCode::LoadGlobal, line);
+                        self.emit_u16(temp_idx, line);
+                        self.emit_op(OpCode::Call, line);
+                        self.emit_u8(1, line);
+                        // Stack: [..., list, slice_fn, list_copy, N, len_result]
+                        self.emit_op(OpCode::Call, line);
+                        self.emit_u8(3, line);
+                        // Stack: [..., list, rest_slice]
+                        let slot = self.scope.declare_local(name);
+                        self.emit_op(OpCode::StoreLocal, line);
+                        self.emit_u16(slot, line);
+                        self.emit_op(OpCode::Pop, line);
+                    } else {
+                        self.compile_pattern_bind(rest_pat, line)?;
+                    }
                 }
             }
             Pattern::Or(alternatives, _) => {

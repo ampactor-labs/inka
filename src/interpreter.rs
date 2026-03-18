@@ -518,6 +518,10 @@ impl Interpreter {
                 self.register_impl_block(decl);
                 Ok(None)
             }
+            Item::Import(_) => {
+                // Imports are resolved before interpretation.
+                Ok(None)
+            }
             Item::Expr(expr) => {
                 let val = self.eval_expr(expr)?;
                 match &val {
@@ -636,17 +640,25 @@ impl Interpreter {
             Expr::Resume {
                 value,
                 state_updates,
-                span: _,
+                span,
             } => {
                 let val = self.eval_expr(value)?;
+
+                // If `resume` is bound to a Continuation (multi-shot handler),
+                // call it as a function so the body is re-evaluated via replay.
+                // This enables `resume(a) ++ resume(b)` and `map(|x| resume(x), xs)`.
+                if state_updates.is_empty() {
+                    if let Some(cont @ Value::Continuation { .. }) = self.env.get("resume") {
+                        return self.call_value(cont.clone(), vec![val], span);
+                    }
+                }
+
                 let updates = state_updates
                     .iter()
                     .map(|su| Ok((su.name.clone(), self.eval_expr(&su.value)?)))
                     .collect::<Result<Vec<_>, Signal>>()?;
 
-                // Always use Signal::Resume for the `resume(val)` keyword.
-                // Multi-shot (calling resume multiple times) requires using resume
-                // as a first-class function value, which goes through call_value.
+                // Signal-based resume for stateful handlers (resume(val) with state = x).
                 Err(Signal::Resume {
                     value: val,
                     state_updates: updates,

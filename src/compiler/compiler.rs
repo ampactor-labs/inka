@@ -38,12 +38,19 @@ pub(super) struct Compiler {
     /// Used to compile `Call(op_name, args)` as `Perform` when the callee
     /// is a registered effect operation.
     pub(super) effect_ops: HashMap<String, String>,
+    /// Variant name → ordered field names, for FieldAccess index resolution.
+    pub(super) field_registry: HashMap<String, Vec<String>>,
 }
 
 /// Loop compilation context.
 struct LoopCtx {
-    /// Code offset of the loop header (for continue).
+    /// Code offset of the loop header (for continue in while/loop).
     start: usize,
+    /// Whether continue should use forward-patching (true for for-loops
+    /// where the increment section comes after the body).
+    continue_forward: bool,
+    /// Offsets of jump placeholders that need patching for continue (for-loops).
+    continue_patches: Vec<usize>,
     /// Offsets of jump placeholders that need patching on break.
     break_patches: Vec<usize>,
 }
@@ -57,6 +64,7 @@ impl Compiler {
             loop_stack: Vec::new(),
             handler_ctx: None,
             effect_ops: HashMap::new(),
+            field_registry: HashMap::new(),
         }
     }
 
@@ -70,6 +78,7 @@ impl Compiler {
             local_count,
             upval_count,
             chunk: self.chunk,
+            field_registry: self.field_registry,
         }
     }
 
@@ -96,7 +105,7 @@ impl Compiler {
 
     /// Emit a jump instruction with a placeholder offset. Returns the offset
     /// of the placeholder for later patching.
-    fn emit_jump(&mut self, op: OpCode, line: u32) -> usize {
+    pub(super) fn emit_jump(&mut self, op: OpCode, line: u32) -> usize {
         self.emit_op(op, line);
         let patch_offset = self.chunk.current_offset();
         self.emit_u16(0, line); // placeholder
@@ -104,7 +113,7 @@ impl Compiler {
     }
 
     /// Patch a previously emitted jump placeholder to jump to the current offset.
-    fn patch_jump(&mut self, patch_offset: usize) {
+    pub(super) fn patch_jump(&mut self, patch_offset: usize) {
         let current = self.chunk.current_offset();
         let delta = (current as i32) - (patch_offset as i32) - 2; // -2 for the i16 operand itself
         self.chunk.patch_i16(patch_offset, delta as i16);
@@ -143,8 +152,13 @@ impl Compiler {
                 }
                 Ok(())
             }
-            // Type/trait/impl declarations don't generate code.
-            Item::TypeDecl(_) | Item::TraitDecl(_) | Item::ImplBlock(_) => Ok(()),
+            Item::TypeDecl(decl) => {
+                self.compile_type_decl(decl)?;
+                Ok(())
+            }
+            // Trait/impl declarations don't generate code.
+            // Imports are resolved before compilation.
+            Item::TraitDecl(_) | Item::ImplBlock(_) | Item::Import(_) => Ok(()),
         }
     }
 
@@ -154,6 +168,7 @@ impl Compiler {
         // Compile function body in a nested compiler
         let mut fn_compiler = Compiler::new(&fd.name);
         fn_compiler.effect_ops = self.effect_ops.clone();
+        fn_compiler.field_registry = self.field_registry.clone();
         fn_compiler.scope.begin_scope();
 
         // Declare parameters as locals
@@ -188,9 +203,8 @@ impl Compiler {
         self.compile_expr(&ld.value)?;
 
         if self.scope.scope_depth > 0 {
-            // In a block: store as local
+            // In a block: value is on TOS; declare_local claims that position
             self.scope.declare_local(&ld.name);
-            // Value already on stack in the right slot
         } else {
             // Top-level: store as global
             let name_idx = self.chunk.intern_name(&ld.name);
@@ -374,6 +388,8 @@ impl Compiler {
                 let loop_start = self.chunk.current_offset();
                 self.loop_stack.push(LoopCtx {
                     start: loop_start,
+                    continue_forward: false,
+                    continue_patches: Vec::new(),
                     break_patches: Vec::new(),
                 });
 
@@ -400,6 +416,8 @@ impl Compiler {
                 let loop_start = self.chunk.current_offset();
                 self.loop_stack.push(LoopCtx {
                     start: loop_start,
+                    continue_forward: false,
+                    continue_patches: Vec::new(),
                     break_patches: Vec::new(),
                 });
 
@@ -431,8 +449,19 @@ impl Compiler {
             Expr::Continue { span } => {
                 let line = Self::current_line(span);
                 if let Some(ctx) = self.loop_stack.last() {
-                    let start = ctx.start;
-                    self.emit_loop(start, line);
+                    if ctx.continue_forward {
+                        // For-loop: forward jump to increment (patched later)
+                        let patch = self.emit_jump(OpCode::Jump, line);
+                        // Re-borrow mutably to push the patch
+                        self.loop_stack
+                            .last_mut()
+                            .unwrap()
+                            .continue_patches
+                            .push(patch);
+                    } else {
+                        let start = ctx.start;
+                        self.emit_loop(start, line);
+                    }
                 }
             }
 
@@ -443,52 +472,97 @@ impl Compiler {
                 span,
             } => {
                 let line = Self::current_line(span);
-                // Compile iterable
-                self.compile_expr(iterable)?;
 
-                // Push iterator index (0)
+                // Open scope for internal locals (list, idx, binding).
+                self.scope.begin_scope();
+
+                // Compile iterable → stack has [list] (claimed as local)
+                self.compile_expr(iterable)?;
+                let list_slot = self.scope.declare_local("__for_list__");
+
+                // Initialize index = 0 (claimed as local)
                 self.emit_op(OpCode::LoadInt, line);
                 self.emit_u8(0, line);
+                let idx_slot = self.scope.declare_local("__for_idx__");
 
-                // Create scope for the loop variable
-                self.scope.begin_scope();
+                // Initialize binding placeholder (claimed as local)
+                self.emit_op(OpCode::LoadUnit, line);
                 let binding_slot = self.scope.declare_local(binding);
-                self.emit_op(OpCode::LoadUnit, line); // placeholder for binding
 
+                // loop_start: check idx < len(list)
                 let loop_start = self.chunk.current_offset();
                 self.loop_stack.push(LoopCtx {
                     start: loop_start,
+                    continue_forward: true,
+                    continue_patches: Vec::new(),
                     break_patches: Vec::new(),
                 });
 
-                // Check: index < len(list)
-                // Stack: [list, idx, binding_val]
-                // We need to dup list and idx to compare
-                // For now, use a simpler approach: compile to a range/list iteration
-                // using LoadLocal for the list and index slots.
-                // This is a simplification — will be refined in the VM execution phase.
+                // Load len(list)
+                self.compile_var_load("len", line);
+                self.emit_op(OpCode::LoadLocal, line);
+                self.emit_u16(list_slot, line);
+                self.emit_op(OpCode::Call, line);
+                self.emit_u8(1, line);
 
-                // For the initial implementation, emit a placeholder that the VM
-                // will handle specially. The full for-loop compilation requires
-                // the VM to be running to test against.
-                // TODO: Implement proper for-loop bytecode once VM dispatch is ready.
+                // Load idx
+                self.emit_op(OpCode::LoadLocal, line);
+                self.emit_u16(idx_slot, line);
 
+                // len > idx? (i.e. idx < len)
+                self.emit_op(OpCode::Gt, line);
+                let exit_jump = self.emit_jump(OpCode::JumpIfFalse, line);
+                self.emit_op(OpCode::Pop, line); // pop condition
+
+                // binding = list[idx]
+                self.emit_op(OpCode::LoadLocal, line);
+                self.emit_u16(list_slot, line);
+                self.emit_op(OpCode::LoadLocal, line);
+                self.emit_u16(idx_slot, line);
+                self.emit_op(OpCode::ListIndex, line);
+                self.emit_op(OpCode::StoreLocal, line);
+                self.emit_u16(binding_slot, line);
+                self.emit_op(OpCode::Pop, line); // pop the store result
+
+                // Compile body
                 self.compile_expr(body)?;
-                self.emit_op(OpCode::Pop, line);
+                self.emit_op(OpCode::Pop, line); // discard body value
+
+                // Patch continue jumps to land here (the increment section).
+                if let Some(ctx) = self.loop_stack.last_mut() {
+                    let patches: Vec<usize> = ctx.continue_patches.drain(..).collect();
+                    for patch in patches {
+                        self.patch_jump(patch);
+                    }
+                }
+
+                // idx = idx + 1
+                self.emit_op(OpCode::LoadLocal, line);
+                self.emit_u16(idx_slot, line);
+                self.emit_op(OpCode::LoadInt, line);
+                self.emit_u8(1, line);
+                self.emit_op(OpCode::Add, line);
+                self.emit_op(OpCode::StoreLocal, line);
+                self.emit_u16(idx_slot, line);
+                self.emit_op(OpCode::Pop, line); // pop store result
+
+                // Jump back to loop_start
                 self.emit_loop(loop_start, line);
+
+                // exit:
+                self.patch_jump(exit_jump);
+                self.emit_op(OpCode::Pop, line); // pop false condition
 
                 let ctx = self.loop_stack.pop().unwrap();
                 for patch in ctx.break_patches {
                     self.patch_jump(patch);
                 }
 
-                let _pops = self.scope.end_scope();
-                // Pop list and index
-                self.emit_op(OpCode::Pop, line);
-                self.emit_op(OpCode::Pop, line);
+                let pops = self.scope.end_scope();
+                for _ in 0..pops {
+                    self.emit_op(OpCode::Pop, line);
+                }
                 self.emit_op(OpCode::LoadUnit, line);
-
-                let _ = binding_slot; // used above in declare_local
             }
 
             Expr::Tuple(elements, span) => {
@@ -572,6 +646,7 @@ impl Compiler {
                 let outer_scope = std::mem::replace(&mut self.scope, Scope::new());
                 let mut fn_compiler = Compiler::new("<lambda>");
                 fn_compiler.effect_ops = self.effect_ops.clone();
+                fn_compiler.field_registry = self.field_registry.clone();
                 fn_compiler.scope.enclosing = Some(Box::new(outer_scope));
                 fn_compiler.scope.begin_scope();
 
@@ -608,15 +683,25 @@ impl Compiler {
                 span,
             } => {
                 let line = Self::current_line(span);
+
+                // Save scrutinee in a dedicated local so pattern bindings
+                // can't overwrite it (needed when guard fails and we retry arms).
+                self.scope.begin_scope();
                 self.compile_expr(scrutinee)?;
+                let scrutinee_slot = self.scope.declare_local("__match_scrutinee__");
 
                 let mut end_patches = Vec::new();
                 for arm in arms {
-                    // Dup scrutinee for pattern test
-                    self.emit_op(OpCode::Dup, line);
+                    // Load scrutinee for pattern test
+                    self.emit_op(OpCode::LoadLocal, line);
+                    self.emit_u16(scrutinee_slot, line);
                     self.compile_pattern_test(&arm.pattern, line)?;
                     let skip = self.emit_jump(OpCode::JumpIfFalse, line);
                     self.emit_op(OpCode::Pop, line); // pop test result
+
+                    // Load scrutinee for pattern binding
+                    self.emit_op(OpCode::LoadLocal, line);
+                    self.emit_u16(scrutinee_slot, line);
 
                     // Bind pattern variables
                     self.scope.begin_scope();
@@ -631,14 +716,14 @@ impl Compiler {
                         // Compile arm body
                         self.compile_expr(&arm.body)?;
                         let _pops = self.scope.end_scope();
-                        // Pop scrutinee (below result) — result is TOS, scrutinee TOS-1
-                        // For correctness we need swap+pop. Simplified: we leave scrutinee.
                         let end = self.emit_jump(OpCode::Jump, line);
                         end_patches.push(end);
 
                         self.patch_jump(guard_fail);
                         self.emit_op(OpCode::Pop, line); // pop guard false
                         let _pops2 = self.scope.end_scope();
+                        // Pop the loaded scrutinee for this arm
+                        self.emit_op(OpCode::Pop, line);
                         continue;
                     }
 
@@ -652,9 +737,24 @@ impl Compiler {
                     self.emit_op(OpCode::Pop, line); // pop test result
                 }
 
-                // If no arm matched, result is the scrutinee (error case, but safe)
+                // If no arm matched, push Unit as default
+                self.emit_op(OpCode::LoadUnit, line);
                 for patch in end_patches {
                     self.patch_jump(patch);
+                }
+
+                // End the scrutinee scope
+                let match_pops = self.scope.end_scope();
+                if match_pops > 0 {
+                    // Save result, pop scrutinee local, reload result
+                    let temp_idx = self.chunk.intern_name("__match_tmp__");
+                    self.emit_op(OpCode::StoreGlobal, line);
+                    self.emit_u16(temp_idx, line);
+                    for _ in 0..match_pops {
+                        self.emit_op(OpCode::Pop, line);
+                    }
+                    self.emit_op(OpCode::LoadGlobal, line);
+                    self.emit_u16(temp_idx, line);
                 }
             }
 
@@ -724,7 +824,7 @@ impl Compiler {
 
     // ── Variable resolution ───────────────────────────────────
 
-    fn compile_var_load(&mut self, name: &str, line: u32) {
+    pub(super) fn compile_var_load(&mut self, name: &str, line: u32) {
         // Try local first
         if let Some(slot) = self.scope.resolve_local(name) {
             self.emit_op(OpCode::LoadLocal, line);
@@ -741,5 +841,38 @@ impl Compiler {
         let name_idx = self.chunk.intern_name(name);
         self.emit_op(OpCode::LoadGlobal, line);
         self.emit_u16(name_idx, line);
+    }
+
+    // ── TypeDecl compilation ─────────────────────────────────
+
+    fn compile_type_decl(&mut self, decl: &TypeDecl) -> Result<(), LuxError> {
+        for variant in &decl.variants {
+            let _arity = variant.fields.len();
+            let line = Self::current_line(&variant.span);
+
+            // Register named fields for FieldAccess resolution.
+            let field_names: Vec<String> = variant
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(idx, f)| f.name.clone().unwrap_or_else(|| format!("_{idx}")))
+                .collect();
+            if variant.fields.iter().any(|f| f.name.is_some()) {
+                self.field_registry
+                    .insert(variant.name.clone(), field_names);
+            }
+
+            // Emit a zero-field variant as a global. For zero-arity variants
+            // this IS the value; for N-arity variants the VM's call_value
+            // treats Variant{fields:[]} + Call(N) as a constructor call.
+            let name_idx = self.chunk.intern_name(&variant.name);
+            self.emit_op(OpCode::MakeVariant, line);
+            self.emit_u16(name_idx, line);
+            self.emit_u16(0, line);
+            let store_idx = self.chunk.intern_name(&variant.name);
+            self.emit_op(OpCode::StoreGlobal, line);
+            self.emit_u16(store_idx, line);
+        }
+        Ok(())
     }
 }

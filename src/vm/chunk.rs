@@ -4,6 +4,7 @@
 //! and handler tables for a single compilation unit (function body or
 //! top-level script).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::opcode::OpCode;
@@ -29,6 +30,8 @@ pub struct FnProto {
     pub local_count: u16,
     pub upval_count: u16,
     pub name: Option<String>,
+    /// Variant name → ordered field names, for FieldAccess resolution at runtime.
+    pub field_registry: HashMap<String, Vec<String>>,
 }
 
 /// Handler table entry — maps effect operations to handler body FnProtos.
@@ -229,6 +232,7 @@ impl Chunk {
                 | OpCode::MatchVariant
                 | OpCode::MatchTuple
                 | OpCode::MatchListCons
+                | OpCode::MatchListExact
                 | OpCode::BindLocal
                 | OpCode::StringInterp => {
                     let idx = self.read_u16(offset);

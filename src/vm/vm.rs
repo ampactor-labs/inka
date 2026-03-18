@@ -12,6 +12,9 @@ use super::frame::{CallFrame, VmHandlerFrame};
 use super::opcode::OpCode;
 use super::value::{BuiltinId, Closure, VmValue};
 
+/// Variant name → ordered field names (for FieldAccess index resolution).
+type FieldRegistry = HashMap<String, Vec<String>>;
+
 /// Signature for VM builtin functions.
 pub type BuiltinFn = fn(&[VmValue]) -> Result<VmValue, String>;
 
@@ -37,6 +40,21 @@ pub struct Vm {
     /// Pushed by Perform, popped by Resume. A stack (not scalar) so nested
     /// effects don't clobber outer dispatch state.
     pub(super) handler_dispatch_stack: Vec<(usize, usize)>,
+    /// Variant name → ordered field names (for named field access).
+    field_registry: FieldRegistry,
+    /// Replay log for multi-shot continuation re-evaluation. `None` = normal mode.
+    pub(super) replay_log: Option<Vec<VmValue>>,
+    /// Current position in the replay log.
+    pub(super) replay_pos: usize,
+    /// When true, `PopHandler` at nesting depth 0 stops execution and returns TOS.
+    /// Used during continuation replay to stop after the handle body completes.
+    pub(super) stop_at_pop_handler: bool,
+}
+
+impl Default for Vm {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Vm {
@@ -51,6 +69,10 @@ impl Vm {
             builtin_map: HashMap::new(),
             output: String::new(),
             handler_dispatch_stack: Vec::new(),
+            field_registry: HashMap::new(),
+            replay_log: None,
+            replay_pos: 0,
+            stop_at_pop_handler: false,
         };
         vm.register_builtins();
         vm
@@ -58,6 +80,9 @@ impl Vm {
 
     /// Run a compiled function prototype.
     pub fn run(&mut self, proto: Arc<FnProto>) -> Result<Option<VmValue>, VmError> {
+        // Load field registry from the top-level proto.
+        self.field_registry = proto.field_registry.clone();
+
         // Allocate locals on the stack
         let stack_base = self.stack.len();
         for _ in 0..proto.local_count {
@@ -82,7 +107,7 @@ impl Vm {
     }
 
     /// Main execution loop.
-    fn execute(&mut self) -> Result<Option<VmValue>, VmError> {
+    pub(super) fn execute(&mut self) -> Result<Option<VmValue>, VmError> {
         loop {
             let frame_idx = self.frames.len() - 1;
             let frame = &mut self.frames[frame_idx];
@@ -351,6 +376,7 @@ impl Vm {
                     if let Some(&(h_idx, body_idx)) = self.handler_dispatch_stack.last() {
                         if frame_idx == body_idx {
                             self.handler_dispatch_stack.pop();
+                            let handler_frame = self.handler_stack[h_idx].frame_idx;
                             let stack_height = self.handler_stack[h_idx].stack_height;
 
                             // Pop handler body frame.
@@ -358,18 +384,31 @@ impl Vm {
                             self.stack.truncate(base);
                             self.frames.pop();
 
-                            // Unwind to handler's installation point.
+                            // Unwind: pop all frames between handler body and
+                            // handle frame (e.g., function calls that performed
+                            // the effect from inside the handle body).
+                            while self.frames.len() > handler_frame + 1 {
+                                let b = self.frames.last().unwrap().stack_base;
+                                self.stack.truncate(b);
+                                self.frames.pop();
+                            }
+
+                            // Unwind stack to handler's installation point.
                             self.stack.truncate(stack_height);
 
                             // Pop the handler frame.
                             self.handler_stack.remove(h_idx);
 
                             // Push result as handle expression's value.
-                            self.stack.push(result);
+                            self.stack.push(result.clone());
 
                             // Skip past PopHandler in the handle frame.
-                            let handle_frame = self.frames.len() - 1;
-                            self.skip_past_pop_handler(handle_frame);
+                            self.skip_past_pop_handler(handler_frame);
+
+                            // In continuation replay, stop after handle body completes.
+                            if self.stop_at_pop_handler {
+                                return Ok(Some(result));
+                            }
 
                             continue;
                         }
@@ -446,7 +485,7 @@ impl Vm {
                 }
                 OpCode::FieldAccess => {
                     let name_idx = self.frames[frame_idx].read_u16();
-                    let name = self.frames[frame_idx]
+                    let field_name = self.frames[frame_idx]
                         .proto
                         .chunk
                         .names
@@ -456,7 +495,7 @@ impl Vm {
                     let obj = self.stack.pop().unwrap_or(VmValue::Unit);
                     match &obj {
                         VmValue::Tuple(elems) => {
-                            if let Ok(idx) = name.parse::<usize>() {
+                            if let Ok(idx) = field_name.parse::<usize>() {
                                 if idx < elems.len() {
                                     self.stack.push(elems[idx].clone());
                                 } else {
@@ -466,9 +505,17 @@ impl Vm {
                                 self.stack.push(VmValue::Unit);
                             }
                         }
-                        VmValue::Variant { fields, .. } => {
-                            let _ = fields;
-                            self.stack.push(VmValue::Unit);
+                        VmValue::Variant {
+                            name: variant_name,
+                            fields,
+                        } => {
+                            // Look up field index from the field registry.
+                            let resolved = self
+                                .field_registry
+                                .get(variant_name.as_str())
+                                .and_then(|names| names.iter().position(|n| n == &field_name))
+                                .and_then(|idx| fields.get(idx).cloned());
+                            self.stack.push(resolved.unwrap_or(VmValue::Unit));
                         }
                         _ => self.stack.push(VmValue::Unit),
                     }
@@ -562,6 +609,12 @@ impl Vm {
                     let matches = matches!(&actual, VmValue::List(elems) if elems.is_empty());
                     self.stack.push(VmValue::Bool(matches));
                 }
+                OpCode::MatchListExact => {
+                    let count = self.frames[frame_idx].read_u16() as usize;
+                    let actual = self.stack.last().cloned().unwrap_or(VmValue::Unit);
+                    let matches = matches!(&actual, VmValue::List(elems) if elems.len() == count);
+                    self.stack.push(VmValue::Bool(matches));
+                }
                 OpCode::BindLocal => {
                     let slot = self.frames[frame_idx].read_u16() as usize;
                     let val = self.stack.last().cloned().unwrap_or(VmValue::Unit);
@@ -589,6 +642,10 @@ impl Vm {
                 }
                 OpCode::PopHandler => {
                     self.op_pop_handler();
+                    // In continuation replay mode, stop after the handle body completes.
+                    if self.stop_at_pop_handler {
+                        return Ok(self.stack.pop());
+                    }
                 }
                 OpCode::Perform => {
                     self.op_perform(frame_idx)?;
@@ -689,6 +746,7 @@ impl Vm {
             | OpCode::MatchVariant
             | OpCode::MatchTuple
             | OpCode::MatchListCons
+            | OpCode::MatchListExact
             | OpCode::BindLocal
             | OpCode::StringInterp
             | OpCode::MatchInt => 2,
@@ -794,7 +852,7 @@ impl Vm {
                 }
 
                 let stack_base = func_idx + 1;
-                let extra_locals = closure.proto.local_count as usize - argc;
+                let extra_locals = (closure.proto.local_count as usize).saturating_sub(argc);
                 for _ in 0..extra_locals {
                     self.stack.push(VmValue::Unit);
                 }
@@ -825,6 +883,15 @@ impl Vm {
                     name,
                     fields: Arc::new(args),
                 });
+                Ok(())
+            }
+            VmValue::Continuation(cont) => {
+                let start = self.stack.len() - argc;
+                let args: Vec<VmValue> = self.stack.drain(start..).collect();
+                self.stack.pop(); // remove function value
+                let resume_value = args.into_iter().next().unwrap_or(VmValue::Unit);
+                let result = self.call_continuation(&cont, resume_value)?;
+                self.stack.push(result);
                 Ok(())
             }
             _ => {
@@ -931,6 +998,131 @@ impl Vm {
         self.register_builtin("string_length", |args| match args.first() {
             Some(VmValue::String(s)) => Ok(VmValue::Int(s.len() as i64)),
             _ => Ok(VmValue::Int(0)),
+        });
+        self.register_builtin("slice", |args| {
+            match (args.first(), args.get(1), args.get(2)) {
+                (
+                    Some(VmValue::List(items)),
+                    Some(VmValue::Int(start)),
+                    Some(VmValue::Int(end)),
+                ) => {
+                    let len = items.len() as i64;
+                    let s = (*start).max(0).min(len) as usize;
+                    let e = (*end).max(0).min(len) as usize;
+                    let slice = items[s..e].to_vec();
+                    Ok(VmValue::List(Arc::new(slice)))
+                }
+                _ => Err("slice expects (List, Int, Int)".into()),
+            }
+        });
+        self.register_builtin("sort", |args| match args.first() {
+            Some(VmValue::List(items)) => {
+                let mut sorted = (**items).clone();
+                sorted.sort_by(|a, b| match (a, b) {
+                    (VmValue::Int(x), VmValue::Int(y)) => x.cmp(y),
+                    (VmValue::Float(x), VmValue::Float(y)) => {
+                        x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
+                    }
+                    (VmValue::String(x), VmValue::String(y)) => x.cmp(y),
+                    _ => std::cmp::Ordering::Equal,
+                });
+                Ok(VmValue::List(Arc::new(sorted)))
+            }
+            _ => Err("sort expects a list".into()),
+        });
+        self.register_builtin("zip", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::List(a)), Some(VmValue::List(b))) => {
+                let pairs: Vec<VmValue> = a
+                    .iter()
+                    .zip(b.iter())
+                    .map(|(x, y)| VmValue::Tuple(Arc::new(vec![x.clone(), y.clone()])))
+                    .collect();
+                Ok(VmValue::List(Arc::new(pairs)))
+            }
+            _ => Err("zip expects two lists".into()),
+        });
+        self.register_builtin("enumerate", |args| match args.first() {
+            Some(VmValue::List(items)) => {
+                let pairs: Vec<VmValue> = items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| VmValue::Tuple(Arc::new(vec![VmValue::Int(i as i64), v.clone()])))
+                    .collect();
+                Ok(VmValue::List(Arc::new(pairs)))
+            }
+            _ => Err("enumerate expects a list".into()),
+        });
+        self.register_builtin("split", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::String(s)), Some(VmValue::String(sep))) => {
+                let parts: Vec<VmValue> = s
+                    .split(sep.as_str())
+                    .map(|p| VmValue::String(Arc::new(p.to_string())))
+                    .collect();
+                Ok(VmValue::List(Arc::new(parts)))
+            }
+            _ => Err("split expects two strings".into()),
+        });
+        self.register_builtin("trim", |args| match args.first() {
+            Some(VmValue::String(s)) => Ok(VmValue::String(Arc::new(s.trim().to_string()))),
+            _ => Err("trim expects a string".into()),
+        });
+        self.register_builtin("contains", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::String(s)), Some(VmValue::String(sub))) => {
+                Ok(VmValue::Bool(s.contains(sub.as_str())))
+            }
+            (Some(VmValue::List(items)), Some(val)) => Ok(VmValue::Bool(items.contains(val))),
+            _ => Err("contains expects (String, String) or (List, value)".into()),
+        });
+        self.register_builtin("starts_with", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::String(s)), Some(VmValue::String(prefix))) => {
+                Ok(VmValue::Bool(s.starts_with(prefix.as_str())))
+            }
+            _ => Err("starts_with expects two strings".into()),
+        });
+        self.register_builtin("replace", |args| {
+            match (args.first(), args.get(1), args.get(2)) {
+                (
+                    Some(VmValue::String(s)),
+                    Some(VmValue::String(from)),
+                    Some(VmValue::String(to)),
+                ) => Ok(VmValue::String(Arc::new(
+                    s.replace(from.as_str(), to.as_str()),
+                ))),
+                _ => Err("replace expects three strings".into()),
+            }
+        });
+        self.register_builtin("chars", |args| match args.first() {
+            Some(VmValue::String(s)) => {
+                let chars: Vec<VmValue> = s
+                    .chars()
+                    .map(|c| VmValue::String(Arc::new(c.to_string())))
+                    .collect();
+                Ok(VmValue::List(Arc::new(chars)))
+            }
+            _ => Err("chars expects a string".into()),
+        });
+        self.register_builtin("join", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::List(items)), Some(VmValue::String(sep))) => {
+                let strings: Vec<String> = items
+                    .iter()
+                    .map(|v| match v {
+                        VmValue::String(s) => (**s).clone(),
+                        other => format!("{other}"),
+                    })
+                    .collect();
+                Ok(VmValue::String(Arc::new(strings.join(sep.as_str()))))
+            }
+            _ => Err("join expects a list and string".into()),
+        });
+        self.register_builtin("floor", |args| match args.first() {
+            Some(VmValue::Float(f)) => Ok(VmValue::Int(f.floor() as i64)),
+            Some(VmValue::Int(n)) => Ok(VmValue::Int(*n)),
+            _ => Err("floor expects a number".into()),
+        });
+        self.register_builtin("ceil", |args| match args.first() {
+            Some(VmValue::Float(f)) => Ok(VmValue::Int(f.ceil() as i64)),
+            Some(VmValue::Int(n)) => Ok(VmValue::Int(*n)),
+            _ => Err("ceil expects a number".into()),
         });
     }
 

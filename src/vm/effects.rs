@@ -9,7 +9,7 @@ use std::sync::Arc;
 use super::chunk::{Constant, FnProto};
 use super::error::VmError;
 use super::frame::{CallFrame, VmHandlerEntry, VmHandlerFrame};
-use super::value::VmValue;
+use super::value::{VmContinuation, VmValue};
 use super::vm::Vm;
 
 impl Vm {
@@ -30,14 +30,26 @@ impl Vm {
         // Resolve handler entries from the current chunk's handler table.
         let entries = self.resolve_handler_entries(frame_idx, table_idx)?;
 
+        // Record body start IP (current position after reading PushHandler operands).
+        let body_start_ip = self.frames[frame_idx].ip;
+
+        // Capture stack snapshot at PushHandler time for continuation replay.
+        // This is the "clean" state before the body modifies locals.
+        let h_frame_idx = self.frames.len() - 1;
+        let snap_base = self.frames[h_frame_idx].stack_base;
+        let stack_snapshot = self.stack[snap_base..].to_vec();
+
         self.handler_stack.push(VmHandlerFrame {
             entries,
-            frame_idx: self.frames.len() - 1,
+            frame_idx: h_frame_idx,
             stack_height: self.stack.len(),
+            initial_state: state.clone(),
             state,
             resume_ip: 0,
             resume_frame_idx: 0,
             resume_stack_height: 0,
+            body_start_ip,
+            stack_snapshot,
         });
 
         Ok(())
@@ -50,8 +62,10 @@ impl Vm {
 
     /// Process the `Perform` opcode.
     ///
-    /// Pops effect args, searches the handler stack for a matching handler,
-    /// saves resume state, and pushes a call frame for the handler body.
+    /// In replay mode, returns the next value from the replay log.
+    /// Otherwise, pops effect args, searches the handler stack for a matching
+    /// handler, saves resume state, and pushes a call frame for the handler body.
+    /// For stateless handlers, creates a `VmContinuation` and passes it as `resume`.
     pub(super) fn op_perform(&mut self, frame_idx: usize) -> Result<(), VmError> {
         let op_name_idx = self.frames[frame_idx].read_u16();
         let argc = self.frames[frame_idx].read_byte() as usize;
@@ -69,7 +83,17 @@ impl Vm {
         let args_start = self.stack.len() - argc;
         let args: Vec<VmValue> = self.stack.drain(args_start..).collect();
 
-        // Search handler stack (top-down) for a matching handler.
+        // Replay mode: consume from log if available.
+        if let Some(ref log) = self.replay_log {
+            if self.replay_pos < log.len() {
+                let val = log[self.replay_pos].clone();
+                self.replay_pos += 1;
+                self.stack.push(val);
+                return Ok(());
+            }
+        }
+
+        // Normal dispatch: search handler stack for a matching handler.
         let found = self.find_handler(&op_name);
 
         if let Some((handler_idx, entry_idx)) = found {
@@ -77,17 +101,56 @@ impl Vm {
             let resume_ip = self.frames[frame_idx].ip;
             let resume_stack_height = self.stack.len();
 
-            let handler = &mut self.handler_stack[handler_idx];
-            handler.resume_ip = resume_ip;
-            handler.resume_frame_idx = frame_idx;
-            handler.resume_stack_height = resume_stack_height;
+            {
+                let handler = &mut self.handler_stack[handler_idx];
+                handler.resume_ip = resume_ip;
+                handler.resume_frame_idx = frame_idx;
+                handler.resume_stack_height = resume_stack_height;
+            }
+
+            // Determine if this handler is stateless (multi-shot capable).
+            let is_stateless = self.handler_stack[handler_idx].state.is_empty();
+
+            // Build continuation for stateless handlers.
+            let continuation = if is_stateless {
+                // Capture replay log so far (entries consumed before this perform).
+                let replay_log_so_far = self
+                    .replay_log
+                    .as_ref()
+                    .map(|log| log[..self.replay_pos].to_vec())
+                    .unwrap_or_default();
+
+                let h_frame_idx = self.handler_stack[handler_idx].frame_idx;
+                let cont = VmContinuation {
+                    replay_log: replay_log_so_far,
+                    proto: self.frames[h_frame_idx].proto.clone(),
+                    body_start_ip: self.handler_stack[handler_idx].body_start_ip,
+                    handler_entries: self.handler_stack[handler_idx].entries.clone(),
+                    initial_state: self.handler_stack[handler_idx].initial_state.clone(),
+                    // Use the snapshot captured at PushHandler time (clean state
+                    // before the body modified locals via block-scoped lets).
+                    stack_snapshot: self.handler_stack[handler_idx].stack_snapshot.clone(),
+                    upvalues: self.frames[h_frame_idx].upvalues.clone(),
+                    outer_handler_stack: self.handler_stack[..handler_idx].to_vec(),
+                    outer_frame_count: h_frame_idx,
+                };
+                Some(VmValue::Continuation(Arc::new(cont)))
+            } else {
+                None
+            };
 
             // Get the handler proto and state.
-            let proto = handler.entries[entry_idx].proto.clone();
-            let state = handler.state.clone();
+            let proto = self.handler_stack[handler_idx].entries[entry_idx]
+                .proto
+                .clone();
+            let state = self.handler_stack[handler_idx].state.clone();
 
             // Push call frame for the handler body.
-            self.dispatch_handler_body(proto, &args, &state)?;
+            if let Some(cont) = continuation {
+                self.dispatch_handler_body_with_resume(proto, &args, &state, cont)?;
+            } else {
+                self.dispatch_handler_body(proto, &args, &state)?;
+            }
 
             // Track that we're in a handler dispatch (stack for nesting).
             self.handler_dispatch_stack
@@ -219,14 +282,29 @@ impl Vm {
         Ok(entries)
     }
 
-    /// Push a call frame for a handler body FnProto.
+    /// Push a call frame for a handler body FnProto (single-shot, no resume param).
     ///
-    /// The handler body's parameters are: `[effect_args..., state_vars...]`.
+    /// The handler body's parameters are: `[effect_args..., state_vars..., resume]`.
+    /// For single-shot dispatch, `resume` is Unit (the Resume opcode handles it).
     fn dispatch_handler_body(
         &mut self,
         proto: Arc<FnProto>,
         args: &[VmValue],
         state: &[VmValue],
+    ) -> Result<(), VmError> {
+        self.dispatch_handler_body_with_resume(proto, args, state, VmValue::Unit)
+    }
+
+    /// Push a call frame for a handler body FnProto with a `resume` value.
+    ///
+    /// Parameters pushed to the stack: `[effect_args..., state_vars..., resume]`.
+    /// For multi-shot handlers, `resume` is a `VmContinuation`.
+    fn dispatch_handler_body_with_resume(
+        &mut self,
+        proto: Arc<FnProto>,
+        args: &[VmValue],
+        state: &[VmValue],
+        resume: VmValue,
     ) -> Result<(), VmError> {
         let stack_base = self.stack.len();
 
@@ -240,8 +318,11 @@ impl Vm {
             self.stack.push(s.clone());
         }
 
+        // Push resume parameter.
+        self.stack.push(resume);
+
         // Push extra locals (beyond params).
-        let total_params = args.len() + state.len();
+        let total_params = args.len() + state.len() + 1; // +1 for resume
         let extra = proto.local_count as usize - total_params.min(proto.local_count as usize);
         for _ in 0..extra {
             self.stack.push(VmValue::Unit);
@@ -256,5 +337,82 @@ impl Vm {
         });
 
         Ok(())
+    }
+
+    /// Call a VmContinuation: replay the handle body with extended replay log.
+    ///
+    /// This runs a sub-execution loop: sets up the handle body frame with
+    /// replay mode, executes until the body completes, and returns the result.
+    pub(super) fn call_continuation(
+        &mut self,
+        cont: &VmContinuation,
+        resume_value: VmValue,
+    ) -> Result<VmValue, VmError> {
+        // Build extended replay log.
+        let mut replay_log = cont.replay_log.clone();
+        replay_log.push(resume_value);
+
+        // Save VM state.
+        let saved_frames = std::mem::take(&mut self.frames);
+        let saved_stack = std::mem::take(&mut self.stack);
+        let saved_handler_stack = std::mem::take(&mut self.handler_stack);
+        let saved_dispatch_stack = std::mem::take(&mut self.handler_dispatch_stack);
+        let saved_replay = self.replay_log.take();
+        let saved_replay_pos = self.replay_pos;
+        let saved_stop = self.stop_at_pop_handler;
+
+        // Set up replay state.
+        self.replay_log = Some(replay_log);
+        self.replay_pos = 0;
+        self.stop_at_pop_handler = true;
+
+        // Restore outer handler stack from the continuation snapshot.
+        self.handler_stack = cont.outer_handler_stack.clone();
+
+        // Restore the enclosing frame's stack (locals at time of PushHandler).
+        let stack_base = 0;
+        self.stack = cont.stack_snapshot.clone();
+
+        // Push a frame for the enclosing function, starting at body_start_ip.
+        self.frames.push(CallFrame {
+            proto: cont.proto.clone(),
+            upvalues: cont.upvalues.clone(),
+            ip: cont.body_start_ip,
+            stack_base,
+            has_func_slot: false,
+        });
+
+        // Push handler frame (re-install the handler for the body).
+        let handler_frame_idx = self.frames.len() - 1;
+        self.handler_stack.push(VmHandlerFrame {
+            entries: cont.handler_entries.clone(),
+            frame_idx: handler_frame_idx,
+            stack_height: self.stack.len(),
+            initial_state: cont.initial_state.clone(),
+            state: cont.initial_state.clone(),
+            resume_ip: 0,
+            resume_frame_idx: 0,
+            resume_stack_height: 0,
+            body_start_ip: cont.body_start_ip,
+            stack_snapshot: cont.stack_snapshot.clone(),
+        });
+
+        // Execute the body.
+        let result = self.execute();
+
+        // Restore VM state.
+        self.frames = saved_frames;
+        self.stack = saved_stack;
+        self.handler_stack = saved_handler_stack;
+        self.handler_dispatch_stack = saved_dispatch_stack;
+        self.replay_log = saved_replay;
+        self.replay_pos = saved_replay_pos;
+        self.stop_at_pop_handler = saved_stop;
+
+        match result {
+            Ok(Some(val)) => Ok(val),
+            Ok(None) => Ok(VmValue::Unit),
+            Err(e) => Err(e),
+        }
     }
 }

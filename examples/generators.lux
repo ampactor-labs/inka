@@ -1,4 +1,5 @@
 // Generator examples — yield effect + generate builtin
+// NOTE: Requires --interpret flag (generators use threads, not supported in bytecode VM)
 
 // Simple generator: yields 1, 2, 3
 let gen = generate(|| {

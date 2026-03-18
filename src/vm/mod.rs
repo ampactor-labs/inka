@@ -12,4 +12,5 @@ pub mod error;
 pub mod frame;
 pub mod opcode;
 pub mod value;
+#[allow(clippy::module_inception)]
 pub mod vm;

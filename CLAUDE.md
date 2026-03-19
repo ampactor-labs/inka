@@ -1,22 +1,126 @@
-# Lux
+# Lux — The Language of Light
+
+## READ THIS FIRST — What Lux IS
+
+Lux is a **thesis language**. The thesis: if you build the right foundations
+— algebraic effects, refinement types, ownership inference, and row
+polymorphism — most of what programmers manually annotate today becomes
+*inferable*. You get Rust-level safety with near-Python concision. Not by
+being sloppy, but by being smarter about inference.
+
+**The gap Lux closes:** between what a programmer *means* and what they're
+*forced to write*. "This reads a file and might fail" becomes four lines of
+ceremony in Rust (async, borrowing, error boxing, lifetimes). In Lux the
+effect system infers all of it.
+
+**One mechanism replaces six.** Exceptions, state, generators, async,
+dependency injection, backtracking — all `handle`/`resume`. An `effect`
+declares operations. A handler provides their semantics. The `resume`
+continuation gives the handler control over what happens next. Zero special
+syntax. Handler-local state (`with` clause) gives handlers mutable bindings
+that evolve across resume calls.
+
+**The effect algebra** — no other language has this. A complete Boolean
+algebra over capabilities:
+
+| Operator | Meaning | Example |
+|----------|---------|---------|
+| `E + F` | Union | `IO + State` |
+| `E - F` | Subtraction | `E - Mutate` |
+| `E & F` | Intersection | `E1 & E2` |
+| `!E` | Negation | `!IO`, `!Alloc` |
+| `Pure` | Empty set | `fn pure() -> Int` |
+
+Koka has `+` via row polymorphism. Lux has the full algebra.
+
+### Emergent Capabilities — Consequences, Not Features
+
+These are not planned features. They fall out of the interaction between
+effects, refinements, and ownership. This is the core insight:
+
+- **`!Alloc` proves real-time safety.** Falls out of effect negation for
+  free. Rust *cannot* do this — `Vec::push` is safe Rust and it allocates.
+  In Lux, `!Alloc` propagates through the entire call chain. If any
+  transitive callee allocates, the constraint fails at compile time.
+
+- **Auto-parallelization.** Pure functions (`!Everything`) can be executed
+  in parallel — the effect system proves it's safe. No annotations needed.
+
+- **GPU compilation gate.** `!IO, !Alloc` functions can be offloaded to
+  GPU. The compiler knows because the algebra proves it.
+
+- **Capability security IS effect restriction.** `!Network` means provably
+  no network access — enforced by the type system, not a runtime sandbox.
+  A plugin with `with Compute, Log` literally cannot perform I/O.
+
+- **Testing without a framework.** You don't mock, you `handle`. Swap the
+  production handler for a test handler. Same code, different semantics.
+  The type system guarantees the handler satisfies the effect signature.
+
+- **"More performant than C" is a real claim.** Not because the runtime is
+  faster, but because the type system can prove things that enable
+  optimizations no manually-disciplined language can match: provable purity
+  enables compile-time evaluation, memoization, and dead code elimination
+  that unsafe languages must conservatively skip.
+
+### Refinement Types
+
+Types with predicates, verified at compile time by Z3, erased at runtime:
+
+```lux
+type Sample = Float where -1.0 <= self <= 1.0    // compiler PROVES audio doesn't clip
+type NonEmpty<T> = List<T> where self.len() > 0   // head on empty list is a compile error
+type Port = Int where 1 <= self <= 65535
+```
+
+Gradual verification: `assert` as runtime fallback, verification dashboard
+tracks strictness score toward 100%.
+
+### Ownership as a Menu
+
+Not GC-everything or own-everything. A real menu: `own` (affine, zero-cost,
+deterministic cleanup), `gc` (shared, collected), `rc` (ref-counted). Borrow
+inference within function bodies — programmers never write `&` or lifetime
+annotations inside functions. Explicit only at module boundaries.
+
+### Progressive Levels (1-5)
+
+Five levels, each a proper subset of the next. Code never rewrites — only
+unlocks. Level 1 (pure functional, feels like Elm) → Level 2 (+effects,
+feels like Koka) → Level 3 (+ownership, feels like friendlier Rust) →
+Level 4 (+refinements, feels like Liquid Haskell) → Level 5 (full Lux,
+feels like nothing else). The compiler nudges you forward when your code
+would benefit from the next level.
+
+### What This Means for Development
+
+Every decision in this project serves the thesis. When choosing between
+approaches, ask: does this prove the language is sufficient for its own
+expression? Migrating Rust builtins to pure Lux proves sufficiency.
+Self-hosting the stdlib proves the language works. The Rust prototype is
+scaffolding — every line of Rust is debt to be repaid in Lux.
+
+> Full manifesto: `docs/DESIGN.md` (971 lines). Read it before proposing
+> architectural changes or new language features.
 
 ## Throughline
-Lux is the language that replaces manual discipline with static proof — the connective tissue between all projects. The effect system IS the hourglass: distributed effects converge to the handle{} block (pinch point), then resume(result) radiates new state.
 
-**Kernel Pattern:** handle { computation } (pure computation) → handler-local state (configuration) → resume(result) (interface)
-**Cross-Project:** !Alloc = sonido no_std; pipe operator = signal chain DSL; effect handlers = flowpilot safety gates; mock handlers = forge test isolation
-**Current Priority:** Phase 6 (bytecode VM) — the interpreter proves the thesis, the VM makes it usable
+Lux is the connective tissue between all projects. The effect system IS
+the hourglass: distributed effects converge to the `handle{}` block (pinch
+point), then `resume(result)` radiates new state.
 
-### DSP Connection
+**Kernel Pattern:** `handle { computation }` (pure computation) →
+handler-local state (configuration) → `resume(result)` (interface)
+
+**Cross-Project:** `!Alloc` = sonido no_std; pipe operator = signal chain
+DSL; effect handlers = flowpilot safety gates; mock handlers = forge test
+isolation
+
+**DSP Connection:**
 - Pipe operator `|>` IS a signal chain: `input |> highpass(80) |> compress(4.0) |> limit(-0.1)`
 - Refinement types (Phase 10): `type Sample = Float where -1.0 <= self <= 1.0` proves audio bounds
 - `!Alloc` effect negation (Phase 9): compiler proves real-time safety, replacing sonido's manual no_std discipline
 - Effect handlers = audio backend adaptation: `handle dsp_graph() { use CoreAudioHandler(48000, 256) }`
-
-Lux ("light") — a compiled language where algebraic effects, refinement types,
-and ownership inference close the gap between what programmers mean and what
-they write. Rust-level safety with near-Python concision. The interpreter is
-the thesis prover; the compiler is the destination.
 
 ## Build / Run / Test
 - `cargo run -- <file.lux>` — run a program
@@ -62,7 +166,7 @@ Standard library: `std/prelude.lux` (self-hosted in Lux — this part stays)
 | `examples/*.lux` | Language examples and test cases | **YES — Lux forever** |
 | `tests/examples.rs` | Golden-file integration tests + VM parity checks | Rewritten in Lux |
 
-## Effect System (the core)
+## Effect System — Syntax Reference
 
 ```lux
 effect Fail { fail(msg: String) -> Never }
@@ -78,8 +182,6 @@ handle { increment(); increment(); get() } with state = 0 {
 }
 // => 2
 ```
-
-One mechanism replaces: exceptions, state, generators, async, DI, backtracking.
 
 ## Rust Prototype Internals
 

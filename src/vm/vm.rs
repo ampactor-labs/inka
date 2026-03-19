@@ -631,7 +631,7 @@ impl Vm {
                     let parts: Vec<VmValue> = self.stack.drain(start..).collect();
                     let mut result = String::new();
                     for part in &parts {
-                        result.push_str(&format!("{part}"));
+                        result.push_str(&part.display_print());
                     }
                     self.stack.push(VmValue::String(Arc::new(result)));
                 }
@@ -925,13 +925,13 @@ impl Vm {
     fn register_builtins(&mut self) {
         self.register_builtin("print", |args| {
             if let Some(val) = args.first() {
-                print!("{val}");
+                print!("{}", val.display_print());
             }
             Ok(VmValue::Unit)
         });
         self.register_builtin("println", |args| {
             if let Some(val) = args.first() {
-                println!("{val}");
+                println!("{}", val.display_print());
             } else {
                 println!();
             }
@@ -939,7 +939,7 @@ impl Vm {
         });
         self.register_builtin("to_string", |args| {
             let val = args.first().cloned().unwrap_or(VmValue::Unit);
-            Ok(VmValue::String(Arc::new(format!("{val}"))))
+            Ok(VmValue::String(Arc::new(val.display_print())))
         });
         self.register_builtin("len", |args| match args.first() {
             Some(VmValue::List(l)) => Ok(VmValue::Int(l.len() as i64)),

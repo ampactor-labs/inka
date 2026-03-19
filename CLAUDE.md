@@ -55,8 +55,12 @@ Standard library: `std/prelude.lux` (self-hosted in Lux — this part stays)
 | `src/patterns.rs` | Pattern matching (list, or, record patterns) | Deleted |
 | `src/env.rs` | Arc-shared lexical scoping (Rust runtime) | Deleted |
 | `src/error.rs` | Error types, source-context formatting | Rewritten in Lux |
-| `std/prelude.lux` | Self-hosted stdlib (map, filter, fold, etc.) | **YES — Lux forever** |
+| `src/loader.rs` | Module import resolution, cycle detection | Rewritten in Lux |
+| `src/compiler/` | Bytecode compiler (expressions, effects, patterns) | Rewritten in Lux |
+| `src/vm/` | Stack-based VM (execution, effects, builtins) | Rewritten in Lux |
+| `std/prelude.lux` | Self-hosted stdlib (26 functions: map, filter, fold, zip, find, partition, etc.) | **YES — Lux forever** |
 | `examples/*.lux` | Language examples and test cases | **YES — Lux forever** |
+| `tests/examples.rs` | Golden-file integration tests + VM parity checks | Rewritten in Lux |
 
 ## Effect System (the core)
 
@@ -99,15 +103,18 @@ One mechanism replaces: exceptions, state, generators, async, DI, backtracking.
 | 5 | Stateful effect handlers (handler-local state) | 1985aad |
 | 6A | Named record fields, list patterns, or-patterns | HEAD |
 | 6B | Multi-shot continuations via replay-based re-evaluation | HEAD |
+| 6C | Bytecode VM, module system, VM parity (15/15 examples) | 5787bb1..d933893 |
+| 6C+ | Pipe-aware calls, prelude expansion, exhaustive match warnings, assert | ffb8ae2..a23cbf9 |
 
 ## Roadmap (beyond interpreter)
 
 | Phase | Layer | Deliverable |
 |-------|-------|-------------|
-| 6C | Modules + VM | Module system, bytecode compiler, stack-based VM, WASM playground |
+| 6C | Modules + VM | Module system, bytecode compiler, stack-based VM (**DONE**) |
 | 7 | Evidence-passing | Koka-style effect compilation, near-native performance |
 | 8 | Codegen | Cranelift backend, native binaries (Linux/Mac/Windows) |
 | 9 | Ownership | own/ref/gc inference, borrow checking |
+| 9.5 | Concurrent handlers | Parallel resume with ownership-proven isolation |
 | 10 | Refinements | Z3-backed refinement types, !Alloc proof, gradual verification |
 | 11 | Self-hosting | Parser + checker rewritten in Lux |
 | 12 | Polish | LLVM backend, LSP, package manager, progressive levels |

@@ -112,7 +112,7 @@ impl fmt::Display for VmValue {
         match self {
             VmValue::Int(n) => write!(f, "{n}"),
             VmValue::Float(n) => write!(f, "{n}"),
-            VmValue::String(s) => write!(f, "{s}"),
+            VmValue::String(s) => write!(f, "\"{s}\""),
             VmValue::Bool(b) => write!(f, "{b}"),
             VmValue::Unit => write!(f, "()"),
             VmValue::List(elems) => {
@@ -156,6 +156,16 @@ impl fmt::Display for VmValue {
             }
             VmValue::Continuation(_) => write!(f, "<continuation>"),
             VmValue::Generator(_) => write!(f, "<generator>"),
+        }
+    }
+}
+
+impl VmValue {
+    /// Display for `print`/`println` — strings without quotes.
+    pub fn display_print(&self) -> String {
+        match self {
+            VmValue::String(s) => (**s).clone(),
+            other => format!("{other}"),
         }
     }
 }

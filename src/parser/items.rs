@@ -27,6 +27,7 @@ impl Parser {
             TokenKind::Trait => Ok(Item::TraitDecl(self.parse_trait_decl()?)),
             TokenKind::Impl => Ok(Item::ImplBlock(self.parse_impl_block()?)),
             TokenKind::Import => Ok(Item::Import(self.parse_import_decl()?)),
+            TokenKind::Handler => Ok(Item::HandlerDecl(self.parse_handler_decl()?)),
             _ => {
                 let expr = self.parse_expr()?;
                 Ok(Item::Expr(expr))
@@ -482,6 +483,51 @@ impl Parser {
             trait_name,
             target_type,
             methods,
+            span,
+        })
+    }
+
+    // ── handler name [: base] [with state = init, ...] { clauses }
+    fn parse_handler_decl(&mut self) -> Result<HandlerDecl, LuxError> {
+        let start_span = self.peek_span();
+        self.expect(&TokenKind::Handler)?;
+        let (name, _) = self.expect_ident()?;
+
+        // Optional base handler: `: base_name`
+        let base = if self.at_exact(&TokenKind::Colon) {
+            self.advance();
+            let (base_name, _) = self.expect_ident()?;
+            Some(base_name)
+        } else {
+            None
+        };
+
+        // Optional state bindings: `with name = expr, ...`
+        let state_bindings = self.parse_state_bindings()?;
+
+        // Handler clauses: `{ op(params) => body, ... }`
+        self.expect(&TokenKind::LBrace)?;
+        self.skip_semis();
+        let mut clauses = Vec::new();
+        while !self.at_exact(&TokenKind::RBrace) && !self.at_exact(&TokenKind::Eof) {
+            clauses.push(self.parse_handler_clause()?);
+            if self.at_exact(&TokenKind::Comma) {
+                self.advance();
+            }
+            self.skip_semis();
+        }
+        let end_tok = self.expect(&TokenKind::RBrace)?;
+        let span = Span::new(
+            start_span.start,
+            end_tok.span.end,
+            start_span.line,
+            start_span.column,
+        );
+        Ok(HandlerDecl {
+            name,
+            base,
+            clauses,
+            state_bindings,
             span,
         })
     }

@@ -1,5 +1,7 @@
 /// Item registration (first pass) and checking (second pass).
-use crate::ast::{EffectDecl, FnDecl, ImplBlock, Item, LetDecl, TraitDecl, TypeDecl};
+use crate::ast::{
+    EffectDecl, FnDecl, HandlerDecl, HandlerOp, ImplBlock, Item, LetDecl, TraitDecl, TypeDecl,
+};
 use crate::error::{TypeError, TypeErrorKind};
 use crate::types::{AdtDef, EffectDef, EffectOpDef, EffectRow, Type, VariantDef};
 
@@ -143,11 +145,46 @@ impl TypeEnv {
             Item::TypeDecl(_) | Item::EffectDecl(_) => Ok(()), // already registered
             Item::TraitDecl(_) | Item::ImplBlock(_) => Ok(()), // already registered in first pass
             Item::Import(_) => Ok(()),                         // resolved before checking
+            Item::HandlerDecl(hd) => self.check_handler_decl(hd),
             Item::Expr(e) => {
                 self.infer_expr(e)?;
                 Ok(())
             }
         }
+    }
+
+    pub(crate) fn check_handler_decl(&mut self, hd: &HandlerDecl) -> Result<(), TypeError> {
+        // Verify base handler exists if specified
+        if let Some(base_name) = &hd.base {
+            if !self.handler_decls.contains_key(base_name) {
+                return Err(TypeError {
+                    kind: TypeErrorKind::UnboundVariable(base_name.clone()),
+                    span: hd.span.clone(),
+                });
+            }
+        }
+        // Validate clauses: op names must be known, nested UseHandler refs must exist
+        for clause in &hd.clauses {
+            match &clause.operation {
+                HandlerOp::OpHandler { op_name, .. } => {
+                    if !self.op_index.contains_key(op_name) {
+                        return Err(TypeError {
+                            kind: TypeErrorKind::UnboundEffectOp(op_name.clone()),
+                            span: clause.span.clone(),
+                        });
+                    }
+                }
+                HandlerOp::UseHandler { name } => {
+                    if !self.handler_decls.contains_key(name) {
+                        return Err(TypeError {
+                            kind: TypeErrorKind::UnboundVariable(name.clone()),
+                            span: clause.span.clone(),
+                        });
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn check_fn_decl(&mut self, fd: &FnDecl) -> Result<(), TypeError> {

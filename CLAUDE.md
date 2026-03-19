@@ -175,6 +175,7 @@ Standard library: `std/prelude.lux` (self-hosted in Lux — this part stays)
 | `std/ml/tensor.lux` | Pure tensor ops (vec/mat arithmetic, activations, loss) | **YES — Lux forever** |
 | `std/ml/autodiff.lux` | Autodiff via Compute effect, tape entries, backward pass | **YES — Lux forever** |
 | `examples/xor.lux` | XOR neural network — autodiff via effect handlers | **YES — Lux forever** |
+| `examples/handler_composition.lux` | Named handlers, inheritance, bare refs, overrides | **YES — Lux forever** |
 | `examples/*.lux` | Language examples and test cases | **YES — Lux forever** |
 | `tests/examples.rs` | Golden-file integration tests + VM parity checks | Rewritten in Lux |
 
@@ -198,6 +199,23 @@ handle { increment(); increment(); get() } with state = 0 {
 let (a, b) = (1, 2)
 let (out, recorded_tape) = handle { forward(model, x) } with tape = [] { ... }
 let (_, second) = some_tuple
+
+// Handler composition — named, reusable handlers
+handler compute_forward {
+  forward_mat_vec_mul(w, xv) => resume(mat_vec_mul(w, xv)),
+  forward_vec_add(a, b) => resume(vec_add(a, b)),
+}
+
+// Bare handler reference (inference = one-liner)
+handle { forward(model, x) } with compute_forward
+
+// Handler inheritance
+handler logging_compute: compute_forward {
+  forward_mat_vec_mul(w, xv) => { println("mul"); resume(mat_vec_mul(w, xv)) },
+}
+
+// Override clauses inline
+handle { body } with compute_forward { forward_relu(xs) => resume(relu_vec(xs)) }
 ```
 
 ## Rust Prototype Internals
@@ -229,6 +247,7 @@ let (_, second) = some_tuple
 | ML+ | Parser newline-aware postfix, checker numeric inference (no more `: Float` ceremony) | HEAD |
 | 7A | Handler state as return value — eliminates `get_tape()` anti-pattern. VM pattern match stack fix. | b33d1ee |
 | 7A.5 | Let destructuring | `let (a, b) = expr` — tuple/list/wildcard/record patterns in let bindings. 13 match→let conversions across examples. | HEAD |
+| 7C | Handler composition | `handler` top-level item, bare handler ref (`with handler_name`), inheritance (`: base`), `use` clause. XOR predict becomes one-liner. | HEAD |
 
 ## Roadmap (beyond interpreter)
 
@@ -237,7 +256,7 @@ let (_, second) = some_tuple
 | 6C | Modules + VM | Module system, bytecode compiler, stack-based VM (**DONE**) |
 | 7A | State-as-return | Handler state flows out as return value (**DONE**). Eliminates `get_tape()` anti-pattern. |
 | 7B | Tail-resumptive | VM fast-path for tail-resumptive handlers, no new syntax. |
-| 7C | Handler composition | `handler` top-level item, handler reuse. **ML milestone:** inference = training minus tape. |
+| 7C | Handler composition | `handler` top-level item, handler reuse (**DONE**). **ML milestone:** inference = training minus tape. |
 | 7+ | Evidence-passing | Koka-style effect compilation, near-native performance. **ML milestone:** zero-overhead autodiff handler. |
 | 8 | Codegen | Cranelift backend, native binaries. **ML milestone:** native-speed tensor ops, training on real data. |
 | 9 | Ownership | own/ref/gc inference, borrow checking. **ML milestone:** `!Alloc` inference, Daisy Seed deployment. |

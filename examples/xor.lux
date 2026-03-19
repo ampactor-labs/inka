@@ -37,6 +37,15 @@ fn forward(model, x) = {
   forward_sigmoid(forward_vec_add(forward_mat_vec_mul(model.w2, h), model.b2))
 }
 
+// ── Named handler: bare compute (no tape) ───────────────────
+
+handler compute_forward {
+  forward_mat_vec_mul(w, xv) => resume(mat_vec_mul(w, xv)),
+  forward_vec_add(a, b) => resume(vec_add(a, b)),
+  forward_relu(xs) => resume(relu_vec(xs)),
+  forward_sigmoid(xs) => resume(sigmoid_vec(xs)),
+}
+
 // ── Training step ───────────────────────────────────────────
 // Runs forward pass inside Compute handler, then backward pass.
 // Returns (loss, updated_model).
@@ -88,17 +97,10 @@ fn train_step(model, x, target, lr) = {
   (loss, new_model)
 }
 
-// ── Inference (no tape) ─────────────────────────────────────
+// ── Inference (no tape) — one-liner via handler reference ───
 
 fn predict(model, x) =
-  handle {
-    forward(model, x)
-  } {
-    forward_mat_vec_mul(w, xv) => resume(mat_vec_mul(w, xv)),
-    forward_vec_add(a, b) => resume(vec_add(a, b)),
-    forward_relu(xs) => resume(relu_vec(xs)),
-    forward_sigmoid(xs) => resume(sigmoid_vec(xs)),
-  }
+  handle { forward(model, x) } with compute_forward
 
 // ── Training loop ───────────────────────────────────────────
 

@@ -501,7 +501,16 @@ impl TypeEnv {
                     effs = effs.union(&body_effs);
                 }
                 HandlerOp::UseHandler { name } => {
-                    // For MVP, `use HandlerName` just removes the named effect
+                    if let Some(hd) = self.handler_decls.get(name).cloned() {
+                        for clause in &hd.clauses {
+                            if let HandlerOp::OpHandler { op_name, .. } = &clause.operation {
+                                if let Some(info) = self.op_index.get(op_name) {
+                                    expr_effs = expr_effs.without(&info.effect_name.clone());
+                                }
+                            }
+                        }
+                    }
+                    // Fallback: also try removing the name itself as an effect name
                     expr_effs = expr_effs.without(name);
                 }
             }

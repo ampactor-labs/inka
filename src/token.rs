@@ -61,6 +61,7 @@ pub enum TokenKind {
     Type,
     Effect,
     Handle,
+    Handler,
     With,
     Resume,
     Pub,

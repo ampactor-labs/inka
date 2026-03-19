@@ -106,6 +106,14 @@ impl Parser {
             .unwrap_or_else(Span::dummy)
     }
 
+    /// Peek at the token after the current one (1 token lookahead).
+    pub(crate) fn peek_next(&self) -> &TokenKind {
+        self.tokens
+            .get(self.pos + 1)
+            .map(|t| &t.kind)
+            .unwrap_or(&TokenKind::Eof)
+    }
+
     pub(crate) fn at(&self, kind: &TokenKind) -> bool {
         std::mem::discriminant(self.peek()) == std::mem::discriminant(kind)
     }

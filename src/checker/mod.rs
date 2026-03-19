@@ -68,6 +68,9 @@ pub fn check(program: &Program) -> Result<Program, LuxError> {
             Item::EffectDecl(ed) => env.register_effect_decl(ed)?,
             Item::TraitDecl(td) => env.register_trait_decl(td)?,
             Item::ImplBlock(ib) => env.register_impl_block(ib)?,
+            Item::HandlerDecl(hd) => {
+                env.handler_decls.insert(hd.name.clone(), hd.clone());
+            }
             _ => {}
         }
     }
@@ -115,6 +118,8 @@ pub(crate) struct TypeEnv {
     pub(crate) resume_type: Option<Type>,
     /// Types of handler state bindings (for Resume state update checking)
     pub(crate) handler_state_types: HashMap<String, Type>,
+    /// Named handler declarations: handler_name → HandlerDecl
+    pub(crate) handler_decls: HashMap<String, crate::ast::HandlerDecl>,
     /// Parent scope (for scoped bindings)
     pub(crate) parent: Option<Box<TypeEnv>>,
     /// Registered traits: trait_name -> list of (method_name, param_types, return_type)
@@ -144,6 +149,7 @@ impl TypeEnv {
             in_handler: false,
             resume_type: None,
             handler_state_types: HashMap::new(),
+            handler_decls: HashMap::new(),
             parent: None,
             traits: HashMap::new(),
             impl_methods: HashMap::new(),
@@ -166,6 +172,7 @@ impl TypeEnv {
             in_handler: self.in_handler,
             resume_type: self.resume_type.clone(),
             handler_state_types: self.handler_state_types.clone(),
+            handler_decls: self.handler_decls.clone(),
             parent: None,
             traits: self.traits.clone(),
             impl_methods: self.impl_methods.clone(),
@@ -427,6 +434,9 @@ impl ReplChecker {
                 }
                 crate::ast::Item::EffectDecl(ed) => {
                     self.env.register_effect_decl(ed).map_err(LuxError::Type)?
+                }
+                crate::ast::Item::HandlerDecl(hd) => {
+                    self.env.handler_decls.insert(hd.name.clone(), hd.clone());
                 }
                 _ => {}
             }

@@ -42,6 +42,14 @@ pub(super) struct Compiler {
     pub(super) field_registry: HashMap<String, Vec<String>>,
     /// Counter for unique pattern scratch variable names.
     pub(super) pat_scratch_id: u32,
+    /// Named handler declarations for handler composition (expanded at compile time).
+    pub(super) handler_decls: HashMap<
+        String,
+        (
+            Vec<crate::ast::HandlerClause>,
+            Vec<crate::ast::StateBinding>,
+        ),
+    >,
 }
 
 /// Loop compilation context.
@@ -68,6 +76,7 @@ impl Compiler {
             effect_ops: HashMap::new(),
             field_registry: HashMap::new(),
             pat_scratch_id: 0,
+            handler_decls: HashMap::new(),
         }
     }
 
@@ -159,6 +168,28 @@ impl Compiler {
                 self.compile_type_decl(decl)?;
                 Ok(())
             }
+            Item::HandlerDecl(decl) => {
+                let mut clauses = Vec::new();
+                // If base handler exists, start with its clauses
+                if let Some(base_name) = &decl.base {
+                    if let Some((base_clauses, _)) = self.handler_decls.get(base_name) {
+                        clauses = base_clauses.clone();
+                    }
+                }
+                // Overlay: new clauses with same op_name replace base clauses
+                for clause in &decl.clauses {
+                    if let HandlerOp::OpHandler { op_name, .. } = &clause.operation {
+                        clauses.retain(|c| match &c.operation {
+                            HandlerOp::OpHandler { op_name: n, .. } => n != op_name,
+                            _ => true,
+                        });
+                    }
+                    clauses.push(clause.clone());
+                }
+                self.handler_decls
+                    .insert(decl.name.clone(), (clauses, decl.state_bindings.clone()));
+                Ok(())
+            }
             // Trait/impl declarations don't generate code.
             // Imports are resolved before compilation.
             Item::TraitDecl(_) | Item::ImplBlock(_) | Item::Import(_) => Ok(()),
@@ -172,6 +203,7 @@ impl Compiler {
         let mut fn_compiler = Compiler::new(&fd.name);
         fn_compiler.effect_ops = self.effect_ops.clone();
         fn_compiler.field_registry = self.field_registry.clone();
+        fn_compiler.handler_decls = self.handler_decls.clone();
         fn_compiler.scope.begin_scope();
 
         // Declare parameters as locals
@@ -696,6 +728,7 @@ impl Compiler {
                 let mut fn_compiler = Compiler::new("<lambda>");
                 fn_compiler.effect_ops = self.effect_ops.clone();
                 fn_compiler.field_registry = self.field_registry.clone();
+                fn_compiler.handler_decls = self.handler_decls.clone();
                 fn_compiler.scope.enclosing = Some(Box::new(outer_scope));
                 fn_compiler.scope.begin_scope();
 

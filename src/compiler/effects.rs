@@ -33,24 +33,79 @@ impl Compiler {
     ) -> Result<(), LuxError> {
         let line = Self::current_line(span);
 
+        // Collect all state bindings: named handler state first, then explicit overrides.
+        // Explicit state bindings take priority — their names shadow base handler state.
+        let mut all_state_bindings: Vec<StateBinding> = Vec::new();
+        let mut seen_names = std::collections::HashSet::new();
+
+        // Record names from explicit state bindings (they take priority)
+        for binding in state_bindings {
+            seen_names.insert(binding.name.clone());
+        }
+
+        // Add state bindings from UseHandler references (only if not overridden)
+        for clause in handlers {
+            if let HandlerOp::UseHandler { name } = &clause.operation {
+                if let Some((_, base_state)) = self.handler_decls.get(name).cloned() {
+                    for binding in base_state {
+                        if !seen_names.contains(&binding.name) {
+                            seen_names.insert(binding.name.clone());
+                            all_state_bindings.push(binding);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Then add explicit state bindings
+        for binding in state_bindings {
+            all_state_bindings.push(binding.clone());
+        }
+
         // Compile state init expressions. Values are left on the stack
         // and consumed by PushHandler (stored in VmHandlerFrame.state).
         // State variables are NOT declared as locals — the handle body
         // only accesses state through effect operations, and handler bodies
         // receive state as FnProto parameters.
-        for binding in state_bindings {
+        for binding in &all_state_bindings {
             self.compile_expr(&binding.init)?;
         }
-        let state_count = state_bindings.len();
+        let state_count = all_state_bindings.len();
 
         // Collect state variable names for handler body compilation.
-        let state_names: Vec<String> = state_bindings.iter().map(|sb| sb.name.clone()).collect();
+        let state_names: Vec<String> = all_state_bindings
+            .iter()
+            .map(|sb| sb.name.clone())
+            .collect();
+
+        // Expand UseHandler references — two-pass for handler composition.
+        let mut expanded: Vec<crate::ast::HandlerClause> = Vec::new();
+
+        // First pass: collect base clauses from UseHandler references
+        for clause in handlers {
+            if let HandlerOp::UseHandler { name } = &clause.operation {
+                if let Some((base_clauses, _)) = self.handler_decls.get(name).cloned() {
+                    expanded.extend(base_clauses);
+                }
+            }
+        }
+
+        // Second pass: overlay inline OpHandler clauses (these win over base)
+        for clause in handlers {
+            if let HandlerOp::OpHandler { op_name, .. } = &clause.operation {
+                expanded.retain(|c| match &c.operation {
+                    HandlerOp::OpHandler { op_name: n, .. } => n != op_name,
+                    _ => true,
+                });
+                expanded.push(clause.clone());
+            }
+        }
 
         // Compile each handler body as a separate FnProto.
         let mut table = HandlerTable {
             entries: Vec::new(),
         };
-        for clause in handlers {
+        for clause in &expanded {
             if let HandlerOp::OpHandler {
                 op_name,
                 params,
@@ -105,6 +160,7 @@ impl Compiler {
     ) -> Result<crate::vm::chunk::FnProto, LuxError> {
         let mut sub = Compiler::new(&format!("handler:{op_name}"));
         sub.effect_ops = self.effect_ops.clone();
+        sub.handler_decls = self.handler_decls.clone();
         sub.scope.begin_scope();
 
         // Declare effect params as locals.

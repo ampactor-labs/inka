@@ -27,6 +27,8 @@ pub enum Item {
     ImplBlock(ImplBlock),
     /// `import path/to/module` or `import path/to/module as alias`
     Import(ImportDecl),
+    /// `handler name [: base] [with state = init] { clauses }`
+    HandlerDecl(HandlerDecl),
     /// A bare expression (for REPL / scripts)
     Expr(Expr),
 }
@@ -131,6 +133,17 @@ pub struct EffectOp {
     pub name: String,
     pub params: Vec<Param>,
     pub return_type: TypeExpr,
+    pub span: Span,
+}
+
+/// A named, reusable handler declaration.
+#[derive(Debug, Clone)]
+pub struct HandlerDecl {
+    pub name: String,
+    /// Optional base handler to inherit clauses from: `handler child: parent { ... }`
+    pub base: Option<String>,
+    pub clauses: Vec<HandlerClause>,
+    pub state_bindings: Vec<StateBinding>,
     pub span: Span,
 }
 
@@ -489,6 +502,7 @@ pub struct HandlerClause {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum HandlerOp {
     /// Handle a specific effect operation: `op(params) => body`
     OpHandler {

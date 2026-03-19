@@ -353,37 +353,79 @@ impl Parser {
         self.expect(&TokenKind::Handle)?;
         let expr = self.parse_expr()?;
 
-        // Parse optional state bindings: `with name = expr, ...`
         let mut state_bindings = Vec::new();
+        let mut handlers = Vec::new();
+
         if self.at_exact(&TokenKind::With) {
             self.advance();
-            loop {
-                let binding_span = self.peek_span();
-                let (name, _) = self.expect_ident()?;
-                self.expect(&TokenKind::Eq)?;
-                let init = self.parse_expr()?;
-                let end = init.span().end;
-                state_bindings.push(StateBinding {
-                    name,
-                    init,
+
+            // Disambiguate: `with ident =` → state binding, `with ident {` or
+            // `with ident` at end → bare handler reference.
+            let is_bare_handler = matches!(self.peek(), TokenKind::Ident(_))
+                && !matches!(self.peek_next(), TokenKind::Eq);
+
+            if is_bare_handler {
+                // `handle { body } with handler_name [{ extra clauses }]`
+                let handler_span = self.peek_span();
+                let (handler_name, end_span) = self.expect_ident()?;
+                handlers.push(HandlerClause {
+                    operation: HandlerOp::UseHandler { name: handler_name },
                     span: Span::new(
-                        binding_span.start,
-                        end,
-                        binding_span.line,
-                        binding_span.column,
+                        handler_span.start,
+                        end_span.end,
+                        handler_span.line,
+                        handler_span.column,
                     ),
                 });
-                if !self.at_exact(&TokenKind::Comma) {
-                    break;
+
+                // Optional override block
+                if self.at_exact(&TokenKind::LBrace) {
+                    self.advance();
+                    self.skip_semis();
+                    while !self.at_exact(&TokenKind::RBrace) && !self.at_exact(&TokenKind::Eof) {
+                        handlers.push(self.parse_handler_clause()?);
+                        if self.at_exact(&TokenKind::Comma) {
+                            self.advance();
+                        }
+                        self.skip_semis();
+                    }
+                    let end_tok = self.expect(&TokenKind::RBrace)?;
+                    let span = Span::new(
+                        start_span.start,
+                        end_tok.span.end,
+                        start_span.line,
+                        start_span.column,
+                    );
+                    return Ok(Expr::Handle {
+                        expr: Box::new(expr),
+                        handlers,
+                        state_bindings,
+                        span,
+                    });
                 }
-                self.advance();
+
+                // No braces — bare handler reference only
+                let span = Span::new(
+                    start_span.start,
+                    end_span.end,
+                    start_span.line,
+                    start_span.column,
+                );
+                return Ok(Expr::Handle {
+                    expr: Box::new(expr),
+                    handlers,
+                    state_bindings,
+                    span,
+                });
             }
+
+            // State bindings: `with name = expr, ...`
+            state_bindings = self.parse_state_bindings_after_with()?;
         }
 
         self.expect(&TokenKind::LBrace)?;
         self.skip_semis();
 
-        let mut handlers = Vec::new();
         while !self.at_exact(&TokenKind::RBrace) && !self.at_exact(&TokenKind::Eof) {
             handlers.push(self.parse_handler_clause()?);
             if self.at_exact(&TokenKind::Comma) {
@@ -407,7 +449,49 @@ impl Parser {
         })
     }
 
-    fn parse_handler_clause(&mut self) -> Result<HandlerClause, LuxError> {
+    /// Parse state bindings after `with` has already been consumed:
+    /// `name = expr, name2 = expr2, ...`
+    /// Also used by `parse_handler_decl`.
+    pub(crate) fn parse_state_bindings(&mut self) -> Result<Vec<StateBinding>, LuxError> {
+        if self.at_exact(&TokenKind::With) {
+            self.advance();
+            self.parse_state_bindings_after_with()
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    fn parse_state_bindings_after_with(&mut self) -> Result<Vec<StateBinding>, LuxError> {
+        let mut bindings = Vec::new();
+        loop {
+            let binding_span = self.peek_span();
+            let (name, _) = self.expect_ident()?;
+            self.expect(&TokenKind::Eq)?;
+            let init = self.parse_expr()?;
+            let end = init.span().end;
+            bindings.push(StateBinding {
+                name,
+                init,
+                span: Span::new(
+                    binding_span.start,
+                    end,
+                    binding_span.line,
+                    binding_span.column,
+                ),
+            });
+            if !self.at_exact(&TokenKind::Comma) {
+                break;
+            }
+            self.advance();
+            // Stop if next token is `{` — don't consume the handler name as a binding
+            if self.at_exact(&TokenKind::LBrace) {
+                break;
+            }
+        }
+        Ok(bindings)
+    }
+
+    pub(crate) fn parse_handler_clause(&mut self) -> Result<HandlerClause, LuxError> {
         let start_span = self.peek_span();
 
         // `use HandlerName`

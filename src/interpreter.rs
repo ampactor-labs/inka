@@ -298,6 +298,14 @@ pub struct Interpreter {
     /// enclosing function. Set to `true` before evaluating a function body
     /// and selectively propagated through blocks, if, and match branches.
     in_tail_position: bool,
+    /// Named handler declarations for handler composition.
+    named_handlers: HashMap<
+        String,
+        (
+            Vec<crate::ast::HandlerClause>,
+            Vec<crate::ast::StateBinding>,
+        ),
+    >,
     /// When running inside a generator thread, holds the sender used to
     /// deliver yielded values to `next()` callers.
     ///
@@ -328,6 +336,7 @@ impl Interpreter {
             call_depth: 0,
             current_fn_name: None,
             in_tail_position: false,
+            named_handlers: HashMap::new(),
             generator_sender: None,
             impl_methods: HashMap::new(),
             replay_log: None,
@@ -520,6 +529,28 @@ impl Interpreter {
             }
             Item::Import(_) => {
                 // Imports are resolved before interpretation.
+                Ok(None)
+            }
+            Item::HandlerDecl(decl) => {
+                let mut clauses = Vec::new();
+                // If base handler exists, start with its clauses
+                if let Some(base_name) = &decl.base {
+                    if let Some((base_clauses, _)) = self.named_handlers.get(base_name) {
+                        clauses = base_clauses.clone();
+                    }
+                }
+                // Overlay: new clauses with same op_name replace base clauses
+                for clause in &decl.clauses {
+                    if let HandlerOp::OpHandler { op_name, .. } = &clause.operation {
+                        clauses.retain(|c| match &c.operation {
+                            HandlerOp::OpHandler { op_name: n, .. } => n != op_name,
+                            _ => true,
+                        });
+                    }
+                    clauses.push(clause.clone());
+                }
+                self.named_handlers
+                    .insert(decl.name.clone(), (clauses, decl.state_bindings.clone()));
                 Ok(None)
             }
             Item::Expr(expr) => {
@@ -1368,6 +1399,7 @@ impl Interpreter {
             call_depth: 0,
             current_fn_name: None,
             in_tail_position: false,
+            named_handlers: self.named_handlers.clone(),
             generator_sender: Some(value_tx.clone()),
             impl_methods: self.impl_methods.clone(),
             replay_log: None,
@@ -1550,6 +1582,20 @@ impl Interpreter {
             initial_state.insert(binding.name.clone(), val);
         }
 
+        // Merge state from named handlers (UseHandler references)
+        for clause in handler_clauses {
+            if let HandlerOp::UseHandler { name } = &clause.operation {
+                if let Some((_, named_state_bindings)) = self.named_handlers.get(name).cloned() {
+                    for binding in &named_state_bindings {
+                        if !initial_state.contains_key(&binding.name) {
+                            let val = self.eval_expr(&binding.init)?;
+                            initial_state.insert(binding.name.clone(), val);
+                        }
+                    }
+                }
+            }
+        }
+
         self.eval_handle_body(body, handler_clauses, state_bindings, &initial_state, &[])
     }
 
@@ -1566,26 +1612,51 @@ impl Interpreter {
         initial_state: &HashMap<String, Value>,
         replay_log: &[ReplayEntry],
     ) -> EvalResult {
-        // Build handler frame from clauses.
+        // Build handler frame from clauses — two-pass for handler composition.
         let mut handlers = HashMap::new();
+
+        // First pass: expand UseHandler references (base clauses)
         for clause in handler_clauses {
-            match &clause.operation {
-                HandlerOp::OpHandler {
-                    op_name,
-                    params,
-                    body,
-                    ..
-                } => {
-                    handlers.insert(
-                        op_name.clone(),
-                        EffectHandler {
-                            params: params.clone(),
-                            body: body.clone(),
-                            env: self.env.clone_flat(),
-                        },
-                    );
+            if let HandlerOp::UseHandler { name } = &clause.operation {
+                if let Some((named_clauses, _)) = self.named_handlers.get(name).cloned() {
+                    for nc in &named_clauses {
+                        if let HandlerOp::OpHandler {
+                            op_name,
+                            params,
+                            body,
+                            ..
+                        } = &nc.operation
+                        {
+                            handlers.insert(
+                                op_name.clone(),
+                                EffectHandler {
+                                    params: params.clone(),
+                                    body: body.clone(),
+                                    env: self.env.clone_flat(),
+                                },
+                            );
+                        }
+                    }
                 }
-                HandlerOp::UseHandler { .. } => {}
+            }
+        }
+        // Second pass: inline OpHandler clauses override base
+        for clause in handler_clauses {
+            if let HandlerOp::OpHandler {
+                op_name,
+                params,
+                body,
+                ..
+            } = &clause.operation
+            {
+                handlers.insert(
+                    op_name.clone(),
+                    EffectHandler {
+                        params: params.clone(),
+                        body: body.clone(),
+                        env: self.env.clone_flat(),
+                    },
+                );
             }
         }
 

@@ -23,12 +23,12 @@ builtins needed for linear algebra — only for transcendentals (`exp`, `sqrt`).
 
 ## Pain Points
 
-### 1. Handler state can't return (Phase 7: evidence-passing)
+### 1. Handler state can't return — Fixed in Phase 7A
 
 **Symptom:** `get_tape()` anti-pattern in xor.lux.
 
 ```lux
-// Current: must use a Compute effect op just to extract handler state
+// Before (Phase 6): must use a Compute effect op just to extract handler state
 let result = handle {
   let out = forward(model, x)
   (out, get_tape())             // get_tape() is a Compute effect op
@@ -38,19 +38,31 @@ let result = handle {
 }
 ```
 
-**Why it's wrong:** The tape is handler-internal state. Exposing it as an effect
-operation pollutes the Compute interface — the model shouldn't know tapes exist.
+**Why it was wrong:** The tape is handler-internal state. Exposing it as an effect
+operation polluted the Compute interface — the model shouldn't know tapes exist.
 
-**Phase 7 fix:** Evidence-passing makes handler state flow out as a return value.
+**Phase 7A fix:** Handle blocks with state bindings return `(body_result, state...)`.
+Zero state bindings → return type unchanged (backward compatible).
 
 ```lux
-// Phase 7: handler state returns naturally
-let (out, tape) = handle {
+// After (Phase 7A): handler state flows out as return value
+let result = handle {
   forward(model, x)
 } with tape = [] {
-  // tape flows out as second return value — no get_tape() needed
+  // tape flows out automatically — no get_tape() needed
+  forward_mat_vec_mul(w, xv) => {
+    let r = mat_vec_mul(w, xv)
+    resume(r) with tape = push(tape, TapeMatVecMul { w: w, x: xv, out: r })
+  },
+  // ...
+}
+match result {
+  (out, recorded_tape) => backward(recorded_tape, mse_grad(out, target))
 }
 ```
+
+`get_tape()` removed from the Compute effect declaration. The model is now pure —
+it performs Compute operations without knowing that a tape exists.
 
 ### 2. Handler duplication (Phase 7: handler composition)
 
@@ -152,13 +164,13 @@ workarounds removed from `tensor.lux` and `xor.lux`.
 
 ## Phase 7 Priority Map
 
-| Pain point | Mechanism | Impact |
-|-----------|-----------|--------|
-| Handler state can't return | Evidence-passing | Eliminates `get_tape()` anti-pattern |
-| Handler duplication | Handler composition | Eliminates inference/training duplication |
-| No numeric polymorphism | Trait constraints | Eliminates `sum`/`sumf` split |
+| Pain point | Mechanism | Impact | Status |
+|-----------|-----------|--------|--------|
+| Handler state can't return | State-as-return-value | Eliminates `get_tape()` anti-pattern | **Fixed (7A)** |
+| Handler duplication | Handler composition | Eliminates inference/training duplication | Phase 7C |
+| No numeric polymorphism | Trait constraints | Eliminates `sum`/`sumf` split | Phase 7+ |
 
-Evidence-passing is the critical unlock. It's not just cleaner — it enables
-handler state to flow into downstream computations, which is required for
+Handler state as return value is the critical unlock. It's not just cleaner — it
+enables handler state to flow into downstream computations, which is required for
 optimizer state (Adam needs running means), learning rate schedules, and
 any handler whose accumulated state IS the result.

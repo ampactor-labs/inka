@@ -105,93 +105,105 @@ impl Compiler {
     ) -> Result<(), LuxError> {
         match pattern {
             Pattern::Binding(name, _) => {
-                // Dup the scrutinee and bind it (value stays on stack as local)
-                self.emit_op(OpCode::Dup, line);
+                // Bind copy on TOS becomes the local (no Dup needed).
                 self.scope.declare_local(name);
             }
             Pattern::Variant { fields, .. } => {
-                // Same approach as Tuple: StoreLocal + Pop for each field
-                // binding, keeping the scrutinee at TOS across iterations.
+                // Save scrutinee to global scratch so LoadGlobal can reload
+                // it for each field (Dup from TOS gets clobbered by locals).
+                self.pat_scratch_id += 1;
+                let scratch_idx = self
+                    .chunk
+                    .intern_name(&format!("__pat_{}__", self.pat_scratch_id));
+                self.emit_op(OpCode::StoreGlobal, line);
+                self.emit_u16(scratch_idx, line);
                 for (i, field_pat) in fields.iter().enumerate() {
-                    self.emit_op(OpCode::Dup, line);
+                    self.emit_op(OpCode::LoadGlobal, line);
+                    self.emit_u16(scratch_idx, line);
                     self.emit_op(OpCode::LoadInt, line);
                     self.emit_u8(i as u8, line);
                     self.emit_op(OpCode::ListIndex, line);
                     if let Pattern::Binding(name, _) = field_pat {
-                        let slot = self.scope.declare_local(name);
-                        self.emit_op(OpCode::StoreLocal, line);
-                        self.emit_u16(slot, line);
+                        self.scope.declare_local(name);
                     } else {
                         self.compile_pattern_bind(field_pat, line)?;
                     }
-                    self.emit_op(OpCode::Pop, line);
                 }
             }
             Pattern::Tuple(pats, _) => {
+                // Save tuple to global scratch so LoadGlobal can reload it
+                // for each element (Dup from TOS gets clobbered by locals
+                // sharing the same stack positions).
+                self.pat_scratch_id += 1;
+                let scratch_idx = self
+                    .chunk
+                    .intern_name(&format!("__pat_{}__", self.pat_scratch_id));
+                self.emit_op(OpCode::StoreGlobal, line);
+                self.emit_u16(scratch_idx, line);
                 for (i, pat) in pats.iter().enumerate() {
-                    self.emit_op(OpCode::Dup, line);
+                    self.emit_op(OpCode::LoadGlobal, line);
+                    self.emit_u16(scratch_idx, line);
                     self.emit_op(OpCode::LoadInt, line);
                     self.emit_u8(i as u8, line);
                     self.emit_op(OpCode::ListIndex, line);
                     if let Pattern::Binding(name, _) = pat {
-                        let slot = self.scope.declare_local(name);
-                        self.emit_op(OpCode::StoreLocal, line);
-                        self.emit_u16(slot, line);
+                        self.scope.declare_local(name);
+                    } else if matches!(pat, Pattern::Wildcard(_)) {
+                        self.emit_op(OpCode::Pop, line);
                     } else {
                         self.compile_pattern_bind(pat, line)?;
                     }
-                    self.emit_op(OpCode::Pop, line);
                 }
             }
             Pattern::Wildcard(_) | Pattern::Literal(_, _) => {
-                // No bindings needed
+                // Consume bind copy — no binding needed
+                self.emit_op(OpCode::Pop, line);
             }
             Pattern::Record { fields, .. } => {
+                self.pat_scratch_id += 1;
+                let scratch_idx = self
+                    .chunk
+                    .intern_name(&format!("__pat_{}__", self.pat_scratch_id));
+                self.emit_op(OpCode::StoreGlobal, line);
+                self.emit_u16(scratch_idx, line);
                 for (field_name, field_pat) in fields {
-                    self.emit_op(OpCode::Dup, line);
+                    self.emit_op(OpCode::LoadGlobal, line);
+                    self.emit_u16(scratch_idx, line);
                     let name_idx = self.chunk.intern_name(field_name);
                     self.emit_op(OpCode::FieldAccess, line);
                     self.emit_u16(name_idx, line);
                     if let Pattern::Binding(name, _) = field_pat {
-                        let slot = self.scope.declare_local(name);
-                        self.emit_op(OpCode::StoreLocal, line);
-                        self.emit_u16(slot, line);
+                        self.scope.declare_local(name);
                     } else {
                         self.compile_pattern_bind(field_pat, line)?;
                     }
-                    self.emit_op(OpCode::Pop, line);
                 }
             }
             Pattern::List { elements, rest, .. } => {
+                self.pat_scratch_id += 1;
+                let scratch_idx = self
+                    .chunk
+                    .intern_name(&format!("__pat_{}__", self.pat_scratch_id));
+                self.emit_op(OpCode::StoreGlobal, line);
+                self.emit_u16(scratch_idx, line);
                 for (i, elem_pat) in elements.iter().enumerate() {
-                    self.emit_op(OpCode::Dup, line);
+                    self.emit_op(OpCode::LoadGlobal, line);
+                    self.emit_u16(scratch_idx, line);
                     self.emit_op(OpCode::LoadInt, line);
                     self.emit_u8(i as u8, line);
                     self.emit_op(OpCode::ListIndex, line);
                     if let Pattern::Binding(name, _) = elem_pat {
-                        let slot = self.scope.declare_local(name);
-                        self.emit_op(OpCode::StoreLocal, line);
-                        self.emit_u16(slot, line);
+                        self.scope.declare_local(name);
                     } else {
                         self.compile_pattern_bind(elem_pat, line)?;
                     }
-                    self.emit_op(OpCode::Pop, line);
                 }
                 if let Some(rest_pat) = rest {
                     if let Pattern::Binding(name, _) = rest_pat.as_ref() {
-                        // Bind rest = slice(list, N, len(list)).
-                        // TOS is the scrutinee list. Save it to a temp global
-                        // so we can build the slice() call.
-                        let temp_idx = self.chunk.intern_name("__rest_tmp__");
-                        self.emit_op(OpCode::Dup, line);
-                        self.emit_op(OpCode::StoreGlobal, line);
-                        self.emit_u16(temp_idx, line);
-                        // StoreGlobal pops the dup. TOS is still scrutinee.
-
-                        // Emit: slice(__rest_tmp__, N, len(__rest_tmp__))
+                        // Bind rest = slice(list, N, len(list))
                         self.compile_var_load("slice", line);
                         self.emit_op(OpCode::LoadGlobal, line);
-                        self.emit_u16(temp_idx, line);
+                        self.emit_u16(scratch_idx, line);
                         let n = elements.len();
                         if n <= 127 {
                             self.emit_op(OpCode::LoadInt, line);
@@ -203,17 +215,13 @@ impl Compiler {
                         }
                         self.compile_var_load("len", line);
                         self.emit_op(OpCode::LoadGlobal, line);
-                        self.emit_u16(temp_idx, line);
+                        self.emit_u16(scratch_idx, line);
                         self.emit_op(OpCode::Call, line);
                         self.emit_u8(1, line);
-                        // Stack: [..., list, slice_fn, list_copy, N, len_result]
                         self.emit_op(OpCode::Call, line);
                         self.emit_u8(3, line);
-                        // Stack: [..., list, rest_slice]
-                        let slot = self.scope.declare_local(name);
-                        self.emit_op(OpCode::StoreLocal, line);
-                        self.emit_u16(slot, line);
-                        self.emit_op(OpCode::Pop, line);
+                        // rest_slice is on TOS — declare as local
+                        self.scope.declare_local(name);
                     } else {
                         self.compile_pattern_bind(rest_pat, line)?;
                     }

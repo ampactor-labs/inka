@@ -1608,6 +1608,21 @@ impl Interpreter {
 
         let result = self.eval_expr(body);
 
+        // Capture final handler state before popping (declaration order)
+        let final_state: Vec<Value> = if !state_bindings.is_empty() {
+            state_bindings
+                .iter()
+                .map(|b| {
+                    self.handler_stack
+                        .last()
+                        .and_then(|f| f.state.get(&b.name).cloned())
+                        .unwrap_or(Value::Unit)
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
         // Restore state
         self.replay_log = saved_replay;
         self.replay_pos = saved_replay_pos;
@@ -1615,8 +1630,15 @@ impl Interpreter {
         self.handler_stack.pop();
 
         match result {
-            Ok(val) => Ok(val),
-            Err(Signal::HandleDone(val)) => Ok(val),
+            Ok(val) | Err(Signal::HandleDone(val)) => {
+                if final_state.is_empty() {
+                    Ok(val)
+                } else {
+                    let mut elts = vec![val];
+                    elts.extend(final_state);
+                    Ok(Value::Tuple(elts))
+                }
+            }
             Err(other) => Err(other),
         }
     }

@@ -77,7 +77,7 @@ fn increment() -> () with State {
 // Handle State with handler-local state
 print("")
 print("=== State Effect ===")
-let final_val = handle {
+let result = handle {
   increment()
   increment()
   increment()
@@ -86,4 +86,7 @@ let final_val = handle {
   get() => resume(state),
   set(v) => resume(()) with state = v,
 }
-print("Counter after 3 increments: " ++ to_string(final_val))
+// Handler state flows out as return value: (body_result, state)
+match result {
+  (val, final_state) => print("Counter after 3 increments: " ++ to_string(val) ++ ", " ++ to_string(final_state))
+}

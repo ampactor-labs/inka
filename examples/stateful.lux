@@ -17,7 +17,7 @@ fn increment() -> () with State {
 }
 
 print("=== Counter ===")
-let count = handle {
+let result = handle {
   increment()
   increment()
   increment()
@@ -28,7 +28,9 @@ let count = handle {
   get() => resume(state),
   set(v) => resume(()) with state = v,
 }
-print("5 increments: " ++ to_string(count))
+match result {
+  (val, _state) => print("5 increments: " ++ to_string(val))
+}
 
 // ── Logger: accumulate messages ───────────────────────────────
 
@@ -39,7 +41,7 @@ effect Log {
 
 print("")
 print("=== Logger ===")
-let logs = handle {
+let log_result = handle {
   log("starting up")
   log("processing data")
   log("all done")
@@ -48,7 +50,9 @@ let logs = handle {
   log(msg) => resume(()) with state = state ++ "[" ++ msg ++ "] ",
   read_log() => resume(state),
 }
-print("Captured: " ++ logs)
+match log_result {
+  (logs, _) => print("Captured: " ++ logs)
+}
 
 // ── Multi-state: independent counters ─────────────────────────
 
@@ -64,8 +68,8 @@ effect CountB {
 
 print("")
 print("=== Multi-state (nested handlers) ===")
-let a = handle {
-  let b = handle {
+let a_result = handle {
+  let b_result = handle {
     bump_a()
     bump_b()
     bump_a()
@@ -77,14 +81,18 @@ let a = handle {
     bump_b() => resume(()) with b_count = b_count + 1,
     read_b() => resume(b_count),
   }
-  print("B count: " ++ to_string(b))
+  match b_result {
+    (b, _) => print("B count: " ++ to_string(b))
+  }
   bump_a()
   read_a()
 } with a_count = 0 {
   bump_a() => resume(()) with a_count = a_count + 1,
   read_a() => resume(a_count),
 }
-print("A count: " ++ to_string(a))
+match a_result {
+  (a, _) => print("A count: " ++ to_string(a))
+}
 
 // ── State + computation: fibonacci via effects ────────────────
 
@@ -95,7 +103,7 @@ effect FibState {
 
 print("")
 print("=== Fibonacci via stateful handler ===")
-let result = handle {
+let fib_result = handle {
   step()
   step()
   step()
@@ -113,7 +121,10 @@ let result = handle {
   get_pair() => resume((a, b)),
   step() => resume(()) with a = b, b = a + b,
 }
-print("fib(10) = " ++ to_string(result))
+// Multi-state handler: (body_result, a, b) — two state bindings
+match fib_result {
+  (result, _a, _b) => print("fib(10) = " ++ to_string(result))
+}
 
 print("")
 print("Stateful handlers: no continuations needed.")

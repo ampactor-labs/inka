@@ -402,18 +402,30 @@ impl Vm {
                             // Unwind stack to handler's installation point.
                             self.stack.truncate(stack_height);
 
+                            // Capture handler state before removing.
+                            let final_state = self.handler_stack[h_idx].state.clone();
+
                             // Pop the handler frame.
                             self.handler_stack.remove(h_idx);
 
-                            // Push result as handle expression's value.
-                            self.stack.push(result.clone());
+                            // Push result as handle expression's value,
+                            // wrapping in tuple if handler had state bindings.
+                            if final_state.is_empty() {
+                                self.stack.push(result.clone());
+                            } else {
+                                let mut elts = vec![result.clone()];
+                                elts.extend(final_state);
+                                let wrapped = VmValue::Tuple(Arc::new(elts));
+                                self.stack.push(wrapped);
+                            }
 
                             // Skip past PopHandler in the handle frame.
                             self.skip_past_pop_handler(handler_frame);
 
                             // In continuation replay, stop after handle body completes.
                             if self.stop_at_pop_handler {
-                                return Ok(Some(result));
+                                let top = self.stack.pop();
+                                return Ok(top);
                             }
 
                             continue;
@@ -647,6 +659,15 @@ impl Vm {
                     self.op_push_handler(frame_idx)?;
                 }
                 OpCode::PopHandler => {
+                    // Build state-return tuple if handler has state bindings.
+                    if let Some(handler) = self.handler_stack.last() {
+                        if !handler.state.is_empty() {
+                            let body_result = self.stack.pop().unwrap_or(VmValue::Unit);
+                            let mut elts = vec![body_result];
+                            elts.extend(handler.state.iter().cloned());
+                            self.stack.push(VmValue::Tuple(Arc::new(elts)));
+                        }
+                    }
                     self.op_pop_handler();
                     // In continuation replay mode, stop after the handle body completes.
                     if self.stop_at_pop_handler {

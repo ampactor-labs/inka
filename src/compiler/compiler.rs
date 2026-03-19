@@ -40,6 +40,8 @@ pub(super) struct Compiler {
     pub(super) effect_ops: HashMap<String, String>,
     /// Variant name → ordered field names, for FieldAccess index resolution.
     pub(super) field_registry: HashMap<String, Vec<String>>,
+    /// Counter for unique pattern scratch variable names.
+    pub(super) pat_scratch_id: u32,
 }
 
 /// Loop compilation context.
@@ -65,6 +67,7 @@ impl Compiler {
             handler_ctx: None,
             effect_ops: HashMap::new(),
             field_registry: HashMap::new(),
+            pat_scratch_id: 0,
         }
     }
 
@@ -730,13 +733,15 @@ impl Compiler {
                     self.emit_u16(scrutinee_slot, line);
                     self.compile_pattern_test(&arm.pattern, line)?;
                     let skip = self.emit_jump(OpCode::JumpIfFalse, line);
-                    self.emit_op(OpCode::Pop, line); // pop test result
+                    self.emit_op(OpCode::Pop, line); // pop test result (true)
+                    self.emit_op(OpCode::Pop, line); // pop test scrutinee copy
 
-                    // Load scrutinee for pattern binding
+                    // Load fresh scrutinee for pattern binding and track it
                     self.emit_op(OpCode::LoadLocal, line);
                     self.emit_u16(scrutinee_slot, line);
 
-                    // Bind pattern variables
+                    // Bind pattern variables — pattern_bind consumes the
+                    // bind copy from TOS and pushes bound locals.
                     self.scope.begin_scope();
                     self.compile_pattern_bind(&arm.pattern, line)?;
 
@@ -748,26 +753,49 @@ impl Compiler {
 
                         // Compile arm body
                         self.compile_expr(&arm.body)?;
-                        let _pops = self.scope.end_scope();
+                        // end_scope once — save pops count for both paths
+                        let pops = self.scope.end_scope();
+                        if pops > 0 {
+                            let temp_idx = self.chunk.intern_name("__arm_tmp__");
+                            self.emit_op(OpCode::StoreGlobal, line);
+                            self.emit_u16(temp_idx, line);
+                            for _ in 0..pops {
+                                self.emit_op(OpCode::Pop, line);
+                            }
+                            self.emit_op(OpCode::LoadGlobal, line);
+                            self.emit_u16(temp_idx, line);
+                        }
                         let end = self.emit_jump(OpCode::Jump, line);
                         end_patches.push(end);
 
+                        // Guard fail: pop guard result + same bindings count
                         self.patch_jump(guard_fail);
                         self.emit_op(OpCode::Pop, line); // pop guard false
-                        let _pops2 = self.scope.end_scope();
-                        // Pop the loaded scrutinee for this arm
-                        self.emit_op(OpCode::Pop, line);
+                        for _ in 0..pops {
+                            self.emit_op(OpCode::Pop, line);
+                        }
                         continue;
                     }
 
                     // Compile arm body
                     self.compile_expr(&arm.body)?;
-                    let _pops = self.scope.end_scope();
+                    let pops = self.scope.end_scope();
+                    if pops > 0 {
+                        let temp_idx = self.chunk.intern_name("__arm_tmp__");
+                        self.emit_op(OpCode::StoreGlobal, line);
+                        self.emit_u16(temp_idx, line);
+                        for _ in 0..pops {
+                            self.emit_op(OpCode::Pop, line);
+                        }
+                        self.emit_op(OpCode::LoadGlobal, line);
+                        self.emit_u16(temp_idx, line);
+                    }
                     let end = self.emit_jump(OpCode::Jump, line);
                     end_patches.push(end);
 
                     self.patch_jump(skip);
-                    self.emit_op(OpCode::Pop, line); // pop test result
+                    self.emit_op(OpCode::Pop, line); // pop test result (false)
+                    self.emit_op(OpCode::Pop, line); // pop test scrutinee copy
                 }
 
                 // If no arm matched, push Unit as default

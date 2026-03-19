@@ -658,7 +658,7 @@ The same architecture that makes Lux perfect for DSP makes it perfect for ML.
 ML exercises all ten of Lux's foundational mechanisms simultaneously — making
 it the ideal stress test for the language thesis.
 
-> **Full ML framework spec:** `docs/superpowers/specs/2026-03-19-lux-ml-design.md`
+> **Full ML framework spec:** `docs/specs/lux-ml-design.md`
 > covers the complete design including autodiff as effect handling, reverse-mode
 > backpropagation, optimizer state as handler-local state, hyperparameter search
 > via multi-shot continuations, `!Alloc` embedded deployment, and the DSP-ML

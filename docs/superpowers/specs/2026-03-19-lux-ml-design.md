@@ -1,9 +1,15 @@
 # Lux ML — Machine Learning as Proof of Thesis
 
-*A framework that proves algebraic effects + refinement types + ownership inference
-compose into ML capabilities that reflect Lux's unique combination of mechanisms —
-several genuinely novel, others achieved through type-level guarantees where existing
-frameworks rely on convention.*
+*Programs are typed effect graphs. Data shapes the effect graph; the effect graph
+shapes how data flows. A neural network is a typed effect graph. Training reshapes
+it; the reshaped graph reshapes how data flows through it. This is the versor
+architecture — and it's why Lux is the right language for ML.*
+
+*Lux ML proves that algebraic effects + refinement types + ownership inference
+compose into ML capabilities that no combination of existing tools can replicate.
+Not because any single feature is impossible elsewhere, but because the unification
+of all ten mechanisms into a single coherent system produces emergent capabilities
+that disappear when you separate the parts.*
 
 ---
 
@@ -44,6 +50,25 @@ state), generic model combinators (row polymorphism), and progressive learning
 (language levels).
 
 No other single workload exercises the full language this thoroughly.
+
+### The Throughline
+
+This framework is not a standalone project. It is a projection of the same
+structure that runs through Sonido (DSP kernels), Hourglass (EEQ dynamics),
+Flowpilot (trading signals), and Forge (agentic coordination).
+
+The pattern repeats: **convergence → pinch point → divergence.**
+- Sonido: signal approaches onset → transient → new harmonics radiate
+- Hourglass: trajectories → attractor basin → new regime dynamics
+- Lux ML: data flows through layers → loss at the pinch → gradients radiate back
+
+The `handle` block IS the pinch point. Effects converge into it. `resume`
+radiates new state. The training loop IS the hourglass: forward pass
+converges to loss, backward pass radiates gradients, optimizer updates
+reshape the graph for the next cycle. Data tells the model how to reshape;
+the reshaped model tells data how to flow.
+
+This isn't metaphor. It's the same typed effect graph, projected into ML.
 
 ### Target Hardware
 
@@ -577,6 +602,36 @@ fn keyword_recognizer(audio: Vector<16000>) -> Vector<12> with Compute, Random {
 conversion, no framework boundary. The effect system tracks what each
 piece needs. The handler stack provides it.
 
+### The Deeper Insight: DSP and ML Are Interchangeable
+
+The unification isn't just syntactic. DSP operations and ML operations are
+*interchangeable* — a learned `conv1d` can replace a hand-designed
+`mel_filterbank`. The boundary doesn't dissolve only in syntax; it dissolves
+in meaning:
+
+```lux
+// Traditional: hand-designed mel filterbank
+fn traditional_features(audio: Vector<16000>) -> Matrix with Compute {
+    audio |> frame(160) |> window(hann) |> fft |> mel_filterbank(40) |> log
+}
+
+// Learned: trainable conv1d replaces the entire filterbank
+fn learned_features(audio: Vector<16000>) -> Matrix with Compute {
+    audio |> frame(160) |> conv1d(1, 40, kernel: 400)
+}
+```
+
+Both have the same type signature. Both compose identically with downstream
+classifiers. The `conv1d` learns a better representation than the mel scale
+if given enough data — this is how modern audio ML works (SincNet, LEAF).
+In Lux, the swap is a one-line change because DSP and ML are the same
+abstraction.
+
+This means **every DSP pipeline is a candidate for partial or full
+replacement by learned components.** And every ML model's intermediate
+representations are interpretable as signal processing stages. The pipe
+operator doesn't just compose them — it makes the substitution obvious.
+
 ---
 
 ## Progressive ML Levels
@@ -647,10 +702,145 @@ parallelization, `!Alloc` embedded deployment. Everything in this spec.
 
 ---
 
+## XOR: Complete End-to-End Example
+
+The first milestone. Proves the entire pipeline works: tensor ops, forward
+pass, autodiff via effect handling, training loop, convergence.
+
+```lux
+// xor.lux — The "hello world" of Lux ML
+//
+// Trains a 2-layer network to learn XOR using effect-based autodiff.
+// Uses: Compute effect, handler-local state (tape), Optimize effect.
+
+import std/ml/tensor
+import std/ml/compute
+import std/ml/autodiff
+import std/ml/optimize
+import std/ml/loss
+
+// ── Model ─────────────────────────────────────────────────────────
+
+type XorModel = XorModel {
+    w1: Matrix<2, 4>,      // input → hidden (4 neurons)
+    b1: Vector<4>,
+    w2: Matrix<4, 1>,      // hidden → output
+    b2: Vector<1>,
+}
+
+fn forward(model: XorModel, x: Vector<2>) -> Vector<1> with Compute {
+    x
+        |> dense(model.w1, model.b1)
+        |> relu
+        |> dense(model.w2, model.b2)
+        |> sigmoid
+}
+
+// ── Data ──────────────────────────────────────────────────────────
+
+let xor_data = [
+    (vector([0.0, 0.0]), vector([0.0])),
+    (vector([0.0, 1.0]), vector([1.0])),
+    (vector([1.0, 0.0]), vector([1.0])),
+    (vector([1.0, 1.0]), vector([0.0])),
+]
+
+// ── Training ──────────────────────────────────────────────────────
+
+fn train_step(model: XorModel, data: List<(Vector<2>, Vector<1>)>) -> XorModel
+    with Compute, Optimize {
+    fold(data, model, |model, (input, target)|
+        // Forward with tape recording
+        let (output, tape) = handle forward(model, input) with tape = [] {
+            matmul(a, b) => {
+                let out = native_matmul(a, b)
+                resume(out) with tape = push(tape, MatMul { a: a, b: b, out: out })
+            },
+            relu(x) => {
+                let out = native_relu(x)
+                resume(out) with tape = push(tape, Relu { input: x, out: out })
+            },
+            sigmoid(x) => {
+                let out = native_sigmoid(x)
+                resume(out) with tape = push(tape, Sigmoid { input: x, out: out })
+            },
+            add(a, b) => {
+                let out = native_add(a, b)
+                resume(out) with tape = push(tape, Add { a: a, b: b, out: out })
+            },
+        }
+
+        // Backward
+        let grads = backward(tape, grad_mse(output, target))
+
+        // Update parameters
+        XorModel {
+            w1: step(model.w1, grads.get(model.w1)),
+            b1: step(model.b1, grads.get(model.b1)),
+            w2: step(model.w2, grads.get(model.w2)),
+            b2: step(model.b2, grads.get(model.b2)),
+        }
+    )
+}
+
+// ── Run ───────────────────────────────────────────────────────────
+
+let model = XorModel {
+    w1: xavier_init((2, 4)),
+    b1: zeros(4),
+    w2: xavier_init((4, 1)),
+    b2: zeros(1),
+}
+
+// Train: 1000 epochs, SGD, CPU backend
+let trained = handle
+    handle {
+        fold(range(0, 1000), model, |model, epoch|
+            train_step(model, xor_data)
+        )
+    }
+    { matmul(a,b) => resume(cpu_matmul(a,b)),
+      relu(x) => resume(cpu_relu(x)),
+      sigmoid(x) => resume(cpu_sigmoid(x)),
+      add(a,b) => resume(cpu_add(a,b)) }
+{ step(p, g) => resume(p - 0.1 * g) }    // SGD, lr=0.1
+
+// Verify
+print("XOR results:")
+print("0,0 -> " ++ to_string(handle forward(trained, vector([0.0, 0.0]))
+    { matmul(a,b) => resume(cpu_matmul(a,b)),
+      relu(x) => resume(cpu_relu(x)),
+      sigmoid(x) => resume(cpu_sigmoid(x)),
+      add(a,b) => resume(cpu_add(a,b)) }))
+print("0,1 -> " ++ to_string(handle forward(trained, vector([0.0, 1.0]))
+    { matmul(a,b) => resume(cpu_matmul(a,b)),
+      relu(x) => resume(cpu_relu(x)),
+      sigmoid(x) => resume(cpu_sigmoid(x)),
+      add(a,b) => resume(cpu_add(a,b)) }))
+print("1,0 -> " ++ to_string(handle forward(trained, vector([1.0, 0.0]))
+    { matmul(a,b) => resume(cpu_matmul(a,b)),
+      relu(x) => resume(cpu_relu(x)),
+      sigmoid(x) => resume(cpu_sigmoid(x)),
+      add(a,b) => resume(cpu_add(a,b)) }))
+print("1,1 -> " ++ to_string(handle forward(trained, vector([1.0, 1.0]))
+    { matmul(a,b) => resume(cpu_matmul(a,b)),
+      relu(x) => resume(cpu_relu(x)),
+      sigmoid(x) => resume(cpu_sigmoid(x)),
+      add(a,b) => resume(cpu_add(a,b)) }))
+```
+
+> **Note:** This example makes the handler composition problem viscerally
+> obvious. The Compute handler is repeated identically for training and
+> inference. This is exactly why handler composition syntax (Design Input #1)
+> matters — with named handlers, the repeated block becomes `{ use CpuBackend }`.
+
+---
+
 ## Lux Design Inputs
 
-The ML framework surfaces two design questions for Lux itself. Both
-converge on **Phase 7** (evidence-passing compilation).
+The ML framework surfaces three design questions for Lux itself. The first
+two converge on **Phase 7** (evidence-passing compilation). The third is
+an effect system scaling question.
 
 ### 1. Handler Composition Syntax
 
@@ -705,6 +895,37 @@ let (output, tape) = handle forward(model, input) with tape = [] {
 }
 // tape is now available for backward pass
 ```
+
+### 3. Compute Effect Scaling
+
+The `Compute` effect currently lists individual operations (`matmul`,
+`conv1d`, `relu`, `softmax`, `elementwise`). A real framework needs 50+
+operations. The effect declaration and every handler grow linearly.
+
+Possible solutions:
+
+```lux
+// Option A: Operation families (multiple effects)
+effect LinearAlgebra { matmul(...), transpose(...), dot(...) }
+effect Convolution { conv1d(...), conv2d(...), pool1d(...), pool2d(...) }
+effect Activation { relu(...), sigmoid(...), softmax(...), tanh(...) }
+
+// Option B: Single parametric dispatch
+type Op = MatMul(a, b) | Conv1d(input, kernel) | Relu(x) | ...
+effect Compute { dispatch(op: Op) -> Tensor }
+
+// Option C: Trait-based operation registration
+trait ComputableOp { fn compute(self) -> Tensor }
+```
+
+Option A preserves type safety but requires multiple effects in signatures.
+Option B is maximally flexible but loses shape information in the dispatch.
+Option C leverages Lux's trait system but requires deeper design work.
+
+This should be explored during Phase 7-8 when real training workloads
+reveal which operations are needed and how they compose. The XOR example
+uses 4 operations; the keyword spotter needs ~15; the framework should
+handle 50+ without handler bloat.
 
 ---
 

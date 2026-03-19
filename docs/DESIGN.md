@@ -655,6 +655,29 @@ or care where the samples come from.
 ## Neural Networks and ML in Lux
 
 The same architecture that makes Lux perfect for DSP makes it perfect for ML.
+ML exercises all ten of Lux's foundational mechanisms simultaneously — making
+it the ideal stress test for the language thesis.
+
+> **Full ML framework spec:** `docs/superpowers/specs/2026-03-19-lux-ml-design.md`
+> covers the complete design including autodiff as effect handling, reverse-mode
+> backpropagation, optimizer state as handler-local state, hyperparameter search
+> via multi-shot continuations, `!Alloc` embedded deployment, and the DSP-ML
+> unification. What follows is the summary.
+
+### The Ten Mechanisms Applied to ML
+
+| Mechanism | ML Capability |
+|-----------|--------------|
+| Effects | Autodiff — model performs `Compute`, handler records tape |
+| Handler-local state | Optimizer state (Adam momentum/variance) |
+| Effect algebra | `!Random` deterministic inference, `!Alloc` embedded deployment |
+| Refinement types | Compile-time shape checking, parameter constraints |
+| Ownership | Zero-copy data pipelines, deterministic memory |
+| Pipes | Model = computation graph = DSP signal chain |
+| Multi-shot | Hyperparameter search as handler strategy |
+| Row polymorphism | Effect-generic model combinators |
+| Evidence-passing | Zero-overhead autodiff at compile time |
+| Progressive levels | ML education path L1→L5 |
 
 ### Compile-Time Dimension Checking
 
@@ -669,34 +692,48 @@ fn forward(input: Tensor<784>, w1: Layer<784, 256>, w2: Layer<256, 10>) -> Tenso
 Mismatched layer dimensions are compile errors, not runtime crashes.
 `Layer<784, 256>` connected to `Layer<128, 10>` fails at compile time.
 
-### Gradient Computation as an Effect
+### Autodiff as Effect Handling
+
+Model code performs `Compute` effects — it does not know about gradients.
+The training handler intercepts operations, computes forward, and records
+the tape. The inference handler just computes. Same model code, different
+handler.
 
 ```lux
-effect Grad {
-  backward(loss: Tensor) -> ()
+effect Compute {
+  matmul<M, N, K>(a: Matrix<M, K>, b: Matrix<K, N>) -> Matrix<M, N>
+  relu<S>(x: Tensor<f32, S>) -> Tensor<f32, S>
+  // ...
+}
+
+// Training: records tape in handler-local state
+handle model.forward(input) with tape = [] {
+  matmul(a, b) => {
+    let out = native_matmul(a, b)
+    resume(out) with tape = push(tape, MatMul { a: a, b: b, out: out })
+  },
+}
+
+// Inference: just computes — with !Alloc, !Random proves safety
+handle model.forward(input) {
+  matmul(a, b) => resume(native_matmul(a, b)),
 }
 ```
 
-The handler chooses the differentiation strategy — automatic differentiation,
-numerical, or symbolic. Same training code, different gradient implementations.
+### GPU Dispatch as a Compilation Gate
 
-### GPU Dispatch as an Effect Handler
-
-```lux
-handle train(model, data) { use CudaHandler(device: 0) }
-handle train(model, data) { use CpuHandler() }
-```
-
-Same model code runs on CPU or GPU. The handler decides.
+`!IO, !Alloc` functions can be automatically offloaded to GPU — the compiler
+proves it's safe. No CUDA, no `.to(device)`. This requires Phase 12 (LLVM).
 
 ### The Pipe Operator IS the Computation Graph
 
 ```lux
-input |> conv(3, 3) |> relu |> pool(2) |> flatten |> dense(128) |> softmax
+audio |> mfcc(40, 160) |> conv1d(40, 32, kernel: 3) |> relu |> dense(12) |> softmax
 ```
 
-Pure functions auto-parallelize across data shards — distributed training
-for free.
+DSP and ML compose in one pipe. Pure functions auto-parallelize across
+data shards. Every DSP stage is a candidate for replacement by a learned
+component — and vice versa.
 
 ---
 

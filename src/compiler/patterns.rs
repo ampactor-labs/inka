@@ -236,4 +236,42 @@ impl Compiler {
         }
         Ok(())
     }
+
+    /// Compile a let-destructuring pattern at global scope.
+    /// Value is on TOS; saves to scratch global, then extracts each binding.
+    pub(super) fn compile_let_pattern_global(
+        &mut self,
+        pat: &Pattern,
+        line: u32,
+    ) -> Result<(), LuxError> {
+        self.pat_scratch_id += 1;
+        let scratch = self
+            .chunk
+            .intern_name(&format!("__let_{}__", self.pat_scratch_id));
+        self.emit_op(OpCode::StoreGlobal, line);
+        self.emit_u16(scratch, line);
+
+        match pat {
+            Pattern::Binding(name, _) => {
+                self.emit_op(OpCode::LoadGlobal, line);
+                self.emit_u16(scratch, line);
+                let idx = self.chunk.intern_name(name);
+                self.emit_op(OpCode::StoreGlobal, line);
+                self.emit_u16(idx, line);
+            }
+            Pattern::Tuple(pats, _) => {
+                for (i, p) in pats.iter().enumerate() {
+                    self.emit_op(OpCode::LoadGlobal, line);
+                    self.emit_u16(scratch, line);
+                    self.emit_op(OpCode::LoadInt, line);
+                    self.emit_u8(i as u8, line);
+                    self.emit_op(OpCode::ListIndex, line);
+                    self.compile_let_pattern_global(p, line)?;
+                }
+            }
+            Pattern::Wildcard(_) => {}
+            _ => {} // Record/List: extend as needed
+        }
+        Ok(())
+    }
 }

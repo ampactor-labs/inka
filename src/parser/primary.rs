@@ -265,7 +265,7 @@ impl Parser {
                 let decl = self.parse_let_decl()?;
                 let span = decl.span.clone();
                 Ok(Expr::Let {
-                    name: decl.name,
+                    pattern: decl.pattern,
                     type_ann: decl.type_ann,
                     value: Box::new(decl.value),
                     span,

@@ -65,35 +65,27 @@ fn train_step(model, x, target, lr) = {
   }
 
   // result is (out, tape) — handler state flows out as return value
-  match result {
-    (out, recorded_tape) => {
-      let loss = mse(out, target)
-      let loss_g = mse_grad(out, target)
+  let (out, recorded_tape) = result
 
-      // Backward pass: get gradient pairs [(dw, db), ...]
-      let grads = backward(recorded_tape, loss_g)
+  let loss = mse(out, target)
+  let loss_g = mse_grad(out, target)
 
-      // grads[0] is layer 2 (last layer), grads[1] is layer 1 (first layer)
-      // because backward walks from output to input
-      let g2 = grads[0]
-      let g1 = grads[1]
+  // Backward pass: get gradient pairs [(dw, db), ...]
+  let grads = backward(recorded_tape, loss_g)
 
-      // Update weights with SGD
-      match g2 {
-        (dw2, db2) => match g1 {
-          (dw1, db1) => {
-            let new_model = XorModel {
-              w1: mat_sub(model.w1, scalar_mat_mul(lr, dw1)),
-              b1: vec_sub(model.b1, scalar_mul(lr, db1)),
-              w2: mat_sub(model.w2, scalar_mat_mul(lr, dw2)),
-              b2: vec_sub(model.b2, scalar_mul(lr, db2))
-            }
-            (loss, new_model)
-          }
-        }
-      }
-    }
+  // grads[0] is layer 2 (last layer), grads[1] is layer 1 (first layer)
+  // because backward walks from output to input
+  let (dw2, db2) = grads[0]
+  let (dw1, db1) = grads[1]
+
+  // Update weights with SGD
+  let new_model = XorModel {
+    w1: mat_sub(model.w1, scalar_mat_mul(lr, dw1)),
+    b1: vec_sub(model.b1, scalar_mul(lr, db1)),
+    w2: mat_sub(model.w2, scalar_mat_mul(lr, dw2)),
+    b2: vec_sub(model.b2, scalar_mul(lr, db2))
   }
+  (loss, new_model)
 }
 
 // ── Inference (no tape) ─────────────────────────────────────
@@ -125,23 +117,20 @@ println("Training XOR network (2->4->1)...")
 // Train: fold over epochs
 let trained = fold(range(0, epochs), init_model, |model, epoch| {
   // Train on all 4 data points per epoch
-  let updated = fold(data, model, |m, sample|
-    match sample {
-      (x, target) => match train_step(m, x, target, lr) {
-        (loss, new_m) => new_m
-      }
-    })
+  let updated = fold(data, model, |m, sample| {
+    let (x, target) = sample
+    let (_, new_m) = train_step(m, x, target, lr)
+    new_m
+  })
 
   // Print loss every 200 epochs
   if epoch % 200 == 0 {
     // Compute total loss for reporting
-    let total_loss = fold(data, 0.0, |acc, sample|
-      match sample {
-        (x, target) => {
-          let pred = predict(updated, x)
-          acc + mse(pred, target)
-        }
-      })
+    let total_loss = fold(data, 0.0, |acc, sample| {
+      let (x, target) = sample
+      let pred = predict(updated, x)
+      acc + mse(pred, target)
+    })
     println("  epoch " ++ to_string(epoch) ++ " loss: " ++ to_string(total_loss))
     updated
   } else {

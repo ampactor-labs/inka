@@ -205,14 +205,23 @@ impl Compiler {
         let line = Self::current_line(&ld.span);
         self.compile_expr(&ld.value)?;
 
-        if self.scope.scope_depth > 0 {
-            // In a block: value is on TOS; declare_local claims that position
-            self.scope.declare_local(&ld.name);
-        } else {
-            // Top-level: store as global
-            let name_idx = self.chunk.intern_name(&ld.name);
-            self.emit_op(OpCode::StoreGlobal, line);
-            self.emit_u16(name_idx, line);
+        match &ld.pattern {
+            Pattern::Binding(name, _) => {
+                if self.scope.scope_depth > 0 {
+                    self.scope.declare_local(name);
+                } else {
+                    let name_idx = self.chunk.intern_name(name);
+                    self.emit_op(OpCode::StoreGlobal, line);
+                    self.emit_u16(name_idx, line);
+                }
+            }
+            _ => {
+                if self.scope.scope_depth > 0 {
+                    self.compile_pattern_bind(&ld.pattern, line)?;
+                } else {
+                    self.compile_let_pattern_global(&ld.pattern, line)?;
+                }
+            }
         }
 
         Ok(())
@@ -367,19 +376,23 @@ impl Compiler {
             }
 
             Expr::Let {
-                name,
+                pattern,
                 value,
-                span: _,
+                span,
                 ..
             } => {
+                let line = Self::current_line(span);
                 self.compile_expr(value)?;
-                self.scope.declare_local(name);
-                // Value stays on stack as the local's slot
+                match pattern {
+                    Pattern::Binding(name, _) => {
+                        self.scope.declare_local(name);
+                    }
+                    _ => {
+                        self.compile_pattern_bind(pattern, line)?;
+                    }
+                }
                 // Let expression evaluates to Unit
-                self.emit_op(
-                    OpCode::LoadUnit,
-                    self.chunk.lines.last().copied().unwrap_or(0),
-                );
+                self.emit_op(OpCode::LoadUnit, line);
             }
 
             Expr::While {

@@ -472,7 +472,7 @@ impl Interpreter {
             }
             Item::LetDecl(decl) => {
                 let val = self.eval_expr(&decl.value)?;
-                self.env.set(&decl.name, val);
+                self.bind_pattern_val(&decl.pattern, val);
                 Ok(None)
             }
             Item::TypeDecl(decl) => {
@@ -600,11 +600,11 @@ impl Interpreter {
                 span,
             } => self.eval_match(scrutinee, arms, span),
 
-            Expr::Let { name, value, .. } => {
+            Expr::Let { pattern, value, .. } => {
                 // Value of a let binding is never in tail position.
                 self.in_tail_position = false;
                 let val = self.eval_expr(value)?;
-                self.env.set(name, val);
+                self.bind_pattern_val(pattern, val);
                 Ok(Value::Unit)
             }
 
@@ -1429,7 +1429,7 @@ impl Interpreter {
             match stmt {
                 Stmt::Let(decl) => {
                     let val = self.eval_expr(&decl.value)?;
-                    self.env.set(&decl.name, val);
+                    self.bind_pattern_val(&decl.pattern, val);
                 }
                 Stmt::Expr(expr) => {
                     self.eval_expr(expr)?;
@@ -1523,6 +1523,15 @@ impl Interpreter {
         bindings: &mut HashMap<String, Value>,
     ) -> bool {
         crate::patterns::match_pattern(pattern, value, bindings)
+    }
+
+    /// Bind variables from a pattern to values in the current environment.
+    fn bind_pattern_val(&mut self, pattern: &Pattern, value: Value) {
+        let mut bindings = HashMap::new();
+        crate::patterns::match_pattern(pattern, &value, &mut bindings);
+        for (k, v) in bindings {
+            self.env.set(&k, v);
+        }
     }
 
     // ── Effect handling ──────────────────────────────────────────

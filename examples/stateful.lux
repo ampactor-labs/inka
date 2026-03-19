@@ -28,9 +28,8 @@ let result = handle {
   get() => resume(state),
   set(v) => resume(()) with state = v,
 }
-match result {
-  (val, _state) => print("5 increments: " ++ to_string(val))
-}
+let (val, _state) = result
+print("5 increments: " ++ to_string(val))
 
 // ── Logger: accumulate messages ───────────────────────────────
 
@@ -50,9 +49,8 @@ let log_result = handle {
   log(msg) => resume(()) with state = state ++ "[" ++ msg ++ "] ",
   read_log() => resume(state),
 }
-match log_result {
-  (logs, _) => print("Captured: " ++ logs)
-}
+let (logs, _) = log_result
+print("Captured: " ++ logs)
 
 // ── Multi-state: independent counters ─────────────────────────
 
@@ -81,18 +79,16 @@ let a_result = handle {
     bump_b() => resume(()) with b_count = b_count + 1,
     read_b() => resume(b_count),
   }
-  match b_result {
-    (b, _) => print("B count: " ++ to_string(b))
-  }
+  let (b, _) = b_result
+  print("B count: " ++ to_string(b))
   bump_a()
   read_a()
 } with a_count = 0 {
   bump_a() => resume(()) with a_count = a_count + 1,
   read_a() => resume(a_count),
 }
-match a_result {
-  (a, _) => print("A count: " ++ to_string(a))
-}
+let (a, _) = a_result
+print("A count: " ++ to_string(a))
 
 // ── State + computation: fibonacci via effects ────────────────
 
@@ -113,18 +109,15 @@ let fib_result = handle {
   step()
   step()
   step()
-  let pair = get_pair()
-  match pair {
-    (a, b) => b
-  }
+  let (a, b) = get_pair()
+  b
 } with a = 0, b = 1 {
   get_pair() => resume((a, b)),
   step() => resume(()) with a = b, b = a + b,
 }
 // Multi-state handler: (body_result, a, b) — two state bindings
-match fib_result {
-  (result, _a, _b) => print("fib(10) = " ++ to_string(result))
-}
+let (result, _a, _b) = fib_result
+print("fib(10) = " ++ to_string(result))
 
 print("")
 print("Stateful handlers: no continuations needed.")

@@ -199,7 +199,7 @@ impl TypeEnv {
             } => self.infer_match(scrutinee, arms, span),
 
             Expr::Let {
-                name,
+                pattern,
                 type_ann,
                 value,
                 span,
@@ -209,7 +209,7 @@ impl TypeEnv {
                     let ann_ty = self.resolve_type_expr(ann)?;
                     self.unify(&val_ty, &ann_ty, span)?;
                 }
-                self.bind(name, self.apply_subst(&val_ty));
+                self.bind_pattern_types(pattern, &self.apply_subst(&val_ty), span)?;
                 Ok((Type::Unit, effs))
             }
 
@@ -539,7 +539,7 @@ impl TypeEnv {
                         let ann_ty = child.resolve_type_expr(ann)?;
                         child.unify(&val_ty, &ann_ty, &ld.span)?;
                     }
-                    child.bind(&ld.name, child.apply_subst(&val_ty));
+                    child.bind_pattern_types(&ld.pattern, &child.apply_subst(&val_ty), &ld.span)?;
                     effs = effs.union(&eff);
                 }
                 Stmt::Expr(e) => {

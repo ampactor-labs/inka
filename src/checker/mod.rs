@@ -17,8 +17,8 @@ mod unify;
 
 use std::collections::HashMap;
 
-use crate::ast::{Expr, Item, Program, TypeExpr};
-use crate::error::LuxError;
+use crate::ast::{Expr, Item, Pattern, Program, TypeExpr};
+use crate::error::{LuxError, TypeError, TypeErrorKind};
 use crate::token::Span;
 use crate::types::{AdtDef, EffectDef, EffectRow, EffectVar, Type, TypeVar};
 use std::collections::BTreeSet;
@@ -259,6 +259,72 @@ impl TypeEnv {
 
     pub(crate) fn bind(&mut self, name: impl Into<String>, ty: Type) {
         self.bindings.insert(name.into(), ty);
+    }
+
+    /// Bind variables from a pattern, unifying the pattern structure with the given type.
+    pub(crate) fn bind_pattern_types(
+        &mut self,
+        pat: &Pattern,
+        ty: &Type,
+        span: &Span,
+    ) -> Result<(), TypeError> {
+        match pat {
+            Pattern::Binding(name, _) => {
+                self.bind(name, ty.clone());
+                Ok(())
+            }
+            Pattern::Wildcard(_) => Ok(()),
+            Pattern::Tuple(pats, _) => {
+                let elems = match ty {
+                    Type::Tuple(elems) => elems.clone(),
+                    _ => {
+                        let fresh: Vec<_> = pats.iter().map(|_| self.fresh_var()).collect();
+                        self.unify(ty, &Type::Tuple(fresh.clone()), span)?;
+                        fresh
+                    }
+                };
+                if pats.len() != elems.len() {
+                    return Err(TypeError {
+                        kind: TypeErrorKind::Mismatch {
+                            expected: Type::Tuple(elems),
+                            found: Type::Tuple(pats.iter().map(|_| self.fresh_var()).collect()),
+                        },
+                        span: span.clone(),
+                    });
+                }
+                for (p, t) in pats.iter().zip(elems.iter()) {
+                    self.bind_pattern_types(p, &self.apply_subst(t), span)?;
+                }
+                Ok(())
+            }
+            Pattern::Record { fields, .. } => {
+                // Bind each named field from the record pattern
+                for (field_name, field_pat) in fields {
+                    let field_ty = self.fresh_var();
+                    self.bind_pattern_types(field_pat, &field_ty, span)?;
+                    let _ = field_name; // Field type resolution handled by unification
+                }
+                Ok(())
+            }
+            Pattern::List { elements, rest, .. } => {
+                let elem_ty = self.fresh_var();
+                for elem_pat in elements {
+                    self.bind_pattern_types(elem_pat, &self.apply_subst(&elem_ty), span)?;
+                }
+                if let Some(rest_pat) = rest {
+                    let list_ty = Type::List(Box::new(elem_ty));
+                    self.bind_pattern_types(rest_pat, &list_ty, span)?;
+                }
+                Ok(())
+            }
+            _ => {
+                // Literal, Variant, Or patterns not supported in let destructuring
+                Err(TypeError {
+                    kind: TypeErrorKind::NonExhaustiveMatch,
+                    span: span.clone(),
+                })
+            }
+        }
     }
 
     pub(crate) fn lookup(&self, name: &str) -> Option<Type> {

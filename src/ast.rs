@@ -90,7 +90,7 @@ pub struct Param {
 
 #[derive(Debug, Clone)]
 pub struct LetDecl {
-    pub name: String,
+    pub pattern: Pattern,
     pub type_ann: Option<TypeExpr>,
     pub value: Expr,
     pub span: Span,
@@ -213,9 +213,9 @@ pub enum Expr {
         span: Span,
     },
 
-    /// `let name = value` as expression (in blocks)
+    /// `let pattern = value` as expression (in blocks)
     Let {
-        name: String,
+        pattern: Pattern,
         type_ann: Option<TypeExpr>,
         value: Box<Expr>,
         span: Span,

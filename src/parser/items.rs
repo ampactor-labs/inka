@@ -185,13 +185,36 @@ impl Parser {
     pub(crate) fn parse_let_decl(&mut self) -> Result<LetDecl, LuxError> {
         let start_span = self.peek_span();
         self.expect(&TokenKind::Let)?;
-        let (name, _) = self.expect_ident()?;
-        let type_ann = if self.at_exact(&TokenKind::Colon) {
-            self.advance();
-            Some(self.parse_type_expr()?)
+
+        // Dispatch to pattern parsing for destructuring syntax
+        let pattern = if self.at_exact(&TokenKind::LParen)
+            || self.at_exact(&TokenKind::LBracket)
+            || self.at_exact(&TokenKind::Underscore)
+        {
+            self.parse_pattern()?
+        } else if let TokenKind::Ident(name) = self.peek() {
+            if name.chars().next().is_some_and(|c| c.is_uppercase()) {
+                // Uppercase ident → variant/record pattern
+                self.parse_pattern()?
+            } else {
+                // Simple variable binding
+                let (name, name_span) = self.expect_ident()?;
+                Pattern::Binding(name, name_span)
+            }
         } else {
-            None
+            let (name, name_span) = self.expect_ident()?;
+            Pattern::Binding(name, name_span)
         };
+
+        // Type annotation only valid for simple bindings
+        let type_ann =
+            if matches!(&pattern, Pattern::Binding(..)) && self.at_exact(&TokenKind::Colon) {
+                self.advance();
+                Some(self.parse_type_expr()?)
+            } else {
+                None
+            };
+
         self.expect(&TokenKind::Eq)?;
         let value = self.parse_expr()?;
         let span = Span::new(
@@ -201,7 +224,7 @@ impl Parser {
             start_span.column,
         );
         Ok(LetDecl {
-            name,
+            pattern,
             type_ann,
             value,
             span,

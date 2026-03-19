@@ -233,7 +233,6 @@ impl TypeEnv {
             self.unify(&val_ty, &ann_ty, &ld.span)?;
         }
 
-        self.bind(&ld.name, self.apply_subst(&val_ty));
-        Ok(())
+        self.bind_pattern_types(&ld.pattern, &self.apply_subst(&val_ty), &ld.span)
     }
 }

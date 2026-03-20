@@ -248,6 +248,7 @@ handle { body } with compute_forward { forward_relu(xs) => resume(relu_vec(xs)) 
 | 7A | Handler state as return value — eliminates `get_tape()` anti-pattern. VM pattern match stack fix. | b33d1ee |
 | 7A.5 | Let destructuring | `let (a, b) = expr` — tuple/list/wildcard/record patterns in let bindings. 13 match→let conversions across examples. | HEAD |
 | 7C | Handler composition | `handler` top-level item, bare handler ref (`with handler_name`), inheritance (`: base`), `use` clause. XOR predict becomes one-liner. | HEAD |
+| 7B | Tail-resumptive fast-path — VM skips continuation capture for `resume(pure_expr)` handlers. Compiler detection, Resume opcode routing. | 1ec1d77 |
 
 ## Roadmap (beyond interpreter)
 
@@ -255,7 +256,7 @@ handle { body } with compute_forward { forward_relu(xs) => resume(relu_vec(xs)) 
 |-------|-------|-------------|
 | 6C | Modules + VM | Module system, bytecode compiler, stack-based VM (**DONE**) |
 | 7A | State-as-return | Handler state flows out as return value (**DONE**). Eliminates `get_tape()` anti-pattern. |
-| 7B | Tail-resumptive | VM fast-path for tail-resumptive handlers, no new syntax. |
+| 7B | Tail-resumptive | VM fast-path for tail-resumptive handlers (**DONE**). Compiler detects, VM skips continuation capture. |
 | 7C | Handler composition | `handler` top-level item, handler reuse (**DONE**). **ML milestone:** inference = training minus tape. |
 | 7+ | Evidence-passing | Koka-style effect compilation, near-native performance. **ML milestone:** zero-overhead autodiff handler. |
 | 8 | Codegen | Cranelift backend, native binaries. **ML milestone:** native-speed tensor ops, training on real data. |

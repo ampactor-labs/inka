@@ -1,7 +1,92 @@
-/// Error types and pretty-printing for Lux.
+/// Error types, pretty-printing, and progressive hints for Lux.
 use crate::token::Span;
 use crate::types::Type;
 use std::fmt;
+
+// ── Compiler Hints (progressive teaching) ─────────────────────
+
+/// A compiler hint — progressive teaching, not error reporting.
+///
+/// Hints are always collected during type checking. The CLI decides
+/// whether to display them (`--teach` flag). Each hint surfaces what
+/// the compiler inferred and suggests annotations that would unlock
+/// new guarantees.
+#[derive(Debug, Clone)]
+pub struct CompilerHint {
+    pub kind: HintKind,
+    pub fn_name: String,
+    pub span: Span,
+    /// Human-readable inferred signature
+    pub inferred: String,
+    /// Suggested annotations and what they unlock
+    pub suggestions: Vec<HintSuggestion>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HintSuggestion {
+    /// The annotation to add (e.g., "with Pure")
+    pub annotation: String,
+    /// What declaring this enables
+    pub unlocks: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum HintKind {
+    /// Function is provably pure but doesn't declare it
+    PurityOpportunity,
+    /// Function performs effects but doesn't declare them
+    EffectsUndeclared,
+}
+
+/// Format a compiler hint for terminal display.
+pub fn format_hint(hint: &CompilerHint, filename: Option<&str>) -> String {
+    let filename = filename.unwrap_or("<input>");
+    let mut out = String::new();
+
+    let label = match hint.kind {
+        HintKind::PurityOpportunity => "is pure",
+        HintKind::EffectsUndeclared => "has effects",
+    };
+
+    out.push_str(&format!(
+        "  fn {} {} (line {})\n",
+        hint.fn_name, label, hint.span.line
+    ));
+    out.push_str(&format!(
+        "    --> {}:{}:{}\n",
+        filename, hint.span.line, hint.span.column
+    ));
+    out.push_str(&format!("    inferred: {}\n", hint.inferred));
+
+    for suggestion in &hint.suggestions {
+        out.push_str(&format!("    -> add `{}`\n", suggestion.annotation));
+        out.push_str(&format!("       {}\n", suggestion.unlocks));
+    }
+
+    out
+}
+
+/// Format a summary of all hints for terminal display.
+pub fn format_hint_summary(hints: &[CompilerHint]) -> String {
+    let pure_count = hints
+        .iter()
+        .filter(|h| matches!(h.kind, HintKind::PurityOpportunity))
+        .count();
+    let effect_count = hints
+        .iter()
+        .filter(|h| matches!(h.kind, HintKind::EffectsUndeclared))
+        .count();
+
+    let mut parts = Vec::new();
+    if pure_count > 0 {
+        parts.push(format!("{pure_count} pure (add `with Pure` to prove it)"));
+    }
+    if effect_count > 0 {
+        parts.push(format!("{effect_count} with undeclared effects"));
+    }
+
+    format!("  {} functions checked: {}", hints.len(), parts.join(", "))
+}
 
 /// All errors that can occur in Lux compilation / interpretation.
 #[derive(Debug, Clone)]

@@ -18,7 +18,7 @@ mod unify;
 use std::collections::HashMap;
 
 use crate::ast::{Expr, Item, Pattern, Program, TypeExpr};
-use crate::error::{LuxError, TypeError, TypeErrorKind};
+use crate::error::{CompilerHint, LuxError, TypeError, TypeErrorKind};
 use crate::token::Span;
 use crate::types::{AdtDef, EffectDef, EffectRow, EffectVar, Type, TypeVar};
 use std::collections::BTreeSet;
@@ -130,6 +130,12 @@ pub(crate) struct TypeEnv {
     pub(crate) type_params: HashMap<String, Type>,
     /// Collected warnings (non-fatal diagnostics).
     pub(crate) warnings: Vec<(String, Span)>,
+    /// Collected hints (progressive teaching — what the compiler inferred).
+    pub(crate) hints: Vec<CompilerHint>,
+    /// Number of items from imports (hints suppressed for these).
+    pub(crate) import_item_count: usize,
+    /// Current item index during check_line (for import boundary).
+    pub(crate) current_item_index: usize,
     /// Effects declared by the enclosing function (for disambiguating op vs binding).
     /// None = unannotated function or top-level (effect ops always dispatch).
     /// Some(set) = only dispatch effect ops whose effect is in the set.
@@ -158,6 +164,9 @@ impl TypeEnv {
             traits: HashMap::new(),
             impl_methods: HashMap::new(),
             warnings: Vec::new(),
+            hints: Vec::new(),
+            import_item_count: 0,
+            current_item_index: 0,
             fn_declared_effects: None,
         }
     }
@@ -183,6 +192,9 @@ impl TypeEnv {
             impl_methods: self.impl_methods.clone(),
             type_params: self.type_params.clone(),
             warnings: Vec::new(),
+            hints: Vec::new(),
+            import_item_count: self.import_item_count,
+            current_item_index: self.current_item_index,
             fn_declared_effects: self.fn_declared_effects.clone(),
         }
     }
@@ -204,6 +216,7 @@ impl TypeEnv {
             self.impl_methods.insert(k.clone(), v.clone());
         }
         self.warnings.extend(child.warnings.iter().cloned());
+        self.hints.extend(child.hints.iter().cloned());
     }
 
     pub(crate) fn fresh_var(&mut self) -> Type {
@@ -450,6 +463,11 @@ impl ReplChecker {
         Self { env }
     }
 
+    /// Set the number of imported items so hints are suppressed for them.
+    pub fn set_import_count(&mut self, n: usize) {
+        self.env.import_item_count = n;
+    }
+
     /// Type-check all items in a parsed program, updating the persistent env.
     pub fn check_line(&mut self, program: &crate::ast::Program) -> Result<(), LuxError> {
         // Register type/effect decls first
@@ -467,7 +485,8 @@ impl ReplChecker {
                 _ => {}
             }
         }
-        for item in &program.items {
+        for (i, item) in program.items.iter().enumerate() {
+            self.env.current_item_index = i;
             self.env.check_item(item).map_err(LuxError::Type)?;
         }
         Ok(())
@@ -476,6 +495,11 @@ impl ReplChecker {
     /// Drain collected warnings (non-fatal diagnostics).
     pub fn take_warnings(&mut self) -> Vec<(String, Span)> {
         std::mem::take(&mut self.env.warnings)
+    }
+
+    /// Drain collected hints (progressive teaching).
+    pub fn take_hints(&mut self) -> Vec<CompilerHint> {
+        std::mem::take(&mut self.env.hints)
     }
 
     /// Infer the type of a single expression and return it as a string.
@@ -512,6 +536,8 @@ impl ReplChecker {
         }
         self.env.subst.clear();
         self.env.eff_subst.clear();
+        // Discard prelude hints — only user code hints matter.
+        self.env.hints.clear();
     }
 }
 

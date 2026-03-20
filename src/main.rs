@@ -9,8 +9,9 @@ use std::sync::Arc;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    // Check for --interpret flag
+    // Check for flags
     let use_interpreter = args.iter().any(|a| a == "--interpret");
+    let teach_mode = args.iter().any(|a| a == "--teach");
     let file_args: Vec<&str> = args
         .iter()
         .skip(1)
@@ -45,9 +46,9 @@ fn main() {
                 }
             };
             let result = if use_interpreter {
-                run_source_interpret(&source, path)
+                run_source_interpret(&source, path, teach_mode)
             } else {
-                run_source_vm(&source, path)
+                run_source_vm(&source, path, teach_mode)
             };
             if let Err(e) = result {
                 eprintln!(
@@ -58,13 +59,17 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("Usage: lux [--interpret] [file.lux | repl]");
+            eprintln!("Usage: lux [--interpret] [--teach] [file.lux | repl]");
             process::exit(1);
         }
     }
 }
 
-fn run_source_interpret(source: &str, file_path: &str) -> Result<(), lux::error::LuxError> {
+fn run_source_interpret(
+    source: &str,
+    file_path: &str,
+    teach: bool,
+) -> Result<(), lux::error::LuxError> {
     let mut checker = lux::checker::ReplChecker::new();
     let mut interpreter = lux::interpreter::Interpreter::new();
 
@@ -86,14 +91,25 @@ fn run_source_interpret(source: &str, file_path: &str) -> Result<(), lux::error:
 
     // Resolve imports before checking/interpreting.
     let (base_dir, std_dir) = resolve_dirs(file_path);
-    let program = lux::loader::resolve_imports(&program, &base_dir, &std_dir)?;
+    let (program, import_count) = lux::loader::resolve_imports(&program, &base_dir, &std_dir)?;
 
+    checker.set_import_count(import_count);
     checker.check_line(&program)?;
     for (msg, span) in checker.take_warnings() {
         eprintln!(
             "warning: {msg}\n  --> {file_path}:{}:{}",
             span.line, span.column
         );
+    }
+    if teach {
+        let hints = checker.take_hints();
+        if !hints.is_empty() {
+            eprintln!("=== lux teach ===\n");
+            for hint in &hints {
+                eprint!("{}", lux::error::format_hint(hint, Some(file_path)));
+            }
+            eprintln!("{}\n", lux::error::format_hint_summary(&hints));
+        }
     }
     let result = interpreter.eval_line(&program)?;
     if let Some(val) = result {
@@ -102,7 +118,7 @@ fn run_source_interpret(source: &str, file_path: &str) -> Result<(), lux::error:
     Ok(())
 }
 
-fn run_source_vm(source: &str, file_path: &str) -> Result<(), lux::error::LuxError> {
+fn run_source_vm(source: &str, file_path: &str, teach: bool) -> Result<(), lux::error::LuxError> {
     let mut checker = lux::checker::ReplChecker::new();
 
     // Load and check prelude.
@@ -121,14 +137,25 @@ fn run_source_vm(source: &str, file_path: &str) -> Result<(), lux::error::LuxErr
 
     // Resolve imports before checking/compiling.
     let (base_dir, std_dir) = resolve_dirs(file_path);
-    let program = lux::loader::resolve_imports(&program, &base_dir, &std_dir)?;
+    let (program, import_count) = lux::loader::resolve_imports(&program, &base_dir, &std_dir)?;
 
+    checker.set_import_count(import_count);
     checker.check_line(&program)?;
     for (msg, span) in checker.take_warnings() {
         eprintln!(
             "warning: {msg}\n  --> {file_path}:{}:{}",
             span.line, span.column
         );
+    }
+    if teach {
+        let hints = checker.take_hints();
+        if !hints.is_empty() {
+            eprintln!("=== lux teach ===\n");
+            for hint in &hints {
+                eprint!("{}", lux::error::format_hint(hint, Some(file_path)));
+            }
+            eprintln!("{}\n", lux::error::format_hint_summary(&hints));
+        }
     }
 
     // Compile: prepend prelude items to the user program.

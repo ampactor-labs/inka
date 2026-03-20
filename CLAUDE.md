@@ -133,6 +133,7 @@ isolation
 
 ## Build / Run / Test
 - `cargo run -- <file.lux>` — run a program
+- `cargo run -- --teach <file.lux>` — run with progressive teaching (shows inferred types/effects)
 - `cargo run` — start REPL
 - `cargo check` — type check the compiler
 - `cargo clippy` — lint
@@ -178,6 +179,7 @@ Standard library: `std/prelude.lux` (self-hosted in Lux — this part stays)
 | `examples/handler_composition.lux` | Named handlers, inheritance, bare refs, overrides | **YES — Lux forever** |
 | `examples/effect_algebra.lux` | Effect algebra — `!Effect`, `Pure`, `E - F` subtraction, capability proofs | **YES — Lux forever** |
 | `examples/dsp_sandbox.lux` | DSP sandbox — subtraction syntax for readable capability removal | **YES — Lux forever** |
+| `examples/progressive_demo.lux` | Progressive levels demo — run with `--teach` to see the teaching compiler | **YES — Lux forever** |
 | `examples/*.lux` | Language examples and test cases | **YES — Lux forever** |
 | `std/dsp/signal.lux` | DSP effects (DSP, Alloc, Network, Feedback) + pure processors (clip, gain, mix, soft_clip) | **YES — Lux forever** |
 | `std/dsp/processors.lux` | Handler-based processors (lowpass, biquad, envelope), presets | **YES — Lux forever** |
@@ -268,6 +270,7 @@ fn safe_v2(x: Float) -> Float with DSP - Network - Alloc { ... }  // subtraction
 | 8A | Effect algebra (negation) — `!Effect` and `Pure` constraints in function signatures. Parser: `!Name` syntax. Checker: validates body effects against negation constraints. Purely compile-time, zero runtime cost. | HEAD |
 | 8A-DSP | Effect-algebraic DSP framework — std/dsp/ library, pipe operator first usage, four-mode proof | HEAD |
 | 8B | Effect subtraction syntax `E - F` in annotations — desugars to negation constraint. Same semantics as `E, !F` but reads as capability removal. Enables readable sandbox patterns. Generic subtraction (row variables) deferred to Phase 9+. | HEAD |
+| 8C | Teaching compiler (`--teach`) — surfaces inferred types/effects, suggests annotations that unlock guarantees. Friendly type vars (a, b, c), import boundary tracking, purity/effect discovery. Progressive levels foundation. | HEAD |
 
 ## Roadmap (beyond interpreter)
 

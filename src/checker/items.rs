@@ -2,7 +2,7 @@
 use crate::ast::{
     EffectDecl, FnDecl, HandlerDecl, HandlerOp, ImplBlock, Item, LetDecl, TraitDecl, TypeDecl,
 };
-use crate::error::{TypeError, TypeErrorKind};
+use crate::error::{CompilerHint, HintKind, HintSuggestion, TypeError, TypeErrorKind};
 use crate::types::{AdtDef, EffectDef, EffectOpDef, EffectRow, Type, VariantDef};
 
 use super::{OpInfo, TypeEnv, type_expr_to_name};
@@ -307,13 +307,79 @@ impl TypeEnv {
             }
         }
 
+        let resolved_params: Vec<Type> = param_types.iter().map(|p| self.apply_subst(p)).collect();
+        let resolved_ret = self.apply_subst(&body_ty);
+        let resolved_effects = self.apply_eff_subst(&body_effects);
+
         let fn_type = Type::Function {
-            params: param_types,
-            return_type: Box::new(self.apply_subst(&body_ty)),
-            effects: body_effects,
+            params: resolved_params.clone(),
+            return_type: Box::new(resolved_ret.clone()),
+            effects: resolved_effects.clone(),
         };
         self.bind(&fd.name, fn_type);
+
+        // Progressive teaching: emit hints for user's unannotated functions.
+        let is_user_code = self.current_item_index >= self.import_item_count;
+        if is_user_code && fd.effects.is_empty() && !fd.name.starts_with('_') {
+            self.emit_fn_hint(fd, &resolved_params, &resolved_ret, &resolved_effects);
+        }
+
         Ok(())
+    }
+
+    /// Emit a teaching hint for a function with unannotated effects.
+    fn emit_fn_hint(&mut self, fd: &FnDecl, params: &[Type], ret: &Type, effects: &EffectRow) {
+        // Map type variables to friendly names: a, b, c, ...
+        let mut var_names: std::collections::HashMap<u32, char> = std::collections::HashMap::new();
+        let mut next_letter = 'a';
+        for ty in params.iter().chain(std::iter::once(ret)) {
+            collect_type_vars(ty, &mut var_names, &mut next_letter);
+        }
+
+        let param_strs: Vec<String> = params
+            .iter()
+            .map(|p| friendly_type(p, &var_names))
+            .collect();
+        let ret_str = friendly_type(ret, &var_names);
+        let effects_label = friendly_effects(effects);
+        let inferred = format!(
+            "({}) -> {} with {}",
+            param_strs.join(", "),
+            ret_str,
+            effects_label,
+        );
+
+        let mut suggestions = Vec::new();
+
+        if effects.is_pure() {
+            suggestions.push(HintSuggestion {
+                annotation: "with Pure".to_string(),
+                unlocks: "parallelization, memoization, compile-time evaluation".to_string(),
+            });
+        } else {
+            let eff_str = friendly_effects(effects);
+            let unlocks = if matches!(effects, EffectRow::Open { .. }) {
+                "effect polymorphism — callers can provide any handler".to_string()
+            } else {
+                "explicit effect tracking — callers see their dependencies".to_string()
+            };
+            suggestions.push(HintSuggestion {
+                annotation: format!("with {eff_str}"),
+                unlocks,
+            });
+        }
+
+        self.hints.push(CompilerHint {
+            kind: if effects.is_pure() {
+                HintKind::PurityOpportunity
+            } else {
+                HintKind::EffectsUndeclared
+            },
+            fn_name: fd.name.clone(),
+            span: fd.span.clone(),
+            inferred,
+            suggestions,
+        });
     }
 
     pub(crate) fn check_let_decl(&mut self, ld: &LetDecl) -> Result<(), TypeError> {
@@ -325,5 +391,106 @@ impl TypeEnv {
         }
 
         self.bind_pattern_types(&ld.pattern, &self.apply_subst(&val_ty), &ld.span)
+    }
+}
+
+// ── Friendly type display for hints ────────────────────────────
+
+/// Collect all type variable IDs in a type, assigning sequential letters.
+fn collect_type_vars(
+    ty: &Type,
+    var_names: &mut std::collections::HashMap<u32, char>,
+    next: &mut char,
+) {
+    match ty {
+        Type::Var(crate::types::TypeVar(id)) => {
+            var_names.entry(*id).or_insert_with(|| {
+                let c = *next;
+                *next = ((*next as u8) + 1) as char;
+                c
+            });
+        }
+        Type::Function {
+            params,
+            return_type,
+            ..
+        } => {
+            for p in params {
+                collect_type_vars(p, var_names, next);
+            }
+            collect_type_vars(return_type, var_names, next);
+        }
+        Type::List(inner) => collect_type_vars(inner, var_names, next),
+        Type::Tuple(elems) => {
+            for e in elems {
+                collect_type_vars(e, var_names, next);
+            }
+        }
+        Type::Adt { type_args, .. } => {
+            for a in type_args {
+                collect_type_vars(a, var_names, next);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Format a type using friendly variable names (a, b, c) instead of ?N.
+fn friendly_type(ty: &Type, var_names: &std::collections::HashMap<u32, char>) -> String {
+    match ty {
+        Type::Var(crate::types::TypeVar(id)) => {
+            if let Some(c) = var_names.get(id) {
+                c.to_string()
+            } else {
+                format!("?{id}")
+            }
+        }
+        Type::Error => "_".to_string(),
+        Type::Function {
+            params,
+            return_type,
+            effects,
+        } => {
+            let ps: Vec<String> = params.iter().map(|p| friendly_type(p, var_names)).collect();
+            let ret = friendly_type(return_type, var_names);
+            let mut s = format!("({}) -> {ret}", ps.join(", "));
+            if !effects.is_pure() {
+                s.push_str(&format!(" with {}", friendly_effects(effects)));
+            }
+            s
+        }
+        Type::List(inner) => format!("List<{}>", friendly_type(inner, var_names)),
+        Type::Tuple(elems) => {
+            let es: Vec<String> = elems.iter().map(|e| friendly_type(e, var_names)).collect();
+            format!("({})", es.join(", "))
+        }
+        Type::Adt { name, type_args } if !type_args.is_empty() => {
+            let args: Vec<String> = type_args
+                .iter()
+                .map(|a| friendly_type(a, var_names))
+                .collect();
+            format!("{name}<{}>", args.join(", "))
+        }
+        _ => format!("{ty}"),
+    }
+}
+
+/// Format an effect row with friendly display (open rows show as "effects, ..."
+/// instead of "effects, E0").
+fn friendly_effects(row: &EffectRow) -> String {
+    match row {
+        EffectRow::Closed(s) if s.is_empty() => "Pure".to_string(),
+        EffectRow::Closed(s) => {
+            let names: Vec<&str> = s.iter().map(|e| e.name.as_str()).collect();
+            names.join(", ")
+        }
+        EffectRow::Open { known, .. } => {
+            if known.is_empty() {
+                "...".to_string()
+            } else {
+                let names: Vec<&str> = known.iter().map(|e| e.name.as_str()).collect();
+                format!("{}, ...", names.join(", "))
+            }
+        }
     }
 }

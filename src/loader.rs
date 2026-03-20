@@ -15,11 +15,15 @@ use crate::token::Span;
 /// Resolve all `import` declarations in a program, returning a combined
 /// program with imported items prepended (dependency order) and `Import`
 /// nodes removed.
+/// Resolve imports and return (combined program, import item count).
+///
+/// The combined program has imported items first, then the user's own items.
+/// `import_count` tells callers where imports end and user code begins.
 pub fn resolve_imports(
     program: &Program,
     base_dir: &Path,
     std_dir: &Path,
-) -> Result<Program, LuxError> {
+) -> Result<(Program, usize), LuxError> {
     let mut visited = HashSet::new();
     let mut imported_items = Vec::new();
 
@@ -29,6 +33,8 @@ pub fn resolve_imports(
             load_module(&file_path, std_dir, &mut visited, &mut imported_items)?;
         }
     }
+
+    let import_count = imported_items.len();
 
     // Build combined: imported items first, then original items minus Import nodes.
     let own_items: Vec<Item> = program
@@ -40,7 +46,7 @@ pub fn resolve_imports(
 
     let mut combined = imported_items;
     combined.extend(own_items);
-    Ok(Program { items: combined })
+    Ok((Program { items: combined }, import_count))
 }
 
 /// Recursively load a module file and all its transitive imports.

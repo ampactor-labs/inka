@@ -1,0 +1,86 @@
+// Lux DSP Framework — Handler-Based Processors
+//
+// Stateful DSP processors built on the DSP effect from signal.lux.
+// Named handlers enable composition: warm_filter |> peak_tracker.
+// Handler-local state tracks filter memory, envelopes, peak levels.
+
+import dsp/signal
+
+// ── Identity processor ──────────────────────────────────────
+
+handler passthrough {
+    process(x) => resume(x),
+}
+
+// ── Peak tracker ────────────────────────────────────────────
+
+handler peak_tracker with state = 0.0 {
+    process(x) => {
+        let ax = if x >= 0.0 { x } else { 0.0 - x }
+        let peak = if ax > state { ax } else { state }
+        resume(x) with state = peak
+    },
+}
+
+// ── Lowpass filter ──────────────────────────────────────────
+
+fn process_lowpass(alpha, buffer) = {
+    let result = handle {
+        map(|x| process(x), buffer)
+    } with state = 0.0 {
+        process(x) => {
+            let y = state + alpha * (x - state)
+            resume(y) with state = y
+        },
+    }
+    let (processed, _) = result
+    processed
+}
+
+// ── Biquad filter ───────────────────────────────────────────
+
+fn process_biquad(b0, b1, b2, a1, a2, buffer) = {
+    let result = handle {
+        map(|x| process(x), buffer)
+    } with y1 = 0.0, y2 = 0.0, x1 = 0.0, x2 = 0.0 {
+        process(x) => {
+            let y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            resume(y) with y1 = y, y2 = y1, x1 = x, x2 = x1
+        },
+    }
+    let (processed, _, _, _, _) = result
+    processed
+}
+
+// ── Envelope follower ───────────────────────────────────────
+
+fn process_envelope(attack, release, buffer) = {
+    let result = handle {
+        map(|x| process(x), buffer)
+    } with state = 0.0 {
+        process(x) => {
+            let abs_x = if x >= 0.0 { x } else { 0.0 - x }
+            let coeff = if abs_x > state { attack } else { release }
+            let env = state + coeff * (abs_x - state)
+            resume(env) with state = env
+        },
+    }
+    let (processed, _) = result
+    processed
+}
+
+// ── Preset handlers ─────────────────────────────────────────
+
+handler warm_filter with state = 0.0 {
+    process(x) => {
+        let y = state + 0.2 * (x - state)
+        resume(y) with state = y
+    },
+}
+
+handler bright_filter with state = 0.0 {
+    process(x) => {
+        let y = state + 0.8 * (x - state)
+        resume(y) with state = y
+    },
+}

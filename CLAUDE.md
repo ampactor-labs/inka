@@ -178,6 +178,9 @@ Standard library: `std/prelude.lux` (self-hosted in Lux — this part stays)
 | `examples/handler_composition.lux` | Named handlers, inheritance, bare refs, overrides | **YES — Lux forever** |
 | `examples/effect_negation.lux` | Effect negation — `!Effect`, `Pure`, capability proofs | **YES — Lux forever** |
 | `examples/*.lux` | Language examples and test cases | **YES — Lux forever** |
+| `std/dsp/signal.lux` | DSP effects (DSP, Alloc, Network, Feedback) + pure processors (clip, gain, mix, soft_clip) | **YES — Lux forever** |
+| `std/dsp/processors.lux` | Handler-based processors (lowpass, biquad, envelope), presets | **YES — Lux forever** |
+| `examples/dsp_framework.lux` | Four-mode DSP proof: real-time, testing, debug, recording + pipe chains | **YES — Lux forever** |
 | `tests/examples.rs` | Golden-file integration tests + VM parity checks | Rewritten in Lux |
 
 ## Effect System — Syntax Reference
@@ -257,6 +260,7 @@ fn pure_add(a: Int, b: Int) -> Int with Pure { a + b } // provably no effects at
 | 7B | Tail-resumptive fast-path — VM skips continuation capture for `resume(pure_expr)` handlers. Compiler detection, Resume opcode routing. | 1ec1d77 |
 | 7+ | Evidence-passing (local) — direct handler dispatch for evidence-eligible ops. Compiler classifies handlers, emits PushEvidence/PerformEvidence. VM mini-loop for synchronous handler call. 12 of 19 examples use evidence path; XOR gets 4024 evidence dispatches. | HEAD |
 | 8A | Effect algebra (negation) — `!Effect` and `Pure` constraints in function signatures. Parser: `!Name` syntax. Checker: validates body effects against negation constraints. Purely compile-time, zero runtime cost. | HEAD |
+| 8A-DSP | Effect-algebraic DSP framework — std/dsp/ library, pipe operator first usage, four-mode proof | HEAD |
 
 ## Roadmap (beyond interpreter)
 
@@ -287,6 +291,7 @@ fn pure_add(a: Int, b: Int) -> Int with Pure { a + b } // provably no effects at
 | `examples/*.lux` | CLAUDE.md (Effect System), docs/DESIGN.md | New patterns |
 | `std/prelude.lux` | CLAUDE.md (Key Files) | New stdlib functions |
 | `std/ml/*.lux`, `std/dsp/*.lux` | `docs/specs/lux-ml-design.md` | ML framework changes |
+| `std/dsp/*.lux`, `examples/dsp_framework.lux` | `docs/specs/dsp-pain-points.md`, CLAUDE.md (Phase History, Key Files) | DSP framework, pipe usage, safety proofs |
 | `src/parser/expr.rs` (parse_postfix) | `docs/specs/ml-pain-points.md` | Postfix parsing rules |
 | `src/checker/exprs.rs` (infer_binop) | `docs/specs/ml-pain-points.md` | Numeric inference rules |
 | `Cargo.toml` | CLAUDE.md (Build) | Dependencies, features |

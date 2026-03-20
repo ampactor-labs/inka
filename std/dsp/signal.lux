@@ -1,0 +1,38 @@
+// Lux DSP Framework — Signal Effects and Pure Processors
+//
+// Effect declarations for DSP capabilities, plus pure math functions
+// that form the building blocks of signal chains.
+//
+// Pure processors use data-last signatures for pipe compatibility:
+//   x |> gain(0.8) |> soft_clip |> clip(0.95)
+
+// ── DSP Effects ─────────────────────────────────────────────
+
+effect DSP {
+    process(x: Float) -> Float
+}
+
+// Capability effects — exist primarily to be NEGATED
+effect Alloc { alloc_buffer(size: Int) -> List<Float> }
+effect Network { fetch_param(url: String) -> String }
+effect Feedback { delay_tap(samples: Int, x: Float) -> Float }
+
+// ── Pure Processors (pipeable) ──────────────────────────────
+
+fn clip(threshold: Float, x: Float) -> Float with Pure =
+    clamp(x, 0.0 - threshold, threshold)
+
+fn gain(factor: Float, x: Float) -> Float with Pure =
+    x * factor
+
+fn mix(wet: Float, dry: Float, amount: Float) -> Float with Pure =
+    dry * (1.0 - amount) + wet * amount
+
+fn soft_clip(x: Float) -> Float with Pure =
+    if x >= 0.0 { x / (1.0 + x) } else { x / (1.0 - x) }
+
+fn db_to_linear(db: Float) -> Float with Pure =
+    exp(db * log(10.0) / 20.0)
+
+fn linear_to_db(x: Float) -> Float with Pure =
+    20.0 * log(x) / log(10.0)

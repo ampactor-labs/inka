@@ -309,7 +309,11 @@ impl TypeEnv {
                 let ret = self.resolve_type_expr(return_type)?;
                 let mut eff_set = EffectRow::pure();
                 for eff_ref in effects {
-                    eff_set.insert(&eff_ref.name);
+                    // Only insert positive (non-negated) effects into the row.
+                    // Negated effects (!IO) are constraints, not members.
+                    if !eff_ref.negated && eff_ref.name != "Pure" {
+                        eff_set.insert(&eff_ref.name);
+                    }
                 }
                 Ok(Type::Function {
                     params: param_types,

@@ -55,14 +55,25 @@ pub struct TypeError {
 
 #[derive(Debug, Clone)]
 pub enum TypeErrorKind {
-    Mismatch { expected: Type, found: Type },
+    Mismatch {
+        expected: Type,
+        found: Type,
+    },
     UnboundVariable(String),
     UnboundType(String),
     UnboundEffect(String),
     UnboundEffectOp(String),
     NotAFunction(Type),
-    WrongArity { expected: usize, found: usize },
+    WrongArity {
+        expected: usize,
+        found: usize,
+    },
     UnhandledEffect(String),
+    /// Effect negation/Pure constraint violated: function performs `effect` but declares `constraint`.
+    EffectConstraintViolation {
+        effect: String,
+        constraint: String,
+    },
     InfiniteType,
     NonExhaustiveMatch,
     DuplicateDefinition(String),
@@ -198,6 +209,13 @@ impl fmt::Display for TypeError {
             TypeErrorKind::UnhandledEffect(name) => {
                 write!(f, "unhandled effect '{name}' at line {}", self.span.line)
             }
+            TypeErrorKind::EffectConstraintViolation { effect, constraint } => {
+                write!(
+                    f,
+                    "performs effect '{effect}' but declares '{constraint}' at line {}",
+                    self.span.line
+                )
+            }
             TypeErrorKind::InfiniteType => {
                 write!(f, "infinite type at line {}", self.span.line)
             }
@@ -286,6 +304,9 @@ impl LuxError {
                     format!("expected {expected} args, found {found}")
                 }
                 TypeErrorKind::UnhandledEffect(name) => format!("unhandled effect '{name}'"),
+                TypeErrorKind::EffectConstraintViolation { effect, constraint } => {
+                    format!("performs effect '{effect}' but declares '{constraint}'")
+                }
                 TypeErrorKind::InfiniteType => "infinite type".to_string(),
                 TypeErrorKind::NonExhaustiveMatch => "non-exhaustive match".to_string(),
                 TypeErrorKind::DuplicateDefinition(name) => {

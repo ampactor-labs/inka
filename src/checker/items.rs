@@ -209,15 +209,28 @@ impl TypeEnv {
 
         // Pre-bind function name for recursion (with fresh return type var)
         let ret_var = child.fresh_var();
-        // If effects are declared, use a closed row; otherwise open (polymorphic)
+
+        // Separate positive effects from negation constraints / Pure.
+        let has_pure = fd.effects.iter().any(|e| !e.negated && e.name == "Pure");
+        let positive_effects: Vec<&crate::ast::EffectRef> = fd
+            .effects
+            .iter()
+            .filter(|e| !e.negated && e.name != "Pure")
+            .collect();
+
+        // If effects are declared, use a closed row; otherwise open (polymorphic).
+        // Negation-only constraints (no positive effects) leave the row open.
         let prelim_effects = if fd.effects.is_empty() {
             child.fresh_eff_var()
-        } else {
+        } else if has_pure || !positive_effects.is_empty() {
             let mut closed = EffectRow::pure();
-            for eff_ref in &fd.effects {
+            for eff_ref in &positive_effects {
                 closed.insert(&eff_ref.name);
             }
             closed
+        } else {
+            // Only negation constraints — keep row open (polymorphic)
+            child.fresh_eff_var()
         };
         let preliminary_fn_type = Type::Function {
             params: param_types.clone(),
@@ -237,16 +250,45 @@ impl TypeEnv {
 
         self.merge_child(&child);
 
-        // Check effect annotations: inferred effects must be a subset of declared
+        // Check effect annotations
         if !fd.effects.is_empty() {
-            let mut declared = EffectRow::pure();
-            for eff_ref in &fd.effects {
-                declared.insert(&eff_ref.name);
+            // Positive effects: body effects must be a subset of declared
+            if !positive_effects.is_empty() {
+                let mut declared = EffectRow::pure();
+                for eff_ref in &positive_effects {
+                    declared.insert(&eff_ref.name);
+                }
+                for eff in body_effects.effects() {
+                    if !declared.contains(&eff.name) {
+                        return Err(TypeError {
+                            kind: TypeErrorKind::UnhandledEffect(eff.name.clone()),
+                            span: fd.span.clone(),
+                        });
+                    }
+                }
             }
-            for eff in body_effects.effects() {
-                if !declared.contains(&eff.name) {
+
+            // Pure constraint: body must have no effects
+            if has_pure {
+                if let Some(eff) = body_effects.effects().iter().next() {
                     return Err(TypeError {
-                        kind: TypeErrorKind::UnhandledEffect(eff.name.clone()),
+                        kind: TypeErrorKind::EffectConstraintViolation {
+                            effect: eff.name.clone(),
+                            constraint: "Pure".to_string(),
+                        },
+                        span: fd.span.clone(),
+                    });
+                }
+            }
+
+            // Negation constraints: body must NOT contain negated effects
+            for neg in fd.effects.iter().filter(|e| e.negated) {
+                if body_effects.contains(&neg.name) {
+                    return Err(TypeError {
+                        kind: TypeErrorKind::EffectConstraintViolation {
+                            effect: neg.name.clone(),
+                            constraint: format!("!{}", neg.name),
+                        },
                         span: fd.span.clone(),
                     });
                 }

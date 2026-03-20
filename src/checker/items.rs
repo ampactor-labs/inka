@@ -232,6 +232,18 @@ impl TypeEnv {
             // Only negation constraints — keep row open (polymorphic)
             child.fresh_eff_var()
         };
+        // Set declared effects for disambiguating effect ops vs bindings.
+        // When a name exists as both (e.g. builtin `log` vs effect op `log`),
+        // this determines which one wins during call resolution.
+        if has_pure || !positive_effects.is_empty() {
+            let mut declared = std::collections::BTreeSet::new();
+            for eff_ref in &positive_effects {
+                declared.insert(eff_ref.name.clone());
+            }
+            child.fn_declared_effects = Some(declared);
+        }
+        // else: fn_declared_effects stays None → effect ops always dispatch (polymorphic)
+
         let preliminary_fn_type = Type::Function {
             params: param_types.clone(),
             return_type: Box::new(ret_var.clone()),

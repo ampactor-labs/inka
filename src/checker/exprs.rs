@@ -18,18 +18,20 @@ impl TypeEnv {
             Expr::Var(name, span) => {
                 // Check if it's an effect operation — treat as Perform with 0 args
                 if let Some(op_info) = self.lookup_op(name) {
-                    if op_info.param_types.is_empty() {
-                        let mut effs = EffectRow::pure();
-                        effs.insert(&op_info.effect_name);
-                        return Ok((op_info.return_type.clone(), effs));
+                    if self.should_dispatch_as_op(name, &op_info) {
+                        if op_info.param_types.is_empty() {
+                            let mut effs = EffectRow::pure();
+                            effs.insert(&op_info.effect_name);
+                            return Ok((op_info.return_type.clone(), effs));
+                        }
+                        // If it takes params, return it as a function type
+                        let fn_ty = Type::Function {
+                            params: op_info.param_types.clone(),
+                            return_type: Box::new(op_info.return_type.clone()),
+                            effects: EffectRow::single(&op_info.effect_name),
+                        };
+                        return Ok((fn_ty, EffectRow::pure()));
                     }
-                    // If it takes params, return it as a function type
-                    let fn_ty = Type::Function {
-                        params: op_info.param_types.clone(),
-                        return_type: Box::new(op_info.return_type.clone()),
-                        effects: EffectRow::single(&op_info.effect_name),
-                    };
-                    return Ok((fn_ty, EffectRow::pure()));
                 }
 
                 // Check if it's an ADT constructor

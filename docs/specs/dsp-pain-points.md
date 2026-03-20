@@ -4,31 +4,35 @@ Pain points discovered during Phase 8A-DSP implementation that motivate future p
 Each section describes what the language currently lacks, what we do instead, and what
 phase addresses the gap.
 
-## 1. Effect Subtraction (`E - F`) — Can't Express Capability Removal
+## 1. Effect Subtraction (`E - F`) — Syntax Implemented, Generic Form Deferred
 
-**What we want:**
+**RESOLVED (Phase 8B):** Effect subtraction syntax `E - F` is now available in type annotations.
+
+```lux
+// For concrete effects, subtraction desugars to negation:
+fn safe(x: Float) -> Float with DSP - Network - Alloc { ... }
+// = fn safe(x: Float) -> Float with DSP, !Network, !Alloc { ... }
+```
+
+Reads naturally as "remove Network and Alloc from DSP."
+
+**Still deferred:** Generic subtraction requires effect row variables in the surface syntax.
 
 ```lux
 fn sandbox<E>(body: () -> T with E) -> T with E - Network - Alloc {
-  handle { body() } {
-    network_request(_) => resume(Err("network blocked")),
-    alloc(_) => resume(Err("allocation blocked")),
-  }
+  // Requires: fn params with effect row variables
+  // Planned for Phase 9 or 10 (after ownership clarifies row semantics)
 }
 ```
 
-The type signature should express that this handler *removes* capabilities from the
-caller's effect set. A sandboxed plugin that started with `E` should exit the handler
-with `E - Network - Alloc` — the compiler should verify that Network and Alloc are
-genuinely handled and cannot escape.
+Until row variables are exposed, generic sandbox patterns require explicit effect listing
+at each call site. The concrete syntax is available now and enables readable capability
+removal in DSP frameworks and security-critical code.
 
-**What we do instead:**
+**Examples:** `examples/dsp_sandbox.lux`, `examples/effect_algebra.lux` demonstrate
+both negation (`!E`) and subtraction (`E - F`) for comparison.
 
-Nested handlers that intercept and discard operations. The signature lies: the outer
-function appears to accept and propagate `E` unchanged. Callers cannot reason about
-capability removal from types alone — they must read the implementation.
-
-**Motivates:** Phase B (effect subtraction in the algebra)
+**Motivates:** Phase 9+ (row variable polymorphism for generic capability removal)
 
 ---
 
@@ -113,4 +117,4 @@ filter coefficient calculation (biquad, Butterworth, Chebyshev) requires `sin`/`
 and simply cannot be implemented without them. The DSP framework is limited to
 first-order filters and approximations until trig is available.
 
-**Motivates:** Expanding math builtins (prerequisite for Phase 8B DSP work)
+**Motivates:** Expanding math builtins (would enable more sophisticated DSP work)

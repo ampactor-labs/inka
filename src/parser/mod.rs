@@ -270,16 +270,30 @@ impl Parser {
     pub(crate) fn parse_effect_refs(&mut self) -> Result<Vec<EffectRef>, LuxError> {
         let mut refs = Vec::new();
         refs.push(self.parse_effect_ref()?);
-        while self.at_exact(&TokenKind::Comma) {
-            // Peek ahead: if after the comma there's an identifier or `!` (negated effect),
-            // keep parsing. But stop if we see `{` (body start) or other non-effect tokens.
-            let saved = self.pos;
-            self.advance(); // consume comma
-            if matches!(self.peek(), TokenKind::Ident(_) | TokenKind::Bang) {
-                refs.push(self.parse_effect_ref()?);
+        loop {
+            if self.at_exact(&TokenKind::Comma) {
+                // Peek ahead: if after the comma there's an identifier or `!` (negated effect),
+                // keep parsing. But stop if we see `{` (body start) or other non-effect tokens.
+                let saved = self.pos;
+                self.advance(); // consume comma
+                if matches!(self.peek(), TokenKind::Ident(_) | TokenKind::Bang) {
+                    refs.push(self.parse_effect_ref()?);
+                } else {
+                    // Not an effect ref — backtrack
+                    self.pos = saved;
+                    break;
+                }
+            } else if self.at_exact(&TokenKind::Minus) {
+                // Effect subtraction: `E - F` desugars to negation constraint on F
+                self.advance(); // consume `-`
+                let (name, span) = self.expect_ident()?;
+                refs.push(EffectRef {
+                    name,
+                    type_args: Vec::new(),
+                    negated: true,
+                    span,
+                });
             } else {
-                // Not an effect ref — backtrack
-                self.pos = saved;
                 break;
             }
         }

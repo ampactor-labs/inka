@@ -1,12 +1,15 @@
-// Effect Negation — Compile-Time Capability Constraints
+// Effect Algebra — Compile-Time Capability Constraints
 //
-// Lux's effect algebra includes negation: `!Effect` proves a function
-// CANNOT perform that effect. This is checked at compile time and
-// erased at runtime — zero-cost safety proofs.
+// Lux's effect algebra includes four of five Boolean operators:
+//   + (union): with E, F — both capabilities available
+//   - (subtraction): with E - F — remove F from E
+//   ! (negation): with !E — cannot perform E
+//   Pure (empty set): with Pure — no effects at all
+//   & (intersection): DEFERRED — needs effect row variables
 //
-// What negation unlocks:
-//   !Alloc  → proves real-time safety (no allocation in call chain)
-//   !IO     → proves purity for parallelization / GPU offload
+// Compile-time proofs, zero runtime cost:
+//   !Alloc  → proves real-time safety
+//   !IO     → proves purity for parallelization
 //   Pure    → proves total absence of effects
 
 // ── Define capability effects ─────────────────────────────────────
@@ -42,7 +45,7 @@ fn pipeline(x: Int) -> Int with Log, !Network {
     b
 }
 
-// ── Run the examples ──────────────────────────────────────────────
+// ── Run the negation examples ──────────────────────────────────────
 
 println("=== Pure functions ===")
 println("add(2, 3) = " ++ to_string(add(2, 3)))
@@ -68,6 +71,28 @@ let result2 = handle { pipeline(5) } {
 }
 println("pipeline(5) = " ++ to_string(result2))
 
+// ── Effect Subtraction ──────────────────────────────────────────────
+
 println("")
-println("Effect negation: compile-time proofs, zero runtime cost.")
-println("!Alloc = real-time safe. !IO = parallelizable. Pure = total purity.")
+println("=== Effect Subtraction ===")
+
+// Subtraction syntax: `with E - F` desugars to negation constraints.
+// Reads as capability removal: start with E, subtract F.
+// Same semantics as `with E, !F` but reads as transformation.
+
+fn sub_safe(x: Int) -> Int with Log - Alloc - Network {
+    log("sub_safe: " ++ to_string(x))
+    double(x) + 1
+}
+
+let sub_result = handle { sub_safe(10) } {
+    log(msg) => {
+        println("[log] " ++ msg)
+        resume(())
+    }
+}
+println("sub_safe(10) = " ++ to_string(sub_result))
+
+println("")
+println("Full effect algebra: + (union), - (subtraction), ! (negation), Pure (empty).")
+println("Missing: & (intersection) — requires effect row variables in surface syntax.")

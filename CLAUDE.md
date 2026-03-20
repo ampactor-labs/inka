@@ -176,7 +176,8 @@ Standard library: `std/prelude.lux` (self-hosted in Lux — this part stays)
 | `std/ml/autodiff.lux` | Autodiff via Compute effect, tape entries, backward pass | **YES — Lux forever** |
 | `examples/xor.lux` | XOR neural network — autodiff via effect handlers | **YES — Lux forever** |
 | `examples/handler_composition.lux` | Named handlers, inheritance, bare refs, overrides | **YES — Lux forever** |
-| `examples/effect_negation.lux` | Effect negation — `!Effect`, `Pure`, capability proofs | **YES — Lux forever** |
+| `examples/effect_algebra.lux` | Effect algebra — `!Effect`, `Pure`, `E - F` subtraction, capability proofs | **YES — Lux forever** |
+| `examples/dsp_sandbox.lux` | DSP sandbox — subtraction syntax for readable capability removal | **YES — Lux forever** |
 | `examples/*.lux` | Language examples and test cases | **YES — Lux forever** |
 | `std/dsp/signal.lux` | DSP effects (DSP, Alloc, Network, Feedback) + pure processors (clip, gain, mix, soft_clip) | **YES — Lux forever** |
 | `std/dsp/processors.lux` | Handler-based processors (lowpass, biquad, envelope), presets | **YES — Lux forever** |
@@ -225,6 +226,11 @@ handle { body } with compute_forward { forward_relu(xs) => resume(relu_vec(xs)) 
 fn process(x: Int) -> Int with !Alloc { x * 2 }    // provably no allocation
 fn sandbox(x: Int) -> Int with Log, !Network { ... } // can log, provably no network
 fn pure_add(a: Int, b: Int) -> Int with Pure { a + b } // provably no effects at all
+
+// Effect subtraction — capability removal (same as negation, reads as transformation)
+fn safe_v1(x: Float) -> Float with DSP, !Network, !Alloc { ... } // traditional negation
+fn safe_v2(x: Float) -> Float with DSP - Network - Alloc { ... }  // subtraction syntax
+// Both are equivalent — same constraints, different emphasis
 ```
 
 ## Rust Prototype Internals
@@ -261,6 +267,7 @@ fn pure_add(a: Int, b: Int) -> Int with Pure { a + b } // provably no effects at
 | 7+ | Evidence-passing (local) — direct handler dispatch for evidence-eligible ops. Compiler classifies handlers, emits PushEvidence/PerformEvidence. VM mini-loop for synchronous handler call. 12 of 19 examples use evidence path; XOR gets 4024 evidence dispatches. | HEAD |
 | 8A | Effect algebra (negation) — `!Effect` and `Pure` constraints in function signatures. Parser: `!Name` syntax. Checker: validates body effects against negation constraints. Purely compile-time, zero runtime cost. | HEAD |
 | 8A-DSP | Effect-algebraic DSP framework — std/dsp/ library, pipe operator first usage, four-mode proof | HEAD |
+| 8B | Effect subtraction syntax `E - F` in annotations — desugars to negation constraint. Same semantics as `E, !F` but reads as capability removal. Enables readable sandbox patterns. Generic subtraction (row variables) deferred to Phase 9+. | HEAD |
 
 ## Roadmap (beyond interpreter)
 

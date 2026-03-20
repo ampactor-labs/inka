@@ -130,6 +130,10 @@ pub(crate) struct TypeEnv {
     pub(crate) type_params: HashMap<String, Type>,
     /// Collected warnings (non-fatal diagnostics).
     pub(crate) warnings: Vec<(String, Span)>,
+    /// Effects declared by the enclosing function (for disambiguating op vs binding).
+    /// None = unannotated function or top-level (effect ops always dispatch).
+    /// Some(set) = only dispatch effect ops whose effect is in the set.
+    pub(crate) fn_declared_effects: Option<BTreeSet<String>>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -154,6 +158,7 @@ impl TypeEnv {
             traits: HashMap::new(),
             impl_methods: HashMap::new(),
             warnings: Vec::new(),
+            fn_declared_effects: None,
         }
     }
 
@@ -178,6 +183,7 @@ impl TypeEnv {
             impl_methods: self.impl_methods.clone(),
             type_params: self.type_params.clone(),
             warnings: Vec::new(),
+            fn_declared_effects: self.fn_declared_effects.clone(),
         }
     }
 
@@ -383,6 +389,26 @@ impl TypeEnv {
             return parent.lookup_op(name);
         }
         None
+    }
+
+    /// Should a call to `op_name` dispatch as an effect operation?
+    ///
+    /// When both a binding and an effect op share a name (e.g. builtin `log`
+    /// vs effect operation `log`), disambiguate using the current function's
+    /// declared effects. If the function declares the owning effect, dispatch
+    /// as op. Otherwise, fall back to the binding.
+    pub(crate) fn should_dispatch_as_op(&self, op_name: &str, op_info: &OpInfo) -> bool {
+        // No binding conflict → always dispatch as effect op
+        if self.lookup(op_name).is_none() {
+            return true;
+        }
+        // Binding exists with same name. Use declared effects to disambiguate.
+        match &self.fn_declared_effects {
+            // Unannotated function or top-level → effect op wins (backward compat)
+            None => true,
+            // Annotated function → only dispatch as op if this effect is declared
+            Some(declared) => declared.contains(&op_info.effect_name),
+        }
     }
 
     pub(crate) fn is_in_handler(&self) -> bool {

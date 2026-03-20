@@ -21,7 +21,9 @@ impl TypeEnv {
         // Special case: if func is a Var naming an effect operation
         if let Expr::Var(name, _) = func {
             if let Some(op_info) = self.lookup_op(name) {
-                return self.infer_perform(&op_info.effect_name, name, args, span);
+                if self.should_dispatch_as_op(name, &op_info) {
+                    return self.infer_perform(&op_info.effect_name, name, args, span);
+                }
             }
             // Special case: ADT constructor
             if let Some((adt_name, idx)) = self.lookup_constructor(name) {

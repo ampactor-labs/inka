@@ -218,11 +218,15 @@ impl Compiler {
     fn compile_fn_decl(&mut self, fd: &FnDecl) -> Result<(), LuxError> {
         let line = Self::current_line(&fd.span);
 
+        // Save enclosing scope so the inner compiler can capture upvalues
+        let outer_scope = std::mem::replace(&mut self.scope, Scope::new());
+
         // Compile function body in a nested compiler
         let mut fn_compiler = Compiler::new(&fd.name, self.effect_routing.clone());
         fn_compiler.effect_ops = self.effect_ops.clone();
         fn_compiler.field_registry = self.field_registry.clone();
         fn_compiler.handler_decls = self.handler_decls.clone();
+        fn_compiler.scope.enclosing = Some(Box::new(outer_scope));
         fn_compiler.scope.begin_scope();
 
         // Declare parameters as locals
@@ -247,6 +251,12 @@ impl Compiler {
         fn_compiler.compile_expr(&fd.body)?;
         fn_compiler.emit_op(OpCode::Return, line);
 
+        // Extract upvalue descriptors before finishing
+        let upvalues: Vec<_> = fn_compiler.scope.upvalues.clone();
+        // Restore enclosing scope
+        let enclosing = fn_compiler.scope.enclosing.take().unwrap();
+        self.scope = *enclosing;
+
         let mut proto = fn_compiler.finish();
         let evidence_count = if let Some(req_effs) = self.effect_routing.get(&fd.span) {
             req_effs.len()
@@ -255,13 +265,16 @@ impl Compiler {
         };
         proto.arity = (fd.params.len() + evidence_count) as u16;
 
-        // In the outer scope: create closure and bind to name
+        // Create closure and emit upvalue descriptors
         let proto_idx = self.chunk.add_constant(Constant::FnProto(Arc::new(proto)));
         self.emit_op(OpCode::MakeClosure, line);
         self.emit_u16(proto_idx, line);
-        // No upvalues for top-level functions (for now)
+        for uv in &upvalues {
+            self.emit_u8(u8::from(uv.is_local), line);
+            self.emit_u16(uv.index, line);
+        }
 
-        // Store as global
+        // Always store as global — enables recursive calls by name lookup
         let name_idx = self.chunk.intern_name(&fd.name);
         self.emit_op(OpCode::StoreGlobal, line);
         self.emit_u16(name_idx, line);

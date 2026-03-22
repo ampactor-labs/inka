@@ -1,0 +1,199 @@
+// Lux Lexer — written in Lux
+//
+// The first self-hosted compiler component. Tokenizes Lux source code
+// into a list of (type, value, line, column) tuples.
+
+// --- Special character constants ---
+let ch_lbrace = from_char_code(123)
+let ch_rbrace = from_char_code(125)
+let ch_backslash = from_char_code(92)
+let ch_dquote = from_char_code(34)
+
+// --- Character classification ---
+
+fn is_digit(ch) = {
+  let code = char_code(ch);
+  code >= 48 && code <= 57
+}
+
+fn is_alpha(ch) = {
+  let code = char_code(ch);
+  (code >= 65 && code <= 90) ||
+  (code >= 97 && code <= 122) ||
+  code == 95
+}
+
+fn is_alnum(ch) = is_alpha(ch) || is_digit(ch)
+
+fn is_whitespace(ch) = ch == " " || ch == "\t" || char_code(ch) == 13
+
+// --- Keyword lookup via list scan ---
+
+fn keyword_type(word) = {
+  let kw = [
+    ("fn", "Fn"), ("let", "Let"), ("if", "If"), ("else", "Else"),
+    ("match", "Match"), ("type", "Type"), ("effect", "Effect"),
+    ("handle", "Handle"), ("with", "With"), ("resume", "Resume"),
+    ("for", "For"), ("in", "In"), ("import", "Import"),
+    ("trait", "Trait"), ("impl", "Impl"), ("handler", "Handler"),
+    ("assert", "Assert"), ("true", "True"), ("false", "False"),
+    ("return", "Return"), ("break", "Break"), ("continue", "Continue")
+  ];
+  fn lookup(kw, word, i) =
+    if i >= len(kw) { "Ident" }
+    else {
+      let (k, v) = kw[i];
+      if k == word { v }
+      else { lookup(kw, word, i + 1) }
+    };
+  lookup(kw, word, 0)
+}
+
+// --- Token constructor ---
+fn token(typ, val, line, col) = (typ, val, line, col)
+
+// --- Two-char operator lookup ---
+fn two_char_op(ch, ch2) = {
+  let ops = [
+    ("=", "=", "EqEq"), ("!", "=", "BangEq"),
+    ("<", "=", "LtEq"), (">", "=", "GtEq"),
+    ("-", ">", "Arrow"), ("=", ">", "FatArrow"),
+    ("+", "+", "PlusPlus"), ("|", ">", "PipeGt"),
+    ("&", "&", "And"), ("|", "|", "Or")
+  ];
+  fn find_op(ops, ch, ch2, i) =
+    if i >= len(ops) { "" }
+    else {
+      let (a, b, name) = ops[i];
+      if a == ch && b == ch2 { name }
+      else { find_op(ops, ch, ch2, i + 1) }
+    };
+  find_op(ops, ch, ch2, 0)
+}
+
+// --- Single-char token type (by char code) ---
+fn single_char_type(ch) = {
+  let code = char_code(ch);
+  if code == 40 { "LParen" }
+  else { if code == 41 { "RParen" }
+  else { if code == 123 { "LBrace" }
+  else { if code == 125 { "RBrace" }
+  else { if code == 91 { "LBracket" }
+  else { if code == 93 { "RBracket" }
+  else { if code == 44 { "Comma" }
+  else { if code == 46 { "Dot" }
+  else { if code == 58 { "Colon" }
+  else { if code == 59 { "Semicolon" }
+  else { if code == 43 { "Plus" }
+  else { if code == 45 { "Minus" }
+  else { if code == 42 { "Star" }
+  else { if code == 47 { "Slash" }
+  else { if code == 37 { "Percent" }
+  else { if code == 61 { "Eq" }
+  else { if code == 60 { "Lt" }
+  else { if code == 62 { "Gt" }
+  else { if code == 33 { "Bang" }
+  else { if code == 124 { "Pipe" }
+  else { "" } } } } } } } } } } } } } } } } } } } }
+}
+
+// --- Scan helpers (no closures — all state passed explicitly) ---
+
+fn scan_string(cs, src_len, p, acc) =
+  if p >= src_len { (p, acc) }
+  else {
+    let c = cs[p];
+    if c == ch_dquote { (p + 1, acc) }
+    else { if c == ch_backslash && p + 1 < src_len {
+      let esc = cs[p + 1];
+      let escaped = if esc == "n" { "\n" }
+        else { if esc == "t" { "\t" }
+        else { if esc == ch_backslash { ch_backslash }
+        else { if esc == ch_dquote { ch_dquote }
+        else { esc } } } };
+      scan_string(cs, src_len, p + 2, acc ++ escaped)
+    }
+    else { scan_string(cs, src_len, p + 1, acc ++ c) } }
+  }
+
+fn scan_number(cs, src_len, p, acc, has_dot) =
+  if p >= src_len { (p, acc, has_dot) }
+  else {
+    let c = cs[p];
+    if is_digit(c) { scan_number(cs, src_len, p + 1, acc ++ c, has_dot) }
+    else { if c == "." && !has_dot && p + 1 < src_len && is_digit(cs[p + 1]) {
+      scan_number(cs, src_len, p + 2, acc ++ "." ++ cs[p + 1], true)
+    }
+    else { (p, acc, has_dot) } }
+  }
+
+fn scan_ident(cs, src_len, p, acc) =
+  if p >= src_len { (p, acc) }
+  else { if is_alnum(cs[p]) { scan_ident(cs, src_len, p + 1, acc ++ cs[p]) }
+  else { (p, acc) } }
+
+fn skip_comment(cs, src_len, p) =
+  if p >= src_len { p }
+  else { if cs[p] == "\n" { p }
+  else { skip_comment(cs, src_len, p + 1) } }
+
+// --- Main tokenizer (no closures — cs and src_len passed explicitly) ---
+
+fn lex_from(cs, src_len, pos, line, col, tokens) = {
+  if pos >= src_len { push(tokens, token("Eof", "", line, col)) }
+  else {
+    let ch = cs[pos];
+
+    if is_whitespace(ch) { lex_from(cs, src_len, pos + 1, line, col + 1, tokens) }
+    else { if ch == "\n" {
+      lex_from(cs, src_len, pos + 1, line + 1, 1, push(tokens, token("Newline", "NL", line, col)))
+    }
+    else { if ch == "/" && pos + 1 < src_len && cs[pos + 1] == "/" {
+      lex_from(cs, src_len, skip_comment(cs, src_len, pos + 2), line, col, tokens)
+    }
+    else { if ch == ch_dquote {
+      let (ep, sv) = scan_string(cs, src_len, pos + 1, "");
+      lex_from(cs, src_len, ep, line, col + (ep - pos), push(tokens, token("String", sv, line, col)))
+    }
+    else { if is_digit(ch) {
+      let (ep, ns, is_f) = scan_number(cs, src_len, pos + 1, ch, false);
+      let tt = if is_f { "Float" } else { "Int" };
+      lex_from(cs, src_len, ep, line, col + (ep - pos), push(tokens, token(tt, ns, line, col)))
+    }
+    else { if is_alpha(ch) {
+      let (ep, word) = scan_ident(cs, src_len, pos + 1, ch);
+      let tt = keyword_type(word);
+      let tv = if tt == "True" { "true" }
+        else { if tt == "False" { "false" }
+        else { word } };
+      lex_from(cs, src_len, ep, line, col + (ep - pos), push(tokens, token(tt, tv, line, col)))
+    }
+    else {
+      let ch2 = if pos + 1 < src_len { cs[pos + 1] } else { "" };
+      let op2 = two_char_op(ch, ch2);
+      if op2 != "" {
+        lex_from(cs, src_len, pos + 2, line, col + 2, push(tokens, token(op2, ch ++ ch2, line, col)))
+      }
+      else {
+        let op1 = single_char_type(ch);
+        if op1 != "" {
+          lex_from(cs, src_len, pos + 1, line, col + 1, push(tokens, token(op1, ch, line, col)))
+        }
+        else { lex_from(cs, src_len, pos + 1, line, col + 1, tokens) }
+      }
+    }}}}}}
+  }
+}
+
+// --- Public API ---
+fn lex(source) = {
+  let cs = chars(source);
+  let src_len = len(cs);
+  lex_from(cs, src_len, 0, 1, 1, [])
+}
+
+// --- Utility ---
+fn format_token(tok) = {
+  let (typ, val, line, col) = tok;
+  typ ++ "(" ++ val ++ ") at " ++ to_string(line) ++ ":" ++ to_string(col)
+}

@@ -438,5 +438,92 @@ impl TypeEnv {
                 operations: vec![yield_op],
             },
         );
+
+        // ── Self-hosting builtins ────────────────────────────────
+
+        // char_at: (String, Int) -> String
+        self.bind(
+            "char_at",
+            Type::Function {
+                params: vec![Type::String, Type::Int],
+                return_type: Box::new(Type::String),
+                effects: EffectRow::pure(),
+            },
+        );
+        // char_code: (String) -> Int
+        self.bind(
+            "char_code",
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::Int),
+                effects: EffectRow::pure(),
+            },
+        );
+        // from_char_code: (Int) -> String
+        self.bind(
+            "from_char_code",
+            Type::Function {
+                params: vec![Type::Int],
+                return_type: Box::new(Type::String),
+                effects: EffectRow::pure(),
+            },
+        );
+        // ends_with: (String, String) -> Bool
+        self.bind(
+            "ends_with",
+            Type::Function {
+                params: vec![Type::String, Type::String],
+                return_type: Box::new(Type::Bool),
+                effects: EffectRow::pure(),
+            },
+        );
+        // index_of: polymorphic (String, String) -> Int or (List<T>, T) -> Int
+        let t_idx = self.fresh_var();
+        self.bind(
+            "index_of",
+            Type::Function {
+                params: vec![t_idx.clone(), t_idx],
+                return_type: Box::new(Type::Int),
+                effects: EffectRow::pure(),
+            },
+        );
+        // string_slice: (String, Int, Int) -> String
+        self.bind(
+            "string_slice",
+            Type::Function {
+                params: vec![Type::String, Type::Int, Type::Int],
+                return_type: Box::new(Type::String),
+                effects: EffectRow::pure(),
+            },
+        );
+        // parse_float: (String) -> Float
+        self.bind(
+            "parse_float",
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::Float),
+                effects: EffectRow::pure(),
+            },
+        );
+        // to_int: (T) -> Int
+        let t_to_int = self.fresh_var();
+        self.bind(
+            "to_int",
+            Type::Function {
+                params: vec![t_to_int],
+                return_type: Box::new(Type::Int),
+                effects: EffectRow::pure(),
+            },
+        );
+        // type_of: (T) -> String
+        let t_typeof = self.fresh_var();
+        self.bind(
+            "type_of",
+            Type::Function {
+                params: vec![t_typeof],
+                return_type: Box::new(Type::String),
+                effects: EffectRow::pure(),
+            },
+        );
     }
 }

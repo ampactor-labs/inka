@@ -1229,6 +1229,90 @@ impl Vm {
             Some(VmValue::Float(f)) => Ok(VmValue::Float(*f)),
             _ => Err("to_float expects a number".into()),
         });
+        // ── String builtins for self-hosting ──────────────────────
+        self.register_builtin("char_at", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::String(s)), Some(VmValue::Int(i))) => {
+                let idx = *i as usize;
+                match s.chars().nth(idx) {
+                    Some(c) => Ok(VmValue::String(Arc::new(c.to_string()))),
+                    None => Err(format!(
+                        "char_at: index {idx} out of bounds (len {})",
+                        s.len()
+                    )),
+                }
+            }
+            _ => Err("char_at expects (String, Int)".into()),
+        });
+        self.register_builtin("char_code", |args| match args.first() {
+            Some(VmValue::String(s)) => match s.chars().next() {
+                Some(c) => Ok(VmValue::Int(c as i64)),
+                None => Err("char_code: empty string".into()),
+            },
+            _ => Err("char_code expects a string".into()),
+        });
+        self.register_builtin("from_char_code", |args| match args.first() {
+            Some(VmValue::Int(n)) => match char::from_u32(*n as u32) {
+                Some(c) => Ok(VmValue::String(Arc::new(c.to_string()))),
+                None => Err(format!("from_char_code: invalid code point {n}")),
+            },
+            _ => Err("from_char_code expects an Int".into()),
+        });
+        self.register_builtin("ends_with", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::String(s)), Some(VmValue::String(suffix))) => {
+                Ok(VmValue::Bool(s.ends_with(suffix.as_str())))
+            }
+            _ => Err("ends_with expects two strings".into()),
+        });
+        self.register_builtin("index_of", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::String(s)), Some(VmValue::String(sub))) => match s.find(sub.as_str()) {
+                Some(pos) => Ok(VmValue::Int(pos as i64)),
+                None => Ok(VmValue::Int(-1)),
+            },
+            (Some(VmValue::List(items)), Some(val)) => match items.iter().position(|v| v == val) {
+                Some(pos) => Ok(VmValue::Int(pos as i64)),
+                None => Ok(VmValue::Int(-1)),
+            },
+            _ => Err("index_of expects (String, String) or (List, value)".into()),
+        });
+        self.register_builtin("string_slice", |args| {
+            match (args.first(), args.get(1), args.get(2)) {
+                (Some(VmValue::String(s)), Some(VmValue::Int(start)), Some(VmValue::Int(end))) => {
+                    let len = s.len() as i64;
+                    let s_idx = (*start).max(0).min(len) as usize;
+                    let e_idx = (*end).max(0).min(len) as usize;
+                    // Use char boundaries for correctness
+                    let result: String = s
+                        .chars()
+                        .skip(s_idx)
+                        .take(e_idx.saturating_sub(s_idx))
+                        .collect();
+                    Ok(VmValue::String(Arc::new(result)))
+                }
+                _ => Err("string_slice expects (String, Int, Int)".into()),
+            }
+        });
+        self.register_builtin("parse_float", |args| match args.first() {
+            Some(VmValue::String(s)) => match s.parse::<f64>() {
+                Ok(f) => Ok(VmValue::Float(f)),
+                Err(_) => Err(format!("parse_float: cannot parse '{s}'")),
+            },
+            _ => Err("parse_float expects a string".into()),
+        });
+        self.register_builtin("to_int", |args| match args.first() {
+            Some(VmValue::Int(n)) => Ok(VmValue::Int(*n)),
+            Some(VmValue::Float(f)) => Ok(VmValue::Int(*f as i64)),
+            Some(VmValue::Bool(b)) => Ok(VmValue::Int(if *b { 1 } else { 0 })),
+            _ => Err("to_int expects a number or bool".into()),
+        });
+        self.register_builtin("type_of", |args| match args.first() {
+            Some(VmValue::Int(_)) => Ok(VmValue::String(Arc::new("Int".to_string()))),
+            Some(VmValue::Float(_)) => Ok(VmValue::String(Arc::new("Float".to_string()))),
+            Some(VmValue::String(_)) => Ok(VmValue::String(Arc::new("String".to_string()))),
+            Some(VmValue::Bool(_)) => Ok(VmValue::String(Arc::new("Bool".to_string()))),
+            Some(VmValue::List(_)) => Ok(VmValue::String(Arc::new("List".to_string()))),
+            Some(VmValue::Unit) => Ok(VmValue::String(Arc::new("Unit".to_string()))),
+            _ => Ok(VmValue::String(Arc::new("Unknown".to_string()))),
+        });
         self.register_builtin("__assert_fail", |args| {
             let msg = match args.first() {
                 Some(VmValue::String(s)) => (**s).clone(),

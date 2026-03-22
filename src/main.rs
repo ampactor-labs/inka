@@ -9,8 +9,10 @@ use std::sync::Arc;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    // Check for flags
-    let teach_mode = args.iter().any(|a| a == "--teach");
+    // Flags: --teach is the default (Lux teaches by design)
+    // Use --quiet to suppress teaching output.
+    let quiet_mode = args.iter().any(|a| a == "--quiet");
+    let teach_mode = !quiet_mode;
     let file_args: Vec<&str> = args
         .iter()
         .skip(1)
@@ -54,7 +56,7 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("Usage: lux [--teach] [file.lux | repl]");
+            eprintln!("Usage: lux [--quiet] [file.lux | repl]");
             process::exit(1);
         }
     }

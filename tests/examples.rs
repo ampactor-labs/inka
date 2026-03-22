@@ -12,6 +12,7 @@ use std::process::Command;
 /// Run a `.lux` file and return (stdout, stderr, success).
 fn run_lux(file: &str) -> (String, String, bool) {
     let output = Command::new(env!("CARGO_BIN_EXE_lux"))
+        .arg("--quiet")
         .arg(file)
         .output()
         .unwrap_or_else(|e| panic!("failed to run lux on {file}: {e}"));

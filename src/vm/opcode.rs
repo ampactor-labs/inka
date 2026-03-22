@@ -82,6 +82,8 @@ pub enum OpCode {
     TailCall = 73,
     /// Call builtin function. Operand: u16 builtin id, u8 arg count.
     CallBuiltin = 74,
+    /// Bundle N evidence arguments into a closure. Operand: u8 evidence count.
+    BundleEvidence = 75,
 
     // ── Collections ───────────────────────────────────────
     /// Create list from N stack values. Operand: u16 element count.

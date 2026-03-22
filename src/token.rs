@@ -1,8 +1,22 @@
 //! Token types for the Lux lexer.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::cell::Cell;
+
+static FILE_ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
+
+pub fn next_file_id() -> usize {
+    FILE_ID_COUNTER.fetch_add(1, Ordering::SeqCst)
+}
+
+thread_local! {
+    pub static CURRENT_FILE_ID: Cell<usize> = Cell::new(0);
+}
+
 /// Source location for error reporting.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Span {
+    pub file_id: usize,
     pub start: usize,
     pub end: usize,
     pub line: usize,
@@ -12,6 +26,7 @@ pub struct Span {
 impl Span {
     pub fn new(start: usize, end: usize, line: usize, column: usize) -> Self {
         Self {
+            file_id: CURRENT_FILE_ID.with(|id| id.get()),
             start,
             end,
             line,
@@ -21,6 +36,7 @@ impl Span {
 
     pub fn dummy() -> Self {
         Self {
+            file_id: 0,
             start: 0,
             end: 0,
             line: 0,

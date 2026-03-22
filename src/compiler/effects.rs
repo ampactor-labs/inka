@@ -416,6 +416,9 @@ impl Compiler {
         for clause in expanded {
             if let HandlerOp::OpHandler { op_name, .. } = &clause.operation {
                 self.evidence_slots.insert(op_name.clone(), ev_local);
+                if let Some(effect_name) = self.effect_ops.get(op_name) {
+                    self.evidence_slots.insert(effect_name.clone(), ev_local);
+                }
             }
         }
 
@@ -457,7 +460,7 @@ impl Compiler {
         state_names: &[String],
         line: u32,
     ) -> Result<crate::vm::chunk::FnProto, LuxError> {
-        let mut sub = Compiler::new(&format!("handler:{op_name}"));
+        let mut sub = Compiler::new(&format!("handler:{op_name}"), self.effect_routing.clone());
         sub.effect_ops = self.effect_ops.clone();
         sub.handler_decls = self.handler_decls.clone();
         sub.scope.begin_scope();
@@ -511,7 +514,7 @@ impl Compiler {
         state_names: &[String],
         line: u32,
     ) -> Result<crate::vm::chunk::FnProto, LuxError> {
-        let mut sub = Compiler::new(&format!("handler:ev:{op_name}"));
+        let mut sub = Compiler::new(&format!("handler:ev:{op_name}"), self.effect_routing.clone());
         sub.effect_ops = self.effect_ops.clone();
         sub.handler_decls = self.handler_decls.clone();
         sub.scope.begin_scope();

@@ -1,0 +1,91 @@
+// Lux DSP Framework — Spectral Flux Distortion
+//
+// A novel distortion algorithm where the waveshaping transfer function
+// MUTATES PER-SAMPLE based on the signal's spectral energy flux.
+//
+// This is uniquely enabled by Lux's algebraic effect system:
+//   - The distortion is an EFFECT (what to process)
+//   - The handler decides HOW to process (which physics to apply)
+//   - Handler-local state tracks spectral analysis across samples
+//   - Same pipe chain, different handler = different character
+//
+// Pure waveshaping functions use data-last signatures for pipe compat:
+//   x |> warm_shape(2.0) |> fold_shape(3.0)
+
+import dsp/signal
+
+// ── Distortion Effect ───────────────────────────────────────
+// The core abstraction: "distort this sample at this drive level"
+// HOW it distorts depends entirely on the handler.
+
+effect Distort {
+    distort(x: Float, drive: Float) -> Float
+}
+
+// ── Pure Waveshaping Functions ──────────────────────────────
+// Each is !Alloc-safe, pipeable, and implements a different
+// harmonic character. These are the building blocks handlers
+// choose from.
+
+// Warm saturation — odd harmonics, asymptotically approaches ±1
+// Classic analog character. tanh(drive * x) normalized.
+fn warm_shape(drive: Float, x: Float) -> Float with Pure =
+    tanh(drive * x)
+
+// Foldback distortion — signal folds back on itself past threshold.
+// Creates dense, inharmonic overtones at high drive. Gnarly.
+// Uses sin() to create the folding behavior.
+fn fold_shape(drive: Float, x: Float) -> Float with Pure =
+    sin(drive * x)
+
+// Asymmetric soft clip — different positive/negative response.
+// Even harmonics (tube character). Positive pushes harder.
+fn asym_shape(drive: Float, x: Float) -> Float with Pure =
+    if x >= 0.0 {
+        tanh(drive * 1.2 * x)
+    } else {
+        tanh(drive * 0.8 * x)
+    }
+
+// Exponential wavefolder — cascaded folding with exponential decay.
+// The more drive, the more folds. Wild harmonics.
+fn exp_fold(drive: Float, x: Float) -> Float with Pure =
+    tanh(sin(drive * x) * exp(0.0 - abs(x) * 0.5))
+
+// ── Spectral Flux Estimation ────────────────────────────────
+// Spectral flux = rate of change of spectral energy.
+// Estimated by the difference between a fast and slow envelope.
+// High flux = transient (attack). Low flux = sustain.
+//
+// Returns a value in [0, 1] — normalized flux intensity.
+
+fn estimate_flux(fast_env: Float, slow_env: Float) -> Float with Pure =
+    if slow_env > 0.001 {
+        let raw = abs(fast_env - slow_env) / (slow_env + 0.001)
+        clamp(raw, 0.0, 1.0)
+    } else {
+        0.0
+    }
+
+// ── Adaptive Waveshaping ────────────────────────────────────
+// The heart of SFD: morphs between warm, asymmetric, and fold
+// based on spectral flux. Low flux = warm. High flux = fold.
+// Mid flux = asymmetric (tube harmonics).
+//
+// The morph is continuous — no hard switching artifacts.
+
+fn adaptive_shape(drive: Float, flux: Float, x: Float) -> Float with Pure = {
+    let w = warm_shape(drive, x)
+    let a = asym_shape(drive, x)
+    let f = fold_shape(drive * 0.8, x)
+
+    // Three-way crossfade based on flux:
+    //   flux [0, 0.3]   → warm dominates
+    //   flux [0.3, 0.7] → asymmetric dominates
+    //   flux [0.7, 1.0] → fold dominates
+    let warm_amt = clamp(1.0 - flux * 3.0, 0.0, 1.0)
+    let fold_amt = clamp(flux * 3.0 - 2.0, 0.0, 1.0)
+    let asym_amt = 1.0 - warm_amt - fold_amt
+
+    w * warm_amt + a * asym_amt + f * fold_amt
+}

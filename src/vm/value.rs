@@ -23,6 +23,10 @@ pub enum VmValue {
     List(Arc<Vec<VmValue>>),
     Tuple(Arc<Vec<VmValue>>),
     Closure(Arc<Closure>),
+    BundledClosure {
+        closure: Arc<Closure>,
+        evidence: Arc<Vec<VmValue>>,
+    },
     Builtin(BuiltinId),
     /// ADT variant: name index into the chunk's name table + fields.
     Variant {
@@ -163,6 +167,10 @@ impl fmt::Display for VmValue {
             VmValue::Closure(c) => {
                 let name = c.proto.name.as_deref().unwrap_or("<lambda>");
                 write!(f, "<fn {name}>")
+            }
+            VmValue::BundledClosure { closure, .. } => {
+                let name = closure.proto.name.as_deref().unwrap_or("<lambda>");
+                write!(f, "<bundled fn {name}>")
             }
             VmValue::Builtin(id) => write!(f, "<builtin #{}>", id.0),
             VmValue::Variant { name, fields } => {

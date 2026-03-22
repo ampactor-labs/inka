@@ -65,6 +65,9 @@ impl TypeEnv {
                         self.unify(param, arg, span)?;
                     }
                     let ret = self.apply_subst(return_type);
+                    
+                    self.effect_routing.insert(span.clone(), effects.clone());
+                    
                     return Ok((ret, arg_effs.union(effects)));
                 }
             }
@@ -101,6 +104,9 @@ impl TypeEnv {
                     self.unify(param, arg, span)?;
                 }
                 let ret = self.apply_subst(return_type);
+                
+                self.effect_routing.insert(span.clone(), effects.clone());
+                
                 Ok((ret, effs1.union(&arg_effs).union(effects)))
             }
             Type::Var(_) => {
@@ -564,6 +570,8 @@ impl TypeEnv {
             self.unify(param_ty, &arg_ty, span)?;
             effs = effs.union(&eff);
         }
+
+        self.effect_routing.insert(span.clone(), EffectRow::single(op_info.effect_name.clone()));
 
         Ok((op_info.return_type.clone(), effs))
     }

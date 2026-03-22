@@ -140,6 +140,8 @@ pub(crate) struct TypeEnv {
     /// None = unannotated function or top-level (effect ops always dispatch).
     /// Some(set) = only dispatch effect ops whose effect is in the set.
     pub(crate) fn_declared_effects: Option<BTreeSet<String>>,
+    /// Side table mapping expression/declaration spans to required evidence arguments.
+    pub(crate) effect_routing: HashMap<Span, crate::types::EffectRow>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -168,6 +170,7 @@ impl TypeEnv {
             import_item_count: 0,
             current_item_index: 0,
             fn_declared_effects: None,
+            effect_routing: HashMap::new(),
         }
     }
 
@@ -196,6 +199,7 @@ impl TypeEnv {
             import_item_count: self.import_item_count,
             current_item_index: self.current_item_index,
             fn_declared_effects: self.fn_declared_effects.clone(),
+            effect_routing: HashMap::new(),
         }
     }
 
@@ -214,6 +218,9 @@ impl TypeEnv {
         }
         for (k, v) in &child.impl_methods {
             self.impl_methods.insert(k.clone(), v.clone());
+        }
+        for (k, v) in &child.effect_routing {
+            self.effect_routing.insert(k.clone(), v.clone());
         }
         self.warnings.extend(child.warnings.iter().cloned());
         self.hints.extend(child.hints.iter().cloned());
@@ -500,6 +507,19 @@ impl ReplChecker {
     /// Drain collected hints (progressive teaching).
     pub fn take_hints(&mut self) -> Vec<CompilerHint> {
         std::mem::take(&mut self.env.hints)
+    }
+
+    /// Drain collected effect routing side-table and resolve effect variables.
+    pub fn take_effect_routing(&mut self) -> HashMap<Span, Vec<String>> {
+        let mut resolved = HashMap::new();
+        let routing = std::mem::take(&mut self.env.effect_routing);
+        for (span, row) in routing {
+            let final_row = self.env.apply_eff_subst(&row);
+            let mut req_effs: Vec<String> = final_row.effects().iter().map(|e| e.name.clone()).collect();
+            req_effs.sort();
+            resolved.insert(span, req_effs);
+        }
+        resolved
     }
 
     /// Infer the type of a single expression and return it as a string.

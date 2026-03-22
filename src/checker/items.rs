@@ -247,12 +247,13 @@ impl TypeEnv {
         let preliminary_fn_type = Type::Function {
             params: param_types.clone(),
             return_type: Box::new(ret_var.clone()),
-            effects: prelim_effects,
+            effects: prelim_effects.clone(),
         };
         child.bind(&fd.name, preliminary_fn_type);
 
         let (body_ty, body_effects) = child.infer_expr(&fd.body)?;
         child.unify(&ret_var, &body_ty, &fd.span)?;
+        child.unify_effects(&prelim_effects, &body_effects, &fd.span)?;
 
         // Check return type annotation inside child scope (so type params are in scope)
         if let Some(ret_ann) = &fd.return_type {
@@ -317,6 +318,8 @@ impl TypeEnv {
             effects: resolved_effects.clone(),
         };
         self.bind(&fd.name, fn_type);
+
+        self.effect_routing.insert(fd.span.clone(), resolved_effects.clone());
 
         // Progressive teaching: emit hints for user's unannotated functions.
         let is_user_code = self.current_item_index >= self.import_item_count;

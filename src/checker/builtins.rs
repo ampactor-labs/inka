@@ -206,8 +206,8 @@ impl TypeEnv {
         self.bind(
             "abs",
             Type::Function {
-                params: vec![t_num],
-                return_type: Box::new(Type::Int),
+                params: vec![t_num.clone()],
+                return_type: Box::new(t_num),
                 effects: EffectRow::pure(),
             },
         );
@@ -283,6 +283,36 @@ impl TypeEnv {
             "pow",
             Type::Function {
                 params: vec![t_pow1, t_pow2],
+                return_type: Box::new(Type::Float),
+                effects: EffectRow::pure(),
+            },
+        );
+        // sin: (Num) -> Float
+        let t_sin = self.fresh_var();
+        self.bind(
+            "sin",
+            Type::Function {
+                params: vec![t_sin],
+                return_type: Box::new(Type::Float),
+                effects: EffectRow::pure(),
+            },
+        );
+        // cos: (Num) -> Float
+        let t_cos = self.fresh_var();
+        self.bind(
+            "cos",
+            Type::Function {
+                params: vec![t_cos],
+                return_type: Box::new(Type::Float),
+                effects: EffectRow::pure(),
+            },
+        );
+        // tanh: (Num) -> Float
+        let t_tanh = self.fresh_var();
+        self.bind(
+            "tanh",
+            Type::Function {
+                params: vec![t_tanh],
                 return_type: Box::new(Type::Float),
                 effects: EffectRow::pure(),
             },

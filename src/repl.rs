@@ -1,6 +1,6 @@
 /// Interactive REPL for the Lux language.
 ///
-/// Provides a read-eval-print loop with persistent interpreter and type-checker
+/// Provides a read-eval-print loop with persistent VM and type-checker
 /// state: bindings, function declarations, effect declarations, and ADT
 /// definitions all survive across lines.
 ///
@@ -10,11 +10,12 @@
 /// - `:effects <name>` — show the type (including effect annotation) of a binding.
 /// - `:help` — list available commands.
 /// - `:quit` / `:q` — exit.
+use std::sync::Arc;
+
 use rustyline::DefaultEditor;
 
 use crate::checker::ReplChecker;
 use crate::error::LuxError;
-use crate::interpreter::Interpreter;
 
 /// Start the interactive REPL.
 pub fn run() -> Result<(), LuxError> {
@@ -25,18 +26,23 @@ pub fn run() -> Result<(), LuxError> {
         })
     })?;
 
-    let mut interpreter = Interpreter::new();
     let mut checker = ReplChecker::new();
+    let mut vm = crate::vm::vm::Vm::new();
 
     // Load prelude into REPL state so prelude functions are available.
     // Freeze the checker after prelude to keep user-code type-checking fast.
     let prelude_src = crate::load_prelude();
     if !prelude_src.is_empty() {
+        crate::token::CURRENT_FILE_ID.with(|id| id.set(crate::token::next_file_id()));
         if let Ok(tokens) = crate::lexer::lex(&prelude_src) {
             if let Ok(program) = crate::parser::parse(tokens) {
                 let _ = checker.check_line(&program);
                 checker.freeze();
-                let _ = interpreter.eval_line(&program);
+                // Compile and execute prelude in the REPL's VM
+                let effect_routing = checker.take_effect_routing();
+                if let Ok(proto) = crate::compiler::compile(&program, effect_routing) {
+                    let _ = vm.run(Arc::new(proto));
+                }
             }
         }
     }
@@ -106,8 +112,8 @@ pub fn run() -> Result<(), LuxError> {
         let source = std::mem::take(&mut pending);
         let _ = rl.add_history_entry(source.trim());
 
-        match eval_line(&mut interpreter, &mut checker, &source) {
-            Ok(Some(value)) => println!("{value}"),
+        match eval_line(&mut vm, &mut checker, &source) {
+            Ok(Some(output)) => println!("{output}"),
             Ok(None) => {}
             Err(e) => eprintln!("error: {e}"),
         }
@@ -130,6 +136,7 @@ fn handle_type_cmd(expr_src: &str, checker: &mut ReplChecker) {
         return;
     }
     let result = (|| -> Result<String, LuxError> {
+        crate::token::CURRENT_FILE_ID.with(|id| id.set(crate::token::next_file_id()));
         let tokens = crate::lexer::lex(expr_src)?;
         let program = crate::parser::parse(tokens)?;
         // Expect exactly one expression item
@@ -157,15 +164,42 @@ fn handle_effects_cmd(name: &str, checker: &ReplChecker) {
 }
 
 fn eval_line(
-    interpreter: &mut Interpreter,
+    vm: &mut crate::vm::vm::Vm,
     checker: &mut ReplChecker,
     source: &str,
-) -> Result<Option<crate::interpreter::Value>, LuxError> {
+) -> Result<Option<String>, LuxError> {
+    crate::token::CURRENT_FILE_ID.with(|id| id.set(crate::token::next_file_id()));
     let tokens = crate::lexer::lex(source)?;
     let program = crate::parser::parse(tokens)?;
     // Best-effort type check — don't block eval on type errors in the REPL
     let _ = checker.check_line(&program);
-    interpreter.eval_line(&program)
+    let effect_routing = checker.take_effect_routing();
+    let proto = crate::compiler::compile(&program, effect_routing)?;
+    let result = vm.run(Arc::new(proto)).map_err(|e| {
+        LuxError::Runtime(crate::error::RuntimeError {
+            kind: crate::error::RuntimeErrorKind::TypeError(e.message),
+            span: crate::token::Span {
+                file_id: 0,
+                line: e.line as usize,
+                column: 0,
+                start: 0,
+                end: 0,
+            },
+        })
+    })?;
+
+    // VM prints directly to stdout, so we just check the final value
+    match result {
+        Some(val) => {
+            let display = val.display_print();
+            if display == "()" {
+                Ok(None)
+            } else {
+                Ok(Some(display))
+            }
+        }
+        None => Ok(None),
+    }
 }
 
 /// Count net open brackets/braces/parens to detect incomplete multi-line input.

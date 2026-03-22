@@ -364,6 +364,30 @@ impl Vm {
                     self.stack
                         .push(VmValue::Closure(Arc::new(Closure { proto, upvalues })));
                 }
+                OpCode::BundleEvidence => {
+                    let argc = self.frames[frame_idx].read_byte() as usize;
+                    let start = self.stack.len() - argc;
+                    let evidence: Vec<VmValue> = self.stack.drain(start..).collect();
+                    let func = self.stack.pop().unwrap_or(VmValue::Unit);
+                    
+                    if let VmValue::Closure(closure) = func {
+                        self.stack.push(VmValue::BundledClosure {
+                            closure,
+                            evidence: Arc::new(evidence),
+                        });
+                    } else if let VmValue::BundledClosure { closure, evidence: old_evidence } = func {
+                        // Inherit old evidence and append new evidence
+                        let mut new_ev = (*old_evidence).clone();
+                        new_ev.extend(evidence);
+                        self.stack.push(VmValue::BundledClosure {
+                            closure,
+                            evidence: Arc::new(new_ev),
+                        });
+                    } else {
+                        let line = self.frames[frame_idx].current_line();
+                        return Err(VmError::new("expected closure for BundleEvidence", line));
+                    }
+                }
                 OpCode::Call => {
                     let argc = self.frames[frame_idx].read_byte() as usize;
                     self.call_value(argc, false)?;
@@ -779,8 +803,7 @@ impl Vm {
             | OpCode::ContinueLoop => 0,
             // u8
             OpCode::LoadBool | OpCode::LoadInt | OpCode::MatchBool => 1,
-            // u8 (argc)
-            OpCode::Call | OpCode::TailCall => 1,
+            OpCode::Call | OpCode::TailCall | OpCode::BundleEvidence => 1,
             // u16
             OpCode::LoadConst
             | OpCode::LoadLocal
@@ -916,6 +939,35 @@ impl Vm {
                     ip: 0,
                     stack_base,
                     has_func_slot: true, // function value at stack_base - 1
+                });
+                self.stack[func_idx] = VmValue::Unit;
+
+                Ok(())
+            }
+            VmValue::BundledClosure { closure, evidence } => {
+                let required_args = closure.proto.arity as usize;
+                let provided = argc + evidence.len();
+                if required_args != provided {
+                    let line = self.frames.last().map(|f| f.current_line()).unwrap_or(0);
+                    return Err(VmError::new(
+                        format!("expected {} arguments (with bundled evidence), got {}", required_args, provided),
+                        line,
+                    ));
+                }
+
+                let stack_base = func_idx + 1;
+                // Append the bundled evidence to the stack so the function can access them as locals.
+                // The compiler appends evidence parameters after regular parameters, so this order matches.
+                for ev in evidence.iter() {
+                    self.stack.push(ev.clone());
+                }
+
+                self.frames.push(CallFrame {
+                    proto: closure.proto.clone(),
+                    upvalues: closure.upvalues.clone(),
+                    ip: 0,
+                    stack_base,
+                    has_func_slot: true,
                 });
                 self.stack[func_idx] = VmValue::Unit;
 
@@ -1149,6 +1201,21 @@ impl Vm {
                 Ok(VmValue::Float((*b as f64).powf(*e as f64)))
             }
             _ => Err("pow expects two numbers".into()),
+        });
+        self.register_builtin("sin", |args| match args.first() {
+            Some(VmValue::Float(f)) => Ok(VmValue::Float(f.sin())),
+            Some(VmValue::Int(n)) => Ok(VmValue::Float((*n as f64).sin())),
+            _ => Err("sin expects a number".into()),
+        });
+        self.register_builtin("cos", |args| match args.first() {
+            Some(VmValue::Float(f)) => Ok(VmValue::Float(f.cos())),
+            Some(VmValue::Int(n)) => Ok(VmValue::Float((*n as f64).cos())),
+            _ => Err("cos expects a number".into()),
+        });
+        self.register_builtin("tanh", |args| match args.first() {
+            Some(VmValue::Float(f)) => Ok(VmValue::Float(f.tanh())),
+            Some(VmValue::Int(n)) => Ok(VmValue::Float((*n as f64).tanh())),
+            _ => Err("tanh expects a number".into()),
         });
         self.register_builtin("to_float", |args| match args.first() {
             Some(VmValue::Int(n)) => Ok(VmValue::Float(*n as f64)),

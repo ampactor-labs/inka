@@ -10,7 +10,6 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     // Check for flags
-    let use_interpreter = args.iter().any(|a| a == "--interpret");
     let teach_mode = args.iter().any(|a| a == "--teach");
     let file_args: Vec<&str> = args
         .iter()
@@ -45,11 +44,7 @@ fn main() {
                     process::exit(1);
                 }
             };
-            let result = if use_interpreter {
-                run_source_interpret(&source, path, teach_mode)
-            } else {
-                run_source_vm(&source, path, teach_mode)
-            };
+            let result = run_source(&source, path, teach_mode);
             if let Err(e) = result {
                 eprintln!(
                     "{}",
@@ -59,72 +54,20 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("Usage: lux [--interpret] [--teach] [file.lux | repl]");
+            eprintln!("Usage: lux [--teach] [file.lux | repl]");
             process::exit(1);
         }
     }
 }
 
-fn run_source_interpret(
-    source: &str,
-    file_path: &str,
-    teach: bool,
-) -> Result<(), lux::error::LuxError> {
-    let mut checker = lux::checker::ReplChecker::new();
-    let mut interpreter = lux::interpreter::Interpreter::new();
-
-    // Load prelude: check and execute it first, then freeze the type env.
-    // Freezing applies all substitutions and clears type variable maps so
-    // that polymorphic prelude functions don't compound the type-checker
-    // complexity when checking user code.
-    let prelude = lux::load_prelude();
-    if !prelude.is_empty() {
-        let tokens = lux::lexer::lex(&prelude)?;
-        let program = lux::parser::parse(tokens)?;
-        let _ = checker.check_line(&program); // best-effort; prelude is trusted
-        checker.freeze();
-        interpreter.eval_line(&program)?;
-    }
-
-    let tokens = lux::lexer::lex(source)?;
-    let program = lux::parser::parse(tokens)?;
-
-    // Resolve imports before checking/interpreting.
-    let (base_dir, std_dir) = resolve_dirs(file_path);
-    let (program, import_count) = lux::loader::resolve_imports(&program, &base_dir, &std_dir)?;
-
-    checker.set_import_count(import_count);
-    checker.check_line(&program)?;
-    for (msg, span) in checker.take_warnings() {
-        eprintln!(
-            "warning: {msg}\n  --> {file_path}:{}:{}",
-            span.line, span.column
-        );
-    }
-    if teach {
-        let hints = checker.take_hints();
-        if !hints.is_empty() {
-            eprintln!("=== lux teach ===\n");
-            for hint in &hints {
-                eprint!("{}", lux::error::format_hint(hint, Some(file_path)));
-            }
-            eprintln!("{}\n", lux::error::format_hint_summary(&hints));
-        }
-    }
-    let result = interpreter.eval_line(&program)?;
-    if let Some(val) = result {
-        println!("{val}");
-    }
-    Ok(())
-}
-
-fn run_source_vm(source: &str, file_path: &str, teach: bool) -> Result<(), lux::error::LuxError> {
+fn run_source(source: &str, file_path: &str, teach: bool) -> Result<(), lux::error::LuxError> {
     let mut checker = lux::checker::ReplChecker::new();
 
     // Load and check prelude.
     let prelude = lux::load_prelude();
     let mut prelude_program = None;
     if !prelude.is_empty() {
+        lux::token::CURRENT_FILE_ID.with(|id| id.set(lux::token::next_file_id()));
         let tokens = lux::lexer::lex(&prelude)?;
         let program = lux::parser::parse(tokens)?;
         let _ = checker.check_line(&program);
@@ -132,6 +75,7 @@ fn run_source_vm(source: &str, file_path: &str, teach: bool) -> Result<(), lux::
         prelude_program = Some(program);
     }
 
+    lux::token::CURRENT_FILE_ID.with(|id| id.set(lux::token::next_file_id()));
     let tokens = lux::lexer::lex(source)?;
     let program = lux::parser::parse(tokens)?;
 
@@ -165,12 +109,14 @@ fn run_source_vm(source: &str, file_path: &str, teach: bool) -> Result<(), lux::
     }
     combined.items.extend(program.items);
 
-    let proto = lux::compiler::compile(&combined)?;
+    let effect_routing = checker.take_effect_routing();
+    let proto = lux::compiler::compile(&combined, effect_routing)?;
     let mut vm = lux::vm::vm::Vm::new();
     let result = vm.run(Arc::new(proto)).map_err(|e| {
         lux::error::LuxError::Runtime(lux::error::RuntimeError {
             kind: lux::error::RuntimeErrorKind::TypeError(e.message),
             span: lux::token::Span {
+                file_id: 0,
                 line: e.line as usize,
                 column: 0,
                 start: 0,
@@ -180,7 +126,6 @@ fn run_source_vm(source: &str, file_path: &str, teach: bool) -> Result<(), lux::
     })?;
 
     // Don't print the final value — file execution uses println for output.
-    // (REPL would print it, but that's a different path.)
     let _ = result;
     Ok(())
 }

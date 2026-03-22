@@ -210,6 +210,11 @@ impl Chunk {
                     offset += 1;
                     out.push_str(&format!("{start:04}  {line:4} | {op:?} argc={argc}\n"));
                 }
+                OpCode::BundleEvidence => {
+                    let argc = self.code[offset];
+                    offset += 1;
+                    out.push_str(&format!("{start:04}  {line:4} | {op:?} argc={argc}\n"));
+                }
                 OpCode::Resume => {
                     let count = self.code[offset];
                     offset += 1;

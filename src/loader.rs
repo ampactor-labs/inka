@@ -66,6 +66,7 @@ fn load_module(
     let source = std::fs::read_to_string(file_path)
         .map_err(|e| module_error(format!("could not read '{}': {e}", file_path.display())))?;
 
+    crate::token::CURRENT_FILE_ID.with(|id| id.set(crate::token::next_file_id()));
     let tokens = crate::lexer::lex(&source)?;
     let program = crate::parser::parse(tokens)?;
 

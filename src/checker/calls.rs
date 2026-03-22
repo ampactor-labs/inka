@@ -209,22 +209,27 @@ impl TypeEnv {
 
         // Exhaustive match check: if scrutinee is a known ADT, warn about
         // missing variants. Wildcard/binding patterns make it exhaustive.
-        self.check_match_exhaustiveness(arms, &scrut_ty, span);
+        self.check_match_exhaustiveness(arms, &scrut_ty, span)?;
 
         Ok((self.apply_subst(&result_ty), effs))
     }
 
-    /// Emit a warning if a match on an ADT doesn't cover all variants.
-    fn check_match_exhaustiveness(&mut self, arms: &[MatchArm], scrut_ty: &Type, span: &Span) {
+    /// Return an error if a match on an ADT doesn't cover all variants.
+    fn check_match_exhaustiveness(
+        &mut self,
+        arms: &[MatchArm],
+        scrut_ty: &Type,
+        span: &Span,
+    ) -> Result<(), TypeError> {
         // Only check ADT types.
         let adt_name = match scrut_ty {
             Type::Adt { name, .. } => name,
-            _ => return,
+            _ => return Ok(()),
         };
 
         let adt_def = match self.lookup_adt(adt_name) {
             Some(def) => def.clone(),
-            None => return,
+            None => return Ok(()),
         };
 
         // Collect all variant names from the ADT definition.
@@ -240,7 +245,7 @@ impl TypeEnv {
         }
 
         if has_catchall {
-            return;
+            return Ok(());
         }
 
         let missing: Vec<&str> = all_variants
@@ -250,14 +255,13 @@ impl TypeEnv {
             .collect();
 
         if !missing.is_empty() {
-            self.warnings.push((
-                format!(
-                    "non-exhaustive match: missing variant(s) {}",
-                    missing.join(", ")
-                ),
-                span.clone(),
-            ));
+            return Err(TypeError {
+                kind: TypeErrorKind::NonExhaustiveMatch,
+                span: span.clone(),
+            });
         }
+
+        Ok(())
     }
 
     /// Recursively collect variant names covered by a pattern.

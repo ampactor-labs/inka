@@ -319,7 +319,8 @@ impl TypeEnv {
         };
         self.bind(&fd.name, fn_type);
 
-        self.effect_routing.insert(fd.span.clone(), resolved_effects.clone());
+        self.effect_routing
+            .insert(fd.span.clone(), resolved_effects.clone());
 
         // Progressive teaching: emit hints for user's unannotated functions.
         let is_user_code = self.current_item_index >= self.import_item_count;

@@ -369,13 +369,17 @@ impl Vm {
                     let start = self.stack.len() - argc;
                     let evidence: Vec<VmValue> = self.stack.drain(start..).collect();
                     let func = self.stack.pop().unwrap_or(VmValue::Unit);
-                    
+
                     if let VmValue::Closure(closure) = func {
                         self.stack.push(VmValue::BundledClosure {
                             closure,
                             evidence: Arc::new(evidence),
                         });
-                    } else if let VmValue::BundledClosure { closure, evidence: old_evidence } = func {
+                    } else if let VmValue::BundledClosure {
+                        closure,
+                        evidence: old_evidence,
+                    } = func
+                    {
                         // Inherit old evidence and append new evidence
                         let mut new_ev = (*old_evidence).clone();
                         new_ev.extend(evidence);
@@ -950,7 +954,10 @@ impl Vm {
                 if required_args != provided {
                     let line = self.frames.last().map(|f| f.current_line()).unwrap_or(0);
                     return Err(VmError::new(
-                        format!("expected {} arguments (with bundled evidence), got {}", required_args, provided),
+                        format!(
+                            "expected {} arguments (with bundled evidence), got {}",
+                            required_args, provided
+                        ),
                         line,
                     ));
                 }

@@ -73,10 +73,13 @@ impl TypeEnv {
                     let fresh = EffectVar(self.next_eff_var);
                     self.next_eff_var += 1;
                     let union_known: BTreeSet<_> = ka.union(kb).cloned().collect();
-                    self.eff_subst.insert(*va, EffectRow::Open {
-                        known: union_known,
-                        var: fresh,
-                    });
+                    self.eff_subst.insert(
+                        *va,
+                        EffectRow::Open {
+                            known: union_known,
+                            var: fresh,
+                        },
+                    );
                     return Ok(());
                 }
                 let fresh = EffectVar(self.next_eff_var);

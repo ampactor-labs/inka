@@ -515,7 +515,8 @@ impl ReplChecker {
         let routing = std::mem::take(&mut self.env.effect_routing);
         for (span, row) in routing {
             let final_row = self.env.apply_eff_subst(&row);
-            let mut req_effs: Vec<String> = final_row.effects().iter().map(|e| e.name.clone()).collect();
+            let mut req_effs: Vec<String> =
+                final_row.effects().iter().map(|e| e.name.clone()).collect();
             req_effs.sort();
             resolved.insert(span, req_effs);
         }

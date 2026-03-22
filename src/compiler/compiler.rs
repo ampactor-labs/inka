@@ -15,7 +15,10 @@ use super::effects::HandlerCtx;
 use super::scope::Scope;
 
 /// Compile a Lux program to a top-level bytecode chunk.
-pub fn compile(program: &Program, effect_routing: HashMap<crate::token::Span, Vec<String>>) -> Result<FnProto, LuxError> {
+pub fn compile(
+    program: &Program,
+    effect_routing: HashMap<crate::token::Span, Vec<String>>,
+) -> Result<FnProto, LuxError> {
     let mut compiler = Compiler::new("<main>", effect_routing);
     for item in &program.items {
         compiler.compile_item(item)?;
@@ -75,7 +78,10 @@ struct LoopCtx {
 }
 
 impl Compiler {
-    pub(super) fn new(name: &str, effect_routing: HashMap<crate::token::Span, Vec<String>>) -> Self {
+    pub(super) fn new(
+        name: &str,
+        effect_routing: HashMap<crate::token::Span, Vec<String>>,
+    ) -> Self {
         Self {
             chunk: Chunk::new(name),
             scope: Scope::new(),
@@ -230,7 +236,9 @@ impl Compiler {
                 let ev_name = format!("{}__ev", eff);
                 fn_compiler.scope.declare_local(&ev_name);
                 let local_idx = fn_compiler.scope.resolve_local(&ev_name).unwrap();
-                fn_compiler.evidence_slots.insert(eff.clone(), local_idx as u16);
+                fn_compiler
+                    .evidence_slots
+                    .insert(eff.clone(), local_idx as u16);
             }
         }
 
@@ -770,7 +778,7 @@ impl Compiler {
                 for arg in args {
                     self.compile_expr(arg)?;
                 }
-                
+
                 let mut total_args = args.len();
                 if let Some(req_effs) = self.effect_routing.get(span).cloned() {
                     for eff in req_effs {
@@ -818,7 +826,9 @@ impl Compiler {
                         let ev_name = format!("{}__ev", eff);
                         fn_compiler.scope.declare_local(&ev_name);
                         let local_idx = fn_compiler.scope.resolve_local(&ev_name).unwrap();
-                        fn_compiler.evidence_slots.insert(eff.clone(), local_idx as u16);
+                        fn_compiler
+                            .evidence_slots
+                            .insert(eff.clone(), local_idx as u16);
                     }
                 }
 

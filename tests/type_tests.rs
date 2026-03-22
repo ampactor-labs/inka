@@ -93,9 +93,7 @@ fn simple_function() {
 
 #[test]
 fn function_call_correct_arity() {
-    assert_checks(
-        "fn add(x: Int, y: Int) -> Int { x + y }\nlet result = add(1, 2)",
-    );
+    assert_checks("fn add(x: Int, y: Int) -> Int { x + y }\nlet result = add(1, 2)");
 }
 
 #[test]
@@ -105,9 +103,7 @@ fn function_wrong_arity() {
 
 #[test]
 fn function_type_mismatch() {
-    assert_fails(
-        "fn add(x: Int, y: Int) -> Int { x + y }\nlet result = add(\"hello\", 2)",
-    );
+    assert_fails("fn add(x: Int, y: Int) -> Int { x + y }\nlet result = add(\"hello\", 2)");
 }
 
 #[test]
@@ -154,9 +150,7 @@ fn adt_construction() {
 
 #[test]
 fn adt_with_fields() {
-    assert_checks(
-        "type Shape = Circle(Float) | Rect(Float, Float)\nlet s = Circle(3.14)",
-    );
+    assert_checks("type Shape = Circle(Float) | Rect(Float, Float)\nlet s = Circle(3.14)");
 }
 
 // ── Pattern matching ──────────────────────────────────────────

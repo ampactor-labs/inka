@@ -132,27 +132,27 @@ isolation
 - ML is the throughline connecting Phases 7-12 to a concrete demanding workload
 
 ## Build / Run / Test
-- `cargo run -- <file.lux>` — run a program
-- `cargo run -- --teach <file.lux>` — run with progressive teaching (shows inferred types/effects)
+- `cargo run -- <file.lux>` — run a program (teaching output enabled by default)
+- `cargo run -- --quiet <file.lux>` — run without teaching output
 - `cargo run` — start REPL
 - `cargo check` — type check the compiler
-- `cargo clippy` — lint
-- `for f in examples/*.lux; do cargo run --quiet -- "$f"; done` — run all examples
-- `/lux-feature` — guided workflow for adding new language constructs
+- `cargo clippy` — lint (zero warnings policy)
+- `cargo fmt --check` — format check
+- `cargo test` — run all tests (36 type checker + golden-file tests)
+- `for f in examples/*.lux; do cargo run --quiet -- --quiet "$f"; done` — run all examples
 
 ## Architecture (Rust prototype — temporary scaffolding)
 
 ```
-source → lex → parse → check → interpret   ← current (tree-walking, Rust)
+source → lex → parse → check → compile → VM   ← current (bytecode VM, Rust)
                           ↓
-                    codegen (future)         ← Cranelift → LLVM → self-hosted
+                    codegen (future)             ← Cranelift → LLVM → self-hosted
 ```
 
-Pipeline: `lexer.rs` → `parser.rs` → `checker.rs` → `interpreter.rs`
+Pipeline: `lexer.rs` → `parser/` → `checker/` → `compiler/` → `vm/`
 Shared types: `token.rs`, `ast.rs`, `types.rs`, `error.rs`
-Runtime: `env.rs` (Rust `Arc`-based scoped environments — prototype only)
-Frontend: `main.rs` (CLI), `repl.rs` (REPL), `lib.rs` (prelude loader)
-Standard library: `std/prelude.lux` (self-hosted in Lux — this part stays)
+Frontend: `main.rs` (CLI), `repl.rs` (VM-backed REPL), `lib.rs` (prelude loader)
+Standard library: `std/prelude.lux`, `std/test.lux`, `std/dsp/`, `std/ml/`
 
 ## Key Files (Rust prototype)
 
@@ -161,30 +161,20 @@ Standard library: `std/prelude.lux` (self-hosted in Lux — this part stays)
 | `src/token.rs` | Token types, Span | Rewritten in Lux |
 | `src/lexer.rs` | Tokenization, string interpolation | Rewritten in Lux |
 | `src/ast.rs` | AST nodes, patterns, type expressions | Rewritten in Lux |
-| `src/parser.rs` | Recursive descent, Pratt precedence climbing | Rewritten in Lux |
+| `src/parser/` | Recursive descent, Pratt precedence climbing | Rewritten in Lux |
 | `src/types.rs` | Internal types, row-polymorphic effects, ADT defs | Rewritten in Lux |
-| `src/checker/mod.rs` | HM inference, effect tracking, trait resolution, `bind_pattern_types` | Rewritten in Lux |
-| `src/interpreter.rs` | Tree-walking eval, multi-shot continuations | Deleted |
-| `src/builtins.rs` | Built-in function registration | Deleted |
-| `src/patterns.rs` | Pattern matching (list, or, record patterns) | Deleted |
-| `src/env.rs` | Arc-shared lexical scoping (Rust runtime) | Deleted |
-| `src/error.rs` | Error types, source-context formatting | Rewritten in Lux |
-| `src/loader.rs` | Module import resolution, cycle detection | Rewritten in Lux |
+| `src/checker/` | HM inference, effect tracking, exhaustive match, trait resolution | Rewritten in Lux |
 | `src/compiler/` | Bytecode compiler (expressions, effects, patterns) | Rewritten in Lux |
 | `src/vm/` | Stack-based VM (execution, effects, builtins) | Rewritten in Lux |
-| `std/prelude.lux` | Self-hosted stdlib (38 functions: map, filter, fold, sort, enumerate, min, max, clamp, flat_map, unique, words, lines, etc.) | **YES — Lux forever** |
-| `std/ml/tensor.lux` | Pure tensor ops (vec/mat arithmetic, activations, loss) | **YES — Lux forever** |
-| `std/ml/autodiff.lux` | Autodiff via Compute effect, tape entries, backward pass | **YES — Lux forever** |
-| `examples/xor.lux` | XOR neural network — autodiff via effect handlers | **YES — Lux forever** |
-| `examples/handler_composition.lux` | Named handlers, inheritance, bare refs, overrides | **YES — Lux forever** |
-| `examples/effect_algebra.lux` | Effect algebra — `!Effect`, `Pure`, `E - F` subtraction, capability proofs | **YES — Lux forever** |
-| `examples/dsp_sandbox.lux` | DSP sandbox — subtraction syntax for readable capability removal | **YES — Lux forever** |
-| `examples/progressive_demo.lux` | Progressive levels demo — run with `--teach` to see the teaching compiler | **YES — Lux forever** |
+| `src/error.rs` | Error types, source-context formatting, teaching hints | Rewritten in Lux |
+| `src/loader.rs` | Module import resolution, cycle detection | Rewritten in Lux |
+| `std/prelude.lux` | Self-hosted stdlib (38 functions: map, filter, fold, sort, etc.) | **YES — Lux forever** |
+| `std/test.lux` | Native test framework (assert_eq, run_tests) | **YES — Lux forever** |
+| `std/ml/` | Tensor ops, autodiff via Compute effect | **YES — Lux forever** |
+| `std/dsp/` | DSP effects, processor library, spectral analysis | **YES — Lux forever** |
 | `examples/*.lux` | Language examples and test cases | **YES — Lux forever** |
-| `std/dsp/signal.lux` | DSP effects (DSP, Alloc, Network, Feedback) + pure processors (clip, gain, mix, soft_clip) | **YES — Lux forever** |
-| `std/dsp/processors.lux` | Handler-based processors (lowpass, biquad, envelope), presets | **YES — Lux forever** |
-| `examples/dsp_framework.lux` | Four-mode DSP proof: real-time, testing, debug, recording + pipe chains | **YES — Lux forever** |
-| `tests/examples.rs` | Golden-file integration tests + VM parity checks | Rewritten in Lux |
+| `tests/type_tests.rs` | Unit tests for type checker (36 tests) | Rewritten in Lux |
+| `tests/examples.rs` | Golden-file integration tests | Rewritten in Lux |
 
 ## Effect System — Syntax Reference
 
@@ -235,16 +225,17 @@ fn safe_v2(x: Float) -> Float with DSP - Network - Alloc { ... }  // subtraction
 // Both are equivalent — same constraints, different emphasis
 ```
 
-## Rust Prototype Internals
+## VM Internals
 
-> These are implementation details of the Rust tree-walking interpreter,
-> NOT part of Lux the language. They will be replaced by codegen.
+> These are implementation details of the bytecode VM.
+> They will be replaced when self-hosting or Cranelift codegen lands.
 
-- `Signal` enum for control flow (Return, Resume, Perform, HandleDone, Break, Continue, TailCall)
+- Stack-based execution with `VmValue` enum (Int, Float, Bool, String, List, Closure, etc.)
+- `FnProto` for compiled function prototypes, `Closure` for captured upvalues
 - `HandlerFrame` stack for effect dispatch
-- `Arc<Environment>` for O(1) closure capture
-- Trampoline loop for TCO
-- Thread-based generators via `std::sync::mpsc` rendezvous channels
+- Evidence-passing for direct handler dispatch (bypass handler stack search)
+- Tail-resumptive fast-path: skips continuation capture for `resume(pure_expr)` handlers
+- `BundledClosure` for passing effect-requiring functions as values
 
 ## Phase History
 
@@ -296,12 +287,10 @@ fn safe_v2(x: Float) -> Float with DSP - Network - Alloc { ... }  // subtraction
 |---|---|---|
 | `src/ast.rs` (Expr variants) | CLAUDE.md (Architecture), docs/DESIGN.md | New expression forms |
 | `src/types.rs` (Type, EffectRow) | docs/DESIGN.md (Type System) | New type constructs |
-| `src/interpreter.rs` (Signal, HandlerFrame) | CLAUDE.md (Conventions) | New control flow signals |
-| `src/checker.rs` (TypeEnv) | docs/DESIGN.md (Type System) | Inference changes |
+| `src/checker/` (TypeEnv) | docs/DESIGN.md (Type System) | Inference changes |
+| `src/compiler/` (compiler.rs, effects.rs) | CLAUDE.md (Architecture) | Bytecode compilation |
+| `src/vm/` (vm.rs, opcode.rs) | CLAUDE.md (VM Internals) | VM opcodes, execution |
 | `examples/*.lux` | CLAUDE.md (Effect System), docs/DESIGN.md | New patterns |
 | `std/prelude.lux` | CLAUDE.md (Key Files) | New stdlib functions |
-| `std/ml/*.lux`, `std/dsp/*.lux` | `docs/specs/lux-ml-design.md` | ML framework changes |
-| `std/dsp/*.lux`, `examples/dsp_framework.lux` | `docs/specs/dsp-pain-points.md`, CLAUDE.md (Phase History, Key Files) | DSP framework, pipe usage, safety proofs |
-| `src/parser/expr.rs` (parse_postfix) | `docs/specs/ml-pain-points.md` | Postfix parsing rules |
-| `src/checker/exprs.rs` (infer_binop) | `docs/specs/ml-pain-points.md` | Numeric inference rules |
+| `std/ml/*.lux`, `std/dsp/*.lux` | `docs/specs/lux-ml-design.md` | ML/DSP framework changes |
 | `Cargo.toml` | CLAUDE.md (Build) | Dependencies, features |

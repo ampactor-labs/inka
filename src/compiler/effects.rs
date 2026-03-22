@@ -514,7 +514,10 @@ impl Compiler {
         state_names: &[String],
         line: u32,
     ) -> Result<crate::vm::chunk::FnProto, LuxError> {
-        let mut sub = Compiler::new(&format!("handler:ev:{op_name}"), self.effect_routing.clone());
+        let mut sub = Compiler::new(
+            &format!("handler:ev:{op_name}"),
+            self.effect_routing.clone(),
+        );
         sub.effect_ops = self.effect_ops.clone();
         sub.handler_decls = self.handler_decls.clone();
         sub.scope.begin_scope();

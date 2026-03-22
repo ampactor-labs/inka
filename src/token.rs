@@ -1,7 +1,7 @@
 //! Token types for the Lux lexer.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::cell::Cell;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 static FILE_ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
@@ -10,7 +10,7 @@ pub fn next_file_id() -> usize {
 }
 
 thread_local! {
-    pub static CURRENT_FILE_ID: Cell<usize> = Cell::new(0);
+    pub static CURRENT_FILE_ID: Cell<usize> = const { Cell::new(0) };
 }
 
 /// Source location for error reporting.

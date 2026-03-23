@@ -412,6 +412,105 @@ The compiler IS the tutor. AI guesses. The compiler knows.
 
 ---
 
+## Effects Are the Universal Joint
+
+Every time we add a feature, it turns out to *already be* an effect pattern.
+
+| Feature | What it actually is |
+|---------|-------------------|
+| Testing | Handler swap |
+| Debugging | Handler that traces |
+| Teaching | Handler that explains |
+| Autodiff | Handler that records a tape |
+| DSP backends | Handler per audio API |
+| The compiler pipeline | Four effect operations, six handlers |
+| Error messages | The compiler's WHY effect, displayed |
+| Time-travel debugging | Trace handler on any effect |
+
+This isn't planned. It's *emergent*. We didn't set out to make testing a
+handler swap — it fell out. We didn't plan for the Why Engine to be a handler
+— it just IS one. That's the hallmark of a correct abstraction: **it keeps
+absorbing new use cases without changing shape.**
+
+The effect system is not a feature of Lux. It IS Lux.
+
+---
+
+## The Metacircular Effect-Aware Checker
+
+The self-hosted type checker (written in Lux, checked by Lux) now tracks
+which algebraic effects each expression performs. This means:
+
+- Lux knows what TYPE something is (HM inference)
+- Lux knows WHY that type was chosen (Why Engine / Reason ADT)
+- Lux knows WHAT EFFECTS it performs (EffRow tracking)
+
+The checker checks itself. And the thing it checks includes effect
+tracking — meaning Lux can verify its own effect semantics. This is
+metacircular in a way that's genuinely new: **a language whose type
+checker, written in itself, can prove properties about effects
+that the checker itself uses.**
+
+When we add refinement types, the checker will verify its own
+refinements. When we add ownership, the checker will track its own
+borrows. The self-hosted compiler becomes increasingly self-aware.
+
+---
+
+## Error Messages as Mentorship
+
+Traditional compilers say "wrong." Good compilers say "wrong, expected X."
+Elm says "wrong, expected X, try Y." Lux says:
+
+> **"Wrong. Here's what I expected, here's why I expected it, here's
+> the closest thing I can find to what you meant, and here's what
+> adding this one annotation would unlock for you."**
+
+The `TailResumptiveHandler` hint doesn't just say "optimized." It says:
+"compiled via evidence passing — zero overhead." The compiler teaches you
+compiler theory while you code. That's not error reporting. That's
+**mentorship**.
+
+The Levenshtein distance for "did you mean?" is the simplest example. But
+the architecture goes deeper: every `Reason` in the Why Engine is a node
+in an explanation graph. Every effect row is a capability set. The compiler
+has perfect knowledge of your program's semantics at every point. Error
+messages that leverage this knowledge are fundamentally better than anything
+an AI can produce — because the compiler doesn't guess. It knows.
+
+---
+
+## The Compiler Knows More Than C
+
+This is the key to beating C and Rust in performance:
+
+**C knows types. Rust knows types + lifetimes. Lux knows types + effects
++ ownership + refinements + effect algebra + purity proofs.**
+
+More knowledge = more optimization opportunities:
+
+| What Lux knows | Optimization it enables |
+|----------------|------------------------|
+| `Pure` function | Memoization, CSE, dead code elimination |
+| `!Alloc` constraint | Stack-allocate everything, no GC |
+| `!IO` constraint | Compile-time evaluation, constant folding |
+| Tail-resumptive handler | Evidence passing in registers, zero overhead |
+| Effect row is closed | Monomorphize handler dispatch |
+| Refinement `x > 0` | Eliminate bounds checks |
+| Ownership is affine | Deterministic deallocation, no ref counting |
+
+C can't memoize — it doesn't know if a function is pure. Rust can't
+eliminate allocation — `Vec::push` is safe and allocates. Lux PROVES
+purity and absence of allocation, enabling optimizations that are
+**impossible** in languages with less knowledge.
+
+**The performance thesis**: the more the compiler knows, the more it
+can optimize. Lux gives the compiler more knowledge than any other
+language. Therefore Lux can be faster than any other language — not
+by being lower-level, but by being smarter.
+
+---
+
 ## The Masterpiece Test
 
 Before every change, every design decision, every line of code, ask:

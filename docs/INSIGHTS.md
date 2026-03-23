@@ -369,6 +369,49 @@ every depth.
 
 ---
 
+## Inference Is an Effect
+
+The compiler pipeline has four stages: tokenize → parse → infer → generate.
+Each stage is an effect operation in the `Compiler` effect. **Handlers decide
+what to do with each stage.**
+
+This means the entire toolchain is one thing:
+
+| Handler | What it does with `infer` |
+|---------|--------------------------|
+| `compile_standard` | Infer silently, compile, execute |
+| `compile_teaching` | Infer → show types → suggest ONE annotation (the gradient) |
+| `compile_explaining` | Infer → dump full Why Engine reasoning chains |
+| `compile_documenting` | Infer → extract typed signatures (documentation) |
+| `compile_checking` | Infer → report types → stop (no codegen) |
+
+**Doc** is what the compiler knows, exported. **Teach** is the compiler's one
+suggestion, the gradient. **Why** is the compiler's reasoning, transparent.
+All three come from the same `infer` stage — just different handlers.
+
+This is not architecture. It's a consequence: if the compiler pipeline is an
+effect graph, then every view of the program (documentation, teaching,
+debugging, verification) is a handler on that graph. You don't build five
+tools. You build one pipeline and write five handlers.
+
+The gradient engine picks ONE suggestion per compile. Not a wall of warnings.
+One step — the most impactful annotation the developer could add. Like a tutor
+who knows exactly what to teach next:
+
+```
+$ lux --teach app.lux
+
+  💡 `process` is Pure — adding `with Pure` would unlock:
+     • memoization (same input → same output, guaranteed)
+     • parallelization (no side effects to race)
+     • compile-time evaluation (if inputs are known)
+```
+
+Over sessions, code naturally evolves from loose to formally verified.
+The compiler IS the tutor. AI guesses. The compiler knows.
+
+---
+
 ## The Masterpiece Test
 
 Before every change, every design decision, every line of code, ask:

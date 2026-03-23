@@ -75,6 +75,14 @@ fn main() {
                 }
             }
         }
+        ["why", path] => {
+            // `lux why <file>` — run through Why Engine (self-hosted pipeline)
+            run_pipeline_mode(path, "why");
+        }
+        ["doc", path] => {
+            // `lux doc <file>` — extract documentation (self-hosted pipeline)
+            run_pipeline_mode(path, "doc");
+        }
         [path] => {
             // Single argument — run file
             let source = read_file(path);
@@ -88,7 +96,7 @@ fn main() {
             }
         }
         _ => {
-            eprintln!("Usage: lux [--quiet] [file.lux | test <file> | check <file> | repl]");
+            eprintln!("Usage: lux [--quiet] [file.lux | test | check | why | doc | repl]");
             process::exit(1);
         }
     }
@@ -238,4 +246,36 @@ fn find_std_file(name: &str) -> Option<String> {
         return Some(path.to_string_lossy().to_string());
     }
     None
+}
+
+/// Run a file through the self-hosted effect pipeline with a specific handler.
+/// mode: "why" → compile_explaining, "doc" → compile_documenting
+fn run_pipeline_mode(file_path: &str, mode: &str) {
+    let source = read_file(file_path);
+    // Escape the source for embedding in a Lux string literal
+    let escaped = source
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n");
+
+    let handler_fn = match mode {
+        "why" => "compile_explaining",
+        "doc" => "compile_documenting",
+        _ => "compile_standard",
+    };
+
+    let wrapper = format!(
+        "import compiler/pipeline\n\
+         let source = \"{escaped}\"\n\
+         let chunk = {}(source)\n\
+         let program = load_chunk(chunk)\n\
+         program()\n",
+        handler_fn
+    );
+
+    let result = run_source(&wrapper, file_path, false, true); // quiet + no-check
+    if let Err(e) = result {
+        eprintln!("{}", e);
+        process::exit(1);
+    }
 }

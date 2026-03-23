@@ -280,6 +280,17 @@ fn find_upvalue(upvalues, is_local, index, pos) = {
   }
 }
 
+// Emit upvalue descriptors after MakeClosure: u8(is_local) + u16(index) per upvalue
+fn emit_upvalue_descriptors(ctx, upvals) = {
+  if len(upvals) == 0 { ctx }
+  else {
+    let (is_local, index) = upvals[0]
+    let ctx2 = emit_byte(ctx, if is_local { 1 } else { 0 })
+    let ctx3 = emit_u16(ctx2, index)
+    emit_upvalue_descriptors(ctx3, slice(upvals, 1, len(upvals)))
+  }
+}
+
 // ─── Expression Compilation ──────────────────────────────────
 
 fn compile_expr(ctx, expr) = match expr {
@@ -390,7 +401,6 @@ fn compile_expr(ctx, expr) = match expr {
   },
 
   LambdaExpr(params, body) => {
-    // Compile body in a child context linked to enclosing scope for upvalue capture
     let fn_ctx = ctx_child(ctx)
     let fn_ctx2 = begin_scope(fn_ctx)
     let fn_ctx3 = declare_params(fn_ctx2, params)
@@ -398,9 +408,11 @@ fn compile_expr(ctx, expr) = match expr {
     let fn_ctx5 = emit_op(fn_ctx4, OP_RETURN())
     let upvals = ctx_upvalues(fn_ctx5)
     let proto = ("fn_proto", "<lambda>", len(params), ctx_code(fn_ctx5),
-                  ctx_constants(fn_ctx5), ctx_names(fn_ctx5))
+                  ctx_constants(fn_ctx5), ctx_names(fn_ctx5),
+                  ctx_next_slot(fn_ctx5), len(upvals))
     let (ctx2, proto_idx) = add_constant(ctx, proto)
-    emit_u16(emit_op(ctx2, OP_MAKE_CLOSURE()), proto_idx)
+    let ctx3 = emit_u16(emit_op(ctx2, OP_MAKE_CLOSURE()), proto_idx)
+    emit_upvalue_descriptors(ctx3, upvals)
   },
 
   BlockExpr(stmts, final_expr) => {
@@ -515,9 +527,9 @@ fn binop_to_opcode(op) = {
   else { if op == "Eq"  { OP_EQ() }
   else { if op == "Neq" { OP_NEQ() }
   else { if op == "Lt"  { OP_LT() }
-  else { if op == "Le"  { OP_LTEQ() }
+  else { if op == "LtEq"  { OP_LTEQ() }
   else { if op == "Gt"  { OP_GT() }
-  else { if op == "Ge"  { OP_GTEQ() }
+  else { if op == "GtEq"  { OP_GTEQ() }
   else { if op == "Concat" { OP_CONCAT() }
   else { OP_ADD() }  // fallback
   }}}}}}}}}}}
@@ -540,22 +552,20 @@ fn compile_stmt(ctx, stmt) = match stmt {
   },
 
   FnStmt(name, params, body) => {
-    // Compile function body as a separate chunk (nested ctx)
-    let fn_ctx = ctx_new()
+    let fn_ctx = ctx_child(ctx)
     let fn_ctx2 = begin_scope(fn_ctx)
-    // Declare params as locals
     let fn_ctx3 = declare_params(fn_ctx2, params)
-    // Compile body
     let fn_ctx4 = compile_expr(fn_ctx3, body)
     let fn_ctx5 = emit_op(fn_ctx4, OP_RETURN())
-    // Package as FnProto constant
+    let upvals = ctx_upvalues(fn_ctx5)
     let proto = ("fn_proto", name, len(params), ctx_code(fn_ctx5),
-                  ctx_constants(fn_ctx5), ctx_names(fn_ctx5))
+                  ctx_constants(fn_ctx5), ctx_names(fn_ctx5),
+                  ctx_next_slot(fn_ctx5), len(upvals))
     let (ctx2, proto_idx) = add_constant(ctx, proto)
     let ctx3 = emit_u16(emit_op(ctx2, OP_MAKE_CLOSURE()), proto_idx)
-    // Store as global
-    let (ctx4, name_idx) = intern_name(ctx3, name)
-    emit_u16(emit_op(ctx4, OP_STORE_GLOBAL()), name_idx)
+    let ctx4 = emit_upvalue_descriptors(ctx3, upvals)
+    let (ctx5, name_idx) = intern_name(ctx4, name)
+    emit_u16(emit_op(ctx5, OP_STORE_GLOBAL()), name_idx)
   },
 
   ExprStmt(expr) => {

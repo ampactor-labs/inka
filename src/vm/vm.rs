@@ -1478,8 +1478,9 @@ impl Vm {
                     _ => Err(format!("load_chunk: unknown constant tuple: {val}")),
                 }
             }
-            // ("fn_proto", name, arity, code, constants, names)
-            VmValue::Tuple(t) if t.len() == 6 => {
+            // ("fn_proto", name, arity, code, constants, names, local_count) or
+            // ("fn_proto", name, arity, code, constants, names, local_count, upval_count)
+            VmValue::Tuple(t) if t.len() >= 6 && t.len() <= 8 => {
                 match &t[0] {
                     VmValue::String(tag) if tag.as_str() == "fn_proto" => {
                         let name = match &t[1] {
@@ -1493,6 +1494,22 @@ impl Vm {
                         let code = Self::extract_code(&t[3])?;
                         let constants = Self::extract_constants(&t[4])?;
                         let names = Self::extract_names(&t[5])?;
+                        let local_count = if t.len() >= 7 {
+                            match &t[6] {
+                                VmValue::Int(n) => *n as u16,
+                                _ => 0,
+                            }
+                        } else {
+                            0
+                        };
+                        let upval_count = if t.len() >= 8 {
+                            match &t[7] {
+                                VmValue::Int(n) => *n as u16,
+                                _ => 0,
+                            }
+                        } else {
+                            0
+                        };
 
                         let chunk = Chunk {
                             code,
@@ -1506,8 +1523,8 @@ impl Vm {
                         Ok(Constant::FnProto(Arc::new(FnProto {
                             chunk,
                             arity,
-                            local_count: 0,
-                            upval_count: 0,
+                            local_count,
+                            upval_count,
                             name: Some(name),
                             field_registry: HashMap::new(),
                         })))

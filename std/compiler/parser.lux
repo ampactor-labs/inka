@@ -443,6 +443,39 @@ fn binop_loop(tokens, left, pos, min_p) = {
 // Top-level expression
 fn parse_expr(tokens, pos) = parse_binop(tokens, pos, 1)
 
+// ─── Type Declaration ────────────────────────────────────────
+// type Name = Variant1 | Variant2(fields) | ...
+
+fn parse_type_decl(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  let name = tok_val(tokens, p);
+  let p2 = skip_ws(tokens, p + 1);
+  // Skip optional = sign
+  let p3 = if check(tokens, p2, "Eq") { skip_ws(tokens, p2 + 1) } else { p2 };
+  let (variants, p4) = parse_variants(tokens, p3);
+  (TypeStmt(name, variants), p4)
+}
+
+fn parse_variants(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  let var_name = tok_val(tokens, p);
+  let p2 = p + 1;
+  // Check for fields: Variant(field1, field2)
+  let (fields, p3) = if check(tokens, p2, "LParen") {
+    let (names, p4) = parse_names(tokens, p2 + 1, "RParen");
+    (names, p4)
+  } else { ([], p2) };
+  let variant = (var_name, fields);
+  let p4 = skip_ws(tokens, p3);
+  // Check for | separator (more variants)
+  if check(tokens, p4, "Pipe") {
+    let (rest, p5) = parse_variants(tokens, skip_ws(tokens, p4 + 1));
+    ([variant] ++ rest, p5)
+  } else {
+    ([variant], p4)
+  }
+}
+
 // ─── Program ─────────────────────────────────────────────────
 
 fn parse_program(tokens) = {
@@ -465,10 +498,14 @@ fn prog_loop(tokens, pos, items) = {
     let path = tok_val(tokens, skip_ws(tokens, p + 1));
     prog_loop(tokens, skip_semi(tokens, p + 2), push(items, ImportStmt(path)))
   }
+  else { if check(tokens, p, "Type") {
+    let (td, p2) = parse_type_decl(tokens, p + 1);
+    prog_loop(tokens, skip_semi(tokens, p2), push(items, td))
+  }
   else {
     let (e, p2) = parse_expr(tokens, p);
     prog_loop(tokens, skip_semi(tokens, p2), push(items, ExprStmt(e)))
-  }}}}
+  }}}}}
 }
 
 // ─── Public API ──────────────────────────────────────────────

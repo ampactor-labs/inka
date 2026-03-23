@@ -563,6 +563,11 @@ fn compile_stmt(ctx, stmt) = match stmt {
     emit_op(ctx2, OP_POP())  // discard result
   },
 
+  TypeStmt(name, variants) => {
+    // Each variant: MakeVariant(name, 0) → StoreGlobal(name)
+    compile_variants(ctx, variants)
+  },
+
   ImportStmt(_) => ctx,  // imports resolved before compilation
 
   _ => ctx
@@ -573,6 +578,19 @@ fn declare_params(ctx, params) = {
   else {
     let (ctx2, _) = declare_local(ctx, params[0])
     declare_params(ctx2, slice(params, 1, len(params)))
+  }
+}
+
+fn compile_variants(ctx, variants) = {
+  if len(variants) == 0 { ctx }
+  else {
+    let (var_name, _fields) = variants[0]
+    let (ctx2, name_idx) = intern_name(ctx, var_name)
+    // MakeVariant name_idx 0 (zero fields — VM handles constructor calls)
+    let ctx3 = emit_u16(emit_u16(emit_op(ctx2, OP_MAKE_VARIANT()), name_idx), 0)
+    // StoreGlobal
+    let ctx4 = emit_u16(emit_op(ctx3, OP_STORE_GLOBAL()), name_idx)
+    compile_variants(ctx4, slice(variants, 1, len(variants)))
   }
 }
 
@@ -621,85 +639,99 @@ fn dis_loop(code, constants, names, offset) = {
 }
 
 fn dis_instruction(code, constants, names, offset, opcode) = {
-  // No-operand instructions
-  if opcode == OP_ADD()     { ("Add", offset + 1) }
-  else { if opcode == OP_SUB()     { ("Sub", offset + 1) }
-  else { if opcode == OP_MUL()     { ("Mul", offset + 1) }
-  else { if opcode == OP_DIV()     { ("Div", offset + 1) }
-  else { if opcode == OP_MOD()     { ("Mod", offset + 1) }
-  else { if opcode == OP_NEG()     { ("Neg", offset + 1) }
-  else { if opcode == OP_NOT()     { ("Not", offset + 1) }
-  else { if opcode == OP_EQ()      { ("Eq", offset + 1) }
-  else { if opcode == OP_NEQ()     { ("Neq", offset + 1) }
-  else { if opcode == OP_LT()      { ("Lt", offset + 1) }
-  else { if opcode == OP_LTEQ()    { ("LtEq", offset + 1) }
-  else { if opcode == OP_GT()      { ("Gt", offset + 1) }
-  else { if opcode == OP_GTEQ()    { ("GtEq", offset + 1) }
-  else { if opcode == OP_CONCAT()  { ("Concat", offset + 1) }
-  else { if opcode == OP_POP()     { ("Pop", offset + 1) }
-  else { if opcode == OP_DUP()     { ("Dup", offset + 1) }
-  else { if opcode == OP_RETURN()  { ("Return", offset + 1) }
-  else { if opcode == OP_LOAD_UNIT() { ("LoadUnit", offset + 1) }
-  else { if opcode == OP_LIST_INDEX() { ("ListIndex", offset + 1) }
-  // u8 operand
-  else { if opcode == OP_LOAD_INT() {
-    ("LoadInt " ++ to_string(code[offset + 1]), offset + 2)
+  let simple = dis_simple(opcode, offset)
+  if simple != "" { (simple, offset + 1) }
+  else {
+    let u8_result = dis_u8_op(code, opcode, offset)
+    if u8_result != "" { (u8_result, offset + 2) }
+    else { dis_u16_op(code, constants, names, offset, opcode) }
   }
-  else { if opcode == OP_LOAD_BOOL() {
-    ("LoadBool " ++ to_string(code[offset + 1]), offset + 2)
-  }
-  else { if opcode == OP_CALL() {
-    ("Call argc=" ++ to_string(code[offset + 1]), offset + 2)
-  }
-  else { if opcode == OP_TAIL_CALL() {
-    ("TailCall argc=" ++ to_string(code[offset + 1]), offset + 2)
-  }
-  // u16 operand
-  else { if opcode == OP_LOAD_CONST() {
-    let idx = read_u16(code, offset + 1)
+}
+
+fn dis_simple(opcode, offset) = {
+  if opcode == OP_ADD()        { "Add" }
+  else { if opcode == OP_SUB() { "Sub" }
+  else { if opcode == OP_MUL() { "Mul" }
+  else { if opcode == OP_DIV() { "Div" }
+  else { if opcode == OP_MOD() { "Mod" }
+  else { if opcode == OP_NEG() { "Neg" }
+  else { if opcode == OP_NOT() { "Not" }
+  else { if opcode == OP_EQ()  { "Eq" }
+  else { if opcode == OP_NEQ() { "Neq" }
+  else { if opcode == OP_LT()  { "Lt" }
+  else { if opcode == OP_LTEQ() { "LtEq" }
+  else { if opcode == OP_GT()   { "Gt" }
+  else { if opcode == OP_GTEQ() { "GtEq" }
+  else { if opcode == OP_CONCAT() { "Concat" }
+  else { if opcode == OP_POP()    { "Pop" }
+  else { if opcode == OP_DUP()    { "Dup" }
+  else { if opcode == OP_RETURN() { "Return" }
+  else { if opcode == OP_LOAD_UNIT() { "LoadUnit" }
+  else { if opcode == OP_LIST_INDEX() { "ListIndex" }
+  else { "" }}}}}}}}}}}}}}}}}}}
+}
+
+fn dis_u8_op(code, opcode, offset) = {
+  let val = code[offset + 1]
+  if opcode == OP_LOAD_INT()    { "LoadInt " ++ to_string(val) }
+  else { if opcode == OP_LOAD_BOOL() { "LoadBool " ++ to_string(val) }
+  else { if opcode == OP_CALL()      { "Call argc=" ++ to_string(val) }
+  else { if opcode == OP_TAIL_CALL() { "TailCall argc=" ++ to_string(val) }
+  else { "" }}}}
+}
+
+fn dis_u16_op(code, constants, names, offset, opcode) = {
+  let idx = read_u16(code, offset + 1)
+  if opcode == OP_LOAD_CONST() {
     ("LoadConst " ++ to_string(idx), offset + 3)
   }
   else { if opcode == OP_LOAD_LOCAL() {
-    ("LoadLocal " ++ to_string(read_u16(code, offset + 1)), offset + 3)
+    ("LoadLocal " ++ to_string(idx), offset + 3)
   }
   else { if opcode == OP_STORE_LOCAL() {
-    ("StoreLocal " ++ to_string(read_u16(code, offset + 1)), offset + 3)
+    ("StoreLocal " ++ to_string(idx), offset + 3)
   }
   else { if opcode == OP_LOAD_GLOBAL() {
-    let idx = read_u16(code, offset + 1)
     let name = if idx < len(names) { names[idx] } else { "?" }
     ("LoadGlobal " ++ to_string(idx) ++ " (" ++ name ++ ")", offset + 3)
   }
   else { if opcode == OP_STORE_GLOBAL() {
-    let idx = read_u16(code, offset + 1)
     let name = if idx < len(names) { names[idx] } else { "?" }
     ("StoreGlobal " ++ to_string(idx) ++ " (" ++ name ++ ")", offset + 3)
   }
-  else { if opcode == OP_MAKE_LIST() {
-    ("MakeList " ++ to_string(read_u16(code, offset + 1)), offset + 3)
+  else { if opcode == OP_LOAD_UPVAL() {
+    ("LoadUpval " ++ to_string(idx), offset + 3)
+  }
+  else { dis_u16_op2(code, constants, names, offset, opcode, idx) }}}}}}
+}
+
+fn dis_u16_op2(code, constants, names, offset, opcode, idx) = {
+  if opcode == OP_MAKE_LIST() {
+    ("MakeList " ++ to_string(idx), offset + 3)
   }
   else { if opcode == OP_MAKE_TUPLE() {
-    ("MakeTuple " ++ to_string(read_u16(code, offset + 1)), offset + 3)
+    ("MakeTuple " ++ to_string(idx), offset + 3)
   }
   else { if opcode == OP_MAKE_CLOSURE() {
-    ("MakeClosure proto=" ++ to_string(read_u16(code, offset + 1)), offset + 3)
+    ("MakeClosure proto=" ++ to_string(idx), offset + 3)
   }
-  // Jump instructions (i16 offset)
+  else { if opcode == OP_MAKE_VARIANT() {
+    let fields = read_u16(code, offset + 3)
+    let name = if idx < len(names) { names[idx] } else { "?" }
+    ("MakeVariant " ++ name ++ " (" ++ to_string(fields) ++ " fields)", offset + 5)
+  }
   else { if opcode == OP_JUMP() {
-    let delta = read_u16(code, offset + 1)
-    ("Jump +" ++ to_string(delta), offset + 3)
+    ("Jump +" ++ to_string(idx), offset + 3)
   }
   else { if opcode == OP_JUMP_FALSE() {
-    let delta = read_u16(code, offset + 1)
-    ("JumpIfFalse +" ++ to_string(delta), offset + 3)
+    ("JumpIfFalse +" ++ to_string(idx), offset + 3)
   }
   else { if opcode == OP_JUMP_TRUE() {
-    let delta = read_u16(code, offset + 1)
-    ("JumpIfTrue +" ++ to_string(delta), offset + 3)
+    ("JumpIfTrue +" ++ to_string(idx), offset + 3)
   }
   else {
     ("UNKNOWN(" ++ to_string(opcode) ++ ")", offset + 1)
-  }}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+  }}}}}}}
 }
 
 fn read_u16(code, offset) = code[offset] * 256 + code[offset + 1]

@@ -1,19 +1,20 @@
-// Lux Type Checker — written in Lux, checked by Lux
+// Lux Type Checker + Why Engine — written in Lux, checked by Lux
 //
-// Self-hosted Hindley-Milner type inference. Uses Lux's effects for
-// error reporting and ADTs for the type representation. This is the
-// third self-hosted compiler component (after lexer and parser),
-// proving Lux can express its own type system.
+// Self-hosted Hindley-Milner type inference with reasoning chains.
+// Every inference carries a Reason explaining WHY that type was chosen.
+// The Why Engine makes the compiler's reasoning transparent at any depth:
+//   depth 0: x: Int
+//   depth 1: x: Int  ← parameter of fn double
+//   depth 2: x: Int  ← parameter of fn double  ← unified with return of * : (Int, Int) -> Int
 //
-// The checker operates on the parser's AST types (Expr, Stmt) and
-// produces typed output with inferred types for every expression.
+// This is what makes Lux's compiler a teaching compiler. It doesn't just
+// CHECK your code — it can EXPLAIN every decision it made, and show you
+// what each annotation would unlock.
 
 import compiler/lexer
 import compiler/parser
 
 // ─── Type Representation ─────────────────────────────────────
-// Types are ADTs. Type variables are integers. Substitution is
-// an association list mapping variable IDs to types.
 
 type Ty
   = TInt
@@ -27,43 +28,66 @@ type Ty
   | TVar(Int)
   | TName(String, List)
 
+// ─── Reason ADT ──────────────────────────────────────────────
+// Every type inference produces a Reason explaining HOW and WHY.
+// Reasons form a tree: each node has a human summary and links
+// to the reasoning steps that support it.
+//
+// This is the soul of the Why Engine. The Reason is not an
+// afterthought bolted onto types — it's a first-class output
+// of the inference process, as fundamental as the type itself.
+
+type Reason
+  = Literal(String)                    // "42 is Int (integer literal)"
+  | VarLookup(String, Reason)          // "x is Int (bound in scope)"  
+  | Declared(String)                   // "x: Int (user annotation)"
+  | OpConstraint(String, Reason, Reason)  // "* requires both args Int" 
+  | Unified(Reason, Reason)            // "unified LHS with RHS"
+  | FnReturn(String, Reason)           // "return type of fn add"
+  | FnParam(String, Int, Reason)       // "parameter 0 of fn add"
+  | Applied(Reason, List)              // "result of applying f to args"
+  | CondBranch(Reason, Reason)         // "if branches must agree"
+  | ListElement(Reason)                // "element type of list literal"
+  | PipeFlow(Reason, Reason)           // "piped value → function"
+  | Inferred(String)                   // "inferred by context"
+  | Because(String, Reason)            // "X because Y"
+  | Fresh(Int)                         // "fresh type variable ?0"
+
 // ─── Type Environment ────────────────────────────────────────
-// Association list: [(name, type_scheme)]. O(n) lookup but simple
-// and sufficient. When Lux has HashMap, this upgrades transparently.
+// Now stores (name, type, reason) triples.
 
 fn env_empty() = []
-fn env_extend(env, name, ty) = [(name, ty)] ++ env
+fn env_extend(env, name, ty, reason) = [(name, ty, reason)] ++ env
 fn env_lookup(env, name) = {
   if len(env) == 0 {
-    ("not_found", TUnit)
+    ("not_found", TUnit, Inferred("unknown"))
   } else {
-    let (k, v) = env[0]
-    if k == name { (k, v) }
+    let (k, v, r) = env[0]
+    if k == name { (k, v, r) }
     else { env_lookup(slice(env, 1, len(env)), name) }
   }
 }
 
 // ─── Fresh Type Variables ────────────────────────────────────
-// Simple counter using a mutable ref (list trick: [counter]).
 
 fn fresh_var(counter) = {
   let n = counter[0]
-  // We can't mutate, so return the new counter and the var
   (TVar(n), [n + 1])
 }
 
 // ─── Substitution ────────────────────────────────────────────
-// A substitution maps type variable IDs to types.
+// A substitution maps type variable IDs to (type, reason) pairs.
+// When we unify and bind a variable, we record WHY.
 
 fn subst_empty() = []
 
-fn subst_set(subst, var_id, ty) = [(var_id, ty)] ++ subst
+fn subst_set(subst, var_id, ty, reason) = [(var_id, ty, reason)] ++ subst
 
 fn subst_get(subst, var_id) = {
-  if len(subst) == 0 { TVar(var_id) }
+  if len(subst) == 0 { (TVar(var_id), Fresh(var_id)) }
   else {
-    let (k, v) = subst[0]
-    if k == var_id { v }
+    let (k, v, r) = subst[0]
+    if k == var_id { (v, r) }
     else { subst_get(slice(subst, 1, len(subst)), var_id) }
   }
 }
@@ -76,7 +100,7 @@ fn apply(subst, ty) = match ty {
   TBool => TBool,
   TUnit => TUnit,
   TVar(id) => {
-    let resolved = subst_get(subst, id)
+    let (resolved, _) = subst_get(subst, id)
     match resolved {
       TVar(id2) => if id == id2 { TVar(id) } else { apply(subst, TVar(id2)) },
       _ => apply(subst, resolved)
@@ -88,9 +112,22 @@ fn apply(subst, ty) = match ty {
   TName(name, args) => TName(name, map(|a| apply(subst, a), args))
 }
 
-// ─── Unification ─────────────────────────────────────────────
-// The core of HM inference: make two types equal by extending
-// the substitution. Returns (success, new_subst).
+// Get the reason WHY a type variable was bound to its current value
+fn apply_reason(subst, ty) = match ty {
+  TVar(id) => {
+    let (resolved, reason) = subst_get(subst, id)
+    match resolved {
+      TVar(id2) => if id == id2 { Fresh(id) } else { apply_reason(subst, TVar(id2)) },
+      _ => reason
+    }
+  },
+  _ => Inferred("concrete type")
+}
+
+// ─── Unification with Reasoning ──────────────────────────────
+// Returns (success, new_subst, reason).
+// On success, reason explains WHY the types are compatible.
+// On failure, reason explains WHY they conflict.
 
 fn occurs(subst, var_id, ty) = match apply(subst, ty) {
   TVar(id2) => id2 == var_id,
@@ -101,242 +138,270 @@ fn occurs(subst, var_id, ty) = match apply(subst, ty) {
   _ => false
 }
 
-fn unify(subst, t1, t2) = {
+fn unify(subst, t1, t2, context) = {
   let a = apply(subst, t1)
   let b = apply(subst, t2)
   match a {
     TVar(id1) => match b {
-      TVar(id2) => if id1 == id2 { (true, subst) }
-        else { (true, subst_set(subst, id1, TVar(id2))) },
-      _ => if occurs(subst, id1, b) { (false, subst) }
-        else { (true, subst_set(subst, id1, b)) }
+      TVar(id2) => if id1 == id2 { (true, subst, context) }
+        else { (true, subst_set(subst, id1, TVar(id2), context), context) },
+      _ => if occurs(subst, id1, b) { (false, subst, Because("infinite type (occurs check)", context)) }
+        else { (true, subst_set(subst, id1, b, context), context) }
     },
     TInt => match b {
-      TInt => (true, subst),
-      TVar(id) => (true, subst_set(subst, id, TInt)),
-      _ => (false, subst)
+      TInt => (true, subst, context),
+      TVar(id) => (true, subst_set(subst, id, TInt, context), context),
+      _ => (false, subst, Because("expected Int, got " ++ type_to_string(subst, b), context))
     },
     TFloat => match b {
-      TFloat => (true, subst),
-      TVar(id) => (true, subst_set(subst, id, TFloat)),
-      _ => (false, subst)
+      TFloat => (true, subst, context),
+      TVar(id) => (true, subst_set(subst, id, TFloat, context), context),
+      _ => (false, subst, Because("expected Float, got " ++ type_to_string(subst, b), context))
     },
     TString => match b {
-      TString => (true, subst),
-      TVar(id) => (true, subst_set(subst, id, TString)),
-      _ => (false, subst)
+      TString => (true, subst, context),
+      TVar(id) => (true, subst_set(subst, id, TString, context), context),
+      _ => (false, subst, Because("expected String, got " ++ type_to_string(subst, b), context))
     },
     TBool => match b {
-      TBool => (true, subst),
-      TVar(id) => (true, subst_set(subst, id, TBool)),
-      _ => (false, subst)
+      TBool => (true, subst, context),
+      TVar(id) => (true, subst_set(subst, id, TBool, context), context),
+      _ => (false, subst, Because("expected Bool, got " ++ type_to_string(subst, b), context))
     },
     TUnit => match b {
-      TUnit => (true, subst),
-      TVar(id) => (true, subst_set(subst, id, TUnit)),
-      _ => (false, subst)
+      TUnit => (true, subst, context),
+      TVar(id) => (true, subst_set(subst, id, TUnit, context), context),
+      _ => (false, subst, Because("expected (), got " ++ type_to_string(subst, b), context))
     },
     TList(e1) => match b {
-      TList(e2) => unify(subst, e1, e2),
-      TVar(id) => if occurs(subst, id, a) { (false, subst) }
-        else { (true, subst_set(subst, id, a)) },
-      _ => (false, subst)
+      TList(e2) => {
+        let (ok, s2, r) = unify(subst, e1, e2, Because("list element types must match", context))
+        (ok, s2, r)
+      },
+      TVar(id) => if occurs(subst, id, a) { (false, subst, Because("infinite type", context)) }
+        else { (true, subst_set(subst, id, a, context), context) },
+      _ => (false, subst, Because("expected List, got " ++ type_to_string(subst, b), context))
     },
     TFun(p1, r1) => match b {
       TFun(p2, r2) => {
-        if len(p1) != len(p2) { (false, subst) }
-        else {
-          let (ok, s2) = unify_list(subst, p1, p2)
-          if !ok { (false, s2) }
-          else { unify(s2, r1, r2) }
+        if len(p1) != len(p2) {
+          (false, subst, Because("arity mismatch: " ++ to_string(len(p1)) ++ " vs " ++ to_string(len(p2)), context))
+        } else {
+          let (ok, s2, reason) = unify_list(subst, p1, p2, Because("parameter types must match", context))
+          if !ok { (false, s2, reason) }
+          else {
+            let (ok2, s3, r2_reason) = unify(s2, r1, r2, Because("return types must match", context))
+            (ok2, s3, r2_reason)
+          }
         }
       },
-      TVar(id) => if occurs(subst, id, a) { (false, subst) }
-        else { (true, subst_set(subst, id, a)) },
-      _ => (false, subst)
+      TVar(id) => if occurs(subst, id, a) { (false, subst, Because("infinite type", context)) }
+        else { (true, subst_set(subst, id, a, context), context) },
+      _ => (false, subst, Because("expected function, got " ++ type_to_string(subst, b), context))
     },
     TTuple(e1) => match b {
       TTuple(e2) => {
-        if len(e1) != len(e2) { (false, subst) }
-        else { unify_list(subst, e1, e2) }
+        if len(e1) != len(e2) {
+          (false, subst, Because("tuple size mismatch: " ++ to_string(len(e1)) ++ " vs " ++ to_string(len(e2)), context))
+        } else { unify_list(subst, e1, e2, Because("tuple element types must match", context)) }
       },
-      TVar(id) => if occurs(subst, id, a) { (false, subst) }
-        else { (true, subst_set(subst, id, a)) },
-      _ => (false, subst)
+      TVar(id) => if occurs(subst, id, a) { (false, subst, Because("infinite type", context)) }
+        else { (true, subst_set(subst, id, a, context), context) },
+      _ => (false, subst, Because("expected tuple, got " ++ type_to_string(subst, b), context))
     },
     _ => match b {
-      TVar(id) => if occurs(subst, id, a) { (false, subst) }
-        else { (true, subst_set(subst, id, a)) },
-      _ => (false, subst)
+      TVar(id) => if occurs(subst, id, a) { (false, subst, Because("infinite type", context)) }
+        else { (true, subst_set(subst, id, a, context), context) },
+      _ => (false, subst, Because("type mismatch", context))
     }
   }
 }
 
-fn unify_list(subst, ts1, ts2) = {
-  if len(ts1) == 0 { (true, subst) }
+fn unify_list(subst, ts1, ts2, context) = {
+  if len(ts1) == 0 { (true, subst, context) }
   else {
-    let (ok, s2) = unify(subst, ts1[0], ts2[0])
-    if !ok { (false, s2) }
-    else { unify_list(s2, slice(ts1, 1, len(ts1)), slice(ts2, 1, len(ts2))) }
+    let (ok, s2, r) = unify(subst, ts1[0], ts2[0], context)
+    if !ok { (false, s2, r) }
+    else { unify_list(s2, slice(ts1, 1, len(ts1)), slice(ts2, 1, len(ts2)), context) }
   }
 }
 
-// ─── Type Inference ──────────────────────────────────────────
-// Infer types for expressions. Returns (type, new_subst, new_counter).
-// The counter threads through for fresh variable generation.
+// ─── Type Inference with Why Engine ──────────────────────────
+// Returns (type, subst, counter, reason).
+// The reason explains WHY this expression has this type.
 
 fn infer_expr(env, subst, counter, expr) = match expr {
-  IntLit(_) => (TInt, subst, counter),
-  FloatLit(_) => (TFloat, subst, counter),
-  StringLit(_) => (TString, subst, counter),
-  BoolLit(_) => (TBool, subst, counter),
-  NoneExpr => (TUnit, subst, counter),
+  IntLit(_) => (TInt, subst, counter, Literal("integer literal")),
+  FloatLit(_) => (TFloat, subst, counter, Literal("float literal")),
+  StringLit(_) => (TString, subst, counter, Literal("string literal")),
+  BoolLit(_) => (TBool, subst, counter, Literal("boolean literal")),
+  NoneExpr => (TUnit, subst, counter, Literal("unit value")),
 
   VarRef(name) => {
-    let (found_name, ty) = env_lookup(env, name)
+    let (found_name, ty, bind_reason) = env_lookup(env, name)
     if found_name == "not_found" {
-      // Unknown variable — assign fresh type variable
       let (tv, c2) = fresh_var(counter)
-      (tv, subst, c2)
+      (tv, subst, c2, Because("unknown variable '" ++ name ++ "', assigned fresh type", Fresh(c2[0] - 1)))
     } else {
-      (ty, subst, counter)
+      (ty, subst, counter, VarLookup(name, bind_reason))
     }
   },
 
   BinOp(op, left, right) => {
-    let (t1, s1, c1) = infer_expr(env, subst, counter, left)
-    let (t2, s2, c2) = infer_expr(env, s1, c1, right)
+    let (t1, s1, c1, r1) = infer_expr(env, subst, counter, left)
+    let (t2, s2, c2, r2) = infer_expr(env, s1, c1, right)
     if op == "Add" || op == "Sub" || op == "Mul" || op == "Div" || op == "Mod" {
-      let (ok1, s3) = unify(s2, t1, TInt)
-      let (ok2, s4) = unify(s3, t2, TInt)
-      (TInt, s4, c2)
+      let op_reason = OpConstraint(op ++ " requires numeric arguments", r1, r2)
+      let (ok1, s3, _) = unify(s2, t1, TInt, Because("left side of " ++ op, r1))
+      let (ok2, s4, _) = unify(s3, t2, TInt, Because("right side of " ++ op, r2))
+      (TInt, s4, c2, op_reason)
     } else { if op == "Eq" || op == "Neq" || op == "Lt" || op == "Gt" || op == "Le" || op == "Ge" {
-      let (_, s3) = unify(s2, t1, t2)
-      (TBool, s3, c2)
+      let op_reason = OpConstraint(op ++ " produces Bool", r1, r2)
+      let (_, s3, _) = unify(s2, t1, t2, Because("comparison requires same types", Unified(r1, r2)))
+      (TBool, s3, c2, op_reason)
     } else { if op == "And" || op == "Or" {
-      let (_, s3) = unify(s2, t1, TBool)
-      let (_, s4) = unify(s3, t2, TBool)
-      (TBool, s4, c2)
+      let op_reason = OpConstraint(op ++ " requires Bool operands", r1, r2)
+      let (_, s3, _) = unify(s2, t1, TBool, Because("left side of " ++ op, r1))
+      let (_, s4, _) = unify(s3, t2, TBool, Because("right side of " ++ op, r2))
+      (TBool, s4, c2, op_reason)
     } else { if op == "Concat" {
-      // ++ is string or list concat
-      (t1, s2, c2)
+      (t1, s2, c2, OpConstraint("++ concatenation", r1, r2))
     } else {
-      (t1, s2, c2)
+      (t1, s2, c2, Inferred("binary operation"))
     }}}}
   },
 
   UnaryOp(op, operand) => {
-    let (t1, s1, c1) = infer_expr(env, subst, counter, operand)
+    let (t1, s1, c1, r1) = infer_expr(env, subst, counter, operand)
     if op == "Neg" {
-      let (_, s2) = unify(s1, t1, TInt)
-      (TInt, s2, c1)
+      let (_, s2, _) = unify(s1, t1, TInt, Because("negation requires numeric type", r1))
+      (TInt, s2, c1, OpConstraint("negation produces numeric type", r1, r1))
     } else { if op == "Not" {
-      let (_, s2) = unify(s1, t1, TBool)
-      (TBool, s2, c1)
+      let (_, s2, _) = unify(s1, t1, TBool, Because("logical not requires Bool", r1))
+      (TBool, s2, c1, OpConstraint("logical not produces Bool", r1, r1))
     } else {
-      (t1, s1, c1)
+      (t1, s1, c1, r1)
     }}
   },
 
   Call(func, args) => {
-    let (ft, s1, c1) = infer_expr(env, subst, counter, func)
-    let (arg_types, s2, c2) = infer_args(env, s1, c1, args)
+    let (ft, s1, c1, fr) = infer_expr(env, subst, counter, func)
+    let (arg_types, arg_reasons, s2, c2) = infer_args(env, s1, c1, args)
     let (ret_tv, c3) = fresh_var(c2)
     let expected_fn_type = TFun(arg_types, ret_tv)
-    let (ok, s3) = unify(s2, ft, expected_fn_type)
-    (apply(s3, ret_tv), s3, c3)
+    let (ok, s3, unify_reason) = unify(s2, ft, expected_fn_type, Because("function application", Applied(fr, arg_reasons)))
+    (apply(s3, ret_tv), s3, c3, Applied(fr, arg_reasons))
   },
 
   IfExpr(cond, then_br, else_br) => {
-    let (tc, s1, c1) = infer_expr(env, subst, counter, cond)
-    let (_, s2) = unify(s1, tc, TBool)
-    let (tt, s3, c2) = infer_expr(env, s2, c1, then_br)
-    let (te, s4, c3) = infer_expr(env, s3, c2, else_br)
-    let (_, s5) = unify(s4, tt, te)
-    (apply(s5, tt), s5, c3)
+    let (tc, s1, c1, rc) = infer_expr(env, subst, counter, cond)
+    let (_, s2, _) = unify(s1, tc, TBool, Because("if condition must be Bool", rc))
+    let (tt, s3, c2, rt) = infer_expr(env, s2, c1, then_br)
+    let (te, s4, c3, re) = infer_expr(env, s3, c2, else_br)
+    let (_, s5, _) = unify(s4, tt, te, Because("if branches must have same type", CondBranch(rt, re)))
+    (apply(s5, tt), s5, c3, CondBranch(rt, re))
   },
 
   ListExpr(elems) => {
     if len(elems) == 0 {
       let (tv, c2) = fresh_var(counter)
-      (TList(tv), subst, c2)
+      (TList(tv), subst, c2, Literal("empty list"))
     } else {
-      let (first_ty, s1, c1) = infer_expr(env, subst, counter, elems[0])
+      let (first_ty, s1, c1, first_reason) = infer_expr(env, subst, counter, elems[0])
       let (s_final, c_final) = infer_list_elems(env, s1, c1, first_ty, slice(elems, 1, len(elems)))
-      (TList(apply(s_final, first_ty)), s_final, c_final)
+      (TList(apply(s_final, first_ty)), s_final, c_final, ListElement(first_reason))
     }
   },
 
   TupleExpr(elems) => {
-    let (types, s_final, c_final) = infer_args(env, subst, counter, elems)
-    (TTuple(types), s_final, c_final)
+    let (types, reasons, s_final, c_final) = infer_args(env, subst, counter, elems)
+    (TTuple(types), s_final, c_final, Literal("tuple literal"))
   },
 
   PipeExpr(left, right) => {
-    // a |> f(b) desugars to f(a, b) — same as compiler
+    // a |> f(b) desugars to f(a, b)
     match right {
       Call(func, args) => {
         let combined = [left] ++ args
-        infer_expr(env, subst, counter, Call(func, combined))
+        let (ty, s, c, r) = infer_expr(env, subst, counter, Call(func, combined))
+        // Wrap reason to show pipe flow
+        let (_, _, _, left_reason) = infer_expr(env, subst, counter, left)
+        (ty, s, c, PipeFlow(left_reason, r))
       },
-      _ => infer_expr(env, subst, counter, Call(right, [left]))
+      _ => {
+        let (ty, s, c, r) = infer_expr(env, subst, counter, Call(right, [left]))
+        let (_, _, _, left_reason) = infer_expr(env, subst, counter, left)
+        (ty, s, c, PipeFlow(left_reason, r))
+      }
     }
+  },
+
+  BlockExpr(stmts, final_expr) => {
+    let (block_env, s1, c1) = check_block_stmts(env, subst, counter, stmts)
+    let (ty, s2, c2, reason) = infer_expr(block_env, s1, c1, final_expr)
+    (ty, s2, c2, Because("block result", reason))
   },
 
   _ => {
     let (tv, c2) = fresh_var(counter)
-    (tv, subst, c2)
+    (tv, subst, c2, Fresh(c2[0] - 1))
   }
 }
 
 fn infer_args(env, subst, counter, args) = {
-  if len(args) == 0 { ([], subst, counter) }
+  if len(args) == 0 { ([], [], subst, counter) }
   else {
-    let (ty, s1, c1) = infer_expr(env, subst, counter, args[0])
-    let (rest, s2, c2) = infer_args(env, s1, c1, slice(args, 1, len(args)))
-    ([ty] ++ rest, s2, c2)
+    let (ty, s1, c1, reason) = infer_expr(env, subst, counter, args[0])
+    let (rest_types, rest_reasons, s2, c2) = infer_args(env, s1, c1, slice(args, 1, len(args)))
+    ([ty] ++ rest_types, [reason] ++ rest_reasons, s2, c2)
   }
 }
 
 fn infer_list_elems(env, subst, counter, elem_ty, elems) = {
   if len(elems) == 0 { (subst, counter) }
   else {
-    let (ty, s1, c1) = infer_expr(env, subst, counter, elems[0])
-    let (_, s2) = unify(s1, elem_ty, ty)
+    let (ty, s1, c1, _) = infer_expr(env, subst, counter, elems[0])
+    let (_, s2, _) = unify(s1, elem_ty, ty, Inferred("list elements must have uniform type"))
     infer_list_elems(env, s2, c1, elem_ty, slice(elems, 1, len(elems)))
   }
 }
 
+// ─── Block Statement Checking ────────────────────────────────
+
+fn check_block_stmts(env, subst, counter, stmts) = {
+  if len(stmts) == 0 { (env, subst, counter) }
+  else {
+    let (new_env, s1, c1) = check_stmt(env, subst, counter, stmts[0])
+    check_block_stmts(new_env, s1, c1, slice(stmts, 1, len(stmts)))
+  }
+}
+
 // ─── Statement Checking ──────────────────────────────────────
-// Returns (new_env, new_subst, new_counter).
 
 fn check_stmt(env, subst, counter, stmt) = match stmt {
   LetStmt(name, value) => {
-    let (ty, s1, c1) = infer_expr(env, subst, counter, value)
-    let new_env = env_extend(env, name, apply(s1, ty))
+    let (ty, s1, c1, reason) = infer_expr(env, subst, counter, value)
+    let new_env = env_extend(env, name, apply(s1, ty), Because("let " ++ name ++ " = ...", reason))
     (new_env, s1, c1)
   },
 
   FnStmt(name, params, body) => {
-    // Create fresh type variables for all parameters
     let (param_types, c1) = fresh_params(counter, params)
-    // Extend environment with parameter types
-    let fn_env = bind_params(env, params, param_types)
-    // Also bind the function name for recursion (with generic type)
+    // Extend env with params + reason
+    let fn_env = bind_params_with_reasons(env, params, param_types, name)
     let (ret_tv, c2) = fresh_var(c1)
     let fn_type = TFun(param_types, ret_tv)
-    let rec_env = env_extend(fn_env, name, fn_type)
-    // Infer body type
-    let (body_ty, s1, c3) = infer_expr(rec_env, subst, c2, body)
-    // Unify return type
-    let (_, s2) = unify(s1, ret_tv, body_ty)
+    let rec_env = env_extend(fn_env, name, fn_type, Declared("recursive binding"))
+    let (body_ty, s1, c3, body_reason) = infer_expr(rec_env, subst, c2, body)
+    let (_, s2, _) = unify(s1, ret_tv, body_ty, FnReturn(name, body_reason))
     let final_type = apply(s2, fn_type)
-    let new_env = env_extend(env, name, final_type)
+    let fn_reason = Because("fn " ++ name ++ " declaration", FnReturn(name, body_reason))
+    let new_env = env_extend(env, name, final_type, fn_reason)
     (new_env, s2, c3)
   },
 
   ExprStmt(expr) => {
-    let (_, s1, c1) = infer_expr(env, subst, counter, expr)
+    let (_, s1, c1, _) = infer_expr(env, subst, counter, expr)
     (env, s1, c1)
   },
 
@@ -352,16 +417,16 @@ fn fresh_params(counter, params) = {
   }
 }
 
-fn bind_params(env, names, types) = {
+fn bind_params_with_reasons(env, names, types, fn_name) = {
   if len(names) == 0 { env }
   else {
-    let new_env = env_extend(env, names[0], types[0])
-    bind_params(new_env, slice(names, 1, len(names)), slice(types, 1, len(types)))
+    let reason = FnParam(fn_name, 0, Declared("parameter declaration"))
+    let new_env = env_extend(env, names[0], types[0], reason)
+    bind_params_with_reasons(new_env, slice(names, 1, len(names)), slice(types, 1, len(types)), fn_name)
   }
 }
 
 // ─── Program Checking ────────────────────────────────────────
-// Check a list of statements, threading environment and substitution.
 
 fn check_program(stmts) = {
   let env = env_empty()
@@ -378,8 +443,98 @@ fn check_stmts(env, subst, counter, stmts) = {
   }
 }
 
+// ─── Reason Display ──────────────────────────────────────────
+// Render a reasoning chain at a given depth.
+// depth 0: just the conclusion
+// depth 1: conclusion + immediate cause
+// depth 2+: full chain with indentation
+
+fn show_reason(reason, depth) = match reason {
+  Literal(what) => what,
+
+  VarLookup(name, bind_reason) => {
+    let base = "variable '" ++ name ++ "' from scope"
+    if depth <= 0 { base }
+    else { base ++ "\n  ← " ++ show_reason(bind_reason, depth - 1) }
+  },
+
+  Declared(what) => what,
+
+  OpConstraint(what, left, right) => {
+    if depth <= 0 { what }
+    else {
+      what ++ "\n  ← left:  " ++ show_reason(left, depth - 1)
+           ++ "\n  ← right: " ++ show_reason(right, depth - 1)
+    }
+  },
+
+  Unified(r1, r2) => {
+    if depth <= 0 { "unified" }
+    else { "unified\n  ← " ++ show_reason(r1, depth - 1)
+                ++ "\n  ← " ++ show_reason(r2, depth - 1) }
+  },
+
+  FnReturn(name, body_reason) => {
+    let base = "return type of fn " ++ name
+    if depth <= 0 { base }
+    else { base ++ "\n  ← " ++ show_reason(body_reason, depth - 1) }
+  },
+
+  FnParam(fn_name, idx, source) => {
+    let base = "parameter of fn " ++ fn_name
+    if depth <= 0 { base }
+    else { base ++ "\n  ← " ++ show_reason(source, depth - 1) }
+  },
+
+  Applied(fn_reason, arg_reasons) => {
+    let base = "function application"
+    if depth <= 0 { base }
+    else {
+      let args_str = show_reason_list(arg_reasons, depth - 1)
+      base ++ "\n  ← fn: " ++ show_reason(fn_reason, depth - 1)
+           ++ "\n  ← args: " ++ args_str
+    }
+  },
+
+  CondBranch(then_r, else_r) => {
+    let base = "if/else branches"
+    if depth <= 0 { base }
+    else { base ++ "\n  ← then: " ++ show_reason(then_r, depth - 1)
+                ++ "\n  ← else: " ++ show_reason(else_r, depth - 1) }
+  },
+
+  ListElement(elem_r) => {
+    let base = "list element type"
+    if depth <= 0 { base }
+    else { base ++ "\n  ← " ++ show_reason(elem_r, depth - 1) }
+  },
+
+  PipeFlow(input_r, output_r) => {
+    let base = "pipe flow"
+    if depth <= 0 { base }
+    else { base ++ "\n  ← input: " ++ show_reason(input_r, depth - 1)
+                ++ "\n  ← |> "   ++ show_reason(output_r, depth - 1) }
+  },
+
+  Because(what, inner) => {
+    if depth <= 0 { what }
+    else { what ++ "\n  ← " ++ show_reason(inner, depth - 1) }
+  },
+
+  Inferred(what) => what,
+
+  Fresh(id) => "fresh type variable ?" ++ to_string(id),
+
+  _ => "unknown reason"
+}
+
+fn show_reason_list(reasons, depth) = {
+  if len(reasons) == 0 { "(none)" }
+  else { if len(reasons) == 1 { show_reason(reasons[0], depth) }
+  else { show_reason(reasons[0], depth) ++ ", " ++ show_reason_list(slice(reasons, 1, len(reasons)), depth) }}
+}
+
 // ─── Type Display ────────────────────────────────────────────
-// Pretty-print inferred types.
 
 fn type_to_string(subst, ty) = match apply(subst, ty) {
   TInt => "Int",
@@ -410,4 +565,44 @@ fn join(strs, sep) = {
   if len(strs) == 0 { "" }
   else { if len(strs) == 1 { strs[0] }
   else { strs[0] ++ sep ++ join(slice(strs, 1, len(strs)), sep) }}
+}
+
+// ─── Why Query ───────────────────────────────────────────────
+// The flagship API: check code, then ask WHY for any binding.
+//
+// Usage:
+//   let result = check_and_explain("let x = 1 + 2", "x", 2)
+//   => "x: Int
+//       WHY: Add requires numeric arguments
+//         ← left:  integer literal
+//         ← right: integer literal"
+
+fn check_and_explain(source, name, depth) = {
+  let stmts = parse(source)
+  let (env, subst, _) = check_program(stmts)
+  let (found, ty, reason) = env_lookup(env, name)
+  if found == "not_found" {
+    name ++ ": not found"
+  } else {
+    let ty_str = type_to_string(subst, ty)
+    name ++ ": " ++ ty_str ++ "\n  WHY: " ++ show_reason(reason, depth)
+  }
+}
+
+// Check program and show all bindings with reasons
+fn check_and_show(source, depth) = {
+  let stmts = parse(source)
+  let (env, subst, _) = check_program(stmts)
+  show_env(env, subst, depth)
+}
+
+fn show_env(env, subst, depth) = {
+  if len(env) == 0 { "" }
+  else {
+    let (name, ty, reason) = env[len(env) - 1]
+    let ty_str = type_to_string(subst, ty)
+    let line = name ++ ": " ++ ty_str
+    let why = if depth > 0 { "\n  WHY: " ++ show_reason(reason, depth) } else { "" }
+    line ++ why ++ "\n" ++ show_env(slice(env, 0, len(env) - 1), subst, depth)
+  }
 }

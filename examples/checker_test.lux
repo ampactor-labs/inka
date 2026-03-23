@@ -1,53 +1,43 @@
-// Test: Self-hosted type checker
-// Parses Lux source, then infers types using the Lux-in-Lux checker.
+// Test: Why Engine — every inference explains itself
+//
+// The teaching compiler doesn't just say WHAT type something is —
+// it explains WHY, at any depth you ask.
 
 import compiler/parser
 import compiler/checker
 
-println("=== Self-Hosted Type Checker ===")
+println("=== Why Engine ===")
 
-// Test 1: Integer literal
-let stmts1 = parse("let x = 42")
-let (env1, s1, _) = check_program(stmts1)
-let (_, x_ty) = env_lookup(env1, "x")
-println("let x = 42       => x: " ++ type_to_string(s1, x_ty))
+// Test 1: Simple literal — WHY is x Int?
+println("--- let x = 42 ---")
+println(check_and_explain("let x = 42", "x", 0))
+println("")
+println(check_and_explain("let x = 42", "x", 1))
+println("")
 
-// Test 2: Arithmetic
-let stmts2 = parse("let y = 1 + 2")
-let (env2, s2, _) = check_program(stmts2)
-let (_, y_ty) = env_lookup(env2, "y")
-println("let y = 1 + 2    => y: " ++ type_to_string(s2, y_ty))
+// Test 2: Arithmetic — WHY is y Int?
+println("--- let y = 1 + 2 * 3 ---")
+println(check_and_explain("let y = 1 + 2 * 3", "y", 0))
+println("")
+println(check_and_explain("let y = 1 + 2 * 3", "y", 1))
+println("")
 
-// Test 3: String
-let stmts3 = parse("let s = \"hello\"")
-let (env3, s3, _) = check_program(stmts3)
-let (_, s_ty) = env_lookup(env3, "s")
-println("let s = \"hello\"  => s: " ++ type_to_string(s3, s_ty))
+// Test 3: Function — WHY does add have this type?
+println("--- fn add(a, b) = a + b ---")
+println(check_and_explain("fn add(a, b) = a + b", "add", 0))
+println("")
+println(check_and_explain("fn add(a, b) = a + b", "add", 1))
+println("")
+println(check_and_explain("fn add(a, b) = a + b", "add", 2))
+println("")
 
-// Test 4: Boolean comparison
-let stmts4 = parse("let b = 1 > 2")
-let (env4, s4, _) = check_program(stmts4)
-let (_, b_ty) = env_lookup(env4, "b")
-println("let b = 1 > 2    => b: " ++ type_to_string(s4, b_ty))
+// Test 4: If expression — WHY do branches agree?
+println("--- let r = if true { 1 } else { 2 } ---")
+println(check_and_explain("let r = if true { 1 } else { 2 }", "r", 1))
+println("")
 
-// Test 5: Function definition
-let stmts5 = parse("fn double(x) = x * 2")
-let (env5, s5, _) = check_program(stmts5)
-let (_, dbl_ty) = env_lookup(env5, "double")
-println("fn double(x)=x*2 => double: " ++ type_to_string(s5, dbl_ty))
+// Test 5: Full program — show all bindings with reasons
+println("--- full program with reasons ---")
+println(check_and_show("let x = 42\nfn double(n) = n * 2\nlet y = double(x)", 1))
 
-// Test 6: Function application
-let stmts6 = parse("fn add(a, b) = a + b\nlet r = add(1, 2)")
-let (env6, s6, _) = check_program(stmts6)
-let (_, add_ty) = env_lookup(env6, "add")
-let (_, r_ty) = env_lookup(env6, "r")
-println("fn add(a,b)=a+b  => add: " ++ type_to_string(s6, add_ty))
-println("let r = add(1,2) => r: " ++ type_to_string(s6, r_ty))
-
-// Test 7: List literal
-let stmts7 = parse("let xs = [1, 2, 3]")
-let (env7, s7, _) = check_program(stmts7)
-let (_, xs_ty) = env_lookup(env7, "xs")
-println("let xs = [1,2,3] => xs: " ++ type_to_string(s7, xs_ty))
-
-println("\n=== Lux type-checks Lux ===")
+println("=== The compiler teaches ===")

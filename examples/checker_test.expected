@@ -1,11 +1,47 @@
-=== Self-Hosted Type Checker ===
-let x = 42       => x: Int
-let y = 1 + 2    => y: Int
-let s = "hello"  => s: String
-let b = 1 > 2    => b: Bool
-fn double(x)=x*2 => double: (Int) -> Int
-fn add(a,b)=a+b  => add: (Int, Int) -> Int
-let r = add(1,2) => r: Int
-let xs = [1,2,3] => xs: List<Int>
+=== Why Engine ===
+--- let x = 42 ---
+x: Int
+  WHY: let x = ...
 
-=== Lux type-checks Lux ===
+x: Int
+  WHY: let x = ...
+  â integer literal
+
+--- let y = 1 + 2 * 3 ---
+y: Int
+  WHY: let y = ...
+
+y: Int
+  WHY: let y = ...
+  â Add requires numeric arguments
+
+--- fn add(a, b) = a + b ---
+add: (Int, Int) -> Int
+  WHY: fn add declaration
+
+add: (Int, Int) -> Int
+  WHY: fn add declaration
+  â return type of fn add
+
+add: (Int, Int) -> Int
+  WHY: fn add declaration
+  â return type of fn add
+  â Add requires numeric arguments
+
+--- let r = if true 1 else 2 ---
+r: Int
+  WHY: let r = ...
+  â if/else branches
+
+--- full program with reasons ---
+x: Int
+  WHY: let x = ...
+  â integer literal
+double: (Int) -> Int
+  WHY: fn double declaration
+  â return type of fn double
+y: Int
+  WHY: let y = ...
+  â function application
+
+=== The compiler teaches ===

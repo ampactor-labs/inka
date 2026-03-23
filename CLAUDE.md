@@ -28,7 +28,7 @@ language would do? If not, design the way it SHOULD be.**
 | Handler composition | ✅ Working | `handler` items, bare ref, inheritance, `use` clause |
 | Self-hosted lexer | ✅ Working | All token types, compiles itself |
 | Self-hosted parser | ✅ Working | All expression/statement forms, compiles itself |
-| Self-hosted checker | ✅ Working | HM inference + Why Engine (14 Reason variants) |
+| Self-hosted checker | ✅ Working | HM inference + Why Engine + effect row tracking |
 | Self-hosted codegen | ✅ Working | Full bytecode emission, match+field binding, closures |
 | **Inference pipeline** | ✅ **ACHIEVED** | `tokenize→parse→infer→generate` as 4-op Compiler effect |
 | Pipeline handlers | ✅ Working | 6 handlers: standard, teaching, explaining (Why), documenting, checking, tracing |
@@ -44,9 +44,11 @@ language would do? If not, design the way it SHOULD be.**
 **Current milestone**: Inference-as-effect pipeline with 6 handlers. Same
 pipeline = compiler + teacher + docs + debugger + checker. Gradient engine
 suggests ONE annotation per compile. CLI: `lux why/doc/check`. REPL: `:why`.
+Elm-quality error messages: did-you-mean, missing variant names, fn context.
+Tail-resumptive handler detection for zero-cost evidence passing.
+Self-hosted checker tracks effect rows through inference.
 
-**Next**: Exhaustive pattern matching, rich error messages (Elm/Rust quality),
-handler optimization (tail-resumptive → zero overhead), native backend.
+**Next**: Record types, native backend, refinement types, ownership inference.
 
 ## READ THIS FIRST — What Lux IS
 

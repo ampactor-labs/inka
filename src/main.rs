@@ -23,11 +23,22 @@ fn main() {
 
     match file_args.as_slice() {
         [] | ["repl"] => {
-            // No arguments or explicit "repl" — start REPL
-            println!("Lux 0.1.0 — A language of light\n");
-            if let Err(e) = lux::repl::run() {
-                eprintln!("REPL error: {e}");
-                process::exit(1);
+            // Try self-hosted effect-pipeline REPL first
+            let repl_path = find_std_file("repl.lux");
+            if let Some(path) = repl_path {
+                let source = read_file(&path);
+                let result = run_source(&source, &path, false, true); // quiet + no-check
+                if let Err(e) = result {
+                    eprintln!("REPL error: {}", e);
+                    process::exit(1);
+                }
+            } else {
+                // Fallback: old Rust REPL
+                println!("Lux 0.1.0 — A language of light\n");
+                if let Err(e) = lux::repl::run() {
+                    eprintln!("REPL error: {e}");
+                    process::exit(1);
+                }
             }
         }
         ["test", path] => {
@@ -208,4 +219,23 @@ fn resolve_dirs(file_path: &str) -> (std::path::PathBuf, std::path::PathBuf) {
         .unwrap_or_else(|| std::path::PathBuf::from("std"));
 
     (base_dir, std_dir)
+}
+
+/// Find a file in the std directory.
+fn find_std_file(name: &str) -> Option<String> {
+    // Try relative to executable first
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let path = dir.join("../std").join(name);
+            if path.exists() {
+                return Some(path.to_string_lossy().to_string());
+            }
+        }
+    }
+    // Try relative to CWD
+    let path = Path::new("std").join(name);
+    if path.exists() {
+        return Some(path.to_string_lossy().to_string());
+    }
+    None
 }

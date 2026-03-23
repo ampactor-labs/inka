@@ -27,6 +27,8 @@ type Expr
   | BlockExpr(List, Expr)
   | ListExpr(List)
   | TupleExpr(List)
+  | HandleExpr(Expr, List, List)
+  | ResumeExpr(Expr, List)
   | NoneExpr
 
 // Match arm: (pattern, body)
@@ -41,6 +43,7 @@ type Stmt
   | LetDestructure(List, Expr)
   | FnStmt(String, List, Expr)
   | TypeStmt(String, List)
+  | EffectDeclStmt(String, List)
   | ExprStmt(Expr)
   | ImportStmt(String)
 
@@ -388,7 +391,9 @@ fn parse_dispatch(tokens, p, typ) = {
   else { if typ == "If" { parse_if(tokens, p + 1) }
   else { if typ == "Match" { parse_match(tokens, p + 1) }
   else { if typ == "Pipe" { parse_lambda(tokens, p + 1) }
-  else { parse_prefix(tokens, p, typ) }}}}}}
+  else { if typ == "Handle" { parse_handle(tokens, p + 1) }
+  else { if typ == "Resume" { parse_resume(tokens, p + 1) }
+  else { parse_prefix(tokens, p, typ) }}}}}}}}
 }
 
 fn parse_prefix(tokens, p, typ) = {
@@ -497,6 +502,176 @@ fn parse_import_path(tokens, pos) = {
   }
 }
 
+// ─── Handle expression ───────────────────────────────────────
+// handle { body } [with name = init, ...] { op(params) => body, ... }
+//
+// HandleExpr(body, handler_arms, state_bindings)
+//   handler_arms: [(op_name, params, body), ...]
+//   state_bindings: [(name, init_expr), ...]
+
+fn parse_handle(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  // Parse body: { ... }
+  let p2 = expect(tokens, p, "LBrace");
+  let (body, p3) = parse_block(tokens, p2);
+  let p4 = skip_ws(tokens, p3);
+
+  // Parse optional "with state = init, ..."
+  let (state_bindings, p5) = if check(tokens, p4, "With") {
+    parse_state_bindings(tokens, p4 + 1)
+  } else { ([], p4) };
+
+  // Parse handler clauses: { op(params) => body, ... }
+  let p6 = skip_ws(tokens, p5);
+  let p7 = expect(tokens, p6, "LBrace");
+  let (arms, p8) = parse_handler_clauses(tokens, p7);
+  (HandleExpr(body, arms, state_bindings), p8)
+}
+
+fn parse_state_bindings(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  let name = tok_val(tokens, p);
+  let p2 = expect(tokens, skip_ws(tokens, p + 1), "Eq");
+  let (init, p3) = parse_expr(tokens, skip_ws(tokens, p2));
+  let p4 = skip_ws(tokens, p3);
+  if check(tokens, p4, "Comma") {
+    // Check if next is another state binding (name = expr)
+    // or if we've hit a handler clause / LBrace
+    let p5 = skip_ws(tokens, p4 + 1);
+    let next_typ = tok_type(tokens, p5);
+    if next_typ == "LBrace" || next_typ == "Ident" {
+      // Look ahead: is it "name =" (another state binding)?
+      let p6 = skip_ws(tokens, p5 + 1);
+      if check(tokens, p6, "Eq") {
+        let (rest, p7) = parse_state_bindings(tokens, p5);
+        ([(name, init)] ++ rest, p7)
+      } else {
+        ([(name, init)], p4 + 1)
+      }
+    } else {
+      ([(name, init)], p4 + 1)
+    }
+  } else {
+    ([(name, init)], p4)
+  }
+}
+
+fn parse_handler_clauses(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  if check(tokens, p, "RBrace") { ([], p + 1) }
+  else {
+    // op_name(params) => body
+    let op_name = tok_val(tokens, p);
+    let p2 = expect(tokens, skip_ws(tokens, p + 1), "LParen");
+    let (params, p3) = parse_names(tokens, p2, "RParen");
+    let p4 = expect(tokens, skip_ws(tokens, p3), "FatArrow");
+    let p5 = skip_ws(tokens, p4);
+    let (hbody, p6) =
+      if check(tokens, p5, "LBrace") { parse_block(tokens, p5 + 1) }
+      else { parse_expr(tokens, p5) };
+    let p7 = skip_ws(tokens, p6);
+    // Skip comma or newline separator
+    let p8 = if check(tokens, p7, "Comma") { p7 + 1 } else { p7 };
+    let (rest, p9) = parse_handler_clauses(tokens, p8);
+    ([(op_name, params, hbody)] ++ rest, p9)
+  }
+}
+
+// resume(value) [with name = expr, ...]
+fn parse_resume(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  let p2 = expect(tokens, p, "LParen");
+  let (value, p3) = parse_expr(tokens, skip_ws(tokens, p2));
+  let p4 = expect(tokens, skip_ws(tokens, p3), "RParen");
+  let p5 = skip_ws(tokens, p4);
+  // Check for "with name = expr" state updates
+  let (updates, p6) = if check(tokens, p5, "With") {
+    parse_state_updates(tokens, p5 + 1)
+  } else { ([], p5) };
+  (ResumeExpr(value, updates), p6)
+}
+
+fn parse_state_updates(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  let name = tok_val(tokens, p);
+  let p2 = expect(tokens, skip_ws(tokens, p + 1), "Eq");
+  let (val, p3) = parse_expr(tokens, skip_ws(tokens, p2));
+  let p4 = skip_ws(tokens, p3);
+  if check(tokens, p4, "Comma") {
+    let (rest, p5) = parse_state_updates(tokens, p4 + 1);
+    ([(name, val)] ++ rest, p5)
+  } else {
+    ([(name, val)], p4)
+  }
+}
+
+// ─── Effect declaration ──────────────────────────────────────
+// effect Name { op(params) -> Type, ... }
+//
+// EffectDeclStmt(name, [(op_name, param_names), ...])
+// For the self-hosted compiler, we only need op names and param counts
+// (types are handled by the checker, not codegen)
+
+fn parse_effect_decl(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  let name = tok_val(tokens, p);
+  let p2 = expect(tokens, skip_ws(tokens, p + 1), "LBrace");
+  let (ops, p3) = parse_effect_ops(tokens, p2);
+  (EffectDeclStmt(name, ops), p3)
+}
+
+fn parse_effect_ops(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  if check(tokens, p, "RBrace") { ([], p + 1) }
+  else {
+    let op_name = tok_val(tokens, p);
+    let p2 = expect(tokens, skip_ws(tokens, p + 1), "LParen");
+    // Parse parameter names (skip type annotations for now)
+    let (params, p3) = parse_effect_params(tokens, p2);
+    let p4 = skip_ws(tokens, p3);
+    // Skip optional -> ReturnType
+    let p5 = if check(tokens, p4, "Arrow") {
+      // Skip the type name(s)
+      let p_ty = skip_ws(tokens, p4 + 1);
+      // Simple: just skip one token (the type name)
+      // Handle () as return type
+      if check(tokens, p_ty, "LParen") {
+        let p_rp = expect(tokens, p_ty + 1, "RParen");
+        p_rp
+      } else {
+        p_ty + 1
+      }
+    } else { p4 };
+    let p6 = skip_ws(tokens, p5);
+    // Skip comma/newline separator
+    let p7 = if check(tokens, p6, "Comma") { p6 + 1 }
+             else { if check(tokens, p6, "Newline") { skip_ws(tokens, p6) } else { p6 } };
+    let (rest, p8) = parse_effect_ops(tokens, p7);
+    ([(op_name, params)] ++ rest, p8)
+  }
+}
+
+fn parse_effect_params(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  if check(tokens, p, "RParen") { ([], p + 1) }
+  else {
+    let name = tok_val(tokens, p);
+    let p2 = skip_ws(tokens, p + 1);
+    // Skip optional : Type annotation
+    let p3 = if check(tokens, p2, "Colon") {
+      let p_ty = skip_ws(tokens, p2 + 1);
+      p_ty + 1  // skip the type name
+    } else { p2 };
+    let p4 = skip_ws(tokens, p3);
+    if check(tokens, p4, "Comma") {
+      let (rest, p5) = parse_effect_params(tokens, p4 + 1);
+      ([name] ++ rest, p5)
+    } else {
+      ([name], expect(tokens, p4, "RParen"))
+    }
+  }
+}
+
 // ─── Program ─────────────────────────────────────────────────
 
 fn parse_program(tokens) = {
@@ -524,10 +699,14 @@ fn prog_loop(tokens, pos, items) = {
     let (td, p2) = parse_type_decl(tokens, p + 1);
     prog_loop(tokens, skip_semi(tokens, p2), push(items, td))
   }
+  else { if check(tokens, p, "Effect") {
+    let (ed, p2) = parse_effect_decl(tokens, p + 1);
+    prog_loop(tokens, skip_semi(tokens, p2), push(items, ed))
+  }
   else {
     let (e, p2) = parse_expr(tokens, p);
     prog_loop(tokens, skip_semi(tokens, p2), push(items, ExprStmt(e)))
-  }}}}}
+  }}}}}}
 }
 
 // ─── Public API ──────────────────────────────────────────────

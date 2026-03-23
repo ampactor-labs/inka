@@ -20,29 +20,33 @@ language would do? If not, design the way it SHOULD be.**
 
 | Subsystem | Status | Notes |
 |-----------|--------|-------|
-| Rust compiler | ✅ Working | 15/15 golden examples pass |
+| Rust compiler | ✅ Working | Golden examples pass, TCO, auto-currying pipes |
 | Effect system | ✅ Working | Fail, Console, State, Compute, handler-local state, evidence-passing |
 | Effect algebra | ✅ Working | `!E`, `E-F`, `Pure` constraints, compile-time enforcement |
+| String interpolation | ✅ Working | `"hello {name}"` — `{expr}` inside double quotes |
 | Teaching compiler | ✅ Working | `--teach` flag, inferred types/effects display |
 | Handler composition | ✅ Working | `handler` items, bare ref, inheritance, `use` clause |
 | Self-hosted lexer | ✅ Working | All token types, compiles itself |
 | Self-hosted parser | ✅ Working | All expression/statement forms, compiles itself |
 | Self-hosted checker | ✅ Working | HM inference + Why Engine (14 Reason variants) |
 | Self-hosted codegen | ✅ Working | Full bytecode emission, match+field binding, closures |
-| **Bootstrap pipeline** | ✅ **ACHIEVED** | `println(2+3) → 5` through self-compiled lex→parse→compile→execute |
+| **Inference pipeline** | ✅ **ACHIEVED** | `tokenize→parse→infer→generate` as 4-op Compiler effect |
+| Pipeline handlers | ✅ Working | 6 handlers: standard, teaching, explaining (Why), documenting, checking, tracing |
+| CLI subcommands | ✅ Working | `lux run/why/doc/check/test/repl` |
+| Gradient engine | ✅ Working | Detects purity, suggests ONE annotation per compile |
 | ML framework | ✅ Working | Autodiff via Compute effect, XOR trains to convergence |
-| DSP library | ✅ Working | std/dsp/ with effect-algebraic proofs |
-| Prelude | ✅ Working | 38+ functions (map, filter, fold, sort, etc.) |
-| REPL | ✅ Working | Self-hosted effect-pipeline REPL with :teach/:trace/:normal modes |
-| **Effect pipeline** | ✅ **ACHIEVED** | Compiler pipeline IS an effect graph — `compile_standard`, `compile_teaching`, `compile_tracing` are handler swaps |
+| DSP library | ✅ Working | std/dsp/ with effect-algebraic proofs, uses abs() |
+| Prelude | ✅ Working | 45+ functions (map, filter, fold, sort, max, min, clamp, etc.) |
+| REPL | ✅ Working | `:normal :teach :why :trace :quit` modes |
+| Math stdlib | ✅ Working | abs, max, min, clamp, round, sqrt, pow, log, exp, sin, cos, tanh, atan2, pi |
+| Test framework | ✅ Working | Test effect with `assert`, `expect_eq`, `run_tests`/`run_suite` handlers |
 
-**Current milestone**: Self-hosted compiler compiles AND EXECUTES Lux programs
-with algebraic effects. The compiler pipeline itself is an algebraic effect
-graph with swappable handlers (standard, teaching, tracing). REPL uses the
-effect-pipeline for interactive compilation.
+**Current milestone**: Inference-as-effect pipeline with 6 handlers. Same
+pipeline = compiler + teacher + docs + debugger + checker. Gradient engine
+suggests ONE annotation per compile. CLI: `lux why/doc/check`. REPL: `:why`.
 
-**Next**: Implement testing as effect handler swap (aligned with DESIGN.md
-vision), deepen teaching compiler output, Why Engine CLI.
+**Next**: Exhaustive pattern matching, rich error messages (Elm/Rust quality),
+handler optimization (tail-resumptive → zero overhead), native backend.
 
 ## READ THIS FIRST — What Lux IS
 

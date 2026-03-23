@@ -329,16 +329,35 @@ fn compile_expr(ctx, expr) = match expr {
     emit_op(ctx3, OP_LIST_INDEX())
   },
 
+  MatchExpr(scrutinee, arms) => {
+    // Compile scrutinee — result stays on stack
+    let ctx2 = compile_expr(ctx, scrutinee)
+    // Compile each arm as: dup, test pattern, jump-if-no-match, pop, body, jump-to-end
+    compile_match_arms(ctx2, arms, [])
+  },
+
+  LambdaExpr(params, body) => {
+    // Compile body in a nested context (like FnStmt but anonymous)
+    let fn_ctx = ctx_new()
+    let fn_ctx2 = begin_scope(fn_ctx)
+    let fn_ctx3 = declare_params(fn_ctx2, params)
+    let fn_ctx4 = compile_expr(fn_ctx3, body)
+    let fn_ctx5 = emit_op(fn_ctx4, OP_RETURN())
+    let proto = ("fn_proto", "<lambda>", len(params), ctx_code(fn_ctx5),
+                  ctx_constants(fn_ctx5), ctx_names(fn_ctx5))
+    let (ctx2, proto_idx) = add_constant(ctx, proto)
+    emit_u16(emit_op(ctx2, OP_MAKE_CLOSURE()), proto_idx)
+  },
+
   BlockExpr(stmts, final_expr) => {
     let ctx2 = begin_scope(ctx)
     let ctx3 = compile_block_stmts(ctx2, stmts)
     let ctx4 = compile_expr(ctx3, final_expr)
-    // End scope: pop locals, keep result
     let (ctx5, pops) = end_scope(ctx4)
     pop_keeping_top(ctx5, pops)
   },
 
-  _ => emit_op(ctx, OP_LOAD_UNIT())  // fallback for unhandled forms
+  _ => emit_op(ctx, OP_LOAD_UNIT())
 }
 
 fn compile_args(ctx, args) = {
@@ -346,6 +365,74 @@ fn compile_args(ctx, args) = {
   else {
     let ctx2 = compile_expr(ctx, args[0])
     compile_args(ctx2, slice(args, 1, len(args)))
+  }
+}
+
+// ─── Match Compilation ───────────────────────────────────────
+// For each arm: dup scrutinee, test pattern, jump-if-no-match,
+// pop scrutinee, execute body, jump-to-end.
+
+fn compile_match_arms(ctx, arms, end_patches) = {
+  if len(arms) == 0 {
+    // No arms matched — pop scrutinee and load unit
+    let ctx2 = emit_op(ctx, OP_POP())
+    let ctx3 = emit_op(ctx2, OP_LOAD_UNIT())
+    patch_all(ctx3, end_patches)
+  } else {
+    let (pat, body) = arms[0]
+    let rest = slice(arms, 1, len(arms))
+    let is_catch_all = match pat {
+      PWild => true,
+      PVar(_) => true,
+      _ => false
+    }
+    if is_catch_all {
+      // Always matches — bind if variable, then body
+      let ctx2 = match pat {
+        PVar(name) => {
+          let (ctx3, _) = declare_local(ctx, name)
+          ctx3
+        },
+        _ => emit_op(ctx, OP_POP())
+      }
+      let ctx3 = compile_expr(ctx2, body)
+      patch_all(ctx3, end_patches)
+    } else {
+      // Dup scrutinee for test
+      let ctx2 = emit_op(ctx, OP_DUP())
+      // Test pattern
+      let ctx3 = compile_pattern_test(ctx2, pat)
+      let (ctx4, next_patch) = emit_jump(ctx3, OP_JUMP_FALSE())
+      let ctx5 = emit_op(ctx4, OP_POP())  // pop test result
+      let ctx6 = emit_op(ctx5, OP_POP())  // pop dup'd scrutinee
+      // Compile body
+      let ctx7 = compile_expr(ctx6, body)
+      let (ctx8, end_patch) = emit_jump(ctx7, OP_JUMP())
+      // Patch: next arm starts here
+      let ctx9 = patch_jump(ctx8, next_patch)
+      let ctx10 = emit_op(ctx9, OP_POP())  // pop false test result
+      compile_match_arms(ctx10, rest, end_patches ++ [end_patch])
+    }
+  }
+}
+
+fn compile_pattern_test(ctx, pat) = match pat {
+  PCon(name, _) => {
+    let (ctx2, name_idx) = intern_name(ctx, name)
+    emit_u16(emit_op(ctx2, OP_MATCH_VARIANT()), name_idx)
+  },
+  PLit(expr) => {
+    let ctx2 = compile_expr(ctx, expr)
+    emit_op(ctx2, OP_EQ())
+  },
+  _ => emit_op(ctx, OP_MATCH_WILDCARD())
+}
+
+fn patch_all(ctx, patches) = {
+  if len(patches) == 0 { ctx }
+  else {
+    let ctx2 = patch_jump(ctx, patches[0])
+    patch_all(ctx2, slice(patches, 1, len(patches)))
   }
 }
 

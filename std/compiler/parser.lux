@@ -22,15 +22,25 @@ type Expr
   | FieldAccess(Expr, String)
   | PipeExpr(Expr, Expr)
   | IfExpr(Expr, Expr, Expr)
+  | MatchExpr(Expr, List)
+  | LambdaExpr(List, Expr)
   | BlockExpr(List, Expr)
   | ListExpr(List)
   | TupleExpr(List)
   | NoneExpr
 
+// Match arm: (pattern, body)
+type Pat
+  = PVar(String)
+  | PLit(Expr)
+  | PWild
+  | PCon(String, List)
+
 type Stmt
   = LetStmt(String, Expr)
   | LetDestructure(List, Expr)
   | FnStmt(String, List, Expr)
+  | TypeStmt(String, List)
   | ExprStmt(Expr)
   | ImportStmt(String)
 
@@ -274,31 +284,117 @@ fn parse_paren(tokens, pos) = {
   }
 }
 
+// Match expression → Expr
+fn parse_match(tokens, pos) = {
+  let (scrutinee, p) = parse_expr(tokens, pos);
+  let p2 = skip_ws(tokens, p);
+  let p3 = expect(tokens, p2, "LBrace");
+  let (arms, p4) = parse_match_arms(tokens, p3);
+  (MatchExpr(scrutinee, arms), p4)
+}
+
+fn parse_match_arms(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  if check(tokens, p, "RBrace") { ([], p + 1) }
+  else {
+    let (pat, p2) = parse_pattern(tokens, p);
+    let p3 = skip_ws(tokens, p2);
+    let p4 = expect(tokens, p3, "FatArrow");
+    let p5 = skip_ws(tokens, p4);
+    let (body, p6) =
+      if check(tokens, p5, "LBrace") { parse_block(tokens, p5 + 1) }
+      else { parse_expr(tokens, p5) };
+    let p7 = skip_ws(tokens, p6);
+    // Skip comma separator if present
+    let p8 = if check(tokens, p7, "Comma") { p7 + 1 } else { p7 };
+    let (rest, p9) = parse_match_arms(tokens, p8);
+    ([(pat, body)] ++ rest, p9)
+  }
+}
+
+fn parse_pattern(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  let typ = tok_type(tokens, p);
+  let val = tok_val(tokens, p);
+  if typ == "Ident" {
+    // Check if it's a constructor (next token is '(')
+    let p2 = p + 1;
+    if check(tokens, p2, "LParen") {
+      let (args, p3) = parse_pattern_args(tokens, p2 + 1);
+      (PCon(val, args), p3)
+    } else {
+      // Wildcard _ or binding variable
+      if val == "_" { (PWild, p2) }
+      else { (PVar(val), p2) }
+    }
+  }
+  else { if typ == "Int" || typ == "String" || typ == "True" || typ == "False" {
+    let (atom, ap) = parse_atom(tokens, p);
+    (PLit(atom), ap)
+  }
+  else {
+    (PWild, p + 1)
+  }}
+}
+
+fn parse_pattern_args(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  if check(tokens, p, "RParen") { ([], p + 1) }
+  else {
+    let (pat, p2) = parse_pattern(tokens, p);
+    let p3 = skip_ws(tokens, p2);
+    let p4 = if check(tokens, p3, "Comma") { p3 + 1 } else { p3 };
+    let (rest, p5) = parse_pattern_args(tokens, p4);
+    ([pat] ++ rest, p5)
+  }
+}
+
+// Lambda expression |params| body
+fn parse_lambda(tokens, pos) = {
+  // pos is AFTER the first | token
+  let (params, p) = parse_names(tokens, pos, "Pipe");
+  let p2 = skip_ws(tokens, p);
+  let (body, p3) =
+    if check(tokens, p2, "LBrace") { parse_block(tokens, p2 + 1) }
+    else { parse_expr(tokens, p2) };
+  (LambdaExpr(params, body), p3)
+}
+
 // Primary expression → Expr
+// Dispatch on token type via helper to avoid deep nesting
 fn parse_primary(tokens, pos) = {
   let p = skip_ws(tokens, pos);
   let typ = tok_type(tokens, p);
   let (atom, ap) = parse_atom(tokens, p);
   match atom {
-    NoneExpr =>
-      if typ == "LBracket" { parse_list(tokens, p + 1) }
-      else { if typ == "LParen" { parse_paren(tokens, p + 1) }
-      else { if typ == "LBrace" { parse_block(tokens, p + 1) }
-      else { if typ == "If" { parse_if(tokens, p + 1) }
-      else { if typ == "Minus" {
-        let (op, p2) = parse_primary(tokens, p + 1);
-        (UnaryOp("Neg", op), p2)
-      }
-      else { if typ == "Bang" {
-        let (op, p2) = parse_primary(tokens, p + 1);
-        (UnaryOp("Not", op), p2)
-      }
-      else {
-        println("Parse error: unexpected " ++ typ)
-        (VarRef("_error"), p + 1)
-      }}}}}},
+    NoneExpr => parse_dispatch(tokens, p, typ),
     _ => (atom, ap),
   }
+}
+
+fn parse_dispatch(tokens, p, typ) = {
+  if typ == "LBracket" { parse_list(tokens, p + 1) }
+  else { if typ == "LParen" { parse_paren(tokens, p + 1) }
+  else { if typ == "LBrace" { parse_block(tokens, p + 1) }
+  else { if typ == "If" { parse_if(tokens, p + 1) }
+  else { if typ == "Match" { parse_match(tokens, p + 1) }
+  else { if typ == "Pipe" { parse_lambda(tokens, p + 1) }
+  else { parse_prefix(tokens, p, typ) }}}}}}
+}
+
+fn parse_prefix(tokens, p, typ) = {
+  if typ == "Minus" {
+    let (op, p2) = parse_primary(tokens, p + 1);
+    (UnaryOp("Neg", op), p2)
+  }
+  else { if typ == "Bang" {
+    let (op, p2) = parse_primary(tokens, p + 1);
+    (UnaryOp("Not", op), p2)
+  }
+  else {
+    println("Parse error: unexpected " ++ typ)
+    (VarRef("_error"), p + 1)
+  }}
 }
 
 // Postfix: calls, indexing, field access

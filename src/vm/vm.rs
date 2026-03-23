@@ -1236,6 +1236,82 @@ impl Vm {
             Some(VmValue::Float(f)) => Ok(VmValue::Float(*f)),
             _ => Err("to_float expects a number".into()),
         });
+        self.register_builtin("max", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::Int(a)), Some(VmValue::Int(b))) => Ok(VmValue::Int(*a.max(b))),
+            (Some(VmValue::Float(a)), Some(VmValue::Float(b))) => Ok(VmValue::Float(a.max(*b))),
+            (Some(VmValue::Int(a)), Some(VmValue::Float(b))) => {
+                Ok(VmValue::Float((*a as f64).max(*b)))
+            }
+            (Some(VmValue::Float(a)), Some(VmValue::Int(b))) => {
+                Ok(VmValue::Float(a.max(*b as f64)))
+            }
+            (Some(VmValue::String(a)), Some(VmValue::String(b))) => {
+                Ok(if a.as_str() >= b.as_str() {
+                    VmValue::String(a.clone())
+                } else {
+                    VmValue::String(b.clone())
+                })
+            }
+            _ => Err("max expects two comparable values".into()),
+        });
+        self.register_builtin("min", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::Int(a)), Some(VmValue::Int(b))) => Ok(VmValue::Int(*a.min(b))),
+            (Some(VmValue::Float(a)), Some(VmValue::Float(b))) => Ok(VmValue::Float(a.min(*b))),
+            (Some(VmValue::Int(a)), Some(VmValue::Float(b))) => {
+                Ok(VmValue::Float((*a as f64).min(*b)))
+            }
+            (Some(VmValue::Float(a)), Some(VmValue::Int(b))) => {
+                Ok(VmValue::Float(a.min(*b as f64)))
+            }
+            (Some(VmValue::String(a)), Some(VmValue::String(b))) => {
+                Ok(if a.as_str() <= b.as_str() {
+                    VmValue::String(a.clone())
+                } else {
+                    VmValue::String(b.clone())
+                })
+            }
+            _ => Err("min expects two comparable values".into()),
+        });
+        self.register_builtin("clamp", |args| {
+            match (args.first(), args.get(1), args.get(2)) {
+                (Some(VmValue::Float(x)), Some(VmValue::Float(lo)), Some(VmValue::Float(hi))) => {
+                    // Don't use f64::clamp — it panics when lo > hi
+                    let result = if *x < *lo {
+                        *lo
+                    } else if *x > *hi {
+                        *hi
+                    } else {
+                        *x
+                    };
+                    Ok(VmValue::Float(result))
+                }
+                (Some(VmValue::Int(x)), Some(VmValue::Int(lo)), Some(VmValue::Int(hi))) => {
+                    let result = if *x < *lo {
+                        *lo
+                    } else if *x > *hi {
+                        *hi
+                    } else {
+                        *x
+                    };
+                    Ok(VmValue::Int(result))
+                }
+                _ => Err("clamp expects (number, number, number)".into()),
+            }
+        });
+        self.register_builtin("round", |args| match args.first() {
+            Some(VmValue::Float(f)) => Ok(VmValue::Int(f.round() as i64)),
+            Some(VmValue::Int(n)) => Ok(VmValue::Int(*n)),
+            _ => Err("round expects a number".into()),
+        });
+        self.register_builtin("atan2", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::Float(y)), Some(VmValue::Float(x))) => {
+                Ok(VmValue::Float(y.atan2(*x)))
+            }
+            _ => Err("atan2 expects two floats".into()),
+        });
+        self.register_builtin("pi", |_args| {
+            Ok(VmValue::Float(std::f64::consts::PI))
+        });
         // ── String builtins for self-hosting ──────────────────────
         self.register_builtin("char_at", |args| match (args.first(), args.get(1)) {
             (Some(VmValue::String(s)), Some(VmValue::Int(i))) => {

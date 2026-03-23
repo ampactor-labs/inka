@@ -185,19 +185,59 @@ impl TypeEnv {
                 effects: EffectRow::pure(),
             },
         );
+        let t_min = self.fresh_var();
         self.bind(
             "min",
             Type::Function {
-                params: vec![Type::Int, Type::Int],
+                params: vec![t_min.clone(), t_min.clone()],
+                return_type: Box::new(t_min),
+                effects: EffectRow::pure(),
+            },
+        );
+        let t_max = self.fresh_var();
+        self.bind(
+            "max",
+            Type::Function {
+                params: vec![t_max.clone(), t_max.clone()],
+                return_type: Box::new(t_max),
+                effects: EffectRow::pure(),
+            },
+        );
+        // clamp: (T, T, T) -> T
+        let t_clamp = self.fresh_var();
+        self.bind(
+            "clamp",
+            Type::Function {
+                params: vec![t_clamp.clone(), t_clamp.clone(), t_clamp.clone()],
+                return_type: Box::new(t_clamp),
+                effects: EffectRow::pure(),
+            },
+        );
+        // round: (Num) -> Int
+        let t_round = self.fresh_var();
+        self.bind(
+            "round",
+            Type::Function {
+                params: vec![t_round],
                 return_type: Box::new(Type::Int),
                 effects: EffectRow::pure(),
             },
         );
+        // atan2: (Float, Float) -> Float
         self.bind(
-            "max",
+            "atan2",
             Type::Function {
-                params: vec![Type::Int, Type::Int],
-                return_type: Box::new(Type::Int),
+                params: vec![Type::Float, Type::Float],
+                return_type: Box::new(Type::Float),
+                effects: EffectRow::pure(),
+            },
+        );
+        // pi: () -> Float
+        self.bind(
+            "pi",
+            Type::Function {
+                params: vec![],
+                return_type: Box::new(Type::Float),
                 effects: EffectRow::pure(),
             },
         );

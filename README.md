@@ -1,64 +1,49 @@
 # Lux
 
-**A language where the compiler teaches you.**
+<!-- [![build](https://github.com/ampactor/lux/actions/workflows/ci.yml/badge.svg)](https://github.com/ampactor/lux/actions) -->
+[![license: MIT/Apache-2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
 
-Lux is a programming language built on one bet: if you get the foundations
-right — algebraic effects, refinement types, ownership inference, row
-polymorphism — most of what programmers manually annotate today becomes
-*inferable*. You get Rust-level safety with near-Python concision.
+**The compiler teaches you what it knows.**
 
-Write code with no annotations. The compiler infers everything. Ask it
-what it found:
+Lux is a programming language where you write code with zero annotations and
+the compiler infers types, effects, purity, and allocation behavior — then
+tells you what it found and what you can unlock by being more explicit.
 
 ```
-$ lux my_code.lux
+$ lux examples/alloc.lux
 
 === lux teach ===
 
-  fn double is allocation-free (line 3)
+  fn double is allocation-free (line 13)
     inferred: (Int) -> Int with Pure
     -> add `with Pure`
        parallelization, memoization, compile-time evaluation
     -> add `with !Alloc`
        real-time audio safety, GPU offload, embedded deployment
-  fn squares is pure (line 5)
-    inferred: (Int) -> List<Int> with Pure
+  fn squares is pure (line 24)
+    inferred: (Int) -> List<a> with Pure
     -> add `with Pure`
        parallelization, memoization, compile-time evaluation
-  fn greet has effects (line 8)
-    inferred: (String) -> () with Console
+  fn say_hello has effects (line 31)
+    inferred: (a) -> () with Console
     -> add `with Console`
        explicit effect tracking — callers see their dependencies
-  3 functions checked: 1 alloc-free, 1 pure, 1 effectful
+  5 functions checked: 2 alloc-free, 2 pure, 1 effectful
 ```
 
-Every hint is *proven*, not guessed. If the compiler says "add `with Pure`",
-it's guaranteed to type-check. The gap between rapid prototype and proven
-correct is a gradient — each hint is one step forward.
+Every suggestion is *proven*, not guessed. The gap between rapid prototype and
+proven-correct is a gradient — each annotation is one step forward, and the
+compiler shows you where to step next.
 
-## One mechanism replaces six
+## Why Lux
 
-Exceptions, state, generators, async, dependency injection, backtracking —
-all `handle`/`resume`. An `effect` declares operations. A handler provides
-their semantics. Zero special syntax.
+Most languages force a choice: write fast with no safety, or write safe with
+ceremony. Lux bets that the right foundations — algebraic effects, row
+polymorphism, ownership inference, refinement types — make safety *inferable*.
+You get Rust-level guarantees with near-Python concision.
 
-```lux
-// Declare what you need
-effect Fail { fail(msg: String) -> Never }
-
-fn parse_positive(n: Int) -> Int with Fail {
-    if n < 0 { fail("negative: " ++ to_string(n)) }
-    else { n }
-}
-
-// Caller decides how to handle it
-let result = handle parse_positive(-5) {
-    fail(msg) => resume(0)    // recover with default
-}
-// result = 0
-```
-
-Same pattern, different effect — state:
+**One mechanism replaces six.** Exceptions, state, generators, async,
+dependency injection, backtracking — all one pattern: `handle`/`resume`.
 
 ```lux
 effect State { get() -> Int, set(val: Int) -> () }
@@ -71,17 +56,17 @@ let count = handle {
     get()    => resume(state),
     set(v)   => resume(()) with state = v,
 }
-// count = 3 — handle returns the body value; state is internal
+// count = 3
 ```
 
-Testing without mocks — swap the handler:
+**Testing without mocks.** Same code, different handler:
 
 ```lux
 effect Console { say(msg: String) -> () }
 
 fn greet(name: String) -> String with Console {
-    say("Greeting " ++ name ++ "...")
-    "Hello, " ++ name ++ "!"
+    say("Hello, " ++ name ++ "!")
+    name
 }
 
 // Production: real output
@@ -95,104 +80,76 @@ handle greet("World") {
 }
 ```
 
-## The effect algebra
+**A complete algebra over capabilities:**
 
-Lux has a complete algebra over capabilities. No other language has this.
+| Syntax | Meaning |
+|--------|---------|
+| `with IO, State` | Can perform IO and State |
+| `with !IO` | Provably cannot perform IO |
+| `with E - Alloc` | E minus allocation |
+| `with Pure` | Provably no effects at all |
 
-| Operator | Syntax | Meaning |
-|----------|--------|---------|
-| Union | `with IO, State` | can perform IO and State |
-| Negation | `with !IO` | provably cannot perform IO |
-| Subtraction | `with E - Alloc` | E but provably no allocation |
-| Pure | `with Pure` | provably no effects at all |
-
-These compose. A function marked `with !Alloc` propagates that constraint
-through its entire call chain — if any transitive callee allocates, the
-compiler rejects it at compile time. This proves real-time safety, enables
-GPU offloading, and gates auto-parallelization.
-
-```lux
-// The compiler proves this can never allocate
-fn process(x: Float) -> Float with !Alloc {
-    x * 0.8 |> soft_clip
-}
-
-// Subtraction reads as capability removal
-fn sandbox(x: Float) -> Float with DSP - Network - Alloc {
-    x |> gain(0.8) |> soft_clip
-}
-
-// Pure = provably no effects at all
-fn safe_add(a: Int, b: Int) -> Int with Pure { a + b }
-```
+`!Alloc` propagates through the entire call chain. If any transitive callee
+allocates, compilation fails. This proves real-time safety, gates GPU
+offloading, and enables auto-parallelization — all from one annotation.
 
 ## The gradient
 
-Every annotation you add changes what the compiler can do for you. There
-are no levels — just more knowledge flowing to the compiler.
+There are no "levels" — just more knowledge flowing to the compiler:
 
-| What you write | What the compiler does |
-|----------------|----------------------|
-| No annotations | Infers everything. It runs. |
-| Type annotations | Confirms your understanding |
-| `with Pure` | Memoizes, parallelizes, compile-time evals |
-| `with !Alloc` | Proves allocation-free for real-time |
-| Refinement types | Proves properties, eliminates runtime checks |
+| You write | The compiler can |
+|-----------|-----------------|
+| Nothing | Infers everything — it runs |
+| Types | Catches mismatches at compile time |
+| `with Pure` | Memoize, parallelize, evaluate at compile time |
+| `with !Alloc` | Prove real-time safety, offload to GPU |
+| Refinement types | Prove properties, eliminate runtime checks |
 
-The compiler shows you exactly where you are and what the next step
-unlocks. It doesn't lecture — it illuminates.
+## What falls out
 
-## What falls out for free
+These aren't planned features. They're consequences of the algebra:
 
-These aren't planned features. They're consequences of the foundations:
+- **`!Alloc` proves real-time safety.** Rust can't — `Vec::push` is safe Rust
+  and it allocates.
+- **Pure functions auto-parallelize.** The effect system proves it's safe.
+- **`!Network` is capability security.** Type-system enforced, not sandboxed.
+- **Testing = handler swap.** No mock framework, no DI container.
 
-- **`!Alloc` proves real-time safety.** Rust can't do this — `Vec::push` is
-  safe Rust and it allocates. In Lux, `!Alloc` propagates through the entire
-  call chain.
-- **Pure functions parallelize.** The effect system proves it's safe. No
-  annotations needed.
-- **`!Network` is capability security.** Enforced by the type system, not a
-  runtime sandbox.
-- **Testing without mocks.** You don't mock, you `handle`. Same code,
-  different handler. The type system guarantees the handler satisfies the
-  effect signature.
+## Status
 
-## Current status
+Lux is a research language under active development.
 
-Lux is a research prototype. The Rust implementation is scaffolding for the
-ideas — the goal is self-hosting.
+| Subsystem | Status |
+|-----------|--------|
+| Effect system (declare, handle, resume, handler state) | Working |
+| Effect algebra (union, negation, subtraction, Pure) | Working |
+| Handler composition (named, inheritance, bare refs) | Working |
+| Teaching compiler (three-tier: alloc-free / pure / effectful) | Working |
+| Self-hosted compiler (lexer, parser, checker, codegen — all Lux) | Working |
+| Bytecode VM with evidence-passing optimization | Working |
+| ML framework (autodiff via effects, XOR convergence) | Working |
+| DSP framework (provably safe audio via effect constraints) | Working |
+| Pattern matching with exhaustiveness warnings | Working |
+| Records with row polymorphism | Working |
+| Pipe operator (`x \|> f \|> g`) | Working |
+| 38 examples, 31 golden-file tested | Passing |
 
-**What works today:**
-- Full effect system: declare, handle, resume, handler-local state
-- Effect algebra: union, negation, subtraction, Pure
-- Handler composition: named handlers, inheritance, bare references
-- Handle internalization: state is internal, handle returns body value
-- Teaching compiler (`--teach`): surfaces inferred types and effects
-- Pipe operator: `x |> f |> g` for natural data flow
-- Pattern matching with exhaustiveness warnings
-- Records with row polymorphism (structural typing, self-describing)
-- Self-hosted compiler: lexer → parser → checker → codegen, ALL in Lux
-- ML framework: autodiff via effect handlers (XOR trains to convergence)
-- DSP framework: provably safe audio processing via effect constraints
-- Bytecode VM with evidence-passing optimization
-- 36 examples (30 passing, 5 self-hosted codegen issues, 1 interactive REPL)
-
-**What's next:**
-- Native codegen (Cranelift backend)
-- Ownership inference (own/gc/rc as a menu, not a mandate)
-- Refinement types (Z3-backed compile-time verification)
-- Self-hosting (the compiler rewritten in Lux)
+**Next:** ownership inference (`own`/`ref`/`gc`), native codegen (Cranelift),
+refinement types (Z3), full self-hosting.
 
 ## Try it
 
 ```bash
-git clone https://github.com/ampactor/lux
-cd lux
-cargo run -- examples/effects.lux          # see algebraic effects
-cargo run -- examples/benchmark.lux        # comprehensive test suite
-cargo run -- examples/xor.lux              # ML via effect handlers
-cargo run -- examples/generators.lux       # generators as effects
-cargo run -- --teach examples/progressive_demo.lux  # the teaching compiler
+git clone https://github.com/ampactor/lux && cd lux
+cargo install --path .
+
+lux examples/effects.lux              # algebraic effects
+lux examples/xor.lux                  # ML via effect handlers
+lux examples/generators.lux           # generators as effects
+lux examples/effect_algebra.lux       # !Alloc, Pure, negation
+lux examples/alloc.lux                # three-tier teach output
+lux examples/ownership.lux            # the annotation gradient
+lux --quiet examples/benchmark.lux    # comprehensive test suite
 ```
 
 ## Prism
@@ -201,13 +158,20 @@ Lux's mascot is **Prism**, a bioluminescent comb jelly. Comb jellies diffract
 white light into cascading rainbow spectra along their cilia — a living prism.
 Many species also generate their own light from within.
 
-The mapping is literal: unannotated code enters the compiler like white light.
-The teach system reveals the spectrum hidden inside — types, effects, purity,
-allocation freedom — each a different band. The language illuminates itself.
+Unannotated code enters the compiler like white light. The teach system reveals
+the spectrum hidden inside — types, effects, purity, allocation freedom — each
+a different band. The language illuminates itself.
 
 ## Design
 
-The full language design document is at [`docs/DESIGN.md`](docs/DESIGN.md).
+The full language design is at [`docs/DESIGN.md`](docs/DESIGN.md). Deep design
+philosophy and insights: [`docs/INSIGHTS.md`](docs/INSIGHTS.md).
+
+## Contributing
+
+Lux is early-stage and contributions are welcome. The `examples/` directory is
+the best way to understand the language. Pick an example, read it, modify it,
+see what the compiler tells you.
 
 ## License
 

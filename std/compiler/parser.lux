@@ -323,9 +323,18 @@ fn parse_pattern(tokens, pos) = {
       let (args, p3) = parse_pattern_args(tokens, p2 + 1);
       (PCon(val, args), p3)
     } else {
-      // Wildcard _ or binding variable
+      // Wildcard _ or binding variable or bare constructor
       if val == "_" { (PWild, p2) }
-      else { (PVar(val), p2) }
+      else {
+        // Convention: uppercase initial = constructor, lowercase = variable
+        let first = chars(val)[0]
+        let code = char_code(first)
+        if code >= 65 && code <= 90 {
+          (PCon(val, []), p2)  // bare constructor like NoneExpr, True, etc.
+        } else {
+          (PVar(val), p2)
+        }
+      }
     }
   }
   else { if typ == "Int" || typ == "String" || typ == "True" || typ == "False" {

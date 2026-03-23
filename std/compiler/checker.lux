@@ -24,9 +24,20 @@ type Ty
   | TUnit
   | TList(Ty)
   | TTuple(List)
-  | TFun(List, Ty)
+  | TFun(List, Ty, EffRow)
   | TVar(Int)
   | TName(String, List)
+
+// ─── Effect Row Representation ───────────────────────────────
+// Tracks which algebraic effects an expression may perform.
+//   EfPure       — no effects (parallelizable, memoizable)
+//   EfClosed(es) — exactly these effects (es is a list of strings)
+//   EfOpen(es,v) — these effects plus unknown (effect-polymorphic)
+
+type EffRow
+  = EfPure
+  | EfClosed(List)
+  | EfOpen(List, Int)
 
 // ─── Reason ADT ──────────────────────────────────────────────
 // Every type inference produces a Reason explaining HOW and WHY.
@@ -107,7 +118,7 @@ fn apply(subst, ty) = match ty {
     }
   },
   TList(elem) => TList(apply(subst, elem)),
-  TFun(params, ret) => TFun(map(|p| apply(subst, p), params), apply(subst, ret)),
+  TFun(params, ret, effs) => TFun(map(|p| apply(subst, p), params), apply(subst, ret), effs),
   TTuple(elems) => TTuple(map(|e| apply(subst, e), elems)),
   TName(name, args) => TName(name, map(|a| apply(subst, a), args))
 }
@@ -132,7 +143,7 @@ fn apply_reason(subst, ty) = match ty {
 fn occurs(subst, var_id, ty) = match apply(subst, ty) {
   TVar(id2) => id2 == var_id,
   TList(elem) => occurs(subst, var_id, elem),
-  TFun(params, ret) => any(|p| occurs(subst, var_id, p), params) || occurs(subst, var_id, ret),
+  TFun(params, ret, _) => any(|p| occurs(subst, var_id, p), params) || occurs(subst, var_id, ret),
   TTuple(elems) => any(|e| occurs(subst, var_id, e), elems),
   TName(_, args) => any(|a| occurs(subst, var_id, a), args),
   _ => false
@@ -182,8 +193,8 @@ fn unify(subst, t1, t2, context) = {
         else { (true, subst_set(subst, id, a, context), context) },
       _ => (false, subst, Because("expected List, got " ++ type_to_string(subst, b), context))
     },
-    TFun(p1, r1) => match b {
-      TFun(p2, r2) => {
+    TFun(p1, r1, _) => match b {
+      TFun(p2, r2, _) => {
         if len(p1) != len(p2) {
           (false, subst, Because("arity mismatch: " ++ to_string(len(p1)) ++ " vs " ++ to_string(len(p2)), context))
         } else {
@@ -226,96 +237,133 @@ fn unify_list(subst, ts1, ts2, context) = {
   }
 }
 
-// ─── Type Inference with Why Engine ──────────────────────────
-// Returns (type, subst, counter, reason).
+// ─── Effect Merging ──────────────────────────────────────────
+// Merge two effect rows: EfPure + E = E, closed ∪ closed, etc.
+
+fn merge_effects(a, b) = match a {
+  EfPure => b,
+  EfClosed(ea) => match b {
+    EfPure => a,
+    EfClosed(eb) => EfClosed(list_union(ea, eb)),
+    EfOpen(eb, v) => EfOpen(list_union(ea, eb), v)
+  },
+  EfOpen(ea, v) => match b {
+    EfPure => a,
+    EfClosed(eb) => EfOpen(list_union(ea, eb), v),
+    EfOpen(eb, _) => EfOpen(list_union(ea, eb), v)
+  }
+}
+
+fn list_union(a, b) = {
+  if len(b) == 0 { a }
+  else {
+    let item = b[0]
+    let rest = slice(b, 1, len(b))
+    if list_contains(a, item) { list_union(a, rest) }
+    else { list_union(a ++ [item], rest) }
+  }
+}
+
+fn list_contains(lst, item) = {
+  if len(lst) == 0 { false }
+  else { if lst[0] == item { true } else { list_contains(slice(lst, 1, len(lst)), item) }
+  }
+}
+
+// ─── Type Inference with Why Engine + Effects ────────────────
+// Returns (type, subst, counter, reason, effects).
 // The reason explains WHY this expression has this type.
+// The effects track WHICH algebraic effects it may perform.
 
 fn infer_expr(env, subst, counter, expr) = match expr {
-  IntLit(_) => (TInt, subst, counter, Literal("integer literal")),
-  FloatLit(_) => (TFloat, subst, counter, Literal("float literal")),
-  StringLit(_) => (TString, subst, counter, Literal("string literal")),
-  BoolLit(_) => (TBool, subst, counter, Literal("boolean literal")),
-  NoneExpr => (TUnit, subst, counter, Literal("unit value")),
+  IntLit(_) => (TInt, subst, counter, Literal("integer literal"), EfPure),
+  FloatLit(_) => (TFloat, subst, counter, Literal("float literal"), EfPure),
+  StringLit(_) => (TString, subst, counter, Literal("string literal"), EfPure),
+  BoolLit(_) => (TBool, subst, counter, Literal("boolean literal"), EfPure),
+  NoneExpr => (TUnit, subst, counter, Literal("unit value"), EfPure),
 
   VarRef(name) => {
     let (found_name, ty, bind_reason) = env_lookup(env, name)
     if found_name == "not_found" {
       let (tv, c2) = fresh_var(counter)
-      (tv, subst, c2, Because("unknown variable '" ++ name ++ "', assigned fresh type", Fresh(c2[0] - 1)))
+      (tv, subst, c2, Because("unknown variable '" ++ name ++ "', assigned fresh type", Fresh(c2[0] - 1)), EfPure)
     } else {
-      (ty, subst, counter, VarLookup(name, bind_reason))
+      (ty, subst, counter, VarLookup(name, bind_reason), EfPure)
     }
   },
 
   BinOp(op, left, right) => {
-    let (t1, s1, c1, r1) = infer_expr(env, subst, counter, left)
-    let (t2, s2, c2, r2) = infer_expr(env, s1, c1, right)
+    let (t1, s1, c1, r1, e1) = infer_expr(env, subst, counter, left)
+    let (t2, s2, c2, r2, e2) = infer_expr(env, s1, c1, right)
+    let effs = merge_effects(e1, e2)
     if op == "Add" || op == "Sub" || op == "Mul" || op == "Div" || op == "Mod" {
       let op_reason = OpConstraint(op ++ " requires numeric arguments", r1, r2)
       let (ok1, s3, _) = unify(s2, t1, TInt, Because("left side of " ++ op, r1))
       let (ok2, s4, _) = unify(s3, t2, TInt, Because("right side of " ++ op, r2))
-      (TInt, s4, c2, op_reason)
+      (TInt, s4, c2, op_reason, effs)
     } else { if op == "Eq" || op == "Neq" || op == "Lt" || op == "Gt" || op == "Le" || op == "Ge" {
       let op_reason = OpConstraint(op ++ " produces Bool", r1, r2)
       let (_, s3, _) = unify(s2, t1, t2, Because("comparison requires same types", Unified(r1, r2)))
-      (TBool, s3, c2, op_reason)
+      (TBool, s3, c2, op_reason, effs)
     } else { if op == "And" || op == "Or" {
       let op_reason = OpConstraint(op ++ " requires Bool operands", r1, r2)
       let (_, s3, _) = unify(s2, t1, TBool, Because("left side of " ++ op, r1))
       let (_, s4, _) = unify(s3, t2, TBool, Because("right side of " ++ op, r2))
-      (TBool, s4, c2, op_reason)
+      (TBool, s4, c2, op_reason, effs)
     } else { if op == "Concat" {
-      (t1, s2, c2, OpConstraint("++ concatenation", r1, r2))
+      (t1, s2, c2, OpConstraint("++ concatenation", r1, r2), effs)
     } else {
-      (t1, s2, c2, Inferred("binary operation"))
-    }}}}
+      (t1, s2, c2, Inferred("binary operation"), effs)
+    }}}}  
   },
 
   UnaryOp(op, operand) => {
-    let (t1, s1, c1, r1) = infer_expr(env, subst, counter, operand)
+    let (t1, s1, c1, r1, e1) = infer_expr(env, subst, counter, operand)
     if op == "Neg" {
       let (_, s2, _) = unify(s1, t1, TInt, Because("negation requires numeric type", r1))
-      (TInt, s2, c1, OpConstraint("negation produces numeric type", r1, r1))
+      (TInt, s2, c1, OpConstraint("negation produces numeric type", r1, r1), e1)
     } else { if op == "Not" {
       let (_, s2, _) = unify(s1, t1, TBool, Because("logical not requires Bool", r1))
-      (TBool, s2, c1, OpConstraint("logical not produces Bool", r1, r1))
+      (TBool, s2, c1, OpConstraint("logical not produces Bool", r1, r1), e1)
     } else {
-      (t1, s1, c1, r1)
+      (t1, s1, c1, r1, e1)
     }}
   },
 
   Call(func, args) => {
-    let (ft, s1, c1, fr) = infer_expr(env, subst, counter, func)
-    let (arg_types, arg_reasons, s2, c2) = infer_args(env, s1, c1, args)
+    let (ft, s1, c1, fr, fe) = infer_expr(env, subst, counter, func)
+    let (arg_types, arg_reasons, s2, c2, arg_effs) = infer_args(env, s1, c1, args)
     let (ret_tv, c3) = fresh_var(c2)
-    let expected_fn_type = TFun(arg_types, ret_tv)
+    let expected_fn_type = TFun(arg_types, ret_tv, EfPure)
     let (ok, s3, unify_reason) = unify(s2, ft, expected_fn_type, Because("function application", Applied(fr, arg_reasons)))
-    (apply(s3, ret_tv), s3, c3, Applied(fr, arg_reasons))
+    let call_effs = merge_effects(fe, arg_effs)
+    (apply(s3, ret_tv), s3, c3, Applied(fr, arg_reasons), call_effs)
   },
 
   IfExpr(cond, then_br, else_br) => {
-    let (tc, s1, c1, rc) = infer_expr(env, subst, counter, cond)
+    let (tc, s1, c1, rc, ec) = infer_expr(env, subst, counter, cond)
     let (_, s2, _) = unify(s1, tc, TBool, Because("if condition must be Bool", rc))
-    let (tt, s3, c2, rt) = infer_expr(env, s2, c1, then_br)
-    let (te, s4, c3, re) = infer_expr(env, s3, c2, else_br)
+    let (tt, s3, c2, rt, et) = infer_expr(env, s2, c1, then_br)
+    let (te, s4, c3, re, ee) = infer_expr(env, s3, c2, else_br)
     let (_, s5, _) = unify(s4, tt, te, Because("if branches must have same type", CondBranch(rt, re)))
-    (apply(s5, tt), s5, c3, CondBranch(rt, re))
+    let effs = merge_effects(ec, merge_effects(et, ee))
+    (apply(s5, tt), s5, c3, CondBranch(rt, re), effs)
   },
 
   ListExpr(elems) => {
     if len(elems) == 0 {
       let (tv, c2) = fresh_var(counter)
-      (TList(tv), subst, c2, Literal("empty list"))
+      (TList(tv), subst, c2, Literal("empty list"), EfPure)
     } else {
-      let (first_ty, s1, c1, first_reason) = infer_expr(env, subst, counter, elems[0])
-      let (s_final, c_final) = infer_list_elems(env, s1, c1, first_ty, slice(elems, 1, len(elems)))
-      (TList(apply(s_final, first_ty)), s_final, c_final, ListElement(first_reason))
+      let (first_ty, s1, c1, first_reason, first_eff) = infer_expr(env, subst, counter, elems[0])
+      let (s_final, c_final, elem_effs) = infer_list_elems(env, s1, c1, first_ty, slice(elems, 1, len(elems)))
+      (TList(apply(s_final, first_ty)), s_final, c_final, ListElement(first_reason), merge_effects(first_eff, elem_effs))
     }
   },
 
   TupleExpr(elems) => {
-    let (types, reasons, s_final, c_final) = infer_args(env, subst, counter, elems)
-    (TTuple(types), s_final, c_final, Literal("tuple literal"))
+    let (types, reasons, s_final, c_final, effs) = infer_args(env, subst, counter, elems)
+    (TTuple(types), s_final, c_final, Literal("tuple literal"), effs)
   },
 
   PipeExpr(left, right) => {
@@ -323,56 +371,58 @@ fn infer_expr(env, subst, counter, expr) = match expr {
     match right {
       Call(func, args) => {
         let combined = [left] ++ args
-        let (ty, s, c, r) = infer_expr(env, subst, counter, Call(func, combined))
+        let (ty, s, c, r, effs) = infer_expr(env, subst, counter, Call(func, combined))
         // Wrap reason to show pipe flow
-        let (_, _, _, left_reason) = infer_expr(env, subst, counter, left)
-        (ty, s, c, PipeFlow(left_reason, r))
+        let (_, _, _, left_reason, _) = infer_expr(env, subst, counter, left)
+        (ty, s, c, PipeFlow(left_reason, r), effs)
       },
       _ => {
-        let (ty, s, c, r) = infer_expr(env, subst, counter, Call(right, [left]))
-        let (_, _, _, left_reason) = infer_expr(env, subst, counter, left)
-        (ty, s, c, PipeFlow(left_reason, r))
+        let (ty, s, c, r, effs) = infer_expr(env, subst, counter, Call(right, [left]))
+        let (_, _, _, left_reason, _) = infer_expr(env, subst, counter, left)
+        (ty, s, c, PipeFlow(left_reason, r), effs)
       }
     }
   },
 
   BlockExpr(stmts, final_expr) => {
-    let (block_env, s1, c1) = check_block_stmts(env, subst, counter, stmts)
-    let (ty, s2, c2, reason) = infer_expr(block_env, s1, c1, final_expr)
-    (ty, s2, c2, Because("block result", reason))
+    let (block_env, s1, c1, block_effs) = check_block_stmts(env, subst, counter, stmts)
+    let (ty, s2, c2, reason, expr_effs) = infer_expr(block_env, s1, c1, final_expr)
+    (ty, s2, c2, Because("block result", reason), merge_effects(block_effs, expr_effs))
   },
 
   _ => {
     let (tv, c2) = fresh_var(counter)
-    (tv, subst, c2, Fresh(c2[0] - 1))
+    (tv, subst, c2, Fresh(c2[0] - 1), EfPure)
   }
 }
 
 fn infer_args(env, subst, counter, args) = {
-  if len(args) == 0 { ([], [], subst, counter) }
+  if len(args) == 0 { ([], [], subst, counter, EfPure) }
   else {
-    let (ty, s1, c1, reason) = infer_expr(env, subst, counter, args[0])
-    let (rest_types, rest_reasons, s2, c2) = infer_args(env, s1, c1, slice(args, 1, len(args)))
-    ([ty] ++ rest_types, [reason] ++ rest_reasons, s2, c2)
+    let (ty, s1, c1, reason, eff) = infer_expr(env, subst, counter, args[0])
+    let (rest_types, rest_reasons, s2, c2, rest_effs) = infer_args(env, s1, c1, slice(args, 1, len(args)))
+    ([ty] ++ rest_types, [reason] ++ rest_reasons, s2, c2, merge_effects(eff, rest_effs))
   }
 }
 
 fn infer_list_elems(env, subst, counter, elem_ty, elems) = {
-  if len(elems) == 0 { (subst, counter) }
+  if len(elems) == 0 { (subst, counter, EfPure) }
   else {
-    let (ty, s1, c1, _) = infer_expr(env, subst, counter, elems[0])
+    let (ty, s1, c1, _, eff) = infer_expr(env, subst, counter, elems[0])
     let (_, s2, _) = unify(s1, elem_ty, ty, Inferred("list elements must have uniform type"))
-    infer_list_elems(env, s2, c1, elem_ty, slice(elems, 1, len(elems)))
+    let (s3, c3, rest_effs) = infer_list_elems(env, s2, c1, elem_ty, slice(elems, 1, len(elems)))
+    (s3, c3, merge_effects(eff, rest_effs))
   }
 }
 
 // ─── Block Statement Checking ────────────────────────────────
 
 fn check_block_stmts(env, subst, counter, stmts) = {
-  if len(stmts) == 0 { (env, subst, counter) }
+  if len(stmts) == 0 { (env, subst, counter, EfPure) }
   else {
-    let (new_env, s1, c1) = check_stmt(env, subst, counter, stmts[0])
-    check_block_stmts(new_env, s1, c1, slice(stmts, 1, len(stmts)))
+    let (new_env, s1, c1, eff) = check_stmt(env, subst, counter, stmts[0])
+    let (final_env, s2, c2, rest_effs) = check_block_stmts(new_env, s1, c1, slice(stmts, 1, len(stmts)))
+    (final_env, s2, c2, merge_effects(eff, rest_effs))
   }
 }
 
@@ -380,32 +430,31 @@ fn check_block_stmts(env, subst, counter, stmts) = {
 
 fn check_stmt(env, subst, counter, stmt) = match stmt {
   LetStmt(name, value) => {
-    let (ty, s1, c1, reason) = infer_expr(env, subst, counter, value)
-    let new_env = env_extend(env, name, apply(s1, ty), Because("let " ++ name ++ " = ...", reason))
-    (new_env, s1, c1)
+    let (ty, s1, c1, reason, eff) = infer_expr(env, subst, counter, value)
+    let new_env = env_extend(env, name, apply(s1, ty), Because("let " ++ name ++ " = ..", reason))
+    (new_env, s1, c1, eff)
   },
 
   FnStmt(name, params, body) => {
     let (param_types, c1) = fresh_params(counter, params)
-    // Extend env with params + reason
     let fn_env = bind_params_with_reasons(env, params, param_types, name)
     let (ret_tv, c2) = fresh_var(c1)
-    let fn_type = TFun(param_types, ret_tv)
+    let fn_type = TFun(param_types, ret_tv, EfPure)
     let rec_env = env_extend(fn_env, name, fn_type, Declared("recursive binding"))
-    let (body_ty, s1, c3, body_reason) = infer_expr(rec_env, subst, c2, body)
+    let (body_ty, s1, c3, body_reason, body_effs) = infer_expr(rec_env, subst, c2, body)
     let (_, s2, _) = unify(s1, ret_tv, body_ty, FnReturn(name, body_reason))
-    let final_type = apply(s2, fn_type)
+    let final_type = TFun(map(|p| apply(s2, p), param_types), apply(s2, body_ty), body_effs)
     let fn_reason = Because("fn " ++ name ++ " declaration", FnReturn(name, body_reason))
     let new_env = env_extend(env, name, final_type, fn_reason)
-    (new_env, s2, c3)
+    (new_env, s2, c3, EfPure)
   },
 
   ExprStmt(expr) => {
-    let (_, s1, c1, _) = infer_expr(env, subst, counter, expr)
-    (env, s1, c1)
+    let (_, s1, c1, _, eff) = infer_expr(env, subst, counter, expr)
+    (env, s1, c1, eff)
   },
 
-  _ => (env, subst, counter)
+  _ => (env, subst, counter, EfPure)
 }
 
 fn fresh_params(counter, params) = {
@@ -438,7 +487,7 @@ fn check_program(stmts) = {
 fn check_stmts(env, subst, counter, stmts) = {
   if len(stmts) == 0 { (env, subst, counter) }
   else {
-    let (new_env, s1, c1) = check_stmt(env, subst, counter, stmts[0])
+    let (new_env, s1, c1, _) = check_stmt(env, subst, counter, stmts[0])
     check_stmts(new_env, s1, c1, slice(stmts, 1, len(stmts)))
   }
 }
@@ -544,9 +593,14 @@ fn type_to_string(subst, ty) = match apply(subst, ty) {
   TUnit => "()",
   TVar(id) => "?" ++ to_string(id),
   TList(elem) => "List<" ++ type_to_string(subst, elem) ++ ">",
-  TFun(params, ret) => {
+  TFun(params, ret, effs) => {
     let param_strs = map(|p| type_to_string(subst, p), params)
-    "(" ++ join(param_strs, ", ") ++ ") -> " ++ type_to_string(subst, ret)
+    let eff_str = match effs {
+      EfPure => "",
+      EfClosed(es) => " with " ++ join(es, ", "),
+      EfOpen(es, _) => if len(es) == 0 { " with .." } else { " with " ++ join(es, ", ") ++ ", .." }
+    }
+    "(" ++ join(param_strs, ", ") ++ ") -> " ++ type_to_string(subst, ret) ++ eff_str
   },
   TTuple(elems) => {
     let elem_strs = map(|e| type_to_string(subst, e), elems)

@@ -60,8 +60,8 @@ pub fn check(program: &Program) -> Result<Program, LuxError> {
     let mut env = TypeEnv::new();
     env.populate_builtins();
 
-    // First pass: register all type, effect, and trait declarations so they're
-    // visible to all top-level items regardless of order.
+    // First pass: register all type, effect, trait, and handler declarations
+    // so they're visible to all top-level items regardless of order.
     for item in &program.items {
         match item {
             Item::TypeDecl(td) => env.register_type_decl(td)?,
@@ -74,6 +74,10 @@ pub fn check(program: &Program) -> Result<Program, LuxError> {
             _ => {}
         }
     }
+
+    // Pre-register all fn declarations with fresh type variables.
+    // This enables mutual recursion: fn A can call fn B defined later.
+    env.pre_register_fn_decls(&program.items);
 
     // Second pass: check everything.
     for item in &program.items {
@@ -492,6 +496,8 @@ impl ReplChecker {
                 _ => {}
             }
         }
+        // Pre-register fn declarations for mutual recursion support.
+        self.env.pre_register_fn_decls(&program.items);
         for (i, item) in program.items.iter().enumerate() {
             self.env.current_item_index = i;
             self.env.check_item(item).map_err(LuxError::Type)?;

@@ -1,7 +1,7 @@
 /// Built-in type registrations for the Lux type checker.
-use crate::types::{EffectDef, EffectOpDef, EffectRow, Type};
+use crate::types::{EffectRow, Type};
 
-use super::{OpInfo, TypeEnv};
+use super::TypeEnv;
 
 #[allow(clippy::result_large_err)]
 impl TypeEnv {
@@ -101,36 +101,10 @@ impl TypeEnv {
             },
         );
 
-        // generate: (() -> ()) -> Generator
-        self.bind(
-            "generate",
-            Type::Function {
-                params: vec![Type::Function {
-                    params: vec![],
-                    return_type: Box::new(Type::Unit),
-                    effects: EffectRow::single("Yield"),
-                }],
-                return_type: Box::new(Type::Adt {
-                    name: "Generator".into(),
-                    type_args: vec![],
-                }),
-                effects: EffectRow::pure(),
-            },
-        );
+        // NOTE: generate/next builtins removed — generators are now
+        // implemented through the effect system. See examples/generators.lux.
+        // yield() is an effect op, collection is a handler pattern.
 
-        // next: (Generator) -> T
-        let t = self.fresh_var();
-        self.bind(
-            "next",
-            Type::Function {
-                params: vec![Type::Adt {
-                    name: "Generator".into(),
-                    type_args: vec![],
-                }],
-                return_type: Box::new(t),
-                effects: EffectRow::pure(),
-            },
-        );
 
         // String builtins
         self.bind(
@@ -416,28 +390,9 @@ impl TypeEnv {
             },
         );
 
-        // Builtin Yield effect: yield(T) -> ()
-        let t = self.fresh_var();
-        let yield_op = EffectOpDef {
-            name: "yield".into(),
-            param_types: vec![t],
-            return_type: Type::Unit,
-        };
-        self.op_index.insert(
-            "yield".into(),
-            OpInfo {
-                effect_name: "Yield".into(),
-                param_types: yield_op.param_types.clone(),
-                return_type: yield_op.return_type.clone(),
-            },
-        );
-        self.effects.insert(
-            "Yield".into(),
-            EffectDef {
-                name: "Yield".into(),
-                operations: vec![yield_op],
-            },
-        );
+        // NOTE: Yield effect removed from builtins — generators declare their
+        // own effects. See examples/generators.lux for the pattern.
+
 
         // ── Self-hosting builtins ────────────────────────────────
 

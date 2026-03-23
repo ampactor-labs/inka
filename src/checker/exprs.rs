@@ -77,7 +77,21 @@ impl TypeEnv {
                 }
 
                 match self.lookup(name) {
-                    Some(ty) => Ok((ty, EffectRow::pure())),
+                    Some(ty) => {
+                        // If this variable is a function with concrete named effects,
+                        // record them in effect_routing so the compiler can emit
+                        // BundleEvidence when the function is passed as a value to
+                        // higher-order functions. Skip open rows with only row
+                        // variables (from pre-registered mutual recursion) — these
+                        // have no concrete evidence to bundle.
+                        if let Type::Function { effects, .. } = &ty {
+                            if !effects.effects().is_empty() {
+                                self.effect_routing
+                                    .insert(span.clone(), effects.clone());
+                            }
+                        }
+                        Ok((ty, EffectRow::pure()))
+                    }
                     None => Err(TypeError {
                         kind: TypeErrorKind::UnboundVariable(name.clone()),
                         span: span.clone(),

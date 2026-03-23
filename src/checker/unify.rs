@@ -287,6 +287,15 @@ impl TypeEnv {
                     "Bool" => return Ok(Type::Bool),
                     "Unit" | "()" => return Ok(Type::Unit),
                     "Never" => return Ok(Type::Never),
+                    // List<T> or bare List (inferred element type)
+                    "List" => {
+                        let inner = if args.is_empty() {
+                            self.fresh_var()
+                        } else {
+                            self.resolve_type_expr(&args[0])?
+                        };
+                        return Ok(Type::List(Box::new(inner)));
+                    }
                     _ => {}
                 }
                 // Check if it's a type parameter in scope

@@ -136,6 +136,41 @@ impl TypeEnv {
         Ok(())
     }
 
+    // ── Pre-registration (mutual recursion) ────────────────────
+
+    /// Pre-bind all top-level function names with fresh type variables.
+    /// This enables mutual recursion: fn A defined before fn B can call B.
+    ///
+    /// Each function gets bound as `(fresh_0, ..., fresh_N) -> fresh_ret`
+    /// with open effects. The later `check_fn_decl` will unify these
+    /// fresh vars with the actual inferred types, narrowing them to the
+    /// precise types.
+    pub(crate) fn pre_register_fn_decls(&mut self, items: &[Item]) {
+        for item in items {
+            if let Item::FnDecl(fd) = item {
+                // Skip if already bound (e.g. from a prior import pass)
+                if self.bindings.contains_key(&fd.name) {
+                    continue;
+                }
+                let param_types: Vec<Type> = fd.params.iter().map(|p| {
+                    if let Some(ann) = &p.type_ann {
+                        self.resolve_type_expr(ann).unwrap_or_else(|_| self.fresh_var())
+                    } else {
+                        self.fresh_var()
+                    }
+                }).collect();
+                let ret = self.fresh_var();
+                let effects = self.fresh_eff_var();
+                let fn_type = Type::Function {
+                    params: param_types,
+                    return_type: Box::new(ret),
+                    effects,
+                };
+                self.bind(&fd.name, fn_type);
+            }
+        }
+    }
+
     // ── Item checking (second pass) ───────────────────────────
 
     pub(crate) fn check_item(&mut self, item: &Item) -> Result<(), TypeError> {

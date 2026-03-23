@@ -1,10 +1,38 @@
-// Lux Parser — written in Lux
+// Lux Parser — written in Lux, typed by Lux
 //
-// Self-hosted recursive descent parser. Parses tokens from the lexer
-// into an AST represented as tagged tuples.
+// Self-hosted recursive descent parser. Uses Lux's own ADT system
+// to define the AST — proving the type system can express its own parser.
 // Each parse function takes (tokens, pos) and returns (node, new_pos).
 
 import compiler/lexer
+
+// ─── AST Types ───────────────────────────────────────────────
+// Lux parsing itself with Lux's own type system.
+
+type Expr
+  = IntLit(String)
+  | FloatLit(String)
+  | StringLit(String)
+  | BoolLit(Bool)
+  | VarRef(String)
+  | BinOp(String, Expr, Expr)
+  | UnaryOp(String, Expr)
+  | Call(Expr, List)
+  | Index(Expr, Expr)
+  | FieldAccess(Expr, String)
+  | PipeExpr(Expr, Expr)
+  | IfExpr(Expr, Expr, Expr)
+  | BlockExpr(List, Expr)
+  | ListExpr(List)
+  | TupleExpr(List)
+  | NoneExpr
+
+type Stmt
+  = LetStmt(String, Expr)
+  | LetDestructure(List, Expr)
+  | FnStmt(String, List, Expr)
+  | ExprStmt(Expr)
+  | ImportStmt(String)
 
 // ─── Token helpers ───────────────────────────────────────────
 
@@ -23,7 +51,7 @@ fn check(tokens, pos, expected) = tok_type(tokens, pos) == expected
 fn expect(tokens, pos, expected) =
   if check(tokens, pos, expected) { pos + 1 }
   else {
-    println("Parse error: expected " ++ expected ++ " got " ++ tok_type(tokens, pos));
+    println("Parse error: expected " ++ expected ++ " got " ++ tok_type(tokens, pos))
     pos
   }
 
@@ -94,23 +122,22 @@ fn parse_names(tokens, pos, end_tok) = {
   }
 }
 
-// ─── Expression parser (all levels) ──────────────────────────
-// Functions are ordered bottom-up to avoid forward references.
+// ─── Expression parser ───────────────────────────────────────
 
-// Atom: literal / identifier
+// Atom: literal / identifier → Expr
 fn parse_atom(tokens, p) = {
   let typ = tok_type(tokens, p);
   let val = tok_val(tokens, p);
-  if typ == "Int" { (("IntLit", val), p + 1) }
-  else { if typ == "Float" { (("FloatLit", val), p + 1) }
-  else { if typ == "String" { (("StringLit", val), p + 1) }
-  else { if typ == "True" { (("BoolLit", "true"), p + 1) }
-  else { if typ == "False" { (("BoolLit", "false"), p + 1) }
-  else { if typ == "Ident" { (("Var", val), p + 1) }
-  else { (("_none", ""), p) } } } } } }
+  if typ == "Int" { (IntLit(val), p + 1) }
+  else { if typ == "Float" { (FloatLit(val), p + 1) }
+  else { if typ == "String" { (StringLit(val), p + 1) }
+  else { if typ == "True" { (BoolLit(true), p + 1) }
+  else { if typ == "False" { (BoolLit(false), p + 1) }
+  else { if typ == "Ident" { (VarRef(val), p + 1) }
+  else { (NoneExpr, p) } } } } } }
 }
 
-// If expression
+// If expression → Expr
 fn parse_if(tokens, pos) = {
   let (cond, p) = parse_expr(tokens, pos);
   let p2 = skip_ws(tokens, p);
@@ -124,29 +151,29 @@ fn parse_if(tokens, pos) = {
       if check(tokens, p5, "If") { parse_if(tokens, p5 + 1) }
       else { if check(tokens, p5, "LBrace") { parse_block(tokens, p5 + 1) }
       else { parse_expr(tokens, p5) } };
-    (("If", cond, then_br, else_br), p6)
+    (IfExpr(cond, then_br, else_br), p6)
   }
-  else { (("If", cond, then_br, ("Tuple", [])), p4) }
+  else { (IfExpr(cond, then_br, TupleExpr([])), p4) }
 }
 
-// Let binding
+// Let binding → Stmt
 fn parse_let(tokens, pos) = {
   let p = skip_ws(tokens, pos);
   if check(tokens, p, "LParen") {
     let (names, p2) = parse_names(tokens, p + 1, "RParen");
     let p3 = expect(tokens, skip_ws(tokens, p2), "Eq");
     let (val, p4) = parse_expr(tokens, skip_ws(tokens, p3));
-    (("LetDestructure", names, val), p4)
+    (LetDestructure(names, val), p4)
   }
   else {
     let name = tok_val(tokens, p);
     let p2 = expect(tokens, skip_ws(tokens, p + 1), "Eq");
     let (val, p3) = parse_expr(tokens, skip_ws(tokens, p2));
-    (("Let", name, val), p3)
+    (LetStmt(name, val), p3)
   }
 }
 
-// Fn declaration
+// Fn declaration → Stmt
 fn parse_fn(tokens, pos) = {
   let p = skip_ws(tokens, pos);
   let name = tok_val(tokens, p);
@@ -157,19 +184,19 @@ fn parse_fn(tokens, pos) = {
   let (body, p6) =
     if check(tokens, p5, "LBrace") { parse_block(tokens, p5 + 1) }
     else { parse_expr(tokens, p5) };
-  (("FnDecl", name, params, body), p6)
+  (FnStmt(name, params, body), p6)
 }
 
-// Block { stmts; final_expr }
+// Block { stmts; final_expr } → Expr
 fn parse_block(tokens, pos) = {
   let (stmts, final_e, p) = block_loop(tokens, pos, []);
-  (("Block", stmts, final_e), p)
+  (BlockExpr(stmts, final_e), p)
 }
 
 fn block_loop(tokens, pos, stmts) = {
   let p = skip_ws(tokens, pos);
-  if check(tokens, p, "RBrace") { (stmts, ("Tuple", []), p + 1) }
-  else { if check(tokens, p, "Eof") { (stmts, ("Tuple", []), p) }
+  if check(tokens, p, "RBrace") { (stmts, TupleExpr([]), p + 1) }
+  else { if check(tokens, p, "Eof") { (stmts, TupleExpr([]), p) }
   else { block_item(tokens, p, stmts) } }
 }
 
@@ -190,10 +217,10 @@ fn block_expr_item(tokens, p, stmts) = {
   let p3 = skip_ws(tokens, p2);
   if check(tokens, p3, "RBrace") { (stmts, expr, p3 + 1) }
   else { if check(tokens, p3, "Eof") { (stmts, expr, p3) }
-  else { block_loop(tokens, skip_semi(tokens, p3), push(stmts, ("ExprStmt", expr))) } }
+  else { block_loop(tokens, skip_semi(tokens, p3), push(stmts, ExprStmt(expr))) } }
 }
 
-// Comma-separated expression list (for function calls, list literals)
+// Comma-separated expression list
 fn parse_args(tokens, pos, end_tok) = {
   let p = skip_ws(tokens, pos);
   if check(tokens, p, end_tok) { ([], p + 1) }
@@ -218,50 +245,63 @@ fn parse_args(tokens, pos, end_tok) = {
 // List literal [...]
 fn parse_list(tokens, pos) = {
   let (elems, p) = parse_args(tokens, pos, "RBracket");
-  (("List", elems), p)
+  (ListExpr(elems), p)
 }
 
 // Parenthesized expression or tuple
 fn parse_paren(tokens, pos) = {
   let p = skip_ws(tokens, pos);
-  if check(tokens, p, "RParen") { (("Tuple", []), p + 1) }
+  if check(tokens, p, "RParen") { (TupleExpr([]), p + 1) }
   else {
     let (first, p2) = parse_expr(tokens, p);
     let p3 = skip_ws(tokens, p2);
     if check(tokens, p3, "Comma") {
-      let (rest, p4) = parse_args(tokens, p3 + 1, "RParen");
-      (("Tuple", push([first], rest)), p4)
+      // Tuple: collect remaining elements one-by-one via accumulator
+      fn tuple_go(tokens, p, acc) = {
+        let p2 = skip_ws(tokens, p);
+        if check(tokens, p2, "RParen") { (acc, p2 + 1) }
+        else {
+          let (elem, p3) = parse_expr(tokens, p2);
+          let p4 = skip_ws(tokens, p3);
+          if check(tokens, p4, "Comma") { tuple_go(tokens, p4 + 1, push(acc, elem)) }
+          else { (push(acc, elem), expect(tokens, p4, "RParen")) }
+        }
+      };
+      let (elems, p4) = tuple_go(tokens, p3 + 1, [first]);
+      (TupleExpr(elems), p4)
     }
     else { (first, expect(tokens, p3, "RParen")) }
   }
 }
 
-// Primary expression
+// Primary expression → Expr
 fn parse_primary(tokens, pos) = {
   let p = skip_ws(tokens, pos);
   let typ = tok_type(tokens, p);
   let (atom, ap) = parse_atom(tokens, p);
-  let (tag, _) = atom;
-  if tag != "_none" { (atom, ap) }
-  else { if typ == "LBracket" { parse_list(tokens, p + 1) }
-  else { if typ == "LParen" { parse_paren(tokens, p + 1) }
-  else { if typ == "LBrace" { parse_block(tokens, p + 1) }
-  else { if typ == "If" { parse_if(tokens, p + 1) }
-  else { if typ == "Minus" {
-    let (op, p2) = parse_primary(tokens, p + 1);
-    (("UnaryOp", "Neg", op), p2)
+  match atom {
+    NoneExpr =>
+      if typ == "LBracket" { parse_list(tokens, p + 1) }
+      else { if typ == "LParen" { parse_paren(tokens, p + 1) }
+      else { if typ == "LBrace" { parse_block(tokens, p + 1) }
+      else { if typ == "If" { parse_if(tokens, p + 1) }
+      else { if typ == "Minus" {
+        let (op, p2) = parse_primary(tokens, p + 1);
+        (UnaryOp("Neg", op), p2)
+      }
+      else { if typ == "Bang" {
+        let (op, p2) = parse_primary(tokens, p + 1);
+        (UnaryOp("Not", op), p2)
+      }
+      else {
+        println("Parse error: unexpected " ++ typ)
+        (VarRef("_error"), p + 1)
+      }}}}}},
+    _ => (atom, ap),
   }
-  else { if typ == "Bang" {
-    let (op, p2) = parse_primary(tokens, p + 1);
-    (("UnaryOp", "Not", op), p2)
-  }
-  else {
-    println("Parse error: unexpected " ++ typ);
-    (("Var", "_error"), p + 1)
-  }}}}}}}
 }
 
-// Postfix: calls and indexing
+// Postfix: calls, indexing, field access
 fn parse_postfix(tokens, pos) = {
   let (e, p) = parse_primary(tokens, pos);
   postfix_loop(tokens, e, p)
@@ -271,13 +311,17 @@ fn postfix_loop(tokens, e, pos) = {
   let t = tok_type(tokens, pos);
   if t == "LParen" {
     let (args, p2) = parse_args(tokens, pos + 1, "RParen");
-    postfix_loop(tokens, ("Call", e, args), p2)
+    postfix_loop(tokens, Call(e, args), p2)
   }
   else { if t == "LBracket" {
     let (idx, p2) = parse_expr(tokens, pos + 1);
-    postfix_loop(tokens, ("Index", e, idx), expect(tokens, p2, "RBracket"))
+    postfix_loop(tokens, Index(e, idx), expect(tokens, p2, "RBracket"))
   }
-  else { (e, pos) } }
+  else { if t == "Dot" {
+    let field = tok_val(tokens, pos + 1);
+    postfix_loop(tokens, FieldAccess(e, field), pos + 2)
+  }
+  else { (e, pos) } } }
 }
 
 // Binary operators with precedence climbing
@@ -293,8 +337,8 @@ fn binop_loop(tokens, left, pos, min_p) = {
   if pr >= min_p && pr > 0 {
     let op = to_op(t);
     let (right, p2) = parse_binop(tokens, p + 1, pr + 1);
-    let node = if op == "Pipe" { ("Pipe", left, right) }
-               else { ("BinOp", op, left, right) };
+    let node = if op == "Pipe" { PipeExpr(left, right) }
+               else { BinOp(op, left, right) };
     binop_loop(tokens, node, p2, min_p)
   }
   else { (left, p) }
@@ -306,13 +350,13 @@ fn parse_expr(tokens, pos) = parse_binop(tokens, pos, 1)
 // ─── Program ─────────────────────────────────────────────────
 
 fn parse_program(tokens) = {
-  let (items, _) = prog_loop(tokens, 0, []);
-  ("Program", items)
+  let items = prog_loop(tokens, 0, []);
+  items
 }
 
 fn prog_loop(tokens, pos, items) = {
   let p = skip_ws(tokens, pos);
-  if check(tokens, p, "Eof") { (items, p) }
+  if check(tokens, p, "Eof") { items }
   else { if check(tokens, p, "Fn") {
     let (d, p2) = parse_fn(tokens, p + 1);
     prog_loop(tokens, skip_semi(tokens, p2), push(items, d))
@@ -323,11 +367,11 @@ fn prog_loop(tokens, pos, items) = {
   }
   else { if check(tokens, p, "Import") {
     let path = tok_val(tokens, skip_ws(tokens, p + 1));
-    prog_loop(tokens, skip_semi(tokens, p + 2), push(items, ("Import", path)))
+    prog_loop(tokens, skip_semi(tokens, p + 2), push(items, ImportStmt(path)))
   }
   else {
     let (e, p2) = parse_expr(tokens, p);
-    prog_loop(tokens, skip_semi(tokens, p2), push(items, ("ExprStmt", e)))
+    prog_loop(tokens, skip_semi(tokens, p2), push(items, ExprStmt(e)))
   }}}}
 }
 

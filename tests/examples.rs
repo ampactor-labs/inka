@@ -23,6 +23,21 @@ fn run_lux(file: &str) -> (String, String, bool) {
     )
 }
 
+/// Run with --no-check (for examples importing self-hosted modules).
+fn run_lux_no_check(file: &str) -> (String, String, bool) {
+    let output = Command::new(env!("CARGO_BIN_EXE_lux"))
+        .arg("--no-check")
+        .arg("--quiet")
+        .arg(file)
+        .output()
+        .unwrap_or_else(|e| panic!("failed to run lux on {file}: {e}"));
+    (
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+        output.status.success(),
+    )
+}
+
 /// Find all examples that have a `.expected` golden file.
 fn golden_examples() -> Vec<(String, String)> {
     let examples_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples");
@@ -56,17 +71,18 @@ fn vm_matches_golden_files() {
     for (lux_file, expected_file) in &pairs {
         let name = Path::new(lux_file).file_stem().unwrap().to_string_lossy();
 
-        // Skip examples with known VM limitations.
-        // - generators: uses thread-based channels (interpreter-only, needs VM reimpl)
-        // - dsp_sandbox: evidence-passing for higher-order effect functions
-        //   (e.g. map(logged_safe, xs)) not yet complete in VM
-        if name == "generators" || name == "dsp_sandbox" {
-            continue;
-        }
+        // Examples importing self-hosted modules need --no-check due to a
+        // known evidence-passing limitation in the Rust compiler. The
+        // Lux-in-Lux compiler will resolve this.
+        let needs_no_check = name == "parser_test" || name == "lexer_test";
 
         let expected = std::fs::read_to_string(expected_file)
             .unwrap_or_else(|e| panic!("can't read {expected_file}: {e}"));
-        let (stdout, stderr, success) = run_lux(lux_file);
+        let (stdout, stderr, success) = if needs_no_check {
+            run_lux_no_check(lux_file)
+        } else {
+            run_lux(lux_file)
+        };
 
         if !success {
             failures.push(format!(

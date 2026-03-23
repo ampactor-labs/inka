@@ -60,8 +60,7 @@ pub(super) struct Compiler {
     pub(super) evidence_state: Option<(u16, u8)>,
     /// Side table mapping expression/declaration spans to required evidence arguments.
     pub(super) effect_routing: HashMap<crate::token::Span, Vec<String>>,
-    /// Whether the compiler is currently parsing the function object of a Call.
-    pub(super) in_callee: bool,
+
 }
 
 /// Loop compilation context.
@@ -95,7 +94,7 @@ impl Compiler {
             evidence_slots: HashMap::new(),
             evidence_state: None,
             effect_routing,
-            in_callee: false,
+
         }
     }
 
@@ -234,18 +233,6 @@ impl Compiler {
             fn_compiler.scope.declare_local(&param.name);
         }
 
-        // Declare evidence parameters as locals based on effect_routing
-        if let Some(req_effs) = self.effect_routing.get(&fd.span) {
-            for eff in req_effs {
-                let ev_name = format!("{}__ev", eff);
-                fn_compiler.scope.declare_local(&ev_name);
-                let local_idx = fn_compiler.scope.resolve_local(&ev_name).unwrap();
-                fn_compiler
-                    .evidence_slots
-                    .insert(eff.clone(), local_idx as u16);
-            }
-        }
-
         // Compile body
         fn_compiler.in_tail = true;
         fn_compiler.compile_expr(&fd.body)?;
@@ -258,12 +245,7 @@ impl Compiler {
         self.scope = *enclosing;
 
         let mut proto = fn_compiler.finish();
-        let evidence_count = if let Some(req_effs) = self.effect_routing.get(&fd.span) {
-            req_effs.len()
-        } else {
-            0
-        };
-        proto.arity = (fd.params.len() + evidence_count) as u16;
+        proto.arity = fd.params.len() as u16;
 
         // Create closure and emit upvalue descriptors
         let proto_idx = self.chunk.add_constant(Constant::FnProto(Arc::new(proto)));
@@ -338,30 +320,6 @@ impl Compiler {
             Expr::Var(name, span) => {
                 let line = Self::current_line(span);
                 self.compile_var_load(name, line);
-
-                // If this variable is passed as a value (not an immediate call target),
-                // bundle any available evidence it requires into a closure right now.
-                if !self.in_callee {
-                    let req_effs = self.effect_routing.get(span).cloned().unwrap_or_default();
-                    if !req_effs.is_empty() {
-                        let mut bundled_count = 0;
-                        for eff in req_effs {
-                            if let Some(&local_idx) = self.evidence_slots.get(&eff) {
-                                self.emit_op(OpCode::LoadLocal, line);
-                                self.emit_u16(local_idx, line);
-                                bundled_count += 1;
-                            } else {
-                                // Fallback if missing
-                                self.emit_op(OpCode::LoadUnit, line);
-                                bundled_count += 1;
-                            }
-                        }
-                        if bundled_count > 0 {
-                            self.emit_op(OpCode::BundleEvidence, line);
-                            self.emit_u8(bundled_count as u8, line);
-                        }
-                    }
-                }
             }
 
             Expr::BinOp {
@@ -784,27 +742,9 @@ impl Compiler {
                 }
 
                 let line = Self::current_line(span);
-                let prev = self.in_callee;
-                self.in_callee = true;
                 self.compile_expr(func)?;
-                self.in_callee = prev;
                 for arg in args {
                     self.compile_expr(arg)?;
-                }
-
-                let mut total_args = args.len();
-                if let Some(req_effs) = self.effect_routing.get(span).cloned() {
-                    for eff in req_effs {
-                        if let Some(&local_idx) = self.evidence_slots.get(&eff) {
-                            self.emit_op(OpCode::LoadLocal, line);
-                            self.emit_u16(local_idx, line);
-                            total_args += 1;
-                        } else {
-                            // Bug in static analysis or missing evidence handling
-                            self.emit_op(OpCode::LoadUnit, line);
-                            total_args += 1;
-                        }
-                    }
                 }
 
                 if self.in_tail {
@@ -812,7 +752,7 @@ impl Compiler {
                 } else {
                     self.emit_op(OpCode::Call, line);
                 }
-                self.emit_u8(total_args as u8, line);
+                self.emit_u8(args.len() as u8, line);
             }
 
             Expr::Lambda {
@@ -833,18 +773,6 @@ impl Compiler {
                     fn_compiler.scope.declare_local(&param.name);
                 }
 
-                // Declare evidence parameters as locals based on effect_routing
-                if let Some(req_effs) = self.effect_routing.get(span) {
-                    for eff in req_effs {
-                        let ev_name = format!("{}__ev", eff);
-                        fn_compiler.scope.declare_local(&ev_name);
-                        let local_idx = fn_compiler.scope.resolve_local(&ev_name).unwrap();
-                        fn_compiler
-                            .evidence_slots
-                            .insert(eff.clone(), local_idx as u16);
-                    }
-                }
-
                 fn_compiler.in_tail = true;
                 fn_compiler.compile_expr(body)?;
                 fn_compiler.emit_op(OpCode::Return, line);
@@ -856,12 +784,7 @@ impl Compiler {
                 self.scope = *enclosing;
 
                 let mut proto = fn_compiler.finish();
-                let evidence_count = if let Some(req_effs) = self.effect_routing.get(span) {
-                    req_effs.len()
-                } else {
-                    0
-                };
-                proto.arity = (params.len() + evidence_count) as u16;
+                proto.arity = params.len() as u16;
 
                 let proto_idx = self.chunk.add_constant(Constant::FnProto(Arc::new(proto)));
                 self.emit_op(OpCode::MakeClosure, line);

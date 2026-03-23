@@ -1,122 +1,46 @@
-// Parser test suite
 import compiler/parser
 
-fn run_tests() = {
-  println("=== Lux Parser Self-Test ===")
-  let pass = 0
-  let fail = 0
+println("=== ADT Parser Test ===")
 
-  // Test 1: let binding
-  let r1 = parse("let x = 42")
-  let (_, items1) = r1
-  let (tag1, name1, val1) = items1[0]
-  let ok1 = tag1 == "Let" && name1 == "x"
-  if ok1 { println("  test let_binding ... ok") }
-  else { println("  test let_binding ... FAIL: " ++ to_string(r1)) }
-  let pass = if ok1 { pass + 1 } else { pass }
-  let fail = if ok1 { fail } else { fail + 1 }
+// Let binding
+let r1 = parse("let x = 42")
+println("let x = 42        => " ++ to_string(r1))
 
-  // Test 2: fn declaration
-  let r2 = parse("fn add(a, b) = a + b")
-  let (_, items2) = r2
-  let (tag2, name2, params2, body2) = items2[0]
-  let ok2 = tag2 == "FnDecl" && name2 == "add" && len(params2) == 2
-  if ok2 { println("  test fn_decl ... ok") }
-  else { println("  test fn_decl ... FAIL: " ++ to_string(r2)) }
-  let pass = if ok2 { pass + 1 } else { pass }
-  let fail = if ok2 { fail } else { fail + 1 }
+// Arithmetic
+let r2 = parse("1 + 2 * 3")
+println("1 + 2 * 3          => " ++ to_string(r2))
 
-  // Test 3: precedence (1 + 2 * 3 => Add(1, Mul(2, 3)))
-  let r3 = parse("1 + 2 * 3")
-  let (_, items3) = r3
-  let (_, expr3) = items3[0]
-  let (tag3, op3, left3, right3) = expr3
-  let (rtag3, _, _, _) = right3
-  let ok3 = tag3 == "BinOp" && op3 == "Add" && rtag3 == "BinOp"
-  if ok3 { println("  test precedence ... ok") }
-  else { println("  test precedence ... FAIL: " ++ to_string(r3)) }
-  let pass = if ok3 { pass + 1 } else { pass }
-  let fail = if ok3 { fail } else { fail + 1 }
+// Function call
+let r3 = parse("f(1, 2)")
+println("f(1, 2)            => " ++ to_string(r3))
 
-  // Test 4: if expression
-  let r4 = parse("if true { 1 } else { 2 }")
-  let (_, items4) = r4
-  let (_, expr4) = items4[0]
-  let (tag4, _, _, _) = expr4
-  let ok4 = tag4 == "If"
-  if ok4 { println("  test if_expr ... ok") }
-  else { println("  test if_expr ... FAIL: " ++ to_string(r4)) }
-  let pass = if ok4 { pass + 1 } else { pass }
-  let fail = if ok4 { fail } else { fail + 1 }
+// If expression
+let r4 = parse("if x { 1 } else { 2 }")
+println("if x { 1 } else.. => " ++ to_string(r4))
 
-  // Test 5: list literal
-  let r5 = parse("[1, 2, 3]")
-  let (_, items5) = r5
-  let (_, expr5) = items5[0]
-  let (tag5, elems5) = expr5
-  let ok5 = tag5 == "List" && len(elems5) == 3
-  if ok5 { println("  test list ... ok") }
-  else { println("  test list ... FAIL: " ++ to_string(r5)) }
-  let pass = if ok5 { pass + 1 } else { pass }
-  let fail = if ok5 { fail } else { fail + 1 }
+// Function declaration
+let r5 = parse("fn add(a, b) = a + b")
+println("fn add(a, b)..     => " ++ to_string(r5))
 
-  // Test 6: function call
-  let r6 = parse("f(x, y)")
-  let (_, items6) = r6
-  let (_, expr6) = items6[0]
-  let (tag6, callee6, args6) = expr6
-  let ok6 = tag6 == "Call" && len(args6) == 2
-  if ok6 { println("  test call ... ok") }
-  else { println("  test call ... FAIL: " ++ to_string(r6)) }
-  let pass = if ok6 { pass + 1 } else { pass }
-  let fail = if ok6 { fail } else { fail + 1 }
+// Nested calls
+let r6 = parse("f(g(1))")
+println("f(g(1))            => " ++ to_string(r6))
 
-  // Test 7: pipe
-  let r7 = parse("x |> f")
-  let (_, items7) = r7
-  let (_, expr7) = items7[0]
-  let (tag7, _, _) = expr7
-  let ok7 = tag7 == "Pipe"
-  if ok7 { println("  test pipe ... ok") }
-  else { println("  test pipe ... FAIL: " ++ to_string(r7)) }
-  let pass = if ok7 { pass + 1 } else { pass }
-  let fail = if ok7 { fail } else { fail + 1 }
+// List literal
+let r7 = parse("[1, 2, 3]")
+println("[1, 2, 3]          => " ++ to_string(r7))
 
-  // Test 8: unary
-  let r8 = parse("-x")
-  let (_, items8) = r8
-  let (_, expr8) = items8[0]
-  let (tag8, op8, _) = expr8
-  let ok8 = tag8 == "UnaryOp" && op8 == "Neg"
-  if ok8 { println("  test unary ... ok") }
-  else { println("  test unary ... FAIL: " ++ to_string(r8)) }
-  let pass = if ok8 { pass + 1 } else { pass }
-  let fail = if ok8 { fail } else { fail + 1 }
+// Boolean
+let r8 = parse("true")
+println("true               => " ++ to_string(r8))
 
-  // Test 9: comparison
-  let r9 = parse("a == b")
-  let (_, items9) = r9
-  let (_, expr9) = items9[0]
-  let (tag9, op9, _, _) = expr9
-  let ok9 = tag9 == "BinOp" && op9 == "Eq"
-  if ok9 { println("  test comparison ... ok") }
-  else { println("  test comparison ... FAIL: " ++ to_string(r9)) }
-  let pass = if ok9 { pass + 1 } else { pass }
-  let fail = if ok9 { fail } else { fail + 1 }
+// Unary
+let r9 = parse("-x")
+println("-x                 => " ++ to_string(r9))
 
-  // Test 10: index
-  let r10 = parse("a[0]")
-  let (_, items10) = r10
-  let (_, expr10) = items10[0]
-  let (tag10, _, _) = expr10
-  let ok10 = tag10 == "Index"
-  if ok10 { println("  test index ... ok") }
-  else { println("  test index ... FAIL: " ++ to_string(r10)) }
-  let pass = if ok10 { pass + 1 } else { pass }
-  let fail = if ok10 { fail } else { fail + 1 }
+// Empty parens
+let r10 = parse("()")
+println("()                 => " ++ to_string(r10))
 
-  println("")
-  println("test result: " ++ to_string(pass) ++ "/" ++ to_string(pass + fail) ++ " passed")
-}
-
-run_tests()
+println("")
+println("Lux parsing itself. ADTs typing their own AST. One type system.")

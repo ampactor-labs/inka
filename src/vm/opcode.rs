@@ -189,6 +189,7 @@ impl OpCode {
             72 => Some(Self::Return),
             73 => Some(Self::TailCall),
             74 => Some(Self::CallBuiltin),
+            75 => Some(Self::BundleEvidence),
             80 => Some(Self::MakeList),
             81 => Some(Self::MakeTuple),
             82 => Some(Self::ListIndex),

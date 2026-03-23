@@ -969,6 +969,13 @@ impl Vm {
                     self.stack.push(ev.clone());
                 }
 
+                let total_args = argc + evidence.len();
+                let extra_locals =
+                    (closure.proto.local_count as usize).saturating_sub(total_args);
+                for _ in 0..extra_locals {
+                    self.stack.push(VmValue::Unit);
+                }
+
                 self.frames.push(CallFrame {
                     proto: closure.proto.clone(),
                     upvalues: closure.upvalues.clone(),

@@ -11,23 +11,25 @@ Write code with no annotations. The compiler infers everything. Ask it
 what it found:
 
 ```
-$ lux --teach my_code.lux
+$ lux my_code.lux
 
 === lux teach ===
 
-  fn add is pure (line 3)
-    inferred: (a, a) -> a with Pure
+  fn double is allocation-free (line 3)
+    inferred: (Int) -> Int with Pure
     -> add `with Pure`
        parallelization, memoization, compile-time evaluation
-  fn greet has effects (line 5)
+    -> add `with !Alloc`
+       real-time audio safety, GPU offload, embedded deployment
+  fn squares is pure (line 5)
+    inferred: (Int) -> List<Int> with Pure
+    -> add `with Pure`
+       parallelization, memoization, compile-time evaluation
+  fn greet has effects (line 8)
     inferred: (String) -> () with Console
     -> add `with Console`
        explicit effect tracking — callers see their dependencies
-  fn predict is pure (line 42)
-    inferred: (Model, Input) -> Output with Pure
-    -> add `with Pure`
-       parallelization, memoization, compile-time evaluation
-  3 functions checked: 2 pure (add `with Pure` to prove it), 1 with undeclared effects
+  3 functions checked: 1 alloc-free, 1 pure, 1 effectful
 ```
 
 Every hint is *proven*, not guessed. If the compiler says "add `with Pure`",
@@ -192,6 +194,16 @@ cargo run -- examples/xor.lux              # ML via effect handlers
 cargo run -- examples/generators.lux       # generators as effects
 cargo run -- --teach examples/progressive_demo.lux  # the teaching compiler
 ```
+
+## Prism
+
+Lux's mascot is **Prism**, a bioluminescent comb jelly. Comb jellies diffract
+white light into cascading rainbow spectra along their cilia — a living prism.
+Many species also generate their own light from within.
+
+The mapping is literal: unannotated code enters the compiler like white light.
+The teach system reveals the spectrum hidden inside — types, effects, purity,
+allocation freedom — each a different band. The language illuminates itself.
 
 ## Design
 

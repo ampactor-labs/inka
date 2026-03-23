@@ -12,6 +12,7 @@ fn main() {
     // Flags: --teach is the default (Lux teaches by design)
     // Use --quiet to suppress teaching output.
     let quiet_mode = args.iter().any(|a| a == "--quiet");
+    let no_check = args.iter().any(|a| a == "--no-check");
     let teach_mode = !quiet_mode;
     let file_args: Vec<&str> = args
         .iter()
@@ -38,7 +39,7 @@ fn main() {
             } else {
                 format!("import test\n{source}")
             };
-            let result = run_source(&source, path, teach_mode);
+            let result = run_source(&source, path, teach_mode, no_check);
             if let Err(e) = result {
                 eprintln!(
                     "{}",
@@ -66,7 +67,7 @@ fn main() {
         [path] => {
             // Single argument — run file
             let source = read_file(path);
-            let result = run_source(&source, path, teach_mode);
+            let result = run_source(&source, path, teach_mode, no_check);
             if let Err(e) = result {
                 eprintln!(
                     "{}",
@@ -92,7 +93,12 @@ fn read_file(path: &str) -> String {
     }
 }
 
-fn run_source(source: &str, file_path: &str, teach: bool) -> Result<(), lux::error::LuxError> {
+fn run_source(
+    source: &str,
+    file_path: &str,
+    teach: bool,
+    no_check: bool,
+) -> Result<(), lux::error::LuxError> {
     let mut checker = lux::checker::ReplChecker::new();
 
     // Load and check prelude.
@@ -115,22 +121,24 @@ fn run_source(source: &str, file_path: &str, teach: bool) -> Result<(), lux::err
     let (base_dir, std_dir) = resolve_dirs(file_path);
     let (program, import_count) = lux::loader::resolve_imports(&program, &base_dir, &std_dir)?;
 
-    checker.set_import_count(import_count);
-    checker.check_line(&program)?;
-    for (msg, span) in checker.take_warnings() {
-        eprintln!(
-            "warning: {msg}\n  --> {file_path}:{}:{}",
-            span.line, span.column
-        );
-    }
-    if teach {
-        let hints = checker.take_hints();
-        if !hints.is_empty() {
-            eprintln!("=== lux teach ===\n");
-            for hint in &hints {
-                eprint!("{}", lux::error::format_hint(hint, Some(file_path)));
+    if !no_check {
+        checker.set_import_count(import_count);
+        checker.check_line(&program)?;
+        for (msg, span) in checker.take_warnings() {
+            eprintln!(
+                "warning: {msg}\n  --> {file_path}:{}:{}",
+                span.line, span.column
+            );
+        }
+        if teach {
+            let hints = checker.take_hints();
+            if !hints.is_empty() {
+                eprintln!("=== lux teach ===\n");
+                for hint in &hints {
+                    eprint!("{}", lux::error::format_hint(hint, Some(file_path)));
+                }
+                eprintln!("{}\n", lux::error::format_hint_summary(&hints));
             }
-            eprintln!("{}\n", lux::error::format_hint_summary(&hints));
         }
     }
 

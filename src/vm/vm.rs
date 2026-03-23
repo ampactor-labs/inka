@@ -1328,6 +1328,31 @@ impl Vm {
             };
             Err(format!("assertion failed: {msg}"))
         });
+
+        // File I/O — enables self-hosted compiler to compile from files
+        self.register_builtin("read_file", |args| {
+            match args.first() {
+                Some(VmValue::String(path)) => {
+                    match std::fs::read_to_string(path.as_ref()) {
+                        Ok(contents) => Ok(VmValue::String(Arc::new(contents))),
+                        Err(e) => Err(format!("read_file: {e}")),
+                    }
+                }
+                _ => Err("read_file: expected string path".to_string()),
+            }
+        });
+
+        self.register_builtin("write_file", |args| {
+            match (args.first(), args.get(1)) {
+                (Some(VmValue::String(path)), Some(VmValue::String(content))) => {
+                    match std::fs::write(path.as_ref(), content.as_ref()) {
+                        Ok(()) => Ok(VmValue::Unit),
+                        Err(e) => Err(format!("write_file: {e}")),
+                    }
+                }
+                _ => Err("write_file: expected (path, content) strings".to_string()),
+            }
+        });
     }
 
     fn register_builtin(&mut self, name: &str, func: BuiltinFn) {

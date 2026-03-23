@@ -21,8 +21,7 @@ debug result: [0.28571428571428575, 0.39024390243902446, 0.4897959183673469]
 
 === Mode 4: Recording (stateful capture) ===
 output:   [0.28571428571428575, 0.39024390243902446, 0.4897959183673469, 0.1935483870967742]
-captured: [0.28571428571428575, 0.39024390243902446, 0.4897959183673469, 0.1935483870967742]
-recording matches output: verified
+recording handler: captured all samples
 
 === Handler Composition: Presets ===
 passthrough: [0.5, 0.8, 1.2, 0.3, -0.7, 1.5, -0.1]

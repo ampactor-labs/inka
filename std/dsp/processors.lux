@@ -33,8 +33,7 @@ fn process_lowpass(alpha, buffer) = {
             resume(y) with state = y
         },
     }
-    let (processed, _) = result
-    processed
+    result
 }
 
 // ── Biquad filter ───────────────────────────────────────────
@@ -48,8 +47,7 @@ fn process_biquad(b0, b1, b2, a1, a2, buffer) = {
             resume(y) with y1 = y, y2 = y1, x1 = x, x2 = x1
         },
     }
-    let (processed, _, _, _, _) = result
-    processed
+    result
 }
 
 // ── Envelope follower ───────────────────────────────────────
@@ -65,8 +63,7 @@ fn process_envelope(attack, release, buffer) = {
             resume(env) with state = env
         },
     }
-    let (processed, _) = result
-    processed
+    result
 }
 
 // ── Preset handlers ─────────────────────────────────────────

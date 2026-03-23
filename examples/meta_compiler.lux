@@ -1,49 +1,55 @@
-// Meta-Unification Demo: Compiler Pipeline as Effects
+// The Meta-Unification: Compiler = Effects
 //
-// This program proves the deepest insight about Lux:
-// compiler, teacher, and tracer are the SAME pipeline
-// with different handlers.
+// Same source, six handlers — each uses the pipeline differently.
+// This proves: compiler, teacher, docs, debugger = same pipeline.
 
 import compiler/pipeline
+
+let source = "let x = 2 + 3\nprintln(x)"
 
 println("═══════════════════════════════════════════")
 println("  The Meta-Unification: Compiler = Effects")
 println("═══════════════════════════════════════════")
 println("")
-
-let source = "let x = 2 + 3\nprintln(x)"
-
 println("Source program:")
 println("  " ++ source)
 println("")
 
-// ─── Standard compilation ───────────────────────────────
-println("── Handler 1: compile_standard ──")
-let chunk1 = compile_standard(source)
-let prog1 = load_chunk(chunk1)
-print("  output: ")
-prog1()
+// Handler 1: just compile and run
+println("── compile_standard ──")
+let chunk = compile_standard(source)
+let program = load_chunk(chunk)
+program()
+
 println("")
 
-// ─── Teaching compilation ───────────────────────────────
-println("── Handler 2: compile_teaching ──")
-let (chunk2, teach_log) = compile_teaching(source)
-let prog2 = load_chunk(chunk2)
-print("  output: ")
-prog2()
-println("  log: " ++ to_string(teach_log))
+// Handler 2: teach — shows types + gradient
+println("── compile_teaching ──")
+let (chunk2, _) = compile_teaching(source)
+let program2 = load_chunk(chunk2)
+program2()
+
 println("")
 
-// ─── Tracing compilation ────────────────────────────────
-println("── Handler 3: compile_tracing ──")
-let (chunk3, trace_stages) = compile_tracing(source)
-let prog3 = load_chunk(chunk3)
-print("  output: ")
-prog3()
+// Handler 3: why engine — full reasoning chains
+println("── compile_explaining ──")
+let chunk3 = compile_explaining(source)
+let program3 = load_chunk(chunk3)
+program3()
+
 println("")
 
-println("═══════════════════════════════════════════")
-println("  Same pipeline. Three handlers.")
-println("  Same input → same output.")
-println("  The compiler IS the language.")
-println("═══════════════════════════════════════════")
+// Handler 4: documentation — typed signatures
+println("── compile_documenting ──")
+let chunk4 = compile_documenting(source)
+let program4 = load_chunk(chunk4)
+program4()
+
+println("")
+
+// Handler 5: check only — no execution
+println("── compile_checking ──")
+let _ = compile_checking(source)
+
+println("")
+println("Same pipeline. Same inference. Five tools.")

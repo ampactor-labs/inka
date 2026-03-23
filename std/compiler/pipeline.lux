@@ -1,42 +1,46 @@
-// Lux Compiler Pipeline — as an effect graph
+// Lux Compiler Pipeline — the unified effect graph
 //
-// This is the meta-unification made real: the compiler pipeline is an
-// effect graph. Different handlers give different behaviors:
-//   - compile_standard: produce bytecode
-//   - compile_teaching: log each stage with explanations
-//   - compile_tracing: capture timing and metadata
+// The meta-unification: every compiler tool is a handler on
+// the same pipeline. The pipeline performs four effects:
+//   tokenize → parse → infer → generate
 //
-// The pipeline function performs Compiler effects at each stage.
-// Handlers intercept and provide the actual implementation.
-// This proves: compiler, teacher, tracer = same pipeline, different handler.
+// Handlers decide what to DO with each stage:
+//   compile_standard:  just compile and execute
+//   compile_teaching:  infer + show ONE gradient suggestion
+//   compile_explaining: infer + dump Why Engine reasoning
+//   compile_documenting: infer + extract typed signatures
+//   compile_checking:   infer only, no codegen
+//   compile_tracing:    capture all intermediate representations
+//
+// This proves: compiler = teacher = docs = debugger = same pipeline.
 
 import compiler/lexer
 import compiler/parser
+import compiler/checker
 import compiler/codegen
 
 // ─── The Compiler Effect ─────────────────────────────────────
-// Each compilation stage is an effect operation.
-// The pipeline doesn't know HOW stages execute — only WHAT they are.
 
 effect Compiler {
   tokenize(source: String) -> List
   parse_source(tokens: List) -> List
-  generate(ast: List) -> Tuple
+  infer(ast: List) -> Tuple
+  generate(checked: Tuple, ast: List) -> Tuple
 }
 
 // ─── The Pipeline ────────────────────────────────────────────
-// Pure computation flow. Performs effects, doesn't implement them.
-// This is the universal shape — WHAT compilation does.
+// Universal shape. Performs effects, doesn't implement them.
 
 fn compile_pipeline(source) = {
   let tokens = tokenize(source)
   let ast = parse_source(tokens)
-  let chunk = generate(ast)
+  let type_info = infer(ast)
+  let chunk = generate(type_info, ast)
   chunk
 }
 
-// ─── Handler: Standard Compilation ───────────────────────────
-// The default policy. Each stage calls the real implementation.
+// ─── Handler: Standard ───────────────────────────────────────
+// Default. Infer types silently, then compile.
 
 fn compile_standard(source) =
   handle {
@@ -44,12 +48,13 @@ fn compile_standard(source) =
   } {
     tokenize(src) => resume(lex(src)),
     parse_source(tokens) => resume(parse_program(tokens)),
-    generate(ast) => resume(compile_program(ast))
+    infer(ast) => resume(check_program(ast)),
+    generate(checked, ast) => resume(compile_program(ast))
   }
 
-// ─── Handler: Teaching Compilation ───────────────────────────
-// Same pipeline, but each stage explains what it did.
-// The teach handler captures metadata in handler-local state.
+// ─── Handler: Teaching ───────────────────────────────────────
+// Infer types, show what the compiler learned, suggest ONE
+// annotation that would unlock the most power.
 
 fn compile_teaching(source) =
   handle {
@@ -57,26 +62,98 @@ fn compile_teaching(source) =
   } with log = [] {
     tokenize(src) => {
       let tokens = lex(src)
-      let n = len(tokens)
-      println("[teach] tokenize: " ++ to_string(n) ++ " tokens")
-      resume(tokens) with log = push(log, ("tokenize", n))
+      resume(tokens) with log = push(log, ("tokenize", len(tokens)))
     },
     parse_source(tokens) => {
       let ast = parse_program(tokens)
-      let n = len(ast)
-      println("[teach] parse: " ++ to_string(n) ++ " top-level items")
-      resume(ast) with log = push(log, ("parse", n))
+      resume(ast) with log = push(log, ("parse", len(ast)))
     },
-    generate(ast) => {
+    infer(ast) => {
+      let result = check_program(ast)
+      let (env, subst, _) = result
+      // Show what the compiler knows
+      println("[teach] types inferred:")
+      println(show_env_compact(env, subst))
+      // Show gradient suggestion
+      let suggestion = gradient_suggestion(env, subst)
+      if len(suggestion) > 0 {
+        println("[teach] 💡 " ++ suggestion)
+      }
+      resume(result) with log = push(log, ("infer", len(env)))
+    },
+    generate(checked, ast) => {
       let chunk = compile_program(ast)
-      println("[teach] codegen: chunk ready")
       resume(chunk) with log = push(log, ("codegen", 1))
     }
   }
 
-// ─── Handler: Tracing Compilation ────────────────────────────
-// Same pipeline, but captures intermediate representations.
-// Useful for debugging the compiler itself.
+// ─── Handler: Why Engine ─────────────────────────────────────
+// Infer types, dump full reasoning chain for every binding.
+// The compiler makes its reasoning transparent.
+
+fn compile_explaining(source) =
+  handle {
+    compile_pipeline(source)
+  } {
+    tokenize(src) => resume(lex(src)),
+    parse_source(tokens) => resume(parse_program(tokens)),
+    infer(ast) => {
+      let result = check_program(ast)
+      let (env, subst, _) = result
+      println("── Why Engine ──")
+      println(show_env_why(env, subst, 2))
+      resume(result)
+    },
+    generate(checked, ast) => resume(compile_program(ast))
+  }
+
+// ─── Handler: Documentation ─────────────────────────────────
+// Infer types, extract typed signatures. No codegen.
+// The type environment IS the documentation.
+
+fn compile_documenting(source) =
+  handle {
+    compile_pipeline(source)
+  } {
+    tokenize(src) => resume(lex(src)),
+    parse_source(tokens) => resume(parse_program(tokens)),
+    infer(ast) => {
+      let result = check_program(ast)
+      let (env, subst, _) = result
+      println("── Documentation ──")
+      println(show_env_doc(env, subst))
+      resume(result)
+    },
+    generate(checked, ast) => {
+      // Doc mode: still compile (may want to run examples)
+      resume(compile_program(ast))
+    }
+  }
+
+// ─── Handler: Check Only ────────────────────────────────────
+// Infer types, report, STOP. No codegen, no execution.
+
+fn compile_checking(source) =
+  handle {
+    compile_pipeline(source)
+  } {
+    tokenize(src) => resume(lex(src)),
+    parse_source(tokens) => resume(parse_program(tokens)),
+    infer(ast) => {
+      let result = check_program(ast)
+      let (env, subst, _) = result
+      println("✓ type check passed")
+      println(show_env_compact(env, subst))
+      resume(result)
+    },
+    generate(checked, ast) => {
+      // Check mode: skip codegen entirely
+      resume(("skip", [], [], 0))
+    }
+  }
+
+// ─── Handler: Tracing ────────────────────────────────────────
+// Capture all intermediate representations.
 
 fn compile_tracing(source) =
   handle {
@@ -92,7 +169,13 @@ fn compile_tracing(source) =
       println("[trace] ast: " ++ to_string(ast))
       resume(ast) with stages = push(stages, ("ast", ast))
     },
-    generate(ast) => {
+    infer(ast) => {
+      let result = check_program(ast)
+      let (env, subst, _) = result
+      println("[trace] types: " ++ show_env_compact(env, subst))
+      resume(result) with stages = push(stages, ("types", env))
+    },
+    generate(checked, ast) => {
       let chunk = compile_program(ast)
       println("[trace] chunk: " ++ to_string(chunk))
       resume(chunk) with stages = push(stages, ("chunk", chunk))
@@ -100,13 +183,12 @@ fn compile_tracing(source) =
   }
 
 // ─── REPL Variants ───────────────────────────────────────────
-// Same pipeline, but uses compile_repl to preserve expression values.
-// In a REPL, `2 + 3` should return 5, not ().
 
 fn repl_compile_pipeline(source) = {
   let tokens = tokenize(source)
   let ast = parse_source(tokens)
-  let chunk = generate(ast)
+  let type_info = infer(ast)
+  let chunk = generate(type_info, ast)
   chunk
 }
 
@@ -116,7 +198,8 @@ fn repl_standard(source) =
   } {
     tokenize(src) => resume(lex(src)),
     parse_source(tokens) => resume(parse_program(tokens)),
-    generate(ast) => resume(compile_repl(ast))
+    infer(ast) => resume(check_program(ast)),
+    generate(checked, ast) => resume(compile_repl(ast))
   }
 
 fn repl_teaching(source) =
@@ -125,21 +208,44 @@ fn repl_teaching(source) =
   } with log = [] {
     tokenize(src) => {
       let tokens = lex(src)
-      let n = len(tokens)
-      println("[teach] " ++ to_string(n) ++ " tokens")
-      resume(tokens) with log = push(log, ("tokenize", n))
+      println("[teach] " ++ to_string(len(tokens)) ++ " tokens")
+      resume(tokens) with log = push(log, ("tokenize", len(tokens)))
     },
     parse_source(tokens) => {
       let ast = parse_program(tokens)
-      let n = len(ast)
-      println("[teach] " ++ to_string(n) ++ " AST nodes")
-      resume(ast) with log = push(log, ("parse", n))
+      println("[teach] " ++ to_string(len(ast)) ++ " AST nodes")
+      resume(ast) with log = push(log, ("parse", len(ast)))
     },
-    generate(ast) => {
+    infer(ast) => {
+      let result = check_program(ast)
+      let (env, subst, _) = result
+      println("[teach] types: " ++ show_env_compact(env, subst))
+      let suggestion = gradient_suggestion(env, subst)
+      if len(suggestion) > 0 {
+        println("[teach] 💡 " ++ suggestion)
+      }
+      resume(result) with log = push(log, ("infer", len(env)))
+    },
+    generate(checked, ast) => {
       let chunk = compile_repl(ast)
       println("[teach] compiled")
       resume(chunk) with log = push(log, ("codegen", 1))
     }
+  }
+
+fn repl_explaining(source) =
+  handle {
+    repl_compile_pipeline(source)
+  } {
+    tokenize(src) => resume(lex(src)),
+    parse_source(tokens) => resume(parse_program(tokens)),
+    infer(ast) => {
+      let result = check_program(ast)
+      let (env, subst, _) = result
+      println(show_env_why(env, subst, 2))
+      resume(result)
+    },
+    generate(checked, ast) => resume(compile_repl(ast))
   }
 
 fn repl_tracing(source) =
@@ -156,9 +262,93 @@ fn repl_tracing(source) =
       println("[trace] " ++ to_string(ast))
       resume(ast) with stages = push(stages, ("ast", ast))
     },
-    generate(ast) => {
+    infer(ast) => {
+      let result = check_program(ast)
+      let (env, subst, _) = result
+      println("[trace] types: " ++ show_env_why(env, subst, 3))
+      resume(result) with stages = push(stages, ("types", env))
+    },
+    generate(checked, ast) => {
       let chunk = compile_repl(ast)
       println("[trace] " ++ to_string(chunk))
       resume(chunk) with stages = push(stages, ("chunk", chunk))
     }
   }
+
+// ─── Display Helpers ─────────────────────────────────────────
+
+// Compact: "x: Int, f: (Int) -> Int"
+fn show_env_compact(env, subst) = {
+  if len(env) == 0 { "" }
+  else {
+    let (name, ty, _) = env[len(env) - 1]
+    let ty_str = type_to_string(subst, ty)
+    let line = "  " ++ name ++ ": " ++ ty_str
+    let rest = show_env_compact(slice(env, 0, len(env) - 1), subst)
+    if len(rest) > 0 { line ++ "\n" ++ rest }
+    else { line }
+  }
+}
+
+// Why: "x: Int  WHY: integer literal"
+fn show_env_why(env, subst, depth) = {
+  if len(env) == 0 { "" }
+  else {
+    let (name, ty, reason) = env[len(env) - 1]
+    let ty_str = type_to_string(subst, ty)
+    let line = "  " ++ name ++ ": " ++ ty_str ++ "\n    WHY: " ++ show_reason(reason, depth)
+    let rest = show_env_why(slice(env, 0, len(env) - 1), subst, depth)
+    if len(rest) > 0 { line ++ "\n" ++ rest }
+    else { line }
+  }
+}
+
+// Doc: "fn name: signature"
+fn show_env_doc(env, subst) = {
+  if len(env) == 0 { "" }
+  else {
+    let (name, ty, _) = env[len(env) - 1]
+    let ty_str = type_to_string(subst, ty)
+    let prefix = match apply(subst, ty) {
+      TFun(_, _) => "fn ",
+      _ => "let "
+    }
+    let line = prefix ++ name ++ ": " ++ ty_str
+    let rest = show_env_doc(slice(env, 0, len(env) - 1), subst)
+    if len(rest) > 0 { line ++ "\n" ++ rest }
+    else { line }
+  }
+}
+
+// ─── Gradient Engine ─────────────────────────────────────────
+// Pick ONE suggestion — the most impactful next annotation.
+
+fn gradient_suggestion(env, subst) = {
+  // Look for functions without annotations that are pure
+  find_pure_unannotated(env, subst)
+}
+
+fn find_pure_unannotated(env, subst) = {
+  if len(env) == 0 { "" }
+  else {
+    let (name, ty, reason) = env[0]
+    let suggestion = match apply(subst, ty) {
+      TFun(params, ret) => {
+        // If the reason doesn't include Declared, it's unannotated
+        if is_inferred(reason) {
+          "Adding type annotation to `" ++ name ++ "` would enable compile-time validation"
+        } else { "" }
+      },
+      _ => ""
+    }
+    if len(suggestion) > 0 { suggestion }
+    else { find_pure_unannotated(slice(env, 1, len(env)), subst) }
+  }
+}
+
+fn is_inferred(reason) = match reason {
+  Declared(_) => false,
+  Inferred(_) => true,
+  Fresh(_) => true,
+  _ => true
+}

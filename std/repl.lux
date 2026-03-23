@@ -1,15 +1,13 @@
 // Lux REPL — Interactive Read-Eval-Print Loop
 //
-// The REPL itself demonstrates Lux's core thesis:
-// the interaction loop is an effect pipeline with swappable handlers.
+// The REPL demonstrates the meta-unification:
+// same pipeline, different handlers = different modes.
 //
-// :teach  — handler that explains each compilation stage
-// :trace  — handler that dumps full intermediate representations
+// :teach  — shows inferred types + gradient suggestion
+// :why    — shows full Why Engine reasoning chains
+// :trace  — dumps all intermediate representations
 // :normal — standard compilation
 // :quit   — exit
-//
-// The REPL uses compile_repl (not compile_program) so that
-// expressions like `2 + 3` return their value instead of ().
 
 import compiler/pipeline
 
@@ -20,7 +18,7 @@ fn repl_banner() = {
   println("  ╩  ╩ ═╝ ╝")
   println("")
   println("  Interactive Lux — self-hosted compiler")
-  println("  :teach :trace :normal :quit")
+  println("  :teach :why :trace :normal :quit")
   println("")
 }
 
@@ -38,11 +36,15 @@ fn repl_loop(mode) = {
         println("Goodbye!")
       }
       else { if line == ":teach" {
-        println("→ teaching mode (shows compilation stages)")
+        println("→ teaching mode (inferred types + gradient)")
         repl_loop("teach")
       }
+      else { if line == ":why" {
+        println("→ why mode (full reasoning chains)")
+        repl_loop("why")
+      }
       else { if line == ":trace" {
-        println("→ tracing mode (shows full IR)")
+        println("→ tracing mode (all intermediate representations)")
         repl_loop("trace")
       }
       else { if line == ":normal" {
@@ -55,7 +57,7 @@ fn repl_loop(mode) = {
       else {
         repl_eval(line, mode)
         repl_loop(mode)
-      }}}}}
+      }}}}}}
     }
   }
 }
@@ -63,6 +65,12 @@ fn repl_loop(mode) = {
 fn repl_eval(source, mode) = {
   if mode == "teach" {
     let (chunk, _log) = repl_teaching(source)
+    let program = load_chunk(chunk)
+    let result = program()
+    print_result(result)
+  }
+  else { if mode == "why" {
+    let chunk = repl_explaining(source)
     let program = load_chunk(chunk)
     let result = program()
     print_result(result)
@@ -78,7 +86,7 @@ fn repl_eval(source, mode) = {
     let program = load_chunk(chunk)
     let result = program()
     print_result(result)
-  }}
+  }}}
 }
 
 fn print_result(result) = {

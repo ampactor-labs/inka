@@ -1,0 +1,11 @@
+=== Self-Hosted Type Checker ===
+let x = 42       => x: Int
+let y = 1 + 2    => y: Int
+let s = "hello"  => s: String
+let b = 1 > 2    => b: Bool
+fn double(x)=x*2 => double: (Int) -> Int
+fn add(a,b)=a+b  => add: (Int, Int) -> Int
+let r = add(1,2) => r: Int
+let xs = [1,2,3] => xs: List<Int>
+
+=== Lux type-checks Lux ===

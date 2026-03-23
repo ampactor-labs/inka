@@ -36,6 +36,14 @@ pub enum HintKind {
     PurityOpportunity,
     /// Function performs effects but doesn't declare them
     EffectsUndeclared,
+    /// Nested function calls that would read better as pipe chains
+    PipeSuggestion { nested: String, piped: String },
+    /// A let binding whose value is never used
+    UnusedBinding,
+    /// Handler is tail-resumptive — zero-cost at runtime
+    TailResumptiveHandler,
+    /// Summary: effect budget for the module
+    EffectBudget { pure_count: usize, effectful_count: usize },
 }
 
 /// Format a compiler hint for terminal display.
@@ -43,24 +51,80 @@ pub fn format_hint(hint: &CompilerHint, filename: Option<&str>) -> String {
     let filename = filename.unwrap_or("<input>");
     let mut out = String::new();
 
-    let label = match hint.kind {
-        HintKind::PurityOpportunity => "is pure",
-        HintKind::EffectsUndeclared => "has effects",
-    };
-
-    out.push_str(&format!(
-        "  fn {} {} (line {})\n",
-        hint.fn_name, label, hint.span.line
-    ));
-    out.push_str(&format!(
-        "    --> {}:{}:{}\n",
-        filename, hint.span.line, hint.span.column
-    ));
-    out.push_str(&format!("    inferred: {}\n", hint.inferred));
-
-    for suggestion in &hint.suggestions {
-        out.push_str(&format!("    -> add `{}`\n", suggestion.annotation));
-        out.push_str(&format!("       {}\n", suggestion.unlocks));
+    match &hint.kind {
+        HintKind::PurityOpportunity | HintKind::EffectsUndeclared => {
+            let label = match hint.kind {
+                HintKind::PurityOpportunity => "is pure",
+                HintKind::EffectsUndeclared => "has effects",
+                _ => unreachable!(),
+            };
+            out.push_str(&format!(
+                "  fn {} {} (line {})\n",
+                hint.fn_name, label, hint.span.line
+            ));
+            out.push_str(&format!(
+                "    --> {}:{}:{}\n",
+                filename, hint.span.line, hint.span.column
+            ));
+            out.push_str(&format!("    inferred: {}\n", hint.inferred));
+            for suggestion in &hint.suggestions {
+                out.push_str(&format!("    -> add `{}`\n", suggestion.annotation));
+                out.push_str(&format!("       {}\n", suggestion.unlocks));
+            }
+        }
+        HintKind::PipeSuggestion { nested, piped } => {
+            out.push_str(&format!(
+                "  pipe opportunity (line {})\n",
+                hint.span.line
+            ));
+            out.push_str(&format!(
+                "    --> {}:{}:{}\n",
+                filename, hint.span.line, hint.span.column
+            ));
+            out.push_str(&format!("    found:  {}\n", nested));
+            out.push_str(&format!("    prefer: {}\n", piped));
+            out.push_str("    -> pipes read left-to-right, like data flows\n");
+        }
+        HintKind::UnusedBinding => {
+            out.push_str(&format!(
+                "  unused binding `{}` (line {})\n",
+                hint.fn_name, hint.span.line
+            ));
+            out.push_str(&format!(
+                "    --> {}:{}:{}\n",
+                filename, hint.span.line, hint.span.column
+            ));
+            out.push_str("    -> prefix with `_` to indicate intentionally unused\n");
+        }
+        HintKind::TailResumptiveHandler => {
+            out.push_str(&format!(
+                "  handler `{}` is tail-resumptive (line {})\n",
+                hint.fn_name, hint.span.line
+            ));
+            out.push_str(&format!(
+                "    --> {}:{}:{}\n",
+                filename, hint.span.line, hint.span.column
+            ));
+            out.push_str("    = compiled via evidence passing — zero overhead\n");
+            out.push_str("    = no continuation captured, no heap allocation\n");
+        }
+        HintKind::EffectBudget { pure_count, effectful_count } => {
+            let total = pure_count + effectful_count;
+            if total > 0 {
+                let pct = (*pure_count as f64 / total as f64 * 100.0) as usize;
+                let bar_len = 20;
+                let filled = bar_len * pct / 100;
+                let bar: String = "█".repeat(filled) + &"░".repeat(bar_len - filled);
+                out.push_str(&format!(
+                    "  effect budget: {} pure  {}\n",
+                    bar, pct
+                ));
+                out.push_str(&format!(
+                    "    {} of {} functions are pure — candidates for memoization and parallelization\n",
+                    pure_count, total
+                ));
+            }
+        }
     }
 
     out
@@ -76,16 +140,31 @@ pub fn format_hint_summary(hints: &[CompilerHint]) -> String {
         .iter()
         .filter(|h| matches!(h.kind, HintKind::EffectsUndeclared))
         .count();
+    let pipe_count = hints
+        .iter()
+        .filter(|h| matches!(h.kind, HintKind::PipeSuggestion { .. }))
+        .count();
+    let unused_count = hints
+        .iter()
+        .filter(|h| matches!(h.kind, HintKind::UnusedBinding))
+        .count();
 
     let mut parts = Vec::new();
     if pure_count > 0 {
-        parts.push(format!("{pure_count} pure (add `with Pure` to prove it)"));
+        parts.push(format!("{pure_count} pure"));
     }
     if effect_count > 0 {
-        parts.push(format!("{effect_count} with undeclared effects"));
+        parts.push(format!("{effect_count} effectful"));
+    }
+    if pipe_count > 0 {
+        parts.push(format!("{pipe_count} pipe opportunities"));
+    }
+    if unused_count > 0 {
+        parts.push(format!("{unused_count} unused bindings"));
     }
 
-    format!("  {} functions checked: {}", hints.len(), parts.join(", "))
+    let fn_count = hints.iter().filter(|h| matches!(h.kind, HintKind::PurityOpportunity | HintKind::EffectsUndeclared)).count();
+    format!("  {} functions checked: {}", fn_count, parts.join(", "))
 }
 
 /// All errors that can occur in Lux compilation / interpretation.

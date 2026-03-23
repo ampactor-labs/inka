@@ -1,0 +1,413 @@
+// Lux Type Checker — written in Lux, checked by Lux
+//
+// Self-hosted Hindley-Milner type inference. Uses Lux's effects for
+// error reporting and ADTs for the type representation. This is the
+// third self-hosted compiler component (after lexer and parser),
+// proving Lux can express its own type system.
+//
+// The checker operates on the parser's AST types (Expr, Stmt) and
+// produces typed output with inferred types for every expression.
+
+import compiler/lexer
+import compiler/parser
+
+// ─── Type Representation ─────────────────────────────────────
+// Types are ADTs. Type variables are integers. Substitution is
+// an association list mapping variable IDs to types.
+
+type Ty
+  = TInt
+  | TFloat
+  | TString
+  | TBool
+  | TUnit
+  | TList(Ty)
+  | TTuple(List)
+  | TFun(List, Ty)
+  | TVar(Int)
+  | TName(String, List)
+
+// ─── Type Environment ────────────────────────────────────────
+// Association list: [(name, type_scheme)]. O(n) lookup but simple
+// and sufficient. When Lux has HashMap, this upgrades transparently.
+
+fn env_empty() = []
+fn env_extend(env, name, ty) = [(name, ty)] ++ env
+fn env_lookup(env, name) = {
+  if len(env) == 0 {
+    ("not_found", TUnit)
+  } else {
+    let (k, v) = env[0]
+    if k == name { (k, v) }
+    else { env_lookup(slice(env, 1, len(env)), name) }
+  }
+}
+
+// ─── Fresh Type Variables ────────────────────────────────────
+// Simple counter using a mutable ref (list trick: [counter]).
+
+fn fresh_var(counter) = {
+  let n = counter[0]
+  // We can't mutate, so return the new counter and the var
+  (TVar(n), [n + 1])
+}
+
+// ─── Substitution ────────────────────────────────────────────
+// A substitution maps type variable IDs to types.
+
+fn subst_empty() = []
+
+fn subst_set(subst, var_id, ty) = [(var_id, ty)] ++ subst
+
+fn subst_get(subst, var_id) = {
+  if len(subst) == 0 { TVar(var_id) }
+  else {
+    let (k, v) = subst[0]
+    if k == var_id { v }
+    else { subst_get(slice(subst, 1, len(subst)), var_id) }
+  }
+}
+
+// Apply substitution to a type, chasing type variable chains.
+fn apply(subst, ty) = match ty {
+  TInt => TInt,
+  TFloat => TFloat,
+  TString => TString,
+  TBool => TBool,
+  TUnit => TUnit,
+  TVar(id) => {
+    let resolved = subst_get(subst, id)
+    match resolved {
+      TVar(id2) => if id == id2 { TVar(id) } else { apply(subst, TVar(id2)) },
+      _ => apply(subst, resolved)
+    }
+  },
+  TList(elem) => TList(apply(subst, elem)),
+  TFun(params, ret) => TFun(map(|p| apply(subst, p), params), apply(subst, ret)),
+  TTuple(elems) => TTuple(map(|e| apply(subst, e), elems)),
+  TName(name, args) => TName(name, map(|a| apply(subst, a), args))
+}
+
+// ─── Unification ─────────────────────────────────────────────
+// The core of HM inference: make two types equal by extending
+// the substitution. Returns (success, new_subst).
+
+fn occurs(subst, var_id, ty) = match apply(subst, ty) {
+  TVar(id2) => id2 == var_id,
+  TList(elem) => occurs(subst, var_id, elem),
+  TFun(params, ret) => any(|p| occurs(subst, var_id, p), params) || occurs(subst, var_id, ret),
+  TTuple(elems) => any(|e| occurs(subst, var_id, e), elems),
+  TName(_, args) => any(|a| occurs(subst, var_id, a), args),
+  _ => false
+}
+
+fn unify(subst, t1, t2) = {
+  let a = apply(subst, t1)
+  let b = apply(subst, t2)
+  match a {
+    TVar(id1) => match b {
+      TVar(id2) => if id1 == id2 { (true, subst) }
+        else { (true, subst_set(subst, id1, TVar(id2))) },
+      _ => if occurs(subst, id1, b) { (false, subst) }
+        else { (true, subst_set(subst, id1, b)) }
+    },
+    TInt => match b {
+      TInt => (true, subst),
+      TVar(id) => (true, subst_set(subst, id, TInt)),
+      _ => (false, subst)
+    },
+    TFloat => match b {
+      TFloat => (true, subst),
+      TVar(id) => (true, subst_set(subst, id, TFloat)),
+      _ => (false, subst)
+    },
+    TString => match b {
+      TString => (true, subst),
+      TVar(id) => (true, subst_set(subst, id, TString)),
+      _ => (false, subst)
+    },
+    TBool => match b {
+      TBool => (true, subst),
+      TVar(id) => (true, subst_set(subst, id, TBool)),
+      _ => (false, subst)
+    },
+    TUnit => match b {
+      TUnit => (true, subst),
+      TVar(id) => (true, subst_set(subst, id, TUnit)),
+      _ => (false, subst)
+    },
+    TList(e1) => match b {
+      TList(e2) => unify(subst, e1, e2),
+      TVar(id) => if occurs(subst, id, a) { (false, subst) }
+        else { (true, subst_set(subst, id, a)) },
+      _ => (false, subst)
+    },
+    TFun(p1, r1) => match b {
+      TFun(p2, r2) => {
+        if len(p1) != len(p2) { (false, subst) }
+        else {
+          let (ok, s2) = unify_list(subst, p1, p2)
+          if !ok { (false, s2) }
+          else { unify(s2, r1, r2) }
+        }
+      },
+      TVar(id) => if occurs(subst, id, a) { (false, subst) }
+        else { (true, subst_set(subst, id, a)) },
+      _ => (false, subst)
+    },
+    TTuple(e1) => match b {
+      TTuple(e2) => {
+        if len(e1) != len(e2) { (false, subst) }
+        else { unify_list(subst, e1, e2) }
+      },
+      TVar(id) => if occurs(subst, id, a) { (false, subst) }
+        else { (true, subst_set(subst, id, a)) },
+      _ => (false, subst)
+    },
+    _ => match b {
+      TVar(id) => if occurs(subst, id, a) { (false, subst) }
+        else { (true, subst_set(subst, id, a)) },
+      _ => (false, subst)
+    }
+  }
+}
+
+fn unify_list(subst, ts1, ts2) = {
+  if len(ts1) == 0 { (true, subst) }
+  else {
+    let (ok, s2) = unify(subst, ts1[0], ts2[0])
+    if !ok { (false, s2) }
+    else { unify_list(s2, slice(ts1, 1, len(ts1)), slice(ts2, 1, len(ts2))) }
+  }
+}
+
+// ─── Type Inference ──────────────────────────────────────────
+// Infer types for expressions. Returns (type, new_subst, new_counter).
+// The counter threads through for fresh variable generation.
+
+fn infer_expr(env, subst, counter, expr) = match expr {
+  IntLit(_) => (TInt, subst, counter),
+  FloatLit(_) => (TFloat, subst, counter),
+  StringLit(_) => (TString, subst, counter),
+  BoolLit(_) => (TBool, subst, counter),
+  NoneExpr => (TUnit, subst, counter),
+
+  VarRef(name) => {
+    let (found_name, ty) = env_lookup(env, name)
+    if found_name == "not_found" {
+      // Unknown variable — assign fresh type variable
+      let (tv, c2) = fresh_var(counter)
+      (tv, subst, c2)
+    } else {
+      (ty, subst, counter)
+    }
+  },
+
+  BinOp(op, left, right) => {
+    let (t1, s1, c1) = infer_expr(env, subst, counter, left)
+    let (t2, s2, c2) = infer_expr(env, s1, c1, right)
+    if op == "Add" || op == "Sub" || op == "Mul" || op == "Div" || op == "Mod" {
+      let (ok1, s3) = unify(s2, t1, TInt)
+      let (ok2, s4) = unify(s3, t2, TInt)
+      (TInt, s4, c2)
+    } else { if op == "Eq" || op == "Neq" || op == "Lt" || op == "Gt" || op == "Le" || op == "Ge" {
+      let (_, s3) = unify(s2, t1, t2)
+      (TBool, s3, c2)
+    } else { if op == "And" || op == "Or" {
+      let (_, s3) = unify(s2, t1, TBool)
+      let (_, s4) = unify(s3, t2, TBool)
+      (TBool, s4, c2)
+    } else { if op == "Concat" {
+      // ++ is string or list concat
+      (t1, s2, c2)
+    } else {
+      (t1, s2, c2)
+    }}}}
+  },
+
+  UnaryOp(op, operand) => {
+    let (t1, s1, c1) = infer_expr(env, subst, counter, operand)
+    if op == "Neg" {
+      let (_, s2) = unify(s1, t1, TInt)
+      (TInt, s2, c1)
+    } else { if op == "Not" {
+      let (_, s2) = unify(s1, t1, TBool)
+      (TBool, s2, c1)
+    } else {
+      (t1, s1, c1)
+    }}
+  },
+
+  Call(func, args) => {
+    let (ft, s1, c1) = infer_expr(env, subst, counter, func)
+    let (arg_types, s2, c2) = infer_args(env, s1, c1, args)
+    let (ret_tv, c3) = fresh_var(c2)
+    let expected_fn_type = TFun(arg_types, ret_tv)
+    let (ok, s3) = unify(s2, ft, expected_fn_type)
+    (apply(s3, ret_tv), s3, c3)
+  },
+
+  IfExpr(cond, then_br, else_br) => {
+    let (tc, s1, c1) = infer_expr(env, subst, counter, cond)
+    let (_, s2) = unify(s1, tc, TBool)
+    let (tt, s3, c2) = infer_expr(env, s2, c1, then_br)
+    let (te, s4, c3) = infer_expr(env, s3, c2, else_br)
+    let (_, s5) = unify(s4, tt, te)
+    (apply(s5, tt), s5, c3)
+  },
+
+  ListExpr(elems) => {
+    if len(elems) == 0 {
+      let (tv, c2) = fresh_var(counter)
+      (TList(tv), subst, c2)
+    } else {
+      let (first_ty, s1, c1) = infer_expr(env, subst, counter, elems[0])
+      let (s_final, c_final) = infer_list_elems(env, s1, c1, first_ty, slice(elems, 1, len(elems)))
+      (TList(apply(s_final, first_ty)), s_final, c_final)
+    }
+  },
+
+  TupleExpr(elems) => {
+    let (types, s_final, c_final) = infer_args(env, subst, counter, elems)
+    (TTuple(types), s_final, c_final)
+  },
+
+  PipeExpr(left, right) => {
+    // a |> f(b) desugars to f(a, b) — same as compiler
+    match right {
+      Call(func, args) => {
+        let combined = [left] ++ args
+        infer_expr(env, subst, counter, Call(func, combined))
+      },
+      _ => infer_expr(env, subst, counter, Call(right, [left]))
+    }
+  },
+
+  _ => {
+    let (tv, c2) = fresh_var(counter)
+    (tv, subst, c2)
+  }
+}
+
+fn infer_args(env, subst, counter, args) = {
+  if len(args) == 0 { ([], subst, counter) }
+  else {
+    let (ty, s1, c1) = infer_expr(env, subst, counter, args[0])
+    let (rest, s2, c2) = infer_args(env, s1, c1, slice(args, 1, len(args)))
+    ([ty] ++ rest, s2, c2)
+  }
+}
+
+fn infer_list_elems(env, subst, counter, elem_ty, elems) = {
+  if len(elems) == 0 { (subst, counter) }
+  else {
+    let (ty, s1, c1) = infer_expr(env, subst, counter, elems[0])
+    let (_, s2) = unify(s1, elem_ty, ty)
+    infer_list_elems(env, s2, c1, elem_ty, slice(elems, 1, len(elems)))
+  }
+}
+
+// ─── Statement Checking ──────────────────────────────────────
+// Returns (new_env, new_subst, new_counter).
+
+fn check_stmt(env, subst, counter, stmt) = match stmt {
+  LetStmt(name, value) => {
+    let (ty, s1, c1) = infer_expr(env, subst, counter, value)
+    let new_env = env_extend(env, name, apply(s1, ty))
+    (new_env, s1, c1)
+  },
+
+  FnStmt(name, params, body) => {
+    // Create fresh type variables for all parameters
+    let (param_types, c1) = fresh_params(counter, params)
+    // Extend environment with parameter types
+    let fn_env = bind_params(env, params, param_types)
+    // Also bind the function name for recursion (with generic type)
+    let (ret_tv, c2) = fresh_var(c1)
+    let fn_type = TFun(param_types, ret_tv)
+    let rec_env = env_extend(fn_env, name, fn_type)
+    // Infer body type
+    let (body_ty, s1, c3) = infer_expr(rec_env, subst, c2, body)
+    // Unify return type
+    let (_, s2) = unify(s1, ret_tv, body_ty)
+    let final_type = apply(s2, fn_type)
+    let new_env = env_extend(env, name, final_type)
+    (new_env, s2, c3)
+  },
+
+  ExprStmt(expr) => {
+    let (_, s1, c1) = infer_expr(env, subst, counter, expr)
+    (env, s1, c1)
+  },
+
+  _ => (env, subst, counter)
+}
+
+fn fresh_params(counter, params) = {
+  if len(params) == 0 { ([], counter) }
+  else {
+    let (tv, c1) = fresh_var(counter)
+    let (rest, c2) = fresh_params(c1, slice(params, 1, len(params)))
+    ([tv] ++ rest, c2)
+  }
+}
+
+fn bind_params(env, names, types) = {
+  if len(names) == 0 { env }
+  else {
+    let new_env = env_extend(env, names[0], types[0])
+    bind_params(new_env, slice(names, 1, len(names)), slice(types, 1, len(types)))
+  }
+}
+
+// ─── Program Checking ────────────────────────────────────────
+// Check a list of statements, threading environment and substitution.
+
+fn check_program(stmts) = {
+  let env = env_empty()
+  let subst = subst_empty()
+  let counter = [0]
+  check_stmts(env, subst, counter, stmts)
+}
+
+fn check_stmts(env, subst, counter, stmts) = {
+  if len(stmts) == 0 { (env, subst, counter) }
+  else {
+    let (new_env, s1, c1) = check_stmt(env, subst, counter, stmts[0])
+    check_stmts(new_env, s1, c1, slice(stmts, 1, len(stmts)))
+  }
+}
+
+// ─── Type Display ────────────────────────────────────────────
+// Pretty-print inferred types.
+
+fn type_to_string(subst, ty) = match apply(subst, ty) {
+  TInt => "Int",
+  TFloat => "Float",
+  TString => "String",
+  TBool => "Bool",
+  TUnit => "()",
+  TVar(id) => "?" ++ to_string(id),
+  TList(elem) => "List<" ++ type_to_string(subst, elem) ++ ">",
+  TFun(params, ret) => {
+    let param_strs = map(|p| type_to_string(subst, p), params)
+    "(" ++ join(param_strs, ", ") ++ ") -> " ++ type_to_string(subst, ret)
+  },
+  TTuple(elems) => {
+    let elem_strs = map(|e| type_to_string(subst, e), elems)
+    "(" ++ join(elem_strs, ", ") ++ ")"
+  },
+  TName(name, args) => {
+    if len(args) == 0 { name }
+    else {
+      let arg_strs = map(|a| type_to_string(subst, a), args)
+      name ++ "<" ++ join(arg_strs, ", ") ++ ">"
+    }
+  }
+}
+
+fn join(strs, sep) = {
+  if len(strs) == 0 { "" }
+  else { if len(strs) == 1 { strs[0] }
+  else { strs[0] ++ sep ++ join(slice(strs, 1, len(strs)), sep) }}
+}

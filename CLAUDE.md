@@ -279,6 +279,7 @@ fn safe_v2(x: Float) -> Float with DSP - Network - Alloc { ... }  // subtraction
 | 9B | Self-hosted parser (`std/compiler/parser.lux`) — ADT-based recursive descent parser in Lux. Handles expressions, let bindings, fn declarations, if/else, match, lists, tuples, pipes, blocks. | HEAD |
 | 9C | Self-hosted type checker (`std/compiler/checker.lux`) — HM type inference with unification, occurs check, and constraint propagation. Infers Int, String, Bool, List<T>, function types. | HEAD |
 | 9D | Self-hosted codegen (`std/compiler/codegen.lux`) — bytecode emitter producing correct opcodes for all core constructs + full disassembler. Lux compiles Lux. | 81b8ed7 |
+| 9E | Why Engine (`std/compiler/checker.lux`) — every type inference carries a Reason ADT tree. 14 reason variants. `check_and_explain(source, name, depth)` explains any binding at any depth. The compiler teaches, not just checks. | 3b2eae4 |
 
 ## Roadmap
 

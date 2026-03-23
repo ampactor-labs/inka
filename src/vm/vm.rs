@@ -566,13 +566,31 @@ impl Vm {
                             name: variant_name,
                             fields,
                         } => {
-                            // Look up field index from the field registry.
-                            let resolved = self
+                            // First try the field registry (ADT records).
+                            let from_registry = self
                                 .field_registry
                                 .get(variant_name.as_str())
                                 .and_then(|names| names.iter().position(|n| n == &field_name))
                                 .and_then(|idx| fields.get(idx).cloned());
-                            self.stack.push(resolved.unwrap_or(VmValue::Unit));
+
+                            if let Some(val) = from_registry {
+                                self.stack.push(val);
+                            } else if variant_name.starts_with("#record:") {
+                                // Anonymous record: parse field names from the tag itself.
+                                // Tag format: "#record:field1,field2,..."  (sorted)
+                                let field_list = &variant_name["#record:".len()..];
+                                let idx = field_list
+                                    .split(',')
+                                    .position(|n| n == field_name);
+                                if let Some(idx) = idx {
+                                    self.stack
+                                        .push(fields.get(idx).cloned().unwrap_or(VmValue::Unit));
+                                } else {
+                                    self.stack.push(VmValue::Unit);
+                                }
+                            } else {
+                                self.stack.push(VmValue::Unit);
+                            }
                         }
                         _ => self.stack.push(VmValue::Unit),
                     }

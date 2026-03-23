@@ -134,6 +134,23 @@ impl TypeEnv {
                 name: name.clone(),
                 type_args: type_args.iter().map(|a| self.apply_subst(a)).collect(),
             },
+            Type::Record { fields, rest } => {
+                let new_fields: Vec<_> = fields
+                    .iter()
+                    .map(|(n, t)| (n.clone(), self.apply_subst(t)))
+                    .collect();
+                let new_rest = rest.map(|rv| {
+                    // If the row variable is substituted, unwrap it
+                    match self.subst.get(&TypeVar(rv.0)) {
+                        Some(_) => rv, // We handle row vars via TypeVar substitution
+                        None => rv,
+                    }
+                });
+                Type::Record {
+                    fields: new_fields,
+                    rest: new_rest,
+                }
+            }
             _ => ty.clone(),
         }
     }
@@ -150,6 +167,10 @@ impl TypeEnv {
             Type::List(inner) => self.occurs_in(var, inner),
             Type::Tuple(elems) => elems.iter().any(|e| self.occurs_in(var, e)),
             Type::Adt { type_args, .. } => type_args.iter().any(|a| self.occurs_in(var, a)),
+            Type::Record { fields, rest } => {
+                fields.iter().any(|(_, t)| self.occurs_in(var, t))
+                    || rest.is_some_and(|rv| TypeVar(rv.0) == var)
+            }
             _ => false,
         }
     }
@@ -264,6 +285,106 @@ impl TypeEnv {
                     self.unify(x, y, span)?;
                 }
                 Ok(())
+            }
+
+            // Record structural unification with row polymorphism
+            (
+                Type::Record {
+                    fields: f1,
+                    rest: r1,
+                },
+                Type::Record {
+                    fields: f2,
+                    rest: r2,
+                },
+            ) => {
+                // Both closed, same fields: unify each field type
+                if r1.is_none() && r2.is_none() {
+                    if f1.len() != f2.len() {
+                        return Err(TypeError {
+                            kind: TypeErrorKind::Mismatch {
+                                expected: a.clone(),
+                                found: b.clone(),
+                            },
+                            span: span.clone(),
+                        });
+                    }
+                    // Fields are sorted by name, so zip directly
+                    for ((n1, t1), (n2, t2)) in f1.iter().zip(f2.iter()) {
+                        if n1 != n2 {
+                            return Err(TypeError {
+                                kind: TypeErrorKind::Mismatch {
+                                    expected: a.clone(),
+                                    found: b.clone(),
+                                },
+                                span: span.clone(),
+                            });
+                        }
+                        self.unify(t1, t2, span)?;
+                    }
+                    Ok(())
+                } else {
+                    // Row polymorphism: unify matching fields, pass excess to row var
+                    // Find common fields and unify their types
+                    let mut i1 = 0;
+                    let mut i2 = 0;
+                    let mut extra_in_1 = Vec::new();
+                    let mut extra_in_2 = Vec::new();
+
+                    while i1 < f1.len() && i2 < f2.len() {
+                        match f1[i1].0.cmp(&f2[i2].0) {
+                            std::cmp::Ordering::Equal => {
+                                self.unify(&f1[i1].1, &f2[i2].1, span)?;
+                                i1 += 1;
+                                i2 += 1;
+                            }
+                            std::cmp::Ordering::Less => {
+                                extra_in_1.push(f1[i1].clone());
+                                i1 += 1;
+                            }
+                            std::cmp::Ordering::Greater => {
+                                extra_in_2.push(f2[i2].clone());
+                                i2 += 1;
+                            }
+                        }
+                    }
+                    extra_in_1.extend(f1[i1..].iter().cloned());
+                    extra_in_2.extend(f2[i2..].iter().cloned());
+
+                    // Constrain row variables to include excess fields
+                    if let Some(rv1) = r1 {
+                        if !extra_in_2.is_empty() {
+                            // r1's row variable must include the extra fields from f2
+                            let rest_record = Type::Record {
+                                fields: extra_in_2,
+                                rest: r2.map(|rv| rv),
+                            };
+                            self.subst.insert(TypeVar(rv1.0), rest_record);
+                        } else if let Some(rv2) = r2 {
+                            // Both open, same fields: unify row variables
+                            self.subst.insert(TypeVar(rv1.0), Type::Var(TypeVar(rv2.0)));
+                        } else {
+                            // r1 is open, r2 is closed with no extras: close r1
+                            self.subst.insert(
+                                TypeVar(rv1.0),
+                                Type::Record {
+                                    fields: vec![],
+                                    rest: None,
+                                },
+                            );
+                        }
+                    }
+                    if let Some(rv2) = r2 {
+                        if !extra_in_1.is_empty() {
+                            let rest_record = Type::Record {
+                                fields: extra_in_1,
+                                rest: r1.map(|rv| rv),
+                            };
+                            self.subst.insert(TypeVar(rv2.0), rest_record);
+                        }
+                    }
+                    Ok(())
+                }
             }
 
             _ => Err(TypeError {

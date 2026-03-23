@@ -196,7 +196,6 @@ cargo run -- --teach examples/progressive_demo.lux  # the teaching compiler
 ## Design
 
 The full language design document is at [`docs/DESIGN.md`](docs/DESIGN.md).
-The implementation guide for contributors is [`CLAUDE.md`](CLAUDE.md).
 
 ## License
 

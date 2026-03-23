@@ -535,19 +535,67 @@ fn binop_to_opcode(op) = {
   }}}}}}}}}}}
 }
 
+// ─── Tuple Destructuring ─────────────────────────────────────
+// let (a, b, c) = expr → DUP, index, store for each name
+
+fn destructure_names(ctx, names, i, tuple_slot) = {
+  if i >= len(names) { ctx }
+  else {
+    let name = names[i]
+    // Load the tuple from its hidden slot, then index
+    let ctx2 = emit_u16(emit_op(ctx, OP_LOAD_LOCAL()), tuple_slot)
+    let ctx3 = emit_u8(emit_op(ctx2, OP_LOAD_INT()), i)
+    let ctx4 = emit_op(ctx3, OP_LIST_INDEX())
+    // Store as local or global
+    let ctx5 = if ctx_depth(ctx4) > 0 {
+      let (c, _slot) = declare_local(ctx4, name)
+      c
+    } else {
+      let (c, name_idx) = intern_name(ctx4, name)
+      emit_u16(emit_op(c, OP_STORE_GLOBAL()), name_idx)
+    }
+    destructure_names(ctx5, names, i + 1, tuple_slot)
+  }
+}
+
+fn destructure_globals(ctx, names, i) = {
+  if i >= len(names) { ctx }
+  else {
+    let name = names[i]
+    let ctx2 = emit_op(ctx, OP_DUP())
+    let ctx3 = emit_u8(emit_op(ctx2, OP_LOAD_INT()), i)
+    let ctx4 = emit_op(ctx3, OP_LIST_INDEX())
+    let (ctx5, name_idx) = intern_name(ctx4, name)
+    let ctx6 = emit_u16(emit_op(ctx5, OP_STORE_GLOBAL()), name_idx)
+    destructure_globals(ctx6, names, i + 1)
+  }
+}
+
 // ─── Statement Compilation ───────────────────────────────────
 
 fn compile_stmt(ctx, stmt) = match stmt {
   LetStmt(name, value) => {
     let ctx2 = compile_expr(ctx, value)
     if ctx_depth(ctx2) > 0 {
-      // Local: declare in scope
       let (ctx3, _slot) = declare_local(ctx2, name)
       ctx3
     } else {
-      // Global: store by name
       let (ctx3, name_idx) = intern_name(ctx2, name)
       emit_u16(emit_op(ctx3, OP_STORE_GLOBAL()), name_idx)
+    }
+  },
+
+  LetDestructure(names, value) => {
+    let ctx2 = compile_expr(ctx, value)
+    if ctx_depth(ctx2) > 0 {
+      // Local scope: store tuple as hidden local, then unpack from it
+      let (ctx3, tuple_slot) = declare_local(ctx2, "_dt")
+      let ctx4 = destructure_names(ctx3, names, 0, tuple_slot)
+      ctx4
+    } else {
+      // Global scope: DUP-based (no local slots at depth 0)
+      let ctx3 = destructure_globals(ctx2, names, 0)
+      emit_op(ctx3, OP_POP())
     }
   },
 

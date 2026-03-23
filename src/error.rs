@@ -223,7 +223,10 @@ pub enum TypeErrorKind {
         expected: Type,
         found: Type,
     },
-    UnboundVariable(String),
+    UnboundVariable {
+        name: String,
+        suggestion: Option<String>,
+    },
     UnboundType(String),
     UnboundEffect(String),
     UnboundEffectOp(String),
@@ -231,6 +234,7 @@ pub enum TypeErrorKind {
     WrongArity {
         expected: usize,
         found: usize,
+        fn_name: Option<String>,
     },
     UnhandledEffect(String),
     /// Effect negation/Pure constraint violated: function performs `effect` but declares `constraint`.
@@ -340,8 +344,12 @@ impl fmt::Display for TypeError {
                     self.span.line
                 )
             }
-            TypeErrorKind::UnboundVariable(name) => {
-                write!(f, "unbound variable '{name}' at line {}", self.span.line)
+            TypeErrorKind::UnboundVariable { name, suggestion } => {
+                write!(f, "unbound variable '{name}'")?;
+                if let Some(s) = suggestion {
+                    write!(f, " — did you mean '{s}'?")?;
+                }
+                write!(f, " at line {}", self.span.line)
             }
             TypeErrorKind::UnboundType(name) => {
                 write!(f, "unknown type '{name}' at line {}", self.span.line)
@@ -363,12 +371,15 @@ impl fmt::Display for TypeError {
                     self.span.line
                 )
             }
-            TypeErrorKind::WrongArity { expected, found } => {
+            TypeErrorKind::WrongArity { expected, found, fn_name } => {
                 write!(
                     f,
-                    "wrong number of arguments: expected {expected}, found {found} at line {}",
-                    self.span.line
-                )
+                    "wrong number of arguments: expected {expected}, found {found}",
+                )?;
+                if let Some(name) = fn_name {
+                    write!(f, " in call to '{name}'")?;
+                }
+                write!(f, " at line {}", self.span.line)
             }
             TypeErrorKind::UnhandledEffect(name) => {
                 write!(f, "unhandled effect '{name}' at line {}", self.span.line)
@@ -458,15 +469,25 @@ impl LuxError {
                 TypeErrorKind::Mismatch { expected, found } => {
                     format!("expected {expected}, found {found}")
                 }
-                TypeErrorKind::UnboundVariable(name) => format!("unbound variable '{name}'"),
+                TypeErrorKind::UnboundVariable { name, suggestion } => {
+                    let mut msg = format!("unbound variable '{name}'");
+                    if let Some(s) = suggestion {
+                        msg.push_str(&format!(" — did you mean '{s}'?"));
+                    }
+                    msg
+                }
                 TypeErrorKind::UnboundType(name) => format!("unknown type '{name}'"),
                 TypeErrorKind::UnboundEffect(name) => format!("unknown effect '{name}'"),
                 TypeErrorKind::UnboundEffectOp(name) => {
                     format!("unknown effect operation '{name}'")
                 }
                 TypeErrorKind::NotAFunction(ty) => format!("expected function, found {ty}"),
-                TypeErrorKind::WrongArity { expected, found } => {
-                    format!("expected {expected} args, found {found}")
+                TypeErrorKind::WrongArity { expected, found, fn_name } => {
+                    let mut msg = format!("expected {expected} args, found {found}");
+                    if let Some(name) = fn_name {
+                        msg.push_str(&format!(" in call to '{name}'"));
+                    }
+                    msg
                 }
                 TypeErrorKind::UnhandledEffect(name) => format!("unhandled effect '{name}'"),
                 TypeErrorKind::EffectConstraintViolation { effect, constraint } => {

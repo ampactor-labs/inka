@@ -92,10 +92,14 @@ impl TypeEnv {
                         }
                         Ok((ty, EffectRow::pure()))
                     }
-                    None => Err(TypeError {
-                        kind: TypeErrorKind::UnboundVariable(name.clone()),
-                        span: span.clone(),
-                    }),
+                    None => {
+                        // Find the closest match for "did you mean?" suggestions
+                        let suggestion = self.find_similar_name(name);
+                        Err(TypeError {
+                            kind: TypeErrorKind::UnboundVariable { name: name.clone(), suggestion },
+                            span: span.clone(),
+                        })
+                    }
                 }
             }
 
@@ -266,7 +270,7 @@ impl TypeEnv {
             } => {
                 if !self.is_in_handler() {
                     return Err(TypeError {
-                        kind: TypeErrorKind::UnboundVariable("resume".into()),
+                        kind: TypeErrorKind::UnboundVariable { name: "resume".into(), suggestion: None },
                         span: span.clone(),
                     });
                 }
@@ -387,7 +391,7 @@ impl TypeEnv {
             } => {
                 // Look up the variant constructor
                 let (adt_name, idx) = self.lookup_constructor(name).ok_or_else(|| TypeError {
-                    kind: TypeErrorKind::UnboundVariable(name.clone()),
+                    kind: TypeErrorKind::UnboundVariable { name: name.clone(), suggestion: None },
                     span: span.clone(),
                 })?;
                 let adt_def = self
@@ -413,10 +417,10 @@ impl TypeEnv {
                         .find(|(n, _)| n == field_name)
                         .map(|(_, ty)| ty.clone())
                         .ok_or_else(|| TypeError {
-                            kind: TypeErrorKind::UnboundVariable(format!(
-                                "{}.{}",
-                                name, field_name
-                            )),
+                            kind: TypeErrorKind::UnboundVariable {
+                                name: format!("{}.{}", name, field_name),
+                                suggestion: None,
+                            },
                             span: span.clone(),
                         })?;
                     let (arg_ty, eff) = self.infer_expr(field_expr)?;

@@ -454,6 +454,56 @@ impl TypeEnv {
         }
         None
     }
+
+    /// Find the most similar binding name for "did you mean?" errors.
+    /// Uses Levenshtein distance, returning the closest match within distance 3.
+    pub(crate) fn find_similar_name(&self, target: &str) -> Option<String> {
+        let mut best: Option<(String, usize)> = None;
+        let max_dist = 3usize; // Only suggest names within 3 edits
+
+        for name in self.bindings.keys() {
+            // Skip internal names
+            if name.starts_with('_') && name.len() > 1 {
+                continue;
+            }
+            let dist = levenshtein(target, name);
+            if dist > 0 && dist <= max_dist {
+                if best.as_ref().is_none_or(|(_, d)| dist < *d) {
+                    best = Some((name.clone(), dist));
+                }
+            }
+        }
+        // Also check constructors
+        for name in self.constructors.keys() {
+            let dist = levenshtein(target, name);
+            if dist > 0 && dist <= max_dist {
+                if best.as_ref().is_none_or(|(_, d)| dist < *d) {
+                    best = Some((name.clone(), dist));
+                }
+            }
+        }
+
+        best.map(|(name, _)| name)
+    }
+}
+
+/// Levenshtein edit distance between two strings.
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let (m, n) = (a.len(), b.len());
+    let mut dp = vec![vec![0usize; n + 1]; m + 1];
+    for i in 0..=m { dp[i][0] = i; }
+    for j in 0..=n { dp[0][j] = j; }
+    for i in 1..=m {
+        for j in 1..=n {
+            let cost = if a[i-1] == b[j-1] { 0 } else { 1 };
+            dp[i][j] = (dp[i-1][j] + 1)
+                .min(dp[i][j-1] + 1)
+                .min(dp[i-1][j-1] + cost);
+        }
+    }
+    dp[m][n]
 }
 
 // ── ReplChecker ───────────────────────────────────────────────

@@ -212,6 +212,7 @@ impl TypeEnv {
                         kind: TypeErrorKind::WrongArity {
                             expected: p1.len(),
                             found: p2.len(),
+                            fn_name: None,
                         },
                         span: span.clone(),
                     });

@@ -57,6 +57,7 @@ impl TypeEnv {
                             kind: TypeErrorKind::WrongArity {
                                 expected: params.len(),
                                 found: arg_types.len(),
+                                fn_name: None,
                             },
                             span: span.clone(),
                         });
@@ -96,6 +97,7 @@ impl TypeEnv {
                         kind: TypeErrorKind::WrongArity {
                             expected: params.len(),
                             found: arg_types.len(),
+                            fn_name: None,
                         },
                         span: span.clone(),
                     });
@@ -148,6 +150,7 @@ impl TypeEnv {
                 kind: TypeErrorKind::WrongArity {
                     expected: variant.fields.len(),
                     found: args.len(),
+                    fn_name: None,
                 },
                 span: span.clone(),
             });
@@ -316,7 +319,7 @@ impl TypeEnv {
                 span: pat_span,
             } => {
                 let (adt_name, idx) = self.lookup_constructor(name).ok_or_else(|| TypeError {
-                    kind: TypeErrorKind::UnboundVariable(name.clone()),
+                    kind: TypeErrorKind::UnboundVariable { name: name.clone(), suggestion: None },
                     span: pat_span.clone(),
                 })?;
                 let adt_def = self
@@ -332,6 +335,7 @@ impl TypeEnv {
                         kind: TypeErrorKind::WrongArity {
                             expected: variant.fields.len(),
                             found: fields.len(),
+                            fn_name: None,
                         },
                         span: pat_span.clone(),
                     });
@@ -359,7 +363,7 @@ impl TypeEnv {
                 span: pat_span,
             } => {
                 let (adt_name, idx) = self.lookup_constructor(name).ok_or_else(|| TypeError {
-                    kind: TypeErrorKind::UnboundVariable(name.clone()),
+                    kind: TypeErrorKind::UnboundVariable { name: name.clone(), suggestion: None },
                     span: pat_span.clone(),
                 })?;
                 let adt_def = self
@@ -390,10 +394,10 @@ impl TypeEnv {
                         .find(|(n, _)| n == field_name)
                         .map(|(_, ty)| ty.clone())
                         .ok_or_else(|| TypeError {
-                            kind: TypeErrorKind::UnboundVariable(format!(
-                                "{}.{}",
-                                name, field_name
-                            )),
+                            kind: TypeErrorKind::UnboundVariable {
+                                name: format!("{}.{}", name, field_name),
+                                suggestion: None,
+                            },
                             span: pat_span.clone(),
                         })?;
                     self.check_pattern(field_pat, &field_ty, pat_span)?;
@@ -565,6 +569,7 @@ impl TypeEnv {
                 kind: TypeErrorKind::WrongArity {
                     expected: op_info.param_types.len(),
                     found: args.len(),
+                    fn_name: None,
                 },
                 span: span.clone(),
             });

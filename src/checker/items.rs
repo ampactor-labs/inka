@@ -193,33 +193,90 @@ impl TypeEnv {
         if let Some(base_name) = &hd.base {
             if !self.handler_decls.contains_key(base_name) {
                 return Err(TypeError {
-                    kind: TypeErrorKind::UnboundVariable(base_name.clone()),
+                    kind: TypeErrorKind::UnboundVariable { name: base_name.clone(), suggestion: None },
                     span: hd.span.clone(),
                 });
             }
         }
         // Validate clauses: op names must be known, nested UseHandler refs must exist
+        let mut all_tail_resumptive = true;
         for clause in &hd.clauses {
             match &clause.operation {
-                HandlerOp::OpHandler { op_name, .. } => {
+                HandlerOp::OpHandler { op_name, body, .. } => {
                     if !self.op_index.contains_key(op_name) {
                         return Err(TypeError {
                             kind: TypeErrorKind::UnboundEffectOp(op_name.clone()),
                             span: clause.span.clone(),
                         });
                     }
+                    // Check if this handler clause is tail-resumptive
+                    if !Self::is_tail_resumptive(body) {
+                        all_tail_resumptive = false;
+                    }
                 }
                 HandlerOp::UseHandler { name } => {
                     if !self.handler_decls.contains_key(name) {
                         return Err(TypeError {
-                            kind: TypeErrorKind::UnboundVariable(name.clone()),
+                            kind: TypeErrorKind::UnboundVariable { name: name.clone(), suggestion: None },
                             span: clause.span.clone(),
                         });
                     }
                 }
             }
         }
+
+        // Emit teaching hint for tail-resumptive handlers
+        let is_user_code = self.current_item_index >= self.import_item_count;
+        if is_user_code && all_tail_resumptive && !hd.clauses.is_empty() {
+            let has_op_handlers = hd.clauses.iter().any(|c| matches!(&c.operation, HandlerOp::OpHandler { .. }));
+            if has_op_handlers {
+                self.hints.push(CompilerHint {
+                    kind: HintKind::TailResumptiveHandler,
+                    fn_name: hd.name.clone(),
+                    span: hd.span.clone(),
+                    inferred: String::new(),
+                    suggestions: Vec::new(),
+                });
+            }
+        }
+
         Ok(())
+    }
+
+    /// Check if an expression is tail-resumptive: every control-flow path
+    /// ends with a call to `resume`. This means the handler can be compiled
+    /// via evidence passing with zero overhead (no continuation capture).
+    fn is_tail_resumptive(expr: &crate::ast::Expr) -> bool {
+        use crate::ast::Expr;
+        match expr {
+            // Direct resume call — this is what we're looking for
+            Expr::Resume { .. } => true,
+
+            // Block: check the final expression
+            Expr::Block { stmts: _, expr: Some(final_expr), .. } => {
+                Self::is_tail_resumptive(final_expr)
+            }
+            Expr::Block { stmts, expr: None, .. } => {
+                // Last statement must be an expression that is tail-resumptive
+                match stmts.last() {
+                    Some(crate::ast::Stmt::Expr(e)) => Self::is_tail_resumptive(e),
+                    _ => false,
+                }
+            }
+
+            // If/else: both branches must be tail-resumptive
+            Expr::If { then_branch, else_branch: Some(else_br), .. } => {
+                Self::is_tail_resumptive(then_branch) && Self::is_tail_resumptive(else_br)
+            }
+
+            // Match: all arms must be tail-resumptive
+            Expr::Match { arms, .. } => {
+                !arms.is_empty() && arms.iter().all(|arm| Self::is_tail_resumptive(&arm.body))
+            }
+
+            // Everything else is not tail-resumptive
+            _ => false,
+        }
     }
 
     pub(crate) fn check_fn_decl(&mut self, fd: &FnDecl) -> Result<(), TypeError> {

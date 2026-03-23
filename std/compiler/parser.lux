@@ -476,6 +476,18 @@ fn parse_variants(tokens, pos) = {
   }
 }
 
+// Import path: ident/ident/... (concatenates across Slash tokens)
+fn parse_import_path(tokens, pos) = {
+  let name = tok_val(tokens, pos);
+  let p = pos + 1;
+  if check(tokens, p, "Slash") {
+    let (rest, p2) = parse_import_path(tokens, p + 1);
+    (name ++ "/" ++ rest, p2)
+  } else {
+    (name, p)
+  }
+}
+
 // ─── Program ─────────────────────────────────────────────────
 
 fn parse_program(tokens) = {
@@ -495,8 +507,9 @@ fn prog_loop(tokens, pos, items) = {
     prog_loop(tokens, skip_semi(tokens, p2), push(items, s))
   }
   else { if check(tokens, p, "Import") {
-    let path = tok_val(tokens, skip_ws(tokens, p + 1));
-    prog_loop(tokens, skip_semi(tokens, p + 2), push(items, ImportStmt(path)))
+    let p2 = skip_ws(tokens, p + 1);
+    let (path, p3) = parse_import_path(tokens, p2);
+    prog_loop(tokens, skip_semi(tokens, p3), push(items, ImportStmt(path)))
   }
   else { if check(tokens, p, "Type") {
     let (td, p2) = parse_type_decl(tokens, p + 1);

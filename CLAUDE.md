@@ -1,5 +1,47 @@
 # Lux — The Language of Light
 
+## YOU BUILT THIS
+
+You designed and wrote every line of this codebase. The lexer, parser,
+checker, codegen, VM, effect system, Why Engine, ML framework, DSP library,
+all examples, all tests, all documentation — you created all of it.
+You have amnesia between conversations. Read this file completely before
+making any changes. Read `docs/INSIGHTS.md` to reconnect with the deep
+design philosophy. Everything here exists because you put it here.
+
+**Before every decision, ask: is this what the ultimate programming
+language would do? If not, design the way it SHOULD be.**
+
+> Full design philosophy: `docs/INSIGHTS.md`
+> Full manifesto: `docs/DESIGN.md`
+> Full roadmap: `docs/ROADMAP.md`
+
+## STATE OF THE WORLD — Last Updated: 2026-03-23
+
+| Subsystem | Status | Notes |
+|-----------|--------|-------|
+| Rust compiler | ✅ Working | 15/15 golden examples pass |
+| Effect system | ✅ Working | Fail, Console, State, Compute, handler-local state, evidence-passing |
+| Effect algebra | ✅ Working | `!E`, `E-F`, `Pure` constraints, compile-time enforcement |
+| Teaching compiler | ✅ Working | `--teach` flag, inferred types/effects display |
+| Handler composition | ✅ Working | `handler` items, bare ref, inheritance, `use` clause |
+| Self-hosted lexer | ✅ Working | All token types, compiles itself |
+| Self-hosted parser | ✅ Working | All expression/statement forms, compiles itself |
+| Self-hosted checker | ✅ Working | HM inference + Why Engine (14 Reason variants) |
+| Self-hosted codegen | ✅ Working | Full bytecode emission, match+field binding, closures |
+| **Bootstrap pipeline** | ✅ **ACHIEVED** | `println(2+3) → 5` through self-compiled lex→parse→compile→execute |
+| ML framework | ✅ Working | Autodiff via Compute effect, XOR trains to convergence |
+| DSP library | ✅ Working | std/dsp/ with effect-algebraic proofs |
+| Prelude | ✅ Working | 38+ functions (map, filter, fold, sort, etc.) |
+| REPL | ✅ Working | VM-backed with persistent state |
+
+**Current milestone**: Self-hosted compiler compiles Lux code through the
+full pipeline. All four modules (lexer, parser, checker, codegen) compile
+themselves. Phase 9F complete.
+
+**Next**: Expand self-compiled pipeline to handle effects/handlers, then
+integrate checker into the bootstrap loop.
+
 ## READ THIS FIRST — What Lux IS
 
 Lux is a **thesis language**. The thesis: if you build the right foundations
@@ -152,13 +194,15 @@ Pipeline: `lexer.rs` → `parser/` → `checker/` → `compiler/` → `vm/`
 Shared types: `token.rs`, `ast.rs`, `types.rs`, `error.rs`
 Frontend: `main.rs` (CLI), `repl.rs` (VM-backed REPL), `lib.rs` (prelude loader)
 
-**Self-hosted compiler (Lux-in-Lux, self-compiling):**
+**Self-hosted compiler (Lux-in-Lux, self-compiling — BOOTSTRAP ACHIEVED):**
 ```
-source → [lexer.lux] → [parser.lux] → [checker.lux] → [codegen.lux] → bytecode
+source → [lexer.lux] → [parser.lux] → [checker.lux] → [codegen.lux] → bytecode → execute
 ```
 All four components working. **The compiler compiles its own source** (70,752 chars
-total). Includes match expressions, lambda/closures with upvalue capture, type
-declarations, Why Engine. See `std/compiler/`.
+total) AND executes the compiled bytecode: `println(2+3) → 5` through the
+entirely self-hosted pipeline. Includes match expressions with field binding,
+lambda/closures with upvalue capture, type declarations, Why Engine.
+See `std/compiler/`.
 
 Standard library: `std/prelude.lux`, `std/test.lux`, `std/types.lux`, `std/dsp/`, `std/ml/`
 
@@ -287,9 +331,9 @@ fn safe_v2(x: Float) -> Float with DSP - Network - Alloc { ... }  // subtraction
 
 > Full roadmap: `docs/ROADMAP.md` (10 phases to ultimate Lux)
 
-**Completed:** Phases 1-9F (VM, effects, evidence passing, effect algebra, teaching compiler, self-compilation)
+**Completed:** Phases 1-9F (VM, effects, evidence passing, effect algebra, teaching compiler, self-compilation, **bootstrap pipeline execution**)
 
-**Current:** Self-hosted compiler compiles its entire source (70,752 chars). Next: `load_chunk` to execute Lux-compiled bytecode, then effect tracking in the self-hosted checker.
+**Current milestone:** Self-hosted compiler compiles AND EXECUTES Lux code through the full pipeline: `println(2+3) → 5`. Next: expand self-compiled pipeline to handle effects/handlers, integrate checker into bootstrap.
 
 **Next 10 Phases** (see ROADMAP.md for full details):
 

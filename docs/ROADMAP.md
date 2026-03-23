@@ -105,7 +105,7 @@ Division by zero is a compile error. Buffer overflow is a compile error. Out-of-
 ### From Why Engine + Everything
 The compiler can explain ANY aspect of your program. Why is this Int? Because... (full reasoning chain). Why is this Pure? Because... (no operation in the call graph performs an effect). Why can this be parallelized? Because... (Pure + independent data).
 
-**This is what makes AI coders obsolete**: the compiler has PERFECT knowledge. An AI has approximate knowledge. Perfect beats approximate every time.
+The compiler has *complete* knowledge of the type and effect system — not heuristic, not approximate. It explains every inference with a full reasoning chain.
 
 ---
 
@@ -314,20 +314,20 @@ The Rust codebase becomes historical.
 
 ---
 
-## Why This Makes AI Coders Obsolete
+## Why the Teaching Compiler Changes How You Code
 
-| What an AI coder does | What Lux's compiler does |
-|----------------------|-------------------------|
-| Guesses intent from code | **Knows** intent from types + effects |
+| Traditional tooling | Lux's compiler |
+|---------------------|---------------|
+| Infers intent heuristically | **Knows** intent from types + effects |
 | Generates boilerplate | No boilerplate to generate (inference) |
 | Suggests optimizations | Applies them automatically (effect gates) |
 | Debugs runtime errors | Prevents them (refinement types) |
-| Writes tests | Effects ARE tests (handler swap) |
-| Documents code | Why Engine explains everything |
-| Refactors | Types guarantee safe refactoring |
-| ~90% correct | 100% correct (proofs, not guesses) |
+| Requires separate test frameworks | Effects ARE tests (handler swap) |
+| External documentation tools | Why Engine explains everything |
+| Refactoring requires analysis | Types guarantee safe refactoring |
 
-The fundamental asymmetry: an AI makes you **dependent** on its guesses. A teaching compiler makes you **sovereign** over your code. You understand everything because the compiler explains everything. You don't need an AI to read your code — the compiler already read it, and it can explain what it found.
+The teaching compiler makes developers **sovereign** over their code.
+You understand everything because the compiler explains everything.
 
 ---
 

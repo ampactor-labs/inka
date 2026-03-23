@@ -1,8 +1,7 @@
 # DSP Framework Pain Points
 
-Pain points discovered during Phase 8A-DSP implementation that motivate future phases.
-Each section describes what the language currently lacks, what we do instead, and what
-phase addresses the gap.
+Pain points discovered during DSP framework implementation that motivate future work.
+Each section describes a gap, the current workaround, and the planned resolution.
 
 ## 1. Effect Subtraction (`E - F`) — Syntax Implemented, Generic Form Deferred
 
@@ -93,28 +92,8 @@ function-wrapped handler, and the `handler` keyword's composition machinery
 
 ---
 
-## 4. No Trig Builtins — Missing `sin`, `cos`, `atan`, `tanh`
+## 4. ~~No Trig Builtins~~ — **Resolved**
 
-**What we want:**
-
-```lux
-fn soft_clip(x: Float) -> Float with Pure = (2.0 / pi) * atan(x)
-
-// Precise biquad filter coefficients
-fn lowpass_coeffs(freq: Float, sample_rate: Float) -> (Float, Float, Float) with Pure {
-  let omega = 2.0 * pi * freq / sample_rate
-  let cos_w = cos(omega)
-  let sin_w = sin(omega)
-  // ... standard biquad formula
-}
-```
-
-**What we do instead:**
-
-Rational approximations: `x / (1.0 + abs(x))` instead of `atan`-based soft clipping.
-These are cheaper but less accurate and harder to reason about. More critically, precise
-filter coefficient calculation (biquad, Butterworth, Chebyshev) requires `sin`/`cos`
-and simply cannot be implemented without them. The DSP framework is limited to
-first-order filters and approximations until trig is available.
-
-**Motivates:** Expanding math builtins (would enable more sophisticated DSP work)
+Math builtins now include `sin`, `cos`, `tanh`, `atan2`, `sqrt`, `pow`,
+`log`, `exp`, and `pi`. Precise biquad filter coefficient calculation and
+`atan`-based soft clipping are now possible.

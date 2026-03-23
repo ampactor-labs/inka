@@ -7,9 +7,9 @@ a declaration of what Lux IS and WILL BE.*
 
 ## The Gap
 
-Every day I read thousands of programs. The single biggest source of bugs,
-complexity, and frustration isn't syntax or performance — it's the **gap
-between what a programmer means and what they're forced to write.**
+The single biggest source of bugs, complexity, and frustration in programming
+isn't syntax or performance — it's the **gap between what a programmer means
+and what they're forced to write.**
 
 A programmer thinks: *"this function reads a file, parses it, and might fail."*
 
@@ -60,10 +60,6 @@ Every program does three things: **transforms data**, **performs effects**,
 and **manages resources**. These aren't independent. Data shapes the effect
 graph; the effect graph shapes how data flows. Types constrain which effects
 are possible; effects constrain which types can exist. They're dual-coupled.
-
-*(If that sounds like "data tells graph how to reshape, reshaped graph tells
-data how to flow" — yes, that isomorphism is real and it's why this design
-works.)*
 
 Most languages handle these three things with three separate mechanisms that
 don't compose. Lux unifies them through the effect system. Effects aren't
@@ -972,17 +968,18 @@ amplifies it.
 
 Lux. Light. The medium of understanding.
 
-*(Also, honestly, it sounds good next to Rust, Zig, Go, Nim. Monosyllabic
-language names just work.)*
+*(It helps that monosyllabic language names — Rust, Zig, Go, Nim — have
+a good track record.)*
 
 ---
 
-## The Interpreter Is the Thesis Prover
+## The Prototype Is the Thesis Prover
 
-The current implementation is a tree-walking interpreter written in Rust.
-It is scaffolding. Every example that runs is evidence. Every handler that
-composes is proof. When the design is proven across enough surface area,
-compilation begins — and the interpreter is deleted.
+The current implementation is a bytecode VM written in Rust, with a
+self-hosted compiler (lexer, parser, checker, codegen) written in Lux itself.
+The Rust code is scaffolding. Every example that runs is evidence. Every
+handler that composes is proof. The goal is full self-hosting — deleting
+every `.rs` file.
 
 The thesis: algebraic effects + refinement types + ownership inference
 close the gap between what programmers mean and what they write.

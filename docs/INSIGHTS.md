@@ -79,18 +79,18 @@ execution model. Every program has this shape. The language makes it visible.
 
 ---
 
-## The Teaching Compiler Makes AI Obsolete
+## The Teaching Compiler as Collaborator
 
-This is not hyperbole. It's structural.
+The compiler doesn't just check code — it *explains* code. This is a
+structural advantage over external tooling: the compiler has complete
+knowledge of the type system, effect graph, and inference chain.
 
-| What an AI coder does | What Lux's compiler does |
-|----------------------|--------------------------|
-| Guesses intent from code | **Knows** intent from types + effects |
+| External tool | Lux's compiler |
+|---------------|---------------|
+| Infers intent heuristically | **Knows** intent from types + effects |
 | Generates boilerplate | No boilerplate exists (inference) |
 | Suggests optimizations | Applies them automatically (effect gates) |
 | Debugs runtime errors | Prevents them at compile time (refinements) |
-| ~90% correct | 100% correct (proofs, not guesses) |
-| Makes you dependent | Makes you sovereign |
 
 The Why Engine explains every decision:
 ```
@@ -100,19 +100,14 @@ Why is x: Int?
   → unified parameter with Int from call site
 ```
 
-An AI gives you answers. The compiler gives you **understanding**. A
-developer who understands doesn't need an AI. A developer dependent on an
-AI never understands. The teaching compiler breaks this dependency.
-
-**For any developer with an idea of what they're building**, the compiler
-guides them through implementation:
+The compiler guides developers through implementation:
 - Types show what data flows where
 - Effects show what the system *does*
 - The gradient shows what each annotation unlocks
 - The Why Engine explains every inference
 
-The compiler IS the pair programmer. And it has **perfect** knowledge,
-not approximate.
+The result is a developer who understands their own code deeply — not
+one who delegates understanding to external tools.
 
 ---
 
@@ -336,7 +331,7 @@ This means:
   comment is source that flows through the same pipeline. Compilation
   and documentation are self-verifying.
 
-This is the unification the user intuited: **there is no documentation
+This is the unification: **there is no documentation
 system separate from the compiler. There is no LSP separate from the
 compiler. There is no teaching mode separate from compilation. There is
 ONE pipeline. Effects make each stage observable. Handlers choose what
@@ -438,7 +433,7 @@ $ lux --teach app.lux
 ```
 
 Over sessions, code naturally evolves from loose to formally verified.
-The compiler IS the tutor. AI guesses. The compiler knows.
+The compiler IS the tutor. It doesn't guess — it knows.
 
 ---
 

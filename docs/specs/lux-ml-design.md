@@ -53,17 +53,12 @@ No other single workload exercises the full language this thoroughly.
 
 ### The Throughline
 
-This framework is not a standalone project. It is a projection of the same
-structure that runs through Sonido (DSP kernels), Hourglass (EEQ dynamics),
-Flowpilot (trading signals), and Forge (agentic coordination).
-
-The pattern repeats: **convergence → pinch point → divergence.**
-- Sonido: signal approaches onset → transient → new harmonics radiate
-- Hourglass: trajectories → attractor basin → new regime dynamics
-- Lux ML: data flows through layers → loss at the pinch → gradients radiate back
+The ML framework follows the same structural pattern as the rest of Lux:
+**convergence → pinch point → divergence.** Data flows through layers →
+loss at the pinch → gradients radiate back.
 
 The `handle` block IS the pinch point. Effects converge into it. `resume`
-radiates new state. The training loop IS the hourglass: forward pass
+radiates new state. The training loop embodies this directly: forward pass
 converges to loss, backward pass radiates gradients, optimizer updates
 reshape the graph for the next cycle. Data tells the model how to reshape;
 the reshaped model tells data how to flow.
@@ -232,13 +227,9 @@ fn train_forward(model, input) -> (output, tape) {
 }
 ```
 
-> **Note on handler state as return value:** The `(output, tape)` destructuring
-> requires handler-local state to be accessible after the handle expression
-> completes. In the current interpreter, handler state is scoped and not
-> automatically returned — it can only be read via effect operations like `get()`.
-> Evidence-passing (Phase 7) threads state as function parameters and returns it
-> as part of the result tuple, resolving this by construction. See "Lux Design
-> Inputs" section for details.
+> **Handler state as return value** is implemented. The `(output, tape)`
+> destructuring works via `let` pattern binding on handle expressions —
+> handler-local state flows out as part of the result tuple.
 
 #### Inference: Compute Only
 
@@ -872,21 +863,13 @@ handle train(model, data) with [
 The ML training stack (6 handlers) is the stress test. Phase 7's evidence-
 passing implementation determines which syntax compiles most naturally.
 
-### 2. Handler State as Return Value
+### 2. Handler State as Return Value — **Resolved**
 
-In the current interpreter, handler-local state is not automatically returned
-as a separate value alongside the expression's result — it can only be read
-via effect operations like `get()`. The training step needs the forward pass's
-tape to flow into the backward pass — inter-handler communication.
-
-In evidence-passing, handler state is threaded as function parameters and
-returned as part of the result tuple. This resolves the tension by construction:
-the tape naturally flows out of the forward pass handler as a return value.
-
-Phase 7 should confirm this works and determine the surface syntax:
+Handler-local state now flows out as part of the result tuple via `let`
+destructuring on handle expressions. The tape naturally flows out of the
+forward pass handler:
 
 ```lux
-// Handler state accessible after handle expression completes
 let (output, tape) = handle forward(model, input) with tape = [] {
     matmul(a, b) => {
         let out = native_matmul(a, b)

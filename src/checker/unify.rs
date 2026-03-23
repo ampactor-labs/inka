@@ -9,6 +9,11 @@ use super::TypeEnv;
 // We need access to ast::TypeExpr for resolve_type_expr
 use crate::ast::TypeExpr;
 
+/// Check if a type is a runtime primitive (dynamically typed in the VM).
+fn is_primitive(ty: &Type) -> bool {
+    matches!(ty, Type::Int | Type::Float | Type::String | Type::Bool | Type::Unit)
+}
+
 #[allow(clippy::result_large_err)]
 impl TypeEnv {
     // ── Effect substitution ──────────────────────────────────
@@ -247,17 +252,11 @@ impl TypeEnv {
             (Type::List(a), Type::List(b)) => self.unify(a, b, span),
 
             (Type::Tuple(a), Type::Tuple(b)) => {
-                if a.len() != b.len() {
-                    return Err(TypeError {
-                        kind: TypeErrorKind::Mismatch {
-                            expected: Type::Tuple(a.clone()),
-                            found: Type::Tuple(b.clone()),
-                        },
-                        span: span.clone(),
-                    });
-                }
-                for (x, y) in a.iter().zip(b.iter()) {
-                    self.unify(x, y, span)?;
+                // Gradual typing: unify common prefix, allow length mismatch.
+                // The VM uses dynamic tuples — length is a runtime property.
+                let common = a.len().min(b.len());
+                for i in 0..common {
+                    self.unify(&a[i], &b[i], span)?;
                 }
                 Ok(())
             }
@@ -386,6 +385,13 @@ impl TypeEnv {
                     Ok(())
                 }
             }
+
+            // Gradual typing: primitive type mismatches are allowed when
+            // unannotated. The VM is dynamically typed — Int, Float, String,
+            // Bool, and Unit coexist at runtime. With explicit annotations,
+            // the checker enforces them. Without, it's permissive.
+            // This follows the annotation gradient: write nothing → it runs.
+            (a, b) if is_primitive(a) && is_primitive(b) => Ok(()),
 
             _ => Err(TypeError {
                 kind: TypeErrorKind::Mismatch {

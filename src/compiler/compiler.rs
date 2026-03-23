@@ -76,7 +76,78 @@ struct LoopCtx {
     break_patches: Vec<usize>,
 }
 
+// ── Compile-time constant folding ────────────────────────────
+// The compiler evaluates constant expressions at compile time.
+// This exploits knowledge that C doesn't have: Lux knows when
+// an expression is guaranteed pure, so it can safely evaluate it.
+
+/// Result of compile-time constant evaluation.
+enum FoldedConst {
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    Str(String),
+}
+
 impl Compiler {
+    /// Try to evaluate an expression at compile time.
+    /// Returns Some(result) if the expression is a constant or a pure
+    /// operation on constants. Handles nested constant expressions
+    /// recursively: `(1 + 2) * 3` → `9`.
+    fn try_eval_const(expr: &Expr) -> Option<FoldedConst> {
+        match expr {
+            Expr::IntLit(n, _) => Some(FoldedConst::Int(*n)),
+            Expr::FloatLit(f, _) => Some(FoldedConst::Float(*f)),
+            Expr::BoolLit(b, _) => Some(FoldedConst::Bool(*b)),
+            Expr::StringLit(s, _) => Some(FoldedConst::Str(s.clone())),
+            Expr::BinOp { op, left, right, .. } => {
+                Self::try_const_fold(op, left, right)
+            }
+            Expr::UnaryOp { op, operand, .. } => {
+                let val = Self::try_eval_const(operand)?;
+                match (op, val) {
+                    (UnaryOp::Neg, FoldedConst::Int(n)) => Some(FoldedConst::Int(-n)),
+                    (UnaryOp::Neg, FoldedConst::Float(f)) => Some(FoldedConst::Float(-f)),
+                    (UnaryOp::Not, FoldedConst::Bool(b)) => Some(FoldedConst::Bool(!b)),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Try to fold a binary operation on two sub-expressions.
+    fn try_const_fold(op: &BinOp, left: &Expr, right: &Expr) -> Option<FoldedConst> {
+        let lhs = Self::try_eval_const(left)?;
+        let rhs = Self::try_eval_const(right)?;
+        match (op, lhs, rhs) {
+            // Int arithmetic
+            (BinOp::Add, FoldedConst::Int(a), FoldedConst::Int(b)) => Some(FoldedConst::Int(a.wrapping_add(b))),
+            (BinOp::Sub, FoldedConst::Int(a), FoldedConst::Int(b)) => Some(FoldedConst::Int(a.wrapping_sub(b))),
+            (BinOp::Mul, FoldedConst::Int(a), FoldedConst::Int(b)) => Some(FoldedConst::Int(a.wrapping_mul(b))),
+            (BinOp::Div, FoldedConst::Int(a), FoldedConst::Int(b)) if b != 0 => Some(FoldedConst::Int(a / b)),
+            (BinOp::Mod, FoldedConst::Int(a), FoldedConst::Int(b)) if b != 0 => Some(FoldedConst::Int(a % b)),
+            // Float arithmetic
+            (BinOp::Add, FoldedConst::Float(a), FoldedConst::Float(b)) => Some(FoldedConst::Float(a + b)),
+            (BinOp::Sub, FoldedConst::Float(a), FoldedConst::Float(b)) => Some(FoldedConst::Float(a - b)),
+            (BinOp::Mul, FoldedConst::Float(a), FoldedConst::Float(b)) => Some(FoldedConst::Float(a * b)),
+            (BinOp::Div, FoldedConst::Float(a), FoldedConst::Float(b)) if b != 0.0 => Some(FoldedConst::Float(a / b)),
+            // Int comparisons
+            (BinOp::Eq, FoldedConst::Int(a), FoldedConst::Int(b)) => Some(FoldedConst::Bool(a == b)),
+            (BinOp::Neq, FoldedConst::Int(a), FoldedConst::Int(b)) => Some(FoldedConst::Bool(a != b)),
+            (BinOp::Lt, FoldedConst::Int(a), FoldedConst::Int(b)) => Some(FoldedConst::Bool(a < b)),
+            (BinOp::LtEq, FoldedConst::Int(a), FoldedConst::Int(b)) => Some(FoldedConst::Bool(a <= b)),
+            (BinOp::Gt, FoldedConst::Int(a), FoldedConst::Int(b)) => Some(FoldedConst::Bool(a > b)),
+            (BinOp::GtEq, FoldedConst::Int(a), FoldedConst::Int(b)) => Some(FoldedConst::Bool(a >= b)),
+            // Bool comparisons
+            (BinOp::Eq, FoldedConst::Bool(a), FoldedConst::Bool(b)) => Some(FoldedConst::Bool(a == b)),
+            (BinOp::Neq, FoldedConst::Bool(a), FoldedConst::Bool(b)) => Some(FoldedConst::Bool(a != b)),
+            // String concat
+            (BinOp::Concat, FoldedConst::Str(a), FoldedConst::Str(b)) => Some(FoldedConst::Str(a + &b)),
+            _ => None,
+        }
+    }
+
     pub(super) fn new(
         name: &str,
         effect_routing: HashMap<crate::token::Span, Vec<String>>,
@@ -349,6 +420,35 @@ impl Compiler {
                     }
                     _ => {}
                 }
+
+                // ── Constant folding ─────────────────────────────
+                // If both operands are compile-time constants, evaluate
+                // now and emit a single load instruction. The compiler
+                // KNOWS this is safe because it has proven purity.
+                if let Some(folded) = Self::try_const_fold(op, left, right) {
+                    match folded {
+                        FoldedConst::Int(n) => {
+                            if n >= -128 && n <= 127 {
+                                self.emit_op(OpCode::LoadInt, line);
+                                self.emit_u8(n as i8 as u8, line);
+                            } else {
+                                self.emit_constant(Constant::Int(n), line);
+                            }
+                        }
+                        FoldedConst::Float(f) => {
+                            self.emit_constant(Constant::Float(f), line);
+                        }
+                        FoldedConst::Bool(b) => {
+                            self.emit_op(OpCode::LoadBool, line);
+                            self.emit_u8(u8::from(b), line);
+                        }
+                        FoldedConst::Str(s) => {
+                            self.emit_constant(Constant::String(Arc::new(s)), line);
+                        }
+                    }
+                    return Ok(());
+                }
+
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
                 match op {
@@ -370,6 +470,35 @@ impl Compiler {
 
             Expr::UnaryOp { op, operand, span } => {
                 let line = Self::current_line(span);
+                // Constant fold unary ops too
+                if let Some(val) = Self::try_eval_const(operand) {
+                    let folded = match (op, val) {
+                        (UnaryOp::Neg, FoldedConst::Int(n)) => Some(FoldedConst::Int(-n)),
+                        (UnaryOp::Neg, FoldedConst::Float(f)) => Some(FoldedConst::Float(-f)),
+                        (UnaryOp::Not, FoldedConst::Bool(b)) => Some(FoldedConst::Bool(!b)),
+                        _ => None,
+                    };
+                    if let Some(result) = folded {
+                        match result {
+                            FoldedConst::Int(n) if n >= -128 && n <= 127 => {
+                                self.emit_op(OpCode::LoadInt, line);
+                                self.emit_u8(n as i8 as u8, line);
+                            }
+                            FoldedConst::Int(n) => {
+                                self.emit_constant(Constant::Int(n), line);
+                            }
+                            FoldedConst::Float(f) => {
+                                self.emit_constant(Constant::Float(f), line);
+                            }
+                            FoldedConst::Bool(b) => {
+                                self.emit_op(OpCode::LoadBool, line);
+                                self.emit_u8(u8::from(b), line);
+                            }
+                            _ => {}
+                        }
+                        return Ok(());
+                    }
+                }
                 self.compile_expr(operand)?;
                 match op {
                     UnaryOp::Neg => self.emit_op(OpCode::Neg, line),

@@ -520,5 +520,33 @@ impl TypeEnv {
                 effects: EffectRow::pure(),
             },
         );
+        // to_upper: (String) -> String
+        self.bind(
+            "to_upper",
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::String),
+                effects: EffectRow::pure(),
+            },
+        );
+        // to_lower: (String) -> String
+        self.bind(
+            "to_lower",
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::String),
+                effects: EffectRow::pure(),
+            },
+        );
+        // is_number: (T) -> Bool
+        let t_isnum = self.fresh_var();
+        self.bind(
+            "is_number",
+            Type::Function {
+                params: vec![t_isnum],
+                return_type: Box::new(Type::Bool),
+                effects: EffectRow::pure(),
+            },
+        );
     }
 }

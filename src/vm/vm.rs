@@ -1410,6 +1410,18 @@ impl Vm {
             };
             Err(format!("assertion failed: {msg}"))
         });
+        self.register_builtin("to_upper", |args| match args.first() {
+            Some(VmValue::String(s)) => Ok(VmValue::String(Arc::new(s.to_uppercase()))),
+            _ => Err("to_upper expects a string".into()),
+        });
+        self.register_builtin("to_lower", |args| match args.first() {
+            Some(VmValue::String(s)) => Ok(VmValue::String(Arc::new(s.to_lowercase()))),
+            _ => Err("to_lower expects a string".into()),
+        });
+        self.register_builtin("is_number", |args| match args.first() {
+            Some(VmValue::Int(_)) | Some(VmValue::Float(_)) => Ok(VmValue::Bool(true)),
+            _ => Ok(VmValue::Bool(false)),
+        });
 
         // File I/O — enables self-hosted compiler to compile from files
         self.register_builtin("read_file", |args| {

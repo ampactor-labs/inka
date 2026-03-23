@@ -51,6 +51,26 @@ fn last(xs) = xs[len(xs) - 1]
 fn unique(xs) =
   fold(xs, [], |acc, x| if any(|a| a == x, acc) { acc } else { push(acc, x) })
 
+// --- Safe access ---
+fn nth(xs, n, default) = if n >= 0 && n < len(xs) { xs[n] } else { default }
+
+// --- Iteration ---
+fn for_each(f, xs) = if len(xs) == 0 { () } else { f(xs[0]); for_each(f, slice(xs, 1, len(xs))) }
+fn repeat(n, x) = if n <= 0 { [] } else { [x] ++ repeat(n - 1, x) }
+fn reduce(xs, f) = fold(slice(xs, 1, len(xs)), xs[0], f)
+fn count(pred, xs) = fold(xs, 0, |acc, x| if pred(x) { acc + 1 } else { acc })
+
+// --- Aggregation with projection ---
+fn sum_by(f, xs) = fold(xs, 0, |acc, x| acc + f(x))
+fn max_by(f, xs) = reduce(xs, |a, b| if f(a) >= f(b) { a } else { b })
+fn min_by(f, xs) = reduce(xs, |a, b| if f(a) <= f(b) { a } else { b })
+
+// --- Logic ---
+fn not(x) = if x { false } else { true }
+
+// --- Chunking ---
+fn chunk(n, xs) = if len(xs) == 0 { [] } else { [take(n, xs)] ++ chunk(n, drop(n, xs)) }
+
 // --- String convenience (wrapping Rust builtins) ---
 fn words(s) = split(s, " ")
 fn unwords(ws) = join(ws, " ")

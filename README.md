@@ -134,8 +134,8 @@ Lux is a research language under active development.
 | Pipe operator (`x \|> f \|> g`) | Working |
 | 38 examples, 31 golden-file tested | Passing |
 
-**Next:** ownership inference (`own`/`ref`/`gc`), native codegen (Cranelift),
-refinement types (Z3), full self-hosting.
+**Shipped:** ownership enforcement (`own` = affine, `ref` = scoped — ownership IS an effect).
+**Next:** `!Alloc` transitivity, refinement types (Fourier-Motzkin), custom effect-aware native backend (written in Lux), full self-containment.
 
 ## Try it
 

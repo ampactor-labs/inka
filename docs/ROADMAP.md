@@ -242,19 +242,19 @@ SMT solver (Z3) handles decidable queries. `assert` as escape hatch. Verificatio
 
 ---
 
-### Phase 7: Native Backend
-*Faster than C for effectful code.*
+### Phase 7: Custom Native Backend
+*Effect-aware codegen, written in Lux, self-contained.*
 
-Two backends: Cranelift (dev speed) and LLVM (release optimization).
+Custom backend — not Cranelift, not LLVM. Written in Lux, runs on the VM during bootstrap, emits machine code directly. See "Custom Native Backend" section below for rationale.
 
 Effect-specific compilation:
-- Tail-resumptive handlers (~85%): evidence passing → zero overhead
-- Linear handlers: single-use CPS → one allocation
-- Multi-shot: full continuation capture → heap allocation
+- Tail-resumptive handlers (~85%): evidence passing in registers → zero overhead
+- Linear handlers: state machine transform → one allocation
+- Multi-shot: state machine, cloneable → the effect system maps the states
 
-**The performance thesis**: Lux beats dynamic dispatch for effectful code because the compiler KNOWS which handlers are tail-resumptive. Languages using `dyn Trait` or vtable dispatch can't — Lux generates direct calls with evidence passed in registers.
+**The performance thesis**: Lux has strictly more information than any other compiler (types + effects + ownership + refinements + purity proofs). More information → better optimization in ALL areas. No ceiling.
 
-**Unlocks**: Production deployment, real-time audio, embedded systems.
+**Unlocks**: Production deployment, real-time audio, embedded systems, self-containment.
 
 ---
 
@@ -322,7 +322,7 @@ The Rust codebase becomes historical.
 | 2. Why Engine | ✅ DONE |
 | 3. Effect tracking | ✅ DONE |
 | 4. Effect algebra | ✅ DONE |
-| 5. Ownership | Design needed |
+| 5. Ownership | Enforcement shipped (`own`/`ref`), `!Alloc` transitivity next |
 | 6. Refinement types | Design needed |
 | 7. Native backend | Design needed |
 | 8. Gradient system | Partially shipped (`--teach`) |

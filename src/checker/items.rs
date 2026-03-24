@@ -406,6 +406,7 @@ impl TypeEnv {
                         kind: TypeErrorKind::EffectConstraintViolation {
                             effect: eff.name.clone(),
                             constraint: "Pure".to_string(),
+                            fn_name: Some(fd.name.clone()),
                         },
                         span: fd.span.clone(),
                     });
@@ -419,6 +420,7 @@ impl TypeEnv {
                         kind: TypeErrorKind::EffectConstraintViolation {
                             effect: neg.name.clone(),
                             constraint: format!("!{}", neg.name),
+                            fn_name: Some(fd.name.clone()),
                         },
                         span: fd.span.clone(),
                     });

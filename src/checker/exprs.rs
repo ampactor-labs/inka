@@ -450,7 +450,10 @@ impl TypeEnv {
                     .lookup_adt(&adt_name)
                     .cloned()
                     .ok_or_else(|| TypeError {
-                        kind: TypeErrorKind::UnboundType(adt_name.clone()),
+                        kind: TypeErrorKind::UnboundType {
+                            name: adt_name.clone(),
+                            suggestion: self.find_similar_type(&adt_name),
+                        },
                         span: span.clone(),
                     })?;
                 let variant = &adt_def.variants[idx];

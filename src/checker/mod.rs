@@ -459,31 +459,89 @@ impl TypeEnv {
     /// Uses Levenshtein distance, returning the closest match within distance 3.
     pub(crate) fn find_similar_name(&self, target: &str) -> Option<String> {
         let mut best: Option<(String, usize)> = None;
-        let max_dist = 3usize; // Only suggest names within 3 edits
+        self.collect_similar_name(target, &mut best);
+        best.map(|(name, _)| name)
+    }
 
+    fn collect_similar_name(&self, target: &str, best: &mut Option<(String, usize)>) {
+        let max_dist = 3usize;
         for name in self.bindings.keys() {
-            // Skip internal names
             if name.starts_with('_') && name.len() > 1 {
                 continue;
             }
             let dist = levenshtein(target, name);
             if dist > 0 && dist <= max_dist {
                 if best.as_ref().is_none_or(|(_, d)| dist < *d) {
-                    best = Some((name.clone(), dist));
+                    *best = Some((name.clone(), dist));
                 }
             }
         }
-        // Also check constructors
         for name in self.constructors.keys() {
             let dist = levenshtein(target, name);
             if dist > 0 && dist <= max_dist {
                 if best.as_ref().is_none_or(|(_, d)| dist < *d) {
-                    best = Some((name.clone(), dist));
+                    *best = Some((name.clone(), dist));
                 }
             }
         }
+        if let Some(parent) = &self.parent {
+            parent.collect_similar_name(target, best);
+        }
+    }
 
+    /// Find the most similar type name for "did you mean?" errors.
+    pub(crate) fn find_similar_type(&self, target: &str) -> Option<String> {
+        let mut best: Option<(String, usize)> = None;
+        self.collect_similar_type(target, &mut best);
         best.map(|(name, _)| name)
+    }
+
+    fn collect_similar_type(&self, target: &str, best: &mut Option<(String, usize)>) {
+        let max_dist = 3usize;
+        for name in self.adts.keys() {
+            let dist = levenshtein(target, name);
+            if dist > 0 && dist <= max_dist {
+                if best.as_ref().is_none_or(|(_, d)| dist < *d) {
+                    *best = Some((name.clone(), dist));
+                }
+            }
+        }
+        // Also check built-in type names
+        for name in &["Int", "Float", "String", "Bool", "List"] {
+            let dist = levenshtein(target, name);
+            if dist > 0 && dist <= max_dist {
+                if best.as_ref().is_none_or(|(_, d)| dist < *d) {
+                    *best = Some((name.to_string(), dist));
+                }
+            }
+        }
+        if let Some(parent) = &self.parent {
+            parent.collect_similar_type(target, best);
+        }
+    }
+
+    /// Find the most similar effect name for "did you mean?" errors.
+    #[allow(dead_code)]
+    pub(crate) fn find_similar_effect(&self, target: &str) -> Option<String> {
+        let mut best: Option<(String, usize)> = None;
+        self.collect_similar_effect(target, &mut best);
+        best.map(|(name, _)| name)
+    }
+
+    #[allow(dead_code)]
+    fn collect_similar_effect(&self, target: &str, best: &mut Option<(String, usize)>) {
+        let max_dist = 3usize;
+        for name in self.effects.keys() {
+            let dist = levenshtein(target, name);
+            if dist > 0 && dist <= max_dist {
+                if best.as_ref().is_none_or(|(_, d)| dist < *d) {
+                    *best = Some((name.clone(), dist));
+                }
+            }
+        }
+        if let Some(parent) = &self.parent {
+            parent.collect_similar_effect(target, best);
+        }
     }
 }
 

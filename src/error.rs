@@ -249,8 +249,14 @@ pub enum TypeErrorKind {
         name: String,
         suggestion: Option<String>,
     },
-    UnboundType(String),
-    UnboundEffect(String),
+    UnboundType {
+        name: String,
+        suggestion: Option<String>,
+    },
+    UnboundEffect {
+        name: String,
+        suggestion: Option<String>,
+    },
     UnboundEffectOp(String),
     NotAFunction(Type),
     WrongArity {
@@ -263,6 +269,7 @@ pub enum TypeErrorKind {
     EffectConstraintViolation {
         effect: String,
         constraint: String,
+        fn_name: Option<String>,
     },
     InfiniteType,
     NonExhaustiveMatch {
@@ -375,11 +382,19 @@ impl fmt::Display for TypeError {
                 }
                 write!(f, " at line {}", self.span.line)
             }
-            TypeErrorKind::UnboundType(name) => {
-                write!(f, "unknown type '{name}' at line {}", self.span.line)
+            TypeErrorKind::UnboundType { name, suggestion } => {
+                write!(f, "unknown type '{name}'")?;
+                if let Some(s) = suggestion {
+                    write!(f, " — did you mean '{s}'?")?;
+                }
+                write!(f, " at line {}", self.span.line)
             }
-            TypeErrorKind::UnboundEffect(name) => {
-                write!(f, "unknown effect '{name}' at line {}", self.span.line)
+            TypeErrorKind::UnboundEffect { name, suggestion } => {
+                write!(f, "unknown effect '{name}'")?;
+                if let Some(s) = suggestion {
+                    write!(f, " — did you mean '{s}'?")?;
+                }
+                write!(f, " at line {}", self.span.line)
             }
             TypeErrorKind::UnboundEffectOp(name) => {
                 write!(
@@ -412,23 +427,39 @@ impl fmt::Display for TypeError {
             TypeErrorKind::UnhandledEffect(name) => {
                 write!(f, "unhandled effect '{name}' at line {}", self.span.line)
             }
-            TypeErrorKind::EffectConstraintViolation { effect, constraint } => {
+            TypeErrorKind::EffectConstraintViolation {
+                effect,
+                constraint,
+                fn_name,
+            } => {
+                if let Some(name) = fn_name {
+                    write!(f, "function '{name}' ")?;
+                }
                 write!(
                     f,
                     "performs effect '{effect}' but declares '{constraint}' at line {}",
                     self.span.line
+                )?;
+                write!(
+                    f,
+                    " — remove '{constraint}' or eliminate '{effect}' from the call chain"
                 )
             }
             TypeErrorKind::InfiniteType => {
                 write!(f, "infinite type at line {}", self.span.line)
             }
             TypeErrorKind::NonExhaustiveMatch { missing } => {
-                let names = missing.join(", ");
-                write!(
-                    f,
-                    "non-exhaustive match at line {} — missing: {names}",
-                    self.span.line
-                )
+                if missing.is_empty() {
+                    write!(f, "non-exhaustive pattern at line {}", self.span.line)
+                } else {
+                    let names = missing.join(", ");
+                    write!(
+                        f,
+                        "non-exhaustive match at line {} — missing: {names}",
+                        self.span.line
+                    )?;
+                    write!(f, " — add a `_` wildcard or handle: {names}")
+                }
             }
             TypeErrorKind::DuplicateDefinition(name) => {
                 write!(
@@ -508,8 +539,20 @@ impl LuxError {
                     }
                     msg
                 }
-                TypeErrorKind::UnboundType(name) => format!("unknown type '{name}'"),
-                TypeErrorKind::UnboundEffect(name) => format!("unknown effect '{name}'"),
+                TypeErrorKind::UnboundType { name, suggestion } => {
+                    let mut msg = format!("unknown type '{name}'");
+                    if let Some(s) = suggestion {
+                        msg.push_str(&format!(" — did you mean '{s}'?"));
+                    }
+                    msg
+                }
+                TypeErrorKind::UnboundEffect { name, suggestion } => {
+                    let mut msg = format!("unknown effect '{name}'");
+                    if let Some(s) = suggestion {
+                        msg.push_str(&format!(" — did you mean '{s}'?"));
+                    }
+                    msg
+                }
                 TypeErrorKind::UnboundEffectOp(name) => {
                     format!("unknown effect operation '{name}'")
                 }
@@ -526,13 +569,26 @@ impl LuxError {
                     msg
                 }
                 TypeErrorKind::UnhandledEffect(name) => format!("unhandled effect '{name}'"),
-                TypeErrorKind::EffectConstraintViolation { effect, constraint } => {
-                    format!("performs effect '{effect}' but declares '{constraint}'")
+                TypeErrorKind::EffectConstraintViolation {
+                    effect,
+                    constraint,
+                    fn_name,
+                } => {
+                    let mut msg = String::new();
+                    if let Some(name) = fn_name {
+                        msg.push_str(&format!("'{name}' "));
+                    }
+                    msg.push_str(&format!("performs '{effect}' but declares '{constraint}'"));
+                    msg
                 }
                 TypeErrorKind::InfiniteType => "infinite type".to_string(),
                 TypeErrorKind::NonExhaustiveMatch { missing } => {
-                    let names = missing.join(", ");
-                    format!("non-exhaustive match — missing: {names}")
+                    if missing.is_empty() {
+                        "non-exhaustive pattern".to_string()
+                    } else {
+                        let names = missing.join(", ");
+                        format!("non-exhaustive match — missing: {names}")
+                    }
                 }
                 TypeErrorKind::DuplicateDefinition(name) => {
                     format!("duplicate definition '{name}'")

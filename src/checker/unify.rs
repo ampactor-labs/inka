@@ -445,7 +445,10 @@ impl TypeEnv {
                     });
                 }
                 Err(TypeError {
-                    kind: TypeErrorKind::UnboundType(name.clone()),
+                    kind: TypeErrorKind::UnboundType {
+                        name: name.clone(),
+                        suggestion: self.find_similar_type(name),
+                    },
                     span: span.clone(),
                 })
             }

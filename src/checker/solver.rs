@@ -4,7 +4,7 @@
 //! the solver evaluates the predicate by substituting `self` with the literal
 //! and reducing. This is the simplest useful solver — literal substitution
 //! + boolean evaluation. Full Fourier-Motzkin variable elimination comes
-//! later when we have multi-variable predicates.
+//!   later when we have multi-variable predicates.
 //!
 //! Design: the solver interface is `check_refinement(predicate, known_value) -> SolverResult`.
 //! Conceptually this is a handler for `prove(predicate, context) -> ProofResult` —

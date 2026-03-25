@@ -44,4 +44,34 @@ y: Int
   WHY: let y = ..
   â function application
 
+--- match expression ---
+x: Int
+  WHY: let x = ..
+  â match expression
+
+--- lambda ---
+f: (Int) -> Int
+  WHY: let f = ..
+
+--- lambda applied ---
+f: (Int) -> Int
+  WHY: let f = ..
+  â lambda
+y: Int
+  WHY: let y = ..
+  â function application
+
+--- match with wildcard ---
+r: Int
+  WHY: let r = ..
+  â match expression
+
+--- let destructure ---
+a: Int
+b: Int
+
+--- nested lambda ---
+add: (Int) -> (Int) -> Int
+  WHY: let add = ..
+
 === The compiler teaches ===

@@ -77,5 +77,34 @@ test("abs",       "println(abs(0 - 42))")
 test("max",       "println(max(3, 7))")
 test("min",       "println(min(3, 7))")
 
+println("── Effects: Handle/Resume ──")
+test("simple-handle",
+  'effect Fail { fail(msg) -> Int }
+let result = handle { fail("oops") } { fail(m) => resume(42) }
+println(result)')
+
+test("body-value",
+  'effect F { f() -> Int }
+let result = handle { 10 + f() } { f() => resume(5) }
+println(result)')
+
+test("multi-resume",
+  'effect F { f(x) -> Int }
+let result = handle { f(1) + f(2) } { f(x) => resume(x * 10) }
+println(result)')
+
+test("handler-state",
+  'effect S { get() -> Int, set(v) -> () }
+let result = handle {
+  set(10)
+  let x = get()
+  set(x + 5)
+  get()
+} with s = 0 {
+  get() => resume(s),
+  set(v) => resume(()) with s = v
+}
+println(result)')
+
 println("")
 println("═══ All tests passed! ═══")

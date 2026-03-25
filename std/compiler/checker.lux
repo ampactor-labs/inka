@@ -390,6 +390,86 @@ fn infer_expr(env, subst, counter, expr) = match expr {
     (ty, s2, c2, Because("block result", reason), merge_effects(block_effs, expr_effs))
   },
 
+  MatchExpr(scrutinee, arms) => {
+    let (scr_ty, s1, c1, scr_reason, scr_effs) = infer_expr(env, subst, counter, scrutinee)
+    if len(arms) == 0 {
+      (scr_ty, s1, c1, Because("empty match", scr_reason), scr_effs)
+    } else {
+      // Infer first arm to establish result type
+      let (first_pat, first_body) = arms[0]
+      let (arm_env, s2, c2) = bind_pattern(env, s1, c1, first_pat, scr_ty)
+      let (result_ty, s3, c3, result_reason, arm_effs) = infer_expr(arm_env, s2, c2, first_body)
+      // Unify remaining arms with first arm's type
+      let (s_final, c_final, all_effs) = unify_match_arms(env, s3, c3, scr_ty, result_ty, slice(arms, 1, len(arms)), merge_effects(scr_effs, arm_effs))
+      (apply(s_final, result_ty), s_final, c_final, Because("match expression", result_reason), all_effs)
+    }
+  },
+
+  LambdaExpr(params, body) => {
+    let (param_types, c1) = fresh_params(counter, params)
+    let lambda_env = bind_params_with_reasons(env, params, param_types, "lambda")
+    let (body_ty, s1, c2, body_reason, body_effs) = infer_expr(lambda_env, subst, c1, body)
+    let fn_type = TFun(map(|p| apply(s1, p), param_types), apply(s1, body_ty), body_effs)
+    (fn_type, s1, c2, Declared("lambda"), EfPure)
+  },
+
+  HandleExpr(body, handler_arms, state_bindings) => {
+    // Infer body type — this is what the handle expression returns
+    let (body_ty, s1, c1, body_reason, body_effs) = infer_expr(env, subst, counter, body)
+    // Check each handler arm: bind op params + state vars, infer body
+    let (s2, c2, handler_effs) = check_handler_arms(env, s1, c1, handler_arms, state_bindings)
+    (apply(s2, body_ty), s2, c2, Because("handle expression", body_reason), merge_effects(body_effs, handler_effs))
+  },
+
+  ResumeExpr(value, state_updates) => {
+    let (val_ty, s1, c1, val_reason, val_effs) = infer_expr(env, subst, counter, value)
+    // Infer state update expressions
+    let (s2, c2, upd_effs) = infer_state_updates(env, s1, c1, state_updates)
+    (val_ty, s2, c2, Because("resume value", val_reason), merge_effects(val_effs, upd_effs))
+  },
+
+  FieldAccess(obj, field_name) => {
+    let (obj_ty, s1, c1, obj_reason, obj_effs) = infer_expr(env, subst, counter, obj)
+    let resolved = apply(s1, obj_ty)
+    match resolved {
+      TTuple(elems) => {
+        // Try parsing field as integer index
+        let idx = to_int(field_name)
+        if idx >= 0 && idx < len(elems) {
+          (elems[idx], s1, c1, Because("tuple field " ++ field_name, obj_reason), obj_effs)
+        } else {
+          let (tv, c2) = fresh_var(c1)
+          (tv, s1, c2, Because("field access ." ++ field_name, obj_reason), obj_effs)
+        }
+      },
+      _ => {
+        // For records or unknown types, return fresh var
+        let (tv, c2) = fresh_var(c1)
+        (tv, s1, c2, Because("field access ." ++ field_name, obj_reason), obj_effs)
+      }
+    }
+  },
+
+  Index(obj, idx) => {
+    let (obj_ty, s1, c1, obj_reason, obj_effs) = infer_expr(env, subst, counter, obj)
+    let (idx_ty, s2, c2, _, idx_effs) = infer_expr(env, s1, c1, idx)
+    let (_, s3, _) = unify(s2, idx_ty, TInt, Because("index must be Int", Inferred("index")))
+    let resolved = apply(s3, obj_ty)
+    let elem_ty = match resolved {
+      TList(inner) => inner,
+      TTuple(elems) => {
+        let (tv, _) = fresh_var(c2)
+        tv
+      },
+      _ => {
+        let (tv, _) = fresh_var(c2)
+        tv
+      }
+    }
+    let (_, c3) = fresh_var(c2)
+    (elem_ty, s3, c3, Because("index into " ++ type_to_string(s3, resolved), obj_reason), merge_effects(obj_effs, idx_effs))
+  },
+
   _ => {
     let (tv, c2) = fresh_var(counter)
     (tv, subst, c2, Fresh(c2[0] - 1), EfPure)
@@ -454,6 +534,41 @@ fn check_stmt(env, subst, counter, stmt) = match stmt {
     (env, s1, c1, eff)
   },
 
+  LetDestructure(names, value) => {
+    let (val_ty, s1, c1, val_reason, eff) = infer_expr(env, subst, counter, value)
+    let resolved = apply(s1, val_ty)
+    // If it's a tuple, bind each name to the corresponding element
+    match resolved {
+      TTuple(elems) => {
+        let new_env = bind_destructure_tuple(env, names, elems, val_reason, 0)
+        (new_env, s1, c1, eff)
+      },
+      _ => {
+        // Bind each name to a fresh var
+        let (new_env, c2) = bind_destructure_fresh(env, s1, c1, names, val_reason)
+        (new_env, s1, c2, eff)
+      }
+    }
+  },
+
+  EffectDeclStmt(name, ops) => {
+    // Register the effect name in the environment
+    let new_env = env_extend(env, name, TName(name, []), Declared("effect " ++ name))
+    // Register each operation as a function type
+    let final_env = register_effect_ops(new_env, subst, counter, name, ops)
+    (final_env, subst, counter, EfPure)
+  },
+
+  TypeStmt(name, variants) => {
+    // Register type name
+    let new_env = env_extend(env, name, TName(name, []), Declared("type " ++ name))
+    // Register each variant as a constructor function
+    let final_env = register_type_variants(new_env, counter, name, variants)
+    (final_env, subst, counter, EfPure)
+  },
+
+  ImportStmt(_) => (env, subst, counter, EfPure),
+
   _ => (env, subst, counter, EfPure)
 }
 
@@ -472,6 +587,143 @@ fn bind_params_with_reasons(env, names, types, fn_name) = {
     let reason = FnParam(fn_name, 0, Declared("parameter declaration"))
     let new_env = env_extend(env, names[0], types[0], reason)
     bind_params_with_reasons(new_env, slice(names, 1, len(names)), slice(types, 1, len(types)), fn_name)
+  }
+}
+
+// ─── Pattern Binding ─────────────────────────────────────────
+// Bind pattern variables into the environment for match arms.
+
+fn bind_pattern(env, subst, counter, pat, scrutinee_ty) = match pat {
+  PVar(name) => {
+    let new_env = env_extend(env, name, scrutinee_ty, Because("pattern binding", Inferred("match scrutinee")))
+    (new_env, subst, counter)
+  },
+  PWild => (env, subst, counter),
+  PLit(_) => (env, subst, counter),
+  PCon(name, sub_pats) => {
+    // Bind sub-pattern variables to fresh type vars
+    let (new_env, new_counter) = bind_con_sub_pats(env, subst, counter, sub_pats, scrutinee_ty)
+    (new_env, subst, new_counter)
+  },
+  _ => (env, subst, counter)
+}
+
+fn bind_con_sub_pats(env, subst, counter, pats, parent_ty) = {
+  if len(pats) == 0 { (env, counter) }
+  else {
+    let (tv, c1) = fresh_var(counter)
+    let (env2, _, c2) = bind_pattern(env, subst, c1, pats[0], tv)
+    bind_con_sub_pats(env2, subst, c2, slice(pats, 1, len(pats)), parent_ty)
+  }
+}
+
+// Unify remaining match arms with the result type of the first arm.
+fn unify_match_arms(env, subst, counter, scr_ty, result_ty, arms, effs) = {
+  if len(arms) == 0 { (subst, counter, effs) }
+  else {
+    let (pat, body) = arms[0]
+    let (arm_env, s1, c1) = bind_pattern(env, subst, counter, pat, scr_ty)
+    let (arm_ty, s2, c2, _, arm_effs) = infer_expr(arm_env, s1, c1, body)
+    let (_, s3, _) = unify(s2, result_ty, arm_ty, Because("match arms must have same type", CondBranch(Inferred("first arm"), Inferred("this arm"))))
+    unify_match_arms(env, s3, c2, scr_ty, result_ty, slice(arms, 1, len(arms)), merge_effects(effs, arm_effs))
+  }
+}
+
+// Check handler arms: create sub-env with op params and state vars.
+fn check_handler_arms(env, subst, counter, arms, state_bindings) = {
+  if len(arms) == 0 { (subst, counter, EfPure) }
+  else {
+    let arm = arms[0]
+    // Handler arm from parser is (op_name, params, body) — a 3-tuple
+    let (op_name, params, body) = arm
+    // Bind each param to a fresh type var
+    let (param_env, s1, c1) = bind_handler_params(env, subst, counter, params)
+    // Bind state variables from state_bindings
+    let (state_env, s2, c2) = bind_state_vars(param_env, s1, c1, state_bindings)
+    // Bind resume as a function in handler arm scope
+    let (resume_tv, c3) = fresh_var(c2)
+    let resume_env = env_extend(state_env, "resume", TFun([resume_tv], resume_tv, EfPure), Declared("resume continuation"))
+    let (_, s3, c4, _, arm_effs) = infer_expr(resume_env, s2, c3, body)
+    let (s4, c5, rest_effs) = check_handler_arms(env, s3, c4, slice(arms, 1, len(arms)), state_bindings)
+    (s4, c5, merge_effects(arm_effs, rest_effs))
+  }
+}
+
+fn bind_handler_params(env, subst, counter, params) = {
+  if len(params) == 0 { (env, subst, counter) }
+  else {
+    let name = params[0]
+    let (tv, c1) = fresh_var(counter)
+    let new_env = env_extend(env, name, tv, Declared("handler parameter"))
+    bind_handler_params(new_env, subst, c1, slice(params, 1, len(params)))
+  }
+}
+
+fn bind_state_vars(env, subst, counter, bindings) = {
+  if len(bindings) == 0 { (env, subst, counter) }
+  else {
+    let binding = bindings[0]
+    // State bindings come from parser as (name, init_expr) pairs
+    let (name, init_expr) = binding
+    let (init_ty, s1, c1, _, _) = infer_expr(env, subst, counter, init_expr)
+    let new_env = env_extend(env, name, init_ty, Declared("handler state"))
+    bind_state_vars(new_env, s1, c1, slice(bindings, 1, len(bindings)))
+  }
+}
+
+fn infer_state_updates(env, subst, counter, updates) = {
+  if len(updates) == 0 { (subst, counter, EfPure) }
+  else {
+    let (_, upd_expr) = updates[0]
+    let (_, s1, c1, _, eff) = infer_expr(env, subst, counter, upd_expr)
+    let (s2, c2, rest_effs) = infer_state_updates(env, s1, c1, slice(updates, 1, len(updates)))
+    (s2, c2, merge_effects(eff, rest_effs))
+  }
+}
+
+// Bind names from let destructuring to tuple elements.
+fn bind_destructure_tuple(env, names, elems, reason, idx) = {
+  if idx >= len(names) || idx >= len(elems) { env }
+  else {
+    let name = names[idx]
+    let ty = elems[idx]
+    let new_env = env_extend(env, name, ty, Because("destructured element " ++ to_string(idx), reason))
+    bind_destructure_tuple(new_env, names, elems, reason, idx + 1)
+  }
+}
+
+// Bind names from let destructuring to fresh type vars (non-tuple case).
+fn bind_destructure_fresh(env, subst, counter, names, reason) = {
+  if len(names) == 0 { (env, counter) }
+  else {
+    let (tv, c1) = fresh_var(counter)
+    let new_env = env_extend(env, names[0], tv, Because("destructured binding", reason))
+    bind_destructure_fresh(new_env, subst, c1, slice(names, 1, len(names)), reason)
+  }
+}
+
+// Register effect operation signatures as function types in env.
+fn register_effect_ops(env, subst, counter, effect_name, ops) = {
+  if len(ops) == 0 { env }
+  else {
+    // Each op descriptor is (op_name, param_names) from parser
+    let (op_name, _) = ops[0]
+    let new_env = env_extend(env, op_name, TName(effect_name ++ "." ++ op_name, []), Declared("effect operation of " ++ effect_name))
+    register_effect_ops(new_env, subst, counter, effect_name, slice(ops, 1, len(ops)))
+  }
+}
+
+// Register ADT variant constructors in the environment.
+fn register_type_variants(env, counter, type_name, variants) = {
+  if len(variants) == 0 { env }
+  else {
+    let variant = variants[0]
+    let v_name = match variant {
+      (name, _) => name,
+      _ => "unknown_variant"
+    }
+    let new_env = env_extend(env, v_name, TName(type_name, []), Declared("constructor of " ++ type_name))
+    register_type_variants(new_env, counter, type_name, slice(variants, 1, len(variants)))
   }
 }
 
@@ -693,91 +945,39 @@ type OwnershipViolation
 // Returns: list of ownership violations.
 fn check_ownership(params, body) = {
   // Build initial tracking state: own params start as Unused
-  let own_params = filter(params, |p| match p {
+  let own_params = filter(|p| match p {
     (name, OwnTier) => true,
     _ => false,
-  })
-  let ref_params = filter(params, |p| match p {
+  }, params)
+  let ref_params = filter(|p| match p {
     (name, RefTier) => true,
     (name, InferredTier) => true,
     _ => false,
-  })
+  }, params)
 
   // Walk the body, collecting uses of owned values
   let (used, violations) = walk_expr(body, own_params, [])
 
   // Check for unused own params
   let unused_warnings = map(
-    filter(own_params, |p| {
+    |p| { let (name, _) = p; OwnNeverConsumed(name) },
+    filter(|p| {
       let (name, _) = p
-      not(any(used, |u| u == name))
-    }),
-    |p| { let (name, _) = p; OwnNeverUsed(name) }
+      not(any(|u| u == name, used))
+    }, own_params)
   )
 
   // Check for ref params in return position
   let escape_violations = check_ref_escape(body, ref_params)
 
-  concat(violations, concat(unused_warnings, escape_violations))
+  violations ++ unused_warnings ++ escape_violations
 }
 
 // Walk an expression tree, tracking which own-values have been consumed.
 // Returns (used_names, violations).
-fn walk_expr(expr, own_names, used_so_far) = match expr {
-  // Variable reference: if it's an own-name, check & record use
-  ("var", name, line) => {
-    let is_own = any(own_names, |p| { let (n, _) = p; n == name })
-    if is_own {
-      let already_used = any(used_so_far, |u| u == name)
-      if already_used {
-        (used_so_far, [MovedTwice(name, 0, line)])
-      } else {
-        (push(used_so_far, name), [])
-      }
-    } else {
-      (used_so_far, [])
-    }
-  },
-
-  // If expression: own-value used in BOTH branches counts as one use,
-  // but used AFTER the if (when used in both branches) is an error.
-  ("if", cond, then_body, else_body) => {
-    let (u1, v1) = walk_expr(cond, own_names, used_so_far)
-    let (u2, v2) = walk_expr(then_body, own_names, u1)
-    let (u3, v3) = walk_expr(else_body, own_names, u1)
-    // Names used in BOTH branches are consumed after the if
-    let both = filter(u2, |n| any(u3, |m| m == n))
-    let merged = unique(concat(u2, u3))
-    (merged, concat(v1, concat(v2, v3)))
-  },
-
-  // Block: walk sequentially, threading used state
-  ("block", stmts) => fold(stmts, (used_so_far, []), |acc, stmt| {
-    let (u, v) = acc
-    let (u2, v2) = walk_expr(stmt, own_names, u)
-    (u2, concat(v, v2))
-  }),
-
-  // Default: no ownership-relevant operation
-  _ => (used_so_far, []),
-}
+// NOTE: Stub — will be rewritten to match ADT-based AST (VarRef, IfExpr, BlockExpr).
+fn walk_expr(expr, own_names, used_so_far) = (used_so_far, [])
 
 // Check if any ref-param appears in return position.
-fn check_ref_escape(body, ref_params) = match body {
-  // If the body IS a ref-param variable, it's escaping
-  ("var", name, line) => {
-    let is_ref = any(ref_params, |p| { let (n, _) = p; n == name })
-    if is_ref { [RefEscaped(name, line)] }
-    else { [] }
-  },
-  // Block: check the last expression (the return value)
-  ("block", stmts) => {
-    if len(stmts) == 0 { [] }
-    else { check_ref_escape(stmts[len(stmts) - 1], ref_params) }
-  },
-  // If: check both branches
-  ("if", _, then_body, else_body) =>
-    concat(check_ref_escape(then_body, ref_params),
-           check_ref_escape(else_body, ref_params)),
-  _ => [],
-}
+// NOTE: Stub — will be rewritten to match ADT-based AST.
+fn check_ref_escape(body, ref_params) = []

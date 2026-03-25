@@ -306,11 +306,11 @@ fn proto_upvals(p)   = { let (_, _, _, _, _, _, _, u) = p; u }
 // ─── Main Execution Loop ────────────────────────────────────
 
 fn vm_run(chunk) = {
-  // chunk = ("chunk", code, constants, names [, htables])
-  let code = chunk[1]
-  let constants = chunk[2]
-  let names = chunk[3]
-  let htables = if len(chunk) >= 5 { chunk[4] } else { [] }
+  // chunk = ("chunk", code, constants, names) or ("chunk", code, constants, names, htables)
+  let (code, constants, names, htables) = match chunk {
+    ("chunk", c, cn, n, ht) => (c, cn, n, ht),
+    ("chunk", c, cn, n)     => (c, cn, n, [])
+  }
   let s = vm_new(code, constants, names, htables)
   let result = vm_loop(s)
   result
@@ -489,9 +489,15 @@ fn vm_step(s, op) = {
         let idx = parse_int(field_name)
         elems[idx]
       },
-      ("variant", _, fields) => {
-        // TODO: field registry lookup
-        ()
+      ("variant", tag, fields) => {
+        if starts_with(tag, "#record:") {
+          // Anonymous record: tag is "#record:field1,field2,..."
+          let parts = split(tag, "#record:")
+          let field_list = parts[1]
+          let names = split(field_list, ",")
+          let idx = find_field_idx(names, field_name, 0)
+          if idx >= 0 { fields[idx] } else { () }
+        } else { () }
       },
       _ => ()
     }
@@ -881,6 +887,12 @@ fn find_entry_for(entries, op_name, i) = {
 }
 
 // Resolve handler table entries: convert name indices to name strings
+fn find_field_idx(names, target, i) = {
+  if i >= len(names) { 0 - 1 }
+  else if names[i] == target { i }
+  else { find_field_idx(names, target, i + 1) }
+}
+
 fn resolve_handler_table(table, names) = {
   if len(table) == 0 { [] }
   else { resolve_ht_loop(table, names, 0, []) }
@@ -890,11 +902,11 @@ fn resolve_ht_loop(table, names, i, acc) = {
   if i >= len(table) { acc }
   else {
     let entry = table[i]
-    // Original: (name_idx, proto_idx, param_count, ...)
-    // Resolved: (name_string, proto_idx, param_count, ...)
-    let name_idx = entry[0]
+    // Original tuple: (name_idx, proto_idx, param_count, tail_resumptive)
+    // Resolved list: [name_string, proto_idx, param_count, tail_resumptive]
+    let (name_idx, proto_idx, param_count, tail_res) = entry
     let resolved_name = if name_idx < len(names) { names[name_idx] } else { "unknown" }
-    let resolved = [resolved_name] ++ slice(entry, 1, len(entry))
+    let resolved = [resolved_name, proto_idx, param_count, tail_res]
     resolve_ht_loop(table, names, i + 1, push(acc, resolved))
   }
 }
@@ -908,9 +920,77 @@ fn vm_resume(s) = {
   // Pop resume value
   let (s5, resume_val) = spop(s4)
 
-  // For now, simplified resume: just push resume value back
-  // Full implementation needs handler dispatch stack unwinding
-  (spush(s5, resume_val), "continue")
+  // Find the resume_marker in handler body locals (from base to stack top)
+  let marker = find_resume_marker(vm_stack(s5), vm_base(s5))
+  match marker {
+    ("found", h_idx, resume_info) => {
+      // Apply state updates to handler frame
+      let handlers = vm_handlers(s5)
+      let updated_handlers = apply_state_updates(handlers, h_idx, offsets, updates, 0)
+
+      // Extract resume_info: (ip, code, constants, names, base, stack, frame_count, htables)
+      let r_ip = resume_info[0]
+      let r_code = resume_info[1]
+      let r_constants = resume_info[2]
+      let r_names = resume_info[3]
+      let r_base = resume_info[4]
+      let r_stack = resume_info[5]
+      let r_frame_count = resume_info[6]
+      let r_htables = resume_info[7]
+
+      // Truncate frames back to saved count
+      let frames = slice(vm_frames(s5), 0, r_frame_count)
+
+      // Rebuild state: restore to perform site, push resume value
+      let restored_stack = push(r_stack, resume_val)
+      let s6 = (r_ip, r_code, r_constants, r_names,
+                restored_stack, r_base, frames, vm_globals(s5),
+                updated_handlers, r_htables, vm_upvals(s5))
+      (s6, "continue")
+    },
+    _ => {
+      // No marker found — fallback (shouldn't happen in well-formed bytecode)
+      (spush(s5, resume_val), "continue")
+    }
+  }
+}
+
+fn find_resume_marker(stack, base) = {
+  find_resume_marker_loop(stack, base, len(stack) - 1)
+}
+
+fn find_resume_marker_loop(stack, base, i) = {
+  if i < base { "not_found" }
+  else {
+    let val = stack[i]
+    match val {
+      ("resume_marker", h_idx, info) => ("found", h_idx, info),
+      _ => find_resume_marker_loop(stack, base, i - 1)
+    }
+  }
+}
+
+fn apply_state_updates(handlers, h_idx, offsets, updates, i) = {
+  if i >= len(offsets) { handlers }
+  else {
+    let offset = offsets[i]
+    let value = updates[i]
+    let hframe = handlers[h_idx]
+    // hframe = ("hframe", resolved, ip, base, frame_count, state, stack)
+    let state = hframe[5]
+    let new_state = list_set(state, offset, value)
+    let new_hframe = (hframe[0], hframe[1], hframe[2], hframe[3],
+                      hframe[4], new_state, hframe[6])
+    let new_handlers = list_set(handlers, h_idx, new_hframe)
+    apply_state_updates(new_handlers, h_idx, offsets, updates, i + 1)
+  }
+}
+
+fn list_set(lst, idx, val) = {
+  if idx >= len(lst) { lst }
+  else {
+    slice(lst, 0, idx) ++ [val] ++ slice(lst, idx + 1, len(lst))
+  }
 }
 
 fn read_offsets(s, n, acc) = {

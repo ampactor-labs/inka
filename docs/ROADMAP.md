@@ -324,7 +324,7 @@ The Rust codebase becomes historical.
 | 4. Effect algebra | ✅ DONE |
 | 5. Ownership | Complete — `own`/`ref` enforced, `!Alloc` transitivity shipped (Approach B: inferred) |
 | 6. Refinement types | 6A syntax + 6B/C solver shipped — literals verified at compile time |
-| 7. Native backend | Design needed |
+| 7. Native backend | **VM self-hosted** (`std/vm.lux`, 930 lines, 38 tests pass); native backend design needed |
 | 8. Gradient system | Partially shipped (`--teach`) |
 | 9. Type-directed synthesis | Research stage |
 | 10. Full self-containment | Bootstrap ready |
@@ -341,7 +341,7 @@ Phase 5 (Ownership) ──→ Phase 7 (Native Backend) ──→ Phase 10 (Self-
 Phase 8 (Gradient System) ←── threads through all phases
 ```
 
-Phases 5 and 6 can overlap (independent type system extensions that compose later). Phase 7 depends on Phase 5 (native codegen needs move/drop semantics). Phase 10 depends on Phase 7 (need native backend for bootstrap binary).
+Phases 5 and 6 can overlap (independent type system extensions that compose later). Phase 7 depends on Phase 5 (native codegen needs move/drop semantics). Phase 10 depends on Phase 7 (need native backend for bootstrap binary). **The VM component of Phase 7/10 is now complete** — `std/vm.lux` proves Lux can execute its own bytecode.
 
 ---
 

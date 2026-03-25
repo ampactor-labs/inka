@@ -127,15 +127,16 @@ Lux is a research language under active development.
 | Teaching compiler (three-tier: alloc-free / pure / effectful) | Working |
 | Self-hosted compiler (lexer, parser, checker, codegen — all Lux) | Working |
 | Bytecode VM with evidence-passing optimization | Working |
+| Self-hosted VM (930 lines, recursive fibonacci/factorial) | Working |
 | ML framework (autodiff via effects, XOR convergence) | Working |
 | DSP framework (provably safe audio via effect constraints) | Working |
 | Pattern matching with exhaustiveness warnings | Working |
 | Records with row polymorphism | Working |
 | Pipe operator (`x \|> f \|> g`) | Working |
-| 38 examples, 31 golden-file tested | Passing |
+| 38 examples, 31 golden-file tested, 38 self-hosted VM tests | Passing |
 
-**Shipped:** ownership enforcement (`own` = affine, `ref` = scoped — ownership IS an effect).
-**Next:** `!Alloc` transitivity, refinement types (Fourier-Motzkin), custom effect-aware native backend (written in Lux), full self-containment.
+**Shipped:** ownership enforcement (`own` = affine, `ref` = scoped), `!Alloc` transitivity, refinement type verification, **self-hosted VM** (full compile+execute pipeline in Lux).
+**Next:** effect handler testing through self-hosted pipeline, oracle testing (golden-file parity), custom effect-aware native backend.
 
 ## Try it
 

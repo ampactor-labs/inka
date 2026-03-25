@@ -286,6 +286,11 @@ pub enum TypeErrorKind {
     RefEscaped {
         name: String,
     },
+    /// Effect negation constraint cannot be proven — body has open effect row.
+    EffectRowUnconstrained {
+        constraint: String,
+        fn_name: String,
+    },
 }
 
 // ── Runtime errors ────────────────────────────────────────────
@@ -454,6 +459,22 @@ impl fmt::Display for TypeError {
                     " — remove '{constraint}' or eliminate '{effect}' from the call chain"
                 )
             }
+            TypeErrorKind::EffectRowUnconstrained {
+                constraint,
+                fn_name,
+            } => {
+                write!(
+                    f,
+                    "function '{fn_name}' declares '{constraint}' but body has effects \
+                     that cannot be fully determined at line {}",
+                    self.span.line
+                )?;
+                write!(
+                    f,
+                    " — ensure all callees have known effects: add type annotations \
+                     or effect declarations so the compiler can prove {constraint}"
+                )
+            }
             TypeErrorKind::InfiniteType => {
                 write!(f, "infinite type at line {}", self.span.line)
             }
@@ -608,6 +629,12 @@ impl LuxError {
                     }
                     msg.push_str(&format!("performs '{effect}' but declares '{constraint}'"));
                     msg
+                }
+                TypeErrorKind::EffectRowUnconstrained {
+                    constraint,
+                    fn_name,
+                } => {
+                    format!("'{fn_name}' declares '{constraint}' but effects undetermined")
                 }
                 TypeErrorKind::InfiniteType => "infinite type".to_string(),
                 TypeErrorKind::NonExhaustiveMatch { missing } => {

@@ -458,14 +458,28 @@ impl TypeEnv {
                 }
             }
 
-            // Negation constraints: body must NOT contain negated effects
+            // Negation constraints: body must NOT contain negated effects.
+            // Apply substitutions first — callee effects may have been resolved
+            // through unification after the initial body inference.
+            let resolved_for_neg = self.apply_eff_subst(&body_effects);
             for neg in fd.effects.iter().filter(|e| e.negated) {
-                if body_effects.contains(&neg.name) {
+                // Rule 1: resolved effects contain the negated effect
+                if resolved_for_neg.contains(&neg.name) {
                     return Err(TypeError {
                         kind: TypeErrorKind::EffectConstraintViolation {
                             effect: neg.name.clone(),
                             constraint: format!("!{}", neg.name),
                             fn_name: Some(fd.name.clone()),
+                        },
+                        span: fd.span.clone(),
+                    });
+                }
+                // Rule 2: open row — can't prove absence through the unknown
+                if resolved_for_neg.is_open() {
+                    return Err(TypeError {
+                        kind: TypeErrorKind::EffectRowUnconstrained {
+                            constraint: format!("!{}", neg.name),
+                            fn_name: fd.name.clone(),
                         },
                         span: fd.span.clone(),
                     });

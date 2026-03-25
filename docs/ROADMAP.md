@@ -322,7 +322,7 @@ The Rust codebase becomes historical.
 | 2. Why Engine | ✅ DONE |
 | 3. Effect tracking | ✅ DONE |
 | 4. Effect algebra | ✅ DONE |
-| 5. Ownership | Enforcement shipped (`own`/`ref`), `!Alloc` transitivity next |
+| 5. Ownership | Complete — `own`/`ref` enforced, `!Alloc` transitivity shipped (Approach B: inferred) |
 | 6. Refinement types | Design needed |
 | 7. Native backend | Design needed |
 | 8. Gradient system | Partially shipped (`--teach`) |

@@ -246,13 +246,20 @@ error: cannot return borrowed value 'data'
   — change 'ref' to 'own' to take ownership
 ```
 
-### Step 5: `!Alloc` transitivity
+### Step 5: `!Alloc` transitivity ✅ SHIPPED
 
-**Where:** `src/checker/items.rs`, effect constraint block (lines 378-427).
+**Where:** `src/checker/items.rs`, negation constraint block (lines 461-490).
 
-When `!Alloc` function calls a callee with open effect row → error unless
-callee is inferred allocation-free. This extends the existing negation
-check with a transitivity rule.
+**Approach B (inferred):** The effect algebra resolves callee effects through
+unification. The negation check applies `apply_eff_subst` to get resolved
+body effects, then:
+- **Rule 1:** If resolved effects contain the negated effect → error (concrete violation).
+- **Rule 2:** If resolved row is still Open (unresolved effect vars) → error
+  (closed-world: can't prove absence through the unknown).
+
+Callee effects resolved at call site via unification — no new mechanism needed.
+Forward references produce open rows (callee not yet checked), which are correctly
+rejected. Fix: define callees before callers, or add explicit annotations.
 
 ### Step 6: Teaching compiler integration
 

@@ -21,7 +21,6 @@ fn is_primitive(ty: &Type) -> bool {
 impl TypeEnv {
     // ── Effect substitution ──────────────────────────────────
 
-    #[allow(dead_code)]
     pub(crate) fn apply_eff_subst(&self, row: &EffectRow) -> EffectRow {
         match row {
             EffectRow::Closed(_) => row.clone(),

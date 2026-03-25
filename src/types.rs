@@ -245,6 +245,11 @@ impl EffectRow {
         matches!(self, EffectRow::Closed(s) if s.is_empty())
     }
 
+    /// True if this row has unresolved effect variables.
+    pub fn is_open(&self) -> bool {
+        matches!(self, EffectRow::Open { .. })
+    }
+
     /// Union two rows. Result is Open if either input is Open.
     pub fn union(&self, other: &EffectRow) -> EffectRow {
         match (self, other) {

@@ -106,5 +106,50 @@ let result = handle {
 }
 println(result)')
 
+println("── Effects: Advanced ──")
+test("nested-handle",
+  'effect A { a() -> Int }
+effect B { b() -> Int }
+let result = handle {
+  let x = handle { b() + 1 } { b() => resume(10) }
+  x + a()
+} { a() => resume(100) }
+println(result)')
+
+test("string-effect",
+  'effect Name { name() -> String }
+let result = handle { "hello " ++ name() } { name() => resume("world") }
+println(result)')
+
+test("computed-resume",
+  'effect F { f(x) -> Int }
+let result = handle { f(3) } { f(x) => resume(x * x + 1) }
+println(result)')
+
+test("no-effect-body",
+  'effect F { f() -> Int }
+let result = handle { 42 } { f() => resume(0) }
+println(result)')
+
+test("effect-unit",
+  'effect Log { log(msg) -> () }
+let result = handle { log("a"); log("b"); 99 } { log(m) => resume(()) }
+println(result)')
+
+test("sequential-state",
+  'effect C { inc() -> (), count() -> Int }
+let result = handle {
+  inc()
+  inc()
+  inc()
+  inc()
+  inc()
+  count()
+} with n = 0 {
+  inc() => resume(()) with n = n + 1,
+  count() => resume(n)
+}
+println(result)')
+
 println("")
 println("═══ All tests passed! ═══")

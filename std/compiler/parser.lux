@@ -598,8 +598,16 @@ fn parse_state_updates(tokens, pos) = {
   let (val, p3) = parse_expr(tokens, skip_ws(tokens, p2));
   let p4 = skip_ws(tokens, p3);
   if check(tokens, p4, "Comma") {
-    let (rest, p5) = parse_state_updates(tokens, p4 + 1);
-    ([(name, val)] ++ rest, p5)
+    // Disambiguate: "ident =" is another state update.
+    // Otherwise it's a handler arm separator — don't consume the comma.
+    let p5 = skip_ws(tokens, p4 + 1);
+    let p6 = skip_ws(tokens, p5 + 1);
+    if check(tokens, p6, "Eq") {
+      let (rest, p7) = parse_state_updates(tokens, p4 + 1);
+      ([(name, val)] ++ rest, p7)
+    } else {
+      ([(name, val)], p4)
+    }
   } else {
     ([(name, val)], p4)
   }

@@ -55,5 +55,12 @@
   body-value: 15
   multi-resume: 30
   handler-state: 15
+ââ Effects: Advanced ââ
+  nested-handle: 111
+  string-effect: hello world
+  computed-resume: 10
+  no-effect-body: 42
+  effect-unit: 99
+  sequential-state: 5
 
 âââ All tests passed! âââ

@@ -432,6 +432,10 @@ impl TypeEnv {
                 if let Some(ty) = self.type_params.get(name) {
                     return Ok(ty.clone());
                 }
+                // Check if it's a type alias (with optional refinement predicate)
+                if let Some((base_ty, _predicate)) = self.type_aliases.get(name) {
+                    return Ok(base_ty.clone());
+                }
                 // Check if it's a known ADT
                 if self.lookup_adt(name).is_some() {
                     let type_args: Vec<Type> = args

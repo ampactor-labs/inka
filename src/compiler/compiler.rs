@@ -287,6 +287,11 @@ impl Compiler {
                 self.compile_type_decl(decl)?;
                 Ok(())
             }
+            Item::TypeAlias(_) => {
+                // Type aliases are resolved at check time. No codegen needed —
+                // refinement predicates are erased at runtime (zero cost).
+                Ok(())
+            }
             Item::HandlerDecl(decl) => {
                 let mut clauses = Vec::new();
                 // If base handler exists, start with its clauses

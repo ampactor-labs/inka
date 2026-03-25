@@ -22,7 +22,7 @@ impl Parser {
         match self.peek() {
             TokenKind::Fn => Ok(Item::FnDecl(self.parse_fn_decl()?)),
             TokenKind::Let => Ok(Item::LetDecl(self.parse_let_decl()?)),
-            TokenKind::Type => Ok(Item::TypeDecl(self.parse_type_decl()?)),
+            TokenKind::Type => self.parse_type_or_alias(),
             TokenKind::Effect => Ok(Item::EffectDecl(self.parse_effect_decl()?)),
             TokenKind::Trait => Ok(Item::TraitDecl(self.parse_trait_decl()?)),
             TokenKind::Impl => Ok(Item::ImplBlock(self.parse_impl_block()?)),
@@ -293,7 +293,8 @@ impl Parser {
     }
 
     // ── type Name<T> = Variant1(A) | Variant2(B)
-    fn parse_type_decl(&mut self) -> Result<TypeDecl, LuxError> {
+    // ── type Name = BaseType where predicate
+    fn parse_type_or_alias(&mut self) -> Result<Item, LuxError> {
         let start_span = self.peek_span();
         self.expect(&TokenKind::Type)?;
         let (name, _) = self.expect_ident()?;
@@ -317,6 +318,36 @@ impl Parser {
         };
 
         self.expect(&TokenKind::Eq)?;
+
+        // Try type alias path: save position, parse type expr, check for `where`.
+        let saved_pos = self.pos;
+        if let Ok(base_type) = self.parse_type_expr() {
+            if self.at_exact(&TokenKind::Where) {
+                // Definitely a type alias with refinement predicate.
+                self.advance(); // consume `where`
+                let predicate = self.parse_expr()?;
+                let span = Span::new(
+                    start_span.start,
+                    predicate.span().end,
+                    start_span.line,
+                    start_span.column,
+                );
+                return Ok(Item::TypeAlias(TypeAlias {
+                    name,
+                    type_params,
+                    base_type,
+                    where_clause: Some(Box::new(predicate)),
+                    span,
+                }));
+            }
+            // No `where` — restore and parse as ADT.
+            self.pos = saved_pos;
+        } else {
+            // Type expr parse failed — restore and parse as ADT.
+            self.pos = saved_pos;
+        }
+
+        // ADT variant parsing (existing path).
         let mut variants = vec![self.parse_variant()?];
         while self.at_exact(&TokenKind::Pipe) {
             self.advance();
@@ -328,12 +359,12 @@ impl Parser {
             .map(|v| v.span.end)
             .unwrap_or(start_span.end);
         let span = Span::new(start_span.start, end, start_span.line, start_span.column);
-        Ok(TypeDecl {
+        Ok(Item::TypeDecl(TypeDecl {
             name,
             type_params,
             variants,
             span,
-        })
+        }))
     }
 
     fn parse_variant(&mut self) -> Result<Variant, LuxError> {

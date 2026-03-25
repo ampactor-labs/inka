@@ -323,7 +323,7 @@ The Rust codebase becomes historical.
 | 3. Effect tracking | ✅ DONE |
 | 4. Effect algebra | ✅ DONE |
 | 5. Ownership | Complete — `own`/`ref` enforced, `!Alloc` transitivity shipped (Approach B: inferred) |
-| 6. Refinement types | Design needed |
+| 6. Refinement types | 6A syntax shipped — `type X = Base where pred`, side table, FM solver next |
 | 7. Native backend | Design needed |
 | 8. Gradient system | Partially shipped (`--teach`) |
 | 9. Type-directed synthesis | Research stage |

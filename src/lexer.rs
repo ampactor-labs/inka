@@ -491,6 +491,7 @@ impl<'src> Lexer<'src> {
             "continue" => TokenKind::Continue,
             "import" => TokenKind::Import,
             "assert" => TokenKind::Assert,
+            "where" => TokenKind::Where,
             "true" => TokenKind::BoolLit(true),
             "false" => TokenKind::BoolLit(false),
             _ => TokenKind::Ident(text.to_string()),

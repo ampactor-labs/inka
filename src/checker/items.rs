@@ -1,6 +1,7 @@
 /// Item registration (first pass) and checking (second pass).
 use crate::ast::{
-    EffectDecl, FnDecl, HandlerDecl, HandlerOp, ImplBlock, Item, LetDecl, TraitDecl, TypeDecl,
+    EffectDecl, FnDecl, HandlerDecl, HandlerOp, ImplBlock, Item, LetDecl, TraitDecl, TypeAlias,
+    TypeDecl,
 };
 use crate::error::{CompilerHint, HintKind, HintSuggestion, TypeError, TypeErrorKind};
 use crate::types::{AdtDef, EffectDef, EffectOpDef, EffectRow, Type, VariantDef};
@@ -38,6 +39,15 @@ impl TypeEnv {
                 type_params: td.type_params.clone(),
                 variants,
             },
+        );
+        Ok(())
+    }
+
+    pub(crate) fn register_type_alias(&mut self, ta: &TypeAlias) -> Result<(), TypeError> {
+        let base = self.resolve_type_expr(&ta.base_type)?;
+        self.type_aliases.insert(
+            ta.name.clone(),
+            (base, ta.where_clause.as_ref().map(|e| *e.clone())),
         );
         Ok(())
     }
@@ -182,7 +192,7 @@ impl TypeEnv {
         match item {
             Item::FnDecl(fd) => self.check_fn_decl(fd),
             Item::LetDecl(ld) => self.check_let_decl(ld),
-            Item::TypeDecl(_) | Item::EffectDecl(_) => Ok(()), // already registered
+            Item::TypeDecl(_) | Item::TypeAlias(_) | Item::EffectDecl(_) => Ok(()), // already registered
             Item::TraitDecl(_) | Item::ImplBlock(_) => Ok(()), // already registered in first pass
             Item::Import(_) => Ok(()),                         // resolved before checking
             Item::HandlerDecl(hd) => self.check_handler_decl(hd),

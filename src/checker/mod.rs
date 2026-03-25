@@ -65,6 +65,7 @@ pub fn check(program: &Program) -> Result<Program, LuxError> {
     for item in &program.items {
         match item {
             Item::TypeDecl(td) => env.register_type_decl(td)?,
+            Item::TypeAlias(ta) => env.register_type_alias(ta)?,
             Item::EffectDecl(ed) => env.register_effect_decl(ed)?,
             Item::TraitDecl(td) => env.register_trait_decl(td)?,
             Item::ImplBlock(ib) => env.register_impl_block(ib)?,
@@ -151,6 +152,9 @@ pub(crate) struct TypeEnv {
     pub(crate) linear_bindings: HashMap<String, Vec<Span>>,
     /// Bindings declared `ref` — escape checking.
     pub(crate) ref_bindings: std::collections::HashSet<String>,
+    /// Type aliases with optional refinement predicates.
+    /// Maps alias name → (resolved base type, optional where-clause predicate).
+    pub(crate) type_aliases: HashMap<String, (Type, Option<crate::ast::Expr>)>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -182,6 +186,7 @@ impl TypeEnv {
             effect_routing: HashMap::new(),
             linear_bindings: HashMap::new(),
             ref_bindings: std::collections::HashSet::new(),
+            type_aliases: HashMap::new(),
         }
     }
 
@@ -213,6 +218,7 @@ impl TypeEnv {
             effect_routing: HashMap::new(),
             linear_bindings: self.linear_bindings.clone(),
             ref_bindings: self.ref_bindings.clone(),
+            type_aliases: self.type_aliases.clone(),
         }
     }
 
@@ -610,6 +616,9 @@ impl ReplChecker {
             match item {
                 crate::ast::Item::TypeDecl(td) => {
                     self.env.register_type_decl(td).map_err(LuxError::Type)?
+                }
+                crate::ast::Item::TypeAlias(ta) => {
+                    self.env.register_type_alias(ta).map_err(LuxError::Type)?
                 }
                 crate::ast::Item::EffectDecl(ed) => {
                     self.env.register_effect_decl(ed).map_err(LuxError::Type)?

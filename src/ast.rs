@@ -19,6 +19,8 @@ pub enum Item {
     LetDecl(LetDecl),
     /// `type Name = Variant1(T) | Variant2(T)`
     TypeDecl(TypeDecl),
+    /// `type Name = BaseType where predicate`
+    TypeAlias(TypeAlias),
     /// `effect Name { op1(...) -> T, op2(...) -> T }`
     EffectDecl(EffectDecl),
     /// `trait Name { fn_decls }`
@@ -118,6 +120,17 @@ pub struct TypeDecl {
     pub name: String,
     pub type_params: Vec<String>,
     pub variants: Vec<Variant>,
+    pub span: Span,
+}
+
+/// A type alias with optional refinement predicate.
+/// `type Byte = Int where 0 <= self && self <= 255`
+#[derive(Debug, Clone)]
+pub struct TypeAlias {
+    pub name: String,
+    pub type_params: Vec<String>,
+    pub base_type: TypeExpr,
+    pub where_clause: Option<Box<Expr>>,
     pub span: Span,
 }
 

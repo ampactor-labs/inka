@@ -99,6 +99,7 @@ pub enum TokenKind {
     Continue,
     Import,
     Assert,
+    Where,
 
     // Operators
     Plus,

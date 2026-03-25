@@ -1,4 +1,4 @@
-// EXPECT_ERROR: performs 'Alloc' but declares '!Alloc'
+// EXPECT_ERROR: calls 'makes_list' which performs 'Alloc' but declares '!Alloc'
 // Transitive allocation: callee allocates, caller declares !Alloc.
 
 fn makes_list(x: Int) -> List<Int> = [x, x + 1, x + 2]

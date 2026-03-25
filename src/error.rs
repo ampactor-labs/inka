@@ -270,6 +270,8 @@ pub enum TypeErrorKind {
         effect: String,
         constraint: String,
         fn_name: Option<String>,
+        /// The callee that introduced the violating effect (diagnostic).
+        callee: Option<String>,
     },
     InfiniteType,
     NonExhaustiveMatch {
@@ -290,6 +292,8 @@ pub enum TypeErrorKind {
     EffectRowUnconstrained {
         constraint: String,
         fn_name: String,
+        /// The callee with the open effect row (diagnostic).
+        callee: Option<String>,
     },
 }
 
@@ -445,15 +449,24 @@ impl fmt::Display for TypeError {
                 effect,
                 constraint,
                 fn_name,
+                callee,
             } => {
                 if let Some(name) = fn_name {
                     write!(f, "function '{name}' ")?;
                 }
-                write!(
-                    f,
-                    "performs effect '{effect}' but declares '{constraint}' at line {}",
-                    self.span.line
-                )?;
+                if let Some(callee_name) = callee {
+                    write!(
+                        f,
+                        "calls '{callee_name}' which performs '{effect}' but declares '{constraint}' at line {}",
+                        self.span.line
+                    )?;
+                } else {
+                    write!(
+                        f,
+                        "performs effect '{effect}' but declares '{constraint}' at line {}",
+                        self.span.line
+                    )?;
+                }
                 write!(
                     f,
                     " — remove '{constraint}' or eliminate '{effect}' from the call chain"
@@ -462,18 +475,33 @@ impl fmt::Display for TypeError {
             TypeErrorKind::EffectRowUnconstrained {
                 constraint,
                 fn_name,
+                callee,
             } => {
-                write!(
-                    f,
-                    "function '{fn_name}' declares '{constraint}' but body has effects \
-                     that cannot be fully determined at line {}",
-                    self.span.line
-                )?;
-                write!(
-                    f,
-                    " — ensure all callees have known effects: add type annotations \
-                     or effect declarations so the compiler can prove {constraint}"
-                )
+                if let Some(callee_name) = callee {
+                    write!(
+                        f,
+                        "function '{fn_name}' declares '{constraint}' but callee '{callee_name}' \
+                         has unknown effects at line {}",
+                        self.span.line
+                    )?;
+                    write!(
+                        f,
+                        " — add '{constraint}' to '{callee_name}', or add 'with Pure' \
+                         if it has no effects"
+                    )
+                } else {
+                    write!(
+                        f,
+                        "function '{fn_name}' declares '{constraint}' but body has effects \
+                         that cannot be fully determined at line {}",
+                        self.span.line
+                    )?;
+                    write!(
+                        f,
+                        " — ensure all callees have known effects: add type annotations \
+                         or effect declarations so the compiler can prove {constraint}"
+                    )
+                }
             }
             TypeErrorKind::InfiniteType => {
                 write!(f, "infinite type at line {}", self.span.line)
@@ -622,19 +650,31 @@ impl LuxError {
                     effect,
                     constraint,
                     fn_name,
+                    callee,
                 } => {
                     let mut msg = String::new();
                     if let Some(name) = fn_name {
                         msg.push_str(&format!("'{name}' "));
                     }
-                    msg.push_str(&format!("performs '{effect}' but declares '{constraint}'"));
+                    if let Some(callee_name) = callee {
+                        msg.push_str(&format!("calls '{callee_name}' which performs '{effect}' but declares '{constraint}'"));
+                    } else {
+                        msg.push_str(&format!("performs '{effect}' but declares '{constraint}'"));
+                    }
                     msg
                 }
                 TypeErrorKind::EffectRowUnconstrained {
                     constraint,
                     fn_name,
+                    callee,
                 } => {
-                    format!("'{fn_name}' declares '{constraint}' but effects undetermined")
+                    if let Some(callee_name) = callee {
+                        format!(
+                            "'{fn_name}' declares '{constraint}' but callee '{callee_name}' has unknown effects"
+                        )
+                    } else {
+                        format!("'{fn_name}' declares '{constraint}' but effects undetermined")
+                    }
                 }
                 TypeErrorKind::InfiniteType => "infinite type".to_string(),
                 TypeErrorKind::NonExhaustiveMatch { missing } => {

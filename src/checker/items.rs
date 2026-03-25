@@ -452,6 +452,7 @@ impl TypeEnv {
                             effect: eff.name.clone(),
                             constraint: "Pure".to_string(),
                             fn_name: Some(fd.name.clone()),
+                            callee: None,
                         },
                         span: fd.span.clone(),
                     });
@@ -465,21 +466,25 @@ impl TypeEnv {
             for neg in fd.effects.iter().filter(|e| e.negated) {
                 // Rule 1: resolved effects contain the negated effect
                 if resolved_for_neg.contains(&neg.name) {
+                    let callee = find_offending_callee(self, &fd.body, &neg.name);
                     return Err(TypeError {
                         kind: TypeErrorKind::EffectConstraintViolation {
                             effect: neg.name.clone(),
                             constraint: format!("!{}", neg.name),
                             fn_name: Some(fd.name.clone()),
+                            callee,
                         },
                         span: fd.span.clone(),
                     });
                 }
                 // Rule 2: open row — can't prove absence through the unknown
                 if resolved_for_neg.is_open() {
+                    let callee = find_open_row_callee(self, &fd.body);
                     return Err(TypeError {
                         kind: TypeErrorKind::EffectRowUnconstrained {
                             constraint: format!("!{}", neg.name),
                             fn_name: fd.name.clone(),
+                            callee,
                         },
                         span: fd.span.clone(),
                     });
@@ -673,6 +678,127 @@ fn friendly_type(ty: &Type, var_names: &std::collections::HashMap<u32, char>) ->
             format!("{name}<{}>", args.join(", "))
         }
         _ => format!("{ty}"),
+    }
+}
+
+/// Walk the body AST to find the first call whose callee type includes
+/// the given effect. Returns the callee name for diagnostic messages.
+fn find_offending_callee(env: &TypeEnv, expr: &crate::ast::Expr, effect: &str) -> Option<String> {
+    use crate::ast::Expr;
+    match expr {
+        Expr::Call { func, args, .. } => {
+            // Check if the callee itself introduces the effect.
+            if let Expr::Var(name, _) = func.as_ref() {
+                if let Some(ty) = env.bindings.get(name) {
+                    let ty = env.apply_subst(ty);
+                    if let crate::types::Type::Function { effects, .. } = &ty {
+                        let resolved = env.apply_eff_subst(effects);
+                        if resolved.contains(effect) {
+                            return Some(name.clone());
+                        }
+                    }
+                }
+            }
+            // Recurse into func and args.
+            if let Some(name) = find_offending_callee(env, func, effect) {
+                return Some(name);
+            }
+            for arg in args {
+                if let Some(name) = find_offending_callee(env, arg, effect) {
+                    return Some(name);
+                }
+            }
+            None
+        }
+        Expr::Block { stmts, expr, .. } => {
+            for stmt in stmts {
+                if let crate::ast::Stmt::Expr(e)
+                | crate::ast::Stmt::Let(crate::ast::LetDecl { value: e, .. }) = stmt
+                {
+                    if let Some(name) = find_offending_callee(env, e, effect) {
+                        return Some(name);
+                    }
+                }
+            }
+            if let Some(tail) = expr {
+                return find_offending_callee(env, tail, effect);
+            }
+            None
+        }
+        Expr::BinOp { left, right, .. } => find_offending_callee(env, left, effect)
+            .or_else(|| find_offending_callee(env, right, effect)),
+        Expr::Pipe { left, right, .. } => find_offending_callee(env, left, effect)
+            .or_else(|| find_offending_callee(env, right, effect)),
+        Expr::If {
+            then_branch,
+            else_branch,
+            ..
+        } => find_offending_callee(env, then_branch, effect).or_else(|| {
+            else_branch
+                .as_ref()
+                .and_then(|e| find_offending_callee(env, e, effect))
+        }),
+        _ => None,
+    }
+}
+
+/// Walk the body AST to find the first call whose callee has an open effect row.
+fn find_open_row_callee(env: &TypeEnv, expr: &crate::ast::Expr) -> Option<String> {
+    use crate::ast::Expr;
+    match expr {
+        Expr::Call { func, args, .. } => {
+            if let Expr::Var(name, _) = func.as_ref() {
+                if let Some(ty) = env.bindings.get(name) {
+                    let ty = env.apply_subst(ty);
+                    if let crate::types::Type::Function { effects, .. } = &ty {
+                        let resolved = env.apply_eff_subst(effects);
+                        if resolved.is_open() {
+                            return Some(name.clone());
+                        }
+                    }
+                }
+            }
+            if let Some(name) = find_open_row_callee(env, func) {
+                return Some(name);
+            }
+            for arg in args {
+                if let Some(name) = find_open_row_callee(env, arg) {
+                    return Some(name);
+                }
+            }
+            None
+        }
+        Expr::Block { stmts, expr, .. } => {
+            for stmt in stmts {
+                if let crate::ast::Stmt::Expr(e)
+                | crate::ast::Stmt::Let(crate::ast::LetDecl { value: e, .. }) = stmt
+                {
+                    if let Some(name) = find_open_row_callee(env, e) {
+                        return Some(name);
+                    }
+                }
+            }
+            if let Some(tail) = expr {
+                return find_open_row_callee(env, tail);
+            }
+            None
+        }
+        Expr::BinOp { left, right, .. } => {
+            find_open_row_callee(env, left).or_else(|| find_open_row_callee(env, right))
+        }
+        Expr::Pipe { left, right, .. } => {
+            find_open_row_callee(env, left).or_else(|| find_open_row_callee(env, right))
+        }
+        Expr::If {
+            then_branch,
+            else_branch,
+            ..
+        } => find_open_row_callee(env, then_branch).or_else(|| {
+            else_branch
+                .as_ref()
+                .and_then(|e| find_open_row_callee(env, e))
+        }),
+        _ => None,
     }
 }
 

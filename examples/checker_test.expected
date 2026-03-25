@@ -89,6 +89,7 @@ impure: () -> Int
 
 --- !Alloc violation ---
 effect error: 'bad' declares !Alloc but performs Alloc
+  hint: wrap the Alloc-performing code in a handler to absorb it
 bad: (?2) -> ?2 with 
   WHY: fn bad declaration
 

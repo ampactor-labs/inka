@@ -17,6 +17,8 @@
 import compiler/lexer
 import compiler/parser
 import compiler/checker
+import compiler/checker_effects
+import compiler/gradient
 import compiler/codegen
 
 // ─── The Compiler Effect ─────────────────────────────────────
@@ -182,6 +184,29 @@ fn compile_tracing(source) =
     }
   }
 
+// ─── Handler: Illuminate ─────────────────────────────────────
+// The gradient as effect. Computes the multi-dimensional gradient
+// and shows the path: where you are, what you could do, what it unlocks.
+
+fn compile_illuminate(source) =
+  handle {
+    compile_pipeline(source)
+  } {
+    tokenize(src) => resume(lex(src)),
+    parse_source(tokens) => resume(parse_program(tokens)),
+    infer(ast) => {
+      let result = check_program(ast)
+      let (env, subst, _) = result
+      let gradient = compute_gradient(env, subst, ast)
+      let rendered = render_gradient(gradient)
+      if len(rendered) > 0 {
+        println(rendered)
+      }
+      resume(result)
+    },
+    generate(checked, ast) => resume(compile_program(ast))
+  }
+
 // ─── REPL Variants ───────────────────────────────────────────
 
 fn repl_compile_pipeline(source) = {
@@ -321,75 +346,15 @@ fn show_env_doc(env, subst) = {
 }
 
 // ─── Gradient Engine ─────────────────────────────────────────
-// Pick ONE suggestion — the most impactful next annotation.
+// Moved to std/compiler/gradient.lux — the gradient as first-class module.
+// compile_teaching still calls a compatibility wrapper here.
 
 fn gradient_suggestion(env, subst) = {
-  // Priority 1: find pure functions that could be annotated
-  let pure_hint = find_pure_fn(env, subst)
-  if len(pure_hint) > 0 { pure_hint }
-  else {
-    // Priority 2: find unannotated functions
-    find_unannotated_fn(env, subst)
-  }
-}
-
-// Find functions that are pure (no effects in reason tree)
-// and suggest adding `with Pure` to unlock optimizations
-fn find_pure_fn(env, subst) = {
-  if len(env) == 0 { "" }
-  else {
-    let (name, ty, reason) = env[0]
-    let suggestion = match apply(subst, ty) {
-      TFun(params, ret) => {
-        if has_no_effects(reason) {
-          "`" ++ name ++ "` is Pure — adding `with Pure` would unlock:\n" ++
-          "       • memoization (same input → same output, guaranteed)\n" ++
-          "       • parallelization (no side effects to race)\n" ++
-          "       • compile-time evaluation (if inputs are known)"
-        } else { "" }
-      },
-      _ => ""
-    }
-    if len(suggestion) > 0 { suggestion }
-    else { find_pure_fn(slice(env, 1, len(env)), subst) }
-  }
-}
-
-// Check if a reason tree contains no effect-related reasons
-fn has_no_effects(reason) = match reason {
-  Literal(_) => true,
-  VarLookup(_, r) => has_no_effects(r),
-  Declared(_) => true,
-  OpConstraint(_, l, r) => has_no_effects(l) && has_no_effects(r),
-  Unified(l, r) => has_no_effects(l) && has_no_effects(r),
-  FnReturn(_, r) => has_no_effects(r),
-  FnParam(_, _, r) => has_no_effects(r),
-  CondBranch(l, r) => has_no_effects(l) && has_no_effects(r),
-  ListElement(r) => has_no_effects(r),
-  PipeFlow(l, r) => has_no_effects(l) && has_no_effects(r),
-  Inferred(_) => true,
-  Fresh(_) => true,
-  Because(_, r) => has_no_effects(r),
-  _ => true
-}
-
-// Find functions without type annotations
-fn find_unannotated_fn(env, subst) = {
-  if len(env) == 0 { "" }
-  else {
-    let (name, ty, reason) = env[0]
-    let suggestion = match apply(subst, ty) {
-      TFun(params, ret) => {
-        let ret_str = type_to_string(subst, ret)
-        let param_strs = map(|p| type_to_string(subst, p), params)
-        "Adding `-> " ++ ret_str ++ "` to `" ++ name ++ "` would enable:\n" ++
-        "       • compile-time return type validation\n" ++
-        "       • better error messages at call sites"
-      },
-      _ => ""
-    }
-    if len(suggestion) > 0 { suggestion }
-    else { find_unannotated_fn(slice(env, 1, len(env)), subst) }
+  // Bridge to new gradient engine for backward compat with compile_teaching
+  let g = compute_gradient(env, subst, [])
+  let (fgs, _) = g
+  if len(fgs) > 0 { render_fn_gradient(fgs[0]) }
+  else { "" }
   }
 }
 

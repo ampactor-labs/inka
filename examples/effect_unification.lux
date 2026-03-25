@@ -90,4 +90,29 @@ fn clamp(x, lo, hi) with !Alloc = if x < lo { lo } else { if x > hi { hi } else 
 ', "clamp", 0))
 println("")
 
+// ── Test 8: Handler absorbs effects ─────────────────────────
+// Phase 15: handle { body with Alloc } { alloc handler } absorbs Alloc.
+// The outer function sees no Alloc — the handler ate it.
+
+println("--- handler absorbs effects ---")
+println(check_and_explain('
+effect Alloc { alloc(n) -> Int }
+fn safe_wrapper(x) = handle { alloc(x) } { alloc(n) => resume(n) }
+fn outer(x) with !Alloc = safe_wrapper(x)
+', "outer", 0))
+println("")
+
+// ── Test 9: Partial absorption — handler only handles some effects ──
+// If body performs Log and Store, but handler only handles Log,
+// Store still propagates.
+
+println("--- partial absorption ---")
+println(check_and_explain('
+effect Log { log(msg) -> () }
+effect Store { save(key, val) -> () }
+fn mixed(x) = { log("hi"); save("k", x); x }
+fn handled(x) = handle { mixed(x) } { log(msg) => resume(()) }
+', "handled", 0))
+println("")
+
 println("=== Effect unification complete ===")

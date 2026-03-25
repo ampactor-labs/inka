@@ -1,0 +1,414 @@
+// Lux Gradient Engine — the compiler illuminates the path
+//
+// The gradient is multi-dimensional. Each dimension is an axis along
+// which the programmer can give the compiler more knowledge:
+//   - Effect annotations: `with Pure`, `with !Alloc`
+//   - Handler wrapping: absorb effects to satisfy constraints
+//   - Return type annotations: lock in inferred types
+//
+// Suggestions form a DAG — each enables others. The gradient shows
+// not just the next step, but the PATH: where you are, what you
+// could do, and what it would unlock.
+//
+// The gradient IS an effect. At every scale, the same shape:
+//   Effects converge → Handler decides → Resume radiates
+//   Knowledge converges → Illuminate decides → Suggestion radiates
+
+import compiler/lexer
+import compiler/parser
+import compiler/checker
+import compiler/checker_effects
+
+// ─── Dimensions ──────────────────────────────────────────────
+// Which axis of the gradient this suggestion occupies.
+
+type Dimension
+  = EffectPure                  // add `with Pure`
+  | EffectNegate(String)        // add `with !Alloc`, `with !Network`
+  | HandlerAbsorb(String)       // wrap in handler to absorb effect
+  | ReturnAnnotation            // add explicit `-> Type`
+
+// ─── Unlocks ─────────────────────────────────────────────────
+// What a suggestion unlocks. Determines ranking.
+
+type Unlock
+  = Memoization
+  | Parallelism
+  | CompileTimeEval
+  | RealTimeSafe
+  | Embeddable
+  | GpuEligible
+  | Sandboxed
+  | DriftDetection
+  | BetterErrors
+
+// ─── Step ────────────────────────────────────────────────────
+// One actionable step in the gradient path.
+// A step has: what dimension, what to write, what it unlocks,
+// and which prior steps it requires (DAG as adjacency list).
+
+fn make_step(dim, annotation, unlocks, requires) =
+  (dim, annotation, unlocks, requires)
+
+// ─── FnGradient ──────────────────────────────────────────────
+// Everything the gradient knows about one function.
+
+fn make_fn_gradient(name, sig, steps, priority) =
+  (name, sig, steps, priority)
+
+// ─── Unlock Weights ──────────────────────────────────────────
+
+fn unlock_weight(u) = match u {
+  Memoization => 3,
+  Parallelism => 3,
+  CompileTimeEval => 2,
+  RealTimeSafe => 4,
+  Embeddable => 3,
+  GpuEligible => 2,
+  Sandboxed => 2,
+  DriftDetection => 1,
+  BetterErrors => 1,
+  _ => 0
+}
+
+fn unlock_name(u) = match u {
+  Memoization => "memoization",
+  Parallelism => "parallelism",
+  CompileTimeEval => "compile-time eval",
+  RealTimeSafe => "real-time safe",
+  Embeddable => "embeddable",
+  GpuEligible => "GPU eligible",
+  Sandboxed => "sandboxed",
+  DriftDetection => "drift detection",
+  BetterErrors => "better errors",
+  _ => "unknown"
+}
+
+fn total_weight(unlocks) = {
+  if len(unlocks) == 0 { 0 }
+  else { unlock_weight(unlocks[0]) + total_weight(slice(unlocks, 1, len(unlocks))) }
+}
+
+// ─── Compute Gradient ────────────────────────────────────────
+// The core engine. Takes the full inference output + AST.
+// Returns a ranked gradient: all function gradients, sorted by
+// priority, with the top function identified.
+
+fn compute_gradient(env, subst, ast) = {
+  // Build declared map: which functions have user annotations?
+  let declared = build_declared_map(ast)
+  // Analyze each function in the environment
+  let fn_gradients = analyze_all_fns(env, subst, declared)
+  // Sort by priority (highest first) and pick top
+  let sorted = sort_by_priority(fn_gradients)
+  let top = if len(sorted) > 0 { let (n, _, _, _) = sorted[0]; n } else { "" }
+  (sorted, top)
+}
+
+// Walk AST to find FnStmt nodes and their declared effects
+fn build_declared_map(ast) = {
+  if len(ast) == 0 { [] }
+  else {
+    let entry = match ast[0] {
+      FnStmt(name, params, body, effects) => [(name, effects)],
+      _ => []
+    }
+    entry ++ build_declared_map(slice(ast, 1, len(ast)))
+  }
+}
+
+fn lookup_declared(declared, name) = {
+  if len(declared) == 0 { [] }
+  else {
+    let (n, effs) = declared[0]
+    if n == name { effs }
+    else { lookup_declared(slice(declared, 1, len(declared)), name) }
+  }
+}
+
+// Analyze all functions in the environment
+fn analyze_all_fns(env, subst, declared) = {
+  if len(env) == 0 { [] }
+  else {
+    let (name, ty, reason) = env[0]
+    let rest = analyze_all_fns(slice(env, 1, len(env)), subst, declared)
+    let fg = analyze_fn(name, ty, reason, subst, declared)
+    let (fg_n, _, _, _) = fg
+    if fg_n == "" { rest }
+    else { [fg] ++ rest }
+  }
+}
+
+// Analyze a single function for gradient opportunities
+fn analyze_fn(name, ty, reason, subst, declared) = {
+  let resolved = apply(subst, ty)
+  match resolved {
+    TFun(params, ret, effs) => {
+      let decl_effects = lookup_declared(declared, name)
+      let has_annotations = len(decl_effects) > 0
+      // Probe each dimension
+      let effect_steps = probe_effect_dim(name, effs, decl_effects, has_annotations)
+      let handler_steps = probe_handler_dim(name, effs, decl_effects)
+      // Combine — handler steps come first (they enable effect steps)
+      let all_steps = renumber_requires(handler_steps, effect_steps)
+      let priority = score_steps(all_steps)
+      if len(all_steps) == 0 { ("", "", [], 0) }
+      else {
+        let sig = type_to_string(subst, resolved)
+        make_fn_gradient(name, sig, all_steps, priority)
+      }
+    },
+    _ => ("", "", [], 0)
+  }
+}
+
+// ─── Effect Dimension ────────────────────────────────────────
+// Detect: is the function Pure? Does it avoid Alloc/Network?
+
+fn probe_effect_dim(name, eff_row, declared, has_annotations) = {
+  let resolved = eff_row
+  match resolved {
+    EfPure => {
+      if has_pure_declared(declared) { [] }
+      else {
+        [make_step(
+          EffectPure,
+          "with Pure",
+          [Memoization, Parallelism, CompileTimeEval],
+          []
+        )]
+      }
+    },
+    EfClosed(effects) => {
+      if len(effects) == 0 {
+        // Empty closed = effectively Pure
+        if has_pure_declared(declared) { [] }
+        else {
+          [make_step(EffectPure, "with Pure", [Memoization, Parallelism, CompileTimeEval], [])]
+        }
+      } else {
+        // Has effects — check what negations are possible
+        let steps = []
+        let no_alloc = not(list_contains(effects, "Alloc"))
+        let no_network = not(list_contains(effects, "Network"))
+        let no_io = not(list_contains(effects, "IO"))
+        let steps = if no_alloc && not(has_negation_declared(declared, "Alloc")) {
+          steps ++ [make_step(
+            EffectNegate("Alloc"),
+            "with !Alloc",
+            [RealTimeSafe, Embeddable],
+            []
+          )]
+        } else { steps }
+        let steps = if no_network && not(has_negation_declared(declared, "Network")) {
+          steps ++ [make_step(
+            EffectNegate("Network"),
+            "with !Network",
+            [Sandboxed],
+            []
+          )]
+        } else { steps }
+        steps
+      }
+    },
+    _ => []
+  }
+}
+
+fn has_pure_declared(declared) = {
+  if len(declared) == 0 { false }
+  else {
+    let (name, negated) = declared[0]
+    if name == "Pure" { true }
+    else { has_pure_declared(slice(declared, 1, len(declared))) }
+  }
+}
+
+fn has_negation_declared(declared, eff_name) = {
+  if len(declared) == 0 { false }
+  else {
+    let (name, negated) = declared[0]
+    if name == eff_name && negated { true }
+    else { has_negation_declared(slice(declared, 1, len(declared)), eff_name) }
+  }
+}
+
+// ─── Handler Absorption Dimension ────────────────────────────
+// Detect: does the function perform effects that a handler could absorb?
+// If the user declared !E but the body performs E, suggest wrapping.
+
+fn probe_handler_dim(name, eff_row, declared) = {
+  // When a function declares !E, the constraint checker already caught
+  // violations and printed errors. The gradient's job is to show the
+  // PATH: wrap in handler to absorb, which satisfies the constraint.
+  // Fire when there ARE negation constraints (the user declared intent).
+  collect_negation_steps(declared)
+}
+
+fn collect_negation_steps(declared) = {
+  if len(declared) == 0 { [] }
+  else {
+    let (eff_name, negated) = declared[0]
+    let rest = collect_negation_steps(slice(declared, 1, len(declared)))
+    if negated && eff_name != "Pure" {
+      [make_step(
+        HandlerAbsorb(eff_name),
+        "wrap " ++ eff_name ++ " calls in handler",
+        [],
+        []
+      )] ++ rest
+    } else { rest }
+  }
+}
+
+// ─── Step Numbering ──────────────────────────────────────────
+// Handler steps come first. Effect steps that depend on handler
+// absorption get requires pointing to the handler step index.
+
+fn renumber_requires(handler_steps, effect_steps) = {
+  let n_handlers = len(handler_steps)
+  if n_handlers == 0 { effect_steps }
+  else {
+    // Effect steps that negate an effect that a handler absorbs
+    // should require that handler step
+    let linked = link_effect_to_handler(effect_steps, handler_steps, 0)
+    handler_steps ++ linked
+  }
+}
+
+fn link_effect_to_handler(effect_steps, handler_steps, offset) = {
+  if len(effect_steps) == 0 { [] }
+  else {
+    let step = effect_steps[0]
+    let rest = link_effect_to_handler(slice(effect_steps, 1, len(effect_steps)), handler_steps, offset)
+    // Check if this effect step's dimension matches any handler absorption
+    let dep = find_handler_dep(step, handler_steps, 0)
+    if dep >= 0 {
+      // Add dependency on the handler step
+      let (dim, ann, unlocks, reqs) = step
+      [make_step(dim, ann, unlocks, [dep])] ++ rest
+    } else {
+      [step] ++ rest
+    }
+  }
+}
+
+fn find_handler_dep(step, handler_steps, idx) = {
+  if idx >= len(handler_steps) { 0 - 1 }
+  else {
+    let (h_dim, _, _, _) = handler_steps[idx]
+    let (s_dim, _, _, _) = step
+    let matches = match s_dim {
+      EffectNegate(eff) => match h_dim {
+        HandlerAbsorb(h_eff) => eff == h_eff,
+        _ => false
+      },
+      _ => false
+    }
+    if matches { idx }
+    else { find_handler_dep(step, handler_steps, idx + 1) }
+  }
+}
+
+// ─── Scoring ─────────────────────────────────────────────────
+
+fn score_steps(steps) = {
+  if len(steps) == 0 { 0 }
+  else {
+    let (_, _, unlocks, _) = steps[0]
+    total_weight(unlocks) + score_steps(slice(steps, 1, len(steps)))
+  }
+}
+
+fn sort_by_priority(fgs) = {
+  // Simple insertion sort — gradient lists are small
+  if len(fgs) == 0 { [] }
+  else {
+    insert_by_priority(fgs[0], sort_by_priority(slice(fgs, 1, len(fgs))))
+  }
+}
+
+fn insert_by_priority(fg, sorted) = {
+  if len(sorted) == 0 { [fg] }
+  else {
+    let (_, _, _, p1) = fg
+    let (_, _, _, p2) = sorted[0]
+    if p1 >= p2 {
+      [fg] ++ sorted
+    } else {
+      [sorted[0]] ++ insert_by_priority(fg, slice(sorted, 1, len(sorted)))
+    }
+  }
+}
+
+// ─── Rendering ───────────────────────────────────────────────
+// The gradient speaks in paths. Not a wall of warnings.
+// One function. Numbered steps. Where they lead.
+
+fn render_gradient(gradient) = {
+  let (fn_gradients, top_fn) = gradient
+  if len(fn_gradients) == 0 { "" }
+  else {
+    // Render the top-priority function
+    render_fn_gradient(fn_gradients[0])
+  }
+}
+
+fn render_fn_gradient(fg) = {
+  let (name, sig, steps, _) = fg
+  if len(steps) == 0 { "" }
+  else {
+    let header = "  " ++ name ++ ": " ++ sig
+    let step_lines = render_steps(steps, 1)
+    let first_idx = find_first_step(steps, 0)
+    let footer = "\n   start with (" ++ to_string(first_idx) ++ ")."
+    header ++ "\n" ++ step_lines ++ footer
+  }
+}
+
+fn render_steps(steps, idx) = {
+  if len(steps) == 0 { "" }
+  else {
+    let line = render_step(steps[0], idx)
+    let rest = render_steps(slice(steps, 1, len(steps)), idx + 1)
+    if len(rest) > 0 { line ++ "\n" ++ rest }
+    else { line }
+  }
+}
+
+fn render_step(step, idx) = {
+  let (dim, annotation, unlocks, requires) = step
+  let action = dim_action(dim)
+  let unlock_str = if len(unlocks) > 0 {
+    " -> " ++ render_unlocks(unlocks)
+  } else { "" }
+  "   " ++ to_string(idx) ++ ". " ++ action ++ unlock_str
+}
+
+fn dim_action(dim) = match dim {
+  EffectPure => "add `with Pure`",
+  EffectNegate(eff) => "add `with !" ++ eff ++ "`",
+  HandlerAbsorb(eff) => "wrap " ++ eff ++ " calls in handler",
+  ReturnAnnotation => "add return type annotation",
+  _ => "unknown action"
+}
+
+fn render_unlocks(unlocks) = {
+  if len(unlocks) == 0 { "" }
+  else {
+    let first = unlock_name(unlocks[0])
+    let rest = render_unlocks(slice(unlocks, 1, len(unlocks)))
+    if len(rest) > 0 { first ++ ", " ++ rest }
+    else { first }
+  }
+}
+
+// Find the first step with no requires (the entry point)
+fn find_first_step(steps, idx) = {
+  if idx >= len(steps) { 1 }
+  else {
+    let (_, _, _, requires) = steps[idx]
+    if len(requires) == 0 { idx + 1 }
+    else { find_first_step(steps, idx + 1) }
+  }
+}

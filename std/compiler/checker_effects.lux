@@ -230,6 +230,7 @@ fn check_each_constraint(fn_name, body_effs, constraints) = {
       let present = effect_in_row(eff_name, body_effs)
       if present {
         println("effect error: '" ++ fn_name ++ "' declares !" ++ eff_name ++ " but performs " ++ eff_name)
+        println("  hint: wrap the " ++ eff_name ++ "-performing code in a handler to absorb it")
         check_each_constraint(fn_name, body_effs, rest)
       } else {
         // Open rows can't prove absence
@@ -279,6 +280,21 @@ fn remove_effect(row, name) = match row {
   EfPure => EfPure,
   EfClosed(effs) => EfClosed(filter(|e| e != name, effs)),
   EfOpen(effs, v) => EfOpen(filter(|e| e != name, effs), v)
+}
+
+// Effect subtraction over a list: E - [F1, F2, ...] = ((E - F1) - F2) - ...
+// This IS the algebra applied sequentially. Handle absorption uses this:
+// handle { body with E } { arms for F } has effects (E - F).
+fn remove_effects(row, names) = {
+  if len(names) == 0 { row }
+  else { remove_effects(remove_effect(row, names[0]), slice(names, 1, len(names))) }
+}
+
+// Extract effect names present in a row (for display/teaching).
+fn effect_names(row) = match row {
+  EfPure => [],
+  EfClosed(es) => es,
+  EfOpen(es, _) => es
 }
 
 fn join(strs, sep) = {

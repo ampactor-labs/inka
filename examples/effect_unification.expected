@@ -6,11 +6,13 @@ caller: (Int) -> Int
 
 --- transitive !Alloc: violation detected ---
 effect error: 'bad_caller' declares !Alloc but performs Alloc
+  hint: wrap the Alloc-performing code in a handler to absorb it
 bad_caller: (?8) -> ?8 with 
   WHY: fn bad_caller declaration
 
 --- transitive chain: three levels ---
 effect error: 'level_a' declares !Network but performs Network
+  hint: wrap the Network-performing code in a handler to absorb it
 level_a: (Int) -> Int with 
   WHY: fn level_a declaration
 
@@ -33,5 +35,13 @@ quad: (Int) -> Int
 --- !Alloc on pure arithmetic ---
 clamp: (?2, ?2, ?2) -> ?2
   WHY: fn clamp declaration
+
+--- handler absorbs effects ---
+outer: (?8) -> ?10 with 
+  WHY: fn outer declaration
+
+--- partial absorption ---
+handled: (?13) -> ?13 with Store
+  WHY: fn handled declaration
 
 === Effect unification complete ===

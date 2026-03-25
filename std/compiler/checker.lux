@@ -410,7 +410,15 @@ fn infer_expr(env, subst, counter, expr) = match expr {
     let (body_ty, s1, c1, body_reason, body_effs) = infer_expr(env, subst, counter, body)
     // Check each handler arm: bind op params + state vars, infer body
     let (s2, c2, handler_effs) = check_handler_arms(env, s1, c1, handler_arms, state_bindings)
-    (apply(s2, body_ty), s2, c2, Because("handle expression", body_reason), merge_effects(body_effs, handler_effs))
+    // The hourglass: effects converge to handle{}, the handler absorbs,
+    // the remainder flows out. This IS effect subtraction: E - F.
+    let absorbed = collect_handled_effects(env, handler_arms)
+    let net_body_effs = remove_effects(body_effs, absorbed)
+    // The Reason teaches what happened: body had effects, handler absorbed some
+    let absorption_note = if len(absorbed) > 0 {
+      "handle absorbs " ++ join(absorbed, ", ")
+    } else { "handle expression" }
+    (apply(s2, body_ty), s2, c2, Because(absorption_note, body_reason), merge_effects(net_body_effs, handler_effs))
   },
 
   ResumeExpr(value, state_updates) => {
@@ -642,6 +650,38 @@ fn check_handler_arms(env, subst, counter, arms, state_bindings) = {
     let (_, s3, c4, _, arm_effs) = infer_expr(resume_env, s2, c3, body)
     let (s5, c5, rest_effs) = check_handler_arms(env, s3, c4, slice(arms, 1, len(arms)), state_bindings)
     (s5, c5, merge_effects(arm_effs, rest_effs))
+  }
+}
+
+// Phase 15: Collect which effects a handler absorbs.
+// For each handler arm, look up the op_name in env to find which
+// effect it belongs to (stored as EfClosed([effect_name]) on the op's type).
+fn collect_handled_effects(env, arms) = {
+  if len(arms) == 0 { [] }
+  else {
+    let (op_name, _, _) = arms[0]
+    let effect_name = lookup_op_effect(env, op_name)
+    let rest = collect_handled_effects(env, slice(arms, 1, len(arms)))
+    if effect_name == "" { rest }
+    else {
+      if list_contains(rest, effect_name) { rest }
+      else { [effect_name] ++ rest }
+    }
+  }
+}
+
+// Look up an effect operation in the env and extract its parent effect name.
+fn lookup_op_effect(env, op_name) = {
+  let (found, ty, _) = env_lookup(env, op_name)
+  if found == "not_found" { "" }
+  else {
+    match ty {
+      TFun(_, _, eff) => match eff {
+        EfClosed(effs) => if len(effs) > 0 { effs[0] } else { "" },
+        _ => ""
+      },
+      _ => ""
+    }
   }
 }
 

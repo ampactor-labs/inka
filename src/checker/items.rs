@@ -656,16 +656,14 @@ impl TypeEnv {
         match result {
             super::solver::SolverResult::Proven => Ok(()),
             super::solver::SolverResult::Unknown => Ok(()), // gradient: silent pass
-            super::solver::SolverResult::Disproven(reason) => {
-                Err(TypeError {
-                    kind: TypeErrorKind::RefinementViolation {
-                        alias_name: alias_name.clone(),
-                        predicate: format_predicate_expr(predicate),
-                        reason,
-                    },
-                    span: span.clone(),
-                })
-            }
+            super::solver::SolverResult::Disproven(reason) => Err(TypeError {
+                kind: TypeErrorKind::RefinementViolation {
+                    alias_name: alias_name.clone(),
+                    predicate: format_predicate_expr(predicate),
+                    reason,
+                },
+                span: span.clone(),
+            }),
         }
     }
 }

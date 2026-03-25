@@ -328,9 +328,7 @@ fn refinement_negative_literal_disproven() {
 #[test]
 fn refinement_unknown_passes() {
     // Unknown value: x is a parameter, solver can't decide — gradient: silent pass
-    assert_checks(
-        "type Positive = Int where self > 0\nfn wrap(x: Int) -> Positive = x",
-    );
+    assert_checks("type Positive = Int where self > 0\nfn wrap(x: Int) -> Positive = x");
 }
 
 #[test]
@@ -348,15 +346,11 @@ fn refinement_let_binding_proven() {
 #[test]
 fn refinement_float_proven() {
     // Float refinement — 0.5 satisfies -1.0 <= self && self <= 1.0
-    assert_checks(
-        "type Sample = Float where -1.0 <= self && self <= 1.0\nfn ok() -> Sample = 0.5",
-    );
+    assert_checks("type Sample = Float where -1.0 <= self && self <= 1.0\nfn ok() -> Sample = 0.5");
 }
 
 #[test]
 fn refinement_float_disproven() {
     // Float refinement — 2.0 violates self <= 1.0
-    assert_fails(
-        "type Sample = Float where -1.0 <= self && self <= 1.0\nfn bad() -> Sample = 2.0",
-    );
+    assert_fails("type Sample = Float where -1.0 <= self && self <= 1.0\nfn bad() -> Sample = 2.0");
 }

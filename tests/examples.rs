@@ -77,7 +77,8 @@ fn vm_matches_golden_files() {
         let needs_no_check = name == "parser_test"
             || name == "lexer_test"
             || name == "checker_test"
-            || name == "codegen_test";
+            || name == "codegen_test"
+            || name == "vm_test";
 
         let expected = std::fs::read_to_string(expected_file)
             .unwrap_or_else(|e| panic!("can't read {expected_file}: {e}"));
@@ -187,7 +188,17 @@ fn regenerate_baselines() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.extension().is_some_and(|e| e == "lux") && path.is_file() {
-            let (stdout, _, success) = run_lux(&path.to_string_lossy());
+            let name = path.file_stem().unwrap().to_string_lossy();
+            let needs_no_check = name == "parser_test"
+                || name == "lexer_test"
+                || name == "checker_test"
+                || name == "codegen_test"
+                || name == "vm_test";
+            let (stdout, _, success) = if needs_no_check {
+                run_lux_no_check(&path.to_string_lossy())
+            } else {
+                run_lux(&path.to_string_lossy())
+            };
             if success {
                 let expected = path.with_extension("expected");
                 std::fs::write(&expected, &stdout)

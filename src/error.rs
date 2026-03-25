@@ -719,9 +719,7 @@ impl LuxError {
                     format!("cannot return borrowed value '{name}'")
                 }
                 TypeErrorKind::RefinementViolation {
-                    alias_name,
-                    reason,
-                    ..
+                    alias_name, reason, ..
                 } => {
                     format!("refinement '{alias_name}' violated — {reason}")
                 }

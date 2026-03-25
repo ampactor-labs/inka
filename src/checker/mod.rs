@@ -13,6 +13,7 @@ mod builtins;
 mod calls;
 mod exprs;
 mod items;
+pub(crate) mod solver;
 mod unify;
 
 use std::collections::HashMap;

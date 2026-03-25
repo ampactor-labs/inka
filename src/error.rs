@@ -295,6 +295,12 @@ pub enum TypeErrorKind {
         /// The callee with the open effect row (diagnostic).
         callee: Option<String>,
     },
+    /// Refinement type predicate violated at compile time.
+    RefinementViolation {
+        alias_name: String,
+        predicate: String,
+        reason: String,
+    },
 }
 
 // ── Runtime errors ────────────────────────────────────────────
@@ -552,6 +558,18 @@ impl fmt::Display for TypeError {
                 )?;
                 write!(f, " — 'ref' parameters are scoped to the function call")
             }
+            TypeErrorKind::RefinementViolation {
+                alias_name,
+                predicate,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "refinement type '{alias_name}' violated at line {} — {reason}",
+                    self.span.line
+                )?;
+                write!(f, " — predicate: {predicate}")
+            }
         }
     }
 }
@@ -699,6 +717,13 @@ impl LuxError {
                 }
                 TypeErrorKind::RefEscaped { name } => {
                     format!("cannot return borrowed value '{name}'")
+                }
+                TypeErrorKind::RefinementViolation {
+                    alias_name,
+                    reason,
+                    ..
+                } => {
+                    format!("refinement '{alias_name}' violated — {reason}")
                 }
             },
             LuxError::Runtime(e) => match &e.kind {

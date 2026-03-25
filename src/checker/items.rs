@@ -392,6 +392,10 @@ impl TypeEnv {
         if let Some(ret_ann) = &fd.return_type {
             let ret_ty = child.resolve_type_expr(ret_ann)?;
             child.unify(&body_ty, &ret_ty, &fd.span)?;
+
+            // Refinement verification: if return type is a refined alias,
+            // check the body against the predicate.
+            child.check_refinement_at_type_expr(ret_ann, &fd.body, &fd.span)?;
         }
 
         // Check ref-escape: if body is a ref-binding variable, it's escaping
@@ -604,9 +608,135 @@ impl TypeEnv {
         if let Some(ann) = &ld.type_ann {
             let ann_ty = self.resolve_type_expr(ann)?;
             self.unify(&val_ty, &ann_ty, &ld.span)?;
+
+            // Refinement verification: if type annotation is a refined alias,
+            // check the value against the predicate.
+            self.check_refinement_at_type_expr(ann, &ld.value, &ld.span)?;
         }
 
         self.bind_pattern_types(&ld.pattern, &self.apply_subst(&val_ty), &ld.span)
+    }
+
+    // ── Refinement type verification ──────────────────────────────
+
+    /// Check if a type expression refers to a refined type alias, and if so,
+    /// verify the value expression against the refinement predicate.
+    ///
+    /// If the value is a literal (Int, Float), the solver evaluates the predicate
+    /// at compile time. Disproven = compile error. Unknown = silent pass (gradient).
+    fn check_refinement_at_type_expr(
+        &self,
+        type_expr: &crate::ast::TypeExpr,
+        value_expr: &crate::ast::Expr,
+        span: &crate::token::Span,
+    ) -> Result<(), TypeError> {
+        // Only check Named type expressions — Byte, Port, Sample, etc.
+        let alias_name = match type_expr {
+            crate::ast::TypeExpr::Named { name, .. } => name,
+            _ => return Ok(()),
+        };
+
+        // Look up in type aliases side table
+        let (_, predicate) = match self.type_aliases.get(alias_name) {
+            Some(entry) => entry,
+            None => return Ok(()), // not a type alias
+        };
+
+        let predicate = match predicate {
+            Some(pred) => pred,
+            None => return Ok(()), // alias without refinement (pure alias)
+        };
+
+        // Try to extract a literal value from the expression
+        let lit_val = extract_literal_value(value_expr);
+
+        // Run the solver
+        let result = super::solver::check_refinement(predicate, lit_val.as_ref());
+
+        match result {
+            super::solver::SolverResult::Proven => Ok(()),
+            super::solver::SolverResult::Unknown => Ok(()), // gradient: silent pass
+            super::solver::SolverResult::Disproven(reason) => {
+                Err(TypeError {
+                    kind: TypeErrorKind::RefinementViolation {
+                        alias_name: alias_name.clone(),
+                        predicate: format_predicate_expr(predicate),
+                        reason,
+                    },
+                    span: span.clone(),
+                })
+            }
+        }
+    }
+}
+
+// ── Refinement helpers ─────────────────────────────────────────
+
+/// Extract a literal value from an expression, looking through blocks and
+/// simple wrappers to find the final value.
+fn extract_literal_value(expr: &crate::ast::Expr) -> Option<super::solver::LitValue> {
+    match expr {
+        crate::ast::Expr::IntLit(n, _) => Some(super::solver::LitValue::Int(*n)),
+        crate::ast::Expr::FloatLit(f, _) => Some(super::solver::LitValue::Float(*f)),
+        // Negative literals: -42, -1.0
+        crate::ast::Expr::UnaryOp {
+            op: crate::ast::UnaryOp::Neg,
+            operand,
+            ..
+        } => match operand.as_ref() {
+            crate::ast::Expr::IntLit(n, _) => Some(super::solver::LitValue::Int(-n)),
+            crate::ast::Expr::FloatLit(f, _) => Some(super::solver::LitValue::Float(-f)),
+            _ => None,
+        },
+        // Look through blocks: { ...; value }
+        crate::ast::Expr::Block {
+            expr: Some(tail), ..
+        } => extract_literal_value(tail),
+        _ => None,
+    }
+}
+
+/// Format a predicate expression for error messages.
+fn format_predicate_expr(expr: &crate::ast::Expr) -> String {
+    match expr {
+        crate::ast::Expr::BinOp {
+            op, left, right, ..
+        } => {
+            let l = format_predicate_expr(left);
+            let r = format_predicate_expr(right);
+            let op_str = match op {
+                crate::ast::BinOp::And => "&&",
+                crate::ast::BinOp::Or => "||",
+                crate::ast::BinOp::Lt => "<",
+                crate::ast::BinOp::LtEq => "<=",
+                crate::ast::BinOp::Gt => ">",
+                crate::ast::BinOp::GtEq => ">=",
+                crate::ast::BinOp::Eq => "==",
+                crate::ast::BinOp::Neq => "!=",
+                crate::ast::BinOp::Add => "+",
+                crate::ast::BinOp::Sub => "-",
+                crate::ast::BinOp::Mul => "*",
+                crate::ast::BinOp::Div => "/",
+                crate::ast::BinOp::Mod => "%",
+                crate::ast::BinOp::Concat => "++",
+            };
+            format!("{l} {op_str} {r}")
+        }
+        crate::ast::Expr::UnaryOp {
+            op: crate::ast::UnaryOp::Neg,
+            operand,
+            ..
+        } => format!("-{}", format_predicate_expr(operand)),
+        crate::ast::Expr::UnaryOp {
+            op: crate::ast::UnaryOp::Not,
+            operand,
+            ..
+        } => format!("!{}", format_predicate_expr(operand)),
+        crate::ast::Expr::Var(name, _) => name.clone(),
+        crate::ast::Expr::IntLit(n, _) => format!("{n}"),
+        crate::ast::Expr::FloatLit(f, _) => format!("{f}"),
+        crate::ast::Expr::BoolLit(b, _) => format!("{b}"),
+        _ => "...".to_string(),
     }
 }
 

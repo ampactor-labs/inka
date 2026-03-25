@@ -299,3 +299,64 @@ fn for_loop() {
 fn assert_statement() {
     assert_checks(r#"assert 1 + 1 == 2, "math works""#);
 }
+
+// ── Refinement types ──────────────────────────────────────────
+
+#[test]
+fn refinement_type_alias_resolves() {
+    assert_checks("type Byte = Int where 0 <= self && self <= 255\nlet x: Int = 42");
+}
+
+#[test]
+fn refinement_literal_proven() {
+    // Valid literal: 42 satisfies 0 <= self && self <= 255
+    assert_checks("type Byte = Int where 0 <= self && self <= 255\nfn ok() -> Byte = 42");
+}
+
+#[test]
+fn refinement_literal_disproven() {
+    // Invalid literal: 300 violates self <= 255
+    assert_fails("type Byte = Int where 0 <= self && self <= 255\nfn bad() -> Byte = 300");
+}
+
+#[test]
+fn refinement_negative_literal_disproven() {
+    // Invalid literal: -1 violates 0 <= self
+    assert_fails("type Byte = Int where 0 <= self && self <= 255\nfn bad() -> Byte = -1");
+}
+
+#[test]
+fn refinement_unknown_passes() {
+    // Unknown value: x is a parameter, solver can't decide — gradient: silent pass
+    assert_checks(
+        "type Positive = Int where self > 0\nfn wrap(x: Int) -> Positive = x",
+    );
+}
+
+#[test]
+fn refinement_let_binding_disproven() {
+    // Let binding with type annotation — literal violates predicate
+    assert_fails("type Port = Int where 1 <= self && self <= 65535\nlet p: Port = 0");
+}
+
+#[test]
+fn refinement_let_binding_proven() {
+    // Let binding with valid literal
+    assert_checks("type Port = Int where 1 <= self && self <= 65535\nlet p: Port = 8080");
+}
+
+#[test]
+fn refinement_float_proven() {
+    // Float refinement — 0.5 satisfies -1.0 <= self && self <= 1.0
+    assert_checks(
+        "type Sample = Float where -1.0 <= self && self <= 1.0\nfn ok() -> Sample = 0.5",
+    );
+}
+
+#[test]
+fn refinement_float_disproven() {
+    // Float refinement — 2.0 violates self <= 1.0
+    assert_fails(
+        "type Sample = Float where -1.0 <= self && self <= 1.0\nfn bad() -> Sample = 2.0",
+    );
+}

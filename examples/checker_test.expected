@@ -92,4 +92,22 @@ effect error: 'bad' declares !Alloc but performs Alloc
 bad: (?2) -> ?2 with 
   WHY: fn bad declaration
 
+=== The Gradient ===
+--- gradient: pure function ---
+double: (Int) -> Int
+  -> double is Pure
+     add 'with Pure' to unlock:
+       memoization  (same input = same output, guaranteed)
+       parallelism  (no side effects to race)
+       compile-time (if inputs are known, evaluate at build)
+
+--- gradient: effectful function ---
+reader: () -> ?2 with IO
+  -> reader does not access network
+     add 'with !Network' to prove:
+       sandboxed  (capability restriction as types)
+
+--- gradient: already annotated ---
+safe: (Int) -> Int
+
 === The compiler teaches ===

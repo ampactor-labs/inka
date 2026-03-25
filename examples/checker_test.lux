@@ -92,4 +92,21 @@ println(check_and_explain('effect Alloc { alloc(n) -> Int }
 fn bad(x) with !Alloc = { alloc(x); x }', "bad", 0))
 println("")
 
+println("=== The Gradient ===")
+
+// Test 16: Pure function gets gradient suggestion
+println("--- gradient: pure function ---")
+println(check_and_teach('fn double(x) = x * 2', "double"))
+println("")
+
+// Test 17: Function with effects — no false suggestion
+println("--- gradient: effectful function ---")
+println(check_and_teach('effect IO { read() -> String }\nfn reader() = read()', "reader"))
+println("")
+
+// Test 18: Already annotated — no suggestion needed
+println("--- gradient: already annotated ---")
+println(check_and_teach('fn safe(x) with Pure = x + 1', "safe"))
+println("")
+
 println("=== The compiler teaches ===")

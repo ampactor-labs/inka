@@ -39,6 +39,7 @@ special cases, the architecture is wrong.
 | Handle semantics | ✅ Working | Handle returns body value only — state is internal to handler |
 | Effect algebra | ✅ Working | `!E`, `E-F`, `Pure` constraints, compile-time enforcement |
 | String interpolation | ✅ Working | `"hello {name}"` — `{expr}` inside double quotes |
+| Raw string literals | ✅ Working | `'hello {name}'` — no interpolation, braces are literal |
 | Teaching compiler | ✅ Working | `--teach` flag, inferred types/effects display |
 | Handler composition | ✅ Working | `handler` items, bare ref, inheritance, `use` clause |
 | Self-hosted lexer | ✅ Working | All token types, compiles itself |

@@ -14,19 +14,23 @@
 11   | Return
 
 --- fn double(x) = x * 2 ---
-0    | MakeClosure proto=0
-3    | StoreGlobal 0 (double)
-6    | Return
+0    | LoadUnit
+1    | StoreGlobal 0 (double)
+4    | MakeClosure proto=0
+7    | StoreGlobal 0 (double)
+10   | Return
 
 --- fn add(a,b) = a + b  /  let r = add(1,2) ---
-0    | MakeClosure proto=0
-3    | StoreGlobal 0 (add)
-6    | LoadGlobal 0 (add)
-9    | LoadInt 1
-11   | LoadInt 2
-13   | Call argc=2
-15   | StoreGlobal 1 (r)
-18   | Return
+0    | LoadUnit
+1    | StoreGlobal 0 (add)
+4    | MakeClosure proto=0
+7    | StoreGlobal 0 (add)
+10   | LoadGlobal 0 (add)
+13   | LoadInt 1
+15   | LoadInt 2
+17   | Call argc=2
+19   | StoreGlobal 1 (r)
+22   | Return
 
 --- 5 |> double ---
 0    | LoadGlobal 0 (double)

@@ -1,29 +1,18 @@
 // Self-hosted VM comprehensive test suite
 // Tests: self-hosted lexer → parser → codegen → Lux VM
 //
-// Note: Lux uses {expr} for string interpolation, so we build
-// source strings with braces using from_char_code(123/125).
+// Uses raw strings ('...') for source code containing braces,
+// because "..." uses {expr} string interpolation.
 
 import compiler/lexer
 import compiler/parser
 import compiler/codegen
 import vm
 
-let lb = from_char_code(123)  // {
-let rb = from_char_code(125)  // }
-
 fn test(name, source) = {
   print("  " ++ name ++ ": ")
   vm_run(compile(source))
 }
-
-// Helper to wrap an expression in if/else blocks
-fn if_else(cond, then_e, else_e) =
-  "if " ++ cond ++ " " ++ lb ++ " " ++ then_e ++ " " ++ rb ++
-  " else " ++ lb ++ " " ++ else_e ++ " " ++ rb
-
-// Helper to wrap a body in braces
-fn block(body) = lb ++ " " ++ body ++ " " ++ rb
 
 println("╔══════════════════════════════════════╗")
 println("║  Self-Hosted VM — Full Test Suite    ║")
@@ -59,25 +48,20 @@ test("multi-let", "let a = 3\nlet b = 4\nprintln(a + b)")
 test("shadow",    "let x = 1\nlet x = 2\nprintln(x)")
 
 println("── Control Flow ──")
-test("if-T",      "println(" ++ if_else("true", "1", "2") ++ ")")
-test("if-F",      "println(" ++ if_else("false", "1", "2") ++ ")")
-test("if-cond",   "let x = 5\nprintln(" ++ if_else("x > 3", "99", "0") ++ ")")
+test("if-T",      'println(if true { 1 } else { 2 })')
+test("if-F",      'println(if false { 1 } else { 2 })')
+test("if-cond",   'let x = 5\nprintln(if x > 3 { 99 } else { 0 })')
 
 println("── Functions ──")
 test("fn-call",   "fn double(x) = x * 2\nprintln(double(21))")
 test("fn-2arg",   "fn add(a, b) = a + b\nprintln(add(10, 20))")
 test("fn-expr",   "fn square(x) = x * x\nprintln(square(5))")
-test("fn-if",     "fn sign(x) = " ++ if_else("x > 0", "1", "0") ++ "\nprintln(sign(42))")
+test("fn-if",     'fn sign(x) = if x > 0 { 1 } else { 0 }\nprintln(sign(42))')
 
 println("── Recursion ──")
-let countdown_src = "fn countdown(n) = " ++ if_else("n == 0", "0", "countdown(n - 1)") ++ "\nprintln(countdown(5))"
-test("countdown", countdown_src)
-
-let fact_src = "fn fact(n) = " ++ if_else("n <= 1", "1", "n * fact(n - 1)") ++ "\nprintln(fact(5))"
-test("factorial", fact_src)
-
-let fib_src = "fn fib(n) = " ++ if_else("n <= 1", "n", "fib(n - 1) + fib(n - 2)") ++ "\nprintln(fib(10))"
-test("fibonacci", fib_src)
+test("countdown", 'fn countdown(n) = if n == 0 { 0 } else { countdown(n - 1) }\nprintln(countdown(5))')
+test("factorial", 'fn fact(n) = if n <= 1 { 1 } else { n * fact(n - 1) }\nprintln(fact(5))')
+test("fibonacci", 'fn fib(n) = if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }\nprintln(fib(10))')
 
 println("── Collections ──")
 test("list-len",  "println(len([1, 2, 3]))")

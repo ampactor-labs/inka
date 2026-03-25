@@ -10,6 +10,7 @@ let ch_lbrace = from_char_code(123)
 let ch_rbrace = from_char_code(125)
 let ch_backslash = from_char_code(92)
 let ch_dquote = from_char_code(34)
+let ch_squote = from_char_code(39)
 
 // --- Character classification ---
 
@@ -151,6 +152,23 @@ fn lex(source) = {
     else { if cs[p] == "\n" { p }
     else { skip_comment(p + 1) } };
 
+  fn scan_raw_string(p, acc) =
+    if p >= src_len { (p, acc) }
+    else {
+      let c = cs[p];
+      if c == ch_squote { (p + 1, acc) }
+      else { if c == ch_backslash && p + 1 < src_len {
+        let esc = cs[p + 1];
+        let escaped = if esc == "n" { "\n" }
+          else { if esc == "t" { "\t" }
+          else { if esc == ch_backslash { ch_backslash }
+          else { if esc == ch_squote { ch_squote }
+          else { ch_backslash ++ esc } } } };
+        scan_raw_string(p + 2, acc ++ escaped)
+      }
+      else { scan_raw_string(p + 1, acc ++ c) } }
+    };
+
   // -- Main tokenizer (closure captures cs, src_len, and scan helpers) --
 
   fn lex_from(pos, line, col, tokens) = {
@@ -167,6 +185,10 @@ fn lex(source) = {
       }
       else { if ch == ch_dquote {
         let (ep, sv) = scan_string(pos + 1, "");
+        lex_from(ep, line, col + (ep - pos), push(tokens, token("String", sv, line, col)))
+      }
+      else { if ch == ch_squote {
+        let (ep, sv) = scan_raw_string(pos + 1, "");
         lex_from(ep, line, col + (ep - pos), push(tokens, token("String", sv, line, col)))
       }
       else { if is_digit(ch) {
@@ -195,7 +217,7 @@ fn lex(source) = {
           }
           else { lex_from(pos + 1, line, col + 1, tokens) }
         }
-      }}}}}}
+      }}}}}}}
     }
   };
 

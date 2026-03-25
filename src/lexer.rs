@@ -255,6 +255,9 @@ impl<'src> Lexer<'src> {
             // String literals
             b'"' => return self.lex_string(start, start_line, start_col),
 
+            // Raw string literals (no interpolation)
+            b'\'' => return self.lex_raw_string(start, start_line, start_col),
+
             // Number literals
             b'0'..=b'9' => return self.lex_number(start, start_line, start_col),
 
@@ -499,6 +502,63 @@ impl<'src> Lexer<'src> {
 
         let span = self.span_from(start, start_line, start_col);
         self.tokens.push(Token::new(kind, span));
+        Ok(())
+    }
+
+    fn lex_raw_string(
+        &mut self,
+        start: usize,
+        start_line: usize,
+        start_col: usize,
+    ) -> Result<(), LuxError> {
+        let mut value = String::new();
+        loop {
+            match self.peek() {
+                None => {
+                    return Err(LexError {
+                        kind: LexErrorKind::UnterminatedString,
+                        span: self.span_from(start, start_line, start_col),
+                    }
+                    .into());
+                }
+                Some(b'\'') => {
+                    self.advance();
+                    break;
+                }
+                Some(b'\\') => {
+                    self.advance();
+                    match self.peek() {
+                        Some(b'\'') => {
+                            self.advance();
+                            value.push('\'');
+                        }
+                        Some(b'\\') => {
+                            self.advance();
+                            value.push('\\');
+                        }
+                        Some(b'n') => {
+                            self.advance();
+                            value.push('\n');
+                        }
+                        Some(b't') => {
+                            self.advance();
+                            value.push('\t');
+                        }
+                        _ => {
+                            // In raw strings, unknown escapes are kept literally
+                            value.push('\\');
+                        }
+                    }
+                }
+                Some(ch) => {
+                    self.advance();
+                    value.push(ch as char);
+                }
+            }
+        }
+        let span = self.span_from(start, start_line, start_col);
+        self.tokens
+            .push(Token::new(TokenKind::StringLit(value), span));
         Ok(())
     }
 }

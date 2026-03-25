@@ -218,7 +218,7 @@ lux examples/crucible_compose.lux      # vertical effect composition
 lux examples/crucible_dsp_ml.lux       # differentiable audio pipeline
 
 # The bootstrap — Lux compiling and executing itself
-lux --no-check examples/crucible_bootstrap.lux  # self-hosted pipeline end-to-end
+lux examples/crucible_bootstrap.lux    # self-hosted pipeline end-to-end
 
 # Foundations
 lux examples/effects.lux               # algebraic effects

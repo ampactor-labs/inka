@@ -50,8 +50,11 @@ run_test("nested calls", "fn square(x) = x * x\nfn add(a, b) = a + b\nprintln(to
 // ── List operations ──────────────────────────────────────────
 run_test("lists", "let xs = [10, 20, 30]\nprintln(to_string(len(xs)))")
 
-// ── Conditional ─────────────────────────────────────────────
-run_test("conditional", "let r = if 10 > 5 { 99 } else { 0 }\nprintln(to_string(r))")
+// ── Conditional with variable ────────────────────────────────
+run_test("conditional", "let x = 10\nlet r = if x > 5 \{ x * 2 \} else \{ x + 1 \}\nprintln(to_string(r))")
+
+// ── Recursive function ───────────────────────────────────────
+run_test("recursion", "fn fact(n) = if n <= 1 \{ 1 \} else \{ n * fact(n - 1) \}\nprintln(to_string(fact(10)))")
 
 // ── Multiple functions ───────────────────────────────────────
 run_test("multi fn", "fn double(x) = x * 2\nfn quad(x) = double(double(x))\nprintln(to_string(quad(5)))")

@@ -335,6 +335,10 @@ impl<'src> Lexer<'src> {
                             self.advance();
                             value.push('{');
                         }
+                        Some(b'}') => {
+                            self.advance();
+                            value.push('}');
+                        }
                         Some(ch) => {
                             return Err(LexError {
                                 kind: LexErrorKind::InvalidEscape(ch as char),

@@ -701,6 +701,83 @@ Even the use case of building itself.
 
 ---
 
+## The Compound Interest of Self-Reference
+
+Self-hosting means the compiler compiles itself. Most languages do this.
+It's necessary but not sufficient. Rust compiles Rust, but Rust's borrow
+checker can't prove properties of the borrow checker — it just verifies
+the code follows borrow rules. The checker isn't a subject of its own
+analysis.
+
+Lux is different. **Each capability, applied to the compiler that provides
+it, creates a positive feedback loop.** This is not self-hosting. This is
+self-verification tending toward self-proof.
+
+Seven loops, each exponential, each feeding the others:
+
+**1. Effects refine the effect inferrer.** When Lux compiles
+`checker_effects.lux`, it infers which effects each function performs. If
+`unify_eff` is Pure, the compiler can memoize it. If a checker function
+performs Console, the gradient sees it and suggests removing the side effect.
+Better inference → more precise compiler profile → more optimizations →
+faster compiler → more inference in less time.
+
+**2. The gradient teaches the compiler developer.** Run `lux --teach` on
+the compiler source. The gradient says: "infer_expr is Pure — add
+`with Pure` to unlock memoization." You add it. Next cycle: "parse_atom
+is `!Alloc` — prove allocation-free." The compiler TELLS YOU how to
+improve it. Each annotation unlocks an optimization that applies to the
+compiler itself.
+
+**3. Refinements constrain the compiler's internals.**
+```lux
+type Opcode = Int where 0 <= self <= 45
+type StackDepth = Int where self >= 0
+```
+Invalid opcode in codegen? Compile-time error in the compiler. Stack
+underflow? Proven impossible. Better solver → more expressible invariants →
+more bugs caught → more reliable solver → even more expressible invariants.
+
+**4. Ownership tracks the compiler's resources.** `own env` consumed
+linearly — no accidental aliasing. `!Alloc` on the parser hot path — the
+parser provably doesn't allocate. The ownership checker checks the
+ownership checker.
+
+**5. The Why Engine debugs itself.** `lux why checker.lux infer_expr`
+explains the reasoning chain for the function that produces reasoning
+chains. Better engine → easier to debug the engine → better engine.
+
+**6. Handler swap = compiler mode.** Same pipeline, different handler:
+optimizing, profiling, debugging, teaching. Adding an optimization
+strategy is adding a handler. No plugin API — the effect system IS the
+plugin system.
+
+**7. Multi-shot enables optimization search.**
+```lux
+handle optimize(ir) {
+  choose_strategy(options) => {
+    let results = map(|opt| resume(opt), options)
+    pick_best(results)
+  }
+}
+```
+The compiler explores optimization spaces using its own multi-shot handlers.
+
+**The convergence.** Each loop feeds the others. Better effects → gradient
+suggests more → more annotations → refinements prove more → ownership
+catches more → compiler improves → effects get even better. The steady
+state: the compiler is a proof of its own correctness. Not because someone
+sat down and verified it — because each improvement cycle made the proof
+tighter. The gradient led the way, one annotation at a time, and the
+compiler followed itself to provable correctness.
+
+This is what separates Lux from every self-hosting language that came
+before. They compile themselves. Lux *proves* itself. The tool and the
+subject are the same thing. That's not linear improvement. It's compound
+interest.
+
+---
+
 ## The Bootstrap Moment: Self-Trust
 
 Every self-hosting language reaches a moment where the old system must yield

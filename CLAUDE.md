@@ -61,13 +61,15 @@ special cases, the architecture is wrong.
 | Math stdlib | ✅ Working | abs, max, min, clamp, round, sqrt, pow, log, exp, sin, cos, tanh, atan2, pi |
 | Test framework | ✅ Working | Test effect with `assert`, `expect_eq`, `run_tests`/`run_suite` handlers |
 | Elm-quality errors | ✅ Working | Did-you-mean (Levenshtein), exhaustive match hints, effect violation suggestions |
-| Ownership enforcement | ✅ Working | `own` = affine (linear), `ref` = scoped (no escape), tracked through effect system |
+| Ownership enforcement | ✅ Working | `own` = affine (linear), `ref` = scoped (no escape), tracked through effect system, self-hosted walk_expr |
+| **AST spans (SExpr)** | ✅ **Working** | `S(Expr, line, col)` wrapper on all 29 parser sites, source-context diagnostics |
+| **Diagnostic architecture** | ✅ **Working** | `format_diagnostic` with source line + caret, structured EffectViolation type |
 | `!Alloc` transitivity | ✅ Working | Resolve-then-check, open-row rejection. Approach B (inferred): algebra resolves callee effects |
 | Refinement types | ✅ Working | `type Byte = Int where 0 <= self && self <= 255` — syntax, solver, compile-time verification of literals |
 
-**Achieved**: Handle internalization, anonymous records, elm-quality errors, ownership enforcement (`own`/`ref`), `!Alloc` transitivity, refinement type verification (solver), self-hosted checker with effect rows, **self-hosted VM** (fully self-hosted compile+execute pipeline), **effect handlers verified through self-hosted pipeline** (10 golden-file tests: handle/resume, nested handlers, handler-local state, string effects, unit effects, computed resume), **checker split** (checker_effects.lux + checker_ownership.lux extracted), **effect unification** (Phase 14: effect rows first-class in unification, 7 transitive golden tests). Self-hosting coverage: ~80%.
+**Achieved**: Handle internalization, anonymous records, elm-quality errors, ownership enforcement (`own`/`ref`), `!Alloc` transitivity, refinement type verification (solver), self-hosted checker with effect rows, **self-hosted VM** (fully self-hosted compile+execute pipeline), **effect handlers verified through self-hosted pipeline** (10 golden-file tests: handle/resume, nested handlers, handler-local state, string effects, unit effects, computed resume), **checker split** (checker_effects.lux + checker_ownership.lux extracted), **effect unification** (Phase 14: effect rows first-class in unification, 7 transitive golden tests), **Phase 15 ownership** (own/ref parsing, affine walk_expr, ref-escape checking, 8 golden tests), **SExpr spans** (S wrapper on all AST nodes, source-context diagnostics with caret underlines), **structured diagnostics** (EffectViolation type, format_diagnostic, source threading via env). Self-hosting coverage: ~85%.
 
-**Next**: Phase 15 (transitive !Alloc proof + handler effect absorption), Phase 16 (refinement solver port).
+**Next**: Phase 16 (refinement solver port), Phase 18 (oracle testing).
 
 ## READ THIS FIRST — What Lux IS
 
@@ -370,7 +372,8 @@ fn safe_v2(x: Float) -> Float with DSP - Network - Alloc { ... }  // subtraction
 | 12A | Self-hosted VM (`std/vm.lux`) — 930-line bytecode interpreter. All 46 opcodes, 45 builtins, 11-tuple threaded state. Codegen forward references (recursive functions). Handler name resolution (indices→strings at install). 38 tests pass including fib(10)=55, fact(5)=120. Full pipeline: lex→parse→codegen→vm all in Lux. | cda9833 |
 | 13A | Effects all the way down — `vm_resume` implemented (finds resume_marker, applies state updates, restores VM state). Checker wildcard replaced with real inference for MatchExpr, LambdaExpr, HandleExpr, ResumeExpr, FieldAccess + LetDestructure, EffectDeclStmt. | fb1bf35 |
 | 13B | Effect handler golden-file verification — `vm_test` wired into `--no-check` test harness. 10 effect tests verified through self-hosted pipeline. Parser fix: disambiguate `resume ... with` state updates from handler arm commas (mirrors `parse_state_bindings` pattern). | 607baa1 |
-| 14 | Checker split + effect unification — extracted `checker_effects.lux` (288 lines: EffRow ops, unify_eff, eff_subst, negation) and `checker_ownership.lux` (70 lines). Counter carries `[fresh_id, eff_subst]` — one channel for inference state. `unify` TFun case unifies effect rows instead of discarding with `_`. `fresh_eff_var` creates effect variables. `apply_eff_subst` resolves before negation checks. 7 transitive golden tests: !Alloc/Pure/!Network through call chains. | HEAD |
+| 14 | Checker split + effect unification — extracted `checker_effects.lux` (288 lines: EffRow ops, unify_eff, eff_subst, negation) and `checker_ownership.lux` (70 lines). Counter carries `[fresh_id, eff_subst]` — one channel for inference state. `unify` TFun case unifies effect rows instead of discarding with `_`. `fresh_eff_var` creates effect variables. `apply_eff_subst` resolves before negation checks. 7 transitive golden tests: !Alloc/Pure/!Network through call chains. | a6de722 |
+| 15 | Ownership + SExpr spans + diagnostics — `parse_fn_params` with `own`/`ref` qualifiers, `walk_expr` affine checking (17 AST variants), `check_ref_escape` return-position tracing, `type SExpr = S(Expr, Int, Int)` wrapper on all 29 parser sites, `format_diagnostic` source-context renderer with caret underlines, structured `EffectViolation` type (replacing println), source threading via env, first-use line tracking. Discovery: Rust VM doesn't support nested constructor patterns — workaround: explicit unwrap-then-match. 8 ownership golden tests. | HEAD |
 
 ## Roadmap
 

@@ -81,7 +81,8 @@ fn vm_matches_golden_files() {
             || name == "vm_test"
             || name == "effect_unification"
             || name == "gradient_test"
-            || name == "type_error_test";
+            || name == "type_error_test"
+            || name == "ownership_check_test";
 
         let expected = std::fs::read_to_string(expected_file)
             .unwrap_or_else(|e| panic!("can't read {expected_file}: {e}"));
@@ -199,7 +200,8 @@ fn regenerate_baselines() {
                 || name == "vm_test"
                 || name == "effect_unification"
                 || name == "gradient_test"
-                || name == "type_error_test";
+                || name == "type_error_test"
+                || name == "ownership_check_test";
             let (stdout, _, success) = if needs_no_check {
                 run_lux_no_check(&path.to_string_lossy())
             } else {

@@ -243,13 +243,22 @@ Build: `lux build std/compiler/`. Test: `lux test examples/`. No Rust anywhere.
   Pure calls Pure ✓, effect union from callees ✓, gradient suggestion ✓,
   !Alloc on arithmetic ✓
 
-## Next Session: Phase 15 → Phase 16
+## Completed: Phase 15 — Ownership + SExpr Spans + Diagnostics (2026-03-25)
 
-**Phase 15** (transitive !Alloc proof):
-- Resolve-then-check with open-row rejection
-- Real `walk_expr` (count uses for affine check) and `check_ref_escape`
-- Handle expression should subtract handled effects from body row
-- Port ownership/!Alloc golden tests from `examples/ownership*.lux`
+- `parse_fn_params` with `own`/`ref` qualifiers → `[(name, tier)]` pairs
+- `walk_expr` affine checking: 17 AST variants, recursive, pattern-matching
+- `check_ref_escape` return-position tracing through blocks/branches/match
+- `type SExpr = S(Expr, Int, Int)` — every expression carries source span
+- Parser wraps all 29 constructor sites via `sp()` helper
+- Consumer unwrap-at-top: `infer_expr`, `compile_expr`, `walk_expr`, `check_return_pos`
+- `format_diagnostic` — Elm-quality source-context rendering with caret underline
+- Structured `EffectViolation` type replacing `println` in `check_effect_constraints`
+- Source threading via `env_with_source`/`env_source` — no signature changes
+- First-use tracking: `used` as `[(name, line)]` pairs, both lines in ConsumedTwice
+- Discovery: Rust VM nested constructor patterns only check outer tag — workaround: unwrap-then-match
+- 8 ownership golden tests (own-once, own-twice, ref-escape, ref-ok, inferred, own+!Alloc, unused-hint, branch-escape)
+
+## Next Session: Phase 16
 
 **Phase 16** (refinement solver port):
 - Port `solver.rs` (190 lines) to `std/compiler/solver.lux`

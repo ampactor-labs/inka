@@ -62,10 +62,19 @@ type Reason
   | Fresh(Int)                         // "fresh type variable ?0"
 
 // ─── Type Environment ────────────────────────────────────────
-// Now stores (name, type, reason) triples.
+// Stores (name, type, reason) triples. Source text rides as a sentinel entry.
 
 fn env_empty() = []
 fn env_extend(env, name, ty, reason) = [(name, ty, reason)] ++ env
+fn env_with_source(env, source) = [("__source__", TUnit, Declared(source))] ++ env
+fn env_source(env) = {
+  if len(env) == 0 { "" }
+  else {
+    let (name, _, reason) = env[0];
+    if name == "__source__" { match reason { Declared(s) => s, _ => "" } }
+    else { env_source(slice(env, 1, len(env))) }
+  }
+}
 fn env_lookup(env, name) = {
   if len(env) == 0 {
     ("not_found", TUnit, Inferred("unknown"))
@@ -258,7 +267,9 @@ fn unify_list(subst, counter, ts1, ts2, context) = {
 // The effects track WHICH algebraic effects it may perform.
 // Counter carries [fresh_id, eff_subst] — effect state flows for free.
 
-fn infer_expr(env, subst, counter, expr) = match expr {
+fn infer_expr(env, subst, counter, sexpr) = {
+  let S(expr, line, col) = sexpr;
+  match expr {
   IntLit(_) => (TInt, subst, counter, Literal("integer literal"), EfPure),
   FloatLit(_) => (TFloat, subst, counter, Literal("float literal"), EfPure),
   StringLit(_) => (TString, subst, counter, Literal("string literal"), EfPure),
@@ -361,16 +372,16 @@ fn infer_expr(env, subst, counter, expr) = match expr {
 
   PipeExpr(left, right) => {
     // a |> f(b) desugars to f(a, b)
-    match right {
+    let S(raw_right, rl, rc) = right;
+    match raw_right {
       Call(func, args) => {
         let combined = [left] ++ args
-        let (ty, s, c, r, effs) = infer_expr(env, subst, counter, Call(func, combined))
-        // Wrap reason to show pipe flow
+        let (ty, s, c, r, effs) = infer_expr(env, subst, counter, S(Call(func, combined), rl, rc))
         let (_, _, _, left_reason, _) = infer_expr(env, subst, counter, left)
         (ty, s, c, PipeFlow(left_reason, r), effs)
       },
       _ => {
-        let (ty, s, c, r, effs) = infer_expr(env, subst, counter, Call(right, [left]))
+        let (ty, s, c, r, effs) = infer_expr(env, subst, counter, S(Call(right, [left]), rl, rc))
         let (_, _, _, left_reason, _) = infer_expr(env, subst, counter, left)
         (ty, s, c, PipeFlow(left_reason, r), effs)
       }
@@ -477,6 +488,7 @@ fn infer_expr(env, subst, counter, expr) = match expr {
     (tv, subst, c2, Fresh(c2_id - 1), EfPure)
   }
 }
+}
 
 fn infer_args(env, subst, counter, args) = {
   if len(args) == 0 { ([], [], subst, counter, EfPure) }
@@ -518,18 +530,22 @@ fn check_stmt(env, subst, counter, stmt) = match stmt {
   },
 
   FnStmt(name, params, body, declared_effects) => {
-    let (param_types, c1) = fresh_params(counter, params)
-    let fn_env = bind_params_with_reasons(env, params, param_types, name)
+    let names = param_names(params)
+    let (param_types, c1) = fresh_params(counter, names)
+    let fn_env = bind_params_with_reasons(env, names, param_types, name)
     let (ret_tv, c2) = fresh_var(c1)
     let fn_type = TFun(param_types, ret_tv, EfPure)
     let rec_env = env_extend(fn_env, name, fn_type, Declared("recursive binding"))
     let (body_ty, s1, c3, body_reason, body_effs) = infer_expr(rec_env, subst, c2, body)
     let (_, s2, _, c4) = unify(s1, c3, ret_tv, body_ty, FnReturn(name, body_reason))
     // Phase 14: resolve effect variables before constraint checking.
-    // The eff_subst in c4 has accumulated all effect variable bindings
-    // from unification within this function body.
     let (_, c4_esubst) = c4
-    let checked_effs = check_effect_constraints(name, body_effs, declared_effects, c4_esubst)
+    let (checked_effs, eff_violations) = check_effect_constraints(name, body_effs, declared_effects, c4_esubst)
+    let source = env_source(env)
+    let _ = report_effect_violations(source, eff_violations)
+    // Phase 15: ownership enforcement — own/ref checking
+    let own_violations = check_ownership(params, body)
+    let _ = report_ownership_violations(source, name, own_violations)
     let final_type = TFun(map(|p| apply(s2, p), param_types), apply(s2, body_ty), checked_effs)
     let fn_reason = Because("fn " ++ name ++ " declaration", FnReturn(name, body_reason))
     let new_env = env_extend(env, name, final_type, fn_reason)
@@ -594,6 +610,69 @@ fn bind_params_with_reasons(env, names, types, fn_name) = {
     let reason = FnParam(fn_name, 0, Declared("parameter declaration"))
     let new_env = env_extend(env, names[0], types[0], reason)
     bind_params_with_reasons(new_env, slice(names, 1, len(names)), slice(types, 1, len(types)), fn_name)
+  }
+}
+
+// Extract plain names from [(name, tier)] parameter pairs.
+fn param_names(params) = {
+  if len(params) == 0 { [] }
+  else {
+    let (name, _) = params[0];
+    [name] ++ param_names(slice(params, 1, len(params)))
+  }
+}
+
+// ─── Effect Violation Reporting ──────────────────────────────
+
+fn report_effect_violations(source, violations) = {
+  if len(violations) == 0 { () }
+  else {
+    match violations[0] {
+      EffNegationViolated(fn_name, eff_name) => {
+        println(format_diagnostic(source, "effect error",
+          "'" ++ fn_name ++ "' declares !" ++ eff_name ++ " but performs " ++ eff_name, 0, 0))
+        println("  hint: wrap the " ++ eff_name ++ "-performing code in a handler to absorb it")
+      },
+      EffOpenRowNegation(fn_name, eff_name) => {
+        println(format_diagnostic(source, "effect error",
+          "'" ++ fn_name ++ "' declares !" ++ eff_name ++ " but effect row is open — cannot prove absence", 0, 0))
+      },
+      EffPurityViolated(fn_name, effs) => {
+        println(format_diagnostic(source, "effect error",
+          "'" ++ fn_name ++ "' declares Pure but performs: " ++ join(effs, ", "), 0, 0))
+      },
+      _ => ()
+    };
+    report_effect_violations(source, slice(violations, 1, len(violations)))
+  }
+}
+
+// ─── Ownership Violation Reporting ──────────────────────────
+
+fn report_ownership_violations(source, fn_name, violations) = {
+  if len(violations) == 0 { () }
+  else {
+    match violations[0] {
+      ConsumedTwice(name, first_line, second_line) => {
+        println(format_diagnostic(source, "ownership error",
+          "'" ++ name ++ "' is own in '" ++ fn_name ++ "' but used more than once",
+          second_line, 1))
+        if first_line > 0 {
+          println("  first use: line " ++ to_string(first_line))
+        } else { () }
+        println("  hint: clone before second use, or change to ref")
+      },
+      RefEscaped(name, line) => {
+        println(format_diagnostic(source, "ownership error",
+          "'" ++ name ++ "' is ref in '" ++ fn_name ++ "' but escapes via return",
+          line, 1))
+        println("  hint: change to own if the caller should transfer ownership")
+      },
+      OwnNeverConsumed(name) =>
+        println("  -> own '" ++ name ++ "' in '" ++ fn_name ++ "' is never used (will be dropped)"),
+      _ => ()
+    };
+    report_ownership_violations(source, fn_name, slice(violations, 1, len(violations)))
   }
 }
 
@@ -774,10 +853,38 @@ fn register_type_variants(env, counter, type_name, variants) = {
 fn check_program(stmts) = {
   let env = env_empty()
   let subst = subst_empty()
-  // Counter is [fresh_id, eff_subst] — one channel for inference state
   let counter = (0, eff_subst_empty())
   check_stmts(env, subst, counter, stmts)
 }
+
+fn check_program_with_source(stmts, source) = {
+  let env = env_with_source(env_empty(), source)
+  let subst = subst_empty()
+  let counter = (0, eff_subst_empty())
+  check_stmts(env, subst, counter, stmts)
+}
+
+// ─── Diagnostic Formatting ──────────────────────────────────
+// Elm-quality error rendering: source line + caret underline.
+
+fn format_diagnostic(source, kind, msg, line, col) = {
+  let header = kind ++ ": " ++ msg
+  if line <= 0 || source == "" { header }
+  else {
+    let src_lines = split(source, "\n")
+    if line > len(src_lines) { header }
+    else {
+      let src_line = src_lines[line - 1]
+      let pad = repeat_char(" ", col - 1)
+      let ln = to_string(line)
+      header ++ "\n  --> line " ++ ln ++ ":" ++ to_string(col)
+             ++ "\n   |\n" ++ ln ++ "  | " ++ src_line
+             ++ "\n   | " ++ pad ++ "^"
+    }
+  }
+}
+
+fn repeat_char(ch, n) = if n <= 0 { "" } else { ch ++ repeat_char(ch, n - 1) }
 
 fn check_stmts(env, subst, counter, stmts) = {
   if len(stmts) == 0 { (env, subst, counter) }
@@ -922,7 +1029,7 @@ fn type_to_string(subst, ty) = match apply(subst, ty) {
 
 fn check_and_explain(source, name, depth) = {
   let stmts = parse(source)
-  let (env, subst, _) = check_program(stmts)
+  let (env, subst, _) = check_program_with_source(stmts, source)
   let (found, ty, reason) = env_lookup(env, name)
   if found == "not_found" {
     name ++ ": not found"
@@ -935,7 +1042,7 @@ fn check_and_explain(source, name, depth) = {
 // Check program and show all bindings with reasons
 fn check_and_show(source, depth) = {
   let stmts = parse(source)
-  let (env, subst, _) = check_program(stmts)
+  let (env, subst, _) = check_program_with_source(stmts, source)
   show_env(env, subst, depth)
 }
 

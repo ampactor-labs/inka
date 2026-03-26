@@ -183,62 +183,50 @@ fn list_diff(a, b) = {
   }
 }
 
+// ─── Effect Violations ───────────────────────────────────────
+type EffectViolation
+  = EffNegationViolated(String, String)   // fn_name, eff_name
+  | EffOpenRowNegation(String, String)    // fn_name, eff_name
+  | EffPurityViolated(String, List)       // fn_name, effect_names
+
 // ─── Effect Negation Enforcement ─────────────────────────────
-// Validates body effects against declared effect annotations.
-// Negated effects (!Name) must be absent. Pure means no effects.
-//
-// Phase 14: apply_eff_subst resolves EfOpen variables BEFORE
-// negation checks, so transitive effects are visible.
+// Returns (checked_effs, violations) — structured data, not println.
 
 fn check_effect_constraints(fn_name, body_effs, declared, esubst) = {
-  // Resolve effect variables before checking constraints
   let resolved_effs = apply_eff_subst(esubst, body_effs)
-  if len(declared) == 0 { resolved_effs }
+  if len(declared) == 0 { (resolved_effs, []) }
   else {
-    let _ = check_each_constraint(fn_name, resolved_effs, declared)
-    // If Pure declared, enforce it
+    let negation_violations = check_each_constraint(fn_name, resolved_effs, declared)
     let has_pure = any_pure(declared)
     if has_pure {
-      match resolved_effs {
-        EfPure => EfPure,
+      let (effs, pure_violations) = match resolved_effs {
+        EfPure => (EfPure, []),
         EfClosed(effs) => {
-          if len(effs) == 0 { EfPure }
-          else {
-            println("effect error: '" ++ fn_name ++ "' declares Pure but performs: " ++ join(effs, ", "))
-            EfPure
-          }
+          if len(effs) == 0 { (EfPure, []) }
+          else { (EfPure, [EffPurityViolated(fn_name, effs)]) }
         },
-        EfOpen(_, _) => {
-          println("effect error: '" ++ fn_name ++ "' declares Pure but has open effect row")
-          EfPure
-        }
-      }
+        EfOpen(_, _) => (EfPure, [EffPurityViolated(fn_name, ["<open row>"])])
+      };
+      (effs, negation_violations ++ pure_violations)
     } else {
-      // Apply negation: remove negated effects from body row
-      apply_negations(resolved_effs, declared)
+      (apply_negations(resolved_effs, declared), negation_violations)
     }
   }
 }
 
 fn check_each_constraint(fn_name, body_effs, constraints) = {
-  if len(constraints) == 0 { true }
+  if len(constraints) == 0 { [] }
   else {
     let (eff_name, negated) = constraints[0]
     let rest = slice(constraints, 1, len(constraints))
     if negated {
-      // Negated: effect must NOT be present
       let present = effect_in_row(eff_name, body_effs)
       if present {
-        println("effect error: '" ++ fn_name ++ "' declares !" ++ eff_name ++ " but performs " ++ eff_name)
-        println("  hint: wrap the " ++ eff_name ++ "-performing code in a handler to absorb it")
-        check_each_constraint(fn_name, body_effs, rest)
+        [EffNegationViolated(fn_name, eff_name)] ++ check_each_constraint(fn_name, body_effs, rest)
       } else {
-        // Open rows can't prove absence
         match body_effs {
-          EfOpen(_, _) => {
-            println("effect error: '" ++ fn_name ++ "' declares !" ++ eff_name ++ " but effect row is open — cannot prove absence")
-            check_each_constraint(fn_name, body_effs, rest)
-          },
+          EfOpen(_, _) =>
+            [EffOpenRowNegation(fn_name, eff_name)] ++ check_each_constraint(fn_name, body_effs, rest),
           _ => check_each_constraint(fn_name, body_effs, rest)
         }
       }

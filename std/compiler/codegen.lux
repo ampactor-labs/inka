@@ -302,7 +302,9 @@ fn emit_upvalue_descriptors(ctx, upvals) = {
 
 // ─── Expression Compilation ──────────────────────────────────
 
-fn compile_expr(ctx, expr) = match expr {
+fn compile_expr(ctx, sexpr) = {
+  let S(expr, _line, _col) = sexpr;
+  match expr {
   IntLit(s) => {
     let n = parse_int(s)
     if n >= 0 - 128 && n <= 127 {
@@ -352,7 +354,8 @@ fn compile_expr(ctx, expr) = match expr {
 
   Call(func, args) => {
     // Check if calling a known effect operation → emit Perform
-    match func {
+    let S(raw_func, _, _) = func;
+    match raw_func {
       VarRef(name) => {
         let eff = find_effect_op(ctx_effect_ops(ctx), name)
         if eff != "" {
@@ -400,7 +403,8 @@ fn compile_expr(ctx, expr) = match expr {
 
   PipeExpr(left, right) => {
     // a |> f(b, c) => f(a, b, c)
-    match right {
+    let S(raw_right, _, _) = right;
+    match raw_right {
       Call(func, args) => {
         let ctx2 = compile_expr(ctx, func)
         let ctx3 = compile_expr(ctx2, left)
@@ -465,6 +469,7 @@ fn compile_expr(ctx, expr) = match expr {
   },
 
   _ => emit_op(ctx, OP_LOAD_UNIT())
+}
 }
 
 fn compile_args(ctx, args) = {
@@ -539,7 +544,9 @@ fn compile_pattern_test(ctx, pat) = match pat {
     let (ctx2, name_idx) = intern_name(ctx, name)
     emit_u16(emit_op(ctx2, OP_MATCH_VARIANT()), name_idx)
   },
-  PLit(expr) => match expr {
+  PLit(sexpr) => {
+    let S(expr, _, _) = sexpr;
+    match expr {
     IntLit(n) => {
       // OP_MATCH_INT peeks at TOS without consuming — emit const index
       let (ctx2, const_idx) = add_constant(ctx, ("int", parse_int(n)))
@@ -556,9 +563,10 @@ fn compile_pattern_test(ctx, pat) = match pat {
     _ => {
       // Fallback: DUP scrutinee, compile expr, EQ
       let ctx2 = emit_op(ctx, OP_DUP())
-      let ctx3 = compile_expr(ctx2, expr)
+      let ctx3 = compile_expr(ctx2, sexpr)
       emit_op(ctx3, OP_EQ())
     }
+  }
   },
   _ => emit_op(ctx, OP_MATCH_WILDCARD())
 }
@@ -902,7 +910,12 @@ fn compile_stmt(ctx, stmt) = match stmt {
 fn declare_params(ctx, params) = {
   if len(params) == 0 { ctx }
   else {
-    let (ctx2, _) = declare_local(ctx, params[0])
+    // Params are (name, tier) pairs from parse_fn_params
+    let name = match params[0] {
+      (n, _) => n,
+      _ => params[0]
+    };
+    let (ctx2, _) = declare_local(ctx, name)
     declare_params(ctx2, slice(params, 1, len(params)))
   }
 }

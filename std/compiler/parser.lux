@@ -47,6 +47,11 @@ type Stmt
   | ExprStmt(Expr)
   | ImportStmt(String)
 
+// ─── Spanned Expressions ─────────────────────────────────────
+// Every Expr is wrapped with its source location. Consumer functions
+// unwrap once at entry; match arms stay unchanged.
+type SExpr = S(Expr, Int, Int)
+
 // ─── Token helpers ───────────────────────────────────────────
 
 fn tok_type(tokens, pos) = {
@@ -58,6 +63,19 @@ fn tok_val(tokens, pos) = {
   let (_, val, _, _) = tokens[pos];
   val
 }
+
+fn tok_line(tokens, pos) = {
+  let (_, _, line, _) = tokens[pos];
+  line
+}
+
+fn tok_col(tokens, pos) = {
+  let (_, _, _, col) = tokens[pos];
+  col
+}
+
+// Wrap an Expr with span from current token position.
+fn sp(expr, tokens, pos) = S(expr, tok_line(tokens, pos), tok_col(tokens, pos))
 
 fn check(tokens, pos, expected) = tok_type(tokens, pos) == expected
 
@@ -135,19 +153,51 @@ fn parse_names(tokens, pos, end_tok) = {
   }
 }
 
+// ─── Function parameters with ownership qualifiers ───────────
+// Parses: name | own name | ref name — comma-separated, RParen-terminated.
+// Returns [(name, tier)] where tier is "own", "ref", or "inferred".
+
+fn parse_one_param(tokens, pos) = {
+  let val = tok_val(tokens, pos);
+  if val == "own" || val == "ref" {
+    let p2 = skip_ws(tokens, pos + 1);
+    (tok_val(tokens, p2), val, p2 + 1)
+  } else {
+    (val, "inferred", pos + 1)
+  }
+}
+
+fn parse_fn_params(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  if check(tokens, p, "RParen") { ([], p + 1) }
+  else {
+    let (name, tier, p2) = parse_one_param(tokens, p);
+    fn go(tokens, p, acc) = {
+      let p2 = skip_ws(tokens, p);
+      if check(tokens, p2, "Comma") {
+        let (n, t, p3) = parse_one_param(tokens, skip_ws(tokens, p2 + 1));
+        go(tokens, p3, push(acc, (n, t)))
+      }
+      else { if check(tokens, p2, "RParen") { (acc, p2 + 1) }
+      else { (acc, p2) } }
+    };
+    go(tokens, p2, [(name, tier)])
+  }
+}
+
 // ─── Expression parser ───────────────────────────────────────
 
 // Atom: literal / identifier → Expr
 fn parse_atom(tokens, p) = {
   let typ = tok_type(tokens, p);
   let val = tok_val(tokens, p);
-  if typ == "Int" { (IntLit(val), p + 1) }
-  else { if typ == "Float" { (FloatLit(val), p + 1) }
-  else { if typ == "String" { (StringLit(val), p + 1) }
-  else { if typ == "True" { (BoolLit(true), p + 1) }
-  else { if typ == "False" { (BoolLit(false), p + 1) }
-  else { if typ == "Ident" { (VarRef(val), p + 1) }
-  else { (NoneExpr, p) } } } } } }
+  if typ == "Int" { (sp(IntLit(val), tokens, p), p + 1) }
+  else { if typ == "Float" { (sp(FloatLit(val), tokens, p), p + 1) }
+  else { if typ == "String" { (sp(StringLit(val), tokens, p), p + 1) }
+  else { if typ == "True" { (sp(BoolLit(true), tokens, p), p + 1) }
+  else { if typ == "False" { (sp(BoolLit(false), tokens, p), p + 1) }
+  else { if typ == "Ident" { (sp(VarRef(val), tokens, p), p + 1) }
+  else { (sp(NoneExpr, tokens, p), p) } } } } } }
 }
 
 // If expression → Expr
@@ -164,9 +214,9 @@ fn parse_if(tokens, pos) = {
       if check(tokens, p5, "If") { parse_if(tokens, p5 + 1) }
       else { if check(tokens, p5, "LBrace") { parse_block(tokens, p5 + 1) }
       else { parse_expr(tokens, p5) } };
-    (IfExpr(cond, then_br, else_br), p6)
+    (sp(IfExpr(cond, then_br, else_br), tokens, pos), p6)
   }
-  else { (IfExpr(cond, then_br, TupleExpr([])), p4) }
+  else { (sp(IfExpr(cond, then_br, sp(TupleExpr([]), tokens, p4)), tokens, pos), p4) }
 }
 
 // Let binding → Stmt
@@ -193,7 +243,7 @@ fn parse_fn(tokens, pos) = {
   let p = skip_ws(tokens, pos);
   let name = tok_val(tokens, p);
   let p2 = expect(tokens, skip_ws(tokens, p + 1), "LParen");
-  let (params, p3) = parse_names(tokens, p2, "RParen");
+  let (params, p3) = parse_fn_params(tokens, p2);
   let p4 = skip_ws(tokens, p3);
   // Parse optional "with" effect annotations before "="
   let (effects, p5) = if check(tokens, p4, "With") {
@@ -227,13 +277,13 @@ fn parse_effect_annotations(tokens, pos) = {
 // Block { stmts; final_expr } → Expr
 fn parse_block(tokens, pos) = {
   let (stmts, final_e, p) = block_loop(tokens, pos, []);
-  (BlockExpr(stmts, final_e), p)
+  (sp(BlockExpr(stmts, final_e), tokens, pos), p)
 }
 
 fn block_loop(tokens, pos, stmts) = {
   let p = skip_ws(tokens, pos);
-  if check(tokens, p, "RBrace") { (stmts, TupleExpr([]), p + 1) }
-  else { if check(tokens, p, "Eof") { (stmts, TupleExpr([]), p) }
+  if check(tokens, p, "RBrace") { (stmts, sp(TupleExpr([]), tokens, p), p + 1) }
+  else { if check(tokens, p, "Eof") { (stmts, sp(TupleExpr([]), tokens, p), p) }
   else { block_item(tokens, p, stmts) } }
 }
 
@@ -282,13 +332,13 @@ fn parse_args(tokens, pos, end_tok) = {
 // List literal [...]
 fn parse_list(tokens, pos) = {
   let (elems, p) = parse_args(tokens, pos, "RBracket");
-  (ListExpr(elems), p)
+  (sp(ListExpr(elems), tokens, pos), p)
 }
 
 // Parenthesized expression or tuple
 fn parse_paren(tokens, pos) = {
   let p = skip_ws(tokens, pos);
-  if check(tokens, p, "RParen") { (TupleExpr([]), p + 1) }
+  if check(tokens, p, "RParen") { (sp(TupleExpr([]), tokens, pos), p + 1) }
   else {
     let (first, p2) = parse_expr(tokens, p);
     let p3 = skip_ws(tokens, p2);
@@ -305,7 +355,7 @@ fn parse_paren(tokens, pos) = {
         }
       };
       let (elems, p4) = tuple_go(tokens, p3 + 1, [first]);
-      (TupleExpr(elems), p4)
+      (sp(TupleExpr(elems), tokens, pos), p4)
     }
     else { (first, expect(tokens, p3, "RParen")) }
   }
@@ -317,7 +367,7 @@ fn parse_match(tokens, pos) = {
   let p2 = skip_ws(tokens, p);
   let p3 = expect(tokens, p2, "LBrace");
   let (arms, p4) = parse_match_arms(tokens, p3);
-  (MatchExpr(scrutinee, arms), p4)
+  (sp(MatchExpr(scrutinee, arms), tokens, pos), p4)
 }
 
 fn parse_match_arms(tokens, pos) = {
@@ -393,7 +443,7 @@ fn parse_lambda(tokens, pos) = {
   let (body, p3) =
     if check(tokens, p2, "LBrace") { parse_block(tokens, p2 + 1) }
     else { parse_expr(tokens, p2) };
-  (LambdaExpr(params, body), p3)
+  (sp(LambdaExpr(params, body), tokens, pos), p3)
 }
 
 // Primary expression → Expr
@@ -402,7 +452,9 @@ fn parse_primary(tokens, pos) = {
   let p = skip_ws(tokens, pos);
   let typ = tok_type(tokens, p);
   let (atom, ap) = parse_atom(tokens, p);
-  match atom {
+  // Unwrap S to check for NoneExpr (Rust VM doesn't support nested patterns)
+  let S(inner, _, _) = atom;
+  match inner {
     NoneExpr => parse_dispatch(tokens, p, typ),
     _ => (atom, ap),
   }
@@ -423,15 +475,15 @@ fn parse_dispatch(tokens, p, typ) = {
 fn parse_prefix(tokens, p, typ) = {
   if typ == "Minus" {
     let (op, p2) = parse_primary(tokens, p + 1);
-    (UnaryOp("Neg", op), p2)
+    (sp(UnaryOp("Neg", op), tokens, p), p2)
   }
   else { if typ == "Bang" {
     let (op, p2) = parse_primary(tokens, p + 1);
-    (UnaryOp("Not", op), p2)
+    (sp(UnaryOp("Not", op), tokens, p), p2)
   }
   else {
     println("Parse error: unexpected " ++ typ)
-    (VarRef("_error"), p + 1)
+    (sp(VarRef("_error"), tokens, p), p + 1)
   }}
 }
 
@@ -445,15 +497,15 @@ fn postfix_loop(tokens, e, pos) = {
   let t = tok_type(tokens, pos);
   if t == "LParen" {
     let (args, p2) = parse_args(tokens, pos + 1, "RParen");
-    postfix_loop(tokens, Call(e, args), p2)
+    postfix_loop(tokens, sp(Call(e, args), tokens, pos), p2)
   }
   else { if t == "LBracket" {
     let (idx, p2) = parse_expr(tokens, pos + 1);
-    postfix_loop(tokens, Index(e, idx), expect(tokens, p2, "RBracket"))
+    postfix_loop(tokens, sp(Index(e, idx), tokens, pos), expect(tokens, p2, "RBracket"))
   }
   else { if t == "Dot" {
     let field = tok_val(tokens, pos + 1);
-    postfix_loop(tokens, FieldAccess(e, field), pos + 2)
+    postfix_loop(tokens, sp(FieldAccess(e, field), tokens, pos), pos + 2)
   }
   else { (e, pos) } } }
 }
@@ -471,8 +523,8 @@ fn binop_loop(tokens, left, pos, min_p) = {
   if pr >= min_p && pr > 0 {
     let op = to_op(t);
     let (right, p2) = parse_binop(tokens, p + 1, pr + 1);
-    let node = if op == "Pipe" { PipeExpr(left, right) }
-               else { BinOp(op, left, right) };
+    let node = if op == "Pipe" { sp(PipeExpr(left, right), tokens, p) }
+               else { sp(BinOp(op, left, right), tokens, p) };
     binop_loop(tokens, node, p2, min_p)
   }
   else { (left, p) }
@@ -549,7 +601,7 @@ fn parse_handle(tokens, pos) = {
   let p6 = skip_ws(tokens, p5);
   let p7 = expect(tokens, p6, "LBrace");
   let (arms, p8) = parse_handler_clauses(tokens, p7);
-  (HandleExpr(body, arms, state_bindings), p8)
+  (sp(HandleExpr(body, arms, state_bindings), tokens, pos), p8)
 }
 
 fn parse_state_bindings(tokens, pos) = {
@@ -612,7 +664,7 @@ fn parse_resume(tokens, pos) = {
   let (updates, p6) = if check(tokens, p5, "With") {
     parse_state_updates(tokens, p5 + 1)
   } else { ([], p5) };
-  (ResumeExpr(value, updates), p6)
+  (sp(ResumeExpr(value, updates), tokens, pos), p6)
 }
 
 fn parse_state_updates(tokens, pos) = {

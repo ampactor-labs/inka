@@ -11,8 +11,11 @@ fn main() {
 
     // Flags: --teach is the default (Lux teaches by design)
     // Use --quiet to suppress teaching output.
+    // Use --rust to route through the Rust pipeline (legacy fallback).
+    // --no-check is kept for backward compatibility (now a no-op alias for default behavior).
     let quiet_mode = args.iter().any(|a| a == "--quiet");
-    let no_check = args.iter().any(|a| a == "--no-check");
+    let use_rust = args.iter().any(|a| a == "--rust");
+    let no_check = args.iter().any(|a| a == "--no-check") || !use_rust;
     let teach_mode = !quiet_mode;
     let file_args: Vec<&str> = args
         .iter()
@@ -101,7 +104,7 @@ fn main() {
         }
         _ => {
             eprintln!(
-                "Usage: lux [--quiet] [file.lux | test | check | why | doc | illuminate | repl]"
+                "Usage: lux [--quiet] [--rust] [file.lux | test | check | why | doc | illuminate | repl]"
             );
             process::exit(1);
         }

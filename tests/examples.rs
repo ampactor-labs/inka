@@ -23,10 +23,10 @@ fn run_lux(file: &str) -> (String, String, bool) {
     )
 }
 
-/// Run with --no-check (for examples importing self-hosted modules).
-fn run_lux_no_check(file: &str) -> (String, String, bool) {
+/// Run with --rust (Rust pipeline, legacy fallback).
+fn run_lux_rust(file: &str) -> (String, String, bool) {
     let output = Command::new(env!("CARGO_BIN_EXE_lux"))
-        .arg("--no-check")
+        .arg("--rust")
         .arg("--quiet")
         .arg(file)
         .output()
@@ -69,30 +69,9 @@ fn vm_matches_golden_files() {
 
     let mut failures = Vec::new();
     for (lux_file, expected_file) in &pairs {
-        let name = Path::new(lux_file).file_stem().unwrap().to_string_lossy();
-
-        // Examples importing self-hosted modules need --no-check due to a
-        // known evidence-passing limitation in the Rust compiler. The
-        // Lux-in-Lux compiler will resolve this.
-        let needs_no_check = name == "parser_test"
-            || name == "lexer_test"
-            || name == "checker_test"
-            || name == "codegen_test"
-            || name == "vm_test"
-            || name == "effect_unification"
-            || name == "gradient_test"
-            || name == "type_error_test"
-            || name == "ownership_check_test"
-            || name == "suggest_test"
-            || name == "refinement_check_test";
-
         let expected = std::fs::read_to_string(expected_file)
             .unwrap_or_else(|e| panic!("can't read {expected_file}: {e}"));
-        let (stdout, stderr, success) = if needs_no_check {
-            run_lux_no_check(lux_file)
-        } else {
-            run_lux(lux_file)
-        };
+        let (stdout, stderr, success) = run_lux(lux_file);
 
         if !success {
             failures.push(format!(
@@ -158,7 +137,9 @@ fn error_examples_produce_expected_errors() {
             continue;
         }
 
-        let (_, stderr, success) = run_lux(&path.to_string_lossy());
+        // Error examples test Rust checker diagnostics (ownership, refinements).
+        // Route through the Rust pipeline so these errors are enforced.
+        let (_, stderr, success) = run_lux_rust(&path.to_string_lossy());
 
         if success {
             failures.push(format!(
@@ -186,10 +167,14 @@ fn error_examples_produce_expected_errors() {
     }
 }
 
-/// Oracle test: compare Rust pipeline vs self-hosted pipeline output.
+/// Oracle test: compare self-hosted pipeline (default) vs Rust pipeline (`--rust`).
 ///
-/// Runs each example with both `lux --quiet` and `lux --no-check --quiet`,
-/// then reports parity. Does not fail on mismatches — diagnostic only.
+/// Runs each example with both `lux --quiet` (self-hosted, default) and
+/// `lux --rust --quiet` (Rust pipeline), then reports parity.
+/// Does not fail on mismatches — diagnostic only.
+///
+/// Examples that can only run on the self-hosted pipeline (they import
+/// self-hosted compiler modules) are skipped for the Rust comparison.
 #[test]
 fn oracle_self_hosted_parity() {
     let pairs = golden_examples();
@@ -200,7 +185,7 @@ fn oracle_self_hosted_parity() {
 
     // Examples that import self-hosted modules and can't run through the Rust
     // pipeline due to known evidence-passing limitations.
-    let needs_no_check = |name: &str| -> bool {
+    let rust_only_skip = |name: &str| -> bool {
         matches!(
             name,
             "parser_test"
@@ -225,13 +210,13 @@ fn oracle_self_hosted_parity() {
     for (lux_file, _expected_file) in &pairs {
         let name = Path::new(lux_file).file_stem().unwrap().to_string_lossy();
 
-        // Skip examples that require --no-check to run at all.
-        if needs_no_check(&name) {
+        // Skip examples that can't run through the Rust pipeline at all.
+        if rust_only_skip(&name) {
             continue;
         }
 
-        let (rust_stdout, rust_stderr, rust_ok) = run_lux(lux_file);
-        let (self_stdout, self_stderr, self_ok) = run_lux_no_check(lux_file);
+        let (self_stdout, self_stderr, self_ok) = run_lux(lux_file);
+        let (rust_stdout, rust_stderr, rust_ok) = run_lux_rust(lux_file);
 
         if !rust_ok && !self_ok {
             // Both fail — still a form of parity.
@@ -308,23 +293,7 @@ fn regenerate_baselines() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.extension().is_some_and(|e| e == "lux") && path.is_file() {
-            let name = path.file_stem().unwrap().to_string_lossy();
-            let needs_no_check = name == "parser_test"
-                || name == "lexer_test"
-                || name == "checker_test"
-                || name == "codegen_test"
-                || name == "vm_test"
-                || name == "effect_unification"
-                || name == "gradient_test"
-                || name == "type_error_test"
-                || name == "ownership_check_test"
-                || name == "suggest_test"
-                || name == "refinement_check_test";
-            let (stdout, _, success) = if needs_no_check {
-                run_lux_no_check(&path.to_string_lossy())
-            } else {
-                run_lux(&path.to_string_lossy())
-            };
+            let (stdout, _, success) = run_lux(&path.to_string_lossy());
             if success {
                 let expected = path.with_extension("expected");
                 std::fs::write(&expected, &stdout)

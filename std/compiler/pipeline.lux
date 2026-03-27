@@ -77,7 +77,7 @@ fn compile_teaching(source) =
       println("[teach] types inferred:")
       println(show_env_compact(env, subst))
       // Show gradient suggestion
-      let suggestion = gradient_suggestion(env, subst)
+      let suggestion = gradient_suggestion(env, subst, ast)
       if len(suggestion) > 0 {
         println("[teach] 💡 " ++ suggestion)
       }
@@ -245,7 +245,7 @@ fn repl_teaching(source) =
       let result = check_program(ast)
       let (env, subst, _) = result
       println("[teach] types: " ++ show_env_compact(env, subst))
-      let suggestion = gradient_suggestion(env, subst)
+      let suggestion = gradient_suggestion(env, subst, ast)
       if len(suggestion) > 0 {
         println("[teach] 💡 " ++ suggestion)
       }
@@ -349,9 +349,8 @@ fn show_env_doc(env, subst) = {
 // Moved to std/compiler/gradient.lux — the gradient as first-class module.
 // compile_teaching still calls a compatibility wrapper here.
 
-fn gradient_suggestion(env, subst) = {
-  // Bridge to new gradient engine for backward compat with compile_teaching
-  let g = compute_gradient(env, subst, [])
+fn gradient_suggestion(env, subst, ast) = {
+  let g = compute_gradient(env, subst, ast)
   let (fgs, _) = g
   if len(fgs) > 0 { render_fn_gradient(fgs[0]) }
   else { "" }

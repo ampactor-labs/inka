@@ -14,25 +14,25 @@ let ch_squote = from_char_code(39)
 
 // --- Character classification ---
 
-fn is_digit(ch) = {
+fn is_digit(ch) with Pure = {
   let code = char_code(ch);
   code >= 48 && code <= 57
 }
 
-fn is_alpha(ch) = {
+fn is_alpha(ch) with Pure = {
   let code = char_code(ch);
   (code >= 65 && code <= 90) ||
   (code >= 97 && code <= 122) ||
   code == 95
 }
 
-fn is_alnum(ch) = is_alpha(ch) || is_digit(ch)
+fn is_alnum(ch) with Pure = is_alpha(ch) || is_digit(ch)
 
-fn is_whitespace(ch) = ch == " " || ch == "\t" || char_code(ch) == 13
+fn is_whitespace(ch) with Pure = ch == " " || ch == "\t" || char_code(ch) == 13
 
 // --- Keyword lookup via list scan ---
 
-fn keyword_type(word) = {
+fn keyword_type(word) with Pure = {
   let kw = [
     ("fn", "Fn"), ("let", "Let"), ("if", "If"), ("else", "Else"),
     ("match", "Match"), ("type", "Type"), ("effect", "Effect"),
@@ -54,10 +54,10 @@ fn keyword_type(word) = {
 }
 
 // --- Token constructor ---
-fn token(typ, val, line, col) = (typ, val, line, col)
+fn token(typ, val, line, col) with Pure = (typ, val, line, col)
 
 // --- Two-char operator lookup ---
-fn two_char_op(ch, ch2) = {
+fn two_char_op(ch, ch2) with Pure = {
   let ops = [
     ("=", "=", "EqEq"), ("!", "=", "BangEq"),
     ("<", "=", "LtEq"), (">", "=", "GtEq"),
@@ -76,7 +76,7 @@ fn two_char_op(ch, ch2) = {
 }
 
 // --- Single-char token type (by char code) ---
-fn single_char_type(ch) = {
+fn single_char_type(ch) with Pure = {
   let code = char_code(ch);
   if code == 40 { "LParen" }
   else { if code == 41 { "RParen" }
@@ -108,7 +108,7 @@ fn single_char_type(ch) = {
 // then defines scan helpers as closures that capture `cs` and `src_len`.
 // This is cleaner than the pre-Phase 7 version which threaded them everywhere.
 
-fn lex(source) = {
+fn lex(source) with Pure = {
   let cs = chars(source);
   let src_len = len(cs);
 
@@ -225,7 +225,7 @@ fn lex(source) = {
 }
 
 // --- Utility ---
-fn format_token(tok) = {
+fn format_token(tok) with Pure = {
   let (typ, val, line, col) = tok;
   typ ++ "(" ++ val ++ ") at " ++ to_string(line) ++ ":" ++ to_string(col)
 }

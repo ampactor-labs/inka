@@ -186,6 +186,120 @@ fn error_examples_produce_expected_errors() {
     }
 }
 
+/// Oracle test: compare Rust pipeline vs self-hosted pipeline output.
+///
+/// Runs each example with both `lux --quiet` and `lux --no-check --quiet`,
+/// then reports parity. Does not fail on mismatches — diagnostic only.
+#[test]
+fn oracle_self_hosted_parity() {
+    let pairs = golden_examples();
+    assert!(
+        !pairs.is_empty(),
+        "no .expected files found — run regenerate_baselines first"
+    );
+
+    // Examples that import self-hosted modules and can't run through the Rust
+    // pipeline due to known evidence-passing limitations.
+    let needs_no_check = |name: &str| -> bool {
+        matches!(
+            name,
+            "parser_test"
+                | "lexer_test"
+                | "checker_test"
+                | "codegen_test"
+                | "vm_test"
+                | "effect_unification"
+                | "gradient_test"
+                | "type_error_test"
+                | "ownership_check_test"
+                | "suggest_test"
+                | "refinement_check_test"
+        )
+    };
+
+    let mut matches = 0usize;
+    let mut mismatches = 0usize;
+    let mut errors = 0usize;
+    let mut mismatch_details: Vec<String> = Vec::new();
+
+    for (lux_file, _expected_file) in &pairs {
+        let name = Path::new(lux_file).file_stem().unwrap().to_string_lossy();
+
+        // Skip examples that require --no-check to run at all.
+        if needs_no_check(&name) {
+            continue;
+        }
+
+        let (rust_stdout, rust_stderr, rust_ok) = run_lux(lux_file);
+        let (self_stdout, self_stderr, self_ok) = run_lux_no_check(lux_file);
+
+        if !rust_ok && !self_ok {
+            // Both fail — still a form of parity.
+            matches += 1;
+            continue;
+        }
+
+        if !rust_ok {
+            errors += 1;
+            mismatch_details.push(format!(
+                "  {name}: Rust FAILED, self-hosted OK\n    rust stderr: {}",
+                rust_stderr.lines().next().unwrap_or("(empty)")
+            ));
+            continue;
+        }
+
+        if !self_ok {
+            errors += 1;
+            mismatch_details.push(format!(
+                "  {name}: Rust OK, self-hosted FAILED\n    self stderr: {}",
+                self_stderr.lines().next().unwrap_or("(empty)")
+            ));
+            continue;
+        }
+
+        if rust_stdout == self_stdout {
+            matches += 1;
+        } else {
+            mismatches += 1;
+            let rust_lines: Vec<&str> = rust_stdout.lines().collect();
+            let self_lines: Vec<&str> = self_stdout.lines().collect();
+            let first_diff = rust_lines
+                .iter()
+                .zip(self_lines.iter())
+                .position(|(a, b)| a != b)
+                .unwrap_or_else(|| rust_lines.len().min(self_lines.len()));
+            let detail = if first_diff < rust_lines.len() && first_diff < self_lines.len() {
+                format!(
+                    "  {name}: line {} differs\n    rust: {}\n    self: {}",
+                    first_diff + 1,
+                    rust_lines[first_diff],
+                    self_lines[first_diff]
+                )
+            } else {
+                format!(
+                    "  {name}: output length differs (rust: {} lines, self: {} lines)",
+                    rust_lines.len(),
+                    self_lines.len()
+                )
+            };
+            mismatch_details.push(detail);
+        }
+    }
+
+    let total = matches + mismatches + errors;
+    eprintln!("\n=== Oracle Parity Report ===");
+    eprintln!("{matches}/{total} match, {mismatches} mismatches, {errors} errors\n");
+    if !mismatch_details.is_empty() {
+        eprintln!("Details:");
+        for d in &mismatch_details {
+            eprintln!("{d}");
+        }
+    }
+
+    // Diagnostic only — does not fail. Once parity is proven, flip to:
+    // assert_eq!(mismatches + errors, 0, "oracle parity failed");
+}
+
 #[test]
 #[ignore]
 fn regenerate_baselines() {

@@ -12,63 +12,65 @@
 
 // ─── Opcodes (matching codegen.lux and Rust VM) ──────────────
 
-fn OP_LOAD_CONST()   = 0
-fn OP_LOAD_INT()     = 1
-fn OP_LOAD_BOOL()    = 2
-fn OP_LOAD_UNIT()    = 3
-fn OP_LOAD_LOCAL()   = 10
-fn OP_STORE_LOCAL()  = 11
-fn OP_LOAD_UPVAL()   = 12
-fn OP_LOAD_GLOBAL()  = 20
-fn OP_STORE_GLOBAL() = 21
-fn OP_ADD()          = 30
-fn OP_SUB()          = 31
-fn OP_MUL()          = 32
-fn OP_DIV()          = 33
-fn OP_MOD()          = 34
-fn OP_NEG()          = 35
-fn OP_NOT()          = 36
-fn OP_EQ()           = 40
-fn OP_NEQ()          = 41
-fn OP_LT()           = 42
-fn OP_LTEQ()         = 43
-fn OP_GT()           = 44
-fn OP_GTEQ()         = 45
-fn OP_CONCAT()       = 50
-fn OP_JUMP()         = 60
-fn OP_JUMP_FALSE()   = 61
-fn OP_JUMP_TRUE()    = 62
-fn OP_POP()          = 63
-fn OP_DUP()          = 64
-fn OP_MAKE_CLOSURE() = 70
-fn OP_CALL()         = 71
-fn OP_RETURN()       = 72
-fn OP_TAIL_CALL()    = 73
-fn OP_CALL_BUILTIN() = 74
-fn OP_BUNDLE_EV()    = 75
-fn OP_MAKE_LIST()    = 80
-fn OP_MAKE_TUPLE()   = 81
-fn OP_LIST_INDEX()   = 82
-fn OP_FIELD_ACCESS() = 83
-fn OP_MAKE_VARIANT() = 84
-fn OP_MATCH_INT()    = 90
-fn OP_MATCH_BOOL()   = 91
-fn OP_MATCH_STRING() = 92
-fn OP_MATCH_VARIANT()= 93
-fn OP_MATCH_TUPLE()  = 94
-fn OP_MATCH_LCONS()  = 95
-fn OP_MATCH_LEMPTY() = 96
-fn OP_MATCH_WILD()   = 97
-fn OP_BIND_LOCAL()   = 98
-fn OP_MATCH_LEXACT() = 99
-fn OP_PERFORM()      = 110
-fn OP_PUSH_HANDLER() = 111
-fn OP_POP_HANDLER()  = 112
-fn OP_RESUME()       = 113
-fn OP_PUSH_EV()      = 115
-fn OP_PERF_EV()      = 116
-fn OP_POP_EV()       = 117
-fn OP_STRING_INTERP()= 130
+type Opcode = Int where 0 <= self && self <= 130
+
+let OP_LOAD_CONST   = 0
+let OP_LOAD_INT     = 1
+let OP_LOAD_BOOL    = 2
+let OP_LOAD_UNIT    = 3
+let OP_LOAD_LOCAL   = 10
+let OP_STORE_LOCAL  = 11
+let OP_LOAD_UPVAL   = 12
+let OP_LOAD_GLOBAL  = 20
+let OP_STORE_GLOBAL = 21
+let OP_ADD          = 30
+let OP_SUB          = 31
+let OP_MUL          = 32
+let OP_DIV          = 33
+let OP_MOD          = 34
+let OP_NEG          = 35
+let OP_NOT          = 36
+let OP_EQ           = 40
+let OP_NEQ          = 41
+let OP_LT           = 42
+let OP_LTEQ         = 43
+let OP_GT           = 44
+let OP_GTEQ         = 45
+let OP_CONCAT       = 50
+let OP_JUMP         = 60
+let OP_JUMP_FALSE   = 61
+let OP_JUMP_TRUE    = 62
+let OP_POP          = 63
+let OP_DUP          = 64
+let OP_MAKE_CLOSURE = 70
+let OP_CALL         = 71
+let OP_RETURN       = 72
+let OP_TAIL_CALL    = 73
+let OP_CALL_BUILTIN = 74
+let OP_BUNDLE_EV    = 75
+let OP_MAKE_LIST    = 80
+let OP_MAKE_TUPLE   = 81
+let OP_LIST_INDEX   = 82
+let OP_FIELD_ACCESS = 83
+let OP_MAKE_VARIANT = 84
+let OP_MATCH_INT    = 90
+let OP_MATCH_BOOL   = 91
+let OP_MATCH_STRING = 92
+let OP_MATCH_VARIANT= 93
+let OP_MATCH_TUPLE  = 94
+let OP_MATCH_LCONS  = 95
+let OP_MATCH_LEMPTY = 96
+let OP_MATCH_WILD   = 97
+let OP_BIND_LOCAL   = 98
+let OP_MATCH_LEXACT = 99
+let OP_PERFORM      = 110
+let OP_PUSH_HANDLER = 111
+let OP_POP_HANDLER  = 112
+let OP_RESUME       = 113
+let OP_PUSH_EV      = 115
+let OP_PERF_EV      = 116
+let OP_POP_EV       = 117
+let OP_STRING_INTERP= 130
 
 // ─── VM State ────────────────────────────────────────────────
 // State = (ip, code, constants, names, stack, base, frames, globals, handlers, htables, upvalues)
@@ -335,42 +337,42 @@ fn vm_loop(s) = {
 
 fn vm_step(s, op) = {
   // ── Literals ──
-  if op == OP_LOAD_CONST() {
+  if op == OP_LOAD_CONST {
     let (s2, idx) = read_u16(s)
     let val = load_const_val(vm_constants(s2), idx)
     (spush(s2, val), "continue")
   }
-  else if op == OP_LOAD_INT() {
+  else if op == OP_LOAD_INT {
     let (s2, byte) = read_byte(s)
     let val = if byte >= 128 { byte - 256 } else { byte }
     (spush(s2, val), "continue")
   }
-  else if op == OP_LOAD_BOOL() {
+  else if op == OP_LOAD_BOOL {
     let (s2, byte) = read_byte(s)
     (spush(s2, byte != 0), "continue")
   }
-  else if op == OP_LOAD_UNIT() {
+  else if op == OP_LOAD_UNIT {
     (spush(s, ()), "continue")
   }
   // ── Locals ──
-  else if op == OP_LOAD_LOCAL() {
+  else if op == OP_LOAD_LOCAL {
     let (s2, slot) = read_u16(s)
     let val = stack_get(s2, vm_base(s2) + slot)
     (spush(s2, val), "continue")
   }
-  else if op == OP_STORE_LOCAL() {
+  else if op == OP_STORE_LOCAL {
     let (s2, slot) = read_u16(s)
     let val = speek(s2)
     (stack_set(s2, vm_base(s2) + slot, val), "continue")
   }
-  else if op == OP_LOAD_UPVAL() {
+  else if op == OP_LOAD_UPVAL {
     let (s2, idx) = read_u16(s)
     let upvals = vm_upvals(s2)
     let val = if idx < len(upvals) { upvals[idx] } else { () }
     (spush(s2, val), "continue")
   }
   // ── Globals ──
-  else if op == OP_LOAD_GLOBAL() {
+  else if op == OP_LOAD_GLOBAL {
     let (s2, name_idx) = read_u16(s)
     let name = vm_names(s2)[name_idx]
     if is_builtin(name) {
@@ -385,40 +387,40 @@ fn vm_step(s, op) = {
       (spush(s2, v), "continue")
     }
   }
-  else if op == OP_STORE_GLOBAL() {
+  else if op == OP_STORE_GLOBAL {
     let (s2, name_idx) = read_u16(s)
     let name = vm_names(s2)[name_idx]
     let (s3, val) = spop(s2)
     (vm_set_globals(s3, global_set(vm_globals(s3), name, val)), "continue")
   }
   // ── Arithmetic ──
-  else if op == OP_ADD() { vm_binop(s, |a, b| a + b) }
-  else if op == OP_SUB() { vm_binop(s, |a, b| a - b) }
-  else if op == OP_MUL() { vm_binop(s, |a, b| a * b) }
-  else if op == OP_DIV() { vm_binop(s, |a, b| a / b) }
-  else if op == OP_MOD() { vm_binop(s, |a, b| a % b) }
-  else if op == OP_NEG() {
+  else if op == OP_ADD { vm_binop(s, |a, b| a + b) }
+  else if op == OP_SUB { vm_binop(s, |a, b| a - b) }
+  else if op == OP_MUL { vm_binop(s, |a, b| a * b) }
+  else if op == OP_DIV { vm_binop(s, |a, b| a / b) }
+  else if op == OP_MOD { vm_binop(s, |a, b| a % b) }
+  else if op == OP_NEG {
     let (s2, val) = spop(s)
     (spush(s2, 0 - val), "continue")
   }
-  else if op == OP_NOT() {
+  else if op == OP_NOT {
     let (s2, val) = spop(s)
     (spush(s2, !val), "continue")
   }
   // ── Comparison ──
-  else if op == OP_EQ()   { vm_binop(s, |a, b| a == b) }
-  else if op == OP_NEQ()  { vm_binop(s, |a, b| a != b) }
-  else if op == OP_LT()   { vm_binop(s, |a, b| a < b) }
-  else if op == OP_LTEQ() { vm_binop(s, |a, b| a <= b) }
-  else if op == OP_GT()   { vm_binop(s, |a, b| a > b) }
-  else if op == OP_GTEQ() { vm_binop(s, |a, b| a >= b) }
+  else if op == OP_EQ   { vm_binop(s, |a, b| a == b) }
+  else if op == OP_NEQ  { vm_binop(s, |a, b| a != b) }
+  else if op == OP_LT   { vm_binop(s, |a, b| a < b) }
+  else if op == OP_LTEQ { vm_binop(s, |a, b| a <= b) }
+  else if op == OP_GT   { vm_binop(s, |a, b| a > b) }
+  else if op == OP_GTEQ { vm_binop(s, |a, b| a >= b) }
   // ── String ──
-  else if op == OP_CONCAT() {
+  else if op == OP_CONCAT {
     let (s2, b) = spop(s)
     let (s3, a) = spop(s2)
     (spush(s3, a ++ b), "continue")
   }
-  else if op == OP_STRING_INTERP() {
+  else if op == OP_STRING_INTERP {
     let (s2, count) = read_u16(s)
     let st = vm_stack(s2)
     let start = len(st) - count
@@ -428,32 +430,32 @@ fn vm_step(s, op) = {
     (spush(s3, result), "continue")
   }
   // ── Control ──
-  else if op == OP_JUMP() {
+  else if op == OP_JUMP {
     let (s2, offset) = read_i16(s)
     (vm_set_ip(s2, vm_ip(s2) + offset), "continue")
   }
-  else if op == OP_JUMP_FALSE() {
+  else if op == OP_JUMP_FALSE {
     let (s2, offset) = read_i16(s)
     let top = speek(s2)
     if top == false { (vm_set_ip(s2, vm_ip(s2) + offset), "continue") }
     else { (s2, "continue") }
   }
-  else if op == OP_JUMP_TRUE() {
+  else if op == OP_JUMP_TRUE {
     let (s2, offset) = read_i16(s)
     let top = speek(s2)
     if top == true { (vm_set_ip(s2, vm_ip(s2) + offset), "continue") }
     else { (s2, "continue") }
   }
-  else if op == OP_POP() {
+  else if op == OP_POP {
     let (s2, _) = spop(s)
     (s2, "continue")
   }
-  else if op == OP_DUP() {
+  else if op == OP_DUP {
     let val = speek(s)
     (spush(s, val), "continue")
   }
   // ── Collections ──
-  else if op == OP_MAKE_LIST() {
+  else if op == OP_MAKE_LIST {
     let (s2, count) = read_u16(s)
     let st = vm_stack(s2)
     let start = len(st) - count
@@ -461,7 +463,7 @@ fn vm_step(s, op) = {
     let s3 = vm_set_stack(s2, slice(st, 0, start))
     (spush(s3, elems), "continue")
   }
-  else if op == OP_MAKE_TUPLE() {
+  else if op == OP_MAKE_TUPLE {
     let (s2, count) = read_u16(s)
     let st = vm_stack(s2)
     let start = len(st) - count
@@ -470,7 +472,7 @@ fn vm_step(s, op) = {
     // Tuples are tagged to distinguish from lists
     (spush(s3, ("__tuple__", elems)), "continue")
   }
-  else if op == OP_LIST_INDEX() {
+  else if op == OP_LIST_INDEX {
     let (s2, idx) = spop(s)
     let (s3, obj) = spop(s2)
     let val = match obj {
@@ -480,7 +482,7 @@ fn vm_step(s, op) = {
     }
     (spush(s3, val), "continue")
   }
-  else if op == OP_FIELD_ACCESS() {
+  else if op == OP_FIELD_ACCESS {
     let (s2, name_idx) = read_u16(s)
     let field_name = vm_names(s2)[name_idx]
     let (s3, obj) = spop(s2)
@@ -503,7 +505,7 @@ fn vm_step(s, op) = {
     }
     (spush(s3, val), "continue")
   }
-  else if op == OP_MAKE_VARIANT() {
+  else if op == OP_MAKE_VARIANT {
     let (s2, name_idx) = read_u16(s)
     let (s3, field_count) = read_u16(s2)
     let name = vm_names(s3)[name_idx]
@@ -514,59 +516,59 @@ fn vm_step(s, op) = {
     (spush(s4, ("variant", name, fields)), "continue")
   }
   // ── Functions ──
-  else if op == OP_MAKE_CLOSURE() {
+  else if op == OP_MAKE_CLOSURE {
     let (s2, proto_idx) = read_u16(s)
     let proto = vm_constants(s2)[proto_idx]
     let upval_count = proto_upvals(proto)
     let (s3, upvals) = read_upvalue_descriptors(s2, upval_count, [])
     (spush(s3, ("closure", proto, upvals)), "continue")
   }
-  else if op == OP_CALL() {
+  else if op == OP_CALL {
     let (s2, argc) = read_byte(s)
     vm_call(s2, argc, false)
   }
-  else if op == OP_TAIL_CALL() {
+  else if op == OP_TAIL_CALL {
     let (s2, argc) = read_byte(s)
     vm_call(s2, argc, true)
   }
-  else if op == OP_RETURN() {
+  else if op == OP_RETURN {
     vm_return(s)
   }
-  else if op == OP_CALL_BUILTIN() {
+  else if op == OP_CALL_BUILTIN {
     let (s2, _id) = read_u16(s)
     let (s3, argc) = read_byte(s2)
     // CallBuiltin uses builtin IDs, but we dispatch by name lookup
     // For now, skip this — self-hosted codegen doesn't emit CallBuiltin
     (s3, "continue")
   }
-  else if op == OP_BUNDLE_EV() {
+  else if op == OP_BUNDLE_EV {
     let (s2, _argc) = read_byte(s)
     // Evidence bundling — skip for now
     (s2, "continue")
   }
   // ── Patterns ──
-  else if op == OP_MATCH_WILD() {
+  else if op == OP_MATCH_WILD {
     (spush(s, true), "continue")
   }
-  else if op == OP_MATCH_INT() {
+  else if op == OP_MATCH_INT {
     let (s2, const_idx) = read_u16(s)
     let expected = load_const_val(vm_constants(s2), const_idx)
     let actual = speek(s2)
     (spush(s2, actual == expected), "continue")
   }
-  else if op == OP_MATCH_BOOL() {
+  else if op == OP_MATCH_BOOL {
     let (s2, byte) = read_byte(s)
     let expected = byte != 0
     let actual = speek(s2)
     (spush(s2, actual == expected), "continue")
   }
-  else if op == OP_MATCH_STRING() {
+  else if op == OP_MATCH_STRING {
     let (s2, const_idx) = read_u16(s)
     let expected = load_const_val(vm_constants(s2), const_idx)
     let actual = speek(s2)
     (spush(s2, actual == expected), "continue")
   }
-  else if op == OP_MATCH_VARIANT() {
+  else if op == OP_MATCH_VARIANT {
     let (s2, name_idx) = read_u16(s)
     let expected = vm_names(s2)[name_idx]
     let actual = speek(s2)
@@ -576,7 +578,7 @@ fn vm_step(s, op) = {
     }
     (spush(s2, matches), "continue")
   }
-  else if op == OP_MATCH_TUPLE() {
+  else if op == OP_MATCH_TUPLE {
     let (s2, count) = read_u16(s)
     let actual = speek(s2)
     let matches = match actual {
@@ -585,49 +587,49 @@ fn vm_step(s, op) = {
     }
     (spush(s2, matches), "continue")
   }
-  else if op == OP_MATCH_LCONS() {
+  else if op == OP_MATCH_LCONS {
     let (s2, min_elems) = read_u16(s)
     let actual = speek(s2)
     let matches = type_of(actual) == "List" && len(actual) >= min_elems
     (spush(s2, matches), "continue")
   }
-  else if op == OP_MATCH_LEMPTY() {
+  else if op == OP_MATCH_LEMPTY {
     let actual = speek(s)
     let matches = type_of(actual) == "List" && len(actual) == 0
     (spush(s, matches), "continue")
   }
-  else if op == OP_MATCH_LEXACT() {
+  else if op == OP_MATCH_LEXACT {
     let (s2, count) = read_u16(s)
     let actual = speek(s2)
     let matches = type_of(actual) == "List" && len(actual) == count
     (spush(s2, matches), "continue")
   }
-  else if op == OP_BIND_LOCAL() {
+  else if op == OP_BIND_LOCAL {
     let (s2, slot) = read_u16(s)
     let val = speek(s2)
     (stack_set(s2, vm_base(s2) + slot, val), "continue")
   }
   // ── Effects ──
-  else if op == OP_PUSH_HANDLER() {
+  else if op == OP_PUSH_HANDLER {
     vm_push_handler(s)
   }
-  else if op == OP_POP_HANDLER() {
+  else if op == OP_POP_HANDLER {
     let handlers = vm_handlers(s)
     (vm_set_handlers(s, slice(handlers, 0, len(handlers) - 1)), "continue")
   }
-  else if op == OP_PERFORM() {
+  else if op == OP_PERFORM {
     vm_perform(s)
   }
-  else if op == OP_RESUME() {
+  else if op == OP_RESUME {
     vm_resume(s)
   }
-  else if op == OP_PUSH_EV() {
+  else if op == OP_PUSH_EV {
     // Skip evidence push — advance past operands
     let (s2, _) = read_u16(s)
     let (s3, _) = read_u16(s2)
     (s3, "continue")
   }
-  else if op == OP_PERF_EV() {
+  else if op == OP_PERF_EV {
     // Fallback to normal perform
     let (s2, _ev_local) = read_u16(s)
     let (s3, op_name_idx) = read_u16(s2)
@@ -640,7 +642,7 @@ fn vm_step(s, op) = {
     // Find handler and dispatch
     vm_perform_dispatch(s5, op_name, args)
   }
-  else if op == OP_POP_EV() {
+  else if op == OP_POP_EV {
     (s, "continue")  // No-op
   }
   else {

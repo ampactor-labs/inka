@@ -14,50 +14,55 @@ import compiler/parser
 // ─── Opcodes ─────────────────────────────────────────────────
 // Numeric constants matching the Rust VM's OpCode enum.
 
-fn OP_LOAD_CONST()  = 0
-fn OP_LOAD_INT()    = 1
-fn OP_LOAD_BOOL()   = 2
-fn OP_LOAD_UNIT()   = 3
-fn OP_LOAD_LOCAL()  = 10
-fn OP_STORE_LOCAL() = 11
-fn OP_LOAD_UPVAL()  = 12
-fn OP_LOAD_GLOBAL() = 20
-fn OP_STORE_GLOBAL()= 21
-fn OP_ADD()         = 30
-fn OP_SUB()         = 31
-fn OP_MUL()         = 32
-fn OP_DIV()         = 33
-fn OP_MOD()         = 34
-fn OP_NEG()         = 35
-fn OP_NOT()         = 36
-fn OP_EQ()          = 40
-fn OP_NEQ()         = 41
-fn OP_LT()          = 42
-fn OP_LTEQ()        = 43
-fn OP_GT()          = 44
-fn OP_GTEQ()        = 45
-fn OP_CONCAT()      = 50
-fn OP_JUMP()        = 60
-fn OP_JUMP_FALSE()  = 61
-fn OP_JUMP_TRUE()   = 62
-fn OP_POP()         = 63
-fn OP_DUP()         = 64
-fn OP_MAKE_CLOSURE()= 70
-fn OP_CALL()        = 71
-fn OP_RETURN()      = 72
-fn OP_TAIL_CALL()   = 73
-fn OP_MAKE_LIST()   = 80
-fn OP_MAKE_TUPLE()  = 81
-fn OP_LIST_INDEX()  = 82
-fn OP_MAKE_VARIANT()= 84
-fn OP_MATCH_VARIANT()= 93
-fn OP_MATCH_WILDCARD()= 97
-fn OP_BIND_LOCAL()  = 98
-fn OP_PERFORM()     = 110
-fn OP_PUSH_HANDLER()= 111
-fn OP_POP_HANDLER() = 112
-fn OP_RESUME()      = 113
-fn OP_STRING_INTERP()= 130
+type Opcode = Int where 0 <= self && self <= 130
+
+let OP_LOAD_CONST  = 0
+let OP_LOAD_INT    = 1
+let OP_LOAD_BOOL   = 2
+let OP_LOAD_UNIT   = 3
+let OP_LOAD_LOCAL  = 10
+let OP_STORE_LOCAL = 11
+let OP_LOAD_UPVAL  = 12
+let OP_LOAD_GLOBAL = 20
+let OP_STORE_GLOBAL= 21
+let OP_ADD         = 30
+let OP_SUB         = 31
+let OP_MUL         = 32
+let OP_DIV         = 33
+let OP_MOD         = 34
+let OP_NEG         = 35
+let OP_NOT         = 36
+let OP_EQ          = 40
+let OP_NEQ         = 41
+let OP_LT          = 42
+let OP_LTEQ        = 43
+let OP_GT          = 44
+let OP_GTEQ        = 45
+let OP_CONCAT      = 50
+let OP_JUMP        = 60
+let OP_JUMP_FALSE  = 61
+let OP_JUMP_TRUE   = 62
+let OP_POP         = 63
+let OP_DUP         = 64
+let OP_MAKE_CLOSURE= 70
+let OP_CALL        = 71
+let OP_RETURN      = 72
+let OP_TAIL_CALL   = 73
+let OP_MAKE_LIST   = 80
+let OP_MAKE_TUPLE  = 81
+let OP_LIST_INDEX  = 82
+let OP_MAKE_VARIANT= 84
+let OP_MATCH_INT   = 90
+let OP_MATCH_BOOL  = 91
+let OP_MATCH_STRING= 92
+let OP_MATCH_VARIANT= 93
+let OP_MATCH_WILD  = 97
+let OP_BIND_LOCAL  = 98
+let OP_PERFORM     = 110
+let OP_PUSH_HANDLER= 111
+let OP_POP_HANDLER = 112
+let OP_RESUME      = 113
+let OP_STRING_INTERP= 130
 
 // ─── Compilation Context ─────────────────────────────────────
 // Threading pattern: every emit function takes ctx and returns new ctx.
@@ -137,7 +142,7 @@ fn find_name(names, name, idx) = {
 // Emit LoadConst with a constant value
 fn emit_constant(ctx, value) = {
   let (ctx2, idx) = add_constant(ctx, value)
-  emit_u16(emit_op(ctx2, OP_LOAD_CONST()), idx)
+  emit_u16(emit_op(ctx2, OP_LOAD_CONST), idx)
 }
 
 // ─── Jump Helpers ────────────────────────────────────────────
@@ -223,14 +228,14 @@ fn find_local(locals, name, idx) = {
 fn emit_var_load(ctx, name) = {
   let slot = resolve_local(ctx, name)
   if slot >= 0 {
-    emit_u16(emit_op(ctx, OP_LOAD_LOCAL()), slot)
+    emit_u16(emit_op(ctx, OP_LOAD_LOCAL), slot)
   } else {
     let (upval_idx, ctx2) = resolve_upvalue(ctx, name)
     if upval_idx >= 0 {
-      emit_u16(emit_op(ctx2, OP_LOAD_UPVAL()), upval_idx)
+      emit_u16(emit_op(ctx2, OP_LOAD_UPVAL), upval_idx)
     } else {
       let (ctx3, name_idx) = intern_name(ctx, name)
-      emit_u16(emit_op(ctx3, OP_LOAD_GLOBAL()), name_idx)
+      emit_u16(emit_op(ctx3, OP_LOAD_GLOBAL), name_idx)
     }
   }
 }
@@ -238,10 +243,10 @@ fn emit_var_load(ctx, name) = {
 fn emit_var_store(ctx, name) = {
   let slot = resolve_local(ctx, name)
   if slot >= 0 {
-    emit_u16(emit_op(ctx, OP_STORE_LOCAL()), slot)
+    emit_u16(emit_op(ctx, OP_STORE_LOCAL), slot)
   } else {
     let (ctx2, name_idx) = intern_name(ctx, name)
-    emit_u16(emit_op(ctx2, OP_STORE_GLOBAL()), name_idx)
+    emit_u16(emit_op(ctx2, OP_STORE_GLOBAL), name_idx)
   }
 }
 
@@ -308,7 +313,7 @@ fn compile_expr(ctx, sexpr) = {
   IntLit(s) => {
     let n = parse_int(s)
     if n >= 0 - 128 && n <= 127 {
-      emit_u8(emit_op(ctx, OP_LOAD_INT()), n)
+      emit_u8(emit_op(ctx, OP_LOAD_INT), n)
     } else {
       emit_constant(ctx, ("int", n))
     }
@@ -318,9 +323,9 @@ fn compile_expr(ctx, sexpr) = {
 
   StringLit(s) => emit_constant(ctx, ("string", s)),
 
-  BoolLit(b) => emit_u8(emit_op(ctx, OP_LOAD_BOOL()), if b { 1 } else { 0 }),
+  BoolLit(b) => emit_u8(emit_op(ctx, OP_LOAD_BOOL), if b { 1 } else { 0 }),
 
-  NoneExpr => emit_op(ctx, OP_LOAD_UNIT()),
+  NoneExpr => emit_op(ctx, OP_LOAD_UNIT),
 
   VarRef(name) => emit_var_load(ctx, name),
 
@@ -328,14 +333,14 @@ fn compile_expr(ctx, sexpr) = {
     // Short-circuit for And/Or
     if op == "And" {
       let ctx2 = compile_expr(ctx, left)
-      let (ctx3, patch) = emit_jump(ctx2, OP_JUMP_FALSE())
-      let ctx4 = emit_op(ctx3, OP_POP())
+      let (ctx3, patch) = emit_jump(ctx2, OP_JUMP_FALSE)
+      let ctx4 = emit_op(ctx3, OP_POP)
       let ctx5 = compile_expr(ctx4, right)
       patch_jump(ctx5, patch)
     } else { if op == "Or" {
       let ctx2 = compile_expr(ctx, left)
-      let (ctx3, patch) = emit_jump(ctx2, OP_JUMP_TRUE())
-      let ctx4 = emit_op(ctx3, OP_POP())
+      let (ctx3, patch) = emit_jump(ctx2, OP_JUMP_TRUE)
+      let ctx4 = emit_op(ctx3, OP_POP)
       let ctx5 = compile_expr(ctx4, right)
       patch_jump(ctx5, patch)
     } else {
@@ -348,8 +353,8 @@ fn compile_expr(ctx, sexpr) = {
 
   UnaryOp(op, operand) => {
     let ctx2 = compile_expr(ctx, operand)
-    if op == "Neg" { emit_op(ctx2, OP_NEG()) }
-    else { emit_op(ctx2, OP_NOT()) }
+    if op == "Neg" { emit_op(ctx2, OP_NEG) }
+    else { emit_op(ctx2, OP_NOT) }
   },
 
   Call(func, args) => {
@@ -362,43 +367,43 @@ fn compile_expr(ctx, sexpr) = {
           // Effect operation: emit args then Perform
           let ctx2 = compile_args(ctx, args)
           let (ctx3, op_name_idx) = intern_name(ctx2, name)
-          let ctx4 = emit_u16(emit_op(ctx3, OP_PERFORM()), op_name_idx)
+          let ctx4 = emit_u16(emit_op(ctx3, OP_PERFORM), op_name_idx)
           emit_u8(ctx4, len(args))
         } else {
           // Normal call
           let ctx2 = compile_expr(ctx, func)
           let ctx3 = compile_args(ctx2, args)
-          emit_u8(emit_op(ctx3, OP_CALL()), len(args))
+          emit_u8(emit_op(ctx3, OP_CALL), len(args))
         }
       },
       _ => {
         let ctx2 = compile_expr(ctx, func)
         let ctx3 = compile_args(ctx2, args)
-        emit_u8(emit_op(ctx3, OP_CALL()), len(args))
+        emit_u8(emit_op(ctx3, OP_CALL), len(args))
       }
     }
   },
 
   IfExpr(cond, then_br, else_br) => {
     let ctx2 = compile_expr(ctx, cond)
-    let (ctx3, else_patch) = emit_jump(ctx2, OP_JUMP_FALSE())
-    let ctx4 = emit_op(ctx3, OP_POP())  // pop condition
+    let (ctx3, else_patch) = emit_jump(ctx2, OP_JUMP_FALSE)
+    let ctx4 = emit_op(ctx3, OP_POP)  // pop condition
     let ctx5 = compile_expr(ctx4, then_br)
-    let (ctx6, end_patch) = emit_jump(ctx5, OP_JUMP())
+    let (ctx6, end_patch) = emit_jump(ctx5, OP_JUMP)
     let ctx7 = patch_jump(ctx6, else_patch)
-    let ctx8 = emit_op(ctx7, OP_POP())  // pop condition
+    let ctx8 = emit_op(ctx7, OP_POP)  // pop condition
     let ctx9 = compile_expr(ctx8, else_br)
     patch_jump(ctx9, end_patch)
   },
 
   ListExpr(elems) => {
     let ctx2 = compile_args(ctx, elems)
-    emit_u16(emit_op(ctx2, OP_MAKE_LIST()), len(elems))
+    emit_u16(emit_op(ctx2, OP_MAKE_LIST), len(elems))
   },
 
   TupleExpr(elems) => {
     let ctx2 = compile_args(ctx, elems)
-    emit_u16(emit_op(ctx2, OP_MAKE_TUPLE()), len(elems))
+    emit_u16(emit_op(ctx2, OP_MAKE_TUPLE), len(elems))
   },
 
   PipeExpr(left, right) => {
@@ -409,13 +414,13 @@ fn compile_expr(ctx, sexpr) = {
         let ctx2 = compile_expr(ctx, func)
         let ctx3 = compile_expr(ctx2, left)
         let ctx4 = compile_args(ctx3, args)
-        emit_u8(emit_op(ctx4, OP_CALL()), 1 + len(args))
+        emit_u8(emit_op(ctx4, OP_CALL), 1 + len(args))
       },
       _ => {
         // a |> f => f(a)
         let ctx2 = compile_expr(ctx, right)
         let ctx3 = compile_expr(ctx2, left)
-        emit_u8(emit_op(ctx3, OP_CALL()), 1)
+        emit_u8(emit_op(ctx3, OP_CALL), 1)
       }
     }
   },
@@ -423,7 +428,7 @@ fn compile_expr(ctx, sexpr) = {
   Index(obj, idx) => {
     let ctx2 = compile_expr(ctx, obj)
     let ctx3 = compile_expr(ctx2, idx)
-    emit_op(ctx3, OP_LIST_INDEX())
+    emit_op(ctx3, OP_LIST_INDEX)
   },
 
   MatchExpr(scrutinee, arms) => {
@@ -442,13 +447,13 @@ fn compile_expr(ctx, sexpr) = {
     let fn_ctx2 = begin_scope(fn_ctx)
     let fn_ctx3 = declare_params(fn_ctx2, params)
     let fn_ctx4 = compile_expr(fn_ctx3, body)
-    let fn_ctx5 = emit_op(fn_ctx4, OP_RETURN())
+    let fn_ctx5 = emit_op(fn_ctx4, OP_RETURN)
     let upvals = ctx_upvalues(fn_ctx5)
     let proto = ("fn_proto", "<lambda>", len(params), ctx_code(fn_ctx5),
                   ctx_constants(fn_ctx5), ctx_names(fn_ctx5),
                   ctx_next_slot(fn_ctx5), len(upvals))
     let (ctx2, proto_idx) = add_constant(ctx, proto)
-    let ctx3 = emit_u16(emit_op(ctx2, OP_MAKE_CLOSURE()), proto_idx)
+    let ctx3 = emit_u16(emit_op(ctx2, OP_MAKE_CLOSURE), proto_idx)
     emit_upvalue_descriptors(ctx3, upvals)
   },
 
@@ -468,7 +473,7 @@ fn compile_expr(ctx, sexpr) = {
     compile_resume_expr(ctx, value, state_updates)
   },
 
-  _ => emit_op(ctx, OP_LOAD_UNIT())
+  _ => emit_op(ctx, OP_LOAD_UNIT)
 }
 }
 
@@ -487,7 +492,7 @@ fn compile_args(ctx, args) = {
 fn compile_match_arms(ctx, arms, end_patches, scr_slot) = {
   if len(arms) == 0 {
     // No arms matched — load unit as result
-    let ctx2 = emit_op(ctx, OP_LOAD_UNIT())
+    let ctx2 = emit_op(ctx, OP_LOAD_UNIT)
     patch_all(ctx2, end_patches)
   } else {
     let (pat, body) = arms[0]
@@ -502,7 +507,7 @@ fn compile_match_arms(ctx, arms, end_patches, scr_slot) = {
       let ctx2 = match pat {
         PVar(name) => {
           // Load scrutinee and bind as local
-          let ctx3 = emit_u16(emit_op(ctx, OP_LOAD_LOCAL()), scr_slot)
+          let ctx3 = emit_u16(emit_op(ctx, OP_LOAD_LOCAL), scr_slot)
           let (ctx4, _) = declare_local(ctx3, name)
           ctx4
         },
@@ -512,11 +517,11 @@ fn compile_match_arms(ctx, arms, end_patches, scr_slot) = {
       patch_all(ctx3, end_patches)
     } else {
       // Load scrutinee for pattern test
-      let ctx2 = emit_u16(emit_op(ctx, OP_LOAD_LOCAL()), scr_slot)
+      let ctx2 = emit_u16(emit_op(ctx, OP_LOAD_LOCAL), scr_slot)
       let ctx3 = compile_pattern_test(ctx2, pat)
-      let (ctx4, next_patch) = emit_jump(ctx3, OP_JUMP_FALSE())
-      let ctx5 = emit_op(ctx4, OP_POP())  // pop test result (true)
-      let ctx6 = emit_op(ctx5, OP_POP())  // pop test scrutinee copy
+      let (ctx4, next_patch) = emit_jump(ctx3, OP_JUMP_FALSE)
+      let ctx5 = emit_op(ctx4, OP_POP)  // pop test result (true)
+      let ctx6 = emit_op(ctx5, OP_POP)  // pop test scrutinee copy
       // Begin scope for field bindings
       let ctx_scoped = begin_scope(ctx6)
       // Extract and bind fields if PCon pattern
@@ -529,11 +534,11 @@ fn compile_match_arms(ctx, arms, end_patches, scr_slot) = {
       // End scope: pop field locals, keeping body result
       let (ctx9, pops) = end_scope(ctx8)
       let ctx10 = pop_keeping_top(ctx9, pops)
-      let (ctx11, end_patch) = emit_jump(ctx10, OP_JUMP())
+      let (ctx11, end_patch) = emit_jump(ctx10, OP_JUMP)
       // Patch: next arm starts here
       let ctx12 = patch_jump(ctx11, next_patch)
-      let ctx13 = emit_op(ctx12, OP_POP())  // pop false test result
-      let ctx14 = emit_op(ctx13, OP_POP())  // pop test scrutinee copy
+      let ctx13 = emit_op(ctx12, OP_POP)  // pop false test result
+      let ctx14 = emit_op(ctx13, OP_POP)  // pop test scrutinee copy
       compile_match_arms(ctx14, rest, end_patches ++ [end_patch], scr_slot)
     }
   }
@@ -542,7 +547,7 @@ fn compile_match_arms(ctx, arms, end_patches, scr_slot) = {
 fn compile_pattern_test(ctx, pat) = match pat {
   PCon(name, _) => {
     let (ctx2, name_idx) = intern_name(ctx, name)
-    emit_u16(emit_op(ctx2, OP_MATCH_VARIANT()), name_idx)
+    emit_u16(emit_op(ctx2, OP_MATCH_VARIANT), name_idx)
   },
   PLit(sexpr) => {
     let S(expr, _, _) = sexpr;
@@ -550,25 +555,25 @@ fn compile_pattern_test(ctx, pat) = match pat {
     IntLit(n) => {
       // OP_MATCH_INT peeks at TOS without consuming — emit const index
       let (ctx2, const_idx) = add_constant(ctx, ("int", parse_int(n)))
-      emit_u16(emit_op(ctx2, OP_MATCH_INT()), const_idx)
+      emit_u16(emit_op(ctx2, OP_MATCH_INT), const_idx)
     },
     BoolLit(b) => {
       let byte = if b { 1 } else { 0 }
-      emit_u8(emit_op(ctx, OP_MATCH_BOOL()), byte)
+      emit_u8(emit_op(ctx, OP_MATCH_BOOL), byte)
     },
     StringLit(s) => {
       let (ctx2, const_idx) = add_constant(ctx, ("string", s))
-      emit_u16(emit_op(ctx2, OP_MATCH_STRING()), const_idx)
+      emit_u16(emit_op(ctx2, OP_MATCH_STRING), const_idx)
     },
     _ => {
       // Fallback: DUP scrutinee, compile expr, EQ
-      let ctx2 = emit_op(ctx, OP_DUP())
+      let ctx2 = emit_op(ctx, OP_DUP)
       let ctx3 = compile_expr(ctx2, sexpr)
-      emit_op(ctx3, OP_EQ())
+      emit_op(ctx3, OP_EQ)
     }
   }
   },
-  _ => emit_op(ctx, OP_MATCH_WILDCARD())
+  _ => emit_op(ctx, OP_MATCH_WILD)
 }
 
 // Bind fields from a matched variant: DUP scrutinee, index, store as local
@@ -579,9 +584,9 @@ fn bind_pattern_fields(ctx, fields, i, scr_slot) = {
     match field {
       PVar(name) => {
         // Load scrutinee from hidden slot, extract field i, declare local
-        let ctx2 = emit_u16(emit_op(ctx, OP_LOAD_LOCAL()), scr_slot)
-        let ctx3 = emit_u8(emit_op(ctx2, OP_LOAD_INT()), i)
-        let ctx4 = emit_op(ctx3, OP_LIST_INDEX())
+        let ctx2 = emit_u16(emit_op(ctx, OP_LOAD_LOCAL), scr_slot)
+        let ctx3 = emit_u8(emit_op(ctx2, OP_LOAD_INT), i)
+        let ctx4 = emit_op(ctx3, OP_LIST_INDEX)
         let (ctx5, _) = declare_local(ctx4, name)
         bind_pattern_fields(ctx5, fields, i + 1, scr_slot)
       },
@@ -648,7 +653,7 @@ fn compile_handle_expr(ctx, body, handler_arms, state_bindings) = {
   let (ctx4, table_idx) = ctx_add_handler_table(ctx3, table_entries)
 
   // 4. Emit PushHandler: table_idx, state_slot_base(unused=0), state_count
-  let ctx5 = emit_u16(emit_op(ctx4, OP_PUSH_HANDLER()), table_idx)
+  let ctx5 = emit_u16(emit_op(ctx4, OP_PUSH_HANDLER), table_idx)
   let ctx6 = emit_u16(ctx5, 0)  // state_slot_base (unused)
   let ctx7 = emit_u8(ctx6, state_count)
 
@@ -656,7 +661,7 @@ fn compile_handle_expr(ctx, body, handler_arms, state_bindings) = {
   let ctx8 = compile_expr(ctx7, body)
 
   // 6. Emit PopHandler
-  emit_op(ctx8, OP_POP_HANDLER())
+  emit_op(ctx8, OP_POP_HANDLER)
 }
 
 fn compile_state_inits(ctx, bindings) = {
@@ -706,7 +711,7 @@ fn compile_one_handler_proto(ctx, op_name, params, handler_body, state_names) = 
   let h_ctx6 = compile_expr(h_ctx5, handler_body)
 
   // Emit Return
-  let h_ctx7 = emit_op(h_ctx6, OP_RETURN())
+  let h_ctx7 = emit_op(h_ctx6, OP_RETURN)
 
   let total_arity = len(params) + len(state_names) + 1  // +1 for resume
 
@@ -739,12 +744,12 @@ fn compile_resume_expr(ctx, value, state_updates) = {
   if len(state_updates) == 0 {
     // Stateless resume: compile value, emit Resume with 0 updates
     let ctx2 = compile_expr(ctx, value)
-    emit_u8(emit_op(ctx2, OP_RESUME()), 0)
+    emit_u8(emit_op(ctx2, OP_RESUME), 0)
   } else {
     // Stateful resume: compile value, then state update values, then Resume
     let ctx2 = compile_expr(ctx, value)
     let ctx3 = compile_state_update_values(ctx2, state_updates)
-    let ctx4 = emit_u8(emit_op(ctx3, OP_RESUME()), len(state_updates))
+    let ctx4 = emit_u8(emit_op(ctx3, OP_RESUME), len(state_updates))
     // Emit state update indices (offsets into handler state array)
     emit_state_offsets(ctx4, state_updates, 0)
   }
@@ -774,31 +779,31 @@ fn pop_keeping_top(ctx, n) = {
   else {
     // Store result in temp global, pop locals, restore result
     let (ctx2, tmp_idx) = intern_name(ctx, "__codegen_tmp__")
-    let ctx3 = emit_u16(emit_op(ctx2, OP_STORE_GLOBAL()), tmp_idx)
+    let ctx3 = emit_u16(emit_op(ctx2, OP_STORE_GLOBAL), tmp_idx)
     let ctx4 = emit_pops(ctx3, n)
-    emit_u16(emit_op(ctx4, OP_LOAD_GLOBAL()), tmp_idx)
+    emit_u16(emit_op(ctx4, OP_LOAD_GLOBAL), tmp_idx)
   }
 }
 
 fn emit_pops(ctx, n) = {
   if n <= 0 { ctx }
-  else { emit_pops(emit_op(ctx, OP_POP()), n - 1) }
+  else { emit_pops(emit_op(ctx, OP_POP), n - 1) }
 }
 
 fn binop_to_opcode(op) = {
-  if op == "Add" { OP_ADD() }
-  else { if op == "Sub" { OP_SUB() }
-  else { if op == "Mul" { OP_MUL() }
-  else { if op == "Div" { OP_DIV() }
-  else { if op == "Mod" { OP_MOD() }
-  else { if op == "Eq"  { OP_EQ() }
-  else { if op == "Neq" { OP_NEQ() }
-  else { if op == "Lt"  { OP_LT() }
-  else { if op == "LtEq"  { OP_LTEQ() }
-  else { if op == "Gt"  { OP_GT() }
-  else { if op == "GtEq"  { OP_GTEQ() }
-  else { if op == "Concat" { OP_CONCAT() }
-  else { OP_ADD() }  // fallback
+  if op == "Add" { OP_ADD }
+  else { if op == "Sub" { OP_SUB }
+  else { if op == "Mul" { OP_MUL }
+  else { if op == "Div" { OP_DIV }
+  else { if op == "Mod" { OP_MOD }
+  else { if op == "Eq"  { OP_EQ }
+  else { if op == "Neq" { OP_NEQ }
+  else { if op == "Lt"  { OP_LT }
+  else { if op == "LtEq"  { OP_LTEQ }
+  else { if op == "Gt"  { OP_GT }
+  else { if op == "GtEq"  { OP_GTEQ }
+  else { if op == "Concat" { OP_CONCAT }
+  else { OP_ADD }  // fallback
   }}}}}}}}}}}
 }
 
@@ -810,16 +815,16 @@ fn destructure_names(ctx, names, i, tuple_slot) = {
   else {
     let name = names[i]
     // Load the tuple from its hidden slot, then index
-    let ctx2 = emit_u16(emit_op(ctx, OP_LOAD_LOCAL()), tuple_slot)
-    let ctx3 = emit_u8(emit_op(ctx2, OP_LOAD_INT()), i)
-    let ctx4 = emit_op(ctx3, OP_LIST_INDEX())
+    let ctx2 = emit_u16(emit_op(ctx, OP_LOAD_LOCAL), tuple_slot)
+    let ctx3 = emit_u8(emit_op(ctx2, OP_LOAD_INT), i)
+    let ctx4 = emit_op(ctx3, OP_LIST_INDEX)
     // Store as local or global
     let ctx5 = if ctx_depth(ctx4) > 0 {
       let (c, _slot) = declare_local(ctx4, name)
       c
     } else {
       let (c, name_idx) = intern_name(ctx4, name)
-      emit_u16(emit_op(c, OP_STORE_GLOBAL()), name_idx)
+      emit_u16(emit_op(c, OP_STORE_GLOBAL), name_idx)
     }
     destructure_names(ctx5, names, i + 1, tuple_slot)
   }
@@ -829,11 +834,11 @@ fn destructure_globals(ctx, names, i) = {
   if i >= len(names) { ctx }
   else {
     let name = names[i]
-    let ctx2 = emit_op(ctx, OP_DUP())
-    let ctx3 = emit_u8(emit_op(ctx2, OP_LOAD_INT()), i)
-    let ctx4 = emit_op(ctx3, OP_LIST_INDEX())
+    let ctx2 = emit_op(ctx, OP_DUP)
+    let ctx3 = emit_u8(emit_op(ctx2, OP_LOAD_INT), i)
+    let ctx4 = emit_op(ctx3, OP_LIST_INDEX)
     let (ctx5, name_idx) = intern_name(ctx4, name)
-    let ctx6 = emit_u16(emit_op(ctx5, OP_STORE_GLOBAL()), name_idx)
+    let ctx6 = emit_u16(emit_op(ctx5, OP_STORE_GLOBAL), name_idx)
     destructure_globals(ctx6, names, i + 1)
   }
 }
@@ -848,7 +853,7 @@ fn compile_stmt(ctx, stmt) = match stmt {
       ctx3
     } else {
       let (ctx3, name_idx) = intern_name(ctx2, name)
-      emit_u16(emit_op(ctx3, OP_STORE_GLOBAL()), name_idx)
+      emit_u16(emit_op(ctx3, OP_STORE_GLOBAL), name_idx)
     }
   },
 
@@ -862,33 +867,33 @@ fn compile_stmt(ctx, stmt) = match stmt {
     } else {
       // Global scope: DUP-based (no local slots at depth 0)
       let ctx3 = destructure_globals(ctx2, names, 0)
-      emit_op(ctx3, OP_POP())
+      emit_op(ctx3, OP_POP)
     }
   },
 
   FnStmt(name, params, body, _effects) => {
     // Pre-declare: store Unit placeholder so recursive calls resolve via LoadGlobal
     let (ctx_pre, name_idx_pre) = intern_name(ctx, name)
-    let ctx_pre2 = emit_u16(emit_op(emit_op(ctx_pre, OP_LOAD_UNIT()), OP_STORE_GLOBAL()), name_idx_pre)
+    let ctx_pre2 = emit_u16(emit_op(emit_op(ctx_pre, OP_LOAD_UNIT), OP_STORE_GLOBAL), name_idx_pre)
     let fn_ctx = ctx_child(ctx_pre2)
     let fn_ctx2 = begin_scope(fn_ctx)
     let fn_ctx3 = declare_params(fn_ctx2, params)
     let fn_ctx4 = compile_expr(fn_ctx3, body)
-    let fn_ctx5 = emit_op(fn_ctx4, OP_RETURN())
+    let fn_ctx5 = emit_op(fn_ctx4, OP_RETURN)
     let upvals = ctx_upvalues(fn_ctx5)
     let proto = ("fn_proto", name, len(params), ctx_code(fn_ctx5),
                   ctx_constants(fn_ctx5), ctx_names(fn_ctx5),
                   ctx_next_slot(fn_ctx5), len(upvals))
     let (ctx2, proto_idx) = add_constant(ctx_pre2, proto)
-    let ctx3 = emit_u16(emit_op(ctx2, OP_MAKE_CLOSURE()), proto_idx)
+    let ctx3 = emit_u16(emit_op(ctx2, OP_MAKE_CLOSURE), proto_idx)
     let ctx4 = emit_upvalue_descriptors(ctx3, upvals)
     // Overwrite placeholder with real closure
-    emit_u16(emit_op(ctx4, OP_STORE_GLOBAL()), name_idx_pre)
+    emit_u16(emit_op(ctx4, OP_STORE_GLOBAL), name_idx_pre)
   },
 
   ExprStmt(expr) => {
     let ctx2 = compile_expr(ctx, expr)
-    emit_op(ctx2, OP_POP())  // discard result
+    emit_op(ctx2, OP_POP)  // discard result
   },
 
   TypeStmt(name, variants) => {
@@ -928,9 +933,9 @@ fn compile_variants(ctx, variants) = {
     let (var_name, _fields) = variants[0]
     let (ctx2, name_idx) = intern_name(ctx, var_name)
     // MakeVariant name_idx 0 (zero fields — VM handles constructor calls)
-    let ctx3 = emit_u16(emit_u16(emit_op(ctx2, OP_MAKE_VARIANT()), name_idx), 0)
+    let ctx3 = emit_u16(emit_u16(emit_op(ctx2, OP_MAKE_VARIANT), name_idx), 0)
     // StoreGlobal
-    let ctx4 = emit_u16(emit_op(ctx3, OP_STORE_GLOBAL()), name_idx)
+    let ctx4 = emit_u16(emit_op(ctx3, OP_STORE_GLOBAL), name_idx)
     compile_variants(ctx4, slice(variants, 1, len(variants)))
   }
 }
@@ -948,7 +953,7 @@ fn compile_block_stmts(ctx, stmts) = {
 fn compile_program(stmts) = {
   let ctx = ctx_new()
   let ctx2 = compile_stmts(ctx, stmts)
-  let ctx3 = emit_op(ctx2, OP_RETURN())
+  let ctx3 = emit_op(ctx2, OP_RETURN)
   // Return the compiled chunk (with handler tables if any effects used)
   let ht = ctx_handler_tables(ctx3)
   if len(ht) > 0 {
@@ -981,7 +986,7 @@ fn compile_repl(stmts) = {
       _ => compile_stmt(ctx3, last)
     }
   } else { ctx }
-  let ctx3 = emit_op(ctx2, OP_RETURN())
+  let ctx3 = emit_op(ctx2, OP_RETURN)
   let ht = ctx_handler_tables(ctx3)
   if len(ht) > 0 {
     ("chunk", ctx_code(ctx3), ctx_constants(ctx3), ctx_names(ctx3), ht)
@@ -1019,84 +1024,84 @@ fn dis_instruction(code, constants, names, offset, opcode) = {
 }
 
 fn dis_simple(opcode, offset) = {
-  if opcode == OP_ADD()        { "Add" }
-  else { if opcode == OP_SUB() { "Sub" }
-  else { if opcode == OP_MUL() { "Mul" }
-  else { if opcode == OP_DIV() { "Div" }
-  else { if opcode == OP_MOD() { "Mod" }
-  else { if opcode == OP_NEG() { "Neg" }
-  else { if opcode == OP_NOT() { "Not" }
-  else { if opcode == OP_EQ()  { "Eq" }
-  else { if opcode == OP_NEQ() { "Neq" }
-  else { if opcode == OP_LT()  { "Lt" }
-  else { if opcode == OP_LTEQ() { "LtEq" }
-  else { if opcode == OP_GT()   { "Gt" }
-  else { if opcode == OP_GTEQ() { "GtEq" }
-  else { if opcode == OP_CONCAT() { "Concat" }
-  else { if opcode == OP_POP()    { "Pop" }
-  else { if opcode == OP_DUP()    { "Dup" }
-  else { if opcode == OP_RETURN() { "Return" }
-  else { if opcode == OP_LOAD_UNIT() { "LoadUnit" }
-  else { if opcode == OP_LIST_INDEX() { "ListIndex" }
+  if opcode == OP_ADD        { "Add" }
+  else { if opcode == OP_SUB { "Sub" }
+  else { if opcode == OP_MUL { "Mul" }
+  else { if opcode == OP_DIV { "Div" }
+  else { if opcode == OP_MOD { "Mod" }
+  else { if opcode == OP_NEG { "Neg" }
+  else { if opcode == OP_NOT { "Not" }
+  else { if opcode == OP_EQ  { "Eq" }
+  else { if opcode == OP_NEQ { "Neq" }
+  else { if opcode == OP_LT  { "Lt" }
+  else { if opcode == OP_LTEQ { "LtEq" }
+  else { if opcode == OP_GT   { "Gt" }
+  else { if opcode == OP_GTEQ { "GtEq" }
+  else { if opcode == OP_CONCAT { "Concat" }
+  else { if opcode == OP_POP    { "Pop" }
+  else { if opcode == OP_DUP    { "Dup" }
+  else { if opcode == OP_RETURN { "Return" }
+  else { if opcode == OP_LOAD_UNIT { "LoadUnit" }
+  else { if opcode == OP_LIST_INDEX { "ListIndex" }
   else { "" }}}}}}}}}}}}}}}}}}}
 }
 
 fn dis_u8_op(code, opcode, offset) = {
   let val = code[offset + 1]
-  if opcode == OP_LOAD_INT()    { "LoadInt " ++ to_string(val) }
-  else { if opcode == OP_LOAD_BOOL() { "LoadBool " ++ to_string(val) }
-  else { if opcode == OP_CALL()      { "Call argc=" ++ to_string(val) }
-  else { if opcode == OP_TAIL_CALL() { "TailCall argc=" ++ to_string(val) }
+  if opcode == OP_LOAD_INT    { "LoadInt " ++ to_string(val) }
+  else { if opcode == OP_LOAD_BOOL { "LoadBool " ++ to_string(val) }
+  else { if opcode == OP_CALL      { "Call argc=" ++ to_string(val) }
+  else { if opcode == OP_TAIL_CALL { "TailCall argc=" ++ to_string(val) }
   else { "" }}}}
 }
 
 fn dis_u16_op(code, constants, names, offset, opcode) = {
   let idx = read_u16(code, offset + 1)
-  if opcode == OP_LOAD_CONST() {
+  if opcode == OP_LOAD_CONST {
     ("LoadConst " ++ to_string(idx), offset + 3)
   }
-  else { if opcode == OP_LOAD_LOCAL() {
+  else { if opcode == OP_LOAD_LOCAL {
     ("LoadLocal " ++ to_string(idx), offset + 3)
   }
-  else { if opcode == OP_STORE_LOCAL() {
+  else { if opcode == OP_STORE_LOCAL {
     ("StoreLocal " ++ to_string(idx), offset + 3)
   }
-  else { if opcode == OP_LOAD_GLOBAL() {
+  else { if opcode == OP_LOAD_GLOBAL {
     let name = if idx < len(names) { names[idx] } else { "?" }
     ("LoadGlobal " ++ to_string(idx) ++ " (" ++ name ++ ")", offset + 3)
   }
-  else { if opcode == OP_STORE_GLOBAL() {
+  else { if opcode == OP_STORE_GLOBAL {
     let name = if idx < len(names) { names[idx] } else { "?" }
     ("StoreGlobal " ++ to_string(idx) ++ " (" ++ name ++ ")", offset + 3)
   }
-  else { if opcode == OP_LOAD_UPVAL() {
+  else { if opcode == OP_LOAD_UPVAL {
     ("LoadUpval " ++ to_string(idx), offset + 3)
   }
   else { dis_u16_op2(code, constants, names, offset, opcode, idx) }}}}}}
 }
 
 fn dis_u16_op2(code, constants, names, offset, opcode, idx) = {
-  if opcode == OP_MAKE_LIST() {
+  if opcode == OP_MAKE_LIST {
     ("MakeList " ++ to_string(idx), offset + 3)
   }
-  else { if opcode == OP_MAKE_TUPLE() {
+  else { if opcode == OP_MAKE_TUPLE {
     ("MakeTuple " ++ to_string(idx), offset + 3)
   }
-  else { if opcode == OP_MAKE_CLOSURE() {
+  else { if opcode == OP_MAKE_CLOSURE {
     ("MakeClosure proto=" ++ to_string(idx), offset + 3)
   }
-  else { if opcode == OP_MAKE_VARIANT() {
+  else { if opcode == OP_MAKE_VARIANT {
     let fields = read_u16(code, offset + 3)
     let name = if idx < len(names) { names[idx] } else { "?" }
     ("MakeVariant " ++ name ++ " (" ++ to_string(fields) ++ " fields)", offset + 5)
   }
-  else { if opcode == OP_JUMP() {
+  else { if opcode == OP_JUMP {
     ("Jump +" ++ to_string(idx), offset + 3)
   }
-  else { if opcode == OP_JUMP_FALSE() {
+  else { if opcode == OP_JUMP_FALSE {
     ("JumpIfFalse +" ++ to_string(idx), offset + 3)
   }
-  else { if opcode == OP_JUMP_TRUE() {
+  else { if opcode == OP_JUMP_TRUE {
     ("JumpIfTrue +" ++ to_string(idx), offset + 3)
   }
   else {

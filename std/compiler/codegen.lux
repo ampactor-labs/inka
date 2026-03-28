@@ -74,46 +74,46 @@ let OP_STRING_INTERP= 130
 // effect_ops: [(op_name, effect_name), ...] — maps effect operation names to their effects
 // handler_tables: [table, ...] where table = [(op_name_idx, proto_idx, param_count), ...]
 // enclosing is either [] (no parent) or [parent_ctx] (for lambda/fn bodies)
-fn ctx_new() = ([], [], [], [], 0, 0, [], [], [], [])
+fn ctx_new() with Pure = ([], [], [], [], 0, 0, [], [], [], [])
 
-fn ctx_child(parent) = ([], [], [], [], 0, 0, [], [parent], ctx_effect_ops(parent), [])
+fn ctx_child(parent) with Pure = ([], [], [], [], 0, 0, [], [parent], ctx_effect_ops(parent), [])
 
 // Accessors
-fn ctx_code(ctx)       = { let (c,_,_,_,_,_,_,_,_,_) = ctx; c }
-fn ctx_constants(ctx)  = { let (_,c,_,_,_,_,_,_,_,_) = ctx; c }
-fn ctx_names(ctx)      = { let (_,_,n,_,_,_,_,_,_,_) = ctx; n }
-fn ctx_locals(ctx)     = { let (_,_,_,l,_,_,_,_,_,_) = ctx; l }
-fn ctx_depth(ctx)      = { let (_,_,_,_,d,_,_,_,_,_) = ctx; d }
-fn ctx_next_slot(ctx)  = { let (_,_,_,_,_,s,_,_,_,_) = ctx; s }
-fn ctx_upvalues(ctx)   = { let (_,_,_,_,_,_,u,_,_,_) = ctx; u }
-fn ctx_enclosing(ctx)  = { let (_,_,_,_,_,_,_,e,_,_) = ctx; e }
-fn ctx_effect_ops(ctx) = { let (_,_,_,_,_,_,_,_,eo,_) = ctx; eo }
-fn ctx_handler_tables(ctx) = { let (_,_,_,_,_,_,_,_,_,ht) = ctx; ht }
+fn ctx_code(ctx) with Pure = { let (c,_,_,_,_,_,_,_,_,_) = ctx; c }
+fn ctx_constants(ctx) with Pure = { let (_,c,_,_,_,_,_,_,_,_) = ctx; c }
+fn ctx_names(ctx) with Pure = { let (_,_,n,_,_,_,_,_,_,_) = ctx; n }
+fn ctx_locals(ctx) with Pure = { let (_,_,_,l,_,_,_,_,_,_) = ctx; l }
+fn ctx_depth(ctx) with Pure = { let (_,_,_,_,d,_,_,_,_,_) = ctx; d }
+fn ctx_next_slot(ctx) with Pure = { let (_,_,_,_,_,s,_,_,_,_) = ctx; s }
+fn ctx_upvalues(ctx) with Pure = { let (_,_,_,_,_,_,u,_,_,_) = ctx; u }
+fn ctx_enclosing(ctx) with Pure = { let (_,_,_,_,_,_,_,e,_,_) = ctx; e }
+fn ctx_effect_ops(ctx) with Pure = { let (_,_,_,_,_,_,_,_,eo,_) = ctx; eo }
+fn ctx_handler_tables(ctx) with Pure = { let (_,_,_,_,_,_,_,_,_,ht) = ctx; ht }
 
-fn ctx_set_code(ctx, code) = {
+fn ctx_set_code(ctx, code) with Pure = {
   let (_,co,na,lo,de,sl,uv,enc,eo,ht) = ctx
   (code, co, na, lo, de, sl, uv, enc, eo, ht)
 }
 
 // ─── Emit Helpers ────────────────────────────────────────────
 
-fn emit_byte(ctx, byte) = {
+fn emit_byte(ctx, byte) with Pure = {
   let (code, co, na, lo, de, sl, uv, enc, eo, ht) = ctx
   (push(code, byte), co, na, lo, de, sl, uv, enc, eo, ht)
 }
 
-fn emit_op(ctx, opcode) = emit_byte(ctx, opcode)
+fn emit_op(ctx, opcode) with Pure = emit_byte(ctx, opcode)
 
-fn emit_u16(ctx, val) = {
+fn emit_u16(ctx, val) with Pure = {
   let hi = val / 256
   let lo = val - hi * 256
   emit_byte(emit_byte(ctx, hi), lo)
 }
 
-fn emit_u8(ctx, val) = emit_byte(ctx, val)
+fn emit_u8(ctx, val) with Pure = emit_byte(ctx, val)
 
 // Add constant, return (ctx, index)
-fn add_constant(ctx, value) = {
+fn add_constant(ctx, value) with Pure = {
   let (code, co, na, lo, de, sl, uv, enc, eo, ht) = ctx
   let constants = co
   let idx = len(constants)
@@ -122,7 +122,7 @@ fn add_constant(ctx, value) = {
 }
 
 // Intern a name, return (ctx, index). Deduplicates.
-fn intern_name(ctx, name) = {
+fn intern_name(ctx, name) with Pure = {
   let names = ctx_names(ctx)
   let found = find_name(names, name, 0)
   if found >= 0 { (ctx, found) }
@@ -133,14 +133,14 @@ fn intern_name(ctx, name) = {
   }
 }
 
-fn find_name(names, name, idx) = {
+fn find_name(names, name, idx) with Pure = {
   if idx >= len(names) { 0 - 1 }
   else { if names[idx] == name { idx }
   else { find_name(names, name, idx + 1) }}
 }
 
 // Emit LoadConst with a constant value
-fn emit_constant(ctx, value) = {
+fn emit_constant(ctx, value) with Pure = {
   let (ctx2, idx) = add_constant(ctx, value)
   emit_u16(emit_op(ctx2, OP_LOAD_CONST), idx)
 }
@@ -148,7 +148,7 @@ fn emit_constant(ctx, value) = {
 // ─── Jump Helpers ────────────────────────────────────────────
 
 // Emit a jump with placeholder offset, return (ctx, patch_offset)
-fn emit_jump(ctx, jump_op) = {
+fn emit_jump(ctx, jump_op) with Pure = {
   let ctx2 = emit_op(ctx, jump_op)
   let patch_offset = len(ctx_code(ctx2))
   let ctx3 = emit_u16(ctx2, 0)  // placeholder
@@ -156,7 +156,7 @@ fn emit_jump(ctx, jump_op) = {
 }
 
 // Patch a jump at the given offset to point to current position
-fn patch_jump(ctx, patch_offset) = {
+fn patch_jump(ctx, patch_offset) with Pure = {
   let code = ctx_code(ctx)
   let current = len(code)
   let delta = current - (patch_offset + 2)
@@ -167,7 +167,7 @@ fn patch_jump(ctx, patch_offset) = {
   ctx_set_code(ctx, patched)
 }
 
-fn list_set(lst, idx, val) = {
+fn list_set(lst, idx, val) with Pure = {
   if idx >= len(lst) { lst }
   else {
     let before = slice(lst, 0, idx)
@@ -178,19 +178,19 @@ fn list_set(lst, idx, val) = {
 
 // ─── Scope Management ────────────────────────────────────────
 
-fn begin_scope(ctx) = {
+fn begin_scope(ctx) with Pure = {
   let (code, co, na, lo, depth, sl, uv, enc, eo, ht) = ctx
   (code, co, na, lo, depth + 1, sl, uv, enc, eo, ht)
 }
 
-fn end_scope(ctx) = {
+fn end_scope(ctx) with Pure = {
   let (code, co, na, locals, depth, sl, uv, enc, eo, ht) = ctx
   let (new_locals, count) = pop_locals(locals, depth, 0)
   let new_sl = sl - count
   ((code, co, na, new_locals, depth - 1, new_sl, uv, enc, eo, ht), count)
 }
 
-fn pop_locals(locals, depth, count) = {
+fn pop_locals(locals, depth, count) with Pure = {
   if len(locals) == 0 { (locals, count) }
   else {
     let (name, slot, d) = locals[len(locals) - 1]
@@ -202,18 +202,18 @@ fn pop_locals(locals, depth, count) = {
   }
 }
 
-fn declare_local(ctx, name) = {
+fn declare_local(ctx, name) with Pure = {
   let (code, co, na, locals, depth, sl, uv, enc, eo, ht) = ctx
   let new_locals = push(locals, (name, sl, depth))
   ((code, co, na, new_locals, depth, sl + 1, uv, enc, eo, ht), sl)
 }
 
-fn resolve_local(ctx, name) = {
+fn resolve_local(ctx, name) with Pure = {
   let locals = ctx_locals(ctx)
   find_local(locals, name, len(locals) - 1)
 }
 
-fn find_local(locals, name, idx) = {
+fn find_local(locals, name, idx) with Pure = {
   if idx < 0 { 0 - 1 }
   else {
     let (n, slot, _) = locals[idx]
@@ -225,7 +225,7 @@ fn find_local(locals, name, idx) = {
 // ─── Variable Resolution ─────────────────────────────────────
 // Resolution order: local → upvalue → global
 
-fn emit_var_load(ctx, name) = {
+fn emit_var_load(ctx, name) with Pure = {
   let slot = resolve_local(ctx, name)
   if slot >= 0 {
     emit_u16(emit_op(ctx, OP_LOAD_LOCAL), slot)
@@ -240,7 +240,7 @@ fn emit_var_load(ctx, name) = {
   }
 }
 
-fn emit_var_store(ctx, name) = {
+fn emit_var_store(ctx, name) with Pure = {
   let slot = resolve_local(ctx, name)
   if slot >= 0 {
     emit_u16(emit_op(ctx, OP_STORE_LOCAL), slot)
@@ -251,7 +251,7 @@ fn emit_var_store(ctx, name) = {
 }
 
 // Resolve upvalue: check enclosing context's locals, then enclosing's upvalues
-fn resolve_upvalue(ctx, name) = {
+fn resolve_upvalue(ctx, name) with Pure = {
   let enc = ctx_enclosing(ctx)
   if len(enc) == 0 { (0 - 1, ctx) }  // no enclosing
   else {
@@ -273,7 +273,7 @@ fn resolve_upvalue(ctx, name) = {
   }
 }
 
-fn add_upvalue(ctx, is_local, index) = {
+fn add_upvalue(ctx, is_local, index) with Pure = {
   let upvalues = ctx_upvalues(ctx)
   let existing = find_upvalue(upvalues, is_local, index, 0)
   if existing >= 0 { (existing, ctx) }
@@ -285,7 +285,7 @@ fn add_upvalue(ctx, is_local, index) = {
   }
 }
 
-fn find_upvalue(upvalues, is_local, index, pos) = {
+fn find_upvalue(upvalues, is_local, index, pos) with Pure = {
   if pos >= len(upvalues) { 0 - 1 }
   else {
     let (il, ix) = upvalues[pos]
@@ -295,7 +295,7 @@ fn find_upvalue(upvalues, is_local, index, pos) = {
 }
 
 // Emit upvalue descriptors after MakeClosure: u8(is_local) + u16(index) per upvalue
-fn emit_upvalue_descriptors(ctx, upvals) = {
+fn emit_upvalue_descriptors(ctx, upvals) with Pure = {
   if len(upvals) == 0 { ctx }
   else {
     let (is_local, index) = upvals[0]
@@ -307,7 +307,7 @@ fn emit_upvalue_descriptors(ctx, upvals) = {
 
 // ─── Expression Compilation ──────────────────────────────────
 
-fn compile_expr(ctx, sexpr) = {
+fn compile_expr(ctx, sexpr) with Pure = {
   let S(expr, _line, _col) = sexpr;
   match expr {
   IntLit(s) => {
@@ -477,7 +477,7 @@ fn compile_expr(ctx, sexpr) = {
 }
 }
 
-fn compile_args(ctx, args) = {
+fn compile_args(ctx, args) with Pure = {
   if len(args) == 0 { ctx }
   else {
     let ctx2 = compile_expr(ctx, args[0])
@@ -489,7 +489,7 @@ fn compile_args(ctx, args) = {
 // For each arm: dup scrutinee, test pattern, jump-if-no-match,
 // pop scrutinee, execute body, jump-to-end.
 
-fn compile_match_arms(ctx, arms, end_patches, scr_slot) = {
+fn compile_match_arms(ctx, arms, end_patches, scr_slot) with Pure = {
   if len(arms) == 0 {
     // No arms matched — load unit as result
     let ctx2 = emit_op(ctx, OP_LOAD_UNIT)
@@ -545,7 +545,7 @@ fn compile_match_arms(ctx, arms, end_patches, scr_slot) = {
   }
 }
 
-fn compile_pattern_test(ctx, pat) = match pat {
+fn compile_pattern_test(ctx, pat) with Pure = match pat {
   PCon(name, _) => {
     let (ctx2, name_idx) = intern_name(ctx, name)
     emit_u16(emit_op(ctx2, OP_MATCH_VARIANT), name_idx)
@@ -579,7 +579,7 @@ fn compile_pattern_test(ctx, pat) = match pat {
 }
 
 // Bind fields from a matched variant: DUP scrutinee, index, store as local
-fn bind_pattern_fields(ctx, fields, i, scr_slot) = {
+fn bind_pattern_fields(ctx, fields, i, scr_slot) with Pure = {
   if i >= len(fields) { ctx }
   else {
     let field = fields[i]
@@ -598,7 +598,7 @@ fn bind_pattern_fields(ctx, fields, i, scr_slot) = {
   }
 }
 
-fn patch_all(ctx, patches) = {
+fn patch_all(ctx, patches) with Pure = {
   if len(patches) == 0 { ctx }
   else {
     let ctx2 = patch_jump(ctx, patches[0])
@@ -610,7 +610,7 @@ fn patch_all(ctx, patches) = {
 // Handle { body } [with state = init] { op(params) => handler_body }
 
 // Find effect operation in effect_ops list: [(op_name, effect_name), ...]
-fn find_effect_op(ops, name) = {
+fn find_effect_op(ops, name) with Pure = {
   if len(ops) == 0 { "" }
   else {
     let (op_name, eff_name) = ops[0]
@@ -620,7 +620,7 @@ fn find_effect_op(ops, name) = {
 }
 
 // Add effect operations to context
-fn ctx_add_effect_ops(ctx, effect_name, ops) = {
+fn ctx_add_effect_ops(ctx, effect_name, ops) with Pure = {
   if len(ops) == 0 { ctx }
   else {
     let (op_name, _params) = ops[0]
@@ -632,7 +632,7 @@ fn ctx_add_effect_ops(ctx, effect_name, ops) = {
 }
 
 // Add a handler table to context, return (ctx, table_idx)
-fn ctx_add_handler_table(ctx, table) = {
+fn ctx_add_handler_table(ctx, table) with Pure = {
   let (code, co, na, lo, de, sl, uv, enc, eo, ht) = ctx
   let idx = len(ht)
   ((code, co, na, lo, de, sl, uv, enc, eo, push(ht, table)), idx)
@@ -642,7 +642,7 @@ fn ctx_add_handler_table(ctx, table) = {
 //   HandleExpr(body, handler_arms, state_bindings)
 //   handler_arms: [(op_name, params, handler_body), ...]
 //   state_bindings: [(name, init_expr), ...]
-fn compile_handle_expr(ctx, body, handler_arms, state_bindings) = {
+fn compile_handle_expr(ctx, body, handler_arms, state_bindings) with Pure = {
   // 1. Compile state init expressions (left on stack for PushHandler)
   let ctx2 = compile_state_inits(ctx, state_bindings)
   let state_count = len(state_bindings)
@@ -666,7 +666,7 @@ fn compile_handle_expr(ctx, body, handler_arms, state_bindings) = {
   emit_op(ctx8, OP_POP_HANDLER)
 }
 
-fn compile_state_inits(ctx, bindings) = {
+fn compile_state_inits(ctx, bindings) with Pure = {
   if len(bindings) == 0 { ctx }
   else {
     let (_name, init_expr) = bindings[0]
@@ -675,7 +675,7 @@ fn compile_state_inits(ctx, bindings) = {
   }
 }
 
-fn get_state_names(bindings) = {
+fn get_state_names(bindings) with Pure = {
   if len(bindings) == 0 { [] }
   else {
     let (name, _) = bindings[0]
@@ -684,7 +684,7 @@ fn get_state_names(bindings) = {
 }
 
 // Compile all handler arm bodies as FnProtos, accumulate table entries
-fn compile_handler_protos(ctx, arms, state_names, entries) = {
+fn compile_handler_protos(ctx, arms, state_names, entries) with Pure = {
   if len(arms) == 0 { (ctx, entries) }
   else {
     let (op_name, params, handler_body) = arms[0]
@@ -695,7 +695,7 @@ fn compile_handler_protos(ctx, arms, state_names, entries) = {
 
 // Compile a single handler body as a FnProto.
 // Parameters: [effect_params..., state_vars..., resume]
-fn compile_one_handler_proto(ctx, op_name, params, handler_body, state_names) = {
+fn compile_one_handler_proto(ctx, op_name, params, handler_body, state_names) with Pure = {
   // Create child context for handler body
   let h_ctx = ctx_child(ctx)
   let h_ctx2 = begin_scope(h_ctx)
@@ -742,7 +742,7 @@ fn compile_one_handler_proto(ctx, op_name, params, handler_body, state_names) = 
 }
 
 // Compile resume expression: resume(value) [with name = expr, ...]
-fn compile_resume_expr(ctx, value, state_updates) = {
+fn compile_resume_expr(ctx, value, state_updates) with Pure = {
   if len(state_updates) == 0 {
     // Stateless resume: compile value, emit Resume with 0 updates
     let ctx2 = compile_expr(ctx, value)
@@ -757,7 +757,7 @@ fn compile_resume_expr(ctx, value, state_updates) = {
   }
 }
 
-fn compile_state_update_values(ctx, updates) = {
+fn compile_state_update_values(ctx, updates) with Pure = {
   if len(updates) == 0 { ctx }
   else {
     let (_name, val) = updates[0]
@@ -766,7 +766,7 @@ fn compile_state_update_values(ctx, updates) = {
   }
 }
 
-fn emit_state_offsets(ctx, updates, idx) = {
+fn emit_state_offsets(ctx, updates, idx) with Pure = {
   if idx >= len(updates) { ctx }
   else {
     // For now, emit offsets in order (0, 1, 2, ...)
@@ -776,7 +776,7 @@ fn emit_state_offsets(ctx, updates, idx) = {
   }
 }
 
-fn pop_keeping_top(ctx, n) = {
+fn pop_keeping_top(ctx, n) with Pure = {
   if n <= 0 { ctx }
   else {
     // Store result in temp global, pop locals, restore result
@@ -787,12 +787,12 @@ fn pop_keeping_top(ctx, n) = {
   }
 }
 
-fn emit_pops(ctx, n) = {
+fn emit_pops(ctx, n) with Pure = {
   if n <= 0 { ctx }
   else { emit_pops(emit_op(ctx, OP_POP), n - 1) }
 }
 
-fn binop_to_opcode(op) = {
+fn binop_to_opcode(op) with Pure = {
   if op == "Add" { OP_ADD }
   else { if op == "Sub" { OP_SUB }
   else { if op == "Mul" { OP_MUL }
@@ -812,7 +812,7 @@ fn binop_to_opcode(op) = {
 // ─── Tuple Destructuring ─────────────────────────────────────
 // let (a, b, c) = expr → DUP, index, store for each name
 
-fn destructure_names(ctx, names, i, tuple_slot) = {
+fn destructure_names(ctx, names, i, tuple_slot) with Pure = {
   if i >= len(names) { ctx }
   else {
     let name = names[i]
@@ -832,7 +832,7 @@ fn destructure_names(ctx, names, i, tuple_slot) = {
   }
 }
 
-fn destructure_globals(ctx, names, i) = {
+fn destructure_globals(ctx, names, i) with Pure = {
   if i >= len(names) { ctx }
   else {
     let name = names[i]
@@ -845,7 +845,7 @@ fn destructure_globals(ctx, names, i) = {
   }
 }
 
-fn destructure_con_fields_global(ctx, scratch_idx, fields, i) = {
+fn destructure_con_fields_global(ctx, scratch_idx, fields, i) with Pure = {
   if i >= len(fields) { ctx }
   else {
     match fields[i] {
@@ -864,7 +864,7 @@ fn destructure_con_fields_global(ctx, scratch_idx, fields, i) = {
 
 // ─── Statement Compilation ───────────────────────────────────
 
-fn compile_stmt(ctx, stmt) = match stmt {
+fn compile_stmt(ctx, stmt) with Pure = match stmt {
   LetStmt(name, value) => {
     let ctx2 = compile_expr(ctx, value)
     if ctx_depth(ctx2) > 0 {
@@ -969,7 +969,7 @@ fn compile_stmt(ctx, stmt) = match stmt {
   _ => ctx
 }
 
-fn declare_params(ctx, params) = {
+fn declare_params(ctx, params) with Pure = {
   if len(params) == 0 { ctx }
   else {
     // Params are (name, tier) pairs from parse_fn_params
@@ -982,7 +982,7 @@ fn declare_params(ctx, params) = {
   }
 }
 
-fn compile_variants(ctx, variants) = {
+fn compile_variants(ctx, variants) with Pure = {
   if len(variants) == 0 { ctx }
   else {
     let (var_name, _fields) = variants[0]
@@ -995,7 +995,7 @@ fn compile_variants(ctx, variants) = {
   }
 }
 
-fn compile_block_stmts(ctx, stmts) = {
+fn compile_block_stmts(ctx, stmts) with Pure = {
   if len(stmts) == 0 { ctx }
   else {
     let ctx2 = compile_stmt(ctx, stmts[0])
@@ -1005,7 +1005,7 @@ fn compile_block_stmts(ctx, stmts) = {
 
 // ─── Program Compilation ─────────────────────────────────────
 
-fn compile_program(stmts) = {
+fn compile_program(stmts) with Pure = {
   let ctx = ctx_new()
   let ctx2 = compile_stmts(ctx, stmts)
   let ctx3 = emit_op(ctx2, OP_RETURN)
@@ -1018,7 +1018,7 @@ fn compile_program(stmts) = {
   }
 }
 
-fn compile_stmts(ctx, stmts) = {
+fn compile_stmts(ctx, stmts) with Pure = {
   if len(stmts) == 0 { ctx }
   else {
     let ctx2 = compile_stmt(ctx, stmts[0])
@@ -1028,7 +1028,7 @@ fn compile_stmts(ctx, stmts) = {
 
 // REPL compilation: like compile_program but preserves the last expression's value
 // so that `2 + 3` returns 5, not ()
-fn compile_repl(stmts) = {
+fn compile_repl(stmts) with Pure = {
   let ctx = ctx_new()
   let ctx2 = if len(stmts) > 0 {
     // Compile all but last as normal statements
@@ -1053,12 +1053,12 @@ fn compile_repl(stmts) = {
 // ─── Disassembly ─────────────────────────────────────────────
 // Pretty-print bytecode for debugging.
 
-fn disassemble(chunk) = {
+fn disassemble(chunk) with Pure = {
   let (_, code, constants, names) = chunk
   dis_loop(code, constants, names, 0)
 }
 
-fn dis_loop(code, constants, names, offset) = {
+fn dis_loop(code, constants, names, offset) with Pure = {
   if offset >= len(code) { "" }
   else {
     let opcode = code[offset]
@@ -1068,7 +1068,7 @@ fn dis_loop(code, constants, names, offset) = {
   }
 }
 
-fn dis_instruction(code, constants, names, offset, opcode) = {
+fn dis_instruction(code, constants, names, offset, opcode) with Pure = {
   let simple = dis_simple(opcode, offset)
   if simple != "" { (simple, offset + 1) }
   else {
@@ -1078,7 +1078,7 @@ fn dis_instruction(code, constants, names, offset, opcode) = {
   }
 }
 
-fn dis_simple(opcode, offset) = {
+fn dis_simple(opcode, offset) with Pure = {
   if opcode == OP_ADD        { "Add" }
   else { if opcode == OP_SUB { "Sub" }
   else { if opcode == OP_MUL { "Mul" }
@@ -1101,7 +1101,7 @@ fn dis_simple(opcode, offset) = {
   else { "" }}}}}}}}}}}}}}}}}}}
 }
 
-fn dis_u8_op(code, opcode, offset) = {
+fn dis_u8_op(code, opcode, offset) with Pure = {
   let val = code[offset + 1]
   if opcode == OP_LOAD_INT    { "LoadInt " ++ to_string(val) }
   else { if opcode == OP_LOAD_BOOL { "LoadBool " ++ to_string(val) }
@@ -1110,7 +1110,7 @@ fn dis_u8_op(code, opcode, offset) = {
   else { "" }}}}
 }
 
-fn dis_u16_op(code, constants, names, offset, opcode) = {
+fn dis_u16_op(code, constants, names, offset, opcode) with Pure = {
   let idx = read_u16(code, offset + 1)
   if opcode == OP_LOAD_CONST {
     ("LoadConst " ++ to_string(idx), offset + 3)
@@ -1135,7 +1135,7 @@ fn dis_u16_op(code, constants, names, offset, opcode) = {
   else { dis_u16_op2(code, constants, names, offset, opcode, idx) }}}}}}
 }
 
-fn dis_u16_op2(code, constants, names, offset, opcode, idx) = {
+fn dis_u16_op2(code, constants, names, offset, opcode, idx) with Pure = {
   if opcode == OP_MAKE_LIST {
     ("MakeList " ++ to_string(idx), offset + 3)
   }
@@ -1164,9 +1164,9 @@ fn dis_u16_op2(code, constants, names, offset, opcode, idx) = {
   }}}}}}}
 }
 
-fn read_u16(code, offset) = code[offset] * 256 + code[offset + 1]
+fn read_u16(code, offset) with Pure = code[offset] * 256 + code[offset + 1]
 
-fn pad_num(n, width) = {
+fn pad_num(n, width) with Pure = {
   let s = to_string(n)
   if len(s) >= width { s }
   else { pad_num(n, width - 1) ++ " " }
@@ -1176,20 +1176,20 @@ fn pad_num(n, width) = {
 // ─── Full Pipeline ───────────────────────────────────────────
 // parse → compile → disassemble
 
-fn compile(source) = {
+fn compile(source) with Pure = {
   let stmts = parse(source)
   let (_env, _subst, _counter) = check_program(stmts)
   compile_program(stmts)
 }
 
-fn compile_checked(source) = {
+fn compile_checked(source) with Pure = {
   let stmts = parse(source)
   let check_result = check_program(stmts)
   let chunk = compile_program(stmts)
   (chunk, check_result)
 }
 
-fn compile_and_show(source) = {
+fn compile_and_show(source) with Pure = {
   let chunk = compile(source)
   disassemble(chunk)
 }

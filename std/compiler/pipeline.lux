@@ -186,13 +186,12 @@ fn compile_lowering(source) =
 // Type info flows from infer → generate through the pipeline.
 
 fn compile_wasm(source) = {
-  // Devour the prelude: prepend Memory effect runtime + stdlib.
-  // The runtime defines len, push, slice, etc. using Memory + Alloc effects.
-  // The prelude defines map, filter, fold, etc. using those primitives.
-  // Everything compiles through the same pipeline. No hand-written WAT for data ops.
+  // Resolve imports, prepend runtime + prelude.
+  // Import IS reading a file. The handler IS the resolution strategy.
   let runtime = read_file("std/runtime/memory.lux")
   let prelude = read_file("std/prelude.lux")
-  let full_source = runtime ++ "\n" ++ prelude ++ "\n" ++ source
+  let imports = resolve_imports(source, [])
+  let full_source = runtime ++ "\n" ++ prelude ++ "\n" ++ imports ++ "\n" ++ strip_imports(source)
   handle {
     compile_pipeline(full_source)
   } {
@@ -417,6 +416,54 @@ fn gradient_suggestion(env, subst, ast) = {
   let (fgs, _) = g
   if len(fgs) > 0 { render_fn_gradient(fgs[0]) }
   else { "" }
+}
+
+// ─── Import Resolution ──────────────────────────────────────
+// Import IS reading a file. Recursive. Transitive deps resolved.
+
+fn resolve_imports(source, seen) = {
+  let import_lines = find_imports(split(source, "\n"), 0)
+  resolve_import_list(import_lines, seen)
+}
+
+fn find_imports(lines, idx) = {
+  if idx >= len(lines) { [] }
+  else {
+    let line = lines[idx]
+    if len(line) >= 7 && string_slice(line, 0, 7) == "import " {
+      [string_slice(line, 7, len(line))] ++ find_imports(lines, idx + 1)
+    } else { find_imports(lines, idx + 1) }
+  }
+}
+
+fn resolve_import_list(paths, seen) = {
+  if len(paths) == 0 { "" }
+  else {
+    let path = paths[0]
+    let rest = resolve_import_list(slice(paths, 1, len(paths)), seen ++ [path])
+    if contains(to_string(seen), path) { rest }
+    else {
+      let file_path = "std/" ++ replace(path, "/", "/") ++ ".lux"
+      let file_source = read_file(file_path)
+      let transitive = resolve_imports(file_source, seen ++ [path])
+      transitive ++ "\n" ++ strip_imports(file_source) ++ "\n" ++ rest
+    }
+  }
+}
+
+fn strip_imports(source) = {
+  let lines = split(source, "\n")
+  join(filter_non_imports(lines, 0), "\n")
+}
+
+fn filter_non_imports(lines, idx) = {
+  if idx >= len(lines) { [] }
+  else {
+    let line = lines[idx]
+    let rest = filter_non_imports(lines, idx + 1)
+    if len(line) >= 7 && string_slice(line, 0, 7) == "import " { rest }
+    else { [line] ++ rest }
+  }
 }
 
 // ─── Type Map for Backend ───────────────────────────────────

@@ -74,10 +74,10 @@ type Reason
 // ─── Type Environment ────────────────────────────────────────
 // Stores (name, type, reason) triples. Source text rides as a sentinel entry.
 
-fn env_empty() with Pure = []
-fn env_extend(env, name, ty, reason) with Pure = [(name, ty, reason)] ++ env
-fn env_with_source(env, source) with Pure = [("__source__", TUnit, Declared(source))] ++ env
-fn env_source(env) with Pure = {
+fn env_empty() = []
+fn env_extend(env, name, ty, reason) = [(name, ty, reason)] ++ env
+fn env_with_source(env, source) = [("__source__", TUnit, Declared(source))] ++ env
+fn env_source(env) = {
   if len(env) == 0 { "" }
   else {
     let (name, _, reason) = env[0];
@@ -85,7 +85,7 @@ fn env_source(env) with Pure = {
     else { env_source(slice(env, 1, len(env))) }
   }
 }
-fn env_lookup(env, name) with Pure = {
+fn env_lookup(env, name) = {
   if len(env) == 0 {
     ("not_found", TUnit, Inferred("unknown"))
   } else {
@@ -104,7 +104,7 @@ fn env_lookup(env, name) with Pure = {
 //
 // When a function moves from here to prelude, that's progress.
 
-fn env_with_primitives(env) with Pure = {
+fn env_with_primitives(env) = {
   let a = TVar(-1)
   let b = TVar(-2)
   env
@@ -112,6 +112,7 @@ fn env_with_primitives(env) with Pure = {
     |> env_extend("len", TFun([a], TInt, EfPure), Declared("builtin"))
     |> env_extend("push", TFun([a, b], a, EfPure), Declared("builtin"))
     |> env_extend("slice", TFun([a, TInt, TInt], a, EfPure), Declared("builtin"))
+    |> env_extend("string_slice", TFun([TString, TInt, TInt], TString, EfPure), Declared("builtin"))
     // Character encoding — needs VM string internals
     |> env_extend("char_code", TFun([TString], TInt, EfPure), Declared("builtin"))
     |> env_extend("from_char_code", TFun([TInt], TString, EfPure), Declared("builtin"))
@@ -126,7 +127,7 @@ fn env_with_primitives(env) with Pure = {
     // fd_write is declared as a WASI effect in std/runtime/memory.lux
 }
 
-fn instantiate_type(ty, counter, mapping) with Pure = match ty {
+fn instantiate_type(ty, counter, mapping) = match ty {
   TVar(id) => {
     if id >= 0 { (ty, counter, mapping) }
     else {
@@ -151,7 +152,7 @@ fn instantiate_type(ty, counter, mapping) with Pure = match ty {
   _ => (ty, counter, mapping)
 }
 
-fn instantiate_types(tys, counter, mapping) with Pure = {
+fn instantiate_types(tys, counter, mapping) = {
   if len(tys) == 0 { ([], counter, mapping) }
   else {
     let (new_head, c2, m2) = instantiate_type(tys[0], counter, mapping)
@@ -160,7 +161,7 @@ fn instantiate_types(tys, counter, mapping) with Pure = {
   }
 }
 
-fn find_inst_mapping(mapping, id) with Pure = {
+fn find_inst_mapping(mapping, id) = {
   if len(mapping) == 0 { -999 }
   else {
     let (k, v) = mapping[0]
@@ -169,19 +170,19 @@ fn find_inst_mapping(mapping, id) with Pure = {
   }
 }
 
-fn has_negative_tvars(ty) with Pure = match ty {
+fn has_negative_tvars(ty) = match ty {
   TVar(id) => id < 0,
   TFun(params, ret, _) => has_negative_tvars_list(params) || has_negative_tvars(ret),
   TList(elem) => has_negative_tvars(elem),
   _ => false
 }
 
-fn has_negative_tvars_list(tys) with Pure = {
+fn has_negative_tvars_list(tys) = {
   if len(tys) == 0 { false }
   else { has_negative_tvars(tys[0]) || has_negative_tvars_list(slice(tys, 1, len(tys))) }
 }
 
-fn extract_builtin_names(env) with Pure = {
+fn extract_builtin_names(env) = {
   if len(env) == 0 { [] }
   else {
     let (name, _, reason) = env[0]
@@ -190,7 +191,7 @@ fn extract_builtin_names(env) with Pure = {
   }
 }
 
-fn is_builtin_reason(reason) with Pure = {
+fn is_builtin_reason(reason) = {
   let s = to_string(reason)
   let dq = from_char_code(34)
   s == "Declared(" ++ dq ++ "builtin" ++ dq ++ ")"
@@ -201,12 +202,12 @@ fn is_builtin_reason(reason) with Pure = {
 // Effect substitution rides alongside the fresh variable counter,
 // threaded through every inference function for free.
 
-fn fresh_var(counter) with Pure = {
+fn fresh_var(counter) = {
   let (n, esubst) = counter
   (TVar(n), (n + 1, esubst))
 }
 
-fn fresh_eff_var(counter) with Pure = {
+fn fresh_eff_var(counter) = {
   let (n, esubst) = counter
   (EfOpen([], n), (n + 1, esubst))
 }
@@ -215,11 +216,11 @@ fn fresh_eff_var(counter) with Pure = {
 // A substitution maps type variable IDs to (type, reason) pairs.
 // When we unify and bind a variable, we record WHY.
 
-fn subst_empty() with Pure = []
+fn subst_empty() = []
 
-fn subst_set(subst, var_id, ty, reason) with Pure = [(var_id, ty, reason)] ++ subst
+fn subst_set(subst, var_id, ty, reason) = [(var_id, ty, reason)] ++ subst
 
-fn subst_get(subst, var_id) with Pure = {
+fn subst_get(subst, var_id) = {
   if len(subst) == 0 { (TVar(var_id), Fresh(var_id)) }
   else {
     let (k, v, r) = subst[0]
@@ -229,7 +230,7 @@ fn subst_get(subst, var_id) with Pure = {
 }
 
 // Apply substitution to a type, chasing type variable chains.
-fn apply(subst, ty) with Pure = match ty {
+fn apply(subst, ty) = match ty {
   TInt => TInt,
   TFloat => TFloat,
   TString => TString,
@@ -249,7 +250,7 @@ fn apply(subst, ty) with Pure = match ty {
 }
 
 // Get the reason WHY a type variable was bound to its current value
-fn apply_reason(subst, ty) with Pure = match ty {
+fn apply_reason(subst, ty) = match ty {
   TVar(id) => {
     let (resolved, reason) = subst_get(subst, id)
     match resolved {
@@ -268,7 +269,7 @@ fn apply_reason(subst, ty) with Pure = match ty {
 // Phase 14: TFun case unifies effect rows instead of discarding
 // them with _. Effects are first-class in unification.
 
-fn occurs(subst, var_id, ty) with Pure = match apply(subst, ty) {
+fn occurs(subst, var_id, ty) = match apply(subst, ty) {
   TVar(id2) => id2 == var_id,
   TList(elem) => occurs(subst, var_id, elem),
   TFun(params, ret, _) => any(|p| occurs(subst, var_id, p), params) || occurs(subst, var_id, ret),
@@ -277,7 +278,7 @@ fn occurs(subst, var_id, ty) with Pure = match apply(subst, ty) {
   _ => false
 }
 
-fn unify(subst, counter, t1, t2, context) with Pure = {
+fn unify(subst, counter, t1, t2, context) = {
   let a = apply(subst, t1)
   let b = apply(subst, t2)
   match a {
@@ -363,7 +364,7 @@ fn unify(subst, counter, t1, t2, context) with Pure = {
   }
 }
 
-fn unify_list(subst, counter, ts1, ts2, context) with Pure = {
+fn unify_list(subst, counter, ts1, ts2, context) = {
   if len(ts1) == 0 { (true, subst, context, counter) }
   else {
     let (ok, s2, r, c2) = unify(subst, counter, ts1[0], ts2[0], context)
@@ -624,7 +625,7 @@ fn infer_expr(env, subst, counter, sexpr) = {
 }
 }
 
-fn infer_args(env, subst, counter, args) with Pure = {
+fn infer_args(env, subst, counter, args) = {
   if len(args) == 0 { ([], [], subst, counter, EfPure) }
   else {
     let (ty, s1, c1, reason, eff) = infer_expr(env, subst, counter, args[0])
@@ -633,7 +634,7 @@ fn infer_args(env, subst, counter, args) with Pure = {
   }
 }
 
-fn infer_list_elems(env, subst, counter, elem_ty, elems) with Pure = {
+fn infer_list_elems(env, subst, counter, elem_ty, elems) = {
   if len(elems) == 0 { (subst, counter, EfPure) }
   else {
     let (ty, s1, c1, _, eff) = infer_expr(env, subst, counter, elems[0])
@@ -645,7 +646,7 @@ fn infer_list_elems(env, subst, counter, elem_ty, elems) with Pure = {
 
 // ─── Block Statement Checking ────────────────────────────────
 
-fn check_block_stmts(env, subst, counter, stmts) with Pure = {
+fn check_block_stmts(env, subst, counter, stmts) = {
   if len(stmts) == 0 { (env, subst, counter, EfPure) }
   else {
     let (new_env, s1, c1, eff) = check_stmt(env, subst, counter, stmts[0])
@@ -656,7 +657,7 @@ fn check_block_stmts(env, subst, counter, stmts) with Pure = {
 
 // ─── Statement Checking ──────────────────────────────────────
 
-fn check_stmt(env, subst, counter, stmt) with Pure = match stmt {
+fn check_stmt(env, subst, counter, stmt) = match stmt {
   LetStmt(name, value) => {
     let (ty, s1, c1, reason, eff) = infer_expr(env, subst, counter, value)
     let new_env = env_extend(env, name, apply(s1, ty), Because("let " ++ name ++ " = ..", reason))
@@ -747,7 +748,7 @@ fn check_stmt(env, subst, counter, stmt) with Pure = match stmt {
   _ => (env, subst, counter, EfPure)
 }
 
-fn fresh_params(counter, params) with Pure = {
+fn fresh_params(counter, params) = {
   if len(params) == 0 { ([], counter) }
   else {
     let (tv, c1) = fresh_var(counter)
@@ -756,7 +757,7 @@ fn fresh_params(counter, params) with Pure = {
   }
 }
 
-fn bind_params_with_reasons(env, names, types, fn_name) with Pure = {
+fn bind_params_with_reasons(env, names, types, fn_name) = {
   if len(names) == 0 { env }
   else {
     let reason = FnParam(fn_name, 0, Declared("parameter declaration"))
@@ -766,7 +767,7 @@ fn bind_params_with_reasons(env, names, types, fn_name) with Pure = {
 }
 
 // Extract plain names from [(name, tier)] parameter pairs.
-fn param_names(params) with Pure = {
+fn param_names(params) = {
   if len(params) == 0 { [] }
   else {
     let (name, _) = params[0];
@@ -831,7 +832,7 @@ fn report_ownership_violations(source, fn_name, violations) = {
 // ─── ADT Type Inference from Patterns ────────────────────────
 // When scrutinee type is unresolved (TVar), infer ADT name from constructor patterns.
 
-fn infer_adt_from_arms(env, arms, i) with Pure = {
+fn infer_adt_from_arms(env, arms, i) = {
   if i >= len(arms) { "" }
   else {
     let (pat, _) = arms[i]
@@ -854,7 +855,7 @@ fn infer_adt_from_arms(env, arms, i) with Pure = {
 // ─── Pattern Binding ─────────────────────────────────────────
 // Bind pattern variables into the environment for match arms.
 
-fn bind_pattern(env, subst, counter, pat, scrutinee_ty) with Pure = match pat {
+fn bind_pattern(env, subst, counter, pat, scrutinee_ty) = match pat {
   PVar(name) => {
     let new_env = env_extend(env, name, scrutinee_ty, Because("pattern binding", Inferred("match scrutinee")))
     (new_env, subst, counter)
@@ -872,7 +873,7 @@ fn bind_pattern(env, subst, counter, pat, scrutinee_ty) with Pure = match pat {
   _ => (env, subst, counter)
 }
 
-fn bind_con_sub_pats(env, subst, counter, pats, parent_ty) with Pure = {
+fn bind_con_sub_pats(env, subst, counter, pats, parent_ty) = {
   if len(pats) == 0 { (env, counter) }
   else {
     let (tv, c1) = fresh_var(counter)
@@ -882,7 +883,7 @@ fn bind_con_sub_pats(env, subst, counter, pats, parent_ty) with Pure = {
 }
 
 // Unify remaining match arms with the result type of the first arm.
-fn unify_match_arms(env, subst, counter, scr_ty, result_ty, arms, effs) with Pure = {
+fn unify_match_arms(env, subst, counter, scr_ty, result_ty, arms, effs) = {
   if len(arms) == 0 { (subst, counter, effs) }
   else {
     let (pat, body) = arms[0]
@@ -894,7 +895,7 @@ fn unify_match_arms(env, subst, counter, scr_ty, result_ty, arms, effs) with Pur
 }
 
 // Check handler arms: create sub-env with op params and state vars.
-fn check_handler_arms(env, subst, counter, arms, state_bindings) with Pure = {
+fn check_handler_arms(env, subst, counter, arms, state_bindings) = {
   if len(arms) == 0 { (subst, counter, EfPure) }
   else {
     let arm = arms[0]
@@ -916,7 +917,7 @@ fn check_handler_arms(env, subst, counter, arms, state_bindings) with Pure = {
 // Phase 15: Collect which effects a handler absorbs.
 // For each handler arm, look up the op_name in env to find which
 // effect it belongs to (stored as EfClosed([effect_name]) on the op's type).
-fn collect_handled_effects(env, arms) with Pure = {
+fn collect_handled_effects(env, arms) = {
   if len(arms) == 0 { [] }
   else {
     let (op_name, _, _) = arms[0]
@@ -931,7 +932,7 @@ fn collect_handled_effects(env, arms) with Pure = {
 }
 
 // Look up an effect operation in the env and extract its parent effect name.
-fn lookup_op_effect(env, op_name) with Pure = {
+fn lookup_op_effect(env, op_name) = {
   let (found, ty, _) = env_lookup(env, op_name)
   if found == "not_found" { "" }
   else {
@@ -945,7 +946,7 @@ fn lookup_op_effect(env, op_name) with Pure = {
   }
 }
 
-fn bind_handler_params(env, subst, counter, params) with Pure = {
+fn bind_handler_params(env, subst, counter, params) = {
   if len(params) == 0 { (env, subst, counter) }
   else {
     let name = params[0]
@@ -955,7 +956,7 @@ fn bind_handler_params(env, subst, counter, params) with Pure = {
   }
 }
 
-fn bind_state_vars(env, subst, counter, bindings) with Pure = {
+fn bind_state_vars(env, subst, counter, bindings) = {
   if len(bindings) == 0 { (env, subst, counter) }
   else {
     let binding = bindings[0]
@@ -967,7 +968,7 @@ fn bind_state_vars(env, subst, counter, bindings) with Pure = {
   }
 }
 
-fn infer_state_updates(env, subst, counter, updates) with Pure = {
+fn infer_state_updates(env, subst, counter, updates) = {
   if len(updates) == 0 { (subst, counter, EfPure) }
   else {
     let (_, upd_expr) = updates[0]
@@ -978,7 +979,7 @@ fn infer_state_updates(env, subst, counter, updates) with Pure = {
 }
 
 // Bind names from let destructuring to tuple elements.
-fn bind_destructure_tuple(env, names, elems, reason, idx) with Pure = {
+fn bind_destructure_tuple(env, names, elems, reason, idx) = {
   if idx >= len(names) || idx >= len(elems) { env }
   else {
     let name = names[idx]
@@ -989,7 +990,7 @@ fn bind_destructure_tuple(env, names, elems, reason, idx) with Pure = {
 }
 
 // Bind names from let destructuring to fresh type vars (non-tuple case).
-fn bind_destructure_fresh(env, subst, counter, names, reason) with Pure = {
+fn bind_destructure_fresh(env, subst, counter, names, reason) = {
   if len(names) == 0 { (env, counter) }
   else {
     let (tv, c1) = fresh_var(counter)
@@ -1000,7 +1001,7 @@ fn bind_destructure_fresh(env, subst, counter, names, reason) with Pure = {
 
 // Register effect operation signatures as function types in env.
 // Each op becomes a TFun that PERFORMS its parent effect.
-fn register_effect_ops(env, subst, counter, effect_name, ops) with Pure = {
+fn register_effect_ops(env, subst, counter, effect_name, ops) = {
   if len(ops) == 0 { (env, counter) }
   else {
     let (op_name, param_names) = ops[0]
@@ -1013,7 +1014,7 @@ fn register_effect_ops(env, subst, counter, effect_name, ops) with Pure = {
 }
 
 // Register ADT variant constructors in the environment.
-fn register_type_variants(env, counter, type_name, variants) with Pure = {
+fn register_type_variants(env, counter, type_name, variants) = {
   if len(variants) == 0 { env }
   else {
     let variant = variants[0]
@@ -1028,7 +1029,7 @@ fn register_type_variants(env, counter, type_name, variants) with Pure = {
 
 // ─── Program Checking ────────────────────────────────────────
 
-fn check_program(stmts) with Pure = {
+fn check_program(stmts) = {
   let env = env_with_primitives(env_empty())
   let subst = subst_empty()
   let counter = (0, eff_subst_empty())
@@ -1043,7 +1044,7 @@ fn check_program(stmts) with Pure = {
   }
 }
 
-fn check_program_with_source(stmts, src_text) with Pure = {
+fn check_program_with_source(stmts, src_text) = {
   let env = env_with_source(env_with_primitives(env_empty()), src_text)
   let subst = subst_empty()
   let counter = (0, eff_subst_empty())
@@ -1061,7 +1062,7 @@ fn check_program_with_source(stmts, src_text) with Pure = {
 // ─── Diagnostic Formatting ──────────────────────────────────
 // Elm-quality error rendering: source line + caret underline.
 
-fn format_diagnostic(source, kind, msg, line, col) with Pure = {
+fn format_diagnostic(source, kind, msg, line, col) = {
   let header = kind ++ ": " ++ msg
   if line <= 0 || source == "" { header }
   else {
@@ -1078,12 +1079,12 @@ fn format_diagnostic(source, kind, msg, line, col) with Pure = {
   }
 }
 
-fn repeat_char(ch, n) with Pure = if n <= 0 { "" } else { ch ++ repeat_char(ch, n - 1) }
+fn repeat_char(ch, n) = if n <= 0 { "" } else { ch ++ repeat_char(ch, n - 1) }
 
-fn check_stmts(env, subst, counter, stmts) with Pure =
+fn check_stmts(env, subst, counter, stmts) =
   check_stmts_with_aliases(env, subst, counter, stmts, [])
 
-fn check_stmts_with_aliases(env, subst, counter, stmts, aliases) with Pure = {
+fn check_stmts_with_aliases(env, subst, counter, stmts, aliases) = {
   if len(stmts) == 0 { (env, subst, counter) }
   else {
     let stmt = stmts[0]
@@ -1101,7 +1102,7 @@ fn check_stmts_with_aliases(env, subst, counter, stmts, aliases) with Pure = {
   }
 }
 
-fn verify_let_refinements(env, name, value, aliases) with Pure =
+fn verify_let_refinements(env, name, value, aliases) =
   verify_aliases_loop(env, name, value, aliases)
 
 fn verify_aliases_loop(env, name, value, aliases) = {
@@ -1134,7 +1135,7 @@ fn verify_aliases_loop(env, name, value, aliases) = {
 // depth 1: conclusion + immediate cause
 // depth 2+: full chain with indentation
 
-fn show_reason(reason, depth) with Pure = match reason {
+fn show_reason(reason, depth) = match reason {
   Literal(what) => what,
 
   VarLookup(name, bind_reason) => {
@@ -1213,7 +1214,7 @@ fn show_reason(reason, depth) with Pure = match reason {
   _ => "unknown reason"
 }
 
-fn show_reason_list(reasons, depth) with Pure = {
+fn show_reason_list(reasons, depth) = {
   if len(reasons) == 0 { "(none)" }
   else { if len(reasons) == 1 { show_reason(reasons[0], depth) }
   else { show_reason(reasons[0], depth) ++ ", " ++ show_reason_list(slice(reasons, 1, len(reasons)), depth) }}
@@ -1221,7 +1222,7 @@ fn show_reason_list(reasons, depth) with Pure = {
 
 // ─── Type Display ────────────────────────────────────────────
 
-fn type_to_string(subst, ty) with Pure = match apply(subst, ty) {
+fn type_to_string(subst, ty) = match apply(subst, ty) {
   TInt => "Int",
   TFloat => "Float",
   TString => "String",
@@ -1315,7 +1316,7 @@ fn check_and_teach(source, name) = {
   }
 }
 
-fn fn_has_annotations(stmts, name) with Pure = {
+fn fn_has_annotations(stmts, name) = {
   if len(stmts) == 0 { false }
   else {
     match stmts[0] {
@@ -1325,7 +1326,7 @@ fn fn_has_annotations(stmts, name) with Pure = {
   }
 }
 
-fn suggest_annotation(subst, name, ty) with Pure = match apply(subst, ty) {
+fn suggest_annotation(subst, name, ty) = match apply(subst, ty) {
   TFun(params, ret, effs) => {
     let suggestion = match effs {
       EfPure => suggest_pure(name),
@@ -1337,14 +1338,14 @@ fn suggest_annotation(subst, name, ty) with Pure = match apply(subst, ty) {
   _ => ""
 }
 
-fn suggest_pure(name) with Pure =
+fn suggest_pure(name) =
   "\n  -> " ++ name ++ " is Pure"
   ++ "\n     add 'with Pure' to unlock:"
   ++ "\n       memoization  (same input = same output, guaranteed)"
   ++ "\n       parallelism  (no side effects to race)"
   ++ "\n       compile-time (if inputs are known, evaluate at build)"
 
-fn suggest_from_closed(name, effects) with Pure = {
+fn suggest_from_closed(name, effects) = {
   // Check which compilation gates are available
   let has_alloc = list_contains(effects, "Alloc")
   let has_io = list_contains(effects, "IO")

@@ -25,7 +25,7 @@ type EffRow
 // ─── Effect Merging ──────────────────────────────────────────
 // Merge two effect rows: EfPure + E = E, closed ∪ closed, etc.
 
-fn merge_effects(a, b) with Pure = match a {
+fn merge_effects(a, b) = match a {
   EfPure => b,
   EfClosed(ea) => match b {
     EfPure => a,
@@ -39,7 +39,7 @@ fn merge_effects(a, b) with Pure = match a {
   }
 }
 
-fn list_union(a, b) with Pure = {
+fn list_union(a, b) = {
   if len(b) == 0 { a }
   else {
     let item = b[0]
@@ -49,7 +49,7 @@ fn list_union(a, b) with Pure = {
   }
 }
 
-fn list_contains(lst, item) with Pure = {
+fn list_contains(lst, item) = {
   if len(lst) == 0 { false }
   else { if lst[0] == item { true } else { list_contains(slice(lst, 1, len(lst)), item) }
   }
@@ -63,11 +63,11 @@ fn list_contains(lst, item) with Pure = {
 // we must also unify their effect rows. An EfOpen(es, v) variable
 // can be bound — just like a TVar in type unification.
 
-fn eff_subst_empty() with Pure = []
+fn eff_subst_empty() = []
 
-fn eff_subst_set(esubst, var_id, row) with Pure = [(var_id, row)] ++ esubst
+fn eff_subst_set(esubst, var_id, row) = [(var_id, row)] ++ esubst
 
-fn eff_subst_get(esubst, var_id) with Pure = {
+fn eff_subst_get(esubst, var_id) = {
   if len(esubst) == 0 { EfOpen([], var_id) }
   else {
     let (k, v) = esubst[0]
@@ -77,7 +77,7 @@ fn eff_subst_get(esubst, var_id) with Pure = {
 }
 
 // Apply effect substitution: resolve EfOpen variables.
-fn apply_eff_subst(esubst, row) with Pure = match row {
+fn apply_eff_subst(esubst, row) = match row {
   EfPure => EfPure,
   EfClosed(es) => EfClosed(es),
   EfOpen(es, v) => {
@@ -105,7 +105,7 @@ fn apply_eff_subst(esubst, row) with Pure = match row {
 //   Open(es, v) ~ row         → bind v to (row - es)
 //   Closed(a) ~ Open(es, v)   → bind v to Closed(a - es)
 //   Pure ~ Open([], v)        → bind v to Pure
-fn unify_eff(esubst, e1, e2) with Pure = {
+fn unify_eff(esubst, e1, e2) = {
   let a = apply_eff_subst(esubst, e1)
   let b = apply_eff_subst(esubst, e2)
   match a {
@@ -165,7 +165,7 @@ fn unify_eff(esubst, e1, e2) with Pure = {
 }
 
 // Set operations for effect name lists
-fn list_subset(a, b) with Pure = {
+fn list_subset(a, b) = {
   if len(a) == 0 { true }
   else {
     if list_contains(b, a[0]) { list_subset(slice(a, 1, len(a)), b) }
@@ -173,7 +173,7 @@ fn list_subset(a, b) with Pure = {
   }
 }
 
-fn list_diff(a, b) with Pure = {
+fn list_diff(a, b) = {
   if len(a) == 0 { [] }
   else {
     let item = a[0]
@@ -192,7 +192,7 @@ type EffectViolation
 // ─── Effect Negation Enforcement ─────────────────────────────
 // Returns (checked_effs, violations) — structured data, not println.
 
-fn check_effect_constraints(fn_name, body_effs, declared, esubst) with Pure = {
+fn check_effect_constraints(fn_name, body_effs, declared, esubst) = {
   let resolved_effs = apply_eff_subst(esubst, body_effs)
   if len(declared) == 0 { (resolved_effs, []) }
   else {
@@ -214,7 +214,7 @@ fn check_effect_constraints(fn_name, body_effs, declared, esubst) with Pure = {
   }
 }
 
-fn check_each_constraint(fn_name, body_effs, constraints) with Pure = {
+fn check_each_constraint(fn_name, body_effs, constraints) = {
   if len(constraints) == 0 { [] }
   else {
     let (eff_name, negated) = constraints[0]
@@ -236,13 +236,13 @@ fn check_each_constraint(fn_name, body_effs, constraints) with Pure = {
   }
 }
 
-fn effect_in_row(name, row) with Pure = match row {
+fn effect_in_row(name, row) = match row {
   EfPure => false,
   EfClosed(effs) => list_contains(effs, name),
   EfOpen(effs, _) => list_contains(effs, name)
 }
 
-fn any_pure(declared) with Pure = {
+fn any_pure(declared) = {
   if len(declared) == 0 { false }
   else {
     let (name, negated) = declared[0]
@@ -251,7 +251,7 @@ fn any_pure(declared) with Pure = {
   }
 }
 
-fn apply_negations(effs, declared) with Pure = {
+fn apply_negations(effs, declared) = {
   if len(declared) == 0 { effs }
   else {
     let (name, negated) = declared[0]
@@ -264,7 +264,7 @@ fn apply_negations(effs, declared) with Pure = {
   }
 }
 
-fn remove_effect(row, name) with Pure = match row {
+fn remove_effect(row, name) = match row {
   EfPure => EfPure,
   EfClosed(effs) => EfClosed(filter(|e| e != name, effs)),
   EfOpen(effs, v) => EfOpen(filter(|e| e != name, effs), v)
@@ -273,19 +273,19 @@ fn remove_effect(row, name) with Pure = match row {
 // Effect subtraction over a list: E - [F1, F2, ...] = ((E - F1) - F2) - ...
 // This IS the algebra applied sequentially. Handle absorption uses this:
 // handle { body with E } { arms for F } has effects (E - F).
-fn remove_effects(row, names) with Pure = {
+fn remove_effects(row, names) = {
   if len(names) == 0 { row }
   else { remove_effects(remove_effect(row, names[0]), slice(names, 1, len(names))) }
 }
 
 // Extract effect names present in a row (for display/teaching).
-fn effect_names(row) with Pure = match row {
+fn effect_names(row) = match row {
   EfPure => [],
   EfClosed(es) => es,
   EfOpen(es, _) => es
 }
 
-fn join(strs, sep) with Pure = {
+fn join(strs, sep) = {
   if len(strs) == 0 { "" }
   else { if len(strs) == 1 { strs[0] }
   else { strs[0] ++ sep ++ join(slice(strs, 1, len(strs)), sep) }}

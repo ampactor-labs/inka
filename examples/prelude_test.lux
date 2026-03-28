@@ -23,7 +23,7 @@ let inter = intersperse(0, [1, 2, 3, 4])
 println("intersperse 0: " ++ to_string(inter))
 
 // scan
-let scanned = scan([1, 2, 3, 4], 0, |acc, x| acc + x)
+let scanned = scanl([1, 2, 3, 4], 0, |acc, x| acc + x)
 println("scan +: " ++ to_string(scanned))
 
 // compose

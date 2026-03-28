@@ -3,14 +3,14 @@ import compiler/lower
 
 let NL = from_char_code(10)
 
-fn pv(v) with Pure = match v {
+fn pv(v) = match v {
   LInt(n) => to_string(n),
   LBool(b) => if b { "true" } else { "false" },
   LUnit => "()",
   _ => "?"
 }
 
-fn pe_atom(e) with Pure = match e {
+fn pe_atom(e) = match e {
   LConst(v) => pv(v),
   LLocal(s) => "$" ++ to_string(s),
   LGlobal(n) => n,
@@ -18,13 +18,13 @@ fn pe_atom(e) with Pure = match e {
   _ => ""
 }
 
-fn pe_op(e) with Pure = match e {
+fn pe_op(e) = match e {
   LBinOp(op, l, r) => "(" ++ pe(l) ++ " " ++ op ++ " " ++ pe(r) ++ ")",
   LUnaryOp(op, x) => op ++ pe(x),
   _ => ""
 }
 
-fn pe_fn(e) with Pure = match e {
+fn pe_fn(e) = match e {
   LCall(f, args) => pe(f) ++ "(" ++ js(mp(args), ", ") ++ ")",
   LReturn(v) => "return " ++ pe(v),
   LMakeClosure(d, _) => {
@@ -34,7 +34,7 @@ fn pe_fn(e) with Pure = match e {
   _ => ""
 }
 
-fn pe_coll(e) with Pure = match e {
+fn pe_coll(e) = match e {
   LMakeList(es) => "[" ++ js(mp(es), ", ") ++ "]",
   LMakeTuple(es) => "(" ++ js(mp(es), ", ") ++ ")",
   LMakeVariant(n, fs) => n ++ "(" ++ js(mp(fs), ", ") ++ ")",
@@ -42,19 +42,19 @@ fn pe_coll(e) with Pure = match e {
   _ => ""
 }
 
-fn pe_ctrl(e) with Pure = match e {
+fn pe_ctrl(e) = match e {
   LBlock(ss) => '{ ' ++ js(mp(ss), "; ") ++ ' }',
   LMatch(s, _) => "match " ++ pe(s) ++ ' { .. }',
   _ => pe_state(e)
 }
 
-fn pe_state(e) with Pure = match e {
+fn pe_state(e) = match e {
   LStateGet(i) => "state[" ++ to_string(i) ++ "]",
   LStateSet(i, v) => "state[" ++ to_string(i) ++ "] = " ++ pe(v),
   _ => ""
 }
 
-fn pe(e) with Pure = {
+fn pe(e) = {
   let a = pe_atom(e)
   if a != "" { a }
   else { let b = pe_op(e)
@@ -68,18 +68,18 @@ fn pe(e) with Pure = {
   else { "?" } }}}}
 }
 
-fn mp(es) with Pure = {
+fn mp(es) = {
   if len(es) == 0 { [] }
   else { [pe(es[0])] ++ mp(slice(es, 1, len(es))) }
 }
 
-fn js(ss, sep) with Pure = {
+fn js(ss, sep) = {
   if len(ss) == 0 { "" }
   else { if len(ss) == 1 { ss[0] }
   else { ss[0] ++ sep ++ js(slice(ss, 1, len(ss)), sep) }}
 }
 
-fn print_lowered(stmts) with Pure = js(mp(stmts), NL)
+fn print_lowered(stmts) = js(mp(stmts), NL)
 
 // Public aliases
-fn print_expr(e) with Pure = pe(e)
+fn print_expr(e) = pe(e)

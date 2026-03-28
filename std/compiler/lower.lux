@@ -72,7 +72,7 @@ type HandlerTier
   | Linear
   | MultiShot
 
-fn classify_handler(arm) with Pure = {
+fn classify_handler(arm) = {
   let (_, _, body_sexpr) = arm
   if ends_with_resume(body_sexpr) {
     let has_state = has_state_updates(body_sexpr)
@@ -82,7 +82,7 @@ fn classify_handler(arm) with Pure = {
   } else { MultiShot }
 }
 
-fn ends_with_resume(sexpr) with Pure = {
+fn ends_with_resume(sexpr) = {
   let S(expr, _, _) = sexpr
   match expr {
     ResumeExpr(_, _) => true,
@@ -92,7 +92,7 @@ fn ends_with_resume(sexpr) with Pure = {
   }
 }
 
-fn has_state_updates(sexpr) with Pure = {
+fn has_state_updates(sexpr) = {
   let S(expr, _, _) = sexpr
   match expr {
     ResumeExpr(_, updates) => len(updates) > 0,
@@ -102,7 +102,7 @@ fn has_state_updates(sexpr) with Pure = {
   }
 }
 
-fn has_pre_resume_stmts(sexpr) with Pure = {
+fn has_pre_resume_stmts(sexpr) = {
   let S(expr, _, _) = sexpr
   match expr {
     ResumeExpr(_, _) => false,
@@ -112,7 +112,7 @@ fn has_pre_resume_stmts(sexpr) with Pure = {
   }
 }
 
-fn classify_all_arms(arms) with Pure = {
+fn classify_all_arms(arms) = {
   if len(arms) == 0 { TailResumptive }
   else {
     let tier = classify_handler(arms[0])
@@ -266,7 +266,7 @@ fn lower_match_arms(arms) = {
   }
 }
 
-fn lower_pat(pat) with Pure = match pat {
+fn lower_pat(pat) = match pat {
   PVar(name) => LPVar(name),
   PWild => LPWild,
   PCon(name, sub) => LPCon(name, lower_pats(sub)),
@@ -275,7 +275,7 @@ fn lower_pat(pat) with Pure = match pat {
   _ => LPWild
 }
 
-fn lower_pats(pats) with Pure = {
+fn lower_pats(pats) = {
   if len(pats) == 0 { [] }
   else { [lower_pat(pats[0])] ++ lower_pats(slice(pats, 1, len(pats))) }
 }
@@ -287,7 +287,7 @@ fn lower_stmts(stmts) = {
   else { [lower_stmt(stmts[0])] ++ lower_stmts(slice(stmts, 1, len(stmts))) }
 }
 
-fn extract_param_names(params) with Pure = {
+fn extract_param_names(params) = {
   if len(params) == 0 { [] }
   else {
     let (name, _) = params[0]
@@ -310,7 +310,7 @@ fn lower_stmt(stmt) = match stmt {
   _ => LConst(LUnit)
 }
 
-fn lower_destructure_bindings(names, idx) with Pure = {
+fn lower_destructure_bindings(names, idx) = {
   if idx >= len(names) { [] }
   else {
     let name = names[idx]
@@ -328,8 +328,6 @@ fn lower_destructure_bindings(names, idx) with Pure = {
 
 fn lower_lambda(name, params, body) = {
   let all_free = collect_free_vars(body, params)
-  // Filter out globals: constructors and known effect ops aren't captures.
-  // Also filter out the function's own name (self-reference, not capture).
   let free = filter_real_captures(all_free, name)
   let lowered_body = lower_expr(body)
   if len(free) == 0 {
@@ -357,11 +355,11 @@ fn filter_real_captures(names, self_name) = {
 
 // Collect free variables: VarRefs in body not in params or locally defined.
 // `bound` accumulates: params + let-bound names + inner fn params.
-fn collect_free_vars(sexpr, params) with Pure = {
+fn collect_free_vars(sexpr, params) = {
   collect_free(sexpr, params)
 }
 
-fn collect_free(sexpr, bound) with Pure = {
+fn collect_free(sexpr, bound) = {
   let S(expr, _, _) = sexpr
   match expr {
     VarRef(name) => if string_in(bound, name, 0) { [] } else { [name] },
@@ -384,13 +382,13 @@ fn collect_free(sexpr, bound) with Pure = {
   }
 }
 
-fn collect_free_list(sexprs, bound) with Pure = {
+fn collect_free_list(sexprs, bound) = {
   if len(sexprs) == 0 { [] }
   else { string_union(collect_free(sexprs[0], bound), collect_free_list(slice(sexprs, 1, len(sexprs)), bound)) }
 }
 
 // Stmts: each let/fn binding extends the bound set for subsequent stmts
-fn collect_free_stmts(stmts, bound) with Pure = {
+fn collect_free_stmts(stmts, bound) = {
   if len(stmts) == 0 { ([], bound) }
   else {
     let stmt = stmts[0]
@@ -400,7 +398,7 @@ fn collect_free_stmts(stmts, bound) with Pure = {
   }
 }
 
-fn collect_free_stmt(stmt, bound) with Pure = match stmt {
+fn collect_free_stmt(stmt, bound) = match stmt {
   LetStmt(name, value) => (collect_free(value, bound), bound ++ [name]),
   LetDestructure(names, value) => (collect_free(value, bound), bound ++ names),
   FnStmt(name, params, body, _) => {
@@ -411,14 +409,14 @@ fn collect_free_stmt(stmt, bound) with Pure = match stmt {
   _ => ([], bound)
 }
 
-fn collect_pat_names_lower(pat) with Pure = {
+fn collect_pat_names_lower(pat) = {
   let s = to_string(pat)
   // Simple extraction: avoid ADT matching that crashes on field count mismatch
   // LetPattern is rare in the lowering path — _lp works for most cases
   []
 }
 
-fn extract_param_names_pure(params) with Pure = {
+fn extract_param_names_pure(params) = {
   if len(params) == 0 { [] }
   else {
     let (name, _) = params[0]
@@ -426,7 +424,7 @@ fn extract_param_names_pure(params) with Pure = {
   }
 }
 
-fn filter_out(names, exclude, idx) with Pure = {
+fn filter_out(names, exclude, idx) = {
   if idx >= len(names) { [] }
   else {
     let name = names[idx]
@@ -436,7 +434,7 @@ fn filter_out(names, exclude, idx) with Pure = {
 }
 
 // Rewrite captures: walk LowIR, replace LGlobal(captured) → LUpval(idx)
-fn rewrite_captures(e, free) with Pure = match e {
+fn rewrite_captures(e, free) = match e {
   LGlobal(name) => {
     let idx = find_in_list(free, name, 0)
     if idx >= 0 { LUpval(idx) } else { LGlobal(name) }
@@ -454,17 +452,17 @@ fn rewrite_captures(e, free) with Pure = match e {
   _ => e
 }
 
-fn rewrite_captures_list(exprs, free) with Pure = {
+fn rewrite_captures_list(exprs, free) = {
   if len(exprs) == 0 { [] }
   else { [rewrite_captures(exprs[0], free)] ++ rewrite_captures_list(slice(exprs, 1, len(exprs)), free) }
 }
 
-fn map_to_globals(names, idx) with Pure = {
+fn map_to_globals(names, idx) = {
   if idx >= len(names) { [] }
   else { [LGlobal(names[idx])] ++ map_to_globals(names, idx + 1) }
 }
 
-fn find_in_list(list, name, idx) with Pure = {
+fn find_in_list(list, name, idx) = {
   if idx >= len(list) { 0 - 1 }
   else { if list[idx] == name { idx } else { find_in_list(list, name, idx + 1) } }
 }
@@ -511,18 +509,18 @@ fn apply_rewrite(rw) = {
 
 // lower_stmts_pure: lower pre_stmts from handler body (no rewrites needed — these are
 // handler-definition stmts, not body stmts, so they don't contain effect operations)
-fn lower_stmts_pure(stmts) with Pure = {
+fn lower_stmts_pure(stmts) = {
   if len(stmts) == 0 { [] }
   else { [lower_stmt_pure(stmts[0])] ++ lower_stmts_pure(slice(stmts, 1, len(stmts))) }
 }
 
-fn lower_stmt_pure(stmt) with Pure = match stmt {
+fn lower_stmt_pure(stmt) = match stmt {
   LetStmt(name, value) => LLet(name, lower_expr_pure(value)),
   ExprStmt(expr) => lower_expr_pure(expr),
   _ => LConst(LUnit)
 }
 
-fn lower_expr_pure(sexpr) with Pure = {
+fn lower_expr_pure(sexpr) = {
   let S(expr, _, _) = sexpr
   match expr {
     IntLit(s) => LConst(LInt(parse_int(s))),
@@ -539,7 +537,7 @@ fn lower_expr_pure(sexpr) with Pure = {
   }
 }
 
-fn lower_exprs_pure(sexprs) with Pure = {
+fn lower_exprs_pure(sexprs) = {
   if len(sexprs) == 0 { [] }
   else { [lower_expr_pure(sexprs[0])] ++ lower_exprs_pure(slice(sexprs, 1, len(sexprs))) }
 }
@@ -547,7 +545,7 @@ fn lower_exprs_pure(sexprs) with Pure = {
 // ─── Rewrite Map ────────────────────────────────────────────
 // Unified: every arm → [op_name, params, pre_stmts, resume_value, updates]
 
-fn build_rewrite_map(arms) with Pure = {
+fn build_rewrite_map(arms) = {
   if len(arms) == 0 { [] }
   else {
     let (op_name, params, handler_body) = arms[0]
@@ -556,7 +554,7 @@ fn build_rewrite_map(arms) with Pure = {
   }
 }
 
-fn extract_handler_entry(op_name, params, handler_body_sexpr) with Pure = {
+fn extract_handler_entry(op_name, params, handler_body_sexpr) = {
   let S(body, _, _) = handler_body_sexpr
   match body {
     ResumeExpr(value, updates) =>
@@ -573,7 +571,7 @@ fn extract_handler_entry(op_name, params, handler_body_sexpr) with Pure = {
   }
 }
 
-fn lookup_rewrite(rw_map, name, idx) with Pure = {
+fn lookup_rewrite(rw_map, name, idx) = {
   if idx >= len(rw_map) { [] }
   else {
     let entry = rw_map[idx]
@@ -617,7 +615,7 @@ fn lower_state_eval_temps(updates, idx) = {
   }
 }
 
-fn lower_state_assign_temps(updates, idx) with Pure = {
+fn lower_state_assign_temps(updates, idx) = {
   if idx >= len(updates) { [] }
   else {
     let (name, _) = updates[idx]
@@ -642,7 +640,7 @@ fn lower_program_typed(stmts, ctors, type_map) = {
   }
 }
 
-fn lookup_type_str(type_map, name, idx) with Pure = {
+fn lookup_type_str(type_map, name, idx) = {
   if idx >= len(type_map) { "" }
   else {
     let (k, v) = type_map[idx]
@@ -650,18 +648,18 @@ fn lookup_type_str(type_map, name, idx) with Pure = {
   }
 }
 
-fn ctor_in(ctors, name, idx) with Pure = {
+fn ctor_in(ctors, name, idx) = {
   if idx >= len(ctors) { false }
   else { if ctors[idx] == name { true } else { ctor_in(ctors, name, idx + 1) } }
 }
 
-fn name_in(names, name, idx) with Pure = {
+fn name_in(names, name, idx) = {
   if idx >= len(names) { false }
   else { if names[idx] == name { true } else { name_in(names, name, idx + 1) } }
 }
 
 // Collect top-level names: fn and let bindings
-fn collect_top_names(stmts, idx) with Pure = {
+fn collect_top_names(stmts, idx) = {
   if idx >= len(stmts) { [] }
   else {
     let here = match stmts[idx] {
@@ -674,7 +672,7 @@ fn collect_top_names(stmts, idx) with Pure = {
   }
 }
 
-fn collect_effect_op_names(ops, idx) with Pure = {
+fn collect_effect_op_names(ops, idx) = {
   if idx >= len(ops) { [] }
   else {
     let (op_name, _) = ops[idx]

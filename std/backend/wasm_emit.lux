@@ -488,9 +488,8 @@ fn emit_stmt(stmt, params, locals, ctx) with Pure = match stmt {
   LConst(_) => "",
   LMakeTuple(_) => "",
   LBlock(stmts) => emit_stmts_void(stmts, 0, params, locals, ctx),
-  LCall(func, args) => emit_call_expr(func, args, params, locals, ctx) ++ "    drop" ++ NL,
-  LIf(_, _, _) => emit_expr(stmt, params, locals, ctx) ++ "    drop" ++ NL,
-  _ => emit_expr(stmt, params, locals, ctx)
+  // Everything else produces a value — drop it in void context
+  _ => emit_expr(stmt, params, locals, ctx) ++ "    drop" ++ NL
 }
 
 fn emit_const(v, ctx) with Pure = match v {
@@ -562,7 +561,14 @@ fn emit_call_expr(func, args, params, locals, ctx) with Pure = {
         }
       }
     },
-    _ => emit_args(args, 0, params, locals, ctx) ++ "    ;; indirect call TODO" ++ NL
+    _ => {
+      // Indirect call: func expr is a closure pointer (upval, local, etc.)
+      emit_expr(func, params, locals, ctx)  // push closure ptr (first arg)
+      ++ emit_args(args, 0, params, locals, ctx)  // push user args
+      ++ emit_expr(func, params, locals, ctx)  // push closure ptr again to load fn_idx
+      ++ "    i32.load" ++ NL
+      ++ "    call_indirect (type $fn" ++ to_string(len(args)) ++ ")" ++ NL
+    }
   }
 }
 

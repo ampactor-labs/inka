@@ -1,48 +1,93 @@
 // WASM Text Format (WAT) Emitter — LowIR → WAT
 //
-// Emits WAT (WebAssembly Text Format) from LowIR. WAT is just strings:
-//   (func $name (param i32) (param i32) (result i32)
-//     local.get 0
-//     local.get 1
-//     i32.add)
-//
-// Phase G of Arc 2. Start with pure integer functions,
-// expand to closures + memory as needed.
+// Emits WAT (WebAssembly Text Format) from LowIR. WAT is just strings.
+// Phase G of Arc 2. Targets WASI for standalone execution.
 
 import compiler/lower
 
 let NL = from_char_code(10)
+let DQ = from_char_code(34)
 
 // ─── Module Structure ───────────────────────────────────────
+// WASI module: imports fd_write, exports _start and memory.
+// String data in linear memory starting at offset 1024.
+// First 1024 bytes reserved for iov structs and scratch.
 
-fn emit_module(defs) with Pure =
+fn emit_module(defs) with Pure = {
+  let fns = collect_fns(defs, 0)
+  let top_stmts = collect_top_stmts(defs, 0)
+  let str_data = collect_strings(defs, 0, 1024)
+  let (segments, _) = str_data
   "(module" ++ NL
-    ++ emit_runtime_imports()
-    ++ emit_defs(defs, 0)
+    ++ emit_wasi_imports()
+    ++ "  (memory (export " ++ DQ ++ "memory" ++ DQ ++ ") 1)" ++ NL
+    ++ emit_string_data(segments, 0)
+    ++ emit_fn_list(fns, 0)
+    ++ emit_print_int()
+    ++ emit_print_str()
+    ++ emit_start(top_stmts)
     ++ ")" ++ NL
-
-fn emit_runtime_imports() with Pure =
-  '  (import "runtime" "print_int" (func $print_int (param i32)))' ++ NL
-  ++ '  (import "runtime" "print_str" (func $print_str (param i32)))' ++ NL
-
-// ─── Definition Emission ────────────────────────────────────
-
-fn emit_defs(defs, idx) with Pure = {
-  if idx >= len(defs) { "" }
-  else { emit_def(defs[idx]) ++ emit_defs(defs, idx + 1) }
 }
 
-fn emit_def(d) with Pure = match d {
-  LLet(name, value) => emit_let_def(name, value),
-  _ => ""
+fn emit_wasi_imports() with Pure =
+  "  (import " ++ DQ ++ "wasi_snapshot_preview1" ++ DQ ++ " " ++ DQ ++ "fd_write" ++ DQ
+    ++ " (func $fd_write (param i32 i32 i32 i32) (result i32)))" ++ NL
+
+// ─── String Data Segments ───────────────────────────────────
+// Strings stored as length-prefixed bytes in linear memory.
+// Pointer = offset. String = (offset, length) pair packed as i32.
+
+fn collect_strings(defs, idx, offset) with Pure = {
+  // TODO: walk LowIR collecting string constants
+  // For now: return empty segments
+  ([], offset)
 }
 
-fn emit_let_def(name, value) with Pure = match value {
-  LMakeClosure(fn_def, _) => emit_fn(fn_def),
-  _ => "  ;; global: " ++ name ++ NL
+fn emit_string_data(segments, idx) with Pure = {
+  if idx >= len(segments) { "" }
+  else {
+    let (offset, text) = segments[idx]
+    "  (data (i32.const " ++ to_string(offset) ++ ") " ++ DQ ++ text ++ DQ ++ ")" ++ NL
+      ++ emit_string_data(segments, idx + 1)
+  }
+}
+
+// ─── Collect Functions and Top-Level Statements ─────────────
+
+fn collect_fns(defs, idx) with Pure = {
+  if idx >= len(defs) { [] }
+  else {
+    let rest = collect_fns(defs, idx + 1)
+    match defs[idx] {
+      LLet(name, value) => match value {
+        LMakeClosure(fn_def, _) => [fn_def] ++ rest,
+        _ => rest
+      },
+      _ => rest
+    }
+  }
+}
+
+fn collect_top_stmts(defs, idx) with Pure = {
+  if idx >= len(defs) { [] }
+  else {
+    let rest = collect_top_stmts(defs, idx + 1)
+    match defs[idx] {
+      LLet(name, value) => match value {
+        LMakeClosure(_, _) => rest,
+        _ => [defs[idx]] ++ rest
+      },
+      _ => [defs[idx]] ++ rest
+    }
+  }
 }
 
 // ─── Function Emission ──────────────────────────────────────
+
+fn emit_fn_list(fns, idx) with Pure = {
+  if idx >= len(fns) { "" }
+  else { emit_fn(fns[idx]) ++ emit_fn_list(fns, idx + 1) }
+}
 
 fn emit_fn(fn_def) with Pure = {
   let LFn(name, arity, params, body) = fn_def
@@ -51,21 +96,122 @@ fn emit_fn(fn_def) with Pure = {
     ++ " (result i32)" ++ NL
     ++ emit_body(body, params)
     ++ "  )" ++ NL
-    ++ emit_export(name)
 }
-
-let DQ = from_char_code(34)
-
-fn emit_export(name) with Pure =
-  "  (export " ++ DQ ++ name ++ DQ ++ " (func $" ++ name ++ "))" ++ NL
 
 fn emit_params(params, idx) with Pure = {
   if idx >= len(params) { "" }
   else { " (param $" ++ params[idx] ++ " i32)" ++ emit_params(params, idx + 1) }
 }
 
+// ─── Runtime: print_int via fd_write ────────────────────────
+// Converts integer to decimal string in scratch memory, writes to stdout.
+
+fn emit_print_int() with Pure =
+  "  (func $print_int (param $n i32)" ++ NL
+  ++ "    (local $ptr i32) (local $len i32) (local $digit i32) (local $neg i32)" ++ NL
+  ++ "    (local $tmp i32)" ++ NL
+  ++ "    ;; write decimal digits to scratch at offset 256, right to left" ++ NL
+  ++ "    (local.set $ptr (i32.const 300))" ++ NL
+  ++ "    ;; handle negative" ++ NL
+  ++ "    (if (i32.lt_s (local.get $n) (i32.const 0))" ++ NL
+  ++ "      (then (local.set $neg (i32.const 1)) (local.set $n (i32.sub (i32.const 0) (local.get $n)))))" ++ NL
+  ++ "    ;; handle zero" ++ NL
+  ++ "    (if (i32.eqz (local.get $n))" ++ NL
+  ++ "      (then" ++ NL
+  ++ "        (i32.store8 (local.get $ptr) (i32.const 48))" ++ NL
+  ++ "        (local.set $ptr (i32.add (local.get $ptr) (i32.const 1)))" ++ NL
+  ++ "      )" ++ NL
+  ++ "      (else" ++ NL
+  ++ "        (block $done (loop $digits" ++ NL
+  ++ "          (br_if $done (i32.eqz (local.get $n)))" ++ NL
+  ++ "          (local.set $digit (i32.rem_u (local.get $n) (i32.const 10)))" ++ NL
+  ++ "          (local.set $n (i32.div_u (local.get $n) (i32.const 10)))" ++ NL
+  ++ "          (i32.store8 (local.get $ptr) (i32.add (i32.const 48) (local.get $digit)))" ++ NL
+  ++ "          (local.set $ptr (i32.add (local.get $ptr) (i32.const 1)))" ++ NL
+  ++ "          (br $digits)" ++ NL
+  ++ "        ))" ++ NL
+  ++ "      )" ++ NL
+  ++ "    )" ++ NL
+  ++ "    ;; add minus sign" ++ NL
+  ++ "    (if (local.get $neg)" ++ NL
+  ++ "      (then (i32.store8 (local.get $ptr) (i32.const 45))" ++ NL
+  ++ "        (local.set $ptr (i32.add (local.get $ptr) (i32.const 1)))))" ++ NL
+  ++ "    ;; reverse: digits are backwards, copy to offset 200" ++ NL
+  ++ "    (local.set $len (i32.sub (local.get $ptr) (i32.const 300)))" ++ NL
+  ++ "    (local.set $tmp (i32.const 0))" ++ NL
+  ++ "    (block $rdone (loop $rev" ++ NL
+  ++ "      (br_if $rdone (i32.ge_u (local.get $tmp) (local.get $len)))" ++ NL
+  ++ "      (i32.store8 (i32.add (i32.const 200) (local.get $tmp))" ++ NL
+  ++ "        (i32.load8_u (i32.sub (i32.sub (local.get $ptr) (i32.const 1)) (local.get $tmp))))" ++ NL
+  ++ "      (local.set $tmp (i32.add (local.get $tmp) (i32.const 1)))" ++ NL
+  ++ "      (br $rev)" ++ NL
+  ++ "    ))" ++ NL
+  ++ "    ;; add newline" ++ NL
+  ++ "    (i32.store8 (i32.add (i32.const 200) (local.get $len)) (i32.const 10))" ++ NL
+  ++ "    (local.set $len (i32.add (local.get $len) (i32.const 1)))" ++ NL
+  ++ "    ;; write iov: ptr=200, len" ++ NL
+  ++ "    (i32.store (i32.const 0) (i32.const 200))" ++ NL
+  ++ "    (i32.store (i32.const 4) (local.get $len))" ++ NL
+  ++ "    ;; fd_write(stdout=1, iovs=0, iovs_len=1, nwritten=8)" ++ NL
+  ++ "    (drop (call $fd_write (i32.const 1) (i32.const 0) (i32.const 1) (i32.const 8)))" ++ NL
+  ++ "  )" ++ NL
+
+fn emit_print_str() with Pure =
+  "  (func $print_str (param $ptr i32) (param $len i32)" ++ NL
+  ++ "    ;; write iov" ++ NL
+  ++ "    (i32.store (i32.const 0) (local.get $ptr))" ++ NL
+  ++ "    (i32.store (i32.const 4) (local.get $len))" ++ NL
+  ++ "    (drop (call $fd_write (i32.const 1) (i32.const 0) (i32.const 1) (i32.const 8)))" ++ NL
+  ++ "  )" ++ NL
+
+// ─── _start Function ────────────────────────────────────────
+// Runs top-level statements (let bindings, expression stmts).
+
+fn emit_start(stmts) with Pure =
+  "  (func $_start (export " ++ DQ ++ "_start" ++ DQ ++ ")" ++ NL
+    ++ emit_start_body(stmts, 0)
+    ++ "  )" ++ NL
+
+fn emit_start_body(stmts, idx) with Pure = {
+  if idx >= len(stmts) { "" }
+  else { emit_start_stmt(stmts[idx]) ++ emit_start_body(stmts, idx + 1) }
+}
+
+fn emit_start_stmt(stmt) with Pure = match stmt {
+  LLet(name, value) => emit_start_expr(value),
+  _ => emit_start_expr(stmt)
+}
+
+fn emit_start_expr(e) with Pure = match e {
+  LCall(func, args) => {
+    match func {
+      LGlobal("println") => emit_println_call(args),
+      LGlobal("to_string") => emit_expr_wat(args[0], []),
+      LGlobal(name) => emit_args(args, [], 0) ++ "    call $" ++ name ++ NL ++ "    drop" ++ NL,
+      _ => "    ;; start expr TODO" ++ NL
+    }
+  },
+  _ => "    ;; start: unhandled" ++ NL
+}
+
+fn emit_println_call(args) with Pure = {
+  if len(args) == 0 { "" }
+  else {
+    // If arg is to_string(call), emit the call and print_int
+    match args[0] {
+      LCall(func, inner_args) => match func {
+        LGlobal("to_string") => {
+          emit_expr_wat(inner_args[0], [])
+            ++ "    call $print_int" ++ NL
+        },
+        _ => emit_expr_wat(args[0], []) ++ "    call $print_int" ++ NL
+      },
+      _ => emit_expr_wat(args[0], []) ++ "    call $print_int" ++ NL
+    }
+  }
+}
+
 // ─── Body Emission ──────────────────────────────────────────
-// WAT is stack-based: expressions push values, operators pop and push.
 
 fn emit_body(stmts, params) with Pure = {
   if len(stmts) == 0 { "    i32.const 0" ++ NL }
@@ -105,9 +251,7 @@ fn find_param_idx(params, name, idx) with Pure = {
 
 fn emit_compound(e, params) with Pure = match e {
   LBinOp(op, l, r) => {
-    emit_expr_wat(l, params)
-      ++ emit_expr_wat(r, params)
-      ++ emit_binop(op)
+    emit_expr_wat(l, params) ++ emit_expr_wat(r, params) ++ emit_binop(op)
   },
   LUnaryOp(op, inner) => emit_unary(op, inner, params),
   LCall(func, args) => emit_call(func, args, params),
@@ -131,14 +275,18 @@ fn emit_binop(op) with Pure = match op {
   "Sub" => "    i32.sub" ++ NL,
   "Mul" => "    i32.mul" ++ NL,
   "Div" => "    i32.div_s" ++ NL,
-  "Mod" => "    i32.rem_s" ++ NL,
-  _ => emit_compare(op)
+  _ => emit_binop2(op)
 }
 
-fn emit_compare(op) with Pure = match op {
+fn emit_binop2(op) with Pure = match op {
+  "Mod" => "    i32.rem_s" ++ NL,
   "Eq" => "    i32.eq" ++ NL,
   "Neq" => "    i32.ne" ++ NL,
   "Lt" => "    i32.lt_s" ++ NL,
+  _ => emit_binop3(op)
+}
+
+fn emit_binop3(op) with Pure = match op {
   "LtEq" => "    i32.le_s" ++ NL,
   "Gt" => "    i32.gt_s" ++ NL,
   "GtEq" => "    i32.ge_s" ++ NL,

@@ -1,30 +1,84 @@
+// LowIR Pretty Printer
 import compiler/lower
 
 let NL = from_char_code(10)
 
-fn print_value(v) with Pure = match v {
+fn pv(v) with Pure = match v {
   LInt(n) => to_string(n),
   LBool(b) => if b { "true" } else { "false" },
   LUnit => "()",
   _ => "?"
 }
 
-fn print_expr(e) with Pure = match e {
-  LConst(v) => print_value(v),
-  LLocal(slot) => "$" ++ to_string(slot),
-  LBinOp(op, l, r) => "(" ++ print_expr(l) ++ " " ++ op ++ " " ++ print_expr(r) ++ ")",
-  _ => "?"
+fn pe_atom(e) with Pure = match e {
+  LConst(v) => pv(v),
+  LLocal(s) => "$" ++ to_string(s),
+  LStore(s, v) => "$" ++ to_string(s) ++ " = " ++ pe(v),
+  _ => ""
 }
 
-fn map_print(exprs) with Pure = {
-  if len(exprs) == 0 { [] }
-  else { [print_expr(exprs[0])] ++ map_print(slice(exprs, 1, len(exprs))) }
+fn pe_op(e) with Pure = match e {
+  LBinOp(op, l, r) => "(" ++ pe(l) ++ " " ++ op ++ " " ++ pe(r) ++ ")",
+  LUnaryOp(op, x) => op ++ pe(x),
+  _ => ""
 }
 
-fn join_strs(strs, sep) with Pure = {
-  if len(strs) == 0 { "" }
-  else { if len(strs) == 1 { strs[0] }
-  else { strs[0] ++ sep ++ join_strs(slice(strs, 1, len(strs)), sep) }}
+fn pe_fn(e) with Pure = match e {
+  LCall(f, args) => pe(f) ++ "(" ++ js(mp(args), ", ") ++ ")",
+  LReturn(v) => "return " ++ pe(v),
+  LMakeClosure(d, _) => {
+    let LFn(n, a, _, _) = d
+    "fn " ++ n ++ "/" ++ to_string(a)
+  },
+  _ => ""
 }
 
-fn print_lowered(stmts) with Pure = join_strs(map_print(stmts), NL)
+fn pe_coll(e) with Pure = match e {
+  LMakeList(es) => "[" ++ js(mp(es), ", ") ++ "]",
+  LMakeTuple(es) => "(" ++ js(mp(es), ", ") ++ ")",
+  LMakeVariant(n, fs) => n ++ "(" ++ js(mp(fs), ", ") ++ ")",
+  LIndex(c, i) => pe(c) ++ "[" ++ pe(i) ++ "]",
+  _ => ""
+}
+
+fn pe_ctrl(e) with Pure = match e {
+  LBlock(ss) => '{ ' ++ js(mp(ss), "; ") ++ ' }',
+  LMatch(s, _) => "match " ++ pe(s) ++ ' { .. }',
+  _ => pe_state(e)
+}
+
+fn pe_state(e) with Pure = match e {
+  LStateGet(i) => "state[" ++ to_string(i) ++ "]",
+  LStateSet(i, v) => "state[" ++ to_string(i) ++ "] = " ++ pe(v),
+  _ => ""
+}
+
+fn pe(e) with Pure = {
+  let a = pe_atom(e)
+  if a != "" { a }
+  else { let b = pe_op(e)
+  if b != "" { b }
+  else { let c = pe_fn(e)
+  if c != "" { c }
+  else { let d = pe_coll(e)
+  if d != "" { d }
+  else { let f = pe_ctrl(e)
+  if f != "" { f }
+  else { "?" } }}}}
+}
+
+fn mp(es) with Pure = {
+  if len(es) == 0 { [] }
+  else { [pe(es[0])] ++ mp(slice(es, 1, len(es))) }
+}
+
+fn js(ss, sep) with Pure = {
+  if len(ss) == 0 { "" }
+  else { if len(ss) == 1 { ss[0] }
+  else { ss[0] ++ sep ++ js(slice(ss, 1, len(ss)), sep) }}
+}
+
+fn print_lowered(stmts) with Pure = js(mp(stmts), NL)
+
+// Public aliases
+fn print_expr(e) with Pure = pe(e)

@@ -24,6 +24,14 @@ import compiler/checker_ownership
 import compiler/checker_suggest
 import compiler/solver
 
+// ─── Diagnostic Effect ──────────────────────────────────────
+// All checker output flows through this single effect.
+// Handlers decide presentation: println, collect, silence, IDE protocol.
+
+effect Diagnostic {
+  report(source: String, kind: String, msg: String, line: Int, col: Int) -> ()
+}
+
 // ─── Type Representation ─────────────────────────────────────
 
 type Ty
@@ -285,7 +293,7 @@ fn infer_expr(env, subst, counter, sexpr) = {
       let _ = if similar != "" {
         let msg = "unknown variable '" ++ name ++ "' — did you mean '" ++ similar ++ "'?"
         let source = env_source(env)
-        println(format_diagnostic(source, "Error", msg, line, col))
+        report(source, "Error", msg, line, col)
       } else { () }
       let (tv, c2) = fresh_var(counter)
       let (c2_id, _) = c2
@@ -423,7 +431,7 @@ fn infer_expr(env, subst, counter, sexpr) = {
       let _ = if len(missing) > 0 {
         let source = env_source(env)
         let msg = "non-exhaustive match — missing: " ++ join(missing, ", ")
-        println(format_diagnostic(source, "Warning", msg, line, col))
+        report(source, "Warning", msg, line, col)
       } else { () }
       (apply(s_final, result_ty), s_final, c_final, Because("match expression", result_reason), all_effs)
     }
@@ -542,7 +550,7 @@ fn check_block_stmts(env, subst, counter, stmts) with Pure = {
 
 // ─── Statement Checking ──────────────────────────────────────
 
-fn check_stmt(env, subst, counter, stmt) = match stmt {
+fn check_stmt(env, subst, counter, stmt) with Pure = match stmt {
   LetStmt(name, value) => {
     let (ty, s1, c1, reason, eff) = infer_expr(env, subst, counter, value)
     let new_env = env_extend(env, name, apply(s1, ty), Because("let " ++ name ++ " = ..", reason))
@@ -667,17 +675,17 @@ fn report_effect_violations(source, violations) = {
   else {
     match violations[0] {
       EffNegationViolated(fn_name, eff_name) => {
-        println(format_diagnostic(source, "effect error",
-          "'" ++ fn_name ++ "' declares !" ++ eff_name ++ " but performs " ++ eff_name, 0, 0))
-        println("  hint: wrap the " ++ eff_name ++ "-performing code in a handler to absorb it")
+        let _ = report(source, "effect error",
+          "'" ++ fn_name ++ "' declares !" ++ eff_name ++ " but performs " ++ eff_name, 0, 0)
+        report("", "Raw", "  hint: wrap the " ++ eff_name ++ "-performing code in a handler to absorb it", 0, 0)
       },
       EffOpenRowNegation(fn_name, eff_name) => {
-        println(format_diagnostic(source, "effect error",
-          "'" ++ fn_name ++ "' declares !" ++ eff_name ++ " but effect row is open — cannot prove absence", 0, 0))
+        report(source, "effect error",
+          "'" ++ fn_name ++ "' declares !" ++ eff_name ++ " but effect row is open — cannot prove absence", 0, 0)
       },
       EffPurityViolated(fn_name, effs) => {
-        println(format_diagnostic(source, "effect error",
-          "'" ++ fn_name ++ "' declares Pure but performs: " ++ join(effs, ", "), 0, 0))
+        report(source, "effect error",
+          "'" ++ fn_name ++ "' declares Pure but performs: " ++ join(effs, ", "), 0, 0)
       },
       _ => ()
     };
@@ -692,22 +700,22 @@ fn report_ownership_violations(source, fn_name, violations) = {
   else {
     match violations[0] {
       ConsumedTwice(name, first_line, second_line) => {
-        println(format_diagnostic(source, "ownership error",
+        let _ = report(source, "ownership error",
           "'" ++ name ++ "' is own in '" ++ fn_name ++ "' but used more than once",
-          second_line, 1))
-        if first_line > 0 {
-          println("  first use: line " ++ to_string(first_line))
+          second_line, 1)
+        let _ = if first_line > 0 {
+          report("", "Raw", "  first use: line " ++ to_string(first_line), 0, 0)
         } else { () }
-        println("  hint: clone before second use, or change to ref")
+        report("", "Raw", "  hint: clone before second use, or change to ref", 0, 0)
       },
-      RefEscaped(name, line) => {
-        println(format_diagnostic(source, "ownership error",
+      RefEscaped(name, ref_line) => {
+        let _ = report(source, "ownership error",
           "'" ++ name ++ "' is ref in '" ++ fn_name ++ "' but escapes via return",
-          line, 1))
-        println("  hint: change to own if the caller should transfer ownership")
+          ref_line, 1)
+        report("", "Raw", "  hint: change to own if the caller should transfer ownership", 0, 0)
       },
       OwnNeverConsumed(name) =>
-        println("  -> own '" ++ name ++ "' in '" ++ fn_name ++ "' is never used (will be dropped)"),
+        report("", "Raw", "  -> own '" ++ name ++ "' in '" ++ fn_name ++ "' is never used (will be dropped)", 0, 0),
       _ => ()
     };
     report_ownership_violations(source, fn_name, slice(violations, 1, len(violations)))
@@ -914,18 +922,34 @@ fn register_type_variants(env, counter, type_name, variants) with Pure = {
 
 // ─── Program Checking ────────────────────────────────────────
 
-fn check_program(stmts) = {
+fn check_program(stmts) with Pure = {
   let env = env_empty()
   let subst = subst_empty()
   let counter = (0, eff_subst_empty())
-  check_stmts(env, subst, counter, stmts)
+  handle { check_stmts(env, subst, counter, stmts) } {
+    report(src, kind, msg, line, col) => {
+      let output = if kind == "Refinement" { "[refinement] " ++ msg }
+        else { if kind == "Raw" { msg }
+        else { format_diagnostic(src, kind, msg, line, col) }}
+      println(output)
+      resume(())
+    }
+  }
 }
 
-fn check_program_with_source(stmts, source) = {
-  let env = env_with_source(env_empty(), source)
+fn check_program_with_source(stmts, src_text) with Pure = {
+  let env = env_with_source(env_empty(), src_text)
   let subst = subst_empty()
   let counter = (0, eff_subst_empty())
-  check_stmts(env, subst, counter, stmts)
+  handle { check_stmts(env, subst, counter, stmts) } {
+    report(src, kind, msg, line, col) => {
+      let output = if kind == "Refinement" { "[refinement] " ++ msg }
+        else { if kind == "Raw" { msg }
+        else { format_diagnostic(src, kind, msg, line, col) }}
+      println(output)
+      resume(())
+    }
+  }
 }
 
 // ─── Diagnostic Formatting ──────────────────────────────────
@@ -950,10 +974,10 @@ fn format_diagnostic(source, kind, msg, line, col) with Pure = {
 
 fn repeat_char(ch, n) with Pure = if n <= 0 { "" } else { ch ++ repeat_char(ch, n - 1) }
 
-fn check_stmts(env, subst, counter, stmts) =
+fn check_stmts(env, subst, counter, stmts) with Pure =
   check_stmts_with_aliases(env, subst, counter, stmts, [])
 
-fn check_stmts_with_aliases(env, subst, counter, stmts, aliases) = {
+fn check_stmts_with_aliases(env, subst, counter, stmts, aliases) with Pure = {
   if len(stmts) == 0 { (env, subst, counter) }
   else {
     let stmt = stmts[0]
@@ -971,7 +995,7 @@ fn check_stmts_with_aliases(env, subst, counter, stmts, aliases) = {
   }
 }
 
-fn verify_let_refinements(env, name, value, aliases) =
+fn verify_let_refinements(env, name, value, aliases) with Pure =
   verify_aliases_loop(env, name, value, aliases)
 
 fn verify_aliases_loop(env, name, value, aliases) = {
@@ -988,9 +1012,9 @@ fn verify_aliases_loop(env, name, value, aliases) = {
       let result = check_refinement(predicate, value)
       match result {
         Disproven(reason) =>
-          println("[refinement] " ++ alias_name ++ " violation: " ++ name ++ " -- " ++ reason),
+          report("", "Refinement", alias_name ++ " violation: " ++ name ++ " -- " ++ reason, 0, 0),
         Proven =>
-          println("[refinement] " ++ alias_name ++ " satisfied: " ++ name),
+          report("", "Refinement", alias_name ++ " satisfied: " ++ name, 0, 0),
         _ => ()
       }
     } else { () }

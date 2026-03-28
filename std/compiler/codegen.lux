@@ -8,8 +8,8 @@
 // the bytecode buffer, scope stack, and constant pool.
 
 import compiler/lexer
-import compiler/checker
 import compiler/parser
+import compiler/checker
 
 // ─── Opcodes ─────────────────────────────────────────────────
 // Numeric constants matching the Rust VM's OpCode enum.
@@ -1174,7 +1174,10 @@ fn pad_num(n, width) = {
 }
 
 // ─── Full Pipeline ───────────────────────────────────────────
-// parse → compile → disassemble
+// These wrappers call check_program — imported via pipeline.lux, not here.
+// Codegen only needs the AST types from parser. The checker dependency
+// is severed so the codegen can compile to WASM without pulling in
+// the entire type inference engine.
 
 fn compile(source) = {
   let stmts = parse(source)
@@ -1190,6 +1193,7 @@ fn compile_checked(source) = {
 }
 
 fn compile_and_show(source) = {
-  let chunk = compile(source)
+  let stmts = parse(source)
+  let chunk = compile_program(stmts)
   disassemble(chunk)
 }

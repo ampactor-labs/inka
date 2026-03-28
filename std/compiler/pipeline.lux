@@ -59,6 +59,20 @@ fn compile_standard(source) =
     generate(checked, ast) => resume(compile_program(ast))
   }
 
+// Convenience wrappers (moved from codegen — they need the checker)
+fn compile(source) = {
+  let stmts = parse(source)
+  let (_env, _subst, _counter) = check_program(stmts)
+  compile_program(stmts)
+}
+
+fn compile_checked(source) = {
+  let stmts = parse(source)
+  let check_result = check_program(stmts)
+  let chunk = compile_program(stmts)
+  (chunk, check_result)
+}
+
 // ─── Handler: Teaching ───────────────────────────────────────
 // Infer types, show what the compiler learned, suggest ONE
 // annotation that would unlock the most power.

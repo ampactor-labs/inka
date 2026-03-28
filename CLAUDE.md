@@ -30,10 +30,12 @@ special cases, the architecture is wrong.
 > Full manifesto: `docs/DESIGN.md`
 > Full roadmap: `docs/ROADMAP.md`
 
-## STATE OF THE WORLD — Last Updated: 2026-03-26
+## STATE OF THE WORLD — Last Updated: 2026-03-27
 
-**THE LETTING GO IS COMPLETE.** The Rust type checker has been deleted.
-The self-hosted pipeline is now the only intelligence. Lux thinks in Lux.
+**THE COMPILER VERIFIES ITSELF.** 272 functions across 9 compiler modules
+proven pure. The Diagnostic effect makes the inference engine externally
+pure. The compiler reads its own source, checks its own types, and proves
+its own purity — using the same mechanisms it enforces on user code.
 
 | Subsystem | Status | Notes |
 |-----------|--------|-------|
@@ -68,13 +70,18 @@ The self-hosted pipeline is now the only intelligence. Lux thinks in Lux.
 | Refinement solver | ✅ Working | `solver.lux` — Proven/Disproven/Unknown, compile-time predicate verification |
 | Ownership enforcement | ✅ Working | `own` = affine (linear), `ref` = scoped (no escape), tracked through effect system, self-hosted walk_expr |
 | **AST spans (SExpr)** | ✅ **Working** | `S(Expr, line, col)` wrapper on all 29 parser sites, source-context diagnostics |
+| **Diagnostic effect** | ✅ **Working** | `effect Diagnostic { report(...) }` — all checker output flows through effect, handled at check_program boundary |
 | **Diagnostic architecture** | ✅ **Working** | `format_diagnostic` with source line + caret, structured EffectViolation type |
+| **Self-checking** | ✅ **Working** | `lux check std/compiler/*.lux` — zero parse errors, all 10 modules type-check |
+| **Purity proofs** | ✅ **272 functions** | 9/10 compiler modules fully annotated `with Pure`; inference engine externally pure |
+| **Constructor let-patterns** | ✅ **Working** | `let S(e, l, c) = sexpr` — LetPattern(Pat, Expr) Stmt variant |
+| **Tuple match patterns** | ✅ **Working** | `(name, _) => name` — PTuple(List) Pat variant |
 | `!Alloc` transitivity | ✅ Working | Resolve-then-check, open-row rejection. Approach B (inferred): algebra resolves callee effects |
 | Refinement types | ✅ Working | `type Byte = Int where 0 <= self && self <= 255` — syntax, solver, compile-time verification of literals |
 
-**Achieved**: Everything above, plus: **Rust checker deleted** (Arc 1 complete), **self-hosted pipeline as default** (27/30 oracle parity, 0 mismatches), **did-you-mean suggestions** (Levenshtein in checker_suggest.lux), **exhaustive match analysis** (ADT variant coverage), **refinement solver** (solver.lux, compile-time predicate verification), **oracle parity test** (self-hosted vs Rust behavioral verification).
+**Achieved**: Everything above, plus: **Rust checker deleted** (Arc 1 complete), **self-hosted pipeline as default** (27/30 oracle parity, 0 mismatches), **did-you-mean suggestions** (Levenshtein in checker_suggest.lux), **exhaustive match analysis** (ADT variant coverage), **refinement solver** (solver.lux, compile-time predicate verification), **oracle parity test** (self-hosted vs Rust behavioral verification), **self-checking** (compiler parses/checks its own source — zero errors), **272 purity proofs** (Arc 3 Phase 2 complete), **Diagnostic effect** (inference engine externally pure).
 
-**Next**: Arc 2 (kill the Rust runtime: LowIR → WASM → self-containment), Arc 3 (compound interest: compiler verifies itself).
+**Next**: Arc 2 (kill the Rust runtime: LowIR → WASM → self-containment). Arc 3 Phase 2 complete; Phase 3 (ownership annotations) and Phase 4 (dashboard) remain.
 
 ## READ THIS FIRST — What Lux IS
 
@@ -266,8 +273,8 @@ Standard library: `std/prelude.lux`, `std/test.lux`, `std/types.lux`, `std/vm.lu
 | File | Owns |
 |------|------|
 | `std/compiler/lexer.lux` | Self-hosted tokenizer |
-| `std/compiler/parser.lux` | Self-hosted recursive descent parser (ADT-based AST, TypeAliasStmt) |
-| `std/compiler/checker.lux` | Self-hosted HM type checker + Why Engine + gradient engine |
+| `std/compiler/parser.lux` | Self-hosted recursive descent parser (ADT-based AST, LetPattern, PTuple, TypeAliasStmt) |
+| `std/compiler/checker.lux` | Self-hosted HM type checker + Why Engine + Diagnostic effect (51/58 fns Pure) |
 | `std/compiler/checker_effects.lux` | Effect row algebra: merge, unify, negate, constrain, eff_subst |
 | `std/compiler/checker_ownership.lux` | Ownership tracking: affine/scoped checking stubs |
 | `std/compiler/checker_suggest.lux` | Did-you-mean (Levenshtein) + exhaustive match analysis |
@@ -393,6 +400,10 @@ fn safe_v2(x: Float) -> Float with DSP - Network - Alloc { ... }  // subtraction
 | 17 | Oracle parity — self-hosted vs Rust pipeline verification. 27/30 match, 0 mismatches. 3 cases where self-hosted surpasses Rust (!Alloc transitivity). | 26a412d |
 | 18 | Self-hosted pipeline as default — `lux run` and `lux check` route through self-hosted by default. `needs_no_check` list removed. All 42 tests pass. | c26b942 |
 | 19 | **Rust checker deleted** — 4,200 lines of scaffolding retired. 5,405 total lines removed. The self-hosted checker is the only intelligence. The student surpassed the teacher. | c84cd43 |
+| 20A | Self-hosted let-patterns — `LetPattern(Pat, Expr)` Stmt variant. Constructor destructuring in let bindings (`let S(e, l, c) = sexpr`). Unblocked self-checking: 8/10 modules pass `lux check`. | 277b291 |
+| 20B | Tuple match patterns — `PTuple(List)` Pat variant. `(name, _) => name` in match arms. Zero parse errors across all 10 compiler modules. | 03244d0 |
+| 21 | **Arc 3 Phase 2: Effect purity** — 272 functions across 9 modules annotated `with Pure`. Gradient engine fixed to see its own annotations (AST passthrough). checker_effects.lux first module at 100%. All modules annotated: lexer, parser, codegen (all-pure), checker (51/58), solver, suggest, ownership, gradient (all-pure). | 15be0d0..4718c09 |
+| 22 | **Diagnostic effect** — `effect Diagnostic { report(source, kind, msg, line, col) -> () }`. All 11 println sites in checker replaced with effect operations. Handler at `check_program` boundary renders output. Inference engine (`infer_expr → check_stmt → check_program`) externally pure. 6 more functions gain `with Pure`. | e2bebb9 |
 
 ## Roadmap
 
@@ -411,12 +422,12 @@ fn safe_v2(x: Float) -> Float with DSP - Network - Alloc { ... }  // subtraction
 | Phase G | WASM emitter (LowIR → WAT → WASM) | Pending |
 | Phase H | WASM bootstrap (compiler self-compiles to WASM) | Pending |
 | Phase I | Delete Rust VM + Cargo.toml (`rm -rf src/`) | Pending |
-| **Arc 3: Compound Interest** | Compiler verifies itself (parallel to Arc 2) | Starting |
-| Step 1 | Run `lux --teach` on each compiler module, add suggested annotations | Next |
-| Step 2 | Refinement types on compiler internals (Opcode, StackDepth, FreshId) | Pending |
-| Step 3 | Effect purity on checker functions (`infer_expr → Pure`) | Pending |
-| Step 4 | Ownership on compiler data (`own` env, `ref` tokens) | Pending |
-| Step 5 | Self-verification score dashboard: % annotated → target 100% | Pending |
+| **Arc 3: Compound Interest** | Compiler verifies itself (parallel to Arc 2) | **Phase 2 complete** |
+| Step 1 | Refinement types on compiler internals (Opcode, StackDepth, FreshId) | ✅ Done (2a9c60a, 6e86451) |
+| Step 2 | Effect purity on all compiler modules (272 functions `with Pure`) | ✅ Done (15be0d0..e2bebb9) |
+| Step 2+ | Diagnostic effect — inference engine externally pure | ✅ Done (e2bebb9) |
+| Step 3 | Ownership on compiler data (`own` env, `ref` tokens) | Pending |
+| Step 4 | Self-verification score dashboard: % annotated → target 100% | Pending |
 
 ## Doc-to-Code Mapping
 

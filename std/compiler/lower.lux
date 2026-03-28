@@ -1,0 +1,122 @@
+// LowIR — The representation where effects become control flow
+//
+// Between AST and WASM. No handler stack, no stack unwinding, no
+// continuation replay. Just Loop, Switch, State, Call.
+//
+// The Rust VM's `Perform` does a non-local unwind across arbitrary
+// call frame depth. WASM can't do that. LowIR makes the state
+// machine explicit: every Perform site becomes a numbered state
+// in a loop/switch. Resume becomes "update state struct + goto
+// loop header."
+//
+// Three-tier handler strategy (same classification as the Rust compiler):
+//   Tail-resumptive (~85%): op(x) => resume(f(x))  →  direct LCall
+//   Linear (single-shot):   resume once, not tail   →  Loop + Switch
+//   Multi-shot:             resume 0 or 2+ times    →  Loop + Switch + clone
+//
+// The common case (tail-resumptive) has ZERO overhead in LowIR.
+// State machines are only for the minority that capture continuations.
+
+// ─── Value Representation ───────────────────────────────────
+// LowIR values are unboxed where possible. The WASM emitter
+// maps these to i32/f64/reference types.
+
+type LowValue
+  = LInt(Int)
+  | LFloat(Float)
+  | LString(String)
+  | LBool(Bool)
+  | LUnit
+  | LNone
+
+// ─── Patterns ───────────────────────────────────────────────
+// Match patterns in LowIR — same structure as AST patterns,
+// but decoupled for backend independence.
+
+type LowPat
+  = LPVar(String)
+  | LPWild
+  | LPCon(String, List)
+  | LPLit(LowValue)
+  | LPTuple(List)
+
+// ─── Core IR ────────────────────────────────────────────────
+// Every node is a value-producing expression. Sequencing is
+// LBlock. Side effects are explicit (LStore, LStateSet).
+// No Perform, no Resume, no PushHandler — those are gone.
+
+type LowExpr
+  // ── Scalars ──
+  = LConst(LowValue)
+  | LLocal(Int)                            // read local slot
+  | LStore(Int, LowExpr)                   // write local slot, returns value
+  | LUpval(Int)                            // read captured upvalue
+  // ── Arithmetic / logic ──
+  | LBinOp(String, LowExpr, LowExpr)      // op: +, -, *, /, %, ==, !=, <, <=, >, >=, ++
+  | LUnaryOp(String, LowExpr)             // op: -, !
+  // ── Functions ──
+  | LCall(LowExpr, List)                   // call(func, [args])
+  | LTailCall(LowExpr, List)              // tail call — reuses frame
+  | LReturn(LowExpr)                       // return from function
+  | LMakeClosure(LowFn, List)             // closure(fn_def, [upvalue_exprs])
+  // ── Control flow ──
+  | LIf(LowExpr, List, List)              // if(cond, then_block, else_block)
+  | LBlock(List)                           // sequence of LowExpr, last is value
+  // ── Collections ──
+  | LMakeList(List)                        // [e1, e2, ...]
+  | LMakeTuple(List)                       // (e1, e2, ...)
+  | LMakeVariant(String, List)             // Ctor(e1, e2, ...)
+  | LIndex(LowExpr, LowExpr)              // collection[index]
+  // ── Pattern matching ──
+  | LMatch(LowExpr, List)                 // match(scrutinee, [(LowPat, LowExpr)])
+  // ── State machine (from effect handler lowering) ──
+  | LLoop(List)                            // loop { body_block }
+  | LBreak(LowExpr)                        // break with value — exits innermost loop
+  | LSwitch(LowExpr, List)                // switch(state_var, [(Int, LowExpr)])
+  | LSuspend(Int, LowExpr, List)           // suspend(state_id, yield_value, [live_local_slots])
+  | LStateGet(Int)                         // read state struct field by index
+  | LStateSet(Int, LowExpr)               // write state struct field by index
+
+// ─── Functions ──────────────────────────────────────────────
+
+type LowFn
+  = LFn(String, Int, List, List)           // name, arity, upvalue_names, body_block
+
+// ─── Programs ───────────────────────────────────────────────
+// A lowered program is a list of top-level definitions.
+
+type LowDef
+  = LFnDef(LowFn)                         // function definition
+  | LTypeDef(String, List)                 // type name, variant names (for runtime tag dispatch)
+
+// ─── State Machine Metadata ─────────────────────────────────
+// Attached to each handle expression during lowering.
+// The WASM emitter uses this to allocate the state struct.
+
+type StateMachine
+  = SM(Int, List, List)                    // num_states, [(slot, name)] live_locals, [(op_name, handler_fn)]
+
+// ─── Three-Tier Classification ──────────────────────────────
+// Determines how a handler compiles to LowIR.
+
+type HandlerTier
+  = TailResumptive                         // → direct LCall, no state machine
+  | Linear                                 // → state machine, single suspension
+  | MultiShot                              // → state machine, cloneable state struct
+
+// ─── Classify a handler arm ─────────────────────────────────
+// Walks the handler body to determine tier.
+// Mirrors src/compiler/effects.rs is_tail_resumptive / is_evidence_eligible.
+
+fn classify_handler(body) with Pure = match body {
+  // resume(pure_expr) with no state updates → tail-resumptive
+  // For now, conservative: everything is Linear
+  // TODO: implement proper body analysis
+  _ => Linear
+}
+
+// ─── Placeholder: AST → LowIR transform ────────────────────
+// This is where the state machine transform will live.
+// Phase F.2: implement lower_expr, lower_stmt, lower_handle.
+
+fn lower_program(stmts) with Pure = stmts  // identity for now

@@ -37,13 +37,13 @@ effect Compiler {
 
 // ─── The Pipeline ────────────────────────────────────────────
 // Universal shape. Performs effects, doesn't implement them.
+// TODO: Make this a |> chain once effect ops work through piped helpers.
 
 fn compile_pipeline(source) = {
   let tokens = tokenize(source)
   let ast = parse_source(tokens)
   let type_info = infer(ast)
-  let chunk = generate(type_info, ast)
-  chunk
+  generate(type_info, ast)
 }
 
 // ─── Handler: Standard ───────────────────────────────────────
@@ -161,6 +161,7 @@ fn compile_checking(source) =
 
 // ─── Handler: LowIR ─────────────────────────────────────────
 // Parse, type-check, then lower to LowIR and print.
+// Backend work in generate — where it belongs.
 
 fn compile_lowering(source) =
   handle {
@@ -168,21 +169,20 @@ fn compile_lowering(source) =
   } {
     tokenize(src) => resume(lex(src)),
     parse_source(tokens) => resume(parse_program(tokens)),
-    infer(ast) => {
-      let result = check_program(ast)
-      // Lower AST to LowIR
-      let lowered = lower_program(ast)
+    infer(ast) => resume(check_program(ast)),
+    generate(checked, ast) => {
+      let (env, _, _) = checked
+      let ctors = extract_constructors(env)
+      let lowered = lower_program_with_ctors(ast, ctors)
       println("── LowIR ──")
       println(print_lowered(lowered))
-      resume(result)
-    },
-    generate(checked, ast) => {
       resume(("skip", [], [], 0))
     }
   }
 
 // ─── Handler: WASM ──────────────────────────────────────────
 // Parse, type-check, lower to LowIR, emit WAT.
+// Type info flows from infer → generate through the pipeline.
 
 fn compile_wasm(source) =
   handle {
@@ -190,14 +190,14 @@ fn compile_wasm(source) =
   } {
     tokenize(src) => resume(lex(src)),
     parse_source(tokens) => resume(parse_program(tokens)),
-    infer(ast) => {
-      let result = check_program(ast)
-      let lowered = lower_program(ast)
-      let wat = emit_module(lowered)
-      println(wat)
-      resume(result)
-    },
+    infer(ast) => resume(check_program(ast)),
     generate(checked, ast) => {
+      let (env, subst, _) = checked
+      let type_map = build_type_map(env, subst)
+      let ctors = extract_constructors(env)
+      let lowered = lower_program_with_ctors(ast, ctors)
+      let wat = emit_module(lowered, type_map)
+      println(wat)
       resume(("skip", [], [], 0))
     }
   }
@@ -402,5 +402,49 @@ fn gradient_suggestion(env, subst, ast) = {
   let (fgs, _) = g
   if len(fgs) > 0 { render_fn_gradient(fgs[0]) }
   else { "" }
+}
+
+// ─── Type Map for Backend ───────────────────────────────────
+// Lightweight extraction from checker env: [(name, type_tag)].
+// The emitter uses this to know string vs int vs function.
+
+fn build_type_map(env, subst) = build_type_map_iter(env, subst, 0)
+
+fn build_type_map_iter(env, subst, idx) = {
+  if idx >= len(env) { [] }
+  else {
+    let (name, ty, _) = env[idx]
+    let tag = type_tag(subst, ty)
+    [(name, tag)] ++ build_type_map_iter(env, subst, idx + 1)
+  }
+}
+
+fn type_tag(subst, ty) = match apply(subst, ty) {
+  TInt => "Int",
+  TFloat => "Float",
+  TString => "String",
+  TBool => "Bool",
+  TUnit => "Unit",
+  TList(_) => "List",
+  TFun(_, ret, _) => "Fn:" ++ type_tag(subst, ret),
+  _ => "Unknown"
+}
+
+// Extract constructor names from checker env.
+// Constructors have TName type (not TFun, TInt, etc.) and reason "Declared".
+fn extract_constructors(env) = extract_ctors_iter(env, 0)
+
+fn extract_ctors_iter(env, idx) = {
+  if idx >= len(env) { [] }
+  else {
+    let (name, ty, reason) = env[idx]
+    let is_ctor = match ty {
+      TName(_, _) => true,
+      _ => false
+    }
+    let rest = extract_ctors_iter(env, idx + 1)
+    if is_ctor { [name] ++ rest }
+    else { rest }
+  }
 }
 

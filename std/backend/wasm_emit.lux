@@ -1,31 +1,44 @@
 // WASM Text Format (WAT) Emitter — LowIR → WAT
 //
-// Emits WAT (WebAssembly Text Format) from LowIR. WAT is just strings.
-// Phase G of Arc 2. Targets WASI for standalone execution.
+// Emits WAT from LowIR. Targets WASI for standalone execution.
+// Context tuple ctx = (string_map, type_map, tag_map) threads through all emission.
+//
+// Memory: [0-1023] scratch, [1024-N] string data [len:i32][bytes...], [N+...] heap.
+// Values: everything is i32. Strings/variants/tuples are heap pointers.
+// Variants: [tag_id:i32][field0:i32][field1:i32]...
+// Strings: [len:i32][bytes...]
 
 import compiler/lower
+import backend/wasm_runtime
 
 let NL = from_char_code(10)
 let DQ = from_char_code(34)
+let BS = from_char_code(92)
+
+// ─── Context helpers ────────────────────────────────────────
+fn ctx_strings(ctx) with Pure = ctx[0]
+fn ctx_types(ctx) with Pure = ctx[1]
+fn ctx_tags(ctx) with Pure = ctx[2]
 
 // ─── Module Structure ───────────────────────────────────────
-// WASI module: imports fd_write, exports _start and memory.
-// String data in linear memory starting at offset 1024.
-// First 1024 bytes reserved for iov structs and scratch.
 
-fn emit_module(defs) with Pure = {
+fn emit_module(defs, type_map) with Pure = {
   let fns = collect_fns(defs, 0)
   let top_stmts = collect_top_stmts(defs, 0)
-  let str_data = collect_strings(defs, 0, 1024)
-  let (segments, _) = str_data
+  let all_strings = collect_all_strings(defs, 0)
+  let string_map = assign_offsets(all_strings, 0, 1024)
+  let heap_start = string_heap_end(string_map, 0, 1024)
+  let tag_map = collect_variant_tags(defs, 0)
+  let ctx = (string_map, type_map, tag_map)
   "(module" ++ NL
     ++ emit_wasi_imports()
     ++ "  (memory (export " ++ DQ ++ "memory" ++ DQ ++ ") 1)" ++ NL
-    ++ emit_string_data(segments, 0)
-    ++ emit_fn_list(fns, 0)
-    ++ emit_print_int()
-    ++ emit_print_str()
-    ++ emit_start(top_stmts)
+    ++ "  (global $heap_ptr (mut i32) (i32.const " ++ to_string(heap_start) ++ "))" ++ NL
+    ++ emit_string_segments(string_map, 0)
+    ++ emit_alloc() ++ emit_str_concat() ++ emit_int_to_str()
+    ++ emit_fn_list(fns, 0, ctx)
+    ++ emit_print_int() ++ emit_print_string()
+    ++ emit_start(top_stmts, ctx)
     ++ ")" ++ NL
 }
 
@@ -33,36 +46,155 @@ fn emit_wasi_imports() with Pure =
   "  (import " ++ DQ ++ "wasi_snapshot_preview1" ++ DQ ++ " " ++ DQ ++ "fd_write" ++ DQ
     ++ " (func $fd_write (param i32 i32 i32 i32) (result i32)))" ++ NL
 
-// ─── String Data Segments ───────────────────────────────────
-// Strings stored as length-prefixed bytes in linear memory.
-// Pointer = offset. String = (offset, length) pair packed as i32.
+// ─── String Collection + Map ────────────────────────────────
 
-fn collect_strings(defs, idx, offset) with Pure = {
-  // TODO: walk LowIR collecting string constants
-  // For now: return empty segments
-  ([], offset)
+fn collect_all_strings(defs, idx) with Pure = {
+  if idx >= len(defs) { [] }
+  else { string_union(collect_strings_expr(defs[idx]), collect_all_strings(defs, idx + 1)) }
 }
 
-fn emit_string_data(segments, idx) with Pure = {
-  if idx >= len(segments) { "" }
+fn collect_strings_expr(e) with Pure = match e {
+  LConst(v) => match v { LString(s) => [s], _ => [] },
+  LBinOp(_, l, r) => string_union(collect_strings_expr(l), collect_strings_expr(r)),
+  LUnaryOp(_, inner) => collect_strings_expr(inner),
+  LCall(func, args) => string_union(collect_strings_expr(func), collect_strings_list(args, 0)),
+  LIf(c, t, e) => string_union(collect_strings_expr(c),
+    string_union(collect_strings_list(t, 0), collect_strings_list(e, 0))),
+  LBlock(stmts) => collect_strings_list(stmts, 0),
+  LLet(_, value) => collect_strings_expr(value),
+  LMakeClosure(fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_strings_list(body, 0) },
+  LMatch(scr, arms) => string_union(collect_strings_expr(scr), collect_strings_arms(arms, 0)),
+  _ => []
+}
+
+fn collect_strings_list(exprs, idx) with Pure = {
+  if idx >= len(exprs) { [] }
+  else { string_union(collect_strings_expr(exprs[idx]), collect_strings_list(exprs, idx + 1)) }
+}
+
+fn collect_strings_arms(arms, idx) with Pure = {
+  if idx >= len(arms) { [] }
   else {
-    let (offset, text) = segments[idx]
-    "  (data (i32.const " ++ to_string(offset) ++ ") " ++ DQ ++ text ++ DQ ++ ")" ++ NL
-      ++ emit_string_data(segments, idx + 1)
+    let (_, body) = arms[idx]
+    string_union(collect_strings_expr(body), collect_strings_arms(arms, idx + 1))
   }
 }
 
-// ─── Collect Functions and Top-Level Statements ─────────────
+fn assign_offsets(strings, idx, offset) with Pure = {
+  if idx >= len(strings) { [] }
+  else {
+    let s = strings[idx]
+    [(s, offset, len(s))] ++ assign_offsets(strings, idx + 1, offset + 4 + len(s))
+  }
+}
+
+fn string_heap_end(string_map, idx, default) with Pure = {
+  if len(string_map) == 0 { default }
+  else { let (_, offset, slen) = string_map[len(string_map) - 1]; offset + 4 + slen }
+}
+
+fn find_string_offset(string_map, text, idx) with Pure = {
+  if idx >= len(string_map) { 0 - 1 }
+  else { let (s, offset, _) = string_map[idx]; if s == text { offset } else { find_string_offset(string_map, text, idx + 1) } }
+}
+
+fn emit_string_segments(string_map, idx) with Pure = {
+  if idx >= len(string_map) { "" }
+  else {
+    let (text, offset, slen) = string_map[idx]
+    "  (data (i32.const " ++ to_string(offset) ++ ") " ++ DQ ++ encode_i32_le(slen) ++ text ++ DQ ++ ")" ++ NL
+      ++ emit_string_segments(string_map, idx + 1)
+  }
+}
+
+fn encode_i32_le(n) with Pure =
+  hex_byte(n % 256) ++ hex_byte((n / 256) % 256) ++ hex_byte((n / 65536) % 256) ++ hex_byte((n / 16777216) % 256)
+
+fn hex_byte(b) with Pure = BS ++ hex_digit(b / 16) ++ hex_digit(b % 16)
+fn hex_digit(n) with Pure = if n < 10 { from_char_code(48 + n) } else { from_char_code(87 + n) }
+
+// ─── Variant Tag Collection ─────────────────────────────────
+// Walk LowIR, find all LMakeVariant/LPCon names, assign sequential IDs.
+
+fn collect_variant_tags(defs, idx) with Pure = {
+  if idx >= len(defs) { [] }
+  else {
+    let here = collect_tags_expr(defs[idx])
+    let rest = collect_variant_tags(defs, idx + 1)
+    tag_union(here, rest)
+  }
+}
+
+fn collect_tags_expr(e) with Pure = match e {
+  LMakeVariant(name, _) => [name],
+  LMatch(scr, arms) => tag_union(collect_tags_expr(scr), collect_tags_arms(arms, 0)),
+  LCall(_, args) => collect_tags_list(args, 0),
+  LBinOp(_, l, r) => tag_union(collect_tags_expr(l), collect_tags_expr(r)),
+  LIf(c, t, e) => tag_union(collect_tags_expr(c), tag_union(collect_tags_list(t, 0), collect_tags_list(e, 0))),
+  LBlock(stmts) => collect_tags_list(stmts, 0),
+  LLet(_, v) => collect_tags_expr(v),
+  LMakeClosure(fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_tags_list(body, 0) },
+  _ => []
+}
+
+fn collect_tags_list(exprs, idx) with Pure = {
+  if idx >= len(exprs) { [] }
+  else { tag_union(collect_tags_expr(exprs[idx]), collect_tags_list(exprs, idx + 1)) }
+}
+
+fn collect_tags_arms(arms, idx) with Pure = {
+  if idx >= len(arms) { [] }
+  else {
+    let (pat, body) = arms[idx]
+    tag_union(collect_tags_pat(pat), tag_union(collect_tags_expr(body), collect_tags_arms(arms, idx + 1)))
+  }
+}
+
+fn collect_tags_pat(pat) with Pure = match pat {
+  LPCon(name, _) => [name],
+  _ => []
+}
+
+fn tag_union(a, b) with Pure = {
+  if len(b) == 0 { a }
+  else {
+    let head = b[0]
+    let rest = slice(b, 1, len(b))
+    if string_in(a, head, 0) { tag_union(a, rest) }
+    else { tag_union(a ++ [head], rest) }
+  }
+}
+
+fn find_tag_id(tag_map, name, idx) with Pure = {
+  if idx >= len(tag_map) { 0 }
+  else { if tag_map[idx] == name { idx } else { find_tag_id(tag_map, name, idx + 1) } }
+}
+
+// ─── Utility ────────────────────────────────────────────────
+
+fn string_union(a, b) with Pure = {
+  if len(b) == 0 { a }
+  else {
+    let head = b[0]
+    let rest = slice(b, 1, len(b))
+    if string_in(a, head, 0) { string_union(a, rest) }
+    else { string_union(a ++ [head], rest) }
+  }
+}
+
+fn string_in(list, s, idx) with Pure = {
+  if idx >= len(list) { false }
+  else { if list[idx] == s { true } else { string_in(list, s, idx + 1) } }
+}
+
+// ─── Collect Functions / Top-Level ──────────────────────────
 
 fn collect_fns(defs, idx) with Pure = {
   if idx >= len(defs) { [] }
   else {
     let rest = collect_fns(defs, idx + 1)
     match defs[idx] {
-      LLet(name, value) => match value {
-        LMakeClosure(fn_def, _) => [fn_def] ++ rest,
-        _ => rest
-      },
+      LLet(name, value) => match value { LMakeClosure(fn_def, _) => [fn_def] ++ rest, _ => rest },
       _ => rest
     }
   }
@@ -73,10 +205,7 @@ fn collect_top_stmts(defs, idx) with Pure = {
   else {
     let rest = collect_top_stmts(defs, idx + 1)
     match defs[idx] {
-      LLet(name, value) => match value {
-        LMakeClosure(_, _) => rest,
-        _ => [defs[idx]] ++ rest
-      },
+      LLet(name, value) => match value { LMakeClosure(_, _) => rest, _ => [defs[idx]] ++ rest },
       _ => [defs[idx]] ++ rest
     }
   }
@@ -84,17 +213,19 @@ fn collect_top_stmts(defs, idx) with Pure = {
 
 // ─── Function Emission ──────────────────────────────────────
 
-fn emit_fn_list(fns, idx) with Pure = {
+fn emit_fn_list(fns, idx, ctx) with Pure = {
   if idx >= len(fns) { "" }
-  else { emit_fn(fns[idx]) ++ emit_fn_list(fns, idx + 1) }
+  else { emit_fn(fns[idx], ctx) ++ emit_fn_list(fns, idx + 1, ctx) }
 }
 
-fn emit_fn(fn_def) with Pure = {
+fn emit_fn(fn_def, ctx) with Pure = {
   let LFn(name, arity, params, body) = fn_def
-  "  (func $" ++ name
-    ++ emit_params(params, 0)
-    ++ " (result i32)" ++ NL
-    ++ emit_body(body, params)
+  let fn_locals = collect_locals(body, 0)
+  // Add temp locals if needed by emitter patterns
+  let with_temps = add_emitter_temps(fn_locals, ctx)
+  "  (func $" ++ name ++ emit_params(params, 0) ++ " (result i32)" ++ NL
+    ++ emit_local_decls(with_temps, 0)
+    ++ emit_fn_body(body, params, with_temps, ctx)
     ++ "  )" ++ NL
 }
 
@@ -103,172 +234,365 @@ fn emit_params(params, idx) with Pure = {
   else { " (param $" ++ params[idx] ++ " i32)" ++ emit_params(params, idx + 1) }
 }
 
-// ─── Runtime: print_int via fd_write ────────────────────────
-// Converts integer to decimal string in scratch memory, writes to stdout.
-
-fn emit_print_int() with Pure =
-  "  (func $print_int (param $n i32)" ++ NL
-  ++ "    (local $ptr i32) (local $len i32) (local $digit i32) (local $neg i32)" ++ NL
-  ++ "    (local $tmp i32)" ++ NL
-  ++ "    ;; write decimal digits to scratch at offset 256, right to left" ++ NL
-  ++ "    (local.set $ptr (i32.const 300))" ++ NL
-  ++ "    ;; handle negative" ++ NL
-  ++ "    (if (i32.lt_s (local.get $n) (i32.const 0))" ++ NL
-  ++ "      (then (local.set $neg (i32.const 1)) (local.set $n (i32.sub (i32.const 0) (local.get $n)))))" ++ NL
-  ++ "    ;; handle zero" ++ NL
-  ++ "    (if (i32.eqz (local.get $n))" ++ NL
-  ++ "      (then" ++ NL
-  ++ "        (i32.store8 (local.get $ptr) (i32.const 48))" ++ NL
-  ++ "        (local.set $ptr (i32.add (local.get $ptr) (i32.const 1)))" ++ NL
-  ++ "      )" ++ NL
-  ++ "      (else" ++ NL
-  ++ "        (block $done (loop $digits" ++ NL
-  ++ "          (br_if $done (i32.eqz (local.get $n)))" ++ NL
-  ++ "          (local.set $digit (i32.rem_u (local.get $n) (i32.const 10)))" ++ NL
-  ++ "          (local.set $n (i32.div_u (local.get $n) (i32.const 10)))" ++ NL
-  ++ "          (i32.store8 (local.get $ptr) (i32.add (i32.const 48) (local.get $digit)))" ++ NL
-  ++ "          (local.set $ptr (i32.add (local.get $ptr) (i32.const 1)))" ++ NL
-  ++ "          (br $digits)" ++ NL
-  ++ "        ))" ++ NL
-  ++ "      )" ++ NL
-  ++ "    )" ++ NL
-  ++ "    ;; add minus sign" ++ NL
-  ++ "    (if (local.get $neg)" ++ NL
-  ++ "      (then (i32.store8 (local.get $ptr) (i32.const 45))" ++ NL
-  ++ "        (local.set $ptr (i32.add (local.get $ptr) (i32.const 1)))))" ++ NL
-  ++ "    ;; reverse: digits are backwards, copy to offset 200" ++ NL
-  ++ "    (local.set $len (i32.sub (local.get $ptr) (i32.const 300)))" ++ NL
-  ++ "    (local.set $tmp (i32.const 0))" ++ NL
-  ++ "    (block $rdone (loop $rev" ++ NL
-  ++ "      (br_if $rdone (i32.ge_u (local.get $tmp) (local.get $len)))" ++ NL
-  ++ "      (i32.store8 (i32.add (i32.const 200) (local.get $tmp))" ++ NL
-  ++ "        (i32.load8_u (i32.sub (i32.sub (local.get $ptr) (i32.const 1)) (local.get $tmp))))" ++ NL
-  ++ "      (local.set $tmp (i32.add (local.get $tmp) (i32.const 1)))" ++ NL
-  ++ "      (br $rev)" ++ NL
-  ++ "    ))" ++ NL
-  ++ "    ;; add newline" ++ NL
-  ++ "    (i32.store8 (i32.add (i32.const 200) (local.get $len)) (i32.const 10))" ++ NL
-  ++ "    (local.set $len (i32.add (local.get $len) (i32.const 1)))" ++ NL
-  ++ "    ;; write iov: ptr=200, len" ++ NL
-  ++ "    (i32.store (i32.const 0) (i32.const 200))" ++ NL
-  ++ "    (i32.store (i32.const 4) (local.get $len))" ++ NL
-  ++ "    ;; fd_write(stdout=1, iovs=0, iovs_len=1, nwritten=8)" ++ NL
-  ++ "    (drop (call $fd_write (i32.const 1) (i32.const 0) (i32.const 1) (i32.const 8)))" ++ NL
-  ++ "  )" ++ NL
-
-fn emit_print_str() with Pure =
-  "  (func $print_str (param $ptr i32) (param $len i32)" ++ NL
-  ++ "    ;; write iov" ++ NL
-  ++ "    (i32.store (i32.const 0) (local.get $ptr))" ++ NL
-  ++ "    (i32.store (i32.const 4) (local.get $len))" ++ NL
-  ++ "    (drop (call $fd_write (i32.const 1) (i32.const 0) (i32.const 1) (i32.const 8)))" ++ NL
-  ++ "  )" ++ NL
-
-// ─── _start Function ────────────────────────────────────────
-// Runs top-level statements (let bindings, expression stmts).
-
-fn emit_start(stmts) with Pure =
-  "  (func $_start (export " ++ DQ ++ "_start" ++ DQ ++ ")" ++ NL
-    ++ emit_start_body(stmts, 0)
-    ++ "  )" ++ NL
-
-fn emit_start_body(stmts, idx) with Pure = {
-  if idx >= len(stmts) { "" }
-  else { emit_start_stmt(stmts[idx]) ++ emit_start_body(stmts, idx + 1) }
+fn emit_fn_body(stmts, params, locals, ctx) with Pure = {
+  if len(stmts) == 0 { "    i32.const 0" ++ NL }
+  else { emit_stmts_value(stmts, 0, params, locals, ctx) }
 }
 
-fn emit_start_stmt(stmt) with Pure = match stmt {
-  LLet(name, value) => emit_start_expr(value),
-  _ => emit_start_expr(stmt)
-}
+// ─── Expression Emission (unified) ──────────────────────────
+// Used by both function bodies (params from fn def) and _start (params = []).
 
-fn emit_start_expr(e) with Pure = match e {
-  LCall(func, args) => {
-    match func {
-      LGlobal("println") => emit_println_call(args),
-      LGlobal("to_string") => emit_expr_wat(args[0], []),
-      LGlobal(name) => emit_args(args, [], 0) ++ "    call $" ++ name ++ NL ++ "    drop" ++ NL,
-      _ => "    ;; start expr TODO" ++ NL
+fn emit_expr(e, params, locals, ctx) with Pure = match e {
+  LConst(v) => emit_const(v, ctx),
+  LMakeTuple(elems) => {
+    if len(elems) == 0 { "    i32.const 0" ++ NL }
+    else { emit_make_tuple(elems, params, locals, ctx) }
+  },
+  LGlobal(name) => {
+    if string_in(locals, name, 0) { "    local.get $" ++ name ++ NL }
+    else { if find_param_idx(params, name, 0) >= 0 { "    local.get $" ++ name ++ NL }
+    else { "    call $" ++ name ++ NL } }
+  },
+  LLet(name, value) => emit_expr(value, params, locals, ctx) ++ "    local.set $" ++ name ++ NL,
+  LBlock(stmts) => emit_stmts_value(stmts, 0, params, locals, ctx),
+  LBinOp(op, l, r) => {
+    if op == "Concat" {
+      emit_expr(l, params, locals, ctx) ++ emit_expr(r, params, locals, ctx) ++ "    call $str_concat" ++ NL
+    } else {
+      emit_expr(l, params, locals, ctx) ++ emit_expr(r, params, locals, ctx) ++ emit_binop(op)
     }
   },
-  _ => "    ;; start: unhandled" ++ NL
+  LUnaryOp(op, inner) => match op {
+    "Neg" => "    i32.const 0" ++ NL ++ emit_expr(inner, params, locals, ctx) ++ "    i32.sub" ++ NL,
+    "Not" => emit_expr(inner, params, locals, ctx) ++ "    i32.eqz" ++ NL,
+    _ => emit_expr(inner, params, locals, ctx)
+  },
+  LCall(func, args) => emit_call_expr(func, args, params, locals, ctx),
+  LIf(cond, then_b, else_b) => {
+    emit_expr(cond, params, locals, ctx)
+    ++ "    (if (result i32)" ++ NL
+    ++ "      (then" ++ NL ++ emit_stmts_value(then_b, 0, params, locals, ctx) ++ "      )" ++ NL
+    ++ "      (else" ++ NL ++ emit_stmts_value(else_b, 0, params, locals, ctx) ++ "      )" ++ NL
+    ++ "    )" ++ NL
+  },
+  LMakeVariant(tag, fields) => emit_make_variant(tag, fields, params, locals, ctx),
+  LMatch(scrutinee, arms) => emit_match(scrutinee, arms, params, locals, ctx),
+  LIndex(coll, idx_expr) => {
+    // collection[idx] → i32.load(collection + 4 + idx * 4)
+    emit_expr(coll, params, locals, ctx)
+    ++ emit_expr(idx_expr, params, locals, ctx)
+    ++ "    i32.const 4" ++ NL ++ "    i32.mul" ++ NL
+    ++ "    i32.add" ++ NL
+    ++ "    i32.const 4" ++ NL ++ "    i32.add" ++ NL
+    ++ "    i32.load" ++ NL
+  },
+  _ => "    i32.const 0 ;; unhandled" ++ NL
 }
 
-fn emit_println_call(args) with Pure = {
-  if len(args) == 0 { "" }
+// Value context: last stmt produces a value (stays on stack). Non-last are void.
+fn emit_stmts_value(stmts, idx, params, locals, ctx) with Pure = {
+  if idx >= len(stmts) { "" }
   else {
-    // If arg is to_string(call), emit the call and print_int
-    match args[0] {
-      LCall(func, inner_args) => match func {
-        LGlobal("to_string") => {
-          emit_expr_wat(inner_args[0], [])
-            ++ "    call $print_int" ++ NL
-        },
-        _ => emit_expr_wat(args[0], []) ++ "    call $print_int" ++ NL
-      },
-      _ => emit_expr_wat(args[0], []) ++ "    call $print_int" ++ NL
+    if idx == len(stmts) - 1 {
+      emit_expr(stmts[idx], params, locals, ctx)
+    } else {
+      emit_stmt(stmts[idx], params, locals, ctx)
+        ++ emit_stmts_value(stmts, idx + 1, params, locals, ctx)
     }
   }
 }
 
-// ─── Body Emission ──────────────────────────────────────────
-
-fn emit_body(stmts, params) with Pure = {
-  if len(stmts) == 0 { "    i32.const 0" ++ NL }
-  else { emit_body_stmts(stmts, params, 0) }
-}
-
-fn emit_body_stmts(stmts, params, idx) with Pure = {
+// Void context: all stmts are void (values dropped). Used by _start.
+fn emit_stmts_void(stmts, idx, params, locals, ctx) with Pure = {
   if idx >= len(stmts) { "" }
-  else { emit_expr_wat(stmts[idx], params) ++ emit_body_stmts(stmts, params, idx + 1) }
+  else { emit_stmt(stmts[idx], params, locals, ctx) ++ emit_stmts_void(stmts, idx + 1, params, locals, ctx) }
 }
 
-// ─── Expression Emission ────────────────────────────────────
-
-fn emit_expr_wat(e, params) with Pure = match e {
-  LConst(v) => emit_const(v),
-  LGlobal(name) => emit_var(name, params),
-  _ => emit_compound(e, params)
+fn emit_stmt(stmt, params, locals, ctx) with Pure = match stmt {
+  LLet(name, value) => emit_expr(value, params, locals, ctx) ++ "    local.set $" ++ name ++ NL,
+  LConst(_) => "",
+  LMakeTuple(_) => "",
+  LBlock(stmts) => emit_stmts_void(stmts, 0, params, locals, ctx),
+  LCall(func, args) => {
+    match func {
+      LGlobal(name) => {
+        if name == "println" { emit_println(args, params, locals, ctx) }
+        else { if name == "print" { emit_println(args, params, locals, ctx) }
+        else { emit_call_expr(func, args, params, locals, ctx) ++ "    drop" ++ NL } }
+      },
+      _ => emit_call_expr(func, args, params, locals, ctx) ++ "    drop" ++ NL
+    }
+  },
+  _ => emit_expr(stmt, params, locals, ctx)
 }
 
-fn emit_const(v) with Pure = match v {
+fn emit_const(v, ctx) with Pure = match v {
   LInt(n) => "    i32.const " ++ to_string(n) ++ NL,
   LBool(b) => "    i32.const " ++ if b { "1" } else { "0" } ++ NL,
-  _ => "    i32.const 0 ;; TODO" ++ NL
+  LString(s) => {
+    let offset = find_string_offset(ctx_strings(ctx), s, 0)
+    "    i32.const " ++ to_string(offset) ++ NL
+  },
+  _ => "    i32.const 0" ++ NL
 }
 
-fn emit_var(name, params) with Pure = {
-  let idx = find_param_idx(params, name, 0)
-  if idx >= 0 { "    local.get $" ++ name ++ NL }
-  else { "    call $" ++ name ++ NL }
+fn emit_call_expr(func, args, params, locals, ctx) with Pure = {
+  match func {
+    LGlobal(name) => {
+      if name == "to_string" {
+        emit_args(args, 0, params, locals, ctx) ++ "    call $int_to_str" ++ NL
+      } else {
+        // Check if this is a variant constructor
+        if string_in(ctx_tags(ctx), name, 0) {
+          emit_make_variant(name, args, params, locals, ctx)
+        } else {
+          emit_args(args, 0, params, locals, ctx) ++ "    call $" ++ name ++ NL
+        }
+      }
+    },
+    _ => emit_args(args, 0, params, locals, ctx) ++ "    ;; indirect call TODO" ++ NL
+  }
+}
+
+fn emit_args(args, idx, params, locals, ctx) with Pure = {
+  if idx >= len(args) { "" }
+  else { emit_expr(args[idx], params, locals, ctx) ++ emit_args(args, idx + 1, params, locals, ctx) }
+}
+
+// ─── Variant Construction ───────────────────────────────────
+// LMakeVariant("Circle", [r]) → alloc [tag_id:i32][r:i32], return ptr
+
+// Tuple construction: alloc [count:i32][elems...], return ptr.
+fn emit_make_tuple(elems, params, locals, ctx) with Pure = {
+  let n = len(elems)
+  let total_size = (1 + n) * 4
+  "    i32.const " ++ to_string(total_size) ++ NL
+  ++ "    call $alloc" ++ NL
+  ++ "    local.set $__vptr" ++ NL
+  // Store count
+  ++ "    local.get $__vptr" ++ NL
+  ++ "    i32.const " ++ to_string(n) ++ NL
+  ++ "    i32.store" ++ NL
+  // Store elements
+  ++ emit_tuple_elems(elems, 0, params, locals, ctx)
+  ++ "    local.get $__vptr" ++ NL
+}
+
+fn emit_tuple_elems(elems, idx, params, locals, ctx) with Pure = {
+  if idx >= len(elems) { "" }
+  else {
+    let offset = (1 + idx) * 4
+    "    local.get $__vptr" ++ NL
+    ++ "    i32.const " ++ to_string(offset) ++ NL
+    ++ "    i32.add" ++ NL
+    ++ emit_expr(elems[idx], params, locals, ctx)
+    ++ "    i32.store" ++ NL
+    ++ emit_tuple_elems(elems, idx + 1, params, locals, ctx)
+  }
+}
+
+// Variant construction: alloc → store ptr in $__vptr → store tag + fields → push ptr.
+// Uses $__vptr temp local (safe even if field expressions allocate).
+fn emit_make_variant(tag, fields, params, locals, ctx) with Pure = {
+  let tag_id = find_tag_id(ctx_tags(ctx), tag, 0)
+  let n_fields = len(fields)
+  let total_size = (1 + n_fields) * 4
+  "    i32.const " ++ to_string(total_size) ++ NL
+  ++ "    call $alloc" ++ NL
+  ++ "    local.set $__vptr" ++ NL
+  // Store tag
+  ++ "    local.get $__vptr" ++ NL
+  ++ "    i32.const " ++ to_string(tag_id) ++ NL
+  ++ "    i32.store" ++ NL
+  // Store fields
+  ++ emit_variant_fields(fields, 0, params, locals, ctx)
+  // Push ptr as result
+  ++ "    local.get $__vptr" ++ NL
+}
+
+fn emit_variant_fields(fields, idx, params, locals, ctx) with Pure = {
+  if idx >= len(fields) { "" }
+  else {
+    let field_offset = (1 + idx) * 4
+    "    local.get $__vptr" ++ NL
+    ++ "    i32.const " ++ to_string(field_offset) ++ NL
+    ++ "    i32.add" ++ NL
+    ++ emit_expr(fields[idx], params, locals, ctx)
+    ++ "    i32.store" ++ NL
+    ++ emit_variant_fields(fields, idx + 1, params, locals, ctx)
+  }
+}
+
+// ─── Match Compilation ──────────────────────────────────────
+// LMatch(scrutinee, [(LPCon("Circle", [LPVar("r")]), body), ...])
+// → evaluate scrutinee to local, chain if/else on tag.
+
+fn emit_match(scrutinee, arms, params, locals, ctx) with Pure = {
+  // Evaluate scrutinee — leave ptr on stack
+  // We need to reference it multiple times, so store in a temp local
+  emit_expr(scrutinee, params, locals, ctx)
+  ++ "    local.set $__match" ++ NL
+  ++ emit_match_arms(arms, 0, params, locals, ctx)
+}
+
+fn emit_match_arms(arms, idx, params, locals, ctx) with Pure = {
+  if idx >= len(arms) { "    i32.const 0 ;; match fallthrough" ++ NL }
+  else {
+    let (pat, body) = arms[idx]
+    match pat {
+      LPCon(name, sub_pats) => {
+        let tag_id = find_tag_id(ctx_tags(ctx), name, 0)
+        // if tag matches, bind fields and execute body
+        "    local.get $__match" ++ NL
+        ++ "    i32.load" ++ NL  // load tag
+        ++ "    i32.const " ++ to_string(tag_id) ++ NL
+        ++ "    i32.eq" ++ NL
+        ++ "    (if (result i32)" ++ NL
+        ++ "      (then" ++ NL
+        ++ emit_bind_fields(sub_pats, 0, params, locals, ctx)
+        ++ emit_expr(body, params, locals, ctx)
+        ++ "      )" ++ NL
+        ++ "      (else" ++ NL
+        ++ emit_match_arms(arms, idx + 1, params, locals, ctx)
+        ++ "      )" ++ NL
+        ++ "    )" ++ NL
+      },
+      LPVar(name) => {
+        // Bind scrutinee to variable, execute body
+        "    local.get $__match" ++ NL
+        ++ "    local.set $" ++ name ++ NL
+        ++ emit_expr(body, params, locals, ctx)
+      },
+      LPWild => emit_expr(body, params, locals, ctx),
+      _ => emit_match_arms(arms, idx + 1, params, locals, ctx)
+    }
+  }
+}
+
+fn emit_bind_fields(sub_pats, idx, params, locals, ctx) with Pure = {
+  if idx >= len(sub_pats) { "" }
+  else {
+    let field_offset = (1 + idx) * 4
+    match sub_pats[idx] {
+      LPVar(name) => {
+        "    local.get $__match" ++ NL
+        ++ "    i32.const " ++ to_string(field_offset) ++ NL
+        ++ "    i32.add" ++ NL
+        ++ "    i32.load" ++ NL
+        ++ "    local.set $" ++ name ++ NL
+        ++ emit_bind_fields(sub_pats, idx + 1, params, locals, ctx)
+      },
+      LPWild => emit_bind_fields(sub_pats, idx + 1, params, locals, ctx),
+      _ => emit_bind_fields(sub_pats, idx + 1, params, locals, ctx)
+    }
+  }
+}
+
+// ─── println Dispatch ───────────────────────────────────────
+
+fn emit_println(args, params, locals, ctx) with Pure = {
+  if len(args) == 0 { "" }
+  else {
+    let arg = args[0]
+    if is_string_expr(arg) {
+      emit_expr(arg, params, locals, ctx) ++ "    call $print_string" ++ NL
+    } else {
+      match arg {
+        LCall(func, inner_args) => match func {
+          LGlobal(name) => {
+            if name == "to_string" {
+              emit_expr(inner_args[0], params, locals, ctx) ++ "    call $print_int" ++ NL
+            } else {
+              emit_expr(arg, params, locals, ctx) ++ "    call $print_int" ++ NL
+            }
+          },
+          _ => emit_expr(arg, params, locals, ctx) ++ "    call $print_int" ++ NL
+        },
+        _ => emit_expr(arg, params, locals, ctx) ++ "    call $print_int" ++ NL
+      }
+    }
+  }
+}
+
+fn is_string_expr(e) with Pure = match e {
+  LConst(v) => match v { LString(_) => true, _ => false },
+  LBinOp(op, _, _) => op == "Concat",
+  _ => false
+}
+
+// ─── _start Function ────────────────────────────────────────
+
+fn emit_start(stmts, ctx) with Pure = {
+  let locals = collect_locals(stmts, 0)
+  let with_temps = add_emitter_temps(locals, ctx)
+  "  (func $_start (export " ++ DQ ++ "_start" ++ DQ ++ ")" ++ NL
+    ++ emit_local_decls(with_temps, 0)
+    ++ emit_stmts_void(stmts, 0, [], with_temps, ctx)
+    ++ "  )" ++ NL
+}
+
+// ─── Local Collection ───────────────────────────────────────
+
+fn collect_locals(stmts, idx) with Pure = {
+  if idx >= len(stmts) { [] }
+  else { string_union(collect_locals_expr(stmts[idx]), collect_locals(stmts, idx + 1)) }
+}
+
+fn collect_locals_expr(e) with Pure = match e {
+  LLet(name, value) => string_union([name], collect_locals_expr(value)),
+  LBlock(stmts) => collect_locals(stmts, 0),
+  LIf(_, t, e) => string_union(collect_locals_list(t, 0), collect_locals_list(e, 0)),
+  LMatch(_, arms) => string_union(["__match"], collect_locals_arms(arms, 0)),
+  LMakeClosure(fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_locals(body, 0) },
+  _ => []
+}
+
+fn collect_locals_list(exprs, idx) with Pure = {
+  if idx >= len(exprs) { [] }
+  else { string_union(collect_locals_expr(exprs[idx]), collect_locals_list(exprs, idx + 1)) }
+}
+
+fn collect_locals_arms(arms, idx) with Pure = {
+  if idx >= len(arms) { [] }
+  else {
+    let (pat, body) = arms[idx]
+    let pat_locals = collect_locals_pat(pat)
+    string_union(pat_locals, string_union(collect_locals_expr(body), collect_locals_arms(arms, idx + 1)))
+  }
+}
+
+fn collect_locals_pat(pat) with Pure = match pat {
+  LPVar(name) => [name],
+  LPCon(_, sub) => collect_locals_pats(sub, 0),
+  LPTuple(sub) => collect_locals_pats(sub, 0),
+  _ => []
+}
+
+fn collect_locals_pats(pats, idx) with Pure = {
+  if idx >= len(pats) { [] }
+  else { string_union(collect_locals_pat(pats[idx]), collect_locals_pats(pats, idx + 1)) }
+}
+
+fn emit_local_decls(locals, idx) with Pure = {
+  if idx >= len(locals) { "" }
+  else { "    (local $" ++ locals[idx] ++ " i32)" ++ NL ++ emit_local_decls(locals, idx + 1) }
+}
+
+// Add emitter temp locals based on what patterns are present.
+// __match: needed when LMatch exists in the expression tree
+// __vptr: needed when variant constructors exist (tag_map non-empty)
+fn add_emitter_temps(locals, ctx) with Pure = {
+  // __vptr: temp for heap allocation (variants, tuples). Always available, zero cost.
+  // __match: added by collect_locals_expr when LMatch is seen.
+  string_union(locals, ["__vptr"])
 }
 
 fn find_param_idx(params, name, idx) with Pure = {
   if idx >= len(params) { 0 - 1 }
-  else { if params[idx] == name { idx }
-  else { find_param_idx(params, name, idx + 1) }}
+  else { if params[idx] == name { idx } else { find_param_idx(params, name, idx + 1) } }
 }
 
-fn emit_compound(e, params) with Pure = match e {
-  LBinOp(op, l, r) => {
-    emit_expr_wat(l, params) ++ emit_expr_wat(r, params) ++ emit_binop(op)
-  },
-  LUnaryOp(op, inner) => emit_unary(op, inner, params),
-  LCall(func, args) => emit_call(func, args, params),
-  _ => emit_control(e, params)
-}
-
-fn emit_control(e, params) with Pure = match e {
-  LIf(cond, then_b, else_b) => {
-    emit_expr_wat(cond, params)
-    ++ "    (if (result i32)" ++ NL
-    ++ "      (then" ++ NL ++ emit_body(then_b, params) ++ "      )" ++ NL
-    ++ "      (else" ++ NL ++ emit_body(else_b, params) ++ "      )" ++ NL
-    ++ "    )" ++ NL
-  },
-  LBlock(stmts) => emit_body_stmts(stmts, params, 0),
-  _ => "    i32.const 0 ;; unhandled" ++ NL
-}
+// ─── Binary Operators ───────────────────────────────────────
 
 fn emit_binop(op) with Pure = match op {
   "Add" => "    i32.add" ++ NL,
@@ -291,23 +615,4 @@ fn emit_binop3(op) with Pure = match op {
   "Gt" => "    i32.gt_s" ++ NL,
   "GtEq" => "    i32.ge_s" ++ NL,
   _ => "    ;; unknown op: " ++ op ++ NL
-}
-
-fn emit_unary(op, inner, params) with Pure = match op {
-  "Neg" => "    i32.const 0" ++ NL ++ emit_expr_wat(inner, params) ++ "    i32.sub" ++ NL,
-  "Not" => emit_expr_wat(inner, params) ++ "    i32.eqz" ++ NL,
-  _ => emit_expr_wat(inner, params)
-}
-
-fn emit_call(func, args, params) with Pure = {
-  let arg_code = emit_args(args, params, 0)
-  match func {
-    LGlobal(name) => arg_code ++ "    call $" ++ name ++ NL,
-    _ => arg_code ++ "    ;; indirect call TODO" ++ NL
-  }
-}
-
-fn emit_args(args, params, idx) with Pure = {
-  if idx >= len(args) { "" }
-  else { emit_expr_wat(args[idx], params) ++ emit_args(args, params, idx + 1) }
 }

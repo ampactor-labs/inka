@@ -385,9 +385,25 @@ fn lower_with_rewrites(sexpr, rewrites) with Pure = {
                            [lower_with_rewrites(t, rewrites)],
                            [lower_with_rewrites(e, rewrites)]),
     BlockExpr(stmts, final_e) =>
-      LBlock(lower_stmts(stmts) ++ [lower_with_rewrites(final_e, rewrites)]),
+      LBlock(lower_stmts_with_rewrites(stmts, rewrites) ++ [lower_with_rewrites(final_e, rewrites)]),
     _ => lower_expr(sexpr)
   }
+}
+
+fn lower_stmts_with_rewrites(stmts, rewrites) with Pure = {
+  if len(stmts) == 0 { [] }
+  else {
+    [lower_stmt_with_rewrites(stmts[0], rewrites)]
+      ++ lower_stmts_with_rewrites(slice(stmts, 1, len(stmts)), rewrites)
+  }
+}
+
+fn lower_stmt_with_rewrites(stmt, rewrites) with Pure = match stmt {
+  ExprStmt(expr) => lower_with_rewrites(expr, rewrites),
+  LetStmt(name, value) => LLet(name, lower_with_rewrites(value, rewrites)),
+  LetDestructure(names, value) => LLet("_dt", lower_with_rewrites(value, rewrites)),
+  LetPattern(pat, value) => LLet("_lp", lower_with_rewrites(value, rewrites)),
+  _ => lower_stmt(stmt)
 }
 
 fn lower_with_rewrites_list(sexprs, rewrites) with Pure = {
@@ -437,7 +453,7 @@ fn lower_state_inits(bindings) with Pure = {
   if len(bindings) == 0 { [] }
   else {
     let (name, init_sexpr) = bindings[0]
-    [LStore(0, lower_expr(init_sexpr))]   // slot resolved later
+    [LLet(name, lower_expr(init_sexpr))]
       ++ lower_state_inits(slice(bindings, 1, len(bindings)))
   }
 }
@@ -505,9 +521,26 @@ fn lower_with_linear_rewrites(sexpr, rewrites, state_bindings) with Pure = {
           [lower_with_linear_rewrites(t, rewrites, state_bindings)],
           [lower_with_linear_rewrites(e, rewrites, state_bindings)]),
     BlockExpr(stmts, final_e) =>
-      LBlock(lower_stmts(stmts) ++ [lower_with_linear_rewrites(final_e, rewrites, state_bindings)]),
+      LBlock(lower_stmts_with_linear_rewrites(stmts, rewrites, state_bindings)
+        ++ [lower_with_linear_rewrites(final_e, rewrites, state_bindings)]),
     _ => lower_expr(sexpr)
   }
+}
+
+fn lower_stmts_with_linear_rewrites(stmts, rewrites, state_bindings) with Pure = {
+  if len(stmts) == 0 { [] }
+  else {
+    [lower_stmt_with_linear_rewrites(stmts[0], rewrites, state_bindings)]
+      ++ lower_stmts_with_linear_rewrites(slice(stmts, 1, len(stmts)), rewrites, state_bindings)
+  }
+}
+
+fn lower_stmt_with_linear_rewrites(stmt, rewrites, state_bindings) with Pure = match stmt {
+  ExprStmt(expr) => lower_with_linear_rewrites(expr, rewrites, state_bindings),
+  LetStmt(name, value) => LLet(name, lower_with_linear_rewrites(value, rewrites, state_bindings)),
+  LetDestructure(names, value) => LLet("_dt", lower_with_linear_rewrites(value, rewrites, state_bindings)),
+  LetPattern(pat, value) => LLet("_lp", lower_with_linear_rewrites(value, rewrites, state_bindings)),
+  _ => lower_stmt(stmt)
 }
 
 fn lower_with_linear_rewrites_list(sexprs, rewrites, state_bindings) with Pure = {
@@ -518,12 +551,44 @@ fn lower_with_linear_rewrites_list(sexprs, rewrites, state_bindings) with Pure =
   }
 }
 
+// State updates must be SIMULTANEOUS: `with a = b, b = a + b` reads OLD a and b.
+// For single updates, direct assignment is correct.
+// For multiple: evaluate all RHS into temps, then assign all at once.
 fn lower_state_updates(updates) with Pure = {
+  if len(updates) <= 1 {
+    lower_state_updates_direct(updates)
+  } else {
+    lower_state_eval_temps(updates, 0)
+      ++ lower_state_assign_temps(updates, 0)
+  }
+}
+
+fn lower_state_updates_direct(updates) with Pure = {
   if len(updates) == 0 { [] }
   else {
     let (name, value_sexpr) = updates[0]
-    [LStateSet(0, lower_expr(value_sexpr))]   // slot resolved later
-      ++ lower_state_updates(slice(updates, 1, len(updates)))
+    [LLet(name, lower_expr(value_sexpr))]
+      ++ lower_state_updates_direct(slice(updates, 1, len(updates)))
+  }
+}
+
+// Phase 1: evaluate each RHS into a __tmp_ variable (reads OLD state)
+fn lower_state_eval_temps(updates, idx) with Pure = {
+  if idx >= len(updates) { [] }
+  else {
+    let (name, value_sexpr) = updates[idx]
+    [LLet("__tmp_" ++ name, lower_expr(value_sexpr))]
+      ++ lower_state_eval_temps(updates, idx + 1)
+  }
+}
+
+// Phase 2: copy temps into the real state variables
+fn lower_state_assign_temps(updates, idx) with Pure = {
+  if idx >= len(updates) { [] }
+  else {
+    let (name, _) = updates[idx]
+    [LLet(name, LGlobal("__tmp_" ++ name))]
+      ++ lower_state_assign_temps(updates, idx + 1)
   }
 }
 
@@ -539,3 +604,95 @@ fn find_linear_rewrite(rewrites, name) with Pure = {
 // ─── Program Lowering ───────────────────────────────────────
 
 fn lower_program(stmts) with Pure = lower_stmts(stmts)
+
+// Constructor-aware lowering: Call(VarRef(ctor), args) → LMakeVariant
+fn lower_program_with_ctors(stmts, ctors) with Pure = lower_stmts_ctors(stmts, ctors)
+
+fn lower_stmts_ctors(stmts, ctors) with Pure = {
+  if len(stmts) == 0 { [] }
+  else { [lower_stmt_ctors(stmts[0], ctors)] ++ lower_stmts_ctors(slice(stmts, 1, len(stmts)), ctors) }
+}
+
+fn lower_stmt_ctors(stmt, ctors) with Pure = match stmt {
+  LetStmt(name, value) => LLet(name, lower_expr_ctors(value, ctors)),
+  LetDestructure(names, value) => LLet("_dt", lower_expr_ctors(value, ctors)),
+  LetPattern(pat, value) => LLet("_lp", lower_expr_ctors(value, ctors)),
+  FnStmt(name, params, body, _) =>
+    LLet(name, LMakeClosure(LFn(name, len(params), extract_param_names(params), [lower_expr_ctors(body, ctors)]), [])),
+  ExprStmt(expr) => lower_expr_ctors(expr, ctors),
+  TypeDeclStmt(name, variants) => LConst(LUnit),
+  _ => LConst(LUnit)
+}
+
+fn lower_expr_ctors(sexpr, ctors) with Pure = {
+  let S(expr, _, _) = sexpr
+  match expr {
+    IntLit(s) => LConst(LInt(parse_int(s))),
+    FloatLit(s) => LConst(LFloat(parse_float(s))),
+    StringLit(s) => LConst(LString(s)),
+    BoolLit(b) => LConst(LBool(b)),
+    NoneExpr => LConst(LUnit),
+    VarRef(name) => LGlobal(name),
+    BinOp(op, left, right) => LBinOp(op, lower_expr_ctors(left, ctors), lower_expr_ctors(right, ctors)),
+    UnaryOp(op, operand) => LUnaryOp(op, lower_expr_ctors(operand, ctors)),
+
+    // THE KEY: distinguish constructor calls from function calls
+    Call(func, args) => {
+      let S(f, _, _) = func
+      match f {
+        VarRef(name) => {
+          if ctor_in(ctors, name, 0) {
+            LMakeVariant(name, lower_exprs_ctors(args, ctors))
+          } else {
+            LCall(lower_expr_ctors(func, ctors), lower_exprs_ctors(args, ctors))
+          }
+        },
+        _ => LCall(lower_expr_ctors(func, ctors), lower_exprs_ctors(args, ctors))
+      }
+    },
+
+    PipeExpr(left, right) => {
+      let lowered_left = lower_expr_ctors(left, ctors)
+      let S(right_expr, _, _) = right
+      match right_expr {
+        Call(func, args) => LCall(lower_expr_ctors(func, ctors), [lowered_left] ++ lower_exprs_ctors(args, ctors)),
+        _ => LCall(lower_expr_ctors(right, ctors), [lowered_left])
+      }
+    },
+
+    IfExpr(cond, then_e, else_e) =>
+      LIf(lower_expr_ctors(cond, ctors), [lower_expr_ctors(then_e, ctors)], [lower_expr_ctors(else_e, ctors)]),
+    MatchExpr(scrutinee, arms) =>
+      LMatch(lower_expr_ctors(scrutinee, ctors), lower_match_arms_ctors(arms, ctors)),
+    BlockExpr(stmts, final_e) =>
+      LBlock(lower_stmts_ctors(stmts, ctors) ++ [lower_expr_ctors(final_e, ctors)]),
+    ListExpr(elems) => LMakeList(lower_exprs_ctors(elems, ctors)),
+    TupleExpr(elems) => LMakeTuple(lower_exprs_ctors(elems, ctors)),
+    Index(collection, idx) => LIndex(lower_expr_ctors(collection, ctors), lower_expr_ctors(idx, ctors)),
+    FieldAccess(obj, field) => LIndex(lower_expr_ctors(obj, ctors), LConst(LString(field))),
+    LambdaExpr(params, body) =>
+      LMakeClosure(LFn("lambda", len(params), params, [lower_expr_ctors(body, ctors)]), []),
+    HandleExpr(body, arms, state_bindings) =>
+      lower_handle(body, arms, state_bindings),
+    ResumeExpr(value, _) => lower_expr_ctors(value, ctors),
+    _ => LConst(LUnit)
+  }
+}
+
+fn lower_exprs_ctors(sexprs, ctors) with Pure = {
+  if len(sexprs) == 0 { [] }
+  else { [lower_expr_ctors(sexprs[0], ctors)] ++ lower_exprs_ctors(slice(sexprs, 1, len(sexprs)), ctors) }
+}
+
+fn lower_match_arms_ctors(arms, ctors) with Pure = {
+  if len(arms) == 0 { [] }
+  else {
+    let (pat, body) = arms[0]
+    [(lower_pat(pat), lower_expr_ctors(body, ctors))] ++ lower_match_arms_ctors(slice(arms, 1, len(arms)), ctors)
+  }
+}
+
+fn ctor_in(ctors, name, idx) with Pure = {
+  if idx >= len(ctors) { false }
+  else { if ctors[idx] == name { true } else { ctor_in(ctors, name, idx + 1) } }
+}

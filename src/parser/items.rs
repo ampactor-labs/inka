@@ -228,7 +228,41 @@ impl Parser {
             _ => crate::ast::Ownership::Inferred,
         };
 
-        let (name, span) = self.expect_ident()?;
+        // Support `_` as wildcard, `(a, b)` as destructuring
+        let (name, span) = if self.at_exact(&TokenKind::Underscore) {
+            let span = self.peek_span();
+            self.advance();
+            ("_".to_string(), span)
+        } else if self.at_exact(&TokenKind::LParen) {
+            let span = self.peek_span();
+            self.advance();
+            let mut names = Vec::new();
+            if !self.at_exact(&TokenKind::RParen) {
+                let (n, _) = if self.at_exact(&TokenKind::Underscore) {
+                    let s = self.peek_span();
+                    self.advance();
+                    ("_".to_string(), s)
+                } else {
+                    self.expect_ident()?
+                };
+                names.push(n);
+                while self.at_exact(&TokenKind::Comma) {
+                    self.advance();
+                    let (n, _) = if self.at_exact(&TokenKind::Underscore) {
+                        let s = self.peek_span();
+                        self.advance();
+                        ("_".to_string(), s)
+                    } else {
+                        self.expect_ident()?
+                    };
+                    names.push(n);
+                }
+            }
+            self.expect(&TokenKind::RParen)?;
+            (format!("({})", names.join(", ")), span)
+        } else {
+            self.expect_ident()?
+        };
         let type_ann = if self.at_exact(&TokenKind::Colon) {
             self.advance();
             Some(self.parse_type_expr()?)

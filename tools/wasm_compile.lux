@@ -1,0 +1,17 @@
+// The Lux Compiler — no Rust.
+//
+// Usage: cat program.lux | wasmtime tools/wasm_compile.wasm
+// Output: WAT to stdout
+//
+// When this tool can compile itself, Rust deletes itself.
+
+import compiler/lexer
+import compiler/parser
+import compiler/lower
+import backend/wasm_emit
+
+let source = read_stdin()
+let tokens = lex(source)
+let ast = parse_program(tokens)
+let lowered = lower_program(ast)
+emit_module(lowered, [])

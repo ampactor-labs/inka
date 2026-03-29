@@ -335,8 +335,19 @@ impl Compiler {
         fn_compiler.scope.begin_scope();
 
         // Declare parameters as locals
+        // First pass: declare all param locals (including destructured tuple slots)
+        let mut destruct_params: Vec<(u16, String)> = Vec::new();
         for param in &fd.params {
-            fn_compiler.scope.declare_local(&param.name);
+            if param.name.starts_with('(') {
+                let slot = fn_compiler.scope.declare_local(&param.name);
+                destruct_params.push((slot, param.name.clone()));
+            } else {
+                fn_compiler.scope.declare_local(&param.name);
+            }
+        }
+        // Second pass: emit destructuring bytecode (runs after VM pre-fills extra locals)
+        for (slot, name) in &destruct_params {
+            fn_compiler.emit_destructured_param(*slot, name, line);
         }
 
         // Compile body
@@ -971,8 +982,17 @@ impl Compiler {
                 fn_compiler.scope.enclosing = Some(Box::new(outer_scope));
                 fn_compiler.scope.begin_scope();
 
+                let mut destruct_params: Vec<(u16, String)> = Vec::new();
                 for param in params {
-                    fn_compiler.scope.declare_local(&param.name);
+                    if param.name.starts_with('(') {
+                        let slot = fn_compiler.scope.declare_local(&param.name);
+                        destruct_params.push((slot, param.name.clone()));
+                    } else {
+                        fn_compiler.scope.declare_local(&param.name);
+                    }
+                }
+                for (slot, name) in &destruct_params {
+                    fn_compiler.emit_destructured_param(*slot, name, line);
                 }
 
                 fn_compiler.in_tail = true;
@@ -1208,6 +1228,62 @@ impl Compiler {
             self.emit_u16(idx, line);
             return;
         }
+        // If this is a known effect operation, emit a wrapper closure.
+        // Effect ops are compiled as Perform when called directly (e.g. resolve(ty)),
+        // but when used as a bare value (e.g. map(resolve, xs)), they need to be
+        // wrapped in a closure so they're first-class: |x| resolve(x)
+        if self.scope.scope_depth > 0 {
+            if let Some(_effect_name) = self.effect_ops.get(name).cloned() {
+            // Build a wrapper closure: fn(arg) { Perform op_name 1; Return }
+            let outer_scope = std::mem::replace(&mut self.scope, super::scope::Scope::new());
+            let mut wrapper = Compiler::new(
+                &format!("<effect:{name}>"),
+                self.effect_routing.clone(),
+            );
+            wrapper.effect_ops = self.effect_ops.clone();
+            wrapper.scope.enclosing = Some(Box::new(outer_scope));
+            wrapper.scope.begin_scope();
+            wrapper.scope.declare_local("__arg__");
+
+            // Check if this op should use evidence dispatch
+            if let Some(&ev_local) = self.evidence_slots.get(name) {
+                // Evidence path
+                wrapper.emit_op(OpCode::LoadLocal, line);
+                wrapper.emit_u16(0, line); // __arg__
+                wrapper.emit_op(OpCode::PerformEvidence, line);
+                wrapper.emit_u16(ev_local, line);
+                let op_name_idx = wrapper.chunk.intern_name(name);
+                wrapper.emit_u16(op_name_idx, line);
+                wrapper.emit_u8(1, line);
+            } else {
+                // Normal Perform path
+                wrapper.emit_op(OpCode::LoadLocal, line);
+                wrapper.emit_u16(0, line); // __arg__
+                let op_name_idx = wrapper.chunk.intern_name(name);
+                wrapper.emit_op(OpCode::Perform, line);
+                wrapper.emit_u16(op_name_idx, line);
+                wrapper.emit_u8(1, line); // 1 argument
+            }
+
+            wrapper.emit_op(OpCode::Return, line);
+
+            let upvalues: Vec<_> = wrapper.scope.upvalues.clone();
+            let enclosing = wrapper.scope.enclosing.take().unwrap();
+            self.scope = *enclosing;
+
+            let mut proto = wrapper.finish();
+            proto.arity = 1;
+
+            let proto_idx = self.chunk.add_constant(Constant::FnProto(Arc::new(proto)));
+            self.emit_op(OpCode::MakeClosure, line);
+            self.emit_u16(proto_idx, line);
+            for uv in &upvalues {
+                self.emit_u8(u8::from(uv.is_local), line);
+                self.emit_u16(uv.index, line);
+            }
+            return;
+        }
+        }
         // Fall back to global
         let name_idx = self.chunk.intern_name(name);
         self.emit_op(OpCode::LoadGlobal, line);
@@ -1245,5 +1321,41 @@ impl Compiler {
             self.emit_u16(store_idx, line);
         }
         Ok(())
+    }
+
+    /// Emit destructuring bytecode for a tuple parameter.
+    ///
+    /// The raw tuple lives at `tuple_slot`. This method:
+    /// 1. Parses "(n, _)" into element names
+    /// 2. Emits LoadLocal + LoadInt(i) + ListIndex for each named element
+    /// 3. Stores the extracted value into a new local via StoreLocal
+    ///
+    /// Element locals are declared here (they become extra locals that the
+    /// VM pre-fills with Unit — our bytecode overwrites them immediately).
+    fn emit_destructured_param(&mut self, tuple_slot: u16, name: &str, line: u32) {
+        let inner = name.trim_start_matches('(').trim_end_matches(')');
+        let elements: Vec<&str> = inner.split(", ").collect();
+
+        for (i, elem_name) in elements.iter().enumerate() {
+            let elem_name = elem_name.trim();
+            if elem_name == "_" {
+                continue; // Skip wildcards — no local needed
+            }
+            // Declare a local for this element (gets a pre-filled Unit slot)
+            let elem_slot = self.scope.declare_local(elem_name);
+            // Emit bytecode to extract tuple[i] and store into the local
+            self.emit_op(OpCode::LoadLocal, line);
+            self.emit_u16(tuple_slot, line);
+            if i <= 127 {
+                self.emit_op(OpCode::LoadInt, line);
+                self.emit_u8(i as u8, line);
+            } else {
+                self.emit_constant(Constant::Int(i as i64), line);
+            }
+            self.emit_op(OpCode::ListIndex, line);
+            self.emit_op(OpCode::StoreLocal, line);
+            self.emit_u16(elem_slot, line);
+            self.emit_op(OpCode::Pop, line); // StoreLocal leaves value on stack
+        }
     }
 }

@@ -224,7 +224,9 @@ impl Vm {
             self.stack.push(resume_value);
 
             // Set IP in the performing frame to continue from after Perform.
-            self.frames[resume_frame_idx].ip = resume_ip;
+            if resume_frame_idx < self.frames.len() {
+                self.frames[resume_frame_idx].ip = resume_ip;
+            }
 
             Ok(())
         } else {

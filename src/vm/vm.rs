@@ -951,7 +951,7 @@ impl Vm {
                     upvalues: closure.upvalues.clone(),
                     ip: 0,
                     stack_base,
-                    has_func_slot: true, // function value at stack_base - 1
+                    has_func_slot: true,
                 });
                 self.stack[func_idx] = VmValue::Unit;
 

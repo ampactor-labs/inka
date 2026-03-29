@@ -191,6 +191,9 @@ fn is_builtin_reason(reason) = {
   || starts_with(s, "Declared(" ++ dq ++ "return type of ")
   || starts_with(s, "Declared(" ++ dq ++ "local of ")
   || starts_with(s, "Declared(" ++ dq ++ "fn context")
+  || starts_with(s, "Declared(" ++ dq ++ "effects:")
+  || starts_with(s, "Declared(" ++ dq ++ "true")
+  || starts_with(s, "Declared(" ++ dq ++ "false")
 }
 
 // ─── Substitution ────────────────────────────────────────────

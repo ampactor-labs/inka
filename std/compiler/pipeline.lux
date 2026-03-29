@@ -468,6 +468,20 @@ fn show_effect_doc(eff) = match eff {
   _ => ""
 }
 
+fn lookup_fn_property(env, fn_name, prop) = {
+  let key = fn_name ++ "__" ++ prop
+  let (found, _, reason) = env_lookup(env, key)
+  if found == "not_found" { "" }
+  else {
+    let s = to_string(reason)
+    let dq = from_char_code(34)
+    // Extract value from Declared("value")
+    let prefix = "Declared(" ++ dq
+    if starts_with(s, prefix) { string_slice(s, len(prefix), len(s) - 2) }
+    else { "" }
+  }
+}
+
 // ─── Gradient Engine ─────────────────────────────────────────
 // Moved to std/compiler/gradient.lux — the gradient as first-class module.
 // compile_teaching still calls a compatibility wrapper here.

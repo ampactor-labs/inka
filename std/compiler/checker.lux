@@ -458,8 +458,15 @@ fn check_stmt(env, subst, counter, stmt) = match stmt {
     let resolved_ret = apply(s2, body_ty)
     let final_type = TFun(resolved_params, resolved_ret, checked_effs)
     let fn_reason = Because("fn " ++ name ++ " declaration", FnReturn(name, body_reason))
+    let is_pure = match checked_effs {
+      EfPure => true,
+      EfClosed(effs) => len(effs) == 0,
+      _ => false
+    }
     let env_typed = env_extend(env, name, final_type, fn_reason)
       |> add_fn_type_info(name, names, resolved_params, resolved_ret)
+      |> env_extend(name ++ "__effects", TUnit, Declared("effects:" ++ eff_to_string(checked_effs)))
+      |> env_extend(name ++ "__pure", TUnit, Declared(if is_pure { "true" } else { "false" }))
     (env_typed, s2, c4, EfPure)
   },
 
@@ -527,6 +534,12 @@ fn check_stmt(env, subst, counter, stmt) = match stmt {
 // The inference flows: param + return types in the env, prefixed by fn name.
 // The lowering reads these via type_of_var. No heuristics. No guessing.
 // The light passes through.
+fn eff_to_string(eff) = match eff {
+  EfPure => "Pure",
+  EfClosed(effs) => if len(effs) == 0 { "Pure" } else { join(effs, ",") },
+  _ => "open"
+}
+
 fn find_fn_ctx(env) = {
   if len(env) == 0 { "" }
   else {

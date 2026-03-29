@@ -208,7 +208,7 @@ fn lower_stmt(stmt) = match stmt {
       let names = extract_pvar_names_from_string(pat_str)
       LBlock([LLet("_lp", lowered)] ++ lower_destructure_bindings_offset(names, 0, 0))
     } else { if starts_with(pat_str, "PVar(") {
-      let name = string_slice(pat_str, 6, len(pat_str) - 2)
+      let name = str_slice(pat_str, 6, len(pat_str) - 2)
       LLet(name, lowered)
     } else {
       LLet("_lp", lowered)
@@ -234,7 +234,7 @@ fn lower_pattern_bindings(pats, field_offset, idx) = {
     // Use to_string to check variant — avoids Rust VM ADT matching crash
     if starts_with(s, "PVar(") {
       // to_string produces PVar("name") — strip PVar(" and ")
-      let name = string_slice(s, 6, len(s) - 2)
+      let name = str_slice(s, 6, len(s) - 2)
       if name == "_" { rest }
       else { [LLet(name, LIndex(LGlobal("_lp"), LConst(LInt(field_offset + idx))))] ++ rest }
     } else { rest }

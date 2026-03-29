@@ -1,39 +1,25 @@
-// Lux Type Checker + Why Engine — written in Lux, checked by Lux
+// Lux Type Checker — the HM algorithm
 //
-// Self-hosted Hindley-Milner type inference with reasoning chains.
-// Every inference carries a Reason explaining WHY that type was chosen.
-// The Why Engine makes the compiler's reasoning transparent at any depth:
-//   depth 0: x: Int
-//   depth 1: x: Int  ← parameter of fn double
-//   depth 2: x: Int  ← parameter of fn double  ← unified with return of * : (Int, Int) -> Int
+// This file implements HOW type inference works.
+// The WHAT (type rules) lives in infer.lux (frozen).
 //
-// This is what makes Lux's compiler a teaching compiler. It doesn't just
-// CHECK your code — it can EXPLAIN every decision it made, and show you
-// what each annotation would unlock.
-//
-// Phase 14: Effect unification. Effect rows are first-class in
-// unification — no longer discarded with `_` in TFun matching.
-// The counter carries [fresh_id, eff_subst] — one channel for
-// inference state, absorbing effect substitution the way effects
-// absorb every other mechanism in Lux.
+// One handle block. Source in, truth out.
+// Swap this handler, swap the algorithm. Same rules.
+// No data lost. Every unification, every effect binding, every
+// scope transition preserved in the state and delivered in the result.
 
 import compiler/lexer
 import compiler/parser
 import compiler/checker_types
 import compiler/checker_effects
-import compiler/checker_ownership
 import compiler/checker_suggest
 import compiler/checker_display
-import compiler/checker_why
-import compiler/solver
+import compiler/infer
 
-// ─── Unification with Reasoning + Effect Unification ─────────
-// Returns (success, new_subst, reason, new_counter).
-// Counter carries [fresh_id, eff_subst] — effect unification
-// updates the eff_subst within the counter.
-//
-// Phase 14: TFun case unifies effect rows instead of discarding
-// them with _. Effects are first-class in unification.
+// ─── Unification ────────────────────────────────────────────
+// Pure functions. Two types + substitution → new substitution.
+// TVar handling once, up front. Structural matching below.
+// Counter = (fresh_id, eff_subst) — both threaded, nothing lost.
 
 fn occurs(subst, var_id, ty) = match apply(subst, ty) {
   TVar(id2) => id2 == var_id,
@@ -44,921 +30,203 @@ fn occurs(subst, var_id, ty) = match apply(subst, ty) {
   _ => false
 }
 
-fn unify_types(subst, counter, t1, t2, context) = unify(subst, counter, t1, t2, context)
-fn unify(subst, counter, t1, t2, context) = {
+fn unify_types(subst, counter, t1, t2, context) = {
   let a = apply(subst, t1)
   let b = apply(subst, t2)
+  // TVar on left: bind or occurs-check
   match a {
     TVar(id1) => match b {
       TVar(id2) => if id1 == id2 { (true, subst, context, counter) }
         else { (true, subst_set(subst, id1, TVar(id2), context), context, counter) },
-      _ => if occurs(subst, id1, b) { (false, subst, Because("infinite type (occurs check)", context), counter) }
+      _ => if occurs(subst, id1, b) { (false, subst, Because("infinite type", context), counter) }
         else { (true, subst_set(subst, id1, b, context), context, counter) }
     },
-    TInt => match b {
-      TInt => (true, subst, context, counter),
-      TVar(id) => (true, subst_set(subst, id, TInt, context), context, counter),
-      _ => (false, subst, Because("expected Int, got " ++ type_to_string(subst, b), context), counter)
-    },
-    TFloat => match b {
-      TFloat => (true, subst, context, counter),
-      TVar(id) => (true, subst_set(subst, id, TFloat, context), context, counter),
-      _ => (false, subst, Because("expected Float, got " ++ type_to_string(subst, b), context), counter)
-    },
-    TString => match b {
-      TString => (true, subst, context, counter),
-      TVar(id) => (true, subst_set(subst, id, TString, context), context, counter),
-      _ => (false, subst, Because("expected String, got " ++ type_to_string(subst, b), context), counter)
-    },
-    TBool => match b {
-      TBool => (true, subst, context, counter),
-      TVar(id) => (true, subst_set(subst, id, TBool, context), context, counter),
-      _ => (false, subst, Because("expected Bool, got " ++ type_to_string(subst, b), context), counter)
-    },
-    TUnit => match b {
-      TUnit => (true, subst, context, counter),
-      TVar(id) => (true, subst_set(subst, id, TUnit, context), context, counter),
-      _ => (false, subst, Because("expected (), got " ++ type_to_string(subst, b), context), counter)
-    },
-    TList(e1) => match b {
-      TList(e2) => {
-        let (ok, s2, r, c2) = unify(subst, counter, e1, e2, Because("list element types must match", context))
-        (ok, s2, r, c2)
-      },
-      TVar(id) => if occurs(subst, id, a) { (false, subst, Because("infinite type", context), counter) }
-        else { (true, subst_set(subst, id, a, context), context, counter) },
-      _ => (false, subst, Because("expected List, got " ++ type_to_string(subst, b), context), counter)
-    },
-    TFun(p1, r1, eff1) => match b {
-      TFun(p2, r2, eff2) => {
-        if len(p1) != len(p2) {
-          (false, subst, Because("arity mismatch: " ++ to_string(len(p1)) ++ " vs " ++ to_string(len(p2)), context), counter)
-        } else {
-          let (ok, s2, reason, c2) = unify_list(subst, counter, p1, p2, Because("parameter types must match", context))
-          if !ok { (false, s2, reason, c2) }
-          else {
-            let (ok2, s3, r2_reason, c3) = unify(s2, c2, r1, r2, Because("return types must match", context))
-            if !ok2 { (false, s3, r2_reason, c3) }
-            else {
-              // Phase 14: unify effect rows — effects are first-class
-              let (c3_id, c3_esubst) = c3
-              let (_, new_esubst) = unify_eff(c3_esubst, eff1, eff2)
-              let c4 = (c3_id, new_esubst)
-              (true, s3, r2_reason, c4)
-            }
-          }
-        }
-      },
-      TVar(id) => if occurs(subst, id, a) { (false, subst, Because("infinite type", context), counter) }
-        else { (true, subst_set(subst, id, a, context), context, counter) },
-      _ => (false, subst, Because("expected function, got " ++ type_to_string(subst, b), context), counter)
-    },
-    TTuple(e1) => match b {
-      TTuple(e2) => {
-        if len(e1) != len(e2) {
-          (false, subst, Because("tuple size mismatch: " ++ to_string(len(e1)) ++ " vs " ++ to_string(len(e2)), context), counter)
-        } else { unify_list(subst, counter, e1, e2, Because("tuple element types must match", context)) }
-      },
-      TVar(id) => if occurs(subst, id, a) { (false, subst, Because("infinite type", context), counter) }
-        else { (true, subst_set(subst, id, a, context), context, counter) },
-      _ => (false, subst, Because("expected tuple, got " ++ type_to_string(subst, b), context), counter)
-    },
+    // TVar on right (non-TVar left): bind or occurs-check
     _ => match b {
       TVar(id) => if occurs(subst, id, a) { (false, subst, Because("infinite type", context), counter) }
         else { (true, subst_set(subst, id, a, context), context, counter) },
-      _ => (false, subst, Because("type mismatch", context), counter)
+      // Neither side is TVar — structural match
+      _ => unify_structure(subst, counter, a, b, context)
     }
   }
+}
+
+fn unify_structure(subst, counter, a, b, context) = match a {
+  TInt => match b { TInt => (true, subst, context, counter),
+    _ => (false, subst, Because("expected Int, got " ++ type_to_string(subst, b), context), counter) },
+  TFloat => match b { TFloat => (true, subst, context, counter),
+    _ => (false, subst, Because("expected Float, got " ++ type_to_string(subst, b), context), counter) },
+  TString => match b { TString => (true, subst, context, counter),
+    _ => (false, subst, Because("expected String, got " ++ type_to_string(subst, b), context), counter) },
+  TBool => match b { TBool => (true, subst, context, counter),
+    _ => (false, subst, Because("expected Bool, got " ++ type_to_string(subst, b), context), counter) },
+  TUnit => match b { TUnit => (true, subst, context, counter),
+    _ => (false, subst, Because("expected (), got " ++ type_to_string(subst, b), context), counter) },
+  TList(e1) => match b {
+    TList(e2) => unify_types(subst, counter, e1, e2, Because("list element types", context)),
+    _ => (false, subst, Because("expected List, got " ++ type_to_string(subst, b), context), counter)
+  },
+  TFun(p1, r1, eff1) => match b {
+    TFun(p2, r2, eff2) => {
+      if len(p1) != len(p2) {
+        (false, subst, Because("arity mismatch: " ++ to_string(len(p1)) ++ " vs " ++ to_string(len(p2)), context), counter)
+      } else {
+        let (ok, s2, reason, c2) = unify_list(subst, counter, p1, p2, Because("parameter types", context))
+        if !ok { (false, s2, reason, c2) }
+        else {
+          let (ok2, s3, r2_reason, c3) = unify_types(s2, c2, r1, r2, Because("return types", context))
+          if !ok2 { (false, s3, r2_reason, c3) }
+          else {
+            let (c3_id, c3_esubst) = c3
+            let (_, new_esubst) = unify_eff(c3_esubst, eff1, eff2)
+            (true, s3, r2_reason, (c3_id, new_esubst))
+          }
+        }
+      }
+    },
+    _ => (false, subst, Because("expected function, got " ++ type_to_string(subst, b), context), counter)
+  },
+  TTuple(e1) => match b {
+    TTuple(e2) => {
+      if len(e1) != len(e2) {
+        (false, subst, Because("tuple size mismatch: " ++ to_string(len(e1)) ++ " vs " ++ to_string(len(e2)), context), counter)
+      } else { unify_list(subst, counter, e1, e2, Because("tuple elements", context)) }
+    },
+    _ => (false, subst, Because("expected tuple, got " ++ type_to_string(subst, b), context), counter)
+  },
+  TName(n1, a1) => match b {
+    TName(n2, a2) => {
+      if n1 == n2 {
+        if len(a1) == len(a2) { unify_list(subst, counter, a1, a2, Because("type arguments of " ++ n1, context)) }
+        else { (false, subst, Because("type argument count mismatch for " ++ n1, context), counter) }
+      } else { (false, subst, Because("expected " ++ n1 ++ ", got " ++ n2, context), counter) }
+    },
+    _ => (false, subst, Because("expected " ++ n1 ++ ", got " ++ type_to_string(subst, b), context), counter)
+  },
+  _ => (false, subst, Because("type mismatch", context), counter)
 }
 
 fn unify_list(subst, counter, ts1, ts2, context) = {
   if len(ts1) == 0 { (true, subst, context, counter) }
   else {
-    let (ok, s2, r, c2) = unify(subst, counter, ts1[0], ts2[0], context)
+    let (ok, s2, r, c2) = unify_types(subst, counter, ts1[0], ts2[0], context)
     if !ok { (false, s2, r, c2) }
     else { unify_list(s2, c2, slice(ts1, 1, len(ts1)), slice(ts2, 1, len(ts2)), context) }
   }
 }
 
-// ─── Type Inference with Why Engine + Effects ────────────────
-// Returns (type, subst, counter, reason, effects).
-// The reason explains WHY this expression has this type.
-// The effects track WHICH algebraic effects it may perform.
-// Counter carries [fresh_id, eff_subst] — effect state flows for free.
+// ─── Effect Resolution ──────────────────────────────────────
+// Resolve effect rows inside type structure. apply() chases type
+// variables but leaves effect rows untouched. This completes the
+// picture — no dangling effect variables in the output.
 
-fn infer_expr(env, subst, counter, sexpr) = {
-  let S(expr, line, col) = sexpr;
-  match expr {
-  IntLit(_) => (TInt, subst, counter, Literal("integer literal"), EfPure),
-  FloatLit(_) => (TFloat, subst, counter, Literal("float literal"), EfPure),
-  StringLit(_) => (TString, subst, counter, Literal("string literal"), EfPure),
-  BoolLit(_) => (TBool, subst, counter, Literal("boolean literal"), EfPure),
-  NoneExpr => (TUnit, subst, counter, Literal("unit value"), EfPure),
-
-  VarRef(name) => {
-    let (found_name, ty, bind_reason) = env_lookup(env, name)
-    if found_name == "not_found" {
-      let similar = find_similar_name(env, name)
-      let _ = if similar != "" {
-        let msg = "unknown variable '" ++ name ++ "' — did you mean '" ++ similar ++ "'?"
-        let source = env_source(env)
-        report(source, "Error", msg, line, col)
-      } else { () }
-      let (tv, c2) = fresh_var(counter)
-      let (c2_id, _) = c2
-      (tv, subst, c2, Because("unknown variable '" ++ name ++ "', assigned fresh type", Fresh(c2_id - 1)), EfPure)
-    } else {
-      if has_negative_tvars(ty) {
-        let (inst_ty, c2, _) = instantiate_type(ty, counter, [])
-        (inst_ty, subst, c2, VarLookup(name, bind_reason), EfPure)
-      } else {
-        (ty, subst, counter, VarLookup(name, bind_reason), EfPure)
-      }
-    }
-  },
-
-  BinOp(op, left, right) => {
-    let (t1, s1, c1, r1, e1) = infer_expr(env, subst, counter, left)
-    let (t2, s2, c2, r2, e2) = infer_expr(env, s1, c1, right)
-    let effs = merge_effects(e1, e2)
-    if op == "Add" || op == "Sub" || op == "Mul" || op == "Div" || op == "Mod" {
-      let op_reason = OpConstraint(op ++ " requires numeric arguments", r1, r2)
-      let (ok1, s3, _, c3) = unify(s2, c2, t1, TInt, Because("left side of " ++ op, r1))
-      let (ok2, s4, _, c4) = unify(s3, c3, t2, TInt, Because("right side of " ++ op, r2))
-      (TInt, s4, c4, op_reason, effs)
-    } else { if op == "Eq" || op == "Neq" || op == "Lt" || op == "Gt" || op == "Le" || op == "Ge" {
-      let op_reason = OpConstraint(op ++ " produces Bool", r1, r2)
-      let (_, s3, _, c3) = unify(s2, c2, t1, t2, Because("comparison requires same types", Unified(r1, r2)))
-      (TBool, s3, c3, op_reason, effs)
-    } else { if op == "And" || op == "Or" {
-      let op_reason = OpConstraint(op ++ " requires Bool operands", r1, r2)
-      let (_, s3, _, c3) = unify(s2, c2, t1, TBool, Because("left side of " ++ op, r1))
-      let (_, s4, _, c4) = unify(s3, c3, t2, TBool, Because("right side of " ++ op, r2))
-      (TBool, s4, c4, op_reason, effs)
-    } else { if op == "Concat" {
-      (t1, s2, c2, OpConstraint("++ concatenation", r1, r2), effs)
-    } else {
-      (t1, s2, c2, Inferred("binary operation"), effs)
-    }}}}
-  },
-
-  UnaryOp(op, operand) => {
-    let (t1, s1, c1, r1, e1) = infer_expr(env, subst, counter, operand)
-    if op == "Neg" {
-      let (_, s2, _, c2) = unify(s1, c1, t1, TInt, Because("negation requires numeric type", r1))
-      (TInt, s2, c2, OpConstraint("negation produces numeric type", r1, r1), e1)
-    } else { if op == "Not" {
-      let (_, s2, _, c2) = unify(s1, c1, t1, TBool, Because("logical not requires Bool", r1))
-      (TBool, s2, c2, OpConstraint("logical not produces Bool", r1, r1), e1)
-    } else {
-      (t1, s1, c1, r1, e1)
-    }}
-  },
-
-  Call(func, args) => {
-    let (ft, s1, c1, fr, fe) = infer_expr(env, subst, counter, func)
-    let (arg_types, arg_reasons, s2, c2, arg_effs) = infer_args(env, s1, c1, args)
-    let (ret_tv, c3) = fresh_var(c2)
-    // Phase 14: fresh effect variable instead of EfPure placeholder —
-    // effects are first-class, the expected function type must carry
-    // an effect variable that unification can bind.
-    let (eff_tv, c3b) = fresh_eff_var(c3)
-    let expected_fn_type = TFun(arg_types, ret_tv, eff_tv)
-    let (ok, s3, unify_reason, c4) = unify(s2, c3b, ft, expected_fn_type, Because("function application", Applied(fr, arg_reasons)))
-    // Extract callee's declared effects from its resolved function type
-    let callee_effs = match apply(s3, ft) {
-      TFun(_, _, eff) => { let (_, c4_esubst) = c4; apply_eff_subst(c4_esubst, eff) },
-      _ => EfPure
-    }
-    let call_effs = merge_effects(merge_effects(fe, arg_effs), callee_effs)
-    (apply(s3, ret_tv), s3, c4, Applied(fr, arg_reasons), call_effs)
-  },
-
-  IfExpr(cond, then_br, else_br) => {
-    let (tc, s1, c1, rc, ec) = infer_expr(env, subst, counter, cond)
-    let (_, s2, _, c1b) = unify(s1, c1, tc, TBool, Because("if condition must be Bool", rc))
-    let (tt, s3, c2, rt, et) = infer_expr(env, s2, c1b, then_br)
-    let (te, s4, c3, re, ee) = infer_expr(env, s3, c2, else_br)
-    let (_, s5, _, c3b) = unify(s4, c3, tt, te, Because("if branches must have same type", CondBranch(rt, re)))
-    let effs = merge_effects(ec, merge_effects(et, ee))
-    (apply(s5, tt), s5, c3b, CondBranch(rt, re), effs)
-  },
-
-  ListExpr(elems) => {
-    if len(elems) == 0 {
-      let (tv, c2) = fresh_var(counter)
-      (TList(tv), subst, c2, Literal("empty list"), EfPure)
-    } else {
-      let (first_ty, s1, c1, first_reason, first_eff) = infer_expr(env, subst, counter, elems[0])
-      let (s_final, c_final, elem_effs) = infer_list_elems(env, s1, c1, first_ty, slice(elems, 1, len(elems)))
-      (TList(apply(s_final, first_ty)), s_final, c_final, ListElement(first_reason), merge_effects(first_eff, elem_effs))
-    }
-  },
-
-  TupleExpr(elems) => {
-    let (types, reasons, s_final, c_final, effs) = infer_args(env, subst, counter, elems)
-    (TTuple(types), s_final, c_final, Literal("tuple literal"), effs)
-  },
-
-  PipeExpr(left, right) => {
-    // a |> f(b) desugars to f(a, b)
-    let S(raw_right, rl, rc) = right;
-    match raw_right {
-      Call(func, args) => {
-        let combined = [left] ++ args
-        let (ty, s, c, r, effs) = infer_expr(env, subst, counter, S(Call(func, combined), rl, rc))
-        let (_, _, _, left_reason, _) = infer_expr(env, subst, counter, left)
-        (ty, s, c, PipeFlow(left_reason, r), effs)
-      },
-      _ => {
-        let (ty, s, c, r, effs) = infer_expr(env, subst, counter, S(Call(right, [left]), rl, rc))
-        let (_, _, _, left_reason, _) = infer_expr(env, subst, counter, left)
-        (ty, s, c, PipeFlow(left_reason, r), effs)
-      }
-    }
-  },
-
-  BlockExpr(stmts, final_expr) => {
-    let (block_env, s1, c1, block_effs) = check_block_stmts(env, subst, counter, stmts)
-    let (ty, s2, c2, reason, expr_effs) = infer_expr(block_env, s1, c1, final_expr)
-    (ty, s2, c2, Because("block result", reason), merge_effects(block_effs, expr_effs))
-  },
-
-  MatchExpr(scrutinee, arms) => {
-    let (scr_ty, s1, c1, scr_reason, scr_effs) = infer_expr(env, subst, counter, scrutinee)
-    if len(arms) == 0 {
-      (scr_ty, s1, c1, Because("empty match", scr_reason), scr_effs)
-    } else {
-      // Infer first arm to establish result type
-      let (first_pat, first_body) = arms[0]
-      let (arm_env, s2, c2) = bind_pattern(env, s1, c1, first_pat, scr_ty)
-      let (result_ty, s3, c3, result_reason, arm_effs) = infer_expr(arm_env, s2, c2, first_body)
-      // Unify remaining arms with first arm's type
-      let (s_final, c_final, all_effs) = unify_match_arms(env, s3, c3, scr_ty, result_ty, slice(arms, 1, len(arms)), merge_effects(scr_effs, arm_effs))
-      // Exhaustive match check — resolve ADT type name
-      let resolved_scr = apply(s_final, scr_ty)
-      let adt_name = match resolved_scr {
-        TName(tn, _) => tn,
-        _ => infer_adt_from_arms(env, arms, 0)
-      }
-      let missing = check_exhaustive(env, adt_name, arms)
-      let _ = if len(missing) > 0 {
-        let source = env_source(env)
-        let msg = "non-exhaustive match — missing: " ++ join(missing, ", ")
-        report(source, "Warning", msg, line, col)
-      } else { () }
-      (apply(s_final, result_ty), s_final, c_final, Because("match expression", result_reason), all_effs)
-    }
-  },
-
-  LambdaExpr(params, body) => {
-    let (param_types, c1) = fresh_params(counter, params)
-    let lambda_env = bind_params_with_reasons(env, params, param_types, "lambda")
-    let (body_ty, s1, c2, body_reason, body_effs) = infer_expr(lambda_env, subst, c1, body)
-    let fn_type = TFun(map(|p| apply(s1, p), param_types), apply(s1, body_ty), body_effs)
-    (fn_type, s1, c2, Declared("lambda"), EfPure)
-  },
-
-  HandleExpr(body, handler_arms, state_bindings) => {
-    // Infer body type — this is what the handle expression returns
-    let (body_ty, s1, c1, body_reason, body_effs) = infer_expr(env, subst, counter, body)
-    // Check each handler arm: bind op params + state vars, infer body
-    let (s2, c2, handler_effs) = check_handler_arms(env, s1, c1, handler_arms, state_bindings)
-    // The hourglass: effects converge to handle{}, the handler absorbs,
-    // the remainder flows out. This IS effect subtraction: E - F.
-    let absorbed = collect_handled_effects(env, handler_arms)
-    let net_body_effs = remove_effects(body_effs, absorbed)
-    // The Reason teaches what happened: body had effects, handler absorbed some
-    let absorption_note = if len(absorbed) > 0 {
-      "handle absorbs " ++ join(absorbed, ", ")
-    } else { "handle expression" }
-    (apply(s2, body_ty), s2, c2, Because(absorption_note, body_reason), merge_effects(net_body_effs, handler_effs))
-  },
-
-  ResumeExpr(value, state_updates) => {
-    let (val_ty, s1, c1, val_reason, val_effs) = infer_expr(env, subst, counter, value)
-    // Infer state update expressions
-    let (s2, c2, upd_effs) = infer_state_updates(env, s1, c1, state_updates)
-    (val_ty, s2, c2, Because("resume value", val_reason), merge_effects(val_effs, upd_effs))
-  },
-
-  FieldAccess(obj, field_name) => {
-    let (obj_ty, s1, c1, obj_reason, obj_effs) = infer_expr(env, subst, counter, obj)
-    let resolved = apply(s1, obj_ty)
-    match resolved {
-      TTuple(elems) => {
-        // Try parsing field as integer index
-        let idx = to_int(field_name)
-        if idx >= 0 && idx < len(elems) {
-          (elems[idx], s1, c1, Because("tuple field " ++ field_name, obj_reason), obj_effs)
-        } else {
-          let (tv, c2) = fresh_var(c1)
-          (tv, s1, c2, Because("field access ." ++ field_name, obj_reason), obj_effs)
-        }
-      },
-      _ => {
-        // For records or unknown types, return fresh var
-        let (tv, c2) = fresh_var(c1)
-        (tv, s1, c2, Because("field access ." ++ field_name, obj_reason), obj_effs)
-      }
-    }
-  },
-
-  Index(obj, idx) => {
-    let (obj_ty, s1, c1, obj_reason, obj_effs) = infer_expr(env, subst, counter, obj)
-    let (idx_ty, s2, c2, _, idx_effs) = infer_expr(env, s1, c1, idx)
-    let (_, s3, _, c2b) = unify(s2, c2, idx_ty, TInt, Because("index must be Int", Inferred("index")))
-    let resolved = apply(s3, obj_ty)
-    let elem_ty = match resolved {
-      TList(inner) => inner,
-      TTuple(elems) => {
-        let (tv, _) = fresh_var(c2b)
-        tv
-      },
-      _ => {
-        let (tv, _) = fresh_var(c2b)
-        tv
-      }
-    }
-    let (_, c3) = fresh_var(c2b)
-    (elem_ty, s3, c3, Because("index into " ++ type_to_string(s3, resolved), obj_reason), merge_effects(obj_effs, idx_effs))
-  },
-
-  _ => {
-    let (tv, c2) = fresh_var(counter)
-    let (c2_id, _) = c2
-    (tv, subst, c2, Fresh(c2_id - 1), EfPure)
-  }
-}
+fn resolve_type(subst, eff_subst, ty) = match apply(subst, ty) {
+  TFun(params, ret, eff) =>
+    TFun(map(|p| resolve_type(subst, eff_subst, p), params),
+         resolve_type(subst, eff_subst, ret),
+         apply_eff_subst(eff_subst, eff)),
+  TList(elem) => TList(resolve_type(subst, eff_subst, elem)),
+  TTuple(elems) => TTuple(map(|e| resolve_type(subst, eff_subst, e), elems)),
+  TName(name, args) => TName(name, map(|a| resolve_type(subst, eff_subst, a), args)),
+  other => other
 }
 
-fn infer_args(env, subst, counter, args) = {
-  if len(args) == 0 { ([], [], subst, counter, EfPure) }
+fn resolve_env(env, subst, eff_subst) = {
+  if len(env) == 0 { [] }
   else {
-    let (ty, s1, c1, reason, eff) = infer_expr(env, subst, counter, args[0])
-    let (rest_types, rest_reasons, s2, c2, rest_effs) = infer_args(env, s1, c1, slice(args, 1, len(args)))
-    ([ty] ++ rest_types, [reason] ++ rest_reasons, s2, c2, merge_effects(eff, rest_effs))
+    let (name, ty, reason) = env[0]
+    [(name, resolve_type(subst, eff_subst, ty), reason)]
+      ++ resolve_env(slice(env, 1, len(env)), subst, eff_subst)
   }
 }
 
-fn infer_list_elems(env, subst, counter, elem_ty, elems) = {
-  if len(elems) == 0 { (subst, counter, EfPure) }
-  else {
-    let (ty, s1, c1, _, eff) = infer_expr(env, subst, counter, elems[0])
-    let (_, s2, _, c1b) = unify(s1, c1, elem_ty, ty, Inferred("list elements must have uniform type"))
-    let (s3, c3, rest_effs) = infer_list_elems(env, s2, c1b, elem_ty, slice(elems, 1, len(elems)))
-    (s3, c3, merge_effects(eff, rest_effs))
-  }
-}
-
-// ─── Block Statement Checking ────────────────────────────────
-
-fn check_block_stmts(env, subst, counter, stmts) = {
-  if len(stmts) == 0 { (env, subst, counter, EfPure) }
-  else {
-    let (new_env, s1, c1, eff) = check_stmt(env, subst, counter, stmts[0])
-    let (final_env, s2, c2, rest_effs) = check_block_stmts(new_env, s1, c1, slice(stmts, 1, len(stmts)))
-    (final_env, s2, c2, merge_effects(eff, rest_effs))
-  }
-}
-
-// ─── Statement Checking ──────────────────────────────────────
-
-fn check_stmt(env, subst, counter, stmt) = match stmt {
-  LetStmt(name, value) => {
-    let (ty, s1, c1, reason, eff) = infer_expr(env, subst, counter, value)
-    let resolved = apply(s1, ty)
-    let new_env = env_extend(env, name, resolved, Because("let " ++ name ++ " = ..", reason))
-    // The inference flows: let-binding types visible to the lowering.
-    let fn_ctx = find_fn_ctx(env)
-    let env_typed = if len(fn_ctx) > 0 {
-      env_extend(new_env, fn_ctx ++ "__" ++ name, resolved, Declared("local of " ++ fn_ctx))
-    } else { new_env }
-    (env_typed, s1, c1, eff)
-  },
-
-  FnStmt(name, params, body, declared_effects) => {
-    let names = param_names(params)
-    let (param_types, c1) = fresh_params(counter, names)
-    let fn_env = bind_params_with_reasons(env, names, param_types, name)
-    let (ret_tv, c2) = fresh_var(c1)
-    let fn_type = TFun(param_types, ret_tv, EfPure)
-    let ctx_env = env_extend(fn_env, "__fn_ctx:" ++ name, TUnit, Declared("fn context"))
-    let rec_env = env_extend(ctx_env, name, fn_type, Declared("recursive binding"))
-    let (body_ty, s1, c3, body_reason, body_effs) = infer_expr(rec_env, subst, c2, body)
-    let (_, s2, _, c4) = unify(s1, c3, ret_tv, body_ty, FnReturn(name, body_reason))
-    // Phase 14: resolve effect variables before constraint checking.
-    let (_, c4_esubst) = c4
-    let (checked_effs, eff_violations) = check_effect_constraints(name, body_effs, declared_effects, c4_esubst)
-    let source = env_source(env)
-    let _ = report_effect_violations(source, eff_violations)
-    // Phase 15: ownership enforcement — own/ref checking
-    let own_violations = check_ownership(params, body)
-    let _ = report_ownership_violations(source, name, own_violations)
-    let resolved_params = map(|p| apply(s2, p), param_types)
-    let resolved_ret = apply(s2, body_ty)
-    let final_type = TFun(resolved_params, resolved_ret, checked_effs)
-    let fn_reason = Because("fn " ++ name ++ " declaration", FnReturn(name, body_reason))
-    let env_typed = env_extend(env, name, final_type, fn_reason)
-      |> add_fn_type_info(name, names, resolved_params, resolved_ret)
-      |> add_fn_effect_info(name, checked_effs)
-    (env_typed, s2, c4, EfPure)
-  },
-
-  ExprStmt(expr) => {
-    let (_, s1, c1, _, eff) = infer_expr(env, subst, counter, expr)
-    (env, s1, c1, eff)
-  },
-
-  LetDestructure(names, value) => {
-    let (val_ty, s1, c1, val_reason, eff) = infer_expr(env, subst, counter, value)
-    let resolved = apply(s1, val_ty)
-    // If it's a tuple, bind each name to the corresponding element
-    match resolved {
-      TTuple(elems) => {
-        let new_env = bind_destructure_tuple(env, names, elems, val_reason, 0)
-        (new_env, s1, c1, eff)
-      },
-      _ => {
-        // Bind each name to a fresh var
-        let (new_env, c2) = bind_destructure_fresh(env, s1, c1, names, val_reason)
-        (new_env, s1, c2, eff)
-      }
-    }
-  },
-
-  EffectDeclStmt(name, ops) => {
-    // Register the effect name in the environment
-    let new_env = env_extend(env, name, TName(name, []), Declared("effect " ++ name))
-    // Register each op as a function type performing this effect
-    let (final_env, c1) = register_effect_ops(new_env, subst, counter, name, ops)
-    (final_env, subst, c1, EfPure)
-  },
-
-  TypeStmt(name, variants) => {
-    // Register type name
-    let new_env = env_extend(env, name, TName(name, []), Declared("type " ++ name))
-    // Register each variant as a constructor function
-    let final_env = register_type_variants(new_env, counter, name, variants)
-    (final_env, subst, counter, EfPure)
-  },
-
-  TypeAliasStmt(name, base_type, _predicate) => {
-    let base_ty = match base_type {
-      "Int" => TInt,
-      "Float" => TFloat,
-      "String" => TString,
-      "Bool" => TBool,
-      _ => TName(base_type, [])
-    }
-    let new_env = env_extend(env, name, base_ty, Declared("type alias " ++ name))
-    (new_env, subst, counter, EfPure)
-  },
-
-  ImportStmt(_) => (env, subst, counter, EfPure),
-
-  LetPattern(pat, value) => {
-    let (val_ty, s1, c1, val_reason, eff) = infer_expr(env, subst, counter, value)
-    let (new_env, s2, c2) = bind_pattern(env, s1, c1, pat, val_ty)
-    (new_env, s2, c2, eff)
-  },
-
-  _ => (env, subst, counter, EfPure)
-}
-
-// The inference flows: param + return types in the env, prefixed by fn name.
-// The lowering reads these via type_of_var. No heuristics. No guessing.
-// The light passes through.
-fn add_fn_effect_info(env, fn_name, effs) = {
-  let is_pure = match effs { EfPure => true, EfClosed(e) => len(e) == 0, _ => false }
-  let eff_names = match effs { EfPure => [], EfClosed(e) => e, _ => [] }
-  // The type system carries types. TList for effect names. TBool for purity.
-  env_extend(
-    env_extend(env, fn_name ++ "__effects", TList(TString), Declared("effects")),
-    fn_name ++ "__pure", TBool, Declared(if is_pure { "pure" } else { "impure" })
-  )
-}
-
-fn find_fn_ctx(env) = {
-  if len(env) == 0 { "" }
-  else {
-    let (name, _, _) = env[0]
-    if starts_with(name, "__fn_ctx:") { string_slice(name, 9, len(name)) }
-    else { find_fn_ctx(slice(env, 1, len(env))) }
-  }
-}
-
-fn add_fn_type_info(env, fn_name, param_names, param_types, ret_type) = {
-  let env2 = add_param_type_entries(env, fn_name, param_names, param_types, 0)
-  env_extend(env2, fn_name ++ "__return", ret_type, Declared("return type of " ++ fn_name))
-}
-
-fn add_param_type_entries(env, fn_name, names, types, idx) = {
-  if idx >= len(names) || idx >= len(types) { env }
-  else {
-    let prefixed = fn_name ++ "__" ++ names[idx]
-    let env2 = env_extend(env, prefixed, types[idx], Declared("param of " ++ fn_name))
-    add_param_type_entries(env2, fn_name, names, types, idx + 1)
-  }
-}
-
-fn fresh_params(counter, params) = {
-  if len(params) == 0 { ([], counter) }
-  else {
-    let (tv, c1) = fresh_var(counter)
-    let (rest, c2) = fresh_params(c1, slice(params, 1, len(params)))
-    ([tv] ++ rest, c2)
-  }
-}
-
-fn bind_params_with_reasons(env, names, types, fn_name) = {
-  if len(names) == 0 { env }
-  else {
-    let reason = FnParam(fn_name, 0, Declared("parameter declaration"))
-    let new_env = env_extend(env, names[0], types[0], reason)
-    bind_params_with_reasons(new_env, slice(names, 1, len(names)), slice(types, 1, len(types)), fn_name)
-  }
-}
-
-// Extract plain names from [(name, tier)] parameter pairs.
-fn param_names(params) = {
-  if len(params) == 0 { [] }
-  else {
-    let (name, _) = params[0];
-    [name] ++ param_names(slice(params, 1, len(params)))
-  }
-}
-
-// ─── Effect Violation Reporting ──────────────────────────────
-
-fn report_effect_violations(source, violations) = {
-  if len(violations) == 0 { () }
-  else {
-    match violations[0] {
-      EffNegationViolated(fn_name, eff_name) => {
-        let _ = report(source, "effect error",
-          "'" ++ fn_name ++ "' declares !" ++ eff_name ++ " but performs " ++ eff_name, 0, 0)
-        report("", "Raw", "  hint: wrap the " ++ eff_name ++ "-performing code in a handler to absorb it", 0, 0)
-      },
-      EffOpenRowNegation(fn_name, eff_name) => {
-        report(source, "effect error",
-          "'" ++ fn_name ++ "' declares !" ++ eff_name ++ " but effect row is open — cannot prove absence", 0, 0)
-      },
-      EffPurityViolated(fn_name, effs) => {
-        report(source, "effect error",
-          "'" ++ fn_name ++ "' declares Pure but performs: " ++ join(effs, ", "), 0, 0)
-      },
-      _ => ()
-    };
-    report_effect_violations(source, slice(violations, 1, len(violations)))
-  }
-}
-
-// ─── Ownership Violation Reporting ──────────────────────────
-
-fn report_ownership_violations(source, fn_name, violations) = {
-  if len(violations) == 0 { () }
-  else {
-    match violations[0] {
-      ConsumedTwice(name, first_line, second_line) => {
-        let _ = report(source, "ownership error",
-          "'" ++ name ++ "' is own in '" ++ fn_name ++ "' but used more than once",
-          second_line, 1)
-        let _ = if first_line > 0 {
-          report("", "Raw", "  first use: line " ++ to_string(first_line), 0, 0)
-        } else { () }
-        report("", "Raw", "  hint: clone before second use, or change to ref", 0, 0)
-      },
-      RefEscaped(name, ref_line) => {
-        let _ = report(source, "ownership error",
-          "'" ++ name ++ "' is ref in '" ++ fn_name ++ "' but escapes via return",
-          ref_line, 1)
-        report("", "Raw", "  hint: change to own if the caller should transfer ownership", 0, 0)
-      },
-      OwnNeverConsumed(name) =>
-        report("", "Raw", "  -> own '" ++ name ++ "' in '" ++ fn_name ++ "' is never used (will be dropped)", 0, 0),
-      _ => ()
-    };
-    report_ownership_violations(source, fn_name, slice(violations, 1, len(violations)))
-  }
-}
-
-// ─── ADT Type Inference from Patterns ────────────────────────
-// When scrutinee type is unresolved (TVar), infer ADT name from constructor patterns.
-
-fn infer_adt_from_arms(env, arms, i) = {
-  if i >= len(arms) { "" }
-  else {
-    let (pat, _) = arms[i]
-    match pat {
-      PCon(name, _) => {
-        let (found, ty, _) = env_lookup(env, name)
-        if found == "not_found" { infer_adt_from_arms(env, arms, i + 1) }
-        else {
-          match ty {
-            TName(tn, _) => tn,
-            _ => infer_adt_from_arms(env, arms, i + 1)
-          }
-        }
-      },
-      _ => infer_adt_from_arms(env, arms, i + 1)
-    }
-  }
-}
-
-// ─── Pattern Binding ─────────────────────────────────────────
-// Bind pattern variables into the environment for match arms.
-
-fn bind_pattern(env, subst, counter, pat, scrutinee_ty) = match pat {
-  PVar(name) => {
-    let new_env = env_extend(env, name, scrutinee_ty, Because("pattern binding", Inferred("match scrutinee")))
-    (new_env, subst, counter)
-  },
-  PWild => (env, subst, counter),
-  PLit(_) => (env, subst, counter),
-  PCon(name, sub_pats) => {
-    let (new_env, new_counter) = bind_con_sub_pats(env, subst, counter, sub_pats, scrutinee_ty)
-    (new_env, subst, new_counter)
-  },
-  PTuple(sub_pats) => {
-    let (new_env, new_counter) = bind_con_sub_pats(env, subst, counter, sub_pats, scrutinee_ty)
-    (new_env, subst, new_counter)
-  },
-  _ => (env, subst, counter)
-}
-
-fn bind_con_sub_pats(env, subst, counter, pats, parent_ty) = {
-  if len(pats) == 0 { (env, counter) }
-  else {
-    let (tv, c1) = fresh_var(counter)
-    let (env2, _, c2) = bind_pattern(env, subst, c1, pats[0], tv)
-    bind_con_sub_pats(env2, subst, c2, slice(pats, 1, len(pats)), parent_ty)
-  }
-}
-
-// Unify remaining match arms with the result type of the first arm.
-fn unify_match_arms(env, subst, counter, scr_ty, result_ty, arms, effs) = {
-  if len(arms) == 0 { (subst, counter, effs) }
-  else {
-    let (pat, body) = arms[0]
-    let (arm_env, s1, c1) = bind_pattern(env, subst, counter, pat, scr_ty)
-    let (arm_ty, s2, c2, _, arm_effs) = infer_expr(arm_env, s1, c1, body)
-    let (_, s3, _, c3) = unify(s2, c2, result_ty, arm_ty, Because("match arms must have same type", CondBranch(Inferred("first arm"), Inferred("this arm"))))
-    unify_match_arms(env, s3, c3, scr_ty, result_ty, slice(arms, 1, len(arms)), merge_effects(effs, arm_effs))
-  }
-}
-
-// Check handler arms: create sub-env with op params and state vars.
-fn check_handler_arms(env, subst, counter, arms, state_bindings) = {
-  if len(arms) == 0 { (subst, counter, EfPure) }
-  else {
-    let arm = arms[0]
-    // Handler arm from parser is (op_name, params, body) — a 3-tuple
-    let (op_name, params, body) = arm
-    // Bind each param to a fresh type var
-    let (param_env, s1, c1) = bind_handler_params(env, subst, counter, params)
-    // Bind state variables from state_bindings
-    let (state_env, s2, c2) = bind_state_vars(param_env, s1, c1, state_bindings)
-    // Bind resume as a function in handler arm scope
-    let (resume_tv, c3) = fresh_var(c2)
-    let resume_env = env_extend(state_env, "resume", TFun([resume_tv], resume_tv, EfPure), Declared("resume continuation"))
-    let (_, s3, c4, _, arm_effs) = infer_expr(resume_env, s2, c3, body)
-    let (s5, c5, rest_effs) = check_handler_arms(env, s3, c4, slice(arms, 1, len(arms)), state_bindings)
-    (s5, c5, merge_effects(arm_effs, rest_effs))
-  }
-}
-
-// Phase 15: Collect which effects a handler absorbs.
-// For each handler arm, look up the op_name in env to find which
-// effect it belongs to (stored as EfClosed([effect_name]) on the op's type).
-fn collect_handled_effects(env, arms) = {
-  if len(arms) == 0 { [] }
-  else {
-    let (op_name, _, _) = arms[0]
-    let effect_name = lookup_op_effect(env, op_name)
-    let rest = collect_handled_effects(env, slice(arms, 1, len(arms)))
-    if effect_name == "" { rest }
-    else {
-      if list_contains(rest, effect_name) { rest }
-      else { [effect_name] ++ rest }
-    }
-  }
-}
-
-// Look up an effect operation in the env and extract its parent effect name.
-fn lookup_op_effect(env, op_name) = {
-  let (found, ty, _) = env_lookup(env, op_name)
-  if found == "not_found" { "" }
-  else {
-    match ty {
-      TFun(_, _, eff) => match eff {
-        EfClosed(effs) => if len(effs) > 0 { effs[0] } else { "" },
-        _ => ""
-      },
-      _ => ""
-    }
-  }
-}
-
-fn bind_handler_params(env, subst, counter, params) = {
-  if len(params) == 0 { (env, subst, counter) }
-  else {
-    let name = params[0]
-    let (tv, c1) = fresh_var(counter)
-    let new_env = env_extend(env, name, tv, Declared("handler parameter"))
-    bind_handler_params(new_env, subst, c1, slice(params, 1, len(params)))
-  }
-}
-
-fn bind_state_vars(env, subst, counter, bindings) = {
-  if len(bindings) == 0 { (env, subst, counter) }
-  else {
-    let binding = bindings[0]
-    // State bindings come from parser as (name, init_expr) pairs
-    let (name, init_expr) = binding
-    let (init_ty, s1, c1, _, _) = infer_expr(env, subst, counter, init_expr)
-    let new_env = env_extend(env, name, init_ty, Declared("handler state"))
-    bind_state_vars(new_env, s1, c1, slice(bindings, 1, len(bindings)))
-  }
-}
-
-fn infer_state_updates(env, subst, counter, updates) = {
-  if len(updates) == 0 { (subst, counter, EfPure) }
-  else {
-    let (_, upd_expr) = updates[0]
-    let (_, s1, c1, _, eff) = infer_expr(env, subst, counter, upd_expr)
-    let (s2, c2, rest_effs) = infer_state_updates(env, s1, c1, slice(updates, 1, len(updates)))
-    (s2, c2, merge_effects(eff, rest_effs))
-  }
-}
-
-// Bind names from let destructuring to tuple elements.
-fn bind_destructure_tuple(env, names, elems, reason, idx) = {
-  if idx >= len(names) || idx >= len(elems) { env }
-  else {
-    let name = names[idx]
-    let ty = elems[idx]
-    let new_env = env_extend(env, name, ty, Because("destructured element " ++ to_string(idx), reason))
-    bind_destructure_tuple(new_env, names, elems, reason, idx + 1)
-  }
-}
-
-// Bind names from let destructuring to fresh type vars (non-tuple case).
-fn bind_destructure_fresh(env, subst, counter, names, reason) = {
-  if len(names) == 0 { (env, counter) }
-  else {
-    let (tv, c1) = fresh_var(counter)
-    let new_env = env_extend(env, names[0], tv, Because("destructured binding", reason))
-    bind_destructure_fresh(new_env, subst, c1, slice(names, 1, len(names)), reason)
-  }
-}
-
-// Register effect operation signatures as function types in env.
-// Each op becomes a TFun that PERFORMS its parent effect.
-fn register_effect_ops(env, subst, counter, effect_name, ops) = {
-  if len(ops) == 0 { (env, counter) }
-  else {
-    let (op_name, param_names) = ops[0]
-    let (param_types, c1) = fresh_params(counter, param_names)
-    let (ret_tv, c2) = fresh_var(c1)
-    let op_type = TFun(param_types, ret_tv, EfClosed([effect_name]))
-    let new_env = env_extend(env, op_name, op_type, Declared("effect op " ++ op_name ++ " of " ++ effect_name))
-    register_effect_ops(new_env, subst, c2, effect_name, slice(ops, 1, len(ops)))
-  }
-}
-
-// Register ADT variant constructors in the environment.
-fn register_type_variants(env, counter, type_name, variants) = {
-  if len(variants) == 0 { env }
-  else {
-    let variant = variants[0]
-    let v_name = match variant {
-      (name, _) => name,
-      _ => "unknown_variant"
-    }
-    let new_env = env_extend(env, v_name, TName(type_name, []), Declared("constructor of " ++ type_name))
-    register_type_variants(new_env, counter, type_name, slice(variants, 1, len(variants)))
-  }
-}
-
-// ─── Program Checking ────────────────────────────────────────
+// ─── The Checker ────────────────────────────────────────────
+// One handle block. Runs the frozen type rules.
+//
+// State: (n, subst, env, effects, scope_stack, eff_subst)
+//   n          — fresh type/effect variable counter
+//   subst      — type variable substitution (accumulated, never reset)
+//   env        — (name, type, reason) triples
+//   effects    — accumulated effects for current scope
+//   scope_stack — saved (env, effects) pairs for push/pop
+//   eff_subst  — effect variable substitution (accumulated, never reset)
+//
+// Returns: env — fully resolved. No dangling type or effect variables.
+// Substitutions are internal. The truth exits clean.
 
 fn check_program(stmts) = {
-  let env = env_with_primitives(env_empty())
-  let subst = subst_empty()
-  let counter = (0, eff_subst_empty())
-  handle { check_stmts(env, subst, counter, stmts) } {
-    report(src, kind, msg, line, col) => {
-      let output = if kind == "Refinement" { "[refinement] " ++ msg }
-        else { if kind == "Raw" { msg }
-        else { format_diagnostic(src, kind, msg, line, col) }}
-      println(output)
-      resume(())
-    }
-  }
-}
-
-fn check_program_with_source(stmts, src_text) = {
-  let env = env_with_source(env_with_primitives(env_empty()), src_text)
-  let subst = subst_empty()
-  let counter = (0, eff_subst_empty())
-  handle { check_stmts(env, subst, counter, stmts) } {
-    report(src, kind, msg, line, col) => {
-      let output = if kind == "Refinement" { "[refinement] " ++ msg }
-        else { if kind == "Raw" { msg }
-        else { format_diagnostic(src, kind, msg, line, col) }}
-      println(output)
-      resume(())
-    }
-  }
-}
-
-// Forward-reference aware checking — for multi-file WASM compilation.
-fn check_program_forward(stmts) = {
-  let env = env_with_primitives(env_empty())
-  let subst = subst_empty()
-  let counter = (0, eff_subst_empty())
-  handle { check_stmts_forward(env, subst, counter, stmts) } {
-    report(src, kind, msg, line, col) => {
-      let output = if kind == "Refinement" { "[refinement] " ++ msg }
-        else { if kind == "Raw" { msg }
-        else { format_diagnostic(src, kind, msg, line, col) }}
-      println(output)
-      resume(())
-    }
-  }
-}
-
-fn check_stmts(env, subst, counter, stmts) =
-  check_stmts_with_aliases(env, subst, counter, stmts, [])
-
-fn check_stmts_forward(env, subst, counter, stmts) = {
-  let (env2, c2) = prescan_fn_names(env, counter, stmts)
-  check_stmts_with_aliases(env2, subst, c2, stmts, [])
-}
-
-fn prescan_fn_names(env, counter, stmts) = {
-  if len(stmts) == 0 { (env, counter) }
-  else {
-    let rest = slice(stmts, 1, len(stmts))
-    let s = to_string(stmts[0])
-    // Detect FnStmt via string prefix — the ONLY safe way on the Rust VM.
-    // When Lux runs on Lux, this becomes a proper match. Until then: this IS the wall.
-    if starts_with(s, "FnStmt(") {
-      // FnStmt("name", ...) — name is the first field, access via index
-      let name = stmts[0][0]
-      let (found_name, _, _) = env_lookup(env, name)
-      if found_name != "not_found" { prescan_fn_names(env, counter, rest) }
-      else {
-        let (tv, c2) = fresh_var(counter)
-        let new_env = env_extend(env, name, tv, Inferred("forward declaration"))
-        prescan_fn_names(new_env, c2, rest)
+  let init_env = env_with_primitives(env_empty())
+  handle {
+    infer_stmts(stmts)
+    get_env()
+  } with state = (0, [], init_env, EfPure, [], eff_subst_empty()) {
+    fresh() => {
+      let (n, s, e, ef, sc, es) = state
+      resume(TVar(n)) with state = (n + 1, s, e, ef, sc, es)
+    },
+    lookup(name) => {
+      let (n, s, e, ef, sc, es) = state
+      let (found, ty, _) = env_lookup(e, name)
+      if found == "not_found" {
+        let similar = find_similar_name(e, name)
+        let _ = if len(similar) > 0 {
+          report("", "Error", "unknown variable '" ++ name ++ "' — did you mean '" ++ similar ++ "'?", 0, 0)
+        } else { () }
+        resume(TVar(n)) with state = (n + 1, s, e, ef, sc, es)
+      } else {
+        if has_negative_tvars(ty) {
+          let (inst_ty, c2, _) = instantiate_type(ty, (n, es), [])
+          let (new_n, new_es) = c2
+          resume(apply(s, inst_ty)) with state = (new_n, s, e, ef, sc, new_es)
+        } else { resume(apply(s, ty)) }
       }
-    } else { prescan_fn_names(env, counter, rest) }
+    },
+    bind(name, ty, reason) => {
+      let (n, s, e, ef, sc, es) = state
+      resume(()) with state = (n, s, [(name, apply(s, ty), reason)] ++ e, ef, sc, es)
+    },
+    unify(a, b) => {
+      let (n, s, e, ef, sc, es) = state
+      let (ok, new_s, _, new_c) = unify_types(s, (n, es), apply(s, a), apply(s, b), Inferred("unification"))
+      let (new_n, new_es) = new_c
+      if ok { resume(()) with state = (new_n, new_s, e, ef, sc, new_es) }
+      else { resume(()) with state = (new_n, s, e, ef, sc, es) }
+    },
+    resolve(ty) => {
+      let (_, s, _, _, _, es) = state
+      resume(resolve_type(s, es, ty))
+    },
+    fresh_eff() => {
+      let (n, s, e, ef, sc, es) = state
+      resume(EfOpen([], n)) with state = (n + 1, s, e, ef, sc, es)
+    },
+    track_effect(eff) => {
+      let (n, s, e, ef, sc, es) = state
+      resume(()) with state = (n, s, e, merge_effects(ef, eff), sc, es)
+    },
+    push_scope() => {
+      let (n, s, e, ef, sc, es) = state
+      resume(()) with state = (n, s, e, EfPure, [(e, ef)] ++ sc, es)
+    },
+    pop_scope() => {
+      let (n, s, e, ef, sc, es) = state
+      let (saved_env, saved_effs) = sc[0]
+      resume(ef) with state = (n, s, saved_env, saved_effs, slice(sc, 1, len(sc)), es)
+    },
+    get_env() => {
+      let (_, s, e, _, _, es) = state
+      resume(resolve_env(e, s, es))
+    },
+    get_subst() => {
+      let (_, s, _, _, _, _) = state
+      resume(s)
+    },
+    report(src, kind, msg, line, col) => {
+      println(kind ++ ": " ++ msg)
+      resume(())
+    }
   }
 }
 
-fn check_stmts_with_aliases(env, subst, counter, stmts, aliases) = {
-  if len(stmts) == 0 { (env, subst, counter) }
-  else {
-    let stmt = stmts[0]
-    let rest = slice(stmts, 1, len(stmts))
-    let (new_env, s1, c1, _) = check_stmt(env, subst, counter, stmt)
-    let new_aliases = match stmt {
-      TypeAliasStmt(name, base, pred) => aliases ++ [(name, base, pred)],
-      _ => aliases
-    }
-    let _ = match stmt {
-      LetStmt(name, value) => verify_let_refinements(new_env, name, value, new_aliases),
-      _ => ()
-    }
-    check_stmts_with_aliases(new_env, s1, c1, rest, new_aliases)
-  }
-}
-
-fn verify_let_refinements(env, name, value, aliases) =
-  verify_aliases_loop(env, name, value, aliases)
-
-fn verify_aliases_loop(env, name, value, aliases) = {
-  if len(aliases) == 0 { () }
-  else {
-    let (alias_name, base_type, predicate) = aliases[0]
-    let (_, ty, _) = env_lookup(env, name)
-    let type_matches = match ty {
-      TInt => base_type == "Int",
-      TFloat => base_type == "Float",
-      _ => false
-    }
-    let _ = if type_matches {
-      let result = check_refinement(predicate, value)
-      match result {
-        Disproven(reason) =>
-          report("", "Refinement", alias_name ++ " violation: " ++ name ++ " -- " ++ reason, 0, 0),
-        Proven =>
-          report("", "Refinement", alias_name ++ " satisfied: " ++ name, 0, 0),
-        _ => ()
-      }
-    } else { () }
-    verify_aliases_loop(env, name, value, slice(aliases, 1, len(aliases)))
-  }
-}
+// Source in, truth out.
+fn check(source) = source |> lex |> parse_program |> check_program

@@ -6,7 +6,6 @@
 // yet (no WASM global access effect). When it can, this file
 // deletes itself.
 
-let NL = from_char_code(10)
 
 
 fn emit_alloc() =

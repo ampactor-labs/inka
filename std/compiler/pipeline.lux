@@ -200,6 +200,40 @@ fn compile_lowering(source) =
 // Parse, type-check, lower to LowIR, emit WAT.
 // Type info flows from infer → generate through the pipeline.
 
+// Fast WASM: skip checker entirely. No type info. val_eq handles dispatch.
+// Used for compiling the compiler itself — the checker can't handle 3000 lines.
+fn compile_wasm_fast(source) = {
+  let runtime = read_file("std/runtime/memory.lux")
+  let prelude = read_file("std/prelude.lux")
+  let imports = resolve_imports(source, [])
+  let full_source = runtime ++ "\n" ++ prelude ++ "\n" ++ imports ++ "\n" ++ strip_imports(source)
+  let tokens = lex(full_source)
+  let ast = parse_program(tokens)
+  let ctors = collect_ctors_from_ast(ast, 0)
+  let lowered = lower_program_ctx(ast, ctors)
+  emit_module(lowered, [])
+}
+
+fn collect_ctors_from_ast(stmts, idx) = {
+  if idx >= len(stmts) { [] }
+  else {
+    let s = to_string(stmts[idx])
+    let rest = collect_ctors_from_ast(stmts, idx + 1)
+    if starts_with(s, "TypeStmt(") {
+      let variants = stmts[idx][1]
+      collect_variant_names(variants, 0) ++ rest
+    } else { rest }
+  }
+}
+
+fn collect_variant_names(variants, idx) = {
+  if idx >= len(variants) { [] }
+  else {
+    let (name, _) = variants[idx]
+    [name] ++ collect_variant_names(variants, idx + 1)
+  }
+}
+
 fn compile_wasm(source) = {
   // Resolve imports, prepend runtime + prelude.
   // Import IS reading a file. The handler IS the resolution strategy.
@@ -218,8 +252,7 @@ fn compile_wasm(source) = {
       let type_map = build_type_map_with_params(env, subst, ast)
       let ctors = extract_constructors(env)
       let lowered = lower_program_typed(ast, ctors, type_map)
-      let wat = emit_module(lowered, build_type_map(env, subst))
-      println(wat)
+      emit_module(lowered, build_type_map(env, subst))
       resume(("skip", [], [], 0))
     }
   }

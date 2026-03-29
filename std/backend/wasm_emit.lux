@@ -50,9 +50,18 @@ fn emit_module(defs, type_map) = {
   let footer = emit_fn_table(fn_table)
     ++ emit_start(top_stmts, ctx)
     ++ ")" ++ NL
-  header
-    ++ emit_fn_list(fns, 0, ctx)
-    ++ footer
+  // Stream: print header, each function, footer. No O(n²) concat.
+  print(header)
+  print_fn_list(fns, 0, ctx)
+  print(footer)
+  ""
+}
+
+fn print_fn_list(fns, idx, ctx) = {
+  if idx < len(fns) {
+    print(emit_fn(fns[idx], ctx))
+    print_fn_list(fns, idx + 1, ctx)
+  } else { () }
 }
 
 fn emit_global_decls(names, idx)= {
@@ -297,11 +306,18 @@ fn emit_builtin(name, args, params, locals, ctx)= {
   // to_string dispatches by type — int_to_str is compiled Lux from memory.lux
   } else { if name == "to_string" {
     emit_args(args, 0, params, locals, ctx) ++ "    call $int_to_str" ++ NL
+  // LowerCtx effect operations — no-ops when compiled to WASM
+  } else { if name == "enter_fn" || name == "is_ctor" || name == "is_global"
+    || name == "find_rewrite" || name == "fresh_id" || name == "type_of_var" {
+    emit_args(args, 0, params, locals, ctx) ++ "    drop" ++ NL ++ "    i32.const 0" ++ NL
+  // VM builtins that have Lux equivalents in memory.lux
+  } else { if name == "string_slice" {
+    emit_args(args, 0, params, locals, ctx) ++ "    call $str_slice" ++ NL
   } else { if name == "type_of" {
     emit_args(args, 0, params, locals, ctx) ++ "    drop" ++ NL ++ "    i32.const 0" ++ NL
   } else {
     "" // Not a primitive — compiled Lux handles it
-  } } } } } } } } } }
+  } } } } } } } } } } } }
 }
 
 fn emit_call_expr(func, args, params, locals, ctx)= {

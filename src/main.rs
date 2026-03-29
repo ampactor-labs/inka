@@ -73,8 +73,10 @@ fn main() {
             run_pipeline_mode(path, "lower");
         }
         ["wasm", path] => {
-            // `lux wasm <file>` — emit WAT (WebAssembly Text Format)
             run_pipeline_mode(path, "wasm");
+        }
+        ["wasm-fast", path] => {
+            run_pipeline_mode(path, "wasm-fast");
         }
         [path] => {
             // Single argument — run file
@@ -192,6 +194,7 @@ fn run_pipeline_mode(file_path: &str, mode: &str) {
         "check" => "compile_checking",
         "lower" => "compile_lowering",
         "wasm" => "compile_wasm",
+        "wasm-fast" => "compile_wasm_fast",
         _ => "compile_standard",
     };
 

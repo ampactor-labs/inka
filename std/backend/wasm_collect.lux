@@ -15,10 +15,7 @@
 
 import compiler/lower
 
-let NL = from_char_code(10)
 
-let DQ = from_char_code(34)
-let BS = from_char_code(92)
 
 // ─── Top-Level Name Collection ──────────────────────────────
 
@@ -232,20 +229,8 @@ fn emit_fn_table_elems(fn_table, idx)= {
 
 // ─── Utility ────────────────────────────────────────────────
 
-fn string_union(a, b)= {
-  if len(b) == 0 { a }
-  else {
-    let head = b[0]
-    let rest = slice(b, 1, len(b))
-    if string_in(a, head, 0) { string_union(a, rest) }
-    else { string_union(a ++ [head], rest) }
-  }
-}
+// string_union provided by lower_closure.lux
 
-fn string_in(list, s, idx)= {
-  if idx >= len(list) { false }
-  else { if list[idx] == s { true } else { string_in(list, s, idx + 1) } }
-}
 
 // ─── Collect Functions / Top-Level ──────────────────────────
 

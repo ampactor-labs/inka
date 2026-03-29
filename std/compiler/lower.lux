@@ -3,59 +3,54 @@
 // Between AST and WASM. No handler stack, no stack unwinding, no
 // continuation replay. Just Loop, Switch, State, Call.
 //
-// Context flows through the LowerCtx effect. One lower_expr function.
-// Nested handlers provide rewrites inside handle expressions.
-// The tool that eliminates effects is built from effects.
+// type_of reads the frozen env directly. No heuristics. No string
+// type maps. The checker already said what everything IS — the
+// lowering just reads the answer and dispatches.
 
 import compiler/lower_ir
 import compiler/lower_closure
+import compiler/ty
 
-// LowerCtx effect is in lower_ir.lux (shared by lower.lux and lower_closure.lux)
-// is_global: true for top-level names — excludes them from closure captures
+// ─── type_of: Read-Only Mirror of the Frozen Type Rules ────
+// The checker solved everything. type_of just reads the answer.
+// Pure function. No unification. No effects. Just lookup and match.
 
-// Type detection — the checker already inferred these types.
-// type_of_var queries the env where param + return types now live.
-// No hardcoded function name lists. The light flows through.
-
-fn is_string_typed(sexpr) = {
+fn type_of(sexpr, env) = {
   let S(expr, _, _) = sexpr
   match expr {
-    StringLit(_) => true,
-    VarRef(name) => type_of_var(name) == "String",
-    BinOp(op, _, _) => op == "Concat",
-    Call(func, _) => {
-      let S(f, _, _) = func
-      match f {
-        VarRef(name) => type_of_var(name ++ "__return") == "String",
-        _ => false
-      }
+    IntLit(_)    => TInt,
+    FloatLit(_)  => TFloat,
+    StringLit(_) => TString,
+    BoolLit(_)   => TBool,
+    NoneExpr     => TUnit,
+    VarRef(name) => { let (_, ty, _) = env_lookup(env, name); ty },
+    BinOp(op, _, _) => {
+      if op == "Add" || op == "Sub" || op == "Mul" || op == "Div" || op == "Mod" { TInt }
+      else { if op == "Eq" || op == "Neq" || op == "Lt" || op == "Gt" || op == "LtEq" || op == "GtEq" { TBool }
+      else { if op == "And" || op == "Or" { TBool }
+      else { if op == "Concat" { TString }
+      else { TUnit } } } }
     },
-    _ => false
-  }
-}
-
-fn is_int_typed(sexpr) = {
-  let S(expr, _, _) = sexpr
-  match expr {
-    IntLit(_) => true,
-    VarRef(name) => type_of_var(name) == "Int",
-    BinOp(op, _, _) => op == "Add" || op == "Sub" || op == "Mul" || op == "Div" || op == "Mod",
-    UnaryOp(op, _) => op == "Neg",
-    Call(func, _) => {
-      let S(f, _, _) = func
-      match f {
-        VarRef(name) => type_of_var(name ++ "__return") == "Int",
-        _ => false
-      }
-    },
-    _ => false
+    UnaryOp(op, _) => if op == "Neg" { TInt } else { if op == "Not" { TBool } else { TUnit } },
+    Call(func, _) => match type_of(func, env) { TFun(_, ret, _) => ret, _ => TUnit },
+    IfExpr(_, then_br, _) => type_of(then_br, env),
+    ListExpr(elems) => if len(elems) == 0 { TList(TUnit) } else { TList(type_of(elems[0], env)) },
+    TupleExpr(elems) => TTuple(map(|e| type_of(e, env), elems)),
+    Index(coll, _) => match type_of(coll, env) { TList(elem) => elem, _ => TUnit },
+    StringInterp(_) => TString,
+    PipeExpr(_, right) => type_of(right, env),
+    BlockExpr(_, final_expr) => type_of(final_expr, env),
+    MatchExpr(_, arms) => if len(arms) > 0 { let (_, body) = arms[0]; type_of(body, env) } else { TUnit },
+    HandleExpr(body, _, _) => type_of(body, env),
+    _ => TUnit
   }
 }
 
 // ─── The One lower_expr ─────────────────────────────────────
-// Performs LowerCtx effects. One function. No duplicates.
+// Performs LowerCtx effects (is_ctor, find_rewrite, is_global, fresh_id).
+// Type dispatch via type_of — pure function on the env, no effect.
 
-fn lower_expr(sexpr) = {
+fn lower_expr(sexpr, env) = {
   let S(expr, _, _) = sexpr
   match expr {
     IntLit(s) => LConst(LInt(parse_int(s))),
@@ -67,98 +62,116 @@ fn lower_expr(sexpr) = {
 
     BinOp(op, left, right) => {
       if op == "Eq" || op == "Neq" {
-        let l = lower_expr(left)
-        let r = lower_expr(right)
-        if is_string_typed(left) || is_string_typed(right) {
-          let eq_call = LCall(LGlobal("str_eq"), [l, r])
-          if op == "Neq" { LUnaryOp("Not", eq_call) } else { eq_call }
-        } else { if is_int_typed(left) && is_int_typed(right) {
-          LBinOp(op, l, r)
-        } else {
-          // Unknown types — use polymorphic val_eq (safe fallback)
-          let eq_call = LCall(LGlobal("val_eq"), [l, r])
-          if op == "Neq" { LUnaryOp("Not", eq_call) } else { eq_call }
-        } }
+        let l = lower_expr(left, env)
+        let r = lower_expr(right, env)
+        let eq = match type_of(left, env) {
+          TString => LCall(LGlobal("str_eq"), [l, r]),
+          _ => LBinOp("Eq", l, r)
+        }
+        if op == "Neq" { LUnaryOp("Not", eq) } else { eq }
       } else { if op == "Concat" {
-        LCall(LGlobal("str_concat"), [lower_expr(left), lower_expr(right)])
+        LCall(LGlobal("str_concat"), [lower_expr(left, env), lower_expr(right, env)])
       } else {
-        LBinOp(op, lower_expr(left), lower_expr(right))
+        LBinOp(op, lower_expr(left, env), lower_expr(right, env))
       } }
     },
-    UnaryOp(op, operand) => LUnaryOp(op, lower_expr(operand)),
+    UnaryOp(op, operand) => LUnaryOp(op, lower_expr(operand, env)),
 
-    // THE KEY: Call dispatches through LowerCtx
     Call(func, args) => {
       let S(f, _, _) = func
       match f {
         VarRef(name) => {
-          if is_ctor(name) { LMakeVariant(name, lower_exprs(args)) }
+          if is_ctor(name) { LMakeVariant(name, lower_exprs(args, env)) }
           else { if (name == "println" || name == "print") && len(args) > 0 {
-            // Type-directed dispatch: the compiler knows the argument type
             let arg = args[0]
-            let lowered_arg = lower_expr(arg)
-            let printer = if is_string_typed(arg) { "print_string" } else { "print_int" }
+            let lowered_arg = lower_expr(arg, env)
+            let printer = match type_of(arg, env) { TString => "print_string", _ => "print_int" }
             if name == "println" {
               LBlock([LCall(LGlobal(printer), [lowered_arg]), LCall(LGlobal("print_newline"), [])])
             } else {
               LCall(LGlobal(printer), [lowered_arg])
             }
           } else { if name == "to_string" && len(args) > 0 {
-            let arg = args[0]
-            if is_string_typed(arg) { lower_expr(arg) }
-            else { LCall(LGlobal("int_to_str"), [lower_expr(arg)]) }
+            match type_of(args[0], env) {
+              TString => lower_expr(args[0], env),
+              _ => LCall(LGlobal("int_to_str"), [lower_expr(args[0], env)])
+            }
+          } else { if name == "slice" && len(args) >= 3 {
+            match type_of(args[0], env) {
+              TString => LCall(LGlobal("str_slice"), lower_exprs(args, env)),
+              _ => LCall(LGlobal("list_slice"), lower_exprs(args, env))
+            }
           } else {
             let rw = find_rewrite(name)
-            if len(rw) > 0 { apply_rewrite(rw) }
-            else { LCall(lower_expr(func), lower_exprs(args)) }
-          } } }
+            if len(rw) > 0 { apply_rewrite(rw, env) }
+            else { LCall(lower_expr(func, env), lower_exprs(args, env)) }
+          } } } }
         },
-        _ => LCall(lower_expr(func), lower_exprs(args))
+        _ => LCall(lower_expr(func, env), lower_exprs(args, env))
       }
     },
 
     PipeExpr(left, right) => {
-      let lowered_left = lower_expr(left)
+      let lowered_left = lower_expr(left, env)
       let S(right_expr, _, _) = right
       match right_expr {
-        Call(func, args) => LCall(lower_expr(func), [lowered_left] ++ lower_exprs(args)),
-        _ => LCall(lower_expr(right), [lowered_left])
+        Call(func, args) => LCall(lower_expr(func, env), [lowered_left] ++ lower_exprs(args, env)),
+        _ => LCall(lower_expr(right, env), [lowered_left])
       }
     },
 
     IfExpr(cond, then_e, else_e) =>
-      LIf(lower_expr(cond), [lower_expr(then_e)], [lower_expr(else_e)]),
+      LIf(lower_expr(cond, env), [lower_expr(then_e, env)], [lower_expr(else_e, env)]),
     MatchExpr(scrutinee, arms) =>
-      LMatch(lower_expr(scrutinee), lower_match_arms(arms)),
+      LMatch(lower_expr(scrutinee, env), lower_match_arms(arms, env)),
     BlockExpr(stmts, final_e) =>
-      LBlock(lower_stmts(stmts) ++ [lower_expr(final_e)]),
+      LBlock(lower_stmts(stmts, env) ++ [lower_expr(final_e, env)]),
 
-    ListExpr(elems) => LMakeList(lower_exprs(elems)),
-    TupleExpr(elems) => LMakeTuple(lower_exprs(elems)),
-    Index(collection, idx) => LIndex(lower_expr(collection), lower_expr(idx)),
-    FieldAccess(obj, field) => LIndex(lower_expr(obj), LConst(LString(field))),
+    ListExpr(elems) => LMakeList(lower_exprs(elems, env)),
+    TupleExpr(elems) => LMakeTuple(lower_exprs(elems, env)),
+    Index(collection, idx) => LIndex(lower_expr(collection, env), lower_expr(idx, env)),
+    FieldAccess(obj, field) => LIndex(lower_expr(obj, env), LConst(LString(field))),
 
-    LambdaExpr(params, body) => lower_lambda_inner("lambda_" ++ to_string(fresh_id()), params, body),
+    LambdaExpr(params, body) => lower_lambda_inner("lambda_" ++ to_string(fresh_id()), params, body, env),
 
     HandleExpr(body, arms, state_bindings) =>
-      lower_handle(body, arms, state_bindings),
+      lower_handle(body, arms, state_bindings, env),
 
-    ResumeExpr(value, _) => lower_expr(value),
+    ResumeExpr(value, _) => lower_expr(value, env),
+
+    StringInterp(parts) => lower_string_interp(parts, env),
+
+    ForExpr(var, iter, body) =>
+      lower_expr(iter, env),
 
     _ => LConst(LUnit)
   }
 }
 
-fn lower_exprs(sexprs) = {
+fn lower_exprs(sexprs, env) = {
   if len(sexprs) == 0 { [] }
-  else { [lower_expr(sexprs[0])] ++ lower_exprs(slice(sexprs, 1, len(sexprs))) }
+  else { [lower_expr(sexprs[0], env)] ++ lower_exprs(slice(sexprs, 1, len(sexprs)), env) }
 }
 
-fn lower_match_arms(arms) = {
+fn lower_string_interp(parts, env) = {
+  if len(parts) == 0 { LConst(LString("")) }
+  else { if len(parts) == 1 {
+    match type_of(parts[0], env) {
+      TString => lower_expr(parts[0], env),
+      _ => LCall(LGlobal("int_to_str"), [lower_expr(parts[0], env)])
+    }
+  } else {
+    let first = lower_string_interp([parts[0]], env)
+    let rest = lower_string_interp(slice(parts, 1, len(parts)), env)
+    LCall(LGlobal("str_concat"), [first, rest])
+  } }
+}
+
+fn lower_match_arms(arms, env) = {
   if len(arms) == 0 { [] }
   else {
     let (pat, body) = arms[0]
-    [(lower_pat(pat), lower_expr(body))] ++ lower_match_arms(slice(arms, 1, len(arms)))
+    [(lower_pat(pat), lower_expr(body, env))] ++ lower_match_arms(slice(arms, 1, len(arms)), env)
   }
 }
 
@@ -178,9 +191,9 @@ fn lower_pats(pats) = {
 
 // ─── Statement Lowering ─────────────────────────────────────
 
-fn lower_stmts(stmts) = {
+fn lower_stmts(stmts, env) = {
   if len(stmts) == 0 { [] }
-  else { [lower_stmt(stmts[0])] ++ lower_stmts(slice(stmts, 1, len(stmts))) }
+  else { [lower_stmt(stmts[0], env)] ++ lower_stmts(slice(stmts, 1, len(stmts)), env) }
 }
 
 fn extract_param_names(params) = {
@@ -191,15 +204,14 @@ fn extract_param_names(params) = {
   }
 }
 
-fn lower_stmt(stmt) = match stmt {
-  LetStmt(name, value) => LLet(name, lower_expr(value)),
+fn lower_stmt(stmt, env) = match stmt {
+  LetStmt(name, value) => LLet(name, lower_expr(value, env)),
   LetDestructure(names, value) => {
-    let lowered = lower_expr(value)
+    let lowered = lower_expr(value, env)
     LBlock([LLet("_dt", lowered)] ++ lower_destructure_bindings(names, 0))
   },
   LetPattern(pat, value) => {
-    // let S(inner, l, c) = expr → let _lp = expr; let inner = _lp[1]; ...
-    let lowered = lower_expr(value)
+    let lowered = lower_expr(value, env)
     let pat_str = to_string(pat)
     if starts_with(pat_str, "PCon(") {
       let names = extract_pvar_names_from_string(pat_str)
@@ -216,29 +228,11 @@ fn lower_stmt(stmt) = match stmt {
   },
   FnStmt(name, params, body, _) => {
     let param_names = extract_param_names(params)
-    // Top-level functions keep names (self-recursion uses call $name).
-    // Inner functions get unique names (called via call_indirect).
-    if is_global(name) { LLet(name, lower_lambda(name, param_names, body)) }
-    else { LLet(name, lower_lambda_inner(name, param_names, body)) }
+    if is_global(name) { LLet(name, lower_lambda(name, param_names, body, env)) }
+    else { LLet(name, lower_lambda_inner(name, param_names, body, env)) }
   },
-  ExprStmt(expr) => lower_expr(expr),
+  ExprStmt(expr) => lower_expr(expr, env),
   _ => LConst(LUnit)
-}
-
-fn lower_pattern_bindings(pats, field_offset, idx) = {
-  if idx >= len(pats) { [] }
-  else {
-    let pat = pats[idx]
-    let rest = lower_pattern_bindings(pats, field_offset, idx + 1)
-    let s = to_string(pat)
-    // Use to_string to check variant — avoids Rust VM ADT matching crash
-    if starts_with(s, "PVar(") {
-      // to_string produces PVar("name") — strip PVar(" and ")
-      let name = str_slice(s, 6, len(s) - 2)
-      if name == "_" { rest }
-      else { [LLet(name, LIndex(LGlobal("_lp"), LConst(LInt(field_offset + idx))))] ++ rest }
-    } else { rest }
-  }
 }
 
 fn lower_destructure_bindings_offset(names, offset, idx) = {
@@ -266,38 +260,28 @@ fn lower_destructure_bindings(names, idx) = {
 }
 
 // ─── Handle Expression Lowering ─────────────────────────────
-// Installs a NESTED LowerCtx handler that provides the rewrite map.
-// is_ctor propagates to the outer handler. find_rewrite is intercepted.
 
-fn lower_handle(body, arms, state_bindings) = {
+fn lower_handle(body, arms, state_bindings, env) = {
   let rw_map = build_rewrite_map(arms)
-  let state_inits = lower_state_inits(state_bindings)
-
-  // Install nested handler: find_rewrite checks the local rewrite map
+  let state_inits = lower_state_inits(state_bindings, env)
   let lowered_body = handle {
-    lower_expr(body)
+    lower_expr(body, env)
   } {
     find_rewrite(name) => {
       let entry = lookup_rewrite(rw_map, name, 0)
       resume(entry)
     }
   }
-  // is_ctor NOT listed → propagates to outer handler automatically
-
   LBlock(state_inits ++ [lowered_body])
 }
 
-// ─── Rewrite Application ────────────────────────────────────
-// Unified format: [op_name, params, pre_stmts, resume_value, updates]
-// Tail-resumptive is linear with empty pre_stmts and updates.
-
-fn apply_rewrite(rw) = {
+fn apply_rewrite(rw, env) = {
   let pre_stmts = rw[2]
   let resume_value = rw[3]
   let updates = rw[4]
-  let lowered_pre = lower_stmts_pure(pre_stmts)
-  let lowered_updates = lower_state_updates(updates)
-  let lowered_value = lower_expr(resume_value)
+  let lowered_pre = lower_stmts_pure(pre_stmts, env)
+  let lowered_updates = lower_state_updates(updates, env)
+  let lowered_value = lower_expr(resume_value, env)
   if len(lowered_pre) == 0 && len(lowered_updates) == 0 {
     lowered_value
   } else {
@@ -305,20 +289,18 @@ fn apply_rewrite(rw) = {
   }
 }
 
-// lower_stmts_pure: lower pre_stmts from handler body (no rewrites needed — these are
-// handler-definition stmts, not body stmts, so they don't contain effect operations)
-fn lower_stmts_pure(stmts) = {
+fn lower_stmts_pure(stmts, env) = {
   if len(stmts) == 0 { [] }
-  else { [lower_stmt_pure(stmts[0])] ++ lower_stmts_pure(slice(stmts, 1, len(stmts))) }
+  else { [lower_stmt_pure(stmts[0], env)] ++ lower_stmts_pure(slice(stmts, 1, len(stmts)), env) }
 }
 
-fn lower_stmt_pure(stmt) = match stmt {
-  LetStmt(name, value) => LLet(name, lower_expr_pure(value)),
-  ExprStmt(expr) => lower_expr_pure(expr),
+fn lower_stmt_pure(stmt, env) = match stmt {
+  LetStmt(name, value) => LLet(name, lower_expr_pure(value, env)),
+  ExprStmt(expr) => lower_expr_pure(expr, env),
   _ => LConst(LUnit)
 }
 
-fn lower_expr_pure(sexpr) = {
+fn lower_expr_pure(sexpr, env) = {
   let S(expr, _, _) = sexpr
   match expr {
     IntLit(s) => LConst(LInt(parse_int(s))),
@@ -327,21 +309,20 @@ fn lower_expr_pure(sexpr) = {
     BoolLit(b) => LConst(LBool(b)),
     NoneExpr => LConst(LUnit),
     VarRef(name) => LGlobal(name),
-    BinOp(op, l, r) => LBinOp(op, lower_expr_pure(l), lower_expr_pure(r)),
-    UnaryOp(op, e) => LUnaryOp(op, lower_expr_pure(e)),
-    Call(func, args) => LCall(lower_expr_pure(func), lower_exprs_pure(args)),
-    TupleExpr(elems) => LMakeTuple(lower_exprs_pure(elems)),
+    BinOp(op, l, r) => LBinOp(op, lower_expr_pure(l, env), lower_expr_pure(r, env)),
+    UnaryOp(op, e) => LUnaryOp(op, lower_expr_pure(e, env)),
+    Call(func, args) => LCall(lower_expr_pure(func, env), lower_exprs_pure(args, env)),
+    TupleExpr(elems) => LMakeTuple(lower_exprs_pure(elems, env)),
     _ => LConst(LUnit)
   }
 }
 
-fn lower_exprs_pure(sexprs) = {
+fn lower_exprs_pure(sexprs, env) = {
   if len(sexprs) == 0 { [] }
-  else { [lower_expr_pure(sexprs[0])] ++ lower_exprs_pure(slice(sexprs, 1, len(sexprs))) }
+  else { [lower_expr_pure(sexprs[0], env)] ++ lower_exprs_pure(slice(sexprs, 1, len(sexprs)), env) }
 }
 
 // ─── Rewrite Map ────────────────────────────────────────────
-// Unified: every arm → [op_name, params, pre_stmts, resume_value, updates]
 
 fn build_rewrite_map(arms) = {
   if len(arms) == 0 { [] }
@@ -380,36 +361,35 @@ fn lookup_rewrite(rw_map, name, idx) = {
 
 // ─── State Init + Update ────────────────────────────────────
 
-fn lower_state_inits(bindings) = {
+fn lower_state_inits(bindings, env) = {
   if len(bindings) == 0 { [] }
   else {
     let (name, init_sexpr) = bindings[0]
-    [LLet(name, lower_expr(init_sexpr))]
-      ++ lower_state_inits(slice(bindings, 1, len(bindings)))
+    [LLet(name, lower_expr(init_sexpr, env))]
+      ++ lower_state_inits(slice(bindings, 1, len(bindings)), env)
   }
 }
 
-// Simultaneous: for multi-variable updates, eval all RHS first, then assign.
-fn lower_state_updates(updates) = {
-  if len(updates) <= 1 { lower_state_updates_direct(updates) }
-  else { lower_state_eval_temps(updates, 0) ++ lower_state_assign_temps(updates, 0) }
+fn lower_state_updates(updates, env) = {
+  if len(updates) <= 1 { lower_state_updates_direct(updates, env) }
+  else { lower_state_eval_temps(updates, env, 0) ++ lower_state_assign_temps(updates, 0) }
 }
 
-fn lower_state_updates_direct(updates) = {
+fn lower_state_updates_direct(updates, env) = {
   if len(updates) == 0 { [] }
   else {
     let (name, value_sexpr) = updates[0]
-    [LLet(name, lower_expr(value_sexpr))]
-      ++ lower_state_updates_direct(slice(updates, 1, len(updates)))
+    [LLet(name, lower_expr(value_sexpr, env))]
+      ++ lower_state_updates_direct(slice(updates, 1, len(updates)), env)
   }
 }
 
-fn lower_state_eval_temps(updates, idx) = {
+fn lower_state_eval_temps(updates, env, idx) = {
   if idx >= len(updates) { [] }
   else {
     let (name, value_sexpr) = updates[idx]
-    [LLet("__tmp_" ++ name, lower_expr(value_sexpr))]
-      ++ lower_state_eval_temps(updates, idx + 1)
+    [LLet("__tmp_" ++ name, lower_expr(value_sexpr, env))]
+      ++ lower_state_eval_temps(updates, env, idx + 1)
   }
 }
 
@@ -423,39 +403,19 @@ fn lower_state_assign_temps(updates, idx) = {
 }
 
 // ─── Program Lowering ───────────────────────────────────────
-// Top-level handler: provides constructor set, no rewrites.
+// env replaces type_map. type_of reads it directly.
 
 fn lower_program_ctx(stmts, ctors) = lower_program_typed(stmts, ctors, [])
 
-fn lower_program_typed(stmts, ctors, type_map) = {
+fn lower_program_typed(stmts, ctors, env) = {
   let globals = collect_top_names(stmts, 0)
-  handle { lower_stmts(stmts) } with state = (0, "") {
+  handle { lower_stmts(stmts, env) } with state = 0 {
     is_ctor(name) => resume(ctor_in(ctors, name, 0)),
     find_rewrite(name) => resume([]),
     is_global(name) => resume(name_in(globals, name, 0)),
     fresh_id() => {
-      let (counter, fn_name) = state
-      resume(counter) with state = (counter + 1, fn_name)
-    },
-    enter_fn(fn_name) => {
-      let (counter, _) = state
-      resume(()) with state = (counter, fn_name)
-    },
-    type_of_var(name) => {
-      // Check scoped name first (fn_name__param), then global
-      let (_, fn_name) = state
-      let scoped = lookup_type_str(type_map, fn_name ++ "__" ++ name, 0)
-      if len(scoped) > 0 { resume(scoped) }
-      else { resume(lookup_type_str(type_map, name, 0)) }
+      resume(state) with state = state + 1
     }
-  }
-}
-
-fn lookup_type_str(type_map, name, idx) = {
-  if idx >= len(type_map) { "" }
-  else {
-    let (k, v) = type_map[idx]
-    if k == name { v } else { lookup_type_str(type_map, name, idx + 1) }
   }
 }
 
@@ -469,7 +429,6 @@ fn name_in(names, name, idx) = {
   else { if names[idx] == name { true } else { name_in(names, name, idx + 1) } }
 }
 
-// Collect top-level names: fn and let bindings
 fn collect_top_names(stmts, idx) = {
   if idx >= len(stmts) { [] }
   else {
@@ -488,18 +447,5 @@ fn collect_effect_op_names(ops, idx) = {
   else {
     let (op_name, _) = ops[idx]
     [op_name] ++ collect_effect_op_names(ops, idx + 1)
-  }
-}
-
-// Legacy entry point (no constructor awareness, no rewrites)
-fn lower_program(stmts) = {
-  let globals = collect_top_names(stmts, 0)
-  handle { lower_stmts(stmts) } with state = (0, "") {
-    is_ctor(name) => resume(false),
-    find_rewrite(name) => resume([]),
-    is_global(name) => resume(name_in(globals, name, 0)),
-    fresh_id() => { let (c, f) = state; resume(c) with state = (c + 1, f) },
-    type_of_var(name) => resume(""),
-    enter_fn(fn_name) => { let (c, _) = state; resume(()) with state = (c, fn_name) }
   }
 }

@@ -15,14 +15,11 @@ import compiler/lower_ir
 
 // ─── Lambda / Closure Lowering ──────────────────────────────
 
-fn lower_lambda_named(wasm_name, name, params, body) = {
-  enter_fn(name)
+fn lower_lambda_named(wasm_name, name, params, body, env) = {
   let all_free = collect_free_vars(body, params)
-  // Don't filter self-name for inner functions — let them capture themselves.
-  // Self-recursion through upval → call_indirect. No call $name needed.
   let free = if wasm_name == name { filter_real_captures(all_free, name) }
              else { filter_real_captures_no_self(all_free) }
-  let lowered_body = lower_expr(body)
+  let lowered_body = lower_expr(body, env)
   if len(free) == 0 {
     LMakeClosure(LFn(wasm_name, len(params), params, [lowered_body]), [])
   } else {
@@ -32,8 +29,8 @@ fn lower_lambda_named(wasm_name, name, params, body) = {
   }
 }
 
-fn lower_lambda(name, params, body) = lower_lambda_named(name, name, params, body)
-fn lower_lambda_inner(name, params, body) = lower_lambda_named(name ++ "_" ++ to_string(fresh_id()), name, params, body)
+fn lower_lambda(name, params, body, env) = lower_lambda_named(name, name, params, body, env)
+fn lower_lambda_inner(name, params, body, env) = lower_lambda_named(name ++ "_" ++ to_string(fresh_id()), name, params, body, env)
 
 fn filter_real_captures_no_self(names) = {
   if len(names) == 0 { [] }

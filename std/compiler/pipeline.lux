@@ -177,9 +177,8 @@ fn compile_lowering(source) = {
   let ast = source |> lex |> parse_program
   let env = check_program(ast)
   validate(ast, env)
-  let type_map = build_type_map(env)
   let ctors = extract_constructors(env)
-  let lowered = lower_program_typed(ast, ctors, type_map)
+  let lowered = lower_program_typed(ast, ctors, env)
   println("── LowIR ──")
   println(print_lowered(lowered))
   ("skip", [], [], 0)
@@ -228,10 +227,9 @@ fn compile_wasm(source) = {
   let full_source = runtime ++ "\n" ++ prelude ++ "\n" ++ imports ++ "\n" ++ strip_imports(source)
   let ast = full_source |> lex |> parse_program
   let env = check_program(ast)
-  let type_map = build_type_map(env)
   let ctors = extract_constructors(env)
-  let lowered = lower_program_typed(ast, ctors, type_map)
-  emit_module(lowered, type_map)
+  let lowered = lower_program_typed(ast, ctors, env)
+  emit_module(lowered, build_type_map(env))
 }
 
 fn collect_ctors_from_ast(stmts, idx) = {

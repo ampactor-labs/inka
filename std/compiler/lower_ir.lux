@@ -18,8 +18,6 @@ effect LowerCtx {
   find_rewrite(name: String) -> List
   is_global(name: String) -> Bool
   fresh_id() -> Int
-  type_of_var(name: String) -> String
-  enter_fn(fn_name: String) -> ()
 }
 
 // ─── Value Representation ───────────────────────────────────

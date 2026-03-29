@@ -1,37 +1,145 @@
-// Lux standard library prelude
-// Auto-loaded before every program and REPL session.
+// Lux Prelude — effects all the way down
+//
+// The Iterate effect: one mechanism for all collection operations.
+// map, filter, fold, take, find — all handlers on the same effect.
+// Same yield. Different resume. Stream fusion falls out for free.
+
+// ─── The Iterate Effect ─────────────────────────────────────
+// One effect. Every collection operation is a handler on it.
+
+effect Iterate {
+  yield(element) -> ()
+  result() -> ()
+}
+
+fn iterate(xs) with Iterate = {
+  if len(xs) > 0 {
+    yield(xs[0])
+    iterate(slice(xs, 1, len(xs)))
+  } else { () }
+}
+
+// ─── Collection Operations (handlers on Iterate) ────────────
+// Each one: handle { iterate(xs); result() } with handler-local state.
+// yield decides what to do with each element. result() extracts the answer.
+// Same effect. Different handlers. Stream fusion falls out for free.
+
+fn map(f, xs) =
+  handle { iterate(xs); result() } with acc = [] {
+    yield(elem) => resume(()) with acc = acc ++ [f(elem)],
+    result() => resume(acc)
+  }
+
+fn filter(pred, xs) =
+  handle { iterate(xs); result() } with acc = [] {
+    yield(elem) => if pred(elem) { resume(()) with acc = acc ++ [elem] } else { resume(()) },
+    result() => resume(acc)
+  }
+
+fn fold(xs, init, f) =
+  handle { iterate(xs); result() } with acc = init {
+    yield(elem) => resume(()) with acc = f(acc, elem),
+    result() => resume(acc)
+  }
+
+fn for_each(f, xs) =
+  handle { iterate(xs) } {
+    yield(elem) => { f(elem); resume(()) }
+  }
+
+fn any(pred, xs) =
+  handle { iterate(xs); result() } with found = false {
+    yield(elem) => if pred(elem) { resume(()) with found = true } else { resume(()) },
+    result() => resume(found)
+  }
+
+fn all(pred, xs) =
+  handle { iterate(xs); result() } with ok = true {
+    yield(elem) => if pred(elem) { resume(()) } else { resume(()) with ok = false },
+    result() => resume(ok)
+  }
+
+fn find(pred, xs) =
+  handle { iterate(xs); result() } with acc = [] {
+    yield(elem) => if pred(elem) { resume(()) with acc = [elem] } else { resume(()) },
+    result() => resume(acc)
+  }
+
+fn count(pred, xs) =
+  handle { iterate(xs); result() } with n = 0 {
+    yield(elem) => if pred(elem) { resume(()) with n = n + 1 } else { resume(()) },
+    result() => resume(n)
+  }
+
+fn take(n, xs) =
+  handle { iterate(xs); result() } with acc = [], remaining = n {
+    yield(elem) => {
+      if remaining > 0 { resume(()) with acc = acc ++ [elem], remaining = remaining - 1 }
+      else { resume(()) }
+    },
+    result() => resume(acc)
+  }
+
+fn drop(n, xs) =
+  handle { iterate(xs); result() } with acc = [], skipped = 0 {
+    yield(elem) => {
+      if skipped < n { resume(()) with skipped = skipped + 1 }
+      else { resume(()) with acc = acc ++ [elem] }
+    },
+    result() => resume(acc)
+  }
+
+// ─── Derived (built on the handlers above) ──────────────────
 
 fn head(xs) = xs[0]
 fn tail(xs) = slice(xs, 1, len(xs))
-fn map(f, xs) = if len(xs) == 0 { [] } else { [f(xs[0])] ++ map(f, slice(xs, 1, len(xs))) }
-fn filter(pred, xs) = if len(xs) == 0 { [] } else { if pred(xs[0]) { [xs[0]] ++ filter(pred, slice(xs, 1, len(xs))) } else { filter(pred, slice(xs, 1, len(xs))) } }
-fn fold(xs, init, f) = if len(xs) == 0 { init } else { fold(slice(xs, 1, len(xs)), f(init, xs[0]), f) }
+fn last(xs) = xs[len(xs) - 1]
 fn reverse(xs) = fold(xs, [], |acc, x| [x] ++ acc)
-fn take(n, xs) = if n <= 0 { [] } else { if len(xs) == 0 { [] } else { [xs[0]] ++ take(n - 1, slice(xs, 1, len(xs))) } }
-fn drop(n, xs) = if n <= 0 { xs } else { if len(xs) == 0 { [] } else { drop(n - 1, slice(xs, 1, len(xs))) } }
 fn flatten(xss) = fold(xss, [], |acc, xs| acc ++ xs)
-fn any(pred, xs) = if len(xs) == 0 { false } else { if pred(xs[0]) { true } else { any(pred, slice(xs, 1, len(xs))) } }
-fn all(pred, xs) = if len(xs) == 0 { true } else { if pred(xs[0]) { all(pred, slice(xs, 1, len(xs))) } else { false } }
+fn flat_map(f, xs) = flatten(map(f, xs))
 fn sum(xs) = fold(xs, 0, |acc, x| acc + x)
 fn product(xs) = fold(xs, 1, |acc, x| acc * x)
 fn concat(xss) = flatten(xss)
-fn zip_with(f, xs, ys) = if len(xs) == 0 { [] } else { if len(ys) == 0 { [] } else { [f(xs[0], ys[0])] ++ zip_with(f, slice(xs, 1, len(xs)), slice(ys, 1, len(ys))) } }
+fn reduce(xs, f) = fold(tail(xs), head(xs), f)
+fn enumerate(xs) = zip(range(0, len(xs)), xs)
+fn unique(xs) = fold(xs, [], |acc, x| if any(|a| a == x, acc) { acc } else { push(acc, x) })
+
+fn zip_with(f, xs, ys) = if len(xs) == 0 || len(ys) == 0 { [] }
+  else { [f(xs[0], ys[0])] ++ zip_with(f, tail(xs), tail(ys)) }
 fn zip(xs, ys) = zip_with(|a, b| (a, b), xs, ys)
-fn find(pred, xs) = if len(xs) == 0 { [] } else { if pred(xs[0]) { [xs[0]] } else { find(pred, slice(xs, 1, len(xs))) } }
+
 fn partition(pred, xs) = (filter(pred, xs), filter(|x| !pred(x), xs))
 fn range_inclusive(start, end) = range(start, end + 1)
-fn intersperse(sep, xs) = if len(xs) <= 1 { xs } else { [xs[0], sep] ++ intersperse(sep, slice(xs, 1, len(xs))) }
-fn scanl(xs, init, f) = if len(xs) == 0 { [init] } else { let next = f(init, xs[0]); [init] ++ scanl(slice(xs, 1, len(xs)), next, f) }
+fn intersperse(sep, xs) = if len(xs) <= 1 { xs } else { [xs[0], sep] ++ intersperse(sep, tail(xs)) }
+fn scanl(xs, init, f) = if len(xs) == 0 { [init] } else { let next = f(init, xs[0]); [init] ++ scanl(tail(xs), next, f) }
+fn repeat(n, x) = if n <= 0 { [] } else { [x] ++ repeat(n - 1, x) }
+fn chunk(n, xs) = if len(xs) == 0 { [] } else { [take(n, xs)] ++ chunk(n, drop(n, xs)) }
+
+// ─── Aggregation with projection ────────────────────────────
+
+fn sum_by(f, xs) = fold(xs, 0, |acc, x| acc + f(x))
+fn max_by(f, xs) = reduce(xs, |a, b| if f(a) >= f(b) { a } else { b })
+fn min_by(f, xs) = reduce(xs, |a, b| if f(a) <= f(b) { a } else { b })
+
+// ─── Composition ────────────────────────────────────────────
+
 fn compose(f, g) = |x| f(g(x))
 fn id(x) = x
+fn not(x) = if x { false } else { true }
 
-// --- Math ---
+// ─── Safe access ────────────────────────────────────────────
+
+fn nth(xs, n, default) = if n >= 0 && n < len(xs) { xs[n] } else { default }
+
+// ─── Math ───────────────────────────────────────────────────
+
 fn min(a, b) = if a <= b { a } else { b }
 fn max(a, b) = if a <= b { b } else { a }
 fn clamp(x, lo, hi) = min(max(x, lo), hi)
 fn abs(x) = if x < 0 { 0 - x } else { x }
 
-// --- List: sort (merge sort) ---
+// ─── Sort (merge sort — pure, not an Iterate handler) ───────
+
 fn merge(xs, ys) =
   if len(xs) == 0 { ys }
   else { if len(ys) == 0 { xs }
@@ -41,39 +149,13 @@ fn merge(xs, ys) =
 fn sort(xs) =
   if len(xs) <= 1 { xs }
   else {
-    let mid = len(xs) / 2;
+    let mid = len(xs) / 2
     merge(sort(slice(xs, 0, mid)), sort(slice(xs, mid, len(xs))))
   }
 
-// --- List: utilities ---
-fn enumerate(xs) = zip(range(0, len(xs)), xs)
-fn flat_map(f, xs) = flatten(map(f, xs))
-fn last(xs) = xs[len(xs) - 1]
-fn unique(xs) =
-  fold(xs, [], |acc, x| if any(|a| a == x, acc) { acc } else { push(acc, x) })
+// ─── String operations (pure Lux) ───────────────────────────
 
-// --- Safe access ---
-fn nth(xs, n, default) = if n >= 0 && n < len(xs) { xs[n] } else { default }
-
-// --- Iteration ---
-fn for_each(f, xs) = if len(xs) == 0 { () } else { f(xs[0]); for_each(f, slice(xs, 1, len(xs))) }
-fn repeat(n, x) = if n <= 0 { [] } else { [x] ++ repeat(n - 1, x) }
-fn reduce(xs, f) = fold(slice(xs, 1, len(xs)), xs[0], f)
-fn count(pred, xs) = fold(xs, 0, |acc, x| if pred(x) { acc + 1 } else { acc })
-
-// --- Aggregation with projection ---
-fn sum_by(f, xs) = fold(xs, 0, |acc, x| acc + f(x))
-fn max_by(f, xs) = reduce(xs, |a, b| if f(a) >= f(b) { a } else { b })
-fn min_by(f, xs) = reduce(xs, |a, b| if f(a) <= f(b) { a } else { b })
-
-// --- Logic ---
-fn not(x) = if x { false } else { true }
-
-// --- Chunking ---
-fn chunk(n, xs) = if len(xs) == 0 { [] } else { [take(n, xs)] ++ chunk(n, drop(n, xs)) }
-
-// --- String operations (pure Lux) ---
-fn join(xs, sep) = if len(xs) == 0 { "" } else { fold(slice(xs, 1, len(xs)), xs[0], |acc, x| acc ++ sep ++ x) }
+fn join(xs, sep) = if len(xs) == 0 { "" } else { fold(tail(xs), head(xs), |acc, x| acc ++ sep ++ x) }
 fn words(s) = split(s, " ")
 fn unwords(ws) = join(ws, " ")
 fn lines(s) = split(s, "\n")
@@ -104,7 +186,8 @@ fn trim(s) = {
   if start >= end { "" } else { slice(s, start, end) }
 }
 
-// --- Parsing (pure Lux) ---
+// ─── Parsing (pure Lux) ─────────────────────────────────────
+
 fn parse_int(s) = {
   let cs = chars(s)
   fn digit(c) = char_code(c) - 48

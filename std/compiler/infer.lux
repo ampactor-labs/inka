@@ -1,0 +1,445 @@
+// The Ultimate Checker — Lux checking Lux, through effects.
+//
+// The checker IS effects. State threading, unification, error reporting —
+// all effects. The checker code is JUST the type rules.
+//
+// The compiler that trusts its own type system already has.
+
+import compiler/lexer
+import compiler/parser
+import compiler/checker_types
+import compiler/checker_effects
+
+// ─── The Inference Effect ───────────────────────────────────
+// One effect. All type operations. The handler IS the algorithm.
+
+effect Infer {
+  fresh() -> Ty
+  lookup(name: String) -> Ty
+  bind(name: String, ty: Ty, reason: Reason) -> ()
+  unify(a: Ty, b: Ty) -> ()
+  resolve(ty: Ty) -> Ty
+  fresh_eff() -> EffRow
+  track_effect(eff: EffRow) -> ()
+  get_env() -> List
+  get_subst() -> List
+}
+
+// ─── Expression Inference ───────────────────────────────────
+// Each match arm IS a type rule. Nothing else.
+
+fn infer(sexpr) with Infer, Diagnostic = {
+  let S(expr, line, col) = sexpr
+  match expr {
+    IntLit(_)    => TInt,
+    FloatLit(_)  => TFloat,
+    StringLit(_) => TString,
+    BoolLit(b)   => TBool,
+    NoneExpr     => TUnit,
+
+    VarRef(name) => lookup(name),
+
+    BinOp(op, left, right) => infer_binop(op, left, right),
+    UnaryOp(op, inner) => infer_unaryop(op, inner),
+
+    Call(func, args) => {
+      let tf = infer(func)
+      let arg_types = infer_list(args)
+      let ret = fresh()
+      let eff = fresh_eff()
+      unify(tf, TFun(arg_types, ret, eff))
+      track_effect(eff)
+      resolve(ret)
+    },
+
+    IfExpr(cond, then_br, else_br) => {
+      unify(infer(cond), TBool)
+      let tt = infer(then_br)
+      let te = infer(else_br)
+      unify(tt, te)
+      resolve(tt)
+    },
+
+    ListExpr(elems) => {
+      if len(elems) == 0 { TList(fresh()) }
+      else {
+        let elem_ty = infer(elems[0])
+        infer_unify_list(slice(elems, 1, len(elems)), elem_ty)
+        TList(resolve(elem_ty))
+      }
+    },
+
+    TupleExpr(elems) => TTuple(infer_list(elems)),
+
+    Index(coll, idx) => {
+      infer(coll)
+      infer(idx)
+      fresh()
+    },
+
+    LambdaExpr(params, body) => {
+      let param_types = map(|_| fresh(), params)
+      bind_names(params, param_types)
+      let ret = infer(body)
+      TFun(map(resolve, param_types), resolve(ret), EfPure)
+    },
+
+    PipeExpr(left, right) => {
+      let input = infer(left)
+      let S(right_expr, _, _) = right
+      match right_expr {
+        Call(func, args) => {
+          let tf = infer(func)
+          let arg_types = [input] ++ infer_list(args)
+          let ret = fresh()
+          let eff = fresh_eff()
+          unify(tf, TFun(arg_types, ret, eff))
+          track_effect(eff)
+          resolve(ret)
+        },
+        _ => {
+          let ret = fresh()
+          let eff = fresh_eff()
+          unify(infer(right), TFun([input], ret, eff))
+          track_effect(eff)
+          resolve(ret)
+        }
+      }
+    },
+
+    MatchExpr(scrutinee, arms) => {
+      let scr_ty = infer(scrutinee)
+      let result = fresh()
+      infer_match_arms(arms, scr_ty, result)
+      resolve(result)
+    },
+
+    BlockExpr(stmts, final_expr) => {
+      infer_stmts(stmts)
+      infer(final_expr)
+    },
+
+    HandleExpr(body, arms, state_bindings) => {
+      // Bind state variables
+      infer_state_bindings(state_bindings)
+      let body_ty = infer(body)
+      infer_handler_arms(arms)
+      resolve(body_ty)
+    },
+
+    ResumeExpr(value, updates) => {
+      infer(value)
+      fresh()
+    },
+
+    StringInterp(parts) => {
+      infer_list(parts)
+      TString
+    },
+
+    FieldAccess(obj, field) => {
+      infer(obj)
+      fresh()
+    },
+
+    ForExpr(var, iter, body) => {
+      let elem = fresh()
+      unify(infer(iter), TList(elem))
+      bind(var, resolve(elem), Inferred("for variable"))
+      infer(body)
+      TUnit
+    },
+
+    _ => fresh()
+  }
+}
+
+// ─── Binary/Unary Operators ─────────────────────────────────
+
+fn infer_binop(op, left, right) with Infer, Diagnostic = {
+  let tl = infer(left)
+  let tr = infer(right)
+  if op == "Add" || op == "Sub" || op == "Mul" || op == "Div" || op == "Mod" {
+    unify(tl, TInt); unify(tr, TInt); TInt
+  } else { if op == "Eq" || op == "Neq" || op == "Lt" || op == "Gt" || op == "LtEq" || op == "GtEq" {
+    unify(tl, tr); TBool
+  } else { if op == "And" || op == "Or" {
+    unify(tl, TBool); unify(tr, TBool); TBool
+  } else { if op == "Concat" {
+    TString
+  } else { tl } } } }
+}
+
+fn infer_unaryop(op, inner) with Infer, Diagnostic = {
+  let t = infer(inner)
+  if op == "Neg" { unify(t, TInt); TInt }
+  else { if op == "Not" { unify(t, TBool); TBool }
+  else { t } }
+}
+
+// ─── Helpers ────────────────────────────────────────────────
+
+fn infer_list(sexprs) with Infer, Diagnostic = {
+  if len(sexprs) == 0 { [] }
+  else { [infer(sexprs[0])] ++ infer_list(slice(sexprs, 1, len(sexprs))) }
+}
+
+fn infer_unify_list(elems, expected) with Infer, Diagnostic = {
+  if len(elems) > 0 {
+    unify(infer(elems[0]), expected)
+    infer_unify_list(slice(elems, 1, len(elems)), expected)
+  } else { () }
+}
+
+fn bind_names(names, types) with Infer = {
+  if len(names) > 0 && len(types) > 0 {
+    bind(names[0], types[0], Inferred("parameter"))
+    bind_names(slice(names, 1, len(names)), slice(types, 1, len(types)))
+  } else { () }
+}
+
+// ─── Statement Inference ────────────────────────────────────
+
+fn infer_stmts(stmts) with Infer, Diagnostic = {
+  if len(stmts) > 0 {
+    infer_stmt(stmts[0])
+    infer_stmts(slice(stmts, 1, len(stmts)))
+  } else { () }
+}
+
+fn infer_stmt(stmt) with Infer, Diagnostic = match stmt {
+  LetStmt(name, value) => {
+    let ty = infer(value)
+    bind(name, ty, Because("let " ++ name, Inferred("binding")))
+  },
+
+  LetDestructure(names, value) => {
+    let ty = infer(value)
+    bind_destructure(names, ty, 0)
+  },
+
+  LetPattern(pat, value) => {
+    let ty = infer(value)
+    bind_pattern(pat, ty)
+  },
+
+  FnStmt(name, params, body, declared_effects) => {
+    let param_names = map(|(n, _)| n, params)
+    let param_types = map(|_| fresh(), param_names)
+    bind_names(param_names, param_types)
+    // Self-binding for recursion
+    let ret = fresh()
+    let eff = fresh_eff()
+    bind(name, TFun(param_types, ret, eff), Declared("fn " ++ name))
+    // Check body
+    let body_ty = infer(body)
+    unify(ret, body_ty)
+    // Resolve and re-bind with final type
+    let final_type = TFun(map(resolve, param_types), resolve(ret), EfPure)
+    bind(name, final_type, Declared("fn " ++ name))
+    // Flow param + return types for downstream consumers
+    flow_fn_types(name, param_names, param_types, body_ty)
+  },
+
+  ExprStmt(expr) => { infer(expr); () },
+
+  EffectDeclStmt(name, ops) => infer_effect_decl(name, ops),
+
+  TypeStmt(name, variants) => infer_type_decl(name, variants),
+
+  TypeAliasStmt(name, base, pred) => (),
+
+  _ => ()
+}
+
+fn bind_destructure(names, ty, idx) with Infer = {
+  if idx < len(names) {
+    bind(names[idx], fresh(), Inferred("destructured"))
+    bind_destructure(names, ty, idx + 1)
+  } else { () }
+}
+
+fn bind_pattern(pat, ty) with Infer = {
+  // Use to_string to detect variant — Rust VM safety
+  let s = to_string(pat)
+  if starts_with(s, "PVar(") {
+    let name = string_slice(s, 6, len(s) - 2)
+    bind(name, ty, Inferred("pattern"))
+  } else { () }
+}
+
+fn infer_effect_decl(name, ops) with Infer = {
+  if len(ops) > 0 {
+    let (op_name, params) = ops[0]
+    let param_types = map(|_| fresh(), params)
+    let ret = fresh()
+    bind(op_name, TFun(param_types, ret, EfClosed([name])), Declared("effect op"))
+    infer_effect_decl(name, slice(ops, 1, len(ops)))
+  } else { () }
+}
+
+fn infer_type_decl(name, variants) with Infer = {
+  if len(variants) > 0 {
+    let (v_name, _) = variants[0]
+    bind(v_name, TName(name, []), Declared("constructor"))
+    infer_type_decl(name, slice(variants, 1, len(variants)))
+  } else { () }
+}
+
+fn infer_match_arms(arms, scr_ty, result_ty) with Infer, Diagnostic = {
+  if len(arms) > 0 {
+    let (pat, body) = arms[0]
+    bind_pattern(pat, scr_ty)
+    unify(infer(body), result_ty)
+    infer_match_arms(slice(arms, 1, len(arms)), scr_ty, result_ty)
+  } else { () }
+}
+
+fn infer_handler_arms(arms) with Infer, Diagnostic = {
+  if len(arms) > 0 {
+    let (op_name, params, body) = arms[0]
+    map(|p| bind(p, fresh(), Inferred("handler param")), params)
+    infer(body)
+    infer_handler_arms(slice(arms, 1, len(arms)))
+  } else { () }
+}
+
+fn infer_state_bindings(bindings) with Infer = {
+  if len(bindings) > 0 {
+    let (name, value) = bindings[0]
+    bind(name, infer(value), Inferred("handler state"))
+    infer_state_bindings(slice(bindings, 1, len(bindings)))
+  } else { () }
+}
+
+fn flow_fn_types(fn_name, param_names, param_types, ret_ty) with Infer = {
+  // The inference flows: param + return types for downstream consumers
+  flow_param_types(fn_name, param_names, param_types, 0)
+  bind(fn_name ++ "__return", resolve(ret_ty), Declared("return type of " ++ fn_name))
+}
+
+fn flow_param_types(fn_name, names, types, idx) with Infer = {
+  if idx < len(names) && idx < len(types) {
+    bind(fn_name ++ "__" ++ names[idx], resolve(types[idx]), Declared("param of " ++ fn_name))
+    flow_param_types(fn_name, names, types, idx + 1)
+  } else { () }
+}
+
+// ─── The Handler: HM Inference ──────────────────────────────
+// The algorithm lives here. The type rules live above.
+// Swap the handler, swap the algorithm. Same rules.
+
+fn run_inference(stmts) = {
+  let init_env = env_with_primitives(env_empty())
+  handle { infer_stmts(stmts); get_env() } with state = (0, [], init_env, []) {
+    // state = (counter, substitution, environment, effects)
+    fresh() => {
+      let (n, s, e, ef) = state
+      resume(TVar(n)) with state = (n + 1, s, e, ef)
+    },
+    lookup(name) => {
+      let (_, _, e, _) = state
+      let (found, ty, _) = env_lookup(e, name)
+      if found == "not_found" { resume(TUnit) }
+      else { resume(ty) }
+    },
+    bind(name, ty, reason) => {
+      let (n, s, e, ef) = state
+      let resolved = apply(s, ty)
+      resume(()) with state = (n, s, [(name, resolved, reason)] ++ e, ef)
+    },
+    unify(a, b) => {
+      let (n, s, e, ef) = state
+      let (ok, new_s, _, new_c) = unify_types(s, (n, eff_subst_empty()), apply(s, a), apply(s, b), Inferred("unification"))
+      let (new_n, _) = new_c
+      resume(()) with state = (new_n, new_s, e, ef)
+    },
+    resolve(ty) => {
+      let (_, s, _, _) = state
+      resume(apply(s, ty))
+    },
+    fresh_eff() => {
+      let (n, s, e, ef) = state
+      resume(EfOpen([], n)) with state = (n + 1, s, e, ef)
+    },
+    track_effect(eff) => {
+      let (n, s, e, ef) = state
+      resume(()) with state = (n, s, e, [eff] ++ ef)
+    },
+    get_env() => {
+      let (_, _, e, _) = state
+      resume(e)
+    },
+    get_subst() => {
+      let (_, s, _, _) = state
+      resume(s)
+    }
+  }
+}
+
+// ─── Public API ─────────────────────────────────────────────
+// check_program_v2: run inference, return (env, subst, counter).
+// Compatible with the existing pipeline.
+
+fn check_program_v2(stmts) = {
+  let init_env = env_with_primitives(env_empty())
+  // The handler IS the algorithm. One handle block. All state managed.
+  handle {
+    infer_stmts(stmts)
+    // Return (env, subst, counter) for pipeline compatibility
+    let env = get_env()
+    let subst = get_subst()
+    (env, subst, (0, eff_subst_empty()))
+  } with state = (0, [], init_env, []) {
+    fresh() => {
+      let (n, s, e, ef) = state
+      resume(TVar(n)) with state = (n + 1, s, e, ef)
+    },
+    lookup(name) => {
+      let (n, s, e, ef) = state
+      let (found, ty, _) = env_lookup(e, name)
+      if found == "not_found" {
+        let similar = find_similar_name(e, name)
+        let _ = if len(similar) > 0 {
+          report("", "Error", "unknown variable '" ++ name ++ "' — did you mean '" ++ similar ++ "'?", 0, 0)
+        } else { () }
+        resume(TVar(n)) with state = (n + 1, s, e, ef)
+      } else {
+        // Instantiate polymorphic types (negative TVars)
+        if has_negative_tvars(ty) {
+          let (inst_ty, c2, _) = instantiate_type(ty, (n, eff_subst_empty()), [])
+          let (new_n, _) = c2
+          resume(apply(s, inst_ty)) with state = (new_n, s, e, ef)
+        } else { resume(apply(s, ty)) }
+      }
+    },
+    bind(name, ty, reason) => {
+      let (n, s, e, ef) = state
+      resume(()) with state = (n, s, [(name, apply(s, ty), reason)] ++ e, ef)
+    },
+    unify(a, b) => {
+      let (n, s, e, ef) = state
+      let ra = apply(s, a)
+      let rb = apply(s, b)
+      let (ok, new_s, _, new_c) = unify_types(s, (n, eff_subst_empty()), ra, rb, Inferred("unification"))
+      let (new_n, _) = new_c
+      if ok { resume(()) with state = (new_n, new_s, e, ef) }
+      else { resume(()) with state = (new_n, s, e, ef) }
+    },
+    resolve(ty) => {
+      let (_, s, _, _) = state
+      resume(apply(s, ty))
+    },
+    fresh_eff() => {
+      let (n, s, e, ef) = state
+      resume(EfOpen([], n)) with state = (n + 1, s, e, ef)
+    },
+    track_effect(eff) => resume(()),
+    get_env() => { let (_, _, e, _) = state; resume(e) },
+    get_subst() => { let (_, s, _, _) = state; resume(s) },
+    report(src, kind, msg, line, col) => {
+      println(kind ++ ": " ++ msg)
+      resume(())
+    }
+  }
+}

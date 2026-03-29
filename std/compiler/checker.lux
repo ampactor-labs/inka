@@ -44,6 +44,7 @@ fn occurs(subst, var_id, ty) = match apply(subst, ty) {
   _ => false
 }
 
+fn unify_types(subst, counter, t1, t2, context) = unify(subst, counter, t1, t2, context)
 fn unify(subst, counter, t1, t2, context) = {
   let a = apply(subst, t1)
   let b = apply(subst, t2)

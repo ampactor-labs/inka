@@ -1,8 +1,7 @@
-// Lux Compiler Pipeline — pipes, not handlers
+// Lux Compiler Pipeline — |> <| <>
 //
-// Each command is a pipe from frozen truth to output.
-// |> converges. <| diverges. No Compiler effect. No handler
-// orchestration. Just functions connected by |>.
+// Three operators. One data flow.
+// |> runs data through. <| fans data out. <> builds pipelines.
 //
 // check_program returns a fully-resolved env. Types are grounded.
 // No dangling variables. Every function below reads that truth.
@@ -24,8 +23,19 @@ import compiler/lower
 import compiler/lower_print
 import backend/wasm_emit
 
-// ─── Validate ───────────────────────────────────────────────
-// Fan-out from (ast, env). Independent analyses on the same truth.
+// ─── The Common Shape ───────────────────────────────────────
+// Every mode: parse, check, validate. Then diverge.
+
+fn parse_source(source) = source |> lex |> parse_program
+
+fn check_and_validate(ast) = {
+  let env = check_program(ast)
+  validate(ast, env)
+  (ast, env)
+}
+
+// ─── Validate (fan-out) ─────────────────────────────────────
+// Three independent analyses on the same (ast, env).
 
 fn validate(ast, env) = {
   validate_ownership_fns(ast)
@@ -41,8 +51,7 @@ fn validate_ownership_fns(ast) = {
       let name = ast[0][0]
       let params = ast[0][1]
       let body = ast[0][2]
-      let violations = check_ownership(params, body)
-      report_ownership(name, violations)
+      check_ownership(params, body) |> report_ownership(name)
     } else { () }
     validate_ownership_fns(slice(ast, 1, len(ast)))
   }
@@ -117,28 +126,22 @@ fn check_let_against_aliases(name, value, aliases) = {
 }
 
 // ─── The Pipes ──────────────────────────────────────────────
-// Each mode: parse |> check |> validate |> output.
+// Each mode: parse |> check |> validate |> diverge to output.
 
 fn compile_standard(source) = {
-  let ast = source |> lex |> parse_program
-  let env = check_program(ast)
-  validate(ast, env)
+  let (ast, env) = source |> parse_source |> check_and_validate
   compile_program(ast)
 }
 
 fn compile(source) = compile_standard(source)
 
 fn compile_checked(source) = {
-  let ast = source |> lex |> parse_program
-  let env = check_program(ast)
-  validate(ast, env)
+  let (ast, env) = source |> parse_source |> check_and_validate
   (compile_program(ast), env)
 }
 
 fn compile_teaching(source) = {
-  let ast = source |> lex |> parse_program
-  let env = check_program(ast)
-  validate(ast, env)
+  let (ast, env) = source |> parse_source |> check_and_validate
   println("[teach] types inferred:")
   println(show_env_compact(env))
   let suggestion = gradient_suggestion(env, ast)
@@ -147,36 +150,28 @@ fn compile_teaching(source) = {
 }
 
 fn compile_explaining(source) = {
-  let ast = source |> lex |> parse_program
-  let env = check_program(ast)
-  validate(ast, env)
+  let (ast, env) = source |> parse_source |> check_and_validate
   println("── Why Engine ──")
   println(show_env_why(env, 2))
   compile_program(ast)
 }
 
 fn compile_documenting(source) = {
-  let ast = source |> lex |> parse_program
-  let env = check_program(ast)
-  validate(ast, env)
+  let (ast, env) = source |> parse_source |> check_and_validate
   println("── Documentation ──")
   println(show_env_doc(env))
   compile_program(ast)
 }
 
 fn compile_checking(source) = {
-  let ast = source |> lex |> parse_program
-  let env = check_program(ast)
-  validate(ast, env)
+  let (ast, env) = source |> parse_source |> check_and_validate
   println("✓ type check passed")
   println(show_env_compact(env))
   ("skip", [], [], 0)
 }
 
 fn compile_lowering(source) = {
-  let ast = source |> lex |> parse_program
-  let env = check_program(ast)
-  validate(ast, env)
+  let (ast, env) = source |> parse_source |> check_and_validate
   let ctors = extract_constructors(env)
   let lowered = lower_program_typed(ast, ctors, env)
   println("── LowIR ──")
@@ -198,9 +193,7 @@ fn compile_tracing(source) = {
 }
 
 fn compile_illuminate(source) = {
-  let ast = source |> lex |> parse_program
-  let env = check_program(ast)
-  validate(ast, env)
+  let (ast, env) = source |> parse_source |> check_and_validate
   let g = compute_gradient(env, ast)
   let rendered = render_gradient(g)
   if len(rendered) > 0 { println(rendered) } else { () }
@@ -208,15 +201,14 @@ fn compile_illuminate(source) = {
 }
 
 // ─── WASM Pipe ──────────────────────────────────────────────
-// The checker is not optional. No wasm-fast.
+// The checker is not optional.
 
 fn compile_wasm(source) = {
   let runtime = read_file("std/runtime/memory.lux")
   let prelude = read_file("std/prelude.lux")
   let imports = resolve_imports(source, [])
   let full_source = runtime ++ "\n" ++ prelude ++ "\n" ++ imports ++ "\n" ++ strip_imports(source)
-  let ast = full_source |> lex |> parse_program
-  let env = check_program(ast)
+  let (ast, env) = full_source |> parse_source |> check_and_validate
   let ctors = extract_constructors(env)
   let lowered = lower_program_typed(ast, ctors, env)
   emit_module(lowered, [])
@@ -225,16 +217,12 @@ fn compile_wasm(source) = {
 // ─── REPL Pipes ─────────────────────────────────────────────
 
 fn repl_standard(source) = {
-  let ast = source |> lex |> parse_program
-  let env = check_program(ast)
-  validate(ast, env)
+  let (ast, env) = source |> parse_source |> check_and_validate
   compile_repl(ast)
 }
 
 fn repl_teaching(source) = {
-  let ast = source |> lex |> parse_program
-  let env = check_program(ast)
-  validate(ast, env)
+  let (ast, env) = source |> parse_source |> check_and_validate
   println("[teach] types: " ++ show_env_compact(env))
   let suggestion = gradient_suggestion(env, ast)
   if len(suggestion) > 0 { println("[teach] " ++ suggestion) } else { () }
@@ -242,9 +230,7 @@ fn repl_teaching(source) = {
 }
 
 fn repl_explaining(source) = {
-  let ast = source |> lex |> parse_program
-  let env = check_program(ast)
-  validate(ast, env)
+  let (ast, env) = source |> parse_source |> check_and_validate
   println(show_env_why(env, 2))
   compile_repl(ast)
 }
@@ -317,6 +303,8 @@ fn filter_non_imports(lines, idx) = {
     else { [line] ++ rest }
   }
 }
+
+// ─── Constructor Extraction ─────────────────────────────────
 
 fn extract_constructors(env) = extract_ctors_iter(env, 0)
 

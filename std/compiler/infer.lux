@@ -108,6 +108,20 @@ fn infer(sexpr) with Infer, Diagnostic = {
       }
     },
 
+    ComposeExpr(f, g) => {
+      // f <> g = |x| g(f(x)) — f first, then g. Left to right.
+      let tf = infer(f)
+      let tg = infer(g)
+      let a = fresh()
+      let b = fresh()
+      let c = fresh()
+      let ef = fresh_eff()
+      let eg = fresh_eff()
+      unify(tf, TFun([a], b, ef))
+      unify(tg, TFun([b], c, eg))
+      TFun([resolve(a)], resolve(c), resolve(eg))
+    },
+
     MatchExpr(scrutinee, arms) => {
       let scr_ty = infer(scrutinee)
       let result = fresh()

@@ -441,6 +441,13 @@ fn compile_expr(ctx, sexpr) = {
     }
   },
 
+  ComposeExpr(f, g) => {
+    // f <> g => |x| g(f(x)) — f first, then g. Left to right.
+    let ctx2 = compile_expr(ctx, f)
+    let ctx3 = compile_expr(ctx2, g)
+    emit_u8(emit_op(ctx3, OP_MAKE_CLOSURE_COMPOSE), 2)
+  },
+
   Index(obj, idx) => {
     let ctx2 = compile_expr(ctx, obj)
     let ctx3 = compile_expr(ctx2, idx)

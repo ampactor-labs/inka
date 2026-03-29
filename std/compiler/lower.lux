@@ -120,6 +120,14 @@ fn lower_expr(sexpr, env) = {
       }
     },
 
+    ComposeExpr(f, g) => {
+      // f <> g = |x| g(f(x)) — f first, then g. Left to right.
+      let param = "__compose_x"
+      let f_call = LCall(lower_expr(f, env), [LGlobal(param)])
+      let g_call = LCall(lower_expr(g, env), [f_call])
+      LMakeClosure(LFn("__composed_" ++ to_string(fresh_id()), 1, [param], [g_call]), [])
+    },
+
     FanOutExpr(left, right) => {
       let S(right_expr, rl, rc) = right
       match right_expr {

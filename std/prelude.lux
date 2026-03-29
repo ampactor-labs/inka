@@ -122,10 +122,19 @@ fn max_by(f, xs) = reduce(xs, |a, b| if f(a) >= f(b) { a } else { b })
 fn min_by(f, xs) = reduce(xs, |a, b| if f(a) <= f(b) { a } else { b })
 
 // ─── Composition ────────────────────────────────────────────
+// compose IS <> for when you need a function instead of syntax.
+// id is the identity element: f <> id = f, id <> f = f.
+// build_pipeline folds a list of functions into one composed pipeline.
 
-fn compose(f, g) = |x| f(g(x))
+// compose matches <> — f first, then g. Left to right.
+// x |> (f <> g) = x |> f |> g
+fn compose(f, g) = |x| g(f(x))
 fn id(x) = x
 fn not(x) = if x { false } else { true }
+
+// Build a pipeline from a list of functions. Fold with compose.
+// build_pipeline([f, g, h]) = f <> g <> h
+fn build_pipeline(steps) = fold(steps, id, |acc, step| |x| step(acc(x)))
 
 // ─── Safe access ────────────────────────────────────────────
 

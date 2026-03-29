@@ -132,7 +132,7 @@ fn analyze_all_fns(env, subst, declared) = {
   else {
     let (name, ty, reason) = env[0]
     let rest = analyze_all_fns(slice(env, 1, len(env)), subst, declared)
-    if name == "__source__" || is_builtin_reason(reason) { rest }
+    if is_internal_name(name) || is_builtin_reason(reason) { rest }
     else {
       let fg = analyze_fn(name, ty, reason, subst, declared)
       let (fg_n, _, _, _) = fg

@@ -378,7 +378,7 @@ fn show_env_compact(env, subst) = {
   else {
     let (name, ty, reason) = env[len(env) - 1]
     let rest = show_env_compact(slice(env, 0, len(env) - 1), subst)
-    if name == "__source__" || is_builtin_reason(reason) { rest }
+    if is_internal_name(name) || is_builtin_reason(reason) { rest }
     else {
       let ty_str = type_to_string(subst, ty)
       let line = "  " ++ name ++ ": " ++ ty_str
@@ -394,7 +394,7 @@ fn show_env_why(env, subst, depth) = {
   else {
     let (name, ty, reason) = env[len(env) - 1]
     let rest = show_env_why(slice(env, 0, len(env) - 1), subst, depth)
-    if name == "__source__" || is_builtin_reason(reason) { rest }
+    if is_internal_name(name) || is_builtin_reason(reason) { rest }
     else {
       let ty_str = type_to_string(subst, ty)
       let line = "  " ++ name ++ ": " ++ ty_str ++ "\n    WHY: " ++ show_reason(reason, depth)
@@ -413,7 +413,7 @@ fn show_env_doc_iter(env, subst, idx) = {
     let (name, ty, reason) = env[idx]
     let rest = show_env_doc_iter(env, subst, idx - 1)
     // Skip internal entries
-    if name == "__source__" || is_builtin_reason(reason) || starts_with(name, "__fn_ctx:") {
+    if is_internal_name(name) || is_builtin_reason(reason) || starts_with(name, "__fn_ctx:") {
       rest
     } else {
       let resolved = apply(subst, ty)

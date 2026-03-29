@@ -183,17 +183,12 @@ fn extract_builtin_names(env) = {
   }
 }
 
+fn is_internal_name(name) = starts_with(name, "__") || contains(name, "__")
+
 fn is_builtin_reason(reason) = {
   let s = to_string(reason)
   let dq = from_char_code(34)
   s == "Declared(" ++ dq ++ "builtin" ++ dq ++ ")"
-  || starts_with(s, "Declared(" ++ dq ++ "param of ")
-  || starts_with(s, "Declared(" ++ dq ++ "return type of ")
-  || starts_with(s, "Declared(" ++ dq ++ "local of ")
-  || starts_with(s, "Declared(" ++ dq ++ "fn context")
-  || starts_with(s, "Declared(" ++ dq ++ "effects:")
-  || starts_with(s, "Declared(" ++ dq ++ "true")
-  || starts_with(s, "Declared(" ++ dq ++ "false")
 }
 
 // ─── Substitution ────────────────────────────────────────────

@@ -56,7 +56,7 @@ fn show_env(env, subst, depth) = {
   else {
     let (name, ty, reason) = env[len(env) - 1]
     let rest = show_env(slice(env, 0, len(env) - 1), subst, depth)
-    if name == "__source__" || is_builtin_reason(reason) { rest }
+    if is_internal_name(name) || is_builtin_reason(reason) { rest }
     else {
       let ty_str = type_to_string(subst, ty)
       let line = name ++ ": " ++ ty_str

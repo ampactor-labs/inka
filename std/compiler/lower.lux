@@ -139,6 +139,7 @@ effect LowerCtx {
   is_global(name: String) -> Bool
   fresh_id() -> Int
   type_of_var(name: String) -> String
+  enter_fn(fn_name: String) -> ()
 }
 // find_rewrite: [] = no rewrite, [op, params, pre, resume, updates] = rewrite
 // is_global: true for top-level names — excludes them from closure captures
@@ -399,6 +400,7 @@ fn lower_destructure_bindings(names, idx) = {
 // No effect operations — captures are a local transform, not context.
 
 fn lower_lambda_named(wasm_name, name, params, body) = {
+  enter_fn(name)
   let all_free = collect_free_vars(body, params)
   // Don't filter self-name for inner functions — let them capture themselves.
   // Self-recursion through upval → call_indirect. No call $name needed.
@@ -751,12 +753,25 @@ fn lower_program_ctx(stmts, ctors) = lower_program_typed(stmts, ctors, [])
 
 fn lower_program_typed(stmts, ctors, type_map) = {
   let globals = collect_top_names(stmts, 0)
-  handle { lower_stmts(stmts) } with counter = 0 {
+  handle { lower_stmts(stmts) } with state = (0, "") {
     is_ctor(name) => resume(ctor_in(ctors, name, 0)),
     find_rewrite(name) => resume([]),
     is_global(name) => resume(name_in(globals, name, 0)),
-    fresh_id() => resume(counter) with counter = counter + 1,
-    type_of_var(name) => resume(lookup_type_str(type_map, name, 0))
+    fresh_id() => {
+      let (counter, fn_name) = state
+      resume(counter) with state = (counter + 1, fn_name)
+    },
+    enter_fn(fn_name) => {
+      let (counter, _) = state
+      resume(()) with state = (counter, fn_name)
+    },
+    type_of_var(name) => {
+      // Check scoped name first (fn_name__param), then global
+      let (_, fn_name) = state
+      let scoped = lookup_type_str(type_map, fn_name ++ "__" ++ name, 0)
+      if len(scoped) > 0 { resume(scoped) }
+      else { resume(lookup_type_str(type_map, name, 0)) }
+    }
   }
 }
 
@@ -803,11 +818,12 @@ fn collect_effect_op_names(ops, idx) = {
 // Legacy entry point (no constructor awareness, no rewrites)
 fn lower_program(stmts) = {
   let globals = collect_top_names(stmts, 0)
-  handle { lower_stmts(stmts) } with counter = 0 {
+  handle { lower_stmts(stmts) } with state = (0, "") {
     is_ctor(name) => resume(false),
     find_rewrite(name) => resume([]),
     is_global(name) => resume(name_in(globals, name, 0)),
-    fresh_id() => resume(counter) with counter = counter + 1,
-    type_of_var(name) => resume("")
+    fresh_id() => { let (c, f) = state; resume(c) with state = (c + 1, f) },
+    type_of_var(name) => resume(""),
+    enter_fn(fn_name) => { let (c, _) = state; resume(()) with state = (c, fn_name) }
   }
 }

@@ -214,10 +214,10 @@ fn compile_wasm(source) = {
     infer(ast) => resume(check_program_forward(ast)),
     generate(checked, ast) => {
       let (env, subst, _) = checked
-      let type_map = build_type_map(env, subst)
+      let type_map = build_type_map_with_params(env, subst, ast)
       let ctors = extract_constructors(env)
       let lowered = lower_program_typed(ast, ctors, type_map)
-      let wat = emit_module(lowered, type_map)
+      let wat = emit_module(lowered, build_type_map(env, subst))
       println(wat)
       resume(("skip", [], [], 0))
     }
@@ -485,6 +485,54 @@ fn filter_non_imports(lines, idx) = {
 // The emitter uses this to know string vs int vs function.
 
 fn build_type_map(env, subst) = build_type_map_iter(env, subst, 0)
+
+fn build_type_map_with_params(env, subst, ast) =
+  build_type_map_iter(env, subst, 0) ++ build_param_types_from_ast(ast, env, subst)
+
+// Extract function parameter types by walking the AST and looking up types in env.
+// Produces prefixed entries: check__expected → String, is_digit__ch → String
+fn build_param_type_map(env, subst) = []
+
+fn build_param_types_from_ast(ast, env, subst) = {
+  if len(ast) == 0 { [] }
+  else {
+    let s = to_string(ast[0])
+    let rest = build_param_types_from_ast(slice(ast, 1, len(ast)), env, subst)
+    if starts_with(s, "FnStmt(") {
+      let fn_name = ast[0][0]
+      let params = ast[0][1]
+      let (_, fn_type, _) = env_lookup(env, fn_name)
+      let resolved = apply(subst, fn_type)
+      let param_names = extract_param_name_strings(params, 0)
+      let param_type_tags = match resolved {
+        TFun(ptypes, _, _) => extract_type_tags(ptypes, subst, 0),
+        _ => []
+      }
+      zip_name_type(fn_name, param_names, param_type_tags, 0) ++ rest
+    } else { rest }
+  }
+}
+
+fn extract_param_name_strings(params, idx) = {
+  if idx >= len(params) { [] }
+  else {
+    let (name, _) = params[idx]
+    [name] ++ extract_param_name_strings(params, idx + 1)
+  }
+}
+
+fn extract_type_tags(types, subst, idx) = {
+  if idx >= len(types) { [] }
+  else { [type_tag(subst, types[idx])] ++ extract_type_tags(types, subst, idx + 1) }
+}
+
+fn zip_name_type(fn_name, names, types, idx) = {
+  if idx >= len(names) || idx >= len(types) { [] }
+  else {
+    [(fn_name ++ "__" ++ names[idx], types[idx])]
+    ++ zip_name_type(fn_name, names, types, idx + 1)
+  }
+}
 
 fn build_type_map_iter(env, subst, idx) = {
   if idx >= len(env) { [] }

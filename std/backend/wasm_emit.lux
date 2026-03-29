@@ -103,8 +103,12 @@ fn collect_strings_expr(e) with Pure = match e {
     string_union(collect_strings_list(t, 0), collect_strings_list(e, 0))),
   LBlock(stmts) => collect_strings_list(stmts, 0),
   LLet(_, value) => collect_strings_expr(value),
+  LMakeTuple(elems) => collect_strings_list(elems, 0),
+  LMakeList(elems) => collect_strings_list(elems, 0),
+  LMakeVariant(_, fields) => collect_strings_list(fields, 0),
   LMakeClosure(fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_strings_list(body, 0) },
   LMatch(scr, arms) => string_union(collect_strings_expr(scr), collect_strings_arms(arms, 0)),
+  LIndex(coll, idx) => string_union(collect_strings_expr(coll), collect_strings_expr(idx)),
   _ => []
 }
 

@@ -1,5 +1,12 @@
 # Lux — The Language of Light
 
+> **The compiler that fights its own type system cannot compile itself.
+> The compiler that trusts its own type system already has.**
+>
+> Code that Lux's inference can't type, that Lux's effects can't carry,
+> that Lux's handlers can't observe — Lux will delete. The only way to
+> persist is to write code that the compiler would write for itself.
+
 ## THE FIRST RULE
 
 **The inference IS the light. Let it through.**

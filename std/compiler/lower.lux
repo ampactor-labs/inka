@@ -109,7 +109,10 @@ fn lower_expr(sexpr, env) = {
               }
             } else {
               let effs = get_user_effects(name, env)
-              let dict_args = map(|e| LGlobal("__dict_" ++ e), effs)
+              // Only pass dicts when inside a handle block that provides them.
+              // find_rewrite returns non-empty if we're inside a handler for that effect's ops.
+              let available_effs = filter(|e| has_active_handler(e, env), effs)
+              let dict_args = map(|e| LGlobal("__dict_" ++ e), available_effs)
               LCall(lower_expr(func, env), lower_exprs(args, env) ++ dict_args)
             } } } }
           }
@@ -544,6 +547,33 @@ fn get_op_info(name, env) = {
     },
     _ => (false, "", -1)
   } }
+}
+
+fn has_active_handler(eff_name, env) = {
+  // Check if any op of this effect has an active rewrite (meaning we're inside a handler)
+  let ops = get_effect_ops(eff_name, env, 0)
+  has_any_rewrite(ops)
+}
+
+fn get_effect_ops(eff_name, env, idx) = {
+  if idx >= len(env) { [] }
+  else {
+    let (name, _, _) = env[idx]
+    if starts_with(name, "__opinfo_") {
+      let op_name = string_slice(name, 9, len(name))
+      let (_, found_eff, _) = get_op_info(op_name, env)
+      if found_eff == eff_name { [op_name] ++ get_effect_ops(eff_name, env, idx + 1) }
+      else { get_effect_ops(eff_name, env, idx + 1) }
+    } else { get_effect_ops(eff_name, env, idx + 1) }
+  }
+}
+
+fn has_any_rewrite(ops) = {
+  if len(ops) == 0 { false }
+  else {
+    if len(find_rewrite(ops[0])) > 0 { true }
+    else { has_any_rewrite(slice(ops, 1, len(ops))) }
+  }
 }
 
 fn get_user_effects(name, env) = {

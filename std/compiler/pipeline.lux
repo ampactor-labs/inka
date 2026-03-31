@@ -78,7 +78,7 @@ fn validate_ownership_fns(ast) = {
   }
 }
 
-fn report_ownership(fn_name, violations) = {
+fn report_ownership(violations, fn_name) = {
   if len(violations) == 0 { () }
   else {
     match violations[0] {

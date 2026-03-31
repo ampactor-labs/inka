@@ -28,7 +28,7 @@ fn ctx_globals(ctx)= ctx[3]
 // ─── Module Structure ───────────────────────────────────────
 
 fn emit_module(defs, type_map) = {
-  let fns = collect_fns(defs, 0)
+  let fns = dedup_fns(collect_fns(defs, 0))
   let top_stmts = collect_top_stmts(defs, 0)
   let top_globals = collect_top_let_names(top_stmts, 0)
   let all_strings = collect_all_strings(defs, 0)
@@ -89,7 +89,8 @@ fn emit_fn_list(fns, idx, ctx)= {
 fn emit_fn(fn_def, ctx)= {
   let LFn(name, arity, params, body) = fn_def
   let fn_locals = collect_locals(body, 0)
-  let with_temps = add_emitter_temps(fn_locals, ctx)
+  let no_params = filter_out_names(fn_locals, params, 0)
+  let with_temps = add_emitter_temps(no_params, ctx)
   "  (func $" ++ name ++ " (param $__closure i32)" ++ emit_params(params, 0) ++ " (result i32)" ++ NL
     ++ emit_local_decls(with_temps, 0)
     ++ emit_fn_body(body, params, with_temps, ctx)
@@ -302,15 +303,9 @@ fn emit_builtin(name, args, params, locals, ctx)= {
     emit_args(args, 0, params, locals, ctx) ++ "    call $fd_write" ++ NL
   } else { if name == "fd_read" {
     emit_args(args, 0, params, locals, ctx) ++ "    call $fd_read" ++ NL
-  // to_string dispatches by type — lowering resolved this, int_to_str is the default
-  } else { if name == "to_string" || name == "int_to_str" {
-    emit_args(args, 0, params, locals, ctx) ++ "    call $int_to_str" ++ NL
-  // str_slice: compiled Lux in memory.lux
-  } else { if name == "str_slice" || name == "string_slice" {
-    emit_args(args, 0, params, locals, ctx) ++ "    call $str_slice" ++ NL
   } else {
     "" // Not a primitive — compiled Lux handles it
-  } } } } } } } } } }
+  } } } } } } } }
 }
 
 fn emit_call_expr(func, args, params, locals, ctx)= {
@@ -421,6 +416,15 @@ fn emit_local_decls(locals, idx)= {
 // Add emitter temp locals based on what patterns are present.
 // __match: needed when LMatch exists in the expression tree
 // __vptr: needed when variant constructors exist (tag_map non-empty)
+fn filter_out_names(locals, exclude, idx) = {
+  if idx >= len(locals) { [] }
+  else {
+    let name = locals[idx]
+    let rest = filter_out_names(locals, exclude, idx + 1)
+    if string_in(exclude, name, 0) { rest } else { [name] ++ rest }
+  }
+}
+
 fn add_emitter_temps(locals, ctx)= {
   // __vptr: temp for heap allocation (variants, tuples). Always available, zero cost.
   // __match: added by collect_locals_expr when LMatch is seen.

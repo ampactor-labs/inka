@@ -141,9 +141,27 @@ fn walk_expr(sexpr, own_params, used) = {
 
   FieldAccess(obj, _) => walk_expr(obj, own_params, used),
 
-  PipeExpr(left, right) => {
-    let (u1, v1) = walk_expr(left, own_params, used)
-    let (u2, v2) = walk_expr(right, own_params, u1)
+  PipeExpr(data, step) => {
+    let (u1, v1) = walk_expr(data, own_params, used)
+    let (u2, v2) = walk_expr(step, own_params, u1)
+    (u2, v1 ++ v2)
+  },
+
+  FanOutExpr(data, branches) => {
+    let (u1, v1) = walk_expr(data, own_params, used)
+    let (u2, v2) = walk_expr(branches, own_params, u1)
+    (u2, v1 ++ v2)
+  },
+
+  JoinExpr(f, g) => {
+    let (u1, v1) = walk_expr(f, own_params, used)
+    let (u2, v2) = walk_expr(g, own_params, u1)
+    (u2, v1 ++ v2)
+  },
+
+  HandlePipeExpr(computation, strategy) => {
+    let (u1, v1) = walk_expr(computation, own_params, used)
+    let (u2, v2) = walk_expr(strategy, own_params, u1)
     (u2, v1 ++ v2)
   },
 

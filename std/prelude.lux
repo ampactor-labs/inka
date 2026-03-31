@@ -101,12 +101,13 @@ fn sum(xs) = fold(xs, 0, |acc, x| acc + x)
 fn product(xs) = fold(xs, 1, |acc, x| acc * x)
 fn concat(xss) = flatten(xss)
 fn reduce(xs, f) = fold(tail(xs), head(xs), f)
-fn enumerate(xs) = zip(range(0, len(xs)), xs)
-fn unique(xs) = fold(xs, [], |acc, x| if any(|a| a == x, acc) { acc } else { push(acc, x) })
 
 fn zip_with(f, xs, ys) = if len(xs) == 0 || len(ys) == 0 { [] }
   else { [f(xs[0], ys[0])] ++ zip_with(f, tail(xs), tail(ys)) }
 fn zip(xs, ys) = zip_with(|a, b| (a, b), xs, ys)
+
+fn enumerate(xs) = zip(range(0, len(xs)), xs)
+fn unique(xs) = fold(xs, [], |acc, x| if any(|a| a == x, acc) { acc } else { push(acc, x) })
 
 fn partition(pred, xs) = (filter(pred, xs), filter(|x| !pred(x), xs))
 fn range_inclusive(start, end) = range(start, end + 1)

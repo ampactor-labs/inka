@@ -63,6 +63,7 @@ fn two_char_op(ch, ch2) = {
     ("<", "=", "LtEq"), (">", "=", "GtEq"),
     ("-", ">", "Arrow"), ("=", ">", "FatArrow"),
     ("+", "+", "PlusPlus"), ("|", ">", "PipeGt"), ("<", "|", "FanOut"), ("<", ">", "Compose"),
+    (">", "<", "Join"), ("~", ">", "HandlePipe"),
     ("&", "&", "And"), ("|", "|", "Or")
   ];
   fn find_op(ops, ch, ch2, i) =
@@ -99,7 +100,8 @@ fn single_char_type(ch) = {
   else { if code == 33 { "Bang" }
   else { if code == 124 { "Pipe" }
   else { if code == 35 { "Hash" }
-  else { "" } } } } } } } } } } } } } } } } } } } } }
+  else { if code == 126 { "Tilde" }
+  else { "" } } } } } } } } } } } } } } } } } } } } } }
 }
 
 // --- Public API ---

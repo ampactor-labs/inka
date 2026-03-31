@@ -281,3 +281,27 @@ fn collect_top_stmts(defs, idx)= {
     }
   }
 }
+
+// ─── Deduplication ──────────────────────────────────────────
+
+fn dedup_fns(fns) = {
+  if len(fns) == 0 { [] }
+  else {
+    let LFn(name, _, _, _) = fns[0]
+    if fn_name_in_list(name, slice(fns, 1, len(fns))) {
+      // Overridden later, skip this one
+      dedup_fns(slice(fns, 1, len(fns)))
+    } else {
+      [fns[0]] ++ dedup_fns(slice(fns, 1, len(fns)))
+    }
+  }
+}
+
+fn fn_name_in_list(name, fns) = {
+  if len(fns) == 0 { false }
+  else {
+    let LFn(n, _, _, _) = fns[0]
+    if n == name { true }
+    else { fn_name_in_list(name, slice(fns, 1, len(fns))) }
+  }
+}

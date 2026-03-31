@@ -76,7 +76,10 @@ fn collect_free(sexpr, bound) = {
       let (refs, new_bound) = collect_free_stmts(stmts, bound)
       string_union(refs, collect_free(final_e, new_bound))
     },
-    PipeExpr(l, r) => string_union(collect_free(l, bound), collect_free(r, bound)),
+    PipeExpr(data, step) => string_union(collect_free(data, bound), collect_free(step, bound)),
+    FanOutExpr(data, branches) => string_union(collect_free(data, bound), collect_free(branches, bound)),
+    JoinExpr(f, g) => string_union(collect_free(f, bound), collect_free(g, bound)),
+    HandlePipeExpr(computation, strategy) => string_union(collect_free(computation, bound), collect_free(strategy, bound)),
     Index(c, i) => string_union(collect_free(c, bound), collect_free(i, bound)),
     LambdaExpr(params, body) => {
       // Inner lambda: its params are bound inside, but free vars propagate up

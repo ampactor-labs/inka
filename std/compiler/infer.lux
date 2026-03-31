@@ -92,24 +92,24 @@ fn infer(sexpr) with Infer, Diagnostic = {
       TFun(map(resolve, param_types), resolve(ret), body_effs)
     },
 
-    PipeExpr(left, right) => {
-      let S(right_expr, rl, rc) = right
-      match right_expr {
-        Call(func, args) => infer(S(Call(func, [left] ++ args), rl, rc)),
-        _ => infer(S(Call(right, [left]), rl, rc))
+    PipeExpr(data, step) => {
+      let S(step_expr, sl, sc) = step
+      match step_expr {
+        Call(func, args) => infer(S(Call(func, [data] ++ args), sl, sc)),
+        _ => infer(S(Call(step, [data]), sl, sc))
       }
     },
 
-    FanOutExpr(left, right) => {
-      let S(right_expr, rl, rc) = right
-      match right_expr {
-        TupleExpr(fns) => TTuple(fan_out(fns, left, rl, rc)),
-        _ => infer(S(Call(right, [left]), rl, rc))
+    FanOutExpr(data, branches) => {
+      let S(branches_expr, bl, bc) = branches
+      match branches_expr {
+        TupleExpr(fns) => TTuple(fan_out(fns, data, bl, bc)),
+        _ => infer(S(Call(branches, [data]), bl, bc))
       }
     },
 
-    ComposeExpr(f, g) => {
-      // f <> g = |x| g(f(x)) — f first, then g. Left to right.
+    JoinExpr(f, g) => {
+      // f >< g = |x| g(f(x)) — f first, then g. Left to right.
       let tf = infer(f)
       let tg = infer(g)
       let a = fresh()
@@ -120,6 +120,11 @@ fn infer(sexpr) with Infer, Diagnostic = {
       unify(tf, TFun([a], b, ef))
       unify(tg, TFun([b], c, eg))
       TFun([resolve(a)], resolve(c), resolve(eg))
+    },
+
+    HandlePipeExpr(computation, strategy) => {
+      // computation ~> strategy desugars to strategy(|| computation)
+      infer(S(Call(strategy, [S(LambdaExpr([], computation), 0, 0)]), 0, 0))
     },
 
     MatchExpr(scrutinee, arms) => {

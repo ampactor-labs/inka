@@ -405,47 +405,56 @@ fn compile_expr(ctx, sexpr) = {
     emit_u16(emit_op(ctx2, OP_MAKE_TUPLE), len(elems))
   },
 
-  PipeExpr(left, right) => {
-    // a |> f(b, c) => f(a, b, c)
-    let S(raw_right, _, _) = right;
-    match raw_right {
+  PipeExpr(data, step) => {
+    // data |> f(b, c) => f(data, b, c)
+    let S(step_expr, _, _) = step;
+    match step_expr {
       Call(func, args) => {
         let ctx2 = compile_expr(ctx, func)
-        let ctx3 = compile_expr(ctx2, left)
+        let ctx3 = compile_expr(ctx2, data)
         let ctx4 = compile_args(ctx3, args)
         emit_u8(emit_op(ctx4, OP_CALL), 1 + len(args))
       },
       _ => {
-        // a |> f => f(a)
-        let ctx2 = compile_expr(ctx, right)
-        let ctx3 = compile_expr(ctx2, left)
+        // data |> f => f(data)
+        let ctx2 = compile_expr(ctx, step)
+        let ctx3 = compile_expr(ctx2, data)
         emit_u8(emit_op(ctx3, OP_CALL), 1)
       }
     }
   },
 
-  FanOutExpr(left, right) => {
-    // a <| (f, g, h) => (f(a), g(a), h(a))
-    let S(raw_right, _, _) = right;
-    match raw_right {
+  FanOutExpr(data, branches) => {
+    // data <| (f, g, h) => (f(data), g(data), h(data))
+    let S(branches_expr, _, _) = branches;
+    match branches_expr {
       TupleExpr(fns) => {
-        let ctx2 = compile_fan_out(ctx, fns, left)
+        let ctx2 = compile_fan_out(ctx, fns, data)
         emit_u16(emit_op(ctx2, OP_MAKE_TUPLE), len(fns))
       },
       _ => {
-        // a <| f => f(a)
-        let ctx2 = compile_expr(ctx, right)
-        let ctx3 = compile_expr(ctx2, left)
+        // data <| f => f(data)
+        let ctx2 = compile_expr(ctx, branches)
+        let ctx3 = compile_expr(ctx2, data)
         emit_u8(emit_op(ctx3, OP_CALL), 1)
       }
     }
   },
 
-  ComposeExpr(f, g) => {
-    // f <> g => |x| g(f(x)) — f first, then g. Left to right.
-    let ctx2 = compile_expr(ctx, f)
-    let ctx3 = compile_expr(ctx2, g)
-    emit_u8(emit_op(ctx3, OP_MAKE_CLOSURE_COMPOSE), 2)
+  JoinExpr(f, g) => {
+    // f >< g => |x| g(f(x)) 
+    let ref_x = S(VarRef("__jx"), 0, 0)
+    let call_f = S(Call(f, [ref_x]), 0, 0)
+    let call_g = S(Call(g, [call_f]), 0, 0)
+    let lambda = S(LambdaExpr(["__jx"], call_g), 0, 0)
+    compile_expr(ctx, lambda)
+  },
+
+  HandlePipeExpr(computation, strategy) => {
+    // computation ~> strategy => strategy(|| computation)
+    let thunk = S(LambdaExpr([], computation), 0, 0)
+    let call_strat = S(Call(strategy, [thunk]), 0, 0)
+    compile_expr(ctx, call_strat)
   },
 
   Index(obj, idx) => {

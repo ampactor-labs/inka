@@ -104,7 +104,17 @@ fn lower_expr(sexpr, env) = {
                 _ => LCall(LGlobal("slice"), lower_exprs(args, env))
               }
             } else {
-              LCall(lower_expr(func, env), lower_exprs(args, env))
+              // Check for handler rewrite (effect op inlining)
+              let rw = find_rewrite(name)
+              if len(rw) > 0 {
+                let params = rw[1]
+                let bindings = bind_rewrite_params(params, args, env, 0)
+                let body = apply_rewrite(rw, env)
+                if len(bindings) == 0 { body }
+                else { LBlock(bindings ++ [body]) }
+              } else {
+                LCall(lower_expr(func, env), lower_exprs(args, env))
+              }
             } } } }
           }
         },
@@ -369,6 +379,14 @@ fn build_dict_arm(arm, env) = {
   let body = LBlock(lowered_pre ++ lowered_updates ++ [lowered_value])
   let fn_def = LFn("dict_arm_" ++ op_name, len(param_names), param_names, [body])
   LMakeClosure(fn_def, [])
+}
+
+fn bind_rewrite_params(params, args, env, idx) = {
+  if idx >= len(params) || idx >= len(args) { [] }
+  else {
+    [LLet(params[idx], lower_expr(args[idx], env))]
+    ++ bind_rewrite_params(params, args, env, idx + 1)
+  }
 }
 
 fn apply_rewrite(rw, env) = {

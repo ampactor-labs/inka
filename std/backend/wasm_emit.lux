@@ -240,8 +240,9 @@ fn emit_stmts_void(stmts, idx, params, locals, ctx)= {
 
 fn emit_stmt(stmt, params, locals, ctx)= match stmt {
   LLet(name, value) => {
-    let setter = if string_in(ctx_globals(ctx), name, 0) { "    global.set $" } else { "    local.set $" }
-    let getter = if string_in(ctx_globals(ctx), name, 0) { "    global.get $" } else { "    local.get $" }
+    let is_local = string_in(locals, name, 0) || find_param_idx(params, name, 0) >= 0
+    let setter = if is_local { "    local.set $" } else { if string_in(ctx_globals(ctx), name, 0) { "    global.set $" } else { "    local.set $" } }
+    let getter = if is_local { "    local.get $" } else { if string_in(ctx_globals(ctx), name, 0) { "    global.get $" } else { "    local.get $" } }
     let base = emit_expr(value, params, locals, ctx) ++ setter ++ name ++ NL
     // Patch self-referential closures: after storing the closure ptr,
     // write it back into the capture slot that holds self

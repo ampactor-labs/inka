@@ -30,7 +30,8 @@ fn ctx_globals(ctx)= ctx[3]
 fn emit_module(defs, type_map) = {
   let fns = dedup_fns(collect_fns(defs, 0))
   let top_stmts = collect_top_stmts(defs, 0)
-  let top_globals = string_union(collect_top_let_names(top_stmts, 0), collect_handler_globals(fns, 0))
+  let top_globals = string_union(collect_top_let_names(top_stmts, 0),
+    string_union(collect_handler_globals(fns, 0), collect_hs_names(top_stmts, 0)))
   let all_strings = collect_all_strings(defs, 0)
   let string_map = assign_offsets(all_strings, 0, 1024)
   let heap_start = string_heap_end(string_map, 0, 1024)
@@ -194,8 +195,15 @@ fn emit_expr(e, params, locals, ctx)= match e {
     let LFn(fname, _, _, _) = fn_def
     let fn_idx = find_fn_index(ctx_fns(ctx), fname, 0)
     if len(captures) == 0 {
-      // No captures: just the function table index
-      "    i32.const " ++ to_string(fn_idx) ++ NL
+      // Always allocate heap closure — i32.load must always work.
+      // One representation. One calling convention. One mechanism.
+      "    i32.const 8" ++ NL ++ "    call $alloc" ++ NL
+      ++ "    local.tee $__vptr" ++ NL
+      ++ "    i32.const " ++ to_string(fn_idx) ++ NL ++ "    i32.store" ++ NL
+      ++ "    local.get $__vptr" ++ NL
+      ++ "    i32.const 4" ++ NL ++ "    i32.add" ++ NL
+      ++ "    i32.const 0" ++ NL ++ "    i32.store" ++ NL
+      ++ "    local.get $__vptr" ++ NL
     } else {
       // Closure object: [fn_idx:i32][upval_count:i32][upvals...]
       let n_caps = len(captures)

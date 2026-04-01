@@ -512,8 +512,8 @@ fn build_evidence_closure(entry, cell_names, env) = {
   let pre_stmts = entry[2]
   let resume_value = entry[3]
   let updates = entry[4]
-  // Lower the arm body using full lowering (needs Concat dispatch, etc.)
-  let lowered_pre = lower_stmts_pure(pre_stmts, env)
+  // Lower the arm body using full lowering (needs println dispatch, Concat, etc.)
+  let lowered_pre = lower_stmts(pre_stmts, env)
   let lowered_value = lower_expr(resume_value, env)
   let lowered_updates = lower_state_updates(updates, env)
   // Remap state variable references to cell loads, state updates to cell stores
@@ -527,11 +527,8 @@ fn build_evidence_closure(entry, cell_names, env) = {
   let free_names = collect_free_lowir(body, params)
   let captures = filter_out_hs_names(filter_real_captures_no_self(free_names))
   let fname = "__ev_" ++ op_name ++ "_" ++ to_string(fresh_id())
-  // Evidence closures are called indirectly through globals.
-  // The calling convention does i32.load on the closure ptr to get fn_idx.
-  // Always create a heap closure object (even with no captures) so i32.load works.
   if len(captures) == 0 {
-    LMakeClosure(LFn(fname, len(params), params, [body]), [LConst(LInt(0))])
+    LMakeClosure(LFn(fname, len(params), params, [body]), [])
   } else {
     let rewritten = rewrite_captures(body, captures)
     let capture_exprs = map_to_globals(captures, 0)
@@ -569,8 +566,14 @@ fn collect_free_lowir(node, bound) = match node {
 fn collect_free_lowir_list(nodes, bound) = {
   if len(nodes) == 0 { [] }
   else {
-    string_union(collect_free_lowir(nodes[0], bound),
-                 collect_free_lowir_list(slice(nodes, 1, len(nodes)), bound))
+    let node = nodes[0]
+    let refs = collect_free_lowir(node, bound)
+    // LLet extends the bound set for subsequent nodes (like let bindings in a block)
+    let new_bound = match node {
+      LLet(name, _) => bound ++ [name],
+      _ => bound
+    }
+    string_union(refs, collect_free_lowir_list(slice(nodes, 1, len(nodes)), new_bound))
   }
 }
 
@@ -657,7 +660,7 @@ fn apply_rewrite(rw, env) = {
   let resume_value = rw[3]
   let updates = rw[4]
   let cell_names = if len(rw) > 5 { rw[5] } else { [] }
-  let lowered_pre = lower_stmts_pure(pre_stmts, env)
+  let lowered_pre = lower_stmts(pre_stmts, env)
   let lowered_updates = lower_state_updates(updates, env)
   let lowered_value = lower_expr(resume_value, env)
   let result = if len(lowered_pre) == 0 && len(lowered_updates) == 0 {

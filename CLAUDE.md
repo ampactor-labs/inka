@@ -58,7 +58,7 @@ special cases, the architecture is wrong.
 > Full manifesto: `docs/DESIGN.md`
 > Full roadmap: `docs/ROADMAP.md`
 
-## STATE OF THE WORLD — Last Updated: 2026-03-27
+## STATE OF THE WORLD — Last Updated: 2026-03-31
 
 **THE COMPILER VERIFIES ITSELF.** 272 functions across 9 compiler modules
 proven pure. The Diagnostic effect makes the inference engine externally
@@ -93,7 +93,7 @@ its own purity — using the same mechanisms it enforces on user code.
 | Math stdlib | ✅ Working | abs, max, min, clamp, round, sqrt, pow, log, exp, sin, cos, tanh, atan2, pi |
 | Test framework | ✅ Working | Test effect with `assert`, `expect_eq`, `run_tests`/`run_suite` handlers |
 | Elm-quality errors | ✅ Working | Did-you-mean (Levenshtein), exhaustive match hints, effect violation suggestions |
-| Did-you-mean suggestions | ✅ Working | Levenshtein distance, threshold ≤ 3, self-hosted `checker_suggest.lux` |
+| Did-you-mean suggestions | ✅ Working | Levenshtein distance, threshold ≤ 3, self-hosted `suggest.lux` |
 | Exhaustive match analysis | ✅ Working | ADT variant coverage, wildcard detection, missing variant warnings |
 | Refinement solver | ✅ Working | `solver.lux` — Proven/Disproven/Unknown, compile-time predicate verification |
 | Ownership enforcement | ✅ Working | `own` = affine (linear), `ref` = scoped (no escape), tracked through effect system, self-hosted walk_expr |
@@ -106,12 +106,13 @@ its own purity — using the same mechanisms it enforces on user code.
 | **Tuple match patterns** | ✅ **Working** | `(name, _) => name` — PTuple(List) Pat variant |
 | `!Alloc` transitivity | ✅ Working | Resolve-then-check, open-row rejection. Approach B (inferred): algebra resolves callee effects |
 | Refinement types | ✅ Working | `type Byte = Int where 0 <= self && self <= 255` — syntax, solver, compile-time verification of literals |
-| **LowIR** | ✅ **Working** | 26-variant ADT, AST→LowIR transform, handler elimination (no state machines for 100% of real handlers) |
-| **WASM emitter** | ✅ **Phase G+** | Strings, handlers, ADTs, match, closures, the Ultimate Test on wasmtime |
+| **LowIR** | ✅ **Working** | 26-variant ADT, AST→LowIR transform, handler elimination, evidence passing (global dispatch) |
+| **WASM emitter** | ✅ **Working** | Clean LowIR→WAT translator, handler globals collection, emit_fn global filtering |
+| **Evidence passing (WASM)** | ✅ **ACHIEVED** | Effect ops as global bindings, handle blocks install closures, handler state in __hs_* globals, 8/8 crucibles |
 
-**Achieved**: Everything above, plus: **Rust checker deleted** (Arc 1 complete), **self-hosted pipeline as default** (27/30 oracle parity, 0 mismatches), **did-you-mean suggestions** (Levenshtein in checker_suggest.lux), **exhaustive match analysis** (ADT variant coverage), **refinement solver** (solver.lux, compile-time predicate verification), **oracle parity test** (self-hosted vs Rust behavioral verification), **self-checking** (compiler parses/checks its own source — zero errors), **272 purity proofs** (Arc 3 Phase 2 complete), **Diagnostic effect** (inference engine externally pure).
+**Achieved**: Everything above, plus: **Rust checker deleted** (Arc 1 complete), **self-hosted pipeline as default**, **272 purity proofs** (Arc 3 Phase 2 complete), **Diagnostic effect** (inference engine externally pure), **evidence passing in WASM** (ce05534 — effect ops as global bindings, handle blocks install closures, cross-function effect dispatch), **8/8 WASM crucibles** including `wasm_prelude` (cross-function handler state accumulation).
 
-**Next**: Arc 2 prelude builtins in WASM (len, slice, char_code_at, push) → lexer self-compilation → Phase H (WASM bootstrap). Arc 3 Phase 3 (ownership annotations) parallel.
+**Next**: Phase 3 of Perfection Plan — checker in WASM. Then wasm_compile.lux rewrite (Phase 4), self-compilation (Phase 5), delete Rust (Phase I).
 
 ## READ THIS FIRST — What Lux IS
 
@@ -297,14 +298,14 @@ Frontend: `main.rs` (CLI), `lib.rs` (prelude loader)
 
 **Self-hosted compiler (Lux-in-Lux, self-compiling — BOOTSTRAP ACHIEVED):**
 ```
-source → [lexer.lux] → [parser.lux] → [checker.lux] → [codegen.lux] → bytecode → [vm.lux] → execute
-                                                      ↘ [lower.lux] → LowIR → [wasm_emit.lux] → WAT → WASM
+source → [lexer.lux] → [parser.lux] → [infer.lux + check.lux] → [codegen.lux] → bytecode → [vm.lux] → execute
+                                                                ↘ [lower.lux + lower_closure.lux] → LowIR
+                                                                    ↘ [wasm_emit.lux + wasm_collect.lux + wasm_construct.lux] → WAT → WASM
 ```
-All five components working. **The compiler compiles AND executes its own output**
-through the entirely self-hosted pipeline. 38 tests pass including recursive
-fibonacci(10)=55 and factorial(5)=120. The VM (930 lines) is 3x simpler than
-the Rust VM (3,100 lines) — zero conversion, pattern-based dispatch.
-See `std/compiler/` and `std/vm.lux`.
+All components working. **The compiler compiles AND executes its own output**
+through the entirely self-hosted pipeline. Evidence passing enables cross-function
+effect dispatch in WASM. 8/8 WASM crucibles on wasmtime.
+See `std/compiler/`, `std/backend/`, `std/runtime/`, and `std/vm.lux`.
 
 Standard library: `std/prelude.lux`, `std/test.lux`, `std/types.lux`, `std/vm.lux`, `std/dsp/`, `std/ml/`
 
@@ -332,18 +333,27 @@ Standard library: `std/prelude.lux`, `std/test.lux`, `std/types.lux`, `std/vm.lu
 |------|------|
 | `std/compiler/lexer.lux` | Self-hosted tokenizer |
 | `std/compiler/parser.lux` | Self-hosted recursive descent parser (ADT-based AST, LetPattern, PTuple, TypeAliasStmt) |
-| `std/compiler/checker.lux` | Self-hosted HM type checker + Why Engine + Diagnostic effect (51/58 fns Pure) |
-| `std/compiler/checker_effects.lux` | Effect row algebra: merge, unify, negate, constrain, eff_subst |
-| `std/compiler/checker_ownership.lux` | Ownership tracking: affine/scoped checking stubs |
-| `std/compiler/checker_suggest.lux` | Did-you-mean (Levenshtein) + exhaustive match analysis |
+| `std/compiler/infer.lux` | Type rules — 11-op Infer effect, 451 lines. **FROZEN** |
+| `std/compiler/check.lux` | HM algorithm handler — one handle block, source in, truth (env) out. **FROZEN** |
+| `std/compiler/ty.lux` | Type ADTs (Ty, Reason, EffRow), TypeEnv, substitution, Diagnostic effect |
+| `std/compiler/eff.lux` | Effect row algebra: merge, unify, negate, constrain, eff_subst |
+| `std/compiler/display.lux` | Type/reason display: show_type, show_env_compact/why/doc |
+| `std/compiler/why.lux` | Why Engine — pure rendering, explain(env, name, depth) |
+| `std/compiler/suggest.lux` | Did-you-mean (Levenshtein) + exhaustive match analysis |
+| `std/compiler/own.lux` | Ownership tracking: affine/scoped checking stubs |
 | `std/compiler/solver.lux` | Refinement type solver: Proven/Disproven/Unknown |
 | `std/compiler/codegen.lux` | Self-hosted bytecode emitter + disassembler |
-| `std/compiler/pipeline.lux` | Compiler effect + pipeline + handlers (meta-unification) |
+| `std/compiler/pipeline.lux` | Compiler pipeline — source \|> frontend \|> check \|> backend |
 | `std/compiler/gradient.lux` | Gradient engine — annotation suggestions |
-| `std/compiler/lower.lux` | LowIR ADT + AST→LowIR transform (effect handler elimination) |
+| `std/compiler/lower.lux` | AST→LowIR + evidence passing (inferred_type, handler rewrite, global dispatch) |
+| `std/compiler/lower_ir.lux` | LowIR ADT (26 variants) + LowerCtx effect |
+| `std/compiler/lower_closure.lux` | Closure/lambda lowering — capture detection, rewrite_captures |
 | `std/compiler/lower_print.lux` | LowIR pretty-printer for `lux lower` output |
-| `std/backend/wasm_emit.lux` | WAT emitter — LowIR → WebAssembly Text Format (WASI) |
-| `std/backend/wasm_runtime.lux` | WASM runtime helpers (scaffolding: alloc, str_concat, print) |
+| `std/backend/wasm_emit.lux` | WAT emitter — clean LowIR→WAT translator |
+| `std/backend/wasm_collect.lux` | String/fn/variant/handler-globals collection for WASM |
+| `std/backend/wasm_construct.lux` | Tuple/variant/match WAT construction helpers |
+| `std/backend/wasm_runtime.lux` | Just emit_alloc (17 lines) — the one hand-written WAT function |
+| `std/runtime/memory.lux` | Memory/Alloc/WASI effects, ALL data primitives (56 fns + list_concat) |
 | `std/vm.lux` | Self-hosted bytecode VM (930 lines, all 46 opcodes, 45 builtins) |
 | `std/prelude.lux` | Self-hosted stdlib (45+ functions: map, filter, fold, sort, etc.) |
 | `std/test.lux` | Native test framework (assert_eq, run_tests) |
@@ -481,6 +491,8 @@ audio |> chain
 | F | **LowIR** — 26-variant ADT between AST and WASM. Three-tier handler classification (TailResumptive/Linear/MultiShot). AST→LowIR transform: tail-resumptive → direct call, linear → direct call with state updates. Discovery: 100% of real handlers compile without state machines. `lux lower` CLI command. Pretty-printer. 541 lines, 29 Pure. | 3731c6a..f5aaf97 |
 | G | **WASM emitter** — LowIR → WAT (WebAssembly Text Format). WASI module emission: fd_write import, linear memory, _start entry point, print_int decimal conversion runtime. `lux wasm` CLI command. First Lux→WASM execution: `fib(10) = 55` on wasmtime. 313 lines, 30 Pure. | 113713f..b100617 |
 | G+ | **WASM Phase G+** — Strings, handler state, ADTs, match, the Ultimate Test. Pipeline alignment, constructor-aware lowering, simultaneous state updates, value/void emission. `fibonacci_via_effects()` with 2 state vars on wasmtime. Runtime split to `wasm_runtime.lux`. LowerCtx effect refactor: 7 duplicate pairs → 1. Closures: function table, call_indirect, capture detection (Pure scope walk), uniform `__closure` calling convention. `lux wasm lexer.lux` attempted — structure compiles, prelude builtins are the wall. | 6a130fa..01aa77d |
+| G++ | **Perfection Plan session** — 6 fixes in one session. `type_of` → `inferred_type` (Rust VM builtin shadow). Handler rewrite connected to Call path (7/7 crucibles). Dead emitter dispatch removed. Locals shadow globals in LLet. `val_eq` for unknown `==` types (keywords work in WASM). `list_concat` added to memory.lux, Concat type-directed dispatch. | 63964ae..d7f7274 |
+| G³ | **Evidence passing** — Effects flow across function boundaries in WASM. Effect ops are global bindings. Handle blocks save/install/restore closures. Handler state in fresh `__hs_*` globals shared between closures and enclosing scope. No callee transformation. `collect_handler_globals` finds `__hs_*` names inside function bodies. `emit_fn` filters globals from function locals. 8/8 crucibles including `wasm_prelude` (cross-function effect dispatch, 10+20+30=60). | ce05534 |
 
 ## Roadmap
 
@@ -497,8 +509,10 @@ audio |> chain
 | **Arc 2: Kill the Runtime** | Delete all remaining Rust | **In progress** |
 | Phase F | LowIR + handler elimination (effects → direct calls) | ✅ Done (3731c6a..f5aaf97) |
 | Phase G | WASM emitter (LowIR → WAT → WASM), fib(10)=55 on wasmtime | ✅ Done (113713f..b100617) |
-| Phase G+ | WASM: strings, handlers, ADTs, match, closures, Ultimate Test | ✅ Done (6a130fa..01aa77d) — prelude builtins next |
-| Phase H | WASM bootstrap (compiler self-compiles to WASM) | Pending |
+| Phase G+ | WASM: strings, handlers, ADTs, match, closures, Ultimate Test | ✅ Done (6a130fa..01aa77d) |
+| Phase G++ | Perfection Plan: inferred_type, handler rewrite, val_eq, list_concat | ✅ Done (63964ae..d7f7274) |
+| Phase G³ | **Evidence passing: effects across function boundaries, 8/8 crucibles** | ✅ Done (ce05534) |
+| Phase H | WASM bootstrap (compiler self-compiles to WASM) | **Next** — checker in WASM first |
 | Phase I | Delete Rust VM + Cargo.toml (`rm -rf src/`) | Pending |
 | **Arc 3: Compound Interest** | Compiler verifies itself (parallel to Arc 2) | **Phase 2 complete** |
 | Step 1 | Refinement types on compiler internals (Opcode, StackDepth, FreshId) | ✅ Done (2a9c60a, 6e86451) |
@@ -513,15 +527,18 @@ audio |> chain
 |---|---|---|
 | `src/ast.rs` (Expr variants) | CLAUDE.md (Architecture), docs/DESIGN.md | New expression forms |
 | `src/types.rs` (Type, EffectRow) | docs/DESIGN.md (Type System) | New type constructs |
-| `src/checker/` (TypeEnv) | docs/DESIGN.md (Type System) | Inference changes |
+| ~~`src/checker/`~~ | ~~docs/DESIGN.md~~ | **DELETED** (c84cd43) |
 | `src/compiler/` (compiler.rs, effects.rs) | CLAUDE.md (Architecture) | Bytecode compilation |
 | `src/vm/` (vm.rs, opcode.rs) | CLAUDE.md (VM Internals) | VM opcodes, execution |
-| `std/compiler/checker*.lux` | CLAUDE.md (Key Files, Phase History), docs/PLAN.md | Checker split, effect unification, ownership |
+| `std/compiler/infer.lux`, `std/compiler/check.lux` | CLAUDE.md (Key Files), docs/PLAN.md | Type rules, HM algorithm (FROZEN) |
+| `std/compiler/ty.lux`, `std/compiler/eff.lux` | CLAUDE.md (Key Files) | Type ADTs, effect row algebra |
 | `examples/*.lux` | CLAUDE.md (Effect System), docs/DESIGN.md | New patterns |
 | `std/prelude.lux` | CLAUDE.md (Key Files) | New stdlib functions |
 | `std/ml/*.lux`, `std/dsp/*.lux` | `docs/specs/lux-ml-design.md` | ML/DSP framework changes |
-| `src/checker/` (ownership tracking) | `docs/specs/ownership-design.md`, CLAUDE.md (Roadmap) | Affine/scoped enforcement, `!Alloc` transitivity |
+| `std/compiler/own.lux` | `docs/specs/ownership-design.md`, CLAUDE.md (Roadmap) | Affine/scoped enforcement |
 | `examples/ownership*.lux` | `docs/specs/ownership-design.md`, CLAUDE.md (Phase History) | Ownership patterns, error specs |
 | `std/compiler/lower*.lux` | CLAUDE.md (Key Files, Phase History), docs/PLAN.md | LowIR types, transform, printer |
-| `std/backend/wasm_emit.lux` | CLAUDE.md (Key Files, Phase History), docs/PLAN.md | WAT emission, WASI runtime |
+| `std/backend/wasm_emit.lux` | CLAUDE.md (Key Files, Phase History) | WAT emission |
+| `std/backend/wasm_collect.lux`, `std/backend/wasm_construct.lux` | CLAUDE.md (Key Files) | WASM collection, construction helpers |
+| `std/runtime/memory.lux` | CLAUDE.md (Key Files) | Runtime primitives, list_concat |
 | `Cargo.toml` | CLAUDE.md (Build) | Dependencies, features |

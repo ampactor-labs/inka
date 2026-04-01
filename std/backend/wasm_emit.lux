@@ -90,8 +90,8 @@ fn emit_fn(fn_def, ctx)= {
   let LFn(name, arity, params, body) = fn_def
   let fn_locals = collect_locals(body, 0)
   let no_params = filter_out_names(fn_locals, params, 0)
-  let no_globals = filter_out_globals(no_params, ctx_globals(ctx), 0)
-  let with_temps = add_emitter_temps(no_globals, ctx)
+  let no_hs = filter_handler_locals(no_params, 0)
+  let with_temps = add_emitter_temps(no_hs, ctx)
   "  (func $" ++ name ++ " (param $__closure i32)" ++ emit_params(params, 0) ++ " (result i32)" ++ NL
     ++ emit_local_decls(with_temps, 0)
     ++ emit_fn_body(body, params, with_temps, ctx)
@@ -426,6 +426,23 @@ fn add_emitter_temps(locals, ctx)= {
   // __vptr: temp for heap allocation (variants, tuples). Always available, zero cost.
   // __match: added by collect_locals_expr when LMatch is seen.
   string_union(locals, ["__vptr", "__match"])
+}
+
+// Remove handler state globals from function locals — these must be WASM globals
+// for evidence passing (closures share state through globals, not local copies).
+// Only removes __hs_*, __save___hs_*, __ev_result — NOT regular globals like 'source'.
+fn filter_handler_locals(locals, idx) = {
+  if idx >= len(locals) { [] }
+  else {
+    let name = locals[idx]
+    let rest = filter_handler_locals(locals, idx + 1)
+    let ns = to_string(name)
+    if len(ns) > 5 && string_slice(ns, 0, 5) == "__hs_" { rest }
+    else { if len(ns) > 7 && string_slice(ns, 0, 7) == "__save_" { rest }
+    else { if len(ns) > 8 && string_slice(ns, 0, 8) == "__ev_op_" { rest }
+    else { if len(ns) > 11 && string_slice(ns, 0, 11) == "__ev_result" { rest }
+    else { [name] ++ rest } } } }
+  }
 }
 
 fn find_param_idx(params, name, idx)= {

@@ -119,7 +119,13 @@ fn lower_expr(sexpr, env) = {
                 if len(bindings) == 0 { body }
                 else { LBlock(bindings ++ [body]) }
               } else {
-                LCall(lower_expr(func, env), lower_exprs(args, env))
+                // Effect ops dispatch through __ev_op_ prefixed globals
+                let (is_op, _, _) = get_op_info(name, env)
+                if is_op {
+                  LCall(LGlobal("__ev_op_" ++ name), lower_exprs(args, env))
+                } else {
+                  LCall(lower_expr(func, env), lower_exprs(args, env))
+                }
               }
             } } } }
           }
@@ -294,8 +300,9 @@ fn emit_dummy_ops(ops, env) = {
   if len(ops) == 0 { [] }
   else {
     let (op_name, p_names) = ops[0]
-    let fn_def = LFn(op_name, len(p_names), p_names, [LConst(LUnit)])
-    [LLet(op_name, LMakeClosure(fn_def, []))] ++ emit_dummy_ops(slice(ops, 1, len(ops)), env)
+    let ev_name = "__ev_op_" ++ op_name
+    let fn_def = LFn(ev_name, len(p_names), p_names, [LConst(LUnit)])
+    [LLet(ev_name, LMakeClosure(fn_def, []))] ++ emit_dummy_ops(slice(ops, 1, len(ops)), env)
   }
 }
 
@@ -465,32 +472,34 @@ fn extract_arm_op_names(arms) = {
   }
 }
 
-// Save current op globals: let __save_yield = yield
+// Save current op globals: let __save___ev_op_yield = __ev_op_yield
 fn save_op_bindings(op_names) = {
   if len(op_names) == 0 { [] }
   else {
-    [LLet("__save_" ++ op_names[0], LGlobal(op_names[0]))]
+    let ev = "__ev_op_" ++ op_names[0]
+    [LLet("__save_" ++ ev, LGlobal(ev))]
     ++ save_op_bindings(slice(op_names, 1, len(op_names)))
   }
 }
 
-// Restore op globals: let yield = __save_yield
+// Restore op globals: let __ev_op_yield = __save___ev_op_yield
 fn restore_op_bindings(op_names) = {
   if len(op_names) == 0 { [] }
   else {
-    [LLet(op_names[0], LGlobal("__save_" ++ op_names[0]))]
+    let ev = "__ev_op_" ++ op_names[0]
+    [LLet(ev, LGlobal("__save_" ++ ev))]
     ++ restore_op_bindings(slice(op_names, 1, len(op_names)))
   }
 }
 
-// Build evidence closures and install them: let yield = <closure>
+// Build evidence closures and install them: let __ev_op_yield = <closure>
 fn build_evidence_installs(arms, cell_names, env) = {
   if len(arms) == 0 { [] }
   else {
     let (op_name, params, handler_body) = arms[0]
     let entry = extract_handler_entry(op_name, params, handler_body)
     let closure = build_evidence_closure(entry, cell_names, env)
-    [LLet(op_name, closure)]
+    [LLet("__ev_op_" ++ op_name, closure)]
     ++ build_evidence_installs(slice(arms, 1, len(arms)), cell_names, env)
   }
 }

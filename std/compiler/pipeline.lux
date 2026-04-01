@@ -227,7 +227,7 @@ fn compile_illuminate(source) = {
 fn compile_wasm(source) = {
   let runtime = read_file("std/runtime/memory.lux")
   let prelude = read_file("std/prelude.lux")
-  let imports = source |> resolve_imports([])
+  let (imports, _) = source |> resolve_imports_tracked([])
   let full_source = runtime ++ "\n" ++ prelude ++ "\n" ++ imports ++ "\n" ++ (source |> strip_imports)
   let (ast, env) = full_source |> checked
   let ctors = env |> extract_constructors
@@ -301,13 +301,38 @@ fn resolve_import_list(paths, seen) = {
   if len(paths) == 0 { "" }
   else {
     let path = paths[0]
-    let rest = resolve_import_list(slice(paths, 1, len(paths)), seen ++ [path])
-    if contains(to_string(seen), path) { rest }
-    else {
+    if list_contains(seen, path) {
+      resolve_import_list(slice(paths, 1, len(paths)), seen)
+    } else {
+      let new_seen = seen ++ [path]
       let file_path = "std/" ++ replace(path, "/", "/") ++ ".lux"
       let file_source = read_file(file_path)
-      let transitive = resolve_imports(file_source, seen ++ [path])
-      transitive ++ "\n" ++ (file_source |> strip_imports) ++ "\n" ++ rest
+      // Resolve transitive imports — returns source with seen threaded through
+      let (trans_source, trans_seen) = resolve_imports_tracked(file_source, new_seen)
+      let rest = resolve_import_list(slice(paths, 1, len(paths)), trans_seen)
+      trans_source ++ "\n" ++ (file_source |> strip_imports) ++ "\n" ++ rest
+    }
+  }
+}
+
+fn resolve_imports_tracked(source, seen) = {
+  let import_lines = source |> split("\n") |> find_imports(0)
+  resolve_import_list_tracked(import_lines, seen)
+}
+
+fn resolve_import_list_tracked(paths, seen) = {
+  if len(paths) == 0 { ("", seen) }
+  else {
+    let path = paths[0]
+    if list_contains(seen, path) {
+      resolve_import_list_tracked(slice(paths, 1, len(paths)), seen)
+    } else {
+      let new_seen = seen ++ [path]
+      let file_path = "std/" ++ replace(path, "/", "/") ++ ".lux"
+      let file_source = read_file(file_path)
+      let (trans_source, trans_seen) = resolve_imports_tracked(file_source, new_seen)
+      let (rest_source, rest_seen) = resolve_import_list_tracked(slice(paths, 1, len(paths)), trans_seen)
+      (trans_source ++ "\n" ++ (file_source |> strip_imports) ++ "\n" ++ rest_source, rest_seen)
     }
   }
 }

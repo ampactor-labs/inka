@@ -59,7 +59,8 @@ fn lower_expr(sexpr, env) = {
     StringLit(s) => LConst(LString(s)),
     BoolLit(b) => LConst(LBool(b)),
     NoneExpr => LConst(LUnit),
-    VarRef(name) => if is_ctor(name) { LMakeVariant(name, []) } else { LGlobal(name) },
+    VarRef(name) => if is_ctor(name) { LMakeVariant(name, []) }
+      else { let (is_op, _, _) = get_op_info(name, env); if is_op { LGlobal("__ev_op_" ++ name) } else { LGlobal(name) } },
 
     BinOp(op, left, right) => {
       if op == "Eq" || op == "Neq" {

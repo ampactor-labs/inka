@@ -751,11 +751,9 @@ fn parse_effect_ops(tokens, pos) = {
     let p5 = if at(tokens, p4, "Arrow") {
       // Skip the type name(s)
       let p_ty = skip_ws(tokens, p4 + 1);
-      // Simple: just skip one token (the type name)
-      // Handle () as return type
+      // Skip return type: simple name, () unit, or (A, B, C) tuple
       if at(tokens, p_ty, "LParen") {
-        let p_rp = expect(tokens, p_ty + 1, "RParen");
-        p_rp
+        skip_balanced_parens(tokens, p_ty + 1, 1)
       } else {
         p_ty + 1
       }
@@ -788,6 +786,14 @@ fn parse_effect_params(tokens, pos) = {
       ([name], expect(tokens, p4, "RParen"))
     }
   }
+}
+
+// Skip balanced parentheses: (A, B, C) → position after closing )
+fn skip_balanced_parens(tokens, pos, depth) = {
+  if depth == 0 { pos }
+  else { if at(tokens, pos, "LParen") { skip_balanced_parens(tokens, pos + 1, depth + 1) }
+  else { if at(tokens, pos, "RParen") { skip_balanced_parens(tokens, pos + 1, depth - 1) }
+  else { skip_balanced_parens(tokens, pos + 1, depth) } } }
 }
 
 // ─── Program ─────────────────────────────────────────────────

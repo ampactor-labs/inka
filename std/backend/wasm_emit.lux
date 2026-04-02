@@ -153,7 +153,13 @@ fn emit_expr(e, params, locals, ctx)= match e {
         ++ "    i32.const 0" ++ NL ++ "    i32.store" ++ NL
         ++ "    local.get $__vptr" ++ NL
       }
-      else { "    call $" ++ name ++ NL }
+      else {
+        // Last resort: check if __ev_op_ prefixed version exists as a global
+        // (effect op used as a value outside its handler scope)
+        let ev_name = "__ev_op_" ++ name
+        if string_in(ctx_globals(ctx), ev_name, 0) { "    global.get $" ++ ev_name ++ NL }
+        else { "    ;; UNRESOLVED: " ++ name ++ NL ++ "    i32.const 0" ++ NL }
+      }
     } } } }
   },
   LUpval(idx) => {

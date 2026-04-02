@@ -43,14 +43,14 @@ fn keyword_type(word) = {
     ("return", "Return"), ("break", "Break"), ("continue", "Continue"),
     ("while", "While"), ("loop", "Loop")
   ];
-  fn lookup(kw, word, i) =
+  fn kw_find(kw, word, i) =
     if i >= len(kw) { "Ident" }
     else {
       let (k, v) = kw[i];
       if k == word { v }
-      else { lookup(kw, word, i + 1) }
+      else { kw_find(kw, word, i + 1) }
     };
-  lookup(kw, word, 0)
+  kw_find(kw, word, 0)
 }
 
 // --- Token constructor ---

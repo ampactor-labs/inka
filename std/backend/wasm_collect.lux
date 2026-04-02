@@ -254,7 +254,7 @@ fn collect_hs_name(e) = {
     let here = if len(ns) > 5 && string_slice(ns, 0, 5) == "__hs_" { [name] }
       else { if len(ns) > 7 && string_slice(ns, 0, 7) == "__save_" { [name] }
       else { if len(ns) > 8 && string_slice(ns, 0, 8) == "__ev_op_" { [name] }
-      else { if len(ns) > 11 && string_slice(ns, 0, 11) == "__ev_result" { [name] }
+      else { if len(ns) >= 11 && string_slice(ns, 0, 11) == "__ev_result" { [name] }
       else { [] } } } }
     string_union(here, collect_hs_name(value))
   } else { if len(s) > 6 && string_slice(s, 0, 6) == "LBlock" {

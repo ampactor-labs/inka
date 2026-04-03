@@ -1,28 +1,21 @@
 // WASM Construction Helpers — wasm_construct.lux
 //
-// WAT emission helpers for data structure construction and matching:
-//   - Tuple/list construction (emit_make_tuple, emit_tuple_sets, emit_tuple_elems)
+// Lower-level WAT construction for compound data types:
+//   - Tuple/list construction (emit_make_tuple, emit_tuple_sets)
 //   - Variant construction (emit_make_variant, emit_variant_fields)
 //   - Match compilation (emit_match, emit_match_arms, emit_bind_fields)
 //   - Closure captures (emit_closure_captures, find_self_capture)
-//   - (println dispatch removed — lowering resolves to print_string/print_int)
-//
-// All functions are Pure — they produce WAT text strings, no side effects.
-// They call emit_expr from wasm_emit.lux via mutual recursion.
 
 import compiler/lower
-import backend/wasm_collect
 
+// ─── Self-Referencing Closure Detection ─────────────────────
 
-
-// ─── Closure Capture Helper ─────────────────────────────────
-
-fn find_self_capture(captures, name, idx)= {
+fn find_self_capture(captures, fn_name, idx) = {
   if idx >= len(captures) { 0 - 1 }
   else {
     match captures[idx] {
-      LGlobal(n) => if n == name { idx } else { find_self_capture(captures, name, idx + 1) },
-      _ => find_self_capture(captures, name, idx + 1)
+      LGlobal(name) => if name == fn_name { idx } else { find_self_capture(captures, fn_name, idx + 1) },
+      _ => find_self_capture(captures, fn_name, idx + 1)
     }
   }
 }
@@ -56,7 +49,6 @@ fn emit_closure_capture_stores(n_caps, idx)= {
 
 // ─── Tuple/List Construction ────────────────────────────────
 // Tuple/list construction: evaluate each element, call make_tuple runtime.
-// The runtime function handles allocation — no $__vptr clobbering.
 
 fn emit_make_tuple(elems, params, locals, ctx)= {
   let n = len(elems)
@@ -98,59 +90,59 @@ fn emit_tuple_elems(elems, idx, params, locals, ctx)= {
 
 // ─── Variant Construction ───────────────────────────────────
 // LMakeVariant("Circle", [r]) → alloc [tag_id:i32][r:i32], return ptr
-// Uses $__vptr temp local (safe even if field expressions allocate).
+//
+// Variant pointer stack in linear memory at addresses 200-260.
+// Global $__vsp tracks nesting depth. Survives arbitrary nesting
+// of variant constructions — each level pushes before, pops after.
 
 fn emit_make_variant(tag, fields, params, locals, ctx)= {
   let tag_id = find_tag_id(ctx_tags(ctx), tag, 0)
   let n_fields = len(fields)
   let total_size = (1 + n_fields) * 4
-  if n_fields == 0 {
-    // Zero-field variant: just alloc + store tag, no nesting risk
-    "    i32.const " ++ to_string(total_size) ++ NL
-    ++ "    call $alloc" ++ NL
-    ++ "    local.tee $__vptr" ++ NL
-    ++ "    i32.const " ++ to_string(tag_id) ++ NL
-    ++ "    i32.store" ++ NL
-    ++ "    local.get $__vptr" ++ NL
-  } else {
-    // Multi-field variant: evaluate all fields FIRST (onto stack temps),
-    // then alloc + store. This avoids __vptr clobber from nested allocs.
-    emit_variant_field_exprs(fields, 0, params, locals, ctx)
-    ++ "    i32.const " ++ to_string(total_size) ++ NL
-    ++ "    call $alloc" ++ NL
-    ++ "    local.set $__vptr" ++ NL
-    // Store tag
-    ++ "    local.get $__vptr" ++ NL
-    ++ "    i32.const " ++ to_string(tag_id) ++ NL
-    ++ "    i32.store" ++ NL
-    // Store fields from temps
-    ++ emit_variant_field_stores(n_fields, 0)
-    // Push variant pointer as result
-    ++ "    local.get $__vptr" ++ NL
-  }
+  // Allocate
+  "    i32.const " ++ to_string(total_size) ++ NL
+  ++ "    call $alloc" ++ NL
+  ++ "    local.set $__vptr" ++ NL
+  // Push base pointer onto memory stack: mem[200 + __vsp*4] = ptr; __vsp++
+  ++ "    global.get $__vsp" ++ NL
+  ++ "    i32.const 4" ++ NL ++ "    i32.mul" ++ NL
+  ++ "    i32.const 200" ++ NL ++ "    i32.add" ++ NL
+  ++ "    local.get $__vptr" ++ NL
+  ++ "    i32.store" ++ NL
+  ++ "    global.get $__vsp" ++ NL ++ "    i32.const 1" ++ NL ++ "    i32.add" ++ NL
+  ++ "    global.set $__vsp" ++ NL
+  // Store tag
+  ++ "    local.get $__vptr" ++ NL
+  ++ "    i32.const " ++ to_string(tag_id) ++ NL
+  ++ "    i32.store" ++ NL
+  // Store fields — each reloads base from memory stack
+  ++ emit_variant_fields(fields, 0, params, locals, ctx)
+  // Pop stack: __vsp--; result = mem[200 + __vsp*4]
+  ++ "    global.get $__vsp" ++ NL ++ "    i32.const 1" ++ NL ++ "    i32.sub" ++ NL
+  ++ "    global.set $__vsp" ++ NL
+  ++ "    global.get $__vsp" ++ NL
+  ++ "    i32.const 4" ++ NL ++ "    i32.mul" ++ NL
+  ++ "    i32.const 200" ++ NL ++ "    i32.add" ++ NL
+  ++ "    i32.load" ++ NL
 }
 
-// Evaluate all field expressions and save to __f0, __f1, etc.
-fn emit_variant_field_exprs(fields, idx, params, locals, ctx)= {
+fn emit_variant_fields(fields, idx, params, locals, ctx)= {
   if idx >= len(fields) { "" }
   else {
-    emit_expr(fields[idx], params, locals, ctx)
-    ++ "    local.set $__f" ++ to_string(idx) ++ NL
-    ++ emit_variant_field_exprs(fields, idx + 1, params, locals, ctx)
-  }
-}
-
-// Store pre-evaluated fields from __f0, __f1, etc. into variant
-fn emit_variant_field_stores(n_fields, idx)= {
-  if idx >= n_fields { "" }
-  else {
     let field_offset = (1 + idx) * 4
-    "    local.get $__vptr" ++ NL
+    // Reload base from memory stack top (peek at __vsp - 1)
+    "    global.get $__vsp" ++ NL ++ "    i32.const 1" ++ NL ++ "    i32.sub" ++ NL
+    ++ "    i32.const 4" ++ NL ++ "    i32.mul" ++ NL
+    ++ "    i32.const 200" ++ NL ++ "    i32.add" ++ NL
+    ++ "    i32.load" ++ NL
+    // Compute field address (on WASM stack — survives nested eval)
     ++ "    i32.const " ++ to_string(field_offset) ++ NL
     ++ "    i32.add" ++ NL
-    ++ "    local.get $__f" ++ to_string(idx) ++ NL
+    // Evaluate field (may nest — memory stack handles it)
+    ++ emit_expr(fields[idx], params, locals, ctx)
+    // Store
     ++ "    i32.store" ++ NL
-    ++ emit_variant_field_stores(n_fields, idx + 1)
+    ++ emit_variant_fields(fields, idx + 1, params, locals, ctx)
   }
 }
 
@@ -219,3 +211,17 @@ fn emit_bind_fields(sub_pats, idx, params, locals, ctx)= {
   }
 }
 
+fn ctx_strings(ctx) = { let (s, _, _, _) = ctx; s }
+fn ctx_tags(ctx) = { let (_, t, _, _) = ctx; t }
+fn ctx_fns(ctx) = { let (_, _, f, _) = ctx; f }
+fn ctx_globals(ctx) = { let (_, _, _, g) = ctx; g }
+
+// Evaluate expressions and save to __f0, __f1, etc. (for closure captures)
+fn emit_variant_field_exprs(fields, idx, params, locals, ctx)= {
+  if idx >= len(fields) { "" }
+  else {
+    emit_expr(fields[idx], params, locals, ctx)
+    ++ "    local.set $__f" ++ to_string(idx) ++ NL
+    ++ emit_variant_field_exprs(fields, idx + 1, params, locals, ctx)
+  }
+}

@@ -43,6 +43,7 @@ fn emit_module(defs, type_map) = {
     ++ emit_wasi_imports()
     ++ "  (memory (export " ++ DQ ++ "memory" ++ DQ ++ ") 16384)" ++ NL
     ++ "  (global $heap_ptr (mut i32) (i32.const " ++ to_string(heap_start) ++ "))" ++ NL
+    ++ "  (global $__vsp (mut i32) (i32.const 0))" ++ NL
     ++ emit_global_decls(top_globals, 0)
     ++ emit_fn_type_sigs(max_arity, 0)
     ++ emit_string_segments(string_map, 0)
@@ -469,9 +470,9 @@ fn filter_out_names(locals, exclude, idx) = {
 }
 
 fn add_emitter_temps(locals, ctx)= {
-  // __vptr: temp for heap allocation (tuples, closures).
-  // __f0-__f5: pre-evaluated variant fields (avoids __vptr clobber from nested allocs).
-  // __match: added by collect_locals_expr when LMatch is seen.
+  // __vptr: temp for heap allocation (closures, tuples).
+  // __match: temp for match scrutinee.
+  // __f0-__f7: pre-evaluated closure captures.
   string_union(locals, ["__vptr", "__match", "__f0", "__f1", "__f2", "__f3", "__f4", "__f5", "__f6", "__f7"])
 }
 

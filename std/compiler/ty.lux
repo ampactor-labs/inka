@@ -235,9 +235,14 @@ fn apply(subst, ty) = match ty {
     }
   },
   TList(elem) => TList(apply(subst, elem)),
-  TFun(params, ret, effs) => TFun(map(|p| apply(subst, p), params), apply(subst, ret), effs),
-  TTuple(elems) => TTuple(map(|e| apply(subst, e), elems)),
-  TName(name, args) => TName(name, map(|a| apply(subst, a), args))
+  TFun(params, ret, effs) => TFun(apply_list(subst, params), apply(subst, ret), effs),
+  TTuple(elems) => TTuple(apply_list(subst, elems)),
+  TName(name, args) => TName(name, apply_list(subst, args))
+}
+
+fn apply_list(subst, tys) = {
+  if len(tys) == 0 { [] }
+  else { [apply(subst, tys[0])] ++ apply_list(subst, slice(tys, 1, len(tys))) }
 }
 
 // Get the reason WHY a type variable was bound to its current value

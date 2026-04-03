@@ -40,6 +40,20 @@ fn emit_closure_captures(captures, idx, params, locals, ctx)= {
   }
 }
 
+// Store pre-evaluated captures from __f0, __f1, ... into closure
+fn emit_closure_capture_stores(n_caps, idx)= {
+  if idx >= n_caps { "" }
+  else {
+    let offset = (2 + idx) * 4
+    "    local.get $__vptr" ++ NL
+    ++ "    i32.const " ++ to_string(offset) ++ NL
+    ++ "    i32.add" ++ NL
+    ++ "    local.get $__f" ++ to_string(idx) ++ NL
+    ++ "    i32.store" ++ NL
+    ++ emit_closure_capture_stores(n_caps, idx + 1)
+  }
+}
+
 // ─── Tuple/List Construction ────────────────────────────────
 // Tuple/list construction: evaluate each element, call make_tuple runtime.
 // The runtime function handles allocation — no $__vptr clobbering.

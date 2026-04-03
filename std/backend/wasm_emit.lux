@@ -227,9 +227,11 @@ fn emit_expr(e, params, locals, ctx)= match e {
       ++ "    local.get $__vptr" ++ NL
     } else {
       // Closure object: [fn_idx:i32][upval_count:i32][upvals...]
+      // Eval captures FIRST to avoid $__vptr clobber from nested allocs
       let n_caps = len(captures)
       let total_size = (2 + n_caps) * 4
-      "    i32.const " ++ to_string(total_size) ++ NL
+      emit_variant_field_exprs(captures, 0, params, locals, ctx)
+      ++ "    i32.const " ++ to_string(total_size) ++ NL
       ++ "    call $alloc" ++ NL
       ++ "    local.set $__vptr" ++ NL
       // Store fn table index
@@ -241,8 +243,8 @@ fn emit_expr(e, params, locals, ctx)= match e {
       ++ "    i32.const 4" ++ NL ++ "    i32.add" ++ NL
       ++ "    i32.const " ++ to_string(n_caps) ++ NL
       ++ "    i32.store" ++ NL
-      // Store captured values
-      ++ emit_closure_captures(captures, 0, params, locals, ctx)
+      // Store pre-evaluated captures from __f0, __f1, ...
+      ++ emit_closure_capture_stores(n_caps, 0)
       ++ "    local.get $__vptr" ++ NL
     }
   },
@@ -470,7 +472,7 @@ fn add_emitter_temps(locals, ctx)= {
   // __vptr: temp for heap allocation (tuples, closures).
   // __f0-__f5: pre-evaluated variant fields (avoids __vptr clobber from nested allocs).
   // __match: added by collect_locals_expr when LMatch is seen.
-  string_union(locals, ["__vptr", "__match", "__f0", "__f1", "__f2", "__f3", "__f4", "__f5"])
+  string_union(locals, ["__vptr", "__match", "__f0", "__f1", "__f2", "__f3", "__f4", "__f5", "__f6", "__f7"])
 }
 
 // Remove handler state globals from function locals — these must be WASM globals

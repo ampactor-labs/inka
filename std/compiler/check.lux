@@ -122,13 +122,18 @@ fn unify_list(subst, counter, ts1, ts2, context) = {
 
 fn resolve_type(subst, eff_subst, ty) = match apply(subst, ty) {
   TFun(params, ret, eff) =>
-    TFun(map(|p| resolve_type(subst, eff_subst, p), params),
+    TFun(resolve_type_list(subst, eff_subst, params),
          resolve_type(subst, eff_subst, ret),
          apply_eff_subst(eff_subst, eff)),
   TList(elem) => TList(resolve_type(subst, eff_subst, elem)),
-  TTuple(elems) => TTuple(map(|e| resolve_type(subst, eff_subst, e), elems)),
-  TName(name, args) => TName(name, map(|a| resolve_type(subst, eff_subst, a), args)),
+  TTuple(elems) => TTuple(resolve_type_list(subst, eff_subst, elems)),
+  TName(name, args) => TName(name, resolve_type_list(subst, eff_subst, args)),
   other => other
+}
+
+fn resolve_type_list(subst, eff_subst, tys) = {
+  if len(tys) == 0 { [] }
+  else { [resolve_type(subst, eff_subst, tys[0])] ++ resolve_type_list(subst, eff_subst, slice(tys, 1, len(tys))) }
 }
 
 fn resolve_env(env, subst, eff_subst) = {

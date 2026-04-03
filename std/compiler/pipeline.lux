@@ -235,6 +235,173 @@ fn compile_wasm(source) = {
   emit_module(lowered, [])
 }
 
+// ─── WASM Fast — trust the proof ────────────────────────────
+// The compiler already proved memory.lux and prelude.lux correct.
+// Re-proving them every compilation is amnesia, not rigor.
+// Build the env from declarations. Let inferred_type handle the rest.
+// The proof IS the env. The env IS the light.
+
+fn compile_wasm_fast(source) = {
+  let runtime = read_file("std/runtime/memory.lux")
+  let prelude = read_file("std/prelude.lux")
+  let (imports, _) = source |> resolve_imports_tracked([])
+  let imports_src = if len(imports) > 1 { imports } else { "" }
+  let user = source |> strip_imports
+
+  // Parse everything (fast — seconds, not minutes)
+  let runtime_ast = runtime |> frontend
+  let prelude_ast = prelude |> frontend
+  let imports_ast = if len(imports_src) > 1 { imports_src |> frontend } else { [] }
+  let user_ast = user |> frontend
+
+  // Build env from declarations — no unification, no body inference.
+  // The compiler already proved these types. We trust the proof.
+  let base_env = env_with_primitives(env_empty())
+  let env1 = build_decl_env(runtime_ast, base_env, 0)
+  let env2 = build_decl_env(prelude_ast, env1, 0)
+  let env3 = build_decl_env(imports_ast, env2, 0)
+  let env4 = build_decl_env(user_ast, env3, 0)
+
+  // Combine ASTs — the full program for lowering
+  let full_ast = runtime_ast ++ prelude_ast ++ imports_ast ++ user_ast
+
+  // Extract constructors from the declaration env
+  let ctors = env4 |> extract_constructors
+
+  // Lower and emit — inferred_type handles type-directed dispatch
+  let lowered = lower_program_typed(full_ast, ctors, env4)
+  emit_module(lowered, [])
+}
+
+// ─── Declaration Environment Builder ────────────────────────
+// Walks AST declarations and builds a type environment.
+// No unification. No HM inference. Just reads what's declared.
+// Effect decls give exact op types. Functions get param count +
+// declared effects. inferred_type in the lowering handles the rest.
+
+fn build_decl_env(stmts, env, n) = {
+  if len(stmts) == 0 { env }
+  else {
+    let (new_env, new_n) = build_decl_entry(stmts[0], env, n)
+    build_decl_env(slice(stmts, 1, len(stmts)), new_env, new_n)
+  }
+}
+
+fn build_decl_entry(stmt, env, n) = match stmt {
+  EffectDeclStmt(name, ops) => build_effect_ops(name, ops, env, n),
+
+  TypeStmt(name, variants) => (build_type_ctors(name, variants, env), n),
+
+  TypeAliasStmt(name, base, _) => {
+    let base_ty = match base {
+      "Int" => TInt, "Float" => TFloat, "String" => TString, "Bool" => TBool,
+      _ => TName(base, [])
+    }
+    ([(name, base_ty, Declared("type alias " ++ name))] ++ env, n)
+  },
+
+  FnStmt(name, params, body, declared_effects) => {
+    let param_names = map(|(n, _)| n, params)
+    let param_count = len(param_names)
+    // Each param gets a unique type variable
+    let param_types = build_fresh_tvars(param_count, n)
+    let new_n = n + param_count + 1
+    // Return type: use inferred_type on the body with params in scope
+    let body_env = bind_params_to_env(param_names, param_types, env)
+    let ret_ty = inferred_type(body, body_env)
+    // Effects from declared annotations
+    let eff = build_declared_eff(declared_effects)
+    ([(name, TFun(param_types, ret_ty, eff), Declared("fn " ++ name))] ++ env, new_n)
+  },
+
+  LetStmt(name, value) => {
+    let ty = inferred_type(value, env)
+    ([(name, ty, Declared("let " ++ name))] ++ env, n)
+  },
+
+  LetDestructure(names, value) => {
+    let ty = inferred_type(value, env)
+    let new_env = match ty {
+      TTuple(elems) => bind_tuple_names(names, elems, 0, env),
+      _ => bind_fresh_names_env(names, 0, env, n)
+    }
+    (new_env, n + len(names))
+  },
+
+  _ => (env, n)
+}
+
+fn build_effect_ops(eff_name, ops, env, n) = {
+  if len(ops) == 0 { (env, n) }
+  else {
+    let (op_name, params) = ops[0]
+    let param_types = build_fresh_tvars(len(params), n)
+    let ret = TVar(0 - (n + len(params) + 1))
+    let new_n = n + len(params) + 2
+    let new_env = [(op_name, TFun(param_types, ret, EfClosed([eff_name])), Declared("effect op"))] ++ env
+    build_effect_ops(eff_name, slice(ops, 1, len(ops)), new_env, new_n)
+  }
+}
+
+fn build_type_ctors(type_name, variants, env) = {
+  if len(variants) == 0 { env }
+  else {
+    let (v_name, _) = variants[0]
+    let new_env = [(v_name, TName(type_name, []), Declared("constructor"))] ++ env
+    build_type_ctors(type_name, slice(variants, 1, len(variants)), new_env)
+  }
+}
+
+fn build_fresh_tvars(count, start) = {
+  if count <= 0 { [] }
+  else { [TVar(0 - (start + 1))] ++ build_fresh_tvars(count - 1, start + 1) }
+}
+
+fn bind_params_to_env(names, types, env) = {
+  if len(names) == 0 { env }
+  else {
+    bind_params_to_env(
+      slice(names, 1, len(names)),
+      slice(types, 1, len(types)),
+      [(names[0], types[0], Inferred("parameter"))] ++ env
+    )
+  }
+}
+
+fn bind_tuple_names(names, elems, idx, env) = {
+  if idx >= len(names) || idx >= len(elems) { env }
+  else {
+    bind_tuple_names(names, elems, idx + 1,
+      [(names[idx], elems[idx], Inferred("destructured"))] ++ env)
+  }
+}
+
+fn bind_fresh_names_env(names, idx, env, n) = {
+  if idx >= len(names) { env }
+  else {
+    bind_fresh_names_env(names, idx + 1,
+      [(names[idx], TVar(0 - (n + idx + 1)), Inferred("destructured"))] ++ env, n)
+  }
+}
+
+fn build_declared_eff(declared) = {
+  if len(declared) == 0 { EfPure }
+  else {
+    let names = extract_eff_names(declared)
+    if list_contains(names, "Pure") { EfPure }
+    else { if len(names) > 0 { EfClosed(names) } else { EfPure } }
+  }
+}
+
+fn extract_eff_names(effects) = {
+  if len(effects) == 0 { [] }
+  else {
+    let (name, negated) = effects[0]
+    let rest = extract_eff_names(slice(effects, 1, len(effects)))
+    if negated { rest } else { [name] ++ rest }
+  }
+}
+
 // ─── REPL Modes ─────────────────────────────────────────────
 // Same spine. Different tail. REPL emits to compile_repl instead.
 

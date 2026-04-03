@@ -71,9 +71,20 @@ fn emit_print_fn_list(fns, idx, ctx) = {
 fn emit_global_decls(names, idx)= {
   if idx >= len(names) { "" }
   else {
-    "  (global $" ++ names[idx] ++ " (mut i32) (i32.const 0))" ++ NL
-    ++ emit_global_decls(names, idx + 1)
+    let name = names[idx]
+    // Skip if this name appeared earlier in the list (dedup)
+    let is_dup = name_seen_before(names, name, 0, idx)
+    if is_dup { emit_global_decls(names, idx + 1) }
+    else {
+      "  (global $" ++ name ++ " (mut i32) (i32.const 0))" ++ NL
+      ++ emit_global_decls(names, idx + 1)
+    }
   }
+}
+
+fn name_seen_before(names, name, start, end) = {
+  if start >= end { false }
+  else { if names[start] == name { true } else { name_seen_before(names, name, start + 1, end) } }
 }
 
 fn emit_wasi_imports()=

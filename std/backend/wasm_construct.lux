@@ -33,6 +33,25 @@ fn emit_closure_captures(captures, idx, params, locals, ctx)= {
   }
 }
 
+// Store captures using variant stack (reload base each time — survives nesting)
+fn emit_closure_captures_stacked(captures, idx, params, locals, ctx)= {
+  if idx >= len(captures) { "" }
+  else {
+    let offset = (2 + idx) * 4
+    // Reload base from variant stack top
+    "    global.get $__vsp" ++ NL ++ "    i32.const 1" ++ NL ++ "    i32.sub" ++ NL
+    ++ "    i32.const 4" ++ NL ++ "    i32.mul" ++ NL
+    ++ "    i32.const 200" ++ NL ++ "    i32.add" ++ NL
+    ++ "    i32.load" ++ NL
+    ++ "    i32.const " ++ to_string(offset) ++ NL
+    ++ "    i32.add" ++ NL
+    // Evaluate capture (may nest — stack handles it)
+    ++ emit_expr(captures[idx], params, locals, ctx)
+    ++ "    i32.store" ++ NL
+    ++ emit_closure_captures_stacked(captures, idx + 1, params, locals, ctx)
+  }
+}
+
 // Store pre-evaluated captures from __f0, __f1, ... into closure
 fn emit_closure_capture_stores(n_caps, idx)= {
   if idx >= n_caps { "" }

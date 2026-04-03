@@ -217,8 +217,7 @@ fn emit_expr(e, params, locals, ctx)= match e {
     let LFn(fname, _, _, _) = fn_def
     let fn_idx = find_fn_index(ctx_fns(ctx), fname, 0)
     if len(captures) == 0 {
-      // Always allocate heap closure — i32.load must always work.
-      // One representation. One calling convention. One mechanism.
+      // Zero captures: alloc [fn_idx, 0]. No nesting risk (no field eval).
       "    i32.const 8" ++ NL ++ "    call $alloc" ++ NL
       ++ "    local.tee $__vptr" ++ NL
       ++ "    i32.const " ++ to_string(fn_idx) ++ NL ++ "    i32.store" ++ NL
@@ -228,13 +227,21 @@ fn emit_expr(e, params, locals, ctx)= match e {
       ++ "    local.get $__vptr" ++ NL
     } else {
       // Closure object: [fn_idx:i32][upval_count:i32][upvals...]
-      // Eval captures FIRST to avoid $__vptr clobber from nested allocs
+      // Uses variant pointer stack (same as emit_make_variant) so
+      // nested allocations in capture expressions can't clobber the base.
       let n_caps = len(captures)
       let total_size = (2 + n_caps) * 4
-      emit_variant_field_exprs(captures, 0, params, locals, ctx)
-      ++ "    i32.const " ++ to_string(total_size) ++ NL
+      "    i32.const " ++ to_string(total_size) ++ NL
       ++ "    call $alloc" ++ NL
       ++ "    local.set $__vptr" ++ NL
+      // Push onto variant stack
+      ++ "    global.get $__vsp" ++ NL
+      ++ "    i32.const 4" ++ NL ++ "    i32.mul" ++ NL
+      ++ "    i32.const 200" ++ NL ++ "    i32.add" ++ NL
+      ++ "    local.get $__vptr" ++ NL
+      ++ "    i32.store" ++ NL
+      ++ "    global.get $__vsp" ++ NL ++ "    i32.const 1" ++ NL ++ "    i32.add" ++ NL
+      ++ "    global.set $__vsp" ++ NL
       // Store fn table index
       ++ "    local.get $__vptr" ++ NL
       ++ "    i32.const " ++ to_string(fn_idx) ++ NL
@@ -244,9 +251,15 @@ fn emit_expr(e, params, locals, ctx)= match e {
       ++ "    i32.const 4" ++ NL ++ "    i32.add" ++ NL
       ++ "    i32.const " ++ to_string(n_caps) ++ NL
       ++ "    i32.store" ++ NL
-      // Store pre-evaluated captures from __f0, __f1, ...
-      ++ emit_closure_capture_stores(n_caps, 0)
-      ++ "    local.get $__vptr" ++ NL
+      // Store captures — reload base from stack each time
+      ++ emit_closure_captures_stacked(captures, 0, params, locals, ctx)
+      // Pop variant stack
+      ++ "    global.get $__vsp" ++ NL ++ "    i32.const 1" ++ NL ++ "    i32.sub" ++ NL
+      ++ "    global.set $__vsp" ++ NL
+      ++ "    global.get $__vsp" ++ NL
+      ++ "    i32.const 4" ++ NL ++ "    i32.mul" ++ NL
+      ++ "    i32.const 200" ++ NL ++ "    i32.add" ++ NL
+      ++ "    i32.load" ++ NL
     }
   },
   _ => "    i32.const 0 ;; unhandled" ++ NL

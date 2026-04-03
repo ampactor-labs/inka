@@ -496,6 +496,21 @@ fn restore_op_bindings(op_names) = {
   }
 }
 
+// Flatten nested LBlocks: [LBlock([a, b]), c] → [a, b, c]
+// Needed because LetDestructure lowers to LBlock([LLet("_dt",...), LLet("n",...)])
+// which hides bindings from the outer scope's free-variable detection.
+fn flatten_blocks(stmts) = {
+  if len(stmts) == 0 { [] }
+  else {
+    let head = stmts[0]
+    let rest = flatten_blocks(slice(stmts, 1, len(stmts)))
+    match head {
+      LBlock(inner) => flatten_blocks(inner) ++ rest,
+      _ => [head] ++ rest
+    }
+  }
+}
+
 // Build evidence closures and install them: let __ev_op_yield = <closure>
 fn build_evidence_installs(arms, cell_names, env) = {
   if len(arms) == 0 { [] }
@@ -517,7 +532,7 @@ fn build_evidence_closure(entry, cell_names, env) = {
   let resume_value = entry[3]
   let updates = entry[4]
   // Lower the arm body using full lowering (needs println dispatch, Concat, etc.)
-  let lowered_pre = lower_stmts(pre_stmts, env)
+  let lowered_pre = flatten_blocks(lower_stmts(pre_stmts, env))
   let lowered_value = lower_expr(resume_value, env)
   let lowered_updates = lower_state_updates(updates, env)
   // Remap state variable references to cell loads, state updates to cell stores

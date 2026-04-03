@@ -51,16 +51,20 @@ fn emit_module(defs, type_map) = {
     ++ emit_start(top_stmts, ctx)
     ++ ")" ++ NL
   // Stream: print header, each function, footer. No O(n²) concat.
-  print(header)
-  print_fn_list(fns, 0, ctx)
-  print(footer)
+  emit_print(header)
+  emit_print_fn_list(fns, 0, ctx)
+  emit_print(footer)
   ""
 }
 
-fn print_fn_list(fns, idx, ctx) = {
+// Direct string output — avoids type dispatch ambiguity.
+// In WASM: print_string. In Rust VM: print (generic).
+fn emit_print(s) = print(s ++ "")
+
+fn emit_print_fn_list(fns, idx, ctx) = {
   if idx < len(fns) {
-    print(emit_fn(fns[idx], ctx))
-    print_fn_list(fns, idx + 1, ctx)
+    emit_print(emit_fn(fns[idx], ctx))
+    emit_print_fn_list(fns, idx + 1, ctx)
   } else { () }
 }
 

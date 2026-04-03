@@ -36,7 +36,7 @@ fn inferred_type(sexpr, env) = {
     Call(func, _) => match inferred_type(func, env) { TFun(_, ret, _) => ret, _ => TUnit },
     IfExpr(_, then_br, _) => inferred_type(then_br, env),
     ListExpr(elems) => if len(elems) == 0 { TList(TUnit) } else { TList(inferred_type(elems[0], env)) },
-    TupleExpr(elems) => TTuple(map(|e| inferred_type(e, env), elems)),
+    TupleExpr(elems) => TTuple(infer_type_list(elems, env)),
     Index(coll, _) => match inferred_type(coll, env) { TList(elem) => elem, _ => TUnit },
     StringInterp(_) => TString,
     PipeExpr(_, step) => inferred_type(step, env),
@@ -45,6 +45,11 @@ fn inferred_type(sexpr, env) = {
     HandleExpr(body, _, _) => inferred_type(body, env),
     _ => TUnit
   }
+}
+
+fn infer_type_list(elems, env) = {
+  if len(elems) == 0 { [] }
+  else { [inferred_type(elems[0], env)] ++ infer_type_list(slice(elems, 1, len(elems)), env) }
 }
 
 // ─── The One lower_expr ─────────────────────────────────────
@@ -101,13 +106,11 @@ fn lower_expr(sexpr, env) = {
               let arg = args[0]
               let lowered_arg = lower_expr(arg, env)
               let arg_ty = inferred_type(arg, env)
-              // Known Int/Bool → print_int. Known String → print_string.
-              // Unknown → to_string (runtime dispatch) then print_string.
+              // Known String → print_string. Everything else → print_int.
+              // The emitter explicitly calls print_string for WAT output.
               let (printer, final_arg) = match arg_ty {
-                TInt => ("print_int", lowered_arg),
-                TBool => ("print_int", lowered_arg),
                 TString => ("print_string", lowered_arg),
-                _ => ("print_string", LCall(LGlobal("to_string"), [lowered_arg]))
+                _ => ("print_int", lowered_arg)
               }
               if name == "println" {
                 LBlock([LCall(LGlobal(printer), [final_arg]), LCall(LGlobal("print_newline"), [])])

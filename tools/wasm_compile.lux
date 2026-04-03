@@ -36,11 +36,19 @@ fn build_decl_env(stmts, env, n) = {
   }
 }
 
+fn extract_param_names(params) = {
+  if len(params) == 0 { [] }
+  else {
+    let (pn, _) = params[0]
+    [pn] ++ extract_param_names(slice(params, 1, len(params)))
+  }
+}
+
 fn build_decl_entry(stmt, env, n) = match stmt {
   EffectDeclStmt(name, ops) => build_effect_ops(name, ops, env, n),
   TypeStmt(name, variants) => (build_type_ctors(name, variants, env), n),
   FnStmt(name, params, body, declared_effects) => {
-    let param_names = map(|(pn, _)| pn, params)
+    let param_names = extract_param_names(params)
     let param_count = len(param_names)
     let param_types = build_fresh_tvars(param_count, n)
     let new_n = n + param_count + 1

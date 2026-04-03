@@ -47,6 +47,21 @@ fn inferred_type(sexpr, env) = {
   }
 }
 
+// Like inferred_type but follows Concat chains to find the actual type.
+// Concat of lists → TList. Concat of strings → TString. Unknown → TString (default).
+fn infer_concat_type(sexpr, env) = {
+  let S(expr, _, _) = sexpr
+  match expr {
+    ListExpr(_) => TList(TUnit),
+    BinOp(op, left, _) => if op == "Concat" { infer_concat_type(left, env) } else { inferred_type(sexpr, env) },
+    MatchExpr(_, arms) => if len(arms) > 0 { let (_, body) = arms[0]; infer_concat_type(body, env) } else { TUnit },
+    IfExpr(_, then_br, _) => infer_concat_type(then_br, env),
+    BlockExpr(_, final_expr) => infer_concat_type(final_expr, env),
+    Call(func, _) => match infer_concat_type(func, env) { TFun(_, ret, _) => ret, _ => inferred_type(sexpr, env) },
+    _ => inferred_type(sexpr, env)
+  }
+}
+
 fn infer_type_list(elems, env) = {
   if len(elems) == 0 { [] }
   else { [inferred_type(elems[0], env)] ++ infer_type_list(slice(elems, 1, len(elems)), env) }
@@ -85,8 +100,8 @@ fn lower_expr(sexpr, env) = {
         }
         if op == "Neq" { LUnaryOp("Not", eq) } else { eq }
       } else { if op == "Concat" {
-        let left_ty = inferred_type(left, env)
-        let right_ty = inferred_type(right, env)
+        let left_ty = infer_concat_type(left, env)
+        let right_ty = infer_concat_type(right, env)
         // Dispatch: known String → str_concat, known List → list_concat
         // Unknown → val_concat (runtime dispatch based on first-element heuristic)
         let concat_fn = match left_ty {

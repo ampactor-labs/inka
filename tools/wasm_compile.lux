@@ -53,7 +53,7 @@ fn build_decl_entry(stmt, env, n) = match stmt {
     let param_types = build_fresh_tvars(param_count, n)
     let new_n = n + param_count + 1
     let body_env = bind_params(param_names, param_types, env)
-    let ret_ty = inferred_type(body, body_env)
+    let ret_ty = infer_concat_type(body, body_env)
     let eff = build_declared_eff(declared_effects)
     ([(name, TFun(param_types, ret_ty, eff), Declared("fn " ++ name))] ++ env, new_n)
   },

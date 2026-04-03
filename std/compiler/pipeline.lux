@@ -316,7 +316,7 @@ fn build_decl_entry(stmt, env, n) = match stmt {
     let new_n = n + param_count + 1
     // Return type: use inferred_type on the body with params in scope
     let body_env = bind_params_to_env(param_names, param_types, env)
-    let ret_ty = inferred_type(body, body_env)
+    let ret_ty = infer_concat_type(body, body_env)
     // Effects from declared annotations
     let eff = build_declared_eff(declared_effects)
     ([(name, TFun(param_types, ret_ty, eff), Declared("fn " ++ name))] ++ env, new_n)

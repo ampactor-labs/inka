@@ -209,8 +209,10 @@ fn lower_expr(sexpr, env) = {
       LIf(lower_expr(cond, env), [lower_expr(then_e, env)], [lower_expr(else_e, env)]),
     MatchExpr(scrutinee, arms) =>
       LMatch(lower_expr(scrutinee, env), lower_match_arms(arms, env)),
-    BlockExpr(stmts, final_e) =>
-      LBlock(lower_stmts(stmts, env) ++ [lower_expr(final_e, env)]),
+    BlockExpr(stmts, final_e) => {
+      let (lowered_stmts, block_env) = lower_stmts_with_env(stmts, env)
+      LBlock(lowered_stmts ++ [lower_expr(final_e, block_env)])
+    },
 
     ListExpr(elems) => LMakeList(lower_exprs(elems, env)),
     TupleExpr(elems) => LMakeTuple(lower_exprs(elems, env)),
@@ -287,6 +289,30 @@ fn lower_pats(pats) = {
 fn lower_stmts(stmts, env) = {
   if len(stmts) == 0 { [] }
   else { [lower_stmt(stmts[0], env)] ++ lower_stmts(slice(stmts, 1, len(stmts)), env) }
+}
+
+// Lower statements while extending env with local types — for BlockExpr.
+// Each LetStmt/FnStmt adds its binding to env for subsequent statements.
+fn lower_stmts_with_env(stmts, env) = {
+  if len(stmts) == 0 { ([], env) }
+  else {
+    let lowered = lower_stmt(stmts[0], env)
+    let new_env = extend_env_from_stmt(stmts[0], env)
+    let (rest, final_env) = lower_stmts_with_env(slice(stmts, 1, len(stmts)), new_env)
+    ([lowered] ++ rest, final_env)
+  }
+}
+
+fn extend_env_from_stmt(stmt, env) = match stmt {
+  LetStmt(name, value) => [(name, infer_concat_type(value, env), Inferred("let"))] ++ env,
+  FnStmt(name, _, _, _) => [(name, TUnit, Declared("fn"))] ++ env,
+  LetDestructure(names, _) => bind_names_unknown(names, env),
+  _ => env
+}
+
+fn bind_names_unknown(names, env) = {
+  if len(names) == 0 { env }
+  else { bind_names_unknown(slice(names, 1, len(names)), [(names[0], TUnit, Inferred("destructured"))] ++ env) }
 }
 
 fn extract_param_names(params) = {

@@ -75,6 +75,18 @@ fn main() {
         ["wasm", path] => {
             run_pipeline_mode(path, "wasm");
         }
+        ["bootstrap"] => {
+            let file_path = "std/compiler/pipeline.lux";
+            let wrapper = format!(
+                "import compiler/pipeline\n\
+                 main()\n"
+            );
+            let result = run_source(&wrapper, file_path, false);
+            if let Err(e) = result {
+                eprintln!("{}", e);
+                std::process::exit(1);
+            }
+        }
         [path] => {
             let mode = if teach_mode { "teach" } else { "run" };
             run_pipeline_mode(path, mode);

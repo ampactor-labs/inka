@@ -1460,6 +1460,36 @@ impl Vm {
             _ => Err("write_file: expected (path, content) strings".to_string()),
         });
 
+        self.register_builtin("cli_args", |_args| {
+            let mut arg_vals = Vec::new();
+            for arg in std::env::args() {
+                arg_vals.push(VmValue::String(Arc::new(arg)));
+            }
+            Ok(VmValue::List(Arc::new(arg_vals)))
+        });
+
+        self.register_builtin("dump_to_rust", |args| match (args.first(), args.get(1)) {
+            (Some(VmValue::Tuple(chunk_tuple)), Some(VmValue::String(path))) => {
+                let slice = if chunk_tuple.len() == 5 {
+                    &chunk_tuple[1..]
+                } else if chunk_tuple.len() == 4 {
+                    &chunk_tuple[1..]
+                } else if chunk_tuple.len() == 3 {
+                    &chunk_tuple[..]
+                } else {
+                    return Err(format!("dump_to_rust: expected 3-5 element tuple, got {}", chunk_tuple.len()));
+                };
+                let proto = Self::chunk_tuple_to_proto(slice, "main")?;
+                let mut dumper = crate::vm::dumper::Dumper::new();
+                let rust_code = dumper.dump_proto(Arc::new(proto));
+                if let Err(e) = std::fs::write(&**path, rust_code) {
+                    return Err(format!("dump_to_rust error: {}", e));
+                }
+                Ok(VmValue::Unit)
+            }
+            _ => Err("dump_to_rust: expected (chunk, path) tuple".to_string()),
+        });
+
         // Read a line from stdin, returning it as a string (without trailing newline)
         self.register_builtin("read_line", |_args| {
             use std::io::BufRead;

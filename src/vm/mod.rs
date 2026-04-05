@@ -14,3 +14,4 @@ pub mod opcode;
 pub mod value;
 #[allow(clippy::module_inception)]
 pub mod vm;
+pub mod dumper;

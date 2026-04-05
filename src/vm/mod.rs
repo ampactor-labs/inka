@@ -7,6 +7,7 @@
 //! Architecture: `source → lex → parse → check → compile → vm::run`
 
 pub mod chunk;
+pub mod dumper;
 mod effects;
 pub mod error;
 pub mod frame;
@@ -14,4 +15,3 @@ pub mod opcode;
 pub mod value;
 #[allow(clippy::module_inception)]
 pub mod vm;
-pub mod dumper;

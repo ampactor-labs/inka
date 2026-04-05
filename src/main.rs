@@ -77,10 +77,9 @@ fn main() {
         }
         ["bootstrap"] => {
             let file_path = "std/compiler/pipeline.lux";
-            let wrapper = format!(
-                "import compiler/pipeline\n\
-                 main()\n"
-            );
+            let wrapper = "import compiler/pipeline\n\
+                           main()\n"
+                .to_string();
             let result = run_source(&wrapper, file_path, false);
             if let Err(e) = result {
                 eprintln!("{}", e);

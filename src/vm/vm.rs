@@ -113,18 +113,7 @@ impl Vm {
 
     /// Main execution loop.
     pub(super) fn execute(&mut self) -> Result<Option<VmValue>, VmError> {
-        let mut _icount = 0usize;
         loop {
-            if _icount % 2_000_000 == 0 {
-                let frame_idx = self.frames.len() - 1;
-                let proto = &self.frames[frame_idx].proto;
-                let func_name = proto.name.as_deref().unwrap_or("<anon>");
-                let ip = self.frames[frame_idx].ip;
-                let line = proto.chunk.lines.get(ip).copied().unwrap_or(0);
-                println!("VM TELEMETRY: {} instructions executed. func: {}, line: {}", _icount, func_name, line);
-            }
-            _icount += 1;
-            
             let frame_idx = self.frames.len() - 1;
             let frame = &mut self.frames[frame_idx];
 
@@ -1039,7 +1028,7 @@ impl Vm {
         }
     }
 
-    fn call_builtin_with_args(&mut self, id: BuiltinId, mut args: Vec<VmValue>) -> Result<(), VmError> {
+    fn call_builtin_with_args(&mut self, id: BuiltinId, args: Vec<VmValue>) -> Result<(), VmError> {
         let func = self.builtins.get(id.0 as usize).map(|(_, f)| *f);
         if let Some(f) = func {
             match f(args) {
@@ -1487,14 +1476,12 @@ impl Vm {
 
         self.register_builtin("dump_to_rust", |args| match (args.first(), args.get(1)) {
             (Some(VmValue::Tuple(chunk_tuple)), Some(VmValue::String(path))) => {
-                let slice = if chunk_tuple.len() == 5 {
-                    &chunk_tuple[1..]
-                } else if chunk_tuple.len() == 4 {
-                    &chunk_tuple[1..]
-                } else if chunk_tuple.len() == 3 {
-                    &chunk_tuple[..]
-                } else {
-                    return Err(format!("dump_to_rust: expected 3-5 element tuple, got {}", chunk_tuple.len()));
+                let slice = match chunk_tuple.len() {
+                    4 | 5 => &chunk_tuple[1..],
+                    3 => &chunk_tuple[..],
+                    n => {
+                        return Err(format!("dump_to_rust: expected 3-5 element tuple, got {n}"));
+                    }
                 };
                 let proto = Self::chunk_tuple_to_proto(slice, "main")?;
                 let mut dumper = crate::vm::dumper::Dumper::new();

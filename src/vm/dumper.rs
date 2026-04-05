@@ -1,5 +1,5 @@
+use crate::vm::chunk::{Constant, FnProto};
 use std::sync::Arc;
-use crate::vm::chunk::{Chunk, Constant, FnProto, HandlerTable};
 
 pub struct Dumper {
     protos: Vec<Arc<FnProto>>,
@@ -28,7 +28,10 @@ impl Dumper {
         }
 
         let root_id = self.protos.len() - 1;
-        out.push_str(&format!("pub fn get_pipeline() -> Arc<FnProto> {{\n    build_proto_{}()\n}}\n", root_id));
+        out.push_str(&format!(
+            "pub fn get_pipeline() -> Arc<FnProto> {{\n    build_proto_{}()\n}}\n",
+            root_id
+        ));
         out
     }
 
@@ -46,14 +49,28 @@ impl Dumper {
 
     fn format_proto(&self, id: usize, proto: &Arc<FnProto>) -> String {
         let mut out = format!("fn build_proto_{}() -> Arc<FnProto> {{\n", id);
-        
+
         let name_str = proto.chunk.name.replace("\"", "\\\"");
-        out.push_str(&format!("    let mut chunk = Chunk::new(\"{name_str}\");\n"));
-        
-        let code_str = proto.chunk.code.iter().map(|b| format!("{b}")).collect::<Vec<_>>().join(", ");
+        out.push_str(&format!(
+            "    let mut chunk = Chunk::new(\"{name_str}\");\n"
+        ));
+
+        let code_str = proto
+            .chunk
+            .code
+            .iter()
+            .map(|b| format!("{b}"))
+            .collect::<Vec<_>>()
+            .join(", ");
         out.push_str(&format!("    chunk.code = vec![{code_str}];\n"));
-        
-        let lines_str = proto.chunk.lines.iter().map(|l| format!("{l}")).collect::<Vec<_>>().join(", ");
+
+        let lines_str = proto
+            .chunk
+            .lines
+            .iter()
+            .map(|l| format!("{l}"))
+            .collect::<Vec<_>>()
+            .join(", ");
         out.push_str(&format!("    chunk.lines = vec![{lines_str}];\n"));
 
         out.push_str("    chunk.names = vec![\n");
@@ -69,16 +86,26 @@ impl Dumper {
                 Constant::Int(n) => out.push_str(&format!("        Constant::Int({}),\n", n)),
                 Constant::Float(n) => {
                     let mut s = n.to_string();
-                    if !s.contains('.') { s.push_str(".0"); }
+                    if !s.contains('.') {
+                        s.push_str(".0");
+                    }
                     out.push_str(&format!("        Constant::Float({s}f64),\n"))
-                },
+                }
                 Constant::String(s) => {
                     let escaped = s.replace("\\", "\\\\").replace("\"", "\\\"");
-                    out.push_str(&format!("        Constant::String(Arc::new(\"{escaped}\".to_string())),\n"))
-                },
+                    out.push_str(&format!(
+                        "        Constant::String(Arc::new(\"{escaped}\".to_string())),\n"
+                    ))
+                }
                 Constant::FnProto(p) => {
-                    let child_id = self.protos.iter().position(|child| Arc::ptr_eq(child, p)).unwrap();
-                    out.push_str(&format!("        Constant::FnProto(build_proto_{child_id}()),\n"))
+                    let child_id = self
+                        .protos
+                        .iter()
+                        .position(|child| Arc::ptr_eq(child, p))
+                        .unwrap();
+                    out.push_str(&format!(
+                        "        Constant::FnProto(build_proto_{child_id}()),\n"
+                    ))
                 }
             }
         }
@@ -89,11 +116,26 @@ impl Dumper {
             out.push_str("        HandlerTable {\n            entries: vec![\n");
             for e in &t.entries {
                 out.push_str("                HandlerEntry {\n");
-                out.push_str(&format!("                    op_name_idx: {},\n", e.op_name_idx));
-                out.push_str(&format!("                    proto_idx: {},\n", e.proto_idx));
-                out.push_str(&format!("                    param_count: {},\n", e.param_count));
-                out.push_str(&format!("                    tail_resumptive: {},\n", e.tail_resumptive));
-                out.push_str(&format!("                    evidence_eligible: {},\n", e.evidence_eligible));
+                out.push_str(&format!(
+                    "                    op_name_idx: {},\n",
+                    e.op_name_idx
+                ));
+                out.push_str(&format!(
+                    "                    proto_idx: {},\n",
+                    e.proto_idx
+                ));
+                out.push_str(&format!(
+                    "                    param_count: {},\n",
+                    e.param_count
+                ));
+                out.push_str(&format!(
+                    "                    tail_resumptive: {},\n",
+                    e.tail_resumptive
+                ));
+                out.push_str(&format!(
+                    "                    evidence_eligible: {},\n",
+                    e.evidence_eligible
+                ));
                 out.push_str("                    upvalue_descs: vec![\n");
                 for (is_loc, idx) in &e.upvalue_descs {
                     out.push_str(&format!("                        ({is_loc}, {idx}),\n"));
@@ -106,8 +148,14 @@ impl Dumper {
 
         out.push_str("    let mut field_registry = std::collections::HashMap::new();\n");
         for (k, v) in &proto.field_registry {
-            let v_str = v.iter().map(|n| format!("\"{n}\".to_string()")).collect::<Vec<_>>().join(", ");
-            out.push_str(&format!("    field_registry.insert(\"{k}\".to_string(), vec![{v_str}]);\n"));
+            let v_str = v
+                .iter()
+                .map(|n| format!("\"{n}\".to_string()"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            out.push_str(&format!(
+                "    field_registry.insert(\"{k}\".to_string(), vec![{v_str}]);\n"
+            ));
         }
 
         let proto_name = match &proto.name {
@@ -115,7 +163,8 @@ impl Dumper {
             None => "None".to_string(),
         };
 
-        out.push_str(&format!(r#"    Arc::new(FnProto {{
+        out.push_str(&format!(
+            r#"    Arc::new(FnProto {{
         chunk,
         arity: {},
         local_count: {},
@@ -124,7 +173,9 @@ impl Dumper {
         field_registry,
     }})
 }}
-"#, proto.arity, proto.local_count, proto.upval_count, proto_name));
+"#,
+            proto.arity, proto.local_count, proto.upval_count, proto_name
+        ));
 
         out
     }

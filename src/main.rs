@@ -75,9 +75,6 @@ fn main() {
         ["wasm", path] => {
             run_pipeline_mode(path, "wasm");
         }
-        ["wasm-fast", path] => {
-            run_pipeline_mode(path, "wasm-fast");
-        }
         [path] => {
             // Single argument — run file
             let source = read_file(path);
@@ -194,7 +191,6 @@ fn run_pipeline_mode(file_path: &str, mode: &str) {
         "check" => "compile_checking",
         "lower" => "compile_lowering",
         "wasm" => "compile_wasm",
-        "wasm-fast" => "compile_wasm_fast",
         _ => "compile_standard",
     };
 

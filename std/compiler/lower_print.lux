@@ -11,23 +11,23 @@ fn pv(v) = match v {
 }
 
 fn pe_atom(e) = match e {
-  LConst(v) => pv(v),
-  LLocal(s) => "$" ++ to_string(s),
-  LGlobal(n) => n,
-  LLet(n, v) => "let " ++ n ++ " = " ++ pe(v),
+  LConst(_, v) => pv(v),
+  LLocal(_, s) => "$" ++ to_string(s),
+  LGlobal(_, n) => n,
+  LLet(_, n, v) => "let " ++ n ++ " = " ++ pe(v),
   _ => ""
 }
 
 fn pe_op(e) = match e {
-  LBinOp(op, l, r) => "(" ++ pe(l) ++ " " ++ op ++ " " ++ pe(r) ++ ")",
-  LUnaryOp(op, x) => op ++ pe(x),
+  LBinOp(_, op, l, r) => "(" ++ pe(l) ++ " " ++ op ++ " " ++ pe(r) ++ ")",
+  LUnaryOp(_, op, x) => op ++ pe(x),
   _ => ""
 }
 
 fn pe_fn(e) = match e {
-  LCall(f, args) => pe(f) ++ "(" ++ js(mp(args), ", ") ++ ")",
-  LReturn(v) => "return " ++ pe(v),
-  LMakeClosure(d, _) => {
+  LCall(_, f, args) => pe(f) ++ "(" ++ js(mp(args), ", ") ++ ")",
+  LReturn(_, v) => "return " ++ pe(v),
+  LMakeClosure(_, d, _) => {
     let LFn(n, a, _, _) = d
     "fn " ++ n ++ "/" ++ to_string(a)
   },
@@ -35,22 +35,22 @@ fn pe_fn(e) = match e {
 }
 
 fn pe_coll(e) = match e {
-  LMakeList(es) => "[" ++ js(mp(es), ", ") ++ "]",
-  LMakeTuple(es) => "(" ++ js(mp(es), ", ") ++ ")",
-  LMakeVariant(n, fs) => n ++ "(" ++ js(mp(fs), ", ") ++ ")",
-  LIndex(c, i) => pe(c) ++ "[" ++ pe(i) ++ "]",
+  LMakeList(_, es) => "[" ++ js(mp(es), ", ") ++ "]",
+  LMakeTuple(_, es) => "(" ++ js(mp(es), ", ") ++ ")",
+  LMakeVariant(_, n, fs) => n ++ "(" ++ js(mp(fs), ", ") ++ ")",
+  LIndex(_, c, i) => pe(c) ++ "[" ++ pe(i) ++ "]",
   _ => ""
 }
 
 fn pe_ctrl(e) = match e {
-  LBlock(ss) => '{ ' ++ js(mp(ss), "; ") ++ ' }',
-  LMatch(s, _) => "match " ++ pe(s) ++ ' { .. }',
+  LBlock(_, ss) => '{ ' ++ js(mp(ss), "; ") ++ ' }',
+  LMatch(_, s, _) => "match " ++ pe(s) ++ ' { .. }',
   _ => pe_state(e)
 }
 
 fn pe_state(e) = match e {
-  LStateGet(i) => "state[" ++ to_string(i) ++ "]",
-  LStateSet(i, v) => "state[" ++ to_string(i) ++ "] = " ++ pe(v),
+  LStateGet(_, i) => "state[" ++ to_string(i) ++ "]",
+  LStateSet(_, i, v) => "state[" ++ to_string(i) ++ "] = " ++ pe(v),
   _ => ""
 }
 

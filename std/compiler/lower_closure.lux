@@ -15,17 +15,64 @@ import compiler/lower_ir
 
 // ─── Lambda / Closure Lowering ──────────────────────────────
 
+// Look up fn name in env and extend with parameter types before lowering body.
+// For named fns (FnStmt), the checker already bound `name : TFun(param_tys, ret, _)`
+// in env — we read it and bind each param to its type. This is the single
+// mechanism that flows the checker's knowledge into nested scopes.
+// For lambdas (synthetic name), lookup misses → params fall back to TUnit.
+fn env_with_params(env, fn_name, params) = {
+  let (_, fn_ty, _) = env_lookup(env, fn_name)
+  match fn_ty {
+    TFun(param_tys, _, _) => zip_params_to_env(params, param_tys, env),
+    _ => bind_params_unknown_ty(params, env)
+  }
+}
+
+fn zip_params_to_env(param_names, param_tys, env) = {
+  if len(param_names) == 0 { env }
+  else {
+    let name = param_names[0]
+    let ty = if len(param_tys) > 0 { param_tys[0] } else { TUnit }
+    let new_env = [(name, ty, Declared("param"))] ++ env
+    let rest_names = slice(param_names, 1, len(param_names))
+    let rest_tys = if len(param_tys) > 0 { slice(param_tys, 1, len(param_tys)) } else { [] }
+    zip_params_to_env(rest_names, rest_tys, new_env)
+  }
+}
+
+fn bind_params_unknown_ty(params, env) = {
+  if len(params) == 0 { env }
+  else {
+    bind_params_unknown_ty(slice(params, 1, len(params)),
+      [(params[0], TUnit, Declared("param"))] ++ env)
+  }
+}
+
+// Look up the return type of a named function in env.
+fn fn_return_ty(env, fn_name) = {
+  let (_, fn_ty, _) = env_lookup(env, fn_name)
+  match fn_ty { TFun(_, rt, _) => rt, _ => TUnit }
+}
+
 fn lower_lambda_named(wasm_name, name, params, body, env) = {
   let all_free = collect_free_vars(body, params)
   let free = if wasm_name == name { filter_real_captures(all_free, name) }
              else { filter_real_captures_no_self(all_free) }
-  let lowered_body = lower_expr(body, env)
+  // Critical: extend env with parameter types so the body's VarRefs resolve.
+  let body_env = env_with_params(env, name, params)
+  let lowered_body = lower_expr(body, body_env)
+  // The lambda's own type: look it up if named, else build from body ty.
+  let fn_ty = { let (_, t, _) = env_lookup(env, name); t }
+  let closure_ty = match fn_ty {
+    TFun(_, _, _) => fn_ty,
+    _ => TFun([], lexpr_ty(lowered_body), EfPure)
+  }
   if len(free) == 0 {
-    LMakeClosure(LFn(wasm_name, len(params), params, [lowered_body]), [])
+    LMakeClosure(closure_ty, LFn(wasm_name, len(params), params, [lowered_body]), [])
   } else {
     let rewritten = rewrite_captures(lowered_body, free)
-    let capture_exprs = map_to_globals(free, 0)
-    LMakeClosure(LFn(wasm_name, len(params), params, [rewritten]), capture_exprs)
+    let capture_exprs = map_to_globals_typed(free, env, 0)
+    LMakeClosure(closure_ty, LFn(wasm_name, len(params), params, [rewritten]), capture_exprs)
   }
 }
 
@@ -176,21 +223,22 @@ fn filter_out(names, exclude, idx) = {
 }
 
 // Rewrite captures: walk LowIR, replace LGlobal(captured) → LUpval(idx)
+// Preserves the Ty field on every node.
 fn rewrite_captures(e, free) = match e {
-  LGlobal(name) => {
+  LGlobal(ty, name) => {
     let idx = find_in_list(free, name, 0)
-    if idx >= 0 { LUpval(idx) } else { LGlobal(name) }
+    if idx >= 0 { LUpval(ty, idx) } else { LGlobal(ty, name) }
   },
-  LBinOp(op, l, r) => LBinOp(op, rewrite_captures(l, free), rewrite_captures(r, free)),
-  LUnaryOp(op, inner) => LUnaryOp(op, rewrite_captures(inner, free)),
-  LCall(func, args) => LCall(rewrite_captures(func, free), rewrite_captures_list(args, free)),
-  LIf(c, t, e) => LIf(rewrite_captures(c, free),
-    rewrite_captures_list(t, free), rewrite_captures_list(e, free)),
-  LBlock(stmts) => LBlock(rewrite_captures_list(stmts, free)),
-  LLet(name, value) => LLet(name, rewrite_captures(value, free)),
-  LMakeTuple(elems) => LMakeTuple(rewrite_captures_list(elems, free)),
-  LMakeList(elems) => LMakeList(rewrite_captures_list(elems, free)),
-  LIndex(c, i) => LIndex(rewrite_captures(c, free), rewrite_captures(i, free)),
+  LBinOp(ty, op, l, r) => LBinOp(ty, op, rewrite_captures(l, free), rewrite_captures(r, free)),
+  LUnaryOp(ty, op, inner) => LUnaryOp(ty, op, rewrite_captures(inner, free)),
+  LCall(ty, func, args) => LCall(ty, rewrite_captures(func, free), rewrite_captures_list(args, free)),
+  LIf(ty, c, t, el) => LIf(ty, rewrite_captures(c, free),
+    rewrite_captures_list(t, free), rewrite_captures_list(el, free)),
+  LBlock(ty, stmts) => LBlock(ty, rewrite_captures_list(stmts, free)),
+  LLet(ty, name, value) => LLet(ty, name, rewrite_captures(value, free)),
+  LMakeTuple(ty, elems) => LMakeTuple(ty, rewrite_captures_list(elems, free)),
+  LMakeList(ty, elems) => LMakeList(ty, rewrite_captures_list(elems, free)),
+  LIndex(ty, c, i) => LIndex(ty, rewrite_captures(c, free), rewrite_captures(i, free)),
   _ => e
 }
 
@@ -199,9 +247,24 @@ fn rewrite_captures_list(exprs, free) = {
   else { [rewrite_captures(exprs[0], free)] ++ rewrite_captures_list(slice(exprs, 1, len(exprs)), free) }
 }
 
-fn map_to_globals(names, idx) = {
+// Build capture list as LGlobal nodes. Looks up each name's real type in
+// env so that downstream (emitter) can emit f32/i32 type-directed stores.
+fn map_to_globals(names, idx) = map_to_globals_env(names, idx, [])
+
+fn map_to_globals_env(names, idx, env) = {
   if idx >= len(names) { [] }
-  else { [LGlobal(names[idx])] ++ map_to_globals(names, idx + 1) }
+  else {
+    let ty = { let (_, t, _) = env_lookup(env, names[idx]); t }
+    [LGlobal(ty, names[idx])] ++ map_to_globals_env(names, idx + 1, env)
+  }
+}
+
+fn map_to_globals_typed(names, env, idx) = {
+  if idx >= len(names) { [] }
+  else {
+    let ty = { let (_, t, _) = env_lookup(env, names[idx]); t }
+    [LGlobal(ty, names[idx])] ++ map_to_globals_typed(names, env, idx + 1)
+  }
 }
 
 fn find_in_list(list, name, idx) = {

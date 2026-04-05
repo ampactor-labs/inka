@@ -14,7 +14,7 @@ fn find_self_capture(captures, fn_name, idx) = {
   if idx >= len(captures) { 0 - 1 }
   else {
     match captures[idx] {
-      LGlobal(name) => if name == fn_name { idx } else { find_self_capture(captures, fn_name, idx + 1) },
+      LGlobal(_, name) => if name == fn_name { idx } else { find_self_capture(captures, fn_name, idx + 1) },
       _ => find_self_capture(captures, fn_name, idx + 1)
     }
   }
@@ -33,11 +33,15 @@ fn emit_closure_captures(captures, idx, params, locals, ctx)= {
   }
 }
 
-// Store captures using variant stack (reload base each time — survives nesting)
+// Store captures using variant stack (reload base each time — survives nesting).
+// Type-directed store: f32 captures use f32.store, else i32.store.
+// The lowered capture node carries its Ty — read it via lexpr_ty, dispatch.
 fn emit_closure_captures_stacked(captures, idx, params, locals, ctx)= {
   if idx >= len(captures) { "" }
   else {
     let offset = (2 + idx) * 4
+    let cap = captures[idx]
+    let store_op = match lexpr_ty(cap) { TFloat => "f32.store", _ => "i32.store" }
     // Reload base from variant stack top
     "    global.get $__vsp" ++ NL ++ "    i32.const 1" ++ NL ++ "    i32.sub" ++ NL
     ++ "    i32.const 4" ++ NL ++ "    i32.mul" ++ NL
@@ -46,8 +50,8 @@ fn emit_closure_captures_stacked(captures, idx, params, locals, ctx)= {
     ++ "    i32.const " ++ to_string(offset) ++ NL
     ++ "    i32.add" ++ NL
     // Evaluate capture (may nest — stack handles it)
-    ++ emit_expr(captures[idx], params, locals, ctx)
-    ++ "    i32.store" ++ NL
+    ++ emit_expr(cap, params, locals, ctx)
+    ++ "    " ++ store_op ++ NL
     ++ emit_closure_captures_stacked(captures, idx + 1, params, locals, ctx)
   }
 }

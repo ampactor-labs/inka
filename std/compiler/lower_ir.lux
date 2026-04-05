@@ -40,33 +40,73 @@ type LowPat
   | LPTuple(List)
 
 // ─── Core IR ────────────────────────────────────────────────
+//
+// Every LowExpr carries its resolved type as its first field. This is
+// a structural invariant: you cannot construct an untyped LowExpr.
+// The checker's light flows through the graph — no downstream pass
+// ever re-infers. If you need a type, read it off the node via lexpr_ty.
 
 type LowExpr
-  = LConst(LowValue)
-  | LLocal(Int)
-  | LGlobal(String)
-  | LStore(Int, LowExpr)
-  | LLet(String, LowExpr)
-  | LUpval(Int)
-  | LBinOp(String, LowExpr, LowExpr)
-  | LUnaryOp(String, LowExpr)
-  | LCall(LowExpr, List)
-  | LTailCall(LowExpr, List)
-  | LReturn(LowExpr)
-  | LMakeClosure(LowFn, List)
-  | LIf(LowExpr, List, List)
-  | LBlock(List)
-  | LMakeList(List)
-  | LMakeTuple(List)
-  | LMakeVariant(String, List)
-  | LIndex(LowExpr, LowExpr)
-  | LMatch(LowExpr, List)
-  | LLoop(List)
-  | LBreak(LowExpr)
-  | LSwitch(LowExpr, List)
-  | LSuspend(Int, LowExpr, List)
-  | LStateGet(Int)
-  | LStateSet(Int, LowExpr)
+  = LConst(Ty, LowValue)
+  | LLocal(Ty, Int)
+  | LGlobal(Ty, String)
+  | LStore(Ty, Int, LowExpr)
+  | LLet(Ty, String, LowExpr)
+  | LUpval(Ty, Int)
+  | LBinOp(Ty, String, LowExpr, LowExpr)
+  | LUnaryOp(Ty, String, LowExpr)
+  | LCall(Ty, LowExpr, List)
+  | LTailCall(Ty, LowExpr, List)
+  | LReturn(Ty, LowExpr)
+  | LMakeClosure(Ty, LowFn, List)
+  | LIf(Ty, LowExpr, List, List)
+  | LBlock(Ty, List)
+  | LMakeList(Ty, List)
+  | LMakeTuple(Ty, List)
+  | LMakeVariant(Ty, String, List)
+  | LIndex(Ty, LowExpr, LowExpr)
+  | LMatch(Ty, LowExpr, List)
+  | LLoop(Ty, List)
+  | LBreak(Ty, LowExpr)
+  | LSwitch(Ty, LowExpr, List)
+  | LSuspend(Ty, Int, LowExpr, List)
+  | LStateGet(Ty, Int)
+  | LStateSet(Ty, Int, LowExpr)
+
+// ─── Type Lookup — The Graph Is The Oracle ───────────────────
+// Every LowExpr carries its type. This is the ONLY way to query it.
+// No SExpr walks. No sidecar maps. No re-inference.
+fn lexpr_ty(e) = match e {
+  LConst(t, _)          => t,
+  LLocal(t, _)          => t,
+  LGlobal(t, _)         => t,
+  LStore(t, _, _)       => t,
+  LLet(t, _, _)         => t,
+  LUpval(t, _)          => t,
+  LBinOp(t, _, _, _)    => t,
+  LUnaryOp(t, _, _)     => t,
+  LCall(t, _, _)        => t,
+  LTailCall(t, _, _)    => t,
+  LReturn(t, _)         => t,
+  LMakeClosure(t, _, _) => t,
+  LIf(t, _, _, _)       => t,
+  LBlock(t, _)          => t,
+  LMakeList(t, _)       => t,
+  LMakeTuple(t, _)      => t,
+  LMakeVariant(t, _, _) => t,
+  LIndex(t, _, _)       => t,
+  LMatch(t, _, _)       => t,
+  LLoop(t, _)           => t,
+  LBreak(t, _)          => t,
+  LSwitch(t, _, _)      => t,
+  LSuspend(t, _, _, _)  => t,
+  LStateGet(t, _)       => t,
+  LStateSet(t, _, _)    => t,
+  _ => TUnit
+}
+
+// Emitter's WASM type question: TFloat → "f32", everything else → "i32"
+fn ty_to_wasm(ty) = match ty { TFloat => "f32", _ => "i32" }
 
 type LowFn
   = LFn(String, Int, List, List)

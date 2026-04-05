@@ -24,8 +24,8 @@ fn collect_top_let_names(stmts, idx)= {
   else {
     let rest = collect_top_let_names(stmts, idx + 1)
     match stmts[idx] {
-      LLet(name, _) => [name] ++ rest,
-      LBlock(inner) => collect_top_let_names(inner, 0) ++ rest,
+      LLet(_, name, _) => [name] ++ rest,
+      LBlock(_, inner) => collect_top_let_names(inner, 0) ++ rest,
       _ => rest
     }
   }
@@ -48,20 +48,20 @@ fn collect_all_strings(defs, idx)= {
 }
 
 fn collect_strings_expr(e)= match e {
-  LConst(v) => match v { LString(s) => [s], _ => [] },
-  LBinOp(_, l, r) => string_union(collect_strings_expr(l), collect_strings_expr(r)),
-  LUnaryOp(_, inner) => collect_strings_expr(inner),
-  LCall(func, args) => string_union(collect_strings_expr(func), collect_strings_list(args, 0)),
-  LIf(c, t, e) => string_union(collect_strings_expr(c),
+  LConst(_, v) => match v { LString(s) => [s], _ => [] },
+  LBinOp(_, _, l, r) => string_union(collect_strings_expr(l), collect_strings_expr(r)),
+  LUnaryOp(_, _, inner) => collect_strings_expr(inner),
+  LCall(_, func, args) => string_union(collect_strings_expr(func), collect_strings_list(args, 0)),
+  LIf(_, c, t, e) => string_union(collect_strings_expr(c),
     string_union(collect_strings_list(t, 0), collect_strings_list(e, 0))),
-  LBlock(stmts) => collect_strings_list(stmts, 0),
-  LLet(_, value) => collect_strings_expr(value),
-  LMakeTuple(elems) => collect_strings_list(elems, 0),
-  LMakeList(elems) => collect_strings_list(elems, 0),
-  LMakeVariant(_, fields) => collect_strings_list(fields, 0),
-  LMakeClosure(fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_strings_list(body, 0) },
-  LMatch(scr, arms) => string_union(collect_strings_expr(scr), collect_strings_arms(arms, 0)),
-  LIndex(coll, idx) => string_union(collect_strings_expr(coll), collect_strings_expr(idx)),
+  LBlock(_, stmts) => collect_strings_list(stmts, 0),
+  LLet(_, _, value) => collect_strings_expr(value),
+  LMakeTuple(_, elems) => collect_strings_list(elems, 0),
+  LMakeList(_, elems) => collect_strings_list(elems, 0),
+  LMakeVariant(_, _, fields) => collect_strings_list(fields, 0),
+  LMakeClosure(_, fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_strings_list(body, 0) },
+  LMatch(_, scr, arms) => string_union(collect_strings_expr(scr), collect_strings_arms(arms, 0)),
+  LIndex(_, coll, idx) => string_union(collect_strings_expr(coll), collect_strings_expr(idx)),
   _ => []
 }
 
@@ -151,14 +151,14 @@ fn collect_variant_tags(defs, idx)= {
 }
 
 fn collect_tags_expr(e)= match e {
-  LMakeVariant(name, _) => [name],
-  LMatch(scr, arms) => tag_union(collect_tags_expr(scr), collect_tags_arms(arms, 0)),
-  LCall(_, args) => collect_tags_list(args, 0),
-  LBinOp(_, l, r) => tag_union(collect_tags_expr(l), collect_tags_expr(r)),
-  LIf(c, t, e) => tag_union(collect_tags_expr(c), tag_union(collect_tags_list(t, 0), collect_tags_list(e, 0))),
-  LBlock(stmts) => collect_tags_list(stmts, 0),
-  LLet(_, v) => collect_tags_expr(v),
-  LMakeClosure(fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_tags_list(body, 0) },
+  LMakeVariant(_, name, _) => [name],
+  LMatch(_, scr, arms) => tag_union(collect_tags_expr(scr), collect_tags_arms(arms, 0)),
+  LCall(_, _, args) => collect_tags_list(args, 0),
+  LBinOp(_, _, l, r) => tag_union(collect_tags_expr(l), collect_tags_expr(r)),
+  LIf(_, c, t, e) => tag_union(collect_tags_expr(c), tag_union(collect_tags_list(t, 0), collect_tags_list(e, 0))),
+  LBlock(_, stmts) => collect_tags_list(stmts, 0),
+  LLet(_, _, v) => collect_tags_expr(v),
+  LMakeClosure(_, fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_tags_list(body, 0) },
   _ => []
 }
 
@@ -258,7 +258,7 @@ fn collect_hs_names(stmts, idx) = {
 }
 
 fn collect_hs_name(e) = match e {
-  LLet(name, value) => {
+  LLet(_, name, value) => {
     let ns = to_string(name)
     let here = if len(ns) > 5 && string_slice(ns, 0, 5) == "__hs_" { [name] }
       else { if len(ns) > 7 && string_slice(ns, 0, 7) == "__save_" { [name] }
@@ -267,26 +267,23 @@ fn collect_hs_name(e) = match e {
       else { [] } } } }
     string_union(here, collect_hs_name(value))
   },
-  LBlock(inner) => collect_hs_names(inner, 0),
-  // Traverse ALL expression types that can contain nested LLets.
-  // This is critical for handle blocks buried inside if/match/call bodies —
-  // their __save_/__hs_ bindings must reach ctx_globals.
-  LIf(c, t, e) => string_union(
+  LBlock(_, inner) => collect_hs_names(inner, 0),
+  LIf(_, c, t, e) => string_union(
     collect_hs_name(c),
     string_union(collect_hs_names(t, 0), collect_hs_names(e, 0))
   ),
-  LCall(func, args) => string_union(collect_hs_name(func), collect_hs_names(args, 0)),
-  LBinOp(_, l, r) => string_union(collect_hs_name(l), collect_hs_name(r)),
-  LUnaryOp(_, inner) => collect_hs_name(inner),
-  LMakeTuple(elems) => collect_hs_names(elems, 0),
-  LMakeList(elems) => collect_hs_names(elems, 0),
-  LMakeVariant(_, fields) => collect_hs_names(fields, 0),
-  LIndex(coll, idx) => string_union(collect_hs_name(coll), collect_hs_name(idx)),
-  LMatch(scrutinee, arms) => string_union(
+  LCall(_, func, args) => string_union(collect_hs_name(func), collect_hs_names(args, 0)),
+  LBinOp(_, _, l, r) => string_union(collect_hs_name(l), collect_hs_name(r)),
+  LUnaryOp(_, _, inner) => collect_hs_name(inner),
+  LMakeTuple(_, elems) => collect_hs_names(elems, 0),
+  LMakeList(_, elems) => collect_hs_names(elems, 0),
+  LMakeVariant(_, _, fields) => collect_hs_names(fields, 0),
+  LIndex(_, coll, idx) => string_union(collect_hs_name(coll), collect_hs_name(idx)),
+  LMatch(_, scrutinee, arms) => string_union(
     collect_hs_name(scrutinee),
     collect_hs_arms(arms, 0)
   ),
-  LMakeClosure(fn_def, captures) => {
+  LMakeClosure(_, fn_def, captures) => {
     let LFn(_, _, _, body) = fn_def
     string_union(collect_hs_names(body, 0), collect_hs_names(captures, 0))
   },
@@ -313,8 +310,8 @@ fn collect_fns(defs, idx)= {
   else {
     let rest = collect_fns(defs, idx + 1)
     match defs[idx] {
-      LLet(name, value) => match value {
-        LMakeClosure(fn_def, captures) => {
+      LLet(_, name, value) => match value {
+        LMakeClosure(_, fn_def, captures) => {
           // Collect this fn + any nested closures in its body
           let LFn(_, _, _, body) = fn_def
           let inner = collect_inner_closures(body, 0)
@@ -322,7 +319,7 @@ fn collect_fns(defs, idx)= {
         },
         _ => collect_inner_closures_expr(defs[idx]) ++ rest
       },
-      LBlock(inner) => collect_fns(inner, 0) ++ rest,
+      LBlock(_, inner) => collect_fns(inner, 0) ++ rest,
       _ => rest
     }
   }
@@ -334,15 +331,15 @@ fn collect_inner_closures(stmts, idx)= {
 }
 
 fn collect_inner_closures_expr(e)= match e {
-  LMakeClosure(fn_def, _) => {
+  LMakeClosure(_, fn_def, _) => {
     let LFn(_, _, _, body) = fn_def
     [fn_def] ++ collect_inner_closures(body, 0)
   },
-  LLet(_, value) => collect_inner_closures_expr(value),
-  LBlock(stmts) => collect_inner_closures(stmts, 0),
-  LIf(_, t, e) => collect_inner_closures(t, 0) ++ collect_inner_closures(e, 0),
-  LBinOp(_, l, r) => collect_inner_closures_expr(l) ++ collect_inner_closures_expr(r),
-  LCall(f, args) => collect_inner_closures_expr(f) ++ collect_inner_closures(args, 0),
+  LLet(_, _, value) => collect_inner_closures_expr(value),
+  LBlock(_, stmts) => collect_inner_closures(stmts, 0),
+  LIf(_, _, t, e) => collect_inner_closures(t, 0) ++ collect_inner_closures(e, 0),
+  LBinOp(_, _, l, r) => collect_inner_closures_expr(l) ++ collect_inner_closures_expr(r),
+  LCall(_, f, args) => collect_inner_closures_expr(f) ++ collect_inner_closures(args, 0),
   _ => []
 }
 
@@ -351,7 +348,7 @@ fn collect_top_stmts(defs, idx)= {
   else {
     let rest = collect_top_stmts(defs, idx + 1)
     match defs[idx] {
-      LLet(name, value) => match value { LMakeClosure(_, _) => rest, _ => [defs[idx]] ++ rest },
+      LLet(_, name, value) => match value { LMakeClosure(_, _, _) => rest, _ => [defs[idx]] ++ rest },
       _ => [defs[idx]] ++ rest
     }
   }

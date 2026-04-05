@@ -1,0 +1,26 @@
+// Test: Compiling the Check pipeline natively into WASM
+//
+// This crucible validates that Phase 3 (Checker in WASM) can compile
+// the 11.8kb `std/compiler/check.lux` file natively and emit a working
+// output.wasm capable of taking AST structures and outputting an Environment.
+
+import compiler/parser
+import compiler/check
+
+println("═══════════════════════════════════════════")
+println("  WASM Phase 3: The Native Checker")
+println("═══════════════════════════════════════════")
+println("")
+println("Instantiating native WASM typechecker...")
+
+// Small AST representing: let x = 42
+// S(stmt, line, col)
+let ast = [
+  S(LetStmt("x", S(IntLit(42), 1, 9)), 1, 1)
+]
+
+let env = check_program(ast)
+
+println("✓ Typechecker executed successfully over simple AST.")
+println("Captured Env:")
+show_env_compact(env) |> println

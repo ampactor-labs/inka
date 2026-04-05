@@ -16,7 +16,7 @@ use super::value::{BuiltinId, Closure, VmValue};
 type FieldRegistry = HashMap<String, Vec<String>>;
 
 /// Signature for VM builtin functions.
-pub type BuiltinFn = fn(&[VmValue]) -> Result<VmValue, String>;
+pub type BuiltinFn = fn(Vec<VmValue>) -> Result<VmValue, String>;
 
 /// The Lux bytecode virtual machine.
 pub struct Vm {
@@ -113,7 +113,18 @@ impl Vm {
 
     /// Main execution loop.
     pub(super) fn execute(&mut self) -> Result<Option<VmValue>, VmError> {
+        let mut _icount = 0usize;
         loop {
+            if _icount % 2_000_000 == 0 {
+                let frame_idx = self.frames.len() - 1;
+                let proto = &self.frames[frame_idx].proto;
+                let func_name = proto.name.as_deref().unwrap_or("<anon>");
+                let ip = self.frames[frame_idx].ip;
+                let line = proto.chunk.lines.get(ip).copied().unwrap_or(0);
+                println!("VM TELEMETRY: {} instructions executed. func: {}, line: {}", _icount, func_name, line);
+            }
+            _icount += 1;
+            
             let frame_idx = self.frames.len() - 1;
             let frame = &mut self.frames[frame_idx];
 
@@ -296,12 +307,12 @@ impl Vm {
                     let a = self.stack.pop().unwrap_or(VmValue::Unit);
                     match (a, b) {
                         (VmValue::String(a), VmValue::String(b)) => {
-                            let mut s = (*a).clone();
+                            let mut s = Arc::unwrap_or_clone(a);
                             s.push_str(&b);
                             self.stack.push(VmValue::String(Arc::new(s)));
                         }
                         (VmValue::List(a), VmValue::List(b)) => {
-                            let mut v = (*a).clone();
+                            let mut v = Arc::unwrap_or_clone(a);
                             v.extend((*b).iter().cloned());
                             self.stack.push(VmValue::List(Arc::new(v)));
                         }
@@ -484,7 +495,7 @@ impl Vm {
                     let argc = self.frames[frame_idx].read_byte() as usize;
                     let start = self.stack.len() - argc;
                     let args: Vec<VmValue> = self.stack.drain(start..).collect();
-                    self.call_builtin_with_args(BuiltinId(id), &args)?;
+                    self.call_builtin_with_args(BuiltinId(id), args)?;
                 }
 
                 // ── Collections ───────────────────────────────────
@@ -999,7 +1010,7 @@ impl Vm {
                 let start = self.stack.len() - argc;
                 let args: Vec<VmValue> = self.stack.drain(start..).collect();
                 self.stack.pop(); // remove function value
-                self.call_builtin_with_args(id, &args)?;
+                self.call_builtin_with_args(id, args)?;
                 Ok(())
             }
             VmValue::Variant { name, fields } if fields.is_empty() => {
@@ -1028,7 +1039,7 @@ impl Vm {
         }
     }
 
-    fn call_builtin_with_args(&mut self, id: BuiltinId, args: &[VmValue]) -> Result<(), VmError> {
+    fn call_builtin_with_args(&mut self, id: BuiltinId, mut args: Vec<VmValue>) -> Result<(), VmError> {
         let func = self.builtins.get(id.0 as usize).map(|(_, f)| *f);
         if let Some(f) = func {
             match f(args) {
@@ -1077,11 +1088,17 @@ impl Vm {
             Some(VmValue::List(l)) => Ok(VmValue::Bool(l.is_empty())),
             _ => Ok(VmValue::Bool(true)),
         });
-        self.register_builtin("push", |args| {
-            if let (Some(VmValue::List(list)), Some(elem)) = (args.first(), args.get(1)) {
-                let mut v = (**list).clone();
-                v.push(elem.clone());
-                Ok(VmValue::List(Arc::new(v)))
+        self.register_builtin("push", |mut args| {
+            if args.len() == 2 {
+                let elem = args.pop().unwrap();
+                let list = args.pop().unwrap();
+                if let VmValue::List(l) = list {
+                    let mut v = Arc::unwrap_or_clone(l);
+                    v.push(elem);
+                    Ok(VmValue::List(Arc::new(v)))
+                } else {
+                    Ok(VmValue::Unit)
+                }
             } else {
                 Ok(VmValue::Unit)
             }

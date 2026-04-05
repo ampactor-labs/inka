@@ -1,16 +1,10 @@
-# Agent Handoff: The Great Deletion (Self-Hosting Bootstrap)
+# Agent Handoff: Arc 2 WASM Phase 3 (Checker in WASM)
 
 **To the ONA Cloud Agent:**
 
-Welcome to the Lux codebase. The local developer's machine hung during a heavy bootstrap compilation step, so they spun up this cloud workspace for you to finish the job.
+Welcome to the Lux codebase. The local developer's machine hung during the massive AST closure iteration of the pure Lux compiler when attempting Phase 3 locally. We are shifting tactics to avoid freezing the local client.
 
-We are in the middle of "The Great Deletion" — transitioning the entire Lux compiler strictly to its self-hosted pure Lux implementation and deleting the Rust prototype compiler entirely.
-
-## What is Staged
-The latest commit on this branch sets up the native Lux routing architecture:
-1. `src/vm/dumper.rs` and `dump_to_rust` builtin were added to serialize a Lux `Chunk` into a static Rust evaluation function (`src/bootstrap.rs`).
-2. `std/compiler/pipeline.lux` now possesses an integrated `main()` method which handles command-routing (like `"check"`, `"run"`, `"bootstrap"`).
-3. `src/main.rs` contains a temporary `["bootstrap"]` command execution arm that invokes the old Rust compiler ONE LAST TIME to evaluate the `pipeline.lux`'s bootstrap logic.
+We are entering **Arc 2 Phase 3**, which means compiling our 5,000+ line self-hosted inference engine (`check.lux` + deps) completely natively into a WebAssembly binary. We've removed `with_prelude` from the `compile_wasm` pipeline so the Rust execution does NOT attempt to interpret the whole source text locally as a concatenated string (which proved to be $O(N^2)$ inside the `push()` loop due to reference counting without Mut tail-call optimization).
 
 ## Your Mission
 
@@ -19,37 +13,21 @@ The latest commit on this branch sets up the native Lux routing architecture:
    cargo build --release
    ```
 
-2. **Execute the one-time bootstrap:**
+2. **Execute the Phase 3 Compilation:**
    ```bash
-   ./target/release/lux bootstrap
+   ./target/release/lux wasm examples/crucible_checker_wasm.lux
    ```
-   *Note: This will execute the `dump_to_rust` builtin inside Lux, parsing the entire `std/compiler/pipeline.lux` AST and serializing the compiled `FnProto` directly into `src/bootstrap.rs`. Because of the size of the AST, this step froze the local developer's thin client. A Large/xLarge ONA VM should handle it fine.*
+   *Note: Ensure this resolves all imports correctly. The local Rust engine will lex, parse, typecheck, and use the pure Lux emitter (`backend/wasm_emit.lux`) to build `output.wasm` containing the native type-checker.*
 
-3. **Verify the generated artifact:** Ensure `src/bootstrap.rs` has been successfully created and contains the `get_pipeline()` function.
-
-4. **The Great Deletion:**
-   - Delete the entire `src/compiler/` folder.
-   - Delete `src/lexer.rs` and `src/parser.rs`.
-   - Radically rewrite `src/main.rs`. Strip out all the custom file argument routing. Replace it with the native hook:
-
-   ```rust
-   use vm::vm::Vm;
-   mod bootstrap;
-   
-   fn main() {
-       let mut vm = Vm::new();
-       let pipeline = bootstrap::get_pipeline();
-       if let Err(e) = vm.run(pipeline) {
-           eprintln!("fatal: {}", e);
-           std::process::exit(1);
-       }
-   }
+3. **Verify the generated WASM artifact:**
+   You must run the resulting `output.wasm` and ensure it doesn't crash:
+   ```bash
+   wasmtime output.wasm
    ```
-   **Reminder**: `pipeline.lux` now calls `cli_args()` directly via the VM to process the arguments.
+   Since it tests a primitive AST (`let x = 42`), the output should look like:
+   `✓ Typechecker executed successfully over simple AST.`
 
-5. **Test and Push!**
-   - Run `cargo build --release` again (it should compile blazing fast).
-   - Test it by executing `./target/release/lux run examples/ml_xor.lux`.
-   - Commit the deletion and cleanly push back to the repository.
+4. **Iterate If Required:**
+   If the `wasm_emit.lux` backend crashes when emitting `check.lux` due to unsupported struct/AST nodes, you're empowered as an Agent to drop in and fix it! Fix the node support, compile the WASM until it completes, and then push.
 
-You are trusted to utilize Lux and enforce the new system!
+You are trusted to utilize Lux and enforce the new architecture!

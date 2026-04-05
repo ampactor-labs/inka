@@ -179,7 +179,7 @@ fn compile_checked(source) = {
 }
 
 fn compile_teaching(source) = {
-  let (ast, env) = source |> with_prelude |> checked
+  let (ast, env) = source |> checked
   println("[teach] types inferred:")
   env |> show_env_compact |> println
   let suggestion = (env, ast) |> gradient_suggestion
@@ -188,33 +188,33 @@ fn compile_teaching(source) = {
 }
 
 fn compile_standard(source) = {
-  let (ast, _) = source |> with_prelude |> checked
+  let (ast, _) = source |> checked
   ast |> compile_program
 }
 
 fn compile_explaining(source) = {
-  let (ast, env) = source |> with_prelude |> checked
+  let (ast, env) = source |> checked
   println("── Why Engine ──")
   env |> show_env_why(2) |> println
   ast |> compile_program
 }
 
 fn compile_documenting(source) = {
-  let (ast, env) = source |> with_prelude |> checked
+  let (ast, env) = source |> checked
   println("── Documentation ──")
   env |> show_env_doc |> println
   ast |> compile_program
 }
 
 fn compile_checking(source) = {
-  let (ast, env) = source |> with_prelude |> checked
+  let (ast, env) = source |> checked
   println("✓ type check passed")
   env |> show_env_compact |> println
   compile_program([])
 }
 
 fn compile_lowering(source) = {
-  let (ast, env) = source |> with_prelude |> checked
+  let (ast, env) = source |> checked
   let ctors = env |> extract_constructors
   let lowered = lower_program_typed(ast, ctors, env)
   println("── LowIR ──")
@@ -237,7 +237,7 @@ fn compile_tracing(source) = {
 }
 
 fn compile_illuminate(source) = {
-  let (ast, env) = source |> with_prelude |> checked
+  let (ast, env) = source |> checked
   let g = compute_gradient(env, ast)
   let rendered = g |> render_gradient
   if len(rendered) > 0 { println(rendered) } else { () }

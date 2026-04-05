@@ -198,19 +198,26 @@ fn lower_expr(sexpr, env) = {
     },
 
     JoinExpr(f, g) => {
-      // f >< g => |__jx| g(f(__jx))
-      let ref_x = S(VarRef("__jx"), 0, 0)
-      let call_f = S(Call(f, [ref_x]), 0, 0)
-      let call_g = S(Call(g, [call_f]), 0, 0)
-      let lambda = S(LambdaExpr(["__jx"], call_g), 0, 0)
-      lower_expr(lambda, env)
+      // f >< g = |x| g(f(x)) — f first, then g. Left to right.
+      let param = "__join_x"
+      let lowered_f = lower_expr(f, env)
+      let lowered_g = lower_expr(g, env)
+      let f_ret = lty_call_result(lowered_f)
+      let g_ret = lty_call_result(lowered_g)
+      let f_call = LCall(f_ret, lowered_f, [LGlobal(TUnit, param)])
+      let g_call = LCall(g_ret, lowered_g, [f_call])
+      LMakeClosure(TFun([TUnit], g_ret, EfPure),
+        LFn("__joined_" ++ to_string(fresh_id()), 1, [param], [g_call]), [])
     },
 
     HandlePipeExpr(computation, strategy) => {
-      // computation ~> strategy => strategy(|| computation)
-      let thunk = S(LambdaExpr([], computation), 0, 0)
-      let call_strat = S(Call(strategy, [thunk]), 0, 0)
-      lower_expr(call_strat, env)
+      // computation ~> strategy desugars to strategy(|| computation)
+      let thunk_body = lower_expr(computation, env)
+      let thunk_ty = TFun([], lexpr_ty(thunk_body), EfPure)
+      let thunk = LMakeClosure(thunk_ty,
+        LFn("__thunk_" ++ to_string(fresh_id()), 0, [], [thunk_body]), [])
+      let lowered_strategy = lower_expr(strategy, env)
+      LCall(lty_call_result(lowered_strategy), lowered_strategy, [thunk])
     },
 
     IfExpr(cond, then_e, else_e) => {

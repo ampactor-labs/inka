@@ -111,7 +111,9 @@ fn env_with_primitives(env) = {
     |> env_extend("type_of", TFun([a], TString, EfPure), Declared("builtin"))
     // split is now pure Lux in std/runtime/memory.lux
     // Numeric parsing
-    |> env_extend("parse_float", TFun([TString], TFloat, EfPure), Declared("builtin"))
+    // parse_float currently stubs to parse_int in memory.lux (returns i32).
+    // The true TFloat version requires actual float parsing — future work.
+    |> env_extend("parse_float", TFun([TString], TInt, EfPure), Declared("builtin"))
     // IO — effects
     |> env_extend("println", TFun([a], TUnit, EfClosed(["Console"])), Declared("builtin"))
     |> env_extend("print", TFun([a], TUnit, EfClosed(["Console"])), Declared("builtin"))

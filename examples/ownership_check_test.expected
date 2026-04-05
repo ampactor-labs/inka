@@ -21,7 +21,7 @@ double: (Int) -> Int
   WHY: fn double
 
 --- own + !Alloc ---
-dsp: (Int) -> Int
+dsp: (Float) -> Float
   WHY: fn dsp
 
 --- own never used (hint) ---

@@ -230,10 +230,11 @@ fn emit_bind_fields(sub_pats, idx, params, locals, ctx)= {
   }
 }
 
-fn ctx_strings(ctx) = { let (s, _, _, _) = ctx; s }
-fn ctx_tags(ctx) = { let (_, t, _, _) = ctx; t }
-fn ctx_fns(ctx) = { let (_, _, f, _) = ctx; f }
-fn ctx_globals(ctx) = { let (_, _, _, g) = ctx; g }
+fn ctx_strings(ctx) = ctx[0]
+fn ctx_tags(ctx) = ctx[1]
+fn ctx_fns(ctx) = ctx[2]
+fn ctx_globals(ctx) = ctx[3]
+fn ctx_type_env(ctx) = ctx[4]
 
 // Evaluate expressions and save to __f0, __f1, etc. (for closure captures)
 fn emit_variant_field_exprs(fields, idx, params, locals, ctx)= {

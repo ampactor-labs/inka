@@ -24,6 +24,7 @@ fn ctx_strings(ctx)= ctx[0]
 fn ctx_tags(ctx)= ctx[1]
 fn ctx_fns(ctx)= ctx[2]
 fn ctx_globals(ctx)= ctx[3]
+fn ctx_type_env(ctx)= ctx[4]
 
 // ─── Module Structure ───────────────────────────────────────
 
@@ -38,7 +39,9 @@ fn emit_module(defs, type_map) = {
   let tag_map = collect_variant_tags(defs, 0)
   let fn_table = collect_fn_names(fns, 0)
   let max_arity = max_fn_arity(fns, 0)
-  let ctx = (string_map, tag_map, fn_table, top_globals)
+  // type_map is the HM env from check_program — (name, type, reason) triples.
+  // The emitter uses it for type-directed local/param/signature emission.
+  let ctx = (string_map, tag_map, fn_table, top_globals, type_map)
   let header = "(module" ++ NL
     ++ emit_wasi_imports()
     ++ "  (memory (export " ++ DQ ++ "memory" ++ DQ ++ ") 16384)" ++ NL
@@ -109,15 +112,30 @@ fn emit_fn(fn_def, ctx)= {
   let no_params = filter_out_names(fn_locals, params, 0)
   let no_hs = filter_handler_locals(no_params, 0)
   let with_temps = add_emitter_temps(no_hs, ctx)
-  "  (func $" ++ name ++ " (param $__closure i32)" ++ emit_params(params, 0) ++ " (result i32)" ++ NL
-    ++ emit_local_decls(with_temps, 0)
+  // Direct calls support per-function signatures. Inspect this function's
+  // type in the HM env to determine param and return WAT types.
+  let env = ctx_type_env(ctx)
+  let (_, fn_ty, _) = env_lookup(env, name)
+  let param_types = match fn_ty { TFun(pts, _, _) => pts, _ => [] }
+  let ret_ty = match fn_ty { TFun(_, rt, _) => rt, _ => TUnit }
+  let result_ty = match ret_ty { TFloat => "f32", _ => "i32" }
+  "  (func $" ++ name ++ " (param $__closure i32)" ++ emit_params(params, param_types, 0) ++ " (result " ++ result_ty ++ ")" ++ NL
+    ++ emit_local_decls(with_temps, 0, body, env)
     ++ emit_fn_body(body, params, with_temps, ctx)
     ++ "  )" ++ NL
 }
 
-fn emit_params(params, idx)= {
+fn emit_params(params, param_types, idx)= {
   if idx >= len(params) { "" }
-  else { " (param $" ++ params[idx] ++ " i32)" ++ emit_params(params, idx + 1) }
+  else {
+    let pname = params[idx]
+    // Look up this param's type from the function's signature.
+    // If beyond the length (signature not found), default to i32.
+    let wtype = if idx < len(param_types) {
+      match param_types[idx] { TFloat => "f32", _ => "i32" }
+    } else { "i32" }
+    " (param $" ++ pname ++ " " ++ wtype ++ ")" ++ emit_params(params, param_types, idx + 1)
+  }
 }
 
 fn emit_fn_body(stmts, params, locals, ctx)= {
@@ -317,6 +335,7 @@ fn emit_stmt(stmt, params, locals, ctx)= match stmt {
 
 fn emit_const(v, ctx)= match v {
   LInt(n) => "    i32.const " ++ to_string(n) ++ NL,
+  LFloat(f) => "    f32.const " ++ to_string(f) ++ NL,
   LBool(b) => "    i32.const " ++ if b { "1" } else { "0" } ++ NL,
   LString(s) => {
     let offset = find_string_offset(ctx_strings(ctx), s, 0)
@@ -425,8 +444,9 @@ fn emit_args(args, idx, params, locals, ctx)= {
 fn emit_start(stmts, ctx)= {
   let locals = filter_out_globals(collect_locals(stmts, 0), ctx_globals(ctx), 0)
   let with_temps = add_emitter_temps(locals, ctx)
+  let env = ctx_type_env(ctx)
   "  (func $_start (export " ++ DQ ++ "_start" ++ DQ ++ ")" ++ NL
-    ++ emit_local_decls(with_temps, 0)
+    ++ emit_local_decls(with_temps, 0, stmts, env)
     ++ emit_stmts_void(stmts, 0, [], with_temps, ctx)
     ++ "  )" ++ NL
 }
@@ -473,9 +493,79 @@ fn collect_locals_pats(pats, idx)= {
   else { string_union(collect_locals_pat(pats[idx]), collect_locals_pats(pats, idx + 1)) }
 }
 
-fn emit_local_decls(locals, idx)= {
+// Determine the WASM type ("f32" or "i32") of a LowIR expression.
+// Pure structural analysis — the lowering already tagged ops as fAdd/fSub/etc.
+// for floats, so we just read the tags.
+fn wasm_type_of(expr, env) = match expr {
+  LConst(inner) => {
+    // Nested constructor patterns may be unreliable; use explicit match on inner.
+    match inner { LFloat(_) => "f32", _ => "i32" }
+  },
+  LBinOp(op, _, _) => if len(op) > 1 && string_slice(op, 0, 1) == "f" { "f32" } else { "i32" },
+  LUnaryOp(op, inner) => if op == "fNeg" { "f32" } else { wasm_type_of(inner, env) },
+  LIf(_, t, _) => if len(t) > 0 { wasm_type_of(t[len(t) - 1], env) } else { "i32" },
+  LBlock(stmts) => if len(stmts) > 0 { wasm_type_of(stmts[len(stmts) - 1], env) } else { "i32" },
+  LLet(_, value) => wasm_type_of(value, env),
+  LGlobal(name) => {
+    // Look up name's type in the HM env. If TFloat → f32, else i32.
+    let (_, ty, _) = env_lookup(env, name)
+    match ty { TFloat => "f32", _ => "i32" }
+  },
+  LCall(func, _) => {
+    match func {
+      LGlobal(name) => {
+        let (_, ty, _) = env_lookup(env, name)
+        match ty {
+          TFun(_, rt, _) => match rt { TFloat => "f32", _ => "i32" },
+          _ => "i32"
+        }
+      },
+      _ => "i32"
+    }
+  },
+  _ => "i32"
+}
+
+// Find the LLet for `name` in body and return its WASM type.
+fn local_wasm_type(name, body, env) = {
+  if len(body) == 0 { "i32" }
+  else {
+    let t = find_let_type(name, body[0], env)
+    if t == "" { local_wasm_type(name, slice(body, 1, len(body)), env) }
+    else { t }
+  }
+}
+
+fn find_let_type(name, expr, env) = match expr {
+  LLet(n, value) => if n == name { wasm_type_of(value, env) } else { find_let_type_list(name, [value], env) },
+  LBlock(stmts) => find_let_type_list(name, stmts, env),
+  LIf(_, t, e) => {
+    let r = find_let_type_list(name, t, env)
+    if r != "" { r } else { find_let_type_list(name, e, env) }
+  },
+  _ => ""
+}
+
+fn find_let_type_list(name, stmts, env) = {
+  if len(stmts) == 0 { "" }
+  else {
+    let r = find_let_type(name, stmts[0], env)
+    if r != "" { r } else { find_let_type_list(name, slice(stmts, 1, len(stmts)), env) }
+  }
+}
+
+fn emit_local_decls(locals, idx, body, env)= {
   if idx >= len(locals) { "" }
-  else { "    (local $" ++ locals[idx] ++ " i32)" ++ NL ++ emit_local_decls(locals, idx + 1) }
+  else {
+    let name = locals[idx]
+    // Emitter temps (__vptr, __match, __f0-__f7) are always i32
+    let wtype = if len(name) >= 2 && string_slice(name, 0, 2) == "__" {
+      "i32"
+    } else {
+      local_wasm_type(name, body, env)
+    }
+    "    (local $" ++ name ++ " " ++ wtype ++ ")" ++ NL ++ emit_local_decls(locals, idx + 1, body, env)
+  }
 }
 
 // Add emitter temp locals based on what patterns are present.
@@ -526,6 +616,10 @@ fn emit_binop(op)= match op {
   "Sub" => "    i32.sub" ++ NL,
   "Mul" => "    i32.mul" ++ NL,
   "Div" => "    i32.div_s" ++ NL,
+  "fAdd" => "    f32.add" ++ NL,
+  "fSub" => "    f32.sub" ++ NL,
+  "fMul" => "    f32.mul" ++ NL,
+  "fDiv" => "    f32.div" ++ NL,
   _ => emit_binop2(op)
 }
 
@@ -534,6 +628,9 @@ fn emit_binop2(op)= match op {
   "Eq" => "    i32.eq" ++ NL,
   "Neq" => "    i32.ne" ++ NL,
   "Lt" => "    i32.lt_s" ++ NL,
+  "fLt" => "    f32.lt" ++ NL,
+  "fEq" => "    f32.eq" ++ NL,
+  "fNeq" => "    f32.ne" ++ NL,
   _ => emit_binop3(op)
 }
 
@@ -541,6 +638,9 @@ fn emit_binop3(op)= match op {
   "LtEq" => "    i32.le_s" ++ NL,
   "Gt" => "    i32.gt_s" ++ NL,
   "GtEq" => "    i32.ge_s" ++ NL,
+  "fLtEq" => "    f32.le" ++ NL,
+  "fGt" => "    f32.gt" ++ NL,
+  "fGtEq" => "    f32.ge" ++ NL,
   "And" => "    i32.and" ++ NL,
   "Or" => "    i32.or" ++ NL,
   _ => "    ;; unknown op: " ++ op ++ NL

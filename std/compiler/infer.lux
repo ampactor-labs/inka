@@ -197,7 +197,15 @@ fn infer_binop(op, left, right) with Infer, Diagnostic = {
   let tl = infer(left)
   let tr = infer(right)
   if op == "Add" || op == "Sub" || op == "Mul" || op == "Div" || op == "Mod" {
-    unify(tl, TInt); unify(tr, TInt); TInt
+    // Arithmetic: unify operands with each other, result is the shared type.
+    // If either operand resolves to TFloat, the whole expression is TFloat.
+    // Otherwise, default to TInt (preserves existing integer arithmetic).
+    unify(tl, tr)
+    let resolved_l = resolve(tl)
+    let result_ty = match resolved_l { TFloat => TFloat, _ => TInt }
+    unify(tl, result_ty)
+    unify(tr, result_ty)
+    result_ty
   } else { if op == "Eq" || op == "Neq" || op == "Lt" || op == "Gt" || op == "LtEq" || op == "GtEq" {
     unify(tl, tr); TBool
   } else { if op == "And" || op == "Or" {

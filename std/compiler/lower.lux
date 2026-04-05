@@ -25,8 +25,11 @@ fn inferred_type(sexpr, env) = {
     BoolLit(_)   => TBool,
     NoneExpr     => TUnit,
     VarRef(name) => { let (_, ty, _) = env_lookup(env, name); ty },
-    BinOp(op, _, _) => {
-      if op == "Add" || op == "Sub" || op == "Mul" || op == "Div" || op == "Mod" { TInt }
+    BinOp(op, left, _) => {
+      if op == "Add" || op == "Sub" || op == "Mul" || op == "Div" || op == "Mod" {
+        // Arithmetic result type = operand type (TFloat or TInt)
+        match inferred_type(left, env) { TFloat => TFloat, _ => TInt }
+      }
       else { if op == "Eq" || op == "Neq" || op == "Lt" || op == "Gt" || op == "LtEq" || op == "GtEq" { TBool }
       else { if op == "And" || op == "Or" { TBool }
       else { if op == "Concat" { TString }
@@ -120,7 +123,11 @@ fn lower_expr(sexpr, env) = {
         }
         LCall(LGlobal(concat_fn), [lower_expr(left, env), lower_expr(right, env)])
       } else {
-        LBinOp(op, lower_expr(left, env), lower_expr(right, env))
+        // Type-directed op dispatch: fAdd/fSub/fMul/fDiv/fLt/etc. for floats.
+        // The checker's unify ensures both operands have the same type.
+        let is_float = match inferred_type(left, env) { TFloat => true, _ => false }
+        let op_name = if is_float { "f" ++ op } else { op }
+        LBinOp(op_name, lower_expr(left, env), lower_expr(right, env))
       } }
     },
     UnaryOp(op, operand) => LUnaryOp(op, lower_expr(operand, env)),

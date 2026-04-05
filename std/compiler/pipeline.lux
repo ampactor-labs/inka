@@ -243,7 +243,9 @@ fn compile_wasm(source) = {
   let (ast, env) = full_source |> checked
   let ctors = env |> extract_constructors
   let lowered = lower_program_typed(ast, ctors, env)
-  emit_module(lowered, [])
+  // Pass the HM env as the type_map — the emitter uses it to determine
+  // float vs int types for locals, params, and function signatures.
+  emit_module(lowered, env)
 }
 
 // ─── REPL Modes ─────────────────────────────────────────────

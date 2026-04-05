@@ -147,17 +147,19 @@ algebra over capabilities:
 
 Koka has `+` via row polymorphism. Lux has the full algebra.
 
-**The data flow operators** — convergence and divergence, both left to right:
+**The data flow operators — The Four Verbs:**
 
-| Operator | Meaning | Example |
-|----------|---------|---------|
-| `a \|> f(b)` | Convergence (pipe) | `source \|> lex \|> parse \|> check` |
-| `a <\| (f, g, h)` | Divergence (fan-out) | `signal <\| (fft, rms, peaks)` → `(A, B, C)` |
-| `f <> g` | Composition | `normalize <> analyze <> classify` → `(A) -> D` |
+| Operator | Name | Meaning | Example |
+|----------|------|---------|---------|
+| `a \|> f(b)` | Pipe | Convergence | `source \|> lex \|> parse \|> check` |
+| `a <\| (f, g, h)` | Fan-out | Divergence | `signal <\| (fft, rms, peaks)` → `(A, B, C)` |
+| `f >< g` | Join | Composition (no data) | `normalize >< analyze >< classify` → `(A) -> D` |
+| `a ~> h` | HandlePipe | Strategy (handle-with postfix) | `pipeline ~> arena_alloc ~> logged` |
 
 `|>` runs data through functions. `<|` broadcasts data to functions.
-`<>` builds functions from functions — no data, just potential.
-Three operators close the algebra: any data flow graph is pipe + fan-out + compose.
+`><` builds functions from functions — no data, just potential.
+`~>` installs handlers over whatever precedes it — binds loosest so it wraps entire pipelines.
+Four operators close the algebra: `|>`/`<|` = WHAT (data flow), `><` = BUILD (function composition), `~>` = HOW (effect resolution).
 
 ### Emergent Capabilities — Consequences, Not Features
 
@@ -237,7 +239,9 @@ scaffolding — every line of Rust is debt to be repaid in Lux.
 Lux is the connective tissue between all projects. The effect system IS
 the hourglass: distributed effects converge to the `handle{}` block (pinch
 point), then `resume(result)` radiates new state. The data flow operators
-make this explicit: `|>` converges, `<|` diverges, `<>` composes. All left to right.
+make this explicit: `|>` converges, `<|` diverges, `><` composes. `~>` is
+strategy application — installs a handler over the preceding pipeline, binds
+loosest. All left to right.
 
 **Kernel Pattern:** `handle { computation }` (pure computation) →
 handler-local state (configuration) → `resume(result)` (interface)
@@ -246,8 +250,11 @@ handler-local state (configuration) → `resume(result)` (interface)
 converge through transforms, diverge to parallel consumers. The hourglass
 as syntax.
 
-**Composition Pattern:** `let pipeline = f <> g <> h` — build pipelines as
+**Composition Pattern:** `let pipeline = f >< g >< h` — build pipelines as
 values. No data flows. Pure potential. `audio |> pipeline` runs it.
+
+**Strategy Pattern:** `computation ~> handler` — installs a handler over the
+preceding pipeline. Binds loosest, so it wraps entire `|>` chains.
 
 **Cross-Project:** `!Alloc` = sonido no_std; pipe operator = signal chain
 DSL; effect handlers = flowpilot safety gates; mock handlers = forge test
@@ -256,7 +263,7 @@ isolation
 **DSP Connection:**
 - `|>` IS a signal chain: `input |> highpass(80) |> compress(4.0) |> limit(-0.1)`
 - `<|` IS parallel analysis: `signal <| (fft, rms, peak_detect)` — one buffer, multiple analyzers
-- `<>` IS signal chain construction: `let master = eq <> dynamics` — chain as a value, `!Alloc` composes
+- `><` IS signal chain construction: `let master = eq >< dynamics` — chain as a value, `!Alloc` composes
 - Refinement types (Phase 10): `type Sample = Float where -1.0 <= self <= 1.0` proves audio bounds
 - `!Alloc` effect negation (Phase 9): compiler proves real-time safety, replacing sonido's manual no_std discipline
 - Effect handlers = audio backend adaptation: `handle dsp_graph() { use CoreAudioHandler(48000, 256) }`
@@ -266,8 +273,8 @@ isolation
 - Autodiff as Compute effect handler (model doesn't know about gradients)
 - `!Alloc` inference deploys to Daisy Seed; `!Random` proves determinism
 - Multi-shot continuations = hyperparameter search; handler-local state = optimizer state
-- DSP and ML compose identically through `|>` `<|` `<>` — converge, diverge, and compose through the same operators
-- `<>` builds models: `let model = encoder <> head`. Networks as values. `build_pipeline(layers)` folds `<>`
+- DSP and ML compose identically through `|>` `<|` `><` `~>` — converge, diverge, compose, and handle through the same operators
+- `><` builds models: `let model = encoder >< head`. Networks as values. `build_pipeline(layers)` folds `><`
 - Demo target: keyword recognition for escape room on embedded hardware
 - ML is the throughline connecting Phases 7-12 to a concrete demanding workload
 
@@ -414,13 +421,13 @@ fn safe_v2(x: Float) -> Float with DSP - Network - Alloc { ... }  // subtraction
 // Data flow — converge, diverge, compose
 fn check(source) = source |> lex |> parse_program |> check_program  // pipe: converge
 signal <| (fft, rms, detect_peaks)  // fan-out: diverge → (A, B, C)
-let pipeline = normalize <> analyze <> classify  // compose: build potential
+let pipeline = normalize >< analyze >< classify  // compose: build potential
 
 // The hourglass — converge, diverge, converge
 audio |> preprocess <| (analyze, measure, detect) |> merge |> classify
 
 // Dynamic pipeline construction via compose
-let chain = fold(effects, id, |acc, fx| fx <> acc)
+let chain = fold(effects, id, |acc, fx| fx >< acc)
 audio |> chain
 ```
 

@@ -76,16 +76,8 @@ fn main() {
             run_pipeline_mode(path, "wasm");
         }
         [path] => {
-            // Single argument — run file
-            let source = read_file(path);
-            let result = run_source(&source, path, teach_mode);
-            if let Err(e) = result {
-                eprintln!(
-                    "{}",
-                    lux::error::format_error_with_source(&e, &source, Some(path))
-                );
-                process::exit(1);
-            }
+            let mode = if teach_mode { "teach" } else { "run" };
+            run_pipeline_mode(path, mode);
         }
         _ => {
             eprintln!(
@@ -191,6 +183,8 @@ fn run_pipeline_mode(file_path: &str, mode: &str) {
         "check" => "compile_checking",
         "lower" => "compile_lowering",
         "wasm" => "compile_wasm",
+        "teach" => "compile_teaching",
+        "run" => "compile_standard",
         _ => "compile_standard",
     };
 

@@ -1,10 +1,10 @@
-// Lux Compiler Pipeline — |> <| <>
+// Lux Compiler Pipeline — |> <| >< ~>
 //
 // The compiler IS composition.
 //
 //   source |> frontend |> check |> backend
 //
-// Each stage is a <> of its parts.
+// Each stage is a >< of its parts.
 // Validation is a <| fan-out.
 // Modes are just different tails on the same spine.
 //
@@ -37,7 +37,7 @@ import compiler/lower_print
 import backend/wasm_emit
 
 // ─── The Stages ─────────────────────────────────────────────
-// Each is a <> composition. Together they form the compiler.
+// Each is a >< composition. Together they form the compiler.
 
 // Stage 1: Frontend — source to structure
 // The frontend IS the composition of lex and parse.
@@ -63,6 +63,12 @@ fn checked(source) = {
   let env = ast |> check_program
   validate(ast, env)
   (ast, env)
+}
+
+fn with_prelude(source) = {
+  let prelude = read_file("std/prelude.lux")
+  let (imports, _) = source |> resolve_imports_tracked([])
+  prelude ++ "\n" ++ imports ++ "\n" ++ (source |> strip_imports)
 }
 
 // ─── Validate — fan-out ─────────────────────────────────────
@@ -173,7 +179,7 @@ fn compile_checked(source) = {
 }
 
 fn compile_teaching(source) = {
-  let (ast, env) = source |> checked
+  let (ast, env) = source |> with_prelude |> checked
   println("[teach] types inferred:")
   env |> show_env_compact |> println
   let suggestion = (env, ast) |> gradient_suggestion
@@ -181,38 +187,44 @@ fn compile_teaching(source) = {
   ast |> compile_program
 }
 
+fn compile_standard(source) = {
+  let (ast, _) = source |> with_prelude |> checked
+  ast |> compile_program
+}
+
 fn compile_explaining(source) = {
-  let (ast, env) = source |> checked
+  let (ast, env) = source |> with_prelude |> checked
   println("── Why Engine ──")
   env |> show_env_why(2) |> println
   ast |> compile_program
 }
 
 fn compile_documenting(source) = {
-  let (ast, env) = source |> checked
+  let (ast, env) = source |> with_prelude |> checked
   println("── Documentation ──")
   env |> show_env_doc |> println
   ast |> compile_program
 }
 
 fn compile_checking(source) = {
-  let (ast, env) = source |> checked
+  let (ast, env) = source |> with_prelude |> checked
   println("✓ type check passed")
   env |> show_env_compact |> println
-  ("skip", [], [], 0)
+  compile_program([])
 }
 
 fn compile_lowering(source) = {
-  let (ast, env) = source |> checked
+  let (ast, env) = source |> with_prelude |> checked
   let ctors = env |> extract_constructors
   let lowered = lower_program_typed(ast, ctors, env)
   println("── LowIR ──")
   lowered |> print_lowered |> println
-  ("skip", [], [], 0)
+  compile_program([])
 }
 
 fn compile_tracing(source) = {
-  let tokens = source |> lex
+  let full = source |> with_prelude
+  let tokens = full |> lex
   println("[trace] tokens: " ++ to_string(tokens))
   let ast = tokens |> parse_program
   println("[trace] ast: " ++ to_string(ast))
@@ -225,7 +237,7 @@ fn compile_tracing(source) = {
 }
 
 fn compile_illuminate(source) = {
-  let (ast, env) = source |> checked
+  let (ast, env) = source |> with_prelude |> checked
   let g = compute_gradient(env, ast)
   let rendered = g |> render_gradient
   if len(rendered) > 0 { println(rendered) } else { () }

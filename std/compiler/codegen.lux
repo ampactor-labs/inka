@@ -55,6 +55,7 @@ let OP_MATCH_INT   = 90
 let OP_MATCH_BOOL  = 91
 let OP_MATCH_STRING= 92
 let OP_MATCH_VARIANT= 93
+let OP_MATCH_TUPLE = 94
 let OP_MATCH_WILD  = 97
 let OP_BIND_LOCAL  = 98
 let OP_PERFORM     = 110
@@ -592,7 +593,7 @@ fn compile_pattern_test(ctx, pat) = match pat {
     let (ctx2, name_idx) = intern_name(ctx, name)
     emit_u16(emit_op(ctx2, OP_MATCH_VARIANT), name_idx)
   },
-  PTuple(_) => emit_op(ctx, OP_MATCH_WILD),
+  PTuple(elems) => emit_u16(emit_op(ctx, OP_MATCH_TUPLE), len(elems)),
   PLit(sexpr) => {
     let S(expr, _, _) = sexpr;
     match expr {
@@ -1149,7 +1150,8 @@ fn dis_u8_op(code, opcode, offset) = {
   else { if opcode == OP_LOAD_BOOL { "LoadBool " ++ to_string(val) }
   else { if opcode == OP_CALL      { "Call argc=" ++ to_string(val) }
   else { if opcode == OP_TAIL_CALL { "TailCall argc=" ++ to_string(val) }
-  else { "" }}}}
+  else { if opcode == OP_MATCH_TUPLE { "MatchTuple" }
+  else { "" }}}}}
 }
 
 fn dis_u16_op(code, constants, names, offset, opcode) = {
@@ -1201,9 +1203,12 @@ fn dis_u16_op2(code, constants, names, offset, opcode, idx) = {
   else { if opcode == OP_JUMP_TRUE {
     ("JumpIfTrue +" ++ to_string(idx), offset + 3)
   }
+  else { if opcode == OP_MATCH_TUPLE {
+    ("MatchTuple " ++ to_string(idx), offset + 3)
+  }
   else {
     ("UNKNOWN(" ++ to_string(opcode) ++ ")", offset + 1)
-  }}}}}}}
+  }}}}}}}}
 }
 
 fn read_u16(code, offset) = code[offset] * 256 + code[offset + 1]

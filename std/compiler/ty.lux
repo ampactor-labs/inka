@@ -76,6 +76,14 @@ fn env_with_primitives(env) = {
     // parse_float currently stubs to parse_int in memory.lux (returns i32).
     // The true TFloat version requires actual float parsing — future work.
     |> env_extend("parse_float", TFun([TString], TInt, EfPure), Declared("builtin"))
+    // String operations — VM builtins used by prelude
+    |> env_extend("str_slice", TFun([TString, TInt, TInt], TString, EfPure), Declared("builtin"))
+    |> env_extend("split", TFun([TString, TString], TList(TString), EfPure), Declared("builtin"))
+    |> env_extend("chars", TFun([TString], TList(TString), EfPure), Declared("builtin"))
+    |> env_extend("range", TFun([TInt, TInt], TList(TInt), EfPure), Declared("builtin"))
+    // Math — VM builtins
+    |> env_extend("abs", TFun([a], a, EfPure), Declared("builtin"))
+    |> env_extend("to_int", TFun([a], TInt, EfPure), Declared("builtin"))
     // IO — effects
     |> env_extend("println", TFun([a], TUnit, EfClosed(["Console"])), Declared("builtin"))
     |> env_extend("print", TFun([a], TUnit, EfClosed(["Console"])), Declared("builtin"))

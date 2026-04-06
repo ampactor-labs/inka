@@ -217,6 +217,7 @@ fn emit_match_arms(arms, idx, params, locals, ctx)= {
         ++ "    local.set $" ++ name ++ NL
         ++ emit_expr(body, params, locals, ctx)
       },
+      LPLit(_) => emit_expr(body, params, locals, ctx),
       LPWild => emit_expr(body, params, locals, ctx),
       _ => emit_match_arms(arms, idx + 1, params, locals, ctx)
     }

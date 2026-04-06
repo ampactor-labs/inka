@@ -67,12 +67,13 @@ fn lower_lambda_named(wasm_name, name, params, body, env) = {
     TFun(_, _, _) => fn_ty,
     _ => TFun([], lexpr_ty(lowered_body), EfPure)
   }
+  let fn_eff = match closure_ty { TFun(_, _, eff) => eff, _ => EfPure }
   if len(free) == 0 {
-    LMakeClosure(closure_ty, LFn(wasm_name, len(params), params, [lowered_body]), [])
+    LMakeClosure(closure_ty, LFn(wasm_name, len(params), params, [lowered_body], fn_eff), [])
   } else {
     let rewritten = rewrite_captures(lowered_body, free)
     let capture_exprs = map_to_globals_typed(free, env, 0)
-    LMakeClosure(closure_ty, LFn(wasm_name, len(params), params, [rewritten]), capture_exprs)
+    LMakeClosure(closure_ty, LFn(wasm_name, len(params), params, [rewritten], fn_eff), capture_exprs)
   }
 }
 

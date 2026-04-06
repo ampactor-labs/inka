@@ -20,6 +20,16 @@ effect LowerCtx {
   fresh_id() -> Int
 }
 
+// ─── The Visitor Effect ─────────────────────────────────────
+// One walk. Many handlers. The tree structure lives in ONE place.
+// Each collector is a handler on this effect.
+
+effect LowVisit {
+  visit_node(node: Int) -> ()
+  visit_pat(pat: Int) -> ()
+  get_collected() -> List
+}
+
 // ─── Value Representation ───────────────────────────────────
 
 type LowValue
@@ -72,6 +82,7 @@ type LowExpr
   | LSuspend(Ty, Int, LowExpr, List)
   | LStateGet(Ty, Int)
   | LStateSet(Ty, Int, LowExpr)
+  | LRegion(Ty, List)
 
 // ─── Type Lookup — The Graph Is The Oracle ───────────────────
 // Every LowExpr carries its type. This is the ONLY way to query it.
@@ -102,6 +113,7 @@ fn lexpr_ty(e) = match e {
   LSuspend(t, _, _, _)  => t,
   LStateGet(t, _)       => t,
   LStateSet(t, _, _)    => t,
+  LRegion(t, _)         => t,
   _ => TUnit
 }
 
@@ -109,7 +121,7 @@ fn lexpr_ty(e) = match e {
 fn ty_to_wasm(ty) = match ty { TFloat => "f32", _ => "i32" }
 
 type LowFn
-  = LFn(String, Int, List, List)
+  = LFn(String, Int, List, List, EffRow)
 
 type LowDef
   = LFnDef(LowFn)

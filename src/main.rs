@@ -73,7 +73,18 @@ fn main() {
             run_pipeline_mode(path, "lower");
         }
         ["wasm", path] => {
-            run_pipeline_mode(path, "wasm");
+            // WASM mode: compile_wasm prints WAT to stdout via emit_print.
+            // No load_chunk — the output is text, not a bytecode chunk.
+            let wrapper = format!(
+                "import compiler/pipeline\n\
+                 let source = read_file(\"{path}\")\n\
+                 compile_wasm(source)\n"
+            );
+            let result = run_source(&wrapper, path, false);
+            if let Err(e) = result {
+                eprintln!("{}", e);
+                process::exit(1);
+            }
         }
         ["bootstrap"] => {
             let file_path = "std/compiler/pipeline.lux";

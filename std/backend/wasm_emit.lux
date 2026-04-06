@@ -29,14 +29,13 @@ fn ctx_type_env(ctx)= ctx[4]
 // ─── Module Structure ───────────────────────────────────────
 
 fn emit_module(defs, type_map) = {
-  let fns = dedup_fns(collect_fns(defs, 0))
+  // One walk. Four results. Zero repeated tree structure.
+  let (all_strings, tag_map, all_hs_globals, all_closures) = collect_all(defs)
+  let fns = dedup_fns(all_closures)
   let top_stmts = collect_top_stmts(defs, 0)
-  let top_globals = string_union(collect_top_let_names(top_stmts, 0),
-    string_union(collect_handler_globals(fns, 0), collect_hs_names(top_stmts, 0)))
-  let all_strings = collect_all_strings(defs, 0)
+  let top_globals = string_union(collect_top_let_names(top_stmts, 0), all_hs_globals)
   let string_map = assign_offsets(all_strings, 0, 1024)
   let heap_start = string_heap_end(string_map, 0, 1024)
-  let tag_map = collect_variant_tags(defs, 0)
   let fn_table = collect_fn_names(fns, 0)
   let max_arity = max_fn_arity(fns, 0)
   // type_map is the HM env from check_program — (name, type, reason) triples.
@@ -113,7 +112,7 @@ fn emit_fn_list(fns, idx, ctx)= {
 // Uniform calling convention: ALL table functions get $__closure as first param.
 // Direct calls pass i32.const 0. Closures pass the closure pointer.
 fn emit_fn(fn_def, ctx)= {
-  let LFn(name, arity, params, body) = fn_def
+  let LFn(name, arity, params, body, fn_eff) = fn_def
   let fn_locals = collect_locals(body, 0)
   let no_params = filter_out_names(fn_locals, params, 0)
   let no_hs = filter_handler_locals(no_params, 0)
@@ -213,6 +212,18 @@ fn emit_expr(e, params, locals, ctx)= match e {
   },
   LLet(_, name, value) => emit_expr(value, params, locals, ctx) ++ "    local.set $" ++ name ++ NL,
   LBlock(_, stmts) => emit_stmts_value(stmts, 0, params, locals, ctx),
+  LRegion(_, stmts) => {
+    // Handler-scoped region: save heap, run body, restore heap.
+    // The result type is non-heap (Int/Bool/Float/Unit) so it stays
+    // on the WASM stack unaffected. All intermediates freed in O(1).
+    "    global.get $heap_ptr" ++ NL
+    ++ "    local.set $__region_mark" ++ NL
+    ++ emit_stmts_value(stmts, 0, params, locals, ctx)
+    ++ "    local.set $__region_result" ++ NL
+    ++ "    local.get $__region_mark" ++ NL
+    ++ "    global.set $heap_ptr" ++ NL
+    ++ "    local.get $__region_result" ++ NL
+  },
   LBinOp(_, op, l, r) =>
     // Dispatch on the OPERAND type (lexpr_ty of l). For arithmetic that's
     // the result type too. For comparisons (result is TBool), the operand
@@ -239,6 +250,8 @@ fn emit_expr(e, params, locals, ctx)= match e {
   LMatch(_, scrutinee, arms) => emit_match(scrutinee, arms, params, locals, ctx),
   LLoop(ty, body_stmts) => emit_loop(ty, body_stmts, params, locals, ctx),
   LBreak(_, value) => emit_expr(value, params, locals, ctx) ++ "    br $break" ++ NL,
+  LTailCall(ty, func, args) => emit_call_expr(func, args, params, locals, ctx),
+  LReturn(_, value) => emit_expr(value, params, locals, ctx) ++ "    return" ++ NL,
   LIndex(_, coll, idx_expr) => {
     // collection[idx] → i32.load(collection + 4 + idx * 4)
     emit_expr(coll, params, locals, ctx)
@@ -249,7 +262,7 @@ fn emit_expr(e, params, locals, ctx)= match e {
     ++ "    i32.load" ++ NL
   },
   LMakeClosure(_, fn_def, captures) => {
-    let LFn(fname, _, _, _) = fn_def
+    let LFn(fname, _, _, _, _) = fn_def
     let fn_idx = find_fn_index(ctx_fns(ctx), fname, 0)
     if len(captures) == 0 {
       // Zero captures: alloc [fn_idx, 0]. No nesting risk (no field eval).
@@ -346,6 +359,13 @@ fn emit_stmt(stmt, params, locals, ctx)= match stmt {
   LConst(_, _) => "",
   LMakeTuple(_, _) => "",
   LBlock(_, stmts) => emit_stmts_void(stmts, 0, params, locals, ctx),
+  LRegion(_, stmts) => {
+    "    global.get $heap_ptr" ++ NL
+    ++ "    local.set $__region_mark" ++ NL
+    ++ emit_stmts_void(stmts, 0, params, locals, ctx)
+    ++ "    local.get $__region_mark" ++ NL
+    ++ "    global.set $heap_ptr" ++ NL
+  },
   // Everything else produces a value — drop it in void context
   _ => emit_expr(stmt, params, locals, ctx) ++ "    drop" ++ NL
 }
@@ -482,11 +502,14 @@ fn collect_locals(stmts, idx)= {
 fn collect_locals_expr(e)= match e {
   LLet(_, name, value) => string_union([name], collect_locals_expr(value)),
   LBlock(_, stmts) => collect_locals(stmts, 0),
+  LRegion(_, stmts) => string_union(["__region_mark", "__region_result"], collect_locals(stmts, 0)),
   LIf(_, _, t, e) => string_union(collect_locals_list(t, 0), collect_locals_list(e, 0)),
   LMatch(_, _, arms) => string_union(["__match"], collect_locals_arms(arms, 0)),
   LLoop(_, body) => collect_locals(body, 0),
   LBreak(_, value) => collect_locals_expr(value),
-  LMakeClosure(_, fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_locals(body, 0) },
+  LTailCall(_, func, args) => string_union(collect_locals_expr(func), collect_locals_list(args, 0)),
+  LReturn(_, value) => collect_locals_expr(value),
+  LMakeClosure(_, fn_def, _) => { let LFn(_, _, _, body, _) = fn_def; collect_locals(body, 0) },
   _ => []
 }
 
@@ -530,6 +553,7 @@ fn find_local_ty_expr(name, expr) = match expr {
   LLet(ty, n, value) =>
     if n == name { ty } else { find_local_ty_expr_inner(name, value) },
   LBlock(_, stmts) => find_local_ty(name, stmts),
+  LRegion(_, stmts) => find_local_ty(name, stmts),
   LIf(_, _, t, e) => {
     let r = find_local_ty(name, t)
     match r { TUnit => find_local_ty(name, e), _ => r }
@@ -539,6 +563,7 @@ fn find_local_ty_expr(name, expr) = match expr {
 
 fn find_local_ty_expr_inner(name, expr) = match expr {
   LBlock(_, stmts) => find_local_ty(name, stmts),
+  LRegion(_, stmts) => find_local_ty(name, stmts),
   LIf(_, _, t, e) => {
     let r = find_local_ty(name, t)
     match r { TUnit => find_local_ty(name, e), _ => r }

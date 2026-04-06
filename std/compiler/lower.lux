@@ -216,7 +216,7 @@ fn lower_expr(sexpr, env) = {
       let g_eff = lty_fn_eff(lowered_g)
       let merged = merge_effects(f_eff, g_eff)
       LMakeClosure(TFun([TUnit], g_ret, merged),
-        LFn("__joined_" ++ to_string(fresh_id()), 1, [param], [g_call]), [])
+        LFn("__joined_" ++ to_string(fresh_id()), 1, [param], [g_call], merged), [])
     },
 
     HandlePipeExpr(computation, strategy) => {
@@ -224,7 +224,7 @@ fn lower_expr(sexpr, env) = {
       let thunk_body = lower_expr(computation, env)
       let thunk_ty = TFun([], lexpr_ty(thunk_body), EfPure)
       let thunk = LMakeClosure(thunk_ty,
-        LFn("__thunk_" ++ to_string(fresh_id()), 0, [], [thunk_body]), [])
+        LFn("__thunk_" ++ to_string(fresh_id()), 0, [], [thunk_body], EfPure), [])
       let lowered_strategy = lower_expr(strategy, env)
       LCall(lty_call_result(lowered_strategy), lowered_strategy, [thunk])
     },
@@ -492,7 +492,7 @@ fn emit_dummy_ops(ops, env) = {
   else {
     let (op_name, p_names) = ops[0]
     let ev_name = "__ev_op_" ++ op_name
-    let fn_def = LFn(ev_name, len(p_names), p_names, [LConst(TUnit, LUnit)])
+    let fn_def = LFn(ev_name, len(p_names), p_names, [LConst(TUnit, LUnit)], EfPure)
     let closure_ty = TFun([], TUnit, EfPure)
     [LLet(closure_ty, ev_name, LMakeClosure(closure_ty, fn_def, []))]
     ++ emit_dummy_ops(slice(ops, 1, len(ops)), env)
@@ -525,6 +525,17 @@ fn lower_destructure_bindings(names, idx) = {
 
 // ─── Handle Expression Lowering ─────────────────────────────
 
+// Region-safe types: values that don't point into the heap.
+// When a handler scope exits and the result is one of these types,
+// the heap can be safely reset (O(1) deallocation of all intermediates).
+fn is_region_safe_ty(ty) = match ty {
+  TInt => true,
+  TBool => true,
+  TFloat => true,
+  TUnit => true,
+  _ => false
+}
+
 fn lower_handle(body, arms, state_bindings, env) = {
   let rw_map = build_rewrite_map(arms)
 
@@ -549,11 +560,19 @@ fn lower_handle(body, arms, state_bindings, env) = {
   let op_restores = restore_op_bindings(op_names)
   let state_restores = restore_state_globals(state_names)
 
-  // Capture body result before restoring, then return it as last expression
-  LBlock(body_ty, state_inits ++ op_saves ++ ev_closures
+  // Capture body result before restoring, then return it as last expression.
+  // Region optimization: if the result type is non-heap (Int, Bool, Float, Unit),
+  // wrap in LRegion — the emitter saves/restores $heap_ptr around handler scopes,
+  // giving O(1) deallocation for all intermediate allocations.
+  let stmts = state_inits ++ op_saves ++ ev_closures
          ++ [LLet(body_ty, "__ev_result", lowered_body)]
          ++ op_restores ++ state_restores
-         ++ [LGlobal(body_ty, "__ev_result")])
+         ++ [LGlobal(body_ty, "__ev_result")]
+  if is_region_safe_ty(body_ty) {
+    LRegion(body_ty, stmts)
+  } else {
+    LBlock(body_ty, stmts)
+  }
 }
 
 fn build_user_effect_dicts(arms, env) = {
@@ -601,7 +620,7 @@ fn build_dict_arm(arm, env) = {
   let lowered_value = lower_expr_pure(resume_value, env)
   let body_ty = lexpr_ty(lowered_value)
   let body = LBlock(body_ty, lowered_pre ++ lowered_updates ++ [lowered_value])
-  let fn_def = LFn("dict_arm_" ++ op_name, len(param_names), param_names, [body])
+  let fn_def = LFn("dict_arm_" ++ op_name, len(param_names), param_names, [body], EfPure)
   let closure_ty = TFun([], body_ty, EfPure)
   LMakeClosure(closure_ty, fn_def, [])
 }
@@ -723,11 +742,11 @@ fn build_evidence_closure(entry, cell_names, env) = {
   let fname = "__ev_" ++ op_name ++ "_" ++ to_string(fresh_id())
   let closure_ty = TFun([], value_ty, EfPure)
   if len(captures) == 0 {
-    LMakeClosure(closure_ty, LFn(fname, len(params), params, [body]), [])
+    LMakeClosure(closure_ty, LFn(fname, len(params), params, [body], EfPure), [])
   } else {
     let rewritten = rewrite_captures(body, captures)
     let capture_exprs = map_to_globals_typed(captures, env, 0)
-    LMakeClosure(closure_ty, LFn(fname, len(params), params, [rewritten]), capture_exprs)
+    LMakeClosure(closure_ty, LFn(fname, len(params), params, [rewritten], EfPure), capture_exprs)
   }
 }
 

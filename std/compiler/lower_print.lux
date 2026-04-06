@@ -28,7 +28,7 @@ fn pe_fn(e) = match e {
   LCall(_, f, args) => pe(f) ++ "(" ++ js(mp(args), ", ") ++ ")",
   LReturn(_, v) => "return " ++ pe(v),
   LMakeClosure(_, d, _) => {
-    let LFn(n, a, _, _) = d
+    let LFn(n, a, _, _, _) = d
     "fn " ++ n ++ "/" ++ to_string(a)
   },
   _ => ""

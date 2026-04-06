@@ -188,6 +188,25 @@ fn has_negative_tvars_list(tys) = {
   else { has_negative_tvars(tys[0]) || has_negative_tvars_list(slice(tys, 1, len(tys))) }
 }
 
+// Check for ANY type variable (positive or negative).
+// Reserved for future let-generalization: when the checker tracks whether
+// a binding has been generalized, needs_instantiation can use this to
+// instantiate all polymorphic user functions (not just builtins). Currently
+// unused because instantiating during recursive self-reference breaks type
+// inference. The prelude workaround (str_slice for strings) avoids the
+// contamination without needing this.
+fn has_tvars(ty) with Pure = match ty {
+  TVar(_) => true,
+  TFun(params, ret, _) => has_tvars_list(params) || has_tvars(ret),
+  TList(elem) => has_tvars(elem),
+  _ => false
+}
+
+fn has_tvars_list(tys) with Pure = {
+  if len(tys) == 0 { false }
+  else { has_tvars(tys[0]) || has_tvars_list(slice(tys, 1, len(tys))) }
+}
+
 fn extract_builtin_names(env) = {
   if len(env) == 0 { [] }
   else {

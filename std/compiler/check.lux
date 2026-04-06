@@ -255,6 +255,14 @@ fn check_program(stmts) = {
 // Effect ops and builtins are polymorphic — shared bindings that
 // need fresh type vars at each use site. Without this, all handlers
 // for the same effect cross-contaminate types through shared TVars.
+//
+// NOTE: user-defined generic functions (like memory.lux's `slice`)
+// are NOT instantiated here. This means all call sites share the same
+// type variables. If `slice` were called with both strings and lists,
+// type contamination would occur. The prelude avoids this by using
+// `str_slice` for string operations — see prelude.lux. A proper fix
+// would implement let-generalization (instantiate after the binding's
+// body is fully checked, not during recursive self-references).
 fn needs_instantiation(ty, reason) = {
   if has_negative_tvars(ty) { true }
   else {

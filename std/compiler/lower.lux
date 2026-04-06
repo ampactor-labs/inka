@@ -190,15 +190,21 @@ fn lower_expr(sexpr, env) = {
       let S(branches_expr, bl, bc) = branches
       match branches_expr {
         TupleExpr(fns) => {
-          let elems = fan_out_lower(fns, data, env)
-          LMakeTuple(TTuple(lty_tuple_elems(elems)), elems)
+          // Input lowered ONCE, bound via LLet. Standard nodes. Types carry the proof.
+          let lowered_input = lower_expr(data, env)
+          let input_name = "__fan_" ++ to_string(fresh_id())
+          let input_ref = LGlobal(lexpr_ty(lowered_input), input_name)
+          let calls = fan_out_single(fns, input_ref, env)
+          LBlock(TTuple(lty_tuple_elems(calls)),
+            [LLet(lexpr_ty(lowered_input), input_name, lowered_input),
+             LMakeTuple(TTuple(lty_tuple_elems(calls)), calls)])
         },
         _ => lower_expr(S(Call(branches, [data]), bl, bc), env)
       }
     },
 
     JoinExpr(f, g) => {
-      // f >< g = |x| g(f(x)) — f first, then g. Left to right.
+      // f >< g — effects merged. Types carry the proof.
       let param = "__join_x"
       let lowered_f = lower_expr(f, env)
       let lowered_g = lower_expr(g, env)
@@ -206,7 +212,10 @@ fn lower_expr(sexpr, env) = {
       let g_ret = lty_call_result(lowered_g)
       let f_call = LCall(f_ret, lowered_f, [LGlobal(TUnit, param)])
       let g_call = LCall(g_ret, lowered_g, [f_call])
-      LMakeClosure(TFun([TUnit], g_ret, EfPure),
+      let f_eff = lty_fn_eff(lowered_f)
+      let g_eff = lty_fn_eff(lowered_g)
+      let merged = merge_effects(f_eff, g_eff)
+      LMakeClosure(TFun([TUnit], g_ret, merged),
         LFn("__joined_" ++ to_string(fresh_id()), 1, [param], [g_call]), [])
     },
 
@@ -278,6 +287,23 @@ fn lower_expr(sexpr, env) = {
   }
 }
 
+// Fan-out with single-evaluation: input_ref is already a bound reference
+fn fan_out_single(fns, input_ref, env) = {
+  if len(fns) == 0 { [] }
+  else {
+    let lowered_fn = lower_expr(fns[0], env)
+    [LCall(lty_call_result(lowered_fn), lowered_fn, [input_ref])]
+    ++ fan_out_single(slice(fns, 1, len(fns)), input_ref, env)
+  }
+}
+
+// Extract effect row from a function type
+fn lty_fn_eff(lowered) = match lexpr_ty(lowered) {
+  TFun(_, _, eff) => eff,
+  _ => EfPure
+}
+
+// Old fan_out_lower kept for non-tuple fan-out paths
 fn fan_out_lower(fns, input, env) = {
   if len(fns) == 0 { [] }
   else {

@@ -124,10 +124,25 @@ fn emit_fn(fn_def, ctx)= {
   let param_types = match fn_ty { TFun(pts, _, _) => pts, _ => [] }
   let ret_ty = match fn_ty { TFun(_, rt, _) => rt, _ => TUnit }
   let result_ty = match ret_ty { TFloat => "f32", _ => "i32" }
-  "  (func $" ++ name ++ " (param $__closure i32)" ++ emit_params(params, param_types, 0) ++ " (result " ++ result_ty ++ ")" ++ NL
+  // Effect annotation: the checker's proof, visible in generated WAT
+  let eff_annotation = emit_eff_annotation(fn_eff)
+  "  (func $" ++ name ++ " (param $__closure i32)" ++ emit_params(params, param_types, 0) ++ " (result " ++ result_ty ++ ")" ++ eff_annotation ++ NL
     ++ emit_local_decls(with_temps, 0, body, env)
     ++ emit_fn_body(body, params, with_temps, ctx)
     ++ "  )" ++ NL
+}
+
+// Emit effect annotation as WAT comment: ;; PURE, ;; effects: IO, State, etc.
+fn emit_eff_annotation(eff) = match eff {
+  EfPure => " ;; PURE",
+  EfClosed(effs) => if len(effs) == 0 { " ;; PURE" } else { " ;; effects: " ++ eff_list_str(effs, 0) },
+  EfOpen(effs, _) => if len(effs) == 0 { "" } else { " ;; effects: " ++ eff_list_str(effs, 0) ++ ", ..." },
+  _ => ""
+}
+
+fn eff_list_str(effs, idx) = {
+  if idx >= len(effs) { "" }
+  else { if idx == 0 { effs[0] ++ eff_list_str(effs, 1) } else { ", " ++ effs[idx] ++ eff_list_str(effs, idx + 1) } }
 }
 
 fn emit_params(params, param_types, idx)= {
@@ -224,11 +239,17 @@ fn emit_expr(e, params, locals, ctx)= match e {
     ++ "    global.set $heap_ptr" ++ NL
     ++ "    local.get $__region_result" ++ NL
   },
-  LBinOp(_, op, l, r) =>
-    // Dispatch on the OPERAND type (lexpr_ty of l). For arithmetic that's
-    // the result type too. For comparisons (result is TBool), the operand
-    // type is what tells us i32 vs f32.
-    emit_expr(l, params, locals, ctx) ++ emit_expr(r, params, locals, ctx) ++ emit_binop(lexpr_ty(l), op),
+  LBinOp(ty, op, l, r) => {
+    // ── Constant folding: the compiler proved these are constants. ──
+    // If both operands are int literals, compute at compile time.
+    // 3 + 4 → i32.const 7. No runtime instruction.
+    let folded = try_const_fold(op, l, r)
+    if len(folded) > 0 { folded }
+    else {
+      // Normal emission: dispatch on operand type (TFloat → f32, else i32)
+      emit_expr(l, params, locals, ctx) ++ emit_expr(r, params, locals, ctx) ++ emit_binop(lexpr_ty(l), op)
+    }
+  },
   LUnaryOp(ty, op, inner) => match op {
     "Neg" => match ty {
       TFloat => "    f32.const 0" ++ NL ++ emit_expr(inner, params, locals, ctx) ++ "    f32.sub" ++ NL,
@@ -365,6 +386,15 @@ fn emit_stmt(stmt, params, locals, ctx)= match stmt {
     ++ emit_stmts_void(stmts, 0, params, locals, ctx)
     ++ "    local.get $__region_mark" ++ NL
     ++ "    global.set $heap_ptr" ++ NL
+  },
+  // ── Dead code elimination: Pure calls with unused results vanish ──
+  LCall(_, func, args) => {
+    let func_eff = match lexpr_ty(func) { TFun(_, _, eff) => eff, _ => EfClosed(["unknown"]) }
+    if is_pure_eff(func_eff) && all_trivial_args(args, 0) {
+      ";; DCE: pure call eliminated (result unused)" ++ NL
+    } else {
+      emit_expr(stmt, params, locals, ctx) ++ "    drop" ++ NL
+    }
   },
   // Everything else produces a value — drop it in void context
   _ => emit_expr(stmt, params, locals, ctx) ++ "    drop" ++ NL
@@ -699,4 +729,77 @@ fn emit_loop(ty, body_stmts, params, locals, ctx)= {
   ++ "        br $loop" ++ NL
   ++ "      )" ++ NL
   ++ "    )" ++ NL
+}
+
+// ─── Phase 3: Purity-Driven Optimizations ───────────────────
+
+// Constant folding: if both operands are int literals, compute at compile time.
+// Returns the WAT string (non-empty) if folded, "" if not foldable.
+fn try_const_fold(op, l, r) = {
+  let lv = extract_int_const(l)
+  let rv = extract_int_const(r)
+  let lv_valid = lv != 0 - 99999999
+  let rv_valid = rv != 0 - 99999999
+  if lv_valid && rv_valid {
+    let result = match op {
+      "Add" => lv + rv,
+      "Sub" => lv - rv,
+      "Mul" => lv * rv,
+      "Div" => if rv != 0 { lv / rv } else { 0 },
+      "Mod" => if rv != 0 { lv % rv } else { 0 },
+      _ => 0 - 99999999
+    }
+    if result != 0 - 99999999 {
+      ";; const-folded: " ++ to_string(lv) ++ " " ++ op ++ " " ++ to_string(rv) ++ NL
+      ++ "    i32.const " ++ to_string(result) ++ NL
+    } else {
+      // Comparison ops: fold to boolean
+      let bool_result = match op {
+        "Eq"   => if lv == rv { 1 } else { 0 },
+        "Neq"  => if lv != rv { 1 } else { 0 },
+        "Lt"   => if lv < rv  { 1 } else { 0 },
+        "Gt"   => if lv > rv  { 1 } else { 0 },
+        "LtEq" => if lv <= rv { 1 } else { 0 },
+        "GtEq" => if lv >= rv { 1 } else { 0 },
+        _ => 0 - 99999999
+      }
+      if bool_result != 0 - 99999999 {
+        ";; const-folded: " ++ to_string(lv) ++ " " ++ op ++ " " ++ to_string(rv) ++ NL
+        ++ "    i32.const " ++ to_string(bool_result) ++ NL
+      } else { "" }
+    }
+  } else { "" }
+}
+
+// Extract integer constant value, or sentinel if not a constant
+fn extract_int_const(e) = match e {
+  LConst(_, v) => match v {
+    LInt(n) => n,
+    LBool(b) => if b { 1 } else { 0 },
+    _ => 0 - 99999999
+  },
+  _ => 0 - 99999999
+}
+
+// Is this effect row pure (no effects)?
+fn is_pure_eff(eff) = match eff {
+  EfPure => true,
+  EfClosed(effs) => len(effs) == 0,
+  _ => false
+}
+
+// Are all arguments trivial (no side effects)?
+// Trivial: LConst, LLocal, LGlobal, LUpval — no function calls, no allocations.
+fn all_trivial_args(args, idx) = {
+  if idx >= len(args) { true }
+  else {
+    let trivial = match args[idx] {
+      LConst(_, _)  => true,
+      LLocal(_, _)  => true,
+      LGlobal(_, _) => true,
+      LUpval(_, _)  => true,
+      _ => false
+    }
+    if trivial { all_trivial_args(args, idx + 1) } else { false }
+  }
 }

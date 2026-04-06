@@ -482,9 +482,16 @@ fn compile_expr(ctx, sexpr) = {
     let fn_ctx4 = compile_expr(fn_ctx3, body)
     let fn_ctx5 = emit_op(fn_ctx4, OP_RETURN)
     let upvals = ctx_upvalues(fn_ctx5)
-    let proto = ("fn_proto", "<lambda>", len(params), ctx_code(fn_ctx5),
-                  ctx_constants(fn_ctx5), ctx_names(fn_ctx5),
-                  ctx_next_slot(fn_ctx5), len(upvals))
+    let lam_ht = ctx_handler_tables(fn_ctx5)
+    let proto = if len(lam_ht) > 0 {
+      ("fn_proto", "<lambda>", len(params), ctx_code(fn_ctx5),
+        ctx_constants(fn_ctx5), ctx_names(fn_ctx5),
+        ctx_next_slot(fn_ctx5), len(upvals), lam_ht)
+    } else {
+      ("fn_proto", "<lambda>", len(params), ctx_code(fn_ctx5),
+        ctx_constants(fn_ctx5), ctx_names(fn_ctx5),
+        ctx_next_slot(fn_ctx5), len(upvals))
+    }
     let (ctx2, proto_idx) = add_constant(ctx, proto)
     let ctx3 = emit_u16(emit_op(ctx2, OP_MAKE_CLOSURE), proto_idx)
     emit_upvalue_descriptors(ctx3, upvals)
@@ -979,9 +986,16 @@ fn compile_stmt(ctx, stmt) = match stmt {
     let fn_ctx4 = compile_expr(fn_ctx3, body)
     let fn_ctx5 = emit_op(fn_ctx4, OP_RETURN)
     let upvals = ctx_upvalues(fn_ctx5)
-    let proto = ("fn_proto", name, len(params), ctx_code(fn_ctx5),
-                  ctx_constants(fn_ctx5), ctx_names(fn_ctx5),
-                  ctx_next_slot(fn_ctx5), len(upvals))
+    let fn_ht = ctx_handler_tables(fn_ctx5)
+    let proto = if len(fn_ht) > 0 {
+      ("fn_proto", name, len(params), ctx_code(fn_ctx5),
+        ctx_constants(fn_ctx5), ctx_names(fn_ctx5),
+        ctx_next_slot(fn_ctx5), len(upvals), fn_ht)
+    } else {
+      ("fn_proto", name, len(params), ctx_code(fn_ctx5),
+        ctx_constants(fn_ctx5), ctx_names(fn_ctx5),
+        ctx_next_slot(fn_ctx5), len(upvals))
+    }
     let (ctx2, proto_idx) = add_constant(ctx_pre2, proto)
     let ctx3 = emit_u16(emit_op(ctx2, OP_MAKE_CLOSURE), proto_idx)
     let ctx4 = emit_upvalue_descriptors(ctx3, upvals)

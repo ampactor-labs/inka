@@ -1387,13 +1387,16 @@ impl Vm {
             },
             _ => Err("index_of expects (String, String) or (List, value)".into()),
         });
-        self.register_builtin("string_slice", |args| {
+        // str_slice and string_slice: both available as builtins so prelude
+        // can use str_slice (matching memory.lux's WASM name) while user code
+        // can use either. The prelude uses str_slice to avoid type contamination
+        // with the list-only `slice` function (see prelude.lux comment).
+        let str_slice_impl = |args: Vec<VmValue>| -> Result<VmValue, String> {
             match (args.first(), args.get(1), args.get(2)) {
                 (Some(VmValue::String(s)), Some(VmValue::Int(start)), Some(VmValue::Int(end))) => {
                     let len = s.len() as i64;
                     let s_idx = (*start).max(0).min(len) as usize;
                     let e_idx = (*end).max(0).min(len) as usize;
-                    // Use char boundaries for correctness
                     let result: String = s
                         .chars()
                         .skip(s_idx)
@@ -1401,9 +1404,11 @@ impl Vm {
                         .collect();
                     Ok(VmValue::String(Arc::new(result)))
                 }
-                _ => Err("string_slice expects (String, Int, Int)".into()),
+                _ => Err("str_slice expects (String, Int, Int)".into()),
             }
-        });
+        };
+        self.register_builtin("string_slice", str_slice_impl);
+        self.register_builtin("str_slice", str_slice_impl);
         self.register_builtin("parse_float", |args| match args.first() {
             Some(VmValue::String(s)) => match s.parse::<f64>() {
                 Ok(f) => Ok(VmValue::Float(f)),
@@ -1698,7 +1703,7 @@ impl Vm {
             },
             // ("fn_proto", name, arity, code, constants, names, local_count) or
             // ("fn_proto", name, arity, code, constants, names, local_count, upval_count)
-            VmValue::Tuple(t) if t.len() >= 6 && t.len() <= 8 => match &t[0] {
+            VmValue::Tuple(t) if t.len() >= 6 && t.len() <= 9 => match &t[0] {
                 VmValue::String(tag) if tag.as_str() == "fn_proto" => {
                     let name = match &t[1] {
                         VmValue::String(s) => s.as_str().to_string(),

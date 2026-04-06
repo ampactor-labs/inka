@@ -555,6 +555,11 @@ fn compile_expr(ctx, sexpr) = {
     compile_resume_expr(ctx, value, state_updates)
   },
 
+  StringInterp(parts) => {
+    let ctx2 = compile_interp_parts(ctx, parts, 0);
+    emit_u16(emit_op(ctx2, OP_STRING_INTERP), len(parts))
+  },
+
   _ => emit_op(ctx, OP_LOAD_UNIT)
 }
 }
@@ -574,6 +579,14 @@ fn compile_fan_out(ctx, fns, input) = {
     let ctx3 = compile_expr(ctx2, input)
     let ctx4 = emit_u8(emit_op(ctx3, OP_CALL), 1)
     compile_fan_out(ctx4, slice(fns, 1, len(fns)), input)
+  }
+}
+
+fn compile_interp_parts(ctx, parts, i) = {
+  if i >= len(parts) { ctx }
+  else {
+    let ctx2 = compile_expr(ctx, parts[i])
+    compile_interp_parts(ctx2, parts, i + 1)
   }
 }
 

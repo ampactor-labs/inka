@@ -172,6 +172,13 @@ fn emit_variant_fields(fields, idx, params, locals, ctx)= {
 // ─── Match Compilation ──────────────────────────────────────
 // LMatch(scrutinee, [(LPCon("Circle", [LPVar("r")]), body), ...])
 // → evaluate scrutinee to local, chain if/else on tag.
+//
+// Nesting depth: $__match is depth 0. Nested sub-patterns that need
+// their own scrutinee use $__match_1, $__match_2, etc. The depth
+// parameter threads through bind_fields to track nesting.
+
+fn match_local(depth) =
+  if depth == 0 { "$__match" } else { "$__match_" ++ to_string(depth) }
 
 fn emit_match(scrutinee, arms, params, locals, ctx)= {
   // Evaluate scrutinee — leave ptr on stack
@@ -195,7 +202,7 @@ fn emit_match_arms(arms, idx, params, locals, ctx)= {
         ++ "    i32.eq" ++ NL
         ++ "    (if (result i32)" ++ NL
         ++ "      (then" ++ NL
-        ++ emit_bind_fields(sub_pats, 0, params, locals, ctx)
+        ++ emit_bind_fields(sub_pats, 0, 0, params, locals, ctx)
         ++ emit_expr(body, params, locals, ctx)
         ++ "      )" ++ NL
         ++ "      (else" ++ NL
@@ -203,6 +210,7 @@ fn emit_match_arms(arms, idx, params, locals, ctx)= {
         ++ "      )" ++ NL
         ++ "    )" ++ NL
       },
+      LPTuple(sub_pats) => emit_match_arm_tuple(sub_pats, body, arms, idx, params, locals, ctx),
       LPVar(name) => {
         // Bind scrutinee to variable, execute body
         "    local.get $__match" ++ NL
@@ -215,22 +223,90 @@ fn emit_match_arms(arms, idx, params, locals, ctx)= {
   }
 }
 
-fn emit_bind_fields(sub_pats, idx, params, locals, ctx)= {
+// LPTuple at top level: no tag check, just bind fields by position.
+// Tuple memory layout: [count:i32][elem0:i32][elem1:i32]...
+// Element i is at offset 4 + i*4 (same as variant fields, count replaces tag).
+fn emit_match_arm_tuple(sub_pats, body, arms, idx, params, locals, ctx)= {
+  emit_bind_tuple_fields(sub_pats, 0, 0, params, locals, ctx)
+  ++ emit_expr(body, params, locals, ctx)
+}
+
+// Bind tuple sub-patterns at a given nesting depth.
+// Tuple element i is at offset 4 + i*4 from the tuple base pointer.
+fn emit_bind_tuple_fields(sub_pats, idx, depth, params, locals, ctx)= {
   if idx >= len(sub_pats) { "" }
   else {
     let field_offset = (1 + idx) * 4
+    let base = match_local(depth)
     match sub_pats[idx] {
       LPVar(name) => {
-        "    local.get $__match" ++ NL
+        "    local.get " ++ base ++ NL
         ++ "    i32.const " ++ to_string(field_offset) ++ NL
         ++ "    i32.add" ++ NL
         ++ "    i32.load" ++ NL
         ++ "    local.set $" ++ name ++ NL
-        ++ emit_bind_fields(sub_pats, idx + 1, params, locals, ctx)
+        ++ emit_bind_tuple_fields(sub_pats, idx + 1, depth, params, locals, ctx)
       },
-      LPWild => emit_bind_fields(sub_pats, idx + 1, params, locals, ctx),
-      _ => emit_bind_fields(sub_pats, idx + 1, params, locals, ctx)
+      LPWild => emit_bind_tuple_fields(sub_pats, idx + 1, depth, params, locals, ctx),
+      _ => emit_bind_sub_pattern(sub_pats[idx], base, field_offset, depth, params, locals, ctx)
+        ++ emit_bind_tuple_fields(sub_pats, idx + 1, depth, params, locals, ctx)
     }
+  }
+}
+
+fn emit_bind_fields(sub_pats, idx, depth, params, locals, ctx)= {
+  if idx >= len(sub_pats) { "" }
+  else {
+    let field_offset = (1 + idx) * 4
+    let base = match_local(depth)
+    match sub_pats[idx] {
+      LPVar(name) => {
+        "    local.get " ++ base ++ NL
+        ++ "    i32.const " ++ to_string(field_offset) ++ NL
+        ++ "    i32.add" ++ NL
+        ++ "    i32.load" ++ NL
+        ++ "    local.set $" ++ name ++ NL
+        ++ emit_bind_fields(sub_pats, idx + 1, depth, params, locals, ctx)
+      },
+      LPWild => emit_bind_fields(sub_pats, idx + 1, depth, params, locals, ctx),
+      _ => emit_bind_sub_pattern(sub_pats[idx], base, field_offset, depth, params, locals, ctx)
+        ++ emit_bind_fields(sub_pats, idx + 1, depth, params, locals, ctx)
+    }
+  }
+}
+
+// Handle nested LPCon / LPTuple sub-patterns.
+// Loads the field value into a deeper match local, then recurses.
+fn emit_bind_sub_pattern(pat, base, field_offset, depth, params, locals, ctx)= {
+  let next_depth = depth + 1
+  let next_local = match_local(next_depth)
+  // Load field value into the next-depth match local
+  let load_field = "    local.get " ++ base ++ NL
+    ++ "    i32.const " ++ to_string(field_offset) ++ NL
+    ++ "    i32.add" ++ NL
+    ++ "    i32.load" ++ NL
+    ++ "    local.set " ++ next_local ++ NL
+  match pat {
+    LPCon(tag, inner_pats) => {
+      let tag_id = find_tag_id(ctx_tags(ctx), tag, 0)
+      // Load, check tag, bind inner fields if tag matches
+      load_field
+      ++ "    local.get " ++ next_local ++ NL
+      ++ "    i32.load" ++ NL
+      ++ "    i32.const " ++ to_string(tag_id) ++ NL
+      ++ "    i32.eq" ++ NL
+      ++ "    (if" ++ NL
+      ++ "      (then" ++ NL
+      ++ emit_bind_fields(inner_pats, 0, next_depth, params, locals, ctx)
+      ++ "      )" ++ NL
+      ++ "    )" ++ NL
+    },
+    LPTuple(inner_pats) => {
+      // Load, bind tuple elements (no tag check)
+      load_field
+      ++ emit_bind_tuple_fields(inner_pats, 0, next_depth, params, locals, ctx)
+    },
+    _ => ""
   }
 }
 

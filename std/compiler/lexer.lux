@@ -120,7 +120,149 @@ fn lex(source) = {
 
   // -- Scan helpers (closures capture cs, src_len) --
 
-  fn scan_string(p, acc) =
+  // Scan string content until '"' or '{'. Does NOT consume the delimiter.
+  // Returns (position_of_delimiter, accumulated_text).
+  fn scan_string_plain(p, acc) =
+    if p >= src_len { (p, acc) }
+    else {
+      let c = cs[p];
+      if c == ch_dquote { (p, acc) }
+      else { if c == ch_lbrace { (p, acc) }
+      else { if c == ch_backslash && p + 1 < src_len {
+        let esc = cs[p + 1];
+        let escaped = if esc == "n" { "\n" }
+          else { if esc == "t" { "\t" }
+          else { if esc == ch_backslash { ch_backslash }
+          else { if esc == ch_dquote { ch_dquote }
+          else { esc } } } };
+        scan_string_plain(p + 2, str_cat(acc, escaped))
+      }
+      else { scan_string_plain(p + 1, str_cat(acc, c)) } } }
+    };
+
+  // Scan a double-quoted string, handling {expr} interpolation.
+  // Returns (new_pos, line, col, tokens) — appends tokens directly.
+  // Called with p pointing to the first char AFTER the opening quote.
+  fn scan_dquote(p, line, col, toks) = {
+    // Scan plain string content — stops at '"' or '{', does NOT consume delimiter
+    let (p2, lit) = scan_string_plain(p, "");
+    if p2 >= src_len {
+      // Unterminated string, emit what we have
+      let toks2 = if lit != "" { push(toks, token("String", lit, line, col)) } else { toks };
+      (p2, line, col, toks2)
+    } else { if cs[p2] == ch_dquote {
+      // Simple string, no interpolation — consume closing quote
+      (p2 + 1, line, col, push(toks, token("String", lit, line, col)))
+    } else {
+      // Hit '{' — this is an interpolated string
+      let toks2 = push(toks, token("InterpStart", "", line, col));
+      let toks3 = if lit != "" { push(toks2, token("String", lit, line, col)) } else { toks2 };
+      // Now scan interpolation segments starting at the '{'
+      scan_interp_segments(p2, line, col, toks3)
+    }}
+  };
+
+  // Scan from a '{' inside an interpolated string.
+  // Tokenizes the expression, then continues scanning more string/interp segments.
+  fn scan_interp_segments(p, line, col, toks) = {
+    if p >= src_len { (p, line, col, push(toks, token("InterpEnd", "", line, col))) }
+    else { if cs[p] == ch_dquote {
+      // Closing quote — end of interpolated string
+      (p + 1, line, col, push(toks, token("InterpEnd", "", line, col)))
+    } else { if cs[p] == ch_lbrace {
+      // Start of expression — tokenize until matching '}'
+      let (p2, line2, col2, toks2) = scan_interp_expr(p + 1, line, col + 1, toks, 1);
+      // After '}', continue scanning string content
+      scan_interp_after_expr(p2, line2, col2, toks2)
+    } else {
+      // String content — scan plain text until next '{' or '"'
+      let (p2, lit) = scan_string_plain(p, "");
+      let toks2 = if lit != "" { push(toks, token("String", lit, line, col)) } else { toks };
+      // Continue: might be another '{' or closing '"'
+      scan_interp_segments(p2, line, col, toks2)
+    }}}
+  };
+
+  fn scan_interp_after_expr(p, line, col, toks) = {
+    if p >= src_len { (p, line, col, push(toks, token("InterpEnd", "", line, col))) }
+    else { if cs[p] == ch_dquote {
+      (p + 1, line, col, push(toks, token("InterpEnd", "", line, col)))
+    } else {
+      // More string content or another interpolation
+      scan_interp_segments(p, line, col, toks)
+    }}
+  };
+
+  // Tokenize an interpolated expression (after '{'), tracking brace depth.
+  // Calls lex_from-like logic inline for each token.
+  fn scan_interp_expr(pos, line, col, toks, depth) = {
+    if pos >= src_len { (pos, line, col, toks) }
+    else {
+      let ch = cs[pos];
+      if ch == ch_rbrace && depth == 1 {
+        // End of interpolation expression
+        (pos + 1, line, col + 1, toks)
+      }
+      else { if ch == ch_rbrace {
+        // Nested closing brace
+        let toks2 = push(toks, token("RBrace", ch, line, col));
+        scan_interp_expr(pos + 1, line, col + 1, toks2, depth - 1)
+      }
+      else { if ch == ch_lbrace {
+        let toks2 = push(toks, token("LBrace", ch, line, col));
+        scan_interp_expr(pos + 1, line, col + 1, toks2, depth + 1)
+      }
+      else {
+        // Delegate to normal tokenization, but we need the tokens and new position.
+        // We do a mini lex_one: lex one token, append to toks, recurse.
+        let (p2, line2, col2, toks2) = lex_one(pos, line, col, toks);
+        scan_interp_expr(p2, line2, col2, toks2, depth)
+      }}}
+    }
+  };
+
+  // Lex exactly one token (non-recursive). Returns (new_pos, line, col, tokens).
+  fn lex_one(pos, line, col, toks) = {
+    let ch = cs[pos];
+    if is_whitespace(ch) { (pos + 1, line, col + 1, toks) }
+    else { if ch == "\n" { (pos + 1, line + 1, 1, toks) }
+    else { if ch == ch_dquote {
+      // Nested string inside interpolation
+      let (ep, sv) = scan_string_nested(pos + 1, "");
+      (ep, line, col + (ep - pos), push(toks, token("String", sv, line, col)))
+    }
+    else { if ch == ch_squote {
+      let (ep, sv) = scan_raw_string(pos + 1, "");
+      (ep, line, col + (ep - pos), push(toks, token("String", sv, line, col)))
+    }
+    else { if is_digit(ch) {
+      let (ep, ns, is_f) = scan_number(pos + 1, ch, false);
+      let tt = if is_f { "Float" } else { "Int" };
+      (ep, line, col + (ep - pos), push(toks, token(tt, ns, line, col)))
+    }
+    else { if is_alpha(ch) {
+      let (ep, word) = scan_ident(pos + 1, ch);
+      let tt = keyword_type(word);
+      let tv = if tt == "True" { "true" } else { if tt == "False" { "false" } else { word } };
+      (ep, line, col + (ep - pos), push(toks, token(tt, tv, line, col)))
+    }
+    else {
+      let ch2 = if pos + 1 < src_len { cs[pos + 1] } else { "" };
+      let op2 = two_char_op(ch, ch2);
+      if op2 != "" {
+        (pos + 2, line, col + 2, push(toks, token(op2, str_cat(ch, ch2), line, col)))
+      } else {
+        let op1 = single_char_type(ch);
+        if op1 != "" {
+          (pos + 1, line, col + 1, push(toks, token(op1, ch, line, col)))
+        }
+        else { (pos + 1, line, col + 1, toks) }
+      }
+    }}}}}}
+  };
+
+  // Scan a string inside an interpolation (no recursive interpolation)
+  fn scan_string_nested(p, acc) =
     if p >= src_len { (p, acc) }
     else {
       let c = cs[p];
@@ -132,9 +274,9 @@ fn lex(source) = {
           else { if esc == ch_backslash { ch_backslash }
           else { if esc == ch_dquote { ch_dquote }
           else { esc } } } };
-        scan_string(p + 2, str_cat(acc, escaped))
+        scan_string_nested(p + 2, str_cat(acc, escaped))
       }
-      else { scan_string(p + 1, str_cat(acc, c)) } }
+      else { scan_string_nested(p + 1, str_cat(acc, c)) } }
     };
 
   fn scan_number(p, acc, has_dot) =
@@ -190,8 +332,8 @@ fn lex(source) = {
         lex_from(skip_comment(pos + 2), line, col, tokens)
       }
       else { if ch == ch_dquote {
-        let (ep, sv) = scan_string(pos + 1, "");
-        lex_from(ep, line, col + (ep - pos), push(tokens, token("String", sv, line, col)))
+        let (ep, line2, col2, toks2) = scan_dquote(pos + 1, line, col, tokens);
+        lex_from(ep, line2, col2, toks2)
       }
       else { if ch == ch_squote {
         let (ep, sv) = scan_raw_string(pos + 1, "");

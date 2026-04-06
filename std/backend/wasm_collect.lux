@@ -62,6 +62,8 @@ fn collect_strings_expr(e)= match e {
   LMakeClosure(_, fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_strings_list(body, 0) },
   LMatch(_, scr, arms) => string_union(collect_strings_expr(scr), collect_strings_arms(arms, 0)),
   LIndex(_, coll, idx) => string_union(collect_strings_expr(coll), collect_strings_expr(idx)),
+  LLoop(_, body) => collect_strings_list(body, 0),
+  LBreak(_, value) => collect_strings_expr(value),
   _ => []
 }
 
@@ -159,6 +161,8 @@ fn collect_tags_expr(e)= match e {
   LBlock(_, stmts) => collect_tags_list(stmts, 0),
   LLet(_, _, v) => collect_tags_expr(v),
   LMakeClosure(_, fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_tags_list(body, 0) },
+  LLoop(_, body) => collect_tags_list(body, 0),
+  LBreak(_, v) => collect_tags_expr(v),
   _ => []
 }
 
@@ -176,8 +180,14 @@ fn collect_tags_arms(arms, idx)= {
 }
 
 fn collect_tags_pat(pat)= match pat {
-  LPCon(name, _) => [name],
+  LPCon(name, subs) => tag_union([name], collect_tags_pats(subs, 0)),
+  LPTuple(subs) => collect_tags_pats(subs, 0),
   _ => []
+}
+
+fn collect_tags_pats(pats, idx)= {
+  if idx >= len(pats) { [] }
+  else { tag_union(collect_tags_pat(pats[idx]), collect_tags_pats(pats, idx + 1)) }
 }
 
 fn tag_union(a, b)= {
@@ -287,6 +297,8 @@ fn collect_hs_name(e) = match e {
     let LFn(_, _, _, body) = fn_def
     string_union(collect_hs_names(body, 0), collect_hs_names(captures, 0))
   },
+  LLoop(_, body) => collect_hs_names(body, 0),
+  LBreak(_, value) => collect_hs_name(value),
   _ => []
 }
 
@@ -340,7 +352,18 @@ fn collect_inner_closures_expr(e)= match e {
   LIf(_, _, t, e) => collect_inner_closures(t, 0) ++ collect_inner_closures(e, 0),
   LBinOp(_, _, l, r) => collect_inner_closures_expr(l) ++ collect_inner_closures_expr(r),
   LCall(_, f, args) => collect_inner_closures_expr(f) ++ collect_inner_closures(args, 0),
+  LLoop(_, body) => collect_inner_closures(body, 0),
+  LBreak(_, v) => collect_inner_closures_expr(v),
+  LMatch(_, scr, arms) => collect_inner_closures_expr(scr) ++ collect_inner_closures_arms(arms, 0),
   _ => []
+}
+
+fn collect_inner_closures_arms(arms, idx)= {
+  if idx >= len(arms) { [] }
+  else {
+    let (_, body) = arms[idx]
+    collect_inner_closures_expr(body) ++ collect_inner_closures_arms(arms, idx + 1)
+  }
 }
 
 fn collect_top_stmts(defs, idx)= {

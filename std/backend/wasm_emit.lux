@@ -237,6 +237,8 @@ fn emit_expr(e, params, locals, ctx)= match e {
   },
   LMakeVariant(_, tag, fields) => emit_make_variant(tag, fields, params, locals, ctx),
   LMatch(_, scrutinee, arms) => emit_match(scrutinee, arms, params, locals, ctx),
+  LLoop(ty, body_stmts) => emit_loop(ty, body_stmts, params, locals, ctx),
+  LBreak(_, value) => emit_expr(value, params, locals, ctx) ++ "    br $break" ++ NL,
   LIndex(_, coll, idx_expr) => {
     // collection[idx] → i32.load(collection + 4 + idx * 4)
     emit_expr(coll, params, locals, ctx)
@@ -482,6 +484,8 @@ fn collect_locals_expr(e)= match e {
   LBlock(_, stmts) => collect_locals(stmts, 0),
   LIf(_, _, t, e) => string_union(collect_locals_list(t, 0), collect_locals_list(e, 0)),
   LMatch(_, _, arms) => string_union(["__match"], collect_locals_arms(arms, 0)),
+  LLoop(_, body) => collect_locals(body, 0),
+  LBreak(_, value) => collect_locals_expr(value),
   LMakeClosure(_, fn_def, _) => { let LFn(_, _, _, body) = fn_def; collect_locals(body, 0) },
   _ => []
 }
@@ -571,9 +575,10 @@ fn filter_out_names(locals, exclude, idx) = {
 
 fn add_emitter_temps(locals, ctx)= {
   // __vptr: temp for heap allocation (closures, tuples).
-  // __match: temp for match scrutinee.
+  // __match: temp for match scrutinee (depth 0).
+  // __match_1, __match_2, __match_3: nested match scrutinees (depth 1-3).
   // __f0-__f7: pre-evaluated closure captures.
-  string_union(locals, ["__vptr", "__match", "__f0", "__f1", "__f2", "__f3", "__f4", "__f5", "__f6", "__f7"])
+  string_union(locals, ["__vptr", "__match", "__match_1", "__match_2", "__match_3", "__f0", "__f1", "__f2", "__f3", "__f4", "__f5", "__f6", "__f7"])
 }
 
 // Remove handler state globals from function locals — these must be WASM globals
@@ -655,4 +660,18 @@ fn emit_binop_f32(op)= match op {
   "LtEq" => "    f32.le" ++ NL,
   "GtEq" => "    f32.ge" ++ NL,
   _ => "    ;; unknown f32 op: " ++ op ++ NL
+}
+
+// ─── Loop/Break Emission ────────────────────────────────────
+// LLoop(ty, body) → block $break (loop $loop ... br $loop)
+// LBreak(ty, value) → emit value, br $break
+
+fn emit_loop(ty, body_stmts, params, locals, ctx)= {
+  let result_wt = ty_to_wasm(ty)
+  "    (block $break (result " ++ result_wt ++ ")" ++ NL
+  ++ "      (loop $loop" ++ NL
+  ++ emit_stmts_void(body_stmts, 0, params, locals, ctx)
+  ++ "        br $loop" ++ NL
+  ++ "      )" ++ NL
+  ++ "    )" ++ NL
 }

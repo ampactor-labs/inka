@@ -317,7 +317,6 @@ fn compile_illuminate(source) = {
 
 fn compile_wasm(source) = {
   // Use the prelude cache — don't re-check the prelude from scratch.
-  // Concatenate runtime + imports + user, check against cached prelude env.
   let (prelude_ast, prelude_env, start_n) = __prelude_cache
   let runtime = read_file("std/runtime/memory.lux")
   let (imports, _) = source |> resolve_imports_tracked([])

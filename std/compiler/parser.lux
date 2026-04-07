@@ -32,7 +32,6 @@ type Expr
   | PipeExpr(Expr, Expr)
   | FanOutExpr(Expr, Expr)
   | JoinExpr(Expr, Expr)
-  | HandlePipeExpr(Expr, Expr)
   | IfExpr(Expr, Expr, Expr)
   | MatchExpr(Expr, List)
   | LambdaExpr(List, Expr)
@@ -897,7 +896,7 @@ fn binop_loop(tokens, left, pos, min_p) = {
     let node = if op == "Pipe" { sp(PipeExpr(left, right), tokens, p) }
                else { if op == "FanOut" { sp(FanOutExpr(left, right), tokens, p) }
                else { if op == "Join" { sp(JoinExpr(left, right), tokens, p) }
-               else { if op == "HandlePipe" { sp(HandlePipeExpr(left, right), tokens, p) }
+               else { if op == "HandlePipe" { sp(HandleExpr(left, right, []), tokens, p) }
                else { sp(BinOp(op, left, right), tokens, p) } } } };
     binop_loop(tokens, node, p2, min_p)
   }

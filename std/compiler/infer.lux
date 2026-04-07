@@ -130,12 +130,6 @@ fn infer(sexpr) with Infer, Diagnostic = {
       TFun([resolve(a)], resolve(c), merged)
     },
 
-    HandlePipeExpr(computation, strategy) => {
-      // computation ~> strategy
-      let result = infer(S(Call(strategy, [S(LambdaExpr([], computation), 0, 0)]), 0, 0))
-      result
-    },
-
     MatchExpr(scrutinee, arms) => {
       let scr_ty = infer(scrutinee)
       let result = fresh()

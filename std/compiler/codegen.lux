@@ -461,12 +461,6 @@ fn compile_expr(ctx, sexpr) = {
     compile_expr(ctx, lambda)
   },
 
-  HandlePipeExpr(computation, strategy) => {
-    // computation ~> strategy => strategy(|| computation)
-    let thunk = S(LambdaExpr([], computation), 0, 0)
-    let call_strat = S(Call(strategy, [thunk]), 0, 0)
-    compile_expr(ctx, call_strat)
-  },
 
   Index(obj, idx) => {
     let ctx2 = compile_expr(ctx, obj)

@@ -219,15 +219,6 @@ fn lower_expr(sexpr, env) = {
         LFn("__joined_" ++ to_string(fresh_id()), 1, [param], [g_call], merged), [])
     },
 
-    HandlePipeExpr(computation, strategy) => {
-      // computation ~> strategy desugars to strategy(|| computation)
-      let thunk_body = lower_expr(computation, env)
-      let thunk_ty = TFun([], lexpr_ty(thunk_body), EfPure)
-      let thunk = LMakeClosure(thunk_ty,
-        LFn("__thunk_" ++ to_string(fresh_id()), 0, [], [thunk_body], EfPure), [])
-      let lowered_strategy = lower_expr(strategy, env)
-      LCall(lty_call_result(lowered_strategy), lowered_strategy, [thunk])
-    },
 
     IfExpr(cond, then_e, else_e) => {
       let lowered_then = lower_expr(then_e, env)

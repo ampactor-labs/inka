@@ -159,12 +159,6 @@ fn walk_expr(sexpr, own_params, used) = {
     (u2, v1 ++ v2)
   },
 
-  HandlePipeExpr(computation, strategy) => {
-    let (u1, v1) = walk_expr(computation, own_params, used)
-    let (u2, v2) = walk_expr(strategy, own_params, u1)
-    (u2, v1 ++ v2)
-  },
-
   IfExpr(cond, then_br, else_br) => {
     let (u_cond, v_cond) = walk_expr(cond, own_params, used)
     // Branches diverge: each starts from post-condition state

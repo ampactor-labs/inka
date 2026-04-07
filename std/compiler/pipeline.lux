@@ -96,8 +96,6 @@ let __prelude_cache = {
   let src = read_file("std/prelude.lux")
   let ast = src |> lex |> parse_program
   let env = ast |> check_program
-  // Start fresh counter high enough to avoid collisions with prelude TVars.
-  // 190 bindings × ~3 TVars each → 600 is safe. Round up generously.
   (ast, env, 1000)
 }
 
@@ -402,7 +400,6 @@ fn resolve_import_list(paths, seen) = {
       let new_seen = seen ++ [path]
       let file_path = "std/" ++ replace(path, "/", "/") ++ ".lux"
       let file_source = read_file(file_path)
-      // Resolve transitive imports — returns source with seen threaded through
       let (trans_source, trans_seen) = resolve_imports_tracked(file_source, new_seen)
       let rest = resolve_import_list(slice(paths, 1, len(paths)), trans_seen)
       trans_source ++ "\n" ++ (file_source |> strip_imports) ++ "\n" ++ rest

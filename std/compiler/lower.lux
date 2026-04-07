@@ -259,7 +259,7 @@ fn lower_expr(sexpr, env) = {
       let sorted = sort_fields_for_lower(fields)
       let lowered = lower_record_fields(sorted, env)
       let tag = lower_record_tag(sorted)
-      LMakeVariant(TRecord(infer_record_field_types(lowered)), tag, lowered)
+      LMakeVariant(TRecord(infer_record_field_types(sorted, lowered)), tag, lowered)
     },
 
     LambdaExpr(params, body) => lower_lambda_inner("lambda_" ++ to_string(fresh_id()), params, body, env),
@@ -345,11 +345,13 @@ fn lower_field_name_list(fields) = {
   }
 }
 
-fn infer_record_field_types(lowered_exprs) = {
+fn infer_record_field_types(fields, lowered_exprs) = {
   // Extract type from each lowered expression for the TRecord type
-  if len(lowered_exprs) == 0 { [] }
+  if len(fields) == 0 || len(lowered_exprs) == 0 { [] }
   else {
-    [lexpr_ty(lowered_exprs[0])] ++ infer_record_field_types(slice(lowered_exprs, 1, len(lowered_exprs)))
+    let (name, _) = fields[0]
+    let ty = lexpr_ty(lowered_exprs[0])
+    [(name, ty)] ++ infer_record_field_types(slice(fields, 1, len(fields)), slice(lowered_exprs, 1, len(lowered_exprs)))
   }
 }
 
@@ -524,25 +526,28 @@ fn is_region_safe_ty(ty) = match ty {
   _ => false
 }
 
-// ─── Extract field names from handler AST ───
+// ─── Extract field names from handler type ───
 // We need field names at compile time for save/restore of evidence globals.
-// This reads the AST structure, not the lowered IR.
-fn extract_handler_field_names(expr) = match expr {
-  S(RecordExpr(fields), _, _) => extract_field_name_list(fields),
-  RecordExpr(fields) => extract_field_name_list(fields),
+// This reads the Type Environment (Ty) instead of the AST, enabling dynamic handlers.
+fn extract_names_from_ty(ty) = match ty {
+  TRecord(fields) => extract_record_ty_names(fields),
+  TRecordOpen(fields, _) => extract_record_ty_names(fields),
   _ => []
 }
 
-fn extract_field_name_list(fields) = {
+fn extract_record_ty_names(fields) = {
   if len(fields) == 0 { [] }
   else {
     let (name, _) = fields[0]
-    [name] ++ extract_field_name_list(slice(fields, 1, len(fields)))
+    [name] ++ extract_record_ty_names(slice(fields, 1, len(fields)))
   }
 }
 
 fn lower_handle(body, handler_expr, state_bindings, env) = {
-  let op_names = extract_handler_field_names(handler_expr)
+  // ─── Lower the handler record as a first-class value ───
+  // Lower the handler first so we can extract its capabilities from its resolved type!
+  let lowered_handler = lower_expr(handler_expr, env)
+  let op_names = extract_names_from_ty(lexpr_ty(lowered_handler))
 
   // ─── State: heap cells for handler-local state ───
   let state_names = gen_state_names(state_bindings)
@@ -551,10 +556,6 @@ fn lower_handle(body, handler_expr, state_bindings, env) = {
   // ─── Save current evidence (for nesting) ───
   let op_saves = save_op_bindings(op_names)
 
-  // ─── Lower the handler record as a first-class value ───
-  // The RecordExpr flows through lower_expr unchanged.
-  // Each field (a LambdaExpr) becomes a closure in the lowered record.
-  let lowered_handler = lower_expr(handler_expr, env)
   let handler_name = "__handler_rec_" ++ to_string(fresh_id())
   let handler_store = [LLet(TUnit, handler_name, lowered_handler)]
 

@@ -756,7 +756,10 @@ fn compile_handle_expr(ctx, body, handler_expr, state_bindings) = {
 // Extract handler arms from RecordExpr back into
 // [(op_name, param_names, body), ...]
 fn extract_codegen_arms(handler_expr) = match handler_expr {
-  S(RecordExpr(fields), _, _) => convert_codegen_fields(fields),
+  S(expr, _, _) => match expr {
+    RecordExpr(fields) => convert_codegen_fields(fields),
+    _ => []
+  },
   RecordExpr(fields) => convert_codegen_fields(fields),
   _ => []
 }
@@ -764,7 +767,7 @@ fn extract_codegen_arms(handler_expr) = match handler_expr {
 fn convert_codegen_fields(fields) = {
   if len(fields) == 0 { [] }
   else {
-    let (name, expr) = fields[0]
+    let (name, expr) = fields[0]     // <--- THIS IS LINE 770
     let (params, body) = extract_lambda_parts(expr)
     [(name, params, body)] ++ convert_codegen_fields(slice(fields, 1, len(fields)))
   }

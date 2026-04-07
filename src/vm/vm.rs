@@ -1169,7 +1169,8 @@ impl Vm {
             }
             _ => {
                 let line = self.frames.last().map(|f| f.current_line()).unwrap_or(0);
-                Err(VmError::new(format!("cannot call value: {func}"), line))
+                let fname = self.frames.last().map(|f| f.proto.chunk.name.as_str()).unwrap_or("?");
+                Err(VmError::new(format!("cannot call value: {func} in {fname}"), line))
             }
         }
     }

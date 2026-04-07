@@ -23,6 +23,7 @@ let BS = from_char_code(92)
 // print directly (zero memory), accumulate (for testing), or transform.
 // This replaces O(N²) string concatenation with O(N) effect dispatch.
 effect WasmOut { out(String) -> () }
+effect WasmCapture { get_captured_wat() -> String }
 
 // ─── Context helpers ────────────────────────────────────────
 // ctx = (string_map, tag_map, fn_table, top_globals)
@@ -138,8 +139,9 @@ fn emit_fn(fn_def, ctx) = {
 
   if eff_implies_no_alloc {
     // Nested handler: capture body WAT to check for $alloc
-    let body_wat = handle { emit_fn_body(body, params, with_temps, ctx); acc } with acc = "" {
-      out(s) => resume(()) with acc = acc ++ s
+    let body_wat = handle { emit_fn_body(body, params, with_temps, ctx); get_captured_wat() } with acc = "" {
+      out(s) => resume(()) with acc = acc ++ s,
+      get_captured_wat() => resume(acc)
     }
     if index_of(body_wat, "call $alloc") >= 0 {
       out("    ;; FATAL COMPILE ERROR: !Alloc violation detected in backend!" ++ NL)

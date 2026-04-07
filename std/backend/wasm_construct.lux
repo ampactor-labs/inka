@@ -10,6 +10,10 @@
 
 import compiler/lower
 
+// WasmOut effect — declared in wasm_emit.lux, redeclared here
+// to avoid circular import. Same effect, same operation name.
+effect WasmOut { out(String) -> () }
+
 // ─── Self-Referencing Closure Detection ─────────────────────
 
 fn find_self_capture(captures, fn_name, idx) = {

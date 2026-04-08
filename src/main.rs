@@ -150,7 +150,10 @@ fn run_source(source: &str, file_path: &str, _teach: bool) -> Result<(), lux::er
     let mut vm = lux::vm::vm::Vm::new();
     let result = vm.run(Arc::new(proto)).map_err(|e| {
         lux::error::LuxError::Runtime(lux::error::RuntimeError {
-            kind: lux::error::RuntimeErrorKind::TypeError(format!("{} at line {}", e.message, e.line)),
+            kind: lux::error::RuntimeErrorKind::TypeError(format!(
+                "{} at line {}",
+                e.message, e.line
+            )),
             span: lux::token::Span {
                 file_id: 0,
                 line: e.line as usize,

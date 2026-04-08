@@ -44,7 +44,9 @@ pub enum VmValue {
 // Compile-time assertion: VmValue must be Send for parallel prism.
 const _: () = {
     fn assert_send<T: Send>() {}
-    fn check() { assert_send::<VmValue>(); }
+    fn check() {
+        assert_send::<VmValue>();
+    }
 };
 
 impl PartialEq for VmValue {

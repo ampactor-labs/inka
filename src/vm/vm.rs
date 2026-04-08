@@ -83,7 +83,11 @@ impl Vm {
             push_builtin_id: u16::MAX,
         };
         vm.register_builtins();
-        vm.push_builtin_id = vm.builtin_map.get("push").map(|id| id.0).unwrap_or(u16::MAX);
+        vm.push_builtin_id = vm
+            .builtin_map
+            .get("push")
+            .map(|id| id.0)
+            .unwrap_or(u16::MAX);
         vm
     }
 
@@ -354,7 +358,8 @@ impl Vm {
                     let offset = self.frames[frame_idx].read_i16();
                     let ip = self.frames[frame_idx].ip;
                     let new_ip = ip as i64 + offset as i64;
-                    if new_ip < 0 || new_ip as usize > self.frames[frame_idx].proto.chunk.code.len() {
+                    if new_ip < 0 || new_ip as usize > self.frames[frame_idx].proto.chunk.code.len()
+                    {
                         let line = self.frames[frame_idx].current_line();
                         return Err(VmError::new(
                             format!("jump offset out of bounds: ip={ip}, offset={offset}"),
@@ -368,7 +373,9 @@ impl Vm {
                     if let Some(VmValue::Bool(false)) = self.stack.last() {
                         let ip = self.frames[frame_idx].ip;
                         let new_ip = ip as i64 + offset as i64;
-                        if new_ip < 0 || new_ip as usize > self.frames[frame_idx].proto.chunk.code.len() {
+                        if new_ip < 0
+                            || new_ip as usize > self.frames[frame_idx].proto.chunk.code.len()
+                        {
                             let line = self.frames[frame_idx].current_line();
                             return Err(VmError::new(
                                 format!("jump offset out of bounds: ip={ip}, offset={offset}"),
@@ -383,7 +390,9 @@ impl Vm {
                     if let Some(VmValue::Bool(true)) = self.stack.last() {
                         let ip = self.frames[frame_idx].ip;
                         let new_ip = ip as i64 + offset as i64;
-                        if new_ip < 0 || new_ip as usize > self.frames[frame_idx].proto.chunk.code.len() {
+                        if new_ip < 0
+                            || new_ip as usize > self.frames[frame_idx].proto.chunk.code.len()
+                        {
                             let line = self.frames[frame_idx].current_line();
                             return Err(VmError::new(
                                 format!("jump offset out of bounds: ip={ip}, offset={offset}"),
@@ -608,36 +617,29 @@ impl Vm {
                     funcs.reverse();
 
                     // Parallel execution: each branch gets an isolated VM
-                    let results: Result<Vec<VmValue>, VmError> =
-                        std::thread::scope(|s| {
-                            let handles: Vec<_> = funcs
-                                .into_iter()
-                                .map(|func| {
-                                    let inp = input.clone();
-                                    s.spawn(move || {
-                                        let mut vm = Vm::new();
-                                        vm.call_pure_isolated(func, vec![inp])
-                                    })
+                    let results: Result<Vec<VmValue>, VmError> = std::thread::scope(|s| {
+                        let handles: Vec<_> = funcs
+                            .into_iter()
+                            .map(|func| {
+                                let inp = input.clone();
+                                s.spawn(move || {
+                                    let mut vm = Vm::new();
+                                    vm.call_pure_isolated(func, vec![inp])
                                 })
-                                .collect();
+                            })
+                            .collect();
 
-                            let mut results = Vec::with_capacity(count);
-                            for handle in handles {
-                                match handle.join() {
-                                    Ok(Ok(val)) => results.push(val),
-                                    Ok(Err(e)) => return Err(e),
-                                    Err(_) => {
-                                        return Err(VmError::new(
-                                            "prism branch panicked",
-                                            line,
-                                        ))
-                                    }
-                                }
+                        let mut results = Vec::with_capacity(count);
+                        for handle in handles {
+                            match handle.join() {
+                                Ok(Ok(val)) => results.push(val),
+                                Ok(Err(e)) => return Err(e),
+                                Err(_) => return Err(VmError::new("prism branch panicked", line)),
                             }
-                            Ok(results)
-                        });
-                    self.stack
-                        .push(VmValue::Tuple(Arc::new(results?)));
+                        }
+                        Ok(results)
+                    });
+                    self.stack.push(VmValue::Tuple(Arc::new(results?)));
                 }
                 OpCode::ListIndex => {
                     let index = self.stack.pop().unwrap_or(VmValue::Unit);
@@ -650,7 +652,13 @@ impl Vm {
                             } else {
                                 let line = self.frames[frame_idx].current_line();
                                 let file = self.frames[frame_idx].proto.chunk.name.as_str();
-                                eprintln!("CRITICAL VM ERROR: list index out of bounds in {} at line {}. Expected index {}, len {}", file, line, idx, elems.len());
+                                eprintln!(
+                                    "CRITICAL VM ERROR: list index out of bounds in {} at line {}. Expected index {}, len {}",
+                                    file,
+                                    line,
+                                    idx,
+                                    elems.len()
+                                );
                                 return Err(VmError::new("index out of bounds", line));
                             }
                         }
@@ -669,14 +677,23 @@ impl Vm {
                             } else {
                                 let line = self.frames[frame_idx].current_line();
                                 let file = self.frames[frame_idx].proto.chunk.name.as_str();
-                                eprintln!("CRITICAL VM ERROR: tuple index out of bounds in {} at line {}. Expected index {}, len {}", file, line, idx, elems.len());
+                                eprintln!(
+                                    "CRITICAL VM ERROR: tuple index out of bounds in {} at line {}. Expected index {}, len {}",
+                                    file,
+                                    line,
+                                    idx,
+                                    elems.len()
+                                );
                                 return Err(VmError::new("tuple index out of bounds", line));
                             }
                         }
                         _ => {
                             let line = self.frames[frame_idx].current_line();
                             let file = self.frames[frame_idx].proto.chunk.name.as_str();
-                            eprintln!("CRITICAL VM ERROR: Cannot index into {:?} in {} at line {}", list, file, line);
+                            eprintln!(
+                                "CRITICAL VM ERROR: Cannot index into {:?} in {} at line {}",
+                                list, file, line
+                            );
                             return Err(VmError::new("type error: cannot index", line));
                         }
                     }
@@ -1169,8 +1186,15 @@ impl Vm {
             }
             _ => {
                 let line = self.frames.last().map(|f| f.current_line()).unwrap_or(0);
-                let fname = self.frames.last().map(|f| f.proto.chunk.name.as_str()).unwrap_or("?");
-                Err(VmError::new(format!("cannot call value: {func} in {fname}"), line))
+                let fname = self
+                    .frames
+                    .last()
+                    .map(|f| f.proto.chunk.name.as_str())
+                    .unwrap_or("?");
+                Err(VmError::new(
+                    format!("cannot call value: {func} in {fname}"),
+                    line,
+                ))
             }
         }
     }

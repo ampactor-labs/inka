@@ -347,10 +347,7 @@ impl Vm {
             VmValue::Variant { name, fields } => (name, fields),
             _ => {
                 let line = self.frames[frame_idx].current_line();
-                return Err(VmError::new(
-                    "dynamic handler: expected record value",
-                    line,
-                ));
+                return Err(VmError::new("dynamic handler: expected record value", line));
             }
         };
 

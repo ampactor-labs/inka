@@ -13,8 +13,8 @@ effect Iterate {
 }
 
 fn iterate(xs) with Iterate = {
-  fn go(i, n) = if i < n { yield(xs[i]); go(i + 1, n) } else { () }
-  go(0, len(xs))
+  fn go(i) = if i < len(xs) { yield(xs[i]); go(i + 1) } else { () }
+  go(0)
 }
 
 // ─── Collection Operations (handlers on Iterate) ────────────

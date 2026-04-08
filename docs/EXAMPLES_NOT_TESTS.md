@@ -1,19 +1,27 @@
 # Examples, Not Tests
 
-*Lux doesn't have tests. It has examples. An example that runs is a proof.
-An example that crashes is a bug report. There is no third thing.*
+*Lux doesn't have tests. It doesn't have debug scripts. It doesn't have
+specs or doc-tests. It has `.lux` files. A file that runs is a proof.
+A file that crashes is a question. There is no third thing.*
 
 ---
 
-## The Insight
+## One Act
 
-A test framework gives you four things: setup, mock, assert, teardown.
+Other languages split development into categories:
 
-In Lux, `handle` is all four:
+- **Testing** — write code that checks code
+- **Debugging** — write code that finds broken code
+- **Documentation** — write prose that explains code
+- **Specification** — write descriptions that precede code
+
+In Lux these are the same act: **write a `.lux` file that exercises the
+mechanism.** The categories dissolve because `handle` is the universal
+joint:
 
 ```lux
 handle { computation } with state = initial {
-  operation(args) => { resume(result) with state = updated }
+  operation(args) => resume(result) with state = updated
 }
 ```
 
@@ -22,96 +30,71 @@ handle { computation } with state = initial {
 - **Assert** — the return value (if it's wrong, you see it)
 - **Teardown** — `resume` (the handler controls what happens next)
 
-There is nothing to add. A test framework would be a second mechanism
-for something the language already does. In Lux, that's wrong by
-construction.
+A test framework would be a second mechanism for something the language
+already does. In Lux, that's wrong by construction.
 
 ---
 
-## Examples ARE Proofs
+## The Debugging Gradient
 
-An example file is a program. If it runs and produces the right output,
-the mechanism it exercises works. If it doesn't, the mechanism is broken.
+A bug is an example that crashes. Debugging is making the example smaller.
 
 ```
-examples/
-  graph.lux          — effects + handlers + structures work
-  kv_store.lux       — handler swapping works
-  diamond.lux        — |> <| >< compose correctly
-  wasm_check.lux     — the checker compiles to WASM
-  wasm_mutual.lux    — mutual recursion works in WASM
+wasm_check.lux (crashes)
+  → lex_test.lux (crashes — just the lexer)
+    → lex_pattern.lux (crashes — simulated lexer)
+      → mutual2.lux (crashes — 4 inner functions)
 ```
 
-Each file IS its own specification. The name says what it proves. The
-output says whether it passes. `lux examples/graph.lux` is the test
-runner. The shell is the harness.
+Each step is a smaller `.lux` file. The minimal file that crashes IS the
+diagnosis. When it runs, the bug is fixed. No debugger. No breakpoints.
+No step-through. Just: write what should work, run it, make it smaller
+until the answer is visible.
 
-To verify everything:
-
-```bash
-for f in examples/*.lux; do
-  lux --quiet "$f" && echo "OK: $f" || echo "FAIL: $f"
-done
-```
-
-No test discovery. No annotations. No configuration. The filesystem IS
-the test suite.
+The compiler helps at every step — type errors narrow the search, effect
+violations point to the mechanism, the Why Engine explains the inference.
+The debugging tool IS the compiler. The debug script IS an example.
 
 ---
 
-## Why No Package Manager
+## The Unification
 
-A package in most languages is: code + metadata + dependency resolution +
-version management + a registry + a build system integration + trust on
-download.
+| Other languages | Lux |
+|----------------|-----|
+| Test suite | `examples/` |
+| Test runner | `for f in examples/*.lux; do lux "$f"; done` |
+| Mock library | Handler swap |
+| Debugger | Smaller example |
+| Doc-test | Example that teaches |
+| Spec | Example that precedes |
+| CI check | Same examples, different machine |
 
-In Lux, a package is:
+No special naming. No categories. No boundaries. A `.lux` file is a
+`.lux` file. The folder is `examples/`. The command is `lux examples/`.
+The act is: write what should work, run it, see the light.
+
+---
+
+## Records, Not Packages
+
+A handler is a record: `{ op: |args| resume(...), ... }`. A module
+exports functions. Functions are values. A "package" is a record you
+import by path.
 
 ```lux
-import path/to/module
+import compiler/ty
+import dsp/filters
 ```
 
-A handler is a module. A module is a file. A file is importable by path.
-Dependencies are explicit in the import — you can see them. Capabilities
-are explicit in the effects — you can audit them.
+The effect signature IS the API contract. `!IO` is a proof, not a
+promise. `!Network` means provably no network access — enforced by the
+type system, not a sandbox, not a policy file. A module with
+`with Compute, Log` literally cannot perform IO. The compiler proves it.
 
-```
-  json_parser
-    effects: (pure)                    ✓ expected for a parser
-
-  sketchy_logger
-    effects: Log, Http, FileSystem     ⚠ a logger that needs Http?
-```
-
-The effect signature IS the dependency audit. `!Network` means provably
-no network access — enforced by the type system, not a sandbox, not a
-policy file, not trust. A module with `with Compute, Log` literally
-cannot perform IO. The compiler proves it.
-
-What a package manager solves:
+What a package manager solves, Lux solves with what it already has:
 - **Discovery** — the effect signature tells you what a module does
 - **Trust** — `!IO` is a proof, not a promise
-- **Versioning** — if the types match, it works; if they don't, it fails at compile time
+- **Versioning** — types match → it works; types don't → compile error
 - **Resolution** — `import` is a path; paths compose; no solver needed
 
-The remaining problem is distribution — getting code from elsewhere onto
-your machine. That's `git clone` or `curl`. Not a language feature.
-
----
-
-## The Pattern
-
-Lux doesn't add mechanisms for things that already exist in the
-language:
-
-| Other languages have | Lux has |
-|---------------------|---------|
-| Test framework | Examples that run |
-| Mock library | Handler swap |
-| Dependency injection | Effect + handler |
-| Package manager | Import + effect audit |
-| Sandbox | `!IO`, `!Network`, `!Alloc` |
-| Runtime assertions | Refinement types |
-| Documentation tests | Examples |
-
-One mechanism. Many consequences. Nothing to add.
+Distribution is `git clone`. Not a language feature.

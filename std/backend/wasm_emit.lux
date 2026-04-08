@@ -53,7 +53,7 @@ fn emit_module(defs, type_map) = {
     // Header
     out("(module" ++ NL)
     out(emit_wasi_imports())
-    out("  (memory (export " ++ DQ ++ "memory" ++ DQ ++ ") 16384)" ++ NL)
+    out("  (memory (export " ++ DQ ++ "memory" ++ DQ ++ ") 65536)" ++ NL)
     out("  (global $heap_ptr (mut i32) (i32.const " ++ to_string(heap_start) ++ "))" ++ NL)
     out("  (global $__vsp (mut i32) (i32.const 0))" ++ NL)
     out(emit_global_decls(top_globals, 0, type_map))

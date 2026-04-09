@@ -393,13 +393,8 @@ fn emit_stmt(stmt, params, locals, ctx) = match stmt {
     ++ "    global.set $heap_ptr" ++ NL)
   },
   LCall(_, func, args) => {
-    let func_eff = match lexpr_ty(func) { TFun(_, _, eff) => eff, _ => EfClosed(["unknown"]) }
-    if is_pure_eff(func_eff) && all_trivial_args(args, 0) {
-      out(";; DCE: pure call eliminated (result unused)" ++ NL)
-    } else {
-      emit_expr(stmt, params, locals, ctx)
-      out("    drop" ++ NL)
-    }
+    emit_expr(stmt, params, locals, ctx)
+    out("    drop" ++ NL)
   },
   _ => {
     emit_expr(stmt, params, locals, ctx)

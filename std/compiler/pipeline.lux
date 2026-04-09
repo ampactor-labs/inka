@@ -134,11 +134,13 @@ fn max_tvar_in_types_at(tys, max_n, i) = {
 
 fn checked_with_cache(source) = {
   let (prelude_ast, prelude_env, start_n) = __prelude_cache
-  let (imports, _) = source |> resolve_imports_tracked([])
-  let user_source = imports ++ "\n" ++ (source |> strip_imports)
-  let user_ast = user_source |> frontend
-  let env = user_ast |> check_program_with(prelude_env, start_n)
-  let combined_ast = prelude_ast ++ user_ast
+  // Check imports module-by-module — fresh substitution per module.
+  let (import_env, next_n, import_ast, _seen) =
+    resolve_and_check_modules(source, prelude_env, start_n)
+  // Check user source against accumulated env.
+  let user_ast = (source |> strip_imports) |> frontend
+  let env = user_ast |> check_program_with(import_env, next_n)
+  let combined_ast = prelude_ast ++ import_ast ++ user_ast
   validate(combined_ast, env)
   (combined_ast, env)
 }
@@ -331,19 +333,17 @@ fn compile_illuminate(source) = {
 // source |> frontend |> check |> lower |> emit
 
 fn compile_wasm(source) = {
-  // Use the prelude cache — don't re-check the prelude from scratch.
   let (prelude_ast, prelude_env, start_n) = __prelude_cache
-  // Check user code + imports FIRST — without runtime, so builtins (push, len,
-  // slice) are fast VM builtins, not the slow memory.lux Lux implementations.
-  let (imports, _) = source |> resolve_imports_tracked([])
-  let user_source = imports ++ "\n" ++ (source |> strip_imports)
-  let user_ast = user_source |> frontend
-  let env = user_ast |> check_program_with(prelude_env, start_n)
-  // Prepend runtime ONLY for lowering — it provides WASM Memory/Alloc primitives
-  // that the emitter needs, but should NOT be in the checker's execution path.
+  // Check imports module-by-module — fresh substitution per module.
+  let (import_env, next_n, import_ast, _seen) =
+    resolve_and_check_modules(source, prelude_env, start_n)
+  // Check user source against accumulated env.
+  let user_ast = (source |> strip_imports) |> frontend
+  let env = user_ast |> check_program_with(import_env, next_n)
+  // Prepend runtime ONLY for lowering.
   let runtime = read_file("std/runtime/memory.lux")
   let runtime_ast = runtime |> frontend
-  let combined_ast = prelude_ast ++ runtime_ast ++ user_ast
+  let combined_ast = prelude_ast ++ import_ast ++ runtime_ast ++ user_ast
   validate(combined_ast, env)
   let ctors = env |> extract_constructors
   let lowered = lower_program_typed(combined_ast, ctors, env)
@@ -395,7 +395,39 @@ fn gradient_suggestion(pair) = {
   else { "" }
 }
 
-// ─── Import Resolution ──────────────────────────────────────
+// ─── Incremental Module Resolution ──────────────────────────
+// Check each module independently against accumulated env.
+// The substitution is FRESH per module — no quadratic growth.
+// Same pattern as __prelude_cache, extended to all modules.
+
+fn resolve_and_check_modules(source, base_env, start_n) =
+  resolve_and_check_at(source |> split("\n") |> find_imports(0), base_env, start_n, [], [])
+
+fn resolve_and_check_at(paths, env, n, seen, combined_ast) = {
+  if len(paths) == 0 { (env, n, combined_ast, seen) }
+  else {
+    let path = paths[0]
+    let rest = slice(paths, 1, len(paths))
+    if list_contains(seen, path) {
+      resolve_and_check_at(rest, env, n, seen, combined_ast)
+    } else {
+      let file_path = "std/" ++ path ++ ".lux"
+      let file_source = read_file(file_path)
+      // Recursively resolve+check this module's own imports first
+      let dep_imports = file_source |> split("\n") |> find_imports(0)
+      let (dep_env, dep_n, dep_ast, dep_seen) =
+        resolve_and_check_at(dep_imports, env, n, seen ++ [path], combined_ast)
+      // Check THIS module against accumulated dependency env
+      let mod_ast = (file_source |> strip_imports) |> frontend
+      let mod_env = mod_ast |> check_program_with(dep_env, dep_n)
+      let new_n = dep_n + len(mod_env) * 10
+      // Continue with remaining imports
+      resolve_and_check_at(rest, mod_env, new_n, dep_seen, dep_ast ++ mod_ast)
+    }
+  }
+}
+
+// ─── Import Resolution (legacy — concatenate source) ────────
 
 fn resolve_imports(source, seen) = {
   let import_lines = source |> split("\n") |> find_imports(0)

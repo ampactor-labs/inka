@@ -68,9 +68,7 @@ fn check_source(source) = source |> frontend |> check_program
 fn checked(source) = {
   let ast = source |> with_prelude |> frontend
   let env = ast |> check_program
-  handle { validate(ast, env) } {
-    report(src, kind, msg, line, col) => { println(kind ++ ": " ++ msg); resume(()) }
-  }
+  handle { validate(ast, env) } with print_diagnostics
   (ast, env)
 }
 
@@ -78,9 +76,7 @@ fn checked(source) = {
 fn checked_raw(source) = {
   let ast = source |> frontend
   let env = ast |> check_program
-  handle { validate(ast, env) } {
-    report(src, kind, msg, line, col) => { println(kind ++ ": " ++ msg); resume(()) }
-  }
+  handle { validate(ast, env) } with print_diagnostics
   (ast, env)
 }
 
@@ -149,6 +145,16 @@ fn checked_with_cache(source) = {
     report(src, kind, msg, line, col) => { println(kind ++ ": " ++ msg); resume(()) }
   }
   (combined_ast, env)
+}
+
+// ─── Diagnostic Handlers ───────────────────────────────────
+// Named handlers — one definition, many call sites.
+handler print_diagnostics {
+  report(src, kind, msg, line, col) => { println(kind ++ ": " ++ msg); resume(()) }
+}
+
+handler silent_diagnostics {
+  report(src, kind, msg, line, col) => resume(())
 }
 
 // ─── Validate — fan-out ─────────────────────────────────────
@@ -320,9 +326,7 @@ fn compile_tracing(source) = {
   let ast = tokens |> parse_program
   println("[trace] ast: " ++ to_string(ast))
   let env = ast |> check_program
-  handle { validate(ast, env) } {
-    report(src, kind, msg, line, col) => { println(kind ++ ": " ++ msg); resume(()) }
-  }
+  handle { validate(ast, env) } with print_diagnostics
   println("[trace] types: " ++ (env |> show_env_compact))
   let chunk = ast |> compile_program
   println("[trace] chunk: " ++ to_string(chunk))
@@ -352,10 +356,8 @@ fn compile_wasm(source) = {
   let runtime = read_file("std/runtime/memory.lux")
   let runtime_ast = runtime |> frontend
   let combined_ast = prelude_ast ++ import_ast ++ runtime_ast ++ user_ast
-  // Silent handler — validate runs but diagnostics don't contaminate WAT stdout.
-  handle { validate(combined_ast, env) } {
-    report(src, kind, msg, line, col) => resume(())
-  }
+  // Silent — diagnostics don't contaminate WAT stdout.
+  handle { validate(combined_ast, env) } with silent_diagnostics
   let ctors = env |> extract_constructors
   let lowered = lower_program_typed(combined_ast, ctors, env)
   emit_module(lowered, env)
@@ -389,9 +391,7 @@ fn repl_tracing(source) = {
   let ast = tokens |> parse_program
   println("[trace] " ++ to_string(ast))
   let env = ast |> check_program
-  handle { validate(ast, env) } {
-    report(src, kind, msg, line, col) => { println(kind ++ ": " ++ msg); resume(()) }
-  }
+  handle { validate(ast, env) } with print_diagnostics
   println("[trace] types: " ++ (env |> show_env_why(3)))
   let chunk = ast |> compile_repl
   println("[trace] " ++ to_string(chunk))

@@ -442,10 +442,7 @@ fn parse_float(s) with Memory = parse_int(s)
 fn to_int(val) = val
 fn to_float(val) = val
 
-fn type_of(val) with Memory, Alloc = {
-  if val >= 1024 { val }
-  else { int_to_str(val) }
-}
+fn type_of(val) with Memory, Alloc = to_string(val)
 
 fn read_file(path) with Memory, Alloc = {
   // Write path bytes to scratch area at offset 200

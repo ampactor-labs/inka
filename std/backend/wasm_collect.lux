@@ -252,14 +252,6 @@ fn escape_wat_bytes(s, i, slen)= {
   }
 }
 
-fn escape_wat_chars(cs, idx)= {
-  if idx >= len(cs) { "" }
-  else {
-    let code = char_code(cs[idx])
-    hex_byte(code) ++ escape_wat_chars(cs, idx + 1)
-  }
-}
-
 // ─── Variant Tag Utilities ──────────────────────────────────
 
 fn tag_union(a, b)= {

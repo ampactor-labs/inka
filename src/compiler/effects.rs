@@ -762,28 +762,20 @@ impl Compiler {
                 self.compile_expr(value)?;
                 self.emit_op(OpCode::Return, line);
             } else {
-                // Stateful: return (resume_value, bitmask, state_0, ..., state_N).
-                // The bitmask encodes which state variables were explicitly updated.
-                // The VM only overwrites those slots, preserving updates from nested
-                // dispatches on unchanged variables.
+                // Stateful: return (resume_value, new_state_0, ...).
                 self.compile_expr(value)?;
-                let mut bitmask: i64 = 0;
-                for (i, name) in state_names.iter().enumerate() {
-                    if state_updates.iter().any(|u| u.name == *name) {
-                        bitmask |= 1 << i;
-                    }
-                }
-                self.emit_constant(Constant::Int(bitmask), line);
                 for name in &state_names {
                     if let Some(update) = state_updates.iter().find(|u| u.name == *name) {
                         self.compile_expr(&update.value)?;
                     } else {
-                        // Placeholder — VM ignores this slot (bitmask bit is 0).
-                        self.emit_op(OpCode::LoadUnit, line);
+                        // State unchanged — load current value from local.
+                        let slot = self.scope.resolve_local(name).unwrap();
+                        self.emit_op(OpCode::LoadLocal, line);
+                        self.emit_u16(slot, line);
                     }
                 }
                 self.emit_op(OpCode::MakeTuple, line);
-                self.emit_u16((2 + state_names.len()) as u16, line);
+                self.emit_u16((1 + state_names.len()) as u16, line);
                 self.emit_op(OpCode::Return, line);
             }
             return Ok(());

@@ -162,10 +162,11 @@ fn collect_free_match_arms(arms, bound) = collect_free_match_arms_at(arms, bound
 fn collect_free_match_arms_at(arms, bound, i) = {
   if i >= len(arms) { [] }
   else {
-    let (pat, body) = arms[i]
-    // Pattern binds names — extend bound before walking body
-    let pat_names = extract_pat_names_safe(pat)
-    string_union(collect_free(body, bound ++ pat_names), collect_free_match_arms_at(arms, bound, i + 1))
+    let (_, body) = arms[i]
+    // Note: pattern-bound names may appear as false positives in free list.
+    // filter_real_captures will drop globals/ctors; pattern vars survive.
+    // This is conservative but safe — no WASM-level pattern crash.
+    string_union(collect_free(body, bound), collect_free_match_arms_at(arms, bound, i + 1))
   }
 }
 

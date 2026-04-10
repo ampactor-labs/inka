@@ -566,11 +566,13 @@ fn lower_destructure_bindings(names, idx) = {
 // Region-safe types: values that don't point into the heap.
 // When a handler scope exits and the result is one of these types,
 // the heap can be safely reset (O(1) deallocation of all intermediates).
+// NOTE: TUnit is NOT region-safe because effect operations declare
+// `-> ()` but handlers often resume with heap values (List, Tuple,
+// Variant). The declared type hides it. Trust only concrete primitives.
 fn is_region_safe_ty(ty) = match ty {
   TInt => true,
   TBool => true,
   TFloat => true,
-  TUnit => true,
   _ => false
 }
 

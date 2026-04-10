@@ -13,12 +13,28 @@ fn emit_alloc() =
   ++ "    (local $ptr i32)" ++ NL
   ++ "    (local $new_end i32)" ++ NL
   ++ "    (local $mem_bytes i32)" ++ NL
+  ++ "    (local $need_pages i32)" ++ NL
+  ++ "    (local $double_pages i32)" ++ NL
+  ++ "    (local $grow_pages i32)" ++ NL
+  // Sanity check: trap on absurd sizes (> 1 MB single alloc = likely corruption)
+  ++ "    (if (i32.gt_u (local.get $size) (i32.const 1048576))" ++ NL
+  ++ "      (then (unreachable))" ++ NL
+  ++ "    )" ++ NL
   ++ "    (local.set $ptr (global.get $heap_ptr))" ++ NL
   ++ "    (local.set $new_end (i32.add (local.get $ptr) (local.get $size)))" ++ NL
   ++ "    (local.set $mem_bytes (i32.mul (memory.size) (i32.const 65536)))" ++ NL
   ++ "    (if (i32.gt_u (local.get $new_end) (local.get $mem_bytes))" ++ NL
   ++ "      (then" ++ NL
-  ++ "        (drop (memory.grow (i32.add (i32.shr_u (i32.sub (local.get $new_end) (local.get $mem_bytes)) (i32.const 16)) (i32.const 1))))" ++ NL
+  // pages needed to cover the new_end: ceil((new_end - mem_bytes) / 65536)
+  ++ "        (local.set $need_pages (i32.add (i32.shr_u (i32.sub (local.get $new_end) (local.get $mem_bytes)) (i32.const 16)) (i32.const 1)))" ++ NL
+  // doubling strategy: grow by at least the current size (amortized O(1))
+  ++ "        (local.set $double_pages (memory.size))" ++ NL
+  // grow_pages = max(need_pages, double_pages)
+  ++ "        (local.set $grow_pages (select (local.get $need_pages) (local.get $double_pages) (i32.gt_u (local.get $need_pages) (local.get $double_pages))))" ++ NL
+  // trap if memory.grow returns -1 (failure)
+  ++ "        (if (i32.eq (memory.grow (local.get $grow_pages)) (i32.const -1))" ++ NL
+  ++ "          (then (unreachable))" ++ NL
+  ++ "        )" ++ NL
   ++ "      )" ++ NL
   ++ "    )" ++ NL
   ++ "    (global.set $heap_ptr (local.get $new_end))" ++ NL

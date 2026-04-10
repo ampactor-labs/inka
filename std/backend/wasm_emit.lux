@@ -73,21 +73,14 @@ fn emit_global_decls(names, idx, env)= {
   if idx >= len(names) { () }
   else {
     let name = names[idx]
-    // SANITY: a global name should be a short identifier. If len > 100,
-    // the pointer is corrupt — bail with an explicit marker to stdout
-    // so debugging doesn't get a cryptic trap downstream.
-    if len(name) > 100 {
-      out(";; CORRUPT GLOBAL NAME at idx " ++ to_string(idx) ++ " len=" ++ to_string(len(name)) ++ " of " ++ to_string(len(names)) ++ NL)
-    } else {
-      let is_dup = name_seen_before(names, name, 0, idx)
-      if is_dup { () } else {
-        let (_, ty, _) = env_lookup(env, name)
-        let (wtype, init) = match ty {
-          TFloat => ("f32", "f32.const 0"),
-          _ => ("i32", "i32.const 0")
-        }
-        out("  (global $" ++ name ++ " (mut " ++ wtype ++ ") (" ++ init ++ "))" ++ NL)
+    let is_dup = name_seen_before(names, name, 0, idx)
+    if is_dup { () } else {
+      let (_, ty, _) = env_lookup(env, name)
+      let (wtype, init) = match ty {
+        TFloat => ("f32", "f32.const 0"),
+        _ => ("i32", "i32.const 0")
       }
+      out("  (global $" ++ name ++ " (mut " ++ wtype ++ ") (" ++ init ++ "))" ++ NL)
     }
     emit_global_decls(names, idx + 1, env)
   }

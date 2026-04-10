@@ -235,7 +235,25 @@ fn infer_binop(op, left, right) with Infer, Diagnostic = {
   } else { if op == "And" || op == "Or" {
     unify(tl, TBool); unify(tr, TBool); TBool
   } else { if op == "Concat" {
-    TString
+    // Defer like arithmetic: unify operands, resolve, commit only if a
+    // side is concretely String or List. If both are TVars, return the
+    // unified tvar so a later unification can resolve it. Premature
+    // commitment to TString here broke string_union: `a ++ [b[i]]` forced
+    // `a : String` when it's actually a list.
+    unify(tl, tr)
+    let resolved_l = resolve(tl)
+    match resolved_l {
+      TString => { unify(tl, TString); unify(tr, TString); TString },
+      TList(elem) => { unify(tl, resolved_l); unify(tr, resolved_l); resolved_l },
+      _ => {
+        let resolved_r = resolve(tr)
+        match resolved_r {
+          TString => { unify(tl, TString); unify(tr, TString); TString },
+          TList(elem) => { unify(tl, resolved_r); unify(tr, resolved_r); resolved_r },
+          _ => tl
+        }
+      }
+    }
   } else { tl } } } }
 }
 

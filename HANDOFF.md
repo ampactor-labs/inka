@@ -1,12 +1,29 @@
-# Handoff — WASM Self-Compilation: STRINGS WORK, stage-2 next
+# Handoff — WASM Self-Compilation: wasm_check runs in WASM, stage-2 blocked on "expected Eq" parser errors
 
-## TL;DR
+## TL;DR (2026-04-11)
 
-**The WASM-compiled compiler compiles Lux programs AND prints strings correctly.** Commits `16885cf` (cage unlocked) and `01a3cd4` (strings work). The rest of the work is narrowing down latent bugs the Rust VM was papering over, each found with `lux lower` + the probe tool in minutes not hours.
+**The WASM-compiled checker now works in WASM.** `cat examples/wasm_check.lux | bs.cwasm` → valid WAT → `21` (env length for `let x = 42`). Commit `a9e1cd6` made this possible by replacing seven `to_string(stmt/reason) + starts_with("FnStmt(")` checks with proper `match` on ADT variants. `memory.lux`'s `to_string` (used in WASM) is a stub that returns the raw pointer for any val ≥ 1024 — it cannot render variants. Every `prescan_fns_at`, `needs_instantiation`, `is_builtin_reason`, etc. was silently classifying every Stmt as non-FnStmt inside the WASM bootstrap. Match extracts variants directly — the answer was in the structure all along.
 
-**Current state:** `echo 'println("hi")' | bs_final.cwasm` → prints "hi". `fn calc(a) = a * 4; println(to_string(calc(3)))` → prints "12". All four crucibles pass. Multi-statement single-line input works (semi-separated). **Multi-line input via newlines does NOT yet work** — there's a latent lexer/parser bug in the bootstrap that only fires in the WASM runtime (Rust VM lexer handles the same input fine). Stage-2 self-compile also needs `join`/`fold` fixes — indirect-call type mismatch in the prelude's fold.
+**Current verified state** (bs9 = `/tmp/bs9.cwasm`, built from HEAD 2026-04-11):
+- 3a–3f all pass: wasm_step1=42, wasm_step2=42, wasm_step3=hello world, wasm_counter=count=3, wasm_mini_checker needs `to_string` wrap (fold-in-handler works; bare `println` on polymorphic Int is a separate dispatch issue), wasm_check=21 ✅
+- Self-compile stage 2 is BLOCKED. Feeding any file that transitively imports `compiler/pipeline` triggers three parse errors: `Parse error [1261:19]: expected expression got Eq`, `[1267:31]`, `[1290:36]`. Pipeline then recurses into Levenshtein (`find_similar_name` → `build_chars` → stack overflow) because the parse errors produce missing-variable errors the checker tries to help with.
+- Parsing the same files in isolation works: `cat codegen.lux | bs9.cwasm` → 43842 lines valid WAT. `lex` and `parse_program` on codegen's content both succeed (11181 tokens, 163 AST items). So the parse errors only fire from *inside* pipeline's `resolve_and_check_at`.
+- Key unsolved question: what file's line 1261 is actually failing? None of the large files (parser.lux 1285, codegen.lux 1426, lower.lux 1226) have `=` at col 19 on line 1261. The WASM lexer's line/col counter may be drifting. Line 1226 of lower.lux is < 1261 but error line 1261 exists in parser and codegen — likely codegen since 1267 and 1290 also appear.
+
+**What NOT to revert:** `a9e1cd6` (match-based structural fixes), `cb6e39a` (join_loop workaround — still in place), `592279d` (val_concat fallback), `d2e7ea7` (walker fix), `fedb430` (shadow-capture).
+
+**What I tried and reverted** (failed — instructive):
+1. Let-generalization via `starts_with(s, "fn ")` in `needs_instantiation`: works via Rust VM (`fold([1,2,3], 0, add) = 12`, `join(["a","b","c"], "-") = "a-b-c"`) but breaks `is_handler_global` when the bootstrap is rebuilt — the WASM emitter started emitting handler state as LOCALS instead of GLOBALS, producing 9 `UNRESOLVED: __hs_acc_N` references. Handler state lifted to globals only works when `is_handler_global(name)` detects them; with polymorphism the lowerer passes `name : TVar` to `to_string`, which falls through to `int_to_str`, corrupting the pointer before the `string_slice` check. This is downstream: the `to_string(name)` dispatch in `lower.lux:151-156` defaults polymorphic args to `int_to_str` — you need either full type propagation or a runtime `to_string` that can handle both ints and strings.
+2. Routing polymorphic to_string to the runtime's `to_string` function: breaks `to_string(int)` for compile-time int literals like data segment offsets (runtime `to_string` returns val unchanged for val ≥ 1024, but the emitter expected a string). Runtime to_string's `val ≥ 1024` heuristic is broken for int literals that happen to be large.
+
+**The REAL fix for fold polymorphism**: let-generalization AND a type-aware `to_string` lowering. Both are needed. The `to_string` in `memory.lux` needs to be a real variant-renderer (walk the ADT, emit tag + fields) — not the current `if val >= 1024 { val }` stub. Before that, the compile-time dispatch needs to handle all primitive types (String, Int, Float, Bool) and fall through to... something that actually works for composite values. Deferred until someone wants to sink a couple hours into it.
 
 **The goal:** Lux is the ultimate programming language. The teaching gradient is so good it makes coding-AI obsolete. Self-containment (no Rust) is **priority #1** — not because deleting Rust is the destination, but because building anything on top of Rust-VM-only behavior is wasted effort. Every fix to the WASM bootstrap is verifying a load-bearing claim of the thesis. (See `docs/INSIGHTS.md` and `docs/DESIGN.md`.)
+
+**Where to start the next session:**
+1. Find which file triggers `Parse error [1261:19]: expected expression got Eq`. Add one line to `resolve_and_check_at` in `pipeline.lux:428`: `let _ = println(";;DBG parse: " ++ path)` immediately before `let mod_ast = ...`. Rebuild bootstrap once (~5 min). Run `cat /tmp/use_pipeline_strip.lux | bs.cwasm > /tmp/out 2>&1` — the last `;;DBG parse:` line before the errors tells you exactly which file. Revert after.
+2. Once identified, compare how the Rust-VM parser handles that file (`lux check <file>`) vs the WASM bootstrap. The line/col numbers (1261:19, 1267:31, 1290:36) may be drifting due to a bug in how `lex_from` tracks position across long input or across recursive file loads — add another print at the top of `lex_from` showing `pos, line, col` and see where they diverge from the file's actual layout.
+3. Fix the file or the lexer. Rebuild. Re-run `cat examples/wasm_bootstrap.lux | bs.cwasm` for stage 2.
 
 **Read first:** `docs/INSIGHTS.md` "Pure Transforms for Structure" and "Self-Compilation: The Cage and the Light", then the rest of this file.
 

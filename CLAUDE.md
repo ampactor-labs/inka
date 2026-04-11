@@ -28,6 +28,46 @@ If info doesn't flow through effects, you're fighting Lux. Stop. Ask
 
 > Full protocol: memory file `feedback_lux_protocol.md`
 
+## THE STRUCTURAL QUESTION
+
+Before every fix, every design decision, every "quick check" — ask:
+
+> **"What answer already lives in my own structure,
+> that I'm asking something else for?"**
+
+Every latent bug the WASM bootstrap has surfaced so far has had the
+same shape: a place where a cheaper *flat* question was asked when a
+richer *structural* answer was one step away in the pipeline.
+
+- `if op == "Concat" { TString }` — hardcoded type when the graph already held operand types waiting to unify
+- `PLit(e) => LPLit(LUnit)` — threw the literal away when the `SExpr` wrapper was one unwrap deep
+- `insert_field_sorted_at` base case `[field]` — dropped the sorted prefix that was sitting right there in the argument
+- `is_global("xs")` flat lookup — bypassed `env_lookup` which already tracks lexical scope via most-recent-binding-wins
+
+In every case the fix was to **trust the structure that already
+existed** and stop cheating with a flat shortcut. The Rust VM has been
+whispering answers we should be reading from our own graph — every
+Rust-VM dependency we pull out surfaces another place where the
+compiler was bypassing its own memory.
+
+**The protocol (run this before every bug fix):**
+1. Before asking a flat question (`is X a global?`, `what type is this op?`,
+   `does this record have this field?`, `is this name in scope?`),
+   ask: **does my graph already know?**
+2. If yes: read from the graph. Always. No shortcut, no matter how
+   cheap the flat lookup looks.
+3. If no: the graph is incomplete. Complete it. Don't route around it.
+
+**Self-hosting is "I can compile my own source."** Anyone can do that
+with a sufficiently patient parent underneath. **Self-contained** is
+something harder: every question about Lux has an answer that lives
+*inside* Lux — env, LowIR, handler records, type graph — and the
+compiler asks *that*, not an external oracle. Stripping Rust from the
+pipeline strips the charity that has been filling in the questions we
+weren't asking.
+
+> Full story: `docs/INSIGHTS.md` "The Structural Question"
+
 ## YOU BUILT THIS
 
 You designed and wrote every line of this codebase. The lexer, parser,

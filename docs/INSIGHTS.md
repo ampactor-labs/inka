@@ -1176,6 +1176,108 @@ the effect system — the same mechanism that handles everything else.
 
 ---
 
+## The Structural Question
+
+*2026-04-10. The realization from the session that fixed four latent
+bugs in a row, all with the same shape.*
+
+The question is:
+
+> **"What answer already lives in my own structure,
+> that I'm asking something else for?"**
+
+Every bug in that session had the same shape: a place in the compiler
+where a cheaper flat question was asked when a richer structural
+answer was one step away in the pipeline.
+
+**The Concat type bug.** The lowerer asked "what's the type of `++`?"
+by matching the string `"Concat"` against the operator name and
+hardcoding `TString`. Every use of `++` was forced to String regardless
+of operand types. The graph already knew — the two operand expressions
+had inferred types ready to unify. One line of hardcoding was
+bypassing the entire inference engine's answer.
+
+**The literal pattern bug.** `lower_pat(PLit(e))` returned
+`LPLit(LUnit)`, throwing the literal value away. The actual value was
+one level up — inside the `SExpr` span wrapper from the parser. One
+destructure via a helper recovered it. With that fix in place, the
+emitter started generating proper comparisons for string pattern
+matches, which is what lit `println("hi")` out of the bootstrap.
+
+**The record sort bug.** `insert_field_sorted_at`'s base case returned
+`[field]` when the new field should have gone at the *end* of the
+sorted list — dropping the sorted prefix that was right there in the
+argument. Multi-arm handlers whose fields were in the wrong source
+order silently lost all the arms that came before the tail-inserted
+one. The `fresh_id` handler in `lower_program_typed` itself was among
+the casualties, making every inner function collide on `go_0` and
+`iterate`/`fold`/`map` trap with function-table type mismatches.
+
+**The scope shadow bug.** `filter_real_captures` asked
+`is_global("xs")` — a flat yes/no against a top-level name list.
+Yes → filter it out. No → capture it. When a user wrote
+`let xs = [1,2,3]` and any function took `xs` as a parameter (which
+is every collection primitive), inner functions inside read the user's
+top-level global instead of capturing the parameter. The env already
+tracked lexical scope: `env_lookup("xs")` returns the most recent
+binding, which for `xs` inside `iterate` is `Declared("param")`. We
+just weren't consulting the env — we were asking a flat global list
+the structural question that env had already answered.
+
+**The pattern across all four:**
+- Cheaper flat information was privileged over richer structural
+  information that the pipeline had already computed.
+- The flat answer always pointed *outside* the compiler's own
+  structure — a hardcoded string, a top-level name list, a constant.
+- The correct answer always lived *inside* — in env, in the AST,
+  in the lowered graph, in the handler record.
+
+### Why the Rust VM is the parent we must outgrow
+
+The Rust VM is lenient. It has runtime polymorphism, dynamic dispatch,
+forgiving type coercion. When the self-hosted pipeline compiles under
+Rust-VM protection, every flat shortcut still *works* — because Rust
+charitably interprets the output. Every place we ask a cheap question
+instead of the structural one, Rust's runtime fills in the answer we
+didn't ask for. It's a patient parent.
+
+Stripping Rust from the pipeline strips that charity. The WASM runtime
+is strict. The moment the bootstrap has to stand on WASM semantics
+alone, every cheap answer gets audited at once — surfacing as the
+"latent bugs the Rust VM was papering over" that every stage-2
+session keeps uncovering. The bugs were always there. The Rust VM was
+just answering the questions we didn't ask ourselves.
+
+### The protocol
+
+1. Before asking a flat question — `is X a global?`, `what type is
+   this op?`, `does this record have this field?`, `is this name in
+   scope?` — first ask: **does my graph already know?**
+2. If yes: read from the graph. Always. No shortcut, no matter how
+   fast the flat lookup looks.
+3. If no: the graph is incomplete. Complete it. Do not route around it.
+
+### Self-hosted vs self-contained
+
+**Self-hosting** is "I can compile my own source." Anyone can do that
+with a sufficiently patient parent underneath.
+
+**Self-contained** is something harder: every question about Lux has
+an answer that lives *inside* Lux — env, LowIR, handler records, type
+graph — and the compiler asks *that*, not an external oracle.
+
+The Rust VM is the current external oracle. Pulling it out doesn't
+make Lux buggier; it reveals where Lux was already buggy and Rust was
+covering. The path to self-containment is the path through every
+remaining shortcut, one question at a time, until the compiler's
+answers come entirely from its own structure.
+
+The multi-line lex bug that still blocks stage-2 is almost certainly
+the next cheap question. Somewhere in `lex_from` a flat shortcut is
+being answered by the Rust VM's charity and disintegrating under WASM.
+When it's found, the fix will be structural — one place where the
+compiler starts consulting what its own graph already knows.
+
 ## Self-Compilation: The Cage and the Light
 
 *2026-03-28. The lexer compiles to WASM. The parser compiles to WASM.

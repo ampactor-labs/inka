@@ -1,8 +1,10 @@
-# Handoff — WASM Self-Compilation: WORKING
+# Handoff — WASM Self-Compilation: STRINGS WORK, stage-2 next
 
 ## TL;DR
 
-**The WASM-compiled compiler now compiles Lux programs.** First time ever. Commit `16885cf`. The cage is unlocked. The remaining work is finite and well-defined: fix println string dispatch, prove bootstrap-compiles-itself, then begin pulling Rust scaffolding down.
+**The WASM-compiled compiler compiles Lux programs AND prints strings correctly.** Commits `16885cf` (cage unlocked) and `01a3cd4` (strings work). The rest of the work is narrowing down latent bugs the Rust VM was papering over, each found with `lux lower` + the probe tool in minutes not hours.
+
+**Current state:** `echo 'println("hi")' | bs_final.cwasm` → prints "hi". `fn calc(a) = a * 4; println(to_string(calc(3)))` → prints "12". All four crucibles pass. Multi-statement single-line input works (semi-separated). **Multi-line input via newlines does NOT yet work** — there's a latent lexer/parser bug in the bootstrap that only fires in the WASM runtime (Rust VM lexer handles the same input fine). Stage-2 self-compile also needs `join`/`fold` fixes — indirect-call type mismatch in the prelude's fold.
 
 **The goal:** Lux is the ultimate programming language. The teaching gradient is so good it makes coding-AI obsolete. Self-containment (no Rust) is **priority #1** — not because deleting Rust is the destination, but because building anything on top of Rust-VM-only behavior is wasted effort. Every fix to the WASM bootstrap is verifying a load-bearing claim of the thesis. (See `docs/INSIGHTS.md` and `docs/DESIGN.md`.)
 
@@ -72,24 +74,37 @@ wasmtime compile /tmp/out.wat -o /tmp/out.cwasm  # validates clean
 
 ## What's still broken
 
-### 1. println(string) prints blank (NEXT — small fix, probably)
+### 1. Multi-line input fails to lex/parse correctly in the WASM bootstrap
 
-When the WASM-compiled compiler emits a program that calls `println("...")`, the program runs without crashing but prints nothing visible. The dispatch from `println` to `print_string` vs `print_int` is type-driven, and for compile-time-known string literals it's miswiring somewhere. Same family of issue as the mini_checker observation way earlier where `println(some_int)` dispatched as `print_string`.
+The symptom: `printf 'let a = 1\nlet b = 2' | bs_final.cwasm` → `Parse error [1:20]: expected Eq got Eof`. The parser reports line 1 col 20 — meaning the lexer never incremented the line counter past the newline. Single-line input (semi-separated or no separator at all) works fine. A direct `lux wasm examples/wasm_lex_probe.lux` built from the same `lex` function handles the same multi-line input correctly (10 tokens), so it's not a lexer source bug — it's another "Rust VM papers over X" thing that only fires when `lex` runs inside the full compiler binary.
 
-**Methodology:** instrument first. Write a one-line test (`println("hi")`), compile via WASM bootstrap, look at the generated WAT for the println call site, see whether it's `call $print_string` or `call $print_int` and what the operand pointer is. The answer should be obvious from the WAT.
+**Confirmed NOT the problem** (already checked via probes):
+- `read_stdin()` reads newlines correctly (verified: len=12, last_byte=10 for `line1\nline2\n`)
+- `is_whitespace(ch)` correctly returns false for newline (verified via probe: `not_ws`)
+- `ch == "\n"` correctly returns true for a newline char (verified: `EQ`)
+- `chars()` + `byte_at()` correctly read all bytes including newlines
+- `split("\n", s)` works (returns 2 elements for two-line input)
 
-### 2. Bootstrap-compiles-itself not yet verified
+So the primitives are fine. The bug is somewhere in how `lex_from` or `prog_loop` behaves at scale in the bootstrap. Possibilities:
+- Tail-call recursion depth issue that diverges silently
+- String literal `"\n"` in `lex_from` body being compiled to the wrong data offset when many strings are interned
+- Closure capture of `cs`/`src_len` in the nested `lex_from` becoming stale
 
-The big claim: feed `wasm_bootstrap.lux` to `bs22.cwasm` and get a new bootstrap WAT. If that new WAT compiles cleanly and runs the same way, we have actual fixed-point self-hosting. Until this works, "self-compiling" is a partial claim.
+**Methodology:** write a probe that calls `lex` on multi-line input inline (no imports), compile via bootstrap, inspect token count. If lex returns < 10 tokens, find where it stopped.
+
+### 2. `join` via the prelude fold has an indirect-call type mismatch
+
+Symptom: `join("\n", parts)` in the bootstrap traps with `wasm trap: indirect call type mismatch` deep inside `fold`/`iterate`. This is evidence-passing/handler dispatch fallout. The prelude's `Iterate` effect has signatures that don't match the emitted `call_indirect` types. Probably fixable with annotations or a fold rewrite — look for it via `tools/probe.sh lower std/prelude.lux` and compare the Iterate handlers.
+
+### 3. Bootstrap-compiles-itself not yet verified
+
+The big claim: feed `wasm_bootstrap.lux` to `bs_final.cwasm` and get a new bootstrap WAT. Blocked by #1 and #2. Each fix unblocks more of the self-compile path, and the methodology is reliable now — `lux lower` + `tools/probe.sh` + write small probes.
 
 ```bash
-cat examples/wasm_bootstrap.lux | wasmtime run --allow-precompiled --dir . -W max-wasm-stack=33554432 /tmp/bs.cwasm > /tmp/stage2.wat
-wasmtime compile /tmp/stage2.wat -o /tmp/stage2.cwasm
-echo 'let x = 42' | wasmtime run --allow-precompiled --dir . /tmp/stage2.cwasm > /tmp/stage2_out.wat
-diff /tmp/out.wat /tmp/stage2_out.wat   # should be identical (or close)
+cat examples/wasm_bootstrap.lux | wasmtime run --allow-precompiled --dir . -W max-wasm-stack=33554432 /tmp/bs_final.cwasm > /tmp/stage2.wat
 ```
 
-This will probably reveal more latent bugs. Use the instrumentation methodology — don't guess.
+This will reveal more latent bugs. Use the instrumentation methodology — don't guess.
 
 ### 3. Then: tear down `src/`
 
@@ -114,16 +129,21 @@ This is the demo that proves the thesis: a compiler that teaches you in your bro
 
 ## Where to start the next session
 
-**Immediate task: fix `println(string)` in self-compiled output.**
+**Immediate task: find the multi-line lex/parse bug in the bootstrap runtime.**
 
-1. Build the current bootstrap if not already: `lux wasm examples/wasm_bootstrap.lux > /tmp/bs.wat && wasmtime compile /tmp/bs.wat -o /tmp/bs.cwasm`
-2. Compile a one-liner: `echo 'println("hi")' | wasmtime run --allow-precompiled --dir . -W max-wasm-stack=16777216 /tmp/bs.cwasm > /tmp/p.wat`
-3. Inspect `/tmp/p.wat` — find the println call site. What does it call? `$print_string`? `$print_int`? With what operand?
-4. Compare against the same program compiled by the Rust VM: `lux wasm /tmp/whatever.lux`. The Rust VM path produces working output, so the WAT difference IS the bug.
-5. Find the dispatch logic in `lower.lux` — search for `println` or `print_string`. Trace back to where the type came from. Fix the type inference, not the dispatch.
+The workflow that works now:
+1. `tools/probe.sh lower <file>` — see the LowIR for any file. 1-second feedback loop.
+2. Write a tiny probe .lux with the thing you're investigating, run `lux lower` on it.
+3. Inject sentinel values (`_ => LString("HIT_X")`) as debug. Rust VM runs instantly.
+4. Only rebuild the bootstrap AFTER you know what the fix is. Don't fish with rebuilds.
 
-**Then:** run the stage-2 self-compile test. Use the same instrumentation discipline.
+**Concrete plan for the multi-line bug:**
+1. Write a probe that imports compiler/lexer and calls `lex("let a = 1\nlet b = 2")` inline, prints the token count + first few tokens. Run via `lux wasm` → works. Run the same probe via bootstrap → fails? If so, the bug is inside `lex`'s WASM execution.
+2. If (1) works via bootstrap but compile_wasm fails, the bug is in compile_wasm's source preprocessing (maybe `strip_imports` or `resolve_and_check_modules`).
+3. Sentinel-hunt: add print statements inside `lex_from` to show what `pos`, `line`, `col` reach. Rebuild once. Run once. The answer should be obvious.
 
+**Then:** fix `join`/`fold` indirect-call type mismatch.
+**Then:** run the stage-2 self-compile test.
 **Then:** `rm -rf src/` planning and the playground.
 
 ## Key files (latest hot zones)
@@ -139,13 +159,23 @@ This is the demo that proves the thesis: a compiler that teaches you in your bro
 
 ## Recent commits (most relevant first)
 
-- `16885cf` **fix(infer): defer Concat type until a side resolves — WASM bootstrap runs!**
+- `01a3cd4` **fix(lower): preserve literal pattern values — WASM bootstrap prints strings**
+- `902b87d` docs: handoff for post-compaction context
+- `16885cf` fix(infer): defer Concat type until a side resolves — WASM bootstrap runs!
 - `ab2ed0d` wip(wasm): larger vstack, bigger initial memory, sanity checks
 - `24dfdc5` fix(wasm): LRegion unsound for TUnit, aggressive alloc, sanity trap
 - `d2e7ea7` fix(lower): state vars in closures — walk_ir into fn_def, effect-filtered captures
 - `57cbe8e` refactor(wasm): consolidate backend — single source of truth
 
 All commits are real fixes. None should be reverted.
+
+## Tooling to use before rebuilding anything
+
+- `tools/probe.sh lower <file>` — shows LowIR with function bodies, match arms, pattern literals. 1-second feedback.
+- `tools/probe.sh fn <file> <name>` — extract a single function's WAT.
+- `tools/probe.sh diff <file>` — diff Rust-VM vs bootstrap-compiled WAT (requires `/tmp/bs.cwasm`).
+- `lux check <compiler-file.lux>` — type-checks the compiler itself. Works today. Ignore the benign "unknown variable 'TUnit'" warnings (cross-module scope noise).
+- Sentinel injection: edit a lowerer function to return `LString("HIT_X")` for the case you want to diagnose, run via Rust VM, see what path was taken. Revert after.
 
 ## Critical warnings for the next session
 

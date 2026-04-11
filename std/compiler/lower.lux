@@ -357,7 +357,14 @@ fn sort_fields_for_lower_at(fields, i) = {
 
 fn insert_field_sorted(field, sorted) = insert_field_sorted_at(field, sorted, 0)
 fn insert_field_sorted_at(field, sorted, i) = {
-  if i >= len(sorted) { [field] }
+  // BUG FIX: base case must preserve preceding elements, not drop them.
+  // With `[field]` here, a field that sorts AFTER all existing entries would
+  // cause the whole preceding list to vanish — which silently dropped handler
+  // arms like `fresh() => resume(state) with state = state + 1` whenever they
+  // came second in source order. That's how lower_program_typed's own
+  // fresh_id handler was getting dropped, causing every inner function to be
+  // renamed to go_0 and the compiler's internal name-collision soup.
+  if i >= len(sorted) { sorted ++ [field] }
   else {
     let (fa, _) = field
     let (fb, _) = sorted[i]

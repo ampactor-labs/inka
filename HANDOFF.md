@@ -92,9 +92,18 @@ So the primitives are fine. The bug is somewhere in how `lex_from` or `prog_loop
 
 **Methodology:** write a probe that calls `lex` on multi-line input inline (no imports), compile via bootstrap, inspect token count. If lex returns < 10 tokens, find where it stopped.
 
-### 2. `join` via the prelude fold has an indirect-call type mismatch
+### 2. `iterate`/`fold`/`map` trap with indirect call type mismatch — `fresh_id()` returns 0 forever in the bootstrap
 
-Symptom: `join("\n", parts)` in the bootstrap traps with `wasm trap: indirect call type mismatch` deep inside `fold`/`iterate`. This is evidence-passing/handler dispatch fallout. The prelude's `Iterate` effect has signatures that don't match the emitted `call_indirect` types. Probably fixable with annotations or a fold rewrite — look for it via `tools/probe.sh lower std/prelude.lux` and compare the Iterate handlers.
+Symptom: `fold([1,2,3], 0, |a,b| a+b)` via the bootstrap traps in `iterate` with `indirect call type mismatch`. Root cause confirmed: the bootstrap's function table contains exactly ONE `$go_0` (from `parse_int`'s inner `go`, 3 params) and ONE `$lambda_*`. The Rust VM output has 2 `$go_N` and 25 `$lambda_N_M` — all distinct. So `fresh_id()` in the `LowerCtx` handler is always returning 0 when the bootstrap runs the lowerer, causing every inner function to be renamed to the same name. Name collisions → iterate's closure stores the fn_idx of parse_int's go (which expects a different arity) → call_indirect type mismatch at runtime.
+
+The handler source looks fine:
+```lux
+is_global(name) => resume(name_in(globals, name, 0)),
+is_state_var(name) => resume(false),
+fresh_id() => { resume(state) with state = state + 1 }
+```
+
+This is the SAME family as the state-vars-in-closures bugs from `d2e7ea7`. The handler's `state` isn't propagating across `resume` calls in the WASM-compiled handler. Check how `resume(state) with state = state + 1` lowers — compare `std/compiler/lower.lux` `ResumeExpr` handling + stash-then-update-then-return ordering. If the update happens before the stash, `state = state + 1` would be visible to `state` in the NEXT `fresh_id()` call, but the returned value would be the incremented one too — meaning fresh_id would return 1, 2, 3, ... (off by one). If the update never happens at all, fresh_id always returns 0. Instrument with a sentinel.
 
 ### 3. Bootstrap-compiles-itself not yet verified
 

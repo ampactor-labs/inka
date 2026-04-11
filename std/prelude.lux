@@ -163,7 +163,14 @@ fn sort(xs) =
 
 // ─── String operations (pure Lux) ───────────────────────────
 
-fn join(xs, sep) = if len(xs) == 0 { "" } else { fold(tail(xs), head(xs), |acc, x| acc ++ sep ++ x) }
+// Explicit recursive loop — avoids fold's polymorphic-lambda issue where
+// the concat inside `|acc, x| acc ++ sep ++ x` gets committed to list_concat
+// via prelude-first-use type inference. Explicit str_concat threads the
+// String type directly through the loop, no polymorphism, no ambiguity.
+fn join_loop(xs, sep, i, acc) =
+  if i >= len(xs) { acc }
+  else { join_loop(xs, sep, i + 1, str_concat(str_concat(acc, sep), xs[i])) }
+fn join(xs, sep) = if len(xs) == 0 { "" } else { join_loop(xs, sep, 1, xs[0]) }
 fn words(s) = split(s, " ")
 fn unwords(ws) = join(ws, " ")
 fn lines(s) = split(s, "\n")

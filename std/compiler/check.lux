@@ -212,7 +212,8 @@ fn resolve_record_fields(subst, eff_subst, fields) =
 fn resolve_record_fields_pop(subst, eff_subst, fields, acc) = {
   if len(fields) == 0 { acc }
   else {
-    let (rest, entry) = list_pop(fields)
+    let entry = list_head(fields)
+    let rest = list_tail(fields)
     let (name, ty) = entry
     resolve_record_fields_pop(subst, eff_subst, rest, [(name, resolve_type(subst, eff_subst, ty))] ++ acc)
   }
@@ -224,7 +225,8 @@ fn resolve_type_list(subst, eff_subst, tys) =
 fn resolve_type_list_pop(subst, eff_subst, tys, acc) = {
   if len(tys) == 0 { acc }
   else {
-    let (rest, ty) = list_pop(tys)
+    let ty = list_head(tys)
+    let rest = list_tail(tys)
     resolve_type_list_pop(subst, eff_subst, rest, [resolve_type(subst, eff_subst, ty)] ++ acc)
   }
 }
@@ -235,7 +237,8 @@ fn resolve_env(env, subst, eff_subst) =
 fn resolve_env_pop(env, subst, eff_subst, acc) = {
   if len(env) == 0 { acc }
   else {
-    let (rest, entry) = list_pop(env)
+    let entry = list_head(env)
+    let rest = list_tail(env)
     let (name, ty, reason) = entry
     resolve_env_pop(rest, subst, eff_subst, [(name, resolve_type(subst, eff_subst, ty), reason)] ++ acc)
   }
@@ -366,7 +369,8 @@ fn prescan_fns(stmts) with Infer = prescan_fns_pop(stmts)
 fn prescan_fns_pop(stmts) with Infer = {
   if len(stmts) == 0 { () }
   else {
-    let (rest, stmt) = list_pop(stmts)
+    let stmt = list_head(stmts)
+    let rest = list_tail(stmts)
     prescan_fns_pop(rest)
     match stmt {
       FnStmt(name, _, _, _, _) => bind(name, fresh(), Inferred("forward declaration")),

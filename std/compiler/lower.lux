@@ -364,7 +364,8 @@ fn lower_exprs(sexprs, env) = lower_exprs_pop(sexprs, env, [])
 fn lower_exprs_pop(sexprs, env, acc) = {
   if len(sexprs) == 0 { acc }
   else {
-    let (rest, expr) = list_pop(sexprs)
+    let expr = list_head(sexprs)
+    let rest = list_tail(sexprs)
     lower_exprs_pop(rest, env, [lower_expr(expr, env)] ++ acc)
   }
 }
@@ -486,7 +487,8 @@ fn lower_pats(pats) = lower_pats_pop(pats, [])
 fn lower_pats_pop(pats, acc) = {
   if len(pats) == 0 { acc }
   else {
-    let (rest, pat) = list_pop(pats)
+    let pat = list_head(pats)
+    let rest = list_tail(pats)
     lower_pats_pop(rest, [lower_pat(pat)] ++ acc)
   }
 }
@@ -497,7 +499,8 @@ fn lower_stmts(stmts, env) = lower_stmts_pop(stmts, env, [])
 fn lower_stmts_pop(stmts, env, acc) = {
   if len(stmts) == 0 { acc }
   else {
-    let (rest, stmt) = list_pop(stmts)
+    let stmt = list_head(stmts)
+    let rest = list_tail(stmts)
     lower_stmts_pop(rest, env, [lower_stmt(stmt, env)] ++ acc)
   }
 }

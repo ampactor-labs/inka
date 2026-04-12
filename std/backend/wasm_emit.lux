@@ -599,7 +599,8 @@ fn find_local_ty(name, body) = find_local_ty_pop(name, body)
 fn find_local_ty_pop(name, body) = {
   if len(body) == 0 { TUnit }
   else {
-    let (rest, expr) = list_pop(body)
+    let expr = list_head(body)
+    let rest = list_tail(body)
     let t = find_local_ty_expr(name, expr)
     match t { TUnit => find_local_ty_pop(name, rest), _ => t }
   }
@@ -630,7 +631,8 @@ fn find_local_ty_expr_inner(name, expr) = match expr {
 fn emit_local_decls(locals, body, env)= {
   if len(locals) == 0 { () }
   else {
-    let (rest, name) = list_pop(locals)
+    let name = list_head(locals)
+    let rest = list_tail(locals)
     let wtype = if len(name) >= 2 && string_slice(name, 0, 2) == "__" {
       "i32"
     } else {

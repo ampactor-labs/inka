@@ -447,7 +447,8 @@ fn find_imports(lines) = find_imports_pop(lines, [])
 fn find_imports_pop(lines, acc) = {
   if len(lines) == 0 { acc }
   else {
-    let (rest, line) = list_pop(lines)
+    let line = list_head(lines)
+    let rest = list_tail(lines)
     if len(line) >= 7 && string_slice(line, 0, 7) == "import " {
       find_imports_pop(rest, [string_slice(line, 7, len(line))] ++ acc)
     } else { find_imports_pop(rest, acc) }
@@ -459,7 +460,8 @@ fn resolve_import_list(paths, seen) = resolve_import_list_pop(paths, seen, "")
 fn resolve_import_list_pop(paths, seen, acc_str) = {
   if len(paths) == 0 { acc_str }
   else {
-    let (rest, path) = list_pop(paths)
+    let path = list_head(paths)
+    let rest = list_tail(paths)
     if list_contains(seen, path) {
       resolve_import_list_pop(rest, seen, acc_str)
     } else {

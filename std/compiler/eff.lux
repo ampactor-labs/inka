@@ -27,20 +27,22 @@ fn merge_effects(a, b) = match a {
   }
 }
 
-fn list_union(a, b) = list_union_at(a, b, 0)
-fn list_union_at(a, b, i) = {
-  if i >= len(b) { a }
+fn list_union(a, b) = list_union_walk(a, b)
+fn list_union_walk(a, b) = {
+  if len(b) == 0 { a }
   else {
-    if list_contains(a, b[i]) { list_union_at(a, b, i + 1) }
-    else { list_union_at(a ++ [b[i]], b, i + 1) }
+    let item = list_head(b)
+    let rest = list_tail(b)
+    if list_contains(a, item) { list_union_walk(a, rest) }
+    else { list_union_walk(push(a, item), rest) }
   }
 }
 
-fn list_contains(lst, item) = list_contains_at(lst, item, 0)
+fn list_contains(lst, item) = list_contains_walk(lst, item)
 
-fn list_contains_at(lst, item, i) = {
-  if i >= len(lst) { false }
-  else { if lst[i] == item { true } else { list_contains_at(lst, item, i + 1) }
+fn list_contains_walk(lst, item) = {
+  if len(lst) == 0 { false }
+  else { if list_head(lst) == item { true } else { list_contains_walk(list_tail(lst), item) }
   }
 }
 
@@ -56,14 +58,16 @@ fn eff_subst_empty() = []
 
 fn eff_subst_set(esubst, var_id, row) = push(esubst, (var_id, row))
 
-fn eff_subst_get(esubst, var_id) = eff_subst_get_at(esubst, var_id, len(esubst) - 1)
+fn eff_subst_get(esubst, var_id) = eff_subst_get_walk(esubst, var_id)
 
-fn eff_subst_get_at(esubst, var_id, i) = {
-  if i < 0 { EfOpen([], var_id) }
+fn eff_subst_get_walk(esubst, var_id) = {
+  if len(esubst) == 0 { EfOpen([], var_id) }
   else {
-    let (k, v) = esubst[i]
+    let entry = list_head(esubst)
+    let rest = list_tail(esubst)
+    let (k, v) = entry
     if k == var_id { v }
-    else { eff_subst_get_at(esubst, var_id, i - 1) }
+    else { eff_subst_get_walk(rest, var_id) }
   }
 }
 
@@ -156,25 +160,25 @@ fn unify_eff(esubst, e1, e2) = {
 }
 
 // Set operations for effect name lists
-fn list_subset(a, b) = list_subset_at(a, b, 0)
+fn list_subset(a, b) = list_subset_walk(a, b)
 
-fn list_subset_at(a, b, i) = {
-  if i >= len(a) { true }
+fn list_subset_walk(a, b) = {
+  if len(a) == 0 { true }
   else {
-    if list_contains(b, a[i]) { list_subset_at(a, b, i + 1) }
+    if list_contains(b, list_head(a)) { list_subset_walk(list_tail(a), b) }
     else { false }
   }
 }
 
-fn list_diff(a, b) = list_diff_at(a, b, 0)
+fn list_diff(a, b) = list_diff_walk(a, b, [])
 
-fn list_diff_at(a, b, i) = {
-  if i >= len(a) { [] }
+fn list_diff_walk(a, b, acc) = {
+  if len(a) == 0 { acc }
   else {
-    let item = a[i]
-    let rest = list_diff_at(a, b, i + 1)
-    if list_contains(b, item) { rest }
-    else { [item] ++ rest }
+    let item = list_head(a)
+    let rest = list_tail(a)
+    if list_contains(b, item) { list_diff_walk(rest, b, acc) }
+    else { list_diff_walk(rest, b, push(acc, item)) }
   }
 }
 
@@ -210,25 +214,27 @@ fn check_effect_constraints(fn_name, body_effs, declared, esubst) = {
 }
 
 fn check_each_constraint(fn_name, body_effs, constraints) =
-  check_each_constraint_at(fn_name, body_effs, constraints, 0)
+  check_each_constraint_walk(fn_name, body_effs, constraints)
 
-fn check_each_constraint_at(fn_name, body_effs, constraints, i) = {
-  if i >= len(constraints) { [] }
+fn check_each_constraint_walk(fn_name, body_effs, constraints) = {
+  if len(constraints) == 0 { [] }
   else {
-    let (eff_name, negated) = constraints[i]
+    let entry = list_head(constraints)
+    let rest = list_tail(constraints)
+    let (eff_name, negated) = entry
     if negated {
       let present = effect_in_row(eff_name, body_effs)
       if present {
-        [EffNegationViolated(fn_name, eff_name)] ++ check_each_constraint_at(fn_name, body_effs, constraints, i + 1)
+        [EffNegationViolated(fn_name, eff_name)] ++ check_each_constraint_walk(fn_name, body_effs, rest)
       } else {
         match body_effs {
           EfOpen(_, _) =>
-            [EffOpenRowNegation(fn_name, eff_name)] ++ check_each_constraint_at(fn_name, body_effs, constraints, i + 1),
-          _ => check_each_constraint_at(fn_name, body_effs, constraints, i + 1)
+            [EffOpenRowNegation(fn_name, eff_name)] ++ check_each_constraint_walk(fn_name, body_effs, rest),
+          _ => check_each_constraint_walk(fn_name, body_effs, rest)
         }
       }
     } else {
-      check_each_constraint_at(fn_name, body_effs, constraints, i + 1)
+      check_each_constraint_walk(fn_name, body_effs, rest)
     }
   }
 }
@@ -239,27 +245,31 @@ fn effect_in_row(name, row) = match row {
   EfOpen(effs, _) => list_contains(effs, name)
 }
 
-fn any_pure(declared) = any_pure_at(declared, 0)
+fn any_pure(declared) = any_pure_walk(declared)
 
-fn any_pure_at(declared, i) = {
-  if i >= len(declared) { false }
+fn any_pure_walk(declared) = {
+  if len(declared) == 0 { false }
   else {
-    let (name, negated) = declared[i]
+    let entry = list_head(declared)
+    let rest = list_tail(declared)
+    let (name, negated) = entry
     if name == "Pure" { true }
-    else { any_pure_at(declared, i + 1) }
+    else { any_pure_walk(rest) }
   }
 }
 
-fn apply_negations(effs, declared) = apply_negations_at(effs, declared, 0)
+fn apply_negations(effs, declared) = apply_negations_walk(effs, declared)
 
-fn apply_negations_at(effs, declared, i) = {
-  if i >= len(declared) { effs }
+fn apply_negations_walk(effs, declared) = {
+  if len(declared) == 0 { effs }
   else {
-    let (name, negated) = declared[i]
+    let entry = list_head(declared)
+    let rest = list_tail(declared)
+    let (name, negated) = entry
     if negated {
-      apply_negations_at(remove_effect(effs, name), declared, i + 1)
+      apply_negations_walk(remove_effect(effs, name), rest)
     } else {
-      apply_negations_at(effs, declared, i + 1)
+      apply_negations_walk(effs, rest)
     }
   }
 }
@@ -273,11 +283,11 @@ fn remove_effect(row, name) = match row {
 // Effect subtraction over a list: E - [F1, F2, ...] = ((E - F1) - F2) - ...
 // This IS the algebra applied sequentially. Handle absorption uses this:
 // handle { body with E } { arms for F } has effects (E - F).
-fn remove_effects(row, names) = remove_effects_at(row, names, 0)
+fn remove_effects(row, names) = remove_effects_walk(row, names)
 
-fn remove_effects_at(row, names, i) = {
-  if i >= len(names) { row }
-  else { remove_effects_at(remove_effect(row, names[i]), names, i + 1) }
+fn remove_effects_walk(row, names) = {
+  if len(names) == 0 { row }
+  else { remove_effects_walk(remove_effect(row, list_head(names)), list_tail(names)) }
 }
 
 // Extract effect names present in a row (for display/teaching).

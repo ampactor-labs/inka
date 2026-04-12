@@ -4,6 +4,7 @@
 // the 11.8kb `std/compiler/check.lux` file natively and emit a working
 // output.wasm capable of taking AST structures and outputting an Environment.
 
+import compiler/lexer
 import compiler/parser
 import compiler/check
 
@@ -13,14 +14,12 @@ println("═══════════════════════�
 println("")
 println("Instantiating native WASM typechecker...")
 
-// Small AST representing: let x = 42
-// S(stmt, line, col)
-let ast = [
-  S(LetStmt("x", S(IntLit(42), 1, 9)), 1, 1)
-]
+let source = "let x = 42"
+let tokens = lex(source)
+let ast = parse_program(tokens)
 
 let env = check_program(ast)
 
 println("✓ Typechecker executed successfully over simple AST.")
 println("Captured Env:")
-show_env_compact(env) |> println
+println(show_env_compact(env))

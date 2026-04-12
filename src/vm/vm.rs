@@ -1841,6 +1841,11 @@ impl Vm {
                 _ => Err("load_chunk: expected chunk tuple".to_string()),
             }
         });
+
+        // Region primitives — no-op in Rust VM (GC handles memory).
+        // In WASM, these checkpoint/restore the bump allocator.
+        self.register_builtin("heap_save", |_args| Ok(VmValue::Int(0)));
+        self.register_builtin("heap_restore", |_args| Ok(VmValue::Unit));
     }
 
     fn register_builtin(&mut self, name: &str, func: BuiltinFn) {

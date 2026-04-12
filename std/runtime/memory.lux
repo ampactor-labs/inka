@@ -141,7 +141,7 @@ fn val_eq(a, b) with Memory = {
     // Both must be valid heap pointers to compare as strings.
     // Strings in data segment start at 1024; heap starts higher.
     // Memory is bounded at 1GB (0x40000000). Guard against OOB.
-    if a >= 1024 && a < 1073741824 && b >= 1024 && b < 1073741824 {
+    if a >= 1024 && a < 2147483647 && b >= 1024 && b < 2147483647 {
       str_eq_raw(a, b)
     }
     else { 0 }

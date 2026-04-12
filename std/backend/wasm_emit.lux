@@ -39,12 +39,12 @@ fn emit_module(defs, type_map) = {
   handle {
     handle {
       out("(module" ++ NL)
-      out(emit_wasi_imports())
+      emit_wasi_imports()
       out("  (memory (export " ++ DQ ++ "memory" ++ DQ ++ ") 32768 65536)" ++ NL)
       out("  (global $heap_ptr (mut i32) (i32.const " ++ to_string(heap_start) ++ "))" ++ NL)
       out("  (global $__vsp (mut i32) (i32.const 0))" ++ NL)
       emit_global_decls(top_globals, 0, type_map)
-      out(emit_fn_type_sigs(max_arity, 0))
+      emit_fn_type_sigs(max_arity, 0)
       emit_string_segments(string_map, 0)
       out(emit_alloc())
 
@@ -52,7 +52,7 @@ fn emit_module(defs, type_map) = {
       emit_fn_list(fns, 0, ctx)
 
       // Footer
-      out(emit_fn_table(fn_table))
+      emit_fn_table(fn_table)
       emit_start(top_stmts, ctx)
       out(")" ++ NL)
     } {
@@ -91,21 +91,27 @@ fn name_seen_before(names, name, start, end) = {
   else { if names[start] == name { true } else { name_seen_before(names, name, start + 1, end) } }
 }
 
-fn emit_wasi_imports()=
-  "  (import " ++ DQ ++ "wasi_snapshot_preview1" ++ DQ ++ " " ++ DQ ++ "fd_write" ++ DQ
-    ++ " (func $fd_write (param i32 i32 i32 i32) (result i32)))" ++ NL
-  ++ "  (import " ++ DQ ++ "wasi_snapshot_preview1" ++ DQ ++ " " ++ DQ ++ "fd_read" ++ DQ
-    ++ " (func $fd_read (param i32 i32 i32 i32) (result i32)))" ++ NL
-  ++ "  (import " ++ DQ ++ "wasi_snapshot_preview1" ++ DQ ++ " " ++ DQ ++ "path_open" ++ DQ
-    ++ " (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))" ++ NL
-  ++ "  (import " ++ DQ ++ "wasi_snapshot_preview1" ++ DQ ++ " " ++ DQ ++ "fd_close" ++ DQ
-    ++ " (func $fd_close (param i32) (result i32)))" ++ NL
+fn emit_wasi_imports() with WasmOut = {
+  out("  (import " ++ DQ ++ "wasi_snapshot_preview1" ++ DQ ++ " " ++ DQ ++ "fd_write" ++ DQ)
+  out(" (func $fd_write (param i32 i32 i32 i32) (result i32)))" ++ NL)
+  out("  (import " ++ DQ ++ "wasi_snapshot_preview1" ++ DQ ++ " " ++ DQ ++ "fd_read" ++ DQ)
+  out(" (func $fd_read (param i32 i32 i32 i32) (result i32)))" ++ NL)
+  out("  (import " ++ DQ ++ "wasi_snapshot_preview1" ++ DQ ++ " " ++ DQ ++ "path_open" ++ DQ)
+  out(" (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))" ++ NL)
+  out("  (import " ++ DQ ++ "wasi_snapshot_preview1" ++ DQ ++ " " ++ DQ ++ "fd_close" ++ DQ)
+  out(" (func $fd_close (param i32) (result i32)))" ++ NL)
+}
 
 // ─── Function Emission ──────────────────────────────────────
 
 fn emit_fn_list(fns, idx, ctx) = {
   if idx >= len(fns) { () }
-  else { emit_fn(fns[idx], ctx); emit_fn_list(fns, idx + 1, ctx) }
+  else {
+    let mark = heap_save()
+    emit_fn(fns[idx], ctx)
+    heap_restore(mark)
+    emit_fn_list(fns, idx + 1, ctx)
+  }
 }
 
 // Uniform calling convention: ALL table functions get $__closure as first param.
@@ -123,7 +129,9 @@ fn emit_fn(fn_def, ctx) = {
   let result_ty = match ret_ty { TFloat => "f32", _ => "i32" }
   let eff_annotation = emit_eff_annotation(fn_eff)
 
-  out("  (func $" ++ name ++ " (param $__closure i32)" ++ emit_params(params, param_types, 0) ++ " (result " ++ result_ty ++ ")" ++ eff_annotation ++ NL)
+  out("  (func $" ++ name ++ " (param $__closure i32)")
+  emit_params(params, param_types, 0)
+  out(" (result " ++ result_ty ++ ")" ++ eff_annotation ++ NL)
   emit_local_decls(with_temps, 0, body, env)
   emit_fn_body(body, params, with_temps, ctx)
 
@@ -143,8 +151,8 @@ fn eff_list_str(effs, idx) = {
   else { if idx == 0 { effs[0] ++ eff_list_str(effs, 1) } else { ", " ++ effs[idx] ++ eff_list_str(effs, idx + 1) } }
 }
 
-fn emit_params(params, param_types, idx)= {
-  if idx >= len(params) { "" }
+fn emit_params(params, param_types, idx) with WasmOut = {
+  if idx >= len(params) { () }
   else {
     let pname = params[idx]
     // Look up this param's type from the function's signature.
@@ -152,7 +160,8 @@ fn emit_params(params, param_types, idx)= {
     let wtype = if idx < len(param_types) {
       match param_types[idx] { TFloat => "f32", _ => "i32" }
     } else { "i32" }
-    " (param $" ++ pname ++ " " ++ wtype ++ ")" ++ emit_params(params, param_types, idx + 1)
+    out(" (param $" ++ pname ++ " " ++ wtype ++ ")")
+    emit_params(params, param_types, idx + 1)
   }
 }
 
@@ -427,9 +436,13 @@ fn emit_builtin(name, args, params, locals, ctx) = {
     out("    call $path_open" ++ NL); true
   } else { if name == "fd_close" {
     emit_args(args, 0, params, locals, ctx); out("    call $fd_close" ++ NL); true
+  } else { if name == "heap_save" {
+    out("    i32.const 0" ++ NL ++ "    call $heap_save" ++ NL); true
+  } else { if name == "heap_restore" {
+    out("    i32.const 0" ++ NL); emit_args(args, 0, params, locals, ctx); out("    call $heap_restore" ++ NL); true
   } else {
     false
-  } } } } } } } } } } } }
+  } } } } } } } } } } } } } }
 }
 
 fn emit_call_expr(func, args, params, locals, ctx) = {

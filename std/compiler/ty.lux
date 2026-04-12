@@ -91,6 +91,9 @@ fn env_with_primitives(env) = {
     |> env_extend("println", TFun([a], TUnit, EfClosed(["Console"])), Declared("builtin"))
     |> env_extend("print", TFun([a], TUnit, EfClosed(["Console"])), Declared("builtin"))
     |> env_extend("read_file", TFun([TString], TString, EfClosed(["IO"])), Declared("builtin"))
+    // Region primitives — bump allocator checkpoint/restore
+    |> env_extend("heap_save", TFun([], TInt, EfPure), Declared("builtin"))
+    |> env_extend("heap_restore", TFun([TInt], TUnit, EfPure), Declared("builtin"))
     // fd_write is declared as a WASI effect in std/runtime/memory.lux
 }
 

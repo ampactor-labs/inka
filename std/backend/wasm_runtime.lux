@@ -41,3 +41,10 @@ fn emit_alloc() =
   ++ "    (global.set $heap_ptr (local.get $new_end))" ++ NL
   ++ "    (local.get $ptr)" ++ NL
   ++ "  )" ++ NL
+  // Region primitives: checkpoint and restore the bump allocator.
+  // heap_save() returns the current heap pointer.
+  // heap_restore(mark) snaps it back, freeing everything allocated since.
+  // Safe when all intermediate values have been flushed (e.g. via out()).
+  // Both take $__closure for uniform calling convention (ignored).
+  ++ "  (func $heap_save (param $__closure i32) (result i32) global.get $heap_ptr)" ++ NL
+  ++ "  (func $heap_restore (param $__closure i32) (param $mark i32) (result i32) local.get $mark global.set $heap_ptr i32.const 0)" ++ NL

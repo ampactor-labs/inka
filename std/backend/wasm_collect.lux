@@ -291,29 +291,33 @@ fn find_fn_index(fn_table, name, idx)= {
 }
 
 // Type sigs include $__closure (first param) + N actual params
-fn emit_fn_type_sigs(max_arity, n)= {
-  if n > max_arity { "" }
+fn emit_fn_type_sigs(max_arity, n) with WasmOut = {
+  if n > max_arity { () }
   else {
-    "  (type $fn" ++ to_string(n) ++ " (func (param i32)" ++ emit_n_i32_params(n, 0) ++ " (result i32)))" ++ NL
-      ++ emit_fn_type_sigs(max_arity, n + 1)
+    out("  (type $fn" ++ to_string(n) ++ " (func (param i32)")
+    emit_n_i32_params(n, 0)
+    out(" (result i32)))" ++ NL)
+    emit_fn_type_sigs(max_arity, n + 1)
   }
 }
 
-fn emit_n_i32_params(n, idx)= {
-  if idx >= n { "" } else { " (param i32)" ++ emit_n_i32_params(n, idx + 1) }
+fn emit_n_i32_params(n, idx) with WasmOut = {
+  if idx >= n { () } else { out(" (param i32)"); emit_n_i32_params(n, idx + 1) }
 }
 
-fn emit_fn_table(fn_table)= {
-  if len(fn_table) == 0 { "" }
+fn emit_fn_table(fn_table) with WasmOut = {
+  if len(fn_table) == 0 { () }
   else {
-    "  (table " ++ to_string(len(fn_table)) ++ " funcref)" ++ NL
-    ++ "  (elem (i32.const 0)" ++ emit_fn_table_elems(fn_table, 0) ++ ")" ++ NL
+    out("  (table " ++ to_string(len(fn_table)) ++ " funcref)" ++ NL)
+    out("  (elem (i32.const 0)")
+    emit_fn_table_elems(fn_table, 0)
+    out(")" ++ NL)
   }
 }
 
-fn emit_fn_table_elems(fn_table, idx)= {
-  if idx >= len(fn_table) { "" }
-  else { " $" ++ fn_table[idx] ++ emit_fn_table_elems(fn_table, idx + 1) }
+fn emit_fn_table_elems(fn_table, idx) with WasmOut = {
+  if idx >= len(fn_table) { () }
+  else { out(" $" ++ fn_table[idx]); emit_fn_table_elems(fn_table, idx + 1) }
 }
 
 // ─── Top-Level Structure ────────────────────────────────────

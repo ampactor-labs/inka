@@ -187,11 +187,20 @@ fn lower_expr(sexpr, env) = {
 
     PipeExpr(data, step) => {
       let lowered_data = lower_expr(data, env)
-      let S(step_expr, _, _) = step
+      let S(step_expr, sl, sc) = step
       match step_expr {
         Call(func, args) => {
           let lowered_func = lower_expr(func, env)
           LCall(lty_call_result(lowered_func), lowered_func, [lowered_data] ++ lower_exprs(args, env))
+        },
+        VarRef(name) => {
+          if name == "println" || name == "print" {
+            // Desugar to Call so the println rewrite fires
+            lower_expr(S(Call(step, [data]), sl, sc), env)
+          } else {
+            let lowered_step = lower_expr(step, env)
+            LCall(lty_call_result(lowered_step), lowered_step, [lowered_data])
+          }
         },
         _ => {
           let lowered_step = lower_expr(step, env)
@@ -1182,7 +1191,7 @@ fn is_user_effect(eff_name, env) = {
 
 fn lower_program_typed(stmts, ctors, env) = {
   let final_env = add_op_indices_to_env(stmts, 0, env)
-  let globals = collect_top_names(stmts, 0)
+  let globals = collect_top_names(stmts, 0) ++ ["heap_save", "heap_restore"]
   handle { lower_stmts(stmts, final_env) } with state = 0 {
     is_ctor(name) => resume(ctor_in(ctors, name, 0)),
     find_rewrite(name) => resume([]),

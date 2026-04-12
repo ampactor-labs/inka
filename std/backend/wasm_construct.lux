@@ -14,36 +14,37 @@ import compiler/lower
 
 // ─── Self-Referencing Closure Detection ─────────────────────
 
-fn find_self_capture(captures, fn_name, idx) = {
-  if idx >= len(captures) { 0 - 1 }
+fn find_self_capture(captures, fn_name) = {
+  if len(captures) == 0 { 0 - 1 }
   else {
-    match captures[idx] {
-      LGlobal(_, name) => if name == fn_name { idx } else { find_self_capture(captures, fn_name, idx + 1) },
-      _ => find_self_capture(captures, fn_name, idx + 1)
+    let (rest, cap) = list_pop(captures)
+    match cap {
+      LGlobal(_, name) => if name == fn_name { len(rest) } else { find_self_capture(rest, fn_name) },
+      _ => find_self_capture(rest, fn_name)
     }
   }
 }
 
 fn emit_closure_captures(captures, idx, params, locals, ctx) = {
-  if idx >= len(captures) { () }
+  if len(captures) == 0 { () }
   else {
     let offset = (2 + idx) * 4
     out("    local.get $__vptr" ++ NL
     ++ "    i32.const " ++ to_string(offset) ++ NL
     ++ "    i32.add" ++ NL)
-    do_emit_expr(captures[idx], params, locals, ctx)
+    do_emit_expr(list_head(captures), params, locals, ctx)
     out("    i32.store" ++ NL)
-    emit_closure_captures(captures, idx + 1, params, locals, ctx)
+    emit_closure_captures(list_tail(captures), idx + 1, params, locals, ctx)
   }
 }
 
 // Store captures using variant stack (reload base each time — survives nesting).
 // Type-directed store: f32 captures use f32.store, else i32.store.
 fn emit_closure_captures_stacked(captures, idx, params, locals, ctx) = {
-  if idx >= len(captures) { () }
+  if len(captures) == 0 { () }
   else {
     let offset = (2 + idx) * 4
-    let cap = captures[idx]
+    let cap = list_head(captures)
     let store_op = match lexpr_ty(cap) { TFloat => "f32.store", _ => "i32.store" }
     out("    global.get $__vsp" ++ NL ++ "    i32.const 1" ++ NL ++ "    i32.sub" ++ NL
     ++ "    i32.const 4" ++ NL ++ "    i32.mul" ++ NL
@@ -53,7 +54,7 @@ fn emit_closure_captures_stacked(captures, idx, params, locals, ctx) = {
     ++ "    i32.add" ++ NL)
     do_emit_expr(cap, params, locals, ctx)
     out("    " ++ store_op ++ NL)
-    emit_closure_captures_stacked(captures, idx + 1, params, locals, ctx)
+    emit_closure_captures_stacked(list_tail(captures), idx + 1, params, locals, ctx)
   }
 }
 
@@ -84,18 +85,19 @@ fn emit_sibling_patches(current_stmt, all_stmts, current_idx, params, locals, ct
   }
 }
 
-fn patch_previous_siblings(name, stmts, current_idx, i, params, locals, ctx) = {
-  if i >= current_idx { () }
+fn patch_previous_siblings(name, prev_stmts, params, locals, ctx) = {
+  if len(prev_stmts) == 0 { () }
   else {
-    match stmts[i] {
+    let stmt = list_head(prev_stmts)
+    match stmt {
       LLet(_, sibling_name, value) => {
         match value {
           LMakeClosure(_, _, captures) => {
-            let cap_idx = find_self_capture(captures, name, 0)
+            let cap_idx = find_self_capture(captures, name)
             if cap_idx >= 0 {
-              let is_local = string_in(locals, sibling_name, 0) || find_param_idx(params, sibling_name, 0) >= 0
+              let is_local = string_in(locals, sibling_name, 0) || find_param_idx(params, sibling_name) >= 0
               let sib_getter = if is_local { "    local.get $" } else { if string_in(ctx_globals(ctx), sibling_name, 0) { "    global.get $" } else { "    local.get $" } }
-              let val_getter = if string_in(locals, name, 0) || find_param_idx(params, name, 0) >= 0 { "    local.get $" } else { if string_in(ctx_globals(ctx), name, 0) { "    global.get $" } else { "    local.get $" } }
+              let val_getter = if string_in(locals, name, 0) || find_param_idx(params, name) >= 0 { "    local.get $" } else { if string_in(ctx_globals(ctx), name, 0) { "    global.get $" } else { "    local.get $" } }
               let offset = (2 + cap_idx) * 4
               out(sib_getter ++ sibling_name ++ NL
               ++ "    i32.const " ++ to_string(offset) ++ NL
@@ -109,7 +111,7 @@ fn patch_previous_siblings(name, stmts, current_idx, i, params, locals, ctx) = {
       },
       _ => ()
     }
-    patch_previous_siblings(name, stmts, current_idx, i + 1, params, locals, ctx)
+    patch_previous_siblings(name, list_tail(prev_stmts), params, locals, ctx)
   }
 }
 
@@ -124,15 +126,15 @@ fn emit_make_tuple(elems, params, locals, ctx) = {
 }
 
 fn emit_tuple_sets(elems, idx, params, locals, ctx) = {
-  if idx >= len(elems) { () }
+  if len(elems) == 0 { () }
   else {
     out("    local.set $__match" ++ NL
     ++ "    i32.const 0" ++ NL
     ++ "    local.get $__match" ++ NL
     ++ "    i32.const " ++ to_string(idx) ++ NL)
-    do_emit_expr(elems[idx], params, locals, ctx)
+    do_emit_expr(list_head(elems), params, locals, ctx)
     out("    call $tuple_set" ++ NL)
-    emit_tuple_sets(elems, idx + 1, params, locals, ctx)
+    emit_tuple_sets(list_tail(elems), idx + 1, params, locals, ctx)
   }
 }
 
@@ -147,28 +149,28 @@ fn emit_make_list(elems, params, locals, ctx) = {
 }
 
 fn emit_list_sets(elems, idx, params, locals, ctx) = {
-  if idx >= len(elems) { () }
+  if len(elems) == 0 { () }
   else {
     out("    local.set $__match" ++ NL
     ++ "    i32.const 0" ++ NL
     ++ "    local.get $__match" ++ NL
     ++ "    i32.const " ++ to_string(idx) ++ NL)
-    do_emit_expr(elems[idx], params, locals, ctx)
+    do_emit_expr(list_head(elems), params, locals, ctx)
     out("    call $list_set" ++ NL)
-    emit_list_sets(elems, idx + 1, params, locals, ctx)
+    emit_list_sets(list_tail(elems), idx + 1, params, locals, ctx)
   }
 }
 
 fn emit_tuple_elems(elems, idx, params, locals, ctx) = {
-  if idx >= len(elems) { () }
+  if len(elems) == 0 { () }
   else {
     let offset = (1 + idx) * 4
     out("    local.get $__vptr" ++ NL
     ++ "    i32.const " ++ to_string(offset) ++ NL
     ++ "    i32.add" ++ NL)
-    do_emit_expr(elems[idx], params, locals, ctx)
+    do_emit_expr(list_head(elems), params, locals, ctx)
     out("    i32.store" ++ NL)
-    emit_tuple_elems(elems, idx + 1, params, locals, ctx)
+    emit_tuple_elems(list_tail(elems), idx + 1, params, locals, ctx)
   }
 }
 
@@ -201,7 +203,7 @@ fn emit_make_variant(tag, fields, params, locals, ctx) = {
 }
 
 fn emit_variant_fields(fields, idx, params, locals, ctx) = {
-  if idx >= len(fields) { () }
+  if len(fields) == 0 { () }
   else {
     let field_offset = (1 + idx) * 4
     out("    global.get $__vsp" ++ NL ++ "    i32.const 1" ++ NL ++ "    i32.sub" ++ NL
@@ -210,9 +212,9 @@ fn emit_variant_fields(fields, idx, params, locals, ctx) = {
     ++ "    i32.load" ++ NL
     ++ "    i32.const " ++ to_string(field_offset) ++ NL
     ++ "    i32.add" ++ NL)
-    do_emit_expr(fields[idx], params, locals, ctx)
+    do_emit_expr(list_head(fields), params, locals, ctx)
     out("    i32.store" ++ NL)
-    emit_variant_fields(fields, idx + 1, params, locals, ctx)
+    emit_variant_fields(list_tail(fields), idx + 1, params, locals, ctx)
   }
 }
 
@@ -228,12 +230,12 @@ fn emit_match(scrutinee, arms, params, locals, ctx) = {
 }
 
 fn emit_match_arms(arms, idx, params, locals, ctx) = {
-  if idx >= len(arms) { out("    i32.const 0 ;; match fallthrough" ++ NL) }
+  if len(arms) == 0 { out("    i32.const 0 ;; match fallthrough" ++ NL) }
   else {
-    let (pat, body) = arms[idx]
+    let (pat, body) = list_head(arms)
     match pat {
       LPCon(name, sub_pats) => {
-        let tag_id = find_tag_id(ctx_tags(ctx), name, 0)
+        let tag_id = find_tag_id(ctx_tags(ctx), name)
         out("    local.get $__match" ++ NL
         ++ "    i32.load" ++ NL
         ++ "    i32.const " ++ to_string(tag_id) ++ NL
@@ -244,24 +246,24 @@ fn emit_match_arms(arms, idx, params, locals, ctx) = {
         do_emit_expr(body, params, locals, ctx)
         out("      )" ++ NL
         ++ "      (else" ++ NL)
-        emit_match_arms(arms, idx + 1, params, locals, ctx)
+        emit_match_arms(list_tail(arms), idx + 1, params, locals, ctx)
         out("      )" ++ NL
         ++ "    )" ++ NL)
       },
-      LPTuple(sub_pats) => emit_match_arm_tuple(sub_pats, body, arms, idx, params, locals, ctx),
+      LPTuple(sub_pats) => emit_match_arm_tuple(sub_pats, body, params, locals, ctx),
       LPVar(name) => {
         out("    local.get $__match" ++ NL
         ++ "    local.set $" ++ name ++ NL)
         do_emit_expr(body, params, locals, ctx)
       },
-      LPLit(lit_val) => emit_match_arm_lit(lit_val, body, arms, idx, params, locals, ctx),
+      LPLit(lit_val) => emit_match_arm_lit(lit_val, body, list_tail(arms), idx, params, locals, ctx),
       LPWild => do_emit_expr(body, params, locals, ctx),
-      _ => emit_match_arms(arms, idx + 1, params, locals, ctx)
+      _ => emit_match_arms(list_tail(arms), idx + 1, params, locals, ctx)
     }
   }
 }
 
-fn emit_match_arm_tuple(sub_pats, body, arms, idx, params, locals, ctx) = {
+fn emit_match_arm_tuple(sub_pats, body, params, locals, ctx) = {
   emit_bind_fields(sub_pats, 0, 0, params, locals, ctx)
   do_emit_expr(body, params, locals, ctx)
 }
@@ -272,7 +274,7 @@ fn emit_match_arm_tuple(sub_pats, body, arms, idx, params, locals, ctx) = {
 fn emit_match_arm_lit(lit_val, body, arms, idx, params, locals, ctx) = {
   match lit_val {
     LString(s) => {
-      let s_offset = find_string_offset(ctx_strings(ctx), s, 0)
+      let s_offset = find_string_offset(ctx_strings(ctx), s)
       out("    i32.const 0" ++ NL
       ++ "    local.get $__match" ++ NL
       ++ "    i32.const " ++ to_string(s_offset) ++ NL
@@ -317,23 +319,23 @@ fn emit_match_arm_lit(lit_val, body, arms, idx, params, locals, ctx) = {
 }
 
 fn emit_bind_fields(sub_pats, idx, depth, params, locals, ctx) = {
-  if idx >= len(sub_pats) { () }
+  if len(sub_pats) == 0 { () }
   else {
     let field_offset = (1 + idx) * 4
     let base = match_local(depth)
-    match sub_pats[idx] {
+    match list_head(sub_pats) {
       LPVar(name) => {
         out("    local.get " ++ base ++ NL
         ++ "    i32.const " ++ to_string(field_offset) ++ NL
         ++ "    i32.add" ++ NL
         ++ "    i32.load" ++ NL
         ++ "    local.set $" ++ name ++ NL)
-        emit_bind_fields(sub_pats, idx + 1, depth, params, locals, ctx)
+        emit_bind_fields(list_tail(sub_pats), idx + 1, depth, params, locals, ctx)
       },
-      LPWild => emit_bind_fields(sub_pats, idx + 1, depth, params, locals, ctx),
+      LPWild => emit_bind_fields(list_tail(sub_pats), idx + 1, depth, params, locals, ctx),
       _ => {
-        emit_bind_sub_pattern(sub_pats[idx], base, field_offset, depth, params, locals, ctx)
-        emit_bind_fields(sub_pats, idx + 1, depth, params, locals, ctx)
+        emit_bind_sub_pattern(list_head(sub_pats), base, field_offset, depth, params, locals, ctx)
+        emit_bind_fields(list_tail(sub_pats), idx + 1, depth, params, locals, ctx)
       }
     }
   }
@@ -349,7 +351,7 @@ fn emit_bind_sub_pattern(pat, base, field_offset, depth, params, locals, ctx) = 
   ++ "    local.set " ++ next_local ++ NL)
   match pat {
     LPCon(tag, inner_pats) => {
-      let tag_id = find_tag_id(ctx_tags(ctx), tag, 0)
+      let tag_id = find_tag_id(ctx_tags(ctx), tag)
       out("    local.get " ++ next_local ++ NL
       ++ "    i32.load" ++ NL
       ++ "    i32.const " ++ to_string(tag_id) ++ NL
@@ -369,10 +371,10 @@ fn emit_bind_sub_pattern(pat, base, field_offset, depth, params, locals, ctx) = 
 
 // Evaluate expressions and save to __f0, __f1, etc. (for closure captures)
 fn emit_variant_field_exprs(fields, idx, params, locals, ctx) = {
-  if idx >= len(fields) { () }
+  if len(fields) == 0 { () }
   else {
-    do_emit_expr(fields[idx], params, locals, ctx)
+    do_emit_expr(list_head(fields), params, locals, ctx)
     out("    local.set $__f" ++ to_string(idx) ++ NL)
-    emit_variant_field_exprs(fields, idx + 1, params, locals, ctx)
+    emit_variant_field_exprs(list_tail(fields), idx + 1, params, locals, ctx)
   }
 }

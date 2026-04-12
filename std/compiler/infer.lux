@@ -194,7 +194,7 @@ fn infer(sexpr) with Infer, Diagnostic = {
       match resolved {
         TTuple(elems) => {
           let idx = to_int(field)
-          if idx >= 0 && idx < len(elems) { elems[idx] }
+          if idx >= 0 && idx < len(elems) { get_tuple_elem(elems, idx) }
           else { fresh() }
         },
         TRecord(fields) => record_field_type(fields, field),
@@ -547,7 +547,7 @@ fn collect_absorbed_from_names(names) with Infer = {
     let op_type = lookup(op_name)
     let eff_name = match op_type {
       TFun(_, _, eff) => match eff {
-        EfClosed(effs) => if len(effs) > 0 { effs[0] } else { "" },
+        EfClosed(effs) => if len(effs) > 0 { list_head(effs) } else { "" },
         _ => ""
       },
       _ => ""
@@ -618,3 +618,9 @@ fn format_violation(v) = match v {
     "effect violation in '" ++ fn_name ++ "': declared Pure but body has effects",
   _ => "effect violation: unknown"
 }
+
+fn get_tuple_elem(elems, idx) = {
+  if idx == 0 { list_head(elems) }
+  else { get_tuple_elem(list_tail(elems), idx - 1) }
+}
+

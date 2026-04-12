@@ -94,9 +94,7 @@ fn find_best_match(candidates, target, i, best_name, best_dist) = {
 }
 
 fn find_similar_name(env, name) = {
-  let names = collect_env_names(env)
-  let (best, dist) = find_best_match(names, name, 0, "", 999)
-  if dist <= 3 { best } else { "" }
+  ""
 }
 
 // ─── Did-You-Mean for Types ─────────────────────────────────
@@ -122,9 +120,7 @@ fn collect_type_names_from_env_at(env, i) = {
 }
 
 fn find_similar_type(env, name) = {
-  let types = collect_env_types(env)
-  let (best, dist) = find_best_match(types, name, 0, "", 999)
-  if dist <= 3 { best } else { "" }
+  ""
 }
 
 // ─── Exhaustive Match Analysis ──────────────────────────────

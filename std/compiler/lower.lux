@@ -360,10 +360,13 @@ fn fan_out_lower_at(fns, input, env, i) = {
   }
 }
 
-fn lower_exprs(sexprs, env) = lower_exprs_at(sexprs, env, 0)
-fn lower_exprs_at(sexprs, env, i) = {
-  if i >= len(sexprs) { [] }
-  else { [lower_expr(sexprs[i], env)] ++ lower_exprs_at(sexprs, env, i + 1) }
+fn lower_exprs(sexprs, env) = lower_exprs_pop(sexprs, env, [])
+fn lower_exprs_pop(sexprs, env, acc) = {
+  if len(sexprs) == 0 { acc }
+  else {
+    let (rest, expr) = list_pop(sexprs)
+    lower_exprs_pop(rest, env, [lower_expr(expr, env)] ++ acc)
+  }
 }
 
 fn lower_record_fields(fields, env) = lower_record_fields_at(fields, env, 0)
@@ -479,18 +482,24 @@ fn lower_pat(pat) = match pat {
   _ => LPWild
 }
 
-fn lower_pats(pats) = lower_pats_at(pats, 0)
-fn lower_pats_at(pats, i) = {
-  if i >= len(pats) { [] }
-  else { [lower_pat(pats[i])] ++ lower_pats_at(pats, i + 1) }
+fn lower_pats(pats) = lower_pats_pop(pats, [])
+fn lower_pats_pop(pats, acc) = {
+  if len(pats) == 0 { acc }
+  else {
+    let (rest, pat) = list_pop(pats)
+    lower_pats_pop(rest, [lower_pat(pat)] ++ acc)
+  }
 }
 
 // ─── Statement Lowering ─────────────────────────────────────
 
-fn lower_stmts(stmts, env) = lower_stmts_at(stmts, env, 0)
-fn lower_stmts_at(stmts, env, i) = {
-  if i >= len(stmts) { [] }
-  else { [lower_stmt(stmts[i], env)] ++ lower_stmts_at(stmts, env, i + 1) }
+fn lower_stmts(stmts, env) = lower_stmts_pop(stmts, env, [])
+fn lower_stmts_pop(stmts, env, acc) = {
+  if len(stmts) == 0 { acc }
+  else {
+    let (rest, stmt) = list_pop(stmts)
+    lower_stmts_pop(rest, env, [lower_stmt(stmt, env)] ++ acc)
+  }
 }
 
 // Lower statements while extending env with local types — for BlockExpr.

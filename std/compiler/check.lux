@@ -207,34 +207,37 @@ fn resolve_type(subst, eff_subst, ty) = match apply(subst, ty) {
 }
 
 fn resolve_record_fields(subst, eff_subst, fields) =
-  resolve_record_fields_at(subst, eff_subst, fields, 0)
+  resolve_record_fields_pop(subst, eff_subst, fields, [])
 
-fn resolve_record_fields_at(subst, eff_subst, fields, i) = {
-  if i >= len(fields) { [] }
+fn resolve_record_fields_pop(subst, eff_subst, fields, acc) = {
+  if len(fields) == 0 { acc }
   else {
-    let (name, ty) = fields[i]
-    [(name, resolve_type(subst, eff_subst, ty))]
-      ++ resolve_record_fields_at(subst, eff_subst, fields, i + 1)
+    let (rest, entry) = list_pop(fields)
+    let (name, ty) = entry
+    resolve_record_fields_pop(subst, eff_subst, rest, [(name, resolve_type(subst, eff_subst, ty))] ++ acc)
   }
 }
 
 fn resolve_type_list(subst, eff_subst, tys) =
-  resolve_type_list_at(subst, eff_subst, tys, 0)
+  resolve_type_list_pop(subst, eff_subst, tys, [])
 
-fn resolve_type_list_at(subst, eff_subst, tys, i) = {
-  if i >= len(tys) { [] }
-  else { [resolve_type(subst, eff_subst, tys[i])] ++ resolve_type_list_at(subst, eff_subst, tys, i + 1) }
+fn resolve_type_list_pop(subst, eff_subst, tys, acc) = {
+  if len(tys) == 0 { acc }
+  else {
+    let (rest, ty) = list_pop(tys)
+    resolve_type_list_pop(subst, eff_subst, rest, [resolve_type(subst, eff_subst, ty)] ++ acc)
+  }
 }
 
 fn resolve_env(env, subst, eff_subst) =
-  resolve_env_at(env, subst, eff_subst, 0)
+  resolve_env_pop(env, subst, eff_subst, [])
 
-fn resolve_env_at(env, subst, eff_subst, i) = {
-  if i >= len(env) { [] }
+fn resolve_env_pop(env, subst, eff_subst, acc) = {
+  if len(env) == 0 { acc }
   else {
-    let (name, ty, reason) = env[i]
-    [(name, resolve_type(subst, eff_subst, ty), reason)]
-      ++ resolve_env_at(env, subst, eff_subst, i + 1)
+    let (rest, entry) = list_pop(env)
+    let (name, ty, reason) = entry
+    resolve_env_pop(rest, subst, eff_subst, [(name, resolve_type(subst, eff_subst, ty), reason)] ++ acc)
   }
 }
 
@@ -358,16 +361,18 @@ fn needs_instantiation(ty, reason) = {
 // Forward-reference prescan: bind FnStmt names with fresh types
 // so functions can reference each other regardless of definition order.
 // Uses the same Infer effect — no separate mechanism.
-fn prescan_fns(stmts) with Infer = prescan_fns_at(stmts, 0)
+fn prescan_fns(stmts) with Infer = prescan_fns_pop(stmts)
 
-fn prescan_fns_at(stmts, i) with Infer = {
-  if i < len(stmts) {
-    match stmts[i] {
+fn prescan_fns_pop(stmts) with Infer = {
+  if len(stmts) == 0 { () }
+  else {
+    let (rest, stmt) = list_pop(stmts)
+    prescan_fns_pop(rest)
+    match stmt {
       FnStmt(name, _, _, _, _) => bind(name, fresh(), Inferred("forward declaration")),
       _ => ()
     }
-    prescan_fns_at(stmts, i + 1)
-  } else { () }
+  }
 }
 
 // Source in, truth out.

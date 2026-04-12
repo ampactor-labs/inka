@@ -22,6 +22,7 @@ pub enum VmValue {
     Unit,
     List(Arc<Vec<VmValue>>),
     Tuple(Arc<Vec<VmValue>>),
+    ListSlice(Arc<Vec<VmValue>>, usize, usize),
     Closure(Arc<Closure>),
     BundledClosure {
         closure: Arc<Closure>,
@@ -59,6 +60,7 @@ impl PartialEq for VmValue {
             (VmValue::Bool(a), VmValue::Bool(b)) => a == b,
             (VmValue::Unit, VmValue::Unit) => true,
             (VmValue::List(a), VmValue::List(b)) => a == b,
+            (VmValue::ListSlice(a, s1, e1), VmValue::ListSlice(b, s2, e2)) => a[*s1..*e1] == b[*s2..*e2],
             (VmValue::Tuple(a), VmValue::Tuple(b)) => a == b,
             (
                 VmValue::Variant {
@@ -158,6 +160,16 @@ impl fmt::Display for VmValue {
             VmValue::List(elems) => {
                 write!(f, "[")?;
                 for (i, e) in elems.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{e}")?;
+                }
+                write!(f, "]")
+            }
+            VmValue::ListSlice(elems, start, end) => {
+                write!(f, "[")?;
+                for (i, e) in elems[*start..*end].iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }

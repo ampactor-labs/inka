@@ -132,7 +132,7 @@ fn emit_fn(fn_def, ctx) = {
   out("  (func $" ++ name ++ " (param $__closure i32)")
   emit_params(params, param_types, 0)
   out(" (result " ++ result_ty ++ ")" ++ eff_annotation ++ NL)
-  emit_local_decls(with_temps, 0, body, env)
+  emit_local_decls(with_temps, body, env)
   emit_fn_body(body, params, with_temps, ctx)
 
   out("  )" ++ NL)
@@ -181,12 +181,15 @@ fn emit_expr(e, params, locals, ctx) = match e {
   },
   LMakeList(_, elems) => {
     if len(elems) == 0 {
-      out("    i32.const 4" ++ NL ++ "    call $alloc" ++ NL
+      out("    i32.const 8" ++ NL ++ "    call $alloc" ++ NL
       ++ "    local.tee $__vptr" ++ NL
+      ++ "    i32.const 0" ++ NL ++ "    i32.store" ++ NL
+      ++ "    local.get $__vptr" ++ NL
+      ++ "    i32.const 4" ++ NL ++ "    i32.add" ++ NL
       ++ "    i32.const 0" ++ NL ++ "    i32.store" ++ NL
       ++ "    local.get $__vptr" ++ NL)
     }
-    else { emit_make_tuple(elems, params, locals, ctx) }
+    else { emit_make_list(elems, params, locals, ctx) }
   },
   LGlobal(_, name) => {
     if string_in(locals, name, 0) { out("    local.get $" ++ name ++ NL) }
@@ -267,13 +270,20 @@ fn emit_expr(e, params, locals, ctx) = match e {
   LBreak(_, value) => { emit_expr(value, params, locals, ctx); out("    br $break" ++ NL) },
   LTailCall(ty, func, args) => emit_call_expr(func, args, params, locals, ctx),
   LReturn(_, value) => { emit_expr(value, params, locals, ctx); out("    return" ++ NL) },
-  LIndex(_, coll, idx_expr) => {
-    emit_expr(coll, params, locals, ctx)
-    emit_expr(idx_expr, params, locals, ctx)
-    out("    i32.const 4" ++ NL ++ "    i32.mul" ++ NL
-    ++ "    i32.add" ++ NL
-    ++ "    i32.const 4" ++ NL ++ "    i32.add" ++ NL
-    ++ "    i32.load" ++ NL)
+  LIndex(_, coll, idx_expr, is_tuple) => {
+    if is_tuple {
+      emit_expr(coll, params, locals, ctx)
+      emit_expr(idx_expr, params, locals, ctx)
+      out("    i32.const 4" ++ NL ++ "    i32.mul" ++ NL
+      ++ "    i32.add" ++ NL
+      ++ "    i32.const 4" ++ NL ++ "    i32.add" ++ NL
+      ++ "    i32.load" ++ NL)
+    } else {
+      out("    i32.const 0" ++ NL)
+      emit_expr(coll, params, locals, ctx)
+      emit_expr(idx_expr, params, locals, ctx)
+      out("    call $list_index" ++ NL)
+    }
   },
   LMakeClosure(_, fn_def, captures) => {
     let LFn(fname, _, _, _, _) = fn_def
@@ -522,7 +532,7 @@ fn emit_start(stmts, ctx) = {
   let with_temps = add_emitter_temps(locals, ctx)
   let env = ctx_type_env(ctx)
   out("  (func $_start (export " ++ DQ ++ "_start" ++ DQ ++ ")" ++ NL)
-  emit_local_decls(with_temps, 0, stmts, env)
+  emit_local_decls(with_temps, stmts, env)
   emit_stmts_void(stmts, 0, [], with_temps, ctx)
   out("  )" ++ NL)
 }
@@ -551,7 +561,7 @@ fn collect_locals_expr(e)= match e {
   LMakeVariant(_, _, fields) => collect_locals_list(fields, 0),
   LBinOp(_, _, l, r) => string_union(collect_locals_expr(l), collect_locals_expr(r)),
   LUnaryOp(_, _, inner) => collect_locals_expr(inner),
-  LIndex(_, coll, idx) => string_union(collect_locals_expr(coll), collect_locals_expr(idx)),
+  LIndex(_, coll, idx, _) => string_union(collect_locals_expr(coll), collect_locals_expr(idx)),
   LStore(_, _, value) => collect_locals_expr(value),
   _ => []
 }
@@ -584,13 +594,14 @@ fn collect_locals_pats(pats, idx)= {
 
 // Find the type of a named local by walking the body looking for its LLet.
 // The LLet already carries the resolved Ty — no re-inference, just a lookup.
-fn find_local_ty(name, body) = find_local_ty_at(name, body, 0)
+fn find_local_ty(name, body) = find_local_ty_pop(name, body)
 
-fn find_local_ty_at(name, body, i) = {
-  if i >= len(body) { TUnit }
+fn find_local_ty_pop(name, body) = {
+  if len(body) == 0 { TUnit }
   else {
-    let t = find_local_ty_expr(name, body[i])
-    match t { TUnit => find_local_ty_at(name, body, i + 1), _ => t }
+    let (rest, expr) = list_pop(body)
+    let t = find_local_ty_expr(name, expr)
+    match t { TUnit => find_local_ty_pop(name, rest), _ => t }
   }
 }
 
@@ -616,11 +627,10 @@ fn find_local_ty_expr_inner(name, expr) = match expr {
   _ => TUnit
 }
 
-// emit_local_decls reads the Ty field of each LLet directly — no walk-and-tag.
-fn emit_local_decls(locals, idx, body, env)= {
-  if idx >= len(locals) { () }
+fn emit_local_decls(locals, body, env)= {
+  if len(locals) == 0 { () }
   else {
-    let name = locals[idx]
+    let (rest, name) = list_pop(locals)
     let wtype = if len(name) >= 2 && string_slice(name, 0, 2) == "__" {
       "i32"
     } else {
@@ -629,7 +639,7 @@ fn emit_local_decls(locals, idx, body, env)= {
     if len(name) > 0 {
       out("    (local $" ++ name ++ " " ++ wtype ++ ")" ++ NL)
     } else { () }
-    emit_local_decls(locals, idx + 1, body, env)
+    emit_local_decls(rest, body, env)
   }
 }
 

@@ -81,6 +81,50 @@ fn push(list, val) with Memory, Alloc = {
   snoc
 }
 
+fn list_pop(list) with Memory, Alloc = {
+  let list_len = load_i32(list)
+  if list_len == 0 {
+    (make_list(0), ())
+  } else {
+    let tag = load_i32(list + 4)
+    if tag == 1 {
+      let left = load_i32(list + 8)
+      let val = load_i32(list + 12)
+      (left, val)
+    } else {
+      let val = list_index(list, list_len - 1)
+      let left = slice(list, 0, list_len - 1)
+      (left, val)
+    }
+  }
+}
+
+// list_head: return the LAST element of a snoc list. Zero allocation.
+// For hot loops like env_lookup, use list_head + list_tail instead of
+// list_pop to avoid allocating a tuple on every iteration.
+fn list_head(list) with Memory = {
+  let list_len = load_i32(list)
+  let tag = load_i32(list + 4)
+  if tag == 1 {
+    load_i32(list + 12)
+  } else {
+    list_index(list, list_len - 1)
+  }
+}
+
+// list_tail: return the list WITHOUT its last element. Zero allocation
+// for snoc nodes (just reads the left pointer). For other tags, creates
+// a slice view (16 bytes — still much cheaper than a tuple per step).
+fn list_tail(list) with Memory, Alloc = {
+  let list_len = load_i32(list)
+  let tag = load_i32(list + 4)
+  if tag == 1 {
+    load_i32(list + 8)
+  } else {
+    slice(list, 0, list_len - 1)
+  }
+}
+
 fn slice(list, start, end) with Memory, Alloc = {
   let new_len = end - start
   if new_len <= 0 { make_list(0) }
@@ -239,6 +283,15 @@ fn print_string(s) with Memory = {
   store_i32(4, slen)
   // fd_write(stdout=1, iov=0, iovs_len=1, nwritten=8)
   fd_write(1, 0, 1, 8)
+}
+
+// eprint_string: write to stderr (fd=2). Diagnostics go here,
+// never to stdout — stdout is the compiler's output channel.
+fn eprint_string(s) with Memory = {
+  let slen = load_i32(s)
+  store_i32(0, s + 4)
+  store_i32(4, slen)
+  fd_write(2, 0, 1, 8)
 }
 
 fn print_int(n) with Memory, Alloc = {

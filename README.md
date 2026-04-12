@@ -201,33 +201,27 @@ Lux is a research language under active development.
 | Pattern matching with exhaustiveness checking | ✅ Working |
 | Records with row polymorphism | ✅ Working |
 | Pipe operator (`x \|> f \|> g`) | ✅ Working |
+| WASM self-hosting bootstrap (lux3 compiles itself to lux4) | 🔄 In progress |
 | 52 examples, 42 unit tests, 7 crucibles | ✅ Passing |
 
 ## Try it
 
 ```bash
 git clone https://github.com/ampactor/lux && cd lux
-cargo install --path .
+cargo build --release
 
-# The crucibles — aspirational programs that stress-test the language
-lux examples/crucible_search.lux       # N-Queens via backtracking effects
-lux examples/crucible_ml.lux           # autodiff as algebraic effects
-lux examples/crucible_dsp.lux          # real-time audio via effect handlers
-lux examples/crucible_dsp_stateful.lux # biquad filter with handler-local state
-lux examples/crucible_compose.lux      # vertical effect composition
-lux examples/crucible_dsp_ml.lux       # differentiable audio pipeline
+# Run examples via the Rust VM
+cargo run --release -- examples/crucible_search.lux       # N-Queens via backtracking effects
+cargo run --release -- examples/crucible_ml.lux           # autodiff as algebraic effects
+cargo run --release -- examples/crucible_dsp.lux          # real-time audio via effect handlers
+cargo run --release -- examples/crucible_compose.lux      # vertical effect composition
 
-# The bootstrap — Lux compiling and executing itself
-lux examples/crucible_bootstrap.lux    # self-hosted pipeline end-to-end
+# Compile to WebAssembly
+cargo run --release -- wasm examples/wasm_bootstrap.lux > lux3.wasm
 
-# Foundations
-lux examples/effects.lux               # algebraic effects
-lux examples/stateful.lux              # handler-local state
-lux examples/generators.lux            # generators as effects
-lux examples/effect_algebra.lux        # !Alloc, Pure, negation
-lux examples/alloc.lux                 # teaching compiler output
-lux examples/ownership.lux             # the annotation gradient
-lux --quiet examples/benchmark.lux     # comprehensive test suite
+# Self-host — Lux compiling itself (requires wasmtime)
+sed -n '/^(module/,$p' lux3.wasm > lux3.wat
+cat examples/wasm_bootstrap.lux | wasmtime run --dir . -W max-wasm-stack=33554432 lux3.wat > lux4.wasm
 ```
 
 ## Prism

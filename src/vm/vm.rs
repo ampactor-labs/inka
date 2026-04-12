@@ -663,6 +663,23 @@ impl Vm {
                                 return Err(VmError::new("index out of bounds", line));
                             }
                         }
+                        (VmValue::ListSlice(elems, start, end), VmValue::Int(i)) => {
+                            let idx = *start + *i as usize;
+                            if idx < *end {
+                                self.stack.push(elems[idx].clone());
+                            } else {
+                                let line = self.frames[frame_idx].current_line();
+                                let file = self.frames[frame_idx].proto.chunk.name.as_str();
+                                eprintln!(
+                                    "CRITICAL VM ERROR: slice index out of bounds in {} at line {}. Expected index {}, slice len {}",
+                                    file,
+                                    line,
+                                    *i as usize,
+                                    *end - *start
+                                );
+                                return Err(VmError::new("index out of bounds", line));
+                            }
+                        }
                         (VmValue::Variant { fields, .. }, VmValue::Int(i)) => {
                             let idx = *i as usize;
                             if idx < fields.len() {
@@ -1357,6 +1374,7 @@ impl Vm {
         });
         self.register_builtin("len", |args| match args.first() {
             Some(VmValue::List(l)) => Ok(VmValue::Int(l.len() as i64)),
+            Some(VmValue::ListSlice(_, start, end)) => Ok(VmValue::Int((*end - *start) as i64)),
             Some(VmValue::String(s)) => Ok(VmValue::Int(s.len() as i64)),
             _ => Ok(VmValue::Int(0)),
         });
@@ -1415,6 +1433,75 @@ impl Vm {
                     Ok(VmValue::List(Arc::new(slice)))
                 }
                 _ => Err("slice expects (List, Int, Int)".into()),
+            }
+        });
+        self.register_builtin("list_pop", |args| {
+            match args.first() {
+                Some(VmValue::List(items)) => {
+                    let len = items.len();
+                    if len == 0 {
+                        Ok(VmValue::Tuple(Arc::new(vec![VmValue::List(Arc::new(vec![])), VmValue::Unit])))
+                    } else {
+                        Ok(VmValue::Tuple(Arc::new(vec![
+                            VmValue::ListSlice(items.clone(), 0, len - 1),
+                            items[len - 1].clone()
+                        ])))
+                    }
+                }
+                Some(VmValue::ListSlice(items, start, end)) => {
+                    let len = end - start;
+                    if len == 0 {
+                        Ok(VmValue::Tuple(Arc::new(vec![VmValue::List(Arc::new(vec![])), VmValue::Unit])))
+                    } else {
+                        Ok(VmValue::Tuple(Arc::new(vec![
+                            VmValue::ListSlice(items.clone(), *start, end - 1),
+                            items[*end - 1].clone()
+                        ])))
+                    }
+                }
+                _ => Err("list_pop expects a List".into()),
+            }
+        });
+        self.register_builtin("list_head", |args| {
+            match args.first() {
+                Some(VmValue::List(items)) => {
+                    let len = items.len();
+                    if len == 0 {
+                        Ok(VmValue::Unit)
+                    } else {
+                        Ok(items[len - 1].clone())
+                    }
+                }
+                Some(VmValue::ListSlice(items, start, end)) => {
+                    let len = end - start;
+                    if len == 0 {
+                        Ok(VmValue::Unit)
+                    } else {
+                        Ok(items[*end - 1].clone())
+                    }
+                }
+                _ => Err("list_head expects a List".into()),
+            }
+        });
+        self.register_builtin("list_tail", |args| {
+            match args.first() {
+                Some(VmValue::List(items)) => {
+                    let len = items.len();
+                    if len == 0 {
+                        Ok(VmValue::List(Arc::new(vec![])))
+                    } else {
+                        Ok(VmValue::ListSlice(items.clone(), 0, len - 1))
+                    }
+                }
+                Some(VmValue::ListSlice(items, start, end)) => {
+                    let len = end - start;
+                    if len == 0 {
+                        Ok(VmValue::List(Arc::new(vec![])))
+                    } else {
+                        Ok(VmValue::ListSlice(items.clone(), *start, end - 1))
+                    }
+                }
+                _ => Err("list_tail expects a List".into()),
             }
         });
         self.register_builtin("split", |args| match (args.first(), args.get(1)) {

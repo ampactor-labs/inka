@@ -42,6 +42,8 @@ type Expr
   | ResumeExpr(Expr, List)
   | RecordExpr(List)
   | StringInterp(List)
+  | LoopExpr(Expr)
+  | BreakExpr(Expr)
 
 // Match arm: (pattern, body)
 type Pat
@@ -838,9 +840,11 @@ fn parse_dispatch(tokens, p, typ) = {
     let (fe, p2) = parse_for(tokens, p + 1);
     (fe, p2)
   }
+  else { if typ == "Loop" { parse_loop(tokens, p + 1) }
+  else { if typ == "Break" { parse_break(tokens, p + 1) }
   else { if typ == "Handle" { parse_handle(tokens, p + 1) }
   else { if typ == "Resume" { parse_resume(tokens, p + 1) }
-  else { parse_prefix(tokens, p, typ) }}}}}}}}}}
+  else { parse_prefix(tokens, p, typ) }}}}}}}}}}}}
 }
 
 fn parse_prefix(tokens, p, typ) = {
@@ -971,6 +975,22 @@ fn parse_import_path(tokens, pos) = {
 // handle { body } [with name = init, ...] { op(params) => body, ... }
 //
 // HandleExpr(body, handler_expr, state_bindings)
+
+fn parse_loop(tokens, pos) = {
+  let (body, p) = parse_block(tokens, pos);
+  (sp(LoopExpr(body), tokens, pos - 1), p)
+}
+
+fn parse_break(tokens, pos) = {
+  // Try to parse an optional expression for break value
+  let p = skip_ws(tokens, pos);
+  let (value, p2) = if at(tokens, p, "Semicolon") || at(tokens, p, "RBrace") || at(tokens, p, "RBracket") || at(tokens, p, "RParen") {
+    (sp(TupleExpr([]), tokens, p), p)
+  } else {
+    parse_expr(tokens, p)
+  };
+  (sp(BreakExpr(value), tokens, pos - 1), p2)
+}
 
 fn parse_handle(tokens, pos) = {
   let p = skip_ws(tokens, pos);

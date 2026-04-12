@@ -136,6 +136,29 @@ fn emit_tuple_sets(elems, idx, params, locals, ctx) = {
   }
 }
 
+// ─── List Construction ──────────────────────────────────────
+
+fn emit_make_list(elems, params, locals, ctx) = {
+  let n = len(elems)
+  out("    i32.const 0" ++ NL
+  ++ "    i32.const " ++ to_string(n) ++ NL
+  ++ "    call $make_list" ++ NL)
+  emit_list_sets(elems, 0, params, locals, ctx)
+}
+
+fn emit_list_sets(elems, idx, params, locals, ctx) = {
+  if idx >= len(elems) { () }
+  else {
+    out("    local.set $__match" ++ NL
+    ++ "    i32.const 0" ++ NL
+    ++ "    local.get $__match" ++ NL
+    ++ "    i32.const " ++ to_string(idx) ++ NL)
+    do_emit_expr(elems[idx], params, locals, ctx)
+    out("    call $list_set" ++ NL)
+    emit_list_sets(elems, idx + 1, params, locals, ctx)
+  }
+}
+
 fn emit_tuple_elems(elems, idx, params, locals, ctx) = {
   if idx >= len(elems) { () }
   else {

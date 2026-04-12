@@ -106,7 +106,7 @@ fn walk_lowir(e) with LowVisit = {
 
     // ── Binary children ──
     LBinOp(_, _, l, r)  => { walk_lowir(l); walk_lowir(r) },
-    LIndex(_, coll, idx) => { walk_lowir(coll); walk_lowir(idx) },
+    LIndex(_, coll, idx, _) => { walk_lowir(coll); walk_lowir(idx) },
 
     // ── N-ary children (list) ──
     LBlock(_, stmts)           => walk_list(stmts),

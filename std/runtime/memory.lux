@@ -38,27 +38,59 @@ effect Alloc {
 
 fn len(obj) with Memory = load_i32(obj)
 
+fn make_list(count) with Memory, Alloc = {
+  let t = alloc(8 + count * 4)
+  store_i32(t, count)
+  store_i32(t + 4, 0)
+  t
+}
+
+fn list_set(l, idx, val) with Memory = {
+  store_i32(l + 8 + idx * 4, val)
+  l
+}
+
+fn list_index(list, i) with Memory = {
+  let tag = load_i32(list + 4)
+  if tag == 0 {
+    load_i32(list + 8 + i * 4)
+  } else { if tag == 1 {
+    let left = load_i32(list + 8)
+    let left_len = load_i32(left)
+    if i < left_len { list_index(left, i) }
+    else { load_i32(list + 12) }
+  } else { if tag == 3 {
+    let left = load_i32(list + 8)
+    let left_len = load_i32(left)
+    if i < left_len { list_index(left, i) }
+    else { list_index(load_i32(list + 12), i - left_len) }
+  } else { if tag == 4 {
+    let base = load_i32(list + 8)
+    let start = load_i32(list + 12)
+    list_index(base, start + i)
+  } else { 1000 } } } }
+}
+
 fn push(list, val) with Memory, Alloc = {
   let old_len = load_i32(list)
-  let new_list = alloc(4 + (old_len + 1) * 4)
-  store_i32(new_list, old_len + 1)
-  // Copy old elements if list is non-null
-  if old_len > 0 { mem_copy(new_list + 4, list + 4, old_len * 4) } else { () }
-  store_i32(new_list + 4 + old_len * 4, val)
-  new_list
+  let snoc = alloc(16)
+  store_i32(snoc, old_len + 1)
+  store_i32(snoc + 4, 1)
+  store_i32(snoc + 8, list)
+  store_i32(snoc + 12, val)
+  snoc
 }
 
 fn slice(list, start, end) with Memory, Alloc = {
   let new_len = end - start
-  if new_len <= 0 {
-    let empty = alloc(4)
-    store_i32(empty, 0)
-    empty
-  } else {
-    let new_list = alloc(4 + new_len * 4)
-    store_i32(new_list, new_len)
-    mem_copy(new_list + 4, list + 4 + start * 4, new_len * 4)
-    new_list
+  if new_len <= 0 { make_list(0) }
+  else {
+    let node = alloc(16)
+    store_i32(node, new_len)
+    store_i32(node + 4, 4)
+    store_i32(node + 8, list)
+    store_i32(node + 12, start)
+    node
   }
 }
 
@@ -74,12 +106,17 @@ fn from_char_code(code) with Memory, Alloc = {
 fn list_concat(a, b) with Memory, Alloc = {
   let len_a = load_i32(a)
   let len_b = load_i32(b)
-  let total = len_a + len_b
-  let new_list = alloc(4 + total * 4)
-  store_i32(new_list, total)
-  if len_a > 0 { mem_copy(new_list + 4, a + 4, len_a * 4) } else { () }
-  if len_b > 0 { mem_copy(new_list + 4 + len_a * 4, b + 4, len_b * 4) } else { () }
-  new_list
+  if len_a == 0 { b }
+  else { if len_b == 0 { a }
+  else {
+    let total = len_a + len_b
+    let node = alloc(16)
+    store_i32(node, total)
+    store_i32(node + 4, 3)
+    store_i32(node + 8, a)
+    store_i32(node + 12, b)
+    node
+  } }
 }
 
 // Runtime-dispatch concatenation for unknown types.
@@ -242,51 +279,69 @@ fn str_slice(s, start, end) with Memory, Alloc = {
 }
 
 // split: break string at separator occurrences
-fn split_find(s, sep, slen, seplen, i) with Memory, Alloc =
+// In-place byte comparison — no allocation during scanning
+fn split_match_at(s, sep, seplen, offset, j) with Memory =
+  if j >= seplen { 1 }
+  else {
+    if load_i8(s + 4 + offset + j) != load_i8(sep + 4 + j) { 0 }
+    else { split_match_at(s, sep, seplen, offset, j + 1) }
+  }
+
+fn split_find(s, sep, slen, seplen, i) with Memory =
   if i + seplen > slen { 0 - 1 }
   else {
-    if str_eq(str_slice(s, i, i + seplen), sep) == 1 { i }
+    if split_match_at(s, sep, seplen, i, 0) == 1 { i }
     else { split_find(s, sep, slen, seplen, i + 1) }
   }
+
+// O(N) split: pass offset into original string, never copy the tail
+fn split_from(s, sep, slen, seplen, offset) with Memory, Alloc = {
+  let idx = split_find(s, sep, slen, seplen, offset)
+  if idx < 0 {
+    let tail = str_slice(s, offset, slen)
+    let list = make_list(1)
+    list_set(list, 0, tail)
+  } else {
+    let before = str_slice(s, offset, idx)
+    let rest = split_from(s, sep, slen, seplen, idx + seplen)
+    let before_list = make_list(1)
+    let _ = list_set(before_list, 0, before)
+    list_concat(before_list, rest)
+  }
+}
 
 fn split(s, sep) with Memory, Alloc = {
   let slen = len(s)
   let seplen = len(sep)
-  let idx = split_find(s, sep, slen, seplen, 0)
-  if idx < 0 {
-    let list = alloc(8)
-    store_i32(list, 1)
-    store_i32(list + 4, s)
-    list
-  } else {
-    let before = str_slice(s, 0, idx)
-    let after = str_slice(s, idx + seplen, slen)
-    let rest = split(after, sep)
-    let rest_len = len(rest)
-    let result = alloc(4 + (rest_len + 1) * 4)
-    store_i32(result, rest_len + 1)
-    store_i32(result + 4, before)
-    if rest_len > 0 { mem_copy(result + 8, rest + 4, rest_len * 4) } else { 0 }
-    result
-  }
+  split_from(s, sep, slen, seplen, 0)
 }
 
-fn build_chars(s, list, slen, i) with Memory, Alloc =
-  if i >= slen { 0 }
+fn build_chars_chunk(s, list, start, count, i) with Memory, Alloc = {
+  if i >= count { list }
   else {
     let ch = alloc(5)
     store_i32(ch, 1)
-    store_i8(ch + 4, load_i8(s + 4 + i))
-    store_i32(list + 4 + i * 4, ch)
-    build_chars(s, list, slen, i + 1)
+    store_i8(ch + 4, load_i8(s + 4 + start + i))
+    let _ = list_set(list, i, ch)
+    build_chars_chunk(s, list, start, count, i + 1)
   }
+}
+
+fn chars_tree(s, start, end) with Memory, Alloc = {
+  let count = end - start
+  if count <= 256 {
+    let list = make_list(count)
+    build_chars_chunk(s, list, start, count, 0)
+  } else {
+    let mid = start + count / 2
+    let left = chars_tree(s, start, mid)
+    let right = chars_tree(s, mid, end)
+    list_concat(left, right)
+  }
+}
 
 fn chars(s) with Memory, Alloc = {
-  let slen = len(s)
-  let list = alloc(4 + slen * 4)
-  store_i32(list, slen)
-  build_chars(s, list, slen, 0)
-  list
+  chars_tree(s, 0, len(s))
 }
 
 // println is NOT a runtime function. The lowering dispatches it

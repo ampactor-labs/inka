@@ -52,7 +52,7 @@ fn pe_coll(e) = match e {
   LMakeList(_, es) => "[" ++ js(mp(es), ", ") ++ "]",
   LMakeTuple(_, es) => "(" ++ js(mp(es), ", ") ++ ")",
   LMakeVariant(_, n, fs) => n ++ "(" ++ js(mp(fs), ", ") ++ ")",
-  LIndex(_, c, i) => pe(c) ++ "[" ++ pe(i) ++ "]",
+  LIndex(_, c, i, _) => pe(c) ++ "[" ++ pe(i) ++ "]",
   _ => ""
 }
 

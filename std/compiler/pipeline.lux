@@ -138,7 +138,8 @@ fn checked_with_cache(source) = {
   let (import_env, next_n, import_ast, _seen) =
     resolve_and_check_modules(source, prelude_env, start_n)
   // Check user source against accumulated env.
-  let user_ast = (source |> strip_imports) |> frontend
+  // No strip_imports — parser creates ImportStmt, checker/lowerer ignore it.
+  let user_ast = source |> frontend
   let env = user_ast |> check_program_with(import_env, next_n)
   let combined_ast = prelude_ast ++ import_ast ++ user_ast
   handle { validate(combined_ast, env) } {
@@ -246,8 +247,6 @@ fn check_let_against_aliases_at(name, value, aliases, i) with Diagnostic = {
     let _ = match result {
       Disproven(reason) =>
         report("", "refinement", alias_name ++ " violation: " ++ name ++ " -- " ++ reason, 0, 0),
-      Proven =>
-        report("", "refinement", alias_name ++ " satisfied: " ++ name, 0, 0),
       _ => ()
     }
     check_let_against_aliases_at(name, value, aliases, i + 1)
@@ -344,7 +343,8 @@ fn compile_wasm(source) = {
   let (import_env, next_n, import_ast, _seen) =
     resolve_and_check_modules(source, prelude_env, start_n)
   // Check user source against accumulated env.
-  let user_ast = (source |> strip_imports) |> frontend
+  // No strip_imports — parser creates ImportStmt, checker/lowerer ignore it.
+  let user_ast = source |> frontend
   let env = user_ast |> check_program_with(import_env, next_n)
   // Prepend runtime ONLY for lowering.
   let runtime = read_file("std/runtime/memory.lux")
@@ -425,7 +425,8 @@ fn resolve_and_check_at(paths, env, n, seen, combined_ast) = {
       let (dep_env, dep_n, dep_ast, dep_seen) =
         resolve_and_check_at(dep_imports, env, n, seen ++ [path], combined_ast)
       // Check THIS module against accumulated dependency env
-      let mod_ast = (file_source |> strip_imports) |> frontend
+      // No strip_imports — ImportStmt flows through and is ignored.
+      let mod_ast = file_source |> frontend
       let mod_env = mod_ast |> check_program_with(dep_env, dep_n)
       let new_n = dep_n + len(mod_env) * 10
       // Continue with remaining imports

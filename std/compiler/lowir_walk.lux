@@ -56,8 +56,8 @@ fn walk_ir(node) with LowIRVisit = match node {
   },
   LMatch(ty, scrutinee, arms) =>
     visit_lowir(LMatch(ty, walk_ir(scrutinee), walk_ir_arms(arms))),
-  LIndex(ty, coll, idx) =>
-    visit_lowir(LIndex(ty, walk_ir(coll), walk_ir(idx))),
+  LIndex(ty, coll, idx, is_tuple) =>
+    visit_lowir(LIndex(ty, walk_ir(coll), walk_ir(idx), is_tuple)),
   LReturn(ty, value) =>
     visit_lowir(LReturn(ty, walk_ir(value))),
   LLoop(ty, body) =>

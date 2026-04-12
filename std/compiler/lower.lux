@@ -260,6 +260,21 @@ fn lower_expr(sexpr, env) = {
       LBlock(lexpr_ty(lowered_final), lowered_stmts ++ [lowered_final])
     },
 
+    LoopExpr(body) => {
+      // Get the type of the LoopExpr (which was successfully inferred as the fresh return type).
+      // Since it's dynamically typed at Lowering, we'll just extract the fresh infer from the AST node if possible,
+      // or default to TUnit since the loop itself doesn't return anything unless broken from.
+      // Actually, we must use lexpr_ty(lowered_body) or the AST type.
+      // Wait, we don't have sexpr_ty here natively, but we can query env or just let LLoop hold TUnit.
+      let lowered_body = lower_expr(body, env)
+      LLoop(TUnit, [lowered_body])
+    },
+
+    BreakExpr(value) => {
+      let lowered_value = lower_expr(value, env)
+      LBreak(lexpr_ty(lowered_value), lowered_value)
+    },
+
     ListExpr(elems) => {
       let lowered = lower_exprs(elems, env)
       LMakeList(lty_list(lowered), lowered)
@@ -270,11 +285,11 @@ fn lower_expr(sexpr, env) = {
     },
     Index(collection, idx) => {
       let lowered_coll = lower_expr(collection, env)
-      LIndex(lty_index_result(lowered_coll), lowered_coll, lower_expr(idx, env))
+      LIndex(lty_index_result(lowered_coll), lowered_coll, lower_expr(idx, env), false)
     },
     FieldAccess(obj, field) => {
       let lowered_obj = lower_expr(obj, env)
-      LIndex(lty_index_result(lowered_obj), lowered_obj, LConst(TString, LString(field)))
+      LIndex(lty_index_result(lowered_obj), lowered_obj, LConst(TString, LString(field)), true)
     },
 
     RecordExpr(fields) => {
@@ -580,7 +595,7 @@ fn lower_destructure_bindings_offset(names, offset, idx) = {
     let name = names[idx]
     if name == "_" { lower_destructure_bindings_offset(names, offset, idx + 1) }
     else {
-      [LLet(TUnit, name, LIndex(TUnit, LGlobal(TUnit, "_lp"), LConst(TInt, LInt(offset + idx))))]
+      [LLet(TUnit, name, LIndex(TUnit, LGlobal(TUnit, "_lp"), LConst(TInt, LInt(offset + idx)), true))]
       ++ lower_destructure_bindings_offset(names, offset, idx + 1)
     }
   }
@@ -592,7 +607,7 @@ fn lower_destructure_bindings(names, idx) = {
     let name = names[idx]
     if name == "_" { lower_destructure_bindings(names, idx + 1) }
     else {
-      [LLet(TUnit, name, LIndex(TUnit, LGlobal(TUnit, "_dt"), LConst(TInt, LInt(idx))))]
+      [LLet(TUnit, name, LIndex(TUnit, LGlobal(TUnit, "_dt"), LConst(TInt, LInt(idx)), true))]
       ++ lower_destructure_bindings(names, idx + 1)
     }
   }
@@ -700,7 +715,7 @@ fn install_evidence_from_record(handler_name, op_names, idx) = {
   if idx >= len(op_names) { [] }
   else {
     let ev_name = "__ev_op_" ++ op_names[idx]
-    let index_expr = LIndex(TUnit, LGlobal(TUnit, handler_name), LConst(TInt, LInt(idx)))
+    let index_expr = LIndex(TUnit, LGlobal(TUnit, handler_name), LConst(TInt, LInt(idx)), true)
     [LLet(TUnit, ev_name, index_expr)]
     ++ install_evidence_from_record(handler_name, op_names, idx + 1)
   }
@@ -711,7 +726,7 @@ fn install_stateful_evidence(handler_name, op_names, state_names, idx, env) = {
   if idx >= len(op_names) { [] }
   else {
     let ev_name = "__ev_op_" ++ op_names[idx]
-    let index_expr = LIndex(TUnit, LGlobal(TUnit, handler_name), LConst(TInt, LInt(idx)))
+    let index_expr = LIndex(TUnit, LGlobal(TUnit, handler_name), LConst(TInt, LInt(idx)), true)
     // For stateful handlers, the closure from the record already captures
     // the state variable names. We substitute those names to heap cells.
     let substituted = subst_state_to_cells(index_expr, state_names)

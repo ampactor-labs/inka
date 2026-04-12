@@ -75,7 +75,7 @@ type LowExpr
   | LMakeList(Ty, List)
   | LMakeTuple(Ty, List)
   | LMakeVariant(Ty, String, List)
-  | LIndex(Ty, LowExpr, LowExpr)
+  | LIndex(Ty, LowExpr, LowExpr, Bool)
   | LMatch(Ty, LowExpr, List)
   | LLoop(Ty, List)
   | LBreak(Ty, LowExpr)
@@ -106,7 +106,7 @@ fn lexpr_ty(e) = match e {
   LMakeList(t, _)       => t,
   LMakeTuple(t, _)      => t,
   LMakeVariant(t, _, _) => t,
-  LIndex(t, _, _)       => t,
+  LIndex(t, _, _, _)    => t,
   LMatch(t, _, _)       => t,
   LLoop(t, _)           => t,
   LBreak(t, _)          => t,

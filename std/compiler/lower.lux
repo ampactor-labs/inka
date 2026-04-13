@@ -594,7 +594,8 @@ fn emit_dummy_ops(ops, env) = {
 fn lower_destructure_bindings_offset(names, offset, idx) = {
   if len(names) == 0 { [] }
   else {
-    let (rest, name) = list_pop(names)
+    let name = list_first(names)
+    let rest = list_rest(names)
     if name == "_" { lower_destructure_bindings_offset(rest, offset, idx + 1) }
     else {
       [LLet(TUnit, name, LIndex(TUnit, LGlobal(TUnit, "_lp"), LConst(TInt, LInt(offset + idx)), true))]
@@ -606,7 +607,8 @@ fn lower_destructure_bindings_offset(names, offset, idx) = {
 fn lower_destructure_bindings(names, idx) = {
   if len(names) == 0 { [] }
   else {
-    let (rest, name) = list_pop(names)
+    let name = list_first(names)
+    let rest = list_rest(names)
     if name == "_" { lower_destructure_bindings(rest, idx + 1) }
     else {
       [LLet(TUnit, name, LIndex(TUnit, LGlobal(TUnit, "_dt"), LConst(TInt, LInt(idx)), true))]

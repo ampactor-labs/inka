@@ -118,17 +118,17 @@ fn walk_lowir(e) with LowVisit = {
     LIndex(_, coll, idx, _) => { walk_lowir(coll); walk_lowir(idx) },
 
     // ── N-ary children (list) ──
-    LBlock(_, stmts)           => walk_list(stmts),
-    LRegion(_, stmts)          => walk_list(stmts),
-    LMakeList(_, elems)        => walk_list(elems),
-    LMakeTuple(_, elems)       => walk_list(elems),
-    LMakeVariant(_, _, fields) => walk_list(fields),
-    LLoop(_, body)             => walk_list(body),
+    LBlock(_, stmts)           => walk_nodes(stmts),
+    LRegion(_, stmts)          => walk_nodes(stmts),
+    LMakeList(_, elems)        => walk_nodes(elems),
+    LMakeTuple(_, elems)       => walk_nodes(elems),
+    LMakeVariant(_, _, fields) => walk_nodes(fields),
+    LLoop(_, body)             => walk_nodes(body),
 
     // ── Branching ──
-    LIf(_, c, t, e)       => { walk_lowir(c); walk_list(t); walk_list(e) },
-    LCall(_, f, args)     => { walk_lowir(f); walk_list(args) },
-    LTailCall(_, f, args) => { walk_lowir(f); walk_list(args) },
+    LIf(_, c, t, e)       => { walk_lowir(c); walk_nodes(t); walk_nodes(e) },
+    LCall(_, f, args)     => { walk_lowir(f); walk_nodes(args) },
+    LTailCall(_, f, args) => { walk_lowir(f); walk_nodes(args) },
 
     // ── Match: walk scrutinee, then arms (patterns + bodies) ──
     LMatch(_, scr, arms)  => { walk_lowir(scr); walk_arms(arms) },
@@ -137,20 +137,20 @@ fn walk_lowir(e) with LowVisit = {
     // ── Closures: walk fn body + captures ──
     LMakeClosure(_, fn_def, captures) => {
       let LFn(_, _, _, body, _) = fn_def
-      walk_list(body)
-      walk_list(captures)
+      walk_nodes(body)
+      walk_nodes(captures)
     },
 
     // ── Suspend ──
-    LSuspend(_, _, val, args) => { walk_lowir(val); walk_list(args) },
+    LSuspend(_, _, val, args) => { walk_lowir(val); walk_nodes(args) },
 
     _ => ()
   }
 }
 
-fn walk_list(nodes) with LowVisit = {
+fn walk_nodes(nodes) with LowVisit = {
   if len(nodes) == 0 { () }
-  else { walk_lowir(list_head(nodes)); walk_list(list_tail(nodes)) }
+  else { walk_lowir(list_head(nodes)); walk_nodes(list_tail(nodes)) }
 }
 
 fn walk_arms(arms) with LowVisit = {
@@ -186,7 +186,7 @@ fn walk_pats(pats) with LowVisit = {
 
 fn collect_all(defs) =
   handle {
-    walk_list(defs)
+    walk_nodes(defs)
     get_collected()
   } with strings = [], tags = [], hs_globals = [], closures = [], max_call = 0 {
     visit_node(node) => {
@@ -336,7 +336,10 @@ fn emit_fn_table(fn_table) with WasmOut = {
 
 fn emit_fn_table_elems(fn_table) with WasmOut = {
   if len(fn_table) == 0 { () }
-  else { out(" $" ++ list_head(fn_table)); emit_fn_table_elems(list_tail(fn_table)) }
+  else {
+    emit_fn_table_elems(list_tail(fn_table))
+    out(" $" ++ list_head(fn_table))
+  }
 }
 
 // ─── Top-Level Structure ────────────────────────────────────

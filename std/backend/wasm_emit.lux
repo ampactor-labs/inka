@@ -108,10 +108,10 @@ fn emit_wasi_imports() with WasmOut = {
 fn emit_fn_list(fns, ctx) = {
   if len(fns) == 0 { () }
   else {
+    emit_fn_list(list_tail(fns), ctx)
     let mark = heap_save()
     emit_fn(list_head(fns), ctx)
     heap_restore(mark)
-    emit_fn_list(list_tail(fns), ctx)
   }
 }
 

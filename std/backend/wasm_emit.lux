@@ -109,9 +109,14 @@ fn emit_fn_list(fns, ctx) = {
   if len(fns) == 0 { () }
   else {
     emit_fn_list(list_tail(fns), ctx)
-    let mark = heap_save()
+    // The bracket heap_save/heap_restore around emit_fn was wiping
+    // ctx_globals (Snoc-tree pointers into memory above the mark,
+    // reached via list_pop/string_in inside the emitter). In the Rust
+    // VM this was a no-op; in WASM it silently corrupted ctx → all
+    // handler-state LLets saw in_globals=false → emitted local.set
+    // instead of global.set. Root-caused via ;; DBG WAT comments showing
+    // glen=0 inside emit_stmt but glen=187 at emit_module entry.
     emit_fn(list_head(fns), ctx)
-    heap_restore(mark)
   }
 }
 
@@ -232,7 +237,18 @@ fn emit_expr(e, params, locals, ctx) = match e {
     ++ "    i32.add" ++ NL
     ++ "    " ++ load_op ++ NL)
   },
-  LLet(_, name, value) => { emit_expr(value, params, locals, ctx); out("    local.set $" ++ name ++ NL) },
+  LLet(_, name, value) => {
+    // Match emit_stmt's dispatch: handler-state names hoisted to globals
+    // must use global.set, not local.set. Earlier code unconditionally
+    // emitted local.set here, producing UNRESOLVED local refs in nested
+    // blocks that should reach the hoisted handler state.
+    let is_local = string_in(locals, name, 0) || find_param_idx(params, name) >= 0
+    let setter = if is_local { "    local.set $" }
+                 else { if string_in(ctx_globals(ctx), name, 0) { "    global.set $" }
+                 else { "    local.set $" } }
+    emit_expr(value, params, locals, ctx)
+    out(setter ++ name ++ NL)
+  },
   LBlock(_, stmts) => emit_stmts_value(stmts, params, locals, ctx),
   LRegion(_, stmts) => {
     out("    global.get $heap_ptr" ++ NL ++ "    local.set $__region_mark" ++ NL)

@@ -50,6 +50,33 @@ The Wasm Paradox: operations that are O(1) in the Rust VM (contiguous Vec)
 become O(N) in WASM (Snoc tree traversal). Use `list_pop` for traversal,
 never `list[i]` in a loop. See `AGENTS.md` for the full list of hot paths.
 
+## ASK THE ARTIFACT — wabt is a first-class interlocutor
+
+When a WASM build misbehaves, don't hypothesize. **Ask the artifact what
+was emitted.** wabt is installed; use it before opening more source files.
+
+```bash
+wasm-decompile bootstrap/build/lux3.wasm | less            # pseudo-C view
+wasm-decompile lux3.wasm | grep -B1 -A15 'function FOO'    # specific fn
+wasm-objdump -x lux3.wasm | less                           # globals/exports
+wasm-objdump -d lux3.wasm | grep -B1 -A30 '<FOO>'          # disassembly
+wat2wasm --debug-names x.wat -o x.wasm                     # catch UNRESOLVED
+wasm-validate x.wasm                                       # validity gate
+```
+
+The protocol: **before guessing which call or which type the lowerer
+produced, run `wasm-decompile` and read it.** The emitted code is the
+ground truth. Patterns this has already caught:
+- `to_string(name)` silently dropping to `int_to_str(pointer)` when
+  inference left `name` as TVar — the decompile showed `to_str(name)`,
+  not identity, revealing a whole class of polymorphic-dispatch bugs.
+- `call $yield` emitted directly where `global.get $__ev_op_yield`
+  was expected — visible as UNRESOLVED from `wat2wasm`, localized by
+  `wasm-decompile` to the exact emit site.
+
+Rule of thumb: if you've stared at the source for five minutes without a
+hypothesis the decompile could confirm, you're asking the wrong file.
+
 ## YOU BUILT THIS
 
 You designed and wrote every line of this codebase. You have amnesia

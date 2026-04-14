@@ -54,8 +54,8 @@ $(BUILD)/lux3.wat: | $(BUILD)
 # human-named C functions.
 stage1: $(BUILD)/lux3.wasm
 $(BUILD)/lux3.wasm: $(BUILD)/lux3.wat
-	wat2wasm --debug-names $< -o $@
-	wasm-validate $@
+	wat2wasm --debug-names --enable-tail-call $< -o $@
+	wasm-validate --enable-tail-call $@
 
 # ─── Stage 1-native: binary WASM → C → native ─────────────────────────
 # wasm2c emits portable C. With gcc -O2 and a minimal WASI shim, we get
@@ -79,8 +79,8 @@ $(BUILD)/lux4.wat: $(BUILD)/lux3.wat
 
 # Also turn the result into a binary for comparison and next-stage runs.
 $(BUILD)/lux4.wasm: $(BUILD)/lux4.wat
-	wat2wasm --debug-names $< -o $@
-	wasm-validate $@
+	wat2wasm --debug-names --enable-tail-call $< -o $@
+	wasm-validate --enable-tail-call $@
 
 # ─── Stage 2-native: Ouroboros via native binary ──────────────────────
 # Same fixed-point, different handler (native C instead of wasmtime JIT).
@@ -109,10 +109,10 @@ check: $(BUILD)/lux3.wat $(BUILD)/lux4.wat
 # `make check`'s textual diff: handler-state fresh_id numbering
 # doesn't matter if the structural shape matches.
 check-canonical: $(BUILD)/lux3.wat $(BUILD)/lux4.wat
-	@wat2wasm --debug-names $(BUILD)/lux3.wat -o $(BUILD)/lux3.canon.wasm 2>/dev/null
-	@wat2wasm --debug-names $(BUILD)/lux4.wat -o $(BUILD)/lux4.canon.wasm 2>/dev/null
-	@wasm2wat $(BUILD)/lux3.canon.wasm > $(BUILD)/lux3.canon.wat
-	@wasm2wat $(BUILD)/lux4.canon.wasm > $(BUILD)/lux4.canon.wat
+	@wat2wasm --debug-names --enable-tail-call $(BUILD)/lux3.wat -o $(BUILD)/lux3.canon.wasm 2>/dev/null
+	@wat2wasm --debug-names --enable-tail-call $(BUILD)/lux4.wat -o $(BUILD)/lux4.canon.wasm 2>/dev/null
+	@wasm2wat --enable-tail-call $(BUILD)/lux3.canon.wasm > $(BUILD)/lux3.canon.wat
+	@wasm2wat --enable-tail-call $(BUILD)/lux4.canon.wasm > $(BUILD)/lux4.canon.wat
 	@if diff -q $(BUILD)/lux3.canon.wat $(BUILD)/lux4.canon.wat > /dev/null; then \
 	  echo "CANONICAL FIXED POINT — Arc 2 semantically complete"; \
 	else \

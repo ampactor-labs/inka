@@ -177,7 +177,104 @@ fn emit_params(params, param_types) with WasmOut = {
 
 fn emit_fn_body(stmts, params, locals, ctx) = {
   if len(stmts) == 0 { out("    i32.const 0" ++ NL) }
-  else { emit_stmts_value(stmts, params, locals, ctx) }
+  else { emit_stmts_value_tail(stmts, params, locals, ctx) }
+}
+
+// ─── Tail-call emission (return_call) ───────────────────────
+// The last expression of a function body is in tail position. If it's
+// a call (LCall or LTailCall), emit `return_call` / `return_call_indirect`
+// instead of `call`, so the WASM runtime reuses the current stack frame
+// instead of growing. This is the structural fix for str_eq_loop et al.
+// that recurse N times for strings of length N. Without it, self-hosting
+// hits wasmtime's default 1MB stack limit on any serious string ops.
+//
+// Tail positions propagate through LIf branches and LBlock last-stmt.
+// Anything else falls through to regular emission (non-tail).
+
+fn emit_stmts_value_tail(stmts, params, locals, ctx) = {
+  if len(stmts) == 0 { out("    i32.const 0" ++ NL) }
+  else {
+    let stmt_last = list_head(stmts)
+    let prev_stmts = list_tail(stmts)
+    emit_stmts_void(prev_stmts, params, locals, ctx)
+    emit_expr_tail(stmt_last, params, locals, ctx)
+  }
+}
+
+fn emit_expr_tail(e, params, locals, ctx) = match e {
+  LCall(_, func, args) => emit_tail_call_expr(func, args, params, locals, ctx),
+  LTailCall(_, func, args) => emit_tail_call_expr(func, args, params, locals, ctx),
+  LIf(_, c, t, el) => {
+    emit_expr(c, params, locals, ctx)
+    out("    (if (result i32)" ++ NL ++ "      (then" ++ NL)
+    emit_stmts_value_tail(t, params, locals, ctx)
+    out("      )" ++ NL ++ "      (else" ++ NL)
+    emit_stmts_value_tail(el, params, locals, ctx)
+    out("      )" ++ NL ++ "    )" ++ NL)
+  },
+  LBlock(_, stmts) => emit_stmts_value_tail(stmts, params, locals, ctx),
+  _ => emit_expr(e, params, locals, ctx)
+}
+
+fn emit_tail_call_expr(func, args, params, locals, ctx) = {
+  match func {
+    LGlobal(_, name) => {
+      // Builtins, tags, closures — can't be tail-called as return_call
+      // because they have bespoke emit sequences. Fall back to regular
+      // call + implicit return. The WASM validator accepts this because
+      // the final stack state equals the function's declared return.
+      let handled = emit_builtin(name, args, params, locals, ctx)
+      if handled { () } else {
+        if string_in(ctx_tags(ctx), name, 0) {
+          emit_make_variant(name, args, params, locals, ctx)
+        } else {
+          let is_param = find_param_idx(params, name) >= 0
+          let is_local = string_in(locals, name, 0)
+          let is_global = string_in(ctx_globals(ctx), name, 0)
+          if is_param || is_local {
+            out("    local.get $" ++ name ++ NL)
+            emit_args(args, params, locals, ctx)
+            out("    local.get $" ++ name ++ NL
+            ++ "    i32.load" ++ NL
+            ++ "    return_call_indirect (type $fn" ++ to_string(len(args)) ++ ")" ++ NL)
+          } else { if is_global {
+            out("    global.get $" ++ name ++ NL)
+            emit_args(args, params, locals, ctx)
+            out("    global.get $" ++ name ++ NL
+            ++ "    i32.load" ++ NL
+            ++ "    return_call_indirect (type $fn" ++ to_string(len(args)) ++ ")" ++ NL)
+          } else {
+            let fn_idx = find_fn_index(ctx_fns(ctx), name)
+            if fn_idx >= 0 {
+              out("    i32.const 0" ++ NL)
+              emit_args(args, params, locals, ctx)
+              out("    return_call $" ++ name ++ NL)
+            } else {
+              let ev_name = "__ev_op_" ++ name
+              if string_in(ctx_globals(ctx), ev_name, 0) {
+                out("    global.get $" ++ ev_name ++ NL)
+                emit_args(args, params, locals, ctx)
+                out("    global.get $" ++ ev_name ++ NL
+                ++ "    i32.load" ++ NL
+                ++ "    return_call_indirect (type $fn" ++ to_string(len(args)) ++ ")" ++ NL)
+              } else {
+                out("    i32.const 0" ++ NL)
+                emit_args(args, params, locals, ctx)
+                out("    return_call $" ++ name ++ NL)
+              }
+            }
+          } }
+        }
+      }
+    },
+    _ => {
+      emit_expr(func, params, locals, ctx)
+      emit_args(args, params, locals, ctx)
+      emit_expr(func, params, locals, ctx)
+      out("    i32.load" ++ NL
+      ++ "    return_call_indirect (type $fn" ++ to_string(len(args)) ++ ")" ++ NL)
+    }
+  }
 }
 
 // ─── Expression Emission (unified) ──────────────────────────

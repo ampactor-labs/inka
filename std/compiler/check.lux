@@ -336,7 +336,7 @@ fn check_program_with(stmts, init_env, start_n) = {
       resume(s)
     },
     report(src, kind, msg, line, col) => {
-      println(kind ++ ": " ++ msg)
+      eprint_string(kind ++ ": " ++ msg ++ "\n")
       resume(())
     }
   }

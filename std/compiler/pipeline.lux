@@ -45,7 +45,7 @@ import backend/wasm_emit
 fn frontend(source) =
   handle { source |> lex |> list_to_flat |> parse_program } {
     unexpected(expected, got, line, col) => {
-      println("Parse error [" ++ to_string(line) ++ ":" ++ to_string(col) ++ "]: expected " ++ expected ++ " got " ++ got)
+      eprint_string("Parse error [" ++ to_string(line) ++ ":" ++ to_string(col) ++ "]: expected " ++ expected ++ " got " ++ got ++ "\n")
       []
     }
   }
@@ -138,9 +138,7 @@ fn checked_with_cache(source) = {
   let user_ast = source |> frontend
   let env = user_ast |> check_program_with(import_env, next_n)
   let combined_ast = prelude_ast ++ import_ast ++ user_ast
-  handle { validate(combined_ast, env) } {
-    report(src, kind, msg, line, col) => { println(kind ++ ": " ++ msg); resume(()) }
-  }
+  handle { validate(combined_ast, env) } with print_diagnostics
   (combined_ast, env)
 }
 
@@ -181,11 +179,11 @@ fn report_ownership(violations, fn_name) = {
   else {
     match list_head(violations) {
       ConsumedTwice(name, first, second) =>
-        println("ownership error: '" ++ name ++ "' is own in '" ++ fn_name ++ "' but used more than once"),
+        report("", "OwnershipError", "'" ++ name ++ "' is own in '" ++ fn_name ++ "' but used more than once", 0, 0),
       RefEscaped(name, line) =>
-        println("ownership error: '" ++ name ++ "' is ref in '" ++ fn_name ++ "' but escapes via return"),
+        report("", "OwnershipError", "'" ++ name ++ "' is ref in '" ++ fn_name ++ "' but escapes via return", line, 0),
       OwnNeverConsumed(name) =>
-        println("  -> own '" ++ name ++ "' in '" ++ fn_name ++ "' is never used (will be dropped)"),
+        report("", "OwnershipError", "own '" ++ name ++ "' in '" ++ fn_name ++ "' is never used (will be dropped)", 0, 0),
       _ => ()
     }
     report_ownership(list_tail(violations), fn_name)

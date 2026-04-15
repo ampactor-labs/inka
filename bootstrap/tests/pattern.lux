@@ -1,0 +1,24 @@
+// Minimal repro of the pattern-binding / closure-capture bug.
+// Pre-fix: PCon pattern variables are seen as free, captured into
+// __closure, and the arm reads garbage from (__closure + offset).
+// Post-fix: they're locals, and we print 42 + 7 = 49.
+
+type Box = B(Int, Int) | S(Int)
+
+fn first(b) = match b {
+  B(x, _) => x,
+  S(y)    => y,
+}
+
+fn second(b) = match b {
+  B(_, w) => w,
+  S(_)    => 0 - 1,
+}
+
+fn main() = {
+  println(to_string(first(B(42, 99))))
+  println(to_string(second(B(42, 7))))
+  println(to_string(first(S(5))))
+}
+
+main()

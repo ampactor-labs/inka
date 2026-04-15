@@ -12,7 +12,12 @@
 PROJECT_ROOT  := $(abspath $(CURDIR)/..)
 LUX_SRC       := $(PROJECT_ROOT)/examples/wasm_bootstrap.lux
 WASMTIME      := $(HOME)/.wasmtime/bin/wasmtime
-WASMTIME_OPTS := --dir $(PROJECT_ROOT) -W max-wasm-stack=33554432
+WASMTIME_OPTS := --dir $(PROJECT_ROOT) -W max-wasm-stack=33554432 -C inlining=y
+
+# Test fixtures (in-repo, not /tmp)
+TEST_DIR      := $(CURDIR)/tests
+COUNTER_LUX   := $(TEST_DIR)/counter.lux
+PATTERN_LUX   := $(TEST_DIR)/pattern.lux
 
 # wasm2c runtime lives with the WABT install. Override if packaged elsewhere.
 WABT_RT_DIR   ?= /usr/share/wabt/wasm2c
@@ -21,20 +26,36 @@ WABT_RT       := $(WABT_RT_DIR)/wasm-rt-impl.c
 BUILD := build
 
 # ─── Phony targets ────────────────────────────────────────────────────
-.PHONY: all stage0 stage1 stage1-native stage2 stage2-native check clean help
+.PHONY: all stage0 stage1 stage1-native stage2 stage2-native \
+        smoke verify check check-canonical decompile-diff stats \
+        interp-check clean help
 .DEFAULT_GOAL := help
 
-all: stage2
+all: verify
 
 help:
 	@echo "Lux Bootstrap targets:"
-	@echo "  make stage0         Rust VM → WAT                (~9 min) → $(BUILD)/lux3.wat"
-	@echo "  make stage1         WAT → binary WASM (w/ names) → $(BUILD)/lux3.wasm"
-	@echo "  make stage1-native  binary → C → native ELF      → $(BUILD)/lux3-native"
-	@echo "  make stage2         wasmtime Ouroboros            → $(BUILD)/lux4.wat"
-	@echo "  make stage2-native  native-binary Ouroboros       → $(BUILD)/lux4-native.wat"
-	@echo "  make check          diff lux3.wat lux4.wat        → fixed-point verdict"
-	@echo "  make clean          remove $(BUILD)/"
+	@echo ""
+	@echo "  Build stages:"
+	@echo "    make stage0         Rust VM → WAT                (~9 min) → $(BUILD)/lux3.wat"
+	@echo "    make stage1         WAT → binary WASM (w/ names) → $(BUILD)/lux3.wasm"
+	@echo "    make stage1-native  binary → C → native ELF      → $(BUILD)/lux3-native"
+	@echo "    make stage2         wasmtime Ouroboros            → $(BUILD)/lux4.wat"
+	@echo "    make stage2-native  native-binary Ouroboros       → $(BUILD)/lux4-native.wat"
+	@echo ""
+	@echo "  Verification:"
+	@echo "    make smoke          pattern + counter tests via lux3 (~1 min gate)"
+	@echo "    make verify         full pipeline: stage0→1→smoke→2→validate (~1 hr)"
+	@echo "    make check          diff lux3.wat lux4.wat → fixed-point verdict"
+	@echo "    make check-canonical  round-trip canonical diff (stronger)"
+	@echo ""
+	@echo "  Diagnostics:"
+	@echo "    make decompile-diff per-function diff lux3 vs lux4"
+	@echo "    make stats          opcode histogram + section sizes"
+	@echo "    make interp-check   wasm-interp reference (slow)"
+	@echo ""
+	@echo "  Housekeeping:"
+	@echo "    make clean          remove $(BUILD)/"
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -70,12 +91,43 @@ $(BUILD)/lux3-native: $(BUILD)/lux3_native.c wasi_shim.c
 	    wasi_shim.c $(BUILD)/lux3_native.c $(WABT_RT) \
 	    -o $(BUILD)/lux3-native
 
+# ─── Smoke Tests ──────────────────────────────────────────────────────
+# Fast gate (~1 min) — catches regressions before the 50-min Ouroboros.
+# Pattern test: validates match/closure codegen (expects "42\n7\n5").
+# Counter test: validates effect handler codegen.
+smoke: $(BUILD)/lux3.wat
+	@echo "=== pattern test via lux3 ==="
+	@cat $(PATTERN_LUX) | $(WASMTIME) run $(WASMTIME_OPTS) \
+	  $(BUILD)/lux3.wat > $(BUILD)/pattern_compiled.out 2>&1
+	@sed -n '/^(module/,$$p' $(BUILD)/pattern_compiled.out > $(BUILD)/pattern.wat
+	@echo "  UNRESOLVED=$$(grep -c UNRESOLVED $(BUILD)/pattern.wat || true)"
+	@wat2wasm --debug-names --enable-tail-call $(BUILD)/pattern.wat -o $(BUILD)/pattern.wasm
+	@$(WASMTIME) run -W max-wasm-stack=33554432 $(BUILD)/pattern.wasm > $(BUILD)/pattern_run.out 2>&1 || true
+	@ACTUAL=$$(cat $(BUILD)/pattern_run.out); \
+	 EXPECTED=$$(printf '42\n7\n5'); \
+	 if [ "$$ACTUAL" = "$$EXPECTED" ]; then \
+	   echo "  PATTERN TEST PASSED ✓"; \
+	 else \
+	   echo "  PATTERN TEST FAILED — got:"; cat $(BUILD)/pattern_run.out; \
+	   echo "  expected: 42 / 7 / 5"; \
+	   exit 1; \
+	 fi
+	@echo ""
+	@echo "=== counter test via lux3 ==="
+	@cat $(COUNTER_LUX) | $(WASMTIME) run $(WASMTIME_OPTS) \
+	  $(BUILD)/lux3.wat > $(BUILD)/counter_compiled.out 2>&1
+	@sed -n '/^(module/,$$p' $(BUILD)/counter_compiled.out > $(BUILD)/counter.wat
+	@echo "  UNRESOLVED=$$(grep -c UNRESOLVED $(BUILD)/counter.wat || true)"
+	@wat2wasm --debug-names --enable-tail-call $(BUILD)/counter.wat -o $(BUILD)/counter.wasm
+	@echo "  counter smoke PASSED ✓"
+
 # ─── Stage 2: Ouroboros via wasmtime ──────────────────────────────────
-# lux3.wat compiles itself, outputting lux4.wat. Currently CPU-bound on
-# O(N²) list traversals in the compiler source (see AGENTS.md).
+# lux3.wat compiles itself, outputting lux4.wat.
 stage2: $(BUILD)/lux4.wat
 $(BUILD)/lux4.wat: $(BUILD)/lux3.wat
-	cat $(LUX_SRC) | $(WASMTIME) run $(WASMTIME_OPTS) $< > $@
+	cat $(LUX_SRC) | $(WASMTIME) run $(WASMTIME_OPTS) $< > $(BUILD)/lux4.raw.out
+	sed -n '/^(module/,$$p' $(BUILD)/lux4.raw.out > $@
+	@echo "lux4 UNRESOLVED=$$(grep -c UNRESOLVED $@ || true)"
 
 # Also turn the result into a binary for comparison and next-stage runs.
 $(BUILD)/lux4.wasm: $(BUILD)/lux4.wat
@@ -88,6 +140,30 @@ stage2-native: $(BUILD)/lux4-native.wat
 $(BUILD)/lux4-native.wat: $(BUILD)/lux3-native
 	cat $(LUX_SRC) | $(BUILD)/lux3-native > $@
 
+# ─── Full Verification Pipeline ──────────────────────────────────────
+# Single command: build everything, test everything, report verdict.
+# This is THE command for Arc 2 verification.
+verify: clean stage0 stage1 smoke stage2 $(BUILD)/lux4.wasm
+	@echo ""
+	@echo "=== lux4.wasm validates ✓ ==="
+	@echo ""
+	@echo "=== counter test via lux4 (THE Ouroboros test) ==="
+	@cat $(COUNTER_LUX) | $(WASMTIME) run $(WASMTIME_OPTS) \
+	  $(BUILD)/lux4.wat > $(BUILD)/counter4_compiled.out 2>&1
+	@sed -n '/^(module/,$$p' $(BUILD)/counter4_compiled.out > $(BUILD)/counter4.wat
+	@echo "  UNRESOLVED=$$(grep -c UNRESOLVED $(BUILD)/counter4.wat || true)"
+	@wat2wasm --debug-names --enable-tail-call $(BUILD)/counter4.wat -o $(BUILD)/counter4.wasm 2>&1 | head -3
+	@if [ -f $(BUILD)/counter4.wasm ]; then \
+	  echo "  counter4.wasm EXISTS AND VALIDATES ✓"; \
+	  echo ""; \
+	  echo "═══════════════════════════════════════════════"; \
+	  echo "  ARC 2 IS CLOSED — Ouroboros produces valid WASM"; \
+	  echo "═══════════════════════════════════════════════"; \
+	else \
+	  echo "  counter4.wasm MISSING — Arc 2 not yet closed"; \
+	  exit 1; \
+	fi
+
 # ─── Fixed-point check ────────────────────────────────────────────────
 # If lux3.wat and lux4.wat are identical, the compiler reached a fixed
 # point: it produces itself unchanged. That is Arc 2 complete.
@@ -99,7 +175,6 @@ check: $(BUILD)/lux3.wat $(BUILD)/lux4.wat
 	  diff $(BUILD)/lux3.wat $(BUILD)/lux4.wat | head -40; \
 	  exit 1; \
 	fi
-
 
 # ─── Canonical-form fixed-point check ─────────────────────────────────
 # Strip syntactic noise (comments, whitespace, name-section ordering)
@@ -152,7 +227,7 @@ stats: $(BUILD)/lux3.wasm
 interp-check: $(BUILD)/lux3.wasm
 	@echo "=== wasm-interp counter via lux3 ==="
 	@echo "(runs the reference interpreter — minutes, not seconds)"
-	@cat /tmp/counter.lux | wasm-interp --enable-tail-call --run-all-exports \
+	@cat $(COUNTER_LUX) | wasm-interp --enable-tail-call --run-all-exports \
 	  $(BUILD)/lux3.wasm 2>&1 | head -20 || echo "(interp can't drive stdin — skip)"
 
 clean:

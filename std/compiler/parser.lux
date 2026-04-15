@@ -153,7 +153,7 @@ fn to_cmp_op(t) =
 
 fn to_op(t) = {
   let a = to_arith_op(t);
-  if a != "" { a } else { to_cmp_op(t) }
+  if len(a) > 0 { a } else { to_cmp_op(t) }
 }
 
 // ─── Comma-separated name list ───────────────────────────────

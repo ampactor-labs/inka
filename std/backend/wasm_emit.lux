@@ -753,7 +753,7 @@ fn emit_local_decls(locals, body, env)= {
   else {
     let name = list_head(locals)
     let rest = list_tail(locals)
-    let wtype = if len(name) >= 2 && string_slice(name, 0, 2) == "__" {
+    let wtype = if len(name) >= 2 && str_eq(string_slice(name, 0, 2), "__") == 1 {
       "i32"
     } else {
       ty_to_wasm(find_local_ty(name, body))

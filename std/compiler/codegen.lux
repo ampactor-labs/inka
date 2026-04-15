@@ -379,7 +379,7 @@ fn compile_expr(ctx, sexpr) = {
     match raw_func {
       VarRef(name) => {
         let eff = find_effect_op(ctx_effect_ops(ctx), name)
-        if eff != "" {
+        if len(eff) > 0 {
           // Effect operation: emit args then Perform
           let ctx2 = compile_args(ctx, args)
           let (ctx3, op_name_idx) = intern_name(ctx2, name)

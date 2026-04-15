@@ -920,7 +920,7 @@ fn is_orig_state_name(state_names, n) = {
   if len(state_names) == 0 { false }
   else {
     let (orig, _) = list_first(state_names)
-    if orig == n { true } else { is_orig_state_name(list_rest(state_names), n) }
+    if str_eq(orig, n) == 1 { true } else { is_orig_state_name(list_rest(state_names), n) }
   }
 }
 

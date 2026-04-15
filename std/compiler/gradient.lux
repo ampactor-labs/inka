@@ -311,7 +311,7 @@ fn find_handler_dep(step, handler_steps, idx) = {
     let (s_dim, _, _, _) = step
     let matches = match s_dim {
       EffectNegate(eff) => match h_dim {
-        HandlerAbsorb(h_eff) => eff == h_eff,
+        HandlerAbsorb(h_eff) => str_eq(eff, h_eff) == 1,
         _ => false
       },
       _ => false

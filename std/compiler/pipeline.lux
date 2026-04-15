@@ -441,7 +441,7 @@ fn find_imports_pop(lines, acc) = {
   else {
     let line = list_head(lines)
     let rest = list_tail(lines)
-    if len(line) >= 7 && string_slice(line, 0, 7) == "import " {
+    if len(line) >= 7 && str_eq(string_slice(line, 0, 7), "import ") == 1 {
       find_imports_pop(rest, [string_slice(line, 7, len(line))] ++ acc)
     } else { find_imports_pop(rest, acc) }
   }
@@ -498,7 +498,7 @@ fn filter_non_imports(lines) = {
   else {
     let line = list_head(lines)
     let rest = filter_non_imports(list_tail(lines))
-    if len(line) >= 7 && string_slice(line, 0, 7) == "import " { rest }
+    if len(line) >= 7 && str_eq(string_slice(line, 0, 7), "import ") == 1 { rest }
     else { [line] ++ rest }
   }
 }

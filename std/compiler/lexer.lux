@@ -51,7 +51,7 @@ fn keyword_type(word) = {
     if i >= len(kw) { "Ident" }
     else {
       let (k, v) = kw[i];
-      if k == word { v }
+      if str_eq(k, word) == 1 { v }
       else { kw_find(kw, word, i + 1) }
     };
   kw_find(kw, word, 0)
@@ -74,7 +74,7 @@ fn two_char_op(ch, ch2) = {
     if i >= len(ops) { "" }
     else {
       let (a, b, name) = ops[i];
-      if a == ch && b == ch2 { name }
+      if str_eq(a, ch) == 1 && str_eq(b, ch2) == 1 { name }
       else { find_op(ops, ch, ch2, i + 1) }
     };
   find_op(ops, ch, ch2, 0)
@@ -148,7 +148,7 @@ fn lex(source) = {
     let (p2, lit) = scan_string_plain(p, "");
     if p2 >= src_len {
       // Unterminated string, emit what we have
-      let toks2 = if lit != "" { push(toks, token("String", lit, line, col)) } else { toks };
+      let toks2 = if len(lit) > 0 { push(toks, token("String", lit, line, col)) } else { toks };
       (p2, line, col, toks2)
     } else { if cs[p2] == ch_dquote {
       // Simple string, no interpolation — consume closing quote
@@ -156,7 +156,7 @@ fn lex(source) = {
     } else {
       // Hit '{' — this is an interpolated string
       let toks2 = push(toks, token("InterpStart", "", line, col));
-      let toks3 = if lit != "" { push(toks2, token("String", lit, line, col)) } else { toks2 };
+      let toks3 = if len(lit) > 0 { push(toks2, token("String", lit, line, col)) } else { toks2 };
       // Now scan interpolation segments starting at the '{'
       scan_interp_segments(p2, line, col, toks3)
     }}
@@ -177,7 +177,7 @@ fn lex(source) = {
     } else {
       // String content — scan plain text until next '{' or '"'
       let (p2, lit) = scan_string_plain(p, "");
-      let toks2 = if lit != "" { push(toks, token("String", lit, line, col)) } else { toks };
+      let toks2 = if len(lit) > 0 { push(toks, token("String", lit, line, col)) } else { toks };
       // Continue: might be another '{' or closing '"'
       scan_interp_segments(p2, line, col, toks2)
     }}}
@@ -249,11 +249,11 @@ fn lex(source) = {
     else {
       let ch2 = if pos + 1 < src_len { cs[pos + 1] } else { "" };
       let op2 = two_char_op(ch, ch2);
-      if op2 != "" {
+      if len(op2) > 0 {
         (pos + 2, line, col + 2, push(toks, token(op2, str_cat(ch, ch2), line, col)))
       } else {
         let op1 = single_char_type(ch);
-        if op1 != "" {
+        if len(op1) > 0 {
           (pos + 1, line, col + 1, push(toks, token(op1, ch, line, col)))
         }
         else { (pos + 1, line, col + 1, toks) }
@@ -355,12 +355,12 @@ fn lex(source) = {
       else {
         let ch2 = if pos + 1 < src_len { cs[pos + 1] } else { "" };
         let op2 = two_char_op(ch, ch2);
-        if op2 != "" {
+        if len(op2) > 0 {
           lex_from(pos + 2, line, col + 2, push(tokens, token(op2, str_cat(ch, ch2), line, col)))
         }
         else {
           let op1 = single_char_type(ch);
-          if op1 != "" {
+          if len(op1) > 0 {
             lex_from(pos + 1, line, col + 1, push(tokens, token(op1, ch, line, col)))
           }
           else { lex_from(pos + 1, line, col + 1, tokens) }

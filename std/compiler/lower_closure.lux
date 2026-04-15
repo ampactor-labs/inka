@@ -119,7 +119,7 @@ fn filter_real_captures_at(names, self_name, env, i) = {
   else {
     let n = names[i]
     let rest = filter_real_captures_at(names, self_name, env, i + 1)
-    if n == self_name { rest }
+    if str_eq(n, self_name) == 1 { rest }
     else { if env_shadows(env, n) { [n] ++ rest }
     else { if is_ctor(n) { rest }
     else { if is_global(n) { rest }

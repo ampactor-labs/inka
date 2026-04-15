@@ -81,59 +81,46 @@ help:
 $(BUILD):
 	mkdir -p $(BUILD)
 
-# ─── Stage 0: Rust VM → WAT ───────────────────────────────────────────
-# The Rust VM runs the self-hosted compiler against the bootstrap entry
-# point and emits WAT to stdout.
-stage0: preflight $(BUILD)/lux3.wat
-$(BUILD)/lux3.wat: | $(BUILD)
+# ─── Stage 0: versioned artifact → build ─────────────────────────────
+# Arc 3 P0-C3: stage0 is no longer a Rust VM invocation. It's a cp from
+# bootstrap/artifacts/ (the post-Arc-2-close seed, frozen in P0-C1).
+# Iteration cost: ~9 min → ~1 s. The Rust path is preserved only under
+# the rust-vm-final tag (see bootstrap/README.md Disaster Recovery).
+ARTIFACTS := $(CURDIR)/artifacts
+
+stage0: preflight $(BUILD)/lux3.wat $(BUILD)/lux3.wasm
+
+$(BUILD)/lux3.wat: $(ARTIFACTS)/lux3.wat $(ARTIFACTS)/artifacts.sha256 | $(BUILD)
 	@echo "╔══════════════════════════════════════════════╗"
-	@echo "║  STAGE 0: Rust VM → WAT                     ║"
+	@echo "║  STAGE 0: artifact → build                  ║"
 	@echo "╚══════════════════════════════════════════════╝"
-	@echo "  started: $$(date '+%H:%M:%S')"
-	@( while true; do sleep 30; \
-	    if [ -f bootstrap/$(BUILD)/lux3.raw.out ]; then \
-	      SIZE=$$(du -h bootstrap/$(BUILD)/lux3.raw.out 2>/dev/null | cut -f1); \
-	      LINES=$$(wc -l < bootstrap/$(BUILD)/lux3.raw.out 2>/dev/null); \
-	      echo "  📊 stage0: $$SIZE, $$LINES lines"; \
-	    fi; \
-	  done ) & MON=$$!; \
-	  trap "kill $$MON 2>/dev/null" EXIT INT TERM; \
-	  cd $(PROJECT_ROOT) && /usr/bin/time -f "  ⏱  stage0: %E elapsed, %M KB peak RSS" \
-	    -o bootstrap/$(BUILD)/stage0.time \
-	    cargo run --release -- wasm $(LUX_SRC) \
-	    > bootstrap/$(BUILD)/lux3.raw.out 2>&1
-	@cat $(BUILD)/stage0.time
-	@sed -n '1,/^(module/{ /^(module/!p }' $(BUILD)/lux3.raw.out > $(BUILD)/lux3.preamble.log
-	@sed -n '/^(module/,$$p' $(BUILD)/lux3.raw.out > $(BUILD)/lux3.wat
-	@if [ -s $(BUILD)/lux3.preamble.log ]; then \
-	  echo "⚠  stage0 preamble ($(BUILD)/lux3.preamble.log):"; \
-	  cat $(BUILD)/lux3.preamble.log; \
-	fi
+	@cd $(ARTIFACTS) && sha256sum -c artifacts.sha256 --status \
+	  || (echo "  ✗ stage0: artifact checksum MISMATCH — do not proceed"; exit 1)
+	@cp $(ARTIFACTS)/lux3.wat $(BUILD)/lux3.wat
 	@LINES=$$(wc -l < $(BUILD)/lux3.wat); \
 	 SIZE=$$(du -h $(BUILD)/lux3.wat | cut -f1); \
 	 FUNCS=$$(grep -c '^  (func ' $(BUILD)/lux3.wat || true); \
 	 UNR=$$(grep -c 'UNRESOLVED:' $(BUILD)/lux3.wat || true); \
-	 echo "  ✓ lux3.wat: $$SIZE, $$LINES lines, $$FUNCS functions"; \
+	 echo "  ✓ lux3.wat: $$SIZE, $$LINES lines, $$FUNCS functions (from artifact)"; \
 	 echo "  stage0 UNRESOLVED=$$UNR"; \
 	 if [ $$UNR -gt 0 ]; then \
-	   echo "  ✗ lux3.wat has UNRESOLVED — Rust VM lost a symbol. No known bugs allowed to sit."; \
-	   awk '/^  \(func /{fn=$$2} /UNRESOLVED:/{print "    " fn ": " $$0}' $(BUILD)/lux3.wat; \
+	   echo "  ✗ artifact lux3.wat has UNRESOLVED — seed is corrupt, regenerate via rust-vm-final"; \
 	   exit 1; \
 	 fi
 
-# ─── Stage 1: WAT → binary WASM ───────────────────────────────────────
-# --debug-names preserves $name symbolic identifiers.
+$(BUILD)/lux3.wasm: $(ARTIFACTS)/lux3.wasm $(ARTIFACTS)/artifacts.sha256 | $(BUILD)
+	@cd $(ARTIFACTS) && sha256sum -c artifacts.sha256 --status \
+	  || (echo "  ✗ stage0: artifact checksum MISMATCH — do not proceed"; exit 1)
+	@cp $(ARTIFACTS)/lux3.wasm $(BUILD)/lux3.wasm
+	@SIZE=$$(du -h $(BUILD)/lux3.wasm | cut -f1); \
+	 echo "  ✓ lux3.wasm: $$SIZE (from artifact)"
+
+# ─── Stage 1: lux3.wasm (already materialized by stage0 from artifact) ─
+# Arc 3 P0-C3: lux3.wasm arrives pre-built from bootstrap/artifacts/.
+# This target just validates it so downstream stages can depend on it.
 stage1: $(BUILD)/lux3.wasm
-$(BUILD)/lux3.wasm: $(BUILD)/lux3.wat
-	@echo ""
-	@echo "╔══════════════════════════════════════════════╗"
-	@echo "║  STAGE 1: WAT → binary WASM                 ║"
-	@echo "╚══════════════════════════════════════════════╝"
-	@echo "  started: $$(date '+%H:%M:%S')"
-	wat2wasm --debug-names --enable-tail-call $< -o $@
-	wasm-validate --enable-tail-call $@
-	@SIZE=$$(du -h $@ | cut -f1); \
-	 echo "  ✓ lux3.wasm: $$SIZE, validates"
+	@wasm-validate --enable-tail-call $(BUILD)/lux3.wasm \
+	  && echo "  ✓ lux3.wasm validates (from artifact)"
 
 # ─── Stage 1-AOT: pre-compile for faster stage2 ───────────────────────
 # wasmtime compile produces a .cwasm that runs without JIT warmup.

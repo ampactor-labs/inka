@@ -144,14 +144,14 @@ fn checked_with_cache(source) = {
   (combined_ast, env)
 }
 
-// ─── Diagnostic Handlers ───────────────────────────────────
-// Named handlers — one definition, many call sites.
+// ─── Diagnostic Handler ─────────────────────────────────────
+// Diagnostics route to stderr. Stdout is the compiler's output
+// channel (WAT); diagnostics there corrupt the stream.
 handler print_diagnostics {
-  report(src, kind, msg, line, col) => { println(kind ++ ": " ++ msg); resume(()) }
-}
-
-handler silent_diagnostics {
-  report(src, kind, msg, line, col) => resume(())
+  report(src, kind, msg, line, col) => {
+    eprint_string(kind ++ ": " ++ msg ++ "\n")
+    resume(())
+  }
 }
 
 // ─── Validate — fan-out ─────────────────────────────────────
@@ -336,7 +336,7 @@ fn compile_wasm(source) = {
   let runtime = read_file("std/runtime/memory.lux")
   let runtime_ast = runtime |> frontend
   let combined_ast = prelude_ast ++ import_ast ++ runtime_ast ++ user_ast
-  handle { validate(combined_ast, env) } with silent_diagnostics
+  handle { validate(combined_ast, env) } with print_diagnostics
   let ctors = env |> extract_constructors
   let lowered = lower_program_typed(combined_ast, ctors, env)
   emit_module(lowered, env)

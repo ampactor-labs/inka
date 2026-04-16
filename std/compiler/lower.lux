@@ -80,41 +80,42 @@ fn lower_expr(sexpr, env, subst) = {
       let lt = lexpr_ty(l)
       let rt = lexpr_ty(r)
       if op == "Eq" || op == "Neq" {
-        // If EITHER side types as TString (e.g., one is a literal), emit
-        // str_eq directly. Falling through to val_eq "works" at runtime
-        // but has been observed to miss heap-pointer equality in edge
-        // cases (string_slice result vs. data-segment literal), breaking
-        // handler-prefix detection in wasm_collect. Typed fast path fixes
-        // it structurally.
+        // Typed equality only. If neither side resolves concretely,
+        // inference failed to monomorphize — emit UNRESOLVED so the
+        // build fails loudly rather than dispatching through val_eq's
+        // runtime byte-sniff heuristic that hides type-inference bugs.
         let eq = match lt {
           TString => LCall(TBool, LGlobal(TFun([TString, TString], TBool, EfPure), "str_eq"), [l, r]),
           TInt    => LBinOp(TBool, "Eq", l, r),
           TBool   => LBinOp(TBool, "Eq", l, r),
           _       => match rt {
             TString => LCall(TBool, LGlobal(TFun([TString, TString], TBool, EfPure), "str_eq"), [l, r]),
-            _ => LCall(TBool, LGlobal(TFun([TUnit, TUnit], TBool, EfPure), "val_eq"), [l, r])
+            TInt    => LBinOp(TBool, "Eq", l, r),
+            TBool   => LBinOp(TBool, "Eq", l, r),
+            _ => {
+              eprint_string("lower: UNRESOLVED == — inference did not monomorphize the call site\n")
+              LCall(TBool, LGlobal(TFun([TUnit, TUnit], TBool, EfPure), "UNRESOLVED_val_eq"), [l, r])
+            }
           }
         }
         if op == "Neq" { LUnaryOp(TBool, "Not", eq) } else { eq }
       } else { if op == "Concat" {
-        // Dispatch: TString → str_concat, TList → list_concat. Read child's
-        // type directly — no infer_concat_type walk.
-        // When BOTH sides are TVar (inference couldn't resolve), route
-        // through val_concat which dispatches at runtime via heuristic.
-        // The flat default to list_concat here was silently turning
-        // `acc ++ sep ++ x` in polymorphic helpers like prelude's `join`
-        // into list_concat, corrupting strings threaded through fold —
-        // which then corrupted the user source passed through
-        // strip_imports (split → filter → join), which broke lex on any
-        // multi-line input in the bootstrap.
-        let rt = lexpr_ty(r)
+        // Dispatch: TString → str_concat, TList → list_concat.
+        // If neither side resolves to a concrete TString or TList,
+        // inference failed to monomorphize this call site. The correct
+        // response is a loud build failure — val_concat's runtime
+        // byte-sniff heuristic hides type-inference bugs and cascades
+        // drift through every bootstrap iteration.
         let (concat_fn, result_ty) = match lt {
           TString => ("str_concat", TString),
           TList(_) => ("list_concat", lt),
           _ => match rt {
             TString => ("str_concat", TString),
             TList(_) => ("list_concat", rt),
-            _ => ("val_concat", TUnit)
+            _ => {
+              eprint_string("lower: UNRESOLVED ++ — inference did not monomorphize the call site\n")
+              ("UNRESOLVED_val_concat", TUnit)
+            }
           }
         }
         LCall(result_ty, LGlobal(TFun([lt, rt], result_ty, EfPure), concat_fn), [l, r])

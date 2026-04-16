@@ -45,8 +45,9 @@ tool.** Find the primitive.
 
 **State of the world:** `lux3.wasm` (frozen artifact) compiles
 itself → `lux4.wat` with ~12 `val_concat` drift sites (Arc 2 semantic
-closure, 2026-04-15). Rust VM deleted. `arc3-phase2` in progress
-toward live-graph observation by lowering (Phase 2's real shape).
+closure, 2026-04-15). Rust VM deleted. The patch-based Arc 3 Phase 2
+path is retired; the `rebuild` branch now drives a scrap-and-rebuild
+of the compiler core against a live SubstGraph. See active plan below.
 
 **Before any bootstrap:** `make -C bootstrap preflight` (<1 s). If it
 fails, fix first. If clean, then work.
@@ -80,10 +81,12 @@ alone.
   refinement types, DSP/ML unification
 - **`docs/SYNTHESIS_CROSSWALK.md`** — external validation + research
   neighbors 2024-2026
-- **`docs/ARC3_ROADMAP.md`** — current arc scope
+- **`docs/ARC3_ROADMAP.md`** — original arc scope (pre-rebuild;
+  Phase D of the rebuild deletes the files this roadmap patches).
+  Vision sections still load-bearing; patch-plan sections superseded.
 - **`AGENTS.md`** — build commands, file map, known issues
-- **`~/.claude/plans/logical-greeting-tarjan.md`** — active plan for
-  Arc 3 phase work
+- **`~/.claude/plans/effervescent-wishing-mountain.md`** — active plan:
+  scrap-and-rebuild of the compiler core (Phases 0, A–F)
 
 Memory index is at
 `~/.claude/projects/-home-suds-Projects-lux/memory/MEMORY.md`. Lux-

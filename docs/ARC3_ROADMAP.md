@@ -1,11 +1,25 @@
 # Arc 3 Roadmap — Native Superpowers & Memory Independence
 
-*The active arc. Captures architectural insights from Arc 2 and the
-path to native, memory-aware Lux. For the full narrative and
-prerequisites, see [`ARCS.md`](ARCS.md).*
+> **⚠ Superseded (2026-04-16):** the patch-based Phase 2 path this
+> document prescribes is retired. The active plan is the
+> scrap-and-rebuild at
+> `~/.claude/plans/effervescent-wishing-mountain.md`, which deletes
+> `check.lux`, `infer.lux`, `ty.lux`, `lower.lux`, `pipeline.lux`,
+> `codegen.lux`, `solver.lux`, `own.lux`, `vm.lux`, and `repl.lux`
+> wholesale in Phase D and rebuilds the compiler core against a live
+> SubstGraph. The **vision sections below** (effect-driven
+> diagnostics, DAG env, ownership-as-effect, scoped arenas,
+> refinement types) remain load-bearing and map onto rebuild phases.
+> The **patch-plan sections** (P2-Cn commit sequences, per-module
+> subst threading) are archaeology — read for intent, not as work.
+> After Phase D lands, this file gets deleted.
+
+*Captures architectural insights from Arc 2 and the path to native,
+memory-aware Lux. For the full narrative and prerequisites, see
+[`ARCS.md`](ARCS.md).*
 
 **Crystalized:** 2026-04-12 (during the Ouroboros bootstrap)
-**Status:** In progress — scoped on top of Arc 2 fixed-point
+**Status:** Superseded by rebuild plan (2026-04-16)
 
 ### Companion specs
 

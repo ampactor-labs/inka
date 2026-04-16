@@ -1,0 +1,23 @@
+type Node
+  = Leaf(Int)
+  | Pair(Node, Node)
+  | Triple(Node, Node, Node)
+
+fn flatten(node) = {
+  match node {
+    Leaf(n) => [n],
+    Pair(a, b) => flatten(a) ++ flatten(b),
+    Triple(a, b, c) => flatten(a) ++ flatten_triple(b, c),
+    _ => []
+  }
+}
+
+fn flatten_triple(b, c) = flatten(b) ++ flatten(c)
+
+fn main() = {
+  let t = Pair(Leaf(1), Triple(Leaf(2), Leaf(3), Leaf(4)))
+  let r = flatten(t)
+  println(to_string(len(r)))
+}
+
+main()

@@ -50,13 +50,13 @@ fn fn_return_ty(env, fn_name) = {
   match fn_ty { TFun(_, rt, _) => rt, _ => TUnit }
 }
 
-fn lower_lambda_named(wasm_name, name, params, body, env) = {
+fn lower_lambda_named(wasm_name, name, params, body, env, subst) = {
   let all_free = collect_free_vars(body, params)
   let free = if str_eq(wasm_name, name) == 1 { filter_real_captures(all_free, name, env) }
              else { filter_real_captures_no_self(all_free, env) }
   // Critical: extend env with parameter types so the body's VarRefs resolve.
   let body_env = env_with_params(env, name, params)
-  let lowered_body = lower_expr(body, body_env)
+  let lowered_body = lower_expr(body, body_env, subst)
   // The lambda's own type: look it up if named, else build from body ty.
   let fn_ty = { let (_, t, _) = env_lookup(env, name); t }
   let closure_ty = match fn_ty {
@@ -73,8 +73,8 @@ fn lower_lambda_named(wasm_name, name, params, body, env) = {
   }
 }
 
-fn lower_lambda(name, params, body, env) = lower_lambda_named(name, name, params, body, env)
-fn lower_lambda_inner(name, params, body, env) = lower_lambda_named(name ++ "_" ++ to_string(fresh_id()), name, params, body, env)
+fn lower_lambda(name, params, body, env, subst) = lower_lambda_named(name, name, params, body, env, subst)
+fn lower_lambda_inner(name, params, body, env, subst) = lower_lambda_named(name ++ "_" ++ to_string(fresh_id()), name, params, body, env, subst)
 
 // env_shadows(env, name): true if the most-recent env binding for `name` is
 // a parameter of an enclosing function. That binding shadows any top-level

@@ -14,44 +14,46 @@ import compiler/lower_closure
 import compiler/lowir_walk
 import compiler/ty
 
-// ─── Type helpers for dispatch — read children, don't re-walk ──
+// ─── Type helpers for dispatch — chase the live substitution ──
+// Every type lookup applies the substitution graph before matching,
+// so stale TVars that inference resolved late get chased live at
+// lower time. The substitution IS the oracle; cached AST types are
+// stale views onto it.
 
-// List result type: TList(elem_ty) read from first lowered element.
-fn lty_list(lowered_elems) = {
+fn lty_list(subst, lowered_elems) = {
   if len(lowered_elems) == 0 { TList(TUnit) }
-  else { TList(lexpr_ty(list_head(lowered_elems))) }
+  else { TList(apply(subst, lexpr_ty(list_head(lowered_elems)))) }
 }
 
-// Tuple result type: TTuple(elem_tys) read from each lowered element.
-fn lty_tuple_elems(lowered_elems) = {
+fn lty_tuple_elems(subst, lowered_elems) = {
   if len(lowered_elems) == 0 { [] }
   else {
     let (rest, e) = list_pop(lowered_elems)
-    lty_tuple_elems(rest) ++ [lexpr_ty(e)]
+    lty_tuple_elems(subst, rest) ++ [apply(subst, lexpr_ty(e))]
   }
 }
 
-// Call result type: unwrap TFun's return from the function node's type.
-fn lty_call_result(lowered_func) = match lexpr_ty(lowered_func) {
-  TFun(_, ret, _) => ret,
+fn lty_call_result(subst, lowered_func) = match apply(subst, lexpr_ty(lowered_func)) {
+  TFun(_, ret, _) => apply(subst, ret),
   _ => TUnit
 }
 
-// Index result type: unwrap TList or default to TUnit.
-fn lty_index_result(lowered_coll) = match lexpr_ty(lowered_coll) {
-  TList(elem) => elem,
+fn lty_index_result(subst, lowered_coll) = match apply(subst, lexpr_ty(lowered_coll)) {
+  TList(elem) => apply(subst, elem),
   _ => TUnit
 }
 
-// Look up a named global's type in env; fall back to TUnit.
-fn lty_name(env, name) = { let (_, ty, _) = env_lookup(env, name); ty }
+fn lty_name(subst, env, name) = {
+  let (_, ty, _) = env_lookup(env, name)
+  apply(subst, ty)
+}
 
 // ─── The One lower_expr ─────────────────────────────────────
 // Performs LowerCtx effects (is_ctor, is_global, is_state_var, fresh_id).
 // Every L* construction attaches a Ty as its first field. The types
 // come from env (for VarRef) or from children (for composite nodes).
 
-fn lower_expr(sexpr, env) = {
+fn lower_expr(sexpr, env, subst) = {
   let S(expr, _, _) = sexpr
   match expr {
     IntLit(s)    => LConst(TInt,    LInt(parse_int(s))),
@@ -60,7 +62,7 @@ fn lower_expr(sexpr, env) = {
     BoolLit(b)   => LConst(TBool,   LBool(b)),
 
     VarRef(name) => {
-      let ty = lty_name(env, name)
+      let ty = lty_name(subst, env, name)
       if is_ctor(name) { LMakeVariant(ty, name, []) }
       else { LGlobal(ty, name) }
       // NB: we do NOT prefix effect-op names with __ev_op_ here, even
@@ -73,8 +75,8 @@ fn lower_expr(sexpr, env) = {
     },
 
     BinOp(op, left, right) => {
-      let l = lower_expr(left, env)
-      let r = lower_expr(right, env)
+      let l = lower_expr(left, env, subst)
+      let r = lower_expr(right, env, subst)
       let lt = lexpr_ty(l)
       let rt = lexpr_ty(r)
       if op == "Eq" || op == "Neq" {
@@ -125,7 +127,7 @@ fn lower_expr(sexpr, env) = {
       } }
     },
     UnaryOp(op, operand) => {
-      let inner = lower_expr(operand, env)
+      let inner = lower_expr(operand, env, subst)
       let ty = if op == "Not" { TBool } else { lexpr_ty(inner) }
       LUnaryOp(ty, op, inner)
     },
@@ -136,13 +138,13 @@ fn lower_expr(sexpr, env) = {
         VarRef(name) => {
           {
             if is_ctor(name) {
-              let lowered_args = lower_exprs(args, env)
-              let ctor_ty = lty_name(env, name)
+              let lowered_args = lower_exprs(args, env, subst)
+              let ctor_ty = lty_name(subst, env, name)
               LMakeVariant(ctor_ty, name, lowered_args)
             }
             else { if (name == "println" || name == "print") && len(args) > 0 {
               let arg = args[0]
-              let lowered_arg = lower_expr(arg, env)
+              let lowered_arg = lower_expr(arg, env, subst)
               // Known String → print_string. Default → print_string.
               // In WASM, all values are heap pointers (i32). print_string
               // reads bytes from the pointer. print_int formats the integer.
@@ -160,13 +162,13 @@ fn lower_expr(sexpr, env) = {
                 print_call
               }
             } else { if name == "to_string" && len(args) > 0 {
-              let lowered = lower_expr(args[0], env)
+              let lowered = lower_expr(args[0], env, subst)
               match lexpr_ty(lowered) {
                 TString => lowered,
                 _ => LCall(TString, LGlobal(TFun([lexpr_ty(lowered)], TString, EfPure), "int_to_str"), [lowered])
               }
             } else { if name == "slice" && len(args) >= 3 {
-              let lowered_args = lower_exprs(args, env)
+              let lowered_args = lower_exprs(args, env, subst)
               let first_ty = lexpr_ty(lowered_args[0])
               match first_ty {
                 TString => LCall(TString, LGlobal(TFun([], TString, EfPure), "str_slice"), lowered_args),
@@ -176,38 +178,38 @@ fn lower_expr(sexpr, env) = {
               // Regular call — effect ops dispatch through __ev_op_NAME
               // closures (installed by the handle). No compile-time inlining;
               // the closure captures free vars by value at install time.
-              let lowered_func = lower_expr(func, env)
-              LCall(lty_call_result(lowered_func), lowered_func, lower_exprs(args, env))
+              let lowered_func = lower_expr(func, env, subst)
+              LCall(lty_call_result(subst, lowered_func), lowered_func, lower_exprs(args, env, subst))
             } } } }
           }
         },
         _ => {
-          let lowered_func = lower_expr(func, env)
-          LCall(lty_call_result(lowered_func), lowered_func, lower_exprs(args, env))
+          let lowered_func = lower_expr(func, env, subst)
+          LCall(lty_call_result(subst, lowered_func), lowered_func, lower_exprs(args, env, subst))
         }
       }
     },
 
     PipeExpr(data, step) => {
-      let lowered_data = lower_expr(data, env)
+      let lowered_data = lower_expr(data, env, subst)
       let S(step_expr, sl, sc) = step
       match step_expr {
         Call(func, args) => {
-          let lowered_func = lower_expr(func, env)
-          LCall(lty_call_result(lowered_func), lowered_func, [lowered_data] ++ lower_exprs(args, env))
+          let lowered_func = lower_expr(func, env, subst)
+          LCall(lty_call_result(subst, lowered_func), lowered_func, [lowered_data] ++ lower_exprs(args, env, subst))
         },
         VarRef(name) => {
           if name == "println" || name == "print" {
             // Desugar to Call so the println rewrite fires
-            lower_expr(S(Call(step, [data]), sl, sc), env)
+            lower_expr(S(Call(step, [data]), sl, sc), env, subst)
           } else {
-            let lowered_step = lower_expr(step, env)
-            LCall(lty_call_result(lowered_step), lowered_step, [lowered_data])
+            let lowered_step = lower_expr(step, env, subst)
+            LCall(lty_call_result(subst, lowered_step), lowered_step, [lowered_data])
           }
         },
         _ => {
-          let lowered_step = lower_expr(step, env)
-          LCall(lty_call_result(lowered_step), lowered_step, [lowered_data])
+          let lowered_step = lower_expr(step, env, subst)
+          LCall(lty_call_result(subst, lowered_step), lowered_step, [lowered_data])
         }
       }
     },
@@ -217,29 +219,29 @@ fn lower_expr(sexpr, env) = {
       match branches_expr {
         TupleExpr(fns) => {
           // Input lowered ONCE, bound via LLet. Standard nodes. Types carry the proof.
-          let lowered_input = lower_expr(data, env)
+          let lowered_input = lower_expr(data, env, subst)
           let input_name = "__fan_" ++ to_string(fresh_id())
           let input_ref = LGlobal(lexpr_ty(lowered_input), input_name)
-          let calls = fan_out_single(fns, input_ref, env)
-          LBlock(TTuple(lty_tuple_elems(calls)),
+          let calls = fan_out_single(fns, input_ref, env, subst)
+          LBlock(TTuple(lty_tuple_elems(subst, calls)),
             [LLet(lexpr_ty(lowered_input), input_name, lowered_input),
-             LMakeTuple(TTuple(lty_tuple_elems(calls)), calls)])
+             LMakeTuple(TTuple(lty_tuple_elems(subst, calls)), calls)])
         },
-        _ => lower_expr(S(Call(branches, [data]), bl, bc), env)
+        _ => lower_expr(S(Call(branches, [data]), bl, bc), env, subst)
       }
     },
 
     ComposeExpr(f, g) => {
       // f >< g — effects merged. Types carry the proof.
       let param = "__join_x"
-      let lowered_f = lower_expr(f, env)
-      let lowered_g = lower_expr(g, env)
-      let f_ret = lty_call_result(lowered_f)
-      let g_ret = lty_call_result(lowered_g)
+      let lowered_f = lower_expr(f, env, subst)
+      let lowered_g = lower_expr(g, env, subst)
+      let f_ret = lty_call_result(subst, lowered_f)
+      let g_ret = lty_call_result(subst, lowered_g)
       let f_call = LCall(f_ret, lowered_f, [LGlobal(TUnit, param)])
       let g_call = LCall(g_ret, lowered_g, [f_call])
-      let f_eff = lty_fn_eff(lowered_f)
-      let g_eff = lty_fn_eff(lowered_g)
+      let f_eff = lty_fn_eff(subst, lowered_f)
+      let g_eff = lty_fn_eff(subst, lowered_g)
       let merged = merge_effects(f_eff, g_eff)
       LMakeClosure(TFun([TUnit], g_ret, merged),
         LFn("__joined_" ++ to_string(fresh_id()), 1, [param], [g_call], merged), [])
@@ -247,19 +249,19 @@ fn lower_expr(sexpr, env) = {
 
 
     IfExpr(cond, then_e, else_e) => {
-      let lowered_then = lower_expr(then_e, env)
-      LIf(lexpr_ty(lowered_then), lower_expr(cond, env),
-          [lowered_then], [lower_expr(else_e, env)])
+      let lowered_then = lower_expr(then_e, env, subst)
+      LIf(lexpr_ty(lowered_then), lower_expr(cond, env, subst),
+          [lowered_then], [lower_expr(else_e, env, subst)])
     },
     MatchExpr(scrutinee, arms) => {
-      let lowered_arms = lower_match_arms(arms, env)
+      let lowered_arms = lower_match_arms(arms, env, subst)
       let result_ty = if len(lowered_arms) == 0 { TUnit }
                       else { let (_, body) = lowered_arms[0]; lexpr_ty(body) }
-      LMatch(result_ty, lower_expr(scrutinee, env), lowered_arms)
+      LMatch(result_ty, lower_expr(scrutinee, env, subst), lowered_arms)
     },
     BlockExpr(stmts, final_e) => {
-      let (lowered_stmts, block_env) = lower_stmts_with_env(stmts, env)
-      let lowered_final = lower_expr(final_e, block_env)
+      let (lowered_stmts, block_env) = lower_stmts_with_env(stmts, env, subst)
+      let lowered_final = lower_expr(final_e, block_env, subst)
       LBlock(lexpr_ty(lowered_final), lowered_stmts ++ [lowered_final])
     },
 
@@ -269,49 +271,49 @@ fn lower_expr(sexpr, env) = {
       // or default to TUnit since the loop itself doesn't return anything unless broken from.
       // Actually, we must use lexpr_ty(lowered_body) or the AST type.
       // Wait, we don't have sexpr_ty here natively, but we can query env or just let LLoop hold TUnit.
-      let lowered_body = lower_expr(body, env)
+      let lowered_body = lower_expr(body, env, subst)
       LLoop(TUnit, [lowered_body])
     },
 
     BreakExpr(value) => {
-      let lowered_value = lower_expr(value, env)
+      let lowered_value = lower_expr(value, env, subst)
       LBreak(lexpr_ty(lowered_value), lowered_value)
     },
 
     ListExpr(elems) => {
-      let lowered = lower_exprs(elems, env)
-      LMakeList(lty_list(lowered), lowered)
+      let lowered = lower_exprs(elems, env, subst)
+      LMakeList(lty_list(subst, lowered), lowered)
     },
     TupleExpr(elems) => {
-      let lowered = lower_exprs(elems, env)
-      LMakeTuple(TTuple(lty_tuple_elems(lowered)), lowered)
+      let lowered = lower_exprs(elems, env, subst)
+      LMakeTuple(TTuple(lty_tuple_elems(subst, lowered)), lowered)
     },
     Index(collection, idx) => {
-      let lowered_coll = lower_expr(collection, env)
+      let lowered_coll = lower_expr(collection, env, subst)
       // ctx[3] for a tuple must emit direct i32.load, not call $list_index
       // (which misreads tuple memory as list-with-tag). Root-caused via
       // wasm-decompile showing ctx_globals(ctx) compiled to list_index
       // → returned the wrong field → ctx_globals appeared empty in-fn.
       let is_tuple = match lexpr_ty(lowered_coll) { TTuple(_) => true, _ => false }
-      LIndex(lty_index_result(lowered_coll), lowered_coll, lower_expr(idx, env), is_tuple)
+      LIndex(lty_index_result(subst, lowered_coll), lowered_coll, lower_expr(idx, env, subst), is_tuple)
     },
     FieldAccess(obj, field) => {
-      let lowered_obj = lower_expr(obj, env)
-      LIndex(lty_index_result(lowered_obj), lowered_obj, LConst(TString, LString(field)), true)
+      let lowered_obj = lower_expr(obj, env, subst)
+      LIndex(lty_index_result(subst, lowered_obj), lowered_obj, LConst(TString, LString(field)), true)
     },
 
     RecordExpr(fields) => {
       // Sort fields by name for canonical ordering — same as codegen.lux
       let sorted = sort_fields_for_lower(fields)
-      let lowered = lower_record_fields(sorted, env)
+      let lowered = lower_record_fields(sorted, env, subst)
       let tag = lower_record_tag(sorted)
       LMakeVariant(TRecord(infer_record_field_types(sorted, lowered)), tag, lowered)
     },
 
-    LambdaExpr(params, body) => lower_lambda_inner("lambda_" ++ to_string(fresh_id()), params, body, env),
+    LambdaExpr(params, body) => lower_lambda_inner("lambda_" ++ to_string(fresh_id()), params, body, env, subst),
 
     HandleExpr(body, handler_expr, state_bindings) =>
-      lower_handle(body, handler_expr, state_bindings, env),
+      lower_handle(body, handler_expr, state_bindings, env, subst),
 
     ResumeExpr(value, updates) => {
       // Indirect dispatch: the arm body runs as a closure invoked via
@@ -322,37 +324,37 @@ fn lower_expr(sexpr, env) = {
       //
       // Order matters: resume(VALUE) with STATE = EXPR must compute VALUE
       // using OLD state. Stash value in a temp, apply updates, return temp.
-      if len(updates) == 0 { lower_expr(value, env) }
+      if len(updates) == 0 { lower_expr(value, env, subst) }
       else {
-        let lowered_value = lower_expr(value, env)
+        let lowered_value = lower_expr(value, env, subst)
         let value_ty = lexpr_ty(lowered_value)
         let stash_name = "__resume_val_" ++ to_string(fresh_id())
         let stash_stmt = LLet(value_ty, stash_name, lowered_value)
-        let update_stmts = lower_state_updates(updates, env)
+        let update_stmts = lower_state_updates(updates, env, subst)
         let return_stmt = LGlobal(value_ty, stash_name)
         LBlock(value_ty, [stash_stmt] ++ update_stmts ++ [return_stmt])
       }
     },
 
-    StringInterp(parts) => lower_string_interp(parts, env),
+    StringInterp(parts) => lower_string_interp(parts, env, subst),
 
     _ => LConst(TUnit, LUnit)
   }
 }
 
 // Fan-out with single-evaluation: input_ref is already a bound reference
-fn fan_out_single(fns, input_ref, env) = {
+fn fan_out_single(fns, input_ref, env, subst) = {
   if len(fns) == 0 { [] }
   else {
     let (rest, f) = list_pop(fns)
-    let lowered_fn = lower_expr(f, env)
-    fan_out_single(rest, input_ref, env)
-    ++ [LCall(lty_call_result(lowered_fn), lowered_fn, [input_ref])]
+    let lowered_fn = lower_expr(f, env, subst)
+    fan_out_single(rest, input_ref, env, subst)
+    ++ [LCall(lty_call_result(subst, lowered_fn), lowered_fn, [input_ref])]
   }
 }
 
 // Extract effect row from a function type
-fn lty_fn_eff(lowered) = match lexpr_ty(lowered) {
+fn lty_fn_eff(subst, lowered) = match apply(subst, lexpr_ty(lowered)) {
   TFun(_, _, eff) => eff,
   _ => EfPure
 }
@@ -362,26 +364,26 @@ fn fan_out_lower(fns, input, env) = {
   if len(fns) == 0 { [] }
   else {
     let (rest, f) = list_pop(fns)
-    let lowered_fn = lower_expr(f, env)
+    let lowered_fn = lower_expr(f, env, subst)
     fan_out_lower(rest, input, env)
-    ++ [LCall(lty_call_result(lowered_fn), lowered_fn, [lower_expr(input, env)])]
+    ++ [LCall(lty_call_result(subst, lowered_fn), lowered_fn, [lower_expr(input, env, subst)])]
   }
 }
 
-fn lower_exprs(sexprs, env) = {
+fn lower_exprs(sexprs, env, subst) = {
   if len(sexprs) == 0 { [] }
   else {
     let (rest, expr) = list_pop(sexprs)
-    lower_exprs(rest, env) ++ [lower_expr(expr, env)]
+    lower_exprs(rest, env, subst) ++ [lower_expr(expr, env, subst)]
   }
 }
 
-fn lower_record_fields(fields, env) = {
+fn lower_record_fields(fields, env, subst) = {
   if len(fields) == 0 { [] }
   else {
     let (rest, f) = list_pop(fields)
     let (_, val) = f
-    lower_record_fields(rest, env) ++ [lower_expr(val, env)]
+    lower_record_fields(rest, env, subst) ++ [lower_expr(val, env, subst)]
   }
 }
 
@@ -431,33 +433,33 @@ fn infer_record_field_types(fields, lowered_exprs) = {
   }
 }
 
-fn lower_string_interp(parts, env) = {
+fn lower_string_interp(parts, env, subst) = {
   if len(parts) == 0 { LConst(TString, LString("")) }
   else {
-    let first = lower_interp_one(list_head(parts), env)
+    let first = lower_interp_one(list_head(parts), env, subst)
     let rest_parts = list_tail(parts)
     if len(rest_parts) == 0 { first }
     else {
-      let rest_str = lower_string_interp(rest_parts, env)
+      let rest_str = lower_string_interp(rest_parts, env, subst)
       LCall(TString, LGlobal(TFun([TString, TString], TString, EfPure), "str_concat"), [first, rest_str])
     }
   }
 }
 
-fn lower_interp_one(part, env) = {
-  let lowered = lower_expr(part, env)
+fn lower_interp_one(part, env, subst) = {
+  let lowered = lower_expr(part, env, subst)
   match lexpr_ty(lowered) {
     TString => lowered,
     _ => LCall(TString, LGlobal(TFun([lexpr_ty(lowered)], TString, EfPure), "int_to_str"), [lowered])
   }
 }
 
-fn lower_match_arms(arms, env) = {
+fn lower_match_arms(arms, env, subst) = {
   if len(arms) == 0 { [] }
   else {
     let (rest, arm) = list_pop(arms)
     let (pat, body) = arm
-    lower_match_arms(rest, env) ++ [(lower_pat(pat), lower_expr(body, env))]
+    lower_match_arms(rest, env, subst) ++ [(lower_pat(pat), lower_expr(body, env, subst))]
   }
 }
 
@@ -495,26 +497,26 @@ fn lower_pats_pop(pats, acc) = {
 
 // ─── Statement Lowering ─────────────────────────────────────
 
-fn lower_stmts(stmts, env) = lower_stmts_pop(stmts, env, [])
-fn lower_stmts_pop(stmts, env, acc) = {
+fn lower_stmts(stmts, env, subst) = lower_stmts_pop(stmts, env, subst, [])
+fn lower_stmts_pop(stmts, env, subst, acc) = {
   if len(stmts) == 0 { acc }
   else {
     let stmt = list_head(stmts)
     let rest = list_tail(stmts)
-    lower_stmts_pop(rest, env, [lower_stmt(stmt, env)] ++ acc)
+    lower_stmts_pop(rest, env, [lower_stmt(stmt, env, subst)] ++ acc)
   }
 }
 
 // Lower statements while extending env with local types — for BlockExpr.
 // Each LetStmt/FnStmt adds its binding to env for subsequent statements.
-fn lower_stmts_with_env(stmts, env) = lower_stmts_forward(reverse_list(stmts), env, [])
-fn lower_stmts_forward(reversed_stmts, env, acc) = {
+fn lower_stmts_with_env(stmts, env, subst) = lower_stmts_forward(reverse_list(stmts), env, subst, [])
+fn lower_stmts_forward(reversed_stmts, env, subst, acc) = {
   if len(reversed_stmts) == 0 { (acc, env) }
   else {
     let (rest, stmt) = list_pop(reversed_stmts)
-    let lowered = lower_stmt(stmt, env)
+    let lowered = lower_stmt(stmt, env, subst)
     let new_env = extend_env_from_stmt(stmt, lowered, env)
-    lower_stmts_forward(rest, new_env, push(acc, lowered))
+    lower_stmts_forward(rest, new_env, subst, push(acc, lowered))
   }
 }
 
@@ -545,17 +547,17 @@ fn extract_param_names(params) = {
   }
 }
 
-fn lower_stmt(stmt, env) = match stmt {
+fn lower_stmt(stmt, env, subst) = match stmt {
   LetStmt(name, value) => {
-    let lowered = lower_expr(value, env)
+    let lowered = lower_expr(value, env, subst)
     LLet(lexpr_ty(lowered), name, lowered)
   },
   LetDestructure(names, value) => {
-    let lowered = lower_expr(value, env)
+    let lowered = lower_expr(value, env, subst)
     LBlock(TUnit, [LLet(lexpr_ty(lowered), "_dt", lowered)] ++ lower_destructure_bindings(names, 0))
   },
   LetPattern(pat, value) => {
-    let lowered = lower_expr(value, env)
+    let lowered = lower_expr(value, env, subst)
     let lowered_ty = lexpr_ty(lowered)
     match pat {
       PVar(name) => LLet(lowered_ty, name, lowered),
@@ -573,11 +575,11 @@ fn lower_stmt(stmt, env) = match stmt {
   FnStmt(name, params, body, _, _) => {
     let base_params = extract_param_names(params)
     let param_names = base_params
-    let lowered_lambda = if is_global(name) { lower_lambda(name, param_names, body, env) }
-                         else { lower_lambda_inner(name, param_names, body, env) }
+    let lowered_lambda = if is_global(name) { lower_lambda(name, param_names, body, env, subst) }
+                         else { lower_lambda_inner(name, param_names, body, env, subst) }
     LLet(lexpr_ty(lowered_lambda), name, lowered_lambda)
   },
-  ExprStmt(expr) => lower_expr(expr, env),
+  ExprStmt(expr) => lower_expr(expr, env, subst),
   EffectDeclStmt(eff_name, ops) => {
     // Runtime effects (Memory, Alloc, WASI) are handled by emit_builtin.
     // Only user effects get dummy op stubs.
@@ -660,7 +662,7 @@ fn extract_record_ty_names(fields) = {
   }
 }
 
-fn lower_handle(body, handler_expr, state_bindings, env) = {
+fn lower_handle(body, handler_expr, state_bindings, env, subst) = {
   // ─── State: heap cells for handler-local state — generate names FIRST ───
   let state_names = gen_state_names(state_bindings)
 
@@ -668,7 +670,7 @@ fn lower_handle(body, handler_expr, state_bindings, env) = {
   // State vars must NOT be captured by handler arm closures — they live in
   // heap cells accessed via globals. is_state_var filters them from captures.
   let lowered_handler = handle {
-    lower_expr(handler_expr, env)
+    lower_expr(handler_expr, env, subst)
   } {
     is_state_var(n) => resume(is_orig_state_name(state_names, n))
   }
@@ -696,7 +698,7 @@ fn lower_handle(body, handler_expr, state_bindings, env) = {
   // The installed closures (in the handler record above) capture their
   // free vars by value — no compile-time inlining needed.
   let lowered_body = handle {
-    lower_expr(body, env)
+    lower_expr(body, env, subst)
   } {
     is_state_var(n) => resume(is_orig_state_name(state_names, n))
   }
@@ -759,7 +761,7 @@ fn init_state_globals(bindings, state_names, env) = {
   else {
     let (_, init_sexpr) = list_head(bindings)
     let (_, gname) = list_head(state_names)
-    let init_lowered = lower_expr(init_sexpr, env)
+    let init_lowered = lower_expr(init_sexpr, env, subst)
     let init_ty = lexpr_ty(init_lowered)
     [ LLet(init_ty, "__save_" ++ gname, LGlobal(init_ty, gname)),
       LLet(init_ty, gname, init_lowered) ]
@@ -840,13 +842,13 @@ fn collect_free_lowir(node, bound) =
     get_lowir_accum() => resume(names)
   }
 
-fn lower_state_updates_pure(updates, env) = {
+fn lower_state_updates_pure(updates, env, subst) = {
   if len(updates) == 0 { [] }
   else {
     let (name, value_sexpr) = list_first(updates)
-    let lowered = lower_expr_pure(value_sexpr, env)
+    let lowered = lower_expr_pure(value_sexpr, env, subst)
     [LLet(lexpr_ty(lowered), name, lowered)]
-    ++ lower_state_updates_pure(list_rest(updates), env)
+    ++ lower_state_updates_pure(list_rest(updates), env, subst)
   }
 }
 
@@ -887,105 +889,105 @@ fn subst_one_state(node, orig, gname) =
     }
   }
 
-fn lower_stmts_pure(stmts, env) = {
+fn lower_stmts_pure(stmts, env, subst) = {
   if len(stmts) == 0 { [] }
-  else { [lower_stmt_pure(list_head(stmts), env)] ++ lower_stmts_pure(list_tail(stmts), env) }
+  else { [lower_stmt_pure(list_head(stmts), env, subst)] ++ lower_stmts_pure(list_tail(stmts), env, subst) }
 }
 
-fn lower_stmt_pure(stmt, env) = match stmt {
+fn lower_stmt_pure(stmt, env, subst) = match stmt {
   LetStmt(name, value) => {
-    let lowered = lower_expr_pure(value, env)
+    let lowered = lower_expr_pure(value, env, subst)
     LLet(lexpr_ty(lowered), name, lowered)
   },
-  ExprStmt(expr) => lower_expr_pure(expr, env),
+  ExprStmt(expr) => lower_expr_pure(expr, env, subst),
   // TypeStmt, TypeAliasStmt, ImportStmt — compile-time declarations,
   // no runtime code. Correctly lower to unit.
   _ => LConst(TUnit, LUnit)
 }
 
-fn lower_expr_pure(sexpr, env) = {
+fn lower_expr_pure(sexpr, env, subst) = {
   let S(expr, _, _) = sexpr
   match expr {
     IntLit(s)    => LConst(TInt,    LInt(parse_int(s))),
     FloatLit(s)  => LConst(TFloat,  LFloat(parse_float(s))),
     StringLit(s) => LConst(TString, LString(s)),
     BoolLit(b)   => LConst(TBool,   LBool(b)),
-    VarRef(name) => LGlobal(lty_name(env, name), name),
+    VarRef(name) => LGlobal(lty_name(subst, env, name), name),
     BinOp(op, l, r) => {
-      let ll = lower_expr_pure(l, env)
-      let rr = lower_expr_pure(r, env)
+      let ll = lower_expr_pure(l, env, subst)
+      let rr = lower_expr_pure(r, env, subst)
       let ty = if op == "Eq" || op == "Neq" || op == "Lt" || op == "Gt" || op == "LtEq" || op == "GtEq" || op == "And" || op == "Or" { TBool }
                else { lexpr_ty(ll) }
       LBinOp(ty, op, ll, rr)
     },
     UnaryOp(op, e) => {
-      let inner = lower_expr_pure(e, env)
+      let inner = lower_expr_pure(e, env, subst)
       let ty = if op == "Not" { TBool } else { lexpr_ty(inner) }
       LUnaryOp(ty, op, inner)
     },
     Call(func, args) => {
-      let lowered_func = lower_expr_pure(func, env)
-      LCall(lty_call_result(lowered_func), lowered_func, lower_exprs_pure(args, env))
+      let lowered_func = lower_expr_pure(func, env, subst)
+      LCall(lty_call_result(subst, lowered_func), lowered_func, lower_exprs_pure(args, env, subst))
     },
     TupleExpr(elems) => {
-      let lowered = lower_exprs_pure(elems, env)
-      LMakeTuple(TTuple(lty_tuple_elems(lowered)), lowered)
+      let lowered = lower_exprs_pure(elems, env, subst)
+      LMakeTuple(TTuple(lty_tuple_elems(subst, lowered)), lowered)
     },
     _ => LConst(TUnit, LUnit)
   }
 }
 
-fn lower_exprs_pure(sexprs, env) = {
+fn lower_exprs_pure(sexprs, env, subst) = {
   if len(sexprs) == 0 { [] }
-  else { [lower_expr_pure(list_head(sexprs), env)] ++ lower_exprs_pure(list_tail(sexprs), env) }
+  else { [lower_expr_pure(list_head(sexprs), env, subst)] ++ lower_exprs_pure(list_tail(sexprs), env, subst) }
 }
 
 
 // ─── State Init + Update ────────────────────────────────────
 
-fn lower_state_inits(bindings, env) = {
+fn lower_state_inits(bindings, env, subst) = {
   if len(bindings) == 0 { [] }
   else {
     let (name, init_sexpr) = list_head(bindings)
-    let lowered = lower_expr(init_sexpr, env)
+    let lowered = lower_expr(init_sexpr, env, subst)
     [LLet(lexpr_ty(lowered), name, lowered)]
-      ++ lower_state_inits(list_tail(bindings), env)
+      ++ lower_state_inits(list_tail(bindings), env, subst)
   }
 }
 
-fn lower_state_updates(updates, env) = {
-  if len(updates) <= 1 { lower_state_updates_direct(updates, env) }
-  else { lower_state_eval_temps(updates, env, 0) ++ lower_state_assign_temps(updates, env, 0) }
+fn lower_state_updates(updates, env, subst) = {
+  if len(updates) <= 1 { lower_state_updates_direct(updates, env, subst) }
+  else { lower_state_eval_temps(updates, env, subst, 0) ++ lower_state_assign_temps(updates, env, subst, 0) }
 }
 
-fn lower_state_updates_direct(updates, env) = {
+fn lower_state_updates_direct(updates, env, subst) = {
   if len(updates) == 0 { [] }
   else {
     let (name, value_sexpr) = list_first(updates)
-    let lowered = lower_expr(value_sexpr, env)
+    let lowered = lower_expr(value_sexpr, env, subst)
     [LLet(lexpr_ty(lowered), name, lowered)]
-      ++ lower_state_updates_direct(list_rest(updates), env)
+      ++ lower_state_updates_direct(list_rest(updates), env, subst)
   }
 }
 
-fn lower_state_eval_temps(updates, env, idx) = {
+fn lower_state_eval_temps(updates, env, subst, idx) = {
   if len(updates) == 0 { [] }
   else {
     let (name, value_sexpr) = list_head(updates)
-    let lowered = lower_expr(value_sexpr, env)
+    let lowered = lower_expr(value_sexpr, env, subst)
     [LLet(lexpr_ty(lowered), "__tmp_" ++ name, lowered)]
-      ++ lower_state_eval_temps(list_tail(updates), env, idx + 1)
+      ++ lower_state_eval_temps(list_tail(updates), env, subst, idx + 1)
   }
 }
 
-fn lower_state_assign_temps(updates, env, idx) = {
+fn lower_state_assign_temps(updates, env, subst, idx) = {
   if len(updates) == 0 { [] }
   else {
     let (name, value_sexpr) = list_head(updates)
-    let lowered = lower_expr(value_sexpr, env)
+    let lowered = lower_expr(value_sexpr, env, subst)
     let ty = lexpr_ty(lowered)
     [LLet(ty, name, LGlobal(ty, "__tmp_" ++ name))]
-      ++ lower_state_assign_temps(list_tail(updates), env, idx + 1)
+      ++ lower_state_assign_temps(list_tail(updates), env, subst, idx + 1)
   }
 }
 
@@ -1050,7 +1052,7 @@ fn is_user_effect(eff_name, env) = {
 
 // filter is in prelude
 
-fn lower_program_typed(stmts, ctors, env) = {
+fn lower_program_typed(stmts, ctors, env, subst) = {
   let final_env = add_op_indices_to_env(stmts, 0, env)
   // println/print are call-site specialized in lower_expr (see the Call
   // branch — they desugar to print_string / print_int / print_newline).
@@ -1061,7 +1063,7 @@ fn lower_program_typed(stmts, ctors, env) = {
   // to_string and slice ARE real fns (memory.lux) — no addition needed.
   let globals = collect_top_names(stmts, 0)
              ++ ["heap_save", "heap_restore", "println", "print"]
-  handle { lower_stmts(stmts, final_env) } with state = 0 {
+  handle { lower_stmts(stmts, final_env, subst) } with state = 0 {
     is_ctor(name) => resume(ctor_in(ctors, name, 0)),
     is_global(name) => resume(name_in(globals, name, 0)),
     is_state_var(name) => resume(false),

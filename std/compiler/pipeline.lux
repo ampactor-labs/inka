@@ -136,10 +136,10 @@ fn checked_with_cache(source) = {
   let (import_env, next_n, import_ast, _seen, import_subst) =
     resolve_and_check_modules(source, prelude_env, start_n)
   let user_ast = source |> frontend
-  let (env, _subst) = user_ast |> check_program_with(import_env, next_n, import_subst)
+  let (env, subst) = user_ast |> check_program_with(import_env, next_n, import_subst)
   let combined_ast = prelude_ast ++ import_ast ++ user_ast
   handle { validate(combined_ast, env) } with print_diagnostics
-  (combined_ast, env)
+  (combined_ast, env, subst)
 }
 
 // ─── Diagnostic Handler ─────────────────────────────────────
@@ -247,17 +247,17 @@ fn check_let_against_aliases(name, value, aliases) with Diagnostic = {
 // different from document, different from compile.
 
 fn compile(source) = {
-  let (ast, _) = source |> checked_with_cache
+  let (ast, _, _) = source |> checked_with_cache
   ast |> compile_program
 }
 
 fn compile_checked(source) = {
-  let (ast, env) = source |> checked_with_cache
+  let (ast, env, subst) = source |> checked_with_cache
   (ast |> compile_program, env)
 }
 
 fn compile_teaching(source) = {
-  let (ast, env) = source |> checked_with_cache
+  let (ast, env, subst) = source |> checked_with_cache
   println("[teach] types inferred:")
   env |> show_env_compact |> println
   let suggestion = (env, ast) |> gradient_suggestion
@@ -266,35 +266,35 @@ fn compile_teaching(source) = {
 }
 
 fn compile_standard(source) = {
-  let (ast, _) = source |> checked_with_cache
+  let (ast, _, _) = source |> checked_with_cache
   ast |> compile_program
 }
 
 fn compile_explaining(source) = {
-  let (ast, env) = source |> checked_with_cache
+  let (ast, env, subst) = source |> checked_with_cache
   println("── Why Engine ──")
   env |> show_env_why(2) |> println
   ast |> compile_program
 }
 
 fn compile_documenting(source) = {
-  let (ast, env) = source |> checked_with_cache
+  let (ast, env, subst) = source |> checked_with_cache
   println("── Documentation ──")
   env |> show_env_doc |> println
   ast |> compile_program
 }
 
 fn compile_checking(source) = {
-  let (ast, env) = source |> checked_with_cache
+  let (ast, env, subst) = source |> checked_with_cache
   println("✓ type check passed")
   env |> show_env_compact |> println
   compile_program([])
 }
 
 fn compile_lowering(source) = {
-  let (ast, env) = source |> checked_with_cache
+  let (ast, env, subst) = source |> checked_with_cache
   let ctors = env |> extract_constructors
-  let lowered = lower_program_typed(ast, ctors, env)
+  let lowered = lower_program_typed(ast, ctors, env, subst)
   println("── LowIR ──")
   lowered |> print_lowered |> println
   compile_program([])
@@ -315,7 +315,7 @@ fn compile_tracing(source) = {
 }
 
 fn compile_illuminate(source) = {
-  let (ast, env) = source |> checked_with_cache
+  let (ast, env, subst) = source |> checked_with_cache
   let g = compute_gradient(env, ast)
   let rendered = g |> render_gradient
   if len(rendered) > 0 { println(rendered) } else { () }
@@ -330,13 +330,13 @@ fn compile_wasm(source) = {
   let (import_env, next_n, import_ast, _seen, import_subst) =
     resolve_and_check_modules(source, prelude_env, start_n)
   let user_ast = source |> frontend
-  let (env, _subst) = user_ast |> check_program_with(import_env, next_n, import_subst)
+  let (env, subst) = user_ast |> check_program_with(import_env, next_n, import_subst)
   let runtime = read_file("std/runtime/memory.lux")
   let runtime_ast = runtime |> frontend
   let combined_ast = prelude_ast ++ import_ast ++ runtime_ast ++ user_ast
   handle { validate(combined_ast, env) } with print_diagnostics
   let ctors = env |> extract_constructors
-  let lowered = lower_program_typed(combined_ast, ctors, env)
+  let lowered = lower_program_typed(combined_ast, ctors, env, subst)
   emit_module(lowered, env)
 }
 

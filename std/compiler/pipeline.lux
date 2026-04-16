@@ -63,11 +63,14 @@ fn frontend(source) =
 
 fn parse_source(source) = source |> frontend
 
-fn check_source(source) = source |> frontend |> check_program
+fn check_source(source) = {
+  let (env, _subst) = source |> frontend |> check_program
+  env
+}
 
 fn checked(source) = {
   let ast = source |> with_prelude |> frontend
-  let env = ast |> check_program
+  let (env, _subst) = ast |> check_program
   handle { validate(ast, env) } with print_diagnostics
   (ast, env)
 }
@@ -75,7 +78,7 @@ fn checked(source) = {
 // Raw checked — no prelude prepend. Used by compile_wasm which prepends its own.
 fn checked_raw(source) = {
   let ast = source |> frontend
-  let env = ast |> check_program
+  let (env, _subst) = ast |> check_program
   handle { validate(ast, env) } with print_diagnostics
   (ast, env)
 }
@@ -95,7 +98,7 @@ fn with_prelude(source) = {
 let __prelude_cache = {
   let src = read_file("std/prelude.lux")
   let ast = src |> lex |> parse_program
-  let env = ast |> check_program
+  let (env, _subst) = ast |> check_program
   (ast, env, 1000)
 }
 
@@ -130,13 +133,10 @@ fn max_tvar_in_types(tys, max_n) = {
 
 fn checked_with_cache(source) = {
   let (prelude_ast, prelude_env, start_n) = __prelude_cache
-  // Check imports module-by-module — fresh substitution per module.
-  let (import_env, next_n, import_ast, _seen) =
+  let (import_env, next_n, import_ast, _seen, import_subst) =
     resolve_and_check_modules(source, prelude_env, start_n)
-  // Check user source against accumulated env.
-  // No strip_imports — parser creates ImportStmt, checker/lowerer ignore it.
   let user_ast = source |> frontend
-  let env = user_ast |> check_program_with(import_env, next_n)
+  let (env, _subst) = user_ast |> check_program_with(import_env, next_n, import_subst)
   let combined_ast = prelude_ast ++ import_ast ++ user_ast
   handle { validate(combined_ast, env) } with print_diagnostics
   (combined_ast, env)
@@ -306,7 +306,7 @@ fn compile_tracing(source) = {
   println("[trace] tokens: " ++ to_string(tokens))
   let ast = tokens |> parse_program
   println("[trace] ast: " ++ to_string(ast))
-  let env = ast |> check_program
+  let (env, _subst) = ast |> check_program
   handle { validate(ast, env) } with print_diagnostics
   println("[trace] types: " ++ (env |> show_env_compact))
   let chunk = ast |> compile_program
@@ -327,10 +327,10 @@ fn compile_illuminate(source) = {
 
 fn compile_wasm(source) = {
   let (prelude_ast, prelude_env, start_n) = __prelude_cache
-  let (import_env, next_n, import_ast, _seen) =
+  let (import_env, next_n, import_ast, _seen, import_subst) =
     resolve_and_check_modules(source, prelude_env, start_n)
   let user_ast = source |> frontend
-  let env = user_ast |> check_program_with(import_env, next_n)
+  let (env, _subst) = user_ast |> check_program_with(import_env, next_n, import_subst)
   let runtime = read_file("std/runtime/memory.lux")
   let runtime_ast = runtime |> frontend
   let combined_ast = prelude_ast ++ import_ast ++ runtime_ast ++ user_ast
@@ -367,7 +367,7 @@ fn repl_tracing(source) = {
   println("[trace] " ++ to_string(tokens))
   let ast = tokens |> parse_program
   println("[trace] " ++ to_string(ast))
-  let env = ast |> check_program
+  let (env, _subst) = ast |> check_program
   handle { validate(ast, env) } with print_diagnostics
   println("[trace] types: " ++ (env |> show_env_why(3)))
   let chunk = ast |> compile_repl
@@ -391,7 +391,7 @@ fn gradient_suggestion(pair) = {
 // Same pattern as __prelude_cache, extended to all modules.
 
 fn resolve_and_check_modules(source, base_env, start_n) =
-  resolve_and_check_at(source |> split("\n") |> find_imports, base_env, start_n, [], [])
+  resolve_and_check_at(source |> split("\n") |> find_imports, base_env, start_n, [], [], [])
 
 // String-typed dedup — list_contains via polymorphic == falls through
 // to val_eq, which SHOULD work for strings but in practice doesn't
@@ -404,30 +404,23 @@ fn paths_contain(paths, p) = {
   }
 }
 
-fn resolve_and_check_at(paths, env, n, seen, combined_ast) = {
-  if len(paths) == 0 { (env, n, combined_ast, seen) }
+fn resolve_and_check_at(paths, env, n, seen, combined_ast, subst) = {
+  if len(paths) == 0 { (env, n, combined_ast, seen, subst) }
   else {
     let path = list_head(paths)
     let rest = list_tail(paths)
     if paths_contain(seen, path) {
-      resolve_and_check_at(rest, env, n, seen, combined_ast)
+      resolve_and_check_at(rest, env, n, seen, combined_ast, subst)
     } else {
       let file_path = "std/" ++ path ++ ".lux"
       let file_source = read_file(file_path)
       let dep_imports = file_source |> split("\n") |> find_imports
-      let (dep_env, dep_n, dep_ast, dep_seen) =
-        resolve_and_check_at(dep_imports, env, n, seen ++ [path], combined_ast)
+      let (dep_env, dep_n, dep_ast, dep_seen, dep_subst) =
+        resolve_and_check_at(dep_imports, env, n, seen ++ [path], combined_ast, subst)
       let mod_ast = file_source |> frontend
-      let mod_env = mod_ast |> check_program_with(dep_env, dep_n)
-      // Use count_fresh_vars (defined above, line 102) to compute the
-      // exact next-fresh TVar id from the env. Was: heuristic
-      // `dep_n + len(mod_env) * 10`, which under-counted on envs with
-      // nested TVars and caused cross-module TVar collisions —
-      // surface symptom: TList(TVar) escaping into downstream modules,
-      // every `++` on a list whose element type "should" be String
-      // falling through to val_concat at lower time. (2026-04-15.)
+      let (mod_env, mod_subst) = mod_ast |> check_program_with(dep_env, dep_n, dep_subst)
       let new_n = count_fresh_vars(mod_env, dep_n)
-      resolve_and_check_at(rest, mod_env, new_n, dep_seen, dep_ast ++ mod_ast)
+      resolve_and_check_at(rest, mod_env, new_n, dep_seen, dep_ast ++ mod_ast, mod_subst)
     }
   }
 }

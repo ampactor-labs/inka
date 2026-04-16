@@ -107,6 +107,6 @@ fn check_and_show(source, depth) = {
 
 fn check_and_teach(source, name) = {
   let ast = source |> lex |> parse_program
-  let env = ast |> check_program
+  let (env, _subst) = ast |> check_program
   teach(env, name, ast)
 }

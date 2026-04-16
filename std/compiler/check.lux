@@ -259,15 +259,15 @@ fn resolve_env_pop(env, subst, eff_subst, acc) = {
 // Returns: env — fully resolved. No dangling type or effect variables.
 // Substitutions are internal. The truth exits clean.
 
-fn check_program(stmts) = check_program_with(stmts, env_with_primitives(env_empty()), 0)
+fn check_program(stmts) = check_program_with(stmts, env_with_primitives(env_empty()), 0, [])
 
-fn check_program_with(stmts, init_env, start_n) = {
+fn check_program_with(stmts, init_env, start_n, init_subst) = {
   let flat_stmts = list_to_flat(stmts)
   handle {
     prescan_fns(flat_stmts)
     infer_stmts(flat_stmts)
-    get_env()
-  } with n = start_n, s = [], e = init_env, ef = EfPure, sc = [], es = eff_subst_empty() {
+    (get_env(), get_subst())
+  } with n = start_n, s = init_subst, e = init_env, ef = EfPure, sc = [], es = eff_subst_empty() {
     fresh() => {
       resume(TVar(n)) with n = n + 1
     },
@@ -382,4 +382,7 @@ fn prescan_fns_pop(stmts) with Infer = {
 }
 
 // Source in, truth out.
-fn check(source) = source |> lex |> parse_program |> check_program
+fn check(source) = {
+  let (env, _subst) = source |> lex |> parse_program |> check_program
+  env
+}

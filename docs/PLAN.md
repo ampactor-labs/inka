@@ -254,8 +254,8 @@ std/
 | File | Status | Notes |
 |---|---|---|
 | types.jxj | ✅ cascade step 1 | Zero duplicate ADTs, display fns via \|>, canonical vocabulary |
-| graph.jxj | ⏳ cascade step 2 | Needs graph_handler with real state, graph_reason_edge op |
-| effects.jxj | ✅ complete | — |
+| graph.jxj | ✅ cascade step 2 | graph_handler with live state, graph_reason_edge, occurs check |
+| effects.jxj | ✅ cascade step 3 | Full Boolean algebra, unify_row, absorb_row, row_is_ground |
 | infer.jxj | ✅ structurally complete | Fix import style |
 | lower.jxj | ✅ structurally complete | Fix import style |
 | pipeline.jxj | ⏳ needs state threading | Implement real graph_handler, env_handler state |

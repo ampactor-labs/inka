@@ -23,6 +23,12 @@ effect LookupTy {
 }
 ```
 
+**Lowering declares `with SubstGraphRead + EnvRead + LookupTy + LowerCtx
++ …` (spec 06).** EnvRead is the peer of SubstGraphRead — global binding
+lookups resolve through the same effect discipline, not through a
+passed-in `env` argument. No pass threads env. Zero arguments between
+passes carry inference state.
+
 Default handler, installed once in `pipeline.compile`:
 
 ```lux

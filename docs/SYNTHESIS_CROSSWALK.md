@@ -1,10 +1,17 @@
-# Synthesis Manifesto — Crosswalk to Lux
+# Synthesis Manifesto — Crosswalk to Inka
+
+> **Status: historical context, not a living spec.** This doc predates
+> the rebuild plan (`docs/PLAN.md`). It remains as confidence — external
+> validation that the major design choices align with a manifesto
+> produced independently. Recommendations from this doc that survived
+> audit are now absorbed into `docs/rebuild/*.md`; recommendations that
+> didn't are marked "rejected" in the table below.
 
 *An external, context-free conversation produced an eight-pillar
-"Synthesis" manifesto. This doc maps each pillar to where Lux already
-is, where it converges, and what's genuinely new. Source document is
-reproduced verbatim at the bottom so future readers can see exactly
-what we were comparing against.*
+"Synthesis" manifesto. This doc maps each pillar to where Inka (then
+called Lux) already is, where it converges, and what's genuinely new.
+Source document is reproduced verbatim at the bottom so future readers
+can see exactly what we were comparing against.*
 
 **Posture:** this is a **crosswalk**, not an adoption plan. Each pillar
 gets a verdict: **✅ already Lux**, **🔀 convergent** (Lux has it under

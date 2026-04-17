@@ -1,4 +1,4 @@
-# Lux — CLAUDE.md
+# Inka (née Lux) — CLAUDE.md
 
 > **Three anchors. Read them before every non-trivial action.**
 
@@ -26,9 +26,9 @@ later change first** or skip the patch entirely.
 (build fails). There is no third state. No "informational warnings,"
 no `|| true` to hide a gate, no `⚠` where `✗` belongs.
 
-## 3. Lux solves Lux.
+## 3. Inka solves Inka.
 
-Every problem you hit in this project dissolves through Lux's own
+Every problem you hit in this project dissolves through Inka's own
 primitives: effects, handlers, the gradient, refinement types, ADTs,
 pipes. Before inventing a mechanism, verify the existing algebra
 can't host it. GC → scoped arenas. Package manager → handlers on
@@ -36,7 +36,7 @@ imports. Mocking → handlers on effects. Build tools → DAG incremental
 compile. Testing → examples + trace handlers. DI → handler swap.
 
 If you find yourself reaching for a framework, a library, or a new
-mechanism: **the problem is a missing Lux primitive, not a missing
+mechanism: **the problem is a missing Inka primitive, not a missing
 tool.** Find the primitive.
 
 ---
@@ -46,22 +46,105 @@ tool.** Find the primitive.
 **State of the world:** `lux3.wasm` (frozen artifact) compiles
 itself → `lux4.wat` with ~12 `val_concat` drift sites (Arc 2 semantic
 closure, 2026-04-15). Rust VM deleted. The patch-based Arc 3 Phase 2
-path is retired; the `rebuild` branch now drives a scrap-and-rebuild
-of the compiler core against a live SubstGraph. See active plan below.
+path is retired; the `rebuild` branch drives a scrap-and-rebuild of
+the compiler core against a live SubstGraph + EnvRead/Write effect
+substrate. Active plan: `docs/PLAN.md`.
 
 **Before any bootstrap:** `make -C bootstrap preflight` (<1 s). If it
 fails, fix first. If clean, then work.
 
-**Bug classes that cost 75-min bootstraps — never recreate:**
-- Polymorphic dispatch fallback (`match … with _`) that silently masks type errors
-- Duplicate top-level function names (emitter picks one silently)
-- Flat-array list ops in Snoc-tree paths (`list[i]` in a loop)
-- `println` inside `report(...)` handler arms (corrupts WAT stdout)
+**Build commands (all via `bootstrap/Makefile`; never raw `cargo` /
+`wat2wasm` / `wasm2c`):**
 
-**Ask the artifact.** `wabt` is installed — before hypothesizing,
-run `wasm-decompile`, `wat2wasm --debug-names`, or grep
-`bootstrap/build/lux4.wat` to see what was emitted. The WAT is ground
-truth; source is a map.
+```
+make -C bootstrap help            # what each target does
+make -C bootstrap stage0          # Rust VM → lux3.wat (~9 min)
+make -C bootstrap stage1          # wat2wasm --debug-names → lux3.wasm
+make -C bootstrap stage1-aot      # wasmtime compile → lux3.cwasm
+make -C bootstrap smoke           # pattern + counter canaries (~1 min)
+make -C bootstrap stage2          # Ouroboros via wasmtime → lux4.wat
+make -C bootstrap check           # diff lux3.wat lux4.wat
+make -C bootstrap check-canonical # round-trip canonical diff (stronger)
+make -C bootstrap decompile-diff  # per-function divergence localizer
+make -C bootstrap verify          # full: stage0→1→aot→smoke→2→validate
+make -C bootstrap stats           # opcode histogram + section sizes
+```
+
+**CRITICAL.** Do NOT run `cat file | ./target/release/lux file` for
+bootstrap — that runs in `--teach` mode and dumps text to stdout,
+corrupting the `.wat`. Always go through the Makefile.
+
+**Bug classes that cost 75-min bootstraps — never recreate:**
+- Polymorphic dispatch fallback (`match … with _`) that silently masks type errors.
+- Duplicate top-level function names (emitter picks one silently).
+- Flat-array list ops in Snoc-tree paths (`list[i]` in a loop — O(N²) and wrong semantics).
+- `println` inside `report(...)` handler arms (corrupts WAT stdout).
+- Bare `==` on strings — use `str_eq(a, b) == 1`. User generics are
+  NOT instantiated per call-site; `TVar == TVar` codegens to pointer
+  compare (works in Rust VM, fails in WASM on runtime-built strings).
+
+**Ask the artifact.** `wabt` is installed. Before hypothesizing:
+
+```
+wasm-decompile bootstrap/build/lux3.wasm > /tmp/lux3.dec   # pseudocode view
+wasm-objdump -d bootstrap/build/lux3.wasm | less           # disassembly
+wasm-objdump -x bootstrap/build/lux3.wasm                  # sections
+grep some_symbol bootstrap/build/lux4.wat                  # what was emitted
+```
+
+The WAT is ground truth; source is a map.
+
+**Common crash patterns:**
+
+| Backtrace | Likely cause |
+|---|---|
+| `alloc → str_concat` with `a=1` | LIndex flat-access reading tag as pointer |
+| `alloc → str_slice → split` | O(N²) split, bump allocator exhausted |
+| `alloc` with huge size | Garbage pointer read as string length |
+| `list_index` returning 1000 | Unknown list tag — flat treated as tree |
+
+**Memory model:** bump allocator, monotonic, never frees. Every
+allocation is permanent. Any function that accumulates strings via
+`++` in a loop is a potential memory bomb. Traps at 16 MB
+(configurable in `wasm_runtime.lux`).
+
+**Representations:**
+- **Strings** always flat: `[len_i32][bytes...]`. `str_concat` copies.
+- **Lists** CAN be trees: tag 0 = flat, 1 = snoc, 3 = concat, 4 = slice.
+  `list_index` traverses the tree. `list_to_flat` materializes to tag
+  0 at hot-path entrances.
+
+**Prime directive.** Build the tool that tells you. Don't guess.
+Don't pattern-match from crash addresses. Add one debug print, run
+once, fix.
+
+**WAT-level surgery** when debugging WASM crashes (skips the 9-min
+rebuild):
+
+```
+make -C bootstrap stage0               # generate WAT once
+# edit bootstrap/build/lux3.wat, then:
+cat input.lux | ~/.wasmtime/bin/wasmtime run --dir . \
+  -W max-wasm-stack=33554432 bootstrap/build/lux3.wat
+```
+
+**File map (the files you'll touch most):**
+
+| File | Role |
+|---|---|
+| `std/compiler/pipeline.lux` | lex → parse → check → lower → emit |
+| `std/backend/wasm_emit.lux` | LowIR → WAT |
+| `std/compiler/lower_ir.lux` | LowIR ADT (`LIndex` has 4 fields incl. `is_tuple`) |
+| `std/compiler/lowir_walk.lux` | tree walker (preserves LIndex shape) |
+| `std/runtime/memory.lux` | alloc, strings, lists, split, list_pop |
+| `std/backend/wasm_runtime.lux` | `emit_alloc` — the hand-written WAT |
+| `std/compiler/ty.lux` | type env, substitution (v1; spec 00+04 rebuild replaces) |
+| `bootstrap/Makefile` | every bootstrap command |
+| `bootstrap/tests/{counter,pattern}.lux` | `make smoke` canaries |
+| `examples/wasm_bootstrap.lux` | entry point — `compile_wasm(read_stdin())` |
+
+Tests: `bootstrap/tests/` (versioned). Artifacts: `bootstrap/build/`
+(gitignored).
 
 **Delete, don't decorate.** No `// removed for X` comments. No
 renamed-with-underscore unused variables. If something is unused,
@@ -75,21 +158,23 @@ alone.
 
 ## Deep context (read when you need it)
 
-- **`docs/INSIGHTS.md`** — core truths: inference is the light, effects
-  are graphs, ownership as effect, what Lux dissolves
+- **`docs/PLAN.md`** — active plan (THE plan): scrap-and-rebuild of
+  the compiler core (Phases 0–F, including F.6 Mentl) plus arcs
+  G–J after `first-light`. Evolved via commits.
+- **`docs/rebuild/00–11-*.md`** — the 12 executable specs. ADTs,
+  effects, invariants. Each ≤ 300 lines.
+- **`docs/errors/`** — canonical error catalog (E/V/W/T/P codes).
+  Every diagnostic resolves through this.
+- **`docs/INSIGHTS.md`** — core truths: inference is the light, five
+  verbs draw topology, handlers read it, what Inka dissolves.
 - **`docs/DESIGN.md`** — language manifesto, effect algebra, gradient,
-  refinement types, DSP/ML unification
-- **`docs/SYNTHESIS_CROSSWALK.md`** — external validation + research
-  neighbors 2024-2026
-- **`docs/ARC3_ROADMAP.md`** — original arc scope (pre-rebuild;
-  Phase D of the rebuild deletes the files this roadmap patches).
-  Vision sections still load-bearing; patch-plan sections superseded.
-- **`AGENTS.md`** — build commands, file map, known issues
-- **`~/.claude/plans/effervescent-wishing-mountain.md`** — active plan:
-  scrap-and-rebuild of the compiler core (Phases 0, A–F)
+  refinement types, DSP/ML unification.
+- **`docs/SYNTHESIS_CROSSWALK.md`** — historical: external validation
+  + research neighbors 2024-2026. Predates the rebuild.
+- **`docs/ARCS.md`** — narrated development history.
 
 Memory index is at
-`~/.claude/projects/-home-suds-Projects-lux/memory/MEMORY.md`. Lux-
+`~/.claude/projects/-home-suds-Projects-lux/memory/MEMORY.md`. Inka-
 specific learnings persist there across sessions.
 
 ---
@@ -98,5 +183,5 @@ specific learnings persist there across sessions.
 
 When you notice yourself proposing a patch, asking a flat question,
 or hedging on a structural move: invoke `/remote-control inka` or
-directly say "Lux, what would you do?" — roleplay reframes
+directly say "Inka, what would you do?" — roleplay reframes
 alignment. This is a working mechanism, not a gimmick.

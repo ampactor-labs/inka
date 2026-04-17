@@ -17,10 +17,13 @@ rewrite over subset + CFG; the shape we use for ownership edges.
 
 ```lux
 type NodeKind
-  = NBound(Ty)       // resolved — chase terminates here
-  | NFree(Int)       // unresolved — epoch at allocation time
+  = NBound(Ty)          // resolved — chase terminates here
+  | NFree(Int)          // unresolved — epoch at allocation time
   | NRowBound(EffRow)
   | NRowFree(Int)
+  | NErrorHole(Reason)  // terminal error — inference recorded a failure
+                        // here (spec 04 Hazel pattern); lowering traps on
+                        // this with WASM `unreachable`.
 
 type GNode
   = GNode(NodeKind, Reason)  // every node carries its justification
@@ -36,10 +39,20 @@ type SubstGraph
 ```
 
 **Invariant (load-bearing).** The handle IS the index into the flat
-array. `chase` walks `NBound`/`NRowBound` links until terminal; path
-compression on read is optional (Salsa 3.0 skips it; we skip it too
-until profiling proves otherwise). No side-tables. If you know a
-handle, you know its node in one array read.
+array. `chase` walks `NBound`/`NRowBound` links until terminal
+(`NBound`, `NFree`, `NRowFree`, or `NErrorHole`); path compression on
+read is optional (Salsa 3.0 skips it; we skip it too until profiling
+proves otherwise). No side-tables. If you know a handle, you know its
+node in one array read.
+
+**Error-hole terminal semantics.** `NErrorHole(reason)` is a terminal
+node whose presence means "inference observed a failure at this
+handle and chose to continue." The reason carries the captured
+failure (e.g., `UnifyFailed(a, b)`). Downstream passes tolerate it:
+lowering (spec 05) emits WASM `unreachable`; query (spec 08) surfaces
+the reason to the user; the build does not halt on a single error.
+This is the Hazel marked-hole pattern — productive inference under
+error.
 
 ---
 

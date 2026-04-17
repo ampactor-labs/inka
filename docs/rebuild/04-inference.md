@@ -48,16 +48,30 @@ type Env
   = Env(List)         // [(name, Scheme, Reason)]
 ```
 
+**Env is effect-mediated (spec 06: `EnvRead` + `EnvWrite`).** Peer
+with the SubstGraph — both are ambient post-inference knowledge read
+through effects, not threaded as arguments. Inference declares
+`with EnvRead + EnvWrite + SubstGraphRead + SubstGraphWrite + …`;
+lowering and query declare `with EnvRead + SubstGraphRead` only.
+Writer isolation is structural (one writer per kind).
+
 - `env_empty`, `env_with_source`, `env_with_primitives` — kept from
-  `ty.lux`.
-- `env_extend(env, name, scheme, reason)` — CHANGED to take Scheme.
+  `ty.lux`, reshaped as the initial handler state the default
+  `env_default` handler installs at compile entry.
+- `env_extend(name, scheme, reason)` — performed via `EnvWrite`.
   Monomorphic bindings wrap as `Forall([], ty)`.
-- `env_lookup(env, name) -> Option((Scheme, Reason))` — return type
-  CHANGED from `(String, Scheme, Reason)` with `"not_found"` sentinel
-  to `Option`. Callers destructure
-  `match env_lookup(env, n) { None => ..., Some((sch, r)) => ... }`.
+- `env_lookup(name) -> Option((Scheme, Reason))` — performed via
+  `EnvRead`. Return shape changed from `(String, Scheme, Reason)`
+  with `"not_found"` sentinel to `Option`. Callers destructure
+  `match perform env_lookup(n) { None => ..., Some((sch, r)) => ... }`.
+- `env_scope_enter()` / `env_scope_exit()` — performed via `EnvWrite`.
+  Block-scoped bindings added during inference are popped on exit.
 
 No subst field in Env. The graph is the subst; the graph is external.
+Env itself is external — both are read through the same effect
+discipline. **Zero pass threads state as arguments.** That uniformity
+is the reason issue 8 (query's ambient `env`) disappears: query reads
+env the same way it reads the graph.
 
 ---
 
@@ -92,7 +106,7 @@ No subst field in Env. The graph is the subst; the graph is external.
 
 4. **Instantiations.** At `VarRef(name)`:
    ```lux
-   match env_lookup(env, name) {
+   match perform env_lookup(name) {
      None => {
        perform report("", "E001", "MissingVariable", name,
                       node.span, "MaybeIncorrect")
@@ -202,11 +216,8 @@ Inference never halts on a type error. A mismatch:
 
 The compiler stays productive under multiple errors — ten mismatches
 produce ten error holes, not one-and-halt. IDE surfaces keep working.
-`NErrorHole` is added to spec 00's NodeKind as:
-
-```lux
-| NErrorHole(Reason)   // terminal; Reason captures the failure
-```
+`NErrorHole(Reason)` is a NodeKind variant owned by spec 00; this spec
+uses it but does not extend the ADT.
 
 ---
 

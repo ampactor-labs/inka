@@ -53,35 +53,65 @@ The answer: **algebraic effects with a complete Boolean algebra.**
 
 ---
 
-## The Pipe Unification
+## The Five Verbs — Topology Drawn on the Page
 
-The pipe operator `|>` is not syntax sugar. It is the **universal notation for
-computation flow** — and it reveals something profound: DSP, ML, and compilers
-are the same thing expressed in different domains.
+The pipe operators are not syntax sugar. They are the **five topological
+shapes every computation graph needs**, made visible in one line of code.
+Together they unify DSP, ML, compilers, control systems, and every other
+directed graph the industry has been drawing on separate whiteboards.
+
+| Verb | Topology | Shape | Reading |
+|---|---|---|---|
+| `\|>` | converge | ∧→ funnel right | "flow forward, merge at narrowing" |
+| `<\|` | diverge | ∨→ fanout right | "flow forward, split at widening" |
+| `><` | parallel compose | ✕ | "two pipelines interact side-by-side" |
+| `~>` | tee / handler-attach | ⌐ | "observe; install handler" |
+| `<~` | feedback | ⟲ | "close a cycle; prior output re-enters" |
 
 ```lux
-// DSP signal chain
-input |> highpass(80) |> compress(4.0) |> limit(-0.1)
+// DSP signal chain with feedback (IIR filter)
+input |> add(a) <~ delay(1) |> output
 
-// ML computation graph
-data |> conv2d(32, 3) |> relu |> dense(10) |> softmax
+// ML computation graph with parallel branches and observation
+data |> embed <| (attention_head_1, attention_head_2, attention_head_3)
+     |> merge_heads ~> gradient_tracker |> output
 
 // Compiler pipeline
 source |> lex |> parse |> check |> compile
 
-// Data pipeline
-users |> filter(active) |> map(fetch_profile) |> take(10)
+// Data pipeline with parallel fanout for enrichment
+users |> filter(active) <| (profile_fetch, recent_orders) |> join |> take(10)
+
+// Control loop with feedback
+sensor |> pid_controller <~ delay(1) ~> telemetry |> actuator
 ```
 
-Same syntax. Different effects. The pipe makes effects VISIBLE — you can SEE
-the computation flowing left-to-right and the effects accumulating at each
-stage. This is visual programming through text.
+Same syntax. Different effects. The shape of the code on the page IS the
+shape of the computation graph. Most languages hide topology behind
+call-stack structure; Inka draws it.
 
-**Why this matters**: The entire audio/ML industry struggles with the
-DSP-to-ML boundary. Libraries like PyTorch and JUCE live in different
-worlds with different paradigms. In Lux, they're literally the same code
-pattern. Swap a DSP stage for a learned component — the types and effects
-still compose. This solves an industry problem through language design.
+**Why this matters.** The industry's artificial boundaries — DSP vs. ML
+vs. compilers vs. control vs. data processing — dissolve. Libraries like
+PyTorch and JUCE live in different worlds because their host languages
+can't express the shared algebra. In Inka, they're the same five verbs.
+Swap a DSP stage for a learned component — types and effects still
+compose. Close a feedback loop in a compiler pass — same `<~` as an IIR
+filter. This solves an industry-scale problem through notation.
+
+**Feedback (`<~`) is the one you haven't seen before.** Every other
+language handles pipelines forward. Feedback loops — IIR filters, RNNs,
+PID controllers, iterative solvers, reactive state — get hidden inside
+handler declarations or state machines. Inka makes the back-edge visible.
+`y |> f <~ delay(1)` is *one line* that says: "y flows through f; f's
+output, delayed, flows back into f." The topology is on the page.
+
+**And — crucially — `<~` is not new machinery.** It's sugar for a
+stateful handler capturing output and re-injecting it. `<~` doesn't
+encode timing; the ambient handler decides. Under `Sample(44100)` it's
+a sample delay (DSP). Under `Tick` it's a logical-step delay
+(iteration). Under `Clock(wall_ms=10)` it's a control-loop delay. One
+operator; topology-only semantics; handler decides interpretation. Inka
+solves Inka.
 
 ---
 
@@ -297,21 +327,72 @@ purpose and was surpassed by the thing it helped create.
 
 ## Examples, Not Tests
 
-Lux doesn't have tests. It has examples. An example that runs is a proof.
-An example that crashes is a bug report. There is no third thing.
+Lux doesn't have tests. It doesn't have debug scripts. It doesn't have
+specs or doc-tests. It has `.lux` files. A file that runs is a proof.
+A file that crashes is a question. There is no third thing.
 
-A test framework gives you setup, mock, assert, teardown. `handle` is all
-four: handler-local state is setup, the handler body is the mock, the return
-value is the assertion, `resume` is teardown. A test framework would be a
-second mechanism for something the language already does.
+### One Act
 
-*Example-Driven Development* is the gradient applied to creation itself.
-Writing an example IS feeding knowledge to the compiler. The example IS the
-specification. The filesystem IS the test suite:
+Other languages split development into categories:
 
-```bash
-for f in examples/*.lux; do lux "$f" && echo "OK" || echo "FAIL"; done
+- **Testing** — write code that checks code
+- **Debugging** — write code that finds broken code
+- **Documentation** — write prose that explains code
+- **Specification** — write descriptions that precede code
+
+In Lux these are the same act: **write a `.lux` file that exercises the
+mechanism.** The categories dissolve because `handle` is the universal
+joint:
+
+```lux
+handle { computation } with state = initial {
+  operation(args) => resume(result) with state = updated
+}
 ```
+
+- **Setup** — handler-local state (`with state = initial`)
+- **Mock** — the handler body (decides what every operation means)
+- **Assert** — the return value (if it's wrong, you see it)
+- **Teardown** — `resume` (the handler controls what happens next)
+
+A test framework would be a second mechanism for something the language
+already does. In Lux, that's wrong by construction.
+
+### The Debugging Gradient
+
+A bug is an example that crashes. Debugging is making the example smaller.
+
+```
+wasm_check.lux (crashes)
+  → lex_test.lux (crashes — just the lexer)
+    → lex_pattern.lux (crashes — simulated lexer)
+      → mutual2.lux (crashes — 4 inner functions)
+```
+
+Each step is a smaller `.lux` file. The minimal file that crashes IS the
+diagnosis. When it runs, the bug is fixed. No debugger. No breakpoints.
+No step-through. Just: write what should work, run it, make it smaller
+until the answer is visible.
+
+The compiler helps at every step — type errors narrow the search, effect
+violations point to the mechanism, the Why Engine explains the inference.
+The debugging tool IS the compiler. The debug script IS an example.
+
+### The Unification
+
+| Other languages | Inka |
+|----------------|-----|
+| Test suite | `examples/` |
+| Test runner | `for f in examples/*.inka; do inka "$f"; done` |
+| Mock library | Handler swap |
+| Debugger | Smaller example |
+| Doc-test | Example that teaches |
+| Spec | Example that precedes |
+| CI check | Same examples, different machine |
+
+No special naming. No categories. No boundaries. The folder is
+`examples/`. The command is `inka examples/`. The act is: write what
+should work, run it, see the light.
 
 ---
 
@@ -502,6 +583,67 @@ The annotation gradient reveals this: write `fn f(x) = x + 1` and the
 compiler infers `Pure`. Add an effect operation and the compiler tracks
 it. The developer chooses how deep to go. The language is the same at
 every depth.
+
+---
+
+## The Meta-Thesis — Topology Read Through Handlers
+
+Every feature of Inka is a **topology** read through **handlers**. Once
+you see this, every other insight in this document becomes a consequence
+of one claim.
+
+| Feature | Topology | Read through handler |
+|---|---|---|
+| Inference | SubstGraph + Env | `graph_chase`, `env_lookup` |
+| Effects | Boolean row algebra | each effect's installed handler |
+| Ownership | Consume trace | `affine_ledger` |
+| Data flow | Five-verb graph (`\|>` `<\|` `><` `~>` `<~`) | the pipe's lowering |
+| Teaching | Reason chain + Mentl's tentacles | `teach_*` handlers |
+| Time | Clock/Tick/Sample DAG | real / test / record / replay handler |
+| Verification | Obligation ledger | `verify_ledger` → `verify_smt` |
+| AI suggestions | Synth proposal graph | any proposer as handler |
+| Compilation | Pipeline graph | `emit_wasm`, `check`, `query`, `--teach` |
+| Self-hosting | Ouroboros fixed point | `first-light` when topology closes on itself |
+
+**Every topology has handlers. Every handler is swappable.** Phase C
+ships `verify_ledger`; Arc F.1 swaps in `verify_smt` — same topology,
+different handler. Test clock vs. real clock — same topology,
+different handler. Claude vs. Synquid vs. local LLM as Suggest
+proposer — same topology, different handler, compiler verifies all.
+
+**The gradient is the developer adding topology.** Writing `fn f(x) = x
++ 1` produces a minimal graph: type handles, empty effect row, no
+refinements, no ownership markers. Adding `with Pure` adds the
+"memoization-eligible" subgraph. Adding `x: Positive` adds a refinement
+edge. Adding `own x` adds a Consume edge. **Each annotation is a graph
+edge made explicit.** More edges → more handlers work → more
+capabilities unlock.
+
+**First-light is the ouroboros topology closing.** When `lux3.wat ≡
+lux4.wat` byte-identical, the compiler's own topology compiles itself
+to the same topology. The graph has a fixed point. This is not just a
+smoke test — it's the first concrete demonstration that the topology
+is complete enough to describe itself.
+
+**Mentl is the human-facing projection of the shared topology.** Eight
+tentacles = eight handlers on one substrate. Octopus neurology maps to
+handler-per-tentacle distributed cognition over shared central nervous
+system. The mascot IS the architecture.
+
+**AI obsolescence, mechanized.** A hole in source code:
+`fn bind_port(p: Int) -> Port = ?`. Mentl's tentacles fire: Why says
+"Port refines to `Int where 1 <= self <= 65535`"; Teach says "add
+`p: Port` to unlock compile-time verification"; Synth proposes
+candidates from any handler (enumerative, SMT, LLM); Verify discharges
+each candidate's refinement obligation. **The verified candidate wins.**
+The compiler is the oracle; the LLM is one peer among many, not a
+privileged collaborator, not a subscription moat. The AI coding tools
+the industry pays for today are proposers; Inka verifies. Subscription
+gets disintermediated at the architectural level.
+
+**One sentence.** Inka is not a language with features — it is **a
+single algebra (graphs + handlers) drawn through a single notation
+(five verbs + effects).** Everything else is a consequence.
 
 ---
 

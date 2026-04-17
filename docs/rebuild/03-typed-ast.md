@@ -64,12 +64,12 @@ type Expr
   | MakeListExpr(List)
   | MakeTupleExpr(List)
   | FieldExpr(Node, String)
-  | PipeExpr(PipeKind, Node, Node)    // |>, <|, ><, ~>
+  | PipeExpr(PipeKind, Node, Node)    // |>, <|, ><, ~>, <~ (spec 10)
   | Placeholder                       // `?` → spawns NHole
 ```
 
 ```lux
-type PipeKind = PForward | PBackward | PCompose | PTee
+type PipeKind = PForward | PDiverge | PCompose | PTee | PFeedback
 ```
 
 ---

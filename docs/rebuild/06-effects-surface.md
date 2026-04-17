@@ -17,14 +17,10 @@ rule: if an effect isn't in this file, it doesn't exist.
 
 ## Shared op metadata
 
-Every op decl carries `@resume=OneShot | MultiShot | Either`. Phase
-C's parser delta (spec 03) reads it into the op signature's
-`ResumeDiscipline` field (spec 02's `TCont`). Research anchor: Affect
-POPL 2025 puts the distinction at the type level.
-
-`Diagnostic.report`'s `code` and `applicability` arguments become
-refined-String values in Arc F.1 (`code: String where code in {"E001",
-...}`). Phase A–E treat them as free Strings.
+Every op decl carries `@resume=OneShot | MultiShot | Either` (Affect
+POPL 2025; landed in spec 02's `TCont`). Parser delta in spec 03.
+`Diagnostic.report`'s `code` and `applicability` become refined
+Strings in Arc F.1; Phase A–E treat them as free Strings.
 
 ---
 
@@ -50,7 +46,7 @@ v1 was `report(source, kind, msg, line, col) -> ()`. The rebuild
 extends to 6-arg with `code`, full `span`, and `applicability`:
 
 ```lux
-effect Diagnostic with !Diagnostic {
+effect Diagnostic {
   report(
     source: String,
     code: String,                // stable error code (E001, W017, ...)
@@ -62,45 +58,27 @@ effect Diagnostic with !Diagnostic {
 }
 ```
 
-**`with !Diagnostic` is load-bearing.** Handler arms for `report`
-cannot themselves perform `Diagnostic.report` — the Boolean effect
-algebra (spec 01) gates the recursion at type-check time. No
-preflight, no stdout corruption, no handler-observer drift.
+**The `!Diagnostic` constraint lives on the HANDLER, not on the
+effect.** Handlers declare `with !Diagnostic` (e.g., `handler
+stderr_diagnostics with !Diagnostic { … }`); any `perform report`
+inside fails subsumption via spec 01. Policy lives where policy lives.
 
-Reserved codes (expanded from
-`docs/specs/diagnostic-effect-signature.md`):
-
-| Code | Kind                        | Emitted by                   |
-|------|-----------------------------|------------------------------|
-| E001 | MissingVariable             | inference                    |
-| E002 | TypeMismatch                | inference                    |
-| E003 | PatternInexhaustive         | inference                    |
-| E004 | OwnershipError              | v2/own.lux, v2/infer.lux     |
-| E010 | OccursCheck                 | SubstGraph bind              |
-| E100 | UnresolvedType              | v2/lower.lux                 |
-| E200 | Refinement                  | Arc F.1 solver handler       |
-| W017 | Suggestion                  | suggest.lux                  |
-| T001 | Teach                       | gradient.lux                 |
-| T002 | ContinuationEscapesArena    | Arc F.4                      |
-| P001 | ParseError                  | lexer + parser               |
-
-**Rule.** New codes are documented in this table BEFORE their first
-call site. No `kind = "<unclassified>"` patterns.
+Reserved codes — canonical explanations at `docs/errors/<CODE>.md`
+(Elm/Roc/Dafny catalog pattern; see `docs/errors/README.md` for the
+full table and conventions). Every `report(...)` names a code whose
+file exists. Rule: new codes land in the catalog BEFORE their first
+call site.
 
 ### ParseError (from `parser.lux:14-16`)
 
-v1: `unexpected(expected, got, line, col) -> Expr` — the op RETURNS
-an Expr for error-recovery continuation. Rebuild preserves that
-pattern, returning a `Node` holding an `NHole`:
+Op returns a `Node` (holding `NHole`) so parsing continues past the
+error — Hazel pattern per spec 03/04.
 
 ```lux
 effect ParseError {
-  unexpected(expected: String, got: String, span: Span) -> Node
-                                    @resume=OneShot
+  unexpected(expected: String, got: String, span: Span) -> Node  @resume=OneShot
 }
 ```
-
-Inference continues with the hole per spec 04's Hazel pattern.
 
 ### LowerCtx (from `lower_ir.lux:15-21`)
 
@@ -137,12 +115,10 @@ Preserved verbatim; `result()` is the generator-terminator handshake.
 ### Alloc (from `std/runtime/memory.lux:31-33`)
 
 ```lux
-effect Alloc {
-  alloc(size: Int) -> Int       @resume=OneShot
-}
+effect Alloc { alloc(size: Int) -> Int       @resume=OneShot }
 ```
 
-Preserved verbatim; subsumed by `!Alloc` in spec 01.
+Subsumed by `!Alloc` in spec 01.
 
 ### Memory (from `std/runtime/memory.lux:21-29`)
 
@@ -158,17 +134,19 @@ effect Memory {
 }
 ```
 
-Preserved verbatim; WASM-primitive.
+WASM-primitive.
 
 ### WasmOut (from `std/backend/wasm_collect.lux:36`)
 
 ```lux
-effect WasmOut {
-  out(String) -> ()             @resume=OneShot
-}
+effect WasmOut { out(String) -> ()             @resume=OneShot }
 ```
 
-Preserved verbatim.
+### Clock family (detail in spec 11)
+
+Four peers: `Clock` (wall), `Tick` (logical), `Sample` (DSP),
+`Deadline` (real-time). Capability negations participate in the row
+algebra. `<~` (spec 10) requires one as iterative context.
 
 ---
 
@@ -200,6 +178,42 @@ effect SubstGraphWrite {
 The Read/Write split IS the "one writer" invariant. Inference
 declares both; lowering and query declare Read only. See spec 00.
 
+### EnvRead (spec 04)
+
+```lux
+effect EnvRead {
+  env_lookup(String) -> Option((Scheme, Reason))   @resume=OneShot
+  env_snapshot() -> Env                            @resume=OneShot
+}
+```
+
+### EnvWrite (spec 04)
+
+```lux
+effect EnvWrite {
+  env_extend(String, Scheme, Reason) -> ()         @resume=OneShot
+  env_scope_enter() -> ()                          @resume=OneShot
+  env_scope_exit() -> ()                           @resume=OneShot
+}
+```
+
+Peer of SubstGraph: Read/Write split, effect-mediated, one writer.
+Inference declares both; lowering and query declare `with EnvRead`
+only.
+
+### Verify (detail in spec 02)
+
+```lux
+effect Verify {
+  verify(Span, Predicate, Reason) -> ()            @resume=OneShot
+  verify_debt() -> List                            @resume=OneShot
+}
+```
+
+Handler swap: **Phase C–E** default `verify_ledger` accrues
+obligations (emits `V001`); **Arc F.1** `verify_smt` discharges via
+Z3/cvc5/Bitwuzla (emits `E200` on reject). No stub. See spec 02.
+
 ### LookupTy (spec 05)
 
 ```lux
@@ -216,9 +230,7 @@ effect Consume {
 }
 ```
 
-Span flows as op payload; the `affine_ledger` handler reads it
-directly for diagnostic emission. No `current_span` in handler state;
-no separate dynamic-scope effect (spec 07 defers SourceContext to F).
+Span flows as op payload; `affine_ledger` reads for diagnostics.
 
 ### Query (spec 08)
 
@@ -228,26 +240,31 @@ effect Query {
 }
 ```
 
-### Teach
+### Teach (Mentl — detail in spec 09)
 
 ```lux
 effect Teach {
-  teach_here(String, String, Ty) -> ()       @resume=OneShot
-                                             // binding name, span-ref, type
+  teach_here(String, Span, Ty) -> ()              @resume=OneShot
+  teach_gradient(Int) -> Option(Annotation)        @resume=OneShot
+  teach_why(Int) -> Reason                         @resume=OneShot
+  teach_error(String, Span, Reason) -> Explanation @resume=OneShot
+  teach_unlock(Annotation) -> Capability           @resume=OneShot
 }
 ```
 
-### Synth (stub in Phase C, real handler Arc F.1)
+Five tentacles on the inference substrate. `Annotation`, `Capability`,
+`Explanation` ADTs defined in spec 09.
+
+### Synth (Arc F.1 wires real handlers)
 
 ```lux
 effect Synth {
   synth(Int, Ty, Context) -> Candidate       @resume=OneShot
-                                             // hole id, expected ty, typed context
 }
 ```
 
-Stub returns `NoCandidate` until Arc F.1 wires Canonical / Synquid
-synthesis.
+Phase C default returns `NoCandidate`; Arc F.1 plugs in Canonical /
+Synquid / LLM proposers as peer handlers verified by the compiler.
 
 ### FreshHandle (spec 04)
 
@@ -257,25 +274,20 @@ effect FreshHandle {
 }
 ```
 
-Parameterizes `instantiate`. Inference handler mints via
-`graph_fresh_ty`; query handler returns `'a, 'b, ...` display ids.
-One function, two handlers — no `instantiate_for_display`.
+Parameterizes `instantiate`: inference mints via `graph_fresh_ty`;
+query mints display ids. One function, two handlers.
 
 ---
 
-## Handler rules & forbidden patterns (structurally gated)
+## Handler rules (structurally gated — no preflight)
 
-- **Diagnostic** default: `stderr_diagnostics`. LSP overrides with
-  `json_diagnostics`. Exactly one active.
-- **LookupTy** has exactly one handler (`lookup_ty_graph`, spec 05).
-- **SubstGraph** composes via fork (spec 00).
-- **Consume** `affine_ledger` installs per-FnStmt.
-- **`Diagnostic.report` inside `report` arm** → type error via
-  `!Diagnostic`.
-- **SubstGraph write from lowering / query** → type error via
-  Read/Write split.
-- **Duplicate handler name / handler for undeclared op / `_` wildcard
-  arm** → all type errors; no preflight.
+- `Diagnostic` default `stderr_diagnostics`; LSP overrides `json_diagnostics`. One active.
+- `LookupTy` has one handler (`lookup_ty_graph`, spec 05).
+- `SubstGraph` / `Env` compose via fork (spec 00 / spec 04).
+- `Consume` `affine_ledger` installs per-FnStmt.
+- `perform report` inside a `with !Diagnostic` handler → type error.
+- Any Write from a Read-only handler → type error.
+- Duplicate handler name / undeclared op / `_` wildcard arm → all type errors.
 
 ---
 

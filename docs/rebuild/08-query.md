@@ -29,6 +29,7 @@ type Question
   | QEffects(String)                    // "effects of NAME"
   | QOwnership(String)                  // "ownership of NAME"
   | QWhy(String)                        // "why NAME"
+  | QVerifyDebt                         // "verification debt"
   | QUnknown(String)
 
 type QueryResult
@@ -38,6 +39,7 @@ type QueryResult
   | QREffects(EffRow)
   | QROwnership(List)                   // [(name, Ownership)]
   | QRWhy(Reason)
+  | QRVerifyDebt(List)                  // [(Span, Predicate, Reason)] pending obligations
   | QRError(String)
 ```
 
@@ -51,11 +53,15 @@ effect Query {
 }
 ```
 
-Installed at `lux query` entry point. The handler declares
-`with SubstGraphRead + FreshHandle`. Read-only by construction: no
-`SubstGraphWrite` in scope means `perform graph_bind` fails type-
-check at handler install. No preflight rule — effect-row subsumption
-(spec 00 / spec 01) is the gate.
+Installed at `inka query` entry point. The handler declares
+`with SubstGraphRead + EnvRead + FreshHandle`. Read-only by
+construction: no `SubstGraphWrite` / `EnvWrite` in scope means
+`perform graph_bind` or `perform env_extend` fails type-check at
+handler install. No preflight rule — effect-row subsumption (spec 00
+/ spec 01) is the gate.
+
+**Env is not a closure argument.** Same discipline as the graph. Peer
+ambient knowledge read through effects. Query reads, never writes.
 
 ---
 
@@ -99,9 +105,9 @@ shell.
 ## The executor
 
 ```lux
-handler query_default with SubstGraphRead + FreshHandle {
+handler query_default with SubstGraphRead + EnvRead + FreshHandle {
   ask(q) => match q {
-    QTypeOf(name) => match env_lookup(env, name) {
+    QTypeOf(name) => match perform env_lookup(name) {
       None => resume(QRError("not found: " ++ name)),
       Some((sch, reason)) => {
         let ty = instantiate(sch)   // FreshHandle handler mints display ids
@@ -116,23 +122,23 @@ handler query_default with SubstGraphRead + FreshHandle {
         resume(QRType(ty, reason))
       }
     },
-    QUnresolved => resume(QRUnresolved(walk_env_for_unresolved(env))),
+    QUnresolved => resume(QRUnresolved(walk_env_for_unresolved())),
     QSubstChain(handle) => resume(QRChain(walk_chain(handle))),
-    QEffects(name) => match env_lookup(env, name) {
+    QEffects(name) => match perform env_lookup(name) {
       None => resume(QRError("not found: " ++ name)),
       Some((sch, _)) => match instantiate(sch) {
         TFun(_, _, row) => resume(QREffects(row)),
         _ => resume(QRError(name ++ " is not a function"))
       }
     },
-    QOwnership(name) => match env_lookup(env, name) {
+    QOwnership(name) => match perform env_lookup(name) {
       None => resume(QRError("not found: " ++ name)),
       Some((sch, _)) => match instantiate(sch) {
         TFun(params, _, _) => resume(QROwnership(map(param_ownership, params))),
         _ => resume(QRError(name ++ " is not a function"))
       }
     },
-    QWhy(name) => match env_lookup(env, name) {
+    QWhy(name) => match perform env_lookup(name) {
       None => resume(QRError("not found: " ++ name)),
       Some((_, reason)) => resume(QRWhy(reason))
     },
@@ -140,6 +146,10 @@ handler query_default with SubstGraphRead + FreshHandle {
   }
 }
 ```
+
+`walk_env_for_unresolved` performs `env_snapshot()` and walks the
+result; same for any other op needing the whole env. No closure
+capture; the effect is the interface.
 
 `instantiate` is the shared function from spec 04. The query handler
 installs a `placeholder_mint` handler for `FreshHandle`:

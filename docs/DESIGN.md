@@ -251,25 +251,85 @@ DSP: `let master = eq >< dynamics with !Alloc` — mastering chain as a value.
 ML: `let model = encoder >< head` — neural network as a value.
 Middleware: `let stack = auth >< rate_limit >< log` — handler chain as a value.
 
+### `~>` — Tee (Handler-Attach)
+
+Data flows forward AND to an observer. The observer is a handler that
+can log, validate, transform, or intervene — but by default the main
+flow continues unchanged.
+
+```lux
+audio |> process ~> trace_handler |> output
+// process runs; trace_handler sees every effect process performs;
+// output gets process's result regardless of what trace saw
+```
+
+Two layout forms:
+- **Inline** (`stage ~> handler`): handler scoped to one stage.
+- **Multi-line** (continuation `~> handler` on its own line after a
+  pipe chain): handler wraps the whole chain.
+
+`~>` is `handle { … } with handler` made visible in the pipeline. Every
+place you'd have wrapped a block in a `handle` expression can be written
+inline with `~>`, keeping the topology on the page.
+
+### `<~` — Feedback (Close a Cycle)
+
+Data flows back. A stage's output, delayed or filtered, feeds into an
+earlier stage.
+
+```lux
+// IIR filter: classic DSP feedback
+input |> add(a) <~ delay(1, init=0) |> output
+
+// RNN: hidden state feeds back
+input |> rnn_cell <~ delay(1, init=zero_state) |> output
+
+// PID controller: error feeds back through integrator
+sensor_diff |> proportional <~ integrate <~ delay(1) |> actuator
+```
+
+`<~` closes a cycle in the data flow graph. The RHS is a *feedback
+specifier* (`state(init)`, `delay(n, init)`, `filter(f, init)`)
+describing the back-edge's behavior.
+
+`<~` requires an iterative context — an `Iterate`, `Clock`, `Tick`, or
+`Sample` handler. The timing unit of `delay(1)` depends on the ambient
+handler: one sample under `Sample(44100)`, one logical step under
+`Tick`, ten milliseconds under `Clock(wall_ms=10)`. **One operator;
+handler decides interpretation.**
+
+Feedback is what every other language hides inside state machines or
+handler declarations. In Inka, it's a one-character edge drawn on the
+page.
+
 ### The Closed Algebra
 
-| Op | Operates on | Produces | When |
-|----|-------------|----------|------|
-| `\|>` | value, function | value | Data flows NOW |
-| `<\|` | value, functions | values | Data fans NOW |
-| `><` | function, function | function | Nothing runs. Potential. |
+| Op | Shape | Operates on | Produces | When |
+|----|-------|-------------|----------|------|
+| `\|>` | ∧→ converge | value, function | value | Data flows NOW |
+| `<\|` | ∨→ diverge | value, functions | values | Data fans NOW |
+| `><` | ✕ parallel | function, function | function | Nothing runs. Potential. |
+| `~>` | ⌐ tee | value, handler/function | observed value | Handler sees effects |
+| `<~` | ⟲ feedback | value, feedback-spec | iterated value | Cycle closes |
 
-Any data flow graph — sequential, parallel, diamond, hourglass — is
-expressible as a combination of these three. They close the algebra.
+Any computation graph — sequential, parallel, diamond, hourglass,
+feedback loop — is expressible as a combination of these five. They
+close the algebra. Every topology you can draw on a whiteboard you can
+type on one line.
 
 ### Type Rules
 
-All three operators desugar to function application or construction:
+Every operator desugars to function application or handler installation:
 - `a |> f(b)` → `f(a, b)` — Call with prepended argument
 - `a <| (f, g, h)` → `(f(a), g(a), h(a))` — Tuple of applications
-- `f >< g` → `|x| g(f(x))` — Forward composition (f first, then g, like `|>`)
+- `f >< g` → `|x| g(f(x))` — Forward composition
+- `expr ~> h` → `handle expr with h` — Handler installation
+- `x |> f <~ spec` → installation of a stateful handler that captures
+  `f`'s output per iteration and supplies it back on the next; RHS
+  `spec` parameterizes the back-edge.
 
-The type rules are pure. No special mechanism. Application IS the mechanism.
+The type rules are pure. No special mechanism. Application and handler
+installation IS the mechanism.
 
 ---
 

@@ -1,7 +1,7 @@
 # 04 — Inference: HM + let-generalization, one walk
 
-**Purpose.** Replace the two-pass `check.lux + infer.lux`
-(`check.lux` 388 lines + `infer.lux` 626 lines = 1014) with a single
+**Purpose.** Replace the two-pass `check.jxj + infer.jxj`
+(`check.jxj` 388 lines + `infer.jxj` 626 lines = 1014) with a single
 walk that writes bindings directly into the SubstGraph (spec 00) as
 it encounters them. Classic Hindley-Milner with Damas-Milner let-
 generalization. Every expression contributes bindings or binds a
@@ -9,7 +9,7 @@ handle; every FnStmt generalizes.
 
 **Research anchors.**
 - Salsa 3.0 — the flat-array + epoch + overlay pattern inherited from
-  spec 00 (we don't ship full Salsa in Phase A–E).
+  spec 00 (we don't ship full Salsa in Phase 1).
 - Polonius 2026 alpha — lazy constraint rewrite. Pattern for
   refinement constraints we don't solve immediately.
 - Abstracting Effect Systems ICFP 2024 — soundness template for
@@ -31,7 +31,7 @@ One pass. No separate "check" vs "infer" phases. Outputs are a typed
 AST (handles populated in graph) and an updated Env; the subst NEVER
 escapes as a sidecar value.
 
-**Key difference from v1.** `check_program` in `check.lux` returns
+**Key difference from v1.** `check_program` in `check.jxj` returns
 `(env, subst)` and downstream passes thread the pair. In the rebuild,
 downstream reads the SubstGraph directly through `graph_chase`. The
 tuple is gone.
@@ -56,7 +56,7 @@ lowering and query declare `with EnvRead + SubstGraphRead` only.
 Writer isolation is structural (one writer per kind).
 
 - `env_empty`, `env_with_source`, `env_with_primitives` — kept from
-  `ty.lux`, reshaped as the initial handler state the default
+  `ty.jxj`, reshaped as the initial handler state the default
   `env_default` handler installs at compile entry.
 - `env_extend(name, scheme, reason)` — performed via `EnvWrite`.
   Monomorphic bindings wrap as `Forall([], ty)`.
@@ -189,7 +189,7 @@ every `VarRef`:
   the walk.
 - FnStmt exits check the ref-escape tracker against return positions.
 
-The structural walk in `own.lux:162-191` is preserved (escape check);
+The structural walk in `own.jxj:162-191` is preserved (escape check);
 the affine-linearity walk is replaced by letting the Consume effect
 handler track linearity (spec 07).
 
@@ -240,7 +240,7 @@ fn row_is_ground(row: EffRow) -> Bool = match row {
 }
 ```
 
-In a self-hosted Lux compilation, >95% of call sites chase to a
+In a self-hosted Inka compilation, >95% of call sites chase to a
 ground row; the remaining 5% route through evidence-passing. The
 `val_concat` class of bugs originated in v1 where this information
 wasn't derivable from the graph — the rebuild makes it a pure
@@ -250,12 +250,12 @@ function of the handle.
 
 ## What this replaces
 
-From `check.lux`:
+From `check.jxj`:
 - `check_program`, `check_fn`, `check_expr` — fold into `infer_expr`
   / `infer_stmt`.
 - Effect row constraint checks — move into unification.
 
-From `infer.lux`:
+From `infer.jxj`:
 - `infer_expr` top level — unified with check; walks are merged.
 - `subst` threading — gone, graph owns it.
 - `generalize` — reformulated against the graph.
@@ -276,7 +276,7 @@ From `infer.lux`:
 
 ## Rejected alternatives
 
-- **Bidirectional type checking.** Lux's surface is HM-inferable;
+- **Bidirectional type checking.** Inka's surface is HM-inferable;
   bidirectional adds annotation burden. Use HM + marked holes (spec
   03) for guidance where annotations help.
 - **Two passes: prescan + infer.** The v1 model. Prescan carries a

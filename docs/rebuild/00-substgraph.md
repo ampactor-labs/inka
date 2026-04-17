@@ -1,8 +1,8 @@
 # 00 — SubstGraph: one live graph, all variables
 
 **Purpose.** Replace the two independent association lists (`s` for type
-substitutions in `ty.lux:226-294`, `es` for effect-row substitutions in
-`eff.lux:57-92`) with a single graph that holds every unknown the
+substitutions in `ty.jxj:226-294`, `es` for effect-row substitutions in
+`eff.jxj:57-92`) with a single graph that holds every unknown the
 program produces and exposes a live, O(1) chase interface to all
 downstream observers.
 

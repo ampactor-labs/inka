@@ -1,7 +1,7 @@
 # 01 — EffRow: Boolean algebra over effect rows
 
 **Purpose.** Lift the current ternary EffRow (`EfPure | EfClosed | EfOpen`
-in `types.lux:30-33`) to a full Boolean algebra `+ - & !` with Pure as
+in `types.jxj:30-33`) to a full Boolean algebra `+ - & !` with Pure as
 identity, so that the gradient's four compilation gates (Pure, !IO,
 !Alloc, !Network) and handler absorption (`body - handled`) fall out of
 one mechanism.
@@ -16,7 +16,7 @@ one mechanism.
 
 ---
 
-## ADT (extends `types.lux:30-33`)
+## ADT (extends `types.jxj:30-33`)
 
 ```lux
 type EffRow
@@ -45,7 +45,7 @@ Surface operators reduce to ADT constructors:
 - `!E`   → `normalize(EfNeg(E))`.
 - `Pure` → `EfPure`.
 
-No syntax extensions needed in Phase A — these read as normal
+No syntax extensions needed in Phase 1 — these read as normal
 function/constructor calls at the source level until Phase F revisits
 operator ergonomics.
 
@@ -134,7 +134,7 @@ Algebra applied at handler elimination:
 
 ---
 
-## What's preserved from `eff.lux`
+## What's preserved from `eff.jxj`
 
 The file already implements the `EfPure | EfClosed | EfOpen` core and
 the 3×3 unification matrix. The rebuild keeps:
@@ -165,11 +165,11 @@ The rebuild adds:
 ## Rejected alternatives
 
 - **Capabilities as the primary mechanism.** Koka/Effekt schism.
-  Modal Effect Types resolves by encoding both. Lux presents rows at
+  Modal Effect Types resolves by encoding both. Inka presents rows at
   the surface; capabilities fall out as a view.
 - **Scala 3 `^` capture syntax.** Parallel mechanism to rows.
   Fractures the one-mechanism thesis. Rejected.
 - **Quantitative effect counts (`!Alloc[≤ f(n)]`).** Out of scope
-  Phase A–E. Listed in Arc F.1 as an open research question.
+  Phase 1. Listed in Arc F.1 as an open research question.
 - **Effect presence bit-vectors instead of names.** Fails at module
   boundaries — bit indexes aren't stable across modules. Names are.

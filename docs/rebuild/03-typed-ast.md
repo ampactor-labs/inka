@@ -6,8 +6,8 @@ the SubstGraph from spec 00) and a full `Span`, not a point. Type
 resolution is always a live chase via `LookupTy` — never a cached Ty
 field.
 
-**Supersedes.** `parser.lux` currently produces `S(expr, line, col)`
-wrappers (see `parser.lux:21-56` for Expr/Stmt/Pat). The rebuild
+**Supersedes.** `parser.jxj` currently produces `S(expr, line, col)`
+wrappers (see `parser.jxj:21-56` for Expr/Stmt/Pat). The rebuild
 replaces `S` with `N(body, span, handle)`.
 
 **Research anchors.**
@@ -41,7 +41,7 @@ an N without a handle.
 
 ---
 
-## Expr (updated from `parser.lux:21`)
+## Expr (updated from `parser.jxj:21`)
 
 ```lux
 type Expr
@@ -74,7 +74,7 @@ type PipeKind = PForward | PDiverge | PCompose | PTee | PFeedback
 
 ---
 
-## Stmt (updated from `parser.lux:56`)
+## Stmt (updated from `parser.jxj:56`)
 
 ```lux
 type Stmt
@@ -95,7 +95,7 @@ type Stmt
 
 ---
 
-## Pat (updated from `parser.lux:49`)
+## Pat (updated from `parser.jxj:49`)
 
 ```lux
 type Pat
@@ -135,7 +135,7 @@ Every node has a 4-tuple span. Every lexer token produces a span. The
 parser composes child spans into parent spans:
 
 ```lux
-// parser.lux sketch (parse_binop):
+// parser.jxj sketch (parse_binop):
 let span = Span.join(left.span, right.span)
 let h = perform graph_fresh_ty(BinOpPlaceholder(op))
 N(NExpr(BinOpExpr(op, left, right)), span, h)
@@ -154,7 +154,7 @@ context available to downstream handlers (Suggest, Synth, LSP
 completion).
 
 ```lux
-// Phase A wires the ADT variant; Arc F.1 installs the Synth handler:
+// Phase 1 wires the ADT variant; Arc F.1 installs the Synth handler:
 perform synth(hole_id, expected_ty, typed_context) -> Candidate
 ```
 
@@ -172,7 +172,7 @@ errors are not.
   RefineStmt is new).
 - Error recovery — preserved.
 
-Changes the rebuild makes in parser.lux:
+Changes the rebuild makes in parser.jxj:
 - `S(expr, line, col)` → `N(body, span, handle)`.
 - Every construction point calls `perform graph_fresh_ty(...)` to
   mint a handle at parse time.
@@ -183,8 +183,8 @@ Changes the rebuild makes in parser.lux:
 
 ## Lexer / Parser deltas
 
-These changes land in Phase C's lexer and parser passes. Spec 03
-owns the contract so Phase A closes on what's coming.
+These changes land in the lexer and parser. Spec 03
+owns the contract.
 
 **Lexer:**
 - Every token carries `Span(sl, sc, el, ec)` — the end position is
@@ -203,7 +203,7 @@ owns the contract so Phase A closes on what's coming.
 - Parent spans compose from child spans via
   `Span.join(a, b) = Span(a.sl, a.sc, b.el, b.ec)`.
 - `type X = T where P` produces `RefineStmt(X, T, P)` (parser arm
-  ships when Arc F.1 needs it; the ADT variant lands in Phase A).
+  ships when Arc F.1 needs it; the ADT variant lands from day one).
 - Effect op declarations accept a trailing
   `@resume=OneShot|MultiShot|Either` annotation, parsed into the op
   signature's `ResumeDiscipline` field (spec 02's TCont discipline).
@@ -223,7 +223,7 @@ content.
   same handles.
 - `07-ownership.md` — walks for Consume performs and ref-escape
   structural checks.
-- `08-query.md` — span-indexed lookup: `lux query FILE "type at L:C"`
+- `08-query.md` — span-indexed lookup: `inka query FILE "type at L:C"`
   finds a node by span, reads its handle.
 
 ---

@@ -1,6 +1,6 @@
-# Inka (née Lux) — CLAUDE.md
+# Inka (formerly Lux) — CLAUDE.md  |  File extension: `.jxj`
 
-> **Three anchors. Read them before every non-trivial action.**
+> **Five anchors. Read them before every non-trivial action.**
 
 ---
 
@@ -41,74 +41,62 @@ tool.** Find the primitive.
 
 ## 4. Build the wheel. Never wrap the axle.
 
-When the specs define the final form, **build it directly.** Do not
-build a wrapper around the current implementation. Do not bridge,
-shim, adapt, or polyfill v1 into the shape of v2. The rebuild exists
-because v1's structure is wrong — wrapping it preserves the wrong
-structure under a new surface. You get v1's costs (28-minute compile
-cycles, linked-list subst chains, threaded `(env, subst)` tuples)
-with v2's complexity on top.
-
 The specs in `docs/rebuild/00–11` ARE the blueprint. Read the spec.
 Write the code the spec describes. If the spec says SubstGraph is a
-flat array with O(1) chase — write a flat array with O(1) chase. Do
-not write a wrapper that calls v1's `apply(subst, ty)` underneath.
-If the spec says env is effect-mediated — write `perform env_lookup`,
+flat array with O(1) chase — write a flat array with O(1) chase. If
+the spec says env is effect-mediated — write `perform env_lookup`,
 not a function that takes env as an argument.
 
-**The wheel is the ultimate final form.** The engine is built to meet
-the wheel, not to wrap the axle it will replace. Trust the design.
-Move fast. Break things that need breaking.
+**The wheel is the ultimate final form.** There is no V1 to wrap, no
+legacy to adapt, no intermediate version to bridge. There is only the
+final form, written directly from the specs. Trust the design. Move
+fast. Break things that need breaking.
 
-This is not abstract advice. On 2026-04-17, the Phase B session spent
-28 minutes waiting for a v1-wrapping query tool to compile through
-the existing pipeline — the exact infrastructure the rebuild was
-designed to delete. The fix was to kill the compile, throw away the
-wrapper, and write the v2 architecture directly from the specs. 2541
-lines in under an hour. The wrapper approach would have produced a
-slower, more fragile tool that still depended on everything scheduled
-for deletion in Phase D.
+## 5. If it needs to exist, it's a handler.
+
+Every feature, tool, output, and extension is a handler on the
+SubstGraph + Env. The graph IS the program. Source, WAT, docs, LSP,
+diagnostics — all handler projections (INSIGHTS.md: "The Graph IS
+the Program").
+
+If a feature can't be expressed as a handler on the graph, the graph
+is incomplete. Extend the graph. Don't route around it.
 
 ---
 
 ## Operational essentials
 
-**State of the world:** `lux3.wasm` (frozen artifact) compiles
-itself → `lux4.wat` with ~12 `val_concat` drift sites (Arc 2 semantic
-closure, 2026-04-15). Rust VM deleted. The `rebuild` branch drives a
-scrap-and-rebuild of the compiler core against a live SubstGraph +
-EnvRead/Write effect substrate. Active plan: `docs/PLAN.md`.
+**State of the world:** Inka bootstraps backward. The VFINAL codebase
+in `inka/compiler/` IS the compiler — written unconstrained from the
+12 specs. A disposable bootstrap translator (any language, ~3-5K
+lines) will compile it once. After that, Inka compiles itself. The
+translator is deleted. Active plan: `docs/PLAN.md`.
 
-**Rebuild progress (2026-04-17):** Phase A (specs) ✅, Phase B
-(query) ✅, Phase C (v2 core) ⏳ structure shipped (9 files, 2541
-lines in `std/compiler/v2/`). v2 ADTs, effects, handler stubs in
-place. Next: wire handler state management and frontend adapter.
+**Progress (2026-04-17):** Specs ✅. Core files written (types, graph,
+effects, infer, lower, pipeline, own, verify, clock, mentl, lexer,
+parser). Remaining Phase 1 work: handler state threading, ADT
+deduplication, pipeline alignment, emit/runtime/main ports.
 
-**Before any bootstrap:** `make -C bootstrap preflight` (<1 s). If it
-fails, fix first. If clean, then work.
-
-**Build commands (all via `bootstrap/Makefile`; never raw `cargo` /
-`wat2wasm` / `wasm2c`):**
+**Build commands (when bootstrap translator exists):**
 
 ```
-make -C bootstrap help            # what each target does
-make -C bootstrap stage0          # Rust VM → lux3.wat (~9 min)
-make -C bootstrap stage1          # wat2wasm --debug-names → lux3.wasm
-make -C bootstrap stage1-aot      # wasmtime compile → lux3.cwasm
-make -C bootstrap smoke           # pattern + counter canaries (~1 min)
-make -C bootstrap stage2          # Ouroboros via wasmtime → lux4.wat
-make -C bootstrap check           # diff lux3.wat lux4.wat
-make -C bootstrap check-canonical # round-trip canonical diff (stronger)
-make -C bootstrap decompile-diff  # per-function divergence localizer
-make -C bootstrap verify          # full: stage0→1→aot→smoke→2→validate
-make -C bootstrap stats           # opcode histogram + section sizes
+# Bootstrap (one-time)
+bootstrap/translate inka/compiler/*.jxj -o inka.wasm
+
+# Self-compilation (the real test)
+cat inka/compiler/*.jxj | wasmtime run inka.wasm > inka2.wat
+wat2wasm inka2.wat -o inka2.wasm
+cat inka/compiler/*.jxj | wasmtime run inka2.wasm > inka3.wat
+diff inka2.wat inka3.wat    # empty = first-light
 ```
 
-**CRITICAL.** Do NOT run `cat file | ./target/release/lux file` for
-bootstrap — that runs in `--teach` mode and dumps text to stdout,
-corrupting the `.wat`. Always go through the Makefile.
+**WASM as substrate.** WASM is the compilation target. No custom VM.
+Linear memory, no GC, tail-call support via wasmtime. Handler
+elimination maps cleanly: tail-resumptive (85%) → `call`, linear →
+state machine, multi-shot → heap struct. See PLAN.md "WASM as Target
+Substrate."
 
-**Bug classes that cost 75-min bootstraps — never recreate:**
+**Bug classes that cost hours — never recreate:**
 - Polymorphic dispatch fallback (`match … with _`) that silently masks type errors.
 - Duplicate top-level function names (emitter picks one silently).
 - Flat-array list ops in Snoc-tree paths (`list[i]` in a loop — O(N²) and wrong semantics).
@@ -123,10 +111,7 @@ corrupting the `.wat`. Always go through the Makefile.
 wasm-decompile bootstrap/build/lux3.wasm > /tmp/lux3.dec   # pseudocode view
 wasm-objdump -d bootstrap/build/lux3.wasm | less           # disassembly
 wasm-objdump -x bootstrap/build/lux3.wasm                  # sections
-grep some_symbol bootstrap/build/lux4.wat                  # what was emitted
 ```
-
-The WAT is ground truth; source is a map.
 
 **Common crash patterns:**
 
@@ -139,8 +124,8 @@ The WAT is ground truth; source is a map.
 
 **Memory model:** bump allocator, monotonic, never frees. Every
 allocation is permanent. Any function that accumulates strings via
-`++` in a loop is a potential memory bomb. Traps at 16 MB
-(configurable in `wasm_runtime.lux`).
+`++` in a loop is a potential memory bomb. Traps at 16 MB. GC is a
+handler (Arc F.4 scoped arenas). See PLAN.md "Memory Model."
 
 **Representations:**
 - **Strings** always flat: `[len_i32][bytes...]`. `str_concat` copies.
@@ -152,74 +137,72 @@ allocation is permanent. Any function that accumulates strings via
 Don't pattern-match from crash addresses. Add one debug print, run
 once, fix.
 
-**WAT-level surgery** when debugging WASM crashes (skips the 9-min
-rebuild):
-
-```
-make -C bootstrap stage0               # generate WAT once
-# edit bootstrap/build/lux3.wat, then:
-cat input.lux | ~/.wasmtime/bin/wasmtime run --dir . \
-  -W max-wasm-stack=33554432 bootstrap/build/lux3.wat
-```
-
 **File map (the files you'll touch most):**
 
 | File | Role |
 |---|---|
-| `std/compiler/v2/graph.lux` | SubstGraph: flat-array, O(1) chase, Read/Write effects |
-| `std/compiler/v2/types.lux` | Ty + Reason + Scheme + typed AST + all 14 effects |
-| `std/compiler/v2/effects.lux` | EffRow Boolean algebra: + - & ! |
-| `std/compiler/v2/infer.lux` | HM inference, one walk, graph-direct |
-| `std/compiler/v2/lower.lux` | Live-observer lowering via LookupTy |
-| `std/compiler/v2/pipeline.lux` | Handler composition + query handler |
-| `std/compiler/v2/own.lux` | Ownership as Consume effect |
-| `std/compiler/v2/verify.lux` | Verify ledger (Arc F.1 swaps to SMT) |
-| `std/compiler/v2/clock.lux` | Clock / Tick / Sample / Deadline |
-| `std/compiler/query.lux` | Phase B forensic substrate (v1 bridge) |
-| `std/compiler/pipeline.lux` | v1 pipeline: lex → parse → check → lower → emit |
-| `std/backend/wasm_emit.lux` | LowIR → WAT (reused by v2) |
-| `std/compiler/lower_ir.lux` | LowIR ADT — v2/lower.lux replaces |
-| `std/compiler/lowir_walk.lux` | tree walker (preserved for v2) |
-| `std/runtime/memory.lux` | alloc, strings, lists (val_concat deleted Phase D) |
-| `std/backend/wasm_runtime.lux` | `emit_alloc` — the hand-written WAT |
-| `std/compiler/ty.lux` | v1 type env, subst (v2/types.lux+graph.lux replace) |
-| `bootstrap/Makefile` | every bootstrap command |
-| `bootstrap/tests/{counter,pattern}.lux` | `make smoke` canaries |
-| `examples/wasm_bootstrap.lux` | v1 entry — `compile_wasm(read_stdin())` |
-
-Tests: `bootstrap/tests/` (versioned). Artifacts: `bootstrap/build/`
-(gitignored).
+| `inka/compiler/graph.jxj` | SubstGraph: flat-array, O(1) chase, Read/Write effects |
+| `inka/compiler/types.jxj` | Ty + Reason + Scheme + typed AST + core effects |
+| `inka/compiler/effects.jxj` | EffRow Boolean algebra: + - & ! |
+| `inka/compiler/infer.jxj` | HM inference, one walk, graph-direct |
+| `inka/compiler/lower.jxj` | Live-observer lowering via LookupTy |
+| `inka/compiler/pipeline.jxj` | Handler composition via ~> + query handler |
+| `inka/compiler/own.jxj` | Ownership as Consume effect |
+| `inka/compiler/verify.jxj` | Verify ledger (Arc F.1 swaps to SMT) |
+| `inka/compiler/clock.jxj` | Clock / Tick / Sample / Deadline |
+| `inka/compiler/mentl.jxj` | Teaching substrate (Teach effect, 5 ops) |
+| `inka/compiler/lexer.jxj` | Tokenizer (full spans, all 5 pipe ops) |
+| `inka/compiler/parser.jxj` | Recursive descent (all PipeKind variants) |
+| `inka/compiler/emit.jxj` | LowIR → WAT |
+| `inka/runtime/memory.jxj` | Allocator as handler, strings, lists |
+| `inka/main.jxj` | Entry: read stdin → compile → emit WAT |
+| `docs/PLAN.md` | THE plan |
+| `docs/rebuild/00–11` | The 12 executable specs |
+| `docs/errors/` | Error catalog |
 
 **Delete, don't decorate.** No `// removed for X` comments. No
 renamed-with-underscore unused variables. If something is unused,
 delete it. If something is wrong, delete it and redo it right.
 
 **Never attribute Claude in commits.** No `Co-Authored-By`, no 🤖
-trailer, no inline mentions. Write commits as Morgan wrote them
-alone.
+trailer, no inline mentions. Write commits as Morgan wrote them alone.
+
+---
+
+## Crystallized Insights (load-bearing truths)
+
+Six insights from INSIGHTS.md that bind all implementation:
+
+1. **The Handler Chain Is a Capability Stack.** `~>` ordering is a
+   trust hierarchy. Outermost = least trusted. Compiler-proven.
+2. **Five Verbs = Complete Basis.** Any directed graph decomposes
+   into `|>`, `<|`, `><`, `~>`, `<~`. Mathematically proven.
+3. **Visual Programming in Plain Text.** Newlines are semantic.
+   The shape of pipe chains IS the computation graph.
+4. **`<~` Feedback Is Genuine Novelty.** No other language makes
+   back-edges visible, checkable, and optimizable.
+5. **Effect Negation > Everything.** `!E` proves absence. Strictly
+   more powerful than Rust + Haskell + Koka + Austral combined.
+6. **The Graph IS the Program.** SubstGraph + Env is the universal
+   representation. Everything else is a handler projection.
 
 ---
 
 ## Deep context (read when you need it)
 
-- **`docs/PLAN.md`** — active plan (THE plan): scrap-and-rebuild of
-  the compiler core (Phases 0–F, including F.6 Mentl) plus arcs
-  G–J after `first-light`. Evolved via commits.
+- **`docs/PLAN.md`** — THE plan. Three phases: Write VFINAL,
+  Bootstrap, First Light. Plus post-first-light arcs F-J.
 - **`docs/rebuild/00–11-*.md`** — the 12 executable specs. ADTs,
   effects, invariants. Each ≤ 300 lines.
 - **`docs/errors/`** — canonical error catalog (E/V/W/T/P codes).
   Every diagnostic resolves through this.
 - **`docs/INSIGHTS.md`** — core truths: inference is the light, five
-  verbs draw topology, handlers read it, what Inka dissolves.
+  verbs draw topology, handlers read it, what Inka dissolves. Six
+  crystallized architectural insights (2026-04-17).
 - **`docs/DESIGN.md`** — language manifesto, effect algebra, gradient,
   refinement types, DSP/ML unification.
 - **`docs/SYNTHESIS_CROSSWALK.md`** — historical: external validation
-  + research neighbors 2024-2026. Predates the rebuild.
-- **`docs/ARCS.md`** — narrated development history.
-
-Memory index is at
-`~/.claude/projects/-home-suds-Projects-lux/memory/MEMORY.md`. Inka-
-specific learnings persist there across sessions.
+  + research neighbors 2024-2026.
 
 ---
 

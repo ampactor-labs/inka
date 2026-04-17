@@ -8,11 +8,11 @@ Mentl's tentacles; the shared substrate is the SubstGraph + Env
 (specs 00, 04) read through effects.
 
 **Scope.** This spec consolidates three currently-separate modules —
-`gradient.lux`, `suggest.lux`, `why.lux` — and the Teach effect (spec
-06) into one coherent subsystem: `std/compiler/mentl.lux`. Ships in
+`gradient.jxj`, `suggest.jxj`, `why.jxj` — and the Teach effect (spec
+06) into one coherent subsystem: `inka/compiler/mentl.jxj`. Ships in
 Arc F.6 as the capstone on the rebuild's teaching surface. Structural
 prerequisites (Teach effect signatures, error-catalog wiring) land in
-Phase A + Phase B.
+Phase 1.
 
 **Research anchors.**
 - Elm / Roc / Dafny error catalogs — stable codes, canonical
@@ -56,13 +56,13 @@ making with zero contention.
 
 | Tentacle | Handler | Reads | Phase landed |
 |---|---|---|---|
-| **Compile** | `emit_wasm` | `SubstGraphRead + LookupTy` | Phase C |
-| **Check** | `check_pipeline` | `Diagnostic` | Phase C |
-| **Query** | `query_default` | `SubstGraphRead + EnvRead + FreshHandle` | **Phase B** |
+| **Compile** | `emit_wasm` | `SubstGraphRead + LookupTy` | Phase 1 |
+| **Check** | `check_pipeline` | `Diagnostic` | Phase 1 |
+| **Query** | `query_default` | `SubstGraphRead + EnvRead + FreshHandle` | **Phase 1** |
 | **Why** | `why_default` | `SubstGraphRead + EnvRead` | F.6 (formalize) |
 | **Teach** | `mentl_default` | `SubstGraphRead + EnvRead + Teach` | F.6 |
 | **Hover** | `lsp_hover` | `Query + Why` | F.2 |
-| **Verify** | `verify_ledger` → `verify_smt` | `SubstGraphRead + Verify` | Phase C, F.1 |
+| **Verify** | `verify_ledger` → `verify_smt` | `SubstGraphRead + Verify` | Phase 1, F.1 |
 | **Suggest** | `synth_default` | `Synth + Verify` | F.1 / F.2 |
 
 Eight. If a ninth emerges (doc extraction, visualization), it fits
@@ -174,7 +174,7 @@ Minimal code triggering it + the fix.
 Mentl's tentacle hits `docs/errors/<code>.md` by convention; absence
 of a catalog file is itself a lint (`W_CatalogMissing`, reserved for
 future use). Every reserved code in spec 06 has a corresponding file
-shipped with Phase B as companion artifact — this is the error
+shipped with Phase 1 as companion artifact — this is the error
 catalog's first complete pass.
 
 ---
@@ -235,7 +235,7 @@ that already exist.
 ## Module structure
 
 ```
-std/compiler/mentl.lux          — the consolidated teaching module
+inka/compiler/mentl.jxj          — the consolidated teaching module
   ├── handler mentl_default      — default Teach handler
   ├── handler why_default        — default Why tentacle
   ├── fn gradient_next(handle)   — gradient logic
@@ -244,9 +244,9 @@ std/compiler/mentl.lux          — the consolidated teaching module
   └── fn render_patch            — Patch → developer-facing diff
 ```
 
-Replaces the currently separate `gradient.lux`, `suggest.lux`,
-`why.lux` by merging them (or, if sizes dictate, coordinating them
-under one entry). The name `mentl.lux` makes the subsystem
+Replaces the currently separate `gradient.jxj`, `suggest.jxj`,
+`why.jxj` by merging them (or, if sizes dictate, coordinating them
+under one entry). The name `mentl.jxj` makes the subsystem
 discoverable in the code tree. The mascot earns its keep linguistically.
 
 ---
@@ -255,9 +255,9 @@ discoverable in the code tree. The mascot earns its keep linguistically.
 
 | Existing | Folded into |
 |---|---|
-| `std/compiler/gradient.lux` | `mentl.lux` → `gradient_next` |
-| `std/compiler/suggest.lux` | `mentl.lux` → suggest handler |
-| `std/compiler/why.lux` | `mentl.lux` → `why_default` |
+| `std/compiler/gradient.jxj` | `mentl.jxj` → `gradient_next` |
+| `std/compiler/suggest.jxj` | `mentl.jxj` → suggest handler |
+| `std/compiler/why.jxj` | `mentl.jxj` → `why_default` |
 | ad-hoc error strings | `docs/errors/*.md` + `load_catalog` |
 | `teach_here` (sole op) | `Teach` effect's five-op surface |
 
@@ -265,7 +265,7 @@ discoverable in the code tree. The mascot earns its keep linguistically.
 
 ## Consumed by
 
-- `std/compiler/pipeline.lux` — installs `mentl_default` at compile
+- `std/compiler/pipeline.jxj` — installs `mentl_default` at compile
   entry (always active; zero-cost when no teach request is made).
 - Arc F.1 `verify_smt` — emits through Mentl for catalog-backed
   diagnostics.
@@ -289,7 +289,7 @@ discoverable in the code tree. The mascot earns its keep linguistically.
   `docs/errors/*.md` is versioned, reviewable, translatable.
 - **Let LSP invent its own hover/completion surface.** Duplicates
   Mentl. Keep LSP as a JSON-RPC wrapper only.
-- **Ship Mentl in Phase C.** Tempting, but the consolidation requires
+- **Ship Mentl in Phase 1.** Tempting, but the consolidation requires
   all eight tentacles to exist first (Verify ships C, Synth ships F.1,
   LSP ships F.2). F.6 is when the substrate is complete enough for a
   named consolidation to be meaningful.

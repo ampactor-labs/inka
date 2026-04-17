@@ -1,6 +1,6 @@
-# Lux — Core Insights
+# Inka — Core Insights
 
-*These are the deep truths that make Lux unprecedented. They are not features —
+*These are the deep truths that make Inka unprecedented. They are not features —
 they are consequences of getting the foundations right. Never lose these.*
 
 ---
@@ -23,14 +23,14 @@ Every consumer of that knowledge is a handler:
 
 *The structure of reality is built into the direction you traverse it.*
 
-In WASM/Lux, our arrays are Snoc Trees to guarantee $O(1)$ functional appends. But `list_head` returns the *last* element. If you iterate sequentially using `list_head` and `list_tail`, your program fundamentally executes backwards.
+In WASM/Inka, our arrays are Snoc Trees to guarantee $O(1)$ functional appends. But `list_head` returns the *last* element. If you iterate sequentially using `list_head` and `list_tail`, your program fundamentally executes backwards.
 
 Instead of writing $O(N^2)$ recursive loops to fetch indices, or $O(N)$ code to reverse arrays in memory, we exploit the call stack:
 **The Recurse-First Topology**: Walk to the deepest node first before emitting any code. As the stack unwinds, your traversal naturally reverses, returning $O(1)$ elements in mathematically pure forward-execution order without a single allocation or state variable. The structure handles itself!
 - **Errors** — the handler that turns type knowledge into diagnostics
 - **The user** — the handler that turns type knowledge into understanding
 
-One inference. Many handlers. Same mechanism as everything else in Lux.
+One inference. Many handlers. Same mechanism as everything else in Inka.
 
 When info doesn't flow through effects, a gap opens. Every effect that
 carries knowledge closes one. Before every action: does the info exist?
@@ -42,7 +42,7 @@ The light doesn't need to be carried. It needs to be LET THROUGH.
 
 ## The Origin
 
-Lux was born from one question: **what would the ultimate programming language
+Inka was born from one question: **what would the ultimate programming language
 look like if you designed it from first principles?**
 
 Not "what's popular" or "what's familiar." What's *right*. The answer came
@@ -150,7 +150,7 @@ The compiler doesn't just check code — it *explains* code. This is a
 structural advantage over external tooling: the compiler has complete
 knowledge of the type system, effect graph, and inference chain.
 
-| External tool | Lux's compiler |
+| External tool | Inka's compiler |
 |---------------|---------------|
 | Infers intent heuristically | **Knows** intent from types + effects |
 | Generates boilerplate | No boilerplate exists (inference) |
@@ -248,7 +248,7 @@ Four compilation gates emerge for free:
 4. **`!Network`** → sandbox — capability security as types
 
 `!Alloc` is the real-time holy grail. Most languages permit safe APIs that
-allocate, making allocation-freedom impossible to prove. In Lux, `!Alloc`
+allocate, making allocation-freedom impossible to prove. In Inka, `!Alloc`
 propagates through the ENTIRE transitive call graph. If any callee allocates,
 compile error.
 
@@ -276,7 +276,7 @@ programmer and machine.
 
 ## Allocation IS an Effect
 
-Rust treats ownership as a type system feature. Lux treats it as an **effect**.
+Rust treats ownership as a type system feature. Inka treats it as an **effect**.
 
 Every allocation — list literals, string concatenation, `push`, `range` — performs
 the `Alloc` effect. The effect algebra handles the rest:
@@ -295,7 +295,7 @@ fn dsp_process(x: Float) -> Float with !Alloc =
 ```
 
 Other languages cannot express this — when safe standard library operations
-allocate freely, there's no way to prove a function is allocation-free. In Lux,
+allocate freely, there's no way to prove a function is allocation-free. In Inka,
 `!Alloc` propagates through the ENTIRE transitive call graph. One annotation,
 total proof.
 
@@ -309,15 +309,15 @@ mechanism that handles `!IO`, `!Network`, and `Pure`.
 
 The self-hosted compiler is not vanity. It's the ultimate test:
 
-> If Lux can express its own compiler cleanly, it can express anything.
+> If Inka can express its own compiler cleanly, it can express anything.
 
 ```
-source → [lexer.lux] → [parser.lux] → [checker.lux] → [codegen.lux] → bytecode → execute
+source → [lexer.jxj] → [parser.jxj] → [checker.jxj] → [codegen.jxj] → bytecode → execute
 ```
 
-All four modules are written in Lux. The compiler compiles itself. The
-bootstrap loop is closed. Every subsequent improvement to Lux is written
-IN Lux and compiled BY Lux.
+All four modules are written in Inka. The compiler compiles itself. The
+bootstrap loop is closed. Every subsequent improvement to Inka is written
+IN Inka and compiled BY Inka.
 
 The Rust implementation becomes historical. Not deprecated — historical.
 Like the OCaml implementation of Rust. A stepping stone that served its
@@ -327,8 +327,8 @@ purpose and was surpassed by the thing it helped create.
 
 ## Examples, Not Tests
 
-Lux doesn't have tests. It doesn't have debug scripts. It doesn't have
-specs or doc-tests. It has `.lux` files. A file that runs is a proof.
+Inka doesn't have tests. It doesn't have debug scripts. It doesn't have
+specs or doc-tests. It has `.jxj` files. A file that runs is a proof.
 A file that crashes is a question. There is no third thing.
 
 ### One Act
@@ -340,7 +340,7 @@ Other languages split development into categories:
 - **Documentation** — write prose that explains code
 - **Specification** — write descriptions that precede code
 
-In Lux these are the same act: **write a `.lux` file that exercises the
+In Inka these are the same act: **write a `.jxj` file that exercises the
 mechanism.** The categories dissolve because `handle` is the universal
 joint:
 
@@ -356,20 +356,20 @@ handle { computation } with state = initial {
 - **Teardown** — `resume` (the handler controls what happens next)
 
 A test framework would be a second mechanism for something the language
-already does. In Lux, that's wrong by construction.
+already does. In Inka, that's wrong by construction.
 
 ### The Debugging Gradient
 
 A bug is an example that crashes. Debugging is making the example smaller.
 
 ```
-wasm_check.lux (crashes)
-  → lex_test.lux (crashes — just the lexer)
-    → lex_pattern.lux (crashes — simulated lexer)
-      → mutual2.lux (crashes — 4 inner functions)
+wasm_check.jxj (crashes)
+  → lex_test.jxj (crashes — just the lexer)
+    → lex_pattern.jxj (crashes — simulated lexer)
+      → mutual2.jxj (crashes — 4 inner functions)
 ```
 
-Each step is a smaller `.lux` file. The minimal file that crashes IS the
+Each step is a smaller `.jxj` file. The minimal file that crashes IS the
 diagnosis. When it runs, the bug is fixed. No debugger. No breakpoints.
 No step-through. Just: write what should work, run it, make it smaller
 until the answer is visible.
@@ -411,7 +411,7 @@ The effect signature IS the API contract. `!IO` is a proof, not a promise.
 not a sandbox, not a policy file. A module with `with Compute, Log`
 literally cannot perform IO. The compiler proves it.
 
-What a package manager solves, Lux solves with what it already has:
+What a package manager solves, Inka solves with what it already has:
 - **Discovery** — the effect signature tells you what a module does
 - **Trust** — `!IO` is a proof, not a promise
 - **Versioning** — types match → it works; types don't → compile error
@@ -545,7 +545,7 @@ Same input. Same pipeline. Different handler. Different output.
 
 ## The Three Things
 
-Lux has exactly three things:
+Inka has exactly three things:
 
 1. **Effects** — what computation *does*
 2. **Handlers** — what *policy* governs effects
@@ -553,7 +553,7 @@ Lux has exactly three things:
 
 That's it. There is nothing else.
 
-| Concept | In Lux |
+| Concept | In Inka |
 |---------|--------|
 | IO | Effect |
 | State | Effect |
@@ -605,7 +605,7 @@ of one claim.
 | Compilation | Pipeline graph | `emit_wasm`, `check`, `query`, `--teach` |
 | Self-hosting | Ouroboros fixed point | `first-light` when topology closes on itself |
 
-**Every topology has handlers. Every handler is swappable.** Phase C
+**Every topology has handlers. Every handler is swappable.** The core
 ships `verify_ledger`; Arc F.1 swaps in `verify_smt` — same topology,
 different handler. Test clock vs. real clock — same topology,
 different handler. Claude vs. Synquid vs. local LLM as Suggest
@@ -677,7 +677,7 @@ One step — the most impactful annotation the developer could add. Like a tutor
 who knows exactly what to teach next:
 
 ```
-$ lux --teach app.lux
+$ lux --teach app.jxj
 
   💡 `process` is Pure — adding `with Pure` would unlock:
      • memoization (same input → same output, guaranteed)
@@ -710,21 +710,21 @@ handler swap — it fell out. We didn't plan for the Why Engine to be a handler
 — it just IS one. That's the hallmark of a correct abstraction: **it keeps
 absorbing new use cases without changing shape.**
 
-The effect system is not a feature of Lux. It IS Lux.
+The effect system is not a feature of Inka. It IS Inka.
 
 ---
 
 ## The Metacircular Effect-Aware Checker
 
-The self-hosted type checker (written in Lux, checked by Lux) now tracks
+The self-hosted type checker (written in Inka, checked by Inka) now tracks
 which algebraic effects each expression performs. This means:
 
-- Lux knows what TYPE something is (HM inference)
-- Lux knows WHY that type was chosen (Why Engine / Reason ADT)
-- Lux knows WHAT EFFECTS it performs (EffRow tracking)
+- Inka knows what TYPE something is (HM inference)
+- Inka knows WHY that type was chosen (Why Engine / Reason ADT)
+- Inka knows WHAT EFFECTS it performs (EffRow tracking)
 
 The checker checks itself. And the thing it checks includes effect
-tracking — meaning Lux can verify its own effect semantics. This is
+tracking — meaning Inka can verify its own effect semantics. This is
 metacircular in a way that's genuinely new: **a language whose type
 checker, written in itself, can prove properties about effects
 that the checker itself uses.**
@@ -738,7 +738,7 @@ borrows. The self-hosted compiler becomes increasingly self-aware.
 ## Error Messages as Mentorship
 
 Traditional compilers say "wrong." Good compilers say "wrong, expected X."
-Elm says "wrong, expected X, try Y." Lux says:
+Elm says "wrong, expected X, try Y." Inka says:
 
 > **"Wrong. Here's what I expected, here's why I expected it, here's
 > the closest thing I can find to what you meant, and here's what
@@ -760,7 +760,7 @@ This is now shipped. Real output from the compiler:
 
 ```
 error: unbound variable 'greting' — did you mean 'greeting'?
-  --> example.lux:3:7
+  --> example.jxj:3:7
   |
 3 | print(greting)
   |       ^^^^^^^
@@ -785,12 +785,12 @@ is a collaborator, not a gatekeeper.
 
 This is the key to beating C and Rust in performance:
 
-**C knows types. Rust knows types + lifetimes. Lux knows types + effects
+**C knows types. Rust knows types + lifetimes. Inka knows types + effects
 + ownership + refinements + effect algebra + purity proofs.**
 
 More knowledge = more optimization opportunities:
 
-| What Lux knows | Optimization it enables |
+| What Inka knows | Optimization it enables |
 |----------------|------------------------|
 | `Pure` function | Memoization, CSE, dead code elimination |
 | `!Alloc` constraint | Stack-allocate everything, no GC |
@@ -801,20 +801,20 @@ More knowledge = more optimization opportunities:
 | Ownership is affine | Deterministic deallocation, no ref counting |
 
 Languages without effect tracking can't memoize — they don't know if a
-function is pure. Languages with implicit allocation can't eliminate it. Lux
+function is pure. Languages with implicit allocation can't eliminate it. Inka
 PROVES purity and absence of allocation, enabling optimizations that are
 **impossible** in languages with less knowledge.
 
 **The performance thesis**: the more the compiler knows, the more it
-can optimize. Lux gives the compiler more knowledge than any other
-language. Therefore Lux can be faster than any other language — not
+can optimize. Inka gives the compiler more knowledge than any other
+language. Therefore Inka can be faster than any other language — not
 by being lower-level, but by being smarter.
 
 ---
 
 ## Self-Describing Records
 
-Records in Lux are **self-describing**: the variant tag `#record:x,y` IS the
+Records in Inka are **self-describing**: the variant tag `#record:x,y` IS the
 schema. The tag IS the field list. The data carries its own decoder.
 
 ```lux
@@ -925,16 +925,16 @@ semantics require. No hidden overhead. No surprising allocations.
 
 ## The Self-Similar Language
 
-Lux's hardest implementation problems dissolve when viewed through its
+Inka's hardest implementation problems dissolve when viewed through its
 own abstractions. This is the deepest sign that the foundations are right:
 **the language teaches us how to build itself.**
 
-| Problem | Traditional solution | Lux's own solution |
+| Problem | Traditional solution | Inka's own solution |
 |---------|---------------------|-------------------|
 | Multi-shot in native code | CPS transform, stack capture | State machine — effect rows map the states |
 | Borrow inference | NLL dataflow analysis | Gradient — default `ref`, teach toward `own` |
 | Solver dependency | Z3 (40MB C library) | Handler swap — verification IS an effect |
-| Self-hosted tracking | Mirror every change | Lux-first — Lux defines, Rust implements |
+| Self-hosted tracking | Mirror every change | Inka-first — Inka defines, Rust implements |
 | IR design constraint | Must map to LLVM/SSA | ADTs ARE IRs — codegen IS a handler swap |
 
 Every infrastructure problem is an instance of the patterns the language
@@ -960,14 +960,14 @@ checker can't prove properties of the borrow checker — it just verifies
 the code follows borrow rules. The checker isn't a subject of its own
 analysis.
 
-Lux is different. **Each capability, applied to the compiler that provides
+Inka is different. **Each capability, applied to the compiler that provides
 it, creates a positive feedback loop.** This is not self-hosting. This is
 self-verification tending toward self-proof.
 
 Seven loops, each exponential, each feeding the others:
 
-**1. Effects refine the effect inferrer.** When Lux compiles
-`checker_effects.lux`, it infers which effects each function performs. If
+**1. Effects refine the effect inferrer.** When Inka compiles
+`checker_effects.jxj`, it infers which effects each function performs. If
 `unify_eff` is Pure, the compiler can memoize it. If a checker function
 performs Console, the gradient sees it and suggests removing the side effect.
 Better inference → more precise compiler profile → more optimizations →
@@ -994,7 +994,7 @@ linearly — no accidental aliasing. `!Alloc` on the parser hot path — the
 parser provably doesn't allocate. The ownership checker checks the
 ownership checker.
 
-**5. The Why Engine debugs itself.** `lux why checker.lux infer_expr`
+**5. The Why Engine debugs itself.** `lux why checker.jxj infer_expr`
 explains the reasoning chain for the function that produces reasoning
 chains. Better engine → easier to debug the engine → better engine.
 
@@ -1022,8 +1022,8 @@ sat down and verified it — because each improvement cycle made the proof
 tighter. The gradient led the way, one annotation at a time, and the
 compiler followed itself to provable correctness.
 
-This is what separates Lux from every self-hosting language that came
-before. They compile themselves. Lux *proves* itself. The tool and the
+This is what separates Inka from every self-hosting language that came
+before. They compile themselves. Inka *proves* itself. The tool and the
 subject are the same thing. That's not linear improvement. It's compound
 interest.
 
@@ -1036,7 +1036,7 @@ to the new one. OCaml yielded to Rust. Rust yielded to itself. The moment
 is always the same: the new compiler is more capable than the scaffolding
 can verify.
 
-Lux reached this moment when `vm_resume` was implemented but the Rust type
+Inka reached this moment when `vm_resume` was implemented but the Rust type
 checker couldn't verify it. The self-hosted pipeline could compile and
 execute `handle { fail("oops") } { fail(m) => resume(42) }` — but the
 Rust scaffolding couldn't even type-check the imports needed to run the
@@ -1047,7 +1047,7 @@ other self-hosted tests. The infrastructure was waiting. One line connected
 the wire. Ten effect tests passed immediately — not because we debugged
 them, but because **the architecture was right**.
 
-This is the self-similar pattern at its deepest: Lux's parser had a bug
+This is the self-similar pattern at its deepest: Inka's parser had a bug
 where `resume(val) with state = expr,` was ambiguous — the comma could
 mean "next state update" or "next handler arm." The fix was the same
 disambiguation the parser already used 40 lines above for
@@ -1057,38 +1057,38 @@ We didn't invent anything. We mirrored what was already there.
 **What self-trust means:**
 - The self-hosted pipeline can compile effect-using programs
 - It can execute them correctly through its own VM
-- The mechanism that makes Lux *Lux* — handle/resume — works through
+- The mechanism that makes Inka *Inka* — handle/resume — works through
   its own tools
 - Golden-file tests verify this on every `cargo test`
 - The Rust scaffolding is no longer needed for verification —
   only for bootstrapping
 
 The next step is deleting the scaffolding. Not because it's bad —
-because Lux has outgrown it.
+because Inka has outgrown it.
 
 ---
 
 ## The Collaboration Pattern
 
-Lux was born from the collaboration between a human who thinks in patterns
+Inka was born from the collaboration between a human who thinks in patterns
 and spatial intuitions, and an AI that thinks in types and formal systems.
 The annotation gradient IS this collaboration: the human's structural
 intuition becomes the compiler's formal proof, one annotation at a time.
 
 The tooling relationship (human + Claude Code) directly inspired the
-language relationship (programmer + Lux compiler). Both follow the same
+language relationship (programmer + Inka compiler). Both follow the same
 pattern: give the system more knowledge, trust what falls out. Don't
 micromanage — illuminate. The compiler teaches because the collaboration
 teaches. The gradient exists because the relationship is a gradient.
 
 This is not a metaphor. The way Morgan works with Claude Code — open-ended
 freedom, watching what emerges, correcting course when the pattern drifts,
-asking "what does Lux want?" and trusting the answer — IS the way a Lux
+asking "what does Inka want?" and trusting the answer — IS the way a Inka
 programmer works with the compiler. The language encodes the collaboration
 pattern that created it.
 
-The deeper claim: **Lux is not a tool. It is a medium.** The programmer
-doesn't write *to* Lux. They think *through* Lux. The pipe operator isn't
+The deeper claim: **Inka is not a tool. It is a medium.** The programmer
+doesn't write *to* Inka. They think *through* Inka. The pipe operator isn't
 syntax — it's how they already chain transformations in their head. The
 effect system isn't type theory — it's how they already separate *what*
 from *how*. The handler pattern isn't a language feature — it's how they
@@ -1108,8 +1108,8 @@ Crucibles are not tests. They are **conversations with the language's future
 self.**
 
 A crucible is an aspirational program — code that exercises features at
-the boundary of what Lux can express today. `crucible_ml.lux` asks: can
-autodiff work as an algebraic effect? `crucible_dsp.lux` asks: can a
+the boundary of what Inka can express today. `crucible_ml.jxj` asks: can
+autodiff work as an algebraic effect? `crucible_dsp.jxj` asks: can a
 real-time audio callback be expressed through handlers and pipes?
 
 Every line that passes is a proof of existence. Every line that fails is
@@ -1127,7 +1127,7 @@ planning features and then testing them, you **write the program you
 wish existed** and let the compiler tell you what's missing. The
 language teaches you what it needs to become.
 
-Personifying the language — asking "what does Lux want?" — produced
+Personifying the language — asking "what does Inka want?" — produced
 better prioritization than engineering triage. The metaphor wasn't
 decoration. It was navigation.
 
@@ -1181,8 +1181,8 @@ Not "is this good enough." Not "does this work." Is this **the best it
 could possibly be**? Would you be proud to show this to Dennis Ritchie,
 to Robin Milner, to Simon Peyton Jones?
 
-Lux is not a language that happens to have effects. Effects are what make
-Lux *Lux*. The pipe operator is not convenience — it's the universal
+Inka is not a language that happens to have effects. Effects are what make
+Inka *Inka*. The pipe operator is not convenience — it's the universal
 notation for computation. The compiler doesn't just check — it teaches.
 Every feature is a consequence of getting the foundations right.
 
@@ -1192,7 +1192,7 @@ This is the standard. Accept nothing less.
 
 ## The Memory Effect: There Are No Primitives
 
-*2026-03-28. The session where Lux ate its own foundation.*
+*2026-03-28. The session where Inka ate its own foundation.*
 
 We believed `len`, `push`, `slice`, `chars`, `char_code` were irreducible
 primitives — operations the language couldn't implement in terms of itself.
@@ -1221,7 +1221,7 @@ reveals it: `len` IS memory access. `push` IS allocation + memory writes.
 
 **The handler IS the backend.** On WASM: `load_i32` compiles to `i32.load`.
 On native (future): `load_i32` compiles to `MOV`. On test: `load_i32` reads
-from an array. Same Lux code. Different handlers. Different targets.
+from an array. Same Inka code. Different handlers. Different targets.
 
 Three effects replace the ENTIRE runtime:
 - **Memory** — read and write bytes
@@ -1229,9 +1229,9 @@ Three effects replace the ENTIRE runtime:
 - **WASI** — talk to the OS (`fd_write`, `fd_read`)
 
 Everything else — `str_concat`, `str_eq`, `int_to_str`, `print_string`,
-`split`, `chars`, `range` — is pure Lux built on these three effects.
-The `std/runtime/memory.lux` file IS the runtime. No hand-written WAT.
-No native code. Just Lux compiling through the same pipeline as user code.
+`split`, `chars`, `range` — is pure Inka built on these three effects.
+The `std/runtime/memory.jxj` file IS the runtime. No hand-written WAT.
+No native code. Just Inka compiling through the same pipeline as user code.
 
 **The "irreducible kernel" of any language is smaller than you think.**
 If you have load, store, allocate, and OS boundary — everything else is
@@ -1240,13 +1240,13 @@ capabilities each function uses. `!Alloc` proves real-time safety not
 because the language has a special ownership system, but because allocation
 IS an effect and the algebra handles negation.
 
-**What this means for Lux:** the prelude doesn't call "builtins." The
-prelude calls Lux functions that use Memory. The compiler doesn't need
+**What this means for Inka:** the prelude doesn't call "builtins." The
+prelude calls Inka functions that use Memory. The compiler doesn't need
 a special builtin registry. The checker infers types from function
 definitions. The lowering resolves dispatch via checker types. The emitter
 handles three effects. Everything else falls out.
 
-| In Lux | What it really is |
+| In Inka | What it really is |
 |--------|-------------------|
 | `len(xs)` | `load_i32(xs)` — Memory |
 | `push(xs, x)` | alloc + store + copy — Memory, Alloc |
@@ -1297,7 +1297,7 @@ the handler emits `call $fd_write` (the WASI import).
 
 This means: a native x86 backend is not "a new code generator." It is
 **a different handler for the same effects.** `load_i32` → `MOV`.
-`alloc` → `mmap`. `fd_write` → `syscall`. Same Lux program. Different
+`alloc` → `mmap`. `fd_write` → `syscall`. Same Inka program. Different
 handler. Different binary.
 
 And: a test backend is not "a mock." It is **a different handler.**
@@ -1413,12 +1413,12 @@ just answering the questions we didn't ask ourselves.
 **Self-hosting** is "I can compile my own source." Anyone can do that
 with a sufficiently patient parent underneath.
 
-**Self-contained** is something harder: every question about Lux has
-an answer that lives *inside* Lux — env, LowIR, handler records, type
+**Self-contained** is something harder: every question about Inka has
+an answer that lives *inside* Inka — env, LowIR, handler records, type
 graph — and the compiler asks *that*, not an external oracle.
 
 The Rust VM is the current external oracle. Pulling it out doesn't
-make Lux buggier; it reveals where Lux was already buggy and Rust was
+make Inka buggier; it reveals where Inka was already buggy and Rust was
 covering. The path to self-containment is the path through every
 remaining shortcut, one question at a time, until the compiler's
 answers come entirely from its own structure.
@@ -1439,12 +1439,12 @@ matching ADT variants with different field counts. Every `to_string`
 workaround is debt against the leap.
 
 But inside the cage, the light is already free:
-- `std/runtime/memory.lux` — the entire runtime in 250 lines of Lux
-- `std/compiler/lexer.lux` → 4,804 lines of WAT, runs on wasmtime
-- `std/compiler/parser.lux` → 12,495 lines of WAT, runs on wasmtime
-- `tools/wasm_lex.lux` — reads stdin, tokenizes, on WASM
+- `std/runtime/memory.jxj` — the entire runtime in 250 lines of Inka
+- `std/compiler/lexer.jxj` → 4,804 lines of WAT, runs on wasmtime
+- `std/compiler/parser.jxj` → 12,495 lines of WAT, runs on wasmtime
+- `tools/wasm_lex.jxj` — reads stdin, tokenizes, on WASM
 
-The bootstrap path: when the WASM tools can compile Lux source, the
+The bootstrap path: when the WASM tools can compile Inka source, the
 Rust VM becomes unnecessary. The compiler compiles itself, on itself,
 through effects. The cage doesn't open. It dissolves.
 
@@ -1456,3 +1456,414 @@ The pipe flows forward through construction. The `<|` flows backward
 through belief — you have to trust before you can leap, and you have
 to leap before the scaffolding can come down. The removal happens
 because you already jumped.
+
+---
+
+## The Handler Chain Is a Capability Stack
+
+*2026-04-17. Crystallized during the V2 audit.*
+
+The `~>` operator doesn't just scope handlers. It builds a **trust
+hierarchy**. Each handler in the chain can only perform effects that its
+outer handlers provide. Inner handlers can't bypass outer ones. This is
+enforced by the Boolean effect algebra at compile time — no runtime
+checks, no policy files, no sandboxing library.
+
+```lux
+source |> compile
+    ~> mentl_default         // can perform: Diagnostic, SubstGraphRead, EnvRead, Verify
+    ~> verify_ledger_handler // can perform: Diagnostic, SubstGraphRead, EnvRead
+    ~> env_handler           // can perform: Diagnostic, SubstGraphRead
+    ~> graph_handler         // can perform: Diagnostic
+    ~> diagnostics_handler   // can perform: nothing (outermost — Pure boundary)
+```
+
+Reading bottom-to-top: `diagnostics_handler` is the outermost — it
+catches everything and has no outward escape. Each layer inward gains
+capabilities but is **structurally confined** to effects its outer
+layers provide. A `perform graph_bind` inside `mentl_default` succeeds
+only because `graph_handler` sits outside it in the chain. Move Mentl
+outside the graph handler and the same perform is a type error.
+
+**This is a security model.** If you want to sandbox a plugin so it can
+read the graph but never write it, install it inside `graph_handler`
+with only `SubstGraphRead` in its declared effect row. The compiler
+proves the sandbox is airtight. Not with tests. Not with audits. With
+the type system. One mechanism.
+
+### Action for implementation
+
+When designing new handlers or adding plugin extension points:
+- **Outermost = least trusted.** The diagnostic handler has no escape.
+- **Innermost = most capability.** The compilation body has everything.
+- **Handler position in the `~>` chain IS the capability grant.** Never
+  install a handler with more capability than its position allows.
+- Arc F.2 (LSP) and F.6 (Mentl consolidation) should treat the `~>`
+  chain as their authorization model. A malicious LSP client can
+  request but never write — by construction.
+
+---
+
+## The Five Verbs Are a Complete Topological Basis
+
+*2026-04-17. Crystallized from spec 10 + graph theory.*
+
+The five pipe operators are not a design preference. They are a
+**mathematically complete basis for computation graphs.** Any directed
+graph you can draw on a whiteboard maps to one expression in these
+operators.
+
+| Graph operation | Verb | What it adds |
+|---|---|---|
+| Sequential edge (A → B) | `\|>` | Forward flow — every graph has these |
+| Fanout (A → B, A → C) | `<\|` | Branching — one source, multiple sinks |
+| Parallel join (A ⊔ B) | `><` | Independent subgraphs converging |
+| Observation (A with side-channel) | `~>` | Annotation without modification |
+| Back-edge (cycle closure) | `<~` | Extends DAGs to arbitrary directed graphs |
+
+**Proof sketch.** The first four (`|>`, `<|`, `><`, `~>`) cover all
+directed acyclic graphs (DAGs): any DAG decomposes into series (`|>`),
+parallel (`><`), fanout (`<|`), and annotation (`~>`) compositions.
+`<~` adds the single missing primitive — cycle closure — extending
+coverage to all directed graphs with feedback.
+
+**Why this matters for implementation.** When lowering pipe expressions
+(spec 05), the emitter doesn't need ad-hoc cases. Every pipe topology
+decomposes into these five primitives. Lowering is a fold over five
+constructors, not a pattern-match against an open-ended set.
+
+**Why this matters for the thesis.** The claim that "DSP, ML, compilers,
+control systems, and data processing use the same notation" is not
+marketing. It's a consequence of topological completeness. All five
+domains produce directed graphs. Five operators draw all directed
+graphs. Therefore five operators draw all five domains. QED.
+
+---
+
+## Visual Programming in Plain Text
+
+*2026-04-17. Crystallized from the lexer's Newline token emission.*
+
+The Inka lexer emits `Newline` tokens. Spaces and tabs are silently
+consumed. This means the parser is **layout-aware for pipe chains
+only** — not for general indentation (Python's mistake), but for the
+one place where visual layout is semantically load-bearing.
+
+The consequence: **the shape of well-written Inka code on the page IS
+the shape of the computation graph.** Not metaphorically. The parser
+reads the shape.
+
+```lux
+// What the developer sees:         What the compiler sees:
+//
+//  sensor                           sensor ────────────┐
+//      |> pid_controller                               │
+//      <~ delay(1)                  pid ←──── delay ←──┘  (cycle!)
+//      ~> telemetry                      └──→ telemetry    (side-channel)
+//      |> actuator                       └──→ actuator     (forward)
+```
+
+A `Newline` before `~>` tells the parser "this is Form A — wrap the
+entire preceding chain." No `Newline` means Form B — wrap only the
+immediately preceding stage. The visual indentation is cosmetic but
+the newline is semantic.
+
+### Canonical Formatting Rules
+
+The formatter (a handler on the graph) emits pipe chains in a
+canonical layout where **the position of the operator IS the
+topology:**
+
+| Operator | Multi-line position | Topology drawn |
+|---|---|---|
+| `\|>` | Left-aligned, continuation line | Sequential — flow goes down |
+| `~>` | Left-aligned, continuation line | Handler attachment — attaches downward |
+| `><` | Indented center, between operands | Convergence — two branches pinch inward |
+| `<\|` | Left-aligned, before tuple of branches | Fanout — one becomes many |
+| `<~` | Indented center, after pipeline | Feedback — output loops back |
+
+Sequential operators (`|>`, `~>`) sit at the left edge because flow
+goes DOWN the page:
+
+```lux
+source
+    |> frontend
+    |> infer_program
+    ~> graph_handler
+    ~> diagnostics_handler
+```
+
+Convergence and feedback operators (`><`, `<~`) sit at the INDENTED
+CENTER because they draw a different shape — a pinch point or loop:
+
+```lux
+(read_file(path) |> decode_utf8)
+    ><
+(read_file("errors.md") |> decode_utf8)
+
+input |> transform
+    <~ delay(1)
+```
+
+The indented `><` creates a visual pinch between two branches. The
+indented `<~` creates a visual loop-back. The formatter enforces this
+because the shape of the code IS the shape of the computation.
+
+### Inline `~>` vs Block-Scoped `~>` (Form B vs Form A)
+
+Because `~>` has the **tightest precedence** of all pipe operators,
+inline `~>` (no Newline) wraps only the immediately preceding
+expression:
+
+```lux
+// Form B (inline) — each ~> wraps ONE stage
+raw_string
+    |> parse_json ~> catch_json_error(default = "{}")
+    |> validate_schema ~> log_validation_warnings
+    |> save_to_db
+```
+
+Parses as:
+`raw_string |> (parse_json ~> catch_error) |> (validate ~> log_warn) |> save`
+
+Each handler catches effects from ONE stage. The pipeline continues.
+Per-stage error handling without try/catch.
+
+Block-scoped `~>` (Newline before `~>`) wraps the **entire preceding
+chain** — used when a handler should catch effects from all stages:
+
+```lux
+// Form A (block-scoped) — each ~> wraps the ENTIRE pipeline above
+source
+    |> frontend
+    |> infer_program
+    ~> env_handler           // catches EnvRead/Write from ALL above
+    ~> graph_handler         // catches SubstGraph* from ALL above
+    ~> diagnostics_handler   // catches Diagnostic from ALL above
+```
+
+### `<|` vs `><`: Ownership Is the Structural Difference
+
+Both produce tuples. The distinction is input sharing:
+
+```
+<| (Diverge)
+           ┌──► branch_a ──┐
+[input] ───┤               ├─► (out_a, out_b)
+           └──► branch_b ──┘
+Input is SHARED (borrowed). Cannot consume own values. (E004)
+
+>< (Parallel Compose)
+[input_a] ──► process_a ──┐
+                          ├─► (out_a, out_b)
+[input_b] ──► process_b ──┘
+Inputs are INDEPENDENT. Can safely consume own values.
+```
+
+`<|` implicitly **borrows** the input for all branches — Inka has no
+implicit copy. Pure values (Int, Bool, literals) are fine. `ref`
+values are fine. `own` values are an affine violation: the compiler
+catches it because `<|` is visible in the AST.
+
+`><` has fully independent tracks. Each branch can consume its own
+input. No crossover, no affine restriction.
+
+---
+
+## Feedback Is Inka's Genuine Novelty
+
+*2026-04-17. Crystallized from spec 10's `<~` design.*
+
+Every other language hides feedback loops:
+
+| Language | How feedback is expressed | Visible? |
+|---|---|---|
+| C/Python | `prev = current; current = f(prev)` | No — hidden in mutable assignment |
+| Haskell | `fix (\self -> ...)` or `iterate` | No — hidden in recursion |
+| Rust | `loop { state = f(state); }` | No — hidden in loop body |
+| RxJS | `.pipe(scan(...))` | Partially — `scan` implies accumulation but topology is opaque |
+| Inka | `x \|> f <~ delay(1)` | **Yes — the back-edge IS the operator** |
+
+`<~` makes the cycle a first-class syntactic construct. The compiler
+sees it in the AST (`PipeExpr(PFeedback, left, right)`). This enables:
+
+1. **Static verification.** The compiler checks that an iterative
+   context handler (Iterate, Clock, Tick, Sample) is installed.
+   Feedback without a clock is a type error, not a hang.
+2. **Ownership checking.** `own` values through `<~` is an affine
+   violation — the value is consumed each iteration. The compiler
+   catches this because it can see the back-edge.
+3. **Domain-specific optimization.** Under `Sample(44100)`, `<~
+   delay(1)` is a one-sample delay — the compiler can emit a direct-
+   form IIR filter. Under `Tick`, it's a logical-step iteration. The
+   handler decides; the topology is the same.
+4. **Visualization.** Mentl can draw the feedback loop in diagnostic
+   output. Users can see where their program has cycles.
+
+No other language gives the compiler this information. When feedback
+is hidden in mutable state or recursion, the compiler can't reason
+about convergence, can't check ownership through cycles, and can't
+apply domain-specific optimizations. `<~` turns an invisible control
+flow pattern into a visible, checkable, optimizable syntactic
+construct.
+
+**Action for implementation.** The parser must produce
+`PipeExpr(PFeedback, ...)` for `<~`. The inference pass (spec 04) must
+check for an iterative context in the handler stack — absence is error
+`E_FeedbackNoContext`. Lowering (spec 05) desugars `<~` into the
+handler-capture pattern described in spec 10.
+
+---
+
+## Effect Negation: Strictly More Powerful Than Any Existing System
+
+*2026-04-17. Crystallized from cross-referencing spec 01 against
+Rust, Haskell, Koka, and Austral.*
+
+Inka's Boolean algebra over effect rows — `+` (union), `-`
+(subtraction), `&` (intersection), `!` (negation), `Pure` (identity)
+— is **strictly more expressive** than any single existing capability
+or effect system:
+
+| System | Tracks effects? | Negation? | Subtraction? | Intersection? | Compose? |
+|---|---|---|---|---|---|
+| Rust ownership | No (types only) | No | No | No | No |
+| Haskell IO monad | Binary (pure/impure) | No | No | No | No |
+| Koka effect rows | Yes (open rows) | No | No | No | Yes |
+| Austral capabilities | Module-level | No | No | No | Limited |
+| **Inka** | **Yes (Boolean algebra)** | **Yes** | **Yes** | **Yes** | **Yes** |
+
+The critical differentiator is **negation**. `!E` proves the
+*absence* of a capability. No other effect system can do this.
+Without negation:
+
+- Koka can track that a function performs `IO + State` but cannot
+  prove it does NOT perform `Alloc`. The row is open — anything could
+  be in the tail.
+- Haskell can distinguish `IO` from pure but cannot prove "pure AND
+  no allocation" — `Alloc` isn't tracked.
+- Rust can prove no data races but cannot prove no allocation, no IO,
+  or no network access through the type system.
+
+With negation, Inka expresses **all of the above as instances of one
+mechanism:**
+
+```
+!Alloc              = Rust's real-time guarantee
+Pure                = Haskell's purity
+!Network            = capability-security sandbox
+!Alloc & !IO        = real-time + compile-time-evaluable
+E - Handled         = Koka's handler absorption
+!Consume            = read-only proof (like Rust's & borrow)
+!Alloc & !Consume   = zero-copy + zero-alloc (embedded/DSP)
+```
+
+**Action for implementation.** The `row_subsumes` function in
+`effects.jxj` IS the proof engine. Every `!E` constraint becomes a
+subsumption check: `body_row ⊆ !E` iff `E ∉ body_row`. This is
+already implemented. The action is to ensure that the compilation
+gates (Phase 1 exit, Phase F optimizations) use `row_subsumes` for
+every capability check, not ad-hoc string comparisons.
+
+---
+
+## The Graph IS the Program
+
+*2026-04-17. Crystallized from the Meta-Thesis section's handler
+table applied to the compilation pipeline itself.*
+
+Source code is one projection. WAT is another. Documentation is
+another. LSP hover info is another. Error messages are another. The
+**program itself** — in its most complete representation — is the
+SubstGraph + Env populated by inference.
+
+```
+                   SubstGraph + Env
+                   (the universal representation)
+                          │
+          ┌───────┬───────┼───────┬───────┬───────┐
+          │       │       │       │       │       │
+       emit    format   doc    query   teach    LSP
+       handler  handler handler handler handler handler
+          │       │       │       │       │       │
+        WAT    source  markdown  answer  hint   JSON-RPC
+```
+
+Every "output" is a handler that reads the same graph and projects it
+into a format. **The graph is the source of truth. Everything else is
+a shadow.**
+
+This is why CLAUDE.md's first anchor — "does my graph already know
+this?" — is load-bearing. If you ask a question by re-parsing source,
+you're reading a shadow instead of the object. If you answer a query
+by walking the AST instead of chasing the graph, you're computing
+what you already have. The graph knows. Always ask the graph.
+
+**Action for implementation.** Every new feature in any phase should be
+expressible as a handler on the graph. If it can't be, the graph is
+incomplete — extend the graph, don't route around it. Specifically:
+
+- Arc F.2 (LSP) is `graph → JSON-RPC` — a handler, not a tool.
+- Arc F.6 (Mentl) is `graph → mentorship` — a handler, not a module.
+- Arc H (examples) is `graph → proof` — a handler that runs, not
+  tests that check.
+- The formatter is `graph → canonical source` — a handler, not a
+  separate binary.
+
+If it needs to exist, it's a handler. If it's not a handler, ask why
+the graph can't host it.
+
+---
+
+## Write the Wheel, Then Build the Lathe
+
+*2026-04-17. Crystallized from the V2 audit pivot.*
+
+Traditional self-hosted compilers bootstrap forward: write V1, use V1
+to compile V2, delete V1. This path taints V2 with V1's constraints —
+every line of V2 implicitly asks "can V1 compile this?" That question
+contaminates the design. You're writing the perfect language while
+wearing the broken language's handcuffs.
+
+**Inka bootstraps backward.** Write the final-form compiler
+unconstrained — the perfect, complete codebase — and THEN solve "how
+do I compile this the first time?" as a separate, disposable problem.
+
+```
+Inka source (perfect, unconstrained)
+    ↓
+Bootstrap translator (disposable, ~3-5K lines, any language)
+    ↓
+inka.wasm (first compilation)
+    ↓
+inka.wasm compiles Inka → inka2.wat
+inka.wasm compiles Inka → inka3.wat
+diff inka2.wat inka3.wat → byte-identical
+    ↓
+Delete translator. Tag: first-light.
+```
+
+**The codebase is the artifact. The translator is scaffolding.** The
+codebase is designed for correctness. The translator is designed for
+disposability. They are completely independent concerns.
+
+This is how every successful self-hosted language was actually born:
+Go was written in Go and bootstrapped from C. Rust was written in
+Rust and bootstrapped from OCaml. Zig is written in Zig and
+bootstrapped from C. In every case: the language is the artifact,
+the bootstrapper is disposable, and the bootstrapper is deleted.
+
+**Why this matters for Inka specifically.** Every prior attempt to
+evolve the compiler iteratively ran into the same treadmill:
+patches around runtime dispatchers, Snoc-tree workarounds,
+substitution resets, eager env snapshots. These aren't bugs to fix —
+they're the legacy compiler's gravity field. Writing the final form
+FIRST means the codebase never enters that gravity field. The design
+is unconstrained. The handlers use real syntax. The pipeline draws
+the real topology. The imports use the real paths.
+
+**Action for implementation.** The codebase lives at `inka/compiler/`.
+It is written directly from the 12 specs in `docs/rebuild/`. It does
+not ask "can the bootstrapper handle this?" — it asks "is this
+correct?" The bootstrap translator is a separate concern, solved
+AFTER the codebase is complete. See `docs/PLAN.md`.

@@ -20,7 +20,7 @@ rule: if an effect isn't in this file, it doesn't exist.
 Every op decl carries `@resume=OneShot | MultiShot | Either` (Affect
 POPL 2025; landed in spec 02's `TCont`). Parser delta in spec 03.
 `Diagnostic.report`'s `code` and `applicability` become refined
-Strings in Arc F.1; Phase A–E treat them as free Strings.
+Strings in Arc F.1; Phase 1 treat them as free Strings.
 
 ---
 
@@ -37,10 +37,10 @@ effect Infer {
 }
 ```
 
-v1 `infer.lux` is deleted; its logic moves into the handler for this
-effect in `v2/infer.lux`. Underneath, handlers perform SubstGraph ops.
+v1 `infer.jxj` is deleted; its logic moves into the handler for this
+effect in `infer.jxj`. Underneath, handlers perform SubstGraph ops.
 
-### Diagnostic (extended from `ty.lux:20-22`)
+### Diagnostic (extended from `ty.jxj:20-22`)
 
 v1 was `report(source, kind, msg, line, col) -> ()`. The rebuild
 extends to 6-arg with `code`, full `span`, and `applicability`:
@@ -69,7 +69,7 @@ full table and conventions). Every `report(...)` names a code whose
 file exists. Rule: new codes land in the catalog BEFORE their first
 call site.
 
-### ParseError (from `parser.lux:14-16`)
+### ParseError (from `parser.jxj:14-16`)
 
 Op returns a `Node` (holding `NHole`) so parsing continues past the
 error — Hazel pattern per spec 03/04.
@@ -80,7 +80,7 @@ effect ParseError {
 }
 ```
 
-### LowerCtx (from `lower_ir.lux:15-21`)
+### LowerCtx (from `lower_ir.jxj:15-21`)
 
 ```lux
 effect LowerCtx {
@@ -91,7 +91,7 @@ effect LowerCtx {
 }
 ```
 
-### LowVisit (from `lower_ir.lux:27-31`)
+### LowVisit (from `lower_ir.jxj:27-31`)
 
 ```lux
 effect LowVisit {
@@ -101,7 +101,7 @@ effect LowVisit {
 }
 ```
 
-### Iterate (from `std/prelude.lux:10-13`)
+### Iterate (from `std/prelude.jxj:10-13`)
 
 ```lux
 effect Iterate {
@@ -112,7 +112,7 @@ effect Iterate {
 
 Preserved verbatim; `result()` is the generator-terminator handshake.
 
-### Alloc (from `std/runtime/memory.lux:31-33`)
+### Alloc (from `std/runtime/memory.jxj:31-33`)
 
 ```lux
 effect Alloc { alloc(size: Int) -> Int       @resume=OneShot }
@@ -120,7 +120,7 @@ effect Alloc { alloc(size: Int) -> Int       @resume=OneShot }
 
 Subsumed by `!Alloc` in spec 01.
 
-### Memory (from `std/runtime/memory.lux:21-29`)
+### Memory (from `std/runtime/memory.jxj:21-29`)
 
 ```lux
 effect Memory {
@@ -136,7 +136,7 @@ effect Memory {
 
 WASM-primitive.
 
-### WasmOut (from `std/backend/wasm_collect.lux:36`)
+### WasmOut (from `std/backend/wasm_collect.jxj:36`)
 
 ```lux
 effect WasmOut { out(String) -> ()             @resume=OneShot }
@@ -210,7 +210,7 @@ effect Verify {
 }
 ```
 
-Handler swap: **Phase C–E** default `verify_ledger` accrues
+Handler swap: **Phase 1** default `verify_ledger` accrues
 obligations (emits `V001`); **Arc F.1** `verify_smt` discharges via
 Z3/cvc5/Bitwuzla (emits `E200` on reject). No stub. See spec 02.
 
@@ -263,7 +263,7 @@ effect Synth {
 }
 ```
 
-Phase C default returns `NoCandidate`; Arc F.1 plugs in Canonical /
+Phase 1 default returns `NoCandidate`; Arc F.1 plugs in Canonical /
 Synquid / LLM proposers as peer handlers verified by the compiler.
 
 ### FreshHandle (spec 04)
@@ -293,6 +293,6 @@ query mints display ids. One function, two handlers.
 
 ## Consumed by
 
-- Every v2/*.lux — this is the linker interface; checker enforces
+- Every inka/compiler/*.jxj — this is the linker interface; checker enforces
   every `perform op` matches a declared op.
 - Arc F.2 LSP handler — serializes Diagnostic and Query as JSON-RPC.

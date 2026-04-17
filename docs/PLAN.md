@@ -256,7 +256,7 @@ std/
 | types.jxj | ✅ cascade step 1 | Zero duplicate ADTs, display fns via \|>, canonical vocabulary |
 | graph.jxj | ✅ cascade step 2 | graph_handler with live state, graph_reason_edge, occurs check |
 | effects.jxj | ✅ cascade step 3 | Full Boolean algebra, unify_row, absorb_row, row_is_ground |
-| infer.jxj | ✅ structurally complete | Fix import style |
+| infer.jxj | ✅ cascade step 4 | unify_row wired, real let-gen, ctor/op registration, show_type errors |
 | lower.jxj | ✅ structurally complete | Fix import style |
 | pipeline.jxj | ⏳ needs state threading | Implement real graph_handler, env_handler state |
 | mentl.jxj | ⏳ needs fixes | RUser fixed, empty handler, str_concat |

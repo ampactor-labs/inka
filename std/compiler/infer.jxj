@@ -1,16 +1,19 @@
 // Inference — HM + let-generalization, one walk (spec 04)
 //
-// Replaces v1's check.jxj + infer.jxj (1014 lines combined) with a
-// single walk that writes bindings directly into SubstGraph as it
-// encounters them. Classic Hindley-Milner with Damas-Milner let-gen.
+// Single walk that writes bindings directly into SubstGraph.
+// Classic Hindley-Milner with Damas-Milner let-generalization.
 //
 // Three operations:
-//   infer_expr(node) -> ()       walks node, binds node.handle
-//   infer_stmt(stmt) -> ()       walks stmt, binds contained nodes
-//   generalize(fn_node) -> Scheme  quantifies free TVars at FnStmt
+//   infer_expr(node) -> ()         walks node, binds node.handle
+//   infer_stmt(stmt) -> ()         walks stmt, binds contained nodes
+//   generalize(fn_handle) -> Scheme  quantifies free TVars at FnStmt
 //
 // Effects required: SubstGraphRead + SubstGraphWrite + EnvRead +
 //   EnvWrite + Diagnostic + FreshHandle + Verify + Consume
+//
+// Key difference from legacy: the subst NEVER escapes as a sidecar
+// value. Downstream reads the SubstGraph directly through
+// graph_chase. The (env, subst) tuple is gone.
 
 import compiler/graph
 import compiler/types
@@ -384,8 +387,7 @@ fn unify_types(a, b, reason) = match a {
     TFun(pb, rb, eb) => {
       unify_param_lists(pa, pb, reason)
       unify_types(ra, rb, FnReturn("fn", reason))
-      // Effect row unification
-      ()
+      unify_row(ea, eb, reason)
     },
     TVar(hb) => unify_types(b, a, reason),
     _ => type_mismatch(a, b, reason)
@@ -440,7 +442,7 @@ fn unify_param_lists(a, b, reason) = {
 
 fn type_mismatch(a, b, reason) = {
   perform report("", "E002", "TypeMismatch",
-    "expected vs actual",
+    show_type(a) |> str_concat(" vs ") |> str_concat(show_type(b)),
     span_zero(), "MachineApplicable")
 }
 
@@ -553,21 +555,67 @@ fn infer_match_arms(arms, scrutinee_h, result_h, span) = {
 }
 
 // ─── Generalization ─────────────────────────────────────────
+// At FnStmt boundary: quantify type variables that are free in
+// the body but NOT free in the environment. This is the classic
+// Damas-Milner let-generalization rule.
 
 fn generalize(handle) = {
-  // Walk the type at handle, collect free TVars, quantify those
-  // not free in the environment
   let node = perform graph_chase(handle)
   let GNode(kind, _) = node
   match kind {
     NBound(ty) => {
-      let free = free_in_ty(ty)
-      // For now, don't quantify — full let-gen needs env free var check
-      Forall([], ty)
+      let body_ty = chase_deep(ty)
+      let body_free = free_in_ty(body_ty)
+      let env_free = perform env_free_vars()
+      let quantified = set_diff_int(body_free, env_free)
+      Forall(quantified, body_ty)
     },
     _ => Forall([], TVar(handle))
   }
 }
+
+fn chase_deep(ty) = match ty {
+  TVar(h) => {
+    let node = perform graph_chase(h)
+    let GNode(kind, _) = node
+    match kind {
+      NBound(inner) => chase_deep(inner),
+      _ => ty
+    }
+  },
+  TList(elem) => TList(chase_deep(elem)),
+  TTuple(elems) => TTuple(map_chase(elems)),
+  TFun(params, ret, eff) =>
+    TFun(chase_params(params), chase_deep(ret), eff),
+  TName(name, args) => TName(name, map_chase(args)),
+  TRefined(base, pred) => TRefined(chase_deep(base), pred),
+  _ => ty
+}
+
+fn map_chase(tys) =
+  if len(tys) == 0 { [] }
+  else { [chase_deep(list_head(tys))] ++ map_chase(list_tail(tys)) }
+
+fn chase_params(params) =
+  if len(params) == 0 { [] }
+  else {
+    let TParam(name, ty, own) = list_head(params)
+    [TParam(name, chase_deep(ty), own)] ++ chase_params(list_tail(params))
+  }
+
+fn set_diff_int(a, b) =
+  if len(a) == 0 { [] }
+  else {
+    let x = list_head(a)
+    let rest = set_diff_int(list_tail(a), b)
+    if int_in_list(b, x) { rest }
+    else { [x] ++ rest }
+  }
+
+fn int_in_list(lst, x) =
+  if len(lst) == 0 { false }
+  else if list_head(lst) == x { true }
+  else { int_in_list(list_tail(lst), x) }
 
 fn free_in_ty(ty) = match ty {
   TVar(id) => [id],
@@ -656,15 +704,65 @@ fn find_mapping(mapping, id) = {
   }
 }
 
-// ─── Stub registrations ────────────────────────────────────
-// Filled in when parser produces actual TypeDef/EffectDecl nodes.
+// ─── Type constructor registration ─────────────────────────
+// Each ADT variant becomes a constructor function in env.
+// Example: type Option = None | Some(a) registers:
+//   None : Forall([], Option)
+//   Some : Forall([a], TFun([TParam("_", TVar(a), OwInferred)], Option, EfPure))
 
-fn register_type_constructors(name, args, variants) = {
-  // Each variant becomes a constructor function in env
-  ()
+fn register_type_constructors(name, args, variants) =
+  register_variants(name, args, variants)
+
+fn register_variants(type_name, type_args, variants) =
+  if len(variants) == 0 { () }
+  else {
+    let variant = list_head(variants)
+    register_one_variant(type_name, type_args, variant)
+    register_variants(type_name, type_args, list_tail(variants))
+  }
+
+fn register_one_variant(type_name, type_args, variant) = {
+  let (ctor_name, field_types) = variant
+  let result_ty = TName(type_name, type_args)
+  if len(field_types) == 0 {
+    // Nullary constructor: just the result type
+    perform env_extend(ctor_name, Forall([], result_ty), Declared(ctor_name))
+  } else {
+    // N-ary constructor: function from fields to result
+    let params = build_ctor_params(field_types, 0)
+    let fn_ty = TFun(params, result_ty, EfPure)
+    perform env_extend(ctor_name, Forall([], fn_ty), Declared(ctor_name))
+  }
 }
 
-fn register_effect_ops(name, ops) = {
-  // Each op becomes an env entry
-  ()
+fn build_ctor_params(field_types, idx) =
+  if len(field_types) == 0 { [] }
+  else {
+    let ty = list_head(field_types)
+    let name = "_" ++ int_to_str(idx)
+    [TParam(name, ty, OwInferred)]
+      ++ build_ctor_params(list_tail(field_types), idx + 1)
+  }
+
+// ─── Effect op registration ─────────────────────────────────
+// Each effect op becomes a function in env with the effect in
+// its row. Example: effect State { get() -> Int } registers:
+//   get : Forall([], TFun([], TInt, EfClosed(["State"])))
+
+fn register_effect_ops(effect_name, ops) =
+  register_ops_list(effect_name, ops)
+
+fn register_ops_list(effect_name, ops) =
+  if len(ops) == 0 { () }
+  else {
+    let op = list_head(ops)
+    register_one_op(effect_name, op)
+    register_ops_list(effect_name, list_tail(ops))
+  }
+
+fn register_one_op(effect_name, op) = {
+  let (op_name, param_types, ret_type) = op
+  let params = build_ctor_params(param_types, 0)
+  let fn_ty = TFun(params, ret_type, EfClosed([effect_name]))
+  perform env_extend(op_name, Forall([], fn_ty), Declared(op_name))
 }

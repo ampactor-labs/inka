@@ -33,11 +33,11 @@ Minimal code triggering it + the fix.
 | [E001](E001.md) | MissingVariable | inference |
 | [E002](E002.md) | TypeMismatch | inference |
 | [E003](E003.md) | PatternInexhaustive | inference |
-| [E004](E004.md) | OwnershipError | `own.lux`, inference |
+| [E004](E004.md) | OwnershipError | `own.jxj`, inference |
 | [E010](E010.md) | OccursCheck | SubstGraph bind |
 | [E100](E100.md) | UnresolvedType | lower |
 | [E200](E200.md) | RefinementRejected | Arc F.1 `verify_smt` |
-| [V001](V001.md) | VerificationPending | Phase C `verify_ledger` |
+| [V001](V001.md) | VerificationPending | `verify_ledger` |
 | [W017](W017.md) | Suggestion | Mentl suggest tentacle |
 | [T001](T001.md) | Teach | Mentl teach tentacle |
 | [T002](T002.md) | ContinuationEscapesArena | Arc F.4 |

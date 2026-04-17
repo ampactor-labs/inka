@@ -1,11 +1,11 @@
-# Lux ML — Machine Learning as Proof of Thesis
+# Inka ML — Machine Learning as Proof of Thesis
 
 *Programs are typed effect graphs. Data shapes the effect graph; the effect graph
 shapes how data flows. A neural network is a typed effect graph. Training reshapes
 it; the reshaped graph reshapes how data flows through it. This is the versor
-architecture — and it's why Lux is the right language for ML.*
+architecture — and it's why Inka is the right language for ML.*
 
-*Lux ML proves that algebraic effects + refinement types + ownership inference
+*Inka ML proves that algebraic effects + refinement types + ownership inference
 compose into ML capabilities that no combination of existing tools can replicate.
 Not because any single feature is impossible elsewhere, but because the unification
 of all ten mechanisms into a single coherent system produces emergent capabilities
@@ -15,19 +15,19 @@ that disappear when you separate the parts.*
 
 ## What This Is
 
-Lux ML is a machine learning framework written entirely in Lux. It is not PyTorch
-in a new language. It is a demonstration that Lux's ten foundational mechanisms —
+Inka ML is a machine learning framework written entirely in Inka. It is not PyTorch
+in a new language. It is a demonstration that Inka's ten foundational mechanisms —
 when applied to ML — produce emergent capabilities that existing frameworks cannot
 replicate.
 
 The framework is a **library**. No language extensions, no compiler plugins.
 Everything is built from user-defined effects, handlers, refinement types, pipes,
 and ADTs. If the framework needs a language feature that doesn't exist, that's a
-signal to Lux's design, not a reason to bolt something on.
+signal to Inka's design, not a reason to bolt something on.
 
 ### Effect Algebra Primer
 
-Lux has a complete Boolean algebra over effects. The key operator for this spec
+Inka has a complete Boolean algebra over effects. The key operator for this spec
 is **negation**: `!E` means "provably does not perform effect E." This is a
 compile-time guarantee that propagates through the entire transitive call chain.
 If any function in the chain performs the negated effect, compilation fails.
@@ -41,7 +41,7 @@ If any function in the chain performs the negated effect, compilation fails.
 
 ### Why ML
 
-ML is the ideal stress test for Lux because it demands all ten mechanisms
+ML is the ideal stress test for Inka because it demands all ten mechanisms
 simultaneously: compile-time shape checking (refinement types), automatic
 differentiation (effects), hardware dispatch (effect handlers), deterministic
 inference (effect algebra), memory control (ownership), composition (pipes),
@@ -53,7 +53,7 @@ No other single workload exercises the full language this thoroughly.
 
 ### The Throughline
 
-The ML framework follows the same structural pattern as the rest of Lux:
+The ML framework follows the same structural pattern as the rest of Inka:
 **convergence → pinch point → divergence.** Data flows through layers →
 loss at the pinch → gradients radiate back.
 
@@ -77,15 +77,15 @@ This isn't metaphor. It's the same typed effect graph, projected into ML.
 
 Keyword recognition for an escape room, running on a Daisy Seed. Audio in →
 MFCC spectral features (DSP) → tiny convnet (ML) → recognized keyword.
-Trained on desktop, deployed to microcontroller. Written entirely in Lux.
+Trained on desktop, deployed to microcontroller. Written entirely in Inka.
 
 ---
 
 ## The Ten Mechanisms
 
-Every Lux mechanism maps to an ML capability. The framework uses all ten.
+Every Inka mechanism maps to an ML capability. The framework uses all ten.
 
-| # | Lux Mechanism | ML Capability | What's Novel |
+| # | Inka Mechanism | ML Capability | What's Novel |
 |---|---|---|---|
 | 1 | Effects | Autodiff as a user-defined effect | Same model code trains or infers based on handler |
 | 2 | Handler-local state | Optimizer state (Adam momentum, variance) | Optimizer is a handler, not a class hierarchy |
@@ -99,7 +99,7 @@ Every Lux mechanism maps to an ML capability. The framework uses all ten.
 | 10 | Progressive levels | ML education path from L1 to L5 | Gradual complexity, never rewrite |
 
 **On novelty claims:** Some capabilities (compile-time shape checking) exist in
-research languages like Dex and Futhark, or via libraries like jaxtyping. Lux's
+research languages like Dex and Futhark, or via libraries like jaxtyping. Inka's
 contribution is unifying ALL ten into a single coherent system. The genuinely
 unprecedented capabilities are: hyperparameter search via multi-shot continuations,
 `!Alloc` embedded deployment with compile-time proof, and the effect algebra
@@ -615,7 +615,7 @@ fn learned_features(audio: Vector<16000>) -> Matrix with Compute {
 Both have the same type signature. Both compose identically with downstream
 classifiers. The `conv1d` learns a better representation than the mel scale
 if given enough data — this is how modern audio ML works (SincNet, LEAF).
-In Lux, the swap is a one-line change because DSP and ML are the same
+In Inka, the swap is a one-line change because DSP and ML are the same
 abstraction.
 
 This means **every DSP pipeline is a candidate for partial or full
@@ -627,7 +627,7 @@ operator doesn't just compose them — it makes the substitution obvious.
 
 ## Progressive ML Levels
 
-The framework is usable at every Lux level. Each level unlocks more power.
+The framework is usable at every Inka level. Each level unlocks more power.
 
 ### Level 1: Pure Functional ML
 
@@ -686,7 +686,7 @@ fn forward(x: Vector<784>) -> Vector<10> with Compute {
 // dense<256, 10>() connected to dense<784, 128>() → COMPILE ERROR
 ```
 
-### Level 5: Full Lux
+### Level 5: Full Inka
 
 Effect algebra gates, multi-shot hyperparameter search, multi-core
 parallelization, `!Alloc` embedded deployment. Everything in this spec.
@@ -699,7 +699,7 @@ The first milestone. Proves the entire pipeline works: tensor ops, forward
 pass, autodiff via effect handling, training loop, convergence.
 
 ```lux
-// xor.lux — The "hello world" of Lux ML
+// xor.jxj — The "hello world" of Inka ML
 //
 // Trains a 2-layer network to learn XOR using effect-based autodiff.
 // Uses: Compute effect, handler-local state (tape), Optimize effect.
@@ -827,9 +827,9 @@ print("1,1 -> " ++ to_string(handle forward(trained, vector([1.0, 1.0]))
 
 ---
 
-## Lux Design Inputs
+## Inka Design Inputs
 
-The ML framework surfaces three design questions for Lux itself. The first
+The ML framework surfaces three design questions for Inka itself. The first
 two converge on **Phase 7** (evidence-passing compilation). The third is
 an effect system scaling question.
 
@@ -903,7 +903,7 @@ trait ComputableOp { fn compute(self) -> Tensor }
 
 Option A preserves type safety but requires multiple effects in signatures.
 Option B is maximally flexible but loses shape information in the dispatch.
-Option C leverages Lux's trait system but requires deeper design work.
+Option C leverages Inka's trait system but requires deeper design work.
 
 This should be explored during Phase 7-8 when real training workloads
 reveal which operations are needed and how they compose. The XOR example
@@ -917,43 +917,43 @@ handle 50+ without handler bloat.
 ```
 lux-ml/
 ├── std/ml/
-│   ├── tensor.lux          # Tensor types, shape refinements
-│   ├── autodiff.lux         # TapeEntry ADT, backward pass, gradient rules
-│   ├── compute.lux          # Compute effect declaration
-│   ├── optimize.lux         # Optimize effect, SGD/Adam/AdaGrad handlers
-│   ├── random.lux           # Random effect, seeded/system handlers
-│   ├── layers.lux           # dense, conv1d, conv2d, pool, dropout, relu, softmax
-│   ├── loss.lux             # MSE, cross-entropy, and their gradients
-│   ├── data.lux             # Dataset, Batch, data loading
-│   ├── hyperparam.lux       # Hyperparam effect, search strategies
-│   ├── combinators.lux      # sequential, residual, repeat
-│   └── train.lux            # Training loop, train_step, evaluation
+│   ├── tensor.jxj          # Tensor types, shape refinements
+│   ├── autodiff.jxj         # TapeEntry ADT, backward pass, gradient rules
+│   ├── compute.jxj          # Compute effect declaration
+│   ├── optimize.jxj         # Optimize effect, SGD/Adam/AdaGrad handlers
+│   ├── random.jxj           # Random effect, seeded/system handlers
+│   ├── layers.jxj           # dense, conv1d, conv2d, pool, dropout, relu, softmax
+│   ├── loss.jxj             # MSE, cross-entropy, and their gradients
+│   ├── data.jxj             # Dataset, Batch, data loading
+│   ├── hyperparam.jxj       # Hyperparam effect, search strategies
+│   ├── combinators.jxj      # sequential, residual, repeat
+│   └── train.jxj            # Training loop, train_step, evaluation
 ├── std/dsp/
-│   ├── spectral.lux         # FFT, MFCC, mel filterbank
-│   ├── window.lux           # Hann, Hamming, Blackman windows
-│   └── features.lux         # Audio feature extraction pipelines
+│   ├── spectral.jxj         # FFT, MFCC, mel filterbank
+│   ├── window.jxj           # Hann, Hamming, Blackman windows
+│   └── features.jxj         # Audio feature extraction pipelines
 └── examples/
-    ├── xor.lux              # Hello world: XOR with backprop
-    ├── audio_classify.lux   # Tiny audio classifier (clap/snap/whistle)
-    └── keyword_spotter.lux  # Escape room keyword recognition
+    ├── xor.jxj              # Hello world: XOR with backprop
+    ├── audio_classify.jxj   # Tiny audio classifier (clap/snap/whistle)
+    └── keyword_spotter.jxj  # Escape room keyword recognition
 ```
 
 ---
 
-## Relationship to Lux Roadmap
+## Relationship to Inka Roadmap
 
 The ML framework is not a separate project. It is a Phase 7+ deliverable
-within Lux itself — the proof that the language works.
+within Inka itself — the proof that the language works.
 
-| Lux Phase | What ML Unlocks |
+| Inka Phase | What ML Unlocks |
 |---|---|
 | 7 (Evidence-passing) | Zero-overhead autodiff handler. Handler composition syntax. Handler state as return value. Training becomes practical. |
 | 8 (Cranelift) | Native-speed tensor operations. Training on real data. |
 | 9 (Ownership) | `!Alloc` inference. Zero-copy data pipelines. Daisy Seed deployment. |
 | 10 (Refinements) | Compile-time shape checking. Parameter constraint types. Z3-verified dimensions. |
-| 11 (Self-hosting) | ML framework written in Lux, compiled by Lux. No Rust anywhere. |
+| 11 (Self-hosting) | ML framework written in Inka, compiled by Inka. No Rust anywhere. |
 | 12 (LLVM) | GPU compilation gate. Multi-core parallelization. Full performance story. |
 
-Each Lux phase completion should ask: **what new ML capability did this unlock?**
+Each Inka phase completion should ask: **what new ML capability did this unlock?**
 The ML framework is the throughline that connects every phase to a concrete,
 demanding workload.

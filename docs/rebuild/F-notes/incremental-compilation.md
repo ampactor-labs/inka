@@ -1,4 +1,4 @@
-# Incremental Module Compilation for Lux
+# Incremental Module Compilation for Inka
 
 ## Context
 
@@ -6,12 +6,12 @@ The bootstrap compiler OOMs (12.7GB → killed) because `compile_wasm` re-resolv
 and re-checks ALL imported modules from scratch. A single call to `check_program_with`
 processes ~10K lines of combined source, growing the substitution quadratically.
 The Rust VM's `op_perform` clones handler state on every dispatch, making effect-based
-unification cost 5.5GB for real code. This blocks the bootstrap: Lux cannot compile
+unification cost 5.5GB for real code. This blocks the bootstrap: Inka cannot compile
 itself to WASM without exhausting 16GB RAM.
 
 The fix: check each module ONCE, cache the result, never re-derive what's already proven.
 
-## The Lux Principle
+## The Inka Principle
 
 From INSIGHTS.md: "The type inference engine produces KNOWLEDGE. That knowledge IS
 the product." The checked type environment — `[(name, Type, Reason)]` — is proven
@@ -24,40 +24,40 @@ LSP, teaching, errors — all handlers on the same env.
 
 ### Unit of Compilation: Module (file)
 
-Each `.lux` file is checked independently against the environments of its dependencies.
+Each `.jxj` file is checked independently against the environments of its dependencies.
 The result: a fully-resolved type environment. No inference state leaks across modules.
 
-### Cache Format: `.luxi` (Lux Interface)
+### Cache Format: `.jxji` (Inka Interface)
 
-After checking a module, serialize its env to `<module>.luxi`:
+After checking a module, serialize its env to `<module>.jxji`:
 - Content: `[(name, Type, Reason)]` triples, fully resolved
-- Key: content hash of the `.lux` source file
-- Location: alongside the `.lux` file (or in a cache directory)
+- Key: content hash of the `.jxj` source file
+- Location: alongside the `.jxj` file (or in a cache directory)
 
 ### Compilation Flow
 
 ```
 resolve_imports(source)
   → for each import:
-      if .luxi exists AND hash matches .lux:
-        load env from .luxi (skip checking)
+      if .jxji exists AND hash matches .jxj:
+        load env from .jxji (skip checking)
       else:
         check module against dependency envs
-        write .luxi
+        write .jxji
   → check user source against accumulated env
   → lower combined AST
   → emit
 ```
 
-### What Changes in pipeline.lux
+### What Changes in pipeline.jxj
 
 `resolve_imports_tracked` currently concatenates source text. New behavior:
 
 ```lux
 fn resolve_module(path, dep_env) = {
-  let source = read_file("std/" ++ path ++ ".lux")
+  let source = read_file("std/" ++ path ++ ".jxj")
   let hash = content_hash(source)
-  let cache_path = "std/" ++ path ++ ".luxi"
+  let cache_path = "std/" ++ path ++ ".jxji"
   
   // Try cache
   let cached = try_load_cache(cache_path, hash)
@@ -80,9 +80,9 @@ dependency env as the initial env. The checker runs on just that module's AST.
 ### Topological Module Ordering
 
 Imports form a DAG. Modules must be checked in dependency order:
-1. ty.lux (no deps except prelude)
-2. eff.lux (depends on ty)
-3. check.lux (depends on ty, eff, infer, ...)
+1. ty.jxj (no deps except prelude)
+2. eff.jxj (depends on ty)
+3. check.jxj (depends on ty, eff, infer, ...)
 4. etc.
 
 `resolve_imports_tracked` already resolves in dependency order (transitive closure
@@ -91,10 +91,10 @@ with cycle detection). The new code adds caching to each step.
 ### Memory Impact
 
 Instead of one `check_program_with` call on 10K lines (5.5GB):
-- prelude.lux: ~200 lines → ~50MB
-- ty.lux: ~280 lines → ~20MB  
-- eff.lux: ~290 lines → ~20MB
-- check.lux: ~370 lines → ~30MB
+- prelude.jxj: ~200 lines → ~50MB
+- ty.jxj: ~280 lines → ~20MB  
+- eff.jxj: ~290 lines → ~20MB
+- check.jxj: ~370 lines → ~30MB
 - Each module checked independently, env from previous modules loaded
 
 Peak memory: the LARGEST single module check (~50MB for prelude), not the sum.
@@ -110,8 +110,8 @@ the interface files.
 ### Serialization
 
 The env is `[(String, Type, Reason)]`. Type and Reason are ADTs (TInt, TFun, TVar, ...).
-These are already representable as Lux values. Serialization = `to_string(env)`.
-Deserialization = parsing the string back to a Lux value.
+These are already representable as Inka values. Serialization = `to_string(env)`.
+Deserialization = parsing the string back to a Inka value.
 
 For v1: use `to_string` + a simple deserializer.
 For v2: binary format keyed by content hash.
@@ -128,14 +128,14 @@ For v2: binary format keyed by content hash.
 
 ```bash
 # After implementation:
-lux wasm examples/wasm_bootstrap.lux > /tmp/bootstrap.wat
+inka wasm examples/wasm_bootstrap.jxj > /tmp/bootstrap.wat
 # Should complete in <100MB, <2 minutes
 
-# .luxi files created alongside .lux files
-ls std/compiler/*.luxi
+# .jxji files created alongside .jxj files
+ls std/compiler/*.jxji
 
 # Cache hit on second run
-lux wasm examples/wasm_bootstrap.lux > /tmp/bootstrap2.wat
+inka wasm examples/wasm_bootstrap.jxj > /tmp/bootstrap2.wat
 # Should be faster (cache hits)
 
 # Bootstrap runs on wasmtime

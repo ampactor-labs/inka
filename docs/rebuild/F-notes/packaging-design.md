@@ -1,4 +1,4 @@
-# Lux Packaging: The Handler Is The Package
+# Inka Packaging: The Handler Is The Package
 
 ## 1. Thesis
 A handler is a package. A project is a `~>` chain. Resolution is type checking. 
@@ -9,9 +9,9 @@ npm, Cargo, Pip. They all do the same thing: they build an ad-hoc, untyped mini-
 
 They do this because the host languages cannot carry the information. Rust does not know what `reqwest` does natively; Cargo must be told. JavaScript does not know what `express` does natively; npm must be told.
 
-In Lux, the language already knows everything.
+In Inka, the language already knows everything.
 
-| Manual Annotation (Other Languages) | What Lux Already Knows |
+| Manual Annotation (Other Languages) | What Inka Already Knows |
 |-------------------------------------|------------------------|
 | `dependencies = ["reqwest"]` | `with Network, IO` |
 | Version ranges (`^1.2.0`) | Effect signature unifies with expected properties |
@@ -22,7 +22,7 @@ When a language is powerful enough, you don't build external tooling to manage i
 
 ## 3. The `~>` Chain IS the Manifest
 A manifest is a description of the environment a program needs to run. 
-In Lux, that's exactly what `~>` (HandlePipe/strategy) does.
+In Inka, that's exactly what `~>` (HandlePipe/strategy) does.
 
 ```lux
 fn main() =
@@ -45,12 +45,12 @@ The type checker IS the version solver. If the program compiles, the versions ar
 
 ## 5. Handlers as the Unit of Distribution
 We do not publish "packages" or "bundles." We publish *handlers*.
-Packages do not exist as a concept in Lux. The word "package" does not appear in the documentation. 
+Packages do not exist as a concept in Inka. The word "package" does not appear in the documentation. 
 
 You import a handler, and you install it over your pipeline with `~>`. 
 
 ## 6. `std/pkg/` Architecture
-The package manager must be written in Lux, as a handler, or the thesis is theater.
+The package manager must be written in Inka, as a handler, or the thesis is theater.
 `Package` is just an effect. 
 
 ```lux
@@ -63,12 +63,12 @@ effect Package {
 
 Registry handlers are handlers of the `Package` effect, swappable like everything else. You can run `~> local_cache_pkg`, `~> github_pkg`, or `~> enterprise_registry_pkg`.
 
-## 7. `lux audit` — The Killer MVP
-Before we build registries and decentralized content delivery, we build `lux audit`.
-`lux audit` walks the `~>` chain in `main()`, collects effect rows transitively, prints the capability set, and suggests negations.
+## 7. `inka audit` — The Killer MVP
+Before we build registries and decentralized content delivery, we build `inka audit`.
+`inka audit` walks the `~>` chain in `main()`, collects effect rows transitively, prints the capability set, and suggests negations.
 
 ```
-$ lux audit main.lux
+$ inka audit main.jxj
 
 Capabilities required:
   - Network (via router_axum)
@@ -99,7 +99,7 @@ Use `><` to chain registry handlers to create fallback resolution paths.
 // Quick script, asks for inference
 fn main() = run_app() ~> http_default
 ```
-`lux audit` will trace `http_default` and report all the effects it utilizes (Network, Alloc, IO).
+`inka audit` will trace `http_default` and report all the effects it utilizes (Network, Alloc, IO).
 
 **Fully-Constrained Production:**
 ```lux
@@ -110,18 +110,18 @@ fn main() =
     ~> log_console 
     ~> alloc_system
 ```
-`lux audit` proves that the program will never touch the filesystem or spawn processes. If `http_reqwest` sneaks in a `Filesystem` requirement in an update, compilation fails immediately.
+`inka audit` proves that the program will never touch the filesystem or spawn processes. If `http_reqwest` sneaks in a `Filesystem` requirement in an update, compilation fails immediately.
 
 ## 10. Implementation Phases
 - 🔲 **Phase 1:** Spec freeze.
-- 🔲 **Phase 2:** `lux audit` prototype (using current compiler engine).
+- 🔲 **Phase 2:** `inka audit` prototype (using current compiler engine).
 - 🔲 **Phase 3:** Content-addressed local cache (the `fetch` effect).
 - 🔲 **Phase 4:** Name registry handler (the `resolve` effect).
-- 🔲 **Phase 5:** `lux install` equivalent.
-- 🔲 **Phase 6:** `lux publish` equivalent.
+- 🔲 **Phase 5:** `inka install` equivalent.
+- 🔲 **Phase 6:** `inka publish` equivalent.
 
 ## 11. Open Questions
 - **Cache Invalidation:** How do we handle handler state across hub fetches? Will it be cache invalidation by signature hash?
-- **Circular Handler Graphs:** Are circular handler graphs (via different handlers at different scopes) legal? Does `lux audit` report cycles?
+- **Circular Handler Graphs:** Are circular handler graphs (via different handlers at different scopes) legal? Does `inka audit` report cycles?
 - **Federation Policy:** What is the exact trust model for hub fallbacks?
 - **Build vs Runtime Selection:** Platform handlers are build-time; HTTP handlers are runtime. They use the same syntax, but how do we cleanly delineate their resolution mechanics without fracturing the mental model?

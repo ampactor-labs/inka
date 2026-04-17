@@ -28,7 +28,7 @@ Until row variables are exposed, generic sandbox patterns require explicit effec
 at each call site. The concrete syntax is available now and enables readable capability
 removal in DSP frameworks and security-critical code.
 
-**Examples:** `examples/dsp_sandbox.lux`, `examples/effect_algebra.lux` demonstrate
+**Examples:** `examples/dsp_sandbox.jxj`, `examples/effect_algebra.jxj` demonstrate
 both negation (`!E`) and subtraction (`E - F`) for comparison.
 
 **Motivates:** Phase 9+ (row variable polymorphism for generic capability removal)
@@ -57,7 +57,7 @@ if a required effect is absent, or silently drop unsupported operations. Neither
 is type-safe. The compiler cannot verify that composition is valid without the
 intersection operator.
 
-**Motivates:** Phase C (effect intersection in the algebra)
+**Motivates:** Arc F.10 (effect intersection in the algebra)
 
 ---
 

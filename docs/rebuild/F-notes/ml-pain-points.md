@@ -15,7 +15,7 @@ handler just computes. Same model code, different semantics. Thesis proven.
 `resume(r) with tape = push(tape, entry)` naturally accumulates the forward
 trace. No mutable state, no side effects.
 
-**Pure Lux IS sufficient for tensor math.** 58 lines of tensor.lux using only
+**Pure Inka IS sufficient for tensor math.** 58 lines of tensor.jxj using only
 prelude functions (`map`, `fold`, `zip_with`, `reverse`, `push`). No Rust
 builtins needed for linear algebra — only for transcendentals (`exp`, `sqrt`).
 
@@ -25,7 +25,7 @@ builtins needed for linear algebra — only for transcendentals (`exp`, `sqrt`).
 
 ### 1. Handler state can't return — Fixed in Phase 7A
 
-**Symptom:** `get_tape()` anti-pattern in xor.lux.
+**Symptom:** `get_tape()` anti-pattern in xor.jxj.
 
 ```lux
 // Before (Phase 6): must use a Compute effect op just to extract handler state
@@ -158,7 +158,7 @@ fn sigmoid_scalar(x) = 1.0 / (1.0 + exp(0.0 - x))
 
 **Status:** Fixed separately from #3 (same root cause in `infer_unary` — removed
 `Type::Var → Int` default). `-x` now works on unconstrained vars; `0.0 - x`
-workarounds removed from `tensor.lux` and `xor.lux`.
+workarounds removed from `tensor.jxj` and `xor.jxj`.
 
 ---
 

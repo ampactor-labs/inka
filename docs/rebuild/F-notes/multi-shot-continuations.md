@@ -1,6 +1,6 @@
 # Multi-Shot Continuations — Design Spec
 
-*"Don't fix multi-shot. Design it." — Lux*
+*"Don't fix multi-shot. Design it." — Inka*
 
 ---
 
@@ -32,7 +32,7 @@ As of 2026-03-25, multi-shot works via **both replay and fork**.
 re-executes the thunk from the top. The handlers are independent. No
 continuation state is shared between invocations.
 
-This was validated by `crucible_ml.lux` Test 5:
+This was validated by `crucible_ml.jxj` Test 5:
 ```
 d/dx(x²) at x=3: 6.000000000012662 (expected: ~6.0)
 ```
@@ -87,7 +87,7 @@ a computation mid-stream (speculative execution).
 Make the continuation a first-class value that can be cloned.
 
 ```lux
-// WORKING TODAY — see crucible_search.lux
+// WORKING TODAY — see crucible_search.jxj
 handle { computation() } {
   choose(options) => {
     fold(options, [], |acc, opt| {
@@ -109,7 +109,7 @@ holds `{ state_index, saved_locals, handler_chain }`.
 
 **Good for**: Backtracking search (SAT solvers, puzzle solvers, Prolog-style
 logic programming), nondeterministic computation, amb/choose semantics.
-`crucible_search.lux` validates this with 4-Queens, Pythagorean triples,
+`crucible_search.jxj` validates this with 4-Queens, Pythagorean triples,
 and constrained choice — all working today.
 
 ### Model 3: State Machine Transform
@@ -304,8 +304,8 @@ analysis needed.
 
 | Model | When | Cost | Status |
 |-------|------|------|--------|
-| **Replay** | Independent re-execution | O(work) per run | ✅ Working (`crucible_ml.lux` Test 5) |
-| **Fork** | Resume from same point with different values | O(state) per clone | ✅ Working (`crucible_search.lux` — 4-Queens, Pythagorean triples) |
+| **Replay** | Independent re-execution | O(work) per run | ✅ Working (`crucible_ml.jxj` Test 5) |
+| **Fork** | Resume from same point with different values | O(state) per clone | ✅ Working (`crucible_search.jxj` — 4-Queens, Pythagorean triples) |
 | **State machine** | Native compilation of fork | O(struct) per clone | 🔲 Phase 7 |
 
 Replay and fork both work today. The state machine transform is the native
@@ -313,7 +313,7 @@ compilation strategy for Phase 7.
 
 ---
 
-## Validation: `crucible_search.lux`
+## Validation: `crucible_search.jxj`
 
 `resume()` called N times inside one handler arm via `fold` — confirmed working.
 

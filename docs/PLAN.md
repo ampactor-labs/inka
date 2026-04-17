@@ -638,35 +638,351 @@ concrete bugs in VFINAL. Fix in Phase 1, re-bootstrap via Phase 2.
 
 ## Post-First-Light Arcs
 
-Per commitment #3: each arc is independent, scoped separately.
+Per commitment #3: each arc is independent and scoped separately.
+These are not "someday" features — they are the capabilities that
+make Inka unprecedented. Phase 1 lays the structural foundation for
+every arc. Each arc is a handler swap, a new handler, or an
+extension to the graph. No arc requires rewriting the compiler core.
 
-### Arc F — Downstream (NOT a single phase)
+**Authoritative design documents** in `docs/rebuild/F-notes/`:
 
-- **F.1 — Refinement SMT wiring.** `verify_ledger` → `verify_smt`.
-  Z3/cvc5/Bitwuzla. Handler swap; source unchanged.
-- **F.6 — Mentl consolidation.** Full teaching substrate. Five-op
-  Teach surface. Error catalog integration. The AI-obsolescence thesis
-  made concrete.
-- **F.2 — LSP handler.** Query + Mentl tentacles wrapped in JSON-RPC.
-  ChatLSP typed context. No new substrate; pure transport.
-- **F.3 — REPL.** Replace `load_chunk`. Either compile-to-WASM per
-  line or LowIR interpreter.
-- **F.4 — Scoped arenas.** bump-scope, nested arenas, D.1 multi-shot
-  × arena semantics.
-- **F.5 — Native backend.** Hand-rolled x86 from LowIR. Capstone arc.
+| F-note | Arc | Key design |
+|---|---|---|
+| `incremental-compilation.md` | F.7 | `.jxji` interface files, content-hash, Salsa red-green |
+| `multi-shot-continuations.md` | F.3, F.4 | Replay/Fork/StateMachine, `!Alloc` prevents fork |
+| `packaging-design.md` | F.9 | `Package` effect, `inka audit`, effect sigs = semver |
+| `scoped-memory.md` | F.4 | `temp_arena`, diagnostic arenas, thread-local Alloc |
+| `dsp-pain-points.md` | F.10 | Handler parameters, effect intersection |
+| `ml-pain-points.md` | F.10 | Handler composition, state-as-return-value |
+| `lux-ml-design.md` | F.10 | 960-line ML framework: autodiff, compilation gates |
+
+### Arc F.1 — Refinement Verification
+
+`verify_ledger` → `verify_smt`. Handler swap; source unchanged.
+
+**What it does:** Every `type Port = Int where 1 <= self && self <=
+65535` annotation that Phase 1 accrues as a V001 pending obligation
+now gets DISCHARGED at compile time via SMT. Invalid call sites
+fail with E200 RefinementRejected.
+
+- Z3 for nonlinear arithmetic.
+- cvc5 for finite-set/bag/map reasoning.
+- Bitwuzla for bitvectors.
+- **Research:** Liquid Haskell 2025, Generic Refinement Types POPL 2025.
+- **Spec:** 02-ty.md (TRefined), 06 (Verify effect).
+
+**What it unlocks:** Compile-time proof that array indices are in
+bounds, that ports are valid, that buffer sizes are sufficient.
+Erased at runtime — zero cost.
+
+---
+
+### Arc F.2 — LSP + ChatLSP
+
+Query + Mentl tentacles wrapped in JSON-RPC. No new substrate.
+
+**What it does:** Every `inka query` command becomes an LSP method:
+- `textDocument/hover` → `QTypeAt` + `teach_why`
+- `textDocument/completion` → `Synth` effect
+- `textDocument/diagnostics` → `Diagnostic` + `teach_error`
+- `textDocument/codeAction` → `Explanation.fix`
+
+ChatLSP extension: typed context (bindings, effect rows, ownership)
+sent to LLM for completion. `!Alloc` masks free prompt budget.
+
+- **Research:** ChatLSP OOPSLA 2024.
+- **Spec:** 08-query.md, 09-mentl.md.
+
+**What it unlocks:** IDE intelligence that is the compiler's own
+reasoning, not a separate ML model. Mentl teaches; the IDE renders.
+
+---
+
+### Arc F.3 — REPL + Multi-Shot Continuations
+
+Replace `load_chunk`. Execute arbitrary Inka expressions. Formalize
+the three multi-shot continuation models.
+
+**What it does:**
+- REPL: compile-to-WASM per line or LowIR interpreter. The REPL is
+  a handler that redirects emitted WASM to an in-process evaluator.
+- Multi-shot continuations with three semantic models:
+  1. **Replay** (default) — re-execute thunk from top. Independent
+     runs. O(work) per invocation. No allocation.
+  2. **Fork** — `resume` called N times in one handler arm. Each
+     call clones the continuation from the perform site. O(state)
+     per clone. Powers backtracking search, SAT, amb/choose.
+  3. **State machine** — compile-time transform of handled body
+     into numbered states. O(struct) per clone. Subsumes replay
+     and fork. Native backend (F.5) target.
+- **Critical interaction:** `!Alloc` computations can be REPLAYED
+  but NOT FORKED (forking allocates the continuation struct). The
+  compiler enforces this via effect rows.
+- Handler-local state at fork point: each fork gets a SNAPSHOT.
+  Functional `with state = ...` update means mutations in one fork
+  don't affect others.
+
+- **F-note:** `multi-shot-continuations.md` (329 lines, detailed)
+- **Spec:** 08-query.md, 06-effects-surface.md (@resume markers).
+
+**What it unlocks:** Backtracking search (4-Queens validated),
+hyperparameter sweep, Monte Carlo, speculative execution — all as
+handler strategies over the same computation code.
+
+---
+
+### Arc F.4 — Scoped Arenas + Memory Strategy
+
+The arc where Inka proves GC is a handler.
+
+**What it does:**
+- `temp_arena(size)` handler — O(1) region free, deterministic.
+  Intercepts `alloc(size)` calls. When scope drops, reset pointer
+  to zero — instant, deterministic "garbage collection."
+- Ownership system prevents use-after-free: if `similar` escapes
+  `temp_arena` scope, compiler forces copy into parent allocator.
+- `own` + deterministic drop for game/embedded contexts.
+- Multi-shot × arena semantics (the D.1 question): three policies:
+  1. **Replay safe** — re-execute from perform site.
+  2. **Fork deny** — error at capture if continuation escapes arena.
+  3. **Fork copy** — deep-copy arena data into caller's arena.
+- **Diagnostic arenas** — wrap memory-heavy mentorship code
+  (Levenshtein suggestions, O(N³) string ops) in `temp_arena`.
+  Mentorship code can be as sloppy as needed — arena isolates it.
+  Zero-cost teaching.
+- **Thread-local Alloc** — each thread gets its own Alloc handler.
+  No global allocator mutex. Concurrency scales with zero locking.
+
+- **F-note:** `scoped-memory.md` (73 lines, clear design)
+- **Research:** Perceus PLDI'21, FBIP PLDI'24, bump-scope, Vale.
+- **Spec:** 07-ownership.md (Consume × Alloc), 02-ty.md (TCont).
+
+**What it unlocks:** Four memory models from one mechanism:
+
+| Context | Handler | Guarantee |
+|---|---|---|
+| Compiler (batch) | `bump_allocator` | Allocate forward, exit frees all |
+| Server (request) | `temp_arena(4MB)` | O(1) region free per request |
+| Game (frame) | `own` + drop | Deterministic, zero-pause |
+| Embedded/DSP | `!Alloc` | Proven zero allocation |
+| Diagnostics | `diagnostic_arena` | Unbounded mentorship, zero cost |
+
+---
+
+### Arc F.5 — Native Backend
+
+Hand-rolled x86-64 from LowIR. The capstone performance arc.
+
+**What it does:** LowIR → native machine code. No WASM, no VM.
+- Lexa zero-overhead handler compilation: direct stack-switching.
+- Tail-resumptive handlers (85%) → `call` instruction.
+- Linear handlers → state machine.
+- Multi-shot → heap-allocated continuation struct.
+
+- **Research:** Lexa OOPSLA 2024, Multiple Resumptions ICFP 2025.
+
+**What it unlocks:** Performance parity with C/Rust for
+compute-bound workloads. The Inka-compiles-itself loop runs at
+native speed. DSP handlers meet real-time deadlines.
+
+---
+
+### Arc F.6 — Mentl Consolidation
+
+The teaching substrate crystallized. The AI-obsolescence thesis
+made concrete.
+
+**What it does:** Merge gradient.jxj, suggest.jxj, why.jxj into
+one coherent `mentl.jxj` with five-op Teach surface. Every error
+has a canonical explanation. Every hover shows the Why chain.
+Every annotation suggestion shows what capability it unlocks.
+
+- **Research:** Elm/Roc/Dafny error catalogs, Hazel marked holes.
+- **Spec:** 09-mentl.md.
+
+**What it unlocks:** The compiler becomes the tutor. Every error
+teaches. Every annotation unlocks power. The gradient from beginner
+to expert is continuous — no cliff, no separate "advanced mode."
+
+---
+
+### Arc F.7 — Incremental Compilation
+
+Per-module caching via `.jxji` interface files + Salsa 3 overlay.
+
+**What it does:**
+- Each `.jxj` file is checked independently against the envs of its
+  dependencies. Result: a fully-resolved type environment.
+- After checking, serialize env to `<module>.jxji` (Inka Interface):
+  `[(name, Type, Reason)]` triples, content-hash keyed.
+- On recompile: if `.jxji` exists AND hash matches source, load env
+  from cache (skip checking). Otherwise re-check and write cache.
+- Topological module ordering: imports form a DAG. Modules checked
+  in dependency order. No inference state leaks across modules.
+- **Memory impact:** Instead of one `check_program` call on 10K+
+  lines (GB-scale), each module checks independently (~20-50MB).
+  Peak memory: the largest single module, not the sum.
+- `graph_fork(module_name)` creates a persistent overlay per module.
+- Grove CmRDT structural edits for cross-module re-inference.
+
+- **F-note:** `incremental-compilation.md` (153 lines, detailed)
+- **Research:** Salsa 3.0, Grove POPL 2025, Polonius 2026 alpha.
+- **Spec:** 00-substgraph.md (graph_fork, epoch overlay).
+
+**What it unlocks:**
+- Sub-second recompilation for large codebases.
+- Parallel compilation: independent modules check concurrently.
+- LSP integration: module envs are the hover/completion source.
+- Gradient dashboard: per-module verification scores from cached envs.
+
+---
+
+### Arc F.8 — Concurrency + Parallelism
+
+Deterministic parallelism via handler swap.
+
+**What it does:**
+- `Parallel` handler: `<|` branches run concurrently (not just
+  sequentially).
+- Vale-style `!Mutate` region-freeze for "N readers, no writers"
+  proof via effect algebra.
+- Fork-join over `><` parallel compose — each branch gets its own
+  stack.
+- Effect row ensures no data races: `!Mutate + !IO` proves
+  deterministic parallelism.
+
+- **Research:** Vale immutable regions, Austral linear capabilities.
+- **Spec:** 10-pipes.md (`<|` and `><` semantics).
+
+**What it unlocks:** Source-unchanged parallelism. Same Inka code,
+different handler. Sequential for debugging, parallel for production.
+The pipe topology SHOWS the parallelism opportunity — `<|` is a
+fork point, `|>` convergence is a join.
+
+---
+
+### Arc F.9 — Package + Module System
+
+The handler IS the package. The `~>` chain IS the manifest. There
+is no package manager. There is only the compiler.
+
+**Thesis:** npm/Cargo/pip build ad-hoc untyped mini-languages (JSON,
+TOML) to describe dependency graphs because their host languages
+can't carry the information. In Inka, the language already knows
+everything: `with Network, IO` replaces `dependencies = ["reqwest"]`.
+Effect signatures ARE API contracts. Breaking change = signature
+drift. Compatible change = signatures unify. The type checker IS
+the version solver.
+
+**What it does:**
+- `Package` effect: `fetch(id: Hash) -> Source`,
+  `resolve(row: EffRow) -> Hash`, `audit() -> List<Violation>`.
+- Registry handlers are swappable: `~> local_cache_pkg`,
+  `~> github_pkg`, `~> enterprise_registry_pkg`.
+- Content-addressed model: hash = identity, name = resolution via
+  handler. There is no lockfile — the hash IS the lock.
+- Federation via handler stacking:
+  `fetch_deps() ~> local_cache >< github_hub >< community_registry`
+- **`inka audit` — the killer MVP.** Walk the `~>` chain in `main()`,
+  collect effect rows transitively, print the capability set, suggest
+  negations. Zero infrastructure. Runs locally. Mathematically proven
+  capability analysis before compilation.
+  ```
+  $ inka audit main.jxj
+  Capabilities required:
+    - Network (via router_axum)
+    - Filesystem (via db_postgres)
+  Suggestions:
+    - Run sandboxed with `with !Process, !FFI`.
+  ```
+
+- **F-note:** `packaging-design.md` (128 lines, complete design)
+
+**What it unlocks:** Package management without a package manager.
+Effect signatures replace semver. `inka audit` proves what your
+program can and cannot do — no other package manager can offer
+mathematically proven capability analysis.
+
+---
+
+### Arc F.10 — ML Framework + Handler Features
+
+Machine learning as proof of thesis. The ten mechanisms composed.
+
+**What it does:**
+- **Autodiff as effect.** `Compute` effect for matmul, conv1d, relu,
+  softmax. Training handler intercepts + records tape. Inference
+  handler just computes. Same model code, different semantics.
+- **Optimizer as handler.** `Optimize` effect: `step(param, grad)`.
+  SGD = stateless handler. Adam = handler with `m`, `v`, `t` state.
+  Same training loop, different optimizer — swap the handler.
+- **Refinement-typed tensors.** `type Tensor<T, Shape>` where
+  `self.len() == product(Shape)`. Shape mismatches are compile
+  errors. `LearningRate`, `Probability`, `BatchSize` as refined
+  types — entire categories of ML bugs eliminated at compile time.
+- **Hyperparameter search via multi-shot.** `Hyperparam` effect
+  with `choose_lr()`, `choose_hidden()`, `choose_dropout()`.
+  Handler resumes with each candidate — grid/random/Bayesian are
+  handler strategies. Genuinely novel: no framework has language-
+  level multi-shot hyperparameter search.
+- **DSP-ML unification.** `mfcc` (DSP) and `conv1d` (ML) compose
+  through `|>` with no adapter. A learned conv1d can replace a
+  hand-designed mel filterbank — the swap is one line.
+- **Compilation gates from effect algebra:**
+  1. `!IO` → compile-time evaluation (constant folding)
+  2. `Pure` → multi-core parallelization (safe, no annotation)
+  3. `!IO, !Alloc` → GPU offload (F.5 backend required)
+  4. `!Alloc` → embedded deployment (ARM Cortex-M7, Daisy Seed)
+- **Progressive ML levels** (L1-L5): pure functional → + effects →
+  + ownership → + refinements → full Inka. Never rewrite.
+- **Handler parameters.** `handler lowpass(alpha: Float) with
+  state = 0.0 { ... }` — named handlers take constructor arguments
+  for configurable instantiation.
+- **Handler composition.** Inference handler = training handler
+  minus tape recording. No DRY violation.
+- **Numeric polymorphism.** `Num` typeclass: one `sum` for all
+  numeric types instead of `sum`/`sumf` split.
+
+- **F-notes:** `lux-ml-design.md` (960 lines), `ml-pain-points.md`,
+  `dsp-pain-points.md`
+
+**What it unlocks:** The performance and native control of Rust
+with the ergonomics of a functional language. Same model code trains
+on desktop, deploys to ARM microcontroller with `!Alloc` proven at
+compile time. The pipe topology shows DSP → ML → classification as
+one continuous graph.
 
 ### Arc G — Rename (Lux → Inka)
 
-One script, one commit. `.jxj` → `.inka`. `lux` → `inka` everywhere.
+One script, one commit. `.lux` → `.jxj`. `lux` → `inka` everywhere.
+Repo rename via `gh repo rename`. Update all existing file extensions.
+
+---
 
 ### Arc H — Examples-as-Proofs
 
 One runnable example per framework-dissolution claim. Each 50-200
-lines. Each runs. Each proves a claim from INSIGHTS.md.
+lines. Each runs. Each proves a claim from INSIGHTS.md:
+
+- **Web server** — handler swap: same code, different transport.
+- **DSP audio** — `<~` feedback loop, `!Alloc` + `Sample` proven.
+- **Parser combinator** — effects as backtracking.
+- **State machine** — handlers as state transitions.
+- **Dependency injection** — handler swap, no framework.
+- **Iterator/generator** — `Iterate` effect, `yield` via perform.
+- **Error handling** — `~>` per-stage vs block-scoped.
+- **Testing** — handler swap for every effect (clock, IO, memory).
+
+Each example demonstrates the five pipe operators where they
+naturally express the computation's topology.
+
+---
 
 ### Arc I — DESIGN.md Audit
 
 Trim to ≤500 lines. Core manifesto on one read.
+
+---
 
 ### Arc J — Verification Dashboard
 
@@ -917,7 +1233,7 @@ it's an F arc.
 
 ## Crystallized Insights (INSIGHTS.md, 2026-04-17)
 
-Six load-bearing truths that guide all implementation:
+Seven load-bearing truths that guide all implementation:
 
 1. **The Handler Chain Is a Capability Stack.** `~>` ordering is a
    trust hierarchy. Outermost = least trusted. Compiler-proven.
@@ -931,6 +1247,9 @@ Six load-bearing truths that guide all implementation:
    Rust+Haskell+Koka+Austral combined can't do this.
 6. **The Graph IS the Program.** SubstGraph + Env is the universal
    representation. Everything else is a handler projection.
+7. **Backward Bootstrap.** Write the perfect compiler unconstrained.
+   Build a disposable translator to compile it once. Delete forever.
+   The fixed point (`diff inka2.wat inka3.wat → empty`) IS soundness.
 
 ---
 
@@ -940,7 +1259,8 @@ Six load-bearing truths that guide all implementation:
 |---|---|
 | **docs/PLAN.md** | THIS FILE. The single roadmap. |
 | **docs/rebuild/00–11** | The 12 executable specs. |
-| **docs/INSIGHTS.md** | Core truths. Six crystallized insights. |
+| **docs/rebuild/F-notes/** | 7 detailed design docs for post-first-light arcs. |
+| **docs/INSIGHTS.md** | Core truths. Seven crystallized insights. |
 | **docs/DESIGN.md** | Language manifesto. |
 | **docs/errors/** | Error catalog (E/V/W/T/P codes). |
-| **CLAUDE.md** | Session anchors for AI assistants. |
+| **CLAUDE.md** | Six session anchors for AI assistants. |

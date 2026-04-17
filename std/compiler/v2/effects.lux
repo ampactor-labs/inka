@@ -1,0 +1,193 @@
+// EffRow — Boolean algebra over effect rows (spec 01)
+//
+// Lifts v1's ternary EffRow (EfPure | EfClosed | EfOpen) to a full
+// Boolean algebra: + union, - subtraction, & intersection, ! negation.
+// Pure is identity. The four compilation gates (Pure, !IO, !Alloc,
+// !Network) and handler absorption (body - handled) fall out of one
+// mechanism.
+//
+// Surface operators reduce to ADT constructors; normalize() produces
+// canonical form before unification.
+
+// ─── ADT ────────────────────────────────────────────────────
+// Extends types.lux:30-33 with negation, subtraction, intersection.
+
+type EffRow
+  = EfPure
+  | EfClosed(List)               // sorted, deduped set of effect names
+  | EfOpen(List, Int)            // known names + row-variable handle
+  | EfNeg(EffRow)                // negation: any effect NOT in inner
+  | EfSub(EffRow, EffRow)        // left minus right
+  | EfInter(EffRow, EffRow)      // intersection
+
+// ─── Normalization ──────────────────────────────────────────
+// After normalization, an EffRow is always in one of three canonical
+// forms: EfPure, EfClosed(...), or EfOpen(..., v).
+// EfNeg/EfSub/EfInter appear as intermediate forms during construction.
+
+fn normalize_row(row) = match row {
+  EfPure => EfPure,
+  EfClosed(names) => if len(names) == 0 { EfPure } else { EfClosed(sort_unique(names)) },
+  EfOpen(names, v) => EfOpen(sort_unique(names), v),
+  EfNeg(inner) => normalize_neg(normalize_row(inner)),
+  EfSub(a, b) => normalize_row(EfInter(a, EfNeg(b))),   // A - B ≡ A & !B
+  EfInter(a, b) => normalize_inter(normalize_row(a), normalize_row(b))
+}
+
+fn normalize_neg(row) = match row {
+  // Negation of canonical forms — stays as EfNeg for subsumption checks
+  // (the compiler gates use !IO, !Alloc etc. as subsumption targets)
+  EfPure => EfNeg(EfPure),
+  EfClosed(names) => EfNeg(EfClosed(names)),
+  EfOpen(names, v) => EfNeg(EfOpen(names, v)),
+  EfNeg(inner) => inner,   // double negation elimination
+  _ => EfNeg(row)
+}
+
+fn normalize_inter(a, b) = match a {
+  EfPure => EfPure,
+  EfClosed(na) => match b {
+    EfPure => EfPure,
+    EfClosed(nb) => {
+      let isect = list_intersect(na, nb)
+      if len(isect) == 0 { EfPure } else { EfClosed(isect) }
+    },
+    EfOpen(nb, v) => {
+      let isect = list_intersect(na, nb)
+      if len(isect) == 0 { EfPure } else { EfClosed(isect) }
+    },
+    _ => EfInter(a, b)
+  },
+  EfOpen(na, va) => match b {
+    EfPure => EfPure,
+    EfClosed(nb) => {
+      let isect = list_intersect(na, nb)
+      if len(isect) == 0 { EfPure } else { EfClosed(isect) }
+    },
+    EfOpen(nb, vb) => {
+      let isect = list_intersect(na, nb)
+      // Both open: fresh row var needed — defer to unification
+      EfOpen(isect, va)
+    },
+    _ => EfInter(a, b)
+  },
+  _ => EfInter(a, b)
+}
+
+// ─── Row union (the + operator) ─────────────────────────────
+
+fn union_row(a, b) = match a {
+  EfPure => b,
+  EfClosed(na) => match b {
+    EfPure => a,
+    EfClosed(nb) => EfClosed(sort_unique(na ++ nb)),
+    EfOpen(nb, v) => EfOpen(sort_unique(na ++ nb), v),
+    _ => EfClosed(na)   // normalize first in practice
+  },
+  EfOpen(na, va) => match b {
+    EfPure => a,
+    EfClosed(nb) => EfOpen(sort_unique(na ++ nb), va),
+    EfOpen(nb, vb) => EfOpen(sort_unique(na ++ nb), va),   // row vars merge at unification
+    _ => a
+  },
+  _ => a
+}
+
+// ─── Row difference (the - operator) ────────────────────────
+// Used by handler absorption: handle { body with E } { arms for F }
+// Result row = (E - F) + extra
+
+fn diff_row(a, b) = normalize_row(EfSub(a, b))
+
+// ─── Subsumption ────────────────────────────────────────────
+// B ⊆ F? Used by compilation gates and handler install.
+
+fn row_subsumes(body_row, gate_row) = match gate_row {
+  EfPure => match body_row {
+    EfPure => true,
+    EfClosed(names) => len(names) == 0,
+    _ => false
+  },
+  EfClosed(gate_names) => match body_row {
+    EfPure => true,
+    EfClosed(body_names) => list_subset_str(body_names, gate_names),
+    _ => false   // open row can't be proven subset of closed
+  },
+  EfOpen(gate_names, _) => match body_row {
+    EfPure => true,
+    EfClosed(body_names) => list_subset_str(body_names, gate_names),
+    EfOpen(body_names, _) => list_subset_str(body_names, gate_names),
+    _ => false
+  },
+  EfNeg(inner) => match body_row {
+    // body ⊆ !inner means body ∩ inner = ∅
+    EfPure => true,
+    EfClosed(body_names) => match inner {
+      EfClosed(neg_names) => list_disjoint(body_names, neg_names),
+      _ => false
+    },
+    _ => false
+  },
+  _ => false
+}
+
+// ─── Set operations on sorted string lists ──────────────────
+
+fn list_intersect(a, b) = {
+  if len(a) == 0 { [] }
+  else {
+    let x = list_head(a)
+    let rest = list_intersect(list_tail(a), b)
+    if string_in_list(b, x) { [x] ++ rest } else { rest }
+  }
+}
+
+fn list_subset_str(sub, sup) = {
+  if len(sub) == 0 { true }
+  else {
+    let x = list_head(sub)
+    if string_in_list(sup, x) { list_subset_str(list_tail(sub), sup) }
+    else { false }
+  }
+}
+
+fn list_disjoint(a, b) = {
+  if len(a) == 0 { true }
+  else {
+    let x = list_head(a)
+    if string_in_list(b, x) { false }
+    else { list_disjoint(list_tail(a), b) }
+  }
+}
+
+fn sort_unique(names) = {
+  // Simple insertion sort + dedup for small effect sets
+  sort_unique_insert(names, [])
+}
+
+fn sort_unique_insert(remaining, sorted) = {
+  if len(remaining) == 0 { sorted }
+  else {
+    let x = list_head(remaining)
+    let rest = list_tail(remaining)
+    if string_in_list(sorted, x) { sort_unique_insert(rest, sorted) }
+    else { sort_unique_insert(rest, insert_sorted(sorted, x)) }
+  }
+}
+
+fn insert_sorted(sorted, x) = {
+  if len(sorted) == 0 { [x] }
+  else {
+    let head = list_head(sorted)
+    if str_lt(x, head) == 1 { [x] ++ sorted }
+    else { [head] ++ insert_sorted(list_tail(sorted), x) }
+  }
+}
+
+fn string_in_list(lst, s) = {
+  if len(lst) == 0 { false }
+  else {
+    if str_eq(list_head(lst), s) == 1 { true }
+    else { string_in_list(list_tail(lst), s) }
+  }
+}

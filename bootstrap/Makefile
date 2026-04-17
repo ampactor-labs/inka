@@ -12,6 +12,7 @@
 # ─── Inputs ───────────────────────────────────────────────────────────
 PROJECT_ROOT  := $(abspath $(CURDIR)/..)
 LUX_SRC       := $(PROJECT_ROOT)/examples/wasm_bootstrap.lux
+QUERY_SRC     := $(PROJECT_ROOT)/examples/query_bootstrap.lux
 WASMTIME      := $(HOME)/.wasmtime/bin/wasmtime
 WASMTIME_OPTS := --dir $(PROJECT_ROOT) -W max-wasm-stack=33554432
 
@@ -41,7 +42,7 @@ TOOLS := $(CURDIR)/tools
 # ─── Phony targets ────────────────────────────────────────────────────
 .PHONY: all stage0 stage1 stage1-aot stage1-native stage2 stage2-native \
         smoke verify check check-canonical check-wat preflight decompile-diff stats \
-        interp-check clean help lux4-runtime
+        interp-check clean help lux4-runtime query
 
 # ─── Preflight: instant static checks before any compile ──────────────
 # Catches: duplicate top-level fn names (the memory.lux shadow class),
@@ -69,6 +70,9 @@ help:
 	@echo "    make verify         full pipeline: stage0→1→aot→smoke→2→validate"
 	@echo "    make check          diff lux3.wat lux4.wat → fixed-point verdict"
 	@echo "    make check-canonical  round-trip canonical diff (stronger)"
+	@echo ""
+	@echo "  Query (Phase B — first Mentl tentacle):"
+	@echo "    make query FILE=path QUESTION='type of name'   run lux query"
 	@echo ""
 	@echo "  Diagnostics:"
 	@echo "    make decompile-diff per-function diff lux3 vs lux4"
@@ -365,6 +369,36 @@ interp-check: $(BUILD)/lux3.wasm
 	@echo "(runs the reference interpreter — minutes, not seconds)"
 	@cat $(COUNTER_LUX) | wasm-interp --enable-tail-call --run-all-exports \
 	  $(BUILD)/lux3.wasm 2>&1 | head -20 || echo "(interp can't drive stdin — skip)"
+
+# ─── Query: first Mentl tentacle ──────────────────────────────────────
+# Build query.wasm from query_bootstrap.lux, then run a query.
+# Usage: make query FILE=std/compiler/own.lux QUESTION='type of check_return_pos'
+$(BUILD)/query.wat: $(BUILD)/lux3.wasm $(QUERY_SRC)
+	@echo ""
+	@echo "╔══════════════════════════════════════════════╗"
+	@echo "║  Building query.wasm (first Mentl tentacle) ║"
+	@echo "╚══════════════════════════════════════════════╝"
+	@if [ -f $(BUILD)/lux3.cwasm ]; then \
+	  cat $(QUERY_SRC) | $(WASMTIME) run --allow-precompiled $(WASMTIME_OPTS) \
+	    $(BUILD)/lux3.cwasm > $(BUILD)/query.raw.out 2>&1; \
+	else \
+	  cat $(QUERY_SRC) | $(WASMTIME) run $(WASMTIME_OPTS) \
+	    $(BUILD)/lux3.wasm > $(BUILD)/query.raw.out 2>&1; \
+	fi
+	@sed -n '/^(module/,$$p' $(BUILD)/query.raw.out > $@
+	@LINES=$$(wc -l < $@); \
+	 echo "  ✓ query.wat: $$LINES lines"
+
+$(BUILD)/query.wasm: $(BUILD)/query.wat
+	@wat2wasm --debug-names --enable-tail-call $< -o $@
+	@echo "  ✓ query.wasm validates"
+
+FILE     ?= std/compiler/own.lux
+QUESTION ?= unresolved
+
+query: $(BUILD)/query.wasm
+	@printf '%s\n%s\n' '$(FILE)' '$(QUESTION)' | \
+	  $(WASMTIME) run $(WASMTIME_OPTS) $(BUILD)/query.wasm
 
 clean:
 	rm -rf $(BUILD)

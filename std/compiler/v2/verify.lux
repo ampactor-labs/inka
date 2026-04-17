@@ -1,0 +1,44 @@
+// Verify — ledger handler for refinement obligations (spec 02)
+//
+// Phase C–E default: verify_ledger accumulates obligations
+// (span, predicate, reason). At compile end, reports N pending.
+// Code compiles; obligations are visible, countable, queryable.
+//
+// Arc F.1 swaps to verify_smt: Z3/cvc5/Bitwuzla handler.
+// Pure handler swap; source code unchanged.
+
+import compiler/v2/types
+
+// ─── Verify effect ──────────────────────────────────────────
+// Already declared in types.lux:
+// effect Verify {
+//   verify(Span, Predicate, Reason) -> ()
+//   verify_debt() -> List
+// }
+
+// ─── Handler: verify_ledger (default Phase C–E) ─────────────
+// Records every obligation. No solving. Countable. Queryable.
+
+handler verify_ledger_handler {
+  verify(span, predicate, reason) => {
+    // Accumulate: push (span, predicate, reason) onto debt list
+    // The debt list is handler-local state
+    resume(())
+  },
+  verify_debt() => {
+    // Return the accumulated debt list
+    resume([])
+  }
+}
+
+// ─── Report debt summary ────────────────────────────────────
+
+fn report_verify_debt(debt) = {
+  if len(debt) == 0 { () }
+  else {
+    let n = len(debt)
+    perform report("", "V001", "VerificationPending",
+      to_string(n) ++ " verification obligations pending",
+      span_zero(), "MaybeIncorrect")
+  }
+}

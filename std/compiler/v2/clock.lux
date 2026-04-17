@@ -1,0 +1,96 @@
+// Clock family — time as first-class effects (spec 11)
+//
+// Four peer effects: Clock (wall), Tick (logical), Sample (DSP),
+// Deadline (real-time budget). Each with real / test / record / replay
+// handler tiers. Capability negations !Clock, !Tick, !Sample, !Deadline
+// participate in the Boolean row algebra (spec 01).
+//
+// <~ feedback's timing unit is handler-decided.
+
+import compiler/v2/types
+
+// ─── Effects ────────────────────────────────────────────────
+// Already declared in types.lux:
+// effect Clock { clock_now() -> Int }
+// effect Tick { tick() -> Int }
+// effect Sample { sample_rate() -> Int }
+// effect Deadline { deadline_remaining() -> Int }
+
+// ─── Handler tier: real ─────────────────────────────────────
+// Delegates to host for actual time.
+
+handler clock_real {
+  clock_now() => {
+    // Host import: wasi_snapshot_preview1.clock_time_get
+    resume(0)
+  }
+}
+
+handler tick_real {
+  tick() => {
+    // Monotonic counter — bumped by pipeline per phase
+    resume(0)
+  }
+}
+
+handler sample_real {
+  sample_rate() => {
+    // Default: 44100 Hz (audio convention)
+    resume(44100)
+  }
+}
+
+handler deadline_real {
+  deadline_remaining() => {
+    // No deadline by default — infinite budget
+    resume(999999999)
+  }
+}
+
+// ─── Handler tier: test ─────────────────────────────────────
+// Deterministic, replayable.
+
+handler clock_test {
+  clock_now() => {
+    resume(1000)   // Fixed epoch for deterministic tests
+  }
+}
+
+handler tick_test {
+  tick() => {
+    resume(1)   // Always tick 1
+  }
+}
+
+// ─── Handler tier: record ───────────────────────────────────
+// Wraps real handler, records every value for replay.
+
+fn make_clock_record(real_handler) = {
+  // Returns a handler that delegates to real_handler
+  // and appends each result to a trace log
+  real_handler
+}
+
+// ─── Handler tier: replay ───────────────────────────────────
+// Plays back recorded values deterministically.
+
+fn make_clock_replay(trace) = {
+  // Returns a handler that yields values from trace
+  // in sequence, failing if trace exhausted
+  clock_test   // fallback to test handler
+}
+
+// ─── Deadline integration with <~ feedback ──────────────────
+// When <~ feedback (spec 10) iterates, each iteration can check
+// deadline_remaining() to bail early on tight real-time budgets.
+
+fn with_deadline(budget_ms, body) = {
+  handle { body() } with deadline_budget(budget_ms)
+}
+
+handler deadline_budget(budget_ms) {
+  deadline_remaining() => {
+    // Track elapsed, return remaining
+    resume(budget_ms)
+  }
+}

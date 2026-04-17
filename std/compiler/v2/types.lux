@@ -1,0 +1,295 @@
+// Ty + Reason + Scheme + new ADTs (spec 02, 03, 04)
+//
+// The type ADT for the v2 architecture. Extends v1's types.lux with:
+//   - TRefined(Ty, Predicate) — refinement types
+//   - TCont(Ty, ResumeDiscipline) — handler continuation types
+//   - TParam(String, Ty, Ownership) — ownership-annotated params
+//   - Scheme = Forall(quantified, Ty) — let-generalization
+//   - Span = Span(sl, sc, el, ec) — full spans everywhere
+//   - Node = N(NodeBody, Span, Int) — typed AST wrapper
+//
+// TVar(id) is a HANDLE into SubstGraph (spec 00), not a binding.
+// There is no apply(subst, ty) — graph chase replaces it.
+
+// ─── Core types ─────────────────────────────────────────────
+// Reuse existing ADT from types.lux, extended per spec 02.
+
+type Ty
+  = TInt
+  | TFloat
+  | TString
+  | TBool
+  | TUnit
+  | TList(Ty)
+  | TTuple(List)
+  | TFun(List, Ty, EffRow)        // params (List[TParam]), return, effects
+  | TVar(Int)                     // handle into SubstGraph
+  | TName(String, List)           // nominal type + type args
+  | TRecord(List)                 // [(name, Ty)]
+  | TRecordOpen(List, Int)        // fields + row-variable handle
+  | TRefined(Ty, Predicate)       // refinement type (Arc F.1 verifies)
+  | TCont(Ty, ResumeDiscipline)   // handler continuation type
+
+// ─── Ownership ──────────────────────────────────────────────
+
+type TParam
+  = TParam(String, Ty, Ownership)
+
+type Ownership
+  = OwInferred     // compiler decides (default)
+  | OwOwn          // affine: consumed at use
+  | OwRef          // borrowed: cannot escape
+
+// ─── Resume discipline ──────────────────────────────────────
+
+type ResumeDiscipline
+  = OneShot
+  | MultiShot
+  | Either
+
+// ─── Scheme (let-generalization) ────────────────────────────
+
+type Scheme
+  = Forall(List, Ty)    // quantified handle IDs, body type
+
+// ─── Reason ─────────────────────────────────────────────────
+// Why a type was assigned. Every graph node carries one.
+// v1's 13 variants preserved + 3 new for specs 00/04/05.
+
+type Reason
+  = Declared(String)
+  | Inferred(String)
+  | Fresh(Int)
+  | OpConstraint(String, Reason, Reason)
+  | VarLookup(String, Reason)
+  | FnReturn(String, Reason)
+  | FnParam(String, Int, Reason)
+  | MatchBranch(Reason, Reason)
+  | ListElement(Reason)
+  | IfBranch(Reason)
+  | LetBinding(String, Reason)
+  | Unified(Reason, Reason)
+  | Instantiation(String, Reason)
+  // New in v2
+  | UnifyFailed(Ty, Ty)            // inference mismatch (spec 04)
+  | Placeholder(Span)              // parse-time handle (spec 03)
+  | BinOpPlaceholder(String)       // binop-specific placeholder
+  | MissingVar(String)             // E001 — variable not in env
+  | Refinement(Predicate, Predicate)  // refinement obligation
+
+// ─── Span ───────────────────────────────────────────────────
+
+type Span
+  = Span(Int, Int, Int, Int)    // start_line, start_col, end_line, end_col
+
+fn span_join(a, b) = {
+  let Span(sl1, sc1, _, _) = a
+  let Span(_, _, el2, ec2) = b
+  Span(sl1, sc1, el2, ec2)
+}
+
+fn span_zero() = Span(0, 0, 0, 0)
+
+// ─── Typed AST (spec 03) ────────────────────────────────────
+// Every expression site is an N(...). The handle is allocated at
+// parse time and populated during inference.
+
+type Node
+  = N(NodeBody, Span, Int)    // body, span, TypeHandle
+
+type NodeBody
+  = NExpr(Expr)
+  | NStmt(Stmt)
+  | NPat(Pat)
+  | NHole(Int)                // marked hole id (Hazel)
+
+// ─── Expr ───────────────────────────────────────────────────
+
+type Expr
+  = LitInt(Int)
+  | LitFloat(Float)
+  | LitString(String)
+  | LitBool(Bool)
+  | LitUnit
+  | VarRef(String)
+  | BinOpExpr(String, Node, Node)
+  | UnaryOpExpr(String, Node)
+  | CallExpr(Node, List)
+  | LambdaExpr(List, Node)
+  | IfExpr(Node, Node, Node)
+  | BlockExpr(List, Node)
+  | MatchExpr(Node, List)
+  | HandleExpr(Node, List)
+  | PerformExpr(String, List)
+  | ResumeExpr(Node, List)
+  | MakeListExpr(List)
+  | MakeTupleExpr(List)
+  | FieldExpr(Node, String)
+  | PipeExpr(PipeKind, Node, Node)
+  | ExprPlaceholder
+
+type PipeKind = PForward | PDiverge | PCompose | PTee | PFeedback
+
+// ─── Stmt ───────────────────────────────────────────────────
+
+type Stmt
+  = LetStmt(Pat, Node)
+  | FnStmt(String, List, Node, List, Node)
+  | TypeDefStmt(String, List, List)
+  | EffectDeclStmt(String, List)
+  | HandlerDeclStmt(String, String, List)
+  | ExprStmt(Node)
+  | ImportStmt(String)
+  | RefineStmt(String, Ty, Predicate)
+
+// ─── Pat ────────────────────────────────────────────────────
+
+type Pat
+  = PVar(String)
+  | PWild
+  | PLit(LitValue)
+  | PCon(String, List)
+  | PTuple(List)
+  | PList(List)
+  | PRecord(List)
+
+type LitValue
+  = LVInt(Int)
+  | LVFloat(Float)
+  | LVString(String)
+  | LVBool(Bool)
+
+// ─── Predicate (spec 02) ────────────────────────────────────
+// Structural; solver is a handler in Arc F.1.
+
+type Predicate
+  = PTrue
+  | PEq(PExpr, PExpr)
+  | PLt(PExpr, PExpr)
+  | PLeq(PExpr, PExpr)
+  | PAnd(Predicate, Predicate)
+  | POr(Predicate, Predicate)
+  | PNot(Predicate)
+  | PCall(String, List)
+
+type PExpr
+  = PSelf
+  | PInt(Int)
+  | PFloat(Float)
+  | PString(String)
+  | PVar(String)
+  | PApp(String, List)
+
+// ─── Env (spec 04) ──────────────────────────────────────────
+// Effect-mediated: EnvRead + EnvWrite. Peer with SubstGraph.
+
+type Env
+  = Env(List)   // [(name, Scheme, Reason)]
+
+effect EnvRead {
+  env_lookup(String) -> Option              // @resume=OneShot
+  env_snapshot() -> Env                     // @resume=OneShot
+}
+
+effect EnvWrite {
+  env_extend(String, Scheme, Reason) -> ()  // @resume=OneShot
+  env_scope_enter() -> ()                   // @resume=OneShot
+  env_scope_exit() -> ()                    // @resume=OneShot
+}
+
+type Option
+  = None
+  | Some(a)
+
+// ─── Diagnostic (spec 06, extended) ─────────────────────────
+
+effect Diagnostic {
+  report(String, String, String, String, Span, String) -> ()
+  // source, code, kind, msg, span, applicability
+}
+
+// ─── LookupTy (spec 05) ────────────────────────────────────
+
+effect LookupTy {
+  lookup_ty(Int) -> Ty    // handle → resolved type via graph chase
+}
+
+// ─── FreshHandle (spec 04/06) ───────────────────────────────
+// One function (instantiate), two handlers:
+// - inference: mint(r) => resume(perform graph_fresh_ty(r))
+// - query: mint(r) => resume(next_display_id(r))
+
+effect FreshHandle {
+  mint(Reason) -> Int     // @resume=OneShot
+}
+
+// ─── Verify (spec 02/06) ────────────────────────────────────
+
+effect Verify {
+  verify(Span, Predicate, Reason) -> ()
+  verify_debt() -> List
+}
+
+// ─── Query (spec 08) ────────────────────────────────────────
+
+effect Query {
+  ask(Question) -> QueryResult    // @resume=OneShot
+}
+
+type Question
+  = QTypeOf(String)
+  | QTypeAt(Span)
+  | QUnresolved
+  | QSubstChain(Int)
+  | QEffects(String)
+  | QOwnership(String)
+  | QWhy(String)
+  | QVerifyDebt
+  | QUnknown(String)
+
+type QueryResult
+  = QRType(Ty, Reason)
+  | QRUnresolved(List)
+  | QRChain(List)
+  | QREffects(EffRow)
+  | QROwnership(List)
+  | QRWhy(Reason)
+  | QRVerifyDebt(List)
+  | QRError(String)
+
+// ─── Consume (spec 07) ──────────────────────────────────────
+
+effect Consume {
+  consume(String, Span) -> ()    // @resume=OneShot
+}
+
+// ─── Teach (spec 09 — Mentl) ────────────────────────────────
+
+effect Teach {
+  teach_here(String, Span, Ty) -> ()
+  teach_gradient(Int) -> Option
+  teach_why(Int) -> Reason
+  teach_error(String, Span, Reason) -> Explanation
+  teach_unlock(Annotation) -> Capability
+}
+
+type Annotation = Annotation(String, Ty)
+type Capability = Capability(String)
+type Explanation = Explanation(String, String, String)  // code, summary, fix
+
+// ─── Synth (Arc F.1) ────────────────────────────────────────
+
+effect Synth {
+  synth(Int, Ty, List) -> Candidate    // @resume=OneShot
+}
+
+type Candidate
+  = NoCandidate
+  | SynthCandidate(String, Ty)
+
+// ─── Clock family (spec 11) ─────────────────────────────────
+
+effect Clock { clock_now() -> Int }
+effect Tick { tick() -> Int }
+effect Sample { sample_rate() -> Int }
+effect Deadline { deadline_remaining() -> Int }

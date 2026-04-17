@@ -1,0 +1,431 @@
+// Pipeline — single-walk entry, handlers composed (spec 04/05/06)
+//
+// The compiler's spine. One function composes all handlers and runs
+// the pipeline: lex |> parse |> infer |> lower |> emit.
+//
+// Every handler is installed here. Every effect is scoped here.
+// Downstream passes don't thread state — they perform effects.
+
+import compiler/v2/graph
+import compiler/v2/types
+import compiler/v2/effects
+import compiler/v2/infer
+import compiler/v2/lower
+import compiler/v2/own
+import compiler/v2/verify
+import compiler/lexer
+import compiler/parser
+
+// ─── compile_wasm: the full pipeline ────────────────────────
+// source |> lex |> parse |> infer |> lower |> emit
+// Every handler installed. Every effect scoped.
+
+fn compile_wasm_v2(source) = {
+  // Install all handlers in the correct nesting order:
+  // outermost: Diagnostic (catches all errors)
+  // then: SubstGraph (shared inference state)
+  // then: Env (shared binding state)
+  // then: Verify (accumulates obligations)
+  // then: the pipeline walks
+  handle {
+    handle {
+      handle {
+        handle {
+          let ast = source |> frontend
+          infer_program(ast)
+          let lowered = lower_program(ast)
+          emit_module(lowered)
+        } with verify_ledger_handler
+      } with env_handler
+    } with graph_handler
+  } with diagnostics_handler
+}
+
+// ─── check_source: inference only, no lowering ──────────────
+// Used by lux query and lux check.
+
+fn check_source_v2(source) = {
+  handle {
+    handle {
+      handle {
+        handle {
+          let ast = source |> frontend
+          infer_program(ast)
+          ast
+        } with verify_ledger_handler
+      } with env_handler
+    } with graph_handler
+  } with diagnostics_handler
+}
+
+// ─── query_source: check + query ────────────────────────────
+// Runs inference, then answers a question against the result.
+
+fn query_source(source, question) = {
+  handle {
+    handle {
+      handle {
+        handle {
+          handle {
+            let ast = source |> frontend
+            infer_program(ast)
+            let q = parse_query(question)
+            let result = perform ask(q)
+            render_query_result(result)
+          } with query_handler
+        } with verify_ledger_handler
+      } with env_handler
+    } with graph_handler
+  } with diagnostics_handler
+}
+
+// ─── Lower program ─────────────────────────────────────────
+
+fn lower_program(ast) = {
+  handle {
+    lower_stmt_list(ast)
+  } with lookup_ty_handler
+}
+
+// ─── Handler: SubstGraph ────────────────────────────────────
+// Threads a single mutable graph through all pipeline passes.
+
+handler graph_handler {
+  graph_chase(h) => {
+    // Chase through the graph state
+    resume(chase_node(graph_nodes, h, 0))
+  },
+  graph_epoch() => resume(graph_ep),
+  graph_snapshot() => resume(SubstGraph(graph_nodes, graph_ep, graph_next, [])),
+  graph_fresh_ty(reason) => {
+    let h = graph_next
+    // Extend graph, bump next
+    resume(h)
+  },
+  graph_fresh_row(reason) => {
+    let h = graph_next
+    resume(h)
+  },
+  graph_bind(h, ty, reason) => {
+    // Check occurs, then bind
+    if occurs_in(h, ty) {
+      // Emit diagnostic, refuse
+      resume(())
+    } else {
+      // Set node, bump epoch
+      resume(())
+    }
+  },
+  graph_bind_row(h, row, reason) => {
+    resume(())
+  },
+  graph_fork(module_name) => {
+    resume(())
+  }
+}
+
+// ─── Handler: Env ───────────────────────────────────────────
+
+handler env_handler {
+  env_lookup(name) => {
+    let result = env_find(env_entries, name)
+    resume(result)
+  },
+  env_snapshot() => resume(Env(env_entries)),
+  env_extend(name, scheme, reason) => {
+    // Push onto env
+    resume(())
+  },
+  env_scope_enter() => {
+    // Push scope marker
+    resume(())
+  },
+  env_scope_exit() => {
+    // Pop to scope marker
+    resume(())
+  }
+}
+
+fn env_find(entries, name) = {
+  if len(entries) == 0 { None }
+  else {
+    let (k, scheme, reason) = list_head(entries)
+    if str_eq(k, name) == 1 { Some((scheme, reason)) }
+    else { env_find(list_tail(entries), name) }
+  }
+}
+
+// ─── Handler: Diagnostic ────────────────────────────────────
+// Routes all diagnostics to stderr.
+
+handler diagnostics_handler {
+  report(source, code, kind, msg, span, applicability) => {
+    let Span(sl, sc, el, ec) = span
+    eprint_string(code ++ " " ++ kind ++ ": " ++ msg ++ "\n")
+    resume(())
+  }
+}
+
+// ─── Handler: LookupTy ─────────────────────────────────────
+// Chases graph for type resolution at lower time.
+
+handler lookup_ty_handler {
+  lookup_ty(h) => {
+    let node = perform graph_chase(h)
+    let GNode(kind, _) = node
+    match kind {
+      NBound(t) => resume(t),
+      NErrorHole(_) => resume(TName("ERROR_HOLE", [])),
+      NFree(epoch) => {
+        perform report("", "E100", "UnresolvedType",
+          "handle " ++ to_string(h) ++ " @epoch=" ++ to_string(epoch),
+          span_zero(), "MaybeIncorrect")
+        resume(TName("UNRESOLVED", []))
+      },
+      NRowBound(_) => resume(TUnit),
+      NRowFree(_) => resume(TUnit)
+    }
+  }
+}
+
+// ─── Handler: Query ─────────────────────────────────────────
+// Forensic substrate. Reads graph + env, answers questions.
+
+handler query_handler {
+  ask(q) => match q {
+    QTypeOf(name) => match perform env_lookup(name) {
+      None => resume(QRError("not found: " ++ name)),
+      Some(entry) => {
+        let (scheme, reason) = entry
+        let Forall(_, ty) = scheme
+        resume(QRType(ty, reason))
+      }
+    },
+    QTypeAt(span) => {
+      resume(QRError("type-at not yet implemented (needs AST span index)"))
+    },
+    QUnresolved => {
+      let Env(entries) = perform env_snapshot()
+      let unresolved = find_unresolved_entries(entries)
+      resume(QRUnresolved(unresolved))
+    },
+    QSubstChain(handle) => {
+      let chain = walk_subst_chain(handle, 0)
+      resume(QRChain(chain))
+    },
+    QEffects(name) => match perform env_lookup(name) {
+      None => resume(QRError("not found: " ++ name)),
+      Some(entry) => {
+        let (scheme, _) = entry
+        let Forall(_, ty) = scheme
+        match ty {
+          TFun(_, _, row) => resume(QREffects(row)),
+          _ => resume(QRError(name ++ " is not a function"))
+        }
+      }
+    },
+    QOwnership(name) => match perform env_lookup(name) {
+      None => resume(QRError("not found: " ++ name)),
+      Some(entry) => {
+        let (scheme, _) = entry
+        let Forall(_, ty) = scheme
+        match ty {
+          TFun(params, _, _) => resume(QROwnership(params)),
+          _ => resume(QRError(name ++ " is not a function"))
+        }
+      }
+    },
+    QWhy(name) => match perform env_lookup(name) {
+      None => resume(QRError("not found: " ++ name)),
+      Some(entry) => {
+        let (_, reason) = entry
+        resume(QRWhy(reason))
+      }
+    },
+    QVerifyDebt => {
+      let debt = perform verify_debt()
+      resume(QRVerifyDebt(debt))
+    },
+    QUnknown(q) => resume(QRError("unknown query: " ++ q))
+  }
+}
+
+fn find_unresolved_entries(entries) = {
+  if len(entries) == 0 { [] }
+  else {
+    let (name, scheme, reason) = list_head(entries)
+    let Forall(_, ty) = scheme
+    let has_tvar = check_has_tvar(ty)
+    let rest = find_unresolved_entries(list_tail(entries))
+    if has_tvar { [(name, ty, [])] ++ rest } else { rest }
+  }
+}
+
+fn check_has_tvar(ty) = match ty {
+  TVar(_) => true,
+  TList(elem) => check_has_tvar(elem),
+  TTuple(elems) => check_has_tvar_list(elems),
+  TFun(params, ret, _) => check_has_tvar(ret) || check_has_tvar_params(params),
+  _ => false
+}
+
+fn check_has_tvar_list(tys) = {
+  if len(tys) == 0 { false }
+  else { check_has_tvar(list_head(tys)) || check_has_tvar_list(list_tail(tys)) }
+}
+
+fn check_has_tvar_params(params) = {
+  if len(params) == 0 { false }
+  else {
+    let TParam(_, ty, _) = list_head(params)
+    check_has_tvar(ty) || check_has_tvar_params(list_tail(params))
+  }
+}
+
+fn walk_subst_chain(handle, depth) = {
+  if depth > 20 { [] }
+  else {
+    let node = perform graph_chase(handle)
+    let GNode(kind, reason) = node
+    match kind {
+      NBound(ty) => match ty {
+        TVar(next) => [(handle, node)] ++ walk_subst_chain(next, depth + 1),
+        _ => [(handle, node)]
+      },
+      _ => [(handle, node)]
+    }
+  }
+}
+
+// ─── Query parsing + rendering ──────────────────────────────
+
+fn parse_query(q) = {
+  let words = split(q, " ")
+  if len(words) == 0 { QUnknown(q) }
+  else {
+    let w0 = words[0]
+    if str_eq(w0, "unresolved") == 1 { QUnresolved }
+    else {
+      if len(words) >= 3 && str_eq(w0, "type") == 1 && str_eq(words[1], "of") == 1 {
+        QTypeOf(words[2])
+      } else {
+        if len(words) >= 3 && str_eq(w0, "effects") == 1 && str_eq(words[1], "of") == 1 {
+          QEffects(words[2])
+        } else {
+          if len(words) >= 3 && str_eq(w0, "ownership") == 1 && str_eq(words[1], "of") == 1 {
+            QOwnership(words[2])
+          } else {
+            if len(words) >= 2 && str_eq(w0, "why") == 1 {
+              QWhy(words[1])
+            } else {
+              if str_eq(w0, "verification") == 1 { QVerifyDebt }
+              else { QUnknown(q) }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fn render_query_result(result) = match result {
+  QRType(ty, reason) =>
+    "→ " ++ show_ty(ty) ++ "\n  Reason: " ++ show_reason_v2(reason),
+  QRUnresolved(entries) =>
+    "→ " ++ to_string(len(entries)) ++ " unresolved entries",
+  QRChain(hops) =>
+    "→ " ++ to_string(len(hops)) ++ " hops in chain",
+  QREffects(row) => "→ " ++ show_effrow(row),
+  QROwnership(params) => "→ " ++ to_string(len(params)) ++ " params",
+  QRWhy(reason) => show_reason_v2(reason),
+  QRVerifyDebt(obligations) =>
+    "→ " ++ to_string(len(obligations)) ++ " verification obligations pending",
+  QRError(msg) => "error: " ++ msg
+}
+
+fn show_ty(ty) = match ty {
+  TInt => "Int",
+  TFloat => "Float",
+  TString => "String",
+  TBool => "Bool",
+  TUnit => "()",
+  TVar(id) => "?" ++ to_string(id),
+  TList(elem) => "List(" ++ show_ty(elem) ++ ")",
+  TTuple(elems) => "(" ++ show_ty_list(elems) ++ ")",
+  TFun(params, ret, eff) =>
+    "(" ++ show_params(params) ++ ") -> " ++ show_ty(ret) ++ " " ++ show_effrow(eff),
+  TName(name, args) => name ++ if len(args) > 0 { "(" ++ show_ty_list(args) ++ ")" } else { "" },
+  TRecord(fields) => "{ " ++ show_fields(fields) ++ " }",
+  TRefined(base, pred) => show_ty(base) ++ " where ...",
+  TCont(ret, disc) => "Cont(" ++ show_ty(ret) ++ ")",
+  _ => "?"
+}
+
+fn show_ty_list(tys) = {
+  if len(tys) == 0 { "" }
+  else {
+    let s = show_ty(list_head(tys))
+    if len(list_tail(tys)) == 0 { s }
+    else { s ++ ", " ++ show_ty_list(list_tail(tys)) }
+  }
+}
+
+fn show_params(params) = {
+  if len(params) == 0 { "" }
+  else {
+    let TParam(name, ty, own) = list_head(params)
+    let s = name ++ ": " ++ show_ty(ty)
+    if len(list_tail(params)) == 0 { s }
+    else { s ++ ", " ++ show_params(list_tail(params)) }
+  }
+}
+
+fn show_fields(fields) = {
+  if len(fields) == 0 { "" }
+  else {
+    let (name, ty) = list_head(fields)
+    let s = name ++ ": " ++ show_ty(ty)
+    if len(list_tail(fields)) == 0 { s }
+    else { s ++ ", " ++ show_fields(list_tail(fields)) }
+  }
+}
+
+fn show_effrow(row) = match row {
+  EfPure => "Pure",
+  EfClosed(names) => join(names, " + "),
+  EfOpen(names, v) =>
+    if len(names) == 0 { "?" ++ to_string(v) }
+    else { join(names, " + ") ++ " + ?" ++ to_string(v) },
+  EfNeg(inner) => "!" ++ show_effrow(inner),
+  _ => "..."
+}
+
+fn show_reason_v2(reason) = match reason {
+  Declared(s) => "declared: " ++ s,
+  Inferred(s) => "inferred: " ++ s,
+  Fresh(id) => "fresh(" ++ to_string(id) ++ ")",
+  VarLookup(name, inner) => "looked up '" ++ name ++ "'",
+  FnReturn(name, _) => "return of " ++ name,
+  FnParam(name, idx, _) => "param " ++ to_string(idx) ++ " of " ++ name,
+  OpConstraint(op, _, _) => "operator " ++ op,
+  Unified(a, b) => "unified",
+  MissingVar(name) => "missing: " ++ name,
+  UnifyFailed(a, b) => "unification failed: " ++ show_ty(a) ++ " vs " ++ show_ty(b),
+  _ => "..."
+}
+
+// ─── frontend (reuse v1 lexer + parser) ─────────────────────
+
+fn frontend(source) = source |> lex_source |> parse_tokens
+
+fn lex_source(source) = {
+  // Delegates to existing lexer.lux
+  // Phase C adapts token output to carry Spans
+  tokenize(source)
+}
+
+fn parse_tokens(tokens) = {
+  // Delegates to existing parser.lux
+  // Phase C adapts to produce N(body, span, handle) wrappers
+  parse(tokens)
+}

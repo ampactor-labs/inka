@@ -447,53 +447,66 @@ fn type_mismatch(a, b, reason) = {
 }
 
 // ─── BinOp inference ────────────────────────────────────────
+// Each operator class has clear semantics. Match dispatch, not
+// nested if/else. This is what the language looks like.
 
-fn infer_binop(handle, op, lh, rh, span) = {
-  if str_eq(op, "+") == 1 || str_eq(op, "-") == 1 ||
-     str_eq(op, "*") == 1 || str_eq(op, "/") == 1 ||
-     str_eq(op, "%") == 1 {
-    // Numeric ops: both operands same type, result same type
-    unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
-    perform graph_bind(handle, TVar(lh), OpConstraint(op, Inferred("result"), Inferred("operand")))
-  } else {
-    if str_eq(op, "++") == 1 {
-      // String/list concat
+fn infer_binop(handle, op, lh, rh, span) =
+  match classify_binop(op) {
+    "arithmetic" => {
+      // +, -, *, /, %: both operands same type, result same type
+      unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
+      perform graph_bind(handle, TVar(lh), OpConstraint(op, Inferred("result"), Inferred("operand")))
+    },
+    "comparison" => {
+      // ==, !=, <, >, <=, >=: both same type, result Bool
+      unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
+      perform graph_bind(handle, TBool, OpConstraint(op, Inferred("comparison"), Inferred("bool")))
+    },
+    "boolean" => {
+      // &&, ||: both Bool, result Bool
+      perform graph_bind(lh, TBool, OpConstraint(op, Inferred("left"), Declared("bool")))
+      perform graph_bind(rh, TBool, OpConstraint(op, Inferred("right"), Declared("bool")))
+      perform graph_bind(handle, TBool, OpConstraint(op, Inferred("result"), Declared("bool")))
+    },
+    "concat" => {
+      // ++: both same type (String or List), result same type
       unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
       perform graph_bind(handle, TVar(lh), OpConstraint(op, Inferred("concat"), Inferred("operand")))
-    } else {
-      if str_eq(op, "==") == 1 || str_eq(op, "!=") == 1 ||
-         str_eq(op, "<") == 1 || str_eq(op, ">") == 1 ||
-         str_eq(op, "<=") == 1 || str_eq(op, ">=") == 1 {
-        // Comparison: both same type, result Bool
-        unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
-        perform graph_bind(handle, TBool, OpConstraint(op, Inferred("comparison"), Inferred("bool")))
-      } else {
-        if str_eq(op, "&&") == 1 || str_eq(op, "||") == 1 {
-          // Boolean ops
-          perform graph_bind(lh, TBool, OpConstraint(op, Inferred("left"), Declared("bool")))
-          perform graph_bind(rh, TBool, OpConstraint(op, Inferred("right"), Declared("bool")))
-          perform graph_bind(handle, TBool, OpConstraint(op, Inferred("result"), Declared("bool")))
-        } else {
-          // Unknown op — leave polymorphic
-          unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
-          perform graph_bind(handle, TVar(lh), OpConstraint(op, Inferred("result"), Inferred("operand")))
-        }
-      }
+    },
+    _ => {
+      // Unknown op — leave polymorphic
+      unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
+      perform graph_bind(handle, TVar(lh), OpConstraint(op, Inferred("result"), Inferred("operand")))
     }
   }
+
+fn classify_binop(op) = match op {
+  "+" => "arithmetic",
+  "-" => "arithmetic",
+  "*" => "arithmetic",
+  "/" => "arithmetic",
+  "%" => "arithmetic",
+  "==" => "comparison",
+  "!=" => "comparison",
+  "<" => "comparison",
+  ">" => "comparison",
+  "<=" => "comparison",
+  ">=" => "comparison",
+  "&&" => "boolean",
+  "||" => "boolean",
+  "++" => "concat",
+  _ => "unknown"
 }
 
-fn infer_unaryop(handle, op, ih, span) = {
-  if str_eq(op, "Neg") == 1 {
-    perform graph_bind(handle, TVar(ih), OpConstraint(op, Inferred("negate"), Inferred("operand")))
-  } else {
-    if str_eq(op, "Not") == 1 {
-      perform graph_bind(ih, TBool, OpConstraint(op, Inferred("not"), Declared("bool")))
-      perform graph_bind(handle, TBool, OpConstraint(op, Inferred("result"), Declared("bool")))
-    } else {
-      perform graph_bind(handle, TVar(ih), Inferred("unary op"))
-    }
-  }
+fn infer_unaryop(handle, op, ih, span) = match op {
+  "Neg" =>
+    perform graph_bind(handle, TVar(ih), OpConstraint(op, Inferred("negate"), Inferred("operand"))),
+  "Not" => {
+    perform graph_bind(ih, TBool, OpConstraint(op, Inferred("not"), Declared("bool")))
+    perform graph_bind(handle, TBool, OpConstraint(op, Inferred("result"), Declared("bool")))
+  },
+  _ =>
+    perform graph_bind(handle, TVar(ih), Inferred("unary op"))
 }
 
 // ─── Pattern inference ──────────────────────────────────────

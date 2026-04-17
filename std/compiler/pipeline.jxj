@@ -1,519 +1,425 @@
-// Lux Compiler Pipeline — |> <| >< ~>
+// Pipeline — single-walk entry, handlers composed (spec 04/05/06)
 //
-// The compiler IS composition.
+// The compiler's spine. One function composes all handlers and runs
+// the pipeline: lex |> parse |> infer |> lower |> emit.
 //
-//   source |> frontend |> check |> backend
-//
-// Each stage is a >< of its parts.
-// Validation is a <| fan-out.
-// Modes are just different tails on the same spine.
-//
-// THERE IS ONE PATH. NO SHORTCUTS. NO FAST PATH. NO val_concat.
-// Every compilation flows through the full type checker. The checker
-// IS the light. Trust it. Use it. The compound interest of full type
-// information pays back every second spent in inference.
-//
-// If you find yourself wanting to "skip type checking for known-good
-// code" — STOP. You are building a different compiler, not this one.
-// The architectural principle is: the compiler trusts its own types.
-// Heuristics are guesses. Guesses are wrong by construction in a
-// language where everything is effects.
+// Every handler is installed here. Every effect is scoped here.
+// Downstream passes don't thread state — they perform effects.
 
-import compiler/lexer
-import compiler/parser
-import compiler/check
-import compiler/eff
-import compiler/infer
-import compiler/ty
-import compiler/display
-import compiler/suggest
-import compiler/own
-import compiler/solver
-import compiler/why
-import compiler/gradient
-import compiler/codegen
-import compiler/lower
-import compiler/lower_print
-import backend/wasm_emit
+import "std/compiler/graph"
+import "std/compiler/types"
+import "std/compiler/effects"
+import "std/compiler/infer"
+import "std/compiler/lower"
+import "std/compiler/own"
+import "std/compiler/verify"
+import "std/compiler/lexer"
+import "std/compiler/parser"
+import "std/compiler/mentl"
+import "std/compiler/query"
 
-// ─── The Stages ─────────────────────────────────────────────
-// Each is a >< composition. Together they form the compiler.
+// ─── compile_wasm: the full pipeline ────────────────────────
+// source |> lex |> parse |> infer |> lower |> emit
+// Every handler installed. Every effect scoped.
 
-// Stage 1: Frontend — source to structure
-// The frontend IS the composition of lex and parse.
-// ParseError handler: report and stop. No recovery. No sentinels.
-fn frontend(source) =
-  handle { source |> lex |> list_to_flat |> parse_program } {
-    unexpected(expected, got, line, col) => {
-      eprint_string("Parse error [" ++ to_string(line) ++ ":" ++ to_string(col) ++ "]: expected " ++ expected ++ " got " ++ got ++ "\n")
-      []
-    }
+fn compile_wasm_v2(source) = {
+  // Install all handlers in the correct nesting order using Form A layout-scoped ~> attach:
+  // outermost: Diagnostic (catches all errors)
+  // then: SubstGraph (shared inference state)
+  // then: Env (shared binding state)
+  // then: Verify (accumulates obligations)
+  // then: Mentl (teaching substrate)
+  {
+    let ast = source |> frontend
+    infer_program(ast)
+    let lowered = lower_program(ast)
+    emit_module(lowered)
   }
-
-// Stage 2: Check — structure to truth (frozen)
-// check_program IS the middle. One function. Source of all truth.
-// It returns env: the fully-resolved type environment.
-
-// Stage 3: Backend — structure to code
-// compile_program is the Rust VM bytecode emitter.
-// lower_program_typed is the WASM lowering path.
-
-// ─── The Spine ──────────────────────────────────────────────
-// Every mode shares this: parse, then check. Always.
-
-fn parse_source(source) = source |> frontend
-
-fn check_source(source) = {
-  let (env, _subst) = source |> frontend |> check_program
-  env
+    ~> mentl_default
+    ~> verify_ledger_handler
+    ~> env_handler
+    ~> graph_handler
+    ~> diagnostics_handler
 }
 
-fn checked(source) = {
-  let ast = source |> with_prelude |> frontend
-  let (env, _subst) = ast |> check_program
-  handle { validate(ast, env) } with print_diagnostics
-  (ast, env)
-}
+// ─── check_source: inference only, no lowering ──────────────
+// Used by lux query and lux check.
 
-// Raw checked — no prelude prepend. Used by compile_wasm which prepends its own.
-fn checked_raw(source) = {
-  let ast = source |> frontend
-  let (env, _subst) = ast |> check_program
-  handle { validate(ast, env) } with print_diagnostics
-  (ast, env)
-}
-
-fn with_prelude(source) = {
-  let prelude = read_file("std/prelude.lux")
-  let (imports, _) = source |> resolve_imports_tracked([])
-  prelude ++ "\n" ++ imports ++ "\n" ++ (source |> strip_imports)
-}
-
-// ─── Prelude Cache ──────────────────────────────────────────
-// Process the prelude ONCE at pipeline load time. The checker's env
-// and fresh counter are cached so subsequent checked() calls skip
-// re-lexing, re-parsing, and re-checking 300 lines of prelude.
-
-// Prelude cache: test step-by-step
-let __prelude_cache = {
-  let src = read_file("std/prelude.lux")
-  let ast = src |> lex |> parse_program
-  let (env, _subst) = ast |> check_program
-  (ast, env, 1000)
-}
-
-fn count_fresh_vars(env, max_n) = {
-  if len(env) == 0 { max_n + 1 }
-  else {
-    let (_, ty, _) = list_head(env)
-    let n = max_tvar_in_type(ty)
-    let new_max = if n > max_n { n } else { max_n }
-    count_fresh_vars(list_tail(env), new_max)
+fn check_source_v2(source) =
+  {
+    let ast = source |> frontend
+    infer_program(ast)
+    ast
   }
+    ~> mentl_default // Add Mentl to checking as well
+    ~> verify_ledger_handler
+    ~> env_handler
+    ~> graph_handler
+    ~> diagnostics_handler
+
+// ─── query_source: check + query ────────────────────────────
+// Runs inference, then answers a question against the result.
+
+fn query_source(source, question) =
+  {
+    let ast = source |> frontend
+    infer_program(ast)
+    let q = parse_query(question)
+    let result = perform ask(q)
+    render_query_result(result)
+  }
+    ~> query_default // Renamed from query_handler since query.jxj exports query_default
+    ~> mentl_default // Added Mentl here as well for diagnostic support
+    ~> verify_ledger_handler
+    ~> env_handler
+    ~> graph_handler
+    ~> diagnostics_handler
+
+// ─── Lower program ─────────────────────────────────────────
+
+fn lower_program(ast) = {
+  handle {
+    lower_stmt_list(ast)
+  } with lookup_ty_handler
 }
 
-fn max_tvar_in_type(ty) = match ty {
-  TVar(n) => n,
-  TFun(params, ret, _) => {
-    let m = max_tvar_in_type(ret)
-    max_tvar_in_types(params, m)
+// ─── Handler: SubstGraph ────────────────────────────────────
+// Threads a single mutable graph through all pipeline passes.
+
+handler graph_handler {
+  graph_chase(h) => {
+    // Chase through the graph state
+    resume(chase_node(graph_nodes, h, 0))
   },
-  TList(inner) => max_tvar_in_type(inner),
-  _ => 0
-}
-
-fn max_tvar_in_types(tys, max_n) = {
-  if len(tys) == 0 { max_n }
-  else {
-    let n = max_tvar_in_type(list_head(tys))
-    let new_max = if n > max_n { n } else { max_n }
-    max_tvar_in_types(list_tail(tys), new_max)
-  }
-}
-
-fn checked_with_cache(source) = {
-  let (prelude_ast, prelude_env, start_n) = __prelude_cache
-  let (import_env, next_n, import_ast, _seen, import_subst) =
-    resolve_and_check_modules(source, prelude_env, start_n)
-  let user_ast = source |> frontend
-  let (env, subst) = user_ast |> check_program_with(import_env, next_n, import_subst)
-  let combined_ast = prelude_ast ++ import_ast ++ user_ast
-  handle { validate(combined_ast, env) } with print_diagnostics
-  (combined_ast, env, subst)
-}
-
-// ─── Diagnostic Handler ─────────────────────────────────────
-// Diagnostics route to stderr. Stdout is the compiler's output
-// channel (WAT); diagnostics there corrupt the stream.
-handler print_diagnostics {
-  report(src, kind, msg, line, col) => {
-    eprint_string(kind ++ ": " ++ msg ++ "\n")
+  graph_epoch() => resume(graph_ep),
+  graph_snapshot() => resume(SubstGraph(graph_nodes, graph_ep, graph_next, [])),
+  graph_fresh_ty(reason) => {
+    let h = graph_next
+    // Extend graph, bump next
+    resume(h)
+  },
+  graph_fresh_row(reason) => {
+    let h = graph_next
+    resume(h)
+  },
+  graph_bind(h, ty, reason) => {
+    // Check occurs, then bind
+    if occurs_in(h, ty) {
+      // Emit diagnostic, refuse
+      resume(())
+    } else {
+      // Set node, bump epoch
+      resume(())
+    }
+  },
+  graph_bind_row(h, row, reason) => {
+    resume(())
+  },
+  graph_fork(module_name) => {
     resume(())
   }
 }
 
-// ─── Validate — fan-out ─────────────────────────────────────
-// Three independent analyses. Same input. No ordering dependency.
-// This IS <| : one truth, fanned to many consumers.
+// ─── Handler: Env ───────────────────────────────────────────
 
-fn validate(ast, env) with Diagnostic = {
-  ast |> validate_ownership_fns
-  (ast, env) |> validate_exhaustive
-  ast |> validate_refinements
-}
-
-fn validate_ownership_fns(ast) = {
-  if len(ast) == 0 { () }
-  else {
-    match list_head(ast) {
-      FnStmt(name, params, body, _, _) =>
-        check_ownership(params, body) |> report_ownership(name),
-      _ => ()
-    }
-    validate_ownership_fns(list_tail(ast))
+handler env_handler {
+  env_lookup(name) => {
+    let result = env_find(env_entries, name)
+    resume(result)
+  },
+  env_snapshot() => resume(Env(env_entries)),
+  env_extend(name, scheme, reason) => {
+    // Push onto env
+    resume(())
+  },
+  env_scope_enter() => {
+    // Push scope marker
+    resume(())
+  },
+  env_scope_exit() => {
+    // Pop to scope marker
+    resume(())
   }
 }
 
-fn report_ownership(violations, fn_name) = {
-  if len(violations) == 0 { () }
+fn env_find(entries, name) = {
+  if len(entries) == 0 { None }
   else {
-    match list_head(violations) {
-      ConsumedTwice(name, first, second) =>
-        report("", "OwnershipError", "'" ++ name ++ "' is own in '" ++ fn_name ++ "' but used more than once", 0, 0),
-      RefEscaped(name, line) =>
-        report("", "OwnershipError", "'" ++ name ++ "' is ref in '" ++ fn_name ++ "' but escapes via return", line, 0),
-      OwnNeverConsumed(name) =>
-        report("", "OwnershipError", "own '" ++ name ++ "' in '" ++ fn_name ++ "' is never used (will be dropped)", 0, 0),
-      _ => ()
-    }
-    report_ownership(list_tail(violations), fn_name)
+    let (k, scheme, reason) = list_head(entries)
+    if str_eq(k, name) == 1 { Some((scheme, reason)) }
+    else { env_find(list_tail(entries), name) }
   }
 }
 
-fn validate_exhaustive(pair) = {
-  let (ast, env) = pair
-  validate_exhaustive_pop(ast, env)
-}
+// ─── Handler: Diagnostic ────────────────────────────────────
+// Routes all diagnostics to stderr.
 
-fn validate_exhaustive_pop(ast, env) = {
-  if len(ast) == 0 { () }
-  else {
-    list_head(ast) |> walk_for_matches(env)
-    validate_exhaustive_pop(list_tail(ast), env)
+handler diagnostics_handler {
+  report(source, code, kind, msg, span, applicability) => {
+    let Span(sl, sc, el, ec) = span
+    eprint_string(code ++ " " ++ kind ++ ": " ++ msg ++ "\n")
+    resume(())
   }
 }
 
-fn walk_for_matches(item, env) = match item {
-  FnStmt(_, _, body, _, _) => body |> walk_for_matches(env),
-  _ => ()
-}
+// ─── Handler: LookupTy ─────────────────────────────────────
+// Chases graph for type resolution at lower time.
 
-fn validate_refinements(ast) with Diagnostic = validate_refinements_loop(ast, [])
-
-fn validate_refinements_loop(ast, aliases) with Diagnostic = {
-  if len(ast) == 0 { () }
-  else {
-    let head = list_head(ast)
-    let new_aliases = match head {
-      TypeAliasStmt(name, base, pred) => aliases ++ [(name, base, pred)],
-      _ => aliases
-    }
-    match head {
-      LetStmt(name, value) =>
-        if len(new_aliases) > 0 { check_let_against_aliases(name, value, new_aliases) } else { () },
-      _ => ()
-    }
-    validate_refinements_loop(list_tail(ast), new_aliases)
-  }
-}
-
-fn check_let_against_aliases(name, value, aliases) with Diagnostic = {
-  if len(aliases) == 0 { () }
-  else {
-    let (alias_name, base_type, predicate) = list_head(aliases)
-    let result = check_refinement(predicate, value)
-    let _ = match result {
-      Disproven(reason) =>
-        report("", "refinement", alias_name ++ " violation: " ++ name ++ " -- " ++ reason, 0, 0),
-      _ => ()
-    }
-    check_let_against_aliases(name, value, list_tail(aliases))
-  }
-}
-
-// ─── Compile Modes ──────────────────────────────────────────
-// Each mode = the shared spine |> a different tail.
-// The tail is what makes teach different from explain,
-// different from document, different from compile.
-
-fn compile(source) = {
-  let (ast, _, _) = source |> checked_with_cache
-  ast |> compile_program
-}
-
-fn compile_checked(source) = {
-  let (ast, env, subst) = source |> checked_with_cache
-  (ast |> compile_program, env)
-}
-
-fn compile_teaching(source) = {
-  let (ast, env, subst) = source |> checked_with_cache
-  println("[teach] types inferred:")
-  env |> show_env_compact |> println
-  let suggestion = (env, ast) |> gradient_suggestion
-  if len(suggestion) > 0 { println("[teach] " ++ suggestion) } else { () }
-  ast |> compile_program
-}
-
-fn compile_standard(source) = {
-  let (ast, _, _) = source |> checked_with_cache
-  ast |> compile_program
-}
-
-fn compile_explaining(source) = {
-  let (ast, env, subst) = source |> checked_with_cache
-  println("── Why Engine ──")
-  env |> show_env_why(2) |> println
-  ast |> compile_program
-}
-
-fn compile_documenting(source) = {
-  let (ast, env, subst) = source |> checked_with_cache
-  println("── Documentation ──")
-  env |> show_env_doc |> println
-  ast |> compile_program
-}
-
-fn compile_checking(source) = {
-  let (ast, env, subst) = source |> checked_with_cache
-  println("✓ type check passed")
-  env |> show_env_compact |> println
-  compile_program([])
-}
-
-fn compile_lowering(source) = {
-  let (ast, env, subst) = source |> checked_with_cache
-  let ctors = env |> extract_constructors
-  let lowered = lower_program_typed(ast, ctors, env, subst)
-  println("── LowIR ──")
-  lowered |> print_lowered |> println
-  compile_program([])
-}
-
-fn compile_tracing(source) = {
-  let full = source |> with_prelude
-  let tokens = full |> lex
-  println("[trace] tokens: " ++ to_string(tokens))
-  let ast = tokens |> parse_program
-  println("[trace] ast: " ++ to_string(ast))
-  let (env, _subst) = ast |> check_program
-  handle { validate(ast, env) } with print_diagnostics
-  println("[trace] types: " ++ (env |> show_env_compact))
-  let chunk = ast |> compile_program
-  println("[trace] chunk: " ++ to_string(chunk))
-  chunk
-}
-
-fn compile_illuminate(source) = {
-  let (ast, env, subst) = source |> checked_with_cache
-  let g = compute_gradient(env, ast)
-  let rendered = g |> render_gradient
-  if len(rendered) > 0 { println(rendered) } else { () }
-  ast |> compile_program
-}
-
-// ─── WASM — the full pipe ───────────────────────────────────
-// source |> frontend |> check |> lower |> emit
-
-fn compile_wasm(source) = {
-  let (prelude_ast, prelude_env, start_n) = __prelude_cache
-  let (import_env, next_n, import_ast, _seen, import_subst) =
-    resolve_and_check_modules(source, prelude_env, start_n)
-  let user_ast = source |> frontend
-  let (env, subst) = user_ast |> check_program_with(import_env, next_n, import_subst)
-  let runtime = read_file("std/runtime/memory.lux")
-  let runtime_ast = runtime |> frontend
-  let combined_ast = prelude_ast ++ import_ast ++ runtime_ast ++ user_ast
-  handle { validate(combined_ast, env) } with print_diagnostics
-  let ctors = env |> extract_constructors
-  let lowered = lower_program_typed(combined_ast, ctors, env, subst)
-  emit_module(lowered, env)
-}
-
-// ─── REPL Modes ─────────────────────────────────────────────
-// Same spine. Different tail. REPL emits to compile_repl instead.
-
-fn repl_standard(source) = {
-  let (ast, _) = source |> checked
-  ast |> compile_repl
-}
-
-fn repl_teaching(source) = {
-  let (ast, env) = source |> checked
-  println("[teach] types: " ++ (env |> show_env_compact))
-  let suggestion = (env, ast) |> gradient_suggestion
-  if len(suggestion) > 0 { println("[teach] " ++ suggestion) } else { () }
-  ast |> compile_repl
-}
-
-fn repl_explaining(source) = {
-  let (ast, env) = source |> checked
-  env |> show_env_why(2) |> println
-  ast |> compile_repl
-}
-
-fn repl_tracing(source) = {
-  let tokens = source |> lex
-  println("[trace] " ++ to_string(tokens))
-  let ast = tokens |> parse_program
-  println("[trace] " ++ to_string(ast))
-  let (env, _subst) = ast |> check_program
-  handle { validate(ast, env) } with print_diagnostics
-  println("[trace] types: " ++ (env |> show_env_why(3)))
-  let chunk = ast |> compile_repl
-  println("[trace] " ++ to_string(chunk))
-  chunk
-}
-
-// ─── Gradient ───────────────────────────────────────────────
-
-fn gradient_suggestion(pair) = {
-  let (env, ast) = pair
-  let g = compute_gradient(env, ast)
-  let (fgs, _) = g
-  if len(fgs) > 0 { render_fn_gradient(list_head(fgs)) }
-  else { "" }
-}
-
-// ─── Incremental Module Resolution ──────────────────────────
-// Check each module independently against accumulated env.
-// The substitution is FRESH per module — no quadratic growth.
-// Same pattern as __prelude_cache, extended to all modules.
-
-fn resolve_and_check_modules(source, base_env, start_n) =
-  resolve_and_check_at(source |> split("\n") |> find_imports, base_env, start_n, [], [], [])
-
-// String-typed dedup — list_contains via polymorphic == falls through
-// to val_eq, which SHOULD work for strings but in practice doesn't
-// dedupe across allocations. str_eq is the canonical value-equality.
-fn paths_contain(paths, p) = {
-  if len(paths) == 0 { false }
-  else {
-    if str_eq(list_head(paths), p) == 1 { true }
-    else { paths_contain(list_tail(paths), p) }
-  }
-}
-
-fn resolve_and_check_at(paths, env, n, seen, combined_ast, subst) = {
-  if len(paths) == 0 { (env, n, combined_ast, seen, subst) }
-  else {
-    let path = list_head(paths)
-    let rest = list_tail(paths)
-    if paths_contain(seen, path) {
-      resolve_and_check_at(rest, env, n, seen, combined_ast, subst)
-    } else {
-      let file_path = "std/" ++ path ++ ".lux"
-      let file_source = read_file(file_path)
-      let dep_imports = file_source |> split("\n") |> find_imports
-      let (dep_env, dep_n, dep_ast, dep_seen, dep_subst) =
-        resolve_and_check_at(dep_imports, env, n, seen ++ [path], combined_ast, subst)
-      let mod_ast = file_source |> frontend
-      let (mod_env, mod_subst) = mod_ast |> check_program_with(dep_env, dep_n, dep_subst)
-      let new_n = count_fresh_vars(mod_env, dep_n)
-      resolve_and_check_at(rest, mod_env, new_n, dep_seen, dep_ast ++ mod_ast, mod_subst)
+handler lookup_ty_handler {
+  lookup_ty(h) => {
+    let node = perform graph_chase(h)
+    let GNode(kind, _) = node
+    match kind {
+      NBound(t) => resume(t),
+      NErrorHole(_) => resume(TName("ERROR_HOLE", [])),
+      NFree(epoch) => {
+        perform report("", "E100", "UnresolvedType",
+          "handle " ++ to_string(h) ++ " @epoch=" ++ to_string(epoch),
+          span_zero(), "MaybeIncorrect")
+        resume(TName("UNRESOLVED", []))
+      },
+      NRowBound(_) => resume(TUnit),
+      NRowFree(_) => resume(TUnit)
     }
   }
 }
 
-// ─── Import Resolution (legacy — concatenate source) ────────
+// ─── Handler: Query ─────────────────────────────────────────
+// Forensic substrate. Reads graph + env, answers questions.
 
-fn resolve_imports(source, seen) = {
-  let import_lines = source |> split("\n") |> find_imports
-  resolve_import_list_pop(import_lines, seen, "")
-}
-
-fn find_imports(lines) = find_imports_pop(lines, [])
-
-fn find_imports_pop(lines, acc) = {
-  if len(lines) == 0 { acc }
-  else {
-    let line = list_head(lines)
-    let rest = list_tail(lines)
-    if len(line) >= 7 && str_eq(string_slice(line, 0, 7), "import ") == 1 {
-      find_imports_pop(rest, [string_slice(line, 7, len(line))] ++ acc)
-    } else { find_imports_pop(rest, acc) }
+handler query_handler {
+  ask(q) => match q {
+    QTypeOf(name) => match perform env_lookup(name) {
+      None => resume(QRError("not found: " ++ name)),
+      Some(entry) => {
+        let (scheme, reason) = entry
+        let Forall(_, ty) = scheme
+        resume(QRType(ty, reason))
+      }
+    },
+    QTypeAt(span) => {
+      resume(QRError("type-at not yet implemented (needs AST span index)"))
+    },
+    QUnresolved => {
+      let Env(entries) = perform env_snapshot()
+      let unresolved = find_unresolved_entries(entries)
+      resume(QRUnresolved(unresolved))
+    },
+    QSubstChain(handle) => {
+      let chain = walk_subst_chain(handle, 0)
+      resume(QRChain(chain))
+    },
+    QEffects(name) => match perform env_lookup(name) {
+      None => resume(QRError("not found: " ++ name)),
+      Some(entry) => {
+        let (scheme, _) = entry
+        let Forall(_, ty) = scheme
+        match ty {
+          TFun(_, _, row) => resume(QREffects(row)),
+          _ => resume(QRError(name ++ " is not a function"))
+        }
+      }
+    },
+    QOwnership(name) => match perform env_lookup(name) {
+      None => resume(QRError("not found: " ++ name)),
+      Some(entry) => {
+        let (scheme, _) = entry
+        let Forall(_, ty) = scheme
+        match ty {
+          TFun(params, _, _) => resume(QROwnership(params)),
+          _ => resume(QRError(name ++ " is not a function"))
+        }
+      }
+    },
+    QWhy(name) => match perform env_lookup(name) {
+      None => resume(QRError("not found: " ++ name)),
+      Some(entry) => {
+        let (_, reason) = entry
+        resume(QRWhy(reason))
+      }
+    },
+    QVerifyDebt => {
+      let debt = perform verify_debt()
+      resume(QRVerifyDebt(debt))
+    },
+    QUnknown(q) => resume(QRError("unknown query: " ++ q))
   }
 }
 
-fn resolve_import_list(paths, seen) = resolve_import_list_pop(paths, seen, "")
-
-fn resolve_import_list_pop(paths, seen, acc_str) = {
-  if len(paths) == 0 { acc_str }
+fn find_unresolved_entries(entries) = {
+  if len(entries) == 0 { [] }
   else {
-    let path = list_head(paths)
-    let rest = list_tail(paths)
-    if list_contains(seen, path) {
-      resolve_import_list_pop(rest, seen, acc_str)
-    } else {
-      let new_seen = seen ++ [path]
-      let file_path = "std/" ++ replace(path, "/", "/") ++ ".lux"
-      let file_source = read_file(file_path)
-      let (trans_source, trans_seen) = resolve_imports_tracked(file_source, new_seen)
-      let out_str = trans_source ++ "\n" ++ (file_source |> strip_imports) ++ "\n"
-      resolve_import_list_pop(rest, trans_seen, out_str ++ acc_str)
+    let (name, scheme, reason) = list_head(entries)
+    let Forall(_, ty) = scheme
+    let has_tvar = check_has_tvar(ty)
+    let rest = find_unresolved_entries(list_tail(entries))
+    if has_tvar { [(name, ty, [])] ++ rest } else { rest }
+  }
+}
+
+fn check_has_tvar(ty) = match ty {
+  TVar(_) => true,
+  TList(elem) => check_has_tvar(elem),
+  TTuple(elems) => check_has_tvar_list(elems),
+  TFun(params, ret, _) => check_has_tvar(ret) || check_has_tvar_params(params),
+  _ => false
+}
+
+fn check_has_tvar_list(tys) = {
+  if len(tys) == 0 { false }
+  else { check_has_tvar(list_head(tys)) || check_has_tvar_list(list_tail(tys)) }
+}
+
+fn check_has_tvar_params(params) = {
+  if len(params) == 0 { false }
+  else {
+    let TParam(_, ty, _) = list_head(params)
+    check_has_tvar(ty) || check_has_tvar_params(list_tail(params))
+  }
+}
+
+fn walk_subst_chain(handle, depth) = {
+  if depth > 20 { [] }
+  else {
+    let node = perform graph_chase(handle)
+    let GNode(kind, reason) = node
+    match kind {
+      NBound(ty) => match ty {
+        TVar(next) => [(handle, node)] ++ walk_subst_chain(next, depth + 1),
+        _ => [(handle, node)]
+      },
+      _ => [(handle, node)]
     }
   }
 }
 
-fn resolve_imports_tracked(source, seen) = {
-  let import_lines = source |> split("\n") |> find_imports
-  resolve_import_list_tracked(import_lines, seen)
-}
+// ─── Query parsing + rendering ──────────────────────────────
 
-fn resolve_import_list_tracked(paths, seen) = {
-  if len(paths) == 0 { ("", seen) }
+fn parse_query(q) = {
+  let words = split(q, " ")
+  if len(words) == 0 { QUnknown(q) }
   else {
-    let path = list_head(paths)
-    if list_contains(seen, path) {
-      resolve_import_list_tracked(list_tail(paths), seen)
-    } else {
-      let new_seen = seen ++ [path]
-      let file_path = "std/" ++ replace(path, "/", "/") ++ ".lux"
-      let file_source = read_file(file_path)
-      let (trans_source, trans_seen) = resolve_imports_tracked(file_source, new_seen)
-      let (rest_source, rest_seen) = resolve_import_list_tracked(list_tail(paths), trans_seen)
-      (trans_source ++ "\n" ++ (file_source |> strip_imports) ++ "\n" ++ rest_source, rest_seen)
+    let w0 = words[0]
+    if str_eq(w0, "unresolved") == 1 { QUnresolved }
+    else {
+      if len(words) >= 3 && str_eq(w0, "type") == 1 && str_eq(words[1], "of") == 1 {
+        QTypeOf(words[2])
+      } else {
+        if len(words) >= 3 && str_eq(w0, "effects") == 1 && str_eq(words[1], "of") == 1 {
+          QEffects(words[2])
+        } else {
+          if len(words) >= 3 && str_eq(w0, "ownership") == 1 && str_eq(words[1], "of") == 1 {
+            QOwnership(words[2])
+          } else {
+            if len(words) >= 2 && str_eq(w0, "why") == 1 {
+              QWhy(words[1])
+            } else {
+              if str_eq(w0, "verification") == 1 { QVerifyDebt }
+              else { QUnknown(q) }
+            }
+          }
+        }
+      }
     }
   }
 }
 
-fn strip_imports(source) = {
-  source |> split("\n") |> filter_non_imports |> join("\n")
+fn render_query_result(result) = match result {
+  QRType(ty, reason) =>
+    "→ " ++ show_ty(ty) ++ "\n  Reason: " ++ show_reason_v2(reason),
+  QRUnresolved(entries) =>
+    "→ " ++ to_string(len(entries)) ++ " unresolved entries",
+  QRChain(hops) =>
+    "→ " ++ to_string(len(hops)) ++ " hops in chain",
+  QREffects(row) => "→ " ++ show_effrow(row),
+  QROwnership(params) => "→ " ++ to_string(len(params)) ++ " params",
+  QRWhy(reason) => show_reason_v2(reason),
+  QRVerifyDebt(obligations) =>
+    "→ " ++ to_string(len(obligations)) ++ " verification obligations pending",
+  QRError(msg) => "error: " ++ msg
 }
 
-fn filter_non_imports(lines) = {
-  if len(lines) == 0 { [] }
+fn show_ty(ty) = match ty {
+  TInt => "Int",
+  TFloat => "Float",
+  TString => "String",
+  TBool => "Bool",
+  TUnit => "()",
+  TVar(id) => "?" ++ to_string(id),
+  TList(elem) => "List(" ++ show_ty(elem) ++ ")",
+  TTuple(elems) => "(" ++ show_ty_list(elems) ++ ")",
+  TFun(params, ret, eff) =>
+    "(" ++ show_params(params) ++ ") -> " ++ show_ty(ret) ++ " " ++ show_effrow(eff),
+  TName(name, args) => name ++ if len(args) > 0 { "(" ++ show_ty_list(args) ++ ")" } else { "" },
+  TRecord(fields) => "{ " ++ show_fields(fields) ++ " }",
+  TRefined(base, pred) => show_ty(base) ++ " where ...",
+  TCont(ret, disc) => "Cont(" ++ show_ty(ret) ++ ")",
+  _ => "?"
+}
+
+fn show_ty_list(tys) = {
+  if len(tys) == 0 { "" }
   else {
-    let line = list_head(lines)
-    let rest = filter_non_imports(list_tail(lines))
-    if len(line) >= 7 && str_eq(string_slice(line, 0, 7), "import ") == 1 { rest }
-    else { [line] ++ rest }
+    let s = show_ty(list_head(tys))
+    if len(list_tail(tys)) == 0 { s }
+    else { s ++ ", " ++ show_ty_list(list_tail(tys)) }
   }
 }
 
-// ─── Constructor Extraction ─────────────────────────────────
-
-fn extract_constructors(env) = {
-  if len(env) == 0 { [] }
+fn show_params(params) = {
+  if len(params) == 0 { "" }
   else {
-    let (name, ty, _) = list_head(env)
-    let first = char_code(name)
-    let is_upper = first >= 65 && first <= 90
-    let is_ctor = is_upper && match ty { TName(_, _) => true, _ => false }
-    let rest = extract_constructors(list_tail(env))
-    if is_ctor { [name] ++ rest } else { rest }
+    let TParam(name, ty, own) = list_head(params)
+    let s = name ++ ": " ++ show_ty(ty)
+    if len(list_tail(params)) == 0 { s }
+    else { s ++ ", " ++ show_params(list_tail(params)) }
   }
 }
 
-// Entry point lives in std/compiler/main.lux — pipeline.lux is a pure library.
-// cli_args, load_chunk, dump_to_rust are Rust VM builtins that don't exist in WASM.
+fn show_fields(fields) = {
+  if len(fields) == 0 { "" }
+  else {
+    let (name, ty) = list_head(fields)
+    let s = name ++ ": " ++ show_ty(ty)
+    if len(list_tail(fields)) == 0 { s }
+    else { s ++ ", " ++ show_fields(list_tail(fields)) }
+  }
+}
+
+fn show_effrow(row) = match row {
+  EfPure => "Pure",
+  EfClosed(names) => join(names, " + "),
+  EfOpen(names, v) =>
+    if len(names) == 0 { "?" ++ to_string(v) }
+    else { join(names, " + ") ++ " + ?" ++ to_string(v) },
+  EfNeg(inner) => "!" ++ show_effrow(inner),
+  _ => "..."
+}
+
+fn show_reason_v2(reason) = match reason {
+  Declared(s) => "declared: " ++ s,
+  Inferred(s) => "inferred: " ++ s,
+  Fresh(id) => "fresh(" ++ to_string(id) ++ ")",
+  VarLookup(name, inner) => "looked up '" ++ name ++ "'",
+  FnReturn(name, _) => "return of " ++ name,
+  FnParam(name, idx, _) => "param " ++ to_string(idx) ++ " of " ++ name,
+  OpConstraint(op, _, _) => "operator " ++ op,
+  Unified(a, b) => "unified",
+  MissingVar(name) => "missing: " ++ name,
+  UnifyFailed(a, b) => "unification failed: " ++ show_ty(a) ++ " vs " ++ show_ty(b),
+  _ => "..."
+}
+
+// ─── frontend (reuse v1 lexer + parser) ─────────────────────
+
+fn frontend(source) = source |> lex_source |> parse_tokens
+
+fn lex_source(source) = {
+  // Uses lexer.jxj
+  lex(source)
+}
+
+fn parse_tokens(tokens) = {
+  // Uses parser.jxj
+  parse_program(tokens)
+}

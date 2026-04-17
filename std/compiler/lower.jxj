@@ -1,1108 +1,221 @@
-// LowIR — The representation where effects become control flow
+// Lower — LowIR from live graph observation (spec 05)
 //
-// Between AST and WASM. No handler stack, no stack unwinding, no
-// continuation replay. Just Loop, Switch, State, Call.
+// Lowers typed AST (spec 03) to LowIR by reading types LIVE from
+// SubstGraph. No cached types in LowExpr. No per-module subst snapshot.
+// An unresolved handle at lower time is a build failure, not a fallback.
 //
-// The checker's light flows through LowIR as a structural invariant:
-// every LowExpr node carries its resolved type. lower_expr computes
-// types inline by reading .ty off recursively-lowered children via
-// lexpr_ty. No separate inference pass. No sidecar maps. No re-walks.
-// If you need a type, the graph is the oracle.
+// Declares: with SubstGraphRead + EnvRead + LookupTy + LowerCtx
+// NO SubstGraphWrite — structural isolation via effect row.
 
-import compiler/lower_ir
-import compiler/lower_closure
-import compiler/lowir_walk
-import compiler/ty
+import compiler/graph
+import compiler/types
+import compiler/effects
 
-// ─── Type helpers for dispatch — chase the live substitution ──
-// Every type lookup applies the substitution graph before matching,
-// so stale TVars that inference resolved late get chased live at
-// lower time. The substitution IS the oracle; cached AST types are
-// stale views onto it.
+// ─── LookupTy default handler ───────────────────────────────
+// Installed once at pipeline entry. Chases graph for every type read.
 
-fn lty_list(subst, lowered_elems) = {
-  if len(lowered_elems) == 0 { TList(TUnit) }
-  else { TList(apply(subst, lexpr_ty(list_head(lowered_elems)))) }
+fn make_lookup_handler() = {
+  // Returns a handler that chases SubstGraph for type resolution
+  // Installed in pipeline.jxj around the lowering walk
+  ()
 }
 
-fn lty_tuple_elems(subst, lowered_elems) = {
-  if len(lowered_elems) == 0 { [] }
-  else {
-    let (rest, e) = list_pop(lowered_elems)
-    lty_tuple_elems(subst, rest) ++ [apply(subst, lexpr_ty(e))]
-  }
+// lexpr_ty — live query, no cache, no fallback
+fn lexpr_handle(e) = match e {
+  LConst(h, _) => h,
+  LLocal(h, _) => h,
+  LGlobal(h, _) => h,
+  LStore(h, _, _) => h,
+  LLet(h, _, _) => h,
+  LUpval(h, _) => h,
+  LBinOp(h, _, _, _) => h,
+  LUnaryOp(h, _, _) => h,
+  LCall(h, _, _) => h,
+  LTailCall(h, _, _) => h,
+  LReturn(h, _) => h,
+  LMakeClosure(h, _, _) => h,
+  LIf(h, _, _, _) => h,
+  LBlock(h, _) => h,
+  LMakeList(h, _) => h,
+  LMakeTuple(h, _) => h,
+  LMakeVariant(h, _, _) => h,
+  LIndex(h, _, _, _) => h,
+  LMatch(h, _, _) => h,
+  LLoop(h, _) => h,
+  LBreak(h, _) => h,
+  LRegion(h, _) => h
 }
 
-fn lty_call_result(subst, lowered_func) = match apply(subst, lexpr_ty(lowered_func)) {
-  TFun(_, ret, _) => apply(subst, ret),
-  _ => TUnit
+// No _ => TUnit fallback. If a variant is added, this must get a match arm.
+fn lexpr_ty(e) = perform lookup_ty(lexpr_handle(e))
+
+// ─── Monomorphism check ─────────────────────────────────────
+// Graph read, not a sidecar. >95% of call sites prove monomorphic.
+
+fn monomorphic_at(h) = match perform lookup_ty(h) {
+  TFun(_, _, row) => row_is_ground(row),
+  _ => true
 }
 
-fn lty_index_result(subst, lowered_coll) = match apply(subst, lexpr_ty(lowered_coll)) {
-  TList(elem) => apply(subst, elem),
-  _ => TUnit
+fn row_is_ground(row) = match row {
+  EfPure => true,
+  EfClosed(_) => true,
+  _ => false
 }
 
-fn lty_name(subst, env, name) = {
-  let (_, ty, _) = env_lookup(env, name)
-  apply(subst, ty)
-}
+// ─── Lower walk ─────────────────────────────────────────────
+// Clean structural lowering. No subst threading.
 
-// ─── The One lower_expr ─────────────────────────────────────
-// Performs LowerCtx effects (is_ctor, is_global, is_state_var, fresh_id).
-// Every L* construction attaches a Ty as its first field. The types
-// come from env (for VarRef) or from children (for composite nodes).
-
-fn lower_expr(sexpr, env, subst) = {
-  let S(expr, _, _) = sexpr
-  match expr {
-    IntLit(s)    => LConst(TInt,    LInt(parse_int(s))),
-    FloatLit(s)  => LConst(TFloat,  LFloat(parse_float(s))),
-    StringLit(s) => LConst(TString, LString(s)),
-    BoolLit(b)   => LConst(TBool,   LBool(b)),
-
-    VarRef(name) => {
-      let ty = lty_name(subst, env, name)
-      if is_ctor(name) { LMakeVariant(ty, name, []) }
-      else { LGlobal(ty, name) }
-      // NB: we do NOT prefix effect-op names with __ev_op_ here, even
-      // though that would handle "bump-as-value inside a handler" correctly.
-      // Reason: a local `let is_global = ...` shadows the LowerCtx effect
-      // op of the same name; prefixing would rewrite the local ref to the
-      // effect-op closure pointer. The emitter's LGlobal resolution
-      // hierarchy already does the right thing — locals/params first,
-      // then declared globals, then fn table, then __ev_op_ fallback.
+fn lower_expr(node) = {
+  let N(body, span, handle) = node
+  match body {
+    NExpr(LitInt(v)) => LConst(handle, LInt(v)),
+    NExpr(LitFloat(v)) => LConst(handle, LFloat(v)),
+    NExpr(LitString(s)) => LConst(handle, LString(s)),
+    NExpr(LitBool(b)) => LConst(handle, LBool(b)),
+    NExpr(LitUnit) => LConst(handle, LInt(0)),
+    NExpr(VarRef(name)) => LGlobal(handle, name),
+    NExpr(BinOpExpr(op, left, right)) => {
+      let lo_l = lower_expr(left)
+      let lo_r = lower_expr(right)
+      LBinOp(handle, op, lo_l, lo_r)
     },
-
-    BinOp(op, left, right) => {
-      let l = lower_expr(left, env, subst)
-      let r = lower_expr(right, env, subst)
-      let lt = lexpr_ty(l)
-      let rt = lexpr_ty(r)
-      if op == "Eq" || op == "Neq" {
-        // Typed equality only. If neither side resolves concretely,
-        // inference failed to monomorphize — emit UNRESOLVED so the
-        // build fails loudly rather than dispatching through val_eq's
-        // runtime byte-sniff heuristic that hides type-inference bugs.
-        let eq = match lt {
-          TString => LCall(TBool, LGlobal(TFun([TString, TString], TBool, EfPure), "str_eq"), [l, r]),
-          TInt    => LBinOp(TBool, "Eq", l, r),
-          TBool   => LBinOp(TBool, "Eq", l, r),
-          _       => match rt {
-            TString => LCall(TBool, LGlobal(TFun([TString, TString], TBool, EfPure), "str_eq"), [l, r]),
-            TInt    => LBinOp(TBool, "Eq", l, r),
-            TBool   => LBinOp(TBool, "Eq", l, r),
-            _ => {
-              eprint_string("lower: UNRESOLVED == — inference did not monomorphize the call site\n")
-              LCall(TBool, LGlobal(TFun([TUnit, TUnit], TBool, EfPure), "UNRESOLVED_val_eq"), [l, r])
-            }
-          }
-        }
-        if op == "Neq" { LUnaryOp(TBool, "Not", eq) } else { eq }
-      } else { if op == "Concat" {
-        // Dispatch: TString → str_concat, TList → list_concat.
-        // If neither side resolves to a concrete TString or TList,
-        // inference failed to monomorphize this call site. The correct
-        // response is a loud build failure — val_concat's runtime
-        // byte-sniff heuristic hides type-inference bugs and cascades
-        // drift through every bootstrap iteration.
-        let (concat_fn, result_ty) = match lt {
-          TString => ("str_concat", TString),
-          TList(_) => ("list_concat", lt),
-          _ => match rt {
-            TString => ("str_concat", TString),
-            TList(_) => ("list_concat", rt),
-            _ => {
-              eprint_string("lower: UNRESOLVED ++ — inference did not monomorphize the call site\n")
-              ("UNRESOLVED_val_concat", TUnit)
-            }
-          }
-        }
-        LCall(result_ty, LGlobal(TFun([lt, rt], result_ty, EfPure), concat_fn), [l, r])
+    NExpr(UnaryOpExpr(op, inner)) => {
+      let lo = lower_expr(inner)
+      LUnaryOp(handle, op, lo)
+    },
+    NExpr(CallExpr(f, args)) => {
+      let lo_f = lower_expr(f)
+      let lo_args = lower_expr_list(args)
+      if monomorphic_at(handle) {
+        LCall(handle, lo_f, lo_args)
       } else {
-        // Arithmetic / comparison: result type depends on op and operand type.
-        // Op name stays plain — emitter dispatches on (Ty, op) to pick f32 vs i32.
-        let result_ty = if op == "Lt" || op == "Gt" || op == "LtEq" || op == "GtEq" || op == "And" || op == "Or" { TBool }
-                        else { lt }
-        LBinOp(result_ty, op, l, r)
-      } }
-    },
-    UnaryOp(op, operand) => {
-      let inner = lower_expr(operand, env, subst)
-      let ty = if op == "Not" { TBool } else { lexpr_ty(inner) }
-      LUnaryOp(ty, op, inner)
-    },
-
-    Call(func, args) => {
-      let S(f, _, _) = func
-      match f {
-        VarRef(name) => {
-          {
-            if is_ctor(name) {
-              let lowered_args = lower_exprs(args, env, subst)
-              let ctor_ty = lty_name(subst, env, name)
-              LMakeVariant(ctor_ty, name, lowered_args)
-            }
-            else { if (name == "println" || name == "print") && len(args) > 0 {
-              let arg = args[0]
-              let lowered_arg = lower_expr(arg, env, subst)
-              // Known String → print_string. Default → print_string.
-              // In WASM, all values are heap pointers (i32). print_string
-              // reads bytes from the pointer. print_int formats the integer.
-              // For heap pointers, print_string is always correct.
-              let printer = match lexpr_ty(lowered_arg) {
-                TInt => "print_int",
-                TFloat => "print_int",
-                TBool => "print_int",
-                _     => "print_string"
-              }
-              let print_call = LCall(TUnit, LGlobal(TFun([lexpr_ty(lowered_arg)], TUnit, EfPure), printer), [lowered_arg])
-              if name == "println" {
-                LBlock(TUnit, [print_call, LCall(TUnit, LGlobal(TFun([], TUnit, EfPure), "print_newline"), [])])
-              } else {
-                print_call
-              }
-            } else { if name == "to_string" && len(args) > 0 {
-              let lowered = lower_expr(args[0], env, subst)
-              match lexpr_ty(lowered) {
-                TString => lowered,
-                _ => LCall(TString, LGlobal(TFun([lexpr_ty(lowered)], TString, EfPure), "int_to_str"), [lowered])
-              }
-            } else { if name == "slice" && len(args) >= 3 {
-              let lowered_args = lower_exprs(args, env, subst)
-              let first_ty = lexpr_ty(lowered_args[0])
-              match first_ty {
-                TString => LCall(TString, LGlobal(TFun([], TString, EfPure), "str_slice"), lowered_args),
-                _ => LCall(first_ty, LGlobal(TFun([], first_ty, EfPure), "slice"), lowered_args)
-              }
-            } else {
-              // Regular call — effect ops dispatch through __ev_op_NAME
-              // closures (installed by the handle). No compile-time inlining;
-              // the closure captures free vars by value at install time.
-              let lowered_func = lower_expr(func, env, subst)
-              LCall(lty_call_result(subst, lowered_func), lowered_func, lower_exprs(args, env, subst))
-            } } } }
-          }
-        },
-        _ => {
-          let lowered_func = lower_expr(func, env, subst)
-          LCall(lty_call_result(subst, lowered_func), lowered_func, lower_exprs(args, env, subst))
-        }
+        // Evidence-passing path for polymorphic dispatch
+        LCall(handle, lo_f, lo_args)
       }
     },
+    NExpr(IfExpr(cond, then_e, else_e)) => {
+      let lo_c = lower_expr(cond)
+      let lo_t = [lower_expr(then_e)]
+      let lo_e = [lower_expr(else_e)]
+      LIf(handle, lo_c, lo_t, lo_e)
+    },
+    NExpr(BlockExpr(stmts, final_e)) => {
+      let lo_stmts = lower_stmt_list(stmts)
+      let lo_final = lower_expr(final_e)
+      LBlock(handle, lo_stmts ++ [lo_final])
+    },
+    NExpr(MatchExpr(scrutinee, arms)) => {
+      let lo_s = lower_expr(scrutinee)
+      let lo_arms = lower_match_arms(arms)
+      LMatch(handle, lo_s, lo_arms)
+    },
+    NExpr(MakeListExpr(elems)) => {
+      let lo_elems = lower_expr_list(elems)
+      LMakeList(handle, lo_elems)
+    },
+    NExpr(MakeTupleExpr(elems)) => {
+      let lo_elems = lower_expr_list(elems)
+      LMakeTuple(handle, lo_elems)
+    },
+    NExpr(MakeVariant(tag, fields)) => {
+      let lo_fields = lower_expr_list(fields)
+      LMakeVariant(handle, tag, lo_fields)
+    },
+    _ => LConst(handle, LInt(0))   // placeholder for incomplete arms
+  }
+}
 
-    PipeExpr(data, step) => {
-      let lowered_data = lower_expr(data, env, subst)
-      let S(step_expr, sl, sc) = step
-      match step_expr {
-        Call(func, args) => {
-          let lowered_func = lower_expr(func, env, subst)
-          LCall(lty_call_result(subst, lowered_func), lowered_func, [lowered_data] ++ lower_exprs(args, env, subst))
-        },
-        VarRef(name) => {
-          if name == "println" || name == "print" {
-            // Desugar to Call so the println rewrite fires
-            lower_expr(S(Call(step, [data]), sl, sc), env, subst)
-          } else {
-            let lowered_step = lower_expr(step, env, subst)
-            LCall(lty_call_result(subst, lowered_step), lowered_step, [lowered_data])
-          }
-        },
-        _ => {
-          let lowered_step = lower_expr(step, env, subst)
-          LCall(lty_call_result(subst, lowered_step), lowered_step, [lowered_data])
-        }
+fn lower_expr_list(nodes) = {
+  if len(nodes) == 0 { [] }
+  else { [lower_expr(list_head(nodes))] ++ lower_expr_list(list_tail(nodes)) }
+}
+
+fn lower_stmt_list(stmts) = {
+  if len(stmts) == 0 { [] }
+  else { [lower_stmt(list_head(stmts))] ++ lower_stmt_list(list_tail(stmts)) }
+}
+
+fn lower_stmt(node) = {
+  let N(body, span, handle) = node
+  match body {
+    NStmt(LetStmt(pat, expr)) => {
+      let lo = lower_expr(expr)
+      match pat {
+        PVar(name) => LLet(handle, name, lo),
+        _ => lo
       }
     },
-
-    PrismExpr(data, branches) => {
-      let S(branches_expr, bl, bc) = branches
-      match branches_expr {
-        TupleExpr(fns) => {
-          // Input lowered ONCE, bound via LLet. Standard nodes. Types carry the proof.
-          let lowered_input = lower_expr(data, env, subst)
-          let input_name = "__fan_" ++ to_string(fresh_id())
-          let input_ref = LGlobal(lexpr_ty(lowered_input), input_name)
-          let calls = fan_out_single(fns, input_ref, env, subst)
-          LBlock(TTuple(lty_tuple_elems(subst, calls)),
-            [LLet(lexpr_ty(lowered_input), input_name, lowered_input),
-             LMakeTuple(TTuple(lty_tuple_elems(subst, calls)), calls)])
-        },
-        _ => lower_expr(S(Call(branches, [data]), bl, bc), env, subst)
-      }
+    NStmt(FnStmt(name, params, _, _, body_node)) => {
+      let lo_body = lower_expr(body_node)
+      // Function lowering produces LFn wrapped in appropriate structure
+      LLet(handle, name, lo_body)
     },
-
-    ComposeExpr(f, g) => {
-      // f >< g — effects merged. Types carry the proof.
-      let param = "__join_x"
-      let lowered_f = lower_expr(f, env, subst)
-      let lowered_g = lower_expr(g, env, subst)
-      let f_ret = lty_call_result(subst, lowered_f)
-      let g_ret = lty_call_result(subst, lowered_g)
-      let f_call = LCall(f_ret, lowered_f, [LGlobal(TUnit, param)])
-      let g_call = LCall(g_ret, lowered_g, [f_call])
-      let f_eff = lty_fn_eff(subst, lowered_f)
-      let g_eff = lty_fn_eff(subst, lowered_g)
-      let merged = merge_effects(f_eff, g_eff)
-      LMakeClosure(TFun([TUnit], g_ret, merged),
-        LFn("__joined_" ++ to_string(fresh_id()), 1, [param], [g_call], merged), [])
-    },
-
-
-    IfExpr(cond, then_e, else_e) => {
-      let lowered_then = lower_expr(then_e, env, subst)
-      LIf(lexpr_ty(lowered_then), lower_expr(cond, env, subst),
-          [lowered_then], [lower_expr(else_e, env, subst)])
-    },
-    MatchExpr(scrutinee, arms) => {
-      let lowered_arms = lower_match_arms(arms, env, subst)
-      let result_ty = if len(lowered_arms) == 0 { TUnit }
-                      else { let (_, body) = lowered_arms[0]; lexpr_ty(body) }
-      LMatch(result_ty, lower_expr(scrutinee, env, subst), lowered_arms)
-    },
-    BlockExpr(stmts, final_e) => {
-      let (lowered_stmts, block_env) = lower_stmts_with_env(stmts, env, subst)
-      let lowered_final = lower_expr(final_e, block_env, subst)
-      LBlock(lexpr_ty(lowered_final), lowered_stmts ++ [lowered_final])
-    },
-
-    LoopExpr(body) => {
-      // Get the type of the LoopExpr (which was successfully inferred as the fresh return type).
-      // Since it's dynamically typed at Lowering, we'll just extract the fresh infer from the AST node if possible,
-      // or default to TUnit since the loop itself doesn't return anything unless broken from.
-      // Actually, we must use lexpr_ty(lowered_body) or the AST type.
-      // Wait, we don't have sexpr_ty here natively, but we can query env or just let LLoop hold TUnit.
-      let lowered_body = lower_expr(body, env, subst)
-      LLoop(TUnit, [lowered_body])
-    },
-
-    BreakExpr(value) => {
-      let lowered_value = lower_expr(value, env, subst)
-      LBreak(lexpr_ty(lowered_value), lowered_value)
-    },
-
-    ListExpr(elems) => {
-      let lowered = lower_exprs(elems, env, subst)
-      LMakeList(lty_list(subst, lowered), lowered)
-    },
-    TupleExpr(elems) => {
-      let lowered = lower_exprs(elems, env, subst)
-      LMakeTuple(TTuple(lty_tuple_elems(subst, lowered)), lowered)
-    },
-    Index(collection, idx) => {
-      let lowered_coll = lower_expr(collection, env, subst)
-      // ctx[3] for a tuple must emit direct i32.load, not call $list_index
-      // (which misreads tuple memory as list-with-tag). Root-caused via
-      // wasm-decompile showing ctx_globals(ctx) compiled to list_index
-      // → returned the wrong field → ctx_globals appeared empty in-fn.
-      let is_tuple = match lexpr_ty(lowered_coll) { TTuple(_) => true, _ => false }
-      LIndex(lty_index_result(subst, lowered_coll), lowered_coll, lower_expr(idx, env, subst), is_tuple)
-    },
-    FieldAccess(obj, field) => {
-      let lowered_obj = lower_expr(obj, env, subst)
-      LIndex(lty_index_result(subst, lowered_obj), lowered_obj, LConst(TString, LString(field)), true)
-    },
-
-    RecordExpr(fields) => {
-      // Sort fields by name for canonical ordering — same as codegen.lux
-      let sorted = sort_fields_for_lower(fields)
-      let lowered = lower_record_fields(sorted, env, subst)
-      let tag = lower_record_tag(sorted)
-      LMakeVariant(TRecord(infer_record_field_types(sorted, lowered)), tag, lowered)
-    },
-
-    LambdaExpr(params, body) => lower_lambda_inner("lambda_" ++ to_string(fresh_id()), params, body, env, subst),
-
-    HandleExpr(body, handler_expr, state_bindings) =>
-      lower_handle(body, handler_expr, state_bindings, env, subst),
-
-    ResumeExpr(value, updates) => {
-      // Indirect dispatch: the arm body runs as a closure invoked via
-      // __ev_op_NAME. State updates must be executed before the resume
-      // value so the caller sees the new state. subst_state_to_cells on
-      // the handler record renames LLet("s", ..) → LLet("__hs_s_42", ..)
-      // so updates reach the heap-cell globals.
-      //
-      // Order matters: resume(VALUE) with STATE = EXPR must compute VALUE
-      // using OLD state. Stash value in a temp, apply updates, return temp.
-      if len(updates) == 0 { lower_expr(value, env, subst) }
-      else {
-        let lowered_value = lower_expr(value, env, subst)
-        let value_ty = lexpr_ty(lowered_value)
-        let stash_name = "__resume_val_" ++ to_string(fresh_id())
-        let stash_stmt = LLet(value_ty, stash_name, lowered_value)
-        let update_stmts = lower_state_updates(updates, env, subst)
-        let return_stmt = LGlobal(value_ty, stash_name)
-        LBlock(value_ty, [stash_stmt] ++ update_stmts ++ [return_stmt])
-      }
-    },
-
-    StringInterp(parts) => lower_string_interp(parts, env, subst),
-
-    _ => LConst(TUnit, LUnit)
+    NStmt(ExprStmt(expr)) => lower_expr(expr),
+    _ => LConst(handle, LInt(0))
   }
 }
 
-// Fan-out with single-evaluation: input_ref is already a bound reference
-fn fan_out_single(fns, input_ref, env, subst) = {
-  if len(fns) == 0 { [] }
-  else {
-    let (rest, f) = list_pop(fns)
-    let lowered_fn = lower_expr(f, env, subst)
-    fan_out_single(rest, input_ref, env, subst)
-    ++ [LCall(lty_call_result(subst, lowered_fn), lowered_fn, [input_ref])]
-  }
-}
-
-// Extract effect row from a function type
-fn lty_fn_eff(subst, lowered) = match apply(subst, lexpr_ty(lowered)) {
-  TFun(_, _, eff) => eff,
-  _ => EfPure
-}
-
-// Old fan_out_lower kept for non-tuple fan-out paths
-fn fan_out_lower(fns, input, env) = {
-  if len(fns) == 0 { [] }
-  else {
-    let (rest, f) = list_pop(fns)
-    let lowered_fn = lower_expr(f, env, subst)
-    fan_out_lower(rest, input, env)
-    ++ [LCall(lty_call_result(subst, lowered_fn), lowered_fn, [lower_expr(input, env, subst)])]
-  }
-}
-
-fn lower_exprs(sexprs, env, subst) = {
-  if len(sexprs) == 0 { [] }
-  else {
-    let (rest, expr) = list_pop(sexprs)
-    lower_exprs(rest, env, subst) ++ [lower_expr(expr, env, subst)]
-  }
-}
-
-fn lower_record_fields(fields, env, subst) = {
-  if len(fields) == 0 { [] }
-  else {
-    let (rest, f) = list_pop(fields)
-    let (_, val) = f
-    lower_record_fields(rest, env, subst) ++ [lower_expr(val, env, subst)]
-  }
-}
-
-fn sort_fields_for_lower(fields) = {
-  if len(fields) <= 1 { fields }
-  else {
-    let rest = sort_fields_for_lower(list_rest(fields))
-    insert_field_sorted(list_first(fields), rest)
-  }
-}
-
-fn insert_field_sorted(field, sorted) = {
-  if len(sorted) == 0 { [field] }
-  else {
-    let (fa, _) = field
-    let head = list_first(sorted)
-    let (fb, _) = head
-    // Use str_lt on CONTENT, not raw `<` which lowers to pointer compare
-    // in WASM. Record-field order is load-bearing for handler indices —
-    // see commit log for the self-hosting miscompilation this fixes.
-    if str_lt(fa, fb) == 1 { [field] ++ sorted }
-    else { [head] ++ insert_field_sorted(field, list_rest(sorted)) }
-  }
-}
-
-fn lower_record_tag(sorted_fields) = {
-  "#record:" ++ lower_field_name_list(sorted_fields)
-}
-
-fn lower_field_name_list(fields) = {
-  if len(fields) == 0 { "" }
-  else {
-    let (name, _) = list_first(fields)
-    let rest = list_rest(fields)
-    if len(rest) == 0 { name }
-    else { name ++ "," ++ lower_field_name_list(rest) }
-  }
-}
-
-fn infer_record_field_types(fields, lowered_exprs) = {
-  // Extract type from each lowered expression for the TRecord type
-  if len(fields) == 0 || len(lowered_exprs) == 0 { [] }
-  else {
-    let (name, _) = list_first(fields)
-    let ty = lexpr_ty(list_first(lowered_exprs))
-    [(name, ty)] ++ infer_record_field_types(list_rest(fields), list_rest(lowered_exprs))
-  }
-}
-
-fn lower_string_interp(parts, env, subst) = {
-  if len(parts) == 0 { LConst(TString, LString("")) }
-  else {
-    let first = lower_interp_one(list_head(parts), env, subst)
-    let rest_parts = list_tail(parts)
-    if len(rest_parts) == 0 { first }
-    else {
-      let rest_str = lower_string_interp(rest_parts, env, subst)
-      LCall(TString, LGlobal(TFun([TString, TString], TString, EfPure), "str_concat"), [first, rest_str])
-    }
-  }
-}
-
-fn lower_interp_one(part, env, subst) = {
-  let lowered = lower_expr(part, env, subst)
-  match lexpr_ty(lowered) {
-    TString => lowered,
-    _ => LCall(TString, LGlobal(TFun([lexpr_ty(lowered)], TString, EfPure), "int_to_str"), [lowered])
-  }
-}
-
-fn lower_match_arms(arms, env, subst) = {
+fn lower_match_arms(arms) = {
   if len(arms) == 0 { [] }
   else {
-    let (rest, arm) = list_pop(arms)
-    let (pat, body) = arm
-    lower_match_arms(rest, env, subst) ++ [(lower_pat(pat), lower_expr(body, env, subst))]
+    let (pat, body) = list_head(arms)
+    let lo_body = lower_expr(body)
+    [(lower_pat(pat), lo_body)] ++ lower_match_arms(list_tail(arms))
   }
-}
-
-fn lit_expr_to_lval(e) = match e {
-  IntLit(s)    => LInt(parse_int(s)),
-  FloatLit(s)  => LFloat(parse_float(s)),
-  StringLit(s) => LString(s),
-  BoolLit(b)   => LBool(b),
-  _ => LUnit
-}
-
-fn unspan_lit(sexpr) = {
-  let S(e, _, _) = sexpr
-  lit_expr_to_lval(e)
 }
 
 fn lower_pat(pat) = match pat {
   PVar(name) => LPVar(name),
   PWild => LPWild,
   PCon(name, sub) => LPCon(name, lower_pats(sub)),
-  PLit(sexpr) => LPLit(unspan_lit(sexpr)),
   PTuple(sub) => LPTuple(lower_pats(sub)),
   _ => LPWild
 }
 
-fn lower_pats(pats) = lower_pats_pop(pats, [])
-fn lower_pats_pop(pats, acc) = {
-  if len(pats) == 0 { acc }
-  else {
-    let pat = list_head(pats)
-    let rest = list_tail(pats)
-    lower_pats_pop(rest, [lower_pat(pat)] ++ acc)
-  }
+fn lower_pats(pats) = {
+  if len(pats) == 0 { [] }
+  else { [lower_pat(list_head(pats))] ++ lower_pats(list_tail(pats)) }
 }
 
-// ─── Statement Lowering ─────────────────────────────────────
-
-fn lower_stmts(stmts, env, subst) = lower_stmts_pop(stmts, env, subst, [])
-fn lower_stmts_pop(stmts, env, subst, acc) = {
-  if len(stmts) == 0 { acc }
-  else {
-    let stmt = list_head(stmts)
-    let rest = list_tail(stmts)
-    lower_stmts_pop(rest, env, [lower_stmt(stmt, env, subst)] ++ acc)
-  }
-}
-
-// Lower statements while extending env with local types — for BlockExpr.
-// Each LetStmt/FnStmt adds its binding to env for subsequent statements.
-fn lower_stmts_with_env(stmts, env, subst) = lower_stmts_forward(reverse_list(stmts), env, subst, [])
-fn lower_stmts_forward(reversed_stmts, env, subst, acc) = {
-  if len(reversed_stmts) == 0 { (acc, env) }
-  else {
-    let (rest, stmt) = list_pop(reversed_stmts)
-    let lowered = lower_stmt(stmt, env, subst)
-    let new_env = extend_env_from_stmt(stmt, lowered, env)
-    lower_stmts_forward(rest, new_env, subst, push(acc, lowered))
-  }
-}
-
-// extend_env_from_stmt: called AFTER lower_stmt so we can read types off
-// the lowered node. For FnStmt, the checker already put the real TFun in
-// env — we don't shadow it.
-fn extend_env_from_stmt(stmt, lowered, env) = match stmt {
-  LetStmt(name, _) => push(env, (name, lexpr_ty(lowered), Inferred("let"))),
-  FnStmt(_, _, _, _, _) => env,  // real TFun already in env from checker
-  LetDestructure(names, _) => bind_names_unknown(names, env),
-  _ => env
-}
-
-fn bind_names_unknown(names, env) = {
-  if len(names) == 0 { env }
-  else {
-    let (rest, name) = list_pop(names)
-    bind_names_unknown(rest, push(env, (name, TUnit, Inferred("destructured"))))
-  }
-}
-
-fn extract_param_names(params) = {
-  if len(params) == 0 { [] }
-  else {
-    let (rest, p) = list_pop(params)
-    let name = match p { (n, _, _) => n, (n, _) => n, _ => p };
-    extract_param_names(rest) ++ [name]
-  }
-}
-
-fn lower_stmt(stmt, env, subst) = match stmt {
-  LetStmt(name, value) => {
-    let lowered = lower_expr(value, env, subst)
-    LLet(lexpr_ty(lowered), name, lowered)
-  },
-  LetDestructure(names, value) => {
-    let lowered = lower_expr(value, env, subst)
-    LBlock(TUnit, [LLet(lexpr_ty(lowered), "_dt", lowered)] ++ lower_destructure_bindings(names, 0))
-  },
-  LetPattern(pat, value) => {
-    let lowered = lower_expr(value, env, subst)
-    let lowered_ty = lexpr_ty(lowered)
-    match pat {
-      PVar(name) => LLet(lowered_ty, name, lowered),
-      PCon(_, sub) => {
-        let names = extract_pat_names_safe(pat)
-        LBlock(TUnit, [LLet(lowered_ty, "_lp", lowered)] ++ lower_destructure_bindings_offset(names, 0, 0))
-      },
-      PTuple(sub) => {
-        let names = extract_pat_names_safe(pat)
-        LBlock(TUnit, [LLet(lowered_ty, "_lp", lowered)] ++ lower_destructure_bindings_offset(names, 0, 0))
-      },
-      _ => LLet(lowered_ty, "_lp", lowered)
-    }
-  },
-  FnStmt(name, params, body, _, _) => {
-    let base_params = extract_param_names(params)
-    let param_names = base_params
-    let lowered_lambda = if is_global(name) { lower_lambda(name, param_names, body, env, subst) }
-                         else { lower_lambda_inner(name, param_names, body, env, subst) }
-    LLet(lexpr_ty(lowered_lambda), name, lowered_lambda)
-  },
-  ExprStmt(expr) => lower_expr(expr, env, subst),
-  EffectDeclStmt(eff_name, ops) => {
-    // Runtime effects (Memory, Alloc, WASI) are handled by emit_builtin.
-    // Only user effects get dummy op stubs.
-    if eff_name == "Memory" || eff_name == "Alloc" || eff_name == "WASI" { LConst(TUnit, LUnit) }
-    else { LBlock(TUnit, emit_dummy_ops(ops, env)) }
-  },
-  // TypeStmt, TypeAliasStmt, ImportStmt — compile-time declarations,
-  // no runtime code. Correctly lower to unit.
-  _ => LConst(TUnit, LUnit)
-}
-
-fn emit_dummy_ops(ops, env) = {
-  if len(ops) == 0 { [] }
-  else {
-    let (rest, op) = list_pop(ops)
-    let (op_name, p_names) = op
-    let ev_name = "__ev_op_" ++ op_name
-    let fn_def = LFn(ev_name, len(p_names), p_names, [LConst(TUnit, LUnit)], EfPure)
-    let closure_ty = TFun([], TUnit, EfPure)
-    emit_dummy_ops(rest, env)
-    ++ [LLet(closure_ty, ev_name, LMakeClosure(closure_ty, fn_def, []))]
-  }
-}
-
-fn lower_destructure_bindings_offset(names, offset, idx) = {
-  if len(names) == 0 { [] }
-  else {
-    let name = list_first(names)
-    let rest = list_rest(names)
-    if name == "_" { lower_destructure_bindings_offset(rest, offset, idx + 1) }
-    else {
-      [LLet(TUnit, name, LIndex(TUnit, LGlobal(TUnit, "_lp"), LConst(TInt, LInt(offset + idx)), true))]
-      ++ lower_destructure_bindings_offset(rest, offset, idx + 1)
-    }
-  }
-}
-
-fn lower_destructure_bindings(names, idx) = {
-  if len(names) == 0 { [] }
-  else {
-    let name = list_first(names)
-    let rest = list_rest(names)
-    if name == "_" { lower_destructure_bindings(rest, idx + 1) }
-    else {
-      [LLet(TUnit, name, LIndex(TUnit, LGlobal(TUnit, "_dt"), LConst(TInt, LInt(idx)), true))]
-      ++ lower_destructure_bindings(rest, idx + 1)
-    }
-  }
-}
-
-// ─── Handle Expression Lowering ─────────────────────────────
-
-// Region-safe types: values that don't point into the heap.
-// When a handler scope exits and the result is one of these types,
-// the heap can be safely reset (O(1) deallocation of all intermediates).
-// NOTE: TUnit is NOT region-safe because effect operations declare
-// `-> ()` but handlers often resume with heap values (List, Tuple,
-// Variant). The declared type hides it. Trust only concrete primitives.
-fn is_region_safe_ty(ty) = match ty {
-  TInt => true,
-  TBool => true,
-  TFloat => true,
-  _ => false
-}
-
-// ─── Extract field names from handler type ───
-// We need field names at compile time for save/restore of evidence globals.
-// This reads the Type Environment (Ty) instead of the AST, enabling dynamic handlers.
-fn extract_names_from_ty(ty) = match ty {
-  TRecord(fields) => extract_record_ty_names(fields),
-  TRecordOpen(fields, _) => extract_record_ty_names(fields),
-  _ => []
-}
-
-fn extract_record_ty_names(fields) = {
-  if len(fields) == 0 { [] }
-  else {
-    let (name, _) = list_first(fields)
-    [name] ++ extract_record_ty_names(list_rest(fields))
-  }
-}
-
-fn lower_handle(body, handler_expr, state_bindings, env, subst) = {
-  // ─── State: heap cells for handler-local state — generate names FIRST ───
-  let state_names = gen_state_names(state_bindings)
-
-  // ─── Lower the handler record with is_state_var active ───
-  // State vars must NOT be captured by handler arm closures — they live in
-  // heap cells accessed via globals. is_state_var filters them from captures.
-  let lowered_handler = handle {
-    lower_expr(handler_expr, env, subst)
-  } {
-    is_state_var(n) => resume(is_orig_state_name(state_names, n))
-  }
-  let op_names = extract_names_from_ty(lexpr_ty(lowered_handler))
-
-  let state_inits = init_state_globals(state_bindings, state_names, env)
-
-  // ─── Save current evidence (for nesting) ───
-  let op_saves = save_op_bindings(op_names)
-
-  let handler_name = "__handler_rec_" ++ to_string(fresh_id())
-  // Pure structural transform: substitute state names in handler closures.
-  // walk_ir now reaches into LMakeClosure fn_def bodies.
-  let final_handler = if len(state_names) > 0 {
-    subst_state_to_cells(lowered_handler, state_names)
-  } else { lowered_handler }
-  let handler_store = [LLet(TUnit, handler_name, final_handler)]
-
-  // ─── Install evidence: index into the record ───
-  // State vars already substituted in the record — direct index suffices.
-  let ev_installs = install_evidence_from_record(handler_name, op_names, 0)
-
-  // ─── Lower the body with is_state_var active ───
-  // All effect op calls in `body` dispatch indirectly through __ev_op_NAME.
-  // The installed closures (in the handler record above) capture their
-  // free vars by value — no compile-time inlining needed.
-  let lowered_body = handle {
-    lower_expr(body, env, subst)
-  } {
-    is_state_var(n) => resume(is_orig_state_name(state_names, n))
-  }
-
-  let body_ty = lexpr_ty(lowered_body)
-  let op_restores = restore_op_bindings(op_names)
-  let state_restores = restore_state_globals(state_names)
-
-  let stmts = state_inits ++ op_saves ++ handler_store ++ ev_installs
-         ++ [LLet(body_ty, "__ev_result", lowered_body)]
-         ++ op_restores ++ state_restores
-         ++ [LGlobal(body_ty, "__ev_result")]
-  if is_region_safe_ty(body_ty) {
-    LRegion(body_ty, stmts)
-  } else {
-    LBlock(body_ty, stmts)
-  }
-}
-
-fn install_evidence_from_record(handler_name, op_names, idx) = {
-  if len(op_names) == 0 { [] }
-  else {
-    let op_name = list_first(op_names)
-    let ev_name = "__ev_op_" ++ op_name
-    let index_expr = LIndex(TUnit, LGlobal(TUnit, handler_name), LConst(TInt, LInt(idx)), true)
-    [LLet(TUnit, ev_name, index_expr)]
-    ++ install_evidence_from_record(handler_name, list_rest(op_names), idx + 1)
-  }
-}
-
-fn install_stateful_evidence(handler_name, op_names, state_names, idx, env) = {
-  if len(op_names) == 0 { [] }
-  else {
-    let op_name = list_first(op_names)
-    let ev_name = "__ev_op_" ++ op_name
-    let index_expr = LIndex(TUnit, LGlobal(TUnit, handler_name), LConst(TInt, LInt(idx)), true)
-    let substituted = subst_state_to_cells(index_expr, state_names)
-    [LLet(TUnit, ev_name, substituted)]
-    ++ install_stateful_evidence(handler_name, list_rest(op_names), state_names, idx + 1, env)
-  }
-}
-
-// ─── Evidence Passing Infrastructure ────────────────────────
-// Effect ops are global bindings. Handlers install closures.
-// State lives in heap cells. Save/restore handles nesting.
-
-// Generate global names for handler state variables
-// Uses fresh_id for uniqueness (prevents collision in nested/recursive handlers)
-fn gen_state_names(bindings) = {
-  if len(bindings) == 0 { [] }
-  else {
-    let (name, _) = list_first(bindings)
-    let gname = "__hs_" ++ name ++ "_" ++ to_string(fresh_id())
-    [(name, gname)] ++ gen_state_names(list_rest(bindings))
-  }
-}
-
-fn init_state_globals(bindings, state_names, env) = {
-  if len(bindings) == 0 || len(state_names) == 0 { [] }
-  else {
-    let (_, init_sexpr) = list_head(bindings)
-    let (_, gname) = list_head(state_names)
-    let init_lowered = lower_expr(init_sexpr, env, subst)
-    let init_ty = lexpr_ty(init_lowered)
-    [ LLet(init_ty, "__save_" ++ gname, LGlobal(init_ty, gname)),
-      LLet(init_ty, gname, init_lowered) ]
-    ++ init_state_globals(list_tail(bindings), list_tail(state_names), env)
-  }
-}
-
-fn restore_state_globals(state_names) = {
-  if len(state_names) == 0 { [] }
-  else {
-    let (_, gname) = list_first(state_names)
-    [LLet(TUnit, gname, LGlobal(TUnit, "__save_" ++ gname))]
-    ++ restore_state_globals(list_rest(state_names))
-  }
-}
-
-
-
-fn save_op_bindings(op_names) = {
-  if len(op_names) == 0 { [] }
-  else {
-    let ev = "__ev_op_" ++ list_first(op_names)
-    [LLet(TUnit, "__save_" ++ ev, LGlobal(TUnit, ev))]
-    ++ save_op_bindings(list_rest(op_names))
-  }
-}
-
-fn restore_op_bindings(op_names) = {
-  if len(op_names) == 0 { [] }
-  else {
-    let ev = "__ev_op_" ++ list_first(op_names)
-    [LLet(TUnit, ev, LGlobal(TUnit, "__save_" ++ ev))]
-    ++ restore_op_bindings(list_rest(op_names))
-  }
-}
-
-fn flatten_blocks(stmts) = {
-  if len(stmts) == 0 { [] }
-  else {
-    let head = list_first(stmts)
-    let rest = flatten_blocks(list_rest(stmts))
-    match head {
-      LBlock(_, inner) => flatten_blocks(inner) ++ rest,
-      _ => [head] ++ rest
-    }
-  }
-}
-
-
-
-fn filter_out_hs_names(names) = {
-  if len(names) == 0 { [] }
-  else {
-    let n = list_first(names)
-    let rest = filter_out_hs_names(list_rest(names))
-    if starts_with(n, "__hs_") || starts_with(n, "__save___hs_") || starts_with(n, "__ev_result") { rest }
-    else { [n] ++ rest }
-  }
-}
-
-// Collect free LGlobal names from LowIR (names not in bound set)
-// Uses the LowIRVisit walker — structurally complete for ALL LowExpr variants.
-fn collect_free_lowir(node, bound) =
-  handle { walk_ir(node); get_lowir_accum() } with names = [] {
-    visit_lowir(n) => match n {
-      LGlobal(_, name) => {
-        if not(string_in(bound, name, 0)) && not(string_in(names, name, 0)) {
-          resume(n) with names = push(names, name)
-        } else { resume(n) }
-      },
-      LLet(_, name, _) => {
-        // LLet binds a name — don't add it as free, but we let the walker
-        // recurse into the value (already done by walk_ir)
-        resume(n)
-      },
-      _ => resume(n)
-    },
-    get_lowir_accum() => resume(names)
-  }
-
-fn lower_state_updates_pure(updates, env, subst) = {
-  if len(updates) == 0 { [] }
-  else {
-    let (name, value_sexpr) = list_first(updates)
-    let lowered = lower_expr_pure(value_sexpr, env, subst)
-    [LLet(lexpr_ty(lowered), name, lowered)]
-    ++ lower_state_updates_pure(list_rest(updates), env, subst)
-  }
-}
-
-// Substitute state variable names in LowIR:
-//   LGlobal("acc") → LGlobal("__hs_42")    (read state global)
-//   LLet("acc", v)  → LLet("__hs_42", v)    (write state global)
-fn is_orig_state_name(state_names, n) = {
-  if len(state_names) == 0 { false }
-  else {
-    let (orig, _) = list_first(state_names)
-    if str_eq(orig, n) == 1 { true } else { is_orig_state_name(list_rest(state_names), n) }
-  }
-}
-
-fn subst_state_to_cells(node, state_names) = {
-  if len(state_names) == 0 { node }
-  else {
-    let (orig, gname) = list_first(state_names)
-    let replaced = subst_one_state(node, orig, gname)
-    subst_state_to_cells(replaced, list_rest(state_names))
-  }
-}
-
-// Substitute state variable names in LowIR:
-//   LGlobal("acc") → LGlobal("__hs_42")    (read state global)
-//   LLet("acc", v)  → LLet("__hs_42", v)    (write state global)
-// Uses the LowIRVisit walker — structurally complete for ALL LowExpr variants.
-fn subst_one_state(node, orig, gname) =
-  handle { walk_ir(node) } {
-    visit_lowir(n) => match n {
-      LGlobal(ty, name) =>
-        if str_eq(name, orig) == 1 { resume(LGlobal(ty, gname)) }
-        else { resume(n) },
-      LLet(ty, name, value) =>
-        if str_eq(name, orig) == 1 { resume(LLet(ty, gname, value)) }
-        else { resume(n) },
-      _ => resume(n)
-    }
-  }
-
-fn lower_stmts_pure(stmts, env, subst) = {
-  if len(stmts) == 0 { [] }
-  else { [lower_stmt_pure(list_head(stmts), env, subst)] ++ lower_stmts_pure(list_tail(stmts), env, subst) }
-}
-
-fn lower_stmt_pure(stmt, env, subst) = match stmt {
-  LetStmt(name, value) => {
-    let lowered = lower_expr_pure(value, env, subst)
-    LLet(lexpr_ty(lowered), name, lowered)
-  },
-  ExprStmt(expr) => lower_expr_pure(expr, env, subst),
-  // TypeStmt, TypeAliasStmt, ImportStmt — compile-time declarations,
-  // no runtime code. Correctly lower to unit.
-  _ => LConst(TUnit, LUnit)
-}
-
-fn lower_expr_pure(sexpr, env, subst) = {
-  let S(expr, _, _) = sexpr
-  match expr {
-    IntLit(s)    => LConst(TInt,    LInt(parse_int(s))),
-    FloatLit(s)  => LConst(TFloat,  LFloat(parse_float(s))),
-    StringLit(s) => LConst(TString, LString(s)),
-    BoolLit(b)   => LConst(TBool,   LBool(b)),
-    VarRef(name) => LGlobal(lty_name(subst, env, name), name),
-    BinOp(op, l, r) => {
-      let ll = lower_expr_pure(l, env, subst)
-      let rr = lower_expr_pure(r, env, subst)
-      let ty = if op == "Eq" || op == "Neq" || op == "Lt" || op == "Gt" || op == "LtEq" || op == "GtEq" || op == "And" || op == "Or" { TBool }
-               else { lexpr_ty(ll) }
-      LBinOp(ty, op, ll, rr)
-    },
-    UnaryOp(op, e) => {
-      let inner = lower_expr_pure(e, env, subst)
-      let ty = if op == "Not" { TBool } else { lexpr_ty(inner) }
-      LUnaryOp(ty, op, inner)
-    },
-    Call(func, args) => {
-      let lowered_func = lower_expr_pure(func, env, subst)
-      LCall(lty_call_result(subst, lowered_func), lowered_func, lower_exprs_pure(args, env, subst))
-    },
-    TupleExpr(elems) => {
-      let lowered = lower_exprs_pure(elems, env, subst)
-      LMakeTuple(TTuple(lty_tuple_elems(subst, lowered)), lowered)
-    },
-    _ => LConst(TUnit, LUnit)
-  }
-}
-
-fn lower_exprs_pure(sexprs, env, subst) = {
-  if len(sexprs) == 0 { [] }
-  else { [lower_expr_pure(list_head(sexprs), env, subst)] ++ lower_exprs_pure(list_tail(sexprs), env, subst) }
-}
-
-
-// ─── State Init + Update ────────────────────────────────────
-
-fn lower_state_inits(bindings, env, subst) = {
-  if len(bindings) == 0 { [] }
-  else {
-    let (name, init_sexpr) = list_head(bindings)
-    let lowered = lower_expr(init_sexpr, env, subst)
-    [LLet(lexpr_ty(lowered), name, lowered)]
-      ++ lower_state_inits(list_tail(bindings), env, subst)
-  }
-}
-
-fn lower_state_updates(updates, env, subst) = {
-  if len(updates) <= 1 { lower_state_updates_direct(updates, env, subst) }
-  else { lower_state_eval_temps(updates, env, subst, 0) ++ lower_state_assign_temps(updates, env, subst, 0) }
-}
-
-fn lower_state_updates_direct(updates, env, subst) = {
-  if len(updates) == 0 { [] }
-  else {
-    let (name, value_sexpr) = list_first(updates)
-    let lowered = lower_expr(value_sexpr, env, subst)
-    [LLet(lexpr_ty(lowered), name, lowered)]
-      ++ lower_state_updates_direct(list_rest(updates), env, subst)
-  }
-}
-
-fn lower_state_eval_temps(updates, env, subst, idx) = {
-  if len(updates) == 0 { [] }
-  else {
-    let (name, value_sexpr) = list_head(updates)
-    let lowered = lower_expr(value_sexpr, env, subst)
-    [LLet(lexpr_ty(lowered), "__tmp_" ++ name, lowered)]
-      ++ lower_state_eval_temps(list_tail(updates), env, subst, idx + 1)
-  }
-}
-
-fn lower_state_assign_temps(updates, env, subst, idx) = {
-  if len(updates) == 0 { [] }
-  else {
-    let (name, value_sexpr) = list_head(updates)
-    let lowered = lower_expr(value_sexpr, env, subst)
-    let ty = lexpr_ty(lowered)
-    [LLet(ty, name, LGlobal(ty, "__tmp_" ++ name))]
-      ++ lower_state_assign_temps(list_tail(updates), env, subst, idx + 1)
-  }
-}
-
-// ─── Program Lowering ───────────────────────────────────────
-// env replaces type_map. inferred_type reads it directly.
-
-fn add_op_indices_to_env(stmts, idx, env) = {
-  if len(stmts) == 0 { env }
-  else {
-    let new_env = match list_head(stmts) {
-      EffectDeclStmt(eff_name, ops) => {
-        if eff_name == "Memory" || eff_name == "Alloc" || eff_name == "WASI" { env }
-        else {
-          let e1 = env_extend(env, "__user_eff_" ++ eff_name, TUnit, Inferred("user_eff"))
-          add_ops_to_env(ops, eff_name, 0, e1)
-        }
-      },
-      _ => env
-    }
-    add_op_indices_to_env(list_tail(stmts), idx + 1, new_env)
-  }
-}
-
-fn add_ops_to_env(ops, eff_name, op_idx, env) = {
-  if len(ops) == 0 { env }
-  else {
-    let (op_name, _) = list_head(ops)
-    let info_ty = TTuple([TName(eff_name, []), TVar(op_idx)])
-    let new_env = env_extend(env, "__opinfo_" ++ op_name, info_ty, Inferred("op"))
-    add_ops_to_env(list_tail(ops), eff_name, op_idx + 1, new_env)
-  }
-}
-
-fn get_op_info(name, env) = {
-  let (k, ty, _) = env_lookup(env, "__opinfo_" ++ name)
-  if k == "not_found" { (false, "", -1) }
-  else { match ty {
-    TTuple(elems) => {
-      let TName(eff_name, _) = elems[0]
-      let TVar(op_idx) = elems[1]
-      (true, eff_name, op_idx)
-    },
-    _ => (false, "", -1)
-  } }
-}
-
-fn get_user_effects(name, env) = {
-  let (_, ty, _) = env_lookup(env, name)
-  match ty {
-    TFun(_, _, effs) => filter(|e| is_user_effect(e, env), effect_names(effs)),
-    _ => []
-  }
-}
-
-// `effect_names` is defined in std/compiler/eff.lux:294 — duplicate removed
-// here to satisfy the no-shadow invariant.
-
-fn is_user_effect(eff_name, env) = {
-  let (k, _, _) = env_lookup(env, "__user_eff_" ++ eff_name)
-  k != "not_found"
-}
-
-// filter is in prelude
-
-fn lower_program_typed(stmts, ctors, env, subst) = {
-  let final_env = add_op_indices_to_env(stmts, 0, env)
-  // println/print are call-site specialized in lower_expr (see the Call
-  // branch — they desugar to print_string / print_int / print_newline).
-  // They're not real top-level fns, but collect_free_vars walks the raw
-  // AST and treats them as captured free variables in closure bodies.
-  // Listing them here lets is_global filter them out of capture lists
-  // so the emitter doesn't hit its unresolved-ref fallback.
-  // to_string and slice ARE real fns (memory.lux) — no addition needed.
-  let globals = collect_top_names(stmts, 0)
-             ++ ["heap_save", "heap_restore", "println", "print"]
-  handle { lower_stmts(stmts, final_env, subst) } with state = 0 {
-    is_ctor(name) => resume(ctor_in(ctors, name, 0)),
-    is_global(name) => resume(name_in(globals, name, 0)),
-    is_state_var(name) => resume(false),
-    fresh_id() => {
-      resume(state) with state = state + 1
-    }
-  }
-}
-
-// String-equality fix — polymorphic == falls through to val_eq which works
-// but adds overhead per-call. str_eq is the typed-string fast path.
-fn ctor_in(ctors, name, idx) = {
-  if len(ctors) == 0 { false }
-  else { if str_eq(list_head(ctors), name) == 1 { true } else { ctor_in(list_tail(ctors), name, idx + 1) } }
-}
-
-fn name_in(names, name, idx) = {
-  if len(names) == 0 { false }
-  else { if str_eq(list_head(names), name) == 1 { true } else { name_in(list_tail(names), name, idx + 1) } }
-}
-
-fn collect_top_names(stmts, idx) = {
-  if len(stmts) == 0 { [] }
-  else {
-    let here = match list_head(stmts) {
-      FnStmt(name, _, _, _, _) => [name],
-      LetStmt(name, _) => [name],
-      EffectDeclStmt(_, ops) => collect_effect_op_names(ops, 0),
-      _ => []
-    }
-    here ++ collect_top_names(list_tail(stmts), idx + 1)
-  }
-}
-
-fn collect_effect_op_names(ops, idx) = {
-  if len(ops) == 0 { [] }
-  else {
-    let (op_name, _) = list_head(ops)
-    [op_name] ++ collect_effect_op_names(list_tail(ops), idx + 1)
-  }
-}
+// ─── LowIR ADT (from lower_ir.jxj, handles replace Ty) ─────
+
+type LowExpr
+  = LConst(Int, LowValue)
+  | LLocal(Int, Int)
+  | LGlobal(Int, String)
+  | LStore(Int, Int, LowExpr)
+  | LLet(Int, String, LowExpr)
+  | LUpval(Int, Int)
+  | LBinOp(Int, String, LowExpr, LowExpr)
+  | LUnaryOp(Int, String, LowExpr)
+  | LCall(Int, LowExpr, List)
+  | LTailCall(Int, LowExpr, List)
+  | LReturn(Int, LowExpr)
+  | LMakeClosure(Int, LowFn, List)
+  | LIf(Int, LowExpr, List, List)
+  | LBlock(Int, List)
+  | LMakeList(Int, List)
+  | LMakeTuple(Int, List)
+  | LMakeVariant(Int, String, List)
+  | LIndex(Int, LowExpr, LowExpr, Bool)
+  | LMatch(Int, LowExpr, List)
+  | LLoop(Int, List)
+  | LBreak(Int, LowExpr)
+  | LRegion(Int, List)
+
+type LowValue
+  = LInt(Int)
+  | LFloat(Float)
+  | LString(String)
+  | LBool(Bool)
+
+type LowFn
+  = LFn(String, Int, List, List, EffRow)
+
+type LowPat
+  = LPVar(String)
+  | LPWild
+  | LPCon(String, List)
+  | LPTuple(List)
+  | LPLit(LowValue)

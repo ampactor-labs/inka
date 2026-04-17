@@ -120,12 +120,15 @@ fn op_prec(t) =
   else { if t == "And" { 2 }
   else { if t == "EqEq" || t == "BangEq" { 3 }
   else { if t == "Lt" || t == "Gt" || t == "LtEq" || t == "GtEq" { 4 }
-  else { if t == "PlusPlus" || t == "PipeGt" || t == "Prism" { 5 }
-  else { if t == "Compose" { 6 }
-  else { if t == "HandlePipe" { 7 }
-  else { if t == "Plus" || t == "Minus" { 8 }
-  else { if t == "Star" || t == "Slash" || t == "Percent" { 9 }
-  else { 0 } } } } } } } } }
+  else { if t == "PlusPlus" { 5 }
+  else { if t == "GtLt" { 6 }
+  else { if t == "PipeGt" { 7 }
+  else { if t == "LtPipe" { 8 }
+  else { if t == "LtTilde" { 9 }
+  else { if t == "TildeGt" { 10 }
+  else { if t == "Plus" || t == "Minus" { 11 }
+  else { if t == "Star" || t == "Slash" || t == "Percent" { 12 }
+  else { 0 } } } } } } } } } } } } }
 
 fn to_arith_op(t) =
   if t == "Plus" { "Add" }
@@ -134,11 +137,12 @@ fn to_arith_op(t) =
   else { if t == "Slash" { "Div" }
   else { if t == "Percent" { "Mod" }
   else { if t == "PlusPlus" { "Concat" }
-  else { if t == "PipeGt" { "Pipe" }
-  else { if t == "Prism" { "Prism" }
-  else { if t == "Compose" { "Compose" }
-  else { if t == "HandlePipe" { "HandlePipe" }
-  else { "" } } } } } } } } } }
+  else { if t == "PipeGt" { "PipeGt" }
+  else { if t == "LtPipe" { "LtPipe" }
+  else { if t == "GtLt" { "GtLt" }
+  else { if t == "TildeGt" { "TildeGt" }
+  else { if t == "LtTilde" { "LtTilde" }
+  else { "" } } } } } } } } } } }
 
 fn to_cmp_op(t) =
   if t == "EqEq" { "Eq" }
@@ -692,9 +696,13 @@ fn parse_pattern(tokens, pos) = {
     let (atom, ap) = parse_atom(tokens, p);
     (PLit(atom), ap)
   }
+  else { if typ == "LBracket" {
+    let (args, p2) = parse_list_pattern_args(tokens, p + 1);
+    (PList(args), p2)
+  }
   else {
     (PWild, p + 1)
-  }}}
+  }}}}
 }
 
 fn parse_pattern_args(tokens, pos) = {
@@ -705,6 +713,18 @@ fn parse_pattern_args(tokens, pos) = {
     let p3 = skip_ws(tokens, p2);
     let p4 = if at(tokens, p3, "Comma") { p3 + 1 } else { p3 };
     let (rest, p5) = parse_pattern_args(tokens, p4);
+    ([pat] ++ rest, p5)
+  }
+}
+
+fn parse_list_pattern_args(tokens, pos) = {
+  let p = skip_ws(tokens, pos);
+  if at(tokens, p, "RBracket") { ([], p + 1) }
+  else {
+    let (pat, p2) = parse_pattern(tokens, p);
+    let p3 = skip_ws(tokens, p2);
+    let p4 = if at(tokens, p3, "Comma") { p3 + 1 } else { p3 };
+    let (rest, p5) = parse_list_pattern_args(tokens, p4);
     ([pat] ++ rest, p5)
   }
 }
@@ -905,11 +925,12 @@ fn binop_loop(tokens, left, pos, min_p) = {
   if pr >= min_p && pr > 0 {
     let op = to_op(t);
     let (right, p2) = parse_binop(tokens, p + 1, pr + 1);
-    let node = if op == "Pipe" { sp(PipeExpr(left, right), tokens, p) }
-               else { if op == "Prism" { sp(PrismExpr(left, right), tokens, p) }
-               else { if op == "Compose" { sp(ComposeExpr(left, right), tokens, p) }
-               else { if op == "HandlePipe" { sp(HandleExpr(left, right, []), tokens, p) }
-               else { sp(BinOp(op, left, right), tokens, p) } } } };
+    let node = if op == "PipeGt" { sp(PipeExpr(PForward, left, right), tokens, p) }
+               else { if op == "LtPipe" { sp(PipeExpr(PDiverge, left, right), tokens, p) }
+               else { if op == "GtLt" { sp(PipeExpr(PCompose, left, right), tokens, p) }
+               else { if op == "TildeGt" { sp(PipeExpr(PTee, left, right), tokens, p) }
+               else { if op == "LtTilde" { sp(PipeExpr(PFeedback, left, right), tokens, p) }
+               else { sp(BinOpExpr(op, left, right), tokens, p) } } } } };
     binop_loop(tokens, node, p2, min_p)
   }
   else { (left, p) }
@@ -1141,11 +1162,23 @@ fn parse_effect_ops(tokens, pos) = {
       p_after
     } else { p4 };
     let p6 = skip_ws(tokens, p5);
+    
+    // Parse optional @resume=Ann
+    let (resume_ann, p7) = if at(tokens, p6, "AtSign") {
+      // Expect `resume`
+      let p_res = skip_ws(tokens, p6 + 1);
+      let p_eq = skip_ws(tokens, p_res + 1);
+      let p_val = skip_ws(tokens, p_eq + 1);
+      let val = tok_val(tokens, p_val);
+      (val, p_val + 1)
+    } else { ("MultiShot", p6) };
+    
+    let p8 = skip_ws(tokens, p7);
     // Skip comma/newline separator
-    let p7 = if at(tokens, p6, "Comma") { p6 + 1 }
-             else { if at(tokens, p6, "Newline") { skip_ws(tokens, p6) } else { p6 } };
-    let (rest, p8) = parse_effect_ops(tokens, p7);
-    ([(op_name, params)] ++ rest, p8)
+    let p9 = if at(tokens, p8, "Comma") { p8 + 1 }
+             else { if at(tokens, p8, "Newline") { skip_ws(tokens, p8) } else { p8 } };
+    let (rest, p10) = parse_effect_ops(tokens, p9);
+    ([(op_name, params, resume_ann)] ++ rest, p10)
   }
 }
 

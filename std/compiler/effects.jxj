@@ -10,7 +10,7 @@
 // canonical form before unification.
 
 // ─── ADT ────────────────────────────────────────────────────
-// Extends types.lux:30-33 with negation, subtraction, intersection.
+// Extends types.jxj:30-33 with negation, subtraction, intersection.
 
 type EffRow
   = EfPure

@@ -7,10 +7,10 @@
 // Arc F.1 swaps to verify_smt: Z3/cvc5/Bitwuzla handler.
 // Pure handler swap; source code unchanged.
 
-import compiler/v2/types
+import compiler/types
 
 // ─── Verify effect ──────────────────────────────────────────
-// Already declared in types.lux:
+// Already declared in types.jxj:
 // effect Verify {
 //   verify(Span, Predicate, Reason) -> ()
 //   verify_debt() -> List

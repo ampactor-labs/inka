@@ -253,13 +253,13 @@ std/
 
 | File | Status | Notes |
 |---|---|---|
-| types.jxj | ⏳ needs ADT cleanup | Delete Mentl/Clock stubs (owned by mentl.jxj/clock.jxj) |
-| graph.jxj | ✅ complete | Add graph_reason_edge op |
+| types.jxj | ✅ cascade step 1 | Zero duplicate ADTs, display fns via \|>, canonical vocabulary |
+| graph.jxj | ⏳ cascade step 2 | Needs graph_handler with real state, graph_reason_edge op |
 | effects.jxj | ✅ complete | — |
 | infer.jxj | ✅ structurally complete | Fix import style |
 | lower.jxj | ✅ structurally complete | Fix import style |
 | pipeline.jxj | ⏳ needs state threading | Implement real graph_handler, env_handler state |
-| mentl.jxj | ⏳ needs fixes | RUser phantom, empty handler, str_concat |
+| mentl.jxj | ⏳ needs fixes | RUser fixed, empty handler, str_concat |
 | own.jxj | ✅ complete | — |
 | verify.jxj | ✅ complete | — |
 | clock.jxj | ✅ complete | — |

@@ -1,626 +1,670 @@
-// The Ultimate Checker — Lux checking Lux, through effects.
+// Inference — HM + let-generalization, one walk (spec 04)
 //
-// This file defines WHAT types ARE. Each match arm is a type rule.
-// The handler (HOW inference works) lives in checker.lux.
-// Swap the handler, swap the algorithm. Same rules.
+// Replaces v1's check.jxj + infer.jxj (1014 lines combined) with a
+// single walk that writes bindings directly into SubstGraph as it
+// encounters them. Classic Hindley-Milner with Damas-Milner let-gen.
 //
-// FROZEN. The definition of types does not change.
+// Three operations:
+//   infer_expr(node) -> ()       walks node, binds node.handle
+//   infer_stmt(stmt) -> ()       walks stmt, binds contained nodes
+//   generalize(fn_node) -> Scheme  quantifies free TVars at FnStmt
+//
+// Effects required: SubstGraphRead + SubstGraphWrite + EnvRead +
+//   EnvWrite + Diagnostic + FreshHandle + Verify + Consume
 
-import compiler/lexer
-import compiler/parser
-import compiler/ty
-import compiler/eff
+import compiler/graph
+import compiler/types
+import compiler/effects
 
-// ─── The Inference Effect ───────────────────────────────────
-// One effect. All type state. The handler IS the algorithm.
+// ─── Core inference ─────────────────────────────────────────
 
-effect Infer {
-  fresh() -> Ty
-  lookup(name: String) -> Ty
-  bind(name: String, ty: Ty, reason: Reason) -> ()
-  unify(a: Ty, b: Ty) -> ()
-  resolve(ty: Ty) -> Ty
-  fresh_eff() -> EffRow
-  track_effect(eff: EffRow) -> ()
-  push_scope() -> ()
-  pop_scope() -> EffRow
-  get_env() -> List
-  get_subst() -> List
-  subst_bind(id: Int, ty: Ty, reason: Reason) -> ()
-  subst_apply(ty: Ty) -> Ty
+fn infer_program(stmts) = {
+  infer_stmt_list(stmts)
 }
 
-// ─── Expression Inference ───────────────────────────────────
-// Each match arm IS a type rule. Nothing else.
-
-fn infer(sexpr) with Infer, Diagnostic = {
-  let S(expr, line, col) = sexpr
-  match expr {
-    IntLit(_)    => TInt,
-    FloatLit(_)  => TFloat,
-    StringLit(_) => TString,
-    BoolLit(_)   => TBool,
-    VarRef(name) => lookup(name),
-
-    BinOp(op, left, right) => infer_binop(op, left, right),
-    UnaryOp(op, inner) => infer_unaryop(op, inner),
-
-    Call(func, args) => {
-      let tf = infer(func)
-      let arg_types = infer_list(args)
-      let ret = fresh()
-      let eff = fresh_eff()
-      unify(tf, TFun(arg_types, ret, eff))
-      track_effect(eff)
-      resolve(ret)
-    },
-
-    IfExpr(cond, then_br, else_br) => {
-      unify(infer(cond), TBool)
-      let tt = infer(then_br)
-      let te = infer(else_br)
-      unify(tt, te)
-      resolve(tt)
-    },
-
-    ListExpr(elems) => {
-      if len(elems) == 0 { TList(fresh()) }
-      else {
-        let elem_ty = infer(list_head(elems))
-        infer_unify_list(list_tail(elems), elem_ty)
-        TList(resolve(elem_ty))
-      }
-    },
-
-    TupleExpr(elems) => TTuple(infer_list(elems)),
-
-    Index(coll, idx) => {
-      let ct = infer(coll)
-      unify(infer(idx), TInt)
-      match resolve(ct) {
-        TList(elem) => elem,
-        _ => fresh()
-      }
-    },
-
-    LambdaExpr(params, body) => {
-      let param_types = map(|_| fresh(), params)
-      push_scope()
-      bind_names(params, param_types)
-      let ret = infer(body)
-      let body_effs = pop_scope()
-      TFun(map(|t| resolve(t), param_types), resolve(ret), body_effs)
-    },
-
-    PipeExpr(data, step) => {
-      let S(step_expr, sl, sc) = step
-      match step_expr {
-        Call(func, args) => infer(S(Call(func, [data] ++ args), sl, sc)),
-        _ => infer(S(Call(step, [data]), sl, sc))
-      }
-    },
-
-    PrismExpr(data, branches) => {
-      let S(branches_expr, bl, bc) = branches
-      match branches_expr {
-        TupleExpr(fns) => {
-          let result_types = prism_branches(fns, data, bl, bc)
-          // Gradient: the types carry the proof — report purity for each branch
-          gradient_prism_branches(fns, bl, bc)
-          TTuple(result_types)
-        },
-        _ => infer(S(Call(branches, [data]), bl, bc))
-      }
-    },
-
-    ComposeExpr(f, g) => {
-      // f >< g — both effects merged. The type doesn't lie.
-      let tf = infer(f)
-      let tg = infer(g)
-      let a = fresh()
-      let b = fresh()
-      let c = fresh()
-      let ef = fresh_eff()
-      let eg = fresh_eff()
-      unify(tf, TFun([a], b, ef))
-      unify(tg, TFun([b], c, eg))
-      // Effects resolve through the effect substitution, not the type
-      // substitution. Use the unification result directly — after
-      // unify(tf, TFun([a], b, ef)), ef is bound in the eff_subst.
-      // merge_effects on the RAW effect vars works because unification
-      // already unified ef/eg with the actual effects from tf/tg.
-      // The merged result flows into TFun and gets resolved when the
-      // checker's resolve_type applies apply_eff_subst.
-      let merged = merge_effects(ef, eg)
-      gradient_compose(merged, line, col)
-      TFun([resolve(a)], resolve(c), merged)
-    },
-
-    MatchExpr(scrutinee, arms) => {
-      let scr_ty = infer(scrutinee)
-      let result = fresh()
-      infer_match_arms(arms, scr_ty, result)
-      resolve(result)
-    },
-
-    BlockExpr(stmts, final_expr) => {
-      push_scope()
-      infer_stmts(stmts)
-      let result = infer(final_expr)
-      let block_effs = pop_scope()
-      track_effect(block_effs)
-      result
-    },
-
-    HandleExpr(body, handler_expr, state_bindings) => {
-      push_scope()
-      let body_ty = infer(body)
-      let body_effs = pop_scope()
-      
-      push_scope()
-      bind_state_vars(state_bindings)
-      let handler_ty = resolve(infer(handler_expr))
-      let arm_effs = pop_scope()
-      track_effect(arm_effs)
-      
-      let absorbed = match handler_ty {
-        TRecord(fields) => collect_absorbed_from_names(extract_record_field_names(fields)),
-        _ => []
-      }
-      let residual = subtract_effects(body_effs, absorbed)
-      // Effect cancellation: perform(E) + handle(E) = Pure.
-      // Only close when ALL named effects absorbed — row variable may carry unknowns otherwise.
-      let net = match residual {
-        EfOpen([], _) => EfPure,
-        _ => residual
-      }
-      track_effect(net)
-      resolve(body_ty)
-    },
-
-    ResumeExpr(value, updates) => {
-      infer(value)
-      infer_updates(updates)
-      fresh()
-    },
-
-    StringInterp(parts) => {
-      infer_list(parts)
-      TString
-    },
-
-    FieldAccess(obj, field) => {
-      let resolved = resolve(infer(obj))
-      match resolved {
-        TTuple(elems) => {
-          let idx = to_int(field)
-          if idx >= 0 && idx < len(elems) { get_tuple_elem(elems, idx) }
-          else { fresh() }
-        },
-        TRecord(fields) => record_field_type(fields, field),
-        TRecordOpen(fields, _) => record_field_type(fields, field),
-        _ => fresh()
-      }
-    },
-
-    RecordExpr(fields) => {
-      let field_types = infer_record_fields(fields)
-      TRecord(field_types)
-    },
-
-    LoopExpr(body) => {
-      // Body of a loop is evaluated but returns bottom/anything because it loops forever unless broken out of.
-      // Easiest is just to infer the body as Unit, and the loop itself as whatever the fresh return is.
-      // Wait, Break dictates the type!
-      let body_ty = infer(body)
-      unify(body_ty, TUnit)
-      fresh()
-    },
-
-    BreakExpr(value) => {
-      let val_ty = infer(value)
-      // Break returns bottom (diverges), but its payload has a type which will unify with the loop.
-      // For now, we just fresh() the break expr itself, just like Return.
-      fresh()
-    },
-
-    _ => fresh()
+fn infer_stmt_list(stmts) = {
+  if len(stmts) == 0 { () }
+  else {
+    infer_stmt(list_head(stmts))
+    infer_stmt_list(list_tail(stmts))
   }
 }
 
-// ─── Binary/Unary Operators ─────────────────────────────────
+fn infer_stmt(node) = {
+  let N(body, span, handle) = node
+  match body {
+    NStmt(LetStmt(pat, expr)) => {
+      infer_expr(expr)
+      let N(_, _, eh) = expr
+      infer_pat(pat, eh)
+    },
+    NStmt(FnStmt(name, params, ret_ann, effs, body_node)) => {
+      // Enter scope for function body
+      perform env_scope_enter()
 
-fn infer_binop(op, left, right) with Infer, Diagnostic = {
-  let tl = infer(left)
-  let tr = infer(right)
-  if op == "Add" || op == "Sub" || op == "Mul" || op == "Div" || op == "Mod" {
-    // Arithmetic: unify operands. If a side is resolved to TFloat/TInt,
-    // commit. If both sides are still TVars, DEFER — return the unified
-    // tvar so later unifications (e.g. `27.0 + x2`) can resolve it.
-    // Premature commitment to TInt here broke tanh_approx: `x * x`
-    // committed x to TInt before the function's float literals were seen.
-    unify(tl, tr)
-    let resolved_l = resolve(tl)
-    match resolved_l {
-      TFloat => { unify(tl, TFloat); unify(tr, TFloat); TFloat },
-      TInt   => { unify(tl, TInt);   unify(tr, TInt);   TInt   },
-      _      => tl
-    }
-  } else { if op == "Eq" || op == "Neq" || op == "Lt" || op == "Gt" || op == "LtEq" || op == "GtEq" {
-    unify(tl, tr); TBool
-  } else { if op == "And" || op == "Or" {
-    unify(tl, TBool); unify(tr, TBool); TBool
-  } else { if op == "Concat" {
-    // Defer like arithmetic: unify operands, resolve, commit only if a
-    // side is concretely String or List. If both are TVars, return the
-    // unified tvar so a later unification can resolve it. Premature
-    // commitment to TString here broke string_union: `a ++ [b[i]]` forced
-    // `a : String` when it's actually a list.
-    unify(tl, tr)
-    let resolved_l = resolve(tl)
-    match resolved_l {
-      TString => { unify(tl, TString); unify(tr, TString); TString },
-      TList(elem) => { unify(tl, resolved_l); unify(tr, resolved_l); resolved_l },
-      _ => {
-        let resolved_r = resolve(tr)
-        match resolved_r {
-          TString => { unify(tl, TString); unify(tr, TString); TString },
-          TList(elem) => { unify(tl, resolved_r); unify(tr, resolved_r); resolved_r },
-          _ => tl
+      // Mint fresh handles for each param, bind into env
+      let param_handles = mint_params(params)
+
+      // Mint fresh return handle
+      let ret_handle = perform mint(Fresh(0))
+
+      // Mint fresh row handle for effects
+      let row_handle = perform graph_fresh_row(Fresh(0))
+
+      // Build the function type
+      let fn_ty = TFun(
+        build_param_types(params, param_handles),
+        TVar(ret_handle),
+        EfOpen([], row_handle)
+      )
+
+      // Bind function name in env BEFORE body (allows recursion)
+      perform env_extend(name, Forall([], fn_ty), Declared(name))
+
+      // Bind the handle to the fn type
+      perform graph_bind(handle, fn_ty, Declared(name))
+
+      // Infer body
+      infer_expr(body_node)
+
+      // Unify body result with return handle
+      let N(_, _, body_handle) = body_node
+      unify(body_handle, ret_handle, FnReturn(name, Inferred("body")))
+
+      // Exit scope, generalize
+      perform env_scope_exit()
+      let scheme = generalize(handle)
+      perform env_extend(name, scheme, Declared(name))
+    },
+    NStmt(TypeDefStmt(name, args, variants)) => {
+      // Register type constructors in env
+      register_type_constructors(name, args, variants)
+    },
+    NStmt(EffectDeclStmt(name, ops)) => {
+      // Register effect ops in env
+      register_effect_ops(name, ops)
+    },
+    NStmt(ExprStmt(expr)) => {
+      infer_expr(expr)
+    },
+    NStmt(ImportStmt(module)) => {
+      // Module resolution handled by pipeline
+      ()
+    },
+    NStmt(RefineStmt(name, base_ty, pred)) => {
+      perform env_extend(name, Forall([], TRefined(base_ty, pred)), Declared(name))
+      perform verify(span, pred, Refinement(pred, PTrue))
+    },
+    _ => ()
+  }
+}
+
+fn infer_expr(node) = {
+  let N(body, span, handle) = node
+  match body {
+    NExpr(LitInt(v)) => {
+      perform graph_bind(handle, TInt, Inferred("int literal"))
+    },
+    NExpr(LitFloat(v)) => {
+      perform graph_bind(handle, TFloat, Inferred("float literal"))
+    },
+    NExpr(LitString(s)) => {
+      perform graph_bind(handle, TString, Inferred("string literal"))
+    },
+    NExpr(LitBool(b)) => {
+      perform graph_bind(handle, TBool, Inferred("bool literal"))
+    },
+    NExpr(LitUnit) => {
+      perform graph_bind(handle, TUnit, Inferred("unit"))
+    },
+    NExpr(VarRef(name)) => {
+      match perform env_lookup(name) {
+        None => {
+          perform report("", "E001", "MissingVariable", name, span, "MaybeIncorrect")
+          perform graph_bind(handle, TVar(handle), MissingVar(name))
+        },
+        Some(entry) => {
+          let (scheme, reason) = entry
+          let ty = instantiate(scheme)
+          perform graph_bind(handle, ty, VarLookup(name, reason))
         }
       }
-    }
-  } else { tl } } } }
-}
+    },
+    NExpr(BinOpExpr(op, left, right)) => {
+      infer_expr(left)
+      infer_expr(right)
+      let N(_, _, lh) = left
+      let N(_, _, rh) = right
+      infer_binop(handle, op, lh, rh, span)
+    },
+    NExpr(UnaryOpExpr(op, inner)) => {
+      infer_expr(inner)
+      let N(_, _, ih) = inner
+      infer_unaryop(handle, op, ih, span)
+    },
+    NExpr(CallExpr(func, args)) => {
+      infer_expr(func)
+      infer_expr_list(args)
+      let N(_, _, fh) = func
+      let arg_handles = collect_handles(args)
 
-fn infer_unaryop(op, inner) with Infer, Diagnostic = {
-  let t = infer(inner)
-  if op == "Neg" { unify(t, TInt); TInt }
-  else { if op == "Not" { unify(t, TBool); TBool }
-  else { t } }
-}
+      // Allocate fresh return + row handles
+      let ret_h = perform mint(Fresh(0))
+      let row_h = perform graph_fresh_row(Fresh(0))
 
-// ─── Record Helpers ─────────────────────────────────────────
+      // Build expected fn type
+      let arg_params = build_inferred_params(arg_handles)
+      let expected_fn = TFun(arg_params, TVar(ret_h), EfOpen([], row_h))
 
-fn record_field_type(fields, name) with Infer = {
-  if len(fields) == 0 { fresh() }
-  else {
-    let (fname, fty) = list_head(fields)
-    if str_eq(fname, name) == 1 { fty }
-    else { record_field_type(list_tail(fields), name) }
-  }
-}
-
-fn infer_record_fields(fields) with Infer, Diagnostic = {
-  if len(fields) == 0 { [] }
-  else {
-    let (name, expr) = list_head(fields)
-    let ty = infer(expr)
-    [(name, ty)] ++ infer_record_fields(list_tail(fields))
+      // Unify func with expected fn type
+      unify(fh, handle, Unified(Inferred("call target"), Inferred("expected fn")))
+      perform graph_bind(handle, TVar(ret_h), Inferred("call result"))
+    },
+    NExpr(IfExpr(cond, then_e, else_e)) => {
+      infer_expr(cond)
+      infer_expr(then_e)
+      infer_expr(else_e)
+      let N(_, _, ch) = cond
+      let N(_, _, th) = then_e
+      let N(_, _, eh) = else_e
+      perform graph_bind(ch, TBool, Inferred("if condition"))
+      unify(th, eh, IfBranch(Inferred("branches must match")))
+      perform graph_bind(handle, TVar(th), IfBranch(Inferred("if result")))
+    },
+    NExpr(BlockExpr(stmts, final_expr)) => {
+      perform env_scope_enter()
+      infer_stmt_list(stmts)
+      infer_expr(final_expr)
+      let N(_, _, fh) = final_expr
+      perform graph_bind(handle, TVar(fh), Inferred("block result"))
+      perform env_scope_exit()
+    },
+    NExpr(MatchExpr(scrutinee, arms)) => {
+      infer_expr(scrutinee)
+      let N(_, _, sh) = scrutinee
+      infer_match_arms(arms, sh, handle, span)
+    },
+    NExpr(MakeListExpr(elems)) => {
+      infer_expr_list(elems)
+      if len(elems) == 0 {
+        let elem_h = perform mint(Fresh(0))
+        perform graph_bind(handle, TList(TVar(elem_h)), Inferred("empty list"))
+      } else {
+        let first = list_head(elems)
+        let N(_, _, fh) = first
+        unify_list_elems(list_tail(elems), fh)
+        perform graph_bind(handle, TList(TVar(fh)), Inferred("list literal"))
+      }
+    },
+    NExpr(MakeTupleExpr(elems)) => {
+      infer_expr_list(elems)
+      let types = collect_tvar_types(elems)
+      perform graph_bind(handle, TTuple(types), Inferred("tuple literal"))
+    },
+    NExpr(PerformExpr(op_name, args)) => {
+      infer_expr_list(args)
+      // Effect op lookup — the op's return type binds to handle
+      match perform env_lookup(op_name) {
+        None => {
+          perform report("", "E001", "MissingVariable", "effect op: " ++ op_name, span, "MaybeIncorrect")
+        },
+        Some(entry) => {
+          let (scheme, reason) = entry
+          let ty = instantiate(scheme)
+          perform graph_bind(handle, ty, VarLookup(op_name, reason))
+        }
+      }
+    },
+    NExpr(HandleExpr(body, arms)) => {
+      // Handler inference: body in extended effect scope, arms match
+      infer_expr(body)
+      let N(_, _, bh) = body
+      perform graph_bind(handle, TVar(bh), Inferred("handle result"))
+    },
+    NExpr(PipeExpr(kind, left, right)) => {
+      // |> is sugar for application: right(left)
+      infer_expr(left)
+      infer_expr(right)
+      let N(_, _, lh) = left
+      let N(_, _, rh) = right
+      match kind {
+        PForward => {
+          // left |> right  ≡  right(left)
+          let ret_h = perform mint(Fresh(0))
+          let row_h = perform graph_fresh_row(Fresh(0))
+          let expected = TFun([TParam("_", TVar(lh), OwInferred)], TVar(ret_h), EfOpen([], row_h))
+          unify(rh, handle, Inferred("pipe target"))
+          perform graph_bind(handle, TVar(ret_h), Inferred("pipe result"))
+        },
+        _ => {
+          // Other pipe kinds deferred to Arc F
+          perform graph_bind(handle, TVar(lh), Inferred("pipe"))
+        }
+      }
+    },
+    NExpr(LambdaExpr(params, body_node)) => {
+      perform env_scope_enter()
+      let param_handles = mint_params(params)
+      infer_expr(body_node)
+      let N(_, _, bh) = body_node
+      let row_h = perform graph_fresh_row(Fresh(0))
+      let fn_ty = TFun(
+        build_param_types(params, param_handles),
+        TVar(bh),
+        EfOpen([], row_h)
+      )
+      perform graph_bind(handle, fn_ty, Inferred("lambda"))
+      perform env_scope_exit()
+    },
+    NExpr(ExprPlaceholder) => {
+      // ? placeholder — allocate TVar, continue (Hazel)
+      ()   // handle already allocated as NFree at parse time
+    },
+    NHole(hole_id) => {
+      // Marked hole — synthesis target for Arc F.1
+      ()
+    },
+    _ => ()
   }
 }
 
 // ─── Helpers ────────────────────────────────────────────────
 
-fn infer_list(sexprs) with Infer, Diagnostic = {
-  if len(sexprs) == 0 { [] }
-  else { [infer(list_head(sexprs))] ++ infer_list(list_tail(sexprs)) }
+fn infer_expr_list(nodes) = {
+  if len(nodes) == 0 { () }
+  else {
+    infer_expr(list_head(nodes))
+    infer_expr_list(list_tail(nodes))
+  }
 }
 
-fn infer_unify_list(elems, expected) with Infer, Diagnostic = {
+fn collect_handles(nodes) = {
+  if len(nodes) == 0 { [] }
+  else {
+    let N(_, _, h) = list_head(nodes)
+    [h] ++ collect_handles(list_tail(nodes))
+  }
+}
+
+fn collect_tvar_types(nodes) = {
+  if len(nodes) == 0 { [] }
+  else {
+    let N(_, _, h) = list_head(nodes)
+    [TVar(h)] ++ collect_tvar_types(list_tail(nodes))
+  }
+}
+
+fn mint_params(params) = {
+  if len(params) == 0 { [] }
+  else {
+    let TParam(name, ty, own) = list_head(params)
+    let h = perform mint(FnParam(name, 0, Fresh(0)))
+    perform env_extend(name, Forall([], TVar(h)), Declared(name))
+    [h] ++ mint_params(list_tail(params))
+  }
+}
+
+fn build_param_types(params, handles) = {
+  if len(params) == 0 { [] }
+  else {
+    let TParam(name, _, own) = list_head(params)
+    let h = list_head(handles)
+    [TParam(name, TVar(h), own)] ++ build_param_types(list_tail(params), list_tail(handles))
+  }
+}
+
+fn build_inferred_params(handles) = {
+  if len(handles) == 0 { [] }
+  else {
+    let h = list_head(handles)
+    [TParam("_", TVar(h), OwInferred)] ++ build_inferred_params(list_tail(handles))
+  }
+}
+
+fn unify_list_elems(elems, target_h) = {
   if len(elems) == 0 { () }
   else {
-    unify(infer(list_head(elems)), expected)
-    infer_unify_list(list_tail(elems), expected)
+    let N(_, _, eh) = list_head(elems)
+    unify(eh, target_h, ListElement(Inferred("list element")))
+    unify_list_elems(list_tail(elems), target_h)
   }
 }
 
-// ─── Gradient: The Verbs Teach ──────────────────────────────
-// Same Diagnostic effect. Different kind. One mechanism.
-// The types carry the proofs. The gradient reads them.
+// ─── Unification ────────────────────────────────────────────
+// Against the graph. No subst argument — the subst IS the graph.
 
-fn gradient_prism_branches(fns, line, col) with Infer, Diagnostic = {
-  let n = len(fns)
-  if n > 0 {
-    let pure_n = count_pure_branches(fns)
-    if pure_n == n {
-      report("", "gradient", "<| all " ++ to_string(n) ++ " branches pure — PARALLEL", line, col)
-    } else { if pure_n > 0 {
-      report("", "gradient", "<| " ++ to_string(pure_n) ++ "/" ++ to_string(n) ++ " pure — add Pure to rest for parallelism", line, col)
-    } else { () } }
-  } else { () }
-}
-
-fn count_pure_branches(fns) with Infer = {
-  if len(fns) == 0 { 0 }
+fn unify(h_a, h_b, reason) = {
+  if h_a == h_b { () }
   else {
-    let fn_ty = resolve(infer(list_head(fns)))
-    let is_pure = match fn_ty {
-      TFun(_, _, eff) => match eff { EfPure => true, EfClosed(es) => len(es) == 0, _ => false },
-      _ => false
+    let na = perform graph_chase(h_a)
+    let nb = perform graph_chase(h_b)
+    let GNode(ka, _) = na
+    let GNode(kb, _) = nb
+    match ka {
+      NFree(_) => perform graph_bind(h_a, TVar(h_b), reason),
+      NBound(ta) => match kb {
+        NFree(_) => perform graph_bind(h_b, TVar(h_a), reason),
+        NBound(tb) => unify_types(ta, tb, reason),
+        NErrorHole(_) => (),   // error already recorded
+        _ => ()
+      },
+      NErrorHole(_) => (),
+      _ => ()
     }
-    let rest = count_pure_branches(list_tail(fns))
-    if is_pure { 1 + rest } else { rest }
   }
 }
 
-fn gradient_compose(merged_eff, line, col) with Diagnostic = {
-  match merged_eff {
-    EfPure => report("", "gradient", ">< fully pure — compile-time evaluation eligible", line, col),
-    EfClosed(es) => if len(es) == 0 {
-      report("", "gradient", ">< fully pure — compile-time evaluation eligible", line, col)
-    } else { () },
-    _ => ()
+fn unify_types(a, b, reason) = match a {
+  TInt => match b { TInt => (), _ => type_mismatch(a, b, reason) },
+  TFloat => match b { TFloat => (), _ => type_mismatch(a, b, reason) },
+  TString => match b { TString => (), _ => type_mismatch(a, b, reason) },
+  TBool => match b { TBool => (), _ => type_mismatch(a, b, reason) },
+  TUnit => match b { TUnit => (), _ => type_mismatch(a, b, reason) },
+  TVar(ha) => match b {
+    TVar(hb) => unify(ha, hb, reason),
+    _ => {
+      if occurs_in(ha, b) {
+        perform report("", "E010", "OccursCheck", "circular type", span_zero(), "MaybeIncorrect")
+      } else {
+        perform graph_bind(ha, b, reason)
+      }
+    }
+  },
+  TList(ea) => match b {
+    TList(eb) => unify_types(ea, eb, ListElement(reason)),
+    TVar(hb) => unify_types(b, a, reason),
+    _ => type_mismatch(a, b, reason)
+  },
+  TTuple(ea) => match b {
+    TTuple(eb) => unify_type_lists(ea, eb, reason),
+    TVar(hb) => unify_types(b, a, reason),
+    _ => type_mismatch(a, b, reason)
+  },
+  TFun(pa, ra, ea) => match b {
+    TFun(pb, rb, eb) => {
+      unify_param_lists(pa, pb, reason)
+      unify_types(ra, rb, FnReturn("fn", reason))
+      // Effect row unification
+      ()
+    },
+    TVar(hb) => unify_types(b, a, reason),
+    _ => type_mismatch(a, b, reason)
+  },
+  TName(na, aa) => match b {
+    TName(nb, ab) => {
+      if str_eq(na, nb) == 1 { unify_type_lists(aa, ab, reason) }
+      else { type_mismatch(a, b, reason) }
+    },
+    TVar(hb) => unify_types(b, a, reason),
+    _ => type_mismatch(a, b, reason)
+  },
+  TRefined(base_a, pred_a) => match b {
+    TRefined(base_b, pred_b) => {
+      unify_types(base_a, base_b, reason)
+      perform verify(span_zero(), PAnd(pred_a, pred_b), Refinement(pred_a, pred_b))
+    },
+    _ => {
+      unify_types(base_a, b, reason)
+      perform verify(span_zero(), pred_a, Refinement(pred_a, PTrue))
+    }
+  },
+  _ => match b {
+    TVar(hb) => unify_types(b, a, reason),
+    _ => type_mismatch(a, b, reason)
   }
 }
 
-fn prism_branches(fns, input, rl, rc) with Infer, Diagnostic = {
-  if len(fns) == 0 { [] }
+fn unify_type_lists(as_list, bs_list, reason) = {
+  if len(as_list) == 0 { () }
   else {
-    let result = infer(S(Call(list_head(fns), [input]), rl, rc))
-    [result] ++ prism_branches(list_tail(fns), input, rl, rc)
+    if len(bs_list) == 0 { () }
+    else {
+      unify_types(list_head(as_list), list_head(bs_list), reason)
+      unify_type_lists(list_tail(as_list), list_tail(bs_list), reason)
+    }
   }
 }
 
-fn bind_names(names, types) with Infer = {
-  if len(names) > 0 && len(types) > 0 {
-    bind(list_head(names), list_head(types), Inferred("parameter"))
-    bind_names(list_tail(names), list_tail(types))
-  } else { () }
-}
-
-fn bind_names_gradient(names, types, params) with Infer = {
-  if len(names) > 0 && len(types) > 0 && len(params) > 0 {
-    let reason = match list_head(params) {
-      (_, _, ty) => match ty { TUnit => Inferred("parameter"), _ => Declared("annotation") },
-      _ => Inferred("parameter")
-    }
-    bind(list_head(names), list_head(types), reason)
-    bind_names_gradient(list_tail(names), list_tail(types), list_tail(params))
-  } else { () }
-}
-
-// ─── Statement Inference ────────────────────────────────────
-
-fn infer_stmts(stmts) with Infer, Diagnostic = {
-  if len(stmts) == 0 { () }
+fn unify_param_lists(a, b, reason) = {
+  if len(a) == 0 { () }
   else {
-    infer_stmt(list_head(stmts))
-    infer_stmts(list_tail(stmts))
+    if len(b) == 0 { () }
+    else {
+      let TParam(_, ta, _) = list_head(a)
+      let TParam(_, tb, _) = list_head(b)
+      unify_types(ta, tb, reason)
+      unify_param_lists(list_tail(a), list_tail(b), reason)
+    }
   }
 }
 
-fn infer_stmt(stmt) with Infer, Diagnostic = match stmt {
-  LetStmt(name, value) => {
-    let ty = infer(value)
-    bind(name, ty, Because("let " ++ name, Inferred("binding")))
-  },
+fn type_mismatch(a, b, reason) = {
+  perform report("", "E002", "TypeMismatch",
+    "expected vs actual",
+    span_zero(), "MachineApplicable")
+}
 
-  LetDestructure(names, value) => {
-    let resolved = resolve(infer(value))
-    match resolved {
-      TTuple(elems) => bind_tuple_elems(names, elems),
-      _ => bind_fresh_names(names)
+// ─── BinOp inference ────────────────────────────────────────
+
+fn infer_binop(handle, op, lh, rh, span) = {
+  if str_eq(op, "+") == 1 || str_eq(op, "-") == 1 ||
+     str_eq(op, "*") == 1 || str_eq(op, "/") == 1 ||
+     str_eq(op, "%") == 1 {
+    // Numeric ops: both operands same type, result same type
+    unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
+    perform graph_bind(handle, TVar(lh), OpConstraint(op, Inferred("result"), Inferred("operand")))
+  } else {
+    if str_eq(op, "++") == 1 {
+      // String/list concat
+      unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
+      perform graph_bind(handle, TVar(lh), OpConstraint(op, Inferred("concat"), Inferred("operand")))
+    } else {
+      if str_eq(op, "==") == 1 || str_eq(op, "!=") == 1 ||
+         str_eq(op, "<") == 1 || str_eq(op, ">") == 1 ||
+         str_eq(op, "<=") == 1 || str_eq(op, ">=") == 1 {
+        // Comparison: both same type, result Bool
+        unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
+        perform graph_bind(handle, TBool, OpConstraint(op, Inferred("comparison"), Inferred("bool")))
+      } else {
+        if str_eq(op, "&&") == 1 || str_eq(op, "||") == 1 {
+          // Boolean ops
+          perform graph_bind(lh, TBool, OpConstraint(op, Inferred("left"), Declared("bool")))
+          perform graph_bind(rh, TBool, OpConstraint(op, Inferred("right"), Declared("bool")))
+          perform graph_bind(handle, TBool, OpConstraint(op, Inferred("result"), Declared("bool")))
+        } else {
+          // Unknown op — leave polymorphic
+          unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
+          perform graph_bind(handle, TVar(lh), OpConstraint(op, Inferred("result"), Inferred("operand")))
+        }
+      }
     }
-  },
+  }
+}
 
-  LetPattern(pat, value) => {
-    let ty = infer(value)
-    bind_pattern(pat, ty)
-  },
-
-  FnStmt(name, params, body, declared_effects, ret_type) => {
-    let param_names = map(|p| match p { (n, _, _) => n, (n, _) => n, _ => p }, params)
-    // The gradient: declared types become constraints, not guesses
-    let param_types = map(|p| match p {
-      (_, _, ty) => match ty { TUnit => fresh(), _ => ty },
-      _ => fresh()
-    }, params)
-    let ret = match ret_type { TUnit => fresh(), _ => ret_type }
-    let eff = fresh_eff()
-    bind(name, TFun(param_types, ret, eff), Declared("fn " ++ name))
-    push_scope()
-    bind_names_gradient(param_names, param_types, params)
-    let body_ty = infer(body)
-    let body_effs = pop_scope()
-    unify(ret, body_ty)
-    let constraint_result = check_effect_constraints(name, body_effs, declared_effects, eff_subst_empty())
-    report_effect_violations(constraint_result)
-    let final_effs = resolve_declared_effs(declared_effects, body_effs)
-    bind(name, TFun(map(|t| resolve(t), param_types), resolve(ret), final_effs), Declared("fn " ++ name))
-  },
-
-  ExprStmt(expr) => { infer(expr); () },
-
-  EffectDeclStmt(name, ops) => infer_effect_decl(name, ops),
-
-  TypeStmt(name, variants) => infer_type_decl(name, variants),
-
-  TypeAliasStmt(name, base, pred) => {
-    let base_ty = match base {
-      "Int" => TInt, "Float" => TFloat, "String" => TString, "Bool" => TBool,
-      _ => TName(base, [])
+fn infer_unaryop(handle, op, ih, span) = {
+  if str_eq(op, "Neg") == 1 {
+    perform graph_bind(handle, TVar(ih), OpConstraint(op, Inferred("negate"), Inferred("operand")))
+  } else {
+    if str_eq(op, "Not") == 1 {
+      perform graph_bind(ih, TBool, OpConstraint(op, Inferred("not"), Declared("bool")))
+      perform graph_bind(handle, TBool, OpConstraint(op, Inferred("result"), Declared("bool")))
+    } else {
+      perform graph_bind(handle, TVar(ih), Inferred("unary op"))
     }
-    bind(name, base_ty, Declared("type alias " ++ name))
+  }
+}
+
+// ─── Pattern inference ──────────────────────────────────────
+
+fn infer_pat(pat, handle) = match pat {
+  PVar(name) => {
+    perform env_extend(name, Forall([], TVar(handle)), LetBinding(name, Inferred("pattern")))
   },
-
-  _ => ()
-}
-
-// ─── Destructuring ──────────────────────────────────────────
-
-fn bind_tuple_elems(names, elems) with Infer = {
-  if len(names) > 0 && len(elems) > 0 {
-    bind(list_head(names), list_head(elems), Inferred("destructured element"))
-    bind_tuple_elems(list_tail(names), list_tail(elems))
-  } else { () }
-}
-
-fn bind_fresh_names(names) with Infer = {
-  if len(names) > 0 {
-    bind(list_head(names), fresh(), Inferred("destructured"))
-    bind_fresh_names(list_tail(names))
-  } else { () }
-}
-
-// ─── Pattern Binding ────────────────────────────────────────
-
-fn bind_pattern(pat, ty) with Infer = match pat {
-  PVar(name) => bind(name, ty, Inferred("pattern")),
   PWild => (),
-  PLit(_) => (),
-  PCon(name, sub_pats) => bind_sub_pats(sub_pats),
-  PTuple(sub_pats) => bind_sub_pats(sub_pats),
+  PLit(v) => {
+    let ty = match v {
+      LVInt(_) => TInt,
+      LVFloat(_) => TFloat,
+      LVString(_) => TString,
+      LVBool(_) => TBool
+    }
+    perform graph_bind(handle, ty, Inferred("literal pattern"))
+  },
+  PCon(name, sub_pats) => {
+    match perform env_lookup(name) {
+      None => perform report("", "E001", "MissingVariable", "constructor: " ++ name, span_zero(), "MaybeIncorrect"),
+      Some(entry) => {
+        let (scheme, reason) = entry
+        let ty = instantiate(scheme)
+        perform graph_bind(handle, ty, VarLookup(name, reason))
+      }
+    }
+  },
+  PTuple(pats) => {
+    infer_pat_list(pats, handle)
+  },
   _ => ()
 }
 
-fn bind_sub_pats(pats) with Infer = {
-  if len(pats) > 0 {
-    bind_pattern(list_head(pats), fresh())
-    bind_sub_pats(list_tail(pats))
-  } else { () }
-}
-
-// ─── Type & Effect Declarations ─────────────────────────────
-
-fn infer_effect_decl(name, ops) with Infer = {
-  if len(ops) == 0 { () }
+fn infer_pat_list(pats, parent_handle) = {
+  // Each sub-pattern gets a fresh handle
+  if len(pats) == 0 { () }
   else {
-    let (op_name, params) = list_head(ops)
-    let param_types = map(|_| fresh(), params)
-    let ret = fresh()
-    bind(op_name, TFun(param_types, ret, EfClosed([name])), Declared("effect op"))
-    infer_effect_decl(name, list_tail(ops))
+    let h = perform mint(Fresh(0))
+    infer_pat(list_head(pats), h)
+    infer_pat_list(list_tail(pats), parent_handle)
   }
 }
 
-fn infer_type_decl(name, variants) with Infer = {
-  if len(variants) == 0 { () }
-  else {
-    let (v_name, _) = list_head(variants)
-    bind(v_name, TName(name, []), Declared("constructor"))
-    infer_type_decl(name, list_tail(variants))
-  }
-}
+// ─── Match arm inference ────────────────────────────────────
 
-// ─── Match Arms ─────────────────────────────────────────────
-
-fn infer_match_arms(arms, scr_ty, result_ty) with Infer, Diagnostic = {
+fn infer_match_arms(arms, scrutinee_h, result_h, span) = {
   if len(arms) == 0 { () }
   else {
     let (pat, body) = list_head(arms)
-    push_scope()
-    bind_pattern(pat, scr_ty)
-    unify(infer(body), result_ty)
-    let arm_effs = pop_scope()
-    track_effect(arm_effs)
-    infer_match_arms(list_tail(arms), scr_ty, result_ty)
+    perform env_scope_enter()
+    infer_pat(pat, scrutinee_h)
+    infer_expr(body)
+    let N(_, _, bh) = body
+    unify(bh, result_h, MatchBranch(Inferred("arm body"), Inferred("result")))
+    perform env_scope_exit()
+    infer_match_arms(list_tail(arms), scrutinee_h, result_h, span)
   }
 }
 
-// ─── Handler Arms ───────────────────────────────────────────
+// ─── Generalization ─────────────────────────────────────────
 
-fn bind_state_vars(bindings) with Infer, Diagnostic = {
-  if len(bindings) == 0 { () }
+fn generalize(handle) = {
+  // Walk the type at handle, collect free TVars, quantify those
+  // not free in the environment
+  let node = perform graph_chase(handle)
+  let GNode(kind, _) = node
+  match kind {
+    NBound(ty) => {
+      let free = free_in_ty(ty)
+      // For now, don't quantify — full let-gen needs env free var check
+      Forall([], ty)
+    },
+    _ => Forall([], TVar(handle))
+  }
+}
+
+fn free_in_ty(ty) = match ty {
+  TVar(id) => [id],
+  TList(elem) => free_in_ty(elem),
+  TTuple(elems) => free_in_list(elems),
+  TFun(params, ret, _) => {
+    let param_free = free_in_params(params)
+    let ret_free = free_in_ty(ret)
+    param_free ++ ret_free
+  },
+  TName(_, args) => free_in_list(args),
+  _ => []
+}
+
+fn free_in_list(tys) = {
+  if len(tys) == 0 { [] }
+  else { free_in_ty(list_head(tys)) ++ free_in_list(list_tail(tys)) }
+}
+
+fn free_in_params(params) = {
+  if len(params) == 0 { [] }
   else {
-    let (name, value) = list_head(bindings)
-    bind(name, infer(value), Inferred("handler state"))
-    bind_state_vars(list_tail(bindings))
+    let TParam(_, ty, _) = list_head(params)
+    free_in_ty(ty) ++ free_in_params(list_tail(params))
   }
 }
 
-fn infer_updates(updates) with Infer, Diagnostic = {
-  if len(updates) == 0 { () }
+// ─── Instantiation ──────────────────────────────────────────
+// instantiate(Forall(qs, t)) — replace each quantified handle with
+// a fresh one via FreshHandle effect. Same fn serves inference
+// (handler mints graph handles) and query (handler mints display ids).
+
+fn instantiate(scheme) = {
+  let Forall(qs, ty) = scheme
+  if len(qs) == 0 { ty }
   else {
-    let (_, expr) = list_head(updates)
-    infer(expr)
-    infer_updates(list_tail(updates))
+    let mapping = build_inst_mapping(qs)
+    subst_ty(ty, mapping)
   }
 }
 
-// ─── Effect Absorption ──────────────────────────────────────
-
-fn collect_absorbed_from_names(names) with Infer = {
-  if len(names) == 0 { [] }
+fn build_inst_mapping(qs) = {
+  if len(qs) == 0 { [] }
   else {
-    let op_name = list_head(names)
-    let op_type = lookup(op_name)
-    let eff_name = match op_type {
-      TFun(_, _, eff) => match eff {
-        EfClosed(effs) => if len(effs) > 0 { list_head(effs) } else { "" },
-        _ => ""
-      },
-      _ => ""
-    }
-    let rest = collect_absorbed_from_names(list_tail(names))
-    if len(eff_name) == 0 { rest }
-    else { if list_contains(rest, eff_name) { rest } else { [eff_name] ++ rest } }
+    let old = list_head(qs)
+    let fresh = perform mint(Instantiation("inst", Fresh(old)))
+    [(old, fresh)] ++ build_inst_mapping(list_tail(qs))
   }
 }
 
-fn extract_record_field_names(fields) = {
-  if len(fields) == 0 { [] }
+fn subst_ty(ty, mapping) = match ty {
+  TVar(id) => {
+    let replacement = find_mapping(mapping, id)
+    if replacement >= 0 { TVar(replacement) } else { ty }
+  },
+  TList(elem) => TList(subst_ty(elem, mapping)),
+  TTuple(elems) => TTuple(subst_list(elems, mapping)),
+  TFun(params, ret, eff) => TFun(
+    subst_params(params, mapping),
+    subst_ty(ret, mapping),
+    eff
+  ),
+  TName(name, args) => TName(name, subst_list(args, mapping)),
+  TRefined(base, pred) => TRefined(subst_ty(base, mapping), pred),
+  _ => ty
+}
+
+fn subst_list(tys, mapping) = {
+  if len(tys) == 0 { [] }
+  else { [subst_ty(list_head(tys), mapping)] ++ subst_list(list_tail(tys), mapping) }
+}
+
+fn subst_params(params, mapping) = {
+  if len(params) == 0 { [] }
   else {
-    let (name, _) = list_head(fields)
-    [name] ++ extract_record_field_names(list_tail(fields))
+    let TParam(name, ty, own) = list_head(params)
+    [TParam(name, subst_ty(ty, mapping), own)] ++ subst_params(list_tail(params), mapping)
   }
 }
 
-fn subtract_effects(effs, absorbed) = match effs {
-  EfPure => EfPure,
-  EfClosed(names) => EfClosed(filter(|n| !list_contains(absorbed, n), names)),
-  EfOpen(names, var) => EfOpen(filter(|n| !list_contains(absorbed, n), names), var)
-}
-
-// ─── Declared Effects ───────────────────────────────────────
-// User annotations ARE the type when present. Inferred when absent.
-
-fn resolve_declared_effs(declared, inferred) = {
-  if len(declared) == 0 { inferred }
+fn find_mapping(mapping, id) = {
+  if len(mapping) == 0 { -1 }
   else {
-    let positives = extract_positive_names(declared)
-    if list_contains(positives, "Pure") { EfPure }
-    else { if len(positives) > 0 { EfClosed(positives) }
-    else { inferred } }
+    let (old, fresh) = list_head(mapping)
+    if old == id { fresh } else { find_mapping(list_tail(mapping), id) }
   }
 }
 
-fn extract_positive_names(effects) = {
-  if len(effects) == 0 { [] }
-  else {
-    let (name, negated) = list_head(effects)
-    let rest = extract_positive_names(list_tail(effects))
-    if negated { rest } else { [name] ++ rest }
-  }
+// ─── Stub registrations ────────────────────────────────────
+// Filled in when parser produces actual TypeDef/EffectDecl nodes.
+
+fn register_type_constructors(name, args, variants) = {
+  // Each variant becomes a constructor function in env
+  ()
 }
 
-fn report_effect_violations(result) = {
-  let violations = result[1]
-  report_violations_loop(violations)
+fn register_effect_ops(name, ops) = {
+  // Each op becomes an env entry
+  ()
 }
-
-fn report_violations_loop(violations) = {
-  if len(violations) == 0 { () }
-  else {
-    let v = list_head(violations)
-    let msg = format_violation(v)
-    report("", "Error", msg, 0, 0)
-    report_violations_loop(list_tail(violations))
-  }
-}
-
-fn format_violation(v) = match v {
-  EffNegationViolated(fn_name, eff_name) =>
-    "effect violation in '" ++ fn_name ++ "': declared !" ++ eff_name ++ " but body performs " ++ eff_name,
-  EffOpenRowNegation(fn_name, eff_name) =>
-    "effect warning in '" ++ fn_name ++ "': declared !" ++ eff_name ++ " but effect row is open",
-  EffPurityViolated(fn_name, effs) =>
-    "effect violation in '" ++ fn_name ++ "': declared Pure but body has effects",
-  _ => "effect violation: unknown"
-}
-
-fn get_tuple_elem(elems, idx) = {
-  if idx == 0 { list_head(elems) }
-  else { get_tuple_elem(list_tail(elems), idx - 1) }
-}
-

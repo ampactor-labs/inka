@@ -7,7 +7,7 @@
 //
 // <~ feedback's timing unit is handler-decided.
 
-import compiler/v2/types
+import compiler/types
 
 // ─── Effects ────────────────────────────────────────────────
 // Four peer effects. Capability negations !Clock, !Tick, !Sample,

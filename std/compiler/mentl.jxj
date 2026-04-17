@@ -2,9 +2,9 @@
 // This module provides the central nervous system for all teaching,
 // querying, and error diagnostic surface areas in Inka.
 
-import "std/compiler/v2/types"
-import "std/compiler/v2/graph"
-import "std/compiler/v2/effects"
+import "std/compiler/types"
+import "std/compiler/graph"
+import "std/compiler/effects"
 
 // --- Mentl Specific ADTs ---
 

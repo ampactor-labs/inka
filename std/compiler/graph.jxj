@@ -1,13 +1,14 @@
-// SubstGraph — one live graph, all variables (spec 00)
+// graph.jxj — SubstGraph: one live graph, all variables (spec 00)
 //
-// Replaces v1's two association lists (s for types, es for effects)
-// with a single flat-array graph. Every TVar(id) is a handle into
-// this graph. Every observer chases via graph_chase. One writer
-// (inference) via SubstGraphWrite; all others read-only via
+// Single flat-array graph replacing association lists. Every TVar(id)
+// is a handle into this graph. Every observer chases via graph_chase.
+// One writer (inference) via SubstGraphWrite; all others read-only via
 // SubstGraphRead. The effect split IS the invariant.
 //
 // Salsa 3.0 pattern: flat array, epoch tags, per-module overlay.
 // O(1) chase. No linked-list depth penalty.
+
+import compiler/types
 
 // ─── NodeKind ───────────────────────────────────────────────
 // What a graph slot holds. Chase terminates at NBound/NFree/NErrorHole.
@@ -32,134 +33,233 @@ type SubstGraph
       List      // overlays: [(module_name, [handle])]
     )
 
-// ─── Constructors ───────────────────────────────────────────
-
 fn graph_empty() = SubstGraph([], 0, 0, [])
 
 // ─── Effects ────────────────────────────────────────────────
 // The Read/Write split IS the "one writer" invariant.
 // Inference declares both; lowering and query declare Read only.
-// A `perform graph_bind` in lowering is a type error at handler
+// A perform graph_bind in lowering is a type error at handler
 // install — caught by the checker, never shipped to runtime.
 
 effect SubstGraphRead {
-  graph_chase(Int) -> GNode                   // @resume=OneShot
-  graph_epoch() -> Int                        // @resume=OneShot
-  graph_snapshot() -> SubstGraph              // @resume=OneShot
+  graph_chase(Int) -> GNode                    @resume=OneShot
+  graph_epoch() -> Int                         @resume=OneShot
+  graph_reason_edge(Int, Int) -> Reason        @resume=OneShot
+  graph_snapshot() -> SubstGraph               @resume=OneShot
 }
 
 effect SubstGraphWrite {
-  graph_fresh_ty(Reason) -> Int               // @resume=OneShot
-  graph_fresh_row(Reason) -> Int              // @resume=OneShot
-  graph_bind(Int, Ty, Reason) -> ()           // @resume=OneShot
-  graph_bind_row(Int, EffRow, Reason) -> ()   // @resume=OneShot
-  graph_fork(String) -> ()                    // @resume=OneShot
+  graph_fresh_ty(Reason) -> Int                @resume=OneShot
+  graph_fresh_row(Reason) -> Int               @resume=OneShot
+  graph_bind(Int, Ty, Reason) -> ()            @resume=OneShot
+  graph_bind_row(Int, EffRow, Reason) -> ()    @resume=OneShot
+  graph_fork(String) -> ()                     @resume=OneShot
 }
 
-// ─── Default handler ────────────────────────────────────────
-// Threads a single mutable SubstGraph through the pipeline.
-// Installed once at compile entry. All passes see the same graph.
+// ─── graph_handler ──────────────────────────────────────────
+// THE handler. Threads a single mutable SubstGraph through the
+// pipeline. Installed once at compile entry. All passes see the
+// same live graph.
+//
+// This is the first real demonstration of Inka's handler-state
+// pattern. State is internal to the handler. Callers never see
+// SubstGraph directly — they perform effects.
 
-fn graph_node_at(nodes, idx) = {
+handler graph_handler with nodes = [], epoch = 0, next = 0, overlays = [] {
+
+  // ─── Read ops ───────────────────────────────────────────
+
+  graph_chase(handle) => {
+    let result = chase_node(nodes, handle, 0)
+    resume(result)
+  },
+
+  graph_epoch() => {
+    resume(epoch)
+  },
+
+  graph_reason_edge(h1, h2) => {
+    let GNode(_, r1) = chase_node(nodes, h1, 0)
+    let GNode(_, r2) = chase_node(nodes, h2, 0)
+    resume(Unified(r1, r2))
+  },
+
+  graph_snapshot() => {
+    resume(SubstGraph(nodes, epoch, next, overlays))
+  },
+
+  // ─── Write ops ──────────────────────────────────────────
+
+  graph_fresh_ty(reason) => {
+    let handle = next
+    let new_node = GNode(NFree(epoch), reason)
+    let new_nodes = nodes ++ [new_node]
+    resume(handle) with nodes = new_nodes, next = next + 1
+  },
+
+  graph_fresh_row(reason) => {
+    let handle = next
+    let new_node = GNode(NRowFree(epoch), reason)
+    let new_nodes = nodes ++ [new_node]
+    resume(handle) with nodes = new_nodes, next = next + 1
+  },
+
+  graph_bind(handle, ty, reason) => {
+    if occurs_in(handle, ty) {
+      perform report(
+        "graph", "E_OccursCheck", "error",
+        "infinite type: "
+          |> str_concat(int_to_str(handle))
+          |> str_concat(" occurs in ")
+          |> str_concat(show_type(ty)),
+        span_zero(),
+        "MachineApplicable"
+      )
+      resume(())
+    } else {
+      let bound_node = GNode(NBound(ty), reason)
+      let new_nodes = graph_set_node(nodes, handle, bound_node)
+      resume(()) with nodes = new_nodes, epoch = epoch + 1
+    }
+  },
+
+  graph_bind_row(handle, row, reason) => {
+    let bound_node = GNode(NRowBound(row), reason)
+    let new_nodes = graph_set_node(nodes, handle, bound_node)
+    resume(()) with nodes = new_nodes, epoch = epoch + 1
+  },
+
+  graph_fork(module_name) => {
+    let overlay_entry = (module_name, [])
+    resume(()) with overlays = overlays ++ [overlay_entry]
+  }
+}
+
+// ─── Pure graph operations ──────────────────────────────────
+// Internal machinery the handler delegates to.
+
+fn graph_node_at(nodes, idx) =
   if idx >= len(nodes) { GNode(NFree(0), Fresh(idx)) }
   else { nodes[idx] }
-}
 
-fn graph_set_node(nodes, idx, node) = {
-  // Extend if needed, then set
-  let extended = graph_extend_to(nodes, idx)
-  graph_set_at(extended, idx, node, 0)
-}
+fn graph_set_node(nodes, idx, node) =
+  nodes
+    |> graph_extend_to(idx)
+    |> graph_write_at(idx, node, 0)
 
-fn graph_extend_to(nodes, idx) = {
+fn graph_extend_to(nodes, idx) =
   if len(nodes) > idx { nodes }
-  else { graph_extend_to(nodes ++ [GNode(NFree(0), Fresh(len(nodes)))], idx) }
-}
-
-fn graph_set_at(nodes, idx, node, i) = {
-  if i >= len(nodes) { nodes }
   else {
-    if i == idx { [node] ++ graph_set_at(nodes, idx, node, i + 1) }
-    else { [nodes[i]] ++ graph_set_at(nodes, idx, node, i + 1) }
+    nodes ++ [GNode(NFree(0), Fresh(len(nodes)))]
+      |> graph_extend_to(idx)
   }
-}
 
-// Chase: follow NBound/NRowBound links until terminal.
+fn graph_write_at(nodes, idx, node, i) =
+  if i >= len(nodes) { nodes }
+  else if i == idx {
+    [node] ++ graph_write_at(nodes, idx, node, i + 1)
+  } else {
+    [nodes[i]] ++ graph_write_at(nodes, idx, node, i + 1)
+  }
+
+// ─── Chase ──────────────────────────────────────────────────
+// Follow NBound/NRowBound links until terminal.
 // Path compression skipped per spec (Salsa 3.0 pattern).
-fn chase_node(nodes, handle, depth) = {
-  if depth > 100 { GNode(NErrorHole(Inferred("occurs check: chase depth exceeded")), Fresh(handle)) }
-  else {
-    let node = graph_node_at(nodes, handle)
-    let GNode(kind, reason) = node
+// Depth-limited to detect cycles that slip past the occurs check.
+
+fn chase_node(nodes, handle, depth) =
+  if depth > 100 {
+    GNode(NErrorHole(Inferred("chase depth exceeded")), Fresh(handle))
+  } else {
+    let GNode(kind, reason) = graph_node_at(nodes, handle)
     match kind {
-      NBound(ty) => match ty {
-        TVar(next) => chase_node(nodes, next, depth + 1),
-        _ => node
-      },
-      NRowBound(row) => match row {
-        EfOpen(names, next) => {
-          let chased = chase_node(nodes, next, depth + 1)
-          let GNode(ck, cr) = chased
-          match ck {
-            NRowFree(_) => node,   // terminal: row var still free
-            NRowBound(inner_row) => GNode(NRowBound(merge_row(names, inner_row)), cr),
-            _ => node
-          }
+      NBound(ty) =>
+        match ty {
+          TVar(next) => chase_node(nodes, next, depth + 1),
+          _ => GNode(kind, reason)
         },
-        _ => node
-      },
-      _ => node   // NFree, NRowFree, NErrorHole — all terminal
+      NRowBound(row) =>
+        match row {
+          EfOpen(names, next) =>
+            chase_node(nodes, next, depth + 1)
+              |> merge_chased_row(names),
+          _ => GNode(kind, reason)
+        },
+      _ => GNode(kind, reason)
     }
   }
-}
 
-fn merge_row(names, row) = match row {
-  EfPure => if len(names) == 0 { EfPure } else { EfClosed(names) },
-  EfClosed(inner) => EfClosed(list_union_str(names, inner)),
-  EfOpen(inner, v) => EfOpen(list_union_str(names, inner), v),
-  _ => row
-}
-
-fn list_union_str(a, b) = {
-  if len(b) == 0 { a }
-  else {
-    let x = list_head(b)
-    if string_in_list(a, x) { list_union_str(a, list_tail(b)) }
-    else { list_union_str(a ++ [x], list_tail(b)) }
+fn merge_chased_row(chased, names) =
+  let GNode(ck, cr) = chased
+  match ck {
+    NRowFree(_) => chased,
+    NRowBound(inner_row) => GNode(NRowBound(merge_row(names, inner_row)), cr),
+    _ => chased
   }
-}
 
-fn string_in_list(lst, s) = {
-  if len(lst) == 0 { false }
-  else {
-    if str_eq(list_head(lst), s) == 1 { true }
-    else { string_in_list(list_tail(lst), s) }
+fn merge_row(names, row) =
+  match row {
+    EfPure =>
+      if len(names) == 0 { EfPure }
+      else { EfClosed(names) },
+    EfClosed(inner) => EfClosed(list_union_str(names, inner)),
+    EfOpen(inner, v) => EfOpen(list_union_str(names, inner), v),
+    _ => row
   }
-}
 
 // ─── Occurs check ───────────────────────────────────────────
 // Before bind: walk ty for free handles containing the target.
 
-fn occurs_in(handle, ty) = match ty {
-  TVar(id) => id == handle,
-  TList(elem) => occurs_in(handle, elem),
-  TTuple(elems) => occurs_in_list(handle, elems),
-  TFun(params, ret, _) => occurs_in_list(handle, params) || occurs_in(handle, ret),
-  TName(_, args) => occurs_in_list(handle, args),
-  TRecord(fields) => occurs_in_fields(handle, fields),
-  TRecordOpen(fields, v) => v == handle || occurs_in_fields(handle, fields),
-  _ => false
-}
+fn occurs_in(handle, ty) =
+  match ty {
+    TVar(id) => id == handle,
+    TList(elem) => occurs_in(handle, elem),
+    TTuple(elems) => occurs_in_list(handle, elems),
+    TFun(params, ret, _) =>
+      occurs_in_params(handle, params) || occurs_in(handle, ret),
+    TName(_, args) => occurs_in_list(handle, args),
+    TRecord(fields) => occurs_in_fields(handle, fields),
+    TRecordOpen(fields, v) =>
+      v == handle || occurs_in_fields(handle, fields),
+    TRefined(base, _) => occurs_in(handle, base),
+    TCont(ret, _) => occurs_in(handle, ret),
+    _ => false
+  }
 
-fn occurs_in_list(handle, tys) = {
+fn occurs_in_params(handle, params) =
+  if len(params) == 0 { false }
+  else {
+    let TParam(_, ty, _) = list_head(params)
+    occurs_in(handle, ty) || occurs_in_params(handle, list_tail(params))
+  }
+
+fn occurs_in_list(handle, tys) =
   if len(tys) == 0 { false }
-  else { occurs_in(handle, list_head(tys)) || occurs_in_list(handle, list_tail(tys)) }
-}
+  else {
+    occurs_in(handle, list_head(tys))
+      || occurs_in_list(handle, list_tail(tys))
+  }
 
-fn occurs_in_fields(handle, fields) = {
+fn occurs_in_fields(handle, fields) =
   if len(fields) == 0 { false }
   else {
     let (_, ty) = list_head(fields)
-    occurs_in(handle, ty) || occurs_in_fields(handle, list_tail(fields))
+    occurs_in(handle, ty)
+      || occurs_in_fields(handle, list_tail(fields))
   }
-}
+
+// ─── String set operations ──────────────────────────────────
+
+fn list_union_str(a, b) =
+  if len(b) == 0 { a }
+  else {
+    let x = list_head(b)
+    let rest = list_tail(b)
+    if string_in_list(a, x) { list_union_str(a, rest) }
+    else { list_union_str(a ++ [x], rest) }
+  }
+
+fn string_in_list(lst, s) =
+  if len(lst) == 0 { false }
+  else if str_eq(list_head(lst), s) == 1 { true }
+  else { string_in_list(list_tail(lst), s) }

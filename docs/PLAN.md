@@ -671,9 +671,9 @@ not locked.
 `verify_ledger` → `verify_smt`. Handler swap; source unchanged.
 
 **What it does:** Every `type Port = Int where 1 <= self && self <=
-65535` annotation that Phase 1 accrues as a V001 pending obligation
+65535` annotation that Phase 1 accrues as a `V_Pending` obligation
 now gets DISCHARGED at compile time via SMT. Invalid call sites
-fail with E200 RefinementRejected.
+fail with `E_RefinementRejected`.
 
 - Z3 for nonlinear arithmetic.
 - cvc5 for finite-set/bag/map reasoning.
@@ -1211,7 +1211,7 @@ it's an F arc.
 
 - **Refinement types.** IN: `TRefined(Ty, Predicate)` as a Ty
   variant. Inference handles it structurally. `Verify` effect with
-  `verify_ledger` accumulates `V001` obligations. OUT: Z3/cvc5
+  `verify_ledger` accumulates `V_Pending` obligations. OUT: Z3/cvc5
   binding that discharges predicates (Arc F.1 handler swap).
 
 - **LSP.** IN: `inka query` IS the forensic substrate. Every query

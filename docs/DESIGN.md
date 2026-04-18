@@ -314,7 +314,7 @@ audio
 
 **Ownership.** `<|` implicitly *borrows* the input for all branches.
 `own` values cannot flow through `<|` — it would consume the same
-value multiple times, an affine violation (E004). `ref` values borrow
+value multiple times, an affine violation (`E_OwnershipViolation`). `ref` values borrow
 per branch. Pure values fan out by copy.
 
 **Type rule.** If `input: T` and branches are `(T -> A, T -> B, T -> C)`,
@@ -870,7 +870,7 @@ evidence, with no fallback.
 
 Inference never halts on a type error. A mismatch:
 
-1. Emits `perform report(..., code="E002", kind="TypeMismatch", ...)`.
+1. Emits `perform report(..., code="E_TypeMismatch", ...)`.
 2. Binds the handle to `NErrorHole(UnifyFailed(a, b))` — a terminal
    error node.
 3. Continues the walk.
@@ -1094,7 +1094,7 @@ handler affine_ledger with !Consume {
     consume(name, span) => {
         if list_contains(self.used, name) {
             let first_span = find_first_use(self.used_sites, name)
-            perform report(self.source, "E004", "OwnershipError",
+            perform report(self.source, "E_OwnershipViolation", "error",
                 "'" ++ name ++ "' consumed twice (first at "
                     ++ show_span(first_span) ++ ")",
                 span, "MachineApplicable")
@@ -1115,7 +1115,7 @@ recurse through `consume` — a structural gate from the Boolean algebra
 (Chapter 3). No infinite loops. No policy.
 
 Installed at every `FnStmt` entry. At `FnStmt` exit, any `own`
-parameter not in `self.used` emits `T001 OwnNeverConsumed` — a
+parameter not in `self.used` emits `T_Gradient` with reason `OwnNeverConsumed` — a
 teaching hint surfaced by Mentl, not an error.
 
 ### `ref` as structural escape check
@@ -1123,12 +1123,12 @@ teaching hint surfaced by Mentl, not an error.
 `ref` parameters cannot appear in return position:
 
 ```
-fn head_ref(xs: ref List<String>) -> ref String = xs[0]  // ERROR E004
+fn head_ref(xs: ref List<String>) -> ref String = xs[0]  // E_OwnershipViolation
 // the returned ref outlives the borrow
 ```
 
 A structural walk checks every return position for ref-marked
-parameters. Violations emit `E004` with `applicability=MaybeIncorrect`
+parameters. Violations emit `E_OwnershipViolation` with `applicability=MaybeIncorrect`
 (the fix might be to change `ref` to `own`, or to refactor; the
 compiler cannot decide for you).
 
@@ -1141,7 +1141,7 @@ subtraction from the Boolean algebra (Chapter 3) discharges it:
 1. Inference walks the body, accumulating its row.
 2. Normalized body row is tested against `!Alloc` via subsumption.
 3. Any `Alloc` in the body without a handler absorbing it emits
-   `E004` with `applicability=MachineApplicable` (the fix is
+   `E_OwnershipViolation` with `applicability=MachineApplicable` (the fix is
    deterministic: add a handler, or promote to caller, or drop the
    claim).
 
@@ -1157,7 +1157,7 @@ ownership. **Ownership fell out.**
 // [input] ────┤               ├─► (out_a, out_b)
 //             └──► branch_b ──┘
 // Input is SHARED (borrowed).
-// Cannot consume own values. (E004)
+// Cannot consume own values. (E_OwnershipViolation)
 
 // >< (Parallel Compose)
 // [input_a] ──► process_a ──┐
@@ -1186,7 +1186,7 @@ Three policies:
 1. **Replay safe.** The continuation is re-derived by replaying the
    effect trace. Resume re-executes from the perform site.
 2. **Fork deny.** Forking a continuation that captured arena memory is
-   an error at capture time (`T002 ContinuationEscapesArena`).
+   an error at capture time (`T_ContinuationEscapes`).
 3. **Fork copy.** Capture deep-copies arena-owned data into the
    caller's arena. Allocation cost; no semantic surprise.
 
@@ -1482,7 +1482,7 @@ type Capability
 
 type Explanation
     = Explanation(
-        code: String,             // E001, V001, W017, ...
+        code: String,             // E_MissingVariable, V_Pending, W_Suggestion, ...
         canonical_md: String,     // path into docs/errors/<code>.md
         summary: String,          // one-line human-readable
         fix: Option(Patch),       // MachineApplicable → concrete patch
@@ -1548,7 +1548,7 @@ Every error code in Inka has a canonical explanation at
 Explanation, and returns it with the full reason chain:
 
 ```markdown
-# E001 — MissingVariable
+# E_MissingVariable
 
 **Kind:** Error
 **Emitted by:** inference
@@ -2017,7 +2017,7 @@ are visible, countable, queryable.
 fn bind_port(p: Int) -> Port = p
 
 // Compile output:
-// V001 VerificationPending at line 12:
+// V_Pending at line 12:
 //   predicate: 1 <= self && self <= 65535
 //   bound on: port argument to bind_port
 //   suggestion: refine the call site, or add `assert p > 0 && p <= 65535`
@@ -2031,7 +2031,7 @@ right solver for the predicate shape.
 
 ```
 // After `~> verify_smt`:
-// E200 RefinementRejected at line 12:
+// E_RefinementRejected at line 12:
 //   predicate: 1 <= self && self <= 65535
 //   rejected: self := user_input (no bounds proof)
 //   fix: add an assertion or narrow the caller

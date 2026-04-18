@@ -1,7 +1,7 @@
 // verify.ka — refinement obligation ledger (spec 02 · spec 06)
 //
 // Phase 1 default: verify_ledger accumulates every obligation
-// (span, predicate, reason). At compile end, emits V001 with the
+// (span, predicate, reason). At compile end, emits V_Pending with the
 // count. Code compiles; obligations are visible, countable,
 // queryable via `inka query verification`.
 //

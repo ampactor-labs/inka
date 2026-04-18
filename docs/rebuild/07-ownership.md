@@ -39,7 +39,7 @@ handler affine_ledger with !Consume {
   consume(name, span) => {
     if list_contains(self.used, name) {
       let first_span = find_first_use(self.used_sites, name)
-      perform report(self.source, "E004", "OwnershipError",
+      perform report(self.source, "E_OwnershipViolation", "OwnershipError",
         "'" ++ name ++ "' consumed twice (first at "
           ++ show_span(first_span) ++ ")",
         span, "MachineApplicable")
@@ -62,7 +62,7 @@ closure-captured at handler install (static per compilation). The
 its own arm — Boolean effect algebra (spec 01) gates it.
 
 Installed at every FnStmt entry. At FnStmt exit, any `own` parameter
-NOT in `self.used` emits `T001 Teach` with code `OwnNeverConsumed` —
+NOT in `self.used` emits `T_Gradient` with code `OwnNeverConsumed` —
 a teaching hint, not an error.
 
 ---
@@ -91,7 +91,7 @@ fn check_return_pos(node, ref_params) = match node.body {
 }
 ```
 
-Violations emit `perform report(..., code="E004",
+Violations emit `perform report(..., code="E_OwnershipViolation",
 kind="OwnershipError", applicability="MaybeIncorrect", ...)`. The
 fix might be to change `ref` to `own`, or to refactor to not return
 the borrow — hence MaybeIncorrect rather than MachineApplicable.
@@ -109,7 +109,7 @@ When a function is declared `with !Alloc`:
 2. Normalized body row is tested against `!Alloc` via subsumption
    (spec 01).
 3. Any `Alloc` effect in the body without a handler that absorbs it
-   emits `E004` with `applicability=MachineApplicable` (the fix is
+   emits `E_OwnershipViolation` with `applicability=MachineApplicable` (the fix is
    deterministic: add a handler, or promote to caller, or drop the
    claim).
 
@@ -129,7 +129,7 @@ F.4): `!Alloc + !Consume` = zero-copy AND zero-alloc.
 | Param     | On use                 | Return as-is     | Return stored    | Escape check        |
 |-----------|------------------------|------------------|------------------|---------------------|
 | `own`     | `perform consume(n)`   | OK (moves out)   | OK (new owner)   | N/A                 |
-| `ref`     | read                   | ERROR (E004)     | ERROR (E004)     | structural walk     |
+| `ref`     | read                   | ERROR (`E_OwnershipViolation`)     | ERROR (`E_OwnershipViolation`)     | structural walk     |
 | Inferred  | compiler decides       | depends          | depends          | default: no-escape  |
 
 ---
@@ -146,8 +146,8 @@ here; implementation lands in Arc F.4:
    if body effects satisfy Affect's safe shape.
 
 2. **Fork deny.** Forking a continuation that captured arena memory
-   is an error at capture time (not resume time). Emits `T002
-   ContinuationEscapesArena`.
+   is an error at capture time (not resume time). Emits
+   `T_ContinuationEscapes`.
 
 3. **Fork copy.** Capture deep-copies arena-owned data into the
    caller's arena. Allocation cost; no semantic surprise.
@@ -201,8 +201,8 @@ the effect system rather than a dedicated pass that returns
 - `04-inference.md` — infers ownership alongside types in one walk.
 - `05-lower.md` — reads TParam ownership to choose move vs copy at
   codegen.
-- `06-effects-surface.md` — Consume is registered; E004 code is
-  reserved.
+- `06-effects-surface.md` — Consume is registered; `E_OwnershipViolation`
+  is the emit code.
 - `08-query.md` — `ownership of NAME` walks TFun params.
 
 ---

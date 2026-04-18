@@ -1,4 +1,4 @@
-# E010 — OccursCheck
+# E_OccursCheck
 
 **Kind:** Error
 **Emitted by:** SubstGraph bind (spec 00 invariant 1)
@@ -30,7 +30,7 @@ as an error instead of looping forever.
 
 ```lux
 fn weird(x) = weird(weird(x))
-// E010 at line 1: occurs check — inferred type would be infinite
+// E_OccursCheck at line 1: occurs check — inferred type would be infinite
 //   chain: 'weird' returns T where T requires T as input
 //   fix: add an explicit type annotation, or refactor
 ```

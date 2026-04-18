@@ -442,7 +442,7 @@ fn infer_pipe(kind, left, right, handle, span) =
     },
 
     // <| diverge — input borrowed to each branch; outputs tupled.
-    // Own values cannot flow through <| (affine violation, E004).
+    // Own values cannot flow through <| (affine violation, E_OwnershipViolation).
     PDiverge => {
       let ret_h = perform mint(Inferred("<| tuple of branch outputs"))
       perform graph_bind(handle, TVar(ret_h),

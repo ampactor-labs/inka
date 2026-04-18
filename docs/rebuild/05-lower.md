@@ -36,7 +36,7 @@ handler lookup_ty_graph with SubstGraphRead {
       NBound(t) => resume(t),
       NErrorHole(_) => resume(TName("ERROR_HOLE", [])),
       NFree(epoch) => {
-        perform report("", "E100", "UnresolvedType",
+        perform report("", "E_UnresolvedType", "UnresolvedType",
           "handle " ++ show(h) ++ " @epoch=" ++ show(epoch),
           Span(0, 0, 0, 0), "MaybeIncorrect")
         resume(TName("UNRESOLVED", []))    // sentinel — halts build
@@ -52,7 +52,7 @@ either `NBound` (well-typed) or `NErrorHole` (explicit failure from
 spec 04). `NErrorHole` lowers to a WASM `unreachable` trap — the
 build continues, the user sees a runtime trap if they hit that path,
 but all other well-typed code compiles. `NFree` is a compiler-
-internal bug (inference failed to populate); emits `E100` and halts.
+internal bug (inference failed to populate); emits `E_UnresolvedType` and halts.
 No silent fallback to TUnit. No `val_concat` reachable.
 
 The `with SubstGraphRead` declaration is load-bearing: this handler
@@ -194,7 +194,7 @@ graph writes, no rebinds, no snapshots.
 
 2. **Complete.** Every LowExpr whose handle chases to `NBound` has a
    ground type; handles that chase to `NErrorHole` lower to
-   `unreachable`; `NFree` is a compiler-internal error (E100). No
+   `unreachable`; `NFree` is a compiler-internal error (`E_UnresolvedType`). No
    silent TUnit fallback.
 
 3. **No defaults.** No `_ => TUnit`. No wildcard arms without

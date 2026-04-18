@@ -342,7 +342,7 @@ effect FreshHandle {
 
 // ═══ Verify (spec 02 · 06) — ledger in Phase 1, SMT in Arc F.1 ═════
 // Every refinement unification performs verify(span, pred, reason).
-// verify_ledger accumulates (V001); verify_smt discharges (E200 on
+// verify_ledger accumulates (V_Pending); verify_smt discharges (E_RefinementRejected on
 // reject). Handler swap; source code unchanged.
 
 effect Verify {

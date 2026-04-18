@@ -107,7 +107,7 @@ type Capability
 
 type Explanation
   = Explanation(
-      code: String,              // E001, V001, W017, ...
+      code: String,              // E_MissingVariable, V_Pending, W_Suggestion, ...
       canonical_md: String,      // path into docs/errors/<code>.md
       summary: String,           // one-line human-readable
       fix: Option(Patch),        // MachineApplicable → concrete patch
@@ -151,7 +151,7 @@ Canonical explanations live at `docs/errors/<CODE>.md`. Mentl's
 `teach_error` op reads them. Structure per file:
 
 ```markdown
-# E001 — MissingVariable
+# E_MissingVariable
 
 **Kind:** Error
 **Emitted by:** inference
@@ -186,7 +186,7 @@ When `verify_ledger` accumulates an obligation, Mentl's error tentacle
 can render it as:
 
 ```
-V001 VerificationPending at line 42:
+V_Pending at line 42:
   predicate: 1 <= self && self <= 65535
   bound on: port argument to bind_tcp(port: Port)
   suggestion: refine the call site, or add `assert port > 0` to discharge
@@ -194,7 +194,7 @@ V001 VerificationPending at line 42:
 ```
 
 When `verify_smt` (Arc F.1) rejects an obligation, Mentl surfaces
-`E200 RefinementRejected` with:
+`E_RefinementRejected` with:
 - The residual unsat core (from Z3/cvc5).
 - The call chain that introduced the value.
 - The canonical suggestion (narrow the caller, or add an assert).

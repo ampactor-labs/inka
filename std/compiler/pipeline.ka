@@ -168,7 +168,7 @@ fn take_last(lst, n) =
 // ═══ lookup_ty_graph — SubstGraphRead → LookupTy bridge (spec 05) ══
 // The ONLY LookupTy handler in Phase 1. Declares SubstGraphRead
 // (inherited from the outer graph_handler). Unresolved handles emit
-// E100; error holes emit a sentinel that lowering/emit translates
+// E_UnresolvedType; error holes emit a sentinel that lowering/emit translates
 // to a WASM unreachable trap.
 
 handler lookup_ty_graph {

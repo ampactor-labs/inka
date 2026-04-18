@@ -84,7 +84,7 @@ converges via tuple.
   unchanged.
 - **Row:** union of all branch rows + upstream row.
 - **Ownership:** `own` CANNOT pass through `<|` (affine violation;
-  emits E004). `ref` borrows per branch. Pure values fan out by copy.
+  emits `E_OwnershipViolation`). `ref` borrows per branch. Pure values fan out by copy.
 
 ## `><` — parallel compose
 

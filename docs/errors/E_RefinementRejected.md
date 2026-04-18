@@ -12,7 +12,7 @@ flow. The SMT solver returned unsat for the obligation's satisfiability
 
 ## Why it matters
 
-Refinement types are compile-time proofs. `E200` is the compiler
+Refinement types are compile-time proofs. `E_RefinementRejected` is the compiler
 saying "I tried to prove this property and found a concrete
 counterexample." The code that's rejected would not uphold the
 refinement at runtime.

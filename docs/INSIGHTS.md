@@ -1638,7 +1638,7 @@ Both produce tuples. The distinction is input sharing:
            ┌──► branch_a ──┐
 [input] ───┤               ├─► (out_a, out_b)
            └──► branch_b ──┘
-Input is SHARED (borrowed). Cannot consume own values. (E004)
+Input is SHARED (borrowed). Cannot consume own values. (`E_OwnershipViolation`)
 
 >< (Parallel Compose)
 [input_a] ──► process_a ──┐

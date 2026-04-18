@@ -180,7 +180,7 @@ fn decode(input: Buffer) -> Message
 The refinement predicate references the `Deadline` effect's op.
 `verify_ledger` in Phase 1 records the obligation; `verify_smt` in
 Arc F.1 checks it against the call context's deadline. If the caller
-doesn't provide at least 1ms, `E200 RefinementRejected`.
+doesn't provide at least 1ms, `E_RefinementRejected`.
 
 ---
 

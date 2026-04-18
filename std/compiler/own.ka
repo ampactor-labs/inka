@@ -3,7 +3,7 @@
 // Ownership dissolves into the existing effect algebra. Every use of
 // an own-annotated parameter performs Consume. The affine_ledger
 // handler tracks which bindings have been consumed; a double-consume
-// is E004. A ref-annotated value cannot escape return position —
+// is E_OwnershipViolation. A ref-annotated value cannot escape return position —
 // checked structurally on the body.
 //
 // No separate ownership pass. The Consume effect piggybacks on the

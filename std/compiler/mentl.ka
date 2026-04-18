@@ -48,7 +48,7 @@ type Patch
 
 type Explanation
   = Explanation(
-      String,     // code: E001, V001, W017, …
+      String,     // code: E_MissingVariable, V_Pending, W_Suggestion, …
       String,     // canonical_md: docs/errors/<code>.md
       String,     // summary: one-line human-readable
       Option,     // fix: Option(Patch) when MachineApplicable

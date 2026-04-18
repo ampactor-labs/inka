@@ -232,7 +232,7 @@ fn lower_pipe(kind, left, right, handle) = {
     PForward => LCall(handle, lo_r, [lo_l]),
 
     // <| diverge — input borrowed to each branch; outputs tupled.
-    // Ownership affinity checked at inference (E004 if own flows here).
+    // Ownership affinity checked at inference (E_OwnershipViolation if own flows here).
     PDiverge =>
       LMakeTuple(handle, lower_diverge_branches(lo_l, lo_r)),
 

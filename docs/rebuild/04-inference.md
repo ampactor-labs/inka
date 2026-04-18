@@ -102,7 +102,7 @@ env the same way it reads the graph.
    ```lux
    match perform env_lookup(name) {
      None => {
-       perform report("", "E001", "MissingVariable", name,
+       perform report("", "E_MissingVariable", "MissingVariable", name,
                       node.span, "MaybeIncorrect")
        graph_bind(node.handle, NErrorHole(MissingVar(name)), ...)
      },
@@ -156,7 +156,7 @@ fn unify_shapes(a, b, r) = match (a, b) {
     perform report("R", "Refinement", show_pred(PAnd(p, q)), ..., "MaybeIncorrect")
   },
   // ... one arm per ADT shape pair
-  _ => perform report("E002", "TypeMismatch", show_mismatch(a, b), ..., "MachineApplicable")
+  _ => perform report("E_TypeMismatch", "TypeMismatch", show_mismatch(a, b), ..., "MachineApplicable")
 }
 ```
 
@@ -200,7 +200,7 @@ r)`, walk ty for free handles containing h; if any, emit
 ## Error handling (Hazel pattern)
 
 Inference never halts on a type error. A mismatch:
-1. Emits `perform report(..., code="E002", kind="TypeMismatch", ...)`.
+1. Emits `perform report(..., code="E_TypeMismatch", ...)`.
 2. Binds the handle to `NErrorHole(UnifyFailed(a, b))` — a terminal
    error node (spec 00 NodeKind variant). Lowering tolerates
    `NErrorHole` by emitting a WASM `unreachable` trap; query surfaces

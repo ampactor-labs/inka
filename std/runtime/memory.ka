@@ -1,6 +1,6 @@
-// Memory Effect — Lux's bridge to the machine
+// memory.ka — Inka's bridge to the machine
 //
-// The handler IS the backend. Same Lux code, different handlers, different targets.
+// The handler IS the backend. Same Inka code, different handlers, different targets.
 // WASM handler: load_i32 → i32.load. Native handler: load_i32 → MOV.
 //
 // !Alloc proves real-time safety. !Memory proves sandboxing.

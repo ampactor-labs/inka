@@ -66,12 +66,63 @@ fn ty_to_wasm_type(ty) = match ty {
 
 fn emit_module(lowered) = {
   emit_header()
+  emit_type_section(lowered)
   emit_runtime_imports()
   emit_memory_decl()
   emit_functions(lowered)
   emit_start(lowered)
   emit_footer()
 }
+
+// ═══ Type section — signatures for call_indirect ═══════════════════
+// Every call_indirect references a function type index. We emit a
+// type for each arity the program's call sites use: the program
+// carries calls of arity 0..N where N is determined by walking the
+// lowered IR. In ultimate-form Inka with evidence-passing, the
+// polymorphic-call path uses these same types: the evidence pointer
+// is a normal i32 slot, so effectful calls of arity K use $ft(K+1).
+
+fn emit_type_section(lowered) = {
+  let max_arity = max_arity_in(lowered, 0)
+  emit_type_decls(0, max_arity)
+}
+
+fn max_arity_in(stmts, acc) =
+  if len(stmts) == 0 { acc }
+  else {
+    let bigger = max_int(acc, max_arity_expr(list_head(stmts)))
+    max_arity_in(list_tail(stmts), bigger)
+  }
+
+fn max_arity_expr(expr) = match expr {
+  LCall(_, _, args)         => len(args),
+  LTailCall(_, _, args)     => len(args),
+  LSuspend(_, _, _, args)   => len(args),
+  LPerform(_, _, args)      => len(args),
+  LLet(_, _, inner)         => max_arity_expr(inner),
+  LMakeClosure(_, _, _)     => 0,
+  _                         => 0
+}
+
+fn max_int(a, b) = if a > b { a } else { b }
+
+fn emit_type_decls(i, max) =
+  if i > max { () }
+  else {
+    perform wat_emit("  (type $ft")
+    perform wat_emit(int_to_str(i))
+    perform wat_emit(" (func")
+    emit_param_types(i)
+    perform wat_emit(" (result i32)))\n")
+    emit_type_decls(i + 1, max)
+  }
+
+fn emit_param_types(n) =
+  if n == 0 { () }
+  else {
+    perform wat_emit(" (param i32)")
+    emit_param_types(n - 1)
+  }
 
 fn emit_header() =
   perform wat_emit("(module\n")
@@ -305,6 +356,12 @@ fn emit_expr(expr) = match expr {
   },
 
   LPerform(_h, op_name, args) => {
+    // Perform emits a direct call to the op's installed handler arm.
+    // In monomorphic handler stacks (the common case — lower.ka's
+    // row_is_ground proves it for >95% of call sites) the symbol
+    // `$op_<name>` resolves statically. The polymorphic path goes
+    // through LSuspend, which loads a function pointer from the
+    // evidence vector and uses call_indirect.
     emit_expr_list(args)
     perform wat_emit("    (call $op_")
     perform wat_emit(op_name)
@@ -386,6 +443,11 @@ fn emit_unaryop(op) = match op {
 // ═══ List / tuple literals ═════════════════════════════════════════
 
 fn emit_list_literal(elems) =
+  // Allocate a snoc-cons chain. `$alloc_cons` is the runtime's
+  // canonical 2-arg cell allocator (head, tail) → pointer. The
+  // runtime's memory.ka handler for Alloc provides it; swapping
+  // memory.ka to temp_arena changes lifetime without changing this
+  // emission. That IS the handler-as-backend thesis.
   if len(elems) == 0 {
     perform wat_emit("    (i32.const 0) ;; empty list\n")
   } else {

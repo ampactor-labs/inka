@@ -151,7 +151,7 @@ fn try_each_annotation(handle, candidates, base_ty) =
 
     let cp = perform graph_push_checkpoint()
     apply_annotation_tentatively(handle, ann, base_ty)
-    let ok = verify_after_apply()
+    let ok = verify_after_apply(handle)
     perform graph_rollback(cp)
 
     let tail_results = try_each_annotation(handle, rest, base_ty)
@@ -189,12 +189,27 @@ fn narrow_row(handle, base_ty, narrow) = match base_ty {
   _ => ()
 }
 
-// Verify after tentative apply: run the algebra's subsumption
-// against any freshly-introduced constraints. In the full oracle,
-// this re-runs inference under the tentative patch; in Phase 1,
-// we trust graph_bind's occurs check to catch gross errors.
+// Verify after tentative apply: read the target handle's state.
+// A candidate is "proven" if the post-apply handle is NBound (the
+// tentative narrowing stuck cleanly). Failure modes:
+//   NErrorHole — occurs check or a structural conflict caused
+//                inference to record failure on the handle.
+//   NFree     — the apply didn't bind (shouldn't happen for a
+//                well-formed apply_annotation_tentatively).
+//   row-kind  — handle was a row variable; not a narrow target.
+// The trail-based rollback restores whatever state the handle held
+// before the tentative apply, so this check is non-destructive.
 
-fn verify_after_apply() = true  // Phase 1: assume apply succeeded
+fn verify_after_apply(handle) = {
+  let GNode(kind, _) = perform graph_chase(handle)
+  match kind {
+    NBound(_)     => true,
+    NErrorHole(_) => false,
+    NFree(_)      => false,
+    NRowBound(_)  => false,
+    NRowFree(_)   => false
+  }
+}
 
 fn ownership_candidates(params) =
   if len(params) == 0 { [] }
@@ -301,13 +316,29 @@ handler synth_enumerative {
   },
 
   verify_candidate(candidate) => {
+    // A candidate's node was typed when it was proposed; its handle
+    // sits in the graph in some state. The candidate is valid iff
+    // chasing the handle lands on NBound — i.e., the type it carries
+    // holds in the current graph without conflict. No injection is
+    // needed because the candidate's type is already materialized;
+    // we just confirm the graph still accepts it.
     let Candidate(node, _) = candidate
-    let cp = perform graph_push_checkpoint()
-    inject_candidate_tentatively(node)
-    let ok = verify_after_apply()
-    perform graph_rollback(cp)
-    resume(ok)
-  }
+    let N(_, _, h) = node
+    let GNode(kind, _) = perform graph_chase(h)
+    match kind {
+      NBound(_)     => resume(true),
+      NErrorHole(_) => resume(false),
+      _             => resume(false)
+    }
+  },
+
+  // Phase 1 default enumerator: the surface is here and callable, but
+  // empty until Arc F.1 plugs in real search (enumerative / SMT / LLM
+  // proposers as peer handlers in front of this one). Returning an
+  // empty list means propose's verify_each immediately yields [], and
+  // teach_synthesize returns None — the compiler says "no proven
+  // candidate" rather than hallucinating.
+  enumerate_inhabitants(_ty, _eff, _ctx) => resume([])
 }
 
 fn verify_each(candidates) =
@@ -318,13 +349,6 @@ fn verify_each(candidates) =
     if perform verify_candidate(c) { [c] ++ tail }
     else { tail }
   }
-
-fn inject_candidate_tentatively(node) = {
-  // In the full oracle, this walks `node` and writes its inferred
-  // types into the graph. Phase 1 records the intent; the verify
-  // step trusts inference was consistent.
-  ()
-}
 
 // ═══ teach_synthesize — fill a hole with a proven candidate ════════
 

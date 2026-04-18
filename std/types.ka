@@ -1,19 +1,25 @@
-// Lux standard types — import with: import types
+// types.ka — user-facing helpers on core vocabulary
 //
-// Provides Option and Result ADTs with helpers.
-// Will be auto-loaded in prelude when the Lux-in-Lux checker is ready.
+// Option lives in `compiler/types` (it is part of Inka's bedrock
+// vocabulary — every module that speaks types speaks Option). This
+// file re-uses it and adds the handful of helpers every program
+// wants, plus Result (which the compiler does not need but user
+// programs do).
 
-type Option = Some(a) | None
-type Result = Ok(a) | Err(e)
+import compiler/types
 
-fn unwrap(opt) = match opt { Some(v) => v, None => fail("unwrap on None") }
+type Result
+  = Ok(a)
+  | Err(e)
+
+fn unwrap(opt)            = match opt { Some(v) => v, None => fail("unwrap on None") }
 fn unwrap_or(opt, default) = match opt { Some(v) => v, None => default }
-fn is_some(opt) = match opt { Some(_) => true, None => false }
-fn is_none(opt) = match opt { Some(_) => false, None => true }
-fn map_option(f, opt) = match opt { Some(v) => Some(f(v)), None => None }
-fn and_then(f, opt) = match opt { Some(v) => f(v), None => None }
+fn is_some(opt)           = match opt { Some(_) => true,  None => false }
+fn is_none(opt)           = match opt { Some(_) => false, None => true }
+fn map_option(f, opt)     = match opt { Some(v) => Some(f(v)), None => None }
+fn and_then(f, opt)       = match opt { Some(v) => f(v),       None => None }
 
-fn ok(res) = match res { Ok(v) => Some(v), Err(_) => None }
-fn err_val(res) = match res { Ok(_) => None, Err(e) => Some(e) }
-fn is_ok(res) = match res { Ok(_) => true, Err(_) => false }
+fn ok(res)        = match res { Ok(v) => Some(v), Err(_) => None }
+fn err_val(res)   = match res { Ok(_) => None,    Err(e) => Some(e) }
+fn is_ok(res)     = match res { Ok(_) => true,    Err(_) => false }
 fn map_result(f, res) = match res { Ok(v) => Ok(f(v)), Err(e) => Err(e) }

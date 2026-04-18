@@ -1,4 +1,4 @@
-// Lux Prelude — effects all the way down
+// prelude.ka — effects all the way down
 //
 // The Iterate effect: one mechanism for all collection operations.
 // map, filter, fold, take, find — all handlers on the same effect.
@@ -169,7 +169,7 @@ fn sort(xs) =
     merge(sort(slice(xs, 0, mid)), sort(slice(xs, mid, len(xs))))
   }
 
-// ─── String operations (pure Lux) ───────────────────────────
+// ─── String operations (pure Inka) ───────────────────────────
 
 // Explicit recursive loop — avoids fold's polymorphic-lambda issue where
 // the concat inside `|acc, x| acc ++ sep ++ x` gets committed to list_concat
@@ -216,7 +216,7 @@ fn trim(s) = {
   if start >= end { "" } else { str_slice(s, start, end) }
 }
 
-// ─── Parsing (pure Lux) ─────────────────────────────────────
+// ─── Parsing (pure Inka) ─────────────────────────────────────
 
 fn parse_int(s) = {
   let cs = chars(s)

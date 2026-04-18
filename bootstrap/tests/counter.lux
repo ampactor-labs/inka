@@ -1,8 +1,0 @@
-effect Counter { bump() -> Int }
-
-fn main() = {
-  handle { bump(); bump() } with state = 0 {
-    bump() => resume(state + 1) with state = state + 1
-  }
-}
-main()

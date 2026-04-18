@@ -34,7 +34,8 @@ import compiler/types
 // a value; access is only through perform.
 
 handler graph_handler
-  with nodes = [], trail = [], epoch = 0, next = 0, overlays = [] {
+  with nodes = [], trail = [], epoch = 0, next = 0,
+       overlays = [], current_overlay = "global" {
 
   // ─── Read ops ────────────────────────────────────────────────────
 
@@ -62,24 +63,30 @@ handler graph_handler
 
   // ─── Write ops ───────────────────────────────────────────────────
   // Each write appends a Mutation to the trail. The trail is the
-  // inverse log — on rollback we walk it backwards.
+  // inverse log — on rollback we walk it backwards. Every fresh
+  // allocation also registers in the CURRENT overlay so Arc F.7
+  // (incremental compilation) can key per-module recomputation.
 
   graph_fresh_ty(reason) => {
     let handle = next
     let new_nodes = nodes ++ [GNode(NFree(epoch), reason)]
+    let new_overlays = overlay_register(overlays, current_overlay, handle)
     resume(handle)
       with nodes = new_nodes,
            next = next + 1,
-           trail = trail ++ [MFreshNode(handle)]
+           trail = trail ++ [MFreshNode(handle)],
+           overlays = new_overlays
   },
 
   graph_fresh_row(reason) => {
     let handle = next
     let new_nodes = nodes ++ [GNode(NRowFree(epoch), reason)]
+    let new_overlays = overlay_register(overlays, current_overlay, handle)
     resume(handle)
       with nodes = new_nodes,
            next = next + 1,
-           trail = trail ++ [MFreshNode(handle)]
+           trail = trail ++ [MFreshNode(handle)],
+           overlays = new_overlays
   },
 
   graph_bind(handle, ty, reason) => {
@@ -113,8 +120,13 @@ handler graph_handler
   },
 
   graph_fork(module_name) => {
+    // Begin a new overlay. Subsequent fresh allocations register
+    // their handles in this overlay via overlay_register. When a
+    // module finishes, a future graph_fork for the next module
+    // shifts current_overlay; the prior overlay stays pinned.
     resume(())
-      with overlays = overlays ++ [(module_name, [])]
+      with overlays = overlays ++ [(module_name, [])],
+           current_overlay = module_name
   },
 
   // ─── Rollback — the oracle's undo ────────────────────────────────
@@ -297,6 +309,35 @@ fn trail_slice(trail, target) =
   else {
     [list_head(trail)]
       ++ trail_slice(list_tail(trail), target - 1)
+  }
+
+// ═══ Overlay registration — per-module handle tracking ════════════
+// Each overlay holds (module_name, [handle]). Appending a handle to
+// the matching overlay keeps cross-module recomputation keyed per
+// module (Arc F.7). In single-module compilation, current_overlay
+// is "global" and the list grows there.
+
+fn overlay_register(overlays, target, handle) =
+  if len(overlays) == 0 {
+    if str_eq(target, "global") == 1 { [("global", [handle])] }
+    else { [] }
+  }
+  else {
+    let (name, handles) = list_head(overlays)
+    let rest = overlay_register(list_tail(overlays), target, handle)
+    if str_eq(name, target) == 1 {
+      [(name, handles ++ [handle])] ++ rest
+    } else {
+      [(name, handles)] ++ rest
+    }
+  }
+
+fn overlay_handles(overlays, target) =
+  if len(overlays) == 0 { [] }
+  else {
+    let (name, handles) = list_head(overlays)
+    if str_eq(name, target) == 1 { handles }
+    else { overlay_handles(list_tail(overlays), target) }
   }
 
 // ═══ String set utilities — sorted, deduped ════════════════════════

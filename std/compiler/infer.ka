@@ -40,10 +40,13 @@ effect InferCtx {
   inf_add_effect(String) -> ()            @resume=OneShot
   inf_add_row(EffRow) -> ()               @resume=OneShot
   inf_current_row() -> EffRow             @resume=OneShot
+  inf_set_declared(List) -> ()            @resume=OneShot
+  inf_declared_effs() -> List             @resume=OneShot
 }
 
-handler infer_ctx with stack = [] {
+handler infer_ctx with stack = [], declared = [] {
   // stack = [(row_handle, accumulated_row), ...]
+  // declared = [(name, negated)] — the current FnStmt's annotation
 
   inf_enter_fn(h) => {
     resume(())
@@ -86,6 +89,14 @@ handler infer_ctx with stack = [] {
       let (_, current) = list_head(stack)
       resume(current)
     }
+  },
+
+  inf_set_declared(effs) => {
+    resume(()) with declared = effs
+  },
+
+  inf_declared_effs() => {
+    resume(declared)
   }
 }
 
@@ -115,8 +126,11 @@ fn infer_stmt(node) =
       infer_pat(pat, eh)
     },
 
-    NStmt(FnStmt(name, params, ret_ann, effs, body_node)) =>
-      infer_fn(name, params, body_node, handle, span),
+    NStmt(FnStmt(name, params, ret_ann, effs, body_node)) => {
+      perform inf_set_declared(effs)
+      infer_fn(name, params, body_node, handle, span)
+      perform inf_set_declared([])
+    },
 
     NStmt(TypeDefStmt(name, args, variants)) =>
       register_type_constructors(name, args, variants),
@@ -171,12 +185,63 @@ fn infer_fn(name, params, body_node, handle, span) = {
   let N(_, _, body_handle) = body_node
   unify(body_handle, ret_handle, FnReturn(name, Inferred("body")))
 
+  // ─── Declared effects enforcement (gap 1 + 2) ──────────────────
+  // If the FnStmt carries a declared effect row, verify the inferred
+  // body's row is subsumed by it. If so, rebind row_handle to the
+  // declared row so callers see the API contract. If not, emit
+  // E_EffectMismatch (body does more than the declaration admits).
+  // The declared row IS the gate — row_subsumes is the proof engine.
+
+  let declared_effs = perform inf_declared_effs()
+  if len(declared_effs) > 0 {
+    let declared_row = build_declared_row(declared_effs)
+    let bound = perform graph_chase(row_handle)
+    match bound {
+      GNode(NRowBound(body_row), _) => {
+        if row_subsumes(body_row, declared_row) {
+          perform graph_bind_row(row_handle, declared_row,
+            Declared(name))
+        } else {
+          perform report("", "E_EffectMismatch", "error",
+            "function '"
+              |> str_concat(name)
+              |> str_concat("' declares ")
+              |> str_concat(show_effrow(declared_row))
+              |> str_concat(" but body inferred ")
+              |> str_concat(show_effrow(body_row)),
+            span, "MachineApplicable")
+        }
+      },
+      _ => ()
+    }
+  }
+
   perform env_scope_exit()
 
   // Generalize and re-extend.
   let scheme = generalize(handle)
   perform env_extend(name, scheme, Declared(name))
 }
+
+// Build an EffRow from a declared `(name, negated)` list. Negated
+// names produce EfNeg(EfClosed([name])) and compose with intersection;
+// positive names union. Normalization reduces to canonical form.
+
+fn build_declared_row(effs) =
+  build_declared_from(effs, EfPure)
+
+fn build_declared_from(effs, acc) =
+  if len(effs) == 0 { acc }
+  else {
+    let (name, negated) = list_head(effs)
+    let next = if negated {
+      // !Name — intersect with negation (forbids the effect)
+      inter_row(acc, neg_row(EfClosed([name])))
+    } else {
+      union_row(acc, EfClosed([name]))
+    }
+    build_declared_from(list_tail(effs), next)
+  }
 
 // ═══ Expression inference ══════════════════════════════════════════
 
@@ -262,14 +327,35 @@ fn infer_expr(node) =
     },
 
     NExpr(HandleExpr(body_node, arms)) => {
+      // ─── Gap 3: handler absorption ──────────────────────────────
+      // Push a nested row scope for the body so its effects do NOT
+      // leak into the enclosing function's accumulated row. After
+      // body inference, compute (body_row - handled_names) + arm_row
+      // via effects.ka's absorb_row, then add the RESULT to the
+      // outer fn's row tracker. The handler IS the subtraction gate.
+
+      let body_row_h = perform graph_fresh_row(Inferred("handle body row"))
+      perform inf_enter_fn(body_row_h)
       infer_expr(body_node)
+      perform inf_exit_fn()
+
       let N(_, _, bh) = body_node
-      // The handler absorbs some effects from the body.
-      // Result type = body's type.
-      perform graph_bind(handle, TVar(bh), Inferred("handle result"))
-      // Absorption: for each arm, the effect name is subtracted from
-      // the body's row. Handled via inference of the arms themselves.
+
+      // Arms inference in their own nested row scope
+      let arm_row_h = perform graph_fresh_row(Inferred("handle arms row"))
+      perform inf_enter_fn(arm_row_h)
       infer_handler_arms(arms, bh)
+      perform inf_exit_fn()
+
+      let handled_names = collect_handled_effects(arms)
+      let body_row = read_bound_row(body_row_h)
+      let arm_row  = read_bound_row(arm_row_h)
+      let result_row = absorb_row(body_row, EfClosed(handled_names), arm_row)
+
+      perform inf_add_row(result_row)
+
+      // Handle expression's TYPE is the body's type.
+      perform graph_bind(handle, TVar(bh), Inferred("handle result"))
     },
 
     NExpr(ResumeExpr(val, state_updates)) => {
@@ -1028,4 +1114,49 @@ fn unify_list_elems(elems, target_h) =
     let N(_, _, eh) = list_head(elems)
     unify(eh, target_h, ListElement(Inferred("list element")))
     unify_list_elems(list_tail(elems), target_h)
+  }
+
+// Handler absorption helpers — used by HandleExpr inference. The
+// "handled effects" are the effect NAMES whose ops the arms handle.
+// For each arm's op_name, we look up its declaring effect via env
+// (an effect op's TFun row carries its effect name, set by
+// register_one_op). Missing ops contribute nothing; the subtraction
+// is conservative.
+
+fn collect_handled_effects(arms) =
+  collect_handled_from(arms, [])
+
+fn collect_handled_from(arms, acc) =
+  if len(arms) == 0 { acc }
+  else {
+    let arm = list_head(arms)
+    let (op_name, _args, _body) = arm
+    let names = effect_names_of_op(op_name)
+    collect_handled_from(list_tail(arms), acc ++ names)
+  }
+
+fn effect_names_of_op(op_name) =
+  match perform env_lookup(op_name) {
+    None => [],
+    Some(entry) => {
+      let (scheme, _) = entry
+      let Forall(_, ty) = scheme
+      match ty {
+        TFun(_, _, row) => row_names(row),
+        _               => []
+      }
+    }
+  }
+
+fn row_names(row) = match row {
+  EfPure           => [],
+  EfClosed(names)  => names,
+  EfOpen(names, _) => names,
+  _                => []
+}
+
+fn read_bound_row(handle) =
+  match perform graph_chase(handle) {
+    GNode(NRowBound(row), _) => row,
+    _                        => EfPure
   }

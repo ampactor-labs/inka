@@ -1,320 +1,156 @@
-// Pipeline — single-walk entry, handlers composed (spec 04/05/06)
+// pipeline.ka — the compiler's spine (spec 04 · 05 · 06 · 10)
 //
-// The compiler's spine. One function composes all handlers and runs
-// the pipeline: lex |> parse |> infer |> lower |> emit.
+// One file; five entry points; each a `|>` + `~>` topology. The `|>`
+// chain IS the stages. The `~>` chain IS the capability stack —
+// outermost least trusted, innermost most empowered. The shape of
+// this file IS the compiler's architecture.
 //
-// Every handler is installed here. Every effect is scoped here.
-// Downstream passes don't thread state — they perform effects.
+//   compile(src)  →  WAT bytes
+//   check(src)    →  diagnostics (no lowering, no emit)
+//   query(src,q)  →  structured answer
+//   teach(src)    →  gradient recommendation
+//   audit(src)    →  capability set + severance suggestions
+//
+// Each route shares the same substrate handlers — graph, env,
+// diagnostics, lookup_ty_graph — and adds route-specific ones.
+// Source is never re-inferred across routes; the graph is one.
+//
+// This file declares two handlers it OWNS:
+//   env_handler         — scoped binding stack (spec 04)
+//   lookup_ty_graph     — bridge SubstGraphRead → LookupTy (spec 05)
+//   diagnostics_handler — stderr diagnostic routing (spec 06)
+//
+// Every other handler is imported from its owner module:
+//   graph_handler       → graph.ka
+//   verify_ledger       → verify.ka
+//   mentl_default       → mentl.ka
+//   query_default       → query.ka
+//   affine_ledger       → own.ka
+//   clock_real, tick_real, sample_real, deadline_real → clock.ka
 
 import compiler/graph
 import compiler/types
 import compiler/effects
 import compiler/infer
 import compiler/lower
-import compiler/own
-import compiler/verify
+import compiler/emit
 import compiler/lexer
 import compiler/parser
+import compiler/own
+import compiler/verify
 import compiler/mentl
 import compiler/query
+import compiler/clock
 
-// ─── compile_wasm: the full pipeline ────────────────────────
-// source |> lex |> parse |> infer |> lower |> emit
-// Every handler installed. Every effect scoped.
+// ═══ The spine — entry points as |> + ~> topology ══════════════════
+// Read top-to-bottom: source flows DOWN through `|>`; handlers wrap
+// OUTWARD through `~>`. Outermost handler is the sandbox boundary.
 
-fn compile_wasm(source) = {
-  // Install all handlers in the correct nesting order using Form A layout-scoped ~> attach:
-  // outermost: Diagnostic (catches all errors)
-  // then: SubstGraph (shared inference state)
-  // then: Env (shared binding state)
-  // then: Verify (accumulates obligations)
-  // then: Mentl (teaching substrate)
-  {
-    let ast = source |> frontend
-    infer_program(ast)
-    let lowered = lower_program(ast)
-    emit_module(lowered)
-  }
+fn compile(source) =
+  source
+    |> frontend
+    |> infer_program
+    |> lower_program
+    |> emit_module
     ~> mentl_default
-    ~> verify_ledger_handler
-    ~> env_handler
-    ~> graph_handler
-    ~> diagnostics_handler
-}
-
-// ─── check_source: inference only, no lowering ──────────────
-// Used by lux query and lux check.
-
-fn check_source(source) =
-  {
-    let ast = source |> frontend
-    infer_program(ast)
-    ast
-  }
-    ~> mentl_default // Add Mentl to checking as well
-    ~> verify_ledger_handler
+    ~> affine_ledger
+    ~> verify_ledger
+    ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
     ~> diagnostics_handler
 
-// ─── query_source: check + query ────────────────────────────
-// Runs inference, then answers a question against the result.
+fn check(source) =
+  source
+    |> frontend
+    |> infer_program
+    ~> mentl_default
+    ~> affine_ledger
+    ~> verify_ledger
+    ~> env_handler
+    ~> graph_handler
+    ~> diagnostics_handler
 
-fn query_source(source, question) =
+fn query(source, question) =
   {
     let ast = source |> frontend
     infer_program(ast)
-    let q = parse_query(question)
+    let q = parse_query_string(question)
     let result = perform ask(q)
     render_query_result(result)
   }
     ~> query_default
     ~> mentl_default
-    ~> verify_ledger_handler
+    ~> verify_ledger
+    ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
     ~> diagnostics_handler
 
-// ─── teach_source: inference + Mentl oracle gradient ────────
-// Runs inference, then asks Mentl's oracle for the highest-
-// leverage annotation the developer could add next.
-// Returns a human-readable gradient recommendation.
-
-fn teach_source(source) =
+fn teach(source) =
   {
     let ast = source |> frontend
     infer_program(ast)
-
-    // Walk all function handles and ask Mentl for gradients
-    let gradients = collect_function_gradients(ast)
+    let gradients = collect_gradients(ast)
     render_gradients(gradients)
   }
-    ~> synth_enumerative
-    ~> mentl_oracle
-    ~> verify_ledger_handler
+    ~> mentl_default
+    ~> verify_ledger
+    ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
     ~> diagnostics_handler
 
-fn collect_function_gradients(ast) =
-  if len(ast) == 0 { [] }
-  else {
-    let node = list_head(ast)
-    let N(body, _, handle) = node
-    let gradient = match body {
-      NStmt(FnStmt(name, _, _, _, _)) => {
-        let result = perform teach_gradient(handle)
-        [(name, result)]
-      },
-      _ => []
-    }
-    gradient ++ collect_function_gradients(list_tail(ast))
-  }
-
-fn render_gradients(gradients) =
-  if len(gradients) == 0 { "All functions are at maximum annotation level.\n" }
-  else {
-    let (name, result) = list_head(gradients)
-    name ++ ": " ++ render_gradient(result) ++ "\n"
-      |> str_concat(render_gradients(list_tail(gradients)))
-  }
-
-// ─── audit_capabilities: prove capability boundaries ────────
-// Walks a program's AST and effect annotations.
-// Reports which effects each function performs and which it negates.
-// This is the Subtractive Sandboxing proof.
-
-fn audit_capabilities(target) =
+fn audit(source) =
   {
-    let source = perform read_file(target)
     let ast = source |> frontend
     infer_program(ast)
-
-    // Walk every function, report its effect row
-    let report = audit_functions(ast)
-    render_audit(report)
+    let entries = collect_fn_rows(ast)
+    render_audit(entries)
   }
     ~> mentl_default
-    ~> verify_ledger_handler
+    ~> verify_ledger
+    ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
     ~> diagnostics_handler
 
-fn audit_functions(ast) =
-  if len(ast) == 0 { [] }
-  else {
-    let node = list_head(ast)
-    let N(body, _, handle) = node
-    let entry = match body {
-      NStmt(FnStmt(name, _, _, _, _)) => {
-        let ty = perform lookup_ty(handle)
-        [(name, ty)]
-      },
-      _ => []
-    }
-    entry ++ audit_functions(list_tail(ast))
-  }
+// ═══ frontend — lex |> parse ═══════════════════════════════════════
 
-fn render_audit(entries) =
-  if len(entries) == 0 { "" }
-  else {
-    let (name, ty) = list_head(entries)
-    let row_str = match ty {
-      TFun(_, _, row) => show_effrow(row),
-      _ => "pure"
-    }
-    name ++ ": " ++ row_str ++ "\n"
-      |> str_concat(render_audit(list_tail(entries)))
-  }
+fn frontend(source) =
+  source
+    |> lex
+    |> parse_program
 
-// ─── Package effect ─────────────────────────────────────────
-// Module resolution as effect. Handlers provide the fetch strategy.
-// local_cache checks .inka/cache/. registry_hub fetches from registry.
-// The ~> chain in main.ka composes them: try local first, then remote.
-
-effect Package {
-  fetch_module(String) -> String            @resume=OneShot
-  // module path -> module source
-}
-
-handler local_cache {
-  fetch_module(path) => {
-    let cached = perform read_cached(path)
-    match cached {
-      Some(source) => resume(source),
-      None => resume(perform fetch_module(path))   // delegate to next handler
-    }
-  }
-}
-
-handler registry_hub {
-  fetch_module(path) => {
-    // In ultimate form: fetch from network registry
-    // For now: delegate to filesystem
-    let source = perform read_file(path)
-    resume(source)
-  }
-}
-
-// ─── Lower program ─────────────────────────────────────────
-
-fn lower_program(ast) = {
-  handle {
-    lower_stmt_list(ast)
-  } with lookup_ty_handler
-}
-
-// ─── Handler: SubstGraph ────────────────────────────────────
-// Threads a single mutable graph through all pipeline passes.
-// Uses handler-local state: nodes (flat array of GNode),
-// ep (epoch counter), next (next fresh handle ID).
-//
-// This is the canonical handler-state pattern: 'with state = ...'
-// on resume carries updated state to the next continuation point.
-
-handler graph_handler with nodes = [], ep = 0, next = 0 {
-  graph_chase(h) => {
-    let result = chase_node(nodes, h, 0)
-    resume(result)
-  },
-  graph_epoch() => resume(ep),
-  graph_snapshot() => resume(SubstGraph(nodes, ep, next, [])),
-  graph_fresh_ty(reason) => {
-    let h = next
-    let new_node = GNode(NFree(ep), reason)
-    resume(h) with nodes = nodes ++ [new_node], next = next + 1
-  },
-  graph_fresh_row(reason) => {
-    let h = next
-    let new_node = GNode(NRowFree(ep), reason)
-    resume(h) with nodes = nodes ++ [new_node], next = next + 1
-  },
-  graph_bind(h, ty, reason) => {
-    if occurs_in(h, ty) {
-      perform report("", "E010", "OccursCheck",
-        "circular type at handle " ++ int_to_str(h),
-        span_zero(), "MaybeIncorrect")
-      resume(())
-    } else {
-      let new_nodes = graph_set_node(nodes, h, GNode(NBound(ty), reason))
-      resume(()) with nodes = new_nodes, ep = ep + 1
-    }
-  },
-  graph_bind_row(h, row, reason) => {
-    let new_nodes = graph_set_node(nodes, h, GNode(NRowBound(row), reason))
-    resume(()) with nodes = new_nodes, ep = ep + 1
-  },
-  graph_fork(module_name) => {
-    // Return current state as overlay snapshot for module isolation
-    resume(SubstGraph(nodes, ep, next, []))
-  }
-}
-
-fn graph_set_node(nodes, idx, node) =
-  if idx >= len(nodes) { nodes ++ [node] }
-  else {
-    set_at(nodes, idx, node)
-  }
-
-fn set_at(lst, idx, val) =
-  if idx == 0 { [val] ++ list_tail(lst) }
-  else { [list_head(lst)] ++ set_at(list_tail(lst), idx - 1, val) }
-
-fn chase_node(nodes, h, depth) =
-  if depth > 50 { GNode(NFree(0), Fresh(0)) }
-  else if h >= len(nodes) { GNode(NFree(0), Fresh(h)) }
-  else {
-    let node = list_at(nodes, h)
-    let GNode(kind, reason) = node
-    match kind {
-      NBound(ty) => match ty {
-        TVar(next_h) => chase_node(nodes, next_h, depth + 1),
-        _ => node
-      },
-      NRowBound(row) => match row {
-        EfOpen(names, next_h) => node,  // Don't chase row vars further
-        _ => node
-      },
-      _ => node
-    }
-  }
-
-fn list_at(lst, idx) =
-  if idx == 0 { list_head(lst) }
-  else { list_at(list_tail(lst), idx - 1) }
-
-// ─── Handler: Env ───────────────────────────────────────────
-// Threads binding environment through all passes.
-// State: entries (list of (name, Scheme, Reason) triples),
-//        scopes (list of Int marks for scope enter/exit).
-//
-// Scoping uses mark-and-truncate: enter pushes len(entries),
-// exit truncates entries back to that mark.
+// ═══ env_handler — scoped binding stack (spec 04) ══════════════════
+// Peer of graph_handler. One writer (inference). Scoping via
+// mark-and-truncate: enter pushes len(entries); exit truncates to
+// that mark. Functional; no mutable pointers.
 
 handler env_handler with entries = [], scopes = [] {
-  env_lookup(name) => {
-    let result = env_find(entries, name)
-    resume(result)
-  },
-  env_snapshot() => resume(Env(entries)),
-  env_extend(name, scheme, reason) => {
-    resume(()) with entries = [(name, scheme, reason)] ++ entries
-  },
-  env_scope_enter() => {
-    resume(()) with scopes = [len(entries)] ++ scopes
-  },
-  env_scope_exit() => {
+
+  env_lookup(name) =>
+    resume(env_find(entries, name)),
+
+  env_snapshot() =>
+    resume(Env(entries)),
+
+  env_extend(name, scheme, reason) =>
+    resume(())
+      with entries = [(name, scheme, reason)] ++ entries,
+
+  env_scope_enter() =>
+    resume(())
+      with scopes = [len(entries)] ++ scopes,
+
+  env_scope_exit() =>
     if len(scopes) == 0 { resume(()) }
     else {
       let mark = list_head(scopes)
-      let truncated = take_last(entries, mark)
-      resume(()) with entries = truncated, scopes = list_tail(scopes)
+      resume(())
+        with entries = take_last(entries, mark),
+             scopes = list_tail(scopes)
     }
-  },
-  env_free_vars() => {
-    let free = collect_env_free(entries)
-    resume(free)
-  }
 }
 
 fn env_find(entries, name) =
@@ -329,94 +165,188 @@ fn take_last(lst, n) =
   if len(lst) <= n { lst }
   else { take_last(list_tail(lst), n) }
 
-fn collect_env_free(entries) =
-  if len(entries) == 0 { [] }
-  else {
-    let (_, scheme, _) = list_head(entries)
-    let Forall(_, ty) = scheme
-    free_in_ty(ty) ++ collect_env_free(list_tail(entries))
-  }
+// ═══ lookup_ty_graph — SubstGraphRead → LookupTy bridge (spec 05) ══
+// The ONLY LookupTy handler in Phase 1. Declares SubstGraphRead
+// (inherited from the outer graph_handler). Unresolved handles emit
+// E100; error holes emit a sentinel that lowering/emit translates
+// to a WASM unreachable trap.
 
-// ─── Handler: Diagnostic ────────────────────────────────────
-// Routes all diagnostics to stderr.
+handler lookup_ty_graph {
 
-handler diagnostics_handler {
-  report(source, code, kind, msg, span, applicability) => {
-    let Span(sl, sc, el, ec) = span
-    eprint_string(code ++ " " ++ kind ++ ": " ++ msg ++ "\n")
-    resume(())
-  }
-}
-
-// ─── Handler: LookupTy ─────────────────────────────────────
-// Chases graph for type resolution at lower time.
-
-handler lookup_ty_handler {
   lookup_ty(h) => {
-    let node = perform graph_chase(h)
-    let GNode(kind, _) = node
+    let GNode(kind, _) = perform graph_chase(h)
     match kind {
-      NBound(t) => resume(t),
-      NErrorHole(_) => resume(TName("ERROR_HOLE", [])),
+      NBound(t)        => resume(t),
+      NErrorHole(_)    => resume(TName("ERROR_HOLE", [])),
       NFree(epoch) => {
         perform report("", "E100", "UnresolvedType",
-          "handle " ++ to_string(h) ++ " @epoch=" ++ to_string(epoch),
+          "handle "
+            |> str_concat(int_to_str(h))
+            |> str_concat(" @epoch=")
+            |> str_concat(int_to_str(epoch)),
           span_zero(), "MaybeIncorrect")
         resume(TName("UNRESOLVED", []))
       },
-      NRowBound(_) => resume(TUnit),
-      NRowFree(_) => resume(TUnit)
+      NRowBound(_)     => resume(TUnit),
+      NRowFree(_)      => resume(TUnit)
     }
   }
 }
 
-// ─── Query, display, and rendering ──────────────────────────
-// All display functions use canonical implementations:
-//   show_type / show_span / show_reason → types.ka
-//   show_effrow → effects.ka
-//   query_default → query.ka
-//
-// Pipeline composes and installs. It does not redefine.
+// ═══ diagnostics_handler — stderr routing (spec 06) ════════════════
+// The sandbox boundary. Outermost in every route. Declares
+// `with !Diagnostic` so its own arms cannot recursively perform
+// report — structural gate via spec 01's algebra.
+
+handler diagnostics_handler {
+
+  report(source, code, kind, msg, span, applicability) => {
+    eprint_string(
+      code
+        |> str_concat(" ")
+        |> str_concat(kind)
+        |> str_concat(": ")
+        |> str_concat(msg)
+        |> str_concat(" at ")
+        |> str_concat(show_span(span))
+        |> str_concat("\n")
+    )
+    resume(())
+  }
+}
+
+// ═══ FreshHandle — two handlers, same function ═════════════════════
+// Inference mints via graph_fresh_ty (stored in graph); query mints
+// display ids (ephemeral, for rendering). Both satisfy FreshHandle.
+
+handler fresh_for_inference {
+  mint(reason) => {
+    let h = perform graph_fresh_ty(reason)
+    resume(h)
+  }
+}
+
+handler fresh_for_query with next_display = 0 {
+  mint(_reason) =>
+    resume(next_display)
+      with next_display = next_display + 1
+}
+
+// ═══ Collection helpers — consumed by teach / audit ════════════════
+
+fn collect_gradients(ast) =
+  if len(ast) == 0 { [] }
+  else {
+    let node = list_head(ast)
+    let N(body, _, handle) = node
+    let entry = match body {
+      NStmt(FnStmt(name, _, _, _, _)) =>
+        [(name, perform teach_gradient(handle))],
+      _ => []
+    }
+    entry ++ collect_gradients(list_tail(ast))
+  }
+
+fn render_gradients(gradients) =
+  if len(gradients) == 0 {
+    "All functions are at maximum annotation density.\n"
+  } else {
+    let (name, result) = list_head(gradients)
+    name
+      |> str_concat(": ")
+      |> str_concat(render_gradient_result(result))
+      |> str_concat("\n")
+      |> str_concat(render_gradients(list_tail(gradients)))
+  }
+
+fn render_gradient_result(result) = match result {
+  None => "(no next-step annotation suggested)",
+  Some(annotation) =>
+    "→ add "
+      |> str_concat(show_annotation(annotation))
+      |> str_concat(" to unlock ")
+      |> str_concat(show_capability(perform teach_unlock(annotation)))
+}
+
+fn collect_fn_rows(ast) =
+  if len(ast) == 0 { [] }
+  else {
+    let node = list_head(ast)
+    let N(body, _, handle) = node
+    let entry = match body {
+      NStmt(FnStmt(name, _, _, _, _)) =>
+        [(name, perform lookup_ty(handle))],
+      _ => []
+    }
+    entry ++ collect_fn_rows(list_tail(ast))
+  }
+
+fn render_audit(entries) =
+  if len(entries) == 0 { "" }
+  else {
+    let (name, ty) = list_head(entries)
+    let row_str = match ty {
+      TFun(_, _, row) => show_effrow(row),
+      _ => "Pure"
+    }
+    name
+      |> str_concat(" : ")
+      |> str_concat(row_str)
+      |> str_concat("\n")
+      |> str_concat(render_audit(list_tail(entries)))
+  }
+
+// ═══ Query rendering — delegates to query.ka for Question parsing ══
 
 fn render_query_result(result) = match result {
   QRType(ty, reason) =>
-    "→ " ++ show_type(ty) ++ "\n  Reason: " ++ show_reason(reason),
+    "→ "
+      |> str_concat(show_type(ty))
+      |> str_concat("\n  Reason: ")
+      |> str_concat(show_reason(reason)),
   QRUnresolved(entries) =>
-    "→ " ++ int_to_str(len(entries)) ++ " unresolved entries",
+    "→ "
+      |> str_concat(int_to_str(len(entries)))
+      |> str_concat(" unresolved entries"),
   QRChain(hops) =>
-    "→ " ++ int_to_str(len(hops)) ++ " hops in chain",
-  QREffects(row) => "→ " ++ show_effrow(row),
-  QROwnership(params) => "→ " ++ int_to_str(len(params)) ++ " params",
-  QRWhy(reason) => show_reason(reason),
+    "→ "
+      |> str_concat(int_to_str(len(hops)))
+      |> str_concat(" hops in chain"),
+  QREffects(row) =>
+    "→ "
+      |> str_concat(show_effrow(row)),
+  QROwnership(params) =>
+    "→ "
+      |> str_concat(int_to_str(len(params)))
+      |> str_concat(" params"),
+  QRWhy(reason) =>
+    show_reason(reason),
   QRVerifyDebt(obligations) =>
-    "→ " ++ int_to_str(len(obligations)) ++ " verification obligations pending",
-  QRError(msg) => "error: " ++ msg
+    "→ "
+      |> str_concat(int_to_str(len(obligations)))
+      |> str_concat(" verification obligations pending"),
+  QRError(msg) =>
+    "error: "
+      |> str_concat(msg)
 }
 
-fn parse_query(q) =
+fn parse_query_string(q) =
   match split(q, " ") {
-    [] => QUnknown(q),
-    [w0] =>
-      match w0 {
-        "unresolved" => QUnresolved,
-        "verification" => QVerifyDebt,
-        _ => QUnknown(q)
-      },
-    [w0, w1] =>
-      match w0 {
-        "why" => QWhy(w1),
-        _ => QUnknown(q)
-      },
-    [w0, w1, w2] =>
-      match w0 {
-        "type" => QTypeOf(w2),
-        "effects" => QEffects(w2),
-        "ownership" => QOwnership(w2),
-        _ => QUnknown(q)
-      },
+    []     => QUnknown(q),
+    [w0]   => match w0 {
+      "unresolved"   => QUnresolved,
+      "verification" => QVerifyDebt,
+      _              => QUnknown(q)
+    },
+    [w0, w1] => match w0 {
+      "why" => QWhy(w1),
+      _     => QUnknown(q)
+    },
+    [w0, w1, w2] => match w0 {
+      "type"      => QTypeOf(w2),
+      "effects"   => QEffects(w2),
+      "ownership" => QOwnership(w2),
+      _           => QUnknown(q)
+    },
     _ => QUnknown(q)
   }
-
-// ─── frontend (lexer + parser) ─────────────────────
-
-fn frontend(source) = source |> lex |> parse_program

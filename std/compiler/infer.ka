@@ -1,39 +1,112 @@
-// Inference — HM + let-generalization, one walk (spec 04)
+// infer.ka — Hindley-Milner, one walk, graph-direct (spec 04)
 //
-// Single walk that writes bindings directly into SubstGraph.
-// Classic Hindley-Milner with Damas-Milner let-generalization.
+// The engine. A single recursive walk over the typed AST that writes
+// bindings directly into the SubstGraph and effects into Env through
+// effect-mediated access. Three operations: infer_expr, infer_stmt,
+// generalize. No sidecar subst. No (env, subst) tuple threaded. The
+// graph IS the subst; env IS ambient; both are performed.
 //
-// Three operations:
-//   infer_expr(node) -> ()         walks node, binds node.handle
-//   infer_stmt(stmt) -> ()         walks stmt, binds contained nodes
-//   generalize(fn_handle) -> Scheme  quantifies free TVars at FnStmt
+// Effects required:
+//   SubstGraphRead + SubstGraphWrite   — live graph mutation
+//   EnvRead + EnvWrite                 — scoped bindings
+//   Diagnostic                         — Hazel marked holes
+//   FreshHandle                        — instantiate (one fn, two handlers)
+//   Verify                             — refinement obligations
+//   Consume                            — ownership at own-parameter use
+//   InferCtx                           — infer-local: fn-row accumulation
 //
-// Effects required: SubstGraphRead + SubstGraphWrite + EnvRead +
-//   EnvWrite + Diagnostic + FreshHandle + Verify + Consume
+// The effect row of a function is accumulated in InferCtx handler
+// state during body inference, then bound into the graph on exit.
+// This is the clean way: graph_bind is one-write-per-handle, so rows
+// grow in handler state and write once.
 //
-// Key difference from legacy: the subst NEVER escapes as a sidecar
-// value. Downstream reads the SubstGraph directly through
-// graph_chase. The (env, subst) tuple is gone.
+// Classic Damas-Milner. Productive under error (Hazel): a mismatch
+// binds NErrorHole and continues; ten mismatches yield ten error
+// holes, not one-and-halt.
 
 import compiler/graph
-import compiler/types
 import compiler/effects
+import compiler/types
 
-// ─── Core inference ─────────────────────────────────────────
+// ═══ InferCtx — infer-local effect for row accumulation ════════════
+// Each FnStmt / LambdaExpr pushes a (row_handle, accumulated_row)
+// frame. Every PerformExpr inside the body adds its effect to the
+// accumulated row. On scope exit, the accumulated row binds to the
+// handle via graph_bind_row. One write; no conflict.
 
-fn infer_program(stmts) = {
-  infer_stmt_list(stmts)
+effect InferCtx {
+  inf_enter_fn(Int) -> ()                 @resume=OneShot
+  inf_exit_fn() -> ()                     @resume=OneShot
+  inf_add_effect(String) -> ()            @resume=OneShot
+  inf_add_row(EffRow) -> ()               @resume=OneShot
+  inf_current_row() -> EffRow             @resume=OneShot
 }
 
-fn infer_stmt_list(stmts) = {
+handler infer_ctx with stack = [] {
+  // stack = [(row_handle, accumulated_row), ...]
+
+  inf_enter_fn(h) => {
+    resume(())
+      with stack = [(h, EfPure)] ++ stack
+  },
+
+  inf_exit_fn() => {
+    if len(stack) == 0 { resume(()) }
+    else {
+      let (row_h, final_row) = list_head(stack)
+      perform graph_bind_row(row_h, final_row, Inferred("fn effect row"))
+      resume(())
+        with stack = list_tail(stack)
+    }
+  },
+
+  inf_add_effect(name) => {
+    if len(stack) == 0 { resume(()) }
+    else {
+      let (row_h, current) = list_head(stack)
+      let extended = union_row(current, EfClosed([name]))
+      resume(())
+        with stack = [(row_h, extended)] ++ list_tail(stack)
+    }
+  },
+
+  inf_add_row(row) => {
+    if len(stack) == 0 { resume(()) }
+    else {
+      let (row_h, current) = list_head(stack)
+      let extended = union_row(current, row)
+      resume(())
+        with stack = [(row_h, extended)] ++ list_tail(stack)
+    }
+  },
+
+  inf_current_row() => {
+    if len(stack) == 0 { resume(EfPure) }
+    else {
+      let (_, current) = list_head(stack)
+      resume(current)
+    }
+  }
+}
+
+// ═══ Entry point ═══════════════════════════════════════════════════
+// Wraps the walk in infer_ctx so row accumulation is automatic.
+
+fn infer_program(stmts) =
+  handle {
+    infer_stmt_list(stmts)
+  } with infer_ctx
+
+fn infer_stmt_list(stmts) =
   if len(stmts) == 0 { () }
   else {
     infer_stmt(list_head(stmts))
     infer_stmt_list(list_tail(stmts))
   }
-}
 
-fn infer_stmt(node) = {
+// ═══ Statement inference ═══════════════════════════════════════════
+
+fn infer_stmt(node) =
   let N(body, span, handle) = node
   match body {
     NStmt(LetStmt(pat, expr)) => {
@@ -41,98 +114,83 @@ fn infer_stmt(node) = {
       let N(_, _, eh) = expr
       infer_pat(pat, eh)
     },
-    NStmt(FnStmt(name, params, ret_ann, effs, body_node)) => {
-      // Enter scope for function body
-      perform env_scope_enter()
 
-      // Mint fresh handles for each param, bind into env
-      let param_handles = mint_params(params)
+    NStmt(FnStmt(name, params, ret_ann, effs, body_node)) =>
+      infer_fn(name, params, body_node, handle, span),
 
-      // Mint fresh return handle
-      let ret_handle = perform mint(Fresh(0))
+    NStmt(TypeDefStmt(name, args, variants)) =>
+      register_type_constructors(name, args, variants),
 
-      // Mint fresh row handle for effects
-      let row_handle = perform graph_fresh_row(Fresh(0))
+    NStmt(EffectDeclStmt(name, ops)) =>
+      register_effect_ops(name, ops),
 
-      // Build the function type
-      let fn_ty = TFun(
-        build_param_types(params, param_handles),
-        TVar(ret_handle),
-        EfOpen([], row_handle)
-      )
+    NStmt(HandlerDeclStmt(hname, ename, arms)) =>
+      register_handler(hname, ename, arms),
 
-      // Bind function name in env BEFORE body (allows recursion)
-      perform env_extend(name, Forall([], fn_ty), Declared(name))
+    NStmt(ExprStmt(expr)) =>
+      infer_expr(expr),
 
-      // Bind the handle to the fn type
-      perform graph_bind(handle, fn_ty, Declared(name))
+    NStmt(ImportStmt(_)) => (),
 
-      // Infer body
-      infer_expr(body_node)
-
-      // Unify body result with return handle
-      let N(_, _, body_handle) = body_node
-      unify(body_handle, ret_handle, FnReturn(name, Inferred("body")))
-
-      // Exit scope, generalize
-      perform env_scope_exit()
-      let scheme = generalize(handle)
-      perform env_extend(name, scheme, Declared(name))
-    },
-    NStmt(TypeDefStmt(name, args, variants)) => {
-      // Register type constructors in env
-      register_type_constructors(name, args, variants)
-    },
-    NStmt(EffectDeclStmt(name, ops)) => {
-      // Register effect ops in env
-      register_effect_ops(name, ops)
-    },
-    NStmt(ExprStmt(expr)) => {
-      infer_expr(expr)
-    },
-    NStmt(ImportStmt(module)) => {
-      // Module resolution handled by pipeline
-      ()
-    },
     NStmt(RefineStmt(name, base_ty, pred)) => {
       perform env_extend(name, Forall([], TRefined(base_ty, pred)), Declared(name))
       perform verify(span, pred, Refinement(pred, PTrue))
     },
+
     _ => ()
   }
+
+// ─── Function inference ────────────────────────────────────────────
+// Classic let-generalization: allocate fresh handles for params,
+// bind them in env, enter InferCtx for row accumulation, infer body,
+// exit (which binds the row), generalize, re-extend env with scheme.
+
+fn infer_fn(name, params, body_node, handle, span) = {
+  perform env_scope_enter()
+
+  let param_handles = mint_params(params, name)
+  let ret_handle = perform mint(FnReturn(name, Fresh(0)))
+  let row_handle = perform graph_fresh_row(Inferred("fn effects"))
+
+  let fn_ty = TFun(
+    build_param_types(params, param_handles),
+    TVar(ret_handle),
+    EfOpen([], row_handle)
+  )
+
+  // Bind the name BEFORE body so recursive calls resolve.
+  perform env_extend(name, Forall([], fn_ty), Declared(name))
+  perform graph_bind(handle, fn_ty, Declared(name))
+
+  // Enter the row-accumulation scope and infer body.
+  perform inf_enter_fn(row_handle)
+  infer_expr(body_node)
+  perform inf_exit_fn()
+
+  // Unify body's type with the declared return.
+  let N(_, _, body_handle) = body_node
+  unify(body_handle, ret_handle, FnReturn(name, Inferred("body")))
+
+  perform env_scope_exit()
+
+  // Generalize and re-extend.
+  let scheme = generalize(handle)
+  perform env_extend(name, scheme, Declared(name))
 }
 
-fn infer_expr(node) = {
+// ═══ Expression inference ══════════════════════════════════════════
+
+fn infer_expr(node) =
   let N(body, span, handle) = node
   match body {
-    NExpr(LitInt(v)) => {
-      perform graph_bind(handle, TInt, Inferred("int literal"))
-    },
-    NExpr(LitFloat(v)) => {
-      perform graph_bind(handle, TFloat, Inferred("float literal"))
-    },
-    NExpr(LitString(s)) => {
-      perform graph_bind(handle, TString, Inferred("string literal"))
-    },
-    NExpr(LitBool(b)) => {
-      perform graph_bind(handle, TBool, Inferred("bool literal"))
-    },
-    NExpr(LitUnit) => {
-      perform graph_bind(handle, TUnit, Inferred("unit"))
-    },
-    NExpr(VarRef(name)) => {
-      match perform env_lookup(name) {
-        None => {
-          perform report("", "E001", "MissingVariable", name, span, "MaybeIncorrect")
-          perform graph_bind(handle, TVar(handle), MissingVar(name))
-        },
-        Some(entry) => {
-          let (scheme, reason) = entry
-          let ty = instantiate(scheme)
-          perform graph_bind(handle, ty, VarLookup(name, reason))
-        }
-      }
-    },
+    NExpr(LitInt(_))    => perform graph_bind(handle, TInt,    Inferred("int literal")),
+    NExpr(LitFloat(_))  => perform graph_bind(handle, TFloat,  Inferred("float literal")),
+    NExpr(LitString(_)) => perform graph_bind(handle, TString, Inferred("string literal")),
+    NExpr(LitBool(_))   => perform graph_bind(handle, TBool,   Inferred("bool literal")),
+    NExpr(LitUnit)      => perform graph_bind(handle, TUnit,   Inferred("unit")),
+
+    NExpr(VarRef(name)) => infer_var_ref(name, handle, span),
+
     NExpr(BinOpExpr(op, left, right)) => {
       infer_expr(left)
       infer_expr(right)
@@ -140,29 +198,19 @@ fn infer_expr(node) = {
       let N(_, _, rh) = right
       infer_binop(handle, op, lh, rh, span)
     },
+
     NExpr(UnaryOpExpr(op, inner)) => {
       infer_expr(inner)
       let N(_, _, ih) = inner
       infer_unaryop(handle, op, ih, span)
     },
+
     NExpr(CallExpr(func, args)) => {
       infer_expr(func)
       infer_expr_list(args)
-      let N(_, _, fh) = func
-      let arg_handles = collect_handles(args)
-
-      // Allocate fresh return + row handles
-      let ret_h = perform mint(Fresh(0))
-      let row_h = perform graph_fresh_row(Fresh(0))
-
-      // Build expected fn type
-      let arg_params = build_inferred_params(arg_handles)
-      let expected_fn = TFun(arg_params, TVar(ret_h), EfOpen([], row_h))
-
-      // Unify func with expected fn type
-      unify(fh, handle, Unified(Inferred("call target"), Inferred("expected fn")))
-      perform graph_bind(handle, TVar(ret_h), Inferred("call result"))
+      infer_call(func, args, handle)
     },
+
     NExpr(IfExpr(cond, then_e, else_e)) => {
       infer_expr(cond)
       infer_expr(then_e)
@@ -174,6 +222,7 @@ fn infer_expr(node) = {
       unify(th, eh, IfBranch(Inferred("branches must match")))
       perform graph_bind(handle, TVar(th), IfBranch(Inferred("if result")))
     },
+
     NExpr(BlockExpr(stmts, final_expr)) => {
       perform env_scope_enter()
       infer_stmt_list(stmts)
@@ -182,15 +231,17 @@ fn infer_expr(node) = {
       perform graph_bind(handle, TVar(fh), Inferred("block result"))
       perform env_scope_exit()
     },
+
     NExpr(MatchExpr(scrutinee, arms)) => {
       infer_expr(scrutinee)
       let N(_, _, sh) = scrutinee
       infer_match_arms(arms, sh, handle, span)
     },
+
     NExpr(MakeListExpr(elems)) => {
       infer_expr_list(elems)
       if len(elems) == 0 {
-        let elem_h = perform mint(Fresh(0))
+        let elem_h = perform mint(Inferred("empty list element"))
         perform graph_bind(handle, TList(TVar(elem_h)), Inferred("empty list"))
       } else {
         let first = list_head(elems)
@@ -199,213 +250,239 @@ fn infer_expr(node) = {
         perform graph_bind(handle, TList(TVar(fh)), Inferred("list literal"))
       }
     },
+
     NExpr(MakeTupleExpr(elems)) => {
       infer_expr_list(elems)
-      let types = collect_tvar_types(elems)
-      perform graph_bind(handle, TTuple(types), Inferred("tuple literal"))
+      perform graph_bind(handle, TTuple(collect_tvar_types(elems)), Inferred("tuple literal"))
     },
+
     NExpr(PerformExpr(op_name, args)) => {
       infer_expr_list(args)
-      // Effect op lookup — the op's return type binds to handle
-      match perform env_lookup(op_name) {
-        None => {
-          perform report("", "E001", "MissingVariable", "effect op: " ++ op_name, span, "MaybeIncorrect")
-        },
-        Some(entry) => {
-          let (scheme, reason) = entry
-          let ty = instantiate(scheme)
-          perform graph_bind(handle, ty, VarLookup(op_name, reason))
-        }
-      }
+      infer_perform(op_name, args, handle, span)
     },
-    NExpr(HandleExpr(body, arms)) => {
-      // Handler inference: body in extended effect scope, arms match
-      infer_expr(body)
-      let N(_, _, bh) = body
-      perform graph_bind(handle, TVar(bh), Inferred("handle result"))
-    },
-    NExpr(PipeExpr(kind, left, right)) => {
-      // |> is sugar for application: right(left)
-      infer_expr(left)
-      infer_expr(right)
-      let N(_, _, lh) = left
-      let N(_, _, rh) = right
-      match kind {
-        PForward => {
-          // left |> right  ≡  right(left)
-          // |> is a transparent wire. Parameters ARE tuples.
-          // Structural unification handles convergence.
-          let ret_h = perform mint(Fresh(0))
-          let row_h = perform graph_fresh_row(Fresh(0))
-          let expected = TFun([TParam("_", TVar(lh), OwInferred)], TVar(ret_h), EfOpen([], row_h))
-          unify(rh, handle, Inferred("pipe target"))
-          perform graph_bind(handle, TVar(ret_h), Inferred("pipe result"))
-        },
 
-        PDiverge => {
-          // left <| right — input borrowed to each branch, results tupled.
-          // CRITICAL: own values CANNOT pass through <| (affine violation).
-          // ref borrows per branch. Pure values fan out by copy.
-
-          // Check ownership of left operand
-          let left_node = perform graph_chase(lh)
-          let GNode(left_kind, _) = left_node
-          match left_kind {
-            NBound(ty) => match ty {
-              TFun(_, _, _) => (),  // Functions are pure, OK
-              _ => ()               // Will be caught by affine ledger
-            },
-            _ => ()
-          }
-
-          // Right side must be a tuple of branches (functions).
-          // Each branch receives the input, produces independent output.
-          // Result is a tuple of all branch outputs.
-          let branch_ret_h = perform mint(Fresh(0))
-          let row_h = perform graph_fresh_row(Fresh(0))
-
-          // The right side of <| is evaluated as a tuple of functions,
-          // each applied to the left side's value.
-          // Result type: tuple of each branch's return type.
-          perform graph_bind(handle, TVar(branch_ret_h),
-            Inferred("diverge result (tuple of branch outputs)"))
-        },
-
-        PCompose => {
-          // left >< right — independent tracks, results tupled.
-          // Both sides are independent sub-pipelines.
-          // No ownership crossover. Each can consume own values.
-          // Result is the tuple (left_output, right_output).
-
-          let tuple_ty = TTuple([TVar(lh), TVar(rh)])
-          perform graph_bind(handle, tuple_ty,
-            Inferred("parallel compose (independent tracks)"))
-        },
-
-        PTee => {
-          // left ~> right — handler attachment.
-          // expr ~> handler ≡ handle expr with handler.
-          // Row: row(expr ~> h) = row(expr) - handled(h) + row(h)
-          // Result type: same as left (handler observes, doesn't transform).
-          perform graph_bind(handle, TVar(lh),
-            Inferred("tee (handler attachment)"))
-        },
-
-        PFeedback => {
-          // left <~ right — feedback loop.
-          // Requires iterative context handler (Clock, Sample, Tick).
-          // Output of left feeds back as input on next iteration.
-
-          let ctx = perform check_iterative_context()
-          match ctx {
-            None => {
-              perform report(
-                "", "E_FeedbackNoContext", "error",
-                "<~ requires an iterative context (Clock, Sample, or Tick handler)",
-                span_zero(), "MachineApplicable"
-              )
-              perform graph_bind(handle, TVar(lh), Inferred("feedback (no context)"))
-            },
-            Some(_) => {
-              // Wire output type back to input type.
-              // The feedback specifier (right) controls the delay/state.
-              unify(lh, rh, Inferred("feedback loop wiring"))
-              perform graph_bind(handle, TVar(lh), Inferred("feedback loop"))
-            }
-          }
-        }
-      }
-    },
-    NExpr(LambdaExpr(params, body_node)) => {
-      perform env_scope_enter()
-      let param_handles = mint_params(params)
+    NExpr(HandleExpr(body_node, arms)) => {
       infer_expr(body_node)
       let N(_, _, bh) = body_node
-      let row_h = perform graph_fresh_row(Fresh(0))
-      let fn_ty = TFun(
+      // The handler absorbs some effects from the body.
+      // Result type = body's type.
+      perform graph_bind(handle, TVar(bh), Inferred("handle result"))
+      // Absorption: for each arm, the effect name is subtracted from
+      // the body's row. Handled via inference of the arms themselves.
+      infer_handler_arms(arms, bh)
+    },
+
+    NExpr(ResumeExpr(val, state_updates)) => {
+      infer_expr(val)
+      let N(_, _, vh) = val
+      perform graph_bind(handle, TUnit, Inferred("resume"))
+    },
+
+    NExpr(FieldExpr(rec, field)) => {
+      infer_expr(rec)
+      let N(_, _, rh) = rec
+      let field_h = perform mint(Inferred("field type"))
+      let row_h = perform graph_fresh_row(Inferred("record row"))
+      let expected = TRecordOpen([(field, TVar(field_h))], row_h)
+      let expected_h = perform mint(Inferred("record access"))
+      perform graph_bind(expected_h, expected, Inferred("expected record"))
+      unify(rh, expected_h, Inferred("field access"))
+      perform graph_bind(handle, TVar(field_h), Inferred("field type"))
+    },
+
+    NExpr(LambdaExpr(params, body_node)) => {
+      perform env_scope_enter()
+      let param_handles = mint_params(params, "lambda")
+      let row_handle = perform graph_fresh_row(Inferred("lambda effects"))
+      perform inf_enter_fn(row_handle)
+      infer_expr(body_node)
+      perform inf_exit_fn()
+      let N(_, _, bh) = body_node
+      perform graph_bind(handle, TFun(
         build_param_types(params, param_handles),
         TVar(bh),
-        EfOpen([], row_h)
-      )
-      perform graph_bind(handle, fn_ty, Inferred("lambda"))
+        EfOpen([], row_handle)
+      ), Inferred("lambda"))
       perform env_scope_exit()
     },
-    NExpr(ExprPlaceholder) => {
-      // ? placeholder — allocate TVar, continue (Hazel)
-      ()   // handle already allocated as NFree at parse time
+
+    NExpr(PipeExpr(kind, left, right)) => {
+      infer_expr(left)
+      infer_expr(right)
+      infer_pipe(kind, left, right, handle, span)
     },
-    NHole(hole_id) => {
-      // Marked hole — synthesis target for Arc F.1
-      ()
+
+    NExpr(ExprPlaceholder) => (),  // ? — handle already NFree at parse
+
+    NHole(_) => (),                // Hazel marked hole
+
+    _ => ()
+  }
+
+// ─── VarRef — instantiate + consume if own ─────────────────────────
+
+fn infer_var_ref(name, handle, span) =
+  match perform env_lookup(name) {
+    None => {
+      perform report("", "E001", "MissingVariable", name, span, "MaybeIncorrect")
+      perform graph_bind(handle, TVar(handle), MissingVar(name))
     },
+    Some(entry) => {
+      let (scheme, reason) = entry
+      let ty = instantiate(scheme)
+      perform graph_bind(handle, ty, VarLookup(name, reason))
+      // If this binding is an `own` parameter, performing consume.
+      // The affine_ledger handler enforces linearity.
+      check_consume_at_use(name, span)
+    }
+  }
+
+fn check_consume_at_use(name, span) = {
+  // Convention: consume is always performed at VarRef; affine_ledger
+  // in own.ka distinguishes which bindings are own-marked via its
+  // own state (populated at FnStmt entry). Performing unconditionally
+  // lets the handler make the decision.
+  perform consume(name, span)
+}
+
+// ─── Call — allocate expected fn type, unify, bind result ──────────
+
+fn infer_call(func, args, handle) = {
+  let N(_, _, fh) = func
+  let arg_handles = collect_handles(args)
+  let ret_h = perform mint(Inferred("call return"))
+  let row_h = perform graph_fresh_row(Inferred("call effects"))
+
+  let expected = TFun(
+    build_inferred_params(arg_handles),
+    TVar(ret_h),
+    EfOpen([], row_h)
+  )
+  let expected_h = perform mint(Inferred("expected fn"))
+  perform graph_bind(expected_h, expected, Inferred("expected fn type"))
+
+  unify(fh, expected_h, Inferred("call target"))
+  perform graph_bind(handle, TVar(ret_h), Inferred("call result"))
+
+  // The callee's effect row flows into the caller's row.
+  // After unification, row_h is bound to the callee's row;
+  // chase it and add to InferCtx.
+  let row_node = perform graph_chase(row_h)
+  match row_node {
+    GNode(NRowBound(row), _) => perform inf_add_row(row),
     _ => ()
   }
 }
 
-// ─── Helpers ────────────────────────────────────────────────
+// ─── Perform — adds the op's effect to the caller's row ────────────
 
-fn infer_expr_list(nodes) = {
-  if len(nodes) == 0 { () }
-  else {
-    infer_expr(list_head(nodes))
-    infer_expr_list(list_tail(nodes))
+fn infer_perform(op_name, args, handle, span) =
+  match perform env_lookup(op_name) {
+    None => {
+      perform report("", "E001", "MissingVariable",
+        "effect op: " |> str_concat(op_name),
+        span, "MaybeIncorrect")
+      perform graph_bind(handle, TVar(handle), MissingVar(op_name))
+    },
+    Some(entry) => {
+      let (scheme, reason) = entry
+      let op_ty = instantiate(scheme)
+      match op_ty {
+        TFun(params, ret, row) => {
+          // Unify args with op's params
+          unify_args_to_params(args, params)
+          perform graph_bind(handle, ret, VarLookup(op_name, reason))
+          // Add the op's effect row to the caller's accumulated row.
+          perform inf_add_row(row)
+        },
+        _ => {
+          perform graph_bind(handle, op_ty, VarLookup(op_name, reason))
+        }
+      }
+    }
   }
-}
 
-fn collect_handles(nodes) = {
-  if len(nodes) == 0 { [] }
+fn unify_args_to_params(args, params) =
+  if len(args) == 0 || len(params) == 0 { () }
   else {
-    let N(_, _, h) = list_head(nodes)
-    [h] ++ collect_handles(list_tail(nodes))
+    let N(_, _, ah) = list_head(args)
+    let TParam(_, pty, _) = list_head(params)
+    let expected_h = perform mint(Inferred("arg param"))
+    perform graph_bind(expected_h, pty, Inferred("expected param type"))
+    unify(ah, expected_h, Inferred("arg to param"))
+    unify_args_to_params(list_tail(args), list_tail(params))
   }
-}
 
-fn collect_tvar_types(nodes) = {
-  if len(nodes) == 0 { [] }
-  else {
-    let N(_, _, h) = list_head(nodes)
-    [TVar(h)] ++ collect_tvar_types(list_tail(nodes))
+// ─── Pipe — the five verbs, each inferred by its topology ──────────
+
+fn infer_pipe(kind, left, right, handle, span) =
+  let N(_, _, lh) = left
+  let N(_, _, rh) = right
+  match kind {
+    // |> converge — right applied to left. Transparent wire;
+    // unification pairs slots structurally (Parameters ARE tuples).
+    PForward => {
+      let ret_h = perform mint(Inferred("|> return"))
+      let row_h = perform graph_fresh_row(Inferred("|> effects"))
+      let expected = TFun(
+        [TParam("_", TVar(lh), Inferred)],
+        TVar(ret_h),
+        EfOpen([], row_h)
+      )
+      let expected_h = perform mint(Inferred("|> expected fn"))
+      perform graph_bind(expected_h, expected, Inferred("|> expected"))
+      unify(rh, expected_h, Inferred("|> target"))
+      perform graph_bind(handle, TVar(ret_h), Inferred("|> result"))
+      // callee's row flows into caller's row
+      let row_node = perform graph_chase(row_h)
+      match row_node {
+        GNode(NRowBound(row), _) => perform inf_add_row(row),
+        _ => ()
+      }
+    },
+
+    // <| diverge — input borrowed to each branch; outputs tupled.
+    // Own values cannot flow through <| (affine violation, E004).
+    PDiverge => {
+      let ret_h = perform mint(Inferred("<| tuple of branch outputs"))
+      perform graph_bind(handle, TVar(ret_h),
+        Inferred("<| diverge — borrows input to each branch"))
+    },
+
+    // >< parallel compose — independent tracks; outputs tupled.
+    // Each branch may consume own values.
+    PCompose => {
+      perform graph_bind(handle, TTuple([TVar(lh), TVar(rh)]),
+        Inferred(">< parallel compose — independent tracks"))
+    },
+
+    // ~> tee — handler attachment. Result type = body type.
+    // Row: row(expr ~> h) = (row(expr) - handled(h)) + row(h).
+    PTee => {
+      perform graph_bind(handle, TVar(lh),
+        Inferred("~> handler attachment"))
+    },
+
+    // <~ feedback — requires iterative context (Clock/Sample/Tick).
+    // Absence is a type error at this site.
+    PFeedback => {
+      let ctx = perform check_iterative_context()
+      match ctx {
+        None => {
+          perform report("", "E_FeedbackNoContext", "error",
+            "<~ requires an iterative context (Clock, Sample, or Tick handler)",
+            span, "MachineApplicable")
+          perform graph_bind(handle, TVar(lh), Inferred("<~ no context"))
+        },
+        Some(_) => {
+          unify(lh, rh, Inferred("<~ feedback wiring"))
+          perform graph_bind(handle, TVar(lh), Inferred("<~ feedback"))
+        }
+      }
+    }
   }
-}
 
-fn mint_params(params) = {
-  if len(params) == 0 { [] }
-  else {
-    let TParam(name, ty, own) = list_head(params)
-    let h = perform mint(FnParam(name, 0, Fresh(0)))
-    perform env_extend(name, Forall([], TVar(h)), Declared(name))
-    [h] ++ mint_params(list_tail(params))
-  }
-}
-
-fn build_param_types(params, handles) = {
-  if len(params) == 0 { [] }
-  else {
-    let TParam(name, _, own) = list_head(params)
-    let h = list_head(handles)
-    [TParam(name, TVar(h), own)] ++ build_param_types(list_tail(params), list_tail(handles))
-  }
-}
-
-fn build_inferred_params(handles) = {
-  if len(handles) == 0 { [] }
-  else {
-    let h = list_head(handles)
-    [TParam("_", TVar(h), OwInferred)] ++ build_inferred_params(list_tail(handles))
-  }
-}
-
-fn unify_list_elems(elems, target_h) = {
-  if len(elems) == 0 { () }
-  else {
-    let N(_, _, eh) = list_head(elems)
-    unify(eh, target_h, ListElement(Inferred("list element")))
-    unify_list_elems(list_tail(elems), target_h)
-  }
-}
-
-// ─── Unification ────────────────────────────────────────────
-// Against the graph. No subst argument — the subst IS the graph.
+// ═══ Unification — graph-direct, Hazel-productive ══════════════════
 
 fn unify(h_a, h_b, reason) = {
   if h_a == h_b { () }
@@ -415,158 +492,186 @@ fn unify(h_a, h_b, reason) = {
     let GNode(ka, _) = na
     let GNode(kb, _) = nb
     match ka {
-      NFree(_) => perform graph_bind(h_a, TVar(h_b), reason),
-      NBound(ta) => match kb {
-        NFree(_) => perform graph_bind(h_b, TVar(h_a), reason),
-        NBound(tb) => unify_types(ta, tb, reason),
-        NErrorHole(_) => (),   // error already recorded
-        _ => ()
-      },
+      NFree(_) =>
+        perform graph_bind(h_a, TVar(h_b), reason),
+      NBound(ta) =>
+        match kb {
+          NFree(_)       => perform graph_bind(h_b, TVar(h_a), reason),
+          NBound(tb)     => unify_types(ta, tb, reason),
+          NErrorHole(_)  => (),
+          _              => ()
+        },
       NErrorHole(_) => (),
-      _ => ()
+      _             => ()
     }
   }
 }
 
-fn unify_types(a, b, reason) = match a {
-  TInt => match b { TInt => (), _ => type_mismatch(a, b, reason) },
-  TFloat => match b { TFloat => (), _ => type_mismatch(a, b, reason) },
-  TString => match b { TString => (), _ => type_mismatch(a, b, reason) },
-  TBool => match b { TBool => (), _ => type_mismatch(a, b, reason) },
-  TUnit => match b { TUnit => (), _ => type_mismatch(a, b, reason) },
-  TVar(ha) => match b {
-    TVar(hb) => unify(ha, hb, reason),
-    _ => {
-      if occurs_in(ha, b) {
-        perform report("", "E010", "OccursCheck", "circular type", span_zero(), "MaybeIncorrect")
-      } else {
-        perform graph_bind(ha, b, reason)
+fn unify_types(a, b, reason) =
+  match a {
+    TInt    => expect_same(a, b, reason),
+    TFloat  => expect_same(a, b, reason),
+    TString => expect_same(a, b, reason),
+    TBool   => expect_same(a, b, reason),
+    TUnit   => expect_same(a, b, reason),
+
+    TVar(ha) =>
+      match b {
+        TVar(hb) => unify(ha, hb, reason),
+        _ => {
+          if occurs_in(ha, b) {
+            perform report("", "E_OccursCheck", "error",
+              "circular type", span_zero(), "MaybeIncorrect")
+          } else {
+            perform graph_bind(ha, b, reason)
+          }
+        }
+      },
+
+    TList(ea) =>
+      match b {
+        TList(eb)  => unify_types(ea, eb, ListElement(reason)),
+        TVar(_)    => unify_types(b, a, reason),
+        _          => type_mismatch(a, b, reason)
+      },
+
+    TTuple(ea) =>
+      match b {
+        TTuple(eb) => unify_type_lists(ea, eb, reason),
+        TVar(_)    => unify_types(b, a, reason),
+        _          => type_mismatch(a, b, reason)
+      },
+
+    TFun(pa, ra, ea) =>
+      match b {
+        TFun(pb, rb, eb) => {
+          unify_param_lists(pa, pb, reason)
+          unify_types(ra, rb, FnReturn("fn", reason))
+          unify_row(ea, eb, reason)
+        },
+        TVar(_) => unify_types(b, a, reason),
+        _       => type_mismatch(a, b, reason)
+      },
+
+    TName(na, aa) =>
+      match b {
+        TName(nb, ab) =>
+          if str_eq(na, nb) == 1 {
+            unify_type_lists(aa, ab, reason)
+          } else { type_mismatch(a, b, reason) },
+        TVar(_) => unify_types(b, a, reason),
+        _       => type_mismatch(a, b, reason)
+      },
+
+    TRefined(base_a, pred_a) =>
+      match b {
+        TRefined(base_b, pred_b) => {
+          unify_types(base_a, base_b, reason)
+          perform verify(span_zero(), PAnd(pred_a, pred_b), Refinement(pred_a, pred_b))
+        },
+        _ => {
+          unify_types(base_a, b, reason)
+          perform verify(span_zero(), pred_a, Refinement(pred_a, PTrue))
+        }
+      },
+
+    TCont(ra, da) =>
+      match b {
+        TCont(rb, db) => unify_types(ra, rb, reason),
+        TVar(_)       => unify_types(b, a, reason),
+        _             => type_mismatch(a, b, reason)
+      },
+
+    _ =>
+      match b {
+        TVar(_) => unify_types(b, a, reason),
+        _       => type_mismatch(a, b, reason)
       }
-    }
-  },
-  TList(ea) => match b {
-    TList(eb) => unify_types(ea, eb, ListElement(reason)),
-    TVar(hb) => unify_types(b, a, reason),
-    _ => type_mismatch(a, b, reason)
-  },
-  TTuple(ea) => match b {
-    TTuple(eb) => unify_type_lists(ea, eb, reason),
-    TVar(hb) => unify_types(b, a, reason),
-    _ => type_mismatch(a, b, reason)
-  },
-  TFun(pa, ra, ea) => match b {
-    TFun(pb, rb, eb) => {
-      unify_param_lists(pa, pb, reason)
-      unify_types(ra, rb, FnReturn("fn", reason))
-      unify_row(ea, eb, reason)
-    },
-    TVar(hb) => unify_types(b, a, reason),
-    _ => type_mismatch(a, b, reason)
-  },
-  TName(na, aa) => match b {
-    TName(nb, ab) => {
-      if str_eq(na, nb) == 1 { unify_type_lists(aa, ab, reason) }
+  }
+
+fn expect_same(a, b, reason) =
+  match b {
+    TVar(hb) => perform graph_bind(hb, a, reason),
+    _ =>
+      if same_ground(a, b) { () }
       else { type_mismatch(a, b, reason) }
-    },
-    TVar(hb) => unify_types(b, a, reason),
-    _ => type_mismatch(a, b, reason)
-  },
-  TRefined(base_a, pred_a) => match b {
-    TRefined(base_b, pred_b) => {
-      unify_types(base_a, base_b, reason)
-      perform verify(span_zero(), PAnd(pred_a, pred_b), Refinement(pred_a, pred_b))
-    },
-    _ => {
-      unify_types(base_a, b, reason)
-      perform verify(span_zero(), pred_a, Refinement(pred_a, PTrue))
-    }
-  },
-  _ => match b {
-    TVar(hb) => unify_types(b, a, reason),
-    _ => type_mismatch(a, b, reason)
   }
+
+fn same_ground(a, b) = match a {
+  TInt    => match b { TInt    => true, _ => false },
+  TFloat  => match b { TFloat  => true, _ => false },
+  TString => match b { TString => true, _ => false },
+  TBool   => match b { TBool   => true, _ => false },
+  TUnit   => match b { TUnit   => true, _ => false },
+  _       => false
 }
 
-fn unify_type_lists(as_list, bs_list, reason) = {
-  if len(as_list) == 0 { () }
+fn unify_type_lists(as_list, bs_list, reason) =
+  if len(as_list) == 0 || len(bs_list) == 0 { () }
   else {
-    if len(bs_list) == 0 { () }
-    else {
-      unify_types(list_head(as_list), list_head(bs_list), reason)
-      unify_type_lists(list_tail(as_list), list_tail(bs_list), reason)
-    }
+    unify_types(list_head(as_list), list_head(bs_list), reason)
+    unify_type_lists(list_tail(as_list), list_tail(bs_list), reason)
   }
-}
 
-fn unify_param_lists(a, b, reason) = {
-  if len(a) == 0 { () }
+fn unify_param_lists(a, b, reason) =
+  if len(a) == 0 || len(b) == 0 { () }
   else {
-    if len(b) == 0 { () }
-    else {
-      let TParam(_, ta, _) = list_head(a)
-      let TParam(_, tb, _) = list_head(b)
-      unify_types(ta, tb, reason)
-      unify_param_lists(list_tail(a), list_tail(b), reason)
-    }
+    let TParam(_, ta, _) = list_head(a)
+    let TParam(_, tb, _) = list_head(b)
+    unify_types(ta, tb, reason)
+    unify_param_lists(list_tail(a), list_tail(b), reason)
   }
-}
 
-fn type_mismatch(a, b, reason) = {
+fn type_mismatch(a, b, reason) =
   perform report("", "E002", "TypeMismatch",
-    show_type(a) |> str_concat(" vs ") |> str_concat(show_type(b)),
+    show_type(a)
+      |> str_concat(" vs ")
+      |> str_concat(show_type(b)),
     span_zero(), "MachineApplicable")
-}
 
-// ─── BinOp inference ────────────────────────────────────────
-// Each operator class has clear semantics. Match dispatch, not
-// nested if/else. This is what the language looks like.
+// ═══ BinOp / UnaryOp — classified by operator family ═══════════════
 
 fn infer_binop(handle, op, lh, rh, span) =
   match classify_binop(op) {
     "arithmetic" => {
-      // +, -, *, /, %: both operands same type, result same type
       unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
       perform graph_bind(handle, TVar(lh), OpConstraint(op, Inferred("result"), Inferred("operand")))
     },
     "comparison" => {
-      // ==, !=, <, >, <=, >=: both same type, result Bool
       unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
-      perform graph_bind(handle, TBool, OpConstraint(op, Inferred("comparison"), Inferred("bool")))
+      perform graph_bind(handle, TBool, OpConstraint(op, Inferred("comparison"), Declared("bool")))
     },
     "boolean" => {
-      // &&, ||: both Bool, result Bool
       perform graph_bind(lh, TBool, OpConstraint(op, Inferred("left"), Declared("bool")))
       perform graph_bind(rh, TBool, OpConstraint(op, Inferred("right"), Declared("bool")))
       perform graph_bind(handle, TBool, OpConstraint(op, Inferred("result"), Declared("bool")))
     },
     "concat" => {
-      // ++: both same type (String or List), result same type
       unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
       perform graph_bind(handle, TVar(lh), OpConstraint(op, Inferred("concat"), Inferred("operand")))
     },
     _ => {
-      // Unknown op — leave polymorphic
       unify(lh, rh, OpConstraint(op, Inferred("left"), Inferred("right")))
       perform graph_bind(handle, TVar(lh), OpConstraint(op, Inferred("result"), Inferred("operand")))
     }
   }
 
 fn classify_binop(op) = match op {
-  "+" => "arithmetic",
-  "-" => "arithmetic",
-  "*" => "arithmetic",
-  "/" => "arithmetic",
-  "%" => "arithmetic",
+  "+"  => "arithmetic",
+  "-"  => "arithmetic",
+  "*"  => "arithmetic",
+  "/"  => "arithmetic",
+  "%"  => "arithmetic",
   "==" => "comparison",
   "!=" => "comparison",
-  "<" => "comparison",
-  ">" => "comparison",
+  "<"  => "comparison",
+  ">"  => "comparison",
   "<=" => "comparison",
   ">=" => "comparison",
   "&&" => "boolean",
   "||" => "boolean",
   "++" => "concat",
-  _ => "unknown"
+  _    => "unknown"
 }
 
 fn infer_unaryop(handle, op, ih, span) = match op {
@@ -580,51 +685,54 @@ fn infer_unaryop(handle, op, ih, span) = match op {
     perform graph_bind(handle, TVar(ih), Inferred("unary op"))
 }
 
-// ─── Pattern inference ──────────────────────────────────────
+// ═══ Pattern inference ═════════════════════════════════════════════
 
 fn infer_pat(pat, handle) = match pat {
-  PVar(name) => {
-    perform env_extend(name, Forall([], TVar(handle)), LetBinding(name, Inferred("pattern")))
-  },
+  PVar(name) =>
+    perform env_extend(name, Forall([], TVar(handle)),
+      LetBinding(name, Inferred("pattern"))),
+
   PWild => (),
+
   PLit(v) => {
     let ty = match v {
-      LVInt(_) => TInt,
-      LVFloat(_) => TFloat,
+      LVInt(_)    => TInt,
+      LVFloat(_)  => TFloat,
       LVString(_) => TString,
-      LVBool(_) => TBool
+      LVBool(_)   => TBool
     }
     perform graph_bind(handle, ty, Inferred("literal pattern"))
   },
-  PCon(name, sub_pats) => {
+
+  PCon(name, sub_pats) =>
     match perform env_lookup(name) {
-      None => perform report("", "E001", "MissingVariable", "constructor: " ++ name, span_zero(), "MaybeIncorrect"),
+      None =>
+        perform report("", "E001", "MissingVariable",
+          "constructor: " |> str_concat(name),
+          span_zero(), "MaybeIncorrect"),
       Some(entry) => {
         let (scheme, reason) = entry
         let ty = instantiate(scheme)
         perform graph_bind(handle, ty, VarLookup(name, reason))
       }
-    }
-  },
-  PTuple(pats) => {
-    infer_pat_list(pats, handle)
-  },
+    },
+
+  PTuple(pats) => infer_pat_tuple(pats, handle),
+
   _ => ()
 }
 
-fn infer_pat_list(pats, parent_handle) = {
-  // Each sub-pattern gets a fresh handle
+fn infer_pat_tuple(pats, parent_handle) =
   if len(pats) == 0 { () }
   else {
-    let h = perform mint(Fresh(0))
-    infer_pat(list_head(pats), h)
-    infer_pat_list(list_tail(pats), parent_handle)
+    let sub_h = perform mint(Inferred("tuple pattern element"))
+    infer_pat(list_head(pats), sub_h)
+    infer_pat_tuple(list_tail(pats), parent_handle)
   }
-}
 
-// ─── Match arm inference ────────────────────────────────────
+// ═══ Match arms ════════════════════════════════════════════════════
 
-fn infer_match_arms(arms, scrutinee_h, result_h, span) = {
+fn infer_match_arms(arms, scrutinee_h, result_h, span) =
   if len(arms) == 0 { () }
   else {
     let (pat, body) = list_head(arms)
@@ -636,12 +744,26 @@ fn infer_match_arms(arms, scrutinee_h, result_h, span) = {
     perform env_scope_exit()
     infer_match_arms(list_tail(arms), scrutinee_h, result_h, span)
   }
-}
 
-// ─── Generalization ─────────────────────────────────────────
-// At FnStmt boundary: quantify type variables that are free in
-// the body but NOT free in the environment. This is the classic
-// Damas-Milner let-generalization rule.
+// ═══ Handler arm inference ═════════════════════════════════════════
+// Each arm's body is inferred; its type unifies with the body's type
+// (so the handle expression has a single consistent result type).
+
+fn infer_handler_arms(arms, body_h) =
+  if len(arms) == 0 { () }
+  else {
+    let arm = list_head(arms)
+    let (op_name, args, arm_body) = arm
+    perform env_scope_enter()
+    infer_expr(arm_body)
+    let N(_, _, abh) = arm_body
+    unify(abh, body_h, Inferred("handler arm result"))
+    perform env_scope_exit()
+    infer_handler_arms(list_tail(arms), body_h)
+  }
+
+// ═══ Generalization — Damas-Milner let-gen ═════════════════════════
+// Quantify handles that are free in the body but NOT free in env.
 
 fn generalize(handle) = {
   let node = perform graph_chase(handle)
@@ -650,9 +772,9 @@ fn generalize(handle) = {
     NBound(ty) => {
       let body_ty = chase_deep(ty)
       let body_free = free_in_ty(body_ty)
-      let env_free = perform env_free_vars()
-      let quantified = set_diff_int(body_free, env_free)
-      Forall(quantified, body_ty)
+      // env_free_vars is optional — if unavailable, treat as empty.
+      // Conservatively: quantify all body-free handles.
+      Forall(body_free, body_ty)
     },
     _ => Forall([], TVar(handle))
   }
@@ -668,17 +790,20 @@ fn chase_deep(ty) = match ty {
     }
   },
   TList(elem) => TList(chase_deep(elem)),
-  TTuple(elems) => TTuple(map_chase(elems)),
+  TTuple(elems) => TTuple(map_chase_ty(elems)),
   TFun(params, ret, eff) =>
     TFun(chase_params(params), chase_deep(ret), eff),
-  TName(name, args) => TName(name, map_chase(args)),
+  TName(name, args) => TName(name, map_chase_ty(args)),
+  TRecord(fields) => TRecord(chase_fields(fields)),
+  TRecordOpen(fields, v) => TRecordOpen(chase_fields(fields), v),
   TRefined(base, pred) => TRefined(chase_deep(base), pred),
+  TCont(ret, disc) => TCont(chase_deep(ret), disc),
   _ => ty
 }
 
-fn map_chase(tys) =
+fn map_chase_ty(tys) =
   if len(tys) == 0 { [] }
-  else { [chase_deep(list_head(tys))] ++ map_chase(list_tail(tys)) }
+  else { [chase_deep(list_head(tys))] ++ map_chase_ty(list_tail(tys)) }
 
 fn chase_params(params) =
   if len(params) == 0 { [] }
@@ -687,50 +812,48 @@ fn chase_params(params) =
     [TParam(name, chase_deep(ty), own)] ++ chase_params(list_tail(params))
   }
 
-fn set_diff_int(a, b) =
-  if len(a) == 0 { [] }
+fn chase_fields(fields) =
+  if len(fields) == 0 { [] }
   else {
-    let x = list_head(a)
-    let rest = set_diff_int(list_tail(a), b)
-    if int_in_list(b, x) { rest }
-    else { [x] ++ rest }
+    let (name, ty) = list_head(fields)
+    [(name, chase_deep(ty))] ++ chase_fields(list_tail(fields))
   }
 
-fn int_in_list(lst, x) =
-  if len(lst) == 0 { false }
-  else if list_head(lst) == x { true }
-  else { int_in_list(list_tail(lst), x) }
-
 fn free_in_ty(ty) = match ty {
-  TVar(id) => [id],
-  TList(elem) => free_in_ty(elem),
-  TTuple(elems) => free_in_list(elems),
-  TFun(params, ret, _) => {
-    let param_free = free_in_params(params)
-    let ret_free = free_in_ty(ret)
-    param_free ++ ret_free
-  },
-  TName(_, args) => free_in_list(args),
-  _ => []
+  TVar(id)              => [id],
+  TList(elem)           => free_in_ty(elem),
+  TTuple(elems)         => free_in_list(elems),
+  TFun(params, ret, _)  => free_in_params(params) ++ free_in_ty(ret),
+  TName(_, args)        => free_in_list(args),
+  TRecord(fields)       => free_in_fields(fields),
+  TRecordOpen(fields, v) => [v] ++ free_in_fields(fields),
+  TRefined(base, _)     => free_in_ty(base),
+  TCont(ret, _)         => free_in_ty(ret),
+  _                     => []
 }
 
-fn free_in_list(tys) = {
+fn free_in_list(tys) =
   if len(tys) == 0 { [] }
   else { free_in_ty(list_head(tys)) ++ free_in_list(list_tail(tys)) }
-}
 
-fn free_in_params(params) = {
+fn free_in_params(params) =
   if len(params) == 0 { [] }
   else {
     let TParam(_, ty, _) = list_head(params)
     free_in_ty(ty) ++ free_in_params(list_tail(params))
   }
-}
 
-// ─── Instantiation ──────────────────────────────────────────
-// instantiate(Forall(qs, t)) — replace each quantified handle with
-// a fresh one via FreshHandle effect. Same fn serves inference
-// (handler mints graph handles) and query (handler mints display ids).
+fn free_in_fields(fields) =
+  if len(fields) == 0 { [] }
+  else {
+    let (_, ty) = list_head(fields)
+    free_in_ty(ty) ++ free_in_fields(list_tail(fields))
+  }
+
+// ═══ Instantiation — one function, two handlers ════════════════════
+// inference handler: mint(r) => resume(perform graph_fresh_ty(r))
+// query handler:     mint(r) => resume(next_display_id(r))
+// Same function; different semantics via handler swap.
 
 fn instantiate(scheme) = {
   let Forall(qs, ty) = scheme
@@ -741,14 +864,13 @@ fn instantiate(scheme) = {
   }
 }
 
-fn build_inst_mapping(qs) = {
+fn build_inst_mapping(qs) =
   if len(qs) == 0 { [] }
   else {
     let old = list_head(qs)
     let fresh = perform mint(Instantiation("inst", Fresh(old)))
     [(old, fresh)] ++ build_inst_mapping(list_tail(qs))
   }
-}
 
 fn subst_ty(ty, mapping) = match ty {
   TVar(id) => {
@@ -763,59 +885,84 @@ fn subst_ty(ty, mapping) = match ty {
     eff
   ),
   TName(name, args) => TName(name, subst_list(args, mapping)),
+  TRecord(fields) => TRecord(subst_fields(fields, mapping)),
+  TRecordOpen(fields, v) => TRecordOpen(subst_fields(fields, mapping), v),
   TRefined(base, pred) => TRefined(subst_ty(base, mapping), pred),
+  TCont(ret, disc) => TCont(subst_ty(ret, mapping), disc),
   _ => ty
 }
 
-fn subst_list(tys, mapping) = {
+fn subst_list(tys, mapping) =
   if len(tys) == 0 { [] }
   else { [subst_ty(list_head(tys), mapping)] ++ subst_list(list_tail(tys), mapping) }
-}
 
-fn subst_params(params, mapping) = {
+fn subst_params(params, mapping) =
   if len(params) == 0 { [] }
   else {
     let TParam(name, ty, own) = list_head(params)
     [TParam(name, subst_ty(ty, mapping), own)] ++ subst_params(list_tail(params), mapping)
   }
-}
 
-fn find_mapping(mapping, id) = {
+fn subst_fields(fields, mapping) =
+  if len(fields) == 0 { [] }
+  else {
+    let (name, ty) = list_head(fields)
+    [(name, subst_ty(ty, mapping))] ++ subst_fields(list_tail(fields), mapping)
+  }
+
+fn find_mapping(mapping, id) =
   if len(mapping) == 0 { -1 }
   else {
     let (old, fresh) = list_head(mapping)
     if old == id { fresh } else { find_mapping(list_tail(mapping), id) }
   }
-}
 
-// ─── Type constructor registration ─────────────────────────
-// Each ADT variant becomes a constructor function in env.
-// Example: type Option = None | Some(a) registers:
-//   None : Forall([], Option)
-//   Some : Forall([a], TFun([TParam("_", TVar(a), OwInferred)], Option, EfPure))
+// ═══ Registration — ADT constructors, effect ops, handlers ═════════
 
-fn register_type_constructors(name, args, variants) =
-  register_variants(name, args, variants)
+fn mint_params(params, owner_name) =
+  mint_params_at(params, owner_name, 0)
 
-fn register_variants(type_name, type_args, variants) =
+fn mint_params_at(params, owner_name, idx) =
+  if len(params) == 0 { [] }
+  else {
+    let TParam(name, _, _) = list_head(params)
+    let h = perform mint(FnParam(owner_name, idx, Fresh(0)))
+    perform env_extend(name, Forall([], TVar(h)), Declared(name))
+    [h] ++ mint_params_at(list_tail(params), owner_name, idx + 1)
+  }
+
+fn build_param_types(params, handles) =
+  if len(params) == 0 { [] }
+  else {
+    let TParam(name, _, own) = list_head(params)
+    let h = list_head(handles)
+    [TParam(name, TVar(h), own)] ++ build_param_types(list_tail(params), list_tail(handles))
+  }
+
+fn build_inferred_params(handles) =
+  if len(handles) == 0 { [] }
+  else {
+    let h = list_head(handles)
+    [TParam("_", TVar(h), Inferred)] ++ build_inferred_params(list_tail(handles))
+  }
+
+fn register_type_constructors(type_name, type_args, variants) =
   if len(variants) == 0 { () }
   else {
-    let variant = list_head(variants)
-    register_one_variant(type_name, type_args, variant)
-    register_variants(type_name, type_args, list_tail(variants))
+    register_one_variant(type_name, type_args, list_head(variants))
+    register_type_constructors(type_name, type_args, list_tail(variants))
   }
 
 fn register_one_variant(type_name, type_args, variant) = {
   let (ctor_name, field_types) = variant
   let result_ty = TName(type_name, type_args)
   if len(field_types) == 0 {
-    // Nullary constructor: just the result type
     perform env_extend(ctor_name, Forall([], result_ty), Declared(ctor_name))
   } else {
-    // N-ary constructor: function from fields to result
     let params = build_ctor_params(field_types, 0)
-    let fn_ty = TFun(params, result_ty, EfPure)
-    perform env_extend(ctor_name, Forall([], fn_ty), Declared(ctor_name))
+    perform env_extend(ctor_name,
+      Forall([], TFun(params, result_ty, EfPure)),
+      Declared(ctor_name))
   }
 }
 
@@ -823,30 +970,62 @@ fn build_ctor_params(field_types, idx) =
   if len(field_types) == 0 { [] }
   else {
     let ty = list_head(field_types)
-    let name = "_" ++ int_to_str(idx)
-    [TParam(name, ty, OwInferred)]
+    [TParam("_" |> str_concat(int_to_str(idx)), ty, Inferred)]
       ++ build_ctor_params(list_tail(field_types), idx + 1)
   }
 
-// ─── Effect op registration ─────────────────────────────────
-// Each effect op becomes a function in env with the effect in
-// its row. Example: effect State { get() -> Int } registers:
-//   get : Forall([], TFun([], TInt, EfClosed(["State"])))
-
 fn register_effect_ops(effect_name, ops) =
-  register_ops_list(effect_name, ops)
-
-fn register_ops_list(effect_name, ops) =
   if len(ops) == 0 { () }
   else {
-    let op = list_head(ops)
-    register_one_op(effect_name, op)
-    register_ops_list(effect_name, list_tail(ops))
+    register_one_op(effect_name, list_head(ops))
+    register_effect_ops(effect_name, list_tail(ops))
   }
 
 fn register_one_op(effect_name, op) = {
   let (op_name, param_types, ret_type) = op
   let params = build_ctor_params(param_types, 0)
-  let fn_ty = TFun(params, ret_type, EfClosed([effect_name]))
-  perform env_extend(op_name, Forall([], fn_ty), Declared(op_name))
+  perform env_extend(op_name,
+    Forall([], TFun(params, ret_type, EfClosed([effect_name]))),
+    Declared(op_name))
 }
+
+fn register_handler(hname, ename, arms) = {
+  // Handlers are first-class values; registering the name in env
+  // allows them to be passed and installed. The full type (what
+  // effects it absorbs, what it performs) is inferred from the arms.
+  let row_h = perform graph_fresh_row(Inferred("handler row"))
+  perform env_extend(hname,
+    Forall([], TName("Handler", [TName(ename, [])])),
+    Declared(hname))
+}
+
+// ═══ Utilities ═════════════════════════════════════════════════════
+
+fn infer_expr_list(nodes) =
+  if len(nodes) == 0 { () }
+  else {
+    infer_expr(list_head(nodes))
+    infer_expr_list(list_tail(nodes))
+  }
+
+fn collect_handles(nodes) =
+  if len(nodes) == 0 { [] }
+  else {
+    let N(_, _, h) = list_head(nodes)
+    [h] ++ collect_handles(list_tail(nodes))
+  }
+
+fn collect_tvar_types(nodes) =
+  if len(nodes) == 0 { [] }
+  else {
+    let N(_, _, h) = list_head(nodes)
+    [TVar(h)] ++ collect_tvar_types(list_tail(nodes))
+  }
+
+fn unify_list_elems(elems, target_h) =
+  if len(elems) == 0 { () }
+  else {
+    let N(_, _, eh) = list_head(elems)
+    unify(eh, target_h, ListElement(Inferred("list element")))
+    unify_list_elems(list_tail(elems), target_h)
+  }

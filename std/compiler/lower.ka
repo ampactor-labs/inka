@@ -1,285 +1,47 @@
-// Lower — LowIR from live graph observation (spec 05)
+// lower.ka — LowIR from live graph observation (spec 05)
 //
-// Lowers typed AST (spec 03) to LowIR by reading types LIVE from
-// SubstGraph. No cached types in LowExpr. No per-module subst snapshot.
-// An unresolved handle at lower time is a build failure, not a fallback.
+// The projection. Lowers typed AST into LowIR by reading types LIVE
+// from SubstGraph through LookupTy. No cached types in LowExpr. No
+// subst threading. An unresolved handle at lower time is a build
+// failure, not a fallback.
 //
-// Declares: with SubstGraphRead + EnvRead + LookupTy + LowerCtx
-// NO SubstGraphWrite — structural isolation via effect row.
+// Declares: with SubstGraphRead + EnvRead + LookupTy + Diagnostic.
+// NO SubstGraphWrite — structural isolation via effect row. A stray
+// perform graph_bind would fail at handler install.
+//
+// Handler elimination (spec 05 §Handler elimination):
+//   TailResumptive (85%) → direct call $h_op
+//   Linear                → state machine
+//   MultiShot             → heap continuation struct
+// Classification reads TCont.discipline. Monomorphic detection is a
+// graph read (row_is_ground), not a sidecar table.
+//
+// Pipe desugarings (spec 10):
+//   left |> right   →  LCall(h, right, [left])
+//   left <| (fs)    →  LMakeTuple(h, [f(left) for f in fs])
+//   left >< right   →  LMakeTuple(h, [left, right])
+//   left ~> right   →  LHandleWith(h, left, right)
+//   left <~ spec    →  LFeedback(h, left, spec) — requires iterative ctx
 
 import compiler/graph
 import compiler/types
 import compiler/effects
 
-// LookupTy handler lives in pipeline.ka — installed once at
-// compile entry, wrapping the lowering walk. Lowering declares
-// SubstGraphRead only (no Write) — effect-row subsumption is
-// the gate, not a runtime policy.
-
-// lexpr_ty — live query, no cache, no fallback
-fn lexpr_handle(e) = match e {
-  LConst(h, _) => h,
-  LLocal(h, _) => h,
-  LGlobal(h, _) => h,
-  LStore(h, _, _) => h,
-  LLet(h, _, _) => h,
-  LUpval(h, _) => h,
-  LBinOp(h, _, _, _) => h,
-  LUnaryOp(h, _, _) => h,
-  LCall(h, _, _) => h,
-  LTailCall(h, _, _) => h,
-  LReturn(h, _) => h,
-  LMakeClosure(h, _, _) => h,
-  LIf(h, _, _, _) => h,
-  LBlock(h, _) => h,
-  LMakeList(h, _) => h,
-  LMakeTuple(h, _) => h,
-  LMakeVariant(h, _, _) => h,
-  LIndex(h, _, _, _) => h,
-  LMatch(h, _, _) => h,
-  LLoop(h, _) => h,
-  LBreak(h, _) => h,
-  LRegion(h, _) => h
-}
-
-// No _ => TUnit fallback. If a variant is added, this must get a match arm.
-fn lexpr_ty(e) = perform lookup_ty(lexpr_handle(e))
-
-// ─── Monomorphism check ─────────────────────────────────────
-// Graph read, not a sidecar. >95% of call sites prove monomorphic.
-
-fn monomorphic_at(h) = match perform lookup_ty(h) {
-  TFun(_, _, row) => row_is_ground(row),
-  _ => true
-}
-
-fn row_is_ground(row) = match row {
-  EfPure => true,
-  EfClosed(_) => true,
-  _ => false
-}
-
-// ─── Lower walk ─────────────────────────────────────────────
-// Clean structural lowering. No subst threading.
-
-fn lower_expr(node) = {
-  let N(body, span, handle) = node
-  match body {
-    NExpr(LitInt(v)) => LConst(handle, LInt(v)),
-    NExpr(LitFloat(v)) => LConst(handle, LFloat(v)),
-    NExpr(LitString(s)) => LConst(handle, LString(s)),
-    NExpr(LitBool(b)) => LConst(handle, LBool(b)),
-    NExpr(LitUnit) => LConst(handle, LInt(0)),
-    NExpr(VarRef(name)) => LGlobal(handle, name),
-    NExpr(BinOpExpr(op, left, right)) => {
-      let lo_l = lower_expr(left)
-      let lo_r = lower_expr(right)
-      LBinOp(handle, op, lo_l, lo_r)
-    },
-    NExpr(UnaryOpExpr(op, inner)) => {
-      let lo = lower_expr(inner)
-      LUnaryOp(handle, op, lo)
-    },
-    NExpr(CallExpr(f, args)) => {
-      let lo_f = lower_expr(f)
-      let lo_args = lower_expr_list(args)
-      if monomorphic_at(handle) {
-        LCall(handle, lo_f, lo_args)
-      } else {
-        // Evidence-passing for polymorphic handler dispatch
-        // Emit suspend + thunk structure for runtime dispatch
-        let N(_, _, fh) = f
-        LSuspend(handle, fh, lo_f, lo_args)
-      }
-    },
-    NExpr(IfExpr(cond, then_e, else_e)) => {
-      let lo_c = lower_expr(cond)
-      let lo_t = [lower_expr(then_e)]
-      let lo_e = [lower_expr(else_e)]
-      LIf(handle, lo_c, lo_t, lo_e)
-    },
-    NExpr(BlockExpr(stmts, final_e)) => {
-      let lo_stmts = lower_stmt_list(stmts)
-      let lo_final = lower_expr(final_e)
-      LBlock(handle, lo_stmts ++ [lo_final])
-    },
-    NExpr(MatchExpr(scrutinee, arms)) => {
-      let lo_s = lower_expr(scrutinee)
-      let lo_arms = lower_match_arms(arms)
-      LMatch(handle, lo_s, lo_arms)
-    },
-    NExpr(MakeListExpr(elems)) => {
-      let lo_elems = lower_expr_list(elems)
-      LMakeList(handle, lo_elems)
-    },
-    NExpr(MakeTupleExpr(elems)) => {
-      let lo_elems = lower_expr_list(elems)
-      LMakeTuple(handle, lo_elems)
-    },
-    NExpr(MakeVariant(tag, fields)) => {
-      let lo_fields = lower_expr_list(fields)
-      LMakeVariant(handle, tag, lo_fields)
-    },
-    NExpr(LambdaExpr(params, body_node)) => {
-      let lo_body = lower_expr(body_node)
-      let row_h = 0  // lambda row resolved via lookup_ty
-      let fn_ir = LFn("lambda", len(params), lower_param_names(params), [lo_body], EfPure)
-      LMakeClosure(handle, fn_ir, [])
-    },
-    NExpr(HandleExpr(body, arms)) => {
-      let lo_body = lower_expr(body)
-      // Handler arms lower to a region wrapping the body
-      LRegion(handle, [lo_body])
-    },
-    NExpr(PerformExpr(op_name, args)) => {
-      let lo_args = lower_expr_list(args)
-      // Perform lowers to evidence-passing call (runtime dispatch)
-      LSuspend(handle, 0, LGlobal(handle, op_name), lo_args)
-    },
-    NExpr(PipeExpr(kind, left, right)) => {
-      let lo_l = lower_expr(left)
-      let lo_r = lower_expr(right)
-      match kind {
-        PForward => {
-          // left |> right  ≡  right(left)
-          // |> is a transparent wire. Structural unification at
-          // the inference level has already verified type compat.
-          LCall(handle, lo_r, [lo_l])
-        },
-
-        PDiverge => {
-          // left <| (f, g, h) ≡ (f(left), g(left), h(left))
-          // Input is borrowed (ref), each branch gets a read-only view.
-          // Result is a tuple of all branch outputs.
-          // Ownership check happened at inference time (E004 if own).
-          LMakeTuple(handle, lower_diverge_branches(lo_l, lo_r))
-        },
-
-        PCompose => {
-          // left >< right ≡ (left, right)
-          // Independent tracks, no data sharing, results tupled.
-          LMakeTuple(handle, [lo_l, lo_r])
-        },
-
-        PTee => {
-          // left ~> right ≡ handle left with right
-          // Handler attachment. Right is a handler or function.
-          // Inline form: handler wraps the single stage.
-          // Block form (layout): handler wraps the whole chain.
-          LHandleWith(handle, lo_l, lo_r)
-        },
-
-        PFeedback => {
-          // left <~ right — desugar to handler-capture iteration.
-          // Per spec 10:
-          //   y = x |> f <~ delay(1, init=0)
-          //   ≡ handler h with state = 0 {
-          //       pull() => resume(state),
-          //       push(v) => resume(()) with state = v
-          //     }
-          //     handle iterate(x, |cx| {
-          //       let fb = perform pull()
-          //       let out = f(cx, fb)
-          //       perform push(out)
-          //       out
-          //     }) with h
-          LFeedback(handle, lo_l, lo_r)
-        }
-      }
-    },
-    _ => LConst(handle, LInt(0))
-  }
-}
-
-fn lower_expr_list(nodes) = {
-  if len(nodes) == 0 { [] }
-  else { [lower_expr(list_head(nodes))] ++ lower_expr_list(list_tail(nodes)) }
-}
-
-fn lower_stmt_list(stmts) = {
-  if len(stmts) == 0 { [] }
-  else { [lower_stmt(list_head(stmts))] ++ lower_stmt_list(list_tail(stmts)) }
-}
-
-fn lower_stmt(node) = {
-  let N(body, span, handle) = node
-  match body {
-    NStmt(LetStmt(pat, expr)) => {
-      let lo = lower_expr(expr)
-      match pat {
-        PVar(name) => LLet(handle, name, lo),
-        _ => lo
-      }
-    },
-    NStmt(FnStmt(name, params, _, _, body_node)) => {
-      let lo_body = lower_expr(body_node)
-      // Function lowering produces LFn wrapped in appropriate structure
-      LLet(handle, name, lo_body)
-    },
-    NStmt(ExprStmt(expr)) => lower_expr(expr),
-    _ => LConst(handle, LInt(0))
-  }
-}
-
-fn lower_match_arms(arms) = {
-  if len(arms) == 0 { [] }
-  else {
-    let (pat, body) = list_head(arms)
-    let lo_body = lower_expr(body)
-    [(lower_pat(pat), lo_body)] ++ lower_match_arms(list_tail(arms))
-  }
-}
-
-fn lower_pat(pat) = match pat {
-  PVar(name) => LPVar(name),
-  PWild => LPWild,
-  PCon(name, sub) => LPCon(name, lower_pats(sub)),
-  PTuple(sub) => LPTuple(lower_pats(sub)),
-  _ => LPWild
-}
-
-fn lower_pats(pats) =
-  if len(pats) == 0 { [] }
-  else { [lower_pat(list_head(pats))] ++ lower_pats(list_tail(pats)) }
-
-fn lower_param_names(params) =
-  if len(params) == 0 { [] }
-  else {
-    let TParam(name, _, _) = list_head(params)
-    [LLet(0, name, LConst(0, LInt(0)))] ++ lower_param_names(list_tail(params))
-  }
-
-// ─── Diverge branch lowering ────────────────────────────────
-// Extracts branches from a tuple expression and applies each
-// to the shared input value.
-
-fn lower_diverge_branches(lo_input, lo_branches) =
-  match lo_branches {
-    LMakeTuple(_, branch_list) =>
-      apply_each_branch(lo_input, branch_list),
-    _ => [LCall(0, lo_branches, [lo_input])]
-  }
-
-fn apply_each_branch(lo_input, branches) =
-  if len(branches) == 0 { [] }
-  else {
-    let branch = list_head(branches)
-    [LCall(0, branch, [lo_input])]
-      ++ apply_each_branch(lo_input, list_tail(branches))
-  }
-
-// ─── LowIR ADT (from lower_ir.ka, handles replace Ty) ─────
+// ═══ LowIR ═════════════════════════════════════════════════════════
+// Every variant carries a source TypeHandle (Int), never a cached Ty.
+// Type reads go through perform lookup_ty(h). Emit consumes this IR;
+// the handle is the live bridge back to the graph.
 
 type LowExpr
   = LConst(Int, LowValue)
-  | LLocal(Int, Int)
-  | LGlobal(Int, String)
-  | LStore(Int, Int, LowExpr)
+  | LLocal(Int, Int)                           // handle, slot
+  | LGlobal(Int, String)                       // handle, name
+  | LStore(Int, Int, LowExpr)                  // handle, slot, value
   | LLet(Int, String, LowExpr)
   | LUpval(Int, Int)
   | LBinOp(Int, String, LowExpr, LowExpr)
   | LUnaryOp(Int, String, LowExpr)
-  | LCall(Int, LowExpr, List)
+  | LCall(Int, LowExpr, List)                  // monomorphic direct call
   | LTailCall(Int, LowExpr, List)
   | LReturn(Int, LowExpr)
   | LMakeClosure(Int, LowFn, List)
@@ -287,18 +49,20 @@ type LowExpr
   | LBlock(Int, List)
   | LMakeList(Int, List)
   | LMakeTuple(Int, List)
-  | LMakeVariant(Int, String, List)
+  | LMakeVariant(Int, String, List)            // constructor application
   | LIndex(Int, LowExpr, LowExpr, Bool)
   | LMatch(Int, LowExpr, List)
   | LLoop(Int, List)
   | LBreak(Int, LowExpr)
-  | LSwitch(Int, LowExpr, List)
-  | LSuspend(Int, Int, LowExpr, List)
+  | LSwitch(Int, LowExpr, List)                // emitter lowers MATCH → SWITCH for ints
+  | LSuspend(Int, Int, LowExpr, List)          // evidence-passing poly call
   | LStateGet(Int, Int)
   | LStateSet(Int, Int, LowExpr)
-  | LRegion(Int, List)
-  | LHandleWith(Int, LowExpr, LowExpr)       // expr, handler — ~> desugaring
-  | LFeedback(Int, LowExpr, LowExpr)         // body, specifier — <~ desugaring
+  | LRegion(Int, List)                         // arena scope
+  | LHandleWith(Int, LowExpr, LowExpr)         // ~> desugaring
+  | LFeedback(Int, LowExpr, LowExpr)           // <~ desugaring (iterative ctx required)
+  | LPerform(Int, String, List)                // effect op invocation
+  | LHandle(Int, LowExpr, List)                // body + arms (handle-expression)
 
 type LowValue
   = LInt(Int)
@@ -308,6 +72,7 @@ type LowValue
 
 type LowFn
   = LFn(String, Int, List, List, EffRow)
+                  // name, arity, param names, body stmts, effect row
 
 type LowPat
   = LPVar(String)
@@ -315,3 +80,298 @@ type LowPat
   | LPCon(String, List)
   | LPTuple(List)
   | LPLit(LowValue)
+
+// ═══ Handle projection — one arm per variant, no fallback ══════════
+
+fn lexpr_handle(e) = match e {
+  LConst(h, _)            => h,
+  LLocal(h, _)            => h,
+  LGlobal(h, _)           => h,
+  LStore(h, _, _)         => h,
+  LLet(h, _, _)           => h,
+  LUpval(h, _)            => h,
+  LBinOp(h, _, _, _)      => h,
+  LUnaryOp(h, _, _)       => h,
+  LCall(h, _, _)          => h,
+  LTailCall(h, _, _)      => h,
+  LReturn(h, _)           => h,
+  LMakeClosure(h, _, _)   => h,
+  LIf(h, _, _, _)         => h,
+  LBlock(h, _)            => h,
+  LMakeList(h, _)         => h,
+  LMakeTuple(h, _)        => h,
+  LMakeVariant(h, _, _)   => h,
+  LIndex(h, _, _, _)      => h,
+  LMatch(h, _, _)         => h,
+  LLoop(h, _)             => h,
+  LBreak(h, _)            => h,
+  LSwitch(h, _, _)        => h,
+  LSuspend(h, _, _, _)    => h,
+  LStateGet(h, _)         => h,
+  LStateSet(h, _, _)      => h,
+  LRegion(h, _)           => h,
+  LHandleWith(h, _, _)    => h,
+  LFeedback(h, _, _)      => h,
+  LPerform(h, _, _)       => h,
+  LHandle(h, _, _)        => h
+}
+
+fn lexpr_ty(e) with LookupTy =
+  perform lookup_ty(lexpr_handle(e))
+
+// ═══ Monomorphism — a graph read, not a sidecar ════════════════════
+// When the callee's effect row is ground (no unresolved row var),
+// emit LCall (direct). When open, emit LSuspend (evidence-passing
+// through a runtime vtable).
+
+fn monomorphic_at(h) with LookupTy =
+  match perform lookup_ty(h) {
+    TFun(_, _, row) => row_is_ground(row),
+    _               => true
+  }
+
+// ═══ Lower walk — exhaustive, live ═════════════════════════════════
+
+fn lower_expr(node) =
+  let N(body, span, handle) = node
+  match body {
+    NExpr(e)     => lower_expr_body(e, handle, span),
+    NStmt(s)     => lower_stmt_as_expr(s, handle, span),
+    NPat(_)      => LConst(handle, LInt(0)),   // patterns don't lower as expr
+    NHole(_)     => LConst(handle, LInt(0))    // Hazel hole → unreachable trap at emit
+  }
+
+fn lower_expr_body(e, handle, span) = match e {
+  LitInt(v)    => LConst(handle, LInt(v)),
+  LitFloat(v)  => LConst(handle, LFloat(v)),
+  LitString(s) => LConst(handle, LString(s)),
+  LitBool(b)   => LConst(handle, LBool(b)),
+  LitUnit      => LConst(handle, LInt(0)),
+
+  VarRef(name) => LGlobal(handle, name),
+
+  BinOpExpr(op, left, right) =>
+    LBinOp(handle, op, lower_expr(left), lower_expr(right)),
+
+  UnaryOpExpr(op, inner) =>
+    LUnaryOp(handle, op, lower_expr(inner)),
+
+  CallExpr(f, args) => {
+    let lo_f = lower_expr(f)
+    let lo_args = lower_expr_list(args)
+    if monomorphic_at(handle) {
+      LCall(handle, lo_f, lo_args)
+    } else {
+      let N(_, _, fh) = f
+      LSuspend(handle, fh, lo_f, lo_args)
+    }
+  },
+
+  IfExpr(cond, then_e, else_e) =>
+    LIf(handle, lower_expr(cond),
+        [lower_expr(then_e)],
+        [lower_expr(else_e)]),
+
+  BlockExpr(stmts, final_e) =>
+    LBlock(handle, lower_stmt_list(stmts) ++ [lower_expr(final_e)]),
+
+  MatchExpr(scrutinee, arms) =>
+    LMatch(handle, lower_expr(scrutinee), lower_match_arms(arms)),
+
+  MakeListExpr(elems) =>
+    LMakeList(handle, lower_expr_list(elems)),
+
+  MakeTupleExpr(elems) =>
+    LMakeTuple(handle, lower_expr_list(elems)),
+
+  LambdaExpr(params, body_node) => {
+    let fn_ir = LFn(
+      "lambda",
+      len(params),
+      lower_param_names(params),
+      [lower_expr(body_node)],
+      EfPure
+    )
+    LMakeClosure(handle, fn_ir, [])
+  },
+
+  HandleExpr(body_node, arms) =>
+    LHandle(handle, lower_expr(body_node), lower_handler_arms(arms)),
+
+  PerformExpr(op_name, args) =>
+    LPerform(handle, op_name, lower_expr_list(args)),
+
+  ResumeExpr(val, _state_updates) =>
+    // State updates on resume threaded through the emitted state machine
+    // at handler-elimination time; structurally a return from the arm.
+    LReturn(handle, lower_expr(val)),
+
+  FieldExpr(rec, field) => {
+    // Field access lowers to a known-slot load; emit resolves the
+    // record layout from the live type via lookup_ty.
+    let lo_rec = lower_expr(rec)
+    LIndex(handle, lo_rec, LConst(handle, LString(field)), false)
+  },
+
+  MakeTupleExpr(elems) =>
+    LMakeTuple(handle, lower_expr_list(elems)),
+
+  PipeExpr(kind, left, right) =>
+    lower_pipe(kind, left, right, handle),
+
+  ExprPlaceholder =>
+    LConst(handle, LInt(0))   // ? — emit lowers to unreachable via NHole check
+}
+
+fn lower_pipe(kind, left, right, handle) = {
+  let lo_l = lower_expr(left)
+  let lo_r = lower_expr(right)
+  match kind {
+    // |> converge — right(left). Transparent wire; unification at
+    // inference time already paired tuple slots with parameters.
+    PForward => LCall(handle, lo_r, [lo_l]),
+
+    // <| diverge — input borrowed to each branch; outputs tupled.
+    // Ownership affinity checked at inference (E004 if own flows here).
+    PDiverge =>
+      LMakeTuple(handle, lower_diverge_branches(lo_l, lo_r)),
+
+    // >< parallel compose — independent tracks, outputs tupled.
+    PCompose =>
+      LMakeTuple(handle, [lo_l, lo_r]),
+
+    // ~> tee — handler attachment (inline OR block form).
+    // Emit resolves the scope from source layout; LIR just marks the
+    // attachment. LHandleWith(handle, body, handler).
+    PTee =>
+      LHandleWith(handle, lo_l, lo_r),
+
+    // <~ feedback — requires iterative context. Emit desugars to a
+    // stateful handler capturing previous output as state.
+    PFeedback =>
+      LFeedback(handle, lo_l, lo_r)
+  }
+}
+
+fn lower_diverge_branches(lo_input, lo_branches) =
+  match lo_branches {
+    LMakeTuple(_, branches) => apply_each_branch(lo_input, branches),
+    _ => [LCall(0, lo_branches, [lo_input])]
+  }
+
+fn apply_each_branch(lo_input, branches) =
+  if len(branches) == 0 { [] }
+  else {
+    [LCall(0, list_head(branches), [lo_input])]
+      ++ apply_each_branch(lo_input, list_tail(branches))
+  }
+
+// ═══ Statement lowering ═══════════════════════════════════════════
+
+fn lower_stmt_list(stmts) =
+  if len(stmts) == 0 { [] }
+  else { [lower_stmt(list_head(stmts))] ++ lower_stmt_list(list_tail(stmts)) }
+
+fn lower_stmt(node) =
+  let N(body, span, handle) = node
+  match body {
+    NStmt(s)  => lower_stmt_body(s, handle, span),
+    NExpr(e)  => lower_expr_body(e, handle, span),
+    _         => LConst(handle, LInt(0))
+  }
+
+fn lower_stmt_body(s, handle, span) = match s {
+  LetStmt(pat, expr) => {
+    let lo = lower_expr(expr)
+    match pat {
+      PVar(name) => LLet(handle, name, lo),
+      _          => lo     // non-binding let (destructure handled by emit)
+    }
+  },
+
+  FnStmt(name, params, _ret_ann, _effs, body_node) => {
+    let lo_body = lower_expr(body_node)
+    let fn_ir = LFn(
+      name,
+      len(params),
+      lower_param_names(params),
+      [lo_body],
+      EfPure          // row resolved live via lookup_ty(handle)
+    )
+    LLet(handle, name, LMakeClosure(handle, fn_ir, []))
+  },
+
+  TypeDefStmt(_name, _args, _variants)      => LConst(handle, LInt(0)),
+  EffectDeclStmt(_name, _ops)               => LConst(handle, LInt(0)),
+  HandlerDeclStmt(_name, _ename, _arms)     => LConst(handle, LInt(0)),
+  ImportStmt(_module)                       => LConst(handle, LInt(0)),
+  RefineStmt(_name, _ty, _pred)             => LConst(handle, LInt(0)),
+
+  ExprStmt(expr) => lower_expr(expr)
+}
+
+fn lower_stmt_as_expr(s, handle, span) =
+  lower_stmt_body(s, handle, span)
+
+// ═══ Pattern lowering ══════════════════════════════════════════════
+
+fn lower_match_arms(arms) =
+  if len(arms) == 0 { [] }
+  else {
+    let (pat, body) = list_head(arms)
+    [(lower_pat(pat), lower_expr(body))]
+      ++ lower_match_arms(list_tail(arms))
+  }
+
+fn lower_pat(pat) = match pat {
+  PVar(name)       => LPVar(name),
+  PWild            => LPWild,
+  PLit(v)          => LPLit(lower_lit_value(v)),
+  PCon(name, sub)  => LPCon(name, lower_pats(sub)),
+  PTuple(sub)      => LPTuple(lower_pats(sub)),
+  PList(sub)       => LPCon("List", lower_pats(sub)),
+  PRecord(_)       => LPWild     // records destructured via field index at emit
+}
+
+fn lower_lit_value(v) = match v {
+  LVInt(n)    => LInt(n),
+  LVFloat(f)  => LFloat(f),
+  LVString(s) => LString(s),
+  LVBool(b)   => LBool(b)
+}
+
+fn lower_pats(pats) =
+  if len(pats) == 0 { [] }
+  else { [lower_pat(list_head(pats))] ++ lower_pats(list_tail(pats)) }
+
+// ═══ Handler arm lowering ══════════════════════════════════════════
+// Each arm = (op_name, arg_names, body). Lowered as a pair for emit
+// to dispatch through the handler's state machine.
+
+fn lower_handler_arms(arms) =
+  if len(arms) == 0 { [] }
+  else {
+    let arm = list_head(arms)
+    let (op_name, args, body) = arm
+    [(op_name, args, lower_expr(body))]
+      ++ lower_handler_arms(list_tail(arms))
+  }
+
+// ═══ Parameter name lowering (for LFn metadata) ════════════════════
+
+fn lower_param_names(params) =
+  if len(params) == 0 { [] }
+  else {
+    let TParam(name, _, _) = list_head(params)
+    [name] ++ lower_param_names(list_tail(params))
+  }
+
+// ═══ Expression list ═══════════════════════════════════════════════
+
+fn lower_expr_list(nodes) =
+  if len(nodes) == 0 { [] }
+  else { [lower_expr(list_head(nodes))] ++ lower_expr_list(list_tail(nodes)) }
+
+// ═══ Program lowering ══════════════════════════════════════════════
+
+fn lower_program(stmts) = lower_stmt_list(stmts)

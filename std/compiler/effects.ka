@@ -1,35 +1,25 @@
 // effects.ka — Boolean algebra over effect rows (spec 01)
 //
-// Full Boolean algebra: + union, - subtraction, & intersection,
-// ! negation. Pure is identity. The four compilation gates (Pure,
-// !IO, !Alloc, !Network) and handler absorption (body - handled)
-// fall out of one mechanism.
+// The algebra. Pure functions on data. No handlers, no state, no
+// effects. The proof engine that every compilation gate (`Pure`,
+// `!IO`, `!Alloc`, `!Network`) and every handler install reduces to.
 //
-// Surface operators reduce to ADT constructors; normalize()
-// produces canonical form before unification. This file is pure
-// functions on data — the cleanest possible Inka.
+// types.ka owns the EffRow ADT and display; this file owns the
+// algebra — normalize / union / diff / inter / neg / subsumes / unify
+// / absorb / ground. One mechanism; four gates fall out.
+//
+// Research: Flix Boolean unification (OOPSLA 2024), Tang-Lindley
+// Modal Effect Types (POPL 2025 / 2026), Abstracting Effect Systems
+// (ICFP 2024). Decidable, sound, documented. None invented here.
+// The artifact is that one row_subsumes call services every gate.
 
 import compiler/types
-import compiler/graph
 
-// ─── EffRow ADT ─────────────────────────────────────────────
-// The base three (EfPure, EfClosed, EfOpen) are canonical forms.
-// The three extensions (EfNeg, EfSub, EfInter) are intermediate
-// forms that normalize away before unification.
-
-type EffRow
-  = EfPure                         // identity: no effects
-  | EfClosed(List)                 // sorted, deduped set of effect names
-  | EfOpen(List, Int)              // known names + row-variable handle
-  | EfNeg(EffRow)                  // negation: any effect NOT in inner
-  | EfSub(EffRow, EffRow)          // left minus right (A - B ≡ A & !B)
-  | EfInter(EffRow, EffRow)        // intersection (A & B)
-
-// ─── Normalization ──────────────────────────────────────────
-// After normalization, every EffRow is one of three canonical
-// forms: EfPure, EfClosed(...), or EfOpen(..., v).
-// EfNeg/EfSub/EfInter are intermediate — they appear during
-// construction but normalize before comparison or unification.
+// ═══ Normalization ═════════════════════════════════════════════════
+// After normalize_row, every row is canonical:
+//   EfPure  |  EfClosed(sorted_unique)  |  EfOpen(sorted_unique, v)
+// EfNeg / EfSub / EfInter are intermediate and reduce before
+// comparison or unification.
 
 fn normalize_row(row) =
   match row {
@@ -37,9 +27,7 @@ fn normalize_row(row) =
     EfClosed(names) =>
       names
         |> sort_unique
-        |> fn(sorted) =>
-          if len(sorted) == 0 { EfPure }
-          else { EfClosed(sorted) },
+        |> closed_or_pure,
     EfOpen(names, v) =>
       EfOpen(sort_unique(names), v),
     EfNeg(inner) =>
@@ -56,29 +44,34 @@ fn normalize_row(row) =
 
 fn normalize_neg(row) =
   match row {
-    EfPure => EfNeg(EfPure),             // !Pure = everything
-    EfClosed(names) => EfNeg(EfClosed(names)),
+    EfPure           => EfNeg(EfPure),        // !Pure = everything
+    EfClosed(names)  => EfNeg(EfClosed(names)),
     EfOpen(names, v) => EfNeg(EfOpen(names, v)),
-    EfNeg(inner) => inner,               // double negation elimination
-    _ => EfNeg(row)
+    EfNeg(inner)     => inner,                // double negation
+    _                => EfNeg(row)
   }
 
 fn normalize_inter(a, b) =
   match a {
-    EfPure => EfPure,                    // Pure & X = Pure (empty ∩ X = empty)
+    EfPure => EfPure,                         // Pure ∩ X = Pure
     EfClosed(na) =>
       match b {
         EfPure => EfPure,
         EfClosed(nb) =>
-          na |> list_intersect(nb) |> closed_or_pure,
+          na
+            |> list_intersect(nb)
+            |> closed_or_pure,
         EfOpen(nb, _) =>
-          // Closed ∩ Open: rowvar can't contribute beyond known names
-          na |> list_intersect(nb) |> closed_or_pure,
+          na
+            |> list_intersect(nb)
+            |> closed_or_pure,
         EfNeg(inner) =>
           match inner {
             EfClosed(neg_names) =>
               // Closed(A) & !Closed(B) = Closed(A - B)
-              na |> list_diff_str(neg_names) |> closed_or_pure,
+              na
+                |> list_diff_str(neg_names)
+                |> closed_or_pure,
             _ => EfInter(a, b)
           },
         _ => EfInter(a, b)
@@ -87,15 +80,16 @@ fn normalize_inter(a, b) =
       match b {
         EfPure => EfPure,
         EfClosed(nb) =>
-          na |> list_intersect(nb) |> closed_or_pure,
+          na
+            |> list_intersect(nb)
+            |> closed_or_pure,
         EfOpen(nb, vb) =>
-          // Both open: intersect known names, keep first var
-          // (unification will constrain vars later)
+          // Both open: intersect known names, keep first var.
+          // Unification later constrains vars.
           EfOpen(list_intersect(na, nb), va),
         EfNeg(inner) =>
           match inner {
             EfClosed(neg_names) =>
-              // Open(A, v) & !Closed(B) = Open(A - B, v)
               EfOpen(list_diff_str(na, neg_names), va),
             _ => EfInter(a, b)
           },
@@ -108,8 +102,8 @@ fn closed_or_pure(names) =
   if len(names) == 0 { EfPure }
   else { EfClosed(names) }
 
-// ─── Row union (the + operator) ─────────────────────────────
-// E + F = the row containing all effects from E and F.
+// ═══ Union — the `+` operator ══════════════════════════════════════
+// E + F = the row of all effects in E or F.
 
 fn union_row(a, b) =
   match a {
@@ -118,55 +112,73 @@ fn union_row(a, b) =
       match b {
         EfPure => a,
         EfClosed(nb) =>
-          na ++ nb |> sort_unique |> EfClosed,
+          na ++ nb
+            |> sort_unique
+            |> closed_or_pure,
         EfOpen(nb, v) =>
-          na ++ nb |> sort_unique |> fn(merged) => EfOpen(merged, v),
-        _ => b |> normalize_row |> union_row(a)
+          na ++ nb
+            |> sort_unique
+            |> fn(merged) => EfOpen(merged, v),
+        _ =>
+          b
+            |> normalize_row
+            |> union_row(a)
       },
     EfOpen(na, va) =>
       match b {
         EfPure => a,
         EfClosed(nb) =>
-          na ++ nb |> sort_unique |> fn(merged) => EfOpen(merged, va),
-        EfOpen(nb, vb) =>
-          // Both open: merge names, keep first var
-          // (row vars merge at unification)
-          na ++ nb |> sort_unique |> fn(merged) => EfOpen(merged, va),
-        _ => b |> normalize_row |> union_row(a)
+          na ++ nb
+            |> sort_unique
+            |> fn(merged) => EfOpen(merged, va),
+        EfOpen(nb, _) =>
+          na ++ nb
+            |> sort_unique
+            |> fn(merged) => EfOpen(merged, va),
+        _ =>
+          b
+            |> normalize_row
+            |> union_row(a)
       },
-    _ => a |> normalize_row |> fn(na) => union_row(na, b)
+    _ =>
+      a
+        |> normalize_row
+        |> fn(na) => union_row(na, b)
   }
 
-// ─── Row difference (the - operator) ────────────────────────
-// Used by handler absorption: handle { body with E } { arms for F }
-// Result row = normalize(E - F)
+// ═══ Difference — the `-` operator ═════════════════════════════════
+// Handler absorption uses this: `(body_row - handled_row) + arm_row`.
 
 fn diff_row(a, b) =
-  EfSub(a, b) |> normalize_row
+  EfSub(a, b)
+    |> normalize_row
 
-// ─── Row intersection (the & operator) ──────────────────────
+// ═══ Intersection — the `&` operator ═══════════════════════════════
 
 fn inter_row(a, b) =
-  EfInter(a, b) |> normalize_row
+  EfInter(a, b)
+    |> normalize_row
 
-// ─── Row negation (the ! operator) ──────────────────────────
+// ═══ Negation — the `!` operator ═══════════════════════════════════
+// !E proves absence. The load-bearing novelty of Inka's algebra.
 
 fn neg_row(a) =
-  EfNeg(a) |> normalize_row
+  EfNeg(a)
+    |> normalize_row
 
-// ─── Subsumption ────────────────────────────────────────────
-// body_row ⊆ gate_row? Used by compilation gates and handler
-// installation. Decidable on canonical forms.
+// ═══ Subsumption — the proof engine ════════════════════════════════
+// `body_row ⊆ gate_row`?  One call services every compilation gate
+// and every handler installation. No per-gate bit-flags. No intrinsic
+// knowledge of effect-name semantics. The gates are subsumption
+// queries applied at codegen:
 //
-// The four gates:
-//   Pure         → memoize / parallelize / compile-time eval
-//   !IO          → safe for compile-time
+//   Pure         → memoize / parallelize / compile-time evaluate
+//   !IO          → safe for compile-time evaluation
 //   !Alloc       → real-time / GPU / kernel
 //   !Network     → sandbox
 //
-// No per-gate bit-flag tracking. No intrinsic knowledge in the
-// compiler about which effect names mean what. The gates are
-// subsumption queries applied at codegen.
+// The same call services user-defined negations: `with !Logging` is
+// one call away.
 
 fn row_subsumes(body_row, gate_row) =
   match gate_row {
@@ -180,7 +192,7 @@ fn row_subsumes(body_row, gate_row) =
       match body_row {
         EfPure => true,
         EfClosed(body_names) => list_subset_str(body_names, gate_names),
-        _ => false   // open row can't be proven subset of closed
+        _ => false
       },
     EfOpen(gate_names, _) =>
       match body_row {
@@ -196,38 +208,32 @@ fn row_subsumes(body_row, gate_row) =
         EfClosed(body_names) =>
           match inner {
             EfClosed(neg_names) => list_disjoint(body_names, neg_names),
-            EfPure => false,    // !Pure = everything; body ⊆ everything = true... but
-                                // body has effects, so body ⊆ !Pure means body has no
-                                // effects that are in Pure, which is vacuously true
+            EfPure => true,     // body ⊆ !Pure: body has no Pure effects — vacuously true
             _ => false
           },
         _ => false
       },
     _ =>
-      // Normalize gate_row and re-check
       gate_row
         |> normalize_row
         |> row_subsumes(body_row)
   }
 
-// ─── Row unification ────────────────────────────────────────
-// Unify two effect rows, writing through SubstGraphWrite.
-// Called by inference when unifying TFun types.
+// ═══ Unification — writes through SubstGraphWrite ══════════════════
+// Called by inference when unifying TFun types (spec 04). Writes
+// through graph_bind_row. Spec 01 table:
 //
-// Spec 01 unification table:
 //   Pure/Pure       → ok
 //   Pure/Closed(∅)  → ok
-//   Pure/Closed(≠∅) → PurityViolated
+//   Pure/Closed(≠∅) → E_PurityViolated
 //   Pure/Open(∅,v)  → bind v to EfPure
 //   Closed(A)/Closed(B) → ok iff A = B as sets
 //   Closed(A)/Open(B,v) → bind v to Closed(A - B)
-//   Open(A,v1)/Open(B,v2) → bind v1 to Open(B-A, v2) if v1≠v2
-//   Neg/Sub/Inter → normalize first, re-dispatch
+//   Open(A,v1)/Open(B,v2) → if v1=v2, unify names; else bind v1 to Open(B-A, v2)
+//   Neg / Sub / Inter → normalize first, re-dispatch
 
 fn unify_row(a, b, reason) =
-  let na = normalize_row(a)
-  let nb = normalize_row(b)
-  unify_row_canonical(na, nb, reason)
+  unify_row_canonical(normalize_row(a), normalize_row(b), reason)
 
 fn unify_row_canonical(a, b, reason) =
   match a {
@@ -236,24 +242,12 @@ fn unify_row_canonical(a, b, reason) =
         EfPure => (),
         EfClosed(names) =>
           if len(names) == 0 { () }
-          else {
-            perform report(
-              "effects", "E_PurityViolated", "error",
-              "expected Pure but found effects: "
-                |> str_concat(show_effrow(b)),
-              span_zero(), "MachineApplicable"
-            )
-          },
+          else { report_purity_mismatch(b) },
         EfOpen(names, v) =>
           if len(names) == 0 {
             perform graph_bind_row(v, EfPure, reason)
           } else {
-            perform report(
-              "effects", "E_PurityViolated", "error",
-              "expected Pure but found effects: "
-                |> str_concat(show_effrow(b)),
-              span_zero(), "MachineApplicable"
-            )
+            report_purity_mismatch(b)
           },
         _ => unify_row_canonical(a, normalize_row(b), reason)
       },
@@ -261,26 +255,10 @@ fn unify_row_canonical(a, b, reason) =
       match b {
         EfPure =>
           if len(na) == 0 { () }
-          else {
-            perform report(
-              "effects", "E_PurityViolated", "error",
-              "expected Pure but found effects: "
-                |> str_concat(show_effrow(a)),
-              span_zero(), "MachineApplicable"
-            )
-          },
+          else { report_purity_mismatch(a) },
         EfClosed(nb) =>
           if list_eq_str(na, nb) { () }
-          else {
-            perform report(
-              "effects", "E_EffectMismatch", "error",
-              "effect row mismatch: "
-                |> str_concat(show_effrow(a))
-                |> str_concat(" vs ")
-                |> str_concat(show_effrow(b)),
-              span_zero(), "MachineApplicable"
-            )
-          },
+          else { report_effect_mismatch(a, b) },
         EfOpen(nb, v) =>
           // Closed(A) ~ Open(B, v) → bind v to Closed(A - B)
           let residual = list_diff_str(na, nb) |> closed_or_pure
@@ -293,12 +271,7 @@ fn unify_row_canonical(a, b, reason) =
           if len(na) == 0 {
             perform graph_bind_row(va, EfPure, reason)
           } else {
-            perform report(
-              "effects", "E_PurityViolated", "error",
-              "expected Pure but found effects: "
-                |> str_concat(show_effrow(a)),
-              span_zero(), "MachineApplicable"
-            )
+            report_purity_mismatch(a)
           },
         EfClosed(nb) =>
           // Open(A, v) ~ Closed(B) → bind v to Closed(B - A)
@@ -306,20 +279,9 @@ fn unify_row_canonical(a, b, reason) =
           perform graph_bind_row(va, residual, reason),
         EfOpen(nb, vb) =>
           if va == vb {
-            // Same row variable: unify the known name sets
             if list_eq_str(na, nb) { () }
-            else {
-              perform report(
-                "effects", "E_EffectMismatch", "error",
-                "effect row mismatch on same variable: "
-                  |> str_concat(show_effrow(a))
-                  |> str_concat(" vs ")
-                  |> str_concat(show_effrow(b)),
-                span_zero(), "MachineApplicable"
-              )
-            }
+            else { report_effect_mismatch(a, b) }
           } else {
-            // Different row variables: bind va to Open(B - A, vb)
             let residual_names = list_diff_str(nb, na)
             perform graph_bind_row(va, EfOpen(residual_names, vb), reason)
           },
@@ -328,68 +290,52 @@ fn unify_row_canonical(a, b, reason) =
     _ => unify_row_canonical(normalize_row(a), b, reason)
   }
 
-// ─── Handler absorption ─────────────────────────────────────
-// handle { body with E } { arms for F } has effects:
-//   normalize((E - F) + extra_arms)
-//
-// The handler's arms absorb effects F from the body's row E.
-// The arms themselves may perform additional effects (extra).
+fn report_purity_mismatch(actual) =
+  perform report(
+    "effects", "E_PurityViolated", "error",
+    "expected Pure but found effects: "
+      |> str_concat(show_effrow(actual)),
+    span_zero(), "MachineApplicable"
+  )
+
+fn report_effect_mismatch(a, b) =
+  perform report(
+    "effects", "E_EffectMismatch", "error",
+    "effect row mismatch: "
+      |> str_concat(show_effrow(a))
+      |> str_concat(" vs ")
+      |> str_concat(show_effrow(b)),
+    span_zero(), "MachineApplicable"
+  )
+
+// ═══ Handler absorption ════════════════════════════════════════════
+// `handle { body with E } { arms for F }` normalizes to
+// `(E - F) + arm_row`. Algebra falls out.
 
 fn absorb_row(body_row, handled_row, extra_row) =
   body_row
     |> diff_row(handled_row)
     |> union_row(extra_row)
 
-// ─── Row ground check ───────────────────────────────────────
-// A row is "ground" if it has no unresolved row variables.
-// Ground rows enable monomorphic dispatch (spec 05).
+// ═══ Groundness — enables monomorphic dispatch ═════════════════════
+// A row is ground if it has no unresolved row variables. Ground rows
+// let lowering emit direct `call $h_op` (spec 05). Non-ground rows
+// go through the evidence-passing path.
 
 fn row_is_ground(row) =
   match row {
-    EfPure => true,
-    EfClosed(_) => true,
-    EfOpen(_, _) => false,
-    EfNeg(inner) => row_is_ground(inner),
-    EfSub(a, b) => row_is_ground(a) && row_is_ground(b),
-    EfInter(a, b) => row_is_ground(a) && row_is_ground(b)
+    EfPure           => true,
+    EfClosed(_)      => true,
+    EfOpen(_, _)     => false,
+    EfNeg(inner)     => row_is_ground(inner),
+    EfSub(a, b)      => row_is_ground(a) && row_is_ground(b),
+    EfInter(a, b)    => row_is_ground(a) && row_is_ground(b)
   }
 
-// ─── Row display ────────────────────────────────────────────
-// Canonical display for diagnostics and query output.
-
-fn show_effrow(row) =
-  match row {
-    EfPure => "Pure",
-    EfClosed(names) =>
-      names |> join_str(", "),
-    EfOpen(names, v) =>
-      if len(names) == 0 { "?" ++ int_to_str(v) }
-      else {
-        names
-          |> join_str(", ")
-          |> str_concat(" + ?")
-          |> str_concat(int_to_str(v))
-      },
-    EfNeg(inner) =>
-      "!" ++ show_effrow(inner),
-    EfSub(a, b) =>
-      show_effrow(a) ++ " - " ++ show_effrow(b),
-    EfInter(a, b) =>
-      show_effrow(a) ++ " & " ++ show_effrow(b)
-  }
-
-fn join_str(items, sep) =
-  if len(items) == 0 { "" }
-  else if len(items) == 1 { list_head(items) }
-  else {
-    list_head(items)
-      |> str_concat(sep)
-      |> str_concat(join_str(list_tail(items), sep))
-  }
-
-// ─── Set operations on sorted string lists ──────────────────
-// These are the foundation of the algebra. All operate on
-// sorted, deduplicated string lists (effect name sets).
+// ═══ Set operations on sorted string lists ═════════════════════════
+// All operate on sorted, deduplicated string lists (effect name sets).
+// Local to this module; kept here because the algebra depends on
+// exactly this set model.
 
 fn sort_unique(names) =
   sort_unique_insert(names, [])
@@ -453,9 +399,7 @@ fn list_eq_str(a, b) =
   if len(a) != len(b) { false }
   else if len(a) == 0 { true }
   else {
-    let ha = list_head(a)
-    let hb = list_head(b)
-    if str_eq(ha, hb) == 1 {
+    if str_eq(list_head(a), list_head(b)) == 1 {
       list_eq_str(list_tail(a), list_tail(b))
     } else { false }
   }

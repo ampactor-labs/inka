@@ -1,61 +1,64 @@
-// Verify — ledger handler for refinement obligations (spec 02)
+// verify.ka — refinement obligation ledger (spec 02 · spec 06)
 //
-// Phase C–E default: verify_ledger accumulates obligations
-// (span, predicate, reason). At compile end, reports N pending.
-// Code compiles; obligations are visible, countable, queryable.
+// Phase 1 default: verify_ledger accumulates every obligation
+// (span, predicate, reason). At compile end, emits V001 with the
+// count. Code compiles; obligations are visible, countable,
+// queryable via `inka query verification`.
 //
-// Arc F.1 swaps to verify_smt: Z3/cvc5/Bitwuzla handler.
-// Pure handler swap; source code unchanged.
+// Arc F.1: verify_smt handler swap — predicates dispatch to Z3
+// (nonlinear arithmetic), cvc5 (finite set/bag/map), Bitwuzla
+// (bitvectors) by residual theory. Source code unchanged; the ~>
+// chain names the handler. Handler swap IS the thesis.
 
 import compiler/types
 
-// ─── Handler: verify_ledger (default Phase C–E) ─────────────
-// Records every obligation. No solving. Countable. Queryable.
-// Uses handler-state: debt (list of (span, predicate, reason)).
-//
-// The handler swap is the thesis proof: same source code,
-// different handler → the program gains formal verification.
+// ═══ verify_ledger — Phase 1 default ═══════════════════════════════
+// Records every obligation. No solving. The simplest possible
+// demonstration that the handler-swap thesis works on the compiler's
+// own core: the gap between "no solver" and "full solver" is hosted
+// by the handler mechanism itself.
 
-handler verify_ledger_handler with debt = [] {
-  verify(span, predicate, reason) => {
-    let entry = (span, predicate, reason)
-    resume(()) with debt = [entry] ++ debt
-  },
-  verify_debt() => {
+handler verify_ledger with debt = [] {
+
+  verify(span, predicate, reason) =>
+    resume(())
+      with debt = [(span, predicate, reason)] ++ debt,
+
+  verify_debt() =>
     resume(debt)
-  }
 }
 
-// ─── Report debt summary ────────────────────────────────────
+// ═══ Report debt summary ═══════════════════════════════════════════
+// Emitted at compile end by the driver (main.ka / pipeline.ka).
 
 fn report_verify_debt(debt) =
   if len(debt) == 0 { () }
   else {
     perform report("", "V001", "VerificationPending",
-      int_to_str(len(debt)) ++ " verification obligations pending",
+      int_to_str(len(debt))
+        |> str_concat(" verification obligations pending"),
       span_zero(), "MaybeIncorrect")
   }
 
-// ─── Debt analysis (for query) ──────────────────────────────
+// ═══ Debt classification — consumed by query ═══════════════════════
+// `inka query verification` projects debt by predicate shape so the
+// developer can see at a glance what classes of proof are pending.
 
 fn debt_by_kind(debt) =
   if len(debt) == 0 { [] }
   else {
     let (span, pred, reason) = list_head(debt)
-    let kind = classify_predicate(pred)
-    [(kind, span, reason)] ++ debt_by_kind(list_tail(debt))
+    [(classify_predicate(pred), span, reason)]
+      ++ debt_by_kind(list_tail(debt))
   }
 
 fn classify_predicate(pred) = match pred {
-  PTrue => "trivial",
-  PNot(_) => "negation",
-  PAnd(_, _) => "conjunction",
-  POr(_, _) => "disjunction",
-  PImplies(_, _) => "implication",
-  PForall(_, _) => "universal",
-  PExists(_, _) => "existential",
-  PEq(_, _) => "equality",
-  PLt(_, _) => "ordering",
-  PIn(_, _) => "membership",
-  _ => "unknown"
+  PTrue        => "trivial",
+  PNot(_)      => "negation",
+  PAnd(_, _)   => "conjunction",
+  POr(_, _)    => "disjunction",
+  PEq(_, _)    => "equality",
+  PLt(_, _)    => "ordering",
+  PLeq(_, _)   => "ordering",
+  PCall(_, _)  => "user-defined"
 }

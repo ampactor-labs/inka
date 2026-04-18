@@ -1,144 +1,186 @@
-// Query — forensic substrate for the live graph (spec 08)
+// query.ka — forensic substrate for the live graph (spec 08)
 //
-// inka query reads the SubstGraph and Env through effects.
-// No mutations. No side effects. Pure observation of the
-// inference result. This module is the substrate for Arc F.2 LSP.
+// `inka query` is the read-only projection of the inference result.
+// No mutations. No side effects. Every question reads through
+// SubstGraphRead + EnvRead; write attempts fail at handler install
+// via spec 01's subsumption gate. The forensic substrate is airtight
+// by type.
 //
-// Every question reads through SubstGraphRead + EnvRead.
-// The handler composes with inference via pipeline's ~> chain.
+// Every LSP method (Arc F.2) is a Question variant over this same
+// effect. There is no separate LSP substrate. JSON-RPC is the
+// transport; tentacles are already here.
 
 import compiler/types
 import compiler/graph
 import compiler/effects
 
-// ─── Question and Result ADTs ───────────────────────────────
+// ═══ Question / QueryResult ════════════════════════════════════════
 
 type Question
-  = QTypeOf(String)                     // "type of NAME"
-  | QTypeAt(Span)                       // "type at L:C"
-  | QUnresolved                         // "unresolved"
-  | QSubstChain(Int)                    // "subst trace for TVar(N)"
-  | QEffects(String)                    // "effects of NAME"
-  | QOwnership(String)                  // "ownership of NAME"
-  | QWhy(String)                        // "why NAME"
-  | QVerifyDebt                         // "verification debt"
+  = QTypeOf(String)          // "type of NAME"
+  | QTypeAt(Span)            // "type at L:C"
+  | QUnresolved              // every handle that chases to NFree
+  | QSubstChain(Int)         // "subst trace for handle N"
+  | QEffects(String)         // "effects of NAME"
+  | QOwnership(String)       // "ownership of NAME"
+  | QWhy(String)             // "why NAME" — walks reason DAG
+  | QRefsOf(String)          // "refs of NAME" — for rename
+  | QVerifyDebt              // "verification" — pending obligations
   | QUnknown(String)
 
 type QueryResult
   = QRType(Ty, Reason)
-  | QRUnresolved(List)                  // [(name, Ty, List)]
-  | QRChain(List)                       // [(handle, GNode)]
+  | QRUnresolved(List)       // [(name, Ty, List)]
+  | QRChain(List)            // [(handle, GNode)]
   | QREffects(EffRow)
-  | QROwnership(List)                   // [TParam]
+  | QROwnership(List)        // [TParam]
   | QRWhy(Reason)
-  | QRVerifyDebt(List)                  // [(Span, Predicate, Reason)]
+  | QRRefs(List)             // [Span]
+  | QRVerifyDebt(List)       // [(Span, Predicate, Reason)]
   | QRError(String)
 
-// ─── The Query Effect ───────────────────────────────────────
+// ═══ The Query effect ══════════════════════════════════════════════
 
 effect Query {
-  ask(Question) -> QueryResult          @resume=OneShot
+  ask(Question) -> QueryResult              @resume=OneShot
 }
 
-// ─── Query Handler ──────────────────────────────────────────
-// The main query executor. Reads graph + env through effects.
-// No handler-local state needed — pure observation.
+// ═══ query_default — read-only over the substrate ═════════════════
+// No handler-local state. All data comes from graph + env through
+// effects. Pure observation.
 
 handler query_default {
+
   ask(q) => match q {
-    QTypeOf(name) => match perform env_lookup(name) {
-      None => resume(QRError("not found: " ++ name)),
-      Some(entry) => {
-        let (scheme, reason) = entry
-        let Forall(qs, ty) = scheme
-        // Chase all TVars to their final bindings
-        let resolved = chase_type_deep(ty)
-        resume(QRType(resolved, reason))
-      }
-    },
-    QTypeAt(span) =>
+
+    QTypeOf(name) =>
+      match perform env_lookup(name) {
+        None => resume(QRError("not found: " |> str_concat(name))),
+        Some(entry) => {
+          let (scheme, reason) = entry
+          let Forall(_, ty) = scheme
+          resume(QRType(chase_type_deep(ty), reason))
+        }
+      },
+
+    QTypeAt(_span) =>
+      // Span-indexed lookup needs an index built at parse time.
+      // Phase 1 returns a structured error; Arc F.2 wires the index.
       resume(QRError("type-at requires AST span index (Arc F.2)")),
+
     QUnresolved => {
       let Env(entries) = perform env_snapshot()
-      let unresolved = find_unresolved(entries)
-      resume(QRUnresolved(unresolved))
+      resume(QRUnresolved(find_unresolved(entries)))
     },
-    QSubstChain(handle) => {
-      let chain = walk_chain(handle, 0)
-      resume(QRChain(chain))
-    },
-    QEffects(name) => match perform env_lookup(name) {
-      None => resume(QRError("not found: " ++ name)),
-      Some(entry) => {
-        let (scheme, _) = entry
-        let Forall(_, ty) = scheme
-        match ty {
-          TFun(_, _, row) => resume(QREffects(row)),
-          _ => resume(QRError(name ++ " is not a function"))
+
+    QSubstChain(handle) =>
+      resume(QRChain(walk_chain(handle, 0))),
+
+    QEffects(name) =>
+      match perform env_lookup(name) {
+        None => resume(QRError("not found: " |> str_concat(name))),
+        Some(entry) => {
+          let (scheme, _) = entry
+          let Forall(_, ty) = scheme
+          match chase_type_deep(ty) {
+            TFun(_, _, row) => resume(QREffects(row)),
+            _ => resume(QRError(
+              name
+                |> str_concat(" is not a function")))
+          }
         }
-      }
-    },
-    QOwnership(name) => match perform env_lookup(name) {
-      None => resume(QRError("not found: " ++ name)),
-      Some(entry) => {
-        let (scheme, _) = entry
-        let Forall(_, ty) = scheme
-        match ty {
-          TFun(params, _, _) => resume(QROwnership(params)),
-          _ => resume(QRError(name ++ " is not a function"))
+      },
+
+    QOwnership(name) =>
+      match perform env_lookup(name) {
+        None => resume(QRError("not found: " |> str_concat(name))),
+        Some(entry) => {
+          let (scheme, _) = entry
+          let Forall(_, ty) = scheme
+          match chase_type_deep(ty) {
+            TFun(params, _, _) => resume(QROwnership(params)),
+            _ => resume(QRError(
+              name
+                |> str_concat(" is not a function")))
+          }
         }
-      }
-    },
-    QWhy(name) => match perform env_lookup(name) {
-      None => resume(QRError("not found: " ++ name)),
-      Some(entry) => {
-        let (_, reason) = entry
-        resume(QRWhy(reason))
-      }
-    },
+      },
+
+    QWhy(name) =>
+      match perform env_lookup(name) {
+        None => resume(QRError("not found: " |> str_concat(name))),
+        Some(entry) => {
+          let (_, reason) = entry
+          resume(QRWhy(reason))
+        }
+      },
+
+    QRefsOf(_name) =>
+      resume(QRError("refs-of requires AST index (Arc F.2)")),
+
     QVerifyDebt => {
       let debt = perform verify_debt()
       resume(QRVerifyDebt(debt))
     },
-    QUnknown(q) => resume(QRError("unknown query: " ++ q))
+
+    QUnknown(q) =>
+      resume(QRError("unknown query: " |> str_concat(q)))
   }
 }
 
-// ─── Query internals ────────────────────────────────────────
+// ═══ Deep chase — resolve every TVar transitively ══════════════════
+// Used by every query that returns a Ty. Query should show the
+// resolved shape, never raw handles.
 
 fn chase_type_deep(ty) = match ty {
   TVar(h) => {
-    let node = perform graph_chase(h)
-    let GNode(kind, _) = node
+    let GNode(kind, _) = perform graph_chase(h)
     match kind {
       NBound(inner) => chase_type_deep(inner),
-      _ => ty
+      _             => ty
     }
   },
-  TList(elem) => TList(chase_type_deep(elem)),
-  TTuple(elems) => TTuple(chase_list_deep(elems)),
+  TList(elem)            => TList(chase_type_deep(elem)),
+  TTuple(elems)          => TTuple(chase_list_deep(elems)),
   TFun(params, ret, eff) =>
     TFun(chase_params_deep(params), chase_type_deep(ret), eff),
-  TName(name, args) => TName(name, chase_list_deep(args)),
-  TRefined(base, pred) => TRefined(chase_type_deep(base), pred),
-  _ => ty
+  TName(name, args)      => TName(name, chase_list_deep(args)),
+  TRecord(fields)        => TRecord(chase_fields_deep(fields)),
+  TRecordOpen(fields, v) => TRecordOpen(chase_fields_deep(fields), v),
+  TRefined(base, pred)   => TRefined(chase_type_deep(base), pred),
+  TCont(ret, disc)       => TCont(chase_type_deep(ret), disc),
+  _                      => ty
 }
 
 fn chase_list_deep(tys) =
   if len(tys) == 0 { [] }
-  else { [chase_type_deep(list_head(tys))] ++ chase_list_deep(list_tail(tys)) }
+  else {
+    [chase_type_deep(list_head(tys))]
+      ++ chase_list_deep(list_tail(tys))
+  }
 
 fn chase_params_deep(params) =
   if len(params) == 0 { [] }
   else {
     let TParam(name, ty, own) = list_head(params)
-    [TParam(name, chase_type_deep(ty), own)] ++ chase_params_deep(list_tail(params))
+    [TParam(name, chase_type_deep(ty), own)]
+      ++ chase_params_deep(list_tail(params))
   }
+
+fn chase_fields_deep(fields) =
+  if len(fields) == 0 { [] }
+  else {
+    let (name, ty) = list_head(fields)
+    [(name, chase_type_deep(ty))]
+      ++ chase_fields_deep(list_tail(fields))
+  }
+
+// ═══ Unresolved detection ══════════════════════════════════════════
 
 fn find_unresolved(entries) =
   if len(entries) == 0 { [] }
   else {
-    let (name, scheme, reason) = list_head(entries)
+    let (name, scheme, _reason) = list_head(entries)
     let Forall(_, ty) = scheme
     let rest = find_unresolved(list_tail(entries))
     if has_free_tvar(ty) { [(name, ty, [])] ++ rest }
@@ -147,25 +189,31 @@ fn find_unresolved(entries) =
 
 fn has_free_tvar(ty) = match ty {
   TVar(h) => {
-    let node = perform graph_chase(h)
-    let GNode(kind, _) = node
+    let GNode(kind, _) = perform graph_chase(h)
     match kind {
-      NFree(_) => true,
+      NFree(_)      => true,
       NBound(inner) => has_free_tvar(inner),
-      _ => false
+      _             => false
     }
   },
-  TList(elem) => has_free_tvar(elem),
-  TTuple(elems) => has_free_tvar_list(elems),
-  TFun(params, ret, _) =>
+  TList(elem)            => has_free_tvar(elem),
+  TTuple(elems)          => has_free_tvar_list(elems),
+  TFun(params, ret, _)   =>
     has_free_tvar(ret) || has_free_tvar_params(params),
-  TName(_, args) => has_free_tvar_list(args),
-  _ => false
+  TName(_, args)         => has_free_tvar_list(args),
+  TRecord(fields)        => has_free_tvar_fields(fields),
+  TRecordOpen(fields, _) => has_free_tvar_fields(fields),
+  TRefined(base, _)      => has_free_tvar(base),
+  TCont(ret, _)          => has_free_tvar(ret),
+  _                      => false
 }
 
 fn has_free_tvar_list(tys) =
   if len(tys) == 0 { false }
-  else { has_free_tvar(list_head(tys)) || has_free_tvar_list(list_tail(tys)) }
+  else {
+    has_free_tvar(list_head(tys))
+      || has_free_tvar_list(list_tail(tys))
+  }
 
 fn has_free_tvar_params(params) =
   if len(params) == 0 { false }
@@ -174,16 +222,26 @@ fn has_free_tvar_params(params) =
     has_free_tvar(ty) || has_free_tvar_params(list_tail(params))
   }
 
+fn has_free_tvar_fields(fields) =
+  if len(fields) == 0 { false }
+  else {
+    let (_, ty) = list_head(fields)
+    has_free_tvar(ty) || has_free_tvar_fields(list_tail(fields))
+  }
+
+// ═══ Chain walker — QSubstChain ════════════════════════════════════
+// Shows every hop from a starting handle to its terminal. Useful for
+// debugging cross-module TVar resolution.
+
 fn walk_chain(handle, depth) =
-  if depth > 50 { [] }
-  else if handle < 0 { [] }
+  if depth > 50 || handle < 0 { [] }
   else {
     let node = perform graph_chase(handle)
-    let GNode(kind, reason) = node
+    let GNode(kind, _) = node
     match kind {
       NBound(ty) => match ty {
         TVar(next) => [(handle, node)] ++ walk_chain(next, depth + 1),
-        _ => [(handle, node)]
+        _          => [(handle, node)]
       },
       _ => [(handle, node)]
     }

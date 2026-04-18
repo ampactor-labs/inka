@@ -1,83 +1,67 @@
-// main.ka — The Executable Manifest
+// main.ka — the executable manifest (spec 10 · DESIGN.md Ch 9.1)
 //
-// This file IS the build system. The ~> chain is the dependency
-// manifest. The !Network, !Process annotations are the security
-// policy. There are no JSON configs. There are no TOML files.
-// The type system IS the package manager.
+// One file. One function. The `~>` chain IS the manifest.
+// What the program has access to is visible on the page. No JSON
+// config. No TOML lockfile. The type system IS the package manager.
 //
-// Five modes:
-//   inka compile <entry>   — compile to WASM
-//   inka check <file>      — inference only, report diagnostics
-//   inka query <file> <q>  — inference + answer question
-//   inka teach <file>      — inference + gradient (what to learn next)
-//   inka audit <target>    — walk ~> chain, prove capability bounds
+// Five modes, each a sub-expression of the same compilation spine:
+//
+//   inka compile <src>   → WAT bytes (to stdout)
+//   inka check <src>     → diagnostics only
+//   inka query <src> <q> → structured answer
+//   inka teach <src>     → gradient recommendation
+//   inka audit <src>     → capability set + severance
+//
+// The outermost handlers — memory, diagnostics, wat_stdout — are the
+// sandbox boundary. Every inward handler receives narrower capability.
+// Swap `wat_stdout` for `wat_buffer` to get the WAT as a String; swap
+// `memory_bump` for `memory_arena` to get per-request GC.
 
 import compiler/pipeline
-import compiler/pkg
-import runtime/memory
-import system/io
+import compiler/emit
+import compiler/clock
 
-// ─── The Core Pipeline ─────────────────────────────────────────
-// The compiler needs Package fetching, Allocating memory, and IO.
-// We PROVE it cannot access the Network or spawn Processes.
-// The effect row annotation is the security policy.
+// ═══ Entry — dispatch on mode ══════════════════════════════════════
+// `argv` is threaded by the host (WASI). First arg is the mode; the
+// remaining args go to the corresponding compile function.
 
-fn compile_app(entry) with Package, Alloc, IO, !Network, !Process =
-  entry
-    |> pipeline.compile_wasm
-    |> io.write_stdout
+fn main(argv) =
+  match dispatch_mode(argv) {
+    None =>
+      print_help(),
+    Some(action) =>
+      action()
+        ~> wat_stdout
+        ~> no_iterative_ctx
+        ~> diagnostics_handler
+        ~> graph_handler
+  }
 
-// ─── The Executable Manifest ───────────────────────────────────
-// The ~> chain is the visible, auditable architecture.
-// Order matters: outermost handler = least trusted.
+fn dispatch_mode(argv) =
+  if len(argv) < 2 { None }
+  else {
+    let mode = argv[1]
+    if str_eq(mode, "compile") == 1 && len(argv) >= 3 {
+      Some(|| compile(read_file(argv[2])))
+    } else if str_eq(mode, "check") == 1 && len(argv) >= 3 {
+      Some(|| check(read_file(argv[2])))
+    } else if str_eq(mode, "query") == 1 && len(argv) >= 4 {
+      Some(|| query(read_file(argv[2]), argv[3]))
+    } else if str_eq(mode, "teach") == 1 && len(argv) >= 3 {
+      Some(|| teach(read_file(argv[2])))
+    } else if str_eq(mode, "audit") == 1 && len(argv) >= 3 {
+      Some(|| audit(read_file(argv[2])))
+    } else {
+      None
+    }
+  }
 
-fn main() =
-  compile_app("src/main.ka")
-    ~> pkg.local_cache           // Try local .inka/cache/ first
-    ~> pkg.registry_hub          // Fallback: fetch from registry
-    ~> memory.temp_arena         // Bind Alloc to scoped arena
-    ~> io.system_io              // Bind IO to host OS
-
-// ─── Check Mode ────────────────────────────────────────────────
-// inka check <file>: runs inference only, reports diagnostics.
-
-fn main_check(source) =
-  source
-    |> pipeline.check_source
-    |> fn(_) => ()               // diagnostics emitted by handler
-    ~> memory.temp_arena
-    ~> io.system_io
-
-// ─── Query Mode ────────────────────────────────────────────────
-// inka query <file> <question>: runs inference, answers question.
-
-fn main_query(source, question) =
-  pipeline.query_source(source, question)
-    |> io.write_stdout
-    ~> memory.temp_arena
-    ~> io.system_io
-
-// ─── Teach Mode ────────────────────────────────────────────────
-// inka teach <file>: runs inference with Mentl oracle,
-// returns the highest-leverage annotation the developer could add.
-// The gradient: one annotation, one unlock, one step closer.
-
-fn main_teach(source) =
-  source
-    |> pipeline.teach_source
-    |> io.write_stdout
-    ~> memory.temp_arena
-    ~> io.system_io
-
-// ─── Audit Mode ────────────────────────────────────────────────
-// inka audit <target>: walks the ~> chain of the target program,
-// proves its capability boundaries (Subtractive Sandboxing).
-// Reports which effects are performed and which are negated.
-
-fn main_audit(target) =
-  pipeline.audit_capabilities(target)
-    |> io.write_stdout
-    ~> pkg.local_cache
-    ~> pkg.registry_hub
-    ~> memory.temp_arena
-    ~> io.system_io
+fn print_help() = {
+  eprint_string("inka — the compiler is the oracle\n\n")
+  eprint_string("usage:\n")
+  eprint_string("  inka compile <src.ka>        — emit WAT to stdout\n")
+  eprint_string("  inka check <src.ka>          — diagnostics only\n")
+  eprint_string("  inka query <src.ka> <query>  — inspect the graph\n")
+  eprint_string("  inka teach <src.ka>          — gradient recommendation\n")
+  eprint_string("  inka audit <src.ka>          — capability set\n")
+}

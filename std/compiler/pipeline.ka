@@ -170,7 +170,7 @@ fn render_audit(entries) =
 // ─── Package effect ─────────────────────────────────────────
 // Module resolution as effect. Handlers provide the fetch strategy.
 // local_cache checks .inka/cache/. registry_hub fetches from registry.
-// The ~> chain in main.jxj composes them: try local first, then remote.
+// The ~> chain in main.ka composes them: try local first, then remote.
 
 effect Package {
   fetch_module(String) -> String            @resume=OneShot
@@ -372,9 +372,9 @@ handler lookup_ty_handler {
 
 // ─── Query, display, and rendering ──────────────────────────
 // All display functions use canonical implementations:
-//   show_type / show_span / show_reason → types.jxj
-//   show_effrow → effects.jxj
-//   query_default → query.jxj
+//   show_type / show_span / show_reason → types.ka
+//   show_effrow → effects.ka
+//   query_default → query.ka
 //
 // Pipeline composes and installs. It does not redefine.
 

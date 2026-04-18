@@ -11,8 +11,10 @@
 - **Bootstrap translator: ⏳ not started.** Follows VFINAL completion.
 - **Error catalog: ✅ shipped.** 12 files in `docs/errors/`.
 - **Language rename:** Lux → **Inka** (mascot: **Mentl**, an octopus).
-- **File extension:** `.jxj` — palindromic: handlers (`j`), convergence
-  (`x`), handlers (`j`). Zero collisions. Registered nowhere.
+- **File extension:** `.ka` — the last two letters of Inka. Short,
+  ergonomic, phonetically tied to the language name. Minimal collision:
+  only the obsolete Karma physics engine (Unreal 2 era) ever claimed
+  it; no active programming language, no active MIME type.
 
 ---
 
@@ -135,7 +137,7 @@ itself. Then it is deleted. Forever.
 
 No plugin API. No framework. No hook system. New capabilities (LSP,
 Mentl, format, lint, doc) are handlers installed via `~>`. Pipeline
-callers compose their own chains. `pipeline.jxj` is not modified to
+callers compose their own chains. `pipeline.ka` is not modified to
 add features — features are handlers.
 
 ### 4. No patches. Restructure or stop. Forever.
@@ -190,85 +192,85 @@ No "can the bootstrapper handle this?" — write what's right.
 ```
 std/
   compiler/
-    types.jxj        — Ty, Reason, Scheme, Node, Expr, Stmt, Pat,
+    types.ka        — Ty, Reason, Scheme, Node, Expr, Stmt, Pat,
                        PipeKind, Predicate, Span, Option.
                        Core effects: Diagnostic, LookupTy, FreshHandle,
                        Verify, Query, Consume, EnvRead, EnvWrite, Synth.
                        Specs: 02, 03, 04, 06.
 
-    graph.jxj        — SubstGraph flat array. NodeKind, GNode.
+    graph.ka        — SubstGraph flat array. NodeKind, GNode.
                        SubstGraphRead/Write effects. chase_node,
                        occurs_in. Spec: 00.
 
-    effects.jxj      — EffRow Boolean algebra. EfNeg, EfSub, EfInter.
+    effects.ka      — EffRow Boolean algebra. EfNeg, EfSub, EfInter.
                        normalize_row, union_row, diff_row, row_subsumes.
                        Spec: 01.
 
-    infer.jxj        — HM + let-generalization. One walk.
+    infer.ka        — HM + let-generalization. One walk.
                        infer_expr, infer_stmt, generalize, instantiate.
                        Unify against graph. Spec: 04.
 
-    lower.jxj        — Live-observer lowering via LookupTy.
+    lower.ka        — Live-observer lowering via LookupTy.
                        No cached types. No subst threading.
                        Handler elimination (3 tiers). Spec: 05.
 
-    pipeline.jxj     — The compiler's spine. Handler composition via ~>.
+    pipeline.ka     — The compiler's spine. Handler composition via ~>.
                        compile, check, query entry points.
                        All handlers: graph, env, diagnostics, lookup_ty,
                        query, verify, mentl. Display functions.
                        Specs: 04, 05, 06, 10.
 
-    mentl.jxj        — Teaching substrate. Annotation, Capability,
+    mentl.ka        — Teaching substrate. Annotation, Capability,
                        Explanation, Patch ADTs. Teach effect (5 ops).
                        mentl_default handler (Phase 1 stubs).
                        Spec: 09.
 
-    own.jxj          — Ownership as Consume effect. affine_ledger.
+    own.ka          — Ownership as Consume effect. affine_ledger.
                        Escape check. Spec: 07.
 
-    verify.jxj       — Verify ledger (accumulates obligations).
+    verify.ka       — Verify ledger (accumulates obligations).
                        Handler swap to verify_smt in Arc F.1.
                        Spec: 02.
 
-    clock.jxj        — Clock, Tick, Sample, Deadline effects.
+    clock.ka        — Clock, Tick, Sample, Deadline effects.
                        Four handler tiers each. Spec: 11.
 
-    lexer.jxj        — Tokenizer. Full spans. All 5 pipe operators.
+    lexer.ka        — Tokenizer. Full spans. All 5 pipe operators.
                        @resume= annotation support.
 
-    parser.jxj       — Recursive descent. Produces N(body, span, handle).
+    parser.ka       — Recursive descent. Produces N(body, span, handle).
                        All PipeKind variants. Layout-sensitive ~>.
 
-    emit.jxj         — WASM emission from LowIR. ty_to_wasm via
+    emit.ka         — WASM emission from LowIR. ty_to_wasm via
                        live LookupTy. Spec: 05.
 
   runtime/
-    memory.jxj       — Bump allocator as handler. String ops.
+    memory.ka       — Bump allocator as handler. String ops.
                        List ops. No val_concat. No val_eq.
 
-  main.jxj           — Entry point: read stdin, compile, emit WAT.
+  main.ka           — Entry point: read stdin, compile, emit WAT.
 ```
 
 #### What's Done
 
 | File | Status | Notes |
 |---|---|---|
-| types.jxj | ✅ cascade step 1 | Zero duplicate ADTs, display fns via \|>, canonical vocabulary |
-| graph.jxj | ✅ cascade step 2 | graph_handler with live state, graph_reason_edge, occurs check |
-| effects.jxj | ✅ cascade step 3 | Full Boolean algebra, unify_row, absorb_row, row_is_ground |
-| infer.jxj | ✅ cascade step 4 | unify_row wired, real let-gen, ctor/op registration, show_type errors |
-| pipeline.jxj | ✅ cascade step 5+7 | Real handlers, v1 purge, canonical display via imports |
-| lower.jxj | ✅ cascade step 6 | Lambda/Handle/Perform/Pipe lowering, LSuspend, LowExpr spec 05 |
-| own.jxj | ✅ cascade | Real affine_ledger with handler-state, escape check, ownership inference |
-| verify.jxj | ✅ cascade | Real verify_ledger with handler-state, debt classification |
-| mentl.jxj | ✅ cascade | Real mentl_default with gradient, why, unlock, catalog |
-| query.jxj | ✅ cascade | Real query_default with chase_type_deep, find_unresolved, walk_chain |
-| clock.jxj | ✅ cascade | All four tiers (real/test/record/replay) with handler-state |
-| lexer.jxj | ✅ patched for pipes | — |
-| parser.jxj | ✅ patched for pipes | — |
-| emit.jxj | ✅ cascade step 8 | ty_to_wasm via LookupTy, WAT structure emission, LowIR dispatch |
+| types.ka | ✅ cascade step 1 | Zero duplicate ADTs, display fns via \|>, canonical vocabulary |
+| graph.ka | ✅ cascade step 2 | graph_handler with live state, graph_reason_edge, occurs check |
+| effects.ka | ✅ cascade step 3 | Full Boolean algebra, unify_row, absorb_row, row_is_ground |
+| infer.ka | ✅ cascade step 4 | unify_row wired, real let-gen, ctor/op registration, show_type errors |
+| pipeline.ka | ✅ cascade step 5+7 | Real handlers, v1 purge, canonical display via imports |
+| lower.ka | ✅ cascade step 6 | Lambda/Handle/Perform/Pipe lowering, LSuspend, LowExpr spec 05 |
+| own.ka | ✅ cascade | Real affine_ledger with handler-state, escape check, ownership inference |
+| verify.ka | ✅ cascade | Real verify_ledger with handler-state, debt classification |
+| mentl.ka | ✅ cascade | Real mentl_default with gradient, why, unlock, catalog |
+| query.ka | ✅ cascade | Real query_default with chase_type_deep, find_unresolved, walk_chain |
+| clock.ka | ✅ cascade | All four tiers (real/test/record/replay) with handler-state |
+| lexer.ka | ✅ patched for pipes | — |
+| parser.ka | ✅ patched for pipes | — |
+| emit.ka | ✅ cascade step 8 | ty_to_wasm via LookupTy, WAT structure emission, LowIR dispatch |
 | runtime/ | ✅ production | 625-line battle-tested runtime (bootstraps self-hosted compiler) |
-| main.jxj | ✅ cascade step 10 | compile/check/query modes, ~30 lines each |
+| main.ka | ✅ cascade step 10 | compile/check/query modes, ~30 lines each |
 
 #### Order of Operations — The Cascade
 
@@ -279,31 +281,31 @@ skippable. No step is reorderable. The cascade IS the implementation.
 
 ---
 
-**Step 1: The Foundation — `types.jxj`** (Spec 02, 03, 06)
+**Step 1: The Foundation — `types.ka`** (Spec 02, 03, 06)
 
 *Depends on:* nothing. This is bedrock.
 *Unlocks:* everything — every other file imports types.
 
 What to do:
 - Delete stub ADTs that are owned by other files: Annotation,
-  Capability, Explanation, Teach (owned by mentl.jxj per spec 09),
-  Clock, Tick, Sample, Deadline (owned by clock.jxj per spec 11).
+  Capability, Explanation, Teach (owned by mentl.ka per spec 09),
+  Clock, Tick, Sample, Deadline (owned by clock.ka per spec 11).
 - Verify Ty ADT has: TRefined, TCont, TParam with Ownership.
 - Verify every effect signature matches spec 06 exactly.
 - Verify Node = N(body, span, handle). Span = Span(sl, sc, el, ec).
 - Verify PipeKind has all five: PForward, PDiverge, PCompose, PTee,
   PFeedback.
-- Delete query.jxj (dead duplicate).
+- Delete query.ka (dead duplicate).
 - **Format:** Express any multi-step ADT construction as `|>` chains.
   Display functions that transform then format use `|>`. This file
   is THE vocabulary — every name chosen here echoes everywhere.
 
-*Exit:* Zero duplicate ADTs across the entire codebase. `types.jxj`
+*Exit:* Zero duplicate ADTs across the entire codebase. `types.ka`
 is the single canonical source of every type, effect, and ADT.
 
 ---
 
-**Step 2: The Substrate — `graph.jxj`** (Spec 00)
+**Step 2: The Substrate — `graph.ka`** (Spec 00)
 
 *Depends on:* Step 1 (types: NodeKind, GNode, Reason, Ty).
 *Unlocks:* inference, lowering, query — everything reads the graph.
@@ -329,7 +331,7 @@ of fresh → bind → chase returns the bound type.
 
 ---
 
-**Step 3: The Algebra — `effects.jxj`** (Spec 01)
+**Step 3: The Algebra — `effects.ka`** (Spec 01)
 
 *Depends on:* Step 1 (types: EffRow ADT).
 *Unlocks:* inference (effect row unification), ownership (!Consume),
@@ -351,7 +353,7 @@ works via normalize + subsumption.
 
 ---
 
-**Step 4: The Engine — `infer.jxj`** (Spec 04)
+**Step 4: The Engine — `infer.ka`** (Spec 04)
 
 *Depends on:* Step 1 (types), Step 2 (graph — writes bindings into
   the live graph), Step 3 (effects — unifies effect rows).
@@ -371,14 +373,14 @@ What to do:
   Effect performs (`perform graph_bind`, `perform env_extend`) replace
   all argument-threading. This file demonstrates WHY effects eliminate
   state-passing — it should be dramatically cleaner than the v1
-  `check.jxj` + `infer.jxj` it replaces.
+  `check.ka` + `infer.ka` it replaces.
 
 *Exit:* `infer_program(ast)` populates graph handles for every node.
 `perform env_lookup(name)` returns typed schemes. No subst sidecar.
 
 ---
 
-**Step 5: The Env — `env_handler` in `pipeline.jxj`** (Spec 04)
+**Step 5: The Env — `env_handler` in `pipeline.ka`** (Spec 04)
 
 *Depends on:* Step 1 (types: Env, Scheme), Step 4 (inference uses
   EnvRead + EnvWrite effects).
@@ -403,7 +405,7 @@ Scoping works: enter → extend → exit → lookup returns None.
 
 ---
 
-**Step 6: The Observer — `lower.jxj`** (Spec 05)
+**Step 6: The Observer — `lower.ka`** (Spec 05)
 
 *Depends on:* Step 2 (graph — reads via LookupTy), Step 4 (inference
   populated the graph), Step 5 (env — reads via EnvRead).
@@ -432,7 +434,7 @@ that chases to NBound or NErrorHole. No NFree survives.
 
 ---
 
-**Step 7: The Spine — `pipeline.jxj`** (Spec 04, 05, 06, 10)
+**Step 7: The Spine — `pipeline.ka`** (Spec 04, 05, 06, 10)
 
 *Depends on:* Steps 1–6 (all components exist). This is assembly.
 *Unlocks:* the compiler runs end-to-end. Compilation is one
@@ -470,7 +472,7 @@ One expression each.
 
 ---
 
-**Step 8: The Emitter — `emit.jxj`** (Spec 05)
+**Step 8: The Emitter — `emit.ka`** (Spec 05)
 
 *Depends on:* Step 6 (lower — produces LowIR), Step 2 (graph —
   `ty_to_wasm` reads handles via LookupTy).
@@ -478,7 +480,7 @@ One expression each.
   runnable.
 
 What to do:
-- Port from existing `std/backend/wasm_emit.jxj`.
+- Port from existing `std/backend/wasm_emit.ka`.
 - `ty_to_wasm` reads `perform lookup_ty(h)` — live, not cached.
 - Emit WAT text format (not binary — keep debugging easy).
 - **Format:** WASM emission is inherently sequential — `|>` chains
@@ -490,7 +492,7 @@ What to do:
 
 ---
 
-**Step 9: The Runtime — `runtime/memory.jxj`** (Spec 06)
+**Step 9: The Runtime — `runtime/memory.ka`** (Spec 06)
 
 *Depends on:* nothing architecturally, but produces the runtime
   primitives that emitted WASM calls into.
@@ -511,7 +513,7 @@ Bump allocator serves all allocation needs.
 
 ---
 
-**Step 10: The Entry — `main.jxj`**
+**Step 10: The Entry — `main.ka`**
 
 *Depends on:* Steps 7–9 (pipeline, emit, runtime all exist).
 *Unlocks:* `inka.wasm` — the compiler is a runnable binary.
@@ -532,7 +534,7 @@ What to do:
         ~> memory_handler
   ```
 
-*Exit:* `wasmtime run inka.wasm < source.jxj > output.wat` works.
+*Exit:* `wasmtime run inka.wasm < source.ka > output.wat` works.
 
 ---
 
@@ -562,8 +564,8 @@ What to do:
   imports, every handler threads real state.
 - Run the exit gate tests:
   ```
-  inka_compile bootstrap/tests/counter.jxj → valid WAT
-  inka_compile bootstrap/tests/pattern.jxj → valid WAT
+  inka_compile bootstrap/tests/counter.ka → valid WAT
+  inka_compile bootstrap/tests/pattern.ka → valid WAT
   Both WATs run correctly under wasmtime.
   ```
 - Every file follows Anchor 6: pipe topology expressed, canonical
@@ -605,7 +607,7 @@ Build a disposable translator that compiles VFINAL once.
 #### Phase 2 Exit Gate
 
 ```
-translator compiles std/compiler/*.jxj → inka.wasm
+translator compiles std/compiler/*.ka → inka.wasm
 inka.wasm validates under wasm-validate
 inka.wasm runs: reads stdin, produces WAT output
 ```
@@ -618,11 +620,11 @@ Inka compiles itself. The fixed point closes.
 
 ```bash
 # Inka compiles itself → first output
-cat std/compiler/*.jxj | wasmtime run inka.wasm > inka2.wat
+cat std/compiler/*.ka | wasmtime run inka.wasm > inka2.wat
 wat2wasm inka2.wat -o inka2.wasm
 
 # Inka2 compiles itself → second output
-cat std/compiler/*.jxj | wasmtime run inka2.wasm > inka3.wat
+cat std/compiler/*.ka | wasmtime run inka2.wasm > inka3.wat
 
 # Fixed point check
 diff inka2.wat inka3.wat
@@ -649,7 +651,7 @@ extension to the graph. No arc requires rewriting the compiler core.
 
 | F-note | Arc | Key design |
 |---|---|---|
-| `incremental-compilation.md` | F.7 | `.jxji` interface files, content-hash, Salsa red-green |
+| `incremental-compilation.md` | F.7 | `.kai` interface files, content-hash, Salsa red-green |
 | `multi-shot-continuations.md` | F.3, F.4 | Replay/Fork/StateMachine, `!Alloc` prevents fork |
 | `packaging-design.md` | F.9 | `Package` effect, `inka audit`, effect sigs = semver |
 | `scoped-memory.md` | F.4 | `temp_arena`, diagnostic arenas, thread-local Alloc |
@@ -793,8 +795,8 @@ native speed. DSP handlers meet real-time deadlines.
 The teaching substrate crystallized. The AI-obsolescence thesis
 made concrete.
 
-**What it does:** Merge gradient.jxj, suggest.jxj, why.jxj into
-one coherent `mentl.jxj` with five-op Teach surface. Every error
+**What it does:** Merge gradient.ka, suggest.ka, why.ka into
+one coherent `mentl.ka` with five-op Teach surface. Every error
 has a canonical explanation. Every hover shows the Why chain.
 Every annotation suggestion shows what capability it unlocks.
 
@@ -809,14 +811,14 @@ to expert is continuous — no cliff, no separate "advanced mode."
 
 ### Arc F.7 — Incremental Compilation
 
-Per-module caching via `.jxji` interface files + Salsa 3 overlay.
+Per-module caching via `.kai` interface files + Salsa 3 overlay.
 
 **What it does:**
-- Each `.jxj` file is checked independently against the envs of its
+- Each `.ka` file is checked independently against the envs of its
   dependencies. Result: a fully-resolved type environment.
-- After checking, serialize env to `<module>.jxji` (Inka Interface):
+- After checking, serialize env to `<module>.kai` (Inka Interface):
   `[(name, Type, Reason)]` triples, content-hash keyed.
-- On recompile: if `.jxji` exists AND hash matches source, load env
+- On recompile: if `.kai` exists AND hash matches source, load env
   from cache (skip checking). Otherwise re-check and write cache.
 - Topological module ordering: imports form a DAG. Modules checked
   in dependency order. No inference state leaks across modules.
@@ -889,7 +891,7 @@ the version solver.
   negations. Zero infrastructure. Runs locally. Mathematically proven
   capability analysis before compilation.
   ```
-  $ inka audit main.jxj
+  $ inka audit main.ka
   Capabilities required:
     - Network (via router_axum)
     - Filesystem (via db_postgres)
@@ -955,7 +957,7 @@ one continuous graph.
 
 ### Arc G — Rename (Lux → Inka)
 
-One script, one commit. `.lux` → `.jxj`. `lux` → `inka` everywhere.
+One script, one commit. `.lux` → `.ka`. `lux` → `inka` everywhere.
 Repo rename via `gh repo rename`. Update all existing file extensions.
 
 ---
@@ -1022,27 +1024,27 @@ paper-worthy artifact is that Inka composes them into one mechanism.
 
 | Technique | Source | Lands in |
 |---|---|---|
-| **Modal Effect Types** — `⟨E₁\|E₂⟩(E) = E₂ + (E − E₁)` as a principled semantics for Inka's `E - F`. Rows and Capabilities are both encodable in modal effects. | [Tang & Lindley POPL 2025](https://arxiv.org/abs/2407.11816) · [POPL 2026](https://arxiv.org/abs/2507.10301) | effects.jxj |
-| **Affect affine-tracked resume** — type-level distinction of one-shot vs multi-shot; Iris/Coq-mechanized. Directly solves Inka's D.1 (multi-shot × arena). | [Affect POPL 2025](https://iris-project.org/pdfs/2025-popl-affect.pdf) | effects.jxj |
-| **Koka evidence-passing compilation** — when the graph proves a call site's handler stack is monomorphic, emit `call $h_foo` directly. Kills val_concat drift at compile time. | [Generalized Evidence Passing JFP 2022](https://dl.acm.org/doi/10.1145/3473576) | lower.jxj |
+| **Modal Effect Types** — `⟨E₁\|E₂⟩(E) = E₂ + (E − E₁)` as a principled semantics for Inka's `E - F`. Rows and Capabilities are both encodable in modal effects. | [Tang & Lindley POPL 2025](https://arxiv.org/abs/2407.11816) · [POPL 2026](https://arxiv.org/abs/2507.10301) | effects.ka |
+| **Affect affine-tracked resume** — type-level distinction of one-shot vs multi-shot; Iris/Coq-mechanized. Directly solves Inka's D.1 (multi-shot × arena). | [Affect POPL 2025](https://iris-project.org/pdfs/2025-popl-affect.pdf) | effects.ka |
+| **Koka evidence-passing compilation** — when the graph proves a call site's handler stack is monomorphic, emit `call $h_foo` directly. Kills val_concat drift at compile time. | [Generalized Evidence Passing JFP 2022](https://dl.acm.org/doi/10.1145/3473576) | lower.ka |
 | **Perceus refcount + FBIP reuse** — precise RC + in-place update when ownership graph proves unique. Layer-2 memory fallback. | [Perceus PLDI'21](https://www.microsoft.com/en-us/research/wp-content/uploads/2021/06/perceus-pldi21.pdf) | Arc F.4 |
 | **Lexa zero-overhead handler compilation** — direct stack-switching, linear vs quadratic dispatch. Makes effects free. | [Lexa OOPSLA 2024](https://cs.uwaterloo.ca/~yizhou/papers/lexa-oopsla2024.pdf) | Arc F.5 |
-| **Salsa 3.0 / `ty` query-driven incremental** — flat-array substitution with epoch + persistent overlay. | [Astral ty](https://astral.sh/blog/ty) · [Salsa-rs](https://github.com/salsa-rs/salsa) | graph.jxj |
-| **Polonius 2026 alpha — lazy constraint rewrite** — location-sensitive reachability over subset+CFG. | [Polonius 2026](https://rust-lang.github.io/rust-project-goals/2026/polonius.html) | graph.jxj, own.jxj |
-| **Flix Boolean unification** — 7% compile overhead for full Boolean algebra over effect rows. | [Fast Boolean Unification OOPSLA 2024](https://dl.acm.org/doi/10.1145/3622816) | effects.jxj |
-| **Abstracting Effect Systems** — parameterize over the effect algebra so +/-/&/! are instances of a Boolean-algebra interface. | [Abstracting Effect Systems ICFP 2024](https://icfp24.sigplan.org/details/icfp-2024-papers/18) | effects.jxj |
-| **Hazel marked-hole calculus** — every ill-typed expression becomes a marked hole; downstream services keep working. | [Total Type Error Localization POPL 2024](https://hazel.org/papers/marking-popl24.pdf) | types.jxj |
+| **Salsa 3.0 / `ty` query-driven incremental** — flat-array substitution with epoch + persistent overlay. | [Astral ty](https://astral.sh/blog/ty) · [Salsa-rs](https://github.com/salsa-rs/salsa) | graph.ka |
+| **Polonius 2026 alpha — lazy constraint rewrite** — location-sensitive reachability over subset+CFG. | [Polonius 2026](https://rust-lang.github.io/rust-project-goals/2026/polonius.html) | graph.ka, own.ka |
+| **Flix Boolean unification** — 7% compile overhead for full Boolean algebra over effect rows. | [Fast Boolean Unification OOPSLA 2024](https://dl.acm.org/doi/10.1145/3622816) | effects.ka |
+| **Abstracting Effect Systems** — parameterize over the effect algebra so +/-/&/! are instances of a Boolean-algebra interface. | [Abstracting Effect Systems ICFP 2024](https://icfp24.sigplan.org/details/icfp-2024-papers/18) | effects.ka |
+| **Hazel marked-hole calculus** — every ill-typed expression becomes a marked hole; downstream services keep working. | [Total Type Error Localization POPL 2024](https://hazel.org/papers/marking-popl24.pdf) | types.ka |
 | **ChatLSP typed-context exposure** — send type/binding/typing-context to LLM via LSP. Inka's `!Alloc` effect mask is free prompt budget. | [Statically Contextualizing LLMs OOPSLA 2024](https://arxiv.org/abs/2409.00921) | Arc F.2 |
 | **Generic Refinement Types** — per-call-site refinement instantiation via unification. | [Generic Refinement Types POPL 2025](https://dl.acm.org/doi/10.1145/3704885) | Arc F.1 |
 | **Canonical tactic-level synthesis** — proof terms AND program bodies for higher-order goals via structural recursion. | [Canonical ITP 2025](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ITP.2025.14) | Arc F (synthesis) |
 | **Vale immutable region borrowing** — `!Mutate` on a region delivers "N readers, no writers" proof via existing effect algebra. | [Vale regions](https://verdagon.dev/blog/zero-cost-memory-safety-regions-overview) | Arc F (concurrency) |
 | **bump-scope nested arenas** — checkpoints, default-Drop, directly mirrors Inka's scoped-arena-as-handler. | [bump-scope](https://docs.rs/bump-scope/) | Arc F.4 |
-| **Austral linear capabilities at module boundaries** — capabilities ARE the transitivity proof. | [Austral](https://borretti.me/article/introducing-austral) | effects.jxj |
+| **Austral linear capabilities at module boundaries** — capabilities ARE the transitivity proof. | [Austral](https://borretti.me/article/introducing-austral) | effects.ka |
 | **Liquid Haskell 2025 SMT-by-theory** — Z3 for nonlinear arithmetic, cvc5 for finite-set/bag/map, Bitwuzla for bitvectors. | [Tweag 2025](https://www.tweag.io/blog/2025-03-20-lh-release/) | Arc F.1 |
-| **Elm/Roc/Dafny error-catalog pattern** — stable error codes + canonical explanation + applicability-tagged fixes. | [Elm errors](https://elm-lang.org/news/compiler-errors-for-humans) | pipeline.jxj |
+| **Elm/Roc/Dafny error-catalog pattern** — stable error codes + canonical explanation + applicability-tagged fixes. | [Elm errors](https://elm-lang.org/news/compiler-errors-for-humans) | pipeline.ka |
 | **Grove CmRDT structural edits** — edits commute; cross-module re-inference becomes a fold over commuting ops. | [Grove POPL 2025](https://hazel.org/papers/grove-popl25.pdf) | Arc F (incremental) |
 | **Multiple Resumptions Directly (ICFP 2025)** — competitive LLVM numbers for multi-shot + local mutable state. | [ICFP 2025](https://dl.acm.org/doi/10.1145/3747529) | Arc F (multi-shot) |
-| **Applicability-tagged diagnostics** — every "did you mean" emits a structured patch with confidence + effect-row delta. | [rustc-dev-guide](https://rustc-dev-guide.rust-lang.org/diagnostics.html) | pipeline.jxj |
+| **Applicability-tagged diagnostics** — every "did you mean" emits a structured patch with confidence + effect-row delta. | [rustc-dev-guide](https://rustc-dev-guide.rust-lang.org/diagnostics.html) | pipeline.ka |
 
 ### Techniques to REJECT (with one-line reason each)
 
@@ -1162,7 +1164,7 @@ of retrofitting one is measured in weeks.
 
 1. **Ownership annotations in the Type ADT.** `TParam` carries
    `Ownership` (`Inferred | Own | Ref`). Without it, every function
-   signature is ambiguous about move vs borrow, and `own.jxj` has no
+   signature is ambiguous about move vs borrow, and `own.ka` has no
    type-level hook to track linearity. Spec: 02-ty.md.
 
 2. **Source spans on every AST node.** Full `Span(start_line,
@@ -1212,7 +1214,7 @@ it's an F arc.
   extensions (Arc F.2).
 
 - **Scoped arenas.** IN: `Alloc` effect signature. `!Alloc` negation
-  propagates. `own.jxj` treats `Consume` and `Alloc` as peers. OUT:
+  propagates. `own.ka` treats `Consume` and `Alloc` as peers. OUT:
   actual `temp_arena` handler (Arc F.4).
 
 - **REPL.** IN: `inka query` covers read-check-explain. OUT:

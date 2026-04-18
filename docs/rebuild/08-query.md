@@ -5,7 +5,7 @@ lex + parse + infer on a single file and answers forensic questions
 against the resulting SubstGraph. Sub-second per query. Substrate for
 Arc F.2 LSP (every LSP method = a Query variant).
 
-**Supersedes.** `std/repl.jxj` (blocked on `load_chunk`, rebuilt
+**Supersedes.** `std/repl.ka` (blocked on `load_chunk`, rebuilt
 query-first in Phase F.3 when execution returns). Extends
 `docs/specs/repl-query-mode.md` into the Query effect and Ty-aware
 executor.
@@ -166,7 +166,7 @@ graph already knows why the handle was bound; query just reads it.
 ## CLI integration
 
 ```lux
-// std/main.jxj
+// std/main.ka
 match argv[0] {
   "check"   => lux_check(argv[1]),
   "wasm"    => lux_wasm(argv[1]),
@@ -220,11 +220,11 @@ as JSON-RPC responses.
 
 ## Performance target
 
-`inka query std/compiler/own.jxj "type of check_return_pos"` returns in
+`inka query std/compiler/own.ka "type of check_return_pos"` returns in
 < 1s on a mid-tier laptop.
 
 Bottleneck: lex + parse + infer of one file (not the whole program).
-For the 200-line own.jxj, a single-file inference pass is well under
+For the 200-line own.ka, a single-file inference pass is well under
 1s; stage2's ~75s cost is the full pipeline including lowering +
 wasm emit, none of which query needs.
 
@@ -246,7 +246,7 @@ via spec 00).
 
 ## Rejected alternatives
 
-- **Interactive REPL.** `std/repl.jxj` pattern depends on execution
+- **Interactive REPL.** `std/repl.ka` pattern depends on execution
   (`load_chunk`). Query is strictly observation; execution is F.3.
 - **Cross-file global query.** Module-local first; global later.
   Keeps the MVP shippable in Phase 1 per commitment #2.

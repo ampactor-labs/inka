@@ -1,4 +1,4 @@
-// effects.jxj — Boolean algebra over effect rows (spec 01)
+// effects.ka — Boolean algebra over effect rows (spec 01)
 //
 // Full Boolean algebra: + union, - subtraction, & intersection,
 // ! negation. Pure is identity. The four compilation gates (Pure,

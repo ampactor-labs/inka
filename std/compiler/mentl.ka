@@ -94,7 +94,7 @@ handler mentl_default with annotations = [] {
 //
 // This is what makes Mentl more than a linter. This is what
 // makes the compiler more than a compiler. The graph trail
-// (graph.jxj) enables speculative mutation. Mentl uses it
+// (graph.ka) enables speculative mutation. Mentl uses it
 // to explore the annotation space and prove which moves
 // are valid. The developer gets certainty, not suggestions.
 

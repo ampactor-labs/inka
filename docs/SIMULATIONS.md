@@ -9,13 +9,13 @@
 **The Scenario:** A developer is editing the Inka compiler's source code inside an IDE. They allocate an array inside a function that the architecture requires to be `Pure`. 
 
 **The Trace:**
-1. **Incremental Substrate**: The LSP does not recompile the project. `pipeline.jxj` loads the cached `.jxji` environments in $O(1)$ time. The Causality Web is instantly populated.
-2. **The Physics Failure**: `infer.jxj` unifies the keystrokes, mints an `Alloc` region, and immediately fails because the function signature is `GraphHandler` (no `Alloc`).
-3. **Trail-Based Backtracking**: `mentl.jxj` intercepts the failure. It calls `graph.push_checkpoint()`. It tries wrapping the allocation in a `temp_arena` handler. It pushes to the `Trail`. Unification succeeds. It calls `graph.rollback()` in $O(M)$ time.
+1. **Incremental Substrate**: The LSP does not recompile the project. `pipeline.ka` loads the cached `.kai` environments in $O(1)$ time. The Causality Web is instantly populated.
+2. **The Physics Failure**: `infer.ka` unifies the keystrokes, mints an `Alloc` region, and immediately fails because the function signature is `GraphHandler` (no `Alloc`).
+3. **Trail-Based Backtracking**: `mentl.ka` intercepts the failure. It calls `graph.push_checkpoint()`. It tries wrapping the allocation in a `temp_arena` handler. It pushes to the `Trail`. Unification succeeds. It calls `graph.rollback()` in $O(M)$ time.
 
 **The Cosmological Insights:**
 * **The Death of the Heuristic Linter**: Linters (like Clippy or ESLint) use regex heuristics to guess fixes. Inka's Oracle uses the physical compiler engine to mathematically *prove* a fix compiles before suggesting it. Every "Quick Fix" is guaranteed.
-* **Global Causality in a Local Scope**: Because the graph traces `Provenance` edges across module boundaries, the Oracle traces the local failure to the exact line in `pipeline.jxj` 5 files away that established the `Pure` constraint.
+* **Global Causality in a Local Scope**: Because the graph traces `Provenance` edges across module boundaries, the Oracle traces the local failure to the exact line in `pipeline.ka` 5 files away that established the `Pure` constraint.
 * **AI-Level Cognition via Brute Force**: By combining Effect Algebras with $O(M)$ state rollbacks, the compiler explores thousands of AST mutations per millisecond. It exhibits "agentic reasoning" grounded in absolute mathematical truth, completely obsoleting LLM guess-and-check coding.
 
 ---
@@ -26,11 +26,11 @@
 
 **The Trace:**
 1. **The Mathematical Topology**: The developer writes one function using the `Compute` and `Feedback` (`<~`) effects.
-2. **The Evidence Engine**: For Thread A, `infer.jxj` synthesizes an Evidence Dictionary of raw SIMD math pointers. Because it is wrapped in `!Alloc`, the Ownership ledger proves it is interrupt-safe.
-3. **The Handler Swap**: For Thread B, `infer.jxj` synthesizes a different Evidence Dictionary that intercepts math operations to push to a `temp_arena` tape.
+2. **The Evidence Engine**: For Thread A, `infer.ka` synthesizes an Evidence Dictionary of raw SIMD math pointers. Because it is wrapped in `!Alloc`, the Ownership ledger proves it is interrupt-safe.
+3. **The Handler Swap**: For Thread B, `infer.ka` synthesizes a different Evidence Dictionary that intercepts math operations to push to a `temp_arena` tape.
 
 **The Cosmological Insights:**
-* **Time is just an Effect**: In DSP, the feedback operator `<~` is a Z-transform (1-sample delay). In ML, feedback is an RNN's hidden state. `infer.jxj` proves an IIR filter and a Recurrent Neural Network are mathematically identical and compiles them into the same state machine.
+* **Time is just an Effect**: In DSP, the feedback operator `<~` is a Z-transform (1-sample delay). In ML, feedback is an RNN's hidden state. `infer.ka` proves an IIR filter and a Recurrent Neural Network are mathematically identical and compiles them into the same state machine.
 * **The End of "Frameworks"**: PyTorch and JUCE exist because Python and C++ lack Effect Algebras. In Inka, Autodiff is just a 15-line handler. The language *is* the framework.
 * **Training vs. Inference is a Handler Swap**: You do not translate a Python training model into a C++ inference engine. Training and Inference are the exact same AST node; the only difference is the Evidence Dictionary passed at runtime.
 
@@ -41,9 +41,9 @@
 **The Scenario:** A generic `parallel_map` function spawns threads and applies a polymorphic effect function. The user passes it a C library function (compiled to WASM) that requires `FFI`. 
 
 **The Trace:**
-1. **Row-Polymorphic Evidence**: `infer.jxj` binds the generic effect variable to `FFI`. Because the function is higher-order, it synthesizes an opaque Evidence Vector (`*const ()`) and rewrites the signature to pass this vector at runtime.
-2. **Lexical Region Calculus**: `parallel_map` declares `Alloc`. `infer.jxj` mints a hidden Region variable `ρ1`. The `alloc` handler is instantiated *per-thread*. `own.jxj` proves no pointers escape their specific thread Region.
-3. **Subtractive Sandboxing**: The C library declares `IO` and `Network`. But the Causality Web traces `main()` and proves the user only touches the `FFI` node. `pipeline.jxj` mathematically severs the unused capabilities from the binary.
+1. **Row-Polymorphic Evidence**: `infer.ka` binds the generic effect variable to `FFI`. Because the function is higher-order, it synthesizes an opaque Evidence Vector (`*const ()`) and rewrites the signature to pass this vector at runtime.
+2. **Lexical Region Calculus**: `parallel_map` declares `Alloc`. `infer.ka` mints a hidden Region variable `ρ1`. The `alloc` handler is instantiated *per-thread*. `own.ka` proves no pointers escape their specific thread Region.
+3. **Subtractive Sandboxing**: The C library declares `IO` and `Network`. But the Causality Web traces `main()` and proves the user only touches the `FFI` node. `pipeline.ka` mathematically severs the unused capabilities from the binary.
 
 **The Cosmological Insights:**
 * **Generics Without Bloat**: In Rust/C++, generics are monomorphized (copied N times). In Inka, `parallel_map` is compiled exactly once. The polymorphic effect physically materializes as a hidden vtable pointer, yielding monomorphized speed without code bloat.
@@ -58,8 +58,8 @@
 
 **The Trace:**
 1. **The Cloud Splitter**: The user wraps the logic in a handler that intercepts `charge_card` and emits an RPC invocation.
-2. **State-Machine Monomorphization**: `lower.jxj` realizes that an RPC call is just a suspension of time. It flags the function and performs a Continuation-Passing Style (CPS) transform, shattering it into an `enum State` machine.
-3. **The Fission Phase**: `emit.jxj` bifurcates the graph, emitting two separate WASM binaries (Client and Server).
+2. **State-Machine Monomorphization**: `lower.ka` realizes that an RPC call is just a suspension of time. It flags the function and performs a Continuation-Passing Style (CPS) transform, shattering it into an `enum State` machine.
+3. **The Fission Phase**: `emit.ka` bifurcates the graph, emitting two separate WASM binaries (Client and Server).
 
 **The Cosmological Insights:**
 * **RPC is just a Delimited Continuation**: A network request is mathematically identical to a local `yield`. The compiler serializes the `enum State` struct (containing local variables), fires it across the internet, and the remote WASM binary `match`es the state to resume execution.
@@ -69,6 +69,6 @@
 ---
 
 ### Conclusion
-By strictly adhering to the **"1 Mechanism, Many Handlers"** doctrine, Inka unifies all of computer science—Memory, Time, Math, and Space—into a single Effect Algebra. The exact same Mechanism that proves an array index is mathematically safe (`verify.jxj`) proves that your distributed cloud infrastructure is perfectly synchronized and free of data races. 
+By strictly adhering to the **"1 Mechanism, Many Handlers"** doctrine, Inka unifies all of computer science—Memory, Time, Math, and Space—into a single Effect Algebra. The exact same Mechanism that proves an array index is mathematically safe (`verify.ka`) proves that your distributed cloud infrastructure is perfectly synchronized and free of data races. 
 
 One Mechanism. Infinite Universes.

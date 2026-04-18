@@ -1,4 +1,4 @@
-// graph.jxj — SubstGraph: one live graph, all variables (spec 00)
+// graph.ka — SubstGraph: one live graph, all variables (spec 00)
 //
 // Single flat-array graph replacing association lists. Every TVar(id)
 // is a handle into this graph. Every observer chases via graph_chase.

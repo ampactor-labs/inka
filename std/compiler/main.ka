@@ -1,4 +1,4 @@
-// main.jxj — The Executable Manifest
+// main.ka — The Executable Manifest
 //
 // This file IS the build system. The ~> chain is the dependency
 // manifest. The !Network, !Process annotations are the security
@@ -32,7 +32,7 @@ fn compile_app(entry) with Package, Alloc, IO, !Network, !Process =
 // Order matters: outermost handler = least trusted.
 
 fn main() =
-  compile_app("src/main.jxj")
+  compile_app("src/main.ka")
     ~> pkg.local_cache           // Try local .inka/cache/ first
     ~> pkg.registry_hub          // Fallback: fetch from registry
     ~> memory.temp_arena         // Bind Alloc to scoped arena

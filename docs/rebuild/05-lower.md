@@ -5,7 +5,7 @@ by reading types LIVE from the SubstGraph (spec 00). No cached types
 in LowExpr nodes. No per-module subst snapshot. An unresolved handle
 at lower time is a build failure, not a fallback.
 
-**Supersedes.** `lower.jxj` (1108 lines), `lower_ir.jxj` (207 lines).
+**Supersedes.** `lower.ka` (1108 lines), `lower_ir.ka` (207 lines).
 Target combined: ~900 lines.
 
 **Research anchor.** Koka generalized evidence passing (JFP 2022) +
@@ -65,7 +65,7 @@ type-check at handler install — no runtime policy needed.
 
 ---
 
-## LowIR (from `lower_ir.jxj:52-118`)
+## LowIR (from `lower_ir.ka:52-118`)
 
 Retained verbatim structurally. The ONE change: the Ty field on each
 LowExpr variant is removed; LowExpr carries the node's `TypeHandle`
@@ -112,7 +112,7 @@ fn lexpr_ty(e) = match e {
 }
 ```
 
-The `_ => TUnit` fallback from v1 (`lower_ir.jxj:117`) is DELETED. No
+The `_ => TUnit` fallback from v1 (`lower_ir.ka:117`) is DELETED. No
 wildcard arm. If a new variant is added, `lexpr_ty` must get a
 matching arm — type-checker exhaustiveness enforces this (no
 preflight rule needed).
@@ -121,7 +121,7 @@ preflight rule needed).
 
 ## Handler elimination
 
-Classification via `classify_handler` from `lower_ir.jxj:147-207` —
+Classification via `classify_handler` from `lower_ir.ka:147-207` —
 TailResumptive, Linear, MultiShot. The logic is retained unchanged.
 
 **New behavior.** When a perform's handler context is provably
@@ -141,7 +141,7 @@ no longer fall through to a runtime type-test dispatcher.
 
 **HandlerTier derives from TCont.discipline.** `HandlerTier`
 (TailResumptive / Linear / MultiShot, preserved from
-`lower_ir.jxj:142-145`) is lowering's compilation-strategy
+`lower_ir.ka:142-145`) is lowering's compilation-strategy
 classification. `TCont.discipline` (spec 02) is the type-level
 contract: the continuation permits this many resumes. The two never
 conflict — a TailResumptive body on a MultiShot continuation is safe
@@ -184,7 +184,7 @@ fn lower_expr(node) -> LowExpr = {
 ```
 
 The only "context" lowering needs — local slot assignments, closure
-upvalue indices — comes from `LowerCtx` (`lower_ir.jxj:15-21`), which
+upvalue indices — comes from `LowerCtx` (`lower_ir.ka:15-21`), which
 is preserved unchanged. No graph writes, no rebinds, no snapshots.
 
 ---
@@ -209,14 +209,14 @@ is preserved unchanged. No graph writes, no rebinds, no snapshots.
 
 ## Emitter handoff
 
-The emitter (`std/backend/wasm_emit.jxj`, preserved) reads LowExpr
+The emitter (`std/backend/wasm_emit.ka`, preserved) reads LowExpr
 handles the same way:
 
 ```lux
 let wasm_ty = ty_to_wasm(perform lookup_ty(expr.handle))
 ```
 
-`ty_to_wasm` (`lower_ir.jxj:121`) stays. It now reads live through
+`ty_to_wasm` (`lower_ir.ka:121`) stays. It now reads live through
 the handler chain, so a stale subst cannot produce the wrong wasm
 type — because there's no subst to be stale.
 
@@ -224,13 +224,13 @@ type — because there's no subst to be stale.
 
 ## What's deleted
 
-- Per-module `subst` threading in `pipeline.jxj`'s lowering-facing
+- Per-module `subst` threading in `pipeline.ka`'s lowering-facing
   tuple — gone, graph is handler-scoped.
 - The `_ => TUnit` fallback in `lexpr_ty`.
 - Polymorphic-dispatch match-arm fallback idioms (see feedback
   memory: "Silent polymorphic dispatch fallback"). No `match _`
   without every variant enumerated.
-- The `val_concat` runtime function (`std/runtime/memory.jxj`). Phase
+- The `val_concat` runtime function (`std/runtime/memory.ka`). Phase
   D's delete list.
 - The `val_eq` runtime function. Same fate.
 
@@ -238,11 +238,11 @@ type — because there's no subst to be stale.
 
 ## Consumed by
 
-- `std/backend/wasm_emit.jxj` (preserved) — reads LowExpr, emits WAT.
-- `std/compiler/lower_print.jxj` (preserved) — pretty printer.
-- `std/compiler/lowir_walk.jxj` (preserved with minor handle-type
+- `std/backend/wasm_emit.ka` (preserved) — reads LowExpr, emits WAT.
+- `std/compiler/lower_print.ka` (preserved) — pretty printer.
+- `std/compiler/lowir_walk.ka` (preserved with minor handle-type
   adapt).
-- `std/compiler/lower_closure.jxj` (preserved) — closure conversion.
+- `std/compiler/lower_closure.ka` (preserved) — closure conversion.
 - `07-ownership.md` — ownership escape check operates on typed AST
   (clearer than on LowIR) but reads ownership via TFun's TParam list,
   resolved through `lookup_ty`.

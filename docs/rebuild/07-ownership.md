@@ -1,12 +1,12 @@
 # 07 — Ownership: Consume as an effect, linearity via handler
 
-**Purpose.** Replace the current `own.jxj` structural walk (191 lines)
+**Purpose.** Replace the current `own.ka` structural walk (191 lines)
 with an effect-based ownership model. `own` parameters perform
 `Consume` on use; a handler enforces affine linearity. `!Consume`
 proves read-only. `!Alloc` proves no allocation. All derived from the
 Boolean effect algebra (spec 01) — no separate ownership analysis.
 
-**Supersedes.** `own.jxj`. Target: ~200 lines effect-based.
+**Supersedes.** `own.ka`. Target: ~200 lines effect-based.
 
 **Research anchors.**
 - DESIGN.md + `docs/specs/ownership-design.md:29-35` — `own` affine /
@@ -74,7 +74,7 @@ a teaching hint, not an error.
 ## `ref` as structural escape check
 
 `ref` parameters cannot appear in return position. Structural walk
-preserved from `own.jxj:162-191`, adapted to Node/Span:
+preserved from `own.ka:162-191`, adapted to Node/Span:
 
 ```lux
 fn check_ref_escape(body, ref_params) =
@@ -177,7 +177,7 @@ and inspecting the resulting TFun's params.
 
 ---
 
-## What we keep from `own.jxj`
+## What we keep from `own.ka`
 
 - `filter_tier / check_unused_own / check_ref_escape / used_has /
   used_union` (lines 89–156). These become helpers inside the

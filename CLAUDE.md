@@ -1,4 +1,4 @@
-# Inka (formerly Lux) — CLAUDE.md  |  File extension: `.jxj`
+# Inka (formerly Lux) — CLAUDE.md  |  File extension: `.ka`
 
 > **Seven anchors. Read them before every non-trivial action.**
 
@@ -12,10 +12,10 @@ parse, compile, or execute. `lux3.wasm` is fundamentally flawed and
 is no longer an appropriate measure of correctness.
 
 **Each file assumes every other file is already perfect.** When
-writing `infer.jxj`, assume `graph.jxj` provides perfect $O(1)$
-chase with trail backtracking. When writing `mentl.jxj`, assume the
+writing `infer.ka`, assume `graph.ka` provides perfect $O(1)$
+chase with trail backtracking. When writing `mentl.ka`, assume the
 graph substrate supports speculative mutation and rollback. When
-writing `lower.jxj`, assume inference has synthesized all evidence
+writing `lower.ka`, assume inference has synthesized all evidence
 dictionaries and state machine annotations. Write the code you
 WISH existed. The architecture will rise to meet it.
 
@@ -100,7 +100,7 @@ If a feature can't be expressed as a handler on the graph, the graph
 is incomplete. Extend the graph. Don't route around it.
 ## 6. Write Inka like Inka. Every file. Every time.
 
-Every `.jxj` file you touch MUST be written in Inka's most powerful
+Every `.ka` file you touch MUST be written in Inka's most powerful
 and expressive form. This is non-negotiable:
 
 **Use the five pipe operators where they express the topology:**
@@ -158,12 +158,12 @@ deduplication, pipeline alignment, emit/runtime/main ports.
 
 ```
 # Bootstrap (one-time)
-bootstrap/translate std/compiler/*.jxj -o inka.wasm
+bootstrap/translate std/compiler/*.ka -o inka.wasm
 
 # Self-compilation (the real test)
-cat std/compiler/*.jxj | wasmtime run inka.wasm > inka2.wat
+cat std/compiler/*.ka | wasmtime run inka.wasm > inka2.wat
 wat2wasm inka2.wat -o inka2.wasm
-cat std/compiler/*.jxj | wasmtime run inka2.wasm > inka3.wat
+cat std/compiler/*.ka | wasmtime run inka2.wasm > inka3.wat
 diff inka2.wat inka3.wat    # empty = first-light
 ```
 
@@ -218,21 +218,21 @@ once, fix.
 
 | File | Role |
 |---|---|
-| `std/compiler/graph.jxj` | SubstGraph: flat-array, O(1) chase, Read/Write effects |
-| `std/compiler/types.jxj` | Ty + Reason + Scheme + typed AST + core effects |
-| `std/compiler/effects.jxj` | EffRow Boolean algebra: + - & ! |
-| `std/compiler/infer.jxj` | HM inference, one walk, graph-direct |
-| `std/compiler/lower.jxj` | Live-observer lowering via LookupTy |
-| `std/compiler/pipeline.jxj` | Handler composition via ~> + query handler |
-| `std/compiler/own.jxj` | Ownership as Consume effect |
-| `std/compiler/verify.jxj` | Verify ledger (Arc F.1 swaps to SMT) |
-| `std/compiler/clock.jxj` | Clock / Tick / Sample / Deadline |
-| `std/compiler/mentl.jxj` | Teaching substrate (Teach effect, 5 ops) |
-| `std/compiler/lexer.jxj` | Tokenizer (full spans, all 5 pipe ops) |
-| `std/compiler/parser.jxj` | Recursive descent (all PipeKind variants) |
-| `std/compiler/emit.jxj` | LowIR → WAT |
-| `std/runtime/memory.jxj` | Allocator as handler, strings, lists |
-| `std/main.jxj` | Entry: read stdin → compile → emit WAT |
+| `std/compiler/graph.ka` | SubstGraph: flat-array, O(1) chase, Read/Write effects |
+| `std/compiler/types.ka` | Ty + Reason + Scheme + typed AST + core effects |
+| `std/compiler/effects.ka` | EffRow Boolean algebra: + - & ! |
+| `std/compiler/infer.ka` | HM inference, one walk, graph-direct |
+| `std/compiler/lower.ka` | Live-observer lowering via LookupTy |
+| `std/compiler/pipeline.ka` | Handler composition via ~> + query handler |
+| `std/compiler/own.ka` | Ownership as Consume effect |
+| `std/compiler/verify.ka` | Verify ledger (Arc F.1 swaps to SMT) |
+| `std/compiler/clock.ka` | Clock / Tick / Sample / Deadline |
+| `std/compiler/mentl.ka` | Teaching substrate (Teach effect, 5 ops) |
+| `std/compiler/lexer.ka` | Tokenizer (full spans, all 5 pipe ops) |
+| `std/compiler/parser.ka` | Recursive descent (all PipeKind variants) |
+| `std/compiler/emit.ka` | LowIR → WAT |
+| `std/runtime/memory.ka` | Allocator as handler, strings, lists |
+| `std/main.ka` | Entry: read stdin → compile → emit WAT |
 | `docs/PLAN.md` | THE plan |
 | `docs/rebuild/00–11` | The 12 executable specs |
 | `docs/errors/` | Error catalog |

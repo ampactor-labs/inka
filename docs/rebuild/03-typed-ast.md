@@ -6,8 +6,8 @@ the SubstGraph from spec 00) and a full `Span`, not a point. Type
 resolution is always a live chase via `LookupTy` — never a cached Ty
 field.
 
-**Supersedes.** `parser.jxj` currently produces `S(expr, line, col)`
-wrappers (see `parser.jxj:21-56` for Expr/Stmt/Pat). The rebuild
+**Supersedes.** `parser.ka` currently produces `S(expr, line, col)`
+wrappers (see `parser.ka:21-56` for Expr/Stmt/Pat). The rebuild
 replaces `S` with `N(body, span, handle)`.
 
 **Research anchors.**
@@ -41,7 +41,7 @@ an N without a handle.
 
 ---
 
-## Expr (updated from `parser.jxj:21`)
+## Expr (updated from `parser.ka:21`)
 
 ```lux
 type Expr
@@ -74,7 +74,7 @@ type PipeKind = PForward | PDiverge | PCompose | PTee | PFeedback
 
 ---
 
-## Stmt (updated from `parser.jxj:56`)
+## Stmt (updated from `parser.ka:56`)
 
 ```lux
 type Stmt
@@ -95,7 +95,7 @@ type Stmt
 
 ---
 
-## Pat (updated from `parser.jxj:49`)
+## Pat (updated from `parser.ka:49`)
 
 ```lux
 type Pat
@@ -135,7 +135,7 @@ Every node has a 4-tuple span. Every lexer token produces a span. The
 parser composes child spans into parent spans:
 
 ```lux
-// parser.jxj sketch (parse_binop):
+// parser.ka sketch (parse_binop):
 let span = Span.join(left.span, right.span)
 let h = perform graph_fresh_ty(BinOpPlaceholder(op))
 N(NExpr(BinOpExpr(op, left, right)), span, h)
@@ -172,7 +172,7 @@ errors are not.
   RefineStmt is new).
 - Error recovery — preserved.
 
-Changes the rebuild makes in parser.jxj:
+Changes the rebuild makes in parser.ka:
 - `S(expr, line, col)` → `N(body, span, handle)`.
 - Every construction point calls `perform graph_fresh_ty(...)` to
   mint a handle at parse time.

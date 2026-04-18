@@ -1,4 +1,4 @@
-// types.jxj — THE vocabulary of Inka
+// types.ka — THE vocabulary of Inka
 //
 // Every type, every effect signature, every ADT that the compiler
 // names lives here. This file is bedrock. Every other file imports it.
@@ -9,12 +9,12 @@
 // There is no apply(subst, ty) — graph chase replaces it.
 //
 // ADTs owned by other files are NOT declared here:
-//   Clock/Tick/Sample/Deadline → clock.jxj (spec 11)
-//   Annotation/Capability/Explanation/Teach → mentl.jxj (spec 09)
-//   Question/QueryResult/Query → query.jxj (spec 08)
-//   Synth/Candidate → mentl.jxj (spec 09)
-//   EffRow/EfNeg/EfSub/EfInter → effects.jxj (spec 01)
-//   SubstGraph/GNode/NodeKind/SubstGraphRead/Write → graph.jxj (spec 00)
+//   Clock/Tick/Sample/Deadline → clock.ka (spec 11)
+//   Annotation/Capability/Explanation/Teach → mentl.ka (spec 09)
+//   Question/QueryResult/Query → query.ka (spec 08)
+//   Synth/Candidate → mentl.ka (spec 09)
+//   EffRow/EfNeg/EfSub/EfInter → effects.ka (spec 01)
+//   SubstGraph/GNode/NodeKind/SubstGraphRead/Write → graph.ka (spec 00)
 
 // ─── Core type ADT ──────────────────────────────────────────
 // The universe of types. spec 02.

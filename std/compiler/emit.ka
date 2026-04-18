@@ -1,13 +1,13 @@
 // Emit — WASM emission from LowIR (spec 05)
 //
 // Bridge between the VFINAL compiler pipeline and the existing
-// WASM emitter in std/backend/wasm_emit.jxj. The existing emitter
+// WASM emitter in std/backend/wasm_emit.ka. The existing emitter
 // is ~1000 lines of production code that produces working WASM
 // (it bootstraps the self-hosted compiler). This module adapts it
 // to the handler-first architecture.
 //
 // ty_to_wasm reads perform lookup_ty(h) — live, not cached.
-// LookupTy is installed once by pipeline.jxj around the lowering walk.
+// LookupTy is installed once by pipeline.ka around the lowering walk.
 //
 // NO SubstGraphWrite — structural isolation via effect row.
 
@@ -43,7 +43,7 @@ fn ty_to_wasm_type(ty) = match ty {
 }
 
 // ─── emit_module: delegate to backend ───────────────────────
-// The actual emission logic lives in std/backend/wasm_emit.jxj.
+// The actual emission logic lives in std/backend/wasm_emit.ka.
 // This function is the VFINAL entry point that the pipeline calls.
 
 fn emit_module(lowered) =

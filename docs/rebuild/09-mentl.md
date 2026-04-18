@@ -8,8 +8,8 @@ Mentl's tentacles; the shared substrate is the SubstGraph + Env
 (specs 00, 04) read through effects.
 
 **Scope.** This spec consolidates three currently-separate modules —
-`gradient.jxj`, `suggest.jxj`, `why.jxj` — and the Teach effect (spec
-06) into one coherent subsystem: `std/compiler/mentl.jxj`. Ships in
+`gradient.ka`, `suggest.ka`, `why.ka` — and the Teach effect (spec
+06) into one coherent subsystem: `std/compiler/mentl.ka`. Ships in
 Arc F.6 as the capstone on the rebuild's teaching surface. Structural
 prerequisites (Teach effect signatures, error-catalog wiring) land in
 Phase 1.
@@ -235,7 +235,7 @@ that already exist.
 ## Module structure
 
 ```
-std/compiler/mentl.jxj          — the consolidated teaching module
+std/compiler/mentl.ka          — the consolidated teaching module
   ├── handler mentl_default      — default Teach handler
   ├── handler why_default        — default Why tentacle
   ├── fn gradient_next(handle)   — gradient logic
@@ -244,9 +244,9 @@ std/compiler/mentl.jxj          — the consolidated teaching module
   └── fn render_patch            — Patch → developer-facing diff
 ```
 
-Replaces the currently separate `gradient.jxj`, `suggest.jxj`,
-`why.jxj` by merging them (or, if sizes dictate, coordinating them
-under one entry). The name `mentl.jxj` makes the subsystem
+Replaces the currently separate `gradient.ka`, `suggest.ka`,
+`why.ka` by merging them (or, if sizes dictate, coordinating them
+under one entry). The name `mentl.ka` makes the subsystem
 discoverable in the code tree. The mascot earns its keep linguistically.
 
 ---
@@ -255,9 +255,9 @@ discoverable in the code tree. The mascot earns its keep linguistically.
 
 | Existing | Folded into |
 |---|---|
-| `std/compiler/gradient.jxj` | `mentl.jxj` → `gradient_next` |
-| `std/compiler/suggest.jxj` | `mentl.jxj` → suggest handler |
-| `std/compiler/why.jxj` | `mentl.jxj` → `why_default` |
+| `std/compiler/gradient.ka` | `mentl.ka` → `gradient_next` |
+| `std/compiler/suggest.ka` | `mentl.ka` → suggest handler |
+| `std/compiler/why.ka` | `mentl.ka` → `why_default` |
 | ad-hoc error strings | `docs/errors/*.md` + `load_catalog` |
 | `teach_here` (sole op) | `Teach` effect's five-op surface |
 
@@ -265,7 +265,7 @@ discoverable in the code tree. The mascot earns its keep linguistically.
 
 ## Consumed by
 
-- `std/compiler/pipeline.jxj` — installs `mentl_default` at compile
+- `std/compiler/pipeline.ka` — installs `mentl_default` at compile
   entry (always active; zero-cost when no teach request is made).
 - Arc F.1 `verify_smt` — emits through Mentl for catalog-backed
   diagnostics.

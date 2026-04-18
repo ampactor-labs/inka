@@ -11,7 +11,7 @@ import compiler/graph
 import compiler/types
 import compiler/effects
 
-// LookupTy handler lives in pipeline.jxj — installed once at
+// LookupTy handler lives in pipeline.ka — installed once at
 // compile entry, wrapping the lowering walk. Lowering declares
 // SubstGraphRead only (no Write) — effect-row subsumption is
 // the gate, not a runtime policy.
@@ -268,7 +268,7 @@ fn apply_each_branch(lo_input, branches) =
       ++ apply_each_branch(lo_input, list_tail(branches))
   }
 
-// ─── LowIR ADT (from lower_ir.jxj, handles replace Ty) ─────
+// ─── LowIR ADT (from lower_ir.ka, handles replace Ty) ─────
 
 type LowExpr
   = LConst(Int, LowValue)

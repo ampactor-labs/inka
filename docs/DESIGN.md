@@ -783,7 +783,7 @@ effect-mediated, peer substrates of ambient post-inference knowledge.
 
 ### One walk
 
-`infer.jxj` is a single recursive walk over the AST:
+`infer.ka` is a single recursive walk over the AST:
 
 ```
 fn infer_expr(node)  -> ()     // walks node, binds node.handle
@@ -819,7 +819,7 @@ is external.
 
 *Abstract algebra must materialize into physical pointers.*
 
-`infer.jxj` does not just type-check. Its ultimate duty is to
+`infer.ka` does not just type-check. Its ultimate duty is to
 **physically synthesize Evidence Dictionaries** — vtables — for
 polymorphic effects. At each function definition whose effect row is
 polymorphic (some effect is implemented by the caller), the inference
@@ -1278,7 +1278,7 @@ the compiler refuses to compile:
 
 ```
 error: 'similar' escapes the lifetime of 'temp_arena'
-    at: std/compiler/diagnostics.jxj:47
+    at: std/compiler/diagnostics.ka:47
     bound by: scoped allocator closes at line 42
     fix: copy the value into the parent allocator's scope
 ```
@@ -1381,7 +1381,7 @@ Three effects replace the entire runtime:
 Everything else — `str_concat`, `str_eq`, `int_to_str`, `print_line`,
 `split`, `chars`, `range`, `push`, `pop`, list access, record field
 lookup — is pure Inka built on these three effects. The
-`std/runtime/memory.jxj` file IS the runtime. No hand-written WAT.
+`std/runtime/memory.ka` file IS the runtime. No hand-written WAT.
 No C code. No assembly. **There are no primitives. There are only
 effects and handlers.**
 
@@ -1498,9 +1498,9 @@ type + effect row and returns the single highest-leverage annotation
 the programmer could add:
 
 ```
-$ inka teach std/compiler/infer.jxj
+$ inka teach std/compiler/infer.ka
 
-    infer.jxj:47  let's_generalize is Pure
+    infer.ka:47  let's_generalize is Pure
         → adding `with Pure` would unlock:
              • memoization (same input → same output, guaranteed)
              • parallelization
@@ -1726,19 +1726,19 @@ compiler's own substrate.
 Before LSP, there is `inka query`:
 
 ```
-$ inka query std/compiler/infer.jxj "type of generalize"
+$ inka query std/compiler/infer.ka "type of generalize"
 → generalize : (Node) -> Scheme with SubstGraphRead + EnvRead
   Reason chain:
-    - bound at FnStmt at infer.jxj:142
+    - bound at FnStmt at infer.ka:142
     - return type unified with Forall(qs, body_ty) at line 147
     - body_ty chased from handle 847
     - quantified vars: [142, 148, 153]
 
-$ inka query std/compiler/infer.jxj "why infer_expr performs EnvWrite"
+$ inka query std/compiler/infer.ka "why infer_expr performs EnvWrite"
 → infer_expr : (Node) -> () with SubstGraphWrite + EnvWrite + ...
   Reason:
-    - extends env at LetStmt (infer.jxj:210)
-    - enters scope at BlockExpr (infer.jxj:187)
+    - extends env at LetStmt (infer.ka:210)
+    - enters scope at BlockExpr (infer.ka:187)
 ```
 
 `inka query` is read-only by `SubstGraphRead + EnvRead` subsumption
@@ -1830,7 +1830,7 @@ lock.**
 collect effect rows transitively, print the capability set:
 
 ```
-$ inka audit main.jxj
+$ inka audit main.ka
 
 Capabilities required:
   - Network (via router_axum)
@@ -1900,16 +1900,16 @@ There is no build system. There is the compiler's own cache.
 
 Every Inka module checks independently against the envs of its
 dependencies. After checking, the env serializes to
-`<module>.jxji` (Inka Interface) keyed by source content hash.
+`<module>.kai` (Inka Interface) keyed by source content hash.
 
 ```
 resolve_imports(source)
     → for each import:
-        if .jxji exists AND hash matches .jxj:
-            load env from .jxji (skip checking)
+        if .kai exists AND hash matches .ka:
+            load env from .kai (skip checking)
         else:
             check module against dependency envs
-            write .jxji
+            write .kai
     → check user source against accumulated env
     → lower → emit
 ```
@@ -2418,7 +2418,7 @@ add a `List.sort` call inside a function whose signature asserts
 
 1. **The editor types the character.** The LSP (Chapter 9.5) sends
    `textDocument/didChange`. The handler chain runs. Module-incremental
-   recompilation (Chapter 9.4) loads cached `.jxji` envs in microseconds;
+   recompilation (Chapter 9.4) loads cached `.kai` envs in microseconds;
    the one module the developer is editing is re-inferred.
 
 2. **Inference walks the edited function.** At the call to `sort`,
@@ -2512,7 +2512,7 @@ historical audio, record gradients, and allocate an autodiff tape.
    `Sample(44100)`, `<~ delay(1)` is a Z-transform — classic IIR
    filter. Under `Sample(48000)`, same. Under `Tick` with iteration
    context, the same `<~` would be an RNN's hidden-state recurrence.
-   **`infer.jxj` proves they are the same topology** and lowers both
+   **`infer.ka` proves they are the same topology** and lowers both
    to the same state machine structure.
 
 **What this demonstrates.**
@@ -2558,7 +2558,7 @@ function (compiled to WASM) that declares `FFI, Network, Filesystem`.
    corresponding imports.
 
    ```
-   $ inka audit main.jxj
+   $ inka audit main.ka
    Capabilities required:
      - FFI (via c_lib_foo)
      - Parallel
@@ -2601,13 +2601,13 @@ function; two machines.
    are handled by `client_handler`; effects from `charge_card` /
    `save_receipt` by `server_handler`.
 
-2. **Lower phase sees the split.** `lower.jxj` realizes the handler
+2. **Lower phase sees the split.** `lower.ka` realizes the handler
    boundary is also a host boundary. It flags the point as a
    **suspension**: a perform-site where the continuation serializes.
    The function is rewritten as an **enum state machine** — each
    suspension a numbered state, locals captured in the state struct.
 
-3. **Emit bifurcates.** `emit.jxj` generates two WASM binaries: client
+3. **Emit bifurcates.** `emit.ka` generates two WASM binaries: client
    and server. The client binary emits code through state N,
    serializes `{state_index = N+1, locals}`, sends the struct over
    the network. The server binary accepts the struct, matches
@@ -2638,8 +2638,8 @@ Inka has one terminal invariant: the compiler compiles itself to a
 **byte-identical** output.
 
 ```
-inka.wasm < std/compiler/*.jxj  >  inka2.wat
-inka.wasm < std/compiler/*.jxj  >  inka3.wat
+inka.wasm < std/compiler/*.ka  >  inka2.wat
+inka.wasm < std/compiler/*.ka  >  inka3.wat
 diff inka2.wat inka3.wat              # empty
 ```
 

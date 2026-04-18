@@ -1,7 +1,7 @@
 # 04 — Inference: HM + let-generalization, one walk
 
-**Purpose.** Replace the two-pass `check.jxj + infer.jxj`
-(`check.jxj` 388 lines + `infer.jxj` 626 lines = 1014) with a single
+**Purpose.** Replace the two-pass `check.ka + infer.ka`
+(`check.ka` 388 lines + `infer.ka` 626 lines = 1014) with a single
 walk that writes bindings directly into the SubstGraph (spec 00) as
 it encounters them. Classic Hindley-Milner with Damas-Milner let-
 generalization. Every expression contributes bindings or binds a
@@ -31,7 +31,7 @@ One pass. No separate "check" vs "infer" phases. Outputs are a typed
 AST (handles populated in graph) and an updated Env; the subst NEVER
 escapes as a sidecar value.
 
-**Key difference from v1.** `check_program` in `check.jxj` returns
+**Key difference from v1.** `check_program` in `check.ka` returns
 `(env, subst)` and downstream passes thread the pair. In the rebuild,
 downstream reads the SubstGraph directly through `graph_chase`. The
 tuple is gone.
@@ -56,7 +56,7 @@ lowering and query declare `with EnvRead + SubstGraphRead` only.
 Writer isolation is structural (one writer per kind).
 
 - `env_empty`, `env_with_source`, `env_with_primitives` — kept from
-  `ty.jxj`, reshaped as the initial handler state the default
+  `ty.ka`, reshaped as the initial handler state the default
   `env_default` handler installs at compile entry.
 - `env_extend(name, scheme, reason)` — performed via `EnvWrite`.
   Monomorphic bindings wrap as `Forall([], ty)`.
@@ -189,7 +189,7 @@ every `VarRef`:
   the walk.
 - FnStmt exits check the ref-escape tracker against return positions.
 
-The structural walk in `own.jxj:162-191` is preserved (escape check);
+The structural walk in `own.ka:162-191` is preserved (escape check);
 the affine-linearity walk is replaced by letting the Consume effect
 handler track linearity (spec 07).
 
@@ -250,12 +250,12 @@ function of the handle.
 
 ## What this replaces
 
-From `check.jxj`:
+From `check.ka`:
 - `check_program`, `check_fn`, `check_expr` — fold into `infer_expr`
   / `infer_stmt`.
 - Effect row constraint checks — move into unification.
 
-From `infer.jxj`:
+From `infer.ka`:
 - `infer_expr` top level — unified with check; walks are merged.
 - `subst` threading — gone, graph owns it.
 - `generalize` — reformulated against the graph.

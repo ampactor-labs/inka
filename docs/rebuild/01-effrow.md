@@ -1,7 +1,7 @@
 # 01 — EffRow: Boolean algebra over effect rows
 
 **Purpose.** Lift the current ternary EffRow (`EfPure | EfClosed | EfOpen`
-in `types.jxj:30-33`) to a full Boolean algebra `+ - & !` with Pure as
+in `types.ka:30-33`) to a full Boolean algebra `+ - & !` with Pure as
 identity, so that the gradient's four compilation gates (Pure, !IO,
 !Alloc, !Network) and handler absorption (`body - handled`) fall out of
 one mechanism.
@@ -16,7 +16,7 @@ one mechanism.
 
 ---
 
-## ADT (extends `types.jxj:30-33`)
+## ADT (extends `types.ka:30-33`)
 
 ```lux
 type EffRow
@@ -134,7 +134,7 @@ Algebra applied at handler elimination:
 
 ---
 
-## What's preserved from `eff.jxj`
+## What's preserved from `eff.ka`
 
 The file already implements the `EfPure | EfClosed | EfOpen` core and
 the 3×3 unification matrix. The rebuild keeps:

@@ -7,7 +7,7 @@ divergence, parallel composition, side-channel observation, and
 feedback. Effects + handlers + the Boolean row algebra make the
 *semantics* universal; the five verbs make the *shapes* visible.
 
-**Supersedes.** Ad-hoc pipe handling in `parser.jxj` / `check.jxj`.
+**Supersedes.** Ad-hoc pipe handling in `parser.ka` / `check.ka`.
 v1 parses `|>` / `<|` but without specified effect / ownership / time
 semantics.
 

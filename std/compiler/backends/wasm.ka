@@ -151,7 +151,7 @@ fn ty_to_wasm_type(ty) = match ty {
 
 fn emit_module(lowered) = {
   let all_fn_names = collect_fn_names(lowered, [])
-  let top_fn_names = collect_top_level_fn_names(lowered, [])
+  let top_fn_names = collect_top_level_fn_names(lowered)
   // W5 string interning — collect every LString in the lowered
   // program, assign each unique literal a 4-byte-aligned offset in
   // the string-data region (starts at 0x10000 = 64KB). The pre-pass
@@ -354,13 +354,30 @@ fn collect_fn_names_expr(expr, acc) = match expr {
 // Top-level fn names — only top-level LLet-wrapped closures have
 // module-init closure globals. Inline lambdas construct their
 // records at the LMakeClosure emit site (not at module init).
-fn collect_top_level_fn_names(lowered, acc) =
-  if len(lowered) == 0 { acc }
+// Ω.3: top-level fn-name collection uses the buffer substrate.
+// Bounded-N (number of top-level LMakeClosure-bound LLet stmts);
+// the buffer pattern preserves O(N) total allocation regardless.
+fn collect_top_level_fn_names(lowered) = {
+  let n = len(lowered)
+  let initial_capacity = if n < 4 { 4 } else { n }
+  let buf = make_list(initial_capacity)
+  let (final_buf, final_count) =
+    collect_top_level_fn_names_loop(lowered, 0, n, buf, 0)
+  slice(final_buf, 0, final_count)
+}
+
+fn collect_top_level_fn_names_loop(lowered, i, n, buf, count) =
+  if i >= n { (buf, count) }
   else {
-    let head_name = extract_top_fn_name(list_head(lowered))
-    let next = if str_eq(head_name, "") { acc }
-               else { acc ++ [head_name] }
-    collect_top_level_fn_names(list_tail(lowered), next)
+    let head_name = extract_top_fn_name(list_index(lowered, i))
+    let (new_buf, new_count) =
+      if str_eq(head_name, "") { (buf, count) }
+      else {
+        let extended = list_extend_to(buf, count + 1)
+        let written  = list_set(extended, count, head_name)
+        (written, count + 1)
+      }
+    collect_top_level_fn_names_loop(lowered, i + 1, n, new_buf, new_count)
   }
 
 fn extract_top_fn_name(stmt) = match stmt {

@@ -844,22 +844,43 @@ fn resolve_captures_outer(names, owner_h) =
 // lambda bodies correctly distinguishes local/upval/global.
 
 fn lower_program(stmts) = {
-  let globals = collect_top_level_names(stmts, [])
+  let globals = collect_top_level_names(stmts)
   perform ls_register_globals(globals)
   lower_stmt_list(stmts)
 }
 
-fn collect_top_level_names(stmts, acc) =
-  if len(stmts) == 0 { acc }
+// Ω.3: top-level name collection uses the buffer substrate. The
+// number of top-level statements is bounded by N (file size), so
+// O(N) total allocation via list_extend_to + list_set + counter
+// + slice — vs `acc ++ [name]`'s O(N²) recursive accumulator.
+// The buffer threads through tail-recursion as `(buf, count)`
+// because list_extend_to may return a fresh allocation if the
+// current capacity is exceeded.
+fn collect_top_level_names(stmts) = {
+  let n = len(stmts)
+  let initial_capacity = if n < 4 { 4 } else { n }
+  let buf = make_list(initial_capacity)
+  let (final_buf, final_count) = collect_top_level_names_loop(stmts, 0, n, buf, 0)
+  slice(final_buf, 0, final_count)
+}
+
+fn collect_top_level_names_loop(stmts, i, n, buf, count) =
+  if i >= n { (buf, count) }
   else {
-    let N(body, _, _) = list_head(stmts)
-    let next = match body {
-      NStmt(FnStmt(name, _, _, _, _))    => acc ++ [name],
-      NStmt(LetStmt(PVar(name), _))      => acc ++ [name],
-      _                                  => acc
+    let N(body, _, _) = list_index(stmts, i)
+    let (new_buf, new_count) = match body {
+      NStmt(FnStmt(name, _, _, _, _))    => push_name(buf, count, name),
+      NStmt(LetStmt(PVar(name), _))      => push_name(buf, count, name),
+      _                                  => (buf, count)
     }
-    collect_top_level_names(list_tail(stmts), next)
+    collect_top_level_names_loop(stmts, i + 1, n, new_buf, new_count)
   }
+
+fn push_name(buf, count, name) = {
+  let extended = list_extend_to(buf, count + 1)
+  let written  = list_set(extended, count, name)
+  (written, count + 1)
+}
 
 // ═══ lower_scope handler — W7.1 lexical frame stack ════════════════
 // State:

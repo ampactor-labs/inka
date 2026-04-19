@@ -120,57 +120,74 @@ fn single_char_kind(ch) = {
 }
 
 // ═══ Entry point ═══════════════════════════════════════════════════
+// Ω.3 substrate: tokens accumulate into a flat buffer threaded
+// through tail-recursion as `(buf, count)`. push_tok extends the
+// buffer if needed and writes at the counter — O(1) amortized per
+// emit instead of `tokens ++ [t]`'s O(N) per emit / O(N²) total.
+// Final `slice(buf, 0, count)` produces a tag=4 view with logical
+// length = count; downstream consumers see a proper bounded list.
 
 fn lex(source) = {
   let cs = list_to_flat(chars(source))
   let n = len(cs)
-  lex_from(cs, n, 0, 1, 1, [])
+  let initial_capacity = if n < 16 { 16 } else { n }
+  let buf = make_list(initial_capacity)
+  let (final_buf, final_count) = lex_from(cs, n, 0, 1, 1, buf, 0)
+  slice(final_buf, 0, final_count)
 }
 
-fn lex_from(cs, n, pos, line, col, tokens) =
+// Append one token to the buffer; grow if needed. Returns (buf, count+1).
+// Threading `(buf, count)` through tail-recursion preserves linearity.
+fn push_tok(buf, count, t) = {
+  let extended = list_extend_to(buf, count + 1)
+  let written  = list_set(extended, count, t)
+  (written, count + 1)
+}
+
+fn lex_from(cs, n, pos, line, col, buf, count) =
   if pos >= n {
-    tokens ++ [tok("Eof", "", line, col, line, col)]
+    push_tok(buf, count, tok("Eof", "", line, col, line, col))
   } else {
     let ch = cs[pos]
 
     if is_whitespace(ch) {
-      lex_from(cs, n, pos + 1, line, col + 1, tokens)
+      lex_from(cs, n, pos + 1, line, col + 1, buf, count)
     } else if ch == "\n" {
-      lex_from(cs, n, pos + 1, line + 1, 1,
-        tokens ++ [tok("Newline", "NL", line, col, line + 1, 1)])
+      let (b1, c1) = push_tok(buf, count, tok("Newline", "NL", line, col, line + 1, 1))
+      lex_from(cs, n, pos + 1, line + 1, 1, b1, c1)
     } else if ch == "/" && pos + 1 < n && cs[pos + 1] == "/" {
       let after = skip_line_comment(cs, n, pos + 2)
-      lex_from(cs, n, after, line, col, tokens)
+      lex_from(cs, n, after, line, col, buf, count)
     } else if ch == "\"" {
       let (new_pos, new_col, str_val) = scan_string(cs, n, pos + 1, col + 1, "")
-      lex_from(cs, n, new_pos, line, new_col,
-        tokens ++ [tok("String", str_val, line, col, line, new_col)])
+      let (b1, c1) = push_tok(buf, count, tok("String", str_val, line, col, line, new_col))
+      lex_from(cs, n, new_pos, line, new_col, b1, c1)
     } else if is_digit(ch) {
       let (new_pos, new_col, num_val, is_float) =
         scan_number(cs, n, pos, col, "", false)
       let kind = if is_float { "Float" } else { "Int" }
-      lex_from(cs, n, new_pos, line, new_col,
-        tokens ++ [tok(kind, num_val, line, col, line, new_col)])
+      let (b1, c1) = push_tok(buf, count, tok(kind, num_val, line, col, line, new_col))
+      lex_from(cs, n, new_pos, line, new_col, b1, c1)
     } else if is_alpha(ch) {
       let (new_pos, new_col, word) = scan_ident(cs, n, pos, col, "")
       let kind = keyword_kind(word)
-      lex_from(cs, n, new_pos, line, new_col,
-        tokens ++ [tok(kind, word, line, col, line, new_col)])
+      let (b1, c1) = push_tok(buf, count, tok(kind, word, line, col, line, new_col))
+      lex_from(cs, n, new_pos, line, new_col, b1, c1)
     } else {
       let ch2 = if pos + 1 < n { cs[pos + 1] } else { "" }
       let two_kind = two_char_kind(ch, ch2)
       if len(two_kind) > 0 {
-        lex_from(cs, n, pos + 2, line, col + 2,
-          tokens ++ [tok(two_kind,
-            ch |> str_concat(ch2),
-            line, col, line, col + 2)])
+        let (b1, c1) = push_tok(buf, count,
+          tok(two_kind, ch |> str_concat(ch2), line, col, line, col + 2))
+        lex_from(cs, n, pos + 2, line, col + 2, b1, c1)
       } else {
         let one_kind = single_char_kind(ch)
         if len(one_kind) > 0 {
-          lex_from(cs, n, pos + 1, line, col + 1,
-            tokens ++ [tok(one_kind, ch, line, col, line, col + 1)])
+          let (b1, c1) = push_tok(buf, count,
+            tok(one_kind, ch, line, col, line, col + 1))
+          lex_from(cs, n, pos + 1, line, col + 1, b1, c1)
         } else {
-          lex_from(cs, n, pos + 1, line, col + 1, tokens)
+          lex_from(cs, n, pos + 1, line, col + 1, buf, count)
         }
       }
     }

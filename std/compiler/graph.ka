@@ -28,6 +28,7 @@
 // (rare); cross-module snapshot builds slice-views (O(1) per overlay).
 
 import compiler/types
+import runtime/strings
 
 // ═══ graph_handler — the substrate handler ═════════════════════════
 // State:
@@ -447,23 +448,16 @@ fn overlays_to_pairs_loop(names, bufs, lens, count, i, acc) =
     )
   }
 
-// ═══ String set utilities ═══════════════════════════════════════════
-// Effect-name sets — small (typically ≤ 5 names). Current shape uses
-// list_head/list_tail walk with `++` for output construction; this
-// is safe for small snoc-or-flat inputs but non-ideal substrate
-// (see plan W8.2 for the sort-invariant flat-array + binary-search
-// + two-pointer-merge upgrade).
+// ═══ String set ops — sorted-flat substrate (W8.2) ═════════════════
+// Effect-name sets route through std/runtime/strings.ka's sorted-set
+// primitives: O(log N) membership, O(N+M) union, sorted invariant.
+// Inputs are canonicalized at the boundary so callers needn't audit
+// upstream constructors. Once every effect-row builder maintains the
+// invariant by construction, the canonicalize calls drop out and the
+// substrate is uniformly O(N+M) without boundary normalization.
 
 fn list_union_str(a, b) =
-  if len(b) == 0 { a }
-  else {
-    let x = list_head(b)
-    let rest = list_tail(b)
-    if string_in_list(a, x) { list_union_str(a, rest) }
-    else { list_union_str(a ++ [x], rest) }
-  }
+  set_union(set_canonicalize(a), set_canonicalize(b))
 
 fn string_in_list(lst, s) =
-  if len(lst) == 0 { false }
-  else if str_eq(list_head(lst), s) == 1 { true }
-  else { string_in_list(list_tail(lst), s) }
+  set_contains(set_canonicalize(lst), s)

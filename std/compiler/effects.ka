@@ -14,6 +14,7 @@
 // The artifact is that one row_subsumes call services every gate.
 
 import compiler/types
+import runtime/strings
 
 // ═══ Normalization ═════════════════════════════════════════════════
 // After normalize_row, every row is canonical:
@@ -337,74 +338,31 @@ fn row_is_ground(row) =
 // Local to this module; kept here because the algebra depends on
 // exactly this set model.
 
-fn sort_unique(names) =
-  sort_unique_insert(names, [])
+// ═══ Effect-name set ops — sorted-flat substrate (W8.2) ════════════
+// All effect-name set arithmetic routes through std/runtime/strings.ka
+// sorted-set primitives. The local names below are thin adapters that
+// canonicalize at the boundary (sort + dedup) so callers don't need
+// to audit upstream constructors. Once every EffRow builder maintains
+// the sort invariant by construction, the canonicalize calls drop
+// out and the substrate runs at O(N+M) with O(log N) membership.
 
-fn sort_unique_insert(remaining, sorted) =
-  if len(remaining) == 0 { sorted }
-  else {
-    let x = list_head(remaining)
-    let rest = list_tail(remaining)
-    if string_in_list(sorted, x) {
-      sort_unique_insert(rest, sorted)
-    } else {
-      sort_unique_insert(rest, insert_sorted(sorted, x))
-    }
-  }
-
-fn insert_sorted(sorted, x) =
-  if len(sorted) == 0 { [x] }
-  else {
-    let head = list_head(sorted)
-    if str_lt(x, head) == 1 { [x] ++ sorted }
-    else { [head] ++ insert_sorted(list_tail(sorted), x) }
-  }
+fn sort_unique(names)        = set_canonicalize(names)
+fn insert_sorted(sorted, x)  = set_insert(sorted, x)
 
 fn list_intersect(a, b) =
-  if len(a) == 0 { [] }
-  else {
-    let x = list_head(a)
-    let rest = list_intersect(list_tail(a), b)
-    if string_in_list(b, x) { [x] ++ rest }
-    else { rest }
-  }
+  set_intersect(set_canonicalize(a), set_canonicalize(b))
 
 fn list_diff_str(a, b) =
-  if len(a) == 0 { [] }
-  else {
-    let x = list_head(a)
-    let rest = list_diff_str(list_tail(a), b)
-    if string_in_list(b, x) { rest }
-    else { [x] ++ rest }
-  }
+  set_diff(set_canonicalize(a), set_canonicalize(b))
 
 fn list_subset_str(sub, sup) =
-  if len(sub) == 0 { true }
-  else {
-    let x = list_head(sub)
-    if string_in_list(sup, x) {
-      list_subset_str(list_tail(sub), sup)
-    } else { false }
-  }
+  set_subset(set_canonicalize(sub), set_canonicalize(sup))
 
 fn list_disjoint(a, b) =
-  if len(a) == 0 { true }
-  else {
-    let x = list_head(a)
-    if string_in_list(b, x) { false }
-    else { list_disjoint(list_tail(a), b) }
-  }
+  set_disjoint(set_canonicalize(a), set_canonicalize(b))
 
 fn list_eq_str(a, b) =
-  if len(a) != len(b) { false }
-  else if len(a) == 0 { true }
-  else {
-    if str_eq(list_head(a), list_head(b)) == 1 {
-      list_eq_str(list_tail(a), list_tail(b))
-    } else { false }
-  }
+  set_eq(set_canonicalize(a), set_canonicalize(b))
 
 fn string_in_list(lst, s) =
-  if len(lst) == 0 { false }
-  else if str_eq(list_head(lst), s) == 1 { true }
-  else { string_in_list(list_tail(lst), s) }
+  set_contains(set_canonicalize(lst), s)

@@ -378,3 +378,207 @@ fn find_char_either(s, slen, start, ch1, ch2) with Memory =
     if b == ch1 || b == ch2 { start }
     else { find_char_either(s, slen, start + 1, ch1, ch2) }
   }
+
+// ═══ String sets — sorted flat arrays + binary search ══════════════
+// The compiler operates on string-keyed sets in many places: effect
+// names, record fields, declared rows, capability lists, ownership
+// names. The invariant: every set is a flat (tag=0) list of unique
+// strings in lexicographic ascending order. Set operations preserve
+// that invariant and produce O(N+M) merges, O(log N) membership.
+//
+// W8.2 substrate: replaces the previous `list_head`/`list_tail` snoc
+// recursions with `++` output construction (concat-tag growth that
+// degrades subsequent reads to O(N²)). Now: flat in, flat out,
+// indexed access, sorted invariant, merge-discipline.
+
+// set_contains: O(log N) binary search over a sorted set.
+fn set_contains(set, target) with Memory =
+  set_bsearch(set, target, 0, len(set))
+
+fn set_bsearch(set, target, lo, hi) with Memory =
+  if lo >= hi { false }
+  else {
+    let mid = (lo + hi) / 2
+    let pivot = list_index(set, mid)
+    if str_eq(pivot, target) == 1 { true }
+    else if str_lt(pivot, target) == 1 {
+      set_bsearch(set, target, mid + 1, hi)
+    } else {
+      set_bsearch(set, target, lo, mid)
+    }
+  }
+
+// set_union: merge two sorted sets into a fresh sorted, deduped set.
+// O(M + N) — single-pass two-pointer merge into a pre-sized buffer.
+fn set_union(a, b) with Memory + Alloc =
+  let len_a = len(a)
+  let len_b = len(b)
+  let buf = make_list(len_a + len_b)
+  let final_len = set_union_merge(a, b, buf, 0, 0, 0, len_a, len_b)
+  set_trim(buf, final_len)
+
+fn set_union_merge(a, b, buf, ai, bi, oi, len_a, len_b) with Memory + Alloc =
+  if ai >= len_a {
+    if bi >= len_b { oi }
+    else {
+      set_union_merge(a, b, list_set(buf, oi, list_index(b, bi)),
+                      ai, bi + 1, oi + 1, len_a, len_b)
+    }
+  }
+  else if bi >= len_b {
+    set_union_merge(a, b, list_set(buf, oi, list_index(a, ai)),
+                    ai + 1, bi, oi + 1, len_a, len_b)
+  }
+  else {
+    let xa = list_index(a, ai)
+    let xb = list_index(b, bi)
+    if str_eq(xa, xb) == 1 {
+      set_union_merge(a, b, list_set(buf, oi, xa),
+                      ai + 1, bi + 1, oi + 1, len_a, len_b)
+    }
+    else if str_lt(xa, xb) == 1 {
+      set_union_merge(a, b, list_set(buf, oi, xa),
+                      ai + 1, bi, oi + 1, len_a, len_b)
+    }
+    else {
+      set_union_merge(a, b, list_set(buf, oi, xb),
+                      ai, bi + 1, oi + 1, len_a, len_b)
+    }
+  }
+
+// set_diff: a minus b. Both sorted; output sorted. O(M + N).
+fn set_diff(a, b) with Memory + Alloc =
+  let len_a = len(a)
+  let len_b = len(b)
+  let buf = make_list(len_a)
+  let final_len = set_diff_merge(a, b, buf, 0, 0, 0, len_a, len_b)
+  set_trim(buf, final_len)
+
+fn set_diff_merge(a, b, buf, ai, bi, oi, len_a, len_b) with Memory + Alloc =
+  if ai >= len_a { oi }
+  else if bi >= len_b {
+    set_diff_merge(a, b, list_set(buf, oi, list_index(a, ai)),
+                   ai + 1, bi, oi + 1, len_a, len_b)
+  }
+  else {
+    let xa = list_index(a, ai)
+    let xb = list_index(b, bi)
+    if str_eq(xa, xb) == 1 {
+      set_diff_merge(a, b, buf, ai + 1, bi + 1, oi, len_a, len_b)
+    }
+    else if str_lt(xa, xb) == 1 {
+      set_diff_merge(a, b, list_set(buf, oi, xa),
+                     ai + 1, bi, oi + 1, len_a, len_b)
+    }
+    else {
+      set_diff_merge(a, b, buf, ai, bi + 1, oi, len_a, len_b)
+    }
+  }
+
+// set_eq: structural equality of two sorted sets. O(N).
+fn set_eq(a, b) with Memory =
+  let la = len(a)
+  let lb = len(b)
+  if la != lb { false }
+  else { set_eq_loop(a, b, 0, la) }
+
+fn set_eq_loop(a, b, i, n) with Memory =
+  if i >= n { true }
+  else if str_eq(list_index(a, i), list_index(b, i)) == 1 {
+    set_eq_loop(a, b, i + 1, n)
+  } else { false }
+
+// set_canonicalize: convert any string list (possibly unsorted, may
+// have duplicates) into a sorted, deduped flat set. Boundary
+// normalization for consumers that receive raw input from parser /
+// AST. Hot-path callers should already maintain the invariant and
+// skip this step.
+fn set_canonicalize(lst) with Memory + Alloc =
+  let n = len(lst)
+  set_canonicalize_loop(lst, [], 0, n)
+
+fn set_canonicalize_loop(lst, acc, i, n) with Memory + Alloc =
+  if i >= n { acc }
+  else {
+    set_canonicalize_loop(lst, set_insert(acc, list_index(lst, i)), i + 1, n)
+  }
+
+// set_insert: insert into sorted set, maintaining order and dedup.
+// O(N) due to position scan + copy; hot-path callers should prefer
+// set_union with a singleton set when inserting into large sets.
+fn set_insert(set, name) with Memory + Alloc =
+  let n = len(set)
+  let pos = set_find_pos(set, name, 0, n)
+  if pos < n && str_eq(list_index(set, pos), name) == 1 { set }
+  else { set_insert_at(set, name, pos, n) }
+
+fn set_find_pos(set, name, i, n) with Memory =
+  if i >= n { n }
+  else if str_lt(list_index(set, i), name) == 1 {
+    set_find_pos(set, name, i + 1, n)
+  } else { i }
+
+fn set_insert_at(set, name, pos, n) with Memory + Alloc =
+  let buf = make_list(n + 1)
+  let buf_with_prefix = list_copy_into(set, buf, 0, pos)
+  let buf_with_ins = list_set(buf_with_prefix, pos, name)
+  copy_suffix_shifted(set, buf_with_ins, pos, pos, n)
+
+// Copy src[src_idx..n) into dst[src_idx+1..n+1) — shift suffix by 1.
+fn copy_suffix_shifted(src, dst, src_idx, dst_idx, n) with Memory + Alloc =
+  if src_idx >= n { dst }
+  else {
+    copy_suffix_shifted(
+      src, list_set(dst, dst_idx + 1, list_index(src, src_idx)),
+      src_idx + 1, dst_idx + 1, n
+    )
+  }
+
+fn set_trim(buf, n) with Memory + Alloc =
+  let trimmed = make_list(n)
+  list_copy_into(buf, trimmed, 0, n)
+
+// set_intersect: a ∩ b. Both sorted; output sorted, ≤ min(|a|,|b|).
+fn set_intersect(a, b) with Memory + Alloc =
+  let len_a = len(a)
+  let len_b = len(b)
+  let cap = if len_a < len_b { len_a } else { len_b }
+  let buf = make_list(cap)
+  let final_len = set_intersect_merge(a, b, buf, 0, 0, 0, len_a, len_b)
+  set_trim(buf, final_len)
+
+fn set_intersect_merge(a, b, buf, ai, bi, oi, len_a, len_b) with Memory + Alloc =
+  if ai >= len_a || bi >= len_b { oi }
+  else {
+    let xa = list_index(a, ai)
+    let xb = list_index(b, bi)
+    if str_eq(xa, xb) == 1 {
+      set_intersect_merge(a, b, list_set(buf, oi, xa),
+                          ai + 1, bi + 1, oi + 1, len_a, len_b)
+    }
+    else if str_lt(xa, xb) == 1 {
+      set_intersect_merge(a, b, buf, ai + 1, bi, oi, len_a, len_b)
+    }
+    else {
+      set_intersect_merge(a, b, buf, ai, bi + 1, oi, len_a, len_b)
+    }
+  }
+
+// set_subset: every element of `sub` appears in `sup`. O(|sub| log |sup|).
+fn set_subset(sub, sup) with Memory =
+  set_subset_loop(sub, sup, 0, len(sub))
+
+fn set_subset_loop(sub, sup, i, n) with Memory =
+  if i >= n { true }
+  else if set_contains(sup, list_index(sub, i)) {
+    set_subset_loop(sub, sup, i + 1, n)
+  } else { false }
+
+// set_disjoint: no element of `a` appears in `b`. O(|a| log |b|).
+fn set_disjoint(a, b) with Memory =
+  set_disjoint_loop(a, b, 0, len(a))
+
+fn set_disjoint_loop(a, b, i, n) with Memory =
+  if i >= n { true }
+  else if set_contains(b, list_index(a, i)) { false }
+  else { set_disjoint_loop(a, b, i + 1, n) }

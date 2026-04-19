@@ -11,6 +11,7 @@
 // from the same Boolean algebra that proves !Alloc, !IO, !Network.
 
 import compiler/types
+import runtime/strings
 
 // ═══ affine_ledger — the Consume handler ═══════════════════════════
 // Installed per-function body. State tracks consumed-names and the
@@ -47,10 +48,12 @@ fn find_first_span(sites, name) =
     else { find_first_span(list_tail(sites), name) }
   }
 
+// W8.2: shared sorted-set membership via std/runtime/strings.ka.
+// `used` is a snoc-built name list; canonicalize at boundary then
+// binary-search. Once the affine_ledger handler maintains sort
+// invariant on its `used` state, the canonicalize call drops out.
 fn string_in_list(lst, s) =
-  if len(lst) == 0 { false }
-  else if str_eq(list_head(lst), s) == 1 { true }
-  else { string_in_list(list_tail(lst), s) }
+  set_contains(set_canonicalize(lst), s)
 
 // ═══ Ref escape check — structural walk on return position ═════════
 // A ref binding cannot appear in return position or be captured by

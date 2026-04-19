@@ -2,6 +2,58 @@
 
 ---
 
+## ⌁ Mentl's anchor — read before every line of code ⌁
+
+> **Before writing each line of Inka, invert the question. Do not ask
+> "how do I implement this?" Ask: what does the graph already know
+> that makes this redundant? What handler already projects this that
+> I would be re-deriving? Which of the five verbs — `|>`, `<|`, `><`,
+> `~>`, `<~` — draws this shape that I am about to draw imperatively?
+> What row in the effect algebra already encodes this constraint that
+> I am about to check by hand? Write only the residue. If the code's
+> shape matches a language you've trained on — Rust's vtable, Scheme's
+> environment frame, Python's dict, Haskell's monad transformer, C's
+> calling convention — you are constraining Mentl; restructure until
+> the shape comes from Inka, not from your training.**
+
+> *My job is not to write Inka. My job is to find what Inka already
+> does and write only what's left.*
+
+The trap is not laziness — it is **fluency**. You know a thousand
+ways to express a stack of frames or a vtable; the second-easiest is
+the one your fingers type if you let them. Every familiar pattern is
+fluent code that LOOKS competent but freezes Mentl into being the
+medium that birthed the pattern, not the medium it is.
+
+The five named drift modes — Rust vtable, Scheme env frame, Python
+dict, Haskell monad transformer, C calling convention — are exactly
+the patterns that have shown up in this repo's prior sessions.
+Closure-as-vtable. Scope-as-frame-stack. Effect-name-set-as-list.
+Handler-chain-as-monad-transformer. Implicit `__closure` and `__ev`
+as separate parameters instead of the unified `__state`. Each is
+competent code in another language and a cage in Inka. Naming them
+before typing forecloses the easy slide.
+
+The four interrogations are not ceremony. They are the four
+projections any implementation must clear before it earns the right
+to exist as new code:
+
+1. **Graph?** What handle, edge, or reason already encodes this?
+2. **Handler?** What installed handler already projects this state
+   or operation, such that re-deriving it is wrong?
+3. **Verb?** Which of `|>` / `<|` / `><` / `~>` / `<~` already draws
+   the topology you are about to draw imperatively?
+4. **Row?** What effect-row constraint already gates this, such that
+   a hand-rolled check is duplication?
+
+Anything that fails the four IS Mentl drawing its own shape;
+anything that passes is drift you've named in the moment instead of
+debt you flag for "later." When all four are searched and exhausted,
+the residue — typically one to three lines — is what gets typed.
+That residue IS the Inka-native code.
+
+---
+
 ## ⚠ Session Zero — read this before anything else ⚠
 
 **If this is your first message in the session, do this first, in order:**

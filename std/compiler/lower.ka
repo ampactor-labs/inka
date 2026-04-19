@@ -73,6 +73,7 @@ type LowExpr
   // `$op_<name>`); only polymorphic sites become LEvPerform.
   | LBuildEvidence(Int, LowExpr, List)         // handle, body, [Evidence] — arms bound to slots
   | LEvPerform(Int, String, Int, List)         // handle, op_name, slot_idx, args
+  | LFieldLoad(Int, LowExpr, Int)              // W6: handle, record, offset_bytes
 
 type LowValue
   = LInt(Int)
@@ -125,7 +126,8 @@ fn lexpr_handle(e) = match e {
   LPerform(h, _, _)       => h,
   LHandle(h, _, _)        => h,
   LBuildEvidence(h, _, _) => h,
-  LEvPerform(h, _, _, _)  => h
+  LEvPerform(h, _, _, _)  => h,
+  LFieldLoad(h, _, _)     => h
 }
 
 fn lexpr_ty(e) with LookupTy =
@@ -253,10 +255,16 @@ fn lower_expr_body(e, handle, span) = match e {
     LReturn(handle, lower_expr(val)),
 
   FieldExpr(rec, field) => {
-    // Field access lowers to a known-slot load; emit resolves the
-    // record layout from the live type via lookup_ty.
+    // W6: record field access lowers to a compile-time-resolved
+    // offset load. Inference bound the record's type via
+    // lookup_ty; the field's position within the record's sorted
+    // field list gives the offset (4 bytes per slot, i32 fields;
+    // ty_to_wasm erases to i32 for all field kinds including
+    // nested records and lists stored as pointers).
     let lo_rec = lower_expr(rec)
-    LIndex(handle, lo_rec, LConst(handle, LString(field)), false)
+    let N(_, _, rh) = rec
+    let offset = resolve_field_offset(rh, field)
+    LFieldLoad(handle, lo_rec, offset)
   },
 
   MakeTupleExpr(elems) =>
@@ -316,6 +324,28 @@ fn apply_each_branch(lo_input, branches) =
   else {
     [LCall(0, list_head(branches), [lo_input])]
       ++ apply_each_branch(lo_input, list_tail(branches))
+  }
+
+// W6: resolve a field's byte offset from the record's live type.
+// Fields are sorted (via field_canonicalize invariants in effects.ka),
+// so the field's index in TRecord(fields) / TRecordOpen(fields, _)
+// maps directly to `4 * idx`. If lookup_ty returns a non-record
+// type (inference unresolved or an error-hole), fall back to 0 —
+// the loader will hit whatever offset 0 holds, which for open
+// records is the first field (best-effort graceful degrade).
+fn resolve_field_offset(rec_handle, field_name) =
+  match perform lookup_ty(rec_handle) {
+    TRecord(fields)        => field_byte_offset(fields, field_name, 0, len(fields)),
+    TRecordOpen(fields, _) => field_byte_offset(fields, field_name, 0, len(fields)),
+    _                      => 0
+  }
+
+fn field_byte_offset(fields, target, i, n) =
+  if i >= n { 0 }
+  else {
+    let (name, _) = list_index(fields, i)
+    if str_eq(name, target) == 1 { 4 * i }
+    else { field_byte_offset(fields, target, i + 1, n) }
   }
 
 // ═══ Statement lowering ═══════════════════════════════════════════

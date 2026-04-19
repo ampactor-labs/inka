@@ -225,6 +225,50 @@ type FeedbackSpec
   | FbDelay(Int)                  // unit-delay lookback of N samples
   | FbFilter(Int, List)           // N-tap filter with coefficient list
 
+// Region (spec I12) — Tofte-Talpin region identity for escape
+// analysis. Each `handle ... with mem_arena` scope produces a
+// region; values allocated inside the region carry that region as a
+// tag. A value cannot escape the scope that outlives its region —
+// the return-position check uses region identity, not pointer
+// reachability, making the analysis O(1) per return edge.
+//
+// The Region ADT is a pair: a unique region id (fresh per
+// arena install) and the span where the region was installed.
+// Span tracking lets escape diagnostics point at the ORIGINAL
+// region site rather than the escape attempt alone.
+type Region
+  = Region(Int, Span)
+
+// RegionTrack (spec I12) — intercepts alloc sites to tag each value
+// with its originating region; checks values at return sites for
+// escape. Today's effect shape is substrate-prep: arms wire into
+// the Alloc effect surface (which surfaces with full W5 arena
+// semantics and the existing Consume ownership ledger). The
+// region_tracker handler lives in own.ka — region_enter pushes a
+// fresh Region id onto a stack; region_exit pops; tag_alloc stamps
+// the current-top region onto an alloc return; check_escape
+// compares a returned value's region against the ambient region
+// on fn return.
+effect RegionTrack {
+  region_enter(Span) -> Int                       @resume=OneShot
+  region_exit(Int) -> ()                          @resume=OneShot
+  tag_alloc(Int) -> ()                            @resume=OneShot
+  check_escape(Int, Span) -> ()                   @resume=OneShot
+}
+
+// StringTable (spec W5) — compile-time interned string literals.
+// emit_module collects every LString in the lowered program, assigns
+// each unique literal a 4-byte-aligned offset in the string-data
+// region (0x10000..0x100000), and emits `(data ...)` segments. At
+// LString emit time, `string_offset(s)` returns the interned offset;
+// the generated WAT is `(i32.const <offset>)` with zero runtime
+// construction. `set_string_entries` is called once by emit_module
+// after collection to populate the handler's state.
+effect StringTable {
+  string_offset(String) -> Int                   @resume=OneShot
+  set_string_entries(List) -> ()                 @resume=OneShot
+}
+
 // Evidence (spec W4) — runtime witness of an effect-to-handler-arm
 // binding. A polymorphic function that performs `op_name` dispatches
 // via an evidence slot: the caller threads the evidence record into

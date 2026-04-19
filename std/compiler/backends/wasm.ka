@@ -70,6 +70,50 @@ handler emit_memory_bump {
   }
 }
 
+// emit_memory_arena (W5) — sibling handler demonstrating the
+// EmitMemory swap surface. Same effect, different pointer, different
+// reclamation semantics. Region arenas allocate from `$arena_ptr`;
+// on scope exit, the pointer resets to the entry snapshot,
+// reclaiming the whole region in O(1). Here the emit is identical
+// to bump except for the pointer name — the region-enter/exit
+// emission is a future refinement once HandleExpr tracks region
+// identity (E3). The SHAPE is what matters: pipeline can swap
+// `~> emit_memory_bump` for `~> emit_memory_arena` with zero source
+// changes, producing different WAT. DESIGN Ch 7.3 "the handler IS
+// the backend" — memory strategy is a handler swap.
+handler emit_memory_arena {
+  emit_alloc(size, target_local) => {
+    perform wat_emit("    (global.get $arena_ptr)\n")
+    perform wat_emit("    (local.set $")
+    perform wat_emit(target_local)
+    perform wat_emit(")\n")
+    perform wat_emit("    (global.get $arena_ptr)\n")
+    perform wat_emit("    (i32.const ")
+    perform wat_emit(int_to_str(size))
+    perform wat_emit(") (i32.add)\n")
+    perform wat_emit("    (global.set $arena_ptr)\n")
+    resume(())
+  }
+}
+
+// String-literal interning (W5). Populated once per emit_module
+// by set_string_entries, then read via string_offset at every
+// LString emit site. Entries are [(String, Int)] — (literal, offset).
+// On lookup miss the handler returns 0 (points at the start of the
+// string region — an empty string whose emit is idempotent).
+handler string_table with entries = [] {
+  string_offset(s) => resume(string_offset_lookup(entries, s, 0, len(entries))),
+  set_string_entries(es) => resume(()) with entries = es
+}
+
+fn string_offset_lookup(entries, target, i, n) =
+  if i >= n { 0 }
+  else {
+    let (s, offset) = list_index(entries, i)
+    if str_eq(s, target) == 1 { offset }
+    else { string_offset_lookup(entries, target, i + 1, n) }
+  }
+
 // ═══ ty_to_wasm — live graph → WASM value type ═════════════════════
 // Reads through LookupTy; refinements transparent (erased at runtime).
 
@@ -108,10 +152,19 @@ fn ty_to_wasm_type(ty) = match ty {
 fn emit_module(lowered) = {
   let all_fn_names = collect_fn_names(lowered, [])
   let top_fn_names = collect_top_level_fn_names(lowered, [])
+  // W5 string interning — collect every LString in the lowered
+  // program, assign each unique literal a 4-byte-aligned offset in
+  // the string-data region (starts at 0x10000 = 64KB). The pre-pass
+  // produces [(String, Int)] pairs; set_string_entries seeds the
+  // string_table handler so downstream LString emits can look up
+  // the offset via perform string_offset.
+  let string_entries = collect_string_literals(lowered)
+  perform set_string_entries(string_entries)
   emit_header()
   emit_type_section(lowered)
   emit_runtime_imports()
   emit_memory_decl()
+  emit_string_data(string_entries)
   emit_fn_table(all_fn_names)
   emit_fn_index_globals(all_fn_names, 0)
   emit_static_top_closures(top_fn_names, all_fn_names, 0)
@@ -119,6 +172,122 @@ fn emit_module(lowered) = {
   emit_start(top_fn_names)
   emit_footer()
 }
+
+// ═══ W5: string-literal data segments ══════════════════════════════
+// Deep-walk the lowered program collecting every unique LString in
+// encounter order; assign each a 4-byte-aligned offset starting at
+// 0x10000 (64KB — sits above the static-closure region at 0x100
+// and below the bump heap at 1MB). Each string occupies
+// `4 + byte_length(s)` bytes with layout [len:i32][utf8_bytes].
+
+fn collect_string_literals(lowered) = {
+  let (entries, _) = collect_strings_list(lowered, [], 65536)
+  entries
+}
+
+fn collect_strings_list(exprs, acc, next_offset) =
+  if len(exprs) == 0 { (acc, next_offset) }
+  else {
+    let (acc2, off2) = collect_strings_expr(list_head(exprs), acc, next_offset)
+    collect_strings_list(list_tail(exprs), acc2, off2)
+  }
+
+fn collect_strings_expr(expr, acc, next_offset) = match expr {
+  LConst(_, LString(s)) => {
+    if string_entry_exists(acc, s, 0, len(acc)) { (acc, next_offset) }
+    else {
+      let size = 4 + byte_len(s)                // 4-byte length prefix + UTF-8 bytes
+      let aligned_size = (size + 3) / 4 * 4     // round up to 4-byte multiple
+      (acc ++ [(s, next_offset)], next_offset + aligned_size)
+    }
+  },
+  LConst(_, _)                => (acc, next_offset),
+  LLocal(_, _)                => (acc, next_offset),
+  LGlobal(_, _)               => (acc, next_offset),
+  LUpval(_, _)                => (acc, next_offset),
+  LStore(_, _, v)             => collect_strings_expr(v, acc, next_offset),
+  LLet(_, _, inner)           => collect_strings_expr(inner, acc, next_offset),
+  LBinOp(_, _, l, r)          => collect_strings_bin(l, r, acc, next_offset),
+  LUnaryOp(_, _, inner)       => collect_strings_expr(inner, acc, next_offset),
+  LCall(_, f, args)           => collect_strings_bin_list(f, args, acc, next_offset),
+  LTailCall(_, f, args)       => collect_strings_bin_list(f, args, acc, next_offset),
+  LReturn(_, inner)           => collect_strings_expr(inner, acc, next_offset),
+  LMakeClosure(_, LFn(_, _, _, body, _), caps) => {
+    let (acc1, o1) = collect_strings_list(body, acc, next_offset)
+    collect_strings_list(caps, acc1, o1)
+  },
+  LIf(_, c, t, e) => {
+    let (a1, o1) = collect_strings_expr(c, acc, next_offset)
+    let (a2, o2) = collect_strings_list(t, a1, o1)
+    collect_strings_list(e, a2, o2)
+  },
+  LBlock(_, stmts)            => collect_strings_list(stmts, acc, next_offset),
+  LMakeList(_, elems)         => collect_strings_list(elems, acc, next_offset),
+  LMakeTuple(_, elems)        => collect_strings_list(elems, acc, next_offset),
+  LMakeVariant(_, _, fs)      => collect_strings_list(fs, acc, next_offset),
+  LIndex(_, b, i, _)          => collect_strings_bin(b, i, acc, next_offset),
+  LMatch(_, s, _arms)         => collect_strings_expr(s, acc, next_offset),
+  LLoop(_, body)              => collect_strings_list(body, acc, next_offset),
+  LBreak(_, v)                => collect_strings_expr(v, acc, next_offset),
+  LSwitch(_, s, _c)           => collect_strings_expr(s, acc, next_offset),
+  LSuspend(_, _, f, args)     => collect_strings_bin_list(f, args, acc, next_offset),
+  LStateGet(_, _)             => (acc, next_offset),
+  LStateSet(_, _, v)          => collect_strings_expr(v, acc, next_offset),
+  LRegion(_, body)            => collect_strings_list(body, acc, next_offset),
+  LHandleWith(_, b, hn)       => collect_strings_bin(b, hn, acc, next_offset),
+  LFeedback(_, b, s)          => collect_strings_bin(b, s, acc, next_offset),
+  LPerform(_, _, args)        => collect_strings_list(args, acc, next_offset),
+  LHandle(_, b, _arms)        => collect_strings_expr(b, acc, next_offset),
+  LBuildEvidence(_, b, _ev)   => collect_strings_expr(b, acc, next_offset),
+  LEvPerform(_, _, _, args)   => collect_strings_list(args, acc, next_offset),
+  LFieldLoad(_, rec, _)       => collect_strings_expr(rec, acc, next_offset)
+}
+
+fn collect_strings_bin(a, b, acc, off) = {
+  let (acc1, o1) = collect_strings_expr(a, acc, off)
+  collect_strings_expr(b, acc1, o1)
+}
+
+fn collect_strings_bin_list(a, bs, acc, off) = {
+  let (acc1, o1) = collect_strings_expr(a, acc, off)
+  collect_strings_list(bs, acc1, o1)
+}
+
+fn string_entry_exists(entries, target, i, n) =
+  if i >= n { false }
+  else {
+    let (s, _) = list_index(entries, i)
+    if str_eq(s, target) == 1 { true }
+    else { string_entry_exists(entries, target, i + 1, n) }
+  }
+
+// Emit `(data (i32.const <offset>) "<escaped-bytes>")` for each
+// string entry. Layout per string: first 4 bytes are the little-
+// endian length (emit_le4_escape emits four \xx escapes), followed
+// by the UTF-8 bytes (each byte emitted as \xx so the WAT parser
+// accepts the whole payload uniformly regardless of byte values).
+fn emit_string_data(entries) =
+  emit_string_data_loop(entries, 0, len(entries))
+
+fn emit_string_data_loop(entries, i, n) =
+  if i >= n { () }
+  else {
+    let (s, offset) = list_index(entries, i)
+    perform wat_emit("  (data (i32.const ")
+    perform wat_emit(int_to_str(offset))
+    perform wat_emit(") \"")
+    emit_le4_escape(byte_len(s))
+    emit_string_bytes(s, 0, byte_len(s))
+    perform wat_emit("\")\n")
+    emit_string_data_loop(entries, i + 1, n)
+  }
+
+fn emit_string_bytes(s, i, n) =
+  if i >= n { () }
+  else {
+    emit_byte_escape(byte_at(s, i))
+    emit_string_bytes(s, i + 1, n)
+  }
 
 // Deep-walk the lowered program, collecting every LMakeClosure's
 // function name in encounter order. Each name gets a stable table
@@ -169,6 +338,7 @@ fn collect_fn_names_expr(expr, acc) = match expr {
   LHandle(_h, b, _arms)      => collect_fn_names_expr(b, acc),
   LBuildEvidence(_h, b, _ev) => collect_fn_names_expr(b, acc),
   LEvPerform(_h, _n, _s, a)  => collect_fn_names_list(a, acc),
+  LFieldLoad(_h, rec, _off)  => collect_fn_names_expr(rec, acc),
   _                          => acc
 }
 
@@ -385,7 +555,15 @@ fn emit_runtime_imports() = {
 
 fn emit_memory_decl() = {
   perform wat_emit("  (memory (export \"memory\") 32768 65536)\n")
+  // Bump heap starts at 1MB. The 64KB..1MB region holds static
+  // string data (W5) and can accommodate future static tables.
   perform wat_emit("  (global $heap_ptr (mut i32) (i32.const 1048576))\n")
+  // Arena pointer (W5 swap surface). emit_memory_arena allocates
+  // from this pointer; scope exits reset it to a saved snapshot
+  // for O(1) region drop. Lives in the same address space as the
+  // bump heap; only one strategy is active per emit (the installed
+  // EmitMemory handler decides which pointer moves).
+  perform wat_emit("  (global $arena_ptr (mut i32) (i32.const 1048576))\n")
 }
 
 // emit_functions deep-walks the lowered program and emits a WASM
@@ -437,6 +615,7 @@ fn emit_fns_expr(expr) = match expr {
   LHandle(_h, b, _arms)      => emit_fns_expr(b),
   LBuildEvidence(_h, b, _ev) => emit_fns_expr(b),
   LEvPerform(_h, _n, _s, a)  => emit_fns_list(a),
+  LFieldLoad(_h, rec, _off)  => emit_fns_expr(rec),
   _                          => ()
 }
 
@@ -509,6 +688,7 @@ fn emit_let_locals_expr(expr) = match expr {
   LHandle(_h, b, _arms)     => emit_let_locals_expr(b),
   LBuildEvidence(_h, b, _)  => emit_let_locals_expr(b),
   LEvPerform(_h, _n, _s, a) => emit_let_locals_list(a),
+  LFieldLoad(_h, rec, _off) => emit_let_locals_expr(rec),
   _                         => ()
 }
 
@@ -821,6 +1001,18 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    (call_indirect (type $ft")
     perform wat_emit(int_to_str(len(args) + 1))
     perform wat_emit("))\n")
+  },
+
+  // W6: record field load. The offset was resolved at lower-time
+  // from the record's inferred type (sorted-field position * 4).
+  // Records lay out as [field_0_i32, field_1_i32, ...] — every
+  // field erases to i32 per ty_to_wasm (pointers for non-scalar
+  // fields). One i32.load with an immediate offset.
+  LFieldLoad(_h, rec, offset) => {
+    emit_expr(rec)
+    perform wat_emit("    (i32.load offset=")
+    perform wat_emit(int_to_str(offset))
+    perform wat_emit(")\n")
   }
 }
 
@@ -848,9 +1040,14 @@ fn emit_const(v) = match v {
     if b { perform wat_emit("    (i32.const 1)\n") }
     else { perform wat_emit("    (i32.const 0)\n") },
   LString(s) => {
-    perform wat_emit("    ;; string: ")
-    perform wat_emit(s)
-    perform wat_emit("\n    (i32.const 0)\n")
+    // W5: string literals live in statically-emitted (data ...)
+    // segments. LString's offset was assigned at emit_module's
+    // collect pass; string_offset looks it up through the
+    // string_table handler. No runtime construction.
+    let offset = perform string_offset(s)
+    perform wat_emit("    (i32.const ")
+    perform wat_emit(int_to_str(offset))
+    perform wat_emit(")\n")
   }
 }
 

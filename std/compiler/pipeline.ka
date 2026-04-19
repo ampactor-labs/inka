@@ -53,9 +53,11 @@ fn compile(source) =
     |> lower_program
     |> emit_module
     ~> wat_stdout
-    ~> emit_memory_bump
+    ~> string_table          // W5 — compile-time interned string offsets
+    ~> emit_memory_bump      // swap for emit_memory_arena to prove surface
     ~> mentl_default
     ~> affine_ledger
+    ~> region_tracker        // I12 — region-escape ledger (substrate prep)
     ~> verify_ledger
     ~> lower_scope
     ~> lookup_ty_graph

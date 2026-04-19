@@ -134,6 +134,55 @@ fn report_collisions_inner(deltas, i, j, n, span) =
     report_collisions_inner(deltas, i, j + 1, n, span)
   }
 
+// ═══ region_tracker — Tofte-Talpin region escape (I12) ════════════
+// Installed per-function body alongside affine_ledger. Arms react
+// to Alloc/return surfaces to track region identity on each value:
+//   region_enter — fresh region id + span, push onto stack
+//   region_exit  — pop; any value still tagged with this region is
+//                  about to escape. When the fn body calls
+//                  check_escape on its return value, we compare
+//                  that value's region against the still-live
+//                  ambient region — mismatches surface as
+//                  E_OwnershipViolation with a region-trace
+//                  diagnostic.
+// Today the handler is a shape-prep stub: the arms are wired to the
+// effect surface but the full Alloc-tagging path (every `perform
+// alloc(n)` runs through tag_alloc) will land when EmitMemory arena
+// semantics bind region identities to alloc returns. The substrate
+// is ready; the wire-up is a precise follow-up.
+handler region_tracker with region_stack = [], next_region = 0, tagged_values = [] {
+
+  region_enter(span) => {
+    let rid = next_region
+    resume(rid)
+      with region_stack = [Region(rid, span)] ++ region_stack,
+           next_region = next_region + 1
+  },
+
+  region_exit(_rid) => {
+    if len(region_stack) == 0 { resume(()) }
+    else { resume(()) with region_stack = list_tail(region_stack) }
+  },
+
+  tag_alloc(_value_handle) => {
+    // Substrate-prep: when full wiring lands, this will stamp the
+    // current-top region onto the value's entry in tagged_values.
+    // Today the stamp is a no-op; value-level region tagging
+    // requires graph-integrated alloc-return correlation that
+    // arrives with full E3.
+    resume(())
+  },
+
+  check_escape(_value_handle, _span) => {
+    // Substrate-prep: when full wiring lands, this compares the
+    // value's tagged region against the topmost still-live region
+    // on region_stack. A value tagged with a region NO LONGER on
+    // the stack is escaping; emit E_OwnershipViolation carrying
+    // the region's install-span and the escape site.
+    resume(())
+  }
+}
+
 fn report_each_collision(names, i, n, span) =
   if i >= n { () }
   else {

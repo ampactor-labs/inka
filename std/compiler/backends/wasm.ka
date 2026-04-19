@@ -79,9 +79,8 @@ fn emit_module(lowered) = {
   emit_memory_decl()
   emit_fn_table(all_fn_names)
   emit_fn_index_globals(all_fn_names, 0)
-  emit_top_level_closure_globals(top_fn_names)
+  emit_static_top_closures(top_fn_names, all_fn_names, 0)
   emit_functions(lowered)
-  emit_init_closures(top_fn_names)
   emit_start(lowered)
   emit_footer()
 }
@@ -191,56 +190,78 @@ fn emit_fn_index_globals(names, idx) =
     emit_fn_index_globals(list_tail(names), idx + 1)
   }
 
-// Top-level closure globals. Every top-level function gets a closure
-// record at module init. `$<name>` holds the pointer so VarRef to a
-// top-level fn lowers to LGlobal(h, name) → (global.get $<name>)
-// returns a callable closure (0 captures). Initialized with 0 here;
-// populated by `$_init_closures` at start time.
-fn emit_top_level_closure_globals(names) =
-  if len(names) == 0 { () }
+// Top-level closure records as STATIC DATA. The graph knows every
+// top-level fn's closure layout at compile time — fn_idx + 0
+// captures = 8 bytes per record. We emit `(data ...)` segments at
+// module-load addresses [256, 256+8N) populated with little-endian
+// `[fn_idx, 0]`, and `(global $<name> i32 (i32.const <addr>))`
+// pointing to each. No `_init_closures` runtime routine; no
+// startup walk; the host populates the records during module
+// instantiation. DESIGN Ch 4 "the graph IS the program" — emit
+// projects state directly, doesn't generate code that builds it.
+//
+// Layout: addresses 0x100..0xFFFF are reserved for static closure
+// records. WASI iov scratch lives at 0x50–0x60 (per io.ka); the
+// bump heap starts at 1MB. Static-closure region sits between.
+//
+// Each top-level closure occupies 8 bytes:
+//   offset 0: fn_idx (i32 LE)
+//   offset 4: capture_count = 0 (i32 LE)
+//
+// Top-level fns can capture nothing because they have no enclosing
+// lexical frame at lower time. Inline lambdas still construct
+// closure records dynamically at LMakeClosure emit (their captures
+// are non-empty in general).
+
+fn emit_static_top_closures(top_names, all_names, slot) =
+  if len(top_names) == 0 { () }
   else {
+    let name = list_head(top_names)
+    let fn_idx = ls_find_str_local(all_names, name, 0)
+    let addr = 256 + slot * 8
+    // Static data segment for the 8-byte closure record.
+    perform wat_emit("  (data (i32.const ")
+    perform wat_emit(int_to_str(addr))
+    perform wat_emit(") \"")
+    emit_le4_escape(fn_idx)
+    emit_le4_escape(0)
+    perform wat_emit("\")\n")
+    // Immutable global pointing at the record. VarRef → LGlobal →
+    // (global.get $<name>) returns the static closure pointer.
     perform wat_emit("  (global $")
-    perform wat_emit(list_head(names))
-    perform wat_emit(" (mut i32) (i32.const 0))\n")
-    emit_top_level_closure_globals(list_tail(names))
+    perform wat_emit(name)
+    perform wat_emit(" i32 (i32.const ")
+    perform wat_emit(int_to_str(addr))
+    perform wat_emit("))\n")
+    emit_static_top_closures(list_tail(top_names), all_names, slot + 1)
   }
 
-// `$_init_closures`: allocates a closure record for each top-level
-// function and stores its pointer into `$<name>`. Called from
-// `$_start` before `$main`. Top-level closures have 0 captures; the
-// record is 8 bytes: [fn_idx, 0].
-fn emit_init_closures(names) = {
-  perform wat_emit("  (func $_init_closures\n")
-  emit_init_closure_stmts(names)
-  perform wat_emit("  )\n")
+// Find the index of a string in a list. Returns -1 if not found.
+fn ls_find_str_local(lst, target, i) =
+  if len(lst) == 0 { -1 }
+  else if str_eq(list_head(lst), target) == 1 { i }
+  else { ls_find_str_local(list_tail(lst), target, i + 1) }
+
+// WAT data string escape: \HH per byte, little-endian for i32.
+fn emit_le4_escape(n) = {
+  emit_byte_escape(n % 256)
+  emit_byte_escape((n / 256) % 256)
+  emit_byte_escape((n / 65536) % 256)
+  emit_byte_escape((n / 16777216) % 256)
 }
 
-fn emit_init_closure_stmts(names) =
-  if len(names) == 0 { () }
-  else {
-    let name = list_head(names)
-    // Store heap_ptr into $<name>, then bump heap_ptr by 8, then
-    // populate the record (fn_idx at offset 0, count=0 at offset 4).
-    perform wat_emit("    (global.get $heap_ptr)\n")
-    perform wat_emit("    (global.set $")
-    perform wat_emit(name)
-    perform wat_emit(")\n")
-    perform wat_emit("    (global.get $heap_ptr)\n")
-    perform wat_emit("    (i32.const 8) (i32.add)\n")
-    perform wat_emit("    (global.set $heap_ptr)\n")
-    perform wat_emit("    (global.get $")
-    perform wat_emit(name)
-    perform wat_emit(")\n")
-    perform wat_emit("    (global.get $")
-    perform wat_emit(name)
-    perform wat_emit("_idx)\n")
-    perform wat_emit("    (i32.store offset=0)\n")
-    perform wat_emit("    (global.get $")
-    perform wat_emit(name)
-    perform wat_emit(")\n")
-    perform wat_emit("    (i32.const 0) (i32.store offset=4)\n")
-    emit_init_closure_stmts(list_tail(names))
-  }
+fn emit_byte_escape(b) = {
+  perform wat_emit("\\")
+  perform wat_emit(hex_digit(b / 16))
+  perform wat_emit(hex_digit(b % 16))
+}
+
+fn hex_digit(d) = match d {
+  0  => "0", 1  => "1", 2  => "2", 3  => "3",
+  4  => "4", 5  => "5", 6  => "6", 7  => "7",
+  8  => "8", 9  => "9", 10 => "a", 11 => "b",
+  12 => "c", 13 => "d", 14 => "e", 15 => "f"
+}
 
 // ═══ Type section — signatures for call_indirect ═══════════════════
 // Every call_indirect references a function type index. We emit a
@@ -463,11 +484,10 @@ fn emit_body(stmts) =
   }
 
 fn emit_start(_lowered) = {
-  // Initialize top-level closures first, then invoke main. Main is
-  // called via the uniform closure convention: load $main (now a
-  // closure pointer), push it as __closure, load fn_idx, call_indirect.
+  // Top-level closures are static data — no init routine. _start
+  // invokes main through its static closure: load $main pointer,
+  // push as __closure, load fn_idx from offset 0, call_indirect.
   perform wat_emit("  (func $_start\n")
-  perform wat_emit("    (call $_init_closures)\n")
   perform wat_emit("    (global.get $main)\n")
   perform wat_emit("    (global.get $main) (i32.load offset=0)\n")
   perform wat_emit("    (call_indirect (type $ft1))\n")
@@ -580,14 +600,7 @@ fn emit_expr(expr) = match expr {
     // keeps W7 self-contained and swap-ready.
     let n = len(captures_exprs)
     let size = 8 + n * 4
-    // Snapshot heap_ptr into $clos_tmp; bump the global.
-    perform wat_emit("    (global.get $heap_ptr)\n")
-    perform wat_emit("    (local.set $clos_tmp)\n")
-    perform wat_emit("    (global.get $heap_ptr)\n")
-    perform wat_emit("    (i32.const ")
-    perform wat_emit(int_to_str(size))
-    perform wat_emit(") (i32.add)\n")
-    perform wat_emit("    (global.set $heap_ptr)\n")
+    emit_alloc_to_local(size, "clos_tmp")
     // Store fn_ptr (table index) at offset 0 — reads the per-fn
     // index global emitted by emit_fn_index_globals.
     perform wat_emit("    (local.get $clos_tmp)\n")
@@ -780,6 +793,25 @@ fn emit_unaryop(op) = match op {
 }
 
 // ═══ List / tuple literals ═════════════════════════════════════════
+
+// Bump-allocate `size` bytes from $heap_ptr; store the result
+// pointer into the named local. The named-function indirection is
+// the swap point for the future Memory handler (W5): a `bump`
+// handler emits this; an `arena` handler emits a region-tracked
+// allocation; a `gc` handler emits a different sequence entirely.
+// The closure layout above stays unchanged because the alloc
+// primitive is the swap surface.
+fn emit_alloc_to_local(size, target_local) = {
+  perform wat_emit("    (global.get $heap_ptr)\n")
+  perform wat_emit("    (local.set $")
+  perform wat_emit(target_local)
+  perform wat_emit(")\n")
+  perform wat_emit("    (global.get $heap_ptr)\n")
+  perform wat_emit("    (i32.const ")
+  perform wat_emit(int_to_str(size))
+  perform wat_emit(") (i32.add)\n")
+  perform wat_emit("    (global.set $heap_ptr)\n")
+}
 
 // Emit the stores for each capture in the closure record.
 // Captures are indexed from 0; each stored at offset 8 + 4*i.

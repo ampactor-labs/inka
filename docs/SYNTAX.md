@@ -934,6 +934,164 @@ A `.ka` file with `fn main()` is an EXECUTABLE — `_start` invokes `main`.
 
 ---
 
+## Token enumeration
+
+The lexer emits a stream of `Token` values. The parser consumes them via exhaustive match. Both the wrapper shape and the variant enumeration are canonical here; Ω.4's parser refactor implements them exactly.
+
+### Token wrapper — substrate-native pattern
+
+```
+type Token = Tok(TokenKind, Span)
+```
+
+This mirrors the `N(NodeBody, Span, Int)` wrapper for AST nodes: a structured-value with positional metadata. Every token carries its source span for parser diagnostics and downstream Located reasons.
+
+Accessors:
+```
+fn token_kind(t) = let Tok(k, _) = t; k
+fn token_span(t) = let Tok(_, s) = t; s
+```
+
+### TokenKind variants — exhaustive
+
+```
+type TokenKind
+  // ─── Keywords ─────────────────────────────────────────────────────
+  = TFn | TLet | TIf | TElse | TMatch | TType
+  | TEffect | THandle | THandler | TWith
+  | TResume | TPerform
+  | TFor | TIn | TLoop | TBreak | TContinue | TReturn
+  | TImport | TWhere
+  | TOwn | TRef | TPure
+  | TTrue | TFalse
+
+  // ─── Identifiers and literals (carry payload) ─────────────────────
+  | TIdent(String)
+  | TInt(Int)
+  | TFloat(Float)
+  | TString(String)
+  | TDocComment(String)             // /// — emitted ONLY when triple-slash
+                                    //   detected; attaches to next decl
+
+  // ─── Two-character operators ──────────────────────────────────────
+  | TEqEq | TBangEq | TLtEq | TGtEq          // comparison
+  | TArrow | TFatArrow                       // -> and =>
+  | TPlusPlus                                // ++ concat
+  | TPipeGt | TLtPipe | TGtLt | TTildeGt | TLtTilde   // five verbs
+  | TAndAnd | TOrOr                          // logical
+  | TColonColon                              // :: (path separator, future)
+
+  // ─── Single-character operators and punctuation ───────────────────
+  | TLParen | TRParen | TLBrace | TRBrace | TLBracket | TRBracket
+  | TComma | TDot | TColon | TSemicolon
+  | TPlus | TMinus | TStar | TSlash | TPercent
+  | TEq | TLt | TGt | TBang
+  | TPipe | TTilde | TAt | TQuestion
+
+  // ─── Layout / structural ──────────────────────────────────────────
+  | TNewline                        // semantic per DESIGN Ch 2 / `~>` form
+  | TEof                            // end of input — always last
+```
+
+### Variant catalog (canonical lexical form, payload, expected parse contexts)
+
+| Variant         | Lexical form     | Payload   | Where parser expects it                       |
+|-----------------|------------------|-----------|------------------------------------------------|
+| **Keywords (24)** |                |           |                                                |
+| `TFn`           | `fn`             | —         | start of function declaration / lambda         |
+| `TLet`          | `let`            | —         | start of let-binding                           |
+| `TIf`           | `if`             | —         | start of if-expression                         |
+| `TElse`         | `else`           | —         | between if branches                            |
+| `TMatch`        | `match`          | —         | start of match-expression                      |
+| `TType`         | `type`           | —         | start of type declaration                      |
+| `TEffect`       | `effect`         | —         | start of effect declaration                    |
+| `THandle`       | `handle`         | —         | start of handle-expression                     |
+| `THandler`      | `handler`        | —         | start of handler declaration                   |
+| `TWith`         | `with`           | —         | effect clauses, handler state, handle-with     |
+| `TResume`       | `resume`         | —         | inside handler arm body                        |
+| `TPerform`      | `perform`        | —         | invoking an effect operation                   |
+| `TFor`          | `for`            | —         | reserved (for-comprehension future)            |
+| `TIn`           | `in`             | —         | reserved (let-in future)                       |
+| `TLoop`         | `loop`           | —         | start of loop expression                       |
+| `TBreak`        | `break`          | —         | inside loop body                               |
+| `TContinue`     | `continue`       | —         | inside loop body                               |
+| `TReturn`       | `return`         | —         | early return from fn body                      |
+| `TImport`       | `import`         | —         | top-level import statement                     |
+| `TWhere`        | `where`          | —         | refinement type clause                         |
+| `TOwn`          | `own`            | —         | parameter ownership marker                     |
+| `TRef`          | `ref`            | —         | parameter borrow marker                        |
+| `TPure`         | `Pure`           | —         | `with Pure` declaration                        |
+| `TTrue`         | `true`           | —         | Bool literal                                   |
+| `TFalse`        | `false`          | —         | Bool literal                                   |
+| **Identifiers and literals (5)** |  |           |                                                |
+| `TIdent(s)`     | `[A-Za-z_][...]` | name      | variable refs, fn names, type names, etc.      |
+| `TInt(n)`       | `[0-9]+`         | i32 value | integer literal                                |
+| `TFloat(f)`     | `[0-9]+.[0-9]+`  | f64 value | floating-point literal                         |
+| `TString(s)`    | `"..."` or `"""..."""` | string content (escape-resolved, interp markers preserved) | string literal |
+| `TDocComment(s)`| `/// ...`        | comment text (one line, leading `///` stripped) | attaches to next declaration |
+| **Two-character operators (15)** |  |           |                                                |
+| `TEqEq`         | `==`             | —         | equality comparison                            |
+| `TBangEq`       | `!=`             | —         | inequality comparison                          |
+| `TLtEq`         | `<=`             | —         | less-than-or-equal                             |
+| `TGtEq`         | `>=`             | —         | greater-than-or-equal                          |
+| `TArrow`        | `->`             | —         | function return type, fn-type form             |
+| `TFatArrow`     | `=>`             | —         | match arm separator, lambda body separator     |
+| `TPlusPlus`     | `++`             | —         | string/list concat                             |
+| `TPipeGt`       | `\|>`            | —         | sequential pipe                                |
+| `TLtPipe`       | `<\|`            | —         | divergent pipe (fanout)                        |
+| `TGtLt`         | `><`             | —         | parallel compose (structural N-ary)            |
+| `TTildeGt`      | `~>`             | —         | handler-attach (block / inline by newline)     |
+| `TLtTilde`      | `<~`             | —         | feedback                                       |
+| `TAndAnd`       | `&&`             | —         | logical and                                    |
+| `TOrOr`         | `\|\|`           | —         | logical or                                     |
+| `TColonColon`   | `::`             | —         | reserved (path separator, namespace future)    |
+| **Single-character operators and punctuation (23)** |  |           |                              |
+| `TLParen`       | `(`              | —         | grouping, params, tuples, calls                |
+| `TRParen`       | `)`              | —         | close grouping                                 |
+| `TLBrace`       | `{`              | —         | blocks, records, handler arms, type variants   |
+| `TRBrace`       | `}`              | —         | close LBrace                                   |
+| `TLBracket`     | `[`              | —         | list literals, list patterns                   |
+| `TRBracket`     | `]`              | —         | close LBracket                                 |
+| `TComma`        | `,`              | —         | separator in tuples, params, fields, lists     |
+| `TDot`          | `.`              | —         | field access                                   |
+| `TColon`        | `:`              | —         | type annotation, record field binding          |
+| `TSemicolon`    | `;`              | —         | statement separator (when explicit)            |
+| `TPlus`         | `+`              | —         | addition; effect union                         |
+| `TMinus`        | `-`              | —         | subtraction; unary negate                      |
+| `TStar`         | `*`              | —         | multiplication                                 |
+| `TSlash`        | `/`              | —         | division; module-path separator                |
+| `TPercent`      | `%`              | —         | modulo                                         |
+| `TEq`           | `=`              | —         | binding (let / fn / type)                      |
+| `TLt`           | `<`              | —         | less-than; generic-param open                  |
+| `TGt`           | `>`              | —         | greater-than; generic-param close              |
+| `TBang`         | `!`              | —         | logical not; effect negation                   |
+| `TPipe`         | `\|`             | —         | type variant separator; lambda param fence (future) |
+| `TTilde`        | `~`              | —         | reserved                                       |
+| `TAt`           | `@`              | —         | annotation marker (`@resume=OneShot`)          |
+| `TQuestion`     | `?`              | —         | hole / placeholder                             |
+| **Layout / structural (2)** |     |           |                                                |
+| `TNewline`      | `\n`             | —         | semantic per DESIGN Ch 2 (block-form `~>`)     |
+| `TEof`          | (end of input)   | —         | always last token; parser uses to terminate    |
+
+**Total: 69 variants.**
+
+### Lexer obligations
+
+- **Every emitted Token MUST be one of the 69 enumerated variants.** Adding a new token kind requires updating SYNTAX.md first, then the lexer, then the parser's match (which fails to compile until the new variant is handled — H6's discipline applied at the lexical layer).
+- **Whitespace (other than `\n`) is silently consumed.** The lexer skips spaces and tabs without emitting a token. Only newlines are semantic.
+- **Line comments `// ...` are silently consumed.** No token emitted.
+- **Doc comments `/// ...` emit `TDocComment(text)`** with the leading `///` stripped. The parser attaches each `TDocComment` to the next declaration it sees.
+- **Block comments do not exist.** Per the Comments section of this spec.
+
+### Parser obligations
+
+- **Match on `Token` must be exhaustive.** No wildcard arms over `TokenKind` without explicit per-variant enumeration. H6's discipline: `_ => …` on a load-bearing ADT is rejected by code review and substrate convention.
+- **Span propagation.** Every parsed AST node is constructed with the joined span of its constituent tokens. Use `span_join(token_span(first), token_span(last))`.
+- **Generic-type angle brackets disambiguated by context.** `<` and `>` are TLt/TGt at expression position; in type position (after `:`, `->`, in fn-decl angle params), they open/close generic parameter lists. This is parser-internal context tracking, not a separate token kind.
+- **Pipe-vs-or disambiguation.** `|` is TPipe (alone); `||` is TOrOr (two-char). Type-variant `|` separators use TPipe.
+
+---
+
 ## Diagnostic catalog (syntax-level errors introduced by SYNTAX.md)
 
 | Code                  | Trigger                                       | Quick Fix                                      |

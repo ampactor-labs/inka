@@ -568,17 +568,14 @@ fn lower_param_handles(params) =
 // Returns `List[String]` — just names, deduplicated. At emit time,
 // the closure record's slot N stores the value of captures[N] from
 // the enclosing scope; the lambda body reads them as LUpval(h, N).
+// VarRef in lower.ka resolves through the LowerScope effect (landed
+// Phase A1) which returns the local's actual type handle for
+// LUpval correctness.
 //
-// TODO (W7.1): thread a LowerScope effect so VarRef can emit
-// LUpval(h, slot) for captured names instead of LGlobal. Currently
-// VarRef still lowers to LGlobal — the captures metadata is correct
-// but consumers that inspect it (emit side) must be updated
-// alongside that change. Until then, this populates LMakeClosure's
-// third slot with the intent, ready for the emit-side upgrade.
-//
-// Name set operations use `++` on small string lists — acceptable for
-// typical capture counts (≤ ~5); upgrades to sorted flat arrays under
-// W8.2 when that lands.
+// Name-set operations use `++` on small string lists. Ω.5's frame-
+// consolidation pass will upgrade these to sorted-set substrate
+// (set_contains O(log N), set_insert) once H2's records enable
+// the consolidated frame shape.
 
 // H6: exhaustive NodeBody enumeration. Patterns and holes
 // contribute no free variable references (they're terminal AST

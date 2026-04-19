@@ -1166,7 +1166,7 @@ fn emit_list_literal(elems) = {
   // type via lookup_ty on each elem's handle; knows the allocation
   // context from the enclosing row. Literals never need cons — cons
   // is for lists the graph doesn't yet know (push / ++ / slice
-  // materialize snoc / concat / view tags; runtime/memory.ka's
+  // materialize snoc / concat / view tags; runtime/lists.ka's
   // list_index dispatches on the tag). A literal is all-flat, all-
   // known.
   //

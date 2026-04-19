@@ -58,8 +58,12 @@ effect IterativeContext {
   check_iterative_context() -> Option       @resume=OneShot
 }
 
-// Phase 1 default: no iterative context. The handler stack installs
-// clock_iterative_ctx when a time handler is present so `<~` works.
+// no_iterative_ctx is the substrate's identity-element handler for
+// IterativeContext — the safe default when no time handler is on the
+// stack. `<~` performed under this handler returns None, which
+// inference reads as E_FeedbackNoContext. The handler stack installs
+// clock_iterative_ctx / tick_iterative_ctx / sample_iterative_ctx
+// when an actual time handler is present so `<~` works.
 
 handler no_iterative_ctx {
   check_iterative_context() => resume(None)

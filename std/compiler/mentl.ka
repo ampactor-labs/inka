@@ -377,12 +377,14 @@ handler synth_enumerative {
     }
   },
 
-  // Phase 1 default enumerator: the surface is here and callable, but
-  // empty until Arc F.1 plugs in real search (enumerative / SMT / LLM
-  // proposers as peer handlers in front of this one). Returning an
-  // empty list means propose's verify_each immediately yields [], and
+  // Substrate-level enumerator: the surface is here and callable. The
+  // empty result means propose's verify_each immediately yields [], so
   // teach_synthesize returns None — the compiler says "no proven
-  // candidate" rather than hallucinating.
+  // candidate" rather than hallucinating. Real search (enumerative /
+  // SMT / LLM proposers) is a sibling Synth handler installed in front
+  // of this one by the post-cascade Arc F.1 surface; the swap surface
+  // IS the thesis. Without that swap installed, returning [] is the
+  // honest substrate behavior.
   enumerate_inhabitants(_ty, _eff, _ctx) => resume([])
 }
 

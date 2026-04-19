@@ -591,65 +591,15 @@ The cascade is closed. Inka is ready to compile herself.
 
 ---
 
-### Phase 2 — Bootstrap
+### Phase 2 + Phase 3 — Bootstrap + First Light *(deferred post-cascade)*
 
-Build a disposable translator that compiles VFINAL once.
+The original Phase 2 (bootstrap translator) and Phase 3 (self-compilation fixed point at `first-light`) were the project's traditional sequel to Phase 1. **They are explicitly out of mind for the current execution.**
 
-**Options (choose one when Phase 1 is complete):**
+Per the active session plan (`/home/suds/.claude/plans/sight-so-absorb-what-s-majestic-taco.md` — the audit-integrated cascade Σ → Ω → γ): bootstrap design fails on an inconsistent graph or a graph dressed in other languages' clothes. The Ω + γ cascade closes both. When Inka's substrate is genuinely Inka-native at every level AND simulation-verified end-to-end, bootstrap becomes DISCOVERABLE rather than designed — and the conversation about translator approach (Rust / Python / LLM-generated / hand-written WAT) returns with the substrate in its ultimate form.
 
-| Option | Effort | Notes |
-|---|---|---|
-| Rust translator (~3-5K lines) | ~1 week | Familiar, fast, reliable |
-| Python translator (~2-4K lines) | ~1 week | Faster to write, slower to run |
-| LLM-generated translator | ~1-2 days | Feed specs + source + WASM spec → one-shot |
-| Hand-written WAT | ~2-3 weeks | Purest but most labor-intensive |
-| Use lux3.wasm as temporary translator | ~1 day | If current Inka files happen to compile under it |
+The bootstrap discussion will resume post-cascade. Until then, verification is by simulation, walkthrough, and audit — not by compilation.
 
-**The translator only needs to handle:**
-- Inka syntax parsing (recursive descent)
-- Handler desugaring (tail-resumptive → direct calls)
-- Pattern matching (→ if/else chains)
-- WASM emission (linear memory, bump allocator)
-- String/list primitives
-
-**The translator does NOT need:**
-- Type inference (we know the types)
-- Effect algebra (type-level only)
-- Refinement checking (deferred to Arc F.1)
-- Optimization (correctness only)
-
-#### Phase 2 Exit Gate
-
-```
-translator compiles std/compiler/*.ka → inka.wasm
-inka.wasm validates under wasm-validate
-inka.wasm runs: reads stdin, produces WAT output
-```
-
----
-
-### Phase 3 — First Light
-
-Inka compiles itself. The fixed point closes.
-
-```bash
-# Inka compiles itself → first output
-cat std/compiler/*.ka | wasmtime run inka.wasm > inka2.wat
-wat2wasm inka2.wat -o inka2.wasm
-
-# Inka2 compiles itself → second output
-cat std/compiler/*.ka | wasmtime run inka2.wasm > inka3.wat
-
-# Fixed point check
-diff inka2.wat inka3.wat
-# Expected: empty
-```
-
-If empty: **Morgan tags `first-light`.** The translator is deleted.
-Inka is fully itself for the first time.
-
-If non-empty: use `inka query` to diagnose. The differing sites are
-concrete bugs in VFINAL. Fix in Phase 1, re-bootstrap via Phase 2.
+The full historical Phase 2 + Phase 3 specifications (translator options, exit gates, fixed-point diff procedure) are preserved in git history (commits before this prune) for reference at the post-cascade conversation.
 
 ---
 

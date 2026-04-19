@@ -22,7 +22,7 @@ import runtime/strings
 handler affine_ledger with used = [], used_sites = [] {
 
   consume(name, span) => {
-    if string_in_list(used, name) {
+    if set_contains(used, name) {
       let first = find_first_span(used_sites, name)
       perform report("", "E_OwnershipViolation", "OwnershipViolation",
         "'"
@@ -33,8 +33,12 @@ handler affine_ledger with used = [], used_sites = [] {
         span, "MachineApplicable")
       resume(())
     } else {
+      // `used` maintains sort invariant via set_insert — every read
+      // (set_contains above) is O(log N) without boundary normalization.
+      // `used_sites` keeps insertion order so find_first_span returns
+      // the actual first-use span (sorting it would lose temporal order).
       resume(())
-        with used = [name] ++ used,
+        with used = set_insert(used, name),
              used_sites = [(name, span)] ++ used_sites
     }
   }
@@ -51,12 +55,10 @@ fn find_first_span_loop(sites, name, i, n) =
     else { find_first_span_loop(sites, name, i + 1, n) }
   }
 
-// W8.2: shared sorted-set membership via std/runtime/strings.ka.
-// `used` is a snoc-built name list; canonicalize at boundary then
-// binary-search. Once the affine_ledger handler maintains sort
-// invariant on its `used` state, the canonicalize call drops out.
-fn string_in_list(lst, s) =
-  set_contains(set_canonicalize(lst), s)
+// W8.2 / Phase-A2: `used` now maintains sort invariant by
+// construction (set_insert in consume), so set_contains runs at
+// O(log N) without boundary canonicalize. The local string_in_list
+// adapter is gone — call sites use set_contains directly.
 
 // ═══ Ref escape check — structural walk on return position ═════════
 // A ref binding cannot appear in return position or be captured by
@@ -70,25 +72,32 @@ fn check_ref_escape(params, body) =
          if len(refs) == 0 { () }
          else { walk_return_positions(refs, body) }
 
+// Phase-A4 reconsidered: function-return values that callers consume
+// via `len()` need their physical length to match their logical
+// length. list_extend_to grows by doubling, so a counter-based loop
+// over-allocates and the caller would see garbage past buf_len. The
+// substrate-aligned form is `slice(buf, 0, count)` — a tag=4 view
+// with len = count. One alloc for the worst-case buffer + one
+// slice-node alloc; same big-O as pre-trim, but the slice preserves
+// O(1) read into the original buffer (no copy).
+
 fn collect_ref_params(params) =
   let flat = list_to_flat(params)
   let n = len(flat)
-  collect_ref_params_loop(flat, 0, n, make_list(n), 0)
+  let buf = make_list(n)
+  let count = collect_ref_params_loop(flat, 0, n, buf, 0)
+  slice(buf, 0, count)
 
-fn collect_ref_params_loop(params, i, n, acc, acc_len) =
-  if i >= n {
-    // Trim acc to actual ref count.
-    let trimmed = make_list(acc_len)
-    list_copy_into(acc, trimmed, 0, acc_len)
-  }
+fn collect_ref_params_loop(params, i, n, buf, buf_len) =
+  if i >= n { buf_len }
   else {
     let TParam(name, _, own) = list_index(params, i)
     match own {
       Ref => {
-        let new_acc = list_set(acc, acc_len, name)
-        collect_ref_params_loop(params, i + 1, n, new_acc, acc_len + 1)
+        list_set(buf, buf_len, name)
+        collect_ref_params_loop(params, i + 1, n, buf, buf_len + 1)
       },
-      _   => collect_ref_params_loop(params, i + 1, n, acc, acc_len)
+      _ => collect_ref_params_loop(params, i + 1, n, buf, buf_len)
     }
   }
 

@@ -146,7 +146,7 @@ fn chase_type_deep(ty) = match ty {
     TFun(chase_params_deep(params), chase_type_deep(ret), eff),
   TName(name, args)      => TName(name, chase_list_deep(args)),
   TRecord(fields)        => TRecord(chase_fields_deep(fields)),
-  TRecordOpen(fields, v) => TRecordOpen(chase_fields_deep(fields), v),
+  TRecordOpen(fields, v) => mk_record_open(chase_fields_deep(fields), v),
   TRefined(base, pred)   => TRefined(chase_type_deep(base), pred),
   TCont(ret, disc)       => TCont(chase_type_deep(ret), disc),
   _                      => ty

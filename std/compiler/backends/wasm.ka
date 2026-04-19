@@ -116,7 +116,7 @@ fn emit_module(lowered) = {
   emit_fn_index_globals(all_fn_names, 0)
   emit_static_top_closures(top_fn_names, all_fn_names, 0)
   emit_functions(lowered)
-  emit_start(lowered)
+  emit_start(top_fn_names)
   emit_footer()
 }
 
@@ -273,9 +273,12 @@ fn emit_static_top_closures(top_names, all_names, slot) =
 
 // Find the index of a string in a list. Returns -1 if not found.
 fn ls_find_str_local(lst, target, i) =
-  if len(lst) == 0 { -1 }
-  else if str_eq(list_head(lst), target) == 1 { i }
-  else { ls_find_str_local(list_tail(lst), target, i + 1) }
+  ls_find_str_local_loop(lst, target, i, len(lst))
+
+fn ls_find_str_local_loop(lst, target, i, n) =
+  if i >= n { -1 }
+  else if str_eq(list_index(lst, i), target) == 1 { i }
+  else { ls_find_str_local_loop(lst, target, i + 1, n) }
 
 // WAT data string escape: \HH per byte, little-endian for i32.
 fn emit_le4_escape(n) = {
@@ -518,15 +521,23 @@ fn emit_body(stmts) =
     emit_body(list_tail(stmts))
   }
 
-fn emit_start(_lowered) = {
+fn emit_start(top_fn_names) = {
   // Top-level closures are static data — no init routine. _start
-  // invokes main through its static closure: load $main pointer,
-  // push as __state, load fn_idx from offset 0, call_indirect.
+  // invokes main through its static closure when main exists; for
+  // programs with no `main` (libraries, test fragments, REPL slices)
+  // _start is a no-op exit so the module still validates.
   perform wat_emit("  (func $_start\n")
-  perform wat_emit("    (global.get $main)\n")
-  perform wat_emit("    (global.get $main) (i32.load offset=0)\n")
-  perform wat_emit("    (call_indirect (type $ft1))\n")
-  perform wat_emit("    (drop)\n")
+  if ls_find_str_local(top_fn_names, "main", 0) >= 0 {
+    // main exists → load $main static closure, push as __state, load
+    // fn_idx from offset 0, call_indirect.
+    perform wat_emit("    (global.get $main)\n")
+    perform wat_emit("    (global.get $main) (i32.load offset=0)\n")
+    perform wat_emit("    (call_indirect (type $ft1))\n")
+    perform wat_emit("    (drop)\n")
+  } else {
+    // No main; the module is library-shape. Exit cleanly.
+    perform wat_emit("    ;; no `main` defined — _start is a clean exit\n")
+  }
   perform wat_emit("    (call $proc_exit (i32.const 0))\n")
   perform wat_emit("  )\n")
   perform wat_emit("  (export \"_start\" (func $_start))\n")

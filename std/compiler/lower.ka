@@ -148,12 +148,18 @@ fn lower_expr_body(e, handle, span) = match e {
   LitBool(b)   => LConst(handle, LBool(b)),
   LitUnit      => LConst(handle, LInt(0)),
 
-  VarRef(name) =>
-    match perform ls_resolve(name) {
-      RLocal       => LLocal(handle, name),
-      RUpval(slot) => LUpval(handle, slot),
+  VarRef(name) => {
+    let (res, local_h) = perform ls_resolve(name)
+    // For LLocal/LUpval the LowExpr's handle should describe the
+    // captured value's type (the local's handle from binding time),
+    // not the VarRef's own handle. Fall back to VarRef's handle for
+    // RGlobal where there's no separate local-binding handle.
+    match res {
+      RLocal       => LLocal(local_h, name),
+      RUpval(slot) => LUpval(local_h, slot),
       RGlobal      => LGlobal(handle, name)
-    },
+    }
+  },
 
   BinOpExpr(op, left, right) =>
     LBinOp(handle, op, lower_expr(left), lower_expr(right)),
@@ -199,11 +205,18 @@ fn lower_expr_body(e, handle, span) = match e {
     // lambda gets a unique name derived from its AST handle, so
     // emit's deep walk lifts every LMakeClosure — top-level or
     // inline — into a WASM function entry in the `$fns` table.
+    // Param + capture HANDLES are threaded into the frame so VarRef
+    // resolution returns the local's actual type handle (Phase-A1).
     let lambda_name = "lambda_" |> str_concat(int_to_str(handle))
     let param_names_list = lower_param_names(params)
+    let param_handles_list = lower_param_handles(params)
     let free_names = collect_free_vars(body_node, param_names_list)
-    let (captures_names, captures_exprs) = resolve_captures_outer(free_names, handle)
-    perform ls_enter_frame(param_names_list, captures_names)
+    let (captures_names, captures_exprs, captures_handles) =
+      resolve_captures_outer(free_names, handle)
+    perform ls_enter_frame(
+      param_names_list, param_handles_list,
+      captures_names, captures_handles
+    )
     let lo_body = lower_expr(body_node)
     perform ls_exit_frame()
     let fn_ir = LFn(
@@ -309,7 +322,9 @@ fn lower_stmt_body(s, handle, span) = match s {
         // Register the name in the current scope. At top level this
         // is a global (already pre-registered by lower_program); inside
         // a frame it binds as a local for subsequent VarRef lookups.
-        perform ls_bind_local(name)
+        // The bound expr's handle IS the local's type handle.
+        let N(_, _, expr_h) = expr
+        perform ls_bind_local(name, expr_h)
         LLet(handle, name, lo)
       },
       _ => lo     // non-binding let (destructure handled by emit)
@@ -317,14 +332,18 @@ fn lower_stmt_body(s, handle, span) = match s {
   },
 
   FnStmt(name, params, _ret_ann, _effs, body_node) => {
-    // Bind the fn's name in the enclosing frame so sibling statements
-    // and recursive references resolve (top-level fns pre-registered
-    // as globals, so this is a no-op outside nested frames).
-    perform ls_bind_local(name)
+    // Bind the fn's name in the enclosing frame; the fn's handle is
+    // the type handle (TFun bound to handle by infer).
+    perform ls_bind_local(name, handle)
     let param_names_list = lower_param_names(params)
+    let param_handles_list = lower_param_handles(params)
     let free_names = collect_free_vars(body_node, param_names_list)
-    let (captures_names, captures_exprs) = resolve_captures_outer(free_names, handle)
-    perform ls_enter_frame(param_names_list, captures_names)
+    let (captures_names, captures_exprs, captures_handles) =
+      resolve_captures_outer(free_names, handle)
+    perform ls_enter_frame(
+      param_names_list, param_handles_list,
+      captures_names, captures_handles
+    )
     let lo_body = lower_expr(body_node)
     perform ls_exit_frame()
     let fn_ir = LFn(
@@ -364,10 +383,14 @@ fn lower_match_arms(arms) =
   }
 
 // Bind every PVar in the pattern as a local in the current frame so
-// arm-body VarRef resolution sees pattern-introduced names.
+// arm-body VarRef resolution sees pattern-introduced names. Pattern
+// vars don't carry their own type handle at lower time (the value
+// type is the scrutinee's; sub-pattern types are scrutinee-derived
+// via inference); 0 stands as a sentinel that consumers should chase
+// the scrutinee's type if they need a handle.
 fn bind_pat_locals(pat) = match pat {
   PVar(name) => {
-    perform ls_bind_local(name)
+    perform ls_bind_local(name, 0)
     ()
   },
   PCon(_, sub_pats) => bind_pat_locals_list(sub_pats),
@@ -425,7 +448,11 @@ fn lower_handler_arms(arms) =
 fn bind_names_as_locals(names) =
   if len(names) == 0 { () }
   else {
-    perform ls_bind_local(list_head(names))
+    // Handler-arm args don't carry separate type handles at lower
+    // time; the op's signature gives them inferentially. 0 is the
+    // sentinel — capture-handle correctness here is bounded by
+    // future reach into op-arg type plumbing (Phase D evidence).
+    perform ls_bind_local(list_head(names), 0)
     bind_names_as_locals(list_tail(names))
   }
 
@@ -436,6 +463,33 @@ fn lower_param_names(params) =
   else {
     let TParam(name, _, _) = list_head(params)
     [name] ++ lower_param_names(list_tail(params))
+  }
+
+// Phase-A1: extract each param's type handle for the LowerScope
+// frame. A param's type is `TVar(handle)` for inferred params (the
+// common case after infer mints fresh handles); for ground types
+// without a handle, 0 stands as a sentinel.
+fn lower_param_handles(params) =
+  if len(params) == 0 { [] }
+  else {
+    let TParam(_, ty, _) = list_head(params)
+    let h = match ty {
+      TVar(handle)        => handle,
+      TInt                => 0,
+      TFloat              => 0,
+      TString             => 0,
+      TBool               => 0,
+      TUnit               => 0,
+      TList(_)            => 0,
+      TTuple(_)           => 0,
+      TFun(_, _, _)       => 0,
+      TName(_, _)         => 0,
+      TRecord(_)          => 0,
+      TRecordOpen(_, _)   => 0,
+      TRefined(_, _)      => 0,
+      TCont(_, _)         => 0
+    }
+    [h] ++ lower_param_handles(list_tail(params))
   }
 
 // ═══ Free-variable analysis — W7 phase 1 ═══════════════════════════
@@ -632,9 +686,12 @@ fn cfv_merge(a, b) =
   }
 
 fn cfv_contains(lst, s) =
-  if len(lst) == 0 { false }
-  else if str_eq(list_head(lst), s) == 1 { true }
-  else { cfv_contains(list_tail(lst), s) }
+  cfv_contains_loop(lst, s, 0, len(lst))
+
+fn cfv_contains_loop(lst, s, i, n) =
+  if i >= n { false }
+  else if str_eq(list_index(lst, i), s) == 1 { true }
+  else { cfv_contains_loop(lst, s, i + 1, n) }
 
 // ═══ Expression list ═══════════════════════════════════════════════
 
@@ -658,17 +715,24 @@ fn lower_expr_list(nodes) =
 // feeds LMakeClosure's heap-record materialization at emit time.
 
 fn resolve_captures_outer(names, owner_h) =
-  if len(names) == 0 { ([], []) }
+  if len(names) == 0 { ([], [], []) }
   else {
     let name = list_head(names)
-    let res = perform ls_resolve(name)
-    let (rest_names, rest_exprs) = resolve_captures_outer(list_tail(names), owner_h)
+    let (res, local_h) = perform ls_resolve(name)
+    let (rest_names, rest_exprs, rest_handles) =
+      resolve_captures_outer(list_tail(names), owner_h)
     match res {
-      RGlobal      => (rest_names, rest_exprs),
-      RLocal       =>
-        ([name] ++ rest_names, [LLocal(owner_h, name)] ++ rest_exprs),
-      RUpval(slot) =>
-        ([name] ++ rest_names, [LUpval(owner_h, slot)] ++ rest_exprs)
+      RGlobal => (rest_names, rest_exprs, rest_handles),
+      RLocal => (
+        [name] ++ rest_names,
+        [LLocal(local_h, name)] ++ rest_exprs,
+        [local_h] ++ rest_handles
+      ),
+      RUpval(slot) => (
+        [name] ++ rest_names,
+        [LUpval(local_h, slot)] ++ rest_exprs,
+        [local_h] ++ rest_handles
+      )
     }
   }
 
@@ -712,10 +776,15 @@ fn collect_top_level_names(stmts, acc) =
 // captured (added to the current frame's captures list at enter
 // time).
 
+// Frame shape: (locals_names, locals_handles, captures_names,
+// captures_handles). Parallel lists keyed by slot index. The handle
+// arrays let ls_resolve return the local's actual type handle —
+// LowExpr correctness for LLocal/LUpval no longer depends on the
+// caller's enclosing handle (W7 / Phase-A1 capture-handle fix).
 handler lower_scope with frames = [], globals = [] {
-  ls_enter_frame(locals, captures) => {
+  ls_enter_frame(locals, locals_h, captures, captures_h) => {
     resume(())
-      with frames = [(locals, captures)] ++ frames
+      with frames = [(locals, locals_h, captures, captures_h)] ++ frames
   },
 
   ls_exit_frame() => {
@@ -729,7 +798,7 @@ handler lower_scope with frames = [], globals = [] {
   ls_push_scope() => {
     if len(frames) == 0 { resume(0) }
     else {
-      let (locals, _caps) = list_head(frames)
+      let (locals, _lh, _caps, _ch) = list_head(frames)
       resume(len(locals))
     }
   },
@@ -737,33 +806,39 @@ handler lower_scope with frames = [], globals = [] {
   ls_pop_scope(checkpoint) => {
     if len(frames) == 0 { resume(()) }
     else {
-      let (locals, captures) = list_head(frames)
-      let truncated = list_take_n(locals, checkpoint)
+      let (locals, locals_h, captures, captures_h) = list_head(frames)
+      let truncated_n = list_take_n(locals, checkpoint)
+      let truncated_h = list_take_n(locals_h, checkpoint)
       resume(())
-        with frames = [(truncated, captures)] ++ list_tail(frames)
+        with frames = [(truncated_n, truncated_h, captures, captures_h)] ++ list_tail(frames)
     }
   },
 
-  ls_bind_local(name) => {
+  ls_bind_local(name, h) => {
     if len(frames) == 0 { resume(0) }
     else {
-      let (locals, captures) = list_head(frames)
+      let (locals, locals_h, captures, captures_h) = list_head(frames)
       let slot = len(locals)
       resume(slot)
-        with frames = [(locals ++ [name], captures)] ++ list_tail(frames)
+        with frames = [(locals ++ [name], locals_h ++ [h], captures, captures_h)] ++ list_tail(frames)
     }
   },
 
   ls_resolve(name) => {
     if len(frames) == 0 {
-      resume(RGlobal)
+      resume((RGlobal, 0))
     } else {
-      let (locals, captures) = list_head(frames)
-      if ls_find_str(locals, name, 0) >= 0 { resume(RLocal) }
-      else {
+      let (locals, locals_h, captures, captures_h) = list_head(frames)
+      let local_idx = ls_find_str(locals, name, 0)
+      if local_idx >= 0 {
+        resume((RLocal, list_index(locals_h, local_idx)))
+      } else {
         let cap_idx = ls_find_str(captures, name, 0)
-        if cap_idx >= 0 { resume(RUpval(cap_idx)) }
-        else { resume(RGlobal) }
+        if cap_idx >= 0 {
+          resume((RUpval(cap_idx), list_index(captures_h, cap_idx)))
+        } else {
+          resume((RGlobal, 0))
+        }
       }
     }
   },
@@ -773,10 +848,22 @@ handler lower_scope with frames = [], globals = [] {
   }
 }
 
+// Phase-A3: flat-indexed linear scan over the frame's locals list.
+// For deeply nested scopes (~20+ locals) a sorted-set upgrade would
+// drop membership to O(log N), but positional indices (needed for
+// captures/LUpval offsets) are insertion-ordered. Two parallel
+// structures (sorted-for-lookup + insertion-ordered-for-position)
+// would add more complexity than the typical small-frame linear
+// scan costs. The flat-indexed version replaces the list_head /
+// list_tail recursion (which allocates slices per step on tag=0
+// inputs) with O(1)-per-step list_index access.
 fn ls_find_str(lst, target, i) =
-  if len(lst) == 0 { -1 }
-  else if str_eq(list_head(lst), target) == 1 { i }
-  else { ls_find_str(list_tail(lst), target, i + 1) }
+  ls_find_str_loop(lst, target, i, len(lst))
+
+fn ls_find_str_loop(lst, target, i, n) =
+  if i >= n { -1 }
+  else if str_eq(list_index(lst, i), target) == 1 { i }
+  else { ls_find_str_loop(lst, target, i + 1, n) }
 
 fn list_take_n(lst, n) =
   if n == 0 { [] }

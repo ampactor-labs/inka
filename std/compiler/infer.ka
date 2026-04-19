@@ -68,7 +68,7 @@ handler infer_ctx with stack = [], declared = [] {
     if len(stack) == 0 { resume(()) }
     else {
       let (row_h, current, fn_span) = list_head(stack)
-      let extended = union_row(current, EfClosed([name]))
+      let extended = union_row(current, mk_ef_closed([name]))
       resume(())
         with stack = [(row_h, extended, fn_span)] ++ list_tail(stack)
     }
@@ -170,7 +170,7 @@ fn infer_fn(name, params, body_node, handle, span) = {
   let fn_ty = TFun(
     build_param_types(params, param_handles),
     TVar(ret_handle),
-    EfOpen([], row_handle)
+    mk_ef_open([], row_handle)
   )
 
   // Bind the name BEFORE body so recursive calls resolve.
@@ -237,9 +237,9 @@ fn build_declared_from(effs, acc) =
     let (name, negated) = list_head(effs)
     let next = if negated {
       // !Name — intersect with negation (forbids the effect)
-      inter_row(acc, neg_row(EfClosed([name])))
+      inter_row(acc, neg_row(mk_ef_closed([name])))
     } else {
-      union_row(acc, EfClosed([name]))
+      union_row(acc, mk_ef_closed([name]))
     }
     build_declared_from(list_tail(effs), next)
   }
@@ -351,7 +351,7 @@ fn infer_expr(node) =
       let handled_names = collect_handled_effects(arms)
       let body_row = read_bound_row(body_row_h)
       let arm_row  = read_bound_row(arm_row_h)
-      let result_row = absorb_row(body_row, EfClosed(handled_names), arm_row)
+      let result_row = absorb_row(body_row, mk_ef_closed(handled_names), arm_row)
 
       perform inf_add_row(result_row)
 
@@ -370,7 +370,7 @@ fn infer_expr(node) =
       let N(_, _, rh) = rec
       let field_h = perform mint(Inferred("field type"))
       let row_h = perform graph_fresh_row(Inferred("record row"))
-      let expected = TRecordOpen([(field, TVar(field_h))], row_h)
+      let expected = mk_record_open([(field, TVar(field_h))], row_h)
       let expected_h = perform mint(Inferred("record access"))
       perform graph_bind(expected_h, expected, Located(span, Inferred("expected record")))
       unify(rh, expected_h, span, Inferred("field access"))
@@ -388,7 +388,7 @@ fn infer_expr(node) =
       perform graph_bind(handle, TFun(
         build_param_types(params, param_handles),
         TVar(bh),
-        EfOpen([], row_handle)
+        mk_ef_open([], row_handle)
       ), Located(span, Inferred("lambda")))
       perform env_scope_exit()
     },
@@ -443,7 +443,7 @@ fn infer_call(func, args, handle, span) = {
   let expected = TFun(
     build_inferred_params(arg_handles),
     TVar(ret_h),
-    EfOpen([], row_h)
+    mk_ef_open([], row_h)
   )
   let expected_h = perform mint(Inferred("expected fn"))
   perform graph_bind(expected_h, expected, Located(span, Inferred("expected fn type")))
@@ -514,7 +514,7 @@ fn infer_pipe(kind, left, right, handle, span) =
       let expected = TFun(
         [TParam("_", TVar(lh), Inferred)],
         TVar(ret_h),
-        EfOpen([], row_h)
+        mk_ef_open([], row_h)
       )
       let expected_h = perform mint(Inferred("|> expected fn"))
       perform graph_bind(expected_h, expected, Located(span, Inferred("|> expected")))
@@ -974,7 +974,7 @@ fn chase_deep(ty) = match ty {
     TFun(chase_params(params), chase_deep(ret), eff),
   TName(name, args) => TName(name, map_chase_ty(args)),
   TRecord(fields) => TRecord(chase_fields(fields)),
-  TRecordOpen(fields, v) => TRecordOpen(chase_fields(fields), v),
+  TRecordOpen(fields, v) => mk_record_open(chase_fields(fields), v),
   TRefined(base, pred) => TRefined(chase_deep(base), pred),
   TCont(ret, disc) => TCont(chase_deep(ret), disc),
   _ => ty
@@ -1065,7 +1065,7 @@ fn subst_ty(ty, mapping) = match ty {
   ),
   TName(name, args) => TName(name, subst_list(args, mapping)),
   TRecord(fields) => TRecord(subst_fields(fields, mapping)),
-  TRecordOpen(fields, v) => TRecordOpen(subst_fields(fields, mapping), v),
+  TRecordOpen(fields, v) => mk_record_open(subst_fields(fields, mapping), v),
   TRefined(base, pred) => TRefined(subst_ty(base, mapping), pred),
   TCont(ret, disc) => TCont(subst_ty(ret, mapping), disc),
   _ => ty
@@ -1164,7 +1164,7 @@ fn register_one_op(effect_name, op) = {
   let (op_name, param_types, ret_type) = op
   let params = build_ctor_params(param_types, 0)
   perform env_extend(op_name,
-    Forall([], TFun(params, ret_type, EfClosed([effect_name]))),
+    Forall([], TFun(params, ret_type, mk_ef_closed([effect_name]))),
     Declared(op_name))
 }
 

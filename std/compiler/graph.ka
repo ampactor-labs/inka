@@ -28,6 +28,7 @@
 // (rare); cross-module snapshot builds slice-views (O(1) per overlay).
 
 import compiler/types
+import compiler/effects
 import runtime/strings
 
 // ═══ graph_handler — the substrate handler ═════════════════════════
@@ -258,9 +259,9 @@ fn merge_row(names, row) =
   match row {
     EfPure =>
       if len(names) == 0 { EfPure }
-      else { EfClosed(names) },
-    EfClosed(inner)  => EfClosed(list_union_str(names, inner)),
-    EfOpen(inner, v) => EfOpen(list_union_str(names, inner), v),
+      else { mk_ef_closed(names) },
+    EfClosed(inner)  => mk_ef_closed(set_union(names, inner)),
+    EfOpen(inner, v) => mk_ef_open(set_union(names, inner), v),
     _ => row
   }
 
@@ -448,16 +449,9 @@ fn overlays_to_pairs_loop(names, bufs, lens, count, i, acc) =
     )
   }
 
-// ═══ String set ops — sorted-flat substrate (W8.2) ═════════════════
-// Effect-name sets route through std/runtime/strings.ka's sorted-set
-// primitives: O(log N) membership, O(N+M) union, sorted invariant.
-// Inputs are canonicalized at the boundary so callers needn't audit
-// upstream constructors. Once every effect-row builder maintains the
-// invariant by construction, the canonicalize calls drop out and the
-// substrate is uniformly O(N+M) without boundary normalization.
-
-fn list_union_str(a, b) =
-  set_union(set_canonicalize(a), set_canonicalize(b))
-
-fn string_in_list(lst, s) =
-  set_contains(set_canonicalize(lst), s)
+// ═══ String set ops — sorted-flat substrate (W8.2 / Phase-A2) ═════
+// merge_row now calls `set_union` and `set_contains` directly via
+// the runtime/strings primitives. Smart constructors (mk_ef_closed,
+// mk_ef_open in effects.ka) enforce sort invariant at construction,
+// so no boundary canonicalize is needed. The local adapter wrappers
+// are gone — every caller uses the substrate primitive directly.

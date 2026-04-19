@@ -86,6 +86,14 @@ That residue IS the Inka-native code.
   archaeology.)
 - "I'll add a library / framework / tool for this." (Anchor 3 —
   Inka solves Inka. Find the primitive.)
+- Writing `_ => <non-trivial-default>` in a match over a
+  load-bearing ADT (Ty, NodeBody, LowExpr, EffRow, Reason). Safe
+  `_` arms: `_ => ()`, `_ => 0`, `_ => reason` (identity preserve),
+  `_ => type_mismatch(...)` (correct default for unrecognized
+  pairs). Dangerous `_` arms: any that return a FABRICATED value
+  (e.g., `_ => Forall([], TVar(handle))`, `_ => "Pure"`). The
+  dangerous form silently absorbs a new variant and emits wrong
+  output; convert to explicit enumeration.
 
 **Persistent memory** lives at
 `/home/suds/.claude/projects/-home-suds-Projects-inka/memory/`.
@@ -332,8 +340,11 @@ once, fix.
 | `std/compiler/mentl.ka` | Teaching substrate (Teach effect, 5 ops) |
 | `std/compiler/lexer.ka` | Tokenizer (full spans, all 5 pipe ops) |
 | `std/compiler/parser.ka` | Recursive descent (all PipeKind variants) |
-| `std/compiler/emit.ka` | LowIR → WAT |
-| `std/runtime/memory.ka` | Allocator as handler, strings, lists |
+| `std/compiler/backends/wasm.ka` | LowIR → WAT (one peer; native/test/browser are sibling handlers) |
+| `std/runtime/lists.ka` | Tagged list ops + flat-buffer-plus-counter primitive (`list_extend_to`) |
+| `std/runtime/strings.ka` | Flat string primitives + sorted-set algebra (set_union/diff/contains/...) |
+| `std/runtime/tuples.ka` | Tuple value layout + accessors |
+| `std/runtime/io.ka` | WASI iov scratch + print/read primitives |
 | `std/main.ka` | Entry: read stdin → compile → emit WAT |
 | `docs/PLAN.md` | THE plan |
 | `docs/rebuild/00–11` | The 12 executable specs |

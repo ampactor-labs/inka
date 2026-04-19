@@ -16,6 +16,85 @@
 import compiler/types
 import runtime/strings
 
+// ═══ Smart constructors — sort invariant by construction ═══════════
+// Every EfClosed / EfOpen value in the system passes through these
+// constructors. They canonicalize their input at the boundary so
+// downstream consumers (set_union, set_diff, set_contains, equality
+// checks) can assume sorted-flat input and run at substrate speed.
+// Permanent overhead-at-call drops to a single set_canonicalize per
+// construction; consumers can then drop their boundary canonicalize
+// adapters entirely.
+//
+// DESIGN Ch 4 substrate discipline: the row IS the sorted set. The
+// graph stores rows in the form they were constructed; constructors
+// enforce the invariant the algebra depends on.
+
+fn mk_ef_closed(names) = EfClosed(set_canonicalize(names))
+
+fn mk_ef_open(names, v) = EfOpen(set_canonicalize(names), v)
+
+// Record-field smart constructor: sort (field_name, ty) pairs by
+// field name, dedup by name (last write wins). Empty list → empty
+// (caller chooses TRecord vs TRecordOpen). Maintains the analog of
+// the EffRow invariant for record types.
+fn mk_record_open(fields, v) =
+  TRecordOpen(field_canonicalize(fields), v)
+
+fn field_canonicalize(fields) =
+  let n = len(fields)
+  field_canonicalize_loop(fields, 0, n, [])
+
+fn field_canonicalize_loop(fields, i, n, acc) =
+  if i >= n { acc }
+  else {
+    let (name, ty) = list_index(fields, i)
+    field_canonicalize_loop(fields, i + 1, n, field_insert(acc, name, ty))
+  }
+
+// field_insert: insert (name, ty) into sorted-by-name list; if name
+// already present, replace (last write wins).
+fn field_insert(sorted, name, ty) =
+  let n = len(sorted)
+  let pos = field_find_pos(sorted, name, 0, n)
+  if pos < n {
+    let (existing_name, _) = list_index(sorted, pos)
+    if str_eq(existing_name, name) == 1 {
+      // Replace at pos.
+      let buf = make_list(n)
+      let copied = list_copy_into(sorted, buf, 0, n)
+      list_set(copied, pos, (name, ty))
+    } else {
+      // Insert at pos.
+      let buf = make_list(n + 1)
+      let prefix = list_copy_into(sorted, buf, 0, pos)
+      let with_ins = list_set(prefix, pos, (name, ty))
+      field_copy_suffix_shifted(sorted, with_ins, pos, pos, n)
+    }
+  } else {
+    // Append.
+    let buf = make_list(n + 1)
+    let copied = list_copy_into(sorted, buf, 0, n)
+    list_set(copied, n, (name, ty))
+  }
+
+fn field_find_pos(sorted, name, i, n) =
+  if i >= n { n }
+  else {
+    let (existing_name, _) = list_index(sorted, i)
+    if str_lt(existing_name, name) == 1 {
+      field_find_pos(sorted, name, i + 1, n)
+    } else { i }
+  }
+
+fn field_copy_suffix_shifted(src, dst, src_idx, dst_idx, n) =
+  if src_idx >= n { dst }
+  else {
+    field_copy_suffix_shifted(
+      src, list_set(dst, dst_idx + 1, list_index(src, src_idx)),
+      src_idx + 1, dst_idx + 1, n
+    )
+  }
+
 // ═══ Normalization ═════════════════════════════════════════════════
 // After normalize_row, every row is canonical:
 //   EfPure  |  EfClosed(sorted_unique)  |  EfOpen(sorted_unique, v)
@@ -346,23 +425,24 @@ fn row_is_ground(row) =
 // the sort invariant by construction, the canonicalize calls drop
 // out and the substrate runs at O(N+M) with O(log N) membership.
 
+// Phase-A2: every EffRow construction routes through mk_ef_closed /
+// mk_ef_open, so name lists arriving at these adapters are
+// sort-invariant by construction. The boundary canonicalize calls
+// have been dropped — adapters delegate directly to the substrate
+// primitives at full O(N+M) merge / O(log N) membership.
+//
+// `sort_unique` retains its name as a documentation handle (it IS
+// set_canonicalize, used by external callers like normalize_row when
+// raw input arrives from the parser). For invariant-maintaining
+// algebraic ops (union/intersect/diff/etc.), use the set_* names
+// directly.
+
 fn sort_unique(names)        = set_canonicalize(names)
 fn insert_sorted(sorted, x)  = set_insert(sorted, x)
 
-fn list_intersect(a, b) =
-  set_intersect(set_canonicalize(a), set_canonicalize(b))
-
-fn list_diff_str(a, b) =
-  set_diff(set_canonicalize(a), set_canonicalize(b))
-
-fn list_subset_str(sub, sup) =
-  set_subset(set_canonicalize(sub), set_canonicalize(sup))
-
-fn list_disjoint(a, b) =
-  set_disjoint(set_canonicalize(a), set_canonicalize(b))
-
-fn list_eq_str(a, b) =
-  set_eq(set_canonicalize(a), set_canonicalize(b))
-
-fn string_in_list(lst, s) =
-  set_contains(set_canonicalize(lst), s)
+fn list_intersect(a, b)      = set_intersect(a, b)
+fn list_diff_str(a, b)       = set_diff(a, b)
+fn list_subset_str(sub, sup) = set_subset(sub, sup)
+fn list_disjoint(a, b)       = set_disjoint(a, b)
+fn list_eq_str(a, b)         = set_eq(a, b)
+fn string_in_list(lst, s)    = set_contains(lst, s)

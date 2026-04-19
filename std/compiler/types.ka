@@ -354,11 +354,18 @@ type Resolution
   | RUpval(Int)     // name is captured at slot; emit offset-loads from __state
   | RGlobal         // top-level name — emit references $<name> as a global
 
+// `ls_resolve` returns (Resolution, type_handle) where type_handle is
+// the type handle the local was BOUND with (via ls_bind_local). For
+// captured names (RUpval) the handle is the local's own handle from
+// the enclosing frame — the LowExpr describing the captured value's
+// type. RGlobal returns the var-ref's enclosing handle (caller-side
+// fallback). This is the W7 + A1 capture-handle correctness fix.
+
 effect LowerScope {
-  ls_enter_frame(List, List) -> ()              @resume=OneShot  // locals, captures (name lists)
+  ls_enter_frame(List, List, List, List) -> ()  @resume=OneShot  // locals_names, locals_handles, captures_names, captures_handles
   ls_exit_frame() -> ()                         @resume=OneShot
-  ls_bind_local(String) -> Int                  @resume=OneShot  // append; returns slot
-  ls_resolve(String) -> Resolution              @resume=OneShot
+  ls_bind_local(String, Int) -> Int             @resume=OneShot  // append (name, handle); returns slot
+  ls_resolve(String) -> (Resolution, Int)       @resume=OneShot
   ls_register_globals(List) -> ()               @resume=OneShot
 }
 

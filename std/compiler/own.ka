@@ -278,7 +278,30 @@ fn walk_return_positions(refs, node) =
     NExpr(LambdaExpr(_, lambda_body)) =>
       walk_return_positions(refs, lambda_body),
 
-    _ => ()
+    // H6: exhaustive NodeBody + Expr enumeration. Most Expr
+    // variants don't contain a ref-returning sub-position
+    // (the tail of a call, binop, literal, etc.); listing each
+    // makes the decision visible. Future Expr variants must
+    // decide their return-position semantics explicitly.
+    NExpr(LitInt(_))         => (),
+    NExpr(LitFloat(_))       => (),
+    NExpr(LitString(_))      => (),
+    NExpr(LitBool(_))        => (),
+    NExpr(LitUnit)           => (),
+    NExpr(BinOpExpr(_, _, _)) => (),
+    NExpr(UnaryOpExpr(_, _)) => (),
+    NExpr(CallExpr(_, _))    => (),
+    NExpr(PerformExpr(_, _)) => (),
+    NExpr(HandleExpr(_, _))  => (),
+    NExpr(ResumeExpr(_, _))  => (),
+    NExpr(MakeListExpr(_))   => (),
+    NExpr(MakeTupleExpr(_))  => (),
+    NExpr(FieldExpr(_, _))   => (),
+    NExpr(PipeExpr(_, _, _)) => (),
+    NExpr(ExprPlaceholder)   => (),
+    NStmt(_) => (),
+    NPat(_)  => (),
+    NHole(_) => ()
   }
 
 fn walk_match_arms(refs, arms) =
@@ -352,7 +375,21 @@ fn count_uses(name, node) =
     NExpr(MakeListExpr(elems))  => count_uses_list(name, elems),
     NExpr(MakeTupleExpr(elems)) => count_uses_list(name, elems),
     NExpr(FieldExpr(rec, _))    => count_uses(name, rec),
-    _ => 0
+
+    // H6: exhaustive. Remaining Expr variants hold no sub-exprs
+    // containing VarRefs that would count against this name
+    // (literals, ResumeExpr is stubby, ExprPlaceholder is a hole).
+    // NStmt / NPat / NHole contribute no variable references.
+    NExpr(LitInt(_))       => 0,
+    NExpr(LitFloat(_))     => 0,
+    NExpr(LitString(_))    => 0,
+    NExpr(LitBool(_))      => 0,
+    NExpr(LitUnit)         => 0,
+    NExpr(ResumeExpr(v, _)) => count_uses(name, v),
+    NExpr(ExprPlaceholder) => 0,
+    NStmt(_) => 0,
+    NPat(_)  => 0,
+    NHole(_) => 0
   }
 
 fn count_uses_list(name, nodes) =

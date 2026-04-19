@@ -419,9 +419,25 @@ fn teach_synthesize(hole_handle, context) = {
   }
 }
 
+// H6: exhaustive Ty enumeration. Only TFun carries an explicit
+// row; every other Ty is treated as EfPure (it has no effect
+// behavior by itself). Named explicitly so a future Ty whose row
+// semantics aren't pure surfaces as a compile error.
 fn extract_row(ty) = match ty {
-  TFun(_, _, row) => row,
-  _               => EfPure
+  TFun(_, _, row)   => row,
+  TInt              => EfPure,
+  TFloat            => EfPure,
+  TString           => EfPure,
+  TBool             => EfPure,
+  TUnit             => EfPure,
+  TList(_)          => EfPure,
+  TTuple(_)         => EfPure,
+  TVar(_)           => EfPure,
+  TName(_, _)       => EfPure,
+  TRecord(_)        => EfPure,
+  TRecordOpen(_, _) => EfPure,
+  TRefined(_, _)    => EfPure,
+  TCont(_, _)       => EfPure
 }
 
 // ═══ Unlock mapping — the teaching payoff ══════════════════════════

@@ -322,8 +322,19 @@ fn graph_fill_free(dst, start, cap) =
 // inputs materialize once at entry, flat inputs pass through. Walks
 // short-circuit on first hit.
 
+// H6: exhaustive Ty enumeration. A wildcard arm here silently
+// misses a new Ty variant's containment check — the most
+// dangerous site in the compiler because a missed occurs-check
+// admits infinite types. Every current Ty variant is named; any
+// future variant fails to compile until its containment semantics
+// are decided explicitly.
 fn occurs_in(handle, ty) =
   match ty {
+    TInt             => false,
+    TFloat           => false,
+    TString          => false,
+    TBool            => false,
+    TUnit            => false,
     TVar(id)         => id == handle,
     TList(elem)      => occurs_in(handle, elem),
     TTuple(elems)    => occurs_in_list(handle, elems),
@@ -334,8 +345,7 @@ fn occurs_in(handle, ty) =
     TRecordOpen(fields, v) =>
       v == handle || occurs_in_fields(handle, fields),
     TRefined(base, _) => occurs_in(handle, base),
-    TCont(ret, _)    => occurs_in(handle, ret),
-    _ => false
+    TCont(ret, _)    => occurs_in(handle, ret)
   }
 
 fn occurs_in_params(handle, params) =

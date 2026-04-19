@@ -354,12 +354,17 @@ fn lower_stmt_list(stmts) =
   if len(stmts) == 0 { [] }
   else { [lower_stmt(list_head(stmts))] ++ lower_stmt_list(list_tail(stmts)) }
 
+// H6: exhaustive NodeBody enumeration. NPat and NHole at
+// statement position are degenerate; lowering to LConst(0)
+// is the "unreachable-in-well-formed-source" fallback. Named
+// explicitly so a new NodeBody variant surfaces at compile time.
 fn lower_stmt(node) =
   let N(body, span, handle) = node
   match body {
-    NStmt(s)  => lower_stmt_body(s, handle, span),
-    NExpr(e)  => lower_expr_body(e, handle, span),
-    _         => LConst(handle, LInt(0))
+    NStmt(s) => lower_stmt_body(s, handle, span),
+    NExpr(e) => lower_expr_body(e, handle, span),
+    NPat(_)  => LConst(handle, LInt(0)),   // pattern at stmt position — degenerate
+    NHole(_) => LConst(handle, LInt(0))    // Hazel hole at stmt position — unreachable trap at emit
   }
 
 fn lower_stmt_body(s, handle, span) = match s {
@@ -436,6 +441,9 @@ fn lower_match_arms(arms) =
 // type is the scrutinee's; sub-pattern types are scrutinee-derived
 // via inference); 0 stands as a sentinel that consumers should chase
 // the scrutinee's type if they need a handle.
+// H6: exhaustive Pat enumeration. PVar binds the local; compound
+// patterns recurse. PWild and PLit bind nothing. New Pat variants
+// must decide their binding.
 fn bind_pat_locals(pat) = match pat {
   PVar(name) => {
     perform ls_bind_local(name, 0)
@@ -443,8 +451,19 @@ fn bind_pat_locals(pat) = match pat {
   },
   PCon(_, sub_pats) => bind_pat_locals_list(sub_pats),
   PTuple(sub_pats)  => bind_pat_locals_list(sub_pats),
-  _                 => ()
+  PList(sub_pats)   => bind_pat_locals_list(sub_pats),
+  PRecord(flds)     => bind_pat_locals_fields(flds),
+  PWild             => (),
+  PLit(_)           => ()
 }
+
+fn bind_pat_locals_fields(flds) =
+  if len(flds) == 0 { () }
+  else {
+    let (_, sub_pat) = list_head(flds)
+    bind_pat_locals(sub_pat)
+    bind_pat_locals_fields(list_tail(flds))
+  }
 
 fn bind_pat_locals_list(pats) =
   if len(pats) == 0 { () }
@@ -561,12 +580,17 @@ fn lower_param_handles(params) =
 // typical capture counts (≤ ~5); upgrades to sorted flat arrays under
 // W8.2 when that lands.
 
+// H6: exhaustive NodeBody enumeration. Patterns and holes
+// contribute no free variable references (they're terminal AST
+// forms). Named explicitly so new NodeBody variants decide
+// whether they can contain VarRefs.
 fn collect_free_vars(node, bound) =
   let N(body, _, _) = node
   match body {
     NExpr(e) => cfv_expr(e, bound),
     NStmt(s) => cfv_stmt(s, bound),
-    _        => []
+    NPat(_)  => [],
+    NHole(_) => []
   }
 
 fn cfv_expr(e, bound) = match e {
@@ -625,14 +649,30 @@ fn cfv_expr(e, bound) = match e {
     cfv_merge(collect_free_vars(l, bound), collect_free_vars(r, bound)),
 
   ExprPlaceholder      => [],
-  _                    => []
+
+  // H6: exhaustive Expr enumeration. Literals contribute no
+  // free vars. Named explicitly so new Expr variants must decide
+  // their free-var contribution (critical for closure capture).
+  LitInt(_)    => [],
+  LitFloat(_)  => [],
+  LitString(_) => [],
+  LitBool(_)   => [],
+  LitUnit      => []
 }
 
+// H6: exhaustive Stmt enumeration. Type/effect/handler
+// declarations and imports contribute no value-level free vars
+// to closure capture. Refinement stmts similarly. Named
+// explicitly so new Stmt variants decide their cfv behavior.
 fn cfv_stmt(s, bound) = match s {
-  LetStmt(_, expr) => collect_free_vars(expr, bound),
+  LetStmt(_, expr)              => collect_free_vars(expr, bound),
   FnStmt(_, _, _, _, body_node) => collect_free_vars(body_node, bound),
-  ExprStmt(expr)   => collect_free_vars(expr, bound),
-  _                => []
+  ExprStmt(expr)                => collect_free_vars(expr, bound),
+  TypeDefStmt(_, _, _)          => [],
+  EffectDeclStmt(_, _)          => [],
+  HandlerDeclStmt(_, _, _)      => [],
+  ImportStmt(_)                 => [],
+  RefineStmt(_, _, _)           => []
 }
 
 fn cfv_list(nodes, bound) =
@@ -711,12 +751,28 @@ fn cfv_param_names(params) =
     [name] ++ cfv_param_names(list_tail(params))
   }
 
+// H6: exhaustive Pat enumeration. PVar is the only leaf that
+// binds a name; compound patterns recurse into sub-patterns.
+// PWild / PLit bind nothing. New Pat variants must decide their
+// binder-name contribution explicitly.
 fn cfv_pat_binds(pat) = match pat {
   PVar(name)         => [name],
   PCon(_, sub_pats)  => cfv_pat_binds_list(sub_pats),
   PTuple(sub_pats)   => cfv_pat_binds_list(sub_pats),
-  _                  => []
+  PList(sub_pats)    => cfv_pat_binds_list(sub_pats),
+  PRecord(flds)      => cfv_pat_binds_fields(flds),
+  PWild              => [],
+  PLit(_)            => []
 }
+
+// Extract binder names from record-pattern fields [(name, Pat)].
+// Each field contributes its sub-pat's binders.
+fn cfv_pat_binds_fields(flds) =
+  if len(flds) == 0 { [] }
+  else {
+    let (_, sub_pat) = list_head(flds)
+    cfv_merge(cfv_pat_binds(sub_pat), cfv_pat_binds_fields(list_tail(flds)))
+  }
 
 fn cfv_pat_binds_list(pats) =
   if len(pats) == 0 { [] }

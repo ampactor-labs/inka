@@ -290,9 +290,26 @@ fn render_audit(entries) =
   if len(entries) == 0 { "" }
   else {
     let (name, ty) = list_head(entries)
+    // H6: exhaustive Ty enumeration. Non-function types have no
+    // effect row; the diagnostic says "Pure" to mean "no effects
+    // at this binding." Future Ty variants might deserve their
+    // own diagnostic string — named explicitly to force the
+    // decision.
     let row_str = match ty {
-      TFun(_, _, row) => show_effrow(row),
-      _ => "Pure"
+      TFun(_, _, row)   => show_effrow(row),
+      TInt              => "Pure",
+      TFloat            => "Pure",
+      TString           => "Pure",
+      TBool             => "Pure",
+      TUnit             => "Pure",
+      TList(_)          => "Pure",
+      TTuple(_)         => "Pure",
+      TVar(_)           => "Pure",
+      TName(_, _)       => "Pure",
+      TRecord(_)        => "Pure",
+      TRecordOpen(_, _) => "Pure",
+      TRefined(_, _)    => "Pure",
+      TCont(_, _)       => "Pure"
     }
     name
       |> str_concat(" : ")

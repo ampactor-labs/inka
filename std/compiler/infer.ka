@@ -513,9 +513,12 @@ fn infer_expr(node) =
 
     NExpr(ExprPlaceholder) => (),  // ? — handle already NFree at parse
 
-    NHole(_) => (),                // Hazel marked hole
-
-    _ => ()
+    NHole(_)  => (),               // Hazel marked hole — inference leaves NFree
+    NStmt(_)  => (),               // statement at expression position — parser
+                                   // should have wrapped in ExprStmt; no-op
+                                   // is the safe fallback
+    NPat(_)   => ()                // pattern at expression position — degenerate;
+                                   // parser emits in match-arm contexts only
   }
 
 // ─── VarRef — instantiate + consume if own ─────────────────────────
@@ -874,13 +877,26 @@ fn expect_same(a, b, span, reason) =
       else { type_mismatch(a, b, span, reason) }
   }
 
+// H6: exhaustive Ty enumeration. Ground scalars match their same-
+// variant; compound types are structurally equal only if their
+// sub-parts are unified separately (that's unify_types' job, not
+// same_ground's). A new scalar Ty must be added here explicitly.
 fn same_ground(a, b) = match a {
   TInt    => match b { TInt    => true, _ => false },
   TFloat  => match b { TFloat  => true, _ => false },
   TString => match b { TString => true, _ => false },
   TBool   => match b { TBool   => true, _ => false },
   TUnit   => match b { TUnit   => true, _ => false },
-  _       => false
+  // Compound types: same_ground rejects; unify_types handles structurally
+  TVar(_)            => false,
+  TList(_)           => false,
+  TTuple(_)          => false,
+  TFun(_, _, _)      => false,
+  TName(_, _)        => false,
+  TRecord(_)         => false,
+  TRecordOpen(_, _)  => false,
+  TRefined(_, _)     => false,
+  TCont(_, _)        => false
 }
 
 fn unify_type_lists(as_list, bs_list, span, reason) =
@@ -1075,7 +1091,11 @@ fn infer_pat(pat, handle, span) = match pat {
 
   PTuple(pats) => infer_pat_tuple(pats, handle, span),
 
-  _ => ()
+  // H6: PList and PRecord inference stubs — real binding logic arrives
+  // with H3 (constructor patterns) and H2 (record patterns). Named
+  // explicitly so future refinement is a compile-error, not silent.
+  PList(_pats)   => (),
+  PRecord(_flds) => ()
 }
 
 fn infer_pat_tuple(pats, parent_handle, span) =
@@ -1121,6 +1141,13 @@ fn infer_handler_arms(arms, body_h, span) =
 // ═══ Generalization — Damas-Milner let-gen ═════════════════════════
 // Quantify handles that are free in the body but NOT free in env.
 
+// H6: exhaustive NodeKind enumeration. Fabricated-value danger:
+// `_ => Forall([], TVar(handle))` silently fabricates a monotype
+// for every non-NBound kind — CLAUDE.md Session Zero names this
+// as a dangerous wildcard. Each non-bound kind gets its own arm
+// with the same fallback spelled out; if a new NodeKind is added,
+// this function fails to compile until its generalization semantic
+// is decided.
 fn generalize(handle) = {
   let node = perform graph_chase(handle)
   let GNode(kind, _) = node
@@ -1132,17 +1159,33 @@ fn generalize(handle) = {
       // Conservatively: quantify all body-free handles.
       Forall(body_free, body_ty)
     },
-    _ => Forall([], TVar(handle))
+    NFree(_)      => Forall([], TVar(handle)),    // unresolved — monotype stays
+    NRowBound(_)  => Forall([], TVar(handle)),    // row handle — not a Ty; monotype
+    NRowFree(_)   => Forall([], TVar(handle)),    // unresolved row — monotype
+    NErrorHole(_) => Forall([], TVar(handle))     // error — preserve handle for diagnostics
   }
 }
 
+// H6: exhaustive Ty enumeration. Scalars terminate; aggregates
+// recurse. Identity for unresolved TVars (when graph_chase lands
+// on a non-NBound kind). A new Ty with embedded sub-types that
+// could contain TVars would need its own recursive arm — fails
+// to compile here until the decision is made.
 fn chase_deep(ty) = match ty {
+  TInt    => ty,
+  TFloat  => ty,
+  TString => ty,
+  TBool   => ty,
+  TUnit   => ty,
   TVar(h) => {
     let node = perform graph_chase(h)
     let GNode(kind, _) = node
     match kind {
       NBound(inner) => chase_deep(inner),
-      _ => ty
+      NFree(_)      => ty,   // unresolved — stays as TVar
+      NRowBound(_)  => ty,   // row handle used as Ty — stays
+      NRowFree(_)   => ty,   // unresolved row handle — stays
+      NErrorHole(_) => ty    // error node — preserve TVar for diagnostics
     }
   },
   TList(elem) => TList(chase_deep(elem)),
@@ -1153,8 +1196,7 @@ fn chase_deep(ty) = match ty {
   TRecord(fields) => TRecord(chase_fields(fields)),
   TRecordOpen(fields, v) => mk_record_open(chase_fields(fields), v),
   TRefined(base, pred) => TRefined(chase_deep(base), pred),
-  TCont(ret, disc) => TCont(chase_deep(ret), disc),
-  _ => ty
+  TCont(ret, disc) => TCont(chase_deep(ret), disc)
 }
 
 fn map_chase_ty(tys) =
@@ -1175,17 +1217,25 @@ fn chase_fields(fields) =
     [(name, chase_deep(ty))] ++ chase_fields(list_tail(fields))
   }
 
+// H6: exhaustive Ty enumeration. Scalars have no free handles;
+// aggregates recurse; TVar IS a free handle; TRecordOpen's row
+// var is free. A new Ty containing TVars would need its own arm —
+// `_ => []` would silently miss them.
 fn free_in_ty(ty) = match ty {
-  TVar(id)              => [id],
-  TList(elem)           => free_in_ty(elem),
-  TTuple(elems)         => free_in_list(elems),
-  TFun(params, ret, _)  => free_in_params(params) ++ free_in_ty(ret),
-  TName(_, args)        => free_in_list(args),
-  TRecord(fields)       => free_in_fields(fields),
+  TInt                   => [],
+  TFloat                 => [],
+  TString                => [],
+  TBool                  => [],
+  TUnit                  => [],
+  TVar(id)               => [id],
+  TList(elem)            => free_in_ty(elem),
+  TTuple(elems)          => free_in_list(elems),
+  TFun(params, ret, _)   => free_in_params(params) ++ free_in_ty(ret),
+  TName(_, args)         => free_in_list(args),
+  TRecord(fields)        => free_in_fields(fields),
   TRecordOpen(fields, v) => [v] ++ free_in_fields(fields),
-  TRefined(base, _)     => free_in_ty(base),
-  TCont(ret, _)         => free_in_ty(ret),
-  _                     => []
+  TRefined(base, _)      => free_in_ty(base),
+  TCont(ret, _)          => free_in_ty(ret)
 }
 
 fn free_in_list(tys) =
@@ -1228,7 +1278,15 @@ fn build_inst_mapping(qs) =
     [(old, fresh)] ++ build_inst_mapping(list_tail(qs))
   }
 
+// H6: exhaustive Ty enumeration. Scalars pass through;
+// aggregates recurse. Substitution is identity for unresolved
+// sites where mapping doesn't have the handle.
 fn subst_ty(ty, mapping) = match ty {
+  TInt    => ty,
+  TFloat  => ty,
+  TString => ty,
+  TBool   => ty,
+  TUnit   => ty,
   TVar(id) => {
     let replacement = find_mapping(mapping, id)
     if replacement >= 0 { TVar(replacement) } else { ty }
@@ -1244,8 +1302,7 @@ fn subst_ty(ty, mapping) = match ty {
   TRecord(fields) => TRecord(subst_fields(fields, mapping)),
   TRecordOpen(fields, v) => mk_record_open(subst_fields(fields, mapping), v),
   TRefined(base, pred) => TRefined(subst_ty(base, mapping), pred),
-  TCont(ret, disc) => TCont(subst_ty(ret, mapping), disc),
-  _ => ty
+  TCont(ret, disc) => TCont(subst_ty(ret, mapping), disc)
 }
 
 fn subst_list(tys, mapping) =

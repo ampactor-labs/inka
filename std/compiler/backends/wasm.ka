@@ -339,7 +339,16 @@ fn collect_fn_names_expr(expr, acc) = match expr {
   LBuildEvidence(_h, b, _ev) => collect_fn_names_expr(b, acc),
   LEvPerform(_h, _n, _s, a)  => collect_fn_names_list(a, acc),
   LFieldLoad(_h, rec, _off)  => collect_fn_names_expr(rec, acc),
-  _                          => acc
+  // H6: exhaustive LowExpr enumeration. Leaves with no fn-names
+  // inside (scalars, locals, globals, upvals, state reads) return
+  // acc unchanged. A new LIR variant must decide its contribution
+  // explicitly — `_ => acc` would silently miss closures inside
+  // a new construct.
+  LConst(_, _)               => acc,
+  LLocal(_, _)               => acc,
+  LGlobal(_, _)              => acc,
+  LUpval(_, _)               => acc,
+  LStateGet(_, _)            => acc
 }
 
 // Top-level fn names — only top-level LLet-wrapped closures have
@@ -501,6 +510,12 @@ fn max_arity_in(stmts, acc) =
 // emitted function takes `__state` as its first parameter, and
 // every LCall pushes the closure pointer before the user args, so
 // the effective call arity is len(args)+1.
+// H6: exhaustive LowExpr enumeration. Call-producing variants
+// contribute their arity (+1 for the implicit __state slot when
+// relevant). Every other variant's own arity is 0; they need
+// enumeration because a new LIR variant that introduces a new
+// call form must decide whether to add a $ft entry — silent
+// `_ => 0` would emit a WASM module with missing type signatures.
 fn max_arity_expr(expr) = match expr {
   LCall(_, _, args)         => len(args) + 1,
   LTailCall(_, _, args)     => len(args) + 1,
@@ -509,7 +524,35 @@ fn max_arity_expr(expr) = match expr {
   LEvPerform(_, _, _, args) => len(args) + 1,
   LLet(_, _, inner)         => max_arity_expr(inner),
   LMakeClosure(_, _, _)     => 0,
-  _                         => 0
+
+  // Non-call LIR variants contribute 0. Explicit so a new
+  // call-like variant can't silently slip through.
+  LConst(_, _)              => 0,
+  LLocal(_, _)              => 0,
+  LGlobal(_, _)             => 0,
+  LStore(_, _, _)           => 0,
+  LUpval(_, _)              => 0,
+  LBinOp(_, _, _, _)        => 0,
+  LUnaryOp(_, _, _)         => 0,
+  LReturn(_, _)             => 0,
+  LIf(_, _, _, _)           => 0,
+  LBlock(_, _)              => 0,
+  LMakeList(_, _)           => 0,
+  LMakeTuple(_, _)          => 0,
+  LMakeVariant(_, _, _)     => 0,
+  LIndex(_, _, _, _)        => 0,
+  LMatch(_, _, _)           => 0,
+  LLoop(_, _)               => 0,
+  LBreak(_, _)              => 0,
+  LSwitch(_, _, _)          => 0,
+  LStateGet(_, _)           => 0,
+  LStateSet(_, _, _)        => 0,
+  LRegion(_, _)             => 0,
+  LHandleWith(_, _, _)      => 0,
+  LFeedback(_, _, _)        => 0,
+  LHandle(_, _, _)          => 0,
+  LBuildEvidence(_, _, _)   => 0,
+  LFieldLoad(_, _, _)       => 0
 }
 
 fn max_int(a, b) = if a > b { a } else { b }
@@ -616,7 +659,14 @@ fn emit_fns_expr(expr) = match expr {
   LBuildEvidence(_h, b, _ev) => emit_fns_expr(b),
   LEvPerform(_h, _n, _s, a)  => emit_fns_list(a),
   LFieldLoad(_h, rec, _off)  => emit_fns_expr(rec),
-  _                          => ()
+  // H6: exhaustive LowExpr. Leaves with no fn-containing
+  // descendants emit nothing. New LIR variants that carry fn
+  // bodies (LMakeClosure-like) must decide their emission path.
+  LConst(_, _)               => (),
+  LLocal(_, _)               => (),
+  LGlobal(_, _)              => (),
+  LUpval(_, _)               => (),
+  LStateGet(_, _)            => ()
 }
 
 fn emit_fn_body(name, param_names, body) = {
@@ -689,7 +739,16 @@ fn emit_let_locals_expr(expr) = match expr {
   LBuildEvidence(_h, b, _)  => emit_let_locals_expr(b),
   LEvPerform(_h, _n, _s, a) => emit_let_locals_list(a),
   LFieldLoad(_h, rec, _off) => emit_let_locals_expr(rec),
-  _                         => ()
+  // H6: exhaustive LowExpr. Leaves declare no locals; LUpval,
+  // LConst, LLocal, LGlobal, LStateGet are pure reads. New LIR
+  // variants with let-bindings inside must add their recursion
+  // explicitly — silent fall-through misses locals and WAT
+  // validation fails.
+  LConst(_, _)              => (),
+  LLocal(_, _)              => (),
+  LGlobal(_, _)             => (),
+  LUpval(_, _)              => (),
+  LStateGet(_, _)           => ()
 }
 
 fn emit_params(names) =

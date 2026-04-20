@@ -1627,10 +1627,9 @@ fn infer_handler_arms(arms, body_h, span) =
   if len(arms) == 0 { () }
   else {
     let arm = list_head(arms)
-    let (op_name, args, arm_body) = arm
     perform env_scope_enter()
-    infer_expr(arm_body)
-    let N(_, _, abh) = arm_body
+    infer_expr(arm.body)
+    let N(_, _, abh) = arm.body
     unify(abh, body_h, span, Inferred("handler arm result"))
     perform env_scope_exit()
     infer_handler_arms(list_tail(arms), body_h, span)
@@ -1991,8 +1990,7 @@ fn collect_handled_from(arms, acc) =
   if len(arms) == 0 { acc }
   else {
     let arm = list_head(arms)
-    let (op_name, _args, _body) = arm
-    let names = effect_names_of_op(op_name)
+    let names = effect_names_of_op(arm.op_name)
     collect_handled_from(list_tail(arms), acc ++ names)
   }
 

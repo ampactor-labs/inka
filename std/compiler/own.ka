@@ -174,16 +174,17 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
 
   tag_alloc(value_handle) => {
     // Stamp the value with the current-top region (or 0 = no
-    // region active = global lifetime). tagged_values records
-    // (handle, region_id, install_span). install_span captured
-    // here so check_escape can point at the alloc site that
-    // produced the escaping value.
+    // region active = global lifetime). tagged_values entries
+    // are records — adding metadata fields (e.g., region join
+    // for record/variant fields per H4 addendum) is additive
+    // without breaking lookup_tag's destructure.
     let rid = if len(region_stack) == 0 { 0 }
               else { let Region(r, _) = list_head(region_stack); r }
     let install_span = if len(region_stack) == 0 { span_zero() }
                        else { let Region(_, s) = list_head(region_stack); s }
+    let tag = {handle: value_handle, install_span: install_span, region_id: rid}
     resume(())
-      with tagged_values = [(value_handle, rid, install_span)] ++ tagged_values
+      with tagged_values = [tag] ++ tagged_values
   },
 
   check_escape(value_handle, escape_span) => {
@@ -195,19 +196,17 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
     let entry = lookup_tag(tagged_values, value_handle)
     match entry {
       None => resume(()),
-      Some(rt) => {
-        let (_, rid, install_span) = rt
-        if rid == 0 || region_on_stack(region_stack, rid) {
+      Some(tag) => {
+        if tag.region_id == 0 || region_on_stack(region_stack, tag.region_id) {
           resume(())
         } else {
           perform report("region", "E_RegionEscape", "OwnershipViolation",
             "value allocated in a scope that ended before this return — region "
-              |> str_concat(int_to_str(rid))
+              |> str_concat(int_to_str(tag.region_id))
               |> str_concat(" no longer live"),
             escape_span, "MaybeIncorrect")
-          // Locate-the-cause secondary: would emit a Located
-          // diagnostic at install_span when the diagnostic
-          // surface supports multi-span reports. Stored in tag.
+          // tag.install_span retained for future multi-span
+          // diagnostic (Located secondary at the alloc site).
           resume(())
         }
       }
@@ -221,9 +220,8 @@ fn lookup_tag(tags, handle) =
 fn lookup_tag_loop(tags, handle, i, n) =
   if i >= n { None }
   else {
-    let entry = list_index(tags, i)
-    let (h, _, _) = entry
-    if h == handle { Some(entry) }
+    let tag = list_index(tags, i)
+    if tag.handle == handle { Some(tag) }
     else { lookup_tag_loop(tags, handle, i + 1, n) }
   }
 

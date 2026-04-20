@@ -599,15 +599,14 @@ fn lower_handler_arms(arms) =
   if len(arms) == 0 { [] }
   else {
     let arm = list_head(arms)
-    let (op_name, args, body) = arm
     // Handler arm args bind into the arm body's scope — push a fresh
     // locals checkpoint, register each arg, lower body, restore.
     let cp = perform ls_push_scope()
-    bind_names_as_locals(args)
-    let lo_body = lower_expr(body)
+    bind_names_as_locals(arm.args)
+    let lo_body = lower_expr(arm.body)
     perform ls_pop_scope(cp)
-    [(op_name, args, lo_body)]
-      ++ lower_handler_arms(list_tail(arms))
+    let lo_arm = {args: arm.args, body: lo_body, op_name: arm.op_name}
+    [lo_arm] ++ lower_handler_arms(list_tail(arms))
   }
 
 fn bind_names_as_locals(names) =

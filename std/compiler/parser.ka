@@ -614,7 +614,11 @@ fn parse_handler_arms(tokens, pos) = {
     let (body, p5) = parse_expr(tokens, skip_ws(tokens, p4))
     let p6 = skip_sep(tokens, p5)
     let (rest, p7) = parse_handler_arms(tokens, p6)
-    ([(op_name, args, body)] ++ rest, p7)
+    // Per Ω.5 frame-record discipline + H1.4 future wiring,
+    // arms are records keyed by field name. New fields (e.g.,
+    // arm_fn_idx for handler arm fn indexing) land additively.
+    let arm = {args: args, body: body, op_name: op_name}
+    ([arm] ++ rest, p7)
   }
 }
 

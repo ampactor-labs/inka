@@ -54,21 +54,23 @@ effect InferCtx {
 // to target; today it's a bookkeeping surface with no consumer but
 // the shape it captures is load-bearing for evidence reification.
 handler infer_ctx with stack = [], declared = [], handler_stack = [] {
-  // stack = [(row_handle, accumulated_row, fn_span), ...]
-  // declared = [(name, negated)] — the current FnStmt's annotation
+  // stack = [InferFrame, ...] where each InferFrame is a record:
+  //   {accumulated_row: EffRow, fn_span: Span, row_handle: Int}
+  // declared = [(EffName, negated)] — the current FnStmt's annotation
   // handler_stack = [handler_name, ...] — outer-to-inner installation order
 
   inf_enter_fn(h, fn_span) => {
+    let frame = {accumulated_row: EfPure, fn_span: fn_span, row_handle: h}
     resume(())
-      with stack = [(h, EfPure, fn_span)] ++ stack
+      with stack = [frame] ++ stack
   },
 
   inf_exit_fn() => {
     if len(stack) == 0 { resume(()) }
     else {
-      let (row_h, final_row, fn_span) = list_head(stack)
-      perform graph_bind_row(row_h, final_row,
-        Located(fn_span, Inferred("fn effect row")))
+      let frame = list_head(stack)
+      perform graph_bind_row(frame.row_handle, frame.accumulated_row,
+        Located(frame.fn_span, Inferred("fn effect row")))
       resume(())
         with stack = list_tail(stack)
     }
@@ -77,30 +79,40 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [] {
   inf_add_effect(name) => {
     if len(stack) == 0 { resume(()) }
     else {
-      let (row_h, current, fn_span) = list_head(stack)
+      let frame = list_head(stack)
       // `name` is a String (legacy callers); wrap as bare ENamed.
       // Parameterized effects flow through inf_add_row instead.
-      let extended = union_row(current, mk_ef_closed([ENamed(name)]))
+      let extended = union_row(frame.accumulated_row, mk_ef_closed([ENamed(name)]))
+      let updated = {
+        accumulated_row: extended,
+        fn_span: frame.fn_span,
+        row_handle: frame.row_handle
+      }
       resume(())
-        with stack = [(row_h, extended, fn_span)] ++ list_tail(stack)
+        with stack = [updated] ++ list_tail(stack)
     }
   },
 
   inf_add_row(row) => {
     if len(stack) == 0 { resume(()) }
     else {
-      let (row_h, current, fn_span) = list_head(stack)
-      let extended = union_row(current, row)
+      let frame = list_head(stack)
+      let extended = union_row(frame.accumulated_row, row)
+      let updated = {
+        accumulated_row: extended,
+        fn_span: frame.fn_span,
+        row_handle: frame.row_handle
+      }
       resume(())
-        with stack = [(row_h, extended, fn_span)] ++ list_tail(stack)
+        with stack = [updated] ++ list_tail(stack)
     }
   },
 
   inf_current_row() => {
     if len(stack) == 0 { resume(EfPure) }
     else {
-      let (_, current, _) = list_head(stack)
-      resume(current)
+      let frame = list_head(stack)
+      resume(frame.accumulated_row)
     }
   },
 

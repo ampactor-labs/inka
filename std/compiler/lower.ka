@@ -995,15 +995,31 @@ fn push_name(buf, count, name) = {
 // captured (added to the current frame's captures list at enter
 // time).
 
-// Frame shape: (locals_names, locals_handles, captures_names,
-// captures_handles). Parallel lists keyed by slot index. The handle
-// arrays let ls_resolve return the local's actual type handle —
-// LowExpr correctness for LLocal/LUpval no longer depends on the
-// caller's enclosing handle (W7 / Phase-A1 capture-handle fix).
+// Frame shape (Ω.5): one record per frame, six fields. Sorted-set
+// for O(log N) membership; parallel insertion-ordered list for slot
+// positioning (LLocal / LUpval need positional indices). Same data
+// as the prior parallel-arrays form, structurally consolidated:
+//
+//   locals       — sorted set of local names (membership)
+//   local_order  — insertion-ordered list (slot index = position)
+//   local_handles — parallel to local_order, type handles per slot
+//   captures, capture_order, capture_handles — same shape, capture side
+//
+// Field-sort discipline (parser + mk_record): records are stored
+// alphabetically, so the WAT layout is captures(0), capture_handles(4),
+// capture_order(8), locals(12), local_handles(16), local_order(20).
+// Inka source reads via .field — physical layout irrelevant.
 handler lower_scope with frames = [], globals = [] {
-  ls_enter_frame(locals, locals_h, captures, captures_h) => {
-    resume(())
-      with frames = [(locals, locals_h, captures, captures_h)] ++ frames
+  ls_enter_frame(locals_in, locals_h, captures_in, captures_h) => {
+    let frame = {
+      capture_handles: captures_h,
+      capture_order: captures_in,
+      captures: set_canonicalize(captures_in),
+      local_handles: locals_h,
+      local_order: locals_in,
+      locals: set_canonicalize(locals_in)
+    }
+    resume(()) with frames = [frame] ++ frames
   },
 
   ls_exit_frame() => {
@@ -1017,29 +1033,45 @@ handler lower_scope with frames = [], globals = [] {
   ls_push_scope() => {
     if len(frames) == 0 { resume(0) }
     else {
-      let (locals, _lh, _caps, _ch) = list_head(frames)
-      resume(len(locals))
+      let frame = list_head(frames)
+      resume(len(frame.local_order))
     }
   },
 
   ls_pop_scope(checkpoint) => {
     if len(frames) == 0 { resume(()) }
     else {
-      let (locals, locals_h, captures, captures_h) = list_head(frames)
-      let truncated_n = list_take_n(locals, checkpoint)
-      let truncated_h = list_take_n(locals_h, checkpoint)
+      let frame = list_head(frames)
+      let truncated_order = list_take_n(frame.local_order, checkpoint)
+      let truncated_handles = list_take_n(frame.local_handles, checkpoint)
+      let updated = {
+        capture_handles: frame.capture_handles,
+        capture_order: frame.capture_order,
+        captures: frame.captures,
+        local_handles: truncated_handles,
+        local_order: truncated_order,
+        locals: set_canonicalize(truncated_order)
+      }
       resume(())
-        with frames = [(truncated_n, truncated_h, captures, captures_h)] ++ list_tail(frames)
+        with frames = [updated] ++ list_tail(frames)
     }
   },
 
   ls_bind_local(name, h) => {
     if len(frames) == 0 { resume(0) }
     else {
-      let (locals, locals_h, captures, captures_h) = list_head(frames)
-      let slot = len(locals)
+      let frame = list_head(frames)
+      let slot = len(frame.local_order)
+      let updated = {
+        capture_handles: frame.capture_handles,
+        capture_order: frame.capture_order,
+        captures: frame.captures,
+        local_handles: frame.local_handles ++ [h],
+        local_order: frame.local_order ++ [name],
+        locals: set_insert(frame.locals, name)
+      }
       resume(slot)
-        with frames = [(locals ++ [name], locals_h ++ [h], captures, captures_h)] ++ list_tail(frames)
+        with frames = [updated] ++ list_tail(frames)
     }
   },
 
@@ -1047,17 +1079,18 @@ handler lower_scope with frames = [], globals = [] {
     if len(frames) == 0 {
       resume((RGlobal, 0))
     } else {
-      let (locals, locals_h, captures, captures_h) = list_head(frames)
-      let local_idx = ls_find_str(locals, name, 0)
-      if local_idx >= 0 {
-        resume((RLocal, list_index(locals_h, local_idx)))
+      let frame = list_head(frames)
+      // O(log N) membership; slot lookup falls back to the order list
+      // only when the name is actually present (the common case for
+      // an enclosed reference is local-or-capture, not global).
+      if set_contains(frame.locals, name) {
+        let local_idx = ls_find_in_order(frame.local_order, name, 0)
+        resume((RLocal, list_index(frame.local_handles, local_idx)))
+      } else if set_contains(frame.captures, name) {
+        let cap_idx = ls_find_in_order(frame.capture_order, name, 0)
+        resume((RUpval(cap_idx), list_index(frame.capture_handles, cap_idx)))
       } else {
-        let cap_idx = ls_find_str(captures, name, 0)
-        if cap_idx >= 0 {
-          resume((RUpval(cap_idx), list_index(captures_h, cap_idx)))
-        } else {
-          resume((RGlobal, 0))
-        }
+        resume((RGlobal, 0))
       }
     }
   },
@@ -1067,22 +1100,20 @@ handler lower_scope with frames = [], globals = [] {
   }
 }
 
-// Phase-A3: flat-indexed linear scan over the frame's locals list.
-// For deeply nested scopes (~20+ locals) a sorted-set upgrade would
-// drop membership to O(log N), but positional indices (needed for
-// captures/LUpval offsets) are insertion-ordered. Two parallel
-// structures (sorted-for-lookup + insertion-ordered-for-position)
-// would add more complexity than the typical small-frame linear
-// scan costs. The flat-indexed version replaces the list_head /
-// list_tail recursion (which allocates slices per step on tag=0
-// inputs) with O(1)-per-step list_index access.
-fn ls_find_str(lst, target, i) =
-  ls_find_str_loop(lst, target, i, len(lst))
+// Slot-index lookup once membership is confirmed. The set vouches
+// the name is present; this loop locates its insertion position
+// (slot index for LLocal / LUpval). Linear because order is
+// insertion-keyed, not sort-keyed; bounded by frame size in
+// practice. Renamed from ls_find_str to mark its post-Ω.5 role:
+// only fires after a positive set_contains, so worst case is O(N)
+// but expected case hits early since recently-bound names dominate.
+fn ls_find_in_order(lst, target, i) =
+  ls_find_in_order_loop(lst, target, i, len(lst))
 
-fn ls_find_str_loop(lst, target, i, n) =
+fn ls_find_in_order_loop(lst, target, i, n) =
   if i >= n { -1 }
   else if str_eq(list_index(lst, i), target) { i }
-  else { ls_find_str_loop(lst, target, i + 1, n) }
+  else { ls_find_in_order_loop(lst, target, i + 1, n) }
 
 fn list_take_n(lst, n) =
   if n == 0 { [] }

@@ -417,12 +417,11 @@ fn infer_expr(node) =
       infer_call(func, args, handle, span)
       // H4: constructor calls allocate a heap record. Tag the
       // resulting handle so check_escape at fn return can verify
-      // the value doesn't outlive its region. Records (Record-
-      // SchemeKind) bind their type but the Call form is unusual
-      // for them — NamedRecordExpr is canonical; CallExpr→record
-      // is the degenerate fall-through.
+      // the value doesn't outlive its region. H4.1: constructor
+      // ARGS ARE the fields — the resulting record's region pins
+      // to the deepest field region.
       if call_is_alloc_returning(func) {
-        perform tag_alloc(handle)
+        perform tag_alloc_join(handle, collect_handles(args))
       }
     },
 
@@ -464,13 +463,14 @@ fn infer_expr(node) =
         unify_list_elems(list_tail(elems), fh, span)
         perform graph_bind(handle, TList(TVar(fh)), Located(span, Inferred("list literal")))
       }
-      perform tag_alloc(handle)
+      // H4.1: list elements may carry inner-region pointers; join.
+      perform tag_alloc_join(handle, collect_handles(elems))
     },
 
     NExpr(MakeTupleExpr(elems)) => {
       infer_expr_list(elems)
       perform graph_bind(handle, TTuple(collect_tvar_types(elems)), Located(span, Inferred("tuple literal")))
-      perform tag_alloc(handle)
+      perform tag_alloc_join(handle, collect_handles(elems))
     },
 
     NExpr(MakeRecordExpr(fields)) => {
@@ -481,7 +481,8 @@ fn infer_expr(node) =
       let field_types = build_record_field_types(fields)
       perform graph_bind(handle, TRecord(field_types),
         Located(span, Inferred("record literal")))
-      perform tag_alloc(handle)
+      // H4.1: record fields may carry inner-region pointers; join.
+      perform tag_alloc_join(handle, record_field_handles(fields))
     },
 
     NExpr(NamedRecordExpr(type_name, fields)) => {
@@ -510,7 +511,7 @@ fn infer_expr(node) =
           }
         }
       }
-      perform tag_alloc(handle)
+      perform tag_alloc_join(handle, record_field_handles(fields))
     },
 
     NExpr(PerformExpr(op_name, args)) => {
@@ -1196,6 +1197,17 @@ fn build_record_field_types(fields) =
     let (name, value) = list_head(fields)
     let N(_, _, vh) = value
     [(name, TVar(vh))] ++ build_record_field_types(list_tail(fields))
+  }
+
+// H4.1 helper — pull the value handles out of a record-field list
+// for region-join lookup. Field names aren't needed for region
+// tracking; only the per-value handles matter.
+fn record_field_handles(fields) =
+  if len(fields) == 0 { [] }
+  else {
+    let (_, value) = list_head(fields)
+    let N(_, _, vh) = value
+    [vh] ++ record_field_handles(list_tail(fields))
   }
 
 // H2.3: validate a nominal record literal's fields against the

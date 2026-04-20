@@ -362,6 +362,11 @@ effect RegionTrack {
   region_enter(Span) -> Int                       @resume=OneShot
   region_exit(Int) -> ()                          @resume=OneShot
   tag_alloc(Int) -> ()                            @resume=OneShot
+  tag_alloc_join(Int, List) -> ()                 @resume=OneShot
+                                                  // value_handle, field_handles —
+                                                  // tag with the deepest (innermost)
+                                                  // region across (current, fields).
+                                                  // Used by record/variant construction.
   check_escape(Int, Span) -> ()                   @resume=OneShot
   current_region() -> Int                         @resume=OneShot
 }

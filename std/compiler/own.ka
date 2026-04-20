@@ -187,6 +187,24 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
       with tagged_values = [tag] ++ tagged_values
   },
 
+  tag_alloc_join(value_handle, field_handles) => {
+    // H4.1: composite values (record / variant with fields) take
+    // the DEEPEST (innermost = largest region_id) region across
+    // (current_region, every field's region). A field tagged with
+    // an inner region pins the composite to that inner lifetime —
+    // escaping the composite to outer scope would orphan the
+    // inner-region pointer field. The escape check at fn return
+    // uses this max-region tag.
+    let cur_rid = if len(region_stack) == 0 { 0 }
+                  else { let Region(r, _) = list_head(region_stack); r }
+    let install_span = if len(region_stack) == 0 { span_zero() }
+                       else { let Region(_, s) = list_head(region_stack); s }
+    let joined = join_field_regions(tagged_values, field_handles, cur_rid)
+    let tag = {handle: value_handle, install_span: install_span, region_id: joined}
+    resume(())
+      with tagged_values = [tag] ++ tagged_values
+  },
+
   check_escape(value_handle, escape_span) => {
     // Look up the value's tagged region. If it's region 0 (global)
     // or a region still on the stack, the value is safe. If the
@@ -234,6 +252,26 @@ fn region_on_stack_loop(stack, rid, i, n) =
     let Region(r, _) = list_index(stack, i)
     if r == rid { true }
     else { region_on_stack_loop(stack, rid, i + 1, n) }
+  }
+
+// H4.1: join field regions with current region — returns the MAX
+// (innermost) region_id. Untagged fields (scalars, never alloc'd)
+// contribute region 0 (global lifetime, doesn't bound the join).
+// The result is the composite's pinning region.
+fn join_field_regions(tags, fields, current) =
+  join_field_regions_loop(tags, fields, current, 0, len(fields))
+
+fn join_field_regions_loop(tags, fields, acc, i, n) =
+  if i >= n { acc }
+  else {
+    let fh = list_index(fields, i)
+    let entry = lookup_tag(tags, fh)
+    let field_rid = match entry {
+      None     => 0,
+      Some(t)  => t.region_id
+    }
+    let next = if field_rid > acc { field_rid } else { acc }
+    join_field_regions_loop(tags, fields, next, i + 1, n)
   }
 
 fn report_each_collision(names, i, n, span) =

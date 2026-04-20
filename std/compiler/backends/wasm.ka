@@ -124,7 +124,6 @@ fn ty_to_wasm(handle) =
 fn ty_to_wasm_type(ty) = match ty {
   TInt              => "i32",
   TFloat            => "f64",
-  TBool             => "i32",
   TString           => "i32",   // pointer into linear memory
   TUnit             => "i32",
   TList(_)          => "i32",   // pointer
@@ -1017,29 +1016,33 @@ fn emit_expr(expr) = match expr {
     //   offset 0: tag_id (i32) — discriminator
     //   offset 4 + 4*i: field_i — each erased to i32 by ty_to_wasm
     //
-    // Uniform heap allocation — even nullary variants pay 4 bytes
-    // for the tag. The nullary-sentinel optimization is deferred
-    // because it requires sentinel-vs-pointer discrimination in
-    // mixed-variant types (e.g., `Maybe = Nothing | Just(a)`),
-    // which depends on a heap-base invariant the substrate does
-    // not yet expose. Match emission consequently uses a uniform
-    // (i32.load offset=0) tag fetch — sound for every shape.
-    // Bool stays primitive TBool until that invariant lands.
+    // HB: nullary variants take the SENTINEL path — value IS the
+    // tag, no allocation. False=0, True=1 (Bool); Nothing=0,
+    // Up=0/Down=1 etc. The HEAP_BASE = 4096 invariant guarantees
+    // sentinels can't collide with valid pointers (heap_ptr starts
+    // at 1 MiB). Mixed-variant types (e.g., Maybe) get
+    // threshold-aware match dispatch in emit_match_arms_mixed.
     //
-    // emit_alloc routes through the EmitMemory swap surface —
-    // bump today; arena / future GC swap without touching here.
+    // Fielded variants heap-allocate via emit_alloc (EmitMemory
+    // swap surface — bump today, arena/GC tomorrow).
     let n = len(fields)
-    let size = 4 + n * 4
-    perform emit_alloc(size, "variant_tmp")
-    // Store tag at offset 0.
-    perform wat_emit("    (local.get $variant_tmp)\n")
-    perform wat_emit("    (i32.const ")
-    perform wat_emit(int_to_str(tag_id))
-    perform wat_emit(") (i32.store offset=0)\n")
-    // Store each field at offset 4 + 4*i.
-    emit_variant_field_stores(fields, 0)
-    // Result: variant pointer on stack.
-    perform wat_emit("    (local.get $variant_tmp)\n")
+    if n == 0 {
+      perform wat_emit("    (i32.const ")
+      perform wat_emit(int_to_str(tag_id))
+      perform wat_emit(")\n")
+    } else {
+      let size = 4 + n * 4
+      perform emit_alloc(size, "variant_tmp")
+      // Store tag at offset 0.
+      perform wat_emit("    (local.get $variant_tmp)\n")
+      perform wat_emit("    (i32.const ")
+      perform wat_emit(int_to_str(tag_id))
+      perform wat_emit(") (i32.store offset=0)\n")
+      // Store each field at offset 4 + 4*i.
+      emit_variant_field_stores(fields, 0)
+      // Result: variant pointer on stack.
+      perform wat_emit("    (local.get $variant_tmp)\n")
+    }
   },
 
   LIndex(_h, base, idx, _is_store) => {
@@ -1309,11 +1312,56 @@ fn emit_record_field_stores(fields, i) =
     emit_record_field_stores(list_tail(fields), i + 1)
   }
 
-// ═══ Match arm dispatch (H3) ═══════════════════════════════════════
-// Cascading if-else over arm patterns. Every emitted arm leaves the
-// arm body's i32 result on the stack (the match's value), so the
-// whole cascade has uniform (result i32) discipline.
+// ═══ Match arm dispatch (H3 + HB) ══════════════════════════════════
+// Cascading if-else over arm patterns. Classify the WHOLE arm set
+// once: pure-nullary (sentinel compare), pure-fielded (offset=0 load
+// + compare), or mixed (threshold gate at HEAP_BASE = 4096, then
+// dispatch to one or the other branch).
+//
+// HB substrate: nullary variants emit as (i32.const tag) sentinels;
+// fielded variants are heap pointers ≥ HEAP_BASE. The threshold
+// comparison `(scrut < HEAP_BASE)` discriminates without ambiguity.
 fn emit_match_arms(arms) =
+  if len(arms) == 0 {
+    perform wat_emit("    (unreachable)\n")
+  } else {
+    let mode = classify_arms_mode(arms)
+    // mode: 0 = pure-nullary, 1 = pure-fielded, 2 = mixed
+    if mode == 2 {
+      emit_match_arms_mixed(arms)
+    } else {
+      emit_match_arms_uniform(arms, mode)
+    }
+  }
+
+// Walk LPCon arms; collect whether each variant arm is nullary
+// (empty sub_pats) or fielded (non-empty). Wildcards / vars / lits
+// are mode-neutral. Returns 0 (all nullary among LPCon arms),
+// 1 (all fielded), or 2 (mix).
+fn classify_arms_mode(arms) =
+  classify_arms_loop(arms, 0, len(arms), -1)
+
+fn classify_arms_loop(arms, i, n, acc) =
+  if i >= n {
+    if acc < 0 { 1 } else { acc }
+  } else {
+    let (pat, _) = list_index(arms, i)
+    match pat {
+      LPCon(_, _, sub_pats) => {
+        let arm_mode = if len(sub_pats) == 0 { 0 } else { 1 }
+        let next = if acc < 0 { arm_mode }
+                   else if acc == arm_mode { acc }
+                   else { 2 }
+        classify_arms_loop(arms, i + 1, n, next)
+      },
+      _ => classify_arms_loop(arms, i + 1, n, acc)
+    }
+  }
+
+// Uniform-mode dispatch: every LPCon arm uses the SAME compare
+// shape (sentinel direct or offset=0 load). mode 0 = nullary,
+// mode 1 = fielded.
+fn emit_match_arms_uniform(arms, mode) =
   if len(arms) == 0 {
     perform wat_emit("    (unreachable)\n")
   } else {
@@ -1321,17 +1369,23 @@ fn emit_match_arms(arms) =
     let rest = list_tail(arms)
     match pat {
       LPCon(_name, tag, sub_pats) => {
-        perform wat_emit("    (local.get $scrut_tmp)\n")
-        perform wat_emit("    (i32.load offset=0)\n")
+        if mode == 0 {
+          // Nullary: scrutinee IS the tag. Direct compare.
+          perform wat_emit("    (local.get $scrut_tmp)\n")
+        } else {
+          // Fielded: load tag at offset 0.
+          perform wat_emit("    (local.get $scrut_tmp)\n")
+          perform wat_emit("    (i32.load offset=0)\n")
+        }
         perform wat_emit("    (i32.const ")
         perform wat_emit(int_to_str(tag))
         perform wat_emit(")\n")
         perform wat_emit("    (i32.eq)\n")
         perform wat_emit("    (if (result i32)\n      (then\n")
-        emit_pat_field_binds(sub_pats, 0)
+        if mode == 1 { emit_pat_field_binds(sub_pats, 0) }
         emit_expr(body)
         perform wat_emit("      )\n      (else\n")
-        emit_match_arms(rest)
+        emit_match_arms_uniform(rest, mode)
         perform wat_emit("      ))\n")
       },
       LPLit(lv) => {
@@ -1341,31 +1395,62 @@ fn emit_match_arms(arms) =
         perform wat_emit("    (if (result i32)\n      (then\n")
         emit_expr(body)
         perform wat_emit("      )\n      (else\n")
-        emit_match_arms(rest)
+        emit_match_arms_uniform(rest, mode)
         perform wat_emit("      ))\n")
       },
       LPVar(name) => {
-        // Always-match: bind whole scrutinee, emit body, end cascade.
         perform wat_emit("    (local.get $scrut_tmp)\n")
         perform wat_emit("    (local.set $")
         perform wat_emit(name)
         perform wat_emit(")\n")
         emit_expr(body)
       },
-      LPWild => {
-        // Always-match: emit body, end cascade.
-        emit_expr(body)
-      },
+      LPWild => emit_expr(body),
       LPRecord(field_binds) => {
-        // Records always-match — no tag, no shape check at runtime.
-        // The type system has already proven the scrutinee fits.
-        // Bind each named field by offset, emit body, end cascade.
         emit_record_field_binds(field_binds)
         emit_expr(body)
       },
-      LPTuple(_) => emit_match_arms(rest),
-      LPList(_)  => emit_match_arms(rest)
+      LPTuple(_) => emit_match_arms_uniform(rest, mode),
+      LPList(_)  => emit_match_arms_uniform(rest, mode)
     }
+  }
+
+// Mixed-mode dispatch: threshold gate at HEAP_BASE (4096). Sentinel
+// values (< HEAP_BASE) take the nullary cascade; pointers (≥ HEAP_BASE)
+// take the fielded cascade. Wildcards/vars/lits appear in both since
+// they always-match irrespective of shape.
+fn emit_match_arms_mixed(arms) = {
+  let nullary_arms = filter_arms_by_mode(arms, 0)
+  let fielded_arms = filter_arms_by_mode(arms, 1)
+  perform wat_emit("    (local.get $scrut_tmp)\n")
+  perform wat_emit("    (i32.const 4096)\n")    // HEAP_BASE
+  perform wat_emit("    (i32.lt_u)\n")
+  perform wat_emit("    (if (result i32)\n      (then\n")
+  emit_match_arms_uniform(nullary_arms, 0)
+  perform wat_emit("      )\n      (else\n")
+  emit_match_arms_uniform(fielded_arms, 1)
+  perform wat_emit("      ))\n")
+}
+
+// Keep arms whose LPCon fits the requested mode (0=nullary, 1=fielded);
+// always keep wildcards/vars/lits/records (always-match terminals).
+fn filter_arms_by_mode(arms, want_mode) =
+  filter_arms_by_mode_loop(arms, want_mode, 0, len(arms), [])
+
+fn filter_arms_by_mode_loop(arms, want_mode, i, n, acc) =
+  if i >= n { acc }
+  else {
+    let arm = list_index(arms, i)
+    let (pat, _) = arm
+    let keep = match pat {
+      LPCon(_, _, sub_pats) => {
+        let arm_mode = if len(sub_pats) == 0 { 0 } else { 1 }
+        arm_mode == want_mode
+      },
+      _ => true
+    }
+    let next = if keep { acc ++ [arm] } else { acc }
+    filter_arms_by_mode_loop(arms, want_mode, i + 1, n, next)
   }
 
 // Per-field binding for LPRecord arms. Mirrors emit_pat_field_binds

@@ -24,17 +24,24 @@
 
 // ═══ Core type ADT (spec 02) ═══════════════════════════════════════
 
+// HEAP_BASE = 4096 — substrate invariant (HB / nullary-sentinel).
+// The bump allocator's $heap_ptr starts at 1048576 (1 MiB).
+// Sentinel values for nullary ADT variants live in [0, HEAP_BASE);
+// every heap allocation is ≥ HEAP_BASE. Mixed-variant match
+// dispatch in backends/wasm.ka uses this threshold to discriminate
+// sentinel from pointer. Bool is the canonical example:
+// `type Bool = False | True` — False=0, True=1, both sentinels.
+
 type Ty
   = TInt
   | TFloat
   | TString
-  | TBool
   | TUnit
   | TList(Ty)
   | TTuple(List)
   | TFun(List, Ty, EffRow)        // params: List[TParam], return, effects
   | TVar(Int)                     // handle into SubstGraph
-  | TName(String, List)           // nominal type + type args
+  | TName(String, List)           // nominal type + type args (Bool lives here)
   | TRecord(List)                 // [(name, Ty)]
   | TRecordOpen(List, Int)        // fields + row-variable handle
   | TRefined(Ty, Predicate)       // refinement type (Verify discharges)
@@ -592,7 +599,6 @@ fn show_type(ty) with SubstGraphRead =
     TInt    => "Int",
     TFloat  => "Float",
     TString => "String",
-    TBool   => "Bool",
     TUnit   => "()",
     TList(elem) =>
       "List("

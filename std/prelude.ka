@@ -4,6 +4,14 @@
 // map, filter, fold, take, find — all handlers on the same effect.
 // Same yield. Different resume. Stream fusion falls out for free.
 
+// ─── Bool (HB) ──────────────────────────────────────────────
+// Nullary-sentinel ADT. False=tag 0, True=tag 1 — matches WAT's
+// i32 truthiness convention so `(if cond ...)` works directly.
+// Both compile to (i32.const N); zero allocation. The substrate
+// has ONE story for tagged values; Bool is its canonical instance.
+
+type Bool = False | True
+
 // ─── The Iterate Effect ─────────────────────────────────────
 // One effect. Every collection operation is a handler on it.
 

@@ -186,7 +186,13 @@ fn lower_expr_body(e, handle, span) = match e {
   LitInt(v)    => LConst(handle, LInt(v)),
   LitFloat(v)  => LConst(handle, LFloat(v)),
   LitString(s) => LConst(handle, LString(s)),
-  LitBool(b)   => LConst(handle, LBool(b)),
+  LitBool(b)   => {
+    // HB: True/False are nullary ConstructorScheme entries. Lower
+    // routes through LMakeVariant so emit picks the sentinel path
+    // (i32.const tag) — no allocation, full ADT semantics.
+    let tag = if b { 1 } else { 0 }
+    LMakeVariant(handle, tag, [])
+  },
   LitUnit      => LConst(handle, LInt(0)),
 
   VarRef(name) => {
@@ -617,7 +623,6 @@ fn lower_param_handles(params) =
       TInt                => 0,
       TFloat              => 0,
       TString             => 0,
-      TBool               => 0,
       TUnit               => 0,
       TList(_)            => 0,
       TTuple(_)           => 0,

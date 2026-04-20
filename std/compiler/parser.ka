@@ -1183,7 +1183,7 @@ fn parse_type_ty(tokens, pos) = match kind_at(tokens, pos) {
     if str_eq(v, "Int")        { (TInt, pos + 1) }
     else if str_eq(v, "Float")  { (TFloat, pos + 1) }
     else if str_eq(v, "String") { (TString, pos + 1) }
-    else if str_eq(v, "Bool")   { (TBool, pos + 1) }
+    else if str_eq(v, "Bool")   { (TName("Bool", []), pos + 1) }
     else if str_eq(v, "Unit")   { (TUnit, pos + 1) }
     else                        { (TName(v, []), pos + 1) }
   },

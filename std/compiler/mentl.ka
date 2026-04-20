@@ -430,7 +430,6 @@ fn extract_row(ty) = match ty {
   TInt              => EfPure,
   TFloat            => EfPure,
   TString           => EfPure,
-  TBool             => EfPure,
   TUnit             => EfPure,
   TList(_)          => EfPure,
   TTuple(_)         => EfPure,

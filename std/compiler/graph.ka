@@ -333,7 +333,6 @@ fn occurs_in(handle, ty) =
     TInt             => false,
     TFloat           => false,
     TString          => false,
-    TBool            => false,
     TUnit            => false,
     TVar(id)         => id == handle,
     TList(elem)      => occurs_in(handle, elem),

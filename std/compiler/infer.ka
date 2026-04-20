@@ -344,7 +344,7 @@ fn infer_expr(node) =
     NExpr(LitInt(_))    => perform graph_bind(handle, TInt,    Located(span, Inferred("int literal"))),
     NExpr(LitFloat(_))  => perform graph_bind(handle, TFloat,  Located(span, Inferred("float literal"))),
     NExpr(LitString(_)) => perform graph_bind(handle, TString, Located(span, Inferred("string literal"))),
-    NExpr(LitBool(_))   => perform graph_bind(handle, TBool,   Located(span, Inferred("bool literal"))),
+    NExpr(LitBool(_))   => perform graph_bind(handle, TName("Bool", []), Located(span, Inferred("bool literal"))),
     NExpr(LitUnit)      => perform graph_bind(handle, TUnit,   Located(span, Inferred("unit"))),
 
     NExpr(VarRef(name)) => infer_var_ref(name, handle, span),
@@ -376,7 +376,7 @@ fn infer_expr(node) =
       let N(_, _, ch) = cond
       let N(_, _, th) = then_e
       let N(_, _, eh) = else_e
-      perform graph_bind(ch, TBool, Located(span, Inferred("if condition")))
+      perform graph_bind(ch, TName("Bool", []), Located(span, Inferred("if condition")))
       unify(th, eh, span, IfBranch(Inferred("branches must match")))
       perform graph_bind(handle, TVar(th), Located(span, IfBranch(Inferred("if result"))))
     },
@@ -813,7 +813,6 @@ fn unify_types(a, b, span, reason) =
     TInt    => expect_same(a, b, span, reason),
     TFloat  => expect_same(a, b, span, reason),
     TString => expect_same(a, b, span, reason),
-    TBool   => expect_same(a, b, span, reason),
     TUnit   => expect_same(a, b, span, reason),
 
     TVar(ha) =>
@@ -933,7 +932,6 @@ fn same_ground(a, b) = match a {
   TInt    => match b { TInt    => true, _ => false },
   TFloat  => match b { TFloat  => true, _ => false },
   TString => match b { TString => true, _ => false },
-  TBool   => match b { TBool   => true, _ => false },
   TUnit   => match b { TUnit   => true, _ => false },
   // Compound types: same_ground rejects; unify_types handles structurally
   TVar(_)            => false,
@@ -1202,12 +1200,12 @@ fn infer_binop(handle, op, lh, rh, span) =
     },
     "comparison" => {
       unify(lh, rh, span, OpConstraint(op, Inferred("left"), Inferred("right")))
-      perform graph_bind(handle, TBool, Located(span, OpConstraint(op, Inferred("comparison"), Declared("bool"))))
+      perform graph_bind(handle, TName("Bool", []), Located(span, OpConstraint(op, Inferred("comparison"), Declared("bool"))))
     },
     "boolean" => {
-      perform graph_bind(lh, TBool, Located(span, OpConstraint(op, Inferred("left"), Declared("bool"))))
-      perform graph_bind(rh, TBool, Located(span, OpConstraint(op, Inferred("right"), Declared("bool"))))
-      perform graph_bind(handle, TBool, Located(span, OpConstraint(op, Inferred("result"), Declared("bool"))))
+      perform graph_bind(lh, TName("Bool", []), Located(span, OpConstraint(op, Inferred("left"), Declared("bool"))))
+      perform graph_bind(rh, TName("Bool", []), Located(span, OpConstraint(op, Inferred("right"), Declared("bool"))))
+      perform graph_bind(handle, TName("Bool", []), Located(span, OpConstraint(op, Inferred("result"), Declared("bool"))))
     },
     "concat" => {
       unify(lh, rh, span, OpConstraint(op, Inferred("left"), Inferred("right")))
@@ -1241,8 +1239,8 @@ fn infer_unaryop(handle, op, ih, span) = match op {
   "Neg" =>
     perform graph_bind(handle, TVar(ih), Located(span, OpConstraint(op, Inferred("negate"), Inferred("operand")))),
   "Not" => {
-    perform graph_bind(ih, TBool, Located(span, OpConstraint(op, Inferred("not"), Declared("bool"))))
-    perform graph_bind(handle, TBool, Located(span, OpConstraint(op, Inferred("result"), Declared("bool"))))
+    perform graph_bind(ih, TName("Bool", []), Located(span, OpConstraint(op, Inferred("not"), Declared("bool"))))
+    perform graph_bind(handle, TName("Bool", []), Located(span, OpConstraint(op, Inferred("result"), Declared("bool"))))
   },
   _ =>
     perform graph_bind(handle, TVar(ih), Located(span, Inferred("unary op")))
@@ -1263,7 +1261,7 @@ fn infer_pat(pat, handle, span) = match pat {
       LVInt(_)    => TInt,
       LVFloat(_)  => TFloat,
       LVString(_) => TString,
-      LVBool(_)   => TBool
+      LVBool(_)   => TName("Bool", [])
     }
     perform graph_bind(handle, ty, Located(span, Inferred("literal pattern")))
   },
@@ -1511,7 +1509,6 @@ fn chase_deep(ty) = match ty {
   TInt    => ty,
   TFloat  => ty,
   TString => ty,
-  TBool   => ty,
   TUnit   => ty,
   TVar(h) => {
     let node = perform graph_chase(h)
@@ -1561,7 +1558,6 @@ fn free_in_ty(ty) = match ty {
   TInt                   => [],
   TFloat                 => [],
   TString                => [],
-  TBool                  => [],
   TUnit                  => [],
   TVar(id)               => [id],
   TList(elem)            => free_in_ty(elem),
@@ -1621,7 +1617,6 @@ fn subst_ty(ty, mapping) = match ty {
   TInt    => ty,
   TFloat  => ty,
   TString => ty,
-  TBool   => ty,
   TUnit   => ty,
   TVar(id) => {
     let replacement = find_mapping(mapping, id)

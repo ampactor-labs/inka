@@ -300,7 +300,6 @@ fn render_audit(entries) =
       TInt              => "Pure",
       TFloat            => "Pure",
       TString           => "Pure",
-      TBool             => "Pure",
       TUnit             => "Pure",
       TList(_)          => "Pure",
       TTuple(_)         => "Pure",

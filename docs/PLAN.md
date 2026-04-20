@@ -215,9 +215,185 @@ is incomplete. Extend the graph. Don't route around it. (INSIGHTS.md:
 
 ---
 
-## The Work: Three Phases
+## The Work: Four Phases
 
-### Phase 1 — Write VFINAL
+Phases I–IV replace the earlier "Three Phases" framing (Write VFINAL,
+Bootstrap, First Light). What actually closed wasn't "write VFINAL
+files"; it was the γ cascade — nine handles, ten crystallizations,
+nine named drift modes, three substrate gaps named and scoped. The
+work that remains is installing handler projections on the closed
+substrate; bootstrap comes after.
+
+### Phase I — γ cascade — CLOSED
+
+The substrate is Inka-native at every layer. See
+`docs/rebuild/simulations/H*.md` for per-handle reasoning and
+`docs/traces/a-day.md` for integration verification.
+
+Landings (chronological):
+- **Σ** — SYNTAX.md canonical syntax
+- **Ω.0–Ω.4** — audit sweeps + parser refactor (str_eq Bool sweep,
+  list_extend_to substrate, Token ADT, full parser match-dispatch)
+- **Ω.5** — frame consolidation (parallel arrays → records)
+- **H6** — wildcard audit (exhaustive ADT matches across substrate)
+- **H3** — ADT instantiation (SchemeKind, LMakeVariant tag_id,
+  LMatch cascade, exhaustiveness check)
+- **H3.1** — parameterized effects (EffName ADT; `Sample(44100)`
+  structurally distinct from `Sample(48000)`)
+- **H2** — structural records (MakeRecordExpr, LMakeRecord,
+  PRecord with field-puning desugar)
+- **HB** — Bool transition (TBool deleted; nullary-sentinel ADT;
+  heap-base threshold discriminator for mixed-variant types)
+- **H1** — evidence reification in full (LMakeClosure absorbs
+  LBuildEvidence; BodyContext effect; real LEvPerform offset
+  arithmetic; handler arm fn indexing via LDeclareFn; transient
+  evidence at poly-call sites)
+- **H4** — region escape in full (tag_alloc/check_escape; region-
+  join for compound types per H4.1)
+- **H2.3** — nominal record types (`type Person = {...}`)
+- **H5 substrate** — Mentl's arms (AWrapHandler annotation;
+  AuditReport records; severance + capability unlocks)
+
+Net effect: every layer from character → token → AST → typed AST →
+LIR → WAT is Inka-native. No primitive special cases. No string-
+keyed-when-structured drift. No parallel-arrays-instead-of-record.
+No int-mode-when-ADT. Records are the handler-state shape
+everywhere. Row algebra is one mechanism over four element types.
+The heap has one story.
+
+### Phase II — Handler projection — IN FLIGHT
+
+Every surface that exposes the substrate to users (editors,
+deployment targets, concurrency, RPC, ML, audit-to-linker) is a
+handler. Phase II installs them. Three of the items are genuine
+substrate gaps, not surfaces — named explicitly below.
+
+Priority order (what unblocks what):
+
+**Priority 1 — unblocks developer use:**
+- **LSP handler** — wraps `inka query` in JSON-RPC; maps
+  `textDocument/hover` → `QTypeAt` + `QWhy`, `textDocument/rename` →
+  cross-module graph rebind, `textDocument/codeAction` → `Explanation.fix`.
+  Substrate already queryable; what pends is the JSON-RPC handler.
+- **`teach_synthesize` oracle conductor** `[substrate pending]` — the
+  composed handler that drives checkpoint → apply_annotation_tentatively →
+  verify → commit-or-rollback in a loop over gradient candidates. Substrate
+  pieces all exist; the conductor that sequences them is ~50-80 lines.
+- **`LFeedback` state-machine lowering** `[substrate pending]` — emit-
+  side rewrite of `<~ spec` to a state-machine LIR (handler-local state
+  slot for the delayed sample; Z-transform structure for DSP; RNN hidden-
+  state for training). The verb, row, type-inference all fire; emit
+  stubs.
+
+**Priority 2 — unblocks deployment scenarios:**
+- **Audit-driven linker dead-code severance** — reads
+  `AuditReport.severable`, issues `--drop-import` at WAT → WASM.
+- **Multi-backend emit** — per-target handler variants on `backends/`
+  (browser, server, trainer, wasi). Today's single `backends/wasm.ka`
+  generalizes; each target adds a handler.
+- **Runtime `HandlerCatalog` effect** `[substrate pending]` — today's
+  static `catalog_handled_effects` table becomes an effect-based
+  registry. User-defined handlers register at module load; Mentl's
+  `AWrapHandler` proposal reads the registry.
+
+**Priority 3 — unblocks specific programs:**
+- **Thread effect + per-thread region minting** — `spawn(f)` op;
+  per-thread handler install pattern; region id per thread.
+- **RPC/actor handler** — `~>` boundary handler that bifurcates
+  emit and serializes the cross-wire state record.
+- **Autodiff handler** — concrete ~15 lines per DESIGN.md 10.2;
+  records tape, resumes with forward values, `backward()` walks
+  the tape in reverse.
+- **SIMD intrinsic emission** — recognize `tanh`, `gain`, etc. as
+  mappable to `v128.*` WAT opcodes.
+
+**Priority 4 — polish, not load-bearing:**
+- Commit message synthesis from graph provenance DAG
+- `inka rename` CLI handler
+- `///` docstring handler (render from graph projection)
+- `.kai` cached-env module-incremental recompilation
+
+**Exit condition:** every `[LIVE · surface pending]` and every
+`[substrate pending]` marker in `docs/traces/a-day.md` flips to
+`[LIVE]`. The trace becomes the scoreboard.
+
+### Phase III — Bootstrap
+
+Deliberately last. A one-shot translator (Rust / Python / hand-
+written WAT — language TBD at that moment) that reads the closed
+substrate and produces the first `inka.wasm`. The translator is
+written as a DIRECT TRACE of the cascade simulations, not as a
+separate interpretation — this is the mitigation for the main risk
+(a bug in the translator corrupts the seed).
+
+Scope estimate: ~3-5K lines of whichever language, reading the
+substrate at its walkthrough-verified form. Deleted forever after
+Phase IV closes.
+
+### Phase IV — First-light
+
+The soundness proof:
+
+```
+bootstrap/translate std/compiler/*.ka -o inka.wasm       # one-shot
+cat std/compiler/*.ka | wasmtime run inka.wasm  > inka2.wat
+wat2wasm inka2.wat -o inka2.wasm
+cat std/compiler/*.ka | wasmtime run inka2.wasm > inka3.wat
+diff inka2.wat inka3.wat                                  # empty
+```
+
+When the diff is empty, the substrate is self-compiling byte-
+identically. Bootstrap deletes. Inka is. Post-first-light arcs
+(the Phase II handler projections that weren't on the critical
+path) continue as ongoing work, not as a separate phase.
+
+---
+
+## The Three Substrate Gaps
+
+Three — and only three — genuine substrate pieces remain.
+Everything else is handler projection on the closed cascade. Each
+gap lives within a Phase II Priority 1 item.
+
+1. **`LFeedback` state-machine lowering.** At emit, `LFeedback(handle,
+   body, spec)` currently emits `;; <~ feedback (iterative ctx)` as
+   a stub. The verb, row, type inference, and AST all fire. What
+   pends: lowering to a state-machine LIR — handler-local state slot
+   for `<~ delay(N)`, RNN hidden-state structure for `<~ step_fn`.
+   Templates in H3.1 walkthrough. Scope: ~100 lines emit-side.
+
+2. **`teach_synthesize` oracle conductor.** `graph_push_checkpoint` /
+   `apply_annotation_tentatively` / `verify` / `graph_rollback` all
+   fire individually. What pends: the composed handler that
+   sequences them over a gradient-candidate list, scores by row
+   subsumption, returns the proven set. Walkthrough in
+   H5-mentl-arms.md. Scope: ~50-80 lines; one new handler in
+   mentl.ka plus a conductor function.
+
+3. **Runtime `HandlerCatalog` effect.** Today's static table in
+   `mentl.ka` (`catalog_handled_effects`) serves the compiler-built-
+   in handlers. For user-level handler discovery (the AWrapHandler
+   proposal reading user-defined absorbers), the catalog becomes an
+   effect: `catalog_register(name, handled_effects, op_arms)` at
+   module load; `catalog_lookup_for(effect)` at Mentl propose time.
+   Scope: ~one effect declaration + one handler, ~40 lines.
+
+Total substrate remaining: ~200 lines across three focused pieces.
+Everything else is handler installation on the substrate that
+already exists.
+
+---
+
+## Cascade Verification — Historical Record
+
+The cascade's internal steps are documented in
+`docs/rebuild/simulations/H*.md` (per-handle walkthroughs with
+riffle-back addenda). The integration trace across all handles is
+`docs/traces/a-day.md`. The sections below preserve the original
+Phase-1-era cascade description for git-history continuity, but
+the actual execution diverged through the γ approach.
+
+### Phase I (historical) — Write VFINAL
 
 Write the complete, correct Inka compiler in Inka. No compromises.
 No "can the bootstrapper handle this?" — write what's right.
@@ -618,25 +794,23 @@ The cascade is closed. Inka is ready to compile herself.
 
 ---
 
-### Phase 2 + Phase 3 — Bootstrap + First Light *(deferred post-cascade)*
+### Phases III + IV (historical framing) — Bootstrap + First Light
 
-The original Phase 2 (bootstrap translator) and Phase 3 (self-compilation fixed point at `first-light`) were the project's traditional sequel to Phase 1. **They are explicitly out of mind for the current execution.**
-
-Per the active session plan (`/home/suds/.claude/plans/sight-so-absorb-what-s-majestic-taco.md` — the audit-integrated cascade Σ → Ω → γ): bootstrap design fails on an inconsistent graph or a graph dressed in other languages' clothes. The Ω + γ cascade closes both. When Inka's substrate is genuinely Inka-native at every level AND simulation-verified end-to-end, bootstrap becomes DISCOVERABLE rather than designed — and the conversation about translator approach (Rust / Python / LLM-generated / hand-written WAT) returns with the substrate in its ultimate form.
-
-The bootstrap discussion will resume post-cascade. Until then, verification is by simulation, walkthrough, and audit — not by compilation.
-
-The full historical Phase 2 + Phase 3 specifications (translator options, exit gates, fixed-point diff procedure) are preserved in git history (commits before this prune) for reference at the post-cascade conversation.
+Described above under the four-phase framing. The original Phase 2
+(bootstrap translator) and Phase 3 (self-compilation fixed point)
+remain the terminal steps, but now follow Phase II handler-projection
+work.
 
 ---
 
-## Post-First-Light Arcs
+## Handler Projection Arcs (formerly Post-First-Light Arcs)
 
-Per commitment #3: each arc is independent and scoped separately.
-These are not "someday" features — they are the capabilities that
-make Inka unprecedented. Phase 1 lays the structural foundation for
-every arc. Each arc is a handler swap, a new handler, or an
-extension to the graph. No arc requires rewriting the compiler core.
+What was framed as "post-first-light" is actually Phase II
+handler-projection work. Each arc below either landed during the
+γ cascade as substrate (marked LANDED), is Phase II priority
+(marked PRIORITY N), or is genuinely post-cascade exposure
+(marked EXPOSURE). Bootstrap / first-light come after Phase II
+closes the critical path.
 
 Arc designs live in `docs/DESIGN.md` (chapter 9 — *What Dissolves*)
 and in this document's per-arc sections below. When an arc picks up,
@@ -644,7 +818,7 @@ capture the concrete implementation in the relevant rebuild spec or
 in a dedicated design doc at that time — the arcs are sketched here,
 not locked.
 
-### Arc F.1 — Refinement Verification
+### Arc F.1 — Refinement Verification  *[PRIORITY 3]*
 
 `verify_ledger` → `verify_smt`. Handler swap; source unchanged.
 
@@ -665,9 +839,11 @@ Erased at runtime — zero cost.
 
 ---
 
-### Arc F.2 — LSP + ChatLSP
+### Arc F.2 — LSP + ChatLSP  *[PRIORITY 1]*
 
 Query + Mentl tentacles wrapped in JSON-RPC. No new substrate.
+The `inka query` surface is live; the JSON-RPC handler that translates
+LSP methods to Query/Mentl ops is the unwritten projection.
 
 **What it does:** Every `inka query` command becomes an LSP method:
 - `textDocument/hover` → `QTypeAt` + `teach_why`
@@ -686,10 +862,12 @@ reasoning, not a separate ML model. Mentl teaches; the IDE renders.
 
 ---
 
-### Arc F.3 — REPL + Multi-Shot Continuations
+### Arc F.3 — REPL + Multi-Shot Continuations  *[PRIORITY 3]*
 
 Replace `load_chunk`. Execute arbitrary Inka expressions. Formalize
-the three multi-shot continuation models.
+the three multi-shot continuation models. Substrate for one-shot
+evidence lands with H1.6; multi-shot semantics extend the same
+LMakeClosure ev_slots layout.
 
 **What it does:**
 - REPL: compile-to-WASM per line or LowIR interpreter. The REPL is
@@ -719,9 +897,13 @@ handler strategies over the same computation code.
 
 ---
 
-### Arc F.4 — Scoped Arenas + Memory Strategy
+### Arc F.4 — Scoped Arenas + Memory Strategy  *[substrate LANDED via H4; handler variants EXPOSURE]*
 
-The arc where Inka proves GC is a handler.
+The arc where Inka proves GC is a handler. H4 landed region tracking
+with tag_alloc_join (composite region-join for records/variants);
+EmitMemory swap surface lands arenas as a handler swap. What remains
+is the concrete `temp_arena` / `arena_pool` / `thread_local_arena`
+handlers as alternate EmitMemory installations.
 
 **What it does:**
 - `temp_arena(size)` handler — O(1) region free, deterministic.
@@ -757,9 +939,12 @@ The arc where Inka proves GC is a handler.
 
 ---
 
-### Arc F.5 — Native Backend
+### Arc F.5 — Native Backend  *[PRIORITY 2]*
 
 Hand-rolled x86-64 from LowIR. The capstone performance arc.
+Lands as an alternate `backends/native.ka` handler installation —
+peer to `backends/wasm.ka`, not a rewrite. Multi-backend emit
+infrastructure (Priority 2) is the prerequisite.
 
 **What it does:** LowIR → native machine code. No WASM, no VM.
 - Lexa zero-overhead handler compilation: direct stack-switching.
@@ -775,10 +960,14 @@ native speed. DSP handlers meet real-time deadlines.
 
 ---
 
-### Arc F.6 — Mentl Consolidation
+### Arc F.6 — Mentl Consolidation  *[substrate LANDED via H5; orchestration PRIORITY 1]*
 
 The teaching substrate crystallized. The AI-obsolescence thesis
-made concrete.
+made concrete. H5 landed AWrapHandler, AuditReport records,
+severance enumeration, capability unlocks. What remains is the
+`teach_synthesize` oracle conductor (substrate gap 2) — the
+composed handler that drives checkpoint/apply/verify/rollback over
+gradient candidates.
 
 **What it does:** Crystallize `mentl.ka` further. The five-op Teach
 surface and the speculative oracle ship in Phase 1 as the structural
@@ -795,7 +984,7 @@ to expert is continuous — no cliff, no separate "advanced mode."
 
 ---
 
-### Arc F.7 — Incremental Compilation
+### Arc F.7 — Incremental Compilation  *[PRIORITY 4]*
 
 Per-module caching via `.kai` interface files + Salsa 3 overlay.
 
@@ -826,9 +1015,10 @@ Per-module caching via `.kai` interface files + Salsa 3 overlay.
 
 ---
 
-### Arc F.8 — Concurrency + Parallelism
+### Arc F.8 — Concurrency + Parallelism  *[PRIORITY 3]*
 
-Deterministic parallelism via handler swap.
+Deterministic parallelism via handler swap. Requires Thread effect
++ per-thread region minting (Priority 3 substrate work).
 
 **What it does:**
 - `Parallel` handler: `<|` branches run concurrently (not just
@@ -850,10 +1040,14 @@ fork point, `|>` convergence is a join.
 
 ---
 
-### Arc F.9 — Package + Module System
+### Arc F.9 — Package + Module System  *[audit LANDED; linker severance PRIORITY 2]*
 
 The handler IS the package. The `~>` chain IS the manifest. There
 is no package manager. There is only the compiler.
+
+H5 landed `inka audit`'s report (AuditReport records with
+severable/unlocks). What pends: the audit-driven linker pass that
+reads `AuditReport.severable` and drops WASM imports (Priority 2).
 
 **Thesis:** npm/Cargo/pip build ad-hoc untyped mini-languages (JSON,
 TOML) to describe dependency graphs because their host languages
@@ -894,9 +1088,12 @@ mathematically proven capability analysis.
 
 ---
 
-### Arc F.10 — ML Framework + Handler Features
+### Arc F.10 — ML Framework + Handler Features  *[PRIORITY 3]*
 
 Machine learning as proof of thesis. The ten mechanisms composed.
+Autodiff handler is ~15 lines per DESIGN.md 10.2; records tape,
+resumes forward, backward walk. Substrate fully supports; the
+concrete handler is a Priority 3 installation.
 
 **What it does:**
 - **Autodiff as effect.** `Compute` effect for matmul, conv1d, relu,
@@ -938,14 +1135,13 @@ on desktop, deploys to ARM microcontroller with `!Alloc` proven at
 compile time. The pipe topology shows DSP → ML → classification as
 one continuous graph.
 
-### Arc G — Rename (Lux → Inka)
+### Arc G — Rename (Lux → Inka)  *[LANDED]*
 
-One script, one commit. `.lux` → `.ka`. `lux` → `inka` everywhere.
-Repo rename via `gh repo rename`. Update all existing file extensions.
+Done. `.ka` is the extension; `lux3.wasm` is archaeology.
 
 ---
 
-### Arc H — Examples-as-Proofs
+### Arc H — Examples-as-Proofs  *[PRIORITY 4]*
 
 One runnable example per framework-dissolution claim. Each 50-200
 lines. Each runs. Each proves a claim from INSIGHTS.md:
@@ -1116,12 +1312,12 @@ ever proves insufficient, `wasm2c` or wasmtime AOT are escape hatches.
 
 ## Memory Model
 
-| Context | Strategy | Ships |
+| Context | Strategy | Status |
 |---|---|---|
-| Compiler (batch) | Bump allocator — allocate forward, never free, exit | Phase 1 |
-| Server (request-scoped) | Scoped arena handler — O(1) region free | Arc F.4 |
-| Game (frame-scoped) | `own` + deterministic drop | Arc F.4 |
-| Embedded/DSP | `!Alloc` — zero allocation, proven by types | Phase 1 (proof); F.4 (enforcement) |
+| Compiler (batch) | Bump allocator — allocate forward, never free, exit | LANDED (emit_memory_bump) |
+| Server (request-scoped) | Scoped arena handler — O(1) region free | substrate LANDED via H4; concrete handler PRIORITY 3 |
+| Game (frame-scoped) | `own` + deterministic drop | substrate LANDED (affine_ledger); PRIORITY 3 refinement |
+| Embedded/DSP | `!Alloc` — zero allocation, proven by types | LANDED (row subsumption + CRealTime unlock via H5) |
 
 **GC is a handler.** The bump allocator IS a handler:
 ```lux
@@ -1135,6 +1331,27 @@ handler bump_allocator with ptr = 0 {
 
 Different programs install different handlers. No runtime GC. No
 framework. Handler swap.
+
+### Substrate invariant — HEAP_BASE = 4096
+
+HB committed to a substrate-level threshold that separates sentinel
+values from heap pointers:
+
+- Bump allocator's `$heap_ptr` initializes at **1 MiB** (1048576).
+- Sentinel values for nullary ADT variants (Bool's False=0 / True=1,
+  Maybe's Nothing=0, etc.) live in `[0, 4096)`.
+- Every heap allocation is **≥ 4096**, so sentinels and pointers are
+  disambiguable by unsigned compare.
+- Mixed-variant match dispatch (`emit_match_arms_mixed`) uses
+  `(scrut < heap_base())` as the sentinel-or-pointer discriminator.
+- `heap_base()` is a single-source-of-truth helper in
+  `backends/wasm.ka`. Changing either the sentinel range or the
+  heap initialization requires updating both at once.
+
+This invariant enables nullary-sentinel compilation for every ADT
+without per-type analysis. Bool is the canonical case;
+user-declared `type Direction = Up | Down` inherits the same
+zero-cost compilation.
 
 ---
 
@@ -1174,68 +1391,102 @@ it's an F arc.
 
 ## Out of Scope — Audited
 
-### Fully out of scope (not touched by Phase 1-3)
+### Fully out of scope (never Inka, always handler projection)
 
-- **Native backend (Arc F.5).** Hand-rolled x86 from LowIR.
 - **Projectional AST.** Rejected. Text is canonical.
 - **Fractional permissions.** Shelved; Vale region-freeze via
   `!Mutate` subsumes.
-- **ML / DSP framework formalization.** Downstream; uses Inka,
-  not part of Inka.
-- **Multi-shot × arena semantics (D.1).** Structure in specs;
-  handler logic in Arc F.4.
+- **Multi-shot × arena full policy.** Structure in specs;
+  handler semantics lands with concrete arena handlers.
 
-### Structure IN scope (Phase 1), implementation OUT (Arc F)
+### Substrate IN cascade, handler exposure PENDING
 
-- **Refinement types.** IN: `TRefined(Ty, Predicate)` as a Ty
-  variant. Inference handles it structurally. `Verify` effect with
-  `verify_ledger` accumulates `V_Pending` obligations. OUT: Z3/cvc5
-  binding that discharges predicates (Arc F.1 handler swap).
+The γ cascade LANDED substrate for every category below. Handler
+projection lands as Phase II work per the Handler Projection
+Priority list.
 
-- **LSP.** IN: `inka query` IS the forensic substrate. Every query
-  mode maps to an LSP method. OUT: JSON-RPC server, ChatLSP
-  extensions (Arc F.2).
+- **Refinement types.** Substrate LIVE (`TRefined(Ty, Predicate)` in
+  types.ka; `Verify` effect with `verify_ledger` accumulates
+  obligations). Exposure PENDING: SMT handler swap (verify_smt with
+  Z3/cvc5/Bitwuzla) — Arc F.1.
 
-- **Scoped arenas.** IN: `Alloc` effect signature. `!Alloc` negation
-  propagates. `own.ka` treats `Consume` and `Alloc` as peers. OUT:
-  actual `temp_arena` handler (Arc F.4).
+- **LSP.** Substrate LIVE (`inka query` surface, Question/QueryResult
+  ADT, render_query_result). Exposure PENDING: JSON-RPC handler,
+  ChatLSP extensions — Arc F.2 = Priority 1.
 
-- **REPL.** IN: `inka query` covers read-check-explain. OUT:
-  execute-arbitrary-source runtime (Arc F.3).
+- **Scoped arenas.** Substrate LIVE (Alloc effect, !Alloc negation,
+  region_tracker with tag_alloc_join, EmitMemory swap surface).
+  Exposure PENDING: concrete `temp_arena` / `thread_local_arena` /
+  `diagnostic_arena` handlers — Priority 3.
+
+- **REPL.** Substrate LIVE (pipeline variant with eval_expr handler
+  is a one-handler install). Exposure PENDING: multi-shot
+  continuation semantics (Replay / Fork / State machine) — Arc F.3.
+
+- **Audit-driven severance.** Substrate LIVE (AuditReport records
+  with severable + unlocks). Exposure PENDING: linker handler that
+  reads severance list and drops WASM imports — Priority 2.
+
+- **Native backend.** Substrate LIVE (multi-backend handler chain).
+  Exposure PENDING: `backends/native.ka` as an alternate EmitBackend
+  handler — Arc F.5 = Priority 2.
 
 ---
 
-## Risk Register
+## Risk Register — post-cascade
+
+Risks are categorized by phase. Closed risks from the γ cascade
+are recorded for the project's memory; active risks lead.
+
+### Active risks (Phase II + Phase III)
 
 | Risk | Mitigation |
 |---|---|
-| VFINAL has bugs that surface during self-compilation | `inka query` forensics; fix in Phase 1, re-bootstrap |
-| Bootstrap translator takes longer than expected | Use lux3.wasm as temporary bootstrapper if its parser handles the syntax |
-| Handler state syntax (`with state = ...`) has edge cases | 85%+ of handlers are tail-resumptive → trivial to translate |
+| Bootstrap translator is the one-shot moment a non-Inka language reads a closed substrate — a bug there corrupts the seed | Write the translator as a DIRECT TRACE of the cascade walkthroughs, not a separate interpretation. Verify by replaying the translator through `docs/traces/a-day.md`. |
+| LSP handler surfaces substrate errors that didn't fire through terminal `inka query` | Mirror every CLI query's test through the LSP handler before Priority 2 lands. The trace's `[LIVE · surface pending]` tags ARE the test list. |
+| `teach_synthesize` oracle conductor thrashes checkpoint/rollback on candidates that don't prove | Cap exploration at N candidates per error (default 8); score by EffName subsumption before apply; reject candidates whose apply cost exceeds a budget. |
+| Multi-backend emit introduces per-target divergence that drifts over time | Shared substrate invariants live in `types.ka` and `effects.ka`; each backend handler declares its own effect row. Row subsumption proves which invariants the backend honors. |
+| User-declared nullary variants collide with HEAP_BASE threshold (4096) | Total variants per type are bounded by tag_id length; no realistic ADT approaches 4096 variants. If a type ever does, the threshold widens; the invariant documents the coupling. |
 | WASM stack overflow from deep recursion | Emit `return_call` for tail calls; wasmtime supports the proposal |
-| Phase 1 stretches too long | Codebase is ~80% written. Remaining work is structural fixes, not new code. |
+
+### Closed risks (γ cascade, now substrate-guarded)
+
+| Risk (once) | Substrate that closes it |
+|---|---|
+| Substrate drift (patterns from other languages freezing Inka into foreign shapes) | 9 named drift modes in CLAUDE.md's Mentl anchor; H6 discipline refuses wildcards on load-bearing ADTs; every cascade step audited before commit. |
+| ADT match silently absorbs a new variant via `_ => default` | H6 landed exhaustive matches at every load-bearing site. |
+| Primitive-type special cases (TBool as C int-bool) | HB dissolved TBool; nullary-sentinel path compiles `type Bool = False \| True` to (i32.const 0/1) — same runtime as before, full ADT semantics at type level. |
+| String-keyed when structured (effect names, constructor names, tokens) | Token ADT (Ω.4), EffName ADT (H3.1), SchemeKind ADT (H3), MatchShape ADT (HB audit) — all now structured. |
+| Parallel-arrays-instead-of-record handler state | Ω.5 consolidated lower_scope and infer_ctx frames to records; H1.3 BodyContext state is a record; H4 region_tracker entries are records. |
+| Evidence-as-sidecar (C calling convention) | H1's LMakeClosure unifies captures and evidence in one record shape — no `*const ()` vtable parameter. |
+| VFINAL has bugs that surface during self-compilation | Deferred to first-light by design; substrate verified by simulation, not execution, per dream-code discipline. |
 
 ---
 
-## Crystallized Insights (INSIGHTS.md, 2026-04-17)
+## Crystallized Insights
 
-Seven load-bearing truths that guide all implementation:
+Ten load-bearing truths — defer to `CLAUDE.md` for the canonical
+list (seven pre-cascade, three crystallized during γ). Summary:
 
-1. **The Handler Chain Is a Capability Stack.** `~>` ordering is a
-   trust hierarchy. Outermost = least trusted. Compiler-proven.
-2. **The Five Verbs Are a Complete Topological Basis.** Any directed
-   graph decomposes into `|>`, `<|`, `><`, `~>`, `<~`. Proven.
-3. **Visual Programming in Plain Text.** Newlines are semantic tokens.
-   The shape of the code IS the computation graph.
-4. **Feedback (`<~`) Is Inka's Genuine Novelty.** No other language
-   makes back-edges visible and checkable.
-5. **Effect Negation Is Strictly More Powerful.** `!E` proves absence.
-   Rust+Haskell+Koka+Austral combined can't do this.
-6. **The Graph IS the Program.** SubstGraph + Env is the universal
-   representation. Everything else is a handler projection.
-7. **Backward Bootstrap.** Write the perfect compiler unconstrained.
-   Build a disposable translator to compile it once. Delete forever.
-   The fixed point (`diff inka2.wat inka3.wat → empty`) IS soundness.
+1. Handler Chain Is a Capability Stack
+2. Five Verbs = Complete Topological Basis
+3. Visual Programming in Plain Text
+4. `<~` Feedback Is Genuine Novelty
+5. Effect Negation > Everything
+6. The Graph IS the Program
+7. Parameters ARE Tuples; `|>` Is a Wire
+8. **The Heap Has One Story** (γ crystallization — closures +
+   variants + records + closures-with-evidence share one
+   emit_alloc swap surface)
+9. **Records Are The Handler-State Shape** (γ crystallization —
+   Ω.5 / BodyContext / region_tracker / AuditReport all converge)
+10. **Row Algebra Is One Mechanism Over Different Element Types**
+    (γ crystallization — string-set / name-set / field-set /
+    tagged_values instances, one abstract pattern)
+
+CLAUDE.md also names the **backward-bootstrap fixed-point** as
+Phase IV's soundness proof (historically insight 7; kept as the
+terminal invariant).
 
 ---
 
@@ -1243,9 +1494,13 @@ Seven load-bearing truths that guide all implementation:
 
 | Document | Role |
 |---|---|
-| **docs/PLAN.md** | THIS FILE. The single roadmap. |
+| **docs/PLAN.md** | THIS FILE. The single roadmap. Four phases, the three substrate gaps, handler-projection priority. |
+| **docs/SYNTAX.md** | Σ canonical syntax. The wheel the parser was shaped to. |
 | **docs/rebuild/00–11** | The 12 executable specs. |
+| **docs/rebuild/simulations/H*.md** | Per-handle cascade walkthroughs with riffle-back addenda. Reasoning record. |
+| **docs/traces/a-day.md** | Post-cascade integration trace. One developer, one project, one day. Every claim tagged `[LIVE]` / `[LIVE · surface pending]` / `[substrate pending]`. The scoreboard. |
 | **docs/INSIGHTS.md** | Core truths. Living compendium. |
-| **docs/DESIGN.md** | Language manifesto. Chapter 9 describes the F-arcs at thesis level. |
+| **docs/DESIGN.md** | Language manifesto. Chapter 10 is the thesis-level simulations; `docs/traces/a-day.md` is the integration. |
+| **CLAUDE.md** | Anchors + eight-anchor discipline + nine drift modes + ten crystallizations. Required reading at session start. |
 | **docs/errors/** | Error catalog (prefix-kind string codes). |
 | **CLAUDE.md** | Session Zero + seven anchors for AI assistants. |

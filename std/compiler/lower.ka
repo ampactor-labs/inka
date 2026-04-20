@@ -44,7 +44,7 @@ type LowExpr
   | LCall(Int, LowExpr, List)                  // monomorphic direct call
   | LTailCall(Int, LowExpr, List)
   | LReturn(Int, LowExpr)
-  | LMakeClosure(Int, LowFn, List)
+  | LMakeClosure(Int, LowFn, List, List)         // handle, fn, captures, ev_slots
   | LIf(Int, LowExpr, List, List)
   | LBlock(Int, List)
   | LMakeList(Int, List)
@@ -64,15 +64,15 @@ type LowExpr
   | LFeedback(Int, LowExpr, LowExpr)           // <~ desugaring (iterative ctx required)
   | LPerform(Int, String, List)                // effect op invocation — monomorphic direct-call form
   | LHandle(Int, LowExpr, List)                // body + arms (handle-expression)
-  // W4 evidence substrate — emitted when inference synthesizes an
-  // evidence vector for a polymorphic body. LBuildEvidence writes
-  // the arms' fn_idx values into the evidence slots of a newly
-  // allocated __state record; LEvPerform loads an arm's fn_idx from
-  // __state at the compile-time-resolved offset and dispatches via
-  // call_indirect. When inference determines a perform site is in
-  // monomorphic context, it stays as LPerform (direct call to
-  // `$op_<name>`); only polymorphic sites become LEvPerform.
-  | LBuildEvidence(Int, LowExpr, List)         // handle, body, [Evidence] — arms bound to slots
+  // H1: evidence is now a slot-set on LMakeClosure (the closure
+  // record IS the evidence record — DESIGN Ch 4 "handler IS state"
+  // in its ultimate form). LBuildEvidence has been deleted; closure
+  // records grow ev_slots after captures. LEvPerform loads the
+  // fn_idx from __state at the compile-time-resolved offset and
+  // dispatches via call_indirect. When inference determines a
+  // perform site is in monomorphic context, it stays as LPerform
+  // (direct call to `$op_<name>`); only polymorphic sites become
+  // LEvPerform.
   | LEvPerform(Int, String, Int, List)         // handle, op_name, slot_idx, args
   | LFieldLoad(Int, LowExpr, Int)              // W6: handle, record, offset_bytes
 
@@ -109,7 +109,7 @@ fn lexpr_handle(e) = match e {
   LCall(h, _, _)          => h,
   LTailCall(h, _, _)      => h,
   LReturn(h, _)           => h,
-  LMakeClosure(h, _, _)   => h,
+  LMakeClosure(h, _, _, _) => h,
   LIf(h, _, _, _)         => h,
   LBlock(h, _)            => h,
   LMakeList(h, _)         => h,
@@ -129,7 +129,6 @@ fn lexpr_handle(e) = match e {
   LFeedback(h, _, _)      => h,
   LPerform(h, _, _)       => h,
   LHandle(h, _, _)        => h,
-  LBuildEvidence(h, _, _) => h,
   LEvPerform(h, _, _, _)  => h,
   LFieldLoad(h, _, _)     => h
 }
@@ -297,7 +296,7 @@ fn lower_expr_body(e, handle, span) = match e {
       [lo_body],
       EfPure
     )
-    LMakeClosure(handle, fn_ir, captures_exprs)
+    LMakeClosure(handle, fn_ir, captures_exprs, [])
   },
 
   HandleExpr(body_node, arms) =>
@@ -463,7 +462,7 @@ fn lower_stmt_body(s, handle, span) = match s {
       [lo_body],
       EfPure          // row resolved live via lookup_ty(handle)
     )
-    LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs))
+    LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs, []))
   },
 
   TypeDefStmt(_name, _args, _variants)      => LConst(handle, LInt(0)),

@@ -211,9 +211,10 @@ fn collect_strings_expr(expr, acc, next_offset) = match expr {
   LCall(_, f, args)           => collect_strings_bin_list(f, args, acc, next_offset),
   LTailCall(_, f, args)       => collect_strings_bin_list(f, args, acc, next_offset),
   LReturn(_, inner)           => collect_strings_expr(inner, acc, next_offset),
-  LMakeClosure(_, LFn(_, _, _, body, _), caps) => {
+  LMakeClosure(_, LFn(_, _, _, body, _), caps, ev) => {
     let (acc1, o1) = collect_strings_list(body, acc, next_offset)
-    collect_strings_list(caps, acc1, o1)
+    let (acc2, o2) = collect_strings_list(caps, acc1, o1)
+    collect_strings_list(ev, acc2, o2)
   },
   LIf(_, c, t, e) => {
     let (a1, o1) = collect_strings_expr(c, acc, next_offset)
@@ -238,7 +239,6 @@ fn collect_strings_expr(expr, acc, next_offset) = match expr {
   LFeedback(_, b, s)          => collect_strings_bin(b, s, acc, next_offset),
   LPerform(_, _, args)        => collect_strings_list(args, acc, next_offset),
   LHandle(_, b, _arms)        => collect_strings_expr(b, acc, next_offset),
-  LBuildEvidence(_, b, _ev)   => collect_strings_expr(b, acc, next_offset),
   LEvPerform(_, _, _, args)   => collect_strings_list(args, acc, next_offset),
   LFieldLoad(_, rec, _)       => collect_strings_expr(rec, acc, next_offset)
 }
@@ -304,9 +304,10 @@ fn collect_fn_names_list(exprs, acc) =
   }
 
 fn collect_fn_names_expr(expr, acc) = match expr {
-  LMakeClosure(_h, LFn(name, _arity, _ps, body, _row), captures) => {
+  LMakeClosure(_h, LFn(name, _arity, _ps, body, _row), captures, ev) => {
     let after_body = collect_fn_names_list(body, acc ++ [name])
-    collect_fn_names_list(captures, after_body)
+    let after_caps = collect_fn_names_list(captures, after_body)
+    collect_fn_names_list(ev, after_caps)
   },
   LLet(_h, _n, inner)        => collect_fn_names_expr(inner, acc),
   LStore(_h, _s, val)        => collect_fn_names_expr(val, acc),
@@ -337,7 +338,6 @@ fn collect_fn_names_expr(expr, acc) = match expr {
   LFeedback(_h, b, s)        => collect_fn_names_expr(s, collect_fn_names_expr(b, acc)),
   LPerform(_h, _n, args)     => collect_fn_names_list(args, acc),
   LHandle(_h, b, _arms)      => collect_fn_names_expr(b, acc),
-  LBuildEvidence(_h, b, _ev) => collect_fn_names_expr(b, acc),
   LEvPerform(_h, _n, _s, a)  => collect_fn_names_list(a, acc),
   LFieldLoad(_h, rec, _off)  => collect_fn_names_expr(rec, acc),
   // H6: exhaustive LowExpr enumeration. Leaves with no fn-names
@@ -382,7 +382,7 @@ fn collect_top_level_fn_names_loop(lowered, i, n, buf, count) =
   }
 
 fn extract_top_fn_name(stmt) = match stmt {
-  LLet(_, name, LMakeClosure(_, _, _)) => name,
+  LLet(_, name, LMakeClosure(_, _, _, _)) => name,
   _                                    => ""
 }
 
@@ -541,7 +541,7 @@ fn max_arity_expr(expr) = match expr {
   LPerform(_, _, args)      => len(args),
   LEvPerform(_, _, _, args) => len(args) + 1,
   LLet(_, _, inner)         => max_arity_expr(inner),
-  LMakeClosure(_, _, _)     => 0,
+  LMakeClosure(_, _, _, _)  => 0,
 
   // Non-call LIR variants contribute 0. Explicit so a new
   // call-like variant can't silently slip through.
@@ -570,7 +570,6 @@ fn max_arity_expr(expr) = match expr {
   LHandleWith(_, _, _)      => 0,
   LFeedback(_, _, _)        => 0,
   LHandle(_, _, _)          => 0,
-  LBuildEvidence(_, _, _)   => 0,
   LFieldLoad(_, _, _)       => 0
 }
 
@@ -645,11 +644,12 @@ fn emit_fns_list(exprs) =
   }
 
 fn emit_fns_expr(expr) = match expr {
-  LMakeClosure(_h, LFn(name, _arity, param_names, body, _row), captures) => {
+  LMakeClosure(_h, LFn(name, _arity, param_names, body, _row), captures, ev) => {
     emit_fn_body(name, param_names, body)
-    // Recurse into body + captures for nested lambdas.
+    // Recurse into body + captures + ev_slots for nested lambdas.
     emit_fns_list(body)
     emit_fns_list(captures)
+    emit_fns_list(ev)
   },
   LLet(_h, _n, inner)        => emit_fns_expr(inner),
   LStore(_h, _s, val)        => emit_fns_expr(val),
@@ -676,7 +676,6 @@ fn emit_fns_expr(expr) = match expr {
   LFeedback(_h, b, s)        => { emit_fns_expr(b); emit_fns_expr(s) },
   LPerform(_h, _n, args)     => emit_fns_list(args),
   LHandle(_h, b, _arms)      => emit_fns_expr(b),
-  LBuildEvidence(_h, b, _ev) => emit_fns_expr(b),
   LEvPerform(_h, _n, _s, a)  => emit_fns_list(a),
   LFieldLoad(_h, rec, _off)  => emit_fns_expr(rec),
   // H6: exhaustive LowExpr. Leaves with no fn-containing
@@ -731,7 +730,7 @@ fn emit_let_locals_expr(expr) = match expr {
     perform wat_emit(" i32)")
     emit_let_locals_expr(inner)
   },
-  LMakeClosure(_, _, _)     => (),  // function boundary — its locals are its own
+  LMakeClosure(_, _, _, _)  => (),  // function boundary — its locals are its own
   LBlock(_h, stmts)         => emit_let_locals_list(stmts),
   LIf(_h, c, t, e)          => {
     emit_let_locals_expr(c)
@@ -763,7 +762,6 @@ fn emit_let_locals_expr(expr) = match expr {
   LFeedback(_h, b, s)       => { emit_let_locals_expr(b); emit_let_locals_expr(s) },
   LPerform(_h, _n, args)    => emit_let_locals_list(args),
   LHandle(_h, b, _arms)     => emit_let_locals_expr(b),
-  LBuildEvidence(_h, b, _)  => emit_let_locals_expr(b),
   LEvPerform(_h, _n, _s, a) => emit_let_locals_list(a),
   LFieldLoad(_h, rec, _off) => emit_let_locals_expr(rec),
   // H6: exhaustive LowExpr. Leaves declare no locals; LUpval,
@@ -942,43 +940,42 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    (return)\n")
   },
 
-  LMakeClosure(_h, LFn(fn_name, _arity, _param_names, _body, _row), captures_exprs) => {
-    // W7 state record layout (closure form — captures only; W4
-    // grows additional slots for evidence in-place, no convention
-    // change):
+  LMakeClosure(_h, LFn(fn_name, _arity, _param_names, _body, _row), captures_exprs, ev_exprs) => {
+    // H1 closure-record layout (the unified handler state):
     //   offset 0: fn_ptr (i32) — table index into $fns
-    //   offset 4: capture_count (i32)
-    //   offset 8 + 4*i: capture_i
+    //   offset 4: capture_count (i32) — fence between captures and evidence
+    //   offset 8 + 4*i:                   capture_i
+    //   offset 8 + 4*nc + 4*j:            ev_slot_j (handler arm fn_idx)
     //
-    // INKA-NATIVE: the record is a frozen handler state; the
-    // calling convention's `$__state` implicit param IS this
-    // record. Evidence (W4) extends the slot kinds inside the same
-    // record — no second implicit param, no parallel convention.
-    // DESIGN Ch 4 "handler IS state" — closure and evidence are
-    // both projections of the same shape.
+    // INKA-NATIVE: the record IS the calling convention's $__state.
+    // Captures and evidence are both projections of the same shape.
+    // DESIGN Ch 4 "handler IS state" in its ultimate form. Empty
+    // ev_exprs (the common case for monomorphic closures) collapses
+    // back to the prior captures-only layout — same WAT.
     //
     // Allocation routes through `perform emit_alloc(size, target)`,
-    // dispatched by the installed EmitMemory handler. The bump
-    // strategy (`emit_memory_bump`) inlines `$heap_ptr` arithmetic;
-    // future arena / gc handlers swap the WAT without touching
+    // dispatched by the installed EmitMemory handler. Bump today;
+    // future arena / GC handlers swap the WAT without touching
     // this site.
-    let n = len(captures_exprs)
-    let size = 8 + n * 4
+    let nc = len(captures_exprs)
+    let ne = len(ev_exprs)
+    let size = 8 + 4 * (nc + ne)
     perform emit_alloc(size, "state_tmp")
-    // Store fn_ptr (table index) at offset 0 — reads the per-fn
-    // index global emitted by emit_fn_index_globals.
+    // Store fn_ptr (table index) at offset 0.
     perform wat_emit("    (local.get $state_tmp)\n")
     perform wat_emit("    (global.get $")
     perform wat_emit(fn_name)
     perform wat_emit("_idx)\n")
     perform wat_emit("    (i32.store offset=0)\n")
-    // Store capture count at offset 4.
+    // Store capture count at offset 4 — the fence.
     perform wat_emit("    (local.get $state_tmp)\n")
     perform wat_emit("    (i32.const ")
-    perform wat_emit(int_to_str(n))
+    perform wat_emit(int_to_str(nc))
     perform wat_emit(") (i32.store offset=4)\n")
     // Store each capture at offset 8 + 4*i.
     emit_capture_stores(captures_exprs, 0)
+    // Store each ev_slot at offset 8 + 4*nc + 4*j.
+    emit_ev_slot_stores(ev_exprs, nc, 0)
     // Result: closure pointer on stack.
     perform wat_emit("    (local.get $state_tmp)\n")
   },
@@ -1141,25 +1138,7 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    ;; handle expression — arms emitted separately\n")
   },
 
-  // W4: evidence-record construction. Mirror of LMakeClosure, but
-  // writes evidence slots AFTER the capture slots. The body is the
-  // expression whose perform-sites reference these slots (via
-  // LEvPerform). Today the body's captures and evidence are still
-  // wired separately through emit_fn_body; this arm wires the
-  // evidence-builder pattern that lower.ka will emit when HandleExpr
-  // begins producing LBuildEvidence. Structure:
-  //   1. allocate body's __state record (header + captures + ev_slots)
-  //   2. write fn_ptr, capture_count, capture values
-  //   3. write each ev_j_fn_idx at offset 8+4*C+4*j
-  //   4. emit body with __state pointing at this record
-  LBuildEvidence(_h, body, evidence) => {
-    emit_expr(body)
-    perform wat_emit("    ;; W4 LBuildEvidence — ")
-    perform wat_emit(int_to_str(len(evidence)))
-    perform wat_emit(" evidence slot(s) — wiring via lower.ka when HandleExpr synthesis lands\n")
-  },
-
-  // W4: evidence-dispatched perform. The op's handler arm fn_idx
+  // H1: evidence-dispatched perform. The op's handler arm fn_idx
   // sits at `offset_base = 8 + 4*body_capture_count + 4*slot_idx`
   // inside the callee's __state. Load it and call_indirect with
   // `(args, __state)` (the arm itself takes __state as implicit
@@ -1279,6 +1258,23 @@ fn emit_capture_stores(captures, i) =
     perform wat_emit(int_to_str(8 + i * 4))
     perform wat_emit(")\n")
     emit_capture_stores(list_tail(captures), i + 1)
+  }
+
+// Emit the stores for each evidence slot in the closure record.
+// Evidence slots live AFTER captures: offset 8 + 4*nc + 4*j.
+// Each slot stores the fn_idx of a handler arm (resolved at the
+// evidence-providing scope; here we just emit whatever LowExpr
+// the lowering layer produced — typically LConst(LInt(fn_idx))
+// or a load from the enclosing __state for poly pass-through).
+fn emit_ev_slot_stores(ev_exprs, nc, j) =
+  if len(ev_exprs) == 0 { () }
+  else {
+    perform wat_emit("    (local.get $state_tmp)\n")
+    emit_expr(list_head(ev_exprs))
+    perform wat_emit("    (i32.store offset=")
+    perform wat_emit(int_to_str(8 + 4 * nc + 4 * j))
+    perform wat_emit(")\n")
+    emit_ev_slot_stores(list_tail(ev_exprs), nc, j + 1)
   }
 
 // Emit the stores for each field in an ADT variant record.

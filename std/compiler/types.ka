@@ -393,8 +393,21 @@ effect StringTable {
 // LEvPerform's offset arithmetic is compile-time-resolved.
 type Evidence
   = Ev(String, Int)   // op_name, slot_idx — the slot in __state where
-                      // the arm's fn_idx was written by the caller's
-                      // LBuildEvidence.
+                      // the arm's fn_idx was written by the caller.
+
+// ─── BodyContext (H1) ──────────────────────────────────────────────
+// Per-fn-body emit-time metadata: how many captures the body's
+// closure has (the fence between captures and evidence in __state)
+// and the body's evidence shape (which ops resolve through which
+// slots). Set at emit_fn_body entry; read by LEvPerform's offset
+// arithmetic and any future evidence-aware emit site.
+
+effect BodyContext {
+  current_body_captures() -> Int                    @resume=OneShot
+  set_body_captures(Int) -> ()                      @resume=OneShot
+  current_body_evidence() -> List                   @resume=OneShot
+  set_body_evidence(List) -> ()                     @resume=OneShot
+}
 
 // ─── Stmt (spec 03) ────────────────────────────────────────────────
 

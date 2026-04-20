@@ -55,6 +55,7 @@ fn compile(source) =
     ~> wat_stdout
     ~> string_table          // W5 — compile-time interned string offsets
     ~> emit_memory_bump      // swap for emit_memory_arena to prove surface
+    ~> body_context          // H1 — per-fn-body emit metadata
     ~> mentl_default
     ~> affine_ledger
     ~> region_tracker        // I12 — region-escape ledger (substrate prep)
@@ -169,6 +170,19 @@ fn env_find(entries, name) =
 fn take_last(lst, n) =
   if len(lst) <= n { lst }
   else { take_last(list_tail(lst), n) }
+
+// ═══ body_context — H1 emit-time per-fn-body metadata ══════════════
+// Set at emit_fn_body entry; read by LEvPerform's offset arithmetic
+// (offset = 8 + 4*captures + 4*slot_idx within __state) and by any
+// future evidence-aware emit site. Each fn-body emission resets the
+// state via set_*; reads return the most recent set.
+
+handler body_context with captures = 0, evidence = [] {
+  current_body_captures()    => resume(captures),
+  set_body_captures(n)       => resume(()) with captures = n,
+  current_body_evidence()    => resume(evidence),
+  set_body_evidence(ev)      => resume(()) with evidence = ev
+}
 
 // ═══ lookup_ty_graph — SubstGraphRead → LookupTy bridge (spec 05) ══
 // The ONLY LookupTy handler in Phase 1. Declares SubstGraphRead

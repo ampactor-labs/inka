@@ -645,7 +645,11 @@ fn emit_fns_list(exprs) =
 
 fn emit_fns_expr(expr) = match expr {
   LMakeClosure(_h, LFn(name, _arity, param_names, body, _row), captures, ev) => {
-    emit_fn_body(name, param_names, body)
+    // H1: thread the body's captures count to emit_fn_body so its
+    // body_context install knows the fence between captures and
+    // evidence in __state. The fence determines LEvPerform's
+    // offset arithmetic inside the body.
+    emit_fn_body(name, param_names, body, len(captures))
     // Recurse into body + captures + ev_slots for nested lambdas.
     emit_fns_list(body)
     emit_fns_list(captures)
@@ -688,7 +692,7 @@ fn emit_fns_expr(expr) = match expr {
   LStateGet(_, _)            => ()
 }
 
-fn emit_fn_body(name, param_names, body) = {
+fn emit_fn_body(name, param_names, body, captures_count) = {
   // W7 calling convention: every function takes `__state` as its
   // implicit first parameter. Top-level functions ignore it; lambda
   // bodies read captures via (local.get $__state) + offset-load.
@@ -697,6 +701,13 @@ fn emit_fn_body(name, param_names, body) = {
   // saving the callee closure pointer before argument evaluation.
   // Every LLet in the body declares a function-level local so
   // (local.set $<name>) / (local.get $<name>) validate.
+  //
+  // H1: set body_context's captures count BEFORE emitting the body.
+  // LEvPerform inside this body reads it to compute its offset
+  // arithmetic. ev_shape derivation arrives in subsequent H1 work;
+  // until then the body's evidence list is empty (monomorphic).
+  perform set_body_captures(captures_count)
+  perform set_body_evidence([])
   perform wat_emit("  (func $")
   perform wat_emit(name)
   perform wat_emit(" (param $__state i32)")
@@ -1146,16 +1157,28 @@ fn emit_expr(expr) = match expr {
   // gated by inference's evidence-shape synthesis; monomorphic
   // perform sites still route through LPerform's direct-call form.
   LEvPerform(_h, op_name, slot, args) => {
-    emit_expr_list(args)
-    perform wat_emit("    ;; W4 LEvPerform '")
+    // H1: evidence-dispatched perform. The op's handler arm fn_idx
+    // sits at byte offset (8 + 4*body_capture_count + 4*slot) inside
+    // the body's __state. Load it, push __state for the callee's
+    // implicit first param, push args, dispatch via call_indirect
+    // through the appropriate type signature ($ft<argc+1>).
+    let body_cc = perform current_body_captures()
+    let absolute_offset = 8 + 4 * body_cc + 4 * slot
+    perform wat_emit("    ;; H1 LEvPerform '")
     perform wat_emit(op_name)
     perform wat_emit("' via slot ")
     perform wat_emit(int_to_str(slot))
-    perform wat_emit("\n")
+    perform wat_emit(" (offset=")
+    perform wat_emit(int_to_str(absolute_offset))
+    perform wat_emit(")\n")
+    // __state is the implicit first arg; load it and the args
     perform wat_emit("    (local.get $__state)\n")
-    perform wat_emit("    (i32.const ")
-    perform wat_emit(int_to_str(slot))
-    perform wat_emit(") ;; slot index — absolute offset resolved by callee at body emit\n")
+    emit_expr_list(args)
+    // Load the fn_idx for the dispatch
+    perform wat_emit("    (local.get $__state)\n")
+    perform wat_emit("    (i32.load offset=")
+    perform wat_emit(int_to_str(absolute_offset))
+    perform wat_emit(")\n")
     perform wat_emit("    (call_indirect (type $ft")
     perform wat_emit(int_to_str(len(args) + 1))
     perform wat_emit("))\n")

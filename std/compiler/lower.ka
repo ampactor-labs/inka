@@ -45,6 +45,7 @@ type LowExpr
   | LTailCall(Int, LowExpr, List)
   | LReturn(Int, LowExpr)
   | LMakeClosure(Int, LowFn, List, List)         // handle, fn, captures, ev_slots
+  | LDeclareFn(LowFn)                            // module-level fn declaration (handler arm) — no runtime slot
   | LIf(Int, LowExpr, List, List)
   | LBlock(Int, List)
   | LMakeList(Int, List)
@@ -110,6 +111,7 @@ fn lexpr_handle(e) = match e {
   LTailCall(h, _, _)      => h,
   LReturn(h, _)           => h,
   LMakeClosure(h, _, _, _) => h,
+  LDeclareFn(_)            => 0,
   LIf(h, _, _, _)         => h,
   LBlock(h, _)            => h,
   LMakeList(h, _)         => h,
@@ -306,8 +308,17 @@ fn lower_expr_body(e, handle, span) = match e {
     LMakeClosure(handle, fn_ir, captures_exprs, [])
   },
 
-  HandleExpr(body_node, arms) =>
-    LHandle(handle, lower_expr(body_node), lower_handler_arms(arms)),
+  HandleExpr(body_node, arms) => {
+    // H1.4: inline handle expression. Lower body normally, lower
+    // arms BOTH as records (for LHandle's arm metadata, currently
+    // unused at emit but reserved for H1.6 evidence wiring) AND
+    // as LDeclareFn entries (so emit_fns_expr's deep walk picks
+    // up each arm body as a wasm function).
+    let arm_decls = lower_handler_arms_as_decls(arms)
+    let arm_records = lower_handler_arms(arms)
+    let lo_body = lower_expr(body_node)
+    LBlock(handle, arm_decls ++ [LHandle(handle, lo_body, arm_records)])
+  },
 
   PerformExpr(op_name, args) =>
     LPerform(handle, op_name, lower_expr_list(args)),
@@ -488,7 +499,16 @@ fn lower_stmt_body(s, handle, span) = match s {
 
   TypeDefStmt(_name, _args, _variants)      => LConst(handle, LInt(0)),
   EffectDeclStmt(_name, _ops)               => LConst(handle, LInt(0)),
-  HandlerDeclStmt(_name, _ename, _arms)     => LConst(handle, LInt(0)),
+  HandlerDeclStmt(_name, _ename, arms)      => {
+    // H1.4: each handler arm becomes a callable wasm function with
+    // name `op_<op_name>`. emit_fns_expr's deep walk picks up the
+    // LDeclareFn entries and emits each as a wasm function with a
+    // registered fn_idx global. LPerform's `(call $op_<n>)` resolves
+    // statically to these. Single-handler-per-op naming for now;
+    // multi-handler dispatch via evidence is H1.6.
+    let arm_decls = lower_handler_arms_as_decls(arms)
+    LBlock(handle, arm_decls ++ [LConst(handle, LInt(0))])
+  },
   ImportStmt(_module)                       => LConst(handle, LInt(0)),
   RefineStmt(_name, _ty, _pred)             => LConst(handle, LInt(0)),
 
@@ -607,6 +627,25 @@ fn lower_handler_arms(arms) =
     perform ls_pop_scope(cp)
     let lo_arm = {args: arm.args, body: lo_body, op_name: arm.op_name}
     [lo_arm] ++ lower_handler_arms(list_tail(arms))
+  }
+
+// H1.4: lower handler arms to LDeclareFn entries — pure module-
+// level fn declarations, no runtime allocation. Each arm body
+// becomes a wasm function `op_<op_name>` taking the arm's args
+// (plus the implicit __state per the calling convention).
+// Stateful handlers (with state slots) are deferred — the handler
+// closure value model lands with H1.6's evidence wiring.
+fn lower_handler_arms_as_decls(arms) =
+  if len(arms) == 0 { [] }
+  else {
+    let arm = list_head(arms)
+    let cp = perform ls_push_scope()
+    bind_names_as_locals(arm.args)
+    let lo_body = lower_expr(arm.body)
+    perform ls_pop_scope(cp)
+    let fn_name = "op_" |> str_concat(arm.op_name)
+    let fn_ir = LFn(fn_name, len(arm.args), arm.args, [lo_body], EfPure)
+    [LDeclareFn(fn_ir)] ++ lower_handler_arms_as_decls(list_tail(arms))
   }
 
 fn bind_names_as_locals(names) =

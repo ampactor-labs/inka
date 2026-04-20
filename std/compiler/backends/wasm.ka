@@ -234,6 +234,8 @@ fn collect_strings_expr(expr, acc, next_offset) = match expr {
     let (acc2, o2) = collect_strings_list(caps, acc1, o1)
     collect_strings_list(ev, acc2, o2)
   },
+  LDeclareFn(LFn(_, _, _, body, _)) =>
+    collect_strings_list(body, acc, next_offset),
   LIf(_, c, t, e) => {
     let (a1, o1) = collect_strings_expr(c, acc, next_offset)
     let (a2, o2) = collect_strings_list(t, a1, o1)
@@ -327,6 +329,8 @@ fn collect_fn_names_expr(expr, acc) = match expr {
     let after_caps = collect_fn_names_list(captures, after_body)
     collect_fn_names_list(ev, after_caps)
   },
+  LDeclareFn(LFn(name, _arity, _ps, body, _row)) =>
+    collect_fn_names_list(body, acc ++ [name]),
   LLet(_h, _n, inner)        => collect_fn_names_expr(inner, acc),
   LStore(_h, _s, val)        => collect_fn_names_expr(val, acc),
   LBinOp(_h, _op, l, r)      => collect_fn_names_expr(r, collect_fn_names_expr(l, acc)),
@@ -560,6 +564,7 @@ fn max_arity_expr(expr) = match expr {
   LEvPerform(_, _, _, args) => len(args) + 1,
   LLet(_, _, inner)         => max_arity_expr(inner),
   LMakeClosure(_, _, _, _)  => 0,
+  LDeclareFn(_)             => 0,
 
   // Non-call LIR variants contribute 0. Explicit so a new
   // call-like variant can't silently slip through.
@@ -673,6 +678,13 @@ fn emit_fns_expr(expr) = match expr {
     emit_fns_list(captures)
     emit_fns_list(ev)
   },
+  LDeclareFn(LFn(name, _arity, param_names, body, _row)) => {
+    // H1.4: handler arm wasm fn declaration. No captures, no
+    // evidence — stateless arms in monomorphic context. Stateful
+    // handlers (with state slots) and poly dispatch land with H1.6.
+    emit_fn_body(name, param_names, body, 0)
+    emit_fns_list(body)
+  },
   LLet(_h, _n, inner)        => emit_fns_expr(inner),
   LStore(_h, _s, val)        => emit_fns_expr(val),
   LBinOp(_h, _op, l, r)      => { emit_fns_expr(l); emit_fns_expr(r) },
@@ -760,6 +772,7 @@ fn emit_let_locals_expr(expr) = match expr {
     emit_let_locals_expr(inner)
   },
   LMakeClosure(_, _, _, _)  => (),  // function boundary — its locals are its own
+  LDeclareFn(_)             => (),  // module-level fn declaration — its body has its own locals
   LBlock(_h, stmts)         => emit_let_locals_list(stmts),
   LIf(_h, c, t, e)          => {
     emit_let_locals_expr(c)
@@ -1212,6 +1225,15 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    (i32.load offset=")
     perform wat_emit(int_to_str(offset))
     perform wat_emit(")\n")
+  },
+
+  LDeclareFn(_fn_ir) => {
+    // H1.4: module-level fn declaration. The fn body is emitted
+    // by emit_fns_expr's deep walk; this expression-position
+    // appearance is a no-op (returns 0 as the LBlock placeholder
+    // value). Lower wraps these in LBlock so they're discoverable
+    // without ever materializing at runtime.
+    perform wat_emit("    (i32.const 0) ;; LDeclareFn marker\n")
   }
 }
 

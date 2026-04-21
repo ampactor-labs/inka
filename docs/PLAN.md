@@ -389,11 +389,22 @@ itself. 32+ are post-first-light surfaces.
     - Lands with: items 11–22 (single simplification+restructure commit or tightly-sequenced commits).
 
 11. **🧪⚙️ Simplification audit execution.**
-    - Status: `[PENDING]`.
+    - Status: `[IN-FLIGHT]` — 11.A partial (smoke test landed); 11.B **LANDED 2026-04-21**; 11.C pending.
     - Deliverable: every site in every `.nx` file rewritten to residue form per item 7's discipline. Includes: dot-access conversion (Finding 1 — ~548 `fn` declarations lose module prefixes; every call site rewritten); lex/parse rename; `SubstGraph → Graph` rename; effect-name normalization; delete SYNTHESIS_CROSSWALK.md; drift-mode audit per file.
     - Depends on: item 4 walkthrough, item 7 walkthrough.
     - Gate for: items 23–25 audits.
     - Expected diff: 10-20% line reduction in `src/`; higher in what was `std/runtime/`.
+    - **Commit sequence (per SIMP §7):**
+      - **11.A** — Pass 1 naming sweep. Status: `[PARTIAL]`. Smoke test for dot-access at `cache.hash_source` landed in Phase II corpus commit `773f879`. Full sweep across remaining modules (driver_*, mentl_*, parse_*, lower_*, infer_*) pending post-11.B.
+      - **11.B** — Pass 2 drift-mode screen (modes 1-9). **LANDED** via three sub-commits:
+        - `773f879` — 11.B.1 BinOp + BinOpKind ADT (drift mode 8 cure at operator dispatch).
+        - `94389fb` — 11.B.2 lexer.ka byte-native refactor (drift mode 12 cure; 14 hits).
+        - `b1a2bf0` — 11.B.3 prelude.ka trim + parse_int byte-native (drift mode 12 cure; 2 hits).
+        Full std/ tree (29 .ka files) drift-audit CLEAN post-11.B.3.
+      - **11.C** — Pass 3 bug-class screen. Status: `[PENDING]`. Sweep `acc ++ [x]` loops (7 files; see 11.T below), `_ => <fabricated>` on load-bearing ADTs, `str_eq(a,b) == 1` deprecated form, `println` in report arms. Bundles 11.T drift-audit regex fix.
+      - **11.D** — Pass 4 eight-interrogation audit (semantic).
+      - **11.E** — Pass 5 docstring harmonization.
+      - **11.F** — Cleanup (delete SYNTHESIS_CROSSWALK.md, etc.).
     - **Named peer sub-handles (land in their own commits inside 11.B / post-11):**
       - **11.B.1.R** — Refinement-typed `op_to_binop` parameter (primitive #6 exercise).
         Scope: refactor `fn op_to_binop(k)` from `Option<BinOp>` return to
@@ -411,6 +422,17 @@ itself. 32+ are post-first-light surfaces.
         ModInfer, ModLower, ModWasm, ModDriver, ModCache, ... Row algebra
         distinguishes `Diagnostic(ModParser)` from `Diagnostic(ModInfer)`.
         Cross-cutting refactor; lands as its own focused commit.
+      - **11.T** — drift-audit regex fix for mode 11 (bug-class tooling gap).
+        Scope: `tools/drift-patterns.tsv` mode 11 regex `\+\+\s*\[[^\]]*\]`
+        fails on multi-character contents inside brackets under GNU grep
+        3.12's ERE (the escaped `\]` inside the character class parses
+        inconsistently). Fix: `\+\+\s*\[[^]]*\]` (remove the backslash
+        escape inside the class). Post-fix, mode 11 catches the 7 files
+        currently masked: prelude.ka (4 hits in Iterate handler arms),
+        cache.ka (3), driver.ka (1), pipeline.ka (1, suppressed), wasm.ka
+        (4, one suppressed), lower.ka (1), infer.ka (2). Lands as the
+        first commit inside 11.C; subsequent 11.C commits sweep the
+        now-visible hits via buffer-counter substrate.
 
 12. **📖 DESIGN.md updates**: `SubstGraph → Graph` in §0.5 + Ch 4 (~40 refs); Ch 8 tentacle list verification; Ch 9.1 packaging rewrite (`.inka/` cache + `~>` as manifest); Ch 9.2 testing rewrite (entry-handler + `run.nx` paradigm; "no `tests/` directory" as substrate claim); Ch 9 examples-dissolution note; every Ch 10 scenario's file paths updated; extension `.ka → .nx` throughout.
 

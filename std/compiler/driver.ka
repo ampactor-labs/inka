@@ -1,0 +1,240 @@
+// driver.ka — incremental compilation driver (IC.2)
+//
+// Orchestrates per-module check/build with cache hit detection.
+// Walks the import DAG from an entry-point module, processes each
+// module exactly once in dependency order, consults the .kai cache
+// to skip re-inference on unchanged sources, installs cached envs
+// into the env_handler so importing modules can resolve names.
+//
+// IC.2 (this commit): single-entry recursive descent over imports
+// with source-hash invalidation. Per-module env install merges
+// flat into env_handler (no per-module overlay separation yet —
+// the graph chase still walks one global graph). Per-module
+// overlays land with IC.3's chase extension.
+//
+// Walkthrough: docs/rebuild/simulations/IC-incremental-compilation.md
+
+import compiler/types
+import compiler/cache
+import compiler/parser
+import compiler/lexer
+import compiler/infer
+import runtime/strings
+import runtime/io
+
+// ═══ Module path conventions ═══════════════════════════════════════
+// Module names map to file paths:
+//   "compiler/infer"  →  "std/compiler/infer.ka"
+//   "runtime/strings" →  "std/runtime/strings.ka"
+// All modules root under std/ for v1; project-relative imports add
+// when project layout supports it.
+
+fn driver_module_path(module_name) =
+  "std/"
+    |> str_concat(module_name)
+    |> str_concat(".ka")
+
+// ═══ Module DAG collection ═════════════════════════════════════════
+// Walks transitively from an entry module, collecting every import.
+// Returns a depth-first post-order list — leaves before importers.
+// Per-module process_module dispatches once per name; visited set
+// prevents cycles (Inka modules don't currently form cycles, but
+// the discipline is cheap and forward-proof).
+
+fn driver_collect_dag(entry_module) with Memory + Alloc + Filesystem = {
+  let collected = []
+  let visited = []
+  let result = driver_collect_visit(entry_module, collected, visited)
+  let (final_collected, _final_visited) = result
+  final_collected
+}
+
+fn driver_collect_visit(module_name, collected, visited)
+  with Memory + Alloc + Filesystem = {
+  if set_contains(visited, module_name) {
+    (collected, visited)
+  } else {
+    let visited2 = set_insert(visited, module_name)
+    let path = driver_module_path(module_name)
+    if !perform fs_exists(path) {
+      // Module source missing — treat as terminal (no further deps).
+      // Driver's per-module check will surface E_MissingModule when
+      // it tries to process this name.
+      (collected ++ [module_name], visited2)
+    } else {
+      let source = perform fs_read_file(path)
+      let imports = driver_extract_imports(source)
+      // Visit dependencies first, then add self (post-order).
+      let (after_deps_collected, after_deps_visited) =
+        driver_collect_visit_list(imports, collected, visited2)
+      (after_deps_collected ++ [module_name], after_deps_visited)
+    }
+  }
+}
+
+fn driver_collect_visit_list(modules, collected, visited)
+  with Memory + Alloc + Filesystem = {
+  if len(modules) == 0 { (collected, visited) }
+  else {
+    let m = list_head(modules)
+    let (c2, v2) = driver_collect_visit(m, collected, visited)
+    driver_collect_visit_list(list_tail(modules), c2, v2)
+  }
+}
+
+// Lex + parse just enough of a source to extract its ImportStmt
+// nodes. Full inference doesn't run here — we want module names
+// only, no env work yet. The parser produces a top-level stmt list;
+// we filter for ImportStmt and pull the path.
+fn driver_extract_imports(source) with Memory + Alloc = {
+  let tokens = lex(source)
+  let ast = parse_program(tokens)
+  driver_extract_imports_loop(ast, 0, len(ast), [])
+}
+
+fn driver_extract_imports_loop(ast, i, n, acc) =
+  if i >= n { acc }
+  else {
+    let node = list_index(ast, i)
+    let N(body, _, _) = node
+    let next = match body {
+      NStmt(ImportStmt(path)) => acc ++ [path],
+      _                       => acc
+    }
+    driver_extract_imports_loop(ast, i + 1, n, next)
+  }
+
+// ═══ Per-module check ══════════════════════════════════════════════
+// Consults the cache; on miss runs full inference for this module
+// and writes a fresh .kai. Returns the env entries this module
+// publishes (for the caller to install into env_handler).
+
+fn driver_check_module(module_name)
+  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + SubstGraphRead + SubstGraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  let path = driver_module_path(module_name)
+  if !perform fs_exists(path) {
+    perform report("driver", "E_MissingModule", "MissingVariable",
+      "module source not found: " |> str_concat(module_name)
+        |> str_concat(" (expected at ")
+        |> str_concat(path)
+        |> str_concat(")"),
+      span_zero(), "MaybeIncorrect")
+    []
+  } else {
+    let source = perform fs_read_file(path)
+    let current_hash = cache_hash_source(source)
+    let cached = cache_read(module_name)
+    match cached {
+      Some(kai) => {
+        if cache_is_hit(kai, source) {
+          // Cache hit — install cached entries into env_handler.
+          // No re-inference for this module. Diagnostics emitted
+          // at compile time of THIS module are also skipped; if
+          // they mattered, the cache wouldn't have been written.
+          driver_install_entries(kai.exported_entries)
+          kai.exported_entries
+        } else {
+          // Cache miss (source hash differs) — re-infer.
+          driver_reinfer_module(module_name, source, current_hash)
+        }
+      },
+      None => driver_reinfer_module(module_name, source, current_hash)
+    }
+  }
+}
+
+fn driver_reinfer_module(module_name, source, source_hash)
+  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + SubstGraphRead + SubstGraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  let tokens = lex(source)
+  let ast = parse_program(tokens)
+  let imports = driver_extract_imports_loop(ast, 0, len(ast), [])
+  let imports_hashes = driver_collect_dep_hashes(imports)
+  // Snapshot env BEFORE inference so we can diff after to find
+  // this module's exported entries.
+  let env_before = perform env_snapshot()
+  let Env(entries_before) = env_before
+  let n_before = len(entries_before)
+  // Run inference.
+  infer_program(ast)
+  // Snapshot env AFTER; the new entries are this module's exports.
+  let env_after = perform env_snapshot()
+  let Env(entries_after) = env_after
+  let n_after = len(entries_after)
+  // entries are prepended in env_handler, so the new ones are at
+  // the head; take the first (n_after - n_before).
+  let new_count = n_after - n_before
+  let exported = driver_take_first(entries_after, new_count)
+  // Write cache.
+  let kai = {
+    compiler_version: cache_compiler_version(),
+    exported_entries: exported,
+    imports: imports,
+    imports_hashes: imports_hashes,
+    module_name: module_name,
+    source_hash: source_hash
+  }
+  cache_write(kai)
+  exported
+}
+
+// Collect each dep's CURRENT source hash (used to record the
+// cache-write moment so future invalidation can compare). For
+// caches written now, "now's" hash is what we record.
+fn driver_collect_dep_hashes(imports) with Memory + Alloc + Filesystem =
+  driver_collect_dep_hashes_loop(imports, 0, len(imports), [])
+
+fn driver_collect_dep_hashes_loop(imports, i, n, acc)
+  with Memory + Alloc + Filesystem =
+  if i >= n { acc }
+  else {
+    let m = list_index(imports, i)
+    let path = driver_module_path(m)
+    let h = if perform fs_exists(path) {
+      cache_hash_source(perform fs_read_file(path))
+    } else { 0 }
+    driver_collect_dep_hashes_loop(imports, i + 1, n, acc ++ [h])
+  }
+
+fn driver_take_first(entries, count) =
+  if count <= 0 { [] }
+  else if len(entries) == 0 { [] }
+  else { [list_head(entries)] ++ driver_take_first(list_tail(entries), count - 1) }
+
+// ═══ Env install ═══════════════════════════════════════════════════
+// Pushes cached entries back into env_handler so importing modules
+// can env_lookup them. Entries from cache carry placeholder Reasons
+// (Inferred("loaded from cache")); the typing data is preserved
+// faithfully which is what cross-module type-checking needs.
+
+fn driver_install_entries(entries) with EnvWrite =
+  driver_install_loop(entries, 0, len(entries))
+
+fn driver_install_loop(entries, i, n) with EnvWrite =
+  if i >= n { () }
+  else {
+    let entry = list_index(entries, i)
+    let (name, scheme, reason, kind) = entry
+    perform env_extend(name, scheme, reason, kind)
+    driver_install_loop(entries, i + 1, n)
+  }
+
+// ═══ Public API ════════════════════════════════════════════════════
+// driver_check(entry_module) — process the entry and all its
+// transitive dependencies. Each module either loads from cache or
+// re-infers; envs install in dep order so by the time the entry
+// runs its inference, every imported name is in env_handler.
+
+fn driver_check(entry_module)
+  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + SubstGraphRead + SubstGraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  let modules = driver_collect_dag(entry_module)
+  driver_check_modules_loop(modules, 0, len(modules))
+}
+
+fn driver_check_modules_loop(modules, i, n)
+  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + SubstGraphRead + SubstGraphWrite + Diagnostic + LookupTy + Verify + InferCtx =
+  if i >= n { () }
+  else {
+    let m = list_index(modules, i)
+    driver_check_module(m)
+    driver_check_modules_loop(modules, i + 1, n)
+  }

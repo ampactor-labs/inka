@@ -18,21 +18,20 @@ import compiler/types
 import runtime/strings
 
 // ═══ Character classification ═════════════════════════════════════
+//
+// Byte-code classification. Lexer operates on raw bytes from the
+// source string via `byte_at(source, pos)`. No 1-char-string
+// allocation per byte; no char_code indirection; no bare-== on
+// runtime strings (drift mode 12 cure).
 
-fn is_digit(ch) = {
-  let code = char_code(ch)
-  code >= 48 && code <= 57
-}
+fn is_digit(b) = b >= 48 && b <= 57
 
-fn is_alpha(ch) = {
-  let code = char_code(ch)
-  (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code == 95
-}
+fn is_alpha(b) =
+  (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || b == 95
 
-fn is_alnum(ch) = is_alpha(ch) || is_digit(ch)
+fn is_alnum(b) = is_alpha(b) || is_digit(b)
 
-fn is_whitespace(ch) =
-  ch == " " || ch == "\t" || char_code(ch) == 13
+fn is_whitespace(b) = b == 32 || b == 9 || b == 13
 
 // ═══ Keyword classification ════════════════════════════════════════
 // Returns Some(TokenKind) if `word` is a reserved keyword; None
@@ -61,7 +60,7 @@ fn keyword_kind(word) =
   else if str_eq(word, "where")     { Some(TWhere) }
   else if str_eq(word, "own")       { Some(TOwn) }
   else if str_eq(word, "ref")       { Some(TRef) }
-  else if str_eq(word, "Pure")      { Some(TPure) }
+  else if str_eq(word, "Pure")      { Some(TPure) }   // drift-audit: ignore — legitimate keyword str_eq at word granularity, NOT effect-name match; "Pure" is a reserved word (TPure is its TokenKind).
   else if str_eq(word, "true")      { Some(TTrue) }
   else if str_eq(word, "false")     { Some(TFalse) }
   else                                    { None }
@@ -70,69 +69,74 @@ fn keyword_kind(word) =
 // Returns Some(TokenKind) if (a, b) form a recognized two-char
 // operator; None otherwise (caller falls through to single-char).
 
+// two_char_kind: match on a pair of byte codes (a, b). Returns
+// Some(TokenKind) if (a, b) form a recognized two-char operator.
+// Byte-code dispatch; no string comparison.
 fn two_char_kind(a, b) =
-  if      str_eq(a, "=") && str_eq(b, "=")  { Some(TEqEq) }
-  else if str_eq(a, "!") && str_eq(b, "=")  { Some(TBangEq) }
-  else if str_eq(a, "<") && str_eq(b, "=")  { Some(TLtEq) }
-  else if str_eq(a, ">") && str_eq(b, "=")  { Some(TGtEq) }
-  else if str_eq(a, "-") && str_eq(b, ">")  { Some(TArrow) }
-  else if str_eq(a, "=") && str_eq(b, ">")  { Some(TFatArrow) }
-  else if str_eq(a, "+") && str_eq(b, "+")  { Some(TPlusPlus) }
-  else if str_eq(a, "|") && str_eq(b, ">")  { Some(TPipeGt) }
-  else if str_eq(a, "<") && str_eq(b, "|")  { Some(TLtPipe) }
-  else if str_eq(a, ">") && str_eq(b, "<")  { Some(TGtLt) }
-  else if str_eq(a, "~") && str_eq(b, ">")  { Some(TTildeGt) }
-  else if str_eq(a, "<") && str_eq(b, "~")  { Some(TLtTilde) }
-  else if str_eq(a, "&") && str_eq(b, "&")  { Some(TAndAnd) }
-  else if str_eq(a, "|") && str_eq(b, "|")  { Some(TOrOr) }
-  else if str_eq(a, ":") && str_eq(b, ":")  { Some(TColonColon) }
-  else                                            { None }
+  if      a == 61 && b == 61 { Some(TEqEq) }       // ==
+  else if a == 33 && b == 61 { Some(TBangEq) }     // !=
+  else if a == 60 && b == 61 { Some(TLtEq) }       // <=
+  else if a == 62 && b == 61 { Some(TGtEq) }       // >=
+  else if a == 45 && b == 62 { Some(TArrow) }      // ->
+  else if a == 61 && b == 62 { Some(TFatArrow) }   // =>
+  else if a == 43 && b == 43 { Some(TPlusPlus) }   // ++
+  else if a == 124 && b == 62 { Some(TPipeGt) }    // |>
+  else if a == 60 && b == 124 { Some(TLtPipe) }    // <|
+  else if a == 62 && b == 60 { Some(TGtLt) }       // ><
+  else if a == 126 && b == 62 { Some(TTildeGt) }   // ~>
+  else if a == 60 && b == 126 { Some(TLtTilde) }   // <~
+  else if a == 38 && b == 38 { Some(TAndAnd) }     // &&
+  else if a == 124 && b == 124 { Some(TOrOr) }     // ||
+  else if a == 58 && b == 58 { Some(TColonColon) } // ::
+  else                       { None }
 
 // ═══ Single-char operators / punctuation ═══════════════════════════
 // Returns Some(TokenKind) if `ch` is a recognized punctuation
 // character; None otherwise (caller skips the character).
 
-fn single_char_kind(ch) = {
-  let code = char_code(ch)
-  if      code == 40  { Some(TLParen) }
-  else if code == 41  { Some(TRParen) }
-  else if code == 123 { Some(TLBrace) }
-  else if code == 125 { Some(TRBrace) }
-  else if code == 91  { Some(TLBracket) }
-  else if code == 93  { Some(TRBracket) }
-  else if code == 44  { Some(TComma) }
-  else if code == 46  { Some(TDot) }
-  else if code == 58  { Some(TColon) }
-  else if code == 59  { Some(TSemicolon) }
-  else if code == 43  { Some(TPlus) }
-  else if code == 45  { Some(TMinus) }
-  else if code == 42  { Some(TStar) }
-  else if code == 47  { Some(TSlash) }
-  else if code == 37  { Some(TPercent) }
-  else if code == 61  { Some(TEq) }
-  else if code == 60  { Some(TLt) }
-  else if code == 62  { Some(TGt) }
-  else if code == 33  { Some(TBang) }
-  else if code == 124 { Some(TPipe) }
-  else if code == 126 { Some(TTilde) }
-  else if code == 64  { Some(TAt) }
-  else if code == 63  { Some(TQuestion) }
-  else                { None }
-}
+fn single_char_kind(b) =
+  if      b == 40  { Some(TLParen) }
+  else if b == 41  { Some(TRParen) }
+  else if b == 123 { Some(TLBrace) }
+  else if b == 125 { Some(TRBrace) }
+  else if b == 91  { Some(TLBracket) }
+  else if b == 93  { Some(TRBracket) }
+  else if b == 44  { Some(TComma) }
+  else if b == 46  { Some(TDot) }
+  else if b == 58  { Some(TColon) }
+  else if b == 59  { Some(TSemicolon) }
+  else if b == 43  { Some(TPlus) }
+  else if b == 45  { Some(TMinus) }
+  else if b == 42  { Some(TStar) }
+  else if b == 47  { Some(TSlash) }
+  else if b == 37  { Some(TPercent) }
+  else if b == 61  { Some(TEq) }
+  else if b == 60  { Some(TLt) }
+  else if b == 62  { Some(TGt) }
+  else if b == 33  { Some(TBang) }
+  else if b == 124 { Some(TPipe) }
+  else if b == 126 { Some(TTilde) }
+  else if b == 64  { Some(TAt) }
+  else if b == 63  { Some(TQuestion) }
+  else             { None }
 
 // ═══ Entry point ═══════════════════════════════════════════════════
 // Tokens accumulate into a flat buffer threaded through tail-recursion
-// as `(buf, count)`. push_tok extends the buffer if needed and writes
-// at the counter — O(1) amortized per emit, vs `tokens ++ [t]`'s
-// O(N²) total. Final `slice(buf, 0, count)` produces a tag=4 view
-// with logical length = count.
+// as (buf, count). push_tok extends the buffer if needed and writes
+// at the counter — O(1) amortized per emit; flat-buffer-plus-counter
+// avoids the O(N squared) concat-append pattern. Final slice call
+// produces a tag=4 view with logical length = count.
+//
+// Input: source is a flat byte-string. byte_at(source, pos) returns
+// the Int byte code at position pos. No intermediate List<String> of
+// 1-char strings is allocated; all per-byte dispatch is Int-eq, not
+// string-eq (drift mode 12 cure).
 
 fn lex(source) = {
-  let cs = list_to_flat(chars(source))
-  let n = len(cs)
+  let n = byte_len(source)
   let initial_capacity = if n < 16 { 16 } else { n }
   let buf = make_list(initial_capacity)
-  let (final_buf, final_count) = lex_from(cs, n, 0, 1, 1, buf, 0)
+  let (final_buf, final_count) = lex_from(source, n, 0, 1, 1, buf, 0)
   slice(final_buf, 0, final_count)
 }
 
@@ -146,61 +150,65 @@ fn push_tok(buf, count, t) = {
 // Construct a Token from kind + 4 span ints.
 fn mk_tok(kind, sl, sc, el, ec) = Tok(kind, Span(sl, sc, el, ec))
 
-fn lex_from(cs, n, pos, line, col, buf, count) =
+fn lex_from(source, n, pos, line, col, buf, count) =
   if pos >= n {
     push_tok(buf, count, mk_tok(TEof, line, col, line, col))
   } else {
-    let ch = cs[pos]
+    let b = byte_at(source, pos)
 
-    if is_whitespace(ch) {
-      lex_from(cs, n, pos + 1, line, col + 1, buf, count)
-    } else if ch == "\n" {
+    if is_whitespace(b) {
+      lex_from(source, n, pos + 1, line, col + 1, buf, count)
+    } else if b == 10 {
+      // newline (\n)
       let (b1, c1) = push_tok(buf, count, mk_tok(TNewline, line, col, line + 1, 1))
-      lex_from(cs, n, pos + 1, line + 1, 1, b1, c1)
-    } else if ch == "/" && pos + 1 < n && cs[pos + 1] == "/" {
-      // Detect doc comment (`///`) vs line comment (`//`).
-      if pos + 2 < n && cs[pos + 2] == "/" {
+      lex_from(source, n, pos + 1, line + 1, 1, b1, c1)
+    } else if b == 47 && pos + 1 < n && byte_at(source, pos + 1) == 47 {
+      // // or /// — line comment or doc comment
+      if pos + 2 < n && byte_at(source, pos + 2) == 47 {
         // Doc comment: capture rest of line as TDocComment payload.
-        let (after, doc_text) = scan_doc_comment(cs, n, pos + 3, "")
+        let after = scan_to_eol(source, n, pos + 3)
+        let doc_text = str_slice(source, pos + 3, after)
         let end_col = col + (after - pos)
         let (b1, c1) = push_tok(buf, count, mk_tok(TDocComment(doc_text), line, col, line, end_col))
-        lex_from(cs, n, after, line, end_col, b1, c1)
+        lex_from(source, n, after, line, end_col, b1, c1)
       } else {
-        let after = skip_line_comment(cs, n, pos + 2)
-        lex_from(cs, n, after, line, col, buf, count)
+        let after = skip_line_comment(source, n, pos + 2)
+        lex_from(source, n, after, line, col, buf, count)
       }
-    } else if ch == "\"" {
-      let (new_pos, new_col, str_val) = scan_string(cs, n, pos + 1, col + 1, "")
+    } else if b == 34 {
+      // string literal (")
+      let (new_pos, new_col, str_val) = scan_string(source, n, pos + 1, col + 1, "")
       let (b1, c1) = push_tok(buf, count, mk_tok(TString(str_val), line, col, line, new_col))
-      lex_from(cs, n, new_pos, line, new_col, b1, c1)
-    } else if is_digit(ch) {
-      let (new_pos, new_col, num_val, is_float) =
-        scan_number(cs, n, pos, col, "", false)
+      lex_from(source, n, new_pos, line, new_col, b1, c1)
+    } else if is_digit(b) {
+      let (new_pos, new_col, is_float) = scan_number(source, n, pos, col, false)
+      let num_val = str_slice(source, pos, new_pos)
       let kind = if is_float { TFloat(parse_float(num_val)) } else { TInt(parse_int(num_val)) }
       let (b1, c1) = push_tok(buf, count, mk_tok(kind, line, col, line, new_col))
-      lex_from(cs, n, new_pos, line, new_col, b1, c1)
-    } else if is_alpha(ch) {
-      let (new_pos, new_col, word) = scan_ident(cs, n, pos, col, "")
+      lex_from(source, n, new_pos, line, new_col, b1, c1)
+    } else if is_alpha(b) {
+      let (new_pos, new_col) = scan_ident(source, n, pos, col)
+      let word = str_slice(source, pos, new_pos)
       let kind = match keyword_kind(word) {
         Some(kw) => kw,
         None     => TIdent(word)
       }
       let (b1, c1) = push_tok(buf, count, mk_tok(kind, line, col, line, new_col))
-      lex_from(cs, n, new_pos, line, new_col, b1, c1)
+      lex_from(source, n, new_pos, line, new_col, b1, c1)
     } else {
-      let ch2 = if pos + 1 < n { cs[pos + 1] } else { "" }
-      match two_char_kind(ch, ch2) {
+      let b2 = if pos + 1 < n { byte_at(source, pos + 1) } else { 0 }
+      match two_char_kind(b, b2) {
         Some(kind) => {
           let (b1, c1) = push_tok(buf, count, mk_tok(kind, line, col, line, col + 2))
-          lex_from(cs, n, pos + 2, line, col + 2, b1, c1)
+          lex_from(source, n, pos + 2, line, col + 2, b1, c1)
         },
         None => {
-          match single_char_kind(ch) {
+          match single_char_kind(b) {
             Some(kind) => {
               let (b1, c1) = push_tok(buf, count, mk_tok(kind, line, col, line, col + 1))
-              lex_from(cs, n, pos + 1, line, col + 1, b1, c1)
+              lex_from(source, n, pos + 1, line, col + 1, b1, c1)
             },
-            None => lex_from(cs, n, pos + 1, line, col + 1, buf, count)
+            None => lex_from(source, n, pos + 1, line, col + 1, buf, count)
           }
         }
       }
@@ -209,54 +217,67 @@ fn lex_from(cs, n, pos, line, col, buf, count) =
 
 // ═══ Lexer helpers ═════════════════════════════════════════════════
 
-fn skip_line_comment(cs, n, pos) =
+// scan_to_eol: advance pos until end-of-line (byte 10) or end-of-
+// input. Returns the position AT the newline (not past it). Used by
+// both doc-comment payload slicing and line-comment skipping.
+fn scan_to_eol(source, n, pos) =
   if pos >= n { pos }
-  else if cs[pos] == "\n" { pos }
-  else { skip_line_comment(cs, n, pos + 1) }
+  else if byte_at(source, pos) == 10 { pos }
+  else { scan_to_eol(source, n, pos + 1) }
 
-// Doc comment: read until end of line, building the payload text.
-// The leading `///` has already been consumed by the caller.
-fn scan_doc_comment(cs, n, pos, acc) =
-  if pos >= n { (pos, acc) }
-  else if cs[pos] == "\n" { (pos, acc) }
-  else { scan_doc_comment(cs, n, pos + 1, acc |> str_concat(cs[pos])) }
+// skip_line_comment: alias for scan_to_eol, semantic clarity at the
+// caller site (line comments skip until newline; newline itself is
+// handled by the outer lex_from loop).
+fn skip_line_comment(source, n, pos) = scan_to_eol(source, n, pos)
 
-fn scan_string(cs, n, pos, col, acc) =
+fn scan_string(source, n, pos, col, acc) =
   if pos >= n { (pos, col, acc) }
   else {
-    let ch = cs[pos]
-    if ch == "\"" { (pos + 1, col + 1, acc) }
-    else if ch == "\\" && pos + 1 < n {
-      let esc = cs[pos + 1]
+    let b = byte_at(source, pos)
+    if b == 34 {
+      // closing "
+      (pos + 1, col + 1, acc)
+    } else if b == 92 && pos + 1 < n {
+      // backslash — resolve escape
+      let esc = byte_at(source, pos + 1)
       let escaped =
-        if esc == "n" { "\n" }
-        else if esc == "t" { "\t" }
-        else if esc == "\\" { "\\" }
-        else if esc == "\"" { "\"" }
-        else { esc }
-      scan_string(cs, n, pos + 2, col + 2, acc |> str_concat(escaped))
+        if      esc == 110 { "\n" }    // n
+        else if esc == 116 { "\t" }    // t
+        else if esc == 92  { "\\" }    // \
+        else if esc == 34  { "\"" }    // "
+        else { str_slice(source, pos + 1, pos + 2) }
+      scan_string(source, n, pos + 2, col + 2, acc |> str_concat(escaped))
     } else {
-      scan_string(cs, n, pos + 1, col + 1, acc |> str_concat(ch))
+      // non-escape byte — append its 1-byte slice view
+      scan_string(source, n, pos + 1, col + 1,
+        acc |> str_concat(str_slice(source, pos, pos + 1)))
     }
   }
 
-fn scan_number(cs, n, pos, col, acc, is_float) =
-  if pos >= n { (pos, col, acc, is_float) }
+// scan_number: advance position over the digits (and optionally one
+// decimal point followed by more digits). Returns (pos, col, is_float).
+// The caller slices the source to obtain the numeric literal text.
+fn scan_number(source, n, pos, col, is_float) =
+  if pos >= n { (pos, col, is_float) }
   else {
-    let ch = cs[pos]
-    if is_digit(ch) {
-      scan_number(cs, n, pos + 1, col + 1, acc |> str_concat(ch), is_float)
-    } else if ch == "." && !is_float && pos + 1 < n && is_digit(cs[pos + 1]) {
-      scan_number(cs, n, pos + 1, col + 1, acc |> str_concat("."), true)
+    let b = byte_at(source, pos)
+    if is_digit(b) {
+      scan_number(source, n, pos + 1, col + 1, is_float)
+    } else if b == 46 && !is_float && pos + 1 < n && is_digit(byte_at(source, pos + 1)) {
+      // . (decimal point) followed by another digit
+      scan_number(source, n, pos + 1, col + 1, true)
     } else {
-      (pos, col, acc, is_float)
+      (pos, col, is_float)
     }
   }
 
-fn scan_ident(cs, n, pos, col, acc) =
-  if pos >= n { (pos, col, acc) }
-  else if is_alnum(cs[pos]) {
-    scan_ident(cs, n, pos + 1, col + 1, acc |> str_concat(cs[pos]))
+// scan_ident: advance position over identifier characters. Returns
+// (pos, col). The caller slices the source to obtain the identifier
+// text.
+fn scan_ident(source, n, pos, col) =
+  if pos >= n { (pos, col) }
+  else if is_alnum(byte_at(source, pos)) {
+    scan_ident(source, n, pos + 1, col + 1)
   } else {
-    (pos, col, acc)
+    (pos, col)
   }

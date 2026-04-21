@@ -45,7 +45,9 @@ type KaiFile = {
 
 // Bumps when serialize/deserialize format changes. Old .kai files
 // with mismatching version are treated as misses.
-fn cache_compiler_version() = 1
+//   v1 — IC.1a header-only
+//   v2 — IC.1b adds env entry serialization (name + Scheme + SchemeKind)
+fn cache_compiler_version() = 2
 
 // ═══ FNV-1a hash ═══════════════════════════════════════════════════
 // 32-bit FNV-1a over the source bytes. Not cryptographic — but
@@ -115,36 +117,50 @@ fn str_from_byte(b) with Memory + Alloc = {
   s
 }
 
-// ═══ Header read/write ═════════════════════════════════════════════
-// IC.1a serializes ONLY the header: compiler_version + source_hash +
-// module_name. Body fields (exported_entries, imports, imports_hashes)
-// are placeholders; deserialize returns empty lists. IC.1b extends
-// to full env serialization.
+// ═══ Format (textual v2) ═══════════════════════════════════════════
+//   INKA-KAI v<compiler_version>
+//   module:<module_name>
+//   hash:<source_hash_decimal>
+//   imports:<dep1>,<dep2>,...
+//   imports_hashes:<hash1>,<hash2>,...
+//   entries:<count>
+//   E:<name>|<scheme_repr>|<kind_repr>
+//   E:<name>|<scheme_repr>|<kind_repr>
+//   ...
 //
-// Format (textual for v1; binary later):
-//   line 1: "INKA-KAI v<compiler_version>"
-//   line 2: "module:<module_name>"
-//   line 3: "hash:<source_hash_decimal>"
-//   line 4: "imports:" (placeholder; IC.1b fills)
-//   line 5: "entries:" (placeholder; IC.1b fills)
+// scheme_repr and kind_repr use a one-line encoding (see show_*
+// + parse_* helpers below). Recursive types (Ty inside Scheme)
+// nest via parens. The parser is single-pass, no backtracking.
+//
+// Reason fields are NOT serialized — on cache load, every entry
+// gets a placeholder Reason `Inferred("loaded from cache")`.
+// Provenance loss is acceptable: Reason chains drive diagnostics,
+// not type correctness. Cached envs preserve every TYPE (the
+// load-bearing data); diagnostics that need full chains re-infer
+// the offending module (cache miss).
 
-fn cache_serialize(kai) =
-  "INKA-KAI v"
+fn cache_serialize(kai) = {
+  let header = "INKA-KAI v"
     |> str_concat(int_to_str(kai.compiler_version))
     |> str_concat("\nmodule:")
     |> str_concat(kai.module_name)
     |> str_concat("\nhash:")
     |> str_concat(int_to_str(kai.source_hash))
-    |> str_concat("\nimports:\nentries:\n")
+    |> str_concat("\nimports:")
+    |> str_concat(cache_show_string_list(kai.imports))
+    |> str_concat("\nimports_hashes:")
+    |> str_concat(cache_show_int_list(kai.imports_hashes))
+    |> str_concat("\nentries:")
+    |> str_concat(int_to_str(len(kai.exported_entries)))
+    |> str_concat("\n")
+  let body = cache_show_entries(kai.exported_entries)
+  str_concat(header, body)
+}
 
 // Parses a serialized KaiFile. On format mismatch (different
 // compiler_version, malformed header), returns None — the driver
 // treats this as a cache miss and re-builds.
 fn cache_deserialize(bytes) =
-  // Minimal parser: split by newline, look for module: and hash:
-  // prefixes. Robust to trailing data (IC.1b body fields ignored
-  // by IC.1a's parse; round-trip preserved when both sides agree
-  // on version).
   if !cache_starts_with(bytes, "INKA-KAI v") { None }
   else {
     let version = cache_parse_version(bytes)
@@ -152,11 +168,14 @@ fn cache_deserialize(bytes) =
     else {
       let module_name = cache_parse_field(bytes, "module:")
       let source_hash = cache_parse_int_field(bytes, "hash:")
+      let imports = cache_parse_string_list_field(bytes, "imports:")
+      let imports_hashes = cache_parse_int_list_field(bytes, "imports_hashes:")
+      let entries = cache_parse_entries(bytes)
       Some({
         compiler_version: version,
-        exported_entries: [],
-        imports: [],
-        imports_hashes: [],
+        exported_entries: entries,
+        imports: imports,
+        imports_hashes: imports_hashes,
         module_name: module_name,
         source_hash: source_hash
       })
@@ -210,6 +229,309 @@ fn cache_find_sub_loop(haystack, needle, i, last) = {
   else if str_eq(str_slice(haystack, i, i + byte_len(needle)), needle) { i }
   else { cache_find_sub_loop(haystack, needle, i + 1, last) }
 }
+
+// ═══ List encoding ═════════════════════════════════════════════════
+// Comma-separated; empty list serializes as the empty string.
+
+fn cache_show_string_list(xs) =
+  cache_show_string_list_loop(xs, 0, len(xs), "")
+
+fn cache_show_string_list_loop(xs, i, n, acc) =
+  if i >= n { acc }
+  else {
+    let sep = if i == 0 { "" } else { "," }
+    cache_show_string_list_loop(xs, i + 1, n,
+      acc |> str_concat(sep) |> str_concat(list_index(xs, i)))
+  }
+
+fn cache_show_int_list(xs) =
+  cache_show_int_list_loop(xs, 0, len(xs), "")
+
+fn cache_show_int_list_loop(xs, i, n, acc) =
+  if i >= n { acc }
+  else {
+    let sep = if i == 0 { "" } else { "," }
+    cache_show_int_list_loop(xs, i + 1, n,
+      acc |> str_concat(sep) |> str_concat(int_to_str(list_index(xs, i))))
+  }
+
+fn cache_parse_string_list_field(bytes, prefix) = {
+  let raw = cache_parse_field(bytes, prefix)
+  if byte_len(raw) == 0 { [] }
+  else { split(raw, ",") }
+}
+
+fn cache_parse_int_list_field(bytes, prefix) = {
+  let raw = cache_parse_field(bytes, prefix)
+  if byte_len(raw) == 0 { [] }
+  else {
+    let parts = split(raw, ",")
+    cache_parse_int_list_loop(parts, 0, len(parts), [])
+  }
+}
+
+fn cache_parse_int_list_loop(parts, i, n, acc) =
+  if i >= n { acc }
+  else {
+    cache_parse_int_list_loop(parts, i + 1, n,
+      acc ++ [parse_int(list_index(parts, i))])
+  }
+
+// ═══ Entry encoding ════════════════════════════════════════════════
+// Each entry on its own line: "E:<name>|<scheme_repr>|<kind_repr>".
+// scheme_repr: "Forall(<handles_csv>;<ty_repr>)"
+// kind_repr:   "FN" | "C:<tag>:<total>" | "EOP:<effect_name>" | "R:<fields_repr>"
+// ty_repr: see cache_show_ty below — single-line, paren-nested.
+
+fn cache_show_entries(entries) =
+  cache_show_entries_loop(entries, 0, len(entries), "")
+
+fn cache_show_entries_loop(entries, i, n, acc) =
+  if i >= n { acc }
+  else {
+    let entry = list_index(entries, i)
+    let (name, scheme, _reason, kind) = entry
+    let line = "E:"
+      |> str_concat(name)
+      |> str_concat("|")
+      |> str_concat(cache_show_scheme(scheme))
+      |> str_concat("|")
+      |> str_concat(cache_show_kind(kind))
+      |> str_concat("\n")
+    cache_show_entries_loop(entries, i + 1, n, str_concat(acc, line))
+  }
+
+fn cache_parse_entries(bytes) = {
+  // Walk lines; collect those starting with "E:".
+  let lines = split(bytes, "\n")
+  cache_parse_entries_loop(lines, 0, len(lines), [])
+}
+
+fn cache_parse_entries_loop(lines, i, n, acc) =
+  if i >= n { acc }
+  else {
+    let line = list_index(lines, i)
+    let next = if cache_starts_with(line, "E:") {
+      acc ++ [cache_parse_entry(line)]
+    } else { acc }
+    cache_parse_entries_loop(lines, i + 1, n, next)
+  }
+
+fn cache_parse_entry(line) = {
+  // Strip "E:" prefix; split by | into 3 parts.
+  let body = str_slice(line, 2, byte_len(line))
+  let parts = split(body, "|")
+  let name = if len(parts) >= 1 { list_index(parts, 0) } else { "" }
+  let scheme = if len(parts) >= 2 { cache_parse_scheme(list_index(parts, 1)) }
+               else { Forall([], TUnit) }
+  let kind = if len(parts) >= 3 { cache_parse_kind(list_index(parts, 2)) }
+             else { FnScheme }
+  // Reason is regenerated as a placeholder — provenance is lost on
+  // cache hit, accepted tradeoff per cache.ka header comment.
+  (name, scheme, Inferred("loaded from cache"), kind)
+}
+
+// ═══ SchemeKind encoding ═══════════════════════════════════════════
+
+fn cache_show_kind(kind) = match kind {
+  FnScheme                       => "FN",
+  ConstructorScheme(tag, total)  =>
+    "C:" |> str_concat(int_to_str(tag))
+         |> str_concat(":")
+         |> str_concat(int_to_str(total)),
+  EffectOpScheme(effect_name)    =>
+    "EOP:" |> str_concat(effect_name),
+  RecordSchemeKind(fields)       =>
+    "R:" |> str_concat(cache_show_fields(fields))
+}
+
+fn cache_parse_kind(s) =
+  if str_eq(s, "FN") { FnScheme }
+  else if cache_starts_with(s, "C:") {
+    let body = str_slice(s, 2, byte_len(s))
+    let parts = split(body, ":")
+    if len(parts) >= 2 {
+      ConstructorScheme(parse_int(list_index(parts, 0)),
+                        parse_int(list_index(parts, 1)))
+    } else { FnScheme }
+  }
+  else if cache_starts_with(s, "EOP:") {
+    EffectOpScheme(str_slice(s, 4, byte_len(s)))
+  }
+  else if cache_starts_with(s, "R:") {
+    RecordSchemeKind(cache_parse_fields(str_slice(s, 2, byte_len(s))))
+  }
+  else { FnScheme }
+
+// ═══ Scheme encoding ═══════════════════════════════════════════════
+
+fn cache_show_scheme(scheme) = {
+  let Forall(handles, ty) = scheme
+  "Forall("
+    |> str_concat(cache_show_int_list(handles))
+    |> str_concat(";")
+    |> str_concat(cache_show_ty(ty))
+    |> str_concat(")")
+}
+
+fn cache_parse_scheme(s) = {
+  // "Forall(<handles_csv>;<ty_repr>)"
+  if !cache_starts_with(s, "Forall(") { Forall([], TUnit) }
+  else {
+    let inner = str_slice(s, 7, byte_len(s) - 1)  // strip "Forall(" and ")"
+    let semi = cache_find_byte(inner, 59, 0)       // ';'
+    if semi < 0 { Forall([], TUnit) }
+    else {
+      let handles_str = str_slice(inner, 0, semi)
+      let ty_str = str_slice(inner, semi + 1, byte_len(inner))
+      let handles = if byte_len(handles_str) == 0 { [] }
+                    else { cache_parse_int_list_loop(split(handles_str, ","), 0,
+                              len(split(handles_str, ",")), []) }
+      Forall(handles, cache_parse_ty(ty_str))
+    }
+  }
+}
+
+// ═══ Ty encoding — single-line paren-nested ═══════════════════════
+// Encodings (chosen to be unambiguous for prefix-match dispatch):
+//   I             TInt
+//   F             TFloat
+//   S             TString
+//   U             TUnit
+//   V<n>          TVar(n)
+//   L(<ty>)       TList(elem)
+//   T(<ty>,...)   TTuple(elems)
+//   N<name>       TName(name, []) — type args deferred (rare in env)
+//   Rec(<fields>) TRecord([(name, ty)])
+//   Fn(<ps>->R<ret>;<row>) TFun(params, ret, row) — params/row encoded
+//   Ref(<ty>;<pred_repr>)  TRefined(base, predicate) — pred placeholder
+//   Cont(<ty>:<disc>)      TCont(ret, discipline)
+//   RO(<fields>;<v>)       TRecordOpen(fields, var_handle)
+//
+// Predicates and TName type-args are NOT round-tripped in v2; they
+// degrade to placeholders. Modules that publish refined or generic
+// types via env produce cache misses correctly because the env
+// reads detect the placeholder shape and re-infer (driver decision).
+
+fn cache_show_ty(ty) = match ty {
+  TInt                  => "I",
+  TFloat                => "F",
+  TString               => "S",
+  TUnit                 => "U",
+  TVar(n)               => "V" |> str_concat(int_to_str(n)),
+  TList(elem)           =>
+    "L(" |> str_concat(cache_show_ty(elem)) |> str_concat(")"),
+  TTuple(elems)         =>
+    "T(" |> str_concat(cache_show_ty_list(elems)) |> str_concat(")"),
+  TName(name, _args)    => "N" |> str_concat(name),
+  TRecord(fields)       =>
+    "Rec(" |> str_concat(cache_show_fields(fields)) |> str_concat(")"),
+  TRecordOpen(fields, v) =>
+    "RO(" |> str_concat(cache_show_fields(fields))
+          |> str_concat(";")
+          |> str_concat(int_to_str(v))
+          |> str_concat(")"),
+  TFun(params, ret, _row) =>
+    "Fn(" |> str_concat(cache_show_params(params))
+          |> str_concat("->")
+          |> str_concat(cache_show_ty(ret))
+          |> str_concat(")"),
+  TRefined(base, _pred) =>
+    "Ref(" |> str_concat(cache_show_ty(base)) |> str_concat(";_)"),
+  TCont(ret, _disc)     =>
+    "Cont(" |> str_concat(cache_show_ty(ret)) |> str_concat(")")
+}
+
+fn cache_show_ty_list(tys) =
+  cache_show_ty_list_loop(tys, 0, len(tys), "")
+
+fn cache_show_ty_list_loop(tys, i, n, acc) =
+  if i >= n { acc }
+  else {
+    let sep = if i == 0 { "" } else { "," }
+    cache_show_ty_list_loop(tys, i + 1, n,
+      acc |> str_concat(sep) |> str_concat(cache_show_ty(list_index(tys, i))))
+  }
+
+fn cache_show_fields(fields) =
+  cache_show_fields_loop(fields, 0, len(fields), "")
+
+fn cache_show_fields_loop(fields, i, n, acc) =
+  if i >= n { acc }
+  else {
+    let (name, ty) = list_index(fields, i)
+    let sep = if i == 0 { "" } else { "," }
+    cache_show_fields_loop(fields, i + 1, n,
+      acc |> str_concat(sep)
+          |> str_concat(name)
+          |> str_concat(":")
+          |> str_concat(cache_show_ty(ty)))
+  }
+
+fn cache_show_params(params) =
+  cache_show_params_loop(params, 0, len(params), "")
+
+fn cache_show_params_loop(params, i, n, acc) =
+  if i >= n { acc }
+  else {
+    let TParam(_name, ty, _own) = list_index(params, i)
+    let sep = if i == 0 { "" } else { "," }
+    cache_show_params_loop(params, i + 1, n,
+      acc |> str_concat(sep) |> str_concat(cache_show_ty(ty)))
+  }
+
+// Ty parser — minimal recursive descent over the encoding above.
+// On unrecognized prefix returns TUnit (degrades; driver invalidates
+// when downstream chase fails).
+fn cache_parse_ty(s) = {
+  if byte_len(s) == 0 { TUnit }
+  else {
+    let c0 = byte_at(s, 0)
+    if c0 == 73 { TInt }              // 'I'
+    else if c0 == 70 { TFloat }       // 'F'
+    else if c0 == 83 { TString }      // 'S'
+    else if c0 == 85 { TUnit }        // 'U'
+    else if c0 == 86 {                // 'V' TVar
+      TVar(parse_int(str_slice(s, 1, byte_len(s))))
+    }
+    else if cache_starts_with(s, "L(") {
+      TList(cache_parse_ty(cache_strip_parens(s, 2)))
+    }
+    else if cache_starts_with(s, "Rec(") {
+      TRecord(cache_parse_fields(cache_strip_parens(s, 4)))
+    }
+    else if cache_starts_with(s, "N") {
+      TName(str_slice(s, 1, byte_len(s)), [])
+    }
+    else { TUnit }
+  }
+}
+
+fn cache_strip_parens(s, prefix_len) =
+  // Strip opening "<prefix>(" and trailing ")".
+  str_slice(s, prefix_len, byte_len(s) - 1)
+
+fn cache_parse_fields(s) = {
+  if byte_len(s) == 0 { [] }
+  else {
+    let parts = split(s, ",")
+    cache_parse_fields_loop(parts, 0, len(parts), [])
+  }
+}
+
+fn cache_parse_fields_loop(parts, i, n, acc) =
+  if i >= n { acc }
+  else {
+    let part = list_index(parts, i)
+    let colon = cache_find_byte(part, 58, 0)        // ':'
+    let entry = if colon < 0 { (part, TUnit) }
+                else {
+                  let name = str_slice(part, 0, colon)
+                  let ty = cache_parse_ty(str_slice(part, colon + 1, byte_len(part)))
+                  (name, ty)
+                }
+    cache_parse_fields_loop(parts, i + 1, n, acc ++ [entry])
+  }
 
 // ═══ Public API — read/write through Filesystem effect ═════════════
 

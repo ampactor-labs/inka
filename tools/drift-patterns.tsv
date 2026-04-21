@@ -24,7 +24,7 @@
 10	Wildcard-fabricates (_ arm returning Forall)	_\s*=>\s*Forall\s*\(	ka	Wildcard fabricates a Scheme. Enumerate variants explicitly.
 10	Wildcard-fabricates (_ arm returning TVar)	_\s*=>\s*TVar\s*\(	ka	Fabricated TVar silently absorbs a new variant.
 10	Wildcard-fabricates (_ arm returning "Pure")	_\s*=>\s*"Pure"	ka	String-Pure default. Use EffRow algebra.
-11	Loop-accumulator O(N²) (acc ++ [x])	\+\+\s*\[[^\]]*\]	ka	Use list_extend_to + list_set + counter + slice. Bump allocator traps at 16 MB.
+11	Loop-accumulator O(N²) (acc ++ [x])	\+\+\s*\[[^]]*\]	ka	Use list_extend_to + list_set + counter + slice. Bump allocator traps at 16 MB.
 12	Bare string equality (== on strings)	==\s*"	ka	Use str_eq(a, b). Runtime-built strings fail pointer-compare in WASM.
 12	Bare string equality (string == var)	"\s*==	ka	Use str_eq(a, b). Post-Ω.2, returns Bool: `if str_eq(a, b) { ... }`.
 13	Failure-mask (|| true)	\|\|\s*true	ka	A bug is zero or blocking. No `|| true` to hide a gate.

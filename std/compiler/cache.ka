@@ -1,0 +1,248 @@
+// cache.ka — incremental compilation cache (IC.1a)
+//
+// Per-module .kai files in <project>/.inka/cache/. Each file records
+// the source hash that produced this cache entry plus the module's
+// public env (the "envelope"); the driver compares hashes to decide
+// cache hit vs miss, and on hit loads the env to skip re-inference.
+//
+// IC.1a (this commit): KaiFile record + FNV-1a source hash +
+// header-only read/write. Cache exists, driver can detect
+// unchanged sources, but env serialization is stubbed (returns
+// empty entries on read; only header round-trips). The driver
+// using this layer still re-infers on cache hit; the perf win
+// arrives with IC.1b's full env serialization.
+//
+// Walkthrough: docs/rebuild/simulations/IC-incremental-compilation.md.
+
+import compiler/types
+import runtime/strings
+import runtime/io
+
+// ═══ KaiFile — per-module cache record ═════════════════════════════
+// Field-sorted alphabetically per parser invariant (post-H2). Adding
+// fields is additive — old caches with missing fields are detected
+// via compiler_version mismatch and re-built.
+//
+//   compiler_version  — bumps when the cache format changes
+//   exported_entries  — List<(String, Scheme, Reason, SchemeKind)>
+//                       (env entries the module publishes)
+//                       Stub in IC.1a — empty list on read.
+//   imports           — List<String> (modules this depends on)
+//   imports_hashes    — List<Int> (each dep's source_hash at write time)
+//                       Cache hit requires every dep's CURRENT source_hash
+//                       matches what we recorded here.
+//   module_name       — qualified module path
+//   source_hash       — FNV-1a 32-bit hash of the source bytes
+
+type KaiFile = {
+  compiler_version: Int,
+  exported_entries: List,
+  imports: List,
+  imports_hashes: List,
+  module_name: String,
+  source_hash: Int
+}
+
+// Bumps when serialize/deserialize format changes. Old .kai files
+// with mismatching version are treated as misses.
+fn cache_compiler_version() = 1
+
+// ═══ FNV-1a hash ═══════════════════════════════════════════════════
+// 32-bit FNV-1a over the source bytes. Not cryptographic — but
+// collision resistance for cache invalidation is adequate (a
+// collision means the cache returns stale results on the rare
+// changed-but-same-hash edit; subsequent invalidation triggers via
+// dependent module hashes catching it). FNV is small, allocation-
+// free, and proven for this use.
+
+fn cache_hash_source(s) with Memory = {
+  let n = byte_len(s)
+  cache_hash_loop(s, 0, n, 2166136261)
+}
+
+fn cache_hash_loop(s, i, n, h) with Memory = {
+  if i >= n { h }
+  else {
+    let b = byte_at(s, i)
+    let xored = i32_xor(h, b)
+    let mixed = i32_mul(xored, 16777619)
+    cache_hash_loop(s, i + 1, n, mixed)
+  }
+}
+
+// Helpers — these mirror what's available; if not yet primitive,
+// they bridge through bit-arithmetic identities. xor and mul are
+// substrate-level WASM ops; this aliases for readability.
+fn i32_xor(a, b) = a ^ b
+fn i32_mul(a, b) = a * b
+
+// ═══ Cache path conventions ════════════════════════════════════════
+// All cache files live under <project>/.inka/cache/. Each module's
+// dotted path becomes a slash-flattened filename:
+//   compiler/infer.ka  → .inka/cache/compiler__infer.ka.kai
+// The module name preserves the original slash form; only the
+// filesystem path flattens.
+
+fn cache_dir() = ".inka/cache"
+
+fn cache_path_for(module_name) =
+  cache_dir()
+    |> str_concat("/")
+    |> str_concat(cache_flatten(module_name))
+    |> str_concat(".kai")
+
+// Replace `/` with `__` so cache filenames stay flat.
+fn cache_flatten(module_name) =
+  cache_flatten_loop(module_name, 0, byte_len(module_name), "")
+
+fn cache_flatten_loop(s, i, n, acc) with Memory + Alloc =
+  if i >= n { acc }
+  else {
+    let b = byte_at(s, i)
+    let segment = if b == 47 { "__" }     // '/' → '__'
+                  else { str_from_byte(b) }
+    cache_flatten_loop(s, i + 1, n, str_concat(acc, segment))
+  }
+
+// Build a one-byte string from a byte value. Wraps the byte in the
+// flat [len][bytes...] layout. Memory-bounded — uses an alloc per
+// call; cache_flatten is bounded by module name length so this
+// allocation churn is small.
+fn str_from_byte(b) with Memory + Alloc = {
+  let s = perform alloc(5)
+  perform store_i32(s, 1)
+  perform store_i8(s + 4, b)
+  s
+}
+
+// ═══ Header read/write ═════════════════════════════════════════════
+// IC.1a serializes ONLY the header: compiler_version + source_hash +
+// module_name. Body fields (exported_entries, imports, imports_hashes)
+// are placeholders; deserialize returns empty lists. IC.1b extends
+// to full env serialization.
+//
+// Format (textual for v1; binary later):
+//   line 1: "INKA-KAI v<compiler_version>"
+//   line 2: "module:<module_name>"
+//   line 3: "hash:<source_hash_decimal>"
+//   line 4: "imports:" (placeholder; IC.1b fills)
+//   line 5: "entries:" (placeholder; IC.1b fills)
+
+fn cache_serialize(kai) =
+  "INKA-KAI v"
+    |> str_concat(int_to_str(kai.compiler_version))
+    |> str_concat("\nmodule:")
+    |> str_concat(kai.module_name)
+    |> str_concat("\nhash:")
+    |> str_concat(int_to_str(kai.source_hash))
+    |> str_concat("\nimports:\nentries:\n")
+
+// Parses a serialized KaiFile. On format mismatch (different
+// compiler_version, malformed header), returns None — the driver
+// treats this as a cache miss and re-builds.
+fn cache_deserialize(bytes) =
+  // Minimal parser: split by newline, look for module: and hash:
+  // prefixes. Robust to trailing data (IC.1b body fields ignored
+  // by IC.1a's parse; round-trip preserved when both sides agree
+  // on version).
+  if !cache_starts_with(bytes, "INKA-KAI v") { None }
+  else {
+    let version = cache_parse_version(bytes)
+    if version != cache_compiler_version() { None }
+    else {
+      let module_name = cache_parse_field(bytes, "module:")
+      let source_hash = cache_parse_int_field(bytes, "hash:")
+      Some({
+        compiler_version: version,
+        exported_entries: [],
+        imports: [],
+        imports_hashes: [],
+        module_name: module_name,
+        source_hash: source_hash
+      })
+    }
+  }
+
+// Helpers — minimal text parsing using runtime/strings primitives.
+// Each scans bytes once; bounded by file size.
+fn cache_starts_with(s, prefix) =
+  str_eq(str_slice(s, 0, byte_len(prefix)), prefix)
+
+fn cache_parse_version(bytes) = {
+  // After "INKA-KAI v" find newline; parse decimal between.
+  let prefix_len = byte_len("INKA-KAI v")
+  let nl = cache_find_byte(bytes, 10, prefix_len)
+  if nl < 0 { 0 }
+  else { parse_int(str_slice(bytes, prefix_len, nl)) }
+}
+
+fn cache_parse_field(bytes, prefix) = {
+  // Find prefix anywhere in the file; read until newline.
+  let pos = cache_find_substring(bytes, prefix, 0)
+  if pos < 0 { "" }
+  else {
+    let value_start = pos + byte_len(prefix)
+    let nl = cache_find_byte(bytes, 10, value_start)
+    if nl < 0 { str_slice(bytes, value_start, byte_len(bytes)) }
+    else { str_slice(bytes, value_start, nl) }
+  }
+}
+
+fn cache_parse_int_field(bytes, prefix) = {
+  let v = cache_parse_field(bytes, prefix)
+  parse_int(v)
+}
+
+fn cache_find_byte(s, target_byte, start) =
+  cache_find_byte_loop(s, target_byte, start, byte_len(s))
+
+fn cache_find_byte_loop(s, target, i, n) =
+  if i >= n { -1 }
+  else if byte_at(s, i) == target { i }
+  else { cache_find_byte_loop(s, target, i + 1, n) }
+
+fn cache_find_substring(haystack, needle, start) =
+  cache_find_sub_loop(haystack, needle, start,
+    byte_len(haystack) - byte_len(needle) + 1)
+
+fn cache_find_sub_loop(haystack, needle, i, last) = {
+  if i >= last { -1 }
+  else if str_eq(str_slice(haystack, i, i + byte_len(needle)), needle) { i }
+  else { cache_find_sub_loop(haystack, needle, i + 1, last) }
+}
+
+// ═══ Public API — read/write through Filesystem effect ═════════════
+
+// Write a KaiFile to its canonical path under .inka/cache/.
+// Creates the cache directory if needed (idempotent).
+fn cache_write(kai) with Memory + Alloc + Filesystem = {
+  if !perform fs_exists(cache_dir()) {
+    perform fs_mkdir(".inka")
+    perform fs_mkdir(cache_dir())
+  }
+  let path = cache_path_for(kai.module_name)
+  let bytes = cache_serialize(kai)
+  perform fs_write_file(path, bytes)
+}
+
+// Read a KaiFile for the named module. Returns None if the cache
+// file doesn't exist, has an incompatible version, or fails to
+// parse — driver treats all None responses identically (cache
+// miss; re-infer).
+fn cache_read(module_name) with Memory + Alloc + Filesystem = {
+  let path = cache_path_for(module_name)
+  if !perform fs_exists(path) { None }
+  else {
+    let bytes = perform fs_read_file(path)
+    cache_deserialize(bytes)
+  }
+}
+
+// Cache-hit decision: source_hash matches AND compiler_version
+// matches. Dependency-hash invalidation lives at IC.2 driver level
+// (depends on imports tracking which is IC.1b). For IC.1a, this
+// answers the simpler question: "is the source byte-identical to
+// when we wrote this cache?"
+fn cache_is_hit(kai, current_source) with Memory =
+  kai.compiler_version == cache_compiler_version() &&
+  kai.source_hash == cache_hash_source(current_source)

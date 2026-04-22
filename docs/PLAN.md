@@ -1774,3 +1774,84 @@ Pre-restructure: `docs/specs/` = `docs/rebuild/`, `.nx` = `.ka`,
 | **README.md** | First-read; kernel enumeration; Repository layout as canonical Inka-project template. |
 | **bootstrap/inka.wat** | Hand-written WAT reference image (empty until hand-write begins post-item 9; kept forever post-first-light). |
 | **bootstrap/first-light.sh** | Fixed-point test harness. |
+
+---
+
+## Handoff Posture — 2026-04-22 (Claude Code → Google Antigravity / Opus 4.6)
+
+Claude Code weekly quota exhausted 2026-04-22 after FV.2 + FV.3 landed.
+Work resumes in Antigravity IDE under Opus 4.6 for ~1 day. This block
+captures the operating posture a fresh session needs beyond what
+`memory/MEMORY.md` and `CLAUDE.md` already carry.
+
+### Cursor
+- Last commit on `rebuild`: `9217d15` (PLAN.md sync — FV.2 at `005d66d`,
+  FV.3 at `f7c6774`, FV.3.1–FV.3.4 named as peer sub-handles).
+- Full `std/` tree (29 `.ka` files) drift-audit CLEAN.
+- No in-flight dispatches. No uncommitted working-tree edits.
+
+### Do NOT touch before first-light
+Every one of these is a "rise after the floor is up" surface. Drifting
+into any of them before hand-WAT Tier 3 delivers byte-identical
+self-compilation is a shape drift the cascade discipline refuses.
+
+- **Syntax highlighting** / TextMate grammar / tree-sitter wrapper.
+- **MV.2 `mentl_voice_default` implementation.** `MV-mentl-voice.md`
+  §2.8 AT1–AT10 ARE the contract; substrate lands post-first-light.
+- **LSP adapter + VS Code extension.** Surface lands post-first-light.
+- **Web playground / α-β-γ-ε options** from the 2026-04-22 brainstorm.
+- **String interpolation `${}` sweep (FV.6).** BLOCKED on a lexer
+  substrate extension — `scan_string` does not yet parse `${}`.
+
+### Dispatch posture (locked 2026-04-22)
+
+| Work shape | Tier | Reason |
+|---|---|---|
+| Plan per `inka-plan` contract | Opus inline (chat) | Planner voice lives in the skill |
+| Mechanical `.ka` edit (bounded surface, typed tokens given) | Sonnet `inka-implementer` | Cheapest correct path |
+| Cross-cutting judgment (`!E` sweep, verb exemplar, Diagnostic ADT shape) | Opus via `Agent({subagent_type:"inka-implementer", model:"opus"})` | Judgment under substrate discipline |
+| Substrate design (new walkthrough, new kernel primitive) | Opus inline | Warm context, no subagent overhead |
+
+Never dispatch `.ka` edits to bare `general-purpose` / `Explore` agents.
+The discipline lives in `inka-implementer`'s system prompt.
+
+### FV queue order (runnable in parallel with hand-WAT Tier 1)
+
+| # | Sub-handle | Tier | Status |
+|---|---|---|---|
+| 1 | FV.3.1 `TagId` → ConstructorScheme + LMakeVariant + LPCon | Sonnet | pending (dispatched 2026-04-22) |
+| 2 | FV.3.2 `ValidOffset` → lexer + parser byte positions | Sonnet | pending |
+| 3 | FV.3.3 `NonEmptyList` → sites where `len > 0` is asserted in prose | Sonnet | pending |
+| 4 | FV.3.4 `ValidSpan` → every Span construction site | Sonnet | pending |
+| 5 | FV.1 `!E` negation sweep (`!IO` / `!Alloc` / `!Diagnostic`) | Opus | pending — biggest exemplar jump left |
+| 6 | FV.4 ownership markers (`own` / `ref` / `!Mutate`) | Opus | pending |
+| 7 | FV.5 five-verb exemplar (`<\|`, `><`, `<~` at one site each) | Opus | pending |
+| 8 | FV.8 parameterized Diagnostic / 11.B.M | Opus | pending |
+| 9 | FV.9 docstring harmonization | Sonnet | blocked on NS-naming template |
+| — | FV.6 string interpolation | — | BLOCKED on lexer substrate |
+| — | FV.7 `~>` chain sweep | Sonnet | likely no-op per pre-audit |
+
+### Per-file drift-audit gate
+Before any feature edit to a `.ka` file, the file's drift-audit must
+be clean. If not, the first commit on that file is the per-file drift
+sweep; feature work follows in a separate commit.
+
+```
+bash ~/Projects/inka/tools/drift-audit.sh <file>    # exit 0 = proceed
+```
+
+### HC rosetta — 2026-04-21 crystallization
+`HC-handler-composition.md` names four ripple points currently live:
+
+- **11.C.2** frame-record restructure (parallel lists → OrderedMap).
+- **11.B.M** parameterized Diagnostic (absorbs FV.8).
+- **Hα** operator-semantics-as-handler (each of the five verbs).
+- **MV.2** tentacles transform-yield; LSP surfaces materialize.
+
+### Highest-leverage first cut in a fresh session
+Opus-judgment tier best spent on **FV.1** (`!E` negation sweep) — biggest
+exemplar jump left; reads what the graph already proved. Run the
+`inka-plan` skill; dispatch `inka-implementer` with `model: "opus"`.
+
+Sonnet-tier cheapest cut: **FV.3.1** (dispatched 2026-04-22 from the
+closing Claude Code session; check `git log` for landing state).

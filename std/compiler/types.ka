@@ -94,7 +94,7 @@ type Scheme
 
 type SchemeKind
   = FnScheme
-  | ConstructorScheme(Int, Int)
+  | ConstructorScheme(TagId, Int)
   | EffectOpScheme(String)
   | RecordSchemeKind(List)               // [(field_name: String, ty: Ty)] declared
 

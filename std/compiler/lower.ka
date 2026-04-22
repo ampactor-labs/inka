@@ -51,7 +51,7 @@ type LowExpr
   | LMakeList(Int, List)
   | LMakeTuple(Int, List)
   | LMakeRecord(Int, List)                     // handle, [field_value] sorted by field name
-  | LMakeVariant(Int, Int, List)               // handle, tag_id, field exprs
+  | LMakeVariant(Int, TagId, List)             // handle, tag_id, field exprs
   | LIndex(Int, LowExpr, LowExpr, Bool)
   | LMatch(Int, LowExpr, List)
   | LLoop(Int, List)
@@ -90,7 +90,7 @@ type LowFn
 type LowPat
   = LPVar(String)
   | LPWild
-  | LPCon(String, Int, List)         // name, tag_id (from ConstructorScheme), sub-pats
+  | LPCon(String, TagId, List)       // name, tag_id (from ConstructorScheme), sub-pats
   | LPTuple(List)
   | LPLit(LowValue)
   | LPList(List)                     // list pattern — runtime-tag dispatch (runtime/lists.ka)

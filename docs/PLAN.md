@@ -514,7 +514,51 @@ Lands after items 10-22 so simplification + extension migration ride through alo
     - Normative output: **FV.1–FV.9 action items** closing the exemplar gap. None block first-light; all runnable in parallel with hand-WAT Tier 1.
     - Hand-WAT Tier 2 scope: ~1500-2000 lines; Tier 1 ~1000 lines; total ~2500-3000 lines. FV additions add ~35 lines to Tier 2 parser. Tractable.
     - **FV peer sub-handles (each becomes a named commit; can land in parallel with Tier 1):**
-      - **FV.1** — `!E` negation sweep (declare `!IO` / `!Alloc` / `!Diagnostic` on lexer/parser/infer/lower/hot-path fns). Primitive #4b. `[PENDING]`
+      - **FV.1** — `!E` negation sweep. `[BLOCKED — substrate finding 2026-04-22: see FV.1.α / FV.1.β below]`
+        - **Substrate finding.** Per `std/compiler/effects.ka:134-156`
+          (`normalize_inter`), `Closed(A) & !Closed(B)` reduces to
+          `Closed(A - B)` — which equals `Closed(A)` when `B ⊄ A`.
+          Declaring `with Memory + Alloc + Filesystem + !Diagnostic`
+          on a function whose body genuinely doesn't perform
+          Diagnostic normalizes to `Closed([Memory, Alloc, Filesystem])`
+          — the negation is syntactically preserved in
+          `declared_effs` but algebraically collapsed before
+          `row_subsumes` sees it. Inference already catches
+          violations via "effect not listed in closed row → subsumption
+          fails"; closed-row-ness IS the negation. Explicit `!E`
+          on closed rows adds no substrate beyond signature-level
+          documentation. This is NOT a bug — the algebra is
+          internally consistent — but it means FV.1 as originally
+          framed (declare `!E` on hot-path fns) would be decoration
+          on monomorphic closed-row sites, which is the compiler's
+          entire surface at every site investigated 2026-04-22
+          (infer_program, lower_program, emit_module, cache_write,
+          cache_read, driver_* functions).
+        - `!E` earns load-bearing weight only on (a) effect-polymorphic
+          open rows `EfOpen(pos, v) & !Closed([E])` — genuinely narrows
+          what `v` can bind to — or (b) row-negation forms directly at
+          the top level of a fn's declared row.
+        - **FV.1.α — substrate decision (Opus judgment).** Decide whether
+          declared `!E` on closed rows should preserve negation as signature
+          metadata accessible to downstream handlers (`inka audit`,
+          Mentl's teach pass, code-review surfaces) even though
+          `normalize_inter` collapses it for row_subsumes purposes.
+          Option 1: keep current algebra; `!E` on closed rows is a no-op
+          and FV.1 doesn't apply there. Option 2: preserve declared
+          negation as a separate field on the fn signature (parallel to
+          `declared_effs`); normalize_inter still collapses for
+          subsumption, but audit/mentl handlers can read the author's
+          intent. `[PENDING — substrate walkthrough needed before code]`
+        - **FV.1.β — polymorphic effect-row exemplar (Opus judgment).**
+          Find a higher-order site in the compiler or prelude where
+          the callback's effect row is genuinely polymorphic, and
+          declare `!E` as a constraint that narrows what the callback
+          can bind to. Candidate: prelude.ka's higher-order
+          collection ops (map / filter / fold / iterate) — `fn map(f:
+          fn(a) -> b with !Diagnostic + v, xs)` would prove map
+          never propagates diagnostic reporting. Requires care (API
+          change; breaks callers passing reporting callbacks).
+          `[PENDING — substrate walkthrough needed before code]`
       - **FV.2** — `Pure` declaration sweep. `[LANDED 2026-04-22 · 005d66d]` — 55 Pure annotations across 11 files. Primitive #4c + #7.
       - **FV.3** — Refinement types. `[LANDED 2026-04-22 · f7c6774]` — 5 aliases (Handle / TagId / ValidOffset / NonEmptyList / ValidSpan) + `fn span_valid` predicate added to types.ka; `Handle` applied to `graph_fresh_ty` return type. Primitive #6 moves from 0 uses to 5 decls + 1 applied site.
         - **FV.3.1** `TagId` applied to ConstructorScheme tag_id fields + emit_match dispatch. `[PENDING]`
@@ -1957,7 +2001,7 @@ commits inline). Recommended order by **single-thread safety**
 | 4 | **FV.9** docstring harmonization | Mechanical | BLOCKED — lock NS-naming template first |
 | 5 | FV.4 ownership markers (`own` / `ref` / `!Mutate`) | Judgment | Per-fn analysis |
 | 6 | FV.5 five-verb exemplar (`<\|` / `><` / `<~` one site each) | Judgment | Per-site judgment |
-| 7 | FV.1 `!E` negation sweep | Judgment | **Recommended to DEFER** to fresh Claude Code |
+| 7 | FV.1 `!E` negation sweep | — | **BLOCKED — substrate finding 2026-04-22** (closed-row negation collapses in normalize_inter; FV.1 reframed as FV.1.α substrate decision + FV.1.β polymorphic exemplar; see FV.1 entry in Pending Work item 25) |
 | 8 | FV.8 parameterized Diagnostic / 11.B.M | Judgment + cross-cutting | **Recommended to DEFER** |
 | — | FV.6 string interpolation | BLOCKED | Lexer `scan_string` does not parse `${}` |
 | — | FV.7 `~>` chain sweep | Likely no-op | Pre-audit found no nested `handle(handle(...))` |
@@ -2024,9 +2068,19 @@ grep -n "pos: Int\|pos += \|self\.pos" std/compiler/parser.ka
 depends on current shape; verify before planning.)
 
 If FV.3.2 clears clean, proceed to FV.3.4 (`ValidSpan`) using the
-same pattern. **Do NOT attempt FV.1 in Antigravity** — save it for
-a fresh Claude Code session where `inka-implementer` under Opus-
-dispatch can carry the judgment.
+same pattern.
+
+### Do NOT attempt in Antigravity
+- **FV.1 `!E` negation sweep.** BLOCKED on substrate finding
+  2026-04-22 (closed-row negation collapses in `normalize_inter`;
+  declarative `!E` adds no substrate on monomorphic closed-row
+  sites — which is every site in the compiler). Reframed as two
+  peer sub-handles (FV.1.α substrate decision + FV.1.β polymorphic
+  exemplar) that each require a walkthrough before code. See the
+  FV.1 entry in Pending Work item 25 for the full finding.
+- **FV.8 parameterized Diagnostic / 11.B.M.** Cross-cutting judgment
+  — save for fresh Claude Code session with `inka-implementer`
+  under Opus-dispatch.
 
 ### Handoff endpoint
 When weekly resets: `git log --oneline -20` to confirm Antigravity's

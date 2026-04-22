@@ -107,14 +107,14 @@ fn cache_flatten_loop(s, i, n, acc) with Memory + Alloc =
 // Tag bytes per variant — one truth table, exhaustive match, no text.
 
 // Magic bytes: "IKAI" (0x49, 0x4B, 0x41, 0x49) — Inka KAI binary.
-fn cache_pack_magic() with Pack = {
+fn cache_pack_magic() with Pack + !Unpack = {
   perform pack_byte(73)    // 'I'
   perform pack_byte(75)    // 'K'
   perform pack_byte(65)    // 'A'
   perform pack_byte(73)    // 'I'
 }
 
-fn cache_pack(kai) with Pack = {
+fn cache_pack(kai) with Pack + !Unpack = {
   cache_pack_magic()
   perform pack_i32(kai.compiler_version)
   perform pack_str(kai.module_name)
@@ -130,21 +130,21 @@ fn cache_pack(kai) with Pack = {
   cache_pack_entries(kai.exported_entries, 0, len(kai.exported_entries))
 }
 
-fn cache_pack_string_list(lst, i, n) with Pack =
+fn cache_pack_string_list(lst, i, n) with Pack + !Unpack =
   if i >= n { () }
   else {
     perform pack_str(list_index(lst, i))
     cache_pack_string_list(lst, i + 1, n)
   }
 
-fn cache_pack_int_list(lst, i, n) with Pack =
+fn cache_pack_int_list(lst, i, n) with Pack + !Unpack =
   if i >= n { () }
   else {
     perform pack_i32(list_index(lst, i))
     cache_pack_int_list(lst, i + 1, n)
   }
 
-fn cache_pack_entries(entries, i, n) with Pack =
+fn cache_pack_entries(entries, i, n) with Pack + !Unpack =
   if i >= n { () }
   else {
     let (name, scheme, _reason, kind) = list_index(entries, i)
@@ -154,7 +154,7 @@ fn cache_pack_entries(entries, i, n) with Pack =
     cache_pack_entries(entries, i + 1, n)
   }
 
-fn cache_pack_scheme(scheme) with Pack = {
+fn cache_pack_scheme(scheme) with Pack + !Unpack = {
   let Forall(handles, ty) = scheme
   perform pack_i32(len(handles))
   cache_pack_int_list(handles, 0, len(handles))
@@ -162,7 +162,7 @@ fn cache_pack_scheme(scheme) with Pack = {
 }
 
 // SchemeKind tags: 0=FnScheme, 1=ConstructorScheme, 2=EffectOpScheme, 3=RecordSchemeKind
-fn cache_pack_kind(kind) with Pack = match kind {
+fn cache_pack_kind(kind) with Pack + !Unpack = match kind {
   FnScheme => perform pack_byte(0),
   ConstructorScheme(tag, total) => {
     perform pack_byte(1)
@@ -183,7 +183,7 @@ fn cache_pack_kind(kind) with Pack = match kind {
 // Ty tags: 0=TInt, 1=TFloat, 2=TString, 3=TUnit, 4=TList, 5=TTuple,
 //          6=TFun, 7=TVar, 8=TName, 9=TRecord, 10=TRecordOpen,
 //          11=TRefined, 12=TCont
-fn cache_pack_ty(ty) with Pack = match ty {
+fn cache_pack_ty(ty) with Pack + !Unpack = match ty {
   TInt    => perform pack_byte(0),
   TFloat  => perform pack_byte(1),
   TString => perform pack_byte(2),
@@ -237,14 +237,14 @@ fn cache_pack_ty(ty) with Pack = match ty {
   }
 }
 
-fn cache_pack_ty_list(tys, i, n) with Pack =
+fn cache_pack_ty_list(tys, i, n) with Pack + !Unpack =
   if i >= n { () }
   else {
     cache_pack_ty(list_index(tys, i))
     cache_pack_ty_list(tys, i + 1, n)
   }
 
-fn cache_pack_fields(fields, i, n) with Pack =
+fn cache_pack_fields(fields, i, n) with Pack + !Unpack =
   if i >= n { () }
   else {
     let (name, ty) = list_index(fields, i)
@@ -253,7 +253,7 @@ fn cache_pack_fields(fields, i, n) with Pack =
     cache_pack_fields(fields, i + 1, n)
   }
 
-fn cache_pack_params(params, i, n) with Pack =
+fn cache_pack_params(params, i, n) with Pack + !Unpack =
   if i >= n { () }
   else {
     let TParam(name, ty, own) = list_index(params, i)
@@ -264,14 +264,14 @@ fn cache_pack_params(params, i, n) with Pack =
   }
 
 // Ownership tags: 0=Inferred, 1=Own, 2=Ref
-fn cache_pack_ownership(own) with Pack = match own {
+fn cache_pack_ownership(own) with Pack + !Unpack = match own {
   Inferred => perform pack_byte(0),
   Own      => perform pack_byte(1),
   Ref      => perform pack_byte(2)
 }
 
 // ResumeDiscipline tags: 0=OneShot, 1=MultiShot, 2=Either
-fn cache_pack_resume_disc(disc) with Pack = match disc {
+fn cache_pack_resume_disc(disc) with Pack + !Unpack = match disc {
   OneShot   => perform pack_byte(0),
   MultiShot => perform pack_byte(1),
   Either    => perform pack_byte(2)
@@ -279,7 +279,7 @@ fn cache_pack_resume_disc(disc) with Pack = match disc {
 
 // EffRow tags: 0=EfPure, 1=EfClosed, 2=EfOpen, 3=EfNeg,
 //              4=EfSub, 5=EfInter
-fn cache_pack_effrow(row) with Pack = match row {
+fn cache_pack_effrow(row) with Pack + !Unpack = match row {
   EfPure => perform pack_byte(0),
   EfClosed(names) => {
     perform pack_byte(1)
@@ -308,7 +308,7 @@ fn cache_pack_effrow(row) with Pack = match row {
   }
 }
 
-fn cache_pack_effnames(names, i, n) with Pack =
+fn cache_pack_effnames(names, i, n) with Pack + !Unpack =
   if i >= n { () }
   else {
     cache_pack_effname(list_index(names, i))
@@ -316,7 +316,7 @@ fn cache_pack_effnames(names, i, n) with Pack =
   }
 
 // EffName tags: 0=ENamed, 1=EParameterized
-fn cache_pack_effname(name) with Pack = match name {
+fn cache_pack_effname(name) with Pack + !Unpack = match name {
   ENamed(s) => {
     perform pack_byte(0)
     perform pack_str(s)
@@ -329,7 +329,7 @@ fn cache_pack_effname(name) with Pack = match name {
   }
 }
 
-fn cache_pack_effargs(args, i, n) with Pack =
+fn cache_pack_effargs(args, i, n) with Pack + !Unpack =
   if i >= n { () }
   else {
     cache_pack_effarg(list_index(args, i))
@@ -337,7 +337,7 @@ fn cache_pack_effargs(args, i, n) with Pack =
   }
 
 // EffArg tags: 0=EAInt, 1=EAString
-fn cache_pack_effarg(arg) with Pack = match arg {
+fn cache_pack_effarg(arg) with Pack + !Unpack = match arg {
   EAInt(n) => {
     perform pack_byte(0)
     perform pack_i32(n)
@@ -351,7 +351,7 @@ fn cache_pack_effarg(arg) with Pack = match arg {
 // ═══ Binary deserialization — Unpack direction ═════════════════════
 // Mirror of pack: reads tag bytes, dispatches, reconstructs.
 
-fn cache_unpack_magic() with Unpack = {
+fn cache_unpack_magic() with Unpack + !Pack = {
   let b0 = perform unpack_byte()
   let b1 = perform unpack_byte()
   let b2 = perform unpack_byte()
@@ -360,7 +360,7 @@ fn cache_unpack_magic() with Unpack = {
   b0 == 73 && b1 == 75 && b2 == 65 && b3 == 73
 }
 
-fn cache_unpack() with Unpack = {
+fn cache_unpack() with Unpack + !Pack = {
   let version = perform unpack_i32()
   let module_name = perform unpack_str()
   let source_hash = perform unpack_i32()
@@ -383,21 +383,21 @@ fn cache_unpack() with Unpack = {
   }
 }
 
-fn cache_unpack_string_list(n, i, buf) with Unpack =
+fn cache_unpack_string_list(n, i, buf) with Unpack + !Pack =
   if i >= n { slice(buf, 0, n) }
   else {
     let s = perform unpack_str()
     cache_unpack_string_list(n, i + 1, list_set(buf, i, s))
   }
 
-fn cache_unpack_int_list(n, i, buf) with Unpack =
+fn cache_unpack_int_list(n, i, buf) with Unpack + !Pack =
   if i >= n { slice(buf, 0, n) }
   else {
     let v = perform unpack_i32()
     cache_unpack_int_list(n, i + 1, list_set(buf, i, v))
   }
 
-fn cache_unpack_entries(n, i, buf) with Unpack =
+fn cache_unpack_entries(n, i, buf) with Unpack + !Pack =
   if i >= n { slice(buf, 0, n) }
   else {
     let name = perform unpack_str()
@@ -407,14 +407,14 @@ fn cache_unpack_entries(n, i, buf) with Unpack =
     cache_unpack_entries(n, i + 1, list_set(buf, i, (name, scheme, reason, kind)))
   }
 
-fn cache_unpack_scheme() with Unpack = {
+fn cache_unpack_scheme() with Unpack + !Pack = {
   let n_handles = perform unpack_i32()
   let handles = cache_unpack_int_list(n_handles, 0, make_list(n_handles))
   let ty = cache_unpack_ty()
   Forall(handles, ty)
 }
 
-fn cache_unpack_kind() with Unpack = {
+fn cache_unpack_kind() with Unpack + !Pack = {
   let tag = perform unpack_byte()
   if tag == 0 { FnScheme }
   else if tag == 1 {
@@ -434,7 +434,7 @@ fn cache_unpack_kind() with Unpack = {
   else { FnScheme }
 }
 
-fn cache_unpack_ty() with Unpack = {
+fn cache_unpack_ty() with Unpack + !Pack = {
   let tag = perform unpack_byte()
   if tag == 0 { TInt }
   else if tag == 1 { TFloat }
@@ -490,14 +490,14 @@ fn cache_unpack_ty() with Unpack = {
   else { TUnit }
 }
 
-fn cache_unpack_ty_list(n, i, buf) with Unpack =
+fn cache_unpack_ty_list(n, i, buf) with Unpack + !Pack =
   if i >= n { slice(buf, 0, n) }
   else {
     let ty = cache_unpack_ty()
     cache_unpack_ty_list(n, i + 1, list_set(buf, i, ty))
   }
 
-fn cache_unpack_fields(n, i, buf) with Unpack =
+fn cache_unpack_fields(n, i, buf) with Unpack + !Pack =
   if i >= n { slice(buf, 0, n) }
   else {
     let name = perform unpack_str()
@@ -505,7 +505,7 @@ fn cache_unpack_fields(n, i, buf) with Unpack =
     cache_unpack_fields(n, i + 1, list_set(buf, i, (name, ty)))
   }
 
-fn cache_unpack_params(n, i, buf) with Unpack =
+fn cache_unpack_params(n, i, buf) with Unpack + !Pack =
   if i >= n { slice(buf, 0, n) }
   else {
     let name = perform unpack_str()
@@ -514,21 +514,21 @@ fn cache_unpack_params(n, i, buf) with Unpack =
     cache_unpack_params(n, i + 1, list_set(buf, i, TParam(name, ty, own)))
   }
 
-fn cache_unpack_ownership() with Unpack = {
+fn cache_unpack_ownership() with Unpack + !Pack = {
   let tag = perform unpack_byte()
   if tag == 0 { Inferred }
   else if tag == 1 { Own }
   else { Ref }
 }
 
-fn cache_unpack_resume_disc() with Unpack = {
+fn cache_unpack_resume_disc() with Unpack + !Pack = {
   let tag = perform unpack_byte()
   if tag == 0 { OneShot }
   else if tag == 1 { MultiShot }
   else { Either }
 }
 
-fn cache_unpack_effrow() with Unpack = {
+fn cache_unpack_effrow() with Unpack + !Pack = {
   let tag = perform unpack_byte()
   if tag == 0 { EfPure }
   else if tag == 1 {
@@ -559,14 +559,14 @@ fn cache_unpack_effrow() with Unpack = {
   else { EfPure }
 }
 
-fn cache_unpack_effnames(n, i, buf) with Unpack =
+fn cache_unpack_effnames(n, i, buf) with Unpack + !Pack =
   if i >= n { slice(buf, 0, n) }
   else {
     let name = cache_unpack_effname()
     cache_unpack_effnames(n, i + 1, list_set(buf, i, name))
   }
 
-fn cache_unpack_effname() with Unpack = {
+fn cache_unpack_effname() with Unpack + !Pack = {
   let tag = perform unpack_byte()
   if tag == 0 {
     let s = perform unpack_str()
@@ -580,14 +580,14 @@ fn cache_unpack_effname() with Unpack = {
   }
 }
 
-fn cache_unpack_effargs(n, i, buf) with Unpack =
+fn cache_unpack_effargs(n, i, buf) with Unpack + !Pack =
   if i >= n { slice(buf, 0, n) }
   else {
     let arg = cache_unpack_effarg()
     cache_unpack_effargs(n, i + 1, list_set(buf, i, arg))
   }
 
-fn cache_unpack_effarg() with Unpack = {
+fn cache_unpack_effarg() with Unpack + !Pack = {
   let tag = perform unpack_byte()
   if tag == 0 {
     let n = perform unpack_i32()

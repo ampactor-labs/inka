@@ -508,9 +508,21 @@ Lands after items 10-22 so simplification + extension migration ride through alo
 24. **🧪 Determinism audit execution** (per item 8 walkthrough).
     - Deliverable: every emit path proven deterministic; compile-same-source-twice-in-one-process yields byte-identical WAT; fix log committed.
 
-25. **🧪 Feature-usage audit.**
-    - Grep every `.nx` for which verbs, effects, refinements, ownership markers appear post-simplification.
-    - Deliverable: `bootstrap/features-used.md` — the hand-WAT minimum scope inventory.
+25. **🧪📋 Feature-usage audit.**
+    - Walkthrough `docs/rebuild/simulations/FU-feature-usage.md` **LANDED 2026-04-21.**
+    - Descriptive finding: compiler uses 3/8 primitives (#1 graph, #2 handlers-OneShot-only, #8 HM+Reasons). Verbs: `|>` + `~>` used in bodies; `<|`, `><`, `<~` 0 body uses. Negation `!E`: 0. `Pure`: 0 declared. Ownership `own`/`ref`: 0. Refinement `where`: 0. String interpolation: 0. 27/630 fns annotated (~4% gradient density).
+    - Normative output: **FV.1–FV.9 action items** closing the exemplar gap. None block first-light; all runnable in parallel with hand-WAT Tier 1.
+    - Hand-WAT Tier 2 scope: ~1500-2000 lines; Tier 1 ~1000 lines; total ~2500-3000 lines. FV additions add ~35 lines to Tier 2 parser. Tractable.
+    - **FV peer sub-handles (each becomes a named commit; can land in parallel with Tier 1):**
+      - **FV.1** — `!E` negation sweep (declare `!IO` / `!Alloc` / `!Diagnostic` on lexer/parser/infer/lower/hot-path fns). Primitive #4b.
+      - **FV.2** — `Pure` declaration sweep (annotate ~200 leaf helpers). Primitive #4c + #7.
+      - **FV.3** — Refinement types (Handle / TagId / ValidOffset / NonEmptyList / ValidSpan in types.ka; use throughout). Primitive #6.
+      - **FV.4** — Ownership markers (`own` on consumed params, `ref` on borrowed, `!Mutate` on append-only frozen buffers). Primitive #5.
+      - **FV.5** — Five-verb exemplar (`<|` in infer_expr, `><` in driver, `<~` in unification fixpoint). Primitive #3.
+      - **FV.6** — String interpolation sweep (`str_concat` chains → `${}` form; cleaner + simpler Tier 2 expander).
+      - **FV.7** — `~>` chain sweep (rewrite any nested `handle(handle(...))` as pipe chain). Drift-4 audit.
+      - **FV.8** — Parameterized Diagnostic (already named as 11.B.M; this is its FV framing). Primitive #2b.
+      - **FV.9** — Docstring harmonization per NS-naming canonical template (absorbs item 11.E).
 
 ---
 

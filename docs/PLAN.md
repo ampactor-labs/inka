@@ -812,10 +812,43 @@ Claude prepares the tree. The hand-WAT is preserved forever, not
 deleted; it is the reference against which future Wasm targets
 are validated.
 
-### 6. Composition is the contribution, not invention.
+### 6. Inka stands on research; the kernel is contribution.
 
-22 techniques from 2024-2026 papers. None invented here. The artifact
-is that Inka composes them into one mechanism.
+2024-2026 research gives the foundation — Koka JFP 2022 for
+effect-handler compilation, Affect POPL 2025 for resume-discipline
+typing, Austral for linearity-as-effect, GRIN for whole-program
+optimization, et al. The research proves the pieces are tractable.
+
+The kernel adds what no existing medium holds in one substrate:
+
+- **Boolean effect algebra with `!E` negation** — `!E` proves
+  ABSENCE. Strictly more powerful than Rust + Haskell + Koka +
+  Austral combined (INSIGHTS.md).
+- **Five verbs as a complete topological basis** — `|>` `<|` `><`
+  `~>` `<~`. `<~` feedback is genuine novelty: no other language
+  makes back-edges visible, checkable, and optimizable.
+- **The graph IS the program** — every output (source, WAT, docs,
+  LSP, diagnostics) a handler projection on one SubstGraph + Env.
+- **Handler-chain-as-capability-stack** — `~>` ordering is a trust
+  hierarchy, compiler-audited. Outermost = least trusted.
+- **Eight-primitive kernel 1-to-1-to-1 with eight interrogations
+  and Mentl's eight tentacles.** One method, one mascot, one
+  kernel. (DESIGN.md §0.5.)
+- **Typed resume discipline as part of each op's type** — `@resume=
+  OneShot|MultiShot|Either`. MultiShot is Mentl's oracle substrate
+  (hundreds of alternate realities per second).
+- **Continuous annotation gradient** — one annotation, one capability
+  unlock. Mentl surfaces one load-bearing next step per turn.
+- **Mentl as oracle, not LLM** — Mentl PROVES suggestions through
+  multi-shot speculative search; the compiler IS the AI. This
+  disintermediates subscription coding tools at the architectural
+  level, not the UX level.
+- **The medium raises its users** — the shape Inka imprints on
+  thinking teaches. This is a pedagogical thesis, not just a
+  compiler claim.
+
+The research is foundation. The kernel is contribution. Pretending
+otherwise surrenders the thesis DESIGN.md spent 14.6k words proving.
 
 ### 7. Claude is a temporary polyfill.
 

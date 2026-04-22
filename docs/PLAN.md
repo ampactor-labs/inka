@@ -514,15 +514,19 @@ Lands after items 10-22 so simplification + extension migration ride through alo
     - Normative output: **FV.1–FV.9 action items** closing the exemplar gap. None block first-light; all runnable in parallel with hand-WAT Tier 1.
     - Hand-WAT Tier 2 scope: ~1500-2000 lines; Tier 1 ~1000 lines; total ~2500-3000 lines. FV additions add ~35 lines to Tier 2 parser. Tractable.
     - **FV peer sub-handles (each becomes a named commit; can land in parallel with Tier 1):**
-      - **FV.1** — `!E` negation sweep (declare `!IO` / `!Alloc` / `!Diagnostic` on lexer/parser/infer/lower/hot-path fns). Primitive #4b.
-      - **FV.2** — `Pure` declaration sweep (annotate ~200 leaf helpers). Primitive #4c + #7.
-      - **FV.3** — Refinement types (Handle / TagId / ValidOffset / NonEmptyList / ValidSpan in types.ka; use throughout). Primitive #6.
-      - **FV.4** — Ownership markers (`own` on consumed params, `ref` on borrowed, `!Mutate` on append-only frozen buffers). Primitive #5.
-      - **FV.5** — Five-verb exemplar (`<|` in infer_expr, `><` in driver, `<~` in unification fixpoint). Primitive #3.
-      - **FV.6** — String interpolation sweep (`str_concat` chains → `${}` form; cleaner + simpler Tier 2 expander).
-      - **FV.7** — `~>` chain sweep (rewrite any nested `handle(handle(...))` as pipe chain). Drift-4 audit.
-      - **FV.8** — Parameterized Diagnostic (already named as 11.B.M; this is its FV framing). Primitive #2b.
-      - **FV.9** — Docstring harmonization per NS-naming canonical template (absorbs item 11.E).
+      - **FV.1** — `!E` negation sweep (declare `!IO` / `!Alloc` / `!Diagnostic` on lexer/parser/infer/lower/hot-path fns). Primitive #4b. `[PENDING]`
+      - **FV.2** — `Pure` declaration sweep. `[LANDED 2026-04-22 · 005d66d]` — 55 Pure annotations across 11 files. Primitive #4c + #7.
+      - **FV.3** — Refinement types. `[LANDED 2026-04-22 · f7c6774]` — 5 aliases (Handle / TagId / ValidOffset / NonEmptyList / ValidSpan) + `fn span_valid` predicate added to types.ka; `Handle` applied to `graph_fresh_ty` return type. Primitive #6 moves from 0 uses to 5 decls + 1 applied site.
+        - **FV.3.1** `TagId` applied to ConstructorScheme tag_id fields + emit_match dispatch. `[PENDING]`
+        - **FV.3.2** `ValidOffset` applied to lexer byte positions + parser token positions. `[PENDING]`
+        - **FV.3.3** `NonEmptyList` applied wherever code asserts `len > 0` in prose. `[PENDING]`
+        - **FV.3.4** `ValidSpan` applied to every Span construction site. `[PENDING]`
+      - **FV.4** — Ownership markers (`own` on consumed params, `ref` on borrowed, `!Mutate` on append-only frozen buffers). Primitive #5. `[PENDING]`
+      - **FV.5** — Five-verb exemplar (`<|` in infer_expr, `><` in driver, `<~` in unification fixpoint). Primitive #3. `[PENDING — Opus-dispatch tier; judgment on sites]`
+      - **FV.6** — String interpolation sweep (`str_concat` chains → `${}` form). `[PENDING — BLOCKED: lexer.ka's scan_string does not yet parse `${}` — FV.6 has a prerequisite lexer-substrate extension]`
+      - **FV.7** — `~>` chain sweep (rewrite any nested `handle(handle(...))` as pipe chain). `[PENDING — likely no-op per pre-audit: all `handle` hits in the compiler are identifier-substrings, not nested handle expressions]`
+      - **FV.8** — Parameterized Diagnostic (already named as 11.B.M; this is its FV framing). Primitive #2b. `[PENDING — Opus-dispatch tier; cross-cutting + judgment on ModuleName ADT shape]`
+      - **FV.9** — Docstring harmonization per NS-naming canonical template (absorbs item 11.E). `[PENDING — Sonnet-dispatch; mechanical once template is locked]`
 
 ---
 

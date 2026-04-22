@@ -53,7 +53,10 @@ type Ty
 // Inference fills unmarked parameters; Own/Ref are explicit commitments.
 
 type TParam
-  = TParam(String, Ty, Ownership)
+  = TParam(String, Ty, Ownership, Ownership)
+                                   // name, ty, authored, resolved
+                                   // OW.2 — authored = what developer typed (Own/Ref/Inferred)
+                                   //        resolved = what infer_ownership determined
 
 type Ownership
   = Inferred     // compiler decides (default)
@@ -801,11 +804,17 @@ fn show_handle(h) with GraphRead =
   }
 
 fn show_tparam(tp) with GraphRead =
-  let TParam(name, ty, own) = tp
-  name
+  let TParam(name, ty, authored, resolved) = tp
+  let base = name
     |> str_concat(": ")
     |> str_concat(show_type(ty))
-    |> str_concat(show_ownership(own))
+  match authored {
+    Inferred => match resolved {
+      Inferred => base,
+      _        => base |> str_concat(show_ownership(resolved)) |> str_concat(" — inferred")
+    },
+    _ => base |> str_concat(show_ownership(authored)) |> str_concat(" — declared")
+  }
 
 fn show_ownership(own) with Pure =
   match own {

@@ -163,8 +163,8 @@ fn chase_list_deep(tys) =
 fn chase_params_deep(params) =
   if len(params) == 0 { [] }
   else {
-    let TParam(name, ty, own) = list_head(params)
-    [TParam(name, chase_type_deep(ty), own)]
+    let TParam(name, ty, auth, res) = list_head(params)
+    [TParam(name, chase_type_deep(ty), auth, res)]
       ++ chase_params_deep(list_tail(params))
   }
 
@@ -220,7 +220,7 @@ fn has_free_tvar_list(tys) =
 fn has_free_tvar_params(params) =
   if len(params) == 0 { false }
   else {
-    let TParam(_, ty, _) = list_head(params)
+    let TParam(_, ty, _, _) = list_head(params)
     has_free_tvar(ty) || has_free_tvar_params(list_tail(params))
   }
 

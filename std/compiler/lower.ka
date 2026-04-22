@@ -712,7 +712,7 @@ fn bind_names_as_locals(names) =
 fn lower_param_names(params) =
   if len(params) == 0 { [] }
   else {
-    let TParam(name, _, _) = list_head(params)
+    let TParam(name, _, _, _) = list_head(params)
     [name] ++ lower_param_names(list_tail(params))
   }
 
@@ -723,7 +723,7 @@ fn lower_param_names(params) =
 fn lower_param_handles(params) =
   if len(params) == 0 { [] }
   else {
-    let TParam(_, ty, _) = list_head(params)
+    let TParam(_, ty, _, _) = list_head(params)
     let h = match ty {
       TVar(handle)        => handle,
       TInt                => 0,
@@ -944,7 +944,7 @@ fn cfv_handler_arms(arms, bound) =
 fn cfv_param_names(params) =
   if len(params) == 0 { [] }
   else {
-    let TParam(name, _, _) = list_head(params)
+    let TParam(name, _, _, _) = list_head(params)
     [name] ++ cfv_param_names(list_tail(params))
   }
 

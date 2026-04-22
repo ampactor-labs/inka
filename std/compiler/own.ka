@@ -333,8 +333,8 @@ fn collect_ref_params(params) =
 fn collect_ref_params_loop(params, i, n, buf, buf_len) =
   if i >= n { buf_len }
   else {
-    let TParam(name, _, own) = list_index(params, i)
-    match own {
+    let TParam(name, _, auth, res) = list_index(params, i)
+    match res {
       Ref => {
         list_set(buf, buf_len, name)
         collect_ref_params_loop(params, i + 1, n, buf, buf_len + 1)
@@ -422,14 +422,14 @@ fn infer_ownership(params, body) =
 fn infer_ownership_loop(params, body, i, n, acc) =
   if i >= n { acc }
   else {
-    let TParam(name, ty, own) = list_index(params, i)
-    let inferred = match own {
+    let TParam(name, ty, authored, _old_resolved) = list_index(params, i)
+    let inferred = match authored {
       Inferred => classify_usage(name, body),
-      _        => own
+      _        => authored
     }
     infer_ownership_loop(
       params, body, i + 1, n,
-      list_set(acc, i, TParam(name, ty, inferred))
+      list_set(acc, i, TParam(name, ty, authored, inferred))
     )
   }
 

@@ -424,12 +424,12 @@ fn parse_one_param(tokens, pos) = {
 
   if at(tokens, p2, TColon) {
     let (ty, p3) = parse_type_ty(tokens, skip_ws(tokens, p2 + 1))
-    (TParam(name, ty, own_marker), p3)
+    (TParam(name, ty, own_marker, own_marker), p3)
   } else {
     // Type inferred via TVar allocated at parse
     let placeholder_span = span_at(tokens, p)
     let h = fresh_ph(placeholder_span)
-    (TParam(name, TVar(h), own_marker), p2)
+    (TParam(name, TVar(h), own_marker, own_marker), p2)
   }
 }
 
@@ -1146,7 +1146,7 @@ fn parse_lambda_params(tokens, pos, buf, count) = {
   else {
     let name = ident_at(tokens, p)
     let h = fresh_ph(span_at(tokens, p))
-    let param = TParam(name, TVar(h), Inferred)
+    let param = TParam(name, TVar(h), Inferred, Inferred)
     let (b1, c1) = push_node(buf, count, param)
     let p2 = skip_ws(tokens, p + 1)
     if at(tokens, p2, TComma) {

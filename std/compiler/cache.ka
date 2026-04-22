@@ -256,10 +256,11 @@ fn cache_pack_fields(fields, i, n) with Pack + !Unpack =
 fn cache_pack_params(params, i, n) with Pack + !Unpack =
   if i >= n { () }
   else {
-    let TParam(name, ty, own) = list_index(params, i)
+    let TParam(name, ty, authored, resolved) = list_index(params, i)
     perform pack_str(name)
     cache_pack_ty(ty)
-    cache_pack_ownership(own)
+    cache_pack_ownership(authored)
+    cache_pack_ownership(resolved)
     cache_pack_params(params, i + 1, n)
   }
 
@@ -510,8 +511,9 @@ fn cache_unpack_params(n, i, buf) with Unpack + !Pack =
   else {
     let name = perform unpack_str()
     let ty = cache_unpack_ty()
-    let own = cache_unpack_ownership()
-    cache_unpack_params(n, i + 1, list_set(buf, i, TParam(name, ty, own)))
+    let authored = cache_unpack_ownership()
+    let resolved = cache_unpack_ownership()
+    cache_unpack_params(n, i + 1, list_set(buf, i, TParam(name, ty, authored, resolved)))
   }
 
 fn cache_unpack_ownership() with Unpack + !Pack = {

@@ -814,7 +814,7 @@ fn unify_args_to_params(args, params, span) =
       span, "MachineApplicable")
   } else {
     let N(_, _, ah) = list_head(args)
-    let TParam(_, pty, _) = list_head(params)
+    let TParam(_, pty, _, _) = list_head(params)
     let expected_h = perform mint(Inferred("arg param"))
     perform graph_bind(expected_h, pty, Located(span, Inferred("expected param type")))
     unify(ah, expected_h, span, Inferred("arg to param"))
@@ -833,7 +833,7 @@ fn infer_pipe(kind, left, right, handle, span) =
       let ret_h = perform mint(InferredPipeResult("|>", Inferred("return")))
       let row_h = perform graph_fresh_row(InferredPipeResult("|>", Inferred("effects")))
       let expected = TFun(
-        [TParam("_", TVar(lh), Inferred)],
+        [TParam("_", TVar(lh), Inferred, Inferred)],
         TVar(ret_h),
         mk_ef_open([], row_h)
       )
@@ -1376,8 +1376,8 @@ fn check_nominal_record_loop(declared, provided, type_name, span, i, j, ni, nj) 
 fn unify_param_lists(a, b, span, reason) =
   if len(a) == 0 || len(b) == 0 { () }
   else {
-    let TParam(_, ta, _) = list_head(a)
-    let TParam(_, tb, _) = list_head(b)
+    let TParam(_, ta, _, _) = list_head(a)
+    let TParam(_, tb, _, _) = list_head(b)
     unify_types(ta, tb, span, reason)
     unify_param_lists(list_tail(a), list_tail(b), span, reason)
   }
@@ -1411,7 +1411,7 @@ fn pair_fn_params(pa, pb, span, reason) =
 //   TVar(_)                         → unify TVar with TTuple of param types
 //   otherwise                       → arity mismatch
 fn try_tuple_decompose(single_param, many_params, span, reason) =
-  let TParam(_, pty, _) = single_param
+  let TParam(_, pty, _, _) = single_param
   let lm = len(many_params)
   match pty {
     TTuple(elems) =>
@@ -1433,7 +1433,7 @@ fn unify_tuple_elems_with_params(elems, params, span, reason, i, n) =
   if i >= n { () }
   else {
     let e = list_index(elems, i)
-    let TParam(_, pt, _) = list_index(params, i)
+    let TParam(_, pt, _, _) = list_index(params, i)
     unify_types(e, pt, span, reason)
     unify_tuple_elems_with_params(elems, params, span, reason, i + 1, n)
   }
@@ -1448,7 +1448,7 @@ fn param_types_flat(params) =
 fn param_types_loop(params, i, n, acc) =
   if i >= n { acc }
   else {
-    let TParam(_, t, _) = list_index(params, i)
+    let TParam(_, t, _, _) = list_index(params, i)
     param_types_loop(params, i + 1, n, list_set(acc, i, t))
   }
 
@@ -1617,7 +1617,7 @@ fn infer_pat_tuple(pats, parent_handle, span) =
 fn bind_pcon_subpats(params, sub_pats, span, reason, ctor_name) =
   if len(params) == 0 || len(sub_pats) == 0 { () }
   else {
-    let TParam(_, pty, _) = list_head(params)
+    let TParam(_, pty, _, _) = list_head(params)
     let sub_h = perform mint(VarLookup(ctor_name, reason))
     perform graph_bind(sub_h, pty,
       Located(span, VarLookup(ctor_name, reason)))
@@ -1803,8 +1803,8 @@ fn map_chase_ty(tys) =
 fn chase_params(params) =
   if len(params) == 0 { [] }
   else {
-    let TParam(name, ty, own) = list_head(params)
-    [TParam(name, chase_deep(ty), own)] ++ chase_params(list_tail(params))
+    let TParam(name, ty, auth, res) = list_head(params)
+    [TParam(name, chase_deep(ty), auth, res)] ++ chase_params(list_tail(params))
   }
 
 fn chase_fields(fields) =
@@ -1842,7 +1842,7 @@ fn free_in_list(tys) =
 fn free_in_params(params) =
   if len(params) == 0 { [] }
   else {
-    let TParam(_, ty, _) = list_head(params)
+    let TParam(_, ty, _, _) = list_head(params)
     free_in_ty(ty) ++ free_in_params(list_tail(params))
   }
 
@@ -1909,8 +1909,8 @@ fn subst_list(tys, mapping) =
 fn subst_params(params, mapping) =
   if len(params) == 0 { [] }
   else {
-    let TParam(name, ty, own) = list_head(params)
-    [TParam(name, subst_ty(ty, mapping), own)] ++ subst_params(list_tail(params), mapping)
+    let TParam(name, ty, auth, res) = list_head(params)
+    [TParam(name, subst_ty(ty, mapping), auth, res)] ++ subst_params(list_tail(params), mapping)
   }
 
 fn subst_fields(fields, mapping) =
@@ -1935,7 +1935,7 @@ fn mint_params(params, owner_name) =
 fn mint_params_at(params, owner_name, idx) =
   if len(params) == 0 { [] }
   else {
-    let TParam(name, _, _) = list_head(params)
+    let TParam(name, _, _, _) = list_head(params)
     let h = perform mint(FnParam(owner_name, idx, Inferred("param of '" |> str_concat(owner_name) |> str_concat("'"))))
     perform env_extend(name, Forall([], TVar(h)), Declared(name), FnScheme)
     [h] ++ mint_params_at(list_tail(params), owner_name, idx + 1)
@@ -1944,16 +1944,16 @@ fn mint_params_at(params, owner_name, idx) =
 fn build_param_types(params, handles) =
   if len(params) == 0 { [] }
   else {
-    let TParam(name, _, own) = list_head(params)
+    let TParam(name, _, auth, res) = list_head(params)
     let h = list_head(handles)
-    [TParam(name, TVar(h), own)] ++ build_param_types(list_tail(params), list_tail(handles))
+    [TParam(name, TVar(h), auth, res)] ++ build_param_types(list_tail(params), list_tail(handles))
   }
 
 fn build_inferred_params(handles) =
   if len(handles) == 0 { [] }
   else {
     let h = list_head(handles)
-    [TParam("_", TVar(h), Inferred)] ++ build_inferred_params(list_tail(handles))
+    [TParam("_", TVar(h), Inferred, Inferred)] ++ build_inferred_params(list_tail(handles))
   }
 
 fn register_type_constructors(type_name, type_args, variants) =
@@ -2005,7 +2005,7 @@ fn build_ctor_params(field_types, idx) =
   if len(field_types) == 0 { [] }
   else {
     let ty = list_head(field_types)
-    [TParam("_" |> str_concat(int_to_str(idx)), ty, Inferred)]
+    [TParam("_" |> str_concat(int_to_str(idx)), ty, Inferred, Inferred)]
       ++ build_ctor_params(list_tail(field_types), idx + 1)
   }
 

@@ -308,8 +308,8 @@ fn ownership_candidates(params) =
 fn ownership_candidates_loop(params, i, n, buf, buf_len) =
   if i >= n { buf_len }
   else {
-    let TParam(name, _, own) = list_index(params, i)
-    match own {
+    let TParam(name, _, _, res) = list_index(params, i)
+    match res {
       Inferred => {
         list_set(buf, buf_len, AOwn(name, None))
         list_set(buf, buf_len + 1, ARef(name, None))
@@ -503,7 +503,8 @@ fn extract_row(ty) with Pure = match ty {
   TRecord(_)        => EfPure,
   TRecordOpen(_, _) => EfPure,
   TRefined(_, _)    => EfPure,
-  TCont(_, _)       => EfPure
+  TCont(_, _)       => EfPure,
+  TAlias(_, inner)  => extract_row(inner)
 }
 
 // ═══ Unlock mapping — the teaching payoff ══════════════════════════

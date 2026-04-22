@@ -361,7 +361,7 @@ fn occurs_in_params(handle, params) =
 fn occurs_in_params_loop(handle, params, i, n) =
   if i >= n { false }
   else {
-    let TParam(_, ty, _) = list_index(params, i)
+    let TParam(_, ty, _, _) = list_index(params, i)
     if occurs_in(handle, ty) { true }
     else { occurs_in_params_loop(handle, params, i + 1, n) }
   }

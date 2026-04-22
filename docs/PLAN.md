@@ -520,6 +520,13 @@ Lands after items 10-22 so simplification + extension migration ride through alo
           FV.1.δ (named capability bundles — `capability RealTime = !Alloc & !IO & !Network`),
           and FV.1.β (polymorphic applied exemplar). Ordering: α → γ → δ → β,
           with MV.2.capability-surfacing as the voice-layer consumer of α+δ.
+        - **Parent context:** EN is one of eight peer walkthroughs in the
+          **IR intent round-trip cluster**
+          (`docs/rebuild/simulations/IR-intent-round-trip.md`). The IR
+          discipline names the principle that every primitive's authored
+          form round-trips to every handler projection surface. The eight
+          peers (EN · RN · OW · VK · GR · RX · HI · DS) each close one
+          primitive's intent gap. EN closes primitive #4's.
         - **Substrate finding.** Per `std/compiler/effects.ka:134-156`
           (`normalize_inter`), `Closed(A) & !Closed(B)` reduces to
           `Closed(A - B)` — which equals `Closed(A)` when `B ⊄ A`.
@@ -975,6 +982,31 @@ Every surface that exposes the substrate to users (editors,
 deployment targets, concurrency, RPC, ML, audit-to-linker) is a
 handler. Phase II installs them. Three of the items are genuine
 substrate gaps, not surfaces — named explicitly below.
+
+**Intent substrate gate (IR cluster, 2026-04-22).** Phase II handler
+projections (MV.2, LSP hover, audit, capability graphs) depend on
+intent substrate — the authored vocabulary that round-trips through
+the compiler to reach downstream surfaces. The IR intent round-trip
+cluster (`docs/rebuild/simulations/IR-intent-round-trip.md`) names
+eight peer walkthroughs that close the intent gaps per kernel
+primitive: EN (effects), RN (refinements), OW (ownership), VK
+(verbs), GR (gradient), RX (reasons), HI (handlers), DS
+(docstrings). Phase II surfaces are HIGH-FIDELITY only when the
+corresponding intent substrate has landed:
+
+- MV.2 Mentl-voice → depends on EN.α+δ (capabilities), RN (alias
+  names), OW (ownership stance), GR (gradient query), DS
+  (docstrings).
+- LSP hover → depends on RN, OW, VK (verb identity), HI (handler
+  identity), DS.
+- `inka audit` → depends on EN.δ (capability stance), RX (reason
+  quality), VK (verb topology).
+- Error diagnostics → depends on RN (alias-named errors), OW
+  (ownership-named errors), RX (intent-grade reasons).
+
+The IR cluster is upstream of Phase II; surfaces that ship before
+their intent substrate lands will speak mechanism instead of the
+developer's vocabulary.
 
 Priority order (what unblocks what):
 
@@ -1843,7 +1875,15 @@ Pre-restructure: `docs/specs/` = `docs/rebuild/`, `.nx` = `.ka`,
 | **docs/specs/00–11** | The 12 executable specs (`00-graph.md` onward). Each spec names its kernel primitive(s) and Mentl tentacle(s). |
 | **docs/specs/simulations/H*.md** | Per-handle cascade walkthroughs. Reasoning record. |
 | **docs/specs/simulations/MV-mentl-voice.md** | Mentl-voice substrate walkthrough (in-flight). |
+| **docs/specs/simulations/IR-intent-round-trip.md** | Intent round-trip meta-walkthrough — names the principle; indexes the eight peer walkthroughs (EN · RN · OW · VK · GR · RX · HI · DS); gates Phase II. Seeded 2026-04-22. |
 | **docs/specs/simulations/EN-effect-negation.md** | Effect-negation substrate walkthrough (primitive #4 intent round-trip — FV.1 reframed as α+γ+δ+β peers; seeded 2026-04-22). |
+| **docs/specs/simulations/RN-refinement-alias.md** | Refinement-alias intent preservation (primitive #6 round-trip; seeded 2026-04-22). |
+| **docs/specs/simulations/OW-ownership-intent.md** | Ownership-intent preservation (primitive #5 round-trip; seeded 2026-04-22). |
+| **docs/specs/simulations/VK-verb-kind.md** | Verb-kind intent preservation (primitive #3 round-trip; seeded 2026-04-22). |
+| **docs/specs/simulations/GR-gradient-delta.md** | Gradient-delta intent preservation (primitive #7 round-trip; seeded 2026-04-22). |
+| **docs/specs/simulations/RX-reason-intent.md** | Reason-intent audit (primitive #8 round-trip; seeded 2026-04-22). |
+| **docs/specs/simulations/HI-handler-identity.md** | Handler-identity intent preservation (primitive #2 round-trip; seeded 2026-04-22). |
+| **docs/specs/simulations/DS-docstring-edge.md** | Docstring-as-intent-edge (cross-cutting round-trip; seeded 2026-04-22). |
 | **docs/specs/simulations/NS-naming.md** | Naming-audit walkthrough (TBD, item 4 of Pending Work). |
 | **docs/specs/simulations/NS-structure.md** | Structural-reshape walkthrough (TBD, item 5). |
 | **docs/specs/simulations/EH-entry-handlers.md** | Entry-handler substrate walkthrough (TBD, item 6). |

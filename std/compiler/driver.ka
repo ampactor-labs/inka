@@ -149,19 +149,21 @@ fn driver_check_module(module_name)
           kai.exported_entries
         } else {
           // Cache miss (source hash differs) — re-infer.
-          driver_reinfer_module(module_name, source, current_hash)
+          driver_infer_module(module_name, source, current_hash)
         }
       },
-      None => driver_reinfer_module(module_name, source, current_hash)
+      None => driver_infer_module(module_name, source, current_hash)
     }
   }
 }
 
-fn driver_reinfer_module(module_name, source, source_hash)
+fn driver_infer_module(module_name, source, source_hash)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   let tokens = lex(source)
   let ast = parse_program(tokens)
-  let imports = driver_extract_imports_loop(ast, 0, len(ast), [])
+  let n_ast = len(ast)
+  let (import_buf, import_count) = driver_extract_imports_loop(ast, 0, n_ast, make_list(n_ast), 0)
+  let imports = slice(import_buf, 0, import_count)
   let imports_hashes = driver_collect_dep_hashes(imports)
   // Snapshot env BEFORE inference so we can diff after to find
   // this module's exported entries.
@@ -266,7 +268,7 @@ fn module_find_last_slash(path, i, n, last) =
   else { module_find_last_slash(path, i + 1, n, last) }
 
 // Install only qualified `module.export` aliases. Used on the
-// reinfer path where `infer_program` has already env_extended each
+// fresh-infer path where `infer_program` has already env_extended each
 // export under its flat short name; only the dotted aliases remain
 // to be registered.
 

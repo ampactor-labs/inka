@@ -238,7 +238,7 @@ fn chase_node(nodes, handle, depth) =
         match row {
           EfOpen(names, next) =>
             chase_node(nodes, next, depth + 1)
-              |> merge_chased_row(names),
+              |> merge_chased_row(names, next),
           _ => GNode(kind, reason)
         },
       _ => GNode(kind, reason)
@@ -246,11 +246,18 @@ fn chase_node(nodes, handle, depth) =
   }
 
 // When chasing an EfOpen row that points to another row handle,
-// fold the known names forward through the chain.
-fn merge_chased_row(chased, names) =
+// fold the known names forward through the chain. free_handle is the
+// handle we chased INTO — needed to reconstruct EfOpen when the
+// chain terminates at NRowFree (the free variable).
+fn merge_chased_row(chased, names, free_handle) =
   let GNode(ck, cr) = chased
   match ck {
-    NRowFree(_) => chased,
+    NRowFree(_) =>
+      // Preserve the accumulated names with the free variable.
+      // Without this, EfOpen([Memory, IO], v) where v → NRowFree
+      // would lose [Memory, IO].
+      if len(names) == 0 { chased }
+      else { GNode(NRowBound(mk_ef_open(names, free_handle)), cr) },
     NRowBound(inner) => GNode(NRowBound(merge_row(names, inner)), cr),
     _ => chased
   }

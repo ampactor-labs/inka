@@ -293,10 +293,13 @@ fn row_subsumes(body_row, gate_row) =
           },
         _ => false
       },
-    _ =>
-      gate_row
-        |> normalize_row
-        |> row_subsumes(body_row)
+    EfSub(_, _) =>
+      // Intermediate form — normalize to resolved shape, then re-check.
+      // Both sides must normalize: body_row may also carry intermediates.
+      row_subsumes(normalize_row(body_row), normalize_row(gate_row)),
+    EfInter(_, _) =>
+      // Intermediate form — same: normalize both, then re-check.
+      row_subsumes(normalize_row(body_row), normalize_row(gate_row))
   }
 
 // ═══ Unification — writes through GraphWrite ══════════════════

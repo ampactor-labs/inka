@@ -396,8 +396,12 @@ fn cache_parse_scheme(s) = {
       let handles_str = str_slice(inner, 0, semi)
       let ty_str = str_slice(inner, semi + 1, byte_len(inner))
       let handles = if byte_len(handles_str) == 0 { [] }
-                    else { cache_parse_int_list_loop(split(handles_str, ","), 0,
-                              len(split(handles_str, ",")), []) }
+                    else {
+                      let parts = split(handles_str, ",")
+                      let np = len(parts)
+                      let (hbuf, hcount) = cache_parse_int_list_loop(parts, 0, np, make_list(np), 0)
+                      slice(hbuf, 0, hcount)
+                    }
       Forall(handles, cache_parse_ty(ty_str))
     }
   }

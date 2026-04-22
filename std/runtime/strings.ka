@@ -96,6 +96,24 @@ fn str_slice(s, start, end) with Memory + Alloc =
 // Digit-wise: no sprintf, no lookup table beyond '0'+digit.
 fn int_to_str(n) with Memory + Alloc =
   if n == 0 { str_of_single_byte(48) }             // "0"
+  else if n == 0 - 2147483648 {
+    // INT_MIN can't be negated in i32 (0 - INT_MIN = INT_MIN).
+    // Hardcode the 11-byte string "-2147483648".
+    let ptr = perform alloc(15)
+    perform store_i32(ptr, 11)
+    perform store_i8(ptr + 4, 45)     // '-'
+    perform store_i8(ptr + 5, 50)     // '2'
+    perform store_i8(ptr + 6, 49)     // '1'
+    perform store_i8(ptr + 7, 52)     // '4'
+    perform store_i8(ptr + 8, 55)     // '7'
+    perform store_i8(ptr + 9, 52)     // '4'
+    perform store_i8(ptr + 10, 56)    // '8'
+    perform store_i8(ptr + 11, 51)    // '3'
+    perform store_i8(ptr + 12, 54)    // '6'
+    perform store_i8(ptr + 13, 52)    // '4'
+    perform store_i8(ptr + 14, 56)    // '8'
+    ptr
+  }
   else if n < 0 {
     let neg = str_of_single_byte(45)               // "-"
     let abs = 0 - n
@@ -222,11 +240,38 @@ fn float_format_fixed(digits, exp) with Memory + Alloc =
   // exp=2 and digits=[1,2,3] → "123.0"
   // exp=0 and digits=[1,2,3] → "1.23"
   // exp=-1 and digits=[1,2,3] → "0.123"
+  // exp=-2 and digits=[1,2,3] → "0.0123"
   let int_digits = exp + 1
-  let int_part = float_digits_to_str(digits, 0, int_digits)
-  let frac_part = float_digits_to_str(digits, int_digits, 17)
-  let dot = str_of_single_byte(46)
-  str_concat(int_part, str_concat(dot, frac_part))
+  if int_digits <= 0 {
+    // All digits are fractional; need leading zeros after "0."
+    let zero = str_of_single_byte(48)           // "0"
+    let dot = str_of_single_byte(46)            // "."
+    let leading = float_zero_pad(0 - int_digits)  // |int_digits| zeros
+    let frac = float_digits_to_str(digits, 0, 17)
+    str_concat(zero, str_concat(dot, str_concat(leading, frac)))
+  } else {
+    let int_part = float_digits_to_str(digits, 0, int_digits)
+    let frac_part = float_digits_to_str(digits, int_digits, 17)
+    let dot = str_of_single_byte(46)
+    str_concat(int_part, str_concat(dot, frac_part))
+  }
+
+// Build a string of n '0' characters for fractional padding.
+fn float_zero_pad(n) with Memory + Alloc =
+  if n <= 0 { str_of_single_byte(48) |> str_slice(0, 0) }
+  else {
+    let dest = perform alloc(4 + n)
+    perform store_i32(dest, n)
+    float_fill_zeros(dest + 4, 0, n)
+    dest
+  }
+
+fn float_fill_zeros(ptr, i, n) with Memory =
+  if i >= n { () }
+  else {
+    perform store_i8(ptr + i, 48)
+    float_fill_zeros(ptr, i + 1, n)
+  }
 
 fn float_format_scientific(digits, exp) with Memory + Alloc =
   let mantissa = float_format_fixed(digits, 0)

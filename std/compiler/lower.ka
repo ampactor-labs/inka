@@ -390,9 +390,6 @@ fn lower_expr_body(e, handle, span) = match e {
     LFieldLoad(handle, lo_rec, offset)
   },
 
-  MakeTupleExpr(elems) =>
-    LMakeTuple(handle, lower_expr_list(elems)),
-
   PipeExpr(kind, left, right) =>
     lower_pipe(kind, left, right, handle),
 

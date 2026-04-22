@@ -768,8 +768,17 @@ fn infer_perform(op_name, args, handle, span) =
   }
 
 fn unify_args_to_params(args, params, span) =
-  if len(args) == 0 || len(params) == 0 { () }
-  else {
+  if len(args) == 0 && len(params) == 0 { () }
+  else if len(args) == 0 || len(params) == 0 {
+    // Arity mismatch: one list exhausted before the other.
+    perform report(
+      "infer", "E_TypeMismatch", "error",
+      "arity mismatch in function call: expected "
+        |> str_concat(int_to_str(len(params)))
+        |> str_concat(" argument(s) but got ")
+        |> str_concat(int_to_str(len(args))),
+      span, "MachineApplicable")
+  } else {
     let N(_, _, ah) = list_head(args)
     let TParam(_, pty, _) = list_head(params)
     let expected_h = perform mint(Inferred("arg param"))
@@ -1080,8 +1089,17 @@ fn same_ground(a, b) with Pure = match a {
 }
 
 fn unify_type_lists(as_list, bs_list, span, reason) =
-  if len(as_list) == 0 || len(bs_list) == 0 { () }
-  else {
+  if len(as_list) == 0 && len(bs_list) == 0 { () }
+  else if len(as_list) == 0 || len(bs_list) == 0 {
+    // Arity mismatch: tuple/list lengths differ.
+    perform report(
+      "infer", "E_TypeMismatch", "error",
+      "type list arity mismatch: "
+        |> str_concat(int_to_str(len(as_list)))
+        |> str_concat(" vs ")
+        |> str_concat(int_to_str(len(bs_list))),
+      span, "MachineApplicable")
+  } else {
     unify_types(list_head(as_list), list_head(bs_list), span, reason)
     unify_type_lists(list_tail(as_list), list_tail(bs_list), span, reason)
   }

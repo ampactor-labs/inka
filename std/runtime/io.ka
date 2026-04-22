@@ -77,17 +77,25 @@ fn eprint_string(s) with Memory + WASI =
 // Reads in 4 KB chunks using a temporary 64 KB buffer (one alloc).
 // Returns a flat Inka string [len:i32][bytes...].
 fn read_stdin() with Memory + Alloc + WASI =
-  let buf = perform alloc(65536)
-  let total = read_stdin_loop(buf, 0)
+  let initial_cap = 65536
+  let buf = perform alloc(initial_cap)
+  let (final_buf, total) = read_stdin_loop(buf, 0, initial_cap)
   let str = perform alloc(4 + total)
   perform store_i32(str, total)
-  perform mem_copy(str + 4, buf, total)
+  perform mem_copy(str + 4, final_buf, total)
   str
 
-fn read_stdin_loop(buf, offset) with Memory + Alloc + WASI =
-  let nread = read_chunk(buf + offset, 4096)
-  if nread == 0 { offset }
-  else { read_stdin_loop(buf, offset + nread) }
+fn read_stdin_loop(buf, offset, capacity) with Memory + Alloc + WASI =
+  // Grow if less than one chunk of headroom remains.
+  let (cur_buf, cur_cap) = if offset + 4096 > capacity {
+    let new_cap = capacity * 2
+    let new_buf = perform alloc(new_cap)
+    perform mem_copy(new_buf, buf, offset)
+    (new_buf, new_cap)
+  } else { (buf, capacity) }
+  let nread = read_chunk(cur_buf + offset, 4096)
+  if nread == 0 { (cur_buf, offset) }
+  else { read_stdin_loop(cur_buf, offset + nread, cur_cap) }
 
 // read_chunk: fill iov at scratch and call fd_read(0 = stdin).
 // Returns the number of bytes actually read (0 = EOF).
@@ -142,22 +150,30 @@ fn fs_read_file_impl(path_str) with Memory + Alloc + WASI =
     empty
   } else {
     let fd = perform load_i32(576)
-    let buf = perform alloc(65536)
-    let total = fs_read_loop(fd, buf, 0)
+    let initial_cap = 65536
+    let buf = perform alloc(initial_cap)
+    let (final_buf, total) = fs_read_loop(fd, buf, 0, initial_cap)
     perform fd_close(fd)
     let str = perform alloc(4 + total)
     perform store_i32(str, total)
-    perform mem_copy(str + 4, buf, total)
+    perform mem_copy(str + 4, final_buf, total)
     str
   }
 
-fn fs_read_loop(fd, buf, offset) with Memory + WASI =
-  perform store_i32(80, buf + offset)
+fn fs_read_loop(fd, buf, offset, capacity) with Memory + Alloc + WASI =
+  // Grow if less than one chunk of headroom remains.
+  let (cur_buf, cur_cap) = if offset + 4096 > capacity {
+    let new_cap = capacity * 2
+    let new_buf = perform alloc(new_cap)
+    perform mem_copy(new_buf, buf, offset)
+    (new_buf, new_cap)
+  } else { (buf, capacity) }
+  perform store_i32(80, cur_buf + offset)
   perform store_i32(84, 4096)
   perform fd_read(fd, 80, 1, 88)
   let nread = perform load_i32(88)
-  if nread == 0 { offset }
-  else { fs_read_loop(fd, buf, offset + nread) }
+  if nread == 0 { (cur_buf, offset) }
+  else { fs_read_loop(fd, cur_buf, offset + nread, cur_cap) }
 
 // fs_write_file — path_open (write+create+trunc) + fd_write + fd_close.
 // Overwrites any existing file at path.

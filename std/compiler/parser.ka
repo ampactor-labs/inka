@@ -330,10 +330,31 @@ fn parse_stmt(tokens, pos) = match kind_at(tokens, pos) {
   TEffect   => parse_effect_decl(tokens, pos + 1),
   THandler  => parse_handler_decl(tokens, pos + 1),
   TImport   => parse_import(tokens, pos + 1),
+  // DS.2 — docstring attachment: collect consecutive /// lines,
+  // parse the following declaration, wrap in Documented(doc, stmt).
+  TDocComment(first_line) => {
+    let doc_span = span_at(tokens, pos)
+    let (full_doc, p) = collect_docstring(tokens, pos + 1, first_line)
+    let p2 = skip_sep(tokens, p)
+    let (inner_stmt, p3) = parse_stmt(tokens, p2)
+    let N(body, inner_span, h) = inner_stmt
+    (N(NStmt(Documented(full_doc, inner_stmt)), doc_span, h), p3)
+  },
   _         => {
     let start_span = span_at(tokens, pos)
     let (expr, next) = parse_expr(tokens, pos)
     (nstmt(ExprStmt(expr), start_span), next)
+  }
+}
+
+// DS.2 — concatenate consecutive /// lines into one docstring.
+fn collect_docstring(tokens, pos, acc) = {
+  let p = skip_sep(tokens, pos)
+  match kind_at(tokens, p) {
+    TDocComment(next_line) =>
+      collect_docstring(tokens, p + 1,
+        acc |> str_concat("\n") |> str_concat(next_line)),
+    _ => (acc, p)
   }
 }
 

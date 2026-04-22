@@ -189,6 +189,28 @@ fn infer_stmt(node) =
       perform verify(span, pred, Refinement(pred, PTrue))
     },
 
+    // DS.3 — unwrap docstring, infer the inner declaration, then
+    // re-extend the declared name's env entry with the docstring Reason.
+    // The docstring becomes a graph-queryable edge via DocstringReason.
+    NStmt(Documented(doc, inner_node)) => {
+      infer_stmt(inner_node)
+      // Thread the docstring into the env as an additional reason
+      // for the declared name (if the inner is a FnStmt/TypeDefStmt/etc.)
+      let N(inner_body, inner_span, _) = inner_node
+      match inner_body {
+        NStmt(FnStmt(name, _, _, _, _)) =>
+          match perform env_lookup(name) {
+            Some(entry) => {
+              let (scheme, reason, kind) = entry
+              let enriched = Located(inner_span, DocstringReason(doc, span))
+              perform env_extend(name, scheme, enriched, kind)
+            },
+            None => ()
+          },
+        _ => ()
+      }
+    },
+
     _ => ()
   }
 

@@ -40,7 +40,7 @@ import compiler/own
 import compiler/verify
 import compiler/mentl
 import compiler/query
-import compiler/clock
+import dsp/clock
 import compiler/cache
 import compiler/driver
 

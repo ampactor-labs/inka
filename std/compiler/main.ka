@@ -29,7 +29,7 @@
 
 import compiler/pipeline
 import compiler/backends/wasm
-import compiler/clock
+import dsp/clock
 
 // ═══ Entry — dispatch on mode ══════════════════════════════════════
 

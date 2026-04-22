@@ -514,7 +514,12 @@ Lands after items 10-22 so simplification + extension migration ride through alo
     - Normative output: **FV.1–FV.9 action items** closing the exemplar gap. None block first-light; all runnable in parallel with hand-WAT Tier 1.
     - Hand-WAT Tier 2 scope: ~1500-2000 lines; Tier 1 ~1000 lines; total ~2500-3000 lines. FV additions add ~35 lines to Tier 2 parser. Tractable.
     - **FV peer sub-handles (each becomes a named commit; can land in parallel with Tier 1):**
-      - **FV.1** — `!E` negation sweep. `[BLOCKED — substrate finding 2026-04-22: see FV.1.α / FV.1.β below]`
+      - **FV.1** — `!E` negation sweep. `[BLOCKED — substrate finding 2026-04-22; walkthrough at docs/rebuild/simulations/EN-effect-negation.md names the four peers]`
+        - **Walkthrough.** `docs/rebuild/simulations/EN-effect-negation.md` —
+          covers FV.1.α (intent preservation), FV.1.γ (lone-`!E` semantics),
+          FV.1.δ (named capability bundles — `capability RealTime = !Alloc & !IO & !Network`),
+          and FV.1.β (polymorphic applied exemplar). Ordering: α → γ → δ → β,
+          with MV.2.capability-surfacing as the voice-layer consumer of α+δ.
         - **Substrate finding.** Per `std/compiler/effects.ka:134-156`
           (`normalize_inter`), `Closed(A) & !Closed(B)` reduces to
           `Closed(A - B)` — which equals `Closed(A)` when `B ⊄ A`.
@@ -1838,6 +1843,7 @@ Pre-restructure: `docs/specs/` = `docs/rebuild/`, `.nx` = `.ka`,
 | **docs/specs/00–11** | The 12 executable specs (`00-graph.md` onward). Each spec names its kernel primitive(s) and Mentl tentacle(s). |
 | **docs/specs/simulations/H*.md** | Per-handle cascade walkthroughs. Reasoning record. |
 | **docs/specs/simulations/MV-mentl-voice.md** | Mentl-voice substrate walkthrough (in-flight). |
+| **docs/specs/simulations/EN-effect-negation.md** | Effect-negation substrate walkthrough (primitive #4 intent round-trip — FV.1 reframed as α+γ+δ+β peers; seeded 2026-04-22). |
 | **docs/specs/simulations/NS-naming.md** | Naming-audit walkthrough (TBD, item 4 of Pending Work). |
 | **docs/specs/simulations/NS-structure.md** | Structural-reshape walkthrough (TBD, item 5). |
 | **docs/specs/simulations/EH-entry-handlers.md** | Entry-handler substrate walkthrough (TBD, item 6). |
@@ -2001,7 +2007,7 @@ commits inline). Recommended order by **single-thread safety**
 | 4 | **FV.9** docstring harmonization | Mechanical | BLOCKED — lock NS-naming template first |
 | 5 | FV.4 ownership markers (`own` / `ref` / `!Mutate`) | Judgment | Per-fn analysis |
 | 6 | FV.5 five-verb exemplar (`<\|` / `><` / `<~` one site each) | Judgment | Per-site judgment |
-| 7 | FV.1 `!E` negation sweep | — | **BLOCKED — substrate finding 2026-04-22** (closed-row negation collapses in normalize_inter; FV.1 reframed as FV.1.α substrate decision + FV.1.β polymorphic exemplar; see FV.1 entry in Pending Work item 25) |
+| 7 | FV.1 `!E` negation sweep | — | **BLOCKED — substrate cluster** (walkthrough at `docs/rebuild/simulations/EN-effect-negation.md`; reframed as α intent-preservation + γ lone-`!E`-semantics + δ named-capability-bundles + β polymorphic-applied-exemplar; ordering α→γ→δ→β) |
 | 8 | FV.8 parameterized Diagnostic / 11.B.M | Judgment + cross-cutting | **Recommended to DEFER** |
 | — | FV.6 string interpolation | BLOCKED | Lexer `scan_string` does not parse `${}` |
 | — | FV.7 `~>` chain sweep | Likely no-op | Pre-audit found no nested `handle(handle(...))` |

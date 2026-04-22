@@ -27,17 +27,67 @@ import runtime/strings
 //                   branch's captured delta; branch_exit pairwise-checks
 //                   and merges. Stack shape naturally supports nested
 //                   branches (e.g. (a >< b) >< c).
+
+fn get_authored_ownership(name) = {
+  match perform env_lookup(name) {
+    Some(entry) => {
+      let (scheme, _, _) = entry
+      match scheme {
+        Forall(_, TVar(h)) => {
+          let node = perform graph_chase(h)
+          let GNode(_, reason) = node
+          match reason {
+            FnParam(owner_name, idx, _) => {
+              match perform env_lookup(owner_name) {
+                Some(owner_entry) => {
+                  let (owner_scheme, _, _) = owner_entry
+                  match owner_scheme {
+                    Forall(_, TVar(fn_h)) => {
+                      let fn_node = perform graph_chase(fn_h)
+                      let GNode(kind, _) = fn_node
+                      match kind {
+                        NBound(TFun(params, _, _)) => {
+                          if idx < len(params) {
+                            let TParam(_, _, auth, _) = list_index(params, idx)
+                            Some(auth)
+                          } else { None }
+                        },
+                        _ => None
+                      }
+                    },
+                    _ => None
+                  }
+                },
+                _ => None
+              }
+            },
+            _ => None
+          }
+        },
+        _ => None
+      }
+    },
+    None => None
+  }
+}
+
 handler affine_ledger with used = [], used_sites = [], branches = [] {
 
   consume(name, span) => {
     if set_contains(used, name) {
       let first = find_first_span(used_sites, name)
+      let auth_hint = match get_authored_ownership(name) {
+        Some(Own) => " — you explicitly declared it 'own'"
+        Some(Inferred) => " — it was inferred as 'own'"
+        _ => ""
+      }
       perform report("ownership", "E_OwnershipViolation", "OwnershipViolation",
         "'"
           |> str_concat(name)
           |> str_concat("' consumed twice (first at ")
           |> str_concat(show_span(first))
-          |> str_concat(")"),
+          |> str_concat(")")
+          |> str_concat(auth_hint),
         span, "MachineApplicable")
       resume(())
     } else {

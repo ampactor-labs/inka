@@ -98,6 +98,41 @@ supersedes earlier framings. Append-only; do not rewrite history
   (used for FNV-1a XOR). Not in SYNTAX.md. Dissolved when cache.ka's text
   layer was replaced by Pack/Unpack. XOR reimplemented via byte-level
   arithmetic decomposition (bit extraction through `%` and `/`).
+- **2026-04-22** — **`i32_xor` intrinsic** (`0dea2cb`). Replaced 35-line
+  byte_xor arithmetic decomposition (64 division/modulus ops per i32 XOR)
+  with `perform i32_xor(a, b)` — a Memory-level intrinsic the emitter
+  lowers to WASM's single `i32.xor` instruction. Same pattern as
+  `store_i32`, `load_i8`, `alloc`, `mem_copy`.
+- **2026-04-22** — **`Memory` + `Alloc` effects declared** (`34f829e`).
+  NEW: `std/runtime/memory.ka`. Memory (6 ops: `store_i32`, `load_i32`,
+  `store_i8`, `load_i8`, `mem_copy`, `i32_xor`) and Alloc (1 op: `alloc`)
+  were used 131+ times but declared NOWHERE. Now declared as proper effects
+  with signatures. `Pure` documented as the empty effect row (keyword,
+  not an effect). **Alloc separated from Memory** because `with Memory +
+  !Alloc` is load-bearing for real-time audio paths.
+- **2026-04-22** — **Effect declaration rule formalized:** if you can
+  `perform` it, you can read its declaration. Every effect operation
+  MUST have a source-level `effect` declaration. No invisible intrinsics.
+  Co-location rule: **declarations live where their handlers live.**
+  Current effect registry:
+  - `std/runtime/memory.ka` — Memory, Alloc (substrate)
+  - `std/runtime/binary.ka` — Pack, Unpack (structured byte I/O)
+  - `std/compiler/types.ka` — Filesystem + 13 compiler effects (Filesystem to move to runtime in item 17')
+  - `std/compiler/clock.ka` — Clock, Tick, Sample, Deadline, IterativeContext, HostClock (to move to dsp/ in item 17')
+  - `std/prelude.ka` — Iterate
+  - Various compiler modules — co-located with handlers
+- **2026-04-22** — **Effect negation exercised** (`cc08f7f`). FV.1 moves
+  from theoretical to exercised: 36 cache functions annotated with
+  `with Pack + !Unpack` (18 serializers) and `with Unpack + !Pack`
+  (18 deserializers). First real `!E` negation on non-trivial functions.
+  Parser (parse_one_effect) and algebra (EfNeg/normalize_inter) already
+  supported this; annotations were simply never applied.
+- **2026-04-22** — **Parameterized effects confirmed implemented.**
+  Parser: `parse_one_effect` handles `Effect(args)` syntax (parser.ka:430-447).
+  Algebra: `EParameterized(name, args)` in effect name comparison
+  (effects.ka:456). Types: `EffParamName` ADT. H3.1 walkthrough landed.
+  Zero exercised sites in the compiler — 11.B.M (`Diagnostic(module)`)
+  is the first real application. Not "future" — substrate ready, awaiting use.
 
 ### 2026-04-21 — pre-walkthrough decisions (hand-wave prevention)
 
@@ -554,7 +589,10 @@ Lands after items 10-22 so simplification + extension migration ride through alo
     - Normative output: **FV.1–FV.9 action items** closing the exemplar gap. None block first-light; all runnable in parallel with hand-WAT Tier 1.
     - Hand-WAT Tier 2 scope: ~1500-2000 lines; Tier 1 ~1000 lines; total ~2500-3000 lines. FV additions add ~35 lines to Tier 2 parser. Tractable.
     - **FV peer sub-handles (each becomes a named commit; can land in parallel with Tier 1):**
-      - **FV.1** — `!E` negation sweep. `[BLOCKED — substrate finding 2026-04-22; walkthrough at docs/rebuild/simulations/EN-effect-negation.md names the four peers]`
+      - **FV.1** — `!E` negation sweep. `[IN-FLIGHT — first exercised exemplar landed 2026-04-22 · cc08f7f]`
+        - **Exercised:** 36 cache functions annotated: `with Pack + !Unpack` (18)
+          and `with Unpack + !Pack` (18). First real `!E` on non-trivial code.
+        - Remaining FV.1 sub-handles (α, β, γ, δ) still pending walkthrough.
         - **Walkthrough.** `docs/rebuild/simulations/EN-effect-negation.md` —
           covers FV.1.α (intent preservation), FV.1.γ (lone-`!E` semantics),
           FV.1.δ (named capability bundles — `capability RealTime = !Alloc & !IO & !Network`),

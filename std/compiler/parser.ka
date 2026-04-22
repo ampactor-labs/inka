@@ -33,12 +33,12 @@ fn nhole(id, span: ValidSpan) = N(NHole(id), span, fresh_ph(span))
 // on TokenKind variants — no string equality at parse time.
 
 // kind_at returns the TokenKind variant at position pos (or TEof if past end).
-fn kind_at(tokens, pos) =
+fn kind_at(ref tokens, pos) =
   if pos >= len(tokens) { TEof }
   else { token_kind(tokens[pos]) }
 
 // span_at returns the span of the token at position pos.
-fn span_at(tokens, pos) =
+fn span_at(ref tokens, pos) =
   if pos >= len(tokens) { span_zero() }
   else { token_span(tokens[pos]) }
 
@@ -119,15 +119,15 @@ fn kind_eq(a, b) with Pure = match a {
 }
 
 // at: predicate form of kind_eq for a position-and-expected pair.
-fn at(tokens, pos, kind) = kind_eq(kind_at(tokens, pos), kind)
+fn at(ref tokens, pos, kind) = kind_eq(kind_at(tokens, pos), kind)
 
-fn skip_ws(tokens, pos) =
+fn skip_ws(ref tokens, pos) =
   match kind_at(tokens, pos) {
     TNewline => skip_ws(tokens, pos + 1),
     _        => pos
   }
 
-fn skip_sep(tokens, pos) =
+fn skip_sep(ref tokens, pos) =
   match kind_at(tokens, pos) {
     TSemicolon => skip_sep(tokens, pos + 1),
     TNewline   => skip_sep(tokens, pos + 1),
@@ -164,7 +164,7 @@ fn show_token_kind(k) with Pure = match k {
 }
 
 // expect: consume the given kind or report a parse error.
-fn expect(tokens, pos, kind) =
+fn expect(ref tokens, pos, kind) =
   if at(tokens, pos, kind) { pos + 1 }
   else {
     perform report("parser", "P_ExpectedToken", "ParseError",
@@ -182,25 +182,25 @@ fn expect(tokens, pos, kind) =
 // these helpers are for the few sites (e.g., parse_fn extracting
 // the function name after dispatching past TFn) where the parent
 // has already verified the variant and just needs the payload.
-fn ident_at(tokens, pos) =
+fn ident_at(ref tokens, pos) =
   match kind_at(tokens, pos) {
     TIdent(s) => s,
     _         => ""
   }
 
-fn int_at(tokens, pos) =
+fn int_at(ref tokens, pos) =
   match kind_at(tokens, pos) {
     TInt(n) => n,
     _       => 0
   }
 
-fn float_at(tokens, pos) =
+fn float_at(ref tokens, pos) =
   match kind_at(tokens, pos) {
     TFloat(f) => f,
     _         => 0.0
   }
 
-fn string_at(tokens, pos) =
+fn string_at(ref tokens, pos) =
   match kind_at(tokens, pos) {
     TString(s) => s,
     _          => ""
@@ -257,10 +257,10 @@ fn effective_prec(k, saw_newline) with Pure = match k {
   _        => op_prec(k)
 }
 
-fn skip_ws_tracked(tokens, pos) =
+fn skip_ws_tracked(ref tokens, pos) =
   skip_ws_tracked_loop(tokens, pos, false)
 
-fn skip_ws_tracked_loop(tokens, pos, saw) =
+fn skip_ws_tracked_loop(ref tokens, pos, saw) =
   match kind_at(tokens, pos) {
     TNewline => skip_ws_tracked_loop(tokens, pos + 1, true),
     _        => (saw, pos)
@@ -302,19 +302,19 @@ fn op_to_binop(k) with Pure = match k {
 // allocates an initial buffer, threads (buf, count) through tail-
 // recursion, and slices at the end. O(N) total allocation per loop
 // regardless of element count.
-fn push_node(buf, count, node) = {
+fn push_node(own buf, count, node) = {
   let extended = list_extend_to(buf, count + 1)
   let written  = list_set(extended, count, node)
   (written, count + 1)
 }
 
-fn parse_program(tokens) = {
+fn parse_program(ref tokens) = {
   let buf = make_list(16)
   let (final_buf, final_count, _) = parse_stmt_list(tokens, 0, buf, 0)
   slice(final_buf, 0, final_count)
 }
 
-fn parse_stmt_list(tokens, pos, buf, count) = {
+fn parse_stmt_list(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TEof) { (buf, count, p) }
   else {
@@ -326,7 +326,7 @@ fn parse_stmt_list(tokens, pos, buf, count) = {
 
 // ═══ Statements ════════════════════════════════════════════════════
 
-fn parse_stmt(tokens, pos) = match kind_at(tokens, pos) {
+fn parse_stmt(ref tokens, pos) = match kind_at(tokens, pos) {
   TFn       => parse_fn(tokens, pos + 1),
   TLet      => parse_let(tokens, pos + 1),
   TType     => parse_type_decl(tokens, pos + 1),
@@ -352,7 +352,7 @@ fn parse_stmt(tokens, pos) = match kind_at(tokens, pos) {
 }
 
 // DS.2 — concatenate consecutive /// lines into one docstring.
-fn collect_docstring(tokens, pos, acc) = {
+fn collect_docstring(ref tokens, pos, own acc) = {
   let p = skip_sep(tokens, pos)
   match kind_at(tokens, p) {
     TDocComment(next_line) =>
@@ -364,7 +364,7 @@ fn collect_docstring(tokens, pos, acc) = {
 
 // ─── fn name(params) [-> retty] [with effects] = body ──────────────
 
-fn parse_fn(tokens, pos) = {
+fn parse_fn(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)
   let p = expect(tokens, pos + 1, TLParen)
@@ -396,7 +396,7 @@ fn parse_fn(tokens, pos) = {
   (stmt_node, p9)
 }
 
-fn parse_fn_params(tokens, pos) = {
+fn parse_fn_params(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { ([], p + 1) }
   else {
@@ -408,7 +408,7 @@ fn parse_fn_params(tokens, pos) = {
   }
 }
 
-fn parse_params_tail(tokens, pos, buf, count) = {
+fn parse_params_tail(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TComma) {
     let (next, p2) = parse_one_param(tokens, skip_ws(tokens, p + 1))
@@ -419,7 +419,7 @@ fn parse_params_tail(tokens, pos, buf, count) = {
   }
 }
 
-fn parse_one_param(tokens, pos) = {
+fn parse_one_param(ref tokens, pos) = {
   let (own_marker, p) = match kind_at(tokens, pos) {
     TOwn => (Own, skip_ws(tokens, pos + 1)),
     TRef => (Ref, skip_ws(tokens, pos + 1)),
@@ -443,7 +443,7 @@ fn parse_one_param(tokens, pos) = {
 // Effect lists use `+` per SYNTAX.md (`with E1 + E2 + !E3`). Each
 // entry parses through parse_one_effect; the row is built from this
 // list at infer time (build_declared_row).
-fn parse_effect_list(tokens, pos) = {
+fn parse_effect_list(ref tokens, pos) = {
   let (name, negated, p) = parse_one_effect(tokens, pos)
   let entry = (name, negated)
   let p2 = skip_ws(tokens, p)
@@ -459,7 +459,7 @@ fn parse_effect_list(tokens, pos) = {
 // parameterized `Sample(44100)`, or negated parameterized
 // `!Sample(44100)`. Args are scalar literals (int/float/string);
 // identifier / expression args land in a v2 walkthrough.
-fn parse_one_effect(tokens, pos) = {
+fn parse_one_effect(ref tokens, pos) = {
   let (negated, p) =
     if at(tokens, pos, TBang) { (true, pos + 1) }
     else { (false, pos) }
@@ -474,7 +474,7 @@ fn parse_one_effect(tokens, pos) = {
   }
 }
 
-fn parse_eff_args(tokens, pos) = {
+fn parse_eff_args(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { ([], p + 1) }
   else {
@@ -487,7 +487,7 @@ fn parse_eff_args(tokens, pos) = {
   }
 }
 
-fn parse_eff_args_tail(tokens, pos, buf, count) = {
+fn parse_eff_args_tail(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TComma) {
     let (next, p2) = parse_one_eff_arg(tokens, skip_ws(tokens, p + 1))
@@ -498,7 +498,7 @@ fn parse_eff_args_tail(tokens, pos, buf, count) = {
   }
 }
 
-fn parse_one_eff_arg(tokens, pos) = match kind_at(tokens, pos) {
+fn parse_one_eff_arg(ref tokens, pos) = match kind_at(tokens, pos) {
   TInt(n)    => (EAInt(n), pos + 1),
   TFloat(f)  => (EAFloat(f), pos + 1),
   TString(s) => (EAString(s), pos + 1),
@@ -507,7 +507,7 @@ fn parse_one_eff_arg(tokens, pos) = match kind_at(tokens, pos) {
 
 // ─── let ───────────────────────────────────────────────────────────
 
-fn parse_let(tokens, pos) = {
+fn parse_let(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let (pat, p) = parse_pat(tokens, pos)
   let p2 = skip_ws(tokens, p)
@@ -522,7 +522,7 @@ fn parse_let(tokens, pos) = {
 
 // ─── type X = V1 | V2(fields) | ... / type X = T where P ───────────
 
-fn parse_type_decl(tokens, pos) = {
+fn parse_type_decl(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)
   let p = skip_ws(tokens, pos + 1)
@@ -550,7 +550,7 @@ fn parse_type_decl(tokens, pos) = {
   }
 }
 
-fn parse_variants(tokens, pos) = {
+fn parse_variants(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   let vname = ident_at(tokens, p)
   let p2 = p + 1
@@ -570,7 +570,7 @@ fn parse_variants(tokens, pos) = {
   }
 }
 
-fn parse_variant_fields(tokens, pos) = {
+fn parse_variant_fields(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { ([], p + 1) }
   else {
@@ -587,7 +587,7 @@ fn parse_variant_fields(tokens, pos) = {
 
 // ─── effect X { op(args) -> ret @resume=Disc } ────────────────────
 
-fn parse_effect_decl(tokens, pos) = {
+fn parse_effect_decl(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)
   let p = expect(tokens, skip_ws(tokens, pos + 1), TLBrace)
@@ -595,7 +595,7 @@ fn parse_effect_decl(tokens, pos) = {
   (nstmt(EffectDeclStmt(name, ops), start), p2)
 }
 
-fn parse_effect_ops(tokens, pos) = {
+fn parse_effect_ops(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) { ([], p + 1) }
   else {
@@ -615,7 +615,7 @@ fn parse_effect_ops(tokens, pos) = {
   }
 }
 
-fn parse_op_params(tokens, pos) = {
+fn parse_op_params(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { ([], p + 1) }
   else {
@@ -632,7 +632,7 @@ fn parse_op_params(tokens, pos) = {
 
 // ─── handler X { arms } ───────────────────────────────────────────
 
-fn parse_handler_decl(tokens, pos) = {
+fn parse_handler_decl(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)
   let p = expect(tokens, skip_ws(tokens, pos + 1), TLBrace)
@@ -640,7 +640,7 @@ fn parse_handler_decl(tokens, pos) = {
   (nstmt(HandlerDeclStmt(name, "", arms), start), p2)
 }
 
-fn parse_handler_arms(tokens, pos) = {
+fn parse_handler_arms(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) { ([], p + 1) }
   else {
@@ -661,7 +661,7 @@ fn parse_handler_arms(tokens, pos) = {
 
 // ─── capability X = effs ──────────────────────────────────────────
 
-fn parse_capability_decl(tokens, pos) = {
+fn parse_capability_decl(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)
   let p = expect(tokens, skip_ws(tokens, pos + 1), TEq)
@@ -669,7 +669,7 @@ fn parse_capability_decl(tokens, pos) = {
   (nstmt(CapabilityDeclStmt(name, effs), start), p2)
 }
 
-fn parse_arg_names(tokens, pos) = {
+fn parse_arg_names(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { ([], p + 1) }
   else {
@@ -686,13 +686,13 @@ fn parse_arg_names(tokens, pos) = {
 
 // ─── import ───────────────────────────────────────────────────────
 
-fn parse_import(tokens, pos) = {
+fn parse_import(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let (path, p) = parse_import_path(tokens, pos, "")
   (nstmt(ImportStmt(path), start), p)
 }
 
-fn parse_import_path(tokens, pos, acc) = {
+fn parse_import_path(ref tokens, pos, own acc) = {
   let name = ident_at(tokens, pos)
   let joined = acc |> str_concat(name)
   let p = pos + 1
@@ -706,15 +706,15 @@ fn parse_import_path(tokens, pos, acc) = {
 
 // ═══ Expressions — precedence-climbing ═════════════════════════════
 
-fn parse_expr(tokens, pos) =
+fn parse_expr(ref tokens, pos) =
   parse_binop(tokens, pos, 1)
 
-fn parse_binop(tokens, pos, min_prec) = {
+fn parse_binop(ref tokens, pos, min_prec) = {
   let (left, p) = parse_postfix(tokens, pos)
   binop_loop(tokens, left, p, min_prec)
 }
 
-fn binop_loop(tokens, left, pos, min_prec) = {
+fn binop_loop(ref tokens, left, pos, min_prec) = {
   let (saw_newline, p) = skip_ws_tracked(tokens, pos)
   let k = kind_at(tokens, p)
   let prec = effective_prec(k, saw_newline)
@@ -747,12 +747,12 @@ fn binop_loop(tokens, left, pos, min_prec) = {
 }
 
 // Postfix: call, field access, indexing
-fn parse_postfix(tokens, pos) = {
+fn parse_postfix(ref tokens, pos) = {
   let (e, p) = parse_primary(tokens, pos)
   postfix_loop(tokens, e, p)
 }
 
-fn postfix_loop(tokens, e, pos) = match kind_at(tokens, pos) {
+fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
   TLParen => {
     let (args, p2) = parse_call_args(tokens, skip_ws(tokens, pos + 1))
     let N(_, start_span, _) = e
@@ -803,14 +803,14 @@ fn postfix_loop(tokens, e, pos) = match kind_at(tokens, pos) {
 // parse_record_fields but invoked from a different surface
 // (postfix-suffix vs primary). Sorts fields by name at parse time
 // to maintain the substrate-wide invariant.
-fn parse_named_record_body(tokens, pos) = {
+fn parse_named_record_body(ref tokens, pos) = {
   let buf = make_list(4)
   let (final_buf, final_count, p) = parse_record_fields(tokens, pos, buf, 0)
   let sorted = sort_record_fields(slice(final_buf, 0, final_count))
   (sorted, p)
 }
 
-fn parse_call_args(tokens, pos) = {
+fn parse_call_args(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { ([], p + 1) }
   else {
@@ -827,7 +827,7 @@ fn parse_call_args(tokens, pos) = {
 
 // ═══ Primary expressions ═══════════════════════════════════════════
 
-fn parse_primary(tokens, pos) = {
+fn parse_primary(ref tokens, pos) = {
   let span = span_at(tokens, pos)
   match kind_at(tokens, pos) {
     TInt(n)      => (nexpr(LitInt(n), span), pos + 1),
@@ -867,7 +867,7 @@ fn parse_primary(tokens, pos) = {
   }
 }
 
-fn parse_paren_or_tuple(tokens, pos, start_span) = {
+fn parse_paren_or_tuple(ref tokens, pos, start_span) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) {
     (nexpr(LitUnit, start_span), p + 1)
@@ -886,7 +886,7 @@ fn parse_paren_or_tuple(tokens, pos, start_span) = {
   }
 }
 
-fn parse_tuple_tail(tokens, pos, buf, count) = {
+fn parse_tuple_tail(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { (buf, count, p + 1) }
   else {
@@ -901,13 +901,13 @@ fn parse_tuple_tail(tokens, pos, buf, count) = {
   }
 }
 
-fn parse_list_literal(tokens, pos, start_span) = {
+fn parse_list_literal(ref tokens, pos, start_span) = {
   let buf = make_list(4)
   let (final_buf, final_count, p) = parse_list_elems(tokens, pos, buf, 0)
   (nexpr(MakeListExpr(slice(final_buf, 0, final_count)), start_span), p)
 }
 
-fn parse_list_elems(tokens, pos, buf, count) = {
+fn parse_list_elems(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBracket) { (buf, count, p + 1) }
   else {
@@ -927,7 +927,7 @@ fn parse_list_elems(tokens, pos, buf, count) = {
 // field) or Comma|RBrace (puned field) signals a record literal.
 // Anything else is a block. Lookahead is bounded to two tokens past
 // the brace — no backtracking, no ambiguity that escapes the parser.
-fn parse_brace_expr(tokens, pos, start_span) = {
+fn parse_brace_expr(ref tokens, pos, start_span) = {
   let p = skip_ws(tokens, pos)
   match kind_at(tokens, p) {
     TIdent(_) => {
@@ -946,14 +946,14 @@ fn parse_brace_expr(tokens, pos, start_span) = {
 // Record literal: `{name: expr, age: expr, ...}` or with field
 // puning `{name, age}` ≡ `{name: name, age: age}`. Fields sort by
 // name at parse time so downstream sees one canonical layout.
-fn parse_record_literal(tokens, pos, start_span) = {
+fn parse_record_literal(ref tokens, pos, start_span) = {
   let buf = make_list(4)
   let (final_buf, final_count, p) = parse_record_fields(tokens, pos, buf, 0)
   let sorted = sort_record_fields(slice(final_buf, 0, final_count))
   (nexpr(MakeRecordExpr(sorted), start_span), p)
 }
 
-fn parse_record_fields(tokens, pos, buf, count) = {
+fn parse_record_fields(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) { (buf, count, p + 1) }
   else {
@@ -983,7 +983,7 @@ fn parse_record_fields(tokens, pos, buf, count) = {
 fn sort_record_fields(fields) =
   sort_record_fields_loop(fields, 0, len(fields), [])
 
-fn sort_record_fields_loop(fields, i, n, acc) =
+fn sort_record_fields_loop(fields, i, n, own acc) =
   if i >= n { acc }
   else {
     sort_record_fields_loop(fields, i + 1, n,
@@ -1023,13 +1023,13 @@ fn record_field_copy_suffix(src, dst, src_idx, dst_idx, n) =
     )
   }
 
-fn parse_block_expr(tokens, pos, start_span) = {
+fn parse_block_expr(ref tokens, pos, start_span) = {
   let buf = make_list(8)
   let (final_buf, final_count, final_e, p) = parse_block_body(tokens, pos, buf, 0)
   (nexpr(BlockExpr(slice(final_buf, 0, final_count), final_e), start_span), p)
 }
 
-fn parse_block_body(tokens, pos, buf, count) = {
+fn parse_block_body(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) {
     let start = span_at(tokens, p)
@@ -1058,7 +1058,7 @@ fn parse_block_body(tokens, pos, buf, count) = {
   }
 }
 
-fn parse_if(tokens, pos, span: ValidSpan) = {
+fn parse_if(ref tokens, pos, span: ValidSpan) = {
   let (cond, p) = parse_expr(tokens, pos)
   let p2 = skip_ws(tokens, p)
   let (then_e, p3) =
@@ -1084,7 +1084,7 @@ fn parse_if(tokens, pos, span: ValidSpan) = {
   }
 }
 
-fn parse_match(tokens, pos, span: ValidSpan) = {
+fn parse_match(ref tokens, pos, span: ValidSpan) = {
   let (scrutinee, p) = parse_expr(tokens, pos)
   let p2 = expect(tokens, skip_ws(tokens, p), TLBrace)
   let buf = make_list(4)
@@ -1093,7 +1093,7 @@ fn parse_match(tokens, pos, span: ValidSpan) = {
   (nexpr(MatchExpr(scrutinee, slice(final_buf, 0, final_count)), span), p3)
 }
 
-fn parse_match_arms(tokens, pos, buf, count) = {
+fn parse_match_arms(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) { (buf, count, p + 1) }
   else {
@@ -1107,7 +1107,7 @@ fn parse_match_arms(tokens, pos, buf, count) = {
   }
 }
 
-fn parse_handle(tokens, pos, span: ValidSpan) = {
+fn parse_handle(ref tokens, pos, span: ValidSpan) = {
   let p = skip_ws(tokens, pos)
   let (body, p2) =
     if at(tokens, p, TLBrace) {
@@ -1130,34 +1130,34 @@ fn parse_handle(tokens, pos, span: ValidSpan) = {
   (nexpr(HandleExpr(body, arms), span), p4)
 }
 
-fn skip_past_ident(tokens, pos) =
+fn skip_past_ident(ref tokens, pos) =
   match kind_at(tokens, pos) {
     TIdent(_) => pos + 1,
     _         => pos
   }
 
-fn parse_perform(tokens, pos, span: ValidSpan) = {
+fn parse_perform(ref tokens, pos, span: ValidSpan) = {
   let op_name = ident_at(tokens, pos)
   let p = expect(tokens, skip_ws(tokens, pos + 1), TLParen)
   let (args, p2) = parse_call_args(tokens, skip_ws(tokens, p))
   (nexpr(PerformExpr(op_name, args), span), p2)
 }
 
-fn parse_resume(tokens, pos, span: ValidSpan) = {
+fn parse_resume(ref tokens, pos, span: ValidSpan) = {
   let p = expect(tokens, skip_ws(tokens, pos), TLParen)
   let (val, p2) = parse_expr(tokens, skip_ws(tokens, p))
   let p3 = expect(tokens, skip_ws(tokens, p2), TRParen)
   (nexpr(ResumeExpr(val, []), span), p3)
 }
 
-fn parse_lambda(tokens, pos, span: ValidSpan) = {
+fn parse_lambda(ref tokens, pos, span: ValidSpan) = {
   let buf = make_list(4)
   let (final_buf, final_count, p) = parse_lambda_params(tokens, pos, buf, 0)
   let (body, p2) = parse_expr(tokens, skip_ws(tokens, p))
   (nexpr(LambdaExpr(slice(final_buf, 0, final_count), body), span), p2)
 }
 
-fn parse_lambda_params(tokens, pos, buf, count) = {
+fn parse_lambda_params(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TPipe) { (buf, count, p + 1) }
   else {
@@ -1174,7 +1174,7 @@ fn parse_lambda_params(tokens, pos, buf, count) = {
   }
 }
 
-fn parse_body(tokens, pos) = {
+fn parse_body(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TLBrace) {
     parse_block_expr(tokens, p + 1, span_at(tokens, p))
@@ -1185,7 +1185,7 @@ fn parse_body(tokens, pos) = {
 
 // ═══ Patterns ══════════════════════════════════════════════════════
 
-fn parse_pat(tokens, pos) = {
+fn parse_pat(ref tokens, pos) = {
   match kind_at(tokens, pos) {
     TIdent(v) => {
       if str_eq(v, "_") { (PWild, pos + 1) }
@@ -1228,7 +1228,7 @@ fn parse_pat(tokens, pos) = {
 
 // Parse `{name, age}` or `{name: sub_pat, age: sub_pat}`. Field
 // puning is the default — `{name}` ≡ `{name: PVar("name")}`.
-fn parse_pat_record_fields(tokens, pos) = {
+fn parse_pat_record_fields(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) { ([], p + 1) }
   else {
@@ -1254,7 +1254,7 @@ fn parse_pat_record_fields(tokens, pos) = {
 fn sort_pat_fields(fields) =
   sort_record_fields_loop(fields, 0, len(fields), [])
 
-fn parse_pat_args(tokens, pos) = {
+fn parse_pat_args(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { ([], p + 1) }
   else {
@@ -1269,7 +1269,7 @@ fn parse_pat_args(tokens, pos) = {
   }
 }
 
-fn parse_pat_list_args(tokens, pos) = {
+fn parse_pat_list_args(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBracket) { ([], p + 1) }
   else {
@@ -1290,7 +1290,7 @@ fn first_char_code(s) =
 
 // ═══ Type expressions ══════════════════════════════════════════════
 
-fn parse_type_ty(tokens, pos) = match kind_at(tokens, pos) {
+fn parse_type_ty(ref tokens, pos) = match kind_at(tokens, pos) {
   TIdent(v) => {
     if str_eq(v, "Int")        { (TInt, pos + 1) }
     else if str_eq(v, "Float")  { (TFloat, pos + 1) }
@@ -1326,7 +1326,7 @@ fn parse_type_ty(tokens, pos) = match kind_at(tokens, pos) {
   _ => (TUnit, pos + 1)
 }
 
-fn parse_type_ty_tail(tokens, pos, buf, count) = {
+fn parse_type_ty_tail(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { (buf, count, p + 1) }
   else {
@@ -1341,7 +1341,7 @@ fn parse_type_ty_tail(tokens, pos, buf, count) = {
   }
 }
 
-fn parse_record_type_fields(tokens, pos) = {
+fn parse_record_type_fields(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) { ([], p + 1) }
   else {
@@ -1361,14 +1361,14 @@ fn parse_record_type_fields(tokens, pos) = {
 fn sort_record_type_fields(fields) =
   sort_record_type_fields_loop(fields, 0, len(fields), [])
 
-fn sort_record_type_fields_loop(fields, i, n, acc) =
+fn sort_record_type_fields_loop(fields, i, n, own acc) =
   if i >= n { acc }
   else {
     sort_record_type_fields_loop(fields, i + 1, n,
       record_field_insert(acc, list_index(fields, i)))
   }
 
-fn parse_type_expr(tokens, pos) = {
+fn parse_type_expr(ref tokens, pos) = {
   let (ty, p) = parse_type_ty(tokens, pos)
   let span = span_at(tokens, pos)
   // Return as a dummy node holding the annotation type.
@@ -1377,14 +1377,14 @@ fn parse_type_expr(tokens, pos) = {
 
 // ═══ Predicates — minimal (expressions after `where`) ══════════════
 
-fn parse_predicate(tokens, pos) = {
+fn parse_predicate(ref tokens, pos) = {
   // Phase 1: collect tokens up to semicolon or newline as PTrue.
   // Full predicate parsing (comparisons, logical ops) in Arc F.1.
   let p = skip_to_stmt_end(tokens, pos)
   (PTrue, p)
 }
 
-fn skip_to_stmt_end(tokens, pos) = match kind_at(tokens, pos) {
+fn skip_to_stmt_end(ref tokens, pos) = match kind_at(tokens, pos) {
   TSemicolon => pos,
   TNewline   => pos,
   TEof       => pos,

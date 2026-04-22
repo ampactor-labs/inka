@@ -29,22 +29,22 @@ import runtime/strings
 // graph stores rows in the form they were constructed; constructors
 // enforce the invariant the algebra depends on.
 
-fn mk_ef_closed(names) = EfClosed(name_set_canonicalize(names))
+fn mk_ef_closed(ref names) with !Mutate = EfClosed(name_set_canonicalize(names))
 
-fn mk_ef_open(names, v) = EfOpen(name_set_canonicalize(names), v)
+fn mk_ef_open(ref names, v) with !Mutate = EfOpen(name_set_canonicalize(names), v)
 
 // Record-field smart constructor: sort (field_name, ty) pairs by
 // field name, dedup by name (last write wins). Empty list → empty
 // (caller chooses TRecord vs TRecordOpen). Maintains the analog of
 // the EffRow invariant for record types.
-fn mk_record_open(fields, v) =
+fn mk_record_open(ref fields, v) with !Mutate =
   TRecordOpen(field_canonicalize(fields), v)
 
-fn field_canonicalize(fields) =
+fn field_canonicalize(ref fields) with !Mutate =
   let n = len(fields)
   field_canonicalize_loop(fields, 0, n, [])
 
-fn field_canonicalize_loop(fields, i, n, acc) =
+fn field_canonicalize_loop(ref fields, i, n, own acc) with !Mutate =
   if i >= n { acc }
   else {
     let (name, ty) = list_index(fields, i)
@@ -53,7 +53,7 @@ fn field_canonicalize_loop(fields, i, n, acc) =
 
 // field_insert: insert (name, ty) into sorted-by-name list; if name
 // already present, replace (last write wins).
-fn field_insert(sorted, name, ty) =
+fn field_insert(ref sorted, ref name, ref ty) with !Mutate =
   let n = len(sorted)
   let pos = field_find_pos(sorted, name, 0, n)
   if pos < n {
@@ -77,7 +77,7 @@ fn field_insert(sorted, name, ty) =
     list_set(copied, n, (name, ty))
   }
 
-fn field_find_pos(sorted, name, i, n) =
+fn field_find_pos(ref sorted, ref name, i, n) with !Mutate =
   if i >= n { n }
   else {
     let (existing_name, _) = list_index(sorted, i)
@@ -86,7 +86,7 @@ fn field_find_pos(sorted, name, i, n) =
     } else { i }
   }
 
-fn field_copy_suffix_shifted(src, dst, src_idx, dst_idx, n) =
+fn field_copy_suffix_shifted(ref src, own dst, src_idx, dst_idx, n) with !Mutate =
   if src_idx >= n { dst }
   else {
     field_copy_suffix_shifted(
@@ -101,7 +101,7 @@ fn field_copy_suffix_shifted(src, dst, src_idx, dst_idx, n) =
 // EfNeg / EfSub / EfInter are intermediate and reduce before
 // comparison or unification.
 
-fn normalize_row(row) =
+fn normalize_row(ref row) with !Mutate =
   match row {
     EfPure => EfPure,
     EfClosed(names) =>
@@ -122,7 +122,7 @@ fn normalize_row(row) =
       normalize_inter(normalize_row(a), normalize_row(b))
   }
 
-fn normalize_neg(row) with Pure =
+fn normalize_neg(ref row) with Pure =
   match row {
     EfPure           => EfNeg(EfPure),        // !Pure = everything
     EfClosed(names)  => EfNeg(EfClosed(names)),
@@ -131,7 +131,7 @@ fn normalize_neg(row) with Pure =
     _                => EfNeg(row)
   }
 
-fn normalize_inter(a, b) =
+fn normalize_inter(ref a, ref b) with !Mutate =
   match a {
     EfPure => EfPure,                         // Pure ∩ X = Pure
     EfClosed(na) =>
@@ -178,14 +178,14 @@ fn normalize_inter(a, b) =
     _ => EfInter(a, b)
   }
 
-fn closed_or_pure(names) =
+fn closed_or_pure(ref names) with !Mutate =
   if len(names) == 0 { EfPure }
   else { EfClosed(names) }
 
 // ═══ Union — the `+` operator ══════════════════════════════════════
 // E + F = the row of all effects in E or F.
 
-fn union_row(a, b) =
+fn union_row(ref a, ref b) with !Mutate =
   match a {
     EfPure => b,
     EfClosed(na) =>
@@ -229,20 +229,20 @@ fn union_row(a, b) =
 // ═══ Difference — the `-` operator ═════════════════════════════════
 // Handler absorption uses this: `(body_row - handled_row) + arm_row`.
 
-fn diff_row(a, b) =
+fn diff_row(ref a, ref b) with !Mutate =
   EfSub(a, b)
     |> normalize_row
 
 // ═══ Intersection — the `&` operator ═══════════════════════════════
 
-fn inter_row(a, b) =
+fn inter_row(ref a, ref b) with !Mutate =
   EfInter(a, b)
     |> normalize_row
 
 // ═══ Negation — the `!` operator ═══════════════════════════════════
 // !E proves absence. The load-bearing novelty of Inka's algebra.
 
-fn neg_row(a) =
+fn neg_row(ref a) with !Mutate =
   EfNeg(a)
     |> normalize_row
 
@@ -260,7 +260,7 @@ fn neg_row(a) =
 // The same call services user-defined negations: `with !Logging` is
 // one call away.
 
-fn row_subsumes(body_row, gate_row) =
+fn row_subsumes(ref body_row, ref gate_row) with !Mutate =
   match gate_row {
     EfPure =>
       match body_row {
@@ -315,10 +315,10 @@ fn row_subsumes(body_row, gate_row) =
 //   Open(A,v1)/Open(B,v2) → if v1=v2, unify names; else bind v1 to Open(B-A, v2)
 //   Neg / Sub / Inter → normalize first, re-dispatch
 
-fn unify_row(a, b, span, reason) =
+fn unify_row(ref a, ref b, ref span, ref reason) with !Mutate =
   unify_row_canonical(normalize_row(a), normalize_row(b), span, reason)
 
-fn unify_row_canonical(a, b, span, reason) =
+fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate =
   match a {
     EfPure =>
       match b {
@@ -387,7 +387,7 @@ fn unify_row_canonical(a, b, span, reason) =
     _ => unify_row_canonical(normalize_row(a), b, span, reason)
   }
 
-fn report_purity_mismatch(actual, span) =
+fn report_purity_mismatch(ref actual, ref span) with !Mutate =
   perform report(
     "effects", "E_PurityViolated", "error",
     "expected Pure but found effects: "
@@ -395,7 +395,7 @@ fn report_purity_mismatch(actual, span) =
     span, "MachineApplicable"
   )
 
-fn report_effect_mismatch(a, b, span) =
+fn report_effect_mismatch(ref a, ref b, ref span) with !Mutate =
   perform report(
     "effects", "E_EffectMismatch", "error",
     "effect row mismatch: "
@@ -409,7 +409,7 @@ fn report_effect_mismatch(a, b, span) =
 // `handle { body with E } { arms for F }` normalizes to
 // `(E - F) + arm_row`. Algebra falls out.
 
-fn absorb_row(body_row, handled_row, extra_row) =
+fn absorb_row(ref body_row, ref handled_row, ref extra_row) with !Mutate =
   body_row
     |> diff_row(handled_row)
     |> union_row(extra_row)
@@ -419,7 +419,7 @@ fn absorb_row(body_row, handled_row, extra_row) =
 // let lowering emit direct `call $h_op` (spec 05). Non-ground rows
 // go through the evidence-passing path.
 
-fn row_is_ground(row) with Pure =
+fn row_is_ground(ref row) with Pure =
   match row {
     EfPure           => true,
     EfClosed(_)      => true,
@@ -456,15 +456,15 @@ fn row_is_ground(row) with Pure =
 
 // (string-set adapters retained for non-row callers — none today)
 
-fn sort_unique(names)        = name_set_canonicalize(names)
-fn insert_sorted(sorted, x)  = name_set_insert(sorted, x)
+fn sort_unique(ref names) with !Mutate = name_set_canonicalize(names)
+fn insert_sorted(ref sorted, ref x) with !Mutate = name_set_insert(sorted, x)
 
-fn list_intersect(a, b)      = name_set_intersect(a, b)
-fn list_diff_str(a, b)       = name_set_diff(a, b)
-fn list_subset_str(sub, sup) = name_set_subset(sub, sup)
-fn list_disjoint(a, b)       = name_set_disjoint(a, b)
-fn list_eq_str(a, b)         = name_set_eq(a, b)
-fn string_in_list(lst, s)    = name_set_contains(lst, s)
+fn list_intersect(ref a, ref b) with !Mutate = name_set_intersect(a, b)
+fn list_diff_str(ref a, ref b) with !Mutate = name_set_diff(a, b)
+fn list_subset_str(ref sub, ref sup) with !Mutate = name_set_subset(sub, sup)
+fn list_disjoint(ref a, ref b) with !Mutate = name_set_disjoint(a, b)
+fn list_eq_str(ref a, ref b) with !Mutate = name_set_eq(a, b)
+fn string_in_list(ref lst, ref s) with !Mutate = name_set_contains(lst, s)
 
 // ═══ EffName comparators ═══════════════════════════════════════════
 // Effect-name equality = name match AND (parameterized) arg lists
@@ -472,7 +472,7 @@ fn string_in_list(lst, s)    = name_set_contains(lst, s)
 // list lex order. The substrate-wide sorted-deduped invariant on
 // row entries depends on these two functions producing total order.
 
-fn eff_name_eq(a, b) = match a {
+fn eff_name_eq(ref a, ref b) with !Mutate = match a {
   ENamed(an) => match b {
     ENamed(bn)               => str_eq(an, bn),
     EParameterized(_, _)     => false
@@ -483,17 +483,17 @@ fn eff_name_eq(a, b) = match a {
   }
 }
 
-fn eff_args_eq(a, b) =
+fn eff_args_eq(ref a, ref b) with !Mutate =
   if len(a) != len(b) { false }
   else { eff_args_eq_loop(a, b, 0, len(a)) }
 
-fn eff_args_eq_loop(a, b, i, n) =
+fn eff_args_eq_loop(ref a, ref b, i, n) with !Mutate =
   if i >= n { true }
   else if eff_arg_eq(list_index(a, i), list_index(b, i)) {
     eff_args_eq_loop(a, b, i + 1, n)
   } else { false }
 
-fn eff_arg_eq(a, b) = match a {
+fn eff_arg_eq(ref a, ref b) with !Mutate = match a {
   EAInt(n)    => match b {
     EAInt(m)    => n == m,
     EAFloat(_)  => false,
@@ -514,7 +514,7 @@ fn eff_arg_eq(a, b) = match a {
 // Total order: ENamed < EParameterized when names differ; same name
 // orders by arg list. Bare ENamed("Sample") < EParameterized("Sample",
 // _) so a bare/parameterized mix has a stable canonical order.
-fn eff_name_lt(a, b) = match a {
+fn eff_name_lt(ref a, ref b) with !Mutate = match a {
   ENamed(an) => match b {
     ENamed(bn)               => str_lt(an, bn),
     EParameterized(bn, _)    =>
@@ -528,10 +528,10 @@ fn eff_name_lt(a, b) = match a {
   }
 }
 
-fn eff_args_lt(a, b) =
+fn eff_args_lt(ref a, ref b) with !Mutate =
   eff_args_lt_loop(a, b, 0, len(a), len(b))
 
-fn eff_args_lt_loop(a, b, i, na, nb) =
+fn eff_args_lt_loop(ref a, ref b, i, na, nb) with !Mutate =
   if i >= na { na < nb }
   else if i >= nb { false }
   else {
@@ -544,7 +544,7 @@ fn eff_args_lt_loop(a, b, i, na, nb) =
     }
   }
 
-fn eff_arg_lt(a, b) = match a {
+fn eff_arg_lt(ref a, ref b) with !Mutate = match a {
   EAInt(n)    => match b {
     EAInt(m)    => n < m,
     EAFloat(_)  => true,
@@ -571,17 +571,17 @@ fn eff_arg_lt(a, b) = match a {
 // construction boundary (mk_ef_closed / mk_ef_open) the same way the
 // string-set substrate handles boundary canonicalization.
 
-fn name_set_canonicalize(names) =
+fn name_set_canonicalize(ref names) with !Mutate =
   name_set_canonicalize_loop(names, 0, len(names), [])
 
-fn name_set_canonicalize_loop(names, i, n, acc) =
+fn name_set_canonicalize_loop(ref names, i, n, own acc) with !Mutate =
   if i >= n { acc }
   else {
     name_set_canonicalize_loop(names, i + 1, n,
       name_set_insert(acc, list_index(names, i)))
   }
 
-fn name_set_insert(sorted, name) =
+fn name_set_insert(ref sorted, ref name) with !Mutate =
   let n = len(sorted)
   let pos = name_find_pos(sorted, name, 0, n)
   if pos < n {
@@ -599,7 +599,7 @@ fn name_set_insert(sorted, name) =
     list_set(copied, n, name)
   }
 
-fn name_find_pos(sorted, name, i, n) =
+fn name_find_pos(ref sorted, ref name, i, n) with !Mutate =
   if i >= n { n }
   else {
     let existing = list_index(sorted, i)
@@ -608,7 +608,7 @@ fn name_find_pos(sorted, name, i, n) =
     } else { i }
   }
 
-fn name_copy_suffix_shifted(src, dst, src_idx, dst_idx, n) =
+fn name_copy_suffix_shifted(ref src, own dst, src_idx, dst_idx, n) with !Mutate =
   if src_idx >= n { dst }
   else {
     name_copy_suffix_shifted(
@@ -617,20 +617,20 @@ fn name_copy_suffix_shifted(src, dst, src_idx, dst_idx, n) =
     )
   }
 
-fn name_set_union(a, b) =
+fn name_set_union(ref a, ref b) with !Mutate =
   name_set_union_loop(a, b, 0, len(b), name_set_canonicalize(a))
 
-fn name_set_union_loop(a, b, i, n, acc) =
+fn name_set_union_loop(ref a, ref b, i, n, own acc) with !Mutate =
   if i >= n { acc }
   else {
     name_set_union_loop(a, b, i + 1, n,
       name_set_insert(acc, list_index(b, i)))
   }
 
-fn name_set_intersect(a, b) =
+fn name_set_intersect(ref a, ref b) with !Mutate =
   name_set_intersect_loop(a, b, 0, len(a), [])
 
-fn name_set_intersect_loop(a, b, i, n, acc) =
+fn name_set_intersect_loop(ref a, ref b, i, n, own acc) with !Mutate =
   if i >= n { acc }
   else {
     let x = list_index(a, i)
@@ -640,10 +640,10 @@ fn name_set_intersect_loop(a, b, i, n, acc) =
     name_set_intersect_loop(a, b, i + 1, n, next)
   }
 
-fn name_set_diff(a, b) =
+fn name_set_diff(ref a, ref b) with !Mutate =
   name_set_diff_loop(a, b, 0, len(a), [])
 
-fn name_set_diff_loop(a, b, i, n, acc) =
+fn name_set_diff_loop(ref a, ref b, i, n, own acc) with !Mutate =
   if i >= n { acc }
   else {
     let x = list_index(a, i)
@@ -652,31 +652,31 @@ fn name_set_diff_loop(a, b, i, n, acc) =
     name_set_diff_loop(a, b, i + 1, n, next)
   }
 
-fn name_set_subset(sub, sup) =
+fn name_set_subset(ref sub, ref sup) with !Mutate =
   name_set_subset_loop(sub, sup, 0, len(sub))
 
-fn name_set_subset_loop(sub, sup, i, n) =
+fn name_set_subset_loop(ref sub, ref sup, i, n) with !Mutate =
   if i >= n { true }
   else if name_set_contains(sup, list_index(sub, i)) {
     name_set_subset_loop(sub, sup, i + 1, n)
   } else { false }
 
-fn name_set_disjoint(a, b) =
+fn name_set_disjoint(ref a, ref b) with !Mutate =
   name_set_disjoint_loop(a, b, 0, len(a))
 
-fn name_set_disjoint_loop(a, b, i, n) =
+fn name_set_disjoint_loop(ref a, ref b, i, n) with !Mutate =
   if i >= n { true }
   else if name_set_contains(b, list_index(a, i)) { false }
   else { name_set_disjoint_loop(a, b, i + 1, n) }
 
-fn name_set_eq(a, b) =
+fn name_set_eq(ref a, ref b) with !Mutate =
   if len(a) != len(b) { false }
   else { name_set_subset(a, b) }
 
-fn name_set_contains(set, name) =
+fn name_set_contains(ref set, ref name) with !Mutate =
   name_set_contains_loop(set, name, 0, len(set))
 
-fn name_set_contains_loop(set, name, i, n) =
+fn name_set_contains_loop(ref set, ref name, i, n) with !Mutate =
   if i >= n { false }
   else if eff_name_eq(list_index(set, i), name) { true }
   else { name_set_contains_loop(set, name, i + 1, n) }

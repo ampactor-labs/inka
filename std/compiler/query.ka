@@ -162,7 +162,7 @@ handler query_default {
 // Used by every query that returns a Ty. Query should show the
 // resolved shape, never raw handles.
 
-fn chase_type_deep(ty) = match ty {
+fn chase_type_deep(ref ty) with !Mutate = match ty {
   TVar(h) => {
     let GNode(kind, _) = perform graph_chase(h)
     match kind {
@@ -183,14 +183,14 @@ fn chase_type_deep(ty) = match ty {
   _                      => ty
 }
 
-fn chase_list_deep(tys) =
+fn chase_list_deep(ref tys) with !Mutate =
   if len(tys) == 0 { [] }
   else {
     [chase_type_deep(list_head(tys))]
       ++ chase_list_deep(list_tail(tys))
   }
 
-fn chase_params_deep(params) =
+fn chase_params_deep(ref params) with !Mutate =
   if len(params) == 0 { [] }
   else {
     let TParam(name, ty, auth, res) = list_head(params)
@@ -198,7 +198,7 @@ fn chase_params_deep(params) =
       ++ chase_params_deep(list_tail(params))
   }
 
-fn chase_fields_deep(fields) =
+fn chase_fields_deep(ref fields) with !Mutate =
   if len(fields) == 0 { [] }
   else {
     let (name, ty) = list_head(fields)
@@ -208,7 +208,7 @@ fn chase_fields_deep(fields) =
 
 // ═══ Unresolved detection ══════════════════════════════════════════
 
-fn find_unresolved(entries) =
+fn find_unresolved(ref entries) with !Mutate =
   if len(entries) == 0 { [] }
   else {
     let (name, scheme, _reason, _kind) = list_head(entries)
@@ -218,7 +218,7 @@ fn find_unresolved(entries) =
     else { rest }
   }
 
-fn has_free_tvar(ty) = match ty {
+fn has_free_tvar(ref ty) with !Mutate = match ty {
   TVar(h) => {
     let GNode(kind, _) = perform graph_chase(h)
     match kind {
@@ -240,21 +240,21 @@ fn has_free_tvar(ty) = match ty {
   _                      => false
 }
 
-fn has_free_tvar_list(tys) =
+fn has_free_tvar_list(ref tys) with !Mutate =
   if len(tys) == 0 { false }
   else {
     has_free_tvar(list_head(tys))
       || has_free_tvar_list(list_tail(tys))
   }
 
-fn has_free_tvar_params(params) =
+fn has_free_tvar_params(ref params) with !Mutate =
   if len(params) == 0 { false }
   else {
     let TParam(_, ty, _, _) = list_head(params)
     has_free_tvar(ty) || has_free_tvar_params(list_tail(params))
   }
 
-fn has_free_tvar_fields(fields) =
+fn has_free_tvar_fields(ref fields) with !Mutate =
   if len(fields) == 0 { false }
   else {
     let (_, ty) = list_head(fields)
@@ -265,7 +265,7 @@ fn has_free_tvar_fields(fields) =
 // Shows every hop from a starting handle to its terminal. Useful for
 // debugging cross-module TVar resolution.
 
-fn walk_chain(handle, depth) =
+fn walk_chain(handle, depth) with !Mutate =
   if depth > 50 || handle < 0 { [] }
   else {
     let node = perform graph_chase(handle)
@@ -286,7 +286,7 @@ fn span_area(s: ValidSpan) with Pure =
   if sl == el { ec - sc }
   else { ((el - sl) * 1000) + ec - sc }
 
-fn find_tightest(idx, target, best_h, best_area) with Pure =
+fn find_tightest(ref idx, target, best_h, best_area) with Pure =
   if len(idx) == 0 { best_h }
   else {
     let (s, h) = list_head(idx)
@@ -302,7 +302,7 @@ fn find_tightest(idx, target, best_h, best_area) with Pure =
     }
   }
 
-fn find_intent(intent_index, handle, i, n) =
+fn find_intent(ref intent_index, handle, i, n) with !Mutate =
   if i >= n { None }
   else {
     let (h, effs) = list_index(intent_index, i)

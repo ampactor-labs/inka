@@ -28,7 +28,7 @@ import runtime/strings
 //                   and merges. Stack shape naturally supports nested
 //                   branches (e.g. (a >< b) >< c).
 
-fn get_authored_ownership(name) = {
+fn get_authored_ownership(ref name) with !Mutate = {
   match perform env_lookup(name) {
     Some(entry) => {
       let (scheme, _, _) = entry
@@ -145,10 +145,10 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
 // Flat-array union across all branch deltas. Every delta is already
 // a sorted set (maintained by set_insert during consume), so folding
 // set_union across them preserves the invariant.
-fn union_all_deltas(deltas) =
+fn union_all_deltas(ref deltas) with !Mutate =
   union_all_deltas_loop(deltas, 0, len(deltas), [])
 
-fn union_all_deltas_loop(deltas, i, n, acc) =
+fn union_all_deltas_loop(ref deltas, i, n, own acc) with !Mutate =
   if i >= n { acc }
   else {
     union_all_deltas_loop(
@@ -164,17 +164,17 @@ fn union_all_deltas_loop(deltas, i, n, acc) =
 // branches surfaces as (1,2), (1,3), (2,3) triples, each naming the
 // branch pair in its own diagnostic. Span is the branching verb's
 // span — the site where the violation becomes observable.
-fn report_branch_collisions(deltas, span) =
+fn report_branch_collisions(ref deltas, ref span) with !Mutate =
   report_collisions_outer(deltas, 0, len(deltas), span)
 
-fn report_collisions_outer(deltas, i, n, span) =
+fn report_collisions_outer(ref deltas, i, n, ref span) with !Mutate =
   if i >= n { () }
   else {
     report_collisions_inner(deltas, i, i + 1, n, span)
     report_collisions_outer(deltas, i + 1, n, span)
   }
 
-fn report_collisions_inner(deltas, i, j, n, span) =
+fn report_collisions_inner(ref deltas, i, j, n, ref span) with !Mutate =
   if j >= n { () }
   else {
     let delta_i = list_index(deltas, i)
@@ -282,10 +282,10 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
   }
 }
 
-fn lookup_tag(tags, handle) =
+fn lookup_tag(ref tags, handle) with !Mutate =
   lookup_tag_loop(tags, handle, 0, len(tags))
 
-fn lookup_tag_loop(tags, handle, i, n) =
+fn lookup_tag_loop(ref tags, handle, i, n) with !Mutate =
   if i >= n { None }
   else {
     let tag = list_index(tags, i)
@@ -293,10 +293,10 @@ fn lookup_tag_loop(tags, handle, i, n) =
     else { lookup_tag_loop(tags, handle, i + 1, n) }
   }
 
-fn region_on_stack(stack, rid) =
+fn region_on_stack(ref stack, rid) with !Mutate =
   region_on_stack_loop(stack, rid, 0, len(stack))
 
-fn region_on_stack_loop(stack, rid, i, n) =
+fn region_on_stack_loop(ref stack, rid, i, n) with !Mutate =
   if i >= n { false }
   else {
     let Region(r, _) = list_index(stack, i)
@@ -308,10 +308,10 @@ fn region_on_stack_loop(stack, rid, i, n) =
 // (innermost) region_id. Untagged fields (scalars, never alloc'd)
 // contribute region 0 (global lifetime, doesn't bound the join).
 // The result is the composite's pinning region.
-fn join_field_regions(tags, fields, current) =
+fn join_field_regions(ref tags, ref fields, current) with !Mutate =
   join_field_regions_loop(tags, fields, current, 0, len(fields))
 
-fn join_field_regions_loop(tags, fields, acc, i, n) =
+fn join_field_regions_loop(ref tags, ref fields, current, i, n) with !Mutate =
   if i >= n { acc }
   else {
     let fh = list_index(fields, i)
@@ -324,7 +324,7 @@ fn join_field_regions_loop(tags, fields, acc, i, n) =
     join_field_regions_loop(tags, fields, next, i + 1, n)
   }
 
-fn report_each_collision(names, i, n, span) =
+fn report_each_collision(ref names, i, n, ref span) with !Mutate =
   if i >= n { () }
   else {
     let name = list_index(names, i)
@@ -336,10 +336,10 @@ fn report_each_collision(names, i, n, span) =
     report_each_collision(names, i + 1, n, span)
   }
 
-fn find_first_span(sites, name) =
+fn find_first_span(ref sites, ref name) with !Mutate =
   find_first_span_loop(sites, name, 0, len(sites))
 
-fn find_first_span_loop(sites, name, i, n) =
+fn find_first_span_loop(ref sites, ref name, i, n) with !Mutate =
   if i >= n { span_zero() }
   else {
     let (entry_name, entry_span) = list_index(sites, i)
@@ -357,7 +357,7 @@ fn find_first_span_loop(sites, name, i, n) =
 // a closure that outlives its scope. The check is a structural walk
 // performed on every function body (called by infer.ka at FnStmt).
 
-fn check_ref_escape(params, body) =
+fn check_ref_escape(ref params, ref body) with !Mutate =
   params
     |> collect_ref_params
     |> fn(refs) =>
@@ -373,14 +373,14 @@ fn check_ref_escape(params, body) =
 // slice-node alloc; same big-O as pre-trim, but the slice preserves
 // O(1) read into the original buffer (no copy).
 
-fn collect_ref_params(params) =
+fn collect_ref_params(ref params) with !Mutate =
   let flat = list_to_flat(params)
   let n = len(flat)
   let buf = make_list(n)
   let count = collect_ref_params_loop(flat, 0, n, buf, 0)
   slice(buf, 0, count)
 
-fn collect_ref_params_loop(params, i, n, buf, buf_len) =
+fn collect_ref_params_loop(ref params, i, n, own buf, buf_len) with !Mutate =
   if i >= n { buf_len }
   else {
     let TParam(name, _, auth, res) = list_index(params, i)
@@ -393,7 +393,7 @@ fn collect_ref_params_loop(params, i, n, buf, buf_len) =
     }
   }
 
-fn walk_return_positions(refs, node) =
+fn walk_return_positions(ref refs, ref node) with !Mutate =
   let N(body, span, _) = node
   match body {
     NExpr(VarRef(name)) =>
@@ -447,10 +447,10 @@ fn walk_return_positions(refs, node) =
     NHole(_) => ()
   }
 
-fn walk_match_arms(refs, arms) =
+fn walk_match_arms(ref refs, ref arms) with !Mutate =
   walk_match_arms_loop(refs, arms, 0, len(arms))
 
-fn walk_match_arms_loop(refs, arms, i, n) =
+fn walk_match_arms_loop(ref refs, ref arms, i, n) with !Mutate =
   if i >= n { () }
   else {
     let (_, body) = list_index(arms, i)
@@ -464,12 +464,12 @@ fn walk_match_arms_loop(refs, arms, i, n) =
 //   1 use       → Own (consumed once — affine)
 //   ≥ 2 uses    → Ref (borrowed multiple times)
 
-fn infer_ownership(params, body) =
+fn infer_ownership(ref params, ref body) with !Mutate =
   let flat = list_to_flat(params)
   let n = len(flat)
   infer_ownership_loop(flat, body, 0, n, make_list(n))
 
-fn infer_ownership_loop(params, body, i, n, acc) =
+fn infer_ownership_loop(ref params, ref body, i, n, own acc) with !Mutate =
   if i >= n { acc }
   else {
     let TParam(name, ty, authored, _old_resolved) = list_index(params, i)
@@ -483,14 +483,14 @@ fn infer_ownership_loop(params, body, i, n, acc) =
     )
   }
 
-fn classify_usage(name, body) = {
+fn classify_usage(ref name, ref body) with !Mutate = {
   let count = count_uses(name, body)
   if count == 0      { Inferred }
   else if count == 1 { Own }
   else               { Ref }
 }
 
-fn count_uses(name, node) =
+fn count_uses(ref name, ref node) with !Mutate =
   let N(body, _, _) = node
   match body {
     NExpr(VarRef(n)) =>
@@ -537,13 +537,13 @@ fn count_uses(name, node) =
     NHole(_) => 0
   }
 
-fn count_uses_list(name, nodes) =
+fn count_uses_list(ref name, ref nodes) with !Mutate =
   count_uses_list_loop(name, nodes, 0, len(nodes), 0)
 
-fn count_uses_record_fields(name, flds) =
+fn count_uses_record_fields(ref name, ref flds) with !Mutate =
   count_uses_record_fields_loop(name, flds, 0, len(flds), 0)
 
-fn count_uses_record_fields_loop(name, flds, i, n, acc) =
+fn count_uses_record_fields_loop(ref name, ref flds, i, n, acc) with !Mutate =
   if i >= n { acc }
   else {
     let (_, value) = list_index(flds, i)
@@ -552,7 +552,7 @@ fn count_uses_record_fields_loop(name, flds, i, n, acc) =
     )
   }
 
-fn count_uses_list_loop(name, nodes, i, n, acc) =
+fn count_uses_list_loop(ref name, ref nodes, i, n, acc) with !Mutate =
   if i >= n { acc }
   else {
     count_uses_list_loop(
@@ -561,10 +561,10 @@ fn count_uses_list_loop(name, nodes, i, n, acc) =
     )
   }
 
-fn count_match_arms(name, arms) =
+fn count_match_arms(ref name, ref arms) with !Mutate =
   count_match_arms_loop(name, arms, 0, len(arms), 0)
 
-fn count_match_arms_loop(name, arms, i, n, acc) =
+fn count_match_arms_loop(ref name, ref arms, i, n, acc) with !Mutate =
   if i >= n { acc }
   else {
     let (_, body) = list_index(arms, i)

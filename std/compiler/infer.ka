@@ -197,7 +197,7 @@ fn infer_stmt_list(stmts) =
 
 // ═══ Statement inference ═══════════════════════════════════════════
 
-fn infer_stmt(node) =
+fn infer_stmt(ref node) =
   let N(body, span, handle) = node
   match body {
     NStmt(LetStmt(pat, expr)) => {
@@ -483,7 +483,7 @@ fn build_from_partition(pos, neg) =
     fold_negations(neg, base)
   }
 
-fn fold_negations(neg, acc) =
+fn fold_negations(neg, own acc) =
   if len(neg) == 0 { acc }
   else {
     let n = list_head(neg)
@@ -493,7 +493,7 @@ fn fold_negations(neg, acc) =
 
 // ═══ Expression inference ══════════════════════════════════════════
 
-fn infer_expr(node) =
+fn infer_expr(ref node) =
   let N(body, span, handle) = node
   match body {
     NExpr(LitInt(_))    => perform graph_bind(handle, TInt,    Located(span, Inferred("int literal"))),
@@ -1066,7 +1066,7 @@ fn unify(h_a, h_b, span: ValidSpan, reason) = {
   }
 }
 
-fn unify_types(a, b, span: ValidSpan, reason) =
+fn unify_types(ref a, ref b, span: ValidSpan, reason) =
   match a {
     TInt    => expect_same(a, b, span, reason),
     TFloat  => expect_same(a, b, span, reason),
@@ -1183,7 +1183,7 @@ fn unify_types(a, b, span: ValidSpan, reason) =
       }
   }
 
-fn expect_same(a, b, span: ValidSpan, reason) =
+fn expect_same(ref a, ref b, span: ValidSpan, reason) =
   match b {
     TVar(hb) => perform graph_bind(hb, a, Located(span, reason)),
     _ =>
@@ -1195,7 +1195,7 @@ fn expect_same(a, b, span: ValidSpan, reason) =
 // variant; compound types are structurally equal only if their
 // sub-parts are unified separately (that's unify_types' job, not
 // same_ground's). A new scalar Ty must be added here explicitly.
-fn same_ground(a, b) with Pure = match a {
+fn same_ground(ref a, ref b) with Pure = match a {
   TInt    => match b { TInt    => true, _ => false },
   TFloat  => match b { TFloat  => true, _ => false },
   TString => match b { TString => true, _ => false },
@@ -1320,7 +1320,7 @@ fn intersect_record_fields(fa, fb) = {
   slice(buf, 0, count)
 }
 
-fn intersect_record_fields_loop(fa, fb, i, n, buf, count) =
+fn intersect_record_fields_loop(fa, fb, i, n, own buf, count) =
   if i >= n { (buf, count) }
   else {
     let (name, _) = list_index(fa, i)
@@ -1340,7 +1340,7 @@ fn record_fields_diff(left, right) = {
   slice(buf, 0, count)
 }
 
-fn record_fields_diff_loop(left, right, i, n, buf, count) =
+fn record_fields_diff_loop(left, right, i, n, own buf, count) =
   if i >= n { (buf, count) }
   else {
     let entry = list_index(left, i)
@@ -1460,7 +1460,7 @@ fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, 
     }
   }
 
-fn unify_param_lists(a, b, span: ValidSpan, reason) =
+fn unify_param_lists(ref a, ref b, span: ValidSpan, reason) =
   if len(a) == 0 || len(b) == 0 { () }
   else {
     let TParam(_, ta, _, _) = list_head(a)
@@ -1532,7 +1532,7 @@ fn param_types_flat(params) =
   let n = len(params)
   param_types_loop(params, 0, n, make_list(n))
 
-fn param_types_loop(params, i, n, acc) =
+fn param_types_loop(params, i, n, own acc) =
   if i >= n { acc }
   else {
     let TParam(_, t, _, _) = list_index(params, i)
@@ -1548,7 +1548,7 @@ fn arity_mismatch(la, lb, span: ValidSpan) =
       |> str_concat(" param(s)"),
     span, "MachineApplicable")
 
-fn type_mismatch(a, b, span: ValidSpan, reason) =
+fn type_mismatch(ref a, ref b, span: ValidSpan, reason) =
   perform report("infer", "E_TypeMismatch", "TypeMismatch",
     show_type(a)
       |> str_concat(" vs ")
@@ -1599,7 +1599,7 @@ fn infer_unaryop(handle, op, ih, span: ValidSpan) = match op {
 
 // ═══ Pattern inference ═════════════════════════════════════════════
 
-fn infer_pat(pat, handle, span: ValidSpan) = match pat {
+fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
   PVar(name) =>
     perform env_extend(name, Forall([], TVar(handle)),
       Located(span, LetBinding(name, Inferred("pattern"))),
@@ -1750,7 +1750,7 @@ fn infer_match_arm_iter(arms, scrut, result_h, span: ValidSpan) =
 
 // Walk arms, gathering each PCon's tag_id (deduped via set_insert).
 // Non-PCon arms (wildcards, vars, lits) contribute no tag.
-fn collect_arm_tags(arms, acc) =
+fn collect_arm_tags(arms, own acc) =
   if len(arms) == 0 { acc }
   else {
     let (pat, _body) = list_head(arms)
@@ -2128,21 +2128,21 @@ fn register_handler(hname, ename, arms) = {
 
 // ═══ Utilities ═════════════════════════════════════════════════════
 
-fn infer_expr_list(nodes) =
+fn infer_expr_list(ref nodes) =
   if len(nodes) == 0 { () }
   else {
     infer_expr(list_head(nodes))
     infer_expr_list(list_tail(nodes))
   }
 
-fn collect_handles(nodes) =
+fn collect_handles(ref nodes) =
   if len(nodes) == 0 { [] }
   else {
     let N(_, _, h) = list_head(nodes)
     [h] ++ collect_handles(list_tail(nodes))
   }
 
-fn collect_tvar_types(nodes) =
+fn collect_tvar_types(ref nodes) =
   if len(nodes) == 0 { [] }
   else {
     let N(_, _, h) = list_head(nodes)
@@ -2176,7 +2176,7 @@ fn handler_stack_tag(handled_names) =
 fn collect_handled_effects(arms) =
   collect_handled_from(arms, [])
 
-fn collect_handled_from(arms, acc) =
+fn collect_handled_from(arms, own acc) =
   if len(arms) == 0 { acc }
   else {
     let arm = list_head(arms)

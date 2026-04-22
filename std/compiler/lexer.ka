@@ -150,7 +150,7 @@ fn push_tok(buf, count, t) = {
 // Construct a Token from kind + 4 span ints.
 fn mk_tok(kind, sl, sc, el, ec) = Tok(kind, Span(sl, sc, el, ec))
 
-fn lex_from(source, n, pos, line, col, buf, count) =
+fn lex_from(source, n: ValidOffset, pos: ValidOffset, line, col, buf, count) =
   if pos >= n {
     push_tok(buf, count, mk_tok(TEof, line, col, line, col))
   } else {
@@ -220,7 +220,7 @@ fn lex_from(source, n, pos, line, col, buf, count) =
 // scan_to_eol: advance pos until end-of-line (byte 10) or end-of-
 // input. Returns the position AT the newline (not past it). Used by
 // both doc-comment payload slicing and line-comment skipping.
-fn scan_to_eol(source, n, pos) =
+fn scan_to_eol(source, n: ValidOffset, pos: ValidOffset) =
   if pos >= n { pos }
   else if byte_at(source, pos) == 10 { pos }
   else { scan_to_eol(source, n, pos + 1) }
@@ -228,9 +228,9 @@ fn scan_to_eol(source, n, pos) =
 // skip_line_comment: alias for scan_to_eol, semantic clarity at the
 // caller site (line comments skip until newline; newline itself is
 // handled by the outer lex_from loop).
-fn skip_line_comment(source, n, pos) = scan_to_eol(source, n, pos)
+fn skip_line_comment(source, n: ValidOffset, pos: ValidOffset) = scan_to_eol(source, n, pos)
 
-fn scan_string(source, n, pos, col, acc) =
+fn scan_string(source, n: ValidOffset, pos: ValidOffset, col, acc) =
   if pos >= n { (pos, col, acc) }
   else {
     let b = byte_at(source, pos)
@@ -257,7 +257,7 @@ fn scan_string(source, n, pos, col, acc) =
 // scan_number: advance position over the digits (and optionally one
 // decimal point followed by more digits). Returns (pos, col, is_float).
 // The caller slices the source to obtain the numeric literal text.
-fn scan_number(source, n, pos, col, is_float) =
+fn scan_number(source, n: ValidOffset, pos: ValidOffset, col, is_float) =
   if pos >= n { (pos, col, is_float) }
   else {
     let b = byte_at(source, pos)
@@ -274,7 +274,7 @@ fn scan_number(source, n, pos, col, is_float) =
 // scan_ident: advance position over identifier characters. Returns
 // (pos, col). The caller slices the source to obtain the identifier
 // text.
-fn scan_ident(source, n, pos, col) =
+fn scan_ident(source, n: ValidOffset, pos: ValidOffset, col) =
   if pos >= n { (pos, col) }
   else if is_alnum(byte_at(source, pos)) {
     scan_ident(source, n, pos + 1, col + 1)

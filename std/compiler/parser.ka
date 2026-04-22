@@ -16,13 +16,16 @@ import compiler/lexer
 
 // ═══ Handle minting and node wrapping ══════════════════════════════
 
-fn fresh_ph(span) =
-  perform graph_fresh_ty(Placeholder(span))
+fn fresh_ph(span: ValidSpan) = {
+  let h = perform graph_fresh_ty(Placeholder(span))
+  perform graph_index_span(span, h)
+  h
+}
 
-fn nexpr(e, span) = N(NExpr(e), span, fresh_ph(span))
-fn nstmt(s, span) = N(NStmt(s), span, fresh_ph(span))
-fn npat(p, span)  = N(NPat(p), span, fresh_ph(span))
-fn nhole(id, span) = N(NHole(id), span, fresh_ph(span))
+fn nexpr(e, span: ValidSpan) = N(NExpr(e), span, fresh_ph(span))
+fn nstmt(s, span: ValidSpan) = N(NStmt(s), span, fresh_ph(span))
+fn npat(p, span: ValidSpan)  = N(NPat(p), span, fresh_ph(span))
+fn nhole(id, span: ValidSpan) = N(NHole(id), span, fresh_ph(span))
 
 // ═══ Token navigation ══════════════════════════════════════════════
 // Tokens are typed: `Tok(TokenKind, Span)`. Helpers extract payload
@@ -1041,7 +1044,7 @@ fn parse_block_body(tokens, pos, buf, count) = {
   }
 }
 
-fn parse_if(tokens, pos, span) = {
+fn parse_if(tokens, pos, span: ValidSpan) = {
   let (cond, p) = parse_expr(tokens, pos)
   let p2 = skip_ws(tokens, p)
   let (then_e, p3) =
@@ -1067,7 +1070,7 @@ fn parse_if(tokens, pos, span) = {
   }
 }
 
-fn parse_match(tokens, pos, span) = {
+fn parse_match(tokens, pos, span: ValidSpan) = {
   let (scrutinee, p) = parse_expr(tokens, pos)
   let p2 = expect(tokens, skip_ws(tokens, p), TLBrace)
   let buf = make_list(4)
@@ -1090,7 +1093,7 @@ fn parse_match_arms(tokens, pos, buf, count) = {
   }
 }
 
-fn parse_handle(tokens, pos, span) = {
+fn parse_handle(tokens, pos, span: ValidSpan) = {
   let p = skip_ws(tokens, pos)
   let (body, p2) =
     if at(tokens, p, TLBrace) {
@@ -1119,21 +1122,21 @@ fn skip_past_ident(tokens, pos) =
     _         => pos
   }
 
-fn parse_perform(tokens, pos, span) = {
+fn parse_perform(tokens, pos, span: ValidSpan) = {
   let op_name = ident_at(tokens, pos)
   let p = expect(tokens, skip_ws(tokens, pos + 1), TLParen)
   let (args, p2) = parse_call_args(tokens, skip_ws(tokens, p))
   (nexpr(PerformExpr(op_name, args), span), p2)
 }
 
-fn parse_resume(tokens, pos, span) = {
+fn parse_resume(tokens, pos, span: ValidSpan) = {
   let p = expect(tokens, skip_ws(tokens, pos), TLParen)
   let (val, p2) = parse_expr(tokens, skip_ws(tokens, p))
   let p3 = expect(tokens, skip_ws(tokens, p2), TRParen)
   (nexpr(ResumeExpr(val, []), span), p3)
 }
 
-fn parse_lambda(tokens, pos, span) = {
+fn parse_lambda(tokens, pos, span: ValidSpan) = {
   let buf = make_list(4)
   let (final_buf, final_count, p) = parse_lambda_params(tokens, pos, buf, 0)
   let (body, p2) = parse_expr(tokens, skip_ws(tokens, p))

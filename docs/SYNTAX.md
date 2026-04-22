@@ -58,11 +58,21 @@ The body is a SINGLE EXPRESSION. The expression's value IS the function's return
 
 Common case — pipeline body:
 ```
-fn parse(path: Path) -> Config with IO + Fail<ParseError> =
+fn parse(path: ValidPath) -> Config with IO + Fail<ParseError> =
   path
     |> read_file
     |> decode
 ```
+
+### The Intent Boundary Rule for Parameters
+
+Inka uses Hindley-Milner type inference. **You do not need to annotate base types** like `Int`, `String`, or structural records on parameters. 
+
+**Rule:** Parameter type annotations are strictly reserved for **Intent Boundaries**. Use them to explicitly declare:
+1. **Refinement Types** (e.g., `pos: ValidOffset`, `span: ValidSpan`) which encode predicates that `Verify` must discharge.
+2. **Ownership Markers** (e.g., `ast: own Node`, `env: ref Env`) which enforce linearity and aliasing.
+
+Do not write `fn name(a: Int)` when the graph can infer it. Do write `fn name(pos: ValidOffset)` to erect a graph-backed semantic contract.
 
 ### Canonical form — block body
 

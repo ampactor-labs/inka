@@ -61,7 +61,8 @@ handler graph_handler
        overlay_lens = [0],
        overlay_count = 1,
        current_overlay_idx = 0,
-       current_overlay = "global" {
+       current_overlay = "global",
+       span_index = [] {
 
   // ─── Read ops ────────────────────────────────────────────────────
 
@@ -82,7 +83,7 @@ handler graph_handler
   graph_snapshot() => {
     let overlays_view =
       overlays_to_pairs(overlay_names, overlay_bufs, overlay_lens, overlay_count)
-    resume(Graph(nodes, epoch, next, overlays_view))
+    resume(Graph(nodes, epoch, next, overlays_view, span_index))
   },
 
   graph_push_checkpoint() => {
@@ -204,6 +205,10 @@ handler graph_handler
   // overwritten on next append — no slicing, no allocation. Epoch is
   // NOT rolled back — it stays monotonic so query observers keyed on
   // (handle, epoch) correctly see invalidation without reordering.
+
+  graph_index_span(span, handle) => {
+    resume(()) with span_index = push(span_index, (span, handle))
+  },
 
   graph_rollback(target_idx) => {
     let (new_nodes, new_next) =

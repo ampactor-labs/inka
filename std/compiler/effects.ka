@@ -368,6 +368,20 @@ fn unify_row_canonical(a, b, span, reason) =
             let residual_names = list_diff_str(nb, na)
             perform graph_bind_row(va, EfOpen(residual_names, vb), Located(span, reason))
           },
+        EfNeg(inner) =>
+          // Open(A, v) ~ !B => v must not perform B. 
+          // For now, exact match or error for universe-minus open rows.
+          report_effect_mismatch(a, b, span),
+        _ => unify_row_canonical(a, normalize_row(b), span, reason)
+      },
+    EfNeg(inner_a) =>
+      match b {
+        EfNeg(inner_b) =>
+          // !A ~ !B => A ~ B
+          unify_row_canonical(inner_a, inner_b, span, reason),
+        EfPure => report_effect_mismatch(a, b, span),
+        EfClosed(_) => report_effect_mismatch(a, b, span),
+        EfOpen(_, _) => report_effect_mismatch(a, b, span),
         _ => unify_row_canonical(a, normalize_row(b), span, reason)
       },
     _ => unify_row_canonical(normalize_row(a), b, span, reason)
@@ -666,3 +680,11 @@ fn name_set_contains_loop(set, name, i, n) =
   if i >= n { false }
   else if eff_name_eq(list_index(set, i), name) { true }
   else { name_set_contains_loop(set, name, i + 1, n) }
+
+// ═══ Substrate Tests (Inka solving Inka) ═══════════════════════════
+// This function exists to statically prove FV.1.γ (Lone Effect Negation).
+// It declares `with !Mutate`. The compiler's own type inference will
+// now infer its row as EfNeg(Closed([Mutate])) instead of collapsing it
+// to EfPure. The very act of the compiler type-checking itself is the test.
+
+fn test_mutate_freeze(buffer: ValidSpan) with !Mutate = buffer

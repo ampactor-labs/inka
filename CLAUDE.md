@@ -88,7 +88,7 @@ to exist as new code. **One per kernel primitive** (DESIGN.md §0.5),
 **one per Mentl tentacle** (DESIGN.md Ch 8). Lose one and the kernel
 goes un-audited; lose one and Mentl loses a tentacle.
 
-1. **Graph?** What handle, edge, or Reason in the SubstGraph + Env
+1. **Graph?** What handle, edge, or Reason in the Graph + Env
    already encodes this? *(If the graph has it, don't re-derive it.
    Primitive #1 · Tentacle **Query**.)*
 2. **Handler?** What installed handler already projects this state
@@ -177,7 +177,7 @@ yet derive. These eight primitives are the kernel. Remove any and
 the medium collapses; Mentl loses a tentacle. Authoritative
 enumeration: `docs/DESIGN.md` §0.5. Shorthand for this file:
 
-1. **SubstGraph + Env** — program IS the graph; every output a handler projection. Tentacle: **Query**.
+1. **Graph + Env** — program IS the graph; every output a handler projection. Tentacle: **Query**.
 2. **Handlers with typed resume discipline** — `handle`/`resume` replaces six+ patterns; `@resume=OneShot|MultiShot|Either` is part of each op's type; MultiShot is Mentl's oracle substrate (hundreds of alternate realities per second); `~>` chains ARE capability stacks. Tentacle: **Propose**.
 3. **Five verbs** — `|>` `<|` `><` `~>` `<~` — complete topological basis. Tentacle: **Topology**.
 4. **Full Boolean effect algebra** — `+ - & ! Pure`; `!E` proves ABSENCE. Tentacle: **Unlock**.
@@ -385,7 +385,7 @@ tool.** Find the primitive.
 ## 4. Build the wheel. Never wrap the axle.
 
 The specs in `docs/rebuild/00–11` ARE the blueprint. Read the spec.
-Write the code the spec describes. If the spec says SubstGraph is a
+Write the code the spec describes. If the spec says Graph is a
 flat array with O(1) chase — write a flat array with O(1) chase. If
 the spec says env is effect-mediated — write `perform env_lookup`,
 not a function that takes env as an argument.
@@ -398,7 +398,7 @@ fast. Break things that need breaking.
 ## 5. If it needs to exist, it's a handler.
 
 Every feature, tool, output, and extension is a handler on the
-SubstGraph + Env. The graph IS the program. Source, WAT, docs, LSP,
+Graph + Env. The graph IS the program. Source, WAT, docs, LSP,
 diagnostics — all handler projections (INSIGHTS.md: "The Graph IS
 the Program").
 
@@ -585,7 +585,7 @@ once, fix.
 
 | File | Role |
 |---|---|
-| `std/compiler/graph.ka` | SubstGraph: flat-array, O(1) chase, Read/Write effects |
+| `src/graph.nx` | Graph: flat-array, O(1) chase, Read/Write effects |
 | `std/compiler/types.ka` | Ty + Reason + Scheme + typed AST + core effects |
 | `std/compiler/effects.ka` | EffRow Boolean algebra: + - & ! |
 | `std/compiler/infer.ka` | HM inference, one walk, graph-direct |
@@ -640,7 +640,7 @@ during the γ cascade — that bind all implementation:
    back-edges visible, checkable, and optimizable.
 5. **Effect Negation > Everything.** `!E` proves absence. Strictly
    more powerful than Rust + Haskell + Koka + Austral combined.
-6. **The Graph IS the Program.** SubstGraph + Env is the universal
+6. **The Graph IS the Program.** Graph + Env is the universal
    representation. Everything else is a handler projection.
 7. **Parameters ARE Tuples. `|>` Is a Wire.** `fn f(a, b)` has type
    `(A, B) -> C`. `<|` and `><` produce tuples. `|>` passes them

@@ -174,7 +174,7 @@ levels.
    `Verify` effect discharges predicates — ledger today; swappable
    to SMT (Z3/cvc5/Bitwuzla by residual theory) without source
    change. Array bounds, port validity, tensor shapes — proven
-   statically, zero cost at runtime. *(Ch 9.7, spec 02/06.)*
+   statically, zero cost at runtime. **Function parameters omit base types (HM inferred) but use refinement annotations (`pos: ValidOffset`) to erect Intent Boundaries.** *(Ch 9.7, spec 02/06.)*
 
 7. **The continuous annotation gradient.** Each annotation unlocks
    one specific compile-time capability. Zero annotations → code

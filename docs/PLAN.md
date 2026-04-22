@@ -652,9 +652,9 @@ Lands after items 10-22 so simplification + extension migration ride through alo
       - **FV.2** — `Pure` declaration sweep. `[LANDED 2026-04-22 · 005d66d]` — 55 Pure annotations across 11 files. Primitive #4c + #7.
       - **FV.3** — Refinement types. `[LANDED 2026-04-22 · f7c6774]` — 5 aliases (Handle / TagId / ValidOffset / NonEmptyList / ValidSpan) + `fn span_valid` predicate added to types.ka; `Handle` applied to `graph_fresh_ty` return type. Primitive #6 moves from 0 uses to 5 decls + 1 applied site.
         - **FV.3.1** `TagId` applied to ConstructorScheme tag_id fields + emit_match dispatch. `[PENDING]`
-        - **FV.3.2** `ValidOffset` applied to lexer byte positions + parser token positions. `[PENDING]`
+        - **FV.3.2** `ValidOffset` applied to lexer byte positions + parser token positions. `[LANDED]` — 12 sites in lexer.ka.
         - **FV.3.3** `NonEmptyList` applied wherever code asserts `len > 0` in prose. `[PENDING]`
-        - **FV.3.4** `ValidSpan` applied to every Span construction site. `[PENDING]`
+        - **FV.3.4** `ValidSpan` applied to every Span construction site. `[IN-FLIGHT]` — 56 sites across parser.ka and infer.ka parameters.
       - **FV.4** — Ownership markers (`own` on consumed params, `ref` on borrowed, `!Mutate` on append-only frozen buffers). Primitive #5. `[PENDING]`
       - **FV.5** — Five-verb exemplar (`<|` in infer_expr, `><` in driver, `<~` in unification fixpoint). Primitive #3. `[PENDING — Opus-dispatch tier; judgment on sites]`
       - **FV.6** — String interpolation sweep (`str_concat` chains → `${}` form). `[PENDING — BLOCKED: lexer.ka's scan_string does not yet parse `${}` — FV.6 has a prerequisite lexer-substrate extension]`

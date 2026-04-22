@@ -156,7 +156,8 @@ type Graph
       List,    // nodes: flat array indexed by handle
       Int,     // epoch: bumps on every bind
       Int,     // next: next fresh allocation
-      List     // overlays: [(module_name, [handle])]
+      List,    // overlays: [(module_name, [handle])]
+      List     // span_index: [(ValidSpan, Int)] for Mentl QTypeAt queries
     )
 
 // Trail mutations — append during forward execution, walk backwards
@@ -614,6 +615,7 @@ effect GraphWrite {
   graph_bind_row(Int, EffRow, Reason) -> ()        @resume=OneShot
   graph_fork(String) -> ()                         @resume=OneShot
   graph_rollback(Int) -> ()                        @resume=OneShot
+  graph_index_span(ValidSpan, Int) -> ()           @resume=OneShot
 }
 
 // ═══ Diagnostic (spec 06) — 6-arg stable-code report ═══════════════

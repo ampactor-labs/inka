@@ -288,7 +288,9 @@ handler diagnostics_handler {
 
   report(source, code, kind, msg, span, applicability) => {
     eprint_string(
-      code
+      source
+        |> str_concat(": ")
+        |> str_concat(code)
         |> str_concat(" ")
         |> str_concat(kind)
         |> str_concat(": ")

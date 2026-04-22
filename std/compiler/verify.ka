@@ -51,7 +51,7 @@ fn debt_by_kind(debt) =
       ++ debt_by_kind(list_tail(debt))
   }
 
-fn classify_predicate(pred) = match pred {
+fn classify_predicate(pred) with Pure = match pred {
   PTrue        => "trivial",
   PNot(_)      => "negation",
   PAnd(_, _)   => "conjunction",

@@ -47,7 +47,7 @@ type KaiFile = {
 // with mismatching version are treated as misses.
 //   v1 — IC.1a header-only
 //   v2 — IC.1b adds env entry serialization (name + Scheme + SchemeKind)
-fn cache_compiler_version() = 2
+fn cache_compiler_version() with Pure = 2
 
 // ═══ FNV-1a hash ═══════════════════════════════════════════════════
 // 32-bit FNV-1a over the source bytes. Not cryptographic — but
@@ -75,8 +75,8 @@ fn cache_hash_loop(s, i, n, h) with Memory = {
 // Helpers — these mirror what's available; if not yet primitive,
 // they bridge through bit-arithmetic identities. xor and mul are
 // substrate-level WASM ops; this aliases for readability.
-fn i32_xor(a, b) = a ^ b
-fn i32_mul(a, b) = a * b
+fn i32_xor(a, b) with Pure = a ^ b
+fn i32_mul(a, b) with Pure = a * b
 
 // ═══ Cache path conventions ════════════════════════════════════════
 // All cache files live under <project>/.inka/cache/. Each module's
@@ -85,7 +85,7 @@ fn i32_mul(a, b) = a * b
 // The module name preserves the original slash form; only the
 // filesystem path flattens.
 
-fn cache_dir() = ".inka/cache"
+fn cache_dir() with Pure = ".inka/cache"
 
 fn cache_path_for(module_name) =
   cache_dir()

@@ -42,7 +42,7 @@ handler wat_stdout {
 // match dispatch (emit_match_arms_mixed) compares scrutinee against
 // this value to discriminate. Single source of truth — every other
 // reference to "4096" is a comment crosslinked to this constant.
-fn heap_base() = 4096
+fn heap_base() with Pure = 4096
 
 // MatchShape — classification of an ADT match's arm set. Decided
 // once per match at emit entry; drives whether arms compare
@@ -139,7 +139,7 @@ fn ty_to_wasm(handle) =
   perform lookup_ty(handle)
     |> ty_to_wasm_type
 
-fn ty_to_wasm_type(ty) = match ty {
+fn ty_to_wasm_type(ty) with Pure = match ty {
   TInt              => "i32",
   TFloat            => "f64",
   TString           => "i32",   // pointer into linear memory
@@ -439,7 +439,7 @@ fn collect_top_level_fn_names_loop(lowered, i, n, buf, count) =
     collect_top_level_fn_names_loop(lowered, i + 1, n, new_buf, new_count)
   }
 
-fn extract_top_fn_name(stmt) = match stmt {
+fn extract_top_fn_name(stmt) with Pure = match stmt {
   LLet(_, name, LMakeClosure(_, _, _, _)) => name,
   _                                    => ""
 }
@@ -551,7 +551,7 @@ fn emit_byte_escape(b) = {
   perform wat_emit(hex_digit(b % 16))
 }
 
-fn hex_digit(d) = match d {
+fn hex_digit(d) with Pure = match d {
   0  => "0", 1  => "1", 2  => "2", 3  => "3",
   4  => "4", 5  => "5", 6  => "6", 7  => "7",
   8  => "8", 9  => "9", 10 => "a", 11 => "b",
@@ -632,7 +632,7 @@ fn max_arity_expr(expr) = match expr {
   LFieldLoad(_, _, _)       => 0
 }
 
-fn max_int(a, b) = if a > b { a } else { b }
+fn max_int(a, b) with Pure = if a > b { a } else { b }
 
 fn emit_type_decls(i, max) =
   if i > max { () }
@@ -1610,7 +1610,7 @@ fn classify_arms_shape_loop(arms, i, n, acc, seen) =
     }
   }
 
-fn shape_eq(a, b) = match a {
+fn shape_eq(a, b) with Pure = match a {
   ShapePureNullary => match b { ShapePureNullary => true, _ => false },
   ShapePureFielded => match b { ShapePureFielded => true, _ => false },
   ShapeMixed       => match b { ShapeMixed       => true, _ => false }

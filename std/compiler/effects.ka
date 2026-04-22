@@ -122,7 +122,7 @@ fn normalize_row(row) =
       normalize_inter(normalize_row(a), normalize_row(b))
   }
 
-fn normalize_neg(row) =
+fn normalize_neg(row) with Pure =
   match row {
     EfPure           => EfNeg(EfPure),        // !Pure = everything
     EfClosed(names)  => EfNeg(EfClosed(names)),
@@ -402,7 +402,7 @@ fn absorb_row(body_row, handled_row, extra_row) =
 // let lowering emit direct `call $h_op` (spec 05). Non-ground rows
 // go through the evidence-passing path.
 
-fn row_is_ground(row) =
+fn row_is_ground(row) with Pure =
   match row {
     EfPure           => true,
     EfClosed(_)      => true,

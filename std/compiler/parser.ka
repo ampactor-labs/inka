@@ -42,7 +42,7 @@ fn span_at(tokens, pos) =
 // kind_eq compares two TokenKind values for variant identity. Used
 // at the few sites where dispatch needs a passed-in kind value;
 // most sites just pattern-match directly via `match kind_at(...)`.
-fn kind_eq(a, b) = match a {
+fn kind_eq(a, b) with Pure = match a {
   TFn        => match b { TFn        => true, _ => false },
   TLet       => match b { TLet       => true, _ => false },
   TIf        => match b { TIf        => true, _ => false },
@@ -132,7 +132,7 @@ fn skip_sep(tokens, pos) =
   }
 
 // show_token_kind: human-readable name for diagnostics.
-fn show_token_kind(k) = match k {
+fn show_token_kind(k) with Pure = match k {
   TFn => "fn", TLet => "let", TIf => "if", TElse => "else",
   TMatch => "match", TType => "type", TEffect => "effect",
   THandle => "handle", THandler => "handler", TWith => "with",
@@ -206,7 +206,7 @@ fn string_at(tokens, pos) =
 // ═══ Operator precedence table ═════════════════════════════════════
 // Per SYNTAX.md's canonical table. Higher number = tighter binding.
 
-fn op_prec(k) = match k {
+fn op_prec(k) with Pure = match k {
   TOrOr      => 1,
   TAndAnd    => 2,
   TEqEq      => 3,
@@ -236,7 +236,7 @@ fn op_prec(k) = match k {
 // The block form carries the LOWEST pipe precedence so it binds
 // outside of everything on its left; the inline form keeps the
 // high precedence (10) so it tightens around the preceding stage.
-fn op_to_pipe_kind_layout(k, saw_newline) = match k {
+fn op_to_pipe_kind_layout(k, saw_newline) with Pure = match k {
   TTildeGt => if saw_newline { Some(PTeeBlock) } else { Some(PTeeInline) },
   TPipeGt  => Some(PForward),
   TLtPipe  => Some(PDiverge),
@@ -249,7 +249,7 @@ fn op_to_pipe_kind_layout(k, saw_newline) = match k {
 // looser than every other pipe verb and every binary operator,
 // capturing the whole preceding chain as its body. Inline form
 // keeps the base precedence.
-fn effective_prec(k, saw_newline) = match k {
+fn effective_prec(k, saw_newline) with Pure = match k {
   TTildeGt => if saw_newline { 1 } else { op_prec(k) },
   _        => op_prec(k)
 }
@@ -275,7 +275,7 @@ fn skip_ws_tracked_loop(tokens, pos, saw) =
 //   fn op_to_binop(k) -> BinOp where is_binop_token(k)
 // exercises primitive #6 and eliminates the Option entirely.
 // Lands post-simplification-audit.
-fn op_to_binop(k) = match k {
+fn op_to_binop(k) with Pure = match k {
   TPlus      => Some(BAdd),
   TMinus     => Some(BSub),
   TStar      => Some(BMul),

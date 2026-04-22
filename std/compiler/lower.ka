@@ -98,7 +98,7 @@ type LowPat
 
 // ═══ Handle projection — one arm per variant, no fallback ══════════
 
-fn lexpr_handle(e) = match e {
+fn lexpr_handle(e) with Pure = match e {
   LConst(h, _)            => h,
   LLocal(h, _)            => h,
   LGlobal(h, _)           => h,
@@ -649,7 +649,7 @@ fn lower_pat_record_fields(flds, i) =
       ++ lower_pat_record_fields(list_tail(flds), i + 1)
   }
 
-fn lower_lit_value(v) = match v {
+fn lower_lit_value(v) with Pure = match v {
   LVInt(n)    => LInt(n),
   LVFloat(f)  => LFloat(f),
   LVString(s) => LString(s),

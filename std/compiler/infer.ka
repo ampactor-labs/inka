@@ -1062,7 +1062,7 @@ fn expect_same(a, b, span, reason) =
 // variant; compound types are structurally equal only if their
 // sub-parts are unified separately (that's unify_types' job, not
 // same_ground's). A new scalar Ty must be added here explicitly.
-fn same_ground(a, b) = match a {
+fn same_ground(a, b) with Pure = match a {
   TInt    => match b { TInt    => true, _ => false },
   TFloat  => match b { TFloat  => true, _ => false },
   TString => match b { TString => true, _ => false },
@@ -1937,7 +1937,7 @@ fn register_one_variant(type_name, type_args, variant, tag_id, total) = {
   }
 }
 
-fn is_record_ty(ty) = match ty {
+fn is_record_ty(ty) with Pure = match ty {
   TRecord(_)        => true,
   _                 => false
 }
@@ -2051,7 +2051,7 @@ fn effect_names_of_op(op_name) =
     }
   }
 
-fn row_names(row) = match row {
+fn row_names(row) with Pure = match row {
   EfPure           => [],
   EfClosed(names)  => names,
   EfOpen(names, _) => names,

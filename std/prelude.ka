@@ -177,8 +177,8 @@ fn min_by(f, xs) = reduce(xs, |a, b| if f(a) <= f(b) { a } else { b })
 // compose matches <> — f first, then g. Left to right.
 // x |> (f <> g) = x |> f |> g
 fn compose(f, g) = |x| g(f(x))
-fn id(x) = x
-fn not(x) = if x { false } else { true }
+fn id(x) with Pure = x
+fn not(x) with Pure = if x { false } else { true }
 
 // Build a pipeline from a list of functions. Fold with compose.
 // build_pipeline([f, g, h]) = f <> g <> h
@@ -190,10 +190,10 @@ fn nth(xs, n, default) = if n >= 0 && n < len(xs) { xs[n] } else { default }
 
 // ─── Math ───────────────────────────────────────────────────
 
-fn min(a, b) = if a <= b { a } else { b }
-fn max(a, b) = if a <= b { b } else { a }
-fn clamp(x, lo, hi) = min(max(x, lo), hi)
-fn abs(x) = if x < 0 { 0 - x } else { x }
+fn min(a, b) with Pure = if a <= b { a } else { b }
+fn max(a, b) with Pure = if a <= b { b } else { a }
+fn clamp(x, lo, hi) with Pure = min(max(x, lo), hi)
+fn abs(x) with Pure = if x < 0 { 0 - x } else { x }
 
 // ─── Sort (merge sort — pure, not an Iterate handler) ───────
 

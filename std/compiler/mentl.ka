@@ -214,7 +214,7 @@ fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
   }
 }
 
-fn unwrap_source_span(opt) = match opt {
+fn unwrap_source_span(opt) with Pure = match opt {
   Some(s) => s,
   None    => span_zero()
 }
@@ -236,7 +236,7 @@ fn catalog_handled_effects(handler_name) =
 // H5: capability unlocks for an annotation. !Alloc unlocks
 // CRealTime; !IO + Pure unlock CCompileTimeEval; etc. The list is
 // returned by render_audit's severance section.
-fn capabilities_for_annotation(ann) = match ann {
+fn capabilities_for_annotation(ann) with Pure = match ann {
   APure(_)        => [CMemoize, CCompileTimeEval, CParallelize],
   ANotAlloc(_)    => [CRealTime],
   ANotIO(_)       => [CCompileTimeEval, CSandbox],
@@ -356,7 +356,7 @@ fn find_annotation_loop(proven, target, i, n) =
 
 // Span-insensitive: two APure(_) compare equal regardless of source
 // span. Priority comparison classifies by discriminator, not origin.
-fn annotation_eq(a, b) = match a {
+fn annotation_eq(a, b) with Pure = match a {
   APure(_)       => match b { APure(_)       => true, _ => false },
   ANotAlloc(_)   => match b { ANotAlloc(_)   => true, _ => false },
   ANotIO(_)      => match b { ANotIO(_)      => true, _ => false },
@@ -490,7 +490,7 @@ fn teach_synthesize(hole_handle, context) = {
 // row; every other Ty is treated as EfPure (it has no effect
 // behavior by itself). Named explicitly so a future Ty whose row
 // semantics aren't pure surfaces as a compile error.
-fn extract_row(ty) = match ty {
+fn extract_row(ty) with Pure = match ty {
   TFun(_, _, row)   => row,
   TInt              => EfPure,
   TFloat            => EfPure,
@@ -509,7 +509,7 @@ fn extract_row(ty) = match ty {
 // ═══ Unlock mapping — the teaching payoff ══════════════════════════
 // "Add this annotation — get this capability."
 
-fn unlock_capability(annotation) = match annotation {
+fn unlock_capability(annotation) with Pure = match annotation {
   APure(_)          => CMemoize,
   ANotAlloc(_)      => CRealTime,
   ANotIO(_)         => CCompileTimeEval,
@@ -566,7 +566,7 @@ fn show_annotation(ann) = match ann {
   ARef(name, _)        => "ref " |> str_concat(name)
 }
 
-fn show_capability(cap) = match cap {
+fn show_capability(cap) with Pure = match cap {
   CMemoize             => "Memoization (pure function caching)",
   CParallelize         => "Automatic parallelization",
   CCompileTimeEval     => "Compile-time evaluation",

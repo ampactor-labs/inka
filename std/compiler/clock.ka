@@ -192,7 +192,7 @@ handler tick_record with counter = 0, trace = [], trace_len = 0 {
 handler clock_replay with trace = [], read_idx = 0 {
   clock_now() =>
     if read_idx >= len(trace) {
-      perform report("", "E_ReplayExhausted", "error",
+      perform report("clock", "E_ReplayExhausted", "error",
         "clock replay trace exhausted",
         span_zero(), "MaybeIncorrect")
       resume(Instant(0))

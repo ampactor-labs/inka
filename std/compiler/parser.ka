@@ -164,7 +164,7 @@ fn show_token_kind(k) with Pure = match k {
 fn expect(tokens, pos, kind) =
   if at(tokens, pos, kind) { pos + 1 }
   else {
-    perform report("", "P_ExpectedToken", "ParseError",
+    perform report("parser", "P_ExpectedToken", "ParseError",
       "expected "
         |> str_concat(show_token_kind(kind))
         |> str_concat(", got ")
@@ -820,7 +820,7 @@ fn parse_primary(tokens, pos) = {
       (nexpr(UnaryOpExpr("Not", inner), span), p)
     },
     _ => {
-      perform report("", "P_UnexpectedToken", "ParseError",
+      perform report("parser", "P_UnexpectedToken", "ParseError",
         "unexpected token: " |> str_concat(show_token_kind(kind_at(tokens, pos))),
         span, "MaybeIncorrect")
       let id = fresh_ph(span)

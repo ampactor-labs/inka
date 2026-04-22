@@ -262,7 +262,7 @@ fn infer_fn(name, params, body_node, handle, span) = {
           // for !Alloc, etc.).
           if row_subsumes(declared_row, body_row) { () }
           else {
-            perform report("", "T_OverDeclared", "warning",
+            perform report("infer", "T_OverDeclared", "warning",
               "function '"
                 |> str_concat(name)
                 |> str_concat("' declares ")
@@ -289,7 +289,7 @@ fn infer_fn(name, params, body_node, handle, span) = {
               |> str_concat(" but body inferred ")
               |> str_concat(show_effrow(body_row))
           }
-          perform report("", code, "error", summary, span, "MachineApplicable")
+          perform report("infer", code, "error", summary, span, "MachineApplicable")
         }
       },
       _ => ()
@@ -495,7 +495,7 @@ fn infer_expr(node) =
       infer_record_field_values(fields)
       match perform env_lookup(type_name) {
         None =>
-          perform report("", "E_MissingVariable", "MissingVariable",
+          perform report("infer", "E_MissingVariable", "MissingVariable",
             "record type: " |> str_concat(type_name),
             span, "MaybeIncorrect"),
         Some(entry) => {
@@ -507,7 +507,7 @@ fn infer_expr(node) =
                 Located(span, Inferred("nominal record literal")))
             },
             _ =>
-              perform report("", "E_NotARecordType", "TypeError",
+              perform report("infer", "E_NotARecordType", "TypeError",
                 type_name |> str_concat(" is not a record type"),
                 span, "MaybeIncorrect")
           }
@@ -578,7 +578,7 @@ fn infer_expr(node) =
         let declared_row = build_declared_row(declared_effs)
         if row_subsumes(arm_row, declared_row) { () }
         else {
-          perform report("", "E_HandlerUninstallable", "error",
+          perform report("infer", "E_HandlerUninstallable", "error",
             "handler arms require effects not admitted by the enclosing declaration ("
               |> str_concat(show_effrow(arm_row))
               |> str_concat(" ⊄ ")
@@ -689,7 +689,7 @@ fn infer_field_access_record(rec, field, handle, span) = {
 fn infer_var_ref(name, handle, span) =
   match perform env_lookup(name) {
     None => {
-      perform report("", "E_MissingVariable", "MissingVariable", name, span, "MaybeIncorrect")
+      perform report("infer", "E_MissingVariable", "MissingVariable", name, span, "MaybeIncorrect")
       perform graph_bind(handle, TVar(handle), Located(span, MissingVar(name)))
     },
     Some(entry) => {
@@ -744,7 +744,7 @@ fn infer_call(func, args, handle, span) = {
 fn infer_perform(op_name, args, handle, span) =
   match perform env_lookup(op_name) {
     None => {
-      perform report("", "E_MissingVariable", "MissingVariable",
+      perform report("infer", "E_MissingVariable", "MissingVariable",
         "effect op: " |> str_concat(op_name),
         span, "MaybeIncorrect")
       perform graph_bind(handle, TVar(handle), Located(span, MissingVar(op_name)))
@@ -851,7 +851,7 @@ fn infer_pipe(kind, left, right, handle, span) =
       let ctx = perform check_iterative_context()
       match ctx {
         None => {
-          perform report("", "E_FeedbackNoContext", "error",
+          perform report("infer", "E_FeedbackNoContext", "error",
             "<~ requires an iterative context (Clock, Sample, or Tick handler)",
             span, "MachineApplicable")
           perform graph_bind(handle, TVar(lh), Located(span, Inferred("<~ no context")))
@@ -963,7 +963,7 @@ fn unify_types(a, b, span, reason) =
         TVar(hb) => unify(ha, hb, span, reason),
         _ => {
           if occurs_in(ha, b) {
-            perform report("", "E_OccursCheck", "error",
+            perform report("infer", "E_OccursCheck", "error",
               "circular type", span, "MaybeIncorrect")
           } else {
             perform graph_bind(ha, b, Located(span, reason))
@@ -1289,7 +1289,7 @@ fn check_nominal_record_loop(declared, provided, type_name, span, i, j, ni, nj) 
   else if i >= ni {
     // Provided has extras
     let (extra, _) = list_index(provided, j)
-    perform report("", "E_RecordFieldExtra", "TypeError",
+    perform report("infer", "E_RecordFieldExtra", "TypeError",
       "record literal has unknown field '"
         |> str_concat(extra)
         |> str_concat("' for type ")
@@ -1298,7 +1298,7 @@ fn check_nominal_record_loop(declared, provided, type_name, span, i, j, ni, nj) 
     check_nominal_record_loop(declared, provided, type_name, span, i, j + 1, ni, nj)
   } else if j >= nj {
     let (missing, _) = list_index(declared, i)
-    perform report("", "E_RecordFieldMissing", "TypeError",
+    perform report("infer", "E_RecordFieldMissing", "TypeError",
       "record literal missing field '"
         |> str_concat(missing)
         |> str_concat("' for type ")
@@ -1317,7 +1317,7 @@ fn check_nominal_record_loop(declared, provided, type_name, span, i, j, ni, nj) 
         OpConstraint("record field", Inferred("declared"), Inferred("provided")))
       check_nominal_record_loop(declared, provided, type_name, span, i + 1, j + 1, ni, nj)
     } else if str_lt(dn, pn) {
-      perform report("", "E_RecordFieldMissing", "TypeError",
+      perform report("infer", "E_RecordFieldMissing", "TypeError",
         "record literal missing field '"
           |> str_concat(dn)
           |> str_concat("' for type ")
@@ -1325,7 +1325,7 @@ fn check_nominal_record_loop(declared, provided, type_name, span, i, j, ni, nj) 
         span, "MaybeIncorrect")
       check_nominal_record_loop(declared, provided, type_name, span, i + 1, j, ni, nj)
     } else {
-      perform report("", "E_RecordFieldExtra", "TypeError",
+      perform report("infer", "E_RecordFieldExtra", "TypeError",
         "record literal has unknown field '"
           |> str_concat(pn)
           |> str_concat("' for type ")
@@ -1415,7 +1415,7 @@ fn param_types_loop(params, i, n, acc) =
   }
 
 fn arity_mismatch(la, lb, span) =
-  perform report("", "E_TypeMismatch", "TypeMismatch",
+  perform report("infer", "E_TypeMismatch", "TypeMismatch",
     "function arity mismatch: "
       |> str_concat(int_to_str(la))
       |> str_concat(" param(s) vs ")
@@ -1424,7 +1424,7 @@ fn arity_mismatch(la, lb, span) =
     span, "MachineApplicable")
 
 fn type_mismatch(a, b, span, reason) =
-  perform report("", "E_TypeMismatch", "TypeMismatch",
+  perform report("infer", "E_TypeMismatch", "TypeMismatch",
     show_type(a)
       |> str_concat(" vs ")
       |> str_concat(show_type(b)),
@@ -1495,7 +1495,7 @@ fn infer_pat(pat, handle, span) = match pat {
   PCon(name, sub_pats) =>
     match perform env_lookup(name) {
       None =>
-        perform report("", "E_MissingVariable", "MissingVariable",
+        perform report("infer", "E_MissingVariable", "MissingVariable",
           "constructor: " |> str_concat(name),
           span, "MaybeIncorrect"),
       Some(entry) => {
@@ -1600,7 +1600,7 @@ fn infer_match_arms(arms, scrut, result_h, span) = {
   let total = arms_total_variants(arms)
   let has_wild = arms_have_wildcard(arms)
   if total > 0 && len(covered) < total && !has_wild {
-    perform report("", "E_PatternInexhaustive", "PatternInexhaustive",
+    perform report("infer", "E_PatternInexhaustive", "PatternInexhaustive",
       "match misses "
         |> str_concat(int_to_str(total - len(covered)))
         |> str_concat(" of ")

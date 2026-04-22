@@ -26,21 +26,72 @@ fn iterate(xs) with Iterate = {
 }
 
 // ─── Collection Operations (handlers on Iterate) ────────────
-// Each one: handle { iterate(xs); result() } with handler-local state.
-// yield decides what to do with each element. result() extracts the answer.
-// Same effect. Different handlers. Stream fusion falls out for free.
+// HC pattern (docs/rebuild/simulations/HC-handler-composition.md):
+//   Transform handlers emit via perform yield.
+//   Materialize handlers capture yields into state.
+//   Compose via ~> chain: source ~> transform ~> materialize.
+//
+// List-producing operations (map, filter, take, drop) use `collector`
+// as their materialize layer — buffer-counter substrate via
+// list_extend_to + list_set + slice (O(N) total, vs the O(N squared)
+// concat-plus-element pattern that drift mode 11 names). Scalar-
+// producing operations (fold, any, all, find, count, for_each) keep
+// their inline form because their state is scalar and
+// `acc = f(acc, elem)` is not drift-11.
 
-fn map(f, xs) =
-  handle { iterate(xs); result() } with acc = [] {
-    yield(elem) => resume(()) with acc = acc ++ [f(elem)],
-    result() => resume(acc)
-  }
+// Transform handlers — re-yield instead of accumulating.
 
-fn filter(pred, xs) =
-  handle { iterate(xs); result() } with acc = [] {
-    yield(elem) => if pred(elem) { resume(()) with acc = acc ++ [elem] } else { resume(()) },
-    result() => resume(acc)
-  }
+handler map_h(f) {
+  yield(elem) => { perform yield(f(elem)); resume(()) }
+}
+
+handler filter_h(pred) {
+  yield(elem) =>
+    if pred(elem) { perform yield(elem); resume(()) }
+    else          { resume(()) }
+}
+
+handler take_h(n) with remaining = n {
+  yield(elem) =>
+    if remaining > 0 {
+      perform yield(elem)
+      resume(()) with remaining = remaining - 1
+    } else {
+      resume(())
+    }
+}
+
+handler drop_h(n) with skipped = 0 {
+  yield(elem) =>
+    if skipped < n {
+      resume(()) with skipped = skipped + 1
+    } else {
+      perform yield(elem)
+      resume(())
+    }
+}
+
+// Materialize handler — captures every yield into buffer-counter state.
+// result() returns slice(buf, 0, count) — the Ω.3 substrate form.
+
+handler collector with buf = make_list(16), count = 0 {
+  yield(elem) => {
+    let extended = list_extend_to(buf, count + 1)
+    let written  = list_set(extended, count, elem)
+    resume(()) with buf = written, count = count + 1
+  },
+  result() => resume(slice(buf, 0, count))
+}
+
+// List-producing operations — transform ~> materialize composition.
+
+fn map(f, xs)     = { iterate(xs); result() } ~> map_h(f)     ~> collector
+fn filter(p, xs)  = { iterate(xs); result() } ~> filter_h(p)  ~> collector
+fn take(n, xs)    = { iterate(xs); result() } ~> take_h(n)    ~> collector
+fn drop(n, xs)    = { iterate(xs); result() } ~> drop_h(n)    ~> collector
+
+// Scalar-producing operations — inline handle form; no drift-11
+// because `acc = f(acc, elem)` is scalar state update, not list append.
 
 fn fold(xs, init, f) =
   handle { iterate(xs); result() } with acc = init {
@@ -75,24 +126,6 @@ fn count(pred, xs) =
   handle { iterate(xs); result() } with n = 0 {
     yield(elem) => if pred(elem) { resume(()) with n = n + 1 } else { resume(()) },
     result() => resume(n)
-  }
-
-fn take(n, xs) =
-  handle { iterate(xs); result() } with acc = [], remaining = n {
-    yield(elem) => {
-      if remaining > 0 { resume(()) with acc = acc ++ [elem], remaining = remaining - 1 }
-      else { resume(()) }
-    },
-    result() => resume(acc)
-  }
-
-fn drop(n, xs) =
-  handle { iterate(xs); result() } with acc = [], skipped = 0 {
-    yield(elem) => {
-      if skipped < n { resume(()) with skipped = skipped + 1 }
-      else { resume(()) with acc = acc ++ [elem] }
-    },
-    result() => resume(acc)
   }
 
 // ─── Derived (built on the handlers above) ──────────────────

@@ -792,6 +792,181 @@ A `mentl_voice_default` implementation is **correct** iff:
 
 ---
 
+## 2.9. VoiceLine register — 20 worked utterances
+
+*The voice is substrate. Each line below is a complete VoiceLine that
+Mentl surfaces under specific graph conditions, one per Tentacle
+FormKind combination. Each cites the proof it compresses. Implementation
+renders from these templates; Morgan owns the register refinements as
+lived-in character work.*
+
+### Tentacle 1 · Query · form = INDICATIVE
+
+**VL1.** (Cursor on `let xs = ...`) Indicative:
+> "`xs : List<Int> with Pure` — bound at line 40."
+
+Proof: graph_chase(handle_of_xs) → NBound(List<Int>); env_lookup returns the scheme with empty row. One-shot render.
+
+**VL2.** (Cursor on `fn compress`) Indicative:
+> "`compress : (own Audio, Float) -> Audio with DSP + !Alloc` —
+> proven pure over memory via row subsumption."
+
+Proof: generalize(compress_node) yields Forall([], ...); row normalizes to DSP with !Alloc; subsumption check against !Alloc passed. Two proofs compressed.
+
+### Tentacle 2 · Propose · form = TEACH
+
+**VL3.** (Cursor on a function signature; Synth returned AWrapHandler candidate)
+Teach:
+> "Wrapping `~> temp_arena(4MB)` absorbs the 50MB of scratch strings —
+> proven by forward-tracing the Alloc effects from line 203."
+
+Proof: forward-trace from body to cursor saw `str_concat` in 6 call sites summing >50MB; temp_arena handler arm absorbs `Alloc`; post-wrap row contains `!Alloc` locally.
+
+**VL4.** (Cursor on an expression hole `?`) Teach + MULTI-SHOT:
+> "I explored 8 candidates — 3 survived. The tightest is
+> `list_index(xs, 0)` (row-minimal, reason-chain shallowest).
+> Shall I fill?"
+
+Proof: synth enumerated 8; 5 failed verify; 3 passed; tiebreak selected the first by chain depth. Classic oracle-loop surfacing.
+
+### Tentacle 3 · Topology · form = STYLE_NUDGE
+
+**VL5.** (Cursor on a nested call `a(b(c(d)))`) Style-nudge:
+> "Three nested calls here — `d |> c |> b |> a` reads the same shape
+> with the topology visible."
+
+Proof: AST shape has call depth ≥ 3 with no intervening binding; pipe chain equivalence is type-preserving per spec 10 semantics. Style nudge, not error.
+
+**VL6.** (Cursor on `<|` where input is `own`) Style-nudge (upgraded to TRACE):
+> "`<|` borrows the input across branches; `own audio` at line 40 would
+> be consumed here. `><` would split the input cleanly if the branches
+> are independent."
+
+Proof: cursor site is a PDiverge with input marked Consume; `<|`'s desugar performs `ref` which conflicts with `own`; `><` desugars to independent branches. Ownership + topology intersection.
+
+### Tentacle 4 · Unlock · form = UNLOCK
+
+**VL7.** (Cursor on a function marked `Pure` but body allocates):
+> "Adding `!Alloc` alongside `Pure` unlocks `CRealTime` — proven by
+> walking the call graph; one allocation remains at `str_concat` on
+> line 57, absorbable via `~> bump_allocator`."
+
+Proof: row subsumes check against !Alloc failed at one site; that site is inside a function that `Pure` has already proven pure-modulo-alloc; absorbing handler removes the residue.
+
+**VL8.** (Cursor on a function with `!IO` but body calls `read_file`):
+> "Removing `!IO` unlocks calling `read_file` as intended; the `Pure`
+> gate you want is `!Network + !FFI`, which this body already satisfies."
+
+Proof: row diff shows `IO` ∈ body_row; `Network + FFI` not in body_row; negation proves absence.
+
+### Tentacle 5 · Trace · form = TRACE
+
+**VL9.** (`own xs` consumed twice across match arms):
+> "`xs` is `own` at line 40 — the second arm at line 48 would consume
+> it twice. Either share via `ref xs` or branch so only one arm
+> consumes."
+
+Proof: affine_ledger observed two Consume events for the same name in different arms; declared ownership is `own`; ref would satisfy the ledger.
+
+**VL10.** (`ref` value escapes):
+> "`ref head` at line 30 escapes the borrow — the returned value
+> outlives its source. Two fixes: promote to `own head` (deep copy),
+> or restructure the return path so the ref stays local."
+
+Proof: return-position structural walk found a ref-marked parameter in return; `own` + region-preserving promotion would type; refactor is the alternative.
+
+### Tentacle 6 · Verify · form = PENDING
+
+**VL11.** (Function declared `type Port = Int where 1 <= self <= 65535`, called with unbound int):
+> "2 pending refinement obligations at line 28 — Port bounds on `p`
+> and on the return. With `verify_smt` installed, these discharge in
+> one pass."
+
+Proof: verify_ledger accumulated 2 V_Pending entries with both predicates citable; handler swap path declared in DESIGN 9.7.
+
+**VL12.** (Refinement violation):
+> "`p = user_input` at line 28 violates `1 <= self <= 65535`; narrowing
+> via `assert p in 1..65535` or refining the caller type both would
+> type."
+
+Proof: verify_smt rejected the candidate; two fix patches both pass the obligation check.
+
+### Tentacle 7 · Teach · form = TEACH (canonical)
+
+**VL13.** (Function body is provably Pure; no annotation):
+> "`double` is Pure — adding `with Pure` unlocks memoization,
+> parallelization, compile-time evaluation."
+
+Proof: generalize produced an empty row; teach_unlock maps APure to [CMemoize, CParallelize, CCompileTimeEval]; the highest-leverage annotation at this handle. **This is the canonical default VoiceLine shape.**
+
+**VL14.** (Function uses `List` but not `Iterate`):
+> "Factoring the loop in `process_batch` through the `Iterate` effect
+> lets test handlers inject synthetic batches — the same mechanism
+> that makes mocking a handler swap."
+
+Proof: body has explicit recursion equivalent to yield/resume; Iterate handler factoring would route through `Iterate` effect; teaching the gradient step.
+
+### Tentacle 8 · Why · form = PROOF_CHAIN
+
+**VL15.** (User asks "why is x: Int?"):
+> "`x` is Int because: it's parameter 0 of `double` (line 12); `double`
+> was called with `42` (literal Int) on line 14; the parameter type
+> unified with Int at that call site."
+
+Proof: teach_why walks the Reason chain; three hops compressed into one sentence. Shortest walk wins.
+
+**VL16.** (User asks "why does this function perform EnvWrite?"):
+> "`infer_expr` performs `EnvWrite` because: it extends the env at the
+> `LetStmt` on line 210, inside the scope entered at the `BlockExpr`
+> on line 187."
+
+Proof: reason chain walks back through env_extend site and the containing scope enter. Two-hop chain.
+
+### Voice identity — multi-shot summary form
+
+**VL17.** (After a multi-candidate speculative pass):
+> "I proved 3 of 8 branches — one has the smallest row (`Pure + !Alloc`),
+> one has the shortest reason chain (1 hop), one aligns with your
+> declared intent (`/// real-time audio`). They're all tied on
+> span-earliness. Shall I pick the row-minimal?"
+
+Proof: oracle loop surfaced 3 survivors; tiebreak chain exposed; the human is invited to choose where determinism defers. First-person "I" used intentionally — this is a multi-shot summary, one of three places first-person is licensed.
+
+### Voice identity — refusal form
+
+**VL18.** (User asks Mentl to emit code that would violate declared `!Alloc`):
+> "I won't — `!Alloc` at line 40 forbids allocating here. Two paths
+> type: `#fix1` removes `!Alloc` and lets the allocation; `#fix2`
+> wraps the allocating call in `~> bump_allocator` to absorb it."
+
+Proof: row subsumption check fires; two fix patches both verify; refusal is firm and proof-linked. First-person "I" for the refusal — another of the three licensed places.
+
+### Voice identity — silence licensed
+
+**VL19.** (Cursor moves over well-typed, well-annotated code with no delta):
+> (silence)
+
+Proof: all eight interrogations terminate on "graph already answers this"; no surfaceable delta; recent voice-ring contains no shadowing; silence predicate fires. **Silence is the default voice shape when the substrate has nothing to compress.**
+
+### Voice identity — first-invocation handling
+
+**VL20.** (Empty project, bare `inka`):
+> (silence, followed on human cursor onto a tutorial file:)
+> "The tutorial at `lib/tutorial/00-hello.nx` walks the eight
+> primitives in order. I'll narrate each as you read."
+
+Proof: graph is empty; no surfaceable content; silence predicate holds. Human motion into tutorial file unlocks teach_narrative tentacle. No canned greeting — presence is proven, not performed.
+
+### Register summary
+
+- **First-person "I" used SPARINGLY** — refusals (VL18), multi-shot summaries (VL17), proof-chain walks (VL15, VL16).
+- **Suggestions drop first-person** — VL3, VL5, VL7, VL13 all anchor the subject at the graph, not at Mentl.
+- **Human addressed as "you"** — pair-programmer register. No "we." No "let's."
+- **Refusals are firm + proof-linked** — never "I'd prefer not to"; always "I won't — <proof>."
+- **Every line compresses a proof** — strike any sentence whose source isn't in the graph. This is the test.
+
+---
+
 ## 3. Proof-shape grammar — the dozen(ish) templates
 
 > **SUPERSEDED 2026-04-21.** §2.7.3's 8-form Tentacle→FormKind mapping replaces §3's 12 templates. The 12→8 remap table lives in §2.7.3. This section is retained as historical reasoning — the original candidate taxonomy from which the consolidated form emerged. Implementation reads from §2.7; this section is not spec.

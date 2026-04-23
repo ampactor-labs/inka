@@ -164,6 +164,41 @@ supersedes earlier framings. Append-only; do not rewrite history
   collapse into `main`. Linear ancestry — all branches shared
   `33e6a52` as merge base; fast-forward only, no force-push.
   Going forward: single trunk.
+- **2026-04-23** — **The Convergence: six threads keyed to the
+  critical path.** Landed together as design contract before
+  touching bootstrap substrate. Each thread reinforces the others:
+  1. **MO-mentl-oracle-loop.md** — speculative gradient end-to-end
+     (checkpoint → Synth → Verify → rollback) with concrete
+     latency math. Research-risk gate for the "compiler IS the
+     AI" thesis claim.
+  2. **BT-bootstrap-triage.md** — per-module punch list for the
+     14/15 cross-module reference failures; sequential close-out
+     recommended with explicit timebox/pivot criteria (3 sessions
+     or disposable translator).
+  3. **CRU-crucibles.md** — five crucible `.nx` files as the
+     thesis fitness function (DSP, ML, realtime, web, oracle).
+     Pass/fail replaces engineering triage as the prioritization
+     mechanism.
+  4. **Hβ-bootstrap.md §12** — first-light is a TRIANGLE, not a
+     diff: byte-identical self-compile + self-verifying refinement
+     witness + cross-domain crucible pass. All three legs required
+     for the first-light tag; partial passes get `first-light-L1`
+     / `first-light-L2` tags.
+  5. **MV-mentl-voice.md §2.9** — 20 canonical VoiceLines, one per
+     (Tentacle × FormKind) surface, each compressing a graph-
+     derivable proof. First-person "I" licensed only for refusals,
+     multi-shot summaries, and proof-chain walks.
+  6. **Five crucible `.nx` seeds under `crucibles/`** — each
+     aspirational, compile-failing until its thesis substrate
+     lands. Seeds drive the critical path by naming what's
+     missing.
+  **Why together:** each thread is load-bearing for the others —
+  the oracle needs the crucibles to prove itself; the crucibles
+  need the triangle to define victory; the triangle needs the
+  linker (BT) to have anything to test; the voice needs the
+  oracle to have something to speak; the voice also gives MV's
+  §2.9 register concrete substance. Landing together avoids
+  each piece ossifying in isolation and compounds the thesis.
 
 ### 2026-04-21 — pre-walkthrough decisions (hand-wave prevention)
 

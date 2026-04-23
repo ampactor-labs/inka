@@ -506,3 +506,120 @@ Hand-WAT lands INCREMENTALLY, module-by-module within the tier structure. Each s
 Hβ is the final cascade handle. Closes the bootstrap conversation. Hand-WAT in tiers (runtime → template-expansion → incremental self-hosting), prescriptively shaped by this walkthrough + per-handle walkthroughs. First-light achieved by a byte-identical diff; hand-WAT preserved forever as the reference.
 
 **One walkthrough, three tiers, the seed compiler's binary image hand-transcribed from walkthroughs into WAT. First-light follows.**
+
+---
+
+## 12. First-Light Triangle — three legs, not one diff *(added 2026-04-23)*
+
+*The earlier framing of first-light as `diff inka2.wat inka3.wat → empty` tests whether the hand-WAT is self-CONSISTENT under the current assembler. It does not test whether Inka is self-DESCRIBING — whether the substrate is complete enough to host its own semantics on its own terms. The triangle names what self-describing actually means.*
+
+First-light is a **triangle**, not a line. Three independent fitness tests; all three must pass for the substrate to claim completeness.
+
+```
+                   ▲
+                  / \
+                 /   \
+                /     \
+              L1       L2
+    (byte-identical)  (self-verifying)
+              /         \
+             /           \
+            ───── L3 ─────
+          (cross-domain capability)
+```
+
+### Leg 1 — Byte-identical self-compilation
+
+**Test:** `cat src/*.nx lib/**/*.nx | wasmtime run inka2.wasm > inka3.wat && diff inka2.wat inka3.wat` exits 0.
+
+**Proves:** the compiler's output, compiled by itself, produces an identical compiler. The ouroboros topology closes. **Self-consistency.**
+
+**What it doesn't prove:** that the substrate is complete enough to describe its own semantics — only that the current pipeline is a fixed point. A compiler with a hard-coded TVar-pointer-compare bug that's present in both `inka2.wasm` and `inka3.wat` would pass Leg 1 silently.
+
+### Leg 2 — Self-verifying refinement witness
+
+**Test:** one concrete function in `src/` carries a refinement annotation; the compiler's own `verify_ledger` discharges the obligation at compile time; swapping to `verify_smt` (handler swap per DESIGN 9.7) produces identical output for a single obligation whose predicate is statically decidable.
+
+**Concrete witness candidate** (minimum viable):
+```
+// src/graph.nx (add annotation to an existing site)
+type Handle = Int where self >= 0 && self < graph_next_handle()
+
+fn graph_chase(h: Handle) -> GNode with GraphRead = ...
+```
+
+**Fitness:**
+- `inka check src/graph.nx` accumulates one V_Pending obligation
+  per `graph_chase` caller whose `h` argument isn't provably in range.
+- `inka check --with verify_smt src/graph.nx` discharges call sites
+  whose handle is graph-proven ground (>95% per H1); the residue is
+  the polymorphic minority.
+- Output is byte-identical across the two runs FOR discharged
+  obligations; the residue produces deterministic V_Pending
+  diagnostics.
+
+**Proves:** the compiler's own substrate can host a non-trivial
+refinement claim AND swap the proof handler without source change.
+**The handler-swap thesis runs on the compiler itself.**
+
+**What it doesn't prove:** full domain coverage — only that the
+refinement substrate is real. That's Leg 3.
+
+### Leg 3 — Cross-domain crucible pass
+
+**Test:** the five crucibles in `crucibles/` (per CRU walkthrough):
+`crucible_dsp.nx`, `crucible_ml.nx`, `crucible_realtime.nx`,
+`crucible_web.nx`, `crucible_oracle.nx` all compile through the
+bootstrapped compiler and each meets its documented fitness
+criterion.
+
+**Proves:** the thesis — "every domain is a handler stack on one
+substrate" — holds across all five named domains. The medium
+actually reaches.
+
+**What it doesn't prove:** that all future domains will work —
+only that the five demonstrated ones do. (Future domains open new
+crucibles; each new crucible is a new fitness test.)
+
+### The combined fitness claim
+
+**First-light is `L1 ∧ L2 ∧ L3`.** All three legs pass. Any one
+failing surfaces a specific substrate gap:
+
+- `¬L1` → bootstrap regression, non-determinism, or missing stdlib
+  primitive. Fix path: Hβ + BT triage iteration.
+- `¬L2` → refinement substrate not closed. Fix path: `verify_smt`
+  handler swap wiring + one witness annotation in src/.
+- `¬L3` → thesis-scale regression in one domain. Fix path: that
+  crucible names its own missing piece (per CRU protocol).
+
+**Tagging discipline:** `first-light-L1` tag when Leg 1 passes.
+`first-light-L2` when Leg 2 joins. `first-light` tag ONLY when all
+three pass. Partial victory gets partial credit; the full tag
+waits for the triangle.
+
+### Drift modes avoided
+
+- **Not drift 9 (deferred-by-omission):** each leg either passes
+  as a contract or has a named follow-up. "Good enough with just
+  L1" is drift; the triangle IS the substrate.
+- **Not drift 6 (primitive-type-special-case):** the verify-self
+  witness uses a REAL refinement on a REAL type (`Handle`), not a
+  hardcoded `Bool` or `Int` synthetic. The witness earns its
+  weight.
+- **Not drift 8 (string-keyed-when-structured):** crucible pass/fail
+  is structurally a `CrucibleResult = Pass(Reason) | Fail(Gap)`
+  ADT, not a parsed string report. The report is a handler
+  projection over that ADT.
+
+### Landing
+
+1. Leg 1 — blocked by BT triage (cross-module linking).
+2. Leg 2 — needs `verify_smt` handler + one witness annotation.
+   Not blocked by Leg 1.
+3. Leg 3 — blocked by crucible seeds + each crucible's named
+   substrate gap. Not blocked by Legs 1 or 2 for compile; blocked
+   by both for run.
+
+Legs 2 and 3 can progress in parallel with Leg 1 — don't serialize
+the triangle.

@@ -193,6 +193,36 @@ supersedes earlier framings. Append-only; do not rewrite history
   (H7 substrate) slotted after current item 1 LFeedback. Each
   phase closes when its walkthrough-paragraph → substrate mapping
   is clean; no temporal budget.
+- **2026-04-23** — **SR audit: PLAN reality sweep.** Systematic
+  audit of Status section + Decisions Ledger claims vs actual
+  `src/*.nx` + `lib/**/*.nx`. Results in
+  `docs/specs/simulations/SR-status-reality-audit.md`. Findings:
+  - ~28 claims REAL (substrate confirmed by grep).
+  - ~6 PARTIAL (explicit pending sub-handles).
+  - ~3 ASPIRATIONAL mistaken-for-landed (tutorial stubs, IC.3
+    as implicit-in-IC, `lib/tutorial/` 9-file curriculum).
+  - ~5 DOCS-DRIFT (stale `docs/rebuild/` paths — swept 2026-04-23).
+  - ~3 SUBSTRATE-DRIFT (duplicate `Alloc` effect name between
+    `lib/dsp/signal.nx` and `lib/runtime/memory.nx`; runtime
+    HandlerCatalog stayed static; main.nx pre-EH subcommand
+    dispatch).
+  Actions taken in this commit:
+  - Swept PLAN.md for stale `docs/rebuild/` paths (18 hits
+    updated to `docs/specs/`).
+  - IC entry in Status §1.3 split: IC.1 + IC.2 landed; IC.3
+    pending (flagged item 49); execution-gated on bootstrap-L1.
+  - CLI-shape entry annotated `[IMPLEMENTATION PENDING — item 20]`.
+  - Tutorial-contents entry annotated `[CONTENT PENDING 2026-04-23]`.
+  Actions follow-up (own commits):
+  - `AL-alloc-unification.md` walkthrough + rename sweep for
+    duplicate Alloc.
+  - Either `TU-tutorial.md` walkthrough + content, or MV.2's
+    teach_narrative tentacle generating on-demand.
+  - `tools/plan-audit.sh` script (pre-Mentl scaffolding) that
+    greps Status claims against code; post-first-light becomes
+    `mentl audit plan` handler projection.
+  **The medium did not lie about itself.** The VFINAL compiler is
+  real substrate; drift concentrated on doc edges.
 - **2026-04-23** — **TH walkthrough: threading substrate named.**
   Morgan's prompt: "imagine how embarrassing it would be if Inka
   only used one core." Right. The substrate was sketched in
@@ -304,7 +334,7 @@ the corresponding walkthrough must respect.*
 - **`speak` discipline:** one-shot per turn. One VoiceLine surfaces, gated by silence predicate. Streaming voice is not a substrate; silence is the default.
 - **`Cursor` shape:** `type Cursor = { handle: Int, span: Span, intent: Option<Intent> }`. Handle is graph-native; span is human-visible; intent is declared-goal. Matches Records-Are-Handler-State-Shape (γ crystallization #9).
 - **`.inka/` cache layout:** per-project root `.inka/cache/` + `.inka/handlers/` (content-addressed handler blobs). Per-user overlay `~/.inka/handlers/` consulted first via `~>` fall-through in default Package handler. Cache key is `(source_hash, handler_chain_hash)` — same source + different handler chain = different WAT; key encodes both.
-- **CLI shape:** single `inka` binary, git-style subcommands. `inka --with <name>` is the universal form; subcommands are aliases: `inka compile` ≡ `--with compile_run`, `inka check` ≡ `--with check_run`, `inka audit` ≡ `--with audit_run`, `inka query <q>` ≡ `--with query_run` + arg, `inka teach` ≡ `--with teach_run`, `inka run` ≡ `--with compile_run && wasmtime output`. Bare `inka` (no args) launches Mentl over the current project (equivalent to `inka teach`); if no `main.nx` exists, Mentl offers to start from `lib/tutorial/`.
+- **CLI shape:** single `inka` binary, git-style subcommands. `inka --with <name>` is the universal form; subcommands are aliases: `inka compile` ≡ `--with compile_run`, `inka check` ≡ `--with check_run`, `inka audit` ≡ `--with audit_run`, `inka query <q>` ≡ `--with query_run` + arg, `inka teach` ≡ `--with teach_run`, `inka run` ≡ `--with compile_run && wasmtime output`. Bare `inka` (no args) launches Mentl over the current project (equivalent to `inka teach`); if no `main.nx` exists, Mentl offers to start from `lib/tutorial/`. **[IMPLEMENTATION PENDING — item 20.]** Today's `src/main.nx` uses pre-EH subcommand dispatch via `argv[1]` string switch (honest about its state in its own comments). EH paradigm + `--with` universal resolution lands when item 20 executes.
 - **`inka new <project>` command:** creates a new project from `lib/tutorial/00-hello.nx` as template.
 - **`Test` effect:**
   - `assert(cond)` — lifts to compile-time proof when `cond` is statically decidable (via `verify_assert` handler in compile-run chain); runtime check otherwise.
@@ -322,7 +352,7 @@ the corresponding walkthrough must respect.*
   - `06-refinement.nx` — primitive 6 (refinement types)
   - `07-gradient.nx` — primitive 7 (gradient)
   - `08-reasons.nx` — primitive 8 (HM + Reasons / Why Engine)
-  Each ≤ 50 lines. Mentl's Teach tentacle walks in order. `00-hello.nx` doubles as `inka new <project>` template.
+  Each ≤ 50 lines. Mentl's Teach tentacle walks in order. `00-hello.nx` doubles as `inka new <project>` template. **[CONTENT PENDING 2026-04-23.]** Today's 9 files exist as 1-line placeholder stubs; the 360-line curriculum is unwritten. Either a `TU-tutorial.md` walkthrough + content commit lands, or Mentl's teach_narrative tentacle (MV.2) generates content on demand from the graph. Option TBD; surfaced in SR audit §3.3.
 - **Hand-WAT file organization:** single monolithic `bootstrap/inka.wat` file pre-first-light. No includes, no macros, no fragments. Auditability > editability for the reference soundness artifact. Post-first-light, if multi-file is desired, separate concern.
 - **EH walkthrough scope:** absorbs the `src/main.nx` CLI rewrite (from current subcommand dispatch to entry-handler resolution). One walkthrough, complete design.
 
@@ -422,12 +452,12 @@ composition. Nothing remains as a separate substrate question.*
 
 ## Status — 2026-04-21 (γ cascade closed; all seven pre-migration walkthroughs LANDED; migrations + audits + bootstrap sequenced)
 
-- **Specs.** Twelve specs in `docs/rebuild/00–11` plus `docs/SYNTAX.md`
+- **Specs.** Twelve specs in `docs/specs` plus `docs/SYNTAX.md`
   (Σ phase, canonical syntax). Read them as declarative contracts;
   update them when the code teaches us something better.
   *(Restructure item 17' relocates to `docs/specs/00–11`; spec 00
   retitled to `00-graph.md` reflecting `SubstGraph → Graph`.)*
-- **Cascade walkthroughs.** `docs/rebuild/simulations/H*.md` — one per
+- **Cascade walkthroughs.** `docs/specs/simulations/H*.md` — one per
   handle. Each resolves design before code freeze. Riffle-back
   addenda capture how prior decisions read in new substrate.
   *(Restructure item 17' relocates to `docs/specs/simulations/`.)*
@@ -462,14 +492,20 @@ composition. Nothing remains as a separate substrate question.*
     path_filestat_get + wasi_filesystem handler. First post-
     cascade effect; exercises the substrate's discipline for
     adding new effects cleanly.
-    Walkthrough: `docs/rebuild/simulations/FS-filesystem-effect.md`.
-  - **IC cluster** (0116d5d, 573879c, b0008dd, 0b27b0c) — cache.nx
+    Walkthrough: `docs/specs/simulations/FS-filesystem-effect.md`.
+  - **IC.1 + IC.2 landed** (0116d5d, 573879c, b0008dd, 0b27b0c) — cache.nx
     (KaiFile record, FNV-1a hash, env serialization round-trip),
     driver.nx (DAG walk + cache hit/miss + env install),
     pipeline+main wiring through driver_check. `inka check
     <module>` operates incrementally; first post-cascade
     closure of drift mode 10 ("the graph as stateless cache").
-    Walkthrough: `docs/rebuild/simulations/IC-incremental-compilation.md`.
+    **IC.3 (graph chase walks per-module overlays) PENDING — item 49.**
+    driver.nx top-comment flags: "Per-module env install merges
+    flat into env_handler (no per-module overlay separation yet);
+    per-module overlays land with IC.3's chase extension."
+    **Execution-gated on bootstrap-L1** per MSR; IC substrate is
+    live in `src/` but doesn't run until bootstrap closes.
+    Walkthrough: `docs/specs/simulations/IC-incremental-compilation.md`.
   - **Phase A — Substrate Truth-Telling** (eafd973) — eight high-priority
     logic/memory-safety fixes across effects.nx, graph.nx, driver.nx,
     cache.nx, infer.nx, lower.nx, strings.nx, io.nx.
@@ -640,7 +676,7 @@ itself. 32+ are post-first-light surfaces.
         - (within `4bddfe4`) — **11.C.0** inline suppressions for 5 false positives (lower.nx one-time LBlock appends + prose comment + frame-record paired-list tracked for 11.C.2).
         - `4bddfe4` — **11.C.1** buffer-counter sweep for 13 genuine tail-recursive accumulator loops (lower/cache/driver/infer/wasm).
         - **11.C.2** — `[PENDING WALKTHROUGH]`. Frame-record paired-list restructure at lower.nx:1177/78 (local_handles + local_order both `++ [x]` in handler-arm record update). Requires frame-record field restructure (list→buffer+counter pair) or introduction of O(1) snoc primitive. Walkthrough-worthy substrate design.
-        - **11.C.3** — `[WALKTHROUGH LANDED 2026-04-21]` — see `docs/rebuild/simulations/HC-handler-composition.md`. Pattern locked: **transform emits; materialize captures; `~>` composes.** Prelude refactor (map_h / filter_h / take_h / skip_h re-yield; collector captures via buf+count; sum_h / count_h as peer materializers) ready for implementation. Pattern ripples to 11.C.2 (frame-record as OrderedMap materializer), 11.B.M (Diagnostic module-parameterized materializer), Hα (Arithmetic(mode) materializer), and MV.2 (tentacles transform; LSP surfaces materialize). **HC is upstream of 4 downstream handler-composition moves.**
+        - **11.C.3** — `[WALKTHROUGH LANDED 2026-04-21]` — see `docs/specs/simulations/HC-handler-composition.md`. Pattern locked: **transform emits; materialize captures; `~>` composes.** Prelude refactor (map_h / filter_h / take_h / skip_h re-yield; collector captures via buf+count; sum_h / count_h as peer materializers) ready for implementation. Pattern ripples to 11.C.2 (frame-record as OrderedMap materializer), 11.B.M (Diagnostic module-parameterized materializer), Hα (Arithmetic(mode) materializer), and MV.2 (tentacles transform; LSP surfaces materialize). **HC is upstream of 4 downstream handler-composition moves.**
         - **11.C.4** — `[PENDING]`. Post-walkthrough bug-class screens: `_ => <fabricated>` sweep, `str_eq(a,b) == 1` deprecated form check, `println` in report arms audit. Currently drift-audit-clean; may surface during 11.D semantic pass.
       - **11.D** — Pass 4 eight-interrogation audit (semantic).
       - **11.E** — Pass 5 docstring harmonization.
@@ -718,8 +754,8 @@ Lands after items 10-22 so simplification + extension migration ride through alo
 - `std/types.nx` merged into `lib/prelude.nx` (absorbed)
 - `std/dsp/` → `lib/dsp/`
 - `std/ml/` → `lib/ml/`
-- `docs/rebuild/` → `docs/specs/`
-- `docs/rebuild/simulations/` → `docs/specs/simulations/`
+- `docs/specs/` → `docs/specs/`
+- `docs/specs/simulations/` → `docs/specs/simulations/`
 - `bootstrap/` created with `README.md`, empty `inka.wat`, `first-light.sh` scaffold
 - `lib/tutorial/` directory created with 5–10 escalating `.nx` files (curriculum content; Mentl's Teach tentacle narrates over these) — NOT a "starter template"; substantive teaching substrate
 - Entry-handlers (compile_run / verify_run / deterministic_run / audit_run) declared at top-level in `src/main.nx` (NOT a separate `run.nx` file — corrected 2026-04-21)
@@ -742,7 +778,7 @@ Lands after items 10-22 so simplification + extension migration ride through alo
     - Deliverable: every emit path proven deterministic; compile-same-source-twice-in-one-process yields byte-identical WAT; fix log committed.
 
 25. **🧪📋 Feature-usage audit.**
-    - Walkthrough `docs/rebuild/simulations/FU-feature-usage.md` **LANDED 2026-04-21.**
+    - Walkthrough `docs/specs/simulations/FU-feature-usage.md` **LANDED 2026-04-21.**
     - Descriptive finding: compiler uses 3/8 primitives (#1 graph, #2 handlers-OneShot-only, #8 HM+Reasons). Verbs: `|>` + `~>` used in bodies; `<|`, `><`, `<~` 0 body uses. Negation `!E`: 0. `Pure`: 0 declared. Ownership `own`/`ref`: 0. Refinement `where`: 0. String interpolation: 0. 27/630 fns annotated (~4% gradient density).
     - Normative output: **FV.1–FV.9 action items** closing the exemplar gap. None block first-light; all runnable in parallel with hand-WAT Tier 1.
     - Hand-WAT Tier 2 scope: ~1500-2000 lines; Tier 1 ~1000 lines; total ~2500-3000 lines. FV additions add ~35 lines to Tier 2 parser. Tractable.
@@ -751,14 +787,14 @@ Lands after items 10-22 so simplification + extension migration ride through alo
         - **Exercised:** 36 cache functions annotated: `with Pack + !Unpack` (18)
           and `with Unpack + !Pack` (18). First real `!E` on non-trivial code.
         - Remaining FV.1 sub-handles (α, β, γ, δ) still pending walkthrough.
-        - **Walkthrough.** `docs/rebuild/simulations/EN-effect-negation.md` —
+        - **Walkthrough.** `docs/specs/simulations/EN-effect-negation.md` —
           covers FV.1.α (intent preservation), FV.1.γ (lone-`!E` semantics),
           FV.1.δ (named capability bundles — `capability RealTime = !Alloc & !IO & !Network`),
           and FV.1.β (polymorphic applied exemplar). Ordering: α → γ → δ → β,
           with MV.2.capability-surfacing as the voice-layer consumer of α+δ.
         - **Parent context:** EN is one of eight peer walkthroughs in the
           **IR intent round-trip cluster**
-          (`docs/rebuild/simulations/IR-intent-round-trip.md`). The IR
+          (`docs/specs/simulations/IR-intent-round-trip.md`). The IR
           discipline names the principle that every primitive's authored
           form round-trips to every handler projection surface. The eight
           peers (EN · RN · OW · VK · GR · RX · HI · DS) each close one
@@ -1181,7 +1217,7 @@ substrate; bootstrap comes after.
 ### Phase I — γ cascade — CLOSED
 
 The substrate is Inka-native at every layer. See
-`docs/rebuild/simulations/H*.md` for per-handle reasoning and
+`docs/specs/simulations/H*.md` for per-handle reasoning and
 `docs/traces/a-day.md` for integration verification.
 
 Landings (chronological):
@@ -1226,7 +1262,7 @@ substrate gaps, not surfaces — named explicitly below.
 projections (MV.2, LSP hover, audit, capability graphs) depend on
 intent substrate — the authored vocabulary that round-trips through
 the compiler to reach downstream surfaces. The IR intent round-trip
-cluster (`docs/rebuild/simulations/IR-intent-round-trip.md`) names
+cluster (`docs/specs/simulations/IR-intent-round-trip.md`) names
 eight peer walkthroughs that close the intent gaps per kernel
 primitive: EN (effects), RN (refinements), OW (ownership), VK
 (verbs), GR (gradient), RX (reasons), HI (handlers), DS
@@ -1779,7 +1815,7 @@ measures accumulation; post-F.1 measures the trend toward zero.
 
 ## Spec Inventory
 
-All twelve specs in `docs/specs/` (relocated from `docs/rebuild/`
+All twelve specs in `docs/specs/` (relocated from `docs/specs/`
 per Pending Work item 17'):
 
 | Spec | File (post-restructure) | Governs |
@@ -2102,7 +2138,7 @@ terminal invariant).
 ## Key Documents
 
 *(Paths reflect post-restructure state — item 17' of Pending Work.
-Pre-restructure: `docs/specs/` = `docs/rebuild/`, `.nx` = `.nx`,
+Pre-restructure: `docs/specs/` = `docs/specs/`, `.nx` = `.nx`,
 `src/` = `std/compiler/`, `lib/` = `std/runtime/` + `std/*.nx`.)*
 
 | Document | Role |
@@ -2153,7 +2189,7 @@ self-contained operating manual.
 2. `docs/DESIGN.md` end-to-end on first session; thereafter §0.5
    (kernel primitives) + the chapter for the module about to be
    touched.
-3. The relevant `docs/rebuild/simulations/H*.md` or topical walkthrough
+3. The relevant `docs/specs/simulations/H*.md` or topical walkthrough
    (FU / HC / MV).
 4. This Handoff Posture section.
 5. `memory/MEMORY.md` index + any file it points to that feels relevant.
@@ -2186,7 +2222,7 @@ only. Opus 4.6, you are the planner. Do not skip sections because
 > lines of shape].
 
 **§2 Walkthrough citation.** Quote the exact paragraph from the
-relevant `docs/rebuild/simulations/*.md` that decides this design
+relevant `docs/specs/simulations/*.md` that decides this design
 point. **Not a summary — the paragraph.** If no walkthrough exists
 for this work, the plan is premature; write the walkthrough first.
 
@@ -2286,7 +2322,7 @@ commits inline). Recommended order by **single-thread safety**
 | 4 | **FV.9** docstring harmonization | Mechanical | BLOCKED — lock NS-naming template first |
 | 5 | FV.4 ownership markers (`own` / `ref` / `!Mutate`) | Judgment | Per-fn analysis |
 | 6 | FV.5 five-verb exemplar (`<\|` / `><` / `<~` one site each) | Judgment | Per-site judgment |
-| 7 | FV.1 `!E` negation sweep | — | **BLOCKED — substrate cluster** (walkthrough at `docs/rebuild/simulations/EN-effect-negation.md`; reframed as α intent-preservation + γ lone-`!E`-semantics + δ named-capability-bundles + β polymorphic-applied-exemplar; ordering α→γ→δ→β) |
+| 7 | FV.1 `!E` negation sweep | — | **BLOCKED — substrate cluster** (walkthrough at `docs/specs/simulations/EN-effect-negation.md`; reframed as α intent-preservation + γ lone-`!E`-semantics + δ named-capability-bundles + β polymorphic-applied-exemplar; ordering α→γ→δ→β) |
 | 8 | FV.8 parameterized Diagnostic / 11.B.M | Judgment + cross-cutting | **Recommended to DEFER** |
 | — | FV.6 string interpolation | BLOCKED | Lexer `scan_string` does not parse `${}` |
 | — | FV.7 `~>` chain sweep | Likely no-op | Pre-audit found no nested `handle(handle(...))` |
@@ -2337,7 +2373,7 @@ mode 9 flipped (work landing before its prerequisite):
   - `wasm-strip` — remove debug/custom sections (production builds).
   - `wat-desugar` — canonicalize WAT formatting (diff normalization).
   - `wasm2c` — WASM → C source (escape hatch, distant future).
-  See `docs/rebuild/simulations/Hβ-bootstrap.md` §5.1 for detailed
+  See `docs/specs/simulations/Hβ-bootstrap.md` §5.1 for detailed
   roles + commands.
 - **wasmtime** v44.0.0 (April 2026) — runtime target. Tail calls
   stable/default-on. WASI preview1 fully supported.

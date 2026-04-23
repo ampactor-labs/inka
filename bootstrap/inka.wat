@@ -19,7 +19,7 @@
     (func $wasi_proc_exit (param i32)))
   
   ;; ─── Memory & Globals ────────────────────────────────────────────────────
-  (memory (export "memory") 1)
+  (memory (export "memory") 32)
   
   (global $heap_base i32 (i32.const 4096))
   (global $heap_ptr (mut i32) (i32.const 1048576))

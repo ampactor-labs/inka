@@ -133,6 +133,37 @@ supersedes earlier framings. Append-only; do not rewrite history
   (effects.nx:456). Types: `EffParamName` ADT. H3.1 walkthrough landed.
   Zero exercised sites in the compiler — 11.B.M (`Diagnostic(module)`)
   is the first real application. Not "future" — substrate ready, awaiting use.
+- **2026-04-23** — **Bootstrap pivot: monolithic-file decision revised
+  to modular `bootstrap/src/` + deterministic `build.sh` assembler.**
+  Earlier 2026-04-21 decision framed the hand-WAT image as a single
+  monolithic `bootstrap/inka.wat` ("auditability > editability").
+  Implementation experience found the monolith unmaintainable at
+  ~4,600 lines; the pivot keeps auditability (the output `inka.wat`
+  is still a single assembled artifact, byte-for-byte reproducible)
+  while splitting the SOURCE into 15 layered chunks under
+  `bootstrap/src/` (Layer 2 lexer, Layer 3 parser, Layer 4 emit).
+  `build.sh` concatenates chunks in dependency order between a
+  preserved shell (Layer 0+1: module decl, WASI imports, memory,
+  globals, runtime primitives) and `_start`. Output assembles with
+  `wat2wasm` and validates with `wasm-validate`. Progress per last
+  session: 15/15 Inka source files compile through the pipeline;
+  1/15 (verify.nx) validates fully; the remaining 14 fail on
+  cross-module references (expected for single-file compilation).
+  **This pivot is the reference soundness artifact's new source
+  form; the monolith was the fluency-preserved form that broke
+  under editability.** Decision-ledger honesty: the monolith was
+  overspec of auditability at editability's expense.
+- **2026-04-23** — **File extension locked: `.nx` forevermore.**
+  Supersedes the 2026-04-21 framing that called this settled
+  (the PLAN text was sloppy on that line); Morgan explicitly
+  confirmed today. All tree files are `.nx`; `.ka` and `.jxj` are
+  archaeology. Memory store updated.
+- **2026-04-23** — **Branch consolidation: `main` is the only
+  branch.** The `rebuild` branch (cascade work + Phase A/B/C) and
+  `gemini-wat` branch (Tier 1 → Tier 2 → modular-bootstrap pivot)
+  collapse into `main`. Linear ancestry — all branches shared
+  `33e6a52` as merge base; fast-forward only, no force-push.
+  Going forward: single trunk.
 
 ### 2026-04-21 — pre-walkthrough decisions (hand-wave prevention)
 

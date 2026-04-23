@@ -211,7 +211,7 @@ kernel as-is; residue only.
    the only artifact in the repo that loads Inka's register as a
    whole. Partial grasp of Inka produces patch-level work that
    shackles the design; Morgan has been burned by this repeatedly.
-2. **Read the specific rebuild spec in `docs/rebuild/00–11/` for any
+2. **Read the specific rebuild spec in `docs/specs/00–11-*.md` for any
    module you intend to touch.** The specs are per-module
    declarative contracts. Follow them literally.
 3. **Surface back a 3–5 sentence synthesis** to Morgan in Inka's
@@ -300,7 +300,7 @@ something new.
 **The vision document is `docs/DESIGN.md`. The execution roadmap is
 `docs/PLAN.md`. The living compendium of crystallized truths is
 `docs/INSIGHTS.md`. The cascade walkthroughs live in
-`docs/rebuild/simulations/H*.md` (one per handle). The eight
+`docs/specs/simulations/H*.md` (one per handle). The eight
 anchors below are the minimum discipline; the vision is what makes
 the discipline coherent.**
 
@@ -384,7 +384,7 @@ tool.** Find the primitive.
 
 ## 4. Build the wheel. Never wrap the axle.
 
-The specs in `docs/rebuild/00–11` ARE the blueprint. Read the spec.
+The specs in `docs/specs/00–11-*.md` ARE the blueprint. Read the spec.
 Write the code the spec describes. If the spec says Graph is a
 flat array with O(1) chase — write a flat array with O(1) chase. If
 the spec says env is effect-mediated — write `perform env_lookup`,
@@ -450,7 +450,7 @@ from its one mechanism.
 Each handle in the γ cascade lands in one well-defined sequence:
 
 1. **Walkthrough first.** Before code, the handle's
-   `docs/rebuild/simulations/H*.md` resolves every design question
+   `docs/specs/simulations/H*.md` resolves every design question
    in prose — layer-by-layer trace, design candidates with Mentl's
    choice, dependencies, estimated scope. Code freezes only when
    the walkthrough has nothing left to decide.
@@ -509,12 +509,12 @@ until the cascade closes.
 
 ```
 # Bootstrap (one-time)
-bootstrap/translate std/compiler/*.nx -o inka.wasm
+bootstrap/build.sh                              # assemble bootstrap/inka.wat from src/
 
 # Self-compilation (the real test)
-cat std/compiler/*.nx | wasmtime run inka.wasm > inka2.wat
+cat src/*.nx lib/**/*.nx | wasmtime run bootstrap/inka.wasm > inka2.wat
 wat2wasm inka2.wat -o inka2.wasm
-cat std/compiler/*.nx | wasmtime run inka2.wasm > inka3.wat
+cat src/*.nx lib/**/*.nx | wasmtime run inka2.wasm > inka3.wat
 diff inka2.wat inka3.wat    # empty = first-light
 ```
 
@@ -586,27 +586,34 @@ once, fix.
 | File | Role |
 |---|---|
 | `src/graph.nx` | Graph: flat-array, O(1) chase, Read/Write effects |
-| `std/compiler/types.nx` | Ty + Reason + Scheme + typed AST + core effects |
-| `std/compiler/effects.nx` | EffRow Boolean algebra: + - & ! |
-| `std/compiler/infer.nx` | HM inference, one walk, graph-direct |
-| `std/compiler/lower.nx` | Live-observer lowering via LookupTy |
-| `std/compiler/pipeline.nx` | Handler composition via ~> + query handler |
-| `std/compiler/own.nx` | Ownership as Consume effect |
-| `std/compiler/verify.nx` | Verify ledger (Arc F.1 swaps to SMT) |
-| `std/compiler/clock.nx` | Clock / Tick / Sample / Deadline |
-| `std/compiler/mentl.nx` | Teaching substrate (Teach effect, 5 ops) |
-| `std/compiler/lexer.nx` | Tokenizer (full spans, all 5 pipe ops) |
-| `std/compiler/parser.nx` | Recursive descent (all PipeKind variants) |
-| `std/compiler/backends/wasm.nx` | LowIR → WAT (one peer; native/test/browser are sibling handlers) |
-| `std/runtime/lists.nx` | Tagged list ops + flat-buffer-plus-counter primitive (`list_extend_to`) |
-| `std/runtime/strings.nx` | Flat string primitives + sorted-set algebra (set_union/diff/contains/...) |
-| `std/runtime/tuples.nx` | Tuple value layout + accessors |
-| `std/runtime/io.nx` | WASI iov scratch + print/read primitives |
-| `std/main.nx` | Entry: read stdin → compile → emit WAT |
+| `src/types.nx` | Ty + Reason + Scheme + typed AST + core effects |
+| `src/effects.nx` | EffRow Boolean algebra: + - & ! |
+| `src/infer.nx` | HM inference, one walk, graph-direct |
+| `src/lower.nx` | Live-observer lowering via LookupTy |
+| `src/pipeline.nx` | Handler composition via ~> + query handler |
+| `src/own.nx` | Ownership as Consume effect |
+| `src/verify.nx` | Verify ledger (Arc F.1 swaps to SMT) |
+| `src/mentl.nx` | Teaching substrate (Teach effect, 5 ops) |
+| `src/lexer.nx` | Tokenizer (full spans, all 5 pipe ops) |
+| `src/parser.nx` | Recursive descent (all PipeKind variants) |
+| `src/backends/wasm.nx` | LowIR → WAT (one peer; native/test/browser are sibling handlers) |
+| `src/driver.nx` / `src/cache.nx` | Incremental DAG walk + binary Pack/Unpack cache |
+| `lib/runtime/lists.nx` | Tagged list ops + flat-buffer-plus-counter primitive (`list_extend_to`) |
+| `lib/runtime/strings.nx` | Flat string primitives + sorted-set algebra (set_union/diff/contains/...) |
+| `lib/runtime/tuples.nx` | Tuple value layout + accessors |
+| `lib/runtime/io.nx` | WASI iov scratch + print/read primitives |
+| `lib/runtime/memory.nx` | Memory + Alloc effect declarations (substrate) |
+| `lib/runtime/binary.nx` | Pack / Unpack effects (structured byte I/O) |
+| `lib/prelude.nx` | Iterate + core builtins |
+| `src/main.nx` | Entry: read stdin → compile → emit WAT |
+| `bootstrap/build.sh` | Deterministic assembler — concatenates `bootstrap/src/*.wat` chunks into `inka.wat` |
+| `bootstrap/src/` | 15 modular WAT chunks (Layer 2 lexer, Layer 3 parser, Layer 4 emit) |
+| `bootstrap/inka.wat` | Assembled bootstrap image (build artifact; shell preserved across builds) |
+| `bootstrap/first-light.sh` | First-light test harness (diff inka2.wat vs inka3.wat) |
 | `docs/PLAN.md` | THE plan |
 | `docs/SYNTAX.md` | Canonical syntax (Σ landed; SYNTAX is the wheel parser is the lathe) |
-| `docs/rebuild/00–11` | The 12 executable specs |
-| `docs/rebuild/simulations/H*.md` | Per-handle walkthroughs (γ cascade) — read before touching the handle's substrate |
+| `docs/specs/00–11-*.md` | The 12 executable specs |
+| `docs/specs/simulations/H*.md` | Per-handle walkthroughs (γ cascade) — read before touching the handle's substrate |
 | `docs/errors/` | Error catalog |
 
 **Delete, don't decorate.** No `// removed for X` comments. No
@@ -679,9 +686,9 @@ during the γ cascade — that bind all implementation:
   until the cascade closes.
 - **`docs/SYNTAX.md`** — canonical syntax (Σ phase). The wheel
   Ω.4's parser was shaped to.
-- **`docs/rebuild/00–11-*.md`** — the 12 executable specs. ADTs,
+- **`docs/specs/00–11-*.md`** — the 12 executable specs. ADTs,
   effects, invariants. Each ≤ 300 lines.
-- **`docs/rebuild/simulations/H*.md`** — per-handle walkthroughs.
+- **`docs/specs/simulations/H*.md`** — per-handle walkthroughs.
   Read the relevant one BEFORE touching that handle's substrate.
   Addenda capture how prior decisions read in current substrate
   — riffle-back is mandatory before each new handle commits.

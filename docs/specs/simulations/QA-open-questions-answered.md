@@ -22,6 +22,135 @@ Every answer below cites:
 
 When the answer is Morgan-specific, it's flagged **DECISION REQUIRED** with options.
 
+## 0.1 Deep explanations of load-bearing answers
+
+### What `Choice` is, concretely (Q-B.3)
+
+**`Choice` is the canonical multi-shot effect.** It powers every "explore N alternatives, backtrack on failure" pattern:
+
+```
+effect Choice {
+    choose(options: List<A>) -> A @resume=MultiShot
+}
+```
+
+When a handler resumes `choose` multiple times, the continuation forks — each fork explores one option. The handler collects outcomes, picks the best, or tries each until one succeeds.
+
+**N-queens in 15 lines:**
+```
+fn place_row(row: Int, board: Board) -> Board with Choice + Fail =
+  let col = perform choose([0, 1, 2, 3, 4, 5, 6, 7])
+  if safe(row, col, board) { put(board, row, col) }
+  else { perform fail() }
+
+handler backtrack {
+  choose(opts) => for o in opts { resume(o) }    // try each
+}
+
+handler first_success {
+  fail() => abort()                               // dead-end → next choice
+}
+```
+
+Each `choose` forks 8 ways; each fork tries a column; `fail()` signals dead-end; `backtrack` handler tries the next option. First complete board wins.
+
+**Bare (not parameterized):** `choose(options: List<A>) -> A` — the type parameter `A` is inferred per call site from context (generics, primitive #4's free row variables). `Choice(T)` parameterized would mean `Choice(Int)` vs `Choice(String)` are distinct effects in the row — adds row-level distinction with no value. A different call site just uses a different `A` inferred from its options.
+
+**Compare with `Sample(44100)` (H3.1 parameterized effect):** `Sample(44100)` vs `Sample(48000)` ARE different effects in the row because the RATE matters at row-subsumption time (a `with Sample(44100)` function cannot call a `with Sample(48000)` function without explicit resampling). Choice doesn't have this — all `choose` calls are semantically identical regardless of A.
+
+### What `TheoryClass` ADT is (Q-B.6.1)
+
+Refinement predicates fall into categories that different SMT solvers handle efficiently:
+
+```
+type TheoryClass
+    = TLinearArith      // x > 0 && x < 100; Presburger arith
+    | TBitvector        // x & 0xFF == 0x42; fixed-width integers
+    | TArray            // arr[i] == 5; array/sequence theory
+    | TUF               // f(x) == f(y) => x == y; uninterpreted functions
+    | TNonlinear        // x * x + y * y < r * r; nonlinear arithmetic
+```
+
+**Why five, not more:** these are the residual-theory divisions per DESIGN 9.7. Each has a specialist solver (Z3 for nonlinear, cvc5 for array/sequence, Bitwuzla for bitvector, Z3/cvc5 for linear+UF). Sub-theories inside each (linear-real vs linear-int; ackermanization vs native UF) are the theory-bridge handler's internal concern, not the classifier's.
+
+**Why five, not fewer:** collapsing (say) TLinearArith + TNonlinear into "TArith" forces solvers to handle predicates they're not optimized for — performance disaster on hot refinement paths.
+
+**Classifier walks a predicate AST** returning one of five. Dispatch fires the matching bridge handler.
+
+### What an overlay is (Q-B.8)
+
+Per spec 00 (graph substrate), an **overlay is a per-module scope of graph state**. When module A is being checked:
+- A's `fn`, `type`, `effect` declarations register handles in A's overlay (indices 0, 1, 2, ... local to A).
+- A's trail entries record under A's overlay.
+
+When module B imports A:
+- B's handles are independently indexed (B's overlay starts at 0 again).
+- Cross-module symbol lookup walks: B's overlay first, then A's overlay (and C's, D's in import declaration order) as sub-scopes.
+
+**Today's state (IC.1 + IC.2 landed):** driver.nx merges A's env entries FLAT into the global env_handler when A is imported. If A has `fn foo` and B also has `fn foo`, which one wins depends on import order, and non-import-order bugs can surface.
+
+**IC.3 fix (B.8 lands):** overlays stay separate. Cross-module env_lookup walks the overlay chain in declaration order. Shadowing semantics match normal lexical scope (inner shadows outer).
+
+Overlays also enable NS-naming's dot-access: `A.foo` directly addresses A's overlay; `foo` walks the chain with B-first shadowing.
+
+### Why OS threads direct for v1 (Q-B.7.2)
+
+**v1 scope:** prove the `><` × handler-dispatch across multi-core thesis. That requires ONE `spawn` → OS thread; ONE `await` → join; one per-thread bump_allocator. ~100 lines.
+
+**Pool adds complexity:**
+- Worker queue + fairness discipline.
+- Work-stealing algorithm.
+- Idle-thread management + wakeup.
+- Pool lifecycle (spawn at handler install; tear down at scope exit).
+- ~500 lines.
+
+**The thesis doesn't need 500 lines.** It needs to prove `~> parallel_compose` on `><` gets multi-core. OS threads directly do that.
+
+**Pool as peer handler post-first-light:** `handler pool_compose(workers = 4) { ... }` is a later handler swap over the same `Thread` effect signature. Install order preference: if user has a scheduling concern (many short tasks), install `~> pool_compose`. Otherwise `~> parallel_compose` (spawn per-branch).
+
+Two handlers, one effect signature — matches "the handler IS the backend" discipline. Pool isn't missing from v1; it's ranked below proving the thesis.
+
+### Why `!MultiShot` is deferred (Q-B.2.1)
+
+**What `!MultiShot` would be as row primitive:** `with !MultiShot` ≡ "no MS-disciplined effect is in this function's transitive row." Semantically: `∀ E ∈ body_row. E.resume_discipline != MultiShot`.
+
+**What's available today:** `!E` for each named MS effect. So `with !Choice + !Backtrack + !McmcSample` works if three MS effects are in scope.
+
+**Why the sugar deferred:**
+- **Row algebra extension required.** `!MultiShot` as row element needs a new row-predicate-over-effect-ops primitive; row algebra is finished at five elements (`+ - & ! Pure`); adding a sixth needs substrate + a walkthrough.
+- **Limited value.** Most codebases have 1-2 MS effects in scope at a given function; enumeration is fine.
+- **Risk of premature abstraction.** If `!MultiShot` doesn't get exercised before substrate lands, it's drift-6 (special-case primitive) added for no reason.
+
+**When it lands:** if a codebase's function signatures start having 4+ `!E` entries where E is MS, the friction earns `!MultiShot`. Walkthrough. Ship.
+
+### Why linker = symbol resolution only (Q-A.1.2)
+
+**The alternative:** linker also composes handler chains, resolves cross-module effect interactions, rewrites evidence passing across module boundaries, etc.
+
+**Why limited:**
+- **Separation of concerns.** infer.nx + lower.nx already compose handler chains (HI walkthrough + HC walkthrough). By linker time, each module's output is evidence-passing-resolved. The linker sees `(call $module_B__fn_X)` instructions — it renames the symbol; it doesn't re-derive the chain.
+- **HC walkthrough principle:** "transform emits; materialize captures; `~>` composes." The composition IS the lowered output. Linker reading the output is transcription.
+- **Stop-signal from BT §4:** "The linker duplicates Inka substrate logic → becomes a second compiler. Stop; move the logic to `src/` where it belongs; call it from the linker as the substrate."
+
+**If the linker did more:** it would need infer.nx's row algebra, HI's handler-stack authored names, HC's materialization discipline — all the logic `src/` already has. That's a second Inka compiler in shell-script form. Drift.
+
+**What the linker does:** reads `<module>__<symbol>` strings, renames, emits unified module. Period.
+
+### Why separate `tools/effect-registry-audit.sh` (Q-B.1.1)
+
+**drift-audit.sh is per-file** — scans each file against regex patterns in drift-patterns.tsv. Each pattern is local to a file or line.
+
+**Effect-name uniqueness is a cross-file invariant** — "is `effect Alloc` declared in exactly one place?" requires collecting all declarations across the repo.
+
+**Two options:**
+- Extend drift-audit with cross-file passes. Complicates the tool; changes its shape.
+- Write a new purpose-built script. Simple; composable; separate-concerns.
+
+**Picked separate script** because:
+- drift-audit stays per-file (single-pass, fast).
+- effect-registry-audit is a distinct concern with its own catalog (`tools/effect-registry.tsv` lists canonical effects + their home modules).
+- Post-first-light both dissolve into Mentl handler projections: `mentl audit drift` + `mentl audit effects`. Keeping them separate now matches the post-dissolution shape.
+
 ---
 
 ## Phase A — Bootstrap linker
@@ -70,21 +199,75 @@ When the answer is Morgan-specific, it's flagged **DECISION REQUIRED** with opti
 
 **Reversibility:** fully reversible; audit is additive.
 
-### DP-B.1: AL resolution — option α vs β?
+### DP-B.1: AL resolution — α / β / γ — REVISED 2026-04-23
 
-**Answer:** **α — rename DSP version to `BufferAlloc`.**
+**Answer:** **γ — DELETE DSP's placeholder effects entirely; unify on runtime's effects.**
 
-**Reasoning:**
-- Option α preserves domain-specific semantics. DSP "buffer allocation" and substrate "byte allocation" are genuinely distinct operations at different abstraction layers.
-- Option β would collapse them into one effect with two ops — reduces clarity, adds unrelated op to substrate.
-- Drift check: option β risks drift 8 (over-collapse of semantically distinct things into one structured bucket).
+**Why this is the right answer (not α, not β):**
+
+Reading `lib/dsp/signal.nx:17-20`:
+```
+// Capability effects — exist primarily to be NEGATED
+effect Alloc { alloc_buffer(size: Int) -> List<Float> }
+effect Network { fetch_param(url: String) -> String }
+effect Feedback { delay_tap(samples: Int, x: Float) -> Float }
+```
+
+**DSP's `effect Alloc` is a PLACEHOLDER, declared to make `with !Alloc` writeable in DSP code.** But it shadows `lib/runtime/memory.nx:49`'s real `effect Alloc { alloc(Int) -> Int }`. This has a semantic bug:
+
+- If a DSP function declares `with !Alloc`, it proves absence of `alloc_buffer` in transitive calls.
+- It does NOT prove absence of runtime's `alloc` — a different effect with the same name.
+- So `with !Alloc` in DSP doesn't actually satisfy the "real-time safe" invariant users expect.
+
+**Option α (rename DSP's to BufferAlloc) preserves the bug** — users would write `with !Alloc + !BufferAlloc` to be safe, which is brittle and defeats the "one annotation, full coverage" claim (DESIGN 3.`!Alloc` propagated).
+
+**Option β (unify via `alloc_buffer` added to runtime Alloc) muddles layers** — runtime substrate shouldn't know about DSP's List<Float> return type.
+
+**Option γ (delete):** `alloc_buffer` becomes a regular function over runtime's `Alloc`:
+
+```
+// lib/dsp/signal.nx (post-γ)
+import runtime/memory
+
+fn alloc_buffer(size: Int) -> List<Float> with Alloc =
+  // convenience over runtime/memory's alloc
+  let bytes = perform alloc(size * 4 + 8)  // header + N floats
+  // ...construct List<Float> header, return
+```
+
+Now `with !Alloc` in DSP code proves absence of runtime's `Alloc` transitively — the real invariant.
+
+**Same treatment for DSP's `effect Network` and `effect Feedback`:**
+- `Network`: already in memory.nx? No — grep shows only dsp/signal.nx declares Network. There is no substrate `Network` effect yet. Decision: land runtime `Network` effect properly (WASI sockets later) OR keep DSP's shadow as the only declaration until F.7 web substrate. **Recommendation:** keep DSP's for now — it's the only user; rename to `Network` in the registry explicitly with a comment that runtime Network lands post-first-light.
+- `Feedback`: DSP-specific (delay_tap). NOT a runtime concern. This is a genuinely domain-specific effect, correctly placed. **Keep as is.**
+
+**So option γ applies only to `Alloc`.** Network and Feedback stay.
+
+**Reasoning — eight interrogations against the edit:**
+
+- **Graph?** env already has runtime's `Alloc` entry; DSP's shadow is a second entry that competes. Delete the shadow.
+- **Handler?** DSP code that needs bump allocation uses runtime's `Alloc` handler (bump_allocator). No DSP-specific Alloc handler exists today anyway.
+- **Verb?** N/A.
+- **Row?** `with Alloc` / `with !Alloc` in DSP code composes with runtime effects correctly after γ.
+- **Ownership?** `alloc_buffer` returns `own List<Float>`; ownership semantics unchanged.
+- **Refinement?** N/A.
+- **Gradient?** `!Alloc` now unlocks `CRealTime` for DSP code for the real reason.
+- **Reason?** Each allocation site leaves a Reason chain; γ makes it trace to runtime's `alloc`, not a shadow.
+
+**Drift check:**
+- Drift 6 (primitive-type-special-case) CURED — `alloc_buffer` was a special-case "alloc that returns a List<Float>"; now it's a regular function over the one substrate allocator.
+- Drift 9 (deferred-by-omission) CURED — the shadow-to-be-negated pattern was drift-9-adjacent (pretending to prove absence while proving something weaker).
 
 **Implications:**
-- `lib/dsp/signal.nx:18` declaration changes: `effect BufferAlloc { alloc_buffer(...) }`.
-- Every caller in `lib/dsp/**/*.nx` updates.
-- AL-alloc-unification.md walkthrough formalizes the rename.
+- `lib/dsp/signal.nx:18` DELETED.
+- `alloc_buffer` rewritten as `fn` using `perform alloc(...)`.
+- Every DSP caller of `alloc_buffer` — no change (call site is identical).
+- Every `with !Alloc` annotation in DSP code — MEANING CHANGES from "no alloc_buffer" to "no runtime alloc." This is the desired fix.
+- AL-alloc-unification.md walkthrough formalizes γ + Network placeholder rationale + Feedback kept-as-is.
 
-**Reversibility:** small blast radius; reversible via second rename.
+**Reversibility:** reversible (re-add the shadow effect) but no reason to.
+
+**Landing:** AL walkthrough precedes the substrate commit. Commit touches 2 files (lib/dsp/signal.nx + lib/runtime/memory.nx if Network moves there) plus any callers of alloc_buffer.
 
 ---
 
@@ -399,31 +582,27 @@ diff /tmp/out-jit.wat /tmp/out-interp.wat   # empty = deterministic
 
 ## Phase D — voice + tutorial
 
-### Q-D.1.1 — D.1.5: MV voice register / CLI / publishing
+### Q-D.1.1 — D.1.5: MV voice register / CLI / publishing — RESOLVED 2026-04-23
 
-**Answer: DECISION REQUIRED (Morgan-specific).** These are character + product decisions.
+**Answer:** all five resolved. Morgan confirmed D.1.2, D.1.5; D.1.1 → "implement decent default for now" (Morgan directive).
 
-**Options surfaced for each:**
+- **Q-D.1.1 Voice register exact words — RESOLVED:** MV.2 ships with a "decent default" VoiceLine register — the 20 example utterances in MV §2.9 render as-is; Morgan tunes register organically post-MV.2-ship via the `~> custom_voice_register` handler swap surface. **Reversibility:** full — custom register is handler-composed at install.
 
-- **Q-D.1.1 Voice register exact words:** ongoing MV.2 work with Morgan; no single answer.
-- **Q-D.1.2 CLI flags (positional vs keyword):**
-  - Option α: positional — `inka compile main`.
-  - Option β: keyword — `inka --with compile_run main`.
-  - Both can coexist (alias pattern per PLAN 2026-04-21).
-  - **Recommendation:** both. Positional subcommand aliases for common verbs; `--with` for extensibility.
-- **Q-D.1.3 Handler hash input:**
-  - Option α: source-hash only.
-  - Option β: inferred-env-hash only.
-  - Option γ: tuple.
-  - **Recommendation:** γ tuple `(source_hash, inferred_env_hash)`. Matches cache discipline (Q-B.6.2).
-- **Q-D.1.4 Subcommand aliases:**
-  - Option α: in-source table in `src/main.nx`.
-  - Option β: in-shell-wrapper.
-  - **Recommendation:** α. The `main.nx` IS the canonical manifest per EH discipline.
-- **Q-D.1.5 VS Code extension publishing:**
-  - Option α: pre-first-light (alpha channel).
-  - Option β: post-first-light (stable).
-  - **Recommendation:** β. `first-light-L1` tag is the PR-worthy milestone.
+  **Decent default defined (substrate contract):**
+  - First-person "I" used sparingly per MV §2.9 — refusals, multi-shot summaries, Why chain walks only.
+  - Pair-programmer register ("you" addressed; no "we"; no "let's").
+  - Proof-linked refusals ("I won't — `own` at line 40 forbids; two fixes type: [#1] [#2]").
+  - Silence-predicate default (no canned greeting; silence until proof-derivable delta arises).
+  - One VoiceLine per turn (§2.9 MV disciplines this).
+  - 20 example utterances in MV §2.9 ARE the initial register; refined via handler swap post-ship.
+
+- **Q-D.1.2 CLI flags — RESOLVED (Morgan confirmed):** both positional + `--with` coexist. Positional subcommand aliases for common verbs (`inka compile`, `inka check`, `inka teach`); `--with <name>` universal form for extensibility + new handlers. Alias table per PLAN 2026-04-21.
+
+- **Q-D.1.3 Handler hash input — RESOLVED:** tuple `(source_hash, inferred_env_hash)` per Q-B.6.2 + Q-E.4.2 consistency.
+
+- **Q-D.1.4 Subcommand aliases — RESOLVED:** in-source table in `src/main.nx`. The manifest IS Inka code; shell-wrapper would be drift.
+
+- **Q-D.1.5 VS Code extension publishing — RESOLVED (Morgan confirmed):** post-first-light-L1 publishing. Pre-L1 extension exists as in-repo `tools/vscode-extension/` for development; publishing to Marketplace waits on the L1 tag as the PR-worthy milestone.
 
 ### DP-D.2 / Q-D.2.1: Tutorial content strategy?
 
@@ -569,15 +748,54 @@ Iterate as false-positives surface.
 
 **Reversibility:** fully reversible.
 
-### DP-F.5: First post-first-light domain?
+### DP-F.5: First post-first-light domain — RESOLVED 2026-04-23
 
-**Answer: DECISION REQUIRED.** Morgan's call when first-light lands; likely driven by first user project per CRU protocol.
+**Answer:** **Pulse, enhanced.** Morgan confirmed, with directive: enhance the specification now that we know so much more.
 
-**Options:**
-- **Pulse** (per existing integration trace `docs/traces/a-day.md`) — real-time audio + browser UI + cloud server + training variant. Exercises DSP + ML + web + realtime crucibles simultaneously.
-- **A specific new crucible from MS2 §2** (SAT, logic prog, distributed, games, etc.).
+**What Pulse was** (per `docs/traces/a-day.md`): real-time audio effect chain + browser UI + cloud training backend + a training variant of the same model. Integration trace of one developer's day, exercising DSP + ML + web + realtime.
 
-**Recommendation:** Pulse — the integration trace is already the specification; first-light extends from there.
+**What Pulse becomes post-MSR/MS2/TH/MO discovery:**
+
+1. **Oracle-driven development.** Mentl's speculative gradient (MO) actively surfaces annotation hints as Morgan writes Pulse. `inka teach pulse/src/*.nx` fires VoiceLines; Morgan commits the proven annotations. Pulse becomes the crucible for "compiler IS the AI" at scale.
+
+2. **All six base crucibles exercised in one project:**
+   - DSP (`crucible_dsp`): Pulse's audio chain with `!Alloc` proof.
+   - ML (`crucible_ml`): Pulse's training variant with handler-swap train/infer.
+   - Realtime (`crucible_realtime`): Pulse's audio callback under `Sample(48000)` via `<~` + LFeedback.
+   - Web (`crucible_web`): Pulse's browser ↔ server RPC via `Pack`/`Unpack` transport handlers.
+   - Oracle (`crucible_oracle`): Mentl guides Morgan's annotation choices through speculative gradient.
+   - Parallel (`crucible_parallel`): Pulse's batch training parallelized over cores via `parallel_compose`.
+
+3. **MS2 territory exercised through Pulse:**
+   - §2.2 Probabilistic: Pulse training uses MCMC for hyperparameter search (MS × Choice × Verify).
+   - §2.3 ML: meta-learning (inner-loop optimization for Pulse's model family).
+   - §2.5 Distributed: Pulse's cloud training federated across clients (`><` + `cluster` handler).
+   - §2.6 Testing: Pulse's regression suite under `simulation_test` handler (chaos + replay).
+   - §2.12 Agents: Mentl proposing refactors to Pulse's codebase via Propose tentacle.
+
+4. **Voice + crucible integration.** VS Code extension (D.1) active; Mentl's VoiceLines surface per cursor position as Morgan edits Pulse. Every Pulse commit traces through the gradient → oracle → Why Engine pipeline.
+
+5. **Pulse IS the first-light-L3 demonstration.** A complete real-world project:
+   - Proves all six crucibles simultaneously.
+   - Exercises MS2 §2 territory (probabilistic / ML / distributed / testing / agents).
+   - Ships to production (users get real Pulse audio/video tooling).
+   - Demonstrates Mentl's voice to real developers.
+   - IS the forcing-function for gaps (first real user project; missing features surface as Pulse requests).
+
+**Scope suggestion for Pulse v1 (post-first-light-L3):**
+- `pulse/src/dsp/` — audio effect chain (uses lib/dsp).
+- `pulse/src/ml/` — model definition + training loop (uses lib/ml).
+- `pulse/src/web/` — browser UI via LSP-style handler projection (uses runtime/binary Pack/Unpack for wire).
+- `pulse/src/server/` — cloud training service (WASI + Thread for parallel training).
+- `pulse/crucibles/` — Pulse-specific acceptance tests (real audio samples + expected outputs).
+
+**Not v1 scope but named:**
+- Pulse mobile (wasmer embedded into native iOS/Android containers) — post-Hα.
+- Pulse federated (multiple peer training nodes) — post-F.5 distributed crucible.
+
+**Reversibility:** Pulse's framing is a concrete instantiation; substrate claims are independent. If a different first-user-project surfaces better (e.g., a compiler competition or an agent infrastructure play), swap at no substrate cost.
+
+**Landing:** Pulse repository spawned post-first-light-L3; integration trace `docs/traces/a-day.md` updated with Pulse's actual pace.
 
 ---
 
@@ -588,7 +806,7 @@ Iterate as false-positives surface.
 | Q-A.1.1 | No hash suffix; `<module>__<symbol>` | Proceed |
 | Q-A.1.2 | Linker = symbol resolution only | Proceed |
 | Q-B.1.1 | Add `tools/effect-registry-audit.sh` | Proceed |
-| DP-B.1 | α (rename DSP's Alloc → BufferAlloc) | Proceed |
+| DP-B.1 | **γ — DELETE DSP's `Alloc` (revised 2026-04-23); unify on runtime Alloc** | Proceed |
 | Q-B.2.1 | Defer `!MultiShot` row modifier | Proceed |
 | Q-B.2.2 | `wasm-interp` cross-check in DET gate | Proceed |
 | Q-B.2.3 | v3 → v4 cache bump at B.2 | Proceed |
@@ -610,11 +828,11 @@ Iterate as false-positives surface.
 | Q-C.3.1 | `!Alloc` sweep at C.3 landing | Proceed |
 | Q-C.4.1 | Pure-Inka naive matmul for v1 | Proceed |
 | Q-C.6.1 | Compile-time function hash | Proceed |
-| Q-D.1.1 | **DECISION REQUIRED** — voice register words | Morgan |
-| Q-D.1.2 | Both positional + `--with` (recommended) | Morgan confirm |
+| Q-D.1.1 | **RESOLVED** — decent default (20 VoiceLines MV §2.9); tune via handler swap post-ship | Morgan directed |
+| Q-D.1.2 | **RESOLVED** — both positional + `--with` coexist | Morgan confirmed |
 | Q-D.1.3 | Tuple `(source, env)` hash | Proceed |
 | Q-D.1.4 | In-source subcommand table | Proceed |
-| Q-D.1.5 | Post-first-light publishing | Morgan confirm |
+| Q-D.1.5 | **RESOLVED** — post-first-light-L1 Marketplace publishing | Morgan confirmed |
 | DP-D.2 | Hybrid (seed + Mentl narration) | Proceed |
 | Q-D.3.1 | Direct `Choice` in 02b-multishot | Proceed |
 | Q-E.1.1 | Install plan-audit as pre-commit hook | Proceed |
@@ -626,9 +844,9 @@ Iterate as false-positives surface.
 | Q-F.5.1 | Defer to SAT crucible benchmark | Proceed |
 | Q-F.5.2 | Handler projection; UX later | Proceed |
 | Q-F.7.1 | v1 server-side; v2 browser | Proceed |
-| DP-F.5 | **DECISION REQUIRED** — Pulse (recommended) | Morgan |
+| DP-F.5 | **RESOLVED** — Pulse, enhanced with full crucible / MS / voice integration | Morgan confirmed |
 
-**Morgan review flagged on 4 items; all others have Inka-discipline-derived answers that the implementer can use as contract.**
+**All 42 questions resolved 2026-04-23.** Zero Morgan-review outstanding. DP-B.1 revised to option γ (delete DSP's placeholder Alloc + unify on runtime) based on semantic-bug analysis of the PLACEHOLDER comment in `lib/dsp/signal.nx:17`.
 
 ---
 

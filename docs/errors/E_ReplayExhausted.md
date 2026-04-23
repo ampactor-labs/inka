@@ -1,7 +1,7 @@
 # E_ReplayExhausted
 
 **Kind:** Error
-**Emitted by:** `clock.ka` (replay handlers — `clock_replay`, `tick_replay`)
+**Emitted by:** `clock.nx` (replay handlers — `clock_replay`, `tick_replay`)
 **Applicability:** MaybeIncorrect
 
 ## Summary

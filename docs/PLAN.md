@@ -49,7 +49,7 @@ supersedes earlier framings. Append-only; do not rewrite history
 - **2026-04-20** — Nine-primitive kernel named; 9→8 merge (handlers + typed resume discipline fused) yields final eight-primitive kernel. 1-to-1-to-1 locked: primitives ↔ interrogations ↔ Mentl's tentacles. Mentl is octopus because kernel is eight.
 - **2026-04-20** — Bootstrap direction: **hand-written WAT**, not Rust/C translator. Hand-WAT image IS the reference soundness artifact (kept forever, not deleted).
 - **2026-04-20** — Four-pass audit sequence named: self-simulation → simplification → determinism → feature-usage, in that order, before hand-WAT.
-- **2026-04-21** — **File extension: `.nx`** (flat-typography two-letter form, phonetic match to "Inka" via the nk/ks sound, zero collision verified). Supersedes `.ka`. Full migration folded into simplification/restructure.
+- **2026-04-21** — **File extension: `.nx`** (flat-typography two-letter form, phonetic match to "Inka" via the nk/ks sound, zero collision verified). Supersedes `.nx`. Full migration folded into simplification/restructure.
 - **2026-04-21** — **`SubstGraph` → `Graph`** ADT rename. The substrate IS a graph; naming it Graph aligns ADT with INSIGHTS crystallization #6 ("The Graph IS the Program"). Keeps `GraphRead` / `GraphWrite` effect names unchanged.
 - **2026-04-21** — **`examples/` as a miscellany directory dissolves; curated teaching content remains as `lib/tutorial/`.** *(Revised within-day after drift audit.)* Earlier framing claimed `examples/` dissolves entirely; that overstated. The dissolution is: no `examples/` dumping ground; compiler's `src/` is the reference Inka program; stdlib's `lib/` is the canonical domain demonstration; integration projects (Pulse, a-day.md) live in separate repositories. **But curated teaching content IS substance** — "how to teach the eight primitives in order" — and lives at `lib/tutorial/` as 5–10 escalating `.nx` files that Mentl's Teach tentacle narrates over. The files are runnable Inka code, not documentation; Mentl projects them into a tutorial experience. Not a directory of demos; curriculum substrate.
 - **2026-04-21** — **`tests/` directory dissolves.** Training-pattern leak; tests dissolve via three collapses: (A) type system proves correctness directly (60-80% of peer-language tests disappear); (B) runnable behavior demonstrations ARE the stdlib + compiler source; (C) chaos/replay/fuzzing is handler swap via named entry-handlers declared at top-level in source. No `.test.nx` files anywhere. No separate test runner. `inka run . --with test_run` is the test invocation.
@@ -75,27 +75,27 @@ supersedes earlier framings. Append-only; do not rewrite history
   `driver_reinfer_module` → `driver_infer_module` ("no re-doing work" rule).
 - **2026-04-22** — **Phase B: Cache Dissolution** landed (`7eee2b8`).
   Text-parsing cache layer dissolved; replaced with binary `Pack`/`Unpack`
-  effects in `std/runtime/binary.ka`. Every Ty/Scheme/SchemeKind/EffRow/
+  effects in `std/runtime/binary.nx`. Every Ty/Scheme/SchemeKind/EffRow/
   Ownership/ResumeDiscipline variant gets an exhaustive tag byte. The graph
   projects itself through its own effect system.
 - **2026-04-22** — **`Pack` / `Unpack` effects** named as Inka's byte-direction
   primitives. Replaces the earlier exploration of Put/Get (too generic,
   collides with database/HTTP/state vocabulary), BinaryWrite/BinaryRead
   (verbose), and Encode/Decode (implies format knowledge). `Pack`/`Unpack`
-  is precise, domain-free, unambiguous. Implementation: `std/runtime/binary.ka`
+  is precise, domain-free, unambiguous. Implementation: `std/runtime/binary.nx`
   with `buffer_packer` and `buffer_unpacker(source)` handlers.
 - **2026-04-22** — **`|x| expr` lambda formalized** in SYNTAX.md as the canonical
   short-form lambda for inline closures. `fn (x) => expr` remains for block
   bodies. SYNTAX.md TPipe token updated to remove "(future)" qualifier.
-  19 existing call sites across prelude.ka, ml/tensor.ka, dsp/processors.ka
+  19 existing call sites across prelude.nx, ml/tensor.nx, dsp/processors.nx
   confirmed as canonical.
 - **2026-04-22** — **Bitwise operators formally excluded.** `&` is claimed by
   effect intersection, `|` by ADT variants + pipes. XOR/shift/AND/OR don't
   pass the eight interrogations — they're hardware concerns that leak
   mechanism into vocabulary. Inka handles byte-level work through Memory
   effects (store_i32/load_i8) and Pack/Unpack effects.
-- **2026-04-22** — **Unauthorized `^` operator** identified in cache.ka:78
-  (used for FNV-1a XOR). Not in SYNTAX.md. Dissolved when cache.ka's text
+- **2026-04-22** — **Unauthorized `^` operator** identified in cache.nx:78
+  (used for FNV-1a XOR). Not in SYNTAX.md. Dissolved when cache.nx's text
   layer was replaced by Pack/Unpack. XOR reimplemented via byte-level
   arithmetic decomposition (bit extraction through `%` and `/`).
 - **2026-04-22** — **`i32_xor` intrinsic** (`0dea2cb`). Replaced 35-line
@@ -104,7 +104,7 @@ supersedes earlier framings. Append-only; do not rewrite history
   lowers to WASM's single `i32.xor` instruction. Same pattern as
   `store_i32`, `load_i8`, `alloc`, `mem_copy`.
 - **2026-04-22** — **`Memory` + `Alloc` effects declared** (`34f829e`).
-  NEW: `std/runtime/memory.ka`. Memory (6 ops: `store_i32`, `load_i32`,
+  NEW: `std/runtime/memory.nx`. Memory (6 ops: `store_i32`, `load_i32`,
   `store_i8`, `load_i8`, `mem_copy`, `i32_xor`) and Alloc (1 op: `alloc`)
   were used 131+ times but declared NOWHERE. Now declared as proper effects
   with signatures. `Pure` documented as the empty effect row (keyword,
@@ -115,11 +115,11 @@ supersedes earlier framings. Append-only; do not rewrite history
   MUST have a source-level `effect` declaration. No invisible intrinsics.
   Co-location rule: **declarations live where their handlers live.**
   Current effect registry:
-  - `std/runtime/memory.ka` — Memory, Alloc (substrate)
-  - `std/runtime/binary.ka` — Pack, Unpack (structured byte I/O)
-  - `std/compiler/types.ka` — Filesystem + 13 compiler effects (Filesystem to move to runtime in item 17')
-  - `std/compiler/clock.ka` — Clock, Tick, Sample, Deadline, IterativeContext, HostClock (to move to dsp/ in item 17')
-  - `std/prelude.ka` — Iterate
+  - `std/runtime/memory.nx` — Memory, Alloc (substrate)
+  - `std/runtime/binary.nx` — Pack, Unpack (structured byte I/O)
+  - `std/compiler/types.nx` — Filesystem + 13 compiler effects (Filesystem to move to runtime in item 17')
+  - `std/compiler/clock.nx` — Clock, Tick, Sample, Deadline, IterativeContext, HostClock (to move to dsp/ in item 17')
+  - `std/prelude.nx` — Iterate
   - Various compiler modules — co-located with handlers
 - **2026-04-22** — **Effect negation exercised** (`cc08f7f`). FV.1 moves
   from theoretical to exercised: 36 cache functions annotated with
@@ -128,9 +128,9 @@ supersedes earlier framings. Append-only; do not rewrite history
   Parser (parse_one_effect) and algebra (EfNeg/normalize_inter) already
   supported this; annotations were simply never applied.
 - **2026-04-22** — **Parameterized effects confirmed implemented.**
-  Parser: `parse_one_effect` handles `Effect(args)` syntax (parser.ka:430-447).
+  Parser: `parse_one_effect` handles `Effect(args)` syntax (parser.nx:430-447).
   Algebra: `EParameterized(name, args)` in effect name comparison
-  (effects.ka:456). Types: `EffParamName` ADT. H3.1 walkthrough landed.
+  (effects.nx:456). Types: `EffParamName` ADT. H3.1 walkthrough landed.
   Zero exercised sites in the compiler — 11.B.M (`Diagnostic(module)`)
   is the first real application. Not "future" — substrate ready, awaiting use.
 
@@ -211,11 +211,11 @@ composition. Nothing remains as a separate substrate question.*
 
 *The first attempt at item 1 (LFeedback) revealed a cascade-level sequencing constraint the walkthroughs had not named.*
 
-**The rule:** **Feature work on a file requires that file's drift-audit to be clean first.** The PreToolUse/PostToolUse hooks in the global config run `tools/drift-audit.sh` against any `.ka` file touched; a non-zero audit blocks the edit from counting as complete. Pre-existing drift in a file therefore blocks ANY edit to that file until the pre-existing drift is swept.
+**The rule:** **Feature work on a file requires that file's drift-audit to be clean first.** The PreToolUse/PostToolUse hooks in the global config run `tools/drift-audit.sh` against any `.nx` file touched; a non-zero audit blocks the edit from counting as complete. Pre-existing drift in a file therefore blocks ANY edit to that file until the pre-existing drift is swept.
 
 **What this means for item ordering:** priority substrate items (1, 2) cannot land before each target file's drift-audit is clean. If item 11's full-tree simplification hasn't run yet, each file must get a **narrow per-file drift sweep** as a pre-gate before feature work lands on it.
 
-**New substrate discipline pattern:** before any feature-adding commit to a `.ka` file whose audit is non-zero:
+**New substrate discipline pattern:** before any feature-adding commit to a `.nx` file whose audit is non-zero:
 
 1. Inspect pre-existing drift hits.
 2. Apply narrow simplification to that file (rewrite drift-9 comment phrasing; suppress false-positive drift-12 matches ONLY where they're heuristic false-alarms for actually-mode-8 drift tracked for real item-11 sweep; convert real drift where scope permits).
@@ -225,8 +225,8 @@ composition. Nothing remains as a separate substrate question.*
 
 **Tracked known-drift-sites (discovered during item 1 attempt, pending real fix at item 11 execution):**
 
-- `src/backends/wasm.ka` (pre-restructure: `std/compiler/backends/wasm.ka`):
-  - Line ~1387 `fn emit_binop(op: String)` + match on string literals `"+"`, `"=="`, `"<"`, etc. → **real drift mode 8 (string-keyed-when-structured);** should be `BinOp` ADT. Requires multi-file refactor touching `types.ka` (add `BinOp` ADT), `parser.ka` (construct BinOp not String), `infer.ka` (match BinOp in BinOpExpr arm), `lower.ka` (LBinOp carries BinOp), `wasm.ka` (match BinOp in emit_binop). **Tracked as simplification-sub-pattern for item 11 commit 11.B (drift-mode screen). For item 1's pre-gate, the ONE flagged line (the `"==" =>` arm which both drift-12 regexes happen to match) is suppressed with `// drift-audit: ignore` + explanatory comment.**
+- `src/backends/wasm.nx` (pre-restructure: `std/compiler/backends/wasm.nx`):
+  - Line ~1387 `fn emit_binop(op: String)` + match on string literals `"+"`, `"=="`, `"<"`, etc. → **real drift mode 8 (string-keyed-when-structured);** should be `BinOp` ADT. Requires multi-file refactor touching `types.nx` (add `BinOp` ADT), `parser.nx` (construct BinOp not String), `infer.nx` (match BinOp in BinOpExpr arm), `lower.nx` (LBinOp carries BinOp), `wasm.nx` (match BinOp in emit_binop). **Tracked as simplification-sub-pattern for item 11 commit 11.B (drift-mode screen). For item 1's pre-gate, the ONE flagged line (the `"==" =>` arm which both drift-12 regexes happen to match) is suppressed with `// drift-audit: ignore` + explanatory comment.**
 
 **This is the hook working exactly as intended.** The hook is not over-gating; it's enforcing the substrate discipline that simplification must lead feature work. The walkthrough underspecified by not naming the pre-gate constraint. Now named.
 
@@ -236,11 +236,11 @@ composition. Nothing remains as a separate substrate question.*
 
 **The reframe.** Dotted names (`graph.chase`) are not record field accesses — they are **env entries with qualified keys**. The graph ALREADY stores `(name, Scheme, Reason, SchemeKind)` entries in env via `env_extend`; names are already strings. A qualified name like `"graph.chase"` is just another valid env key. **No new type variant. No module record. No record-of-schemes.**
 
-**Substrate mechanics** (~15 lines total across driver.ka + infer.ka):
+**Substrate mechanics** (~15 lines total across driver.nx + infer.nx):
 
-1. **In `driver.ka`'s install path** (~10 lines). After flat-installing each export `(name, scheme, reason, kind)` from an imported module, ALSO install `(module_short_name ++ "." ++ name, scheme, reason, kind)` as a second env entry with the qualified key. `module_short_name` = last path segment of the import path (e.g., `compiler/graph` → `graph`).
+1. **In `driver.nx`'s install path** (~10 lines). After flat-installing each export `(name, scheme, reason, kind)` from an imported module, ALSO install `(module_short_name ++ "." ++ name, scheme, reason, kind)` as a second env entry with the qualified key. `module_short_name` = last path segment of the import path (e.g., `compiler/graph` → `graph`).
 
-2. **In `infer.ka`'s `FieldExpr` arm** (~5 lines). Before constraining to record unification, check if the assembled dotted string (`left_side_name ++ "." ++ field`) resolves in env. Hit → use that binding's scheme. Miss → fall through to existing record-field-access path.
+2. **In `infer.nx`'s `FieldExpr` arm** (~5 lines). Before constraining to record unification, check if the assembled dotted string (`left_side_name ++ "." ++ field`) resolves in env. Hit → use that binding's scheme. Miss → fall through to existing record-field-access path.
 
 **Why this is Inka-native:**
 - Graph? — env entries already keyed by names (strings); dotted names are more-qualified strings. Same substrate.
@@ -305,19 +305,19 @@ composition. Nothing remains as a separate substrate question.*
     cascade effect; exercises the substrate's discipline for
     adding new effects cleanly.
     Walkthrough: `docs/rebuild/simulations/FS-filesystem-effect.md`.
-  - **IC cluster** (0116d5d, 573879c, b0008dd, 0b27b0c) — cache.ka
+  - **IC cluster** (0116d5d, 573879c, b0008dd, 0b27b0c) — cache.nx
     (KaiFile record, FNV-1a hash, env serialization round-trip),
-    driver.ka (DAG walk + cache hit/miss + env install),
+    driver.nx (DAG walk + cache hit/miss + env install),
     pipeline+main wiring through driver_check. `inka check
     <module>` operates incrementally; first post-cascade
     closure of drift mode 10 ("the graph as stateless cache").
     Walkthrough: `docs/rebuild/simulations/IC-incremental-compilation.md`.
   - **Phase A — Substrate Truth-Telling** (eafd973) — eight high-priority
-    logic/memory-safety fixes across effects.ka, graph.ka, driver.ka,
-    cache.ka, infer.ka, lower.ka, strings.ka, io.ka.
+    logic/memory-safety fixes across effects.nx, graph.nx, driver.nx,
+    cache.nx, infer.nx, lower.nx, strings.nx, io.nx.
   - **Phase B — Cache Dissolution** (7eee2b8) — text-parsing cache layer
-    dissolved. NEW: `std/runtime/binary.ka` (Pack/Unpack effects +
-    buffer_packer/buffer_unpacker handlers). cache.ka rewritten from
+    dissolved. NEW: `std/runtime/binary.nx` (Pack/Unpack effects +
+    buffer_packer/buffer_unpacker handlers). cache.nx rewritten from
     text serialization to binary Pack/Unpack (503 ins, 416 del).
     cache_compiler_version bumped to v3.
 
@@ -345,7 +345,7 @@ composition. Nothing remains as a separate substrate question.*
 - **File extension:** `.nx` (decided 2026-04-21). Two letters,
   flat typography (no ascenders / descenders), zero collision
   verified, phonetic match to "Inka" via the N-K sound. Supersedes
-  `.ka`. Migration is item 10 of Pending Work.
+  `.nx`. Migration is item 10 of Pending Work.
 - **Repository shape:** six top-level directories (`src/` compiler,
   `lib/` stdlib, `docs/` docs, `bootstrap/` hand-WAT, `tools/`
   scripts, plus root markdown + license). No `examples/`, no
@@ -412,7 +412,7 @@ itself. 32+ are post-first-light surfaces.
    - Deliverable: closed walkthrough → `Interact` effect declaration + `mentl_voice_default` 8-tentacle handler + silence predicate + LSP adapter handler + VS Code extension package. Absorbs former `teach_synthesize` conductor gap + former `HandlerCatalog` gap.
    - Depends on: nothing substrate-wise; §2 closure unblocks MV.2 implementation.
    - Gate for: VS Code plugin v1 shipping. NOT gating for bootstrap — Mentl-voice code can land post-first-light if needed.
-   - Scope: ~600–1000 lines `.nx` (mentl_voice.ka + lsp_adapter.ka) + ~300 lines TypeScript extension glue.
+   - Scope: ~600–1000 lines `.nx` (mentl_voice.nx + lsp_adapter.nx) + ~300 lines TypeScript extension glue.
    - Acceptance: `mentl_voice_default` correct iff AT1–AT10 (§2.8 of walkthrough) render as specified.
 
 3. **⚙️ Three-gap residue swept.**
@@ -458,9 +458,9 @@ itself. 32+ are post-first-light surfaces.
 
 ### Extension + Graph rename propagation (folded into simplification audit)
 
-10. **🔁 `.ka` → `.nx` migration.**
+10. **🔁 `.nx` → `.nx` migration.**
     - Status: `[PENDING]`.
-    - Deliverable: every `.ka` file renamed to `.nx`; every reference in every doc, memory file, comment, CLAUDE.md, README.md, DESIGN.md, PLAN.md, SYNTAX.md, INSIGHTS.md, errors/README.md, every spec, every walkthrough, every tool script, `.gitignore` updated for `.inka/` cache directory pattern; drift-audit.sh patterns updated if any reference `.ka`.
+    - Deliverable: every `.nx` file renamed to `.nx`; every reference in every doc, memory file, comment, CLAUDE.md, README.md, DESIGN.md, PLAN.md, SYNTAX.md, INSIGHTS.md, errors/README.md, every spec, every walkthrough, every tool script, `.gitignore` updated for `.inka/` cache directory pattern; drift-audit.sh patterns updated if any reference `.nx`.
     - Depends on: walkthrough closure for items 4, 5.
     - Lands with: items 11–22 (single simplification+restructure commit or tightly-sequenced commits).
 
@@ -474,14 +474,14 @@ itself. 32+ are post-first-light surfaces.
       - **11.A** — Pass 1 naming sweep. Status: `[PARTIAL]`. Smoke test for dot-access at `cache.hash_source` landed in Phase II corpus commit `773f879`. Full sweep across remaining modules (driver_*, mentl_*, parse_*, lower_*, infer_*) pending post-11.B.
       - **11.B** — Pass 2 drift-mode screen (modes 1-9). **LANDED** via three sub-commits:
         - `773f879` — 11.B.1 BinOp + BinOpKind ADT (drift mode 8 cure at operator dispatch).
-        - `94389fb` — 11.B.2 lexer.ka byte-native refactor (drift mode 12 cure; 14 hits).
-        - `b1a2bf0` — 11.B.3 prelude.ka trim + parse_int byte-native (drift mode 12 cure; 2 hits).
-        Full std/ tree (29 .ka files) drift-audit CLEAN post-11.B.3.
+        - `94389fb` — 11.B.2 lexer.nx byte-native refactor (drift mode 12 cure; 14 hits).
+        - `b1a2bf0` — 11.B.3 prelude.nx trim + parse_int byte-native (drift mode 12 cure; 2 hits).
+        Full std/ tree (29 .nx files) drift-audit CLEAN post-11.B.3.
       - **11.C** — Pass 3 bug-class screen. Status: `[IN-FLIGHT]` — 11.T + 11.C.0 + 11.C.1 landed; 11.C.2 + 11.C.3 pending walkthroughs.
         - `944f443` — **11.T** drift-audit mode-11 regex fix (character-class escape; surfaced 22 previously-masked drift-11 hits).
-        - (within `4bddfe4`) — **11.C.0** inline suppressions for 5 false positives (lower.ka one-time LBlock appends + prose comment + frame-record paired-list tracked for 11.C.2).
+        - (within `4bddfe4`) — **11.C.0** inline suppressions for 5 false positives (lower.nx one-time LBlock appends + prose comment + frame-record paired-list tracked for 11.C.2).
         - `4bddfe4` — **11.C.1** buffer-counter sweep for 13 genuine tail-recursive accumulator loops (lower/cache/driver/infer/wasm).
-        - **11.C.2** — `[PENDING WALKTHROUGH]`. Frame-record paired-list restructure at lower.ka:1177/78 (local_handles + local_order both `++ [x]` in handler-arm record update). Requires frame-record field restructure (list→buffer+counter pair) or introduction of O(1) snoc primitive. Walkthrough-worthy substrate design.
+        - **11.C.2** — `[PENDING WALKTHROUGH]`. Frame-record paired-list restructure at lower.nx:1177/78 (local_handles + local_order both `++ [x]` in handler-arm record update). Requires frame-record field restructure (list→buffer+counter pair) or introduction of O(1) snoc primitive. Walkthrough-worthy substrate design.
         - **11.C.3** — `[WALKTHROUGH LANDED 2026-04-21]` — see `docs/rebuild/simulations/HC-handler-composition.md`. Pattern locked: **transform emits; materialize captures; `~>` composes.** Prelude refactor (map_h / filter_h / take_h / skip_h re-yield; collector captures via buf+count; sum_h / count_h as peer materializers) ready for implementation. Pattern ripples to 11.C.2 (frame-record as OrderedMap materializer), 11.B.M (Diagnostic module-parameterized materializer), Hα (Arithmetic(mode) materializer), and MV.2 (tentacles transform; LSP surfaces materialize). **HC is upstream of 4 downstream handler-composition moves.**
         - **11.C.4** — `[PENDING]`. Post-walkthrough bug-class screens: `_ => <fabricated>` sweep, `str_eq(a,b) == 1` deprecated form check, `println` in report arms audit. Currently drift-audit-clean; may surface during 11.D semantic pass.
       - **11.D** — Pass 4 eight-interrogation audit (semantic).
@@ -510,21 +510,21 @@ itself. 32+ are post-first-light surfaces.
         3.12's ERE (the escaped `\]` inside the character class parses
         inconsistently). Fix: `\+\+\s*\[[^]]*\]` (remove the backslash
         escape inside the class). Post-fix, mode 11 catches the 7 files
-        currently masked: prelude.ka (4 hits in Iterate handler arms),
-        cache.ka (3), driver.ka (1), pipeline.ka (1, suppressed), wasm.ka
-        (4, one suppressed), lower.ka (1), infer.ka (2). Lands as the
+        currently masked: prelude.nx (4 hits in Iterate handler arms),
+        cache.nx (3), driver.nx (1), pipeline.nx (1, suppressed), wasm.nx
+        (4, one suppressed), lower.nx (1), infer.nx (2). Lands as the
         first commit inside 11.C; subsequent 11.C commits sweep the
         now-visible hits via buffer-counter substrate.
 
-12. **📖 DESIGN.md updates**: `SubstGraph → Graph` in §0.5 + Ch 4 (~40 refs); Ch 8 tentacle list verification; Ch 9.1 packaging rewrite (`.inka/` cache + `~>` as manifest); Ch 9.2 testing rewrite (entry-handler + `run.nx` paradigm; "no `tests/` directory" as substrate claim); Ch 9 examples-dissolution note; every Ch 10 scenario's file paths updated; extension `.ka → .nx` throughout.
+12. **📖 DESIGN.md updates**: `SubstGraph → Graph` in §0.5 + Ch 4 (~40 refs); Ch 8 tentacle list verification; Ch 9.1 packaging rewrite (`.inka/` cache + `~>` as manifest); Ch 9.2 testing rewrite (entry-handler + `run.nx` paradigm; "no `tests/` directory" as substrate claim); Ch 9 examples-dissolution note; every Ch 10 scenario's file paths updated; extension `.nx → .nx` throughout.
 
 13. **📖 INSIGHTS.md updates**: kernel shorthand `SubstGraph → Graph`; any `std/compiler/` path refs; extension throughout.
 
-14. **📖 CLAUDE.md updates**: Mentl's anchor kernel refs `SubstGraph → Graph`; interrogation #1 refs; file map (every `std/compiler/X.ka` → `src/X.nx`); file-extension line (`.ka` → `.nx`); bug-classes path refs.
+14. **📖 CLAUDE.md updates**: Mentl's anchor kernel refs `SubstGraph → Graph`; interrogation #1 refs; file map (every `std/compiler/X.nx` → `src/X.nx`); file-extension line (`.nx` → `.nx`); bug-classes path refs.
 
-15. **📖 README.md updates**: kernel enumeration `SubstGraph → Graph`; Repository layout rewritten to six-directory template; extension `.ka → .nx`.
+15. **📖 README.md updates**: kernel enumeration `SubstGraph → Graph`; Repository layout rewritten to six-directory template; extension `.nx → .nx`.
 
-16. **📖 SYNTAX.md updates**: file extension throughout; entry-handler declaration form (new section: `handler name_run { ~> stack }`); `Test` effect interaction; layout + token refs where `.ka` appears.
+16. **📖 SYNTAX.md updates**: file extension throughout; entry-handler declaration form (new section: `handler name_run { ~> stack }`); `Test` effect interaction; layout + token refs where `.nx` appears.
 
 17. **📖 PLAN.md updates**: (this file, being updated now) — extension finalized; restructure step tracked; examples-dissolution tracked; `run.nx` substrate tracked; all future pending work rolled into item list.
 
@@ -533,10 +533,10 @@ itself. 32+ are post-first-light surfaces.
 19. **📖 Per-spec files `docs/specs/00-11`**: 
     - `00-substgraph.md` retitled to `00-graph.md`; body rewritten to use `Graph`.
     - Cross-spec references to old paths updated.
-    - Extension `.ka → .nx` in all examples.
-20. **📖 All walkthroughs `docs/specs/simulations/`**: `HB`, `H1-H6`, `H2.3`, `H3.1`, `FS`, `IC`, `MV`, `TS` — each scanned for `SubstGraph`, `std/compiler/` paths, `.ka` extension; updated.
+    - Extension `.nx → .nx` in all examples.
+20. **📖 All walkthroughs `docs/specs/simulations/`**: `HB`, `H1-H6`, `H2.3`, `H3.1`, `FS`, `IC`, `MV`, `TS` — each scanned for `SubstGraph`, `std/compiler/` paths, `.nx` extension; updated.
 
-21. **📖 `docs/traces/a-day.md`**: extension `.ka → .nx` and any path refs.
+21. **📖 `docs/traces/a-day.md`**: extension `.nx → .nx` and any path refs.
 
 22. **📖 Memory files (`~/.claude/projects/-home-suds-Projects-inka/memory/`)**:
     - `MEMORY.md` index: extension / path refs.
@@ -555,9 +555,9 @@ Lands after items 10-22 so simplification + extension migration ride through alo
 - `std/compiler/*` → `src/*`
 - `std/compiler/backends/` → `src/backends/`
 - `std/runtime/` → `lib/runtime/`
-- `std/prelude.ka` → `lib/prelude.nx`
-- `std/test.ka` → `lib/test.nx`
-- `std/types.ka` merged into `lib/prelude.nx` (absorbed)
+- `std/prelude.nx` → `lib/prelude.nx`
+- `std/test.nx` → `lib/test.nx`
+- `std/types.nx` merged into `lib/prelude.nx` (absorbed)
 - `std/dsp/` → `lib/dsp/`
 - `std/ml/` → `lib/ml/`
 - `docs/rebuild/` → `docs/specs/`
@@ -605,7 +605,7 @@ Lands after items 10-22 so simplification + extension migration ride through alo
           form round-trips to every handler projection surface. The eight
           peers (EN · RN · OW · VK · GR · RX · HI · DS) each close one
           primitive's intent gap. EN closes primitive #4's.
-        - **Substrate finding.** Per `std/compiler/effects.ka:134-156`
+        - **Substrate finding.** Per `std/compiler/effects.nx:134-156`
           (`normalize_inter`), `Closed(A) & !Closed(B)` reduces to
           `Closed(A - B)` — which equals `Closed(A)` when `B ⊄ A`.
           Declaring `with Memory + Alloc + Filesystem + !Diagnostic`
@@ -643,21 +643,21 @@ Lands after items 10-22 so simplification + extension migration ride through alo
           Find a higher-order site in the compiler or prelude where
           the callback's effect row is genuinely polymorphic, and
           declare `!E` as a constraint that narrows what the callback
-          can bind to. Candidate: prelude.ka's higher-order
+          can bind to. Candidate: prelude.nx's higher-order
           collection ops (map / filter / fold / iterate) — `fn map(f:
           fn(a) -> b with !Diagnostic + v, xs)` would prove map
           never propagates diagnostic reporting. Requires care (API
           change; breaks callers passing reporting callbacks).
           `[PENDING — substrate walkthrough needed before code]`
       - **FV.2** — `Pure` declaration sweep. `[LANDED 2026-04-22 · 005d66d]` — 55 Pure annotations across 11 files. Primitive #4c + #7.
-      - **FV.3** — Refinement types. `[LANDED 2026-04-22 · f7c6774]` — 5 aliases (Handle / TagId / ValidOffset / NonEmptyList / ValidSpan) + `fn span_valid` predicate added to types.ka; `Handle` applied to `graph_fresh_ty` return type. Primitive #6 moves from 0 uses to 5 decls + 1 applied site.
+      - **FV.3** — Refinement types. `[LANDED 2026-04-22 · f7c6774]` — 5 aliases (Handle / TagId / ValidOffset / NonEmptyList / ValidSpan) + `fn span_valid` predicate added to types.nx; `Handle` applied to `graph_fresh_ty` return type. Primitive #6 moves from 0 uses to 5 decls + 1 applied site.
         - **FV.3.1** `TagId` applied to ConstructorScheme tag_id fields + emit_match dispatch. `[PENDING]`
-        - **FV.3.2** `ValidOffset` applied to lexer byte positions + parser token positions. `[LANDED]` — 12 sites in lexer.ka.
+        - **FV.3.2** `ValidOffset` applied to lexer byte positions + parser token positions. `[LANDED]` — 12 sites in lexer.nx.
         - **FV.3.3** `NonEmptyList` applied wherever code asserts `len > 0` in prose. `[PENDING]`
-        - **FV.3.4** `ValidSpan` applied to every Span construction site. `[IN-FLIGHT]` — 56 sites across parser.ka and infer.ka parameters.
+        - **FV.3.4** `ValidSpan` applied to every Span construction site. `[IN-FLIGHT]` — 56 sites across parser.nx and infer.nx parameters.
       - **FV.4** — Ownership markers (`own` on consumed params, `ref` on borrowed, `!Mutate` on append-only frozen buffers). Primitive #5. `[PENDING]`
       - **FV.5** — Five-verb exemplar (`<|` in infer_expr, `><` in driver, `<~` in unification fixpoint). Primitive #3. `[PENDING — Opus-dispatch tier; judgment on sites]`
-      - **FV.6** — String interpolation sweep (`str_concat` chains → `${}` form). `[PENDING — BLOCKED: lexer.ka's scan_string does not yet parse `${}` — FV.6 has a prerequisite lexer-substrate extension]`
+      - **FV.6** — String interpolation sweep (`str_concat` chains → `${}` form). `[PENDING — BLOCKED: lexer.nx's scan_string does not yet parse `${}` — FV.6 has a prerequisite lexer-substrate extension]`
       - **FV.7** — `~>` chain sweep (rewrite any nested `handle(handle(...))` as pipe chain). `[PENDING — likely no-op per pre-audit: all `handle` hits in the compiler are identifier-substrings, not nested handle expressions]`
       - **FV.8** — Parameterized Diagnostic (already named as 11.B.M; this is its FV framing). Primitive #2b. `[PENDING — Opus-dispatch tier; cross-cutting + judgment on ModuleName ADT shape]`
       - **FV.9** — Docstring harmonization per NS-naming canonical template (absorbs item 11.E). `[PENDING — Sonnet-dispatch; mechanical once template is locked]`
@@ -932,7 +932,7 @@ are validated by re-running the fixed-point test against it.
 
 No plugin API. No framework. No hook system. New capabilities (LSP,
 Mentl, format, lint, doc) are handlers installed via `~>`. Pipeline
-callers compose their own chains. `pipeline.ka` is not modified to
+callers compose their own chains. `pipeline.nx` is not modified to
 add features — features are handlers.
 
 ### 4. No patches. Restructure or stop. Forever.
@@ -1096,8 +1096,8 @@ conversational latency; anything slower is the graph being
 disrespected by the driver.**
 
 - **Incremental compilation** *[LANDED — substrate]* — per-module
-  `.kai` cached envs (cache.ka), module DAG walk + cache hit/miss
-  (driver.ka), source-hash invalidation, env reconstruction from
+  `.kai` cached envs (cache.nx), module DAG walk + cache hit/miss
+  (driver.nx), source-hash invalidation, env reconstruction from
   cache. The Filesystem effect (FS substrate) lands underneath,
   exposing path_open/fd_close/path_create_directory/
   path_filestat_get to the driver via wasi_filesystem handler.
@@ -1128,7 +1128,7 @@ disrespected by the driver.**
 - **Audit-driven linker dead-code severance** — reads
   `AuditReport.severable`, issues `--drop-import` at WAT → WASM.
 - **Multi-backend emit** — per-target handler variants on `backends/`
-  (browser, server, trainer, wasi). Today's single `backends/wasm.ka`
+  (browser, server, trainer, wasi). Today's single `backends/wasm.nx`
   generalizes; each target adds a handler.
 - *(Former: Runtime `HandlerCatalog` effect — folded into
   Mentl-voice substrate at Priority 1. The registry is what Mentl
@@ -1378,8 +1378,8 @@ handlers as alternate EmitMemory installations.
 ### Arc F.5 — Native Backend  *[PRIORITY 2]*
 
 Hand-rolled x86-64 from LowIR. The capstone performance arc.
-Lands as an alternate `backends/native.ka` handler installation —
-peer to `backends/wasm.ka`, not a rewrite. Multi-backend emit
+Lands as an alternate `backends/native.nx` handler installation —
+peer to `backends/wasm.nx`, not a rewrite. Multi-backend emit
 infrastructure (Priority 2) is the prerequisite.
 
 **What it does:** LowIR → native machine code. No WASM, no VM.
@@ -1405,7 +1405,7 @@ severance enumeration, capability unlocks. What remains is the
 composed handler that drives checkpoint/apply/verify/rollback over
 gradient candidates.
 
-**What it does:** Crystallize `mentl.ka` further. The five-op Teach
+**What it does:** Crystallize `mentl.nx` further. The five-op Teach
 surface and the speculative oracle ship in Phase 1 as the structural
 substrate; F.6 expands the reasoning depth (longer Why-chains,
 richer error catalog, higher-leverage gradient suggestions) and
@@ -1425,7 +1425,7 @@ to expert is continuous — no cliff, no separate "advanced mode."
 Per-module caching via `.kai` interface files + Salsa 3 overlay.
 
 **What it does:**
-- Each `.ka` file is checked independently against the envs of its
+- Each `.nx` file is checked independently against the envs of its
   dependencies. Result: a fully-resolved type environment.
 - After checking, serialize env to `<module>.kai` (Inka Interface):
   `[(name, Type, Reason)]` triples, content-hash keyed.
@@ -1507,7 +1507,7 @@ the version solver.
   negations. Zero infrastructure. Runs locally. Mathematically proven
   capability analysis before compilation.
   ```
-  $ inka audit main.ka
+  $ inka audit main.nx
   Capabilities required:
     - Network (via router_axum)
     - Filesystem (via db_postgres)
@@ -1573,7 +1573,7 @@ one continuous graph.
 
 ### Arc G — Rename (Lux → Inka)  *[LANDED]*
 
-Done. Extension is `.nx` (2026-04-21); `.ka` is the previous
+Done. Extension is `.nx` (2026-04-21); `.nx` is the previous
 extension being migrated out per Pending Work item 10;
 `lux3.wasm` is archaeology.
 
@@ -1650,27 +1650,27 @@ paper-worthy artifact is that Inka composes them into one mechanism.
 
 | Technique | Source | Lands in |
 |---|---|---|
-| **Modal Effect Types** — `⟨E₁\|E₂⟩(E) = E₂ + (E − E₁)` as a principled semantics for Inka's `E - F`. Rows and Capabilities are both encodable in modal effects. | [Tang & Lindley POPL 2025](https://arxiv.org/abs/2407.11816) · [POPL 2026](https://arxiv.org/abs/2507.10301) | effects.ka |
-| **Affect affine-tracked resume** — type-level distinction of one-shot vs multi-shot; Iris/Coq-mechanized. Directly solves Inka's D.1 (multi-shot × arena). | [Affect POPL 2025](https://iris-project.org/pdfs/2025-popl-affect.pdf) | effects.ka |
-| **Koka evidence-passing compilation** — when the graph proves a call site's handler stack is monomorphic, emit `call $h_foo` directly. Kills val_concat drift at compile time. | [Generalized Evidence Passing JFP 2022](https://dl.acm.org/doi/10.1145/3473576) | lower.ka |
+| **Modal Effect Types** — `⟨E₁\|E₂⟩(E) = E₂ + (E − E₁)` as a principled semantics for Inka's `E - F`. Rows and Capabilities are both encodable in modal effects. | [Tang & Lindley POPL 2025](https://arxiv.org/abs/2407.11816) · [POPL 2026](https://arxiv.org/abs/2507.10301) | effects.nx |
+| **Affect affine-tracked resume** — type-level distinction of one-shot vs multi-shot; Iris/Coq-mechanized. Directly solves Inka's D.1 (multi-shot × arena). | [Affect POPL 2025](https://iris-project.org/pdfs/2025-popl-affect.pdf) | effects.nx |
+| **Koka evidence-passing compilation** — when the graph proves a call site's handler stack is monomorphic, emit `call $h_foo` directly. Kills val_concat drift at compile time. | [Generalized Evidence Passing JFP 2022](https://dl.acm.org/doi/10.1145/3473576) | lower.nx |
 | **Perceus refcount + FBIP reuse** — precise RC + in-place update when ownership graph proves unique. Layer-2 memory fallback. | [Perceus PLDI'21](https://www.microsoft.com/en-us/research/wp-content/uploads/2021/06/perceus-pldi21.pdf) | Arc F.4 |
 | **Lexa zero-overhead handler compilation** — direct stack-switching, linear vs quadratic dispatch. Makes effects free. | [Lexa OOPSLA 2024](https://cs.uwaterloo.ca/~yizhou/papers/lexa-oopsla2024.pdf) | Arc F.5 |
-| **Salsa 3.0 / `ty` query-driven incremental** — flat-array substitution with epoch + persistent overlay. | [Astral ty](https://astral.sh/blog/ty) · [Salsa-rs](https://github.com/salsa-rs/salsa) | graph.ka |
-| **Polonius 2026 alpha — lazy constraint rewrite** — location-sensitive reachability over subset+CFG. | [Polonius 2026](https://rust-lang.github.io/rust-project-goals/2026/polonius.html) | graph.ka, own.ka |
-| **Flix Boolean unification** — 7% compile overhead for full Boolean algebra over effect rows. | [Fast Boolean Unification OOPSLA 2024](https://dl.acm.org/doi/10.1145/3622816) | effects.ka |
-| **Abstracting Effect Systems** — parameterize over the effect algebra so +/-/&/! are instances of a Boolean-algebra interface. | [Abstracting Effect Systems ICFP 2024](https://icfp24.sigplan.org/details/icfp-2024-papers/18) | effects.ka |
-| **Hazel marked-hole calculus** — every ill-typed expression becomes a marked hole; downstream services keep working. | [Total Type Error Localization POPL 2024](https://hazel.org/papers/marking-popl24.pdf) | types.ka |
+| **Salsa 3.0 / `ty` query-driven incremental** — flat-array substitution with epoch + persistent overlay. | [Astral ty](https://astral.sh/blog/ty) · [Salsa-rs](https://github.com/salsa-rs/salsa) | graph.nx |
+| **Polonius 2026 alpha — lazy constraint rewrite** — location-sensitive reachability over subset+CFG. | [Polonius 2026](https://rust-lang.github.io/rust-project-goals/2026/polonius.html) | graph.nx, own.nx |
+| **Flix Boolean unification** — 7% compile overhead for full Boolean algebra over effect rows. | [Fast Boolean Unification OOPSLA 2024](https://dl.acm.org/doi/10.1145/3622816) | effects.nx |
+| **Abstracting Effect Systems** — parameterize over the effect algebra so +/-/&/! are instances of a Boolean-algebra interface. | [Abstracting Effect Systems ICFP 2024](https://icfp24.sigplan.org/details/icfp-2024-papers/18) | effects.nx |
+| **Hazel marked-hole calculus** — every ill-typed expression becomes a marked hole; downstream services keep working. | [Total Type Error Localization POPL 2024](https://hazel.org/papers/marking-popl24.pdf) | types.nx |
 | **ChatLSP typed-context exposure** — send type/binding/typing-context to LLM via LSP. Inka's `!Alloc` effect mask is free prompt budget. | [Statically Contextualizing LLMs OOPSLA 2024](https://arxiv.org/abs/2409.00921) | Arc F.2 |
 | **Generic Refinement Types** — per-call-site refinement instantiation via unification. | [Generic Refinement Types POPL 2025](https://dl.acm.org/doi/10.1145/3704885) | Arc F.1 |
 | **Canonical tactic-level synthesis** — proof terms AND program bodies for higher-order goals via structural recursion. | [Canonical ITP 2025](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.ITP.2025.14) | Arc F (synthesis) |
 | **Vale immutable region borrowing** — `!Mutate` on a region delivers "N readers, no writers" proof via existing effect algebra. | [Vale regions](https://verdagon.dev/blog/zero-cost-memory-safety-regions-overview) | Arc F (concurrency) |
 | **bump-scope nested arenas** — checkpoints, default-Drop, directly mirrors Inka's scoped-arena-as-handler. | [bump-scope](https://docs.rs/bump-scope/) | Arc F.4 |
-| **Austral linear capabilities at module boundaries** — capabilities ARE the transitivity proof. | [Austral](https://borretti.me/article/introducing-austral) | effects.ka |
+| **Austral linear capabilities at module boundaries** — capabilities ARE the transitivity proof. | [Austral](https://borretti.me/article/introducing-austral) | effects.nx |
 | **Liquid Haskell 2025 SMT-by-theory** — Z3 for nonlinear arithmetic, cvc5 for finite-set/bag/map, Bitwuzla for bitvectors. | [Tweag 2025](https://www.tweag.io/blog/2025-03-20-lh-release/) | Arc F.1 |
-| **Elm/Roc/Dafny error-catalog pattern** — stable error codes + canonical explanation + applicability-tagged fixes. | [Elm errors](https://elm-lang.org/news/compiler-errors-for-humans) | pipeline.ka |
+| **Elm/Roc/Dafny error-catalog pattern** — stable error codes + canonical explanation + applicability-tagged fixes. | [Elm errors](https://elm-lang.org/news/compiler-errors-for-humans) | pipeline.nx |
 | **Grove CmRDT structural edits** — edits commute; cross-module re-inference becomes a fold over commuting ops. | [Grove POPL 2025](https://hazel.org/papers/grove-popl25.pdf) | Arc F (incremental) |
 | **Multiple Resumptions Directly (ICFP 2025)** — competitive LLVM numbers for multi-shot + local mutable state. | [ICFP 2025](https://dl.acm.org/doi/10.1145/3747529) | Arc F (multi-shot) |
-| **Applicability-tagged diagnostics** — every "did you mean" emits a structured patch with confidence + effect-row delta. | [rustc-dev-guide](https://rustc-dev-guide.rust-lang.org/diagnostics.html) | pipeline.ka |
+| **Applicability-tagged diagnostics** — every "did you mean" emits a structured patch with confidence + effect-row delta. | [rustc-dev-guide](https://rustc-dev-guide.rust-lang.org/diagnostics.html) | pipeline.nx |
 
 ### Techniques to REJECT (with one-line reason each)
 
@@ -1792,7 +1792,7 @@ values from heap pointers:
 - Mixed-variant match dispatch (`emit_match_arms_mixed`) uses
   `(scrut < heap_base())` as the sentinel-or-pointer discriminator.
 - `heap_base()` is a single-source-of-truth helper in
-  `backends/wasm.ka`. Changing either the sentinel range or the
+  `backends/wasm.nx`. Changing either the sentinel range or the
   heap initialization requires updating both at once.
 
 This invariant enables nullary-sentinel compilation for every ADT
@@ -1811,7 +1811,7 @@ of retrofitting one is measured in weeks.
 
 1. **Ownership annotations in the Type ADT.** `TParam` carries
    `Ownership` (`Inferred | Own | Ref`). Without it, every function
-   signature is ambiguous about move vs borrow, and `own.ka` has no
+   signature is ambiguous about move vs borrow, and `own.nx` has no
    type-level hook to track linearity. Spec: 02-ty.md.
 
 2. **Source spans on every AST node.** Full `Span(start_line,
@@ -1853,7 +1853,7 @@ projection lands as Phase II work per the Handler Projection
 Priority list.
 
 - **Refinement types.** Substrate LIVE (`TRefined(Ty, Predicate)` in
-  types.ka; `Verify` effect with `verify_ledger` accumulates
+  types.nx; `Verify` effect with `verify_ledger` accumulates
   obligations). Exposure PENDING: SMT handler swap (verify_smt with
   Z3/cvc5/Bitwuzla) — Arc F.1.
 
@@ -1878,7 +1878,7 @@ Priority list.
   reads severance list and drops WASM imports — Priority 2.
 
 - **Native backend.** Substrate LIVE (multi-backend handler chain).
-  Exposure PENDING: `backends/native.ka` as an alternate EmitBackend
+  Exposure PENDING: `backends/native.nx` as an alternate EmitBackend
   handler — Arc F.5 = Priority 2.
 
 ---
@@ -1896,7 +1896,7 @@ are recorded for the project's memory; active risks lead.
 | Mentl's voice ships before the voice design session closes; surfaces drift into cliché/chatbot register | `MV-mentl-voice.md` walkthrough is gating for ANY voice-surface code. Voice grammar (proof-shape templates, silence discipline) lands on paper before a single byte of REPL or CLI surface code. Character design is as load-bearing as substrate design here. |
 | Mentl-voice surfaces proliferate before the core Interact effect stabilizes | Design order is CLI/REPL first; text transport forces discipline. Web playground, IDE-like client are later renderers on the same substrate. If Mentl's voice works in a terminal, it works everywhere; reverse is false. |
 | Multi-shot `enumerate_inhabitants` thrashes checkpoint/rollback on branches that don't prove | Cap at N=8 verified-or-rejected branches per hole; pre-filter each resumed branch with `row_subsumes` before `graph_bind`; stop resuming once the cap is reached or the continuation exhausts. The pre-filter is load-bearing, not an optimization. |
-| Multi-backend emit introduces per-target divergence that drifts over time | Shared substrate invariants live in `types.ka` and `effects.ka`; each backend handler declares its own effect row. Row subsumption proves which invariants the backend honors. |
+| Multi-backend emit introduces per-target divergence that drifts over time | Shared substrate invariants live in `types.nx` and `effects.nx`; each backend handler declares its own effect row. Row subsumption proves which invariants the backend honors. |
 | User-declared nullary variants collide with HEAP_BASE threshold (4096) | Total variants per type are bounded by tag_id length; no realistic ADT approaches 4096 variants. If a type ever does, the threshold widens; the invariant documents the coupling. |
 | WASM stack overflow from deep recursion | Emit `return_call` for tail calls; wasmtime supports the proposal |
 
@@ -1944,8 +1944,8 @@ terminal invariant).
 ## Key Documents
 
 *(Paths reflect post-restructure state — item 17' of Pending Work.
-Pre-restructure: `docs/specs/` = `docs/rebuild/`, `.nx` = `.ka`,
-`src/` = `std/compiler/`, `lib/` = `std/runtime/` + `std/*.ka`.)*
+Pre-restructure: `docs/specs/` = `docs/rebuild/`, `.nx` = `.nx`,
+`src/` = `std/compiler/`, `lib/` = `std/runtime/` + `std/*.nx`.)*
 
 | Document | Role |
 |---|---|
@@ -2006,14 +2006,14 @@ self-contained operating manual.
 - Last commits on `rebuild`: `1ae46f9` (initial handoff block),
   `934dedd` (FV.3.1 `TagId` applied). FV.2 at `005d66d`, FV.3 at
   `f7c6774`.
-- Full `std/` tree (29 `.ka` files) drift-audit CLEAN.
+- Full `std/` tree (29 `.nx` files) drift-audit CLEAN.
 - Zero uncommitted working-tree edits. Zero in-flight dispatches.
 
 ---
 
 ### The `inka-plan` contract — inlined (since the skill is unreachable)
 
-**Every `.ka` edit follows this shape before tokens are typed.**
+**Every `.nx` edit follows this shape before tokens are typed.**
 Write the plan either in chat or in your head; type the residue
 only. Opus 4.6, you are the planner. Do not skip sections because
 "it's just a small edit" — fluency is the trap this contract closes.
@@ -2053,7 +2053,7 @@ superseded.)
 
 **§4 Edits as literal tokens at file:line.** Not prose. Exact form:
 ```
-std/compiler/<file>.ka:<line_range>
+std/compiler/<file>.nx:<line_range>
   DELETE: <current tokens, verbatim>
   WRITE:  <new tokens, verbatim, canonical formatting>
 ```
@@ -2122,7 +2122,7 @@ commits inline). Recommended order by **single-thread safety**
 
 | # | Item | Kind | Scope |
 |---|---|---|---|
-| 1 | **FV.3.2** `ValidOffset` → lexer + parser byte positions | Mechanical | ~15 sites in lexer.ka + parser.ka |
+| 1 | **FV.3.2** `ValidOffset` → lexer + parser byte positions | Mechanical | ~15 sites in lexer.nx + parser.nx |
 | 2 | **FV.3.4** `ValidSpan` → every `Span(sl,sc,el,ec)` construction | Mechanical | ~25 sites across lexer / parser / infer |
 | 3 | **FV.3.3** `NonEmptyList<A>` → where comments assert `len > 0` | Mechanical | Grep for "len > 0" / "non-empty" assertions |
 | 4 | **FV.9** docstring harmonization | Mechanical | BLOCKED — lock NS-naming template first |
@@ -2162,7 +2162,7 @@ mode 9 flipped (work landing before its prerequisite):
 
 ### Runtime tooling (Antigravity terminal-accessible)
 - `bash tools/drift-audit.sh <files>` — exit 0 required before commit.
-- `.githooks/pre-commit` — enforces drift-audit on staged `.ka`
+- `.githooks/pre-commit` — enforces drift-audit on staged `.nx`
   files. Ensure `git config core.hooksPath .githooks` is active
   (check with `git config --get core.hooksPath`; if not, run the
   command before the first commit).
@@ -2207,8 +2207,8 @@ without cross-cutting judgment.
 
 Inventory to seed the plan (grep before committing):
 ```
-grep -n "pos: Int" std/compiler/lexer.ka
-grep -n "pos: Int\|pos += \|self\.pos" std/compiler/parser.ka
+grep -n "pos: Int" std/compiler/lexer.nx
+grep -n "pos: Int\|pos += \|self\.pos" std/compiler/parser.nx
 ```
 (Expect ~15 applied sites between the two files. Actual count
 depends on current shape; verify before planning.)

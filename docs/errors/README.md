@@ -55,20 +55,20 @@ Minimal code triggering it + the fix.
 
 | Code | Emitted by |
 |---|---|
-| [E_MissingVariable](E_MissingVariable.md) | `infer.ka` — VarRef handling |
-| [E_TypeMismatch](E_TypeMismatch.md) | `infer.ka` — unify_types |
-| [E_PatternInexhaustive](E_PatternInexhaustive.md) | `infer.ka` — match exhaustiveness |
-| [E_OwnershipViolation](E_OwnershipViolation.md) | `own.ka` — affine_ledger |
-| [E_OccursCheck](E_OccursCheck.md) | `graph.ka`, `infer.ka` — bind guard |
-| [E_UnresolvedType](E_UnresolvedType.md) | `pipeline.ka` — lookup_ty_graph |
-| [E_RefinementRejected](E_RefinementRejected.md) | `verify.ka` — Arc F.1 SMT |
-| [E_FeedbackNoContext](E_FeedbackNoContext.md) | `infer.ka` — `<~` checking |
-| [E_PurityViolated](E_PurityViolated.md) | `effects.ka` — unify_row |
-| [E_EffectMismatch](E_EffectMismatch.md) | `effects.ka` — unify_row |
-| [E_ReplayExhausted](E_ReplayExhausted.md) | `clock.ka` — replay handlers |
-| [P_ExpectedToken](P_ExpectedToken.md) | `parser.ka` — `expect` helper |
-| [P_UnexpectedToken](P_UnexpectedToken.md) | `parser.ka` — primary fallthrough |
-| [V_Pending](V_Pending.md) | `verify.ka` — verify_ledger |
+| [E_MissingVariable](E_MissingVariable.md) | `infer.nx` — VarRef handling |
+| [E_TypeMismatch](E_TypeMismatch.md) | `infer.nx` — unify_types |
+| [E_PatternInexhaustive](E_PatternInexhaustive.md) | `infer.nx` — match exhaustiveness |
+| [E_OwnershipViolation](E_OwnershipViolation.md) | `own.nx` — affine_ledger |
+| [E_OccursCheck](E_OccursCheck.md) | `graph.nx`, `infer.nx` — bind guard |
+| [E_UnresolvedType](E_UnresolvedType.md) | `pipeline.nx` — lookup_ty_graph |
+| [E_RefinementRejected](E_RefinementRejected.md) | `verify.nx` — Arc F.1 SMT |
+| [E_FeedbackNoContext](E_FeedbackNoContext.md) | `infer.nx` — `<~` checking |
+| [E_PurityViolated](E_PurityViolated.md) | `effects.nx` — unify_row |
+| [E_EffectMismatch](E_EffectMismatch.md) | `effects.nx` — unify_row |
+| [E_ReplayExhausted](E_ReplayExhausted.md) | `clock.nx` — replay handlers |
+| [P_ExpectedToken](P_ExpectedToken.md) | `parser.nx` — `expect` helper |
+| [P_UnexpectedToken](P_UnexpectedToken.md) | `parser.nx` — primary fallthrough |
+| [V_Pending](V_Pending.md) | `verify.nx` — verify_ledger |
 | [W_Suggestion](W_Suggestion.md) | Mentl suggest tentacle |
 | [T_Gradient](T_Gradient.md) | Mentl teach tentacle |
 | [T_ContinuationEscapes](T_ContinuationEscapes.md) | Arc F.4 scoped-arena × multi-shot |

@@ -976,7 +976,7 @@ let bad: Sample = 1.5   // E_RefinementRejected: 1.5 violates -1.0 <= self <= 1.
 
 ## Top-level program structure
 
-A `.ka` file is a sequence of top-level statements. Each is one of:
+A `.nx` file is a sequence of top-level statements. Each is one of:
 
 - `import path/to/module` — module imports
 - `type Name<P> = ...` — type declarations
@@ -985,9 +985,9 @@ A `.ka` file is a sequence of top-level statements. Each is one of:
 - `fn name(...) = ...` — function declarations
 - `let name = ...` — top-level value bindings (constants)
 
-A `.ka` file with no `main` function is a LIBRARY module — its declarations are imported by other modules. Compilation produces a WAT module whose `_start` is a clean exit.
+A `.nx` file with no `main` function is a LIBRARY module — its declarations are imported by other modules. Compilation produces a WAT module whose `_start` is a clean exit.
 
-A `.ka` file with `fn main()` is an EXECUTABLE — `_start` invokes `main`.
+A `.nx` file with `fn main()` is an EXECUTABLE — `_start` invokes `main`.
 
 ---
 

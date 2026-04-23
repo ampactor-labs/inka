@@ -34,7 +34,7 @@ if ! grep -qF "$MARKER" "$CL/CLAUDE.md" 2>/dev/null; then
 
 When working in the Inka repository, `~/Projects/inka/CLAUDE.md` governs. Read it in full per Session Zero — it carries Mentl's anchor, eight discipline anchors, nine drift modes, ten crystallizations. The project's SessionStart hook will inject the reminder automatically; confirm you've read it before proposing any edit.
 
-For planning .ka edits, invoke the `inka-plan` skill (Opus); dispatch implementation to the `inka-implementer` agent (or the new `inka-planner` agent for the planning side). Never dispatch .ka edits to a bare `general-purpose` agent — the discipline lives in the Inka-specific agent system prompts.
+For planning .nx edits, invoke the `inka-plan` skill (Opus); dispatch implementation to the `inka-implementer` agent (or the new `inka-planner` agent for the planning side). Never dispatch .nx edits to a bare `general-purpose` agent — the discipline lives in the Inka-specific agent system prompts.
 EOF
     echo "✓ appended Inka pointer to ~/.claude/CLAUDE.md"
 else
@@ -52,7 +52,7 @@ cat > "$OP_PLAN" <<'PLANEOF'
 crystallizations + nine drift modes named + ten substrate insights.
 
 **Phase II — Handler projection — IN FLIGHT.** First cluster landed
-this session: FS substrate + IC cluster (cache.ka + driver.ka +
+this session: FS substrate + IC cluster (cache.nx + driver.nx +
 pipeline/main wiring). Incremental compilation operational —
 `inka check <module>` consults `.inka/cache/*.kai`, returns from
 cache without re-inference on no-op / leaf edits.
@@ -77,7 +77,7 @@ cache without re-inference on no-op / leaf edits.
 
 **Priority 1** (three substrate gaps + LSP):
 1. LFeedback state-machine lowering (~100 lines emit-side)
-2. teach_synthesize oracle conductor (~50-80 lines mentl.ka)
+2. teach_synthesize oracle conductor (~50-80 lines mentl.nx)
 3. Runtime HandlerCatalog effect (~40 lines)
 4. LSP handler (JSON-RPC wrapping inka query + Mentl tentacles; couples to driver_check via didChange)
 

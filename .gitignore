@@ -16,3 +16,6 @@ art/
 
 # One-off probe outputs
 /probe-*.txt
+
+# Inka cache directory
+.inka/

@@ -1,7 +1,7 @@
 # E_OwnershipViolation
 
 **Kind:** Error
-**Emitted by:** `own.ka` (affine_ledger handler, spec 07)
+**Emitted by:** `own.nx` (affine_ledger handler, spec 07)
 **Applicability:** varies (see below)
 
 ## Summary

@@ -78,7 +78,7 @@ We do not use Garbage Collectors, nor do we use immutable "Snoc Trees" to fake i
 
 *Abstract algebra must materialize into one concrete shape.*
 
-`infer.ka` does not just "type-check" code. Its ultimate duty is to
+`infer.nx` does not just "type-check" code. Its ultimate duty is to
 physically synthesize evidence — the concrete closure records that
 carry captures, handler state, and resume discipline **together, in
 one record shape**. **There is no vtable. There is no separate
@@ -382,7 +382,7 @@ The self-hosted compiler is not vanity. It's the ultimate test:
 > If Inka can express its own compiler cleanly, it can express anything.
 
 ```
-source → [lexer.ka] → [parser.ka] → [checker.ka] → [codegen.ka] → bytecode → execute
+source → [lexer.nx] → [parser.nx] → [checker.nx] → [codegen.nx] → bytecode → execute
 ```
 
 All four modules are written in Inka. The compiler compiles itself. The
@@ -398,7 +398,7 @@ purpose and was surpassed by the thing it helped create.
 ## Examples, Not Tests
 
 Inka doesn't have tests. It doesn't have debug scripts. It doesn't have
-specs or doc-tests. It has `.ka` files. A file that runs is a proof.
+specs or doc-tests. It has `.nx` files. A file that runs is a proof.
 A file that crashes is a question. There is no third thing.
 
 ### One Act
@@ -410,7 +410,7 @@ Other languages split development into categories:
 - **Documentation** — write prose that explains code
 - **Specification** — write descriptions that precede code
 
-In Inka these are the same act: **write a `.ka` file that exercises the
+In Inka these are the same act: **write a `.nx` file that exercises the
 mechanism.** The categories dissolve because `handle` is the universal
 joint:
 
@@ -433,13 +433,13 @@ already does. In Inka, that's wrong by construction.
 A bug is an example that crashes. Debugging is making the example smaller.
 
 ```
-failing_program.ka (crashes)
-  → lex_test.ka (crashes — just the lexer)
-    → lex_pattern.ka (crashes — simulated lexer)
-      → mutual2.ka (crashes — 4 inner functions)
+failing_program.nx (crashes)
+  → lex_test.nx (crashes — just the lexer)
+    → lex_pattern.nx (crashes — simulated lexer)
+      → mutual2.nx (crashes — 4 inner functions)
 ```
 
-Each step is a smaller `.ka` file. The minimal file that crashes IS the
+Each step is a smaller `.nx` file. The minimal file that crashes IS the
 diagnosis. When it runs, the bug is fixed. No debugger. No breakpoints.
 No step-through. Just: write what should work, run it, make it smaller
 until the answer is visible.
@@ -733,7 +733,7 @@ One step — the most impactful annotation the developer could add. Like a tutor
 who knows exactly what to teach next:
 
 ```
-$ lux --teach app.ka
+$ lux --teach app.nx
 
   💡 `process` is Pure — adding `with Pure` would unlock:
      • memoization (same input → same output, guaranteed)
@@ -816,7 +816,7 @@ This is now shipped. Real output from the compiler:
 
 ```
 error: unbound variable 'greting' — did you mean 'greeting'?
-  --> example.ka:3:7
+  --> example.nx:3:7
   |
 3 | print(greting)
   |       ^^^^^^^
@@ -1023,7 +1023,7 @@ self-verification tending toward self-proof.
 Seven loops, each exponential, each feeding the others:
 
 **1. Effects refine the effect inferrer.** When Inka compiles
-`checker_effects.ka`, it infers which effects each function performs. If
+`checker_effects.nx`, it infers which effects each function performs. If
 `unify_eff` is Pure, the compiler can memoize it. If a checker function
 performs Console, the gradient sees it and suggests removing the side effect.
 Better inference → more precise compiler profile → more optimizations →
@@ -1050,7 +1050,7 @@ linearly — no accidental aliasing. `!Alloc` on the parser hot path — the
 parser provably doesn't allocate. The ownership checker checks the
 ownership checker.
 
-**5. The Why Engine debugs itself.** `lux why checker.ka infer_expr`
+**5. The Why Engine debugs itself.** `lux why checker.nx infer_expr`
 explains the reasoning chain for the function that produces reasoning
 chains. Better engine → easier to debug the engine → better engine.
 
@@ -1164,8 +1164,8 @@ Crucibles are not tests. They are **conversations with the language's future
 self.**
 
 A crucible is an aspirational program — code that exercises features at
-the boundary of what Inka can express today. `crucible_ml.ka` asks: can
-autodiff work as an algebraic effect? `crucible_dsp.ka` asks: can a
+the boundary of what Inka can express today. `crucible_ml.nx` asks: can
+autodiff work as an algebraic effect? `crucible_dsp.nx` asks: can a
 real-time audio callback be expressed through handlers and pipes?
 
 Every line that passes is a proof of existence. Every line that fails is
@@ -1288,7 +1288,7 @@ Three effects replace the ENTIRE runtime:
 
 Everything else — `str_concat`, `str_eq`, `int_to_str`, `print_string`,
 `split`, `chars`, `range` — is pure Inka built on these three effects.
-The `std/runtime/memory.ka` file IS the runtime. No hand-written WAT.
+The `std/runtime/memory.nx` file IS the runtime. No hand-written WAT.
 No native code. Just Inka compiling through the same pipeline as user code.
 
 **The "irreducible kernel" of any language is smaller than you think.**
@@ -1497,10 +1497,10 @@ matching ADT variants with different field counts. Every `to_string`
 workaround is debt against the leap.
 
 But inside the cage, the light is already free:
-- `std/runtime/memory.ka` — the entire runtime in 250 lines of Inka
-- `std/compiler/lexer.ka` → 4,804 lines of WAT, runs on wasmtime
-- `std/compiler/parser.ka` → 12,495 lines of WAT, runs on wasmtime
-- `tools/wasm_lex.ka` — reads stdin, tokenizes, on WASM
+- `std/runtime/memory.nx` — the entire runtime in 250 lines of Inka
+- `std/compiler/lexer.nx` → 4,804 lines of WAT, runs on wasmtime
+- `std/compiler/parser.nx` → 12,495 lines of WAT, runs on wasmtime
+- `tools/wasm_lex.nx` — reads stdin, tokenizes, on WASM
 
 The bootstrap path: when the WASM tools can compile Inka source, the
 Rust VM becomes unnecessary. The compiler compiles itself, on itself,
@@ -1847,7 +1847,7 @@ E - Handled         = Koka's handler absorption
 ```
 
 **Action for implementation.** The `row_subsumes` function in
-`effects.ka` IS the proof engine. Every `!E` constraint becomes a
+`effects.nx` IS the proof engine. Every `!E` constraint becomes a
 subsumption check: `body_row ⊆ !E` iff `E ∉ body_row`. This is
 already implemented. The action is to ensure that the compilation
 gates (Phase 1 exit, Phase F optimizations) use `row_subsumes` for

@@ -13,7 +13,7 @@ graph underneath and teaches the programmer one step at a time.
 She explores hundreds of alternate realities per second under
 the surface; She surfaces only what's proven.
 
-File extension: `.ka` (the last two letters of Inka).
+File extension: `.nx` (the last two letters of Inka).
 
 ---
 
@@ -170,16 +170,16 @@ severance, autodiff handler, threads, RPC, refinement SMT. See
 
 ```
 std/
-  prelude.ka              — Iterate effect, Bool ADT, derived collections
-  test.ka                 — Test effect declarations
+  prelude.nx              — Iterate effect, Bool ADT, derived collections
+  test.nx                 — Test effect declarations
   compiler/               — the compiler, written in Inka
-    types.ka graph.ka effects.ka infer.ka lower.ka pipeline.ka
-    own.ka verify.ka clock.ka mentl.ka query.ka lexer.ka parser.ka
-    cache.ka driver.ka main.ka
-    backends/wasm.ka      — LowIR → WAT (peer; native/browser/etc.
+    types.nx graph.nx effects.nx infer.nx lower.nx pipeline.nx
+    own.nx verify.nx clock.nx mentl.nx query.nx lexer.nx parser.nx
+    cache.nx driver.nx main.nx
+    backends/wasm.nx      — LowIR → WAT (peer; native/browser/etc.
                              are sibling handlers — Phase II)
   runtime/
-    strings.ka lists.ka tuples.ka io.ka
+    strings.nx lists.nx tuples.nx io.nx
   dsp/                    — DSP examples (signal, spectral)
   ml/                     — ML examples (autodiff)
 

@@ -1,4 +1,4 @@
-# Inka (formerly Lux) — CLAUDE.md  |  File extension: `.ka`
+# Inka (formerly Lux) — CLAUDE.md  |  File extension: `.nx`
 
 ---
 
@@ -244,7 +244,7 @@ kernel as-is; residue only.
   (Anchor 2 — later cleanup is a myth.)
 - "Can `lux3.wasm` parse this?" (Anchor 0 — dream code. lux3.wasm
   is not the arbiter.)
-- "Let me cite a `.jxj` file." (Extension is `.ka`. `.jxj` is
+- "Let me cite a `.jxj` file." (Extension is `.nx`. `.jxj` is
   archaeology.)
 - "I'll add a library / framework / tool for this." (Anchor 3 —
   Inka solves Inka. Find the primitive.)
@@ -318,10 +318,10 @@ parse, compile, or execute. `lux3.wasm` is fundamentally flawed and
 is no longer an appropriate measure of correctness.
 
 **Each file assumes every other file is already perfect.** When
-writing `infer.ka`, assume `graph.ka` provides perfect $O(1)$
-chase with trail backtracking. When writing `mentl.ka`, assume the
+writing `infer.nx`, assume `graph.nx` provides perfect $O(1)$
+chase with trail backtracking. When writing `mentl.nx`, assume the
 graph substrate supports speculative mutation and rollback. When
-writing `lower.ka`, assume inference has synthesized all evidence
+writing `lower.nx`, assume inference has synthesized all evidence
 dictionaries and state machine annotations. Write the code you
 WISH existed. The architecture will rise to meet it.
 
@@ -406,7 +406,7 @@ If a feature can't be expressed as a handler on the graph, the graph
 is incomplete. Extend the graph. Don't route around it.
 ## 6. Write Inka like Inka. Every file. Every time.
 
-Every `.ka` file you touch MUST be written in Inka's most powerful
+Every `.nx` file you touch MUST be written in Inka's most powerful
 and expressive form. This is non-negotiable:
 
 **Use the five pipe operators where they express the topology:**
@@ -509,12 +509,12 @@ until the cascade closes.
 
 ```
 # Bootstrap (one-time)
-bootstrap/translate std/compiler/*.ka -o inka.wasm
+bootstrap/translate std/compiler/*.nx -o inka.wasm
 
 # Self-compilation (the real test)
-cat std/compiler/*.ka | wasmtime run inka.wasm > inka2.wat
+cat std/compiler/*.nx | wasmtime run inka.wasm > inka2.wat
 wat2wasm inka2.wat -o inka2.wasm
-cat std/compiler/*.ka | wasmtime run inka2.wasm > inka3.wat
+cat std/compiler/*.nx | wasmtime run inka2.wasm > inka3.wat
 diff inka2.wat inka3.wat    # empty = first-light
 ```
 
@@ -546,7 +546,7 @@ Substrate."
   ADT variants live in `[0, HEAP_BASE)`; bump allocator
   initializes `$heap_ptr` at 1 MiB so collisions are impossible.
   Any change to either constant requires updating both at once
-  (`runtime/lists.ka` for the bump init; `backends/wasm.ka` for
+  (`runtime/lists.nx` for the bump init; `backends/wasm.nx` for
   emit_match_arms_mixed's threshold compare).
 
 **Ask the artifact.** `wabt` is installed. Before hypothesizing:
@@ -586,23 +586,23 @@ once, fix.
 | File | Role |
 |---|---|
 | `src/graph.nx` | Graph: flat-array, O(1) chase, Read/Write effects |
-| `std/compiler/types.ka` | Ty + Reason + Scheme + typed AST + core effects |
-| `std/compiler/effects.ka` | EffRow Boolean algebra: + - & ! |
-| `std/compiler/infer.ka` | HM inference, one walk, graph-direct |
-| `std/compiler/lower.ka` | Live-observer lowering via LookupTy |
-| `std/compiler/pipeline.ka` | Handler composition via ~> + query handler |
-| `std/compiler/own.ka` | Ownership as Consume effect |
-| `std/compiler/verify.ka` | Verify ledger (Arc F.1 swaps to SMT) |
-| `std/compiler/clock.ka` | Clock / Tick / Sample / Deadline |
-| `std/compiler/mentl.ka` | Teaching substrate (Teach effect, 5 ops) |
-| `std/compiler/lexer.ka` | Tokenizer (full spans, all 5 pipe ops) |
-| `std/compiler/parser.ka` | Recursive descent (all PipeKind variants) |
-| `std/compiler/backends/wasm.ka` | LowIR → WAT (one peer; native/test/browser are sibling handlers) |
-| `std/runtime/lists.ka` | Tagged list ops + flat-buffer-plus-counter primitive (`list_extend_to`) |
-| `std/runtime/strings.ka` | Flat string primitives + sorted-set algebra (set_union/diff/contains/...) |
-| `std/runtime/tuples.ka` | Tuple value layout + accessors |
-| `std/runtime/io.ka` | WASI iov scratch + print/read primitives |
-| `std/main.ka` | Entry: read stdin → compile → emit WAT |
+| `std/compiler/types.nx` | Ty + Reason + Scheme + typed AST + core effects |
+| `std/compiler/effects.nx` | EffRow Boolean algebra: + - & ! |
+| `std/compiler/infer.nx` | HM inference, one walk, graph-direct |
+| `std/compiler/lower.nx` | Live-observer lowering via LookupTy |
+| `std/compiler/pipeline.nx` | Handler composition via ~> + query handler |
+| `std/compiler/own.nx` | Ownership as Consume effect |
+| `std/compiler/verify.nx` | Verify ledger (Arc F.1 swaps to SMT) |
+| `std/compiler/clock.nx` | Clock / Tick / Sample / Deadline |
+| `std/compiler/mentl.nx` | Teaching substrate (Teach effect, 5 ops) |
+| `std/compiler/lexer.nx` | Tokenizer (full spans, all 5 pipe ops) |
+| `std/compiler/parser.nx` | Recursive descent (all PipeKind variants) |
+| `std/compiler/backends/wasm.nx` | LowIR → WAT (one peer; native/test/browser are sibling handlers) |
+| `std/runtime/lists.nx` | Tagged list ops + flat-buffer-plus-counter primitive (`list_extend_to`) |
+| `std/runtime/strings.nx` | Flat string primitives + sorted-set algebra (set_union/diff/contains/...) |
+| `std/runtime/tuples.nx` | Tuple value layout + accessors |
+| `std/runtime/io.nx` | WASI iov scratch + print/read primitives |
+| `std/main.nx` | Entry: read stdin → compile → emit WAT |
 | `docs/PLAN.md` | THE plan |
 | `docs/SYNTAX.md` | Canonical syntax (Σ landed; SYNTAX is the wheel parser is the lathe) |
 | `docs/rebuild/00–11` | The 12 executable specs |
@@ -662,7 +662,7 @@ during the γ cascade — that bind all implementation:
    Until functional update lands (H2.2), arms reconstruct the
    record explicitly — verbose but honest.
 10. **Row Algebra Is One Mechanism Over Different Element Types.**
-    String-set (runtime/strings), name-set (effects.ka, EffName),
+    String-set (runtime/strings), name-set (effects.nx, EffName),
     field-set (records, sorted by field name), tagged_values
     (region_tracker, sorted by handle) — four parallel
     implementations of one ordered-keyed-set algebra. The

@@ -46,12 +46,12 @@ continuation), Inka proves.
 
 ## 0800 — New file
 
-You open `synth/core.ka`. The editor is a plain text editor; the Inka
+You open `synth/core.nx`. The editor is a plain text editor; the Inka
 language server will attach to it.
 
 `[LIVE · surface pending]` — the LSP (Chapter 9.5) isn't wired as a
 handler yet. The substrate has everything the LSP reads: the graph,
-env, `Question` type in `query.ka`, `QTypeAt(Span)` / `QWhy(String)` /
+env, `Question` type in `query.nx`, `QTypeAt(Span)` / `QWhy(String)` /
 `QEffects(String)` queries, `render_query_result` for terminal output.
 What pends: an LSP handler whose arms translate
 `textDocument/hover` → `QTypeAt`, `textDocument/definition` → graph
@@ -65,7 +65,7 @@ fn distort(x, alpha) =
   x |> gain(alpha)
 ```
 
-`inka query --type-at synth/core.ka:2:3` returns the current inferred
+`inka query --type-at synth/core.nx:2:3` returns the current inferred
 type of `distort`. **`[LIVE]`** — `infer_program` runs, `graph_chase`
 resolves, `show_type` formats, stdout prints:
 
@@ -92,7 +92,7 @@ fn distort(x, alpha) =
     |> tanh
 ```
 
-`inka query --type-at synth/core.ka:4:5` now gives:
+`inka query --type-at synth/core.nx:4:5` now gives:
 
 ```
 distort : fn(Float, Float) -> Float with Sample + Alloc
@@ -108,8 +108,8 @@ rows. `row_subsumes` proved it; `graph_bind_row` committed it.
 ```
 tanh : fn(Float) -> Float with Alloc
   reason: Inferred("coefficient table allocation")
-           Located at std/dsp/tanh.ka:12:8
-  callers: 1 (distort at synth/core.ka:5)
+           Located at std/dsp/tanh.nx:12:8
+  callers: 1 (distort at synth/core.nx:5)
 ```
 
 The substrate has the reason chain (`Located(span, reason)` is in
@@ -165,13 +165,13 @@ against this and reports mismatch if `tanh` allocates.
 
 Mentl fires: `tanh`'s row is `Alloc`; your declared row has `!Alloc`.
 The intersection is empty; `row_subsumes` returns false; the FnStmt
-emits `E_PurityViolated` at synth/core.ka:1 (the declaration span).
+emits `E_PurityViolated` at synth/core.nx:1 (the declaration span).
 
 `[LIVE · surface pending]` — Proof Lens would surface the Mentl gradient:
 
 ```
-E_PurityViolated at synth/core.ka:1:3
-  body performs Alloc (from tanh at synth/core.ka:4:8)
+E_PurityViolated at synth/core.nx:1:3
+  body performs Alloc (from tanh at synth/core.nx:4:8)
   declared row requires !Alloc
 
 Mentl suggests (PROVEN):
@@ -236,7 +236,7 @@ parameterized effects are structurally distinct (H3.1).
 `map(distort, ...)` call site:
 
 ```
-E_EffectMismatch at synth/train.ka:5:8
+E_EffectMismatch at synth/train.nx:5:8
   distort declares Sample(44100); caller provides Sample(48000)
   rates are structurally distinct (parameterized row entries)
 
@@ -319,8 +319,8 @@ installation sits.
 `[substrate pending]` — the emit-side recognition of `~>` as a
 HOST boundary (vs just a handler attachment) is one of the three
 named substrate gaps. DESIGN.md 10.4's description of the suspension
-rewrite — `lower.ka` flags the `~>` as a continuation-serializing
-point — doesn't yet fire in `lower.ka`. The substrate can type-check
+rewrite — `lower.nx` flags the `~>` as a continuation-serializing
+point — doesn't yet fire in `lower.nx`. The substrate can type-check
 the distributed flow TODAY; it can't emit two WASM binaries yet.
 
 `[LIVE · surface pending]` — when emit bifurcates, the state struct
@@ -343,10 +343,10 @@ ready.
 You run:
 
 ```
-$ inka audit pulse/main.ka
+$ inka audit pulse/main.nx
 ```
 
-**`[LIVE]`** — `audit` is a pipeline route in `pipeline.ka`; it runs
+**`[LIVE]`** — `audit` is a pipeline route in `pipeline.nx`; it runs
 `frontend |> infer_program`, collects each FnStmt's row, builds
 `AuditReport` records, renders.
 
@@ -427,10 +427,10 @@ When the rename fires:
   queryable via `///`-handler projection — DESIGN.md Ch 9.12).
 - 1 handler declaration updated (the `charge_card` arm in
   `server_handler`).
-- 1 attempted update REJECTED: `pulse_docs.ka` has a user-facing
+- 1 attempted update REJECTED: `pulse_docs.nx` has a user-facing
   marketing string `"charge your card"` that is NOT a VarRef — the
   graph knows this because the string literal has no binding. The
-  rename handler surfaces: `skipped: pulse_docs.ka:18 — literal
+  rename handler surfaces: `skipped: pulse_docs.nx:18 — literal
   string, not a reference`.
 
 **No linting-tool guesswork. No sed-script accidents. The graph
@@ -448,7 +448,7 @@ You introduce a bug: in `distort`, you accidentally write
 fires:
 
 ```
-E_TypeMismatch at synth/core.ka:5:12
+E_TypeMismatch at synth/core.nx:5:12
   expected Int (delay's first parameter)
   found Float
   at call site delay(3.0)
@@ -460,14 +460,14 @@ expands the Located reason DAG:
 ```
 Why is Int expected?
   └─ delay is declared with FnParam(delay, 0, Declared("Int"))
-     at std/dsp/delay.ka:4:14
-  └─ FnStmt at std/dsp/delay.ka:4:1
+     at std/dsp/delay.nx:4:14
+  └─ FnStmt at std/dsp/delay.nx:4:1
      declared row: Sample + !Alloc
-  └─ Located span: std/dsp/delay.ka:4:1..4:30
+  └─ Located span: std/dsp/delay.nx:4:1..4:30
 
 Why is Float provided?
-  └─ LitFloat(3.0) at synth/core.ka:5:18
-  └─ Located span: synth/core.ka:5:18..5:21
+  └─ LitFloat(3.0) at synth/core.nx:5:18
+  └─ Located span: synth/core.nx:5:18..5:21
 ```
 
 The reason DAG is substrate-live (every graph node carries
@@ -478,12 +478,12 @@ tree in the IDE waits on the LSP handler.
 In terminal:
 
 ```
-$ inka query --why synth/core.ka:5:18
-Float literal at synth/core.ka:5:18 (column 18..21)
+$ inka query --why synth/core.nx:5:18
+Float literal at synth/core.nx:5:18 (column 18..21)
   reason chain:
-    - LitFloat(3.0) at synth/core.ka:5:18
+    - LitFloat(3.0) at synth/core.nx:5:18
   propagates to:
-    - delay's first param at std/dsp/delay.ka:4:14
+    - delay's first param at std/dsp/delay.nx:4:14
     - which expects Int (reason: FnParam declaration)
 ```
 
@@ -504,13 +504,13 @@ $ inka build --targets wasi,browser,server,trainer
 **`[LIVE · surface pending]`** — the multi-target build is a pipeline
 variant. Each target installs a different backend handler:
 
-- `wasi`    → `backends/wasm.ka` with `emit_runtime_wasi_imports`
-- `browser` → `backends/wasm.ka` with `emit_runtime_browser_imports`
-- `server`  → `backends/wasm.ka` with `emit_runtime_wasi_imports` +
+- `wasi`    → `backends/wasm.nx` with `emit_runtime_wasi_imports`
+- `browser` → `backends/wasm.nx` with `emit_runtime_browser_imports`
+- `server`  → `backends/wasm.nx` with `emit_runtime_wasi_imports` +
   `emit_runtime_network_imports`
-- `trainer` → `backends/wasm.ka` with full imports + larger arena
+- `trainer` → `backends/wasm.nx` with full imports + larger arena
 
-`[substrate pending]` — today there's one `backends/wasm.ka`. DESIGN
+`[substrate pending]` — today there's one `backends/wasm.nx`. DESIGN
 Ch 9's "the handler IS the backend" names what this dissolves to:
 multiple emit backends, each a handler, each swappable. The
 substrate accepts this — the emit pipeline is already a handler
@@ -557,10 +557,10 @@ You commit. The commit message is auto-generated by the
 ```
 Pulse: add real-time distort (CRealTime proven) + training variant
 
-- synth/core.ka: distort fn, Sample(44100) + !Alloc gate proven
-- synth/train.ka: train_step at Sample(48000), resample bridge added
-- pulse/main.ka: checkout flow with ~> client/server split
-- pulse_docs.ka: docstrings regenerated from Mentl why-chains
+- synth/core.nx: distort fn, Sample(44100) + !Alloc gate proven
+- synth/train.nx: train_step at Sample(48000), resample bridge added
+- pulse/main.nx: checkout flow with ~> client/server split
+- pulse_docs.nx: docstrings regenerated from Mentl why-chains
 
 Audit: CRealTime ✓, CSandbox partial (Network required for server)
 Graph changes: +2312 handles, +47 ev_slots, +4 region boundaries
@@ -617,7 +617,7 @@ authored. Updates:
   fs_read_file, fs_write_file, fs_mkdir) + wasi_filesystem
   handler + WASI preview1 path_open / fd_close /
   path_create_directory / path_filestat_get imports. The driver
-  layer reads .ka source and writes .kai cache via this surface.
+  layer reads .nx source and writes .kai cache via this surface.
   Walkthrough: `docs/rebuild/simulations/FS-filesystem-effect.md`.
 - **Incremental compilation** `[LIVE]` for the substrate; LSP
   surface still `[LIVE · surface pending]`. `inka compile <module>`
@@ -656,7 +656,7 @@ Three. Only three.
 
 3. **Runtime `HandlerCatalog` as effect.** Today's
    `catalog_handled_effects(handler_name)` is a static table in
-   `mentl.ka`. A runtime registration surface (user-defined handlers
+   `mentl.nx`. A runtime registration surface (user-defined handlers
    register at module load; Mentl's `AWrapHandler` proposal reads
    the registry) would make the catalog queryable for user-defined
    handlers. One effect + one handler; small.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # drift-audit.sh — fluency-trap sentinel for Inka.
 #
-# Scans given files (or all staged .ka files if none given) against the
+# Scans given files (or all staged .nx files if none given) against the
 # patterns in tools/drift-patterns.tsv. Each pattern is labeled with the
 # drift-mode number it flags (1–9 from CLAUDE.md). Zero matches = clean.
 # Any match = named drift mode, cited at file:line.
@@ -15,7 +15,7 @@
 #
 # Usage:
 #   tools/drift-audit.sh [file1 file2 ...]
-#   tools/drift-audit.sh                 # audits all staged .ka files
+#   tools/drift-audit.sh                 # audits all staged .nx files
 #
 # Exit: 0 clean, 1 drift detected, 2 misuse.
 
@@ -41,11 +41,11 @@ if [[ $# -gt 0 ]]; then
         fi
     done
 else
-    # Default: staged .ka files.
+    # Default: staged .nx files.
     if command -v git >/dev/null 2>&1 && git -C "$REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         while IFS= read -r f; do
             [[ -n "$f" && -f "$REPO_ROOT/$f" ]] && files+=("$REPO_ROOT/$f")
-        done < <(git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACMR 2>/dev/null | grep -E '\.ka$' || true)
+        done < <(git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACMR 2>/dev/null | grep -E '\.nx$' || true)
     fi
 fi
 
@@ -67,7 +67,7 @@ while IFS=$'\t' read -r mode_num mode_name regex scope notes; do
     scan_files=()
     case "$scope" in
         ka)
-            for f in "${files[@]}"; do [[ "$f" == *.ka ]] && scan_files+=("$f"); done
+            for f in "${files[@]}"; do [[ "$f" == *.nx ]] && scan_files+=("$f"); done
             ;;
         all|"")
             scan_files=("${files[@]}")

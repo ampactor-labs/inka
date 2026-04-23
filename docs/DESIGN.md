@@ -610,12 +610,21 @@ at the boundary with `~>`.
 ```inka
 effect Abort { abort() -> ! }
 
-fn get_authored_ownership(name) =
+fn lookup_env(ref name) = perform env_lookup(name)
+
+fn get_authored_ownership(ref name) with !Mutate =
   name
-    |> env_lookup
+    |> lookup_env
     |> unwrap_env            // performs abort() if None
-    |> extract_param_owner   // performs abort() if wrong node type
-    |> get_auth_marker
+    |> extract_param_owner   // performs abort() if wrong shape
+    |> fn ((owner_name, idx)) => {
+         let params = owner_name
+           |> lookup_env |> unwrap_env |> extract_fn_params
+         if idx < len(params) {
+           let TParam(_, _, auth, _) = list_index(params, idx)
+           Some(auth)
+         } else { None }
+       }
     ~> catch_abort           // abort() => None
 ```
 This is the ultimate realization of Inka's algebraic thesis: Control flow anomalies
@@ -1011,7 +1020,7 @@ scans names once per module enter (rare); `graph_snapshot`
 reconstructs `List[(name, handles)]` pairs using tag=4 slice views
 for O(1)-per-overlay snapshots. The same substrate discipline that
 the nodes buffer and the trail follow. One shape, three roles;
-`list_extend_to` in `std/runtime/lists.ka` is the shared primitive
+`list_extend_to` in `std/runtime/lists.nx` is the shared primitive
 that grounds all of them.
 
 ### Live chase, not cache
@@ -1072,7 +1081,7 @@ effect-mediated, peer substrates of ambient post-inference knowledge.
 
 ### One walk
 
-`infer.ka` is a single recursive walk over the AST:
+`infer.nx` is a single recursive walk over the AST:
 
 ```
 fn infer_expr(node)  -> ()     // walks node, binds node.handle
@@ -1108,7 +1117,7 @@ is external.
 
 *Abstract algebra must materialize into one concrete shape.*
 
-`infer.ka` does not just type-check. Its ultimate duty is to
+`infer.nx` does not just type-check. Its ultimate duty is to
 physically synthesize evidence: the concrete closure records that
 carry captures, handler state, and resume discipline **together, in
 one record shape**. **There is no vtable. There is no separate
@@ -1578,7 +1587,7 @@ the compiler refuses to compile:
 
 ```
 error: 'similar' escapes the lifetime of 'temp_arena'
-    at: std/compiler/diagnostics.ka:47
+    at: std/compiler/diagnostics.nx:47
     bound by: scoped allocator closes at line 42
     fix: copy the value into the parent allocator's scope
 ```
@@ -1681,7 +1690,7 @@ Three effects replace the entire runtime:
 Everything else — `str_concat`, `str_eq`, `int_to_str`, `print_line`,
 `split`, `chars`, `range`, `push`, `pop`, list access, record field
 lookup — is pure Inka built on these three effects. The
-`std/runtime/memory.ka` file IS the runtime. No hand-written WAT.
+`std/runtime/memory.nx` file IS the runtime. No hand-written WAT.
 No C code. No assembly. **There are no primitives. There are only
 effects and handlers.**
 
@@ -1825,9 +1834,9 @@ type + effect row and returns the single highest-leverage annotation
 the programmer could add:
 
 ```
-$ inka teach std/compiler/infer.ka
+$ inka teach std/compiler/infer.nx
 
-    infer.ka:47  let's_generalize is Pure
+    infer.nx:47  let's_generalize is Pure
         → adding `with Pure` would unlock:
              • memoization (same input → same output, guaranteed)
              • parallelization
@@ -2056,19 +2065,19 @@ compiler's own substrate.
 Before LSP, there is `inka query`:
 
 ```
-$ inka query std/compiler/infer.ka "type of generalize"
+$ inka query std/compiler/infer.nx "type of generalize"
 → generalize : (Node) -> Scheme with SubstGraphRead + EnvRead
   Reason chain:
-    - bound at FnStmt at infer.ka:142
+    - bound at FnStmt at infer.nx:142
     - return type unified with Forall(qs, body_ty) at line 147
     - body_ty chased from handle 847
     - quantified vars: [142, 148, 153]
 
-$ inka query std/compiler/infer.ka "why infer_expr performs EnvWrite"
+$ inka query std/compiler/infer.nx "why infer_expr performs EnvWrite"
 → infer_expr : (Node) -> () with SubstGraphWrite + EnvWrite + ...
   Reason:
-    - extends env at LetStmt (infer.ka:210)
-    - enters scope at BlockExpr (infer.ka:187)
+    - extends env at LetStmt (infer.nx:210)
+    - enters scope at BlockExpr (infer.nx:187)
 ```
 
 `inka query` is read-only by `SubstGraphRead + EnvRead` subsumption
@@ -2160,7 +2169,7 @@ lock.**
 collect effect rows transitively, print the capability set:
 
 ```
-$ inka audit main.ka
+$ inka audit main.nx
 
 Capabilities required:
   - Network (via router_axum)
@@ -2235,7 +2244,7 @@ dependencies. After checking, the env serializes to
 ```
 resolve_imports(source)
     → for each import:
-        if .kai exists AND hash matches .ka:
+        if .kai exists AND hash matches .nx:
             load env from .kai (skip checking)
         else:
             check module against dependency envs
@@ -2851,7 +2860,7 @@ historical audio, record gradients, and allocate an autodiff tape.
    `Sample(44100)`, `<~ delay(1)` is a Z-transform — classic IIR
    filter. Under `Sample(48000)`, same. Under `Tick` with iteration
    context, the same `<~` would be an RNN's hidden-state recurrence.
-   **`infer.ka` proves they are the same topology** and lowers both
+   **`infer.nx` proves they are the same topology** and lowers both
    to the same state machine structure.
 
 **What this demonstrates.**
@@ -2900,7 +2909,7 @@ function (compiled to WASM) that declares `FFI, Network, Filesystem`.
    corresponding imports.
 
    ```
-   $ inka audit main.ka
+   $ inka audit main.nx
    Capabilities required:
      - FFI (via c_lib_foo)
      - Parallel
@@ -2944,13 +2953,13 @@ function; two machines.
    are handled by `client_handler`; effects from `charge_card` /
    `save_receipt` by `server_handler`.
 
-2. **Lower phase sees the split.** `lower.ka` realizes the handler
+2. **Lower phase sees the split.** `lower.nx` realizes the handler
    boundary is also a host boundary. It flags the point as a
    **suspension**: a perform-site where the continuation serializes.
    The function is rewritten as an **enum state machine** — each
    suspension a numbered state, locals captured in the state struct.
 
-3. **Emit bifurcates.** `emit.ka` generates two WASM binaries: client
+3. **Emit bifurcates.** `emit.nx` generates two WASM binaries: client
    and server. The client binary emits code through state N,
    serializes `{state_index = N+1, locals}`, sends the struct over
    the network. The server binary accepts the struct, matches
@@ -2981,8 +2990,8 @@ Inka has one terminal invariant: the compiler compiles itself to a
 **byte-identical** output.
 
 ```
-inka.wasm < std/compiler/*.ka  >  inka2.wat
-inka.wasm < std/compiler/*.ka  >  inka3.wat
+inka.wasm < std/compiler/*.nx  >  inka2.wat
+inka.wasm < std/compiler/*.nx  >  inka3.wat
 diff inka2.wat inka3.wat              # empty
 ```
 

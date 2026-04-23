@@ -7,22 +7,22 @@
 ## 1. Substrate Runtime Effects (`std/runtime/`)
 These effects have no written handler in Inka. The WASM runtime *is* the handler. They exist so the type-checker knows their signatures and their capabilities can be guarded by the Boolean algebra.
 
-- **`effect Memory`** (`memory.ka`)
+- **`effect Memory`** (`memory.nx`)
   - **What it does:** Direct read/write access to the WASM linear memory and bitwise primitives. 
   - **Ops:** `store_i32`, `load_i32`, `store_i8`, `load_i8`, `mem_copy`, `i32_xor`.
   - **Constraint:** Functions with `!Memory` mathematically prove they do not touch raw pointers.
 
-- **`effect Alloc`** (`memory.ka`)
+- **`effect Alloc`** (`memory.nx`)
   - **What it does:** Advances the WASM linear memory bump-allocator pointer. There is no `free` (region-based lifetimes handle this).
   - **Ops:** `alloc(size: Int) -> Int`.
   - **Constraint:** Crucial for DSP code. `with !Alloc` guarantees a function will not advance the heap pointer, ensuring bounded execution time.
 
-- **`effect Pack` / `Unpack`** (`binary.ka`)
+- **`effect Pack` / `Unpack`** (`binary.nx`)
   - **What it does:** Serializes and deserializes values to/from binary formats.
 
 ---
 
-## 2. Time and Iteration (`std/dsp/clock.ka`)
+## 2. Time and Iteration (`std/dsp/clock.nx`)
 Inka defines four distinct notions of time to prevent collapsing distinct refinement proofs into one.
 
 - **`effect Clock`**: Wall time. Ops: `clock_now()`, `clock_sleep()`.
@@ -33,7 +33,7 @@ Inka defines four distinct notions of time to prevent collapsing distinct refine
 
 ---
 
-## 3. The Compiler Medium (`std/compiler/types.ka` & `infer.ka`)
+## 3. The Compiler Medium (`std/compiler/types.nx` & `infer.nx`)
 The compiler itself is written in Inka and operates strictly via effect handlers.
 
 - **`effect GraphRead` / `GraphWrite`**: 
@@ -53,7 +53,7 @@ The compiler itself is written in Inka and operates strictly via effect handlers
 
 ---
 
-## 4. Mentl's Intelligence (`std/compiler/mentl.ka` & `query.ka`)
+## 4. Mentl's Intelligence (`std/compiler/mentl.nx` & `query.nx`)
 
 - **`effect Synth`**:
   - **What it does:** Mentl's `Propose` tentacle. It executes speculative handler multi-shots during inference, brute-forcing topological paths when the user's code hits an `NErrorHole`.
@@ -64,6 +64,6 @@ The compiler itself is written in Inka and operates strictly via effect handlers
 
 ---
 
-## 5. DSP & External (`std/dsp/signal.ka` & `wasm.ka`)
+## 5. DSP & External (`std/dsp/signal.nx` & `wasm.nx`)
 - **`effect DSP` / `Network` / `Feedback` / `Distort`**: High-level capability domains used in example simulations.
 - **`effect WasmOut` / `EmitMemory`**: Code emission side-effects. Used by the backend to push bytes into the final WASM module.

@@ -1,7 +1,7 @@
 # E_HandlerUninstallable
 
 **Kind:** Error
-**Emitted by:** `infer.ka` (spec 04, HandleExpr arm) and `pipeline.ka`
+**Emitted by:** `infer.nx` (spec 04, HandleExpr arm) and `pipeline.nx`
 (handler-install subsumption check — spec I14/I16)
 **Applicability:** MachineApplicable
 

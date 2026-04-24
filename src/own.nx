@@ -13,11 +13,11 @@
 import types
 import runtime/strings
 
-// ═══ affine_ledger — the Consume handler ═══════════════════════════
-// Installed per-function body. State tracks consumed-names and the
-// first-use span (for diagnostic pinpointing). `with !Consume` on
-// the handler would statically prevent the arms from recursing
-// through consume — the Boolean algebra gate.
+// affine_ledger — the Consume handler. Installed per-function body.
+// State tracks consumed-names and the first-use span (for diagnostic
+// pinpointing). `with !Consume` on the handler would statically
+// prevent the arms from recursing through consume — the Boolean
+// algebra gate.
 
 // State:
 //   used          — flat sorted set of consumed names (O(log N) membership)
@@ -196,22 +196,22 @@ fn report_collisions_inner(ref deltas, i, j, n, ref span) with !Mutate =
     report_collisions_inner(deltas, i, j + 1, n, span)
   }
 
-// ═══ region_tracker — Tofte-Talpin region escape (I12) ════════════
-// Installed per-function body alongside affine_ledger. Arms react
-// to Alloc/return surfaces to track region identity on each value:
-//   region_enter — fresh region id + span, push onto stack
-//   region_exit  — pop; any value still tagged with this region is
-//                  about to escape. When the fn body calls
-//                  check_escape on its return value, we compare
-//                  that value's region against the still-live
-//                  ambient region — mismatches surface as
-//                  E_OwnershipViolation with a region-trace
-//                  diagnostic.
-// Today the handler is a shape-prep stub: the arms are wired to the
-// effect surface but the full Alloc-tagging path (every `perform
-// alloc(n)` runs through tag_alloc) will land when EmitMemory arena
-// semantics bind region identities to alloc returns. The substrate
-// is ready; the wire-up is a precise follow-up.
+/// Tofte-Talpin region escape tracker (I12). Installed per-function
+/// body alongside `affine_ledger`. Arms react to Alloc/return
+/// surfaces to track region identity on each value:
+///
+/// - `region_enter` — fresh region id + span, pushed onto stack.
+/// - `region_exit` — pops the stack; values tagged with this region
+///   are checked against the ambient live region on escape.
+/// - `check_escape` — compares the value's tagged region against the
+///   stack; mismatches emit `E_RegionEscape` pointing at both alloc
+///   site and escape site.
+///
+/// The arms are wired to the Alloc effect surface; `tag_alloc` stamps
+/// every allocation with the current-top region id. `tag_alloc_join`
+/// takes the deepest (innermost) region across a composite value's
+/// fields — preventing inner-region pointers from escaping via the
+/// composite.
 handler region_tracker with region_stack = [], next_region = 0, tagged_values = [] {
 
   region_enter(span) => {
@@ -364,12 +364,10 @@ fn find_first_span_loop(ref sites, ref name, i, n) with !Mutate =
 // O(log N) without boundary canonicalize. The local string_in_list
 // adapter is gone — call sites use set_contains directly.
 
-// ═══ Ref escape check — structural walk on return position ═════════
-// A ref binding cannot appear in return position or be captured by
-// a closure that outlives its scope. The check is a structural walk
-// performed on every function body (called by infer.nx at FnStmt).
-
 /// Check that ref bindings don't escape to return position or closures.
+/// A `ref`-annotated binding cannot appear in return position or be
+/// captured by a closure that outlives its scope. Called by infer.nx
+/// at every `FnStmt` body.
 fn check_ref_escape(ref params, ref body) with !Mutate =
   params
     |> collect_ref_params
@@ -471,12 +469,10 @@ fn walk_match_arms_loop(ref refs, ref arms, i, n) with !Mutate =
     walk_match_arms_loop(refs, arms, i + 1, n)
   }
 
-// ═══ Ownership inference for Inferred params ═══════════════════════
-// When a parameter is marked Inferred, deduce Own vs Ref from usage:
-//   0 uses      → Inferred (unused; mark stays)
-//   1 use       → Own (consumed once — affine)
-//   ≥ 2 uses    → Ref (borrowed multiple times)
-
+/// Deduce `Own` vs `Ref` for `Inferred`-marked parameters by counting
+/// uses in the function body: 0 uses → `Inferred` (mark stays),
+/// 1 use → `Own` (consumed once — affine), ≥ 2 uses → `Ref`
+/// (borrowed multiple times).
 fn infer_ownership(ref params, ref body) with !Mutate =
   let flat = list_to_flat(params)
   let n = len(flat)

@@ -687,7 +687,7 @@ handler-per-tentacle distributed cognition over shared central nervous
 system. The mascot IS the architecture.
 
 **AI obsolescence, mechanized.** A hole in source code:
-`fn bind_port(p: Int) -> Port = ?`. Mentl's tentacles fire: Why says
+`fn bind_port(p: Int) -> Port = ??`. Mentl's tentacles fire: Why says
 "Port refines to `Int where 1 <= self <= 65535`"; Teach says "add
 `p: Port` to unlock compile-time verification"; Synth proposes
 candidates from any handler (enumerative, SMT, LLM); Verify discharges
@@ -1186,6 +1186,57 @@ language teaches you what it needs to become.
 Personifying the language — asking "what does Inka want?" — produced
 better prioritization than engineering triage. The metaphor wasn't
 decoration. It was navigation.
+
+---
+
+## The Hole Is the Gradient's Absence Marker
+
+*2026-04-24. Crystallized from re-reading The Circular Gradient
+(below) against the daily-development experience.*
+
+Read-mode (cursor at finished code) and write-mode (cursor at `??`)
+are not different modes. They are the **same gradient interaction**
+viewed from two angles: at finished code, Mentl's Synth tentacle
+proposes alternatives to the current selection; at a hole, Mentl's
+Synth tentacle proposes from the constraint space alone. **Same proof
+machinery, same constraint space, different surface presentation**
+depending on whether a candidate currently occupies the slot.
+
+The hole IS the gradient's syntactic absence marker. It is how the
+developer says **"no current selection here"** — letting Mentl's
+constraint-search focus on filling rather than alternating. The
+existing expression at a finished position is just one candidate
+among many that the gradient could propose; `??` is the empty-current-
+selection state that lets the proposer enumerate without competing
+against an incumbent.
+
+Per the Circular Gradient (below): at the bottom (loose constraints)
+`??` invites many candidates; at the top (tight constraints) `??`
+resolves to one inhabitant — the program is the proof is the
+specification is the program. **Same hole; same Mentl; constraint
+tightness alone determines the candidate-space size.**
+
+`??` is therefore not a TODO marker bolted onto the gradient. It is
+the **developer's primary write-mode verb in Inka** — the syntactic
+surface for "synthesize here at whatever constraints I've added."
+Read-mode (observing what Mentl proves about finished code) and
+write-mode (asking Mentl to fill an absence) are two faces of the
+one continuous proof-search the compiler runs at every position.
+
+**Substrate consequence.** Lexer recognizes `??` as `THole`; parser
+produces `nhole(fresh_ph(span), span)` AST; inference assigns the
+hole a fresh type variable and lets unification narrow it from
+context; Mentl's Synth tentacle fires at every `THole` position with
+constraint-respecting candidates. Single `?` is no longer a token —
+two characters mark a deliberate gradient invitation, not an
+accidental keystroke.
+
+**Visual identity.** Inka Mono renders `??` as the octagonal-socket
+glyph (`tools/editor/inka-mono/features.fea`) — eight sides for eight
+kernel primitives. The visual signal "this is where the gradient
+asks the question" reinforces the substrate role: an empty socket
+waiting to be filled, with eight tentacles' worth of proof-search
+behind every candidate.
 
 ---
 

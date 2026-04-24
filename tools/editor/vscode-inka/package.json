@@ -1,0 +1,54 @@
+{
+  "name": "inka",
+  "displayName": "Inka",
+  "description": "Syntax highlighting and color theme for the Inka programming language (.nx files). The medium that refuses ceremony the graph doesn't require.",
+  "version": "0.1.0",
+  "publisher": "ampactor-labs",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ampactor-labs/inka"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Themes"
+  ],
+  "keywords": [
+    "inka",
+    "nx",
+    "effect handlers",
+    "pipe topology",
+    "algebraic effects"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "inka",
+        "aliases": ["Inka", "inka"],
+        "extensions": [".nx"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/inka-file-icon.svg",
+          "dark": "./icons/inka-file-icon.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "inka",
+        "scopeName": "source.inka",
+        "path": "./syntaxes/inka.tmLanguage.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "Inka Obsidian",
+        "uiTheme": "vs-dark",
+        "path": "./themes/inka-obsidian-color-theme.json"
+      }
+    ]
+  }
+}

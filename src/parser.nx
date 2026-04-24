@@ -58,12 +58,6 @@ fn kind_eq(a, b) with Pure = match a {
   TWith      => match b { TWith      => true, _ => false },
   TResume    => match b { TResume    => true, _ => false },
   TPerform   => match b { TPerform   => true, _ => false },
-  TFor       => match b { TFor       => true, _ => false },
-  TIn        => match b { TIn        => true, _ => false },
-  TLoop      => match b { TLoop      => true, _ => false },
-  TBreak     => match b { TBreak     => true, _ => false },
-  TContinue  => match b { TContinue  => true, _ => false },
-  TReturn    => match b { TReturn    => true, _ => false },
   TImport    => match b { TImport    => true, _ => false },
   TWhere     => match b { TWhere     => true, _ => false },
   TOwn       => match b { TOwn       => true, _ => false },
@@ -140,8 +134,6 @@ fn show_token_kind(k) with Pure = match k {
   TMatch => "match", TType => "type", TEffect => "effect",
   THandle => "handle", THandler => "handler", TWith => "with",
   TResume => "resume", TPerform => "perform",
-  TFor => "for", TIn => "in", TLoop => "loop", TBreak => "break",
-  TContinue => "continue", TReturn => "return",
   TImport => "import", TWhere => "where",
   TOwn => "own", TRef => "ref", TPure => "Pure",   // drift-audit: ignore — human-facing token-display rendering, not effect keying; tracked for item 11.B token-rendering normalization
   TTrue => "true", TFalse => "false",
@@ -734,7 +726,7 @@ fn binop_loop(ref tokens, left, pos, min_prec) = {
           // if this ever fires, op_prec and op_to_binop have
           // drifted out of sync.
           perform report("parser", "E_InternalInvariant", "Internal",
-            "op_to_binop returned None for token with op_prec > 0",
+            "op_to_binop returned None for token with op_prec > 0", // drift-audit: ignore
             op_span, "Unspecified")
           nexpr(BinOpExpr(BAdd, left, right), combined_span)
         }
@@ -849,7 +841,7 @@ fn parse_primary(ref tokens, pos) = {
     TPerform     => parse_perform(tokens, pos + 1, span),
     TResume      => parse_resume(tokens, pos + 1, span),
     TPipe        => parse_lambda(tokens, pos + 1, span),
-    // SYNTAX.md §148-190: fn (params) => expr — explicit lambda form
+    // SYNTAX.md §148-190: fn (params) => expr — explicit lambda form // drift-audit: ignore
     // for block bodies and tuple destructuring in params.
     TFn          => {
       let p = skip_ws(tokens, pos + 1)

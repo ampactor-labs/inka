@@ -50,12 +50,6 @@ fn keyword_kind(ref word) with !Mutate =
   else if str_eq(word, "with")      { Some(TWith) }
   else if str_eq(word, "resume")    { Some(TResume) }
   else if str_eq(word, "perform")   { Some(TPerform) }
-  else if str_eq(word, "for")       { Some(TFor) }
-  else if str_eq(word, "in")        { Some(TIn) }
-  else if str_eq(word, "loop")      { Some(TLoop) }
-  else if str_eq(word, "break")     { Some(TBreak) }
-  else if str_eq(word, "continue")  { Some(TContinue) }
-  else if str_eq(word, "return")    { Some(TReturn) }
   else if str_eq(word, "import")    { Some(TImport) }
   else if str_eq(word, "where")     { Some(TWhere) }
   else if str_eq(word, "own")       { Some(TOwn) }

@@ -311,11 +311,11 @@ fn span_contains(outer, inner) with Pure =
 type Token = Tok(TokenKind, Span)
 
 type TokenKind
-  // ─── Keywords (24) ───────────────────────────────────────────────
+  // ─── Keywords (19) ───────────────────────────────────────────────
   = TFn | TLet | TIf | TElse | TMatch | TType
   | TEffect | THandle | THandler | TWith
   | TResume | TPerform
-  | TFor | TIn | TLoop | TBreak | TContinue | TReturn
+
   | TImport | TWhere
   | TOwn | TRef | TPure
   | TTrue | TFalse
@@ -980,7 +980,7 @@ fn show_reason(ref reason) with GraphRead + !Mutate =
         |> str_concat(" → ")
         |> str_concat(show_reason(inner)),
     FnReturn(name, inner) =>
-      "return of "
+      "return of " // drift-audit: ignore
         |> str_concat(name)
         |> str_concat(" → ")
         |> str_concat(show_reason(inner)),

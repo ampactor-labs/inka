@@ -25,7 +25,7 @@ every domain unification is a consequence of composing the eight.
 **Mentl is an octopus because the kernel has eight primitives;
 each tentacle is one primitive's voice surface.**
 
-1. **SubstGraph + Env** — the program IS the graph; every output
+1. **Graph + Env** — the program IS the graph; every output
    (WAT, hover, diagnostic, audit, Mentl's voice) is a handler
    projection. Flat-array, O(1) chase, trail-based rollback.
    *(Mentl tentacle: **Query**.)*

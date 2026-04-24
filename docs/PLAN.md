@@ -1891,7 +1891,7 @@ per Pending Work item 17'):
 
 | Spec | File (post-restructure) | Governs |
 |---|---|---|
-| 00 | 00-graph.md (was substgraph) | Graph, flat array, O(1) chase |
+| 00 | 00-graph.md (was Graph) | Graph, flat array, O(1) chase |
 | 01 | 01-effrow.md | EffRow Boolean algebra |
 | 02 | 02-ty.md | Ty ADT, TRefined, TCont, Verify |
 | 03 | 03-typed-ast.md | Node, Span, Expr, Stmt, Pat, PipeKind |

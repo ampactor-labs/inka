@@ -211,7 +211,7 @@ docs/
 │   ├── README.md
 │   └── <CODE>.md             ← one file per error code
 ├── specs/                    ← the 12 per-module specs (was: rebuild/)
-│   ├── 00-graph.md           ← was: 00-substgraph.md (NS-naming rename)
+│   ├── 00-graph.md           ← was: 00-Graph.md (NS-naming rename)
 │   ├── 01-effrow.md
 │   ├── 02-ty.md
 │   ├── 03-typed-ast.md
@@ -499,7 +499,7 @@ fi
 
 ```
 mv docs/rebuild/              → docs/specs/
-mv docs/specs/00-substgraph.md → docs/specs/00-graph.md  (NS-naming 1.2)
+mv docs/specs/00-Graph.md → docs/specs/00-graph.md  (NS-naming 1.2)
 # Rewrite title + content of 00-graph.md to use "Graph" throughout
 # (NS-naming.md rewrite rules apply).
 

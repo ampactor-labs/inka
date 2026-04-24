@@ -1007,15 +1007,42 @@ let x = 1   // trailing comment
 
 ### Doc comments
 
+`///` is the developer's one voice into the substrate. The lexer emits `TDocComment(text)` (per Token enumeration §`TDocComment`). The parser attaches each `TDocComment` to the immediately-following declaration via the `Documented(content, stmt)` AST wrapper (per DS walkthrough §3.1 + §3.2). Inference threads the docstring into the env entry as a `DocstringReason(content, span)` Reason edge (per DS §3.1 candidate C). Mentl's voice handler surfaces the docstring **verbatim alongside her canonical projection** (per MV §2.7 + F.1 §3.1, §5).
+
 ```
-/// Computes the FFT of a sample frame.
+/// Single-pole IIR low-pass with cutoff frequency parameterized by
+/// the sample rate. Real-time-safe.
 ///
-/// The frame's length should be a power of 2; non-powers are zero-padded.
-fn fft(frame: List<Float>) -> List<Complex> with Alloc =
+/// Use in audio callbacks where allocation would cause dropouts.
+/// References to `Sample` and `<~` are resolved by render handlers.
+///
+/// Primitive: #5 (Trace) — exemplifies ownership-as-effect with `!Alloc`.
+fn lowpass_filter(samples: List<Sample>) -> List<Sample> with !Alloc =
   ...
 ```
 
-`///` doc comments attach to the immediately following declaration (fn, type, effect, handler, let). They render through the docs-backend handler. Markdown is supported in the body.
+#### What `///` IS
+
+- **Pure prose.** Multi-line allowed; contiguous `///` lines concatenate to one String (per DS §5 AT-DS3). Blank `///` line becomes paragraph break.
+- **Attaches to the immediately-following declaration.** Top-level `fn` / `type` / `effect` / `handler` / `let` accept `///`. Module-level `///` (no preceding declaration in the file) attaches to the synthetic `Module` handle for that file (per F.1 §3.2). One `///` block per declaration.
+- **Surfaces verbatim.** Mentl has no semantic parse of `///`. She reads the String, renders it alongside her canonical voice (per MV §2.7 + F.1 §5). Render handlers (per F.1 §3.6) interpret presentation per target — HTML may render backticks as `<code>`, terminal as ANSI, markdown as fenced. The substrate stores raw String per DS §8; render handlers decide the rest.
+- **Lede + body structure.** First sentence is the lede — the one sentence Mentl shows in `RTerse` register. Subsequent paragraphs add nuance, invariants, the `Why:` behind non-obvious choices. Mentl shows the full body in `RExplain`.
+- **Cross-references via backticks.** Reference other identifiers, types, effects, handlers, capabilities in `` `backticks` ``. Render handlers resolve to links per target. The author writes the reference; the handler resolves.
+- **Code blocks compile via the same pipeline.** A `///` block containing Inka source IS just Inka source; the compile pipeline verifies it. If it doesn't compile, the project's compile fails at the `doc_attach` site. There are no doc-tests as a separate category (INSIGHTS §"Examples, Not Tests" L398).
+
+#### What `///` is NOT
+
+- **Not a markup language.** No `=== headers ===` or `// ───── name ─────` decorations inside `///`; the declaration's name IS the heading. Render handlers add their own presentation chrome.
+- **Not JSDoc / JavaDoc / Sphinx tags.** No `@param`, `@returns`, `@throws`, `@since`, `@deprecated`, `:func:`, `:type:`. The effect row + refinement substrate already carries parameter, return, and capability information; tags would duplicate. Lifecycle vocabulary (`@deprecated`, `@since`, "previously", "no longer", "legacy") is forbidden by the positive-form discipline (CLAUDE.md global). Doc shows what IS, not what was.
+- **Not gated by the docstring's content.** Mentl is unsilenceable; `///` adds, never gates, never silences. A declaration with no `///` still surfaces Mentl's substrate-derived tentacles per silence_predicate (MV §2.7.5).
+- **Not the only voice.** Mentl's substrate voice (per-tentacle, silence-gated, derived from the graph) is the second voice. Two speakers per declaration; no editorial third (F.1 §5).
+- **Not module-level via `///` floating with no following declaration outside a file's prelude.** A module-level `///` block must precede the synthetic Module handle's position (the start of the file, before the first import or declaration). Behavior of `///` blocks elsewhere with no following declaration is owned by the DS substrate (current DS substrate per §3.1 candidate A: the parser tracks the most-recent `TDocComment` as pending; if no following declaration accepts it, the docstring is dropped silently. A future diagnostic may surface the orphan as `P_OrphanDocstring` if the pattern proves error-prone in practice).
+
+#### Relationship to `//`
+
+`//` is human-only scaffolding. The lexer silently consumes `//` comments — no token emitted, no graph presence, no Mentl presence. Use `//` for implementation notes inside function bodies (where the note describes a step in the algorithm, not the function itself) or for short file-skim section markers when no `///` would fit.
+
+The choice between `//` and `///` is the choice between **"this is human-only context"** and **"this is part of the substrate the medium reads."** When in doubt — does Mentl need to know? `///`. Does only the human reader need to know? `//`.
 
 ### No block comments
 

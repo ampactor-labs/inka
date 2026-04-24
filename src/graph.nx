@@ -229,10 +229,8 @@ handler graph_handler
 // Internal machinery the handler delegates to. All pure; all
 // deterministic; no effects.
 
-// ─── chase_node ────────────────────────────────────────────────────
-// Follow NBound / NRowBound links until terminal. Amortized O(1) —
-// chains shallow in practice, depth-limited for cycle safety.
-
+/// Follow NBound / NRowBound links until terminal. Amortized O(1) —
+/// chains shallow in practice, depth-limited for cycle safety.
 fn chase_node(ref nodes, handle, depth) with !Mutate =
   if depth > 100 {
     GNode(NErrorHole(Inferred("chase depth exceeded")), Fresh(handle))
@@ -255,10 +253,10 @@ fn chase_node(ref nodes, handle, depth) with !Mutate =
     }
   }
 
-// When chasing an EfOpen row that points to another row handle,
-// fold the known names forward through the chain. free_handle is the
-// handle we chased INTO — needed to reconstruct EfOpen when the
-// chain terminates at NRowFree (the free variable).
+/// When chasing an EfOpen row that points to another row handle,
+/// fold the known names forward through the chain. free_handle is the
+/// handle we chased INTO — needed to reconstruct EfOpen when the
+/// chain terminates at NRowFree (the free variable).
 fn merge_chased_row(ref chased, ref names, free_handle) with !Mutate =
   let GNode(ck, cr) = chased
   match ck {
@@ -282,34 +280,27 @@ fn merge_row(ref names, ref row) with !Mutate =
     _ => row
   }
 
-// ─── graph_node_at ─────────────────────────────────────────────────
-// Returns node at handle, or synthesizes NFree for out-of-range
-// handles (defensive — should not happen in well-formed compilation).
-
+/// Returns node at handle, or synthesizes NFree for out-of-range
+/// handles (defensive — should not happen in well-formed compilation).
 fn graph_node_at(ref nodes, idx) with !Mutate =
   if idx >= len(nodes) { GNode(NFree(0), Fresh(idx)) }
   else { nodes[idx] }
 
-// ─── graph_set_node ────────────────────────────────────────────────
-// O(1) in-place write. list_set stores at list + 8 + idx*4 directly.
-// Caller must ensure idx < len(nodes); graph_extend_to enforces the bound.
-
+/// O(1) in-place write. list_set stores at list + 8 + idx*4 directly.
+/// Caller must ensure idx < len(nodes); graph_extend_to enforces the bound.
 fn graph_set_node(own nodes, idx, own node) =
   list_set(graph_extend_to(nodes, idx + 1), idx, node)
 
-// ─── graph_extend_to ───────────────────────────────────────────────
-// Ensure nodes has at least min_size slots. Uses capacity doubling so
-// amortized cost per fresh allocation is O(1). When growth is needed,
-// allocates a new flat list of size max(min_size, len(nodes)*2), copies
-// old entries, and fills the remainder with NFree sentinel nodes.
-//
-// Note: this specializes list_extend_to (std/runtime/lists.nx) with
-// an NFree sentinel fill so that defensive reads via graph_node_at
-// return a well-formed NFree for extended-but-unwritten slots.
-// Generic flat-buffer callers (trail, overlays, evidence vectors)
-// use list_extend_to directly — they never read above their logical
-// length counter.
-
+/// Ensure nodes has at least min_size slots. Uses capacity doubling so
+/// amortized cost per fresh allocation is O(1). When growth is needed,
+/// allocates a new flat list of size max(min_size, len(nodes)*2), copies
+/// old entries, and fills the remainder with NFree sentinel nodes.
+///
+/// Specializes list_extend_to (std/runtime/lists.nx) with an NFree
+/// sentinel fill so that defensive reads via graph_node_at return a
+/// well-formed NFree for extended-but-unwritten slots. Generic flat-buffer
+/// callers (trail, overlays, evidence vectors) use list_extend_to directly
+/// — they never read above their logical length counter.
 fn graph_extend_to(own nodes, min_size) =
   if len(nodes) >= min_size { nodes }
   else {
@@ -320,7 +311,7 @@ fn graph_extend_to(own nodes, min_size) =
     graph_fill_free(filled, old_len, new_cap)
   }
 
-// Fill dst[start..cap) with NFree sentinel nodes.
+/// Fill dst[start..cap) with NFree sentinel nodes.
 fn graph_fill_free(own dst, start, cap) =
   if start >= cap { dst }
   else {
@@ -339,12 +330,12 @@ fn graph_fill_free(own dst, start, cap) =
 // inputs materialize once at entry, flat inputs pass through. Walks
 // short-circuit on first hit.
 
-// H6: exhaustive Ty enumeration. A wildcard arm here silently
-// misses a new Ty variant's containment check — the most
-// dangerous site in the compiler because a missed occurs-check
-// admits infinite types. Every current Ty variant is named; any
-// future variant fails to compile until its containment semantics
-// are decided explicitly.
+/// H6: exhaustive Ty enumeration. A wildcard arm here silently
+/// misses a new Ty variant's containment check — the most
+/// dangerous site in the compiler because a missed occurs-check
+/// admits infinite types. Every current Ty variant is named; any
+/// future variant fails to compile until its containment semantics
+/// are decided explicitly.
 fn occurs_in(handle, ref ty) with !Mutate =
   match ty {
     TInt             => false,
@@ -454,8 +445,8 @@ fn overlay_register_at(own overlay_bufs, own overlay_lens, idx, handle) =
 fn overlay_find(ref names, count, ref target) with !Mutate =
   overlay_find_loop(names, count, target, 0)
 
-// Not-found sentinel is `count` (one past the last valid index).
-// Callers test `existing_idx < count` to branch on found/missing.
+/// Not-found sentinel is `count` (one past the last valid index).
+/// Callers test `existing_idx < count` to branch on found/missing.
 fn overlay_find_loop(ref names, count, ref target, i) with !Mutate =
   if i >= count { count }
   else if str_eq(list_index(names, i), target) { i }

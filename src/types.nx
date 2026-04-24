@@ -638,9 +638,22 @@ effect Abort {
 /// !Mutate on a function proves read-only access to all parameters.
 /// Vale-style region-freeze: "N parallel readers, no writers" through
 /// the same Boolean algebra that proves !Alloc and !IO.
+/// Mutate carries the graph_mutated event — performed by graph_handler
+/// at the OUTERMOST commit boundary so subscribers (cached_check_with_oracle
+/// per src/mentl_oracle.nx) catch only real graph state changes.
+/// Speculative writes between graph_push_checkpoint / graph_rollback
+/// never reach this op — Mentl's own oracle would otherwise subscribe
+/// to her speculations and recursively explore forever.
+///
+/// epoch — graph epoch at which the mutation committed.
+/// Mutation — MSetNode | MSetRow | MFreshNode (per the Mutation type at
+/// src/types.nx:163). The substrate carries enough information for
+/// subscribers to walk the dependency graph and invalidate affected
+/// per-module cache entries (Q-2 (B) scope: transitive dependents via
+/// Reason chain).
+
 effect Mutate {
-  // Marker effect — ops populated when Mutate is decomposed into
-  // GraphWrite + EnvWrite + ... (region-freeze work).
+  graph_mutated(Int, Mutation) -> ()                @resume=OneShot
 }
 
 // The ONLY route from a TypeHandle to a resolved Ty. Delegates to

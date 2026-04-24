@@ -154,9 +154,9 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
   }
 }
 
-// Flat-array union across all branch deltas. Every delta is already
-// a sorted set (maintained by set_insert during consume), so folding
-// set_union across them preserves the invariant.
+/// Flat-array union across all branch deltas. Every delta is already
+/// a sorted set (maintained by set_insert during consume), so folding
+/// set_union across them preserves the invariant.
 fn union_all_deltas(ref deltas) with !Mutate =
   union_all_deltas_loop(deltas, 0, len(deltas), [])
 
@@ -169,13 +169,13 @@ fn union_all_deltas_loop(ref deltas, i, n, own acc) with !Mutate =
     )
   }
 
-// Pairwise collision check across branch deltas. For each pair
-// (delta_i, delta_j) with i < j, any name in their intersection was
-// consumed in TWO parallel branches — an affine violation. We report
-// each colliding name once per pair; a name consumed in three
-// branches surfaces as (1,2), (1,3), (2,3) triples, each naming the
-// branch pair in its own diagnostic. Span is the branching verb's
-// span — the site where the violation becomes observable.
+/// Pairwise collision check across branch deltas. For each pair
+/// (delta_i, delta_j) with i < j, any name in their intersection was
+/// consumed in TWO parallel branches — an affine violation. We report
+/// each colliding name once per pair; a name consumed in three
+/// branches surfaces as (1,2), (1,3), (2,3) triples, each naming the
+/// branch pair in its own diagnostic. Span is the branching verb's
+/// span — the site where the violation becomes observable.
 fn report_branch_collisions(ref deltas, ref span) with !Mutate =
   report_collisions_outer(deltas, 0, len(deltas), span)
 
@@ -316,10 +316,10 @@ fn region_on_stack_loop(ref stack, rid, i, n) with !Mutate =
     else { region_on_stack_loop(stack, rid, i + 1, n) }
   }
 
-// H4.1: join field regions with current region — returns the MAX
-// (innermost) region_id. Untagged fields (scalars, never alloc'd)
-// contribute region 0 (global lifetime, doesn't bound the join).
-// The result is the composite's pinning region.
+/// H4.1: join field regions with current region — returns the MAX
+/// (innermost) region_id. Untagged fields (scalars, never alloc'd)
+/// contribute region 0 (global lifetime, doesn't bound the join).
+/// The result is the composite's pinning region.
 fn join_field_regions(ref tags, ref fields, current) with !Mutate =
   join_field_regions_loop(tags, fields, current, 0, len(fields))
 
@@ -375,15 +375,10 @@ fn check_ref_escape(ref params, ref body) with !Mutate =
          if len(refs) == 0 { () }
          else { walk_return_positions(refs, body) }
 
-// Phase-A4 reconsidered: function-return values that callers consume
-// via `len()` need their physical length to match their logical
-// length. list_extend_to grows by doubling, so a counter-based loop
-// over-allocates and the caller would see garbage past buf_len. The
-// substrate-aligned form is `slice(buf, 0, count)` — a tag=4 view
-// with len = count. One alloc for the worst-case buffer + one
-// slice-node alloc; same big-O as pre-trim, but the slice preserves
-// O(1) read into the original buffer (no copy).
-
+/// Phase-A4: collect_ref_params returns `slice(buf, 0, count)` — a
+/// tag=4 view with len = count. One alloc for the worst-case buffer
+/// + one slice-node alloc; same big-O as pre-trim, but the slice
+/// preserves O(1) read into the original buffer (no copy).
 fn collect_ref_params(ref params) with !Mutate =
   let flat = list_to_flat(params)
   let n = len(flat)

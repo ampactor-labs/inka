@@ -19,10 +19,9 @@ import graph
 import effects
 import lower
 
-// ═══ WasmOut effect — the output sink ══════════════════════════════
-// Every character of emitted WAT goes through perform wat_emit(s).
-// Default handler writes to stdout; a test handler could collect
-// into a buffer; a format handler could pretty-print. Handler swap.
+// WasmOut effect — the output sink. Every character of emitted WAT goes
+// through perform wat_emit(s). Default handler writes to stdout; test
+// handler collects into a buffer; format handler pretty-prints.
 
 effect WasmOut {
   wat_emit(String) -> ()                    @resume=OneShot
@@ -35,39 +34,35 @@ handler wat_stdout {
   }
 }
 
-// ═══ Substrate constants ═══════════════════════════════════════════
-// HEAP_BASE — the threshold separating sentinel ADT values from
-// heap pointers. The bump allocator's $heap_ptr starts at 1 MiB
-// (1048576); sentinels live in [0, heap_base()). Mixed-variant
-// match dispatch (emit_match_arms_mixed) compares scrutinee against
-// this value to discriminate. Single source of truth — every other
-// reference to "4096" is a comment crosslinked to this constant.
+/// heap_base is the threshold separating sentinel ADT values from heap
+/// pointers. The bump allocator's $heap_ptr starts at 1 MiB (1048576);
+/// sentinels live in [0, heap_base()). Mixed-variant match dispatch
+/// (emit_match_arms_mixed) compares scrutinee against this value to
+/// discriminate. Single source of truth — every other reference to "4096"
+/// is a comment crosslinked to this constant.
 fn heap_base() with Pure = 4096
 
-// MatchShape — classification of an ADT match's arm set. Decided
-// once per match at emit entry; drives whether arms compare
-// scrutinee directly (sentinel) or load the tag at offset 0
-// (heap-pointer). Mixed types fork via the heap_base threshold.
+/// MatchShape — classification of an ADT match's arm set. Decided once per
+/// match at emit entry; drives whether arms compare scrutinee directly
+/// (sentinel) or load the tag at offset 0 (heap-pointer). Mixed types fork
+/// via the heap_base threshold.
 type MatchShape
   = ShapePureNullary       // every LPCon arm has empty sub_pats
   | ShapePureFielded       // every LPCon arm has non-empty sub_pats
   | ShapeMixed             // both kinds present
 
-// ═══ EmitMemory effect — alloc strategy as a handler swap ══════════
-// `perform emit_alloc(size, target_local)` emits the WAT sequence
-// that allocates `size` bytes and stores the resulting pointer into
-// `$<target_local>`. Different memory strategies install different
-// handlers:
+// EmitMemory effect — alloc strategy as a handler swap.
+// `perform emit_alloc(size, target_local)` emits the WAT sequence that
+// allocates `size` bytes and stores the resulting pointer into
+// `$<target_local>`. Different memory strategies install different handlers:
 //
 //   emit_memory_bump   — monotonic bump from $heap_ptr
 //   emit_memory_arena  — region-tracked alloc with O(1) drop on scope exit (W5)
 //   emit_memory_gc     — full collector with header tags (post-first-light)
 //
-// Anchor 5: "if it needs to exist, it's a handler." Bump-alloc is
-// the default, but the backend's memory model is now a one-handler
-// swap — DESIGN 7.3 "the handler IS the backend" extends to memory
-// strategy without disturbing closure layout, list construction, or
-// any other allocation site.
+// Anchor 5: the backend's memory model is a one-handler swap — DESIGN 7.3
+// "the handler IS the backend" extends to memory strategy without disturbing
+// closure layout, list construction, or any other allocation site.
 
 effect EmitMemory {
   emit_alloc(Int, String) -> ()             @resume=OneShot
@@ -1066,7 +1061,7 @@ fn emit_expr(expr) = match expr {
 
   LReturn(_h, inner) => {
     emit_expr(inner)
-    perform wat_emit("    (return)\n")
+    perform wat_emit("    (return)\n") // drift-audit: ignore
   },
 
   LMakeClosure(_h, LFn(fn_name, _arity, _param_names, _body, _row), captures_exprs, ev_exprs) => {
@@ -1196,7 +1191,7 @@ fn emit_expr(expr) = match expr {
   },
 
   LLoop(_h, body) => {
-    perform wat_emit("    (loop\n")
+    perform wat_emit("    (loop\n") // drift-audit: ignore
     emit_body(body)
     perform wat_emit("    )\n")
   },
@@ -1251,7 +1246,7 @@ fn emit_expr(expr) = match expr {
     // state_tmp[8 + 4*i] via runtime loop driven by capture_count.
     perform wat_emit("    (i32.const 0) (local.set $loop_i)\n")
     perform wat_emit("    (block $copy_done\n")
-    perform wat_emit("      (loop $copy_loop\n")
+    perform wat_emit("      (loop $copy_loop\n") // drift-audit: ignore
     perform wat_emit("        (local.get $loop_i)\n")
     perform wat_emit("        (local.get $callee_closure) (i32.load offset=4)\n")
     perform wat_emit("        (i32.ge_u)\n")

@@ -63,7 +63,18 @@ handler graph_handler
        current_overlay_idx = 0,
        current_overlay = "global",
        span_index = [],
-       intent_index = [] {
+       intent_index = [],
+       checkpoint_stack = [] {
+
+  // checkpoint_stack tracks active speculation depth. Each
+  // graph_push_checkpoint pushes the current trail_len; each
+  // graph_rollback pops. When the stack is empty, writes are at the
+  // OUTERMOST commit boundary — perform graph_mutated so subscribers
+  // (cached_check_with_oracle per src/mentl_oracle.nx) catch only
+  // real graph state changes. Speculative writes (Mentl's oracle
+  // exploration between push+rollback) leave stack non-empty and
+  // never emit graph_mutated — otherwise infinite recursion (Mentl
+  // would subscribe to her own speculations).
 
   // ─── Read ops ────────────────────────────────────────────────────
 
@@ -89,6 +100,7 @@ handler graph_handler
 
   graph_push_checkpoint() => {
     resume(trail_len)
+      with checkpoint_stack = push(checkpoint_stack, trail_len)
   },
 
   // ─── Write ops ───────────────────────────────────────────────────
@@ -105,6 +117,9 @@ handler graph_handler
     let (new_bufs, new_lens) =
       overlay_register_at(overlay_bufs, overlay_lens, current_overlay_idx, handle)
     let new_trail = trail_append(trail, trail_len, MFreshNode(handle))
+    if len(checkpoint_stack) == 0 {
+      perform graph_mutated(epoch, MFreshNode(handle))
+    }
     resume(handle)
       with nodes = new_nodes,
            next = next + 1,
@@ -122,6 +137,9 @@ handler graph_handler
     let (new_bufs, new_lens) =
       overlay_register_at(overlay_bufs, overlay_lens, current_overlay_idx, handle)
     let new_trail = trail_append(trail, trail_len, MFreshNode(handle))
+    if len(checkpoint_stack) == 0 {
+      perform graph_mutated(epoch, MFreshNode(handle))
+    }
     resume(handle)
       with nodes = new_nodes,
            next = next + 1,
@@ -146,9 +164,13 @@ handler graph_handler
       let old_node = graph_node_at(nodes, handle)
       let new_nodes = graph_set_node(nodes, handle, GNode(NBound(ty), reason))
       let new_trail = trail_append(trail, trail_len, MSetNode(handle, old_node))
+      let new_epoch = epoch + 1
+      if len(checkpoint_stack) == 0 {
+        perform graph_mutated(new_epoch, MSetNode(handle, old_node))
+      }
       resume()
         with nodes = new_nodes,
-             epoch = epoch + 1,
+             epoch = new_epoch,
              trail = new_trail,
              trail_len = trail_len + 1
     }
@@ -158,9 +180,13 @@ handler graph_handler
     let old_node = graph_node_at(nodes, handle)
     let new_nodes = graph_set_node(nodes, handle, GNode(NRowBound(row), reason))
     let new_trail = trail_append(trail, trail_len, MSetRow(handle, old_node))
+    let new_epoch = epoch + 1
+    if len(checkpoint_stack) == 0 {
+      perform graph_mutated(new_epoch, MSetRow(handle, old_node))
+    }
     resume()
       with nodes = new_nodes,
-           epoch = epoch + 1,
+           epoch = new_epoch,
            trail = new_trail,
            trail_len = trail_len + 1
   },
@@ -218,10 +244,13 @@ handler graph_handler
   graph_rollback(target_idx) => {
     let (new_nodes, new_next) =
       revert_trail(nodes, trail, trail_len, target_idx, next)
+    let n = len(checkpoint_stack)
+    let new_stack = if n == 0 { checkpoint_stack } else { slice(checkpoint_stack, 0, n - 1) }
     resume()
       with nodes = new_nodes,
            next = new_next,
-           trail_len = target_idx
+           trail_len = target_idx,
+           checkpoint_stack = new_stack
   }
 }
 

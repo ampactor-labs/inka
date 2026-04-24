@@ -30,7 +30,7 @@ import pipeline
 import backends/wasm
 import dsp/clock
 
-// ═══ Entry — dispatch on mode ══════════════════════════════════════
+// Entry — dispatch on mode.
 
 fn main(argv) =
   match dispatch_mode(argv) {

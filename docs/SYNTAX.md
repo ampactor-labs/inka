@@ -47,22 +47,45 @@ Five rules every syntactic decision below honors:
 
 ## Function declarations
 
-### Canonical form — single expression
+### Canonical form — single-line expression body
 
 ```
-fn name(p1: T1, p2: T2) -> RetTy with E1 + E2 =
-  expr
+fn name(p1, p2) -> RetTy with E1 + E2 = expr
 ```
 
-The body is a SINGLE EXPRESSION. The expression's value IS the function's return value. No braces. The expression may span multiple lines (indented continuation), but it is one syntactic expression.
+When the body fits on one line after `=`, no braces are required.
 
-Common case — pipeline body:
 ```
-fn parse(path: ValidPath) -> Config with IO + Fail<ParseError> =
-  path
-    |> read_file
-    |> decode
+fn double(x) = x * 2
+fn add(a, b) with Pure = a + b
+fn parse(path: ValidPath) = path |> read_file |> decode
 ```
+
+### Canonical form — multi-line body requires braces
+
+**Rule:** if the body spans more than one line (statements, multi-line expressions like `if`/`match`, etc.), braces are required. They anchor the function boundary visually and enable editor code-folding at every function.
+
+```
+fn chase_node(ref nodes, handle, depth) with !Mutate = {
+  if depth > 100 {
+    GNode(NErrorHole(Inferred("depth exceeded")), Fresh(handle))
+  } else {
+    let GNode(kind, reason) = graph_node_at(nodes, handle)
+    match kind {
+      NBound(ty) => ...,
+      _          => GNode(kind, reason),
+    }
+  }
+}
+
+fn process(input: List<Float>) -> Result with !Alloc = {
+  let validated = input |> validate
+  let normalized = validated |> normalize
+  normalized |> fft |> extract
+}
+```
+
+The braces enclose a `BlockExpr(stmts, final_expr)` when `let`/intermediate statements are present, or a single multi-line expression otherwise.
 
 ### The Intent Boundary Rule for Parameters
 
@@ -88,19 +111,35 @@ fn process(input: List<Float>) -> Result with !Alloc = {
 
 Braces ARE required when there are statements. The braces enclose a `BlockExpr(stmts, final_expr)`.
 
-### Rejected form — braces around single expression
+### Rejected form — braces around single-line expression
 
 ```
 // REJECTED:
-fn parse(path: Path) -> Config = {
-  path |> read_file |> decode
-}
+fn parse(path: Path) -> Config = { path |> read_file |> decode }
 ```
 
 Diagnostic: **`E_RedundantBraces`** at the opening `{`.
-> "this body is a single expression; remove the braces. Pipelines and other compound expressions are themselves single expressions and do not require braces."
+> "this body fits on one line; remove the braces. Use braces only for multi-line bodies."
 
 Quick Fix: remove the `{` and `}`.
+
+### Rejected form — missing braces on multi-line body
+
+```
+// REJECTED:
+fn chase_node(...) =
+  if depth > 100 {
+    ...
+  } else {
+    let node = graph_node_at(...)
+    ...
+  }
+```
+
+Diagnostic: **`E_MissingBracesMultiLine`** at the `=`.
+> "multi-line function bodies require braces to anchor the function boundary. Wrap the body in `{ ... }`."
+
+Quick Fix: add `{` after `=` and `}` at the end.
 
 ### Generic type parameters
 
@@ -143,6 +182,53 @@ fn id(x: A) = x   // return type inferred
 
 The `-> RetTy` clause is optional; absent = inferred. Most user code does NOT annotate return types. Mentl's gradient may suggest annotating when capabilities depend on the return type being explicit.
 
+### Default parameter values
+
+Trailing parameters may have default values. Call sites may omit them or override via labeled args.
+
+```
+fn compress(x: Sample, ratio: Float = 4.0, threshold: Float = -12.0) -> Sample = ...
+
+compress(sample)                                    // ratio and threshold defaulted
+compress(sample, 8.0)                               // ratio overridden; threshold defaulted
+compress(sample, threshold = -6.0)                  // label to skip over ratio
+compress(sample, ratio = 2.0, threshold = -18.0)   // fully labeled
+```
+
+Defaults are evaluated per-call-site (not at declaration time); they may reference earlier parameters but not later ones.
+
+### Labeled call arguments
+
+Any call may use `name = value` for trailing positional arguments. Positional-before-labeled order:
+
+```
+fn spawn_task(priority: Int, ref config: Config, timeout_ms: Int = 1000) -> Handle = ...
+
+spawn_task(5, config)                                            // positional only
+spawn_task(5, config, timeout_ms = 5000)                        // positional + labeled override
+spawn_task(priority = 5, config = current, timeout_ms = 5000)   // all labeled
+```
+
+Labeled args improve readability at call sites with many parameters and allow skipping defaults. Parser resolves labels against the declared parameter names; unknown label = `E_UnknownArgLabel`.
+
+### Nested function declarations
+
+`fn` declarations may appear inside another function's body. Nested fns are local to the enclosing body's scope.
+
+```
+fn check_exhaustive(patterns) = {
+  fn covers_all(pats, variants) = {
+    // inner helper; visible only inside check_exhaustive
+    all_match(variants, (v) => any_match(pats, (p) => matches(v, p)))
+  }
+  covers_all(patterns, known_variants())
+}
+```
+
+Nested `fn name(params) = body` is syntactic sugar for `let name = (params) => body`. Same semantics; nested form reads more naturally when the inner fn is genuinely function-shaped (vs. a lambda passed as an argument).
+
+Mutual recursion: nested fns may reference each other — the compiler hoists them into a local letrec scope.
+
 ---
 
 ## Anonymous functions (lambdas)
@@ -150,60 +236,97 @@ The `-> RetTy` clause is optional; absent = inferred. Most user code does NOT an
 ### Canonical form
 
 ```
-fn (params) => expr
+(params) => body
 ```
 
-`=>` separates params from body. Body is a single expression — same discipline as named fns.
+One syntax for all anonymous functions. `(` opens the parameter list; `)` closes it; `=>` separates params from body; body is one expression OR one brace-block. `fn` keyword is reserved for named declarations only — it does NOT appear in lambda syntax.
 
+### Examples
+
+**Zero arguments:**
 ```
-fn (x) => x + 1
-fn (a, b) => a * b
-fn (point) => point.x + point.y
-```
-
-### Short form — `|params| expr`
-
-The pipe-fence form is the canonical short lambda for inline use:
-
-```
-map(|x| x + 1, xs)
-fold(xs, 0, |acc, x| acc + x)
-filter(|x| x > 0, xs)
-zip_with(|a, b| a * b, xs, ys)
+() => 42
+() => { let x = compute(); x + 1 }
 ```
 
-`|params|` fences the parameter list; the body is a single expression. This is the common case — inline closures passed to higher-order functions. No `fn` keyword, no `=>`, minimal ceremony.
-
-### Explicit form — `fn (params) => expr`
-
-The `fn` keyword form is available for block bodies and multi-statement lambdas:
-
+**Single argument:**
 ```
-fn (input) => {
+(x) => x + 1
+(_) => 42              // argument ignored (PWild pattern)
+```
+
+**Multiple arguments:**
+```
+(a, b) => a * b
+(a, _) => a            // second ignored
+(_, _) => 0            // all ignored
+```
+
+**Destructuring patterns in param position:**
+```
+({name, age}) => greet(name)              // record destructure
+((a, b)) => a + b                          // tuple destructure (outer = param list; inner = tuple pattern)
+([h, ...t]) => process(h, t)               // list destructure
+```
+
+**Block body:**
+```
+(input) => {
   let cleaned = input |> clean
   cleaned |> transform
 }
 ```
 
-Same brace discipline: braces ONLY when statements precede the final expression.
+### Rule — braces only for multi-line / statement bodies
 
-**Rule:** use `|x| expr` for inline single-expression closures; use `fn (x) => { ... }` when you need a block body. One mechanism, two surfaces, clear intent.
+- **Single-line, single expression body:** no braces. `(x) => x + 1`.
+- **Multi-line OR containing `let` statements:** braces required. `(x) => { let y = ...; y + 1 }`.
+
+This matches the brace discipline for named fn bodies (see §"Function declarations").
+
+### Inline higher-order use
+
+```
+map((x) => x + 1, xs)
+fold(xs, 0, (acc, x) => acc + x)
+filter((x) => x > 0, xs)
+zip_with((a, b) => a * b, xs, ys)
+```
 
 ### Returned closures
 
 ```
-fn compose(f, g) = |x| g(f(x))
+fn compose(f, g) = (x) => g(f(x))
 fn id(x) with Pure = x
 ```
 
-### Tuple destructure in params
+### Match arms share the lambda syntax
+
+Match arms are `pattern => body`. **Match arms ARE pattern-dispatched lambdas** — same separator, same body discipline. The syntactic unity reflects semantic unity.
+
+### Rejected forms
 
 ```
-(audio, ctrl) |> fn ((a, c)) => process(a, c)   // explicit tuple unpack
-(audio, ctrl) |> fn (a, c) => process(a, c)     // shorthand: positional unpack
+// REJECTED — pipe-fence form (superseded by `()` unification):
+|x| x + 1
+|acc, x| acc + x
 ```
 
-The shorthand form unpacks a tuple ARGUMENT into positional params. This is the canonical form for receiving tuples produced by `<|` or `><`.
+Diagnostic: **`E_DeprecatedLambdaFence`** with Quick Fix rewriting `|params| body` → `(params) => body`.
+
+```
+// REJECTED — `fn` keyword on anonymous lambda:
+fn (x) => x + 1
+```
+
+Diagnostic: **`E_RedundantFnOnLambda`** — `fn` is reserved for named declarations. Remove `fn` for anonymous forms.
+
+```
+// REJECTED — zero-arg via `||`:
+|| expr
+```
+
+Diagnostic: **`E_LambdaAsOrOr`** — `||` is logical OR (TOrOr). Use `() => expr` for zero-arg lambdas. Quick Fix: replace `||` with `() =>`.
 
 ---
 
@@ -454,6 +577,42 @@ nested.outer.inner
 
 Field access lowers to `LFieldLoad` with offset resolved at compile time from the record's type. O(1) load.
 
+### Record update — spread into new record
+
+```
+let older = {...user, age: user.age + 1}
+let tagged = {...event, timestamp: now(), processed: true}
+```
+
+`{...existing, field: new_value, ...}` creates a NEW record by copying `existing`'s fields and overwriting/adding the listed fields. Non-destructive; original record unchanged (ownership preserved). Field lists must be type-compatible with the source shape.
+
+---
+
+## Indexing
+
+Subscript access for lists, tuples, and integer-keyed records.
+
+```
+argv[1]                      // list index
+nodes[idx]                   // list index
+(a, b, c)[0]                 // tuple element access (compile-time bounds check)
+matrix[i][j]                 // chained indexing
+```
+
+`xs[i]` lowers to the appropriate runtime call based on the receiver's inferred type:
+- `List<A>` → `list_index(xs, i)`.
+- Tuple → compile-time position extraction.
+- Map / record-by-int-key → `record_get(xs, i)`.
+
+Bounds-checking is runtime for lists (traps on out-of-range); compile-time for tuples (H6 exhaustiveness).
+
+Refinements over the index tighten bounds:
+```
+fn safe_get(xs: List<A>, i: ValidIndex<xs>) -> A = xs[i]
+```
+
+When `i` is refined to a proven-valid index, the compiler elides the bounds check.
+
 ---
 
 ## Algebraic data types
@@ -520,17 +679,43 @@ type Even = Int where self % 2 == 0
 
 ```
 effect IO {
-  print(msg: String) -> ()       @resume=OneShot
-  read() -> String                @resume=OneShot
+  print(msg: String)              @resume=OneShot   // unit return; `-> ()` omitted
+  read() -> String                 @resume=OneShot
 }
 
 effect State<S> {
-  get() -> S                      @resume=OneShot
-  set(v: S) -> ()                 @resume=OneShot
+  get() -> S                       @resume=OneShot
+  set(v: S)                        @resume=OneShot   // unit return; `-> ()` omitted
 }
 ```
 
-Each operation declares its parameter types, return type, and **resume discipline** (`@resume=OneShot | MultiShot | Either`). The resume discipline is part of the operation's identity; it's checked at every handler arm and call site.
+Each operation declares its parameter types, return type (if non-unit), and **resume discipline** (`@resume=OneShot | MultiShot | Either`). The resume discipline is part of the operation's identity; it's checked at every handler arm and call site.
+
+### Unit return omission
+
+If an effect op returns unit `()`, the `-> ()` clause may be omitted:
+
+```
+effect Console { print(msg: String) @resume=OneShot }     // returns ()
+effect Console { print(msg: String) -> () @resume=OneShot } // equivalent, explicit
+```
+
+Both forms are accepted; absence is the idiomatic short form. Non-unit returns MUST be declared explicitly: `read() -> String`. This mirrors the fn-declaration rule where `-> RetTy` is optional on inferred fns but REQUIRED when declared.
+
+### Calling resume with unit
+
+For ops returning `()`, the handler arm calls `resume()` (no inner unit literal required):
+
+```
+handler stdout_console {
+  print(msg) => {
+    perform fd_write(msg)
+    resume()                // canonical — not resume(())
+  }
+}
+```
+
+Per §"Parameters ARE tuples," a zero-arg call unifies with a unit parameter type. `resume()` and `resume(())` are grammatically equivalent; `resume()` is canonical by §"No redundant form."
 
 ### Parameterized effect (first-class)
 
@@ -720,6 +905,8 @@ Patterns appear in `let`, `match`, function parameters, and lambda parameters.
 | `PTuple`            | `(a, b, c)`                       | positional binds   |
 | `PList`             | `[a, b, c]`, `[head, ...rest]`    | positional + rest  |
 | `PRecord`           | `{name, age}`, `{name: n, ...r}`  | field punning + rest |
+| `PAlt`              | `pat_1 \| pat_2 \| ...`            | matches if any branch matches; no variable bindings inside alternatives |
+| `PAs`               | `name @ pat`                      | binds `name` to whole value AND destructures via `pat` |
 
 ### Examples
 
@@ -741,6 +928,20 @@ match user {
   {name: n}             => "user " ++ n,
 }
 
+// Pattern alternation — multiple patterns, one arm body
+match event {
+  Click(_) | Key(_) | Scroll(_) => "user input",
+  Resize | Paint                => "render event",
+  _                              => "other",
+}
+
+// As-patterns — bind whole value AND destructure
+match event {
+  e @ Click({x, y}) => process_click_with_coords(e, x, y),
+  e @ Key(k)        => log_and_dispatch(e, k),
+  _                 => ignore(),
+}
+
 let (x, y) = point
 let {name, age} = user
 let [first, second, ...rest] = items
@@ -749,6 +950,16 @@ let [first, second, ...rest] = items
 ### Exhaustiveness
 
 Match arms must cover all variants OR include a wildcard. Missing-variant errors include the missing variants by name (per H3's exhaustiveness machinery).
+
+### Pattern alternation — rule
+
+`pat_1 | pat_2 | ... | pat_n => body`: body executes if ANY branch matches. **No variable bindings may appear inside alternatives** (each branch must match identically at the value level — `Some(x) | Other(x)` is rejected because `x`'s binding source is ambiguous). Pure literals / tag-only patterns are common; use an as-pattern (§PAs) outside the alternation if you need a binding.
+
+### As-patterns — rule
+
+`name @ pat => body`: binds `name` to the entire matched value; `pat` destructures it further. `name` and any bindings inside `pat` are all available in the arm body. Common for "need the whole value AND some pieces" cases — event forwarding, logging, pass-through.
+
+`@` is also TAt (annotation marker on effect ops: `@resume=OneShot`). Context disambiguates: annotation on op decl vs pattern in match/let.
 
 ---
 
@@ -814,36 +1025,60 @@ Inka does not have `/* ... */` block comments. Composability of the substrate me
 
 ## Strings
 
-### Basic literal
+Inka has **two string forms** distinguished by quote character:
+
+- **`"..."`** — double-quoted; **supports interpolation** via `{expr}`.
+- **`'...'`** — single-quoted; **literal**, no interpolation.
+
+Each form has a multi-line variant (triple-quoted):
+
+- **`"""..."""`** — multi-line + interpolating.
+- **`'''...'''`** — multi-line + literal.
+
+### Double-quoted (interpolating)
 
 ```
 "hello"
 "with newline\n"
 "escaped quote: \""
+"result is {a + b}"
+"hello, {name}!"
 ```
 
-Escape codes: `\n`, `\r`, `\t`, `\\`, `\"`, `\0`, `\xHH` (hex byte).
+**Interpolation:** `{expr}` is replaced with the expression's value at runtime. The expression's type must implement `Show` (or be a String already). For a literal `{` or `}` inside an interpolating string, double the brace: `{{` → literal `{`, `}}` → literal `}`.
 
-### Interpolation
+**Escape codes:** `\n`, `\r`, `\t`, `\\`, `\"`, `\0`, `\xHH` (hex byte).
+
+### Single-quoted (literal)
 
 ```
-let name = "Morgan"
-let greeting = "hello, ${name}!"
-let calc = "result is ${a + b}"
+'raw text — {name} stays literal'
+'use {{brace}} syntax {verbatim}'
+'regex: ^[a-z]+\s*$'
 ```
 
-`${expr}` is replaced with the expression's value. The expression's type must implement `Show` (or be a String already).
+No interpolation. Braces are literal characters — no doubling needed. Useful for format strings, regex, shell commands, documentation snippets about Inka itself.
+
+**Escape codes:** `\\`, `\'`, `\0`, `\xHH`. NO `\n` expansion — newlines must be literal (use triple-quoted form for multi-line literal content).
 
 ### Multi-line
 
 ```
-let block = """
-  This is a multi-line string.
-  It preserves newlines.
+let interpolating_block = """
+  Hello, {name}.
+  Your age is {age}.
 """
+
+let literal_block = '''
+  This is a literal multi-line block.
+  Braces like {this} are NOT interpolated.
+'''
 ```
 
 Triple-quoted strings span multiple lines. Leading whitespace common to all lines is stripped (indentation-aware).
+
+`"""..."""` inherits interpolation semantics from `"..."`.
+`'''...'''` inherits literal semantics from `'...'`.
 
 ---
 
@@ -1017,10 +1252,13 @@ type TokenKind
   = TFn | TLet | TIf | TElse | TMatch | TType
   | TEffect | THandle | THandler | TWith
   | TResume | TPerform
-  | TFor | TIn | TLoop | TBreak | TContinue | TReturn
   | TImport | TWhere
   | TOwn | TRef | TPure
   | TTrue | TFalse
+  // Note: `loop`, `break`, `continue`, `return`, `for`, `in` are NOT
+  // reserved keywords — Inka has no imperative control flow constructs.
+  // Iteration is via `|>` + `<~` + `Iterate` effect handlers.
+  // Early-exit is via `Abort` effect + `catch_abort` handler.
 
   // ─── Identifiers and literals (carry payload) ─────────────────────
   | TIdent(String)
@@ -1067,12 +1305,7 @@ type TokenKind
 | `TWith`         | `with`           | —         | effect clauses, handler state, handle-with     |
 | `TResume`       | `resume`         | —         | inside handler arm body                        |
 | `TPerform`      | `perform`        | —         | invoking an effect operation                   |
-| `TFor`          | `for`            | —         | reserved (for-comprehension future)            |
-| `TIn`           | `in`             | —         | reserved (let-in future)                       |
-| `TLoop`         | `loop`           | —         | start of loop expression                       |
-| `TBreak`        | `break`          | —         | inside loop body                               |
-| `TContinue`     | `continue`       | —         | inside loop body                               |
-| `TReturn`       | `return`         | —         | early return from fn body                      |
+| *(removed)*     | —                | —         | `for`, `in`, `loop`, `break`, `continue`, `return` were previously reserved but are NOT Inka keywords. Iteration uses pipe verbs + Iterate effect; early-exit uses Abort effect. |
 | `TImport`       | `import`         | —         | top-level import statement                     |
 | `TWhere`        | `where`          | —         | refinement type clause                         |
 | `TOwn`          | `own`            | —         | parameter ownership marker                     |
@@ -1082,8 +1315,8 @@ type TokenKind
 | `TFalse`        | `false`          | —         | Bool literal                                   |
 | **Identifiers and literals (5)** |  |           |                                                |
 | `TIdent(s)`     | `[A-Za-z_][...]` | name      | variable refs, fn names, type names, etc.      |
-| `TInt(n)`       | `[0-9]+`         | i32 value | integer literal                                |
-| `TFloat(f)`     | `[0-9]+.[0-9]+`  | f64 value | floating-point literal                         |
+| `TInt(n)`       | `[0-9][0-9_]*`, `0x[0-9A-Fa-f_]+`, `0b[01_]+`, `0o[0-7_]+` | i32 value | integer literal (decimal / hex / binary / octal; underscores allowed for readability) |
+| `TFloat(f)`     | `[0-9][0-9_]*\.[0-9][0-9_]*` | f64 value | floating-point literal (underscore separators allowed) |
 | `TString(s)`    | `"..."` or `"""..."""` | string content (escape-resolved, interp markers preserved) | string literal |
 | `TDocComment(s)`| `/// ...`        | comment text (one line, leading `///` stripped) | attaches to next declaration |
 | **Two-character operators (15)** |  |           |                                                |
@@ -1145,7 +1378,18 @@ type TokenKind
 - **Match on `Token` must be exhaustive.** No wildcard arms over `TokenKind` without explicit per-variant enumeration. H6's discipline: `_ => …` on a load-bearing ADT is rejected by code review and substrate convention.
 - **Span propagation.** Every parsed AST node is constructed with the joined span of its constituent tokens. Use `span_join(token_span(first), token_span(last))`.
 - **Generic-type angle brackets disambiguated by context.** `<` and `>` are TLt/TGt at expression position; in type position (after `:`, `->`, in fn-decl angle params), they open/close generic parameter lists. This is parser-internal context tracking, not a separate token kind.
-- **Pipe-vs-or disambiguation.** `|` is TPipe (alone); `||` is TOrOr (two-char). Type-variant `|` separators use TPipe.
+- **Pipe-vs-or disambiguation.** `|` is TPipe (variant separator in `type` body + pattern alternation in match arm body); `||` is TOrOr (logical or). No `|x|` lambda fence — lambdas use `(params) => body`.
+
+### `if` without `else` — unit-returning conditional
+
+An `if cond { body }` without `else` is legal when `body`'s type is unit `()`. The compiler inserts an implicit `else { () }`. Used for side-effect conditionals:
+
+```
+if should_log { perform log("message") }     // unit body — OK
+if x > 0 { x * 2 }                            // non-unit body — E_IfMissingElse
+```
+
+Diagnostic on non-unit if-without-else: **`E_IfMissingElse`** with Quick Fix suggesting either adding an `else` branch or restructuring. Lowers the "forgot the else accidentally" class of bug to a compile error.
 
 ---
 

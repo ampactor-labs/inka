@@ -193,6 +193,77 @@ supersedes earlier framings. Append-only; do not rewrite history
   (H7 substrate) slotted after current item 1 LFeedback. Each
   phase closes when its walkthrough-paragraph → substrate mapping
   is clean; no temporal budget.
+- **2026-04-23** — **ΣU — SYNTAX unification (18 refinements A-R).**
+  Comprehensive syntax audit against developer-friendliness + INSIGHTS's
+  crystallized truths. Morgan + Opus reviewed every form, named every
+  drift, landed 18 refinements (A-R) as one coherent amendment:
+
+  - **A.** Remove unused reserved keywords (`loop` / `break` /
+    `continue` / `return` / `for` / `in`). Imperative control-flow drift.
+    Iteration via `|>`/`<~`/Iterate effect; early-exit via Abort effect.
+  - **B.** Labeled call arguments (`f(label = value)`) for readability.
+  - **C.** Default parameter values (pairs with B).
+  - **D.** Formalize `xs[i]` indexing in SYNTAX.md.
+  - **E.** Formalize nested `fn` declarations.
+  - **F.** String interpolation `"{name}"` not `"${name}"` — drop
+    dollar-sigil. Escape literal brace via `{{` / `}}`.
+  - **G.** Single-quote `'...'` strings are LITERAL (no interpolation).
+    Double-quote `"..."` interpolates. Triple-quoted forms inherit:
+    `"""..."""` multi-line-interpolating; `'''...'''` multi-line-literal.
+  - **H.** Optional `-> ()` on effect op declarations (absence = unit).
+  - **I.** Canonicalize `resume()` not `resume(())` per Parameters-ARE-
+    Tuples + No-Redundant-Form.
+  - **J.** Braces REQUIRED for multi-line fn bodies (anchor for editor
+    + reader). Single-line single-expr stays brace-free.
+  - **K.** `if cond { body }` without `else` legal when body is unit.
+  - **L.** Pattern alternation in match arms (`Some(0) | None =>`).
+  - **M.** As-patterns (`x @ Some(v)` — bind whole + destructure).
+  - **N.** Record spread update (`{...existing, field: new}`).
+  - **O.** Trailing-comma uniformity across all list-like syntax.
+  - **P.** Numeric literal underscores (`1_000_000`, `0xFF_00`).
+  - **Q.** Hex / binary / octal literals (`0xFF`, `0b1010`, `0o755`).
+  - **R.** No `pub`/`priv` visibility keywords — composition via
+    capability effects, not modifier keywords.
+  - **(prior)** Lambda unification: `(params) => body`; drop `|x|`
+    pipe-fence; drop `fn (x) =>` form; `fn` keyword reserved for
+    named declarations only. Zero-arg `() => expr` fills the gap
+    `||` couldn't occupy (since `||` is TOrOr). Symbol `|` reduces
+    to ONE clean role: type-variant separator + pattern-alternation
+    (context-disambiguated, non-overlapping).
+
+  **Symbol-role consolidation achieved:**
+  | Symbol | After refinement |
+  |---|---|
+  | `()` | Universal function-shape bracket (params / call / unit / zero-arg) |
+  | `|` | Type-variant separator + pattern-alternation (context-disambiguated) |
+  | `||` | Logical OR ONLY |
+  | `=` | Name-to-value binding (let, named-fn-decl) |
+  | `=>` | Pattern-to-body mapping (lambda, match arm) |
+  | `->` | Function-type arrow |
+  | `...` | Rest/spread (patterns + types + record update) |
+
+  Each symbol: one clean semantic role. No overloading that requires
+  complex context tracking beyond what the eight interrogations
+  already enforce.
+
+  **Implications:**
+  - SYNTAX.md rewritten with 18 amendments landed in a single commit
+    (no versioning — Σ was the first canonical-syntax phase; ΣU is
+    the unification amendment).
+  - SYNTAX-exemplary sweep (new Phase B.12) touches every `.nx`
+    file + every walkthrough code example to ensure the tree
+    demonstrates the refinements.
+  - Drift-audit patterns extended (tools/drift-patterns.tsv) to
+    catch regressions: `\|x\| body` lambda-fence, `"${` dollar-sigil
+    interpolation, imperative keywords, redundant `fn ()` on
+    lambdas, etc.
+
+  **Design philosophy preserved:** every refinement passes the eight
+  interrogations, avoids all nine drift modes, honors "No redundant
+  form" + "Layout IS contract" + "Every construct has graph
+  correspondence." INSIGHTS.md crystallized truths unchanged — the
+  refinements are surface-level; the kernel's eight primitives
+  unmodified.
 - **2026-04-23** — **SR audit: PLAN reality sweep.** Systematic
   audit of Status section + Decisions Ledger claims vs actual
   `src/*.nx` + `lib/**/*.nx`. Results in

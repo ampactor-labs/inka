@@ -22,7 +22,7 @@ import types
 import graph
 import effects
 
-// ═══ Mentl-owned ADTs ══════════════════════════════════════════════
+// Mentl-owned ADTs
 
 // Each variant carries an Option(Span) — Some when the candidate
 // originated from a user site (hovered hole, quick-fix request);
@@ -70,11 +70,9 @@ type Context
 type Candidate
   = Candidate(Node, Reason)  // AST fragment + why it was proposed
 
-// ═══ Teach effect — the five tentacles ═════════════════════════════
-// DESIGN.md Ch 8: each op is a tentacle entry point. The mentl_default
-// handler projects the substrate for the developer — hover, gradient,
-// why-chain, error catalog, unlock preview.
-
+/// Teach effect — the five tentacle entry points (DESIGN.md Ch 8). `mentl_default`
+/// projects the substrate for the developer: hover, gradient, why-chain, error catalog,
+/// unlock preview.
 effect Teach {
   teach_here(String, Span, Ty) -> ()                @resume=OneShot
   teach_gradient(Int) -> Option                     @resume=OneShot
@@ -94,11 +92,9 @@ effect Synth {
   enumerate_inhabitants(Ty, EffRow, Context) -> List @resume=MultiShot
 }
 
-// ═══ mentl_default — the substrate's self-projection ═══════════════
-// Reads the graph through GraphRead. Accumulates teach_here
-// entries so the driver can render them as hover info. Gradient and
-// why use the speculative oracle and reason DAG respectively.
-
+/// Default Teach handler — the substrate's self-projection. Reads the graph through
+/// GraphRead. Accumulates `teach_here` entries so the driver renders them as hover info.
+/// Gradient and why use the speculative oracle and reason DAG respectively.
 handler mentl_default with annotations = [] {
 
   teach_here(name, span, ty) =>
@@ -124,13 +120,9 @@ handler mentl_default with annotations = [] {
     resume(unlock_capability(annotation))
 }
 
-// ═══ The speculative oracle — gradient_next ════════════════════════
-// For each candidate annotation:
-//   checkpoint → tentative apply → run unification → record → rollback
-// Only PROVEN annotations reach the user. The trail (graph.nx) makes
-// this O(M) where M = mutations recorded. The developer gets
-// certainty, not guesses.
-
+/// Speculative oracle: for each candidate annotation, checkpoint → tentative apply →
+/// run unification → record → rollback. Only PROVEN annotations reach the user.
+/// The trail (graph.nx) makes this O(M) where M = mutations recorded.
 fn gradient_next(handle) = {
   let node = perform graph_chase(handle)
   let GNode(kind, _) = node
@@ -366,12 +358,9 @@ fn annotation_eq(a, b) with Pure = match a {
   ARef(_, _)     => match b { ARef(_, _)     => true, _ => false }
 }
 
-// ═══ The Why Engine — walk the reason DAG ══════════════════════════
-// Every unification, instantiation, subsumption wrote a Reason edge
-// into the graph. teach_why recurses through the chain, chasing
-// handle-valued reasons, until leaf reasons (Declared, Inferred,
-// MissingVar) terminate. Depth-limited to tolerate any residual cycle.
-
+/// Walk the reason DAG from a graph handle. Every unification, instantiation, and
+/// subsumption wrote a Reason edge into the graph; `why_expand` recurses through the chain
+/// until leaf reasons (Declared, Inferred, MissingVar) terminate. Depth-limited at 20.    // drift-audit: ignore — "cycles" referencing graph cycle detection, not deferred work
 fn why_from_handle(handle) = {
   let GNode(_, reason) = perform graph_chase(handle)
   why_expand(reason, 0)
@@ -412,11 +401,9 @@ fn why_expand(reason, depth) =
     _ => reason
   }
 
-// ═══ synth_enumerative — the default proposer ══════════════════════
-// Enumerates candidates; verifies each via checkpoint/rollback.
-// Handler fall-through: a caller can install ~> synth_llm inside
-// ~> synth_enumerative for LLM candidates to come first.
-
+/// Default Synth handler: enumerates candidates and verifies each via checkpoint/rollback.
+/// Handler fall-through: install `~> synth_llm` inside `~> synth_enumerative` to prepend
+/// alternative proposer candidates before enumeration.
 handler synth_enumerative {
 
   propose(target_ty, allowed_effects, context) => {
@@ -471,8 +458,7 @@ fn verify_each_loop(candidates, i, n, buf, buf_len) =
     }
   }
 
-// ═══ teach_synthesize — fill a hole with a proven candidate ════════
-
+/// Fill a typed hole with the first proven candidate from the Synth proposer chain.
 fn teach_synthesize(hole_handle, context) = {
   let GNode(kind, _) = perform graph_chase(hole_handle)
   match kind {
@@ -507,9 +493,7 @@ fn extract_row(ty) with Pure = match ty {
   TAlias(_, inner)  => extract_row(inner)
 }
 
-// ═══ Unlock mapping — the teaching payoff ══════════════════════════
-// "Add this annotation — get this capability."
-
+/// Map an annotation to the capability it unlocks: add this annotation, get this capability.
 fn unlock_capability(annotation) with Pure = match annotation {
   APure(_)          => CMemoize,
   ANotAlloc(_)      => CRealTime,
@@ -520,11 +504,8 @@ fn unlock_capability(annotation) with Pure = match annotation {
   ARef(_, _)        => CZeroCopy
 }
 
-// ═══ Error catalog — canonical summaries ═══════════════════════════
-// Every code has an entry at docs/errors/<code>.md. This surface
-// returns the one-line summary; teach_error returns the full
-// Explanation including the path into the catalog.
-
+/// One-line summary for an error code. Every code has a full entry at
+/// `docs/errors/<code>.md`; `teach_error` returns the full Explanation with that path.
 fn catalog_summary(code) = match code {
   "E_MissingVariable"     => "Variable not found in scope",
   "E_TypeMismatch"        => "Type mismatch",
@@ -548,7 +529,7 @@ fn catalog_summary(code) = match code {
   _ => "Unknown error code: " |> str_concat(code)
 }
 
-// ═══ Display — for driver rendering ════════════════════════════════
+// Display — for driver rendering
 
 fn render_explanation(exp) = {
   let Explanation(code, _md, summary, _fix, reason) = exp
@@ -578,7 +559,7 @@ fn show_capability(cap) with Pure = match cap {
   CDeterministicDrop   => "Deterministic drop (proven single use)"
 }
 
-// ═══ render_why — Located-aware Why Engine renderer (I18) ══════════
+// render_why — Located-aware Why Engine renderer (I18)
 // teach_why returns a Reason DAG. render_why walks it, emitting
 // one indented line per structural frame. Located(span, inner)
 // produces `<line:col-line:col>` at its depth; structured variants
@@ -635,7 +616,7 @@ fn render_why_at(reason, depth) =
 
     FnReturn(name, inner) =>
       indent_for(depth)
-        |> str_concat("return of '")
+        |> str_concat("return of '")    // drift-audit: ignore — string literal content, not a control keyword
         |> str_concat(name)
         |> str_concat("':\n")
         |> str_concat(render_why_at(inner, depth + 1)),

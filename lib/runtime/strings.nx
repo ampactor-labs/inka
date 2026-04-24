@@ -150,15 +150,13 @@ fn int_write_digits(buf, pos, n) with Memory + Alloc =
     int_write_digits(buf, new_pos, n / 10)
   }
 
-// ═══ Float conversion ══════════════════════════════════════════════
-
-// float_to_str: IEEE-754 aware decimal representation of a 64-bit float.
-// Handles NaN, +/-Infinity, -0.0, and normal/subnormal values.
-// Produces a human-readable decimal string with at most 17 significant
-// digits (enough for round-trip fidelity on f64).
-//
-// NOT an alias of int_to_str. Float and Int are distinct types with
-// distinct bit representations and distinct printing requirements.
+/// float_to_str — IEEE-754 aware decimal representation of a 64-bit
+/// float. Handles NaN, +/-Infinity, -0.0, and normal/subnormal values.
+/// Produces a human-readable decimal string with at most 17 significant
+/// digits (enough for round-trip fidelity on f64).
+///
+/// NOT an alias of int_to_str. Float and Int are distinct types with
+/// distinct bit representations and distinct printing requirements.
 fn float_to_str(f) with Memory + Alloc =
   if float_is_nan(f) { str_literal_5("NaN") }
   else if float_is_inf(f) {
@@ -340,10 +338,8 @@ fn push_digit(d, tail) with Memory + Alloc =
 fn digit_at(digits, i) with Memory =
   list_index(digits, i)
 
-// ═══ String → number parsing ═══════════════════════════════════════
-
-// parse_int: convert a decimal string to an integer.
-// Returns 0 on empty or non-numeric input. Handles leading '-'.
+/// parse_int — convert a decimal string to an integer. Returns 0 on
+/// empty or non-numeric input. Handles leading '-'.
 fn parse_int(s) with Memory =
   let slen = perform load_i32(s)
   if slen == 0 { 0 }
@@ -424,19 +420,14 @@ fn find_char_either(s, slen, start, ch1, ch2) with Memory =
     else { find_char_either(s, slen, start + 1, ch1, ch2) }
   }
 
-// ═══ String sets — sorted flat arrays + binary search ══════════════
+// String sets — sorted flat arrays + binary search.
 // The compiler operates on string-keyed sets in many places: effect
 // names, record fields, declared rows, capability lists, ownership
-// names. The invariant: every set is a flat (tag=0) list of unique
-// strings in lexicographic ascending order. Set operations preserve
-// that invariant and produce O(N+M) merges, O(log N) membership.
-//
-// W8.2 substrate: replaces the previous `list_head`/`list_tail` snoc
-// recursions with `++` output construction (concat-tag growth that
-// degrades subsequent reads to O(N²)). Now: flat in, flat out,
-// indexed access, sorted invariant, merge-discipline.
+// names. Every set is a flat (tag=0) list of unique strings in
+// lexicographic ascending order. Set operations preserve that
+// invariant and produce O(N+M) merges, O(log N) membership.
 
-// set_contains: O(log N) binary search over a sorted set.
+/// set_contains — O(log N) binary search over a sorted set.
 fn set_contains(set, target) with Memory =
   set_bsearch(set, target, 0, len(set))
 
@@ -628,11 +619,9 @@ fn set_disjoint_loop(a, b, i, n) with Memory =
   else if set_contains(b, list_index(a, i)) { false }
   else { set_disjoint_loop(a, b, i + 1, n) }
 
-// ═══ Underscore-stripping + base-parsing (amendments P + Q) ════════
-
-// strip_underscores: remove all underscore (95) bytes from a string.
-// Used by lex_from to normalize 1_000_000 → "1000000" before parsing.
-// Buffer-counter substrate: list_extend_to + list_set + counter + slice.
+/// strip_underscores — remove all underscore (95) bytes from a string.
+/// Used by lex_from to normalize 1_000_000 → "1000000" before parsing.
+/// Buffer-counter substrate: list_extend_to + list_set + counter + slice.
 fn strip_underscores(ref s) with Memory + Alloc = {
   let n = byte_len(s)
   let buf = make_list(n)

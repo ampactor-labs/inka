@@ -31,7 +31,7 @@ import types
 import effects
 import runtime/strings
 
-// ═══ graph_handler — the substrate handler ═════════════════════════
+// graph_handler — the substrate handler
 // State:
 //   nodes               — flat array indexed by handle
 //   trail               — flat mutation buffer (append forward, walk back on rollback)
@@ -225,7 +225,7 @@ handler graph_handler
   }
 }
 
-// ═══ Pure graph operations — the mechanism ═════════════════════════
+// Pure graph operations — the mechanism
 // Internal machinery the handler delegates to. All pure; all
 // deterministic; no effects.
 
@@ -330,7 +330,7 @@ fn graph_fill_free(own dst, start, cap) =
     )
   }
 
-// ═══ Occurs check ══════════════════════════════════════════════════
+// Occurs check
 // Before graph_bind(h, ty, r): walk ty for free handles containing h.
 // If found, inference emits E_OccursCheck and refuses. No silent
 // binding. No cycle except through explicit <~ feedback.
@@ -399,7 +399,7 @@ fn occurs_in_fields_loop(handle, ref fields, i, n) with !Mutate =
     else { occurs_in_fields_loop(handle, fields, i + 1, n) }
   }
 
-// ═══ Trail buffer — flat array + length counter ════════════════════
+// Trail buffer — flat array + length counter
 // Mirrors the nodes buffer substrate (DESIGN Ch 4 Salsa 3.0 shape).
 // Append via list_extend_to + list_set — O(1) amortized. Revert is
 // a backward flat-array loop, one list_set per step — O(M) exact.
@@ -433,7 +433,7 @@ fn trail_append(own trail, trail_len, own mutation) =
     |> list_extend_to(trail_len + 1)
     |> list_set(trail_len, mutation)
 
-// ═══ Overlay registration — flat-substrate per-module handle set ══
+// Overlay registration — flat-substrate per-module handle set
 // Three parallel arrays — names, bufs, lens — keyed by overlay index.
 // overlay_register_at writes into the current overlay's handles_buf
 // in O(1) amortized; overlay_find scans names only on graph_fork.
@@ -475,7 +475,7 @@ fn overlays_to_pairs_loop(ref names, ref bufs, ref lens, count, i, own acc) =
     )
   }
 
-// ═══ Effect-name set ops (H3.1) ═══════════════════════════════════
+// Effect-name set ops (H3.1)
 // merge_row routes through `name_set_union` from effects.nx — the
 // row entries are EffName values, not strings. Smart constructors
 // (mk_ef_closed, mk_ef_open) enforce sort invariant at construction,

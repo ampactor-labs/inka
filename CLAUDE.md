@@ -155,7 +155,7 @@ Two older framings existed:
 - **Four** (graph / handler / verb / row) — audited against only
   primitives 1–4. Worked for most work but left ownership,
   refinement, resume discipline, gradient, and Reason
-  un-interrogated. Deprecated.
+  un-interrogated. Historical.
 - **Nine** (with resume discipline as its own question) — briefly
   held when handlers and multi-shot were numbered as separate
   primitives. The 9→8 consolidation folds resume discipline into
@@ -531,7 +531,7 @@ Substrate."
 - `println` inside `report(...)` handler arms (corrupts WAT stdout).
 - Bare `==` on strings — use `str_eq(a, b)`. (Post-Ω.2, `str_eq`
   returns Bool; `if str_eq(a, b) { ... }` is the canonical form.
-  The deprecated `str_eq(a, b) == 1` shape is gone.) User generics
+  The `str_eq(a, b) == 1` shape is gone.) User generics
   are NOT instantiated per call-site; `TVar == TVar` codegens to
   pointer compare (works in Rust VM, fails in WASM on runtime-built
   strings).

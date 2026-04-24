@@ -20,7 +20,7 @@ phase of this plan is work on the kernel (cascade-level) or work
 composing handler projections from the kernel (Phase II and later).
 **Nothing in this plan exists without a kernel grounding.**
 
-The kernel, in shorthand: **(1)** SubstGraph + Env / **(2)** handlers
+The kernel, in shorthand: **(1)** Graph + Env / **(2)** handlers
 with typed resume discipline `@resume=OneShot|MultiShot|Either` /
 **(3)** five verbs `|> <| >< ~> <~` / **(4)** full Boolean effect
 algebra with negation / **(5)** ownership as effect / **(6)**
@@ -50,7 +50,7 @@ supersedes earlier framings. Append-only; do not rewrite history
 - **2026-04-20** — Bootstrap direction: **hand-written WAT**, not Rust/C translator. Hand-WAT image IS the reference soundness artifact (kept forever, not deleted).
 - **2026-04-20** — Four-pass audit sequence named: self-simulation → simplification → determinism → feature-usage, in that order, before hand-WAT.
 - **2026-04-21** — **File extension: `.nx`** (flat-typography two-letter form, phonetic match to "Inka" via the nk/ks sound, zero collision verified). Supersedes `.nx`. Full migration folded into simplification/restructure.
-- **2026-04-21** — **`SubstGraph` → `Graph`** ADT rename. The substrate IS a graph; naming it Graph aligns ADT with INSIGHTS crystallization #6 ("The Graph IS the Program"). Keeps `GraphRead` / `GraphWrite` effect names unchanged.
+- **2026-04-21** — **`Graph` → `Graph`** ADT rename. The substrate IS a graph; naming it Graph aligns ADT with INSIGHTS crystallization #6 ("The Graph IS the Program"). Keeps `GraphRead` / `GraphWrite` effect names unchanged.
 - **2026-04-21** — **`examples/` as a miscellany directory dissolves; curated teaching content remains as `lib/tutorial/`.** *(Revised within-day after drift audit.)* Earlier framing claimed `examples/` dissolves entirely; that overstated. The dissolution is: no `examples/` dumping ground; compiler's `src/` is the reference Inka program; stdlib's `lib/` is the canonical domain demonstration; integration projects (Pulse, a-day.md) live in separate repositories. **But curated teaching content IS substance** — "how to teach the eight primitives in order" — and lives at `lib/tutorial/` as 5–10 escalating `.nx` files that Mentl's Teach tentacle narrates over. The files are runnable Inka code, not documentation; Mentl projects them into a tutorial experience. Not a directory of demos; curriculum substrate.
 - **2026-04-21** — **`tests/` directory dissolves.** Training-pattern leak; tests dissolve via three collapses: (A) type system proves correctness directly (60-80% of peer-language tests disappear); (B) runnable behavior demonstrations ARE the stdlib + compiler source; (C) chaos/replay/fuzzing is handler swap via named entry-handlers declared at top-level in source. No `.test.nx` files anywhere. No separate test runner. `inka run . --with test_run` is the test invocation.
 - **2026-04-21** — **Entry-handler paradigm (NOT a dedicated file).** *(Revised within-day after drift audit.)* Earlier framing claimed `run.nx` as a dedicated entry-handler file. That was Makefile/package.json-shaped drift. Correct form: entry-handlers are normal handlers declared at top-level in `main.nx` (or any imported module). CLI `--with <name>` resolves by handler symbol through ordinary import — no special filename, no manifest file. `src/main.nx` declares `compile_run`, `test_run`, `deterministic_run`, `audit_run` inline alongside `fn main`; the CLI reads the requested name and wraps `main()` in the resolved handler before emit. Handlers are handlers. No new file category.
@@ -415,7 +415,7 @@ the corresponding walkthrough must respect.*
 - **Mentl's voice personhood:** first-person "I" used SPARINGLY — for refusals, multi-shot summaries, proof-chain walks only. Suggestions drop first-person ("Adding `!Alloc` unlocks CRealTime", not "I suggest..."). Human addressed as "you" (pair-programmer register, not "we"). Refusals are firm + proof-linked: "I won't — `own` at line 40 forbids. Two fixes type: [#fix1] [#fix2]."
 - **`lib/tutorial/` contents:** 9 files (00-08) keyed to kernel primitives:
   - `00-hello.nx` — minimum-teachable-subset (primitives 1 + 2 + 3)
-  - `01-graph.nx` — primitive 1 (SubstGraph + Env)
+  - `01-graph.nx` — primitive 1 (Graph + Env)
   - `02-handlers.nx` — primitive 2 (handlers + resume discipline)
   - `03-verbs.nx` — primitive 3 (five verbs)
   - `04-row.nx` — primitive 4 (Boolean effect algebra)
@@ -527,7 +527,7 @@ composition. Nothing remains as a separate substrate question.*
   (Σ phase, canonical syntax). Read them as declarative contracts;
   update them when the code teaches us something better.
   *(Restructure item 17' relocates to `docs/specs/00–11`; spec 00
-  retitled to `00-graph.md` reflecting `SubstGraph → Graph`.)*
+  retitled to `00-graph.md` reflecting `Graph → Graph`.)*
 - **Cascade walkthroughs.** `docs/specs/simulations/H*.md` — one per
   handle. Each resolves design before code freeze. Riffle-back
   addenda capture how prior decisions read in new substrate.
@@ -690,7 +690,7 @@ itself. 32+ are post-first-light surfaces.
 *All seven walkthroughs drafted 2026-04-21 in one focused session.*
 
 4. **📋 `NS-naming.md`** (naming-audit walkthrough). **`[LANDED 2026-04-21]`** — 560 lines.
-   - Covers: dot-access module convention (eliminates `module_fn` C-style prefixes); `lexer.nx`→`lex.nx` + `parser.nx`→`parse.nx` rename; `SubstGraph → Graph` ADT rename; effect-name normalization (`HostClock` merged into Clock; `IterativeContext` dissolved into row constraint); docstring consistency (canonical template per module); delete `SYNTHESIS_CROSSWALK.md`; modules-as-records inference extension.
+   - Covers: dot-access module convention (eliminates `module_fn` C-style prefixes); `lexer.nx`→`lex.nx` + `parser.nx`→`parse.nx` rename; `Graph → Graph` ADT rename; effect-name normalization (`HostClock` merged into Clock; `IterativeContext` dissolved into row constraint); docstring consistency (canonical template per module); delete `SYNTHESIS_CROSSWALK.md`; modules-as-records inference extension.
    - Gate for: item 11 simplification audit execution.
 
 5. **📋 `NS-structure.md`** (structural-reshape walkthrough). **`[LANDED 2026-04-21]`** — 662 lines.
@@ -731,7 +731,7 @@ itself. 32+ are post-first-light surfaces.
 
 11. **🧪⚙️ Simplification audit execution.**
     - Status: `[IN-FLIGHT]` — 11.A partial (smoke test landed); 11.B **LANDED 2026-04-21**; 11.C pending.
-    - Deliverable: every site in every `.nx` file rewritten to residue form per item 7's discipline. Includes: dot-access conversion (Finding 1 — ~548 `fn` declarations lose module prefixes; every call site rewritten); lex/parse rename; `SubstGraph → Graph` rename; effect-name normalization; delete SYNTHESIS_CROSSWALK.md; drift-mode audit per file.
+    - Deliverable: every site in every `.nx` file rewritten to residue form per item 7's discipline. Includes: dot-access conversion (Finding 1 — ~548 `fn` declarations lose module prefixes; every call site rewritten); lex/parse rename; `Graph → Graph` rename; effect-name normalization; delete SYNTHESIS_CROSSWALK.md; drift-mode audit per file.
     - Depends on: item 4 walkthrough, item 7 walkthrough.
     - Gate for: items 23–25 audits.
     - Expected diff: 10-20% line reduction in `src/`; higher in what was `std/runtime/`.
@@ -748,7 +748,7 @@ itself. 32+ are post-first-light surfaces.
         - `4bddfe4` — **11.C.1** buffer-counter sweep for 13 genuine tail-recursive accumulator loops (lower/cache/driver/infer/wasm).
         - **11.C.2** — `[PENDING WALKTHROUGH]`. Frame-record paired-list restructure at lower.nx:1177/78 (local_handles + local_order both `++ [x]` in handler-arm record update). Requires frame-record field restructure (list→buffer+counter pair) or introduction of O(1) snoc primitive. Walkthrough-worthy substrate design.
         - **11.C.3** — `[WALKTHROUGH LANDED 2026-04-21]` — see `docs/specs/simulations/HC-handler-composition.md`. Pattern locked: **transform emits; materialize captures; `~>` composes.** Prelude refactor (map_h / filter_h / take_h / skip_h re-yield; collector captures via buf+count; sum_h / count_h as peer materializers) ready for implementation. Pattern ripples to 11.C.2 (frame-record as OrderedMap materializer), 11.B.M (Diagnostic module-parameterized materializer), Hα (Arithmetic(mode) materializer), and MV.2 (tentacles transform; LSP surfaces materialize). **HC is upstream of 4 downstream handler-composition moves.**
-        - **11.C.4** — `[PENDING]`. Post-walkthrough bug-class screens: `_ => <fabricated>` sweep, `str_eq(a,b) == 1` deprecated form check, `println` in report arms audit. Currently drift-audit-clean; may surface during 11.D semantic pass.
+        - **11.C.4** — `[PENDING]`. Post-walkthrough bug-class screens: `_ => <fabricated>` sweep, `str_eq(a,b) == 1` Int-return anti-pattern check, `println` in report arms audit. Currently drift-audit-clean; may surface during 11.D semantic pass.
       - **11.D** — Pass 4 eight-interrogation audit (semantic).
       - **11.E** — Pass 5 docstring harmonization.
       - **11.F** — Cleanup (delete SYNTHESIS_CROSSWALK.md, etc.).
@@ -781,13 +781,13 @@ itself. 32+ are post-first-light surfaces.
         first commit inside 11.C; subsequent 11.C commits sweep the
         now-visible hits via buffer-counter substrate.
 
-12. **📖 DESIGN.md updates**: `SubstGraph → Graph` in §0.5 + Ch 4 (~40 refs); Ch 8 tentacle list verification; Ch 9.1 packaging rewrite (`.inka/` cache + `~>` as manifest); Ch 9.2 testing rewrite (entry-handler + `run.nx` paradigm; "no `tests/` directory" as substrate claim); Ch 9 examples-dissolution note; every Ch 10 scenario's file paths updated; extension `.nx → .nx` throughout.
+12. **📖 DESIGN.md updates**: `Graph → Graph` in §0.5 + Ch 4 (~40 refs); Ch 8 tentacle list verification; Ch 9.1 packaging rewrite (`.inka/` cache + `~>` as manifest); Ch 9.2 testing rewrite (entry-handler + `run.nx` paradigm; "no `tests/` directory" as substrate claim); Ch 9 examples-dissolution note; every Ch 10 scenario's file paths updated; extension `.nx → .nx` throughout.
 
-13. **📖 INSIGHTS.md updates**: kernel shorthand `SubstGraph → Graph`; any `std/compiler/` path refs; extension throughout.
+13. **📖 INSIGHTS.md updates**: kernel shorthand `Graph → Graph`; any `std/compiler/` path refs; extension throughout.
 
-14. **📖 CLAUDE.md updates**: Mentl's anchor kernel refs `SubstGraph → Graph`; interrogation #1 refs; file map (every `std/compiler/X.nx` → `src/X.nx`); file-extension line (`.nx` → `.nx`); bug-classes path refs.
+14. **📖 CLAUDE.md updates**: Mentl's anchor kernel refs `Graph → Graph`; interrogation #1 refs; file map (every `std/compiler/X.nx` → `src/X.nx`); file-extension line (`.nx` → `.nx`); bug-classes path refs.
 
-15. **📖 README.md updates**: kernel enumeration `SubstGraph → Graph`; Repository layout rewritten to six-directory template; extension `.nx → .nx`.
+15. **📖 README.md updates**: kernel enumeration `Graph → Graph`; Repository layout rewritten to six-directory template; extension `.nx → .nx`.
 
 16. **📖 SYNTAX.md updates**: file extension throughout; entry-handler declaration form (new section: `handler name_run { ~> stack }`); `Test` effect interaction; layout + token refs where `.nx` appears.
 
@@ -796,10 +796,10 @@ itself. 32+ are post-first-light surfaces.
 18. **📖 errors/README.md updates**: extension; any file refs.
 
 19. **📖 Per-spec files `docs/specs/00-11`**: 
-    - `00-substgraph.md` retitled to `00-graph.md`; body rewritten to use `Graph`.
+    - `00-graph.md` retitled to `00-graph.md`; body rewritten to use `Graph`.
     - Cross-spec references to old paths updated.
     - Extension `.nx → .nx` in all examples.
-20. **📖 All walkthroughs `docs/specs/simulations/`**: `HB`, `H1-H6`, `H2.3`, `H3.1`, `FS`, `IC`, `MV`, `TS` — each scanned for `SubstGraph`, `std/compiler/` paths, `.nx` extension; updated.
+20. **📖 All walkthroughs `docs/specs/simulations/`**: `HB`, `H1-H6`, `H2.3`, `H3.1`, `FS`, `IC`, `MV`, `TS` — each scanned for `Graph`, `std/compiler/` paths, `.nx` extension; updated.
 
 21. **📖 `docs/traces/a-day.md`**: extension `.nx → .nx` and any path refs.
 
@@ -807,8 +807,8 @@ itself. 32+ are post-first-light surfaces.
     - `MEMORY.md` index: extension / path refs.
     - `project_canonical_docs.md`: path refs.
     - `project_extension_ka.md`: REWRITE (or delete + new memory `project_extension_nx.md`) for `.nx`.
-    - `project_mentl_voice_reframe.md`: `SubstGraph` refs.
-    - Every other memory scanned for path / SubstGraph / extension refs.
+    - `project_mentl_voice_reframe.md`: `Graph` refs.
+    - Every other memory scanned for path / Graph / extension refs.
 
 ---
 
@@ -1132,7 +1132,7 @@ intersection, `!` negation, `Pure` empty. Strictly more powerful than
 Rust + Haskell + Koka + Austral combined (INSIGHTS.md). No other
 language has effect negation.
 
-**Inference IS the product.** The SubstGraph + Env IS the program.
+**Inference IS the product.** The Graph + Env IS the program.
 Source, WAT, docs, LSP, diagnostics — all projections via handlers.
 "Passes" dissolve into observers on one graph (INSIGHTS.md).
 
@@ -1230,7 +1230,7 @@ The kernel adds what no existing medium holds in one substrate:
   `~>` `<~`. `<~` feedback is genuine novelty: no other language
   makes back-edges visible, checkable, and optimizable.
 - **The graph IS the program** — every output (source, WAT, docs,
-  LSP, diagnostics) a handler projection on one SubstGraph + Env.
+  LSP, diagnostics) a handler projection on one Graph + Env.
 - **Handler-chain-as-capability-stack** — `~>` ordering is a trust
   hierarchy, compiler-audited. Outermost = least trusted.
 - **Eight-primitive kernel 1-to-1-to-1 with eight interrogations
@@ -1706,7 +1706,7 @@ Per-module caching via `.kai` interface files + Salsa 3 overlay.
 
 - **F-note:** `incremental-compilation.md` (153 lines, detailed)
 - **Research:** Salsa 3.0, Grove POPL 2025, Polonius 2026 alpha.
-- **Spec:** 00-substgraph.md (graph_fork, epoch overlay).
+- **Spec:** 00-graph.md (graph_fork, epoch overlay).
 
 **What it unlocks:**
 - Sub-second recompilation for large codebases.
@@ -2285,7 +2285,7 @@ only. Opus 4.6, you are the planner. Do not skip sections because
 
 **§1 Session Zero stub (3-5 sentences).** Pre-filled template:
 > This edit lands inside [handle / module]. The medium here is the
-> [SubstGraph / Env / handler chain / LowIR] already carrying [what].
+> [Graph / Env / handler chain / LowIR] already carrying [what].
 > The one mechanism — graph + handler — means [how it hosts this
 > without new substrate]. The verb drawing this topology is [`|>` /
 > `<|` / `><` / `~>` / `<~`] because [reason]. Mentl, as oracle,
@@ -2301,7 +2301,7 @@ for this work, the plan is premature; write the walkthrough first.
 primitive; see `CLAUDE.md` §"Mentl's anchor" for the canonical
 framing. Four-question and nine-question earlier forms are
 superseded.)
-- **Graph?** What handle / edge / Reason in SubstGraph + Env already
+- **Graph?** What handle / edge / Reason in Graph + Env already
   encodes this?
 - **Handler?** What installed handler projects this — and with what
   resume discipline (`@resume=OneShot|MultiShot|Either`)?

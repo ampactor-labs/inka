@@ -27,7 +27,7 @@ at its most direct.
 tokens. The parser (parser.nx:75, 147) recognizes them. But the
 parser does NOT attach the docstring to the following declaration.
 The `FnStmt` (types.nx:503-504) has no docstring field. The typed
-AST has no docstring edge. The SubstGraph has no docstring Reason.
+AST has no docstring edge. The Graph has no docstring Reason.
 
 The docstring is born in the token stream and dies before it reaches
 the graph. Mentl's Teach tentacle cannot read "Idempotent across

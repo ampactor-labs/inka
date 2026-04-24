@@ -182,7 +182,7 @@ the Fork deny/copy logic.
 
 ---
 
-## Interaction with SubstGraph
+## Interaction with Graph
 
 The graph tracks type + row variables; it does NOT track ownership.
 Ownership is a static structural property of the Ty ADT

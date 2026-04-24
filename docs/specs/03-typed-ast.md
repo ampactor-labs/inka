@@ -2,12 +2,12 @@
 
 **Purpose.** The AST data structure the frontend produces and the
 backend consumes. Every node carries a `TypeHandle` (Int index into
-the SubstGraph from spec 00) and a full `Span`, not a point. Type
+the Graph from spec 00) and a full `Span`, not a point. Type
 resolution is always a live chase via `LookupTy` — never a cached Ty
 field.
 
 **Kernel primitives implemented:** #1 (every AST node handle is a
-SubstGraph handle), #8 (productive-under-error — `NErrorHole`
+Graph handle), #8 (productive-under-error — `NErrorHole`
 placeholders let the walk continue). Also carries the surface for
 #3 (the five verbs as `PipeKind`).
 
@@ -26,7 +26,7 @@ type Span
   = Span(Int, Int, Int, Int)    // start_line, start_col, end_line, end_col
 
 type Node
-  = N(NodeBody, Span, Int)      // body, span, TypeHandle into SubstGraph
+  = N(NodeBody, Span, Int)      // body, span, TypeHandle into Graph
 
 type NodeBody
   = NExpr(Expr)

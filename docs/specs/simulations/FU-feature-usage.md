@@ -41,7 +41,7 @@ Scan of `std/compiler/*.nx` + `std/compiler/backends/*.nx` + `std/prelude.nx`
 
 | # | Primitive | Status | Evidence |
 |---|-----------|--------|----------|
-| 1 | SubstGraph + Env | ✓ used | graph.nx, infer.nx, driver.nx |
+| 1 | Graph + Env | ✓ used | graph.nx, infer.nx, driver.nx |
 | 2 | Handlers with resume discipline | ✓ used (OneShot only) | ~20 top-level handlers in clock.nx / graph.nx / infer.nx etc. |
 | 2a | MultiShot resume | 1 decl (mentl.nx:94 `enumerate_inhabitants`) | Mentl's op; never actually invoked from compiler source |
 | 2b | Parameterized effects | **0 uses** | no `effect Name(arg) { ... }` in compiler |

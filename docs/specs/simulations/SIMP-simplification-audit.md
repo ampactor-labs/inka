@@ -64,7 +64,7 @@ In addition to the nine, every site screened for:
 
 - **`_ => <fabricated>`** in match arms over load-bearing ADTs (Ty, NodeBody, LowExpr, EffRow, Reason, EntryHandlerInvocation, etc.). Safe: `_ => ()`, `_ => 0`, `_ => identity_preserve_value`, `_ => type_mismatch(...)`. Dangerous: `_ => Forall([], TVar(handle))`, `_ => "Pure"`, `_ => FakeConstructor(...)`.
 - **`acc ++ [x]` in loops** — O(N²) allocation; replace with buffer-counter substrate.
-- **`if str_eq(a, b) == 1`** — post-Ω.2 deprecated; replace with `if str_eq(a, b) { ... }`.
+- **`if str_eq(a, b) == 1`** — Int-return shape from before Ω.2; `str_eq` returns `Bool` post-Ω.2. Use `if str_eq(a, b) { ... }`. The `== 1` form is drift, not a prior canonical.
 - **Flat-array list ops in Snoc-tree paths** (`list[i]` in a loop) — use `list_to_flat` at hot-path entrances.
 - **`println` inside `report(...)` handler arms** — corrupts WAT stdout.
 - **Bare `==` on strings** — use `str_eq(a, b)`.
@@ -80,7 +80,7 @@ Simplification executes across the full `src/` + `lib/` tree. Single-pass-per-fi
 ### Pass 1 — Naming sweep (rides NS-naming)
 
 Applies NS-naming.md's rewrite rules mechanically:
-- `SubstGraph → Graph` ADT rename
+- `Graph → Graph` ADT rename
 - `module_fn()` → `module.fn()` or selective-import bare calls
 - `HostClock → Clock`, `IterativeContext → row constraint`
 - `lexer.nx → lex.nx`, `parser.nx → parse.nx` (files renamed; imports follow)
@@ -197,7 +197,7 @@ Every rewrite should leave a Reason in the graph if the rewrite is applied via a
 Item 11's execution lands as a sequence of commits (each auditable + revertable):
 
 **Commit 11.A — Pass 1 naming sweep** (mechanical; largest diff):
-- `SubstGraph → Graph`
+- `Graph → Graph`
 - Module function prefix → dot-access (or selective import for hot paths)
 - `HostClock → Clock`, `IterativeContext` dissolution
 - File renames

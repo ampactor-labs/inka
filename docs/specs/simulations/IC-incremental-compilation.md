@@ -55,7 +55,7 @@ question it already answered.
 The cascade closed having BUILT for this. Specifically:
 
 - **`graph.nx`'s shape is Salsa 3.0.** Flat array + epoch +
-  per-module overlays. The `SubstGraph(nodes, epoch, next, overlays)`
+  per-module overlays. The `Graph(nodes, epoch, next, overlays)`
   ADT carries `overlays: [(module_name, [handle])]` — one slot per
   module, ready for fork.
 - **`graph_fork(name)` is in spec 00.** Not yet plumbed by a driver,
@@ -155,7 +155,7 @@ When module A imports module B:
   resolves `env_lookup("B_function")` to B's exported scheme.
 - The Scheme's TVar handles refer to B's overlay handles. When A's
   inference reads the type, it chases through B's overlay slot in
-  the SubstGraph. The overlay segregation means B's handle 47 and
+  the Graph. The overlay segregation means B's handle 47 and
   A's handle 47 are different nodes; chase resolves correctly via
   the overlay name embedded in the handle (or via the
   `current_overlay_idx` discipline already in graph.nx).

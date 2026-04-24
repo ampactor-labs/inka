@@ -2,7 +2,7 @@
 
 **Purpose.** A single walk over the AST, classic Hindley-Milner with
 Damas-Milner let-generalization, that writes bindings directly into
-the SubstGraph (spec 00) as it encounters them. Every expression
+the Graph (spec 00) as it encounters them. Every expression
 contributes bindings or binds a handle; every FnStmt generalizes.
 Types, effects, and ownership all fall out of this one walk.
 
@@ -35,7 +35,7 @@ fn generalize(fn_node) -> Scheme // quantifies free TVars at FnStmt
 
 One pass. No separate "check" vs "infer" phases. Outputs are a typed
 AST (handles populated in graph) and an updated Env. The subst does
-not escape as a sidecar value — downstream passes read the SubstGraph
+not escape as a sidecar value — downstream passes read the Graph
 directly through `graph_chase`. There is no `(env, subst)` tuple
 threaded between passes.
 
@@ -52,10 +52,10 @@ type Env
 ```
 
 **Env is effect-mediated (spec 06: `EnvRead` + `EnvWrite`).** Peer
-with the SubstGraph — both are ambient post-inference knowledge read
+with the Graph — both are ambient post-inference knowledge read
 through effects, not threaded as arguments. Inference declares
-`with EnvRead + EnvWrite + SubstGraphRead + SubstGraphWrite + …`;
-lowering and query declare `with EnvRead + SubstGraphRead` only.
+`with EnvRead + EnvWrite + GraphRead + GraphWrite + …`;
+lowering and query declare `with EnvRead + GraphRead` only.
 Writer isolation is structural (one writer per kind).
 
 - `env_empty`, `env_with_source`, `env_with_primitives` — initial

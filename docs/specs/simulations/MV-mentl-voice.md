@@ -28,7 +28,7 @@ Earlier framings in this document treated Mentl as reading from
 shorter or differently-numbered lists (4, then 9). Locked at eight;
 each primitive is one of Her tentacles:
 
-- **SubstGraph + Env (primitive 1 · tentacle Query)** — the universal substrate She projects.
+- **Graph + Env (primitive 1 · tentacle Query)** — the universal substrate She projects.
 - **Handlers with typed resume discipline (2 · Propose)** — what She proposes wrapping code in (AWrapHandler); what She reads to understand capability stacks; **the MultiShot-typed arms are how She explores hundreds of alternate realities per second** under trail-based rollback.
 - **Five verbs (3 · Topology)** — the topology She speaks about (recommending `|>` over nested calls; noticing when `<|` would be wrong for `own`).
 - **Boolean effect algebra (4 · Unlock)** — what She subtracts, subsumes, negates; how She names capability unlocks (`!Alloc` unlocks `CRealTime`).
@@ -362,7 +362,7 @@ What persists turn to turn in a REPL session:
 ```
 type Session
   = Session(
-      SubstGraph,           // live graph (the program state)
+      Graph,           // live graph (the program state)
       Env,                  // live env
       Cursor,               // cursor-of-attention (a Handle)
       VoiceRing,            // recent VoiceLines (for silence predicate)

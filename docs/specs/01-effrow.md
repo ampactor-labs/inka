@@ -88,7 +88,7 @@ One function: `unify_row(a, b, reason) -> ()`. Writes through
 | Open(A, v₁)    | Open(B, v₂)    | if v₁=v₂: unify A/B as sets; else bind v₁→Open(B−A, v₂) |
 | Neg / Sub / Inter | any          | normalize LHS first, then re-dispatch                |
 
-Effect-row variable handles live in the same SubstGraph as type
+Effect-row variable handles live in the same Graph as type
 variables (spec 00). Unification writes through the same
 `graph_bind_*` ops.
 

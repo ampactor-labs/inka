@@ -4,7 +4,7 @@
 surface. Mentl is the collective noun for the set of handlers on the
 shared inference substrate — gradient, Why Engine, error catalog,
 suggest, LSP hover, verification-obligation surface. Each is one of
-Mentl's tentacles; the shared substrate is the SubstGraph + Env
+Mentl's tentacles; the shared substrate is the Graph + Env
 (specs 00, 04) read through effects.
 
 **Kernel primitives implemented:** #7 (continuous annotation gradient
@@ -44,7 +44,7 @@ tentacles.
 
 ```
                        ╔══════════════════════════════╗
-                       ║   SubstGraph + Env + Ty      ║
+                       ║   Graph + Env + Ty      ║
                        ║   (shared inference substrate)║
                        ╚══════════════════════════════╝
                                       │
@@ -69,13 +69,13 @@ making with zero contention.
 
 | Tentacle | Handler | Reads | Phase landed |
 |---|---|---|---|
-| **Compile** | `emit_wasm` | `SubstGraphRead + LookupTy` | Phase 1 |
+| **Compile** | `emit_wasm` | `GraphRead + LookupTy` | Phase 1 |
 | **Check** | `check_pipeline` | `Diagnostic` | Phase 1 |
-| **Query** | `query_default` | `SubstGraphRead + EnvRead + FreshHandle` | **Phase 1** |
-| **Why** | `why_default` | `SubstGraphRead + EnvRead` | F.6 (formalize) |
-| **Teach** | `mentl_default` | `SubstGraphRead + EnvRead + Teach` | F.6 |
+| **Query** | `query_default` | `GraphRead + EnvRead + FreshHandle` | **Phase 1** |
+| **Why** | `why_default` | `GraphRead + EnvRead` | F.6 (formalize) |
+| **Teach** | `mentl_default` | `GraphRead + EnvRead + Teach` | F.6 |
 | **Hover** | `lsp_hover` | `Query + Why` | F.2 |
-| **Verify** | `verify_ledger` → `verify_smt` | `SubstGraphRead + Verify` | Phase 1, F.1 |
+| **Verify** | `verify_ledger` → `verify_smt` | `GraphRead + Verify` | Phase 1, F.1 |
 | **Suggest** | `synth_default` | `Synth + Verify` | F.1 / F.2 |
 
 Eight. If a ninth emerges (doc extraction, visualization), it fits

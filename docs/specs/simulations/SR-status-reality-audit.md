@@ -155,7 +155,7 @@ matches code.
 | Hand-written WAT bootstrap decision | **REAL (decision)** | PLAN 2026-04-20 entry stands |
 | Four-pass audit sequence | **REAL (documented)** | SIMP + DET + FU + self-simulation walkthroughs present |
 | `.nx` file extension | **REAL** | Per §1.4 |
-| `SubstGraph` → `Graph` rename | **REAL** | grep finds 0 `SubstGraph` in code (except 2 doc-comment mentions in types.nx); `type Graph` is active |
+| `Graph` → `Graph` rename | **REAL** | grep finds 0 `Graph` in code (except 2 doc-comment mentions in types.nx); `type Graph` is active |
 | `examples/` dissolves; `lib/tutorial/` remains | **PARTIAL (SUBSTRATE-DRIFT)** | `examples/` absent ✓; `lib/tutorial/` exists ✓ BUT tutorial files are empty 1-line stubs ✗. "9-file curriculum" not actually written. |
 | `tests/` dissolves | **REAL** | No `tests/` directory in repo |
 | Entry-handler paradigm NOT dedicated file | **REAL (spec)** | EH walkthrough specifies top-level handlers, not dedicated file |

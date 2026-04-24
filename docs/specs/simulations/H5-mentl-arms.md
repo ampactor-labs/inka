@@ -49,7 +49,7 @@ fn pipeline(source) =
 ```
 
 The pipeline attaches three handlers. `diagnostics_handler`
-reports to stderr. `graph_handler` mutates the SubstGraph.
+reports to stderr. `graph_handler` mutates the Graph.
 `env_handler` scopes env. What's the cumulative capability set?
 
 **Mentl's I17 audit:**

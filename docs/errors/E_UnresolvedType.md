@@ -7,7 +7,7 @@
 ## Summary
 
 Lowering encountered a TypeHandle that chases to `NFree` (unbound
-TVar) in the SubstGraph — meaning inference completed but failed to
+TVar) in the Graph — meaning inference completed but failed to
 populate this handle.
 
 ## Why it matters

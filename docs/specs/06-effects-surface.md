@@ -48,7 +48,7 @@ effect Infer {
 ```
 
 The `infer.nx` module hosts the handler for these ops; underneath,
-the handler performs SubstGraph ops.
+the handler performs Graph ops.
 
 ### Diagnostic
 
@@ -159,22 +159,22 @@ algebra. `<~` (spec 10) requires one as iterative context.
 
 ## New effects
 
-### SubstGraphRead (spec 00)
+### GraphRead (spec 00)
 
 ```lux
-effect SubstGraphRead {
+effect GraphRead {
   graph_chase(Int) -> GNode                  @resume=OneShot
   graph_epoch() -> Int                       @resume=OneShot
   graph_reason_edge(Int, Int) -> Reason      @resume=OneShot
-  graph_snapshot() -> SubstGraph             @resume=OneShot
+  graph_snapshot() -> Graph             @resume=OneShot
   graph_push_checkpoint() -> Int             @resume=OneShot
 }
 ```
 
-### SubstGraphWrite (spec 00)
+### GraphWrite (spec 00)
 
 ```lux
-effect SubstGraphWrite {
+effect GraphWrite {
   graph_fresh_ty(Reason) -> Int              @resume=OneShot
   graph_fresh_row(Reason) -> Int             @resume=OneShot
   graph_bind(Int, Ty, Reason) -> ()          @resume=OneShot
@@ -191,7 +191,7 @@ declares both; lowering and query declare Read only. See spec 00.
 surface that powers Mentl's oracle loop (spec 09): capture trail
 length, apply tentative writes, roll back to restore the graph. The
 checkpoint itself is read-only (it returns the current trail length
-without mutating), so `SubstGraphRead` exposes it; only `rollback`
+without mutating), so `GraphRead` exposes it; only `rollback`
 writes.
 
 ### EnvRead (spec 04)
@@ -213,7 +213,7 @@ effect EnvWrite {
 }
 ```
 
-Peer of SubstGraph: Read/Write split, effect-mediated, one writer.
+Peer of Graph: Read/Write split, effect-mediated, one writer.
 Inference declares both; lowering and query declare `with EnvRead`
 only.
 
@@ -350,7 +350,7 @@ effect HostClock {
 
 - `Diagnostic` default `stderr_diagnostics`; LSP overrides `json_diagnostics`. One active.
 - `LookupTy` has one handler (`lookup_ty_graph`, spec 05).
-- `SubstGraph` / `Env` compose via fork (spec 00 / spec 04).
+- `Graph` / `Env` compose via fork (spec 00 / spec 04).
 - `Consume` `affine_ledger` installs per-FnStmt.
 - `perform report` inside a `with !Diagnostic` handler → type error.
 - Any Write from a Read-only handler → type error.

@@ -14,7 +14,7 @@ Every form below exists to make one primitive of the kernel (DESIGN.md §0.5) re
 
 | # | Kernel primitive                                    | Tentacle   | Surface form                                                    |
 |---|-----------------------------------------------------|------------|-----------------------------------------------------------------|
-| 1 | SubstGraph + Env                                    | Query      | AST nodes implicit; `import` brings module envs together         |
+| 1 | Graph + Env                                    | Query      | AST nodes implicit; `import` brings module envs together         |
 | 2 | Handlers with typed resume discipline               | Propose    | `effect`, `handler`, `handle`/`~>`, `perform`, `resume`; `@resume=OneShot \| MultiShot \| Either` on effect ops |
 | 3 | Five verbs                                          | Topology   | `\|>`  `<\|`  `><`  `~>`  `<~` with canonical layout             |
 | 4 | Full Boolean effect algebra (`+ - & ! Pure`)        | Unlock     | `with E1 + !E2 + Pure` in fn sigs, handler sigs, types           |
@@ -312,7 +312,7 @@ Match arms are `pattern => body`. **Match arms ARE pattern-dispatched lambdas** 
 |acc, x| acc + x
 ```
 
-Diagnostic: **`E_DeprecatedLambdaFence`** with Quick Fix rewriting `|params| body` → `(params) => body`.
+Diagnostic: **`E_LambdaFence`** with Quick Fix rewriting `|params| body` → `(params) => body`.
 
 ```
 // REJECTED — `fn` keyword on anonymous lambda:

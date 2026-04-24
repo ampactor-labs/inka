@@ -12,7 +12,7 @@ costs Mentl a tentacle. See DESIGN.md §0.5 for the authoritative
 enumeration; the list below is the shorthand every other insight
 composes from.*
 
-1. **SubstGraph + Env** — the program IS the graph; every output is a handler projection. *(Mentl tentacle: **Query**.)*
+1. **Graph + Env** — the program IS the graph; every output is a handler projection. *(Mentl tentacle: **Query**.)*
 2. **Handlers with typed resume discipline** — `handle`/`resume` replaces six+ named patterns; `@resume=OneShot|MultiShot|Either` is part of each op's type; MultiShot is the substrate Mentl's oracle uses to explore hundreds of alternate realities per second; `~>` chains ARE capability stacks. *(Tentacle: **Propose**.)*
 3. **Five verbs** — `|>` `<|` `><` `~>` `<~` — topologically complete basis for computation graphs. *(Tentacle: **Topology**.)*
 4. **Full Boolean effect algebra** — `+ - & ! Pure`; negation (`!E`) proves ABSENCE; four compilation gates fall out of one subsumption. *(Tentacle: **Unlock**.)*
@@ -650,7 +650,7 @@ of one claim.
 
 | Feature | Topology | Read through handler |
 |---|---|---|
-| Inference | SubstGraph + Env | `graph_chase`, `env_lookup` |
+| Inference | Graph + Env | `graph_chase`, `env_lookup` |
 | Effects | Boolean row algebra | each effect's installed handler |
 | Ownership | Consume trace | `affine_ledger` |
 | Data flow | Five-verb graph (`\|>` `<\|` `><` `~>` `<~`) | the pipe's lowering |
@@ -1529,9 +1529,9 @@ checks, no policy files, no sandboxing library.
 
 ```lux
 source |> compile
-    ~> mentl_default         // can perform: Diagnostic, SubstGraphRead, EnvRead, Verify
-    ~> verify_ledger_handler // can perform: Diagnostic, SubstGraphRead, EnvRead
-    ~> env_handler           // can perform: Diagnostic, SubstGraphRead
+    ~> mentl_default         // can perform: Diagnostic, GraphRead, EnvRead, Verify
+    ~> verify_ledger_handler // can perform: Diagnostic, GraphRead, EnvRead
+    ~> env_handler           // can perform: Diagnostic, GraphRead
     ~> graph_handler         // can perform: Diagnostic
     ~> diagnostics_handler   // can perform: nothing (outermost — Pure boundary)
 ```
@@ -1545,7 +1545,7 @@ outside the graph handler and the same perform is a type error.
 
 **This is a security model.** If you want to sandbox a plugin so it can
 read the graph but never write it, install it inside `graph_handler`
-with only `SubstGraphRead` in its declared effect row. The compiler
+with only `GraphRead` in its declared effect row. The compiler
 proves the sandbox is airtight. Not with tests. Not with audits. With
 the type system. One mechanism.
 
@@ -1696,7 +1696,7 @@ source
     |> frontend
     |> infer_program
     ~> env_handler           // catches EnvRead/Write from ALL above
-    ~> graph_handler         // catches SubstGraph* from ALL above
+    ~> graph_handler         // catches Graph* from ALL above
     ~> diagnostics_handler   // catches Diagnostic from ALL above
 ```
 
@@ -1863,10 +1863,10 @@ table applied to the compilation pipeline itself.*
 Source code is one projection. WAT is another. Documentation is
 another. LSP hover info is another. Error messages are another. The
 **program itself** — in its most complete representation — is the
-SubstGraph + Env populated by inference.
+Graph + Env populated by inference.
 
 ```
-                   SubstGraph + Env
+                   Graph + Env
                    (the universal representation)
                           │
           ┌───────┬───────┼───────┬───────┬───────┐

@@ -1,7 +1,7 @@
 # E_OccursCheck
 
 **Kind:** Error
-**Emitted by:** SubstGraph bind (spec 00 invariant 1)
+**Emitted by:** Graph bind (spec 00 invariant 1)
 **Applicability:** MaybeIncorrect
 
 ## Summary

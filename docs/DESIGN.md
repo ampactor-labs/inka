@@ -118,7 +118,7 @@ it IS the architecture. Eight primitives ↔ eight interrogations
 (what Mentl surfaces per turn). One kernel expressed at three
 levels.
 
-1. **SubstGraph + Env as universal representation.** The program
+1. **Graph + Env as universal representation.** The program
    IS the graph — flat-array handles, O(1) chase, epoch-versioned,
    trail-based checkpoint/rollback. Every output (WAT, hover,
    diagnostic, audit, Mentl's voice) is a handler projection.
@@ -283,7 +283,7 @@ tentacle. The mascot IS the architecture.**
 
 | # | Primitive (what the medium is BUILT from)        | Interrogation (what the programmer asks before each line) | Tentacle (what Mentl surfaces as voice)        |
 |---|--------------------------------------------------|------------------------------------------------------------|------------------------------------------------|
-| 1 | SubstGraph + Env                                 | **Graph?** — what handle/edge/Reason already encodes this? | **Query** — render what the graph knows here  |
+| 1 | Graph + Env                                 | **Graph?** — what handle/edge/Reason already encodes this? | **Query** — render what the graph knows here  |
 | 2 | Handlers with typed resume discipline            | **Handler?** — which installed handler (and with what resume discipline) already projects this? | **Propose** — `AWrapHandler`; hole-fill via MultiShot oracle |
 | 3 | Five verbs                                       | **Verb?** — which of `\|>` `<\|` `><` `~>` `<~` draws this topology? | **Topology** — suggest a pipe chain over nested calls |
 | 4 | Full Boolean effect algebra                      | **Row?** — what `+ - & ! Pure` constraint already gates this? | **Unlock** — "adding `!E` unlocks capability C" |
@@ -391,14 +391,14 @@ surface observation. The deeper claim is structural:
 
 ### The graph IS the program
 
-Every Inka compilation produces a substrate — `SubstGraph + Env` —
+Every Inka compilation produces a substrate — `Graph + Env` —
 that contains every type, every effect row, every ownership marker,
 every reason, every binding the program ever established. Every
 *output* the compiler produces is a handler projection of that
 substrate.
 
 ```
-                          SubstGraph + Env
+                          Graph + Env
                    (the universal representation)
                                  │
          ┌───────┬───────┬───────┼───────┬───────┬───────┐
@@ -649,7 +649,7 @@ hierarchy. Reading top-to-bottom (i.e., inner-to-outer):
 
 This is a security model. If you want a plugin that reads the graph
 but cannot write it, install it inside `graph_handler` with only
-`SubstGraphRead` in its declared effect row. The sandbox is not
+`GraphRead` in its declared effect row. The sandbox is not
 enforced by runtime policy, not by audit, not by inspection. It is
 airtight by type.
 
@@ -961,7 +961,7 @@ Every consumer of that knowledge is a handler:
 One inference. Many handlers. Same mechanism as everything else in
 Inka.
 
-### The SubstGraph
+### The Graph
 
 The substrate is a flat-array graph:
 
@@ -976,8 +976,8 @@ type NodeKind
 type GNode
   = GNode(NodeKind, Reason)  // every node carries its justification
 
-type SubstGraph
-  = SubstGraph(List, Int, Int, List)
+type Graph
+  = Graph(List, Int, Int, List)
 //               │    │    │    └─ per-module overlays
 //               │    │    └────── next fresh handle
 //               │    └─────────── epoch counter
@@ -1028,14 +1028,14 @@ that grounds all of them.
 Every type read in the compiler goes through the same effect:
 
 ```
-effect SubstGraphRead {
+effect GraphRead {
     graph_chase(Int) -> GNode
     graph_epoch() -> Int
     graph_reason_edge(Int, Int) -> Reason
-    graph_snapshot() -> SubstGraph
+    graph_snapshot() -> Graph
 }
 
-effect SubstGraphWrite {
+effect GraphWrite {
     graph_fresh_ty(Reason) -> Int
     graph_bind(Int, Ty, Reason) -> ()
     graph_fork(String) -> ()
@@ -1062,13 +1062,13 @@ mirror of it.
 ### Writer isolation by effect row
 
 ```
-inference declares  with SubstGraphRead + SubstGraphWrite + ...
-lowering declares   with SubstGraphRead                    + ...
-query declares      with SubstGraphRead                    + ...
+inference declares  with GraphRead + GraphWrite + ...
+lowering declares   with GraphRead                    + ...
+query declares      with GraphRead                    + ...
 ```
 
 A `perform graph_bind` inside the lowering handler stack fails
-type-check at handler install — because `SubstGraphWrite` is not in
+type-check at handler install — because `GraphWrite` is not in
 the available effect row. **"One writer" is not policy. It is
 structural.** The Boolean effect algebra gates the invariant at
 compile time. Runtime enforcement is unnecessary because runtime
@@ -1716,7 +1716,7 @@ one graph, each surfacing what one primitive wants to say.
 
 ```
                 ╔═══════════════════════════════════════╗
-                ║       SubstGraph + Env + Ty           ║
+                ║       Graph + Env + Ty           ║
                 ║    (shared inference substrate)       ║
                 ╚═══════════════════════════════════════╝
                                     │
@@ -1733,7 +1733,7 @@ one graph, each surfacing what one primitive wants to say.
 
 | Tentacle    | Kernel primitive                             | Surfaces                                                            |
 |-------------|----------------------------------------------|---------------------------------------------------------------------|
-| **Query**   | #1 SubstGraph + Env                          | what the graph knows at a site (type, row, ownership, refinements)  |
+| **Query**   | #1 Graph + Env                          | what the graph knows at a site (type, row, ownership, refinements)  |
 | **Propose** | #2 Handlers + typed resume discipline        | wrap-handler candidates (AWrapHandler); hole-fill candidates via MultiShot-typed `enumerate_inhabitants` — the oracle exploring hundreds of alternate realities per second |
 | **Topology**| #3 Five verbs                                | topology suggestions (`\|>` chain over nested calls; `<\|` over shared-source tuple; warnings when `<\|` would consume `own`) |
 | **Unlock**  | #4 Boolean effect algebra                    | capability-unlock surfacing: "adding `!Alloc` unlocks `CRealTime` — proven path" |
@@ -1742,7 +1742,7 @@ one graph, each surfacing what one primitive wants to say.
 | **Teach**   | #7 Annotation gradient                       | ONE highest-leverage next step per turn; the gradient's conversation |
 | **Why**     | #8 HM inference with Reasons                 | walk the Reason DAG on demand; compress the proof chain into a sentence |
 
-Each tentacle reads the same graph through `SubstGraphRead`, the same
+Each tentacle reads the same graph through `GraphRead`, the same
 env through `EnvRead`. None coordinate with each other. Each reasons
 locally and surfaces a projection for the human. **One primitive per
 tentacle; one tentacle per primitive. Mentl is the kernel made voice.**
@@ -1974,15 +1974,15 @@ Enumerative search, SMT-guided, LLM-guided, symbolic-execution —
 **all are handlers on the same `Synth` effect**:
 
 ```
-handler synth_enumerative with SubstGraphRead + EnvRead {
+handler synth_enumerative with GraphRead + EnvRead {
     synth(h, expected, ctx) => resume(enumerate_candidates(...))
 }
 
-handler synth_smt with SubstGraphRead + Verify {
+handler synth_smt with GraphRead + Verify {
     synth(h, expected, ctx) => resume(smt_synthesize(...))
 }
 
-handler synth_llm with SubstGraphRead + HTTPClient {
+handler synth_llm with GraphRead + HTTPClient {
     synth(h, expected, ctx) => resume(llm_query(...))
 }
 ```
@@ -2066,7 +2066,7 @@ Before LSP, there is `inka query`:
 
 ```
 $ inka query std/compiler/infer.nx "type of generalize"
-→ generalize : (Node) -> Scheme with SubstGraphRead + EnvRead
+→ generalize : (Node) -> Scheme with GraphRead + EnvRead
   Reason chain:
     - bound at FnStmt at infer.nx:142
     - return type unified with Forall(qs, body_ty) at line 147
@@ -2074,13 +2074,13 @@ $ inka query std/compiler/infer.nx "type of generalize"
     - quantified vars: [142, 148, 153]
 
 $ inka query std/compiler/infer.nx "why infer_expr performs EnvWrite"
-→ infer_expr : (Node) -> () with SubstGraphWrite + EnvWrite + ...
+→ infer_expr : (Node) -> () with GraphWrite + EnvWrite + ...
   Reason:
     - extends env at LetStmt (infer.nx:210)
     - enters scope at BlockExpr (infer.nx:187)
 ```
 
-`inka query` is read-only by `SubstGraphRead + EnvRead` subsumption
+`inka query` is read-only by `GraphRead + EnvRead` subsumption
 — a `perform graph_bind` inside the query handler is a type error.
 Write attempts cannot corrupt a compilation. The forensic substrate
 is airtight by type.

@@ -116,11 +116,11 @@ fn expr(node) = {
 
 ---
 
-### 1.2 `SubstGraph` → `Graph` ADT rename
+### 1.2 `Graph` → `Graph` ADT rename
 
-**Current form.** The flat-array, O(1)-chase substrate is named `SubstGraph` throughout the compiler.
+**Current form.** The flat-array, O(1)-chase substrate is named `Graph` throughout the compiler.
 
-**Why it's drift.** "SubstGraph" encodes history — "substitution graph" from type-theory tradition where "subst" refers to the substitution a unifier produces. The name answers "what was its origin?" not "what is it?" A newcomer reads `SubstGraph` and asks "sub-what? substitute for what? is there another graph?" — legitimate questions the name doesn't answer.
+**Why it's drift.** "Graph" encodes history — "substitution graph" from type-theory tradition where "subst" refers to the substitution a unifier produces. The name answers "what was its origin?" not "what is it?" A newcomer reads `Graph` and asks "sub-what? substitute for what? is there another graph?" — legitimate questions the name doesn't answer.
 
 **What it IS, per INSIGHTS crystallization #6: *The Graph IS the Program.*** The substrate is the graph. There is no other graph in Inka's vocabulary (not a neural graph — that's `Tensor`; not a dependency graph — that's handler composition; not a parse graph — that's the AST which is projections of the graph). **One graph; name it `Graph`.**
 
@@ -133,11 +133,11 @@ fn expr(node) = {
 
 | Current | New |
 |---|---|
-| `SubstGraph` (ADT) | `Graph` |
-| `SubstGraphRead` (effect) | `GraphRead` (already landed) |
-| `SubstGraphWrite` (effect) | `GraphWrite` (already landed) |
-| `substgraph.md` (spec filename) | `graph.md` (retitled with restructure) |
-| `the SubstGraph` (prose) | `the Graph` (occasionally lowercase "the graph" in informal prose) |
+| `Graph` (ADT) | `Graph` |
+| `GraphRead` (effect) | `GraphRead` (already landed) |
+| `GraphWrite` (effect) | `GraphWrite` (already landed) |
+| `graph.md` (spec filename) | `graph.md` (retitled with restructure) |
+| `the Graph` (prose) | `the Graph` (occasionally lowercase "the graph" in informal prose) |
 
 **Files affected:**
 - `src/types.nx` — ADT declaration + ~5 references
@@ -147,7 +147,7 @@ fn expr(node) = {
 - `docs/INSIGHTS.md` (kernel shorthand + various)
 - `docs/CLAUDE.md` (kernel anchor, interrogations, file map)
 - `docs/README.md` (kernel enumeration)
-- `docs/specs/00-substgraph.md` → `docs/specs/00-graph.md` (retitled)
+- `docs/specs/00-graph.md` → `docs/specs/00-graph.md` (retitled)
 - `docs/specs/simulations/H*.md` — various references
 - `docs/traces/a-day.md`
 - Memory files
@@ -185,8 +185,8 @@ fn expr(node) = {
 - **Action-named:** `Verify`, `Teach`, `Synth`, `Deadline` — ✓
 - **Compound scoped:** `GraphRead`, `GraphWrite`, `EnvRead`, `EnvWrite`, `LookupTy` — ✓
 - **Parameterized:** `Sample(44100)`, `Tick(48000)` — ✓
-- **Legacy long forms** (to fix): `HostClock`, `IterativeContext`, any lingering `SubstGraphRead`/`SubstGraphWrite` not yet cleaned up
-- **Over-specific:** `SubstGraphRead`/`SubstGraphWrite` already renamed; any residual `Subst*` flagged for rename
+- **Legacy long forms** (to fix): `HostClock`, `IterativeContext`, any lingering `GraphRead`/`GraphWrite` not yet cleaned up
+- **Over-specific:** `GraphRead`/`GraphWrite` already renamed; any residual `Subst*` flagged for rename
 
 **Normalization rule** (prescriptive):
 - **One-word PascalCase** for simple effects: `IO`, `Alloc`, `Memory`, `Iterate`, `Consume`, `Verify`, `Teach`, `Synth`, `Interact`.
@@ -200,8 +200,8 @@ fn expr(node) = {
 |---|---|---|
 | `HostClock` effect | merged into `Clock` | Different handlers of `Clock` (real vs test vs record vs replay); not a separate effect |
 | `IterativeContext` effect | deleted; replaced by row constraint `Tick + Sample + Clock` (intersection) | Was an artificial sentinel |
-| `SubstGraphRead` | `GraphRead` | Already shortened; audit for any residual |
-| `SubstGraphWrite` | `GraphWrite` | Same |
+| `GraphRead` | `GraphRead` | Already shortened; audit for any residual |
+| `GraphWrite` | `GraphWrite` | Same |
 
 **Files affected:** `src/effects.nx`, `src/clock.nx`, any module performing `HostClock` ops, any `with IterativeContext` constraints.
 
@@ -298,7 +298,7 @@ Every rename site gets a `Reason::Inferred("renamed per NS-naming.md:<decision-n
 - Drift 5 (C calling convention): the WHOLE POINT is dissolving module-prefix-as-C-namespace. Forbidden: leaving any `module_function` name behind.
 - Drift 8 (string-keyed-when-structured): forbidden to introduce stringly-typed module-member lookup; dot-access resolves structurally through the synthesized record.
 
-### Decision 1.2 — SubstGraph → Graph
+### Decision 1.2 — Graph → Graph
 
 - Drift 1 (Rust vtable): N/A
 - Drift 6 (primitive-type-special-case): forbidden to treat `Graph` as "the special graph" with separate dispatch; it's one ADT among many.
@@ -384,14 +384,14 @@ import src/X {foo}
 let v = foo(args_here)    // every call site drops X. prefix
 ```
 
-### Rule 2 — ADT rename SubstGraph → Graph
+### Rule 2 — ADT rename Graph → Graph
 
 **Pattern:**
 ```
-type SubstGraph
-  = SubstGraph(List, Int, Int, List)
+type Graph
+  = Graph(List, Int, Int, List)
 
-let SubstGraph(nodes, epoch, next, overlays) = g
+let Graph(nodes, epoch, next, overlays) = g
 ```
 
 **Rewrite:**
@@ -470,7 +470,7 @@ bash ~/Projects/inka/tools/drift-audit.sh src/*.nx lib/**/*.nx
 ```
 
 **The audit MUST exit 0** or the simplification commit doesn't land. The audit checks for:
-- Residual `SubstGraph` references (rename incomplete)
+- Residual `Graph` references (rename incomplete)
 - Residual `*_fn_name(` patterns indicating prefix-style naming (decision 1.1 incomplete)
 - Residual `lexer.` or `parser.` (decision 1.3 incomplete)
 - `HostClock` or `IterativeContext` residue (decision 1.4 incomplete)
@@ -480,7 +480,7 @@ bash ~/Projects/inka/tools/drift-audit.sh src/*.nx lib/**/*.nx
 If any pattern matches, the audit exits non-zero with the specific offending sites; the commit is refused until addressed.
 
 **New drift patterns added to `tools/drift-patterns.tsv` as part of this walkthrough's deliverables:**
-- `\bsubst_?graph\b` (case-insensitive) → flags `SubstGraph`/`subst_graph` residue.
+- `\bsubst_?graph\b` (case-insensitive) → flags `Graph`/`subst_graph` residue.
 - `\b([a-z]+)_([a-z]+)\(` where `$1` is a known module name → flags prefix-style calls. **Cautious** (may false-positive on legitimate snake_case); implementer reviews each hit.
 - `\b(lexer|parser)\.` → flags agent-form module refs.
 - `\b(HostClock|IterativeContext)\b` → flags legacy effect names.
@@ -495,7 +495,7 @@ If any pattern matches, the audit exits non-zero with the specific offending sit
 1. Walkthrough drafted (this file) — LANDED once committed.
 2. `tools/drift-patterns.tsv` updated with the new patterns (small commit).
 3. Simplification execution (item 11) runs across the whole `src/` + `lib/` tree in ONE focused series of commits:
-   - Commit A: `SubstGraph → Graph` ADT rename sweep (mechanical, grep-safe).
+   - Commit A: `Graph → Graph` ADT rename sweep (mechanical, grep-safe).
    - Commit B: module-to-record infer synthesis (~30 lines in `infer.nx`); test compiles.
    - Commit C: dot-access / selective-import conversion across all `src/` + `lib/` modules (largest commit; audit clean before closing).
    - Commit D: effect normalization (`HostClock` → `Clock`, `IterativeContext` dissolution).

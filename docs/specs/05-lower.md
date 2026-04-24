@@ -1,7 +1,7 @@
 # 05 — Lower: LowIR from live graph observation
 
 **Purpose.** Lower the typed AST (spec 03) to LowIR (WASM-shaped IR)
-by reading types LIVE from the SubstGraph (spec 00). No cached types
+by reading types LIVE from the Graph (spec 00). No cached types
 in LowExpr nodes. No per-module subst snapshot. An unresolved handle
 at lower time is a build failure, not a fallback.
 
@@ -26,8 +26,8 @@ effect LookupTy {
 }
 ```
 
-**Lowering declares `with SubstGraphRead + EnvRead + LookupTy + LowerCtx
-+ …` (spec 06).** EnvRead is the peer of SubstGraphRead — global binding
+**Lowering declares `with GraphRead + EnvRead + LookupTy + LowerCtx
++ …` (spec 06).** EnvRead is the peer of GraphRead — global binding
 lookups resolve through the same effect discipline, not through a
 passed-in `env` argument. No pass threads env. Zero arguments between
 passes carry inference state.
@@ -35,7 +35,7 @@ passes carry inference state.
 Default handler, installed once in `pipeline.compile`:
 
 ```lux
-handler lookup_ty_graph with SubstGraphRead {
+handler lookup_ty_graph with GraphRead {
   lookup_ty(h) => {
     let GNode(kind, _) = perform graph_chase(h)
     match kind {
@@ -61,7 +61,7 @@ but all other well-typed code compiles. `NFree` is a compiler-
 internal bug (inference failed to populate); emits `E_UnresolvedType` and halts.
 No silent fallback to TUnit. No `val_concat` reachable.
 
-The `with SubstGraphRead` declaration is load-bearing: this handler
+The `with GraphRead` declaration is load-bearing: this handler
 has read-only access to the graph by effect-row subsumption (spec 00).
 An accidental `perform graph_bind` inside this handler would fail
 type-check at handler install — no runtime policy needed.
@@ -195,7 +195,7 @@ graph writes, no rebinds, no snapshots.
 ## Invariants (enforced structurally)
 
 1. **Read-only by effect-row subsumption.** Lowering declares
-   `with SubstGraphRead` (not Write). Any `perform graph_bind` fails
+   `with GraphRead` (not Write). Any `perform graph_bind` fails
    type-check at handler install. No runtime policy; the Boolean
    effect algebra (spec 01) gates the invariant by construction.
 

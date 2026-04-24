@@ -1,10 +1,10 @@
-# 00 — SubstGraph: one live graph, all variables
+# 00 — Graph: one live graph, all variables
 
 **Purpose.** A single graph that holds every type and effect-row
 variable the program produces and exposes a live, O(1) chase interface
 to every downstream observer. One substrate, many readers.
 
-**Kernel primitive implemented:** #1 — SubstGraph + Env (DESIGN.md §0.5).
+**Kernel primitive implemented:** #1 — Graph + Env (DESIGN.md §0.5).
 Also the substrate primitive #8 (HM inference with Reasons) writes into.
 Mentl tentacle served: **Query**.
 
@@ -31,8 +31,8 @@ type GNode
   = GNode(NodeKind, Reason)  // every node carries its justification
                              // (G-prefix avoids collision with spec 03's AST Node)
 
-type SubstGraph
-  = SubstGraph(
+type Graph
+  = Graph(
       List,          // flat array: nodes indexed by handle
       Int,           // epoch counter (bumps on every bind)
       Int,           // next fresh handle
@@ -61,14 +61,14 @@ error.
 ## API
 
 ```lux
-effect SubstGraphRead {
+effect GraphRead {
   graph_chase(Int) -> GNode                   @resume=OneShot
   graph_epoch() -> Int                        @resume=OneShot
   graph_reason_edge(Int, Int) -> Reason       @resume=OneShot
-  graph_snapshot() -> SubstGraph              @resume=OneShot
+  graph_snapshot() -> Graph              @resume=OneShot
 }
 
-effect SubstGraphWrite {
+effect GraphWrite {
   graph_fresh_ty(Reason) -> Int               @resume=OneShot
   graph_fresh_row(Reason) -> Int              @resume=OneShot
   graph_bind(Int, Ty, Reason) -> ()           @resume=OneShot
@@ -78,8 +78,8 @@ effect SubstGraphWrite {
 ```
 
 **Writer isolation is structural, not policy.** Inference declares
-`with SubstGraphWrite + SubstGraphRead`. Lowering and query declare
-`with SubstGraphRead` only. A `perform graph_bind` in lowering is a
+`with GraphWrite + GraphRead`. Lowering and query declare
+`with GraphRead` only. A `perform graph_bind` in lowering is a
 missing-effect type error — caught by the checker at handler install,
 never shipped to runtime. No preflight rule; the Boolean effect
 algebra (spec 01) gates the invariant by construction.
@@ -149,14 +149,14 @@ eager snapshot crosses the boundary; cross-module drift (the
 ## Default handler
 
 The pipeline installs one `graph_default` handler at `compile`
-entry. It threads a single mutable `SubstGraph` value through the
+entry. It threads a single mutable `Graph` value through the
 effect's state. Downstream passes (infer, lower, query) see the same
 graph; the handler routes their perform calls to the same underlying
 state.
 
 **Writer isolation via effect row.** Inference is the only pass that
-declares `with SubstGraphWrite`. Lowering and query have `with
-SubstGraphRead` only. The invariant "one writer" is therefore
+declares `with GraphWrite`. Lowering and query have `with
+GraphRead` only. The invariant "one writer" is therefore
 structural — a `perform graph_bind` in lowering fails type-check at
 handler install (see the effect split above).
 
@@ -168,8 +168,8 @@ handler install (see the effect split above).
 - `03-typed-ast.md` — every AST node carries a handle allocated here.
 - `04-inference.md` — inference is the only writer.
 - `05-lower.md` — `LookupTy` handler delegates to `graph_chase`.
-- `06-effects-surface.md` — both `SubstGraphRead` and
-  `SubstGraphWrite` listed in the inventory.
+- `06-effects-surface.md` — both `GraphRead` and
+  `GraphWrite` listed in the inventory.
 - `08-query.md` — every query walks the graph via chase + epoch.
 
 ---

@@ -2,7 +2,7 @@
 
 **Purpose.** One subcommand, `inka query <file> <question>`, that runs
 lex + parse + infer on a single file and answers forensic questions
-against the resulting SubstGraph. Sub-second per query. Substrate for
+against the resulting Graph. Sub-second per query. Substrate for
 Arc F.2 (the Mentl-voice surface and its LSP projection — every LSP
 method decomposes to a Query variant).
 
@@ -56,8 +56,8 @@ effect Query {
 ```
 
 Installed at `inka query` entry point. The handler declares
-`with SubstGraphRead + EnvRead + FreshHandle`. Read-only by
-construction: no `SubstGraphWrite` / `EnvWrite` in scope means
+`with GraphRead + EnvRead + FreshHandle`. Read-only by
+construction: no `GraphWrite` / `EnvWrite` in scope means
 `perform graph_bind` or `perform env_extend` fails type-check at
 handler install. No preflight rule — effect-row subsumption (spec 00
 / spec 01) is the gate.
@@ -107,7 +107,7 @@ shell.
 ## The executor
 
 ```lux
-handler query_default with SubstGraphRead + EnvRead + FreshHandle {
+handler query_default with GraphRead + EnvRead + FreshHandle {
   ask(q) => match q {
     QTypeOf(name) => match perform env_lookup(name) {
       None => resume(QRError("not found: " ++ name)),

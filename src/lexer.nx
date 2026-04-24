@@ -141,7 +141,7 @@ fn lex(ref source) = {
   let n = byte_len(source)
   let initial_capacity = if n < 16 { 16 } else { n }
   let buf = make_list(initial_capacity)
-  let (final_buf, final_count) = lex_from(source, n, 0, 1, 1, buf, 0)
+  let (final_buf, final_count) = lex_from(source, n, 0, 1, 1, buf, 0, 0, 0)
   slice(final_buf, 0, final_count)
 }
 
@@ -155,18 +155,24 @@ fn push_tok(own buf, count, own t) = {
 // Construct a Token from kind + 4 span ints.
 fn mk_tok(kind, sl, sc, el, ec) with Pure = Tok(kind, Span(sl, sc, el, ec))
 
-fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, count) =
+// lex_from: core lexer loop. term_byte = 0 (no terminator) or 125
+// (terminate on first TRBrace at depth 0 — used by splice scanning).
+// depth tracks open brace nesting for splice termination.
+// Amendments C + G: double-quote strings emit TStringPart/TStringSplice
+// via scan_string (which threads buf/count directly); single-quote
+// strings emit a single TString(content) with no interpolation.
+fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, count, term_byte, depth) =
   if pos >= n {
     push_tok(buf, count, mk_tok(TEof, line, col, line, col))
   } else {
     let b = byte_at(source, pos)
 
     if is_whitespace(b) {
-      lex_from(source, n, pos + 1, line, col + 1, buf, count)
+      lex_from(source, n, pos + 1, line, col + 1, buf, count, term_byte, depth)
     } else if b == 10 {
       // newline (\n)
       let (b1, c1) = push_tok(buf, count, mk_tok(TNewline, line, col, line + 1, 1))
-      lex_from(source, n, pos + 1, line + 1, 1, b1, c1)
+      lex_from(source, n, pos + 1, line + 1, 1, b1, c1, term_byte, depth)
     } else if b == 47 && pos + 1 < n && byte_at(source, pos + 1) == 47 {
       // // or /// — line comment or doc comment
       if pos + 2 < n && byte_at(source, pos + 2) == 47 {
@@ -175,16 +181,22 @@ fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, co
         let doc_text = str_slice(source, pos + 3, after)
         let end_col = col + (after - pos)
         let (b1, c1) = push_tok(buf, count, mk_tok(TDocComment(doc_text), line, col, line, end_col))
-        lex_from(source, n, after, line, end_col, b1, c1)
+        lex_from(source, n, after, line, end_col, b1, c1, term_byte, depth)
       } else {
         let after = skip_line_comment(source, n, pos + 2)
-        lex_from(source, n, after, line, col, buf, count)
+        lex_from(source, n, after, line, col, buf, count, term_byte, depth)
       }
     } else if b == 34 {
-      // string literal (")
-      let (new_pos, new_col, str_val) = scan_string(source, n, pos + 1, col + 1, "")
+      // double-quoted string — amendment C brace-interpolation.
+      // scan_string emits TStringPart/TStringSplice tokens directly
+      // into buf and returns the updated (buf, count).
+      let (new_pos, new_col, b1, c1) = scan_string(source, n, pos + 1, line, col + 1, buf, count, "")
+      lex_from(source, n, new_pos, line, new_col, b1, c1, term_byte, depth)
+    } else if b == 39 {
+      // single-quoted literal string (amendment G) — no interpolation.
+      let (new_pos, new_col, str_val) = scan_literal_string(source, n, pos + 1, col + 1, "")
       let (b1, c1) = push_tok(buf, count, mk_tok(TString(str_val), line, col, line, new_col))
-      lex_from(source, n, new_pos, line, new_col, b1, c1)
+      lex_from(source, n, new_pos, line, new_col, b1, c1, term_byte, depth)
     } else if is_digit(b) {
       let (new_pos, new_col, base, is_float) = scan_number(source, n, pos, col, false)
       let num_val = str_slice(source, pos, new_pos)
@@ -192,7 +204,7 @@ fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, co
         if is_float { TFloat(parse_float(strip_underscores(num_val))) }
         else        { TInt(parse_int_base(strip_underscores(num_val), base)) }
       let (b1, c1) = push_tok(buf, count, mk_tok(kind, line, col, line, new_col))
-      lex_from(source, n, new_pos, line, new_col, b1, c1)
+      lex_from(source, n, new_pos, line, new_col, b1, c1, term_byte, depth)
     } else if is_alpha(b) {
       let (new_pos, new_col) = scan_ident(source, n, pos, col)
       let word = str_slice(source, pos, new_pos)
@@ -201,21 +213,32 @@ fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, co
         None     => TIdent(word)
       }
       let (b1, c1) = push_tok(buf, count, mk_tok(kind, line, col, line, new_col))
-      lex_from(source, n, new_pos, line, new_col, b1, c1)
+      lex_from(source, n, new_pos, line, new_col, b1, c1, term_byte, depth)
     } else {
       let b2 = if pos + 1 < n { byte_at(source, pos + 1) } else { 0 }
       match two_char_kind(b, b2) {
         Some(kind) => {
           let (b1, c1) = push_tok(buf, count, mk_tok(kind, line, col, line, col + 2))
-          lex_from(source, n, pos + 2, line, col + 2, b1, c1)
+          lex_from(source, n, pos + 2, line, col + 2, b1, c1, term_byte, depth)
         },
         None => {
           match single_char_kind(b) {
             Some(kind) => {
-              let (b1, c1) = push_tok(buf, count, mk_tok(kind, line, col, line, col + 1))
-              lex_from(source, n, pos + 1, line, col + 1, b1, c1)
+              // TLBrace increments depth; TRBrace may terminate splice.
+              let new_depth =
+                if b == 123 { depth + 1 }
+                else { depth }
+              if b == 125 && term_byte == 125 && depth == 0 {
+                // Splice termination — emit TRBrace and return to
+                // scan_string_after_splice.
+                push_tok(buf, count, mk_tok(TRBrace, line, col, line, col + 1))
+              } else {
+                let new_d = if b == 125 && depth > 0 { depth - 1 } else { new_depth }
+                let (b1, c1) = push_tok(buf, count, mk_tok(kind, line, col, line, col + 1))
+                lex_from(source, n, pos + 1, line, col + 1, b1, c1, term_byte, new_d)
+              }
             },
-            None => lex_from(source, n, pos + 1, line, col + 1, buf, count)
+            None => lex_from(source, n, pos + 1, line, col + 1, buf, count, term_byte, depth)
           }
         }
       }
@@ -237,26 +260,93 @@ fn scan_to_eol(ref source, n: ValidOffset, pos: ValidOffset) =
 // handled by the outer lex_from loop).
 fn skip_line_comment(ref source, n: ValidOffset, pos: ValidOffset) = scan_to_eol(source, n, pos)
 
-fn scan_string(ref source, n: ValidOffset, pos: ValidOffset, col, own acc) =
-  if pos >= n { (pos, col, acc) }
-  else {
+// scan_string — amendments C + G tokenization.
+// Emits TStringPart(literal_chunk) for contiguous literal content.
+// On { (not doubled), emits TStringPart(acc) + TStringSplice then
+// delegates to scan_string_after_splice which calls lex_from with
+// term_byte=125 to tokenize the expression until the matching }.
+// On {{, emits literal { into the current chunk. Closing " terminates.
+// Returns (new_pos, new_col, buf, count) — buffer threaded directly.
+// Peer sub-handles: B.12.5.1 (triple-quoted """...""", amendment D),
+// B.12.5.2 (nested-brace splices beyond depth 0).
+fn scan_string(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, count, own acc) =
+  if pos >= n {
+    // Unterminated — emit final part; parser surfaces diagnostic next.
+    push_tok(buf, count, mk_tok(TStringPart(acc), line, col, line, col))
+  } else {
     let b = byte_at(source, pos)
     if b == 34 {
       // closing "
-      (pos + 1, col + 1, acc)
+      let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(acc), line, col, line, col + 1))
+      (pos + 1, col + 1, b1, c1)
+    } else if b == 123 && pos + 1 < n && byte_at(source, pos + 1) == 123 {
+      // {{ — literal brace escape
+      scan_string(source, n, pos + 2, line, col + 2, buf, count,
+        acc |> str_concat("{"))
+    } else if b == 125 && pos + 1 < n && byte_at(source, pos + 1) == 125 {
+      // }} — literal close-brace escape
+      scan_string(source, n, pos + 2, line, col + 2, buf, count,
+        acc |> str_concat("}"))
+    } else if b == 123 {
+      // { — start of interpolation splice (amendment C).
+      let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(acc), line, col, line, col))
+      let (b2, c2) = push_tok(b1, c1, mk_tok(TStringSplice, line, col, line, col + 1))
+      scan_string_after_splice(source, n, pos + 1, line, col + 1, b2, c2)
     } else if b == 92 && pos + 1 < n {
-      // backslash — resolve escape
       let esc = byte_at(source, pos + 1)
       let escaped =
-        if      esc == 110 { "\n" }    // n
-        else if esc == 116 { "\t" }    // t
-        else if esc == 92  { "\\" }    // \
-        else if esc == 34  { "\"" }    // "
+        if      esc == 110 { "\n" }
+        else if esc == 116 { "\t" }
+        else if esc == 92  { "\\" }
+        else if esc == 34  { "\"" }
         else { str_slice(source, pos + 1, pos + 2) }
-      scan_string(source, n, pos + 2, col + 2, acc |> str_concat(escaped))
+      scan_string(source, n, pos + 2, line, col + 2, buf, count,
+        acc |> str_concat(escaped))
+    } else if b == 36 && pos + 1 < n && byte_at(source, pos + 1) == 123 {
+      // ${ — deprecated dollar-sigil interpolation (amendment C).
+      let here = mk_tok(TStringSplice, line, col, line, col + 2)
+      perform report("lexer", "P_DeprecatedDollarInterp", "LexError",
+        "`${name}` is deprecated; use `{name}` (amendment C)", // drift-audit: ignore
+        Span(line, col, line, col + 2), "MachineApplicable")
+      // Best-effort recovery: treat $ as literal content, let { start splice.
+      scan_string(source, n, pos + 1, line, col + 1, buf, count,
+        acc |> str_concat("$"))
     } else {
       // non-escape byte — append its 1-byte slice view
-      scan_string(source, n, pos + 1, col + 1,
+      scan_string(source, n, pos + 1, line, col + 1, buf, count,
+        acc |> str_concat(str_slice(source, pos, pos + 1)))
+    }
+  }
+
+// After emitting TStringPart + TStringSplice, lex the expression
+// inside the splice using lex_from with term_byte=125 (terminates
+// on first TRBrace at depth 0). Then resume scan_string with empty acc.
+// Nested splices (depth > 0) handled by lex_from's depth tracking;
+// peer sub-handle B.12.5.2 extends this to multiple nesting levels.
+fn scan_string_after_splice(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, count) = {
+  let (new_pos, new_col, b1, c1) = lex_from(source, n, pos, line, col, buf, count, 125, 0)
+  scan_string(source, n, new_pos, line, new_col, b1, c1, "")
+}
+
+// scan_literal_string — amendment G single-quoted form; no interpolation,
+// no brace interpretation. Literal content until closing '. Escape set:
+// \\ \' \n \t (SYNTAX.md line 1062).
+fn scan_literal_string(ref source, n: ValidOffset, pos: ValidOffset, col, own acc) =
+  if pos >= n { (pos, col, acc) }
+  else {
+    let b = byte_at(source, pos)
+    if b == 39 { (pos + 1, col + 1, acc) }
+    else if b == 92 && pos + 1 < n {
+      let esc = byte_at(source, pos + 1)
+      let escaped =
+        if      esc == 92  { "\\" }
+        else if esc == 39  { "'" }
+        else if esc == 110 { "\n" }
+        else if esc == 116 { "\t" }
+        else { str_slice(source, pos + 1, pos + 2) }
+      scan_literal_string(source, n, pos + 2, col + 2, acc |> str_concat(escaped))
+    } else {
+      scan_literal_string(source, n, pos + 1, col + 1,
         acc |> str_concat(str_slice(source, pos, pos + 1)))
     }
   }

@@ -327,6 +327,11 @@ type TokenKind
   | TString(String)
   | TDocComment(String)             // /// — emitted ONLY when triple-slash
                                     //   detected; attaches to next decl
+  | TStringPart(String)             // literal chunk of a "..." string
+                                    //   (amendment C brace-interpolation)
+  | TStringSplice                   // marks the start of a {expr} splice;
+                                    //   followed by ordinary tokens then
+                                    //   TRBrace (re-used) closes it
 
   // ─── Two-character operators (15) ────────────────────────────────
   | TEqEq | TBangEq | TLtEq | TGtEq          // comparison

@@ -22,12 +22,9 @@ import infer
 import runtime/strings
 import runtime/io
 
-// ═══ Module path conventions ═══════════════════════════════════════
-// Module names map to file paths:
-//   "infer"           →  "src/infer.nx"
-//   "runtime/strings" →  "lib/runtime/strings.nx"
-// First checks src/, then lib/.
-
+/// Resolve a module name to a file path. Checks `src/` then `lib/`:
+///   `"infer"` → `"src/infer.nx"`,
+///   `"runtime/strings"` → `"lib/runtime/strings.nx"`.
 fn driver_module_path(ref module_name) with Memory + Alloc + Filesystem = {
   let src_path = "src/" |> str_concat(module_name) |> str_concat(".nx")
   if perform fs_exists(src_path) {
@@ -37,12 +34,8 @@ fn driver_module_path(ref module_name) with Memory + Alloc + Filesystem = {
   }
 }
 
-// ═══ Module DAG collection ═════════════════════════════════════════
-// Walks transitively from an entry module, collecting every import.
-// Returns a depth-first post-order list — leaves before importers.
-// Per-module process_module dispatches once per name; visited set
-// prevents cycles (Inka modules don't currently form cycles, but
-// the discipline is cheap and forward-proof).
+// Module DAG collection — depth-first post-order walk from entry.
+// Leaves before importers; visited set prevents cycles.
 
 fn driver_collect_dag(ref entry_module) with Memory + Alloc + Filesystem = {
   let buf = make_list(16)
@@ -121,11 +114,9 @@ fn driver_extract_imports_loop(ref ast, i, n, own buf, count) =
     driver_extract_imports_loop(ast, i + 1, n, next_buf, next_count)
   }
 
-// ═══ Per-module check ══════════════════════════════════════════════
-// Consults the cache; on miss runs full inference for this module
-// and writes a fresh .kai. Returns the env entries this module
-// publishes (for the caller to install into env_handler).
-
+/// Consult the cache; on miss run full inference for this module
+/// and write a fresh `.kai`. Returns the env entries this module
+/// publishes for the caller to install into `env_handler`.
 fn driver_check_module(ref module_name)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   let path = driver_module_path(module_name)
@@ -223,19 +214,9 @@ fn driver_take_first(ref entries, count) =
   else if len(entries) == 0 { [] }
   else { [list_head(entries)] ++ driver_take_first(list_tail(entries), count - 1) }
 
-// ═══ Env install ═══════════════════════════════════════════════════
-// Pushes cached entries back into env_handler so importing modules
-// can env_lookup them. Entries from cache carry placeholder Reasons
-// (Inferred("loaded from cache")); the typing data is preserved
-// faithfully which is what cross-module type-checking needs.
-//
-// Dual-install: each export registers under TWO env keys — the flat
-// short name (enables selective-import semantics + existing call
-// sites) AND the qualified `module_short.export` form (enables
-// `graph.chase(h)` dot-access). Both keys point to the same Scheme.
-// This is the Inka-native form of "modules as namespaces" — not a
-// record-of-functions type, just more env entries at qualified
-// keys. See PLAN.md Decisions Ledger 2026-04-21 dotted-names-as-env.
+// Env install — push entries into env_handler for importing modules.
+// Dual-install: flat short name AND qualified `module.export` key.
+// Both point to the same Scheme (dotted-names-as-env, PLAN.md 2026-04-21).
 
 fn driver_install_entries(ref module_name, ref entries) with Memory + Alloc + EnvWrite =
   let short = module_short_name(module_name)
@@ -289,12 +270,10 @@ fn driver_install_qualified_loop(ref short, ref entries, i, n) with Memory + All
     driver_install_qualified_loop(short, entries, i + 1, n)
   }
 
-// ═══ Public API ════════════════════════════════════════════════════
-// driver_check(entry_module) — process the entry and all its
-// transitive dependencies. Each module either loads from cache or
-// re-infers; envs install in dep order so by the time the entry
-// runs its inference, every imported name is in env_handler.
-
+/// Process the entry module and all its transitive dependencies.
+/// Each module either loads from cache or re-infers; envs install in
+/// dependency order so every imported name is in `env_handler` before
+/// the entry module's inference runs.
 fn driver_check(ref entry_module)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   let modules = driver_collect_dag(entry_module)

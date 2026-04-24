@@ -372,6 +372,11 @@ type NodeBody
   | NStmt(Stmt)
   | NPat(Pat)
   | NHole(Int)               // Hazel marked hole — inference populates with reason
+  /// Synthetic module entity — one per source file. Module-level `///`
+  /// attaches its DocstringReason here; decls lists every top-level Handle
+  /// so F.1's doc_handler and render_index can walk the module without
+  /// re-parsing source.
+  | NModule({path: String, decls: List, span: Span})
 
 // ─── Expr (spec 03) ────────────────────────────────────────────────
 

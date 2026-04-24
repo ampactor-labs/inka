@@ -16,7 +16,7 @@
 import types
 import runtime/strings
 
-// ═══ Smart constructors — sort invariant by construction ═══════════
+// Smart constructors — sort invariant by construction
 // Every EfClosed / EfOpen value in the system passes through these
 // constructors. They canonicalize their input at the boundary so
 // downstream consumers (set_union, set_diff, set_contains, equality
@@ -95,7 +95,7 @@ fn field_copy_suffix_shifted(ref src, own dst, src_idx, dst_idx, n) with !Mutate
     )
   }
 
-// ═══ Normalization ═════════════════════════════════════════════════
+// Normalization
 // After normalize_row, every row is canonical:
 //   EfPure  |  EfClosed(sorted_unique)  |  EfOpen(sorted_unique, v)
 // EfNeg / EfSub / EfInter are intermediate and reduce before
@@ -182,9 +182,7 @@ fn closed_or_pure(ref names) with !Mutate =
   if len(names) == 0 { EfPure }
   else { EfClosed(names) }
 
-// ═══ Union — the `+` operator ══════════════════════════════════════
-// E + F = the row of all effects in E or F.
-
+/// Union row (`+`): E + F = the row of all effects in E or F.
 fn union_row(ref a, ref b) with !Mutate =
   match a {
     EfPure => b,
@@ -226,40 +224,31 @@ fn union_row(ref a, ref b) with !Mutate =
         |> (na) => union_row(na, b)
   }
 
-// ═══ Difference — the `-` operator ═════════════════════════════════
-// Handler absorption uses this: `(body_row - handled_row) + arm_row`.
-
+/// Difference row (`-`): handler absorption uses this — `(body_row - handled_row) + arm_row`.
 fn diff_row(ref a, ref b) with !Mutate =
   EfSub(a, b)
     |> normalize_row
 
-// ═══ Intersection — the `&` operator ═══════════════════════════════
-
+/// Intersection row (`&`).
 fn inter_row(ref a, ref b) with !Mutate =
   EfInter(a, b)
     |> normalize_row
 
-// ═══ Negation — the `!` operator ═══════════════════════════════════
-// !E proves absence. The load-bearing novelty of Inka's algebra.
-
+/// Negation row (`!`): `!E` proves absence — the load-bearing novelty of Inka's algebra.
 fn neg_row(ref a) with !Mutate =
   EfNeg(a)
     |> normalize_row
 
-// ═══ Subsumption — the proof engine ════════════════════════════════
-// `body_row ⊆ gate_row`?  One call services every compilation gate
-// and every handler installation. No per-gate bit-flags. No intrinsic
-// knowledge of effect-name semantics. The gates are subsumption
-// queries applied at codegen:
-//
-//   Pure         → memoize / parallelize / compile-time evaluate
-//   !IO          → safe for compile-time evaluation
-//   !Alloc       → real-time / GPU / kernel
-//   !Network     → sandbox
-//
-// The same call services user-defined negations: `with !Logging` is
-// one call away.
-
+/// Subsumption check: `body_row ⊆ gate_row`? One call services every compilation gate
+/// and every handler installation. No per-gate bit-flags. No intrinsic knowledge of
+/// effect-name semantics. The gates are subsumption queries applied at codegen:
+///
+///   Pure     → memoize / parallelize / compile-time evaluate
+///   !IO      → safe for compile-time evaluation
+///   !Alloc   → real-time / GPU / kernel
+///   !Network → sandbox
+///
+/// The same call services user-defined negations: `with !Logging` is one call away.
 fn row_subsumes(ref body_row, ref gate_row) with !Mutate =
   match gate_row {
     EfPure =>
@@ -302,19 +291,17 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate =
       row_subsumes(normalize_row(body_row), normalize_row(gate_row))
   }
 
-// ═══ Unification — writes through GraphWrite ══════════════════
-// Called by inference when unifying TFun types (spec 04). Writes
-// through graph_bind_row. Spec 01 table:
-//
-//   Pure/Pure       → ok
-//   Pure/Closed(∅)  → ok
-//   Pure/Closed(≠∅) → E_PurityViolated
-//   Pure/Open(∅,v)  → bind v to EfPure
-//   Closed(A)/Closed(B) → ok iff A = B as sets
-//   Closed(A)/Open(B,v) → bind v to Closed(A - B)
-//   Open(A,v1)/Open(B,v2) → if v1=v2, unify names; else bind v1 to Open(B-A, v2)
-//   Neg / Sub / Inter → normalize first, re-dispatch
-
+/// Unify two effect rows, writing bindings through `graph_bind_row` (spec 04 / spec 01).
+/// Spec 01 unification table:
+///
+///   Pure/Pure           → ok
+///   Pure/Closed(∅)      → ok
+///   Pure/Closed(≠∅)     → E_PurityViolated
+///   Pure/Open(∅,v)      → bind v to EfPure
+///   Closed(A)/Closed(B) → ok iff A = B as sets
+///   Closed(A)/Open(B,v) → bind v to Closed(A - B)
+///   Open(A,v1)/Open(B,v2) → if v1=v2, unify names; else bind v1 to Open(B-A, v2)
+///   Neg / Sub / Inter   → normalize first, re-dispatch
 fn unify_row(ref a, ref b, ref span, ref reason) with !Mutate =
   unify_row_canonical(normalize_row(a), normalize_row(b), span, reason)
 
@@ -405,20 +392,15 @@ fn report_effect_mismatch(ref a, ref b, ref span) with !Mutate =
     span, "MachineApplicable"
   )
 
-// ═══ Handler absorption ════════════════════════════════════════════
-// `handle { body with E } { arms for F }` normalizes to
-// `(E - F) + arm_row`. Algebra falls out.
-
+/// Handler absorption: `handle { body with E } { arms for F }` normalizes to
+/// `(E - F) + arm_row`. Algebra falls out.
 fn absorb_row(ref body_row, ref handled_row, ref extra_row) with !Mutate =
   body_row
     |> diff_row(handled_row)
     |> union_row(extra_row)
 
-// ═══ Groundness — enables monomorphic dispatch ═════════════════════
-// A row is ground if it has no unresolved row variables. Ground rows
-// let lowering emit direct `call $h_op` (spec 05). Non-ground rows
-// go through the evidence-passing path.
-
+/// Ground-row predicate: a row with no unresolved row variables. Ground rows let lowering
+/// emit direct `call $h_op` (spec 05); non-ground rows take the evidence-passing path.
 fn row_is_ground(ref row) with Pure =
   match row {
     EfPure           => true,
@@ -429,12 +411,12 @@ fn row_is_ground(ref row) with Pure =
     EfInter(a, b)    => row_is_ground(a) && row_is_ground(b)
   }
 
-// ═══ Set operations on sorted string lists ═════════════════════════
+// Set operations on sorted string lists
 // All operate on sorted, deduplicated string lists (effect name sets).
 // Local to this module; kept here because the algebra depends on
 // exactly this set model.
 
-// ═══ Effect-name set ops — sorted-flat substrate (W8.2) ════════════
+// Effect-name set ops — sorted-flat substrate (W8.2)
 // All effect-name set arithmetic routes through std/runtime/strings.nx
 // sorted-set primitives. The local names below are thin adapters that
 // canonicalize at the boundary (sort + dedup) so callers don't need
@@ -466,7 +448,7 @@ fn list_disjoint(ref a, ref b) with !Mutate = name_set_disjoint(a, b)
 fn list_eq_str(ref a, ref b) with !Mutate = name_set_eq(a, b)
 fn string_in_list(ref lst, ref s) with !Mutate = name_set_contains(lst, s)
 
-// ═══ EffName comparators ═══════════════════════════════════════════
+// EffName comparators
 // Effect-name equality = name match AND (parameterized) arg lists
 // pointwise equal. Ordering = name lex order; ties broken by arg
 // list lex order. The substrate-wide sorted-deduped invariant on
@@ -562,7 +544,7 @@ fn eff_arg_lt(ref a, ref b) with !Mutate = match a {
   }
 }
 
-// ═══ Row-name set algebra ══════════════════════════════════════════
+// Row-name set algebra
 // Sorted-flat List<EffName> set ops. Mirror runtime/strings.nx's
 // set_* surface but compare with eff_name_eq / eff_name_lt. Local to
 // effects.nx because EffName is row-internal vocabulary.
@@ -681,10 +663,7 @@ fn name_set_contains_loop(ref set, ref name, i, n) with !Mutate =
   else if eff_name_eq(list_index(set, i), name) { true }
   else { name_set_contains_loop(set, name, i + 1, n) }
 
-// ═══ Substrate Tests (Inka solving Inka) ═══════════════════════════
-// This function exists to statically prove FV.1.γ (Lone Effect Negation).
-// It declares `with !Mutate`. The compiler's own type inference will
-// now infer its row as EfNeg(Closed([Mutate])) instead of collapsing it
-// to EfPure. The very act of the compiler type-checking itself is the test.
-
+/// Statically proves FV.1.γ (Lone Effect Negation). Declares `with !Mutate`; the
+/// compiler's own type inference infers its row as EfNeg(Closed([Mutate])) rather than
+/// collapsing to EfPure. The compiler type-checking itself is the test.
 fn test_mutate_freeze(buffer: ValidSpan) with !Mutate = buffer

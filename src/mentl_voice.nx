@@ -107,19 +107,45 @@ type HandlerEntry
 
 type Situation
   = Situation({
-      tentacle:           Tentacle,
-      topic:              Topic,
-      handle:             Option,                // Option<Int>
-      env_snapshot:       List,                  // List<EnvEntry>
-      reason_at_topic:    Option,                // Option<Reason>
-      row_at_topic:       Option,                // Option<EffRow>
-      row_declared:       Option,                // Option<EffRow> — differs from row_at_topic → subsumption diag
-      ownership_at_topic: Option,                // Option<Ownership>
-      refinements:        List,                  // List<Predicate>
-      gradient_next:      Option,                // Option<GradientStep>
-      handlers_installed: List,                  // List<HandlerEntry>
-      prior_turn_topic:   Option,                // Option<Topic> — silence predicate input
-      register:           Register
+      tentacle:              Tentacle,
+      topic:                 Topic,
+      handle:                Option,                // Option<Int>
+      env_snapshot:          List,                  // List<EnvEntry>
+      reason_at_topic:       Option,                // Option<Reason>
+      row_at_topic:          Option,                // Option<EffRow>
+      row_declared:          Option,                // Option<EffRow> — differs from row_at_topic → subsumption diag
+      ownership_at_topic:    Option,                // Option<Ownership>
+      refinements:           List,                  // List<Predicate>
+      gradient_next:          Option,                // Option<GradientStep>
+      handlers_installed:    List,                  // List<HandlerEntry>
+      prior_turn_topic:      Option,                // Option<Topic> — silence predicate input
+      prior_turn_tentacle:   Option,                // Option<Tentacle> — travels with prior_turn_topic for tentacle-different check
+      facts:                 TopicFacts,            // pre-computed predicates over topic (§2.7.5 helpers as field reads)
+      register:              Register
+    })
+
+// ═══ TopicFacts — pre-computed predicates over topic ════════════════
+/// §2.7.5's silence predicate references helpers (handle_is_hole,
+/// error_at, nested_calls_at_span, unlocks_capability,
+/// ownership_violation_at, row_subsumption_fails_at,
+/// refinement_obligation_at) that would each require an effect read
+/// on graph / ledger state. TopicFacts hoists those reads into
+/// Situation composition: the handler that builds the Situation
+/// performs the effect queries once and freezes results here, so
+/// silence_predicate itself is pure over (Situation, which contains
+/// facts).
+///
+/// The fields that can be derived from existing Situation fields
+/// (reason_at_topic, refinements, gradient_next, row_at_topic vs
+/// row_declared) are NOT duplicated here — those stay on Situation
+/// and silence_predicate reads them directly. TopicFacts holds only
+/// the three truly-new computations.
+
+type TopicFacts
+  = TopicFacts({
+      is_hole:                Bool,                 // TentPropose → TopicHandle(h): handle_is_hole(h)
+      error_code_at:          Option,               // Option<String> — TentPropose → TopicHandle(h): error_at(h)
+      nested_call_depth:      Int                   // TentTopology → nested_calls_at_span(topic)
     })
 
 // ═══ FormKind — the grammar shape a VoiceLine takes ═════════════════
@@ -389,3 +415,142 @@ effect Interact {
   history(Int)                   -> List                       @resume=OneShot   // List<TurnRecord>
   cancel_pending()               -> ()                         @resume=OneShot
 }
+
+// ═══ Silence predicate — default is silence ═════════════════════════
+/// Mentl does NOT fill space to fill space. A VoiceLine surfaces only
+/// when the predicate holds: proof_derivable AND observation-new. Both
+/// false → Silence. Silence is the default state; speaking is the
+/// exception, earned by proof + novelty. §2.7.5 is the authority.
+///
+/// Pure over Situation (facts are pre-computed during composition, per
+/// §2.7.5 resolution + TopicFacts above). No effects. Same Situation
+/// → same verdict, deterministic. This is the substrate on which
+/// cursor-moved-turns decide whether to emit anything at all.
+
+fn silence_predicate(situation) with Pure =
+  proof_derivable(situation) && observation_new_since_last_turn(situation)
+
+// ═══ proof_derivable — tentacle-specific check ══════════════════════
+/// Each tentacle asks: "does the graph hold a proven thing I can say
+/// about this topic right now?" If yes, proof_derivable true; else
+/// false. Exhaustive over the 8 tentacles — no wildcard arm (H6
+/// discipline). Every branch is a pure read of Situation's pre-
+/// computed state.
+
+fn proof_derivable(situation) with Pure =
+  let Situation(s) = situation
+  match s.tentacle {
+    TentQuery     => is_some(s.reason_at_topic),
+    TentPropose   =>
+      match s.topic {
+        TopicHandle(_) => {
+          let TopicFacts(f) = s.facts
+          f.is_hole || is_some(f.error_code_at)
+        },
+        TopicAsk(_)    => true,
+        TopicIdent(_)  => false,
+        TopicSpan(_)   => false,
+        TopicError(_, _) => true
+      },
+    TentTopology  => {
+      let TopicFacts(f) = s.facts
+      f.nested_call_depth >= 3
+    },
+    TentUnlock    =>
+      is_some(s.gradient_next) && gradient_unlocks_capability(s.gradient_next),
+    TentTrace     =>
+      is_some(s.ownership_at_topic) || row_subsumption_fails(s.row_at_topic, s.row_declared),
+    TentVerify    => list_non_empty(s.refinements),
+    TentTeach     => is_some(s.gradient_next),
+    TentWhy       =>
+      match s.topic {
+        TopicAsk(q) => question_is_why(q),
+        TopicIdent(_) => false,
+        TopicHandle(_) => false,
+        TopicSpan(_) => false,
+        TopicError(_, _) => false
+      }
+  }
+
+// ═══ observation_new_since_last_turn — novelty check ════════════════
+/// Mentl does not repeat herself. If the prior turn was at the same
+/// topic with the same tentacle, this turn is silent — unless the
+/// underlying proof changed materially (which shows up via
+/// proof_derivable). Together, the two predicates compose into:
+/// "speak when there's proof AND it's new."
+
+fn observation_new_since_last_turn(situation) with Pure =
+  let Situation(s) = situation
+  match s.prior_turn_topic {
+    None          => true,
+    Some(prior)   =>
+      !topic_equal(s.topic, prior)
+        || match s.prior_turn_tentacle {
+             None              => true,
+             Some(prior_tent)  => !tentacle_equal(s.tentacle, prior_tent)
+           }
+  }
+
+// ═══ topic_equal — structural equality on Topic ═════════════════════
+/// Two Topics match when same variant + same carried values. Span
+/// equality is structural; String equality is via str_eq. Match is
+/// exhaustive over the 5 variants — no wildcard.
+
+fn topic_equal(a, b) with Pure =
+  match a {
+    TopicIdent(n1)        =>
+      match b {
+        TopicIdent(n2)      => str_eq(n1, n2),
+        TopicHandle(_)      => false,
+        TopicSpan(_)        => false,
+        TopicError(_, _)    => false,
+        TopicAsk(_)         => false
+      },
+    TopicHandle(h1)       =>
+      match b {
+        TopicHandle(h2)     => h1 == h2,
+        TopicIdent(_)       => false,
+        TopicSpan(_)        => false,
+        TopicError(_, _)    => false,
+        TopicAsk(_)         => false
+      },
+    TopicSpan(s1)         =>
+      match b {
+        TopicSpan(s2)       => span_equal(s1, s2),
+        TopicIdent(_)       => false,
+        TopicHandle(_)      => false,
+        TopicError(_, _)    => false,
+        TopicAsk(_)         => false
+      },
+    TopicError(c1, s1)    =>
+      match b {
+        TopicError(c2, s2)  => str_eq(c1, c2) && span_equal(s1, s2),
+        TopicIdent(_)       => false,
+        TopicHandle(_)      => false,
+        TopicSpan(_)        => false,
+        TopicAsk(_)         => false
+      },
+    TopicAsk(_)           =>
+      match b {
+        TopicAsk(_)         => true,     // same-variant ask; Question equality deferred to Ask handler context
+        TopicIdent(_)       => false,
+        TopicHandle(_)      => false,
+        TopicSpan(_)        => false,
+        TopicError(_, _)    => false
+      }
+  }
+
+// ═══ tentacle_equal — structural equality on Tentacle ═══════════════
+/// Eight nullary variants. Pair-match exhaustive. No wildcard (H6).
+
+fn tentacle_equal(a, b) with Pure =
+  match a {
+    TentQuery     => match b { TentQuery     => true, TentPropose => false, TentTopology => false, TentUnlock => false, TentTrace => false, TentVerify => false, TentTeach => false, TentWhy => false },
+    TentPropose   => match b { TentPropose   => true, TentQuery   => false, TentTopology => false, TentUnlock => false, TentTrace => false, TentVerify => false, TentTeach => false, TentWhy => false },
+    TentTopology  => match b { TentTopology  => true, TentQuery   => false, TentPropose  => false, TentUnlock => false, TentTrace => false, TentVerify => false, TentTeach => false, TentWhy => false },
+    TentUnlock    => match b { TentUnlock    => true, TentQuery   => false, TentPropose  => false, TentTopology => false, TentTrace => false, TentVerify => false, TentTeach => false, TentWhy => false },
+    TentTrace     => match b { TentTrace     => true, TentQuery   => false, TentPropose  => false, TentTopology => false, TentUnlock => false, TentVerify => false, TentTeach => false, TentWhy => false },
+    TentVerify    => match b { TentVerify    => true, TentQuery   => false, TentPropose  => false, TentTopology => false, TentUnlock => false, TentTrace => false, TentTeach => false, TentWhy => false },
+    TentTeach     => match b { TentTeach     => true, TentQuery   => false, TentPropose  => false, TentTopology => false, TentUnlock => false, TentTrace => false, TentVerify => false, TentWhy => false },
+    TentWhy       => match b { TentWhy       => true, TentQuery   => false, TentPropose  => false, TentTopology => false, TentUnlock => false, TentTrace => false, TentVerify => false, TentTeach => false }
+  }

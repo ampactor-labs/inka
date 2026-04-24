@@ -373,7 +373,7 @@ fn find_first_span_loop(ref sites, ref name, i, n) with !Mutate =
 fn check_ref_escape(ref params, ref body) with !Mutate =
   params
     |> collect_ref_params
-    |> |refs|
+    |> (refs) =>
          if len(refs) == 0 { () }
          else { walk_return_positions(refs, body) }
 

@@ -1,0 +1,202 @@
+// mentl_voice.nx — voice substrate (MV §2.7 closure, LOCKED 2026-04-21)
+//
+// Declares the types Mentl's voice reads and produces. No handlers
+// here yet — handlers compose on these types and land in peer
+// sub-handles (MV.2.b Interact effect + MV.2.c silence predicate +
+// MV.2.d render + modifier bank + MV.2.e mentl_voice_default handler).
+//
+// Every tentacle reads the graph through the same Situation shape;
+// every tentacle produces the same VoiceLine shape. Eight tentacles,
+// one kernel, one voice grammar.
+
+import types
+import mentl
+import graph
+import own
+
+// ═══ Topic — what the voice is about ════════════════════════════════
+/// Topic is the focus of one voice turn. Cursor-of-attention projects
+/// onto a Topic; Mentl reads the graph at that topic. Five variants
+/// cover the four load-bearing attention surfaces (identifier / graph
+/// handle / cursor position / named error) plus the explicit ask path.
+/// Primitive: #1 (Query tentacle reads the graph at a Topic).
+
+type Topic
+  = TopicIdent(String)                   // hover on identifier
+  | TopicHandle(Int)                     // direct graph node
+  | TopicSpan(Span)                      // cursor position
+  | TopicError(String, Span)             // specific diagnostic (code, span)
+  | TopicAsk(Question)                   // user asked explicitly (via query.nx's Question)
+
+// ═══ Tentacle — which projection is speaking ════════════════════════
+/// One tentacle per kernel primitive. Eight primitives · eight
+/// tentacles · eight interrogations — the octopus IS the kernel made
+/// voice. Never a ninth; never a seventh.
+
+type Tentacle
+  = TentQuery       // #1 — graph state at topic
+  | TentPropose     // #2 — handler / candidate surfaces
+  | TentTopology    // #3 — verb / pipe-shape nudges
+  | TentUnlock      // #4 — capability narrowings via row algebra
+  | TentTrace       // #5 — ownership / region trails
+  | TentVerify      // #6 — refinement obligations + discharges
+  | TentTeach       // #7 — gradient's one next step
+  | TentWhy         // #8 — Reason chain walks
+
+// ═══ Register — rendering density ═══════════════════════════════════
+/// Three registers. V1 default is RPlayful — warm but sparse.
+/// RTerse is the keyboard-shortcut register. RExplain opens the
+/// Reason chain (multi-sentence, used when user asked QWhy).
+/// The register is a rendering input; it does not change what's
+/// surfaced, only how densely.
+
+type Register
+  = RTerse
+  | RPlayful
+  | RExplain
+
+// ═══ GradientStep — one proven annotation the user could add ════════
+/// Every GradientStep is a theorem: Mentl has proved (via the
+/// speculative oracle at src/mentl.nx:134) that annotating `site`
+/// with `annotation` unlocks `capability`. `proof` is the Reason
+/// edge the Why tentacle walks on demand.
+/// Primitive: #7 (annotation gradient), with #8 (Reason) carrying proof.
+
+type GradientStep
+  = GradStep({
+      annotation: Annotation,
+      unlocks:    Capability,
+      site:       Span,
+      proof:      Reason
+    })
+
+// ═══ EnvEntry — one binding in the env snapshot ═════════════════════
+/// Env-entries reach Mentl as snapshots so a turn is stateless w.r.t.
+/// env updates. Name + Scheme + Reason + SchemeKind mirrors Env's
+/// existing shape (per types.nx SchemeKind).
+
+type EnvEntry
+  = EnvEntry(String, Scheme, Reason, SchemeKind)
+
+// ═══ HandlerEntry — one installed handler in the current chain ══════
+/// The ~> chain is a capability stack (INSIGHTS.md "The Handler Chain
+/// Is a Capability Stack"). HandlerEntry captures one position in it:
+/// handler name, the effects it absorbs, and the Reason that placed
+/// it here. Mentl's Unlock tentacle reads this to surface "this
+/// handler is why `Alloc` is absorbed here."
+/// Primitive: #2 + #4.
+
+type HandlerEntry
+  = HandlerEntry({
+      name:              String,
+      absorbs:           EffRow,
+      install_reason:    Reason,
+      install_span:      Span
+    })
+
+// ═══ Situation — the complete input Mentl reads per turn ════════════
+/// Every speak op receives a Situation. All 13 fields are load-bearing.
+/// No external state consulted — stateless-per-turn except
+/// prior_turn_topic (silence predicate input) and register (rendering).
+/// The Situation IS the graph read: composing it invokes every
+/// relevant effect op (graph_chase, env_snapshot, refinement_query,
+/// ownership_at, gradient_next) and freezes their results for this
+/// turn.
+/// Primitives: #1 (graph), #2 (handlers_installed), #4 (rows),
+/// #5 (ownership), #6 (refinements), #7 (gradient_next), #8 (reason).
+
+type Situation
+  = Situation({
+      tentacle:           Tentacle,
+      topic:              Topic,
+      handle:             Option,                // Option<Int>
+      env_snapshot:       List,                  // List<EnvEntry>
+      reason_at_topic:    Option,                // Option<Reason>
+      row_at_topic:       Option,                // Option<EffRow>
+      row_declared:       Option,                // Option<EffRow> — differs from row_at_topic → subsumption diag
+      ownership_at_topic: Option,                // Option<Ownership>
+      refinements:        List,                  // List<Predicate>
+      gradient_next:      Option,                // Option<GradientStep>
+      handlers_installed: List,                  // List<HandlerEntry>
+      prior_turn_topic:   Option,                // Option<Topic> — silence predicate input
+      register:           Register
+    })
+
+// ═══ FormKind — the grammar shape a VoiceLine takes ═════════════════
+/// Eight shapes, one per default-tentacle. Tone is NOT a separate
+/// enum: tentacle + FormKind + Modifier compose the register-shape
+/// of each VoiceLine. Tentacle→FormKind is the §2.7.3 mapping;
+/// users rarely override.
+
+type FormKind
+  = FFactual          // "`x` is Pure." (Query)
+  | FOffering         // "Adding `with Pure` unlocks memoization." (Propose / Topology)
+  | FRefutation       // "`own x` consumed twice at L40." (Trace)
+  | FNavigation       // "`env_lookup` — returns `Option<Entry>`." (Query deep)
+  | FCapability       // "`!Alloc` — real-time-safe." (Unlock)
+  | FRefinement       // "`99999` violates `self <= 65535`." (Verify)
+  | FGradient         // "Next: `with Pure` on line 12." (Teach)
+  | FTrace            // "Bound L18; `+` at L42 said `Int`." (Why)
+
+// ═══ Slot — typed content slots in a VoiceLine ══════════════════════
+/// Each slot renders through a canonical renderer (show_type,
+/// show_row, show_reason). No ad-hoc formatting at the voice layer —
+/// the graph's own self-projection is the source of strings.
+/// Backtick-wrapping lives in the slot's render, not in handwritten
+/// prose.
+
+type Slot
+  = SIdent(String)         // backtick-wrapped at render
+  | SType(Ty)              // via canonical show_type
+  | SRow(EffRow)           // via canonical show_row
+  | SSpan(Span)            // rendered "(L{line})" or "(L{line}:{col})"
+  | SReason(Reason)        // via show_reason (compressed)
+  | SCap(String)           // capability name, plain (e.g., "CRealTime")
+  | SAnnot(String)         // annotation, backtick-wrapped
+  | SLit(String)           // literal text (for offering closers)
+
+// ═══ Modifier — one optional tail flourish ══════════════════════════
+/// RPlayful picks AT MOST ONE modifier per VoiceLine. RTerse → NoMod.
+/// RExplain allows one per sentence max. Modifier selection is
+/// deterministic — same Situation hash → same modifier — so
+/// repeated renders are reproducible (§2.7.4 applicable subsets
+/// live in the handler's render path, MV.2.d).
+
+type Modifier
+  = NoMod
+  | TailConsequence(String)   // " — memoization's on the table."
+  | ParenQualifier(String)    // " (L40)"
+  | EmphasisClose(String)     // " — can't have it both ways."
+
+// ═══ VoiceLine — the residue of one speak op ════════════════════════
+/// Silence is the default. When a turn produces nothing proven-worth-
+/// surfacing (silence_predicate returns false), the surface handler
+/// renders null — hover returns empty, inlayHint is not emitted,
+/// status bar stays empty. Mentl does NOT fill space to fill space.
+///
+/// Non-silence is a four-part composition: which tentacle speaks,
+/// what grammar shape, the typed slots it fills, one optional
+/// modifier. Every non-Silence VoiceLine carries a Reason edge in
+/// the graph that supports its assertion (acceptance criterion #4
+/// per MV §2.8).
+/// Primitives: #2 (tentacle's resume discipline), #8 (Reason on every
+/// non-Silence VoiceLine).
+
+type VoiceLine
+  = Silence
+  | VoiceLine(Tentacle, FormKind, List, Modifier)   // slots: List<Slot>
+
+// ═══ TurnRecord — one entry in the session's voice history ══════════
+/// History feeds the silence predicate's
+/// observation_new_since_last_turn check. Bounded ring — the session
+/// keeps the last N turns, older entries drop. Ring size is a
+/// handler-install parameter, not a substrate constant (configured
+/// at handler install per H3.1 parameterized effects).
+
+type TurnRecord
+  = TurnRecord({
+      tentacle:  Tentacle,
+      topic:     Topic,
+      line:      VoiceLine,
+      span_at:   Span
+    })

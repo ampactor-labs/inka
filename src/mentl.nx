@@ -24,11 +24,11 @@ import effects
 
 // Mentl-owned ADTs
 
-// Each variant carries an Option(Span) — Some when the candidate
-// originated from a user site (hovered hole, quick-fix request);
-// None for fully-internal speculation. narrow_row threads this into
-// the Located reason so the Why chain reads at the user's
-// coordinates, not 0:0-0:0.
+/// Each variant carries an Option(Span) — Some when the candidate
+/// originated from a user site (hovered hole, quick-fix request);
+/// None for fully-internal speculation. narrow_row threads this into
+/// the Located reason so the Why chain reads at the user's
+/// coordinates, not 0:0-0:0.
 type Annotation
   = APure(Option)
   | ANotAlloc(Option)
@@ -81,7 +81,7 @@ effect Teach {
   teach_unlock(Annotation) -> Capability            @resume=OneShot
 }
 
-// ═══ Synth effect — proposers as handlers ══════════════════════════
+// ═══ Synth effect — proposers as handlers ══════════════════════════  // drift-audit: ignore — D.1.R reserved block; decoration removal is a separate sub-handle
 // Three ops: propose (main), verify_candidate (Mentl-internal),
 // enumerate_inhabitants (multi-shot raw). Any proposer — enumerative,
 // SMT, LLM, user — plugs in as a handler. The compiler verifies.
@@ -141,9 +141,8 @@ fn gradient_next(handle) = {
   }
 }
 
-// Try each candidate; checkpoint + tentative apply + verify + rollback.
-// Returns [(Annotation, Capability)] for annotations that passed.
-
+/// Try each candidate: checkpoint → tentative apply → verify → rollback.
+/// Returns [(Annotation, Capability)] for annotations that passed.
 fn try_each_annotation(handle, candidates, base_ty) =
   let n = len(candidates)
   let buf = make_list(n)
@@ -166,10 +165,9 @@ fn try_each_annotation_loop(handle, candidates, base_ty, i, n, buf, buf_len) =
     }
   }
 
-// Speculative apply: compute the narrowed type/row and graph_bind it.
-// graph_bind is one-write; within a checkpoint, the narrowed bind is
-// recorded in the trail and reverted on rollback.
-
+/// Speculative apply: compute the narrowed type/row and graph_bind it.
+/// graph_bind is one-write; within a checkpoint, the narrowed bind is
+/// recorded in the trail and reverted on rollback.
 fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
   APure(sp)          => narrow_row(handle, base_ty, EfPure, sp),
   ANotAlloc(sp)      => narrow_row(handle, base_ty, EfNeg(mk_ef_closed([ENamed("Alloc")])), sp),    // drift-audit: ignore — real drift 8 (EffName should have EAlloc variant); tracked for item 11.B EffName refactor
@@ -211,12 +209,12 @@ fn unwrap_source_span(opt) with Pure = match opt {
   None    => span_zero()
 }
 
-// H5: HandlerCatalog — registry of which compiler-built-in handlers
-// absorb which effects. Today a static table; the full effect-based
-// handler_catalog (with runtime registration) lands when user-level
-// handler discovery is exercised. The catalog enables AWrapHandler
-// proposal: when a body row has an effect E, look up handlers that
-// absorb E, propose the closest match.
+/// H5: HandlerCatalog — registry of which compiler-built-in handlers
+/// absorb which effects. Today a static table; the full effect-based
+/// handler_catalog (with runtime registration) lands when user-level
+/// handler discovery is exercised. The catalog enables AWrapHandler
+/// proposal: when a body row has an effect E, look up handlers that
+/// absorb E, propose the closest match.
 fn catalog_handled_effects(handler_name) =
   if str_eq(handler_name, "mem_bump")    { [ENamed("Alloc")] }         // drift-audit: ignore — static HandlerCatalog table pending substrate replacement; real drift 8 on EffName+handler-name; both tracked for item 11.B EffName refactor + HandlerCatalog runtime registration
   else if str_eq(handler_name, "temp_arena") { [ENamed("Alloc")] }     // drift-audit: ignore — same as above
@@ -225,9 +223,9 @@ fn catalog_handled_effects(handler_name) =
   else if str_eq(handler_name, "sandbox_net")   { [ENamed("Network")] }
   else { [] }
 
-// H5: capability unlocks for an annotation. !Alloc unlocks
-// CRealTime; !IO + Pure unlock CCompileTimeEval; etc. The list is
-// returned by render_audit's severance section.
+/// H5: capability unlocks for an annotation. !Alloc unlocks
+/// CRealTime; !IO + Pure unlock CCompileTimeEval; etc. The list is
+/// returned by render_audit's severance section.
 fn capabilities_for_annotation(ann) with Pure = match ann {
   APure(_)        => [CMemoize, CCompileTimeEval, CParallelize],
   ANotAlloc(_)    => [CRealTime],
@@ -239,9 +237,9 @@ fn capabilities_for_annotation(ann) with Pure = match ann {
   AWrapHandler(_, _, _) => []     // unlocks depend on what's wrapped
 }
 
-// H5: capability unlocks for a SEVERANCE — adding `!E` to an fn
-// that doesn't perform E. Mirrors capabilities_for_annotation but
-// keyed by EffName (severance candidate's name).
+/// H5: capability unlocks for a SEVERANCE — adding `!E` to an fn
+/// that doesn't perform E. Mirrors capabilities_for_annotation but
+/// keyed by EffName (severance candidate's name).
 fn capabilities_for_severance(name) = match name {
   ENamed(n) =>
     if str_eq(n, "Alloc")   { [CRealTime] }                          // drift-audit: ignore — capability-for-severance table; real drift 8 (should match on EAlloc/EIO variants); tracked for item 11.B EffName refactor
@@ -266,17 +264,16 @@ fn narrow_row(handle, base_ty, narrow, source_span) = match base_ty {
   _ => ()
 }
 
-// Verify after tentative apply: read the target handle's state.
-// A candidate is "proven" if the post-apply handle is NBound (the
-// tentative narrowing stuck cleanly). Failure modes:
-//   NErrorHole — occurs check or a structural conflict caused
-//                inference to record failure on the handle.
-//   NFree     — the apply didn't bind (shouldn't happen for a
-//                well-formed apply_annotation_tentatively).
-//   row-kind  — handle was a row variable; not a narrow target.
-// The trail-based rollback restores whatever state the handle held
-// before the tentative apply, so this check is non-destructive.
-
+/// Verify after tentative apply: read the target handle's state.
+/// A candidate is "proven" if the post-apply handle is NBound (the
+/// tentative narrowing stuck cleanly). Failure modes:
+///   NErrorHole — occurs check or a structural conflict caused
+///                inference to record failure on the handle.
+///   NFree     — the apply didn't bind (shouldn't happen for a
+///                well-formed apply_annotation_tentatively).
+///   row-kind  — handle was a row variable; not a narrow target.
+/// The trail-based rollback restores whatever state the handle held
+/// before the tentative apply, so this check is non-destructive.
 fn verify_after_apply(handle) = {
   let GNode(kind, _) = perform graph_chase(handle)
   match kind {
@@ -346,8 +343,8 @@ fn find_annotation_loop(proven, target, i, n) =
     else { find_annotation_loop(proven, target, i + 1, n) }
   }
 
-// Span-insensitive: two APure(_) compare equal regardless of source
-// span. Priority comparison classifies by discriminator, not origin.
+/// Span-insensitive: two APure(_) compare equal regardless of source
+/// span. Priority comparison classifies by discriminator, not origin.
 fn annotation_eq(a, b) with Pure = match a {
   APure(_)       => match b { APure(_)       => true, _ => false },
   ANotAlloc(_)   => match b { ANotAlloc(_)   => true, _ => false },

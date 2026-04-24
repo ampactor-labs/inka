@@ -16,17 +16,17 @@
 
 import types
 
-// ═══ Byte-level accessors ══════════════════════════════════════════
+// Byte-level accessors
 
-// byte_len: length of a string in bytes (the i32 header word).
+/// byte_len — length of a string in bytes (the i32 header word).
 fn byte_len(s) with Memory =
   perform load_i32(s)
 
-// byte_at: load a single byte at position i (0-indexed into the payload).
+/// byte_at — load a single byte at position i (0-indexed into the payload).
 fn byte_at(s, i) with Memory =
   perform load_i8(s + 4 + i)
 
-// ═══ Equality and ordering ═════════════════════════════════════════
+// Equality and ordering
 
 fn str_eq_loop(a, b, slen, i) -> Bool with Memory =
   if i >= slen { true }
@@ -35,11 +35,10 @@ fn str_eq_loop(a, b, slen, i) -> Bool with Memory =
     else { str_eq_loop(a, b, slen, i + 1) }
   }
 
-// str_eq: byte-exact equality. Returns Bool. Always use directly:
-// `if str_eq(a, b) { ... }` — never `str_eq(a, b)` (which is
-// E_TypeMismatch under Inka's type-distinct Bool). Bare `==` on
-// string pointers is a pointer compare, not a content compare —
-// always wrong.
+/// str_eq — byte-exact equality. Returns Bool. Always use directly:
+/// `if str_eq(a, b) { ... }` — never `str_eq(a, b)` as a value
+/// (E_TypeMismatch under Inka's type-distinct Bool). Bare `==` on
+/// string pointers is a pointer compare, not a content compare.
 fn str_eq(a, b) -> Bool with Memory =
   let la = perform load_i32(a)
   let lb = perform load_i32(b)
@@ -58,16 +57,16 @@ fn str_lt_loop(a, b, la, lb, i) -> Bool with Memory =
     else { str_lt_loop(a, b, la, lb, i + 1) }
   }
 
-// str_lt: lexicographic less-than. Returns Bool.
+/// str_lt — lexicographic less-than. Returns Bool.
 fn str_lt(a, b) -> Bool with Memory =
   let la = perform load_i32(a)
   let lb = perform load_i32(b)
   str_lt_loop(a, b, la, lb, 0)
 
-// ═══ Concatenation and slicing ═════════════════════════════════════
+// Concatenation and slicing
 
-// str_concat: allocate a new flat string = a ++ b.
-// The result shares nothing with a or b — bump allocator, immutable.
+/// str_concat — allocate a new flat string = a ++ b.
+/// The result shares nothing with a or b — bump allocator, immutable.
 fn str_concat(a, b) with Memory + Alloc =
   let la = perform load_i32(a)
   let lb = perform load_i32(b)
@@ -77,8 +76,8 @@ fn str_concat(a, b) with Memory + Alloc =
   perform mem_copy(dest + 4 + la, b + 4, lb)
   dest
 
-// str_slice: return a new flat string = s[start..end) (exclusive end).
-// Clamps start and end to valid range — no panic, no sentinel.
+/// str_slice — return a new flat string = s[start..end) (exclusive end).
+/// Clamps start and end to valid range — no panic, no sentinel.
 fn str_slice(s, start, end) with Memory + Alloc =
   let slen = perform load_i32(s)
   let cstart = if start < 0 { 0 } else if start > slen { slen } else { start }
@@ -89,11 +88,11 @@ fn str_slice(s, start, end) with Memory + Alloc =
   perform mem_copy(dest + 4, s + 4 + cstart, n)
   dest
 
-// ═══ Integer conversion ════════════════════════════════════════════
+// Integer conversion
 
-// int_to_str: decimal representation of a signed 32-bit integer.
-// Handles negative numbers and zero correctly.
-// Digit-wise: no sprintf, no lookup table beyond '0'+digit.
+/// int_to_str — decimal representation of a signed 32-bit integer.
+/// Handles negative numbers and zero correctly.
+/// Digit-wise: no sprintf, no lookup table beyond '0'+digit.
 fn int_to_str(n) with Memory + Alloc =
   if n == 0 { str_of_single_byte(48) }             // "0"
   else if n == 0 - 2147483648 {
@@ -140,8 +139,8 @@ fn int_to_str_positive(n) with Memory + Alloc =
   perform mem_copy(dest + 4, scratch + 4 + used, len)
   dest
 
-// int_write_digits: write decimal digits right-to-left into buf[0..10).
-// Returns the start offset of the first written digit (so length = 10 - start).
+/// int_write_digits — write decimal digits right-to-left into buf[0..10).
+/// Returns the start offset of the first written digit (so length = 10 - start).
 fn int_write_digits(buf, pos, n) with Memory + Alloc =
   if n == 0 { pos }
   else {

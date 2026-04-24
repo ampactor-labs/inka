@@ -18,8 +18,7 @@
 import types
 import runtime/strings
 
-// Pack — byte output direction
-
+/// Pack — byte output direction.
 effect Pack {
   pack_byte(Int) -> ()        @resume=OneShot
   pack_i32(Int) -> ()         @resume=OneShot
@@ -27,8 +26,7 @@ effect Pack {
   pack_finalize() -> String   @resume=OneShot
 }
 
-// Unpack — byte input direction
-
+/// Unpack — byte input direction.
 effect Unpack {
   unpack_byte() -> Int        @resume=OneShot
   unpack_i32() -> Int         @resume=OneShot
@@ -117,8 +115,7 @@ handler buffer_unpacker(source) with pos = 0 {
   }
 }
 
-// Ensure capacity — grow-on-demand buffer management
-
+/// ensure_capacity — grow-on-demand buffer management.
 fn ensure_capacity(buf, offset, capacity, needed) with Memory + Alloc =
   if capacity == 0 {
     let initial = if needed > 4096 { needed * 2 } else { 4096 }

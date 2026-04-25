@@ -934,6 +934,66 @@ fn fold_tentacles(situation, tentacles, i, n, acc, count) with Pure =
     }
   }
 
+/// voice_lines_for — D.1.e LOWER LAYER per F.1 walkthrough §3.3 (commit
+/// 4d0fce1). Tentacle-fold projection: walks the 8 kernel tentacles in
+/// canonical order (Query → Propose → Topology → Unlock → Trace →
+/// Verify → Teach → Why), composes per-tentacle Situation via
+/// with_tentacle, checks proof_derivable (Pure per-tentacle gate),
+/// renders surviving tentacles via render_for_tentacle, returns a
+/// List<VoiceLine> of length 0 to 8.
+///
+/// Two-tier silence per insight #11 + MV §2.7.5:
+///   - Outer gate: silence_predicate(situation) — project queue empty
+///     means full silence; entire fn returns []
+///   - Inner gate: proof_derivable(situation_t) per tentacle — even
+///     with non-empty queue, only tentacles with proven content fire
+///
+/// Cursor-time consumers (LSP) call this and filter to the
+/// surface-specific tentacle; batch consumers (F.1 inka doc) render
+/// all. Same machinery, different iteration scope. Tier-1 unification
+/// per INSIGHTS L509.
+///
+/// Naming note: F.1 §3.3 specifies `mentl_voice_default(situation)`
+/// for this function; the Interact handler at end-of-file took that
+/// name first per MV.2.e.scaffold (commit a0f6be6). Resolved here as
+/// voice_lines_for — describes input→output shape — to honor both
+/// the walkthrough's contract and the handler's canonical-name role.
+///
+/// Substrate idiom: list_extend_to + counter (Ω.3 substrate). Avoids
+/// the O(N squared) loop-accumulator pattern by mutating a sized
+/// buffer with explicit length tracking.
+
+fn voice_lines_for(situation) with OracleQuery =
+  if silence_predicate(situation) { [] }
+  else {
+    let tentacles = [TentQuery, TentPropose, TentTopology, TentUnlock,
+                     TentTrace, TentVerify, TentTeach, TentWhy]
+    let n = len(tentacles)
+    let buf = make_list(n)
+    let count = fold_tentacles_to_voicelines(situation, tentacles, 0, n, buf, 0)
+    slice(buf, 0, count)
+  }
+
+/// fold_tentacles_to_voicelines — tail-recursive fold helper. For each
+/// tentacle: retarget Situation, gate via proof_derivable, render +
+/// accumulate via list_extend_to. Pure (silence_predicate's
+/// OracleQuery already discharged at the outer gate).
+
+fn fold_tentacles_to_voicelines(situation, tentacles, i, n, buf, count) with Pure =
+  if i >= n { count }
+  else {
+    let tent = list_index(tentacles, i)
+    let situation_t = with_tentacle(situation, tent)
+    if proof_derivable(situation_t) {
+      let voiceline = render_for_tentacle(situation_t)
+      let extended = list_extend_to(buf, count + 1)
+      let written = list_set(extended, count, voiceline)
+      fold_tentacles_to_voicelines(situation, tentacles, i + 1, n, written, count + 1)
+    } else {
+      fold_tentacles_to_voicelines(situation, tentacles, i + 1, n, buf, count)
+    }
+  }
+
 /// voice_queue_walk — queue-projection per insight #11. Queries the
 /// project queue via OracleQuery (cursor-relevance filtered when the
 /// situation has a cursor; project-wide otherwise); for each

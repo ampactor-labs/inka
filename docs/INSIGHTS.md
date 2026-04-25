@@ -2234,6 +2234,81 @@ the graph can't host it.
 
 ---
 
+## Kernel Closure: All Eight Primitives Structurally Live
+
+*2026-04-24. Crystallized at the close of B.9 LFeedback substrate
+(commit `7f8ff5f`), which completes Primitive #3 (Five verbs).*
+
+The eight kernel primitives — **(1)** Graph + Env / **(2)** handlers
+with typed resume discipline / **(3)** five verbs `|> <| >< ~> <~` /
+**(4)** full Boolean effect algebra / **(5)** ownership-as-effect /
+**(6)** refinement types / **(7)** annotation gradient / **(8)** HM
+inference + Reasons — are now ALL substrate-live. Not "designed and
+walkthrough-closed" — substrate-live, with code in `src/` + `lib/`
+implementing each.
+
+Roll-call:
+
+| Primitive | Substrate site | Status |
+|---|---|---|
+| #1 Graph + Env | `src/graph.nx`, `src/types.nx` | live since γ cascade |
+| #2 Handlers + resume discipline | `src/lower.nx` LMakeContinuation; `lib/runtime/{search,combinators,arena_ms}.nx`; `src/backends/wasm.nx` H7 emit | live with multi-shot quartet (H7 + B.3 + B.4 + B.5) |
+| #3 Five verbs | `<~` LFeedback emit completion | LIVE NOW (B.9) — last verb closes |
+| #4 Boolean effect algebra | `src/effects.nx` row algebra | live since γ cascade |
+| #5 Ownership-as-effect | `src/own.nx` Consume effect | live since γ cascade |
+| #6 Refinement types | `src/verify.nx` verify_ledger handler | live; verify_smt handler-swap (Arc F.1) is post-first-light upgrade |
+| #7 Annotation gradient | `src/mentl.nx` Teach effect ops | live in shape |
+| #8 HM + Reasons | `src/infer.nx` one-walk HM with Reason chain | live since γ cascade |
+
+**This is the closure moment for the kernel-as-substrate.** No
+primitive is now "declared but unimplemented." Every primitive has
+LIR support, has emit support, has at least one handler implementation,
+and composes with the others.
+
+**What this does NOT mean.** The kernel is structurally closed; it is
+NOT yet *demonstrated end-to-end*. Crucibles are seeds (acceptance
+criteria, not running tests). Domain libraries (`lib/dsp/`, `lib/ml/`)
+remain pre-Ultimate-Inka and need DM rewrite (B.10 + B.11). The
+oracle's voice surfaces (LSP adapter, F.1 inka doc) are pending. Most
+critically: the bootstrap translator (items 26-31) hasn't been
+written — first-light is reached only when `diff inka2.wat inka3.wat`
+is empty, and that's bootstrap work the kernel-substrate enables but
+doesn't accomplish.
+
+**What this DOES mean.** The next moves can compose on a complete
+kernel. B.10/B.11 can use parameterized Sample(rate), the multi-shot
+quartet, `<~` feedback, all eight primitives — and the substrate
+will respond correctly. MV.2.e Interact handler arms can install over
+all eight tentacles knowing each tentacle has substrate to query.
+Bootstrap can hand-WAT against a kernel whose every shape is final
+(no more "we'll add primitive X later"). The kernel is the contract
+the bootstrap writes against; that contract is now sealed.
+
+**The eight interrogations gain weight.** Pre-closure, asking "what
+handler already projects this?" sometimes had no answer because the
+substrate wasn't there. Post-closure, every interrogation has a
+concrete substrate site to point to. The interrogation discipline
+shifts from "find what should be there" to "find what IS there" — a
+strictly stronger discipline.
+
+**The cascade discipline (Anchor 7) earned its weight.** Each handle
+was walkthrough-first; each walkthrough resolved design before code
+froze; each commit closed one handle in residue form. The cumulative
+result is a kernel that no single design pass would have produced —
+the substrate accumulated correctness through dozens of small,
+audited, drift-clean landings. Closure is the cumulative artifact of
+the discipline, not a separate event.
+
+**The next phase is composition, not invention.** From here, work
+COMPOSES on the kernel rather than EXTENDING it. New domains (DSP,
+ML, web, parallel, real-time) project from the eight primitives via
+handler stacks. New surfaces (LSP, doc, REPL, debugger) are handlers
+on existing substrate. New optimizations (verify_smt, native backend,
+SIMD/BLAS) are handler swaps that source code never sees. **The
+medium is whole.** What follows is the medium being put to work.
+
+---
+
 ## Write the Wheel, Then Build the Lathe
 
 *2026-04-17. Crystallized from the V2 audit pivot.*

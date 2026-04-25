@@ -1593,6 +1593,40 @@ fn emit_ev_slot_stores(ev_exprs, nc, j) =
     emit_ev_slot_stores(list_tail(ev_exprs), nc, j + 1)
   }
 
+/// emit_capture_stores_at_offset — H7 variant of emit_capture_stores
+/// with explicit base_offset parameter. LMakeContinuation's heap layout
+/// shifts capture storage to start at offset 12 (header is fn_ptr +
+/// state_index + capture_count = 12 bytes) instead of LMakeClosure's
+/// offset 8 (no state_index). The substrate is otherwise identical;
+/// only the base offset differs.
+
+fn emit_capture_stores_at_offset(captures, base_offset, i) =
+  if len(captures) == 0 { () }
+  else {
+    perform wat_emit("    (local.get $state_tmp)\n")
+    emit_expr(list_head(captures))
+    perform wat_emit("    (i32.store offset=")
+    perform wat_emit(int_to_str(base_offset + i * 4))
+    perform wat_emit(")\n")
+    emit_capture_stores_at_offset(list_tail(captures), base_offset, i + 1)
+  }
+
+/// emit_ev_slot_stores_at_offset — H7 variant of emit_ev_slot_stores
+/// with explicit base_offset (the offset where the first ev_slot lives,
+/// already past the captures). For LMakeContinuation: base_offset =
+/// 12 + 4 * nc.
+
+fn emit_ev_slot_stores_at_offset(ev_exprs, base_offset, j) =
+  if len(ev_exprs) == 0 { () }
+  else {
+    perform wat_emit("    (local.get $state_tmp)\n")
+    emit_expr(list_head(ev_exprs))
+    perform wat_emit("    (i32.store offset=")
+    perform wat_emit(int_to_str(base_offset + j * 4))
+    perform wat_emit(")\n")
+    emit_ev_slot_stores_at_offset(list_tail(ev_exprs), base_offset, j + 1)
+  }
+
 // H1.6: dynamic-offset variant for LSuspend's transient closure.
 // nc is runtime-known (loaded from $callee_closure[4]); each ev
 // slot's address is base + 8 + 4*nc + 4*j computed at runtime.

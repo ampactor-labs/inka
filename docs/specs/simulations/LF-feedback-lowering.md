@@ -362,3 +362,112 @@ Actually — revision: LF is **independent of naming/structure/simplification** 
 LF closes the last Priority 1 substrate gap. The `<~` verb — Inka's genuine novelty — compiles to WAT correctly for the v1 scope of `delay(1)`. DSP and ML stdlib modules work end-to-end. The `[substrate pending]` tag on feedback in `a-day.md` flips to `[LIVE]`.
 
 **One walkthrough, one commit, feedback fully realized.**
+
+---
+
+## 11. Riffle-back addendum (2026-04-24, post-substrate-landing)
+
+*Per Anchor 7: riffle-back captures how prior decisions read in
+the substrate that actually shipped. This addendum is the audit of
+the walkthrough against commit `7f8ff5f` (B.9 emit landing) +
+commit `bba8d4d` (lib/dsp/feedback.nx first composition demo).*
+
+### 11.1 What landed exactly as designed
+
+- **Load-tee-store cycle (§1.5).** The WAT shape matches the
+  walkthrough's pseudo-WAT exactly: load prior → emit body → tee
+  current → store current → reload. Lives at `src/backends/wasm.nx`
+  LFeedback emit arm.
+- **Per-site locals (§4.5).** Both `$__fb_prev_<h>` and `$__fb_<h>`
+  declared in the let-locals walker. Body's lowered LIR has access
+  to both at WAT level.
+- **Spec encoding stubbed (§1.3).** v1 supports `delay(1)` as the
+  walkthrough scoped; longer delays + accumulator + filter_spec
+  remain peer sub-handles LF.1 / LF.2 / LF.3.
+- **Iterative-context gate (§1.7).** Unchanged; existing
+  IterativeContext effect + handlers in `lib/dsp/clock.nx` continue
+  to gate `<~` per `src/infer.nx:961` `perform check_iterative_context()`.
+- **Cache version bump (§5).** `cache_compiler_version` 4→5 per
+  `src/cache.nx:44` so cached LIR pre-B.9 invalidates correctly.
+
+### 11.2 What landed differently from §1.4-§1.5 (and why)
+
+- **State storage: module globals, not handler-state offsets.** The
+  walkthrough §1.4 designed for slot-in-handler-state-record via
+  `alloc_handler_state_slot` op on LowerCtx. What shipped uses
+  module-level `(global $s<h> (mut i32) (i32.const 0))` declared
+  by `emit_state_globals` at module init.
+  - **Why:** The handler-state-offset approach requires a LowerCtx
+    extension + FeedbackSpecCompiled type + threading `$handler_state`
+    through every emit context. That's substantial substrate. The
+    module-globals path was already partially in place
+    (LStateGet/LStateSet's `$s<h>` convention) and just needed the
+    declaration prologue (`collect_state_slots` walker +
+    `emit_state_globals`).
+  - **Trade-off named:** module globals don't compose with threading
+    × multi-shot resume. State would be SHARED across threads (B.7
+    parallel_compose) and across MS continuation captures (H7) —
+    incorrect. Single-threaded-single-iteration v1 works correctly.
+  - **Peer sub-handle to track the migration:** **LF.M** (handler-
+    state-offset migration). Required before threading × `<~`
+    composition is sound.
+
+### 11.3 What didn't land (named as peer sub-handle)
+
+- **Body access to prior at the source level (§1.6).** The
+  walkthrough's v1 said "the feedback value is implicit as
+  `$fb_prior` in the emitted WAT scope. The body is lowered with
+  the expectation that one additional local is present." The WAT
+  local IS declared, but the parser/lower has no way to surface a
+  source-level name that resolves to it. So body LIR can't read the
+  prior — the load-tee-store cycle emits but body computes only on
+  current input.
+  - **Effect on `lib/dsp/feedback.nx` (commit `bba8d4d`):** the IIR
+    filter functions are STRUCTURAL — they emit valid WAT with a
+    feedback shape, but the body multiplies input by alpha alone;
+    the prior-iteration term is absent.
+  - **Peer sub-handle:** **LF.B** (Body-binding for prior). Parser
+    + lower change so a body shape like `(prev) => f(input, prev)`
+    has `prev` resolve to `$__fb_prev_<h>`. Tangled because pipe
+    semantics (`input |> body`) currently feeds body as 1-arg
+    (input only); LF.B needs `<~` to make body a 2-arg function
+    `(input, prev)`.
+
+### 11.4 Sub-handles tracked (final list)
+
+| Handle | Scope | Gate |
+|---|---|---|
+| **LF.B** | Body-binding for prior at source level | Numerical correctness of `<~` filters |
+| **LF.M** | Handler-state-offset migration (replace module globals) | Threading × MS composition soundness |
+| **LF.1** | FbDelay(N>1) ring buffer | DSP delay lines beyond one sample |
+| **LF.2** | FbState(init) typed carrier | Accumulator-style feedback |
+| **LF.3** | FbFilter(N, coeffs) N-tap filter | FIR/IIR with explicit coeff vectors |
+| **LF.S** | verify_smt discharge of refinement obligations | Folds into Arc F.1 SMT work |
+
+### 11.5 What this teaches about the walkthrough discipline
+
+The walkthrough specified a CLEAN design (handler-state offsets +
+FeedbackSpecCompiled + body-binding). What shipped is a HONEST
+v1 that gets the structural state-machine right while explicitly
+deferring source-binding (LF.B) and architectural correctness
+under threading (LF.M).
+
+**Riffle-back catches this** — without the addendum, future readers
+of the walkthrough would see the §1.5 pseudo-WAT and assume that's
+what's emitted. The addendum names the gap precisely so the next
+session reading this walkthrough doesn't have to re-discover it
+from the source.
+
+**The discipline scales:** every walkthrough that lands substrate
+gets a riffle-back addendum naming what landed exactly, what
+landed differently and why, and what didn't land (named as peer
+sub-handles). The walkthrough stays declarative; the addendum
+records the residue between intent and substrate.
+
+**Compounds with insight #13 (kernel closure):** the kernel is
+structurally closed, but several primitives have peer sub-handles
+naming what's deferred. LF.B + LF.M are the largest such; their
+existence doesn't invalidate the kernel-closure milestone (the
+verb's STRUCTURAL substrate IS live), but they remind future
+sessions that "structurally complete" is not "every behavior the
+walkthrough proposed is wired."

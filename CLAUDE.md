@@ -762,6 +762,43 @@ during the γ cascade — that bind all implementation:
     §"Kernel Closure: All Eight Primitives Structurally Live"
     (commit `9a726f2`).
 
+14. **Session Zero corpus reads are non-negotiable; partial-corpus
+    proposals cost 5x tokens.** Crystallized 2026-04-25 from the
+    session that burned ~500k tokens drafting walkthroughs
+    (MV-LSP-adapter, IE-inka-edit) + proposing critical-path moves
+    (BT linker, web-playground collapse) + recommending sequencing
+    — all from partial corpus reads. Each proposal got corrected
+    by the user pointing out load-bearing content I hadn't read.
+    Quality degraded as context filled with correction cycles
+    instead of compact dream-code work. **The discipline:** before
+    proposing or drafting ANY substrate work (walkthrough, code,
+    plan tracker update, road map, sequencing), read the load-
+    bearing corpus IN FULL — `CLAUDE.md` end-to-end + `docs/DESIGN.md`
+    end-to-end (first session; thereafter §0.5 + relevant chapter)
+    + `docs/INSIGHTS.md` load-bearing sections + `~/.claude/plans/the-residue.md`
+    in full + all walkthroughs at `docs/specs/simulations/` that
+    touch the proposed work area + `docs/SYNTAX.md` if any
+    parser/lexer/syntax work + `docs/specs/00-11` for any module
+    being touched. **No substrate proposal from partial-corpus
+    understanding.** If reads are partial, DEFER the proposal
+    until reads complete. **First action post-compaction is corpus
+    reads, not user-request response.** State explicitly which
+    corpus reads are complete; THEN propose or act. Per insight
+    #12 compound interest applied at agent-discipline layer: each
+    session that reads first earns higher-altitude future
+    sessions; each session that skips drops altitude AND costs 5x
+    tokens to recover. The walkthroughs already say what the
+    medium IS; proposals are residue from the walkthroughs, not
+    invention from agent training. Pattern-matching from training
+    data into a substrate proposal is the same drift class as
+    pattern-matching from training data into code — both are
+    fluency-trap; both are caught by reading the medium first.
+    Substrate authority: memory protocol
+    `protocol_session_zero_corpus.md` (2026-04-25); paired with
+    `project_inka_edit_canonical.md` capturing the corrected
+    canonical-IDE + tracker-rename + ultimate-form-discipline
+    + bootstrap-rewrite state.
+
 ---
 
 ## Deep context (read when you need it)

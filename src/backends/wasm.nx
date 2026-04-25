@@ -127,7 +127,6 @@ fn string_offset_lookup(entries, target, i, n) =
     else { string_offset_lookup(entries, target, i + 1, n) }
   }
 
-// ═══ ty_to_wasm — live graph → WASM value type ═════════════════════
 // Reads through LookupTy; refinements transparent (erased at runtime).
 
 fn ty_to_wasm(handle) =
@@ -150,7 +149,6 @@ fn ty_to_wasm_type(ty) with Pure = match ty {
   TCont(_, _)       => "i32"    // continuation pointer
 }
 
-// ═══ emit_module — top-level entry ═════════════════════════════════
 // Walks the lowered program, emitting the full WAT module structure:
 // imports, memory, globals, function table, functions, start. Every
 // output line flows through perform wat_emit.
@@ -185,7 +183,6 @@ fn emit_module(lowered) = {
   emit_footer()
 }
 
-// ═══ W5: string-literal data segments ══════════════════════════════
 // Deep-walk the lowered program collecting every unique LString in
 // encounter order; assign each a 4-byte-aligned offset starting at
 // 0x10000 (64KB — sits above the static-closure region at 0x100
@@ -228,6 +225,14 @@ fn collect_strings_expr(expr, buf, count, next_offset) = match expr {
   LTailCall(_, f, args)       => collect_strings_bin_list(f, args, buf, count, next_offset),
   LReturn(_, inner)           => collect_strings_expr(inner, buf, count, next_offset),
   LMakeClosure(_, LFn(_, _, _, body, _), caps, ev) => {
+    let (buf1, count1, o1) = collect_strings_list(body, buf, count, next_offset)
+    let (buf2, count2, o2) = collect_strings_list(caps, buf1, count1, o1)
+    collect_strings_list(ev, buf2, count2, o2)
+  },
+  LMakeContinuation(_, LFn(_, _, _, body, _), caps, ev, _, _) => {
+    // H7 — same string-collection shape as LMakeClosure (resume_fn body
+    // + captures + ev_slots). state_index and ret_slot are Ints; no
+    // string contributions.
     let (buf1, count1, o1) = collect_strings_list(body, buf, count, next_offset)
     let (buf2, count2, o2) = collect_strings_list(caps, buf1, count1, o1)
     collect_strings_list(ev, buf2, count2, o2)
@@ -335,6 +340,16 @@ fn collect_fn_names_expr(expr, buf, count) = match expr {
     let (buf2, count2) = collect_fn_names_list(captures, buf1, count1)
     collect_fn_names_list(ev, buf2, count2)
   },
+  LMakeContinuation(_h, LFn(name, _arity, _ps, body, _row), captures, ev, _, _) => {
+    // H7 — same fn-name collection shape; the resume_fn becomes
+    // a registered top-level fn alongside other LMakeClosure-derived
+    // fns. state_index and ret_slot are Ints (no fn names).
+    let extended = list_extend_to(buf, count + 1)
+    let written  = list_set(extended, count, name)
+    let (buf1, count1) = collect_fn_names_list(body, written, count + 1)
+    let (buf2, count2) = collect_fn_names_list(captures, buf1, count1)
+    collect_fn_names_list(ev, buf2, count2)
+  },
   LDeclareFn(LFn(name, _arity, _ps, body, _row)) => {
     let extended = list_extend_to(buf, count + 1)
     let written  = list_set(extended, count, name)
@@ -435,8 +450,9 @@ fn collect_top_level_fn_names_loop(lowered, i, n, buf, count) =
   }
 
 fn extract_top_fn_name(stmt) with Pure = match stmt {
-  LLet(_, name, LMakeClosure(_, _, _, _)) => name,
-  _                                    => ""
+  LLet(_, name, LMakeClosure(_, _, _, _))           => name,
+  LLet(_, name, LMakeContinuation(_, _, _, _, _, _)) => name,
+  _                                                  => ""
 }
 
 // Emit the function table and elem mapping indices to function
@@ -553,7 +569,6 @@ fn hex_digit(d) with Pure = match d {
   12 => "c", 13 => "d", 14 => "e", 15 => "f"
 }
 
-// ═══ Type section — signatures for call_indirect ═══════════════════
 // Every call_indirect references a function type index. We emit a
 // type for each arity the program's call sites use: the program
 // carries calls of arity 0..N where N is determined by walking the
@@ -594,8 +609,9 @@ fn max_arity_expr(expr) = match expr {
   LPerform(_, _, args)      => len(args),
   LEvPerform(_, _, _, args) => len(args) + 1,
   LLet(_, _, inner)         => max_arity_expr(inner),
-  LMakeClosure(_, _, _, _)  => 0,
-  LDeclareFn(_)             => 0,
+  LMakeClosure(_, _, _, _)         => 0,
+  LMakeContinuation(_, _, _, _, _, _) => 0,
+  LDeclareFn(_)                    => 0,
 
   // Non-call LIR variants contribute 0. Explicit so a new
   // call-like variant can't silently slip through.
@@ -744,6 +760,17 @@ fn emit_fns_expr(expr) = match expr {
     emit_fns_list(captures)
     emit_fns_list(ev)
   },
+  LMakeContinuation(_h, LFn(name, _arity, param_names, body, _row), captures, ev, _, _) => {
+    // H7 — emit the resume_fn alongside other top-level fns. Same
+    // body_context install pattern as LMakeClosure (the resume fn
+    // takes a __state continuation pointer parameter; captures
+    // restored from offsets per H7 §1.2 layout). Recurse into body
+    // + captures + ev_slots for nested lambdas.
+    emit_fn_body(name, param_names, body, len(captures))
+    emit_fns_list(body)
+    emit_fns_list(captures)
+    emit_fns_list(ev)
+  },
   LDeclareFn(LFn(name, _arity, param_names, body, _row)) => {
     // H1.4: handler arm wasm fn declaration. No captures, no
     // evidence — stateless arms in monomorphic context. Stateful
@@ -843,8 +870,9 @@ fn emit_let_locals_expr(expr) = match expr {
     perform wat_emit(" i32)")
     emit_let_locals_expr(inner)
   },
-  LMakeClosure(_, _, _, _)  => (),  // function boundary — its locals are its own
-  LDeclareFn(_)             => (),  // module-level fn declaration — its body has its own locals
+  LMakeClosure(_, _, _, _)         => (),  // function boundary — its locals are its own
+  LMakeContinuation(_, _, _, _, _, _) => (),  // resume_fn boundary — its locals are its own (H7)
+  LDeclareFn(_)                    => (),  // module-level fn declaration — its body has its own locals
   LBlock(_h, stmts)         => emit_let_locals_list(stmts),
   LIf(_h, c, t, e)          => {
     emit_let_locals_expr(c)
@@ -979,7 +1007,6 @@ fn emit_start(top_fn_names) = {
   perform wat_emit("  (export \"_start\" (func $_start))\n")
 }
 
-// ═══ emit_expr — LowIR → WAT instructions ══════════════════════════
 // Exhaustive match on every LowExpr variant; no _ fallback.
 
 fn emit_expr(expr) = match expr {
@@ -1101,6 +1128,69 @@ fn emit_expr(expr) = match expr {
     // Store each ev_slot at offset 8 + 4*nc + 4*j.
     emit_ev_slot_stores(ev_exprs, nc, 0)
     // Result: closure pointer on stack.
+    perform wat_emit("    (local.get $state_tmp)\n")
+  },
+
+  LMakeContinuation(_h, LFn(resume_fn_name, _arity, _param_names, _body, _row), captures_exprs, ev_exprs, state_idx, ret_slot) => {
+    // H7 §4.2 — multi-shot continuation record layout. Mirrors
+    // LMakeClosure's heap-record shape with two added i32 fields:
+    // state_index at offset 4 (between fn_ptr and capture_count) and
+    // ret_slot at the final offset (after captures + evidence).
+    //
+    // Layout per H7 §1.2:
+    //   offset 0:                          fn_ptr (i32) — resume_fn table index
+    //   offset 4:                          state_index (i32) — perform-site discriminator
+    //   offset 8:                          capture_count (i32) — fence
+    //   offset 12 + 4*i:                   capture_i
+    //   offset 12 + 4*nc + 4*j:            ev_slot_j
+    //   offset 12 + 4*nc + 4*ne:           ret_slot (i32)
+    //
+    // The continuation IS Mentl's oracle substrate — heap-captured
+    // closure struct (captures + evidence + state + ret_slot)
+    // allocated through the SAME emit_alloc swap surface as every
+    // other heap value (γ crystallization #8 — the heap has one
+    // story). Mentl's exploration ALWAYS goes through this code
+    // path; trail rollback (per src/graph.nx graph_rollback) reverts
+    // any speculative graph_bind that happened during the resume.
+    //
+    // Per the H7 walkthrough: there is no vtable. The fn_ptr field is
+    // a plain i32 indexing into the WASM funcref table; resume happens
+    // via call_indirect with the resume_fn's signature. Evidence
+    // passing per Koka JFP 2022, not vtable indirection.
+    let nc = len(captures_exprs)
+    let ne = len(ev_exprs)
+    let size = 12 + 4 * (nc + ne) + 4
+    perform emit_alloc(size, "state_tmp")
+    // Store fn_ptr (resume_fn table index) at offset 0.
+    perform wat_emit("    (local.get $state_tmp)\n")
+    perform wat_emit("    (global.get $")
+    perform wat_emit(resume_fn_name)
+    perform wat_emit("_idx)\n")
+    perform wat_emit("    (i32.store offset=0)\n")
+    // Store state_index at offset 4 (per H7 §4.2 layout).
+    perform wat_emit("    (local.get $state_tmp)\n")
+    perform wat_emit("    (i32.const ")
+    perform wat_emit(int_to_str(state_idx))
+    perform wat_emit(") (i32.store offset=4)\n")
+    // Store capture count at offset 8 — fence between captures and
+    // evidence (same shape as LMakeClosure offset 4, just shifted).
+    perform wat_emit("    (local.get $state_tmp)\n")
+    perform wat_emit("    (i32.const ")
+    perform wat_emit(int_to_str(nc))
+    perform wat_emit(") (i32.store offset=8)\n")
+    // Store each capture at offset 12 + 4*i.
+    emit_capture_stores_at_offset(captures_exprs, 12, 0)
+    // Store each ev_slot at offset 12 + 4*nc + 4*j.
+    emit_ev_slot_stores_at_offset(ev_exprs, 12 + 4 * nc, 0)
+    // Store ret_slot at the final offset.
+    let ret_offset = 12 + 4 * (nc + ne)
+    perform wat_emit("    (local.get $state_tmp)\n")
+    perform wat_emit("    (i32.const ")
+    perform wat_emit(int_to_str(ret_slot))
+    perform wat_emit(") (i32.store offset=")
+    perform wat_emit(int_to_str(ret_offset))
+    perform wat_emit(")\n")
+    // Result: continuation pointer on stack.
     perform wat_emit("    (local.get $state_tmp)\n")
   },
 
@@ -1415,7 +1505,6 @@ fn emit_expr_list(exprs) =
     emit_expr_list(list_tail(exprs))
   }
 
-// ═══ Constants ═════════════════════════════════════════════════════
 
 fn emit_const(v) = match v {
   LInt(n) => {
@@ -1443,7 +1532,6 @@ fn emit_const(v) = match v {
   }
 }
 
-// ═══ BinOp / UnaryOp ═══════════════════════════════════════════════
 
 fn emit_binop(op) = match op {
   BAdd    => perform wat_emit("    (i32.add)\n"),
@@ -1474,7 +1562,6 @@ fn emit_unaryop(op) = match op {
   }
 }
 
-// ═══ List / tuple literals ═════════════════════════════════════════
 
 // Emit the stores for each capture in the closure record.
 // Captures are indexed from 0; each stored at offset 8 + 4*i.
@@ -1557,7 +1644,6 @@ fn emit_record_field_stores(fields, i) =
     emit_record_field_stores(list_tail(fields), i + 1)
   }
 
-// ═══ Match arm dispatch (H3 + HB) ══════════════════════════════════
 // Cascading if-else over arm patterns. Classify the WHOLE arm set
 // once: pure-nullary (sentinel compare), pure-fielded (offset=0 load
 // + compare), or mixed (threshold gate at HEAP_BASE = 4096, then

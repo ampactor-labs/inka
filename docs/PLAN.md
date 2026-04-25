@@ -521,7 +521,7 @@ composition. Nothing remains as a separate substrate question.*
 
 ---
 
-## Status — 2026-04-24 (kernel structurally closed — all 8 primitives substrate-live; first composition demo lands; next phase is composition + bootstrap, not invention)
+## Status — 2026-04-24 (kernel structurally closed — all 8 primitives substrate-live; first composition demo lands; MV.2.e composition arc opened; next phase is composition + bootstrap, not invention)
 
 **Kernel-closure milestone (insight #13, commit `9a726f2`):** with B.9
 LFeedback emit landing (commit `7f8ff5f`), Primitive #3 (Five verbs)
@@ -535,6 +535,38 @@ primitives in one row.
 domain rewrites, MV.2.e Interact handler arms, items 11.A/11.D
 simplification audit, then bootstrap items 26-31 — each composes on
 the closed kernel, none extends it.
+
+**MV.2.e arc opened post-kernel-closure (commits `a0f6be6` + `9798a0e`):**
+- `MV.2.e.scaffold` (commit `a0f6be6`) — `mentl_voice_default` handler
+  declared on Interact with all 22 ops named per drift mode 6 + H6
+  wildcard discipline; rename `mentl_voice_default` fn → `voice_queue_walk`
+  (the queue-projection per insight #11). State per Insight #9: cursor +
+  prior_turn + history + intents + next_intent_id (record-shape).
+- `MV.2.e.Q` (commit `9798a0e`) — Query tentacle arms (cursor / focus /
+  ask) with 7 helpers (resolve_cursor_target / focus_reason /
+  tentacle_for_question / question_span / compose_minimal_ask_situation /
+  voiceline_to_answer / answer_from_slots). Sparse-Situation composition;
+  render_for_tentacle reuse; ΣU mode 36 enforced (`resume()` not
+  `resume(())`).
+- **Remaining MV.2.e sub-handles:** P (propose / edit / speak),
+  V (run_check), Run (run_compile / run_audit / run_query),
+  Filesystem (8 file ops), Session (declare_intent / retract_intent /
+  history / cancel_pending), lsp_adapter (separate handler).
+- **Surfaced peer sub-handles:** MV.2.e.Q.compose-ops (extend Situation
+  composition with full graph reads); MV.2.e.Q.ident (env→handle
+  resolution for TargetIdent); MV.2.e.Q.refine (Cursor.handle
+  refinement); MV.2.e.Q.refs (AnsRefs projection for QRefsOf);
+  MV.2.e.Patch-type (verify Patch ADT design before edit arm).
+
+**LF substrate state (B.9 + sub-handles):** B.9 emit landed
+structurally; lib/dsp/feedback.nx compiles to valid WAT but body
+doesn't reference prior at source level. **LF.B (body-binding for
+prior) needs walkthrough extension before code** — SYNTAX.md L473-490
+doesn't yet describe how `prev` becomes source-accessible inside
+`<~`'s body. The substrate-design question is its own peer sub-handle
+(LF.B walkthrough → LF.B substrate). LF.M (handler-state-offset
+migration), LF.1/2/3 (FbDelay(N>1) / FbState / FbFilter spec
+encoding), and LF.S (verify_smt) remain as named follow-ons.
 
 **This-run substrate landed (12 commits):** H7 multi-shot keystone +
 emit walker arms + capture-store helpers (4236b96 + ad78384 +
@@ -708,12 +740,19 @@ itself. 32+ are post-first-light surfaces.
      - **LF.S** — verify_smt discharge of refinement obligations on Sample/Hz/Gain bounds (folds into Arc F.1).
 
 2. **⚙️📋 Mentl-voice substrate.**
-   - Status: `[IN-FLIGHT]` — walkthrough **§2 CLOSED 2026-04-21** (Situation record, VoiceLine shape, 8-tentacle × 8-FormKind mapping, 16-phrase modifier bank, silence predicate formal, turn anatomy via LSP methods, 10 acceptance tests AT1–AT10 locked as `mentl_voice_default` contract). Substrate **partial-LANDED** — silence_predicate + queue-projection refactor (commit `7fb8871`); oracle keystone (commit `f87abf3`); Tier 2 silence-as-queue-empty + tier_to_tentacle (commits Tier 2 of insight #11).
-   - Remaining (MV.2.e): Interact handler arms (22 ops × handler bodies) + LSP adapter handler.
-   - Deliverable: `Interact` effect declaration ✓ + `mentl_voice_default` 8-tentacle queue-projection ✓ + silence predicate ✓ + LSP adapter handler PENDING + VS Code extension package PENDING.
+   - Status: `[IN-FLIGHT]` — walkthrough **§2 CLOSED 2026-04-21** (Situation record, VoiceLine shape, 8-tentacle × 8-FormKind mapping, 16-phrase modifier bank, silence predicate formal, turn anatomy via LSP methods, 10 acceptance tests AT1–AT10 locked as `mentl_voice_default` contract). Substrate **partial-LANDED** — silence_predicate + queue-projection refactor (commit `7fb8871`); oracle keystone (commit `f87abf3`); Tier 2 silence-as-queue-empty + tier_to_tentacle (commits Tier 2 of insight #11). **MV.2.e arc opened 2026-04-24** — handler scaffold with all 22 ops named (commit `a0f6be6`) + Query tentacle arms cursor/focus/ask (commit `9798a0e`).
+   - Remaining MV.2.e sub-handles (each its own commit per Anchor 7):
+     - **MV.2.e.P** — Propose tentacle: propose / edit / speak (~3 ops; edit needs Patch ADT verified)
+     - **MV.2.e.V** — Verify tentacle: run_check (~1 op; routes through verify_ledger)
+     - **MV.2.e.Run** — run_compile / run_audit / run_query (~3 ops; compose through pipeline)
+     - **MV.2.e.Filesystem** — 8 file ops (project_root through file_text; compose through wasi_filesystem)
+     - **MV.2.e.Session** — declare_intent / retract_intent / history / cancel_pending (~4 ops)
+     - **MV.2.e.lsp_adapter** — separate handler (LSP transport surface)
+   - Q-batch surfaced peers: MV.2.e.Q.compose-ops (full Situation graph reads) + MV.2.e.Q.ident (env→handle for TargetIdent) + MV.2.e.Q.refine (Cursor.handle refinement) + MV.2.e.Q.refs (AnsRefs projection)
+   - Deliverable: `Interact` effect declaration ✓ + `mentl_voice_default` 8-tentacle queue-projection ✓ + silence predicate ✓ + handler scaffold ✓ + Query tentacle arms ✓ + remaining tentacle arms PENDING + LSP adapter handler PENDING + VS Code extension package PENDING.
    - Depends on: nothing substrate-wise; §2 closure unblocks remaining MV.2.e implementation.
-   - Gate for: VS Code plugin v1 shipping. NOT gating for bootstrap — Mentl-voice code can land post-first-light if needed.
-   - Scope remaining: ~400–600 lines `.nx` (Interact handler arms + lsp_adapter.nx) + ~300 lines TypeScript extension glue.
+   - Gate for: VS Code plugin v1 shipping. **No longer gated on first-light** per kernel-closure milestone (insight #13) — composition arcs land in parallel with bootstrap items 26-31.
+   - Scope remaining: ~300–500 lines `.nx` (remaining handler arms + lsp_adapter.nx) + ~300 lines TypeScript extension glue.
    - Acceptance: `mentl_voice_default` correct iff AT1–AT10 (§2.8 of walkthrough) render as specified.
 
 3. **⚙️ Three-gap residue swept.**
@@ -2443,16 +2482,29 @@ judgment items amplify drift risk in single-thread.
 
 ---
 
-### Do NOT touch before first-light
-Rise-after-floor-is-up surfaces. Drifting into any of them before
-hand-WAT Tier 3 delivers byte-identical self-compilation is drift
-mode 9 flipped (work landing before its prerequisite):
-- **Syntax highlighting** / TextMate grammar / tree-sitter wrapper.
-- **`mentl_voice_default` implementation.** `MV-mentl-voice.md`
-  §2.8 AT1-AT10 ARE the contract; substrate lands post-first-light.
-- **LSP adapter + VS Code extension.** Post-first-light.
-- **Web playground / α-β-γ-ε options** from the 2026-04-22 brainstorm.
-- **FV.6 string interpolation.** BLOCKED on lexer substrate.
+### Do NOT touch before first-light *(reframed 2026-04-24 per kernel-closure)*
+The pre-2026-04-24 framing said "Mentl-voice surfaces post-first-light only."
+Insight #13 (kernel closure, commit `9a726f2`) reframes: the next phase
+is composition not invention; MV.2.e Interact handler arms are an
+explicitly-named composition arc landing in parallel with bootstrap
+items 26-31. Items still gated on substrate prerequisites, NOT on
+first-light:
+- **Syntax highlighting** / TextMate grammar / tree-sitter wrapper —
+  defer until SYNTAX.md is fully stable (post-LF.B walkthrough; ΣU
+  is the latest stable layer).
+- **LSP adapter + VS Code extension** — gated on MV.2.e.lsp_adapter
+  handler closure; that handler in turn composes on the per-tentacle
+  arms (MV.2.e.P / V / Run / Filesystem / Session). Land arms first.
+- **Web playground / α-β-γ-ε options** from the 2026-04-22 brainstorm —
+  unchanged; defer until LSP surface stabilizes.
+- **FV.6 string interpolation** — BLOCKED on lexer substrate (`scan_string`
+  doesn't yet parse `${}`); lands when lexer extension is walkthroughed.
+
+What `mentl_voice_default` looks like NOW (post-MV.2.e.scaffold +
+MV.2.e.Q): substrate-live handler with Query tentacle arms
+operational; remaining tentacle batches (P / V / Run / Filesystem /
+Session) compose in their own commits per Anchor 7 cascade discipline.
+**The 2026-04-22 "post-first-light only" framing is stale.**
 
 ### HC rosetta — 2026-04-21 crystallization (unchanged)
 `HC-handler-composition.md` names four live ripple points:

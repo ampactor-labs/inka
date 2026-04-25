@@ -170,10 +170,12 @@ fn emit_module(lowered) = {
   // the offset via perform string_offset.
   let string_entries = collect_string_literals(lowered)
   perform set_string_entries(string_entries)
+  let state_slots = collect_state_slots(lowered)
   emit_header()
   emit_type_section(lowered)
   emit_runtime_imports()
   emit_memory_decl()
+  emit_state_globals(state_slots)
   emit_string_data(string_entries)
   emit_fn_table(all_fn_names)
   emit_fn_index_globals(all_fn_names, 0)
@@ -285,6 +287,129 @@ fn string_entry_exists(entries, target, i, n) =
     let (s, _) = list_index(entries, i)
     if str_eq(s, target) { true }
     else { string_entry_exists(entries, target, i + 1, n) }
+  }
+
+/// State-slot collection — sweeps LIR for every LFeedback handle (the
+/// per-site state slot) plus any LStateGet/LStateSet slot index, and
+/// returns the unique-sorted list. Each slot becomes `(global $s<n>
+/// (mut i32) (i32.const 0))` at module init so the LFeedback
+/// load-tee-store cycle has somewhere to read and write. v1 uses
+/// module-level globals; LF.M peer sub-handle migrates to handler-
+/// state offsets when threading composition surfaces (per LF
+/// walkthrough §1.4 + drift mode 9 — name the deferred piece).
+
+fn collect_state_slots(lowered) = {
+  let buf = make_list(8)
+  let (final_buf, final_count) = collect_slots_list(lowered, buf, 0)
+  slice(final_buf, 0, final_count)
+}
+
+fn collect_slots_list(exprs, buf, count) =
+  if len(exprs) == 0 { (buf, count) }
+  else {
+    let (buf2, count2) = collect_slots_expr(list_head(exprs), buf, count)
+    collect_slots_list(list_tail(exprs), buf2, count2)
+  }
+
+fn collect_slots_expr(expr, buf, count) = match expr {
+  LFeedback(h, b, s) => {
+    let (buf1, count1) = record_slot(buf, count, h)
+    let (buf2, count2) = collect_slots_expr(b, buf1, count1)
+    collect_slots_expr(s, buf2, count2)
+  },
+  LStateGet(_, slot)         => record_slot(buf, count, slot),
+  LStateSet(_, slot, v)      => {
+    let (buf1, count1) = record_slot(buf, count, slot)
+    collect_slots_expr(v, buf1, count1)
+  },
+  LStore(_, _, v)            => collect_slots_expr(v, buf, count),
+  LLet(_, _, inner)          => collect_slots_expr(inner, buf, count),
+  LBinOp(_, _, l, r)         => collect_slots_bin(l, r, buf, count),
+  LUnaryOp(_, _, inner)      => collect_slots_expr(inner, buf, count),
+  LCall(_, f, args)          => collect_slots_bin_list(f, args, buf, count),
+  LTailCall(_, f, args)      => collect_slots_bin_list(f, args, buf, count),
+  LReturn(_, inner)          => collect_slots_expr(inner, buf, count),
+  LMakeClosure(_, LFn(_, _, _, body, _), caps, ev) => {
+    let (buf1, count1) = collect_slots_list(body, buf, count)
+    let (buf2, count2) = collect_slots_list(caps, buf1, count1)
+    collect_slots_list(ev, buf2, count2)
+  },
+  LMakeContinuation(_, LFn(_, _, _, body, _), caps, ev, _, _) => {
+    let (buf1, count1) = collect_slots_list(body, buf, count)
+    let (buf2, count2) = collect_slots_list(caps, buf1, count1)
+    collect_slots_list(ev, buf2, count2)
+  },
+  LDeclareFn(LFn(_, _, _, body, _)) =>
+    collect_slots_list(body, buf, count),
+  LIf(_, c, t, e) => {
+    let (b1, c1) = collect_slots_expr(c, buf, count)
+    let (b2, c2) = collect_slots_list(t, b1, c1)
+    collect_slots_list(e, b2, c2)
+  },
+  LBlock(_, stmts)           => collect_slots_list(stmts, buf, count),
+  LMakeList(_, elems)        => collect_slots_list(elems, buf, count),
+  LMakeTuple(_, elems)       => collect_slots_list(elems, buf, count),
+  LMakeRecord(_, fs)         => collect_slots_list(fs, buf, count),
+  LMakeVariant(_, _, fs)     => collect_slots_list(fs, buf, count),
+  LIndex(_, b, i, _)         => collect_slots_bin(b, i, buf, count),
+  LMatch(_, s, _arms)        => collect_slots_expr(s, buf, count),
+  LLoop(_, body)             => collect_slots_list(body, buf, count),
+  LBreak(_, v)               => collect_slots_expr(v, buf, count),
+  LSwitch(_, s, _c)          => collect_slots_expr(s, buf, count),
+  LSuspend(_, _, f, args, ev) => {
+    let (buf1, count1) = collect_slots_bin_list(f, args, buf, count)
+    collect_slots_list(ev, buf1, count1)
+  },
+  LRegion(_, body)           => collect_slots_list(body, buf, count),
+  LHandleWith(_, b, hn)      => collect_slots_bin(b, hn, buf, count),
+  LPerform(_, _, args)       => collect_slots_list(args, buf, count),
+  LHandle(_, b, _arms)       => collect_slots_expr(b, buf, count),
+  LEvPerform(_, _, _, args)  => collect_slots_list(args, buf, count),
+  LFieldLoad(_, rec, _)      => collect_slots_expr(rec, buf, count),
+  LConst(_, _)               => (buf, count),
+  LLocal(_, _)               => (buf, count),
+  LGlobal(_, _)              => (buf, count),
+  LUpval(_, _)               => (buf, count)
+}
+
+fn collect_slots_bin(a, b, buf, count) = {
+  let (buf1, count1) = collect_slots_expr(a, buf, count)
+  collect_slots_expr(b, buf1, count1)
+}
+
+fn collect_slots_bin_list(a, bs, buf, count) = {
+  let (buf1, count1) = collect_slots_expr(a, buf, count)
+  collect_slots_list(bs, buf1, count1)
+}
+
+fn record_slot(buf, count, slot) =
+  if slot_already_recorded(buf, slot, 0, count) { (buf, count) }
+  else {
+    let extended = list_extend_to(buf, count + 1)
+    let written  = list_set(extended, count, slot)
+    (written, count + 1)
+  }
+
+fn slot_already_recorded(entries, target, i, n) =
+  if i >= n { false }
+  else if list_index(entries, i) == target { true }
+  else { slot_already_recorded(entries, target, i + 1, n) }
+
+/// Emit `(global $s<n> (mut i32) (i32.const 0))` for each unique
+/// state slot. Globals initialize to 0 — the convention for "no
+/// prior iteration" at LFeedback's first entry. v1 single-threaded
+/// scope; LF.M migrates to per-handler-state offsets.
+
+fn emit_state_globals(slots) =
+  emit_state_globals_loop(slots, 0, len(slots))
+
+fn emit_state_globals_loop(slots, i, n) =
+  if i >= n { () }
+  else {
+    perform wat_emit("  (global $s")
+    perform wat_emit(int_to_str(list_index(slots, i)))
+    perform wat_emit(" (mut i32) (i32.const 0))\n")
+    emit_state_globals_loop(slots, i + 1, n)
   }
 
 // Emit `(data (i32.const <offset>) "<escaped-bytes>")` for each
@@ -906,8 +1031,14 @@ fn emit_let_locals_expr(expr) = match expr {
   LFeedback(h, b, s)        => {
     emit_let_locals_expr(b)
     emit_let_locals_expr(s)
-    // LF walkthrough §4.5: declare $__fb_<h> i32 local for the
-    // load-invoke-store state-machine emitted at the LFeedback arm.
+    // LF walkthrough §4.5: declare both per-site locals for the
+    // load-tee-store state-machine emitted at the LFeedback arm.
+    // $__fb_prev_<h> holds the prior iteration's output (loaded
+    // from $s<h> at iteration entry); $__fb_<h> holds the current
+    // iteration's output (tee'd before storing back to $s<h>).
+    perform wat_emit("    (local $__fb_prev_")
+    perform wat_emit(int_to_str(h))
+    perform wat_emit(" i32)\n")
     perform wat_emit("    (local $__fb_")
     perform wat_emit(int_to_str(h))
     perform wat_emit(" i32)\n")
@@ -1394,23 +1525,36 @@ fn emit_expr(expr) = match expr {
   LFeedback(h, body, _spec) => {
     // <~ feedback — state-machine lowering, v1 scope: FbDelay(1).
     //
-    // Emits load-invoke-store: body produces the current iteration's
-    // output; we tee it to a per-site local so it stays on stack,
-    // store to state-global $s<h> for the next iteration's load,
-    // then re-load the tee'd local to leave the value on stack.
+    // Per LF walkthrough §1.5: the iteration cycle is load-prior →
+    // emit body → tee-current → store-current → reload-current.
+    // The body's lowering may reference `$__fb_prev_<h>` to consume
+    // the prior iteration's output (post-first-light source-binding
+    // surfaces a name for it; pre-first-light the local is in scope
+    // and unused unless body's LIR explicitly reads it).
     //
     // State-global substrate reuses LStateGet/LStateSet's `$s<slot>`
-    // convention. The handle `h` as slot number ensures per-site
-    // uniqueness; globals persist across iterative-context handler
-    // re-invocations (Sample / Tick / Clock).
+    // convention; collect_state_slots harvests every LFeedback handle
+    // and emit_state_globals declares each as `(global $s<n> (mut
+    // i32) (i32.const 0))` at module init. The handle `h` ensures
+    // per-site uniqueness; the global persists across iterative-
+    // context handler re-invocations (Sample / Tick / Clock).
     //
-    // Sub-handles tracked in PLAN.md (each migrates state into the
-    // handler's own state record when H1.4 ev_shape synthesis lands):
+    // Sub-handles named as peers in PLAN.md (each lands in its own
+    // commit when its substrate motive surfaces):
     //   LF.1 — FbDelay(N>1) ring buffer
     //   LF.2 — FbState(init) with typed carrier
     //   LF.3 — FbFilter(N, coeffs) N-tap filter
+    //   LF.M — handler-state-offset migration (replaces module
+    //          globals with per-handler-state slots; required for
+    //          threading × multi-shot composition correctness).
     //
-    // Walkthrough: docs/rebuild/simulations/LF-feedback-lowering.md.
+    // Walkthrough: docs/specs/simulations/LF-feedback-lowering.md.
+    perform wat_emit("    (global.get $s")
+    perform wat_emit(int_to_str(h))
+    perform wat_emit(")\n")
+    perform wat_emit("    (local.set $__fb_prev_")
+    perform wat_emit(int_to_str(h))
+    perform wat_emit(")\n")
     emit_expr(body)
     perform wat_emit("    (local.tee $__fb_")
     perform wat_emit(int_to_str(h))

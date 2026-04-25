@@ -40,8 +40,11 @@ type KaiFile = {
 //   v1 — IC.1a header-only (text)
 //   v2 — IC.1b full env serialization (text)
 //   v3 — IC.2 binary Pack/Unpack
-//   v4 — H7 LMakeContinuation variant added to LowExpr (this version)
-fn cache_compiler_version() with Pure = 4
+//   v4 — H7 LMakeContinuation variant added to LowExpr
+//   v5 — B.9 LFeedback emit completed (load-prior + state-globals
+//        prologue; cache invalidates because emitted WAT shape
+//        differs at every LFeedback site)
+fn cache_compiler_version() with Pure = 5
 
 /// 32-bit FNV-1a hash of the source bytes. Non-cryptographic;
 /// collision resistance is sufficient for cache invalidation.

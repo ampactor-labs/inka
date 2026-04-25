@@ -1358,8 +1358,16 @@ handler mentl_voice_default
     let new_handle = resolve_cursor_target(target, current_handle)
     let new_reason = focus_reason(target)
     let new_cursor = Cursor(new_handle, new_reason)
+    let new_turn = TurnRecord({
+      tentacle: TentQuery,
+      topic:    TopicHandle(new_handle),
+      line:     Silence,
+      span_at:  span_zero()
+    })
     resume()
-      with cursor = new_cursor
+      with cursor     = new_cursor,
+           prior_turn = Some(new_turn),
+           history    = [new_turn] ++ history
   },
 
   /// cursor — read the cursor-of-attention. Pure read of handler
@@ -1394,7 +1402,8 @@ handler mentl_voice_default
       span_at:  question_span(question)
     })
     resume(answer)
-      with prior_turn = Some(new_turn)
+      with prior_turn = Some(new_turn),
+           history    = [new_turn] ++ history
   },
 
   /// propose — Mentl-initiated proposal at a CursorTarget. Compose
@@ -1458,7 +1467,33 @@ handler mentl_voice_default
   run_compile(_fh)      => resume(unimplemented_arm("run_compile")),
   run_check(_fh)        => resume(unimplemented_arm("run_check")),
   run_audit(_fh)        => resume(unimplemented_arm("run_audit")),
-  run_query(_q)         => resume(unimplemented_arm("run_query")),
+  /// run_query — batch/CLI version of ask. Same composition path as
+  /// the ask arm above (compose_minimal_ask_situation →
+  /// silence_predicate → render → voiceline_to_answer); different
+  /// invocation surface (CLI invokes directly per Interact §"Run ops"
+  /// comment). Per Insight #10: this is the third instance of sparse
+  /// Situation composition; the abstraction earns its weight when
+  /// run_compile/run_audit add the fourth and fifth instances. Until
+  /// then, the parallel form honors the substrate idiom.
+  run_query(question)   => {
+    let Cursor(cursor_handle, _) = cursor
+    let situation = compose_minimal_ask_situation(question, cursor_handle, prior_turn)
+    let voiceline = if silence_predicate(situation) {
+      Silence
+    } else {
+      render_for_tentacle(situation)
+    }
+    let answer = voiceline_to_answer(voiceline, situation)
+    let new_turn = TurnRecord({
+      tentacle: tentacle_for_question(question),
+      topic:    TopicAsk(question),
+      line:     voiceline,
+      span_at:  question_span(question)
+    })
+    resume(answer)
+      with prior_turn = Some(new_turn),
+           history    = [new_turn] ++ history
+  },
 
   // ─── Session ops (4) — MV.2.e.Session ────────────────────────────
 

@@ -13,6 +13,7 @@ import types
 import mentl
 import graph
 import own
+import query
 
 /// Topic is the focus of one voice turn. Cursor-of-attention projects
 /// onto a Topic; Mentl reads the graph at that topic. Five variants
@@ -687,7 +688,7 @@ fn select_modifier(situation, register) with Pure =
   }
 
 /// with_tentacle — pure update of Situation's tentacle field. Used by
-/// mentl_voice_default's fold to retarget the same Situation snapshot
+/// voice_queue_walk's fold to retarget the same Situation snapshot
 /// at each of the 8 tentacles in turn. All other Situation fields
 /// (topic, handle, env_snapshot, reasons, rows, ownership, refinements,
 /// gradient_next, handlers_installed, prior_turn_topic, facts,
@@ -933,22 +934,7 @@ fn fold_tentacles(situation, tentacles, i, n, acc, count) with Pure =
     }
   }
 
-/// mentl_voice_default — THE handler entry. Takes a Situation seed
-/// (any tentacle in the field is fine; the fold retargets per-iteration)
-/// and returns List<VoiceLine> — one per silence-passing tentacle in
-/// kernel order (Query → Propose → Topology → Unlock → Trace → Verify
-/// → Teach → Why). Empty list = full silence (per MV §2.8 AT7).
-///
-/// Per F.1 walkthrough §3.3: same machinery cursor-time MV + batch
-/// F.1 inka doc. LSP picks the tentacle for its surface from the
-/// returned list; F.1 renders all. Tier-1 unification (INSIGHTS L509).
-///
-/// All eight tentacles always evaluated; silence_predicate filters.
-/// Pure over Situation — graph reads happened upstream when the
-/// Situation was composed; this handler operates on the frozen
-/// snapshot per MV §2.7.1.
-
-/// mentl_voice_default — queue-projection per insight #11. Queries the
+/// voice_queue_walk — queue-projection per insight #11. Queries the
 /// project queue via OracleQuery (cursor-relevance filtered when the
 /// situation has a cursor; project-wide otherwise); for each
 /// QueueItem, dispatches to the per-tentacle render arm based on
@@ -958,7 +944,7 @@ fn fold_tentacles(situation, tentacles, i, n, acc, count) with Pure =
 /// VoiceLine for the cursor surface; F.1 inka doc renders all.
 /// Surface-side cursor-relevance projection (cursor_relevant op) +
 /// project-wide fallback (query_project_queue) compose at the
-/// surface; mentl_voice_default just projects the queue items it
+/// surface; voice_queue_walk just projects the queue items it
 /// receives.
 ///
 /// Per the realization-loop discipline (insight #12): this fn replaces
@@ -966,8 +952,13 @@ fn fold_tentacles(situation, tentacles, i, n, acc, count) with Pure =
 /// silence framing that insight #11 superseded). The new fold is over
 /// the QUEUE; tentacles are VIEWS on queue items, not separate
 /// handlers.
+///
+/// Renamed from `mentl_voice_default` 2026-04-24 (MV.2.e.scaffold) to
+/// free that name for the actual `Interact` handler declared at
+/// end-of-file. The handler internally folds the project queue via
+/// this projector.
 
-fn mentl_voice_default(situation_seed) with OracleQuery =
+fn voice_queue_walk(situation_seed) with OracleQuery =
   let Situation(s) = situation_seed
   let queue_items = match s.handle {
     None       => perform query_project_queue(),
@@ -1019,3 +1010,100 @@ fn tier_to_tentacle(tier) with Pure =
     TUnlock     => TentUnlock,
     TStyle      => TentTopology
   }
+
+// ─── unimplemented_arm — sentinel for arms not yet in their batch ─────
+//
+// Per drift mode 9 (deferred-by-omission): every Interact arm in the
+// handler below is named — even those whose body lands in a later
+// peer sub-handle (MV.2.e.P / .V / .Filesystem / .Run / .Session).
+// Stub arms route here so unintended dispatch surfaces immediately
+// (Abort) rather than returning a fabricated default. The diagnostic
+// string surfaces which op was hit. Returns ! (bottom) — unifies with
+// every Interact op's resume value type without fabrication.
+//
+// The Abort effect installed above this handler is the surface's
+// responsibility: lsp_adapter installs catch_abort; CLI installs its
+// own. The handler declares its row honestly.
+
+fn unimplemented_arm(op_name) with Abort =
+  perform abort()
+
+// ─── mentl_voice_default — Interact handler ───────────────────────────
+//
+// THE handler that every voice surface (LSP adapter, batch CLI,
+// terminal IDE, web playground, desktop client) projects through.
+// Per MV §1.5: Interact is the stable API boundary; this handler is
+// its canonical implementation.
+//
+// State (per MV §2.7.1 + §2.7.6 turn anatomy + Insight #9 records-as-
+// handler-state-shape):
+//   cursor          — current cursor-of-attention (Handle + Reason)
+//   prior_turn      — last turn record; feeds prior_turn_topic /
+//                     prior_turn_tentacle into Situation composition
+//                     for cross-turn observation deltas
+//   history         — bounded ring of TurnRecords (size is a handler-
+//                     install parameter once Session ops land)
+//   intents         — declared user Intents (per §2.7.1's gradient /
+//                     intent gating); empty until Session ops land
+//   next_intent_id  — opaque IntentId minter; same disposition
+//
+// Resume discipline: every Interact op is @resume=OneShot per the
+// effect declaration (mentl_voice.nx:340-396). Arms call resume(value)
+// exactly once.
+//
+// Sub-handle decomposition (each lands in its own commit per Anchor 7
+// + drift mode 9 prevention):
+//   MV.2.e.scaffold — this commit (handler skeleton, all 22 arms named)
+//   MV.2.e.Q        — Query tentacle: cursor / focus / ask
+//   MV.2.e.P        — Propose tentacle: propose / edit / speak / cancel_pending
+//   MV.2.e.V        — Verify tentacle: run_check
+//   MV.2.e.Run      — run_compile / run_audit / run_query
+//   MV.2.e.Filesystem — 8 file ops (project_root through file_text)
+//   MV.2.e.Session  — declare_intent / retract_intent / history
+//   MV.2.e.lsp_adapter — separate handler; the LSP transport surface
+//
+// Primitives audited: #1 (Graph — cursor handle indexes graph),
+// #2 (this handler IS primitive #2 incarnate), #4 (handler row composes
+// via ~> with caller rows), #8 (every cursor write threads a Reason).
+
+handler mentl_voice_default
+  with cursor              = Cursor(0, Inferred("session start")),
+       prior_turn          = None,
+       history             = [],
+       intents             = [],
+       next_intent_id      = 0 {
+
+  // ─── Project / file ops (8) — MV.2.e.Filesystem ─────────────────
+  project_root()        => resume(unimplemented_arm("project_root")),
+  tree_list(_path)      => resume(unimplemented_arm("tree_list")),
+  open_file(_path)      => resume(unimplemented_arm("open_file")),
+  save_file(_fh)        => resume(unimplemented_arm("save_file")),
+  create_file(_p, _t)   => resume(unimplemented_arm("create_file")),
+  rename_path(_a, _b)   => resume(unimplemented_arm("rename_path")),
+  delete_path(_p)       => resume(unimplemented_arm("delete_path")),
+  file_text(_fh)        => resume(unimplemented_arm("file_text")),
+
+  // ─── Edit op (1) — MV.2.e.P ──────────────────────────────────────
+  edit(_fh, _patch)     => resume(unimplemented_arm("edit")),
+
+  // ─── Attention ops (2) — MV.2.e.Q (next commit) ──────────────────
+  focus(_target)        => resume(unimplemented_arm("focus")),
+  cursor()              => resume(unimplemented_arm("cursor")),
+
+  // ─── Mentl voice ops (3) — ask in Q; propose + speak in MV.2.e.P ─
+  ask(_question)        => resume(unimplemented_arm("ask")),
+  propose(_target)      => resume(unimplemented_arm("propose")),
+  speak(_voiceline)     => resume(unimplemented_arm("speak")),
+
+  // ─── Run ops (4) — MV.2.e.V (run_check) + MV.2.e.Run (rest) ──────
+  run_compile(_fh)      => resume(unimplemented_arm("run_compile")),
+  run_check(_fh)        => resume(unimplemented_arm("run_check")),
+  run_audit(_fh)        => resume(unimplemented_arm("run_audit")),
+  run_query(_q)         => resume(unimplemented_arm("run_query")),
+
+  // ─── Session ops (4) — MV.2.e.Session ────────────────────────────
+  declare_intent(_i)    => resume(unimplemented_arm("declare_intent")),
+  retract_intent(_id)   => resume(unimplemented_arm("retract_intent")),
+  history(_n)           => resume(unimplemented_arm("history")),
+  cancel_pending()      => resume(unimplemented_arm("cancel_pending"))
+}

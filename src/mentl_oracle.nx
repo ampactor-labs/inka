@@ -130,7 +130,7 @@ type OracleQueue
 /// graph_mutated fires (which IC governs).
 ///
 /// Five surfaces today subscribe through these ops:
-/// - `mentl_voice_default` (cursor-time MV) — query_project_queue +
+/// - `voice_queue_walk` (cursor-time MV) — query_project_queue +
 ///   cursor_relevant
 /// - `inka doc` (F.1 batch) — query_module_queue per decl
 /// - LSP hover — query_at_position(cursor_handle)
@@ -166,7 +166,7 @@ handler cached_check_with_oracle
 
   /// infer arm — cache lookup; on miss, run check + oracle, store both.
   /// Returns (env, oracle_queue) so downstream handlers (project queue
-  /// merger, mentl_voice_default) read both from the same call.
+  /// merger, voice_queue_walk) read both from the same call.
   infer(ast) => {
     let key = oracle_cache_key(ast)
     match cache_lookup(cache, key) {
@@ -249,7 +249,7 @@ handler project_queue_merger
   /// they want to bias toward the cursor's region (LSP hover, inline
   /// hints) but fall back to project-wide priority when cursor's
   /// region is silent. The fallback decision lives in the surface
-  /// (mentl_voice_default), not here.
+  /// (voice_queue_walk), not here.
   cursor_relevant(cursor_handle, max_distance_bytes) => {
     let queue = perform query_project_queue()
     resume(filter_by_locality(queue, cursor_handle, max_distance_bytes))
@@ -347,7 +347,7 @@ fn try_each_candidate_loop(handle, candidates, i, n, env, module_path, buf, coun
 /// project is at the gradient's top.
 ///
 /// The per-Topic / per-tentacle render-or-not decision moves to the
-/// surface (mentl_voice_default — see queue_to_voicelines). What this
+/// surface (voice_queue_walk — see queue_to_voicelines). What this
 /// predicate gates is the STRONG silence: no more proven next-steps
 /// anywhere in the project.
 

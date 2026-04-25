@@ -1155,6 +1155,54 @@ fn compose_minimal_ask_situation(question, cursor_handle, prior_turn) with Pure 
     register:              RPlayful
   })
 
+/// compose_propose_situation — sparse Situation for a propose gesture.
+/// Parallel to compose_minimal_ask_situation but with TentPropose
+/// tentacle and TopicHandle topic. Carries target_reason in
+/// reason_at_topic so the Why tentacle can later answer "why this
+/// proposal?". The full multi-shot oracle composition (Synth.propose
+/// + verify + rank) is the MV.2.e.P.synth peer sub-handle; this sparse
+/// form ships the structural composition while that oracle plumbing
+/// lands separately.
+///
+/// Per MV §2.7.3: TentPropose's default FormKind is FOffering;
+/// render_propose_arm handles the sparse Situation gracefully when
+/// is_hole / error_code_at are absent (returns short-form offering).
+///
+/// Per Insight #10 ("Row Algebra Is One Mechanism"): this is the
+/// second instance of sparse Situation composition; one more (likely
+/// run_query for batch path) earns the abstraction. Until then,
+/// parallel forms honest about not-yet-generic.
+
+fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure =
+  let (prior_topic, prior_tent) = match prior_turn {
+    None        => (None, None),
+    Some(rec)   => {
+      let TurnRecord(r) = rec
+      (Some(r.topic), Some(r.tentacle))
+    }
+  }
+  Situation({
+    tentacle:              TentPropose,
+    topic:                 TopicHandle(target_handle),
+    handle:                Some(target_handle),
+    env_snapshot:          [],
+    reason_at_topic:       Some(target_reason),
+    row_at_topic:          None,
+    row_declared:          None,
+    ownership_at_topic:    None,
+    refinements:           [],
+    gradient_next:         None,
+    handlers_installed:    [],
+    prior_turn_topic:      prior_topic,
+    prior_turn_tentacle:   prior_tent,
+    facts:                 TopicFacts({
+      is_hole:           false,
+      error_code_at:     None,
+      nested_call_depth: 0
+    }),
+    register:              RPlayful
+  })
+
 /// answer_from_slots — first-projectable-slot wins. SType → AnsType;
 /// SRow → AnsRow; SReason → AnsReason. SIdent / SSpan / SCap / SAnnot
 /// / SLit are non-Answer-projecting slot kinds; recurse past them to
@@ -1349,8 +1397,62 @@ handler mentl_voice_default
       with prior_turn = Some(new_turn)
   },
 
-  propose(_target)      => resume(unimplemented_arm("propose")),
-  speak(_voiceline)     => resume(unimplemented_arm("speak")),
+  /// propose — Mentl-initiated proposal at a CursorTarget. Compose
+  /// Propose-tentacle Situation at the target → silence_predicate →
+  /// render_propose_arm → return VoiceLine. Update prior_turn +
+  /// history.
+  ///
+  /// Sparse Situation (env_snapshot / row_at_topic / refinements /
+  /// gradient_next empty); the full multi-shot oracle composition
+  /// (Synth.propose enumeration + verify + rank) is the MV.2.e.P.synth
+  /// peer sub-handle. This sparse form ships the structural composition
+  /// while oracle plumbing lands separately.
+  propose(target)       => {
+    let Cursor(current_handle, _) = cursor
+    let target_handle = resolve_cursor_target(target, current_handle)
+    let target_reason = focus_reason(target)
+    let situation = compose_propose_situation(target_handle, target_reason, prior_turn)
+    let voiceline = if silence_predicate(situation) {
+      Silence
+    } else {
+      render_for_tentacle(situation)
+    }
+    let new_turn = TurnRecord({
+      tentacle: TentPropose,
+      topic:    TopicHandle(target_handle),
+      line:     voiceline,
+      span_at:  span_zero()
+    })
+    resume(voiceline)
+      with prior_turn = Some(new_turn),
+           history    = [new_turn] ++ history
+  },
+
+  /// speak — Mentl-initiated voice surfacing of a pre-composed
+  /// VoiceLine. The handler doesn't render; it just records the turn
+  /// (so silence_predicate sees this as a turn for next-turn
+  /// observation-delta) and projects to the surface. Per MV §1.5: the
+  /// per-surface transport handlers (lsp_adapter / cli / web) project
+  /// the turn; this handler updates session state.
+  ///
+  /// Tentacle extracted from VoiceLine; Silence defaults to TentQuery
+  /// (sentinel — speak with Silence is a no-op turn but still records).
+  /// Topic is TopicHandle(0) since speak isn't tied to a graph topic.
+  speak(voiceline)      => {
+    let tentacle = match voiceline {
+      Silence                       => TentQuery,
+      VoiceLine(t, _, _, _)         => t
+    }
+    let new_turn = TurnRecord({
+      tentacle: tentacle,
+      topic:    TopicHandle(0),
+      line:     voiceline,
+      span_at:  span_zero()
+    })
+    resume()
+      with prior_turn = Some(new_turn),
+           history    = [new_turn] ++ history
+  },
 
   // ─── Run ops (4) — MV.2.e.V (run_check) + MV.2.e.Run (rest) ──────
   run_compile(_fh)      => resume(unimplemented_arm("run_compile")),

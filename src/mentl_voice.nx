@@ -1203,6 +1203,42 @@ fn voiceline_to_answer(voiceline, situation) with Pure =
     VoiceLine(_, _, slots, _)     => answer_from_slots(slots, reason)
   }
 
+// ─── MV.2.e.Session — Session-tentacle helpers ────────────────────────
+//
+// Two pure helpers for intent management. Per drift mode 7 prevention:
+// intents are stored as List<(IntentId, Intent)> tuples on the handler
+// state, NOT as parallel List<IntentId> + List<Intent> arrays. Per
+// drift mode 8: IntentId is a structured ADT (Int wrapper), not a
+// raw integer.
+
+/// intent_id_eq — IntentId equality. IntentId wraps an Int; compare
+/// via destructure + integer compare. H6 implicit (single-variant ADT).
+
+fn intent_id_eq(a, b) with Pure =
+  let IntentId(ai) = a
+  let IntentId(bi) = b
+  ai == bi
+
+/// intents_without — return intents list with the entry whose id
+/// matches removed. Single-pass recursion; allocates one cons cell
+/// per kept entry. Tail-recursive in the keep-and-recurse case;
+/// length is bounded by user-declared intent count (small N typical),
+/// so the simple form is honest. Substrate idiom (list_extend_to +
+/// counter) reserved for genuinely-large N — this is not it.
+
+fn intents_without(intents, id) with Pure =
+  if len(intents) == 0 { [] }
+  else {
+    let head = list_head(intents)
+    let rest = list_tail(intents)
+    let (head_id, _) = head
+    if intent_id_eq(head_id, id) {
+      intents_without(rest, id)
+    } else {
+      [head] ++ intents_without(rest, id)
+    }
+  }
+
 // ─── mentl_voice_default — Interact handler ───────────────────────────
 //
 // THE handler that every voice surface (LSP adapter, batch CLI,
@@ -1323,8 +1359,53 @@ handler mentl_voice_default
   run_query(_q)         => resume(unimplemented_arm("run_query")),
 
   // ─── Session ops (4) — MV.2.e.Session ────────────────────────────
-  declare_intent(_i)    => resume(unimplemented_arm("declare_intent")),
-  retract_intent(_id)   => resume(unimplemented_arm("retract_intent")),
-  history(_n)           => resume(unimplemented_arm("history")),
-  cancel_pending()      => resume(unimplemented_arm("cancel_pending"))
+
+  /// declare_intent — append an Intent to the handler's intents list.
+  /// Mints a fresh IntentId from next_intent_id counter; the new entry
+  /// goes to the head (cons), so most-recent intents are first. The op
+  /// returns () per the Interact effect signature; users learn the
+  /// minted id via history projection or via Mentl's Teach tentacle
+  /// surfacing the gradient/intent gating state.
+  ///
+  /// Per MV §2.7.1: intents are gradient/intent-gating substrate — the
+  /// silence_predicate and Trace tentacle weigh declared intents
+  /// against subsequent edits.
+  declare_intent(intent) => {
+    let new_id      = IntentId(next_intent_id)
+    let new_intents = [(new_id, intent)] ++ intents
+    resume()
+      with intents        = new_intents,
+           next_intent_id = next_intent_id + 1
+  },
+
+  /// retract_intent — remove the entry whose IntentId matches. If no
+  /// entry matches, intents stays unchanged (idempotent retract is the
+  /// honest semantics — caller may have already retracted, or used a
+  /// stale id from history).
+  retract_intent(id) => {
+    let new_intents = intents_without(intents, id)
+    resume()
+      with intents = new_intents
+  },
+
+  /// history — return the last n turn records. If n exceeds the actual
+  /// history length, return all of history. The list is in
+  /// most-recent-first order (cons-pattern; latest TurnRecord at head).
+  ///
+  /// Per MV §2.7.6: TurnRecord captures one turn's tentacle / topic /
+  /// VoiceLine / span; surfaces use this for observation-delta
+  /// reasoning (silence_predicate's prior_turn input is the head).
+  history(n) => {
+    let h_len = len(history)
+    if n >= h_len { resume(history) }
+    else          { resume(slice(history, h_len - n, h_len)) }
+  },
+
+  /// cancel_pending — clear prior_turn so the next turn doesn't
+  /// observation-delta against the current prior. Per Interact effect
+  /// comment: "rolls back a tentative application." Pre-pending-edit
+  /// substrate (MV.2.e.P), the only tentative state observable is
+  /// prior_turn; resetting it gives surfaces a clean turn boundary
+  /// when the user explicitly invalidates a Mentl-initiated proposal.
+  cancel_pending() => resume() with prior_turn = None
 }

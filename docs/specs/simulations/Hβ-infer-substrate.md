@@ -254,23 +254,47 @@ return rewritten body
 Implementation: $instantiate calls `$ty_substitute` (a sibling helper)
 which dispatches on Ty tags. Tag conventions for Ty variants land
 alongside Hβ.lower (as the same conventions drive both inference and
-lowering); pending Hβ.lower walkthrough's `§Ty tags` section, the
-provisional allocation per spec 02 ordering:
+lowering). The locked allocation per spec 02 ordering + RN.1
+substrate (TAlias added 2026-04-26 per Wave 2.E.infer.ty substrate-
+gap finding — agent caught 14 canonical variants vs 13-named earlier
+draft):
 
 ```
-TINT_TAG       = 100
-TFLOAT_TAG     = 101
-TSTRING_TAG    = 102
-TUNIT_TAG      = 103
-TVAR_TAG       = 104   ;; arity 1 — graph handle
+TINT_TAG       = 100   ;; nullary sentinel
+TFLOAT_TAG     = 101   ;; nullary sentinel
+TSTRING_TAG    = 102   ;; nullary sentinel
+TUNIT_TAG      = 103   ;; nullary sentinel
+TVAR_TAG       = 104   ;; arity 1 — graph handle (Int)
 TLIST_TAG      = 105   ;; arity 1 — element Ty ptr
 TTUPLE_TAG     = 106   ;; arity 1 — list of element Ty ptrs
-TFUN_TAG       = 107   ;; arity 3 — params list, return Ty, eff row ptr
-TNAME_TAG      = 108   ;; arity 2 — name str, args list
+TFUN_TAG       = 107   ;; arity 3 — params list (TParam records), return Ty, eff row ptr
+TNAME_TAG      = 108   ;; arity 2 — name str, args list (Bool/Option/etc. live here)
 TRECORD_TAG    = 109   ;; arity 1 — list of (name, Ty) pairs
 TRECORDOPEN_TAG= 110   ;; arity 2 — fields list, rowvar handle
-TREFINED_TAG   = 111   ;; arity 2 — base Ty, predicate ptr
-TCONT_TAG      = 112   ;; arity 2 — return Ty, ResumeDiscipline tag
+TREFINED_TAG   = 111   ;; arity 2 — base Ty, predicate (opaque ptr — verify.wat precedent)
+TCONT_TAG      = 112   ;; arity 2 — return Ty, ResumeDiscipline sentinel (250-252)
+TALIAS_TAG     = 113   ;; arity 2 — alias name str, resolved Ty (RN.1 substrate;
+                       ;;          per src/types.nx:48; preserves authored name
+                       ;;          for intent-aware rendering — show_type at
+                       ;;          src/types.nx:815 returns the alias name verbatim)
+
+;; Reserved 114-119 for future Ty variants per src/types.nx evolution.
+```
+
+ResumeDiscipline is its own ADT (`src/types.nx:70-73`) referenced
+from TCont's discipline field. Per the same nullary-sentinel
+discipline (Hβ §1.5), ResumeDiscipline values are sentinel ints.
+**Tag region 250-259 reserved (added 2026-04-26 per Wave 2.E.infer.ty
+gap finding — earlier Hβ-lower §3.1 named 220/221/222 which now
+collide with reason.wat's 220-242 Reason variants; relocated to
+250-259 to preserve $tag_of uniqueness):**
+
+```
+RESUME_ONESHOT_TAG   = 250
+RESUME_MULTISHOT_TAG = 251
+RESUME_EITHER_TAG    = 252
+
+;; Reserved 253-259 for future ResumeDiscipline variants if any.
 ```
 
 `$ty_substitute` walks each variant; when it sees `TVar(q)` and `q`
@@ -764,7 +788,7 @@ After unify.wat:
 |-------|---------------|-------------|
 | state.wat | ~80 | this walkthrough §1 |
 | reason.wat | ~280-320 | spec 02 + spec 08 + src/types.nx canonical 23-variant Reason ADT (constructor + accessors per variant ≈ 12-14 WAT lines × 23 variants; revised 2026-04-26 per Wave 2.E.infer.reason substrate-gap finding — earlier 9-named undercount yielded ~150 estimate; canonical reality is 23 variants) |
-| ty.wat | ~400 | spec 02 + this walkthrough §2.3 |
+| ty.wat | ~430 | spec 02 + this walkthrough §2.3 (revised 2026-04-26 from ~400 per 14th variant TAlias + 3 ResumeDiscipline sentinel constructors) |
 | scheme.wat | ~250 | spec 04 §Env+Scheme + this §2 |
 | emit_diag.wat | ~200 | spec 04 §Error handling + docs/errors |
 | unify.wat | ~700 | spec 04 §Unification + spec 01 §Unification rules |

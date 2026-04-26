@@ -308,17 +308,20 @@ ADT at src/types.nx:70-73).
   (if (i32.ne (call $tag_of (local.get $ty)) (i32.const 112))    ;; TCONT_TAG
     (then (unreachable)))   ;; classify on non-TCont is a bug
   (local.set $disc (call $record_get (local.get $ty) (i32.const 1)))
-  ;; ResumeDiscipline tags (per src/types.nx:70-73 conventions):
-  ;;   OneShot   = sentinel 220
-  ;;   MultiShot = sentinel 221
-  ;;   Either    = sentinel 222
-  (if (i32.eq (local.get $disc) (i32.const 220))
+  ;; ResumeDiscipline tags (per src/types.nx:70-73 conventions; tag
+  ;; region relocated 2026-04-26 from 220/221/222 → 250/251/252 to
+  ;; resolve collision with reason.wat's 220-242 Reason variants;
+  ;; canonical layout now in Hβ-infer-substrate.md §2.3):
+  ;;   OneShot   = sentinel 250
+  ;;   MultiShot = sentinel 251
+  ;;   Either    = sentinel 252
+  (if (i32.eq (local.get $disc) (i32.const 250))
     (then (return (call $is_tail_resumptive (local.get $handler_handle)))))
                                 ;; OneShot — discriminate TailResumptive (0)
                                 ;; vs Linear (1) by structural body check
-  (if (i32.eq (local.get $disc) (i32.const 221))
+  (if (i32.eq (local.get $disc) (i32.const 251))
     (then (return (i32.const 2))))    ;; MultiShot
-  (if (i32.eq (local.get $disc) (i32.const 222))
+  (if (i32.eq (local.get $disc) (i32.const 252))
     (then (return (call $either_strategy (local.get $handler_handle)))))
                                 ;; Either — install-time negotiation;
                                 ;; for seed, default to Linear (1)
@@ -915,7 +918,7 @@ correctly so the wheel can run the oracle.
 | Question | Resolution |
 |----------|-----------|
 | Tag values for LowExpr — coordinate with Hβ.emit? | Yes — §2 names the 300-349 range; lock in coordination with Hβ.emit chunk extensions. |
-| Resume-discipline tag values for ResumeDiscipline ADT? | Provisional sentinels: OneShot=220 / MultiShot=221 / Either=222 (region 220-249). Alongside Ty tags 100-119, this defines the seed's tag layout. |
+| Resume-discipline tag values for ResumeDiscipline ADT? | LOCKED 2026-04-26: OneShot=250 / MultiShot=251 / Either=252 (region 250-259). Earlier draft used 220/221/222 but Wave 2.E.infer.reason landed Reason variants at 220-242 (commit `2609c82`); per Wave 2.E.infer.ty agent gap-finding, ResumeDiscipline relocated to 250-259 to preserve $tag_of uniqueness across the heap. Canonical layout in Hβ-infer-substrate.md §2.3. |
 | Either-discipline strategy — what's the seed's default? | Linear (1) when handler body's static check can't classify TailResumptive. Per src/lower.nx classify_handler precedent. |
 | Cross-module function symbol resolution? | Hβ.link (BT.A.2) via link.py + symbol-rename. Hβ.lower emits module-local references; link resolves at assembly time. |
 | Does the seed lower MultiShot ops at all in Tier-3 base? | Yes — per H7 §2.5 substrate already in src/lower.nx; the seed transcribes the same. |

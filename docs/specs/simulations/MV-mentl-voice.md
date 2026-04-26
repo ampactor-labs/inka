@@ -18,7 +18,7 @@ canonical contract for `mentl_voice_default` v1 implementation. §3's
 6–10 folded into MV.2–MV.8 sub-handles.*
 
 *Supersedes: parts of `simulations/TS-teach-synthesize.md`
-(retained as historical reasoning). Absorbs: PLAN.md "teach_synthesize
+(retained as historical reasoning). Absorbs: roadmap "teach_synthesize
 oracle conductor" gap, "HandlerCatalog" gap, former "LSP handler"
 Priority 1 item.*
 

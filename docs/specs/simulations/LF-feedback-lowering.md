@@ -221,7 +221,7 @@ Each LFeedback emission leaves a Reason: `Located(span, Inferred("feedback slot 
 - **Drift 1 (Rust vtable):** feedback is NOT a "method on a feedback object." It's a state slot + load-store protocol. Forbidden: introducing an `IFeedback` interface or virtual call.
 - **Drift 5 (C calling convention):** `$handler_state` is NOT a separate threading parameter; it's part of the uniformly-allocated handler state record (γ crystallization #8). Forbidden: thread `$fb_state` separately.
 - **Drift 6 (primitive-type-special-case):** `f32` feedback + `i32` feedback + record feedback all use the same protocol. Forbidden: separate paths for "simple" vs "compound" feedback.
-- **Drift 9 (deferred-by-omission):** v1 delay(1) scope is explicit and named. `accumulate`/`filter_spec`/`delay(N>1)` get their own follow-up walkthroughs (LF.1, LF.2, LF.3) named in PLAN.md.
+- **Drift 9 (deferred-by-omission):** v1 delay(1) scope is explicit and named. `accumulate`/`filter_spec`/`delay(N>1)` get their own follow-up walkthroughs (LF.1, LF.2, LF.3) named in `ROADMAP.md`.
 
 ---
 
@@ -341,7 +341,7 @@ Actually — revision: LF is **independent of naming/structure/simplification** 
 - The DSP thesis scenario (DESIGN 10.2, a-day.md "1000 DSP + RT") fires in WAT, not just in paper simulation.
 - The scoreboard `docs/traces/a-day.md` flips the `[substrate pending]` tag for `<~` to `[LIVE]`.
 
-**Sub-handles split off** (named in PLAN.md for future work):
+**Sub-handles split off** (named in `ROADMAP.md` for future work):
 
 - **LF.1** — `delay(N)` for N > 1. Ring-buffer state allocation + rotating index + modular load. Post-first-light.
 - **LF.2** — `accumulate(init)` feedback. Single-slot state + accumulator update pattern. Post-first-light.

@@ -956,7 +956,7 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   // LEvPerform inside this body reads it to compute its offset
   // arithmetic. On the monomorphic path (>95% per H1) the evidence
   // list is empty by construction. Per-op ev_shape synthesis on the
-  // polymorphic path lands as peer handle H1.4 in PLAN.md.
+  // polymorphic path lands as a peer handle tracked in ROADMAP.md.
   perform set_body_captures(captures_count)
   perform set_body_evidence([])
   perform wat_emit("  (func $")
@@ -1539,7 +1539,7 @@ fn emit_expr(expr) = match expr {
     // per-site uniqueness; the global persists across iterative-
     // context handler re-invocations (Sample / Tick / Clock).
     //
-    // Sub-handles named as peers in PLAN.md (each lands in its own
+    // Sub-handles named as peers in ROADMAP.md (each lands in its own
     // commit when its substrate motive surfaces):
     //   LF.1 — FbDelay(N>1) ring buffer
     //   LF.2 — FbState(init) with typed carrier
@@ -2086,7 +2086,7 @@ fn emit_list_literal(elems) = {
   // When the enclosing row excludes Alloc AND every element is a
   // pure literal, this whole construction can fold into a static
   // data segment — no runtime allocation at all. That fold is a
-  // named peer handle (H2.4 static-literal-list-fold in PLAN.md);
+  // named peer handle tracked in ROADMAP.md;
   // it does not change the emitted primitive when the fold doesn't
   // apply.
   let n = len(elems)

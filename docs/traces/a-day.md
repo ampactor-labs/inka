@@ -8,7 +8,7 @@
 > **See also.** `docs/DESIGN.md` Chapter 10 for the thesis-level
 > promises (IDE, DSP×ML, C-straightjacket, distributed). This
 > document integrates them through one continuous project instead of
-> four scenarios. `docs/rebuild/simulations/H*.md` for the cascade's
+> four scenarios. `docs/specs/simulations/H*.md` for the cascade's
 > reasoning record per handle.
 
 ---
@@ -618,14 +618,14 @@ authored. Updates:
   handler + WASI preview1 path_open / fd_close /
   path_create_directory / path_filestat_get imports. The driver
   layer reads .nx source and writes .kai cache via this surface.
-  Walkthrough: `docs/rebuild/simulations/FS-filesystem-effect.md`.
+  Walkthrough: `docs/specs/simulations/FS-filesystem-effect.md`.
 - **Incremental compilation** `[LIVE]` for the substrate; LSP
   surface still `[LIVE · surface pending]`. `inka compile <module>`
   and `inka check <module>` consult `.inka/cache/*.kai` files;
   cold compile equals prior behavior, warm compile after no-op or
   leaf-edit returns from cache without re-inference. Drift mode
   10 ("the graph as stateless cache") closed at the driver level.
-  Walkthrough: `docs/rebuild/simulations/IC-incremental-compilation.md`.
+  Walkthrough: `docs/specs/simulations/IC-incremental-compilation.md`.
 
 These both materially change "0800 — new file" through "1700 —
 deploy" by replacing the implicit full-recompile assumption with

@@ -6,7 +6,7 @@ it use to exemplify Inka? Action: FV.1–FV.9 close the gap before
 first-light so the post-first-light compiler IS the medium, not a
 weak demonstration of it.*
 
-*Status: walkthrough for item 25 of PLAN.md, expanded prescriptively
+*Status: walkthrough for the feature-usage sweep, expanded prescriptively
 per Inka-solves-Inka discipline — a descriptive audit alone would ship
 a compiler that claims 8 primitives but exercises 3.*
 
@@ -157,7 +157,7 @@ in compiler source; rewrite as `~>` chain. Drift-4 audit.
 **FV.8 — Parameterized Diagnostic (11.B.M).** `effect Diagnostic(module: ModuleName) { report(...) }`. Every `perform report("parser", ...)` site drops its first arg. Row algebra
 distinguishes `Diagnostic(ModParser)` from `Diagnostic(ModInfer)`.
 Primitive #2b parameterized-effect exercise. Already named as
-peer sub-handle in PLAN.md.
+peer sub-handle in `ROADMAP.md`.
 
 **FV.9 — Docstring harmonization** (item 11.E, folded here). Every
 module's top docstring names:
@@ -298,6 +298,6 @@ compiler exemplifies what it's compiling. The substrate already
 supports everything; the code hasn't caught up. FV closes that gap
 before first-light, not after.
 
-Action items FV.1–FV.9 become peer commits in PLAN.md, landable in
+Action items FV.1–FV.9 become peer commits in `ROADMAP.md`, landable in
 parallel with hand-WAT Tier 1 development. None block first-light;
 all make first-light mean more.

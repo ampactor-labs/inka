@@ -859,8 +859,8 @@ substrates:
 - **Real-time multi-developer co-edit in v1.** IE.peer-share peer
   handler is a named sub-handle (§9) that lands when needed; the
   substrate is "another peer handler on edit_handler" with conflict
-  resolution as handler-swap (Grove CmRDT structural edits per
-  PLAN.md research integration). Not in the IDE's primary
+  resolution as handler-swap (Grove CmRDT structural edits per the
+  roadmap's research-integration lane). Not in the IDE's primary
   acceptance contract.
 - **Mobile editing.** Browser-first per §1.1; mobile browsers can
   load the URL but the geometric Topographic Canvas + Holographic

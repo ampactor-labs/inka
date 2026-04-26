@@ -18,7 +18,7 @@
 8	String-keyed-when-structured (token kind as int)	\btoken_kind\s*==\s*\d	ka	Tokens are ADTs post-Ω.4.
 8	String-keyed-when-structured (SchemeKind as int)	\bscheme_kind\s*==\s*\d	ka	SchemeKind is ADT post-H3.
 9	Deferred-by-omission (TODO / for now / later)	//\s*(TODO|FIXME|XXX|for now|until\b|deferred|later\b|short[- ]term)	ka	Land whole or surface as named peer handle. No deferred-in-committed-code.
-9	Deferred-by-omission (stub/placeholder tell)	//\s*(placeholder|stub|not\s+implemented)	ka	Same as above — surface as peer handle in PLAN.md.
+9	Deferred-by-omission (stub/placeholder tell)	//\s*(placeholder|stub|not\s+implemented)	ka	Same as above — surface as peer handle in ROADMAP.md.
 #
 # --- Bug classes from CLAUDE.md that have cost hours ---
 10	Wildcard-fabricates (_ arm returning Forall)	_\s*=>\s*Forall\s*\(	ka	Wildcard fabricates a Scheme. Enumerate variants explicitly.

@@ -115,9 +115,8 @@ framing is architectural, not decorative.**
   truths; composition consequences of the kernel.
 - **[`docs/SYNTAX.md`](docs/SYNTAX.md)** — the canonical syntax;
   every parser decision implements something here.
-- **[`docs/PLAN.md`](docs/PLAN.md)** — the four-phase roadmap.
-  Phase I (γ cascade) closed; Phase II (handler projection) in
-  flight.
+- **[`ROADMAP.md`](ROADMAP.md)** — the canonical roadmap. Current
+  priority, sequencing, and session-entry guidance live here.
 - **[`docs/traces/a-day.md`](docs/traces/a-day.md)** — the
   integration trace. One developer, one project, one day. Every
   claim tagged `[LIVE]` / `[LIVE · surface pending]` /
@@ -156,12 +155,12 @@ Two independent pieces of Priority 1 substrate remain:
    grammar + one-at-a-time surfacing discipline + multi-shot
    `enumerate_inhabitants` owned by Mentl. Absorbs the former
    `teach_synthesize` and `HandlerCatalog` gaps. Walkthrough:
-   [`MV-mentl-voice.md`](docs/rebuild/simulations/MV-mentl-voice.md).
+   [`MV-mentl-voice.md`](docs/specs/simulations/MV-mentl-voice.md).
 
 Everything else is handler projection on the existing substrate —
 editor integration, multi-backend emit, audit-driven linker
 severance, autodiff handler, threads, RPC, refinement SMT. See
-[`docs/PLAN.md`](docs/PLAN.md) for the priority order;
+[`ROADMAP.md`](ROADMAP.md) for the priority order;
 [`docs/traces/a-day.md`](docs/traces/a-day.md) is the scoreboard.
 
 ---
@@ -185,7 +184,7 @@ std/
 
 docs/
   DESIGN.md               — the manifesto (§0.5 = the kernel)
-  PLAN.md                 — four-phase roadmap
+  ROADMAP.md              — canonical roadmap
   SYNTAX.md               — canonical syntax
   INSIGHTS.md             — crystallized truths
   rebuild/                — twelve executable specs (00–11)

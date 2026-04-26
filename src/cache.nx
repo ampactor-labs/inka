@@ -10,7 +10,7 @@
 // Every Ty variant gets a tag byte; the handler accumulates the bytes.
 // Inka solving Inka: the substrate persists itself.
 //
-// Walkthrough: docs/rebuild/simulations/IC-incremental-compilation.md.
+// Walkthrough: docs/specs/simulations/IC-incremental-compilation.md.
 
 import types
 import runtime/strings

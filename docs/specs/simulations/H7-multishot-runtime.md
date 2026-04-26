@@ -875,10 +875,9 @@ execution.
 Landing discipline per drift mode 9: the deferred piece IS named
 (H7.1), not hidden inside H7's "completed" commit.
 
-### 4.6 `PLAN.md` Decisions Ledger entry (post-H7-land)
+### 4.6 `ROADMAP.md` update note (post-H7-land)
 
-Add to `docs/PLAN.md`'s Decisions Ledger (section per current
-format):
+Update `ROADMAP.md` with the H7 landing and what it unblocks:
 
 ```
 ### 2026-04-XX — H7 MS runtime emit path

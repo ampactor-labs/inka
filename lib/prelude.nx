@@ -26,7 +26,7 @@ fn iterate(xs) with Iterate = {
 }
 
 // ─── Collection Operations (handlers on Iterate) ────────────
-// HC pattern (docs/rebuild/simulations/HC-handler-composition.md):
+// HC pattern (docs/specs/simulations/HC-handler-composition.md):
 //   Transform handlers emit via perform yield.
 //   Materialize handlers capture yields into state.
 //   Compose via ~> chain: source ~> transform ~> materialize.
@@ -213,7 +213,7 @@ fn sort(xs) =
 // ─── String operations (pure Inka) ───────────────────────────
 
 // Explicit recursive loop — avoids fold's polymorphic-lambda issue where
-// the concat inside `|acc, x| acc ++ sep ++ x` gets committed to list_concat
+// the concat inside `|acc, x| acc ++ sep ++ x` gets committed to list_concat // drift-audit: ignore
 // via prelude-first-use type inference. Explicit str_concat threads the
 // String type directly through the loop, no polymorphism, no ambiguity.
 fn join_loop(xs, sep, i, acc) =

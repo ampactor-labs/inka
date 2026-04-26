@@ -13,7 +13,7 @@
 > graph per F-retire); `docs/specs/simulations/BT-bootstrap-triage.md`
 > §3 (the linking work — what closing the gap actually requires) +
 > §5 (recommended path: leaves-first, sequential close-out) + §6
-> (forbidden patterns); `docs/PLAN.md` Decisions Ledger entry
+> (forbidden patterns); `ROADMAP.md`
 > 2026-04-23 (modular bootstrap pivot — link.py composes on the 15+
 > `bootstrap/src/*.wat` chunks + the seed-emitted per-module
 > partial WATs).

@@ -27,7 +27,7 @@ the vision alone.*
 > Only then are you loaded to collaborate. See `CLAUDE.md` for the
 > seven anchors and session-zero protocol; see `docs/INSIGHTS.md`
 > for the living compendium of crystallized truths; see
-> `docs/rebuild/00–11` for the per-module contracts.
+> `docs/specs/00–11` for the per-module contracts.
 
 ---
 
@@ -3003,7 +3003,7 @@ is reproducible under its own semantics.**
 
 This is the closing moment named `first-light`. It is an execution
 concern, not a design concern — its mechanics, bootstrap translator
-shape, and rollout are documented in `docs/PLAN.md`. The design
+shape, and rollout are documented in `ROADMAP.md`. The design
 commits to making first-light achievable: every mechanism above is
 shaped so the compiler itself fits inside Inka's own expressive
 surface, and the Evidence Engine makes self-compilation efficient.
@@ -3062,7 +3062,7 @@ gap between human thought and machine instruction finally closes.
 
 ---
 
-*Design v1 — 2026-04-18. See `docs/PLAN.md` for execution roadmap,
-`docs/rebuild/00–11` for per-module contracts, `docs/errors/` for
+*Design v1 — 2026-04-18. See `ROADMAP.md` for execution roadmap,
+`docs/specs/00–11` for per-module contracts, `docs/errors/` for
 the error catalog, `docs/INSIGHTS.md` for the living compendium of
 crystallized truths, `CLAUDE.md` for session anchors.*

@@ -706,8 +706,7 @@ fn infer_expr(ref node) =
       // FieldExpr as a qualified env lookup (e.g., `graph.chase`).
       // This is how dot-access on imported modules works — driver
       // installs each export under BOTH flat and `module.export`
-      // keys at load time. See PLAN.md Decisions Ledger 2026-04-21
-      // dotted-names-as-env-entries. On miss, fall through to the
+      // keys at load time. On miss, fall through to the
       // record-field-access path for struct-record dot-access.
       let N(rbody, _, _) = rec
       match rbody {

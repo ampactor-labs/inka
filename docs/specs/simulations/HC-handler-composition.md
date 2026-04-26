@@ -7,8 +7,9 @@ filter / take / skip currently accumulate internally — drift mode
 parameterization (11.B.M), operator-as-handler (Hα), and Mentl's
 voice (MV.2 mentl_voice_default's 8 tentacles).*
 
-*Status: walkthrough for item 11.C.3 of PLAN.md. Establishes the
-substrate pattern; closes prelude's 4 remaining drift-11 hits.*
+*Status: walkthrough for the handler-composition cleanup lane.
+Establishes the substrate pattern; closes prelude's 4 remaining
+drift-11 hits.*
 
 ---
 

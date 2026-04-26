@@ -4,7 +4,7 @@
 
 This document is **the authoritative syntactic spec for Inka**. It binds the parser; the parser implements exactly this. It is written under dream-code discipline: every decision below is the IDEAL form, not a description of the current parser. Where the current parser deviates, the parser is wrong; SYNTAX.md is the wheel, the parser is the lathe being adjusted to it.
 
-DESIGN.md articulates the medium's vision. The 12 specs in `docs/rebuild/` describe per-module behavior. INSIGHTS.md crystallizes load-bearing truths. **SYNTAX.md is the layer between vision and implementation: the surface form by which intent reaches the substrate.**
+DESIGN.md articulates the medium's vision. The 12 specs in `docs/specs/` describe per-module behavior. INSIGHTS.md crystallizes load-bearing truths. **SYNTAX.md is the layer between vision and implementation: the surface form by which intent reaches the substrate.**
 
 ---
 
@@ -1472,4 +1472,4 @@ This document supersedes any syntactic decisions implicit in DESIGN.md, INSIGHTS
 
 Mentl's discipline applies to syntax: every form below was decided by asking the eight interrogations — one per kernel primitive (DESIGN.md §0.5), one per Mentl tentacle. Graph (what AST does it produce?), handler + resume discipline (what installed handler reads it, with what resume type?), verb (which topology?), row (what `+ - & !` constraint?), ownership (what `own`/`ref` does it carry?), refinement (what predicate does it admit?), gradient (what annotation would it unlock?), Reason (what edge does it leave for the Why Engine?). Forms that failed any of the eight were rejected.
 
-When questions arise about syntax not yet covered here: open a γ-style walkthrough in `docs/rebuild/simulations/syntax/<topic>.md`, resolve the design question, then update this document.
+When questions arise about syntax not yet covered here: open a γ-style walkthrough in `docs/specs/simulations/syntax/<topic>.md`, resolve the design question, then update this document.

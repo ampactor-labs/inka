@@ -19,7 +19,7 @@
 > the `teach_synthesize` conductor lands as one section inside it.
 >
 > Do not use this walkthrough to freeze code. Until `MV-mentl-voice.md`
-> exists, the three substrate gaps in PLAN.md are reframed: gap 2
+> exists, the three substrate gaps in the roadmap are reframed: gap 2
 > (`teach_synthesize` conductor) and gap 3 (`HandlerCatalog`) fold
 > into the Mentl-voice substrate; gap 1 (`LFeedback` emit) is
 > independent.
@@ -32,10 +32,10 @@ leverage). The hole-fill path is a different shape — a proposed AST
 fragment, not a row narrowing — and it needs its own walkthrough
 before the conductor freezes in code.*
 
-*See also:* `docs/rebuild/simulations/H5-mentl-arms.md` (annotation
+*See also:* `docs/specs/simulations/H5-mentl-arms.md` (annotation
 oracle, already landed) · `docs/DESIGN.md` Ch 8 (Mentl architecture,
-the speculative gradient, the Synth effect) · `docs/PLAN.md` §Three
-Substrate Gaps (this is gap 2).
+the speculative gradient, the Synth effect) · `ROADMAP.md` (this is
+the voice/synth substrate lane).
 
 ---
 
@@ -156,8 +156,8 @@ speaks. This is Anchor 3 — Inka solves Inka.
 
 ### Q3. Budget
 
-**Decision.** Cap at **N = 8** candidates per call (from PLAN.md
-risk register). Pre-filter: before calling `apply_*_tentatively`,
+**Decision.** Cap at **N = 8** candidates per call (from the roadmap
+discipline). Pre-filter: before calling `apply_*_tentatively`,
 check `row_subsumes(candidate_row, allowed_row)`. If the
 candidate's declared row already overshoots `allowed`, skip it —
 no checkpoint needed. This is a cheap pre-filter (one subsumption

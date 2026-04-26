@@ -895,7 +895,7 @@ transform(signal)
   ~> fork_copy(outer_arena)
 ```
 
-### 4.5 `PLAN.md` Decisions Ledger entry (post-AM-land)
+### 4.5 `ROADMAP.md` update note (post-AM-land)
 
 ```
 ### 2026-04-XX — AM landed

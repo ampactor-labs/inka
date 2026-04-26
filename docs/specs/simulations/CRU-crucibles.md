@@ -17,7 +17,7 @@ build.*
 
 ## 0. Why crucibles (not tests, not benchmarks)
 
-- **Tests verify existing behavior.** The PLAN.md 2026-04-21
+- **Tests verify existing behavior.** The roadmap's 2026-04-21
   decision dissolves `tests/` because the type system proves
   correctness directly (60-80% of peer-language tests vanish) and
   runnable behavior demonstrations ARE `src/` + `lib/`.
@@ -209,8 +209,8 @@ Each FAIL names the next concrete piece of work. The language team
 works ONLY on what a crucible demands next. When every crucible
 runs, the thesis is proven.
 
-**This is the honest priority mechanism.** More honest than PLAN.md's
-49-item roadmap because the crucibles can't rationalize; they
+**This is the honest priority mechanism.** More honest than a long
+checklist roadmap because the crucibles can't rationalize; they
 compile or they don't.
 
 ---

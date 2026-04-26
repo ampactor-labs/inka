@@ -116,8 +116,8 @@ verified survivors (bounded by the 8-candidate-per-hole cap from MO
 then commits one. **Load-bearing for first-light bit-identical
 output.**
 
-**The chain** (PLAN.md Decisions Ledger 2026-04-21 "Mentl's voice
-register" entry — same chain as MO §2 and MV §2.9 VL17):
+**The chain** (same chain as MO §2 and MV §2.9 VL17; canonicalized in
+the roadmap):
 
 1. **Row-minimality** — fewest effects in the candidate's
    declared/inferred row. Primitive #4 algebra gives the count;

@@ -53,7 +53,7 @@ inka/
 - `tools/` is pre-Inka scaffolding; dissolves post-first-light when scripts can be rewritten as Inka.
 - `docs/` is pre-first-light documentation; partially dissolves post-first-light when `doc_handler` generates from `///` comments + graph provenance.
 
-**Post-first-light dissolutions (tracked in PLAN.md Decisions Ledger):**
+**Post-first-light dissolutions (tracked in `ROADMAP.md`):**
 - `tools/` dissolves → scripts become Inka programs in `lib/`.
 - `docs/` shrinks to human-written manifestos (DESIGN.md, INSIGHTS.md, remaining walkthroughs + Decisions Ledger); per-module specs + error catalog generated.
 - Final form probably **four directories**: `src/`, `lib/`, `bootstrap/`, minimal `docs/`.
@@ -205,7 +205,7 @@ bootstrap/
 docs/
 ├── DESIGN.md                 ← the manifesto (§0.5 kernel + 12 chapters)
 ├── INSIGHTS.md               ← crystallized truths
-├── PLAN.md                   ← roadmap + Decisions Ledger
+├── ROADMAP.md                ← canonical roadmap
 ├── SYNTAX.md                 ← canonical syntax
 ├── errors/                   ← canonical error catalog (E/V/W/T/P codes)
 │   ├── README.md
@@ -256,7 +256,7 @@ docs/
 - `docs/errors/<CODE>.md` files become `doc_handler` projections from error declarations + `///` comments.
 - `docs/specs/00-11.md` files become `doc_handler` projections from each module's kernel-primitive-served declaration + structural analysis.
 - `docs/specs/simulations/*.md` remain (cascade reasoning record is historical; doesn't auto-regenerate).
-- `DESIGN.md`, `INSIGHTS.md`, `PLAN.md`'s Decisions Ledger, `SYNTAX.md` — remain human-written manifestos.
+- `DESIGN.md`, `INSIGHTS.md`, `ROADMAP.md`, `SYNTAX.md` — remain human-written manifestos.
 
 ### 1.6 Root-level files
 

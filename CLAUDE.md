@@ -330,7 +330,7 @@ compilation.** We soft-verify through role-play, tracing the data
 flow through handler chains, checking effect row algebra by hand,
 and walking the topology on the page. Only after we are confident
 in overall perfection do we build the bootstrap translator. The
-bootstrap is a separate, disposable concern (see PLAN.md).
+bootstrap is a separate, disposable concern (see ROADMAP.md).
 
 **Mentl is not a feature. It is the thesis made flesh.** Mentl must
 render all modern agentic coding AI obsolete. Through the gradient

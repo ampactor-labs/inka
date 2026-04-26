@@ -16,10 +16,10 @@
 > kernel) + §11 (closing fixed point); `docs/INSIGHTS.md` §"Self-
 > Hosting IS the Proof" (L378) + §"Self-Compilation: The Cage and
 > the Light" (L1791) + §"The Bootstrap Moment: Self-Trust" (L1338);
-> `docs/PLAN.md` Decisions Ledger 2026-04-20 (hand-WAT not
+> `ROADMAP.md` (hand-WAT not
 > translator) + 2026-04-23 (modular `bootstrap/src/*.wat` pivot) +
 > 2026-04-25 (bootstrap rewrite recontextualization);
-> `~/.claude/plans/the-residue.md` Phase A.
+> `ROADMAP.md` bootstrap critical path.
 > **Walkthrough peers:** `BT-bootstrap-triage.md` (per-module
 > compile inventory; tracks gaps), `H1-evidence-reification.md`
 > (closure record + handler dispatch — load-bearing for §1.3),

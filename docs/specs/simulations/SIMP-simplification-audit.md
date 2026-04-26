@@ -126,11 +126,11 @@ Per NS-naming.md decision 1.5: every module's top gets the canonical docstring (
 
 When Pass 4 (eight-interrogation audit) finds a site that fails: **rewrite in-place, don't flag.** Per CLAUDE.md protocol `protocol_transform_dont_flag`: *"writing a flag costs as much as doing the fix; do the fix."*
 
-**Exception:** if the rewrite requires substrate that doesn't exist yet (e.g., a new graph-op or a new handler), name the residue as a **named follow-up handle** in PLAN.md's Pending Work and leave the current site with a minimal comment pointing to the follow-up. Do NOT leave the site with `// TODO: simplify later` — that's drift mode 9. The minimum discipline is "either fix now or name the sub-handle that will fix later."
+**Exception:** if the rewrite requires substrate that doesn't exist yet (e.g., a new graph-op or a new handler), name the residue as a **named follow-up handle** in `ROADMAP.md` and leave the current site with a minimal comment pointing to the follow-up. Do NOT leave the site with `// TODO: simplify later` — that's drift mode 9. The minimum discipline is "either fix now or name the sub-handle that will fix later."
 
 **Sub-handles that might surface during Pass 4** (tracked during execution, not predicted):
 - Surprise convergences: three modules with similar shapes that earn an abstraction (rule of three per CLAUDE.md Anchor 7.4). Record the third-instance site; land the factoring in the next handle that benefits.
-- Substrate gaps: if Pass 4 surfaces that a primitive-level affordance is missing (e.g., "the graph needs a new op"), that's cascade-level work, not simplification; name it as a peer handle in PLAN.md.
+- Substrate gaps: if Pass 4 surfaces that a primitive-level affordance is missing (e.g., "the graph needs a new op"), that's cascade-level work, not simplification; name it as a peer handle in `ROADMAP.md`.
 
 ---
 
@@ -249,11 +249,11 @@ Item 11's execution lands as a sequence of commits (each auditable + revertable)
 - Item 11 (simplification audit execution) has prescriptive method.
 - `tools/drift-patterns.tsv` extended with SIMP's patterns.
 - Post-SIMP, `src/` + `lib/` are in residue form; the hand-WAT transcription has 10-20% less source to handle.
-- Pass 4's findings produce a list of "surfaced convergences" tracked in PLAN.md for future factoring.
+- Pass 4's findings produce a list of "surfaced convergences" tracked in `ROADMAP.md` for future factoring.
 
 **Sub-handles split off:**
 
-None in this walkthrough; Pass 4 may surface some during execution, each tracked as a named follow-up in PLAN.md.
+None in this walkthrough; Pass 4 may surface some during execution, each tracked as a named follow-up in `ROADMAP.md`.
 
 ---
 

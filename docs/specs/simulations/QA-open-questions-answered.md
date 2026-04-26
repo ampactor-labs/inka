@@ -360,7 +360,7 @@ diff /tmp/out-jit.wat /tmp/out-interp.wat   # empty = deterministic
 
 **Drift check:** drift 9 (deferred-by-omission) avoided — the semantic is settled up front.
 
-**Tiebreak chain** (per PLAN.md Decisions Ledger 2026-04-21):
+**Tiebreak chain** (per the roadmap's canonical survivor-ordering discipline):
 1. Row-minimality (fewest effects).
 2. Reason-chain depth (shortest = most local).
 3. Declared-intent alignment.
@@ -635,7 +635,7 @@ diff /tmp/out-jit.wat /tmp/out-interp.wat   # empty = deterministic
 
 ### Q-E.1.1: plan-audit git hook integration?
 
-**Answer:** Yes. Extend `tools/setup-git-hooks.sh` to install plan-audit as pre-commit check on PLAN.md + substrate changes.
+**Answer:** Yes. Extend `tools/setup-git-hooks.sh` to install plan-audit as pre-commit check on `ROADMAP.md` + substrate changes.
 
 **Reasoning:**
 - Prevent PLAN drift at commit time, not at audit time.
@@ -647,7 +647,7 @@ diff /tmp/out-jit.wat /tmp/out-interp.wat   # empty = deterministic
 
 ### Q-E.1.2 / DP-E.1: PLAN aspirational-claims convention?
 
-**Answer:** **Separate section.** Add explicit `## Aspirational Claims` section to PLAN.md; plan-audit skips this section.
+**Answer:** **Separate section.** Add explicit `## Aspirational Claims` section to `ROADMAP.md`; plan-audit skips this section.
 
 **Reasoning:**
 - Primitive #8 (Reason): explicit aspirational-flagging makes intent legible.

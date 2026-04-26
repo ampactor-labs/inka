@@ -3,7 +3,7 @@
 #
 # Per DET walkthrough §2.6 (commit 'docs/specs/simulations/DET-determinism-audit.md'):
 # the compiler must produce byte-identical WAT on double-compile of the
-# same input. Any difference is a first-light blocker (PLAN.md item 24).
+# same input. Any difference is a first-light blocker in ROADMAP.md.
 #
 # Usage:
 #   tools/determinism-gate.sh                  # full src/ + lib/ tree

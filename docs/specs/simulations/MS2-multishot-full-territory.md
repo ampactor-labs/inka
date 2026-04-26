@@ -728,8 +728,8 @@ but no MS. Inka is the first to compose the full substrate.
 
 ### 3.4 Voice selection from survivors
 
-MS returns a set of K verified candidates. Tiebreak chain (PLAN.md
-Decisions Ledger 2026-04-21 + MV §2.9 VL17):
+MS returns a set of K verified candidates. Tiebreak chain (current
+roadmap discipline + MV §2.9 VL17):
 
 1. Row-minimality (fewest effects).
 2. Reason-chain depth (shortest = most local).
@@ -1001,7 +1001,7 @@ MS; only on commit does the queue flush.
 
 ## 7. Pedagogical ladder — teaching MS in order
 
-Per `lib/tutorial/` (PLAN.md item 17'), MS is taught across the
+Per `lib/tutorial/` (roadmap tutorial lane), MS is taught across the
 eight primitives' tutorial files. The canonical ordering:
 
 1. **02-handlers.nx** introduces OneShot resume — `handle/resume`

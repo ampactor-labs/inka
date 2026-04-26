@@ -834,7 +834,7 @@ Reason edge?
 > doc handler chain when cross-package links wanted. Absent: docs are
 > local-only. Per INSIGHTS L1520 capability-stack doctrine. Substrate
 > for `remote_doc_resolver` lives in packaging-design walkthrough
-> (out of F.1 scope; ecosystem item per PLAN.md).
+> (out of F.1 scope; ecosystem item per `ROADMAP.md`).
 
 **Q-F1.10.** Tentacle render order when multiple fire?
 

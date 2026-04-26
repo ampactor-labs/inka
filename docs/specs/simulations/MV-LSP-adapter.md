@@ -505,7 +505,8 @@ language features. Lands when the .nx side is stable.
 - **Multi-root workspace handling** — v1 assumes single project root.
 - **Workspace edit transactions** (multi-file edits) — ties to MV.2.e.P.edit substrate.
 - **textDocument/semanticTokens** — syntax highlighting via LSP. Per
-  PLAN.md "Do NOT touch": defer until SYNTAX.md is fully stable.
+  the roadmap's defer-until-SYNTAX-stable rule: wait until
+  `SYNTAX.md` is fully stable.
 - **Cancellation** — LSP $/cancelRequest support. Defer to MV-LSP.cancel peer when long-running ops surface.
 
 ---
@@ -521,8 +522,8 @@ After the full MV-LSP arc ships:
    continuous oracle is realized in the daily-development experience:
    keystroke → didChange → re-infer → oracle re-explores → next-turn
    Mentl voice surfaces.
-3. **The AI obsolescence thesis becomes demonstrable.** Per PLAN.md
-   "AI obsolescence argument" + DESIGN.md Ch 8: Mentl's voice
+3. **The AI obsolescence thesis becomes demonstrable.** Per
+   `ROADMAP.md` + DESIGN.md Ch 8: Mentl's voice
    replaces what Cursor/Copilot/Claude-Code-as-helper are subscribed
    for. Not in marketing rhetoric — in the user's actual editor,
    answering hover/completion/codeAction with proven suggestions.

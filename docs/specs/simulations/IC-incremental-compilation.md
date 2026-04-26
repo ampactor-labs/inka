@@ -311,7 +311,7 @@ difference is whether lowering/emit fires after check.
   Today `runtime/io.nx` has only stdin/stdout/stderr via fd_write
   + fd_read. IC needs per-module `.kai` files on disk; that's an
   FS capability the current substrate doesn't expose. See
-  `docs/rebuild/simulations/FS-filesystem-effect.md` for the
+  `docs/specs/simulations/FS-filesystem-effect.md` for the
   prerequisite walkthrough.
 
 IC is handler-projection on the graph substrate. FS is a small

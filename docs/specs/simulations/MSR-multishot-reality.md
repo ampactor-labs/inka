@@ -385,7 +385,9 @@ Plus **Blockers (Category A resolution):** BT linker work (separate from this wa
 
 **Ownership?** Input handlers are `ref`; the returned composite handler is `own` (new handler identity).
 
-**Refinement?** The first-verified-wins semantic requires a canonical ordering on survivors — tiebreak chain from PLAN.md Decisions Ledger.
+**Refinement?** The first-verified-wins semantic requires a canonical
+ordering on survivors — tiebreak chain from the roadmap's
+survivor-ordering discipline.
 
 **Gradient?** Capability: CProvenFastest — the first verified candidate wins its own latency budget.
 
@@ -602,9 +604,9 @@ scope emerges from substrate necessity.
 
 ## 8. Landing
 
-**This walkthrough lands as design contract.** The PLAN.md
-Decisions Ledger gets a 2026-04-23 entry naming MSR as the MS2
-implementation design.
+**This walkthrough lands as design contract.** `ROADMAP.md`
+gets a 2026-04-23 entry naming MSR as the MS2 implementation
+design.
 
 Subsequent PLAN items derived from MSR:
 

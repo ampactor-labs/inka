@@ -18,7 +18,7 @@ the primitive composition that makes the compiler a tutor instead
 of an adversary. **Her eight tentacles (DESIGN.md Ch 8) are the
 eight primitives made voice**, 1-to-1 — Query / Propose / Topology /
 Unlock / Trace / Verify / Teach / Why. See also
-`docs/rebuild/simulations/MV-mentl-voice.md` for the voice
+`docs/specs/simulations/MV-mentl-voice.md` for the voice
 substrate design session.
 
 **Scope.** This spec defines the module `std/compiler/mentl.nx` — the

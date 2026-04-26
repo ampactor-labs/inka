@@ -1,10 +1,10 @@
 # Synthesis Manifesto — Crosswalk to Inka
 
 > **Status: historical context, not a living spec.** This doc predates
-> the rebuild plan (`docs/PLAN.md`). It remains as confidence — external
+> the current roadmap (`ROADMAP.md`). It remains as confidence — external
 > validation that the major design choices align with a manifesto
 > produced independently. Recommendations from this doc that survived
-> audit are now absorbed into `docs/rebuild/*.md`; recommendations that
+> audit are now absorbed into `docs/specs/*.md`; recommendations that
 > didn't are marked "rejected" in the table below.
 
 *An external, context-free conversation produced an eight-pillar
@@ -373,7 +373,7 @@ per-definition is overkill (Pyrefly engineering confirms at Meta scale).
 - **WASIp3 async ABI**: `IO + Async` row → WASIp3 async imports, no caller coloring. [Preview](https://www.fermyon.com/blog/looking-ahead-to-wasip3).
 - **Direct WASM binary emission** (Thunderseethe 2024): typed section builder emitting LEB128. [Reference](https://thunderseethe.dev/posts/emit-base/).
 - **Lexa** (OOPSLA 2024): direct stack-switching for lexical handlers; linear vs quadratic. [Paper](https://cs.uwaterloo.ca/~yizhou/papers/lexa-oopsla2024.pdf).
-- **Native-backend ranking** (hand-rolled x86 > QBE > Cranelift > LLVM): see `docs/PLAN.md` Arc F.5.
+- **Native-backend ranking** (hand-rolled x86 > QBE > Cranelift > LLVM): see `ROADMAP.md`.
 - **Roc surgical linker + dev-backend split**: release (LLVM/QBE) + dev (bespoke) for interactive latency. [Roc](https://sycl.it/agenda/day2/roc-surgical-linker/).
 
 ### Tier 3 — reframes (no redesign, citations)

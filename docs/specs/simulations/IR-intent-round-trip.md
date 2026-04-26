@@ -6,7 +6,7 @@ establishes the invariant every Phase II handler-projection surface
 depends on.*
 
 **Status: 2026-04-22 · seeded.** Derived from the EN finding
-(`docs/rebuild/simulations/EN-effect-negation.md`) that primitive #4's
+(`docs/specs/simulations/EN-effect-negation.md`) that primitive #4's
 explicit `!E` is algebraically collapsed at normalization, losing
 authored intent. The pattern recurs across the kernel; IR names the
 discipline and gates every Phase II handler-projection arc (MV.2, LSP,

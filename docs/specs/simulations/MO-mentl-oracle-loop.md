@@ -27,8 +27,8 @@ Three claims compose to the thesis:
    DESIGN Ch 4. One flat-buffer read per step; no allocation; no
    linked-structure walk.
 2. **Candidate enumeration is bounded per hole.** §2 below gives
-   the bound (≤ 8 per Mentl voice register tiebreak chain per
-   PLAN.md Decisions Ledger 2026-04-21).
+   the bound (≤ 8 per Mentl voice register tiebreak chain per the
+   current roadmap discipline).
 3. **Per-candidate cost fits the interactive budget.** §3 below
    gives the latency breakdown: checkpoint, apply, re-infer locally
    (scope-limited), verify, rollback.
@@ -92,7 +92,7 @@ Every primitive appears:
 
 ## 2. Candidate enumeration bounds
 
-Per PLAN.md Decisions Ledger `Interact` effect shape:
+Per the roadmap's `Interact` effect shape:
 
 - **≤ 8 candidates per hole** (voice register cap). More than 8 =
   the hole is underconstrained; Mentl surfaces ASK rather than

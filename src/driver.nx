@@ -12,7 +12,7 @@
 // the graph chase still walks one global graph). Per-module
 // overlays land with IC.3's chase extension.
 //
-// Walkthrough: docs/rebuild/simulations/IC-incremental-compilation.md
+// Walkthrough: docs/specs/simulations/IC-incremental-compilation.md
 
 import types
 import cache
@@ -216,7 +216,7 @@ fn driver_take_first(ref entries, count) =
 
 // Env install — push entries into env_handler for importing modules.
 // Dual-install: flat short name AND qualified `module.export` key.
-// Both point to the same Scheme (dotted-names-as-env, PLAN.md 2026-04-21).
+// Both point to the same Scheme (dotted-names-as-env entries).
 
 fn driver_install_entries(ref module_name, ref entries) with Memory + Alloc + EnvWrite =
   let short = module_short_name(module_name)

@@ -415,7 +415,7 @@ grep -rn "effect Abort\|effect Fail\|try_with_abort_catch\|abort()\|fail()" \
 Classify the output into:
 - Existing Abort-like effect → reuse.
 - No existing form → declare as peer handle (Path A); ship in CE
-  commit or as named sub-handle CE.1 in PLAN.md.
+  commit or as named sub-handle CE.1 in `ROADMAP.md`.
 
 Do NOT inline an ad-hoc abort mechanism inside `backtrack`.
 
@@ -531,9 +531,12 @@ fn try_with_abort_catch(inner, on_abort) = {
 If `lib/runtime/abort.nx` already exists with matching shape,
 skip this peer and adjust `search.nx`'s import accordingly.
 
-### 4.8 `PLAN.md` Decisions Ledger entry (post-CE-land)
+### 4.8 `ROADMAP.md` update note (post-CE-land)
 
-After CE ships, append to `docs/PLAN.md`'s Decisions Ledger an entry noting: CE landed, zero src/ edits, Abort substrate shipped as peer if missing, unblocks crucible_search / crucible_sat / crucible_parser / crucible_kanren / crucible_sampling; runtime MS fork execution awaits H7.
+After CE ships, update `ROADMAP.md` to note: CE landed, zero `src/`
+edits, Abort substrate shipped as peer if missing, unblocks
+crucible_search / crucible_sat / crucible_parser / crucible_kanren /
+crucible_sampling; runtime MS fork execution awaits H7.
 
 ---
 

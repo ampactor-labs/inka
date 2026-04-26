@@ -249,7 +249,8 @@ MV.2.capability-surfacing        — depends on α+δ. Voice-layer.
 4. β (applied exemplar; lands in a new module).
 5. MV.2.capability-surfacing (post-MV.2 main landing; uses α+δ).
 
-Each of α, γ, δ is its own commit with its own `H*.*` or `FV.1.*` handle per PLAN.md's peer sub-handle discipline.
+Each of α, γ, δ is its own commit with its own `H*.*` or `FV.1.*`
+handle per the roadmap's peer sub-handle discipline.
 
 ---
 
@@ -315,7 +316,7 @@ shift between commits.
 
 - **Decorative `!E` on closed-row monomorphic sites.** The original FV.1
   framing. Absorbed into "closed-row-ness IS the negation" — documented
-  in the FV.1 substrate finding in PLAN.md Pending Work item 25.
+  in the roadmap's FV.1 substrate finding.
 - **Per-site `!E` sweeps without first closing the intent round-trip.**
   If authored `!E` is lost at normalization, sweeping it across the
   compiler doesn't land substrate; it lands artifacts.

@@ -198,7 +198,28 @@ Scheme record:
     offset 12: field_1 = body Ty (heap pointer)
 ```
 
-Tag region 200-219 reserved for infer.wat private records.
+Tag regions reserved for Hβ.infer private records (extended
+2026-04-26 per Wave 2.E.infer.reason substrate-gap finding —
+agent found 23 canonical Reason variants in src/types.nx vs
+9-named subset in this walkthrough's earlier draft + only 17
+free slots in the original 200-219 region; per Anchor 7 cascade
+discipline + drift mode 9 / drift mode 8: the canonical ADT must
+be honored, not under-named):
+
+  - **200-219** — non-Reason infer-private records (state.wat
+    consumed 210/211/212 for REF_ESCAPE_ENTRY / SPAN_INDEX_ENTRY /
+    INTENT_INDEX_ENTRY; 17 slots remain for ty.wat / scheme.wat /
+    walk_*.wat / etc. peer records)
+  - **220-249** — Reason variants (30 slots for current 23
+    canonical variants + 7 future-headroom). Per §8.1 reason.wat
+    row: 220=Declared, 221=Inferred, 222=Fresh, 223=OpConstraint,
+    224=VarLookup, 225=FnReturn, 226=FnParam, 227=MatchBranch,
+    228=ListElement, 229=IfBranch, 230=LetBinding, 231=Unified,
+    232=Instantiation, 233=UnifyFailed, 234=Placeholder,
+    235=BinOpPlaceholder, 236=MissingVar, 237=Refinement,
+    238=Located, 239=InferredCallReturn, 240=InferredPipeResult,
+    241=FreshInContext, 242=DocstringReason. (242-249 reserved for
+    future Reason variants per src/types.nx evolution.)
 
 ### 2.2 Constructors + accessors
 
@@ -653,10 +674,21 @@ bootstrap/src/infer/
   ty.wat                 ;; Tier 5 — Ty constructors + tag conventions + chase_deep
                          ;;          (shared with Hβ.lower; lands here as the
                          ;;          earlier consumer)
-  reason.wat             ;; Tier 5 — Reason record constructors
-                         ;;          (Inferred / OpConstraint / VarLookup /
-                         ;;          UnifyFailed / Generalized / Instantiated /
-                         ;;          ListElement / FnReturn / Declared)
+  reason.wat             ;; Tier 5 — Reason record constructors per src/types.nx
+                         ;;          canonical ADT (23 variants, tags 220-242):
+                         ;;          Declared, Inferred, Fresh, OpConstraint,
+                         ;;          VarLookup, FnReturn, FnParam, MatchBranch,
+                         ;;          ListElement, IfBranch, LetBinding, Unified,
+                         ;;          Instantiation, UnifyFailed, Placeholder,
+                         ;;          BinOpPlaceholder, MissingVar, Refinement,
+                         ;;          Located, InferredCallReturn,
+                         ;;          InferredPipeResult, FreshInContext,
+                         ;;          DocstringReason.
+                         ;;          Payloads carrying Ty/Span/Predicate/BinOp
+                         ;;          are stored as opaque i32 pointers per the
+                         ;;          verify.wat precedent (verify.wat:39 stores
+                         ;;          predicate as opaque ptr); ty.wat /
+                         ;;          parser substrate fill them in later.
   unify.wat              ;; Tier 6 — $unify + $unify_shapes + $unify_row_dispatch +
                          ;;          $reify_node + $unify_sub
   walk_expr.wat          ;; Tier 7 — $infer_expr + per-variant arms
@@ -731,7 +763,7 @@ After unify.wat:
 | Chunk | Lines (target) | Spec source |
 |-------|---------------|-------------|
 | state.wat | ~80 | this walkthrough §1 |
-| reason.wat | ~150 | spec 02 + spec 08 |
+| reason.wat | ~280-320 | spec 02 + spec 08 + src/types.nx canonical 23-variant Reason ADT (constructor + accessors per variant ≈ 12-14 WAT lines × 23 variants; revised 2026-04-26 per Wave 2.E.infer.reason substrate-gap finding — earlier 9-named undercount yielded ~150 estimate; canonical reality is 23 variants) |
 | ty.wat | ~400 | spec 02 + this walkthrough §2.3 |
 | scheme.wat | ~250 | spec 04 §Env+Scheme + this §2 |
 | emit_diag.wat | ~200 | spec 04 §Error handling + docs/errors |

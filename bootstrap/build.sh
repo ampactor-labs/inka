@@ -86,12 +86,19 @@ CHUNKS=(
   #      $free_in_ty + $ty_substitute (deps: record + list + graph + ty +
   #      reason; canonical algorithms src/infer.nx:1818-1998 + spec 04
   #      §Env+Scheme/§Generalizations/§Instantiations).
-  # Subsequent: emit_diag.wat, unify.wat, own.wat, walk_expr.wat,
-  # walk_stmt.wat, main.wat.
+  #   5. emit_diag.wat — diagnostic emission helpers (deps: alloc + str
+  #      + int + list + wasi + graph + ty + reason; canonical spec 04
+  #      §Error handling Hazel pattern + docs/errors catalog;
+  #      $infer_emit_type_mismatch / missing_var / occurs_check +
+  #      additional catalog-emitted helpers + $render_ty walker over
+  #      14 Ty variants).
+  # Subsequent: unify.wat, own.wat, walk_expr.wat, walk_stmt.wat,
+  # main.wat.
   "bootstrap/src/infer/state.wat"        # Tier 4 (uses $alloc + list + record; Hβ.infer §1)
   "bootstrap/src/infer/reason.wat"       # Tier 5 (uses record; Hβ.infer §1 + §8.1 + 23-variant ADT)
   "bootstrap/src/infer/ty.wat"           # Tier 5 (uses record + graph + list; Hβ.infer §2.3 + Hβ.lower §3.1; 14 Ty + 3 ResumeDiscipline + $chase_deep)
   "bootstrap/src/infer/scheme.wat"       # Tier 5 (uses record + list + graph + ty + reason; Hβ.infer §2 + §2.4; Forall + instantiate + generalize)
+  "bootstrap/src/infer/emit_diag.wat"    # Tier 6 (uses str + int + wasi + graph + ty + reason; Hβ.infer §8.1 + spec 04 §Error handling; 7 emit helpers + $render_ty)
 
   # ── Layer 5: Emitter ──
   "bootstrap/src/emit_data.wat"

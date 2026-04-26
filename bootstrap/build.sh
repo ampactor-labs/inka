@@ -82,11 +82,16 @@ CHUNKS=(
   #   3. ty.wat — 14 Ty constructors + 3 ResumeDiscipline sentinels +
   #      $chase_deep (deps: record + graph; SHARED with Hβ.lower per
   #      Hβ-lower-substrate.md §7.1 — lower lands as the second consumer).
-  # Subsequent: scheme.wat (deps: ty), emit_diag.wat, unify.wat, own.wat,
-  # walk_expr.wat, walk_stmt.wat, main.wat.
+  #   4. scheme.wat — Forall record + $instantiate + $generalize +
+  #      $free_in_ty + $ty_substitute (deps: record + list + graph + ty +
+  #      reason; canonical algorithms src/infer.nx:1818-1998 + spec 04
+  #      §Env+Scheme/§Generalizations/§Instantiations).
+  # Subsequent: emit_diag.wat, unify.wat, own.wat, walk_expr.wat,
+  # walk_stmt.wat, main.wat.
   "bootstrap/src/infer/state.wat"        # Tier 4 (uses $alloc + list + record; Hβ.infer §1)
   "bootstrap/src/infer/reason.wat"       # Tier 5 (uses record; Hβ.infer §1 + §8.1 + 23-variant ADT)
   "bootstrap/src/infer/ty.wat"           # Tier 5 (uses record + graph + list; Hβ.infer §2.3 + Hβ.lower §3.1; 14 Ty + 3 ResumeDiscipline + $chase_deep)
+  "bootstrap/src/infer/scheme.wat"       # Tier 5 (uses record + list + graph + ty + reason; Hβ.infer §2 + §2.4; Forall + instantiate + generalize)
 
   # ── Layer 5: Emitter ──
   "bootstrap/src/emit_data.wat"

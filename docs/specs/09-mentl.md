@@ -35,8 +35,9 @@ tentacles.
 - Hazel POPL 2024 — marked holes. Mentl's teach_gradient tentacle
   nudges toward hole-fill candidates.
 - Rust `rustc-dev-guide` — applicability tags, structured patches.
-- INSIGHTS.md *The Teaching Compiler as Collaborator*, *Error
-  Messages as Mentorship* — the thesis this spec mechanizes.
+- DESIGN.md (manifesto) — the teaching-compiler-as-collaborator
+  thesis and error-messages-as-mentorship discipline that this
+  spec mechanizes.
 
 ---
 

@@ -14,7 +14,7 @@ a compiler that claims 8 primitives but exercises 3.*
 
 ## 0. Framing — the compiler IS the first Inka program
 
-Per INSIGHTS.md "The Self-Similar Language": *"Inka's hardest
+Per Inka's self-similarity discipline (DESIGN.md): *"Inka's hardest
 implementation problems dissolve when viewed through its own
 abstractions."* Per the Masterpiece Test: *"Is this what the ultimate
 intent → machine instruction medium would do?"*

@@ -13,9 +13,9 @@
 > **Authority:** `CLAUDE.md` Mentl's anchor + Anchor 0 (dream code)
 > + Anchor 4 (build the wheel) + Anchor 7 (walkthroughs first);
 > `docs/DESIGN.md` §0 (closing fixed point) + §0.5 (eight-primitive
-> kernel) + §11 (closing fixed point); `docs/INSIGHTS.md` §"Self-
-> Hosting IS the Proof" (L378) + §"Self-Compilation: The Cage and
-> the Light" (L1791) + §"The Bootstrap Moment: Self-Trust" (L1338);
+> kernel) + §11 (closing fixed point); `docs/SUBSTRATE.md` §I "Self-
+> Hosting IS the Proof"; `docs/DESIGN.md` (self-compilation as the
+> bootstrap moment of self-trust);
 > `ROADMAP.md` (hand-WAT not
 > translator) + 2026-04-23 (modular `bootstrap/src/*.wat` pivot) +
 > 2026-04-25 (bootstrap rewrite recontextualization);

@@ -6,7 +6,7 @@
 > crucibles replace engineering triage as the prioritization
 > mechanism.**
 
-*INSIGHTS.md's "The Crucible Pattern": aspirational programs that
+*The Crucible Pattern (DESIGN.md): aspirational programs that
 exercise features at the boundary of what Inka can express today.
 A crucible that runs is a proof of existence. A crucible that
 fails is a feature request — more honest than a backlog because it

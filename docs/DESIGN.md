@@ -25,9 +25,10 @@ the vision alone.*
 > you absorbed the vision, not just the facts.
 >
 > Only then are you loaded to collaborate. See `CLAUDE.md` for the
-> seven anchors and session-zero protocol; see `docs/INSIGHTS.md`
-> for the living compendium of crystallized truths; see
-> `docs/specs/00–11` for the per-module contracts.
+> eight anchors, the eight interrogations, and the JIT-trigger
+> table; see `docs/SUBSTRATE.md` for the canonical substrate
+> (kernel, verbs, algebra, handlers, gradient, refinement,
+> theorems); see `docs/specs/00–11` for the per-module contracts.
 
 ---
 
@@ -785,9 +786,9 @@ input <| (low_pass, band_pass, high_pass) |> fn(bands) => log(bands)
 The developer controls arity through their function signature. No
 language rule. No special case. **One mechanism.**
 
-This is settled. It will never be re-opened. It is in INSIGHTS.md, it
-is in CLAUDE.md's seven anchors, it is in spec 10. The answer was
-always *unification*.
+This is settled. It will never be re-opened. It is in `SUBSTRATE.md`
+§II, it is in `CLAUDE.md`'s eight anchors, it is in spec 10. The
+answer was always *unification*.
 
 ---
 
@@ -1123,7 +1124,7 @@ carry captures, handler state, and resume discipline **together, in
 one record shape**. **There is no vtable. There is no separate
 dictionary. There is no `*const ()` parameter smuggled alongside the
 closure.** The heap has one story (γ crystallization #8 —
-INSIGHTS.md): closure records, ADT variants, nominal records, and
+`SUBSTRATE.md` §IX): closure records, ADT variants, nominal records, and
 closures-with-evidence all allocate through the SAME `emit_alloc`
 swap surface.
 
@@ -3064,5 +3065,6 @@ gap between human thought and machine instruction finally closes.
 
 *Design v1 — 2026-04-18. See `ROADMAP.md` for execution roadmap,
 `docs/specs/00–11` for per-module contracts, `docs/errors/` for
-the error catalog, `docs/INSIGHTS.md` for the living compendium of
-crystallized truths, `CLAUDE.md` for session anchors.*
+the error catalog, `docs/SUBSTRATE.md` for the canonical substrate
+(kernel, verbs, algebra, handlers, gradient, refinement, theorems),
+`CLAUDE.md` for session anchors and JIT-trigger table.*

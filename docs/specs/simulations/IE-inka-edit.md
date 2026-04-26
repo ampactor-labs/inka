@@ -10,12 +10,13 @@ developer-encounter substrate).
 **Status:** 2026-04-25 · seeded.
 **Authority:** `docs/DESIGN.md` §0.5 (eight-primitive kernel),
 §5 (annotation gradient is conversation), §8 (Mentl as oracle), §10
-(simulations); `docs/INSIGHTS.md` §"The Continuous Oracle IS IC + One
-Cached Value" (L509), §"The Hole Is the Gradient's Absence Marker"
-(L1487), §"Visual Programming in Plain Text" (L1932), §"Feedback Is
-Inka's Genuine Novelty" (L2092), §"The Handler Chain Is a Capability
-Stack" (L1851), §"AI Obsolescence Mechanized" (L689),
-§"The Compound Interest of Self-Reference" (L1291);
+(simulations); `docs/SUBSTRATE.md` §VI "The Hole Is the Gradient's
+Absence Marker" + §II "Visual Programming in Plain Text" + §II
+"Feedback Is Inka's Genuine Novelty" + §III "The Handler Chain Is a
+Capability Stack"; memory protocol `protocol_oracle_is_ic.md` (the
+continuous-oracle-IS-IC discipline) + `protocol_realization_loop.md`
+(compound interest of self-reference); `docs/DESIGN.md` (AI
+obsolescence mechanized);
 `docs/specs/simulations/IDE-playground-vision.md` (vision; this
 walkthrough materializes it as substrate);
 `docs/specs/simulations/MV-mentl-voice.md` (Mentl's voice substrate

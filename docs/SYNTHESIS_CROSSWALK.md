@@ -33,7 +33,7 @@ Six of eight pillars are Lux. Two bring ideas worth adopting:
 | V. Types as Proofs | ✅ already Lux | `DESIGN.md` → *Refinement Types* |
 | VI. Concurrency | 🔀 convergent | colorless async ✅; fractional permissions 🆕 |
 | VII. Demand-Driven DAG Compiler | 🔀 convergent | `ARC3_ROADMAP.md` item 6 + `specs/incremental-compilation.md` |
-| VIII. AI-Native Symbiosis | 🔀 convergent | `INSIGHTS.md` → *The Collaboration Pattern* (implicit, not elevated) |
+| VIII. AI-Native Symbiosis | 🔀 convergent | `DESIGN.md` — collaboration discipline (compiler-verifies, collaborator-proposes) |
 
 **The genuinely new ideas, ranked by fit:**
 
@@ -54,7 +54,7 @@ Six of eight pillars are Lux. Two bring ideas worth adopting:
    in the `.luxi` cache (`specs/incremental-compilation.md`). No
    projectional editor. See *Research Neighbors* Tier 4.
 4. **AI-native as an explicit design principle** (Pillar VIII) — Lux's
-   *Collaboration Pattern* (`INSIGHTS.md`) is exactly this, unnamed.
+   collaboration discipline (`DESIGN.md`) is exactly this, unnamed.
    Worth promoting to a first-class design constraint. **Operationalized**
    as one-mechanism `Suggest` effect — any proposer (enumerative,
    SMT-guided, LLM-guided) is a handler; the verifier is the oracle.
@@ -187,8 +187,8 @@ than Synthesis's "prototyping / production" bimodal framing.
 > loop. Function coloring doesn't exist."*
 > *"Structured Concurrency — child threads reaped when parent cancels."*
 
-**Lux today:** colorless async falls out of effects (`INSIGHTS.md`
-mentions this). Structured concurrency is implicit. Fractional
+**Lux today:** colorless async falls out of effects (`DESIGN.md` Ch 4
++ `SUBSTRATE.md` §IV). Structured concurrency is implicit. Fractional
 permissions are NOT in Lux.
 
 **What's new:**
@@ -225,8 +225,9 @@ hash = Lux's `.luxi` content hash. Synthesis's "cloud swarm" = Lux's
 
 **What's new (or more ambitious):**
 
-- **"The IDE is the Compiler"** — Lux's `INSIGHTS.md` already says
-  "LSP is a handler on the compile effect." Synthesis goes further:
+- **"The IDE is the Compiler"** — Lux's medium already says
+  "LSP is a handler on the compile effect" (`SUBSTRATE.md` §III).
+  Synthesis goes further:
   the daemon IS the source of truth, editor is just a query client.
   This is a deployment/tooling stance, not a language feature.
 - **O(1) recompilation invalidation** — needs structural signatures
@@ -243,19 +244,19 @@ structural-signature idea into `specs/incremental-compilation.md`. The
 > prevent it. Mathematical verification — the AI is physically
 > incapable of introducing a memory bug."*
 
-**Lux today:** `INSIGHTS.md` → *The Collaboration Pattern* says the
-same thing about human + Claude collaboration: "the compiler verifies,
-so the collaborator's suggestions are either correct or caught." Not
-elevated to a design principle.
+**Lux today:** Lux's collaboration discipline (`DESIGN.md` +
+`CLAUDE.md`) says the same thing about human + Claude collaboration:
+"the compiler verifies, so the collaborator's suggestions are either
+correct or caught." Not elevated to a design principle.
 
 **What's new:** **promoting this to a named principle.** Lux's entire
 gradient architecture is an AI-and-human interface by accident — make
 it explicit. Types-as-proofs + effect algebra = a verified surface
 where AI's role is proposing; the compiler's role is verifying.
 
-**Verdict:** add an explicit "AI-Native" section to `DESIGN.md` or
-`INSIGHTS.md` that names what's already there. No new mechanism needed
-— just documentation.
+**Verdict:** add an explicit "AI-Native" section to `DESIGN.md`
+that names what's already there. No new mechanism needed — just
+documentation.
 
 ---
 

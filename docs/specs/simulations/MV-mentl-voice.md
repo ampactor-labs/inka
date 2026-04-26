@@ -971,14 +971,14 @@ Proof: graph is empty; no surfaceable content; silence predicate holds. Human mo
 
 > **SUPERSEDED 2026-04-21.** §2.7.3's 8-form Tentacle→FormKind mapping replaces §3's 12 templates. The 12→8 remap table lives in §2.7.3. This section is retained as historical reasoning — the original candidate taxonomy from which the consolidated form emerged. Implementation reads from §2.7; this section is not spec.
 
-### 3.0 ONE-at-a-time discipline (load-bearing, from INSIGHTS.md)
+### 3.0 ONE-at-a-time discipline (load-bearing, from DESIGN.md)
 
 Before the grammar, the surfacing rule:
 
 > *"The gradient engine picks ONE suggestion per compile. Not a
 > wall of warnings. One step — the most impactful annotation the
 > developer could add. Like a tutor who knows exactly what to
-> teach next."* — INSIGHTS.md §Teaching Is Compilation
+> teach next."* — DESIGN.md (Teaching Is Compilation discipline)
 
 The 12 templates below are **internal proof-shape categories**
 Mentl detects. They are NOT what She surfaces per turn. Per

@@ -55,7 +55,7 @@ inka/
 
 **Post-first-light dissolutions (tracked in `ROADMAP.md`):**
 - `tools/` dissolves → scripts become Inka programs in `lib/`.
-- `docs/` shrinks to human-written manifestos (DESIGN.md, INSIGHTS.md, remaining walkthroughs + Decisions Ledger); per-module specs + error catalog generated.
+- `docs/` shrinks to human-written manifestos (DESIGN.md, SUBSTRATE.md, remaining walkthroughs + Decisions Ledger); per-module specs + error catalog generated.
 - Final form probably **four directories**: `src/`, `lib/`, `bootstrap/`, minimal `docs/`.
 
 **The six-directory interim IS the Inka-project template for a developer's own projects.** Most user projects won't have `bootstrap/` or `tools/` or full `docs/`; they'll have:
@@ -204,7 +204,7 @@ bootstrap/
 ```
 docs/
 ├── DESIGN.md                 ← the manifesto (§0.5 kernel + 12 chapters)
-├── INSIGHTS.md               ← crystallized truths
+├── SUBSTRATE.md              ← canonical substrate (kernel, verbs, algebra, handlers, gradient, refinement, theorems)
 ├── ROADMAP.md                ← canonical roadmap
 ├── SYNTAX.md                 ← canonical syntax
 ├── errors/                   ← canonical error catalog (E/V/W/T/P codes)
@@ -256,7 +256,7 @@ docs/
 - `docs/errors/<CODE>.md` files become `doc_handler` projections from error declarations + `///` comments.
 - `docs/specs/00-11.md` files become `doc_handler` projections from each module's kernel-primitive-served declaration + structural analysis.
 - `docs/specs/simulations/*.md` remain (cascade reasoning record is historical; doesn't auto-regenerate).
-- `DESIGN.md`, `INSIGHTS.md`, `ROADMAP.md`, `SYNTAX.md` — remain human-written manifestos.
+- `DESIGN.md`, `SUBSTRATE.md`, `ROADMAP.md`, `SYNTAX.md` — remain human-written manifestos.
 
 ### 1.6 Root-level files
 
@@ -534,7 +534,7 @@ bootstrap/inka2.wat
 Every `.md` file referencing `std/compiler/`, `std/runtime/`, `std/dsp/`, `std/ml/`, `std/prelude.nx`, `std/test.nx`, `std/types.nx`, `docs/rebuild/`, `.nx` gets path-updated in the restructure commit. Files affected (per NS-naming.md §6 commit H, now absorbed into restructure):
 
 - `docs/DESIGN.md` — every Ch 10 scenario, every file-reference.
-- `docs/INSIGHTS.md` — every file-reference.
+- `docs/SUBSTRATE.md` — every file-reference.
 - `ROADMAP.md` — the canonical roadmap's future sections.
 - `docs/SYNTAX.md` — every file-reference.
 - `CLAUDE.md` — the File Map section + Session Zero references.

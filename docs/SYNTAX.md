@@ -4,7 +4,7 @@
 
 This document is **the authoritative syntactic spec for Inka**. It binds the parser; the parser implements exactly this. It is written under dream-code discipline: every decision below is the IDEAL form, not a description of the current parser. Where the current parser deviates, the parser is wrong; SYNTAX.md is the wheel, the parser is the lathe being adjusted to it.
 
-DESIGN.md articulates the medium's vision. The 12 specs in `docs/specs/` describe per-module behavior. INSIGHTS.md crystallizes load-bearing truths. **SYNTAX.md is the layer between vision and implementation: the surface form by which intent reaches the substrate.**
+DESIGN.md articulates the medium's vision. The 12 specs in `docs/specs/` describe per-module behavior. SUBSTRATE.md crystallizes load-bearing structural truths (kernel, verbs, algebra, handlers, gradient, refinement, theorems). **SYNTAX.md is the layer between vision and implementation: the surface form by which intent reaches the substrate.**
 
 ---
 
@@ -1449,7 +1449,7 @@ Every diagnostic carries a Located reason chain, source span, applicability tag 
 
 - DESIGN.md Ch 2 — the five verbs, with worked examples
 - DESIGN.md Ch 4 — the substrate (graph + handler)
-- INSIGHTS.md — Visual Programming in Plain Text; Five Verbs = Complete Basis
+- SUBSTRATE.md §II — Visual Programming in Plain Text; Five Verbs Are a Complete Topological Basis
 - spec 03 — Typed AST (NodeBody, Expr, Stmt, Pat)
 - spec 10 — Pipes (PipeKind, layout enforcement)
 - spec 11 — Clock (iterative context for `<~`)
@@ -1468,7 +1468,7 @@ Every diagnostic carries a Located reason chain, source span, applicability tag 
 
 ## Authority
 
-This document supersedes any syntactic decisions implicit in DESIGN.md, INSIGHTS.md, the 12 specs, or current parser behavior. Where another document conflicts with SYNTAX.md, SYNTAX.md is correct and the other document gets a corrective revision.
+This document supersedes any syntactic decisions implicit in DESIGN.md, SUBSTRATE.md, the 12 specs, or current parser behavior. Where another document conflicts with SYNTAX.md, SYNTAX.md is correct and the other document gets a corrective revision.
 
 Mentl's discipline applies to syntax: every form below was decided by asking the eight interrogations — one per kernel primitive (DESIGN.md §0.5), one per Mentl tentacle. Graph (what AST does it produce?), handler + resume discipline (what installed handler reads it, with what resume type?), verb (which topology?), row (what `+ - & !` constraint?), ownership (what `own`/`ref` does it carry?), refinement (what predicate does it admit?), gradient (what annotation would it unlock?), Reason (what edge does it leave for the Why Engine?). Forms that failed any of the eight were rejected.
 

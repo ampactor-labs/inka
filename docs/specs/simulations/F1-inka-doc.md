@@ -8,12 +8,12 @@ handler is installed.*
 lands ahead of substrate per Inka's substrate-first posture).
 **Status:** 2026-04-24 · seeded.
 **Authority:** `docs/DESIGN.md` §9.12 (Documentation as handler);
-`docs/INSIGHTS.md` §"The Meta-Unification" (L509) + §"The Three Things"
-(L622) + §"Documentation is an Effect" (L570) + §"The Pipe Flows
-Understanding" (L588) + §"The Graph IS the Program" (L1858) +
-§"The Handler IS the Backend" (L1346) + §"Examples Not Tests" (L398) +
-§"The Crucible Pattern" (L1161) + §"Visual Programming in Plain Text"
-(L1601) + §"The Handler Chain Is a Capability Stack" (L1520) +
+`docs/SUBSTRATE.md` §VIII "The Graph IS the Program" + §III "The
+Handler IS the Backend" + §III "The Handler Chain Is a Capability
+Stack" + §II "Visual Programming in Plain Text"; `docs/DESIGN.md`
+(meta-unification, three things, documentation-as-effect,
+pipe-flows-understanding, examples-not-tests, crucible pattern —
+the vision-level claims this walkthrough composes from) +
 §"AI Obsolescence Mechanized" (L689).
 **Walkthrough peers:** `DS-docstring-edge.md` (substrate for `///` →
 graph), `MV-mentl-voice.md` (Mentl's tentacle handlers), `EH-entry-handlers.md`
@@ -760,7 +760,7 @@ graph writes (even though doc_handler reads graph). Verifiable via
 
 **The disintermediation claim** (per plan §1693, §1697): post-first-light
 + Mentl-at-cursor + F.1, the markdown corpus retires (`docs/DESIGN.md`
-+ `docs/INSIGHTS.md` + walkthroughs become historical archive).
++ `docs/SUBSTRATE.md` + walkthroughs become historical archive).
 Runtime orientation comes from Mentl's voice + `inka doc` projection +
 `///` on declarations. **The claim is mechanical, not aspirational** —
 every other system requires the doc generator to drift from the

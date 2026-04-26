@@ -136,7 +136,7 @@ handler collector with buf = make_list(16), count = 0 {
     resume() with buf = written, count = count + 1
   }
   // No `result()` arm needed — the handle block's return value IS
-  // slice(buf, 0, count) via INSIGHTS.md "Handler State
+  // slice(buf, 0, count) via SUBSTRATE.md §III "Handler State
   // Internalization": the body value IS the handle value.
 }
 ```
@@ -193,8 +193,8 @@ parameterized-effect exercise. Row algebra would distinguish
 
 Currently the `result()` op existed on Iterate. Post-refactor it's
 **deleted.** The handle block's return value IS the accumulated
-list (INSIGHTS.md "Handler State Internalization"). No explicit
-result call needed.
+list (SUBSTRATE.md §III "Handler State Internalization"). No
+explicit result call needed.
 
 ### Q4 — Do the transform handlers share the Iterate effect with the source?
 
@@ -228,7 +228,8 @@ sum_h into an Int; count_h into an Int; max_h into an Option; etc.
 
 No — improves it. Post-refactor, map_h's `yield(elem) => perform
 yield(f(elem)); resume()` is a tail-resumptive handler (85% case
-per INSIGHTS.md "Three Tiers"). Compiles to zero-overhead direct
+per SUBSTRATE.md §III "The Three Tiers of Effect Compilation").
+Compiles to zero-overhead direct
 call. `filter_h` is linear (single-shot resume). collector is
 linear. Chain compiles to a tight loop with no intermediate list
 allocations.
@@ -389,7 +390,7 @@ structural rewrite; collector's buffer-counter form passes the
 Post-refactor, `first_three_positives_doubled(xs)` compiles to a
 tight single loop with ZERO intermediate list allocations (only
 collector's buf grows once). This is the performance claim
-INSIGHTS.md "Three Tiers of Effect Compilation" makes for
+SUBSTRATE.md §III "The Three Tiers of Effect Compilation" makes for
 tail-resumptive handler chains.
 
 Verification via `inka audit` once MV.2 lands: the chain's

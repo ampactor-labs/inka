@@ -144,7 +144,7 @@ fn expr(node) = {
 - `src/graph.nx` — the module implementing it (~40 refs)
 - `src/infer.nx`, `src/lower.nx`, `src/query.nx`, `src/mentl.nx`, others — chase calls + type mentions
 - `docs/DESIGN.md` §0.5 + Ch 4 (~40 refs)
-- `docs/INSIGHTS.md` (kernel shorthand + various)
+- `docs/SUBSTRATE.md` (kernel shorthand + various)
 - `docs/CLAUDE.md` (kernel anchor, interrogations, file map)
 - `docs/README.md` (kernel enumeration)
 - `docs/specs/00-graph.md` → `docs/specs/00-graph.md` (retitled)
@@ -245,7 +245,7 @@ fn expr(node) = {
 
 **Why it's drift.** Anchor 8 of CLAUDE.md: **"Delete fearlessly. Nobody uses Inka. No backwards compatibility. No archive folders. No 'for reference.'"** A file marked historical is an archive-folder-as-file. Its presence is archaeology kept as decoration.
 
-**Resolution:** delete the file. If any nugget remains load-bearing, it's moved into DESIGN.md or INSIGHTS.md first (verified during simplification execution). Then delete.
+**Resolution:** delete the file. If any nugget remains load-bearing, it's moved into DESIGN.md or SUBSTRATE.md first (verified during simplification execution). Then delete.
 
 **Files affected:** `docs/SYNTHESIS_CROSSWALK.md` (deleted); CLAUDE.md's "Deep context" section (remove the pointer to it).
 
@@ -502,7 +502,7 @@ If any pattern matches, the audit exits non-zero with the specific offending sit
    - Commit E: file renames (`lexer.nx` → `lex.nx`, `parser.nx` → `parse.nx`) + every import updated. (Fold into restructure item 17' for extension migration.)
    - Commit F: docstring harmonization (per-module passes; can split by directory if size warrants).
    - Commit G: delete `SYNTHESIS_CROSSWALK.md` + remove CLAUDE.md pointer.
-   - Commit H: doc updates propagating the renames into DESIGN.md, INSIGHTS.md, CLAUDE.md, README.md, SYNTAX.md, specs, walkthroughs, traces, memory files (this is items 12-16, 19, 20, 21, 22 combined).
+   - Commit H: doc updates propagating the renames into DESIGN.md, SUBSTRATE.md, CLAUDE.md, README.md, SYNTAX.md, specs, walkthroughs, traces, memory files (this is items 12-16, 19, 20, 21, 22 combined).
 
 **No commit in the sequence lands with a non-zero drift audit.** Each commit is a functioning intermediate state. The sequence closes when commit H clears; after that, the whole naming reform is complete and irreversible.
 

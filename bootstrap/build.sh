@@ -50,8 +50,9 @@ CHUNKS=(
   "bootstrap/src/runtime/list.wat"       # Tier 1 (uses $alloc)
   "bootstrap/src/runtime/record.wat"     # Tier 1 (uses $alloc + $heap_base)
   "bootstrap/src/runtime/closure.wat"    # Tier 2 (uses $alloc; same shape as record)
-  # Future Wave 2.B+ runtime additions (cont.wat / graph.wat / env.wat /
-  # row.wat / verify.wat / wasi_fs.wat) append here per INDEX.tsv tier order.
+  "bootstrap/src/runtime/cont.wat"       # Tier 2 (uses $alloc; H7 multi-shot continuation)
+  # Future Wave 2.C+ runtime additions (graph.wat / env.wat / row.wat /
+  # verify.wat / wasi_fs.wat) append here per INDEX.tsv tier order.
 
   # ── Layer 2: Lexer ──
   "bootstrap/src/lexer_data.wat"         # keyword + output data segments

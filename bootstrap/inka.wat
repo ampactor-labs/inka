@@ -1,5 +1,9 @@
 ;; inka.wat — The Reference Seed Compiler (Tier 1 Runtime)
 ;;
+;; ASSEMBLED FROM bootstrap/src/* by bootstrap/build.sh. Do not edit
+;; this file directly; edit the chunk files in bootstrap/src/ and
+;; rerun build.sh. Per Hβ §2.1 modular pivot (plan §136 2026-04-23).
+;;
 ;; HEAP_BASE = 4096 (0x1000)
 ;; Nullary sentinel values: [0, HEAP_BASE)
 ;; Allocated records: >= HEAP_BASE
@@ -21,11 +25,29 @@
   (import "wasi_snapshot_preview1" "proc_exit"
     (func $wasi_proc_exit (param i32)))
 
-  ;; ─── Memory & Globals ─────────────────────────────────────────────
+  ;; ─── Memory & Globals (Layer 0) ───────────────────────────────────
   (memory (export "memory") 512)  ;; 32 MiB — room for heap + output buffer
 
   (global $heap_base i32 (i32.const 4096))
   (global $heap_ptr (mut i32) (i32.const 1048576))
+
+  ;; ═══ alloc.wat — bump allocator (Tier 0) ═══════════════════════════
+  ;; Implements: Hβ §1.1 — HEAP_BASE invariant + 8-byte-aligned bump.
+  ;; Exports:    $alloc
+  ;; Uses:       $heap_ptr (global, Layer 0 shell)
+  ;; Test:       runtime_test/alloc.wat (per-chunk fitness)
+  ;;
+  ;; HEAP_BASE = 4096 (sentinel region [0, 4096)); $heap_ptr starts at
+  ;; 1 MiB (1048576). 8-byte-aligned monotonic bump; never frees.
+  ;;
+  ;; Per CLAUDE.md memory model + γ crystallization #8 (the heap has one
+  ;; story): closures (closure.wat), continuations (cont.wat — H7),
+  ;; ADT variants (record.wat), records, tuples, strings (str.wat),
+  ;; lists (list.wat) ALL allocate through this surface. Arena handlers
+  ;; (B.5 AM-arena-multishot — replay_safe / fork_deny / fork_copy) are
+  ;; peer swaps that intercept this allocation at handler-install time
+  ;; post-L1; the seed's bump_allocator is the default that arena
+  ;; handlers narrow.
 
   ;; ─── Bump Allocator ───────────────────────────────────────────────
   (func $alloc (param $size i32) (result i32)
@@ -38,6 +60,22 @@
           (i32.const 7))
         (i32.const -8)))  ;; 8-byte alignment
     (local.get $old))
+
+  ;; ═══ str.wat — flat string primitives (Tier 1) ════════════════════
+  ;; Implements: Hβ §1.6 — String layout [len:i32][bytes...].
+  ;; Exports:    $str_alloc, $str_len, $byte_at, $byte_len,
+  ;;             $str_eq, $str_concat, $str_slice
+  ;; Uses:       $alloc (alloc.wat)
+  ;; Test:       runtime_test/str.wat
+  ;;
+  ;; Strings are always flat — length-prefixed byte buffers. $str_concat
+  ;; allocates a new string and copies both inputs. $str_eq compares
+  ;; length-then-bytes. $str_slice allocates a new substring; clamps
+  ;; out-of-range indices.
+  ;;
+  ;; The bare `==` shape on strings is forbidden in src/*.nx per
+  ;; CLAUDE.md bug classes; user code calls `str_eq(a, b)` (which
+  ;; lowers to $str_eq here). Per Ω.2: $str_eq returns Bool (i32 0/1).
 
   ;; ─── String Primitives ────────────────────────────────────────────
   ;; Layout: [len:i32][bytes...]
@@ -113,6 +151,27 @@
           (local.get $n))))
     (local.get $dest))
 
+  ;; ═══ wasi.wat — WASI preview1 I/O wrappers (Tier 1) ═══════════════
+  ;; Implements: Hβ §1.15 — WASI preview1 stdout/stderr/stdin helpers
+  ;;             over the imported wasi_snapshot_preview1 functions
+  ;;             (Layer 0 shell declares the imports).
+  ;; Exports:    $print_string, $eprint_string, $read_all_stdin
+  ;; Uses:       $alloc (alloc.wat), $str_alloc (str.wat),
+  ;;             $str_len (str.wat), $str_concat (str.wat),
+  ;;             $wasi_fd_read, $wasi_fd_write (Layer 0 imports)
+  ;; Test:       runtime_test/wasi.wat
+  ;;
+  ;; WASI preview1 surface (per CLAUDE.md WASM-as-substrate + plan §21):
+  ;;   fd_write, fd_read, fd_close, path_open, proc_exit
+  ;; Filesystem extensions (path_create_directory / fd_readdir /
+  ;; path_filestat_get / path_unlink_file / path_rename) live in
+  ;; wasi_fs.wat per the FX walkthrough composition arc.
+  ;;
+  ;; iov scratch is allocated inline (one $alloc per call). Per
+  ;; lib/runtime/io.nx VFINAL: scratch convention; bump allocator
+  ;; recovers all on next session reset (none — bump is monotonic, but
+  ;; iov use is small).
+
   ;; ─── WASI I/O Wrappers ────────────────────────────────────────────
 
   ;; Print a string (len-prefixed) to stdout (fd 1)
@@ -174,6 +233,24 @@
         (local.set $result (call $str_concat (local.get $result) (local.get $chunk_str)))
         (br $read_loop)))
     (local.get $result))
+
+  ;; ═══ int.wat — integer ↔ string conversion (Tier 1) ═══════════════
+  ;; Implements: Hβ §1.6 integer/string conversion + memory-region
+  ;;             string construction.
+  ;; Exports:    $str_of_byte, $str_from_mem, $int_to_str, $parse_int
+  ;; Uses:       $alloc (alloc.wat), $str_alloc (str.wat),
+  ;;             $str_len (str.wat), $byte_at (str.wat),
+  ;;             $str_of_byte (self — used by $int_to_str)
+  ;; Test:       runtime_test/int.wat
+  ;;
+  ;; Bridges between byte / memory-region representations and the
+  ;; flat string layout (see str.wat). Callers in lexer.wat use these
+  ;; to materialize keyword strings + numeric literal text from the
+  ;; lexer's input cursor + scratch buffer; emit_*.wat uses them to
+  ;; render i32 constants into output WAT text.
+  ;;
+  ;; $int_to_str writes digits right-to-left into a 12-byte scratch
+  ;; buffer; $parse_int reads decimal text + optional leading '-'.
 
   ;; ─── Integer/String Conversion ────────────────────────────────────
 
@@ -262,6 +339,29 @@
       (then (i32.sub (i32.const 0) (local.get $acc)))
       (else (local.get $acc))))
 
+  ;; ═══ list.wat — tagged list primitives (Tier 1) ═══════════════════
+  ;; Implements: Hβ §1.7 — tagged list layout [count:i32][tag:i32][...].
+  ;; Exports:    $make_list, $len, $list_index, $list_set,
+  ;;             $list_extend_to, $slice
+  ;; Uses:       $alloc (alloc.wat)
+  ;; Test:       runtime_test/list.wat
+  ;;
+  ;; Layout per CLAUDE.md representations:
+  ;;   tag 0 = flat   [count:i32][tag:i32][elements i32 each]
+  ;;   tag 1 = snoc   [count:i32][tag:i32][tail:ptr][head:i32]   (Tier 2 dispatch)
+  ;;   tag 3 = concat [count:i32][tag:i32][left:ptr][right:ptr]  (Tier 2 dispatch)
+  ;;   tag 4 = slice  [count:i32][tag:i32][base:ptr][start:i32]  (Tier 2 dispatch)
+  ;;
+  ;; Wave 2.A factoring: this chunk preserves the existing FLAT-only
+  ;; $list_index dispatch (tag check is performed but only flat access
+  ;; is used; tags 1/3/4 fall through). Wave 2.B extends to full tag
+  ;; dispatch per Hβ §1.7. Both layers are needed for bootstrap to
+  ;; compile any src/*.nx file that exercises non-flat list shapes
+  ;; (lib/runtime/lists.nx's snoc/concat/slice arms).
+  ;;
+  ;; $list_extend_to is the buffer-counter substrate primitive (Ω.3)
+  ;; — load-bearing across graph/trail/overlay arrays per spec 00.
+
   ;; ─── List Primitives ──────────────────────────────────────────────
   ;; Layout: [count:i32][tag:i32][payload...]
 
@@ -349,6 +449,26 @@
           (br $cp)))
         (local.get $result))))
 
+  ;; ═══ record.wat — record/tuple + ADT match helpers (Tier 1) ═══════
+  ;; Implements: Hβ §1.8 (tuple) + §1.9 (record) + §1.5 (ADT match
+  ;;             discriminator via heap-base threshold).
+  ;; Exports:    $make_record, $record_get, $record_set,
+  ;;             $tag_of, $is_sentinel
+  ;; Uses:       $alloc (alloc.wat), $heap_base (Layer 0 shell)
+  ;; Test:       runtime_test/record.wat
+  ;;
+  ;; Layout per H2-record-construction.md + H2.3-nominal-records.md +
+  ;; H3-adt-instantiation.md:
+  ;;   [tag:i32][arity:i32][field_0:i32]...[field_N:i32]
+  ;;
+  ;; The heap-base discriminator (HEAP_BASE = 4096) lets nullary-
+  ;; sentinel ADT variants live in the [0, 4096) region and fielded
+  ;; variants live at >= 4096; $tag_of dispatches on this threshold.
+  ;; Per HB-bool-transition.md + γ crystallization #8.
+  ;;
+  ;; H6 wildcard discipline: every load-bearing ADT match is
+  ;; exhaustive; no `_ => fabricated_default` arms.
+
   ;; ─── Record/Tuple Primitives ──────────────────────────────────────
   ;; Layout: [tag:i32][arity:i32][fields...]
 
@@ -385,6 +505,38 @@
   (func $is_sentinel (param $ptr i32) (result i32)
     (i32.lt_u (local.get $ptr) (global.get $heap_base)))
 
+  ;; ═══ closure.wat — closure record substrate (Tier 2) ══════════════
+  ;; Implements: Hβ §1.3 — closure record per H1 evidence reification.
+  ;;             [tag:i32][fn_index:i32][captures...][evidence_slots...]
+  ;; Exports:    $make_closure, $closure_get_slot, $closure_set_slot
+  ;; Uses:       $alloc (alloc.wat)
+  ;; Test:       runtime_test/closure.wat
+  ;;
+  ;; Same allocation surface as records (record.wat) — the heap has one
+  ;; story (γ crystallization #8). Closures are records with a known
+  ;; field-0 tag + field-1 fn_index; subsequent slots hold captures
+  ;; (lexical environment) followed by evidence (handler function-
+  ;; pointers for polymorphic effect dispatch per H1).
+  ;;
+  ;; Handler dispatch per Hβ §1.3 + H1 evidence reification:
+  ;;   - Ground site (>95% per H1):  (call $op_<name> <args>) — direct
+  ;;   - Polymorphic site:           call_indirect via fn_index field
+  ;;     loaded from a closure's evidence slot at compile-time-resolved
+  ;;     offset.
+  ;;
+  ;; THERE IS NO VTABLE. The fn_index is a FIELD on the record;
+  ;; evidence is a SLOT on the record; dispatch reads the field. Per
+  ;; CLAUDE.md anchor "There is no vtable in Inka" + Koka JFP 2022
+  ;; evidence-passing compilation.
+  ;;
+  ;; cont.wat (H7 — multi-shot continuation; future Wave 2.B addition)
+  ;; extends this layout with state_index + ret_slot fields per H7
+  ;; §1.2; same allocation path, same dispatch pattern, additional
+  ;; fields. Mentl's oracle loop (insight #11 — speculative inference
+  ;; firing on every save/edit) drives high-volume multi-shot continuously
+  ;; through cont.wat — that substrate is the hot path, not a minority
+  ;; case.
+
   ;; ─── Closure Primitives ───────────────────────────────────────────
   ;; Same layout as records: [tag:i32][fn_index:i32][slots...]
 
@@ -409,11 +561,31 @@
         (i32.mul (local.get $idx) (i32.const 4)))
       (local.get $val)))
 
-  ;; ─── Data Segments (string constants) ─────────────────────────────
-  ;; Keyword strings for the lexer — stored in low memory [256..4096)
-  ;; Each: [len:i32][bytes...]
-  ;; These are pre-laid-out so the lexer can reference them by address.
+  ;; ═══ lexer_data.wat — keyword + output data segments (Layer 2) ════
+  ;; Implements: lexer keyword string constants at fixed memory
+  ;;             addresses [256, 512) + output format strings at
+  ;;             [512, 4096). Read by lexer.wat's identifier-vs-
+  ;;             keyword classifier + by the entry point's stdout
+  ;;             reporting helpers.
+  ;; Exports:    (data segments — addressed via $str_from_mem in int.wat)
+  ;; Uses:       (memory.data only — no function dependencies)
+  ;; Test:       runtime_test/lexer_data.wat (asserts string content
+  ;;             at known addresses)
+  ;;
+  ;; Each entry: 4-byte little-endian length prefix + raw bytes.
+  ;; Addresses chosen to fit within the [256, 4096) data region (the
+  ;; HEAP_BASE-bounded sentinel space below the heap floor at 1 MiB).
+  ;; Per CLAUDE.md memory model: HEAP_BASE = 4096; sentinel region
+  ;; [0, 4096) holds (a) nullary ADT variant tags + (b) data-segment
+  ;; constants like these.
+  ;;
+  ;; Wave 2.A factoring: these segments lived inline in inka.wat's
+  ;; Layer 0+1 shell because the build.sh "extract shell" pattern
+  ;; treated everything before ";; ─── TokenKind Sentinel IDs" as
+  ;; shell. They are SEMANTICALLY lexer data — moved here as the
+  ;; lexer's first chunk so build.sh assembles them before lexer.wat.
 
+  ;; ─── Keyword strings for the lexer — [256, 512) ───────────────────
   ;; "fn" at 256
   (data (i32.const 256) "\02\00\00\00fn")
   ;; "let" at 264
@@ -467,7 +639,7 @@
   ;; "false" at 472
   (data (i32.const 472) "\05\00\00\00false")
 
-  ;; Output format strings (safe region 512+)
+  ;; ─── Output format strings — [512, 4096) ──────────────────────────
   ;; " tokens, " at 512 (9 bytes)
   (data (i32.const 512) " tokens, ")
   ;; " stmts" at 528 (6 bytes)
@@ -818,7 +990,6 @@
         (br $scan)))
     (local.get $pos))
 
-
   ;; ─── Main Lex Loop ─────────────────────────────────────────────────
   ;; Iterative version of lex_from. Processes source byte-by-byte,
   ;; building a flat token buffer. Returns (buf, count) as 2-tuple.
@@ -1055,7 +1226,6 @@
         (if (i32.eq (local.get $tag) (i32.const 29))
           (then (return (i32.load offset=4 (local.get $kind)))))  ;; TDocComment → payload
         (call $int_to_str (local.get $tag)))))
-
 
   ;; ─── Parser Infrastructure ──────────────────────────────────────────
   ;; Graph stub: fresh handle = incrementing counter
@@ -1418,7 +1588,6 @@
     (if (i32.eq (local.get $k) (i32.const 40)) (then (return (i32.const 164)))) ;; PTeeInline
     (if (i32.eq (local.get $k) (i32.const 41)) (then (return (i32.const 165)))) ;; PFeedback
     (i32.const 160))
-
 
   ;; ═══ Pattern Parsing ═══════════════════════════════════════════════
   ;; Hand-transcribed from src/parser.nx lines 1196-1294.
@@ -1798,7 +1967,6 @@
     (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))
 
-
   ;; ═══ Function Statement Parser (Complete) ═══════════════════════════
   ;; Hand-transcribed from src/parser.nx lines 367-441.
   ;;
@@ -2045,7 +2213,6 @@
       (br $scan)))
     (local.get $pos))
 
-
   ;; ═══ Type Declaration Parser (Complete) ═════════════════════════════
   ;; Hand-transcribed from src/parser.nx lines 525-586.
   ;;
@@ -2286,7 +2453,6 @@
     (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))
 
-
   ;; ─── Expression Parsing ─────────────────────────────────────────────
 
   ;; parse_expr: entry point — calls binop with min_prec=1
@@ -2515,7 +2681,6 @@
       (call $nexpr (i32.const 84) (local.get $span))))  ;; LitUnit
     (drop (call $list_set (local.get $tup) (i32.const 1) (i32.add (local.get $pos) (i32.const 1))))
     (local.get $tup))
-
 
   ;; ═══ Compound Expression Parsers (Complete) ════════════════════════
   ;; Hand-transcribed from src/parser.nx.
@@ -2838,7 +3003,6 @@
       (br $scan)))
     (local.get $pos))
 
-
   ;; ═══ Statement Dispatch + Top-Level (Complete) ══════════════════════
   ;; Hand-transcribed from src/parser.nx lines 299-352.
 
@@ -2976,7 +3140,6 @@
       (local.set $p (i32.add (local.get $p) (i32.const 1)))
       (br $cp)))
     (local.get $result))
-
 
   ;; ═══ WAT Fragment Data Segments ═════════════════════════════════════
   ;; Raw byte strings for WAT syntax emission. No length prefix —
@@ -3180,7 +3343,6 @@
   (data (i32.const 1491) "_start_fn")
   (data (i32.const 1500) " (export \22_start\22)")
 
-
   ;; ═══ Emitter Infrastructure ═════════════════════════════════════════
   ;; Output buffer management for WAT text generation.
   ;;
@@ -3341,7 +3503,6 @@
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $ch)))
     (call $emit_byte (i32.const 34))) ;; closing "
-
 
   ;; ═══ Expression Emitter ═════════════════════════════════════════════
   ;; Walks AST expression nodes and emits corresponding WAT.
@@ -3746,7 +3907,6 @@
   ;; 1000: "record_get" (10 bytes)
   ;; 1010: "make_list" (9 bytes)
 
-
   ;; ═══ Compound Expression Emission ═══════════════════════════════════
   ;; If, Block, and Match expression WAT generation.
   ;;
@@ -4022,7 +4182,6 @@
           (call $emit_nl)))
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $bind))))
-
 
   ;; ═══ Statement Emission ═════════════════════════════════════════════
   ;; Emits WAT for statement nodes: FnStmt, LetStmt, ExprStmt,
@@ -4371,7 +4530,6 @@
       (call $emit_nl)
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $op_loop))))
-
 
   ;; ═══ Module Emission (Top-Level Orchestrator) ════════════════════════
   ;; Emits a complete WAT module from a parsed AST program.

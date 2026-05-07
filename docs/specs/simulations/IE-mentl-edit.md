@@ -445,7 +445,7 @@ Per Insight #1 (handler chain IS capability stack) + DESIGN §1
 through one entry handler installed by `mentl --with edit_run`:
 
 ```
-inka_edit_session()
+mentl_edit_session()
     ~> edit_handler              ← outermost: sandbox boundary; least trusted
     ~> file_watcher              ← peer: re-projects on disk change
     ~> execute_on_save           ← peer: runs compile_run on save
@@ -663,7 +663,7 @@ walkthrough specifies the full design; tracker carries gates.
 | Handle | Scope |
 |--------|-------|
 | **IE.0** | This walkthrough |
-| **IE.session** | `inka_edit_session()` entry fn + `edit_handler` + WebSocket transport substrate |
+| **IE.session** | `mentl_edit_session()` entry fn + `edit_handler` + WebSocket transport substrate |
 | **IE.canvas** | Topographic Canvas render handler — text editor + geometric pipe lines + layout enforcement at typing |
 | **IE.hud** | Capability HUD render handler — live row + ownership ledger + capability unlocks + annotation gradient response |
 | **IE.wavefront** | Wavefront render handler — Reason DAG navigation + MultiShot reality streaming + time-travel scrub |
@@ -824,7 +824,7 @@ Anchor 7. Walkthrough citation in commit body. Drift-audit clean.
     overlay. Step-through controls; live-edit invitation; departs
     to working editor on `create_file`. ~250 lines.
 13. **`lib/edit/handler.mn`** — IE.session `edit_handler` + entry
-    fn `inka_edit_session`; intercepts gestures; pushes WebSocket
+    fn `mentl_edit_session`; intercepts gestures; pushes WebSocket
     updates on graph_mutated / synth_progress; composes the full
     handler chain (§4). ~300 lines.
 14. **`src/main.mn`** — IE.cli `mentl edit [PROJECT_PATH] [--port=N]`

@@ -560,24 +560,24 @@ for f in src/*.mn lib/**/*.mn; do
 done
 
 # Link
-python3 bootstrap/src/link.py /tmp/*.wat -o /tmp/inka2.wat
+python3 bootstrap/src/link.py /tmp/*.wat -o /tmp/mentl2.wat
 
 # Assemble + validate seed-of-seed
-wat2wasm /tmp/inka2.wat -o /tmp/inka2.wasm --debug-names --enable-tail-call
-wasm-validate /tmp/inka2.wasm
+wat2wasm /tmp/mentl2.wat -o /tmp/mentl2.wasm --debug-names --enable-tail-call
+wasm-validate /tmp/mentl2.wasm
 
 # Self-compile via seed-of-seed
 for f in src/*.mn lib/**/*.mn; do
-  cat "$f" | wasmtime run /tmp/inka2.wasm > "/tmp/inka3-$(basename $f .mn).wat"
+  cat "$f" | wasmtime run /tmp/mentl2.wasm > "/tmp/mentl3-$(basename $f .mn).wat"
 done
 
 # Link inka3
-python3 bootstrap/src/link.py /tmp/inka3-*.wat -o /tmp/inka3.wat
+python3 bootstrap/src/link.py /tmp/mentl3-*.wat -o /tmp/mentl3.wat
 
 # The diff — Leg 1 of First-Light Triangle
-wat-desugar /tmp/inka2.wat --stdout > /tmp/canon-inka2.wat
-wat-desugar /tmp/inka3.wat --stdout > /tmp/canon-inka3.wat
-diff /tmp/canon-inka2.wat /tmp/canon-inka3.wat
+wat-desugar /tmp/mentl2.wat --stdout > /tmp/canon-mentl2.wat
+wat-desugar /tmp/mentl3.wat --stdout > /tmp/canon-mentl3.wat
+diff /tmp/canon-mentl2.wat /tmp/canon-mentl3.wat
 # Empty = first-light-L1
 ```
 
@@ -950,7 +950,7 @@ all three must pass for the substrate to claim completeness.*
 ### §12.1 Leg 1 — Byte-identical self-compilation
 
 **Test:** `bash bootstrap/first-light.sh` exits 0 with `diff
-inka2.wat inka3.wat` empty.
+mentl2.wat mentl3.wat` empty.
 
 **Proves:** the compiler's output, compiled by itself, produces
 identical compiler. The ouroboros topology closes. **Self-

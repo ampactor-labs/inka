@@ -34,7 +34,7 @@ light.
 
 ## 1. Descriptive audit — what the compiler uses TODAY
 
-Scan of `std/compiler/*.mn` + `std/compiler/backends/*.mn` + `std/prelude.mn`
+Scan of `src/*.mn` + `src/backends/*.mn` + `std/prelude.mn`
 (2026-04-21). ~630 `fn` declarations across 17 modules.
 
 ### 1.1 Primitive-by-primitive inventory
@@ -289,7 +289,7 @@ to Mentl.
 
 Cost: each FV is 2-6 hours of focused work. Total: ~1-2 weeks.
 Benefit: at first-light, the compiler IS the exemplar. Users
-downloading `mentl.wasm` and running `mentl check std/compiler/*.mn`
+downloading `mentl.wasm` and running `mentl check src/*.mn`
 see the kernel exercised in the thing they just compiled — not
 inference engines you'd find in any OCaml project.
 

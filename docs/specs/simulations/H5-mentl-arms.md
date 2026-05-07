@@ -238,12 +238,12 @@ fn audit(source) =
   source
     |> frontend
     |> infer_program
-    |> inka_audit_walk
+    |> mentl_audit_walk
     ~> mentl_default
     ...
 ```
 
-inka_audit_walk iterates every FnStmt, builds AuditReport,
+mentl_audit_walk iterates every FnStmt, builds AuditReport,
 renders. Output to stdout or a JSON stream (the IDE consumes).
 
 ---
@@ -346,7 +346,7 @@ shared AuditReport → render_terminal / render_json.
 - audit pipeline route.
 - AuditReport ADT.
 - render_audit terminal + JSON renderers.
-- inka_audit_walk iterator over FnStmts.
+- mentl_audit_walk iterator over FnStmts.
 
 **Both depend on H1 (evidence) being complete** for the
 re-inference-through-oracle path to consistently produce

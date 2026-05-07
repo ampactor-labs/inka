@@ -48,7 +48,7 @@ Phase B.6 ("DEFERRED (arena routing for transient Reasons)").
   with 0-byte stdout at 50+ minutes; RSS ascending past 456 MB).
 - Pre-fix baseline (this session, 2026-05-05): `cat src/*.mn
   lib/runtime/*.mn lib/*.mn | timeout 60s wasmtime run
-  bootstrap/mentl.wasm > /tmp/inka2_pre.wat` exits 124 (timeout)
+  bootstrap/mentl.wasm > /tmp/mentl2_pre.wat` exits 124 (timeout)
   with 0 bytes produced and 3187 lines stderr (E_MissingVariable
   cascades on tentacle types — but the diagnostic stream halts long
   before the perm region exhausts; the binary continues consuming
@@ -79,12 +79,12 @@ Phase B.6 ("DEFERRED (arena routing for transient Reasons)").
 
 ```
 $ timeout 65s bash -c 'cat src/*.mn lib/runtime/*.mn lib/*.mn \
-    | wasmtime run bootstrap/mentl.wasm > /tmp/inka2_pre.wat 2> /tmp/inka2_pre.stderr'
+    | wasmtime run bootstrap/mentl.wasm > /tmp/mentl2_pre.wat 2> /tmp/mentl2_pre.stderr'
 exit=124
-$ wc -c /tmp/inka2_pre.wat
-0 /tmp/inka2_pre.wat
-$ wc -l /tmp/inka2_pre.stderr
-3187 /tmp/inka2_pre.stderr
+$ wc -c /tmp/mentl2_pre.wat
+0 /tmp/mentl2_pre.wat
+$ wc -l /tmp/mentl2_pre.stderr
+3187 /tmp/mentl2_pre.stderr
 ```
 
 Exit 124 = timeout. The binary continues (RSS ascending) past the
@@ -180,8 +180,8 @@ multi-shot semantics: each allocation is one continuation.
 
 ### Primitive #3 — Verb topology
 
-The pipeline is `|>` sequential: `$parse_program |> $inka_infer
-|> $inka_lower |> $inka_emit` (build.sh:147-167). `$stage_reset`
+The pipeline is `|>` sequential: `$parse_program |> $mentl_infer
+|> $mentl_lower |> $mentl_emit` (build.sh:147-167). `$stage_reset`
 is the boundary verb between stages — it severs the stage-arena
 lifetime contract. Promote-on-bind is the *crossing* the perm-
 edge before the boundary fires.
@@ -625,12 +625,12 @@ Per §E in the prescriptive plan; recorded in commit message.
 5. **Empirical full-wheel test (the headline gate):**
    ```
    timeout 60 bash -c 'cat src/*.mn lib/runtime/*.mn lib/*.mn \
-     | wasmtime run bootstrap/mentl.wasm > /tmp/inka2.wat'
+     | wasmtime run bootstrap/mentl.wasm > /tmp/mentl2.wat'
    ```
    Expected: exit 0 within 60s; non-empty WAT output. Pre-fix:
    exit 124, 0 bytes, 50+ minute plateau.
-6. **Determinism gate:** `cat ... | wasmtime run inka2.wasm >
-   /tmp/inka3.wat; diff /tmp/inka2.wat /tmp/inka3.wat` — same
+6. **Determinism gate:** `cat ... | wasmtime run mentl2.wasm >
+   /tmp/mentl3.wat; diff /tmp/mentl2.wat /tmp/mentl3.wat` — same
    output (deterministic byte-identical). Pre-existing
    determinism contract is preserved (allocation-order is the
    same across runs; promote-on-bind is deterministic).

@@ -590,7 +590,7 @@ dispatched polymorphic perform sites (LEvPerform, already substrate).
 **Cursor of attention** post-LPerform-state-arg: full wheel re-test;
 identify whether the productive-under-error config-params or
 state-flow blocks WAT termination next. The L1 fixpoint
-(`inka2.wat == inka3.wat`) needs the wheel to terminate, which
+(`mentl2.wat == mentl3.wat`) needs the wheel to terminate, which
 depends on these next two named peers landing.
 
 ### 4.5.9 Wheel-termination unblocker landed (2026-05-06) — list_index PUE
@@ -611,7 +611,7 @@ unresolved Tys that lower's PUE-path can't ground).
 | `+ types + effects + graph + infer` | **134 (TRAP)** | 0 |
 
 The trap localized at `$list_index` ← `$emit_functions` ←
-`$inka_emit`. Backtrace `wasm trap: wasm `unreachable` instruction
+`$mentl_emit`. Backtrace `wasm trap: wasm `unreachable` instruction
 executed`. CLAUDE.md "Bug classes that cost hours" — "list_index
 returning 1000 → Unknown list tag — flat treated as tree." A
 non-list pointer threaded through emit_functions_walk's recursive
@@ -752,7 +752,7 @@ deletable. Future emit-walk-dag-aware closes the next layer.
 **Cursor of attention** post-Buffer<A>: emit-walk-dag-aware peer
 to dedup the wheel-scale fn list. After that, the wheel WAT will
 be sane-sized and we can iterate on the actual L1 fixpoint
-(`inka2.wat == inka3.wat`).
+(`mentl2.wat == mentl3.wat`).
 
 ### 4.5.12 Handler-arm fn name discriminator (2026-05-06)
 
@@ -1119,7 +1119,7 @@ ownership-register-allocation) because the wheel-self-compiled
 output must be a faithful projection of the graph the wheel built.
 
 **Crystallized into persistent memory** at
-`~/.claude/projects/-home-suds-Projects-inka/memory/protocol_emit_is_graph_projection.md`
+`~/.claude/projects/-home-suds-Projects-mentl/memory/protocol_emit_is_graph_projection.md`
 per the realization-loop pattern (see `protocol_realization_loop.md`).
 Future sessions will read the principle and apply it automatically.
 

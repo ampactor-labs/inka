@@ -1,7 +1,7 @@
 # Hβ.lower — LowIR construction + handler elimination at the WAT layer
 
 > **Status:** `[CASCADE CLOSED 2026-04-28]`. 11/11 chunks structurally
-> live under `bootstrap/src/lower/`; `$inka_lower` pipeline-stage
+> live under `bootstrap/src/lower/`; `$mentl_lower` pipeline-stage
 > boundary named at commit `c53904d`. With Hβ.infer (commit `b6e1f23`)
 > the full kernel-projected compiler pipeline is live in the seed.
 > 59/59 trace-harnesses PASS; first-light Tier 1 LIVE non-regression;
@@ -541,9 +541,9 @@ emit consumption.
   (local $out i32) (local $lowered i32)
   (call $lower_init)
   ;; $stmts is the SAME flat list parsed_stmts that was passed to
-  ;; $inka_infer; the graph carries the inferred type info per handle.
+  ;; $mentl_infer; the graph carries the inferred type info per handle.
   ;; No "typed_ast" wrapper exists — pipeline shape per main.wat:154-156:
-  ;;   parsed_stmts |> $inka_infer |> $inka_lower |> $emit_program
+  ;;   parsed_stmts |> $mentl_infer |> $mentl_lower |> $emit_program
   ;; (every stage takes the same `stmts` pointer; graph IS the constraint
   ;; store per DESIGN.md §0.5).
   (local.set $n (call $len (local.get $stmts)))
@@ -1019,7 +1019,7 @@ fluency + per-handle walkthrough reading.
 9. **walk_compound.wat** (deps: lexpr, walk_const, walk_call)
 10. **walk_stmt.wat** (deps: walk_compound, walk_handle, env)
 11. **main.wat** (deps: walk_stmt) — pipeline-stage boundary
-    `$inka_lower` (symmetric with `$inka_infer` per Hβ-bootstrap §1.15)
+    `$mentl_lower` (symmetric with `$mentl_infer` per Hβ-bootstrap §1.15)
 
 ### 12.4 Per-handle landing discipline
 

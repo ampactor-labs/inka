@@ -135,7 +135,7 @@ walkthrough doesn't need each line, just the shape.
 
 ## Layer 4 — wasi_filesystem handler
 
-In `pipeline.mn` (or a new `std/compiler/filesystem.mn` if it grows):
+In `pipeline.mn` (or a new `src/filesystem.mn` if it grows):
 
 ```
 handler wasi_filesystem {

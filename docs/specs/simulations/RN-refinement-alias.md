@@ -28,7 +28,7 @@ Diagnostic quality delta: *"refinement discharge failed for `1 <= self && self <
 
 ## §2 Trace — where intent drops today
 
-In `std/compiler/infer.mn:187-189` (`RefineStmt` handling):
+In `src/infer.mn:187-189` (`RefineStmt` handling):
 
 ```
 perform env_extend(name, Forall([], TRefined(base_ty, pred)), Declared(name), FnScheme)

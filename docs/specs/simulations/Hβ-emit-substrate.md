@@ -72,7 +72,7 @@ H7; LFeedback per LF; LSuspend per H1.6).
     LDeclareFn / LLet)
 - **§3** — H1.4 single-handler-per-op naming + funcref-table layout.
 - **§4** — Module orchestration: emit_program retrofit to take
-  LowExpr program (the result of `$inka_lower(parsed_stmts)`).
+  LowExpr program (the result of `$mentl_lower(parsed_stmts)`).
 - **§5** — Per-edit-site eight interrogations.
 - **§6** — Forbidden patterns per edit site.
 - **§7** — Chunk decomposition (~6-8 chunks).
@@ -128,7 +128,7 @@ multiple peer-projections:
         WAT    source  markdown  answer  hint   JSON-RPC
 ```
 
-Hβ.emit's `$inka_emit` is the WAT-shadow. The cascade's
+Hβ.emit's `$mentl_emit` is the WAT-shadow. The cascade's
 `$emit_lexpr` 35-arm dispatcher (§1) is the **template** every
 sister-handler will reuse: `$format_lexpr` (Arc F.x — formatter as
 graph→canonical-source handler), `$doc_lexpr` (Arc F.x — doc as
@@ -144,8 +144,8 @@ substrate — all are reusable substrate. Arc F.2 (LSP) / Arc F.6
 (Mentl) compose post-L1 without re-architecture; they are NOT new
 features but new shadow-handlers reading the same graph.
 
-The chunk #11's `$inka_emit` symbol is one of an eventual N peer
-`$inka_<verb>` symbols. Per Hβ-bootstrap §1.15: pipeline-stage
+The chunk #11's `$mentl_emit` symbol is one of an eventual N peer
+`$mentl_<verb>` symbols. Per Hβ-bootstrap §1.15: pipeline-stage
 boundaries name handler-projection sites. emit is one site; the
 others compose later.
 
@@ -396,7 +396,7 @@ arms. When the GC substrate lands post-first-light, same. **The
 emit-layer becomes a swap surface from day one** — exactly what
 Mentl means by "if it needs to exist, it's a handler."
 
-This composes with §0.6's handler-family framing: `$inka_emit` is
+This composes with §0.6's handler-family framing: `$mentl_emit` is
 ONE handler-on-graph (graph→WAT); the WAT-emit handler INTERNALLY
 composes another handler swap (EmitMemory bump/arena/gc). Handlers
 all the way down. The substrate IS the medium.
@@ -435,7 +435,7 @@ of lowered LowExprs). The retrofit shape:
 
 Surface in §10: should the retrofit branch on tag-detection at
 runtime, OR should `$emit_program` be replaced by a new
-`$emit_lowir_program` that's called only after `$inka_lower`?
+`$emit_lowir_program` that's called only after `$mentl_lower`?
 The latter is cleaner; `$emit_program` legacy path retires when
 pipeline-wire lands.
 
@@ -523,7 +523,7 @@ bootstrap/src/emit/
   emit_handler.wat       ;; LHandleWith / LHandle / LPerform / LEvPerform /
                          ;;   LMakeClosure / LMakeContinuation / LFeedback /
                          ;;   LDeclareFn / LLet per §2.5
-  main.wat               ;; $emit_lowir_program orchestrator + $inka_emit
+  main.wat               ;; $emit_lowir_program orchestrator + $mentl_emit
                          ;;   pipeline-stage boundary
 ```
 
@@ -552,7 +552,7 @@ Decide in plan §10.
 - [ ] `bootstrap/build.sh` CHUNKS[] includes emit chunks.
 - [ ] `wat2wasm bootstrap/mentl.wat` succeeds.
 - [ ] `wasm-validate bootstrap/mentl.wasm` passes.
-- [ ] `wasm-objdump -x` lists `$emit_lexpr`, `$inka_emit`, all 35
+- [ ] `wasm-objdump -x` lists `$emit_lexpr`, `$mentl_emit`, all 35
       `$emit_l<variant>` arms (at minimum).
 
 ### 8.2 Functional acceptance (per-program tests)
@@ -568,7 +568,7 @@ Decide in plan §10.
 ### 8.3 Self-compile acceptance (Hβ.emit unblocks pipeline-wire)
 
 - [ ] Pipeline-wire commit retrofits `$sys_main` to chain
-      `$inka_infer + $inka_lower + $inka_emit`.
+      `$mentl_infer + $mentl_lower + $mentl_emit`.
 - [ ] `cat src/runtime/alloc.mn | wasmtime run bootstrap/mentl.wasm`
       produces VALID WAT (not a trap, not garbage).
 - [ ] `cat src/types.mn | wasmtime run bootstrap/mentl.wasm` produces
@@ -584,8 +584,8 @@ Decide in plan §10.
 
 ### 9.1 Hβ.emit × Hβ.lower
 
-Hβ.lower's `$inka_lower` produces a list of LowExprs (the lowered
-program). Hβ.emit's `$inka_emit` consumes that list and emits WAT
+Hβ.lower's `$mentl_lower` produces a list of LowExprs (the lowered
+program). Hβ.emit's `$mentl_emit` consumes that list and emits WAT
 text. Clean handoff: lower mutates graph + builds LowExpr; emit
 reads LowExpr + reads graph via `$lookup_ty`; both compose on the
 populated graph from Hβ.infer.
@@ -603,9 +603,9 @@ After emit cascade closes, pipeline-wire `$sys_main` retrofit
 becomes:
 ```
 stdin |> read_all_stdin |> lex |> parse_program
-      |> $inka_infer    ;; mutates graph
-      |> $inka_lower    ;; produces LowExpr list
-      |> $inka_emit     ;; emits WAT text
+      |> $mentl_infer    ;; mutates graph
+      |> $mentl_lower    ;; produces LowExpr list
+      |> $mentl_emit     ;; emits WAT text
       |> proc_exit
 ```
 
@@ -626,7 +626,7 @@ emits module-local references; link resolves at assembly time per
 
 | Question | Resolution |
 |----------|-----------|
-| `$emit_program` retrofit branch on input tag, OR new `$inka_emit` symbol? | LOCKED 2026-04-28: new `$inka_emit` symbol. `$emit_program` legacy path retires post-pipeline-wire per Hβ-bootstrap §1.15 `$inka_<verb>` convention. Two-mode emit during cascade; clean cut at pipeline-wire commit. |
+| `$emit_program` retrofit branch on input tag, OR new `$mentl_emit` symbol? | LOCKED 2026-04-28: new `$mentl_emit` symbol. `$emit_program` legacy path retires post-pipeline-wire per Hβ-bootstrap §1.15 `$mentl_<verb>` convention. Two-mode emit during cascade; clean cut at pipeline-wire commit. |
 | Layer 6 placement — before legacy emit OR alongside? | LOCKED: alongside. Both layers compile to same module; legacy unused once pipeline-wire flips to LowExpr path. |
 | LowValue ADT structuring — LInt / LFloat / LString wrappers? | DEFERRED to `Hβ.lower.lvalue-lowfn-lpat-substrate` follow-up (chunk #3 lexpr.wat:160). Currently LowValue is opaque i32 pass-through; emit reads via `$lookup_ty` for type-driven dispatch. |
 | LFn ADT shape for LDeclareFn? | DEFERRED to same follow-up. Emit currently treats LDeclareFn's field 0 as opaque LowFn ptr; structural access surfaces when LFn lands. |
@@ -686,7 +686,7 @@ fluency + per-handle walkthrough reading.
    emit_handler forward-decl for funcref-table)
 7. **emit_handler.wat** (deps: emit_call, runtime/cont, runtime/closure)
 8. **emit_dispatcher.wat** (deps: all per-variant chunks)
-9. **main.wat** (deps: emit_dispatcher; names `$inka_emit`)
+9. **main.wat** (deps: emit_dispatcher; names `$mentl_emit`)
 
 ### 11.4 Per-handle landing discipline
 

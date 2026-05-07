@@ -144,7 +144,7 @@ each handler arm to `LDeclareFn(LowFn("op_" + op_name, len(args),
 args, [lo_body], Pure))` per src/lower.mn:745-755 wheel canonical;
 `$lower_handle` (walk_handle.wat:340-385) returns
 `LBlock(h, arm_decls ++ [LHandle(h, body, arm_records)])` so the
-LDeclareFn list flows through `$inka_emit`'s top-level LowExpr
+LDeclareFn list flows through `$mentl_emit`'s top-level LowExpr
 stream. The four emit walks (`$cfn_walk` for fn-name table
 collection; `$emit_functions_walk` for `(func ...)` body emission;
 `$max_arity_expr` for the (`$ftN`) type-section arity ceiling;
@@ -348,7 +348,7 @@ Constructs a hand-authored LowProgram whose top-level LowExpr list
 contains a single `LBlock` entry whose stmts are
 `[LDeclareFn(LowFn("op_test", 1, [arg], [LLocal($arg)], Pure))]`
 (no surrounding LHandle — minimal LDeclareFn-only repro to verify
-the four walks pick it up). Calls `$inka_emit`. Scans output for
+the four walks pick it up). Calls `$mentl_emit`. Scans output for
 the substrings `(func $op_test` AND `$op_test_idx` AND
 `(elem $fns ... $op_test ...)` exactly once each; verifies
 `(call_indirect (type $ft2))` resolves cleanly via the harness's
@@ -357,7 +357,7 @@ chunk-list inheritance. Exits 0 on PASS, 1 on FAIL.
 The simpler "structural empty harness; verification by sibling
 shell-grep on emitted WAT" form per planner §C Edit 7 keeps the
 harness compact: it constructs the LDeclareFn record directly via
-the lexpr accessors, runs `$inka_emit`, and asserts substring
+the lexpr accessors, runs `$mentl_emit`, and asserts substring
 presence. No need for full pipeline traversal — the test isolates
 the four walks at the LowExpr-input boundary.
 

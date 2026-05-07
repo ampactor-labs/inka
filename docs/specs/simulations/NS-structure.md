@@ -77,7 +77,7 @@ Minimal, honest, Mentl-native.
 
 ### 1.2 `src/` — the Mentl compiler source
 
-**Current location:** `std/compiler/`. Conceptually mis-filed — the compiler isn't stdlib (users don't `import std/compiler/infer`). Move to `src/`.
+**Current location:** `src/`. Conceptually mis-filed — the compiler isn't stdlib (users don't `import src/infer`). Move to `src/`.
 
 **Post-restructure `src/` contents:**
 
@@ -106,10 +106,10 @@ src/
 ```
 
 **Rename mapping:**
-- `std/compiler/lexer.mn` → `src/lex.mn` (NS-naming decision 1.3)
-- `std/compiler/parser.mn` → `src/parse.mn` (NS-naming decision 1.3)
-- Every other `std/compiler/*.mn` → `src/<same-name>.mn` (extension migration per item 10)
-- `std/compiler/backends/wasm.mn` → `src/backends/wasm.mn`
+- `src/lexer.mn` → `src/lex.mn` (NS-naming decision 1.3)
+- `src/parser.mn` → `src/parse.mn` (NS-naming decision 1.3)
+- Every other `src/*.mn` → `src/<same-name>.mn` (extension migration per item 10)
+- `src/backends/wasm.mn` → `src/backends/wasm.mn`
 
 **Import-path rewrites:** every `import compiler/X` → `import X` OR `import src/X` (depending on how the import resolver treats "project-relative" vs "absolute-from-repo-root"). **Resolution:** project-relative. The compiler IS its own project; imports within `src/` are project-relative (`import graph` resolves to `src/graph.mn`). Cross-project imports use the full path (`import lib/prelude` resolves to `lib/prelude.mn`).
 
@@ -186,8 +186,8 @@ bootstrap/
 └── first-light.sh            ← the fixed-point test harness:
                                   wat2wasm bootstrap/mentl.wat -o bootstrap/mentl.wasm
                                   wasm-validate bootstrap/mentl.wasm
-                                  cat src/*.mn lib/**/*.mn | wasmtime run bootstrap/mentl.wasm > inka2.wat
-                                  diff bootstrap/mentl.wat inka2.wat
+                                  cat src/*.mn lib/**/*.mn | wasmtime run bootstrap/mentl.wasm > mentl2.wat
+                                  diff bootstrap/mentl.wat mentl2.wat
 ```
 
 **Why a dedicated directory:**
@@ -276,7 +276,7 @@ No `.gitignore` changes beyond adding `.mentl/` cache pattern. No new root-level
 
 ### Graph?
 
-What does the graph know about directory structure? The module resolver (driver.mn) reads import paths and resolves them to source files. Currently it resolves `compiler/X` to `std/compiler/X.mn`; post-restructure it resolves `X` (project-relative) to `src/X.mn` for compiler-internal, and `lib/X` for stdlib imports. **The graph's import resolution IS the directory structure's interface.**
+What does the graph know about directory structure? The module resolver (driver.mn) reads import paths and resolves them to source files. Currently it resolves `compiler/X` to `src/X.mn`; post-restructure it resolves `X` (project-relative) to `src/X.mn` for compiler-internal, and `lib/X` for stdlib imports. **The graph's import resolution IS the directory structure's interface.**
 
 ### Handler?
 
@@ -325,7 +325,7 @@ Every file move generates `Reason::Inferred("moved per NS-structure.md:<section>
 ### Decision 1.2 — `src/` layout
 
 - **Drift 5 (C calling convention):** forbidden to organize `src/` by "what acts" (lexers/, parsers/, etc.). Files are named by what they DO (infer, lower, verify) or what they HOLD (types, graph, effects).
-- **Drift 9 (deferred-by-omission):** every file from `std/compiler/` moves in the same restructure commit; none deferred "to split up the PR."
+- **Drift 9 (deferred-by-omission):** every file from `src/` moves in the same restructure commit; none deferred "to split up the PR."
 
 ### Decision 1.3 — `lib/` layout
 
@@ -361,24 +361,24 @@ Item 17' (restructure commit) performs these moves mechanically.
 ### 4.1 File moves (compiler → src/)
 
 ```
-mv std/compiler/types.mn       → src/types.mn
-mv std/compiler/graph.mn       → src/graph.mn
-mv std/compiler/effects.mn     → src/effects.mn
-mv std/compiler/infer.mn       → src/infer.mn
-mv std/compiler/lower.mn       → src/lower.mn
-mv std/compiler/lexer.mn       → src/lex.mn          (NS-naming 1.3)
-mv std/compiler/parser.mn      → src/parse.mn        (NS-naming 1.3)
-mv std/compiler/pipeline.mn    → src/pipeline.mn
-mv std/compiler/own.mn         → src/own.mn
-mv std/compiler/verify.mn      → src/verify.mn
-mv std/compiler/clock.mn       → src/clock.mn
-mv std/compiler/mentl.mn       → src/mentl.mn
-mv std/compiler/query.mn       → src/query.mn
-mv std/compiler/cache.mn       → src/cache.mn
-mv std/compiler/driver.mn      → src/driver.mn
-mv std/compiler/main.mn        → src/main.mn
+mv src/types.mn       → src/types.mn
+mv src/graph.mn       → src/graph.mn
+mv src/effects.mn     → src/effects.mn
+mv src/infer.mn       → src/infer.mn
+mv src/lower.mn       → src/lower.mn
+mv src/lexer.mn       → src/lex.mn          (NS-naming 1.3)
+mv src/parser.mn      → src/parse.mn        (NS-naming 1.3)
+mv src/pipeline.mn    → src/pipeline.mn
+mv src/own.mn         → src/own.mn
+mv src/verify.mn      → src/verify.mn
+mv src/clock.mn       → src/clock.mn
+mv src/mentl.mn       → src/mentl.mn
+mv src/query.mn       → src/query.mn
+mv src/cache.mn       → src/cache.mn
+mv src/driver.mn      → src/driver.mn
+mv src/main.mn        → src/main.mn
 mkdir src/backends/
-mv std/compiler/backends/wasm.mn → src/backends/wasm.mn
+mv src/backends/wasm.mn → src/backends/wasm.mn
 ```
 
 ### 4.2 File moves (stdlib → lib/)
@@ -481,16 +481,16 @@ wasm-validate "$WASM"
 
 # Compile Mentl's source through the hand-WAT image
 cat "$ROOT"/src/*.mn "$ROOT"/lib/**/*.mn \
-  | wasmtime run "$WASM" > "$ROOT/bootstrap/inka2.wat"
+  | wasmtime run "$WASM" > "$ROOT/bootstrap/mentl2.wat"
 
 # Fixed-point check
-if diff -q "$WAT" "$ROOT/bootstrap/inka2.wat" > /dev/null; then
+if diff -q "$WAT" "$ROOT/bootstrap/mentl2.wat" > /dev/null; then
   echo "✓ first-light: hand-WAT is byte-identical to self-compiled WAT."
   echo "  Hand-WAT preserved as reference artifact."
   exit 0
 else
   echo "✗ first-light FAILED: diff non-empty."
-  echo "  Inspect: diff $WAT $ROOT/bootstrap/inka2.wat" >&2
+  echo "  Inspect: diff $WAT $ROOT/bootstrap/mentl2.wat" >&2
   exit 2
 fi
 ```
@@ -526,12 +526,12 @@ rm docs/SYNTHESIS_CROSSWALK.md  (NS-naming 1.6)
 # Mentl project cache (per-project + IC cache)
 .mentl/
 bootstrap/mentl.wasm
-bootstrap/inka2.wat
+bootstrap/mentl2.wat
 ```
 
 ### 4.8 Every doc reference updates
 
-Every `.md` file referencing `std/compiler/`, `std/runtime/`, `std/dsp/`, `std/ml/`, `std/prelude.mn`, `std/test.mn`, `std/types.mn`, `docs/rebuild/`, `.mn` gets path-updated in the restructure commit. Files affected (per NS-naming.md §6 commit H, now absorbed into restructure):
+Every `.md` file referencing `src/`, `std/runtime/`, `std/dsp/`, `std/ml/`, `std/prelude.mn`, `std/test.mn`, `std/types.mn`, `docs/rebuild/`, `.mn` gets path-updated in the restructure commit. Files affected (per NS-naming.md §6 commit H, now absorbed into restructure):
 
 - `docs/DESIGN.md` — every Ch 10 scenario, every file-reference.
 - `docs/SUBSTRATE.md` — every file-reference.
@@ -564,7 +564,7 @@ bash ~/Projects/mentl/tools/drift-audit.sh
 ```
 
 The audit checks for:
-- Residual `std/compiler/`, `std/runtime/`, `std/dsp/`, `std/ml/` path references in any `.md` or `.mn` file.
+- Residual `src/`, `std/runtime/`, `std/dsp/`, `std/ml/` path references in any `.md` or `.mn` file.
 - Residual `docs/rebuild/` references.
 - Residual `.mn` extension references (post extension migration).
 - Residual `import compiler/X` patterns (should be `import X` project-local or `import lib/...`).
@@ -576,7 +576,7 @@ The audit checks for:
 **Exit 0 required** or restructure commit doesn't land.
 
 **New drift patterns added to `tools/drift-patterns.tsv`:**
-- `\bstd/compiler/` → flags residual compiler path
+- `\bsrc/` → flags residual compiler path
 - `\bstd/runtime/` → flags residual runtime path
 - `\bstd/dsp/`, `\bstd/ml/` → flags residual example paths
 - `\bdocs/rebuild/` → flags residual archaeology directory name

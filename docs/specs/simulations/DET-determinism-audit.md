@@ -10,7 +10,7 @@
 
 Determinism is the property that the same compiler compiling the same source produces byte-identical output. **This is load-bearing for first-light** because:
 
-1. **Hand-WAT is the reference.** First-light's fixed-point test diffs `bootstrap/mentl.wat` against `inka2.wat` (the compiler's self-compilation output). A single non-deterministic byte in emit = diff non-empty = first-light fails.
+1. **Hand-WAT is the reference.** First-light's fixed-point test diffs `bootstrap/mentl.wat` against `mentl2.wat` (the compiler's self-compilation output). A single non-deterministic byte in emit = diff non-empty = first-light fails.
 2. **Non-determinism is latent.** It might pass on one run, fail on another; a determinism bug can ship and hide until a first-light attempt.
 3. **Post-first-light, determinism enables caching.** IC's `(source_hash, handler_chain_hash)` key assumes same inputs → same output. Non-determinism breaks cache correctness.
 

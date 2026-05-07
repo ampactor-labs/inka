@@ -397,14 +397,14 @@ separate so this commit stays focused on the 5 syscall ops).
 The two handlers compose via `~>` chain at the LSP adapter layer:
 
 ```
-inka_lsp_session(stdin, stdout)
+mentl_lsp_session(stdin, stdout)
   ~> mentl_voice_filesystem
   ~> mentl_voice_default
   ~> wasi_filesystem
 ```
 
 Order matters (per Insight #1: handler chain IS capability stack):
-- **Outermost (`inka_lsp_session`)** owns the JSON-RPC transport.
+- **Outermost (`mentl_lsp_session`)** owns the JSON-RPC transport.
 - **`mentl_voice_filesystem`** intercepts file-shaped Interact ops;
   passes voice ops through.
 - **`mentl_voice_default`** intercepts voice ops + state ops; passes
@@ -427,7 +427,7 @@ disjointness; install fails with `E_HandlerOverlap` if they collide
 |---|---|---|
 | 1 | Graph? | FileHandle is opaque substrate; not graph-resident. project_root could index a graph node for the project's synthetic Module handle (per F.1 §3.2). Defer to FX.4. |
 | 2 | Handler? | `wasi_filesystem` extended (5 new arms); NEW `mentl_voice_filesystem` handler with FileHandle table state. All ops `@resume=OneShot`. |
-| 3 | Verb? | `~>` chain composes the three handlers (inka_lsp_session ~> mentl_voice_filesystem ~> mentl_voice_default ~> wasi_filesystem). Per Insight #1: outermost = least trusted. |
+| 3 | Verb? | `~>` chain composes the three handlers (mentl_lsp_session ~> mentl_voice_filesystem ~> mentl_voice_default ~> wasi_filesystem). Per Insight #1: outermost = least trusted. |
 | 4 | Row? | `with Filesystem` widens to include 5 new ops; `with !Filesystem` still proves absence (audit-driven severance can drop ALL 9 path_* / fd_* imports). The negation algebra unchanged. |
 | 5 | Ownership? | FileHandle is `own`-to-handler-table (consumed-on-close semantics surface as save_file invalidating after the LSP adapter's didClose). Today: no explicit fs_close from Interact; handler holds handles for session lifetime. **FX.5 peer sub-handle adds explicit close_file Interact op** when LSP didClose plumbing matters. |
 | 6 | Refinement? | Path could be `Path = String where !contains_dotdot(self) && len(self) > 0`. Defer to MV.2.e.Q.refine. |

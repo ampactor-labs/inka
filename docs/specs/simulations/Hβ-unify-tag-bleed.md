@@ -264,7 +264,7 @@ primitives input shapes simulating real-source self-compile call paths.
 | U.1 | `$ty_make_tfun` field hygiene; build TFun([], TInt, 999_row) and read each field; verify tag is 107 and each field reads the value written | ty.wat:308-315 ty_make_tfun field-write order |
 | U.2 | `$unify` identity short-circuit; unify(h, h) doesn't recurse on bound h_a == h_b | unify.wat:211-213 |
 | U.3 | basic graph_bind + chase to TInt; bind TVar to TInt; chase terminates at TInt sentinel | graph.wat:264-296 chase loop |
-| U.4 | TFun-vs-TInt productive-under-error; the EXACT failing shape from /tmp/inka2-now.err — must emit TypeMismatch + bind NErrorHole, MUST NOT TRAP | unify.wat:394-423 TFun arm + emit_diag.wat type_mismatch |
+| U.4 | TFun-vs-TInt productive-under-error; the EXACT failing shape from /tmp/mentl2-now.err — must emit TypeMismatch + bind NErrorHole, MUST NOT TRAP | unify.wat:394-423 TFun arm + emit_diag.wat type_mismatch |
 | U.5 | NErrorHole-bound handle: bind to NErrorHole productive-under-error, then unify against TInt; line 255 NErrorHole arm should no-op | unify.wat:255 NErrorHole arm |
 | U.6 | TVar(row_h) chase termination; construct TVar wrapping row_h, bind a fresh ty handle, chase. graph_chase_loop sees NBound payload tag = 104 (TVar), recurses with row_h. row_h's GNode is NRowFree (63); chase falls through line 296 — returns NRowFree GNode. **MUST NOT TRAP. If U.6 traps, H-A is THE residue.** | graph.wat:281-289 chase NBound→TVar→handle recursion |
 | U.7 | pre-register + instantiate + unify; mint pre-registered fn handle with `[param_handles..., ret_h, row_h]` quantifier list, instantiate, simulate BinOp arith arm against TInt. **If U.7 traps OR U.7b (row substitution leak) FAILs, the residue is in pre-register-quantifier composition AND/OR ty_substitute's row preservation.** | walk_stmt.wat:406-426 quantifier construction; scheme.wat:876-920 instantiate |
@@ -488,10 +488,10 @@ The Plan D.2 fix is gated on:
    phases (U.1–U.7) green.
 3. Real-source full-wheel probe:
    ```
-   cat src/*.mn lib/**/*.mn | wasmtime run bootstrap/mentl.wasm > /tmp/inka2-postfix.wat 2> /tmp/inka2-postfix.err
+   cat src/*.mn lib/**/*.mn | wasmtime run bootstrap/mentl.wasm > /tmp/mentl2-postfix.wat 2> /tmp/mentl2-postfix.err
    echo "exit: $?"
-   grep "wasm trap" /tmp/inka2-postfix.err   # MUST be empty
-   grep "out of bounds" /tmp/inka2-postfix.err   # MUST be empty
+   grep "wasm trap" /tmp/mentl2-postfix.err   # MUST be empty
+   grep "out of bounds" /tmp/mentl2-postfix.err   # MUST be empty
    ```
    Exit MUST be 0 OR a nonzero diagnostic-only output (productive-under-error
    surface only, no trap, no SIGABRT).

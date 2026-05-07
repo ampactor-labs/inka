@@ -2,7 +2,7 @@
 
 > **Status:** `[LIVE 2026-05-02]` — the session-by-session execution
 > roadmap from the current cursor (post-Hμ.cursor wheel-side closure;
-> commit `95d8ce5`) to first-light-L1 (`inka2.wat == inka3.wat`)
+> commit `95d8ce5`) to first-light-L1 (`mentl2.wat == mentl3.wat`)
 > and into the Tier 3 unlocks that follow automatically.
 >
 > **Authority:** ROADMAP.md (live sequencing); Hβ-bootstrap.md §12.5
@@ -32,7 +32,7 @@
 
 ## §0 The integration claim — what closure unlocks
 
-When **Phase H closes** (first-light-L1; `inka2.wat == inka3.wat`),
+When **Phase H closes** (first-light-L1; `mentl2.wat == mentl3.wat`),
 the seed compiling the wheel produces every projection-layer module
 automatically — Mentl, Cursor, multi-shot, IC, mentl edit, the eight
 tentacles, every Phase μ peer handle's seed transcription. **One
@@ -110,7 +110,7 @@ constructs.**
 
 Extends `bootstrap/first-light.sh` to actually run the L1 fixpoint
 test: compile src+lib through mentl.wasm → wat2wasm → re-compile via
-inka2.wasm → diff. Today the harness only validates "tiny Mentl
+mentl2.wasm → diff. Today the harness only validates "tiny Mentl
 programs"; L1 needs the full src+lib double-compile.
 
 **Closing this phase IS L1 closure — the diff is the proof.**
@@ -387,7 +387,7 @@ concatenation routed to runtime calls.
   - **Unlocks:** list-algebra correctness in wheel-Mentl.
 
 **Phase H.3 closure check:** Re-run L1 candidate compile; expect
-inka2.wat to be a real compilation (multi-thousand-line WAT module),
+mentl2.wat to be a real compilation (multi-thousand-line WAT module),
 not the 19-line stub.
 
 ---
@@ -399,11 +399,11 @@ not the 19-line stub.
     test:
     ```
     cat $(find src -name '*.mn' | sort) $(find lib -name '*.mn' | sort) \
-      | wasmtime run bootstrap/mentl.wasm > /tmp/inka2.wat
-    wat2wasm /tmp/inka2.wat -o /tmp/inka2.wasm
+      | wasmtime run bootstrap/mentl.wasm > /tmp/mentl2.wat
+    wat2wasm /tmp/mentl2.wat -o /tmp/mentl2.wasm
     cat $(find src -name '*.mn' | sort) $(find lib -name '*.mn' | sort) \
-      | wasmtime run /tmp/inka2.wasm > /tmp/inka3.wat
-    diff /tmp/inka2.wat /tmp/inka3.wat   # MUST be empty
+      | wasmtime run /tmp/mentl2.wasm > /tmp/mentl3.wat
+    diff /tmp/mentl2.wat /tmp/mentl3.wat   # MUST be empty
     ```
   - **Substrate residue:** ~50 lines extending first-light.sh.
   - **Walkthrough:** integrated into H.4 commit message; no
@@ -593,7 +593,7 @@ The plan closes when **all** hold:
 1. **All 12 H-phase boxes checked** — each handle has its own
    walkthrough + substrate chunk(s) + trace harness + commit.
 2. **L1 fixpoint passes** (`bootstrap/first-light.sh` exits 0;
-   `diff inka2.wat inka3.wat` empty).
+   `diff mentl2.wat mentl3.wat` empty).
 3. **All 6 T3 boxes checked** — every Phase μ peer handle's
    `.seed` variant landed via Tier 3 self-compile + diff + audit.
 4. **`mentl edit` runs end-to-end** — the user can type `??` in

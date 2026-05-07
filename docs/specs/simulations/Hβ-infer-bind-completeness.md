@@ -6,8 +6,8 @@
 > **Phase tag:** `Hβ.infer.bind-completeness` — peer to Phase B
 > closures (B.2 typedef / B.3 effect / B.4 handler / B.5 match-pattern).
 > **Cascade-state context:** ROADMAP claims Phase G is closed (commit
-> `fe5e944`); empirical 1068-line `/tmp/inka2-attempt.err` proves the
-> closure is contingent. `$inka_infer` runs end-to-end on
+> `fe5e944`); empirical 1068-line `/tmp/mentl2-attempt.err` proves the
+> closure is contingent. `$mentl_infer` runs end-to-end on
 > `fn main(x) = x`, but does NOT run end-to-end on real wheel source —
 > it produces 100 distinct `E_MissingVariable` names across `src/*.mn`
 > + `lib/runtime/*.mn`. Phase G's gate harness used a single-stmt
@@ -149,7 +149,7 @@ A new trace harness MUST be authored at
 `bootstrap/test/infer/bind_completeness_diag.wat` and added to
 `bootstrap/CHUNKS.sh` per the harness convention of
 `walk_stmt_block_with_stmts.wat`. The harness drives lex+parse+
-`$inka_infer` on each shape and asserts no `E_MissingVariable` fires
+`$mentl_infer` on each shape and asserts no `E_MissingVariable` fires
 on the bound names (chase the AST handle through `$graph_chase`;
 `$gnode_kind` MUST not be `NErrorHole`):
 
@@ -406,7 +406,7 @@ documented in §3.3 but don't ship a residue here.
   diagnostic phase C.4 in §2.1 closes that gap.
 
 - **Phase G (`$sys_main` retrofit, `fe5e944`):** the gate harness
-  `main_mentl_infer_smoke.wat` exercises `$inka_infer` with a single
+  `main_mentl_infer_smoke.wat` exercises `$mentl_infer` with a single
   LetStmt PVar. The substrate-honesty audit declares Phase G's
   closure **harness-coverage-incomplete** — it passes its own bar
   but does not characterize wheel-source viability. ROADMAP entry

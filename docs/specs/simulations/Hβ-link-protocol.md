@@ -577,9 +577,9 @@ Hβ-link-protocol.md, the new build.sh flow:
 #   bash bootstrap/build.sh --multi-module
 #   → for each src/*.mn + lib/**/*.mn:
 #       cat $f | wasmtime run bootstrap/mentl.wasm > /tmp/$(basename $f .mn).wat
-#   → python3 bootstrap/src/link.py /tmp/*.wat -o /tmp/inka2.wat
-#   → wat2wasm /tmp/inka2.wat -o /tmp/inka2.wasm
-#   → wasm-validate /tmp/inka2.wasm
+#   → python3 bootstrap/src/link.py /tmp/*.wat -o /tmp/mentl2.wat
+#   → wat2wasm /tmp/mentl2.wat -o /tmp/mentl2.wasm
+#   → wasm-validate /tmp/mentl2.wasm
 ```
 
 The single-source mode is what currently exists (Wave 2.A factoring).
@@ -592,9 +592,9 @@ non-degenerate per-module WAT.
 Per Hβ-bootstrap.md §2.4 first-light.sh + §12.1 Leg 1:
 
 The first-light harness invokes link.py twice:
-1. Compile src/*.mn via current bootstrap → per-module WAT → link.py → inka2.wat → wat2wasm → inka2.wasm
-2. Compile src/*.mn via inka2.wasm → per-module WAT → link.py → inka3.wat → wat2wasm → inka3.wasm
-3. `diff <canonicalized inka2.wat> <canonicalized inka3.wat>` empty → first-light-L1 ✓
+1. Compile src/*.mn via current bootstrap → per-module WAT → link.py → mentl2.wat → wat2wasm → mentl2.wasm
+2. Compile src/*.mn via mentl2.wasm → per-module WAT → link.py → mentl3.wat → wat2wasm → mentl3.wasm
+3. `diff <canonicalized mentl2.wat> <canonicalized mentl3.wat>` empty → first-light-L1 ✓
 
 link.py is the substrate that makes this multi-module assembly
 possible; without it, the per-module WATs can't be combined into
@@ -626,7 +626,7 @@ one validating module.
 ### 7.3 Self-compile (post-Hβ.infer/lower/emit landing)
 
 - [ ] `bash bootstrap/first-light.sh` runs end-to-end; produces empty
-      diff between inka2.wat and inka3.wat. → `git tag first-light-L1`.
+      diff between mentl2.wat and mentl3.wat. → `git tag first-light-L1`.
 
 ---
 

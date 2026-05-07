@@ -249,7 +249,7 @@ carry a comment naming what "leave unchanged" means.
 
 ## Inventory (complete)
 
-*Every `_ => X` arm in std/compiler/, classified.*
+*Every `_ => X` arm in src/, classified.*
 
 ### DANGEROUS (transform to explicit enumeration)
 
@@ -325,7 +325,7 @@ carry a comment naming what "leave unchanged" means.
 
 3. **SAFE arms: add a one-line comment.** No structural change, but every kept wildcard carries its contract in the code. Future reviewers see "identity preserve — intentional" rather than wondering.
 
-4. **Add a verification invariant.** At the end of H6, every wildcard in std/compiler/ either (a) has been enumerated or (b) carries a comment naming its contract. `grep -rn "_ =>"` across std/compiler/ returns only arms with contract comments — a greppable audit rule.
+4. **Add a verification invariant.** At the end of H6, every wildcard in src/ either (a) has been enumerated or (b) carries a comment naming its contract. `grep -rn "_ =>"` across src/ returns only arms with contract comments — a greppable audit rule.
 
 5. **Runtime files (std/runtime/)** are out of scope for H6 unless they have load-bearing ADT matches. Quick sweep confirms they don't — lists.mn and strings.mn operate on scalar structures.
 

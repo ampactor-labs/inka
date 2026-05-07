@@ -327,7 +327,7 @@ LPTuple elem-LPVar, LPRecord field-LPVar + rest_var, LPList elem-LPVar + rest_va
 | **E.3** (drift) | `bash tools/drift-audit.sh bootstrap/src/emit/state.wat bootstrap/src/emit/main.wat bootstrap/test/emit/match_arm_binding_uniqueness.wat` — zero matches. |
 | **E.4** (existing harnesses) | `bash bootstrap/test.sh` — all currently-passing harnesses pass post-fix. Specifically `match_arm_pat_binding_local_decl.wat`, `main_mentl_emit_smoke.wat`, `emit_lmatch.wat` still PASS. The 81/81 baseline holds. |
 | **E.5** (new harness) | `bootstrap/test/emit/match_arm_binding_uniqueness.wat` exits 0; assertion: exactly one `(local $fields i32)` substring in `$f`'s preamble. |
-| **E.6** (broader L1 regression) | HEAD self-bootstrap: `cat src/*.mn lib/runtime/*.mn \| wasmtime run bootstrap/mentl.wasm > /tmp/inka2.wat; wat2wasm /tmp/inka2.wat -o /tmp/inka2.wasm 2>&1 \| grep -c 'redefinition'` — strictly less than pre-fix baseline. |
+| **E.6** (broader L1 regression) | HEAD self-bootstrap: `cat src/*.mn lib/runtime/*.mn \| wasmtime run bootstrap/mentl.wasm > /tmp/mentl2.wat; wat2wasm /tmp/mentl2.wat -o /tmp/mentl2.wasm 2>&1 \| grep -c 'redefinition'` — strictly less than pre-fix baseline. |
 | **E.7** (artifact validation) | `wasm-validate bootstrap/mentl.wasm` (post-rebuild) exits 0. |
 
 ---

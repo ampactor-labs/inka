@@ -233,7 +233,7 @@ conductor.** Not taken on now.
 
 ### Edit surface (bounded)
 
-All edits land inside `std/compiler/mentl.mn`. No other file is
+All edits land inside `src/mentl.mn`. No other file is
 touched by TS. Line estimates:
 
 - `apply_candidate_tentatively` — ~10 lines, peer to

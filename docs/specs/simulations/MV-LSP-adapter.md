@@ -39,7 +39,7 @@ A single handler that:
    an LSP response shape.
 5. **Writes stdout** the JSON-RPC framed response.
 
-The handler IS one entry point: `inka_lsp_session(stdin, stdout)`.
+The handler IS one entry point: `mentl_lsp_session(stdin, stdout)`.
 The CLI wrapper invokes it: `mentl --with lsp_run` (entry-handler per
 EH walkthrough convention).
 
@@ -284,13 +284,13 @@ handler lsp_adapter
   }
 }
 
-/// inka_lsp_session — the entry fn. Reads stdin loop until shutdown
+/// mentl_lsp_session — the entry fn. Reads stdin loop until shutdown
 /// + exit; dispatches each message; writes responses. Composes
 /// through the full Mentl handler chain at install. Per Insight #1
 /// (capability stack): the chain reads outer→inner as least-trusted
 /// → most-trusted.
 
-fn inka_lsp_session() with Memory + WASI + Filesystem + OracleQuery + ... =
+fn mentl_lsp_session() with Memory + WASI + Filesystem + OracleQuery + ... =
   loop_lsp_messages()    // tail-recursive
 
 fn loop_lsp_messages() with ... =
@@ -420,8 +420,8 @@ fn handle_completion(params) with ... =
 | # | Interrogation | Answer |
 |---|---|---|
 | 1 | Graph? | doc_table maps URIs ↔ FileHandles; FileHandles index the mentl_voice_filesystem table; FileHandles trace back to graph nodes via the IC cache. The graph already encodes the URI↔graph relationship transitively. lsp_adapter just maintains the URI plumbing. |
-| 2 | Handler? | NEW handler `lsp_adapter` + entry fn `inka_lsp_session`. Composes OUTERMOST in chain. The handler's only intercepted op is `graph_mutated` (oracle subscriber). The session loop performs Interact ops; the lower handlers project them to substrate. |
-| 3 | Verb? | Composition via `~>` chain at install: `inka_lsp_session() ~> lsp_adapter ~> mentl_voice_filesystem ~> mentl_voice_default ~> wasi_filesystem ~> graph_handler ~> oracle handlers`. Per Insight #1: outermost = least trusted = sandbox boundary. |
+| 2 | Handler? | NEW handler `lsp_adapter` + entry fn `mentl_lsp_session`. Composes OUTERMOST in chain. The handler's only intercepted op is `graph_mutated` (oracle subscriber). The session loop performs Interact ops; the lower handlers project them to substrate. |
+| 3 | Verb? | Composition via `~>` chain at install: `mentl_lsp_session() ~> lsp_adapter ~> mentl_voice_filesystem ~> mentl_voice_default ~> wasi_filesystem ~> graph_handler ~> oracle handlers`. Per Insight #1: outermost = least trusted = sandbox boundary. |
 | 4 | Row? | `with Memory + WASI + Filesystem + OracleQuery + Mutate + ...` — full surface row. The LSP server is the user-facing surface; it reaches every capability. Per Anchor 5 (capability stack): this is the SANDBOX BOUNDARY — VS Code never sees raw effects, only LSP shapes. |
 | 5 | Ownership? | doc_table entries `own`-to-handler-state. URIs as String borrowed (immutable). FileHandles as opaque Int values. JSON parse trees are own-to-arm-body (constructed and consumed within one method dispatch). |
 | 6 | Refinement? | Position fields could be `Line = Int where 0 <= self`, `Col = Int where 0 <= self`. URI could be `Uri = String where starts_with(self, "file://")`. Defer to MV-LSP.refine peer sub-handle (small; aligned with FX.4 Path refinement). |
@@ -480,7 +480,7 @@ Recommended landing order (each commit per Anchor 7):
    ~250 lines `.mn`. Pure substrate; reusable beyond LSP.
 3. **MV-LSP.frame** — read_lsp_frame + write_lsp_frame on Memory + WASI.
    ~50 lines.
-4. **MV-LSP.scaffold** — lsp_adapter handler decl (state + graph_mutated arm) + inka_lsp_session loop fn. ~80 lines.
+4. **MV-LSP.scaffold** — lsp_adapter handler decl (state + graph_mutated arm) + mentl_lsp_session loop fn. ~80 lines.
 5. **MV-LSP.dispatch** — LspMethodKind ADT + classify_method + dispatch_request + dispatch_notification. ~80 lines.
 6. **MV-LSP.responses** — LspResponseBody ADT + response projection helpers (HoverContent / CompletionItem / etc.) + their JSON serialization. ~100 lines.
 7. **MV-LSP.handlers** — 12-14 handle_* fns + ensure_doc_open + URI plumbing. ~250 lines.

@@ -1,7 +1,7 @@
 # Handle IC — Incremental Compilation
 
 *Role-play as Mentl, tracing what happens when Morgan saves a one-
-character edit to `std/compiler/infer.mn` and the LSP re-checks the
+character edit to `src/infer.mn` and the LSP re-checks the
 project. Today: full recompile, ~seconds. After IC: only the edited
 module re-infers, downstream modules with valid `.kai` caches load
 their envs from disk, the response returns in conversational
@@ -12,7 +12,7 @@ Salsa 3.0 + overlay pattern in `graph.mn`. What pends is the driver.*
 
 ## The scenario
 
-Morgan opens `std/compiler/infer.mn`. The whole project is checked
+Morgan opens `src/infer.mn`. The whole project is checked
 once at session start (cold compile; ~1.5s on a modern laptop with
 the current substrate). Morgan edits one line: `let x = 1` becomes
 `let x = 2`. He saves.
@@ -20,7 +20,7 @@ the current substrate). Morgan edits one line: `let x = 1` becomes
 What happens with TODAY's driver:
 
 ```
-$ mentl check std/compiler/
+$ mentl check src/
 ... full recompile of all 16 .mn files ...
 Done in 1.4s.
 ```
@@ -324,8 +324,8 @@ effects; this is just one more).
 ## Estimated scope
 
 - ~400-600 lines across 3 new modules:
-  - `std/compiler/cache.mn` — KaiFile, hash, serialize, deserialize
-  - `std/compiler/driver.mn` — module DAG, topo sort, per-module
+  - `src/cache.mn` — KaiFile, hash, serialize, deserialize
+  - `src/driver.mn` — module DAG, topo sort, per-module
     invocation, cache invalidation walk
   - LSP handler arms wiring to driver
 

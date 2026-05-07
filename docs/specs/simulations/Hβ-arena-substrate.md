@@ -20,7 +20,7 @@
 > a bump allocator (alloc.wat:9-16) that traps when infer/lower walk
 > real-world ASTs (per the ba327c9 substrate-honesty audit). This
 > walkthrough designs a per-cascade-stage arena substrate where each
-> pipeline stage (`$inka_infer`, `$inka_lower`, `$inka_emit`)
+> pipeline stage (`$mentl_infer`, `$mentl_lower`, `$mentl_emit`)
 > allocates from its own region; cascade transitions reset the
 > region to free all stage-local allocations in O(1); long-lived
 > graph nodes promote to a global heap. NO GC. NO reference counting.
@@ -36,14 +36,14 @@
 ### 0.1 The discovery
 
 Per commit `ba327c9` substrate-honesty audit (post-Hβ.lower-cascade-
-closure pipeline-wire attempt): chaining `$inka_infer` between
+closure pipeline-wire attempt): chaining `$mentl_infer` between
 `$parse_program` and `$emit_program` in `$sys_main` trapped
 first-light Tier 1 with **out-of-bounds memory fault at
 0x2213838 in linear memory of size 0x2000000** (32 MiB).
 
 Root cause: the seed's `bootstrap/src/runtime/alloc.wat` is a
 monotonic bump allocator (`$heap_ptr` starts at 1 MiB; bumps
-forever; never frees). When `$inka_infer` walks a real `lexer.mn`-
+forever; never frees). When `$mentl_infer` walks a real `lexer.mn`-
 shape AST (~thousands of nodes), it allocates per-handle Ty records,
 per-binding Reason records, evidence-row records per call site, env
 extension records per scope — and exhausts the 32 MiB heap before
@@ -77,8 +77,8 @@ each layer is its own substrate.
 
 Three concrete pressures per the substrate audit:
 
-1. **Per-cascade-stage isolation**: `$inka_infer` allocates per-walk
-   records that can be freed AFTER `$inka_lower` consumes the graph.
+1. **Per-cascade-stage isolation**: `$mentl_infer` allocates per-walk
+   records that can be freed AFTER `$mentl_lower` consumes the graph.
    Currently they leak forever in the bump heap.
 2. **Per-fn isolation within a stage**: walking each user-fn in
    walk_stmt produces local allocations (locals ledger, captures
@@ -155,8 +155,8 @@ Linear memory (the seed's heap):
 
 ```wat
 ;; $stage_reset() — bumps $stage_arena_ptr back to start; frees ALL
-;; stage-local allocations in O(1). Called between $inka_infer →
-;; $inka_lower → $inka_emit transitions.
+;; stage-local allocations in O(1). Called between $mentl_infer →
+;; $mentl_lower → $mentl_emit transitions.
 (func $stage_reset ...)
 
 ;; $fn_reset() — bumps $fn_arena_ptr back to start; frees ALL
@@ -188,7 +188,7 @@ Anchor 5; both are physical at their respective layers.
 Per Hβ-bootstrap §1.15 + the cascade-closure landings:
 
 ```
-parse  →  $inka_infer  →  $inka_lower  →  $inka_emit  →  proc_exit
+parse  →  $mentl_infer  →  $mentl_lower  →  $mentl_emit  →  proc_exit
             │              │              │
             ▼              ▼              ▼
          $stage_reset   $stage_reset    $stage_reset
@@ -208,8 +208,8 @@ permanent heap) survive across resets because they live in
 - **The input AST**: parsed by `$parse_program`, consumed by all
   three stages. Lives in `$perm_alloc` (the parser is currently
   alloc.wat-based; promotes to perm at parser-output boundary).
-- **The lowered LowExpr program**: produced by `$inka_lower`, read
-  by `$inka_emit`. Could live in either stage-arena (if emit
+- **The lowered LowExpr program**: produced by `$mentl_lower`, read
+  by `$mentl_emit`. Could live in either stage-arena (if emit
   copies during traversal) or perm (if shared between stages).
   **Decision per §10**: lives in stage-arena owned by lower; emit
   reads it before $stage_reset fires for emit's stage.
@@ -362,10 +362,10 @@ allocations route to the right arena.
 
 ### 6.4 Per-cascade boundary retrofits
 
-- `$inka_infer` (bootstrap/src/infer/main.wat:154) — set
+- `$mentl_infer` (bootstrap/src/infer/main.wat:154) — set
   `$current_arena_stage = STAGE_STAGE` at entry; reset at exit.
-- `$inka_lower` (bootstrap/src/lower/main.wat) — same pattern.
-- `$inka_emit` (TBD when Hβ.emit cascade lands main.wat) — same.
+- `$mentl_lower` (bootstrap/src/lower/main.wat) — same pattern.
+- `$mentl_emit` (TBD when Hβ.emit cascade lands main.wat) — same.
 - `$ls_reset_function` (state.wat:240) + infer's `$infer_fn_reset`
   — call `$fn_reset()` to additionally free fn-arena.
 
@@ -389,16 +389,16 @@ Hβ.lower.lower-expr-dispatch-extension cumulative-retrofit pattern.
 
 ### 7.2 Per-cascade boundary retrofits
 
-- [ ] `$inka_infer` sets STAGE_STAGE on entry + resets on exit.
-- [ ] `$inka_lower` same.
-- [ ] `$inka_emit` same.
+- [ ] `$mentl_infer` sets STAGE_STAGE on entry + resets on exit.
+- [ ] `$mentl_lower` same.
+- [ ] `$mentl_emit` same.
 - [ ] `$ls_reset_function` + `$infer_fn_reset` call `$fn_reset()`.
 
 ### 7.3 Functional acceptance — pipeline-wire unblocks
 
 - [ ] After arena substrate lands + boundary retrofits + Hβ.emit
       cascade closes: chaining
-      `$inka_infer + $inka_lower + $inka_emit` in `$sys_main` does
+      `$mentl_infer + $mentl_lower + $mentl_emit` in `$sys_main` does
       NOT trap on real-input ASTs.
 - [ ] `cat src/runtime/alloc.mn | wasmtime run bootstrap/mentl.wasm`
       produces VALID WAT output (not a trap, not garbage).
@@ -450,15 +450,15 @@ $sys_main:
 
   $current_arena_stage := STAGE_STAGE
   $stage_reset()
-  $inka_infer($ast)                   ;; stage-local arena
+  $mentl_infer($ast)                   ;; stage-local arena
   $stage_reset()                      ;; clears infer transients
 
   $current_arena_stage := STAGE_STAGE
-  $lowered := $inka_lower($ast)       ;; stage-local arena (LowExpr resident)
+  $lowered := $mentl_lower($ast)       ;; stage-local arena (LowExpr resident)
   ;; NO reset before emit — emit needs LowExpr
 
   $current_arena_stage := STAGE_STAGE
-  $inka_emit($lowered)                ;; stage-local arena
+  $mentl_emit($lowered)                ;; stage-local arena
   $stage_reset()                      ;; final cleanup
 
   $wasi_proc_exit(0)

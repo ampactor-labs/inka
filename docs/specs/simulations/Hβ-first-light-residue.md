@@ -2,7 +2,7 @@
 
 > **Status:** `[DRAFT 2026-05-02]` — Phase H residue mapping authored
 > immediately after Hμ.cursor wheel-side closure. Names what blocks
-> first-light-L1 (`inka2.wat == inka3.wat` byte-for-byte) and the
+> first-light-L1 (`mentl2.wat == mentl3.wat` byte-for-byte) and the
 > minimum substrate growth that closes it.
 >
 > **Authority:** ROADMAP.md Phase H + Phase μ (Hμ.cursor.seed entry);
@@ -32,10 +32,10 @@
 Per `CLAUDE.md` operational essentials:
 
 ```
-cat src/*.mn lib/**/*.mn | wasmtime run bootstrap/mentl.wasm > inka2.wat
-wat2wasm inka2.wat -o inka2.wasm
-cat src/*.mn lib/**/*.mn | wasmtime run inka2.wasm > inka3.wat
-diff inka2.wat inka3.wat    # empty = first-light
+cat src/*.mn lib/**/*.mn | wasmtime run bootstrap/mentl.wasm > mentl2.wat
+wat2wasm mentl2.wat -o mentl2.wasm
+cat src/*.mn lib/**/*.mn | wasmtime run mentl2.wasm > mentl3.wat
+diff mentl2.wat mentl3.wat    # empty = first-light
 ```
 
 The `cat src/*.mn lib/**/*.mn` form is order-sensitive (depends on
@@ -50,14 +50,14 @@ canonical form is what L1 requires.
 ```
 $ cat $(find src -name '*.mn' -type f | sort) \
        $(find lib -name '*.mn' -type f | sort) \
-   | wasmtime run bootstrap/mentl.wasm > /tmp/inka2.wat 2>/tmp/inka2.err
+   | wasmtime run bootstrap/mentl.wasm > /tmp/mentl2.wat 2>/tmp/mentl2.err
 
 exit=0
-inka2.wat=19 lines
-inka2.err=13 lines (E_UnresolvedType diagnostics)
+mentl2.wat=19 lines
+mentl2.err=13 lines (E_UnresolvedType diagnostics)
 ```
 
-**Exit 0 is misleading.** `inka2.wat`'s contents:
+**Exit 0 is misleading.** `mentl2.wat`'s contents:
 
 ```wat
 (module
@@ -126,10 +126,10 @@ points to a specific inference arm that's seed-stub.
 
 ### 0.4 What this means for L1
 
-L1 acceptance is `inka2.wat == inka3.wat`. Today's stage-1 output is
-a 19-line stub with no real compilation. Stage-2 (`inka2.wasm`
-re-compiles same source → `inka3.wat`) cannot produce identical
-output because `inka2.wasm` (compiled from the stub) is not a
+L1 acceptance is `mentl2.wat == mentl3.wat`. Today's stage-1 output is
+a 19-line stub with no real compilation. Stage-2 (`mentl2.wasm`
+re-compiles same source → `mentl3.wat`) cannot produce identical
+output because `mentl2.wasm` (compiled from the stub) is not a
 compiler at all — it's a no-op `_start`. Running it on the same
 source produces undefined behavior or empty output.
 
@@ -377,16 +377,16 @@ This document is that residue.
 
 The handle chain `Hβ.first-light.*` is closed when **all** hold:
 
-1. `cat $(find src -name '*.mn' -type f | sort) $(find lib -name '*.mn' -type f | sort) | wasmtime run bootstrap/mentl.wasm > inka2.wat`
+1. `cat $(find src -name '*.mn' -type f | sort) $(find lib -name '*.mn' -type f | sort) | wasmtime run bootstrap/mentl.wasm > mentl2.wat`
    produces a real compilation (not the stub-with-`heap_base`-only
    form documented in §0.2).
 
-2. `wat2wasm inka2.wat -o inka2.wasm` validates without error.
+2. `wat2wasm mentl2.wat -o mentl2.wasm` validates without error.
 
-3. `cat $(find src -name '*.mn' -type f | sort) $(find lib -name '*.mn' -type f | sort) | wasmtime run inka2.wasm > inka3.wat`
-   produces a result equal to `inka2.wat`.
+3. `cat $(find src -name '*.mn' -type f | sort) $(find lib -name '*.mn' -type f | sort) | wasmtime run mentl2.wasm > mentl3.wat`
+   produces a result equal to `mentl2.wat`.
 
-4. `diff inka2.wat inka3.wat` is empty.
+4. `diff mentl2.wat mentl3.wat` is empty.
 
 5. The 13 `E_UnresolvedType` diagnostics (§0.3) fall to zero —
    every wheel binding resolves to a ground type at lower-time.

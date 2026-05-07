@@ -55,7 +55,7 @@ stance: "real-time," "sandboxed") diverges from the textual form
 
 ### §2.1 Explicit `!E` lost at normalization
 
-**Trace.** `std/compiler/parser.mn:418-447` builds `effs : List<(EffName, negated: Bool)>` per fn signature. `std/compiler/infer.mn:376-387` (`build_declared_from`) iterates the list and builds an `EffRow` via `union_row` / `inter_row(_, neg_row(_))`. `std/compiler/effects.mn:134-156` (`normalize_inter`) reduces `Closed(A) & !Closed(B)` to `Closed(A - B)` — algebraically correct, but after this reduction the pair `(Name, negated=true)` is no longer recoverable from the normalized row.
+**Trace.** `src/parser.mn:418-447` builds `effs : List<(EffName, negated: Bool)>` per fn signature. `src/infer.mn:376-387` (`build_declared_from`) iterates the list and builds an `EffRow` via `union_row` / `inter_row(_, neg_row(_))`. `src/effects.mn:134-156` (`normalize_inter`) reduces `Closed(A) & !Closed(B)` to `Closed(A - B)` — algebraically correct, but after this reduction the pair `(Name, negated=true)` is no longer recoverable from the normalized row.
 
 **Consequence.** `row_subsumes(body_row, declared_row)` correctly catches violations; that's not the issue. The issue is that downstream consumers — `mentl_voice_default`, `mentl audit`, hover-info handlers, capability-report generators — reading the function's effect type get only the normalized row. The `!Alloc` the author typed is gone. The author wrote intent; the substrate kept only effect.
 

@@ -69,10 +69,10 @@ change.
 
 ```
 effect Thread {
-    spawn(task: () -> A) -> Handle      @resume=OneShot
-    await(handle: Handle) -> A          @resume=OneShot
-    current_id() -> Int                 @resume=OneShot
-    num_cores() -> Int                  @resume=OneShot
+    spawn(task: () -> A) -> Handle
+    await(handle: Handle) -> A
+    current_id() -> Int
+    num_cores() -> Int
 }
 
 type Handle = Handle(Int)    // opaque; handler-held thread/task identity
@@ -89,12 +89,12 @@ combinator (MSR Edit 5), not `Thread`.
 
 ```
 effect SharedMemory {
-    atomic_load_i32(addr: Int) -> Int         @resume=OneShot
-    atomic_store_i32(addr: Int, val: Int) -> ()  @resume=OneShot
-    atomic_rmw(addr: Int, op: RmwOp, val: Int) -> Int  @resume=OneShot
-    wait_i32(addr: Int, expected: Int, timeout_ns: Int) -> WaitResult  @resume=OneShot
-    notify(addr: Int, count: Int) -> Int      @resume=OneShot
-    fence() -> ()                              @resume=OneShot
+    atomic_load_i32(addr: Int) -> Int
+    atomic_store_i32(addr: Int, val: Int) -> ()
+    atomic_rmw(addr: Int, op: RmwOp, val: Int) -> Int
+    wait_i32(addr: Int, expected: Int, timeout_ns: Int) -> WaitResult
+    notify(addr: Int, count: Int) -> Int
+    fence() -> ()
 }
 
 type RmwOp = RmwAdd | RmwSub | RmwAnd | RmwOr | RmwXor | RmwXchg | RmwCmpxchg

@@ -189,7 +189,7 @@ has no caller; this commit IS the wiring).
 | # | Interrogation | Resolution |
 |---|---|---|
 | 1 | **Graph?** | LPVar's `name` field at record offset 1 already carries the binding's source-level name string-pointer (per `bootstrap/src/lower/lowpat.wat:87-93`). The fn-local-set IS a structural projection of the LowPat tree's LPVar leaves under the current fn body. We add ONE ledger reading these names; we do NOT invent a parallel name source. |
-| 2 | **Handler?** | The existing emit-state ledger family (`$emit_funcref_table_ptr` / `$emit_string_table_ptr`) IS the wheel's handler-with-state shape projected; this is the fourth ledger entry. `@resume=OneShot` (no continuation; pure scan-or-append). The wheel projection IS `body_context` per `src/backends/wasm.mn:117-128 + 960-961`, augmented with a per-fn local-name set. |
+| 2 | **Handler?** | The existing emit-state ledger family (`$emit_funcref_table_ptr` / `$emit_string_table_ptr`) IS the wheel's handler-with-state shape projected; this is the fourth ledger entry. `OneShot` (inferred from arm body) (no continuation; pure scan-or-append). The wheel projection IS `body_context` per `src/backends/wasm.mn:117-128 + 960-961`, augmented with a per-fn local-name set. |
 | 3 | **Verb?** | N/A at substrate level (intra-handler ledger). |
 | 4 | **Row?** | `EmitMemory` effect — writes via `$list_extend_to` + `$list_set` to the heap-allocated ledger; reads via `$list_index` + `$str_eq`. No row change vs the existing state.wat ledgers. |
 | 5 | **Ownership?** | Ledger OWNS by emit pass; `$emit_fn_reset` length-only-resets at fn boundary (mirrors `$emit_body_evidence_len_g`); name str_ptrs are `ref`-stored (caller retains primary ownership). |

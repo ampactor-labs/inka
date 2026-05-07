@@ -194,7 +194,7 @@ needed.
 
 ### 1.2 Handler? — What handler projects this, with what `@resume`?
 
-**Answer:** `cursor_default` is the new handler. `@resume=OneShot`
+**Answer:** `cursor_default` is the new handler. `OneShot` (inferred from arm body)
 on each op because each query produces one CursorView per call. No
 MultiShot needed for Cursor itself (the Synth tentacle Cursor calls
 into uses MultiShot for proposal exploration; that's a different
@@ -493,13 +493,13 @@ slot. No mode switch, no separate code path.
 
 ```mentl
 effect Cursor {
-  cursor_at(Span) -> CursorView                 @resume=OneShot
-  cursor_argmax(Caret) -> Cursor                @resume=OneShot
-  cursor_pinned(Handle) -> Cursor               @resume=OneShot
+  cursor_at(Span) -> CursorView
+  cursor_argmax(Caret) -> Cursor
+  cursor_pinned(Handle) -> Cursor
 }
 ```
 
-Three ops; each `@resume=OneShot`. No MultiShot in Cursor itself —
+Three ops; each `OneShot` (inferred from arm body). No MultiShot in Cursor itself —
 that lives in Synth (the proposer Cursor calls into).
 
 ### 4.2 cursor_default — the handler

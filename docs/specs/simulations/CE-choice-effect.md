@@ -88,7 +88,7 @@ tutorial exemplar.
 ### 0.4 What's out of scope
 
 - **H7 MS runtime emit path.** Its own walkthrough. CE declares
-  `choose` as `@resume=MultiShot`; execution at runtime waits for
+  `choose` as `MultiShot` (inferred from arm body); execution at runtime waits for
   H7. Until H7 lands, `perform choose(...)` type-checks and
   row-algebras correctly, but runtime fork is undefined — which
   matches the MSR §3 phasing (β.2 CE can land before β.1 H7; MS
@@ -117,7 +117,7 @@ already exist.
 ```mentl
 // ═══ Choice — canonical multi-shot user effect ═════════════════════
 // One op. Generic over the element type A (inferred per call site
-// from the options list's type). @resume=MultiShot declares that
+// from the options list's type). declares that
 // the handler may resume the continuation multiple times, once per
 // explored option; trail-based rollback (primitive #1) bounds each
 // speculative resume. Primitive #2's typed resume discipline makes
@@ -133,7 +133,7 @@ already exist.
 // A; only the element type flows.
 
 effect Choice {
-  choose(options: List<A>) -> A   @resume=MultiShot
+  choose(options: List<A>) -> A
 }
 ```
 
@@ -154,7 +154,7 @@ effect Choice {
 //
 // Resume discipline: the ARM resumes once; the op is declared
 // MultiShot, but pick_first's INSTALLATION narrows it to OneShot
-// at this site. Primitive #2's @resume=Either pattern would
+// at this site. Primitive #2's pattern would
 // formalize this; for CE's v1, pick_first is simply named
 // OneShot-at-install and row subsumption at handler install lets
 // it pass.
@@ -227,12 +227,12 @@ inline an ad-hoc abort-catch inside `backtrack`.
 Every edit site passes all eight primitives before being
 admissible. One line per primitive; the residue is the code.
 
-### 2.1 `effect Choice { choose(options: List<A>) -> A @resume=MultiShot }`
+### 2.1 `effect Choice { choose(options: List<A>) -> A }`
 
 | # | Primitive | Interrogation answer |
 |---|-----------|---------------------|
 | 1 | **Graph?** | No graph extension. Effect registration adds one env entry with `EffectOpScheme("Choice")` metadata — existing H3 substrate. |
-| 2 | **Handler?** | No handler at declaration; handlers ship separately below. Resume discipline on the op is `@resume=MultiShot` — primitive-#2's substrate carries this; inference + row algebra enforce compatibility at install time. |
+| 2 | **Handler?** | No handler at declaration; handlers ship separately below. Resume discipline on the op is `MultiShot` (inferred from arm body) — primitive-#2's substrate carries this; inference + row algebra enforce compatibility at install time. |
 | 3 | **Verb?** | No verb at the declaration; `~>` attaches at handler install, not at op-declaration. |
 | 4 | **Row?** | Row `Choice` enters the algebra as `ENamed("Choice")` (a string inside the existing EffName ADT — substrate reality; see §4.0.1 halt-signal). `with Choice` / `with !Choice` / `with Choice - Fail` compose through the existing Boolean algebra with zero extension. |
 | 5 | **Ownership?** | `options: List<A>` is implicitly `ref` (borrowed; function doesn't consume). Return `A` is ownership-polymorphic (inherits the option's ownership marker). No Consume effect at the op surface. |
@@ -298,7 +298,7 @@ vocabulary that must NOT sneak in.*
 | 5 | **C calling convention** | At declaration level, irrelevant — no emit code here. At H7 emit time (separate walkthrough), forbidden to emit `__closure` + `__ev` as separate i32 parameters; unified `__state` only. |
 | 6 | **Primitive-type-special-case** | `Choice` is declared EXACTLY like `Iterate`, `Memory`, `Alloc`, `Pack`, `Unpack`. No compiler intrinsic; no special-case in EffName ADT (halt-signal §4.0.1); no hardcoded knowledge of `"Choice"` anywhere in `src/`. If an existing effect treats `Choice` as special, FLAG. |
 | 7 | **Parallel-arrays-instead-of-record** | `options: List<A>` is ONE list. NOT `(option_values, option_weights, option_sources)` — if the caller needs multiple axes per option, they wrap in a record. |
-| 8 | **String-keyed-when-structured** | The op's resume discipline is the **ADT** `ResumeDiscipline::MultiShot`, not `"multishot"` string. The `@resume=MultiShot` syntax already gives us this — verify the parser produces the ADT, not a string. |
+| 8 | **String-keyed-when-structured** | The op's resume discipline is the **ADT** `ResumeDiscipline::MultiShot`, not `"multishot"` string. The `MultiShot` (inferred from arm body) syntax already gives us this — verify the parser produces the ADT, not a string. |
 | 9 | **Deferred-by-omission** | Declaration ships with BOTH handlers in the SAME FILE in the SAME COMMIT. If `pick_first` ships today and `backtrack` is "coming next commit" — that's drift 9. Land all three (effect + 2 handlers) or none. |
 
 **Generalized fluency-taint check for the Choice declaration:**
@@ -398,7 +398,7 @@ If this combinator (or the `Abort` effect it catches) is NOT yet
 declared in `lib/runtime/`, there are two paths:
 
 - **Path A (preferred):** declare `lib/runtime/abort.mn` with
-  `effect Abort { abort() -> () @resume=OneShot }` + the
+  `effect Abort { abort() -> () }` + the
   `try_with_abort_catch` combinator, as a peer handle to CE. Land
   both in the same commit; CE depends on Abort.
 - **Path B (fallback):** use an existing `Fail` effect if one
@@ -463,7 +463,7 @@ import types                 // ResumeDiscipline, EffRow, Reason
 // ═══ Choice — the canonical multi-shot user effect ═════════════════
 
 effect Choice {
-  choose(options: List<A>) -> A   @resume=MultiShot
+  choose(options: List<A>) -> A
 }
 
 // ═══ pick_first — OneShot terminal ═════════════════════════════════
@@ -514,7 +514,7 @@ doesn't yet exist:
 import types
 
 effect Abort {
-  abort() -> ()   @resume=OneShot
+  abort() -> ()
 }
 
 // try_with_abort_catch — scope-local abort catch
@@ -645,7 +645,7 @@ Synth and Choice are DIFFERENT effects with DIFFERENT purposes.
 Synth is Mentl's proposer chain — returns Candidate ADT per MO §4.
 Choice is the user-visible search primitive — returns user-typed A
 per call site. Neither subsumes the other. Both are
-`@resume=MultiShot`; both compose with graph rollback; both are
+`MultiShot` (inferred from arm body); both compose with graph rollback; both are
 primitive #2's substrate. Peer effects.
 
 ### 6.4 `Choice` × `Verify` (refinement discharge)

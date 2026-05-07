@@ -93,7 +93,7 @@ primitive, exhaustive coverage, no skips.
 | # | Primitive | Authority | What F.1 has vs needs |
 |---|-----------|-----------|----------------------|
 | 1 | **Graph + Env** (Query) | INSIGHTS L1858 ("Graph IS the Program"); L1469 ("Self-Containment"); L622 (Document = Effect captured by handler) | Already has: every decl handle, Reason DAG (incl. `DocstringReason` via DS), effect rows, refinements, ownership markers, handler entries, gradient_next. **Adds:** synthetic `Module` handle per file. |
-| 2 | **Handlers + resume discipline** (Propose) | INSIGHTS L509 ("compiler/teacher/doc/LSP same pipeline"); L713 (`compile_documenting` form); L1346 ("Handler IS the Backend") | `doc_handler` is the form. All ops `@resume=OneShot` (no MS for F.1's machinery; `gradient_next` arrives pre-computed in Situation). F.1 reuses MV.2.e — `mentl_voice_default(situation) -> List<VoiceLine>` — same handler, different iteration scope from cursor-time. |
+| 2 | **Handlers + resume discipline** (Propose) | INSIGHTS L509 ("compiler/teacher/doc/LSP same pipeline"); L713 (`compile_documenting` form); L1346 ("Handler IS the Backend") | `doc_handler` is the form. All ops `OneShot` (inferred from arm body) (no MS for F.1's machinery; `gradient_next` arrives pre-computed in Situation). F.1 reuses MV.2.e — `mentl_voice_default(situation) -> List<VoiceLine>` — same handler, different iteration scope from cursor-time. |
 | 3 | **Five verbs** (Topology) | INSIGHTS L1565 ("Five Verbs Complete Basis"); L1601 ("shape on page IS the graph") | Pipeline: `source \|> lex \|> parse \|> infer ~> doc_handler ~> render_<target> ~> transport_<target>`. Per-decl projection: `decl \|> situation_for \|> mentl_voice_default <\| (render_md, render_html, render_llms, render_terminal)` for fanout when multi-target. **Constraint:** rendered handler-chain decls preserve canonical multi-line `~>`/`\|>` formatter shape (verb-shape IS doc element). |
 | 4 | **Effect row algebra** (Unlock) | INSIGHTS L302 (negation); L1520 (capability stack) | doc_handler **performs** `GraphRead + EnvRead + Verify`; **declares** `!Mutate` (proves it can't edit what it documents — graph-shadow doctrine enforced by row); render handler performs `Render`; transport handler performs `Console + WASI + Network` per target. Three-tier chain; row algebra proves composition. |
 | 5 | **Ownership as effect** (Trace) | INSIGHTS L347 (Allocation IS effect); L1322 ("Pure Transforms for Structure") | Graph state `ref` to doc handler. VoiceLines `own`. `DocstringReason` content `own` to graph. Render output `own` to transport. Pure transforms on structure (signature → display string), effects only for context (graph queries). |
@@ -227,10 +227,10 @@ type RenderedConversation
     })
 
 effect Render {
-  render_decl(decl: Handle, voicelines: List, doc: Option) -> RenderedDecl   @resume=OneShot
-  render_handler_chain(chain: List) -> RenderedTopology                      @resume=OneShot
-  render_index(modules: List) -> RenderedIndex                               @resume=OneShot
-  render_crucible(crucible: Handle, claim: Option) -> RenderedConversation   @resume=OneShot
+  render_decl(decl: Handle, voicelines: List, doc: Option) -> RenderedDecl
+  render_handler_chain(chain: List) -> RenderedTopology
+  render_index(modules: List) -> RenderedIndex
+  render_crucible(crucible: Handle, claim: Option) -> RenderedConversation
 }
 ```
 
@@ -972,8 +972,7 @@ Per CLAUDE.md / DESIGN.md §0.5 — F.1 composes from the eight primitives:
   Every claim a render handler emits cites a graph fact.
 - **Primitive #2 (Handlers + resume discipline)** — F.1 IS a handler
   swap on the compile pipeline. doc_handler + render handler +
-  transport handler form a three-tier capability stack. All `@resume=
-  OneShot` (no MS for projection itself).
+  transport handler form a three-tier capability stack. All ops inferred `OneShot` (no MS for projection itself).
 - **Primitive #3 (Five verbs)** — pipeline composes via `|>` and `~>`;
   per-target fanout via `<|`. No `<~` or `><` needed.
 - **Primitive #4 (Effect row algebra)** — three-tier handler chain has

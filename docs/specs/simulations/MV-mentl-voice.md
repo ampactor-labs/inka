@@ -212,14 +212,14 @@ effect Interact {
   // Files and folders are substrate, not UI. These ops are
   // first-class because text-files-first is a hard constraint.
 
-  project_root() -> Path                          @resume=OneShot
-  tree_list(Path) -> List<TreeEntry>              @resume=OneShot
-  open_file(Path) -> FileHandle                   @resume=OneShot
-  save_file(FileHandle) -> ()                     @resume=OneShot
-  create_file(Path, String) -> FileHandle         @resume=OneShot
-  rename_path(Path, Path) -> ()                   @resume=OneShot
-  delete_path(Path) -> ()                         @resume=OneShot
-  file_text(FileHandle) -> String                 @resume=OneShot
+  project_root() -> Path
+  tree_list(Path) -> List<TreeEntry>
+  open_file(Path) -> FileHandle
+  save_file(FileHandle) -> ()
+  create_file(Path, String) -> FileHandle
+  rename_path(Path, Path) -> ()
+  delete_path(Path) -> ()
+  file_text(FileHandle) -> String
 
   // ═══ Edit / graph-mutation ops ═════════════════════════════════
   // An edit is a text-level Patch that re-projects into graph
@@ -227,39 +227,39 @@ effect Interact {
   // back as edited text AND to trigger Mentl's post-edit
   // observation cycle.
 
-  edit(FileHandle, Patch) -> EditOutcome          @resume=OneShot
+  edit(FileHandle, Patch) -> EditOutcome
 
   // ═══ Attention ops ═════════════════════════════════════════════
   // Cursor-of-attention spans multiple dimensions: current file,
   // line/col position, selection, hovered handle. See §2 Q5.
 
-  focus(CursorTarget) -> ()                       @resume=OneShot
-  cursor() -> Cursor                              @resume=OneShot
+  focus(CursorTarget) -> ()
+  cursor() -> Cursor
 
   // ═══ Mentl ops ═════════════════════════════════════════════════
   // Ask, propose, advance; Mentl-initiated speak.
 
-  ask(Question) -> Answer                         @resume=OneShot
-  propose(CursorTarget) -> VoiceLine              @resume=OneShot
-  speak(VoiceLine) -> ()                          @resume=OneShot
+  ask(Question) -> Answer
+  propose(CursorTarget) -> VoiceLine
+  speak(VoiceLine) -> ()
 
   // ═══ Run / evaluate ops ════════════════════════════════════════
   // Batch-shape operations against the project. Terminal IDE
   // exposes as commands; CLI subcommands invoke one directly
   // and exit.
 
-  run_compile(FileHandle) -> CompileOutcome       @resume=OneShot
-  run_check(FileHandle) -> CheckOutcome           @resume=OneShot
-  run_audit(FileHandle) -> AuditReport            @resume=OneShot
-  run_query(Question) -> Answer                   @resume=OneShot
+  run_compile(FileHandle) -> CompileOutcome
+  run_check(FileHandle) -> CheckOutcome
+  run_audit(FileHandle) -> AuditReport
+  run_query(Question) -> Answer
 
   // ═══ Session ops ═══════════════════════════════════════════════
   // Intent declaration; session history; cancel/undo.
 
-  declare_intent(Intent) -> ()                    @resume=OneShot
-  retract_intent(IntentId) -> ()                  @resume=OneShot
-  history(Int) -> List<TurnRecord>                @resume=OneShot
-  cancel_pending() -> ()                          @resume=OneShot
+  declare_intent(Intent) -> ()
+  retract_intent(IntentId) -> ()
+  history(Int) -> List<TurnRecord>
+  cancel_pending() -> ()
 }
 ```
 

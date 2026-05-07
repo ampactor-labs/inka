@@ -60,7 +60,7 @@ A **library function** (`fn race(handlers: List<Handler>) -> Handler`)
 that returns a handler projecting the shared effect-row of the
 inputs. At install, it pushes one checkpoint on the graph trail
 (primitive #1). Each candidate handler's arms are invoked as MS
-forks (primitive #2, `@resume=MultiShot`). Verified survivors
+forks (primitive #2, `MultiShot` (inferred from arm body)). Verified survivors
 accumulate. The canonical tiebreak chain selects one (primitive #8
 determinism). Losers' trail entries unwind via `graph_rollback` to
 the shared checkpoint. The winner's mutations persist.
@@ -178,7 +178,7 @@ checkpoint" mitigation — `race` is the vehicle MO names.
   encode the speculative-rollback substrate (`src/graph.mn:90,218`).
   `race` calls these; it does not re-derive them. Primitive #1.
 - **Handler?** `race` IS a handler-combinator. Its arms resume
-  `@resume=MultiShot` (each input handler's ops are MS; `race`
+  `MultiShot` (inferred from arm body) (each input handler's ops are MS; `race`
   composes them). The returned handler's resume discipline is
   MultiShot by construction. Primitive #2.
 - **Verb?** Install is `~> race(...)`. Internal shape uses `|>` for

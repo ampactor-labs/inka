@@ -180,7 +180,7 @@ names resolve to ground types.
   - **Unlocks:** H.2 handles dependent on constructor schemes;
     Hμ.cursor's CursorView destructure lowers.
 
-- [x] **H.1.b — Hβ.first-light.infer-effect-ops** — CLOSED. `$infer_register_effect_ops` is implemented at walk_stmt.wat:914-948. Phase B parser fixes (named-param `addr: Int` form per commit `dc0d9a6`; `@resume=OneShot` skip per commit `a0beab7`) ensure the effect decls in the wheel parse correctly through to env_extend. Empirical confirmation: `lib/runtime/memory.mn + lib/runtime/strings.mn` slice resolves `load_i32 / store_i32 / load_i8 / store_i8 / mem_copy` cleanly — zero E_MissingVariable on Memory effect ops.
+- [x] **H.1.b — Hβ.first-light.infer-effect-ops** — CLOSED. `$infer_register_effect_ops` is implemented at walk_stmt.wat:914-948. Phase B parser fixes (named-param `addr: Int` form per commit `dc0d9a6`; `OneShot` (inferred from arm body) skip per commit `a0beab7`) ensure the effect decls in the wheel parse correctly through to env_extend. Empirical confirmation: `lib/runtime/memory.mn + lib/runtime/strings.mn` slice resolves `load_i32 / store_i32 / load_i8 / store_i8 / mem_copy` cleanly — zero E_MissingVariable on Memory effect ops.
   - **What:** EffectDeclStmt arm registers each effect operation as
     an EffectOpScheme entry (op_name, param types, return type,
     resume_discipline). Walks the operations list per
@@ -191,7 +191,7 @@ names resolve to ground types.
   - **Substrate residue:** ~200 lines `bootstrap/src/infer/effect_ops.wat`.
   - **Walkthrough:** `Hβ-first-light.infer-effect-ops.md`.
   - **Trace harness:** `effect_ops_smoke.wat` — declare `effect
-    Cursor { cursor_at(Span) -> CursorView @resume=OneShot }` then
+    Cursor { cursor_at(Span) -> CursorView }` then
     `perform cursor_at(span)` resolves to typed call.
   - **Acceptance:** all `perform <op>(...)` calls in wheel
     src/cursor.mn + src/mentl.mn + src/parser.mn resolve.

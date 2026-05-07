@@ -137,7 +137,7 @@ loop_i`, restoring the three-way symmetry with `record_tmp` and
 | # | Interrogation | Resolution |
 |---|---|---|
 | 1 | **Graph?** | LMakeTuple's elems list at lexpr offset 4 (`$lexpr_lmaketuple_elems`); no per-fn graph reads needed for the fix — the symmetry is graph-side already (every LowFn record is structurally identical at emit-time; each can contain LMakeTuple). The fix lives entirely in the fn-preamble emit handler; the graph already knows every LowFn might contain LMakeTuple. |
-| 2 | **Handler?** | Direct emit projection; `@resume=OneShot` (no continuation capture; one-shot streaming preamble emission). `$emit_standard_locals` IS the canonical "every fn might need these scratch locals" handler; the fix adds one more decl call symmetric with `variant_tmp` and `record_tmp`. |
+| 2 | **Handler?** | Direct emit projection; `OneShot` (inferred from arm body) (no continuation capture; one-shot streaming preamble emission). `$emit_standard_locals` IS the canonical "every fn might need these scratch locals" handler; the fix adds one more decl call symmetric with `variant_tmp` and `record_tmp`. |
 | 3 | **Verb?** | N/A — direct streaming emission (no pipe topology at the preamble layer). |
 | 4 | **Row?** | `EmitMemory` effect — writes to `$out_base` via `$emit_str` and `$emit_cstr` (transitively through `$emit_local_decl_str`). No allocation, no consumes; same effect row as the existing `record_tmp` and `variant_tmp` declarations in `$emit_standard_locals`. |
 | 5 | **Ownership?** | Length-prefixed string at offset 1536 is statically-allocated emit-private data (`emit_const.wat:329`); read-only borrow during emission; no consume. |

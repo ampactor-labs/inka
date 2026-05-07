@@ -45,7 +45,7 @@ MultiShot is not:
 
 ### 0.2 What MS IS
 
-MultiShot is the **typed resume discipline `@resume=MultiShot`**
+MultiShot is the **typed resume discipline `MultiShot` (inferred from arm body)**
 that appears as part of an effect op's type signature (DESIGN Ch 1
 + spec 06). Every effect op is born with one of three resume
 disciplines:
@@ -65,7 +65,7 @@ disciplines:
   is OneShot in context.
 
 **The resume discipline is TYPED.** Writing `effect Choice {
-choose(options: List<A>) -> A @resume=MultiShot }` means every
+choose(options: List<A>) -> A }` means every
 caller knows, at compile time, that `choose` may produce
 backtracking. The type system enforces compatibility: a handler
 that only resumes once cannot claim MultiShot capacity without
@@ -438,7 +438,7 @@ currently uses.*
 ### 2.1 Search & satisfiability
 
 **Backtracking** (N-queens, sudoku) is MS-canonical. `Choice`
-effect's `choose(options)` op is `@resume=MultiShot`; the solver
+effect's `choose(options)` op is `MultiShot` (inferred from arm body); the solver
 handler resumes once per option; on return of `Fail`, the next
 option. Trail rollback handles the backtrack substrate. SAT
 solvers (DPLL): variable assignment is `Choice`; conflict analysis

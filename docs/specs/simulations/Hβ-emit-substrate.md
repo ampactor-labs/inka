@@ -335,7 +335,7 @@ src/backends/wasm.mn:55-110 wheel canonical:
 
 ```
 effect EmitMemory {
-  emit_alloc(Int, String) -> ()             @resume=OneShot
+  emit_alloc(Int, String) -> ()
 }
 ```
 

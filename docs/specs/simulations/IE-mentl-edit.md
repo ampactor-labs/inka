@@ -257,7 +257,7 @@ visually. Per IDE-playground-vision.md §2 layer 3:
   forks fade. Per DESIGN §0.5 primitive #2 + Ch 8:
   "hundreds of alternate realities per second under trail-based
   rollback." Substrate: Synth's `enumerate_inhabitants(ty, row, ctx)
-  @resume=MultiShot` (per `mentl.mn:92`); each resume is a fork the
+` (per `mentl.mn:92`); each resume is a fork the
   Wavefront renders.
 
 The Wavefront has a scrub control: drag back to see the cursor
@@ -375,7 +375,7 @@ the gradient would unlock a capability — the Lens fires:
    `cursor_relevant(handle, max_distance_bytes)` (per
    `oracle.mn:248`).
 2. **Multi-shot enumeration** — Mentl performs Synth's
-   `enumerate_inhabitants(ty, row, ctx) @resume=MultiShot` (per
+   `enumerate_inhabitants(ty, row, ctx)` (per
    `mentl.mn:92`); each resume forks a candidate. The Wavefront
    streams the forks live. Per DESIGN §0.5 primitive #2 + Ch 8 +
    MO walkthrough: hundreds of alternate realities per second under
@@ -596,7 +596,7 @@ primitive; exhaustive coverage; no skips.
 | # | Primitive | What `mentl edit` exercises |
 |---|-----------|---------------------------|
 | 1 | **Graph + Env** (Query) | The IDE's every panel reads the graph through `GraphRead + EnvRead`. Topographic Canvas reads spans + types. HUD reads effect rows + ownership ledger. Wavefront reads Reason DAG via `graph_reason_edge`. Mentl voice panel reads via `voice_lines_for(situation)`. **No panel maintains its own state mirror; every render is a fresh graph projection.** |
-| 2 | **Handlers + resume discipline** (Propose) | The IDE's full surface IS one handler stack composition (§4). The Holographic Lens fires Synth's `@resume=MultiShot` ops (per `mentl.mn:92`); per DESIGN Ch 8 the speculative gradient loop is the IDE's load-bearing thesis demo. Every other handler arm in the chain is `@resume=OneShot`. |
+| 2 | **Handlers + resume discipline** (Propose) | The IDE's full surface IS one handler stack composition (§4). The Holographic Lens fires Synth's `MultiShot` (inferred from arm body) ops (per `mentl.mn:92`); per DESIGN Ch 8 the speculative gradient loop is the IDE's load-bearing thesis demo. Every other handler arm in the chain is `OneShot` (inferred from arm body). |
 | 3 | **Five verbs** (Topology) | Topographic Canvas physically renders the verb topology via geometric lines. Layout enforcement at typing time (§2.1). The doc panel preserves `~>` chain canonical formatting per F.1 §3.4 + INSIGHTS L1932. |
 | 4 | **Boolean effect algebra** (Unlock) | Capability HUD's Unlock section IS the row-algebra engine made UX. Each row narrowing → capability light. `with !Mutate` + `with !Alloc` + `with !IO` + `with Pure` all directly visible as the four headline gates per DESIGN §3.4. |
 | 5 | **Ownership as effect** (Trace) | Capability HUD's ownership ledger renders `affine_ledger` state live. `own` parameters glow amber; consumed ones drain to gray. Trace tentacle voice panel surfaces consume-twice / ref-escape diagnostics with proven fixes. |

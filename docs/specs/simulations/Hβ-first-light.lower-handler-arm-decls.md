@@ -64,7 +64,7 @@ still emits a `(call $op_<name>)` LDeclareFn-target):
 
 ```
 effect Counter {
-  next() -> Int @resume=OneShot
+  next() -> Int
 }
 
 fn main() = perform next()
@@ -162,7 +162,7 @@ the existing LBlock / LIf / LCall / LBinOp arms recurse.
 | # | Interrogation | Resolution |
 |---|---|---|
 | 1 | **Graph?** | LDeclareFn's `fn` field at record offset 0 (`$lexpr_ldeclarefn_fn` at lexpr.wat:452); LowFn's `name` at record offset 0 (`$lowfn_name`); LowFn's `body` at offset 4 (`$lowfn_body`); LowFn's `arity` at offset 2 (`$lowfn_arity`). LHandle's `body` at offset 1 (`$lexpr_lhandle_body` at lexpr.wat:722); LHandleWith's `body` at offset 1 + `handler` at offset 2 (`$lexpr_lhandlewith_body` / `$lexpr_lhandlewith_handler` at lexpr.wat:668-672). The graph already carries every handler-arm fn's name string-pointer + body LowExpr at the LowFn record level. The residue is one structural arm per walk + one body-recurse arm per walk; no parallel ledger. |
-| 2 | **Handler?** | Direct emit projection. `$emit_functions_walk` IS the handler over LowExpr containers that produces `(func $name ...)` declarations; `$cfn_walk` IS the handler that collects names for `(table $fns N funcref)` + `(elem $fns ...)` + `(global $name_idx i32 ...)`; `$max_arity_expr` IS the handler that derives `($ftN)` type-section ceiling. `@resume=OneShot` (no continuation capture; structural walk). The residue extends each handler's tag-eq-int chain with one new arm per missing case — same shape as the existing arms. |
+| 2 | **Handler?** | Direct emit projection. `$emit_functions_walk` IS the handler over LowExpr containers that produces `(func $name ...)` declarations; `$cfn_walk` IS the handler that collects names for `(table $fns N funcref)` + `(elem $fns ...)` + `(global $name_idx i32 ...)`; `$max_arity_expr` IS the handler that derives `($ftN)` type-section ceiling. `OneShot` (inferred from arm body) (no continuation capture; structural walk). The residue extends each handler's tag-eq-int chain with one new arm per missing case — same shape as the existing arms. |
 | 3 | **Verb?** | N/A — structural recursive walk. The five verbs apply at composition boundaries; this is intra-handler descent. |
 | 4 | **Row?** | `EmitMemory` effect for `$emit_functions_walk` (writes to `$out_base` via `$emit_fn_body`); `Pure` for `$cfn_walk` and `$max_arity_expr` (data-flow projections only — return values, no I/O). Same row as the LMakeClosure / LMakeContinuation arms; the LDeclareFn arm inherits. |
 | 5 | **Ownership?** | LowExpr / LowFn records `ref`-borrowed throughout each walk; no consume; the `$names` list in `$cfn_walk` is mutated via `$list_extend_to` + `$list_set` per Ω.3 buffer-counter discipline (already-used by the LMakeClosure / LMakeContinuation arms). |
@@ -401,7 +401,7 @@ NOT named as follow-ups (they land this commit).
 
 | Gate | Action |
 |---|---|
-| **E.1** (primary single-handler smoke) | `echo 'effect Counter { next() -> Int @resume=OneShot } fn main() = perform next()' \| wasmtime run bootstrap/mentl.wasm > /tmp/h2.wat`; verify `/tmp/h2.wat` contains `(func $op_next` AND `(global $op_next_idx i32` AND `$op_next` appears in `(elem $fns ...)`; `wat2wasm /tmp/h2.wat -o /tmp/h2.wasm` exits 0 with NO undefined-function-variable errors. |
+| **E.1** (primary single-handler smoke) | `echo 'effect Counter { next() -> Int } fn main() = perform next()' \| wasmtime run bootstrap/mentl.wasm > /tmp/h2.wat`; verify `/tmp/h2.wat` contains `(func $op_next` AND `(global $op_next_idx i32` AND `$op_next` appears in `(elem $fns ...)`; `wat2wasm /tmp/h2.wat -o /tmp/h2.wasm` exits 0 with NO undefined-function-variable errors. |
 | **E.2** (partial-wheel undefined-fn baseline) | `cat src/*.mn lib/**/*.mn \| wasmtime run bootstrap/mentl.wasm 2>&1 \| wat2wasm - 2>&1 \| grep "undefined function variable" \| grep -c '\\$op_'` drops from baseline (~126 per planner §E.2) to 0 post-fix. |
 | **E.3** (existing trace harnesses) | `bash bootstrap/test.sh` — 82/82 currently-passing harnesses STILL PASS post-fix; the new `handler_arm_decls_smoke.wat` brings count to 83/83 PASS. |
 | **E.4** (determinism gate) | `bootstrap/build.sh` then a second `bootstrap/build.sh`; `diff bootstrap/mentl.wat bootstrap/mentl.wat.{run1,run2}` empty. |

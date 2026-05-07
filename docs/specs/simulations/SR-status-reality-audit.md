@@ -183,7 +183,7 @@ matches code.
 
 ```
 lib/dsp/signal.mn:18:   effect Alloc { alloc_buffer(size: Int) -> List<Float> }
-lib/runtime/memory.mn:49: effect Alloc { alloc(Int) -> Int @resume=OneShot }
+lib/runtime/memory.mn:49: effect Alloc { alloc(Int) -> Int }
 ```
 
 **Same effect name; different ops; different modules.** When a

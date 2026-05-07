@@ -78,7 +78,7 @@ violating; runtime asserts otherwise (verify_ledger residue).
 /// The DSP process effect. Single op; handlers interpret as
 /// audio-rate, control-rate, or spectral-rate per install.
 effect DSP {
-    process(x: Sample) -> Sample                     @resume=OneShot
+    process(x: Sample) -> Sample
 }
 ```
 
@@ -162,8 +162,8 @@ MS2 §1.3.5 particle-filter topology made concrete.
 /// Audio-rate context. Parameterized by sample rate; different
 /// rates are different effects at the row level.
 effect Sample(rate: Int) {
-    tick() -> ()                                     @resume=OneShot
-    current_sample() -> Int                          @resume=OneShot
+    tick() -> ()
+    current_sample() -> Int
 }
 ```
 
@@ -257,16 +257,16 @@ compile time with no runtime dispatch cost.
 /// execution.
 effect Compute {
     matmul(ref a: Matrix<f32, M, K>, ref b: Matrix<f32, K, N>)
-        -> Tensor<f32, [M, N]>                       @resume=OneShot
+        -> Tensor<f32, [M, N]>
 
     relu(ref x: Tensor<f32, S>)
-        -> Tensor<f32, S>                            @resume=OneShot
+        -> Tensor<f32, S>
 
     softmax(ref x: Vector<f32, N>)
-        -> Vector<f32, N>                            @resume=OneShot
+        -> Vector<f32, N>
 
     add(ref a: Tensor<f32, S>, ref b: Tensor<f32, S>)
-        -> Tensor<f32, S>                            @resume=OneShot
+        -> Tensor<f32, S>
 
     // ... (conv, batchnorm, etc., as needed by crucibles)
 }

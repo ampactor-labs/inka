@@ -269,7 +269,7 @@ plus FV additions:
 **Can defer or omit (not used by compiler source):**
 
 - MultiShot resume discipline (Mentl only; post-first-light)
-- `@resume=Either` discipline (unused)
+- `Either` (inferred from arm body) discipline (unused)
 - Higher-rank generics (`fn run_with<E>(f: fn() -> () with E)`)
 - Refinement predicates involving Verify SMT (ledger-only for now)
 - Complex pattern types that compiler doesn't use

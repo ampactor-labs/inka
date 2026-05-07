@@ -457,7 +457,7 @@ universally compiles; `replay_safe` requires replay-compat effects;
 | # | Primitive | Interrogation answer |
 |---|-----------|---------------------|
 | 1 | **Graph?** | Reads `in_ms_capture()` + `current_ms_site()` from lower.mn's H7 substrate (LowerState effect); writes trail via `perform record_replay_trace(...)`. Trail already substrate — primitive #1's trail vocabulary. |
-| 2 | **Handler?** | This IS the handler. Peer to `emit_memory_bump`, `emit_memory_arena` on the `EmitMemory` effect surface. Resume discipline: each arm is `@resume=OneShot` (handler's own arms); the MS work is the BODY being captured, not the handler's resumes. |
+| 2 | **Handler?** | This IS the handler. Peer to `emit_memory_bump`, `emit_memory_arena` on the `EmitMemory` effect surface. Resume discipline: each arm is `OneShot` (inferred from arm body) (handler's own arms); the MS work is the BODY being captured, not the handler's resumes. |
 | 3 | **Verb?** | Installed via `~> replay_safe` in the user's chain. `~>` ordering: `replay_safe` sits OUTSIDE the MS op's emit handler; inside the arena's `temp_arena`. Stack order: `~> temp_arena ~> replay_safe ~> ms_op_body`. |
 | 4 | **Row?** | Declares `with ReplaySafe + !UnrepayableEffects + EmitMemory`. The `!UnrepayableEffects` is the load-bearing invariant check per §1.1. `!Alloc` can compose with `replay_safe` (no emit_alloc at MS sites). |
 | 5 | **Ownership?** | Trail buffer is `own` by the handler's state record; released at handler-exit. Captures are NOT allocated — replay_safe does not see `own` captures at MS sites because there's no capture struct. |
@@ -729,10 +729,10 @@ import own  // for region_tracker's check_capture_escape + deep_copy_to
 // current MS captures?".
 
 effect MsContext {
-  in_ms_capture() -> Bool                          @resume=OneShot
-  current_ms_site() -> Int                         @resume=OneShot
-  current_ms_site_span() -> Span                   @resume=OneShot
-  current_ms_captures() -> List                    @resume=OneShot
+  in_ms_capture() -> Bool
+  current_ms_site() -> Int
+  current_ms_site_span() -> Span
+  current_ms_captures() -> List
 }
 
 // ── replay_safe ────────────────────────────────────────────────────
@@ -778,14 +778,14 @@ Add one op:
 
 ```
 effect Region {
-  region_enter(Span) -> Int                        @resume=OneShot
-  region_exit(Int) -> ()                           @resume=OneShot
-  tag_alloc(Int) -> ()                             @resume=OneShot
-  tag_alloc_join(Int, List) -> ()                  @resume=OneShot
-  check_escape(Int, Span) -> ()                    @resume=OneShot
-  current_region() -> Int                          @resume=OneShot
+  region_enter(Span) -> Int
+  region_exit(Int) -> ()
+  tag_alloc(Int) -> ()
+  tag_alloc_join(Int, List) -> ()
+  check_escape(Int, Span) -> ()
+  current_region() -> Int
   // NEW:
-  check_capture_escape(List, Int) -> Result        @resume=OneShot
+  check_capture_escape(List, Int) -> Result
 }
 ```
 
@@ -809,9 +809,9 @@ in `lib/runtime/memory.mn`): add one op:
 
 ```
 effect Alloc {
-  alloc(size: Int) -> Int                          @resume=OneShot
+  alloc(size: Int) -> Int
   // NEW:
-  deep_copy_to(source_handle: Int, target_arena: Int) -> Int @resume=OneShot
+  deep_copy_to(source_handle: Int, target_arena: Int) -> Int
 }
 ```
 
@@ -1043,7 +1043,7 @@ implementation; AM's SUBSTRATE awaits H7's.
 ### 6.2 AM × CE (Choice effect)
 
 CE provides `effect Choice { choose(options: List<A>) -> A
-@resume=MultiShot }` (per CE walkthrough §1.1). Any `perform
+MultiShot (inferred) }` (per CE walkthrough §1.1). Any `perform
 choose(...)` site inside an arena handler triggers AM's allocation
 intercept via H7's `LMakeContinuation`. The CE walkthrough's N-queens
 example (CE §5.1) under `~> temp_arena + ~> backtrack + ~> fork_copy`

@@ -32,10 +32,10 @@ hold the editor's mental model.*
 
 ```
 effect Filesystem {
-  fs_exists(String) -> Bool                          @resume=OneShot
-  fs_read_file(String) -> String                     @resume=OneShot
-  fs_write_file(String, String) -> ()                @resume=OneShot
-  fs_mkdir(String) -> ()                             @resume=OneShot
+  fs_exists(String) -> Bool
+  fs_read_file(String) -> String
+  fs_write_file(String, String) -> ()
+  fs_mkdir(String) -> ()
 }
 ```
 
@@ -52,14 +52,14 @@ close in one atomic op). Insufficient for editor surfaces which need:
 ```
 effect Interact {
   // ─── Project / file ops (8) ─────────────────────────────────────
-  project_root()                 -> Path                @resume=OneShot
-  tree_list(Path)                -> List                @resume=OneShot   // List<TreeEntry>
-  open_file(Path)                -> FileHandle          @resume=OneShot
-  save_file(FileHandle)          -> ()                  @resume=OneShot
-  create_file(Path, String)      -> FileHandle          @resume=OneShot
-  rename_path(Path, Path)        -> ()                  @resume=OneShot
-  delete_path(Path)              -> ()                  @resume=OneShot
-  file_text(FileHandle)          -> String              @resume=OneShot
+  project_root()                 -> Path
+  tree_list(Path)                -> List   // List<TreeEntry>
+  open_file(Path)                -> FileHandle
+  save_file(FileHandle)          -> ()
+  create_file(Path, String)      -> FileHandle
+  rename_path(Path, Path)        -> ()
+  delete_path(Path)              -> ()
+  file_text(FileHandle)          -> String
   ...
 }
 ```
@@ -87,10 +87,10 @@ ops that cover the FileHandle-shaped surface.
 ```
 effect Filesystem {
   // ─── Existing 4 ops (per FS walkthrough) ─────────────────────
-  fs_exists(String) -> Bool                          @resume=OneShot
-  fs_read_file(String) -> String                     @resume=OneShot
-  fs_write_file(String, String) -> ()                @resume=OneShot
-  fs_mkdir(String) -> ()                             @resume=OneShot
+  fs_exists(String) -> Bool
+  fs_read_file(String) -> String
+  fs_write_file(String, String) -> ()
+  fs_mkdir(String) -> ()
 
   // ─── 4 new ops (FX extension) ────────────────────────────────
 
@@ -99,22 +99,22 @@ effect Filesystem {
   /// fs_exists first if distinction needed). The returned fd is
   /// the WASI handle; the mentl_voice_filesystem handler wraps it
   /// in an opaque FileHandle ADT for the Interact surface.
-  fs_open(String) -> Int                             @resume=OneShot
+  fs_open(String) -> Int
 
   /// fs_close — close a previously-opened fd. Idempotent at the
   /// runtime level (closing an invalid fd is errno-9 EBADF and
   /// silently absorbed).
-  fs_close(Int) -> ()                                @resume=OneShot
+  fs_close(Int) -> ()
 
   /// fs_unlink — delete a file at path. Errno surfaced as Bool
   /// (true on success, false on any error). Per WASI semantics,
   /// directory unlink is a separate op not yet exposed.
-  fs_unlink(String) -> Bool                          @resume=OneShot
+  fs_unlink(String) -> Bool
 
   /// fs_rename — rename old_path → new_path. Errno surfaced as Bool.
   /// Same-directory and cross-directory both supported (WASI's
   /// path_rename takes both base fds as the same preopen).
-  fs_rename(String, String) -> Bool                  @resume=OneShot
+  fs_rename(String, String) -> Bool
 
   /// fs_list_dir — directory listing. Returns a flat List<String>
   /// of entry names (relative to the listed dir). The
@@ -123,7 +123,7 @@ effect Filesystem {
   /// at the surface boundary (kept out of the substrate effect to
   /// avoid drift mode 8 — string-keyed-when-structured: TreeEntry IS
   /// the structured form, but only at the surface, not the syscall).
-  fs_list_dir(String) -> List                        @resume=OneShot   // List<String>
+  fs_list_dir(String) -> List   // List<String>
 }
 ```
 
@@ -426,7 +426,7 @@ disjointness; install fails with `E_HandlerOverlap` if they collide
 | # | Interrogation | Answer |
 |---|---|---|
 | 1 | Graph? | FileHandle is opaque substrate; not graph-resident. project_root could index a graph node for the project's synthetic Module handle (per F.1 §3.2). Defer to FX.4. |
-| 2 | Handler? | `wasi_filesystem` extended (5 new arms); NEW `mentl_voice_filesystem` handler with FileHandle table state. All ops `@resume=OneShot`. |
+| 2 | Handler? | `wasi_filesystem` extended (5 new arms); NEW `mentl_voice_filesystem` handler with FileHandle table state. All ops `OneShot` (inferred from arm body). |
 | 3 | Verb? | `~>` chain composes the three handlers (mentl_lsp_session ~> mentl_voice_filesystem ~> mentl_voice_default ~> wasi_filesystem). Per Insight #1: outermost = least trusted. |
 | 4 | Row? | `with Filesystem` widens to include 5 new ops; `with !Filesystem` still proves absence (audit-driven severance can drop ALL 9 path_* / fd_* imports). The negation algebra unchanged. |
 | 5 | Ownership? | FileHandle is `own`-to-handler-table (consumed-on-close semantics surface as save_file invalidating after the LSP adapter's didClose). Today: no explicit fs_close from Interact; handler holds handles for session lifetime. **FX.5 peer sub-handle adds explicit close_file Interact op** when LSP didClose plumbing matters. |

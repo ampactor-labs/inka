@@ -126,7 +126,7 @@ LIf (314) cases descend.
 | # | Interrogation | Resolution |
 |---|---|---|
 | 1 | **Graph?** | LPVar's `name` field at record offset 1; LPCon's `args` list at offset 2; LMatch's `arms` list at lexpr offset 2; LPArm's `pat` at offset 0, `body` at offset 1; tag-int dispatch via `$tag_of`. The graph already carries every binding's name string-pointer at the LPVar record level — the residue is one structural walk, not a separate ledger. |
-| 2 | **Handler?** | Direct emit projection; `@resume=OneShot` (no continuation capture; structural walk). The `$emit_let_locals` family IS the handler over LowExpr containers; the residue extends one arm + adds two helpers in the same shape as the existing LBlock / LIf arms. |
+| 2 | **Handler?** | Direct emit projection; `OneShot` (inferred from arm body) (no continuation capture; structural walk). The `$emit_let_locals` family IS the handler over LowExpr containers; the residue extends one arm + adds two helpers in the same shape as the existing LBlock / LIf arms. |
 | 3 | **Verb?** | N/A — structural recursive walk. (The five verbs apply at composition boundaries; this is intra-handler descent.) |
 | 4 | **Row?** | `EmitMemory` effect — writes to `$out_base` via `$emit_str` and `$emit_cstr`. No allocation, no consumes; same effect row as the LLet arm. |
 | 5 | **Ownership?** | LowPat record `ref`-borrowed throughout the walk; LowExpr arms list `ref`-borrowed; no consume. |

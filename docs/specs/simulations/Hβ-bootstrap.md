@@ -364,7 +364,7 @@ LF.1 sub-handle.
 
 Per `H7-multishot-runtime.md` (walkthrough landed `f463b46`):
 
-`@resume=MultiShot` op at perform site emits:
+`MultiShot` (inferred from arm body) op at perform site emits:
 ```wat
 ;; allocate continuation struct
 (call $alloc (i32.const <cont_struct_size>))
@@ -571,7 +571,7 @@ for f in src/*.mn lib/**/*.mn; do
   cat "$f" | wasmtime run /tmp/mentl2.wasm > "/tmp/mentl3-$(basename $f .mn).wat"
 done
 
-# Link inka3
+# Link mentl3
 python3 bootstrap/src/link.py /tmp/mentl3-*.wat -o /tmp/mentl3.wat
 
 # The diff — Leg 1 of First-Light Triangle
@@ -961,7 +961,7 @@ extension cycle per §6.3 + §11; full src/*.mn + lib/**/*.mn
 compiles cleanly; linker output validates; self-compile diff empty.
 
 **No H7 dependency for L1.** Per plan §21 + §1721 structural insight:
-self-compile exercises `@resume=OneShot` only; MultiShot ops in
+self-compile exercises `OneShot` (inferred from arm body) only; MultiShot ops in
 src/mentl.mn + src/oracle.mn are DECLARED but not invoked
 during self-compile (Mentl's voice surfaces don't fire during
 compile-time; they're surface concerns). L1 closes without H7

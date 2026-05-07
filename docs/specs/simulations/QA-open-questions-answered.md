@@ -30,7 +30,7 @@ When the answer is Morgan-specific, it's flagged **DECISION REQUIRED** with opti
 
 ```
 effect Choice {
-    choose(options: List<A>) -> A @resume=MultiShot
+    choose(options: List<A>) -> A
 }
 ```
 
@@ -322,7 +322,7 @@ diff /tmp/out-jit.wat /tmp/out-interp.wat   # empty = deterministic
 
 ### Q-B.3.1: `Choice(T)` parameterized or bare?
 
-**Answer:** Bare variant. `effect Choice { choose(options: List<A>) -> A @resume=MultiShot }` — `A` is a generic type parameter, NOT an effect parameter.
+**Answer:** Bare variant. `effect Choice { choose(options: List<A>) -> A }` — `A` is a generic type parameter, NOT an effect parameter.
 
 **Reasoning:**
 - Primitive #4 (row algebra) + H3.1 (parameterized effects): parameterized effects distinguish instances at the row level (e.g., `Sample(44100)` vs `Sample(48000)` are different effects in the row).
@@ -623,7 +623,7 @@ diff /tmp/out-jit.wat /tmp/out-interp.wat   # empty = deterministic
 
 **Reasoning:**
 - Primitive #2 tutorial: the file teaches MS resume discipline; wrapping hides what learner must see.
-- Pedagogical: learners should see `@resume=MultiShot` + `perform choose` + `~> backtrack` composed inline.
+- Pedagogical: learners should see `MultiShot` (inferred from arm body) + `perform choose` + `~> backtrack` composed inline.
 
 **Drift check:** drift 6 avoided — no "helper function" wrapper around the primitive.
 

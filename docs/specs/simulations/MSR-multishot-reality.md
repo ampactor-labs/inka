@@ -70,8 +70,8 @@ of bounded kernel-surface extensions.**
 | Claim | Status | Evidence / gap |
 |-------|--------|----------------|
 | `ResumeDiscipline = OneShot | MultiShot` ADT | **A: REAL** | `src/types.mn:70-72` |
-| `@resume=OneShot` pervasively declared | **A: REAL** | 30+ sites in `src/types.mn` |
-| `@resume=MultiShot` used on actual ops | **A: PARTIAL** | ONE site: `enumerate_inhabitants` in `src/mentl.mn:94`. Need more MS-typed ops for the substrate's claim to be live. |
+| `OneShot` (inferred from arm body) pervasively declared | **A: REAL** | 30+ sites in `src/types.mn` |
+| `MultiShot` (inferred from arm body) used on actual ops | **A: PARTIAL** | ONE site: `enumerate_inhabitants` in `src/mentl.mn:94`. Need more MS-typed ops for the substrate's claim to be live. |
 | `TCont(Ty, ResumeDiscipline)` continuation type | **A: REAL** | `src/types.mn:48` |
 | MS runtime — heap-captured closure with captures + evidence + return slot | **B: MISSING** | No `LMakeContinuation` or equivalent in `src/lower.mn`. Bootstrap emit path undefined for MS arms. |
 | Compile-time detection of >95% ground (OneShot direct call) | **A: REAL** in substrate, **A: UNPROVEN** in emitted code — pending first-light |
@@ -209,9 +209,9 @@ Plus **Blockers (Category A resolution):** BT linker work (separate from this wa
 
 ### Edit 1 — MS runtime emit path
 
-**Problem:** `@resume=MultiShot` ops have no emit path. `lower.mn` can produce `LMakeClosure` for evidence-passing (per H1 walkthrough); a MS continuation is a variant of that shape — captures + evidence + return slot + trail-rollback awareness — but no corresponding `LMakeContinuation` (or `LMakeMultiShot`) constructor exists.
+**Problem:** `MultiShot` (inferred from arm body) ops have no emit path. `lower.mn` can produce `LMakeClosure` for evidence-passing (per H1 walkthrough); a MS continuation is a variant of that shape — captures + evidence + return slot + trail-rollback awareness — but no corresponding `LMakeContinuation` (or `LMakeMultiShot`) constructor exists.
 
-**Graph?** The graph encodes `@resume=MultiShot` on each op; `TCont(ret, MultiShot)` at perform sites; inference proves which sites are polymorphic (requiring `call_indirect`).
+**Graph?** The graph encodes `MultiShot` (inferred from arm body) on each op; `TCont(ret, MultiShot)` at perform sites; inference proves which sites are polymorphic (requiring `call_indirect`).
 
 **Handler?** The `emit_alloc` handler (per γ crystallization #8 "the heap has one story") allocates the MS closure struct — same swap surface as OneShot closures + records + variants.
 
@@ -234,14 +234,14 @@ Plus **Blockers (Category A resolution):** BT linker work (separate from this wa
 - **Drift 1 (Rust vtable):** CRITICAL. MS dispatch through closure's `fn_index` FIELD, NEVER through a `multishot_dispatch_table`. Per CLAUDE.md / INSIGHTS §8.
 - **Drift 5 (C calling convention):** One `$continuation_ptr` parameter; offsets into it for captures + evidence + return slot. NEVER separate `$closure` + `$ev` + `$rs` parameters.
 - **Drift 6 (primitive-type-special-case):** MS closure allocates via SAME `emit_alloc` as ADT variants + records. No special "MS allocator."
-- **Drift 9 (deferred-by-omission):** Either emit MS for ALL `@resume=MultiShot` ops, or reject such ops at emit time with `E_UnimplementedMultiShot`. No "some MS works, some doesn't."
+- **Drift 9 (deferred-by-omission):** Either emit MS for ALL `MultiShot` (inferred from arm body) ops, or reject such ops at emit time with `E_UnimplementedMultiShot`. No "some MS works, some doesn't."
 
 **Substrate touch sites (design; literal tokens pending mentl-plan at execution):**
 
 | File | Section | Purpose |
 |------|---------|---------|
 | `src/types.mn` | Add `LMakeContinuation(captures, ev_list, ret_slot)` variant to `LowExpr` | IR shape for MS capture |
-| `src/lower.mn` | `lower_perform` arm on `@resume=MultiShot` op | Emit `LMakeContinuation` + continuation-resume call site |
+| `src/lower.mn` | `lower_perform` arm on `MultiShot` (inferred from arm body) op | Emit `LMakeContinuation` + continuation-resume call site |
 | `src/backends/wasm.mn` | Match `LMakeContinuation` | Emit `emit_alloc(size) + store_captures + store_ev + return_slot_placeholder` |
 | `bootstrap/src/emit_expr.wat` | Hand-WAT the MS continuation allocation | Mirror for bootstrap |
 
@@ -257,7 +257,7 @@ Plus **Blockers (Category A resolution):** BT linker work (separate from this wa
 
 **Graph?** `Choice` is a new effect; its declaration adds one entry to the effect registry (primitive #1 — graph extension).
 
-**Handler?** One op: `choose(options: List<A>) -> A @resume=MultiShot`. Handlers for `Choice` are where search strategies live (DPLL, enumerative, probabilistic).
+**Handler?** One op: `choose(options: List<A>) -> A`. Handlers for `Choice` are where search strategies live (DPLL, enumerative, probabilistic).
 
 **Verb?** `Choice` is composed into user code via `perform choose(...)` — typically inside a `~>` chain.
 
@@ -282,7 +282,7 @@ Plus **Blockers (Category A resolution):** BT linker work (separate from this wa
 | File | Change |
 |------|--------|
 | `src/types.mn` | Add `Choice` to `EffName` ADT (enumerate alongside Alloc, IO, Network, etc.) — tracked alongside the existing ENamed drift-mode-8 item in PLAN 11.B |
-| `lib/prelude.mn` or new `lib/runtime/search.mn` | Declare `effect Choice { choose(options: List<A>) -> A @resume=MultiShot }` |
+| `lib/prelude.mn` or new `lib/runtime/search.mn` | Declare `effect Choice { choose(options: List<A>) -> A }` |
 | `lib/runtime/search.mn` | Example handler — `handler pick_first` (OneShot terminates at first) + `handler backtrack` (MS, tries each option, accepts first that doesn't Abort) |
 
 **Walkthrough:** NEW — `CE-choice-effect.md`. Scope: one op, two canonical handlers, interaction with trail rollback. Small.
@@ -465,7 +465,7 @@ simultaneously.
 `first-light-L1`.
 
 **Critical refinement (2026-04-23):** self-compilation EXERCISES
-`@resume=OneShot` ops ONLY. The code path lex → parse → infer →
+`OneShot` (inferred from arm body) ops ONLY. The code path lex → parse → infer →
 lower → emit has zero MultiShot perform sites in its trace, even
 though `src/mentl.mn` DECLARES MS ops that aren't invoked during
 self-compile (they fire under `mentl teach`, not `mentl compile`).

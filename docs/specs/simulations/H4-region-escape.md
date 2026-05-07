@@ -113,11 +113,11 @@ current_region accessor on region_tracker:
 
 ```
 effect RegionTrack {
-  region_enter(Span) -> Int                        @resume=OneShot
-  region_exit(Int) -> ()                           @resume=OneShot
-  tag_alloc(Int) -> ()                             @resume=OneShot
-  check_escape(Int, Span) -> ()                    @resume=OneShot
-  current_region() -> Int                          @resume=OneShot
+  region_enter(Span) -> Int
+  region_exit(Int) -> ()
+  tag_alloc(Int) -> ()
+  check_escape(Int, Span) -> ()
+  current_region() -> Int
 }
 ```
 

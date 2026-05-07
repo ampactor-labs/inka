@@ -207,9 +207,9 @@ The `Test` effect is declared in `lib/test.mn` (post-restructure):
 // lib/test.mn — Test effect declarations + reporter handler
 
 effect Test {
-  assert(cond: Bool, msg: String) -> ()                @resume=OneShot
-  assert_eq<A>(actual: A, expected: A, msg: String) -> () @resume=OneShot
-  assert_near(actual: Float, expected: Float, eps: Float, msg: String) -> () @resume=OneShot
+  assert(cond: Bool, msg: String) -> ()
+  assert_eq<A>(actual: A, expected: A, msg: String) -> ()
+  assert_near(actual: Float, expected: Float, eps: Float, msg: String) -> ()
 }
 ```
 
@@ -558,9 +558,9 @@ Each handler declaration is ~5-15 lines.
 // ─── The Test effect ───────────────────────────────────────────
 
 effect Test {
-  assert(cond: Bool, msg: String) -> ()                  @resume=OneShot
-  assert_eq<A>(actual: A, expected: A, msg: String) -> () @resume=OneShot
-  assert_near(actual: Float, expected: Float, eps: Float, msg: String) -> () @resume=OneShot
+  assert(cond: Bool, msg: String) -> ()
+  assert_eq<A>(actual: A, expected: A, msg: String) -> ()
+  assert_near(actual: Float, expected: Float, eps: Float, msg: String) -> ()
 }
 
 // ─── assert_reporter — runtime fallback ──────────────────────

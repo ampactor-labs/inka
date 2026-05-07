@@ -172,7 +172,7 @@ storage.
 
 ### Primitive #2 — Handlers w/ resume discipline
 
-`$make_record_stage` is @resume=OneShot allocation primitive at
+`$make_record_stage` is allocation primitive at
 the seed level. The wheel-side compiled form (post-L1 per `Hμ.
 memory-stage-arena-effect`) routes via `Memory + Alloc` effect
 handler swap — this seed substrate is the precursor. No
@@ -312,7 +312,7 @@ lands preserves that discipline verbatim.
 ### §5.1 — `$make_record_stage` (record.wat additions, §C.1)
 
 1. **Graph?** N/A (substrate-allocator level; below the graph layer).
-2. **Handler?** Direct seed-level constructor; @resume=OneShot.
+2. **Handler?** Direct seed-level constructor;.
    Wheel-side compiled form (post-L1) routes via `Memory + Alloc`
    effect handler swap.
 3. **Verb?** N/A.
@@ -332,7 +332,7 @@ lands preserves that discipline verbatim.
 
 1. **Graph?** Reads tag via `$tag_of`; the graph IS where
    Reasons-as-records originate.
-2. **Handler?** Direct dispatch on integer tag; @resume=OneShot.
+2. **Handler?** Direct dispatch on integer tag;.
 3. **Verb?** N/A.
 4. **Row?** `Pure` (read-only on the record header).
 5. **Ownership?** `ref` on the input pointer (no consume).
@@ -347,7 +347,7 @@ lands preserves that discipline verbatim.
 1. **Graph?** Recurses on the Reason DAG; the graph already
    encodes which fields are Reason vs opaque (Ty/Span/Predicate/
    String/Int/BinOp).
-2. **Handler?** Direct recursion; @resume=OneShot.
+2. **Handler?** Direct recursion;.
 3. **Verb?** N/A.
 4. **Row?** `+!Mutate` (allocates new perm-resident records).
 5. **Ownership?** Performs the ownership-transfer effect — input
@@ -365,7 +365,7 @@ lands preserves that discipline verbatim.
 1. **Graph?** This IS the graph's bind-site for Reasons. The
    Reason persists exactly as long as the GNode does — all
    GNodes are perm-allocated.
-2. **Handler?** Direct seed-level call; @resume=OneShot.
+2. **Handler?** Direct seed-level call;.
 3. **Verb?** N/A.
 4. **Row?** `+!Mutate` (constructs new GNode + may construct
    promoted Reason chain).
@@ -387,7 +387,7 @@ lands preserves that discipline verbatim.
 
 1. **Graph?** Constructor produces transient by default; the
    graph's `$gnode_make` promotes if it earns persistence.
-2. **Handler?** Direct constructor; @resume=OneShot.
+2. **Handler?** Direct constructor;.
 3. **Verb?** N/A.
 4. **Row?** `+!Mutate` at allocation.
 5. **Ownership?** Returned pointer is `own` with stage-arena

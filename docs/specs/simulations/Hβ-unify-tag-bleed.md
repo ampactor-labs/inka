@@ -31,7 +31,7 @@ reason)` chases both handles through `graph_chase_loop` (graph + env;
 primitive #1) until a terminal NodeKind dispatches to a Ty-tag arm in
 `$unify_types` — which then composes with $graph_bind / $graph_bind_kind
 mutations the trail records (multi-shot rollback substrate per insight
-#11; primitive #2 with `@resume=OneShot` at the seed since rollback is a
+#11; primitive #2 with `OneShot` (inferred from arm body) at the seed since rollback is a
 peer concern). The five verbs (#3) are upstream of this surface; row
 algebra (#4 — TFun's row field) is preserved verbatim until row.wat ships;
 ownership (#5) and refinement (#6) flow through TFun's params and
@@ -310,7 +310,7 @@ should NOT include row_h.
 | # | Interrogation | Answer |
 |---|---|---|
 | 1 | Graph?       | The graph already separates ty handles (NFree/NBound) from row handles (NRowFree/NRowBound) at the NodeKind tag layer. Mixing them in a quantifier list erases that distinction; the residue keeps row_h OUT of the quantifier list. |
-| 2 | Handler?     | `$infer_pre_register_quantifier` is the projection. `@resume=OneShot` (single recursive copy). The wheel `src/infer.mn:96-149` `pre_register_fn_sigs` quantifies over ty handles only — row generalization awaits row.wat substrate. |
+| 2 | Handler?     | `$infer_pre_register_quantifier` is the projection. `OneShot` (inferred from arm body) (single recursive copy). The wheel `src/infer.mn:96-149` `pre_register_fn_sigs` quantifies over ty handles only — row generalization awaits row.wat substrate. |
 | 3 | Verb?        | N/A — substrate-internal. |
 | 4 | Row?         | This IS the row interrogation: row generalization at FnStmt SHOULD quantify row vars per spec 04 §Generalizations, but ONLY when row.wat's `$row_substitute` is the projection that handles them. Until row.wat ships, row vars are NOT polymorphic; the seed conservatively monomorphizes row positions per Hβ.infer.row-normalize follow-up. |
 | 5 | Ownership?   | Quantifiers are reference-counted-once into the Forall record. No Consume. |

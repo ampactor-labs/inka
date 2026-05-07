@@ -3,7 +3,7 @@
 *This document captures the brainstorm exploring the absolute limit of Mentl's algebraic primitives, specifically the intersection of spatial topology and temporal realities.*
 
 When we talk about the Five Verbs (`|>`, `<|`, `><`, `~>`, `<~`), we are talking about **spatial topology** — how data moves through the graph. 
-When we talk about Multi-Shot Continuations (`@resume=MultiShot`), we are talking about **temporal topology** — how execution forks into alternate realities (backtracking, generators, quantum superpositions).
+When we talk about Multi-Shot Continuations (`MultiShot` (inferred from arm body)), we are talking about **temporal topology** — how execution forks into alternate realities (backtracking, generators, quantum superpositions).
 
 What happens when we intersect them? We stop writing code and start sculpting N-dimensional state spaces.
 

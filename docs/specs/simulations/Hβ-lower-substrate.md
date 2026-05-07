@@ -311,7 +311,7 @@ Three strategies:
 |----------|------|----------|
 | **TailResumptive** | Handler arm calls `resume(v)` exactly once in tail position; OneShot-typed | Direct `(call $h_op ...)` — zero indirection per H1 evidence reification |
 | **Linear** | Handler arm calls `resume` exactly once but not in tail position (e.g., wraps result) | State machine — per-perform-site state ordinal + saved locals; same shape as MultiShot but with at-most-one-resume invariant |
-| **MultiShot** | Handler arm declared `@resume=MultiShot`; can resume zero or many times | Heap-captured continuation per H7 — $alloc_continuation + cont.wat |
+| **MultiShot** | Handler arm declared `MultiShot` (inferred from arm body); can resume zero or many times | Heap-captured continuation per H7 — $alloc_continuation + cont.wat |
 
 ### 3.1 `$classify_handler(handler_handle) -> i32`
 

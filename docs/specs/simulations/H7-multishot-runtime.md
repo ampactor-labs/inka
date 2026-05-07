@@ -14,7 +14,7 @@
 > + state_index + ret_slot — four fields, one heap record, one
 > `call_indirect` at resume.
 >
-> *Claim in one sentence:* **Every `@resume=MultiShot` op emits a
+> *Claim in one sentence:* **Every `MultiShot` (inferred from arm body) op emits a
 > call to `LMakeContinuation` at the perform site, allocating a
 > heap struct via the same `emit_alloc` handler that allocates
 > closures and variants; handler arms resume the captured struct
@@ -47,7 +47,7 @@ boundary.
 
 **The substrate knows. The emit path hasn't been written.**
 
-Today, the tree contains exactly ONE op declared `@resume=MultiShot`:
+Today, the tree contains exactly ONE op declared `MultiShot` (inferred from arm body):
 `enumerate_inhabitants` at `src/mentl.mn:94`. Its handler arm at
 `src/mentl.mn:453` is the substrate's honest stub:
 
@@ -758,10 +758,10 @@ match cont {
 //   ms_reset_function() -> ()
 //     On function-emit entry, clears the state table.
 effect LowerState {
-  ms_alloc_state(Int, Int) -> Int                  @resume=OneShot
-  ms_alloc_ret_slot(Int, Int) -> Int               @resume=OneShot
-  ms_function_states(Int) -> List                  @resume=OneShot
-  ms_reset_function() -> ()                        @resume=OneShot
+  ms_alloc_state(Int, Int) -> Int
+  ms_alloc_ret_slot(Int, Int) -> Int
+  ms_function_states(Int) -> List
+  ms_reset_function() -> ()
 }
 
 handler lower_state_default {
@@ -899,7 +899,7 @@ crucible_oracle, C.4 crucible_ml, D.4 L2 tag, D.5 L3 tag.
 ## 5. Worked example — the `Synth`-via-`enumerate_inhabitants` path
 
 Current state of the code: `src/mentl.mn:94` declares
-`enumerate_inhabitants(Ty, EffRow, Context) -> List @resume=MultiShot`.
+`enumerate_inhabitants(Ty, EffRow, Context) -> List`.
 `src/mentl.mn:453`'s handler arm resumes `[]`. Tree compiles; MS
 runtime doesn't execute because no substrate calls `enumerate_inhabitants`
 from a body that would require multi-shot forking.
@@ -999,7 +999,7 @@ its handler-install-time interaction surface.
 ### 6.1 H7 × CE (Choice effect)
 
 Per CE walkthrough §1.1 (`effect Choice { choose(options: List<A>)
--> A @resume=MultiShot }`). `choose` is a MS op declared in
+-> A }`). `choose` is a MS op declared in
 `lib/runtime/search.mn`. At every `perform choose(opts)` call site,
 lower.mn post-H7 emits `LMakeContinuation` + suspension. CE
 provides the effect and two canonical handlers (`pick_first`,

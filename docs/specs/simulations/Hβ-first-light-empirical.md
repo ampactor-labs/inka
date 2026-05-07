@@ -481,7 +481,7 @@ typing:
 Per-arm typing skeleton lands; four primitive holes named as
 positive-form peer handles (drift-9 closure):
 
-- `Hβ.first-light.infer-handler-arm-resume-disposition` — `@resume=`
+- `Hβ.first-light.infer-handler-arm-resume-disposition` — resume cardinality
   discipline check on arm body shape (OneShot consumes resume
   linearly; MultiShot ref-borrows; Either is the linear-or-affine
   choice). Substrate: bind synthetic `resume` continuation in arm
@@ -489,7 +489,7 @@ positive-form peer handles (drift-9 closure):
 - `Hβ.first-light.infer-handler-arm-row-subtract` — arm body row
   algebra: `body_row_arm = handler_row + (arm_body_walked_row \ {E})`.
 - `Hβ.first-light.infer-handler-arm-resume-ownership` — own/ref
-  per `@resume=` on the synthetic resume binding.
+  per inferred resume cardinality on the synthetic resume binding.
 - `Hβ.first-light.infer-handler-arm-pat-refinement` — refinement
   predicates on op args flow as verify obligations into arm scope.
 - `Hβ.first-light.infer-handler-arm-op-not-declared` — silent skip
@@ -568,7 +568,7 @@ Wheel-side mirror at `src/backends/wasm.mn:1568-1579` — same shape:
 **Empirical: minimal handler + perform program now compiles + validates + runs:**
 
 ```mentl
-effect E { op() -> Int @resume=OneShot }
+effect E { op() -> Int }
 handler h { op() => 42 }
 fn main() = perform op()
 ```
@@ -998,7 +998,7 @@ Tier 2 substrate when needed.
 **Empirical (sanity preserved):** minimal program
 
 ```
-effect E { op() -> Int @resume=OneShot }
+effect E { op() -> Int }
 handler h { op() => 42 }
 fn main() = perform op() ~> h
 ```

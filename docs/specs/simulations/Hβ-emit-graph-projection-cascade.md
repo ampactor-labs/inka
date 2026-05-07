@@ -244,7 +244,7 @@ correct (monomorphization at lower handles it).
 
 ### `Hβ.emit.resume-discipline-aware` ✓ PARTIALLY-LANDED (Tier 1 closed; Tier 2/3 named)
 
-**Truth-throw-away:** effect ops carry `@resume=OneShot|MultiShot
+**Truth-throw-away:** effect ops carry `OneShot (inferred)|MultiShot
 |Either` discipline at scheme; emit could specialize per discipline.
 
 **Substrate audit:**

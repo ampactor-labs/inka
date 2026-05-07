@@ -48,12 +48,12 @@ In `types.mn`:
 // distinguish permissions.
 
 effect Filesystem {
-  fs_exists(String) -> Bool                              @resume=OneShot
-  fs_read_file(String) -> List                           @resume=OneShot
+  fs_exists(String) -> Bool
+  fs_read_file(String) -> List
                                                     // returns bytes as List<Int>
-  fs_write_file(String, List) -> ()                      @resume=OneShot
+  fs_write_file(String, List) -> ()
                                                     // path, bytes
-  fs_mkdir(String) -> ()                                 @resume=OneShot
+  fs_mkdir(String) -> ()
 }
 ```
 

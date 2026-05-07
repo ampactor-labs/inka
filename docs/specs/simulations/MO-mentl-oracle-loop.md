@@ -173,7 +173,7 @@ SMT may be invoked uncached).
 ```
 effect Synth {
     synth(hole: Int, expected: Ty, context: Context) -> Candidate
-      @resume=MultiShot
+
 }
 
 type Candidate

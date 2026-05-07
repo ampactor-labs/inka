@@ -80,7 +80,7 @@ Two routes exist for closing the gap:
 | # | Interrogation | Answer for Hβ.lower.diverge-via-thread |
 |---|---|---|
 | 1 | **Graph?** | PDiverge AST + branch_nodes already carried in the `PipeExpr(PDiverge, left, right)` graph edge; right's `NExpr(MakeTupleExpr(branches))` enumerates each branch handle. No new graph vocabulary. |
-| 2 | **Handler?** | `parallel_compose` (already declared in `lib/runtime/threading.mn:114-125`); after this commit it intercepts BOTH `><` and `<|` spawn/join. `@resume=OneShot` per Thread effect declaration §1.1. |
+| 2 | **Handler?** | `parallel_compose` (already declared in `lib/runtime/threading.mn:114-125`); after this commit it intercepts BOTH `><` and `<|` spawn/join. `OneShot` (inferred from arm body) per Thread effect declaration §1.1. |
 | 3 | **Verb?** | `<|` is the second parallelism verb (SUBSTRATE.md §431). This commit makes the wheel-side dispatch story symmetric across `<|` and `><`. |
 | 4 | **Row?** | + Thread (always); + SharedMemory only when branches read shared atomics. Per peer G.1 `Hβ.infer.diverge-shared-memory-row`, infer enforces row composition; lower trusts the proof. `!SharedMemory` proves parallelizable-no-sync. |
 | 5 | **Ownership?** | `<|` ref-borrows the shared input across N branches (SUBSTRATE.md §431-455). `own` values cannot flow through `<|` — affine violation `E_OwnershipViolation` enforced at infer; lower trusts the proof. Each branch thunk captures the let-local `__diverge_input` by handle. |

@@ -24,12 +24,12 @@ enumeration; the list below is the shorthand every other insight
 composes from.*
 
 1. **Graph + Env** — the program IS the graph; every output is a handler projection. *(Mentl tentacle: **Query**.)*
-2. **Handlers with typed resume discipline** — `handle`/`resume` replaces six+ named patterns; `@resume=OneShot|MultiShot|Either` is part of each op's type; MultiShot is the substrate Mentl's oracle uses to explore hundreds of alternate realities per second; `~>` chains ARE capability stacks. *(Tentacle: **Propose**.)*
+2. **Handlers with typed resume discipline** — `handle`/`resume` replaces six+ named patterns; resume cardinality (OneShot / MultiShot / Either) is INFERRED from each arm body's resume sites under control-flow ancestry, never authored as annotation; the inferred cardinality attaches to the op's continuation type and drives lower's tier selection; MultiShot is the substrate Mentl's oracle uses to explore hundreds of alternate realities per second; `~>` chains ARE capability stacks. *(Tentacle: **Propose**.)*
 3. **Five verbs** — `|>` `<|` `><` `~>` `<~` — topologically complete basis for computation graphs. *(Tentacle: **Topology**.)*
 4. **Full Boolean effect algebra** — `+ - & ! Pure`; negation (`!E`) proves ABSENCE; four compilation gates fall out of one subsumption. *(Tentacle: **Unlock**.)*
 5. **Ownership as an effect** — `own` performs `Consume`, `ref` is a row constraint; no lifetime annotations; Rust-level safety without the ceremony. *(Tentacle: **Trace**.)*
 6. **Refinement types** — compile-time proof, runtime erasure; `Verify` effect swappable to SMT by residual theory. *(Tentacle: **Verify**.)*
-7. **The continuous annotation gradient** — each annotation unlocks one specific compile-time capability; bottom and top converge; Mentl surfaces ONE next step per turn. *(Tentacle: **Teach**.)*
+7. **The continuous gradient** — the gradient is continuous, derived (gates_unlocked × proximity per `cursor.mn`); annotations are INPUTS that unlock gradient ascent at a position. The gradient itself is never authored — it emerges from the cursor reading the kernel's truth at P. Bottom and top converge; Mentl surfaces ONE next step per turn. *(Tentacle: **Teach**.)*
 8. **HM inference, live, one-walk, productive-under-error, with Reasons** — the light every handler projection reads by; Why Engine walks the reason DAG. *(Tentacle: **Why**.)*
 
 **Composition IS the medium.** Every insight below, every
@@ -1044,6 +1044,83 @@ real-time / idle-debounced (~250ms default) / on-save / on-explicit-
 ask. Same kernel; four handler variants; user picks via configuration
 which transport handler is installed. Mentl solves Mentl's UX-tradeoff
 problem through handler-swap.
+
+### Cursor IS the substrate (chain extension 2026-05-07)
+
+*Crystallized as `protocol_cursor_is_the_substrate.md` after Phase B
+landed (resume-cardinality inference replaces erased `@resume=`
+annotations).*
+
+The cursor isn't just the gradient's argmax — it's the medium's
+**read-primitive that every subsystem in Mentl is a different mode
+of**. The CursorView at position P returns the eight aspects (Graph,
+Handler, Verb, Row, Ownership, Refinement, Gradient, Reason). Every
+named subsystem you can write down is the cursor in a different
+traversal mode:
+
+| Mode | What changes |
+|---|---|
+| sequential cursor | one P at a time, topo-ordered → **compile-order** |
+| cached cursor | return cached CursorView if parents-stable → **incrementality** (= IC) |
+| forked cursor | multiple cursors at same P, divergent futures → **multi-shot exploration** |
+| reasoned cursor | every read leaves a Reason edge → **truth** (Reason chain valid to axioms) |
+| verified cursor | Verify aspect must be admissible → **proof** (`~> verify_handler`) |
+| parallel cursor | many cursors at disjoint P concurrently → **multithreading** (Thread handler) |
+| projected cursor | each aspect produces a target-language token → **emit / lower / infer** |
+| proposing cursor | gradient aspect surfaces speculative branches → **Mentl propose** |
+
+ONE primitive (the CursorView at P). Many modes (different `~>`
+handler chains over the same query). The unifier is **the cursor
+read**, not "the driver" or "the gradient" or "the graph" — those
+are aspects of the cursor read at a position.
+
+### The Inference Primitive — annotations declare INPUTS, never emergent properties
+
+Phase B (commit `5bf7c8b`) erased all 197 `@resume=` annotations across
+the wheel. The replacement: `infer_resume_cardinality(arm_body)` walks
+each handler arm body, counts resume sites under control-flow
+ancestry + branch-disjointness, produces `ResumeDiscipline`. Same
+Cursor Projection Pattern as `$collect_used_wasi_ops` in the seed
+(Hβ.first-light.cursor-projected-wasi-imports, commit `6e52b34`):
+WALK + PREDICATE-FILTER + PROJECT.
+
+This generalizes to **all four cursor-projected emergent properties**:
+
+| Aspect | Inferred from | Authored declaration is |
+|---|---|---|
+| Resume cardinality | arm body's resume sites + control-flow ancestry | (erased — no annotation form exists) |
+| Effect row | body's `perform` sites accumulated via `inf_add_row` | a CONSTRAINT verified against inferred (T_OverDeclared warning when wider) |
+| Ownership | `Inferred`-marked params get `classify_usage`: 0/1/2+ → Inferred/Own/Ref | a CONSTRAINT over the inferred form |
+| Refinement | flow-sensitive narrowing at `if`/`match`/`assert` sites | a CONSTRAINT verified against the path-derived predicate |
+
+The cursor reads the body's structure; the body IS the contract; the
+authored declaration (when present) becomes a constraint the inference
+verifies. This inverts the foreign-language paradigm where annotations
+are authority and the compiler reverse-engineers semantics: in Mentl,
+**the body has authority, the cursor projects, and the developer
+writes WHAT THEY MEAN** — body structure + ground value types +
+effect names + boundary constraints.
+
+### The realization chain
+
+Five crystallizations deep at this writing (each strictly composes the
+prior):
+
+1. **`protocol_oracle_is_ic.md`** (2026-04-24) — Mentl's continuous
+   oracle ≅ IC + one cached value
+2. **`protocol_cursor_is_argmax.md`** (2026-05-02) — Cursor ≅ the
+   gradient's global argmax over the live graph
+3. **`protocol_emit_is_graph_projection.md`** (2026-05-07) — emit ≅
+   a handler reading the graph; shared scratch state is drift
+4. **`protocol_cursor_is_the_substrate.md`** (2026-05-07) — every
+   subsystem is the cursor in a different mode
+5. **(this section's discipline)** — annotations declare INPUTS to
+   the cursor; never the emergent property itself
+
+Each compounds: future-session altitude inherits the chain; the
+medium reads itself through itself; the discipline tightens with every
+cycle. The cursor IS the medium's read-primitive; Mentl IS the cursor
+in motion under the gradient's pull.
 
 ---
 

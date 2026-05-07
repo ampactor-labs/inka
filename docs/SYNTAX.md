@@ -15,12 +15,12 @@ Every form below exists to make one primitive of the kernel (DESIGN.md §0.5) re
 | # | Kernel primitive                                    | Tentacle   | Surface form                                                    |
 |---|-----------------------------------------------------|------------|-----------------------------------------------------------------|
 | 1 | Graph + Env                                    | Query      | AST nodes implicit; `import` brings module envs together         |
-| 2 | Handlers with typed resume discipline               | Propose    | `effect`, `handler`, `handle`/`~>`, `perform`, `resume`; `@resume=OneShot \| MultiShot \| Either` on effect ops |
+| 2 | Handlers with typed resume discipline               | Propose    | `effect`, `handler`, `handle`/`~>`, `perform`, `resume`. Resume cardinality is INFERRED from arm body structure (count of resume sites under control-flow ancestry); never authored as annotation. |
 | 3 | Five verbs                                          | Topology   | `\|>`  `<\|`  `><`  `~>`  `<~` with canonical layout             |
-| 4 | Full Boolean effect algebra (`+ - & ! Pure`)        | Unlock     | `with E1 + !E2 + Pure` in fn sigs, handler sigs, types           |
-| 5 | Ownership as an effect                              | Trace      | `own` / `ref` parameter markers; inferred by default             |
-| 6 | Refinement types                                    | Verify     | `type Name = Base where predicate`                               |
-| 7 | Continuous annotation gradient                      | Teach      | Every `with`-clause, every ownership marker, every refinement is one point on the gradient; zero annotations is the default (code runs) |
+| 4 | Full Boolean effect algebra (`+ - & ! Pure`)        | Unlock     | `with E1 + !E2 + Pure` in fn sigs, handler sigs, types — declared row is a CONSTRAINT verified against the row inferred from the body's `perform` sites, never a contract |
+| 5 | Ownership as an effect                              | Trace      | `own` / `ref` parameter markers; inferred from usage count by default (0/1/2+ → Inferred/Own/Ref) |
+| 6 | Refinement types                                    | Verify     | `type Name = Base where predicate`; per-program-point narrowing inferred from `if`/`match`/`assert` sites |
+| 7 | Continuous gradient                                 | Teach      | The gradient is continuous, derived (gates_unlocked × proximity); annotations are INPUTS that unlock gradient ascent at a position. The gradient itself is never authored — it emerges from the cursor reading the kernel's truth at P. |
 | 8 | HM inference with Reasons                           | Why        | No turbofish; generic params declared, inferred at call; wildcard `_` holes admit productive-under-error continuation |
 
 **Rule:** before adding a syntactic form, ask: which kernel primitive does it surface (and therefore which tentacle speaks for it)? If none, the form doesn't belong. If multiple, they were missing a shared form — consolidate.
@@ -679,25 +679,25 @@ type Even = Int where self % 2 == 0
 
 ```
 effect IO {
-  print(msg: String)              @resume=OneShot   // unit return; `-> ()` omitted
-  read() -> String                 @resume=OneShot
+  print(msg: String)               // unit return; `-> ()` omitted
+  read() -> String
 }
 
 effect State<S> {
-  get() -> S                       @resume=OneShot
-  set(v: S)                        @resume=OneShot   // unit return; `-> ()` omitted
+  get() -> S
+  set(v: S)                        // unit return; `-> ()` omitted
 }
 ```
 
-Each operation declares its parameter types, return type (if non-unit), and **resume discipline** (`@resume=OneShot | MultiShot | Either`). The resume discipline is part of the operation's identity; it's checked at every handler arm and call site.
+Each operation declares its parameter types and return type (if non-unit). **Resume cardinality is INFERRED at handler-decl time from each arm body** — never declared on the effect op. The infer pass counts resume call sites under control-flow ancestry; the inferred cardinality attaches to the op's `TCont` continuation type and drives lower's tier selection (Tier 1 direct call vs Tier 3 heap continuation). See `protocol_cursor_is_the_substrate.md` for the discipline.
 
 ### Unit return omission
 
 If an effect op returns unit `()`, the `-> ()` clause may be omitted:
 
 ```
-effect Console { print(msg: String) @resume=OneShot }     // returns ()
-effect Console { print(msg: String) -> () @resume=OneShot } // equivalent, explicit
+effect Console { print(msg: String) }       // returns ()
+effect Console { print(msg: String) -> () } // equivalent, explicit
 ```
 
 Both forms are accepted; absence is the idiomatic short form. Non-unit returns MUST be declared explicitly: `read() -> String`. This mirrors the fn-declaration rule where `-> RetTy` is optional on inferred fns but REQUIRED when declared.
@@ -721,12 +721,12 @@ Per §"Parameters ARE tuples," a zero-arg call unifies with a unit parameter typ
 
 ```
 effect Sample(rate: Int) {
-  tick() -> ()                    @resume=OneShot
-  current_sample() -> Float       @resume=OneShot
+  tick() -> ()
+  current_sample() -> Float
 }
 
 effect Budget(limit: Int) {
-  spend(amount: Int) -> Bool      @resume=OneShot
+  spend(amount: Int) -> Bool
 }
 ```
 
@@ -741,13 +741,15 @@ fn audio_loop() with Sample(44100) + IO + !Alloc =
 
 The argument is evaluated at install time and frozen. Two functions declared with `Sample(44100)` and `Sample(48000)` cannot interoperate without an explicit handler bridge.
 
-### Resume discipline meaning
+### Resume discipline — inferred, not annotated
 
-- **`@resume=OneShot`** — the handler arm calls `resume(...)` AT MOST once per invocation. Continuation lives on the stack; no heap capture; performance is direct-call equivalent. Compile error if an arm calls resume twice.
-- **`@resume=MultiShot`** — the arm calls `resume(...)` zero or more times. Continuation captured to the heap as a closure. Enables backtracking, non-determinism, generators.
-- **`@resume=Either`** — discipline not pinned at declaration time. Handler arms may use either; loses some optimization headroom.
+Resume cardinality is **inferred from each handler arm body** at handler-decl time; the developer never types `@resume=`. The infer pass walks the arm body collecting resume call sites; classifies via control-flow ancestry + branch-disjointness:
 
-This annotation is **load-bearing** — see DESIGN Ch 1 and the discussion in this codebase's conversation history. It's why Mentl can express real-time DSP and constraint-search backtracking under one effect algebra.
+- **`OneShot`** (inferred when zero or one resume site, not under loop ancestor; or multiple sites all in branch-disjoint paths) — continuation lives on the stack; no heap capture; performance is direct-call equivalent. Compile error never fires here because the inference produces the correct kind from the body's structure.
+- **`MultiShot`** (inferred when one or more resume sites under loop/recursion ancestry, or two sites both reachable from one path) — continuation captured to the heap as a closure. Enables backtracking, non-determinism, generators.
+- **`Either`** (inferred when callers pin distinct kinds at different install sites; gradient-undecided at the EffectOpScheme) — handler arms may use either; loses some optimization headroom.
+
+The cardinality is **load-bearing on type+lower** — it's why Mentl can express real-time DSP and constraint-search backtracking under one effect algebra. But the **annotation form is drift** (per `protocol_cursor_is_the_substrate.md`): authoring `@resume=` would declare what the body already proves. The body IS the contract; the cursor projects the cardinality. See `src/infer.mn`'s `infer_resume_cardinality` for the substrate.
 
 ### Negation in `with` clauses
 
@@ -959,7 +961,7 @@ Match arms must cover all variants OR include a wildcard. Missing-variant errors
 
 `name @ pat => body`: binds `name` to the entire matched value; `pat` destructures it further. `name` and any bindings inside `pat` are all available in the arm body. Common for "need the whole value AND some pieces" cases — event forwarding, logging, pass-through.
 
-`@` is also TAt (annotation marker on effect ops: `@resume=OneShot`). Context disambiguates: annotation on op decl vs pattern in match/let.
+`@` is TAt (reserved for handler annotations more generally; no current load-bearing user-facing `@`-form on effect ops — `@resume=` was erased per the inference-from-body discipline). Context disambiguates if other `@`-forms are introduced in future kernel additions.
 
 ---
 
@@ -1384,7 +1386,7 @@ type TokenKind
 | `TBang`         | `!`              | —         | logical not; effect negation                   |
 | `TPipe`         | `\|`             | —         | type variant separator; lambda param fence (`\|x\| expr`) |
 | `TTilde`        | `~`              | —         | reserved                                       |
-| `TAt`           | `@`              | —         | annotation marker (`@resume=OneShot`)          |
+| `TAt`           | `@`              | —         | reserved annotation marker (currently no user-facing form; @resume= erased per inference-from-body) |
 | `THole`         | `??`             | —         | hole — the gradient's syntactic absence marker; Mentl's Synth proposes candidates filling the position. The Mentl Mono ligature renders `??` as the octagonal-socket glyph (8 sides ↔ 8 kernel primitives). Single `?` is no longer a token. |
 | **Layout / structural (2)** |     |           |                                                |
 | `TNewline`      | `\n`             | —         | semantic per DESIGN Ch 2 (block-form `~>`)     |
@@ -1438,7 +1440,7 @@ Diagnostic on non-unit if-without-else: **`E_IfMissingElse`** with Quick Fix sug
 | `E_TypeMismatch`      | unification failed                            | adjust types; widen / narrow                   |
 | `E_OccursCheck`       | infinite type                                 | restructure to break cycle                     |
 | `T_OverDeclared`      | declared row wider than body uses             | tighten the signature to unlock capabilities   |
-| `T_Gradient`          | annotation would unlock a capability          | accept the suggestion to unlock                |
+| `T_Gradient`          | an annotation INPUT (existing form) would narrow the cursor's projection at this position | accept the suggestion to narrow |
 | `W_Suggestion`        | probable Quick Fix available                  | (Mentl-proposed)                               |
 
 Every diagnostic carries a Located reason chain, source span, applicability tag (`MachineApplicable`, `MaybeIncorrect`, `HasPlaceholders`, `Unspecified`), and (where mechanical) a Patch.
@@ -1470,6 +1472,6 @@ Every diagnostic carries a Located reason chain, source span, applicability tag 
 
 This document supersedes any syntactic decisions implicit in DESIGN.md, SUBSTRATE.md, the 12 specs, or current parser behavior. Where another document conflicts with SYNTAX.md, SYNTAX.md is correct and the other document gets a corrective revision.
 
-Mentl's discipline applies to syntax: every form below was decided by asking the eight interrogations — one per kernel primitive (DESIGN.md §0.5), one per Mentl tentacle. Graph (what AST does it produce?), handler + resume discipline (what installed handler reads it, with what resume type?), verb (which topology?), row (what `+ - & !` constraint?), ownership (what `own`/`ref` does it carry?), refinement (what predicate does it admit?), gradient (what annotation would it unlock?), Reason (what edge does it leave for the Why Engine?). Forms that failed any of the eight were rejected.
+Mentl's discipline applies to syntax: every form below was decided by asking the eight interrogations — one per kernel primitive (DESIGN.md §0.5), one per Mentl tentacle. Graph (what AST does it produce?), handler + inferred resume cardinality (what installed handler reads it, what cardinality does the arm body prove?), verb (which topology?), row (what `+ - & !` constraint does the body's perform sites prove?), ownership (what `own`/`ref` does the use-count infer?), refinement (what predicate does the path narrow?), gradient (what annotation INPUT or body-structure unlocks the cursor's projection here?), Reason (what edge does it leave for the Why Engine?). Forms that failed any of the eight were rejected. **Annotations declare INPUTS to the cursor; never the emergent property itself** (per `protocol_cursor_is_the_substrate.md`).
 
 When questions arise about syntax not yet covered here: open a γ-style walkthrough in `docs/specs/simulations/syntax/<topic>.md`, resolve the design question, then update this document.

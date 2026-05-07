@@ -522,3 +522,119 @@ fn filter_by_span(target, debt) with Pure = {
     kept ++ filter_by_span(target, tail)
   }
 }
+
+// ─── GradientQueue — the cursor's argmax projected as schedulable ops ─
+//
+// Hβ.cursor.work-stealing-via-gradient handle. The substrate primitive
+// that the four named peer handles compose on:
+//
+//   Hμ.driver.topological-layer-par-map      consumes gradient_pop
+//   Hμ.cursor.speculative-compile            consumes gradient_peek_n
+//   Hμ.runtime.wasi-thread-spawn-seed        consumes work via gradient_pop
+//   Hμ.collab.shared-graph-handler (Phase Z) layered on top
+//
+// Per protocol_cursor_is_argmax + protocol_cursor_is_the_substrate:
+// gradient_queue IS the cursor projected as work-scheduler. The queue
+// has zero memory cost — it's a recomputed argmax over the live graph
+// at the caret. No priority-queue data structure (drift 7 refusal —
+// that would be parallel-arrays-not-record); no scheduler module
+// (drift 9 — every subsystem is the cursor in a different mode per
+// protocol_cursor_is_the_substrate). The graph + cursor + Pure-over-
+// broader-input = the queue.
+//
+// Drift discipline:
+//   1 (vtable):              no dispatch table mapping work-items to handlers
+//   7 (parallel-arrays):     the queue is NOT a vec<WorkItem>; it's a Pure projection
+//   9 (deferred-by-omission): four peer handles named (above); none silent
+//   38 (mascot-as-tentacle):  GradientQueue is its own effect; not a CLI verb
+
+effect GradientQueue {
+  gradient_pop() -> Option
+  gradient_peek_n(n: Int) -> List
+  gradient_step() -> Option
+}
+
+handler gradient_queue_default with caret = Caret(0, Inferred("queue init")) {
+
+  // gradient_pop — the cursor's argmax IS the queue's head. Returns
+  // Some(Cursor) when there's substrate to advance to; None when the
+  // gradient is at top (no candidates remaining; silence at gradient
+  // top per silence_predicate_oracle).
+  gradient_pop() => {
+    let argmax = cursor_argmax_compute(caret)
+    let Cursor(_, _, score) = argmax
+    if score > 0.0 { resume(Some(argmax)) }
+    else            { resume(None) }
+  },
+
+  // gradient_peek_n — top-N candidates by gradient score; the
+  // substrate primitive for speculative compilation (Hμ.cursor.
+  // speculative-compile dispatches the top-K candidates as multi-shot
+  // continuations spatially). Composes enumerate_gradient_positions
+  // + score_all_positions + sort_by_score_desc.
+  gradient_peek_n(n) => {
+    let positions = enumerate_gradient_positions()
+    let scored = score_all_positions(positions, caret)
+    resume(top_n_by_score(scored, n))
+  },
+
+  // gradient_step — pop + advance the queue's caret state. The
+  // substrate primitive for the bus-compressor loop (each accept
+  // re-positions the queue to the just-accepted handle, narrowing
+  // future argmax computation per the proximity weighting in
+  // scope_distance_decay).
+  gradient_step() => {
+    let argmax = cursor_argmax_compute(caret)
+    let Cursor(handle, located, score) = argmax
+    if score > 0.0 {
+      resume(Some(argmax)) with caret = Caret(handle, reason_of_located(located))
+    } else {
+      resume(None)
+    }
+  }
+}
+
+// top_n_by_score — sort descending by impact, take first N. Pure.
+// Insertion sort: O(N²) for moderate N; acceptable until profiling
+// names `Hμ.cursor.queue-fast-sort` as a peer handle. Substrate-
+// honest baseline; drift 9 refusal on premature optimization.
+
+fn top_n_by_score(scored, n) with Pure = {
+  let sorted = sort_by_score_desc(scored)
+  take_first_n(sorted, n)
+}
+
+fn sort_by_score_desc(scored) with Pure = {
+  if scored.len <= 1 { scored }
+  else {
+    let head = list_head(scored)
+    let tail = list_tail(scored)
+    insert_descending(head, sort_by_score_desc(tail))
+  }
+}
+
+fn insert_descending(item, sorted) with Pure = match sorted {
+  []            => [item],
+  [head | rest] => {
+    let Cursor(_, _, item_score) = item
+    let Cursor(_, _, head_score) = head
+    if item_score >= head_score { [item, head] ++ rest }
+    else                        { [head] ++ insert_descending(item, rest) }
+  }
+}
+
+fn take_first_n(list, n) with Pure = {
+  if n <= 0 || list.len == 0 { [] }
+  else {
+    let head = list_head(list)
+    let tail = list_tail(list)
+    [head] ++ take_first_n(tail, n - 1)
+  }
+}
+
+// reason_of_located — extracts the Reason from a Located wrapper.
+// Pure helper for gradient_step's caret advance.
+
+fn reason_of_located(located) with Pure = match located {
+  Located(_, reason) => reason
+}

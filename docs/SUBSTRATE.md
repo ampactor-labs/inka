@@ -1298,3 +1298,224 @@ field-set (records, sorted by field name), `tagged_values`
 implementations of one ordered-keyed-set algebra. The abstraction
 earns its weight when a fifth instance arrives; until then, the
 parallel forms are honest about what's not yet generic.
+
+---
+
+
+---
+
+# § X · Phase μ Theorems — the medium being put to work
+
+*§I–§IX establish the kernel + verbs + algebra + handlers + memory
++ gradient + inference + graph. §X establishes what falls out
+when the kernel is whole and projected for a developer at the
+cursor. Three theorems crystallized 2026-05-07 alongside the
+developer-experience vision (`protocol_developer_experience_vision.md`).
+Compose on `protocol_ultimate_medium.md` (Phase μ thesis) +
+`docs/ULTIMATE_MEDIUM.md` §8 (day-in-the-medium experience layer).*
+
+### Collab-as-substrate
+
+**Theorem.** When two transports `~>` over the same shared
+`graph_handler`, every collaboration tool the industry has built
+— git, code review, pair programming, blame, time-travel
+debugging, refactoring across teams, RBAC — falls out as a
+derived consequence. **Multi-user collaboration is not a feature
+to add; it is what the substrate delivers when shared.**
+
+**Proof sketch.** The kernel components that make this work:
+
+- **Reason chains are append-only** (kernel #8). Conflict-free by
+  construction (CRDT); two users mutating concurrently produce two
+  Reasons under a common parent — no diff/merge, just two children.
+- **Pure-over-broader-input** (handlers + IC; §VII +
+  `protocol_oracle_is_ic.md`). Any handler-projection (compile,
+  check, lower, emit) replays deterministically from any
+  Reason-chain prefix. "What did the codebase look like at 3pm
+  yesterday?" = walk Reason chain to that timestamp; replay.
+- **Cursors are graph nodes** (Hμ.cursor; §VI). Each user's cursor
+  IS a handle. Other users' cursors render naturally because they're
+  in the graph. Presence is automatic projection; no separate
+  "presence service."
+- **Refinement types verify mutations** (kernel #6). Mutation lands
+  → refinement re-checks → if violated, the Reason chain marks it
+  `Reason::ViolatesRefinement(handle, predicate)` — visible to
+  both users immediately.
+- **Boolean effect row gates capabilities** (kernel #4). Per-user
+  permissions are an effect row over (user × graph_region):
+  `+Mutate(region) - Read(other_region)` is the entire RBAC
+  story. No separate auth system.
+- **Gradient re-ranks per cursor** (kernel #7). User A's mutation
+  lands; user B's gradient re-ranks against A's mutation; B sees
+  relevant changes ranked, not a notification dump.
+- **Why Engine walks Reason chains** (kernel #8). "Why did this
+  change?" → walk to the mutating Reason → see (user, cursor_pos,
+  what they were trying to do, gradient_score). One walk.
+
+**What this collapses** (industry tools become substrate
+projections):
+
+| Industry tool | Reduces to |
+|---|---|
+| Git commit / branch / merge | Reason chain walk; branches are forks; merges replay one chain's Reasons against another |
+| Code review (GitHub PRs, Gerrit) | Reviewer's cursor + `Reason::ReviewComment(handle, message)` |
+| Pair programming (Live Share, Replit) | Two cursors, one graph_handler, atomic mutations; conflict-free by Reason-CRDT |
+| Blame (git blame) | `Reason::AttributedTo(user, cursor_pos, time)` walked back; one Reason walk |
+| Time-travel debugging (rr, Pernosco) | Walk Reason chain to any point; replay handlers up to that point; reproducible from chain |
+| Refactoring across teams | Mutate one site; Reason chains link to dependents; downstream cursors re-rank |
+| Permissions / RBAC | Effect row `+Mutate(graph_region)` per user; kernel enforces; no separate auth layer |
+| Issue tracking ↔ code linking | Issues are graph nodes; `Reason::ResolvesIssue(issue_handle, by_handle)` links them |
+
+**Action for implementation.** Phase Z opens with
+`Hμ.collab.shared-graph-handler` (per `ROADMAP.md` Phase Z).
+Walkthrough planned at `docs/specs/simulations/COLLAB-shared-graph.md`
+(named-but-pending). Sub-handles: `Hμ.collab.reason-crdt-replay`,
+`Hμ.collab.cursor-presence`, `Hμ.collab.permission-row`,
+`Hμ.collab.transport-bridge`, `Hμ.collab.federated-replication`.
+**No new kernel primitives required** — composition only, per the
+kernel-closure protocol.
+
+**Forbidden framings.** "Mentl needs a real-time collaboration
+feature" is drift 1 (vtable thinking) + drift 9 (deferred-by-omission)
+in feature-shaped clothing. The right reach: which `graph_handler`
+swap delivers the property? **Two transports → one shared
+graph_handler. Done. The "feature" is graph_handler swap, not new
+code.** "Mentl needs git" → Reason chains ARE the version control;
+walk back; fork; replay. **No git module. Git is a compatibility
+transport for non-Mentl tools.**
+
+### Multi-domain unification
+
+**Theorem.** The same kernel admits every domain's discipline as
+a handler stack on the same graph. **DSP, ML, web frontend / backend,
+embedded, control, data processing, distributed, real-time,
+scientific computing, robotics, sensors — same substrate, same
+five verbs, same eight kernel primitives, one developer.**
+
+**Proof sketch.**
+
+- **Five verbs are topologically complete** (§II). Every directed
+  graph decomposes into `|>` + `<|` + `><` + `~>` + `<~`. Every
+  domain's computational shape is a directed graph (DSP signal
+  chain, ML computation graph, distributed RPC topology, control
+  loop, web request-response, embedded interrupt handler chain).
+  Therefore five verbs draw every domain. QED for the topology
+  layer.
+- **Kernel primitives are domain-neutral** (§I). Graph + Env,
+  handlers, refinement, ownership, effect algebra, HM inference,
+  gradient — none are specific to a domain. Domains differ in
+  which handlers are installed, not in the substrate.
+- **Per-domain semantics live in handler-chain composition.** DSP
+  uses `Sample(rate)` + `<~` feedback under `!Alloc`. ML uses
+  `Compute` + `autodiff_tape` handler. Web uses `DOM` + `Network`
+  + `Async`. Embedded uses `!Alloc + !IO + !Network`. Each domain
+  is a SET of handlers + a TYPICAL effect row composition, NOT a
+  separate language or runtime.
+- **Row algebra discriminates per-domain effects.** A function
+  `with Sample(44100) + !Alloc` is real-time DSP; same function
+  body `with Compute + Alloc` is ML training. Same source, different
+  handler chain, different domain, different binary. The ergonomic
+  default is the domain-honest default because the row algebra
+  catches mismatches at install time.
+
+**Industry consequence.** Frontend devs don't do ML; ML devs don't
+do audio; audio devs don't do distributed — these specialty silos
+are consequences of language fragmentation, not properties of the
+domains. **Mentl dissolves the silos by being one substrate that
+admits every domain via handler chains.** A single Mentl developer
+can write audio in the morning, the web app in the afternoon, the
+ML model in the evening, the embedded firmware that night — all in
+ONE language with ONE medium that speaks each domain natively.
+
+**Action for implementation.** `lib/tutorial/<domain>/` exercises
+each domain as handler chains over the shared substrate. `lib/dsp/`
++ `lib/ml/` lead the demonstration; web / embedded / control /
+distributed extend post-L1 per `ROADMAP.md` Phase F goals + Phase
+B.10/B.11 (Ultimate DSP / Ultimate ML rewrites). The five verbs
+draw every domain — **the proof is in the rewrite** (a single DSP
+filter and a single ML autodiff tape compile through the same
+five-verb topology).
+
+### AI obsolescence — approximation has a ceiling, proof has none
+
+**Theorem.** The medium internalizes proof to a kernel that
+proves; AI tools externalize proof to a model that approximates.
+**Approximation asymptotes against ground truth and never
+reaches; proof IS ground truth.** This is why the obsolescence
+is genuine, not marketing.
+
+**Proof sketch.**
+
+- **Mentl's proposers are kernel-derived.** `Synth` handler-chain
+  (per `mentl.mn` + `oracle.mn`) enumerates candidates via
+  MultiShot resume (kernel #2's typed resume discipline). Each
+  candidate runs through the speculative gradient loop:
+  `graph_push_checkpoint` → tentative `graph_bind` → row
+  subsumption + Verify discharge → `graph_rollback`. Survivors
+  are PROVEN compilable. Non-survivors fade.
+- **Reason chains accumulate per-project wisdom** (kernel #8).
+  Across sessions, the project's Reason graph IS its accumulated
+  cognitive history. The gradient at year 5 of a project surfaces
+  next-steps tuned to the specific trajectory of that project, that
+  team, that codebase — not to a model trained on millions of
+  strangers.
+- **The kernel cannot hallucinate.** Types, effect rows,
+  refinements, ownership are proven; `NErrorHole(Reason)` is the
+  honest failure mode. No "best-effort" surface; either the
+  candidate is proven (Synth surfaces it) or it isn't (silence).
+  Per `protocol_mentl_is_not_an_llm.md`: Mentl is the kernel's
+  MultiShot resume primitive made into a handler-on-graph, not a
+  learner trained on vocabulary.
+- **The medium runs locally.** Kernel is WASM; browser instances
+  run the same WASM kernel; `mentl edit` reaches developers at
+  their browsers; `mentl serve` reaches editor users via LSP;
+  `mentl` bare reaches terminal users. Same substrate, three
+  transports. **No SaaS dependency for substrate function.**
+- **The compiler IS the AI; the LLM was pretending.** What AI
+  tools approximate — type-aware completion, refactoring proposals,
+  causal explanation, multi-shot exploration — Mentl produces
+  structurally from the kernel. The Holographic Lens (per
+  `IE-mentl-edit.md` §3) IS the demo: ghost text projections of
+  multi-shot proven candidates; Tab-snap commits the proven
+  alternative.
+
+**The ceiling argument formally.** Approximation systems
+(LLM-backed proposers, embedding-based search, statistical type
+inference) optimize against ground-truth-as-target via training.
+The optimization is asymptotic — error decreases with model size,
+training data, compute — but never reaches zero. **Approximation
+has a ceiling.** Proof systems (HM inference + refinement types +
+effect algebra + ownership) compute ground truth directly via
+sound deduction rules. The output IS ground truth (modulo soundness
+of the rules; mechanical). **Proof has no ceiling — it IS ground
+truth.** The medium's surface (Mentl + Cursor + gradient + multi-shot
++ Why Engine + Holographic Lens) ranks proven candidates by
+relevance, not by approximation; the kernel underneath does the
+proving.
+
+**Industry consequence.** "AI coding tools" become a product
+category superseded by substrate. The medium reaches what AI tools
+reach for, with proof instead of approximation, locally instead of
+SaaS-bound, persistently instead of session-amnesic. **The compiler
+IS the AI; the demo is `mentl edit`.**
+
+**Action for implementation.** Never frame Mentl as an AI tool in
+user-facing surfaces. Substrate-honest vocabulary (per
+`protocol_developer_experience_vision.md` §"AI obsolescence is
+mathematical" + `CLAUDE.md` red-flag table):
+
+| Forbidden | Substrate-honest |
+|---|---|
+| "AI" / "agent" / "completion" / "assistant" / "chatbot" | "the medium proposes" / "cursor argmax" / "Lens fires" |
+| "model" / "training" / "embedding" / "hallucination" | "Synth handler-chain" / "gradient narrows" / "Reason chain" |
+| "may want to" / "might consider" / "perhaps" | "the medium surfaces" / "the gradient unlocks" / silence at gradient top |
+| "completion suggestion" / "code generated" / "AI-suggested" | "multi-shot proven candidate" / "Holographic Lens projection" / "Tab-snap candidate" |
+
+**Forbidden framings.** "Mentl has an AI feature" is the marketing
+trap; the medium IS the AI in the same sense the compiler IS
+inference. "Mentl uses an LLM under the hood" is structurally
+false (per `protocol_mentl_is_not_an_llm.md`). "Mentl assists the
+developer" is anthropomorphism in the wrong direction — the medium
+IS the developer's externalized cognition, not an external assistant
+(per `protocol_developer_experience_vision.md` §"the medium IS the
+developer's mind given substrate").

@@ -148,8 +148,13 @@ levels.
    backtracking — all `handle`/`resume`. One mechanism replaces
    six+ named patterns plus everything peer languages handle as
    framework (testing, mocking, GC, package management,
-   distributed RPC). Each effect op carries its resume discipline
-   in its type: `@resume=OneShot | MultiShot | Either`. OneShot →
+   distributed RPC). Each effect op's resume cardinality is
+   **INFERRED at handler-decl time from each arm body's resume
+   sites under control-flow ancestry** (per
+   `protocol_cursor_is_the_substrate.md` + SYNTAX.md §"Resume
+   discipline"); never authored as `@resume=` annotation. The
+   inferred OneShot / MultiShot / Either drives lower's tier
+   selection: OneShot →
    direct `call`; MultiShot → heap-captured continuation; Either
    → dynamic. Handler chains (`~>`) ARE capability stacks,
    trust-ordered, proven at compile time. **The MultiShot-typed

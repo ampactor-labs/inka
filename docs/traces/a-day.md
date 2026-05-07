@@ -25,11 +25,38 @@ Every substantive claim carries one of three tags:
   a handler projection not yet installed. Adding the surface is a
   handler, not substrate.
 - **`[substrate pending]`** — the substrate itself has a named gap.
-  Three gaps remain post-cascade: `LFeedback` state-machine
-  lowering at emit, `teach_synthesize` oracle orchestration, runtime
-  `HandlerCatalog` as effect (vs the current static table).
 
 The discipline: no surface claimed without a tag. Honest integration.
+
+> **State of the substrate (2026-05-07).** The "three named gaps"
+> claim in the original trace has shifted under Phase H + Phase μ
+> work. Current substrate-pending status, refreshed:
+>
+> - **LFeedback state-machine lowering** — substrate landed in
+>   `Hβ.lower` cascade (commits `f01ea67` walk_handle + `c53904d`
+>   Tier 9 main; per ROADMAP). Some emit-side polish handled in the
+>   `Hβ.emit` cascade (chunks #1-#8 + handler-fnref-substrate).
+> - **`Synth handler-chain` oracle orchestration** → renamed to
+>   **Mentl's Synth handler-chain** (per current DESIGN §8 + IE §3
+>   Holographic Lens). Substrate substantially live in `src/oracle.mn`
+>   + `src/mentl.mn`; the OneShot stub at `src/mentl.mn:404-438`
+>   returning `[]` is the named peer **Hμ.synth-proposer** (per ROADMAP
+>   Phase μ). Cursor projects through it via `cursor_default` per
+>   Hμ.cursor (LANDED 2026-05-02).
+> - **Runtime `HandlerCatalog` as effect** — collapsed into the
+>   MV-mentl-voice substrate per `protocol_mentl_voice_reframe.md`
+>   (the catalog is a graph projection, not a separate registry).
+>
+> **Phase μ extension to this trace.** The day-in-the-medium
+> experience layer (`docs/ULTIMATE_MEDIUM.md` §8 +
+> `protocol_developer_experience_vision.md`) is now the canonical
+> framing for what the developer experiences across these scenes —
+> the cursor moves itself, files become a handler, projections
+> replace runs, the medium narrates, and `mentl edit` opens the
+> browser-WASM canonical IDE. After Phase H first-light-L1 closes
+> and the IE walkthrough's substrate lands, this trace's "[LIVE ·
+> surface pending]" entries collapse into "[LIVE]" without scenario
+> rewrites — the substrate is already there.
 
 ---
 
@@ -182,7 +209,7 @@ Mentl suggests (PROVEN):
 The `AWrapHandler` annotation + `apply_annotation_tentatively` +
 `catalog_handled_effects(temp_arena) = [Alloc]` + row subtraction all
 fire in the substrate. **`[LIVE]`** for the machinery;
-`[substrate pending]` for `teach_synthesize`'s oracle loop that
+`[substrate pending]` for `Synth handler-chain`'s oracle loop that
 drives checkpoint/apply/verify/rollback to prove the fix BEFORE
 offering it. Today, the ingredients exist but the composed
 oracle-loop handler isn't written.
@@ -254,7 +281,7 @@ effect boundaries doesn't exist yet.
 `[LIVE · surface pending]` — the more general Mentl propose path
 (enumerate every handler whose installed row converts
 Sample(48000)→Sample(44100), score by minimal diff, PROVE via
-checkpoint/apply/verify/rollback) needs the `teach_synthesize`
+checkpoint/apply/verify/rollback) needs the `Synth handler-chain`
 conductor. The ingredients are there.
 
 You manually resolve:
@@ -634,32 +661,53 @@ the trace) still pends LSP wiring, but its underlying queries now
 run against an incrementally-maintained graph instead of a
 cold-rebuilt one.
 
-### `[substrate pending]` — named substrate gaps
+### `[substrate pending]` — named substrate gaps (refreshed 2026-05-07)
 
-Three. Only three.
+Original trace listed three gaps. Phase H + Phase μ work has shifted
+the list; current state per ROADMAP + commit history:
 
-1. **`LFeedback` state-machine lowering at emit.** The verb, row,
-   type inference all fire. Emit stubs at `;; <~ feedback (iterative
-   ctx)`. What's missing: lowering `LFeedback(handle, body, spec)`
-   to a state-machine LIR (handler-local state slot for the delayed
-   sample; Z-transform structure for `<~ delay(N)`; RNN hidden-state
-   structure for `<~ step_fn` in training). One focused
-   emission-side pass; has a clear template in the walkthroughs.
+1. **`LFeedback` state-machine lowering at emit** — *substantially
+   landed* via `Hβ.lower` cascade closure (commits `f01ea67` walk_handle
+   + `c53904d` Tier 9 main) + `Hβ.emit` chunks #1-#8 +
+   handler-fnref-substrate. Polishing handled in the cascade. Was a
+   blocker; isn't anymore.
 
-2. **`teach_synthesize` oracle orchestration.** The checkpoint /
-   apply / verify / rollback substrate pieces exist individually
+2. **Mentl's Synth handler-chain — full MultiShot enumeration** — the
+   OneShot stub at `src/mentl.mn:404-438` returning `[]` is the named
+   peer `Hμ.synth-proposer` (per ROADMAP Phase μ). Substrate-gated on
+   H7 MultiShot emit completion. Speculative gradient pieces
    (`graph_push_checkpoint`, `apply_annotation_tentatively`,
-   `verify_ledger`, `graph_rollback`). What's missing: the composed
-   conductor handler that drives them in sequence, enumerates
-   candidates, scores, returns the proven set. One substrate
-   handler; maybe 50-80 lines.
+   `verify_ledger`, `graph_rollback`) all live; the composed conductor
+   handler that drives MultiShot enumeration is the residue. Cursor
+   `propose` field gains real candidates when this lands (per Hμ.cursor
+   §"propose tentacle").
 
-3. **Runtime `HandlerCatalog` as effect.** Today's
-   `catalog_handled_effects(handler_name)` is a static table in
-   `mentl.mn`. A runtime registration surface (user-defined handlers
-   register at module load; Mentl's `AWrapHandler` proposal reads
-   the registry) would make the catalog queryable for user-defined
-   handlers. One effect + one handler; small.
+3. **Phase H first-light-L1 closure** (the active cursor today) —
+   `mentl2.wat == mentl3.wat` byte-identity; the kernel projection
+   closed under self-application. Empirical-real residue tracked at
+   `docs/specs/simulations/Hβ-first-light-empirical.md`. NEXT cursor
+   per CLAUDE.md: `Hβ.first-light.parser-fabrication-substrate`
+   (`bootstrap/src/parser_infra.wat:296` `$ident_at_p` fabrication).
+   When L1 closes, Tier 3 transcription unlocks every Phase μ peer
+   handle's seed variant simultaneously.
+
+4. **Phase μ peer handles** (post-L1 unlocks per ROADMAP):
+   `Hμ.cursor.transport` (terminal/LSP/web-WASM render targets),
+   `Hμ.synth-proposer` (replaces the `[]` stub), `Hμ.gradient-delta`
+   (inverse-direction gradient), `Hμ.cursor.cache` (IC over
+   `(env, oracle_queue)`), `Hμ.eight-interrogation-loop` (discipline
+   as code at compile time). Each composes on the sealed kernel.
+
+5. **Phase Z collaborative substrate** (post-μ; named-but-pending) —
+   `Hμ.collab.shared-graph-handler` opens multi-cursor on shared graph;
+   collab + git + code review + RBAC fall out as kernel-derived
+   projections (per `docs/SUBSTRATE.md` §X.1 + `docs/ULTIMATE_MEDIUM.md`
+   §8.6 + `protocol_developer_experience_vision.md` §"Collab-as-substrate").
+   Walkthrough planned at `docs/specs/simulations/COLLAB-shared-graph.md`.
+
+The original "runtime HandlerCatalog as effect" gap collapsed into the
+MV-mentl-voice substrate (per `protocol_mentl_voice_reframe.md`); the
+catalog is a graph projection, not a separate registry.
 
 ### Beyond the substrate — handler-projection work
 
@@ -734,3 +782,22 @@ scene stops working; remove enough and Pulse (real-time audio + UI
 load-bearing-together property IS the domain-universal claim. And
 the scenes' voice surfaces cover all eight tentacles — Pulse's day
 is Mentl's day too.
+
+---
+
+## Cross-references
+
+- `docs/ULTIMATE_MEDIUM.md` §8 — day-in-the-medium experience layer
+  (the canonical Phase μ framing this trace integrates against)
+- `protocol_developer_experience_vision.md` (memory) — the throughline
+  vision; "the medium IS the developer's mind given substrate"
+- `docs/SUBSTRATE.md` §X — Phase μ theorems (collab-as-substrate +
+  multi-domain unification + AI obsolescence math)
+- `docs/specs/simulations/IE-mentl-edit.md` — the canonical IDE that
+  collapses many of this trace's "[LIVE · surface pending]" entries
+  into "[LIVE]" when its substrate lands
+- `docs/specs/simulations/F1-mentl-doc.md` — the doc handler chain
+- `docs/specs/simulations/EH-entry-handlers.md` — the CLI substrate
+- `docs/specs/simulations/CLI-canonical-vocabulary.md` — the canonical
+  verb catalog (mentl edit / doc / run / test / audit / serve / etc.)
+- `ROADMAP.md` — current Phase H + μ + Z status

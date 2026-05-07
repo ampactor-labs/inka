@@ -26915,14 +26915,45 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter))))
 
+  ;; ═══ The Cursor Projection Pattern ═══════════════════════════════
+  ;; Per protocol_cursor_is_the_substrate.md (2026-05-07): every emit-
+  ;; side collect-and-project function follows ONE shape:
+  ;;
+  ;;   1. WALK the LowExpr tree (mirror $cwo_walk's tag-int dispatch)
+  ;;   2. PREDICATE-FILTER each visited node (matches the aspect)
+  ;;   3. PROJECT the matched node (push to Buffer, or emit directly)
+  ;;
+  ;; The seed has four instances at this writing:
+  ;;
+  ;;   $collect_fn_names           — Handler aspect (LMakeClosure /
+  ;;                                  LMakeContinuation / LDeclareFn)
+  ;;                                  → fn-name set for funcref table.
+  ;;   $collect_top_level_fn_names — Handler aspect at module-root
+  ;;                                  (LLet-wrapped LMakeClosure) →
+  ;;                                  static closure record set.
+  ;;   $collect_used_wasi_ops      — Row aspect (LPerform with wasi_*
+  ;;                                  target) → import declarations.
+  ;;   $emit_toplevel_locals       — Refinement aspect (LetStmt+PVar)
+  ;;                                  → local declarations (projects
+  ;;                                  directly via $emit_byte rather
+  ;;                                  than collecting first).
+  ;;
+  ;; Future emit-extensions (type tables, refinement bound elision,
+  ;; row-aware parallel emit, ownership register allocation) all
+  ;; follow this shape. The extension point is the predicate, not
+  ;; the projector. "Imperative subsystem" never appears in correct
+  ;; Mentl substrate (named drift extension; see CLAUDE.md red-flag
+  ;; thoughts table).
+  ;; ──────────────────────────────────────────────────────────────────
+
   ;; ─── WASI import emission — cursor-projected ─────────────────────
-  ;; Per protocol_cursor_is_the_substrate.md (2026-05-07): emit walks
-  ;; the lowered program collecting LPerform op_names that target
-  ;; "wasi_<op>" symbols; projects ONE import per used op. Adding a
-  ;; new WASI op = ZERO emit code change beyond extending
-  ;; $wasi_signature_for. No imperative subsystem, no per-op
-  ;; emit-call sequence — the cursor's Row aspect at the program
-  ;; root drives import projection. emit IS a graph projection.
+  ;; Per the Cursor Projection Pattern above: emit walks the lowered
+  ;; program collecting LPerform op_names that target "wasi_<op>"
+  ;; symbols; projects ONE import per used op. Adding a new WASI op
+  ;; = ZERO emit code change beyond extending $wasi_signature_for.
+  ;; The cursor's Row aspect at the program root drives import
+  ;; projection. emit IS a graph projection, not an imperative
+  ;; subsystem.
   ;;
   ;; Drift refused: 1 (no vtable; structural tag-int dispatch in
   ;; cwo_walk); 7 (no parallel arrays — used set is one Buffer<String>);
@@ -27041,13 +27072,25 @@
   (func $collect_used_wasi_ops (param $lowexprs i32) (result i32)
     (local $buf i32)
     (local.set $buf (call $buf_make (i32.const 8)))
-    ;; Inject runtime-emitted ops first — _start always calls proc_exit.
-    ;; Future _start projections (Hβ.first-light.start-section-graph-
-    ;; projected) drop this line; the cursor walk picks them up
-    ;; automatically.
-    (call $buf_push (local.get $buf) (i32.const 5104))   ;; "wasi_proc_exit"
+    ;; The cursor walk over user code (graph-projected).
     (local.set $buf (call $cwo_walk_list (local.get $buf) (local.get $lowexprs)))
+    ;; The substrate boundary: ops the seed's emit fabricates outside
+    ;; the graph (currently $emit_start_section_static's hard-coded
+    ;; proc_exit call). Each runtime-emitted op gets one line below.
+    ;; As $emit_start_section_static migrates into a graph projection
+    ;; (Hβ.first-light.start-section-graph-projected — peer follow-up),
+    ;; the runtime-injection set shrinks to empty; the cursor walk
+    ;; alone projects the import set.
+    (local.set $buf (call $inject_runtime_emitted_wasi_ops (local.get $buf)))
     (call $buf_freeze (local.get $buf)))
+
+  ;; $inject_runtime_emitted_wasi_ops — explicit residue. Each line is
+  ;; one WASI op the seed's emit emits outside the graph; the function
+  ;; shrinks to empty as substrate migrates entries into the graph.
+  ;; Today: just proc_exit (called by _start's hand-rolled epilogue).
+  (func $inject_runtime_emitted_wasi_ops (param $buf i32) (result i32)
+    (call $buf_push_unique (local.get $buf) (i32.const 5104))   ;; wasi_proc_exit
+    (local.get $buf))
 
   ;; $cwo_walk_list — iterate top-level lowexprs; threads Buffer<String>.
   (func $cwo_walk_list (param $buf i32) (param $lowexprs i32) (result i32)
@@ -27317,8 +27360,11 @@
   ;; each as a (func $name ...) WAT definition. Also collects fn names
   ;; for the funcref table + index globals.
 
-  ;; $collect_fn_names — walk LowExpr list, collect LMakeClosure fn names.
-  ;; Returns a flat list of name ptrs. Per wasm.mn:848-928 emit_fns_expr.
+  ;; $collect_fn_names — Cursor Projection Pattern instance (Handler
+  ;; aspect). Walks LowExpr list, collects LMakeClosure /
+  ;; LMakeContinuation / LDeclareFn fn names. Returns a flat list of
+  ;; name ptrs for the funcref table + $name_idx globals.
+  ;;
   ;; Per Hβ.emit.nested-fn-idx-globals: recurses into common LowExpr
   ;; containers (LLet, LBlock, LIf, LCall, LBinOp, LMakeVariant,
   ;; LMakeList, LMakeTuple, LReturn) to collect EVERY LMakeClosure's
@@ -27326,11 +27372,10 @@
   ;; recursion already emits each nested fn body; this collector
   ;; mirrors that walk so the funcref table + $name_idx globals stay
   ;; consistent with emit_functions's actual emissions.
-  ;; $collect_fn_names — entry: builds a Buffer<String>, walks the
-  ;; LowExpr tree appending fn names via $buf_push, freezes to a clean
-  ;; List<String> on return. Per Hβ.runtime.buffer-substrate — the
-  ;; transient name-collection IS the use-case Buffer<A> exists for.
-  ;; Pre-substrate this used a List as a buffer (offset-0-as-both-
+  ;;
+  ;; Buffer<String> per Hβ.runtime.buffer-substrate — the transient
+  ;; name-collection IS the use-case Buffer<A> exists for. Pre-
+  ;; substrate this used a List as a buffer (offset-0-as-both-
   ;; count-and-capacity), causing O(N²) reallocations at wheel scale.
   (func $collect_fn_names (param $lowexprs i32) (result i32)
     (local $buf i32)
@@ -27477,12 +27522,15 @@
     ;; All other tags: no LowExpr children to recurse into.
     (local.get $buf))
 
-  ;; $collect_top_level_fn_names — top-level LLet-wrapped closures only.
-  ;; Inline closures still allocate at their expression site; module-level
-  ;; function declarations get static closure records.
+  ;; $collect_top_level_fn_names — Cursor Projection Pattern instance
+  ;; (Handler aspect at module-root). Top-level LLet-wrapped closures
+  ;; only; inline closures still allocate at their expression site,
+  ;; module-level function declarations get static closure records.
   ;;
-  ;; Buffer<String> per Hβ.runtime.buffer-substrate — same pattern as
-  ;; $collect_fn_names; freezes to clean List<String> on return.
+  ;; Buffer<String> per Hβ.runtime.buffer-substrate; freezes to clean
+  ;; List<String> on return. Same pattern as $collect_fn_names with
+  ;; a more restrictive predicate (LLet at top level wrapping
+  ;; LMakeClosure / LMakeContinuation; never recurse into bodies).
   (func $collect_top_level_fn_names (param $lowexprs i32) (result i32)
     (local $buf i32)
     (local $i i32) (local $n i32) (local $expr i32) (local $name i32)

@@ -311,14 +311,36 @@ byte. Empirically-real residue per `Hβ-first-light-empirical.md` §2.3
   thunks capturing shared input by handle; spawn/join uniform across
   both parallel verbs. `parallel_compose` now intercepts BOTH `><`
   and `<|`. SUBSTRATE.md §"<| vs ><" symmetry made physical.
-- ✗ `Hβ.first-light.tuple-tmp-fn-local-decl` — NEXT cursor. `let (a,
-  b) = pair()` emits `(local.set $tuple_tmp)` but `$tuple_tmp` not
-  in fn-local preamble; wat2wasm rejects. Same bug-class as
+- ✓ `Hβ.first-light.handle-expr-with-clause-substrate` — parser
+  `with EXPR` for handle-expr install (commit `190b4b1` 2026-05-07).
+  Closes form-3 named follow-up; src/infer.mn cross-prefixed names
+  281→1; chain-link-5 protocol crystallized (parse_is_eager_graph_
+  projection.md). Parser eager-form-commitment recognized as drift 9
+  in parser-state clothes; two-arm structural OK, multi-arm form-
+  classification = drift.
+- ✗ `Hβ.first-light.parser-fabrication-substrate` — NEXT cursor.
+  `bootstrap/src/parser_infra.wat:296` `$ident_at_p` returns fabricated
+  `$str_alloc(0)` empty-string on non-TIdent (sister `$int_at_p`
+  at line 306 returns `i32.const 0` correctly). 16 callers consume
+  the lie; downstream produces 14k empty-named globals in
+  src/lower.mn seed-compile (5.9MB instead of ~80KB). Substrate fix:
+  return 0 on non-TIdent + caller audit for productive-under-error
+  sentinel-AST emission (see `protocol_parser_fabrication_substrate.md`).
+- ✗ `Hβ.first-light.tuple-tmp-fn-local-decl` — secondary residue.
+  `let (a, b) = pair()` emits `(local.set $tuple_tmp)` but `$tuple_tmp`
+  not in fn-local preamble; wat2wasm rejects. Same bug-class as
   match-arm-pat-binding-local-decl (closed); same fix shape (extend
   emit's locals walk).
 - △ `refinement-type-self-binding` — graceful degrade; predicate
   drops at parse via where-clause-skip; enforcement is post-L2
   (peer handle `verify_smt-witness-L2`).
+- △ Five-verb exhaustive use in wheel — substrate gap. Across the
+  wheel: `|>` 600, `~>` 190, `<~` 51, `><` 39, `<|` 36 uses. src/cursor.mn
+  (Phase μ thesis file) uses ZERO of `<|`/`><`/`<~` and ONE `~>`.
+  `<|` (multi-shot fanout) and `><` (parallel) are barely realized.
+  Substrate work: rewrite cursor projection + IC fixpoint to compose
+  all five exhaustively per `docs/specs/simulations/Hμ-cursor-five-
+  verb-exhaustive.md` (named follow-up, post-L1).
 
 After L1 closure, Tier 3 unlocks Hμ.cursor.seed + every Phase μ peer
 handle's `.seed` variant automatically (per Hβ-bootstrap.md §12.5 +

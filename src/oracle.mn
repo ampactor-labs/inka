@@ -423,69 +423,6 @@ handler speculate_handler {
   graph_rollback(cp)      => resume(perform graph_rollback_to(cp))
 }
 
-// ─── Preserved sequential substrate (replaced above; kept as residue) ─
-//
-// The pre-five-verb form for explore_positions / try_each_candidate_loop
-// was sequential `for i in 0..n`-style iteration. The replacement above
-// uses the topology directly: <| (divergence) + >< (parallel) + |> +
-// ~> + <~. The shape on the page is the computation graph — what
-// kernel primitive #3 (Five verbs) MEANS at this site.
-
-/// explore_positions — fold over positions; per-position, enumerate
-/// candidates and try each. Tail-recursive accumulator; flat-buffer-
-/// plus-counter substrate (Ω.3 — list_extend_to + list_set + counter +
-/// slice; the substrate idiom that avoids the appended-bracket-x
-/// O(N²) loop pattern).
-
-fn explore_positions(positions, i, n, env, module_path, buf, count) with Verify = {
-  if i >= n { count }
-  else {
-    let handle = list_index(positions, i)
-    let candidates = enumerate_candidates_at(handle, env)
-    let new_count  = try_each_candidate_to_queue(handle, candidates, env, module_path, buf, count)
-    explore_positions(positions, i + 1, n, env, module_path, buf, new_count)
-  }
-}
-
-/// try_each_candidate_to_queue — for each candidate at a position,
-/// checkpoint → tentative apply → verify → rollback → on success,
-/// append a QueueItem to the buffer with computed priority. Extends
-/// src/mentl.mn try_each_annotation_loop to write to the queue
-/// instead of returning a tuple list.
-
-fn try_each_candidate_to_queue(handle, candidates, env, module_path, buf, count) with Verify = {
-  let n = candidates.len
-  try_each_candidate_loop(handle, candidates, 0, n, env, module_path, buf, count)
-}
-
-fn try_each_candidate_loop(handle, candidates, i, n, env, module_path, buf, count) with Verify = {
-  if i >= n { count }
-  else {
-    let cand    = list_index(candidates, i)
-    let cp      = perform graph_push_checkpoint()
-    let _       = apply_candidate_tentatively(handle, cand, env)
-    let proven  = verify_after_apply(handle)
-    let _       = perform graph_rollback(cp)
-    if proven {
-      let priority = compute_priority(handle, cand, env, module_path)
-      let item     = QueueItem({
-        position:    handle,
-        candidate:   cand,
-        capability:  unlock_capability(cand),
-        impact:      priority,
-        reason:      OracleVerified(handle, cand),
-        module_path: module_path
-      })
-      let extended = list_extend_to(buf, count + 1)
-      let written  = list_set(extended, count, item)
-      try_each_candidate_loop(handle, candidates, i + 1, n, env, module_path, written, count + 1)
-    }
-    else {
-      try_each_candidate_loop(handle, candidates, i + 1, n, env, module_path, buf, count)
-    }
-  }
-}
-
 // ─── silence_predicate (revised per Q-Morgan-B) ──────────────────────
 
 /// silence_predicate — Mentl is silent ONLY when the project queue is

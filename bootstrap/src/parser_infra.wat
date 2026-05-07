@@ -326,7 +326,19 @@
       (then (i32.add (local.get $pos) (i32.const 1)))
       (else (local.get $pos))))
 
-  ;; ident_at: extract string from TIdent at pos
+  ;; ident_at_p: extract string from TIdent at pos. Returns 0 (null
+  ;; pointer) when token at pos is NOT a TIdent — productive-under-
+  ;; error contract per protocol_parser_fabrication_substrate.md +
+  ;; chain-link-5 discipline. Sister $int_at_p at line 340 returns
+  ;; i32.const 0 on non-TInt — same contract.
+  ;;
+  ;; CALLERS MUST handle the null return — either by detecting and
+  ;; producing a sentinel-AST with attached Reason chain, by skipping
+  ;; the construct, or by explicit-fabrication band-aid (with named
+  ;; follow-up). Silent fabrication of a load-bearing name was the
+  ;; pre-fix drift (drift "any fabricated value over a load-bearing
+  ;; ADT" per CLAUDE.md red-flag table) producing 14k empty-named
+  ;; globals on src/lower.mn seed-compile (5.9 MB instead of ~80 KB).
   (func $ident_at_p (param $tokens i32) (param $pos i32) (result i32)
     (local $k i32)
     (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
@@ -334,7 +346,7 @@
           (i32.eqz (call $is_sentinel (local.get $k)))
           (i32.eq (call $tag_of (local.get $k)) (i32.const 25)))
       (then (i32.load offset=4 (local.get $k)))
-      (else (call $str_alloc (i32.const 0)))))
+      (else (i32.const 0))))
 
   ;; int_payload: extract int from TInt at pos
   (func $int_at_p (param $tokens i32) (param $pos i32) (result i32)

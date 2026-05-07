@@ -177,9 +177,12 @@
               (call $at (local.get $tokens) (local.get $p) (i32.const 69))  ;; TEof
               (call $at (local.get $tokens) (local.get $p) (i32.const 68))) ;; TNewline
           (then (br $done)))
-        ;; Check it's actually an ident
+        ;; Check it's actually an ident — null return per
+        ;; protocol_parser_fabrication_substrate.md means "no TIdent
+        ;; at this position." Skip the variant; the loop terminates.
+        ;; Substrate-honest recovery (no fabrication needed at this site).
         (local.set $vname (call $ident_at_p (local.get $tokens) (local.get $p)))
-        (if (i32.eqz (call $str_len (local.get $vname)))
+        (if (i32.eqz (local.get $vname))
           (then (br $done)))
         (local.set $p2 (i32.add (local.get $p) (i32.const 1)))
         ;; Check for (fields)
@@ -292,9 +295,12 @@
           (then
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $done)))
-        ;; Op name
+        ;; Op name — null return per protocol_parser_fabrication_substrate.md
+        ;; means "no TIdent at this position." Advance past the bad
+        ;; token + skip separators, continue loop. Substrate-honest
+        ;; recovery (no fabrication needed).
         (local.set $op_name (call $ident_at_p (local.get $tokens) (local.get $p)))
-        (if (i32.eqz (call $str_len (local.get $op_name)))
+        (if (i32.eqz (local.get $op_name))
           (then
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (local.set $p (call $skip_sep (local.get $tokens) (local.get $p)))

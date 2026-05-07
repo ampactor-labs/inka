@@ -124,6 +124,7 @@ past ~128k tokens risks midsection blindness on the response
 | Touching `query` / driver / cache | `docs/specs/08-query.md` + SUBSTRATE.md §VII |
 | Working on Mentl / oracle / gradient | `docs/specs/09-mentl.md` + `protocol_oracle_is_ic.md` + `src/oracle.mn` + SUBSTRATE.md §VI |
 | Editing `cursor.mn` / Cursor handler / Mentl projection | `src/cursor.mn` + `docs/specs/simulations/Hμ-cursor.md` + SUBSTRATE.md §VI "Cursor: The Gradient's Global Argmax" + `protocol_cursor_is_argmax.md` |
+| Editing seed-side emit / lower / infer / verify substrate | `protocol_emit_is_graph_projection.md` + `protocol_cursor_is_the_substrate.md` (chain: oracle-is-IC → cursor-is-argmax → emit-is-graph-projection → cursor-IS-the-substrate; every subsystem is the cursor in a different mode; "imperative subsystem" is the named drift) |
 | Drawing topology / pipe operators | `docs/specs/10-pipes.md` + SUBSTRATE.md §II |
 | Touching `clock` / time effects | `docs/specs/11-clock.md` |
 | Starting a new γ-cascade handle | `/compact` first, then `docs/specs/simulations/{handle}.md` |
@@ -150,6 +151,7 @@ Omitted primitives = under-loaded register.
 | "It's heavy / a representation change" | — | Surface the substrate decision and decide it |
 | "Mode 0 / 1 / 2" / "flag for shape" | Drift 8 | Convert to ADT |
 | "Vtable" / "dispatch table" any layer | Drift 1 | The word never appears in correct Mentl dispatch |
+| "I'll add a per-X line" (per-op emit, per-tag handler, per-field projection) | `protocol_cursor_is_the_substrate.md` | "Imperative subsystem" never appears in correct Mentl substrate. Convert to graph projection: walk + predicate + project once. The extension point is the dispatch table, not the projector. |
 | `_ => <fabricated value>` over a load-bearing ADT | — | Convert to explicit enumeration. Safe `_`: `()`, `0`, identity-preserve, `type_mismatch(...)`. Dangerous: any fabricated value (`_ => Forall([], TVar(handle))`, `_ => "Pure"`) |
 | "Per the chunk-header named follow-up, X is a stub" | Anchor 7 | Empirically verify before authoring. Named follow-ups can be stale (substrate landed, comment unchanged). Run a 5-line micro-test through the seed; trust evidence over comment. See `Hβ-first-light-empirical.md`. |
 | "Cascade decomposes into N speculative handles" | Anchor 7 + `protocol_walkthrough_pre_audit.md` | Verification-pass FIRST: ~5-min micro-test per handle distinguishes closed-vs-real before walkthrough authoring. 12 walkthroughs against stale state costs more than 1 hour of empirical pre-audit. |

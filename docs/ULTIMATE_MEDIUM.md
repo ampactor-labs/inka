@@ -598,12 +598,17 @@ highest-leverage next step; the Verify tentacle shows pending
 obligations. Author's `///` and Mentl's substrate-derived voice
 both speak — two voices, no editorial third.
 
-**Mark, don't commit.** Every keystroke lives in the Reason chain.
-`Reason::Checkpoint("compressor working")` marks a coherent moment.
-Branches are forks of the chain. Merges are
-`Reason::ApplyChainFrom(other)` replaying mutations against current
-state. Conflicts surface as kernel-arbitrated refinement / ownership
-/ row violations.
+**Commit with causal context.** Every keystroke lives in the Reason
+chain *within a session*. When you `git commit`, the `git_handler`
+walks the Reason DAG and synthesizes a starting-point commit message
+that captures the substrate's own causal record (what changed, why,
+what capabilities unlocked). You edit the message; git stores it as
+durable history; Mentl reads it back as Reasons on load. **Git does
+what git does (durable versioned history, branches, merges, blame,
+distributed sync, ecosystem integration); Mentl adds the causal
+layer on top.** Two layers, two questions: "why does this binding
+hold its current shape?" (Reason chain, in session) vs "what
+changed across history?" (git).
 
 **Co-cursor, don't pair-program.** Two developers on the project
 see two cursors. The graph mutates atomically. Each cursor's
@@ -711,29 +716,35 @@ effects.
 This is both a SUBSTRATE claim AND the marketing thesis. Surface
 in DESIGN.md and README as both.
 
-### 8.6 Collaboration is what `graph_handler` swap delivers
+### 8.6 Collaboration is what `graph_handler` swap delivers (scoped)
 
-When two transports `~>` over the same shared `graph_handler`,
-every collaboration tool the industry has built — git, code
-review, pair programming, blame, time-travel debugging,
-refactoring across teams, RBAC — falls out as a derived
-consequence:
+When two transports `~>` over the same shared `graph_handler`, four
+properties emerge as substrate consequences:
 
-| Industry tool | Reduces to |
+| Property | Substrate consequence |
 |---|---|
-| Git commit / branch / merge | Reason chain walk; branches are forks; merges replay one chain's Reasons against another |
-| Code review | Reviewer's cursor + `Reason::ReviewComment` projected at handles |
-| Pair programming | Two cursors, one graph_handler, atomic mutations |
-| Blame | `Reason::AttributedTo(user, cursor_pos, time)` walked back |
-| Time-travel debugging | Walk Reason chain to any point; replay handlers up to that point |
-| Refactoring across teams | Mutate at one site; Reason chains link to dependents; downstream cursors re-rank |
-| RBAC / permissions | Effect row over (user × graph_region) — `+Mutate(region)` per user |
+| Real-time co-edit | Two transports → one `graph_handler`; atomic mutations; verify-arbitrated concurrent writes |
+| Cursor presence | Each cursor IS a graph node (per Hμ.cursor); other users see them by reading the graph |
+| Per-region RBAC | Effect row `+Mutate(region) - Read(other_region)` per user; row subsumption proves enforcement at handler install |
+| In-session causal record | Reason chain entries (`Reason::AuthoredBy(user, cursor_pos, time)`) within session; Why tentacle walks them |
 
-**Multi-user collaboration is not a feature. It is what the
-substrate delivers when shared.** Phase Z (post-μ) opens with
+**Mentl does NOT replace git.** Git handles durable versioned
+history, branches, merges, blame, distributed sync, signed commits,
+ecosystem integration with non-Mentl tools. Building a Mentl-native
+VCS would duplicate git with no compelling differentiator. Mentl
+integrates with git via a thin `git_handler` bridge that synthesizes
+commit messages from the Reason DAG on save and reads commits back
+as Reasons on load. **`mentl blame` extends `git blame` with WHY**
+(the Reason loaded from commit message) — git tells you who and
+when; Mentl tells you why.
+
+**Multi-user real-time collaboration is not a feature; it is what
+the substrate delivers when shared.** Phase Z (post-μ) opens with
 `Hμ.collab.shared-graph-handler`; walkthrough at
-`docs/specs/simulations/COLLAB-shared-graph.md` (named-but-pending
-per the cohesion sweep, task #75).
+`docs/specs/simulations/COLLAB-shared-graph.md` (revised 2026-05-07
+to scope to in-session + causal + RBAC + presence + git-bridge).
+Five peer handles: shared-graph-handler, cursor-presence,
+permission-row, transport-bridge, git-bridge.
 
 ### 8.7 CLI canonical (per EH-entry-handlers.md)
 

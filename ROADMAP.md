@@ -459,54 +459,58 @@ with !Mutate`). Zero invented kernel substrate.
 ---
 
 
-## Phase Z — Collaborative substrate (post-μ)
+## Phase Z — Collaborative substrate (post-μ; scoped: real-time + causal + RBAC + presence + git-bridge)
 
 **Opens after Phase μ's transport handles compose against a shared
-`graph_handler`.** Multi-cursor on shared graph delivers
-collaboration as substrate consequence, not as a feature.
-Crystallized in `protocol_developer_experience_vision.md`
-§"Collab-as-substrate" + `docs/ULTIMATE_MEDIUM.md` §8.6.
+`graph_handler`.** Multi-cursor on shared graph delivers four
+properties as substrate consequences: real-time co-edit, cursor
+presence, per-region RBAC, in-session causal record. Crystallized
+in `protocol_developer_experience_vision.md`
+§"Collab-as-substrate" + `docs/ULTIMATE_MEDIUM.md` §8.6 +
+`docs/SUBSTRATE.md` §X.1 (theorem, scoped 2026-05-07).
 
-Every collaboration tool the industry has built dissolves into a
-projection: git (Reason chain walk; branches are forks; merges
-replay one chain's Reasons against another), code review
-(reviewer's cursor + `Reason::ReviewComment`), pair programming
-(two cursors, one graph_handler, atomic mutations), blame
-(`Reason::AttributedTo(user, cursor_pos, time)`), time-travel
-debugging (walk Reason chain to any point; replay handlers up
-to that point), refactoring across teams (mutate one site;
-Reason chains link to dependents; downstream cursors re-rank),
-RBAC (effect row over (user × graph_region) — `+Mutate(region)`
-per user). **None are features; all are kernel-derived.**
+**Mentl does NOT replace git.** Git handles durable versioned
+history, branches, merges, blame, distributed sync, signed commits,
+ecosystem integration. Every dev uses git; every IDE integrates
+with it; building a Mentl-native VCS would duplicate it with no
+compelling differentiator. **Mentl integrates with git** via a thin
+`git_handler` bridge that synthesizes commit messages from the
+Reason DAG and reads commits back as Reasons on load. Two layers,
+two questions: "why does this binding hold its current shape?"
+(Reason chain, in session) vs "what changed across history?" (git).
+
+What dissolves: the in-session real-time category — Live Share /
+Replit collab / VS Code Live Share / Tuple presence / per-path
+branch protection / in-editor pair chat overlays. What stays:
+git, GitHub MR review, time-travel debuggers (rr / Pernosco),
+issue trackers, codemods.
 
 ### Hμ.collab.shared-graph-handler — opening handle
 
 Multi-transport `~>` over shared `graph_handler`. Two cursors,
-one graph. Mutations atomic. Reason chain CRDT (append-only;
-conflict-free by construction). Conflicts surface as
-kernel-arbitrated refinement / ownership / row violations. The
-kernel was always going to do this; it took until Phase μ to
-see it.
+one graph. Mutations atomic. Verify-on-write arbitrates concurrent
+mutations (compatible writes both apply; incompatible surfaces as
+V_Pending for human resolution). **No persistent mutation log; no
+third-party CRDT library; no Mentl-native VCS.**
 
-Walkthrough planned at `docs/specs/simulations/COLLAB-shared-graph.md`
-(named-but-pending per the cohesion sweep).
+Walkthrough at `docs/specs/simulations/COLLAB-shared-graph.md`
+(revised 2026-05-07 to scope away from git-replacement).
 
-### Phase Z peer handles (named to prevent drift 9 — deferred-by-omission)
+### Phase Z peer handles (five; named to prevent drift 9)
 
 | Handle | Composes on | Unlocks |
 |---|---|---|
-| **Hμ.collab.shared-graph-handler** | Phase μ + `graph_handler` swap | Multi-cursor on shared graph; the substrate primitive for everything else in Phase Z |
-| **Hμ.collab.reason-crdt-replay** | Hμ.collab.shared-graph-handler | Branch / fork / merge as Reason chain replay; conflicts as kernel diagnostics; git as compatibility transport |
-| **Hμ.collab.cursor-presence** | Hμ.collab.shared-graph-handler + Hμ.cursor | Each user's cursor IS a graph node; presence is automatic projection (no separate "presence service") |
-| **Hμ.collab.permission-row** | Hμ.collab.shared-graph-handler + Boolean effect row | Per-user `+Mutate(region) - Read(other_region)` permission discipline; RBAC by row algebra |
+| **Hμ.collab.shared-graph-handler** | Phase μ + `graph_handler` swap | Multi-cursor on shared graph; the substrate primitive |
+| **Hμ.collab.cursor-presence** | shared-graph-handler + Hμ.cursor | Each user's cursor IS a graph node; presence is automatic projection (replaces Tuple / Pop / Live Share presence services) |
+| **Hμ.collab.permission-row** | shared-graph-handler + Boolean effect row | Per-user `+Mutate(region) - Read(other_region)` discipline; RBAC by row algebra (replaces per-path branch protection) |
 | **Hμ.collab.transport-bridge** | Hμ.cursor.transport (Phase μ) | WebSocket / WebRTC / shared-FS transports composing on shared `graph_handler`; the wire format IS Pack/Unpack on graph mutations |
-| **Hμ.collab.federated-replication** | Hμ.collab.reason-crdt-replay + Pure-over-broader-input | Replicated `graph_handler`s across nodes; any node can replay from any Reason-chain prefix; trust = signed Reason entries |
+| **Hμ.collab.git-bridge** | shared-graph-handler + WASI shell-out | Synthesizes commit messages from Reason DAG on save; reads commits back as Reasons on load; `mentl blame` extends `git blame` with WHY |
 
-After Phase Z, the medium reaches solo + team + open-source +
-remote work in one substrate. Industry tools (git, Slack threads
-on PRs, Live Share, Pernosco, Replit collab, GitLab MR review)
-dissolve into substrate projections. **Phase Z is when the
-medium reaches the ecosystem.**
+After Phase Z, real-time co-edit / cursor presence / per-region
+RBAC / in-session causal record run on substrate; durable history
++ branches + merges + blame + distributed sync stay git's domain.
+**The medium reaches teams via shared graph; git keeps doing
+what git does.**
 
 ---
 

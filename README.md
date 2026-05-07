@@ -93,8 +93,11 @@ with ONE medium that speaks each domain natively.
 - **Embedded / kernel-safe** — `with !Alloc + !IO` proves
   zero-allocation, no-syscall paths transitively.
 - **Distributed / cloud** — multi-cursor on shared `graph_handler`
-  delivers collab + git + code review + RBAC structurally
-  (Phase Z, post-μ).
+  delivers real-time co-edit + cursor presence + per-region RBAC
+  + in-session causal record as substrate consequences (Phase Z,
+  post-μ); integrates with git for durable versioned history via
+  a thin `git_handler` bridge. Mentl complements git, doesn't
+  replace it.
 - **Documentation, build, test, deploy** — handler chains, not
   separate tools. `mentl doc` reads the same graph as `mentl
   compile`; tests live in `///` blocks; deploy is a `~> production`

@@ -47,7 +47,7 @@ type QueryResult
 /// `query_default`. LSP methods (Arc F.2) are `Question` variants
 /// over this same effect — no separate LSP substrate.
 effect Query {
-  ask(Question) -> QueryResult              @resume=OneShot
+  ask(Question) -> QueryResult
 }
 
 /// Read-only projection over the live graph and env. No handler-local

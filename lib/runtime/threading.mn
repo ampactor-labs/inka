@@ -60,10 +60,10 @@ type Handle = Handle(Int)
 /// a different topology (race per HC2), not Thread.
 
 effect Thread {
-  spawn(task: () -> A) -> Handle              @resume=OneShot
-  join(handle: Handle) -> A                  @resume=OneShot
-  current_id() -> Int                         @resume=OneShot
-  num_cores() -> Int                          @resume=OneShot
+  spawn(task: () -> A) -> Handle
+  join(handle: Handle) -> A
+  current_id() -> Int
+  num_cores() -> Int
 }
 
 /// SharedMemory — atomics + wait/notify. Separate effect so
@@ -75,12 +75,12 @@ effect Thread {
 /// sequential fallback when SAB unavailable in browser context.
 
 effect SharedMemory {
-  atomic_load_i32(addr: Int) -> Int                          @resume=OneShot
-  atomic_store_i32(addr: Int, val: Int) -> ()                @resume=OneShot
-  atomic_rmw(addr: Int, op: RmwOp, val: Int) -> Int          @resume=OneShot
-  wait_i32(addr: Int, expected: Int, timeout_ns: Int) -> WaitResult @resume=OneShot
-  notify(addr: Int, count: Int) -> Int                       @resume=OneShot
-  fence() -> ()                                              @resume=OneShot
+  atomic_load_i32(addr: Int) -> Int
+  atomic_store_i32(addr: Int, val: Int) -> ()
+  atomic_rmw(addr: Int, op: RmwOp, val: Int) -> Int
+  wait_i32(addr: Int, expected: Int, timeout_ns: Int) -> WaitResult
+  notify(addr: Int, count: Int) -> Int
+  fence() -> ()
 }
 
 /// RmwOp — read-modify-write opcodes per WASM atomic instructions.
@@ -162,13 +162,13 @@ handler sequential_compose with results = [] {
 // at module-init.
 
 effect WasiThreads {
-  wasi_thread_spawn(Int) -> Int                            @resume=OneShot
-  thread_record_alloc(Int) -> Int                          @resume=OneShot
-  thread_record_pack_task(Int, Int) -> ()                  @resume=OneShot
-  thread_record_done_addr(Int) -> Int                      @resume=OneShot
-  thread_record_result_addr(Int) -> Int                    @resume=OneShot
-  thread_record_self_id() -> Int                           @resume=OneShot
-  wasi_num_cores() -> Int                                  @resume=OneShot
+  wasi_thread_spawn(Int) -> Int
+  thread_record_alloc(Int) -> Int
+  thread_record_pack_task(Int, Int) -> ()
+  thread_record_done_addr(Int) -> Int
+  thread_record_result_addr(Int) -> Int
+  thread_record_self_id() -> Int
+  wasi_num_cores() -> Int
 }
 
 fn ffi_spawn(ref task) with WasiThreads = {

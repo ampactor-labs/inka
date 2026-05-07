@@ -28,24 +28,24 @@ type Duration = Duration(Int)      // nanoseconds
 // The four peer effects — Clock, Tick, Sample, Deadline.
 
 effect Clock {
-  clock_now() -> Instant                    @resume=OneShot
-  clock_sleep(Duration) -> ()               @resume=OneShot
+  clock_now() -> Instant
+  clock_sleep(Duration) -> ()
 }
 
 effect Tick {
-  tick() -> ()                              @resume=OneShot
-  current_tick() -> Int                     @resume=OneShot
+  tick() -> ()
+  current_tick() -> Int
 }
 
 effect Sample {
-  sample_rate() -> Int                      @resume=OneShot
-  advance_sample() -> ()                    @resume=OneShot
-  current_sample() -> Int                   @resume=OneShot
+  sample_rate() -> Int
+  advance_sample() -> ()
+  current_sample() -> Int
 }
 
 effect Deadline {
-  deadline() -> Instant                     @resume=OneShot
-  remaining() -> Duration                   @resume=OneShot
+  deadline() -> Instant
+  remaining() -> Duration
 }
 
 /// IterativeContext — `<~` feedback checker. `<~` in the PipeExpr ADT
@@ -53,7 +53,7 @@ effect Deadline {
 /// check_iterative_context(); returns Some(tag) if any is installed, None
 /// otherwise. The handler reports which time-effect is in scope.
 effect IterativeContext {
-  check_iterative_context() -> Option       @resume=OneShot
+  check_iterative_context() -> Option
 }
 
 /// no_iterative_ctx is the identity-element handler for IterativeContext —
@@ -81,7 +81,7 @@ handler sample_iterative_ctx {
 // effects are mapped at emit time to WASI imports; pure composition here.
 
 effect HostClock {
-  host_clock_ns() -> Int                    @resume=OneShot
+  host_clock_ns() -> Int
 }
 
 handler clock_real {

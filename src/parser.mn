@@ -584,7 +584,9 @@ fn parse_variant_fields(ref tokens, pos) = {
   }
 }
 
-/// Parse `effect X { op(args) -> ret @resume=Disc }`.
+/// Parse `effect X { op(args) -> ret }`. Resume discipline is
+/// INFERRED from each handler arm body (no annotation in the
+/// effect declaration); see types.mn:ResumeDiscipline.
 fn parse_effect_decl(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)

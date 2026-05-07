@@ -342,14 +342,14 @@ effect Interact {
   // ─── Project / file ops (8) ─────────────────────────────────────
   // Text-files-first is a hard constraint. These ops are first-class.
 
-  project_root()                 -> Path                       @resume=OneShot
-  tree_list(Path)                -> List                       @resume=OneShot   // List<TreeEntry>
-  open_file(Path)                -> FileHandle                 @resume=OneShot
-  save_file(FileHandle)          -> ()                         @resume=OneShot
-  create_file(Path, String)      -> FileHandle                 @resume=OneShot
-  rename_path(Path, Path)        -> ()                         @resume=OneShot
-  delete_path(Path)              -> ()                         @resume=OneShot
-  file_text(FileHandle)          -> String                     @resume=OneShot
+  project_root()                 -> Path
+  tree_list(Path)                -> List   // List<TreeEntry>
+  open_file(Path)                -> FileHandle
+  save_file(FileHandle)          -> ()
+  create_file(Path, String)      -> FileHandle
+  rename_path(Path, Path)        -> ()
+  delete_path(Path)              -> ()
+  file_text(FileHandle)          -> String
 
   // ─── Edit op (1) ────────────────────────────────────────────────
   // An edit is a Patch against a FileHandle. The handler re-projects
@@ -357,43 +357,43 @@ effect Interact {
   // Graph is live; the edit either succeeds (graph updates) or is
   // rejected with a diagnostic.
 
-  edit(FileHandle, Patch)        -> EditOutcome                @resume=OneShot
+  edit(FileHandle, Patch)        -> EditOutcome
 
   // ─── Attention ops (2) ──────────────────────────────────────────
   // Cursor-of-attention is (Handle, Reason). focus sets it; cursor
   // reads it.
 
-  focus(CursorTarget)            -> ()                         @resume=OneShot
-  cursor()                       -> Cursor                     @resume=OneShot
+  focus(CursorTarget)            -> ()
+  cursor()                       -> Cursor
 
   // ─── Mentl voice ops (3) ────────────────────────────────────────
   // ask is user-initiated (Question); propose is Mentl-initiated
   // at a target (returns the survivor candidate as VoiceLine);
   // speak surfaces a VoiceLine the surface should render.
 
-  ask(Question)                  -> Answer                     @resume=OneShot
-  propose(CursorTarget)          -> VoiceLine                  @resume=OneShot
-  speak(VoiceLine)               -> ()                         @resume=OneShot
+  ask(Question)                  -> Answer
+  propose(CursorTarget)          -> VoiceLine
+  speak(VoiceLine)               -> ()
 
   // ─── Run ops (4) ────────────────────────────────────────────────
   // Batch-shape operations. Terminal IDE exposes as commands; CLI
   // invokes directly. `run_audit` projects docs/ / PLAN / drift into
   // one report — F.1/F.2/F.3 substrate dissolution lives here.
 
-  run_compile(FileHandle)        -> CompileOutcome             @resume=OneShot
-  run_check(FileHandle)          -> CheckOutcome               @resume=OneShot
-  run_audit(FileHandle)          -> AuditReport                @resume=OneShot
-  run_query(Question)            -> Answer                     @resume=OneShot
+  run_compile(FileHandle)        -> CompileOutcome
+  run_check(FileHandle)          -> CheckOutcome
+  run_audit(FileHandle)          -> AuditReport
+  run_query(Question)            -> Answer
 
   // ─── Session ops (4) ────────────────────────────────────────────
   // Intent shapes the silence predicate and Trace tentacle's weights.
   // History feeds observation_new_since_last_turn. cancel_pending
   // rolls back a tentative application.
 
-  declare_intent(Intent)         -> ()                         @resume=OneShot
-  retract_intent(IntentId)       -> ()                         @resume=OneShot
-  history(Int)                   -> List                       @resume=OneShot   // List<TurnRecord>
-  cancel_pending()               -> ()                         @resume=OneShot
+  declare_intent(Intent)         -> ()
+  retract_intent(IntentId)       -> ()
+  history(Int)                   -> List   // List<TurnRecord>
+  cancel_pending()               -> ()
 }
 
 /// Mentl does NOT fill space to fill space. A VoiceLine surfaces only
@@ -1128,7 +1128,7 @@ fn unimplemented_arm(op_name) with Abort = {
 //
 // Per the eight interrogations applied to MV.2.e.Q (CLAUDE.md anchor):
 //   Graph?   — cursor handle indexes graph; reads via graph_snapshot
-//   Handler? — Interact's @resume=OneShot satisfied; one resume per arm
+//   Handler? — Interact's satisfied; one resume per arm
 //   Verb?    — flat let/match; pipe doesn't draw better topology
 //   Row?     — composed at arm site (Pure / GraphRead / OracleQuery)
 //   Owner?   — Cursor + VoiceLine own-to-handler; no escape
@@ -1407,7 +1407,7 @@ fn intents_without(intents, id) with Pure = {
 //                     intent gating); empty until Session ops land
 //   next_intent_id  — opaque IntentId minter; same disposition
 //
-// Resume discipline: every Interact op is @resume=OneShot per the
+// Resume discipline: every Interact op is per the
 // effect declaration (voice.mn:340-396). Arms call resume(value)
 // exactly once.
 //

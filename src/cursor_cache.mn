@@ -101,15 +101,15 @@ fn cursor_cache_queue_version() with Pure = 1
 effect CursorCache {
   /// Look up the oracle queue for a module. Returns None on miss
   /// (source hash changed, version mismatch, or not yet cached).
-  query_oracle_queue(String) -> Option<List>            @resume=OneShot
+  query_oracle_queue(String) -> Option<List>
 
   /// Store the oracle queue for a module after re-inference.
   /// Called by the IC driver when re-walking a module's env.
-  store_oracle_queue(String, Int, List) -> ()           @resume=OneShot
+  store_oracle_queue(String, Int, List) -> ()
 
   /// Walk the full multi-module oracle queue, filtered by caret
   /// proximity, returning ranked entries for cursor_argmax.
-  argmax_over_cache(Caret) -> List                      @resume=OneShot
+  argmax_over_cache(Caret) -> List
 }
 
 // ─── cursor_cache_default — the canonical handler ──────────────────
@@ -448,9 +448,9 @@ fn cache_unpack_suggestion() with Unpack = {
 // ─── Effect declarations consumed by cache I/O ──────────────────────
 
 effect WasmFs {
-  fs_exists(String) -> Bool                          @resume=OneShot
-  fs_open_for_read(String) -> ()                     @resume=OneShot
-  fs_write_packed(String) -> ()                      @resume=OneShot
+  fs_exists(String) -> Bool
+  fs_open_for_read(String) -> ()
+  fs_write_packed(String) -> ()
 }
 
 // ─── Composition with cursor_default ────────────────────────────────

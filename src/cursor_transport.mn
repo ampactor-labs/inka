@@ -30,7 +30,7 @@
 //
 // Drift-mode audit per CLAUDE.md ⌁ + nine modes:
 //
-//   Drift 1 (vtable):       Surface effect dispatches via @resume=OneShot
+//   Drift 1 (vtable):       Surface effect dispatches via
 //                           handler; no fn-pointer table; no vtable.
 //   Drift 2 (env frame):    Transport state lives in handler.with state,
 //                           NOT a parallel env-frame stack.
@@ -72,16 +72,16 @@ effect Surface {
   /// Render the eight-aspect CursorView at the cursor's position.
   /// Called whenever Cursor's argmax shifts (graph delta + caret
   /// change). Cadence is the transport's responsibility.
-  surface_render(Cursor, CursorView) -> ()         @resume=OneShot
+  surface_render(Cursor, CursorView) -> ()
 
   /// Receive an action from the human — accept, defer, override,
   /// caret-move. The transport translates input events into Action
   /// values; the kernel reads them through the same effect.
-  surface_action() -> Action                        @resume=OneShot
+  surface_action() -> Action
 
   /// Negotiate transport readiness (handshake; LSP-style for IDEs;
   /// no-op for terminal). Called once per session.
-  surface_handshake() -> ()                         @resume=OneShot
+  surface_handshake() -> ()
 }
 
 // ─── ADTs the transport reads + writes ──────────────────────────────
@@ -439,28 +439,28 @@ fn format_voice_line(view) with Pure = {
 // when its target surface is exercised in production.
 
 effect WebSurface {
-  web_dom_init(String) -> ()                         @resume=OneShot
-  web_register_keystroke_listener() -> ()            @resume=OneShot
-  web_dom_render_cursorview(Cursor, CursorView) -> () @resume=OneShot
-  web_next_input_event() -> WebEvent                  @resume=OneShot
+  web_dom_init(String) -> ()
+  web_register_keystroke_listener() -> ()
+  web_dom_render_cursorview(Cursor, CursorView) -> ()
+  web_next_input_event() -> WebEvent
 }
 
 effect VimSurface {
-  vim_register_neovim_rpc() -> ()                       @resume=OneShot
-  vim_set_virtual_text(Handle, String) -> ()             @resume=OneShot
-  vim_set_signs(List<Predicate>) -> ()                  @resume=OneShot
-  vim_echo_at_cmdline(String) -> ()                      @resume=OneShot
-  vim_next_key() -> Int                                  @resume=OneShot
+  vim_register_neovim_rpc() -> ()
+  vim_set_virtual_text(Handle, String) -> ()
+  vim_set_signs(List<Predicate>) -> ()
+  vim_echo_at_cmdline(String) -> ()
+  vim_next_key() -> Int
 }
 
 effect LspSurface {
-  lsp_frame_read() -> LspFrame                            @resume=OneShot
-  lsp_frame_write(LspFrame) -> ()                          @resume=OneShot
+  lsp_frame_read() -> LspFrame
+  lsp_frame_write(LspFrame) -> ()
 }
 
 effect Patch {
-  patch_set_target(String) -> ()                            @resume=OneShot
-  apply_patch_at_cursor(Span, String) -> ()                 @resume=OneShot
+  patch_set_target(String) -> ()
+  apply_patch_at_cursor(Span, String) -> ()
 }
 
 handler patch_to_file with target_module = "" {

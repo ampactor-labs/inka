@@ -6,11 +6,15 @@
 // realities. The handler chain IS the capability stack: outermost
 // least trusted; innermost most empowered.
 //
-// The resume discipline (@resume=OneShot | MultiShot | Either) is a
-// LOAD-BEARING type-level commitment. OneShot proves linear control
-// flow (compiles to a `call`). MultiShot enables backtracking,
+// The resume discipline (cardinality One | Many | Either) is a
+// LOAD-BEARING type-level property — INFERRED from each handler's
+// arm body, never declared. The infer pass counts resume call sites
+// under control-flow + ownership linearity; cardinality `One` proves
+// linear control (compiles to a `call`); `Many` enables backtracking,
 // speculation, the gradient's argmax. Mentl's oracle IS the
-// MultiShot resume primitive made into a handler-on-graph.
+// many-cardinality resume primitive made into a handler-on-graph.
+// Authoring discipline: write the body that means what you want; the
+// medium proves the cardinality.
 //
 // Read this alongside SUBSTRATE.md §IV (Effect Algebra) and
 // `docs/specs/06-effects-surface.md`.
@@ -18,12 +22,14 @@
 import runtime/io
 
 /// Counter — a tiny effect with two ops. `inc` returns Unit and
-/// updates handler state; `read` returns the current count.
-/// @resume=OneShot on both ops proves linear control: each call
-/// resumes exactly once, the body continues, no backtracking.
+/// updates handler state; `read` returns the current count. Both
+/// arm bodies invoke `resume` exactly once with no surrounding loop
+/// or recursion, so the medium infers cardinality `One` for both —
+/// linear control: each call resumes once, the body continues, no
+/// backtracking.
 effect Counter {
-  inc() -> ()                                    @resume=OneShot
-  read() -> Int                                  @resume=OneShot
+  inc() -> ()
+  read() -> Int
 }
 
 /// `counter_in_memory` — handler #1: keeps state in handler-local

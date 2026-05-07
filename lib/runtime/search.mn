@@ -9,11 +9,13 @@
 // reach-for-it cases.
 //
 // Per the kernel's MultiShot resume discipline (primitive #2 +
-// INSIGHTS L97-101): `choose` is `@resume=MultiShot` — handlers may
-// resume the continuation multiple times (once per option) to
-// explore alternatives. The runtime substrate that makes this
-// fork-real is H7 (commits 4236b96 + ad78384 + bafd63a — LMakeContinuation
-// emit path now lands continuations heap-allocated through emit_alloc).
+// INSIGHTS L97-101): `choose`'s arm bodies invoke `resume` more
+// than once (once per explored option), so the medium INFERS
+// cardinality `Many` from the body's resume sites. Handlers may
+// resume the continuation multiple times to explore alternatives.
+// The runtime substrate that makes this fork-real is H7 (commits
+// 4236b96 + ad78384 + bafd63a — LMakeContinuation emit path now
+// lands continuations heap-allocated through emit_alloc).
 //
 // Two canonical handlers:
 // - pick_first — OneShot terminal; resume with options[0]; aborts on
@@ -67,7 +69,7 @@ import own        // for catch_abort handler
 /// that call site).
 
 effect Choice {
-  choose(options: List<A>) -> A                    @resume=MultiShot
+  choose(options: List<A>) -> A
 }
 
 /// pick_first — OneShot terminal handler. Per CE §1.2: resumes with
@@ -80,7 +82,7 @@ effect Choice {
 /// Resume discipline: the arm resumes once; the op is declared
 /// MultiShot, but pick_first's INSTALLATION narrows it to OneShot
 /// at this site. Row subsumption at handler install lets it pass.
-/// Primitive #2's @resume=Either pattern would formalize this; for
+/// Primitive #2's pattern would formalize this; for
 /// V1 the narrowing is implicit in pick_first being named OneShot.
 
 handler pick_first {
@@ -159,8 +161,9 @@ handler backtrack with Choice + GraphRead + GraphWrite + Abort {
 /// recursion).
 ///
 /// Primitive #2 (Handlers + resume discipline) — Choice's `choose`
-/// is `@resume=MultiShot`. backtrack invokes resume per-option (one
-/// per call to try_each); pick_first invokes once. Per H7 substrate
+/// has cardinality `Many` (inferred from backtrack's arm body, which
+/// invokes `resume` per-option in try_each); pick_first's arm
+/// invokes resume once so its cardinality is `One`. Per H7 substrate
 /// (commits 4236b96 + ad78384 + bafd63a), MultiShot resumes are
 /// heap-allocated continuation records; backtrack's per-option
 /// invocation produces a fresh resume call per the existing trail

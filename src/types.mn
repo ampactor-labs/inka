@@ -64,7 +64,14 @@ type Ownership
 
 // ─── Resume discipline (spec 02 · Affect POPL 2025) ────────────────
 // Continuations discriminated at the type level so handler elimination
-// (spec 05) and multi-shot × arena (Arc F.4) have the type hook.
+// (spec 05) and multi-shot × arena (Arc F.4) have the type hook. The
+// discipline is INFERRED from each handler arm body — the infer pass
+// counts resume call sites under control-flow analysis (loops /
+// recursion → MultiShot; single-branch single-call → OneShot;
+// branch-disjoint single-call → OneShot; gradient-undecided →
+// Either) and attaches the result to the EffectOpScheme. There is
+// no @resume= annotation; the body IS the contract per
+// protocol_cursor_is_the_substrate.md.
 
 type ResumeDiscipline
   = OneShot
@@ -554,16 +561,16 @@ type Region
 // on fn return.
 fn mk_tok(kind, sl, sc, el, ec) with Pure = Tok(kind, Span(sl, sc, el, ec))
 effect RegionTrack {
-  region_enter(Span) -> Int                       @resume=OneShot
-  region_exit(Int) -> ()                          @resume=OneShot
-  tag_alloc(Int) -> ()                            @resume=OneShot
-  tag_alloc_join(Int, List) -> ()                 @resume=OneShot
+  region_enter(Span) -> Int
+  region_exit(Int) -> ()
+  tag_alloc(Int) -> ()
+  tag_alloc_join(Int, List) -> ()
                                                   // value_handle, field_handles —
                                                   // tag with the deepest (innermost)
                                                   // region across (current, fields).
                                                   // Used by record/variant construction.
-  check_escape(Int, Span) -> ()                   @resume=OneShot
-  current_region() -> Int                         @resume=OneShot
+  check_escape(Int, Span) -> ()
+  current_region() -> Int
 }
 
 // StringTable (spec W5) — compile-time interned string literals.
@@ -575,8 +582,8 @@ effect RegionTrack {
 // construction. `set_string_entries` is called once by emit_module
 // after collection to populate the handler's state.
 effect StringTable {
-  string_offset(String) -> Int                   @resume=OneShot
-  set_string_entries(List) -> ()                 @resume=OneShot
+  string_offset(String) -> Int
+  set_string_entries(List) -> ()
 }
 
 // Evidence (spec W4) — runtime witness of an effect-to-handler-arm
@@ -606,10 +613,10 @@ type Evidence
 // arithmetic and any future evidence-aware emit site.
 
 effect BodyContext {
-  current_body_captures() -> Int                    @resume=OneShot
-  set_body_captures(Int) -> ()                      @resume=OneShot
-  current_body_evidence() -> List                   @resume=OneShot
-  set_body_evidence(List) -> ()                     @resume=OneShot
+  current_body_captures() -> Int
+  set_body_captures(Int) -> ()
+  current_body_evidence() -> List
+  set_body_evidence(List) -> ()
 }
 
 // ─── Stmt (spec 03) ────────────────────────────────────────────────
@@ -621,7 +628,9 @@ type Stmt
   | TypeDefStmt(String, List, List)
                            // name, type args, variants
   | EffectDeclStmt(String, List)
-                           // effect name, ops (each carries ResumeDiscipline)
+                           // effect name, ops (each is (op_name, param_tys, ret_ty);
+                           // ResumeDiscipline is inferred at handler-decl time
+                           // from each arm body, not declared on the effect op)
   | HandlerDeclStmt(String, String, List, List, List)
                            // handler name, effect name, config-params, state-fields, arms
                            // config: List<String> — closure-captured at install site
@@ -688,14 +697,14 @@ type Env
   = Env(List)   // [(name, Scheme, Reason, SchemeKind)]
 
 effect EnvRead {
-  env_lookup(String) -> Option                       @resume=OneShot
-  env_snapshot() -> Env                              @resume=OneShot
+  env_lookup(String) -> Option
+  env_snapshot() -> Env
 }
 
 effect EnvWrite {
-  env_extend(String, Scheme, Reason, SchemeKind) -> ()  @resume=OneShot
-  env_scope_enter() -> ()                               @resume=OneShot
-  env_scope_exit() -> ()                                @resume=OneShot
+  env_extend(String, Scheme, Reason, SchemeKind) -> ()
+  env_scope_enter() -> ()
+  env_scope_exit() -> ()
 }
 
 // The Read/Write split IS the "one writer" invariant. Inference
@@ -708,21 +717,21 @@ effect EnvWrite {
 // rolls back to restore. Trail-based; O(M) where M is mutations.
 
 effect GraphRead {
-  graph_chase(Int) -> GNode                        @resume=OneShot
-  graph_epoch() -> Int                             @resume=OneShot
-  graph_reason_edge(Int, Int) -> Reason            @resume=OneShot
-  graph_snapshot() -> Graph                   @resume=OneShot
-  graph_push_checkpoint() -> Int                   @resume=OneShot
+  graph_chase(Int) -> GNode
+  graph_epoch() -> Int
+  graph_reason_edge(Int, Int) -> Reason
+  graph_snapshot() -> Graph
+  graph_push_checkpoint() -> Int
 }
 
 effect GraphWrite {
-  graph_fresh_ty(Reason) -> Handle                 @resume=OneShot
-  graph_fresh_row(Reason) -> Int                   @resume=OneShot
-  graph_bind(Int, Ty, Reason) -> ()                @resume=OneShot
-  graph_bind_row(Int, EffRow, Reason) -> ()        @resume=OneShot
-  graph_fork(String) -> ()                         @resume=OneShot
-  graph_rollback(Int) -> ()                        @resume=OneShot
-  graph_index_span(ValidSpan, Int) -> ()           @resume=OneShot
+  graph_fresh_ty(Reason) -> Handle
+  graph_fresh_row(Reason) -> Int
+  graph_bind(Int, Ty, Reason) -> ()
+  graph_bind_row(Int, EffRow, Reason) -> ()
+  graph_fork(String) -> ()
+  graph_rollback(Int) -> ()
+  graph_index_span(ValidSpan, Int) -> ()
 }
 
 // Every perform report names a code whose docs/errors/<CODE>.md entry
@@ -731,16 +740,18 @@ effect GraphWrite {
 
 effect Diagnostic {
   report(String, String, String, String, Span, String) -> ()
-  // source, code, kind, msg, span, applicability        @resume=OneShot
+  // source, code, kind, msg, span, applicability
 }
 
 /// Universal short-circuit / early return.
 /// Flattens the "Option Monad" into the topological pipeline.
-/// @resume=OneShot is correct despite -> !: OneShot means "at most
-/// once" (zero ≤ 1) and "continuation on stack, no heap capture" —
-/// both true for a handler arm that never calls resume.
+/// `abort` is inferred OneShot despite `-> !`: OneShot's semantics
+/// is "at most once" (zero ≤ 1) and "continuation on stack, no
+/// heap capture" — both true for a handler arm that never calls
+/// resume. The infer pass counts zero resume sites in `catch_abort`-
+/// shape arms and produces `OneShot` (count ≤ 1 → OneShot).
 effect Abort {
-  abort() -> !                                     @resume=OneShot
+  abort() -> !
 }
 
 /// Mutation capability marker.
@@ -762,21 +773,21 @@ effect Abort {
 /// Reason chain).
 
 effect Mutate {
-  graph_mutated(Int, Mutation) -> ()                @resume=OneShot
+  graph_mutated(Int, Mutation) -> ()
 }
 
 // The ONLY route from a TypeHandle to a resolved Ty. Delegates to
 // graph_chase. No cache. No staleness. Every observer reads live.
 
 effect LookupTy {
-  lookup_ty(Int) -> Ty                             @resume=OneShot
+  lookup_ty(Int) -> Ty
 }
 
 // Inference mints via graph_fresh_ty; query mints display ids. One
 // function, two handlers, different semantics for the same op.
 
 effect FreshHandle {
-  mint(Reason) -> Int                              @resume=OneShot
+  mint(Reason) -> Int
 }
 
 // Tracks the stack of (locals, captures) frames so VarRef can resolve
@@ -799,12 +810,12 @@ type Resolution
 // fallback). This is the W7 + A1 capture-handle correctness fix.
 
 effect LowerScope {
-  ls_enter_frame(String, List, List, List, List) -> ()  @resume=OneShot  // fn_name, locals_names, locals_handles, captures_names, captures_handles
-  ls_exit_frame() -> ()                         @resume=OneShot
-  ls_bind_local(String, Int) -> Int             @resume=OneShot  // append (name, handle); returns slot
-  ls_resolve(String) -> (Resolution, Int)       @resume=OneShot
-  ls_register_globals(List) -> ()               @resume=OneShot
-  ls_outer_fn_name() -> String                  @resume=OneShot  // closest enclosing named-fn frame; "" for top-level
+  ls_enter_frame(String, List, List, List, List) -> ()  // fn_name, locals_names, locals_handles, captures_names, captures_handles
+  ls_exit_frame() -> ()
+  ls_bind_local(String, Int) -> Int  // append (name, handle); returns slot
+  ls_resolve(String) -> (Resolution, Int)
+  ls_register_globals(List) -> ()
+  ls_outer_fn_name() -> String  // closest enclosing named-fn frame; "" for top-level
 }
 
 // Every refinement unification performs verify(span, pred, reason).
@@ -812,8 +823,8 @@ effect LowerScope {
 // reject). Handler swap; source code unchanged.
 
 effect Verify {
-  verify(Span, Predicate, Reason) -> ()            @resume=OneShot
-  verify_debt() -> List                            @resume=OneShot
+  verify(Span, Predicate, Reason) -> ()
+  verify_debt() -> List
 }
 
 // Every use of an own-parameter performs consume(name, span).
@@ -828,10 +839,10 @@ effect Verify {
 // E_OwnershipViolation), unions all deltas into used, pops the frame.
 
 effect Consume {
-  consume(String, Span) -> ()                      @resume=OneShot
-  branch_enter() -> ()                             @resume=OneShot
-  branch_divider(Span) -> ()                       @resume=OneShot
-  branch_exit(Span) -> ()                          @resume=OneShot
+  consume(String, Span) -> ()
+  branch_enter() -> ()
+  branch_divider(Span) -> ()
+  branch_exit(Span) -> ()
 }
 
 // Four ops cover the incremental-compilation cache layer (.kai
@@ -852,10 +863,10 @@ effect Consume {
 
 effect Filesystem {
   // ─── Original 4 ops (FS walkthrough; commit 1debfdc) ──────────
-  fs_exists(String) -> Bool                          @resume=OneShot
-  fs_read_file(String) -> String                     @resume=OneShot
-  fs_write_file(String, String) -> ()                @resume=OneShot
-  fs_mkdir(String) -> ()                             @resume=OneShot
+  fs_exists(String) -> Bool
+  fs_read_file(String) -> String
+  fs_write_file(String, String) -> ()
+  fs_mkdir(String) -> ()
 
   // ─── FX.A.basics extension ops (FX walkthrough §1) ────────────
   // Cover the FileHandle-shaped surface Mentl-voice's Interact ops
@@ -866,10 +877,10 @@ effect Filesystem {
   // fs_list_dir lands separately as FX.A.dirent (dirent record parsing
   // is its own focused sub-handle).
 
-  fs_open(String) -> Int                             @resume=OneShot
-  fs_close(Int) -> ()                                @resume=OneShot
-  fs_unlink(String) -> Bool                          @resume=OneShot
-  fs_rename(String, String) -> Bool                  @resume=OneShot
+  fs_open(String) -> Int
+  fs_close(Int) -> ()
+  fs_unlink(String) -> Bool
+  fs_rename(String, String) -> Bool
 }
 
 // Every show_* that renders a Ty chases TVars through graph_chase.

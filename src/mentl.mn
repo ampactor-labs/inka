@@ -74,11 +74,11 @@ type Candidate
 /// projects the substrate for the developer: hover, gradient, why-chain, error catalog,
 /// unlock preview.
 effect Teach {
-  teach_here(String, Span, Ty) -> ()                @resume=OneShot
-  teach_gradient(Int) -> Option                     @resume=OneShot
-  teach_why(Int) -> Reason                          @resume=OneShot
-  teach_error(String, Span, Reason) -> Explanation  @resume=OneShot
-  teach_unlock(Annotation) -> Capability            @resume=OneShot
+  teach_here(String, Span, Ty) -> ()
+  teach_gradient(Int) -> Option
+  teach_why(Int) -> Reason
+  teach_error(String, Span, Reason) -> Explanation
+  teach_unlock(Annotation) -> Capability
 }
 
 // ═══ Synth effect — proposers as handlers ══════════════════════════  // drift-audit: ignore — D.1.R reserved block; decoration removal is a separate sub-handle
@@ -87,9 +87,9 @@ effect Teach {
 // SMT, LLM, user — plugs in as a handler. The compiler verifies.
 
 effect Synth {
-  propose(Ty, EffRow, Context) -> List               @resume=OneShot
-  verify_candidate(Node) -> Bool                     @resume=OneShot
-  enumerate_inhabitants(Ty, EffRow, Context) -> List @resume=MultiShot
+  propose(Ty, EffRow, Context) -> List
+  verify_candidate(Node) -> Bool
+  enumerate_inhabitants(Ty, EffRow, Context) -> List
 }
 
 /// Default Teach handler — the substrate's self-projection. Reads the graph through

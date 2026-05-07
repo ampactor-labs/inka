@@ -43,10 +43,10 @@ import effects
 /// `lower_state_default` below.
 
 effect LowerState {
-  ms_alloc_state(Int, Int) -> Int                  @resume=OneShot
-  ms_alloc_ret_slot(Int, Int) -> Int               @resume=OneShot
-  ms_function_states(Int) -> List                  @resume=OneShot
-  ms_reset_function() -> ()                        @resume=OneShot
+  ms_alloc_state(Int, Int) -> Int
+  ms_alloc_ret_slot(Int, Int) -> Int
+  ms_function_states(Int) -> List
+  ms_reset_function() -> ()
 }
 
 /// lower_state_default — the LowerState handler. State record:

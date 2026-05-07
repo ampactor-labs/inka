@@ -236,7 +236,7 @@ type SmtResult
   | SmtUnknown
 
 effect SmtSolver {
-  smt_solve(String) -> SmtResult                     @resume=OneShot
+  smt_solve(String) -> SmtResult
 }
 
 handler verify_smt with witnesses = [] {

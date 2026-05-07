@@ -67,16 +67,16 @@ import mentl
 effect Delta {
   /// The inverse-direction gradient at one fn handle. Returns the
   /// single highest-leverage tightening or None.
-  delta_pick(Handle) -> Option<AnnotationSuggestion>     @resume=OneShot
+  delta_pick(Handle) -> Option<AnnotationSuggestion>
 
   /// Effect-row tightening only (body row narrower than declared).
-  delta_effect_row(Handle) -> Option<AnnotationSuggestion>  @resume=OneShot
+  delta_effect_row(Handle) -> Option<AnnotationSuggestion>
 
   /// Ownership tightening only (Inferred → Own/Ref classification).
-  delta_ownership(Handle) -> Option<AnnotationSuggestion>   @resume=OneShot
+  delta_ownership(Handle) -> Option<AnnotationSuggestion>
 
   /// Refinement tightening only (return-type sub-range opportunity).
-  delta_refinement(Handle) -> Option<AnnotationSuggestion>  @resume=OneShot
+  delta_refinement(Handle) -> Option<AnnotationSuggestion>
 }
 
 // ─── delta_default — the canonical handler ─────────────────────────
@@ -404,7 +404,7 @@ fn capabilities_unlocked_by_tightening(declared, body) with Pure = {
 // canonical when the env-binding-extended-shape lands.
 
 effect DeltaQuery {
-  graph_declared_row(Handle) -> Option<EffRow>      @resume=OneShot
+  graph_declared_row(Handle) -> Option<EffRow>
 }
 
 // ─── Composition with cursor_default ───────────────────────────────

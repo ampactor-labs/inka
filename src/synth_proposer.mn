@@ -523,7 +523,7 @@ fn synth_param_loop(params, i, n, buf) with Pure = {
 effect EnvLookup {
   /// All bindings keyed under a TypeName whose schemekind is
   /// ConstructorScheme. Used by enumerate_constructors.
-  env_constructors_of(String) -> List               @resume=OneShot
+  env_constructors_of(String) -> List
 }
 
 // ─── Composition with cursor_default + delta_default + cursor_cache_default ─

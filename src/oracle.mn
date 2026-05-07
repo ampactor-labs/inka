@@ -138,10 +138,10 @@ type OracleQueue
 /// - Web playground — same as LSP, push via WebSocket on queue change
 
 effect OracleQuery {
-  query_at_position(Int)            -> List   @resume=OneShot   // List<QueueItem> at this Handle
-  query_project_queue()             -> List   @resume=OneShot   // List<QueueItem> merged from all modules
-  query_module_queue(String)        -> List   @resume=OneShot   // List<QueueItem> for one module
-  cursor_relevant(Int, Int)         -> List   @resume=OneShot   // (cursor_handle, max_distance_bytes); locality-filtered
+  query_at_position(Int)            -> List   // List<QueueItem> at this Handle
+  query_project_queue()             -> List   // List<QueueItem> merged from all modules
+  query_module_queue(String)        -> List   // List<QueueItem> for one module
+  cursor_relevant(Int, Int)         -> List   // (cursor_handle, max_distance_bytes); locality-filtered
 }
 
 // ─── cached_check_with_oracle — IC Cache shape extension ─────────────

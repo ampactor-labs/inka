@@ -51,18 +51,20 @@ import infer
 
 // ─── The Cursor effect ──────────────────────────────────────────────
 //
-// Three ops; each @resume=OneShot. The cursor projects; it never
-// captures or replays. MultiShot exploration lives in Synth (the
-// tentacle Cursor calls into); Cursor itself is a one-call read.
+// Three ops. Each cursor_default arm body invokes resume exactly
+// once on the projection, so the medium infers cardinality `One`
+// for all three — the cursor projects, it never captures or replays.
+// MultiShot exploration lives in Synth (the tentacle Cursor calls
+// into); Cursor itself is a one-call read.
 //
 // `with !Mutate` on cursor_default proves at compile time that the
 // projection cannot corrupt oracle state — exactly the constraint
 // `protocol_oracle_is_ic.md` locks for "surfaces query, never write."
 
 effect Cursor {
-  cursor_at(Span) -> CursorView                 @resume=OneShot
-  cursor_argmax(Caret) -> Cursor                @resume=OneShot
-  cursor_pinned(Handle) -> Cursor               @resume=OneShot
+  cursor_at(Span) -> CursorView
+  cursor_argmax(Caret) -> Cursor
+  cursor_pinned(Handle) -> Cursor
 }
 
 // ─── The handler ────────────────────────────────────────────────────

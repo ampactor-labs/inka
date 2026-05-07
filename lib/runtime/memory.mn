@@ -19,20 +19,20 @@
 /// intent; the substrate emits the opcode.
 effect Memory {
   // 32-bit store/load — full i32 word at address
-  store_i32(Int, Int) -> ()       @resume=OneShot   // (addr, value)
-  load_i32(Int) -> Int            @resume=OneShot   // (addr) -> value
+  store_i32(Int, Int) -> ()   // (addr, value)
+  load_i32(Int) -> Int   // (addr) -> value
 
   // 8-bit store/load — single byte at address
-  store_i8(Int, Int) -> ()        @resume=OneShot   // (addr, byte)
-  load_i8(Int) -> Int             @resume=OneShot   // (addr) -> byte (0-255)
+  store_i8(Int, Int) -> ()   // (addr, byte)
+  load_i8(Int) -> Int   // (addr) -> byte (0-255)
 
   // Bulk memory copy — src to dst, n bytes
-  mem_copy(Int, Int, Int) -> ()   @resume=OneShot   // (dst, src, n)
+  mem_copy(Int, Int, Int) -> ()   // (dst, src, n)
 
   // Integer XOR — two i32 values, returns i32
   // Lowers to WASM's i32.xor. Not a bitwise operator in the
   // language — a substrate primitive. Used by hash functions.
-  i32_xor(Int, Int) -> Int        @resume=OneShot   // (a, b) -> a XOR b
+  i32_xor(Int, Int) -> Int   // (a, b) -> a XOR b
 }
 
 /// Alloc — heap allocation. Bump allocator in WASM linear memory.
@@ -45,7 +45,7 @@ effect Memory {
 /// this distinction is load-bearing for real-time audio paths where
 /// allocation is forbidden.
 effect Alloc {
-  alloc(Int) -> Int               @resume=OneShot   // (size) -> ptr
+  alloc(Int) -> Int   // (size) -> ptr
 }
 
 // Pure — the empty effect row. Pure is not an effect with operations

@@ -24,7 +24,7 @@ import lower
 // handler collects into a buffer; format handler pretty-prints.
 
 effect WasmOut {
-  wat_emit(String) -> ()                    @resume=OneShot
+  wat_emit(String) -> ()
 }
 
 handler wat_stdout {
@@ -65,7 +65,7 @@ type MatchShape
 // closure layout, list construction, or any other allocation site.
 
 effect EmitMemory {
-  emit_alloc(Int, String) -> ()             @resume=OneShot
+  emit_alloc(Int, String) -> ()
 }
 
 handler emit_memory_bump {

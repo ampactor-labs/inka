@@ -34,17 +34,17 @@ import types
 /// accumulated row. On scope exit, the accumulated row binds to the
 /// handle via `graph_bind_row`. One write; no conflict.
 effect InferCtx {
-  inf_enter_fn(Int, Span) -> ()           @resume=OneShot
-  inf_exit_fn() -> ()                     @resume=OneShot
-  inf_add_effect(String) -> ()            @resume=OneShot
-  inf_add_row(EffRow) -> ()               @resume=OneShot
-  inf_current_row() -> EffRow             @resume=OneShot
-  inf_set_declared(List) -> ()            @resume=OneShot
-  inf_declared_effs() -> List             @resume=OneShot
-  inf_push_handler(String) -> ()          @resume=OneShot
-  inf_pop_handler() -> ()                 @resume=OneShot
-  inf_handler_stack() -> List             @resume=OneShot
-  inf_handler_provider(String) -> Option  @resume=OneShot
+  inf_enter_fn(Int, Span) -> ()
+  inf_exit_fn() -> ()
+  inf_add_effect(String) -> ()
+  inf_add_row(EffRow) -> ()
+  inf_current_row() -> EffRow
+  inf_set_declared(List) -> ()
+  inf_declared_effs() -> List
+  inf_push_handler(String) -> ()
+  inf_pop_handler() -> ()
+  inf_handler_stack() -> List
+  inf_handler_provider(String) -> Option
 }
 
 // handler_stack (W4 prep, C4) — insertion-ordered stack of handler
@@ -2245,6 +2245,14 @@ fn register_handler(hname, ename, config, state, arms) = {
   // empirical (E_TypeMismatch at handle 20). Empty-config handlers
   // keep the bare Handler<E> scheme since `~> h` (no parens) is
   // direct application without intermediate call.
+  //
+  // Per protocol_cursor_is_the_substrate.md (2026-05-07) Phase B:
+  // each arm's resume cardinality is INFERRED from the body via
+  // $infer_resume_cardinality below; results attach to the
+  // corresponding op's TCont in the EffectOpScheme so lower picks
+  // Tier 1 (OneShot direct call) vs Tier 3 (heap continuation) per
+  // proven cardinality. There is no @resume= annotation; the body
+  // IS the contract.
   let handler_ty = TName("Handler", [TName(ename, [])])
   let scheme_body = if config.len == 0 {
     handler_ty
@@ -2256,6 +2264,272 @@ fn register_handler(hname, ename, config, state, arms) = {
     Forall([], scheme_body),
     Declared(hname),
     FnScheme)
+  // Phase B: infer per-arm resume cardinality and bind onto each
+  // op's continuation type. The cursor walks each arm body; counts
+  // resume call sites under control-flow ancestry; produces
+  // ResumeDiscipline. Same projection pattern as $collect_used_wasi_ops
+  // in the seed: walk + predicate-filter + project.
+  list_iter(arms, (arm) => {
+    let kind = infer_resume_cardinality(arm.body)
+    perform graph_bind_resume_kind(arm.op_name, ename, kind,
+      Located(span_of_node(arm.body), Inferred("resume cardinality from arm body")))
+  })
+}
+
+/// $infer_resume_cardinality — Phase B substrate. Replaces the
+/// @resume= annotation that was erased from all effect declarations
+/// across the wheel — cardinality is a graph property of the arm
+/// body, not an authored annotation. Per
+/// protocol_cursor_is_the_substrate.md (2026-05-07).
+///
+/// Walks the arm body collecting ResumeExpr handles; classifies via
+/// control-flow detection (loop ancestry) + branch disjointness:
+///
+///   • zero resume sites               → OneShot (catch_abort shape)
+///   • one site, not under loop        → OneShot
+///   • one site under loop ancestor    → MultiShot
+///   • multiple sites, branch-disjoint → OneShot (one per path)
+///   • multiple sites, not disjoint    → MultiShot
+///
+/// Drift refused: 1 (no vtable; structural NodeKind walk); 6 (no
+/// primitive-type-special-case for resume — every arm body classified
+/// uniformly); 8 (no count-as-string; ResumeDiscipline IS the ADT).
+fn infer_resume_cardinality(arm_body) with GraphRead = {
+  let resume_sites = collect_resume_sites(arm_body)
+  if resume_sites.len == 0 { OneShot }
+  else if resume_sites.len == 1 {
+    let site = list_head(resume_sites)
+    if has_loop_ancestor(site, arm_body) { MultiShot }
+    else { OneShot }
+  }
+  else if all_disjoint_branches(resume_sites, arm_body) { OneShot }
+  else { MultiShot }
+}
+
+/// Walk arm body's NExpr collecting ResumeExpr handles. Buffer<Handle>
+/// per Hβ.runtime.buffer-substrate; freeze to clean List on return.
+/// Drift refused: 7 (one Buffer, not parallel arrays); 9 (every
+/// container NExpr arm enumerated explicitly, no _ wildcard
+/// fabricating ()).
+fn collect_resume_sites(arm_body) with GraphRead = {
+  let buf = make_buffer(8)
+  collect_resume_walk(buf, arm_body)
+  buf_freeze(buf)
+}
+
+fn collect_resume_walk(buf, node) with GraphRead = {
+  let N(body, _, h) = node
+  match body {
+    NExpr(ResumeExpr(_, _)) => buf_push(buf, h),
+    NExpr(BlockExpr(stmts, final)) => {
+      list_iter(stmts, (s) => collect_resume_walk(buf, s))
+      collect_resume_walk(buf, final)
+    },
+    NExpr(IfExpr(c, t, e)) => {
+      collect_resume_walk(buf, c)
+      collect_resume_walk(buf, t)
+      collect_resume_walk(buf, e)
+    },
+    NExpr(MatchExpr(scrut, arms)) => {
+      collect_resume_walk(buf, scrut)
+      list_iter(arms, (a) => collect_resume_walk(buf, a.body))
+    },
+    NExpr(CallExpr(f, args)) => {
+      collect_resume_walk(buf, f)
+      list_iter(args, (a) => collect_resume_walk(buf, a))
+    },
+    NExpr(BinOpExpr(_, l, r)) => {
+      collect_resume_walk(buf, l)
+      collect_resume_walk(buf, r)
+    },
+    NExpr(UnaryOpExpr(_, x)) => collect_resume_walk(buf, x),
+    NExpr(LambdaExpr(_, body)) => collect_resume_walk(buf, body),
+    NExpr(PerformExpr(_, args)) =>
+      list_iter(args, (a) => collect_resume_walk(buf, a)),
+    NExpr(MakeListExpr(elems)) =>
+      list_iter(elems, (e) => collect_resume_walk(buf, e)),
+    NExpr(MakeTupleExpr(elems)) =>
+      list_iter(elems, (e) => collect_resume_walk(buf, e)),
+    NExpr(MakeRecordExpr(fields)) =>
+      list_iter(fields, (f) => collect_resume_walk(buf, f.value)),
+    NExpr(NamedRecordExpr(_, fields)) =>
+      list_iter(fields, (f) => collect_resume_walk(buf, f.value)),
+    NExpr(FieldExpr(b, _)) => collect_resume_walk(buf, b),
+    NExpr(PipeExpr(_, l, r)) => {
+      collect_resume_walk(buf, l)
+      collect_resume_walk(buf, r)
+    },
+    NExpr(HandleExpr(b, h_arms)) => {
+      collect_resume_walk(buf, b)
+      list_iter(h_arms, (a) => collect_resume_walk(buf, a.body))
+    },
+    NStmt(LetStmt(_, v)) => collect_resume_walk(buf, v),
+    NStmt(ExprStmt(e)) => collect_resume_walk(buf, e),
+    // Leaves: literals, var refs, holes, placeholders, unit — no
+    // children carry a body that could contain ResumeExpr.
+    NExpr(LitInt(_))    => (),
+    NExpr(LitFloat(_))  => (),
+    NExpr(LitString(_)) => (),
+    NExpr(LitBool(_))   => (),
+    NExpr(LitUnit)      => (),
+    NExpr(VarRef(_))    => (),
+    NExpr(ExprPlaceholder) => (),
+    NHole(_) => (),
+    NPat(_)  => (),
+    NModule(_) => ()
+  }
+}
+
+/// Loop-ancestry detection. Mentl has LoopExpr (lib/runtime/iterate.mn
+/// surface) but in the type-graph it surfaces via tail-recursion in
+/// CallExpr — a fn that calls itself in tail position with the
+/// resume site inside its body produces effective MultiShot
+/// cardinality. Today: structural NLoopExpr ancestor; tail-recursion
+/// detection is the gradient-undecided case, peer follow-up
+/// `Hβ.infer.tail-recursion-resume-cardinality`.
+fn has_loop_ancestor(target_handle, node) with GraphRead = {
+  let N(body, _, h) = node
+  if h == target_handle { false }
+  else { match body {
+    NExpr(BlockExpr(stmts, final)) =>
+      any(stmts, (s) => has_loop_ancestor(target_handle, s)) ||
+      has_loop_ancestor(target_handle, final),
+    NExpr(IfExpr(c, t, e)) =>
+      has_loop_ancestor(target_handle, c) ||
+      has_loop_ancestor(target_handle, t) ||
+      has_loop_ancestor(target_handle, e),
+    NExpr(MatchExpr(scrut, arms)) =>
+      has_loop_ancestor(target_handle, scrut) ||
+      any(arms, (a) => has_loop_ancestor(target_handle, a.body)),
+    NExpr(LambdaExpr(_, body)) => has_loop_ancestor(target_handle, body),
+    NStmt(LetStmt(_, v)) => has_loop_ancestor(target_handle, v),
+    NStmt(ExprStmt(e)) => has_loop_ancestor(target_handle, e),
+    _ => false
+  } }
+}
+
+/// Multiple resume sites — disjoint-branch check. Pairwise: each
+/// pair lies in disjoint branches of some common If/Match ancestor.
+/// O(N²) over resume sites; N is bounded small (typical handler
+/// arm has ≤ a few resume sites).
+fn all_disjoint_branches(sites, root) with GraphRead = {
+  pairwise_disjoint_loop(sites, root)
+}
+
+fn pairwise_disjoint_loop(sites, root) with GraphRead = {
+  if sites.len <= 1 { true }
+  else {
+    let head = list_head(sites)
+    let tail = list_tail(sites)
+    all(tail, (s) => disjoint_branches(head, s, root)) &&
+    pairwise_disjoint_loop(tail, root)
+  }
+}
+
+fn disjoint_branches(a, b, root) with GraphRead = {
+  let lca = lowest_common_ancestor(a, b, root)
+  let N(body, _, _) = lca
+  match body {
+    NExpr(IfExpr(_, t, e)) =>
+      (contains_handle(t, a) && contains_handle(e, b)) ||
+      (contains_handle(t, b) && contains_handle(e, a)),
+    NExpr(MatchExpr(_, arms)) => {
+      let arm_a = arm_index_containing(arms, a)
+      let arm_b = arm_index_containing(arms, b)
+      arm_a != arm_b
+    },
+    NExpr(BlockExpr(_, _)) => false,    // sequential — not disjoint
+    _ => false
+  }
+}
+
+/// Helpers for branch-disjointness detection. Each is a small graph
+/// walk; named peer `Hβ.infer.resume-cardinality-helpers` covers the
+/// production substrate (lowest-common-ancestor + handle-containment +
+/// arm-index-containing). For Phase B today the helpers exist as
+/// dream-code interfaces; their bodies fold into named peers as the
+/// inference cascade matures past simple OneShot/MultiShot binary.
+fn contains_handle(node, target_handle) with GraphRead = {
+  let N(body, _, h) = node
+  if h == target_handle { true }
+  else { match body {
+    NExpr(BlockExpr(stmts, final)) =>
+      any(stmts, (s) => contains_handle(s, target_handle)) ||
+      contains_handle(final, target_handle),
+    NExpr(IfExpr(c, t, e)) =>
+      contains_handle(c, target_handle) ||
+      contains_handle(t, target_handle) ||
+      contains_handle(e, target_handle),
+    NExpr(MatchExpr(scrut, arms)) =>
+      contains_handle(scrut, target_handle) ||
+      any(arms, (a) => contains_handle(a.body, target_handle)),
+    NExpr(CallExpr(f, args)) =>
+      contains_handle(f, target_handle) ||
+      any(args, (a) => contains_handle(a, target_handle)),
+    NExpr(BinOpExpr(_, l, r)) =>
+      contains_handle(l, target_handle) ||
+      contains_handle(r, target_handle),
+    NExpr(UnaryOpExpr(_, x)) => contains_handle(x, target_handle),
+    NExpr(LambdaExpr(_, body)) => contains_handle(body, target_handle),
+    NExpr(PerformExpr(_, args)) =>
+      any(args, (a) => contains_handle(a, target_handle)),
+    NExpr(ResumeExpr(_, _)) => false,   // leaf for our purposes
+    NStmt(LetStmt(_, v)) => contains_handle(v, target_handle),
+    NStmt(ExprStmt(e)) => contains_handle(e, target_handle),
+    _ => false
+  } }
+}
+
+fn lowest_common_ancestor(a, b, root) with GraphRead = {
+  // Find the deepest node that contains both a and b. If a child
+  // of root contains both, recurse into that child; else root is
+  // the LCA. O(N) per call; root walks once.
+  let N(body, _, _) = root
+  let descendant_lca = match body {
+    NExpr(BlockExpr(stmts, final)) =>
+      lca_among_children(append_one(stmts, final), a, b),
+    NExpr(IfExpr(c, t, e)) => lca_among_children([c, t, e], a, b),
+    NExpr(MatchExpr(scrut, arms)) =>
+      lca_among_children([scrut] ++ map(arms, (arm) => arm.body), a, b),
+    NExpr(CallExpr(f, args)) => lca_among_children([f] ++ args, a, b),
+    NExpr(BinOpExpr(_, l, r)) => lca_among_children([l, r], a, b),
+    NExpr(UnaryOpExpr(_, x)) => lca_among_children([x], a, b),
+    NExpr(LambdaExpr(_, body)) => lca_among_children([body], a, b),
+    NExpr(PerformExpr(_, args)) => lca_among_children(args, a, b),
+    NStmt(LetStmt(_, v)) => lca_among_children([v], a, b),
+    NStmt(ExprStmt(e)) => lca_among_children([e], a, b),
+    _ => None
+  }
+  match descendant_lca {
+    Some(child_lca) => child_lca,
+    None => root
+  }
+}
+
+fn lca_among_children(children, a, b) with GraphRead = {
+  if children.len == 0 { None }
+  else {
+    let head = list_head(children)
+    let tail = list_tail(children)
+    if contains_handle(head, a) && contains_handle(head, b) {
+      Some(lowest_common_ancestor(a, b, head))
+    } else {
+      lca_among_children(tail, a, b)
+    }
+  }
+}
+
+fn arm_index_containing(arms, target_handle) with GraphRead = {
+  arm_index_loop(arms, target_handle, 0)
+}
+
+fn arm_index_loop(arms, target_handle, idx) with GraphRead = {
+  if arms.len == 0 { -1 }
+  else {
+    let arm = list_head(arms)
+    if contains_handle(arm.body, target_handle) { idx }
+    else { arm_index_loop(list_tail(arms), target_handle, idx + 1) }
+  }
 }
 
 /// Mint TParam list for handler config-params. Each name gets a

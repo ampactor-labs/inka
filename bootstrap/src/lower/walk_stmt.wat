@@ -527,6 +527,44 @@
     (local.set $name      (i32.load offset=4  (local.get $stmt)))
     (local.set $params    (i32.load offset=8  (local.get $stmt)))
     (local.set $body_node (i32.load offset=20 (local.get $stmt)))
+    ;; Per Hβ.first-light.malformed-fnstmt-sentinel (2026-05-07,
+    ;; chain-link-5 protocol_parse_is_eager_graph_projection.md applied
+    ;; at the lower layer per protocol_parser_fabrication_substrate.md):
+    ;; when the upstream parser (via $ident_at_p fabricating empty-string
+    ;; on non-TIdent) produces an FnStmt with empty name, the construct
+    ;; was malformed at parse — there's nothing valid to lower. ULTIMATE
+    ;; MEDIUM at this site: emit LConst(handle, 0) sentinel-LExpr;
+    ;; downstream emit reads sentinel and produces no funcref-table
+    ;; entry, no $name_idx global, no static-closure record. Drift
+    ;; refused: 9 (no propagating malformed AST through to emit's
+    ;; bloat output); fabrication (we don't fabricate a name to keep
+    ;; the FnStmt; we surface it as the sentinel it is).
+    ;;
+    ;; Eight interrogations on the sentinel emission:
+    ;;  1. Graph?      LConst(handle, 0) attaches to the same graph
+    ;;                 handle the malformed FnStmt was at; downstream
+    ;;                 walks the graph through this LConst.
+    ;;  2. Handler?    @resume=OneShot; sentinel emit is one-shot.
+    ;;  3. Verb?       N/A — structural.
+    ;;  4. Row?        Pure (no effects).
+    ;;  5. Ownership?  Sentinel owns nothing.
+    ;;  6. Refinement? FnStmt's name should refine to NonEmptyString;
+    ;;                 violation lands here. The proper fix is upstream
+    ;;                 ($ident_at_p contract change); this is the
+    ;;                 productive-under-error projection until then.
+    ;;  7. Gradient?   Sentinel is the lowest-information lowering;
+    ;;                 the gradient narrows toward authoring a proper
+    ;;                 fn name at the source position.
+    ;;  8. Reason?     Reason chain attaches via the parser-side
+    ;;                 sentinel-stmt (named peer when productive-under-
+    ;;                 error parser substrate lands).
+    ;;
+    ;; Empirical: src/lower.mn seed-compile produced 14232 empty-named
+    ;; static closures via this exact propagation path; this guard
+    ;; closes the bloat at the lower→emit boundary while the upstream
+    ;; parser substrate fix proceeds.
+    (if (i32.eqz (i32.load (local.get $name)))   ;; len(name) == 0 → empty
+      (then (return (call $lexpr_make_lconst (local.get $handle) (i32.const 0)))))
     ;; Bind only inside an existing function frame. At module scope the
     ;; name was pre-registered by $lower_program and resolves as LGlobal.
     (if (call $ls_in_function)

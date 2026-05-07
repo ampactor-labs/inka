@@ -7270,18 +7270,35 @@
   ;; ─── parse_program: top-level statement list ──────────────────────
 
   (func $parse_program (param $tokens i32) (result i32)
-    (local $buf i32) (local $count i32) (local $p i32)
-    (local $result i32) (local $stmt i32)
+    (local $buf i32) (local $count i32) (local $p i32) (local $p_before i32)
+    (local $result i32) (local $stmt i32) (local $new_p i32)
     (local.set $buf (call $make_list (i32.const 16)))
     (local.set $count (i32.const 0))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.const 0)))
     (block $done
       (loop $stmts
         (br_if $done (call $at (local.get $tokens) (local.get $p) (i32.const 69))) ;; TEof
+        (local.set $p_before (local.get $p))
         (local.set $result (call $parse_stmt_p (local.get $tokens) (local.get $p)))
         (local.set $stmt (call $list_index (local.get $result) (i32.const 0)))
-        (local.set $p (call $skip_sep (local.get $tokens)
+        (local.set $new_p (call $skip_sep (local.get $tokens)
           (call $list_index (local.get $result) (i32.const 1))))
+        ;; Per Hβ.first-light.parser-progress-guarantee (2026-05-07,
+        ;; chain-link-5 protocol_parse_is_eager_graph_projection.md):
+        ;; if parse_stmt_p didn't advance position, the parser is
+        ;; stuck on a token it can't classify. Pushing a sentinel-stmt
+        ;; without advancing would loop forever, generating thousands
+        ;; of empty-named entries downstream. Force progress by skipping
+        ;; ONE token and re-loop. The cursor reads forward; the lost
+        ;; token attaches as Reason "unparseable at SPAN" via the
+        ;; sentinel-stmt's empty-shape (kernel primitive 8: HM live
+        ;; with Reasons). Drift refused: 9 (no infinite recovery loop
+        ;; producing empty entries); fabrication (no manufactured
+        ;; "fix" — we accept the byte loss and surface it).
+        (if (i32.le_u (local.get $new_p) (local.get $p_before))
+          (then
+            (local.set $new_p (i32.add (local.get $p_before) (i32.const 1)))))
+        (local.set $p (local.get $new_p))
         (local.set $buf (call $list_extend_to (local.get $buf)
           (i32.add (local.get $count) (i32.const 1))))
         (drop (call $list_set (local.get $buf) (local.get $count) (local.get $stmt)))
@@ -21961,6 +21978,44 @@
     (local.set $name      (i32.load offset=4  (local.get $stmt)))
     (local.set $params    (i32.load offset=8  (local.get $stmt)))
     (local.set $body_node (i32.load offset=20 (local.get $stmt)))
+    ;; Per Hβ.first-light.malformed-fnstmt-sentinel (2026-05-07,
+    ;; chain-link-5 protocol_parse_is_eager_graph_projection.md applied
+    ;; at the lower layer per protocol_parser_fabrication_substrate.md):
+    ;; when the upstream parser (via $ident_at_p fabricating empty-string
+    ;; on non-TIdent) produces an FnStmt with empty name, the construct
+    ;; was malformed at parse — there's nothing valid to lower. ULTIMATE
+    ;; MEDIUM at this site: emit LConst(handle, 0) sentinel-LExpr;
+    ;; downstream emit reads sentinel and produces no funcref-table
+    ;; entry, no $name_idx global, no static-closure record. Drift
+    ;; refused: 9 (no propagating malformed AST through to emit's
+    ;; bloat output); fabrication (we don't fabricate a name to keep
+    ;; the FnStmt; we surface it as the sentinel it is).
+    ;;
+    ;; Eight interrogations on the sentinel emission:
+    ;;  1. Graph?      LConst(handle, 0) attaches to the same graph
+    ;;                 handle the malformed FnStmt was at; downstream
+    ;;                 walks the graph through this LConst.
+    ;;  2. Handler?    @resume=OneShot; sentinel emit is one-shot.
+    ;;  3. Verb?       N/A — structural.
+    ;;  4. Row?        Pure (no effects).
+    ;;  5. Ownership?  Sentinel owns nothing.
+    ;;  6. Refinement? FnStmt's name should refine to NonEmptyString;
+    ;;                 violation lands here. The proper fix is upstream
+    ;;                 ($ident_at_p contract change); this is the
+    ;;                 productive-under-error projection until then.
+    ;;  7. Gradient?   Sentinel is the lowest-information lowering;
+    ;;                 the gradient narrows toward authoring a proper
+    ;;                 fn name at the source position.
+    ;;  8. Reason?     Reason chain attaches via the parser-side
+    ;;                 sentinel-stmt (named peer when productive-under-
+    ;;                 error parser substrate lands).
+    ;;
+    ;; Empirical: src/lower.mn seed-compile produced 14232 empty-named
+    ;; static closures via this exact propagation path; this guard
+    ;; closes the bloat at the lower→emit boundary while the upstream
+    ;; parser substrate fix proceeds.
+    (if (i32.eqz (i32.load (local.get $name)))   ;; len(name) == 0 → empty
+      (then (return (call $lexpr_make_lconst (local.get $handle) (i32.const 0)))))
     ;; Bind only inside an existing function frame. At module scope the
     ;; name was pre-registered by $lower_program and resolves as LGlobal.
     (if (call $ls_in_function)

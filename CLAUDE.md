@@ -41,6 +41,54 @@
 
 ---
 
+## ⊛ The pre-action question ⊛
+
+> **Before tackling ANY new thing — implementation, fix, refactor,
+> tooling, anything — ASK FIRST: "What does the ULTIMATE MEDIUM do
+> here?"**
+>
+> Locked 2026-05-07 by Morgan. The directive forces high-altitude
+> framing BEFORE the action commits, not after. Every "let me first
+> investigate / patch / verify" without articulating the ULTIMATE
+> form is the eager-form-commitment drift at the workflow layer
+> (chain-link-5).
+>
+> The question's ANSWER is what gets implemented — not a "for now"
+> approximation, not a "named follow-up", not a "next-session"
+> plan. The ULTIMATE form lands NOW or it gets named as a peer
+> handle in positive form (with a concrete substrate reason for
+> why this commit can't carry it whole — context exhaustion alone
+> is NOT sufficient reason; only structural orthogonality is).
+>
+> Concretely, before each action:
+>
+> 1. **State the ULTIMATE FORM** of the thing being touched — what
+>    would the cursor + eight aspects + five verbs + Boolean row
+>    + ownership + refinement + gradient + Reason chain produce?
+>    Articulate this in two sentences before writing any code.
+> 2. **Implement THAT.** Not a band-aid. Not a workaround. Not
+>    "next-substrate-handle." The discipline is the implementation
+>    matches the ULTIMATE FORM in this commit.
+> 3. **If implementing the FULL ULTIMATE FORM in this commit has
+>    a structural reason it can't land whole** (e.g., orthogonal
+>    cross-cutting work needs its own substrate move first),
+>    NAME the peer handle with a positive-form description of
+>    what's left, not as deferral. Drift mode 9 fires the moment
+>    you write "named follow-up for next session" without that
+>    structural reason articulated.
+> 4. **Five-verb exhaustive check** at every implementation site:
+>    is this composition reaching for `|>` and `~>` only, or does
+>    the topology genuinely call for `<|` (multi-shot fanout),
+>    `><` (parallel composition), or `<~` (feedback loop)?
+>    Under-using the convergent verbs is itself drift; the wheel's
+>    wheel-wide ratio of `|>` 600 vs `<|` 36 / `><` 39 IS the gap.
+>
+> "What does the ultimate medium do here?" is the LATCH. If the
+> answer doesn't ship in this commit, document the structural
+> reason. Without that reason, the deferral IS drift mode 9.
+
+---
+
 ## ⌁ Mentl's anchor — the eight interrogations ⌁
 
 > *My job is not to write Mentl. My job is to find what Mentl already

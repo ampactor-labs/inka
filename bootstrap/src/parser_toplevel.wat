@@ -132,18 +132,35 @@
   ;; ─── parse_program: top-level statement list ──────────────────────
 
   (func $parse_program (param $tokens i32) (result i32)
-    (local $buf i32) (local $count i32) (local $p i32)
-    (local $result i32) (local $stmt i32)
+    (local $buf i32) (local $count i32) (local $p i32) (local $p_before i32)
+    (local $result i32) (local $stmt i32) (local $new_p i32)
     (local.set $buf (call $make_list (i32.const 16)))
     (local.set $count (i32.const 0))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.const 0)))
     (block $done
       (loop $stmts
         (br_if $done (call $at (local.get $tokens) (local.get $p) (i32.const 69))) ;; TEof
+        (local.set $p_before (local.get $p))
         (local.set $result (call $parse_stmt_p (local.get $tokens) (local.get $p)))
         (local.set $stmt (call $list_index (local.get $result) (i32.const 0)))
-        (local.set $p (call $skip_sep (local.get $tokens)
+        (local.set $new_p (call $skip_sep (local.get $tokens)
           (call $list_index (local.get $result) (i32.const 1))))
+        ;; Per Hβ.first-light.parser-progress-guarantee (2026-05-07,
+        ;; chain-link-5 protocol_parse_is_eager_graph_projection.md):
+        ;; if parse_stmt_p didn't advance position, the parser is
+        ;; stuck on a token it can't classify. Pushing a sentinel-stmt
+        ;; without advancing would loop forever, generating thousands
+        ;; of empty-named entries downstream. Force progress by skipping
+        ;; ONE token and re-loop. The cursor reads forward; the lost
+        ;; token attaches as Reason "unparseable at SPAN" via the
+        ;; sentinel-stmt's empty-shape (kernel primitive 8: HM live
+        ;; with Reasons). Drift refused: 9 (no infinite recovery loop
+        ;; producing empty entries); fabrication (no manufactured
+        ;; "fix" — we accept the byte loss and surface it).
+        (if (i32.le_u (local.get $new_p) (local.get $p_before))
+          (then
+            (local.set $new_p (i32.add (local.get $p_before) (i32.const 1)))))
+        (local.set $p (local.get $new_p))
         (local.set $buf (call $list_extend_to (local.get $buf)
           (i32.add (local.get $count) (i32.const 1))))
         (drop (call $list_set (local.get $buf) (local.get $count) (local.get $stmt)))

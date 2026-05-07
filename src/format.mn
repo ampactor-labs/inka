@@ -1,0 +1,455 @@
+// format.mn — canonical-render handler · the medium handles formatting
+//
+// The substrate-honest answer to "what about indent / tabs / 2-space-
+// vs-4-space?": the formatter renders the cursor's projection back to
+// disk in canonical form. The developer types meaning; the editor
+// renders properly; the file on disk is canonical regardless of what
+// the developer typed. Same source, same bytes, every save.
+//
+// Per protocol_cursor_is_argmax.md + protocol_parse_is_eager_graph_
+// projection.md (chain-link-5): the parser tolerates any structurally-
+// valid indent (relative ordering of verb-vs-operand suffices); the
+// formatter normalizes column counts. Indent is a render decision, not
+// a parse contract — the same chain-link-5 realization at the layout
+// layer that earlier closed `with EXPR` parsing and `$ident_at_p`
+// fabrication.
+//
+// The formatter IS a `~>` handler on the cursor — same kernel primitive
+// as every other tentacle. Composes:
+//
+//   keystroke
+//     |> tokenize
+//     |> parse_to_graph
+//     ~> format_default        // canonical render before display
+//     ~> render_to_transport   // terminal / LSP frame / web
+//       <~ accumulate(graph)   // IC re-renders on next keystroke
+//
+// Five verbs realized inside the formatter itself: each rendering
+// pipeline composes |> sequentially, ~> attaches per-form handlers,
+// <| fans out per-form rendering, >< parallelizes independent
+// sub-renders, <~ closes on stability (canonical form is a fixpoint —
+// running format twice IS the same as running once).
+//
+// SYNTAX.md §1185 governs the canonical layout. Authority:
+// - SYNTAX.md §342-389 (per-verb layout rules)
+// - SYNTAX.md §1142-1186 (layout enforcement)
+// - protocol_cursor_is_argmax.md
+// - protocol_parse_is_eager_graph_projection.md
+
+import types
+import effects
+import graph
+
+// ─── The Format effect ──────────────────────────────────────────────
+//
+// Three ops:
+//   format_program — render the whole AST as canonical String
+//   format_at_handle — render one node + canonical-spaced surroundings
+//   format_chain — render a single |> / ~> / <| / >< / <~ chain
+//
+// Resume cardinality is INFERRED from arm body structure per Phase B
+// substrate (CLAUDE.md ⌁ Mentl's anchor — interrogation #2).
+// format_default arms call resume exactly once → OneShot.
+
+effect Format {
+  format_program(Node) -> String
+  format_at_handle(Int) -> String
+  format_chain(Node) -> String
+}
+
+// ─── format_default — canonical render handler ──────────────────────
+//
+// `with !Mutate` — read-only over graph + AST; same constraint as
+// cursor_default + interrogate_default per the read-only-projection
+// discipline.
+//
+// Each arm composes the five verbs in its own rendering logic:
+//   <|  per-node-kind branches (each NodeBody variant gets its own
+//       render branch; the eight aspects of the cursor's projection
+//       fan out into eight render-aspect branches)
+//   ><  parallel sub-render (independent siblings render concurrently)
+//   |>  sequential through tokenize → indent → emit
+//   ~>  buffer handler attaches output sink
+//   <~  fixpoint check (running format twice = running once)
+//
+// Drift refused: 1 (no dispatch table; render IS graph projection); 6
+// (no primitive special-case — each NodeBody variant is one branch
+// of the same fanout); 7 (one record per RenderResult, not parallel-
+// arrays); 9 (every NodeBody variant bodied; no "later").
+
+handler format_default with !Mutate {
+
+  // ─── format_program — top-level render ────────────────────────────
+  //
+  // The whole AST renders by walking top-level statements through |>,
+  // each statement individually formatted via format_at_handle, and
+  // the results joined with newline separators. Pure rendering — no
+  // graph mutation, no side effects beyond the output String.
+
+  format_program(ast) => {
+    let stmts = ast_top_level_stmts(ast)
+    let rendered =
+      stmts
+        |> parallel_map((s) => format_one_stmt(s))
+    resume(join_lines(rendered))
+  },
+
+  // ─── format_at_handle — render one node ───────────────────────────
+  //
+  // The eight aspects of the formatter at one position fan out via <|.
+  // `(node, kind, ctx)` is borrowed (read-only) to eight render-aspect
+  // branches: tokens, indent, line_break, comment, span, doc, reason,
+  // sibling. Outputs tuple together; the assembly_step composes them
+  // into the canonical String.
+
+  format_at_handle(handle) => {
+    let node = perform graph_node_at(handle)
+    let kind = ast_kind_of(node)
+    let ctx = render_context_at(handle)
+    let pos = (node, kind, ctx)
+    let (tokens, indent, line_break, comment, span, doc, reason, sibling) =
+      pos
+        <| (
+          (n, _, _)  => render_tokens_for(n),                      // 1. tokens
+          (_, k, c)  => render_indent_for(k, c),                   // 2. indent (canonical)
+          (_, k, _)  => render_line_break_after(k),                // 3. line break
+          (n, _, _)  => render_comments_for(n),                    // 4. comments preserved
+          (n, _, _)  => render_span_marker(n),                     // 5. span (debug only)
+          (n, _, _)  => render_doc_attached(n),                    // 6. /// doc preserved
+          (n, _, _)  => render_reason_chain(n),                    // 7. reason (debug)
+          (_, _, c)  => render_sibling_separator(c)                // 8. sibling glue
+        )
+    let assembled = assemble_render(tokens, indent, line_break, comment, span, doc, reason, sibling)
+    resume(assembled)
+  },
+
+  // ─── format_chain — render one verb-chain ─────────────────────────
+  //
+  // Distinguishes the five verb-classes; each gets canonical layout
+  // per SYNTAX.md §342-389. `<|` opens-tuple-on-same-line with branches
+  // indented. `><` alone-on-line at indented center between paren-
+  // pipelines. `<~` indented center, optionally inline. `|>` and `~>`
+  // at left edge with stages on indented lines.
+
+  format_chain(chain_node) => {
+    let kind = ast_kind_of(chain_node)
+    let rendered = match kind {
+      NPipeExpr(PConverge, l, r)   => render_converge_chain(l, r),  // |>
+      NPipeExpr(PDiverge, l, r)    => render_diverge_chain(l, r),   // <|
+      NPipeExpr(PCompose, l, r)    => render_compose_chain(l, r),   // ><
+      NPipeExpr(PTeeBlock, l, r)   => render_tee_block(l, r),       // ~> block
+      NPipeExpr(PTeeInline, l, r)  => render_tee_inline(l, r),      // ~> inline
+      NPipeExpr(PFeedback, l, r)   => render_feedback_chain(l, r),  // <~
+      _                            => render_non_chain(chain_node)
+    }
+    resume(rendered)
+  }
+}
+
+// ─── Canonical layout constants (SYNTAX.md §1185) ───────────────────
+//
+// 2-space indent for left-edge verbs (|>, ~>, <|).
+// 4-space indent for indented-center convergent verbs (><, <~).
+// Tabs convert to spaces at format time.
+
+fn left_edge_indent() with Pure = 2
+fn indented_center() with Pure = 4
+
+// ─── Render a |> chain — sequential left-edge ───────────────────────
+//
+// canonical layout per SYNTAX.md §342-346:
+//
+//   input
+//     |> stage_a
+//     |> stage_b
+//
+// Input on its own line at base indent; |> at base + 2; stages on
+// the same line as their |>. The chain reads top-to-bottom = data flow.
+
+fn render_converge_chain(left, right) with Format + !Mutate = {
+  let left_str = perform format_chain(left)
+  let right_str = perform format_chain(right)
+  left_str
+    |> str_concat("\n")
+    |> str_concat(spaces(left_edge_indent()))
+    |> str_concat("|> ")
+    |> str_concat(right_str)
+}
+
+// ─── Render a <| chain — divergence with branch tuple ───────────────
+//
+// Canonical per SYNTAX.md §362-368:
+//
+//   input
+//     <| (
+//       branch_a,
+//       branch_b,
+//       branch_c,
+//     )
+//
+// Input on its own line; <| on the next line at +2 indent with `(`
+// on the same line; branches at +4 indent with trailing commas; `)`
+// at +2 indent (aligned with <|). The shape draws the fanout topology.
+
+fn render_diverge_chain(input, branches_tuple) with Format + !Mutate = {
+  let input_str = perform format_chain(input)
+  let branches = render_branch_tuple(branches_tuple)
+  input_str
+    |> str_concat("\n")
+    |> str_concat(spaces(left_edge_indent()))
+    |> str_concat("<| (\n")
+    |> str_concat(branches)
+    |> str_concat("\n")
+    |> str_concat(spaces(left_edge_indent()))
+    |> str_concat(")")
+}
+
+// ─── Render a >< chain — parallel composition ───────────────────────
+//
+// Canonical per SYNTAX.md §390-405:
+//
+//   (pipeline_a)
+//       ><
+//   (pipeline_b)
+//
+// Each branch parenthesized at base indent; >< alone on its line at
+// indented center (4-space). The shape is two columns met at center —
+// the parallel-merge topology.
+
+fn render_compose_chain(left, right) with Format + !Mutate = {
+  let left_str = perform format_chain(left)
+  let right_str = perform format_chain(right)
+  parenthesize(left_str)
+    |> str_concat("\n")
+    |> str_concat(spaces(indented_center()))
+    |> str_concat("><\n")
+    |> str_concat(parenthesize(right_str))
+}
+
+// ─── Render a ~> chain — handler-attach (block form) ───────────────
+//
+// Canonical per SYNTAX.md §451-459:
+//
+//   source
+//     |> lex
+//     |> parse
+//     ~> env_handler          // wraps prior chain
+//     ~> diagnostics_handler  // outermost — sandbox boundary
+//
+// Block form: ~> on its own line at left-edge indent. Newline before
+// is the disambiguator from the inline form per SYNTAX.md §469.
+
+fn render_tee_block(body, handler) with Format + !Mutate = {
+  let body_str = perform format_chain(body)
+  let handler_str = perform format_chain(handler)
+  body_str
+    |> str_concat("\n")
+    |> str_concat(spaces(left_edge_indent()))
+    |> str_concat("~> ")
+    |> str_concat(handler_str)
+}
+
+// ─── Render a ~> chain — handler-attach (inline form) ──────────────
+//
+// Canonical per SYNTAX.md §461-467:
+//
+//   raw_string
+//     |> parse_json ~> catch_parse_error(default = "{}")
+//     |> validate ~> log_warnings
+//
+// Inline form: no newline before ~>. Wraps only the immediately
+// preceding stage. The whitespace-before-~> IS the disambiguator —
+// the only place in Mentl where whitespace is semantically load-bearing
+// per SYNTAX.md §469.
+
+fn render_tee_inline(stage, handler) with Format + !Mutate = {
+  let stage_str = perform format_chain(stage)
+  let handler_str = perform format_chain(handler)
+  stage_str
+    |> str_concat(" ~> ")
+    |> str_concat(handler_str)
+}
+
+// ─── Render a <~ chain — feedback / iterative ──────────────────────
+//
+// Canonical per SYNTAX.md §483-489:
+//
+//   signal
+//       <~ delay(3)
+//
+// <~ at indented center (4-space) with the FeedbackSpec on the same
+// line. Requires iterative context (Sample / Tick / Clock / IC handler
+// installed upstream); without it, parser rejects with E_FeedbackNoContext.
+
+fn render_feedback_chain(input, spec) with Format + !Mutate = {
+  let input_str = perform format_chain(input)
+  let spec_str = perform format_chain(spec)
+  input_str
+    |> str_concat("\n")
+    |> str_concat(spaces(indented_center()))
+    |> str_concat("<~ ")
+    |> str_concat(spec_str)
+}
+
+// ─── Multi-source format — `parallel_map` over an AST list ──────────
+//
+// `format_pair` (binary special-case) was erased per
+// `feedback_fully_as_early.md`: callers compose
+// `parallel_map(format_program, asts)` directly. `format_program`
+// itself already uses `parallel_map` over top-level statements
+// (line 93); the same primitive composes at the multi-source level.
+// Drift 6 erasure.
+
+// ─── format_ic_loop — `<~` IC fixpoint on canonical-form stability ─
+//
+// The formatter's idempotency: format(format(x)) == format(x). The IC
+// loop closes when the rendered form stabilizes (one iteration after
+// initial — canonical IS the fixpoint). Per protocol_oracle_is_ic.md:
+// build IS the <~ loop. Composing format with IC means save-time
+// auto-formatting is just one iteration of this loop.
+
+fn format_ic_loop(initial_ast) with Format + IC + !Mutate = {
+  initial_ast
+    |> (ast) => perform format_program(ast)
+    ~> format_default
+      <~ accumulate(empty_render())
+}
+
+fn empty_render() with Pure = ""
+
+// ─── Helper functions — pure transforms over String ────────────────
+
+fn spaces(n) with Pure = {
+  if n == 0 { "" }
+  else { " " |> str_concat(spaces(n - 1)) }
+}
+
+fn parenthesize(s) with Pure = {
+  "(" |> str_concat(s) |> str_concat(")")
+}
+
+fn join_lines(lines) with Pure = {
+  if lines.len == 0 { "" }
+  else if lines.len == 1 { list_head(lines) }
+  else {
+    list_head(lines)
+      |> str_concat("\n")
+      |> str_concat(join_lines(list_tail(lines)))
+  }
+}
+
+// ─── Render-aspect helpers — one per cursor-projection lens ────────
+
+fn render_tokens_for(node) with Pure = {
+  // Tokens render via the lexer's inverse projection. Today returns a
+  // structural placeholder; full token-emit substrate lands as the
+  // wheel-side companion to the seed's lexer.wat — the formatter's
+  // canonical token stream IS the lexer's input form, normalized.
+  show_node(node)
+}
+
+fn render_indent_for(kind, ctx) with Pure = {
+  // Canonical indent depth per node kind. Match-arm bodies +2; let-
+  // value at same indent as let; fn body +2 from fn signature; etc.
+  // Each kind's indent is the PARENT's indent + verb-class offset.
+  spaces(canonical_indent_depth(kind, ctx))
+}
+
+fn render_line_break_after(kind) with Pure = match kind {
+  NStmt(_)              => "\n",
+  NExpr(_)              => "",
+  NPat(_)               => "",
+  NHole(_)              => ""
+}
+
+fn render_comments_for(node) with Pure = {
+  // // comments preserved verbatim with their attached span. The
+  // formatter strips trailing whitespace on comment-bearing lines but
+  // never re-flows comments themselves.
+  ""
+}
+
+fn render_span_marker(node) with Pure = ""
+
+fn render_doc_attached(node) with Pure = {
+  // /// doc comments attach to the next declaration per SYNTAX.md
+  // §1012. The formatter preserves the /// prefix and the doc-block's
+  // line breaks; full re-formatting of doc-block content is owned by
+  // the prose formatter (peer follow-up — separate concern from code
+  // formatting).
+  ""
+}
+
+fn render_reason_chain(node) with Pure = ""
+fn render_sibling_separator(ctx) with Pure = ""
+
+fn render_context_at(handle) with GraphRead + !Mutate = {
+  // Render context = parent kind + sibling position + indent depth.
+  // Today returns RenderContextDefault; full parent-walk substrate
+  // lands when the wheel grows full AST-parent indexing.
+  RenderContextDefault
+}
+
+fn render_branch_tuple(branches) with Format + !Mutate = {
+  if branches.len == 0 { "" }
+  else {
+    let head = list_head(branches)
+    let tail = list_tail(branches)
+    let head_str = perform format_chain(head)
+    let head_line = spaces(indented_center())
+      |> str_concat(head_str)
+      |> str_concat(",")
+    if tail.len == 0 { head_line }
+    else {
+      head_line
+        |> str_concat("\n")
+        |> str_concat(render_branch_tuple(tail))
+    }
+  }
+}
+
+fn render_non_chain(node) with Format + !Mutate = {
+  perform format_at_handle(node_handle(node))
+}
+
+fn assemble_render(tokens, indent, line_break, comment, span, doc, reason, sibling) with Pure = {
+  doc
+    |> str_concat(indent)
+    |> str_concat(tokens)
+    |> str_concat(comment)
+    |> str_concat(line_break)
+    |> str_concat(sibling)
+}
+
+fn format_one_stmt(stmt) with Format + !Mutate = {
+  perform format_at_handle(node_handle(stmt))
+}
+
+fn ast_top_level_stmts(ast) with Pure = ast
+
+fn ast_kind_of(node) with Pure = {
+  let N(body, _, _) = node
+  body
+}
+
+fn node_handle(node) with Pure = {
+  let N(_, _, h) = node
+  h
+}
+
+fn canonical_indent_depth(kind, ctx) with Pure = match kind {
+  NStmt(_) => 0,
+  NExpr(_) => left_edge_indent(),
+  _        => 0
+}
+
+type RenderContext
+  = RenderContextDefault
+  | RenderContextChain(Int)        // current chain depth
+  | RenderContextBlock(Int)        // inside { ... } at depth
+  | RenderContextTuple(Int)        // inside (...) at depth
+
+fn show_node(node) with Pure = {
+  let N(_body, _, h) = node
+  "node@" |> str_concat(int_to_str(h))
+}

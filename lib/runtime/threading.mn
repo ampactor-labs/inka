@@ -151,6 +151,64 @@ handler sequential_compose with results = [] {
   num_cores() => resume(1)
 }
 
+// ─── parallel_map — runtime-list parallel fold via `><` ─────────────
+//
+// The N-arity primitive that pair-forms (compile_pair_modules,
+// format_pair, teach_pair, cursor_pair_at) accreted around the absence
+// of. Per `feedback_fully_as_early.md`: binary pair-forms ARE the tell
+// that an N-arity peer is missing; this IS that peer.
+//
+// Per Layer 3 framing (cursor IS the scheduler): parallelism IS handler
+// interpretation of continuation-capture (kernel primitive #2). `><` IS
+// the multi-cont OneShot fork at the kernel layer; parallel_map IS the
+// runtime-list fold via binary `><`; `parallel_compose` interprets the
+// forks SPATIALLY (across cores), `sequential_compose` interprets them
+// TEMPORALLY. Same source — handler swap.
+//
+// Per CLAUDE.md ⌁ eight interrogations:
+//   Graph?     recursive list-fold → LMatch + LCall(spawn/join) + LCons
+//   Handler?   parallel_compose (or sequential_compose) installed upstream
+//   Verb?      `><` is the binary step of the fold; `|>` is chain glue
+//   Row?       Thread + (caller's row); HM widens at instantiation
+//   Ownership? each list element consumed (`own`); list itself ref-borrowed
+//   Refinement? length-preserving — peer follow-up (post-L1)
+//   Gradient?  unlocks "sequential map → parallel_map for free" suggestion
+//   Reason?    each spawn leaves Reason::ParallelComposeSpawn(branch_idx)
+//
+// Drift refused: 1 (no thread-pool / scheduler object — `><` IS the
+// fanout); 6 (uniform N=0 to ∞; pair-forms collapse to
+// `parallel_map([a, b], f)`); 9 (no "sequential fallback for now" —
+// sequential_compose is a peer HANDLER, not a deferred mode).
+//
+// Peer follow-ups (positive-form, structurally orthogonal):
+// - Hβ.runtime.wasi-thread-spawn-seed — bootstrap/src/* substrate
+//   importing wasi_thread_spawn + per-thread bump arena partition.
+//   Without it, parallel_compose runs single-threaded via the
+//   intrinsics below; with it, OS threads pin all cores cargo-style.
+// - Hβ.driver.level-set-par-walk — Kahn-style topological levels in
+//   src/driver.mn; modules in same level parallel_map; cross-level
+//   sequential gates dep-installation.
+// - Hβ.cursor.speculative-compile — Axis 2 multi-shot dispatched
+//   spatially: Synth's MultiShot proposer captures cursor at "what
+//   type for this hole?"; per-candidate compile on different cores;
+//   results bubble back as gradient suggestions with full Reason chains.
+// - Hβ.cursor.work-stealing-via-gradient — when N cores finish their
+//   handles and ask "what next?", the cursor's gradient returns
+//   argmax. The gradient IS the priority queue; no scheduler module.
+
+fn parallel_map(xs, f) with Thread = {
+  if xs.len == 0 { [] }
+  else {
+    let h = list_head(xs)
+    let t = list_tail(xs)
+    let (head_result, tail_results) =
+      (f(h))
+          ><
+      (parallel_map(t, f))
+    [head_result] ++ tail_results
+  }
+}
+
 // ─── FFI surface ────────────────────────────────────────────────────
 //
 // wasi-threads provides thread-spawn(start_arg) -> tid as the only
@@ -193,6 +251,50 @@ fn closure_pointer(ref task) with Pure = closure_pointer_intrinsic(task)
 fn closure_pointer_intrinsic(ref task) with Pure = 0
 
 fn max_join_timeout() with Pure = 1000000000
+
+// ─── wasi_threads — handler for the WasiThreads effect ────────────────
+//
+// Each arm performs an intrinsic and resumes; no state. Runtime
+// intrinsics come from the seed-side substrate per
+// `Hβ.runtime.wasi-thread-spawn-seed` (positive-form named peer):
+// bootstrap/src/* imports `wasi_thread_spawn` from the WASI threads
+// runtime + partitions per-thread bump arenas + lowers thread-record
+// allocation. Until that peer cascade lands, the intrinsics return
+// single-thread sentinels; parallel_compose dispatches via these
+// intrinsics and degrades to sequential-equivalent runtime behavior.
+// Same handler, swap-via-substrate-cascade — the wheel describes
+// parallel without depending on the seed.
+//
+// Per `protocol_parallelism_symmetry.md`: parallel_compose's ffi_spawn
+// performs WasiThreads ops; without wasi_threads installed in the
+// chain, the row stays open (E_HandlerUninstallable). Both handlers
+// install together in main's `~>` chain.
+//
+// Drift refused: 1 (no thread-pool object); 6 (one handler covers all
+// WasiThreads ops uniformly).
+
+handler wasi_threads {
+  wasi_thread_spawn(start_arg)        => resume(wasi_thread_spawn_intrinsic(start_arg)),
+  thread_record_alloc(closure_ptr)    => resume(thread_record_alloc_intrinsic(closure_ptr)),
+  thread_record_pack_task(slot, ptr)  => resume(thread_record_pack_task_intrinsic(slot, ptr)),
+  thread_record_done_addr(tid)        => resume(thread_record_done_addr_intrinsic(tid)),
+  thread_record_result_addr(tid)      => resume(thread_record_result_addr_intrinsic(tid)),
+  thread_record_self_id()             => resume(thread_record_self_id_intrinsic()),
+  wasi_num_cores()                    => resume(wasi_num_cores_intrinsic())
+}
+
+// Single-thread sentinel intrinsics — replaced by
+// `Hβ.runtime.wasi-thread-spawn-seed` cascade with bootstrap-side
+// hand-WAT bodies that import wasi_thread_spawn from the WASI threads
+// runtime. Sentinel values keep parallel_compose's ffi_spawn / ffi_join
+// / current_id / num_cores runtime-correct under sequential dispatch.
+fn wasi_thread_spawn_intrinsic(start_arg)        with Pure = start_arg
+fn thread_record_alloc_intrinsic(closure_ptr)    with Pure = 0
+fn thread_record_pack_task_intrinsic(slot, ptr)  with Pure = ()
+fn thread_record_done_addr_intrinsic(tid)        with Pure = 0
+fn thread_record_result_addr_intrinsic(tid)      with Pure = 0
+fn thread_record_self_id_intrinsic()             with Pure = 0
+fn wasi_num_cores_intrinsic()                    with Pure = 1
 
 // ─── Connection to the kernel ─────────────────────────────────────────
 

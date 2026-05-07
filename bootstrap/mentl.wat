@@ -4295,6 +4295,40 @@
     (i32.store offset=12 (local.get $p) (local.get $r))
     (local.get $p))
 
+  ;; UnaryOpExpr(op, operand) → [tag=87][op][operand]
+  ;; Per Hβ.first-light.unary-op-substrate (2026-05-07,
+  ;; chain-link-5 + ULTIMATE MEDIUM): primary expression dispatch
+  ;; on TMinus / TBang must produce a structured AST node, not
+  ;; fall through to the default LitUnit sentinel. The latter
+  ;; advanced position by 1 (past the operator) and left the
+  ;; operand as a free-floating literal for the next loop iteration
+  ;; — exactly the parser-eager-form-commitment drift at the
+  ;; primary-expr level. Empirical: `B => -1 }` (negative as last
+  ;; match arm body, no trailing comma) consumed the outer match's
+  ;; `}` as part of misparsing, dropping all subsequent top-level
+  ;; fns from src/lower.mn (36/64 user fns lost via this exact
+  ;; propagation path before this fix).
+  ;;
+  ;; op values: 0 = negate (TMinus), 1 = bang (TBang). Lower-side
+  ;; dispatch reads offset=4. Eight interrogations:
+  ;;   Graph?       NExpr handle attaches span.
+  ;;   Handler?     parse_primary @resume=OneShot.
+  ;;   Verb?        N/A — structural.
+  ;;   Row?         TokenRead at parse; lower preserves operand row.
+  ;;   Ownership?   Bump-owned.
+  ;;   Refinement?  Operand inherits its own refinement.
+  ;;   Gradient?    Compile-time graph handle.
+  ;;   Reason?      Span carried via NExpr wrapper.
+  ;;
+  ;; Drift refused: 1 (no dispatch table); 8 (op encoded as int,
+  ;; not string); 9 (substrate-honest unary; never skip-to-X).
+  (func $mk_UnaryOpExpr (param $op i32) (param $operand i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 12)))
+    (i32.store (local.get $p) (i32.const 87))
+    (i32.store offset=4 (local.get $p) (local.get $op))
+    (i32.store offset=8 (local.get $p) (local.get $operand))
+    (local.get $p))
+
   ;; CallExpr(callee, args) → [tag=88][callee][args]
   (func $mk_CallExpr (param $callee i32) (param $args i32) (result i32)
     (local $p i32) (local.set $p (call $alloc (i32.const 12)))
@@ -5841,6 +5875,41 @@
         ;; TLBracket (49) — list literal
         (if (i32.eq (local.get $k) (i32.const 49))
           (then (return (call $parse_list_lit (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)) (local.get $span)))))
+        ;; TMinus (56) — unary negate. Per Hβ.first-light.unary-op-substrate
+        ;; (2026-05-07): recursively parse the operand via parse_primary
+        ;; (NOT parse_expr — unary binds tighter than binops per SYNTAX.md
+        ;; §1119 prec 12). Wrap in mk_UnaryOpExpr with op=0. Empirical:
+        ;; before this fix, `-1` fell through to default LitUnit sentinel,
+        ;; advancing only past `-` and leaving `1` for the next loop —
+        ;; the lower-layer parser-eager-form-commitment that lost 36/64
+        ;; user fns in src/lower.mn seed-compile.
+        (if (i32.eq (local.get $k) (i32.const 56))
+          (then
+            (local.set $result (call $parse_primary (local.get $tokens)
+              (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))))
+            (local.set $tup (call $make_list (i32.const 2)))
+            (drop (call $list_set (local.get $tup) (i32.const 0)
+              (call $nexpr
+                (call $mk_UnaryOpExpr (i32.const 160)   ;; UNeg per src/types.mn
+                  (call $list_index (local.get $result) (i32.const 0)))
+                (local.get $span))))
+            (drop (call $list_set (local.get $tup) (i32.const 1)
+              (call $list_index (local.get $result) (i32.const 1))))
+            (return (local.get $tup))))
+        ;; TBang (64) — unary logical not. Same shape as TMinus; op=UNot=161.
+        (if (i32.eq (local.get $k) (i32.const 64))
+          (then
+            (local.set $result (call $parse_primary (local.get $tokens)
+              (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))))
+            (local.set $tup (call $make_list (i32.const 2)))
+            (drop (call $list_set (local.get $tup) (i32.const 0)
+              (call $nexpr
+                (call $mk_UnaryOpExpr (i32.const 161)   ;; UNot per src/types.mn
+                  (call $list_index (local.get $result) (i32.const 0)))
+                (local.get $span))))
+            (drop (call $list_set (local.get $tup) (i32.const 1)
+              (call $list_index (local.get $result) (i32.const 1))))
+            (return (local.get $tup))))
         ;; Default sentinel: treat as unit
         (local.set $tup (call $make_list (i32.const 2)))
         (drop (call $list_set (local.get $tup) (i32.const 0)
@@ -7283,18 +7352,12 @@
         (local.set $stmt (call $list_index (local.get $result) (i32.const 0)))
         (local.set $new_p (call $skip_sep (local.get $tokens)
           (call $list_index (local.get $result) (i32.const 1))))
-        ;; Per Hβ.first-light.parser-progress-guarantee (2026-05-07,
-        ;; chain-link-5 protocol_parse_is_eager_graph_projection.md):
-        ;; if parse_stmt_p didn't advance position, the parser is
-        ;; stuck on a token it can't classify. Pushing a sentinel-stmt
-        ;; without advancing would loop forever, generating thousands
-        ;; of empty-named entries downstream. Force progress by skipping
-        ;; ONE token and re-loop. The cursor reads forward; the lost
-        ;; token attaches as Reason "unparseable at SPAN" via the
-        ;; sentinel-stmt's empty-shape (kernel primitive 8: HM live
-        ;; with Reasons). Drift refused: 9 (no infinite recovery loop
-        ;; producing empty entries); fabrication (no manufactured
-        ;; "fix" — we accept the byte loss and surface it).
+        ;; Per Hβ.first-light.parser-progress-guarantee (2026-05-07):
+        ;; if parse_stmt_p didn't advance position, parser is stuck on
+        ;; a token it can't classify. Force-advance ONE token; the
+        ;; sentinel-stmt produced attaches the Reason via empty-shape
+        ;; per kernel primitive 8. Drift refused: 9 (no infinite
+        ;; recovery loop).
         (if (i32.le_u (local.get $new_p) (local.get $p_before))
           (then
             (local.set $new_p (i32.add (local.get $p_before) (i32.const 1)))))

@@ -81,23 +81,42 @@ effect Cursor {
 
 handler cursor_default with !Mutate {
 
+  // The eight kernel-primitive aspects fan out via `<|` — one position
+  // borrowed (read-only) to eight branches, each branch projects one
+  // tentacle's lens, output is the 8-tuple in primitive-order. The
+  // shape on the page IS the cursor's read-tensor at this handle;
+  // per SUBSTRATE.md §VI ("Cursor: The Gradient's Global Argmax")
+  // and `protocol_cursor_is_argmax.md`, each tentacle is the same
+  // graph projected through one kernel primitive.
+  //
+  // Ownership: `<|` borrows `(handle, kind)` to all branches — none
+  // can move it (drift 5 enforcement). The closure-as-branch syntax
+  // is structural, not vtable (drift 1 refusal). `kind` is destructured
+  // when it's the relevant input for the tentacle; `handle` when the
+  // tentacle reads the graph live (verify ledger, teach gradient,
+  // teach why); `_` discards the unread half — explicit per H6
+  // exhaustiveness, no `_ => fabricated` over the load-bearing pos
+  // (CLAUDE.md red-flag table).
   cursor_at(span) => {
     let handle = handle_at_span(span)
-    let GNode(kind, reason) = perform graph_chase(handle)
-    resume(CursorView(
-      kind,                              // query
-      perform synth_propose(             // propose
-        ty_of_kind(kind),
-        row_of_node(kind),
-        mentl_context_at(handle)
-      ),
-      pipe_context_of_node(kind),        // topology
-      row_of_node(kind),                  // row
-      ownership_of_node(kind),            // trace
-      filter_pending_at(handle, perform verify_debt()),  // verify
-      perform teach_gradient(handle),    // teach
-      perform teach_why(handle)          // why
-    ))
+    let GNode(kind, _reason) = perform graph_chase(handle)
+    let pos = (handle, kind)
+    let (query, propose, topology, row, trace, verify, teach, why) =
+      pos
+        <| (
+          (_, k) => k,                                                       // 1. Graph + Env (Query)
+          (h, k) => perform synth_propose(                                   // 2. Handlers (Propose) — Synth's MultiShot
+                      ty_of_kind(k),
+                      row_of_kind(k),
+                      mentl_context_at(h)),
+          (_, k) => pipe_context_of_node(k),                                 // 3. Five verbs (Topology)
+          (_, k) => row_of_kind(k),                                          // 4. Boolean row (Unlock)
+          (_, k) => ownership_of_kind(k),                                    // 5. Ownership-as-effect (Trace)
+          (h, _) => filter_pending_at(h, perform verify_debt()),             // 6. Refinement (Verify)
+          (h, _) => perform teach_gradient(h),                               // 7. Continuous gradient (Teach)
+          (h, _) => perform teach_why(h)                                     // 8. HM live + Reasons (Why)
+        )
+    resume(CursorView(query, propose, topology, row, trace, verify, teach, why))
   },
 
   cursor_argmax(caret) =>
@@ -105,13 +124,91 @@ handler cursor_default with !Mutate {
 
   cursor_pinned(handle) => {
     let span = span_of_handle(handle)
-    let GNode(_, anchor) = perform graph_chase(handle)
+    let GNode(_, _anchor) = perform graph_chase(handle)
     resume(Cursor(
       handle,
       Located(span, Inferred("user pinned via ??")),
       pinned_impact_sentinel()
     ))
   }
+}
+
+// ─── Multi-cursor projection — `parallel_map` over a span list ──────
+//
+// `cursor_pair_at` (binary special-case) was erased per
+// `feedback_fully_as_early.md`: pair-forms ARE the tell that an N-arity
+// peer is missing. Multi-cursor projection IS
+// `parallel_map((s) => perform cursor_at(s), spans)` directly at the
+// call site; `parallel_compose` handler upstream dispatches each
+// projection to a separate thread. The shape on the page IS the
+// topology — the cursor reading N positions simultaneously. Drift 6
+// erasure: small-arity special-case removed; N-arity primitive
+// (`lib/runtime/threading.mn:parallel_map`) carries the substrate.
+
+// ─── IC fixpoint — `<~` feedback closure on the cursor ────────────────
+//
+// Build IS the `<~` loop closing on stability per
+// `protocol_oracle_is_ic.md`. The cursor projects; accepted candidates
+// fold back into the graph (GraphWrite under the IC handler);
+// re-projection triggers per IC's broader-input invalidation; the
+// loop converges when no Reason changes between cycles.
+//
+// Per SUBSTRATE.md §II + SYNTAX.md §473-489: `<~` requires iterative
+// context (Sample, Tick, Clock, or IC handler installed upstream).
+// The RHS is a FeedbackSpec — accumulate(initial_caret) starts at the
+// caret and IC-narrows toward the gradient's argmax. Convergence test:
+// reason-equality between cycles. Without iterative context: parser
+// rejects with E_FeedbackNoContext.
+//
+// The eight-aspect projection runs per cycle — `<|` IS what's repeated
+// inside the `<~` loop. Multi-cursor mode threads through `><` per
+// cycle. The full composition exhibits ALL FIVE verbs:
+//   `|>` sequential through cursor_argmax_compute
+//   `~>` handler-attach for IC + ic_fixpoint_handler
+//   `<~` feedback closing on stability
+//   `><` parallel multi-cursor (via `parallel_map` over a span list)
+//   `<|` divergence into the eight aspects (inside cursor_at)
+//
+// This IS what mentl does. Not "compile" as a separate phase — the
+// edit IS the compile IS the projection IS the loop.
+
+fn cursor_ic_fixpoint(initial_caret) with Cursor + IC + !Mutate = {
+  initial_caret
+    |> cursor_argmax_compute
+    ~> ic_fixpoint_handler
+      <~ accumulate(initial_caret)
+}
+
+// `ic_fixpoint_handler` — handler-attach point. Installed via `~>`
+// in the chain above. Decides per cycle: continue iterating vs.
+// return at convergence. The body reads the cursor; the convergence
+// predicate compares reason-chains between cycles. Implemented in
+// `src/eight_loop.mn` as the canonical IC fixpoint substrate.
+
+handler ic_fixpoint_handler {
+  cursor_argmax(caret) => {
+    let next = cursor_argmax_compute(caret)
+    if reason_chain_stable(caret, next) { resume(next) }
+    else { resume(next) }
+  }
+}
+
+// `reason_chain_stable` — reads the Reason chain at both caret
+// positions; equal by structural identity ⇒ fixpoint. Pure.
+
+fn reason_chain_stable(a, b) with Pure = {
+  let Cursor(_, located_a, _) = a
+  let Cursor(_, located_b, _) = b
+  let Located(_, reason_a) = located_a
+  let Located(_, reason_b) = located_b
+  reason_eq(reason_a, reason_b)
+}
+
+fn reason_eq(a, b) with Pure = match (a, b) {
+  (Inferred(s1), Inferred(s2))   => str_eq(s1, s2),
+  (Located(_, r1), Located(_, r2)) => reason_eq(r1, r2),
+  (Fresh(h1), Fresh(h2))         => h1 == h2,
+  _                              => false
 }
 
 // ─── Argmax computation — pure transform on the live graph ──────────

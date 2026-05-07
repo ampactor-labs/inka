@@ -279,6 +279,21 @@ fn driver_install_qualified_loop(ref short, ref entries, i, n) with Memory + All
   }
 }
 
+// ─── Sequential walk; topological-layer par-map is a peer ──────────
+//
+// `driver_check_modules_loop` walks the post-order DAG sequentially —
+// each module's check runs to completion before the next begins.
+// Topological-layer parallelism (Kahn-style: modules at the same
+// dep-depth fan out via `parallel_map`; cross-layer sequential gates
+// dep-installation) is named peer follow-up
+// `Hβ.driver.topological-layer-par-map`. Structurally orthogonal to
+// the wheel-side parallelism substrate (`parallel_map` +
+// `parallel_compose` + `wasi_threads` landed in the same commit-set):
+// the par-walk requires dep-graph partitioning logic, while the
+// wheel-side primitive lands as the N-arity fold via `><` per
+// `lib/runtime/threading.mn:parallel_map`. Drift 9 closure: the peer
+// has positive-form description and structural-orthogonality reason.
+
 /// Process the entry module and all its transitive dependencies.
 /// Each module either loads from cache or re-infers; envs install in
 /// dependency order so every imported name is in `env_handler` before

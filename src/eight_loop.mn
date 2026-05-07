@@ -144,48 +144,48 @@ effect Interrogate {
 
 handler interrogate_default with !Mutate {
 
+  // The eight interrogations fan out via `<|` — `(handle, kind, reason)`
+  // borrowed to eight branches, each branch running one tentacle's
+  // verdict, output is the 8-tuple of InterrogationVerdicts in
+  // primitive-order. Same shape as cursor_at — Cursor's eight aspects
+  // surface as human-readable; InterrogationReport's eight verdicts
+  // surface as structured artifacts the IDE walks. SAME eight, FIVE
+  // roles, ONE method (per the recursive realization at the bottom).
+  //
+  // Drift refused per branch: 1 (each branch is a closure call, no
+  // dispatch table); 6 (eight uniform branches; no primitive special
+  // case); 7 (one record output, not parallel-arrays); 9 (all eight
+  // bodied; no "later"); 11 (no acc-append in loop; <| outputs tuple).
   interrogate_at(handle) => {
     let GNode(kind, reason) = perform graph_chase(handle)
     let span = perform graph_span_of(handle)
-
-    // 1. Graph?      — the binding's NodeKind reveals what's encoded.
-    let graph_v = match kind {
-      NBound(_)     => VerdictClears(reason),
-      NRowBound(_)  => VerdictClears(reason),
-      NFree(_)      => VerdictInvites(graph_invite_for(handle, reason)),
-      NRowFree(_)   => VerdictInvites(graph_invite_for(handle, reason)),
-      NErrorHole(r) => VerdictInvites(graph_invite_for(handle, r))
-    }
-
-    // 2. Handler?    — what handler projects this position's effects?
-    let handler_v = handler_verdict_for(handle, kind, reason)
-
-    // 3. Verb?       — what pipe context surrounds this position?
-    let verb_v = verb_verdict_for(handle, kind, reason)
-
-    // 4. Row?        — what effect row gates this binding?
-    let row_v = row_verdict_for(handle, kind, reason)
-
-    // 5. Ownership?  — what own/ref proves linearity?
-    let ownership_v = ownership_verdict_for(handle, kind, reason)
-
-    // 6. Refinement? — what Verify-pending predicate bounds this?
-    let refinement_v = refinement_verdict_for(handle, reason)
-
-    // 7. Gradient?   — what annotation would unlock capability?
-    let gradient_v = match perform teach_gradient(handle) {
-      None => VerdictClears(reason),
-      Some(suggestion) => VerdictInvites(suggestion)
-    }
-
-    // 8. Reason?     — what edge does this leave for Why?
-    let reason_v = match reason {
-      Inferred(_)   => VerdictClears(reason),
-      Declared(_)   => VerdictClears(reason),
-      Located(_, _) => VerdictClears(reason),
-      _             => VerdictInvites(reason_invite_for(handle, reason))
-    }
-
+    let pos = (handle, kind, reason)
+    let (graph_v, handler_v, verb_v, row_v, ownership_v, refinement_v, gradient_v, reason_v) =
+      pos
+        <| (
+          (_, k, r) => match k {                                                    // 1. Graph
+            NBound(_)     => VerdictClears(r),
+            NRowBound(_)  => VerdictClears(r),
+            NFree(_)      => VerdictInvites(graph_invite_for(0, r)),
+            NRowFree(_)   => VerdictInvites(graph_invite_for(0, r)),
+            NErrorHole(_) => VerdictInvites(graph_invite_for(0, r))
+          },
+          (h, k, r) => handler_verdict_for(h, k, r),                                // 2. Handler
+          (h, k, r) => verb_verdict_for(h, k, r),                                   // 3. Verb
+          (h, k, r) => row_verdict_for(h, k, r),                                    // 4. Row
+          (h, k, r) => ownership_verdict_for(h, k, r),                              // 5. Ownership
+          (h, _, r) => refinement_verdict_for(h, r),                                // 6. Refinement
+          (h, _, r) => match perform teach_gradient(h) {                            // 7. Gradient
+            None             => VerdictClears(r),
+            Some(suggestion) => VerdictInvites(suggestion)
+          },
+          (_, _, r) => match r {                                                    // 8. Reason
+            Inferred(_)   => VerdictClears(r),
+            Declared(_)   => VerdictClears(r),
+            Located(_, _) => VerdictClears(r),
+            _             => VerdictInvites(reason_invite_for(0, r))
+          }
+        )
     resume(InterrogationReport({
       handle:        handle,
       span:          span,
@@ -200,16 +200,55 @@ handler interrogate_default with !Mutate {
     }))
   },
 
+  // interrogate_all walks every binding-bearing node concurrently
+  // via parallel_map; the Thread effect handler installed upstream
+  // dispatches the parallelism. Per protocol_parallelism_symmetry.md:
+  // <| (per-position eight-aspect fanout, inside interrogate_at) +
+  // parallel_map (across positions) compose — the project-wide audit
+  // IS the cursor projection scaled to N handles.
   interrogate_all() => {
     let snapshot = perform graph_snapshot()
     let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
-    let buf = make_list(next)
-    let kept = walk_all_loop(0, next, buf, 0)
-    resume(slice(buf, 0, kept))
+    let positions = enumerate_handles(0, next)
+    let reports =
+      positions
+        |> parallel_map((h) => perform interrogate_at(h))
+    resume(reports)
   },
 
   interrogation_invites(report, kind) =>
     resume(verdict_is_invite(extract_verdict(report, kind)))
+}
+
+// ─── The IC fixpoint over the project audit ─────────────────────────
+//
+// `<~` closes the audit cycle: when the developer types `??` or accepts
+// a gradient suggestion, the graph mutates, IC invalidates affected
+// modules, the audit re-projects, the gradient density updates. The
+// loop converges when total_clear_positions stops increasing — the
+// project at gradient top per silence_predicate_oracle.
+//
+// This composition exhibits all FIVE verbs:
+//   <|  inside interrogate_at — eight verdicts per position
+//   ><  multi-cursor (via `parallel_map` over a span list upstream)
+//   |>  positions through parallel_map → reports
+//   ~>  interrogate_default attached as handler
+//   <~  feedback closing on gradient density stability
+//
+// The Hμ.eight-interrogation-loop's ULTIMATE FORM realized by topology.
+
+fn audit_ic_fixpoint(initial_density) with Interrogate + IC + !Mutate = {
+  initial_density
+    |> (_) => perform interrogate_all()
+    ~> interrogate_default
+      <~ accumulate(empty_density())
+}
+
+fn empty_density() with Pure = []
+
+fn enumerate_handles(i, n) with Pure = {
+  if i >= n { [] }
+  else { [i] ++ enumerate_handles(i + 1, n) }
 }
 
 // ─── Per-interrogation helpers ──────────────────────────────────────

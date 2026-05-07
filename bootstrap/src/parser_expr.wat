@@ -242,6 +242,41 @@
         ;; TLBracket (49) — list literal
         (if (i32.eq (local.get $k) (i32.const 49))
           (then (return (call $parse_list_lit (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)) (local.get $span)))))
+        ;; TMinus (56) — unary negate. Per Hβ.first-light.unary-op-substrate
+        ;; (2026-05-07): recursively parse the operand via parse_primary
+        ;; (NOT parse_expr — unary binds tighter than binops per SYNTAX.md
+        ;; §1119 prec 12). Wrap in mk_UnaryOpExpr with op=0. Empirical:
+        ;; before this fix, `-1` fell through to default LitUnit sentinel,
+        ;; advancing only past `-` and leaving `1` for the next loop —
+        ;; the lower-layer parser-eager-form-commitment that lost 36/64
+        ;; user fns in src/lower.mn seed-compile.
+        (if (i32.eq (local.get $k) (i32.const 56))
+          (then
+            (local.set $result (call $parse_primary (local.get $tokens)
+              (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))))
+            (local.set $tup (call $make_list (i32.const 2)))
+            (drop (call $list_set (local.get $tup) (i32.const 0)
+              (call $nexpr
+                (call $mk_UnaryOpExpr (i32.const 160)   ;; UNeg per src/types.mn
+                  (call $list_index (local.get $result) (i32.const 0)))
+                (local.get $span))))
+            (drop (call $list_set (local.get $tup) (i32.const 1)
+              (call $list_index (local.get $result) (i32.const 1))))
+            (return (local.get $tup))))
+        ;; TBang (64) — unary logical not. Same shape as TMinus; op=UNot=161.
+        (if (i32.eq (local.get $k) (i32.const 64))
+          (then
+            (local.set $result (call $parse_primary (local.get $tokens)
+              (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))))
+            (local.set $tup (call $make_list (i32.const 2)))
+            (drop (call $list_set (local.get $tup) (i32.const 0)
+              (call $nexpr
+                (call $mk_UnaryOpExpr (i32.const 161)   ;; UNot per src/types.mn
+                  (call $list_index (local.get $result) (i32.const 0)))
+                (local.get $span))))
+            (drop (call $list_set (local.get $tup) (i32.const 1)
+              (call $list_index (local.get $result) (i32.const 1))))
+            (return (local.get $tup))))
         ;; Default sentinel: treat as unit
         (local.set $tup (call $make_list (i32.const 2)))
         (drop (call $list_set (local.get $tup) (i32.const 0)

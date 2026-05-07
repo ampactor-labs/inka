@@ -74,6 +74,8 @@ fn compile(entry_module) = {
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
+    ~> parallel_compose
+    ~> wasi_threads
     ~> diagnostics_handler
 }
 
@@ -108,6 +110,8 @@ fn compile_source(source) = {
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
+    ~> parallel_compose
+    ~> wasi_threads
     ~> diagnostics_handler
 }
 
@@ -168,6 +172,87 @@ fn audit(source) = {
     ~> env_handler
     ~> graph_handler
     ~> diagnostics_handler
+}
+
+// ─── cursor_session — `<|` fanout from one source to four projections ──
+//
+// One source borrowed (read-only) to four cursor projections — check
+// surfaces diagnostics; teach surfaces gradient steps; query answers
+// structured questions; audit surfaces capability-severance suggestions.
+// All four read the SAME inferred graph; the AST is borrowed via `<|`
+// to each branch; outputs tuple together.
+//
+// `<|` here proves the cursor's eight-aspect projection AT THE
+// PIPELINE level: a single edit triggers four canonical surfaces
+// simultaneously — exactly what `mentl edit` does at the IDE layer.
+// The seed parser handles `<|` per Hβ.first-light.handle-expr-with-
+// clause-substrate; the lower-side parallelism dispatches via the
+// Thread effect handler installed upstream (single-thread sequential
+// default; WasiThreads spawn in production per
+// protocol_parallelism_symmetry.md).
+//
+// Drift refused: 9 (no deferred surface — all four bodied here);
+// 6 (none of the surfaces is primitive special-case; uniform branches);
+// 7 (output is a 4-tuple, not parallel-arrays).
+
+fn cursor_session(source) = {
+  let (diagnostics, gradients, audit_report, query_default_view) =
+    source
+      <| (
+        (s) => check_source(s),
+        (s) => teach(s),
+        (s) => audit(s),
+        (s) => query(s, "type main")
+      )
+  CursorSessionResult(diagnostics, gradients, audit_report, query_default_view)
+}
+
+type CursorSessionResult
+  = CursorSessionResult({
+      diagnostics:        String,
+      gradients:          String,
+      audit_report:       String,
+      query_default_view: String
+    })
+
+// ─── Multi-module compilation — `parallel_map` over a module list ────
+//
+// `compile_pair_modules` (binary special-case) was erased per
+// `feedback_fully_as_early.md`: when the driver's topological-layer
+// par-walk lands (`Hβ.driver.level-set-par-walk` peer), each
+// dep-independent layer composes as `parallel_map(compile, layer)`
+// directly. `parallel_compose` handler in main's `~>` chain dispatches
+// each module's compile to a separate thread; render targets attach
+// via `~>` to the per-module wat output. Drift 6 erasure.
+
+// ─── ic_compile_loop — `<~` feedback closing on cache stability ───────
+//
+// Build IS the `<~` loop closing at fixpoint. Per
+// protocol_oracle_is_ic.md: every source change triggers IC
+// invalidation; the cache tells affected modules to re-infer; the
+// queue updates; the cursor surfaces the highest-priority residue.
+// The cycle converges when no module's cache hash changes between
+// cycles — the project at gradient top.
+//
+// `<~` requires iterative context per SYNTAX.md §489. The IC handler
+// installed upstream provides it. accumulate(initial_cache) starts at
+// empty cache and IC-narrows toward the proven-complete state.
+//
+// This composition exhibits ALL FIVE verbs at the project level:
+//   |>  source through frontend |> infer_program |> ... |> emit
+//   <|  source borrowed to four surface projections (cursor_session)
+//   ><  multi-module parallel composition (compile_pair_modules)
+//   ~>  handler stack — diagnostics outermost, lookup_ty innermost
+//   <~  IC fixpoint closing on cache-hash stability
+//
+// `mentl edit` IS this loop running. There is no separate `compile`
+// — the edit IS the compile IS the projection IS the loop closing.
+
+fn ic_compile_loop(initial_entry) with IC + !Mutate = {
+  initial_entry
+    |> driver_check
+    ~> cached_check_with_oracle
+      <~ accumulate(empty_cache())
 }
 
 // frontend — lex |> parse

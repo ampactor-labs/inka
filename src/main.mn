@@ -72,6 +72,8 @@ fn main(argv) = {
       ~> interrogate_default
       ~> mentl_default
       ~> wasi_filesystem
+      ~> parallel_compose
+      ~> wasi_threads
       ~> verify_ledger
       ~> diagnostics_handler
       ~> graph_handler
@@ -92,6 +94,8 @@ fn main(argv) = {
         action()
           ~> wat_stdout
           ~> wasi_filesystem
+          ~> parallel_compose
+          ~> wasi_threads
           ~> no_iterative_ctx
           ~> diagnostics_handler
           ~> graph_handler

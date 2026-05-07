@@ -121,6 +121,40 @@
     (i32.store offset=12 (local.get $p) (local.get $r))
     (local.get $p))
 
+  ;; UnaryOpExpr(op, operand) → [tag=87][op][operand]
+  ;; Per Hβ.first-light.unary-op-substrate (2026-05-07,
+  ;; chain-link-5 + ULTIMATE MEDIUM): primary expression dispatch
+  ;; on TMinus / TBang must produce a structured AST node, not
+  ;; fall through to the default LitUnit sentinel. The latter
+  ;; advanced position by 1 (past the operator) and left the
+  ;; operand as a free-floating literal for the next loop iteration
+  ;; — exactly the parser-eager-form-commitment drift at the
+  ;; primary-expr level. Empirical: `B => -1 }` (negative as last
+  ;; match arm body, no trailing comma) consumed the outer match's
+  ;; `}` as part of misparsing, dropping all subsequent top-level
+  ;; fns from src/lower.mn (36/64 user fns lost via this exact
+  ;; propagation path before this fix).
+  ;;
+  ;; op values: 0 = negate (TMinus), 1 = bang (TBang). Lower-side
+  ;; dispatch reads offset=4. Eight interrogations:
+  ;;   Graph?       NExpr handle attaches span.
+  ;;   Handler?     parse_primary @resume=OneShot.
+  ;;   Verb?        N/A — structural.
+  ;;   Row?         TokenRead at parse; lower preserves operand row.
+  ;;   Ownership?   Bump-owned.
+  ;;   Refinement?  Operand inherits its own refinement.
+  ;;   Gradient?    Compile-time graph handle.
+  ;;   Reason?      Span carried via NExpr wrapper.
+  ;;
+  ;; Drift refused: 1 (no dispatch table); 8 (op encoded as int,
+  ;; not string); 9 (substrate-honest unary; never skip-to-X).
+  (func $mk_UnaryOpExpr (param $op i32) (param $operand i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 12)))
+    (i32.store (local.get $p) (i32.const 87))
+    (i32.store offset=4 (local.get $p) (local.get $op))
+    (i32.store offset=8 (local.get $p) (local.get $operand))
+    (local.get $p))
+
   ;; CallExpr(callee, args) → [tag=88][callee][args]
   (func $mk_CallExpr (param $callee i32) (param $args i32) (result i32)
     (local $p i32) (local.set $p (call $alloc (i32.const 12)))

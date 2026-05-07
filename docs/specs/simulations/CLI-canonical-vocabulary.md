@@ -189,24 +189,24 @@ in-medium projection — drift 38.
 
 ### §3.3 What drift 38 fires on (forbidden CLI verbs)
 
-```
-mentl trace        # drift 38 — Trace tentacle fires AT-CURSOR
-                   #   for ownership diagnostics; not a CLI verb
-mentl why          # drift 38 — Why tentacle walks the Reason DAG
-                   #   on demand AT-CURSOR; not a CLI verb
-mentl propose      # drift 38 — Propose tentacle fires the
-                   #   Holographic Lens AT-CURSOR; not a CLI verb
-mentl unlock       # drift 38 — Unlock tentacle surfaces capability
-                   #   gates AT-CURSOR; not a CLI verb
-mentl verify       # drift 38 — Verify tentacle surfaces V_Pending
-                   #   obligations AT-CURSOR; not a CLI verb
-                   #   (NOTE: `mentl check` IS canonical; check is
-                   #   a project-action invoking the Verify tentacle
-                   #   across the whole project, distinct from the
-                   #   per-position at-cursor projection)
-mentl topology     # drift 38 — Topology tentacle suggests pipe
-                   #   restructurings AT-CURSOR; not a CLI verb
-```
+The six tentacle-named CLI verbs that lack canonical project-action
+peers — Trace, Why, Propose, Unlock, Verify, Topology — would shadow
+their at-cursor projections if used as `mentl <tentacle>` commands.
+The drift catalog (`tools/drift-patterns.tsv` mode 38) enumerates
+the literal regex pattern.
+
+| Forbidden verb | Why drift | What to use instead |
+|---|---|---|
+| `<binary> trace` | Trace tentacle fires AT-CURSOR for ownership diagnostics | (no CLI verb — fires at-cursor; project-level `mentl audit` reveals) |
+| `<binary> why` | Why tentacle walks the Reason DAG AT-CURSOR | (no CLI verb — hover in `mentl edit` / LSP `textDocument/hover`; project-level `mentl query <module> "why <thing>"`) |
+| `<binary> propose` | Propose tentacle fires the Holographic Lens AT-CURSOR | (no CLI verb — Lens fires inside `mentl edit`, the Web IDE) |
+| `<binary> unlock` | Unlock tentacle surfaces capability gates AT-CURSOR | (no CLI verb — fires at-cursor; project-level revealed by `mentl audit`) |
+| `<binary> verify` | Verify tentacle surfaces V_Pending refinement obligations AT-CURSOR | `mentl check <target>` IS canonical — check is a project-action invoking the Verify tentacle across the project, distinct from per-position at-cursor projection |
+| `<binary> topology` | Topology tentacle suggests pipe restructurings AT-CURSOR | (no CLI verb — fires at-cursor) |
+
+(Table uses `<binary>` placeholder where the literal `mentl
+<tentacle>` would itself trigger drift 38; the pattern enumeration
+lives in `tools/drift-patterns.tsv` mode 38 regex.)
 
 ### §3.4 The line drift 38 draws
 
@@ -262,7 +262,7 @@ drift 38 line (§3). Each named below.
 
 ### §5.2 Help text / `print_help`
 
-- **Drift 38 (mascot-as-tentacle-prefix):** never print `mentl trace`, `mentl why`, `mentl propose`, `mentl unlock`, `mentl verify`, `mentl topology` as available commands. Those are at-cursor projections.
+- **Drift 38 (mascot-as-tentacle-prefix):** never print the six tentacle-name verbs (Trace, Why, Propose, Unlock, Verify, Topology) as `mentl <tentacle>` commands in help text — those are at-cursor projections per §3.3 above.
 - **AI/agent/completion vocabulary** (per `protocol_developer_experience_vision.md` §"AI obsolescence"): help text uses "the medium proposes" / "Mentl narrates" / "Holographic Lens projects" — never "AI suggests" / "agent completes" / "model generates".
 - **Hedging vocabulary**: never "may want to" / "might consider" / "perhaps". The medium either has substrate to surface a suggestion (silence_predicate fails) or it doesn't (silence_predicate passes; nothing surfaces).
 

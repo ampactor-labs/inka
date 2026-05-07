@@ -1,34 +1,46 @@
-// main.mn — the executable manifest (spec 10 · DESIGN.md Ch 9.1)
+// main.mn — the executable manifest (per EH-entry-handlers.md §1.4
+// + CLI-canonical-vocabulary.md). One file. One function. The `~>`
+// chain IS the manifest. What the program has access to is visible
+// on the page. No JSON config. No TOML lockfile. The type system
+// IS the package manager.
 //
-// One file. One function. The `~>` chain IS the manifest.
-// What the program has access to is visible on the page. No JSON
-// config. No TOML lockfile. The type system IS the package manager.
-//
-// IC.4: compile / check take entry-MODULE names (e.g.
+// IC.4: compile / check / etc take entry-MODULE names (e.g.
 // "compiler/main") instead of raw sources. The driver walks
 // imports, consults .kai caches, re-infers only what changed.
 //
-// Seven modes, each a sub-expression of the same compilation spine:
+// CLI canonical vocabulary (per docs/specs/simulations/CLI-canonical-vocabulary.md):
 //
-//   mentl compile <module>      → WAT bytes (to stdout)
-//   mentl check <module>        → diagnostics only (incremental)
-//   mentl query <module> <q>    → structured answer
-//   mentl teach <module>        → gradient recommendation
-//   mentl audit <module>        → capability set + severance
-//   mentl edit <module>         → the medium: bus-compressor at the
-//                                 human boundary; eight tentacles +
-//                                 multi-shot proposers + cursor argmax
-//                                 + IC-cached oracle_queue. Type `??`
-//                                 to see the gradient narrow.
-//   mentl compile-source <path> → legacy: read raw source, full
-//                                 recompile (no cache)
+//   mentl                       → bare; defaults to teach_run
+//   mentl edit [path] [--port=N] → canonical Web IDE (browser-WASM holographic)
+//   mentl doc [path]             → documentation projection (F.1 substrate)
+//   mentl serve                  → LSP transport on stdio
+//   mentl compile <path>         → emit WAT to stdout
+//   mentl run <path>             → compile + wasmtime execute
+//   mentl check <path>           → diagnostics; no emit
+//   mentl test [path]            → test handler chain
+//   mentl audit <path>           → capability set + severance suggestions
+//   mentl query <path> <q>       → structured ad-hoc query
+//   mentl teach [path]           → terminal voice surface; gradient narration
+//   mentl repl                   → line REPL over current env
+//   mentl new <name>             → scaffold new project from lib/tutorial/00-hello.mn
+//   mentl --with <handler>       → universal escape hatch; resolves by env_lookup
 //
-// Module names map to paths: `main` → `src/main.mn`.
-// The .mn extension is implicit. Strip `src/` or `lib/` prefixes
-// and the .mn suffix from a path to get the module name.
+// Drift 38 (mascot-as-tentacle-prefix per CLAUDE.md red-flag table):
+// project-action verbs are canonical (the binary IS named Mentl;
+// subcommand prefix is structural like `git commit` / `cargo build`).
+// Tentacle-named verbs (Trace / Why / Propose / Unlock / Verify /
+// Topology) that shadow at-cursor projections would be drift 38 —
+// see tools/drift-patterns.tsv mode 38 + CLI-canonical-vocabulary.md
+// §3.3 for the line. `teach` and `query` are project-action peer
+// transports (canonical) for terminal users — those tentacle names
+// have legitimate CLI semantics that the per-cursor projection
+// inside the medium does not duplicate.
 //
-// The outermost handlers — memory, diagnostics, wat_stdout,
-// wasi_filesystem — are the sandbox boundary. Every inward
+// Module names map to paths: `main` → `src/main.mn`. Strip `src/` or
+// `lib/` prefixes and `.mn` suffix from a path to get the module name.
+//
+// The outermost handlers — diagnostics, wat_stdout, wasi_filesystem,
+// terminal_transport — are the sandbox boundary. Every inward
 // handler receives narrower capability.
 
 import pipeline
@@ -45,74 +57,78 @@ import synth_proposer
 import eight_loop
 import oracle
 
-/// Entry — dispatch on mode. Both `edit` and `lsp` are special-cased
-/// above dispatch_mode because each composes its own handler chain
-/// (Phase μ peers + Mentl + transport sit between the surface adapter
-/// and the substrate) instead of the wat-emitting chain the other
-/// modes share. Per Insight #1 (handler chain IS capability stack):
-/// the surface adapter (terminal_transport / lsp_adapter) is
-/// OUTERMOST = least trusted = sandbox boundary.
-///
-/// The `edit` chain composes the six Phase μ peer handlers — the
-/// medium running on the developer's terminal. cursor_session opens
-/// the bus-compressor loop; each iteration reads the gradient argmax,
-/// projects the eight-aspect CursorView, surfaces it via
-/// terminal_transport, receives an action, applies (echoed via
-/// patch_echo today; full filesystem rewrite is the named follow-up
-/// `Hμ.cursor.transport.patch-to-file`), advances. Silence ONLY when
-/// the project queue is empty — gradient at top.
-fn main(argv) = {
-  if argv.len >= 3 && str_eq(argv[1], "edit") {
-    inka_edit_session(path_to_module(argv[2]))
-      ~> patch_to_file
-      ~> terminal_transport
-      ~> cursor_cache_default
-      ~> delta_default
-      ~> synth_default
-      ~> interrogate_default
-      ~> mentl_default
-      ~> wasi_filesystem
-      ~> parallel_compose
-      ~> wasi_threads
-      ~> verify_ledger
-      ~> diagnostics_handler
-      ~> graph_handler
-  } else if argv.len >= 2 && str_eq(argv[1], "lsp") {
-    inka_lsp_session()
-      ~> lsp_adapter
-      ~> mentl_voice_filesystem
-      ~> mentl_voice_default
-      ~> wasi_filesystem
-      ~> no_iterative_ctx
-      ~> diagnostics_handler
-      ~> graph_handler
-  } else {
-    match dispatch_mode(argv) {
-      None =>
-        print_help(),
-      Some(action) =>
-        action()
-          ~> wat_stdout
-          ~> wasi_filesystem
-          ~> parallel_compose
-          ~> wasi_threads
-          ~> no_iterative_ctx
-          ~> diagnostics_handler
-          ~> graph_handler
+// ─── EntryHandlerInvocation ADT ───────────────────────────────────
+//
+// argv parses into a structured Invocation; ParseError surfaces
+// unparseable argv as the honest default (per EH §1.4 — never
+// fabricate an Invocation with placeholder fields).
+
+type EntryHandlerInvocation
+  = Invocation(String, List<String>, Option<String>)  // name, args, target
+  | ParseError(String)
+
+// ─── argv parsing ─────────────────────────────────────────────────
+//
+// Maps subcommand aliases to entry-handler names. Bare `mentl` →
+// teach_run per EH. `--with <name>` is the universal escape hatch.
+// `compile-source` (legacy) is dropped per CLI canonical (not in
+// canonical 12-verb catalog).
+
+fn parse_cli_args(argv) with Pure = {
+  if argv.len < 2 { Invocation("teach_run", [], None) }
+  else {
+    let mode = argv[1]
+    if str_eq(mode, "edit") {
+      Invocation("edit_run", [], optional_target(argv, 2))
+    } else if str_eq(mode, "doc") {
+      Invocation("doc_run", [], optional_target(argv, 2))
+    } else if str_eq(mode, "serve") {
+      Invocation("serve_run", [], None)
+    } else if str_eq(mode, "compile") && argv.len >= 3 {
+      Invocation("compile_run", [], Some(path_to_module(argv[2])))
+    } else if str_eq(mode, "run") && argv.len >= 3 {
+      Invocation("run_run", [], Some(path_to_module(argv[2])))
+    } else if str_eq(mode, "check") && argv.len >= 3 {
+      Invocation("check_run", [], Some(path_to_module(argv[2])))
+    } else if str_eq(mode, "test") {
+      Invocation("test_run", [], optional_target(argv, 2))
+    } else if str_eq(mode, "audit") && argv.len >= 3 {
+      Invocation("audit_run", [], Some(path_to_module(argv[2])))
+    } else if str_eq(mode, "query") && argv.len >= 4 {
+      Invocation("query_run", [argv[3]], Some(path_to_module(argv[2])))
+    } else if str_eq(mode, "teach") {
+      Invocation("teach_run", [], optional_target(argv, 2))
+    } else if str_eq(mode, "repl") {
+      Invocation("repl_run", [], None)
+    } else if str_eq(mode, "new") && argv.len >= 3 {
+      Invocation("new_project", [argv[2]], None)
+    } else if str_eq(mode, "--with") && argv.len >= 3 {
+      // Universal escape hatch — defer arbitrary handler-by-name
+      // resolution to install_entry_handler. Named follow-up:
+      // Hβ.cli.user-defined-entry-handler-resolution (resolves
+      // user-defined entry-handlers via env_lookup at install time).
+      Invocation(argv[2], [], optional_target(argv, 3))
+    } else {
+      ParseError("unrecognized command: " ++ mode)
     }
   }
 }
 
-fn inka_edit_session(entry_module) = {
-  driver_check(entry_module)
-  perform patch_set_target(entry_module)
-  cursor_session(Caret(0, Inferred("mentl edit session start")))
+// optional_target — for verbs where target is optional (edit / doc
+// / teach / test). Returns Some(module-name) when present; None
+// otherwise. Strips src/ / lib/ prefixes + .mn suffix per
+// path_to_module.
+
+fn optional_target(argv, idx) with Pure = {
+  if argv.len > idx { Some(path_to_module(argv[idx])) }
+  else { None }
 }
 
-// path_to_module: accept either a module name ("main") or
-// a file path ("src/main.mn"). Strip "src/" or "lib/" prefix and
-// ".mn" suffix when present. Idempotent on bare module names.
-fn path_to_module(arg) = {
+// path_to_module — accept either a module name ("main") or a file
+// path ("src/main.mn"). Strip "src/" or "lib/" prefix and ".mn"
+// suffix when present. Idempotent on bare module names.
+
+fn path_to_module(arg) with Pure = {
   let stripped_prefix = if starts_with(arg, "src/") {
     str_slice(arg, 4, byte_len(arg))
   } else if starts_with(arg, "lib/") {
@@ -123,40 +139,332 @@ fn path_to_module(arg) = {
   } else { stripped_prefix }
 }
 
-fn dispatch_mode(argv) = {
-  if argv.len < 2 { None }
-  else {
-    let mode = argv[1]
-    if str_eq(mode, "compile") && argv.len >= 3 {
-      Some(() => compile(path_to_module(argv[2])))
-    } else if str_eq(mode, "check") && argv.len >= 3 {
-      Some(() => check(path_to_module(argv[2])))
-    } else if str_eq(mode, "query") && argv.len >= 4 {
-      Some(() => query(path_to_module(argv[2]), argv[3]))
-    } else if str_eq(mode, "teach") && argv.len >= 3 {
-      Some(() => teach(path_to_module(argv[2])))
-    } else if str_eq(mode, "audit") && argv.len >= 3 {
-      Some(() => audit(path_to_module(argv[2])))
-    } else if str_eq(mode, "compile-source") && argv.len >= 3 {
-      Some(() => compile_source(read_stdin()))
-    } else {
-      None
-    }
+// ─── Entry — argv → Invocation → dispatch ─────────────────────────
+//
+// Per EH §1.4: argv parses into EntryHandlerInvocation; dispatch
+// resolves the named entry-handler and runs it. Per Insight #1
+// (handler chain IS capability stack): each entry-handler's chain
+// places the surface adapter (terminal_transport / lsp_adapter /
+// wat_stdout) OUTERMOST = least trusted = sandbox boundary.
+
+fn main(argv) = match parse_cli_args(argv) {
+  ParseError(msg) =>
+    print_error_and_help(msg),
+  Invocation(name, args, target) =>
+    dispatch_invocation(name, args, target)
+}
+
+fn dispatch_invocation(name, args, target) = {
+  if str_eq(name, "edit_run") {
+    edit_run(target)
+  } else if str_eq(name, "doc_run") {
+    doc_run(target)
+  } else if str_eq(name, "serve_run") {
+    serve_run()
+  } else if str_eq(name, "compile_run") {
+    compile_run(unwrap_target_or_die(target, "compile"))
+  } else if str_eq(name, "run_run") {
+    run_run(unwrap_target_or_die(target, "run"))
+  } else if str_eq(name, "check_run") {
+    check_run(unwrap_target_or_die(target, "check"))
+  } else if str_eq(name, "test_run") {
+    test_run(target)
+  } else if str_eq(name, "audit_run") {
+    audit_run(unwrap_target_or_die(target, "audit"))
+  } else if str_eq(name, "query_run") {
+    query_run(unwrap_target_or_die(target, "query"), args)
+  } else if str_eq(name, "teach_run") {
+    teach_run(target)
+  } else if str_eq(name, "repl_run") {
+    repl_run()
+  } else if str_eq(name, "new_project") {
+    new_project(args)
+  } else {
+    print_error_and_help("entry-handler not found: " ++ name)
   }
 }
 
+fn unwrap_target_or_die(target, verb) = match target {
+  Some(t) => t,
+  None    => {
+    eprint_string("mentl ")
+    eprint_string(verb)
+    eprint_string(" requires a target module\n")
+    ""
+  }
+}
+
+// ─── edit_run — canonical Web IDE (browser-WASM; per IE walkthrough)
+//
+// Six Phase μ peer handlers compose: the medium running on the
+// developer's surface. cursor_session opens the bus-compressor loop;
+// each iteration reads the gradient argmax, projects the eight-aspect
+// CursorView, surfaces it via terminal_transport, receives an action,
+// applies (echoed via patch_echo today; full filesystem rewrite is
+// the named follow-up `Hμ.cursor.transport.patch-to-file`),
+// advances. Silence ONLY when the project queue is empty — gradient
+// at top.
+//
+// Browser-WASM transport (per IE §0): same kernel, different transport
+// adapter. Named follow-up: Hμ.cursor.transport.browser-wasm.
+
+fn edit_run(target_opt) = {
+  let entry_module = match target_opt {
+    Some(t) => t,
+    None    => "main"  // default project entry
+  }
+  mentl_edit_session(entry_module)
+    ~> patch_to_file
+    ~> terminal_transport
+    ~> cursor_cache_default
+    ~> delta_default
+    ~> synth_default
+    ~> interrogate_default
+    ~> mentl_default
+    ~> wasi_filesystem
+    ~> parallel_compose
+    ~> wasi_threads
+    ~> verify_ledger
+    ~> diagnostics_handler
+    ~> graph_handler
+}
+
+fn mentl_edit_session(entry_module) = {
+  driver_check(entry_module)
+  perform patch_set_target(entry_module)
+  cursor_session(Caret(0, Inferred("mentl edit session start")))
+}
+
+// ─── serve_run — LSP transport on stdio
+//
+// vim / helix / VSCode (with Mentl extension) consume this. The
+// kernel is identical to edit_run; the surface adapter (lsp_adapter)
+// is OUTERMOST. Per MV-LSP-adapter.md substrate.
+
+fn serve_run() = {
+  mentl_lsp_session()
+    ~> lsp_adapter
+    ~> mentl_voice_filesystem
+    ~> mentl_voice_default
+    ~> wasi_filesystem
+    ~> no_iterative_ctx
+    ~> diagnostics_handler
+    ~> graph_handler
+}
+
+fn mentl_lsp_session() = {
+  // Reads JSON-RPC frames from stdin; routes to Query / Teach /
+  // Synth via lsp_adapter; writes responses to stdout. Per MV-LSP-adapter.
+  perform lsp_serve_loop()
+}
+
+// ─── doc_run — documentation projection (F.1 substrate)
+//
+// Per F.1-mentl-doc.md: doc_handler reads the same graph the compile
+// handler proves on; render handlers (md / html / llms / terminal)
+// project per --target flag; transport handlers emit per stdout /
+// file_io / http_serve.
+//
+// Named follow-up: Hβ.f1.doc-handler-substrate (the lib/doc/ chunks
+// per F.1 §13 file-creation order). Today this routes through
+// mentl_default + diagnostics for the projection-only mode; the
+// dedicated doc_handler is gated.
+
+fn doc_run(target_opt) = {
+  let entry_module = match target_opt {
+    Some(t) => t,
+    None    => "main"
+  }
+  doc_project(entry_module)
+    ~> stdout_console
+    ~> wasi_filesystem
+    ~> mentl_default
+    ~> verify_ledger
+    ~> diagnostics_handler
+    ~> graph_handler
+}
+
+fn doc_project(entry_module) = {
+  // Today: minimal projection — module signature + `///` Reasons
+  // surfaced verbatim per DS-docstring-edge substrate. Full F.1
+  // render handlers (md / html / llms) gated on
+  // Hβ.f1.doc-handler-substrate.
+  driver_check(entry_module)
+  perform doc_emit_for_module(entry_module)
+}
+
+// ─── compile_run / run_run — emit WAT / compile + execute
+//
+// compile_run emits WAT to stdout (CI use case; shell pipeline).
+// run_run = compile_run + wasmtime exec. Named follow-up:
+// Hβ.cli.run-via-wasmtime-exec (composes wasmtime invocation as a
+// handler over the compile_run output).
+
+fn compile_run(target) = {
+  compile(target)
+    ~> wat_stdout
+    ~> wasi_filesystem
+    ~> parallel_compose
+    ~> wasi_threads
+    ~> no_iterative_ctx
+    ~> diagnostics_handler
+    ~> graph_handler
+}
+
+fn run_run(target) = {
+  // Phase 1: compile to WAT; execute is a named follow-up (the
+  // wasmtime invocation needs a Process effect handler not yet
+  // authored). Today this falls back to compile_run with a note.
+  eprint_string("mentl run: compile-and-execute is gated on ")
+  eprint_string("Hβ.cli.run-via-wasmtime-exec (Process effect ")
+  eprint_string("handler). Falling back to compile-only.\n")
+  compile_run(target)
+}
+
+// ─── check_run — diagnostics; no emit
+//
+// Incremental cache hits via .mentl/cache/*.kai (per IC walkthrough).
+// Same handler chain as compile_run minus wat_stdout — the diagnostic
+// pipeline is the value; emission is suppressed.
+
+fn check_run(target) = {
+  check(target)
+    ~> wasi_filesystem
+    ~> parallel_compose
+    ~> wasi_threads
+    ~> no_iterative_ctx
+    ~> diagnostics_handler
+    ~> graph_handler
+}
+
+// ─── test_run — Test effect handler chain
+//
+// Per EH §1.3 + lib/test.mn: assert / assert_eq / assert_near
+// dispatch through assert_reporter (runtime) + verify_assert
+// (compile-time lifting). Named follow-up: Hβ.test.lib-test-mn-substrate.
+
+fn test_run(target_opt) = {
+  let entry_module = match target_opt {
+    Some(t) => t,
+    None    => "test"  // default test entry module
+  }
+  // Today: routes to check (diagnostic projection); full Test
+  // effect handlers gated on lib/test.mn substrate.
+  eprint_string("mentl test: Test effect handlers gated on ")
+  eprint_string("Hβ.test.lib-test-mn-substrate. Routing to check.\n")
+  check_run(entry_module)
+}
+
+// ─── audit_run — capability set + severance suggestions
+//
+// Walks the ~> chain; collects effect rows transitively; emits
+// AuditReport. Per DESIGN §9.1 + traces/a-day §1400.
+
+fn audit_run(target) = {
+  audit(target)
+    ~> stdout_console
+    ~> wasi_filesystem
+    ~> mentl_default
+    ~> verify_ledger
+    ~> diagnostics_handler
+    ~> graph_handler
+}
+
+// ─── query_run — structured ad-hoc query
+//
+// `mentl query <module> "<question>"` — read-only query against
+// the substrate. Per traces/a-day §0800 + DESIGN §8 mentl query.
+
+fn query_run(target, args) = match args {
+  [question] =>
+    query(target, question)
+      ~> stdout_console
+      ~> wasi_filesystem
+      ~> mentl_default
+      ~> diagnostics_handler
+      ~> graph_handler,
+  _ => {
+    eprint_string("mentl query <module> <question> — args mismatch\n")
+  }
+}
+
+// ─── teach_run — terminal voice surface (default)
+//
+// Bare `mentl` defaults here per EH. Gradient narration; one
+// suggestion per turn; Mentl's voice in the terminal for
+// vim/helix/terminal-only users.
+
+fn teach_run(target_opt) = {
+  let entry_module = match target_opt {
+    Some(t) => t,
+    None    => "main"
+  }
+  teach(entry_module)
+    ~> stdout_console
+    ~> wasi_filesystem
+    ~> mentl_voice_default
+    ~> diagnostics_handler
+    ~> graph_handler
+}
+
+// ─── repl_run — line REPL
+//
+// Each line compiles to LowIR and evaluates through an in-process
+// interpreter. Per DESIGN §9.6. Named follow-up:
+// Hβ.repl.line-eval-substrate (the interpreter chain; not yet
+// authored).
+
+fn repl_run() = {
+  eprint_string("mentl repl: gated on Hβ.repl.line-eval-substrate.\n")
+}
+
+// ─── new_project — scaffold from lib/tutorial/00-hello.mn
+//
+// Per EH §1.1: copies lib/tutorial/00-hello.mn into ./<name>/src/main.mn
+// and sets up .mentl/ cache directory. Named follow-up:
+// Hβ.cli.new-project-scaffold-substrate.
+
+fn new_project(args) = match args {
+  [name] => {
+    eprint_string("mentl new ")
+    eprint_string(name)
+    eprint_string(": gated on Hβ.cli.new-project-scaffold-substrate.\n")
+  },
+  _ => {
+    eprint_string("mentl new <name> — args mismatch\n")
+  }
+}
+
+// ─── help + error surface ─────────────────────────────────────────
+
+fn print_error_and_help(msg) = {
+  eprint_string("mentl: ")
+  eprint_string(msg)
+  eprint_string("\n\n")
+  print_help()
+}
+
 fn print_help() = {
-  eprint_string("mentl — the compiler is the oracle\n\n")
+  eprint_string("mentl — the medium between intent and execution\n\n")
   eprint_string("usage:\n")
-  eprint_string("  mentl compile <module>          — emit WAT (incremental)\n")
-  eprint_string("  mentl check <module>            — diagnostics (incremental)\n")
-  eprint_string("  mentl query <module> <query>    — inspect the graph\n")
-  eprint_string("  mentl teach <module>            — gradient recommendation\n")
-  eprint_string("  mentl audit <module>            — capability set\n")
-  eprint_string("  mentl edit <module>             — the medium: eight tentacles + cursor argmax (type ?? to override)\n")
-  eprint_string("  mentl compile-source < src.mn   — legacy: stdin → WAT\n")
-  eprint_string("  mentl lsp                       — LSP server on stdin/stdout (Mentl in editors)\n")
+  eprint_string("  mentl                          — terminal voice surface (default = teach_run)\n")
+  eprint_string("  mentl edit [path]              — canonical Web IDE (browser-WASM holographic)\n")
+  eprint_string("  mentl doc [path]               — documentation projection (handler chain)\n")
+  eprint_string("  mentl serve                    — LSP transport on stdio\n")
+  eprint_string("  mentl compile <path>           — emit WAT to stdout (incremental)\n")
+  eprint_string("  mentl run <path>               — compile + wasmtime execute\n")
+  eprint_string("  mentl check <path>             — diagnostics; no emit (incremental)\n")
+  eprint_string("  mentl test [path]              — test handler chain\n")
+  eprint_string("  mentl audit <path>             — capability set + severance suggestions\n")
+  eprint_string("  mentl query <path> <question>  — structured ad-hoc query\n")
+  eprint_string("  mentl teach [path]             — terminal voice; gradient narration\n")
+  eprint_string("  mentl repl                     — line REPL\n")
+  eprint_string("  mentl new <name>               — scaffold from lib/tutorial/00-hello.mn\n")
+  eprint_string("  mentl --with <handler> [path]  — universal escape hatch (env_lookup)\n")
   eprint_string("\n")
   eprint_string("module names map to src/ or lib/ paths — paths accepted too.\n")
   eprint_string("incremental modes consult .mentl/cache/*.kai for cache hits.\n")
+  eprint_string("\n")
+  eprint_string("see docs/specs/simulations/CLI-canonical-vocabulary.md for the full catalog\n")
+  eprint_string("see docs/specs/simulations/EH-entry-handlers.md for substrate (--with resolution)\n")
 }

@@ -235,9 +235,10 @@ These are the live operating rules for roadmap execution:
 2. Walkthrough first, substrate second.
 3. No “done except wiring” commits.
 4. No substrate proposal from partial corpus reads.
-5. No drift-budget vocabulary: no “timebox”, no “N sessions”, no
-   “pivot criterion”.
-6. Project-action `mentl <verb>` is canonical (`mentl edit / doc / run / test / audit / serve / new / compile / check / repl / teach / query`) per `EH-entry-handlers.md` alias table; subcommand prefix is structural because the binary IS named Mentl. **Tentacle-named CLI verbs that shadow at-cursor projections are drift 38** (`mentl trace / why / propose / unlock / verify / topology` — those projections fire AT-CURSOR inside the medium per `Hμ.cursor` + `cursor_default`, not as separate CLI verbs).
+5. No drift-budget vocabulary in roadmap or planning notes — the
+   forbidden patterns are enumerated in `tools/drift-patterns.tsv`
+   mode 39 (project-management lifecycle vocabulary).
+6. Project-action `mentl <verb>` is canonical (`mentl edit / doc / run / test / audit / serve / new / compile / check / repl / teach / query`) per `EH-entry-handlers.md` alias table; subcommand prefix is structural because the binary IS named Mentl. **Tentacle-named CLI verbs that shadow at-cursor projections are drift 38** — see `tools/drift-patterns.tsv` mode 38 + `CLI-canonical-vocabulary.md` §3.3 for the line; the six tentacle names (Trace, Why, Propose, Unlock, Verify, Topology) without canonical project-action peers fire at-cursor inside the medium per `Hμ.cursor` + `cursor_default`, not as separate CLI verbs.
 7. `///` reaches the graph; markdown does not.
 8. `ROADMAP.md` is the live roadmap; old roadmap files are
    compatibility shims only.

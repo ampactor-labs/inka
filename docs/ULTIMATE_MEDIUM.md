@@ -776,10 +776,11 @@ overlap at-cursor projections. Among the eight tentacles
   terminal-only users; project-action verb).
 - `mentl query` IS canonical (structured ad-hoc query;
   project-action verb).
-- `mentl trace` / `mentl why` / `mentl propose` / `mentl unlock`
-  / `mentl verify` / `mentl topology` would be drift — those are
-  at-cursor projections inside the medium, not project-action
-  verbs.
+- The six tentacle names that lack canonical CLI verbs (Trace, Why,
+  Propose, Unlock, Verify, Topology — per CLI canonical §3.3) would
+  be drift if used as `mentl <tentacle>` commands. Those projections
+  fire at-cursor inside the medium, not as project-action verbs.
+  <!-- drift-audit: ignore (intentional documentation of drift 38) -->
 
 Project-action verbs are canonical; tentacle-as-namespace is drift.
 

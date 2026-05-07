@@ -733,9 +733,9 @@ fn dot(xs: List<Float>, ys: List<Float>) -> Float =
 - Teach (inlayHint): `Index-fold — unlocks real-time.`
 - Propose (codeAction): `Rewrite to index-fold?` + patch preview
 
-### AT6 — `mentl why result`
+### AT6 — Why tentacle on `result` (`mentl query <module> "why result"` OR hover in `mentl edit`)
 
-**Setup:** `let result = compute(data)`; user asks `mentl why result`.
+**Setup:** `let result = compute(data)`; user invokes the Why tentacle on `result` — either via `mentl query <module> "why result"` (terminal CLI; canonical per CLI-canonical-vocabulary.md) or by hovering `result` in `mentl edit` (browser-WASM IDE; the Why tentacle fires at-cursor per Hμ.cursor + cursor_default). Same substrate; two transports.
 
 **Situation:**
 - tentacle: TentWhy

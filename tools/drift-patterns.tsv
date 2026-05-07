@@ -40,7 +40,7 @@
 22	Haskell/OCaml drift (do-notation / typeclass)	\bdo\s*\{|\binstance\s+\w+\s+where\b	ka	Do-notation is monad-transformer drift (mode 4). Use ~> chains.
 23	C/Go drift (typedef/void/sizeof)	\b(typedef|void|sizeof)\s*\(	ka	C primitives. Mentl has ADTs + refinement types.
 24	JS drift (async/await/Promise)	\b(async|await|Promise\b)	ka	Async is an effect in Mentl, handled — not a keyword.
-25	OOP drift (new/self/this/super)	\b(new\s+\w+\s*\(|self\.|this\.|super\.)	ka	Mentl has no classes. `new`/`self`/`this` are OOP drift.
+25	OOP drift (new/self/this/super)	\b(new\s+\w+\s*\(|self\.\w|this\.\w|super\.\w)	ka	Mentl has no classes. `new`/`self`/`this` are OOP drift. Anchored to `\w` after the dot to avoid false positives on prose "this."/"self." with sentence breaks.
 #
 # --- Mentl-native shape violations (residue discipline) ---
 30	Imperative-loop-where-verb-exists (for/while)	^\s*(for|while)\s	ka	Loops are rarely the Mentl shape. Use |> transforms or <~ feedback. If truly needed, justify in a comment and suppress.
@@ -64,7 +64,7 @@
 37	Σ-/// drift (// ═══ decoration on file)	^//\s*═	ka	Σ-///. // ═══ decorations are flat-file scaffolding. Pattern A: delete. Pattern B: consolidate to /// lede. Pattern C: strip ═══, keep plain // text.
 #
 # --- Disintermediation drift (mascot-as-command-prefix; F.1) ---
-38	Mascot-as-command (mentl <verb> CLI)	\bmentl\s+(audit|compile|check|run|teach|query|build|new|test|doc|crucibles)\b	all	F.1 + EH walkthrough. Every command is `mentl <verb>`. Mentl is the voice; not the command prefix. (Scope: all files including markdown.)
+38	Mascot-as-tentacle-prefix (mentl <tentacle> shadowing at-cursor)	\bmentl\s+(trace|why|propose|unlock|verify|topology)\b	all	Per CLAUDE.md sharpened drift 38 + CLI-canonical-vocabulary.md §3.3 (2026-05-07). Project-action verbs (mentl edit/doc/run/test/audit/serve/teach/query/repl/new/compile/check) are CANONICAL — the binary IS named Mentl; subcommand prefix is structural like `git commit` / `cargo build`. Drift fires only on tentacle-named verbs that shadow at-cursor projections (Trace/Why/Propose/Unlock/Verify/Topology). Note: `mentl teach` and `mentl query` are project-action peer transports for terminal users (per EH alias table), NOT drift.
 #
 # --- Ship-gate drift (agile/scrum vocabulary; project-management drift) ---
-39	Ship-gate vocab (N sessions / timebox / pivot)	\b(\d+\s*sessions?|N\s*sessions?|timebox|pivot criterion|ship[- ]gate|sprint goal)\b	all	No temporal budgets. Progress measured in walkthrough-paragraph → substrate mapping clarity. Scope emerges from substrate necessity. (Scope: all files.)
+39	Ship-gate vocab (N sessions / timebox / pivot)	\b(\d+\s*sessions?|N\s*sessions?|timebox|pivot criterion|ship[- ]gate|sprint goal)\b	all	No temporal budgets. Progress measured in walkthrough-paragraph → substrate mapping clarity. Scope emerges from substrate necessity. (Scope: all files.) drift-audit: ignore (self-reference: this line defines the pattern it matches)

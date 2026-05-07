@@ -101,6 +101,18 @@ mechanism rests on eight primitives, each load-bearing. Remove any
 and the thesis collapses. The next section enumerates them; the
 rest of this document develops each in depth.
 
+> **Cross-reference (Phase μ thesis statement).** What Mentl IS as a
+> *medium* between intent and execution lives at the highest
+> altitude in `docs/ULTIMATE_MEDIUM.md` (Phase μ thesis, 2026-05-02;
+> §8 day-in-the-medium experience layer added 2026-05-07). The
+> developer-experience throughline — *the medium IS the developer's
+> mind given substrate* — crystallizes in
+> `protocol_developer_experience_vision.md` (memory file; loaded
+> alongside CLAUDE+MEMORY at session start). DESIGN.md develops the
+> kernel and its consequences; ULTIMATE_MEDIUM and the vision memory
+> develop what the developer *experiences* through the kernel. Read
+> in concert.
+
 ---
 
 ## 0.5. The Minimal Kernel — Eight Primitives
@@ -1350,7 +1362,7 @@ handles it.
 
 ```
 effect Consume {
-    consume(name: String, span: Span) -> ()    @resume=OneShot
+    consume(name: String, span: Span) -> ()
 }
 ```
 
@@ -1593,7 +1605,7 @@ the compiler refuses to compile:
 
 ```
 error: 'similar' escapes the lifetime of 'temp_arena'
-    at: std/compiler/diagnostics.mn:47
+    at: src/diagnostics.mn:47
     bound by: scoped allocator closes at line 42
     fix: copy the value into the parent allocator's scope
 ```
@@ -1859,7 +1871,7 @@ type + effect row and returns the single highest-leverage annotation
 the programmer could add:
 
 ```
-$ mentl teach std/compiler/infer.mn
+$ mentl teach src/infer.mn
 
     infer.mn:47  let's_generalize is Pure
         → adding `with Pure` would unlock:
@@ -2045,8 +2057,12 @@ The subscription coding AI is selling three things:
 what the type "probably" should be. Mentl's compiler *knows*, because
 the type is already constrained by the refinement, the effect row,
 and the call context. The hole has a single inhabitant or a narrow
-candidate set. `teach_synthesize` fills it with a *verified*
-candidate; there is no hallucination surface.
+candidate set. Mentl's Synth handler-chain (`enumerate_inhabitants`
+under MultiShot resume + speculative `graph_push_checkpoint` /
+`graph_rollback`) fills it with a *verified* candidate; there is no
+hallucination surface. **Approximation has a ceiling; proof has none**
+(per `docs/SUBSTRATE.md` §X.3 AI obsolescence math + `docs/ULTIMATE_MEDIUM.md`
+§8.4).
 
 **(b) Verification of what the AI would have checked.** An LLM looks
 at code and tries to find bugs. In Mentl, code that hallucinates
@@ -2090,7 +2106,7 @@ compiler's own substrate.
 Before LSP, there is `mentl query`:
 
 ```
-$ mentl query std/compiler/infer.mn "type of generalize"
+$ mentl query src/infer.mn "type of generalize"
 → generalize : (Node) -> Scheme with GraphRead + EnvRead
   Reason chain:
     - bound at FnStmt at infer.mn:142
@@ -2098,7 +2114,7 @@ $ mentl query std/compiler/infer.mn "type of generalize"
     - body_ty chased from handle 847
     - quantified vars: [142, 148, 153]
 
-$ mentl query std/compiler/infer.mn "why infer_expr performs EnvWrite"
+$ mentl query src/infer.mn "why infer_expr performs EnvWrite"
 → infer_expr : (Node) -> () with GraphWrite + EnvWrite + ...
   Reason:
     - extends env at LetStmt (infer.mn:210)
@@ -2799,8 +2815,9 @@ add a `List.sort` call inside a function whose signature asserts
    fails. Inference binds the handle to `NErrorHole(PurityViolated)`
    and continues — the rest of the file still types.
 
-3. **Mentl wakes up.** The error-hole triggers `teach_synthesize`.
-   Mentl's speculative gradient:
+3. **Mentl wakes up.** The error-hole triggers Mentl's Synth
+   handler-chain (per Ch 8 + `docs/specs/simulations/IE-mentl-edit.md`
+   §3 Holographic Lens). The speculative gradient:
    - `graph_push_checkpoint()` — save the graph state.
    - Candidate 1: wrap the `sort` call in `temp_arena`. Apply
      patch tentatively. Run inference. Row now subsumes `Pure`
@@ -3015,8 +3032,8 @@ Mentl has one terminal invariant: the compiler compiles itself to a
 **byte-identical** output.
 
 ```
-mentl.wasm < std/compiler/*.mn  >  mentl2.wat
-mentl.wasm < std/compiler/*.mn  >  mentl3.wat
+cat src/*.mn lib/**/*.mn | wasmtime run mentl.wasm > mentl2.wat
+cat src/*.mn lib/**/*.mn | wasmtime run mentl.wasm > mentl3.wat
 diff mentl2.wat mentl3.wat              # empty
 ```
 
@@ -3087,8 +3104,19 @@ gap between human thought and machine instruction finally closes.
 
 ---
 
-*Design v1 — 2026-04-18. See `ROADMAP.md` for execution roadmap,
-`docs/specs/00–11` for per-module contracts, `docs/errors/` for
-the error catalog, `docs/SUBSTRATE.md` for the canonical substrate
-(kernel, verbs, algebra, handlers, gradient, refinement, theorems),
-`CLAUDE.md` for session anchors and JIT-trigger table.*
+*Design v1 — 2026-04-18 (cross-references updated 2026-05-07 alongside
+the developer-experience vision crystallization). See `ROADMAP.md` for
+execution roadmap; `docs/specs/00–11` for per-module contracts;
+`docs/errors/` for the error catalog; `docs/SUBSTRATE.md` for the
+canonical substrate (kernel, verbs, algebra, handlers, gradient,
+refinement, theorems; §X Phase μ theorems for collab-as-substrate +
+multi-domain unification + AI obsolescence math); `docs/ULTIMATE_MEDIUM.md`
+for what Mentl IS as a medium (highest-altitude anchor; §8
+day-in-the-medium experience layer);
+`protocol_developer_experience_vision.md` (memory) for the throughline
+that survives compaction; `CLAUDE.md` for session anchors and
+JIT-trigger table; `docs/specs/simulations/CLI-canonical-vocabulary.md`
+for the CLI verb catalog; `docs/specs/simulations/IE-mentl-edit.md`
+for the canonical Web IDE; `docs/specs/simulations/F1-mentl-doc.md`
+for the doc handler; `docs/specs/simulations/EH-entry-handlers.md`
+for the `mentl --with` CLI substrate.*

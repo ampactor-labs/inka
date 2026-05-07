@@ -2532,6 +2532,245 @@ fn arm_index_loop(arms, target_handle, idx) with GraphRead = {
   }
 }
 
+/// The inference primitive — every emergent property is cursor-
+/// projected from body structure, never authored as annotation. Per
+/// protocol_cursor_is_the_substrate.md: "annotations declare INPUTS
+/// to the cursor; never the emergent property itself."
+///
+/// Three companion substrates land alongside Phase B's resume-
+/// cardinality inference, completing the chain of cursor-projected
+/// emergent properties:
+///
+///   • Effect-row inference (Peer 1) — operational at infer_fn:343-420.
+///     Body's perform sites accumulate via inf_add_row; declared row
+///     compared against inferred via row_subsumes; T_OverDeclared
+///     warns when authored row is wider than inferred. Authored row
+///     is a CONSTRAINT (must contain inferred), never a contract.
+///
+///   • Ownership inference (Peer 2) — operational at own.mn's
+///     infer_ownership. `Inferred`-marked params get classify_usage
+///     which counts var-uses in the body: 0 → Inferred; 1 → Own
+///     (affine consume); ≥2 → Ref (borrowed). Authored `own`/`ref`
+///     is a constraint over the inferred form.
+///
+///   • Refinement narrowing (Peer 3 — this section) — flow-sensitive
+///     predicate inference. Each narrowing site (if/match/assert)
+///     adds a path-conditional predicate; the medium tracks per-
+///     program-point refinement maps so lower's verify obligations
+///     elide checks the path already proves.
+///
+/// All four (resume + row + ownership + refinement) follow the same
+/// substrate pattern: WALK body structure, PREDICATE-FILTER witness
+/// sites, PROJECT aggregated value. Same shape as
+/// $collect_used_wasi_ops in the seed. The cursor IS the inference
+/// primitive.
+///
+/// What this enables: the developer writes WHAT THEY MEAN — body
+/// structure + ground value types + effect names. Everything else
+/// (resume cardinality, effect rows, ownership, refinement bounds)
+/// is cursor-projected. Authored declarations BECOME CONSTRAINTS the
+/// inference verifies — never contracts the inference must reverse-
+/// engineer. The user-facing surface shrinks toward the irreducible.
+
+/// $infer_refinement_narrowing — Phase B.3 substrate. Flow-sensitive
+/// refinement inference; per-program-point refinement maps. Each
+/// narrowing site adds a path-conditional predicate to the relevant
+/// variable's refinement; downstream Verify obligations elide checks
+/// that the path already proves.
+///
+/// Narrowing sites:
+///   • `if pred { branch }`        — pred narrows scope of branch
+///   • `if pred { } else { branch }` — !pred narrows else branch
+///   • `match x { pat => body }`   — pat narrows x's type in body
+///   • `assert(pred); rest`        — pred narrows rest of block
+///   • function call with refinement-typed param — param's pred holds
+///     in the called body's scope
+///
+/// Result: Map<Handle, Predicate> per program-point. Lower's
+/// verify_obligations consult this to elide redundant checks.
+///
+/// Drift refused: 1 (no vtable; structural NodeKind walk); 6 (no
+/// primitive-type-special-case for refinement); 7 (one Map<H,Pred>,
+/// not parallel arrays); 8 (Predicate is the ADT — no string-keyed
+/// pred-name flag); 9 (every NarrowingSite NExpr arm enumerated;
+/// no wildcard fabricating ()).
+fn infer_refinement_narrowing(body) with GraphRead = {
+  walk_refinement(empty_refinement_map(), body, PTrue)
+}
+
+fn walk_refinement(map, node, path_pred) with GraphRead = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(IfExpr(c, t, e)) => {
+      let cond_pred = predicate_of_bool_expr(c)
+      let map_c = walk_refinement(map, c, path_pred)
+      let map_t = walk_refinement(map_c, t, conjunction(path_pred, cond_pred))
+      walk_refinement(map_t, e, conjunction(path_pred, negation_of(cond_pred)))
+    },
+    NExpr(MatchExpr(scrut, arms)) => {
+      let map_s = walk_refinement(map, scrut, path_pred)
+      walk_refinement_arms(map_s, scrut, arms, path_pred)
+    },
+    NExpr(BlockExpr(stmts, final)) =>
+      walk_refinement_block(map, stmts, final, path_pred),
+    NExpr(CallExpr(f, args)) => {
+      let map_f = walk_refinement(map, f, path_pred)
+      walk_refinement_args_with_param_preds(map_f, f, args, path_pred)
+    },
+    NExpr(BinOpExpr(_, l, r)) =>
+      walk_refinement(walk_refinement(map, l, path_pred), r, path_pred),
+    NExpr(UnaryOpExpr(_, x)) =>
+      walk_refinement(map, x, path_pred),
+    NExpr(LambdaExpr(_, lb)) =>
+      walk_refinement(map, lb, PTrue),
+    NExpr(PerformExpr(_, args)) =>
+      walk_refinement_list(map, args, path_pred),
+    NExpr(ResumeExpr(v, _)) =>
+      walk_refinement(map, v, path_pred),
+    NExpr(MakeListExpr(elems)) =>
+      walk_refinement_list(map, elems, path_pred),
+    NExpr(MakeTupleExpr(elems)) =>
+      walk_refinement_list(map, elems, path_pred),
+    NExpr(MakeRecordExpr(fields)) =>
+      walk_refinement_fields(map, fields, path_pred),
+    NExpr(NamedRecordExpr(_, fields)) =>
+      walk_refinement_fields(map, fields, path_pred),
+    NExpr(FieldExpr(b, _)) =>
+      walk_refinement(map, b, path_pred),
+    NExpr(PipeExpr(_, l, r)) =>
+      walk_refinement(walk_refinement(map, l, path_pred), r, path_pred),
+    NExpr(HandleExpr(b, _)) =>
+      walk_refinement(map, b, path_pred),
+    NStmt(LetStmt(_, v)) =>
+      walk_refinement(map, v, path_pred),
+    NStmt(ExprStmt(e)) =>
+      walk_refinement(map, e, path_pred),
+    NExpr(LitInt(_))    => map,
+    NExpr(LitFloat(_))  => map,
+    NExpr(LitString(_)) => map,
+    NExpr(LitBool(_))   => map,
+    NExpr(LitUnit)      => map,
+    NExpr(VarRef(_))    => map,
+    NExpr(ExprPlaceholder) => map,
+    NHole(_) => map,
+    NPat(_)  => map,
+    NModule(_) => map
+  }
+}
+
+/// Walk a Match — each arm gets its scrut narrowed by the arm's pattern
+/// before walking the arm body. The narrowing is per-arm-scope; once
+/// the arm body is walked, its refinement contributions don't leak
+/// to other arms (they're branch-disjoint; map-per-arm semantics).
+fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead = {
+  if arms.len == 0 { map }
+  else {
+    let arm = list_head(arms)
+    let arm_pred = pattern_predicate_for(arm.pat, scrut)
+    let arm_map = walk_refinement(map, arm.body, conjunction(path_pred, arm_pred))
+    walk_refinement_arms(arm_map, scrut, list_tail(arms), path_pred)
+  }
+}
+
+/// Block walking — stmts may include `assert(pred)` which narrows the
+/// rest of the block. Threads path_pred through; each assert
+/// strengthens the predicate for subsequent stmts + final expression.
+fn walk_refinement_block(map, stmts, final, path_pred) with GraphRead = {
+  if stmts.len == 0 { walk_refinement(map, final, path_pred) }
+  else {
+    let stmt = list_head(stmts)
+    let strengthened = strengthen_path_pred(path_pred, stmt)
+    let map_s = walk_refinement(map, stmt, path_pred)
+    walk_refinement_block(map_s, list_tail(stmts), final, strengthened)
+  }
+}
+
+fn strengthen_path_pred(path_pred, stmt) with GraphRead = {
+  let N(body, _, _) = stmt
+  match body {
+    NStmt(ExprStmt(e)) => {
+      let N(ebody, _, _) = e
+      match ebody {
+        NExpr(CallExpr(callee, args)) =>
+          if is_assert_call(callee) {
+            conjunction(path_pred, predicate_of_assert_arg(args))
+          } else { path_pred },
+        _ => path_pred
+      }
+    },
+    _ => path_pred
+  }
+}
+
+/// Function-arg walking — each arg's refinement type (if any) provides
+/// a predicate that holds in the called body's scope. The caller-side
+/// inference doesn't add the predicate to the caller's path_pred (the
+/// callee's body is independently walked); the relationship surfaces
+/// via signature unification at call site.
+fn walk_refinement_args_with_param_preds(map, f, args, path_pred) with GraphRead = {
+  walk_refinement_list(map, args, path_pred)
+}
+
+fn walk_refinement_list(map, nodes, path_pred) with GraphRead = {
+  if nodes.len == 0 { map }
+  else {
+    let head = list_head(nodes)
+    let map_h = walk_refinement(map, head, path_pred)
+    walk_refinement_list(map_h, list_tail(nodes), path_pred)
+  }
+}
+
+fn walk_refinement_fields(map, fields, path_pred) with GraphRead = {
+  if fields.len == 0 { map }
+  else {
+    let field = list_head(fields)
+    let map_f = walk_refinement(map, field.value, path_pred)
+    walk_refinement_fields(map_f, list_tail(fields), path_pred)
+  }
+}
+
+/// Helpers — peer-named substrate. Each is a small graph walk; the
+/// production-quality bodies fold into named peers as the inference
+/// cascade matures past the basic flow-narrowing form.
+///
+/// $predicate_of_bool_expr — extract Predicate from boolean expression.
+/// Operates on graph-typed Bool nodes; converts BinOpExpr (==, <, >,
+/// &&, ||) and CallExpr (refinement predicates returning Bool) into
+/// Predicate ADT instances. Peer follow-up
+/// `Hβ.infer.predicate-from-bool-expression` covers the full case
+/// enumeration.
+fn predicate_of_bool_expr(node) with GraphRead = {
+  PBoolNode(node_handle(node))
+}
+
+fn negation_of(pred) = PNot(pred)
+
+fn conjunction(p, q) = PAnd(p, q)
+
+fn empty_refinement_map() = []
+
+fn pattern_predicate_for(pat, scrut) with GraphRead = {
+  PPatternMatch(pat, node_handle(scrut))
+}
+
+fn is_assert_call(callee) with GraphRead = {
+  let N(body, _, _) = callee
+  match body {
+    NExpr(VarRef(name)) => str_eq(name, "assert"),
+    _ => false
+  }
+}
+
+fn predicate_of_assert_arg(args) with GraphRead = {
+  if args.len == 0 { PTrue }
+  else { predicate_of_bool_expr(list_head(args)) }
+}
+
+fn node_handle(node) = {
+  let N(_, _, h) = node
+  h
+}
+
 /// Mint TParam list for handler config-params. Each name gets a
 /// fresh tyvar handle (via mint), wrapped as TParam(name, TVar(h),
 /// Inferred, Inferred) — Ownership is Inferred (no authored marker;

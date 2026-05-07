@@ -42,10 +42,12 @@ one file.
 Other documents remain authoritative in their own layer:
 
 - `CLAUDE.md` — discipline, anchors, drift modes, session-zero method
+- `docs/ULTIMATE_MEDIUM.md` — Phase μ thesis statement; what Mentl IS as a medium between intent and execution; §8 day-in-the-medium experience layer (2026-05-07); the highest-altitude anchor every other doc points to
 - `docs/DESIGN.md` — manifesto and kernel thesis
 - `docs/SUBSTRATE.md` — canonical substrate (kernel, verbs, algebra, handlers, gradient, refinement, theorems)
 - `docs/specs/00-11-*.md` — per-module contracts
-- `docs/specs/simulations/*.md` — handle-level design contracts
+- `docs/specs/simulations/*.md` — handle-level design contracts (developer-surface load-bearing: `IE-mentl-edit.md` / `F1-mentl-doc.md` / `EH-entry-handlers.md` / `Hμ-cursor.md`)
+- `~/.claude/projects/-home-suds-Projects-mentl/memory/protocol_developer_experience_vision.md` — Phase μ thesis extension; throughline for every doc + line of code from here (cite when proposing surface decisions; survives compaction; loaded alongside CLAUDE+MEMORY at session start)
 
 If `ROADMAP.md` and a walkthrough disagree on a specific handle,
 **stop and reconcile** before landing substrate. The walkthrough owns
@@ -203,10 +205,25 @@ Current Hβ.emit + Hβ.arena cascade state — **Hβ.arena CLOSED; Hβ.emit CHUN
     (LMakeClosure 311 + LMakeContinuation 312 arms; depends on LowFn)
     and `Hβ.emit.module-wrap` ($inka_emit produces full WAT modules).
 
-Current branch tip:
+Current branch tip (2026-05-07 doc-vision sweep + wheel-side substrate):
 
+- `8f5a081` — `CLAUDE.md: align with developer-experience vision + sharpen drift 38`
+- `240406d` — `README.md: full refresh per the developer-experience vision`
+- `5335ff2` — `ULTIMATE_MEDIUM.md: extend with §8 day-in-the-medium experience layer`
+- `03db1db` — `oracle: delete dead sequential exploration substrate`
+- `1c69bdb` — `oracle five-verb composition + format effect substrate + parser-progress polish`
+- `b584b88` — `parallelism cascade: parallel_map + wasi_threads + drift 6 erasure across the wheel`
+- `39c9b93` — `Hβ.first-light.parser-progress + malformed-fnstmt-sentinel + ULTIMATE MEDIUM latch`
 - `3a21226` — `substrate: eradicate 'self' OOP drift from refinement syntax`
 - `c53904d` — `substrate: bootstrap/src/lower/main.wat — Hβ.lower cascade closure`
+
+Wheel-side substrate landings (2026-05-07) compose for Phase μ + Phase Z when L1 lands; do not directly close L1 (that's seed-side parser-fabrication-substrate cursor):
+
+- **`parallel_map` + `wasi_threads` handler** (`b584b88`) — N-arity peer for the binary pair-forms; closes the cargo-equivalent CPU profile gap wheel-side; 5 named peer follow-ups
+- **Oracle five-verb composition** (`1c69bdb` + `03db1db`) — `run_oracle` composes `<|` + `><` + `|>` + `~>` + `<~` exhaustively; realizes "thousands per second" claim; dead sequential `explore_positions` deleted (no back-compat residue per `protocol_delete_dont_explain_absence.md`)
+- **`Format` effect substrate** (`1c69bdb`) — `src/format.mn` + SYNTAX.md indentation discipline; `mentl edit` auto-formats continuously; LSP transport gives format-on-save
+- **Vision crystallization** (`5335ff2` + memory file) — `protocol_developer_experience_vision.md` + ULTIMATE_MEDIUM §8 day-in-the-medium; throughline for the doc sweep
+- **Outward-face refresh** (`240406d` + `8f5a081`) — README full refresh; CLAUDE.md alignment with vision + drift 38 sharpening
 
 ---
 
@@ -220,7 +237,7 @@ These are the live operating rules for roadmap execution:
 4. No substrate proposal from partial corpus reads.
 5. No drift-budget vocabulary: no “timebox”, no “N sessions”, no
    “pivot criterion”.
-6. Mentl is not a CLI prefix; commands are `mentl <verb>`.
+6. Project-action `mentl <verb>` is canonical (`mentl edit / doc / run / test / audit / serve / new / compile / check / repl / teach / query`) per `EH-entry-handlers.md` alias table; subcommand prefix is structural because the binary IS named Mentl. **Tentacle-named CLI verbs that shadow at-cursor projections are drift 38** (`mentl trace / why / propose / unlock / verify / topology` — those projections fire AT-CURSOR inside the medium per `Hμ.cursor` + `cursor_default`, not as separate CLI verbs).
 7. `///` reaches the graph; markdown does not.
 8. `ROADMAP.md` is the live roadmap; old roadmap files are
    compatibility shims only.
@@ -357,7 +374,7 @@ which Phase μ landings naturally feed into.
 
 ### Hμ.cursor — opening handle
 
-**Status: AUTHORING 2026-05-02.** See
+**Status: LANDED 2026-05-02 (commit `9f6b616`).** See
 `docs/specs/simulations/Hμ-cursor.md` (12-section walkthrough),
 `src/cursor.mn` (~250 lines wheel-canonical Mentl), SUBSTRATE.md §VI
 "Cursor: The Gradient's Global Argmax" (theorem-set entry),
@@ -438,6 +455,58 @@ with !Mutate`). Zero invented kernel substrate.
   all produced automatically by the seed compiling the wheel at L1
   closure, not handwritten. **Closing L1 is the leverage point that
   unlocks every Phase μ seed transcription simultaneously.**
+
+---
+
+
+## Phase Z — Collaborative substrate (post-μ)
+
+**Opens after Phase μ's transport handles compose against a shared
+`graph_handler`.** Multi-cursor on shared graph delivers
+collaboration as substrate consequence, not as a feature.
+Crystallized in `protocol_developer_experience_vision.md`
+§"Collab-as-substrate" + `docs/ULTIMATE_MEDIUM.md` §8.6.
+
+Every collaboration tool the industry has built dissolves into a
+projection: git (Reason chain walk; branches are forks; merges
+replay one chain's Reasons against another), code review
+(reviewer's cursor + `Reason::ReviewComment`), pair programming
+(two cursors, one graph_handler, atomic mutations), blame
+(`Reason::AttributedTo(user, cursor_pos, time)`), time-travel
+debugging (walk Reason chain to any point; replay handlers up
+to that point), refactoring across teams (mutate one site;
+Reason chains link to dependents; downstream cursors re-rank),
+RBAC (effect row over (user × graph_region) — `+Mutate(region)`
+per user). **None are features; all are kernel-derived.**
+
+### Hμ.collab.shared-graph-handler — opening handle
+
+Multi-transport `~>` over shared `graph_handler`. Two cursors,
+one graph. Mutations atomic. Reason chain CRDT (append-only;
+conflict-free by construction). Conflicts surface as
+kernel-arbitrated refinement / ownership / row violations. The
+kernel was always going to do this; it took until Phase μ to
+see it.
+
+Walkthrough planned at `docs/specs/simulations/COLLAB-shared-graph.md`
+(named-but-pending per the cohesion sweep).
+
+### Phase Z peer handles (named to prevent drift 9 — deferred-by-omission)
+
+| Handle | Composes on | Unlocks |
+|---|---|---|
+| **Hμ.collab.shared-graph-handler** | Phase μ + `graph_handler` swap | Multi-cursor on shared graph; the substrate primitive for everything else in Phase Z |
+| **Hμ.collab.reason-crdt-replay** | Hμ.collab.shared-graph-handler | Branch / fork / merge as Reason chain replay; conflicts as kernel diagnostics; git as compatibility transport |
+| **Hμ.collab.cursor-presence** | Hμ.collab.shared-graph-handler + Hμ.cursor | Each user's cursor IS a graph node; presence is automatic projection (no separate "presence service") |
+| **Hμ.collab.permission-row** | Hμ.collab.shared-graph-handler + Boolean effect row | Per-user `+Mutate(region) - Read(other_region)` permission discipline; RBAC by row algebra |
+| **Hμ.collab.transport-bridge** | Hμ.cursor.transport (Phase μ) | WebSocket / WebRTC / shared-FS transports composing on shared `graph_handler`; the wire format IS Pack/Unpack on graph mutations |
+| **Hμ.collab.federated-replication** | Hμ.collab.reason-crdt-replay + Pure-over-broader-input | Replicated `graph_handler`s across nodes; any node can replay from any Reason-chain prefix; trust = signed Reason entries |
+
+After Phase Z, the medium reaches solo + team + open-source +
+remote work in one substrate. Industry tools (git, Slack threads
+on PRs, Live Share, Pernosco, Replit collab, GitLab MR review)
+dissolve into substrate projections. **Phase Z is when the
+medium reaches the ecosystem.**
 
 ---
 

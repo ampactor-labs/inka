@@ -91,6 +91,68 @@ fn lowpass(input) with Sample = {
   (0.9 * previous + 0.1 * input)
 }
 
+// ─── The five-verb finale — all five composed at once ──────────────
+//
+// Each verb has its own section above. The finale composes them in
+// ONE expression: the cursor's read at a position, audited live,
+// feedback-closing over an iterative context. The shape on the page
+// IS the medium's main loop.
+//
+// Reading the topology:
+//   `<|` divergence — input borrowed to FOUR independent reads
+//                     (each tentacle's lens is a branch)
+//   `|>` sequential — flow through normalize and combine
+//   `><` parallel  — two independent positions project simultaneously
+//   `~>` attach    — Clock + sample handlers wrap the cycle
+//   `<~` feedback  — output threads back as next-cycle input
+//
+// Per SUBSTRATE.md §II: convergent verbs (`><`, `<~`) sit at indented
+// center; sequential verbs (`|>`, `~>`) at the left edge; `<|` at the
+// left edge before its branch tuple. The visual shape IS the
+// computation graph — the developer reads the topology by reading
+// the indent.
+
+/// `live_session_demo` — one position projected through four lenses
+/// simultaneously, normalized, combined with another position's
+/// projection (parallel composition), feedback-closed under a clock.
+fn live_session_demo(input_a, input_b) with Sample = {
+  let projection_a =
+    input_a
+      <| (
+        double,
+        add_one,
+        negate,
+        identity_step
+      )
+  let projection_b =
+    input_b
+      <| (
+        double,
+        add_one,
+        negate,
+        identity_step
+      )
+  let normalized =
+    (projection_a |> reduce_to_int)
+        ><
+    (projection_b |> reduce_to_int)
+  normalized
+      <~ (combine_normalized(normalized) |> tick_advance)
+}
+
+fn identity_step(x) with Pure = x
+fn reduce_to_int(t) with Pure = sum_tuple(t)
+fn sum_tuple(t) with Pure = match t {
+  (a, b, c, d) => a + b + c + d
+}
+fn combine_normalized(pair) with Pure = match pair {
+  (a, b) => a + b
+}
+fn tick_advance(x) with Sample = {
+  perform tick()
+  x
+}
+
 fn main() = {
   pipeline_demo(7)
     |> print_string

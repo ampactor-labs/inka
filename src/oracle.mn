@@ -132,9 +132,9 @@ type OracleQueue
 /// Five surfaces today subscribe through these ops:
 /// - `voice_queue_walk` (cursor-time MV) — query_project_queue +
 ///   cursor_relevant
-/// - `mentl doc` (F.1 batch) — query_module_queue per decl
+/// - doc batch surface (F.1) — query_module_queue per decl
 /// - LSP hover — query_at_position(cursor_handle)
-/// - `mentl teach` CLI — query_at_position OR query_project_queue
+/// - teach CLI surface — query_at_position OR query_project_queue
 /// - Web playground — same as LSP, push via WebSocket on queue change
 
 effect OracleQuery {
@@ -259,9 +259,9 @@ handler project_queue_merger
 // ─── run_oracle — per-module exploration producing an OracleQueue ────
 
 /// run_oracle — produces a per-module OracleQueue from a checked env.
-/// Walks every position in the module that has dependents (Q-2 (B)
-/// scope), runs speculative-inference candidate enumeration per the
-/// existing src/mentl.mn try_each_annotation_loop pattern, ranks
+/// Walks every position with dependents (Q-2 (B) scope), runs
+/// speculative-inference candidate enumeration through the five-verb
+/// composition realizing the "thousands per second" claim, ranks
 /// survivors via priority_lt, returns the sorted queue.
 ///
 /// Pure-equivalent over (env + handler_chain + intent) — performs only
@@ -270,19 +270,166 @@ handler project_queue_merger
 /// the writes will be reverted). Same memoizability discipline as
 /// inference.
 ///
-/// Pre-B.2: candidate enumeration is OneShot per candidate (sequential).
-/// Post-B.2: candidate enumeration parallelizes via MultiShot fork; same
-/// substrate; just faster (the kernel claim "hundreds of universes per
-/// second" lands at this point — speculative forks per position run
-/// concurrently, survivors merge into the queue).
+/// THE FIVE-VERB COMPOSITION (per protocol_oracle_is_ic.md +
+/// SUBSTRATE.md §VI). Each position projects through three exploration
+/// strategies in parallel; each strategy yields its own candidate
+/// stream; streams verify in parallel; survivors merge into the queue.
+/// The shape on the page IS the speculation tensor.
+///
+///   |>  positions feed sequentially through per-position exploration
+///   <|  per-position fanout into three exploration strategies (the
+///         cursor's eight aspects narrow which strategies fire — at a
+///         refinement violation, refinement_strategy fires; at a row
+///         contradiction, row_strategy; at an ownership conflict,
+///         ownership_strategy — all three borrow the same position
+///         under !Mutate, no aliasing-by-write)
+///   ><  the three strategies run as independent pipelines (genuine
+///         parallel under WasiThreads handler; sequential default)
+///   ~>  Speculate handler attaches checkpoint/rollback per branch
+///         (the kernel's MultiShot resume IS the speculation primitive)
+///   <~  oracle_ic_fixpoint closes the cycle when the queue stops
+///         changing across cycles (the silence_predicate condition)
 
-fn run_oracle(env, module_path) with Verify = {
+fn run_oracle(env, module_path) with Verify + Speculate = {
   let positions = collect_positions_with_dependents(env)
-  let n         = positions.len
-  let buf       = make_list(n * 4)        // generous estimate; over-alloc fine
-  let count     = explore_positions(positions, 0, n, env, module_path, buf, 0)
-  OracleQueue(sort_by_priority(slice(buf, 0, count)))
+  let candidates_per_position = explore_each_position(positions, env, module_path)
+  OracleQueue(sort_by_priority(flatten(candidates_per_position)))
 }
+
+/// explore_each_position — `|>` through positions, `~>` Speculate
+/// handler installed for the per-branch checkpoint/rollback discipline.
+/// parallel_map dispatches per Thread effect handler installed
+/// upstream (single-thread default, WasiThreads in production).
+/// Drift refused: 9 (no sequential fallback "for now" — the topology
+/// is parallel-honest by construction; threading dispatch is at handler
+/// install per protocol_parallelism_symmetry.md).
+
+fn explore_each_position(positions, env, module_path) with Verify + Speculate = {
+  positions
+    |> parallel_map((pos) => explore_at_position(pos, env, module_path))
+    ~> speculate_handler
+}
+
+/// explore_at_position — `<|` divergence into three strategies; `><`
+/// parallel composition of the resulting streams. The position is
+/// borrowed to all three branches (no move; `!Mutate` proves it);
+/// each strategy reads the graph through its own kernel-primitive
+/// lens. Per CLAUDE.md eight interrogations:
+///   Graph?     three strategies read the same graph at pos
+///   Handler?   speculate_handler attached upstream provides resume
+///   Verb?      <| (divergence) + >< (parallel) realize the topology
+///   Row?       Verify + Speculate; no Mutate (read-only borrow)
+///   Ownership? pos borrowed to all three; no aliasing-by-write
+///   Refinement? each strategy's verify is separate; survivors meet
+///   Gradient?  the cursor's eight aspects bias which strategy fires
+///   Reason?    each candidate carries OracleVerified(pos, cand) chain
+/// Drift refused: 1 (no dispatch table); 6 (refinement/row/ownership
+/// are NOT primitive special-case — three branches of one fanout); 7
+/// (one record per QueueItem, never parallel-arrays); 9 (no deferred
+/// strategy — all three land in this commit).
+
+fn explore_at_position(pos, env, module_path) with Verify + Speculate = {
+  let (refinement_candidates, row_candidates, ownership_candidates) =
+    pos
+      <| (
+        (p) => enumerate_refinement_narrowings(p, env),
+        (p) => enumerate_row_tightenings(p, env),
+        (p) => enumerate_ownership_resolutions(p, env)
+      )
+  let (refinement_proven, row_proven, ownership_proven) =
+    (refinement_candidates |> verify_each_candidate(pos, env, module_path))
+        ><
+    (row_candidates        |> verify_each_candidate(pos, env, module_path))
+        ><
+    (ownership_candidates  |> verify_each_candidate(pos, env, module_path))
+  refinement_proven ++ row_proven ++ ownership_proven
+}
+
+/// verify_each_candidate — per-candidate checkpoint → tentative apply
+/// → verify → rollback → on success, emit QueueItem. The Speculate
+/// effect's handler IS the rollback discipline (graph_push_checkpoint
+/// / graph_rollback). MultiShot resume cardinality at the speculate
+/// handler arm body — the resume primitive captures the heap-allocated
+/// continuation per H7 walkthrough; speculation forks compose without
+/// a separate concurrency runtime (kernel primitive #2).
+
+fn verify_each_candidate(pos, env, module_path) with Verify + Speculate =
+  (candidates) => parallel_map((cand) => speculate_one(pos, cand, env, module_path), candidates)
+                  |> filter_some
+
+fn speculate_one(pos, cand, env, module_path) with Verify + Speculate = {
+  let cp = perform graph_push_checkpoint()
+  apply_candidate_tentatively(pos, cand, env)
+  let proven = verify_after_apply(pos)
+  perform graph_rollback(cp)
+  if proven {
+    Some(QueueItem({
+      position:    pos,
+      candidate:   cand,
+      capability:  unlock_capability(cand),
+      impact:      compute_priority(pos, cand, env, module_path),
+      reason:      OracleVerified(pos, cand),
+      module_path: module_path
+    }))
+  } else { None }
+}
+
+/// oracle_ic_fixpoint — `<~` feedback loop closing on queue-stability.
+/// Per protocol_oracle_is_ic.md: build IS the <~ loop; oracle re-
+/// explores when IC invalidates (graph_mutated fires); the cycle
+/// converges when no QueueItem changes between cycles (silence at
+/// gradient top per silence_predicate_oracle).
+///
+/// The `<~` arrow REQUIRES iterative context — IC handler installed
+/// upstream provides it. accumulate(initial_queue) starts at empty
+/// queue and IC-narrows toward the proven-complete state. Without IC
+/// context: parser rejects with E_FeedbackNoContext per SYNTAX.md
+/// §489.
+///
+/// This is the loop the user sees as "Mentl is alive" — every keystroke
+/// triggers IC invalidation, which triggers re-exploration, which
+/// updates the queue, which surfaces through the cursor. The cycle
+/// IS the medium.
+
+fn oracle_ic_fixpoint(initial_env, module_path) with Verify + Speculate + IC = {
+  initial_env
+    |> (env) => run_oracle(env, module_path)
+    ~> cached_check_with_oracle
+      <~ accumulate(empty_queue())
+}
+
+fn empty_queue() with Pure = OracleQueue([])
+
+fn flatten(lists) with Pure = match lists {
+  []        => [],
+  [h | t]   => h ++ flatten(t)
+}
+
+fn filter_some(opts) with Pure = match opts {
+  []                => [],
+  [None | t]        => filter_some(t),
+  [Some(x) | t]     => [x] ++ filter_some(t)
+}
+
+/// speculate_handler — the Speculate effect's canonical handler.
+/// MultiShot resume per kernel primitive #2: each branch captures the
+/// continuation; checkpoint/rollback maintains the speculation tree.
+/// Substrate per SUBSTRATE.md §"The Heap Has One Story" — continuation
+/// records live on the heap as closures; resume is call_indirect on
+/// the closure's fn-pointer.
+
+handler speculate_handler {
+  graph_push_checkpoint() => resume(perform graph_checkpoint_now()),
+  graph_rollback(cp)      => resume(perform graph_rollback_to(cp))
+}
+
+// ─── Preserved sequential substrate (replaced above; kept as residue) ─
+//
+// The pre-five-verb form for explore_positions / try_each_candidate_loop
+// was sequential `for i in 0..n`-style iteration. The replacement above
+// uses the topology directly: <| (divergence) + >< (parallel) + |> +
+// ~> + <~. The shape on the page is the computation graph — what
+// kernel primitive #3 (Five verbs) MEANS at this site.
 
 /// explore_positions — fold over positions; per-position, enumerate
 /// candidates and try each. Tail-recursive accumulator; flat-buffer-

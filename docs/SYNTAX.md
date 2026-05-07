@@ -1182,7 +1182,37 @@ After a convergent construct, the chain returns to the left edge:
 
 ### Indentation discipline
 
-Mentl uses 2-space indentation. The parser is INDENT-AWARE for layout enforcement (similar to F# and OCaml's indent-sensitive modes). Mixed tabs and spaces: rejected.
+**The medium handles formatting; the developer types meaning.**
+
+Mentl's canonical layout: 2-space indent for left-edge verbs (`|>`, `~>`, `<|`); 4-space indent for indented-center convergent verbs (`><`, `<~`). The shape on the page IS the computation graph (per §36 governing principle 1).
+
+**Parse rule** (relative ordering, not absolute counts):
+- Left-edge verbs MUST be indented MORE than their input.
+- Convergent verbs (`><`, `<~`) MUST be indented at least as much as left-edge verbs of the same chain.
+- Each stage of a `|>` / `~>` chain at the SAME indent as its peers within the chain.
+- Within a `<|` branch tuple, branches at the SAME indent as each other.
+
+Tabs are accepted at parse time and converted to spaces by the formatter. Absolute column counts are NOT enforced at parse — what matters is structural ordering. This applies the chain-link-5 discipline (`protocol_parse_is_eager_graph_projection.md`) at the layout layer: indent is a render decision, not a parse contract.
+
+**Render rule** (canonical):
+- The formatter renders code in canonical 2-space / 4-space form on save.
+- The `Format` effect at `src/format.mn` declares `format_program` / `format_at_handle` / `format_chain` ops; `format_default` is the canonical handler.
+- `mentl edit` (built-in) auto-formats continuously — keystroke triggers parse → format → render. The developer never sees badly-indented code because the medium normalizes before display.
+- The LSP transport (external editors via VS Code / vim / Emacs) provides format-on-save through the same `format_default` handler, different transport.
+- Tabs in the on-disk file are converted to spaces at the next save; the renderer's indent-width preference is per-developer (editor setting), but the file on disk is canonical for L1 byte-identity and version-control determinism.
+
+**Composition**: the formatter is a `~>` handler in the cursor stack:
+
+```
+keystroke
+  |> tokenize
+  |> parse_to_graph
+  ~> format_default
+  ~> render_to_transport
+    <~ accumulate(graph)
+```
+
+Per `protocol_oracle_is_ic.md`: format is idempotent (`format(format(x)) == format(x)`), so the IC fixpoint converges in one iteration. The format problem dissolves into the cursor projection.
 
 ---
 

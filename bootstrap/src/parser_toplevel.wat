@@ -145,18 +145,12 @@
         (local.set $stmt (call $list_index (local.get $result) (i32.const 0)))
         (local.set $new_p (call $skip_sep (local.get $tokens)
           (call $list_index (local.get $result) (i32.const 1))))
-        ;; Per Hβ.first-light.parser-progress-guarantee (2026-05-07,
-        ;; chain-link-5 protocol_parse_is_eager_graph_projection.md):
-        ;; if parse_stmt_p didn't advance position, the parser is
-        ;; stuck on a token it can't classify. Pushing a sentinel-stmt
-        ;; without advancing would loop forever, generating thousands
-        ;; of empty-named entries downstream. Force progress by skipping
-        ;; ONE token and re-loop. The cursor reads forward; the lost
-        ;; token attaches as Reason "unparseable at SPAN" via the
-        ;; sentinel-stmt's empty-shape (kernel primitive 8: HM live
-        ;; with Reasons). Drift refused: 9 (no infinite recovery loop
-        ;; producing empty entries); fabrication (no manufactured
-        ;; "fix" — we accept the byte loss and surface it).
+        ;; Per Hβ.first-light.parser-progress-guarantee (2026-05-07):
+        ;; if parse_stmt_p didn't advance position, parser is stuck on
+        ;; a token it can't classify. Force-advance ONE token; the
+        ;; sentinel-stmt produced attaches the Reason via empty-shape
+        ;; per kernel primitive 8. Drift refused: 9 (no infinite
+        ;; recovery loop).
         (if (i32.le_u (local.get $new_p) (local.get $p_before))
           (then
             (local.set $new_p (i32.add (local.get $p_before) (i32.const 1)))))

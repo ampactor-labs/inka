@@ -271,65 +271,282 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter))))
 
-  ;; ─── WASI import emission ─────────────────────────────────────────
-  ;; WASI import projection used by emitted modules.
-  (func $emit_wasi_imports_inka
-    ;; fd_write
-    (call $emit_cstr (i32.const 854) (i32.const 8))   ;; "(import "
-    (call $emit_byte (i32.const 34))                  ;; '"'
-    (call $emit_cstr (i32.const 1121) (i32.const 22)) ;; "wasi_snapshot_preview1"
-    (call $emit_byte (i32.const 34))
-    (call $emit_space)
-    (call $emit_byte (i32.const 34))
-    (call $emit_cstr (i32.const 1143) (i32.const 8))  ;; "fd_write"
-    (call $emit_byte (i32.const 34))
-    (call $emit_space)
-    (call $emit_cstr (i32.const 924) (i32.const 5))   ;; "(func"
-    (call $emit_space)
-    (call $emit_byte (i32.const 36))                  ;; '$'
-    (call $emit_cstr (i32.const 1151) (i32.const 13)) ;; "wasi_fd_write"
-    (call $emit_cstr (i32.const 1164) (i32.const 37)) ;; " (param i32 i32 i32 i32) (result i32)"
-    (call $emit_close)
-    (call $emit_close)
-    (call $emit_nl)
-    ;; fd_read
+  ;; ─── WASI import emission — cursor-projected ─────────────────────
+  ;; Per protocol_cursor_is_the_substrate.md (2026-05-07): emit walks
+  ;; the lowered program collecting LPerform op_names that target
+  ;; "wasi_<op>" symbols; projects ONE import per used op. Adding a
+  ;; new WASI op = ZERO emit code change beyond extending
+  ;; $wasi_signature_for. No imperative subsystem, no per-op
+  ;; emit-call sequence — the cursor's Row aspect at the program
+  ;; root drives import projection. emit IS a graph projection.
+  ;;
+  ;; Drift refused: 1 (no vtable; structural tag-int dispatch in
+  ;; cwo_walk); 7 (no parallel arrays — used set is one Buffer<String>);
+  ;; 8 (op_name string compare, no mode flag); 9 (collect+sig+emit
+  ;; land whole as one cohesive projection cascade).
+  ;;
+  ;; Length-prefixed signature strings keyed by op-name suffix.
+  ;; Reused across all (effect-name, op-name) pairs that share a
+  ;; WASI-preview1 signature (e.g. fd_write/fd_read share 4-i32-args).
+  (data (i32.const 4800) "\0c\00\00\00 (param i32)")                                              ;; len 12 — proc_exit
+  (data (i32.const 4816) "\19\00\00\00 (param i32) (result i32)")                                  ;; len 25 — fd_close
+  (data (i32.const 4848) "\21\00\00\00 (param i32 i32 i32) (result i32)")                          ;; len 33 — path_create_directory, path_unlink_file
+  (data (i32.const 4896) "\25\00\00\00 (param i32 i32 i32 i32) (result i32)")                      ;; len 37 — fd_write, fd_read
+  (data (i32.const 4944) "\29\00\00\00 (param i32 i32 i32 i32 i32) (result i32)")                  ;; len 41 — path_filestat_get
+  (data (i32.const 4992) "\2d\00\00\00 (param i32 i32 i32 i32 i32 i32) (result i32)")              ;; len 45 — path_rename
+  (data (i32.const 5040) "\39\00\00\00 (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)")  ;; len 57 — path_open
+
+  ;; Length-prefixed "wasi_proc_exit" for runtime-injected used set.
+  ;; The seed's _start epilogue calls $wasi_proc_exit unconditionally;
+  ;; the cursor walks user code only, so emit-runtime-emitted ops must
+  ;; be injected before the walk. Until _start itself is graph-
+  ;; projected (Hβ.first-light.start-section-graph-projected — peer
+  ;; follow-up), each runtime-emitted WASI op gets one seed-side line
+  ;; here. User ops remain fully cursor-projected from $cwo_walk.
+  (data (i32.const 5104) "\0e\00\00\00wasi_proc_exit")  ;; len 14
+
+  ;; $wasi_signature_for — given target_name "wasi_<op>", returns a
+  ;; length-prefixed signature string ptr (or 0 if unknown). Suffix-
+  ;; key dispatch reuses walk_call.wat's existing length-prefixed
+  ;; comparison strings at 4416/4432/4448/4464/4480/4608/4640/4672/4704.
+  (func $wasi_signature_for (param $target i32) (result i32)
+    (local $suffix i32)
+    (local.set $suffix
+      (call $str_slice (local.get $target) (i32.const 5)
+                       (call $str_len (local.get $target))))
+    (if (call $str_eq (local.get $suffix) (i32.const 4416))   ;; fd_write
+      (then (return (i32.const 4896))))
+    (if (call $str_eq (local.get $suffix) (i32.const 4432))   ;; fd_read
+      (then (return (i32.const 4896))))
+    (if (call $str_eq (local.get $suffix) (i32.const 4448))   ;; proc_exit
+      (then (return (i32.const 4800))))
+    (if (call $str_eq (local.get $suffix) (i32.const 4464))   ;; path_open
+      (then (return (i32.const 5040))))
+    (if (call $str_eq (local.get $suffix) (i32.const 4480))   ;; fd_close
+      (then (return (i32.const 4816))))
+    (if (call $str_eq (local.get $suffix) (i32.const 4608))   ;; path_create_directory
+      (then (return (i32.const 4848))))
+    (if (call $str_eq (local.get $suffix) (i32.const 4640))   ;; path_filestat_get
+      (then (return (i32.const 4944))))
+    (if (call $str_eq (local.get $suffix) (i32.const 4672))   ;; path_unlink_file
+      (then (return (i32.const 4848))))
+    (if (call $str_eq (local.get $suffix) (i32.const 4704))   ;; path_rename
+      (then (return (i32.const 4992))))
+    (i32.const 0))
+
+  ;; $emit_one_wasi_import — emit one WASI import declaration:
+  ;;   (import "wasi_snapshot_preview1" "<op>" (func $wasi_<op> <sig>))
+  ;; Field name = target with "wasi_" prefix stripped (5 bytes).
+  ;; Internal name = full target. Signature via $wasi_signature_for.
+  ;; Silent return if signature unknown (lower would not have routed
+  ;; an unknown op to wasi_<op>; this is defense-in-depth).
+  (func $emit_one_wasi_import (param $target i32)
+    (local $sig i32) (local $tlen i32)
+    (local.set $sig (call $wasi_signature_for (local.get $target)))
+    (if (i32.eqz (local.get $sig)) (then (return)))
+    (local.set $tlen (call $str_len (local.get $target)))
     (call $emit_indent)
-    (call $emit_cstr (i32.const 854) (i32.const 8))   ;; "(import "
-    (call $emit_byte (i32.const 34))
-    (call $emit_cstr (i32.const 1121) (i32.const 22)) ;; "wasi_snapshot_preview1"
-    (call $emit_byte (i32.const 34))
-    (call $emit_space)
-    (call $emit_byte (i32.const 34))
-    (call $emit_cstr (i32.const 1202) (i32.const 7))  ;; "fd_read"
-    (call $emit_byte (i32.const 34))
-    (call $emit_space)
-    (call $emit_cstr (i32.const 924) (i32.const 5))   ;; "(func"
-    (call $emit_space)
-    (call $emit_byte (i32.const 36))
-    (call $emit_cstr (i32.const 1209) (i32.const 12)) ;; "wasi_fd_read"
-    (call $emit_cstr (i32.const 1164) (i32.const 37)) ;; " (param i32 i32 i32 i32) (result i32)"
-    (call $emit_close)
-    (call $emit_close)
-    (call $emit_nl)
-    ;; proc_exit
-    (call $emit_indent)
-    (call $emit_cstr (i32.const 854) (i32.const 8))   ;; "(import "
-    (call $emit_byte (i32.const 34))
-    (call $emit_cstr (i32.const 1121) (i32.const 22)) ;; "wasi_snapshot_preview1"
+    (call $emit_cstr (i32.const 854) (i32.const 8))    ;; "(import "
+    (call $emit_byte (i32.const 34))                   ;; '"'
+    (call $emit_cstr (i32.const 1121) (i32.const 22))  ;; "wasi_snapshot_preview1"
     (call $emit_byte (i32.const 34))
     (call $emit_space)
     (call $emit_byte (i32.const 34))
-    (call $emit_cstr (i32.const 1221) (i32.const 9))  ;; "proc_exit"
+    ;; Field name = target+9 (skip 4-byte length prefix + 5-byte "wasi_")
+    (call $emit_cstr
+      (i32.add (local.get $target) (i32.const 9))
+      (i32.sub (local.get $tlen) (i32.const 5)))
     (call $emit_byte (i32.const 34))
     (call $emit_space)
-    (call $emit_cstr (i32.const 924) (i32.const 5))   ;; "(func"
+    (call $emit_cstr (i32.const 924) (i32.const 5))    ;; "(func"
     (call $emit_space)
-    (call $emit_byte (i32.const 36))
-    (call $emit_cstr (i32.const 1230) (i32.const 14)) ;; "wasi_proc_exit"
-    (call $emit_cstr (i32.const 1244) (i32.const 12)) ;; " (param i32)"
+    (call $emit_byte (i32.const 36))                   ;; '$'
+    ;; Internal name = full "wasi_<op>" payload.
+    (call $emit_cstr
+      (i32.add (local.get $target) (i32.const 4))
+      (local.get $tlen))
+    ;; Signature payload.
+    (call $emit_cstr
+      (i32.add (local.get $sig) (i32.const 4))
+      (call $str_len (local.get $sig)))
     (call $emit_close)
     (call $emit_close)
     (call $emit_nl))
+
+  ;; $emit_wasi_imports_inka — cursor-projected entry. Walks lowered
+  ;; program for used wasi_* op-names; emits one import per. Insertion
+  ;; order is graph-traversal-deterministic; both L1 iterations
+  ;; produce identical import section.
+  (func $emit_wasi_imports_inka (param $lowexprs i32)
+    (local $used i32) (local $i i32) (local $n i32) (local $op i32)
+    (local.set $used (call $collect_used_wasi_ops (local.get $lowexprs)))
+    (local.set $n (call $len (local.get $used)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $op (call $list_index (local.get $used) (local.get $i)))
+        (call $emit_one_wasi_import (local.get $op))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
+
+  ;; $collect_used_wasi_ops — walk LowExpr collecting LPerform.op_name
+  ;; where it starts with "wasi_". Mirrors $collect_fn_names structure
+  ;; (Hβ.runtime.buffer-substrate); freezes Buffer<String> to clean
+  ;; List<String> on return. Dedup via $buf_push_unique.
+  (func $collect_used_wasi_ops (param $lowexprs i32) (result i32)
+    (local $buf i32)
+    (local.set $buf (call $buf_make (i32.const 8)))
+    ;; Inject runtime-emitted ops first — _start always calls proc_exit.
+    ;; Future _start projections (Hβ.first-light.start-section-graph-
+    ;; projected) drop this line; the cursor walk picks them up
+    ;; automatically.
+    (call $buf_push (local.get $buf) (i32.const 5104))   ;; "wasi_proc_exit"
+    (local.set $buf (call $cwo_walk_list (local.get $buf) (local.get $lowexprs)))
+    (call $buf_freeze (local.get $buf)))
+
+  ;; $cwo_walk_list — iterate top-level lowexprs; threads Buffer<String>.
+  (func $cwo_walk_list (param $buf i32) (param $lowexprs i32) (result i32)
+    (local $i i32) (local $n i32)
+    (if (i32.lt_u (local.get $lowexprs) (global.get $heap_base))
+      (then (return (local.get $buf))))
+    (local.set $n (call $len (local.get $lowexprs)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $buf
+          (call $cwo_walk (local.get $buf)
+            (call $list_index (local.get $lowexprs) (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (local.get $buf))
+
+  ;; $cwo_walk — recurse into one LowExpr; push wasi_* op_names into
+  ;; the Buffer at any depth. Mirrors $cfn_walk's recursion shape so
+  ;; every emitted fn body's perform sites get visited.
+  (func $cwo_walk (param $buf i32) (param $expr i32) (result i32)
+    (local $tag i32) (local $op_name i32) (local $fn_r i32) (local $body i32)
+    (if (i32.lt_u (local.get $expr) (global.get $heap_base))
+      (then (return (local.get $buf))))
+    (local.set $tag (call $tag_of (local.get $expr)))
+    ;; LPerform (331) — push op_name if it starts with "wasi_".
+    (if (i32.eq (local.get $tag) (i32.const 331))
+      (then
+        (local.set $op_name (call $lexpr_lperform_op_name (local.get $expr)))
+        (if (call $starts_with_wasi (local.get $op_name))
+          (then (call $buf_push_unique (local.get $buf) (local.get $op_name))))
+        (return (call $cwo_walk_list (local.get $buf)
+                  (call $lexpr_lperform_args (local.get $expr))))))
+    ;; LMakeClosure (311) — recurse into fn body.
+    (if (i32.eq (local.get $tag) (i32.const 311))
+      (then
+        (local.set $fn_r (call $lexpr_lmakeclosure_fn (local.get $expr)))
+        (local.set $body (call $lowfn_body (local.get $fn_r)))
+        (return (call $cwo_walk_list (local.get $buf) (local.get $body)))))
+    ;; LMakeContinuation (312) — same shape.
+    (if (i32.eq (local.get $tag) (i32.const 312))
+      (then
+        (local.set $fn_r (call $lexpr_lmakecontinuation_fn (local.get $expr)))
+        (local.set $body (call $lowfn_body (local.get $fn_r)))
+        (return (call $cwo_walk_list (local.get $buf) (local.get $body)))))
+    ;; LDeclareFn (313) — handler-arm fn body.
+    (if (i32.eq (local.get $tag) (i32.const 313))
+      (then
+        (local.set $fn_r (call $lexpr_ldeclarefn_fn (local.get $expr)))
+        (local.set $body (call $lowfn_body (local.get $fn_r)))
+        (return (call $cwo_walk_list (local.get $buf) (local.get $body)))))
+    ;; LLet (304) — recurse into value.
+    (if (i32.eq (local.get $tag) (i32.const 304))
+      (then
+        (return (call $cwo_walk (local.get $buf)
+                  (call $lexpr_llet_value (local.get $expr))))))
+    ;; LBlock (315).
+    (if (i32.eq (local.get $tag) (i32.const 315))
+      (then
+        (return (call $cwo_walk_list (local.get $buf)
+                  (call $lexpr_lblock_stmts (local.get $expr))))))
+    ;; LIf (314).
+    (if (i32.eq (local.get $tag) (i32.const 314))
+      (then
+        (local.set $buf (call $cwo_walk (local.get $buf)
+                          (call $lexpr_lif_cond (local.get $expr))))
+        (local.set $buf (call $cwo_walk_list (local.get $buf)
+                          (call $lexpr_lif_then (local.get $expr))))
+        (return (call $cwo_walk_list (local.get $buf)
+                  (call $lexpr_lif_else (local.get $expr))))))
+    ;; LCall (308).
+    (if (i32.eq (local.get $tag) (i32.const 308))
+      (then
+        (local.set $buf (call $cwo_walk (local.get $buf)
+                          (call $lexpr_lcall_fn (local.get $expr))))
+        (return (call $cwo_walk_list (local.get $buf)
+                  (call $lexpr_lcall_args (local.get $expr))))))
+    ;; LTailCall (309).
+    (if (i32.eq (local.get $tag) (i32.const 309))
+      (then
+        (local.set $buf (call $cwo_walk (local.get $buf)
+                          (call $lexpr_ltailcall_fn (local.get $expr))))
+        (return (call $cwo_walk_list (local.get $buf)
+                  (call $lexpr_ltailcall_args (local.get $expr))))))
+    ;; LBinOp (306).
+    (if (i32.eq (local.get $tag) (i32.const 306))
+      (then
+        (local.set $buf (call $cwo_walk (local.get $buf)
+                          (call $lexpr_lbinop_l (local.get $expr))))
+        (return (call $cwo_walk (local.get $buf)
+                  (call $lexpr_lbinop_r (local.get $expr))))))
+    ;; LMakeVariant (319).
+    (if (i32.eq (local.get $tag) (i32.const 319))
+      (then
+        (return (call $cwo_walk_list (local.get $buf)
+                  (call $lexpr_lmakevariant_args (local.get $expr))))))
+    ;; LMakeList (316).
+    (if (i32.eq (local.get $tag) (i32.const 316))
+      (then
+        (return (call $cwo_walk_list (local.get $buf)
+                  (call $lexpr_lmakelist_elems (local.get $expr))))))
+    ;; LMakeTuple (317).
+    (if (i32.eq (local.get $tag) (i32.const 317))
+      (then
+        (return (call $cwo_walk_list (local.get $buf)
+                  (call $lexpr_lmaketuple_elems (local.get $expr))))))
+    ;; LReturn (310).
+    (if (i32.eq (local.get $tag) (i32.const 310))
+      (then
+        (return (call $cwo_walk (local.get $buf)
+                  (call $lexpr_lreturn_x (local.get $expr))))))
+    ;; LHandle (332) — handler body.
+    (if (i32.eq (local.get $tag) (i32.const 332))
+      (then
+        (return (call $cwo_walk (local.get $buf)
+                  (call $lexpr_lhandle_body (local.get $expr))))))
+    ;; LHandleWith (329) — handle body + handler expression.
+    (if (i32.eq (local.get $tag) (i32.const 329))
+      (then
+        (local.set $buf (call $cwo_walk (local.get $buf)
+                          (call $lexpr_lhandlewith_body (local.get $expr))))
+        (return (call $cwo_walk (local.get $buf)
+                  (call $lexpr_lhandlewith_handler (local.get $expr))))))
+    (local.get $buf))
+
+  ;; $buf_push_unique — push if no existing buffer entry str_eq's str.
+  ;; O(N×L); fine because the WASI op-name set has < 20 distinct
+  ;; values across the wheel + this loop runs once per emit pass.
+  (func $buf_push_unique (param $buf i32) (param $str i32)
+    (local $count i32) (local $i i32) (local $existing i32)
+    (local.set $count (call $buf_count (local.get $buf)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $count)))
+        (local.set $existing
+          (call $list_index (call $buf_data (local.get $buf)) (local.get $i)))
+        (if (call $str_eq (local.get $existing) (local.get $str))
+          (then (return)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (call $buf_push (local.get $buf) (local.get $str)))
 
   ;; ─── Table Section Emission ───────────────────────────────────────
   (func $emit_funcref_section
@@ -1654,8 +1871,8 @@
     ;; ── Function types for call_indirect ──
     (call $emit_type_section (local.get $lowexprs))
 
-    ;; ── WASI imports ──
-    (call $emit_wasi_imports_inka)
+    ;; ── WASI imports (cursor-projected from used-(effect, op) set) ──
+    (call $emit_wasi_imports_inka (local.get $lowexprs))
 
     ;; ── Memory & Globals ──
     (call $emit_indent)

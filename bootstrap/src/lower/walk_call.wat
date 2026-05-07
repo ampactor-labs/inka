@@ -578,6 +578,13 @@
   (data (i32.const 4464) "\09\00\00\00path_open")
   (data (i32.const 4480) "\08\00\00\00fd_close")
   (data (i32.const 4496) "\05\00\00\00wasi_")
+  ;; Additional WASI ops per Hβ.first-light.wasi-paths-substrate
+  ;; (2026-05-07). io.mn's filesystem ops use these. Length-prefixed
+  ;; comparison strings continue at 4608+.
+  (data (i32.const 4608) "\16\00\00\00path_create_directory")
+  (data (i32.const 4640) "\12\00\00\00path_filestat_get")
+  (data (i32.const 4672) "\10\00\00\00path_unlink_file")
+  (data (i32.const 4704) "\0b\00\00\00path_rename")
 
   ;; Per Hβ.emit.memory-effect-op-direct-emit (2026-05-07): Memory-
   ;; effect ops emit RAW WASM instructions (i32.load / i32.store /
@@ -589,6 +596,10 @@
   (data (i32.const 4544) "\09\00\00\00store_i32")
   (data (i32.const 4560) "\08\00\00\00store_i8")
   (data (i32.const 4576) "\07\00\00\00memory_")
+  ;; alloc + mem_copy land here. alloc(size) → bump-allocator inline;
+  ;; mem_copy(dst, src, n) → (memory.copy) raw WASM op.
+  (data (i32.const 4736) "\05\00\00\00alloc")
+  (data (i32.const 4752) "\08\00\00\00mem_copy")
 
   (func $wasi_op_target_name (param $op_name i32) (result i32)
     (if (call $str_eq (local.get $op_name) (i32.const 4416))   ;; fd_write
@@ -600,6 +611,14 @@
     (if (call $str_eq (local.get $op_name) (i32.const 4464))   ;; path_open
       (then (return (call $str_concat (i32.const 4496) (local.get $op_name)))))
     (if (call $str_eq (local.get $op_name) (i32.const 4480))   ;; fd_close
+      (then (return (call $str_concat (i32.const 4496) (local.get $op_name)))))
+    (if (call $str_eq (local.get $op_name) (i32.const 4608))   ;; path_create_directory
+      (then (return (call $str_concat (i32.const 4496) (local.get $op_name)))))
+    (if (call $str_eq (local.get $op_name) (i32.const 4640))   ;; path_filestat_get
+      (then (return (call $str_concat (i32.const 4496) (local.get $op_name)))))
+    (if (call $str_eq (local.get $op_name) (i32.const 4672))   ;; path_unlink_file
+      (then (return (call $str_concat (i32.const 4496) (local.get $op_name)))))
+    (if (call $str_eq (local.get $op_name) (i32.const 4704))   ;; path_rename
       (then (return (call $str_concat (i32.const 4496) (local.get $op_name)))))
     (i32.const 0))
 
@@ -613,6 +632,10 @@
     (if (call $str_eq (local.get $op_name) (i32.const 4544))   ;; store_i32
       (then (return (call $str_concat (i32.const 4576) (local.get $op_name)))))
     (if (call $str_eq (local.get $op_name) (i32.const 4560))   ;; store_i8
+      (then (return (call $str_concat (i32.const 4576) (local.get $op_name)))))
+    (if (call $str_eq (local.get $op_name) (i32.const 4736))   ;; alloc
+      (then (return (call $str_concat (i32.const 4576) (local.get $op_name)))))
+    (if (call $str_eq (local.get $op_name) (i32.const 4752))   ;; mem_copy
       (then (return (call $str_concat (i32.const 4576) (local.get $op_name)))))
     (i32.const 0))
 

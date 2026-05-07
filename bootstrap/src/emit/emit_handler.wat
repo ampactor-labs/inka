@@ -469,15 +469,12 @@
     (local $slen i32) (local $b7 i32) (local $b8 i32)
     (local.set $slen (call $str_len (local.get $op_name)))
     ;; "memory_" is 7 bytes; suffix starts at byte 7.
-    ;; load_i32 (4 bytes after prefix) → suffix "load_i32" (8 bytes total).
-    ;; load_i8  (3 bytes after prefix) → suffix "load_i8"  (7 bytes total).
-    ;; store_i32 → suffix "store_i32" (9 bytes total).
-    ;; store_i8  → suffix "store_i8"  (8 bytes total).
-    ;; Discriminate via byte 7 ('l' or 's') and total length.
+    ;; load_i32 → 15 total ; load_i8 → 14 ; store_i32 → 16 ; store_i8 → 15
+    ;; alloc → 12 (memory_alloc) ; mem_copy → 15 (memory_mem_copy)
+    ;; Discriminate via byte 7 + total length.
     (local.set $b7 (call $byte_at (local.get $op_name) (i32.const 7)))
     (if (i32.eq (local.get $b7) (i32.const 108))   ;; 'l' — load_*
       (then
-        ;; suffix length: slen - 7. 8 = load_i32, 7 = load_i8.
         (if (i32.eq (local.get $slen) (i32.const 15))   ;; memory_load_i32
           (then
             (call $emit_str_lit_i32_load_offset_0)
@@ -492,10 +489,72 @@
           (then
             (call $emit_str_lit_i32_store_offset_0)
             (return)))
-        (if (i32.eq (local.get $slen) (i32.const 15))   ;; memory_store_i8
+        (if (i32.eq (local.get $slen) (i32.const 15))   ;; memory_store_i8 (slen=15) OR memory_mem_copy (slen=15)
           (then
             (call $emit_str_lit_i32_store8_offset_0)
-            (return))))))
+            (return)))))
+    ;; alloc / mem_copy via byte 7 = 'a' / 'm'.
+    (if (i32.eq (local.get $b7) (i32.const 97))    ;; 'a' — alloc
+      (then
+        (call $emit_alloc_wasm_inline)
+        (return)))
+    (if (i32.eq (local.get $b7) (i32.const 109))   ;; 'm' — mem_copy
+      (then
+        (call $emit_str_lit_memory_copy)
+        (return))))
+
+  ;; alloc inline — args: [size] on stack. Emits:
+  ;;   (local.tee $alloc_size_temp)        ;; save size for store
+  ;;   (drop)
+  ;;   (global.get $heap_ptr)              ;; old ptr (return value)
+  ;;   (global.get $heap_ptr)
+  ;;   (local.get $alloc_size_temp)
+  ;;   (i32.add)
+  ;;   (global.set $heap_ptr)
+  ;; Result: old ptr on stack, heap_ptr advanced by size.
+  ;;
+  ;; Uses $alloc_size local (declared in $emit_standard_locals). Stack
+  ;; in: [size]. Stack out: [old_heap_ptr].
+  (func $emit_alloc_wasm_inline
+    ;; (local.set $alloc_size)
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 108))   ;; '(' 'l'
+    (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 99))   ;; 'o' 'c'
+    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))   ;; 'a' 'l'
+    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 115))   ;; '.' 's'
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 116))  ;; 'e' 't'
+    (call $emit_byte (i32.const 32))                                     ;; ' '
+    (call $emit_byte (i32.const 36))                                     ;; '$'
+    (call $emit_cstr (i32.const 1860) (i32.const 10))                   ;; "alloc_size" payload (past 4-byte length prefix at 1856)
+    (call $emit_byte (i32.const 41))                                     ;; ')'
+    ;; (global.get $heap_ptr) — return value (old ptr)
+    (call $ec_emit_global_get_heap_ptr)
+    ;; (global.get $heap_ptr)
+    (call $ec_emit_global_get_heap_ptr)
+    ;; (local.get $alloc_size)
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 99))
+    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 103))   ;; '.' 'g'
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 116))  ;; 'e' 't'
+    (call $emit_byte (i32.const 32))
+    (call $emit_byte (i32.const 36))
+    (call $emit_cstr (i32.const 1860) (i32.const 10))   ;; past length prefix
+    (call $emit_byte (i32.const 41))
+    ;; (i32.add)(global.set $heap_ptr)
+    (call $ec_emit_i32_add)
+    (call $ec_emit_global_set_heap_ptr))
+
+  (func $emit_str_lit_memory_copy
+    (call $emit_byte (i32.const 40))                                     ;; '('
+    (call $emit_byte (i32.const 109)) (call $emit_byte (i32.const 101))  ;; 'm' 'e'
+    (call $emit_byte (i32.const 109)) (call $emit_byte (i32.const 111))  ;; 'm' 'o'
+    (call $emit_byte (i32.const 114)) (call $emit_byte (i32.const 121))  ;; 'r' 'y'
+    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 99))    ;; '.' 'c'
+    (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 112))  ;; 'o' 'p'
+    (call $emit_byte (i32.const 121))                                    ;; 'y'
+    (call $emit_byte (i32.const 41))
+    ;; mem_copy returns () — push unit-sentinel for downstream local.set.
+    (call $emit_i32_const (i32.const 0)))
 
   ;; Raw WAT instruction emitters — each emits one canonical instr.
   (func $emit_str_lit_i32_load_offset_0

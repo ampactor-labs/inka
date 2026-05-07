@@ -537,7 +537,244 @@ altitude. The crystallizations carry forward.
 
 ---
 
-## §8 · Cross-references — the doc loop
+## §8 · The day in the medium — what the developer experiences
+
+Sections §1–§7 establish what the medium IS and what it rules out.
+§8 establishes what the medium DOES in the developer's hands — the
+experience layer the kernel + projection + cursor + loop produce.
+Each item below is a substrate consequence of the eight primitives
+composed; nothing here is a UX choice. Crystallized in
+`protocol_developer_experience_vision.md` (memory file, indexed in
+MEMORY.md). Read alongside this section when surface decisions arise.
+
+### 8.1 The medium IS the developer's mind given substrate
+
+The graph is the body of thought. The cursor is proprioception (where
+attention IS). The eight tentacles are the senses. The Reason chain
+is memory. The gradient is muscle (what to do next). Mentl She/Her
+is voice (how the medium speaks back).
+
+Not "AI augments the developer" — the medium IS the developer's
+externalized cognition, with a kernel that is stronger and more
+honest than the human's working memory alone. **The kernel cannot
+forget, cannot hallucinate, cannot lose track of which constraint
+is load-bearing on which other constraint.** Every other system
+loses intent at some boundary; AI tools sit OUTSIDE this and try
+to pattern-match the lost intent back from training data. Mentl
+starts at lossless: the graph carries every Reason from the
+developer's `///`, `??`, manual override — every keystroke and
+every checkpoint — through inference, lowering, emit, deployment,
+all the way to machine instruction and back. **There is no
+translation. There is projection.**
+
+### 8.2 Ten moments in a day
+
+**Open.** A URL (`mentl.run/projects/foo`) or a terminal command
+(`mentl edit`) — same medium. The cursor opens at the project's
+argmax: where the gradient says you'd be most leveraged right now.
+The medium's first words are precisely about that highest-leverage
+move.
+
+**The cursor moves itself.** As you read, the gradient re-ranks. As
+you type a constraint (`with !Alloc`), the gradient narrows; the
+cursor may JUMP to a related handle in another part of the project
+that just became relevant. You don't navigate; the medium navigates
+with you. `??` is your override when you want to drive.
+
+**Think in handles, not files.** Files are a handler — a transport
+that maps the graph to disk for git/external-tool compatibility.
+Inside the medium, the unit of attention is the handle. The page
+renders the handle's text projection, type, row, refinements, Why
+chain, gradient suggestion — all at once.
+
+**Project, don't run.** Want WAT? Render through the WAT handler.
+Want test results? Render through the test handler. Want deployment
+readiness? Render through the audit handler. Same graph, different
+projection. There's no "build" step.
+
+**The medium narrates.** Cursor at any handle, the Why tentacle
+walks Reason chains back; the Teach tentacle surfaces ONE
+highest-leverage next step; the Verify tentacle shows pending
+obligations. Author's `///` and Mentl's substrate-derived voice
+both speak — two voices, no editorial third.
+
+**Mark, don't commit.** Every keystroke lives in the Reason chain.
+`Reason::Checkpoint("compressor working")` marks a coherent moment.
+Branches are forks of the chain. Merges are
+`Reason::ApplyChainFrom(other)` replaying mutations against current
+state. Conflicts surface as kernel-arbitrated refinement / ownership
+/ row violations.
+
+**Co-cursor, don't pair-program.** Two developers on the project
+see two cursors. The graph mutates atomically. Each cursor's
+gradient ranks for ITS developer (different proximity bias). Pair
+programming, code review, async collab — all the same substrate.
+
+**Swap handlers, don't deploy.** Production is
+`your_app ~> production_handlers`. Test is
+`your_app ~> test_handlers`. Chaos is
+`your_app ~> chaos_handlers`. Per EH walkthrough, entry-handlers
+are normal handler declarations in `main.mn`; the CLI resolves them
+via `--with <name>`. No CI config; the handler chain IS the config.
+
+**Walk, don't debug.** Bug fires. The Reason chain walks from the
+production trace back to the edit that introduced it — with WHY.
+Not git blame ("who"). Not stack trace ("where"). Reason chain
+("why"). The debugger IS the Why Engine; the fix surfaces with
+full causal context, often as a multi-shot proposal at the
+originating site.
+
+**Live, don't search docs.** New domain? `import` the relevant
+handlers. The medium narrates each contract at-cursor. Tutorials
+in `lib/tutorial/` are runnable Mentl programs the medium projects
+as guided tours. **There is no separate documentation site, course,
+blog post, video, or book required to learn.**
+
+**Type text.** This stays foundational. The medium augments the
+developer's primary motor act of typing meaning; it never replaces
+it. Text is canonical. Files on disk are canonical. The medium
+adds projection on top.
+
+### 8.3 Three first-class transports
+
+Per IE-mentl-edit.md §0 — every transport is a handler; the kernel
+WASM is invariant; richest projection lives where screen real estate
+allows. **All three have full Mentl power**; the substrate (kernel
++ Mentl handler + gradient + Reason chain) is identical.
+
+| Transport | Surface | Where developers find it |
+|---|---|---|
+| **Web IDE (`mentl edit`)** | Browser-WASM, holographic, max screen real estate; Topographic Canvas + Capability HUD + Wavefront panels; Holographic Lens + ghost-text + Tab-snap | Canonical first-impression URL; the medium reaches developers at maximum richness |
+| **VSCode + Mentl extension (`mentl serve` + extension)** | LSP for editor surface + VSCode webview panels for richer projections (Why-Engine sidebar, multi-shot speculation tree, refinement-proof viewer, capability flow) | 90%+ of users early; familiar editor, full Mentl projection |
+| **Terminal (vim/helix + LSP, or bare `mentl teach`)** | LSP for hover/diagnostic/code-action; or `mentl` bare → `teach_run` for terminal voice surface | Vim/helix/terminal-only users; minimum-friction Mentl access |
+
+The Web IDE is canonical because the browser-holographic-live
+transport is the medium's most expressive surface. But the other
+two are first-class for the developers who prefer them. **No "lite
+version." Same kernel, three handler swaps.**
+
+### 8.4 AI obsolescence is mathematical, not stylistic
+
+The thesis (DESIGN.md §8 + this section): the medium makes agentic
+coding AI obsolete by making the work AI tools do (proposing,
+refactoring, fixing, navigating) FALL OUT of the substrate,
+structurally proven instead of model-approximated.
+
+| Today's AI agents | The medium |
+|---|---|
+| Generate code from prompts | Propose code from the gradient (multi-shot proven, not guessed) |
+| Hallucinate types / APIs / imports | Cannot hallucinate — the kernel verifies before surfacing |
+| Lose context across long sessions | The Reason chain IS the project's memory; never lost |
+| Re-explain when corrected | Each correction lands as Reason; the gradient learns THIS project |
+| Operate via diffs you must review | Operate via graph mutations the kernel proves |
+| Cannot prove correctness | Every proposal carries Reason chain proof, walkable to root |
+| Train on millions of strangers' code | The gradient ranks for THIS project, THIS team, THIS session |
+| Need a tool for code, another for docs, another for tests, another for collab | One medium; eight tentacles; one cursor projection |
+| Stop being useful offline | Run locally; WASM kernel; same medium without SaaS |
+| Scale via bigger model | Scale via more complete substrate |
+| Talk like a chatbot | The substrate speaks; cursor + gradient + multi-shot + `??` |
+
+**AI tools EXTERNALIZE proof to a model that approximates. The
+medium INTERNALIZES proof to a kernel that proves.** Approximation
+has a ceiling — it asymptotes against ground truth and never
+reaches. Proof has no ceiling — it IS ground truth. This is why
+the obsolescence is genuine, not marketing.
+
+**Forbidden vocabulary in user-facing surfaces:** "AI" / "agent" /
+"completion" / "assistant" / "chatbot" / "prompt" / "model" /
+"training" / "hallucination" / "may want to" / "might consider".
+**Substrate-honest vocabulary:** "the medium proposes" / "the
+cursor argmax" / "the Lens fires" / "Mentl narrates" / "the
+gradient surfaces" / "multi-shot proven" / "Reason chain".
+
+### 8.5 Multi-domain unification — substrate AND marketing thesis
+
+The five verbs are topologically complete (SUBSTRATE.md §II); the
+eight kernel primitives admit every domain's discipline as a
+handler stack on the same graph. **DSP / ML / web / embedded /
+control / data processing / docs / build / distributed / real-time
+/ scientific computing / robotics / sensors — same substrate, same
+kernel, one developer.**
+
+The industry's domain-specialty fragmentation (frontend devs don't
+do ML; ML devs don't do audio; audio devs don't do distributed)
+is a consequence of language fragmentation. Mentl dissolves it.
+A single Mentl developer can write audio in the morning, the web
+app in the afternoon, the ML model in the evening, the embedded
+firmware that night — all in ONE language with ONE medium that
+speaks each domain natively. The medium adapts what it surfaces
+based on which handlers are installed: DSP context → Sample/Tick/
+Clock; ML context → autodiff handlers; Web context → DOM/Network/
+IndexedDB; Embedded context → !Alloc + real-time + hardware
+effects.
+
+This is both a SUBSTRATE claim AND the marketing thesis. Surface
+in DESIGN.md and README as both.
+
+### 8.6 Collaboration is what `graph_handler` swap delivers
+
+When two transports `~>` over the same shared `graph_handler`,
+every collaboration tool the industry has built — git, code
+review, pair programming, blame, time-travel debugging,
+refactoring across teams, RBAC — falls out as a derived
+consequence:
+
+| Industry tool | Reduces to |
+|---|---|
+| Git commit / branch / merge | Reason chain walk; branches are forks; merges replay one chain's Reasons against another |
+| Code review | Reviewer's cursor + `Reason::ReviewComment` projected at handles |
+| Pair programming | Two cursors, one graph_handler, atomic mutations |
+| Blame | `Reason::AttributedTo(user, cursor_pos, time)` walked back |
+| Time-travel debugging | Walk Reason chain to any point; replay handlers up to that point |
+| Refactoring across teams | Mutate at one site; Reason chains link to dependents; downstream cursors re-rank |
+| RBAC / permissions | Effect row over (user × graph_region) — `+Mutate(region)` per user |
+
+**Multi-user collaboration is not a feature. It is what the
+substrate delivers when shared.** Phase Z (post-μ) opens with
+`Hμ.collab.shared-graph-handler`; walkthrough at
+`docs/specs/simulations/COLLAB-shared-graph.md` (named-but-pending
+per the cohesion sweep, task #75).
+
+### 8.7 CLI canonical (per EH-entry-handlers.md)
+
+`mentl --with <handler>` is universal; subcommands are aliases
+that resolve through env lookup like any other Mentl identifier.
+Entry-handlers are normal `handler` declarations at top level in
+`src/main.mn` (or any imported module) — no separate config file,
+no manifest, no YAML / TOML / JSON.
+
+| Bare invocation | Resolves to |
+|---|---|
+| `mentl` | `--with teach_run` (terminal voice surface) |
+| `mentl edit [path] [--port=N]` | `--with edit_run` (canonical IDE per IE) |
+| `mentl doc [target]` | `--with doc_run` (per F.1) |
+| `mentl serve` | `--with lsp_run` (LSP transport on stdio) |
+| `mentl compile <target>` | `--with compile_run <target>` |
+| `mentl run <target>` | `--with compile_run + wasmtime` |
+| `mentl check <target>` | `--with check_run <target>` |
+| `mentl test [target]` | `--with test_run` |
+| `mentl audit <target>` | `--with audit_run` |
+| `mentl query <target> <q>` | `--with query_run` |
+| `mentl repl` | `--with repl_run` |
+| `mentl new <name>` | `--with new_project(name=<name>)` |
+
+**Drift 38 sharpened**: fires on tentacle-named CLI verbs that
+overlap at-cursor projections. Among the eight tentacles
+(Query/Propose/Topology/Unlock/Trace/Verify/Teach/Why):
+- `mentl teach` IS canonical (terminal voice surface for vim/
+  terminal-only users; project-action verb).
+- `mentl query` IS canonical (structured ad-hoc query;
+  project-action verb).
+- `mentl trace` / `mentl why` / `mentl propose` / `mentl unlock`
+  / `mentl verify` / `mentl topology` would be drift — those are
+  at-cursor projections inside the medium, not project-action
+  verbs.
+
+Project-action verbs are canonical; tentacle-as-namespace is drift.
+
+---
+
+## §9 · Cross-references — the doc loop
 
 This document is the highest-altitude anchor. It cross-references
 the substrate that supports it; the substrate cross-references back.
@@ -575,7 +812,7 @@ the substrate that supports it; the substrate cross-references back.
 
 ---
 
-## §9 · The closing statement
+## §10 · The closing statement
 
 > Mentl is the **ultimate medium** between intent and execution.
 >

@@ -1314,75 +1314,100 @@ developer-experience vision (`protocol_developer_experience_vision.md`).
 Compose on `protocol_ultimate_medium.md` (Phase μ thesis) +
 `docs/ULTIMATE_MEDIUM.md` §8 (day-in-the-medium experience layer).*
 
-### Collab-as-substrate
+### Collab-as-substrate (scoped: real-time + causal + RBAC + presence)
 
 **Theorem.** When two transports `~>` over the same shared
-`graph_handler`, every collaboration tool the industry has built
-— git, code review, pair programming, blame, time-travel
-debugging, refactoring across teams, RBAC — falls out as a
-derived consequence. **Multi-user collaboration is not a feature
-to add; it is what the substrate delivers when shared.**
+`graph_handler`, **real-time co-edit + per-region RBAC + cursor
+presence + in-session causal understanding** emerge as substrate
+consequences. None of those need a separate module; all four are
+kernel-derived projections.
 
-**Proof sketch.** The kernel components that make this work:
+**Scope clarification (2026-05-07, post-COLLAB-revision).** This
+theorem does NOT claim Mentl replaces git. Earlier framings
+overreached on the version-control-replacement claim; that was
+walked back when authoring `docs/specs/simulations/COLLAB-shared-graph.md`.
+**Durable versioned history stays git's domain** (mature, ubiquitous,
+ecosystem-compatible; building a Mentl-native VCS would duplicate
+git with no compelling differentiator and require persistent
+Reason-chain logs that aren't substrate-justified). Mentl integrates
+with git via a thin `git_handler` bridge that synthesizes commit
+messages from the Reason DAG and reads commits back as Reasons on
+load. **Two layers, two questions** — Mentl answers "why does this
+binding hold its current shape" within session; git answers "what
+changed across history."
 
-- **Reason chains are append-only** (kernel #8). Conflict-free by
-  construction (CRDT); two users mutating concurrently produce two
-  Reasons under a common parent — no diff/merge, just two children.
-- **Pure-over-broader-input** (handlers + IC; §VII +
-  `protocol_oracle_is_ic.md`). Any handler-projection (compile,
-  check, lower, emit) replays deterministically from any
-  Reason-chain prefix. "What did the codebase look like at 3pm
-  yesterday?" = walk Reason chain to that timestamp; replay.
+**Proof sketch (in-scope properties).**
+
 - **Cursors are graph nodes** (Hμ.cursor; §VI). Each user's cursor
-  IS a handle. Other users' cursors render naturally because they're
-  in the graph. Presence is automatic projection; no separate
-  "presence service."
-- **Refinement types verify mutations** (kernel #6). Mutation lands
-  → refinement re-checks → if violated, the Reason chain marks it
-  `Reason::ViolatesRefinement(handle, predicate)` — visible to
-  both users immediately.
-- **Boolean effect row gates capabilities** (kernel #4). Per-user
-  permissions are an effect row over (user × graph_region):
-  `+Mutate(region) - Read(other_region)` is the entire RBAC
-  story. No separate auth system.
+  IS a handle. Other users' cursors render naturally; presence is
+  automatic projection — no separate "presence service."
+- **Reason chains carry per-mutation causality WITHIN a session**
+  (kernel #8). User A's mutation lands with `Reason::AuthoredBy(alice,
+  cursor_pos, time)`; user B's Why tentacle walks to it. In-session
+  causal record.
+- **Refinement types verify concurrent mutations** (kernel #6).
+  Two users mutating the same handle: Verify-on-write checks both;
+  compatible mutations both apply (last-mutation-wins is fine
+  because Verify already ran); incompatible surfaces as `V_Pending`
+  for human resolution.
+- **Boolean effect row gates per-region capabilities** (kernel #4).
+  Per-user permissions are an effect row over (user × graph_region):
+  `+Mutate(region) - Read(other_region)`. Row subsumption proves
+  enforcement at handler install. **RBAC is a proof, not a runtime
+  check.**
 - **Gradient re-ranks per cursor** (kernel #7). User A's mutation
   lands; user B's gradient re-ranks against A's mutation; B sees
-  relevant changes ranked, not a notification dump.
-- **Why Engine walks Reason chains** (kernel #8). "Why did this
-  change?" → walk to the mutating Reason → see (user, cursor_pos,
-  what they were trying to do, gradient_score). One walk.
+  relevant changes ranked.
 
-**What this collapses** (industry tools become substrate
-projections):
+**What this delivers** (in-scope industry tools that genuinely
+dissolve):
 
 | Industry tool | Reduces to |
 |---|---|
-| Git commit / branch / merge | Reason chain walk; branches are forks; merges replay one chain's Reasons against another |
-| Code review (GitHub PRs, Gerrit) | Reviewer's cursor + `Reason::ReviewComment(handle, message)` |
-| Pair programming (Live Share, Replit) | Two cursors, one graph_handler, atomic mutations; conflict-free by Reason-CRDT |
-| Blame (git blame) | `Reason::AttributedTo(user, cursor_pos, time)` walked back; one Reason walk |
-| Time-travel debugging (rr, Pernosco) | Walk Reason chain to any point; replay handlers up to that point; reproducible from chain |
-| Refactoring across teams | Mutate one site; Reason chains link to dependents; downstream cursors re-rank |
-| Permissions / RBAC | Effect row `+Mutate(graph_region)` per user; kernel enforces; no separate auth layer |
-| Issue tracking ↔ code linking | Issues are graph nodes; `Reason::ResolvesIssue(issue_handle, by_handle)` links them |
+| Live Share / Replit collab / VS Code Live Share | Two transports → one shared `graph_handler`; atomic mutations; verify-arbitrated concurrent writes |
+| Tuple / Pop / Around (cursor presence) | Each cursor IS a graph node; presence is automatic projection |
+| Per-path branch protection rules | Effect row `+Mutate(region) - Read(other_region)` per user; row subsumption proves enforcement |
+| In-editor pair chat overlays (in-session discussion) | Reason chain entries within session (`Reason::DiscussionThread(handle, [...messages])`) |
+
+**What this delivers via integration with git** (NOT replacement):
+
+| Industry tool | Integrated via |
+|---|---|
+| Git commits / branches / merges / blame / signing | `git_handler` bridge: synthesizes commit messages from Reason DAG on save; reads commits back as Reasons on load; `mentl blame` extends `git blame` with WHY (Reason loaded from commit message) |
+| GitHub / GitLab MR review | On-disk `.mn` files are canonical (per IE §0.f); git versions them; review platforms see diffs; `mentl --with review_run` projects diffs as cursor walks for richer review |
+| Issue trackers (Linear / Jira / GitHub Issues) | External; cross-link via commit messages that the Reason DAG synthesizes |
+
+**What this does NOT deliver** (substrate-out-of-scope):
+
+| Industry tool | Why out-of-scope |
+|---|---|
+| Mentl-native version control replacing git | Building it would duplicate git with no compelling differentiator |
+| Persistent Reason-chain log across sessions | Heavy substrate (~2-3K lines); for a property git already provides via commits |
+| Cross-session time-travel debugging (rr / Pernosco) | Would need persistent log; out-of-scope |
+| Cryptographic signing of every Reason | Git signs commits; that's enough |
+| Cross-repository refactor (codemods across many repos) | Git's domain; codemod tools compose on git |
 
 **Action for implementation.** Phase Z opens with
 `Hμ.collab.shared-graph-handler` (per `ROADMAP.md` Phase Z).
-Walkthrough planned at `docs/specs/simulations/COLLAB-shared-graph.md`
-(named-but-pending). Sub-handles: `Hμ.collab.reason-crdt-replay`,
-`Hμ.collab.cursor-presence`, `Hμ.collab.permission-row`,
-`Hμ.collab.transport-bridge`, `Hμ.collab.federated-replication`.
-**No new kernel primitives required** — composition only, per the
-kernel-closure protocol.
+Walkthrough at `docs/specs/simulations/COLLAB-shared-graph.md` —
+revised 2026-05-07 to scope the substrate to in-session + causal
++ RBAC + presence + git-bridge. Five sub-handles:
+`Hμ.collab.shared-graph-handler`, `Hμ.collab.cursor-presence`,
+`Hμ.collab.permission-row`, `Hμ.collab.transport-bridge`,
+`Hμ.collab.git-bridge`. **No new kernel primitives required** —
+composition only.
 
 **Forbidden framings.** "Mentl needs a real-time collaboration
-feature" is drift 1 (vtable thinking) + drift 9 (deferred-by-omission)
-in feature-shaped clothing. The right reach: which `graph_handler`
-swap delivers the property? **Two transports → one shared
-graph_handler. Done. The "feature" is graph_handler swap, not new
-code.** "Mentl needs git" → Reason chains ARE the version control;
-walk back; fork; replay. **No git module. Git is a compatibility
-transport for non-Mentl tools.**
+feature" is drift 1 + drift 9 in feature-shaped clothing. The
+right reach: which `graph_handler` swap delivers the property?
+**Two transports → one shared graph_handler. Done. The "feature"
+is graph_handler swap, not new code.**
+
+"Mentl replaces git" — overreach. Git stays. The right reach:
+which `git_handler` integration enables the value? **Reason DAG
+synthesizes commit messages on save; commits load back as Reasons.
+Git does what git does; Mentl adds the causal-and-presence layer
+on top.**
 
 ### Multi-domain unification
 

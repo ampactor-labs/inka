@@ -156,6 +156,7 @@ Omitted primitives = under-loaded register.
 | `_ => <fabricated value>` over a load-bearing ADT | — | Convert to explicit enumeration. Safe `_`: `()`, `0`, identity-preserve, `type_mismatch(...)`. Dangerous: any fabricated value (`_ => Forall([], TVar(handle))`, `_ => "Pure"`) |
 | "Per the chunk-header named follow-up, X is a stub" | Anchor 7 | Empirically verify before authoring. Named follow-ups can be stale (substrate landed, comment unchanged). Run a 5-line micro-test through the seed; trust evidence over comment. See `Hβ-first-light-empirical.md`. |
 | "Cascade decomposes into N speculative handles" | Anchor 7 + `protocol_walkthrough_pre_audit.md` | Verification-pass FIRST: ~5-min micro-test per handle distinguishes closed-vs-real before walkthrough authoring. 12 walkthroughs against stale state costs more than 1 hour of empirical pre-audit. |
+| Parser dispatching on syntactic form: `with FIELD = INIT` vs `with !ROW` vs `with NAME` vs `{ ARMS }` | `protocol_parse_is_eager_graph_projection.md` | Eager-form-commitment — duplicates work the graph + infer narrow at type-check. parse_expr is the residue; the kernel (Boolean row + typed-resume + HM live with Reasons) classifies the form at the appropriate layer. `skip_to_lbrace_p` IS drift 9 in parser-state clothes. Two-arm structural disambiguation OK; multi-arm form-classification = drift. |
 
 ---
 

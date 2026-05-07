@@ -129,7 +129,7 @@ past ~128k tokens risks midsection blindness on the response
 | Touching `clock` / time effects | `docs/specs/11-clock.md` |
 | Starting a new γ-cascade handle | `/compact` first, then `docs/specs/simulations/{handle}.md` |
 | Substrate-architecture realization brewing | `protocol_realization_loop.md` (5-step recipe) |
-| Working on Phase H first-light-L1 closure (`inka2.wat == inka3.wat`) | `docs/specs/simulations/PLAN-to-first-light.md` (18-box trackable plan) + `Hβ-first-light-residue.md` (cascade decomposition) + `Hβ-first-light-empirical.md` (empirical seed-state — REQUIRED before substrate authoring) |
+| Working on Phase H first-light-L1 closure (`mentl2.wat == mentl3.wat`) | `docs/specs/simulations/PLAN-to-first-light.md` (18-box trackable plan) + `Hβ-first-light-residue.md` (cascade decomposition) + `Hβ-first-light-empirical.md` (empirical seed-state — REQUIRED before substrate authoring) |
 
 **Synthesis at session start:** 3–5 sentences in Mentl's vocabulary
 touching all eight kernel primitives by name or consequence.
@@ -285,7 +285,7 @@ ROADMAP §Phase D-F), **Hβ.infer.pipeline-wire CLOSED** (commit `fe5e944`;
 `fn main(x) = x` compiles end-to-end through full pipeline),
 **Hμ.cursor wheel-side CLOSED** (Phase μ opening; 7 commits ending
 `9f6b616`, 2026-05-02; `src/cursor.mn` + ULTIMATE_MEDIUM thesis).
-Active: **Phase H first-light-L1** — `inka2.wat == inka3.wat` byte-for-
+Active: **Phase H first-light-L1** — `mentl2.wat == mentl3.wat` byte-for-
 byte. Empirically-real residue per `Hβ-first-light-empirical.md` §2.3
 + §4.5.5 (rebased 2026-05-05):
 - ✓ `Hβ.first-light.handler-decl-emit-cascade` — 19-box parser closure
@@ -328,10 +328,10 @@ ROADMAP Phase μ).
 ```
 bootstrap/build.sh                              # assemble bootstrap/mentl.wat from src/
 
-cat src/*.mn lib/**/*.mn | wasmtime run bootstrap/mentl.wasm > inka2.wat
-wat2wasm inka2.wat -o inka2.wasm
-cat src/*.mn lib/**/*.mn | wasmtime run inka2.wasm > inka3.wat
-diff inka2.wat inka3.wat    # empty = first-light
+cat src/*.mn lib/**/*.mn | wasmtime run bootstrap/mentl.wasm > mentl2.wat
+wat2wasm mentl2.wat -o mentl2.wasm
+cat src/*.mn lib/**/*.mn | wasmtime run mentl2.wasm > mentl3.wat
+diff mentl2.wat mentl3.wat    # empty = first-light
 ```
 
 **WASM as substrate.** Linear memory, no GC, tail-call support via

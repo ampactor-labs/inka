@@ -183,7 +183,7 @@ criteria, not running tests). Domain libraries (`lib/dsp/`, `lib/ml/`)
 remain pre-Ultimate-Mentl and need DM rewrite (B.10 + B.11). The
 oracle's voice surfaces (LSP adapter, F.1 mentl doc) are pending. Most
 critically: the bootstrap translator (items 26-31) hasn't been
-written — first-light is reached only when `diff inka2.wat inka3.wat`
+written — first-light is reached only when `diff mentl2.wat mentl3.wat`
 is empty, and that's bootstrap work the kernel-substrate enables but
 doesn't accomplish.
 

@@ -189,8 +189,8 @@
     (local.get $old))
 
   ;; ─── $stage_reset — frees ALL stage-local allocations in O(1) ──────
-  ;; Called at cascade-stage transitions: $inka_infer → $inka_lower →
-  ;; $inka_emit. Bumps $stage_arena_ptr back to STAGE_ARENA_START. Any
+  ;; Called at cascade-stage transitions: $mentl_infer → $mentl_lower →
+  ;; $mentl_emit. Bumps $stage_arena_ptr back to STAGE_ARENA_START. Any
   ;; record allocated through $stage_alloc since the last reset is now
   ;; gone; its memory will be re-used by the next stage.
   (func $stage_reset (export "stage_reset")
@@ -15877,7 +15877,7 @@
   ;; seed. Closes the Hβ.infer cascade (10/10 chunks per §13.3). Names
   ;; the boundary where Hβ.lower will read the graph via $graph_chase.
   ;;
-  ;; Exports:    $inka_infer (pipeline-stage entry — delegates to
+  ;; Exports:    $mentl_infer (pipeline-stage entry — delegates to
   ;;               $infer_program from walk_stmt.wat; takes parsed
   ;;               toplevel stmts list; returns after the inference walk
   ;;               populates the graph + env)
@@ -15888,7 +15888,7 @@
   ;; ═══ EIGHT INTERROGATIONS (per Hβ-infer-substrate.md §6 applied to the
   ;;                           pipeline-stage boundary) ══════════════════
   ;;
-  ;; 1. Graph?      $inka_infer does not touch the graph directly. Every
+  ;; 1. Graph?      $mentl_infer does not touch the graph directly. Every
   ;;                $graph_bind / $graph_fresh_ty / $graph_chase happens
   ;;                inside the delegated $infer_program call (walk_stmt.wat:
   ;;                708-713) and downstream walk_expr / unify / own arms.
@@ -15905,7 +15905,7 @@
   ;;                stays inert.
   ;; 3. Verb?       `|>` — this chunk draws ONE pipeline-stage step in
   ;;                the planned chain
-  ;;                  parsed_stmts |> $inka_infer |> $inka_lower
+  ;;                  parsed_stmts |> $mentl_infer |> $mentl_lower
   ;;                              |> $emit_program
   ;;                The verb is implicit in the future call sequence;
   ;;                the symbol convention `$inka_<verb>` (per
@@ -15914,13 +15914,13 @@
   ;;                the wheel's infer_program toplevel is also pure-
   ;;                modulo-graph-mutation per src/infer.mn:182-186 (the
   ;;                graph IS the constraint store per §0.5).
-  ;; 5. Ownership?  $inka_infer takes stmts by shared pointer (`ref` in
+  ;; 5. Ownership?  $mentl_infer takes stmts by shared pointer (`ref` in
   ;;                the wheel); no consumption — the stmts list remains
-  ;;                available to the future $inka_lower stage. No own/ref
+  ;;                available to the future $mentl_lower stage. No own/ref
   ;;                annotation at the WAT layer; pointer-pass-through.
   ;; 6. Refinement? None at this chunk. TRefined obligations land inside
   ;;                walk_expr arms via $verify_record; main.wat is transit.
-  ;; 7. Gradient?   The post-$inka_infer graph state IS the gradient
+  ;; 7. Gradient?   The post-$mentl_infer graph state IS the gradient
   ;;                surface for Hβ.lower. Per §10.3: monomorphism is a
   ;;                graph read (not an inference-side flag); main.wat
   ;;                makes that read AVAILABLE by closing the inference
@@ -15929,13 +15929,13 @@
   ;;                inside walk arms via reason.wat constructors. main.wat
   ;;                cites §10.3 in commentary so the Why Engine (when it
   ;;                composes on this layer per the wheel's Mentl tentacle
-  ;;                #8) can walk back: "graph state produced by inka_infer
+  ;;                #8) can walk back: "graph state produced by mentl_infer
   ;;                stage → $infer_program → $infer_stmt_list →
   ;;                src/infer.mn:182-186".
   ;;
   ;; ═══ FORBIDDEN PATTERNS (drift modes 1-9) ════════════════════════════
   ;;
-  ;; Drift 1 (Rust vtable):       NO $inka_infer_closure / dispatch table.
+  ;; Drift 1 (Rust vtable):       NO $mentl_infer_closure / dispatch table.
   ;;                              One direct function.
   ;; Drift 2 (Scheme env frame):  NO env_frame parameter; env.wat owns env
   ;;                              state.
@@ -15951,7 +15951,7 @@
   ;; Drift 7 (parallel arrays):   NO (stage_names[], stage_fns[]) registry;
   ;;                              the chain is the call sequence.
   ;; Drift 8 (mode flag):         NO mode: i32 parameter ("strict" /
-  ;;                              "incremental"); one $inka_infer.
+  ;;                              "incremental"); one $mentl_infer.
   ;; Drift 9 (deferred-by-omis):  The $sys_main retrofit is the named peer
   ;;                              handle Hβ.infer.pipeline-wire below —
   ;;                              NOT a silent TODO inline.
@@ -15969,27 +15969,27 @@
   ;; ═══ NAMED FOLLOW-UPS (per Drift 9 + Hβ-infer §12) ═══════════════════
   ;;
   ;; - Hβ.infer.pipeline-wire: $sys_main retrofit (build.sh Layer 6
-  ;;   inline) to chain $inka_infer between $parse_program and
+  ;;   inline) to chain $mentl_infer between $parse_program and
   ;;   $emit_program. GATED on Hβ.lower arrival per §10.3 + §10.4 — the
   ;;   clean handoff is infer→lower; emit_program does not consume graph
   ;;   state, so wiring infer alone inserts compute that produces an
   ;;   unread artifact AND would trap walk_expr's (unreachable) fallback
   ;;   on parser surface that lower would otherwise consume transparently.
-  ;;   When Hβ.lower's $inka_lower lands, $sys_main becomes:
+  ;;   When Hβ.lower's $mentl_lower lands, $sys_main becomes:
   ;;     stdin |> read_all_stdin |> lex |> parse_program
-  ;;       |> $inka_infer |> $inka_lower |> $emit_program |> proc_exit
+  ;;       |> $mentl_infer |> $mentl_lower |> $emit_program |> proc_exit
   ;;
-  ;; - Hβ.infer.synth: Synth-handler composition on top of $inka_infer
+  ;; - Hβ.infer.synth: Synth-handler composition on top of $mentl_infer
   ;;   per §10.5 + H7 §2.5. Speculative inference at `??` holes via
   ;;   cont.wat $graph_push_checkpoint / rollback. The wheel runs this;
   ;;   the seed's main.wat stays inert.
   ;;
-  ;; - Hβ.infer.overlay: cross-module $inka_infer per §10.5 + §12 (Hβ.infer
+  ;; - Hβ.infer.overlay: cross-module $mentl_infer per §10.5 + §12 (Hβ.infer
   ;;   single-module Tier-3 base). Overlay-aware $env_lookup +
   ;;   cross-module scheme resolution. Lands alongside graph.wat overlay
   ;;   primitives.
 
-  ;; ─── $inka_infer — the pipeline-stage entry ──────────────────────────
+  ;; ─── $mentl_infer — the pipeline-stage entry ──────────────────────────
   ;;
   ;; Per Hβ-infer-substrate.md §8.1 main.wat row + §10 composition + the
   ;; canonical wheel src/infer.mn:182-186:
@@ -16007,12 +16007,12 @@
   ;;
   ;; Why a separate symbol from $infer_program: pipeline-stage boundary
   ;; vs. inference-walk-over-stmts boundary. Hβ.lower's symmetric
-  ;; counterpart will be $inka_lower per §10.3; emit's existing
+  ;; counterpart will be $mentl_lower per §10.3; emit's existing
   ;; $emit_program is the third stage. The $inka_<verb> convention from
   ;; Hβ-bootstrap §1.15 marks pipeline stages; $infer_program (per
   ;; src/infer.mn:182-186) is the algorithmic core.
 
-  (func $inka_infer (export "inka_infer")
+  (func $mentl_infer (export "mentl_infer")
         (param $stmts i32)
     (call $infer_program (local.get $stmts)))
 
@@ -22112,7 +22112,7 @@
   ;;             §7.4 ~100-line estimate +
   ;;             §10 composition with Hβ.infer / Hβ.emit / cont.wat / LFeedback +
   ;;             §10.3 the CLEAN handoff (infer→lower→emit; graph populated by
-  ;;             $inka_infer is read-only here; LowExpr list IS the new artifact) +
+  ;;             $mentl_infer is read-only here; LowExpr list IS the new artifact) +
   ;;             §11 acceptance + §12.3 #11 dep order (closes the cascade) +
   ;;             §13 closing (the seed becomes a full Mentl compiler) +
   ;;             Hβ-bootstrap.md §1.15 (entry-handler convention —
@@ -22123,11 +22123,11 @@
   ;;
   ;; Realizes the pipeline-stage projection of primitive #3 (the five verbs
   ;; — DESIGN.md §0.5) at the seed's lowering layer, symmetric to
-  ;; $inka_infer's primitive #8 projection at the inference layer. Closes
+  ;; $mentl_infer's primitive #8 projection at the inference layer. Closes
   ;; the Hβ.lower cascade (11/11 chunks per §12.3). Names the boundary
   ;; where Hβ.emit will read the LowExpr list.
   ;;
-  ;; Exports:    $inka_lower (pipeline-stage entry — delegates to
+  ;; Exports:    $mentl_lower (pipeline-stage entry — delegates to
   ;;               $lower_program; takes typed-AST stmts list; returns the
   ;;               flat LowExpr list ready for $emit_program consumption),
   ;;             $lower_program (algorithmic-core orchestrator —
@@ -22147,16 +22147,16 @@
   ;;          with Hβ.infer.toplevel-pre-register named in walk_stmt.wat:
   ;;          236-239 chunk header).
   ;;
-  ;; Lock #2: $inka_lower is the pipeline-stage boundary; $lower_program is
+  ;; Lock #2: $mentl_lower is the pipeline-stage boundary; $lower_program is
   ;;          the algorithmic core. Two symbols, one delegation each. Mirrors
-  ;;          Hβ.infer's $inka_infer / $infer_program two-symbol pattern per
+  ;;          Hβ.infer's $mentl_infer / $infer_program two-symbol pattern per
   ;;          Hβ-bootstrap §1.15.
   ;;
   ;; Lock #3: Result type (result i32) — returns the flat LowExpr list
   ;;          pointer. $lower_stmt_list returns i32 per walk_stmt.wat:426-427
   ;;          + Lock #11 buffer-counter Ω.3. The LowExpr list IS the artifact
   ;;          $emit_program will consume post-pipeline-wire. Differs from
-  ;;          $inka_infer (no result — graph is the artifact); Hβ.lower has
+  ;;          $mentl_infer (no result — graph is the artifact); Hβ.lower has
   ;;          TWO artifacts (graph stays from infer; LowExpr list is fresh).
   ;;
   ;; Lock #4: $sys_main retrofit is the SEPARATE peer-handle commit
@@ -22176,7 +22176,7 @@
   ;; ═══ EIGHT INTERROGATIONS (per Hβ-lower-substrate.md §5 applied to the
   ;;                           pipeline-stage boundary) ══════════════════
   ;;
-  ;; 1. Graph?      $inka_lower does not touch the graph directly. Every
+  ;; 1. Graph?      $mentl_lower does not touch the graph directly. Every
   ;;                $graph_chase happens INSIDE the delegated $lower_program
   ;;                → $lower_stmt_list → $lower_stmt → $lower_expr →
   ;;                $lookup_ty (lookup.wat:148-173) call chain. main.wat
@@ -22191,7 +22191,7 @@
   ;;                ON this substrate; main.wat stays inert.
   ;; 3. Verb?       `|>` — this chunk draws the SECOND pipeline-stage step
   ;;                in the planned chain
-  ;;                  parsed_stmts |> $inka_infer |> $inka_lower
+  ;;                  parsed_stmts |> $mentl_infer |> $mentl_lower
   ;;                              |> $emit_program
   ;;                The $inka_<verb> convention (Hβ-bootstrap §1.15) names
   ;;                each `|>` stage; the verb is implicit in the call sequence.
@@ -22199,9 +22199,9 @@
   ;;                the wheel's lower_program toplevel is also pure-modulo-
   ;;                graph-read per src/lower.mn:1106-1110 (graph IS the
   ;;                constraint store per §0.5; $lookup_ty is a read).
-  ;; 5. Ownership?  $inka_lower takes stmts by shared pointer (`ref`); no
+  ;; 5. Ownership?  $mentl_lower takes stmts by shared pointer (`ref`); no
   ;;                consumption — the stmts list remains available; graph
-  ;;                stays shared with $inka_infer's upstream. Returned
+  ;;                stays shared with $mentl_infer's upstream. Returned
   ;;                LowExpr list is FRESH (bump-allocated by lexpr.wat
   ;;                constructors); OWN by caller. No own/ref annotation
   ;;                at WAT layer; pointer-pass-through.
@@ -22209,7 +22209,7 @@
   ;;                walk_expr arms via $verify_record at infer time; lower's
   ;;                $lookup_ty returns TRefined transparent (§5.3); main.wat
   ;;                is transit.
-  ;; 7. Gradient?   The post-$inka_lower LowExpr list IS the gradient
+  ;; 7. Gradient?   The post-$mentl_lower LowExpr list IS the gradient
   ;;                surface for Hβ.emit. The continuous gradient becomes
   ;;                machine code at the layer this chunk closes. main.wat
   ;;                makes that surface AVAILABLE by closing the lowering
@@ -22220,13 +22220,13 @@
   ;;                walk arms; every LowExpr carries the source AST handle
   ;;                (field 0 per chunk #3 lexpr.wat $lexpr_handle). The Why
   ;;                Engine (when the wheel composes on this layer per Mentl
-  ;;                tentacle #8) walks back: "LowExpr produced by $inka_lower
+  ;;                tentacle #8) walks back: "LowExpr produced by $mentl_lower
   ;;                stage → $lower_program → $lower_stmt_list →
   ;;                src/lower.mn:1106-1110 + spec 05 §LowIR".
   ;;
   ;; ═══ FORBIDDEN PATTERNS (drift modes 1-9) ════════════════════════════
   ;;
-  ;; Drift 1 (Rust vtable):       NO $inka_lower_closure / $lower_dispatch_
+  ;; Drift 1 (Rust vtable):       NO $mentl_lower_closure / $lower_dispatch_
   ;;                              table / data segment $pipeline_stage_table.
   ;;                              Two direct functions; ONE call each.
   ;; Drift 2 (Scheme env frame):  NO $frame / $lower_frame parameter; state.wat
@@ -22244,7 +22244,7 @@
   ;;                              the chain IS the call sequence (lands in
   ;;                              Hβ.infer.pipeline-wire per Lock #4).
   ;; Drift 8 (mode flag):         NO mode: i32 parameter ("strict" / "wheel-
-  ;;                              parity"); one $inka_lower; the wheel-vs-
+  ;;                              parity"); one $mentl_lower; the wheel-vs-
   ;;                              seed difference is the named follow-up
   ;;                              Hβ.lower.toplevel-pre-register per Lock #1.
   ;; Drift 9 (deferred-by-omis):  The $sys_main retrofit is named peer handle
@@ -22269,12 +22269,12 @@
   ;; ═══ NAMED FOLLOW-UPS (per Drift 9 closure + Hβ-lower §11 + §12) ═════
   ;;
   ;; - Hβ.infer.pipeline-wire: $sys_main retrofit (build.sh Layer 6 inline)
-  ;;   to chain $inka_infer + $inka_lower between $parse_program and
+  ;;   to chain $mentl_infer + $mentl_lower between $parse_program and
   ;;   $emit_program. UNGATED post-this-chunk (the cascade closure ungates
   ;;   it per Hβ-infer-substrate.md §10.3 + Hβ-lower §10.3). $sys_main
   ;;   becomes:
   ;;     stdin |> read_all_stdin |> lex |> parse_program
-  ;;       |> $inka_infer |> $inka_lower |> $emit_program |> proc_exit
+  ;;       |> $mentl_infer |> $mentl_lower |> $emit_program |> proc_exit
   ;;   Lands as the IMMEDIATE next commit per Lock #4.
   ;;
   ;; - Hβ.lower.toplevel-pre-register: $lower_program two-pass
@@ -22287,10 +22287,10 @@
   ;; - Hβ.lower.emit-extension: extend Layer 6 emit_*.wat to consume
   ;;   LowExpr per Hβ-lower-substrate.md §9.2. Currently emit chunks
   ;;   template WAT directly from AST; post-pipeline-wire they read the
-  ;;   $inka_lower output. Walkthrough Hβ-emit-substrate.md TBD per
+  ;;   $mentl_lower output. Walkthrough Hβ-emit-substrate.md TBD per
   ;;   Hβ-lower-substrate.md §13 sibling list.
   ;;
-  ;; - Hβ.lower.synth: Synth-handler composition on top of $inka_lower
+  ;; - Hβ.lower.synth: Synth-handler composition on top of $mentl_lower
   ;;   per insight #11 (Mentl IS speculative inference firing on every
   ;;   save) + H7 §2.5. The wheel runs this; the seed's main.wat stays
   ;;   inert.
@@ -22376,15 +22376,15 @@
             (i32.load offset=8 (local.get $stmt))))))
     (i32.const 0))
 
-  ;; ─── $inka_lower — the pipeline-stage entry ──────────────────────────
+  ;; ─── $mentl_lower — the pipeline-stage entry ──────────────────────────
   ;;
   ;; Per Hβ-lower-substrate.md §10.3 + Hβ-bootstrap §1.15 entry-handler
-  ;; convention. Symmetric to $inka_infer (infer/main.wat:154-156). Lock #2:
+  ;; convention. Symmetric to $mentl_infer (infer/main.wat:154-156). Lock #2:
   ;; pipeline-stage boundary distinct from $lower_program algorithmic core.
   ;; Lock #3: returns the LowExpr list pointer (the new artifact $emit_program
   ;; will consume post-Hβ.infer.pipeline-wire).
 
-  (func $inka_lower (export "inka_lower")
+  (func $mentl_lower (export "mentl_lower")
         (param $stmts i32) (result i32)
     (call $lower_program (local.get $stmts)))
 
@@ -23428,7 +23428,7 @@
   ;;
   ;;   1. Graph?       $lookup_ty(handle) IS the live graph read per
   ;;                   Anchor 1 — chunk #2 lookup.wat's primitives
-  ;;                   compose here. The graph populated by $inka_infer
+  ;;                   compose here. The graph populated by $mentl_infer
   ;;                   carries the Ty bindings; emit-time chunk reads
   ;;                   them at-emission to drive dispatch.
   ;;   2. Handler?     At wheel: emit_lconst is one arm of an Emit
@@ -26634,7 +26634,7 @@
   ;;             $emit_lowir_program walks the LowExpr list and emits
   ;;             via $emit_lexpr) + §7.1 (chunk #9 main.wat) +
   ;;             §10.3 the CLEAN handoff (lower→emit; LowExpr list
-  ;;             produced by $inka_lower is read-only here; WAT-text
+  ;;             produced by $mentl_lower is read-only here; WAT-text
   ;;             output IS the new artifact) + §11.3 dep order (chunk
   ;;             #9 closes the cascade) + Hβ-bootstrap.md §1.15 (entry-
   ;;             handler convention — $inka_<verb> naming) + §2.1 Layer 6
@@ -26642,14 +26642,14 @@
   ;;
   ;; Realizes the pipeline-stage projection of primitive #3 (the five
   ;; verbs — DESIGN.md §0.5) at the seed's emission layer, symmetric to
-  ;; $inka_infer's primitive #8 projection at inference + $inka_lower's
+  ;; $mentl_infer's primitive #8 projection at inference + $mentl_lower's
   ;; primitive #3 projection at lowering. Closes the Hβ.emit cascade.
   ;; Names the boundary where pipeline-wire ($sys_main retrofit, named
-  ;; peer follow-up) will chain after $inka_lower.
+  ;; peer follow-up) will chain after $mentl_lower.
   ;;
-  ;; Exports:    $inka_emit (pipeline-stage entry — delegates to
+  ;; Exports:    $mentl_emit (pipeline-stage entry — delegates to
   ;;               $emit_lowir_program; takes the LowExpr list from
-  ;;               $inka_lower; emits WAT to $out_base buffer via
+  ;;               $mentl_lower; emits WAT to $out_base buffer via
   ;;               $emit_byte side-effect),
   ;;             $emit_lowir_program (algorithmic-core orchestrator —
   ;;               walks the LowExpr list and emits each via $emit_lexpr)
@@ -26669,16 +26669,16 @@
   ;;          on $out_base/$out_pos via $emit_byte deep in $emit_lexpr's
   ;;          arm bodies; the orchestrator itself is loop-only.
   ;;
-  ;; Lock #2: $inka_emit is the pipeline-stage boundary; $emit_lowir_program
+  ;; Lock #2: $mentl_emit is the pipeline-stage boundary; $emit_lowir_program
   ;;          is the algorithmic core. Two symbols, one delegation each.
-  ;;          Mirrors Hβ.infer's $inka_infer / $infer_program + Hβ.lower's
-  ;;          $inka_lower / $lower_program two-symbol pattern per
+  ;;          Mirrors Hβ.infer's $mentl_infer / $infer_program + Hβ.lower's
+  ;;          $mentl_lower / $lower_program two-symbol pattern per
   ;;          Hβ-bootstrap §1.15. THIRD instance — the abstraction is
   ;;          earned per Anchor 7 cascade discipline.
   ;;
-  ;; Lock #3: Result type — $inka_emit returns no value; emission is
+  ;; Lock #3: Result type — $mentl_emit returns no value; emission is
   ;;          side-effect on $out_base/$out_pos. Differs from
-  ;;          $inka_lower (returns LowExpr list ptr) and $inka_infer
+  ;;          $mentl_lower (returns LowExpr list ptr) and $mentl_infer
   ;;          (no result; graph is the artifact). Hβ.emit's artifact
   ;;          IS the WAT byte buffer.
   ;;
@@ -26696,7 +26696,7 @@
   ;; ═══ EIGHT INTERROGATIONS (per Hβ-emit-substrate.md §5 applied to the
   ;;                           pipeline-stage boundary) ══════════════════
   ;;
-  ;; 1. Graph?      $inka_emit reads through the LowExpr list. Each
+  ;; 1. Graph?      $mentl_emit reads through the LowExpr list. Each
   ;;                $emit_lexpr call walks the LowExpr's record; arms
   ;;                that need types call $lookup_ty (per §2.1 LConst /
   ;;                §2.4 LSuspend etc.). main.wat itself is graph-silent;
@@ -26706,18 +26706,18 @@
   ;;                (src/backends/wasm.mn — Emit effect) is OneShot;
   ;;                seed maps onto direct $emit_byte side-effect. When
   ;;                the wheel composes Emit-handler-swap (text-output
-  ;;                vs binary-output vs LSP-rendering), $inka_emit stays
+  ;;                vs binary-output vs LSP-rendering), $mentl_emit stays
   ;;                inert — handlers compose ON the substrate.
   ;; 3. Verb?       `|>` — this chunk draws the THIRD pipeline-stage
   ;;                step in the planned chain
-  ;;                  parsed_stmts |> $inka_infer |> $inka_lower |> $inka_emit
+  ;;                  parsed_stmts |> $mentl_infer |> $mentl_lower |> $mentl_emit
   ;;                The $inka_<verb> convention names each `|>` stage.
   ;; 4. Row?        EmitMemory + WasmOut at the wheel; row-silent at the
   ;;                seed. Side-effect on $out_base/$out_pos via the
   ;;                emit_infra primitives is the EmitMemory swap surface
   ;;                made physical (§3.5 — bump today, arena/gc tomorrow
   ;;                via $emit_alloc / $emit_alloc_dyn body swap).
-  ;; 5. Ownership?  $inka_emit takes lowexprs by shared pointer (`ref`);
+  ;; 5. Ownership?  $mentl_emit takes lowexprs by shared pointer (`ref`);
   ;;                no consumption — the LowExpr list remains available
   ;;                for downstream readers. $out_base buffer OWNed
   ;;                program-wide per emit_infra.wat globals; emission is
@@ -26725,7 +26725,7 @@
   ;; 6. Refinement? None at this chunk. TRefined obligations carried
   ;;                through $lookup_ty are transparent at emit; main.wat
   ;;                is transit.
-  ;; 7. Gradient?   The post-$inka_emit WAT byte buffer IS the gradient
+  ;; 7. Gradient?   The post-$mentl_emit WAT byte buffer IS the gradient
   ;;                cashed out — every annotation in the source program
   ;;                ($with`-clauses, `own`/`ref`, refinements, type
   ;;                annotations) has been ground through inference,
@@ -26735,7 +26735,7 @@
   ;;                site for monomorphic-vs-polymorphic) + #7 (handler
   ;;                family + LFeedback `<~` substrate).
   ;; 8. Reason?     main.wat adds no Reason edges. Reasons accumulate
-  ;;                upstream in the graph populated by $inka_infer; emit
+  ;;                upstream in the graph populated by $mentl_infer; emit
   ;;                preserves them by reading-only via $lookup_ty inside
   ;;                $emit_lexpr's arms. Per SUBSTRATE.md §VIII "the
   ;;                graph IS the program": Reasons stay graph-side; the
@@ -26744,7 +26744,7 @@
   ;;
   ;; ═══ FORBIDDEN PATTERNS (drift modes 1-9) ════════════════════════════
   ;;
-  ;; Drift 1 (Rust vtable):       NO $inka_emit_closure / $emit_dispatch_
+  ;; Drift 1 (Rust vtable):       NO $mentl_emit_closure / $emit_dispatch_
   ;;                              table / data segment $pipeline_stage_
   ;;                              table. Two direct functions; ONE call
   ;;                              each. The dispatch IS $emit_lexpr's
@@ -26768,9 +26768,9 @@
   ;;                              registry; the chain IS the call
   ;;                              sequence (lands in pipeline-wire peer
   ;;                              per Lock #4).
-  ;; Drift 8 (mode flag):         NO mode: i32 parameter; one $inka_emit;
+  ;; Drift 8 (mode flag):         NO mode: i32 parameter; one $mentl_emit;
   ;;                              pipeline-wire selects this projection
-  ;;                              directly via $inka_emit.
+  ;;                              directly via $mentl_emit.
   ;; Drift 9 (deferred-by-omis):  $sys_main retrofit is named peer handle
   ;;                              Hβ.infer.pipeline-wire (Lock #4); the
   ;;                              two LFn-bearing emit arms (LMakeClosure
@@ -26796,12 +26796,12 @@
   ;; ═══ NAMED FOLLOW-UPS (per Drift 9 closure + Hβ-emit-substrate.md §10) ══
   ;;
   ;; - Hβ.infer.pipeline-wire: $sys_main retrofit (build.sh Layer 0
-  ;;   shell inline) to chain $inka_emit between $inka_lower and the
+  ;;   shell inline) to chain $mentl_emit between $mentl_lower and the
   ;;   final $proc_exit. UNGATED post-this-chunk per Hβ-emit
   ;;   substrate.md §10.3 + Hβ-lower §10.3 + Hβ-infer §10.3 (three-
   ;;   stage cascade closure). $sys_main becomes:
   ;;     stdin |> read_all_stdin |> lex |> parse_program
-  ;;       |> $inka_infer |> $inka_lower |> $inka_emit |> proc_exit
+  ;;       |> $mentl_infer |> $mentl_lower |> $mentl_emit |> proc_exit
   ;;   Lands as the IMMEDIATE next commit per Lock #4.
   ;;
   ;; - Hβ.lower.lowfn-substrate: add LowFn record (tag 350 + 5
@@ -28516,10 +28516,10 @@
     ;; locals, globals, etc.). Drop through.
     (return))
 
-  ;; ─── $inka_emit — the pipeline-stage entry ───────────────────────────
+  ;; ─── $mentl_emit — the pipeline-stage entry ───────────────────────────
   ;;
   ;; Per Hβ-emit-substrate.md §10.3 + Hβ-bootstrap §1.15 entry-handler
-  ;; convention. Symmetric to $inka_infer (infer/main.wat) + $inka_lower
+  ;; convention. Symmetric to $mentl_infer (infer/main.wat) + $mentl_lower
   ;; (lower/main.wat). Lock #2: pipeline-stage boundary distinct from
   ;; $emit_lowir_program algorithmic core. Lock #3: no result —
   ;; emission is side-effect on $out_base/$out_pos; the WAT byte buffer
@@ -28530,7 +28530,7 @@
   ;; Order: header → imports → memory → globals → table → fn_idx_globals
   ;;        → functions → top-level body in _start → string data → close.
 
-  (func $inka_emit (export "inka_emit")
+  (func $mentl_emit (export "mentl_emit")
         (param $lowexprs i32)
     (local $fn_names i32) (local $top_fn_names i32)
     ;; Collect function names for table + globals
@@ -30100,7 +30100,7 @@
   ;; ─── Entry Point ──────────────────────────────────────────────────
   ;; Pipeline: stdin → lex → parse → infer → lower → emit → stdout
   ;; Per Phase G — Hβ.infer.pipeline-wire. The canonical form:
-  ;;   $parse_program |> $inka_infer |> $inka_lower |> $inka_emit
+  ;;   $parse_program |> $mentl_infer |> $mentl_lower |> $mentl_emit
   ;; with $stage_reset between transitions per Hβ-arena §7.4.
   (func $sys_main (export "_start")
     (local $input i32) (local $lex_result i32) (local $tokens i32)
@@ -30112,14 +30112,14 @@
     (local.set $ast (call $parse_program (local.get $tokens)))
     ;; ── infer stage ──
     (call $stage_reset)
-    (call $inka_infer (local.get $ast))
+    (call $mentl_infer (local.get $ast))
     ;; ── lower stage ──
     (call $stage_reset)
-    (local.set $lowered (call $inka_lower (local.get $ast)))
+    (local.set $lowered (call $mentl_lower (local.get $ast)))
     ;; ── emit stage ──
     (call $stage_reset)
     (call $emit_init)
-    (call $inka_emit (local.get $lowered))
+    (call $mentl_emit (local.get $lowered))
     (call $emit_flush)
     (call $wasi_proc_exit (i32.const 0)))
 )

@@ -35,7 +35,7 @@
     (local.set $tokens (call $list_index (local.get $lex_result) (i32.const 0)))
     (local.set $stmts (call $parse_program (local.get $tokens)))
     
-    (call $inka_infer (local.get $stmts)))
+    (call $mentl_infer (local.get $stmts)))
 
   (func $check_errors (result i32)
     (local $i i32) (local $n i32) (local $g i32) (local $nk i32)

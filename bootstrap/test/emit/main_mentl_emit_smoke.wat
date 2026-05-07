@@ -1,17 +1,17 @@
   ;; ═══ main_mentl_emit_smoke.wat — Hβ.emit.module-wrap acceptance ═════
-  ;; Executes: Phase F — $inka_emit module wrapper per Hβ-emit-substrate.md
+  ;; Executes: Phase F — $mentl_emit module wrapper per Hβ-emit-substrate.md
   ;;           §10.3 + src/backends/wasm.mn emit_module/emit_start.
   ;;           Proves the pipeline-stage boundary emits structurally valid
   ;;           WAT module wrapping (header, WASI imports, memory, globals,
   ;;           body functions, funcref table, data section, _start).
-  ;; Exercises: emit/main.wat $inka_emit, $emit_wasi_imports_inka,
+  ;; Exercises: emit/main.wat $mentl_emit, $emit_wasi_imports_inka,
   ;;            $emit_funcref_section, $emit_string_section,
   ;;            $emit_start_section, $emit_lowir_program.
   ;;
   ;; ─── Eight interrogations (per Hβ-emit §5.1 / SUBSTRATE §I) ────────
   ;;   Graph?      $emit_funcref_lookup verifies "main" string on heap.
   ;;   Handler?    Direct side-effect mapping (EmitMemory/WasmOut) on $out_base.
-  ;;   Verb?       |> $inka_emit closes the pipeline segment.
+  ;;   Verb?       |> $mentl_emit closes the pipeline segment.
   ;;   Row?        EfPure at substrate level.
   ;;   Ownership?  Buffer owned by infra, list passed by ref.
   ;;   Refinement? Transparent.
@@ -47,12 +47,12 @@
     ;; Initialize emit state.
     (call $emit_init)
 
-    ;; ═══ Phase 1: $inka_emit over empty LowExpr list ══════════════════
+    ;; ═══ Phase 1: $mentl_emit over empty LowExpr list ══════════════════
     ;; The module wrapper always emits: (module\n ... )\n
     ;; An empty body still produces the full envelope.
     (local.set $empty_list (call $make_list (i32.const 0)))
     (global.set $out_pos (i32.const 0))
-    (call $inka_emit (local.get $empty_list))
+    (call $mentl_emit (local.get $empty_list))
 
     ;; ── Check 1: Non-zero emission ──
     ;; Module wrapper must produce >0 bytes even for empty body.

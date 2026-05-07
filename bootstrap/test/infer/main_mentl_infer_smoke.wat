@@ -3,9 +3,9 @@
   ;; Per Hβ-infer-substrate.md §11 acceptance + main.wat §10.3 clean handoff.
   ;;
   ;; Asserts:
-  ;;   1. $inka_infer is callable with empty stmts list — returns without
+  ;;   1. $mentl_infer is callable with empty stmts list — returns without
   ;;      trap; $infer_ref_escape_len = 0 (no refs pushed by empty walk).
-  ;;   2. $inka_infer with single LetStmt (PVar "x" = LitInt 42) delegates
+  ;;   2. $mentl_infer with single LetStmt (PVar "x" = LitInt 42) delegates
   ;;      to $infer_program — verifiable via $env_lookup("x") returning
   ;;      nonzero (binding was env_extended by infer_walk_stmt_let).
   ;;
@@ -23,14 +23,14 @@
   (data (i32.const 4224) "\1f\00\00\00FAIL main_inka_infer empty path\0a")
   (data (i32.const 4272) "\21\00\00\00FAIL main_inka_infer letstmt path\0a")
 
-  ;; ─── Path 1: empty stmts — $inka_infer returns; $infer_ref_escape_len=0
+  ;; ─── Path 1: empty stmts — $mentl_infer returns; $infer_ref_escape_len=0
   (func $main_smoke_empty (result i32)
     (local $empty_stmts i32)
     (call $graph_init)
     (call $env_init)
     (call $infer_init)
     (local.set $empty_stmts (call $make_list (i32.const 0)))
-    (call $inka_infer (local.get $empty_stmts))
+    (call $mentl_infer (local.get $empty_stmts))
     (call $infer_ref_escape_len))
 
   ;; ─── Path 2: LetStmt(PVar "x", LitInt 42) — env_lookup("x") nonzero
@@ -105,7 +105,7 @@
     (drop (call $list_set (local.get $stmts) (i32.const 0) (local.get $stmt_node)))
 
     ;; Run inference
-    (call $inka_infer (local.get $stmts))
+    (call $mentl_infer (local.get $stmts))
 
     ;; Post-call: env_lookup("x") should return nonzero binding
     (local.set $lookup (call $env_lookup (i32.const 4928)))

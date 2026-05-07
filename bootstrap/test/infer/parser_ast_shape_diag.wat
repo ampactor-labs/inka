@@ -25,8 +25,8 @@
   ;;   s should be a FnStmt: [tag=121][name][params][ret][effs][body].
   ;;   For each of the 5 payload fields, assert it's sentinel-or-
   ;;   heap-pointer (NEVER ≥ 32 MiB; that's the trap class).
-  ;; ─── Phase 5 — drive $inka_infer ──────────────────────────────
-  ;;   Call $inka_infer on the parsed list. If it returns without
+  ;; ─── Phase 5 — drive $mentl_infer ──────────────────────────────
+  ;;   Call $mentl_infer on the parsed list. If it returns without
   ;;   trap, the diagnostic confirms the AST is shape-valid for this
   ;;   minimal source.
 
@@ -174,14 +174,14 @@
                         (call $eprint_string (i32.const 3104))
                         (local.set $failed (i32.const 1))))))))))
 
-    ;; ─── Phase 5: drive $inka_infer ─────────────────────────────
+    ;; ─── Phase 5: drive $mentl_infer ─────────────────────────────
     ;; If everything above passed, the AST is shape-valid; running
-    ;; $inka_infer either returns cleanly OR traps. A trap here on
+    ;; $mentl_infer either returns cleanly OR traps. A trap here on
     ;; a shape-valid AST means infer's walk has its own fault that
     ;; isn't about parser-shape — that gets captured in a separate
     ;; named follow-up.
     (if (i32.eqz (local.get $failed))
-      (then (call $inka_infer (local.get $stmts))))
+      (then (call $mentl_infer (local.get $stmts))))
 
     ;; ─── Verdict ──────────────────────────────────────────────
     (if (local.get $failed)

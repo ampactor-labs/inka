@@ -53,7 +53,7 @@
   ;;
   ;;   1. Graph?       $lookup_ty(handle) IS the live graph read per
   ;;                   Anchor 1 — chunk #2 lookup.wat's primitives
-  ;;                   compose here. The graph populated by $inka_infer
+  ;;                   compose here. The graph populated by $mentl_infer
   ;;                   carries the Ty bindings; emit-time chunk reads
   ;;                   them at-emission to drive dispatch.
   ;;   2. Handler?     At wheel: emit_lconst is one arm of an Emit

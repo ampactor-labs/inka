@@ -127,8 +127,8 @@
     (local.get $old))
 
   ;; ─── $stage_reset — frees ALL stage-local allocations in O(1) ──────
-  ;; Called at cascade-stage transitions: $inka_infer → $inka_lower →
-  ;; $inka_emit. Bumps $stage_arena_ptr back to STAGE_ARENA_START. Any
+  ;; Called at cascade-stage transitions: $mentl_infer → $mentl_lower →
+  ;; $mentl_emit. Bumps $stage_arena_ptr back to STAGE_ARENA_START. Any
   ;; record allocated through $stage_alloc since the last reset is now
   ;; gone; its memory will be re-used by the next stage.
   (func $stage_reset (export "stage_reset")

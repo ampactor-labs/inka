@@ -3015,9 +3015,9 @@ Mentl has one terminal invariant: the compiler compiles itself to a
 **byte-identical** output.
 
 ```
-mentl.wasm < std/compiler/*.mn  >  inka2.wat
-mentl.wasm < std/compiler/*.mn  >  inka3.wat
-diff inka2.wat inka3.wat              # empty
+mentl.wasm < std/compiler/*.mn  >  mentl2.wat
+mentl.wasm < std/compiler/*.mn  >  mentl3.wat
+diff mentl2.wat mentl3.wat              # empty
 ```
 
 When this holds, the topology has closed on itself. The graph +

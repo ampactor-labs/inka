@@ -16,7 +16,7 @@
   ;; seed. Closes the Hβ.infer cascade (10/10 chunks per §13.3). Names
   ;; the boundary where Hβ.lower will read the graph via $graph_chase.
   ;;
-  ;; Exports:    $inka_infer (pipeline-stage entry — delegates to
+  ;; Exports:    $mentl_infer (pipeline-stage entry — delegates to
   ;;               $infer_program from walk_stmt.wat; takes parsed
   ;;               toplevel stmts list; returns after the inference walk
   ;;               populates the graph + env)
@@ -27,7 +27,7 @@
   ;; ═══ EIGHT INTERROGATIONS (per Hβ-infer-substrate.md §6 applied to the
   ;;                           pipeline-stage boundary) ══════════════════
   ;;
-  ;; 1. Graph?      $inka_infer does not touch the graph directly. Every
+  ;; 1. Graph?      $mentl_infer does not touch the graph directly. Every
   ;;                $graph_bind / $graph_fresh_ty / $graph_chase happens
   ;;                inside the delegated $infer_program call (walk_stmt.wat:
   ;;                708-713) and downstream walk_expr / unify / own arms.
@@ -44,7 +44,7 @@
   ;;                stays inert.
   ;; 3. Verb?       `|>` — this chunk draws ONE pipeline-stage step in
   ;;                the planned chain
-  ;;                  parsed_stmts |> $inka_infer |> $inka_lower
+  ;;                  parsed_stmts |> $mentl_infer |> $mentl_lower
   ;;                              |> $emit_program
   ;;                The verb is implicit in the future call sequence;
   ;;                the symbol convention `$inka_<verb>` (per
@@ -53,13 +53,13 @@
   ;;                the wheel's infer_program toplevel is also pure-
   ;;                modulo-graph-mutation per src/infer.mn:182-186 (the
   ;;                graph IS the constraint store per §0.5).
-  ;; 5. Ownership?  $inka_infer takes stmts by shared pointer (`ref` in
+  ;; 5. Ownership?  $mentl_infer takes stmts by shared pointer (`ref` in
   ;;                the wheel); no consumption — the stmts list remains
-  ;;                available to the future $inka_lower stage. No own/ref
+  ;;                available to the future $mentl_lower stage. No own/ref
   ;;                annotation at the WAT layer; pointer-pass-through.
   ;; 6. Refinement? None at this chunk. TRefined obligations land inside
   ;;                walk_expr arms via $verify_record; main.wat is transit.
-  ;; 7. Gradient?   The post-$inka_infer graph state IS the gradient
+  ;; 7. Gradient?   The post-$mentl_infer graph state IS the gradient
   ;;                surface for Hβ.lower. Per §10.3: monomorphism is a
   ;;                graph read (not an inference-side flag); main.wat
   ;;                makes that read AVAILABLE by closing the inference
@@ -68,13 +68,13 @@
   ;;                inside walk arms via reason.wat constructors. main.wat
   ;;                cites §10.3 in commentary so the Why Engine (when it
   ;;                composes on this layer per the wheel's Mentl tentacle
-  ;;                #8) can walk back: "graph state produced by inka_infer
+  ;;                #8) can walk back: "graph state produced by mentl_infer
   ;;                stage → $infer_program → $infer_stmt_list →
   ;;                src/infer.mn:182-186".
   ;;
   ;; ═══ FORBIDDEN PATTERNS (drift modes 1-9) ════════════════════════════
   ;;
-  ;; Drift 1 (Rust vtable):       NO $inka_infer_closure / dispatch table.
+  ;; Drift 1 (Rust vtable):       NO $mentl_infer_closure / dispatch table.
   ;;                              One direct function.
   ;; Drift 2 (Scheme env frame):  NO env_frame parameter; env.wat owns env
   ;;                              state.
@@ -90,7 +90,7 @@
   ;; Drift 7 (parallel arrays):   NO (stage_names[], stage_fns[]) registry;
   ;;                              the chain is the call sequence.
   ;; Drift 8 (mode flag):         NO mode: i32 parameter ("strict" /
-  ;;                              "incremental"); one $inka_infer.
+  ;;                              "incremental"); one $mentl_infer.
   ;; Drift 9 (deferred-by-omis):  The $sys_main retrofit is the named peer
   ;;                              handle Hβ.infer.pipeline-wire below —
   ;;                              NOT a silent TODO inline.
@@ -108,27 +108,27 @@
   ;; ═══ NAMED FOLLOW-UPS (per Drift 9 + Hβ-infer §12) ═══════════════════
   ;;
   ;; - Hβ.infer.pipeline-wire: $sys_main retrofit (build.sh Layer 6
-  ;;   inline) to chain $inka_infer between $parse_program and
+  ;;   inline) to chain $mentl_infer between $parse_program and
   ;;   $emit_program. GATED on Hβ.lower arrival per §10.3 + §10.4 — the
   ;;   clean handoff is infer→lower; emit_program does not consume graph
   ;;   state, so wiring infer alone inserts compute that produces an
   ;;   unread artifact AND would trap walk_expr's (unreachable) fallback
   ;;   on parser surface that lower would otherwise consume transparently.
-  ;;   When Hβ.lower's $inka_lower lands, $sys_main becomes:
+  ;;   When Hβ.lower's $mentl_lower lands, $sys_main becomes:
   ;;     stdin |> read_all_stdin |> lex |> parse_program
-  ;;       |> $inka_infer |> $inka_lower |> $emit_program |> proc_exit
+  ;;       |> $mentl_infer |> $mentl_lower |> $emit_program |> proc_exit
   ;;
-  ;; - Hβ.infer.synth: Synth-handler composition on top of $inka_infer
+  ;; - Hβ.infer.synth: Synth-handler composition on top of $mentl_infer
   ;;   per §10.5 + H7 §2.5. Speculative inference at `??` holes via
   ;;   cont.wat $graph_push_checkpoint / rollback. The wheel runs this;
   ;;   the seed's main.wat stays inert.
   ;;
-  ;; - Hβ.infer.overlay: cross-module $inka_infer per §10.5 + §12 (Hβ.infer
+  ;; - Hβ.infer.overlay: cross-module $mentl_infer per §10.5 + §12 (Hβ.infer
   ;;   single-module Tier-3 base). Overlay-aware $env_lookup +
   ;;   cross-module scheme resolution. Lands alongside graph.wat overlay
   ;;   primitives.
 
-  ;; ─── $inka_infer — the pipeline-stage entry ──────────────────────────
+  ;; ─── $mentl_infer — the pipeline-stage entry ──────────────────────────
   ;;
   ;; Per Hβ-infer-substrate.md §8.1 main.wat row + §10 composition + the
   ;; canonical wheel src/infer.mn:182-186:
@@ -146,11 +146,11 @@
   ;;
   ;; Why a separate symbol from $infer_program: pipeline-stage boundary
   ;; vs. inference-walk-over-stmts boundary. Hβ.lower's symmetric
-  ;; counterpart will be $inka_lower per §10.3; emit's existing
+  ;; counterpart will be $mentl_lower per §10.3; emit's existing
   ;; $emit_program is the third stage. The $inka_<verb> convention from
   ;; Hβ-bootstrap §1.15 marks pipeline stages; $infer_program (per
   ;; src/infer.mn:182-186) is the algorithmic core.
 
-  (func $inka_infer (export "inka_infer")
+  (func $mentl_infer (export "mentl_infer")
         (param $stmts i32)
     (call $infer_program (local.get $stmts)))

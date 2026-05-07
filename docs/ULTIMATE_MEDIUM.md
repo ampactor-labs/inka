@@ -158,7 +158,7 @@ own future understanding through the cursor's continuous projection.
 ### 2.4 Truth is a fixpoint, not a snapshot — *Refinement types*
 
 Mentl's truth is whatever survives composition with itself.
-First-light-L1 is `inka2.wat == inka3.wat` — the compiler is a
+First-light-L1 is `mentl2.wat == mentl3.wat` — the compiler is a
 fixpoint under self-application. A defensive runtime predicate fails
 this test (the "fix" doesn't compose with the codebase's structural
 truths); a structural correction passes (the fix IS a structural

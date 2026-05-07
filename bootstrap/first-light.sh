@@ -79,7 +79,7 @@ echo "       ok: wasm-validate accepted seed"
 echo "[3/7] Inspecting seed sections with wasm-objdump..."
 SEED_SECTIONS="$WORKDIR/seed.sections"
 wasm-objdump -x "$WASM" > "$SEED_SECTIONS"
-assert_contains "$SEED_SECTIONS" '<inka_emit>' "seed exports/keeps inka_emit"
+assert_contains "$SEED_SECTIONS" '<mentl_emit>' "seed exports/keeps mentl_emit"
 assert_contains "$SEED_SECTIONS" '-> "_start"' "seed exports _start"
 assert_contains "$SEED_SECTIONS" '<emit_start_section_static>' "static start projection present"
 
@@ -133,7 +133,7 @@ L1_WASM_2="$WORKDIR/l1-pass2.wasm"
   find lib -name '*.mn' -type f | sort | xargs cat
 } > "$L1_INPUT"
 
-# Pass 2: seed → wheel → inka2.wat
+# Pass 2: seed → wheel → mentl2.wat
 wasmtime run "$WASM" < "$L1_INPUT" > "$L1_OUT_2" 2> "$L1_ERR_2" || true
 PASS2_FNS=$(grep -c "^  (func " "$L1_OUT_2" || true)
 PASS2_LINES=$(wc -l < "$L1_OUT_2")
@@ -157,7 +157,7 @@ else
   wasm-validate "$L1_WASM_2" \
     || { echo "       pass-2 WASM failed wasm-validate — runtime correctness gap"; exit 1; }
 
-  # Pass 3: pass-2.wasm → wheel → inka3.wat
+  # Pass 3: pass-2.wasm → wheel → mentl3.wat
   wasmtime run "$L1_WASM_2" < "$L1_INPUT" > "$L1_OUT_3" 2>/dev/null || true
   PASS3_FNS=$(grep -c "^  (func " "$L1_OUT_3" || true)
   PASS3_LINES=$(wc -l < "$L1_OUT_3")

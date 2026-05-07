@@ -3,9 +3,9 @@
   ;; Per Hβ-lower-substrate.md §11 acceptance + main.wat §10.3 clean handoff.
   ;;
   ;; Asserts:
-  ;;   1. $inka_lower is callable with empty stmts list — returns a list
+  ;;   1. $mentl_lower is callable with empty stmts list — returns a list
   ;;      pointer with length 0 (empty input → empty LowExpr output).
-  ;;   2. $inka_lower with single ExprStmt(LitInt(42)) delegates to
+  ;;   2. $mentl_lower with single ExprStmt(LitInt(42)) delegates to
   ;;      $lower_program → $lower_stmt_list → $lower_stmt → $lower_expr →
   ;;      $lower_lit_int — verifiable via result list length 1 +
   ;;      $tag_of(first element) == 300 (LConst) + $lexpr_lconst_value == 42.
@@ -19,7 +19,7 @@
   (data (i32.const 4224) "\1f\00\00\00FAIL main_inka_lower empty path\0a")
   (data (i32.const 4272) "\22\00\00\00FAIL main_inka_lower exprstmt path\0a")
 
-  ;; ─── Path 1: empty stmts — $inka_lower returns empty list (len 0)
+  ;; ─── Path 1: empty stmts — $mentl_lower returns empty list (len 0)
   (func $main_smoke_empty (result i32)
     (local $empty_stmts i32)
     (local $result i32)
@@ -27,7 +27,7 @@
     (call $env_init)
     (call $lower_init)
     (local.set $empty_stmts (call $make_list (i32.const 0)))
-    (local.set $result (call $inka_lower (local.get $empty_stmts)))
+    (local.set $result (call $mentl_lower (local.get $empty_stmts)))
     (call $len (local.get $result)))
 
   ;; ─── Path 2: ExprStmt(LitInt(42)) — result list len 1, tag 300, value 42
@@ -56,7 +56,7 @@
     (local.set $stmts (call $make_list (i32.const 1)))
     (drop (call $list_set (local.get $stmts) (i32.const 0) (local.get $stmt_node)))
 
-    (local.set $result (call $inka_lower (local.get $stmts)))
+    (local.set $result (call $mentl_lower (local.get $stmts)))
 
     ;; Verify length 1
     (if (i32.ne (call $len (local.get $result)) (i32.const 1))

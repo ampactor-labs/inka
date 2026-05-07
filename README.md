@@ -1,197 +1,246 @@
 # Mentl
 
-> *The ultimate intent → machine instruction medium. The compiler
-> IS the AI. The graph IS the program. The handler IS the backend.
-> The pipe IS the universal notation. The medium refuses ceremony
-> the graph doesn't require. The medium raises its users.*
+> *The ultimate intent → machine instruction medium.
+> The compiler IS the AI. The graph IS the program.
+> The medium raises its users.*
 
 Mentl is not a programming language. It is a **medium** — a lens
 clear enough that a programmer looks through it and sees their
 intent, realized as machine instructions, for any domain they
 choose. Mentl — an octopus-shaped oracle, She / Her — reads the
 graph underneath and teaches the programmer one step at a time.
-She explores hundreds of alternate realities per second under
-the surface; She surfaces only what's proven.
+She explores hundreds of alternate realities per second under the
+surface; She surfaces only what's proven.
 
-File extension: `.mn` (the last two letters of Mentl).
+File extension: `.mn`.
 
 ---
 
-## The minimal kernel — eight primitives, load-bearing together
+## The medium IS the developer's mind given substrate
+
+The graph is the body of thought. The cursor is proprioception
+(where attention IS). The eight tentacles are the senses
+(Query / Propose / Topology / Unlock / Trace / Verify / Teach / Why).
+The Reason chain is memory. The gradient is muscle. Mentl is voice.
+
+Not "AI augments the developer" — the medium IS the developer's
+externalized cognition, with a kernel that is stronger and more
+honest than the human's working memory alone. **The kernel cannot
+forget, cannot hallucinate, cannot lose track of which constraint
+is load-bearing on which other constraint.** Every other system
+loses intent at some boundary. Mentl starts at lossless.
+
+See [`docs/ULTIMATE_MEDIUM.md`](docs/ULTIMATE_MEDIUM.md) for the
+Phase μ thesis statement; §8 for the day-in-the-medium experience
+layer (open / cursor moves itself / handles not files / project
+don't run / medium narrates / mark not commit / co-cursor / swap
+handlers / walk don't debug / live don't search docs / type text).
+
+---
+
+## Three first-class transports — same kernel underneath
+
+| Transport | Surface | Audience |
+|---|---|---|
+| **`mentl edit`** | Browser-WASM, holographic, max screen real estate. Topographic Canvas + Capability HUD + Wavefront panels; Holographic Lens fires multi-shot proven proposals as ghost text; Tab-snap. | Canonical first-impression URL. The medium reaches developers at maximum richness. |
+| **`mentl serve`** | LSP transport for vim / helix / VSCode (with the Mentl extension) / any LSP-aware editor. VSCode webview panels add richer projections. | 90%+ of users early; familiar editor, full Mentl projection. |
+| **`mentl`** (bare) / **`mentl teach`** | Terminal voice surface. Gradient narration; Why-walk on demand; one suggestion per turn. | Vim/helix/terminal-only users; minimum-friction Mentl access. |
+
+All three run the same WASM kernel locally — same substrate, same
+proofs, same cursor, different transport handlers. **Local-first;
+no SaaS dependency for substrate function.**
+
+---
+
+## Why the medium dissolves agentic AI
+
+The medium internalizes proof to a kernel that proves. AI tools
+externalize proof to a model that approximates. **Approximation
+has a ceiling — it asymptotes against ground truth and never
+reaches. Proof has no ceiling — it IS ground truth.**
+
+| Today's AI agents | The medium |
+|---|---|
+| Generate from prompts; hallucinate APIs / types / imports | Propose from the gradient; multi-shot proven; cannot hallucinate |
+| Lose context across long sessions | Reason chain IS the project's memory; never lost |
+| Re-explain when corrected | Each correction lands as Reason; the gradient learns THIS project |
+| Operate via diffs you must review | Operate via graph mutations the kernel proves |
+| Train on millions of strangers' code | Gradient ranks for THIS project, THIS team, THIS session |
+| Need separate tools (code, docs, tests, collab) | One medium; eight tentacles; one cursor projection |
+| Stop being useful offline | Run locally; WASM kernel; full medium without SaaS |
+
+This is mathematical, not stylistic. **The compiler IS the AI;
+the LLM was pretending; the demo is `mentl edit`.**
+
+---
+
+## What you can build — one medium, every domain
+
+The five verbs (`|>` `<|` `><` `~>` `<~`) are topologically
+complete (proof in `docs/SUBSTRATE.md` §II). The eight kernel
+primitives admit every domain's discipline as a handler stack on
+the same graph. **A single Mentl developer can write audio in the
+morning, the web app in the afternoon, the ML model in the
+evening, the embedded firmware that night** — all in ONE language
+with ONE medium that speaks each domain natively.
+
+- **DSP and audio** — `Sample(44100) + !Alloc` proves real-time;
+  `<~` makes feedback loops first-class.
+- **ML and autodiff** — `effect Compute` + autodiff handler; same
+  five verbs draw the computation graph.
+- **Web frontend / backend / RPC** — DOM + Network as effects;
+  handler chains compose. No framework imports.
+- **Embedded / kernel-safe** — `with !Alloc + !IO` proves
+  zero-allocation, no-syscall paths transitively.
+- **Distributed / cloud** — multi-cursor on shared `graph_handler`
+  delivers collab + git + code review + RBAC structurally
+  (Phase Z, post-μ).
+- **Documentation, build, test, deploy** — handler chains, not
+  separate tools. `mentl doc` reads the same graph as `mentl
+  compile`; tests live in `///` blocks; deploy is a `~> production`
+  swap.
+
+---
+
+## The eight primitives — load-bearing together
 
 Remove any one and the medium collapses AND Mentl loses a
-tentacle. Every framework dissolution, every performance claim,
-every domain unification is a consequence of composing the eight.
-**Mentl is an octopus because the kernel has eight primitives;
-each tentacle is one primitive's voice surface.**
+tentacle. **Mentl is an octopus because the kernel has eight
+primitives; each tentacle is one primitive's voice surface.**
 
-1. **Graph + Env** — the program IS the graph; every output
-   (WAT, hover, diagnostic, audit, Mentl's voice) is a handler
-   projection. Flat-array, O(1) chase, trail-based rollback.
-   *(Mentl tentacle: **Query**.)*
-2. **Handlers with typed resume discipline** — `handle` /
-   `resume` replaces exceptions, state, generators, async, DI,
-   backtracking. Each effect op carries `@resume=OneShot |
-   MultiShot | Either` as part of its type. **MultiShot-typed
-   arms are the substrate Mentl's oracle uses to explore hundreds
-   of alternate realities per second** under trail-based
-   rollback. Handler chains (`~>`) ARE capability stacks,
-   compile-time-proven. *(Tentacle: **Propose**.)*
-3. **Five verbs** — `|>` converge, `<|` diverge, `><` parallel,
-   `~>` handler-attach, `<~` feedback. **Topologically complete
-   basis for computation graphs.** DSP, ML, compilers,
-   distributed systems, control loops all share the same
-   notation. *(Tentacle: **Topology**.)*
+1. **Graph + Env** — the program IS the graph; flat-array, O(1)
+   chase. Every output (WAT, hover, diagnostic, audit, Mentl's
+   voice) is a handler projection. *(Tentacle: **Query**.)*
+2. **Handlers with typed resume discipline** — `handle` / `resume`
+   replaces six+ named patterns. Resume cardinality (OneShot /
+   MultiShot / Either) is INFERRED from each arm body, never
+   authored. **MultiShot is the substrate Mentl's oracle uses to
+   explore hundreds of alternate realities per second** under
+   trail-based rollback. *(Tentacle: **Propose**.)*
+3. **Five verbs** — `|>` converge, `<|` diverge, `><` parallel
+   compose, `~>` handler-attach, `<~` feedback. Topologically
+   complete basis. *(Tentacle: **Topology**.)*
 4. **Full Boolean effect algebra** — `+ - & ! Pure`. **Negation
-   (`!E`) proves ABSENCE of capability** — strictly more
-   expressive than every production effect system. `!Alloc`
-   proves real-time. `!IO` proves compile-time-evaluable.
-   `!Network` proves sandboxed. *(Tentacle: **Unlock**.)*
-5. **Ownership as an effect, inferred** — `own` performs
-   `Consume`, `ref` is a row constraint, `affine_ledger`
-   enforces linearity. Rust-level safety without lifetime
-   annotations; same Boolean algebra as every other effect.
-   *(Tentacle: **Trace**.)*
+   (`!E`) proves ABSENCE** — strictly more expressive than every
+   production effect system. *(Tentacle: **Unlock**.)*
+5. **Ownership as an effect** — `own` performs `Consume`; `ref`
+   is a row constraint. Rust-level safety without lifetime
+   annotations. *(Tentacle: **Trace**.)*
 6. **Refinement types** — compile-time proof, runtime erasure.
-   `type Port = Int where 1 <= self && self <= 65535`. `Verify`
-   effect swaps to SMT (Z3/cvc5/Bitwuzla by residual theory)
-   with no source change. *(Tentacle: **Verify**.)*
-7. **The continuous annotation gradient** — each annotation
-   unlocks one specific compile-time capability. Zero
-   annotations → code runs; each step narrows; bottom (pure
-   inference) and top (total specification) converge. **Mentl
-   surfaces ONE highest-leverage next step per turn, proven
-   before offered.** *(Tentacle: **Teach**.)*
-8. **HM inference, live, one-walk, productive-under-error, with
-   Reasons** — types + effect rows + ownership + refinements
-   inferred in one pass; graph-direct; errors become
-   `NErrorHole`s, walk continues; every binding records a
-   `Reason`; the Why Engine walks the reason DAG. *(Tentacle:
-   **Why**.)*
+   `Verify` swaps to SMT (Z3/cvc5/Bitwuzla) by residual theory
+   without source change. *(Tentacle: **Verify**.)*
+7. **The continuous gradient** — emergent (gates_unlocked ×
+   proximity); annotations are INPUTS that unlock gradient ascent.
+   The gradient itself is never authored. *(Tentacle: **Teach**.)*
+8. **HM inference, live, productive-under-error, with Reasons** —
+   types + effect rows + ownership + refinements inferred in one
+   walk. Errors become `NErrorHole`; walk continues. The Why Engine
+   walks the Reason DAG. *(Tentacle: **Why**.)*
 
-Authoritative enumeration with chapter pointers: **[DESIGN.md
-§0.5](docs/DESIGN.md).**
-
-**One kernel. Eight primitives. Eight interrogations (what the
-programmer asks before each line). Eight tentacles (what Mentl
-surfaces as voice). Mentl is the kernel made voice; the octopus
-framing is architectural, not decorative.**
+Authoritative: **[`docs/DESIGN.md`](docs/DESIGN.md) §0.5**.
 
 ---
 
-## What composes out
+## Where we are
 
-- **Every framework dissolves into a handler.** GC, package
-  managers, test runners, build tools, DI containers, LSP
-  servers, doc generators, debuggers, REPLs, ML frameworks,
-  DSP frameworks, RPC systems.
-- **Every deployment target is a backend handler choice.** WASM,
-  native x86/ARM, GPU, interpreter, test sandbox. Same source,
-  different handler stack, different binary.
-- **Every speed claim falls out of completeness of proof.** `Pure`
-  → memoize + parallelize. `!Alloc` → emit without allocation-
-  tracking. `!IO` → constant-fold. The ergonomic default is
-  the performant default.
-- **Every domain is a handler stack.** Frontend, backend, DSP,
-  robotics, sensors, ML, embedded, systems — one substrate.
-  The industry's domain-specialty fragmentation is a consequence
-  of language fragmentation; Mentl dissolves it.
-- **Mentl is the compiler's voice.** She reads the graph,
-  explores alternate realities via multi-shot, surfaces one
-  proven suggestion at a time. **She makes modern agentic
-  coding AI obsolete not by competing with it but by making the
-  compiler itself the oracle that proves before it speaks.**
-- **The closing fixed point** — byte-identical self-compilation
-  — is the soundness proof stronger than any external checker.
+**Phase H — first-light-L1 in progress.** The wheel is dream-code
+complete: every kernel primitive structurally live in `src/` +
+`lib/`. The bootstrap seed in `bootstrap/` is in cascade closure
+toward `mentl2.wat == mentl3.wat` byte-identity (the kernel
+projection closed under self-application). See [`ROADMAP.md`](ROADMAP.md)
+and `docs/specs/simulations/Hβ-first-light-empirical.md` for the
+empirically-real residue.
+
+**Phase μ — Mentl active-surface composition.** `src/cursor.mn`
+lands the `Cursor` effect + `cursor_default` handler: the eight
+tentacles are eight aspects of one read at a position. Five peer
+handles named (transport, synth-proposer, gradient-delta,
+cursor-cache, eight-interrogation-loop) — each composes on the
+sealed kernel; nothing extends it.
+
+**Phase Z — collaborative substrate (post-μ).** Multi-cursor on
+shared `graph_handler` opens with `Hμ.collab.shared-graph-handler`
+— the walkthrough names the substrate; collab is what the kernel
+delivers when shared.
 
 ---
 
 ## Read it whole
 
+- **[`docs/ULTIMATE_MEDIUM.md`](docs/ULTIMATE_MEDIUM.md)** — Phase μ
+  thesis. What Mentl IS as a medium between intent and execution;
+  the day-in-the-medium experience layer; AI obsolescence
+  mathematics; multi-domain unification; collab-as-substrate;
+  CLI canonical.
 - **[`docs/DESIGN.md`](docs/DESIGN.md)** — the manifesto. §0.5
-  enumerates the kernel; twelve chapters develop it. Every
-  cascade decision rests on it.
+  enumerates the kernel; twelve chapters develop it.
 - **[`docs/SUBSTRATE.md`](docs/SUBSTRATE.md)** — canonical substrate;
   kernel, verbs, algebra, handlers, gradient, refinement, theorems.
 - **[`docs/SYNTAX.md`](docs/SYNTAX.md)** — the canonical syntax;
   every parser decision implements something here.
-- **[`ROADMAP.md`](ROADMAP.md)** — the canonical roadmap. Current
-  priority, sequencing, and session-entry guidance live here.
-- **[`docs/traces/a-day.md`](docs/traces/a-day.md)** — the
-  integration trace. One developer, one project, one day. Every
-  claim tagged `[LIVE]` / `[LIVE · surface pending]` /
-  `[substrate pending]`.
+- **[`ROADMAP.md`](ROADMAP.md)** — current priority, sequencing,
+  session-entry guidance.
+- **[`docs/specs/simulations/`](docs/specs/simulations/)** — per-handle
+  cascade walkthroughs. `IE-mentl-edit.md` (the IDE), `F1-mentl-doc.md`
+  (the doc handler), `EH-entry-handlers.md` (the CLI substrate),
+  `Hμ-cursor.md` (the projection that makes Mentl Mentl),
+  `MV-mentl-voice.md` (the voice substrate).
+- **[`docs/traces/a-day.md`](docs/traces/a-day.md)** — integration
+  trace. One developer, one project, one day.
 - **[`CLAUDE.md`](CLAUDE.md)** — Mentl's anchor; the eight-primitive
   kernel as a working reference; eight discipline anchors; nine
-  named drift modes; ten substrate insights. Required reading
-  for any contributor.
-
----
-
-## What's substrate-live today
-
-After the γ cascade closed, every layer from character → token →
-AST → typed AST → LIR → WAT speaks Mentl's vocabulary.
-Discriminated unions, parameterized effects (`with Sample(44100)`),
-structural records, nominal record types, Bool as nullary-sentinel
-ADT, region-tracked allocation with field-store join, evidence
-reification with transient closures, frame-record handler state.
-
-After Phase II's first cluster, `mentl check <module>` runs
-incrementally: per-module `.kai` cached envs, source-hash
-invalidation, env reconstruction without re-inference. Filesystem
-effect grants cache I/O via WASI; the same effect surfaces let
-`mentl compile <module>` write WAT to disk.
-
----
-
-## What pends
-
-Two independent pieces of Priority 1 substrate remain:
-
-1. **`LFeedback` state-machine lowering at emit** (~100 lines).
-   The fifth verb's runtime realization.
-2. **Mentl-voice substrate** — the `Interact` effect + voice
-   grammar + one-at-a-time surfacing discipline + multi-shot
-   `enumerate_inhabitants` owned by Mentl. Absorbs the former
-   `teach_synthesize` and `HandlerCatalog` gaps. Walkthrough:
-   [`MV-mentl-voice.md`](docs/specs/simulations/MV-mentl-voice.md).
-
-Everything else is handler projection on the existing substrate —
-editor integration, multi-backend emit, audit-driven linker
-severance, autodiff handler, threads, RPC, refinement SMT. See
-[`ROADMAP.md`](ROADMAP.md) for the priority order;
-[`docs/traces/a-day.md`](docs/traces/a-day.md) is the scoreboard.
+  named drift modes. Required reading for any contributor.
 
 ---
 
 ## Repository layout
 
 ```
-std/
-  prelude.mn              — Iterate effect, Bool ADT, derived collections
-  test.mn                 — Test effect declarations
-  compiler/               — the compiler, written in Mentl
-    types.mn graph.mn effects.mn infer.mn lower.mn pipeline.mn
-    own.mn verify.mn clock.mn mentl.mn query.mn lexer.mn parser.mn
-    cache.mn driver.mn main.mn
-    backends/wasm.mn      — LowIR → WAT (peer; native/browser/etc.
-                             are sibling handlers — Phase II)
-  runtime/
-    strings.mn lists.mn tuples.mn io.mn
-  dsp/                    — DSP examples (signal, spectral)
-  ml/                     — ML examples (autodiff)
+src/                          — the wheel: Mentl compiler in Mentl
+  types.mn graph.mn effects.mn infer.mn lower.mn pipeline.mn
+  own.mn verify.mn cursor.mn mentl.mn oracle.mn voice.mn lsp.mn
+  format.mn driver.mn cache.mn lexer.mn parser.mn main.mn
+  backends/wasm.mn            — LowIR → WAT (peer; native / browser
+                                 / GPU are sibling handlers)
+  cursor_transport.mn         — Phase μ peer: terminal/LSP/web-WASM
+  cursor_cache.mn             — Phase μ peer: IC over (env, oracle_queue)
+  gradient_delta.mn           — Phase μ peer: inverse-direction gradient
+  synth_proposer.mn           — Phase μ peer: real MS enumeration
+  eight_loop.mn               — Phase μ peer: eight-interrogation loop
 
-ROADMAP.md                — canonical roadmap (repo root)
+lib/
+  prelude.mn                  — Iterate, Bool, derived collections
+  test.mn                     — Test effect declarations
+  runtime/                    — strings, lists, tuples, io, threading,
+                                memory, binary
+  dsp/                        — DSP examples
+  ml/                         — ML examples
+  tutorial/                   — runnable Mentl programs the medium
+                                projects as guided tours (00-hello +
+                                01..08 per kernel primitive)
+
+bootstrap/                    — disposable seed; deleted post-first-light
+  build.sh                    — assembles bootstrap/mentl.wat from src/
+  src/                        — modular WAT chunks (lexer, parser,
+                                infer, lower, emit)
+
+ROADMAP.md                    — canonical roadmap
+
 docs/
-  DESIGN.md               — the manifesto (§0.5 = the kernel)
-  SUBSTRATE.md            — canonical substrate (kernel, verbs, algebra, handlers, gradient, refinement, theorems)
-  SYNTAX.md               — canonical syntax
-  specs/                  — twelve executable specs (00–11)
-    simulations/          — per-handle cascade walkthroughs
-  traces/
-    a-day.md              — post-cascade integration trace
-  errors/                 — canonical error catalog (E/V/W/T/P codes)
+  ULTIMATE_MEDIUM.md          — Phase μ thesis (highest-altitude anchor)
+  DESIGN.md                   — the manifesto
+  SUBSTRATE.md                — canonical substrate (theorems)
+  SYNTAX.md                   — canonical syntax
+  specs/                      — twelve executable specs (00–11)
+    simulations/              — per-handle cascade walkthroughs
+  traces/a-day.md             — integration trace
+  errors/                     — canonical error catalog (E/V/W/T/P)
+
+CLAUDE.md                     — discipline; anchors; drift modes
+
+tools/editor/
+  vscode-mentl/               — VSCode extension (consumes mentl serve)
+  mentl-mono/                 — Mentl Mono font (octagonal-socket ?? glyph)
 ```
 
 ---

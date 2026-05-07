@@ -3,15 +3,16 @@
 > **CLAUDE.md is the cached-prefix interface, not the manifesto.**
 > Cited docs load cursor-adjacent on relevance, not Session-Zero-bulk.
 >
-> - `docs/ULTIMATE_MEDIUM.md` — the highest-altitude anchor; what Mentl IS at the thesis level (Phase μ thesis statement, 2026-05-02)
+> - `docs/ULTIMATE_MEDIUM.md` — the highest-altitude anchor; what Mentl IS at the thesis level (Phase μ thesis statement, 2026-05-02; §8 day-in-the-medium experience layer added 2026-05-07)
 > - `docs/DESIGN.md` — manifesto; eight kernel primitives at §0.5
 > - `docs/SUBSTRATE.md` — canonical substrate (kernel, verbs, algebra, handlers, gradient, refinement, theorems)
 > - `docs/specs/00–11-*.md` — per-module declarative contracts
-> - `docs/specs/simulations/` — per-handle walkthroughs (H*.md cascade; MV/MSR/TH/DM/QA Phase II)
+> - `docs/specs/simulations/` — per-handle walkthroughs (H*.md cascade; MV/MSR/TH/DM/QA Phase II); `IE-mentl-edit.md` + `F1-mentl-doc.md` + `EH-entry-handlers.md` + `Hμ-cursor.md` are the developer-surface load-bearing walkthroughs
 > - `docs/traces/a-day.md` — integration trace
 > - `ROADMAP.md` — live sequencing (`docs/PLAN.md` is a shim)
-> - `MEMORY.md` index + `protocol_*.md` files at `~/.claude/projects/-home-suds-Projects-mentl/memory/` — discipline crystallizations
+> - `MEMORY.md` index + `protocol_*.md` files at `~/.claude/projects/-home-suds-Projects-mentl/memory/` — discipline crystallizations; **`protocol_developer_experience_vision.md`** crystallizes the day-in-the-medium throughline (read alongside CLAUDE+MEMORY at session start; cite when proposing surface decisions)
 > - `tools/drift-audit.sh` — PostToolUse drift detector
+> - `tools/drift-patterns.tsv` — extended drift mode catalog (drift 38 mascot-as-command-prefix lives here; clarified in red-flag table below)
 
 ---
 
@@ -178,6 +179,11 @@ past ~128k tokens risks midsection blindness on the response
 | Starting a new γ-cascade handle | `/compact` first, then `docs/specs/simulations/{handle}.md` |
 | Substrate-architecture realization brewing | `protocol_realization_loop.md` (5-step recipe) |
 | Working on Phase H first-light-L1 closure (`mentl2.wat == mentl3.wat`) | `docs/specs/simulations/PLAN-to-first-light.md` (18-box trackable plan) + `Hβ-first-light-residue.md` (cascade decomposition) + `Hβ-first-light-empirical.md` (empirical seed-state — REQUIRED before substrate authoring) |
+| Working on developer-facing surface (CLI / IDE / doc / README / error message / vocabulary) | `protocol_developer_experience_vision.md` + `docs/ULTIMATE_MEDIUM.md` §8 day-in-the-medium — the throughline for every surface decision; substrate-honest vocabulary; AI obsolescence math; three first-class transports |
+| Touching the CLI / `mentl --with` / entry handlers / main.mn argv dispatch | `docs/specs/simulations/EH-entry-handlers.md` (universal `--with <name>` substrate; subcommand alias table) + planned `docs/specs/simulations/CLI-canonical-vocabulary.md` + `protocol_developer_experience_vision.md` §"CLI canonical" |
+| Touching `mentl edit` / Web IDE / browser-WASM transport / Holographic Lens | `docs/specs/simulations/IE-mentl-edit.md` + `docs/specs/simulations/IDE-playground-vision.md` + `protocol_developer_experience_vision.md` §"Three first-class transports" |
+| Touching `mentl doc` / documentation projection / `///` substrate | `docs/specs/simulations/F1-mentl-doc.md` + `docs/specs/simulations/DS-docstring-edge.md` |
+| Working on collaborative substrate / multi-cursor / shared graph_handler / Phase Z | planned `docs/specs/simulations/COLLAB-shared-graph.md` (Phase Z opener) + `protocol_developer_experience_vision.md` §"Collab-as-substrate"; collab is what graph_handler swap delivers, not a feature |
 
 **Synthesis at session start:** 3–5 sentences in Mentl's vocabulary
 touching all eight kernel primitives by name or consequence.
@@ -205,6 +211,9 @@ Omitted primitives = under-loaded register.
 | "Per the chunk-header named follow-up, X is a stub" | Anchor 7 | Empirically verify before authoring. Named follow-ups can be stale (substrate landed, comment unchanged). Run a 5-line micro-test through the seed; trust evidence over comment. See `Hβ-first-light-empirical.md`. |
 | "Cascade decomposes into N speculative handles" | Anchor 7 + `protocol_walkthrough_pre_audit.md` | Verification-pass FIRST: ~5-min micro-test per handle distinguishes closed-vs-real before walkthrough authoring. 12 walkthroughs against stale state costs more than 1 hour of empirical pre-audit. |
 | Parser dispatching on syntactic form: `with FIELD = INIT` vs `with !ROW` vs `with NAME` vs `{ ARMS }` | `protocol_parse_is_eager_graph_projection.md` | Eager-form-commitment — duplicates work the graph + infer narrow at type-check. parse_expr is the residue; the kernel (Boolean row + typed-resume + HM live with Reasons) classifies the form at the appropriate layer. `skip_to_lbrace_p` IS drift 9 in parser-state clothes. Two-arm structural disambiguation OK; multi-arm form-classification = drift. |
+| Saying "AI" / "agent" / "completion" / "assistant" / "chatbot" / "prompt" / "model" / "training" / "hallucination" in user-facing surfaces | `protocol_developer_experience_vision.md` §"AI obsolescence is mathematical" | Substrate-honest vocabulary: "the medium proposes" / "cursor argmax" / "Lens fires" / "Mentl narrates" / "multi-shot proven" / "Reason chain". The medium INTERNALIZES proof; AI tools EXTERNALIZE proof. Approximation has a ceiling; proof has none. The compiler IS the AI; framing as "Mentl has an AI feature" is the marketing trap. |
+| "Preserved as residue" / "kept for back-compat" / "for future migration" / similar leftover-explanation comments in pre-production code | Drift 9 + `protocol_delete_dont_explain_absence.md` + `protocol_developer_experience_vision.md` | Pre-production: no back-compat needed; residue comments are AI-agent drift. **Make it whole.** Absence IS the statement. Delete dead substrate; do not explain absence. Named follow-up acceptable only with a structural reason this commit cannot carry the full form. |
+| `mentl <tentacle-name>` as CLI verb (`mentl trace` / `mentl why` / `mentl propose` / `mentl unlock` / `mentl verify` / `mentl topology`) | drift 38 (mascot-as-command-prefix per `tools/drift-patterns.tsv`) + `protocol_developer_experience_vision.md` §"CLI canonical" | Tentacle projections fire AT-CURSOR inside the medium (per Hμ.cursor + cursor_default), not as separate CLI verbs. Project-action verbs (`mentl edit/doc/run/test/audit/serve/new/compile/check/repl/teach/query`) are canonical per EH-entry-handlers.md alias table. The binary IS Mentl; subcommand prefix on project-actions is structural, not drift. |
 
 ---
 

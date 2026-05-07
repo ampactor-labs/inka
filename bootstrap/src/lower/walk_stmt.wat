@@ -540,7 +540,21 @@
     ;; name. Symmetric with $op_<handler>_<op>; uses semantic prefixes
     ;; (not handle-ints). Drift refused: 1 (no vtable, direct concat);
     ;; 8 (composed name string, not mode-int).
-    (local.set $outer (call $ls_outer_fn_name))
+    ;;
+    ;; Per Hβ.first-light.nested-fn-name-discriminator-bloat-fix
+    ;; (2026-05-07): outer fn name is meaningful ONLY inside a function
+    ;; frame ($ls_in_function). At module-top-level, every FnStmt is
+    ;; inherently bare-named regardless of any stale fn-name global. The
+    ;; pre-fix bug surfaced when the seed compiled the wheel: the wheel's
+    ;; src/infer.mn has many top-level fns; the global wasn't being
+    ;; reset between them; subsequent fns inherited "infer_program_"
+    ;; prefix (213k bloat in the funcref table). The structural guard
+    ;; below makes the discriminator robust to any path that leaks a
+    ;; non-zero fn-name across top-level fns.
+    (local.set $outer
+      (if (result i32) (call $ls_in_function)
+        (then (call $ls_outer_fn_name))
+        (else (i32.const 0))))
     (if (i32.eqz (local.get $outer))
       (then (local.set $fn_name (local.get $name)))
       (else

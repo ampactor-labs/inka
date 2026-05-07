@@ -212,22 +212,61 @@
   ;; value pushed/popped on the WASM operand stack; the LAST stmt's
   ;; value is the surrounding construct's value.
   ;;
+  ;; Per Hβ.emit.unit-stmt-drop (2026-05-07): non-final stmts that
+  ;; push a stack value need an explicit `(drop)` after, else
+  ;; wat2wasm rejects the fn body with "type mismatch at end of
+  ;; function: expected [i32] but got [i32, i32, ...]". The producer
+  ;; tags are everything EXCEPT LLet (304 — emits local.set, no
+  ;; residue) and LDeclareFn (313 — emits a fn declaration, no
+  ;; residue). The cursor projects a Drop aspect at non-final
+  ;; positions for stack-producing tags. Drift refused: 1 (tag-int
+  ;; dispatch, no vtable); 8 (tag IS the ADT); 9 (every producer
+  ;; tag handled uniformly via the consumes-no-stack predicate).
+  ;;
   ;; Drift 7 refusal: stmts is ONE list ptr field (record-shaped), not
   ;; parallel slot-arrays. Drift 9 refusal: empty list emits nothing
   ;; (the surrounding construct provides its own absence handling —
   ;; LBlock empty is a value-less block; LIf empty branches violate
   ;; type discipline at inference, not emit).
   (func $ec5_emit_body (param $stmts i32)
-    (local $i i32) (local $n i32)
+    (local $i i32) (local $n i32) (local $stmt i32) (local $tag i32)
     (local.set $n (call $len (local.get $stmts)))
     (local.set $i (i32.const 0))
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (call $emit_lexpr
-          (call $list_index (local.get $stmts) (local.get $i)))
+        (local.set $stmt (call $list_index (local.get $stmts) (local.get $i)))
+        (call $emit_lexpr (local.get $stmt))
+        ;; Drop residue for non-final stmts whose tag pushes a value.
+        (if (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $n))
+          (then
+            (local.set $tag (call $tag_of (local.get $stmt)))
+            (if (i32.eqz (call $lexpr_consumes_no_stack (local.get $tag)))
+              (then (call $ec5_emit_drop_open_close)))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter))))
+
+  ;; $lexpr_consumes_no_stack — predicate over LowExpr tags. Returns
+  ;; 1 for tags whose emit form pushes nothing onto the operand
+  ;; stack; 0 for tags that do push a value. The complement of "is
+  ;; a producer at stmt position." Drift 8 refusal: tag-int compare,
+  ;; not a string-keyed flag dispatch.
+  (func $lexpr_consumes_no_stack (param $tag i32) (result i32)
+    (if (i32.eq (local.get $tag) (i32.const 304))   ;; LLet — local.set
+      (then (return (i32.const 1))))
+    (if (i32.eq (local.get $tag) (i32.const 313))   ;; LDeclareFn — fn decl
+      (then (return (i32.const 1))))
+    (i32.const 0))
+
+  ;; $ec5_emit_drop_open_close — emits `(drop)` to consume one stack
+  ;; slot. Bytes 40 'd' 'r' 'o' 'p' 41.
+  (func $ec5_emit_drop_open_close
+    (call $emit_byte (i32.const 40))
+    (call $emit_byte (i32.const 100))
+    (call $emit_byte (i32.const 114))
+    (call $emit_byte (i32.const 111))
+    (call $emit_byte (i32.const 112))
+    (call $emit_byte (i32.const 41)))
 
   ;; ─── $emit_lreturn — LReturn tag 310 emit arm per §2.3 ─────────────
   ;; Per src/backends/wasm.mn:1220-1223. LReturn carries the resumed

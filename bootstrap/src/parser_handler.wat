@@ -583,7 +583,11 @@
   (func $parse_handle_expr (param $tokens i32) (param $pos i32) (param $span i32)
         (result i32)
     (local $p i32) (local $body_r i32) (local $body_node i32) (local $p_after_body i32)
-    (local $state_r i32) (local $state_fields i32) (local $p_after_state i32)
+    (local $state_fields i32) (local $install_expr i32) (local $p_after_state i32)
+    (local $p_with i32) (local $p_after_ident i32) (local $k_with_arg i32)
+    (local $count i32) (local $buf i32) (local $field_name i32)
+    (local $p2 i32) (local $p3 i32) (local $p4 i32) (local $init_r i32)
+    (local $init_expr i32) (local $field i32) (local $install_r i32)
     (local $p_open i32) (local $arms_r i32) (local $arms i32) (local $p_close i32)
     (local $handle_struct i32) (local $tup i32)
     ;; Body must be a block expression — `handle { ... }`.
@@ -594,17 +598,111 @@
     (local.set $body_node (call $list_index (local.get $body_r) (i32.const 0)))
     (local.set $p_after_body (call $skip_ws_p (local.get $tokens)
       (call $list_index (local.get $body_r) (i32.const 1))))
-    ;; Optional `with FIELD = INIT [, ...]`.
-    (local.set $state_r (call $parse_handler_state (local.get $tokens) (local.get $p_after_body)))
-    (local.set $state_fields (call $list_index (local.get $state_r) (i32.const 0)))
-    (local.set $p_after_state (call $list_index (local.get $state_r) (i32.const 1)))
-    ;; Optional arms block `{ ARM, ... }`. If no TLBrace follows, this
-    ;; is the `handle BODY with HANDLER_NAME` form (where with-clause
-    ;; consumed the handler-name; no inline arms). Fall through with
-    ;; empty arms list — productive-under-error per the wheel-graceful
-    ;; degrade discipline. Form-3 named peer
-    ;; Hβ.first-light.handle-expr-with-named-handler-substrate covers
-    ;; the install-time wiring (handler-value as closure).
+    ;; ─── Optional `with` clause ──────────────────────────────────────
+    ;; Per Hβ.first-light.handle-expr-with-clause-substrate (2026-05-07):
+    ;; the parser does NOT special-case the with-clause's three forms
+    ;; (state-init / effect-row / install). Two forms suffice for
+    ;; handle-expr context:
+    ;;
+    ;;   with FIELD = INIT, F2 = I2  — anon-handler state-init (form 2,
+    ;;                                  followed by `{ ARMS }`)
+    ;;   with EXPR                    — handler install (form 3, no
+    ;;                                  inline arms; install_expr is any
+    ;;                                  expression — VarRef, Call,
+    ;;                                  inline-handler-literal — graph
+    ;;                                  + infer narrow at type-check)
+    ;;
+    ;; Disambiguation: peek past TWith.
+    ;;   TIdent followed by TEq → state-init loop (form 2)
+    ;;   anything else          → parse_expr (form 3)
+    ;;
+    ;; The previous form CALLED $parse_handler_state which uses
+    ;; $skip_to_lbrace_p in its TIdent-not-TEq branch. That branch is
+    ;; correct ONLY for handler-decl context (where `{ ARMS }` follows
+    ;; the with-clause unconditionally). In handle-expr context with
+    ;; install form, no `{ ARMS }` follows — skip_to_lbrace consumes
+    ;; subsequent top-level fns until it finds an unrelated `{`,
+    ;; absorbing them into the handle-expr's arms. Drift mode 9
+    ;; (deferred-by-omission) wearing a parser-state mask: closes
+    ;; named follow-up Hβ.first-light.handle-expr-with-named-handler-
+    ;; substrate by replacing skip_to_lbrace with parse_expr.
+    ;;
+    ;; Eight interrogations:
+    ;;   1. Graph?      install_expr is an NExpr handle in the same
+    ;;                  graph as the body's expressions.
+    ;;   2. Handler?    parse_handle_expr handler @resume=OneShot.
+    ;;   3. Verb?       Implicit |> in token consumption.
+    ;;   4. Row?        TokenRead effect; same as parse_expr.
+    ;;   5. Ownership?  install_expr alloc'd by parse_expr; bump-owned.
+    ;;   6. Refinement? parse_expr's contract: returns a valid NExpr.
+    ;;   7. Gradient?   install resolution at infer-time (handler-as-
+    ;;                  value type-check); compile-time stays opaque.
+    ;;   8. Reason?     install_expr's Reason chain reads back to TWith
+    ;;                  span via parse_expr's standard span-attachment.
+    ;;
+    ;; Drift refused: 1 (no dispatch table); 6 (no primitive special-
+    ;; case — EXPR is uniform over handler-value sources); 8 (peek is
+    ;; structural kind comparison, not string flag); 9 (closes form-3
+    ;; named follow-up).
+    (local.set $state_fields (call $make_list (i32.const 0)))
+    (local.set $install_expr (i32.const 0))
+    (local.set $p_after_state (local.get $p_after_body))
+    (if (call $at (local.get $tokens) (local.get $p_after_body) (i32.const 9))   ;; TWith
+      (then
+        (local.set $p_with (call $skip_ws_p (local.get $tokens)
+          (i32.add (local.get $p_after_body) (i32.const 1))))
+        (local.set $k_with_arg (call $kind_at (local.get $tokens) (local.get $p_with)))
+        (local.set $p_after_ident (call $skip_ws_p (local.get $tokens)
+          (i32.add (local.get $p_with) (i32.const 1))))
+        (if (i32.and
+              (i32.and
+                (i32.eqz (call $is_sentinel (local.get $k_with_arg)))
+                (i32.eq (call $tag_of (local.get $k_with_arg)) (i32.const 25)))   ;; TIdent
+              (call $at (local.get $tokens) (local.get $p_after_ident) (i32.const 60)))   ;; TEq
+          (then
+            ;; State-init form: `with FIELD = INIT [, ...]`. Field-loop.
+            (local.set $buf (call $make_list (i32.const 4)))
+            (local.set $count (i32.const 0))
+            (local.set $p (local.get $p_with))
+            (block $done
+              (loop $fields
+                (local.set $field_name (call $ident_at_p (local.get $tokens) (local.get $p)))
+                (local.set $p2 (i32.add (local.get $p) (i32.const 1)))
+                (local.set $p3 (call $expect (local.get $tokens)
+                  (call $skip_ws_p (local.get $tokens) (local.get $p2))
+                  (i32.const 60)))   ;; TEq
+                (local.set $init_r (call $parse_expr (local.get $tokens)
+                  (call $skip_ws_p (local.get $tokens) (local.get $p3))))
+                (local.set $init_expr (call $list_index (local.get $init_r) (i32.const 0)))
+                (local.set $p4 (call $skip_ws_p (local.get $tokens)
+                  (call $list_index (local.get $init_r) (i32.const 1))))
+                (local.set $field (call $make_list (i32.const 2)))
+                (drop (call $list_set (local.get $field) (i32.const 0) (local.get $field_name)))
+                (drop (call $list_set (local.get $field) (i32.const 1) (local.get $init_expr)))
+                (local.set $buf (call $list_extend_to (local.get $buf)
+                  (i32.add (local.get $count) (i32.const 1))))
+                (drop (call $list_set (local.get $buf) (local.get $count) (local.get $field)))
+                (local.set $count (i32.add (local.get $count) (i32.const 1)))
+                (if (call $at (local.get $tokens) (local.get $p4) (i32.const 51))   ;; TComma
+                  (then
+                    (local.set $p (call $skip_ws_p (local.get $tokens)
+                      (i32.add (local.get $p4) (i32.const 1))))
+                    (br $fields))
+                  (else
+                    (local.set $p (local.get $p4))
+                    (br $done)))))
+            (local.set $state_fields (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
+            (local.set $p_after_state (local.get $p)))
+          (else
+            ;; Install form: `with EXPR`. The graph + infer resolve
+            ;; what kind-of-handler EXPR is at type-check time.
+            (local.set $install_r (call $parse_expr (local.get $tokens) (local.get $p_with)))
+            (local.set $install_expr (call $list_index (local.get $install_r) (i32.const 0)))
+            (local.set $p_after_state (call $skip_ws_p (local.get $tokens)
+              (call $list_index (local.get $install_r) (i32.const 1))))))))
+    ;; Optional arms block `{ ARM, ... }`. Form 1 (no `with`, anon arms)
+    ;; and form 2 (with state-init + arms) both land here. Form 3 (with
+    ;; install) does NOT have arms — empty list.
     (if (call $at (local.get $tokens)
           (call $skip_ws_p (local.get $tokens) (local.get $p_after_state))
           (i32.const 47))   ;; TLBrace
@@ -619,12 +717,16 @@
       (else
         (local.set $arms (call $make_list (i32.const 0)))
         (local.set $p_close (local.get $p_after_state))))
-    ;; Build HandleExpr AST: [tag=93][body][arms][state] — 16 bytes.
-    (local.set $handle_struct (call $alloc (i32.const 16)))
+    ;; Build HandleExpr AST: [tag=93][body][arms][state][install] — 20 bytes.
+    ;; install_expr at offset 16 is additive — older readers (lower's
+    ;; $lower_handle reading offsets 0/4/8/12) stay correct. install
+    ;; wiring is named peer Hβ.first-light.handle-expr-install-lower.
+    (local.set $handle_struct (call $alloc (i32.const 20)))
     (i32.store         (local.get $handle_struct) (i32.const 93))
     (i32.store offset=4  (local.get $handle_struct) (local.get $body_node))
     (i32.store offset=8  (local.get $handle_struct) (local.get $arms))
     (i32.store offset=12 (local.get $handle_struct) (local.get $state_fields))
+    (i32.store offset=16 (local.get $handle_struct) (local.get $install_expr))
     ;; Wrap as NExpr (tag 110).
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)

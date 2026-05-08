@@ -696,43 +696,6 @@
   ;; the actual emit walk runs; $emit_fn_table_and_globals then
   ;; iterates that ledger. One walk, one ledger. Drift 7 closure.
 
-  ;; $collect_top_level_fn_names — Cursor Projection Pattern instance
-  ;; (Handler aspect at module-root). Top-level LLet-wrapped closures
-  ;; only; inline closures still allocate at their expression site,
-  ;; module-level function declarations get static closure records.
-  ;;
-  ;; Buffer<String> per Hβ.runtime.buffer-substrate; freezes to clean
-  ;; List<String> on return. Same pattern as $collect_fn_names with
-  ;; a more restrictive predicate (LLet at top level wrapping
-  ;; LMakeClosure / LMakeContinuation; never recurse into bodies).
-  (func $collect_top_level_fn_names (param $lowexprs i32) (result i32)
-    (local $buf i32)
-    (local $i i32) (local $n i32) (local $expr i32) (local $name i32)
-    (local.set $buf (call $buf_make (i32.const 16)))
-    (local.set $n (call $len (local.get $lowexprs)))
-    (local.set $i (i32.const 0))
-    (block $done
-      (loop $iter
-        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $expr (call $list_index (local.get $lowexprs) (local.get $i)))
-        (local.set $name (call $extract_top_fn_name (local.get $expr)))
-        (if (i32.ne (local.get $name) (i32.const 0))
-          (then (call $buf_push (local.get $buf) (local.get $name))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter)))
-    (call $buf_freeze (local.get $buf)))
-
-  (func $extract_top_fn_name (param $expr i32) (result i32)
-    (local $inner i32)
-    (if (i32.ne (call $tag_of (local.get $expr)) (i32.const 304))
-      (then (return (i32.const 0))))
-    (local.set $inner (call $lexpr_llet_value (local.get $expr)))
-    (if (i32.eq (call $tag_of (local.get $inner)) (i32.const 311))
-      (then (return (call $lexpr_llet_name (local.get $expr)))))
-    (if (i32.eq (call $tag_of (local.get $inner)) (i32.const 312))
-      (then (return (call $lexpr_llet_name (local.get $expr)))))
-    (i32.const 0))
-
   ;; ─── Function Type Section ────────────────────────────────────────
   ;; Every call_indirect references $ftN, where N includes the implicit
   ;; __state parameter. The LowExpr graph determines the required ceiling.
@@ -936,34 +899,38 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter2))))
 
-  ;; $emit_static_top_closures — module-level closure records for top fns.
-  ;; Each record is [fn_idx:i32, capture_count=0:i32] at address
-  ;; 256 + slot*8, with a global $name pointing at the record. Looks
-  ;; up fn_idx via the funcref ledger ($emit_funcref_lookup) — must be
-  ;; called AFTER $emit_functions in $mentl_emit.
-  (func $emit_static_top_closures (param $top_names i32)
-    (local $i i32) (local $n i32) (local $name i32) (local $fn_idx i32)
+  ;; $emit_static_top_closures — module-level closure records for every
+  ;; fn in the funcref ledger. Each record is [fn_idx:i32,
+  ;; capture_count=0:i32] at address 256 + slot*8, with a global $name
+  ;; pointing at the record. The funcref ledger IS the canonical
+  ;; projection (per protocol_canonical_projection_pattern.md): the
+  ;; index in the ledger IS the fn_idx; the name IS the global label.
+  ;; Top-level fns get referenced via (global.get $name); inline
+  ;; closures get runtime-allocated via emit_lmakeclosure with
+  ;; per-call captures (the static record at $name is unused for
+  ;; those). 8 bytes per inline lambda is negligible noise; one
+  ;; ledger, one walk closes drift 7 + drift 9 from the prior parallel
+  ;; $top_fn_names ledger.
+  (func $emit_static_top_closures
+    (local $i i32) (local $n i32) (local $name i32)
     (local $addr i32)
-    (local.set $n (call $len (local.get $top_names)))
+    (local.set $n (call $emit_funcref_count))
     (local.set $i (i32.const 0))
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $name (call $list_index (local.get $top_names) (local.get $i)))
-        (local.set $fn_idx (call $emit_funcref_lookup (local.get $name)))
+        (local.set $name (call $emit_funcref_at (local.get $i)))
         (local.set $addr (i32.add (i32.const 256) (i32.mul (local.get $i) (i32.const 8))))
-        ;; (data (i32.const <addr>) "\xx\xx\xx\xx\00\00\00\00")
         (call $emit_indent)
         (call $emit_cstr (i32.const 912) (i32.const 6))  ;; "(data "
         (call $emit_i32_const (local.get $addr))
         (call $emit_space)
         (call $emit_byte (i32.const 34))
-        (call $emit_le4_escape (local.get $fn_idx))
+        (call $emit_le4_escape (local.get $i))
         (call $emit_le4_escape (i32.const 0))
         (call $emit_byte (i32.const 34))
         (call $emit_close)
         (call $emit_nl)
-        ;; (global $name i32 (i32.const <addr>))
         (call $emit_indent)
         (call $emit_cstr (i32.const 862) (i32.const 8))  ;; "(global "
         (call $emit_byte (i32.const 36))
@@ -974,9 +941,6 @@
         (call $emit_nl)
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter))))
-
-  ;; $emit_find_name_index deleted — replaced by $emit_funcref_lookup
-  ;; at the only consumer ($emit_static_top_closures).
 
   (func $emit_le4_escape (param $n i32)
     (call $emit_byte_escape (i32.and (local.get $n) (i32.const 255)))
@@ -1723,9 +1687,6 @@
 
   (func $mentl_emit (export "mentl_emit")
         (param $lowexprs i32)
-    (local $top_fn_names i32)
-    (local.set $top_fn_names (call $collect_top_level_fn_names (local.get $lowexprs)))
-
     (call $emit_cstr (i32.const 831) (i32.const 7))  ;; "(module"
     (call $emit_nl)
     (call $indent_inc)
@@ -1764,8 +1725,8 @@
     ;; ── Funcref table + index globals (reads funcref ledger) ──
     (call $emit_fn_table_and_globals)
 
-    ;; ── Static top-level closure records (looks up via funcref) ──
-    (call $emit_static_top_closures (local.get $top_fn_names))
+    ;; ── Static closure records (iterates funcref ledger directly) ──
+    (call $emit_static_top_closures)
 
     ;; ── String data segments ──
     (call $emit_string_section)

@@ -5350,7 +5350,16 @@
     (if (call $at (local.get $tokens) (local.get $p3) (i32.const 47)) ;; TLBrace
       (then (local.set $body_r (call $parse_block (local.get $tokens)
         (i32.add (local.get $p3) (i32.const 1)) (local.get $span))))
-      (else (local.set $body_r (call $parse_expr (local.get $tokens) (local.get $p3)))))
+      (else
+        ;; If next token is TLet, body is multi-line indented (let-prefixed);
+        ;; use parse_implicit_body. Else single-expression body — preserve
+        ;; the original parse_expr direct path to avoid BlockExpr-wrap
+        ;; regression on single-expr fns.
+        (if (i32.eq (call $kind_at (local.get $tokens) (local.get $p3))
+                    (i32.const 1))   ;; TLet
+          (then (local.set $body_r (call $parse_implicit_body
+            (local.get $tokens) (local.get $p3) (local.get $span))))
+          (else (local.set $body_r (call $parse_expr (local.get $tokens) (local.get $p3)))))))
     ;; Build FnStmt
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
@@ -6493,6 +6502,89 @@
             (local.set $count (i32.add (local.get $count) (i32.const 1)))
             (local.set $p (call $skip_sep (local.get $tokens) (local.get $p3)))
             (br $body)))))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0)
+      (call $nexpr
+        (call $mk_BlockExpr
+          (call $slice (local.get $buf) (i32.const 0) (local.get $count))
+          (local.get $expr))
+        (local.get $span))))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
+    (local.get $tup))
+
+  ;; ─── Implicit fn body (multi-line indented, no braces) ───────────
+  ;; Per Hβ.parser.multi-line-indented-body-substrate (task #108).
+  ;; Mirrors parse_block but terminates on top-level decl keyword
+  ;; (TFn / TType / TEffect / THandler / TImport) or TEof instead of
+  ;; TRBrace. Used by parse_fn_stmt when the body after `=` is
+  ;; multi-line indented without braces:
+  ;;
+  ;;   fn envelope_follower(...) =
+  ;;     let abs_input = ...
+  ;;     let alpha = compute_alpha(...)
+  ;;     (abs_input * alpha) <~ delay(1)
+  ;;
+  ;; Without this, the inner let-stmts surfaced as TOP-LEVEL stmts;
+  ;; their PVar-bound names polluted $ls_register_globals's input,
+  ;; causing $ls_is_global("alpha") to return TRUE inside handler-
+  ;; arm capture-resolution → spurious LGlobal($alpha) emit at
+  ;; process_lowpass's handler arm.
+  (func $is_top_level_decl_keyword (param $k i32) (result i32)
+    (if (i32.eq (local.get $k) (i32.const 0))  (then (return (i32.const 1)))) ;; TFn
+    (if (i32.eq (local.get $k) (i32.const 5))  (then (return (i32.const 1)))) ;; TType
+    (if (i32.eq (local.get $k) (i32.const 6))  (then (return (i32.const 1)))) ;; TEffect
+    (if (i32.eq (local.get $k) (i32.const 8))  (then (return (i32.const 1)))) ;; THandler
+    (if (i32.eq (local.get $k) (i32.const 12)) (then (return (i32.const 1)))) ;; TImport
+    (if (i32.eq (local.get $k) (i32.const 69)) (then (return (i32.const 1)))) ;; TEof
+    (i32.const 0))
+
+  (func $parse_implicit_body (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
+    (local $p i32) (local $k i32) (local $buf i32) (local $count i32)
+    (local $result i32) (local $stmt i32) (local $expr i32)
+    (local $p2 i32) (local $p3 i32) (local $tup i32)
+    (local.set $buf (call $make_list (i32.const 8)))
+    (local.set $count (i32.const 0))
+    (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
+    (local.set $expr (call $nexpr (i32.const 84) (local.get $span))) ;; default LitUnit
+    (block $done
+      (loop $body
+        (local.set $k (call $kind_at (local.get $tokens) (local.get $p)))
+        ;; Top-level boundary → done.
+        (if (call $is_top_level_decl_keyword (local.get $k))
+          (then (br $done)))
+        ;; Declaration (let or fn) — fn-inside-fn isn't allowed at
+        ;; this layer per SYNTAX.md; only TLet kicks in.
+        (if (i32.eq (local.get $k) (i32.const 1))   ;; TLet
+          (then
+            (local.set $result (call $parse_stmt_p (local.get $tokens) (local.get $p)))
+            (local.set $stmt (call $list_index (local.get $result) (i32.const 0)))
+            (local.set $p2 (call $list_index (local.get $result) (i32.const 1)))
+            (local.set $buf (call $list_extend_to (local.get $buf)
+              (i32.add (local.get $count) (i32.const 1))))
+            (drop (call $list_set (local.get $buf) (local.get $count) (local.get $stmt)))
+            (local.set $count (i32.add (local.get $count) (i32.const 1)))
+            (local.set $p (call $skip_sep (local.get $tokens) (local.get $p2)))
+            (br $body)))
+        ;; Expression — might be final (followed by top-level boundary)
+        ;; or might be a non-final ExprStmt.
+        (local.set $result (call $parse_expr (local.get $tokens) (local.get $p)))
+        (local.set $expr (call $list_index (local.get $result) (i32.const 0)))
+        (local.set $p3 (call $skip_ws_p (local.get $tokens)
+          (call $list_index (local.get $result) (i32.const 1))))
+        ;; If followed by top-level boundary, this is the final expression.
+        (if (call $is_top_level_decl_keyword
+              (call $kind_at (local.get $tokens) (local.get $p3)))
+          (then
+            (local.set $p (local.get $p3))
+            (br $done)))
+        ;; Otherwise, wrap as ExprStmt and continue.
+        (local.set $buf (call $list_extend_to (local.get $buf)
+          (i32.add (local.get $count) (i32.const 1))))
+        (drop (call $list_set (local.get $buf) (local.get $count)
+          (call $nstmt (call $mk_ExprStmt (local.get $expr)) (local.get $span))))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        (local.set $p (call $skip_sep (local.get $tokens) (local.get $p3)))
+        (br $body)))
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $nexpr

@@ -246,7 +246,16 @@
     (if (call $at (local.get $tokens) (local.get $p3) (i32.const 47)) ;; TLBrace
       (then (local.set $body_r (call $parse_block (local.get $tokens)
         (i32.add (local.get $p3) (i32.const 1)) (local.get $span))))
-      (else (local.set $body_r (call $parse_expr (local.get $tokens) (local.get $p3)))))
+      (else
+        ;; If next token is TLet, body is multi-line indented (let-prefixed);
+        ;; use parse_implicit_body. Else single-expression body — preserve
+        ;; the original parse_expr direct path to avoid BlockExpr-wrap
+        ;; regression on single-expr fns.
+        (if (i32.eq (call $kind_at (local.get $tokens) (local.get $p3))
+                    (i32.const 1))   ;; TLet
+          (then (local.set $body_r (call $parse_implicit_body
+            (local.get $tokens) (local.get $p3) (local.get $span))))
+          (else (local.set $body_r (call $parse_expr (local.get $tokens) (local.get $p3)))))))
     ;; Build FnStmt
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)

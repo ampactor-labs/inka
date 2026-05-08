@@ -349,5 +349,13 @@
         ;; Capture found. Use VarRef's own AST handle as seed-honest fallback
         ;; for LUpval field 0 (named follow-up Hβ.lower.upval-handle-resolution).
         (return (call $lexpr_make_lupval (local.get $h) (local.get $cap_idx)))))
-    ;; Lock #2 step 3: neither local nor capture → global.
-    (call $lexpr_make_lglobal (local.get $h) (local.get $name)))
+    ;; Lock #2 step 3 (per protocol_no_silent_fallback.md): distinguish
+    ;; "resolved as top-level global" from "genuinely unresolved." LGlobal
+    ;; for the former; LUnresolved for the latter. The silent-LGlobal
+    ;; fallback was drift — overloading "global" to mean both "real
+    ;; top-level binding" AND "I gave up resolving this." Substrate-
+    ;; honest: if name is in $ls_is_global set → LGlobal; otherwise
+    ;; LUnresolved (emit translates to (unreachable)).
+    (if (call $ls_is_global (local.get $name))
+      (then (return (call $lexpr_make_lglobal (local.get $h) (local.get $name)))))
+    (call $lexpr_make_lunresolved (local.get $h) (local.get $name)))

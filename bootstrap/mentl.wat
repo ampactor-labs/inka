@@ -17528,6 +17528,26 @@
   (func $lexpr_lglobal_name (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 1)))
 
+  ;; ─── 335 = LUnresolved(handle, name) — arity 2 ────────────────────
+  ;; Per protocol_no_silent_fallback.md (2026-05-08). Distinct from
+  ;; LGlobal: LGlobal is "name resolved as top-level binding"; LUnresolved
+  ;; is "name not in locals/captures/globals — genuinely unknown." Emit
+  ;; translates LUnresolved to (unreachable) — valid WAT, runtime trap
+  ;; if execution reaches the site, preserves L1 closure even amid
+  ;; wheel-source dangling references. The Reason chain on the LUnresolved
+  ;; LowExpr's handle carries "unresolved at lower-time" so the Why
+  ;; Engine can walk back; diagnostic handlers can fire on this tag at
+  ;; compile-time without rejecting compilation.
+  (func $lexpr_make_lunresolved (param $h i32) (param $name i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 335) (i32.const 2)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $name))
+    (local.get $r))
+
+  (func $lexpr_lunresolved_name (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 1)))
+
   ;; ─── 303 = LStore(handle, slot, value) — arity 3 ──────────────────
   ;; Per src/lower.mn:101 LStore(Int, Int, LowExpr) — "handle, slot, value".
   (func $lexpr_make_lstore (param $h i32) (param $slot i32) (param $value i32) (result i32)
@@ -19416,8 +19436,16 @@
         ;; Capture found. Use VarRef's own AST handle as seed-honest fallback
         ;; for LUpval field 0 (named follow-up Hβ.lower.upval-handle-resolution).
         (return (call $lexpr_make_lupval (local.get $h) (local.get $cap_idx)))))
-    ;; Lock #2 step 3: neither local nor capture → global.
-    (call $lexpr_make_lglobal (local.get $h) (local.get $name)))
+    ;; Lock #2 step 3 (per protocol_no_silent_fallback.md): distinguish
+    ;; "resolved as top-level global" from "genuinely unresolved." LGlobal
+    ;; for the former; LUnresolved for the latter. The silent-LGlobal
+    ;; fallback was drift — overloading "global" to mean both "real
+    ;; top-level binding" AND "I gave up resolving this." Substrate-
+    ;; honest: if name is in $ls_is_global set → LGlobal; otherwise
+    ;; LUnresolved (emit translates to (unreachable)).
+    (if (call $ls_is_global (local.get $name))
+      (then (return (call $lexpr_make_lglobal (local.get $h) (local.get $name)))))
+    (call $lexpr_make_lunresolved (local.get $h) (local.get $name)))
 
   ;; ═══ walk_call.wat — Hβ.lower CallExpr/PerformExpr/ResumeExpr arms (Tier 7) ═══
   ;; Hβ.lower cascade chunk #7 of 11 per Hβ-lower-substrate.md §12.3 dep order.
@@ -24685,7 +24713,62 @@
       (then (call $emit_levperform   (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 334))
       (then (call $emit_lfieldload   (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 335))
+      (then (call $emit_lunresolved  (local.get $r)) (return)))
     (unreachable))
+
+  ;; ─── $emit_lunresolved — LUnresolved tag 335 emit arm ─────────────
+  ;; Per protocol_no_silent_fallback.md (2026-05-08). Emits a
+  ;; diagnostic comment carrying the unresolved name + the WAT
+  ;; (unreachable) instruction. Wat2wasm accepts; runtime traps
+  ;; if execution reaches the site. The (unreachable) is polymorphic
+  ;; in WAT's stack discipline — surrounding call/store/etc. type-
+  ;; check trivially as the stack becomes "any" after unreachable.
+  ;;
+  ;; Drift refused:
+  ;;   - Drift 6 (special-case): unresolved-vs-global is the substrate
+  ;;     distinction the kernel makes; recognizing it is the canonical
+  ;;     projection. Not drift.
+  ;;   - Drift 9 (deferred-by-omission): the prior LGlobal-fallback
+  ;;     was the deferred form. Closed.
+  ;;
+  ;; Diagnostic format: `;; UNRESOLVED: <name>\n(unreachable)`.
+  (func $emit_lunresolved (param $r i32)
+    (local $name i32)
+    (local.set $name (call $lexpr_lunresolved_name (local.get $r)))
+    ;; ;; UNRESOLVED: <name>
+    (call $emit_byte (i32.const 59))   ;; ';'
+    (call $emit_byte (i32.const 59))   ;; ';'
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $emit_byte (i32.const 85))   ;; 'U'
+    (call $emit_byte (i32.const 78))   ;; 'N'
+    (call $emit_byte (i32.const 82))   ;; 'R'
+    (call $emit_byte (i32.const 69))   ;; 'E'
+    (call $emit_byte (i32.const 83))   ;; 'S'
+    (call $emit_byte (i32.const 79))   ;; 'O'
+    (call $emit_byte (i32.const 76))   ;; 'L'
+    (call $emit_byte (i32.const 86))   ;; 'V'
+    (call $emit_byte (i32.const 69))   ;; 'E'
+    (call $emit_byte (i32.const 68))   ;; 'D'
+    (call $emit_byte (i32.const 58))   ;; ':'
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $emit_str  (local.get $name))
+    (call $emit_nl)
+    ;; (unreachable)
+    (call $emit_byte (i32.const 40))   ;; '('
+    (call $emit_byte (i32.const 117))  ;; 'u'
+    (call $emit_byte (i32.const 110))  ;; 'n'
+    (call $emit_byte (i32.const 114))  ;; 'r'
+    (call $emit_byte (i32.const 101))  ;; 'e'
+    (call $emit_byte (i32.const 97))   ;; 'a'
+    (call $emit_byte (i32.const 99))   ;; 'c'
+    (call $emit_byte (i32.const 104))  ;; 'h'
+    (call $emit_byte (i32.const 97))   ;; 'a'
+    (call $emit_byte (i32.const 98))   ;; 'b'
+    (call $emit_byte (i32.const 108))  ;; 'l'
+    (call $emit_byte (i32.const 101))  ;; 'e'
+    (call $emit_byte (i32.const 41))   ;; ')'
+    )
 
   ;; ═══ emit_local.wat — Hβ.emit local-scope family (Tier 6, chunk #4) ═══
   ;; Implements: Hβ-emit-substrate.md §2.2 (local-scope family) +

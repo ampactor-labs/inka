@@ -703,4 +703,59 @@
       (then (call $emit_levperform   (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 334))
       (then (call $emit_lfieldload   (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 335))
+      (then (call $emit_lunresolved  (local.get $r)) (return)))
     (unreachable))
+
+  ;; ─── $emit_lunresolved — LUnresolved tag 335 emit arm ─────────────
+  ;; Per protocol_no_silent_fallback.md (2026-05-08). Emits a
+  ;; diagnostic comment carrying the unresolved name + the WAT
+  ;; (unreachable) instruction. Wat2wasm accepts; runtime traps
+  ;; if execution reaches the site. The (unreachable) is polymorphic
+  ;; in WAT's stack discipline — surrounding call/store/etc. type-
+  ;; check trivially as the stack becomes "any" after unreachable.
+  ;;
+  ;; Drift refused:
+  ;;   - Drift 6 (special-case): unresolved-vs-global is the substrate
+  ;;     distinction the kernel makes; recognizing it is the canonical
+  ;;     projection. Not drift.
+  ;;   - Drift 9 (deferred-by-omission): the prior LGlobal-fallback
+  ;;     was the deferred form. Closed.
+  ;;
+  ;; Diagnostic format: `;; UNRESOLVED: <name>\n(unreachable)`.
+  (func $emit_lunresolved (param $r i32)
+    (local $name i32)
+    (local.set $name (call $lexpr_lunresolved_name (local.get $r)))
+    ;; ;; UNRESOLVED: <name>
+    (call $emit_byte (i32.const 59))   ;; ';'
+    (call $emit_byte (i32.const 59))   ;; ';'
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $emit_byte (i32.const 85))   ;; 'U'
+    (call $emit_byte (i32.const 78))   ;; 'N'
+    (call $emit_byte (i32.const 82))   ;; 'R'
+    (call $emit_byte (i32.const 69))   ;; 'E'
+    (call $emit_byte (i32.const 83))   ;; 'S'
+    (call $emit_byte (i32.const 79))   ;; 'O'
+    (call $emit_byte (i32.const 76))   ;; 'L'
+    (call $emit_byte (i32.const 86))   ;; 'V'
+    (call $emit_byte (i32.const 69))   ;; 'E'
+    (call $emit_byte (i32.const 68))   ;; 'D'
+    (call $emit_byte (i32.const 58))   ;; ':'
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $emit_str  (local.get $name))
+    (call $emit_nl)
+    ;; (unreachable)
+    (call $emit_byte (i32.const 40))   ;; '('
+    (call $emit_byte (i32.const 117))  ;; 'u'
+    (call $emit_byte (i32.const 110))  ;; 'n'
+    (call $emit_byte (i32.const 114))  ;; 'r'
+    (call $emit_byte (i32.const 101))  ;; 'e'
+    (call $emit_byte (i32.const 97))   ;; 'a'
+    (call $emit_byte (i32.const 99))   ;; 'c'
+    (call $emit_byte (i32.const 104))  ;; 'h'
+    (call $emit_byte (i32.const 97))   ;; 'a'
+    (call $emit_byte (i32.const 98))   ;; 'b'
+    (call $emit_byte (i32.const 108))  ;; 'l'
+    (call $emit_byte (i32.const 101))  ;; 'e'
+    (call $emit_byte (i32.const 41))   ;; ')'
+    )

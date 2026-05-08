@@ -222,6 +222,26 @@
   (func $lexpr_lglobal_name (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 1)))
 
+  ;; ─── 335 = LUnresolved(handle, name) — arity 2 ────────────────────
+  ;; Per protocol_no_silent_fallback.md (2026-05-08). Distinct from
+  ;; LGlobal: LGlobal is "name resolved as top-level binding"; LUnresolved
+  ;; is "name not in locals/captures/globals — genuinely unknown." Emit
+  ;; translates LUnresolved to (unreachable) — valid WAT, runtime trap
+  ;; if execution reaches the site, preserves L1 closure even amid
+  ;; wheel-source dangling references. The Reason chain on the LUnresolved
+  ;; LowExpr's handle carries "unresolved at lower-time" so the Why
+  ;; Engine can walk back; diagnostic handlers can fire on this tag at
+  ;; compile-time without rejecting compilation.
+  (func $lexpr_make_lunresolved (param $h i32) (param $name i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 335) (i32.const 2)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $name))
+    (local.get $r))
+
+  (func $lexpr_lunresolved_name (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 1)))
+
   ;; ─── 303 = LStore(handle, slot, value) — arity 3 ──────────────────
   ;; Per src/lower.mn:101 LStore(Int, Int, LowExpr) — "handle, slot, value".
   (func $lexpr_make_lstore (param $h i32) (param $slot i32) (param $value i32) (result i32)

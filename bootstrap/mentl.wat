@@ -21819,7 +21819,12 @@
     (local.set $cap_idx (call $ls_lookup_or_capture (local.get $name)))
     (if (i32.ge_s (local.get $cap_idx) (i32.const 0))
       (then (return (call $lexpr_make_lupval (i32.const 0) (local.get $cap_idx)))))
-    (call $lexpr_make_lglobal (i32.const 0) (local.get $name)))
+    ;; Per protocol_no_silent_fallback.md: name truly unresolved at
+    ;; outer-fn level (not global, not local, not capture-able). Emit
+    ;; LUnresolved sentinel; emit translates to (unreachable). Was
+    ;; previously a silent LGlobal fallback — same drift as $lower_var_ref
+    ;; step 3's prior fallback. Closes the symmetric drift.
+    (call $lexpr_make_lunresolved (i32.const 0) (local.get $name)))
 
   ;; AST per Lock #9: [tag=89][params_list][body_node] offsets 0/4/8.
   (func $lower_lambda (export "lower_lambda") (param $node i32) (result i32)

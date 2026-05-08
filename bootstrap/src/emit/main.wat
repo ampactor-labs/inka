@@ -1933,6 +1933,155 @@
     ;; All other tags: leaves with no LowExpr children to walk.
     (return))
 
+  ;; ─── $emit_feedback_state_globals ─────────────────────────────────
+  ;; Walks the program for LFeedback nodes; emits per-site state
+  ;; globals `(global $s<h> (mut i32) (i32.const 0))`. Per
+  ;; emit_handler.wat:94 + SUBSTRATE.md §II "Feedback IS Mentl's
+  ;; Genuine Novelty": each `<~` site needs persistent cross-iteration
+  ;; state in WAT global memory; module-init declares all such globals
+  ;; once. Same coverage shape as $emit_alloc_handle_locals_walk
+  ;; (descend through every non-fn-boundary container; LMakeClosure /
+  ;; LMakeContinuation / LDeclareFn cross fn boundary, but their
+  ;; bodies still need walking — feedback inside a lambda body STILL
+  ;; needs its state-global declared at module level).
+  ;;
+  ;; Per protocol_no_silent_fallback.md companion: drift 9 (deferred-
+  ;; by-omission) — emit_handler.wat's comment block at line 94 said
+  ;; "module-init declares each $s<n>" but the function that should
+  ;; produce them DIDN'T EXIST. The comment described the dream code;
+  ;; this commit implements it.
+  (func $emit_feedback_state_globals (param $exprs i32)
+    (local $i i32) (local $n i32) (local $expr i32)
+    (local.set $n (call $len (local.get $exprs)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $expr (call $list_index (local.get $exprs) (local.get $i)))
+        (call $emit_feedback_state_globals_walk (local.get $expr))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
+
+  (func $emit_feedback_state_globals_walk (param $expr i32)
+    (local $tag i32) (local $handle i32)
+    (if (i32.lt_u (local.get $expr) (global.get $heap_base))
+      (then (return)))
+    (local.set $tag (call $tag_of (local.get $expr)))
+    ;; LFeedback (330) — emit (global $s<h> (mut i32) (i32.const 0))
+    ;; THEN recurse into body + spec.
+    (if (i32.eq (local.get $tag) (i32.const 330))
+      (then
+        (local.set $handle (call $lexpr_handle (local.get $expr)))
+        (call $emit_indent)
+        (call $emit_cstr (i32.const 862) (i32.const 8))      ;; "(global "
+        (call $emit_byte (i32.const 36))                     ;; '$'
+        (call $emit_byte (i32.const 115))                    ;; 's'
+        (call $emit_int  (local.get $handle))
+        (call $emit_cstr (i32.const 1110) (i32.const 11))    ;; " (mut i32) "
+        (call $emit_i32_const (i32.const 0))
+        (call $emit_close)
+        (call $emit_nl)
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lfeedback_body (local.get $expr)))
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lfeedback_spec (local.get $expr)))
+        (return)))
+    ;; Container recursion — same set as $emit_alloc_handle_locals_walk.
+    (if (i32.eq (local.get $tag) (i32.const 304))         ;; LLet
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_llet_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 315))         ;; LBlock
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lblock_stmts (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 314))         ;; LIf
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lif_then (local.get $expr)))
+        (call $emit_feedback_state_globals
+          (call $lexpr_lif_else (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 321))         ;; LMatch
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lmatch_scrut (local.get $expr)))
+        (call $emit_feedback_state_globals_match_arms
+          (call $lexpr_lmatch_arms (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 311))         ;; LMakeClosure — walk fn body too (state globals are MODULE-level)
+      (then
+        (call $emit_feedback_state_globals
+          (call $lowfn_body (call $lexpr_lmakeclosure_fn (local.get $expr))))
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmakeclosure_caps (local.get $expr)))
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmakeclosure_evs (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 312))         ;; LMakeContinuation
+      (then
+        (call $emit_feedback_state_globals
+          (call $lowfn_body (call $lexpr_lmakecontinuation_fn (local.get $expr))))
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmakecontinuation_caps (local.get $expr)))
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmakecontinuation_evs (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 313))         ;; LDeclareFn
+      (then
+        (call $emit_feedback_state_globals
+          (call $lowfn_body (call $lexpr_ldeclarefn_fn (local.get $expr))))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 308))         ;; LCall
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lcall_fn (local.get $expr)))
+        (call $emit_feedback_state_globals
+          (call $lexpr_lcall_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 309))         ;; LTailCall
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_ltailcall_fn (local.get $expr)))
+        (call $emit_feedback_state_globals
+          (call $lexpr_ltailcall_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 328))         ;; LRegion
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lregion_body (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 329))         ;; LHandleWith
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lhandlewith_body (local.get $expr)))
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lhandlewith_handler (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 332))         ;; LHandle
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lhandle_body (local.get $expr)))
+        (call $emit_feedback_state_globals_match_arms
+          (call $lexpr_lhandle_arms (local.get $expr)))
+        (return)))
+    (return))
+
+  (func $emit_feedback_state_globals_match_arms (param $arms i32)
+    (local $i i32) (local $n i32) (local $arm i32)
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
+        (call $emit_feedback_state_globals_walk
+          (call $lowpat_lparm_body (local.get $arm)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
+
   ;; Match-arm walker for $emit_functions — same shape as
   ;; $emit_alloc_handle_locals_match_arms but with the fn-emit leaf.
   (func $emit_functions_match_arms (param $arms i32)
@@ -1994,6 +2143,9 @@
     (call $emit_i32_const (i32.const 1048576))
     (call $emit_close)
     (call $emit_nl)
+
+    ;; ── Per-site feedback state globals (LFeedback `<~` substrate) ──
+    (call $emit_feedback_state_globals (local.get $lowexprs))
 
     ;; ── Function definitions FIRST: populates funcref via emit_fn_body ──
     (call $emit_functions (local.get $lowexprs))

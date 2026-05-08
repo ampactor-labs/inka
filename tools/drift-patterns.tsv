@@ -46,6 +46,16 @@
 30	Imperative-loop-where-verb-exists (for/while)	^\s*(for|while)\s	ka	Loops are rarely the Mentl shape. Use |> transforms or <~ feedback. If truly needed, justify in a comment and suppress.
 31	Tuple-return-where-record-fits (multi-arg with _h suffix)	->\s*\([^)]*_h[^)]*,	ka	Anchor 6 + H1.3: if components carry _h suffix, reach for a record.
 32	Handler-as-function-argument (plain env param)	\(\s*env\s*:\s*\w+|\bctx\.env\.	ka	Env is effect-mediated. `perform env_lookup(name)` — not a function parameter.
+# --- Mode 33: sequential-let-where-pipe-chain-is-residue ---
+# Locked 2026-05-07 by Morgan: "I find it strange that there are places in
+# mentl code where `|>` is... optional." Per CLAUDE.md Anchor 6 strengthening:
+# wherever `let X = f(y); use_once(X)` appears, the residue is
+# `y |> f |> use_once`. Detection requires scope-aware single-use analysis
+# (count X's references in the enclosing block); the simple line-regex below
+# fires only on the strongest signature — no rhs args, single-line let. The
+# discipline is primarily author-side per CLAUDE.md Anchor 6 file-wide audit
+# clause; this regex is a backstop for the most blatant Scheme-fluency.
+33	Sequential-let-where-pipe-chain (let X = no_arg_call())	^\s*let\s+[a-z_]\w*\s*=\s*[a-z_]\w*\(\s*\)\s*$	ka	`let result = compute(); next_step(result)` is residue for `compute() |> next_step`. Suppress per-line only if the binding is genuinely reused. drift-audit: ignore (self-reference: this catalog line defines its own pattern)
 #
 # --- ΣU drift patterns (amendments A-R; SYNTAX.md) ---
 36	ΣU drift (lambda fence)	\|[a-z_][a-z_0-9]*\s*\|	ka	Amendment A. Canonical: (params) => body. `|x|` pipe-fence is not Mentl syntax.

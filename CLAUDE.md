@@ -294,8 +294,55 @@ source
     ~> diagnostics_handler
 ```
 
-Files in flat imperative style get refactored; every file you
-touch exits in its most powerful Mentl form.
+**`|>` is NEVER optional.** Wherever data flows sequentially through
+transforms with each intermediate value used exactly once, `|>` IS
+the substrate-honest form. The let-chain `let x = f(y); g(x)` and
+the pipe-chain `y |> f |> g` produce identical graphs — but the pipe
+form has the topology ON THE PAGE; the let form hides it behind
+temporary names. Locked 2026-05-07 by Morgan: "I find it strange
+that there are places in mentl code where `|>` is... optional."
+Drift mode 10 (sequential-let-instead-of-pipe-chain) fires whenever
+`let x = f(y); use_once(x)` appears where `y |> f |> use_once` was
+the residue.
+
+When `|>` is NOT applicable:
+- **Reuse**: `let x = f(y); g(x) + h(x)` — `x` used twice; the
+  topology is `<|` divergence, not `|>` chain. Substrate form:
+  `y |> f <| (g, h) |> sum` (or whatever combiner).
+- **Discard for effect**: `let _ = perform log(...); next_step()` —
+  sequencing for side-effects, not data flow; `~>` handler-attach
+  on the producing stage is the substrate form.
+- **Single-step**: `f(y)` — no chain to express.
+- **Match scrutinee binding**: `let X(field) = value` is destructure,
+  not data-flow. Stays as let.
+
+Otherwise: foreign-fluency drift. Convert to pipe-chain.
+
+**File-wide audit on touch.** Every file you touch exits in its most
+powerful Mentl form. This is NOT optional and NOT scoped to the
+specific edit — when you open a `.mn` file to change one function,
+audit the WHOLE file for:
+
+1. **Let-chains where pipe-chains are residue** (drift 10 above).
+2. **Recursion-with-`++` where `|>` `map`/`filter`/`fold` is residue**
+   (foreign-fluency, drift 6 generalized — see Hμ.cursor-five-verb-
+   exhaustive landing 2026-05-07 for the canonical example).
+3. **Nested `handle(handle(...))` where `~>` chain is residue**
+   (drift 4, Haskell-MTL).
+4. **Binary pair-forms (`compile_pair`, `format_pair`, etc.) where
+   `[a, b] |> par_map(f)` (or N-ary) is residue** (drift 6 closure
+   per `feedback_fully_as_early.md`).
+5. **Imperative for-loops (where Mentl has none — `loop`, `break`
+   are not keywords per SYNTAX.md §1317-1320)** where iteration is
+   `<|` `Iterate` handler or `<~` feedback.
+6. **Bare equality on strings (`a == b`)** where `str_eq(a, b)` is
+   the residue (CLAUDE.md "Bug classes that cost hours").
+
+Mentl will eventually enforce this at compile time (gradient teaches
+the conversion; the formatter rewrites at save). Until then, the
+discipline is the author's. Every `.mn` file diff that lands without
+a whole-file pipe-chain audit is a deferred-by-omission (drift 9)
+plus foreign-fluency (drift 6/10).
 
 ### 7. Cascade discipline — walkthrough first, audit always.
 

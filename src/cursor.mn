@@ -224,18 +224,16 @@ fn reason_eq(a, b) with Pure = match (a, b) {
 // becomes O(N) read on cached results — same semantics, better
 // latency.
 
-fn cursor_argmax_compute(caret) with GraphRead + !Mutate = {
-  let positions = enumerate_gradient_positions()
-  let scored = score_all_positions(positions, caret)
-  argmax_or_default(scored, caret)
-}
+fn cursor_argmax_compute(caret) with GraphRead + !Mutate =
+  enumerate_gradient_positions()
+    |> (positions) => score_all_positions(positions, caret)
+    |> (scored) => argmax_or_default(scored, caret)
 
 fn enumerate_gradient_positions() with GraphRead + !Mutate = {
-  let snapshot = perform graph_snapshot()
-  let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
+  let Graph(_nodes, _epoch, next, _overlays, _spans) = perform graph_snapshot()
   let buf = make_list(next)
-  let kept = collect_unfilled_loop(0, next, buf, 0)
-  slice(buf, 0, kept)
+  collect_unfilled_loop(0, next, buf, 0)
+    |> (kept) => slice(buf, 0, kept)
 }
 
 // Buffer-counter substrate (CLAUDE.md "Bug classes that cost hours"):
@@ -560,11 +558,11 @@ handler gradient_queue_default with caret = Caret(0, Inferred("queue init")) {
   // speculative-compile dispatches the top-K candidates as multi-shot
   // continuations spatially). Composes enumerate_gradient_positions
   // + score_all_positions + sort_by_score_desc.
-  gradient_peek_n(n) => {
-    let positions = enumerate_gradient_positions()
-    let scored = score_all_positions(positions, caret)
-    resume(top_n_by_score(scored, n))
-  },
+  gradient_peek_n(n) =>
+    resume(
+      enumerate_gradient_positions()
+        |> (positions) => score_all_positions(positions, caret)
+        |> (scored)    => top_n_by_score(scored, n)),
 
   // gradient_step — pop + advance the queue's caret state. The
   // substrate primitive for the bus-compressor loop (each accept

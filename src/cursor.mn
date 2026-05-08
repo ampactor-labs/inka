@@ -255,15 +255,9 @@ fn collect_unfilled_loop(i, n, buf, buf_len) with GraphRead + !Mutate = {
   }
 }
 
-fn score_all_positions(handles, caret) with GraphRead + !Mutate = {
-  if handles.len == 0 { [] }
-  else {
-    let head = list_head(handles)
-    let tail = list_tail(handles)
-    let scored_head = score_one_position(head, caret)
-    [scored_head] ++ score_all_positions(tail, caret)
-  }
-}
+fn score_all_positions(handles, caret) with GraphRead + !Mutate =
+  handles
+    |> map((h) => score_one_position(h, caret))
 
 fn score_one_position(handle, caret) with GraphRead + !Mutate = {
   let suggestion_opt = perform teach_gradient(handle)
@@ -512,16 +506,10 @@ fn filter_pending_at(handle, debt) with GraphRead + !Mutate = {
   filter_by_span(target_span, debt)
 }
 
-fn filter_by_span(target, debt) with Pure = {
-  if debt.len == 0 { [] }
-  else {
-    let head = list_head(debt)
-    let tail = list_tail(debt)
-    let (debt_span, predicate, _reason) = head
-    let kept = if span_overlaps(target, debt_span) { [predicate] } else { [] }
-    kept ++ filter_by_span(target, tail)
-  }
-}
+fn filter_by_span(target, debt) with Pure =
+  debt
+    |> filter(((debt_span, _, _)) => span_overlaps(target, debt_span))
+    |> map(((_, predicate, _)) => predicate)
 
 // ─── GradientQueue — the cursor's argmax projected as schedulable ops ─
 //

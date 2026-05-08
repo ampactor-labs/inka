@@ -24282,12 +24282,16 @@
   ;; pointers via the shared `*_tmp` local. Prefixes minted at runtime
   ;; via str_concat of these length-prefixed strings + int_to_str(handle):
   ;;   1600 — "variant_" (8 chars; 4+8=12 bytes; 1600-1611)
-  ;;   1616 — "record_"  (7 chars; 4+7=11 bytes; 1616-1626)
-  ;;   1632 — "tuple_"   (6 chars; 4+6=10 bytes; 1632-1641)
+  ;;   1616 — "record_"      (7 chars; 4+7=11 bytes; 1616-1626)
+  ;;   1632 — "tuple_"       (6 chars; 4+6=10 bytes; 1632-1641)
+  ;;   1648 — "__fb_"        (5 chars; 4+5=9 bytes;  1648-1656)
+  ;;   1664 — "__fb_prev_"   (10 chars; 4+10=14 bytes; 1664-1677)
   ;; Length-prefixed; readable by $str_concat which expects [len:i32][bytes].
   (data (i32.const 1600) "\08\00\00\00variant_")
   (data (i32.const 1616) "\07\00\00\00record_")
   (data (i32.const 1632) "\06\00\00\00tuple_")
+  (data (i32.const 1648) "\05\00\00\00__fb_")
+  (data (i32.const 1664) "\0a\00\00\00__fb_prev_")
 
   ;; ─── $emit_alloc — bump-pattern emitter (EmitMemory swap surface) ─
   ;; Per Hβ-emit-substrate.md §3.5 + wheel canonical src/backends/wasm.mn:
@@ -28620,6 +28624,20 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 330))         ;; LFeedback
       (then
+        ;; Emit per-handle feedback temps. Per emit_handler.wat:240,256,
+        ;; 270 — LFeedback emits (local.set $__fb_prev_<h>) + (local.tee
+        ;; $__fb_<h>). Both need preamble declarations in the containing
+        ;; fn. Per protocol_canonical_projection_pattern.md: same shape
+        ;; as $tuple_<H> / $variant_<H> / $record_<H>; same projection.
+        (local.set $handle (call $lexpr_handle (local.get $expr)))
+        (local.set $name
+          (call $str_concat (i32.const 1648)               ;; "__fb_"
+                            (call $int_to_str (local.get $handle))))
+        (call $emit_local_decl_str (local.get $name))
+        (local.set $name
+          (call $str_concat (i32.const 1664)               ;; "__fb_prev_"
+                            (call $int_to_str (local.get $handle))))
+        (call $emit_local_decl_str (local.get $name))
         (call $emit_alloc_handle_locals_walk
           (call $lexpr_lfeedback_body (local.get $expr)))
         (call $emit_alloc_handle_locals_walk

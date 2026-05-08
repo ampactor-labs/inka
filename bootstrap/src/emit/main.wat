@@ -1376,6 +1376,20 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 330))         ;; LFeedback
       (then
+        ;; Emit per-handle feedback temps. Per emit_handler.wat:240,256,
+        ;; 270 — LFeedback emits (local.set $__fb_prev_<h>) + (local.tee
+        ;; $__fb_<h>). Both need preamble declarations in the containing
+        ;; fn. Per protocol_canonical_projection_pattern.md: same shape
+        ;; as $tuple_<H> / $variant_<H> / $record_<H>; same projection.
+        (local.set $handle (call $lexpr_handle (local.get $expr)))
+        (local.set $name
+          (call $str_concat (i32.const 1648)               ;; "__fb_"
+                            (call $int_to_str (local.get $handle))))
+        (call $emit_local_decl_str (local.get $name))
+        (local.set $name
+          (call $str_concat (i32.const 1664)               ;; "__fb_prev_"
+                            (call $int_to_str (local.get $handle))))
+        (call $emit_local_decl_str (local.get $name))
         (call $emit_alloc_handle_locals_walk
           (call $lexpr_lfeedback_body (local.get $expr)))
         (call $emit_alloc_handle_locals_walk

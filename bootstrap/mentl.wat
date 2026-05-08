@@ -28442,6 +28442,22 @@
     ;; this is the first wiring of $emit_fn_reset (state.wat exports it
     ;; but no caller existed pre-this-commit).
     (call $emit_fn_reset)
+    ;; Register param names in fn-local ledger so emit_let_locals's
+    ;; emit_fn_local_check skips re-declaring locals that shadow
+    ;; params (per the eight: a name appearing as both param and
+    ;; let-bound IS shadowing in user-source; WAT can't express
+    ;; shadowing in same scope, so the local.set in body writes to
+    ;; the param's slot directly — semantically equivalent for the
+    ;; immediate use, no preamble redef). Closes the $e/$q
+    ;; redef-of-parameter wat2wasm rejects.
+    (local.set $i (i32.const 0))
+    (block $pdone2
+      (loop $piter2
+        (br_if $pdone2 (i32.ge_u (local.get $i) (local.get $arity)))
+        (local.set $param_name (call $list_index (local.get $params) (local.get $i)))
+        (drop (call $emit_fn_local_check (local.get $param_name)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $piter2)))
     ;; Pre-declare LLet locals from body
     (call $emit_let_locals (local.get $body))
     ;; Per Hβ.first-light.alloc-handle-locals (2026-05-07): pre-declare

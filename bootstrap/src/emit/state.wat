@@ -191,7 +191,6 @@
   (global $emit_fn_locals_ptr            (mut i32) (i32.const 0))
   (global $emit_fn_locals_len_g          (mut i32) (i32.const 0))
 
-
   ;; ─── Idempotent initializer (mirrors $lower_init / $infer_init) ────
   ;; Per the seed's discipline for module-level state chunks: every
   ;; public entry calls $emit_init first; subsequent calls no-op.
@@ -269,12 +268,24 @@
     (call $emit_init)
     (call $list_index (global.get $emit_funcref_table_ptr) (local.get $idx)))
 
-  ;; ─── $emit_fn_local_check — register-or-no-op; return "is new" ─────
-  ;; Per Hβ.first-light.match-arm-binding-name-uniqueness Lock #1:
-  ;; returns 1 IFF $name was not previously registered for the current
-  ;; fn AND has just been appended to the ledger. Returns 0 IFF $name
-  ;; was already present (no append performed). Mirrors
-  ;; $emit_funcref_register's idempotent-on-repeat shape.
+  ;; Register-or-no-op pattern: returns 1 IFF $name was newly appended
+  ;; (caller emits the (local $name i32) declaration), 0 IFF already
+  ;; present. Sibling: $emit_funcref_register_first below.
+  (func $emit_funcref_register_first (param $name i32) (result i32)
+    (local $new_idx i32) (local $new_len i32)
+    (call $emit_init)
+    (if (i32.ge_s (call $emit_funcref_lookup (local.get $name)) (i32.const 0))
+      (then (return (i32.const 0))))
+    (local.set $new_idx (global.get $emit_funcref_table_len_g))
+    (local.set $new_len (i32.add (local.get $new_idx) (i32.const 1)))
+    (global.set $emit_funcref_table_ptr
+      (call $list_extend_to (global.get $emit_funcref_table_ptr) (local.get $new_len)))
+    (drop (call $list_set (global.get $emit_funcref_table_ptr)
+                          (local.get $new_idx)
+                          (local.get $name)))
+    (global.set $emit_funcref_table_len_g (local.get $new_len))
+    (i32.const 1))
+
   (func $emit_fn_local_check (param $name i32) (result i32)
     (local $existing i32) (local $new_idx i32) (local $new_len i32)
     (call $emit_init)

@@ -96,12 +96,8 @@
   (func $lowfn_row (export "lowfn_row") (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 4)))
 
-  ;; Canonical WAT name for an LFn record. Falls back to int_to_str(r)
-  ;; (the perm-allocated pointer) when the name field is missing —
-  ;; covers synthesized closures, multi-shot continuations, anonymous
-  ;; thunks, and malformed LMakeClosure fn-field payloads. Single
-  ;; source of truth across $emit_fn_body, $cfn_walk, and $emit_fn_
-  ;; table_and_globals (per protocol_canonical_projection_pattern.md).
+  ;; Canonical WAT name. Falls back to int_to_str(r) for synthesized
+  ;; closures, anonymous thunks, malformed payloads.
   (func $lowfn_emit_name (export "lowfn_emit_name") (param $r i32) (result i32)
     (local $name i32)
     (if (i32.lt_u (local.get $r) (global.get $heap_base))

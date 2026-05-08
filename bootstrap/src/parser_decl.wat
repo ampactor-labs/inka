@@ -9,6 +9,18 @@
     (local $fields_r i32) (local $ty_record i32) (local $variant i32)
     (local $variants i32) (local $field_tys i32)
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
+    ;; Null return per protocol_parser_fabrication_substrate.md means
+    ;; "no TIdent at this position." Substrate-honest recovery:
+    ;; produce NErrorStmt sentinel + advance pos by 1; outer parse_stmts
+    ;; loop continues, lower/emit kind-dispatch skips the entry.
+    (if (i32.eqz (local.get $name))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nstmt (call $mk_NErrorStmt (i32.const 1)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
     ;; Skip =
     (if (call $at (local.get $tokens) (local.get $p) (i32.const 60)) ;; TEq
@@ -123,7 +135,12 @@
     (local.set $count (i32.const 0))
     (block $done
       (loop $fields
+        ;; null return per protocol_parser_fabrication_substrate.md
+        ;; means "no TIdent at this position." Substrate-honest
+        ;; recovery: terminate the loop; no field pushed.
         (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $name))
+          (then (br $done)))
         (local.set $p2 (call $expect
           (local.get $tokens)
           (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p) (i32.const 1)))
@@ -261,6 +278,17 @@
   (func $parse_effect_stmt (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
     (local $name i32) (local $p i32) (local $ops_r i32) (local $tup i32)
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
+    ;; Null return per protocol_parser_fabrication_substrate.md means
+    ;; "no TIdent at this position." Substrate-honest recovery:
+    ;; produce NErrorStmt sentinel + advance pos by 1.
+    (if (i32.eqz (local.get $name))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nstmt (call $mk_NErrorStmt (i32.const 1)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
     (local.set $p (call $expect (local.get $tokens) (local.get $p) (i32.const 47))) ;; TLBrace
     (local.set $ops_r (call $parse_effect_ops (local.get $tokens)

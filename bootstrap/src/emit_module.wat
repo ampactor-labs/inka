@@ -50,6 +50,11 @@
           (i32.eq (local.get $tag) (i32.const 126))
           (i32.eq (local.get $tag) (i32.const 124)))
       (then (return (i32.const 1))))
+    ;; NErrorStmt=129 → always skip per protocol_parser_fabrication_substrate.md
+    ;; + DESIGN.md §4 (NErrorHole peer at graph layer); parse-time
+    ;; diagnostic already surfaced; no emit.
+    (if (i32.eq (local.get $tag) (i32.const 129))
+      (then (return (i32.const 1))))
     ;; ExprStmt=125 wrapping bare VarRef → skip (no-op statement)
     (if (i32.eq (local.get $tag) (i32.const 125))
       (then

@@ -1470,6 +1470,13 @@
     (if (i32.eq (local.get $tag) (i32.const 128))
       (then (return (call $infer_walk_stmt_documented
               (local.get $stmt) (local.get $handle) (local.get $span)))))
+    ;; NErrorStmt (129): productive-under-error sentinel from parser.
+    ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
+    ;; (NErrorHole peer at graph layer): no type to infer; the parser
+    ;; already attached the diagnostic; bind the handle to a TyVar so
+    ;; the graph stays consistent and return.
+    (if (i32.eq (local.get $tag) (i32.const 129))
+      (then (return)))
     ;; Unknown Stmt tag — H6 wildcard discipline: trap so future Stmt
     ;; variants force this dispatch table to be extended (drift mode 9
     ;; prevention).

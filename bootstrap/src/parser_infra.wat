@@ -17,10 +17,12 @@
   ;;   MatchExpr=92 HandleExpr=93 PerformExpr=94 ResumeExpr=95
   ;;   MakeListExpr=96 MakeTupleExpr=97 MakeRecordExpr=98
   ;;   NamedRecordExpr=99 FieldExpr=100 PipeExpr=101
+  ;;   NErrorExpr=102 (productive-under-error sentinel)
   ;; NodeBody: NExpr=110 NStmt=111 NPat=112 NHole=113
   ;; Stmt: LetStmt=120 FnStmt=121 TypeDefStmt=122
   ;;   EffectDeclStmt=123 HandlerDeclStmt=124 ExprStmt=125
   ;;   ImportStmt=126 RefineStmt=127 Documented=128
+  ;;   NErrorStmt=129 (productive-under-error sentinel)
   ;; Pat: PVar=130 PWild=131 PLit=132 PCon=133
   ;;   PTuple=134 PList=135 PRecord=136
   ;; BinOp: BAdd=140..BConcat=153
@@ -255,6 +257,36 @@
     (i32.store (local.get $p) (i32.const 123))
     (i32.store offset=4 (local.get $p) (local.get $name))
     (i32.store offset=8 (local.get $p) (local.get $ops))
+    (local.get $p))
+
+  ;; ─── Sentinel-AST: productive-under-error ─────────────────────────
+  ;; Per kernel primitive #8 (HM live with Reasons): every parse
+  ;; failure attaches a Reason chain instead of fabricating a load-
+  ;; bearing value. The cursor at this position projects the sentinel
+  ;; tag + reason_kind + span as residue ("ident expected here") rather
+  ;; than pretending parsing succeeded. Cure for the $ident_at_p
+  ;; fabrication substrate gap (protocol_parser_fabrication_substrate.md
+  ;; + chain-link-5 eager-form-commitment).
+  ;;
+  ;; reason_kind values (extensible as more recovery sites land):
+  ;;   1 = ERROR_MISSING_IDENT  — caller expected TIdent, got something else
+
+  ;; NErrorExpr(reason_kind) → [tag=102][reason_kind]. Caller wraps
+  ;; with $nexpr for span attachment; lower/emit kind-dispatch this
+  ;; tag to emit (unreachable) without polluting the output.
+  (func $mk_NErrorExpr (param $reason_kind i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 102))
+    (i32.store offset=4 (local.get $p) (local.get $reason_kind))
+    (local.get $p))
+
+  ;; NErrorStmt(reason_kind) → [tag=129][reason_kind]. Caller wraps
+  ;; with $nstmt for span attachment; lower/emit kind-dispatch this
+  ;; tag to skip the entry without polluting the stmt-list walk.
+  (func $mk_NErrorStmt (param $reason_kind i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 129))
+    (i32.store offset=4 (local.get $p) (local.get $reason_kind))
     (local.get $p))
 
   ;; ─── Token navigation (parser helpers) ────────────────────────────

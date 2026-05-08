@@ -123,8 +123,12 @@
       (then
         (local.set $own (i32.const 172))
         (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))))
-    ;; Get param name
+    ;; Get param name. Null return per protocol_parser_fabrication_substrate.md
+    ;; means "no TIdent at this position." Substrate-honest recovery:
+    ;; return null tuple; caller loop detects + terminates ($done).
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
+    (if (i32.eqz (local.get $name))
+      (then (return (i32.const 0))))
     (local.set $p2 (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p) (i32.const 1))))
     ;; Check for : Type annotation
     (if (call $at (local.get $tokens) (local.get $p2) (i32.const 53)) ;; TColon
@@ -161,6 +165,11 @@
     (block $done
       (loop $params
         (local.set $param_r (call $parse_one_param (local.get $tokens) (local.get $p)))
+        ;; Null tuple per protocol_parser_fabrication_substrate.md
+        ;; means $parse_one_param hit null name. Terminate loop;
+        ;; outer $expect TRParen surfaces the diagnostic.
+        (if (i32.eqz (local.get $param_r))
+          (then (br $done)))
         (local.set $param (call $list_index (local.get $param_r) (i32.const 0)))
         (local.set $p2 (call $list_index (local.get $param_r) (i32.const 1)))
         (local.set $buf (call $list_extend_to (local.get $buf)
@@ -198,6 +207,17 @@
     (local $p4 i32) (local $body_r i32) (local $tup i32)
     ;; Get function name
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
+    ;; Null return per protocol_parser_fabrication_substrate.md means
+    ;; "no TIdent at this position." Substrate-honest recovery:
+    ;; produce NErrorStmt sentinel + advance pos by 1.
+    (if (i32.eqz (local.get $name))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nstmt (call $mk_NErrorStmt (i32.const 1)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
     ;; Parse (params)
     (local.set $p (call $expect (local.get $tokens)
       (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))

@@ -799,6 +799,13 @@
     (if (i32.eq (local.get $stmt_tag) (i32.const 128))
       (then (return (call $lower_walk_stmt_documented
               (local.get $stmt) (local.get $handle)))))
+    ;; NErrorStmt (129): productive-under-error sentinel from parser.
+    ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
+    ;; (NErrorHole peer at graph layer): skip emit; the stmt-list walk
+    ;; continues; well-typed sibling code still lowers cleanly.
+    ;; LConst sentinel matches NPat/NHole degenerate pattern above.
+    (if (i32.eq (local.get $stmt_tag) (i32.const 129))
+      (then (return (call $lexpr_make_lconst (local.get $handle) (i32.const 0)))))
     ;; H6 wildcard: unknown Stmt tag.
     (unreachable))
 

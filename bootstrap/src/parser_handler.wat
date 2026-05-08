@@ -229,8 +229,12 @@
     (local $body_r i32) (local $body i32) (local $p5 i32) (local $p6 i32)
     (local $arm i32) (local $tup i32)
     (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
-    ;; Op name (TIdent)
+    ;; Op name (TIdent). Null return per protocol_parser_fabrication_substrate.md
+    ;; means "no TIdent at this position." Substrate-honest recovery:
+    ;; return null tuple; caller $parse_handler_arms loop terminates.
     (local.set $op_name (call $ident_at_p (local.get $tokens) (local.get $p)))
+    (if (i32.eqz (local.get $op_name))
+      (then (return (i32.const 0))))
     (local.set $p2 (i32.add (local.get $p) (i32.const 1)))
     ;; Args list inside parens
     (local.set $args_r (call $parse_handler_arm_args (local.get $tokens)
@@ -282,6 +286,10 @@
           (then (br $done)))
         ;; Parse one arm
         (local.set $arm_r (call $parse_handler_arm (local.get $tokens) (local.get $p)))
+        ;; Null tuple per protocol_parser_fabrication_substrate.md means
+        ;; the arm hit null op_name. Terminate loop.
+        (if (i32.eqz (local.get $arm_r))
+          (then (br $done)))
         (local.set $arm (call $list_index (local.get $arm_r) (i32.const 0)))
         (local.set $p2 (call $list_index (local.get $arm_r) (i32.const 1)))
         ;; Append
@@ -374,8 +382,12 @@
     (local.set $count (i32.const 0))
     (block $done
       (loop $fields
-        ;; Field name (TIdent)
+        ;; Field name (TIdent). Null return per protocol_parser_fabrication_substrate.md
+        ;; means "no TIdent at this position." Substrate-honest recovery:
+        ;; terminate loop; no field pushed.
         (local.set $field_name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $field_name))
+          (then (br $done)))
         (local.set $p2 (i32.add (local.get $p) (i32.const 1)))
         ;; Expect TEq
         (local.set $p3 (call $expect (local.get $tokens)
@@ -426,9 +438,19 @@
     (local $state_r i32) (local $state_fields i32) (local $p2 i32)
     (local $p3 i32) (local $arms_r i32) (local $arms i32) (local $p4 i32)
     (local $stmt i32) (local $tup i32)
-    ;; Read handler name
+    ;; Read handler name. Null return per protocol_parser_fabrication_substrate.md
+    ;; means "no TIdent at this position." Substrate-honest recovery:
+    ;; produce NErrorStmt sentinel + advance pos by 1 (THandler consumed).
     (local.set $name (call $ident_at_p (local.get $tokens)
       (i32.add (local.get $pos) (i32.const 1))))
+    (if (i32.eqz (local.get $name))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nstmt (call $mk_NErrorStmt (i32.const 1)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
     ;; Skip past name + ws
     (local.set $p (call $skip_ws_p (local.get $tokens)
       (i32.add (local.get $pos) (i32.const 2))))
@@ -509,8 +531,13 @@
       (loop $cfg_loop
         ;; Read one ident — handler config-params are simple names
         ;; (per SYNTAX.md §770; type-annotation form is named peer
-        ;; Hβ.handler-config-type-annotation-substrate).
+        ;; Hβ.handler-config-type-annotation-substrate). Null return
+        ;; per protocol_parser_fabrication_substrate.md means "no
+        ;; TIdent at this position." Substrate-honest recovery:
+        ;; terminate loop; outer $expect TRParen surfaces diagnostic.
         (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $name))
+          (then (br $done)))
         (local.set $p (call $skip_ws_p (local.get $tokens)
           (i32.add (local.get $p) (i32.const 1))))
         ;; Append to buffer
@@ -666,7 +693,12 @@
             (local.set $p (local.get $p_with))
             (block $done
               (loop $fields
+                ;; Null return per protocol_parser_fabrication_substrate.md
+                ;; means "no TIdent at this position." Substrate-honest
+                ;; recovery: terminate loop; no field pushed.
                 (local.set $field_name (call $ident_at_p (local.get $tokens) (local.get $p)))
+                (if (i32.eqz (local.get $field_name))
+                  (then (br $done)))
                 (local.set $p2 (i32.add (local.get $p) (i32.const 1)))
                 (local.set $p3 (call $expect (local.get $tokens)
                   (call $skip_ws_p (local.get $tokens) (local.get $p2))

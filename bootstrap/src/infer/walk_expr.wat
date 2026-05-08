@@ -298,6 +298,7 @@
   (data (i32.const 3960) "\0a\00\00\00empty list")           ;; 10 bytes
   (data (i32.const 3984) "\06\00\00\00lambda")               ;;  6 bytes
   (data (i32.const 4008) "\06\00\00\00<expr>")               ;;  6 bytes
+  (data (i32.const 5128) "\1c\00\00\00parser missing ident at <tok>")  ;; 28 bytes
 
   ;; ─── Private helpers ─────────────────────────────────────────────────
 
@@ -1795,6 +1796,21 @@
     (if (i32.eq (local.get $tag) (i32.const 101))
       (then (return (call $infer_walk_expr_pipe
               (local.get $expr) (local.get $handle) (local.get $span)))))
+    ;; NErrorExpr (102): productive-under-error sentinel from parser.
+    ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
+    ;; (NErrorHole peer at graph layer): bind the handle to NErrorHole
+    ;; so $lookup_ty / $chase_deep see the sentinel; the walk continues;
+    ;; well-typed sibling code still infers cleanly. The parser already
+    ;; surfaced the diagnostic at the missing-ident span.
+    (if (i32.eq (local.get $tag) (i32.const 102))
+      (then
+        (call $graph_bind_kind
+          (local.get $handle)
+          (call $node_kind_make_nerrorhole
+            (call $reason_make_inferred (i32.const 5128)))   ;; "parser missing ident at <tok>"
+          (call $reason_make_located (local.get $span)
+            (call $reason_make_inferred (i32.const 5128))))
+        (return (local.get $handle))))
     ;; Unknown tag — H6 wildcard discipline: trap so future Expr variants
     ;; force this dispatch table to be extended (drift mode 9 prevention).
     (unreachable))

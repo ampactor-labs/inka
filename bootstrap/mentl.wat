@@ -4191,10 +4191,12 @@
   ;;   MatchExpr=92 HandleExpr=93 PerformExpr=94 ResumeExpr=95
   ;;   MakeListExpr=96 MakeTupleExpr=97 MakeRecordExpr=98
   ;;   NamedRecordExpr=99 FieldExpr=100 PipeExpr=101
+  ;;   NErrorExpr=102 (productive-under-error sentinel)
   ;; NodeBody: NExpr=110 NStmt=111 NPat=112 NHole=113
   ;; Stmt: LetStmt=120 FnStmt=121 TypeDefStmt=122
   ;;   EffectDeclStmt=123 HandlerDeclStmt=124 ExprStmt=125
   ;;   ImportStmt=126 RefineStmt=127 Documented=128
+  ;;   NErrorStmt=129 (productive-under-error sentinel)
   ;; Pat: PVar=130 PWild=131 PLit=132 PCon=133
   ;;   PTuple=134 PList=135 PRecord=136
   ;; BinOp: BAdd=140..BConcat=153
@@ -4431,6 +4433,36 @@
     (i32.store offset=8 (local.get $p) (local.get $ops))
     (local.get $p))
 
+  ;; ─── Sentinel-AST: productive-under-error ─────────────────────────
+  ;; Per kernel primitive #8 (HM live with Reasons): every parse
+  ;; failure attaches a Reason chain instead of fabricating a load-
+  ;; bearing value. The cursor at this position projects the sentinel
+  ;; tag + reason_kind + span as residue ("ident expected here") rather
+  ;; than pretending parsing succeeded. Cure for the $ident_at_p
+  ;; fabrication substrate gap (protocol_parser_fabrication_substrate.md
+  ;; + chain-link-5 eager-form-commitment).
+  ;;
+  ;; reason_kind values (extensible as more recovery sites land):
+  ;;   1 = ERROR_MISSING_IDENT  — caller expected TIdent, got something else
+
+  ;; NErrorExpr(reason_kind) → [tag=102][reason_kind]. Caller wraps
+  ;; with $nexpr for span attachment; lower/emit kind-dispatch this
+  ;; tag to emit (unreachable) without polluting the output.
+  (func $mk_NErrorExpr (param $reason_kind i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 102))
+    (i32.store offset=4 (local.get $p) (local.get $reason_kind))
+    (local.get $p))
+
+  ;; NErrorStmt(reason_kind) → [tag=129][reason_kind]. Caller wraps
+  ;; with $nstmt for span attachment; lower/emit kind-dispatch this
+  ;; tag to skip the entry without polluting the stmt-list walk.
+  (func $mk_NErrorStmt (param $reason_kind i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 129))
+    (i32.store offset=4 (local.get $p) (local.get $reason_kind))
+    (local.get $p))
+
   ;; ─── Token navigation (parser helpers) ────────────────────────────
 
   ;; kind_at: get TokenKind at pos. Token = [tag][kind][span]
@@ -4500,7 +4532,19 @@
       (then (i32.add (local.get $pos) (i32.const 1)))
       (else (local.get $pos))))
 
-  ;; ident_at: extract string from TIdent at pos
+  ;; ident_at_p: extract string from TIdent at pos. Returns 0 (null
+  ;; pointer) when token at pos is NOT a TIdent — productive-under-
+  ;; error contract per protocol_parser_fabrication_substrate.md +
+  ;; chain-link-5 discipline. Sister $int_at_p at line 340 returns
+  ;; i32.const 0 on non-TInt — same contract.
+  ;;
+  ;; CALLERS MUST handle the null return — either by detecting and
+  ;; producing a sentinel-AST with attached Reason chain, by skipping
+  ;; the construct, or by explicit-fabrication band-aid (with named
+  ;; follow-up). Silent fabrication of a load-bearing name was the
+  ;; pre-fix drift (drift "any fabricated value over a load-bearing
+  ;; ADT" per CLAUDE.md red-flag table) producing 14k empty-named
+  ;; globals on src/lower.mn seed-compile (5.9 MB instead of ~80 KB).
   (func $ident_at_p (param $tokens i32) (param $pos i32) (result i32)
     (local $k i32)
     (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
@@ -4508,7 +4552,7 @@
           (i32.eqz (call $is_sentinel (local.get $k)))
           (i32.eq (call $tag_of (local.get $k)) (i32.const 25)))
       (then (i32.load offset=4 (local.get $k)))
-      (else (call $str_alloc (i32.const 0)))))
+      (else (i32.const 0))))
 
   ;; int_payload: extract int from TInt at pos
   (func $int_at_p (param $tokens i32) (param $pos i32) (result i32)
@@ -5101,8 +5145,12 @@
       (then
         (local.set $own (i32.const 172))
         (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))))
-    ;; Get param name
+    ;; Get param name. Null return per protocol_parser_fabrication_substrate.md
+    ;; means "no TIdent at this position." Substrate-honest recovery:
+    ;; return null tuple; caller loop detects + terminates ($done).
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
+    (if (i32.eqz (local.get $name))
+      (then (return (i32.const 0))))
     (local.set $p2 (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p) (i32.const 1))))
     ;; Check for : Type annotation
     (if (call $at (local.get $tokens) (local.get $p2) (i32.const 53)) ;; TColon
@@ -5139,6 +5187,11 @@
     (block $done
       (loop $params
         (local.set $param_r (call $parse_one_param (local.get $tokens) (local.get $p)))
+        ;; Null tuple per protocol_parser_fabrication_substrate.md
+        ;; means $parse_one_param hit null name. Terminate loop;
+        ;; outer $expect TRParen surfaces the diagnostic.
+        (if (i32.eqz (local.get $param_r))
+          (then (br $done)))
         (local.set $param (call $list_index (local.get $param_r) (i32.const 0)))
         (local.set $p2 (call $list_index (local.get $param_r) (i32.const 1)))
         (local.set $buf (call $list_extend_to (local.get $buf)
@@ -5176,6 +5229,17 @@
     (local $p4 i32) (local $body_r i32) (local $tup i32)
     ;; Get function name
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
+    ;; Null return per protocol_parser_fabrication_substrate.md means
+    ;; "no TIdent at this position." Substrate-honest recovery:
+    ;; produce NErrorStmt sentinel + advance pos by 1.
+    (if (i32.eqz (local.get $name))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nstmt (call $mk_NErrorStmt (i32.const 1)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
     ;; Parse (params)
     (local.set $p (call $expect (local.get $tokens)
       (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))
@@ -5241,6 +5305,18 @@
     (local $fields_r i32) (local $ty_record i32) (local $variant i32)
     (local $variants i32) (local $field_tys i32)
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
+    ;; Null return per protocol_parser_fabrication_substrate.md means
+    ;; "no TIdent at this position." Substrate-honest recovery:
+    ;; produce NErrorStmt sentinel + advance pos by 1; outer parse_stmts
+    ;; loop continues, lower/emit kind-dispatch skips the entry.
+    (if (i32.eqz (local.get $name))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nstmt (call $mk_NErrorStmt (i32.const 1)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
     ;; Skip =
     (if (call $at (local.get $tokens) (local.get $p) (i32.const 60)) ;; TEq
@@ -5355,7 +5431,12 @@
     (local.set $count (i32.const 0))
     (block $done
       (loop $fields
+        ;; null return per protocol_parser_fabrication_substrate.md
+        ;; means "no TIdent at this position." Substrate-honest
+        ;; recovery: terminate the loop; no field pushed.
         (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $name))
+          (then (br $done)))
         (local.set $p2 (call $expect
           (local.get $tokens)
           (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p) (i32.const 1)))
@@ -5409,9 +5490,12 @@
               (call $at (local.get $tokens) (local.get $p) (i32.const 69))  ;; TEof
               (call $at (local.get $tokens) (local.get $p) (i32.const 68))) ;; TNewline
           (then (br $done)))
-        ;; Check it's actually an ident
+        ;; Check it's actually an ident — null return per
+        ;; protocol_parser_fabrication_substrate.md means "no TIdent
+        ;; at this position." Skip the variant; the loop terminates.
+        ;; Substrate-honest recovery (no fabrication needed at this site).
         (local.set $vname (call $ident_at_p (local.get $tokens) (local.get $p)))
-        (if (i32.eqz (call $str_len (local.get $vname)))
+        (if (i32.eqz (local.get $vname))
           (then (br $done)))
         (local.set $p2 (i32.add (local.get $p) (i32.const 1)))
         ;; Check for (fields)
@@ -5490,6 +5574,17 @@
   (func $parse_effect_stmt (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
     (local $name i32) (local $p i32) (local $ops_r i32) (local $tup i32)
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
+    ;; Null return per protocol_parser_fabrication_substrate.md means
+    ;; "no TIdent at this position." Substrate-honest recovery:
+    ;; produce NErrorStmt sentinel + advance pos by 1.
+    (if (i32.eqz (local.get $name))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nstmt (call $mk_NErrorStmt (i32.const 1)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
     (local.set $p (call $expect (local.get $tokens) (local.get $p) (i32.const 47))) ;; TLBrace
     (local.set $ops_r (call $parse_effect_ops (local.get $tokens)
@@ -5524,9 +5619,12 @@
           (then
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $done)))
-        ;; Op name
+        ;; Op name — null return per protocol_parser_fabrication_substrate.md
+        ;; means "no TIdent at this position." Advance past the bad
+        ;; token + skip separators, continue loop. Substrate-honest
+        ;; recovery (no fabrication needed).
         (local.set $op_name (call $ident_at_p (local.get $tokens) (local.get $p)))
-        (if (i32.eqz (call $str_len (local.get $op_name)))
+        (if (i32.eqz (local.get $op_name))
           (then
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (local.set $p (call $skip_sep (local.get $tokens) (local.get $p)))
@@ -5739,6 +5837,18 @@
       (then
         (local.set $field (call $ident_at_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
         (local.set $span (i32.load offset=8 (local.get $e)))
+        ;; Null field per protocol_parser_fabrication_substrate.md
+        ;; means "no TIdent at field-name position." Substrate-honest
+        ;; recovery: produce NErrorExpr sentinel + advance past TDot;
+        ;; do NOT chain into postfix_loop on a sentinel.
+        (if (i32.eqz (local.get $field))
+          (then
+            (local.set $node (call $nexpr (call $mk_NErrorExpr (i32.const 1)) (local.get $span)))
+            (local.set $tup (call $make_list (i32.const 2)))
+            (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $node)))
+            (drop (call $list_set (local.get $tup) (i32.const 1)
+              (i32.add (local.get $pos) (i32.const 1))))
+            (return (local.get $tup))))
         ;; FieldExpr(e, field) → [tag=100][e][field]
         (local.set $node (call $alloc (i32.const 12)))
         (i32.store (local.get $node) (i32.const 100))
@@ -6383,6 +6493,17 @@
   (func $parse_perform_expr (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
     (local $name i32) (local $p i32) (local $args_r i32) (local $tup i32)
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
+    ;; Null return per protocol_parser_fabrication_substrate.md means
+    ;; "no TIdent at this position." Substrate-honest recovery:
+    ;; produce NErrorExpr sentinel + advance pos by 1.
+    (if (i32.eqz (local.get $name))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nexpr (call $mk_NErrorExpr (i32.const 1)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
     (local.set $p (call $expect (local.get $tokens)
       (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))
       (i32.const 45))) ;; TLParen
@@ -6700,8 +6821,12 @@
     (local $body_r i32) (local $body i32) (local $p5 i32) (local $p6 i32)
     (local $arm i32) (local $tup i32)
     (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
-    ;; Op name (TIdent)
+    ;; Op name (TIdent). Null return per protocol_parser_fabrication_substrate.md
+    ;; means "no TIdent at this position." Substrate-honest recovery:
+    ;; return null tuple; caller $parse_handler_arms loop terminates.
     (local.set $op_name (call $ident_at_p (local.get $tokens) (local.get $p)))
+    (if (i32.eqz (local.get $op_name))
+      (then (return (i32.const 0))))
     (local.set $p2 (i32.add (local.get $p) (i32.const 1)))
     ;; Args list inside parens
     (local.set $args_r (call $parse_handler_arm_args (local.get $tokens)
@@ -6753,6 +6878,10 @@
           (then (br $done)))
         ;; Parse one arm
         (local.set $arm_r (call $parse_handler_arm (local.get $tokens) (local.get $p)))
+        ;; Null tuple per protocol_parser_fabrication_substrate.md means
+        ;; the arm hit null op_name. Terminate loop.
+        (if (i32.eqz (local.get $arm_r))
+          (then (br $done)))
         (local.set $arm (call $list_index (local.get $arm_r) (i32.const 0)))
         (local.set $p2 (call $list_index (local.get $arm_r) (i32.const 1)))
         ;; Append
@@ -6845,8 +6974,12 @@
     (local.set $count (i32.const 0))
     (block $done
       (loop $fields
-        ;; Field name (TIdent)
+        ;; Field name (TIdent). Null return per protocol_parser_fabrication_substrate.md
+        ;; means "no TIdent at this position." Substrate-honest recovery:
+        ;; terminate loop; no field pushed.
         (local.set $field_name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $field_name))
+          (then (br $done)))
         (local.set $p2 (i32.add (local.get $p) (i32.const 1)))
         ;; Expect TEq
         (local.set $p3 (call $expect (local.get $tokens)
@@ -6897,9 +7030,19 @@
     (local $state_r i32) (local $state_fields i32) (local $p2 i32)
     (local $p3 i32) (local $arms_r i32) (local $arms i32) (local $p4 i32)
     (local $stmt i32) (local $tup i32)
-    ;; Read handler name
+    ;; Read handler name. Null return per protocol_parser_fabrication_substrate.md
+    ;; means "no TIdent at this position." Substrate-honest recovery:
+    ;; produce NErrorStmt sentinel + advance pos by 1 (THandler consumed).
     (local.set $name (call $ident_at_p (local.get $tokens)
       (i32.add (local.get $pos) (i32.const 1))))
+    (if (i32.eqz (local.get $name))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nstmt (call $mk_NErrorStmt (i32.const 1)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
     ;; Skip past name + ws
     (local.set $p (call $skip_ws_p (local.get $tokens)
       (i32.add (local.get $pos) (i32.const 2))))
@@ -6980,8 +7123,13 @@
       (loop $cfg_loop
         ;; Read one ident — handler config-params are simple names
         ;; (per SYNTAX.md §770; type-annotation form is named peer
-        ;; Hβ.handler-config-type-annotation-substrate).
+        ;; Hβ.handler-config-type-annotation-substrate). Null return
+        ;; per protocol_parser_fabrication_substrate.md means "no
+        ;; TIdent at this position." Substrate-honest recovery:
+        ;; terminate loop; outer $expect TRParen surfaces diagnostic.
         (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $name))
+          (then (br $done)))
         (local.set $p (call $skip_ws_p (local.get $tokens)
           (i32.add (local.get $p) (i32.const 1))))
         ;; Append to buffer
@@ -7137,7 +7285,12 @@
             (local.set $p (local.get $p_with))
             (block $done
               (loop $fields
+                ;; Null return per protocol_parser_fabrication_substrate.md
+                ;; means "no TIdent at this position." Substrate-honest
+                ;; recovery: terminate loop; no field pushed.
                 (local.set $field_name (call $ident_at_p (local.get $tokens) (local.get $p)))
+                (if (i32.eqz (local.get $field_name))
+                  (then (br $done)))
                 (local.set $p2 (i32.add (local.get $p) (i32.const 1)))
                 (local.set $p3 (call $expect (local.get $tokens)
                   (call $skip_ws_p (local.get $tokens) (local.get $p2))
@@ -7287,7 +7440,12 @@
     (local.set $p (local.get $pos))
     (block $done
       (loop $parts
+        ;; Null return per protocol_parser_fabrication_substrate.md
+        ;; means "no TIdent at this position." Substrate-honest
+        ;; recovery: terminate path-loop without concatenating.
         (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $name))
+          (then (br $done)))
         (local.set $acc (call $str_concat (local.get $acc) (local.get $name)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (if (call $at (local.get $tokens) (local.get $p) (i32.const 58))
@@ -13003,6 +13161,7 @@
   (data (i32.const 3960) "\0a\00\00\00empty list")           ;; 10 bytes
   (data (i32.const 3984) "\06\00\00\00lambda")               ;;  6 bytes
   (data (i32.const 4008) "\06\00\00\00<expr>")               ;;  6 bytes
+  (data (i32.const 5128) "\1c\00\00\00parser missing ident at <tok>")  ;; 28 bytes
 
   ;; ─── Private helpers ─────────────────────────────────────────────────
 
@@ -14500,6 +14659,21 @@
     (if (i32.eq (local.get $tag) (i32.const 101))
       (then (return (call $infer_walk_expr_pipe
               (local.get $expr) (local.get $handle) (local.get $span)))))
+    ;; NErrorExpr (102): productive-under-error sentinel from parser.
+    ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
+    ;; (NErrorHole peer at graph layer): bind the handle to NErrorHole
+    ;; so $lookup_ty / $chase_deep see the sentinel; the walk continues;
+    ;; well-typed sibling code still infers cleanly. The parser already
+    ;; surfaced the diagnostic at the missing-ident span.
+    (if (i32.eq (local.get $tag) (i32.const 102))
+      (then
+        (call $graph_bind_kind
+          (local.get $handle)
+          (call $node_kind_make_nerrorhole
+            (call $reason_make_inferred (i32.const 5128)))   ;; "parser missing ident at <tok>"
+          (call $reason_make_located (local.get $span)
+            (call $reason_make_inferred (i32.const 5128))))
+        (return (local.get $handle))))
     ;; Unknown tag — H6 wildcard discipline: trap so future Expr variants
     ;; force this dispatch table to be extended (drift mode 9 prevention).
     (unreachable))
@@ -15976,6 +16150,13 @@
     (if (i32.eq (local.get $tag) (i32.const 128))
       (then (return (call $infer_walk_stmt_documented
               (local.get $stmt) (local.get $handle) (local.get $span)))))
+    ;; NErrorStmt (129): productive-under-error sentinel from parser.
+    ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
+    ;; (NErrorHole peer at graph layer): no type to infer; the parser
+    ;; already attached the diagnostic; bind the handle to a TyVar so
+    ;; the graph stays consistent and return.
+    (if (i32.eq (local.get $tag) (i32.const 129))
+      (then (return)))
     ;; Unknown Stmt tag — H6 wildcard discipline: trap so future Stmt
     ;; variants force this dispatch table to be extended (drift mode 9
     ;; prevention).
@@ -19472,6 +19653,16 @@
       (then (return (call $lower_named_record (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 100))
       (then (return (call $lower_field       (local.get $node)))))
+    ;; NErrorExpr (102): productive-under-error sentinel from parser.
+    ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
+    ;; (NErrorHole peer at graph layer): parse-time diagnostic already
+    ;; surfaced; emit LConst-0 (the WAT $unreachable equivalent for
+    ;; sentinel propagation) so the surrounding expr composes cleanly.
+    ;; No re-diagnose — the parser owned the report.
+    (if (i32.eq (local.get $tag) (i32.const 102))
+      (then (return (call $lexpr_make_lconst
+                          (call $walk_expr_node_handle (local.get $node))
+                          (i32.const 0)))))
     ;; Unknown tag — productive-under-error per Hazel discipline.
     ;; Emit diagnostic, return unit-sentinel LConst so callers can compose.
     (call $lower_emit_unresolved_type (call $walk_expr_node_handle (local.get $node)))
@@ -22313,6 +22504,13 @@
     (if (i32.eq (local.get $stmt_tag) (i32.const 128))
       (then (return (call $lower_walk_stmt_documented
               (local.get $stmt) (local.get $handle)))))
+    ;; NErrorStmt (129): productive-under-error sentinel from parser.
+    ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
+    ;; (NErrorHole peer at graph layer): skip emit; the stmt-list walk
+    ;; continues; well-typed sibling code still lowers cleanly.
+    ;; LConst sentinel matches NPat/NHole degenerate pattern above.
+    (if (i32.eq (local.get $stmt_tag) (i32.const 129))
+      (then (return (call $lexpr_make_lconst (local.get $handle) (i32.const 0)))))
     ;; H6 wildcard: unknown Stmt tag.
     (unreachable))
 
@@ -30076,6 +30274,11 @@
     (if (i32.or
           (i32.eq (local.get $tag) (i32.const 126))
           (i32.eq (local.get $tag) (i32.const 124)))
+      (then (return (i32.const 1))))
+    ;; NErrorStmt=129 → always skip per protocol_parser_fabrication_substrate.md
+    ;; + DESIGN.md §4 (NErrorHole peer at graph layer); parse-time
+    ;; diagnostic already surfaced; no emit.
+    (if (i32.eq (local.get $tag) (i32.const 129))
       (then (return (i32.const 1))))
     ;; ExprStmt=125 wrapping bare VarRef → skip (no-op statement)
     (if (i32.eq (local.get $tag) (i32.const 125))

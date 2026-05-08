@@ -80,7 +80,12 @@
     (local.set $p (local.get $pos))
     (block $done
       (loop $parts
+        ;; Null return per protocol_parser_fabrication_substrate.md
+        ;; means "no TIdent at this position." Substrate-honest
+        ;; recovery: terminate path-loop without concatenating.
         (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $name))
+          (then (br $done)))
         (local.set $acc (call $str_concat (local.get $acc) (local.get $name)))
         (local.set $p (i32.add (local.get $p) (i32.const 1)))
         (if (call $at (local.get $tokens) (local.get $p) (i32.const 58))

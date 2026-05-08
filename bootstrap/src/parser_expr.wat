@@ -106,6 +106,18 @@
       (then
         (local.set $field (call $ident_at_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
         (local.set $span (i32.load offset=8 (local.get $e)))
+        ;; Null field per protocol_parser_fabrication_substrate.md
+        ;; means "no TIdent at field-name position." Substrate-honest
+        ;; recovery: produce NErrorExpr sentinel + advance past TDot;
+        ;; do NOT chain into postfix_loop on a sentinel.
+        (if (i32.eqz (local.get $field))
+          (then
+            (local.set $node (call $nexpr (call $mk_NErrorExpr (i32.const 1)) (local.get $span)))
+            (local.set $tup (call $make_list (i32.const 2)))
+            (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $node)))
+            (drop (call $list_set (local.get $tup) (i32.const 1)
+              (i32.add (local.get $pos) (i32.const 1))))
+            (return (local.get $tup))))
         ;; FieldExpr(e, field) → [tag=100][e][field]
         (local.set $node (call $alloc (i32.const 12)))
         (i32.store (local.get $node) (i32.const 100))

@@ -422,6 +422,17 @@
   (func $parse_perform_expr (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
     (local $name i32) (local $p i32) (local $args_r i32) (local $tup i32)
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
+    ;; Null return per protocol_parser_fabrication_substrate.md means
+    ;; "no TIdent at this position." Substrate-honest recovery:
+    ;; produce NErrorExpr sentinel + advance pos by 1.
+    (if (i32.eqz (local.get $name))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nexpr (call $mk_NErrorExpr (i32.const 1)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
     (local.set $p (call $expect (local.get $tokens)
       (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))
       (i32.const 45))) ;; TLParen

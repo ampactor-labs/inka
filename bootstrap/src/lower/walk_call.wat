@@ -353,6 +353,16 @@
       (then (return (call $lower_named_record (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 100))
       (then (return (call $lower_field       (local.get $node)))))
+    ;; NErrorExpr (102): productive-under-error sentinel from parser.
+    ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
+    ;; (NErrorHole peer at graph layer): parse-time diagnostic already
+    ;; surfaced; emit LConst-0 (the WAT $unreachable equivalent for
+    ;; sentinel propagation) so the surrounding expr composes cleanly.
+    ;; No re-diagnose — the parser owned the report.
+    (if (i32.eq (local.get $tag) (i32.const 102))
+      (then (return (call $lexpr_make_lconst
+                          (call $walk_expr_node_handle (local.get $node))
+                          (i32.const 0)))))
     ;; Unknown tag — productive-under-error per Hazel discipline.
     ;; Emit diagnostic, return unit-sentinel LConst so callers can compose.
     (call $lower_emit_unresolved_type (call $walk_expr_node_handle (local.get $node)))

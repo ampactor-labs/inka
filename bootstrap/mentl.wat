@@ -16152,11 +16152,19 @@
               (local.get $stmt) (local.get $handle) (local.get $span)))))
     ;; NErrorStmt (129): productive-under-error sentinel from parser.
     ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
-    ;; (NErrorHole peer at graph layer): no type to infer; the parser
-    ;; already attached the diagnostic; bind the handle to a TyVar so
-    ;; the graph stays consistent and return.
+    ;; (NErrorHole peer at graph layer): bind the handle to NErrorHole
+    ;; with the parser's reason chain so $lookup_ty / $chase_deep / Why
+    ;; Engine all see the parse-failure truth. Don't throw away the
+    ;; reason — preserve it on the graph.
     (if (i32.eq (local.get $tag) (i32.const 129))
-      (then (return)))
+      (then
+        (call $graph_bind_kind
+          (local.get $handle)
+          (call $node_kind_make_nerrorhole
+            (call $reason_make_inferred (i32.const 5128)))   ;; "parser missing ident at <tok>"
+          (call $reason_make_located (local.get $span)
+            (call $reason_make_inferred (i32.const 5128))))
+        (return)))
     ;; Unknown Stmt tag — H6 wildcard discipline: trap so future Stmt
     ;; variants force this dispatch table to be extended (drift mode 9
     ;; prevention).

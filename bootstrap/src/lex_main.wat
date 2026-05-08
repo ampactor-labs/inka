@@ -226,12 +226,38 @@
       (then
         ;; The kind value IS the tag for nullary variants
         (local.set $tag (local.get $kind))
-        ;; Map tag to name string
-        (if (i32.eq (local.get $tag) (i32.const 0)) (then (return (i32.const 256))))  ;; "fn"
-        (if (i32.eq (local.get $tag) (i32.const 1)) (then (return (i32.const 262))))  ;; "let"
-        (if (i32.eq (local.get $tag) (i32.const 2)) (then (return (i32.const 269))))  ;; "if"
-        (if (i32.eq (local.get $tag) (i32.const 3)) (then (return (i32.const 275))))  ;; "else"
-        ;; ... (abbreviated — full table would map all 64 nullary sentinels)
+        ;; Keyword table (kinds 0-24) — canonical static-string offsets
+        ;; per lexer_data.wat. Used by $ident_or_keyword_at_p
+        ;; (parser_infra.wat) for field-access on keyword-named fields
+        ;; (e.g., `s.handle`, `m.match`); single source of truth for
+        ;; kind→text in the seed. Drift 7 refusal (parallel-arrays):
+        ;; the keyword table lives ONLY here, not duplicated across
+        ;; parser, infer, emit.
+        (if (i32.eq (local.get $tag) (i32.const 0))  (then (return (i32.const 256))))   ;; "fn"
+        (if (i32.eq (local.get $tag) (i32.const 1))  (then (return (i32.const 262))))   ;; "let"
+        (if (i32.eq (local.get $tag) (i32.const 2))  (then (return (i32.const 269))))   ;; "if"
+        (if (i32.eq (local.get $tag) (i32.const 3))  (then (return (i32.const 275))))   ;; "else"
+        (if (i32.eq (local.get $tag) (i32.const 4))  (then (return (i32.const 283))))   ;; "match"
+        (if (i32.eq (local.get $tag) (i32.const 5))  (then (return (i32.const 292))))   ;; "type"
+        (if (i32.eq (local.get $tag) (i32.const 6))  (then (return (i32.const 300))))   ;; "effect"
+        (if (i32.eq (local.get $tag) (i32.const 7))  (then (return (i32.const 310))))   ;; "handle"
+        (if (i32.eq (local.get $tag) (i32.const 8))  (then (return (i32.const 320))))   ;; "handler"
+        (if (i32.eq (local.get $tag) (i32.const 9))  (then (return (i32.const 331))))   ;; "with"
+        (if (i32.eq (local.get $tag) (i32.const 10)) (then (return (i32.const 339))))   ;; "resume"
+        (if (i32.eq (local.get $tag) (i32.const 11)) (then (return (i32.const 349))))   ;; "perform"
+        (if (i32.eq (local.get $tag) (i32.const 12)) (then (return (i32.const 360))))   ;; "for"
+        (if (i32.eq (local.get $tag) (i32.const 13)) (then (return (i32.const 367))))   ;; "in"
+        (if (i32.eq (local.get $tag) (i32.const 14)) (then (return (i32.const 373))))   ;; "loop"
+        (if (i32.eq (local.get $tag) (i32.const 15)) (then (return (i32.const 381))))   ;; "break"
+        (if (i32.eq (local.get $tag) (i32.const 16)) (then (return (i32.const 390))))   ;; "continue"
+        (if (i32.eq (local.get $tag) (i32.const 17)) (then (return (i32.const 402))))   ;; "return"
+        (if (i32.eq (local.get $tag) (i32.const 18)) (then (return (i32.const 412))))   ;; "import"
+        (if (i32.eq (local.get $tag) (i32.const 19)) (then (return (i32.const 422))))   ;; "where"
+        (if (i32.eq (local.get $tag) (i32.const 20)) (then (return (i32.const 431))))   ;; "own"
+        (if (i32.eq (local.get $tag) (i32.const 21)) (then (return (i32.const 438))))   ;; "ref"
+        (if (i32.eq (local.get $tag) (i32.const 22)) (then (return (i32.const 459))))   ;; "Pure"
+        (if (i32.eq (local.get $tag) (i32.const 23)) (then (return (i32.const 467))))   ;; "true"
+        (if (i32.eq (local.get $tag) (i32.const 24)) (then (return (i32.const 475))))   ;; "false"
         (if (i32.eq (local.get $tag) (i32.const 68)) (then (return (i32.const 272)))) ;; TNewline→"NL"
         (if (i32.eq (local.get $tag) (i32.const 69)) (then (return (i32.const 272)))) ;; TEof→"EOF"
         (call $int_to_str (local.get $tag)))

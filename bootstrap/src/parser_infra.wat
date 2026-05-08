@@ -380,6 +380,58 @@
       (then (i32.load offset=4 (local.get $k)))
       (else (i32.const 0))))
 
+  ;; ident_or_keyword_at_p: extract string for ANY identifier-shape
+  ;; token at pos — TIdent OR a keyword used as a field-name. Returns
+  ;; 0 (null) when the token is neither an ident nor a keyword.
+  ;;
+  ;; Per SYNTAX.md §572 (field access): `morgan.name` — the parser's
+  ;; field-access path admits any identifier-or-keyword token after
+  ;; TDot. Mentl uses common keyword-named fields like `s.handle`,
+  ;; `m.match`, `e.with`, `r.ref` throughout the wheel; the lexer
+  ;; correctly tokenizes these as keywords (THandle/TMatch/TWith/TRef)
+  ;; based on lexeme, but the parser's field-access path must accept
+  ;; them as field names.
+  ;;
+  ;; SUBSTRATE-HONEST UNIFICATION: this function delegates to
+  ;; $tokenkind_name (lex_main.wat) — the SAME function that maps
+  ;; kind→string for diagnostics. The lexer ALREADY HAS this mapping;
+  ;; we don't duplicate it. Drift refused: 7 (parallel-arrays — keyword
+  ;; table lives in ONE place); 1 (no vtable; structural kind dispatch).
+  ;;
+  ;; Closure for the absorption bug discovered 2026-05-07: pre-fix,
+  ;; $ident_at_p returned null on keyword → my Stage 2B recovery
+  ;; advanced pos by 1 → keyword remained unconsumed → outer parser
+  ;; saw THandle and started a `handle EXPR with HANDLER` form →
+  ;; absorbed sibling fns. This helper closes it structurally.
+  ;;
+  ;; Returns the kind's canonical text for kinds 0-24 (keywords),
+  ;; the payload string for kind 25 (TIdent), and 0 (null) otherwise.
+  ;; For non-keyword sentinels (operators, layout), $tokenkind_name
+  ;; falls through to int_to_str(tag); we treat that as "not an
+  ;; identifier" by returning 0.
+  (func $ident_or_keyword_at_p (param $tokens i32) (param $pos i32) (result i32)
+    (local $k i32) (local $kind_int i32)
+    (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
+    ;; Fielded TIdent (kind=25) — return payload string directly.
+    (if (result i32) (i32.and
+          (i32.eqz (call $is_sentinel (local.get $k)))
+          (i32.eq (call $tag_of (local.get $k)) (i32.const 25)))
+      (then (i32.load offset=4 (local.get $k)))
+      (else
+        ;; Sentinel keyword (kind 0-24) — delegate to $tokenkind_name
+        ;; which holds the canonical kind→text mapping. For kinds
+        ;; outside 0-24 (operators, layout), $tokenkind_name returns
+        ;; a fallback we treat as "not identifier-shape."
+        (if (result i32) (call $is_sentinel (local.get $k))
+          (then
+            (local.set $kind_int (local.get $k))
+            (if (result i32) (i32.and
+                  (i32.ge_u (local.get $kind_int) (i32.const 0))
+                  (i32.le_u (local.get $kind_int) (i32.const 24)))
+              (then (call $tokenkind_name (local.get $k)))
+              (else (i32.const 0))))
+          (else (i32.const 0))))))
+
   ;; int_payload: extract int from TInt at pos
   (func $int_at_p (param $tokens i32) (param $pos i32) (result i32)
     (local $k i32)

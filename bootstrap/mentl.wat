@@ -4150,12 +4150,38 @@
       (then
         ;; The kind value IS the tag for nullary variants
         (local.set $tag (local.get $kind))
-        ;; Map tag to name string
-        (if (i32.eq (local.get $tag) (i32.const 0)) (then (return (i32.const 256))))  ;; "fn"
-        (if (i32.eq (local.get $tag) (i32.const 1)) (then (return (i32.const 262))))  ;; "let"
-        (if (i32.eq (local.get $tag) (i32.const 2)) (then (return (i32.const 269))))  ;; "if"
-        (if (i32.eq (local.get $tag) (i32.const 3)) (then (return (i32.const 275))))  ;; "else"
-        ;; ... (abbreviated — full table would map all 64 nullary sentinels)
+        ;; Keyword table (kinds 0-24) — canonical static-string offsets
+        ;; per lexer_data.wat. Used by $ident_or_keyword_at_p
+        ;; (parser_infra.wat) for field-access on keyword-named fields
+        ;; (e.g., `s.handle`, `m.match`); single source of truth for
+        ;; kind→text in the seed. Drift 7 refusal (parallel-arrays):
+        ;; the keyword table lives ONLY here, not duplicated across
+        ;; parser, infer, emit.
+        (if (i32.eq (local.get $tag) (i32.const 0))  (then (return (i32.const 256))))   ;; "fn"
+        (if (i32.eq (local.get $tag) (i32.const 1))  (then (return (i32.const 262))))   ;; "let"
+        (if (i32.eq (local.get $tag) (i32.const 2))  (then (return (i32.const 269))))   ;; "if"
+        (if (i32.eq (local.get $tag) (i32.const 3))  (then (return (i32.const 275))))   ;; "else"
+        (if (i32.eq (local.get $tag) (i32.const 4))  (then (return (i32.const 283))))   ;; "match"
+        (if (i32.eq (local.get $tag) (i32.const 5))  (then (return (i32.const 292))))   ;; "type"
+        (if (i32.eq (local.get $tag) (i32.const 6))  (then (return (i32.const 300))))   ;; "effect"
+        (if (i32.eq (local.get $tag) (i32.const 7))  (then (return (i32.const 310))))   ;; "handle"
+        (if (i32.eq (local.get $tag) (i32.const 8))  (then (return (i32.const 320))))   ;; "handler"
+        (if (i32.eq (local.get $tag) (i32.const 9))  (then (return (i32.const 331))))   ;; "with"
+        (if (i32.eq (local.get $tag) (i32.const 10)) (then (return (i32.const 339))))   ;; "resume"
+        (if (i32.eq (local.get $tag) (i32.const 11)) (then (return (i32.const 349))))   ;; "perform"
+        (if (i32.eq (local.get $tag) (i32.const 12)) (then (return (i32.const 360))))   ;; "for"
+        (if (i32.eq (local.get $tag) (i32.const 13)) (then (return (i32.const 367))))   ;; "in"
+        (if (i32.eq (local.get $tag) (i32.const 14)) (then (return (i32.const 373))))   ;; "loop"
+        (if (i32.eq (local.get $tag) (i32.const 15)) (then (return (i32.const 381))))   ;; "break"
+        (if (i32.eq (local.get $tag) (i32.const 16)) (then (return (i32.const 390))))   ;; "continue"
+        (if (i32.eq (local.get $tag) (i32.const 17)) (then (return (i32.const 402))))   ;; "return"
+        (if (i32.eq (local.get $tag) (i32.const 18)) (then (return (i32.const 412))))   ;; "import"
+        (if (i32.eq (local.get $tag) (i32.const 19)) (then (return (i32.const 422))))   ;; "where"
+        (if (i32.eq (local.get $tag) (i32.const 20)) (then (return (i32.const 431))))   ;; "own"
+        (if (i32.eq (local.get $tag) (i32.const 21)) (then (return (i32.const 438))))   ;; "ref"
+        (if (i32.eq (local.get $tag) (i32.const 22)) (then (return (i32.const 459))))   ;; "Pure"
+        (if (i32.eq (local.get $tag) (i32.const 23)) (then (return (i32.const 467))))   ;; "true"
+        (if (i32.eq (local.get $tag) (i32.const 24)) (then (return (i32.const 475))))   ;; "false"
         (if (i32.eq (local.get $tag) (i32.const 68)) (then (return (i32.const 272)))) ;; TNewline→"NL"
         (if (i32.eq (local.get $tag) (i32.const 69)) (then (return (i32.const 272)))) ;; TEof→"EOF"
         (call $int_to_str (local.get $tag)))
@@ -4553,6 +4579,58 @@
           (i32.eq (call $tag_of (local.get $k)) (i32.const 25)))
       (then (i32.load offset=4 (local.get $k)))
       (else (i32.const 0))))
+
+  ;; ident_or_keyword_at_p: extract string for ANY identifier-shape
+  ;; token at pos — TIdent OR a keyword used as a field-name. Returns
+  ;; 0 (null) when the token is neither an ident nor a keyword.
+  ;;
+  ;; Per SYNTAX.md §572 (field access): `morgan.name` — the parser's
+  ;; field-access path admits any identifier-or-keyword token after
+  ;; TDot. Mentl uses common keyword-named fields like `s.handle`,
+  ;; `m.match`, `e.with`, `r.ref` throughout the wheel; the lexer
+  ;; correctly tokenizes these as keywords (THandle/TMatch/TWith/TRef)
+  ;; based on lexeme, but the parser's field-access path must accept
+  ;; them as field names.
+  ;;
+  ;; SUBSTRATE-HONEST UNIFICATION: this function delegates to
+  ;; $tokenkind_name (lex_main.wat) — the SAME function that maps
+  ;; kind→string for diagnostics. The lexer ALREADY HAS this mapping;
+  ;; we don't duplicate it. Drift refused: 7 (parallel-arrays — keyword
+  ;; table lives in ONE place); 1 (no vtable; structural kind dispatch).
+  ;;
+  ;; Closure for the absorption bug discovered 2026-05-07: pre-fix,
+  ;; $ident_at_p returned null on keyword → my Stage 2B recovery
+  ;; advanced pos by 1 → keyword remained unconsumed → outer parser
+  ;; saw THandle and started a `handle EXPR with HANDLER` form →
+  ;; absorbed sibling fns. This helper closes it structurally.
+  ;;
+  ;; Returns the kind's canonical text for kinds 0-24 (keywords),
+  ;; the payload string for kind 25 (TIdent), and 0 (null) otherwise.
+  ;; For non-keyword sentinels (operators, layout), $tokenkind_name
+  ;; falls through to int_to_str(tag); we treat that as "not an
+  ;; identifier" by returning 0.
+  (func $ident_or_keyword_at_p (param $tokens i32) (param $pos i32) (result i32)
+    (local $k i32) (local $kind_int i32)
+    (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
+    ;; Fielded TIdent (kind=25) — return payload string directly.
+    (if (result i32) (i32.and
+          (i32.eqz (call $is_sentinel (local.get $k)))
+          (i32.eq (call $tag_of (local.get $k)) (i32.const 25)))
+      (then (i32.load offset=4 (local.get $k)))
+      (else
+        ;; Sentinel keyword (kind 0-24) — delegate to $tokenkind_name
+        ;; which holds the canonical kind→text mapping. For kinds
+        ;; outside 0-24 (operators, layout), $tokenkind_name returns
+        ;; a fallback we treat as "not identifier-shape."
+        (if (result i32) (call $is_sentinel (local.get $k))
+          (then
+            (local.set $kind_int (local.get $k))
+            (if (result i32) (i32.and
+                  (i32.ge_u (local.get $kind_int) (i32.const 0))
+                  (i32.le_u (local.get $kind_int) (i32.const 24)))
+              (then (call $tokenkind_name (local.get $k)))
+              (else (i32.const 0))))
+          (else (i32.const 0))))))
 
   ;; int_payload: extract int from TInt at pos
   (func $int_at_p (param $tokens i32) (param $pos i32) (result i32)
@@ -5835,19 +5913,35 @@
     ;; Field: e.field
     (if (i32.eq (local.get $k) (i32.const 52))  ;; TDot
       (then
-        (local.set $field (call $ident_at_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
+        ;; Per SYNTAX.md §572 + Hβ.first-light.field-access-keyword-name
+        ;; (closure 2026-05-07): field-access reads any identifier-OR-
+        ;; keyword token (`s.handle`, `m.match`, `e.with` are valid
+        ;; field accesses; lexer tokenizes the field as keyword based
+        ;; on lexeme but the parser admits it as field name).
+        ;;
+        ;; $ident_or_keyword_at_p delegates to $tokenkind_name (lex
+        ;; layer) — single source of truth for kind→text. Pre-fix
+        ;; (Stage 2B), $ident_at_p returned null on keyword → the
+        ;; recovery advanced pos by 1 (past TDot) → keyword remained
+        ;; unconsumed → outer parser saw THandle and started a
+        ;; `handle EXPR with HANDLER` form → absorbed sibling fns.
+        ;; This was the wheel-scale "voice_queue_walk absorbs 344
+        ;; siblings" substrate gap (Hβ-first-light-empirical.md §X).
+        (local.set $field (call $ident_or_keyword_at_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
         (local.set $span (i32.load offset=8 (local.get $e)))
-        ;; Null field per protocol_parser_fabrication_substrate.md
-        ;; means "no TIdent at field-name position." Substrate-honest
-        ;; recovery: produce NErrorExpr sentinel + advance past TDot;
-        ;; do NOT chain into postfix_loop on a sentinel.
+        ;; Null only when the next token is neither TIdent nor a
+        ;; keyword (operator, layout, etc.) — then we genuinely have
+        ;; a parse error. Substrate-honest recovery: NErrorExpr
+        ;; sentinel + advance past BOTH TDot AND the non-ident token
+        ;; (advance by 2) so the outer parser doesn't re-parse the
+        ;; non-ident as a new statement.
         (if (i32.eqz (local.get $field))
           (then
             (local.set $node (call $nexpr (call $mk_NErrorExpr (i32.const 1)) (local.get $span)))
             (local.set $tup (call $make_list (i32.const 2)))
             (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $node)))
             (drop (call $list_set (local.get $tup) (i32.const 1)
-              (i32.add (local.get $pos) (i32.const 1))))
+              (i32.add (local.get $pos) (i32.const 2))))
             (return (local.get $tup))))
         ;; FieldExpr(e, field) → [tag=100][e][field]
         (local.set $node (call $alloc (i32.const 12)))

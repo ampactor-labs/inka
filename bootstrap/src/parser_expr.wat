@@ -104,19 +104,35 @@
     ;; Field: e.field
     (if (i32.eq (local.get $k) (i32.const 52))  ;; TDot
       (then
-        (local.set $field (call $ident_at_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
+        ;; Per SYNTAX.md §572 + Hβ.first-light.field-access-keyword-name
+        ;; (closure 2026-05-07): field-access reads any identifier-OR-
+        ;; keyword token (`s.handle`, `m.match`, `e.with` are valid
+        ;; field accesses; lexer tokenizes the field as keyword based
+        ;; on lexeme but the parser admits it as field name).
+        ;;
+        ;; $ident_or_keyword_at_p delegates to $tokenkind_name (lex
+        ;; layer) — single source of truth for kind→text. Pre-fix
+        ;; (Stage 2B), $ident_at_p returned null on keyword → the
+        ;; recovery advanced pos by 1 (past TDot) → keyword remained
+        ;; unconsumed → outer parser saw THandle and started a
+        ;; `handle EXPR with HANDLER` form → absorbed sibling fns.
+        ;; This was the wheel-scale "voice_queue_walk absorbs 344
+        ;; siblings" substrate gap (Hβ-first-light-empirical.md §X).
+        (local.set $field (call $ident_or_keyword_at_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
         (local.set $span (i32.load offset=8 (local.get $e)))
-        ;; Null field per protocol_parser_fabrication_substrate.md
-        ;; means "no TIdent at field-name position." Substrate-honest
-        ;; recovery: produce NErrorExpr sentinel + advance past TDot;
-        ;; do NOT chain into postfix_loop on a sentinel.
+        ;; Null only when the next token is neither TIdent nor a
+        ;; keyword (operator, layout, etc.) — then we genuinely have
+        ;; a parse error. Substrate-honest recovery: NErrorExpr
+        ;; sentinel + advance past BOTH TDot AND the non-ident token
+        ;; (advance by 2) so the outer parser doesn't re-parse the
+        ;; non-ident as a new statement.
         (if (i32.eqz (local.get $field))
           (then
             (local.set $node (call $nexpr (call $mk_NErrorExpr (i32.const 1)) (local.get $span)))
             (local.set $tup (call $make_list (i32.const 2)))
             (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $node)))
             (drop (call $list_set (local.get $tup) (i32.const 1)
-              (i32.add (local.get $pos) (i32.const 1))))
+              (i32.add (local.get $pos) (i32.const 2))))
             (return (local.get $tup))))
         ;; FieldExpr(e, field) → [tag=100][e][field]
         (local.set $node (call $alloc (i32.const 12)))

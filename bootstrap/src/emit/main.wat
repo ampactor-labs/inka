@@ -781,14 +781,14 @@
     (if (i32.eq (local.get $tag) (i32.const 311))
       (then
         (local.set $fn_r (call $lexpr_lmakeclosure_fn (local.get $expr)))
-        (call $buf_push (local.get $buf) (call $lowfn_name (local.get $fn_r)))
+        (call $buf_push (local.get $buf) (call $lowfn_emit_name (local.get $fn_r)))
         (local.set $body (call $lowfn_body (local.get $fn_r)))
         (return (call $cfn_walk_list (local.get $buf) (local.get $body)))))
     ;; LMakeContinuation (312) — same shape.
     (if (i32.eq (local.get $tag) (i32.const 312))
       (then
         (local.set $fn_r (call $lexpr_lmakecontinuation_fn (local.get $expr)))
-        (call $buf_push (local.get $buf) (call $lowfn_name (local.get $fn_r)))
+        (call $buf_push (local.get $buf) (call $lowfn_emit_name (local.get $fn_r)))
         (local.set $body (call $lowfn_body (local.get $fn_r)))
         (return (call $cfn_walk_list (local.get $buf) (local.get $body)))))
     ;; LDeclareFn (313) — handler-arm fn name + recurse into body.
@@ -798,7 +798,7 @@
     (if (i32.eq (local.get $tag) (i32.const 313))
       (then
         (local.set $fn_r (call $lexpr_ldeclarefn_fn (local.get $expr)))
-        (call $buf_push (local.get $buf) (call $lowfn_name (local.get $fn_r)))
+        (call $buf_push (local.get $buf) (call $lowfn_emit_name (local.get $fn_r)))
         (local.set $body (call $lowfn_body (local.get $fn_r)))
         (return (call $cfn_walk_list (local.get $buf) (local.get $body)))))
     ;; LLet (304) — recurse into value.
@@ -1247,19 +1247,20 @@
   (func $emit_fn_body (param $fn_r i32)
     (local $name i32) (local $params i32) (local $body i32)
     (local $arity i32) (local $i i32)
-    (local.set $name   (call $lowfn_name   (local.get $fn_r)))
-    ;; Closure-capture dedup substrate (per protocol_emit_is_graph_
-    ;; projection.md + protocol_cursor_is_the_substrate.md). When a
-    ;; top-level fn `foo` is captured by N closures, the LowExpr graph
-    ;; carries N LMakeClosure(LFn("foo", body)) nodes; emit_functions_
-    ;; walk visits each → without dedup, $emit_fn_body fires N times,
-    ;; producing N (func $foo ...) emissions and an invalid WAT.
-    ;; The substrate-honest read: emit projects graph → WAT; one fn
-    ;; handle = one (func) emission. This idempotency check IS the
-    ;; projection's "already-projected" cursor. Empty-name lambdas
-    ;; bypass the check (named peer Hβ.first-light.lambda-name-
-    ;; substrate); each LMakeClosure with an empty name still emits
-    ;; until lower's name-synthesis gap is closed.
+    ;; Canonical name projection — handles empty/null fallback to
+    ;; pointer-derived synth uniformly across all emit sites (also used
+    ;; by $cfn_walk and $emit_fn_table_and_globals so funcref entries,
+    ;; global declarations, and (func) bodies all resolve to the same
+    ;; name string for any given LFn record).
+    (local.set $name (call $lowfn_emit_name (local.get $fn_r)))
+    ;; Closure-capture dedup: idempotent emission per LFn name. Per
+    ;; protocol_emit_is_graph_projection.md + protocol_cursor_is_the_
+    ;; substrate.md: emit projects graph → WAT; one LFn handle = one
+    ;; (func) emission. With $lowfn_emit_name as the canonical projection,
+    ;; the dedup applies uniformly to user-named fns AND to anonymous-
+    ;; lambdas/continuations (same LFn record → same pointer-derived
+    ;; name → dedup match; distinct LFn records → distinct names →
+    ;; distinct emissions).
     (if (call $emit_fn_already_emitted (local.get $name))
       (then (return)))
     (call $emit_fn_mark_emitted (local.get $name))

@@ -1136,7 +1136,8 @@
         (if (i32.eq (local.get $tag) (i32.const 315))
           (then
             (call $emit_let_locals (call $lexpr_lblock_stmts (local.get $expr)))))
-        ;; LIf (314) — recurse into branches.
+        ;; LIf (314) — branches are LISTS per $lower_if (single-element
+        ;; lists wrapping the branch expr); use list walker.
         (if (i32.eq (local.get $tag) (i32.const 314))
           (then
             (call $emit_let_locals (call $lexpr_lif_then (local.get $expr)))
@@ -1798,7 +1799,7 @@
       (then
         (call $emit_functions (call $lexpr_lblock_stmts (local.get $expr)))
         (return)))
-    ;; LIf (314) — recurse into cond/then/else
+    ;; LIf (314) — cond is single LowExpr; branches are LISTS per $lower_if.
     (if (i32.eq (local.get $tag) (i32.const 314))
       (then
         (call $emit_functions_walk (call $lexpr_lif_cond (local.get $expr)))

@@ -631,8 +631,9 @@
         (local.set $cap_entry
           (call $list_index (call $lower_captures_ptr_get) (local.get $i)))
         (local.set $cap_name (call $record_get (local.get $cap_entry) (i32.const 0)))
+        ;; Triage via $lower_cap_materialize per closure-cap LowExpr discipline.
         (local.set $cap_lexpr
-          (call $lexpr_make_llocal (i32.const 0) (local.get $cap_name)))
+          (call $lower_cap_materialize (local.get $cap_name)))
         (drop (call $list_set (local.get $caps)
                               (i32.sub (local.get $i) (local.get $caps_snapshot))
                               (local.get $cap_lexpr)))

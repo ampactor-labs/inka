@@ -869,6 +869,42 @@
   ;;                          gates on a frame-stack ADT — named
   ;;                          follow-up Hβ.lower.lambda-nested-frame.
   ;;
+  ;; ─── $lower_cap_materialize — closure-cap LowExpr triage ──────────
+  ;; When the lambda's body has captured a name from outer scope, the
+  ;; OUTER fn (where the LMakeClosure is being assembled) needs a
+  ;; LowExpr that READS that name's value and stores it into the
+  ;; closure record. The naive form `LLocal(0, name)` was wrong:
+  ;; outer-fn references to a global would emit (local.get $X) for X
+  ;; that's actually a top-level closure-record-ptr global — wat2wasm
+  ;; reject as undefined local.
+  ;;
+  ;; Triage per protocol_canonical_projection_pattern.md, mirrors
+  ;; $lower_var_ref's discrimination:
+  ;;   1. Is name a top-level global? → LGlobal(0, name); outer fn
+  ;;      emits (global.get $name) reading the closure-record-ptr.
+  ;;   2. Is name a local in OUTER fn's frame? → LLocal(0, name);
+  ;;      outer fn emits (local.get $name) reading its own local.
+  ;;   3. Otherwise — name is in some FURTHER-outer scope → recurse
+  ;;      via $ls_lookup_or_capture which appends a CAPTURE_ENTRY for
+  ;;      the OUTER fn's captures, then emit LUpval(cap_idx) so outer
+  ;;      reads from its own __state record. (Nested-lambda case.)
+  ;;   4. Fallback → LGlobal (productive-under-error: emit_diag fires
+  ;;      if genuinely missing, but emission proceeds).
+  ;;
+  ;; Closes Drift 9 named follow-up Hβ.lower.lambda-nested-frame from
+  ;; $lower_lambda's prior comment block.
+  (func $lower_cap_materialize (param $name i32) (result i32)
+    (local $local_slot i32) (local $cap_idx i32)
+    (if (call $ls_is_global (local.get $name))
+      (then (return (call $lexpr_make_lglobal (i32.const 0) (local.get $name)))))
+    (local.set $local_slot (call $ls_lookup_local (local.get $name)))
+    (if (i32.ge_s (local.get $local_slot) (i32.const 0))
+      (then (return (call $lexpr_make_llocal (i32.const 0) (local.get $name)))))
+    (local.set $cap_idx (call $ls_lookup_or_capture (local.get $name)))
+    (if (i32.ge_s (local.get $cap_idx) (i32.const 0))
+      (then (return (call $lexpr_make_lupval (i32.const 0) (local.get $cap_idx)))))
+    (call $lexpr_make_lglobal (i32.const 0) (local.get $name)))
+
   ;; AST per Lock #9: [tag=89][params_list][body_node] offsets 0/4/8.
   (func $lower_lambda (export "lower_lambda") (param $node i32) (result i32)
     (local $h i32) (local $body i32) (local $lambda_struct i32)
@@ -908,10 +944,10 @@
         (local.set $cap_entry
           (call $list_index (call $lower_captures_ptr_get) (local.get $i)))
         (local.set $cap_name (call $record_get (local.get $cap_entry) (i32.const 0)))
-        ;; LLocal(0, cap_name): sentinel handle 0; emit-time closure
-        ;; record materialization reads the outer-scope binding by name.
+        ;; Triage via $lower_cap_materialize: LGlobal / LLocal / LUpval
+        ;; per the OUTER fn's view of the captured name.
         (local.set $cap_lexpr
-          (call $lexpr_make_llocal (i32.const 0) (local.get $cap_name)))
+          (call $lower_cap_materialize (local.get $cap_name)))
         (drop (call $list_set (local.get $caps)
                               (i32.sub (local.get $i) (local.get $caps_snapshot))
                               (local.get $cap_lexpr)))

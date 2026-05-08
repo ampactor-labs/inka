@@ -1166,24 +1166,127 @@
 
   ;; Single-expr walker companion to $emit_let_locals (which takes a
   ;; list). Used when recursing into LLet's value (a single expr).
+  ;; Container coverage matches $emit_alloc_handle_locals_walk per
+  ;; protocol_canonical_projection_pattern.md — three walks (this,
+  ;; alloc-handle, emit_functions) each project a different leaf-action
+  ;; over the SAME container set; in WAT pre-L1 they stay parallel,
+  ;; post-L1 in Mentl they unify.
   (func $emit_let_locals_walk (param $expr i32)
     (local $tag i32)
     (if (i32.lt_u (local.get $expr) (global.get $heap_base))
       (then (return)))
     (local.set $tag (call $tag_of (local.get $expr)))
-    (if (i32.eq (local.get $tag) (i32.const 315))
+    (if (i32.eq (local.get $tag) (i32.const 315))         ;; LBlock
       (then
         (call $emit_let_locals (call $lexpr_lblock_stmts (local.get $expr)))
         (return)))
-    (if (i32.eq (local.get $tag) (i32.const 314))
+    (if (i32.eq (local.get $tag) (i32.const 314))         ;; LIf
       (then
         (call $emit_let_locals (call $lexpr_lif_then (local.get $expr)))
         (call $emit_let_locals (call $lexpr_lif_else (local.get $expr)))
         (return)))
-    (if (i32.eq (local.get $tag) (i32.const 321))
+    (if (i32.eq (local.get $tag) (i32.const 321))         ;; LMatch
       (then
         (call $emit_let_locals_walk (call $lexpr_lmatch_scrut (local.get $expr)))
         (call $emit_match_arm_locals (call $lexpr_lmatch_arms (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 308))         ;; LCall
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lcall_fn (local.get $expr)))
+        (call $emit_let_locals (call $lexpr_lcall_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 309))         ;; LTailCall
+      (then
+        (call $emit_let_locals_walk (call $lexpr_ltailcall_fn (local.get $expr)))
+        (call $emit_let_locals (call $lexpr_ltailcall_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 306))         ;; LBinOp
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lbinop_l (local.get $expr)))
+        (call $emit_let_locals_walk (call $lexpr_lbinop_r (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 307))         ;; LUnaryOp
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lunaryop_x (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 303))         ;; LStore
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lstore_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 327))         ;; LStateSet
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lstateset_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 310))         ;; LReturn
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lreturn_x (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 320))         ;; LIndex
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lindex_base (local.get $expr)))
+        (call $emit_let_locals_walk (call $lexpr_lindex_idx (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 316))         ;; LMakeList
+      (then
+        (call $emit_let_locals (call $lexpr_lmakelist_elems (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 317))         ;; LMakeTuple
+      (then
+        (call $emit_let_locals (call $lexpr_lmaketuple_elems (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 318))         ;; LMakeRecord
+      (then
+        (call $emit_let_locals (call $lexpr_lmakerecord_fields (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 319))         ;; LMakeVariant
+      (then
+        (call $emit_let_locals (call $lexpr_lmakevariant_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 311))         ;; LMakeClosure — caps + evs
+      (then
+        (call $emit_let_locals (call $lexpr_lmakeclosure_caps (local.get $expr)))
+        (call $emit_let_locals (call $lexpr_lmakeclosure_evs (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 312))         ;; LMakeContinuation — caps + evs
+      (then
+        (call $emit_let_locals (call $lexpr_lmakecontinuation_caps (local.get $expr)))
+        (call $emit_let_locals (call $lexpr_lmakecontinuation_evs (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 325))         ;; LSuspend — args + evs (fn boundary)
+      (then
+        (call $emit_let_locals (call $lexpr_lsuspend_args (local.get $expr)))
+        (call $emit_let_locals (call $lexpr_lsuspend_evs (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 328))         ;; LRegion
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lregion_body (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 329))         ;; LHandleWith
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lhandlewith_body (local.get $expr)))
+        (call $emit_let_locals_walk (call $lexpr_lhandlewith_handler (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 330))         ;; LFeedback
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lfeedback_body (local.get $expr)))
+        (call $emit_let_locals_walk (call $lexpr_lfeedback_spec (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 332))         ;; LHandle
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lhandle_body (local.get $expr)))
+        (call $emit_match_arm_locals (call $lexpr_lhandle_arms (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 331))         ;; LPerform
+      (then
+        (call $emit_let_locals (call $lexpr_lperform_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 333))         ;; LEvPerform
+      (then
+        (call $emit_let_locals (call $lexpr_levperform_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 334))         ;; LFieldLoad
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lfieldload_record (local.get $expr)))
         (return)))
     (return))
 

@@ -312,6 +312,13 @@ When `|>` is NOT applicable:
 - **Discard for effect**: `let _ = perform log(...); next_step()` —
   sequencing for side-effects, not data flow; `~>` handler-attach
   on the producing stage is the substrate form.
+- **Sequenced effectful reads for record construction**: `let a =
+  perform read1(); let b = perform read2(); Combine(a, b)` — each
+  call advances a stateful effect's stream cursor; the order is
+  load-bearing on the effect (not the value); the values are
+  parallel inputs to one constructor, not a transform chain. Stays
+  as let-chain. (Cache deserialization, parser-token-walks, byte-
+  stream readers all fit here.)
 - **Single-step**: `f(y)` — no chain to express.
 - **Match scrutinee binding**: `let X(field) = value` is destructure,
   not data-flow. Stays as let.

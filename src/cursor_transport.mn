@@ -191,8 +191,7 @@ handler terminal_transport with state = transport_state_init(Caret(0, Inferred("
 handler lsp_transport with state = transport_state_init(Caret(0, Inferred("lsp-init"))) {
 
   surface_handshake() => {
-    let init_msg = lsp_initialize_response()
-    perform lsp_frame_write(init_msg)
+    perform lsp_frame_write(lsp_initialize_response())
     resume()
   },
 

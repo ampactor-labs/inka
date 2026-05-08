@@ -312,7 +312,7 @@ fn load_extended_kai_from_disk(module_name)
   let path = kai_extended_path_for(module_name)
   if perform fs_exists(path) {
     perform fs_open_for_read(path)
-    let extended = cache_unpack_extended_kai()
+    let extended = cache_unpack_extended_kai()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     Some(extended)
   } else { None }
 }
@@ -399,10 +399,10 @@ fn byte_to_suggestion_kind(b) with Pure = {
 // ─── Unpack — wire format reader ───────────────────────────────────
 
 fn cache_unpack_extended_kai() with Unpack = {
-  let kai = cache_unpack()
-  let queue_version = cache_unpack_int()
-  let queue_count = cache_unpack_int()
-  let queue = cache_unpack_oracle_entries(0, queue_count, [])
+  let kai = cache_unpack()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let queue_version = cache_unpack_int()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let queue_count = cache_unpack_int()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let queue = cache_unpack_oracle_entries(0, queue_count, [])   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
   ExtendedKaiFile({
     kai:           kai,
     oracle_queue:  queue,
@@ -413,16 +413,16 @@ fn cache_unpack_extended_kai() with Unpack = {
 fn cache_unpack_oracle_entries(i, n, acc) with Unpack = {
   if i >= n { acc }
   else {
-    let entry = cache_unpack_oracle_entry()
+    let entry = cache_unpack_oracle_entry()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     cache_unpack_oracle_entries(i + 1, n, [(0, entry)] ++ acc)
   }
 }
 
 fn cache_unpack_oracle_entry() with Unpack = {
-  let handle = cache_unpack_int()
-  let direction_byte = cache_unpack_byte()
-  let suggestion = cache_unpack_suggestion()
-  let reason = cache_unpack_reason()
+  let handle = cache_unpack_int()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let direction_byte = cache_unpack_byte()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let suggestion = cache_unpack_suggestion()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let reason = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
   OracleEntry({
     handle:     handle,
     suggestion: suggestion,
@@ -432,11 +432,11 @@ fn cache_unpack_oracle_entry() with Unpack = {
 }
 
 fn cache_unpack_suggestion() with Unpack = {
-  let kind_byte = cache_unpack_byte()
-  let ann_text = cache_unpack_string()
-  let unlocks_count = cache_unpack_int()
-  let unlocks = cache_unpack_string_list(0, unlocks_count, [])
-  let reason = cache_unpack_reason()
+  let kind_byte = cache_unpack_byte()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let ann_text = cache_unpack_string()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let unlocks_count = cache_unpack_int()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let unlocks = cache_unpack_string_list(0, unlocks_count, [])   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let reason = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
   AnnotationSuggestion(
     byte_to_suggestion_kind(kind_byte),
     ann_text,

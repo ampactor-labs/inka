@@ -433,8 +433,8 @@ fn cache_unpack_entries(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
     let name = perform unpack_str()
-    let scheme = cache_unpack_scheme()
-    let kind = cache_unpack_kind()
+    let scheme = cache_unpack_scheme()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let kind = cache_unpack_kind()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let reason = Inferred("loaded from cache")
     cache_unpack_entries(n, i + 1, list_set(buf, i, (name, scheme, reason, kind)))
   }
@@ -443,7 +443,7 @@ fn cache_unpack_entries(n, i, buf) with Unpack + !Pack = {
 fn cache_unpack_scheme() with Unpack + !Pack = {
   let n_handles = perform unpack_i32()
   let handles = cache_unpack_int_list(n_handles, 0, make_list(n_handles))
-  let ty = cache_unpack_ty()
+  let ty = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
   Forall(handles, ty)
 }
 
@@ -479,7 +479,7 @@ fn cache_unpack_ty() with Unpack + !Pack = {
   else if tag == 2 { TString }
   else if tag == 3 { TUnit }
   else if tag == 4 {
-    let elem = cache_unpack_ty()
+    let elem = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     TList(elem)
   }
   else if tag == 5 {
@@ -490,8 +490,8 @@ fn cache_unpack_ty() with Unpack + !Pack = {
   else if tag == 6 {
     let n = perform unpack_i32()
     let params = cache_unpack_params(n, 0, make_list(n))
-    let ret = cache_unpack_ty()
-    let row = cache_unpack_effrow()
+    let ret = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let row = cache_unpack_effrow()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     TFun(params, ret, row)
   }
   else if tag == 7 {
@@ -516,13 +516,13 @@ fn cache_unpack_ty() with Unpack + !Pack = {
     TRecordOpen(fields, v)
   }
   else if tag == 11 {
-    let base = cache_unpack_ty()
+    let base = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     // Predicate placeholder — refinement deserialization is v4.
     TRefined(base, PTrue)
   }
   else if tag == 12 {
-    let ret = cache_unpack_ty()
-    let disc = cache_unpack_resume_disc()
+    let ret = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let disc = cache_unpack_resume_disc()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     TCont(ret, disc)
   }
   else { TUnit }
@@ -531,7 +531,7 @@ fn cache_unpack_ty() with Unpack + !Pack = {
 fn cache_unpack_ty_list(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
-    let ty = cache_unpack_ty()
+    let ty = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     cache_unpack_ty_list(n, i + 1, list_set(buf, i, ty))
   }
 }
@@ -540,7 +540,7 @@ fn cache_unpack_fields(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
     let name = perform unpack_str()
-    let ty = cache_unpack_ty()
+    let ty = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     cache_unpack_fields(n, i + 1, list_set(buf, i, (name, ty)))
   }
 }
@@ -549,9 +549,9 @@ fn cache_unpack_params(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
     let name = perform unpack_str()
-    let ty = cache_unpack_ty()
-    let authored = cache_unpack_ownership()
-    let resolved = cache_unpack_ownership()
+    let ty = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let authored = cache_unpack_ownership()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let resolved = cache_unpack_ownership()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     cache_unpack_params(n, i + 1, list_set(buf, i, TParam(name, ty, authored, resolved)))
   }
 }
@@ -585,17 +585,17 @@ fn cache_unpack_effrow() with Unpack + !Pack = {
     EfOpen(names, v)
   }
   else if tag == 3 {
-    let inner = cache_unpack_effrow()
+    let inner = cache_unpack_effrow()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     EfNeg(inner)
   }
   else if tag == 4 {
-    let a = cache_unpack_effrow()
-    let b = cache_unpack_effrow()
+    let a = cache_unpack_effrow()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let b = cache_unpack_effrow()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     EfSub(a, b)
   }
   else if tag == 5 {
-    let a = cache_unpack_effrow()
-    let b = cache_unpack_effrow()
+    let a = cache_unpack_effrow()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let b = cache_unpack_effrow()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     EfInter(a, b)
   }
   else { EfPure }
@@ -604,7 +604,7 @@ fn cache_unpack_effrow() with Unpack + !Pack = {
 fn cache_unpack_effnames(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
-    let name = cache_unpack_effname()
+    let name = cache_unpack_effname()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     cache_unpack_effnames(n, i + 1, list_set(buf, i, name))
   }
 }
@@ -612,7 +612,7 @@ fn cache_unpack_effnames(n, i, buf) with Unpack + !Pack = {
 fn cache_unpack_eff_pairs(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
-    let name = cache_unpack_effname()
+    let name = cache_unpack_effname()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let neg_byte = perform unpack_byte()
     let negated = neg_byte != 0
     cache_unpack_eff_pairs(n, i + 1, list_set(buf, i, (name, negated)))
@@ -636,7 +636,7 @@ fn cache_unpack_effname() with Unpack + !Pack = {
 fn cache_unpack_effargs(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
-    let arg = cache_unpack_effarg()
+    let arg = cache_unpack_effarg()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     cache_unpack_effargs(n, i + 1, list_set(buf, i, arg))
   }
 }
@@ -663,7 +663,7 @@ fn cache_serialize(kai) with Memory + Alloc = {
 fn cache_deserialize(bytes) with Memory + Alloc = {
   if !cache_unpack_magic() { None }
   else {
-    let kai = cache_unpack()
+    let kai = cache_unpack()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     if kai.compiler_version != cache_compiler_version() { None }
     else { Some(kai) }
   }

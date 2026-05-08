@@ -1248,6 +1248,21 @@
     (local $name i32) (local $params i32) (local $body i32)
     (local $arity i32) (local $i i32)
     (local.set $name   (call $lowfn_name   (local.get $fn_r)))
+    ;; Closure-capture dedup substrate (per protocol_emit_is_graph_
+    ;; projection.md + protocol_cursor_is_the_substrate.md). When a
+    ;; top-level fn `foo` is captured by N closures, the LowExpr graph
+    ;; carries N LMakeClosure(LFn("foo", body)) nodes; emit_functions_
+    ;; walk visits each → without dedup, $emit_fn_body fires N times,
+    ;; producing N (func $foo ...) emissions and an invalid WAT.
+    ;; The substrate-honest read: emit projects graph → WAT; one fn
+    ;; handle = one (func) emission. This idempotency check IS the
+    ;; projection's "already-projected" cursor. Empty-name lambdas
+    ;; bypass the check (named peer Hβ.first-light.lambda-name-
+    ;; substrate); each LMakeClosure with an empty name still emits
+    ;; until lower's name-synthesis gap is closed.
+    (if (call $emit_fn_already_emitted (local.get $name))
+      (then (return)))
+    (call $emit_fn_mark_emitted (local.get $name))
     (local.set $arity  (call $lowfn_arity  (local.get $fn_r)))
     (local.set $params (call $lowfn_params (local.get $fn_r)))
     (local.set $body   (call $lowfn_body   (local.get $fn_r)))
@@ -1908,6 +1923,10 @@
   (func $mentl_emit (export "mentl_emit")
         (param $lowexprs i32)
     (local $fn_names i32) (local $top_fn_names i32)
+    ;; Reset the emitted-fns ledger — fresh projection per emit pass.
+    ;; Closure-capture dedup substrate; see $emit_fn_body and
+    ;; protocol_emit_is_graph_projection.md.
+    (call $emit_emitted_fns_reset)
     ;; Collect function names for table + globals
     (local.set $fn_names (call $collect_fn_names (local.get $lowexprs)))
     (local.set $top_fn_names (call $collect_top_level_fn_names (local.get $lowexprs)))

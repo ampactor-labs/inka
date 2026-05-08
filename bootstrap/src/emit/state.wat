@@ -191,6 +191,28 @@
   (global $emit_fn_locals_ptr            (mut i32) (i32.const 0))
   (global $emit_fn_locals_len_g          (mut i32) (i32.const 0))
 
+  ;; Emitted-fns ledger — per protocol_emit_is_graph_projection.md +
+  ;; protocol_cursor_is_the_substrate.md (chain-link 4: every subsystem
+  ;; is the cursor in a different mode). Closes the closure-capture-
+  ;; emit-multiplication substrate gap surfaced 2026-05-08:
+  ;; emit_functions_walk visits every LMakeClosure(LFn(name, body))
+  ;; in the LowExpr graph; when fn `foo` is captured by N closures,
+  ;; the walker visits it N times → N (func $foo ...) emissions →
+  ;; wat2wasm "duplicate fn" error. The substrate-honest fix is to
+  ;; treat emit as a graph projection: walk handles once, emit each
+  ;; handle once. This ledger IS the projection's "what's emitted"
+  ;; cursor — set membership check before $emit_fn_body's body work.
+  ;;
+  ;; Reset per $mentl_emit invocation via $emit_emitted_fns_reset.
+  ;; Empty-name lambdas (lowfn_name returning empty string per the
+  ;; named follow-up `Hβ.first-light.lambda-name-substrate`) skip
+  ;; dedup — each LMakeClosure occurrence stands as its own fn until
+  ;; lower's $int_to_str(handle) name lands; that follow-up makes
+  ;; the dedup uniform across ALL fn kinds. NAMED PEER, not silent
+  ;; deferral (drift 9 refused).
+  (global $emit_emitted_fns_ptr          (mut i32) (i32.const 0))
+  (global $emit_emitted_fns_len_g        (mut i32) (i32.const 0))
+
   ;; ─── Idempotent initializer (mirrors $lower_init / $infer_init) ────
   ;; Per the seed's discipline for module-level state chunks: every
   ;; public entry calls $emit_init first; subsequent calls no-op.
@@ -211,7 +233,85 @@
         (global.set $emit_strings_next_offset_g (i32.const 65536))
         (global.set $emit_fn_locals_ptr         (call $make_list (i32.const 8)))
         (global.set $emit_fn_locals_len_g       (i32.const 0))
+        (global.set $emit_emitted_fns_ptr       (call $make_list (i32.const 16)))
+        (global.set $emit_emitted_fns_len_g     (i32.const 0))
         (global.set $emit_initialized           (i32.const 1)))))
+
+  ;; ─── Emitted-fns ledger helpers (closure-capture dedup substrate) ──
+  ;;
+  ;; Eight interrogations on this projection:
+  ;;  1. Graph?      The ledger IS a projection of "fns emitted." Each
+  ;;                 entry is a graph-handle's identity (by name).
+  ;;  2. Handler?    $emit_fn_body becomes idempotent per name — OneShot
+  ;;                 resume per fn-handle. Was N-shot (drift) when the
+  ;;                 walker re-visited a captured top-level fn.
+  ;;  3. Verb?       `|>` chain at emit's cursor: lowexpr_walk |>
+  ;;                 dedup_filter |> emit_fn_body. The check is the
+  ;;                 filter stage.
+  ;;  4. Row?        `+ Mut` (ledger writes) — already in emit's row.
+  ;;  5. Ownership?  Ledger owned by emit; each name ref-borrowed.
+  ;;  6. Refinement? `{ledger : List<String> | every entry non-empty}`.
+  ;;  7. Gradient?   N/A — pure emission policy. The wheel will
+  ;;                 declare @unique-fn-emission via Hβ.emit.fn-
+  ;;                 uniqueness-annotation peer follow-up.
+  ;;  8. Reason?     LFn graph node's Reason chain unchanged; only
+  ;;                 emission is deduped, not the graph.
+  ;;
+  ;; Drift modes refused:
+  ;;  - Drift 1 (vtable): no dispatch table; direct sorted-set scan.
+  ;;  - Drift 6 (special): empty names skip dedup — the empty-name
+  ;;                       case is a NAMED follow-up `Hβ.first-light.
+  ;;                       lambda-name-substrate` (lower's $lower_lambda
+  ;;                       at walk_compound.wat:927 calls $int_to_str
+  ;;                       on handle but emit shows empty — investigation
+  ;;                       pending). When that lands, dedup applies
+  ;;                       uniformly to every fn handle.
+  ;;  - Drift 7 (parallel arrays): single ledger; one list of names.
+  ;;  - Drift 9 (deferred): full substrate lands this commit; the
+  ;;                       empty-name skip is a NAMED PEER with its
+  ;;                       own substrate handle, not silent omission.
+
+  ;; Has fn-name been emitted as a (func) body yet? Empty/null names
+  ;; never dedup (lambdas — see drift 6 note above); each LMakeClosure
+  ;; occurrence with an empty name stands alone until the lambda-name
+  ;; substrate gap is closed.
+  (func $emit_fn_already_emitted (param $name i32) (result i32)
+    (local $i i32) (local $n i32) (local $entry i32)
+    (if (i32.eqz (local.get $name)) (then (return (i32.const 0))))
+    (if (i32.eqz (call $str_len (local.get $name))) (then (return (i32.const 0))))
+    (local.set $n (global.get $emit_emitted_fns_len_g))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $entry (call $list_index (global.get $emit_emitted_fns_ptr) (local.get $i)))
+        (if (call $str_eq (local.get $entry) (local.get $name))
+          (then (return (i32.const 1))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 0))
+
+  ;; Mark fn-name as emitted. Empty/null names no-op (consistent with
+  ;; $emit_fn_already_emitted's empty-name skip).
+  (func $emit_fn_mark_emitted (param $name i32)
+    (if (i32.eqz (local.get $name)) (then (return)))
+    (if (i32.eqz (call $str_len (local.get $name))) (then (return)))
+    (global.set $emit_emitted_fns_ptr
+      (call $list_extend_to (global.get $emit_emitted_fns_ptr)
+                            (i32.add (global.get $emit_emitted_fns_len_g) (i32.const 1))))
+    (drop (call $list_set (global.get $emit_emitted_fns_ptr)
+                          (global.get $emit_emitted_fns_len_g)
+                          (local.get $name)))
+    (global.set $emit_emitted_fns_len_g
+      (i32.add (global.get $emit_emitted_fns_len_g) (i32.const 1))))
+
+  ;; Reset the emitted-fns ledger at start of each $mentl_emit pass.
+  ;; The ledger lives across the whole compile; resetting per pass
+  ;; ensures multi-compile processes (test harnesses, future REPL)
+  ;; don't carry stale state.
+  (func $emit_emitted_fns_reset
+    (global.set $emit_emitted_fns_ptr (call $make_list (i32.const 16)))
+    (global.set $emit_emitted_fns_len_g (i32.const 0)))
 
   ;; ─── $emit_funcref_register — append name; return assigned index ───
   ;; Per Hβ-emit-substrate.md §3 H1.4 + wheel src/backends/wasm.mn:444-475

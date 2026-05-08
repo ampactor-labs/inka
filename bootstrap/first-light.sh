@@ -128,9 +128,12 @@ L1_ERR_2="$WORKDIR/l1-pass2.err"
 L1_WASM_2="$WORKDIR/l1-pass2.wasm"
 
 # Concatenate the wheel in canonical order (src then lib, same as
-# CLAUDE.md operational essentials).
+# CLAUDE.md operational essentials). Exclude lib/tutorial/ — tutorials
+# are demo programs (each has its own `fn main`), compiled by
+# `mentl run lib/tutorial/X.mn` as separate executables, NOT part of
+# the self-compile wheel substrate.
 { find src -name '*.mn' -type f | sort | xargs cat
-  find lib -name '*.mn' -type f | sort | xargs cat
+  find lib -name '*.mn' -type f -not -path '*/tutorial/*' | sort | xargs cat
 } > "$L1_INPUT"
 
 # Pass 2: seed → wheel → mentl2.wat

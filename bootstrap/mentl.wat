@@ -28572,6 +28572,76 @@
         (call $emit_alloc_handle_locals
           (call $lexpr_lperform_args (local.get $expr)))
         (return)))
+    (if (i32.eq (local.get $tag) (i32.const 316))         ;; LMakeList
+      (then
+        (call $emit_alloc_handle_locals
+          (call $lexpr_lmakelist_elems (local.get $expr)))
+        (return)))
+    ;; LMakeClosure (311) / LMakeContinuation (312) — caps + evs are
+    ;; OUTER-fn expressions captured into the closure; descend. Inner
+    ;; fn (lexpr_lmakeclosure_fn) is a boundary; do NOT descend.
+    (if (i32.eq (local.get $tag) (i32.const 311))
+      (then
+        (call $emit_alloc_handle_locals
+          (call $lexpr_lmakeclosure_caps (local.get $expr)))
+        (call $emit_alloc_handle_locals
+          (call $lexpr_lmakeclosure_evs (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 312))
+      (then
+        (call $emit_alloc_handle_locals
+          (call $lexpr_lmakecontinuation_caps (local.get $expr)))
+        (call $emit_alloc_handle_locals
+          (call $lexpr_lmakecontinuation_evs (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 325))         ;; LSuspend
+      (then
+        (call $emit_alloc_handle_locals
+          (call $lexpr_lsuspend_args (local.get $expr)))
+        (call $emit_alloc_handle_locals
+          (call $lexpr_lsuspend_evs (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 327))         ;; LStateSet
+      (then
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lstateset_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 328))         ;; LRegion
+      (then
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lregion_body (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 329))         ;; LHandleWith
+      (then
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lhandlewith_body (local.get $expr)))
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lhandlewith_handler (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 330))         ;; LFeedback
+      (then
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lfeedback_body (local.get $expr)))
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lfeedback_spec (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 332))         ;; LHandle
+      (then
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lhandle_body (local.get $expr)))
+        (call $emit_alloc_handle_locals_match_arms
+          (call $lexpr_lhandle_arms (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 333))         ;; LEvPerform
+      (then
+        (call $emit_alloc_handle_locals
+          (call $lexpr_levperform_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 334))         ;; LFieldLoad
+      (then
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lfieldload_record (local.get $expr)))
+        (return)))
     (return))
 
   ;; Match-arm walker — iterate arms, recurse into each arm body.

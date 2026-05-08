@@ -1017,7 +1017,7 @@
   ;; Per wasm.mn:930-962 emit_fn_body. W7 calling convention.
   (func $emit_fn_body (param $fn_r i32)
     (local $name i32) (local $params i32) (local $body i32)
-    (local $arity i32) (local $i i32)
+    (local $arity i32) (local $i i32) (local $param_name i32)
     (local.set $name (call $lowfn_emit_name (local.get $fn_r)))
     ;; Idempotent emission per LFn name — closure-capture dedup via
     ;; the existing funcref ledger. $emit_funcref_register dedups
@@ -1041,13 +1041,25 @@
     (call $emit_cstr (i32.const 4124) (i32.const 9)) ;; " (param $"
     (call $emit_cstr (i32.const 4096) (i32.const 7)) ;; "__state"
     (call $emit_cstr (i32.const 4155) (i32.const 5)) ;; " i32)"
-    ;; Emit user params
+    ;; Emit user params. For wildcard "_" (the SYNTAX.md substrate-defined
+    ;; no-binding sentinel) at multiple param positions, emit `$_<i>` so
+    ;; WAT param names stay unique. Body never references wildcards
+    ;; (verified empirically: 0 (local.get $_) sites in wheel-out).
     (local.set $i (i32.const 0))
     (block $pdone
       (loop $piter
         (br_if $pdone (i32.ge_u (local.get $i) (local.get $arity)))
+        (local.set $param_name (call $list_index (local.get $params) (local.get $i)))
         (call $emit_cstr (i32.const 4124) (i32.const 9)) ;; " (param $"
-        (call $emit_str (call $list_index (local.get $params) (local.get $i)))
+        (if (i32.and
+              (i32.eq (call $str_len (local.get $param_name)) (i32.const 1))
+              (i32.eq (call $byte_at (local.get $param_name) (i32.const 0))
+                      (i32.const 95)))                  ;; '_'
+          (then
+            (call $emit_byte (i32.const 95))            ;; '_'
+            (call $emit_int (local.get $i)))
+          (else
+            (call $emit_str (local.get $param_name))))
         (call $emit_cstr (i32.const 4155) (i32.const 5)) ;; " i32)"
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $piter)))

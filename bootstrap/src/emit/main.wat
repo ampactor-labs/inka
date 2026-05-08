@@ -591,34 +591,8 @@
         (br $iter)))
     (call $buf_push (local.get $buf) (local.get $str)))
 
-  ;; ─── Table Section Emission ───────────────────────────────────────
-  (func $emit_funcref_section
-    (local $i i32) (local $n i32) (local $str i32)
-    (local.set $n (call $emit_funcref_count))
-    (if (i32.eqz (local.get $n)) (then (return)))
-    (call $emit_indent)
-    (call $emit_cstr (i32.const 870) (i32.const 7)) ;; "(table "
-    (call $emit_int (local.get $n))
-    (call $emit_space)
-    (call $emit_cstr (i32.const 1584) (i32.const 7)) ;; "funcref"
-    (call $emit_close)
-    (call $emit_nl)
-    (call $emit_indent)
-    (call $emit_cstr (i32.const 877) (i32.const 6)) ;; "(elem "
-    (call $emit_cstr (i32.const 560) (i32.const 11)) ;; "(i32.const "
-    (call $emit_byte (i32.const 48)) ;; '0'
-    (call $emit_close)
-    (local.set $i (i32.const 0))
-    (block $done (loop $iter
-      (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-      (local.set $str (call $emit_funcref_at (local.get $i)))
-      (call $emit_space)
-      (call $emit_byte (i32.const 36)) ;; '$'
-      (call $emit_cstr (i32.add (local.get $str) (i32.const 4)) (call $str_len (local.get $str)))
-      (local.set $i (i32.add (local.get $i) (i32.const 1)))
-      (br $iter)))
-    (call $emit_close)
-    (call $emit_nl))
+  ;; $emit_funcref_section deleted — its (table) + (elem) emission is
+  ;; subsumed by $emit_fn_table_and_globals iterating the funcref ledger.
 
   ;; ─── Data Section Emission ────────────────────────────────────────
   (func $emit_string_section
@@ -716,167 +690,11 @@
   ;; each as a (func $name ...) WAT definition. Also collects fn names
   ;; for the funcref table + index globals.
 
-  ;; $collect_fn_names — Cursor Projection Pattern instance (Handler
-  ;; aspect). Walks LowExpr list, collects LMakeClosure /
-  ;; LMakeContinuation / LDeclareFn fn names. Returns a flat list of
-  ;; name ptrs for the funcref table + $name_idx globals.
-  ;;
-  ;; Per Hβ.emit.nested-fn-idx-globals: recurses into common LowExpr
-  ;; containers (LLet, LBlock, LIf, LCall, LBinOp, LMakeVariant,
-  ;; LMakeList, LMakeTuple, LReturn) to collect EVERY LMakeClosure's
-  ;; fn name — including nested lambdas. The $emit_functions_walk
-  ;; recursion already emits each nested fn body; this collector
-  ;; mirrors that walk so the funcref table + $name_idx globals stay
-  ;; consistent with emit_functions's actual emissions.
-  ;;
-  ;; Buffer<String> per Hβ.runtime.buffer-substrate — the transient
-  ;; name-collection IS the use-case Buffer<A> exists for. Pre-
-  ;; substrate this used a List as a buffer (offset-0-as-both-
-  ;; count-and-capacity), causing O(N²) reallocations at wheel scale.
-  (func $collect_fn_names (param $lowexprs i32) (result i32)
-    (local $buf i32)
-    (local.set $buf (call $buf_make (i32.const 16)))
-    (local.set $buf (call $cfn_walk_list (local.get $buf) (local.get $lowexprs)))
-    (call $buf_freeze (local.get $buf)))
-
-  ;; $cfn_walk_list — iterate top-level lowexprs; threads a Buffer<String>.
-  ;;
-  ;; Productive-under-error guard: when the input is a sentinel/null
-  ;; pointer (< HEAP_BASE) — typically because an upstream lower
-  ;; accessor returned a sentinel where a list was expected — `$len`
-  ;; would read garbage from low memory addresses, causing the loop
-  ;; to spin for billions of iterations.
-  ;;
-  ;; Named peer `Hβ.first-light.cfn-walk-list-malformed-source`:
-  ;; identify which upstream accessor (likely lexpr_lblock_stmts /
-  ;; lexpr_lcall_args / lexpr_lhandle_body when the LowExpr is an
-  ;; LError sentinel) produces the sub-HEAP_BASE pointer.
-  (func $cfn_walk_list (param $buf i32) (param $lowexprs i32) (result i32)
-    (local $i i32) (local $n i32)
-    (if (i32.lt_u (local.get $lowexprs) (global.get $heap_base))
-      (then (return (local.get $buf))))
-    (local.set $n (call $len (local.get $lowexprs)))
-    (local.set $i (i32.const 0))
-    (block $done
-      (loop $iter
-        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $buf
-          (call $cfn_walk (local.get $buf)
-            (call $list_index (local.get $lowexprs) (local.get $i))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter)))
-    (local.get $buf))
-
-  ;; $cfn_walk — recurse into one LowExpr; push LMakeClosure fn names
-  ;; into the Buffer at any depth. Mirrors $emit_functions_walk
-  ;; structurally so funcref table entries match emit_fn_body
-  ;; invocations 1:1. Threads Buffer<String> through recursion;
-  ;; $buf_push is amortized O(1) (capacity-vs-count separation).
-  (func $cfn_walk (param $buf i32) (param $expr i32) (result i32)
-    (local $tag i32) (local $fn_r i32) (local $body i32)
-    (if (i32.lt_u (local.get $expr) (global.get $heap_base))
-      (then (return (local.get $buf))))
-    (local.set $tag (call $tag_of (local.get $expr)))
-    ;; LMakeClosure (311) — push fn name + recurse into body.
-    (if (i32.eq (local.get $tag) (i32.const 311))
-      (then
-        (local.set $fn_r (call $lexpr_lmakeclosure_fn (local.get $expr)))
-        (call $buf_push (local.get $buf) (call $lowfn_emit_name (local.get $fn_r)))
-        (local.set $body (call $lowfn_body (local.get $fn_r)))
-        (return (call $cfn_walk_list (local.get $buf) (local.get $body)))))
-    ;; LMakeContinuation (312) — same shape.
-    (if (i32.eq (local.get $tag) (i32.const 312))
-      (then
-        (local.set $fn_r (call $lexpr_lmakecontinuation_fn (local.get $expr)))
-        (call $buf_push (local.get $buf) (call $lowfn_emit_name (local.get $fn_r)))
-        (local.set $body (call $lowfn_body (local.get $fn_r)))
-        (return (call $cfn_walk_list (local.get $buf) (local.get $body)))))
-    ;; LDeclareFn (313) — handler-arm fn name + recurse into body.
-    ;; Symmetric to LMakeClosure (311) per Lock #1 — both wrap a LowFn
-    ;; that becomes a module-level (func ...). Third caller per Anchor
-    ;; 7 (lower=1, cfn_walk=2, emit_functions_walk=3 — same commit).
-    (if (i32.eq (local.get $tag) (i32.const 313))
-      (then
-        (local.set $fn_r (call $lexpr_ldeclarefn_fn (local.get $expr)))
-        (call $buf_push (local.get $buf) (call $lowfn_emit_name (local.get $fn_r)))
-        (local.set $body (call $lowfn_body (local.get $fn_r)))
-        (return (call $cfn_walk_list (local.get $buf) (local.get $body)))))
-    ;; LLet (304) — recurse into value.
-    (if (i32.eq (local.get $tag) (i32.const 304))
-      (then
-        (return (call $cfn_walk (local.get $buf)
-                  (call $lexpr_llet_value (local.get $expr))))))
-    ;; LBlock (315) — recurse into stmts.
-    (if (i32.eq (local.get $tag) (i32.const 315))
-      (then
-        (return (call $cfn_walk_list (local.get $buf)
-                  (call $lexpr_lblock_stmts (local.get $expr))))))
-    ;; LIf (314).
-    (if (i32.eq (local.get $tag) (i32.const 314))
-      (then
-        (local.set $buf (call $cfn_walk (local.get $buf)
-                          (call $lexpr_lif_cond (local.get $expr))))
-        (local.set $buf (call $cfn_walk_list (local.get $buf)
-                          (call $lexpr_lif_then (local.get $expr))))
-        (return (call $cfn_walk_list (local.get $buf)
-                  (call $lexpr_lif_else (local.get $expr))))))
-    ;; LCall (308).
-    (if (i32.eq (local.get $tag) (i32.const 308))
-      (then
-        (local.set $buf (call $cfn_walk (local.get $buf)
-                          (call $lexpr_lcall_fn (local.get $expr))))
-        (return (call $cfn_walk_list (local.get $buf)
-                  (call $lexpr_lcall_args (local.get $expr))))))
-    ;; LTailCall (309).
-    (if (i32.eq (local.get $tag) (i32.const 309))
-      (then
-        (local.set $buf (call $cfn_walk (local.get $buf)
-                          (call $lexpr_ltailcall_fn (local.get $expr))))
-        (return (call $cfn_walk_list (local.get $buf)
-                  (call $lexpr_ltailcall_args (local.get $expr))))))
-    ;; LBinOp (306).
-    (if (i32.eq (local.get $tag) (i32.const 306))
-      (then
-        (local.set $buf (call $cfn_walk (local.get $buf)
-                          (call $lexpr_lbinop_l (local.get $expr))))
-        (return (call $cfn_walk (local.get $buf)
-                  (call $lexpr_lbinop_r (local.get $expr))))))
-    ;; LMakeVariant (319).
-    (if (i32.eq (local.get $tag) (i32.const 319))
-      (then
-        (return (call $cfn_walk_list (local.get $buf)
-                  (call $lexpr_lmakevariant_args (local.get $expr))))))
-    ;; LMakeList (316).
-    (if (i32.eq (local.get $tag) (i32.const 316))
-      (then
-        (return (call $cfn_walk_list (local.get $buf)
-                  (call $lexpr_lmakelist_elems (local.get $expr))))))
-    ;; LMakeTuple (317).
-    (if (i32.eq (local.get $tag) (i32.const 317))
-      (then
-        (return (call $cfn_walk_list (local.get $buf)
-                  (call $lexpr_lmaketuple_elems (local.get $expr))))))
-    ;; LReturn (310).
-    (if (i32.eq (local.get $tag) (i32.const 310))
-      (then
-        (return (call $cfn_walk (local.get $buf)
-                  (call $lexpr_lreturn_x (local.get $expr))))))
-    ;; LHandle (332) — recurse into body so nested closures get visited.
-    ;; Per Lock #2: handler-arm bodies are a peer site for LMakeClosure /
-    ;; LDeclareFn discovery alongside top-level LBlocks.
-    (if (i32.eq (local.get $tag) (i32.const 332))
-      (then
-        (return (call $cfn_walk (local.get $buf)
-                  (call $lexpr_lhandle_body (local.get $expr))))))
-    ;; LHandleWith (329) — recurse into body + handler.
-    (if (i32.eq (local.get $tag) (i32.const 329))
-      (then
-        (local.set $buf (call $cfn_walk (local.get $buf)
-                          (call $lexpr_lhandlewith_body (local.get $expr))))
-        (return (call $cfn_walk (local.get $buf)
-                  (call $lexpr_lhandlewith_handler (local.get $expr))))))
-    ;; All other tags: no LowExpr children to recurse into.
-    (local.get $buf))
+  ;; $collect_fn_names + $cfn_walk + $cfn_walk_list — DELETED
+  ;; post-consolidation. The funcref ledger ($emit_funcref_table_ptr)
+  ;; is populated by $emit_fn_body via $emit_funcref_register_first as
+  ;; the actual emit walk runs; $emit_fn_table_and_globals then
+  ;; iterates that ledger. One walk, one ledger. Drift 7 closure.
 
   ;; $collect_top_level_fn_names — Cursor Projection Pattern instance
   ;; (Handler aspect at module-root). Top-level LLet-wrapped closures
@@ -1076,11 +894,12 @@
         (br $iter))))
 
   ;; $emit_fn_table_and_globals — emit (table $fns N funcref) + (elem ...)
-  ;; + (global $name_idx i32 (i32.const N)) per fn.
-  ;; Per wasm.mn:577-609.
-  (func $emit_fn_table_and_globals (param $names i32)
+  ;; + (global $name_idx i32 (i32.const N)) per fn. Iterates the funcref
+  ;; ledger ($emit_funcref_count + _at) which $emit_fn_body populates as
+  ;; it runs; must be called AFTER $emit_functions in $mentl_emit.
+  (func $emit_fn_table_and_globals
     (local $n i32) (local $i i32)
-    (local.set $n (call $len (local.get $names)))
+    (local.set $n (call $emit_funcref_count))
     (if (i32.eqz (local.get $n)) (then (return)))
     ;; (table $fns N funcref)
     (call $emit_indent)
@@ -1096,7 +915,7 @@
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (call $emit_byte (i32.const 32))  ;; ' '
         (call $emit_byte (i32.const 36))  ;; '$'
-        (call $emit_str (call $list_index (local.get $names) (local.get $i)))
+        (call $emit_str (call $emit_funcref_at (local.get $i)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter)))
     (call $emit_cstr (i32.const 4206) (i32.const 2)) ;; ")\n"
@@ -1108,7 +927,7 @@
         (call $emit_indent)
         (call $emit_cstr (i32.const 862) (i32.const 8))  ;; "(global "
         (call $emit_byte (i32.const 36))                  ;; '$'
-        (call $emit_str (call $list_index (local.get $names) (local.get $i)))
+        (call $emit_str (call $emit_funcref_at (local.get $i)))
         (call $emit_cstr (i32.const 4104) (i32.const 20)) ;; "_idx i32 (i32.const "
         (call $emit_int (local.get $i))
         (call $emit_close)  ;; close (i32.const N)
@@ -1119,8 +938,10 @@
 
   ;; $emit_static_top_closures — module-level closure records for top fns.
   ;; Each record is [fn_idx:i32, capture_count=0:i32] at address
-  ;; 256 + slot*8, with a global $name pointing at the record.
-  (func $emit_static_top_closures (param $top_names i32) (param $all_names i32)
+  ;; 256 + slot*8, with a global $name pointing at the record. Looks
+  ;; up fn_idx via the funcref ledger ($emit_funcref_lookup) — must be
+  ;; called AFTER $emit_functions in $mentl_emit.
+  (func $emit_static_top_closures (param $top_names i32)
     (local $i i32) (local $n i32) (local $name i32) (local $fn_idx i32)
     (local $addr i32)
     (local.set $n (call $len (local.get $top_names)))
@@ -1129,9 +950,7 @@
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $name (call $list_index (local.get $top_names) (local.get $i)))
-        (local.set $fn_idx (call $emit_find_name_index
-          (local.get $all_names)
-          (local.get $name)))
+        (local.set $fn_idx (call $emit_funcref_lookup (local.get $name)))
         (local.set $addr (i32.add (i32.const 256) (i32.mul (local.get $i) (i32.const 8))))
         ;; (data (i32.const <addr>) "\xx\xx\xx\xx\00\00\00\00")
         (call $emit_indent)
@@ -1156,20 +975,8 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter))))
 
-  (func $emit_find_name_index (param $names i32) (param $target i32) (result i32)
-    (local $i i32) (local $n i32)
-    (local.set $n (call $len (local.get $names)))
-    (local.set $i (i32.const 0))
-    (block $done
-      (loop $iter
-        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (if (call $str_eq
-              (call $list_index (local.get $names) (local.get $i))
-              (local.get $target))
-          (then (return (local.get $i))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter)))
-    (i32.const -1))
+  ;; $emit_find_name_index deleted — replaced by $emit_funcref_lookup
+  ;; at the only consumer ($emit_static_top_closures).
 
   (func $emit_le4_escape (param $n i32)
     (call $emit_byte_escape (i32.and (local.get $n) (i32.const 255)))
@@ -1916,9 +1723,7 @@
 
   (func $mentl_emit (export "mentl_emit")
         (param $lowexprs i32)
-    (local $fn_names i32) (local $top_fn_names i32)
-    ;; Collect function names for table + globals
-    (local.set $fn_names (call $collect_fn_names (local.get $lowexprs)))
+    (local $top_fn_names i32)
     (local.set $top_fn_names (call $collect_top_level_fn_names (local.get $lowexprs)))
 
     (call $emit_cstr (i32.const 831) (i32.const 7))  ;; "(module"
@@ -1953,19 +1758,16 @@
     (call $emit_close)
     (call $emit_nl)
 
-    ;; ── Funcref table + index globals ──
-    (call $emit_fn_table_and_globals (local.get $fn_names))
-
-    ;; ── Static top-level closure records ──
-    (call $emit_static_top_closures
-      (local.get $top_fn_names)
-      (local.get $fn_names))
-
-    ;; ── Function definitions ──
+    ;; ── Function definitions FIRST: populates funcref via emit_fn_body ──
     (call $emit_functions (local.get $lowexprs))
 
-    ;; ── Table & Data (funcref + strings from emit state) ──
-    (call $emit_funcref_section)
+    ;; ── Funcref table + index globals (reads funcref ledger) ──
+    (call $emit_fn_table_and_globals)
+
+    ;; ── Static top-level closure records (looks up via funcref) ──
+    (call $emit_static_top_closures (local.get $top_fn_names))
+
+    ;; ── String data segments ──
     (call $emit_string_section)
 
     ;; ── _start ──

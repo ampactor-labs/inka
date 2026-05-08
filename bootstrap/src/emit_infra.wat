@@ -1,13 +1,18 @@
   ;; ═══ Emitter Infrastructure ═════════════════════════════════════════
   ;; Output buffer management for WAT text generation.
   ;;
-  ;; Strategy: accumulate bytes in a heap buffer at 16 MiB, flush to
-  ;; stdout via WASI fd_write. Auto-flushes when buffer is nearly full.
+  ;; Buffer lives at 2 GiB (past fn arena's 2048 MiB cap), in the 8 MiB
+  ;; region appended to memory by build.sh. Earlier layout placed the
+  ;; buffer at 16 MiB — INSIDE perm arena's 1-1537 MiB range. perm
+  ;; grew past 16 MiB on wheel-scale compiles and clobbered the buffer
+  ;; (and adjacent funcref-ledger entries), surfacing as duplicate
+  ;; (table)/(elem) sections + structural body corruption (resolved
+  ;; 2026-05-08: Hβ.first-light.emit-buffer-arena-disjointness).
   ;;
   ;; All emit_* functions in other modules depend on these primitives.
 
   (global $out_pos (mut i32) (i32.const 0))
-  (global $out_base (mut i32) (i32.const 16777216))  ;; 16 MiB
+  (global $out_base (mut i32) (i32.const 2147483648)) ;; 2 GiB (post-fn arena)
   (global $out_cap (mut i32) (i32.const 4194304))     ;; 4 MiB capacity
   (global $emit_indent_level (mut i32) (i32.const 0))
 

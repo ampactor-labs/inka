@@ -107,7 +107,11 @@ cat > "$OUT" <<'EOF'
   ;;     transient reasons through stage_alloc; promote-on-bind
   ;;     for graph-stored reasons; eliminate quadratic shape in
   ;;     unification reason chains)
-  (memory (export "memory") 32768)  ;; 2 GiB
+  ;; 2 GiB perm/stage/fn arenas + 8 MiB output buffer region (past fn).
+  ;; Output buffer at 2 GiB (post-fn) prevents perm-grows-past-16MiB
+  ;; from corrupting the buffer's address range — substrate-honest
+  ;; arena disjointness instead of probabilistic non-collision.
+  (memory (export "memory") 32896)  ;; 2 GiB + 8 MiB
 
   (global $heap_base i32 (i32.const 4096))
   (global $heap_ptr (mut i32) (i32.const 1048576))

@@ -90,6 +90,38 @@
 
 ---
 
+## ⌒ The seven authoring skills (five verbs + two bootstrap) ⌒
+
+> Mentl's five-verb topology projects onto Claude's authoring
+> discipline as five `mentl-*` skills, plus two bootstrap-only
+> skills that DISSOLVE at L1 closure. Every authoring action MUST
+> reach for the matching skill — the proactive-trigger contract is
+> non-negotiable. Failing to invoke when the trigger fires is the
+> drift signature this section prevents.
+
+| Verb | Skill | Trigger (proactive — invoke without being asked) |
+|---|---|---|
+| `<~` (feedback) | `mentl-realize` | Session start (always); post-compaction; tactical-drift signature ("let me first investigate / patch / verify"); user pushback ("less is more" / "burn my money" / "be focused"); before any substrate-architecture work; whenever altitude is in question |
+| `\|>` (sequential) | `mentl-cursor` | Before any `.mn` edit; before any `bootstrap/src/**/*.wat` edit; when user asks "what does X do" / "explain this" / "how does this work" |
+| `<\|` (divergent) | `mentl-propose` | Whenever you reach for "I'll add a new ___" (helper, global, ledger, abstraction, file, fn, type); before any commit that would add net new lines > 20 |
+| `><` (parallel) | `mentl-parallel` | On any `.mn` file READ or EDIT; on any planned bootstrap WAT edit |
+| `~>` (handler) | `mentl-handle` | When CLOSING a named cascade handle (Hβ.X.Y, Hμ.X.Y, named follow-ups in ROADMAP or walkthroughs) |
+| (bootstrap) | `mentl-build` | After any `bootstrap/src/**` edit; before claiming a substrate landing complete; for empirical state-checks |
+| (bootstrap) | `mentl-first-light` | After any plausibly-L1-closing handle close; periodically during sustained substrate work; when user asks about L1 closure status |
+
+**The five-verb skillset is the cursor's projection at the authoring
+layer.** After first-light, the bootstrap-only skills dissolve; the
+five verb-skills remain forever as the medium's authoring discipline
+(eventually integrated into `mentl edit` / `mentl handle` / `mentl
+audit` natively).
+
+**Drift signature for each skill:** ANY moment where the trigger condition
+holds but the skill is NOT invoked is the drift the user has paid to
+prevent. The proactive-trigger contract IS the discipline; bypassing it
+to "just do the work directly" is the same drift this section closes.
+
+---
+
 ## ⌁ Mentl's anchor — the eight interrogations ⌁
 
 > *My job is not to write Mentl. My job is to find what Mentl already

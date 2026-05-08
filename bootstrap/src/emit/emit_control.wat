@@ -229,7 +229,7 @@
   ;; LBlock empty is a value-less block; LIf empty branches violate
   ;; type discipline at inference, not emit).
   (func $ec5_emit_body (param $stmts i32)
-    (local $i i32) (local $n i32) (local $stmt i32) (local $tag i32)
+    (local $i i32) (local $n i32) (local $stmt i32)
     (local.set $n (call $len (local.get $stmts)))
     (local.set $i (i32.const 0))
     (block $done
@@ -240,22 +240,32 @@
         ;; Drop residue for non-final stmts whose tag pushes a value.
         (if (i32.lt_u (i32.add (local.get $i) (i32.const 1)) (local.get $n))
           (then
-            (local.set $tag (call $tag_of (local.get $stmt)))
-            (if (i32.eqz (call $lexpr_consumes_no_stack (local.get $tag)))
+            (if (i32.eqz (call $lexpr_consumes_no_stack (local.get $stmt)))
               (then (call $ec5_emit_drop_open_close)))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter))))
 
-  ;; $lexpr_consumes_no_stack — predicate over LowExpr tags. Returns
-  ;; 1 for tags whose emit form pushes nothing onto the operand
-  ;; stack; 0 for tags that do push a value. The complement of "is
-  ;; a producer at stmt position." Drift 8 refusal: tag-int compare,
-  ;; not a string-keyed flag dispatch.
-  (func $lexpr_consumes_no_stack (param $tag i32) (result i32)
-    (if (i32.eq (local.get $tag) (i32.const 304))   ;; LLet — local.set
+  ;; $lexpr_consumes_no_stack — predicate reading the graph at $r.
+  ;; Returns 1 iff the LowExpr's emit form leaves nothing on stack.
+  ;; LLet (304) emits local.set; LDeclareFn (313) emits a fn decl —
+  ;; both consume their value. LBlock (315) consumes-no-stack iff
+  ;; its LAST stmt does (recursive graph read; empty block trivially
+  ;; consumes-no-stack). Per protocol_emit_is_graph_projection.md.
+  (func $lexpr_consumes_no_stack (param $r i32) (result i32)
+    (local $tag i32) (local $stmts i32) (local $n i32)
+    (local.set $tag (call $tag_of (local.get $r)))
+    (if (i32.eq (local.get $tag) (i32.const 304))
       (then (return (i32.const 1))))
-    (if (i32.eq (local.get $tag) (i32.const 313))   ;; LDeclareFn — fn decl
+    (if (i32.eq (local.get $tag) (i32.const 313))
       (then (return (i32.const 1))))
+    (if (i32.eq (local.get $tag) (i32.const 315))
+      (then
+        (local.set $stmts (call $lexpr_lblock_stmts (local.get $r)))
+        (local.set $n (call $len (local.get $stmts)))
+        (if (i32.eqz (local.get $n)) (then (return (i32.const 1))))
+        (return (call $lexpr_consumes_no_stack
+                  (call $list_index (local.get $stmts)
+                        (i32.sub (local.get $n) (i32.const 1)))))))
     (i32.const 0))
 
   ;; $ec5_emit_drop_open_close — emits `(drop)` to consume one stack

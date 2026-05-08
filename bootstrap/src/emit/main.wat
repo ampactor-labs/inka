@@ -1247,23 +1247,16 @@
   (func $emit_fn_body (param $fn_r i32)
     (local $name i32) (local $params i32) (local $body i32)
     (local $arity i32) (local $i i32)
-    ;; Canonical name projection — handles empty/null fallback to
-    ;; pointer-derived synth uniformly across all emit sites (also used
-    ;; by $cfn_walk and $emit_fn_table_and_globals so funcref entries,
-    ;; global declarations, and (func) bodies all resolve to the same
-    ;; name string for any given LFn record).
     (local.set $name (call $lowfn_emit_name (local.get $fn_r)))
-    ;; Closure-capture dedup: idempotent emission per LFn name. Per
-    ;; protocol_emit_is_graph_projection.md + protocol_cursor_is_the_
-    ;; substrate.md: emit projects graph → WAT; one LFn handle = one
-    ;; (func) emission. With $lowfn_emit_name as the canonical projection,
-    ;; the dedup applies uniformly to user-named fns AND to anonymous-
-    ;; lambdas/continuations (same LFn record → same pointer-derived
-    ;; name → dedup match; distinct LFn records → distinct names →
-    ;; distinct emissions).
-    (if (call $emit_fn_already_emitted (local.get $name))
+    ;; Idempotent emission per LFn name — closure-capture dedup via
+    ;; the existing funcref ledger. $emit_funcref_register dedups
+    ;; internally (lookup-or-append); a name's PRESENCE in the ledger
+    ;; is the "already emitted" signal here. Per protocol_canonical_
+    ;; projection_pattern.md: one ledger, two consumers (this call
+    ;; site + $emit_funcref_section).
+    (if (i32.ge_s (call $emit_funcref_lookup (local.get $name)) (i32.const 0))
       (then (return)))
-    (call $emit_fn_mark_emitted (local.get $name))
+    (drop (call $emit_funcref_register (local.get $name)))
     (local.set $arity  (call $lowfn_arity  (local.get $fn_r)))
     (local.set $params (call $lowfn_params (local.get $fn_r)))
     (local.set $body   (call $lowfn_body   (local.get $fn_r)))
@@ -1924,10 +1917,6 @@
   (func $mentl_emit (export "mentl_emit")
         (param $lowexprs i32)
     (local $fn_names i32) (local $top_fn_names i32)
-    ;; Reset the emitted-fns ledger — fresh projection per emit pass.
-    ;; Closure-capture dedup substrate; see $emit_fn_body and
-    ;; protocol_emit_is_graph_projection.md.
-    (call $emit_emitted_fns_reset)
     ;; Collect function names for table + globals
     (local.set $fn_names (call $collect_fn_names (local.get $lowexprs)))
     (local.set $top_fn_names (call $collect_top_level_fn_names (local.get $lowexprs)))

@@ -18168,53 +18168,14 @@
   (func $lowfn_row (export "lowfn_row") (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 4)))
 
-  ;; ─── $lowfn_emit_name — canonical projection: "what name does this
-  ;; LFn emit as in WAT?" ─────────────────────────────────────────────
-  ;;
-  ;; Per protocol_emit_is_graph_projection.md + protocol_cursor_is_the_
-  ;; substrate.md: emit projects graph → WAT; one LFn handle = one
-  ;; (func) emission; the fn's WAT identity is its name. When upstream
-  ;; lower produces an LFn with an empty (or null) name field —
-  ;; synthesized closures, multi-shot continuations, anonymous thunks —
-  ;; the emit projection synthesizes a unique name from the LFn record's
-  ;; perm-allocated pointer (always > 1 MiB, always positive, 7+ digits
-  ;; in decimal; collision-free with user-defined identifiers and with
-  ;; int_to_str-on-handle lambda names which use the AST handle <<1MB).
-  ;;
-  ;; Single source of truth: every emit-side site that needs the
-  ;; canonical WAT name for an LFn calls THIS function. The (func $name
-  ;; ...) emission, the (elem $fns ... $name1 $name2 ...) funcref table,
-  ;; the (global $name_idx ...) declarations, and the static-top-closures
-  ;; (data ...) records all read through this projection. Three+ callers
-  ;; earn the abstraction per Anchor 7 cascade discipline.
-  ;;
-  ;; Eight interrogations on this projection:
-  ;;   1. Graph?      LFn record's name field; pointer value as fallback.
-  ;;   2. Handler?    Pure projection (no Performs). @resume=N/A.
-  ;;   3. Verb?       N/A (single read).
-  ;;   4. Row?        Pure (read-only).
-  ;;   5. Ownership?  ref-borrow on $r and on the name string.
-  ;;   6. Refinement? Result is non-empty by construction.
-  ;;   7. Gradient?   N/A (compile-time constant).
-  ;;   8. Reason?     LFn graph node's Reason chain unchanged.
-  ;;
-  ;; Drift modes refused:
-  ;;   - Drift 1: structural string check, no dispatch table.
-  ;;   - Drift 6: no special-case for "main" or for lambda; uniform
-  ;;              empty/null detection across all LFn kinds.
-  ;;   - Drift 9: lands whole; closes the lambda-name-substrate +
-  ;;              empty-name-collision-substrate + emit-byte-corruption
-  ;;              named follow-ups in one move.
+  ;; Canonical WAT name for an LFn record. Falls back to int_to_str(r)
+  ;; (the perm-allocated pointer) when the name field is missing —
+  ;; covers synthesized closures, multi-shot continuations, anonymous
+  ;; thunks, and malformed LMakeClosure fn-field payloads. Single
+  ;; source of truth across $emit_fn_body, $cfn_walk, and $emit_fn_
+  ;; table_and_globals (per protocol_canonical_projection_pattern.md).
   (func $lowfn_emit_name (export "lowfn_emit_name") (param $r i32) (result i32)
     (local $name i32)
-    ;; Tag-guard: only LFn records (tag 350) carry a name field at
-    ;; offset 4. When upstream lower emits a malformed LMakeClosure
-    ;; whose fn-field is a string-literal pointer (or any other
-    ;; non-LFn payload), `record_get(r, 0)` reads garbage and emit_str
-    ;; later spews the string-literal content into the funcref-table
-    ;; section (Hβ.first-light.emit-string-literal-pointer-leak,
-    ;; surfaced 2026-05-08). Productive-under-error: synthesize a
-    ;; pointer-derived name and let dedup handle the rest.
     (if (i32.lt_u (local.get $r) (global.get $heap_base))
       (then (return (call $int_to_str (local.get $r)))))
     (if (i32.ne (call $tag_of (local.get $r)) (i32.const 350))
@@ -23173,27 +23134,6 @@
   (global $emit_fn_locals_ptr            (mut i32) (i32.const 0))
   (global $emit_fn_locals_len_g          (mut i32) (i32.const 0))
 
-  ;; Emitted-fns ledger — per protocol_emit_is_graph_projection.md +
-  ;; protocol_cursor_is_the_substrate.md (chain-link 4: every subsystem
-  ;; is the cursor in a different mode). Closes the closure-capture-
-  ;; emit-multiplication substrate gap surfaced 2026-05-08:
-  ;; emit_functions_walk visits every LMakeClosure(LFn(name, body))
-  ;; in the LowExpr graph; when fn `foo` is captured by N closures,
-  ;; the walker visits it N times → N (func $foo ...) emissions →
-  ;; wat2wasm "duplicate fn" error. The substrate-honest fix is to
-  ;; treat emit as a graph projection: walk handles once, emit each
-  ;; handle once. This ledger IS the projection's "what's emitted"
-  ;; cursor — set membership check before $emit_fn_body's body work.
-  ;;
-  ;; Reset per $mentl_emit invocation via $emit_emitted_fns_reset.
-  ;; Empty-name lambdas (lowfn_name returning empty string per the
-  ;; named follow-up `Hβ.first-light.lambda-name-substrate`) skip
-  ;; dedup — each LMakeClosure occurrence stands as its own fn until
-  ;; lower's $int_to_str(handle) name lands; that follow-up makes
-  ;; the dedup uniform across ALL fn kinds. NAMED PEER, not silent
-  ;; deferral (drift 9 refused).
-  (global $emit_emitted_fns_ptr          (mut i32) (i32.const 0))
-  (global $emit_emitted_fns_len_g        (mut i32) (i32.const 0))
 
   ;; ─── Idempotent initializer (mirrors $lower_init / $infer_init) ────
   ;; Per the seed's discipline for module-level state chunks: every
@@ -23215,85 +23155,7 @@
         (global.set $emit_strings_next_offset_g (i32.const 65536))
         (global.set $emit_fn_locals_ptr         (call $make_list (i32.const 8)))
         (global.set $emit_fn_locals_len_g       (i32.const 0))
-        (global.set $emit_emitted_fns_ptr       (call $make_list (i32.const 16)))
-        (global.set $emit_emitted_fns_len_g     (i32.const 0))
         (global.set $emit_initialized           (i32.const 1)))))
-
-  ;; ─── Emitted-fns ledger helpers (closure-capture dedup substrate) ──
-  ;;
-  ;; Eight interrogations on this projection:
-  ;;  1. Graph?      The ledger IS a projection of "fns emitted." Each
-  ;;                 entry is a graph-handle's identity (by name).
-  ;;  2. Handler?    $emit_fn_body becomes idempotent per name — OneShot
-  ;;                 resume per fn-handle. Was N-shot (drift) when the
-  ;;                 walker re-visited a captured top-level fn.
-  ;;  3. Verb?       `|>` chain at emit's cursor: lowexpr_walk |>
-  ;;                 dedup_filter |> emit_fn_body. The check is the
-  ;;                 filter stage.
-  ;;  4. Row?        `+ Mut` (ledger writes) — already in emit's row.
-  ;;  5. Ownership?  Ledger owned by emit; each name ref-borrowed.
-  ;;  6. Refinement? `{ledger : List<String> | every entry non-empty}`.
-  ;;  7. Gradient?   N/A — pure emission policy. The wheel will
-  ;;                 declare @unique-fn-emission via Hβ.emit.fn-
-  ;;                 uniqueness-annotation peer follow-up.
-  ;;  8. Reason?     LFn graph node's Reason chain unchanged; only
-  ;;                 emission is deduped, not the graph.
-  ;;
-  ;; Drift modes refused:
-  ;;  - Drift 1 (vtable): no dispatch table; direct sorted-set scan.
-  ;;  - Drift 6 (special): empty names skip dedup — the empty-name
-  ;;                       case is a NAMED follow-up `Hβ.first-light.
-  ;;                       lambda-name-substrate` (lower's $lower_lambda
-  ;;                       at walk_compound.wat:927 calls $int_to_str
-  ;;                       on handle but emit shows empty — investigation
-  ;;                       pending). When that lands, dedup applies
-  ;;                       uniformly to every fn handle.
-  ;;  - Drift 7 (parallel arrays): single ledger; one list of names.
-  ;;  - Drift 9 (deferred): full substrate lands this commit; the
-  ;;                       empty-name skip is a NAMED PEER with its
-  ;;                       own substrate handle, not silent omission.
-
-  ;; Has fn-name been emitted as a (func) body yet? Empty/null names
-  ;; never dedup (lambdas — see drift 6 note above); each LMakeClosure
-  ;; occurrence with an empty name stands alone until the lambda-name
-  ;; substrate gap is closed.
-  (func $emit_fn_already_emitted (param $name i32) (result i32)
-    (local $i i32) (local $n i32) (local $entry i32)
-    (if (i32.eqz (local.get $name)) (then (return (i32.const 0))))
-    (if (i32.eqz (call $str_len (local.get $name))) (then (return (i32.const 0))))
-    (local.set $n (global.get $emit_emitted_fns_len_g))
-    (local.set $i (i32.const 0))
-    (block $done
-      (loop $iter
-        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $entry (call $list_index (global.get $emit_emitted_fns_ptr) (local.get $i)))
-        (if (call $str_eq (local.get $entry) (local.get $name))
-          (then (return (i32.const 1))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter)))
-    (i32.const 0))
-
-  ;; Mark fn-name as emitted. Empty/null names no-op (consistent with
-  ;; $emit_fn_already_emitted's empty-name skip).
-  (func $emit_fn_mark_emitted (param $name i32)
-    (if (i32.eqz (local.get $name)) (then (return)))
-    (if (i32.eqz (call $str_len (local.get $name))) (then (return)))
-    (global.set $emit_emitted_fns_ptr
-      (call $list_extend_to (global.get $emit_emitted_fns_ptr)
-                            (i32.add (global.get $emit_emitted_fns_len_g) (i32.const 1))))
-    (drop (call $list_set (global.get $emit_emitted_fns_ptr)
-                          (global.get $emit_emitted_fns_len_g)
-                          (local.get $name)))
-    (global.set $emit_emitted_fns_len_g
-      (i32.add (global.get $emit_emitted_fns_len_g) (i32.const 1))))
-
-  ;; Reset the emitted-fns ledger at start of each $mentl_emit pass.
-  ;; The ledger lives across the whole compile; resetting per pass
-  ;; ensures multi-compile processes (test harnesses, future REPL)
-  ;; don't carry stale state.
-  (func $emit_emitted_fns_reset
-    (global.set $emit_emitted_fns_ptr (call $make_list (i32.const 16)))
-    (global.set $emit_emitted_fns_len_g (i32.const 0)))
 
   ;; ─── $emit_funcref_register — append name; return assigned index ───
   ;; Per Hβ-emit-substrate.md §3 H1.4 + wheel src/backends/wasm.mn:444-475
@@ -28603,23 +28465,16 @@
   (func $emit_fn_body (param $fn_r i32)
     (local $name i32) (local $params i32) (local $body i32)
     (local $arity i32) (local $i i32)
-    ;; Canonical name projection — handles empty/null fallback to
-    ;; pointer-derived synth uniformly across all emit sites (also used
-    ;; by $cfn_walk and $emit_fn_table_and_globals so funcref entries,
-    ;; global declarations, and (func) bodies all resolve to the same
-    ;; name string for any given LFn record).
     (local.set $name (call $lowfn_emit_name (local.get $fn_r)))
-    ;; Closure-capture dedup: idempotent emission per LFn name. Per
-    ;; protocol_emit_is_graph_projection.md + protocol_cursor_is_the_
-    ;; substrate.md: emit projects graph → WAT; one LFn handle = one
-    ;; (func) emission. With $lowfn_emit_name as the canonical projection,
-    ;; the dedup applies uniformly to user-named fns AND to anonymous-
-    ;; lambdas/continuations (same LFn record → same pointer-derived
-    ;; name → dedup match; distinct LFn records → distinct names →
-    ;; distinct emissions).
-    (if (call $emit_fn_already_emitted (local.get $name))
+    ;; Idempotent emission per LFn name — closure-capture dedup via
+    ;; the existing funcref ledger. $emit_funcref_register dedups
+    ;; internally (lookup-or-append); a name's PRESENCE in the ledger
+    ;; is the "already emitted" signal here. Per protocol_canonical_
+    ;; projection_pattern.md: one ledger, two consumers (this call
+    ;; site + $emit_funcref_section).
+    (if (i32.ge_s (call $emit_funcref_lookup (local.get $name)) (i32.const 0))
       (then (return)))
-    (call $emit_fn_mark_emitted (local.get $name))
+    (drop (call $emit_funcref_register (local.get $name)))
     (local.set $arity  (call $lowfn_arity  (local.get $fn_r)))
     (local.set $params (call $lowfn_params (local.get $fn_r)))
     (local.set $body   (call $lowfn_body   (local.get $fn_r)))
@@ -29280,10 +29135,6 @@
   (func $mentl_emit (export "mentl_emit")
         (param $lowexprs i32)
     (local $fn_names i32) (local $top_fn_names i32)
-    ;; Reset the emitted-fns ledger — fresh projection per emit pass.
-    ;; Closure-capture dedup substrate; see $emit_fn_body and
-    ;; protocol_emit_is_graph_projection.md.
-    (call $emit_emitted_fns_reset)
     ;; Collect function names for table + globals
     (local.set $fn_names (call $collect_fn_names (local.get $lowexprs)))
     (local.set $top_fn_names (call $collect_top_level_fn_names (local.get $lowexprs)))

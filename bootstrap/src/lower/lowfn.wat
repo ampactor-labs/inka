@@ -135,6 +135,18 @@
   ;;              named follow-ups in one move.
   (func $lowfn_emit_name (export "lowfn_emit_name") (param $r i32) (result i32)
     (local $name i32)
+    ;; Tag-guard: only LFn records (tag 350) carry a name field at
+    ;; offset 4. When upstream lower emits a malformed LMakeClosure
+    ;; whose fn-field is a string-literal pointer (or any other
+    ;; non-LFn payload), `record_get(r, 0)` reads garbage and emit_str
+    ;; later spews the string-literal content into the funcref-table
+    ;; section (Hβ.first-light.emit-string-literal-pointer-leak,
+    ;; surfaced 2026-05-08). Productive-under-error: synthesize a
+    ;; pointer-derived name and let dedup handle the rest.
+    (if (i32.lt_u (local.get $r) (global.get $heap_base))
+      (then (return (call $int_to_str (local.get $r)))))
+    (if (i32.ne (call $tag_of (local.get $r)) (i32.const 350))
+      (then (return (call $int_to_str (local.get $r)))))
     (local.set $name (call $record_get (local.get $r) (i32.const 0)))
     (if (i32.or
           (i32.eqz (local.get $name))

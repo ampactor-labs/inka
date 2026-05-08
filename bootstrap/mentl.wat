@@ -28487,6 +28487,13 @@
   ;;  - Drift 6 (special): same descent for outer block AND nested
   ;;                       LBlock; no special-case for first-level.
   ;;  - Drift 9 (deferred): all emit-relevant containers walked.
+  ;; Per protocol_canonical_projection_pattern.md: the LIST walker
+  ;; declares LLets and dispatches everything else to the SINGLE walker.
+  ;; Eliminates the parallel-coverage-arrays drift between this list
+  ;; walker (LBlock/LIf/LMatch arms) and the single walker (full
+  ;; container coverage). One source of truth — the single walker —
+  ;; for which containers descend; this list walker just declares
+  ;; LLets at the current iteration position and delegates.
   (func $emit_let_locals (param $exprs i32)
     (local $i i32) (local $n i32) (local $expr i32) (local $tag i32)
     (local.set $n (call $len (local.get $exprs)))
@@ -28496,11 +28503,10 @@
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $expr (call $list_index (local.get $exprs) (local.get $i)))
         (local.set $tag (call $tag_of (local.get $expr)))
-        ;; LLet (304) — declare local IFF not already declared for current
-        ;; fn (Hβ.first-light.match-arm-binding-name-uniqueness Lock #1
-        ;; + §A.5b LLet-cross-block coverage); recurse into value either
-        ;; way (since the value may itself contain nested LLets via PCon
-        ;; destructure or block expressions).
+        ;; LLet (304) — declare local IFF not already declared, then
+        ;; recurse into value via single walker (canonical container
+        ;; coverage). Value may itself contain nested LLets via PCon
+        ;; destructure or block expressions.
         (if (i32.eq (local.get $tag) (i32.const 304))
           (then
             (if (call $emit_fn_local_check (call $lexpr_llet_name (local.get $expr)))
@@ -28508,30 +28514,14 @@
                 (call $emit_cstr (i32.const 4146) (i32.const 9)) ;; " (local $"
                 (call $emit_str (call $lexpr_llet_name (local.get $expr)))
                 (call $emit_cstr (i32.const 4155) (i32.const 5)))) ;; " i32)"
-            ;; Recurse into the value (may contain nested LBlocks via
-            ;; PCon destructure or other compound expressions).
             (call $emit_let_locals_walk
-                  (call $lexpr_llet_value (local.get $expr)))))
-        ;; LBlock (315) — recurse into stmts list to find nested LLets.
-        (if (i32.eq (local.get $tag) (i32.const 315))
-          (then
-            (call $emit_let_locals (call $lexpr_lblock_stmts (local.get $expr)))))
-        ;; LIf (314) — branches are LISTS per $lower_if (single-element
-        ;; lists wrapping the branch expr); use list walker.
-        (if (i32.eq (local.get $tag) (i32.const 314))
-          (then
-            (call $emit_let_locals (call $lexpr_lif_then (local.get $expr)))
-            (call $emit_let_locals (call $lexpr_lif_else (local.get $expr)))))
-        ;; LMatch (321) — recurse into scrutinee + each arm. Per
-        ;; Hβ.first-light.match-arm-pat-binding-local-decl Lock #1:
-        ;; arms' patterns introduce LPVar bindings (potentially nested);
-        ;; arms' bodies may contain LLet bindings.
-        (if (i32.eq (local.get $tag) (i32.const 321))
-          (then
-            (call $emit_let_locals_walk
-              (call $lexpr_lmatch_scrut (local.get $expr)))
-            (call $emit_match_arm_locals
-              (call $lexpr_lmatch_arms (local.get $expr)))))
+                  (call $lexpr_llet_value (local.get $expr))))
+          (else
+            ;; Non-LLet — dispatch to single walker for full container
+            ;; coverage (LBlock, LIf, LMatch, LCall, LBinOp, LRegion,
+            ;; LHandleWith, LFeedback, LHandle, etc.). The single walker
+            ;; is the canonical source of truth for what descends.
+            (call $emit_let_locals_walk (local.get $expr))))
         ;; LMakeClosure (311) / LMakeContinuation (312) / LDeclareFn (313)
         ;; — fn boundary. Their bodies belong to their own fn body's
         ;; emit_let_locals invocation (chained from $emit_fn_body line 932).

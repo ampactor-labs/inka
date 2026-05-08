@@ -28999,9 +28999,85 @@
         (call $emit_functions_walk (call $lexpr_lhandlewith_body (local.get $expr)))
         (call $emit_functions_walk (call $lexpr_lhandlewith_handler (local.get $expr)))
         (return)))
-    ;; All other tags: no LowExpr children to recurse into (literals,
-    ;; locals, globals, etc.). Drop through.
+    ;; LMatch (321) — match-arm bodies routinely contain LMakeClosure
+    ;; (e.g., `match x { _ => () => y }`). Walk scrut + each arm body.
+    (if (i32.eq (local.get $tag) (i32.const 321))
+      (then
+        (call $emit_functions_walk (call $lexpr_lmatch_scrut (local.get $expr)))
+        (call $emit_functions_match_arms (call $lexpr_lmatch_arms (local.get $expr)))
+        (return)))
+    ;; LMakeRecord (318) — recurse into fields.
+    (if (i32.eq (local.get $tag) (i32.const 318))
+      (then
+        (call $emit_functions (call $lexpr_lmakerecord_fields (local.get $expr)))
+        (return)))
+    ;; LSuspend (325) — fn IS a closure; recurse to find its inner LFn.
+    (if (i32.eq (local.get $tag) (i32.const 325))
+      (then
+        (call $emit_functions_walk (call $lexpr_lsuspend_fn (local.get $expr)))
+        (call $emit_functions (call $lexpr_lsuspend_args (local.get $expr)))
+        (return)))
+    ;; LFeedback (330) — body + spec; spec may embed an LFn.
+    (if (i32.eq (local.get $tag) (i32.const 330))
+      (then
+        (call $emit_functions_walk (call $lexpr_lfeedback_body (local.get $expr)))
+        (call $emit_functions_walk (call $lexpr_lfeedback_spec (local.get $expr)))
+        (return)))
+    ;; LRegion (328) — recurse into body.
+    (if (i32.eq (local.get $tag) (i32.const 328))
+      (then
+        (call $emit_functions_walk (call $lexpr_lregion_body (local.get $expr)))
+        (return)))
+    ;; LIndex (320) — recurse into base + idx.
+    (if (i32.eq (local.get $tag) (i32.const 320))
+      (then
+        (call $emit_functions_walk (call $lexpr_lindex_base (local.get $expr)))
+        (call $emit_functions_walk (call $lexpr_lindex_idx (local.get $expr)))
+        (return)))
+    ;; LStore (303) / LStateSet (327) — recurse into value.
+    (if (i32.eq (local.get $tag) (i32.const 303))
+      (then
+        (call $emit_functions_walk (call $lexpr_lstore_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 327))
+      (then
+        (call $emit_functions_walk (call $lexpr_lstateset_value (local.get $expr)))
+        (return)))
+    ;; LUnaryOp (307) — recurse into x.
+    (if (i32.eq (local.get $tag) (i32.const 307))
+      (then
+        (call $emit_functions_walk (call $lexpr_lunaryop_x (local.get $expr)))
+        (return)))
+    ;; LPerform (331) / LEvPerform (333) — recurse into args.
+    (if (i32.eq (local.get $tag) (i32.const 331))
+      (then
+        (call $emit_functions (call $lexpr_lperform_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 333))
+      (then
+        (call $emit_functions (call $lexpr_levperform_args (local.get $expr)))
+        (return)))
+    ;; LFieldLoad (334) — recurse into record sub-expr.
+    (if (i32.eq (local.get $tag) (i32.const 334))
+      (then
+        (call $emit_functions_walk (call $lexpr_lfieldload_record (local.get $expr)))
+        (return)))
+    ;; All other tags: leaves with no LowExpr children to walk.
     (return))
+
+  ;; Match-arm walker for $emit_functions — same shape as
+  ;; $emit_alloc_handle_locals_match_arms but with the fn-emit leaf.
+  (func $emit_functions_match_arms (param $arms i32)
+    (local $i i32) (local $n i32) (local $arm i32)
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
+        (call $emit_functions_walk (call $lowpat_lparm_body (local.get $arm)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
 
   ;; ─── $mentl_emit — the pipeline-stage entry ───────────────────────────
   ;;

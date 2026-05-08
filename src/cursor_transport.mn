@@ -359,7 +359,10 @@ fn span_of_cursor(cursor) with GraphRead = {
   perform graph_span_of(handle)
 }
 
-fn handle_at_span(span) with GraphRead = perform graph_handle_at_span(span)
+// handle_at_span() — see src/cursor.mn (canonical scan-based impl).
+// Substrate-honest peer Hβ.graph.handle-at-span-effect-op would
+// promote this to a GraphRead op (perform graph_handle_at_span(span));
+// blocked on adding the op to graph.mn's effect declaration.
 
 fn apply_suggestion(view) with GraphRead + !Mutate = {
   let CursorView(_, _, _, _, _, _, teach, _) = view

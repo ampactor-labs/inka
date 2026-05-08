@@ -53,23 +53,23 @@ fn is_ws(b) with Pure = {
   b == 32 || b == 9 || b == 10 || b == 13
 }
 
-/// is_digit — ASCII '0'..'9' (0x30..0x39).
+/// json_is_digit — ASCII '0'..'9' (0x30..0x39).
 
-fn is_digit(b) with Pure = {
+fn json_is_digit(b) with Pure = {
   b >= 48 && b <= 57
 }
 
 // ─── Whitespace skip ──────────────────────────────────────────────────
 
-/// skip_ws — advance position past JSON whitespace. Tail-recursive;
+/// json_skip_ws — advance position past JSON whitespace. Tail-recursive;
 /// returns the position of the first non-whitespace byte (or end of
 /// string).
 
-fn skip_ws(src, pos) with Memory = {
+fn json_skip_ws(src, pos) with Memory = {
   if pos >= byte_len(src) { pos }
   else {
     let b = byte_at(src, pos)
-    if is_ws(b) { skip_ws(src, pos + 1) }
+    if is_ws(b) { json_skip_ws(src, pos + 1) }
     else        { pos }
   }
 }
@@ -81,7 +81,7 @@ fn skip_ws(src, pos) with Memory = {
 /// (LSP messages may have trailing whitespace within Content-Length).
 
 fn json_parse(src) with Memory + Alloc = {
-  let p0 = skip_ws(src, 0)
+  let p0 = json_skip_ws(src, 0)
   parse_value(src, p0)
 }
 
@@ -102,7 +102,7 @@ fn parse_value(src, pos) with Memory + Alloc = {
     else if b == 116           { parse_keyword(src, pos, "true",  JBool(true)) }
     else if b == 102           { parse_keyword(src, pos, "false", JBool(false)) }
     else if b == 110           { parse_keyword(src, pos, "null",  JNull) }
-    else if b == 45 || is_digit(b) { parse_number(src, pos) } // -  or  0..9
+    else if b == 45 || json_is_digit(b) { parse_number(src, pos) } // -  or  0..9
     else                       { JErr("unexpected byte at value position", pos) }
   }
 }
@@ -144,7 +144,7 @@ fn keyword_matches(src, pos, kw, i, n) with Memory = {
 /// idiom).
 
 fn parse_number(src, pos) with Memory + Alloc = {
-  let (end, _is_float) = scan_number(src, pos, pos, false)
+  let (end, _is_float) = json_scan_number(src, pos, pos, false)
   if end == pos { JErr("expected number", pos) }
   else {
     let n = number_from_substring(src, pos, end)
@@ -152,18 +152,18 @@ fn parse_number(src, pos) with Memory + Alloc = {
   }
 }
 
-/// scan_number — advance past digits, optional decimal point, optional
+/// json_scan_number — advance past digits, optional decimal point, optional
 /// exponent. Returns (end_pos, is_float). Tail-recursive.
 
-fn scan_number(src, start, pos, is_float) with Memory = {
+fn json_scan_number(src, start, pos, is_float) with Memory = {
   if pos >= byte_len(src) { (pos, is_float) }
   else {
     let b = byte_at(src, pos)
-    if is_digit(b)            { scan_number(src, start, pos + 1, is_float) }
-    else if b == 46           { scan_number(src, start, pos + 1, true) }       // .
-    else if b == 45 && pos == start { scan_number(src, start, pos + 1, is_float) } // leading -
-    else if b == 101 || b == 69 { scan_number(src, start, pos + 1, true) }    // e or E
-    else if b == 43 || b == 45 { scan_number(src, start, pos + 1, is_float) } // exponent sign
+    if json_is_digit(b)            { json_scan_number(src, start, pos + 1, is_float) }
+    else if b == 46           { json_scan_number(src, start, pos + 1, true) }       // .
+    else if b == 45 && pos == start { json_scan_number(src, start, pos + 1, is_float) } // leading -
+    else if b == 101 || b == 69 { json_scan_number(src, start, pos + 1, true) }    // e or E
+    else if b == 43 || b == 45 { json_scan_number(src, start, pos + 1, is_float) } // exponent sign
     else                      { (pos, is_float) }
   }
 }
@@ -189,7 +189,7 @@ fn scan_int_part(src, pos, end, acc) with Memory + Alloc = {
   if pos >= end { (acc, pos) }
   else {
     let b = byte_at(src, pos)
-    if is_digit(b) {
+    if json_is_digit(b) {
       let d = b - 48
       scan_int_part(src, pos + 1, end, acc * 10.0 + d)
     } else {
@@ -202,7 +202,7 @@ fn scan_frac_part(src, pos, end, acc, place) with Memory + Alloc = {
   if pos >= end { (acc, pos) }
   else {
     let b = byte_at(src, pos)
-    if is_digit(b) {
+    if json_is_digit(b) {
       let d = b - 48
       scan_frac_part(src, pos + 1, end, acc + d * place, place * 0.1)
     } else {
@@ -301,7 +301,7 @@ fn decode_escape(e) with Pure = {
 fn parse_array(src, pos) with Memory + Alloc = {
   if byte_at(src, pos) != 91 { JErr("expected array opening bracket", pos) }
   else {
-    let p0 = skip_ws(src, pos + 1)
+    let p0 = json_skip_ws(src, pos + 1)
     if p0 < byte_len(src) && byte_at(src, p0) == 93 {
       JOk(JArr([]), p0 + 1)
     } else {
@@ -314,14 +314,14 @@ fn parse_array_elements(src, pos, acc_rev) with Memory + Alloc = {
   match parse_value(src, pos) {
     JErr(m, p)        => JErr(m, p),
     JOk(v, p1)        => {
-      let p2 = skip_ws(src, p1)
+      let p2 = json_skip_ws(src, p1)
       if p2 >= byte_len(src) { JErr("unexpected end in array", p2) }
       else {
         let next_acc = [v] ++ acc_rev
         let b = byte_at(src, p2)
         if b == 93 { JOk(JArr(reverse_list(next_acc)), p2 + 1) }
         else if b == 44 {
-          let p3 = skip_ws(src, p2 + 1)
+          let p3 = json_skip_ws(src, p2 + 1)
           parse_array_elements(src, p3, next_acc)
         } else {
           JErr("expected ',' or ']' in array", p2)
@@ -340,7 +340,7 @@ fn parse_array_elements(src, pos, acc_rev) with Memory + Alloc = {
 fn parse_object(src, pos) with Memory + Alloc = {
   if byte_at(src, pos) != 123 { JErr("expected object opening brace", pos) }
   else {
-    let p0 = skip_ws(src, pos + 1)
+    let p0 = json_skip_ws(src, pos + 1)
     if p0 < byte_len(src) && byte_at(src, p0) == 125 {
       JOk(JObj([]), p0 + 1)
     } else {
@@ -361,22 +361,22 @@ fn parse_object_pairs(src, pos, acc_rev) with Memory + Alloc = {
         JArr(_)           => "",
         JObj(_)           => ""
       }
-      let p2 = skip_ws(src, p1)
+      let p2 = json_skip_ws(src, p1)
       if p2 >= byte_len(src) || byte_at(src, p2) != 58 {
         JErr("expected ':' after object key", p2)
       } else {
-        let p3 = skip_ws(src, p2 + 1)
+        let p3 = json_skip_ws(src, p2 + 1)
         match parse_value(src, p3) {
           JErr(m, p)      => JErr(m, p),
           JOk(v, p4)      => {
-            let p5 = skip_ws(src, p4)
+            let p5 = json_skip_ws(src, p4)
             if p5 >= byte_len(src) { JErr("unexpected end in object", p5) }
             else {
               let next_acc = [(key, v)] ++ acc_rev
               let b = byte_at(src, p5)
               if b == 125 { JOk(JObj(reverse_list(next_acc)), p5 + 1) }
               else if b == 44 {
-                let p6 = skip_ws(src, p5 + 1)
+                let p6 = json_skip_ws(src, p5 + 1)
                 parse_object_pairs(src, p6, next_acc)
               } else {
                 JErr("expected ',' or '}' in object", p5)

@@ -148,8 +148,8 @@ fn push_tok(own buf, count, own t) = {
   (written, count + 1)
 }
 
-/// Construct a `Token` from kind + 4 span ints.
-fn mk_tok(kind, sl, sc, el, ec) with Pure = Tok(kind, Span(sl, sc, el, ec))
+// mk_tok() — see src/types.mn (canonical Token constructor; Tok ADT
+// is declared there).
 
 /// Core lexer loop. `term_byte = 0` (no terminator) or `125`
 /// (terminate on first `TRBrace` at depth 0 — used by splice scanning).

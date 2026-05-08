@@ -174,7 +174,7 @@ fn audit(source) = {
     ~> diagnostics_handler
 }
 
-// ─── cursor_session — `<|` fanout from one source to four projections ──
+// ─── cursor_session_batch — `<|` fanout from one source to four projections ──
 //
 // One source borrowed (read-only) to four cursor projections — check
 // surfaces diagnostics; teach surfaces gradient steps; query answers
@@ -191,11 +191,16 @@ fn audit(source) = {
 // default; WasiThreads spawn in production per
 // protocol_parallelism_symmetry.md).
 //
+// Renamed from `cursor_session` 2026-05-07 to disambiguate from
+// `cursor_session` (cursor_transport.mn) — that one opens the bus-
+// compressor loop with a Caret; this one runs the four batch
+// projections from one source string. Different shapes; same family.
+//
 // Drift refused: 9 (no deferred surface — all four bodied here);
 // 6 (none of the surfaces is primitive special-case; uniform branches);
 // 7 (output is a 4-tuple, not parallel-arrays).
 
-fn cursor_session(source) = {
+fn cursor_session_batch(source) = {
   let (diagnostics, gradients, audit_report, query_default_view) =
     source
       <| (

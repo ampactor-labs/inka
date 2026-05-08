@@ -27522,8 +27522,8 @@
   (data (i32.const 4848) "\21\00\00\00 (param i32 i32 i32) (result i32)")                          ;; len 33 — path_create_directory, path_unlink_file
   (data (i32.const 4896) "\25\00\00\00 (param i32 i32 i32 i32) (result i32)")                      ;; len 37 — fd_write, fd_read
   (data (i32.const 4944) "\29\00\00\00 (param i32 i32 i32 i32 i32) (result i32)")                  ;; len 41 — path_filestat_get
-  (data (i32.const 4992) "\2d\00\00\00 (param i32 i32 i32 i32 i32 i32) (result i32)")              ;; len 45 — path_rename
-  (data (i32.const 5040) "\39\00\00\00 (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)")  ;; len 57 — path_open
+  (data (i32.const 4992) "\2d\00\00\00 (param i32 i32 i32 i32 i32 i32) (result i32)")              ;; len 45 — path_rename (occupies 4992..5040 inclusive — 4 prefix + 45 content)
+  (data (i32.const 5048) "\39\00\00\00 (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)")  ;; len 57 — path_open. Was 5040 → overlapped path_rename's last byte (`)` → `9`); moved to 5048 for 8-byte alignment.
 
   ;; Length-prefixed "wasi_proc_exit" for runtime-injected used set.
   ;; The seed's _start epilogue calls $wasi_proc_exit unconditionally;
@@ -27532,7 +27532,7 @@
   ;; projected (Hβ.first-light.start-section-graph-projected — peer
   ;; follow-up), each runtime-emitted WASI op gets one seed-side line
   ;; here. User ops remain fully cursor-projected from $cwo_walk.
-  (data (i32.const 5104) "\0e\00\00\00wasi_proc_exit")  ;; len 14
+  (data (i32.const 5120) "\0e\00\00\00wasi_proc_exit")  ;; len 14 (was 5104 → overlapped path_open at 5048+61)
 
   ;; $wasi_signature_for — given target_name "wasi_<op>", returns a
   ;; length-prefixed signature string ptr (or 0 if unknown). Suffix-
@@ -27550,7 +27550,7 @@
     (if (call $str_eq (local.get $suffix) (i32.const 4448))   ;; proc_exit
       (then (return (i32.const 4800))))
     (if (call $str_eq (local.get $suffix) (i32.const 4464))   ;; path_open
-      (then (return (i32.const 5040))))
+      (then (return (i32.const 5048))))
     (if (call $str_eq (local.get $suffix) (i32.const 4480))   ;; fd_close
       (then (return (i32.const 4816))))
     (if (call $str_eq (local.get $suffix) (i32.const 4608))   ;; path_create_directory
@@ -27643,7 +27643,7 @@
   ;; shrinks to empty as substrate migrates entries into the graph.
   ;; Today: just proc_exit (called by _start's hand-rolled epilogue).
   (func $inject_runtime_emitted_wasi_ops (param $buf i32) (result i32)
-    (call $buf_push_unique (local.get $buf) (i32.const 5104))   ;; wasi_proc_exit
+    (call $buf_push_unique (local.get $buf) (i32.const 5120))   ;; wasi_proc_exit
     (local.get $buf))
 
   ;; $cwo_walk_list — iterate top-level lowexprs; threads Buffer<String>.

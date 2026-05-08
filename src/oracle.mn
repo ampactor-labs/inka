@@ -400,10 +400,7 @@ fn oracle_ic_fixpoint(initial_env, module_path) with Verify + Speculate + IC = {
 
 fn empty_queue() with Pure = OracleQueue([])
 
-fn flatten(lists) with Pure = match lists {
-  []        => [],
-  [h | t]   => h ++ flatten(t)
-}
+// flatten() — see lib/prelude.mn (canonical fold-based combinator).
 
 fn filter_some(opts) with Pure = match opts {
   []                => [],

@@ -432,10 +432,7 @@ fn ast_kind_of(node) with Pure = {
   body
 }
 
-fn node_handle(node) with Pure = {
-  let N(_, _, h) = node
-  h
-}
+// node_handle() — see src/infer.mn (canonical Node-handle accessor).
 
 fn canonical_indent_depth(kind, ctx) with Pure = match kind {
   NStmt(_) => 0,

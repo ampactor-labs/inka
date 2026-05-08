@@ -29898,6 +29898,16 @@
     (local.set $stmt (call $node_expr (local.get $node)))
     (local.set $tag (i32.load (local.get $stmt)))
 
+    ;; Documented (128) → unwrap docstring; recurse on inner_node.
+    ;; Per protocol_cursor_is_the_substrate.md: emit dispatches on the
+    ;; underlying form, not the docstring wrapper. The Documented layer
+    ;; is the developer's voice (Mentl reads it via DocstringReason at
+    ;; infer time); emit projects the inner stmt unchanged.
+    (if (i32.eq (local.get $tag) (i32.const 128))
+      (then
+        (call $emit_node (i32.load offset=8 (local.get $stmt)))
+        (return)))
+
     ;; FnStmt (121) → emit function definition
     (if (i32.eq (local.get $tag) (i32.const 121))
       (then (call $emit_fn_def (local.get $stmt)) (return)))
@@ -30261,6 +30271,14 @@
       (then (return (i32.const 0))))
     (local.set $stmt (i32.load offset=4 (local.get $body)))
     (local.set $tag (i32.load (local.get $stmt)))
+    ;; Documented (128) → unwrap and recurse on inner_node. Per
+    ;; protocol_cursor_is_the_substrate.md: the docstring wrapper is
+    ;; non-load-bearing for emit's decl/skip classification; the inner
+    ;; stmt's tag is the truth. Without this, ALL wheel functions with
+    ;; /// docstrings (e.g., str_concat, println, to_string) are
+    ;; silently skipped from emit pass-1 → 14k undefined-fn errors.
+    (if (i32.eq (local.get $tag) (i32.const 128))
+      (then (return (call $is_decl_stmt (i32.load offset=8 (local.get $stmt))))))
     ;; FnStmt=121, TypeDefStmt=122, EffectDeclStmt=123
     (i32.or (i32.or
       (i32.eq (local.get $tag) (i32.const 121))
@@ -30278,6 +30296,12 @@
       (then (return (i32.const 0))))
     (local.set $stmt (i32.load offset=4 (local.get $body)))
     (local.set $tag (i32.load (local.get $stmt)))
+    ;; Documented (128) → unwrap and recurse on inner_node. Same
+    ;; substrate fix as $is_decl_stmt. Without this, Documented-wrapped
+    ;; ImportStmt / HandlerDeclStmt / ExprStmt-with-bare-VarRef
+    ;; classify wrong (skip-worthy stmts emit; non-skip stmts skip).
+    (if (i32.eq (local.get $tag) (i32.const 128))
+      (then (return (call $is_skip_stmt (i32.load offset=8 (local.get $stmt))))))
     ;; ImportStmt=126, HandlerDeclStmt=124 → always skip
     (if (i32.or
           (i32.eq (local.get $tag) (i32.const 126))

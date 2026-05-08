@@ -1052,8 +1052,8 @@ fn voice_queue_walk(situation_seed) with OracleQuery = {
     Some(h)    => {
       let local = perform cursor_relevant(h, 200)
       match local {
-        []        => perform query_project_queue(),
-        [_ | _]   => local
+        []           => perform query_project_queue(),
+        [_, ..._]    => local
       }
     }
   }
@@ -1915,6 +1915,7 @@ fn update_file_text_loop(ref table, fh, ref path, ref text, i, n, own buf) with 
     list_set(buf, i, replacement)
     update_file_text_loop(table, fh, path, text, i + 1, n, buf)
   }
+}
 
 fn path_to_module_name(ref s) with Memory + Alloc = {
   let stripped_prefix = if starts_with(s, "src/") {

@@ -13,6 +13,16 @@
     (local.set $stmt (call $node_expr (local.get $node)))
     (local.set $tag (i32.load (local.get $stmt)))
 
+    ;; Documented (128) → unwrap docstring; recurse on inner_node.
+    ;; Per protocol_cursor_is_the_substrate.md: emit dispatches on the
+    ;; underlying form, not the docstring wrapper. The Documented layer
+    ;; is the developer's voice (Mentl reads it via DocstringReason at
+    ;; infer time); emit projects the inner stmt unchanged.
+    (if (i32.eq (local.get $tag) (i32.const 128))
+      (then
+        (call $emit_node (i32.load offset=8 (local.get $stmt)))
+        (return)))
+
     ;; FnStmt (121) → emit function definition
     (if (i32.eq (local.get $tag) (i32.const 121))
       (then (call $emit_fn_def (local.get $stmt)) (return)))

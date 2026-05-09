@@ -497,10 +497,20 @@ byte. Empirically-real residue per `Hβ-first-light-empirical.md` §2.3
       THandle treated as ident in pat + ident-positions per SYNTAX.md:69.
       UNRESOLVED handle 155 → 8 (89%); total 358 → 294. Wheel reaches
       infer_pat (fn 584).
-- ✗ `Hβ.first-light.wheel-infer-pat-unreachable` — NEXT cursor. mentl2
-  runs through infer pre-register + infer_stmt_list, traps inside
-  infer_pat (fn 584). Likely: PList/PRecord arm gap or PCon's report-on-
-  None path triggers unhandled report effect.
+- ✓ Round 3 (commit `a727b28`):
+    - `Hβ.emit.match-nested-lpcon-substrate` — pat-tree recursive
+      predicate + binds. Pre-fix: emit_pat_field_binds (seed + wheel)
+      both had `// nested ADT destructure — TODO`; for `match body {
+      NStmt(LetStmt(...)) | NStmt(FnStmt(...)) | ... }` ALL arms
+      collapsed to identical outer-NStmt-tag dispatch → first arm
+      fired for ANY NStmt → mentl2 trapped at infer_pat with garbage.
+      Post-fix: recursive pat-tree walk emits cumulative `i32.and`
+      predicate at each LPCon depth + binds LPVar leaves at full
+      offset-paths. Buffer-counter (Ω.3) discipline; depth-counter +
+      list_set in-place; no `path ++ [x]` accumulator. mentl2 runs
+      full pipeline through teach_run WITHOUT TRAP; returns heap-
+      pointer-as-exit-code (next gate: WASI argv or compile_run path
+      to enable mentl2 to actually emit mentl3.wat for fixpoint test).
 - ✗ `Hβ.first-light.wheel-emit-implementation` — broader cascade
   tracking surfaced wheel-side gaps as mentl2 progresses through the
   compile pipeline.

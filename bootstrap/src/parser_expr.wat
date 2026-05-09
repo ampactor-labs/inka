@@ -291,8 +291,19 @@
             (drop (call $list_set (local.get $tup) (i32.const 1)
               (call $list_index (local.get $result) (i32.const 1))))
             (return (local.get $tup))))
-        ;; TBang (64) — unary logical not. Same shape as TMinus; op=UNot=161.
-        (if (i32.eq (local.get $k) (i32.const 64))
+        ;; TBang (63) — unary logical not. Same shape as TMinus; op=UNot=161.
+        ;; Per Hβ.parser.tbang-token-kind-fix (2026-05-09): the kind ID
+        ;; is 63 per lexer.wat:25 (TEq=60 TLt=61 TGt=62 TBang=63 TPipe=64);
+        ;; pre-fix this comparison used 64 (TPipe), causing every `!expr`
+        ;; in wheel-source to fall through to default-LitUnit. Compiled
+        ;; mentl2 with `!is_float` produced `(i32.const 0)` for the
+        ;; operand → `b == 46 && 0` always false → scan_decimal float-
+        ;; detection arm never fired. The CASCADE: mentl2's lex_from
+        ;; → scan_number → scan_decimal infinite-recursed because the
+        ;; compiled emit of the broader if-cascade left the position
+        ;; un-advanced in some path the wheel-source author assumed
+        ;; would terminate via float-detection.
+        (if (i32.eq (local.get $k) (i32.const 63))
           (then
             (local.set $result (call $parse_primary (local.get $tokens)
               (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))))

@@ -522,7 +522,30 @@
                       (local.get $scrut_h)
                       (i32.load offset=4 (local.get $lit))
                       (call $make_list (i32.const 0))))))
-        (return (call $lowpat_make_lplit (local.get $scrut_h) (local.get $lit)))))
+        ;; Per Hβ.lower.lpat-extract-lit-scalar (2026-05-09): LPLit's
+        ;; value field stores the OPAQUE-i32 scalar (LowValue convention
+        ;; per Lock #4) — mirroring $lower_lit_int's $walk_const_payload_i32
+        ;; pattern. Pre-fix the LV-NODE pointer leaked into the value
+        ;; field; emit's `(i32.const $lowpat_lplit_value)` then compared
+        ;; the scrutinee against a heap pointer (e.g. 23889432) instead
+        ;; of the actual scalar (e.g. 0). list_index's `match tag { 0
+        ;; => ... }` failed all arms → unreachable trap.
+        ;;
+        ;; LV tags 180/181/182 (LVInt/LVFloat/LVString) all store the
+        ;; scalar at offset 4 (parser_pat.wat $mk_LVInt etc.). Extract
+        ;; uniformly. LVBool (183) handled above as LPCon. LVFloat /
+        ;; LVString store str_ptr — opaque-i32 today; named follow-up
+        ;; Hβ.lower.lpat-typed-equality routes through (call $str_eq)
+        ;; for string patterns at the emit layer.
+        (if (i32.or
+              (i32.or (i32.eq (local.get $lit_tag) (i32.const 180))  ;; LVInt
+                      (i32.eq (local.get $lit_tag) (i32.const 181))) ;; LVFloat
+              (i32.eq (local.get $lit_tag) (i32.const 182)))         ;; LVString
+          (then
+            (return (call $lowpat_make_lplit
+                      (local.get $scrut_h)
+                      (i32.load offset=4 (local.get $lit))))))
+        (return (call $lowpat_make_lplit (local.get $scrut_h) (i32.const 0)))))
     (if (i32.eq (local.get $tag) (i32.const 133))
       (then
         (local.set $name (i32.load offset=4 (local.get $pat)))

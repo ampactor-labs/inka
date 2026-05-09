@@ -461,7 +461,31 @@ byte. Empirically-real residue per `Hβ-first-light-empirical.md` §2.3
   projection.md). Parser eager-form-commitment recognized as drift 9
   in parser-state clothes; two-arm structural OK, multi-arm form-
   classification = drift.
-- ✗ `Hβ.first-light.parser-fabrication-substrate` — NEXT cursor.
+- ✓ **`Hβ.first-light.m2-wat-validity` — m2.wat compiles cleanly via
+  wat2wasm (2026-05-09 session)**. Five convergent gates closed in
+  one session; wat2wasm errors went 2034 → 0. Cascade:
+    - `Hβ.parser.fn-sig-multi-line` (commit `2e8c1bd`) — skip_to_eq_or_brace
+      drops TNewline halt; multi-line fn signatures parse cleanly.
+    - `Hβ.emit.feedback-state-globals-dedup` (commit `48b43c3`) — handle-set
+      ledger sibling to funcref; eliminates 21 duplicate `(global $s<h>)`.
+    - `Hβ.emit.runtime-helper-state-push` (commit `9ed5d25`) — W7 state
+      push at every direct-call emit site (make_list, list_set, str_concat,
+      list_concat, list_index, byte_at). Save-reload via $state_tmp +
+      $callee_closure scratch; closes 558+ call-arity mismatches.
+    - `Hβ.emit.{float-substrate-handler,wasi-path-open-i64-args}` (commit
+      `00cdeb2`) — LFloat → (i32.const 0) placeholder per kernel uniform-i32
+      (96 f64 errors); WASI path_open positions 5+6 widened via
+      (i64.extend_i32_u) (3 i64 errors).
+    - `Hβ.first-light.main-arity-1-argv-zero` (commit `f3af42e`) — _start
+      wires arity-1 main with argv=0 placeholder; mentl2 NOW EXECUTES
+      the wheel's main; traps on LUnresolved in wheel-side compile
+      pipeline → next gate Hβ.first-light.wheel-emit-implementation.
+- ✗ `Hβ.first-light.wheel-emit-implementation` — NEXT cursor. mentl2
+  runs main but traps inside wheel-side compile pipeline (LUnresolved
+  hit). The wheel-source compiler logic (parse/infer/lower/emit in
+  src/) has implementation gaps — bringing them up is the next L1
+  cascade. Each gap surfaces as a specific symptom; iterate empirically.
+- ✗ `Hβ.first-light.parser-fabrication-substrate` — earlier cursor (still pending).
   `bootstrap/src/parser_infra.wat:296` `$ident_at_p` returns fabricated
   `$str_alloc(0)` empty-string on non-TIdent (sister `$int_at_p`
   at line 306 returns `i32.const 0` correctly). 16 callers consume

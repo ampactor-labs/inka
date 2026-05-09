@@ -615,6 +615,10 @@
     (call $ls_enter_function)
     (call $bind_names_as_locals (local.get $param_names) (local.get $param_handles))
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
+    ;; Hβ.lower.tail-call-mark-pass — fn body IS in tail position.
+    ;; Without this, lex_from / scan_decimal recursive calls compile as
+    ;; regular call_indirect and exhaust the WASM stack on long inputs.
+    (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
     (call $ls_exit_function)
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))

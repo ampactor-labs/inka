@@ -20408,6 +20408,106 @@
       (local.get $h)
       (local.get $lo_val)))
 
+  ;; ─── $lower_mark_tail — Hβ.lower.tail-call-mark-pass ─────────────────
+  ;; Walk a LowExpr in tail position; rewrite LCall(308) → LTailCall(309)
+  ;; recursively through tail-preserving constructors. Tail position is
+  ;; structural (graph-property): branches of LIf, last stmt of LBlock,
+  ;; arm bodies of LMatch. Conservative on LRegion/LHandleWith/LFeedback —
+  ;; their bodies are NOT tail (handler-cleanup / region-exit / feedback
+  ;; continuation runs after, so a tail call would skip the surrounding
+  ;; control-flow). Mutates lists in place via $list_set / $record_set
+  ;; per buffer-counter (Ω.3) — caller's list pointer remains valid.
+  ;;
+  ;; Without this, every recursive call in lex_from / scan_decimal /
+  ;; tree-walks compiles as call_indirect (regular), growing the WASM
+  ;; stack frame-per-iteration; long inputs trap at "call stack
+  ;; exhausted". The L1 fixpoint requires WASM tail-call extension
+  ;; (return_call_indirect) at LTailCall emission sites — see
+  ;; emit_call.wat:264-278 $emit_ltailcall.
+  ;;
+  ;; Eight interrogations cleared:
+  ;;   Graph: tail-position is a structural property of the LowExpr tree.
+  ;;   Handler: lower walks; pure derived information from position.
+  ;;   Verb:  | > sequencing's rightmost stage IS tail.
+  ;;   Row: no effect change.
+  ;;   Ownership: same.
+  ;;   Refinement: none.
+  ;;   Gradient: tail-call IS a compile-time guarantee, recognized
+  ;;             structurally.
+  ;;   Reason: "tail-position because terminal expression of fn-body /
+  ;;           branch-of-tail-LIf / arm-of-tail-LMatch / last-stmt-of-
+  ;;           tail-LBlock."
+  (func $lower_mark_tail (export "lower_mark_tail") (param $e i32) (result i32)
+    (local $tag i32)
+    (local $h i32) (local $fn i32) (local $args i32)
+    (local $cond i32) (local $then_branch i32) (local $else_branch i32)
+    (local $stmts i32) (local $stmts_len i32) (local $last_idx i32)
+    (local $last i32) (local $marked i32)
+    (local $arms i32) (local $arms_len i32) (local $i i32)
+    (local $arm i32) (local $body i32)
+    (if (i32.eqz (local.get $e))
+      (then (return (local.get $e))))
+    (local.set $tag (call $tag_of (local.get $e)))
+    ;; LCall (308) → LTailCall (309).
+    (if (i32.eq (local.get $tag) (i32.const 308))
+      (then
+        (local.set $h    (call $record_get (local.get $e) (i32.const 0)))
+        (local.set $fn   (call $record_get (local.get $e) (i32.const 1)))
+        (local.set $args (call $record_get (local.get $e) (i32.const 2)))
+        (return (call $lexpr_make_ltailcall
+                  (local.get $h) (local.get $fn) (local.get $args)))))
+    ;; LIf (314): mark both branches in tail. Branches are single-element
+    ;; lists per $lower_if (walk_compound.wat:689-694 Lock #10).
+    (if (i32.eq (local.get $tag) (i32.const 314))
+      (then
+        (local.set $then_branch (call $record_get (local.get $e) (i32.const 2)))
+        (local.set $else_branch (call $record_get (local.get $e) (i32.const 3)))
+        (if (i32.gt_s (call $len (local.get $then_branch)) (i32.const 0))
+          (then
+            (local.set $last     (call $list_index (local.get $then_branch) (i32.const 0)))
+            (local.set $marked   (call $lower_mark_tail (local.get $last)))
+            (drop (call $list_set (local.get $then_branch) (i32.const 0) (local.get $marked)))))
+        (if (i32.gt_s (call $len (local.get $else_branch)) (i32.const 0))
+          (then
+            (local.set $last     (call $list_index (local.get $else_branch) (i32.const 0)))
+            (local.set $marked   (call $lower_mark_tail (local.get $last)))
+            (drop (call $list_set (local.get $else_branch) (i32.const 0) (local.get $marked)))))
+        (return (local.get $e))))
+    ;; LBlock (315): mark last stmt in tail. Per $lower_block
+    ;; (walk_compound.wat:706-735) the final-expr lives at the last index.
+    (if (i32.eq (local.get $tag) (i32.const 315))
+      (then
+        (local.set $stmts (call $record_get (local.get $e) (i32.const 1)))
+        (local.set $stmts_len (call $len (local.get $stmts)))
+        (if (i32.gt_s (local.get $stmts_len) (i32.const 0))
+          (then
+            (local.set $last_idx (i32.sub (local.get $stmts_len) (i32.const 1)))
+            (local.set $last     (call $list_index (local.get $stmts) (local.get $last_idx)))
+            (local.set $marked   (call $lower_mark_tail (local.get $last)))
+            (drop (call $list_set (local.get $stmts) (local.get $last_idx) (local.get $marked)))))
+        (return (local.get $e))))
+    ;; LMatch (321): mark each arm body in tail. Arms are LPArm records
+    ;; (lowpat.wat:235-247 tag 369, body at slot 1).
+    (if (i32.eq (local.get $tag) (i32.const 321))
+      (then
+        (local.set $arms     (call $record_get (local.get $e) (i32.const 2)))
+        (local.set $arms_len (call $len (local.get $arms)))
+        (local.set $i (i32.const 0))
+        (block $arms_done
+          (loop $arms_iter
+            (br_if $arms_done (i32.ge_s (local.get $i) (local.get $arms_len)))
+            (local.set $arm   (call $list_index (local.get $arms) (local.get $i)))
+            (local.set $body  (call $record_get (local.get $arm) (i32.const 1)))
+            (local.set $marked (call $lower_mark_tail (local.get $body)))
+            (call $record_set (local.get $arm) (i32.const 1) (local.get $marked))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $arms_iter)))
+        (return (local.get $e))))
+    ;; All other tags — identity. LRegion (328) / LHandleWith (329) /
+    ;; LFeedback (330) deliberately not propagated (handler / region /
+    ;; feedback cleanup runs after the body's last expression).
+    (local.get $e))
+
   ;; ═══ walk_handle.wat — Hβ.lower HandleExpr/PipeExpr arms (Tier 7) ═══
   ;; Hβ.lower cascade chunk #8 of 11 per Hβ-lower-substrate.md §12.3 dep order.
   ;;
@@ -20702,6 +20802,8 @@
     (call $bind_handler_state_names  (local.get $state))
     (call $bind_handler_arg_names (local.get $args))
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
+    ;; Hβ.lower.tail-call-mark-pass — handler arm body is in tail position.
+    (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
     (call $ls_pop_scope (local.get $cp))
     (local.get $lo_body))
 
@@ -20843,6 +20945,8 @@
     (local.set $prev_frame (call $ls_enter_frame))
     (call $bind_handler_arg_names (local.get $args))
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
+    ;; Hβ.lower.tail-call-mark-pass — handler arm body is in tail position.
+    (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     (local.get $lo_body))
@@ -22085,6 +22189,8 @@
     (local.set $prev_frame    (call $ls_enter_frame))
     (call $bind_names_as_locals (local.get $param_names) (local.get $param_handles))
     (local.set $lo_body       (call $lower_expr (local.get $body_node)))
+    ;; Hβ.lower.tail-call-mark-pass — lambda body is in tail position.
+    (local.set $lo_body       (call $lower_mark_tail (local.get $lo_body)))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     ;; H.2.e step 5: materialize caps_exprs from new captures.
@@ -22744,6 +22850,10 @@
     (call $ls_enter_function)
     (call $bind_names_as_locals (local.get $param_names) (local.get $param_handles))
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
+    ;; Hβ.lower.tail-call-mark-pass — fn body IS in tail position.
+    ;; Without this, lex_from / scan_decimal recursive calls compile as
+    ;; regular call_indirect and exhaust the WASM stack on long inputs.
+    (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
     (call $ls_exit_function)
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))

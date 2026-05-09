@@ -206,6 +206,48 @@ fn lexpr_ty(e) with LookupTy = {
   perform lookup_ty(lexpr_handle(e))
 }
 
+/// Hβ.lower.tail-call-mark-pass — rewrite LCall→LTailCall in tail position.
+/// Tail position is a structural property: branches of LIf, last stmt of
+/// LBlock, arm bodies of LMatch. LRegion / LHandleWith / LFeedback do NOT
+/// propagate tail (their cleanup runs after the body's last expression).
+/// Without this, lex_from / scan_decimal recursive calls compile as
+/// regular call_indirect and exhaust the WASM stack on long inputs.
+/// Mirror of bootstrap/src/lower/walk_call.wat $lower_mark_tail. Called by
+/// FnStmt / LambdaExpr / handler-arm-body lowering after lower_expr.
+fn mark_tail(e) with Memory = match e {
+  LCall(h, fn_, args)         => LTailCall(h, fn_, args),
+  LIf(h, cond, then_b, else_b) => {
+    mark_tail_last_in(then_b)
+    mark_tail_last_in(else_b)
+    LIf(h, cond, then_b, else_b)
+  },
+  LBlock(h, stmts) => {
+    mark_tail_last_in(stmts)
+    LBlock(h, stmts)
+  },
+  LMatch(h, scrut, arms) => LMatch(h, scrut, mark_tail_arms(arms)),
+  _ => e
+}
+
+/// Mutate-in-place: replace last element of `stmts` (a tag=0 flat list)
+/// with mark_tail(last). Returns the same list pointer.
+fn mark_tail_last_in(stmts) with Memory = {
+  let n = stmts.len
+  if n == 0 { stmts }
+  else {
+    let last_idx = n - 1
+    list_set(stmts, last_idx, mark_tail(list_index(stmts, last_idx)))
+  }
+}
+
+fn mark_tail_arms(arms) with Memory = {
+  if arms.len == 0 { [] }
+  else {
+    let (pat, body) = list_head(arms)
+    [(pat, mark_tail(body))] ++ mark_tail_arms(list_tail(arms))   // mirrors lower_match_arms shape
+  }
+}
+
 /// When the callee's effect row is ground (no unresolved row var),
 /// emit `LCall` (direct). When open, emit `LSuspend` (evidence-passing
 /// through a runtime call-indirect on the closure's fn-pointer field).
@@ -446,7 +488,7 @@ fn lower_expr_body(e, handle, span) = match e {
       param_names_list, param_handles_list,
       captures_names, captures_handles
     )
-    let lo_body = lower_expr(body_node)
+    let lo_body = mark_tail(lower_expr(body_node))   // Hβ.lower.tail-call-mark-pass — lambda body is in tail
     perform ls_exit_frame()
     let fn_ir = LFn(
       lambda_name,
@@ -725,7 +767,7 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
     resolve_captures_outer(free_names, parent_handle)
   // Synthetic parallel-thunk: empty fn_name; not a named fn declaration.
   perform ls_enter_frame("", [], [], captures_names, captures_handles)
-  let lo_body = lower_expr(branch_node)
+  let lo_body = mark_tail(lower_expr(branch_node))   // Hβ.lower.tail-call-mark-pass — synthesized thunk body is in tail
   perform ls_exit_frame()
   let fn_ir = LFn(
     thunk_name,
@@ -841,7 +883,7 @@ fn lower_stmt_body(s, handle, span) = match s {
       param_names_list, param_handles_list,
       captures_names, captures_handles
     )
-    let lo_body = lower_expr(body_node)
+    let lo_body = mark_tail(lower_expr(body_node))   // Hβ.lower.tail-call-mark-pass — fn body is in tail
     perform ls_exit_frame()
     let fn_ir = LFn(
       fn_name,
@@ -998,7 +1040,7 @@ fn lower_handler_arms(arms) = {
     // locals checkpoint, register each arg, lower body, restore.
     let cp = perform ls_push_scope()
     bind_names_as_locals(arm.args)
-    let lo_body = lower_expr(arm.body)
+    let lo_body = mark_tail(lower_expr(arm.body))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
     perform ls_pop_scope(cp)
     let lo_arm = {args: arm.args, body: lo_body, op_name: arm.op_name}
     [lo_arm] ++ lower_handler_arms(list_tail(arms))
@@ -1031,7 +1073,7 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = {
     bind_names_as_locals(config)
     bind_state_field_names_as_locals(state)
     bind_names_as_locals(arm.args)
-    let lo_body = lower_expr(arm.body)
+    let lo_body = mark_tail(lower_expr(arm.body))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
     perform ls_pop_scope(cp)
     // Per Hβ.first-light.handler-arm-fn-name-discriminator —
     // fn_name = "op_" ++ discriminator ++ "_" ++ arm.op_name

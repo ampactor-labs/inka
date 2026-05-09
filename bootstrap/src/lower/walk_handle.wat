@@ -292,6 +292,8 @@
     (call $bind_handler_state_names  (local.get $state))
     (call $bind_handler_arg_names (local.get $args))
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
+    ;; Hβ.lower.tail-call-mark-pass — handler arm body is in tail position.
+    (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
     (call $ls_pop_scope (local.get $cp))
     (local.get $lo_body))
 
@@ -433,6 +435,8 @@
     (local.set $prev_frame (call $ls_enter_frame))
     (call $bind_handler_arg_names (local.get $args))
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
+    ;; Hβ.lower.tail-call-mark-pass — handler arm body is in tail position.
+    (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     (local.get $lo_body))

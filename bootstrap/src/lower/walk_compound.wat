@@ -958,6 +958,8 @@
     (local.set $prev_frame    (call $ls_enter_frame))
     (call $bind_names_as_locals (local.get $param_names) (local.get $param_handles))
     (local.set $lo_body       (call $lower_expr (local.get $body_node)))
+    ;; Hβ.lower.tail-call-mark-pass — lambda body is in tail position.
+    (local.set $lo_body       (call $lower_mark_tail (local.get $lo_body)))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     ;; H.2.e step 5: materialize caps_exprs from new captures.

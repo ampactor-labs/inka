@@ -27191,14 +27191,22 @@
 
   ;; ─── $emit_ldeclarefn — LDeclareFn tag 313 emit arm per §2.5 ───────
   ;; Per src/backends/wasm.mn:1601-1608 + H1.4: at expression-position
-  ;; this arm is a NO-OP marker. The actual `(func $op_<name> ...)`
-  ;; body emission happens at module-emit time via emit_fns_expr deep
-  ;; walk (chunk #9 main.wat). LDeclareFn lands inside LBlock per
-  ;; Hβ.lower walk_stmt's HandlerDeclStmt arm; the LBlock placeholder
-  ;; convention requires this arm to push some i32 (here: 0) for the
-  ;; block's value-position slot.
-  (func $emit_ldeclarefn (param $r i32)
-    (call $emit_i32_const (i32.const 0)))
+  ;; this arm is a TRUE NO-OP. The actual `(func $op_<name> ...)` body
+  ;; emission happens at module-emit time via emit_fns_expr deep walk
+  ;; (chunk #9 main.wat). LDeclareFn lands inside LBlock per Hβ.lower
+  ;; walk_stmt's HandlerDeclStmt arm.
+  ;;
+  ;; Per Hβ.emit.ldeclarefn-true-noop (2026-05-09): the prior placeholder
+  ;; emitted (i32.const 0) — but $lexpr_consumes_no_stack returns 1 for
+  ;; tag 313, telling $ec5_emit_body NOT to drop residue. Net: 1 i32
+  ;; leaked onto stack per LDeclareFn in LBlock. Surfaced after the
+  ;; record-field-variant cascade closure (commit 49f0165) when LDeclareFn
+  ;; entries no longer hid behind UNRESOLVED → unreachable polymorphism.
+  ;; The placeholder convention is from a pre-drop-residue era; modern
+  ;; $ec5_emit_body correctly skips drop ONLY for tags that produce no
+  ;; residue. LDeclareFn IS no-residue at expression position; emit
+  ;; nothing.
+  (func $emit_ldeclarefn (param $r i32))
 
   ;; ─── $emit_lhandlewith — LHandleWith tag 329 emit arm per §2.5 ─────
   ;; Per src/backends/wasm.mn:1486-1489: sub-emit body. The handler-

@@ -29,7 +29,7 @@ effect WasmOut {
 
 handler wat_stdout {
   wat_emit(s) => {
-    print(s)
+    print_string(s)
     resume()
   }
 }

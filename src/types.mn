@@ -732,6 +732,13 @@ effect GraphWrite {
   graph_fork(String) -> ()
   graph_rollback(Int) -> ()
   graph_index_span(ValidSpan, Int) -> ()
+  // Per Hβ.first-light.graph-index-intent-effect-decl: graph_handler's
+  // arm graph_index_intent (graph.mn:240) was undeclared in any effect.
+  // parse_fn at parser.mn:396 perform-calls it. Infer couldn't ground
+  // → handle's Ty = TError-hole → emit_lconst's TError-hole branch
+  // produced (unreachable) → mentl2 trapped on parse_fn for any input
+  // containing `fn`. Effect decl IS the substrate-honest residue.
+  graph_index_intent(Int, List) -> ()
 }
 
 // Every perform report names a code whose docs/errors/<CODE>.md entry

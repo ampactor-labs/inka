@@ -158,6 +158,26 @@
               (call $list_index (local.get $subs_r) (i32.const 1))))
             (return (local.get $tup))))
 
+        ;; THandle (sentinel kind 7) — `handle` is a keyword in expression
+        ;; position (introduces handle-expr per parser_expr.wat:254 with
+        ;; TLBrace lookahead) but a CONTEXTUAL keyword in pattern position.
+        ;; Per SYNTAX.md:69 (`fn chase_node(ref nodes, handle, depth) ...`)
+        ;; `handle` is a canonical parameter name. Per protocol_parse_is_
+        ;; eager_graph_projection.md chain-link 5: reserving `handle` as
+        ;; hard keyword IS eager-form-commitment (drift 9 in lexer-state
+        ;; clothes). In pattern position there's NO ambiguity with
+        ;; `handle <expr>` (no expr after the pat). Treat THandle as
+        ;; PVar("handle"); reuse the lexer's length-prefixed "handle"
+        ;; data segment at offset 310.
+        (if (i32.eq (local.get $k) (i32.const 7))
+          (then
+            (local.set $tup (call $make_list (i32.const 2)))
+            (drop (call $list_set (local.get $tup) (i32.const 0)
+              (call $mk_PVar (i32.const 310))))
+            (drop (call $list_set (local.get $tup) (i32.const 1)
+              (i32.add (local.get $pos) (i32.const 1))))
+            (return (local.get $tup))))
+
         ;; Default sentinel → PWild (skip token)
         (local.set $tup (call $make_list (i32.const 2)))
         (drop (call $list_set (local.get $tup) (i32.const 0) (i32.const 131)))

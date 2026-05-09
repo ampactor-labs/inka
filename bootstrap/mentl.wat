@@ -4578,11 +4578,25 @@
   (func $ident_at_p (param $tokens i32) (param $pos i32) (result i32)
     (local $k i32)
     (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
-    (if (result i32) (i32.and
-          (i32.eqz (call $is_sentinel (local.get $k)))
-          (i32.eq (call $tag_of (local.get $k)) (i32.const 25)))
-      (then (i32.load offset=4 (local.get $k)))
-      (else (i32.const 0))))
+    ;; THandle (sentinel kind 7) — contextual keyword. Per SYNTAX.md:69
+    ;; (`fn chase_node(ref nodes, handle, depth) ...`) `handle` is a
+    ;; canonical parameter name. Per protocol_parse_is_eager_graph_
+    ;; projection.md chain-link 5: reserving as hard keyword IS drift 9
+    ;; in lexer-state clothes. The expr-position parser disambiguates
+    ;; via TLBrace lookahead (parser_expr.wat:254-269); identifier
+    ;; positions (param, let, pat-PVar, ref) treat THandle as ident
+    ;; with name = the lexer's static "handle" data segment at offset 310.
+    ;; This is THE canonical "is this position an ident?" projection
+    ;; (canonical_projection_pattern.md): ONE function reads + classifies,
+    ;; all callers consume uniformly.
+    (if (result i32) (i32.eq (local.get $k) (i32.const 7))
+      (then (i32.const 310))
+      (else
+        (if (result i32) (i32.and
+              (i32.eqz (call $is_sentinel (local.get $k)))
+              (i32.eq (call $tag_of (local.get $k)) (i32.const 25)))
+          (then (i32.load offset=4 (local.get $k)))
+          (else (i32.const 0))))))
 
   ;; ident_or_keyword_at_p: extract string for ANY identifier-shape
   ;; token at pos — TIdent OR a keyword used as a field-name. Returns
@@ -4866,6 +4880,26 @@
               (call $mk_PList (call $list_index (local.get $subs_r) (i32.const 0)))))
             (drop (call $list_set (local.get $tup) (i32.const 1)
               (call $list_index (local.get $subs_r) (i32.const 1))))
+            (return (local.get $tup))))
+
+        ;; THandle (sentinel kind 7) — `handle` is a keyword in expression
+        ;; position (introduces handle-expr per parser_expr.wat:254 with
+        ;; TLBrace lookahead) but a CONTEXTUAL keyword in pattern position.
+        ;; Per SYNTAX.md:69 (`fn chase_node(ref nodes, handle, depth) ...`)
+        ;; `handle` is a canonical parameter name. Per protocol_parse_is_
+        ;; eager_graph_projection.md chain-link 5: reserving `handle` as
+        ;; hard keyword IS eager-form-commitment (drift 9 in lexer-state
+        ;; clothes). In pattern position there's NO ambiguity with
+        ;; `handle <expr>` (no expr after the pat). Treat THandle as
+        ;; PVar("handle"); reuse the lexer's length-prefixed "handle"
+        ;; data segment at offset 310.
+        (if (i32.eq (local.get $k) (i32.const 7))
+          (then
+            (local.set $tup (call $make_list (i32.const 2)))
+            (drop (call $list_set (local.get $tup) (i32.const 0)
+              (call $mk_PVar (i32.const 310))))
+            (drop (call $list_set (local.get $tup) (i32.const 1)
+              (i32.add (local.get $pos) (i32.const 1))))
             (return (local.get $tup))))
 
         ;; Default sentinel → PWild (skip token)

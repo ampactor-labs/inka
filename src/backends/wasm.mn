@@ -1919,8 +1919,6 @@ fn emit_match_arms_uniform(arms, shape) = {
             perform wat_emit("    (i32.load offset=0)\n")
           },
           ShapeMixed => {
-            // Mixed never reaches uniform; emit_match_arms_mixed
-            // pre-filters into one of the two pure shapes.
             perform wat_emit("    (unreachable)\n")
           }
         }
@@ -1928,6 +1926,18 @@ fn emit_match_arms_uniform(arms, shape) = {
         perform wat_emit(int_to_str(tag))
         perform wat_emit(")\n")
         perform wat_emit("    (i32.eq)\n")
+        // Per Hβ.emit.match-nested-lpcon-substrate: emit AND-chain of
+        // nested LPCon tag-checks. PureFielded shape only — sentinel
+        // shape has no field structure to descend into. Each nested
+        // LPCon contributes (i32.and (sub_field.tag == sub_tag)) to the
+        // cumulative predicate; LPVars/LPWilds/LPLits are shape-neutral.
+        match shape {
+          ShapePureFielded => {
+            let path_buf = make_list(8)
+            emit_pat_nested_predicate(sub_pats, 0, path_buf, 0)
+          },
+          _ => ()
+        }
         perform wat_emit("    (if (result i32)\n      (then\n")
         match shape {
           ShapePureFielded => emit_pat_field_binds(sub_pats, 0),
@@ -2046,19 +2056,38 @@ fn emit_record_field_binds(binds) = {
   }
 }
 
-// Per-arm field binding: for each LPVar sub-pattern at index i, emit
-// (local.get $scrut_tmp) (i32.load offset=4+4*i) (local.set $name).
-// Wildcards bind nothing; nested constructor patterns are not yet
-// destructured (shallow-pattern v1).
+// Per Hβ.emit.match-nested-lpcon-substrate (2026-05-09): pat is a TREE.
+// Emit walks the tree recursively. For each LPVar leaf at offset path
+// [N_1, N_2, ...], emit (local.get $scrut_tmp)(i32.load offset=N_1)
+// (i32.load offset=N_2)...(local.set $name). For nested LPCon sub-pats,
+// recurse with extended path. Pre-fix only depth-1 LPVars bound; for
+// `match body { NStmt(LetStmt(p, e)) | NStmt(FnStmt(...)) | ... }`
+// ALL arms received identical outer-NStmt-tag dispatch → first arm
+// fired for any NStmt → mentl2 trap at infer_pat. Per protocol_emit_
+// is_graph_projection.md: the graph encodes pat hierarchy explicitly;
+// emit projects through it.
+//
+// Per Ω.3 buffer-counter substrate: path is a pre-allocated 8-slot
+// buffer, mutated in-place via list_set; path_len tracks current depth.
+// Each depth D fully owns slot path[D] for its iteration; recursion
+// below D mutates path[D+1..] freely; sibling iteration at D
+// overwrites slot D cleanly. No O(N²) accumulator (drift 11 refused).
 fn emit_pat_field_binds(sub_pats, i) = {
+  let path = make_list(8)
+  emit_pat_field_binds_path(sub_pats, i, path, 0)
+}
+
+fn emit_pat_field_binds_path(sub_pats, i, path, path_len) = {
   if sub_pats.len == 0 { () }
   else {
     let p = list_head(sub_pats)
+    let field_offset = 4 + i * 4
     match p {
       LPVar(name) => {
         perform wat_emit("    (local.get $scrut_tmp)\n")
+        emit_load_chain(path, 0, path_len)
         perform wat_emit("    (i32.load offset=")
-        perform wat_emit(int_to_str(4 + i * 4))
+        perform wat_emit(int_to_str(field_offset))
         perform wat_emit(")\n")
         perform wat_emit("    (local.set $")
         perform wat_emit(name)
@@ -2066,12 +2095,61 @@ fn emit_pat_field_binds(sub_pats, i) = {
       },
       LPWild     => (),
       LPLit(_)   => (),
-      LPCon(_, _, _) => (),    // nested ADT destructure — TODO
+      LPCon(_, _, sub) => {
+        let extended = list_set(path, path_len, field_offset)
+        emit_pat_field_binds_path(sub, 0, extended, path_len + 1)
+      },
       LPTuple(_) => (),
       LPList(_)  => (),
-      LPRecord(_) => ()        // nested record destructure — TODO
+      LPRecord(_) => ()
     }
-    emit_pat_field_binds(list_tail(sub_pats), i + 1)
+    emit_pat_field_binds_path(list_tail(sub_pats), i + 1, path, path_len)
+  }
+}
+
+// emit_load_chain — emit (i32.load offset=path[k]) for k in 0..path_len.
+// Caller has already emitted (local.get $scrut_tmp); this chains the
+// field-traversal loads to reach the deepest parent.
+fn emit_load_chain(path, k, path_len) = {
+  if k == path_len { () }
+  else {
+    perform wat_emit("    (i32.load offset=")
+    perform wat_emit(int_to_str(list_index(path, k)))
+    perform wat_emit(")\n")
+    emit_load_chain(path, k + 1, path_len)
+  }
+}
+
+// emit_pat_nested_predicate — recursive nested-LPCon tag-check predicate.
+// Walks sub_pats; for each LPCon at index i, emits the chain that loads
+// the sub-field's tag, compares to sub_tag, and i32.ands with the
+// previously-on-stack predicate. Recurses into each nested LPCon's
+// sub-pats with extended path. Same buffer-counter discipline as
+// emit_pat_field_binds_path.
+fn emit_pat_nested_predicate(sub_pats, i, path, path_len) = {
+  if sub_pats.len == 0 { () }
+  else {
+    let p = list_head(sub_pats)
+    let field_offset = 4 + i * 4
+    match p {
+      LPCon(_, tag_id, sub) => {
+        perform wat_emit("    (local.get $scrut_tmp)\n")
+        emit_load_chain(path, 0, path_len)
+        perform wat_emit("    (i32.load offset=")
+        perform wat_emit(int_to_str(field_offset))
+        perform wat_emit(")\n")
+        perform wat_emit("    (i32.load offset=0)\n")
+        perform wat_emit("    (i32.const ")
+        perform wat_emit(int_to_str(tag_id))
+        perform wat_emit(")\n")
+        perform wat_emit("    (i32.eq)\n")
+        perform wat_emit("    (i32.and)\n")
+        let extended = list_set(path, path_len, field_offset)
+        emit_pat_nested_predicate(sub, 0, extended, path_len + 1)
+      },
+      _ => ()
+    }
+    emit_pat_nested_predicate(list_tail(sub_pats), i + 1, path, path_len)
   }
 }
 

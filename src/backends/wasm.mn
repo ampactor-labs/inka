@@ -1662,11 +1662,14 @@ fn emit_const(v) = match v {
     perform wat_emit(int_to_str(n))
     perform wat_emit(")\n")
   },
-  LFloat(f) => {
-    perform wat_emit("    (f64.const ")
-    perform wat_emit(float_to_str(f))
-    perform wat_emit(")\n")
-  },
+  // Per kernel uniform-i32 (DESIGN.md §0.5 / SUBSTRATE.md §IX): float
+  // values flow as i32 placeholder until the float-substrate handler
+  // lands. Pre-fix this arm emitted (f64.const ...) — partial f64
+  // dream-code that cascaded type errors at every i32-uniform downstream
+  // emit. Named follow-up Hβ.emit.float-substrate-handler swaps in
+  // proper f64 emit (typed binops, typed stores, closure-record i64-
+  // reinterpret) post-L1 via row-tagged dispatch.
+  LFloat(_) => perform wat_emit("    (i32.const 0)\n"),
   LBool(b) =>
     if b { perform wat_emit("    (i32.const 1)\n") }
     else { perform wat_emit("    (i32.const 0)\n") },

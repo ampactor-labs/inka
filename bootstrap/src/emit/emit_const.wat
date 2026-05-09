@@ -166,15 +166,25 @@
 
     (local.set $ty_tag_v (call $ty_tag (local.get $ty)))
 
-    ;; TFloat (101) → "(f64.const <text>)". H.3.b emit-float-substrate.
-    ;; The LConst's value field IS the str ptr to the raw decimal text
-    ;; (set by parser's mk_LitFloat at offset 4; threaded through lower
-    ;; via $walk_const_payload_i32 reading offset 4). Emit passes the
-    ;; text verbatim — WAT accepts decimal float literals natively, so
-    ;; the seed avoids implementing a full IEEE-754 decoder.
+    ;; TFloat (101) → "(i32.const 0)" placeholder per kernel uniform-i32
+    ;; (DESIGN.md §0.5 / SUBSTRATE.md §IX "the heap has one story").
+    ;; Pre-fix this arm emitted (f64.const <text>) — partial f64 dream-
+    ;; code that created cascading type-mismatch chains because every
+    ;; downstream emit site (i32.store / i32.gt_s / i32.add / fn-result
+    ;; / call_indirect) is i32-uniform per the kernel. f64 needs a
+    ;; coordinated cascade across emit (typed binops, typed stores,
+    ;; typed call-signatures, typed fn results, closure-record float
+    ;; encoding via i64-reinterpret-or-box). Per CLAUDE.md "delete dead
+    ;; substrate; do not explain absence" — partial f64 emit IS dead
+    ;; substrate at the kernel layer; replace with i32-uniform placeholder.
+    ;; Cursor scoring values are 0 at runtime; cursor-scoring proximity
+    ;; functions become functionally inert until float-substrate handler
+    ;; lands. Named follow-up: Hβ.emit.float-substrate-handler closes
+    ;; the f64 cascade post-L1 (when wheel-side handler-on-row swap
+    ;; routes float-row-tagged values through f64 emit naturally).
     (if (i32.eq (local.get $ty_tag_v) (i32.const 101))
       (then
-        (call $emit_f64_const (local.get $value))
+        (call $emit_i32_const (i32.const 0))
         (return)))
 
     ;; TString (102) → intern + emit "(i32.const <offset>)".

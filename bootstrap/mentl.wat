@@ -24328,15 +24328,25 @@
 
     (local.set $ty_tag_v (call $ty_tag (local.get $ty)))
 
-    ;; TFloat (101) → "(f64.const <text>)". H.3.b emit-float-substrate.
-    ;; The LConst's value field IS the str ptr to the raw decimal text
-    ;; (set by parser's mk_LitFloat at offset 4; threaded through lower
-    ;; via $walk_const_payload_i32 reading offset 4). Emit passes the
-    ;; text verbatim — WAT accepts decimal float literals natively, so
-    ;; the seed avoids implementing a full IEEE-754 decoder.
+    ;; TFloat (101) → "(i32.const 0)" placeholder per kernel uniform-i32
+    ;; (DESIGN.md §0.5 / SUBSTRATE.md §IX "the heap has one story").
+    ;; Pre-fix this arm emitted (f64.const <text>) — partial f64 dream-
+    ;; code that created cascading type-mismatch chains because every
+    ;; downstream emit site (i32.store / i32.gt_s / i32.add / fn-result
+    ;; / call_indirect) is i32-uniform per the kernel. f64 needs a
+    ;; coordinated cascade across emit (typed binops, typed stores,
+    ;; typed call-signatures, typed fn results, closure-record float
+    ;; encoding via i64-reinterpret-or-box). Per CLAUDE.md "delete dead
+    ;; substrate; do not explain absence" — partial f64 emit IS dead
+    ;; substrate at the kernel layer; replace with i32-uniform placeholder.
+    ;; Cursor scoring values are 0 at runtime; cursor-scoring proximity
+    ;; functions become functionally inert until float-substrate handler
+    ;; lands. Named follow-up: Hβ.emit.float-substrate-handler closes
+    ;; the f64 cascade post-L1 (when wheel-side handler-on-row swap
+    ;; routes float-row-tagged values through f64 emit naturally).
     (if (i32.eq (local.get $ty_tag_v) (i32.const 101))
       (then
-        (call $emit_f64_const (local.get $value))
+        (call $emit_i32_const (i32.const 0))
         (return)))
 
     ;; TString (102) → intern + emit "(i32.const <offset>)".
@@ -27205,6 +27215,17 @@
     ;; refused: 1 (structural prefix-check); 8 (no mode flag).
     (if (call $starts_with_wasi (local.get $op_name))
       (then
+        ;; Per Hβ.emit.wasi-path-open-i64-args: WASI path_open's
+        ;; rights_base + rights_inheriting (positions 5,6) are i64 per
+        ;; WASI snapshot_preview1; wheel-source passes i32 literals;
+        ;; emit widens via (i64.extend_i32_u). Other WASI ops are
+        ;; i32-uniform (verified per WASI spec scan; only path_open
+        ;; carries i64 in the ops the wheel uses).
+        (if (call $str_eq (local.get $op_name) (i32.const 5160))   ;; "wasi_path_open"
+          (then
+            (call $ec6_emit_args_path_open (call $lexpr_lperform_args (local.get $r)))
+            (call $ec7_emit_call_dollar (local.get $op_name))
+            (return)))
         (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
         (call $ec7_emit_call_dollar (local.get $op_name))
         (return)))
@@ -27222,6 +27243,50 @@
     (call $el_emit_local_get_state)
     (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
     (call $ec7_emit_call_op_dollar (local.get $op_name)))
+
+  ;; ─── WASI path_open i64-args data + helper ──────────────────────
+  ;; Per WASI snapshot_preview1: path_open's rights_base (arg 5) and
+  ;; rights_inheriting (arg 6) are i64. Wheel-source passes Mentl-Int
+  ;; literals (i32 in the seed's uniform-i32 representation). Emit
+  ;; widens via (i64.extend_i32_u) at those two positions.
+  ;;
+  ;; Comparison string "wasi_path_open" (length 14) at offset 5160.
+  ;; [5160, 5178) — past walk_expr.wat's 5128 (28 bytes ending at 5160).
+  (data (i32.const 5160) "\0e\00\00\00wasi_path_open")
+
+  ;; $emit_i64_extend_i32_u — emit "(i64.extend_i32_u)" (18 bytes).
+  ;; Drift 1 refused: direct byte-emit (no vtable / op-table). Drift 6
+  ;; refused: i64-extension is the precise WASM op for i32→i64 widen,
+  ;; not a generic "convert"-flag dispatch.
+  (func $emit_i64_extend_i32_u
+    ;; '(' 'i' '6' '4' '.' 'e' 'x' 't' 'e' 'n' 'd' '_' 'i' '3' '2' '_' 'u' ')'
+    (call $emit_byte (i32.const 40))  (call $emit_byte (i32.const 105))
+    (call $emit_byte (i32.const 54))  (call $emit_byte (i32.const 52))
+    (call $emit_byte (i32.const 46))  (call $emit_byte (i32.const 101))
+    (call $emit_byte (i32.const 120)) (call $emit_byte (i32.const 116))
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 110))
+    (call $emit_byte (i32.const 100)) (call $emit_byte (i32.const 95))
+    (call $emit_byte (i32.const 105)) (call $emit_byte (i32.const 51))
+    (call $emit_byte (i32.const 50))  (call $emit_byte (i32.const 95))
+    (call $emit_byte (i32.const 117)) (call $emit_byte (i32.const 41)))
+
+  ;; $ec6_emit_args_path_open — args emitter with i64 widening at
+  ;; positions 5,6. Mirrors $ec6_emit_args's loop shape (Anchor 4
+  ;; wheel parity); only delta is the position-conditional extend.
+  (func $ec6_emit_args_path_open (param $args i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $args)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (call $emit_lexpr
+          (call $list_index (local.get $args) (local.get $i)))
+        (if (i32.or (i32.eq (local.get $i) (i32.const 5))
+                    (i32.eq (local.get $i) (i32.const 6)))
+          (then (call $emit_i64_extend_i32_u)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
 
   ;; $starts_with_memory — checks `memory_` prefix (7 bytes).
   (func $starts_with_memory (param $s i32) (result i32)

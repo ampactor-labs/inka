@@ -237,14 +237,25 @@
   ;; SUBSTRATE.md §I third truth: evidence passing per Koka JFP 2022,
   ;; NOT vtable indirection. The closure record IS the unified
   ;; __state per W7.
+  ;; Per Hβ.emit.lcall-per-handle-state-scratch (2026-05-09): use
+  ;; per-handle "$call_<H>" local instead of shared $state_tmp. Nested
+  ;; calls (e.g. `is_alnum(byte_at(s, p))`) clobbered $state_tmp during
+  ;; inner-arg emission, producing call_indirect ftN type-mismatch
+  ;; traps. Per-handle scratch isolates each call's closure-pointer per
+  ;; protocol_emit_is_graph_projection.md "graph encodes per-call-site
+  ;; uniqueness; emit projects through it." Local declared by alloc-
+  ;; handle-locals walk's LCall arm (main.wat).
   (func $emit_lcall (param $r i32)
-    (local $args i32)
+    (local $args i32) (local $local_name i32)
     (local.set $args (call $lexpr_lcall_args (local.get $r)))
+    (local.set $local_name
+      (call $str_concat (i32.const 1680)                  ;; "call_"
+                        (call $int_to_str (call $lexpr_handle (local.get $r)))))
     (call $emit_lexpr (call $lexpr_lcall_fn (local.get $r)))
-    (call $ec6_emit_local_set_state_tmp)
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_set_dollar (local.get $local_name))
+    (call $ec_emit_local_get_dollar (local.get $local_name))
     (call $ec6_emit_args (local.get $args))
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_get_dollar (local.get $local_name))
     (call $ec6_emit_i32_load_offset_0)
     (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
 
@@ -253,13 +264,16 @@
   ;; return_call_indirect — H7 multi-shot's tail-resumptive optimization
   ;; (~85% per SUBSTRATE.md §III "Tail-resumptive").
   (func $emit_ltailcall (param $r i32)
-    (local $args i32)
+    (local $args i32) (local $local_name i32)
     (local.set $args (call $lexpr_ltailcall_args (local.get $r)))
+    (local.set $local_name
+      (call $str_concat (i32.const 1680)                  ;; "call_"
+                        (call $int_to_str (call $lexpr_handle (local.get $r)))))
     (call $emit_lexpr (call $lexpr_ltailcall_fn (local.get $r)))
-    (call $ec6_emit_local_set_state_tmp)
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_set_dollar (local.get $local_name))
+    (call $ec_emit_local_get_dollar (local.get $local_name))
     (call $ec6_emit_args (local.get $args))
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_get_dollar (local.get $local_name))
     (call $ec6_emit_i32_load_offset_0)
     (call $ec6_emit_return_call_indirect_ftN (call $len (local.get $args))))
 

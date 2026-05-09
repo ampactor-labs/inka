@@ -357,6 +357,15 @@
   (data (i32.const 1632) "\06\00\00\00tuple_")
   (data (i32.const 1648) "\05\00\00\00__fb_")
   (data (i32.const 1664) "\0a\00\00\00__fb_prev_")
+  ;; Per Hβ.emit.lcall-per-handle-state-scratch (2026-05-09): each LCall
+  ;; mints a unique "call_<H>" local for the closure pointer. Pre-fix
+  ;; LCall used the SHARED $state_tmp scratch, but nested calls (e.g.
+  ;; `is_alnum(byte_at(s, p))`) clobbered it during inner-arg emission,
+  ;; producing call_indirect ftN type-mismatch traps. Per-handle scratch
+  ;; per protocol_emit_is_graph_projection.md "graph encodes per-call-
+  ;; site uniqueness; emit projects through it."
+  ;;   1680 — "call_" (5 chars; 4+5=9 bytes; 1680-1688)
+  (data (i32.const 1680) "\05\00\00\00call_")
 
   ;; ─── $emit_alloc — bump-pattern emitter (EmitMemory swap surface) ─
   ;; Per Hβ-emit-substrate.md §3.5 + wheel canonical src/backends/wasm.mn:

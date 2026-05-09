@@ -1390,6 +1390,13 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 314))         ;; LIf
       (then
+        ;; Per Hβ.emit.lif-walk-cond (2026-05-09): cond is a single
+        ;; LowExpr that may contain LCalls whose per-handle locals
+        ;; need pre-registration. Pre-fix the walk skipped cond,
+        ;; surfacing as undefined-local errors after the lcall-per-
+        ;; handle-state-scratch cascade.
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lif_cond (local.get $expr)))
         (call $emit_alloc_handle_locals
           (call $lexpr_lif_then (local.get $expr)))
         (call $emit_alloc_handle_locals
@@ -1402,8 +1409,21 @@
         (call $emit_alloc_handle_locals_match_arms
           (call $lexpr_lmatch_arms (local.get $expr)))
         (return)))
+    ;; Per Hβ.emit.lcall-per-handle-state-scratch (2026-05-09): mint
+    ;; "call_<H>" per-handle local. Pre-fix LCall used $state_tmp shared
+    ;; scratch; nested calls clobbered. Per-handle isolates each call's
+    ;; closure-pointer scratch — uniform with variant_/record_/tuple_ pattern,
+    ;; with the addition of $emit_fn_local_check dedup (LCalls can share
+    ;; handles when synthesized at lower; e.g. handle=0 sentinel from
+    ;; recovery paths).
     (if (i32.eq (local.get $tag) (i32.const 308))         ;; LCall
       (then
+        (local.set $handle (call $lexpr_handle (local.get $expr)))
+        (local.set $name
+          (call $str_concat (i32.const 1680)              ;; "call_"
+                            (call $int_to_str (local.get $handle))))
+        (if (call $emit_fn_local_check (local.get $name))
+          (then (call $emit_local_decl_str (local.get $name))))
         (call $emit_alloc_handle_locals_walk
           (call $lexpr_lcall_fn (local.get $expr)))
         (call $emit_alloc_handle_locals
@@ -1411,6 +1431,12 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 309))         ;; LTailCall
       (then
+        (local.set $handle (call $lexpr_handle (local.get $expr)))
+        (local.set $name
+          (call $str_concat (i32.const 1680)              ;; "call_"
+                            (call $int_to_str (local.get $handle))))
+        (if (call $emit_fn_local_check (local.get $name))
+          (then (call $emit_local_decl_str (local.get $name))))
         (call $emit_alloc_handle_locals_walk
           (call $lexpr_ltailcall_fn (local.get $expr)))
         (call $emit_alloc_handle_locals

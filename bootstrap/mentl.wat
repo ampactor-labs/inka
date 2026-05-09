@@ -24582,6 +24582,15 @@
   (data (i32.const 1632) "\06\00\00\00tuple_")
   (data (i32.const 1648) "\05\00\00\00__fb_")
   (data (i32.const 1664) "\0a\00\00\00__fb_prev_")
+  ;; Per Hβ.emit.lcall-per-handle-state-scratch (2026-05-09): each LCall
+  ;; mints a unique "call_<H>" local for the closure pointer. Pre-fix
+  ;; LCall used the SHARED $state_tmp scratch, but nested calls (e.g.
+  ;; `is_alnum(byte_at(s, p))`) clobbered it during inner-arg emission,
+  ;; producing call_indirect ftN type-mismatch traps. Per-handle scratch
+  ;; per protocol_emit_is_graph_projection.md "graph encodes per-call-
+  ;; site uniqueness; emit projects through it."
+  ;;   1680 — "call_" (5 chars; 4+5=9 bytes; 1680-1688)
+  (data (i32.const 1680) "\05\00\00\00call_")
 
   ;; ─── $emit_alloc — bump-pattern emitter (EmitMemory swap surface) ─
   ;; Per Hβ-emit-substrate.md §3.5 + wheel canonical src/backends/wasm.mn:
@@ -26137,14 +26146,25 @@
   ;; SUBSTRATE.md §I third truth: evidence passing per Koka JFP 2022,
   ;; NOT vtable indirection. The closure record IS the unified
   ;; __state per W7.
+  ;; Per Hβ.emit.lcall-per-handle-state-scratch (2026-05-09): use
+  ;; per-handle "$call_<H>" local instead of shared $state_tmp. Nested
+  ;; calls (e.g. `is_alnum(byte_at(s, p))`) clobbered $state_tmp during
+  ;; inner-arg emission, producing call_indirect ftN type-mismatch
+  ;; traps. Per-handle scratch isolates each call's closure-pointer per
+  ;; protocol_emit_is_graph_projection.md "graph encodes per-call-site
+  ;; uniqueness; emit projects through it." Local declared by alloc-
+  ;; handle-locals walk's LCall arm (main.wat).
   (func $emit_lcall (param $r i32)
-    (local $args i32)
+    (local $args i32) (local $local_name i32)
     (local.set $args (call $lexpr_lcall_args (local.get $r)))
+    (local.set $local_name
+      (call $str_concat (i32.const 1680)                  ;; "call_"
+                        (call $int_to_str (call $lexpr_handle (local.get $r)))))
     (call $emit_lexpr (call $lexpr_lcall_fn (local.get $r)))
-    (call $ec6_emit_local_set_state_tmp)
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_set_dollar (local.get $local_name))
+    (call $ec_emit_local_get_dollar (local.get $local_name))
     (call $ec6_emit_args (local.get $args))
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_get_dollar (local.get $local_name))
     (call $ec6_emit_i32_load_offset_0)
     (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
 
@@ -26153,13 +26173,16 @@
   ;; return_call_indirect — H7 multi-shot's tail-resumptive optimization
   ;; (~85% per SUBSTRATE.md §III "Tail-resumptive").
   (func $emit_ltailcall (param $r i32)
-    (local $args i32)
+    (local $args i32) (local $local_name i32)
     (local.set $args (call $lexpr_ltailcall_args (local.get $r)))
+    (local.set $local_name
+      (call $str_concat (i32.const 1680)                  ;; "call_"
+                        (call $int_to_str (call $lexpr_handle (local.get $r)))))
     (call $emit_lexpr (call $lexpr_ltailcall_fn (local.get $r)))
-    (call $ec6_emit_local_set_state_tmp)
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_set_dollar (local.get $local_name))
+    (call $ec_emit_local_get_dollar (local.get $local_name))
     (call $ec6_emit_args (local.get $args))
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_get_dollar (local.get $local_name))
     (call $ec6_emit_i32_load_offset_0)
     (call $ec6_emit_return_call_indirect_ftN (call $len (local.get $args))))
 
@@ -29073,6 +29096,13 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 314))         ;; LIf
       (then
+        ;; Per Hβ.emit.lif-walk-cond (2026-05-09): cond is a single
+        ;; LowExpr that may contain LCalls whose per-handle locals
+        ;; need pre-registration. Pre-fix the walk skipped cond,
+        ;; surfacing as undefined-local errors after the lcall-per-
+        ;; handle-state-scratch cascade.
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lif_cond (local.get $expr)))
         (call $emit_alloc_handle_locals
           (call $lexpr_lif_then (local.get $expr)))
         (call $emit_alloc_handle_locals
@@ -29085,8 +29115,21 @@
         (call $emit_alloc_handle_locals_match_arms
           (call $lexpr_lmatch_arms (local.get $expr)))
         (return)))
+    ;; Per Hβ.emit.lcall-per-handle-state-scratch (2026-05-09): mint
+    ;; "call_<H>" per-handle local. Pre-fix LCall used $state_tmp shared
+    ;; scratch; nested calls clobbered. Per-handle isolates each call's
+    ;; closure-pointer scratch — uniform with variant_/record_/tuple_ pattern,
+    ;; with the addition of $emit_fn_local_check dedup (LCalls can share
+    ;; handles when synthesized at lower; e.g. handle=0 sentinel from
+    ;; recovery paths).
     (if (i32.eq (local.get $tag) (i32.const 308))         ;; LCall
       (then
+        (local.set $handle (call $lexpr_handle (local.get $expr)))
+        (local.set $name
+          (call $str_concat (i32.const 1680)              ;; "call_"
+                            (call $int_to_str (local.get $handle))))
+        (if (call $emit_fn_local_check (local.get $name))
+          (then (call $emit_local_decl_str (local.get $name))))
         (call $emit_alloc_handle_locals_walk
           (call $lexpr_lcall_fn (local.get $expr)))
         (call $emit_alloc_handle_locals
@@ -29094,6 +29137,12 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 309))         ;; LTailCall
       (then
+        (local.set $handle (call $lexpr_handle (local.get $expr)))
+        (local.set $name
+          (call $str_concat (i32.const 1680)              ;; "call_"
+                            (call $int_to_str (local.get $handle))))
+        (if (call $emit_fn_local_check (local.get $name))
+          (then (call $emit_local_decl_str (local.get $name))))
         (call $emit_alloc_handle_locals_walk
           (call $lexpr_ltailcall_fn (local.get $expr)))
         (call $emit_alloc_handle_locals

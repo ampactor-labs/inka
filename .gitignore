@@ -20,6 +20,9 @@ art/
 # One-off probe outputs
 /probe-*.txt
 
+# Throwaway substrate-debug artifacts (build logs, .err/.wat reproductions)
+/.tmp/
+
 # Inka cache directory
 .inka/
 

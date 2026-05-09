@@ -480,11 +480,30 @@ byte. Empirically-real residue per `Hβ-first-light-empirical.md` §2.3
       wires arity-1 main with argv=0 placeholder; mentl2 NOW EXECUTES
       the wheel's main; traps on LUnresolved in wheel-side compile
       pipeline → next gate Hβ.first-light.wheel-emit-implementation.
-- ✗ `Hβ.first-light.wheel-emit-implementation` — NEXT cursor. mentl2
-  runs main but traps inside wheel-side compile pipeline (LUnresolved
-  hit). The wheel-source compiler logic (parse/infer/lower/emit in
-  src/) has implementation gaps — bringing them up is the next L1
-  cascade. Each gap surfaces as a specific symptom; iterate empirically.
+- ✓ Round 2 cascade (2026-05-09 session): wheel-pipeline-progression
+  via 6 substrate fixes:
+    - `Hβ.parser.record-field-variant-substrate` (commit `49f0165`) —
+      `Bar { name: T, ... }` in type decls. UNRESOLVED 2902 → 448 (85%).
+    - `Hβ.emit.ldeclarefn-true-noop` (commit `c67cbb7`) — LDeclareFn
+      placeholder leaked stack; 11 wat2wasm errors → 0 (surfaced after
+      record-field-variant cascade resolved `map`).
+    - `Hβ.emit.lcall-per-handle-state-scratch` (commit `1fa5f97`) —
+      $state_tmp shared scratch clobbered by nested calls; per-handle
+      `$call_<H>` local. mentl2 trap depth 8 → 11 frames.
+    - `Hβ.lower.lpat-extract-lit-scalar` (commit `ee2b679`) — LPLit
+      stored LV-ptr instead of scalar; `match tag { 0 => ... }` failed
+      all arms. Wheel reaches infer pre-register walk.
+    - `Hβ.parser.handle-as-contextual-ident` (commit `0e7e27e`) —
+      THandle treated as ident in pat + ident-positions per SYNTAX.md:69.
+      UNRESOLVED handle 155 → 8 (89%); total 358 → 294. Wheel reaches
+      infer_pat (fn 584).
+- ✗ `Hβ.first-light.wheel-infer-pat-unreachable` — NEXT cursor. mentl2
+  runs through infer pre-register + infer_stmt_list, traps inside
+  infer_pat (fn 584). Likely: PList/PRecord arm gap or PCon's report-on-
+  None path triggers unhandled report effect.
+- ✗ `Hβ.first-light.wheel-emit-implementation` — broader cascade
+  tracking surfaced wheel-side gaps as mentl2 progresses through the
+  compile pipeline.
 - ✗ `Hβ.first-light.parser-fabrication-substrate` — earlier cursor (still pending).
   `bootstrap/src/parser_infra.wat:296` `$ident_at_p` returns fabricated
   `$str_alloc(0)` empty-string on non-TIdent (sister `$int_at_p`

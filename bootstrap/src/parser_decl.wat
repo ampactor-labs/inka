@@ -180,8 +180,9 @@
   ;; Returns (variants_list, new_pos). Each variant is a 2-tuple (name, field_types).
 
   (func $parse_variants (param $tokens i32) (param $pos i32) (result i32)
-    (local $p i32) (local $vname i32) (local $p2 i32)
+    (local $p i32) (local $vname i32) (local $p2 i32) (local $p2ws i32)
     (local $fields_r i32) (local $fields i32) (local $p3 i32)
+    (local $rec_fields i32) (local $ty_record i32)
     (local $variant i32) (local $p4 i32) (local $rest_r i32)
     (local $buf i32) (local $count i32) (local $tup i32)
     (local.set $buf (call $make_list (i32.const 4)))
@@ -202,16 +203,36 @@
         (if (i32.eqz (local.get $vname))
           (then (br $done)))
         (local.set $p2 (i32.add (local.get $p) (i32.const 1)))
-        ;; Check for (fields)
-        (if (call $at (local.get $tokens) (local.get $p2) (i32.const 45)) ;; TLParen
+        (local.set $p2ws (call $skip_ws_p (local.get $tokens) (local.get $p2)))
+        ;; Per Hβ.parser.record-field-variant-substrate (2026-05-09):
+        ;; check for { record-fields } before ( paren-fields. Wheel-source
+        ;; uses BOTH forms (paren-fields in src/types.mn ADTs without
+        ;; field names; record-fields in lib/ml/autodiff.mn TapeEntry +
+        ;; src/types.mn record-shaped variants). Mirror $parse_type_stmt's
+        ;; nominal-record pattern at lines 28-52: parse record fields via
+        ;; $parse_record_type_fields, wrap in mk_TyRecord, store as a
+        ;; 1-element field_tys list (uniform with the variant_tys shape
+        ;; downstream lower expects).
+        (if (call $at (local.get $tokens) (local.get $p2ws) (i32.const 47)) ;; TLBrace
           (then
-            (local.set $fields_r (call $parse_variant_fields (local.get $tokens)
-              (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p2) (i32.const 1)))))
-            (local.set $fields (call $list_index (local.get $fields_r) (i32.const 0)))
+            (local.set $fields_r (call $parse_record_type_fields
+              (local.get $tokens)
+              (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p2ws) (i32.const 1)))))
+            (local.set $rec_fields (call $list_index (local.get $fields_r) (i32.const 0)))
+            (local.set $ty_record (call $mk_TyRecord (local.get $rec_fields)))
+            (local.set $fields (call $make_list (i32.const 1)))
+            (drop (call $list_set (local.get $fields) (i32.const 0) (local.get $ty_record)))
             (local.set $p3 (call $list_index (local.get $fields_r) (i32.const 1))))
           (else
-            (local.set $fields (call $make_list (i32.const 0)))
-            (local.set $p3 (local.get $p2))))
+            (if (call $at (local.get $tokens) (local.get $p2) (i32.const 45)) ;; TLParen
+              (then
+                (local.set $fields_r (call $parse_variant_fields (local.get $tokens)
+                  (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p2) (i32.const 1)))))
+                (local.set $fields (call $list_index (local.get $fields_r) (i32.const 0)))
+                (local.set $p3 (call $list_index (local.get $fields_r) (i32.const 1))))
+              (else
+                (local.set $fields (call $make_list (i32.const 0)))
+                (local.set $p3 (local.get $p2))))))
         ;; Build variant tuple (name, fields)
         (local.set $variant (call $make_list (i32.const 2)))
         (drop (call $list_set (local.get $variant) (i32.const 0) (local.get $vname)))

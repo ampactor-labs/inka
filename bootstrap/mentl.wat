@@ -29849,6 +29849,12 @@
     (call $emit_cstr (i32.const 1591) (i32.const 6)) ;; "_start"
     (call $emit_byte (i32.const 34))
     (call $emit_close)
+    ;; Per Hβ.first-light.start-section-state-tmp-local: _start invokes
+    ;; main via W7 closure-call which threads through $state_tmp; declare
+    ;; the local in _start's preamble. Cost: 18 bytes (one local decl).
+    (call $emit_cstr (i32.const 4146) (i32.const 9)) ;; " (local $"
+    (call $emit_str (i32.const 2244)) ;; "state_tmp" (length-prefixed)
+    (call $emit_cstr (i32.const 4155) (i32.const 5)) ;; " i32)"
     (call $emit_nl)
     (call $indent_inc)
     (if (i32.eqz (local.get $main_arity))
@@ -29880,13 +29886,36 @@
         (call $emit_close)
         (call $emit_nl))
       (else
-        ;; Library / parameterized main — clean-exit with 0.
+        ;; Per Hβ.first-light.main-arity-1-argv-zero (placeholder until
+        ;; EH-entry-handlers.md WASI argv extraction lands): parameterized
+        ;; main with arity 1 takes argv. Call with i32.const 0 placeholder
+        ;; (empty-argv sentinel; wheel's parse_cli_args handles 0 → empty
+        ;; cmd args). Threading return → proc_exit per arity-0 form.
+        ;; Emit:
+        ;;   (global.get $main)                        ;; closure ptr → __state
+        ;;   (local.set $state_tmp)
+        ;;   (local.get $state_tmp)                    ;; state arg
+        ;;   (i32.const 0)                              ;; argv = 0 (empty)
+        ;;   (local.get $state_tmp) (i32.load offset=0) ;; fn_ptr
+        ;;   (call_indirect (type $ft2))                ;; main's i32 result
+        ;;   (call $wasi_proc_exit)                     ;; threads result → exit
+        (call $emit_indent)
+        (call $el_emit_global_get_dollar (call $str_from_mem (i32.const 4268) (i32.const 4)))
+        (call $ec6_emit_local_set_state_tmp)
+        (call $emit_nl)
+        (call $emit_indent)
+        (call $ec6_emit_local_get_state_tmp)
+        (call $emit_i32_const (i32.const 0))
+        (call $ec6_emit_local_get_state_tmp)
+        (call $ec6_emit_i32_load_offset_0)
+        (call $emit_nl)
+        (call $emit_indent)
+        (call $ec6_emit_call_indirect_ftN (i32.const 1))   ;; ft<arity+1> = ft2
+        (call $emit_nl)
         (call $emit_indent)
         (call $emit_cstr (i32.const 572) (i32.const 6)) ;; "(call "
         (call $emit_byte (i32.const 36))
         (call $emit_cstr (i32.const 1230) (i32.const 14)) ;; "wasi_proc_exit"
-        (call $emit_space)
-        (call $emit_i32_const (i32.const 0))
         (call $emit_close)
         (call $emit_nl)))
     (call $indent_dec)

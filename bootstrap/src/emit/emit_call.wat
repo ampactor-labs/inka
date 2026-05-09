@@ -288,8 +288,17 @@
     (call $emit_lexpr (call $lexpr_lbinop_r (local.get $r)))
     (local.set $op (call $lexpr_lbinop_op (local.get $r)))
     ;; BConcat (153): operand-Ty dispatch.
+    ;; Per Hβ.emit.runtime-helper-state-push: str_concat / list_concat
+    ;; are W7-compiled fns expecting (state, a, b). Stack here has
+    ;; [a, b]; insert state UNDER via save-reload through $state_tmp +
+    ;; $callee_closure (both pre-declared in fn preamble).
     (if (i32.eq (local.get $op) (i32.const 153))
       (then
+        (call $ec6_emit_local_set_callee_closure)    ;; pop right → scratch
+        (call $ec6_emit_local_set_state_tmp)         ;; pop left → scratch
+        (call $el_emit_local_get_state)              ;; push state
+        (call $ec6_emit_local_get_state_tmp)         ;; push left
+        (call $ec6_emit_local_get_callee_closure)    ;; push right
         (local.set $left_h (call $lexpr_handle (local.get $left_lexpr)))
         (local.set $left_ty (call $lookup_ty (local.get $left_h)))
         (local.set $left_ty_tag (call $ty_tag (local.get $left_ty)))
@@ -523,9 +532,16 @@
   ;; runtime/list.wat) for non-string, $byte_at for string (per
   ;; runtime/str.wat:29). Emits:
   ;;   <base> <idx> (call $list_index)        ;; or (call $byte_at)
+  ;; Per Hβ.emit.runtime-helper-state-push: list_index / byte_at are
+  ;; W7-compiled (state, base, idx). Save-reload pattern same as BConcat.
   (func $emit_lindex (param $r i32)
     (call $emit_lexpr (call $lexpr_lindex_base (local.get $r)))
     (call $emit_lexpr (call $lexpr_lindex_idx (local.get $r)))
+    (call $ec6_emit_local_set_callee_closure)    ;; pop idx → scratch
+    (call $ec6_emit_local_set_state_tmp)         ;; pop base → scratch
+    (call $el_emit_local_get_state)              ;; push state
+    (call $ec6_emit_local_get_state_tmp)         ;; push base
+    (call $ec6_emit_local_get_callee_closure)    ;; push idx
     (if (call $lexpr_lindex_is_str (local.get $r))
       (then (call $ec6_emit_call_byte_at) (return)))
     (call $ec6_emit_call_list_index))

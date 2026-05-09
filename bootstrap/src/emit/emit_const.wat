@@ -424,10 +424,18 @@
   ;;
   ;; Drift 7 refusal: elems is ONE list ptr field (record-shaped); not
   ;; parallel keys-ptr + counts-ptr arrays.
+  ;; Per Hβ.emit.runtime-helper-state-push (W7): every emitted fn has
+  ;; (param $__state i32) prepended. Direct-call sites must push state
+  ;; first. For the make_list+list_set chain, list_set returns the list
+  ;; ptr; saving to $callee_closure at iter-top + reloading-before-emit
+  ;; preserves nested-LMakeList safety: the loaded list_ptr is on the
+  ;; WASM stack BEFORE any clobbering emit_lexpr, and stays underneath
+  ;; the inner emit's pushed values.
   (func $emit_lmakelist (param $r i32)
     (local $elems i32) (local $n i32) (local $i i32) (local $elem i32)
     (local.set $elems (call $lexpr_lmakelist_elems (local.get $r)))
     (local.set $n     (call $len (local.get $elems)))
+    (call $el_emit_local_get_state)
     (call $emit_i32_const (local.get $n))
     (call $ec_emit_call_make_list)
     (local.set $i (i32.const 0))
@@ -435,6 +443,9 @@
       (loop $store_loop
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $elem (call $list_index (local.get $elems) (local.get $i)))
+        (call $ec6_emit_local_set_callee_closure)   ;; pop list_ptr → scratch
+        (call $el_emit_local_get_state)              ;; push state
+        (call $ec6_emit_local_get_callee_closure)   ;; push list_ptr
         (call $emit_i32_const (local.get $i))
         (call $emit_lexpr (local.get $elem))
         (call $ec_emit_call_list_set)

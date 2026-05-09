@@ -1697,7 +1697,17 @@ fn emit_binop(op) = match op {
   BGe     => perform wat_emit("    (i32.ge_s)\n"),
   BAnd    => perform wat_emit("    (i32.and)\n"),
   BOr     => perform wat_emit("    (i32.or)\n"),
-  BConcat => perform wat_emit("    (call $str_concat)\n")
+  // Per Hβ.emit.runtime-helper-state-push: str_concat is W7-compiled
+  // (state, a, b). Stack here has [a, b]; insert state UNDER via
+  // save-reload through pre-declared $state_tmp + $callee_closure.
+  BConcat => {
+    perform wat_emit("    (local.set $callee_closure)\n")
+    perform wat_emit("    (local.set $state_tmp)\n")
+    perform wat_emit("    (local.get $__state)\n")
+    perform wat_emit("    (local.get $state_tmp)\n")
+    perform wat_emit("    (local.get $callee_closure)\n")
+    perform wat_emit("    (call $str_concat)\n")
+  }
 }
 
 fn emit_unaryop(op) = match op {
@@ -2092,9 +2102,12 @@ fn emit_list_literal(elems) = {
   //   offset 0: length
   //   offset 4: tag = 0 (flat)
   //   offset 8 + i*4: element i
-  // list_set(list, idx, val) stores and returns the list pointer, so
-  // the pointer threads on the stack through successive stores. The
-  // result is the list pointer (O(1) indexable via list_index@tag=0).
+  // list_set(state, list, idx, val) stores and returns the list
+  // pointer (W7: every fn takes __state first). At iteration top the
+  // returned list_ptr is saved to $callee_closure scratch; reloaded
+  // onto stack BEFORE elem emission so it survives any clobber inner
+  // emit performs on the local. The result is the list pointer (O(1)
+  // indexable via list_index@tag=0).
   //
   // When the enclosing row excludes Alloc AND every element is a
   // pure literal, this whole construction can fold into a static
@@ -2103,6 +2116,7 @@ fn emit_list_literal(elems) = {
   // it does not change the emitted primitive when the fold doesn't
   // apply.
   let n = elems.len
+  perform wat_emit("    (local.get $__state)\n")
   perform wat_emit("    (i32.const ")
   perform wat_emit(int_to_str(n))
   perform wat_emit(")\n")
@@ -2113,6 +2127,9 @@ fn emit_list_literal(elems) = {
 fn emit_list_stores(elems, idx) = {
   if elems.len == 0 { () }
   else {
+    perform wat_emit("    (local.set $callee_closure)\n")
+    perform wat_emit("    (local.get $__state)\n")
+    perform wat_emit("    (local.get $callee_closure)\n")
     perform wat_emit("    (i32.const ")
     perform wat_emit(int_to_str(idx))
     perform wat_emit(")\n")

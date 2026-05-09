@@ -24586,10 +24586,18 @@
   ;;
   ;; Drift 7 refusal: elems is ONE list ptr field (record-shaped); not
   ;; parallel keys-ptr + counts-ptr arrays.
+  ;; Per Hβ.emit.runtime-helper-state-push (W7): every emitted fn has
+  ;; (param $__state i32) prepended. Direct-call sites must push state
+  ;; first. For the make_list+list_set chain, list_set returns the list
+  ;; ptr; saving to $callee_closure at iter-top + reloading-before-emit
+  ;; preserves nested-LMakeList safety: the loaded list_ptr is on the
+  ;; WASM stack BEFORE any clobbering emit_lexpr, and stays underneath
+  ;; the inner emit's pushed values.
   (func $emit_lmakelist (param $r i32)
     (local $elems i32) (local $n i32) (local $i i32) (local $elem i32)
     (local.set $elems (call $lexpr_lmakelist_elems (local.get $r)))
     (local.set $n     (call $len (local.get $elems)))
+    (call $el_emit_local_get_state)
     (call $emit_i32_const (local.get $n))
     (call $ec_emit_call_make_list)
     (local.set $i (i32.const 0))
@@ -24597,6 +24605,9 @@
       (loop $store_loop
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $elem (call $list_index (local.get $elems) (local.get $i)))
+        (call $ec6_emit_local_set_callee_closure)   ;; pop list_ptr → scratch
+        (call $el_emit_local_get_state)              ;; push state
+        (call $ec6_emit_local_get_callee_closure)   ;; push list_ptr
         (call $emit_i32_const (local.get $i))
         (call $emit_lexpr (local.get $elem))
         (call $ec_emit_call_list_set)
@@ -26104,8 +26115,17 @@
     (call $emit_lexpr (call $lexpr_lbinop_r (local.get $r)))
     (local.set $op (call $lexpr_lbinop_op (local.get $r)))
     ;; BConcat (153): operand-Ty dispatch.
+    ;; Per Hβ.emit.runtime-helper-state-push: str_concat / list_concat
+    ;; are W7-compiled fns expecting (state, a, b). Stack here has
+    ;; [a, b]; insert state UNDER via save-reload through $state_tmp +
+    ;; $callee_closure (both pre-declared in fn preamble).
     (if (i32.eq (local.get $op) (i32.const 153))
       (then
+        (call $ec6_emit_local_set_callee_closure)    ;; pop right → scratch
+        (call $ec6_emit_local_set_state_tmp)         ;; pop left → scratch
+        (call $el_emit_local_get_state)              ;; push state
+        (call $ec6_emit_local_get_state_tmp)         ;; push left
+        (call $ec6_emit_local_get_callee_closure)    ;; push right
         (local.set $left_h (call $lexpr_handle (local.get $left_lexpr)))
         (local.set $left_ty (call $lookup_ty (local.get $left_h)))
         (local.set $left_ty_tag (call $ty_tag (local.get $left_ty)))
@@ -26339,9 +26359,16 @@
   ;; runtime/list.wat) for non-string, $byte_at for string (per
   ;; runtime/str.wat:29). Emits:
   ;;   <base> <idx> (call $list_index)        ;; or (call $byte_at)
+  ;; Per Hβ.emit.runtime-helper-state-push: list_index / byte_at are
+  ;; W7-compiled (state, base, idx). Save-reload pattern same as BConcat.
   (func $emit_lindex (param $r i32)
     (call $emit_lexpr (call $lexpr_lindex_base (local.get $r)))
     (call $emit_lexpr (call $lexpr_lindex_idx (local.get $r)))
+    (call $ec6_emit_local_set_callee_closure)    ;; pop idx → scratch
+    (call $ec6_emit_local_set_state_tmp)         ;; pop base → scratch
+    (call $el_emit_local_get_state)              ;; push state
+    (call $ec6_emit_local_get_state_tmp)         ;; push base
+    (call $ec6_emit_local_get_callee_closure)    ;; push idx
     (if (call $lexpr_lindex_is_str (local.get $r))
       (then (call $ec6_emit_call_byte_at) (return)))
     (call $ec6_emit_call_list_index))

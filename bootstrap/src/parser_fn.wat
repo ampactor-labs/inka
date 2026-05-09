@@ -268,7 +268,19 @@
       (call $list_index (local.get $body_r) (i32.const 1))))
     (local.get $tup))
 
-  ;; Helper: skip to = or { (for skipping return type and effect annotations)
+  ;; Helper: skip to = or { (for skipping return type and effect annotations).
+  ;;
+  ;; Per Hβ.parser.fn-sig-multi-line (chain link 5 / drift 9 close):
+  ;; fn signatures span lines naturally — `-> Type\n    with Effects =`
+  ;; is canonical SYNTAX.md form. Newlines inside the signature are
+  ;; whitespace-equivalent; they do NOT terminate. Halting at TNewline
+  ;; was an eager-form-commitment that made the parser surface inner
+  ;; let-stmts (`let alpha = compute_alpha(...)` from the fn body) as
+  ;; TOP-LEVEL stmts when the multi-line `with` clause + body bled past
+  ;; the failed signature parse — name then leaked into
+  ;; $ls_register_globals → spurious LGlobal($alpha) at the dependent
+  ;; handler-arm capture site (process_lowpass's process arm).
+  ;; Substrate-honest: signature ends at TEq, TLBrace, or TEof; period.
   (func $skip_to_eq_or_brace (param $tokens i32) (param $pos i32) (result i32)
     (local $k i32)
     (block $done (loop $scan
@@ -276,7 +288,6 @@
       (br_if $done (i32.eq (local.get $k) (i32.const 60)))  ;; TEq
       (br_if $done (i32.eq (local.get $k) (i32.const 47)))  ;; TLBrace
       (br_if $done (i32.eq (local.get $k) (i32.const 69)))  ;; TEof
-      (br_if $done (i32.eq (local.get $k) (i32.const 68)))  ;; TNewline
       (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
       (br $scan)))
     (local.get $pos))

@@ -79,6 +79,39 @@ fn compile(entry_module) = {
     ~> diagnostics_handler
 }
 
+// Per Hβ.first-light.compile-stdin-substrate (2026-05-09): canonical
+// stdin-source compile path. Per Unix vocabulary `mentl compile -`
+// reads source from stdin. Skips driver_check + fs_read_file (no
+// module-graph; no path); reads the entire stdin via read_stdin
+// (lib/runtime/io.mn:83 — fd_read loop with grow-on-headroom buffer);
+// pipes through frontend → lower_program → emit_module. Same handler
+// chain as compile() — emission to stdout via wat_stdout, all the
+// substrate handlers attached.
+//
+// L1 fixpoint requires this path: seed compiles wheel → mentl2.wat;
+// mentl2 reads stdin (the wheel input) → emits mentl3.wat. Both passes
+// produce byte-identical output when the wheel-source emit is
+// deterministic AND substrate-aligned across seed + wheel.
+fn compile_stdin() = {
+  read_stdin() |> frontend |> lower_program |> emit_module
+}
+    ~> wat_stdout
+    ~> wasi_filesystem
+    ~> string_table
+    ~> emit_memory_bump
+    ~> body_context
+    ~> mentl_default
+    ~> affine_ledger
+    ~> region_tracker
+    ~> verify_ledger
+    ~> lower_scope
+    ~> lookup_ty_graph
+    ~> env_handler
+    ~> graph_handler
+    ~> parallel_compose
+    ~> wasi_threads
+    ~> diagnostics_handler
+
 fn check(entry_module) = {
   driver_check(entry_module)
     ~> wasi_filesystem

@@ -75,7 +75,7 @@ type EntryHandlerInvocation
 // canonical 12-verb catalog).
 
 fn parse_cli_args(argv) with Pure = {
-  if argv.len < 2 { Invocation("teach_run", [], None) }
+  if argv.len < 2 { Invocation("compile_stdin_run", [], None) }
   else {
     let mode = argv[1]
     if str_eq(mode, "edit") {
@@ -163,6 +163,8 @@ fn dispatch_invocation(name, args, target) = {
     serve_run()
   } else if str_eq(name, "compile_run") {
     compile_run(unwrap_target_or_die(target, "compile"))
+  } else if str_eq(name, "compile_stdin_run") {
+    compile_stdin_run()
   } else if str_eq(name, "run_run") {
     run_run(unwrap_target_or_die(target, "run"))
   } else if str_eq(name, "check_run") {
@@ -304,6 +306,20 @@ fn compile_run(target) = {
   compile(target)
     ~> wat_stdout
     ~> wasi_filesystem
+    ~> parallel_compose
+    ~> wasi_threads
+    ~> no_iterative_ctx
+    ~> diagnostics_handler
+    ~> graph_handler
+}
+
+// Per Hβ.first-light.compile-stdin-substrate: stdin-source compile entry.
+// `mentl` with no args reads stdin via WASI fd_read (canonical Unix
+// `cmd <input` semantics). compile_stdin (pipeline.mn) carries its own
+// handler chain — wat_stdout for emit + wasi_filesystem (stdin via fd 0
+// goes through the same handler) + the substrate stack.
+fn compile_stdin_run() = {
+  compile_stdin()
     ~> parallel_compose
     ~> wasi_threads
     ~> no_iterative_ctx

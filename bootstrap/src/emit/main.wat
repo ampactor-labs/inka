@@ -1974,19 +1974,26 @@
       (then (return)))
     (local.set $tag (call $tag_of (local.get $expr)))
     ;; LFeedback (330) — emit (global $s<h> (mut i32) (i32.const 0))
-    ;; THEN recurse into body + spec.
+    ;; THEN recurse into body + spec. Per Hβ.emit.feedback-state-globals-
+    ;; dedup: the same LowFn body is reachable via N LMakeClosure refs +
+    ;; LDeclareFn at top-level, so this walker visits the same LFeedback
+    ;; handle N+1 times. Gate on $emit_state_handle_register_first to
+    ;; emit the global once per distinct handle (sibling to $emit_fn_body's
+    ;; idempotency via $emit_funcref_register).
     (if (i32.eq (local.get $tag) (i32.const 330))
       (then
         (local.set $handle (call $lexpr_handle (local.get $expr)))
-        (call $emit_indent)
-        (call $emit_cstr (i32.const 862) (i32.const 8))      ;; "(global "
-        (call $emit_byte (i32.const 36))                     ;; '$'
-        (call $emit_byte (i32.const 115))                    ;; 's'
-        (call $emit_int  (local.get $handle))
-        (call $emit_cstr (i32.const 1110) (i32.const 11))    ;; " (mut i32) "
-        (call $emit_i32_const (i32.const 0))
-        (call $emit_close)
-        (call $emit_nl)
+        (if (call $emit_state_handle_register_first (local.get $handle))
+          (then
+            (call $emit_indent)
+            (call $emit_cstr (i32.const 862) (i32.const 8))      ;; "(global "
+            (call $emit_byte (i32.const 36))                     ;; '$'
+            (call $emit_byte (i32.const 115))                    ;; 's'
+            (call $emit_int  (local.get $handle))
+            (call $emit_cstr (i32.const 1110) (i32.const 11))    ;; " (mut i32) "
+            (call $emit_i32_const (i32.const 0))
+            (call $emit_close)
+            (call $emit_nl)))
         (call $emit_feedback_state_globals_walk
           (call $lexpr_lfeedback_body (local.get $expr)))
         (call $emit_feedback_state_globals_walk

@@ -23307,6 +23307,17 @@
   (global $emit_fn_locals_ptr            (mut i32) (i32.const 0))
   (global $emit_fn_locals_len_g          (mut i32) (i32.const 0))
 
+  ;; State-globals dedupe ledger. Per Hβ.emit.feedback-state-globals
+  ;; (commit 4f3556d) the walk descends into LMakeClosure/Continuation
+  ;; lowfn_body to find module-level $s<h> globals. Same LowFn body is
+  ;; reachable via N LMakeClosure refs + LDeclareFn at top-level, so the
+  ;; same LFeedback handle is visited N+1 times → N+1 duplicate globals
+  ;; → wat2wasm "redefinition of global $s<h>". Dedup ledger holds INT
+  ;; handles (i32.eq lookup, sibling to funcref's str_eq). Program-wide;
+  ;; never reset — feedback-state lifetime is the whole module.
+  (global $emit_state_handles_ptr        (mut i32) (i32.const 0))
+  (global $emit_state_handles_len_g      (mut i32) (i32.const 0))
+
   ;; ─── Idempotent initializer (mirrors $lower_init / $infer_init) ────
   ;; Per the seed's discipline for module-level state chunks: every
   ;; public entry calls $emit_init first; subsequent calls no-op.
@@ -23327,6 +23338,8 @@
         (global.set $emit_strings_next_offset_g (i32.const 65536))
         (global.set $emit_fn_locals_ptr         (call $make_list (i32.const 8)))
         (global.set $emit_fn_locals_len_g       (i32.const 0))
+        (global.set $emit_state_handles_ptr     (call $make_list (i32.const 8)))
+        (global.set $emit_state_handles_len_g   (i32.const 0))
         (global.set $emit_initialized           (i32.const 1)))))
 
   ;; ─── $emit_funcref_register — append name; return assigned index ───
@@ -23436,6 +23449,37 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter)))
     (i32.const -1))
+
+  ;; ─── $emit_state_handle_register_first — dedup LFeedback handle ───
+  ;; Returns 1 if $h is newly appended; 0 if already present. Mirrors
+  ;; $emit_funcref_register_first / $emit_fn_local_check shape, but uses
+  ;; i32.eq lookup on integer handles instead of $str_eq on str_ptrs.
+  ;; Per protocol_canonical_projection_pattern.md: same dedup discipline
+  ;; as the funcref ledger ($emit_funcref_register's str_eq scan); just
+  ;; over a different namespace (LowExpr handle, not name string).
+  (func $emit_state_handle_register_first (param $h i32) (result i32)
+    (local $i i32) (local $n i32) (local $new_idx i32) (local $new_len i32)
+    (call $emit_init)
+    (local.set $i (i32.const 0))
+    (local.set $n (global.get $emit_state_handles_len_g))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (if (i32.eq (call $list_index (global.get $emit_state_handles_ptr)
+                                       (local.get $i))
+                    (local.get $h))
+          (then (return (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (local.set $new_idx (global.get $emit_state_handles_len_g))
+    (local.set $new_len (i32.add (local.get $new_idx) (i32.const 1)))
+    (global.set $emit_state_handles_ptr
+      (call $list_extend_to (global.get $emit_state_handles_ptr) (local.get $new_len)))
+    (drop (call $list_set (global.get $emit_state_handles_ptr)
+                          (local.get $new_idx)
+                          (local.get $h)))
+    (global.set $emit_state_handles_len_g (local.get $new_len))
+    (i32.const 1))
 
   ;; ─── $emit_set_body_context — install per-fn captures + evidence ───
   ;; Per Hβ-emit-substrate.md §5.2 + wheel src/backends/wasm.mn:960-961.
@@ -29450,19 +29494,26 @@
       (then (return)))
     (local.set $tag (call $tag_of (local.get $expr)))
     ;; LFeedback (330) — emit (global $s<h> (mut i32) (i32.const 0))
-    ;; THEN recurse into body + spec.
+    ;; THEN recurse into body + spec. Per Hβ.emit.feedback-state-globals-
+    ;; dedup: the same LowFn body is reachable via N LMakeClosure refs +
+    ;; LDeclareFn at top-level, so this walker visits the same LFeedback
+    ;; handle N+1 times. Gate on $emit_state_handle_register_first to
+    ;; emit the global once per distinct handle (sibling to $emit_fn_body's
+    ;; idempotency via $emit_funcref_register).
     (if (i32.eq (local.get $tag) (i32.const 330))
       (then
         (local.set $handle (call $lexpr_handle (local.get $expr)))
-        (call $emit_indent)
-        (call $emit_cstr (i32.const 862) (i32.const 8))      ;; "(global "
-        (call $emit_byte (i32.const 36))                     ;; '$'
-        (call $emit_byte (i32.const 115))                    ;; 's'
-        (call $emit_int  (local.get $handle))
-        (call $emit_cstr (i32.const 1110) (i32.const 11))    ;; " (mut i32) "
-        (call $emit_i32_const (i32.const 0))
-        (call $emit_close)
-        (call $emit_nl)
+        (if (call $emit_state_handle_register_first (local.get $handle))
+          (then
+            (call $emit_indent)
+            (call $emit_cstr (i32.const 862) (i32.const 8))      ;; "(global "
+            (call $emit_byte (i32.const 36))                     ;; '$'
+            (call $emit_byte (i32.const 115))                    ;; 's'
+            (call $emit_int  (local.get $handle))
+            (call $emit_cstr (i32.const 1110) (i32.const 11))    ;; " (mut i32) "
+            (call $emit_i32_const (i32.const 0))
+            (call $emit_close)
+            (call $emit_nl)))
         (call $emit_feedback_state_globals_walk
           (call $lexpr_lfeedback_body (local.get $expr)))
         (call $emit_feedback_state_globals_walk

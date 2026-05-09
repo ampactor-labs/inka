@@ -285,19 +285,29 @@
       (then (local.set $p2 (i32.add (local.get $p2) (i32.const 1)))))
     ;; Parse body
     (local.set $p3 (call $skip_ws_p (local.get $tokens) (local.get $p2)))
-    (if (call $at (local.get $tokens) (local.get $p3) (i32.const 47)) ;; TLBrace
-      (then (local.set $body_r (call $parse_block (local.get $tokens)
-        (i32.add (local.get $p3) (i32.const 1)) (local.get $span))))
-      (else
-        ;; If next token is TLet, body is multi-line indented (let-prefixed);
-        ;; use parse_implicit_body. Else single-expression body — preserve
-        ;; the original parse_expr direct path to avoid BlockExpr-wrap
-        ;; regression on single-expr fns.
-        (if (i32.eq (call $kind_at (local.get $tokens) (local.get $p3))
-                    (i32.const 1))   ;; TLet
-          (then (local.set $body_r (call $parse_implicit_body
-            (local.get $tokens) (local.get $p3) (local.get $span))))
-          (else (local.set $body_r (call $parse_expr (local.get $tokens) (local.get $p3)))))))
+    ;; Per Hβ.parser.fn-body-pipe-continuation (chain link 5 / drift-9 close):
+    ;; route through parse_expr ALWAYS — including the `{` case. parse_expr
+    ;; recognizes `{` via parse_primary and dispatches to parse_block, then
+    ;; binop_loop picks up trailing pipe operators. The wheel canonical form
+    ;;   fn compile_stdin() = {
+    ;;     read_stdin() |> frontend |> ... |> emit_module
+    ;;   }
+    ;;     ~> wat_stdout
+    ;;     ~> wasi_filesystem
+    ;;     ...
+    ;; only parses correctly when `{ ... } ~> handler ~> ...` is one
+    ;; PipeExpr chain — parse_block alone returns the BlockExpr and
+    ;; loses every trailing `~>` (perform sites then fall through to
+    ;; LConst(0) at lower-time because lower_handler_stack stays empty).
+    ;; TLet retains the dedicated parse_implicit_body path because
+    ;; multi-line indented let-bodies don't go through parse_expr's
+    ;; primary dispatch (let-stmt is statement-position, not
+    ;; expression-position).
+    (if (i32.eq (call $kind_at (local.get $tokens) (local.get $p3))
+                (i32.const 1))   ;; TLet
+      (then (local.set $body_r (call $parse_implicit_body
+        (local.get $tokens) (local.get $p3) (local.get $span))))
+      (else (local.set $body_r (call $parse_expr (local.get $tokens) (local.get $p3)))))
     ;; Build FnStmt
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)

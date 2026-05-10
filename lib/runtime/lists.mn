@@ -203,6 +203,10 @@ fn slice(list, start, end) with Memory + Alloc = {
 // head of the snoc stack.
 
 /// list_head — return the last element. O(1) for snoc nodes.
+/// Per Hazel productive-under-error: unknown tag returns 0 sentinel
+/// rather than trapping. Substrate gap surfaces upstream (whoever
+/// passed a non-list pointer); the runtime degrades gracefully so
+/// the cursor's diagnostic chain can walk back to source via Reason.
 fn list_head(list) with Memory = {
   let list_len = perform load_i32(list)
   let tag      = perform load_i32(list + 4)
@@ -210,13 +214,17 @@ fn list_head(list) with Memory = {
     1 => perform load_i32(list + 12),
     0 => list_index(list, list_len - 1),
     3 => list_index(list, list_len - 1),
-    4 => list_index(list, list_len - 1)
+    4 => list_index(list, list_len - 1),
+    _ => 0
   }
 }
 
 /// list_tail — return the list without its last element.
 /// O(1) for snoc nodes (reads the left pointer). Creates a slice for
 /// other tag variants — still O(1) allocation, O(1) by-reference.
+/// Per Hazel productive-under-error: unknown tag returns make_list(0)
+/// rather than trapping. Substrate gap surfaces upstream; runtime
+/// degrades gracefully.
 fn list_tail(list) with Memory + Alloc = {
   let list_len = perform load_i32(list)
   let tag      = perform load_i32(list + 4)
@@ -224,7 +232,8 @@ fn list_tail(list) with Memory + Alloc = {
     1 => perform load_i32(list + 8),
     0 => slice(list, 0, list_len - 1),
     3 => slice(list, 0, list_len - 1),
-    4 => slice(list, 0, list_len - 1)
+    4 => slice(list, 0, list_len - 1),
+    _ => make_list(0)
   }
 }
 

@@ -387,8 +387,9 @@ input
 
 **Two or more INDEPENDENT pipelines run in parallel.** Each branch has its own input. Outputs are tupled.
 
-**`><` is NOT a binary operator.** It is a structural N-ary construct with REQUIRED layout:
+**`><` is a structural N-ary construct accepting two layouts**, distinguished by branch shape:
 
+**Form A — vertical (canonical for multi-line branches):**
 ```
 (pipeline_a)
     ><
@@ -404,13 +405,24 @@ Three or more branches stack:
 (pipeline_c)
 ```
 
-**Layout requirements (parser-enforced):**
-- Each branch must be parenthesized — `(...)`.
-- Each branch is on its own line (or its own indented multi-line block).
-- `><` sits ALONE on its own line at INDENTED CENTER (4-space indent typical).
-- The construct as a whole reads top-to-bottom: branch, `><`, branch, `><`, branch.
+**Form B — inline (canonical for atomic branches):**
+```
+(branch_a) >< (branch_b)
+(audio_l |> compress) >< (audio_r |> compress)
+(extract_x) >< (extract_y) >< (extract_z)
+```
 
-After `><`, the chain returns to LEFT EDGE for whatever consumes the tupled result:
+**Layout requirements (parser-enforced):**
+- Each branch MUST be parenthesized — `(...)`.
+- Form A: each branch on its own line (or own indented multi-line block); `><` ALONE on its own line at INDENTED CENTER (4-space indent typical).
+- Form B: all branches single-line; `><` between branches with one space on each side.
+- Mixed-form rejected: `E_MixedShapeBranches` with Quick Fix to vertical.
+
+**Render rule:** the formatter normalizes per branch length:
+- All branches single-line + total fits target width → Form B (inline).
+- Any branch multi-line OR total exceeds width → Form A (vertical).
+
+The construct reads top-to-bottom (Form A) or left-to-right (Form B). After `><` the chain returns to LEFT EDGE for whatever consumes the tupled result:
 ```
 (audio_left  |> compress |> limit)
     ><
@@ -424,15 +436,17 @@ After `><`, the chain returns to LEFT EDGE for whatever consumes the tupled resu
 // REJECTED — not parenthesized:
 audio_left >< audio_right
 ```
-Diagnostic: **`E_LayoutViolation`** at `><`: "`><` requires parenthesized pipelines on each side. Wrap each branch in `(...)`."
+Diagnostic: **`E_BranchNotParenthesized`** at `><`: "`><` requires parenthesized pipelines on each side. Wrap each branch in `(...)`."
 Quick Fix: insert parentheses around each operand.
 
 ```
-// REJECTED — same line, no indent center:
-(left) >< (right)
+// REJECTED — mixed shape (one inline branch + one multi-line):
+(branch_a) >< (branch_b
+              |> stage_1
+              |> stage_2)
 ```
-Diagnostic: **`E_LayoutViolation`**: "`><` must sit alone on its own line at indented center, between parenthesized branches on adjacent lines."
-Quick Fix: reformat to canonical layout.
+Diagnostic: **`E_MixedShapeBranches`**: "`><` branches must share shape: all inline OR all vertical. Mixed shapes produce visual ambiguity."
+Quick Fix: reformat all branches to vertical (Form A).
 
 ```
 // REJECTED — values, not pipelines:
@@ -440,6 +454,8 @@ Quick Fix: reformat to canonical layout.
 ```
 Diagnostic: **`E_LayoutViolation`** at `><`: "`><` branches must be pipelines (sequences of stages), not value expressions. Did you mean `(audio |> analyze) >< (ctrl |> smooth)`?"
 Quick Fix: rewrite each branch as a pipeline.
+
+See `docs/specs/simulations/syntax/parallel-compose-layout-substrate.md` for the substrate analysis.
 
 ### `~>` — tee (handler-attach)
 
@@ -467,6 +483,8 @@ raw_string
 ```
 
 A `Newline` token directly before `~>` means Form A. No newline means Form B. **This is the only place in Mentl where whitespace is semantically load-bearing.** It is load-bearing because the visual layout IS the computation graph.
+
+The newline-disambiguation is substrate-honest because no alternative disambiguator exists for `~>`'s scope (unlike `><` which has parens-per-branch). Form A and Form B produce structurally distinct AST nodes with different rows; the layout IS the only unambiguous signal. Parens override is always available for explicit cases: `(body |> chain) ~> handler` makes the scope explicit regardless of newline. See `docs/specs/simulations/syntax/handler-attach-newline-substrate.md` for the substrate analysis.
 
 **Type rule:** `row(expr ~> h) = row(expr) - handled(h) + row(h)`. The handler subtracts what it absorbs; anything its arms perform is added.
 
@@ -660,6 +678,47 @@ Diagnostic: **`E_PatternInexhaustive`** at the `match` keyword:
 > "match on Option does not cover variant: None. Add `None => ...` arm or `_ => ...` wildcard."
 
 Quick Fix: insert stubs for missing variants.
+
+### Type aliases
+
+Three forms of `type` declaration, distinguished by RHS shape:
+
+**Transparent alias** — `type X = Y` (no `where`, RHS is a type expression, not a record literal).
+
+```
+type Port = Int
+type Frequency = Float
+type Bytes = List<Int>
+```
+
+Creates `TAlias("X", Y)`. The alias and underlying type unify transparently — `Port` and `Int` are interchangeable for type-checking. The name is preserved in Reason chains and in Mentl's voice.
+
+**Refined alias** — `type X = Y where pred`.
+
+```
+type ValidPort = Int where self >= 1024 && self <= 65535
+type Sample = Float where -1.0 <= self <= 1.0
+```
+
+Creates `TRefined(TAlias("X", Y), pred)`. The alias names the type; the refinement narrows it via predicate. Verify discharges the predicate at construction sites.
+
+**Nominal record** — `type X = {f1: T1, f2: T2, ...}`.
+
+```
+type Person = {name: String, age: Int}
+type Customer = {name: String, age: Int}    // distinct from Person despite same shape
+```
+
+Creates `TName("X", [], TRecord([...]))`. The record's name brands its identity — `Person` and `Customer` do NOT unify even with identical fields.
+
+**For nominal distinction over a primitive** — wrap in a single-field record:
+
+```
+type Port = {value: Int}
+type Customer = {value: String}
+```
+
+No `newtype` keyword required; the record name carries the brand. Field access via `.value`. See `docs/specs/simulations/syntax/type-alias-substrate.md` for the substrate analysis.
 
 ### Refinement types
 
@@ -955,7 +1014,26 @@ Match arms must cover all variants OR include a wildcard. Missing-variant errors
 
 ### Pattern alternation — rule
 
-`pat_1 | pat_2 | ... | pat_n => body`: body executes if ANY branch matches. **No variable bindings may appear inside alternatives** (each branch must match identically at the value level — `Some(x) | Other(x)` is rejected because `x`'s binding source is ambiguous). Pure literals / tag-only patterns are common; use an as-pattern (§PAs) outside the alternation if you need a binding.
+`pat_1 | pat_2 | ... | pat_n => body`: body executes if ANY branch matches. Variable bindings ARE allowed inside alternatives WHEN:
+
+1. **All branches bind the same set of names.** Wildcards and literals don't count as bindings.
+2. **For each binding name, the types across branches unify.** The body sees the unified type.
+3. **Compatible refinements.** When refinements differ across branches, the body sees the disjunction; Verify discharges per-arm.
+
+```
+match opt {
+  Some(x: Int) | Right(x: Int) => use(x),    // ACCEPTED — same name, same type
+  None | Empty => default,                    // ACCEPTED — no bindings
+  ...
+}
+
+match v {
+  Some(x) | Other(y) => use(x)                // REJECTED — different binding names
+  //   ^ E_PatternAlternationBindingMismatch
+}
+```
+
+When branches bind different names: `E_PatternAlternationBindingMismatch` with the conflict surfaced. When the same name has incompatible types: same diagnostic with the type conflict surfaced. See `docs/specs/simulations/syntax/pattern-alternation-substrate.md` for the substrate analysis.
 
 ### As-patterns — rule
 
@@ -1121,7 +1199,7 @@ One canonical table. Higher number = tighter binding.
 | 12   | unary `-`, unary `!`                     | right (prefix)  |                                |
 | 11   | `*`, `/`, `%`                            | left            |                                |
 | 10   | `+`, `-` (binary)                        | left            |                                |
-| 9    | `++`                                     | right           | string + list concat           |
+| 9    | `++`                                     | right           | concat — type-polymorphic; see §"Concatenation operator" |
 | 8    | `==`, `!=`, `<`, `>`, `<=`, `>=`         | non-associative |                                |
 | 7    | `&&`                                     | left            |                                |
 | 6    | `\|\|`                                   | left            |                                |
@@ -1132,6 +1210,23 @@ One canonical table. Higher number = tighter binding.
 | 1    | (reserved)                               |                 |                                |
 
 The block-form `~>` deliberately has the LOWEST precedence so it captures the whole preceding chain as its body.
+
+### Concatenation operator
+
+`++` is **type-polymorphic over `TList<A>` and `TString`**, dispatched at lower-time by reading the operand's inferred type from the graph (`lookup_ty`).
+
+| Operand types               | Lower projection                                       | Runtime fn       |
+|-----------------------------|--------------------------------------------------------|------------------|
+| `TList<A>` ++ `TList<A>`    | `LCall(handle, LGlobal("list_concat"), [l, r])`        | `list_concat`    |
+| `TString` ++ `TString`      | `LCall(handle, LGlobal("str_concat"),  [l, r])`        | `str_concat`     |
+| mixed (`TList` ++ `TString`)| `E_ConcatTypeMismatch` at infer-time                   | (none)           |
+| unresolved (TVar / NFree)   | `E_ConcatTypeUnresolved` at lower-time                 | (none)           |
+
+The dispatch is compile-time-only; no runtime type test. When the type is known, the operator IS a direct call. When the type is not known, the diagnostic surfaces with the operand handle's source span — the user must constrain the type.
+
+**Drift refusal:** `++` does NOT silently default to `str_concat` when type is unresolved. Per `protocol_no_silent_fallback.md`, the substrate names the failure rather than fabricating a fallback. The `LUnresolved` sentinel emits `(unreachable)` with a Located reason chain back to the `++` site.
+
+See `docs/specs/simulations/syntax/concat-operator-substrate.md` for the substrate analysis.
 
 ---
 
@@ -1318,6 +1413,11 @@ type TokenKind
   // reserved keywords — Mentl has no imperative control flow constructs.
   // Iteration is via `|>` + `<~` + `Iterate` effect handlers.
   // Early-exit is via `Abort` effect + `catch_abort` handler.
+  // The gradient teaches the substrate at the friction-point: when a user
+  // types `for x in xs`, `E_NotAKeyword` surfaces a Quick Fix to the
+  // verb form `xs |> for_each((x) => ...)`. See
+  // `docs/specs/simulations/syntax/iteration-substrate.md` for the
+  // canonical iteration patterns and gradient teaching.
 
   // ─── Identifiers and literals (carry payload) ─────────────────────
   | TIdent(String)
@@ -1454,26 +1554,63 @@ Diagnostic on non-unit if-without-else: **`E_IfMissingElse`** with Quick Fix sug
 
 ## Diagnostic catalog (syntax-level errors introduced by SYNTAX.md)
 
-| Code                  | Trigger                                       | Quick Fix                                      |
-|-----------------------|-----------------------------------------------|------------------------------------------------|
-| `E_RedundantBraces`   | braces around single-expression body          | remove `{` and `}`                             |
-| `E_LayoutViolation`   | wrong indent / wrong line / wrong wrapping    | reformat to canonical layout                   |
-| `E_ExplicitTypeParams`| turbofish `f<T>(...)` at call site            | remove `<T>`; let inference fill it            |
-| `E_PatternInexhaustive` | match missing variants, no wildcard         | insert stubs for missing variants              |
-| `E_RefinementRejected`  | value violates refinement predicate         | adjust value or widen refinement               |
-| `E_EffectMismatch`    | declared row doesn't subsume body row         | widen declaration OR install absorbing handler |
-| `E_PurityViolated`    | `with Pure` body performs non-empty effects   | remove `with Pure` or absorb the effect        |
-| `E_FeedbackNoContext` | `<~` used without iterative context           | install `Sample`/`Tick`/`Clock` handler        |
-| `E_OwnershipViolation` | `own` consumed twice / escapes ref scope     | restructure to single-consume or use `ref`     |
-| `E_HandlerUninstallable` | handler arms need effects context disallows | widen ambient row or restructure handler       |
-| `E_MissingVariable`   | name not in scope                             | check spelling; check imports                  |
-| `E_TypeMismatch`      | unification failed                            | adjust types; widen / narrow                   |
-| `E_OccursCheck`       | infinite type                                 | restructure to break cycle                     |
-| `T_OverDeclared`      | declared row wider than body uses             | tighten the signature to unlock capabilities   |
-| `T_Gradient`          | an annotation INPUT (existing form) would narrow the cursor's projection at this position | accept the suggestion to narrow |
-| `W_Suggestion`        | probable Quick Fix available                  | (Mentl-proposed)                               |
+Mentl's diagnostics are TEACHING surfaces, not punishment. The catalog is classified into three categories per substrate role:
 
-Every diagnostic carries a Located reason chain, source span, applicability tag (`MachineApplicable`, `MaybeIncorrect`, `HasPlaceholders`, `Unspecified`), and (where mechanical) a Patch.
+- **Format-liftable** — the formatter (`format_default` handler) auto-corrects on save / auto-format keystroke. The user does not see the diagnostic; the medium silently applies the rewrite.
+- **Hard error** — substrate violation; the user must restructure. The medium cannot auto-recover.
+- **Gradient narration** — not an error; a teaching surface in Mentl's voice. The user may accept or dismiss.
+
+Every diagnostic carries:
+
+- **Located reason chain** — source span + `ReasonKind`
+- **Applicability tag** — `MachineApplicable` / `MaybeIncorrect` / `HasPlaceholders` / `Unspecified`
+- **Quick Fix Patch** — where mechanically derivable
+
+The applicability tag determines automation: `MachineApplicable` patches are auto-applied; `MaybeIncorrect` surfaces with user confirmation; `HasPlaceholders` requires user fill-in; `Unspecified` is text-only.
+
+### Format-liftable (formatter handles silently)
+
+| Code                  | Trigger                                       | Formatter action                                |
+|-----------------------|-----------------------------------------------|--------------------------------------------------|
+| `E_RedundantBraces`   | braces around single-expression body          | strip the braces; user sees no diagnostic       |
+| `E_ExplicitTypeParams`| turbofish `f<T>(...)` at call site            | strip the type params; user sees no diagnostic  |
+| `E_IndentMismatch`    | wrong indent count                            | normalize indent; user sees no diagnostic       |
+
+### Hard errors (substrate violations)
+
+| Code                  | Trigger                                       | Applicability        | Quick Fix                                      |
+|-----------------------|-----------------------------------------------|----------------------|-------------------------------------------------|
+| `E_PatternInexhaustive` | match missing variants, no wildcard         | `HasPlaceholders`    | insert stubs for missing variants              |
+| `E_RefinementRejected`| value violates refinement predicate           | `Unspecified`        | adjust value or widen refinement               |
+| `E_EffectMismatch`    | declared row doesn't subsume body row         | `MaybeIncorrect`     | widen declaration OR install absorbing handler |
+| `E_PurityViolated`    | `with Pure` body performs non-empty effects   | `MaybeIncorrect`     | remove `with Pure` or absorb the effect        |
+| `E_FeedbackNoContext` | `<~` used without iterative context           | `MaybeIncorrect`     | install `Sample`/`Tick`/`Clock` handler        |
+| `E_OwnershipViolation`| `own` consumed twice / escapes ref scope      | `Unspecified`        | restructure to single-consume or use `ref`     |
+| `E_HandlerUninstallable` | handler arms need effects context disallows | `MaybeIncorrect`   | widen ambient row or restructure handler       |
+| `E_MissingVariable`   | name not in scope                             | `MaybeIncorrect`     | check spelling; check imports                  |
+| `E_TypeMismatch`      | unification failed                            | `Unspecified`        | adjust types; widen / narrow                   |
+| `E_OccursCheck`       | infinite type                                 | `Unspecified`        | restructure to break cycle                     |
+| `E_OrphanHandlerAttach` | `~>` with no preceding chain                | `Unspecified`        | delete `~>` or supply body                     |
+| `E_BranchNotParenthesized` | `><` branch missing parens               | `MachineApplicable`  | insert parens around each branch               |
+| `E_OperatorIsolation` | `><` not on its own line in Form A            | `MachineApplicable`  | reformat to canonical Form A layout            |
+| `E_MixedShapeBranches` | `><` mixes inline + multi-line branches      | `MachineApplicable`  | reformat to vertical (Form A)                  |
+| `E_ParallelComposeArity` | `><` with single branch                    | `Unspecified`        | restructure to single pipeline (no `><` needed) |
+| `E_LayoutViolation`   | wrong line / wrong wrapping (residual cases)  | `MaybeIncorrect`     | reformat per canonical layout                  |
+| `E_NotAKeyword`       | user typed `for`/`while`/`loop`/`break`/`continue`/`return` | `MaybeIncorrect` | rewrite as verb form per substrate             |
+| `E_PatternAlternationBindingMismatch` | branches in `\|` bind different names or types | `MaybeIncorrect` | adjust patterns to bind same names with unifiable types |
+| `E_ConcatTypeMismatch` | `++` operands have unifiable but distinct types (e.g. `TList` ++ `TString`) | `MaybeIncorrect` | unify operand types via conversion |
+| `E_ConcatTypeUnresolved` | `++` operand type not bound at lower-time | `MaybeIncorrect`    | annotate operand to constrain type             |
+
+### Gradient narration (teaching surfaces)
+
+| Code                  | Trigger                                       | Applicability        | Action                                          |
+|-----------------------|-----------------------------------------------|----------------------|-------------------------------------------------|
+| `T_OverDeclared`      | declared row wider than body uses             | `MachineApplicable`  | tighten the signature to unlock capabilities    |
+| `T_Gradient`          | an annotation INPUT would narrow the cursor's projection | `MachineApplicable` | accept the suggestion to narrow             |
+| `W_Suggestion`        | probable Quick Fix available                  | `MaybeIncorrect`     | (Mentl-proposed)                                |
+| `W_RedundantWhere`    | `type X = Y where true` — vacuous predicate   | `MachineApplicable`  | drop the `where true`; alias is transparent     |
+
+See `docs/specs/simulations/syntax/diagnostic-catalog-substrate.md` for the substrate analysis.
 
 ---
 

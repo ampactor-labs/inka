@@ -543,10 +543,11 @@
                     (local.set $tag_id (call $lower_resolve_handler_for_op (local.get $name)))
                     (if (i32.ne (local.get $tag_id) (i32.const 0))
                       (then
-                        (return (call $lexpr_make_lperform
+                        (return (call $lexpr_make_lperform_with_state
                                       (local.get $h)
                                       (local.get $tag_id)
-                                      (local.get $lo_args))))
+                                      (local.get $lo_args)
+                                      (call $lower_lookup_default_handler_for_op (local.get $name)))))
                       (else
                         ;; Polymorphic perform — same band-aid as
                         ;; $lower_perform's else branch above. LConst(0)
@@ -708,10 +709,17 @@
     (local.set $resolved (call $lower_resolve_handler_for_op (local.get $op_name)))
     (if (result i32) (i32.ne (local.get $resolved) (i32.const 0))
       (then
-        (call $lexpr_make_lperform
+        ;; Thread the handler's NAME (for `$<handler>_state_g` global) per
+        ;; protocol_handler_is_state_is_closure_is_evidence.md. Tier 1.5
+        ;; single-instance (global state-ptr); Tier 3 multi-instance via
+        ;; stack-of-records is named follow-up. emit reads the handler-
+        ;; name and emits `(global.get $<name>_state_g)` for arm-call's
+        ;; __state, threading the install-time state record.
+        (call $lexpr_make_lperform_with_state
           (local.get $h)
           (local.get $resolved)
-          (local.get $lo_args)))
+          (local.get $lo_args)
+          (call $lower_lookup_default_handler_for_op (local.get $op_name))))
       (else
         ;; Per Hβ.first-light.evidence-poly-call-transient (named peer
         ;; from commit 5b94fbb): polymorphic perform — no handler in

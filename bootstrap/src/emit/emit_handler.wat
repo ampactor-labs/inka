@@ -359,7 +359,71 @@
   ;; The handler list is emitted separately at module-emit time as
   ;; `(func $op_<name> ...)` declarations.
   (func $emit_lhandlewith (param $r i32)
+    (local $h i32) (local $hstate_name i32)
+    ;; Per protocol_handler_is_state_is_closure_is_evidence.md: allocate
+    ;; the handler's state record at install — ONE record carrying state
+    ;; slots + ev_slots + (post-H7) continuation. Bind to local minted in
+    ;; $lower_pipe (walk_handle.wat) as "__hstate_<handle>". Perform sites
+    ;; within body thread this local as the arm-call's __state via LPerform's
+    ;; state_local field (set by $lower_perform/lower_call's EffectOp arm
+    ;; from $lower_resolve_handler_state_for_op). Size: 64 bytes (16 slots
+    ;; — 1 tag + 1 capture_count + 14 state fields); kernel-uniform
+    ;; placeholder per protocol_kernel_uniform_placeholder_substrate.md;
+    ;; named follow-up Hβ.emit.handler-state-record-size-from-decl reads
+    ;; the handler-decl's state-field count. Zero-init via $alloc (memory
+    ;; cleared per WASM linear memory init); entries=[] sentinel-correct
+    ;; for env_handler / lower_scope / etc.
+    (local.set $h (call $lexpr_handle (local.get $r)))
+    (local.set $hstate_name
+      (call $str_concat (i32.const 5408) (call $int_to_str (local.get $h))))
+    ;; Use the canonical $emit_alloc (5-piece bump pattern via the
+    ;; EmitMemory swap surface — same path as LMakeRecord/LMakeVariant).
+    (call $emit_alloc (i32.const 64) (local.get $hstate_name))
+    ;; Per-handler GLOBAL state-ptr write (cross-fn projection of the
+    ;; install-time state record). Read handler_name from LHandleWith's
+    ;; new slot 3 (threaded by lower_pipe from extract_handler_name).
+    ;; Skipped if handler_name == 0 (anonymous handle-expr).
+    (call $emit_hstate_global_set (call $lexpr_lhandlewith_handler_name (local.get $r))
+                                   (local.get $hstate_name))
     (call $emit_lexpr (call $lexpr_lhandlewith_body (local.get $r))))
+
+  ;; Emit `(global.get $<handler_name>_state_g)`.
+  (func $emit_handler_state_global_get (param $handler_name i32)
+    (local $global_name i32)
+    (local.set $global_name
+      (call $str_concat (local.get $handler_name) (i32.const 5424)))
+    (call $emit_byte (i32.const 40))
+    (call $emit_byte (i32.const 103)) (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 98))
+    (call $emit_byte (i32.const 97))  (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 46))  (call $emit_byte (i32.const 103))
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 116))
+    (call $emit_byte (i32.const 32))  (call $emit_byte (i32.const 36))
+    (call $emit_str (local.get $global_name))
+    (call $emit_byte (i32.const 41)))
+
+  ;; Emit `(local.get $<hstate_local>)(global.set $<handler>_state_g)`.
+  ;; Per protocol_handler_is_state_is_closure_is_evidence.md — the
+  ;; global IS the cross-fn projection of the install-time state record;
+  ;; perform sites resolved via env-scan read this global as __state for
+  ;; the arm-call. For Tier 3 multishot the global becomes a stack-of-
+  ;; records (post-L1 per Hβ.lower.handler-state-multi-instance).
+  (func $emit_hstate_global_set (param $handler_name i32) (param $hstate_local i32)
+    (local $global_name i32)
+    (if (i32.eqz (local.get $handler_name)) (then (return)))
+    (local.set $global_name
+      (call $str_concat (local.get $handler_name) (i32.const 5424)))   ;; "_state_g"
+    (call $ec_emit_local_get_dollar (local.get $hstate_local))
+    ;; emits: (global.set $<global_name>)
+    (call $emit_byte (i32.const 40))
+    (call $emit_byte (i32.const 103)) (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 98))
+    (call $emit_byte (i32.const 97))  (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 46))  (call $emit_byte (i32.const 115))
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 116))
+    (call $emit_byte (i32.const 32))  (call $emit_byte (i32.const 36))
+    (call $emit_str (local.get $global_name))
+    (call $emit_byte (i32.const 41)))
 
   ;; ─── $emit_lhandle — LHandle tag 332 emit arm per §2.5 ─────────────
   ;; Per src/backends/wasm.mn:1549-1552: sub-emit body. Same inert-
@@ -420,8 +484,9 @@
   ;; []" for any program with a perform site. Symmetric to LEvPerform's
   ;; first $el_emit_local_get_state per §I third-truth + Koka JFP 2022.
   (func $emit_lperform (param $r i32)
-    (local $op_name i32)
+    (local $op_name i32) (local $state_local i32)
     (local.set $op_name (call $lexpr_lperform_op_name (local.get $r)))
+    (local.set $state_local (call $lexpr_lperform_state_local (local.get $r)))
     ;; Per Hβ.emit.wasi-effect-op-direct-emit (2026-05-07): if target
     ;; starts with "wasi_", emit `(call $<name>)` direct — bypassing
     ;; the `op_` discriminator prefix used for handler-arm dispatch.
@@ -454,7 +519,17 @@
         (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
         (call $emit_memory_op_wasm (local.get $op_name))
         (return)))
-    (call $el_emit_local_get_state)
+    ;; Per protocol_handler_is_state_is_closure_is_evidence.md: state_local
+    ;; carries the handler-NAME str_ptr; emit produces `(global.get
+    ;; $<handler>_state_g)` for the arm-call's __state — the cross-fn
+    ;; projection of the install-time state record. state_local == 0
+    ;; means no handler resolved (env-scan fallthrough); fall back to
+    ;; caller's __state for productive-under-error.
+    (if (i32.ne (local.get $state_local) (i32.const 0))
+      (then
+        (call $emit_handler_state_global_get (local.get $state_local)))
+      (else
+        (call $el_emit_local_get_state)))
     (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
     (call $ec7_emit_call_op_dollar (local.get $op_name)))
 

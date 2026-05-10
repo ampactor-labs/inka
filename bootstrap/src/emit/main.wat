@@ -1183,6 +1183,23 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter))))
 
+  ;; $emit_hstate_local_decl — declare `(local $__hstate_<h> i32)` in the
+  ;; enclosing fn's preamble. Per protocol_handler_is_state_is_closure_is_
+  ;; evidence.md: each `~>` install mints a state-record-local indexed by
+  ;; the handle of the LHandleWith site. emit_let_locals_walk's LHandleWith
+  ;; arm calls this; $emit_lhandlewith later emits `(local.set $__hstate_<h>
+  ;; (call $alloc ...))` at install. The local-name string is built from
+  ;; "__hstate_" + int_to_str(h), matching the lower-time mint in
+  ;; $lower_pipe (walk_handle.wat).
+  (func $emit_hstate_local_decl (param $h i32)
+    (local $name i32)
+    (local.set $name (call $str_concat (i32.const 5408) (call $int_to_str (local.get $h))))
+    (if (call $emit_fn_local_check (local.get $name))
+      (then
+        (call $emit_cstr (i32.const 4146) (i32.const 9))   ;; " (local $"
+        (call $emit_str (local.get $name))
+        (call $emit_cstr (i32.const 4155) (i32.const 5))))) ;; " i32)"
+
   ;; Single-expr walker companion to $emit_let_locals (which takes a
   ;; list). Used when recursing into LLet's value (a single expr).
   ;; Container coverage matches $emit_alloc_handle_locals_walk per
@@ -1282,6 +1299,11 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 329))         ;; LHandleWith
       (then
+        ;; Per protocol_handler_is_state_is_closure_is_evidence.md: declare
+        ;; `__hstate_<h>` local for the state record allocated at install.
+        ;; Each `~>` site mints a unique local; perform sites within body
+        ;; read it via $emit_lperform's state_local-aware path.
+        (call $emit_hstate_local_decl (call $lexpr_handle (local.get $expr)))
         (call $emit_let_locals_walk (call $lexpr_lhandlewith_body (local.get $expr)))
         (call $emit_let_locals_walk (call $lexpr_lhandlewith_handler (local.get $expr)))
         (return)))
@@ -1965,6 +1987,219 @@
     ;; All other tags: leaves with no LowExpr children to walk.
     (return))
 
+  ;; ─── $emit_handler_state_globals ──────────────────────────────────
+  ;; Walks the program for LHandleWith nodes; emits per-handler-name
+  ;; state-record-pointer globals `(global $<handler>_state_g (mut i32)
+  ;; (i32.const 0))`. Per protocol_handler_is_state_is_closure_is_evidence.md
+  ;; — each distinct handler installed via `~>` gets ONE global state-ptr
+  ;; (Tier 1.5 single-instance form; multi-instance via stack-of-records
+  ;; is named follow-up Hβ.lower.handler-state-multi-instance).
+  ;;
+  ;; Dedup via the same handle ledger as $emit_feedback_state_globals
+  ;; (state-handle register), distinguishing handler-name strings via
+  ;; $str_eq scan in the local helper. Drift 7 refused: ONE ledger,
+  ;; ONE walk; not parallel arrays per role.
+  (func $emit_handler_state_globals (param $exprs i32)
+    (local $i i32) (local $n i32) (local $expr i32)
+    (local.set $n (call $len (local.get $exprs)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $expr (call $list_index (local.get $exprs) (local.get $i)))
+        (call $emit_handler_state_globals_walk (local.get $expr))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
+
+  (func $emit_handler_state_globals_walk (param $expr i32)
+    (local $tag i32) (local $handler_name i32) (local $global_name i32)
+    (if (i32.lt_u (local.get $expr) (global.get $heap_base))
+      (then (return)))
+    (local.set $tag (call $tag_of (local.get $expr)))
+    (if (i32.eq (local.get $tag) (i32.const 329))         ;; LHandleWith
+      (then
+        (local.set $handler_name (call $lexpr_lhandlewith_handler_name (local.get $expr)))
+        (if (i32.ne (local.get $handler_name) (i32.const 0))
+          (then
+            (if (call $emit_handler_state_register_first (local.get $handler_name))
+              (then
+                (call $emit_indent)
+                (call $emit_cstr (i32.const 862) (i32.const 8))     ;; "(global "
+                (call $emit_byte (i32.const 36))                    ;; '$'
+                (local.set $global_name
+                  (call $str_concat (local.get $handler_name) (i32.const 5424)))
+                (call $emit_str (local.get $global_name))
+                (call $emit_cstr (i32.const 1110) (i32.const 11))   ;; " (mut i32) "
+                (call $emit_i32_const (i32.const 0))
+                (call $emit_close)
+                (call $emit_nl)))))
+        (call $emit_handler_state_globals_walk
+          (call $lexpr_lhandlewith_body (local.get $expr)))
+        (call $emit_handler_state_globals_walk
+          (call $lexpr_lhandlewith_handler (local.get $expr)))
+        (return)))
+    ;; Container recursion — minimal coverage matching feedback walker.
+    (if (i32.eq (local.get $tag) (i32.const 304))         ;; LLet
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_llet_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 315))         ;; LBlock
+      (then
+        (call $emit_handler_state_globals (call $lexpr_lblock_stmts (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 314))         ;; LIf
+      (then
+        (call $emit_handler_state_globals (call $lexpr_lif_then (local.get $expr)))
+        (call $emit_handler_state_globals (call $lexpr_lif_else (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 321))         ;; LMatch
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lmatch_scrut (local.get $expr)))
+        (call $emit_handler_state_globals_arms (call $lexpr_lmatch_arms (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 311))         ;; LMakeClosure — recurse into LowFn body
+      (then
+        (call $emit_handler_state_globals
+          (call $lowfn_body (call $lexpr_lmakeclosure_fn (local.get $expr))))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 313))         ;; LDeclareFn
+      (then
+        (call $emit_handler_state_globals
+          (call $lowfn_body (call $lexpr_ldeclarefn_fn (local.get $expr))))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 308))         ;; LCall
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lcall_fn (local.get $expr)))
+        (call $emit_handler_state_globals (call $lexpr_lcall_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 309))         ;; LTailCall
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_ltailcall_fn (local.get $expr)))
+        (call $emit_handler_state_globals (call $lexpr_ltailcall_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 316))         ;; LMakeList
+      (then
+        (call $emit_handler_state_globals (call $lexpr_lmakelist_elems (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 317))         ;; LMakeTuple
+      (then
+        (call $emit_handler_state_globals (call $lexpr_lmaketuple_elems (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 318))         ;; LMakeRecord
+      (then
+        (call $emit_handler_state_globals (call $lexpr_lmakerecord_fields (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 319))         ;; LMakeVariant
+      (then
+        (call $emit_handler_state_globals (call $lexpr_lmakevariant_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 306))         ;; LBinOp
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lbinop_l (local.get $expr)))
+        (call $emit_handler_state_globals_walk (call $lexpr_lbinop_r (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 307))         ;; LUnaryOp
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lunaryop_x (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 310))         ;; LReturn
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lreturn_x (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 320))         ;; LIndex
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lindex_base (local.get $expr)))
+        (call $emit_handler_state_globals_walk (call $lexpr_lindex_idx (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 331))         ;; LPerform
+      (then
+        (call $emit_handler_state_globals (call $lexpr_lperform_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 330))         ;; LFeedback
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lfeedback_body (local.get $expr)))
+        (call $emit_handler_state_globals_walk (call $lexpr_lfeedback_spec (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 328))         ;; LRegion
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lregion_body (local.get $expr)))
+        (return)))
+    (return))
+
+  (func $emit_handler_state_globals_arms (param $arms i32)
+    (local $n i32) (local $i i32) (local $arm i32)
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
+        (call $emit_handler_state_globals_walk (call $lowpat_lparm_body (local.get $arm)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
+
+  ;; Walk the lower-stage default-handler-map for every distinct handler-
+  ;; name, emit `(global $<name>_state_g (mut i32) (i32.const 0))` if
+  ;; not yet seen. Needed when arms are reached via env-scan without a
+  ;; covering `~>` LHandleWith in the LowExpr tree (typical for nested
+  ;; handlers whose install lives in a fn we don't inline-lower).
+  (func $emit_handler_state_globals_from_default_map
+    (local $i i32) (local $entry i32) (local $hname i32) (local $global_name i32)
+    (call $lower_init)
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i)
+                               (global.get $lower_default_op_handler_map_len_g)))
+        (local.set $entry (call $list_index
+                                (global.get $lower_default_op_handler_map_ptr)
+                                (local.get $i)))
+        (local.set $hname (call $record_get (local.get $entry) (i32.const 1)))
+        (if (call $emit_handler_state_register_first (local.get $hname))
+          (then
+            (call $emit_indent)
+            (call $emit_cstr (i32.const 862) (i32.const 8))
+            (call $emit_byte (i32.const 36))
+            (local.set $global_name
+              (call $str_concat (local.get $hname) (i32.const 5424)))
+            (call $emit_str (local.get $global_name))
+            (call $emit_cstr (i32.const 1110) (i32.const 11))
+            (call $emit_i32_const (i32.const 0))
+            (call $emit_close)
+            (call $emit_nl)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
+
+  ;; Per-handler-name "first-time-seen" ledger. Dedupes the global emit
+  ;; across multiple `~>` installs of the same handler.
+  (global $emit_handler_state_seen_ptr (mut i32) (i32.const 0))
+  (global $emit_handler_state_seen_len (mut i32) (i32.const 0))
+
+  (func $emit_handler_state_register_first (param $name i32) (result i32)
+    (local $i i32) (local $entry i32)
+    (if (i32.eqz (global.get $emit_handler_state_seen_ptr))
+      (then (global.set $emit_handler_state_seen_ptr (call $make_list (i32.const 4)))))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (global.get $emit_handler_state_seen_len)))
+        (local.set $entry (call $list_index
+                                (global.get $emit_handler_state_seen_ptr)
+                                (local.get $i)))
+        (if (call $str_eq (local.get $entry) (local.get $name))
+          (then (return (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (global.set $emit_handler_state_seen_ptr
+      (call $list_extend_to (global.get $emit_handler_state_seen_ptr)
+        (i32.add (global.get $emit_handler_state_seen_len) (i32.const 1))))
+    (drop (call $list_set (global.get $emit_handler_state_seen_ptr)
+                          (global.get $emit_handler_state_seen_len)
+                          (local.get $name)))
+    (global.set $emit_handler_state_seen_len
+      (i32.add (global.get $emit_handler_state_seen_len) (i32.const 1)))
+    (i32.const 1))
+
   ;; ─── $emit_feedback_state_globals ─────────────────────────────────
   ;; Walks the program for LFeedback nodes; emits per-site state
   ;; globals `(global $s<h> (mut i32) (i32.const 0))`. Per
@@ -2182,6 +2417,15 @@
     (call $emit_i32_const (i32.const 1048576))
     (call $emit_close)
     (call $emit_nl)
+
+    ;; ── Per-handler state globals (LHandleWith `~>` substrate) ──
+    ;; Per protocol_handler_is_state_is_closure_is_evidence.md.
+    ;; Walk both the LowExpr tree (for `~>` installs) AND the
+    ;; default-handler-map (for env-scan-resolved handlers without `~>`
+    ;; lex-scope) — every handler whose arm fns appear in m2.wat needs a
+    ;; state global, even when only env-scan-reached.
+    (call $emit_handler_state_globals (local.get $lowexprs))
+    (call $emit_handler_state_globals_from_default_map)
 
     ;; ── Per-site feedback state globals (LFeedback `<~` substrate) ──
     (call $emit_feedback_state_globals (local.get $lowexprs))

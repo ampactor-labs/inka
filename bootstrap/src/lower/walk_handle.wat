@@ -535,6 +535,11 @@
     (drop (call $list_set (local.get $stmts) (local.get $n) (local.get $lhandle)))
     (call $lexpr_make_lblock (local.get $h) (local.get $stmts)))
 
+  ;; "__hstate_" prefix for synthesized state-local names per the
+  ;; handler-state-record substrate (one heap record, four roles).
+  (data (i32.const 5408) "\09\00\00\00__hstate_")
+  (data (i32.const 5424) "\08\00\00\00_state_g")
+
   ;; ─── $lower_pipe — PipeExpr arm (parser tag 101) — 5-verb dispatch ──
   ;; Per src/lower.mn:470-504 + spec 10. Five PipeKinds, one arm each.
   ;; Lock #2: PTeeBlock + PTeeInline collapse to one arm.
@@ -563,12 +568,26 @@
         (local.set $lo_r (call $lower_expr (local.get $right_node)))
         (local.set $hname (call $extract_handler_name (local.get $right_node)))
         (if (i32.ne (local.get $hname) (i32.const 0))
-          (then (call $lower_handler_push (local.get $hname))))
+          (then
+            ;; Per protocol_handler_is_state_is_closure_is_evidence.md:
+            ;; mint state-local-name "__hstate_<h>" from this `~>` site's
+            ;; graph handle. emit_lhandlewith will alloc + init the state
+            ;; record and bind it to this local; perform sites within body
+            ;; thread this local-name as their __state arg via the
+            ;; handler-stack pair.
+            (call $lower_handler_push_with_state
+              (local.get $hname)
+              (call $str_concat (i32.const 5408)               ;; "__hstate_"
+                                (call $int_to_str (local.get $h))))))
         (local.set $lo_l (call $lower_expr (local.get $left_node)))
         (if (i32.ne (local.get $hname) (i32.const 0))
           (then (call $lower_handler_pop)))
-        (return (call $lower_pipe_handle
-                  (local.get $h) (local.get $lo_l) (local.get $lo_r)))))
+        ;; Thread handler_name (extracted earlier) into LHandleWith so
+        ;; emit can construct $<handler>_state_g without re-deriving it
+        ;; from lo_r's tag-302/closure-shape (which varies per binding).
+        (return (call $lexpr_make_lhandlewith_with_name
+                  (local.get $h) (local.get $lo_l) (local.get $lo_r)
+                  (local.get $hname)))))
     ;; Non-handle pipes — lower left+right normally.
     (local.set $lo_l (call $lower_expr (local.get $left_node)))
     (local.set $lo_r (call $lower_expr (local.get $right_node)))

@@ -677,19 +677,34 @@
   ;; ─── 329 = LHandleWith(handle, body, handler) — arity 3 ─────────────
   ;; Per src/lower.mn:136 LHandleWith(Int, LowExpr, LowExpr) — "~>
   ;; desugaring". Both body and handler are LowExpr ptrs (i32).
-  (func $lexpr_make_lhandlewith (param $h i32) (param $body i32) (param $handler i32) (result i32)
+  ;; Per protocol_handler_is_state_is_closure_is_evidence.md: LHandleWith
+  ;; carries a 4th field — handler_name (str_ptr, 0 if anonymous handle-
+  ;; expr). emit reads it for the per-handler global state-ptr name
+  ;; ($<handler_name>_state_g).
+  (func $lexpr_make_lhandlewith_with_name
+        (param $h i32) (param $body i32) (param $handler i32) (param $handler_name i32)
+        (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 329) (i32.const 3)))
+    (local.set $r (call $make_record (i32.const 329) (i32.const 4)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
     (call $record_set (local.get $r) (i32.const 1) (local.get $body))
     (call $record_set (local.get $r) (i32.const 2) (local.get $handler))
+    (call $record_set (local.get $r) (i32.const 3) (local.get $handler_name))
     (local.get $r))
+
+  (func $lexpr_make_lhandlewith (param $h i32) (param $body i32) (param $handler i32) (result i32)
+    (call $lexpr_make_lhandlewith_with_name
+      (local.get $h) (local.get $body) (local.get $handler) (i32.const 0)))
 
   (func $lexpr_lhandlewith_body (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 1)))
 
   (func $lexpr_lhandlewith_handler (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
+
+  (func $lexpr_lhandlewith_handler_name (export "lexpr_lhandlewith_handler_name")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 3)))
 
   ;; ─── 330 = LFeedback(handle, body, spec) — arity 3 ──────────────────
   ;; Per src/lower.mn:137 LFeedback(Int, LowExpr, LowExpr) — "<~
@@ -714,19 +729,35 @@
   ;; invocation — monomorphic direct-call form". When inference proves
   ;; ground row, perform → LPerform (direct $op_<name> call); polymorphic
   ;; sites become LEvPerform (tag 333).
-  (func $lexpr_make_lperform (param $h i32) (param $op_name i32) (param $args i32) (result i32)
+  ;; Per protocol_handler_is_state_is_closure_is_evidence.md: LPerform
+  ;; carries a state_local_name (slot 3, sentinel 0 = use caller __state).
+  ;; The arm-call's __state arg is read from this local at emit time —
+  ;; threading the handler's STATE RECORD (allocated at `~>` install)
+  ;; instead of caller's closure misread as state.
+  (func $lexpr_make_lperform_with_state
+        (param $h i32) (param $op_name i32) (param $args i32) (param $state_local i32)
+        (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 331) (i32.const 3)))
+    (local.set $r (call $make_record (i32.const 331) (i32.const 4)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
     (call $record_set (local.get $r) (i32.const 1) (local.get $op_name))
     (call $record_set (local.get $r) (i32.const 2) (local.get $args))
+    (call $record_set (local.get $r) (i32.const 3) (local.get $state_local))
     (local.get $r))
+
+  (func $lexpr_make_lperform (param $h i32) (param $op_name i32) (param $args i32) (result i32)
+    (call $lexpr_make_lperform_with_state
+      (local.get $h) (local.get $op_name) (local.get $args) (i32.const 0)))
 
   (func $lexpr_lperform_op_name (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 1)))
 
   (func $lexpr_lperform_args (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
+
+  (func $lexpr_lperform_state_local (export "lexpr_lperform_state_local")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 3)))
 
   ;; ─── 332 = LHandle(handle, body, arms) — arity 3 ─────────────────────
   ;; Per src/lower.mn:139 LHandle(Int, LowExpr, List) — "body + arms

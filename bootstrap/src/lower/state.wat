@@ -224,17 +224,34 @@
   ;; first handler whose env-bound scheme is TName("Handler",
   ;; [TName(ename)]) where ename = op_name's EffectOpScheme effect.
 
-  (func $lower_handler_push (export "lower_handler_push") (param $name i32)
+  ;; Per protocol_handler_is_state_is_closure_is_evidence.md: handler-stack
+  ;; entries are PAIRS (name, state_local_name) — NOT just names. The state
+  ;; record at each `~>` install is bound to a unique WAT local; perform sites
+  ;; within body resolve the state-local-name through this stack and emit
+  ;; (local.get $<state-local>) for the arm-call's __state arg. Without
+  ;; the pair, arms received caller's __state (corrupt — env_find→str_eq
+  ;; trapped on 0xe28094e2 garbage). Backwards-compat: $lower_handler_push
+  ;; (name only) routes through with state_local_name = 0 (sentinel "use
+  ;; caller __state"); $lower_handler_push_with_state takes both.
+  (func $lower_handler_push_with_state (export "lower_handler_push_with_state")
+        (param $name i32) (param $state_local i32)
+    (local $entry i32)
     (call $lower_init)
+    (local.set $entry (call $make_record (i32.const 0) (i32.const 2)))
+    (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
+    (call $record_set (local.get $entry) (i32.const 1) (local.get $state_local))
     (global.set $lower_handler_stack_ptr
       (call $list_extend_to (global.get $lower_handler_stack_ptr)
         (i32.add (global.get $lower_handler_count_g) (i32.const 1))))
     (drop (call $list_set
             (global.get $lower_handler_stack_ptr)
             (global.get $lower_handler_count_g)
-            (local.get $name)))
+            (local.get $entry)))
     (global.set $lower_handler_count_g
       (i32.add (global.get $lower_handler_count_g) (i32.const 1))))
+
+  (func $lower_handler_push (export "lower_handler_push") (param $name i32)
+    (call $lower_handler_push_with_state (local.get $name) (i32.const 0)))
 
   (func $lower_handler_pop (export "lower_handler_pop")
     (call $lower_init)
@@ -267,13 +284,16 @@
     (if (i32.ne (call $tag_of (local.get $kind)) (i32.const 133))
       (then (return (i32.const 0))))
     (local.set $ename (call $schemekind_effectop_name (local.get $kind)))
-    ;; Walk handler-stack innermost-first.
+    ;; Walk handler-stack innermost-first. Stack entries are (name,
+    ;; state_local_name) pairs since the state-record substrate landing.
     (local.set $i (i32.sub (global.get $lower_handler_count_g) (i32.const 1)))
     (block $done
       (loop $iter
         (br_if $done (i32.lt_s (local.get $i) (i32.const 0)))
         (local.set $hname
-          (call $list_index (global.get $lower_handler_stack_ptr) (local.get $i)))
+          (call $record_get
+                (call $list_index (global.get $lower_handler_stack_ptr) (local.get $i))
+                (i32.const 0)))
         (local.set $h_entry (call $env_lookup (local.get $hname)))
         (if (i32.ne (local.get $h_entry) (i32.const 0))
           (then
@@ -380,6 +400,69 @@
         (if (call $str_eq (local.get $existing_op) (local.get $op_name))
           (then (return (call $record_get (local.get $entry) (i32.const 1)))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 0))
+
+  ;; Per protocol_handler_is_state_is_closure_is_evidence.md — return the
+  ;; state-record-local-name for the innermost handler in scope that
+  ;; handles op_name's effect. Returns 0 (sentinel "use caller __state")
+  ;; when the handler-stack walk found a match but the entry's
+  ;; state-local-name is empty (legacy push without state) OR no match.
+  ;; Walks the stack with the same shape as $lower_resolve_handler_for_op
+  ;; but reads slot-1 (state_local) instead of building the discriminated
+  ;; target name. Mirror-symmetric: the resolver reads name-then-effect-
+  ;; match-then-target; this resolver reads name-then-effect-match-then-
+  ;; state. Drift refused: 7 (NOT a parallel ledger; same stack of pairs).
+  (func $lower_resolve_handler_state_for_op
+        (export "lower_resolve_handler_state_for_op")
+        (param $op_name i32) (result i32)
+    (local $entry i32) (local $kind i32) (local $ename i32)
+    (local $i i32) (local $stack_entry i32) (local $hname i32)
+    (local $state_local i32) (local $h_entry i32) (local $sch i32)
+    (local $body i32) (local $args i32) (local $arg0 i32)
+    (call $lower_init)
+    (local.set $entry (call $env_lookup (local.get $op_name)))
+    (if (i32.eqz (local.get $entry)) (then (return (i32.const 0))))
+    (local.set $kind (call $env_binding_kind (local.get $entry)))
+    (if (i32.lt_u (local.get $kind) (global.get $heap_base))
+      (then (return (i32.const 0))))
+    (if (i32.ne (call $tag_of (local.get $kind)) (i32.const 133))
+      (then (return (i32.const 0))))
+    (local.set $ename (call $schemekind_effectop_name (local.get $kind)))
+    (local.set $i (i32.sub (global.get $lower_handler_count_g) (i32.const 1)))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.lt_s (local.get $i) (i32.const 0)))
+        (local.set $stack_entry
+          (call $list_index (global.get $lower_handler_stack_ptr) (local.get $i)))
+        (local.set $hname       (call $record_get (local.get $stack_entry) (i32.const 0)))
+        (local.set $state_local (call $record_get (local.get $stack_entry) (i32.const 1)))
+        (local.set $h_entry (call $env_lookup (local.get $hname)))
+        (if (i32.ne (local.get $h_entry) (i32.const 0))
+          (then
+            (local.set $sch (call $env_binding_scheme (local.get $h_entry)))
+            (local.set $body (call $scheme_body (local.get $sch)))
+            (if (i32.ge_u (local.get $body) (global.get $heap_base))
+              (then
+                (if (i32.eq (call $ty_tag (local.get $body)) (i32.const 108))
+                  (then
+                    (if (call $str_eq
+                              (call $ty_tname_name (local.get $body))
+                              (i32.const 4320))
+                      (then
+                        (local.set $args (call $ty_tname_args (local.get $body)))
+                        (if (i32.eq (call $len (local.get $args)) (i32.const 1))
+                          (then
+                            (local.set $arg0 (call $list_index (local.get $args) (i32.const 0)))
+                            (if (i32.ge_u (local.get $arg0) (global.get $heap_base))
+                              (then
+                                (if (i32.eq (call $ty_tag (local.get $arg0)) (i32.const 108))
+                                  (then
+                                    (if (call $str_eq
+                                              (call $ty_tname_name (local.get $arg0))
+                                              (local.get $ename))
+                                      (then (return (local.get $state_local))))))))))))))))))
+        (local.set $i (i32.sub (local.get $i) (i32.const 1)))
         (br $iter)))
     (i32.const 0))
 

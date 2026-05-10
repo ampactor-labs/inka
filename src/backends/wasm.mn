@@ -1040,7 +1040,14 @@ fn emit_let_locals_expr(expr) = match expr {
   LMakeList(_h, elems)      => emit_let_locals_list(elems),
   LMakeTuple(_h, elems)     => emit_let_locals_list(elems),
   LMakeRecord(_h, fs)       => emit_let_locals_list(fs),
-  LMakeVariant(_h, _t, fs)  => emit_let_locals_list(fs),
+  LMakeVariant(h, _t, fs)   => {
+    if fs.len > 0 {
+      perform wat_emit(" (local $variant_")
+      perform wat_emit(int_to_str(h))
+      perform wat_emit(" i32)")
+    }
+    emit_let_locals_list(fs)
+  },
   LIndex(_h, b, i, _)       => { emit_let_locals_expr(b); emit_let_locals_expr(i) },
   LMatch(_h, s, arms)       => {
     emit_let_locals_expr(s)
@@ -1402,20 +1409,14 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    (local.get $record_tmp)\n")
   },
 
-  LMakeVariant(_h, tag_id, fields) => {
-    // ADT variant layout (mirrors LMakeClosure's record shape):
-    //   offset 0: tag_id (i32) — discriminator
-    //   offset 4 + 4*i: field_i — each erased to i32 by ty_to_wasm
-    //
-    // HB: nullary variants take the SENTINEL path — value IS the
-    // tag, no allocation. False=0, True=1 (Bool); Nothing=0,
-    // Up=0/Down=1 etc. The HEAP_BASE = 4096 invariant guarantees
-    // sentinels can't collide with valid pointers (heap_ptr starts
-    // at 1 MiB). Mixed-variant types (e.g., Maybe) get
-    // threshold-aware match dispatch in emit_match_arms_mixed.
-    //
-    // Fielded variants heap-allocate via emit_alloc (EmitMemory
-    // swap surface — bump today, arena/GC tomorrow).
+  LMakeVariant(h, tag_id, fields) => {
+    // Per-handle scratch `$variant_<h>` avoids shared-$variant_tmp
+    // clobber: for nested constructors like `LConst(handle, LInt(999))`,
+    // the inner LMakeVariant's allocation would overwrite the outer's
+    // variant_tmp, so the outer's final `(local.get $variant_tmp)`
+    // returned the INNER's pointer. Each LMakeVariant's identity IS
+    // its graph handle per protocol_canonical_projection_pattern; the
+    // scratch local name follows. HB: nullary variants stay sentinel.
     let n = fields.len
     if n == 0 {
       perform wat_emit("    (i32.const ")
@@ -1423,16 +1424,17 @@ fn emit_expr(expr) = match expr {
       perform wat_emit(")\n")
     } else {
       let size = 4 + n * 4
-      perform emit_alloc(size, "variant_tmp")
-      // Store tag at offset 0.
-      perform wat_emit("    (local.get $variant_tmp)\n")
-      perform wat_emit("    (i32.const ")
+      let local_name = "variant_" |> str_concat(int_to_str(h))
+      perform emit_alloc(size, local_name)
+      perform wat_emit("    (local.get $")
+      perform wat_emit(local_name)
+      perform wat_emit(")\n    (i32.const ")
       perform wat_emit(int_to_str(tag_id))
       perform wat_emit(") (i32.store offset=0)\n")
-      // Store each field at offset 4 + 4*i.
-      emit_variant_field_stores(fields, 0)
-      // Result: variant pointer on stack.
-      perform wat_emit("    (local.get $variant_tmp)\n")
+      emit_variant_field_stores_at(fields, 0, local_name)
+      perform wat_emit("    (local.get $")
+      perform wat_emit(local_name)
+      perform wat_emit(")\n")
     }
   },
 
@@ -1884,15 +1886,17 @@ fn emit_ev_slots_dynamic(ev_exprs, j) = {
 // holds the tag_id). Mirrors emit_capture_stores; the only delta is
 // the base offset (4 vs 8) — closures reserve slot 1 for capture
 // count, variants don't.
-fn emit_variant_field_stores(fields, i) = {
+fn emit_variant_field_stores_at(fields, i, local_name) = {
   if fields.len == 0 { () }
   else {
-    perform wat_emit("    (local.get $variant_tmp)\n")
+    perform wat_emit("    (local.get $")
+    perform wat_emit(local_name)
+    perform wat_emit(")\n")
     emit_expr(list_head(fields))
     perform wat_emit("    (i32.store offset=")
     perform wat_emit(int_to_str(4 + i * 4))
     perform wat_emit(")\n")
-    emit_variant_field_stores(list_tail(fields), i + 1)
+    emit_variant_field_stores_at(list_tail(fields), i + 1, local_name)
   }
 }
 

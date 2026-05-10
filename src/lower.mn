@@ -538,8 +538,12 @@ fn lower_expr_body(e, handle, span) = match e {
   },
 
   ResumeExpr(val, _state_updates) =>
-    // State updates on resume threaded through the emitted state machine
-    // at handler-elimination time; structurally a return from the arm.
+    // Parser captures `with field = expr` state_updates per
+    // Hβ.first-light.resume-with-state-mutation. Lower currently
+    // produces LReturn — the state-store substrate is a peer handle
+    // that requires per-handler state-field slot lookup at emit time
+    // (handler-arm fn name → handler_name → state-fields registry).
+    // Crystallized in protocol_resume_state_mutation_substrate.md.
     LReturn(handle, lower_expr(val)),
 
   FieldExpr(rec, field) => {
@@ -1107,6 +1111,19 @@ fn bind_names_as_locals(names) = {
   }
 }
 
+/// Walk free vars through a `resume() with` updates list. Each update's
+/// init expression may reference outer-scope names (e.g., a freshly-built
+/// `[frame] ++ frames` where `frame` is a let-bound local in the arm
+/// body). cfv reports those that aren't in `bound`.
+fn cfv_state_updates(updates, bound) = {
+  if updates.len == 0 { [] }
+  else {
+    let upd = list_head(updates)
+    cfv_merge(collect_free_vars(upd.init, bound),
+              cfv_state_updates(list_tail(updates), bound))
+  }
+}
+
 /// Bind handler state-field names as arm-scope locals. Per
 /// Hβ.first-light.handler-config-state-substrate (2026-05-06):
 /// state-fields are records `{name, init}`; arm bodies reference the
@@ -1237,7 +1254,9 @@ fn cfv_expr(e, bound) = match e {
     ),
 
   PerformExpr(_, args) => cfv_list(args, bound),
-  ResumeExpr(val, _)   => collect_free_vars(val, bound),
+  ResumeExpr(val, state_updates) =>
+    cfv_merge(collect_free_vars(val, bound),
+              cfv_state_updates(state_updates, bound)),
   FieldExpr(rec, _)    => collect_free_vars(rec, bound),
 
   PipeExpr(_, l, r) =>

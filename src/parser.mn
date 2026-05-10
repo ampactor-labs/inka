@@ -1205,7 +1205,16 @@ fn parse_resume(ref tokens, pos, span: ValidSpan) = {
   let p = expect(tokens, skip_ws(tokens, pos), TLParen)
   let (val, p2) = parse_expr(tokens, skip_ws(tokens, p))
   let p3 = expect(tokens, skip_ws(tokens, p2), TRParen)
-  (nexpr(ResumeExpr(val, []), span), p3)
+  // Hβ.first-light.resume-with-state-mutation: `resume(val) with field =
+  // expr [, field = expr]*` captures state_updates as list of
+  // {name, init} records — same shape as handler state-fields. Lower's
+  // ResumeExpr arm threads these as state-record store-backs preceding
+  // the LReturn, so handler state actually mutates across resume calls.
+  let p_with = skip_ws(tokens, p3)
+  let (state_updates, p4) = if at(tokens, p_with, TWith) {
+    parse_handler_state_fields(tokens, skip_ws(tokens, p_with + 1))
+  } else { ([], p3) }
+  (nexpr(ResumeExpr(val, state_updates), span), p4)
 }
 
 fn parse_lambda(ref tokens, pos, span: ValidSpan) = {

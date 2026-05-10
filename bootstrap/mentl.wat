@@ -25293,9 +25293,17 @@
     (local.set $h     (call $lexpr_handle      (local.get $r)))
     (local.set $ty    (call $lookup_ty         (local.get $h)))
 
-    ;; TError-hole (114) → "(unreachable)" — Hazel productive-under-error.
-    (if (call $emit_is_terror_hole (local.get $ty))
-      (then (call $ec_emit_unreachable) (return)))
+    ;; TError-hole (114) at LConst was previously emitted as (unreachable)
+    ;; per Hazel productive-under-error framing. But LConst's value was
+    ;; produced by lower_lit_int / lower_lit_float / lower_lit_string —
+    ;; the constructor IS the type witness. The value is structurally
+    ;; safe to emit as (i32.const N); the i32-uniform fallback below
+    ;; handles it. Trapping here turned every literal in untyped contexts
+    ;; (e.g. handler-arm bodies pre-Hβ.first-light.infer-handler-decl-
+    ;; arms-typing closure) into a runtime trap, producing empty wheel-
+    ;; compile output. Substrate-honest path is to fall through; named
+    ;; follow-up Hβ.emit.lconst-typed-emit closes the cascade once
+    ;; handler-arm-body inference resolves all literal types.
 
     (local.set $ty_tag_v (call $ty_tag (local.get $ty)))
 

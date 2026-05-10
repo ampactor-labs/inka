@@ -615,11 +615,31 @@ fn parse_effect_ops(ref tokens, pos) = {
   }
 }
 
+/// Parse a single op-param: either bare `Type` (positional) or
+/// `name: Type` (named — SYNTAX.md §678 `print(msg: String)`). Skips
+/// the optional `<ident> :` prefix; returns the parsed Ty + new pos.
+/// Per Hβ.parser.effect-op-typed-arg-substrate (2026-05-10): the wheel
+/// parser accepts both forms; the seed-side substrate already does the
+/// same via the `if at p2 TColon` check at parse_one_param shape, so
+/// this stays SYNTAX.md-aligned.
+fn parse_op_param_one(ref tokens, pos) = {
+  let p = skip_ws(tokens, pos)
+  // peek `<ident> :` — if present, skip the name + colon and parse the type.
+  let after_ws = skip_ws(tokens, p + 1)
+  let is_ident_here = ident_at(tokens, p).len > 0
+  let typed_form = is_ident_here && at(tokens, after_ws, TColon)
+  if typed_form {
+    parse_type_ty(tokens, skip_ws(tokens, after_ws + 1))
+  } else {
+    parse_type_ty(tokens, p)
+  }
+}
+
 fn parse_op_params(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { ([], p + 1) }
   else {
-    let (ty, p2) = parse_type_ty(tokens, p)
+    let (ty, p2) = parse_op_param_one(tokens, p)
     let p3 = skip_ws(tokens, p2)
     if at(tokens, p3, TComma) {
       let (rest, p4) = parse_op_params(tokens, skip_ws(tokens, p3 + 1))

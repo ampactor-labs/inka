@@ -414,19 +414,12 @@
     (if (i32.eq (local.get $ptag) (i32.const 363))
       (then
         (local.set $sub_pats (call $lowpat_lpcon_args (local.get $pat)))
-        ;; Hβ.first-light.match-mixed-recursive-filter: skip the arm if
-        ;; its shape (0=nullary, 1=fielded) doesn't match the cascade's
-        ;; want-shape ($shape). Without this, mixed-shape's LPCon
-        ;; recursion via $ec5_emit_match_arms_from at line 442 emits
-        ;; ALL arms in both cascades — the filtered_from caller skips
-        ;; the mismatched FIRST arm only, then delegates here, and the
-        ;; LPCon recursion no longer re-filters. Pure-shape matches
-        ;; pass through cleanly (every arm matches $shape by classify).
-        (if (i32.ne
-              (if (result i32) (call $len (local.get $sub_pats))
-                (then (i32.const 1))
-                (else (i32.const 0)))
-              (local.get $shape))
+        ;; Hβ.first-light.match-mixed-recursive-filter: arm-shape filter
+        ;; per LPCon arm so mixed-cascade dispatch keeps filtering as
+        ;; the recursion descends; pure-shape matches pass-through
+        ;; cleanly (every arm matches $shape by classify).
+        (if (i32.ne (call $ec5_classify_pat_shape (local.get $sub_pats))
+                    (local.get $shape))
           (then
             (call $ec5_emit_match_arms_from
               (local.get $arms) (i32.add (local.get $idx) (i32.const 1))
@@ -502,6 +495,15 @@
       (local.get $arms) (i32.add (local.get $idx) (i32.const 1))
       (local.get $shape)))
 
+  ;; ─── $ec5_classify_pat_shape — sub_pats list → 0 (nullary) | 1 (fielded)
+  ;; Canonical projection of LPCon arm shape per
+  ;; protocol_canonical_projection_pattern.md. Empty sub_pats = nullary
+  ;; (sentinel-only); non-empty = fielded (heap-tag dispatch).
+  (func $ec5_classify_pat_shape (param $sub_pats i32) (result i32)
+    (if (result i32) (call $len (local.get $sub_pats))
+      (then (i32.const 1))
+      (else (i32.const 0))))
+
   ;; ─── $ec5_emit_match_arms_mixed — threshold gate dispatch ───────────
   ;; Per src/backends/wasm.mn:1909-1922 emit_match_arms_mixed.
   ;; Emits:
@@ -535,7 +537,6 @@
   (func $ec5_emit_match_arms_filtered_from
         (param $arms i32) (param $idx i32) (param $want_shape i32)
     (local $arm i32) (local $pat i32) (local $ptag i32)
-    (local $arm_shape i32)
     ;; Base case: no more arms → unreachable.
     (if (i32.ge_u (local.get $idx) (call $len (local.get $arms)))
       (then (call $ec_emit_unreachable) (return)))
@@ -545,14 +546,10 @@
     ;; LPCon: check shape match.
     (if (i32.eq (local.get $ptag) (i32.const 363))
       (then
-        (local.set $arm_shape
-          (if (result i32)
-              (i32.eqz (call $len (call $lowpat_lpcon_args (local.get $pat))))
-            (then (i32.const 0))
-            (else (i32.const 1))))
-        (if (i32.ne (local.get $arm_shape) (local.get $want_shape))
+        (if (i32.ne
+              (call $ec5_classify_pat_shape (call $lowpat_lpcon_args (local.get $pat)))
+              (local.get $want_shape))
           (then
-            ;; Shape mismatch — skip this arm.
             (call $ec5_emit_match_arms_filtered_from
               (local.get $arms) (i32.add (local.get $idx) (i32.const 1))
               (local.get $want_shape))

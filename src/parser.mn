@@ -1347,9 +1347,9 @@ fn parse_block_expr_checked(ref tokens, pos, start_span) = {
   let Span(sl, _, _, _) = start_span
   let Span(_, _, el, _) = end_span
   if sl == el && is_empty_block(block_node) {
-    eprint_string("parser: E_RedundantBraces Warning: this body fits on one line; remove the braces. Braces apply only to multi-line bodies. at ")
-    eprint_string(show_span(span_join(start_span, end_span)))
-    eprint_string("\n")
+    perform report("parser", "E_RedundantBraces", "Warning",
+      "this body fits on one line; remove the braces. Braces apply only to multi-line bodies.",
+      span_join(start_span, end_span), "MachineApplicable")
   } else { () }
   (block_node, p_end)
 }

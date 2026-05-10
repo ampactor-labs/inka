@@ -1103,14 +1103,6 @@ fn record_field_copy_suffix(src, dst, src_idx, dst_idx, n) = {
 fn parse_block_expr(ref tokens, pos, start_span) = {
   let buf = make_list(8)
   let (final_buf, final_count, final_e, p) = parse_block_body(tokens, pos, buf, 0)
-  let end_span = span_at(tokens, p - 1)
-  let Span(sl, _, _, _) = start_span
-  let Span(_, _, el, _) = end_span
-  if final_count == 0 && sl == el {
-    eprint_string("parser: E_RedundantBraces Warning: this body fits on one line; remove the braces. Braces apply only to multi-line bodies. at ")
-    eprint_string(show_span(span_join(start_span, end_span)))
-    eprint_string("\n")
-  } else { () }
   (nexpr(BlockExpr(slice(final_buf, 0, final_count), final_e), start_span), p)
 }
 
@@ -1272,10 +1264,44 @@ fn parse_lambda_params(ref tokens, pos, own buf, count) = {
 fn parse_body(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TLBrace) {
-    parse_block_expr(tokens, p + 1, span_at(tokens, p))
+    parse_block_expr_checked(tokens, p + 1, span_at(tokens, p))
   } else {
     parse_expr(tokens, p)
   }
+}
+
+// Wrapper around parse_block_expr that emits E_RedundantBraces when the
+// fn body fits one line (no stmts, opening { and closing } on same line).
+// Per SYNTAX.md:117-124 — applies only to fn body context (parse_body
+// is the only fn-body-parsing site; nested blocks under `if`/`match`
+// arms use parse_block_expr directly without this check).
+fn parse_block_expr_checked(ref tokens, pos, start_span) = {
+  let (block_node, p_end) = parse_block_expr(tokens, pos, start_span)
+  let end_span = span_at(tokens, p_end - 1)
+  let Span(sl, _, _, _) = start_span
+  let Span(_, _, el, _) = end_span
+  let stmts_count = block_stmts_count(block_node)
+  if stmts_count == 0 && sl == el {
+    eprint_string("parser: E_RedundantBraces Warning: this body fits on one line; remove the braces. Braces apply only to multi-line bodies. at ")
+    eprint_string(show_span(span_join(start_span, end_span)))
+    eprint_string("\n")
+  } else { () }
+  (block_node, p_end)
+}
+
+// Extract the stmts count of a parsed BlockExpr node. Walks one level of
+// the Node wrapper + the NExpr / BlockExpr destructure via match.
+fn block_stmts_count(node) = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(e) => block_expr_stmts_count(e),
+    _        => 0 - 1
+  }
+}
+
+fn block_expr_stmts_count(e) = match e {
+  BlockExpr(stmts, _) => stmts.len,
+  _                   => 0 - 1
 }
 
 // Patterns

@@ -614,6 +614,16 @@
     (local.set $prev_frame    (call $ls_enter_frame))
     (call $ls_enter_function)
     (call $bind_names_as_locals (local.get $param_names) (local.get $param_handles))
+    ;; Per Hβ.first-light.fnstmt-fresh-captures-len: each fn body owns its
+    ;; captures-len ledger 0-based, mirrors $lower_handler_arm_body_capturing
+    ;; (walk_handle.wat:449-455). Without the reset, a leaked captures-len_g
+    ;; from a malformed-parse sibling stmt produces body LUpval(global_idx)
+    ;; offsets that disagree with the closure-record's local-offset storage —
+    ;; e.g. parse_int_go's `n` resolves to LUpval(1) → __state[12], but the
+    ;; closure stored capture[1] = digit. Body→record disagreement = `indirect
+    ;; call type mismatch` trap when the resolved fn-ptr is read from the
+    ;; wrong slot. Reset puts both views in 0-based agreement.
+    (global.set $lower_captures_len_g (i32.const 0))
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
     ;; Hβ.lower.tail-call-mark-pass — fn body IS in tail position.
     ;; Without this, lex_from / scan_decimal recursive calls compile as
@@ -623,27 +633,39 @@
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     (drop (call $ls_set_fn_name (local.get $prev_fn_name)))
-    ;; Materialize caps_exprs from new captures (mirrors $lower_lambda).
+    ;; Materialize caps_exprs from new captures.
+    ;; Captures-len-g was reset to 0 at body entry, so $caps_post IS the
+    ;; cap count for THIS body (0-based). Iterate [0, caps_post) reading
+    ;; from $lower_captures_ptr — entries were stored at those local
+    ;; indices during the body walk via $ls_lookup_or_capture. Note the
+    ;; caller's parent-scope captures (if any) live at indices ≥ caps_post
+    ;; in the global ptr buffer, but were OVERWRITTEN by this body's
+    ;; captures; the parent's logical view ($caps_snapshot..) is restored
+    ;; below via captures_len_g = caps_snapshot, but its physical entries
+    ;; in the buffer are clobbered. Single-level nesting (top-level fn
+    ;; with nested-fn body) is the dominant case and is correct under
+    ;; this discipline; multi-level nesting is the named follow-up
+    ;; Hβ.first-light.fnstmt-nested-captures-isolation (frame-stack
+    ;; ports the wheel's per-frame captures records, replacing the flat
+    ;; global ptr).
     (local.set $caps_post (call $lower_captures_len))
-    (local.set $caps_count (i32.sub (local.get $caps_post) (local.get $caps_snapshot)))
+    (local.set $caps_count (local.get $caps_post))
     (local.set $caps (call $make_list (i32.const 0)))
     (local.set $caps (call $list_extend_to (local.get $caps) (local.get $caps_count)))
-    (local.set $i (local.get $caps_snapshot))
+    (local.set $i (i32.const 0))
     (block $caps_done
       (loop $caps_iter
         (br_if $caps_done (i32.ge_u (local.get $i) (local.get $caps_post)))
         (local.set $cap_entry
           (call $list_index (call $lower_captures_ptr_get) (local.get $i)))
         (local.set $cap_name (call $record_get (local.get $cap_entry) (i32.const 0)))
-        ;; Triage via $lower_cap_materialize per closure-cap LowExpr discipline.
         (local.set $cap_lexpr
           (call $lower_cap_materialize (local.get $cap_name)))
-        (drop (call $list_set (local.get $caps)
-                              (i32.sub (local.get $i) (local.get $caps_snapshot))
-                              (local.get $cap_lexpr)))
+        (drop (call $list_set (local.get $caps) (local.get $i) (local.get $cap_lexpr)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $caps_iter)))
     (call $ls_truncate_captures (local.get $caps_snapshot))
+    (global.set $lower_captures_len_g (local.get $caps_snapshot))
     (local.set $body_list (call $make_list (i32.const 0)))
     (local.set $body_list (call $list_extend_to (local.get $body_list) (i32.const 1)))
     (drop (call $list_set (local.get $body_list) (i32.const 0) (local.get $lo_body)))

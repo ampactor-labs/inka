@@ -91,6 +91,29 @@ handler lower_state_default
   }
 }
 
+/// Hβ.first-light.resume-with-state-mutation — handler-arm-state context.
+/// `lower_handler_arms_as_decls` installs `arm_state_ctx(state)` around
+/// each arm body's lower_expr call; ResumeExpr arm reads `current_state_
+/// fields()` to resolve `with field = NEW` updates' slot offsets.
+/// Config-param-only handler (no state-fields), so it works regardless
+/// of resume-with-state-update lowering — bootstrap-safe per
+/// protocol_resume_state_mutation_substrate.md.
+
+effect ArmStateContext {
+  current_state_fields() -> List
+}
+
+handler arm_state_ctx(fields) {
+  current_state_fields() => resume(fields)
+}
+
+/// Empty default for non-arm contexts (top-level fn bodies, lambdas).
+/// `current_state_fields()` returns [] — `resume() with X = Y` outside
+/// arm context resolves no slots and falls through to plain LReturn.
+handler arm_state_default {
+  current_state_fields() => resume([])
+}
+
 /// Every variant carries a source TypeHandle (Int), never a cached Ty.
 /// Type reads go through `perform lookup_ty(h)`. Emit consumes this IR;
 /// the handle is the live bridge back to the graph.
@@ -145,6 +168,14 @@ type LowExpr
   // LEvPerform.
   | LEvPerform(Int, String, Int, List)         // handle, op_name, slot_idx, args
   | LFieldLoad(Int, LowExpr, Int)              // W6: handle, record, offset_bytes
+  // Hβ.first-light.resume-with-state-mutation: `resume(val) with field =
+  // expr` per SUBSTRATE.md L660-694 lowers each (field, value) update to
+  // an LStateSlotStore preceding the LReturn. slot_offset is field source-
+  // order * 4 per §IX "Records Are The Handler-State Shape" L1282; the
+  // arm fn's __state IS the handler's state record per
+  // protocol_handler_is_state_is_closure_is_evidence.md, so the store
+  // mutates handler state across resume calls.
+  | LStateSlotStore(Int, Int, LowExpr)         // handle, slot_offset, value
 
 type LowValue
   = LInt(Int)
@@ -199,7 +230,8 @@ fn lexpr_handle(e) with Pure = match e {
   LPerform(h, _, _)       => h,
   LHandle(h, _, _)        => h,
   LEvPerform(h, _, _, _)  => h,
-  LFieldLoad(h, _, _)     => h
+  LFieldLoad(h, _, _)     => h,
+  LStateSlotStore(h, _, _) => h
 }
 
 fn lexpr_ty(e) with LookupTy = {
@@ -537,14 +569,21 @@ fn lower_expr_body(e, handle, span) = match e {
     }
   },
 
-  ResumeExpr(val, _state_updates) =>
-    // Parser captures `with field = expr` state_updates per
-    // Hβ.first-light.resume-with-state-mutation. Lower currently
-    // produces LReturn — the state-store substrate is a peer handle
-    // that requires per-handler state-field slot lookup at emit time
-    // (handler-arm fn name → handler_name → state-fields registry).
-    // Crystallized in protocol_resume_state_mutation_substrate.md.
-    LReturn(handle, lower_expr(val)),
+  ResumeExpr(val, state_updates) =>
+    // Hβ.first-light.resume-with-state-mutation per SUBSTRATE.md L660-694:
+    // each (field, value) update lowers to LStateSlotStore at the field's
+    // source-order slot offset; the sequence of stores precedes the
+    // LReturn, mutating the handler state record across resume calls.
+    // current_state_fields() returns the enclosing arm's state-fields
+    // list (or [] outside arm context); resolve_state_slot_offset finds
+    // the field's slot or -1 (not found, store skipped).
+    if state_updates.len == 0 {
+      LReturn(handle, lower_expr(val))
+    } else {
+      let fields = perform current_state_fields()
+      let stores = lower_state_slot_stores(handle, state_updates, fields)
+      LBlock(handle, stores ++ [LReturn(handle, lower_expr(val))])   // drift-audit: ignore — one-time single-element append at ResumeExpr-lowering boundary; NOT a tail-recursive accumulator. stores built once, extended by exactly one LReturn terminator. Mirror of HandlerDeclStmt arm at line 927.
+    },
 
   FieldExpr(rec, field) => {
     // W6: record field access lowers to a compile-time-resolved
@@ -1082,7 +1121,12 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = {
     bind_names_as_locals(config)
     bind_state_field_names_as_locals(state)
     bind_names_as_locals(arm.args)
-    let lo_body = mark_tail(lower_expr(arm.body))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
+    // Hβ.first-light.resume-with-state-mutation: install arm_state_ctx
+    // around arm body lowering so lower_expr's ResumeExpr arm can
+    // resolve `with field = NEW` updates' slot offsets via
+    // perform current_state_fields(). Config-param-only handler;
+    // bootstrap-safe (no state-mutation-on-resume dependency).
+    let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(state))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
     perform ls_pop_scope(cp)
     // Per Hβ.first-light.handler-arm-fn-name-discriminator —
     // fn_name = "op_" ++ discriminator ++ "_" ++ arm.op_name
@@ -1109,6 +1153,37 @@ fn bind_names_as_locals(names) = {
     perform ls_bind_local(list_head(names), 0)
     bind_names_as_locals(list_tail(names))
   }
+}
+
+/// Lower the state_updates list of a ResumeExpr to a sequence of
+/// LStateSlotStore expressions. Each update's slot offset comes from
+/// the field's source-order position in the enclosing arm's state-
+/// fields (resolved via the ArmStateContext handler). Updates whose
+/// field name is not in scope (mismatched arm body, no enclosing
+/// arm, etc.) lower to LStateSlotStore(handle, -1, value) — emit
+/// time silently skips negative offsets per
+/// protocol_resume_state_mutation_substrate.md productive-under-error.
+fn lower_state_slot_stores(handle, updates, fields) = {
+  if updates.len == 0 { [] }
+  else {
+    let upd = list_head(updates)
+    let offset = resolve_state_slot_offset(upd.name, fields, 0)
+    [LStateSlotStore(handle, offset, lower_expr(upd.init))]
+      ++ lower_state_slot_stores(handle, list_tail(updates), fields)
+  }
+}
+
+/// Resolve a state-field name to its byte offset in the handler state
+/// record. State-fields share the closure-record layout per
+/// protocol_handler_is_state_is_closure_is_evidence.md (one heap record,
+/// four roles): [fn_ptr@0, capture_count@4, slot_0@8, slot_1@12, ...].
+/// State-field at source-order position N → offset 8 + N*4 (mirroring
+/// LUpval emit at backends/wasm.mn:1186-1193). Returns -1 when name
+/// is not in fields (productive-under-error).
+fn resolve_state_slot_offset(name, fields, idx) = {
+  if fields.len == 0 { 0 - 1 }
+  else if str_eq(list_head(fields).name, name) { 8 + idx * 4 }
+  else { resolve_state_slot_offset(name, list_tail(fields), idx + 1) }
 }
 
 /// Walk free vars through a `resume() with` updates list. Each update's

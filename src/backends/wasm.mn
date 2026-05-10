@@ -268,7 +268,8 @@ fn collect_strings_expr(expr, buf, count, next_offset) = match expr {
   LPerform(_, _, args)        => collect_strings_list(args, buf, count, next_offset),
   LHandle(_, b, _arms)        => collect_strings_expr(b, buf, count, next_offset),
   LEvPerform(_, _, _, args)   => collect_strings_list(args, buf, count, next_offset),
-  LFieldLoad(_, rec, _)       => collect_strings_expr(rec, buf, count, next_offset)
+  LFieldLoad(_, rec, _)       => collect_strings_expr(rec, buf, count, next_offset),
+  LStateSlotStore(_, _, v)    => collect_strings_expr(v, buf, count, next_offset)
 }
 
 fn collect_strings_bin(a, b, buf, count, off) = {
@@ -365,6 +366,7 @@ fn collect_slots_expr(expr, buf, count) = match expr {
   LHandle(_, b, _arms)       => collect_slots_expr(b, buf, count),
   LEvPerform(_, _, _, args)  => collect_slots_list(args, buf, count),
   LFieldLoad(_, rec, _)      => collect_slots_expr(rec, buf, count),
+  LStateSlotStore(_, _, v)   => collect_slots_expr(v, buf, count),
   LConst(_, _)               => (buf, count),
   LLocal(_, _)               => (buf, count),
   LGlobal(_, _)              => (buf, count),
@@ -537,6 +539,7 @@ fn collect_fn_names_expr(expr, buf, count) = match expr {
   LHandle(_h, b, _arms)      => collect_fn_names_expr(b, buf, count),
   LEvPerform(_h, _n, _s, a)  => collect_fn_names_list(a, buf, count),
   LFieldLoad(_h, rec, _off)  => collect_fn_names_expr(rec, buf, count),
+  LStateSlotStore(_h, _o, v) => collect_fn_names_expr(v, buf, count),
   // H6: exhaustive LowExpr enumeration. Leaves with no fn-names
   // inside (scalars, locals, globals, upvals, state reads) return
   // the accumulator unchanged. A new LIR variant must decide its
@@ -773,7 +776,8 @@ fn max_arity_expr(expr) = match expr {
   LHandleWith(_, _, _)      => 0,
   LFeedback(_, _, _)        => 0,
   LHandle(_, _, _)          => 0,
-  LFieldLoad(_, _, _)       => 0
+  LFieldLoad(_, _, _)       => 0,
+  LStateSlotStore(_, _, _)  => 0
 }
 
 fn max_int(a, b) with Pure = if a > b { a } else { b }
@@ -943,6 +947,7 @@ fn emit_fns_expr(expr) = match expr {
   LHandle(_h, b, _arms)      => emit_fns_expr(b),
   LEvPerform(_h, _n, _s, a)  => emit_fns_list(a),
   LFieldLoad(_h, rec, _off)  => emit_fns_expr(rec),
+  LStateSlotStore(_h, _o, v) => emit_fns_expr(v),
   // H6: exhaustive LowExpr. Leaves with no fn-containing
   // descendants emit nothing. New LIR variants that carry fn
   // bodies (LMakeClosure-like) must decide their emission path.
@@ -1056,6 +1061,7 @@ fn emit_let_locals_expr(expr) = match expr {
   LHandle(_h, b, _arms)     => emit_let_locals_expr(b),
   LEvPerform(_h, _n, _s, a) => emit_let_locals_list(a),
   LFieldLoad(_h, rec, _off) => emit_let_locals_expr(rec),
+  LStateSlotStore(_h, _o, v) => emit_let_locals_expr(v),
   // H6: exhaustive LowExpr. Leaves declare no locals; LUpval,
   // LConst, LLocal, LGlobal, LStateGet are pure reads. New LIR
   // variants with let-bindings inside must add their recursion
@@ -1638,6 +1644,27 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    (i32.load offset=")
     perform wat_emit(int_to_str(offset))
     perform wat_emit(")\n")
+  },
+
+  LStateSlotStore(_h, slot_offset, value) => {
+    // Hβ.first-light.resume-with-state-mutation: store VALUE into the
+    // arm fn's __state record at slot_offset, mutating handler state
+    // across resume calls. __state IS the state record per
+    // protocol_handler_is_state_is_closure_is_evidence.md. Negative
+    // slot_offset = lower-time name-resolution miss (productive-under-
+    // error per protocol_resume_state_mutation_substrate.md): emit
+    // the value as drop, no store. Block-position emit produces no
+    // result on the stack (matching siblings like LStore).
+    if slot_offset < 0 {
+      emit_expr(value)
+      perform wat_emit("    (drop)\n")
+    } else {
+      perform wat_emit("    (local.get $__state)\n")
+      emit_expr(value)
+      perform wat_emit("    (i32.store offset=")
+      perform wat_emit(int_to_str(slot_offset))
+      perform wat_emit(")\n")
+    }
   },
 
   LDeclareFn(_fn_ir) => {

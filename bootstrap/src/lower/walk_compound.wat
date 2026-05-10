@@ -827,6 +827,11 @@
   ;; ty.wat record-fields walker). AST per Lock #9:
   ;;   [tag=100][rec_node][field_name_str] offsets 0/4/8.
   ;; field_name_str THREADED but NOT COMPARED (drift-8 closure).
+  ;;
+  ;; Lists per lib/runtime/lists.mn:28 store [count@0, tag@4, data@8];
+  ;; `.len` reads offset 0 directly which IS the count. Other field
+  ;; names also currently route through offset 0 until ty.wat structural
+  ;; record-fields walker exposes per-field lookup.
   (func $lower_field (export "lower_field") (param $node i32) (result i32)
     (local $h i32) (local $body i32) (local $field_struct i32)
     (local $rec_node i32) (local $lo_rec i32)
@@ -835,9 +840,6 @@
     (local.set $field_struct (i32.load offset=4 (local.get $body)))
     (local.set $rec_node     (i32.load offset=4 (local.get $field_struct)))
     (local.set $lo_rec       (call $lower_expr (local.get $rec_node)))
-    ;; Lock #4: offset sentinel 0 — ty.wat structural record-fields walker
-    ;; not yet exposed at lower layer; matches wheel src/lower.mn:543
-    ;; non-record-type fallback semantics.
     (call $lexpr_make_lfieldload
       (local.get $h)
       (local.get $lo_rec)

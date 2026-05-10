@@ -28213,13 +28213,67 @@
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $loop))))
 
+
   ;; ─── $emit_llet — LLet tag 304 emit arm per §2.5 ───────────────────
   ;; Per src/backends/wasm.mn:1147-1152: sub-emit value + "(local.set
   ;; $<name>)". Lock #6 separation: ResumeExpr→LReturn (not LLet);
   ;; parser-LetStmt→LLet.
+  ;;
+  ;; Per Hβ.first-light.closure-self-reference-substrate (2026-05-10):
+  ;; when value is LMakeClosure (tag 311), assign the local BEFORE
+  ;; populating captures so any self-reference capture (LLocal whose
+  ;; name == this LLet's name, e.g. `fn go(...)` capturing `go`) reads
+  ;; the closure record itself, not the uninitialized local. The fn IS
+  ;; the closure record IS __state at runtime; assigning early makes
+  ;; that identity available during capture population.
   (func $emit_llet (param $r i32)
-    (call $emit_lexpr (call $lexpr_llet_value (local.get $r)))
-    (call $ec_emit_local_set_dollar (call $lexpr_llet_name (local.get $r))))
+    (local $value i32) (local $name i32)
+    (local.set $value (call $lexpr_llet_value (local.get $r)))
+    (local.set $name  (call $lexpr_llet_name (local.get $r)))
+    (if (i32.eq (call $tag_of (local.get $value)) (i32.const 311))
+      (then
+        (call $emit_lmakeclosure_into_local (local.get $value) (local.get $name))
+        (return)))
+    (call $emit_lexpr (local.get $value))
+    (call $ec_emit_local_set_dollar (local.get $name)))
+
+  ;; ─── $emit_lmakeclosure_into_local — closure assigned before caps ──
+  ;; Same shape as $emit_lmakeclosure but assigns $<name> immediately
+  ;; after alloc, before storing captures. Self-references in captures
+  ;; (LLocal(_, name)) then resolve via (local.get $<name>) to the
+  ;; closure record being constructed.
+  (func $emit_lmakeclosure_into_local (param $r i32) (param $name i32)
+    (local $fn_r i32) (local $fn_name i32)
+    (local $caps i32) (local $evs i32)
+    (local $nc i32)   (local $ne i32)
+    (local.set $fn_r    (call $lexpr_lmakeclosure_fn   (local.get $r)))
+    (local.set $fn_name (call $lowfn_emit_name (local.get $fn_r)))
+    (local.set $caps    (call $lexpr_lmakeclosure_caps (local.get $r)))
+    (local.set $evs     (call $lexpr_lmakeclosure_evs  (local.get $r)))
+    (local.set $nc (call $len (local.get $caps)))
+    (local.set $ne (call $len (local.get $evs)))
+    ;; Alloc 8 + 4*(nc+ne) bytes → $state_tmp.
+    (call $emit_alloc
+      (i32.add (i32.const 8)
+               (i32.mul (i32.const 4) (i32.add (local.get $nc) (local.get $ne))))
+      (i32.const 2244))
+    ;; Assign $name = $state_tmp BEFORE storing captures, so self-ref
+    ;; LLocal($name) in caps reads the closure record under construction.
+    (call $ec8_emit_local_get_state_tmp)
+    (call $ec_emit_local_set_dollar (local.get $name))
+    ;; Store fn_ptr at offset 0.
+    (call $ec8_emit_local_get_state_tmp)
+    (call $ec8_emit_global_get_name_idx (local.get $fn_name))
+    (call $ec_emit_i32_store_offset (i32.const 0))
+    ;; Store capture_count at offset 4.
+    (call $ec8_emit_local_get_state_tmp)
+    (call $emit_i32_const (local.get $nc))
+    (call $ec_emit_i32_store_offset (i32.const 4))
+    ;; Store captures at offsets 8, 12, 16, ...
+    (call $ec8_emit_cap_stores (local.get $caps) (i32.const 8))
+    ;; Store ev_slots at offsets 8+4*nc, 8+4*nc+4, ...
+    (call $ec8_emit_cap_stores (local.get $evs)
+      (i32.add (i32.const 8) (i32.mul (local.get $nc) (i32.const 4)))))
 
   ;; ─── $emit_ldeclarefn — LDeclareFn tag 313 emit arm per §2.5 ───────
   ;; Per src/backends/wasm.mn:1601-1608 + H1.4: at expression-position

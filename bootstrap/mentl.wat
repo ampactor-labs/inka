@@ -21492,15 +21492,31 @@
   ;; resolves config + state references as captures. Mirrors
   ;; $lower_lambda's frame discipline at single-arm granularity.
   ;; Per Hβ.first-light.handler-arm-capture-substrate.
+  ;;
+  ;; Hβ.first-light.arm-body-fresh-captures-len — each arm body is its
+  ;; own LFn that emits as its own WASM fn; the closure-record at
+  ;; runtime carries ONLY this arm's captures. Without saving and
+  ;; restoring captures_len around the arm body, captures accumulate
+  ;; across sibling handler-arms globally — by the time
+  ;; lower_scope's ls_push_scope arm is processed, the captures
+  ;; ledger is at slot 34, so `frames` (state-field-as-capture)
+  ;; resolves to LUpval(34), emit produces __state[8 + 34*4] = 144,
+  ;; OOB on a 64-byte state record. Save+restore mirrors
+  ;; $lower_lambda's discipline; per H.2.e closure-capture path,
+  ;; each fn-body's captures live in a fresh slot region.
   (func $lower_handler_arm_body_capturing
         (param $args i32) (param $body_node i32) (result i32)
     (local $cp i32) (local $prev_frame i32) (local $lo_body i32)
+    (local $prev_captures_len i32)
     (local.set $cp (call $ls_push_scope))
     (local.set $prev_frame (call $ls_enter_frame))
+    (local.set $prev_captures_len (global.get $lower_captures_len_g))
+    (global.set $lower_captures_len_g (i32.const 0))
     (call $bind_handler_arg_names (local.get $args))
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
     ;; Hβ.lower.tail-call-mark-pass — handler arm body is in tail position.
     (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
+    (global.set $lower_captures_len_g (local.get $prev_captures_len))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     (local.get $lo_body))

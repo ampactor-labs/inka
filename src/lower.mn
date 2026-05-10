@@ -1104,43 +1104,59 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = {
   if arms.len == 0 { [] }
   else {
     let arm = list_head(arms)
-    let cp = perform ls_push_scope()
-    // Per Hβ.first-light.handler-config-state-substrate (2026-05-06):
-    // config-params and state-field-names bind in arm scope BEFORE arm
-    // args. This makes references like `f` (in `handler map_h(f) {
-    // yield(elem) => f(elem) ... }`) and `remaining` (in `handler
-    // take_h(n) with remaining = n { yield(elem) => if remaining > 0
-    // ... }`) resolve as captures at lower time. Without this, lower
-    // saw arm bodies referencing names not in any frame and emitted
-    // unresolved-var sentinels — the 331 E_MissingVariable + 314
-    // E_TypeMismatch diagnostic mass observed at wheel-prefix scale.
-    // Walk-through: docs/specs/simulations/Hβ-first-light-empirical.md
-    // §4.5.14. Drift refused: 5 (config + state not parallel arrays —
-    // distinct lists with distinct shapes); 9 (config + state both
-    // bound here, not deferred).
-    bind_names_as_locals(config)
-    bind_state_field_names_as_locals(state)
-    bind_names_as_locals(arm.args)
-    // Hβ.first-light.resume-with-state-mutation: install arm_state_ctx
-    // around arm body lowering so lower_expr's ResumeExpr arm can
-    // resolve `with field = NEW` updates' slot offsets via
-    // perform current_state_fields(). Config-param-only handler;
-    // bootstrap-safe (no state-mutation-on-resume dependency).
-    let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(state))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
-    perform ls_pop_scope(cp)
-    // Per Hβ.first-light.handler-arm-fn-name-discriminator —
-    // fn_name = "op_" ++ discriminator ++ "_" ++ arm.op_name
-    // discriminator is handler_name for top-level decls (passed by
-    // HandlerDeclStmt arm), int_to_str(handle) for inline anonymous
-    // handle-expressions. Each arm gets a unique WASM symbol;
-    // multi-handler-per-op is structurally supported.
     let fn_name = "op_"
       |> str_concat(discriminator)
       |> str_concat("_")
       |> str_concat(arm.op_name)
+    // Hβ.first-light.arm-body-fresh-frame: each handler-arm body is
+    // its own WASM function with __state IS the handler state record
+    // (per protocol_handler_is_state_is_closure_is_evidence.md). The
+    // arm body needs a FRESH frame so state-field references (e.g.
+    // `frames`, `globals`) resolve to LUpval(0..N-1), emitting
+    // `(local.get $__state)(i32.load offset=8 + idx*4)` — the
+    // canonical closure-record layout. Using ls_push_scope alone
+    // contaminates with the outer fn's accumulated locals (slot 34
+    // → offset 144, past the state record entirely; OOB trap).
+    //
+    // captures_names = config_names ++ state_field_names (sources
+    // for closure-record slots at install time). args go as locals
+    // (arm fn params at WASM call-arity). zero handles per
+    // bind_names_as_locals convention.
+    let config_names = config
+    let state_field_names = state_field_names_of(state)
+    let captures_names = config_names ++ state_field_names
+    let captures_handles = zeros_of_len(captures_names.len)
+    let locals_handles = zeros_of_len(arm.args.len)
+    perform ls_enter_frame(
+      fn_name,
+      arm.args, locals_handles,
+      captures_names, captures_handles
+    )
+    // Hβ.first-light.resume-with-state-mutation: install arm_state_ctx
+    // around arm body lowering so lower_expr's ResumeExpr arm resolves
+    // `with field = NEW` updates' slot offsets via current_state_fields().
+    let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(state))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
+    perform ls_exit_frame()
     let fn_ir = LFn(fn_name, arm.args.len, arm.args, [lo_body], EfPure)
     [LDeclareFn(fn_ir)] ++ lower_handler_arms_as_decls(list_tail(arms), discriminator, config, state)
   }
+}
+
+/// Extract just the `name` field from each state-fields record.
+/// Per parse_handler_state_fields, each entry is `{name, init}`.
+fn state_field_names_of(state) = {
+  if state.len == 0 { [] }
+  else {
+    let field = list_head(state)
+    [field.name] ++ state_field_names_of(list_tail(state))
+  }
+}
+
+/// Build a list of n zero handles. Used as the handle-list for arm
+/// captures and locals where lower-time has no type-handle info.
+fn zeros_of_len(n) = {
+  if n <= 0 { [] }
+  else { [0] ++ zeros_of_len(n - 1) }
 }
 
 fn bind_names_as_locals(names) = {

@@ -198,6 +198,17 @@
     (i32.store offset=8 (local.get $p) (local.get $args))
     (local.get $p))
 
+  ;; MakeRecordExpr(fields) → [tag=98][fields]
+  ;; fields is a list of (name, value_node) pair-records (tag 0, arity 2).
+  ;; Per Lock #6 in walk_compound.wat, $lower_make_record reads fields[1]
+  ;; (value_node) at slot 1, with name at slot 0 (alphabetical). The
+  ;; parser ($parse_record_lit) sorts fields alphabetically by name.
+  (func $mk_MakeRecordExpr (param $fields i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 98))
+    (i32.store offset=4 (local.get $p) (local.get $fields))
+    (local.get $p))
+
   ;; ResumeExpr(val, state_updates) → [tag=95][val_node][state_updates_ptr]
   ;; Per Hβ.first-light.resume-expr-substrate: $lower_resume reads val_node
   ;; at offset 4 and ignores state_updates per Lock #6 (named follow-up

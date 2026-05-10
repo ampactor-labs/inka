@@ -219,9 +219,20 @@
         ;; TLParen (45) — parenthesized expr or tuple
         (if (i32.eq (local.get $k) (i32.const 45))
           (then (return (call $parse_paren (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)) (local.get $span)))))
-        ;; TLBrace (47) — block
+        ;; TLBrace (47) — block OR record-literal. Per Hβ.first-light.
+        ;; record-literal-disambiguation: peek `{` + ident + `:` → record
+        ;; literal; otherwise block expression. The wheel's `let frame =
+        ;; { capture_handles: ..., ... }` and similar field-projection
+        ;; sites need the record-literal path; pre-fix they parsed as
+        ;; blocks where each `name: value` became a VarRef sequence
+        ;; producing UNRESOLVED sentinels at lower-time.
         (if (i32.eq (local.get $k) (i32.const 47))
-          (then (return (call $parse_block (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)) (local.get $span)))))
+          (then
+            (if (call $is_record_literal_start (local.get $tokens) (local.get $pos))
+              (then (return (call $parse_record_lit (local.get $tokens)
+                              (i32.add (local.get $pos) (i32.const 1))
+                              (local.get $span)))))
+            (return (call $parse_block (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)) (local.get $span)))))
         ;; TIf (2)
         (if (i32.eq (local.get $k) (i32.const 2))
           (then (return (call $parse_if_expr (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)) (local.get $span)))))

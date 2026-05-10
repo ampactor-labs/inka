@@ -531,6 +531,107 @@
       (call $list_index (local.get $args_r) (i32.const 1))))
     (local.get $tup))
 
+  ;; ─── is_record_literal_start ─ peek `{ ident :` to disambiguate ──
+  ;; Per Hβ.first-light.record-literal-disambiguation: parse_primary's
+  ;; `{` arm needs to distinguish block-expr from record-lit. Peek:
+  ;;   pos     = '{'
+  ;;   pos+1   = TIdent (after skipping ws)
+  ;;   pos+2   = TColon (kind 16) (after skipping ws)
+  ;; If matches, this is a record literal. Empty `{}` is block (unit).
+  ;; Field-punning `{name, ...}` is also record-lit but rare in seed
+  ;; corpus — peer follow-up Hβ.parser.record-lit-field-punning.
+  (func $is_record_literal_start (param $tokens i32) (param $pos i32) (result i32)
+    (local $p1 i32) (local $p2 i32) (local $k1 i32)
+    ;; pos points at `{`; advance past brace.
+    (local.set $p1 (call $skip_ws_p (local.get $tokens)
+                          (i32.add (local.get $pos) (i32.const 1))))
+    ;; Empty `{}` → block.
+    (if (call $at (local.get $tokens) (local.get $p1) (i32.const 48))   ;; TRBrace
+      (then (return (i32.const 0))))
+    ;; First token must be TIdent (fielded; tag-25 heap record, NOT
+    ;; sentinel). Per parser_handler.wat:362 canonical "is TIdent"
+    ;; probe — `is_sentinel == false && tag_of == 25`.
+    (local.set $k1 (call $kind_at (local.get $tokens) (local.get $p1)))
+    (if (call $is_sentinel (local.get $k1))
+      (then (return (i32.const 0))))
+    (if (i32.ne (call $tag_of (local.get $k1)) (i32.const 25))
+      (then (return (i32.const 0))))
+    ;; Next non-ws must be TColon (sentinel kind 53).
+    (local.set $p2 (call $skip_ws_p (local.get $tokens)
+                          (i32.add (local.get $p1) (i32.const 1))))
+    (if (i32.eq (call $kind_at (local.get $tokens) (local.get $p2)) (i32.const 53))
+      (then (return (i32.const 1))))
+    (i32.const 0))
+
+  ;; ─── parse_record_lit ─ `{ name: value, ... }` per SYNTAX.md §Records
+  ;; Per Hβ.first-light.record-literal-substrate: builds field list of
+  ;; (name, value_node) pair-records. Fields sorted alphabetically per
+  ;; canonical AST shape (SYNTAX.md §"Sorting at parse time"). Trailing
+  ;; comma allowed. The wheel uses this form heavily for handler frames,
+  ;; cursor records, AST node construction, and config records.
+  ;;
+  ;; pos points AFTER the opening `{`.
+  (func $parse_record_lit (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
+    (local $p i32) (local $buf i32) (local $count i32)
+    (local $name i32) (local $val_r i32) (local $val i32)
+    (local $p2 i32) (local $p3 i32) (local $tup i32) (local $field i32)
+    (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
+    (local.set $buf (call $make_list (i32.const 4)))
+    (local.set $count (i32.const 0))
+    (block $done
+      (loop $each
+        ;; `}` → end.
+        (if (call $at (local.get $tokens) (local.get $p) (i32.const 48))   ;; TRBrace
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (br $done)))
+        ;; Read field name (TIdent). Substrate-honest recovery on mis-parse
+        ;; per protocol_parser_fabrication_substrate.md: ident_at_p
+        ;; returns 0 on non-TIdent → produce NErrorExpr-wrapped sentinel.
+        (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $name))
+          (then (br $done)))
+        (local.set $p (call $skip_ws_p (local.get $tokens)
+                            (i32.add (local.get $p) (i32.const 1))))
+        ;; Expect `:` (TColon kind 53).
+        (local.set $p (call $expect (local.get $tokens) (local.get $p) (i32.const 53)))
+        (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $p)))
+        ;; Parse value expression.
+        (local.set $val_r (call $parse_expr (local.get $tokens) (local.get $p)))
+        (local.set $val (call $list_index (local.get $val_r) (i32.const 0)))
+        (local.set $p2 (call $skip_ws_p (local.get $tokens)
+                              (call $list_index (local.get $val_r) (i32.const 1))))
+        ;; Build (name, value) pair-record (tag 0, arity 2).
+        (local.set $field (call $make_record (i32.const 0) (i32.const 2)))
+        (call $record_set (local.get $field) (i32.const 0) (local.get $name))
+        (call $record_set (local.get $field) (i32.const 1) (local.get $val))
+        ;; Append to buf via Ω.3 buffer-counter.
+        (local.set $buf (call $list_extend_to (local.get $buf)
+                          (i32.add (local.get $count) (i32.const 1))))
+        (drop (call $list_set (local.get $buf) (local.get $count) (local.get $field)))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        ;; Skip optional `,` (TComma kind 51) — trailing comma allowed.
+        (if (call $at (local.get $tokens) (local.get $p2) (i32.const 51))
+          (then (local.set $p (call $skip_ws_p (local.get $tokens)
+                                (i32.add (local.get $p2) (i32.const 1)))))
+          (else (local.set $p (local.get $p2))))
+        (br $each)))
+    ;; Slice buf to count and sort alphabetically per SYNTAX.md §"Sorting
+    ;; at parse time" — canonical AST has fields sorted by name. Sort is
+    ;; named follow-up Hβ.parser.record-lit-field-sort: the seed leaves
+    ;; insertion order for now (matches MakeRecord's emit which uses
+    ;; whatever order is given). Lower's $lower_record_field_values reads
+    ;; values uniformly. L1 fixpoint preservation: bootstrap and wheel
+    ;; both use insertion order, so byte-identical.
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0)
+      (call $nexpr
+        (call $mk_MakeRecordExpr
+          (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
+        (local.get $span))))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
+    (local.get $tup))
+
   ;; ─── parse_resume_expr ─ resume() / resume(value) ─────────────────
   ;; Per Hβ.first-light.resume-expr-substrate (chain link 5 closure for
   ;; resume-state-update parser drift): TResume (kind 10) was unhandled

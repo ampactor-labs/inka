@@ -1128,11 +1128,13 @@ fn emit_params(names) = {
   }
 }
 
-fn emit_body(stmts) = {
-  if stmts.len == 0 { () }
+fn emit_body(stmts) = emit_body_at(stmts, 0, stmts.len)
+
+fn emit_body_at(stmts, i, n) = {
+  if i >= n { () }
   else {
-    emit_expr(list_head(stmts))
-    emit_body(list_tail(stmts))
+    emit_expr(list_index(stmts, i))
+    emit_body_at(stmts, i + 1, n)
   }
 }
 

@@ -246,29 +246,25 @@ fn lexpr_ty(e) with LookupTy = {
 /// regular call_indirect and exhaust the WASM stack on long inputs.
 /// Mirror of bootstrap/src/lower/walk_call.wat $lower_mark_tail. Called by
 /// FnStmt / LambdaExpr / handler-arm-body lowering after lower_expr.
-fn mark_tail(e) with Memory = match e {
+fn mark_tail(e) with Memory + Alloc = match e {
   LCall(h, fn_, args)         => LTailCall(h, fn_, args),
-  LIf(h, cond, then_b, else_b) => {
-    mark_tail_last_in(then_b)
-    mark_tail_last_in(else_b)
-    LIf(h, cond, then_b, else_b)
-  },
-  LBlock(h, stmts) => {
-    mark_tail_last_in(stmts)
-    LBlock(h, stmts)
-  },
+  LIf(h, cond, then_b, else_b) =>
+    LIf(h, cond, mark_tail_last_in(then_b), mark_tail_last_in(else_b)),
+  LBlock(h, stmts) => LBlock(h, mark_tail_last_in(stmts)),
   LMatch(h, scrut, arms) => LMatch(h, scrut, mark_tail_arms(arms)),
   _ => e
 }
 
-/// Mutate-in-place: replace last element of `stmts` (a tag=0 flat list)
-/// with mark_tail(last). Returns the same list pointer.
-fn mark_tail_last_in(stmts) with Memory = {
+/// Return a fresh flat list with the last element replaced by mark_tail(last).
+/// Materializes via list_to_flat so callers can pass any list shape (concat,
+/// slice, snoc) — substrate-honest per list_set's tag=0 contract.
+fn mark_tail_last_in(stmts) with Memory + Alloc = {
   let n = stmts.len
   if n == 0 { stmts }
   else {
+    let flat = list_to_flat(stmts)
     let last_idx = n - 1
-    list_set(stmts, last_idx, mark_tail(list_index(stmts, last_idx)))
+    list_set(flat, last_idx, mark_tail(list_index(flat, last_idx)))
   }
 }
 

@@ -974,6 +974,28 @@ fn parse_primary(ref tokens, pos) = {
       let (inner, p) = parse_primary(tokens, pos + 1)
       (nexpr(UnaryOpExpr(UNot, inner), span), p)
     },
+    // SYNTAX.md:324-329 — E_LambdaAsOrOr: the double-pipe at expression
+    // start position is the logical-OR token (TOrOr), not a zero-arg
+    // lambda. Canonical zero-arg lambda is `() => body`. Parse continues
+    // as `() => <next-expr>` per the Quick-Fix.
+    TOrOr        => {
+      perform report("parser", "E_LambdaAsOrOr", "Warning",
+        "the double-pipe is logical-OR, not a zero-arg lambda — use parenthesized-empty with fat-arrow body per SYNTAX.md:324-329",
+        span, "MachineApplicable")
+      let (body, p) = parse_expr(tokens, pos + 1)
+      (nexpr(LambdaExpr([], body), span), p)
+    },
+    // SYNTAX.md:1593 — E_OrphanHandlerAttach: the tee-arrow at expression
+    // start position has no preceding chain. Quick-Fix shape per spec:
+    // delete the tee-arrow OR supply a body. Parser recovery: emit
+    // diagnostic, return hole, advance past the tee-arrow token.
+    TTildeGt     => {
+      perform report("parser", "E_OrphanHandlerAttach", "ParseError",
+        "the tee-arrow has no preceding chain — supply a body before it or remove the tee-arrow",
+        span, "Unspecified")
+      let id = fresh_ph(span)
+      (nhole(id, span), pos + 1)
+    },
     _ => {
       perform report("parser", "P_UnexpectedToken", "ParseError",
         "unexpected token: " |> str_concat(show_token_kind(kind_at(tokens, pos))),

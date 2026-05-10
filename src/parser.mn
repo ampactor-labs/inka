@@ -1381,7 +1381,20 @@ fn parse_body(ref tokens, pos) = {
   if at(tokens, p, TLBrace) {
     parse_block_expr_checked(tokens, p + 1, span_at(tokens, p))
   } else {
-    parse_expr(tokens, p)
+    // SYNTAX.md:126-142 — E_MissingBracesMultiLine: a multi-line fn
+    // body (no braces) is REJECTED — braces anchor the function
+    // boundary visually and enable editor folding. After parse_expr
+    // returns the body's span, check if start_line != end_line; if
+    // so, emit the diagnostic.
+    let (body, p_end) = parse_expr(tokens, p)
+    let N(_, body_span, _) = body
+    let Span(sl, _, el, _) = body_span
+    if sl != el {
+      perform report("parser", "E_MissingBracesMultiLine", "Warning",
+        "multi-line fn body requires braces — wrap the body to anchor the function boundary per SYNTAX.md:126-142",
+        body_span, "MachineApplicable")
+    } else { () }
+    (body, p_end)
   }
 }
 

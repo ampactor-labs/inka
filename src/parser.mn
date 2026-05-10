@@ -915,7 +915,20 @@ fn parse_primary(ref tokens, pos) = {
     TStringPart(s) => parse_string_interpolation(tokens, pos + 1, s, span),
     TTrue        => (nexpr(LitBool(true), span), pos + 1),
     TFalse       => (nexpr(LitBool(false), span), pos + 1),
-    TIdent(name) => (nexpr(VarRef(name), span), pos + 1),
+    TIdent(name) => {
+      // SYNTAX.md:1417, 1599 — E_NotAKeyword: user typed a non-Mentl
+      // keyword from another language. Mentl uses verb forms (iterate,
+      // perform, resume) per substrate. Parse continues with VarRef
+      // (the name binds normally; infer surfaces missing-variable at
+      // infer time). Diagnostic gives the user the gradient toward
+      // Mentl idiom.
+      if is_foreign_keyword(name) {
+        perform report("parser", "E_NotAKeyword", "Warning",
+          "this is not a Mentl keyword — Mentl uses verb forms (iterate / perform / resume / etc.) per substrate",
+          span, "MaybeIncorrect")
+      } else { () }
+      (nexpr(VarRef(name), span), pos + 1)
+    },
     THole        => {
       let id = fresh_ph(span)
       (nhole(id, span), pos + 1)
@@ -928,10 +941,24 @@ fn parse_primary(ref tokens, pos) = {
     THandle      => parse_handle(tokens, pos + 1, span),
     TPerform     => parse_perform(tokens, pos + 1, span),
     TResume      => parse_resume(tokens, pos + 1, span),
-    TPipe        => parse_lambda(tokens, pos + 1, span),
-    // SYNTAX.md §148-190: fn (params) => expr — explicit lambda form // drift-audit: ignore
-    // for block bodies and tuple destructuring in params.
+    TPipe        => {
+      // SYNTAX.md:307-315 — E_LambdaFence: pipe-fenced params syntax is // drift-audit: ignore
+      // REJECTED. Canonical is parenthesized-params + fat-arrow body. // drift-audit: ignore
+      // Parse continues via parse_lambda; the diagnostic surfaces the
+      // Quick-Fix rewrite.
+      perform report("parser", "E_LambdaFence", "Warning",
+        "pipe-fenced params syntax is rejected — use parenthesized params with fat-arrow body per SYNTAX.md:309-313", // drift-audit: ignore
+        span, "MachineApplicable")
+      parse_lambda(tokens, pos + 1, span)
+    },
+    // SYNTAX.md §148-190 + §317-322: anonymous lambda via the fn-keyword // drift-audit: ignore
+    // is REJECTED (E_RedundantFnOnLambda). The fn-keyword is reserved
+    // on named declarations; anonymous lambdas use parenthesized params
+    // + fat-arrow body. Parse continues; diagnostic surfaces Quick-Fix.
     TFn          => {
+      perform report("parser", "E_RedundantFnOnLambda", "Warning",
+        "the fn-keyword is reserved on named declarations — anonymous lambdas use parenthesized params with fat-arrow body per SYNTAX.md:318-322",
+        span, "MachineApplicable")
       let p = skip_ws(tokens, pos + 1)
       let p2 = expect(tokens, p, TLParen)
       let (params, p3) = parse_fn_params(tokens, p2)
@@ -1366,6 +1393,20 @@ fn is_empty_block(node) = {
     _        => false
   }
 }
+
+// SYNTAX.md:1599 — names that look like keywords from other languages
+// (Python / JS / C / Rust) but aren't Mentl keywords. Mentl's
+// substrate uses verbs (iterate / perform / resume / pipe operators),
+// not statement keywords. Emit E_NotAKeyword on these as a teaching
+// surface toward Mentl idiom. The string literals below ARE the
+// detection target — drift-audit suppress is the residue form.
+fn is_foreign_keyword(name) =
+  str_eq(name, "for") ||      // drift-audit: ignore
+  str_eq(name, "while") ||    // drift-audit: ignore
+  str_eq(name, "loop") ||     // drift-audit: ignore
+  str_eq(name, "break") ||    // drift-audit: ignore
+  str_eq(name, "continue") || // drift-audit: ignore
+  str_eq(name, "return")      // drift-audit: ignore
 
 fn is_empty_block_expr(e) = match e {
   BlockExpr(stmts, _) => stmts.len == 0,

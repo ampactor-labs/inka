@@ -1343,9 +1343,12 @@ fn parse_pat_list_args(ref tokens, pos) = {
   }
 }
 
+// Per Hβ.first-light.first-char-code-via-byte-at: chars/char_code aren't
+// defined in the wheel runtime; byte_at is the substrate-honest primitive.
+// Strings are length-prefixed; byte_at(s, 0) reads s[0] as i32 directly.
 fn first_char_code(s) = {
   if s.len == 0 { 0 }
-  else { char_code(chars(s)[0]) }
+  else { byte_at(s, 0) }
 }
 
 // Type expressions

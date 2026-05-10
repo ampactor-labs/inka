@@ -1346,8 +1346,7 @@ fn parse_block_expr_checked(ref tokens, pos, start_span) = {
   let end_span = span_at(tokens, p_end - 1)
   let Span(sl, _, _, _) = start_span
   let Span(_, _, el, _) = end_span
-  let stmts_count = block_stmts_count(block_node)
-  if stmts_count == 0 && sl == el {
+  if sl == el && is_empty_block(block_node) {
     eprint_string("parser: E_RedundantBraces Warning: this body fits on one line; remove the braces. Braces apply only to multi-line bodies. at ")
     eprint_string(show_span(span_join(start_span, end_span)))
     eprint_string("\n")
@@ -1355,19 +1354,22 @@ fn parse_block_expr_checked(ref tokens, pos, start_span) = {
   (block_node, p_end)
 }
 
-// Extract the stmts count of a parsed BlockExpr node. Walks one level of
-// the Node wrapper + the NExpr / BlockExpr destructure via match.
-fn block_stmts_count(node) = {
+// "Is this Node an empty BlockExpr (a `{ final_expr }` with no statements)?"
+// Returns Bool — false is the identity-preserve value for non-BlockExpr
+// shapes (a non-block is correctly "not an empty block"). Avoids the
+// drift class of `_ => <fabricated int sentinel>` per CLAUDE.md red-flag
+// "no `_ => <fabricated value>` over a load-bearing ADT".
+fn is_empty_block(node) = {
   let N(body, _, _) = node
   match body {
-    NExpr(e) => block_expr_stmts_count(e),
-    _        => 0 - 1
+    NExpr(e) => is_empty_block_expr(e),
+    _        => false
   }
 }
 
-fn block_expr_stmts_count(e) = match e {
-  BlockExpr(stmts, _) => stmts.len,
-  _                   => 0 - 1
+fn is_empty_block_expr(e) = match e {
+  BlockExpr(stmts, _) => stmts.len == 0,
+  _                   => false
 }
 
 // Patterns

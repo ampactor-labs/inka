@@ -578,11 +578,16 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     lower_compose_via_thread(handle, left, right),
 
   PForward => {
-    // |> converge — right(left). Transparent wire; unification at
-    // inference time already paired tuple slots with parameters.
+    // Hβ.first-light.pipe-forward-flatten — `x |> f(a, b)` flattens to
+    // `LCall(f, [x, a, b])` per "Parameters ARE tuples" semantics
+    // (no auto-currying in seed). When lo_r is LCall, unfold its args
+    // and prepend lo_l. Bare-fn case stays `LCall(lo_r, [lo_l])`.
     let lo_l = lower_expr(left)
     let lo_r = lower_expr(right)
-    LCall(handle, lo_r, [lo_l])
+    match lo_r {
+      LCall(_, fn_, args) => LCall(handle, fn_, [lo_l] ++ args),
+      _                   => LCall(handle, lo_r, [lo_l])
+    }
   },
 
   PDiverge => {

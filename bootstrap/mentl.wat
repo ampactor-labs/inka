@@ -21348,10 +21348,55 @@
     (i32.const 0))
 
   ;; ─── $lower_pipe_forward — `|>` arm ───────────────────────────────
-  ;; Per src/lower.mn:476: PForward => LCall(handle, lo_r, [lo_l]).
+  ;; Per Hβ.first-light.pipe-forward-flatten (chain link 5 closure):
+  ;; `x |> f(a, b)` flattens to `LCall(f, [x, a, b])` instead of the
+  ;; curry-form `LCall(LCall(f, [a, b]), [x])`. Mentl fns are NOT
+  ;; auto-curried; per "Parameters ARE tuples" `f(a, b)` calls f with
+  ;; the 2-tuple (a, b). The pipe `x |> f(a, b)` is the full call
+  ;; `f(x, a, b)` — left as the FIRST argument, then the explicit
+  ;; args. Mirrors src/lower.mn's intent (the wheel comment "right(
+  ;; left). Transparent wire; unification at inference time already
+  ;; paired tuple slots with parameters" — but lowering must produce
+  ;; the flat call directly since seed has no auto-curry substrate).
+  ;;
+  ;; If lo_r is LCall(f, args) (tag 308), unfold to LCall(f,
+  ;; [lo_l] ++ args). Else LCall(lo_r, [lo_l]) per the bare-fn shape.
+  ;; Drift refused: 1 (no vtable; structural tag-308 dispatch); 9
+  ;; (lands the closure here, not a pre-pipe-rewrite peer follow-up).
   (func $lower_pipe_forward (export "lower_pipe_forward")
         (param $h i32) (param $lo_l i32) (param $lo_r i32) (result i32)
-    (local $args i32)
+    (local $args i32) (local $r_args i32) (local $r_args_n i32)
+    (local $i i32) (local $r_fn i32) (local $r_tag i32)
+    (local.set $r_tag (call $tag_of (local.get $lo_r)))
+    ;; Flatten works on both LCall (monomorphic, tag 308) and LSuspend
+    ;; (polymorphic evidence-passing, tag 325). For both, lo_r contains
+    ;; an args list at slot 2 (LCall) / slot 3 (LSuspend), and a fn at
+    ;; slot 1 / slot 2. Read the right slot per tag.
+    (if (i32.or (i32.eq (local.get $r_tag) (i32.const 308))
+                (i32.eq (local.get $r_tag) (i32.const 325)))
+      (then
+        (if (i32.eq (local.get $r_tag) (i32.const 308))
+          (then
+            (local.set $r_fn   (call $lexpr_lcall_fn (local.get $lo_r)))
+            (local.set $r_args (call $lexpr_lcall_args (local.get $lo_r))))
+          (else
+            (local.set $r_fn   (call $lexpr_lsuspend_fn (local.get $lo_r)))
+            (local.set $r_args (call $lexpr_lsuspend_args (local.get $lo_r)))))
+        (local.set $r_args_n (call $len (local.get $r_args)))
+        (local.set $args (call $make_list (i32.const 0)))
+        (local.set $args (call $list_extend_to (local.get $args)
+                          (i32.add (local.get $r_args_n) (i32.const 1))))
+        (drop (call $list_set (local.get $args) (i32.const 0) (local.get $lo_l)))
+        (local.set $i (i32.const 0))
+        (block $copy_done
+          (loop $copy_iter
+            (br_if $copy_done (i32.ge_u (local.get $i) (local.get $r_args_n)))
+            (drop (call $list_set (local.get $args)
+                                  (i32.add (local.get $i) (i32.const 1))
+                                  (call $list_index (local.get $r_args) (local.get $i))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $copy_iter)))
+        (return (call $lexpr_make_lcall (local.get $h) (local.get $r_fn) (local.get $args)))))
     (local.set $args (call $make_list (i32.const 0)))
     (local.set $args (call $list_extend_to (local.get $args) (i32.const 1)))
     (drop (call $list_set (local.get $args) (i32.const 0) (local.get $lo_l)))

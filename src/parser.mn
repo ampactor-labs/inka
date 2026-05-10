@@ -895,6 +895,7 @@ fn parse_primary(ref tokens, pos) = {
     TInt(n)      => (nexpr(LitInt(n), span), pos + 1),
     TFloat(f)    => (nexpr(LitFloat(f), span), pos + 1),
     TString(s)   => (nexpr(LitString(s), span), pos + 1),
+    TStringPart(s) => parse_string_interpolation(tokens, pos + 1, s, span),
     TTrue        => (nexpr(LitBool(true), span), pos + 1),
     TFalse       => (nexpr(LitBool(false), span), pos + 1),
     TIdent(name) => (nexpr(VarRef(name), span), pos + 1),
@@ -971,6 +972,54 @@ fn parse_tuple_tail(ref tokens, pos, own buf, count) = {
       (b1, c1, expect(tokens, p3, TRParen))
     }
   }
+}
+
+// String interpolation per SYNTAX.md:1137-1187. Lexer (src/lexer.mn:262-309)
+// tokenizes `"prefix{expr}suffix"` as:
+//   TStringPart("prefix"), TStringSplice, <expr tokens>, TStringPart("suffix")
+// where the closing `}` is consumed by lex_from (no terminator token). Multi-
+// splice strings cascade the same alternation. Plain `"foo"` emits just
+// TStringPart("foo") with no following splice.
+//
+// parse_string_interpolation enters with pos AFTER the first TStringPart and
+// first_chunk holding its content. Loop: if next is TStringSplice, parse the
+// inner expression via parse_expr (terminates naturally at TStringPart, the
+// next non-operator-continuation), consume the next TStringPart for the
+// trailing literal chunk, fold into a str_concat chain.
+//
+// Substrate: desugars to nested CallExpr(VarRef("str_concat"), [a, b]) — no
+// new AST variant. Plain non-interpolated strings stay as bare LitString
+// (single fragment, no splice → loop terminates immediately, returns
+// nexpr(LitString(first_chunk), span)).
+fn parse_string_interpolation(ref tokens, pos, first_chunk, start_span) = {
+  let initial = nexpr(LitString(first_chunk), start_span)
+  parse_string_interpolation_loop(tokens, pos, initial, start_span)
+}
+
+fn parse_string_interpolation_loop(ref tokens, pos, acc, start_span) = {
+  if at(tokens, pos, TStringSplice) {
+    let (splice_expr, p2) = parse_expr(tokens, pos + 1)
+    let (next_chunk, p3) = consume_string_part(tokens, p2)
+    let next_chunk_node = nexpr(LitString(next_chunk), start_span)
+    let combined = build_str_concat(build_str_concat(acc, splice_expr, start_span), next_chunk_node, start_span)
+    parse_string_interpolation_loop(tokens, p3, combined, start_span)
+  } else { (acc, pos) }
+}
+
+// After a TStringSplice's inner expression, the next token must be a
+// TStringPart (the trailing literal chunk — possibly empty when two splices
+// abut as `"{x}{y}"`). Returns (chunk, advanced_pos). On non-TStringPart
+// (lexer drift — should not occur per Amendment C+G invariants) returns the
+// empty string + unchanged pos, surfacing as a downstream parse error rather
+// than fabricating an AST.
+fn consume_string_part(ref tokens, pos) = match kind_at(tokens, pos) {
+  TStringPart(s) => (s, pos + 1),
+  _              => ("", pos)
+}
+
+fn build_str_concat(a, b, span) = {
+  let callee = nexpr(VarRef("str_concat"), span)
+  nexpr(CallExpr(callee, [a, b]), span)
 }
 
 fn parse_list_literal(ref tokens, pos, start_span) = {

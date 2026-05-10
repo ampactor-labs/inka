@@ -22676,6 +22676,11 @@
   ;; ty.wat record-fields walker). AST per Lock #9:
   ;;   [tag=100][rec_node][field_name_str] offsets 0/4/8.
   ;; field_name_str THREADED but NOT COMPARED (drift-8 closure).
+  ;;
+  ;; Lists per lib/runtime/lists.mn:28 store [count@0, tag@4, data@8];
+  ;; `.len` reads offset 0 directly which IS the count. Other field
+  ;; names also currently route through offset 0 until ty.wat structural
+  ;; record-fields walker exposes per-field lookup.
   (func $lower_field (export "lower_field") (param $node i32) (result i32)
     (local $h i32) (local $body i32) (local $field_struct i32)
     (local $rec_node i32) (local $lo_rec i32)
@@ -22684,9 +22689,6 @@
     (local.set $field_struct (i32.load offset=4 (local.get $body)))
     (local.set $rec_node     (i32.load offset=4 (local.get $field_struct)))
     (local.set $lo_rec       (call $lower_expr (local.get $rec_node)))
-    ;; Lock #4: offset sentinel 0 — ty.wat structural record-fields walker
-    ;; not yet exposed at lower layer; matches wheel src/lower.mn:543
-    ;; non-record-type fallback semantics.
     (call $lexpr_make_lfieldload
       (local.get $h)
       (local.get $lo_rec)
@@ -26519,6 +26521,24 @@
     (if (i32.eq (local.get $ptag) (i32.const 363))
       (then
         (local.set $sub_pats (call $lowpat_lpcon_args (local.get $pat)))
+        ;; Hβ.first-light.match-mixed-recursive-filter: skip the arm if
+        ;; its shape (0=nullary, 1=fielded) doesn't match the cascade's
+        ;; want-shape ($shape). Without this, mixed-shape's LPCon
+        ;; recursion via $ec5_emit_match_arms_from at line 442 emits
+        ;; ALL arms in both cascades — the filtered_from caller skips
+        ;; the mismatched FIRST arm only, then delegates here, and the
+        ;; LPCon recursion no longer re-filters. Pure-shape matches
+        ;; pass through cleanly (every arm matches $shape by classify).
+        (if (i32.ne
+              (if (result i32) (call $len (local.get $sub_pats))
+                (then (i32.const 1))
+                (else (i32.const 0)))
+              (local.get $shape))
+          (then
+            (call $ec5_emit_match_arms_from
+              (local.get $arms) (i32.add (local.get $idx) (i32.const 1))
+              (local.get $shape))
+            (return)))
         ;; OUTER predicate.
         (call $ec5_emit_local_get_scrut_tmp)
         (if (i32.eq (local.get $shape) (i32.const 1))

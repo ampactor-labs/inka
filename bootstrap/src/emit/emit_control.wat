@@ -414,6 +414,24 @@
     (if (i32.eq (local.get $ptag) (i32.const 363))
       (then
         (local.set $sub_pats (call $lowpat_lpcon_args (local.get $pat)))
+        ;; Hβ.first-light.match-mixed-recursive-filter: skip the arm if
+        ;; its shape (0=nullary, 1=fielded) doesn't match the cascade's
+        ;; want-shape ($shape). Without this, mixed-shape's LPCon
+        ;; recursion via $ec5_emit_match_arms_from at line 442 emits
+        ;; ALL arms in both cascades — the filtered_from caller skips
+        ;; the mismatched FIRST arm only, then delegates here, and the
+        ;; LPCon recursion no longer re-filters. Pure-shape matches
+        ;; pass through cleanly (every arm matches $shape by classify).
+        (if (i32.ne
+              (if (result i32) (call $len (local.get $sub_pats))
+                (then (i32.const 1))
+                (else (i32.const 0)))
+              (local.get $shape))
+          (then
+            (call $ec5_emit_match_arms_from
+              (local.get $arms) (i32.add (local.get $idx) (i32.const 1))
+              (local.get $shape))
+            (return)))
         ;; OUTER predicate.
         (call $ec5_emit_local_get_scrut_tmp)
         (if (i32.eq (local.get $shape) (i32.const 1))

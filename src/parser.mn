@@ -794,34 +794,6 @@ fn parse_postfix(ref tokens, pos) = {
   postfix_loop(tokens, e, p)
 }
 
-/// extract_named_record_type — projection of a node's "type-name-shape".
-/// Returns the name string when the node IS a capitalized VarRef
-/// (the only AST shape that legitimately precedes `{` for a nominal
-/// record literal per SYNTAX.md §551 `let p = Person{name: "Morgan"}`).
-/// Returns empty string otherwise — the postfix-loop's caller treats
-/// empty as "no record literal here, leave the `{` alone."
-///
-/// Per Hβ.parser.postfix-named-record-extracted: separated from
-/// postfix_loop's TLBrace arm so the cursor's structural projection
-/// (VarRef-or-not + capitalized-or-not) is one fn, not a nested-match
-/// arm with a `&&`-chain body. The wheel's match-arm-body emit had
-/// trouble with the prior shape; this fn simplifies the projection.
-fn extract_named_record_type(node) = {
-  let N(body, _, _) = node
-  match body {
-    NExpr(VarRef(name)) => extract_named_record_type_check(name),
-    _                   => ""
-  }
-}
-
-fn extract_named_record_type_check(name) = {
-  if name.len <= 0 { "" }
-  else {
-    let c = first_char_code(name)
-    if c >= 65 && c <= 90 { name } else { "" }
-  }
-}
-
 fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
   TLParen => {
     let (args, p2) = parse_call_args(tokens, skip_ws(tokens, pos + 1))
@@ -846,15 +818,19 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
     // very next token). Type names are capitalized; lowercase
     // identifiers fall through and the brace stays a separate
     // construct (block at expr position, not a record literal).
-    //
-    // Per Hβ.parser.postfix-named-record-extracted (2026-05-10):
-    // the type-name check + extraction lives in extract_named_record_type
-    // — single nested-pattern match arm with structural body, no `&&`
-    // chain. Substrate-honest: separate fn for the check; postfix_loop
-    // reads the projection.
-    let type_name = extract_named_record_type(e)
-    if type_name.len > 0 {
-      let N(_, start_span, _) = e
+    let N(body, start_span, _) = e
+    let is_named_record = match body {
+      NExpr(VarRef(name)) =>
+        name.len > 0 &&
+        first_char_code(name) >= 65 &&
+        first_char_code(name) <= 90,
+      _ => false
+    }
+    if is_named_record {
+      let type_name = match body {
+        NExpr(VarRef(n)) => n,
+        _                => ""
+      }
       let (sorted, p2) = parse_named_record_body(tokens, pos + 1)
       let end_span = span_at(tokens, p2 - 1)
       postfix_loop(tokens,

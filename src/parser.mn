@@ -823,6 +823,23 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
       nexpr(CallExpr(e, args), span_join(start_span, end_span)),
       p2)
   },
+  // Subscript `xs[i]` per SYNTAX.md:611-632. Desugars to
+  // CallExpr(VarRef("list_index"), [xs, i]). Infer dispatches by the
+  // receiver's type — List<A> → list_index; tuple → compile-time slot;
+  // record-by-int-key → record_get. For first-light, the wheel-source
+  // uses subscript almost exclusively on lists (argv[i], nodes[idx],
+  // matrix rows); tuples use destructuring. Post-L1: refinements over
+  // the index elide the runtime bounds check via gradient ascent.
+  TLBracket => {
+    let (idx_expr, p2) = parse_expr(tokens, skip_ws(tokens, pos + 1))
+    let p3 = expect(tokens, skip_ws(tokens, p2), TRBracket)
+    let N(_, start_span, _) = e
+    let end_span = span_at(tokens, p3 - 1)
+    let callee = nexpr(VarRef("list_index"), start_span)
+    postfix_loop(tokens,
+      nexpr(CallExpr(callee, [e, idx_expr]), span_join(start_span, end_span)),
+      p3)
+  },
   TDot => {
     let field = ident_at(tokens, pos + 1)
     let N(_, start_span, _) = e
@@ -1467,12 +1484,27 @@ fn first_char_code(s) = {
 
 fn parse_type_ty(ref tokens, pos) = match kind_at(tokens, pos) {
   TIdent(v) => {
-    if str_eq(v, "Int")        { (TInt, pos + 1) }
-    else if str_eq(v, "Float")  { (TFloat, pos + 1) }
-    else if str_eq(v, "String") { (TString, pos + 1) }
-    else if str_eq(v, "Bool")   { (TName("Bool", []), pos + 1) }
-    else if str_eq(v, "Unit")   { (TUnit, pos + 1) }
-    else                        { (TName(v, []), pos + 1) }
+    let base_pos = pos + 1
+    let base = if str_eq(v, "Int")        { TInt }
+               else if str_eq(v, "Float")  { TFloat }
+               else if str_eq(v, "String") { TString }
+               else if str_eq(v, "Bool")   { TName("Bool", []) }
+               else if str_eq(v, "Unit")   { TUnit }
+               else                        { TName(v, []) }
+    // Generic application per SYNTAX.md:147: `Name<T1, T2, ...>`.
+    // After parse_type_ty's TIdent arm, look for TLt. If present, parse
+    // comma-separated type args until TGt; rewrap a TName base with args.
+    // Primitives (TInt etc.) shouldn't take args; per protocol_no_silent_
+    // fallback the args are discarded but the parse advances cleanly. A
+    // diagnostic could fire here (post-L1).
+    if at(tokens, base_pos, TLt) {
+      let (args, p_after) = parse_type_args(tokens, skip_ws(tokens, base_pos + 1))
+      let typed = match base {
+        TName(name, _) => TName(name, args),
+        _              => base
+      }
+      (typed, p_after)
+    } else { (base, base_pos) }
   },
   TLParen => {
     let p = skip_ws(tokens, pos + 1)
@@ -1512,6 +1544,30 @@ fn parse_type_ty_tail(ref tokens, pos, own buf, count) = {
       parse_type_ty_tail(tokens, skip_ws(tokens, p3 + 1), b1, c1)
     } else {
       (b1, c1, expect(tokens, p3, TRParen))
+    }
+  }
+}
+
+// Parse comma-separated type arguments terminated by TGt. Caller has
+// already consumed the opening TLt. Returns (List<Ty>, pos-after-TGt).
+// Used for type application `Name<T1, T2, ...>` per SYNTAX.md:147.
+fn parse_type_args(ref tokens, pos) = {
+  let buf = make_list(4)
+  let (final_buf, final_count, p) = parse_type_args_loop(tokens, pos, buf, 0)
+  (slice(final_buf, 0, final_count), p)
+}
+
+fn parse_type_args_loop(ref tokens, pos, own buf, count) = {
+  let p = skip_ws(tokens, pos)
+  if at(tokens, p, TGt) { (buf, count, p + 1) }
+  else {
+    let (ty, p2) = parse_type_ty(tokens, p)
+    let (b1, c1) = push_node(buf, count, ty)
+    let p3 = skip_ws(tokens, p2)
+    if at(tokens, p3, TComma) {
+      parse_type_args_loop(tokens, skip_ws(tokens, p3 + 1), b1, c1)
+    } else {
+      (b1, c1, expect(tokens, p3, TGt))
     }
   }
 }

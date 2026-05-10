@@ -531,6 +531,56 @@
       (call $list_index (local.get $args_r) (i32.const 1))))
     (local.get $tup))
 
+  ;; ─── parse_resume_expr ─ resume() / resume(value) ─────────────────
+  ;; Per Hβ.first-light.resume-expr-substrate (chain link 5 closure for
+  ;; resume-state-update parser drift): TResume (kind 10) was unhandled
+  ;; in parse_expr's primary dispatch; `resume()` parsed as bare CallExpr
+  ;; → LCall(LConst(0), []) → emit produced bogus call_indirect from
+  ;; address 0 → trapped at table[0] (wat_stdout's $ft2 vs caller's
+  ;; $ft1). Substrate fix: produce ResumeExpr (tag 95) so $lower_resume
+  ;; emits LReturn(handle, lo_val) per H7 Tier-1 tail-resumptive form.
+  ;; State-update `with field = expr` after the close-paren is absorbed
+  ;; by $skip_to_arm_terminator at the handler-arm boundary; AST
+  ;; state_updates field stays empty per wheel src/parser.mn:1208
+  ;; canonical (`ResumeExpr(val, [])`).
+  ;;
+  ;; Forms:
+  ;;   resume()          val = LitUnit
+  ;;   resume(value)     val = parsed expr
+  ;;   resume(v) with .. trailing absorbed by handler-arm boundary
+  (func $parse_resume_expr (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
+    (local $p i32) (local $val i32) (local $val_r i32) (local $p2 i32)
+    (local $tup i32) (local $empty_state_updates i32)
+    ;; Expect `(`.
+    (local.set $p (call $expect (local.get $tokens)
+      (call $skip_ws_p (local.get $tokens) (local.get $pos))
+      (i32.const 45)))   ;; TLParen
+    ;; If immediately `)`, this is `resume()` — val is LitUnit.
+    (if (call $at (local.get $tokens) (call $skip_ws_p (local.get $tokens) (local.get $p))
+                  (i32.const 46))   ;; TRParen
+      (then
+        (local.set $val (call $nexpr (i32.const 84) (local.get $span)))  ;; LitUnit tag 84
+        (local.set $p2 (i32.add (call $skip_ws_p (local.get $tokens) (local.get $p))
+                                (i32.const 1))))
+      (else
+        ;; Parse value expression, expect `)`.
+        (local.set $val_r (call $parse_expr (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens) (local.get $p))))
+        (local.set $val (call $list_index (local.get $val_r) (i32.const 0)))
+        (local.set $p2 (call $expect (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens)
+            (call $list_index (local.get $val_r) (i32.const 1)))
+          (i32.const 46)))))   ;; TRParen
+    ;; State-updates list: empty per Lock #6 (wheel-canonical seed shape).
+    (local.set $empty_state_updates (call $make_list (i32.const 0)))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0)
+      (call $nexpr
+        (call $mk_ResumeExpr (local.get $val) (local.get $empty_state_updates))
+        (local.get $span))))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p2)))
+    (local.get $tup))
+
   ;; ─── List literal ─────────────────────────────────────────────────
   ;; [e1, e2, ...]
   (func $parse_list_lit (param $tokens i32) (param $pos i32) (param $span i32) (result i32)

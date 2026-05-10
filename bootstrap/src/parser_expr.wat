@@ -231,6 +231,17 @@
         ;; TPerform (11)
         (if (i32.eq (local.get $k) (i32.const 11))
           (then (return (call $parse_perform_expr (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)) (local.get $span)))))
+        ;; TResume (10) — `resume()` / `resume(value)` / `resume() with field
+        ;; = expr [, ...]`. Per H7 multishot spec + wheel src/lower.mn:445-448
+        ;; ResumeExpr arm: lowers to LReturn(handle, lo_val) at Tier 1
+        ;; tail-resumptive; with-clause state-updates emit LStateSet before
+        ;; the LReturn so handler-state mutates BEFORE the continuation
+        ;; fires. Without this arm, `resume()` lexes as TResume but parses
+        ;; as bare CallExpr → LConst(0) → emit produces bogus call_indirect
+        ;; from address 0 (the wheel's lower_scope handler arms trapped
+        ;; here with type mismatch on table[0]'s wat_stdout signature).
+        (if (i32.eq (local.get $k) (i32.const 10))
+          (then (return (call $parse_resume_expr (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)) (local.get $span)))))
         ;; THandle (7) — Per Hβ.first-light.handle-expr-state-substrate
         ;; (2026-05-06). Parses `handle BODY [with FIELD = INIT [, ...]
         ;; { ARMS }]` — inline anonymous handler with optional state.

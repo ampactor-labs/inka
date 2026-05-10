@@ -198,6 +198,21 @@
     (i32.store offset=8 (local.get $p) (local.get $args))
     (local.get $p))
 
+  ;; ResumeExpr(val, state_updates) → [tag=95][val_node][state_updates_ptr]
+  ;; Per Hβ.first-light.resume-expr-substrate: $lower_resume reads val_node
+  ;; at offset 4 and ignores state_updates per Lock #6 (named follow-up
+  ;; Hβ.lower.resume-state-updates-threading lifts the state-mutation arm).
+  ;; state_updates_ptr is reserved (sentinel 0); the seed-side
+  ;; $skip_to_arm_terminator already absorbs trailing `with field = expr`
+  ;; tokens at the handler-arm boundary. Layout matches wheel src/parser.mn
+  ;; line 1208 ResumeExpr(val, []).
+  (func $mk_ResumeExpr (param $val i32) (param $state_updates i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 12)))
+    (i32.store (local.get $p) (i32.const 95))
+    (i32.store offset=4 (local.get $p) (local.get $val))
+    (i32.store offset=8 (local.get $p) (local.get $state_updates))
+    (local.get $p))
+
   ;; PipeExpr(kind, left, right) → [tag=101][kind][left][right]
   (func $mk_PipeExpr (param $kind i32) (param $l i32) (param $r i32) (result i32)
     (local $p i32) (local.set $p (call $alloc (i32.const 16)))

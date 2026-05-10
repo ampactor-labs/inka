@@ -1023,8 +1023,18 @@ fn emit_let_locals_expr(expr) = match expr {
   },
   LBinOp(_h, _op, l, r)     => { emit_let_locals_expr(l); emit_let_locals_expr(r) },
   LUnaryOp(_h, _op, inner)  => emit_let_locals_expr(inner),
-  LCall(_h, f, args)        => { emit_let_locals_expr(f); emit_let_locals_list(args) },
-  LTailCall(_h, f, args)    => { emit_let_locals_expr(f); emit_let_locals_list(args) },
+  LCall(h, f, args)         => {
+    perform wat_emit(" (local $call_")
+    perform wat_emit(int_to_str(h))
+    perform wat_emit(" i32)")
+    emit_let_locals_expr(f); emit_let_locals_list(args)
+  },
+  LTailCall(h, f, args)     => {
+    perform wat_emit(" (local $call_")
+    perform wat_emit(int_to_str(h))
+    perform wat_emit(" i32)")
+    emit_let_locals_expr(f); emit_let_locals_list(args)
+  },
   LReturn(_h, inner)        => emit_let_locals_expr(inner),
   LStore(_h, _s, val)       => emit_let_locals_expr(val),
   LMakeList(_h, elems)      => emit_let_locals_list(elems),
@@ -1214,29 +1224,43 @@ fn emit_expr(expr) = match expr {
     emit_unaryop(op)
   },
 
-  LCall(_h, func, args) => {
-    // W7 closure call convention:
-    //   1. Evaluate closure (puts pointer on stack), save into $state_tmp.
+  LCall(h, func, args) => {
+    // W7 closure call convention with per-handle scratch isolation:
+    //   1. Evaluate closure (puts pointer on stack), save into $call_<h>.
     //   2. Push closure ptr as implicit first arg (for __state).
     //   3. Push user args.
     //   4. Load fn_ptr from closure offset 0.
     //   5. call_indirect with $ft(N+1) — arity includes __state.
+    // Per-handle $call_<h> avoids the shared-$state_tmp clobber that
+    // surfaced when nested LCalls (e.g. `list_index(list_concat(L, R), i)`)
+    // overwrote each other's saved closure ptr. Mirrors the seed's
+    // Hβ.emit.lcall-per-handle-state-scratch substrate (#115).
     emit_expr(func)
-    perform wat_emit("    (local.set $state_tmp)\n")
-    perform wat_emit("    (local.get $state_tmp)\n")
+    perform wat_emit("    (local.set $call_")
+    perform wat_emit(int_to_str(h))
+    perform wat_emit(")\n    (local.get $call_")
+    perform wat_emit(int_to_str(h))
+    perform wat_emit(")\n")
     emit_expr_list(args)
-    perform wat_emit("    (local.get $state_tmp) (i32.load offset=0)\n")
+    perform wat_emit("    (local.get $call_")
+    perform wat_emit(int_to_str(h))
+    perform wat_emit(") (i32.load offset=0)\n")
     perform wat_emit("    (call_indirect (type $ft")
     perform wat_emit(int_to_str(args.len + 1))
     perform wat_emit("))\n")
   },
 
-  LTailCall(_h, func, args) => {
+  LTailCall(h, func, args) => {
     emit_expr(func)
-    perform wat_emit("    (local.set $state_tmp)\n")
-    perform wat_emit("    (local.get $state_tmp)\n")
+    perform wat_emit("    (local.set $call_")
+    perform wat_emit(int_to_str(h))
+    perform wat_emit(")\n    (local.get $call_")
+    perform wat_emit(int_to_str(h))
+    perform wat_emit(")\n")
     emit_expr_list(args)
-    perform wat_emit("    (local.get $state_tmp) (i32.load offset=0)\n")
+    perform wat_emit("    (local.get $call_")
+    perform wat_emit(int_to_str(h))
+    perform wat_emit(") (i32.load offset=0)\n")
     perform wat_emit("    (return_call_indirect (type $ft")
     perform wat_emit(int_to_str(args.len + 1))
     perform wat_emit("))\n")
@@ -1679,11 +1703,13 @@ fn emit_expr(expr) = match expr {
   }
 }
 
-fn emit_expr_list(exprs) = {
-  if exprs.len == 0 { () }
+fn emit_expr_list(exprs) = emit_expr_list_at(exprs, 0, exprs.len)
+
+fn emit_expr_list_at(exprs, i, n) = {
+  if i >= n { () }
   else {
-    emit_expr(list_head(exprs))
-    emit_expr_list(list_tail(exprs))
+    emit_expr(list_index(exprs, i))
+    emit_expr_list_at(exprs, i + 1, n)
   }
 }
 

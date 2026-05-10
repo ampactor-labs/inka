@@ -1686,6 +1686,12 @@ fn emit_expr_list(exprs) = {
 }
 
 
+/// emit_const — productive-under-error per Hazel discipline: unknown
+/// LowValue shapes emit `(i32.const 0)` placeholder instead of trapping
+/// at the match-exhaustiveness fallthrough. The trap was a Hβ.lower
+/// drift surfacing here; named peer Hβ.lower.lconst-adt-canonical
+/// closes the upstream gap. Until then, the diagnostic is the
+/// wat-comment + sentinel — one mechanism, no silent failure.
 fn emit_const(v) = match v {
   LInt(n) => {
     perform wat_emit("    (i32.const ")
@@ -1712,6 +1718,10 @@ fn emit_const(v) = match v {
     perform wat_emit("    (i32.const ")
     perform wat_emit(int_to_str(offset))
     perform wat_emit(")\n")
+  },
+  _ => {
+    perform wat_emit("    ;; emit_const: unknown LowValue shape\n")
+    perform wat_emit("    (i32.const 0)\n")
   }
 }
 

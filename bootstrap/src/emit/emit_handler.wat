@@ -661,24 +661,38 @@
     (call $emit_byte (i32.const 41))
     (call $emit_i32_const (i32.const 0)))
 
-  ;; $starts_with_wasi — checks if a length-prefixed Mentl string
-  ;; starts with bytes "wasi_" (5 bytes).
+  ;; $starts_with_wasi — exact-match against the WASI import set produced
+  ;; by lower's $wasi_op_target_name. Per Hβ.first-light.tier2-perform-or-
+  ;; env-scan: handler names like `wasi_filesystem` collide with the
+  ;; loose "starts with wasi_" check; the discriminated arm name
+  ;; "wasi_filesystem_fs_exists" is NOT a WASI import. The substrate
+  ;; truth: lower's wasi_op_target_name produces a CLOSED set of 9
+  ;; targets (offsets 5160 wasi_path_open, 5176 wasi_fd_write, etc.);
+  ;; emit recognizes membership in that closed set, NOT prefix.
+  ;; Drift refused: 1 (no vtable; direct str_eq dispatch); 8 (no mode
+  ;; flag); 9 (lands the closure here, not deferred — the wheel uses
+  ;; handlers whose names start with wasi_ legitimately).
+  ;; WASI import-name strings — placed past wasi_path_open at 5160
+  ;; (occupies 5160..5177; next aligned offset 5184).
+  (data (i32.const 5184) "\0d\00\00\00wasi_fd_write")
+  (data (i32.const 5208) "\0c\00\00\00wasi_fd_read")
+  (data (i32.const 5232) "\0d\00\00\00wasi_fd_close")
+  (data (i32.const 5256) "\15\00\00\00wasi_path_unlink_file")
+  (data (i32.const 5288) "\10\00\00\00wasi_path_rename")
+  (data (i32.const 5312) "\0e\00\00\00wasi_proc_exit")
+  (data (i32.const 5336) "\1a\00\00\00wasi_path_create_directory")
+  (data (i32.const 5376) "\16\00\00\00wasi_path_filestat_get")
   (func $starts_with_wasi (param $s i32) (result i32)
-    (local $slen i32)
-    (local.set $slen (call $str_len (local.get $s)))
-    (if (i32.lt_u (local.get $slen) (i32.const 5))
-      (then (return (i32.const 0))))
-    (if (i32.ne (call $byte_at (local.get $s) (i32.const 0)) (i32.const 119))   ;; 'w'
-      (then (return (i32.const 0))))
-    (if (i32.ne (call $byte_at (local.get $s) (i32.const 1)) (i32.const 97))    ;; 'a'
-      (then (return (i32.const 0))))
-    (if (i32.ne (call $byte_at (local.get $s) (i32.const 2)) (i32.const 115))   ;; 's'
-      (then (return (i32.const 0))))
-    (if (i32.ne (call $byte_at (local.get $s) (i32.const 3)) (i32.const 105))   ;; 'i'
-      (then (return (i32.const 0))))
-    (if (i32.ne (call $byte_at (local.get $s) (i32.const 4)) (i32.const 95))    ;; '_'
-      (then (return (i32.const 0))))
-    (i32.const 1))
+    (if (call $str_eq (local.get $s) (i32.const 5160)) (then (return (i32.const 1))))   ;; wasi_path_open
+    (if (call $str_eq (local.get $s) (i32.const 5184)) (then (return (i32.const 1))))   ;; wasi_fd_write
+    (if (call $str_eq (local.get $s) (i32.const 5208)) (then (return (i32.const 1))))   ;; wasi_fd_read
+    (if (call $str_eq (local.get $s) (i32.const 5232)) (then (return (i32.const 1))))   ;; wasi_fd_close
+    (if (call $str_eq (local.get $s) (i32.const 5256)) (then (return (i32.const 1))))   ;; wasi_path_unlink_file
+    (if (call $str_eq (local.get $s) (i32.const 5288)) (then (return (i32.const 1))))   ;; wasi_path_rename
+    (if (call $str_eq (local.get $s) (i32.const 5312)) (then (return (i32.const 1))))   ;; wasi_proc_exit
+    (if (call $str_eq (local.get $s) (i32.const 5336)) (then (return (i32.const 1))))   ;; wasi_path_create_directory
+    (if (call $str_eq (local.get $s) (i32.const 5376)) (then (return (i32.const 1))))   ;; wasi_path_filestat_get
+    (i32.const 0))
 
   ;; $ec7_emit_call_dollar — emits `(call $<name>)` direct, NO `op_` prefix.
   (func $ec7_emit_call_dollar (param $name i32)

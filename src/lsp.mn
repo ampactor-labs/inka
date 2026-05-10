@@ -299,11 +299,13 @@ fn handle_completion(params) with Memory + Alloc + Interact = {
   let span = position_to_span(pos)
   ensure_doc_open(uri)
   perform focus(TargetSpan(span))
-  let voiceline = perform propose(TargetSpan(span))
-  match voiceline {
-    Silence                       => LspCompletionResp([]),
-    VoiceLine(_t, _f, slots, _m)  => LspCompletionResp(completion_items_from_slots(slots))
-  }
+  // Voice projection of cursor's Propose tentacle.
+  // Named peer Hβ.lsp.voice-propose-at-target: a 1-arg `voice_propose`
+  // op on a Voice effect projects Synth's 3-arg propose through the
+  // span (ty inferred from span_handle, row from ambient, context from
+  // LSP request shape). Until that effect-decl lands, the cursor's
+  // completion projection stays at Silence.
+  LspCompletionResp([])
 }
 
 /// handle_code_action — propose at the cursor; project VoiceLine to
@@ -315,11 +317,8 @@ fn handle_code_action(params) with Memory + Alloc + Interact = {
   let span = position_to_span(pos)
   ensure_doc_open(uri)
   perform focus(TargetSpan(span))
-  let voiceline = perform propose(TargetSpan(span))
-  match voiceline {
-    Silence                       => LspCodeActionResp([]),
-    VoiceLine(_t, _f, slots, _m)  => LspCodeActionResp(code_actions_from_slots(slots))
-  }
+  // Same Voice projection as handle_completion. Hβ.lsp.voice-propose-at-target.
+  LspCodeActionResp([])
 }
 
 /// handle_diagnostic — run_check on the file; project CheckOutcome

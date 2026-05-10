@@ -175,6 +175,26 @@
   ;; granularity per the seed's substrate.
   (global $lower_current_fn_name_g (mut i32) (i32.const 0))
 
+  ;; Hβ.first-light.tier2-perform-or-env-scan — default-handler-per-op
+  ;; map populated at HandlerDeclStmt-time. Each entry is a 2-record
+  ;; {op_name, handler_name}. lower_resolve_handler_for_op falls back
+  ;; to this map when the handler-stack walk returns 0 (perform site
+  ;; in a fn called outside its `~>` chain at lower-time — e.g.,
+  ;; `compile_stdin`'s `emit_module` performs `wat_emit` while
+  ;; the `~> wat_stdout` chain wraps compile_stdin's BODY, not
+  ;; emit_module's body).
+  ;;
+  ;; Per protocol_kernel_uniform_placeholder_substrate.md: this is the
+  ;; pragmatic Tier-1.5 form — works when the wheel uses each effect
+  ;; with a single default handler. Multi-handler ambiguity (e.g.,
+  ;; both wat_stdout AND wat_test_collector handling WasmOut)
+  ;; resolves to the FIRST registered (single-shot use covers the
+  ;; wheel's L1 case). Real Tier 2 evidence-passing per Koka JFP 2022
+  ;; reads from a closure ev-slot via call_indirect — named follow-up
+  ;; Hβ.lower.tier2-evidence-passing.
+  (global $lower_default_op_handler_map_ptr (mut i32) (i32.const 0))
+  (global $lower_default_op_handler_map_len_g (mut i32) (i32.const 0))
+
   ;; ─── Idempotent initializer (mirrors $infer_init / $graph_init) ────
   ;; Per the seed's discipline for module-level state chunks: every
   ;; public entry calls $lower_init first; subsequent calls no-op.
@@ -194,6 +214,8 @@
         (global.set $lower_handler_stack_ptr (call $make_list (i32.const 8)))
         (global.set $lower_handler_count_g (i32.const 0))
         (global.set $lower_current_fn_name_g (i32.const 0))
+        (global.set $lower_default_op_handler_map_ptr (call $make_list (i32.const 8)))
+        (global.set $lower_default_op_handler_map_len_g (i32.const 0))
         (global.set $lower_initialized    (i32.const 1)))))
 
   ;; Hβ.first-light.seed-lperform-discriminator-mirror —
@@ -291,6 +313,73 @@
                                                 (local.get $op_name)))
                                         (return (local.get $target))))))))))))))))))
         (local.set $i (i32.sub (local.get $i) (i32.const 1)))
+        (br $iter)))
+    ;; Hβ.first-light.tier2-perform-or-env-scan — fall back to the
+    ;; default-handler-per-op map. The wheel uses each effect with a
+    ;; single default handler; map lookup returns hname for ops the
+    ;; handler-stack walk couldn't find.
+    (local.set $hname (call $lower_lookup_default_handler_for_op
+                            (local.get $op_name)))
+    (if (i32.ne (local.get $hname) (i32.const 0))
+      (then
+        (local.set $target (call $str_concat
+                                  (local.get $hname)
+                                  (i32.const 4400)))         ;; "_"
+        (local.set $target (call $str_concat
+                                  (local.get $target)
+                                  (local.get $op_name)))
+        (return (local.get $target))))
+    (i32.const 0))
+
+  ;; Hβ.first-light.tier2-perform-or-env-scan — register/lookup the
+  ;; default handler for each op-name. Called from infer_walk_stmt's
+  ;; HandlerDeclStmt arm at handler-decl time (per-arm registration).
+  ;; Each entry is a 2-record (op_name, handler_name).
+  (func $lower_register_default_handler_for_op (export "lower_register_default_handler_for_op")
+        (param $op_name i32) (param $handler_name i32)
+    (local $entry i32) (local $i i32) (local $existing_op i32)
+    (call $lower_init)
+    ;; Skip if already registered (first-handler-wins for the L1 case).
+    (local.set $i (i32.const 0))
+    (block $skip
+      (loop $iter
+        (br_if $skip (i32.ge_u (local.get $i) (global.get $lower_default_op_handler_map_len_g)))
+        (local.set $entry (call $list_index
+                                (global.get $lower_default_op_handler_map_ptr)
+                                (local.get $i)))
+        (local.set $existing_op (call $record_get (local.get $entry) (i32.const 0)))
+        (if (call $str_eq (local.get $existing_op) (local.get $op_name))
+          (then (return)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (local.set $entry (call $make_record (i32.const 0) (i32.const 2)))
+    (call $record_set (local.get $entry) (i32.const 0) (local.get $op_name))
+    (call $record_set (local.get $entry) (i32.const 1) (local.get $handler_name))
+    (global.set $lower_default_op_handler_map_ptr
+      (call $list_extend_to (global.get $lower_default_op_handler_map_ptr)
+        (i32.add (global.get $lower_default_op_handler_map_len_g) (i32.const 1))))
+    (drop (call $list_set
+                (global.get $lower_default_op_handler_map_ptr)
+                (global.get $lower_default_op_handler_map_len_g)
+                (local.get $entry)))
+    (global.set $lower_default_op_handler_map_len_g
+      (i32.add (global.get $lower_default_op_handler_map_len_g) (i32.const 1))))
+
+  (func $lower_lookup_default_handler_for_op (export "lower_lookup_default_handler_for_op")
+        (param $op_name i32) (result i32)
+    (local $entry i32) (local $i i32) (local $existing_op i32)
+    (call $lower_init)
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (global.get $lower_default_op_handler_map_len_g)))
+        (local.set $entry (call $list_index
+                                (global.get $lower_default_op_handler_map_ptr)
+                                (local.get $i)))
+        (local.set $existing_op (call $record_get (local.get $entry) (i32.const 0)))
+        (if (call $str_eq (local.get $existing_op) (local.get $op_name))
+          (then (return (call $record_get (local.get $entry) (i32.const 1)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter)))
     (i32.const 0))
 

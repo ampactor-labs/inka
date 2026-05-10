@@ -61,7 +61,7 @@ type Handle = Handle(Int)
 
 effect Thread {
   spawn(task: () -> A) -> Handle
-  join(handle: Handle) -> A
+  thread_join(handle: Handle) -> A
   current_id() -> Int
   num_cores() -> Int
 }
@@ -122,7 +122,7 @@ handler parallel_compose with threads = [] {
     resume(handle) with threads = push(threads, handle)
   },
 
-  join(handle) => resume(ffi_join(handle)),
+  thread_join(handle) => resume(ffi_join(handle)),
 
   current_id() => resume(ffi_current_thread_id()),
 
@@ -136,12 +136,12 @@ handler parallel_compose with threads = [] {
 
 handler sequential_compose with results = [] {
   spawn(task) => {
-    let result = task()
+    let result = task()  // drift-audit: ignore — task() is effectful; result feeds the with-clause's push, not chain-position
     let handle = Handle(results.len)
     resume(handle) with results = push(results, result)
   },
 
-  join(handle) => {
+  thread_join(handle) => {
     let Handle(idx) = handle
     resume(list_index(results, idx))
   },

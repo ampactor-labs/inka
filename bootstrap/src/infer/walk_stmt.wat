@@ -1090,7 +1090,19 @@
       (local.get $handler_name)
       (local.get $span)
       (i32.load offset=20 (local.get $stmt))
-      (i32.load offset=16 (local.get $stmt))))
+      (i32.load offset=16 (local.get $stmt)))
+    ;; Hβ.first-light.tier2-perform-or-env-scan — register each arm's
+    ;; op_name → handler_name in the default-handler-per-op map.
+    ;; lower_resolve_handler_for_op falls back to this map when the
+    ;; lower-stage handler-stack walk returns 0 (perform site is in a
+    ;; fn whose `~>` chain wraps the CALLER, not this fn — e.g.,
+    ;; emit_module performs wat_emit while compile_stdin's body
+    ;; carries the `~> wat_stdout` chain). First-handler-wins on
+    ;; ambiguity; multi-handler dispatch is named follow-up
+    ;; Hβ.lower.tier2-evidence-passing per Koka JFP 2022.
+    (call $register_handler_decl_arm_ops
+      (i32.load offset=12 (local.get $stmt))
+      (local.get $handler_name)))
 
   ;; $mint_handler_config_tparams — recursive build of TParam list for
   ;; handler config-params. Each name gets a fresh tyvar handle and is
@@ -1135,6 +1147,28 @@
 
   (func $handler_decl_handler_name_ptr (result i32)
     (i32.const 4320))
+
+  ;; Hβ.first-light.tier2-perform-or-env-scan — walk handler-decl arms;
+  ;; for each arm's op_name, register handler_name as the default in
+  ;; $lower_default_op_handler_map. lower_resolve_handler_for_op falls
+  ;; back to this when the handler-stack walk returns 0 (perform site
+  ;; called outside its `~>` chain at lower-time). First-handler-wins
+  ;; on ambiguity per protocol_kernel_uniform_placeholder_substrate.md.
+  (func $register_handler_decl_arm_ops
+        (param $arms i32) (param $handler_name i32)
+    (local $n i32) (local $i i32) (local $arm i32) (local $op_name i32)
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arm     (call $list_index (local.get $arms) (local.get $i)))
+        (local.set $op_name (call $record_get (local.get $arm) (i32.const 2)))
+        (call $lower_register_default_handler_for_op
+          (local.get $op_name)
+          (local.get $handler_name))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
 
   ;; $derive_effect_name_from_arms — given the arms list of a handler
   ;; decl, return the effect_name string by looking up the FIRST arm's

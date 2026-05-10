@@ -16089,7 +16089,19 @@
       (local.get $handler_name)
       (local.get $span)
       (i32.load offset=20 (local.get $stmt))
-      (i32.load offset=16 (local.get $stmt))))
+      (i32.load offset=16 (local.get $stmt)))
+    ;; Hβ.first-light.tier2-perform-or-env-scan — register each arm's
+    ;; op_name → handler_name in the default-handler-per-op map.
+    ;; lower_resolve_handler_for_op falls back to this map when the
+    ;; lower-stage handler-stack walk returns 0 (perform site is in a
+    ;; fn whose `~>` chain wraps the CALLER, not this fn — e.g.,
+    ;; emit_module performs wat_emit while compile_stdin's body
+    ;; carries the `~> wat_stdout` chain). First-handler-wins on
+    ;; ambiguity; multi-handler dispatch is named follow-up
+    ;; Hβ.lower.tier2-evidence-passing per Koka JFP 2022.
+    (call $register_handler_decl_arm_ops
+      (i32.load offset=12 (local.get $stmt))
+      (local.get $handler_name)))
 
   ;; $mint_handler_config_tparams — recursive build of TParam list for
   ;; handler config-params. Each name gets a fresh tyvar handle and is
@@ -16134,6 +16146,28 @@
 
   (func $handler_decl_handler_name_ptr (result i32)
     (i32.const 4320))
+
+  ;; Hβ.first-light.tier2-perform-or-env-scan — walk handler-decl arms;
+  ;; for each arm's op_name, register handler_name as the default in
+  ;; $lower_default_op_handler_map. lower_resolve_handler_for_op falls
+  ;; back to this when the handler-stack walk returns 0 (perform site
+  ;; called outside its `~>` chain at lower-time). First-handler-wins
+  ;; on ambiguity per protocol_kernel_uniform_placeholder_substrate.md.
+  (func $register_handler_decl_arm_ops
+        (param $arms i32) (param $handler_name i32)
+    (local $n i32) (local $i i32) (local $arm i32) (local $op_name i32)
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arm     (call $list_index (local.get $arms) (local.get $i)))
+        (local.set $op_name (call $record_get (local.get $arm) (i32.const 2)))
+        (call $lower_register_default_handler_for_op
+          (local.get $op_name)
+          (local.get $handler_name))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
 
   ;; $derive_effect_name_from_arms — given the arms list of a handler
   ;; decl, return the effect_name string by looking up the FIRST arm's
@@ -16883,6 +16917,26 @@
   ;; granularity per the seed's substrate.
   (global $lower_current_fn_name_g (mut i32) (i32.const 0))
 
+  ;; Hβ.first-light.tier2-perform-or-env-scan — default-handler-per-op
+  ;; map populated at HandlerDeclStmt-time. Each entry is a 2-record
+  ;; {op_name, handler_name}. lower_resolve_handler_for_op falls back
+  ;; to this map when the handler-stack walk returns 0 (perform site
+  ;; in a fn called outside its `~>` chain at lower-time — e.g.,
+  ;; `compile_stdin`'s `emit_module` performs `wat_emit` while
+  ;; the `~> wat_stdout` chain wraps compile_stdin's BODY, not
+  ;; emit_module's body).
+  ;;
+  ;; Per protocol_kernel_uniform_placeholder_substrate.md: this is the
+  ;; pragmatic Tier-1.5 form — works when the wheel uses each effect
+  ;; with a single default handler. Multi-handler ambiguity (e.g.,
+  ;; both wat_stdout AND wat_test_collector handling WasmOut)
+  ;; resolves to the FIRST registered (single-shot use covers the
+  ;; wheel's L1 case). Real Tier 2 evidence-passing per Koka JFP 2022
+  ;; reads from a closure ev-slot via call_indirect — named follow-up
+  ;; Hβ.lower.tier2-evidence-passing.
+  (global $lower_default_op_handler_map_ptr (mut i32) (i32.const 0))
+  (global $lower_default_op_handler_map_len_g (mut i32) (i32.const 0))
+
   ;; ─── Idempotent initializer (mirrors $infer_init / $graph_init) ────
   ;; Per the seed's discipline for module-level state chunks: every
   ;; public entry calls $lower_init first; subsequent calls no-op.
@@ -16902,6 +16956,8 @@
         (global.set $lower_handler_stack_ptr (call $make_list (i32.const 8)))
         (global.set $lower_handler_count_g (i32.const 0))
         (global.set $lower_current_fn_name_g (i32.const 0))
+        (global.set $lower_default_op_handler_map_ptr (call $make_list (i32.const 8)))
+        (global.set $lower_default_op_handler_map_len_g (i32.const 0))
         (global.set $lower_initialized    (i32.const 1)))))
 
   ;; Hβ.first-light.seed-lperform-discriminator-mirror —
@@ -16999,6 +17055,73 @@
                                                 (local.get $op_name)))
                                         (return (local.get $target))))))))))))))))))
         (local.set $i (i32.sub (local.get $i) (i32.const 1)))
+        (br $iter)))
+    ;; Hβ.first-light.tier2-perform-or-env-scan — fall back to the
+    ;; default-handler-per-op map. The wheel uses each effect with a
+    ;; single default handler; map lookup returns hname for ops the
+    ;; handler-stack walk couldn't find.
+    (local.set $hname (call $lower_lookup_default_handler_for_op
+                            (local.get $op_name)))
+    (if (i32.ne (local.get $hname) (i32.const 0))
+      (then
+        (local.set $target (call $str_concat
+                                  (local.get $hname)
+                                  (i32.const 4400)))         ;; "_"
+        (local.set $target (call $str_concat
+                                  (local.get $target)
+                                  (local.get $op_name)))
+        (return (local.get $target))))
+    (i32.const 0))
+
+  ;; Hβ.first-light.tier2-perform-or-env-scan — register/lookup the
+  ;; default handler for each op-name. Called from infer_walk_stmt's
+  ;; HandlerDeclStmt arm at handler-decl time (per-arm registration).
+  ;; Each entry is a 2-record (op_name, handler_name).
+  (func $lower_register_default_handler_for_op (export "lower_register_default_handler_for_op")
+        (param $op_name i32) (param $handler_name i32)
+    (local $entry i32) (local $i i32) (local $existing_op i32)
+    (call $lower_init)
+    ;; Skip if already registered (first-handler-wins for the L1 case).
+    (local.set $i (i32.const 0))
+    (block $skip
+      (loop $iter
+        (br_if $skip (i32.ge_u (local.get $i) (global.get $lower_default_op_handler_map_len_g)))
+        (local.set $entry (call $list_index
+                                (global.get $lower_default_op_handler_map_ptr)
+                                (local.get $i)))
+        (local.set $existing_op (call $record_get (local.get $entry) (i32.const 0)))
+        (if (call $str_eq (local.get $existing_op) (local.get $op_name))
+          (then (return)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (local.set $entry (call $make_record (i32.const 0) (i32.const 2)))
+    (call $record_set (local.get $entry) (i32.const 0) (local.get $op_name))
+    (call $record_set (local.get $entry) (i32.const 1) (local.get $handler_name))
+    (global.set $lower_default_op_handler_map_ptr
+      (call $list_extend_to (global.get $lower_default_op_handler_map_ptr)
+        (i32.add (global.get $lower_default_op_handler_map_len_g) (i32.const 1))))
+    (drop (call $list_set
+                (global.get $lower_default_op_handler_map_ptr)
+                (global.get $lower_default_op_handler_map_len_g)
+                (local.get $entry)))
+    (global.set $lower_default_op_handler_map_len_g
+      (i32.add (global.get $lower_default_op_handler_map_len_g) (i32.const 1))))
+
+  (func $lower_lookup_default_handler_for_op (export "lower_lookup_default_handler_for_op")
+        (param $op_name i32) (result i32)
+    (local $entry i32) (local $i i32) (local $existing_op i32)
+    (call $lower_init)
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (global.get $lower_default_op_handler_map_len_g)))
+        (local.set $entry (call $list_index
+                                (global.get $lower_default_op_handler_map_ptr)
+                                (local.get $i)))
+        (local.set $existing_op (call $record_get (local.get $entry) (i32.const 0)))
+        (if (call $str_eq (local.get $existing_op) (local.get $op_name))
+          (then (return (call $record_get (local.get $entry) (i32.const 1)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter)))
     (i32.const 0))
 
@@ -27877,24 +28000,38 @@
     (call $emit_byte (i32.const 41))
     (call $emit_i32_const (i32.const 0)))
 
-  ;; $starts_with_wasi — checks if a length-prefixed Mentl string
-  ;; starts with bytes "wasi_" (5 bytes).
+  ;; $starts_with_wasi — exact-match against the WASI import set produced
+  ;; by lower's $wasi_op_target_name. Per Hβ.first-light.tier2-perform-or-
+  ;; env-scan: handler names like `wasi_filesystem` collide with the
+  ;; loose "starts with wasi_" check; the discriminated arm name
+  ;; "wasi_filesystem_fs_exists" is NOT a WASI import. The substrate
+  ;; truth: lower's wasi_op_target_name produces a CLOSED set of 9
+  ;; targets (offsets 5160 wasi_path_open, 5176 wasi_fd_write, etc.);
+  ;; emit recognizes membership in that closed set, NOT prefix.
+  ;; Drift refused: 1 (no vtable; direct str_eq dispatch); 8 (no mode
+  ;; flag); 9 (lands the closure here, not deferred — the wheel uses
+  ;; handlers whose names start with wasi_ legitimately).
+  ;; WASI import-name strings — placed past wasi_path_open at 5160
+  ;; (occupies 5160..5177; next aligned offset 5184).
+  (data (i32.const 5184) "\0d\00\00\00wasi_fd_write")
+  (data (i32.const 5208) "\0c\00\00\00wasi_fd_read")
+  (data (i32.const 5232) "\0d\00\00\00wasi_fd_close")
+  (data (i32.const 5256) "\15\00\00\00wasi_path_unlink_file")
+  (data (i32.const 5288) "\10\00\00\00wasi_path_rename")
+  (data (i32.const 5312) "\0e\00\00\00wasi_proc_exit")
+  (data (i32.const 5336) "\1a\00\00\00wasi_path_create_directory")
+  (data (i32.const 5376) "\16\00\00\00wasi_path_filestat_get")
   (func $starts_with_wasi (param $s i32) (result i32)
-    (local $slen i32)
-    (local.set $slen (call $str_len (local.get $s)))
-    (if (i32.lt_u (local.get $slen) (i32.const 5))
-      (then (return (i32.const 0))))
-    (if (i32.ne (call $byte_at (local.get $s) (i32.const 0)) (i32.const 119))   ;; 'w'
-      (then (return (i32.const 0))))
-    (if (i32.ne (call $byte_at (local.get $s) (i32.const 1)) (i32.const 97))    ;; 'a'
-      (then (return (i32.const 0))))
-    (if (i32.ne (call $byte_at (local.get $s) (i32.const 2)) (i32.const 115))   ;; 's'
-      (then (return (i32.const 0))))
-    (if (i32.ne (call $byte_at (local.get $s) (i32.const 3)) (i32.const 105))   ;; 'i'
-      (then (return (i32.const 0))))
-    (if (i32.ne (call $byte_at (local.get $s) (i32.const 4)) (i32.const 95))    ;; '_'
-      (then (return (i32.const 0))))
-    (i32.const 1))
+    (if (call $str_eq (local.get $s) (i32.const 5160)) (then (return (i32.const 1))))   ;; wasi_path_open
+    (if (call $str_eq (local.get $s) (i32.const 5184)) (then (return (i32.const 1))))   ;; wasi_fd_write
+    (if (call $str_eq (local.get $s) (i32.const 5208)) (then (return (i32.const 1))))   ;; wasi_fd_read
+    (if (call $str_eq (local.get $s) (i32.const 5232)) (then (return (i32.const 1))))   ;; wasi_fd_close
+    (if (call $str_eq (local.get $s) (i32.const 5256)) (then (return (i32.const 1))))   ;; wasi_path_unlink_file
+    (if (call $str_eq (local.get $s) (i32.const 5288)) (then (return (i32.const 1))))   ;; wasi_path_rename
+    (if (call $str_eq (local.get $s) (i32.const 5312)) (then (return (i32.const 1))))   ;; wasi_proc_exit
+    (if (call $str_eq (local.get $s) (i32.const 5336)) (then (return (i32.const 1))))   ;; wasi_path_create_directory
+    (if (call $str_eq (local.get $s) (i32.const 5376)) (then (return (i32.const 1))))   ;; wasi_path_filestat_get
+    (i32.const 0))
 
   ;; $ec7_emit_call_dollar — emits `(call $<name>)` direct, NO `op_` prefix.
   (func $ec7_emit_call_dollar (param $name i32)

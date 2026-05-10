@@ -1103,6 +1103,14 @@ fn record_field_copy_suffix(src, dst, src_idx, dst_idx, n) = {
 fn parse_block_expr(ref tokens, pos, start_span) = {
   let buf = make_list(8)
   let (final_buf, final_count, final_e, p) = parse_block_body(tokens, pos, buf, 0)
+  let end_span = span_at(tokens, p - 1)
+  let Span(sl, _, _, _) = start_span
+  let Span(_, _, el, _) = end_span
+  if final_count == 0 && sl == el {
+    eprint_string("parser: E_RedundantBraces Warning: this body fits on one line; remove the braces. Braces apply only to multi-line bodies. at ")
+    eprint_string(show_span(span_join(start_span, end_span)))
+    eprint_string("\n")
+  } else { () }
   (nexpr(BlockExpr(slice(final_buf, 0, final_count), final_e), start_span), p)
 }
 

@@ -6065,10 +6065,21 @@
           (i32.gt_s (local.get $prec) (i32.const 0)))
       (then
         (local.set $span (call $span_at_p (local.get $tokens) (local.get $p)))
-        ;; Parse right side with higher prec
+        ;; Parse right side with higher prec.
+        ;; Per Hβ.parser.binop-skip-ws-after-op (2026-05-10): skip
+        ;; TNewlines AFTER the operator before parsing the right operand.
+        ;; Multi-line binop chains (`x > 0 && \n y > 0 && \n z > 0`) had
+        ;; the right-recursion start at pos+1 (just past the operator
+        ;; token) — landing on the newline. parse_primary's fallback
+        ;; returned LitUnit + advance, truncating the chain so the
+        ;; lowered form was `(x > 0) && unit` and the rest leaked as
+        ;; orphan top-level statements. Substrate-honest fix: the operator
+        ;; is followed by an expression; whitespace between them is
+        ;; transparent (per SYNTAX.md — newlines aren't binop terminators).
         (local.set $right_result
           (call $parse_binop (local.get $tokens)
-            (i32.add (local.get $p) (i32.const 1))
+            (call $skip_ws_p (local.get $tokens)
+              (i32.add (local.get $p) (i32.const 1)))
             (i32.add (local.get $prec) (i32.const 1))))
         (local.set $right (call $list_index (local.get $right_result) (i32.const 0)))
         (local.set $p2 (call $list_index (local.get $right_result) (i32.const 1)))

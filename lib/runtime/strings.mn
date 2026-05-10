@@ -324,7 +324,11 @@ fn float_fill_digit_bytes(buf, digits, start, end, i) with Memory + Alloc = {
 fn float_add(a, b) with Memory + Alloc = a + b
 fn float_sub(a, b) with Memory + Alloc = a - b
 fn float_mul(a, b) with Memory + Alloc = a * b
-fn float_div(a, b) with Memory + Alloc = a / b
+// Hβ.first-light.wheel-float-div-zero-guard — productive-under-error per
+// protocol_kernel_uniform_placeholder_substrate.md (chain-link 6 below
+// cursor-is-the-substrate). Peer handle: #110 Hβ.emit.float-substrate-
+// handler swaps the kernel-uniform i32 substrate for typed f64 ops.
+fn float_div(a, b) with Memory + Alloc = if b == 0 { 0 } else { a / b }
 fn float_neg(f)    with Memory + Alloc = 0.0 - f
 fn float_lt(a, b)  with Memory + Alloc = if a < b { 1 } else { 0 }
 fn float_ge(a, b)  with Memory + Alloc = if a >= b { 1 } else { 0 }

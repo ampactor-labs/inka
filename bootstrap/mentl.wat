@@ -16226,6 +16226,14 @@
       (then (local.set $effect_name
               (call $derive_effect_name_from_arms
                     (i32.load offset=12 (local.get $stmt))))))
+    ;; Hβ.first-light.handler-arm-ops-as-effect-ops: when the handler-decl
+    ;; IS the only declaration of its arm ops (no separate `effect E {}`),
+    ;; derivation returns empty. Use handler_name as the surface effect-
+    ;; name so each handler is its own effect from the type system's view.
+    ;; Wheel pattern: `handler lower_scope { ls_push_scope() => ... }` —
+    ;; ls_push_scope env_extends as EffectOpScheme("lower_scope") below.
+    (if (i32.eqz (call $str_len (local.get $effect_name)))
+      (then (local.set $effect_name (local.get $handler_name))))
     ;; Build TName(ename, []) — the inner effect-name Ty.
     (local.set $effect_ty
       (call $ty_make_tname
@@ -16300,7 +16308,9 @@
     ;; Hβ.lower.tier2-evidence-passing per Koka JFP 2022.
     (call $register_handler_decl_arm_ops
       (i32.load offset=12 (local.get $stmt))
-      (local.get $handler_name)))
+      (local.get $handler_name)
+      (local.get $effect_name)
+      (local.get $span)))
 
   ;; $mint_handler_config_tparams — recursive build of TParam list for
   ;; handler config-params. Each name gets a fresh tyvar handle and is
@@ -16352,19 +16362,109 @@
   ;; back to this when the handler-stack walk returns 0 (perform site
   ;; called outside its `~>` chain at lower-time). First-handler-wins
   ;; on ambiguity per protocol_kernel_uniform_placeholder_substrate.md.
+  ;;
+  ;; Hβ.first-light.handler-arm-ops-as-effect-ops (2026-05-09):
+  ;; ALSO env_extend each op_name as EffectOpScheme(effect_name) when
+  ;; not already bound. Wheel pattern: handler-decl IS the only
+  ;; declaration of its arm ops (no separate `effect E { op() }`); the
+  ;; handler_name doubles as the surface effect-name. Each arm's op
+  ;; becomes a fully-polymorphic Forall over fresh tyvars: param tyvars
+  ;; per arg pattern + ret tyvar + row tyvar. This unblocks block-expr/
+  ;; match-expr emission — without EffectOpScheme registration, perform
+  ;; sites types as TError-hole and emit_lconst surfaces (unreachable),
+  ;; which traps the entire compile pipeline. Substrate parity with
+  ;; $infer_register_effect_ops; arity from len(args).
   (func $register_handler_decl_arm_ops
         (param $arms i32) (param $handler_name i32)
-    (local $n i32) (local $i i32) (local $arm i32) (local $op_name i32)
+        (param $effect_name i32) (param $span i32)
+    (local $n i32) (local $i i32) (local $arm i32)
+    (local $args i32) (local $op_name i32) (local $existing i32)
+    (local $kind_or_h i32) (local $kind_tag i32)
+    (local $n_args i32) (local $j i32) (local $param_handles i32)
+    (local $param_h i32) (local $tparam_list i32)
+    (local $ret_h i32) (local $row_h i32)
+    (local $op_ty i32) (local $tyvar_handles i32)
+    (local $scheme i32) (local $reason i32)
     (local.set $n (call $len (local.get $arms)))
     (local.set $i (i32.const 0))
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $arm     (call $list_index (local.get $arms) (local.get $i)))
+        (local.set $args    (call $record_get (local.get $arm) (i32.const 0)))
         (local.set $op_name (call $record_get (local.get $arm) (i32.const 2)))
+        ;; Lower default-handler-map registration (existing behavior).
         (call $lower_register_default_handler_for_op
           (local.get $op_name)
           (local.get $handler_name))
+        ;; EffectOpScheme env_extend (new substrate). Skip if already
+        ;; bound as EffectOpScheme from a prior `effect E { op() }`
+        ;; declaration — the handler's arm just attaches a body to an
+        ;; already-declared op.
+        (local.set $existing (call $env_lookup (local.get $op_name)))
+        (block $skip_env_extend
+          (if (i32.ne (local.get $existing) (i32.const 0))
+            (then
+              (local.set $kind_or_h (call $env_binding_kind (local.get $existing)))
+              ;; SchemeKind is a heap record; tag 133 = EffectOpScheme.
+              (if (i32.ge_u (local.get $kind_or_h) (global.get $heap_base))
+                (then
+                  (local.set $kind_tag (call $tag_of (local.get $kind_or_h)))
+                  (if (i32.eq (local.get $kind_tag) (i32.const 133))
+                    (then (br $skip_env_extend)))))))
+          ;; Build per-arg fresh tyvar handles. Buffer-counter discipline.
+          (local.set $n_args (call $len (local.get $args)))
+          (local.set $param_handles (call $make_list (i32.const 0)))
+          (local.set $param_handles
+            (call $list_extend_to (local.get $param_handles) (local.get $n_args)))
+          (local.set $tyvar_handles (call $make_list (i32.const 0)))
+          (local.set $tyvar_handles
+            (call $list_extend_to (local.get $tyvar_handles) (local.get $n_args)))
+          (local.set $j (i32.const 0))
+          (block $params_done
+            (loop $each_param
+              (br_if $params_done (i32.ge_u (local.get $j) (local.get $n_args)))
+              (local.set $param_h (call $graph_fresh_ty
+                (call $reason_make_located (local.get $span)
+                  (call $reason_make_inferred (i32.const 4056)))))   ;; "param"
+              (drop (call $list_set (local.get $param_handles)
+                                    (local.get $j) (local.get $param_h)))
+              (drop (call $list_set (local.get $tyvar_handles)
+                                    (local.get $j) (local.get $param_h)))
+              (local.set $j (i32.add (local.get $j) (i32.const 1)))
+              (br $each_param)))
+          (local.set $tparam_list
+            (call $walk_stmt_build_inferred_params (local.get $param_handles)))
+          (local.set $ret_h (call $graph_fresh_ty
+            (call $reason_make_located (local.get $span)
+              (call $reason_make_inferred (i32.const 4064)))))   ;; "return"
+          (local.set $row_h (call $graph_fresh_row
+            (call $reason_make_located (local.get $span)
+              (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
+          (local.set $op_ty (call $ty_make_tfun
+            (local.get $tparam_list)
+            (call $ty_make_tvar (local.get $ret_h))
+            (local.get $row_h)))
+          ;; Polymorphic over param tyvars + ret tyvar (row stays opaque
+          ;; per the H1.4 separation — see line 87+ commentary).
+          (local.set $tyvar_handles
+            (call $list_extend_to (local.get $tyvar_handles)
+              (i32.add (local.get $n_args) (i32.const 1))))
+          (drop (call $list_set
+            (local.get $tyvar_handles)
+            (local.get $n_args)
+            (local.get $ret_h)))
+          (local.set $scheme (call $scheme_make_forall
+            (local.get $tyvar_handles)
+            (local.get $op_ty)))
+          (local.set $reason (call $reason_make_located
+            (local.get $span)
+            (call $reason_make_declared (local.get $op_name))))
+          (call $env_extend
+            (local.get $op_name)
+            (local.get $scheme)
+            (local.get $reason)
+            (call $schemekind_make_effectop (local.get $effect_name))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter))))
 
@@ -27259,6 +27359,11 @@
   ;; Dispatches on UnaryOp ADT i32 sentinel (UNeg=160, UNot=161 per
   ;; src/types.mn UnaryOp ADT in 160-179 reserved region — mirror of
   ;; BinOp 140-153). Drift 8 refusal: integer-tag ADT, not string-keyed.
+  ;; Hβ.first-light.unary-neg-stack-order — UNeg emits 0 - x, NOT x - 0.
+  ;; emit_lexpr leaves x on top; for `0 - x` the kernel-correct sequence
+  ;; is: pop x to $state_tmp, push 0, push x from $state_tmp, sub.
+  ;; BConcat at line 309+ uses the same scratch-local pattern; fully
+  ;; reuses fn-preamble locals (no new state).
   (func $emit_lunaryop (param $r i32)
     (local $op i32)
     (call $emit_lexpr (call $lexpr_lunaryop_x (local.get $r)))
@@ -27270,15 +27375,20 @@
     (unreachable))
 
   (func $ec6_emit_neg
-    ;; emits: (i32.const 0) (i32.sub)
-    ;; Per wheel emit_unaryop "Neg" arm — negation as 0 - x.
-    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 105))
-    (call $emit_byte (i32.const 51)) (call $emit_byte (i32.const 50))
-    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 99))
+    ;; emits: (local.set $state_tmp) (i32.const 0) (local.get $state_tmp) (i32.sub)
+    ;; Computes 0 - x = -x. Operand x sits on top after emit_lexpr;
+    ;; sink it into $state_tmp (preamble-declared in every fn), push
+    ;; the constant 0 below, restore x above, then i32.sub.
+    (call $ec6_emit_local_set_state_tmp)
+    ;; "(i32.const 0)\n"
+    (call $emit_byte (i32.const 40))  (call $emit_byte (i32.const 105))
+    (call $emit_byte (i32.const 51))  (call $emit_byte (i32.const 50))
+    (call $emit_byte (i32.const 46))  (call $emit_byte (i32.const 99))
     (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 110))
     (call $emit_byte (i32.const 115)) (call $emit_byte (i32.const 116))
-    (call $emit_byte (i32.const 32)) (call $emit_byte (i32.const 48))
-    (call $emit_byte (i32.const 41))
+    (call $emit_byte (i32.const 32))  (call $emit_byte (i32.const 48))
+    (call $emit_byte (i32.const 41))  (call $emit_byte (i32.const 10))
+    (call $ec6_emit_local_get_state_tmp)
     (call $ec6_emit_i32_sub))
 
   (func $ec6_emit_i32_eqz

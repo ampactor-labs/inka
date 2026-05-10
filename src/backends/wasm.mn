@@ -1199,6 +1199,9 @@ fn emit_expr(expr) = match expr {
   },
 
   LUnaryOp(_h, op, inner) => {
+    // Hβ.first-light.unary-neg-stack-order — UNeg is `0 - x`, not `x - 0`.
+    // emit_unaryop's UNeg arm emits the full sink-and-subtract dance via
+    // $state_tmp (declared in every fn preamble at line 978).
     emit_expr(inner)
     emit_unaryop(op)
   },
@@ -1714,7 +1717,10 @@ fn emit_binop(op) = match op {
 }
 
 fn emit_unaryop(op) = match op {
-  UNeg => perform wat_emit("    (i32.const 0) (i32.sub)\n"),
+  // UNeg: -x = 0 - x. Operand x is on top after emit_expr; sink it
+  // into $state_tmp (fn-preamble local), push 0 below, restore x above,
+  // i32.sub. Same scratch-local pattern as LCall (line 1214).
+  UNeg => perform wat_emit("    (local.set $state_tmp) (i32.const 0) (local.get $state_tmp) (i32.sub)\n"),
   UNot => perform wat_emit("    (i32.eqz)\n")
 }
 

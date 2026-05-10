@@ -506,6 +506,11 @@
   ;; Dispatches on UnaryOp ADT i32 sentinel (UNeg=160, UNot=161 per
   ;; src/types.mn UnaryOp ADT in 160-179 reserved region — mirror of
   ;; BinOp 140-153). Drift 8 refusal: integer-tag ADT, not string-keyed.
+  ;; Hβ.first-light.unary-neg-stack-order — UNeg emits 0 - x, NOT x - 0.
+  ;; emit_lexpr leaves x on top; for `0 - x` the kernel-correct sequence
+  ;; is: pop x to $state_tmp, push 0, push x from $state_tmp, sub.
+  ;; BConcat at line 309+ uses the same scratch-local pattern; fully
+  ;; reuses fn-preamble locals (no new state).
   (func $emit_lunaryop (param $r i32)
     (local $op i32)
     (call $emit_lexpr (call $lexpr_lunaryop_x (local.get $r)))
@@ -517,15 +522,20 @@
     (unreachable))
 
   (func $ec6_emit_neg
-    ;; emits: (i32.const 0) (i32.sub)
-    ;; Per wheel emit_unaryop "Neg" arm — negation as 0 - x.
-    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 105))
-    (call $emit_byte (i32.const 51)) (call $emit_byte (i32.const 50))
-    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 99))
+    ;; emits: (local.set $state_tmp) (i32.const 0) (local.get $state_tmp) (i32.sub)
+    ;; Computes 0 - x = -x. Operand x sits on top after emit_lexpr;
+    ;; sink it into $state_tmp (preamble-declared in every fn), push
+    ;; the constant 0 below, restore x above, then i32.sub.
+    (call $ec6_emit_local_set_state_tmp)
+    ;; "(i32.const 0)\n"
+    (call $emit_byte (i32.const 40))  (call $emit_byte (i32.const 105))
+    (call $emit_byte (i32.const 51))  (call $emit_byte (i32.const 50))
+    (call $emit_byte (i32.const 46))  (call $emit_byte (i32.const 99))
     (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 110))
     (call $emit_byte (i32.const 115)) (call $emit_byte (i32.const 116))
-    (call $emit_byte (i32.const 32)) (call $emit_byte (i32.const 48))
-    (call $emit_byte (i32.const 41))
+    (call $emit_byte (i32.const 32))  (call $emit_byte (i32.const 48))
+    (call $emit_byte (i32.const 41))  (call $emit_byte (i32.const 10))
+    (call $ec6_emit_local_get_state_tmp)
     (call $ec6_emit_i32_sub))
 
   (func $ec6_emit_i32_eqz

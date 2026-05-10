@@ -22,6 +22,9 @@
           (i32.add (local.get $pos) (i32.const 1))))
         (return (local.get $tup))))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
+    ;; Optional `<TypeParams>` per SYNTAX.md §1219.
+    (local.set $p (call $skip_type_params_p (local.get $tokens) (local.get $p)))
+    (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $p)))
     ;; Skip =
     (if (call $at (local.get $tokens) (local.get $p) (i32.const 60)) ;; TEq
       (then (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p) (i32.const 1))))))
@@ -96,6 +99,41 @@
         (local.get $span))))
     (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))
+
+  ;; Skip optional `<TypeParams>` clause after a declaration name per
+  ;; SYNTAX.md §1219-1226 (`type Pair<A, B> = ...`,
+  ;; `fn map<A, B>(...) = ...`, `effect State<S> { ... }`). Returns
+  ;; new pos AFTER the closing TGt; if no TLt at $pos, returns $pos
+  ;; unchanged. Counts angle-bracket depth so nested forms like
+  ;; `Buffer<Option<A>>` close correctly. Per Hβ.parser.type-params-skip
+  ;; (2026-05-10): the seed consumes type params without structuring
+  ;; them; HM inference at the wheel layer projects polymorphism from
+  ;; usage. Substrate-honest deferral; the skip prevents <A>'s tokens
+  ;; from leaking into subsequent stmt parses (which previously caused
+  ;; a captures-len leak through malformed-AST cascade — now closed by
+  ;; Hβ.first-light.fnstmt-fresh-captures-len).
+  (func $skip_type_params_p (param $tokens i32) (param $pos i32) (result i32)
+    (local $depth i32) (local $k i32)
+    (if (i32.eqz (call $at (local.get $tokens) (local.get $pos) (i32.const 61)))   ;; TLt
+      (then (return (local.get $pos))))
+    (local.set $depth (i32.const 1))
+    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+    (block $done (loop $scan
+      (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
+      (br_if $done (i32.eq (local.get $k) (i32.const 69)))   ;; TEof
+      (br_if $done (i32.eq (local.get $k) (i32.const 68)))   ;; TNewline (defensive)
+      (if (i32.eq (local.get $k) (i32.const 61))             ;; TLt
+        (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
+      (if (i32.eq (local.get $k) (i32.const 62))             ;; TGt
+        (then
+          (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+          (if (i32.eqz (local.get $depth))
+            (then
+              (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+              (br $done)))))
+      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+      (br $scan)))
+    (local.get $pos))
 
   ;; Skip tokens until the next statement boundary — newline, EOF, or
   ;; a top-level declaration keyword (TFn, TLet, TType, TEffect,
@@ -311,6 +349,9 @@
           (i32.add (local.get $pos) (i32.const 1))))
         (return (local.get $tup))))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
+    ;; Optional `<TypeParams>` per SYNTAX.md §1226 (`effect State<S> { ... }`).
+    (local.set $p (call $skip_type_params_p (local.get $tokens) (local.get $p)))
+    (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $p)))
     (local.set $p (call $expect (local.get $tokens) (local.get $p) (i32.const 47))) ;; TLBrace
     (local.set $ops_r (call $parse_effect_ops (local.get $tokens)
       (call $skip_ws_p (local.get $tokens) (local.get $p))))

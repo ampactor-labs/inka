@@ -87,7 +87,36 @@
         (br $scan)))
     (local.get $pos))
 
+  ;; Per Hβ.parser.arrow-type-substrate (2026-05-10): after the base
+  ;; type is parsed, check for TArrow. If present, this is a fn-type
+  ;; like `() -> A` (effect-op signature, SYNTAX.md §678-720; nested
+  ;; fn-types in type annotations, §1244 `fn() -> () with E`). The seed
+  ;; doesn't structure fn-types — wheel-side HM inference projects
+  ;; them via TFun substrate — but the parser must consume the `-> R`
+  ;; tokens so subsequent parser-state lands at the next field/comma/
+  ;; close. Without this, fn-type tokens leaked into following stmt
+  ;; parses (which previously cascaded through the captures-len leak;
+  ;; closed by Hβ.first-light.fnstmt-fresh-captures-len, but the parser
+  ;; gap remains and is closed here for SYNTAX-honest token consumption).
+  ;; Recursive: `T1 -> T2 -> T3` consumes all arrows.
   (func $parse_type_ty (param $tokens i32) (param $pos i32) (result i32)
+    (local $tup i32) (local $base_pos i32) (local $arrow_pos i32) (local $rhs_r i32)
+    (local.set $tup (call $parse_type_ty_atom (local.get $tokens) (local.get $pos)))
+    (local.set $base_pos (call $list_index (local.get $tup) (i32.const 1)))
+    (local.set $arrow_pos (call $skip_ws_p (local.get $tokens) (local.get $base_pos)))
+    (if (call $at (local.get $tokens) (local.get $arrow_pos) (i32.const 34))   ;; TArrow
+      (then
+        (local.set $rhs_r (call $parse_type_ty (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens) (i32.add (local.get $arrow_pos) (i32.const 1)))))
+        ;; Discard base ty; result Ty is the rhs's Ty (the fn's return).
+        ;; Substrate-honest: the fn-type's structure is opaque to the
+        ;; seed; the wheel reconstructs via HM. Consume tokens; return
+        ;; rhs's Ty so the outer caller sees a parseable type.
+        (return (local.get $rhs_r))))
+    (local.get $tup))
+
+  ;; Atom: TIdent (with optional <TypeArgs>) or `(...)` paren-form.
+  (func $parse_type_ty_atom (param $tokens i32) (param $pos i32) (result i32)
     (local $k i32) (local $name i32) (local $tup i32) (local $p i32) (local $next i32)
     (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
     ;; TIdent → check for known type names
@@ -260,10 +289,12 @@
         (drop (call $list_set (local.get $tup) (i32.const 1)
           (i32.add (local.get $pos) (i32.const 1))))
         (return (local.get $tup))))
+    ;; Optional `<TypeParams>` per SYNTAX.md §1219 (`fn map<A, B>(...)`).
+    (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
+    (local.set $p (call $skip_type_params_p (local.get $tokens) (local.get $p)))
+    (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $p)))
     ;; Parse (params)
-    (local.set $p (call $expect (local.get $tokens)
-      (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))
-      (i32.const 45))) ;; TLParen
+    (local.set $p (call $expect (local.get $tokens) (local.get $p) (i32.const 45))) ;; TLParen
     (local.set $params_r (call $parse_fn_params (local.get $tokens) (local.get $p)))
     (local.set $params (call $list_index (local.get $params_r) (i32.const 0)))
     (local.set $p2 (call $skip_ws_p (local.get $tokens)

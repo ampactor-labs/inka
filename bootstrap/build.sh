@@ -194,7 +194,7 @@ echo "Assembled: $LINES lines"
 
 # ─── Compile ─────────────────────────────────────────────────────────
 echo "Compiling WAT → WASM..."
-wat2wasm "$OUT" -o "$WASM" --debug-names --enable-threads
+wat2wasm "$OUT" -o "$WASM" --debug-names --enable-threads --enable-tail-call
 echo "Built: $WASM ($(wc -c < "$WASM") bytes)"
 
 # ─── Optional: run tests ─────────────────────────────────────────────

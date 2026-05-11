@@ -49,12 +49,14 @@ compile_sample() {
   local sections="$WORKDIR/$name.sections"
   local disasm="$WORKDIR/$name.disasm"
 
-  printf "%s" "$source" | wasmtime run -W threads=y -W shared-memory=y -S threads=y "$WASM" > "$out_wat"
-  wat2wasm "$out_wat" -o "$out_wasm" --debug-names --enable-threads
-  wasm-validate "$out_wasm"
+  printf "%s" "$source" | wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$WASM" > "$out_wat"
+  wat2wasm "$out_wat" -o "$out_wasm" --debug-names --enable-threads --enable-tail-call
+  wasm-validate --enable-threads --enable-tail-call "$out_wasm"
   wasm-objdump -x "$out_wasm" > "$sections"
   wasm-objdump -d "$out_wasm" > "$disasm"
-  wasmtime run -W threads=y -W shared-memory=y -S threads=y "$out_wasm" >/dev/null
+  # Compiled program's exit code IS its `main()` return value (proc_exit).
+  # Don't let set -e mistake a non-zero exit for a compile failure.
+  wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$out_wasm" >/dev/null || true
 
   printf "%s|%s|%s|%s\n" "$out_wat" "$out_wasm" "$sections" "$disasm"
 }
@@ -69,11 +71,11 @@ require_tool wasmtime
 echo "       ok: WABT + wasmtime available"
 
 echo "[1/7] Assembling seed WAT with wat2wasm..."
-wat2wasm "$WAT" -o "$WASM" --debug-names --enable-threads
+wat2wasm "$WAT" -o "$WASM" --debug-names --enable-threads --enable-tail-call
 echo "       ok: built $WASM ($(wc -c < "$WASM") bytes)"
 
 echo "[2/7] Validating seed WASM..."
-wasm-validate "$WASM"
+wasm-validate --enable-threads --enable-tail-call "$WASM"
 echo "       ok: wasm-validate accepted seed"
 
 echo "[3/7] Inspecting seed sections with wasm-objdump..."
@@ -137,7 +139,7 @@ L1_WASM_2="$WORKDIR/l1-pass2.wasm"
 } > "$L1_INPUT"
 
 # Pass 2: seed → wheel → mentl2.wat
-wasmtime run -W threads=y -W shared-memory=y -S threads=y "$WASM" < "$L1_INPUT" > "$L1_OUT_2" 2> "$L1_ERR_2" || true
+wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$WASM" < "$L1_INPUT" > "$L1_OUT_2" 2> "$L1_ERR_2" || true
 PASS2_FNS=$(grep -c "^  (func " "$L1_OUT_2" || true)
 PASS2_LINES=$(wc -l < "$L1_OUT_2")
 PASS2_NFRE=$(tr -d '\0' < "$L1_ERR_2" | grep -c "E_UnresolvedType" || true)
@@ -155,13 +157,13 @@ if [ "$PASS2_FNS" -le "2" ]; then
   echo "       This is the cursor — Phase H handles narrow toward L1 closure per PLAN-to-first-light.md §5."
 else
   # Pass 2 produced real wheel output. Compile it and run pass 3.
-  wat2wasm "$L1_OUT_2" -o "$L1_WASM_2" --debug-names --enable-threads 2>/dev/null \
+  wat2wasm "$L1_OUT_2" -o "$L1_WASM_2" --debug-names --enable-threads --enable-tail-call 2>/dev/null \
     || { echo "       pass-2 WAT failed wat2wasm — wheel substrate produced invalid WASM"; exit 1; }
-  wasm-validate "$L1_WASM_2" \
+  wasm-validate --enable-threads --enable-tail-call "$L1_WASM_2" \
     || { echo "       pass-2 WASM failed wasm-validate — runtime correctness gap"; exit 1; }
 
   # Pass 3: pass-2.wasm → wheel → mentl3.wat
-  wasmtime run -W threads=y -W shared-memory=y -S threads=y "$L1_WASM_2" < "$L1_INPUT" > "$L1_OUT_3" 2>/dev/null || true
+  wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$L1_WASM_2" < "$L1_INPUT" > "$L1_OUT_3" 2>/dev/null || true
   PASS3_FNS=$(grep -c "^  (func " "$L1_OUT_3" || true)
   PASS3_LINES=$(wc -l < "$L1_OUT_3")
   echo "       pass3: $PASS3_FNS funcs, $PASS3_LINES lines"

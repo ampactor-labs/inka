@@ -114,7 +114,7 @@ assemble_harness() {
   echo "" >> "$out_wat"
   echo ")" >> "$out_wat"
 
-  wat2wasm "$out_wat" -o "$out_wasm" --debug-names --enable-threads
+  wat2wasm "$out_wat" -o "$out_wasm" --debug-names --enable-threads --enable-tail-call
   wasm-validate "$out_wasm"
   local objdump_output
   objdump_output=$(wasm-objdump -x "$out_wasm")
@@ -129,7 +129,7 @@ assemble_harness() {
 execute_harness() {
   local wasm="$1"
   local stderr_file="$2"
-  wasmtime run -W threads=y -W shared-memory=y -S threads=y "$wasm" 2> "$stderr_file" || true
+  wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$wasm" 2> "$stderr_file" || true
 }
 
 TOTAL=0

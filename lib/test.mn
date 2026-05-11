@@ -37,9 +37,18 @@ fn expect_false(value) = {
 // ─── run_tests: compact output ───────────────────────────────
 
 fn run_tests(tests) = {
-  let totals = fold(tests, (0, 0), (acc, test) => {
+  // Each test is independent — its assertion counts compose by fold-sum
+  // and its failure messages have no order dependency. parallel_map
+  // dispatches the N tests to N OS threads via parallel_compose; per-
+  // test (passed, failed) tuples accumulate via fold. Test output stays
+  // honest because the println happens inside the check arm at test
+  // execution time — interleaved messages from concurrent tests are a
+  // tolerable cost for cargo-class test parallelism (peer follow-up
+  // Hβ.test.per-test-output-buffer routes per-thread println through a
+  // wat_to_string-style buffer for sequential surface).
+  let results = parallel_map((test) => {
     let (name, test_fn) = test
-    let (p, f) = handle {
+    handle {
       test_fn()
       get_results()
     } with counts = (0, 0) {
@@ -54,7 +63,10 @@ fn run_tests(tests) = {
       },
       get_results() => resume(counts),
     }
+  }, tests)
+  let totals = fold(results, (0, 0), (acc, r) => {
     let (tp, tf) = acc
+    let (p, f) = r
     (tp + p, tf + f)
   })
   let (passed, failed) = totals

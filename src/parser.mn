@@ -1804,10 +1804,9 @@ fn parse_type_expr(ref tokens, pos) = {
 fn parse_predicate(ref tokens, pos) = {
   // Phase 1: collect tokens up to semicolon or newline as PTrue.
   // Full predicate parsing (comparisons, logical ops) in Arc F.1.
-  // W_RedundantWhere narration: if the predicate body is exactly the
-  // literal `true` (single TTrue token before the terminator), the
-  // where-clause adds zero constraint over the base type — emit the
-  // gradient hint per SYNTAX.md:1604-1611 gradient narration codes.
+  // W_RedundantWhere narration per SYNTAX.md:1604-1611: if the
+  // predicate body is exactly the literal `true` (single TTrue
+  // before the terminator), the where-clause adds no constraint.
   let p = skip_to_stmt_end(tokens, pos)
   if at(tokens, pos, TTrue) && p == pos + 1 {
     perform report("parser", "W_RedundantWhere", "Warning",

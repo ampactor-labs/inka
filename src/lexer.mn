@@ -137,7 +137,7 @@ fn lex(ref source) = {
   let n = byte_len(source)
   let initial_capacity = if n < 16 { 16 } else { n }
   let buf = make_list(initial_capacity)
-  let (final_buf, final_count) = lex_from(source, n, 0, 1, 1, buf, 0, 0, 0)
+  let (_final_pos, _final_col, final_buf, final_count) = lex_from(source, n, 0, 1, 1, buf, 0, 0, 0)
   slice(final_buf, 0, final_count)
 }
 
@@ -159,7 +159,8 @@ fn push_tok(own buf, count, own t) = {
 /// strings emit a single `TString(content)` with no interpolation.
 fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, count, term_byte, depth) = {
   if pos >= n {
-    push_tok(buf, count, mk_tok(TEof, line, col, line, col))
+    let (b1, c1) = push_tok(buf, count, mk_tok(TEof, line, col, line, col))
+    (pos, col, b1, c1)
   } else {
     let b = byte_at(source, pos)
 
@@ -226,8 +227,10 @@ fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, co
                 else { depth }
               if b == 125 && term_byte == 125 && depth == 0 {
                 // Splice termination — emit TRBrace and return to
-                // scan_string_after_splice.
-                push_tok(buf, count, mk_tok(TRBrace, line, col, line, col + 1))
+                // scan_string_after_splice with position info so the
+                // outer scan_string can resume past the splice.
+                let (b1, c1) = push_tok(buf, count, mk_tok(TRBrace, line, col, line, col + 1))
+                (pos + 1, col + 1, b1, c1)
               } else {
                 let new_d = if b == 125 && depth > 0 { depth - 1 } else { new_depth }
                 let (b1, c1) = push_tok(buf, count, mk_tok(kind, line, col, line, col + 1))
@@ -270,7 +273,8 @@ fn skip_line_comment(ref source, n: ValidOffset, pos: ValidOffset) = scan_to_eol
 fn scan_string(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, count, own acc) = {
   if pos >= n {
     // Unterminated — emit final part; parser surfaces diagnostic next.
-    push_tok(buf, count, mk_tok(TStringPart(acc), line, col, line, col))
+    let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(acc), line, col, line, col))
+    (pos, col, b1, c1)
   } else {
     let b = byte_at(source, pos)
     if b == 34 {

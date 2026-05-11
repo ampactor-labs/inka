@@ -634,6 +634,12 @@ type Stmt
                            // effect name, ops (each is (op_name, param_tys, ret_ty);
                            // ResumeDiscipline is inferred at handler-decl time
                            // from each arm body, not declared on the effect op)
+  | CapabilityDeclStmt(String, List)
+                           // capability name, effect ops bundled into one
+                           // capability per SYNTAX.md `capability` keyword.
+                           // Parser produces via parse_capability_decl
+                           // (src/parser.mn:726); infer's NStmt arm at
+                           // infer.mn:254 unpacks via the same shape.
   | HandlerDeclStmt(String, String, List, List, List)
                            // handler name, effect name, config-params, state-fields, arms
                            // config: List<String> — closure-captured at install site

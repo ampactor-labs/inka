@@ -256,28 +256,30 @@ fn driver_install_qualified_only(ref module_name, ref entries) with Memory + All
 }
 
 fn driver_install_qualified_loop(ref short, ref entries, i, n) with Memory + Alloc + EnvWrite = {
-  if i >= n { () }
-  else {
-    let entry = list_index(entries, i)
+  for_each((entry) => {
     let (name, scheme, reason, kind) = entry
     let dotted = short |> str_concat(".") |> str_concat(name)
     perform env_extend(dotted, scheme, reason, kind)
-    driver_install_qualified_loop(short, entries, i + 1, n)
-  }
+  }, entries)
 }
 
-// ─── Module walk via for_each over the post-order DAG ──────────────
+// ─── Topological-layer parallel walk (cargo-class) ──────────────────
 //
-// `driver_collect_dag` produces modules in post-order (deps before
-// dependents). for_each preserves this ordering — each module's check
-// runs to completion before the next begins. Within a topological
-// layer (same dep-depth), modules are independent and could `<|`
-// fanout via parallel_map; per `Hβ.driver.topological-layer-par-map`
-// the dep-graph partitioning that exposes layer membership is peer
-// follow-up. The verb at the walk layer is for_each; the par-map
-// version lifts when the layer-partition lands. Same source, handler
-// swap (sequential_compose vs parallel_compose decides spatial vs
-// temporal dispatch).
+// `driver_collect_dag` produces modules in post-order; this layer
+// peels them into topological levels. Layer 0 = leaves (no in-DAG
+// deps); layer N = modules whose deepest in-DAG dep is in layer N-1.
+// Modules WITHIN a layer are dep-independent — parallel_map fans them
+// out via `><`. Layers process sequentially: layer N completes (every
+// module's exports install into env) BEFORE layer N+1 starts (so
+// dependents see all their deps).
+//
+// for_each over layers (sequential gates dep-installation) × per-layer
+// parallel_map (genuine parallelism via Thread effect + parallel_compose)
+// IS the cargo-equivalent topology. Handler swap decides spatial
+// (parallel_compose → OS threads) vs temporal (sequential_compose → one
+// thread) — same source.
+//
+// Per `Hβ.driver.level-set-par-walk` peer follow-up closure.
 
 /// Process the entry module and all its transitive dependencies.
 /// Each module either loads from cache or re-infers; envs install in
@@ -285,5 +287,69 @@ fn driver_install_qualified_loop(ref short, ref entries, i, n) with Memory + All
 /// the entry module's inference runs.
 fn driver_check(ref entry_module)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
-  for_each(driver_check_module, driver_collect_dag(entry_module))
+  entry_module
+    |> driver_collect_dag_with_deps
+    |> driver_partition_layers
+    |> for_each((layer) => parallel_map(driver_check_module, layer))
+}
+
+/// Walk the post-order DAG and pair each module with its in-DAG deps.
+/// In-DAG: dep names that appear among the collected modules (filters
+/// out missing-module fallbacks that have no source). Returns
+/// `[(module_name, [dep_name])]` in post-order.
+fn driver_collect_dag_with_deps(ref entry_module)
+  with Memory + Alloc + Filesystem = {
+  let modules = driver_collect_dag(entry_module)
+  map((m) => (m, driver_module_in_dag_deps(m, modules)), modules)
+}
+
+/// Extract the imports of one module, then filter to the in-DAG set.
+/// Out-of-DAG names (missing modules, stdlib aliases the driver doesn't
+/// process) contribute nothing to the layer-partition's wait condition.
+fn driver_module_in_dag_deps(ref module_name, ref dag_modules)
+  with Memory + Alloc + Filesystem = {
+  let path = driver_module_path(module_name)
+  if !perform fs_exists(path) { [] }
+  else {
+    let source = perform fs_read_file(path)
+    source
+      |> driver_extract_imports
+      |> filter((dep) => contains_module(dag_modules, dep))
+  }
+}
+
+fn contains_module(ref modules, ref target) with Pure = {
+  any((m) => str_eq(m, target), modules)
+}
+
+/// Partition modules-with-deps into topological layers. Each pass
+/// peels off the "ready set" — modules whose deps are all processed.
+/// Iteration bound: DAG depth (typically ≤ 10 for a wheel-class graph).
+fn driver_partition_layers(ref modules_with_deps) with Memory + Alloc = {
+  driver_partition_peel(modules_with_deps, [], [])
+}
+
+fn driver_partition_peel(ref remaining, ref processed, ref layers_rev)
+  with Memory + Alloc = {
+  if remaining.len == 0 { reverse(layers_rev) }
+  else {
+    let layer_pairs = filter((m_with_deps) => {
+      let (_, deps) = m_with_deps
+      all((d) => contains_module(processed, d), deps)
+    }, remaining)
+    if layer_pairs.len == 0 {
+      // Cycle or unsatisfiable dep — process remaining sequentially
+      // as a final layer to surface diagnostics at driver_check_module.
+      let leftover_names = map((p) => { let (m, _) = p; m }, remaining)
+      reverse([leftover_names] ++ layers_rev)
+    } else {
+      let layer_names = map((p) => { let (m, _) = p; m }, layer_pairs)
+      let next_remaining = filter((m_with_deps) => {
+        let (m, _) = m_with_deps
+        !contains_module(layer_names, m)
+      }, remaining)
+      let next_processed = processed ++ layer_names
+      driver_partition_peel(next_remaining, next_processed, [layer_names] ++ layers_rev)
+    }
+  }
 }

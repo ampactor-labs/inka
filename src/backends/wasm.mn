@@ -129,6 +129,57 @@ handler emit_memory_arena {
   }
 }
 
+/// Stage 4b: lock-free CAS-based bump allocator for multi-thread
+/// execution. Each alloc reads $heap_ptr from a fixed memory cell
+/// (atomic-accessible — globals don't support atomics), computes the
+/// next pointer, attempts atomic.rmw.cmpxchg; retries on contention.
+/// Per protocol_bootstrap_wasi_threads_substrate.md Stage 4b.
+///
+/// Swap surface: install `~> emit_memory_atomic_cas` in pipeline.mn
+/// instead of `~> emit_memory_bump` when the emitted program will
+/// run with parallel_compose (genuine multi-core dispatch). The wheel
+/// audit detects which programs need this via the Thread effect row
+/// — gradient cash-out at install-time.
+///
+/// HEAP_PTR_ADDR = 0x40 (64). Clear of WASI scratch [0x50, 0x250).
+/// Initialization: _start must set the memory cell to 0x100000 (1 MiB)
+/// before any allocation. Peer follow-up:
+/// Hβ.emit.cas-alloc-init-in-start — emit _start preamble for the
+/// memory-cell initialization when emit_memory_atomic_cas is the
+/// installed handler.
+handler emit_memory_atomic_cas {
+  emit_alloc(size, target_local) => {
+    // CAS loop: atomically claim `size` bytes from $heap_ptr cell.
+    perform wat_emit("    (block $alloc_done\n")
+    perform wat_emit("      (loop $alloc_retry\n")  // drift-audit: ignore — WAT-literal loop keyword (target output), not Mentl-source iteration
+    perform wat_emit("        ;; load current heap_ptr\n")
+    perform wat_emit("        (local.tee $")
+    perform wat_emit(target_local)
+    perform wat_emit(" (i32.atomic.load (i32.const 64)))\n")
+    perform wat_emit("        ;; cmpxchg(addr, expected, replacement) returns old value\n")
+    perform wat_emit("        (i32.const 64)\n")
+    perform wat_emit("        (local.get ")
+    perform wat_emit(target_local)
+    perform wat_emit(")\n")
+    perform wat_emit("        (local.get ")
+    perform wat_emit(target_local)
+    perform wat_emit(")\n")
+    perform wat_emit("        (i32.const ")
+    perform wat_emit(int_to_str(size))
+    perform wat_emit(")\n")
+    perform wat_emit("        (i32.add)\n")
+    perform wat_emit("        (i32.atomic.rmw.cmpxchg)\n")
+    perform wat_emit("        ;; if witness == expected, we won; br_if exits\n")  // drift-audit: ignore — WAT-literal br_if pattern, not Mentl-source early-exit
+    perform wat_emit("        (local.get ")
+    perform wat_emit(target_local)
+    perform wat_emit(")\n")
+    perform wat_emit("        (i32.eq)\n")
+    perform wat_emit("        (br_if $alloc_done)\n")
+    perform wat_emit("        (br $alloc_retry)))\n")
+    resume()
+  }
+}
+
 // String-literal interning (W5). Populated once per emit_module
 // by set_string_entries, then read via string_offset at every
 // LString emit site. Entries are [(String, Int)] — (literal, offset).

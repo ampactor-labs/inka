@@ -678,19 +678,33 @@
   ;; Per src/lower.mn:136 LHandleWith(Int, LowExpr, LowExpr) — "~>
   ;; desugaring". Both body and handler are LowExpr ptrs (i32).
   ;; Per protocol_handler_is_state_is_closure_is_evidence.md: LHandleWith
-  ;; carries a 4th field — handler_name (str_ptr, 0 if anonymous handle-
-  ;; expr). emit reads it for the per-handler global state-ptr name
-  ;; ($<handler_name>_state_g).
-  (func $lexpr_make_lhandlewith_with_name
-        (param $h i32) (param $body i32) (param $handler i32) (param $handler_name i32)
+  ;; carries 5 fields:
+  ;;   0: handle (graph handle)
+  ;;   1: body (LowExpr — the expression to which ~> attaches)
+  ;;   2: handler (LowExpr — the handler reference)
+  ;;   3: handler_name (str_ptr, 0 if anonymous handle-expr)
+  ;;   4: state_inits (list of LowExpr — one per source-order state field;
+  ;;                   emit writes each at offset 8+i*4 of the freshly-
+  ;;                   allocated state record at $emit_lhandlewith time)
+  (func $lexpr_make_lhandlewith_with_inits
+        (param $h i32) (param $body i32) (param $handler i32)
+        (param $handler_name i32) (param $state_inits i32)
         (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 329) (i32.const 4)))
+    (local.set $r (call $make_record (i32.const 329) (i32.const 5)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
     (call $record_set (local.get $r) (i32.const 1) (local.get $body))
     (call $record_set (local.get $r) (i32.const 2) (local.get $handler))
     (call $record_set (local.get $r) (i32.const 3) (local.get $handler_name))
+    (call $record_set (local.get $r) (i32.const 4) (local.get $state_inits))
     (local.get $r))
+
+  (func $lexpr_make_lhandlewith_with_name
+        (param $h i32) (param $body i32) (param $handler i32) (param $handler_name i32)
+        (result i32)
+    (call $lexpr_make_lhandlewith_with_inits
+      (local.get $h) (local.get $body) (local.get $handler) (local.get $handler_name)
+      (call $make_list (i32.const 0))))
 
   (func $lexpr_make_lhandlewith (param $h i32) (param $body i32) (param $handler i32) (result i32)
     (call $lexpr_make_lhandlewith_with_name
@@ -705,6 +719,10 @@
   (func $lexpr_lhandlewith_handler_name (export "lexpr_lhandlewith_handler_name")
         (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 3)))
+
+  (func $lexpr_lhandlewith_state_inits (export "lexpr_lhandlewith_state_inits")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 4)))
 
   ;; ─── 330 = LFeedback(handle, body, spec) — arity 3 ──────────────────
   ;; Per src/lower.mn:137 LFeedback(Int, LowExpr, LowExpr) — "<~

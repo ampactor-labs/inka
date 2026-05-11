@@ -413,7 +413,7 @@
   ;; The handler list is emitted separately at module-emit time as
   ;; `(func $op_<name> ...)` declarations.
   (func $emit_lhandlewith (param $r i32)
-    (local $h i32) (local $hstate_name i32)
+    (local $h i32) (local $hstate_name i32) (local $inits i32)
     ;; Per protocol_handler_is_state_is_closure_is_evidence.md: allocate
     ;; the handler's state record at install — ONE record carrying state
     ;; slots + ev_slots + (post-H7) continuation. Bind to local minted in
@@ -422,17 +422,24 @@
     ;; state_local field (set by $lower_perform/lower_call's EffectOp arm
     ;; from $lower_resolve_handler_state_for_op). Size: 64 bytes (16 slots
     ;; — 1 tag + 1 capture_count + 14 state fields); kernel-uniform
-    ;; placeholder per protocol_kernel_uniform_placeholder_substrate.md;
-    ;; named follow-up Hβ.emit.handler-state-record-size-from-decl reads
-    ;; the handler-decl's state-field count. Zero-init via $alloc (memory
-    ;; cleared per WASM linear memory init); entries=[] sentinel-correct
-    ;; for env_handler / lower_scope / etc.
+    ;; placeholder per protocol_kernel_uniform_placeholder_substrate.md.
+    ;;
+    ;; Hβ.seed.handler-state-init-writes-mirror — between alloc and the
+    ;; global-set, walk state_inits and emit a store at offset 8+i*4 for
+    ;; each (matches resolve_state_slot_offset in src/lower.mn:1195 so
+    ;; arm-body reads align with install-time writes). Closes #144 — the
+    ;; root cause of trail_append-on-zero-trail was that this step
+    ;; didn't exist; state[8..40] read as zero-init garbage.
     (local.set $h (call $lexpr_handle (local.get $r)))
     (local.set $hstate_name
       (call $str_concat (i32.const 5408) (call $int_to_str (local.get $h))))
     ;; Use the canonical $emit_alloc (5-piece bump pattern via the
     ;; EmitMemory swap surface — same path as LMakeRecord/LMakeVariant).
     (call $emit_alloc (i32.const 64) (local.get $hstate_name))
+    ;; Emit init writes BEFORE the global-set so the record is fully
+    ;; populated by the time any perform-site reads it.
+    (local.set $inits (call $lexpr_lhandlewith_state_inits (local.get $r)))
+    (call $emit_state_init_writes (local.get $hstate_name) (local.get $inits) (i32.const 0))
     ;; Per-handler GLOBAL state-ptr write (cross-fn projection of the
     ;; install-time state record). Read handler_name from LHandleWith's
     ;; new slot 3 (threaded by lower_pipe from extract_handler_name).
@@ -440,6 +447,49 @@
     (call $emit_hstate_global_set (call $lexpr_lhandlewith_handler_name (local.get $r))
                                    (local.get $hstate_name))
     (call $emit_lexpr (call $lexpr_lhandlewith_body (local.get $r))))
+
+  ;; ─── $emit_state_init_writes — populate state record slots ──────────
+  ;; For each LowExpr in inits at index i, emit:
+  ;;   (local.get $<state_local>) <emit_lexpr init> (i32.store offset=<8+i*4>)
+  ;; Mirror of wheel-side emit_state_init_writes (src/backends/wasm.mn).
+  ;; Per protocol_handler_is_state_is_closure_is_evidence.md slot layout.
+  (func $emit_state_init_writes (param $state_local i32) (param $inits i32) (param $idx i32)
+    (local $n i32) (local $i i32) (local $init i32) (local $offset i32)
+    (local.set $n (call $len (local.get $inits)))
+    (local.set $i (local.get $idx))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $init   (call $list_index (local.get $inits) (local.get $i)))
+        (local.set $offset (i32.add (i32.const 8) (i32.mul (i32.const 4) (local.get $i))))
+        ;; Emit (local.get $<state_local>)
+        (call $ec_emit_local_get_dollar (local.get $state_local))
+        ;; Emit init's value
+        (call $emit_lexpr (local.get $init))
+        ;; Emit (i32.store offset=<offset>)
+        (call $emit_byte (i32.const 40))   ;; '('
+        (call $emit_byte (i32.const 105))  ;; 'i'
+        (call $emit_byte (i32.const 51))   ;; '3'
+        (call $emit_byte (i32.const 50))   ;; '2'
+        (call $emit_byte (i32.const 46))   ;; '.'
+        (call $emit_byte (i32.const 115))  ;; 's'
+        (call $emit_byte (i32.const 116))  ;; 't'
+        (call $emit_byte (i32.const 111))  ;; 'o'
+        (call $emit_byte (i32.const 114))  ;; 'r'
+        (call $emit_byte (i32.const 101))  ;; 'e'
+        (call $emit_byte (i32.const 32))   ;; ' '
+        (call $emit_byte (i32.const 111))  ;; 'o'
+        (call $emit_byte (i32.const 102))  ;; 'f'
+        (call $emit_byte (i32.const 102))  ;; 'f'
+        (call $emit_byte (i32.const 115))  ;; 's'
+        (call $emit_byte (i32.const 101))  ;; 'e'
+        (call $emit_byte (i32.const 116))  ;; 't'
+        (call $emit_byte (i32.const 61))   ;; '='
+        (call $emit_int (local.get $offset))
+        (call $emit_byte (i32.const 41))   ;; ')'
+        (call $emit_byte (i32.const 10))   ;; '\n'
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each))))
 
   ;; Emit `(global.get $<handler_name>_state_g)`.
   (func $emit_handler_state_global_get (param $handler_name i32)

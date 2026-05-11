@@ -598,12 +598,15 @@
         (local.set $lo_l (call $lower_expr (local.get $left_node)))
         (if (i32.ne (local.get $hname) (i32.const 0))
           (then (call $lower_handler_pop)))
-        ;; Thread handler_name (extracted earlier) into LHandleWith so
-        ;; emit can construct $<handler>_state_g without re-deriving it
-        ;; from lo_r's tag-302/closure-shape (which varies per binding).
-        (return (call $lexpr_make_lhandlewith_with_name
+        ;; Thread handler_name (extracted earlier) and state_inits
+        ;; (queried by name from the registry populated at
+        ;; $lower_walk_stmt_handler_decl) into LHandleWith so emit can
+        ;; allocate + init the state record without re-deriving from
+        ;; lo_r's closure shape. Hβ.seed.handler-state-init-writes-mirror.
+        (return (call $lexpr_make_lhandlewith_with_inits
                   (local.get $h) (local.get $lo_l) (local.get $lo_r)
-                  (local.get $hname)))))
+                  (local.get $hname)
+                  (call $handler_state_inits_lookup (local.get $hname))))))
     ;; Non-handle pipes — lower left+right normally.
     (local.set $lo_l (call $lower_expr (local.get $left_node)))
     (local.set $lo_r (call $lower_expr (local.get $right_node)))

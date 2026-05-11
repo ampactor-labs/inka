@@ -195,6 +195,19 @@
   (global $lower_default_op_handler_map_ptr (mut i32) (i32.const 0))
   (global $lower_default_op_handler_map_len_g (mut i32) (i32.const 0))
 
+  ;; Hβ.seed.handler-state-init-writes-mirror — per-handler state-init
+  ;; ledger. Each entry is a 2-field record (handler_name_str,
+  ;; state_inits_list) where state_inits_list is a flat list of LowExpr
+  ;; (one per source-order state field). $lower_walk_stmt_handler_decl
+  ;; populates; $lower_pipe at PTee install path queries by name; emit
+  ;; reads at LHandleWith emit to write inits at offset 8+i*4 of the
+  ;; freshly-allocated state record per
+  ;; protocol_handler_is_state_is_closure_is_evidence.md (ONE record,
+  ;; FOUR roles). Mirror of wheel-side src/lower.mn:
+  ;; handler_state_inits_registry handler.
+  (global $lower_state_inits_ledger_ptr (mut i32) (i32.const 0))
+  (global $lower_state_inits_ledger_len_g (mut i32) (i32.const 0))
+
   ;; ─── Idempotent initializer (mirrors $infer_init / $graph_init) ────
   ;; Per the seed's discipline for module-level state chunks: every
   ;; public entry calls $lower_init first; subsequent calls no-op.
@@ -216,7 +229,53 @@
         (global.set $lower_current_fn_name_g (i32.const 0))
         (global.set $lower_default_op_handler_map_ptr (call $make_list (i32.const 8)))
         (global.set $lower_default_op_handler_map_len_g (i32.const 0))
+        (global.set $lower_state_inits_ledger_ptr (call $make_list (i32.const 8)))
+        (global.set $lower_state_inits_ledger_len_g (i32.const 0))
         (global.set $lower_initialized    (i32.const 1)))))
+
+  ;; ─── $handler_state_inits_register / $handler_state_inits_lookup ──
+  ;; Mirror of wheel-side handler_state_inits_registry (src/lower.mn).
+  ;; Register: append (name, inits) entry; lookup: linear walk by name.
+  ;; Used by $lower_walk_stmt_handler_decl (register) and $lower_pipe at
+  ;; PTee path (lookup). emit_lhandlewith reads lhandlewith's inits
+  ;; field directly — no emit-time lookup needed.
+  (func $handler_state_inits_register (export "handler_state_inits_register")
+        (param $name i32) (param $inits i32)
+    (local $entry i32) (local $new_len i32)
+    (call $lower_init)
+    (local.set $entry (call $make_record (i32.const 282) (i32.const 2)))
+    (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
+    (call $record_set (local.get $entry) (i32.const 1) (local.get $inits))
+    (local.set $new_len
+      (i32.add (global.get $lower_state_inits_ledger_len_g) (i32.const 1)))
+    (global.set $lower_state_inits_ledger_ptr
+      (call $list_extend_to (global.get $lower_state_inits_ledger_ptr)
+                            (local.get $new_len)))
+    (drop (call $list_set (global.get $lower_state_inits_ledger_ptr)
+                          (global.get $lower_state_inits_ledger_len_g)
+                          (local.get $entry)))
+    (global.set $lower_state_inits_ledger_len_g (local.get $new_len)))
+
+  (func $handler_state_inits_lookup (export "handler_state_inits_lookup")
+        (param $name i32) (result i32)
+    (local $i i32) (local $n i32) (local $entry i32) (local $entry_name i32)
+    (call $lower_init)
+    (local.set $n (global.get $lower_state_inits_ledger_len_g))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $entry
+          (call $list_index (global.get $lower_state_inits_ledger_ptr)
+                            (local.get $i)))
+        (local.set $entry_name (call $record_get (local.get $entry) (i32.const 0)))
+        (if (call $str_eq (local.get $entry_name) (local.get $name))
+          (then (return (call $record_get (local.get $entry) (i32.const 1)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    ;; Not found — productive-under-error: return empty list (matches
+    ;; wheel's handler_state_inits_default behavior).
+    (call $make_list (i32.const 0)))
 
   ;; Hβ.first-light.seed-lperform-discriminator-mirror —
   ;; handler-stack push/pop/lookup. Push at HandleExpr enter; pop at

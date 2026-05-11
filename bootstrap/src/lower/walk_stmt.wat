@@ -701,6 +701,30 @@
     (drop (local.get $stmt))
     (call $lexpr_make_lconst (local.get $handle) (i32.const 0)))
 
+  ;; ─── $lower_state_field_inits — lower each init expr in source order ─
+  ;; Each state_fields entry is a {name, init} record (offset 0 = name,
+  ;; offset 4 = init AST node). Returns a flat list of LowExprs ready
+  ;; for emit_state_init_writes (mirror of wheel-side lower_state_field_inits).
+  ;; Buffer-counter discipline (Ω.3); no acc-concat in loop.
+  (func $lower_state_field_inits (export "lower_state_field_inits")
+        (param $state_fields i32) (result i32)
+    (local $n i32) (local $i i32) (local $buf i32)
+    (local $field i32) (local $init_node i32) (local $lo i32)
+    (local.set $n   (call $len (local.get $state_fields)))
+    (local.set $buf (call $make_list (i32.const 0)))
+    (local.set $buf (call $list_extend_to (local.get $buf) (local.get $n)))
+    (local.set $i   (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $field     (call $list_index (local.get $state_fields) (local.get $i)))
+        (local.set $init_node (call $record_get (local.get $field) (i32.const 1)))
+        (local.set $lo        (call $lower_expr (local.get $init_node)))
+        (drop (call $list_set (local.get $buf) (local.get $i) (local.get $lo)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.get $buf))
+
   ;; ─── $lower_walk_stmt_handler_decl — HandlerDeclStmt arm (tag 124) ──
   ;; Per src/lower.mn:617-625 + Lock #7.
   ;; Layout assumption: [tag=124][handler_name][effect_name][arms_list]
@@ -710,9 +734,17 @@
         (param $stmt i32) (param $handle i32) (result i32)
     (local $arms i32) (local $arm_decls i32) (local $sentinel i32)
     (local $stmts i32) (local $i i32) (local $n i32)
-    (local $handler_name i32)
+    (local $handler_name i32) (local $state_fields i32) (local $state_inits i32)
     (local.set $arms         (i32.load offset=12 (local.get $stmt)))
     (local.set $handler_name (i32.load offset=4  (local.get $stmt)))
+    (local.set $state_fields (i32.load offset=16 (local.get $stmt)))
+    ;; Hβ.seed.handler-state-init-writes-mirror — lower each state-field
+    ;; init expression and register the list keyed by handler_name. PTee
+    ;; install sites query via $handler_state_inits_lookup and embed
+    ;; the inits into LHandleWith for emit-time stores at offset 8+i*4
+    ;; per protocol_handler_is_state_is_closure_is_evidence.md.
+    (local.set $state_inits (call $lower_state_field_inits (local.get $state_fields)))
+    (call $handler_state_inits_register (local.get $handler_name) (local.get $state_inits))
     ;; Lock #7: invoke chunk #8's helper (third caller — abstraction earned).
     ;; Per Hβ.first-light.handler-arm-fn-name-discriminator: pass the
     ;; handler_name as the discriminator so each top-level handler's
@@ -726,7 +758,7 @@
                             (local.get $arms)
                             (local.get $handler_name)
                             (i32.load offset=20 (local.get $stmt))
-                            (i32.load offset=16 (local.get $stmt))))
+                            (local.get $state_fields)))
     (local.set $sentinel  (call $lexpr_make_lconst (local.get $handle) (i32.const 0)))
     ;; Build stmts = arm_decls ++ [sentinel]. Buffer-counter (Ω.3).
     (local.set $n     (call $len (local.get $arm_decls)))

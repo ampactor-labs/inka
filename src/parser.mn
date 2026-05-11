@@ -1098,11 +1098,11 @@ fn parse_primary(ref tokens, pos) = {
       (nexpr(LambdaExpr(params, body), span), p5)
     },
     TMinus       => {
-      let (inner, p) = parse_primary(tokens, pos + 1)
+      let (inner, p) = parse_postfix(tokens, pos + 1)
       (nexpr(UnaryOpExpr(UNeg, inner), span), p)
     },
     TBang        => {
-      let (inner, p) = parse_primary(tokens, pos + 1)
+      let (inner, p) = parse_postfix(tokens, pos + 1)
       (nexpr(UnaryOpExpr(UNot, inner), span), p)
     },
     // SYNTAX.md:324-329 — E_LambdaAsOrOr: the double-pipe at expression

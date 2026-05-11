@@ -159,17 +159,7 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
 /// a sorted set (maintained by set_insert during consume), so folding
 /// set_union across them preserves the invariant.
 fn union_all_deltas(ref deltas) with !Mutate = {
-  union_all_deltas_loop(deltas, 0, deltas.len, [])
-}
-
-fn union_all_deltas_loop(ref deltas, i, n, own acc) with !Mutate = {
-  if i >= n { acc }
-  else {
-    union_all_deltas_loop(
-      deltas, i + 1, n,
-      set_union(acc, list_index(deltas, i))
-    )
-  }
+  fold(deltas, [], (acc, delta) => set_union(acc, delta))
 }
 
 /// Pairwise collision check across branch deltas. For each pair
@@ -197,7 +187,7 @@ fn report_collisions_inner(ref deltas, i, j, n, ref span) with !Mutate = {
     let delta_i = list_index(deltas, i)
     let delta_j = list_index(deltas, j)
     let collisions = set_intersect(delta_i, delta_j)
-    report_each_collision(collisions, 0, collisions.len, span)
+    report_each_collision(collisions, span)
     report_collisions_inner(deltas, i, j + 1, n, span)
   }
 }
@@ -314,16 +304,10 @@ fn lookup_tag_loop(ref tags, handle, i, n) with !Mutate = {
 }
 
 fn region_on_stack(ref stack, rid) with !Mutate = {
-  region_on_stack_loop(stack, rid, 0, stack.len)
-}
-
-fn region_on_stack_loop(ref stack, rid, i, n) with !Mutate = {
-  if i >= n { false }
-  else {
-    let Region(r, _) = list_index(stack, i)
-    if r == rid { true }
-    else { region_on_stack_loop(stack, rid, i + 1, n) }
-  }
+  any((r) => {
+    let Region(rid_on_stack, _) = r
+    rid_on_stack == rid
+  }, stack)
 }
 
 /// H4.1: join field regions with current region — returns the MAX
@@ -331,34 +315,23 @@ fn region_on_stack_loop(ref stack, rid, i, n) with !Mutate = {
 /// contribute region 0 (global lifetime, doesn't bound the join).
 /// The result is the composite's pinning region.
 fn join_field_regions(ref tags, ref fields, current) with !Mutate = {
-  join_field_regions_loop(tags, fields, current, 0, fields.len)
-}
-
-fn join_field_regions_loop(ref tags, ref fields, current, i, n) with !Mutate = {
-  if i >= n { current }
-  else {
-    let fh = list_index(fields, i)
-    let entry = lookup_tag(tags, fh)
-    let field_rid = match entry {
+  fold(fields, current, (acc, fh) => {
+    let field_rid = match lookup_tag(tags, fh) {
       None     => 0,
       Some(t)  => t.region_id
     }
-    let next = if field_rid > current { field_rid } else { current }
-    join_field_regions_loop(tags, fields, next, i + 1, n)
-  }
+    if field_rid > acc { field_rid } else { acc }
+  })
 }
 
-fn report_each_collision(ref names, i, n, ref span) with !Mutate = {
-  if i >= n { () }
-  else {
-    let name = list_index(names, i)
+fn report_each_collision(ref names, ref span) with !Mutate = {
+  for_each((name) => {
     perform report("ownership", "E_OwnershipViolation", "OwnershipViolation",
       "'"
         |> str_concat(name)
         |> str_concat("' consumed in two parallel branches"),
       span, "MachineApplicable")
-    report_each_collision(names, i + 1, n, span)
-  }
+  }, names)
 }
 
 fn find_first_span(ref sites, ref name) with !Mutate = {
@@ -475,16 +448,10 @@ fn walk_return_positions(ref refs, ref node) with !Mutate = {
 }
 
 fn walk_match_arms(ref refs, ref arms) with !Mutate = {
-  walk_match_arms_loop(refs, arms, 0, arms.len)
-}
-
-fn walk_match_arms_loop(ref refs, ref arms, i, n) with !Mutate = {
-  if i >= n { () }
-  else {
-    let (_, body) = list_index(arms, i)
+  for_each((arm) => {
+    let (_, body) = arm
     walk_return_positions(refs, body)
-    walk_match_arms_loop(refs, arms, i + 1, n)
-  }
+  }, arms)
 }
 
 /// Deduce `Own` vs `Ref` for `Inferred`-marked parameters by counting
@@ -492,24 +459,14 @@ fn walk_match_arms_loop(ref refs, ref arms, i, n) with !Mutate = {
 /// 1 use → `Own` (consumed once — affine), ≥ 2 uses → `Ref`
 /// (borrowed multiple times).
 fn infer_ownership(ref params, ref body) with !Mutate = {
-  let flat = list_to_flat(params)
-  let n = flat.len
-  infer_ownership_loop(flat, body, 0, n, make_list(n))
-}
-
-fn infer_ownership_loop(ref params, ref body, i, n, own acc) with !Mutate = {
-  if i >= n { acc }
-  else {
-    let TParam(name, ty, authored, _old_resolved) = list_index(params, i)
+  map((p) => {
+    let TParam(name, ty, authored, _old_resolved) = p
     let inferred = match authored {
       Inferred => classify_usage(name, body),
       _        => authored
     }
-    infer_ownership_loop(
-      params, body, i + 1, n,
-      list_set(acc, i, TParam(name, ty, authored, inferred))
-    )
-  }
+    TParam(name, ty, authored, inferred)
+  }, list_to_flat(params))
 }
 
 fn classify_usage(ref name, ref body) with !Mutate = {
@@ -571,44 +528,19 @@ fn count_uses(ref name, ref node) with !Mutate = {
 }
 
 fn count_uses_list(ref name, ref nodes) with !Mutate = {
-  count_uses_list_loop(name, nodes, 0, nodes.len, 0)
+  fold(nodes, 0, (acc, node) => acc + count_uses(name, node))
 }
 
 fn count_uses_record_fields(ref name, ref flds) with !Mutate = {
-  count_uses_record_fields_loop(name, flds, 0, flds.len, 0)
-}
-
-fn count_uses_record_fields_loop(ref name, ref flds, i, n, acc) with !Mutate = {
-  if i >= n { acc }
-  else {
-    let (_, value) = list_index(flds, i)
-    count_uses_record_fields_loop(
-      name, flds, i + 1, n, acc + count_uses(name, value)
-    )
-  }
-}
-
-fn count_uses_list_loop(ref name, ref nodes, i, n, acc) with !Mutate = {
-  if i >= n { acc }
-  else {
-    count_uses_list_loop(
-      name, nodes, i + 1, n,
-      acc + count_uses(name, list_index(nodes, i))
-    )
-  }
+  fold(flds, 0, (acc, fld) => {
+    let (_, value) = fld
+    acc + count_uses(name, value)
+  })
 }
 
 fn count_match_arms(ref name, ref arms) with !Mutate = {
-  count_match_arms_loop(name, arms, 0, arms.len, 0)
-}
-
-fn count_match_arms_loop(ref name, ref arms, i, n, acc) with !Mutate = {
-  if i >= n { acc }
-  else {
-    let (_, body) = list_index(arms, i)
-    count_match_arms_loop(
-      name, arms, i + 1, n,
-      acc + count_uses(name, body)
-    )
-  }
+  fold(arms, 0, (acc, arm) => {
+    let (_, body) = arm
+    acc + count_uses(name, body)
+  })
 }

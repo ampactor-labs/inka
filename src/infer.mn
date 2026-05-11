@@ -2881,12 +2881,10 @@ fn unify_list_elems(elems, target_h, span: ValidSpan) = {
 // post-Show-typeclass (peer Hβ.infer.show-typeclass), non-String
 // splices register a Show obligation that verify_ledger discharges.
 fn unify_string_fragments(fragments, span: ValidSpan) = {
-  if fragments.len == 0 { () }
-  else {
-    let N(_, _, fh) = list_head(fragments)
+  for_each((frag) => {
+    let N(_, _, fh) = frag
     perform graph_bind(fh, TString, Located(span, Inferred("interpolation fragment")))
-    unify_string_fragments(list_tail(fragments), span)
-  }
+  }, fragments)
 }
 
 // Handler absorption helpers — used by HandleExpr inference. The

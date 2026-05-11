@@ -1700,16 +1700,8 @@ fn lower_string_interpolation(handle, lowered_fragments) = {
   } else {
     let head = list_head(lowered_fragments)
     let rest = list_tail(lowered_fragments)
-    lower_str_concat_fold(handle, head, rest)
-  }
-}
-
-fn lower_str_concat_fold(handle, acc, rest) = {
-  if rest.len == 0 { acc }
-  else {
-    let next = list_head(rest)
-    let combined = LCall(handle, LGlobal(handle, "str_concat"), [acc, next])
-    lower_str_concat_fold(handle, combined, list_tail(rest))
+    fold(rest, head, (acc, frag) =>
+      LCall(handle, LGlobal(handle, "str_concat"), [acc, frag]))
   }
 }
 

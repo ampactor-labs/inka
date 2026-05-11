@@ -1969,17 +1969,7 @@ fn node_to_pexpr(node) = {
   }
 }
 
-fn pexprs_of(nodes) = pexprs_of_loop(nodes, 0, nodes.len, make_list(2), 0)
-
-fn pexprs_of_loop(nodes, i, n, buf, count) = {
-  if i >= n { slice(buf, 0, count) }
-  else {
-    let pe = node_to_pexpr(list_index(nodes, i))
-    let extended = list_extend_to(buf, count + 1)
-    let written  = list_set(extended, count, pe)
-    pexprs_of_loop(nodes, i + 1, n, written, count + 1)
-  }
-}
+fn pexprs_of(nodes) = map(node_to_pexpr, nodes)
 
 fn skip_to_stmt_end(ref tokens, pos) = match kind_at(tokens, pos) {
   TSemicolon => pos,

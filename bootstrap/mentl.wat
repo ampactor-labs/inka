@@ -5626,11 +5626,26 @@
     ;;              position; named follow-up threads it as DeclaredAt.
     (local.set $p (call $list_index (local.get $variants_r) (i32.const 1)))
     (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $p)))
+    ;; Hβ.parser.refinement-type-no-variant-reregister — when TWhere is
+    ;; present, the form is `type X = Y where pred` (refinement alias),
+    ;; NOT `type X = A | B | C` (sum type). $parse_variants greedily
+    ;; consumed `Y` as a variant; but Y is already a constructor of its
+    ;; own type. Re-registering Y as a variant of X would overwrite Y's
+    ;; tag_id in env, breaking all sites that construct Y. Refinement
+    ;; alias = TypeDefStmt with EMPTY variants (X registers as a type
+    ;; name but adds no new constructors). The predicate itself is
+    ;; metadata that the Verify substrate consumes (named follow-up
+    ;; Hβ.first-light.refine-predicate-parser).
     (if (call $at (local.get $tokens) (local.get $p) (i32.const 19)) ;; TWhere
       (then
         (local.set $p (call $skip_predicate_to_stmt_end
                             (local.get $tokens)
-                            (i32.add (local.get $p) (i32.const 1))))))
+                            (i32.add (local.get $p) (i32.const 1))))
+        ;; Refinement form — discard the greedily-parsed variants list.
+        (local.set $variants_r (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $variants_r) (i32.const 0)
+          (call $make_list (i32.const 0))))
+        (drop (call $list_set (local.get $variants_r) (i32.const 1) (local.get $p)))))
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $nstmt

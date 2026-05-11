@@ -409,42 +409,26 @@ fn slot_already_recorded(entries, target, i, n) = {
 /// prior iteration" at LFeedback's first entry. v1 single-threaded
 /// scope; LF.M migrates to per-handler-state offsets.
 
-fn emit_state_globals(slots) = {
-  emit_state_globals_loop(slots, 0, slots.len)
-}
-
-fn emit_state_globals_loop(slots, i, n) = {
-  if i >= n { () }
-  else {
-    perform wat_emit("  (global $s")
-    perform wat_emit(int_to_str(list_index(slots, i)))
-    perform wat_emit(" (mut i32) (i32.const 0))\n")
-    emit_state_globals_loop(slots, i + 1, n)
-  }
-}
+fn emit_state_globals(slots) = for_each((slot) => {
+  perform wat_emit("  (global $s")
+  perform wat_emit(int_to_str(slot))
+  perform wat_emit(" (mut i32) (i32.const 0))\n")
+}, slots)
 
 // Emit `(data (i32.const <offset>) "<escaped-bytes>")` for each
 // string entry. Layout per string: first 4 bytes are the little-
 // endian length (emit_le4_escape emits four \xx escapes), followed
 // by the UTF-8 bytes (each byte emitted as \xx so the WAT parser
 // accepts the whole payload uniformly regardless of byte values).
-fn emit_string_data(entries) = {
-  emit_string_data_loop(entries, 0, entries.len)
-}
-
-fn emit_string_data_loop(entries, i, n) = {
-  if i >= n { () }
-  else {
-    let (s, offset) = list_index(entries, i)
-    perform wat_emit("  (data (i32.const ")
-    perform wat_emit(int_to_str(offset))
-    perform wat_emit(") \"")
-    emit_le4_escape(byte_len(s))
-    emit_string_bytes(s, 0, byte_len(s))
-    perform wat_emit("\")\n")
-    emit_string_data_loop(entries, i + 1, n)
-  }
-}
+fn emit_string_data(entries) = for_each((entry) => {
+  let (s, offset) = entry
+  perform wat_emit("  (data (i32.const ")
+  perform wat_emit(int_to_str(offset))
+  perform wat_emit(") \"")
+  emit_le4_escape(byte_len(s))
+  emit_string_bytes(s, 0, byte_len(s))
+  perform wat_emit("\")\n")
+}, entries)
 
 fn emit_string_bytes(s, i, n) = {
   if i >= n { () }
@@ -623,17 +607,14 @@ fn emit_fn_refs(names) = {
 // Per-function table-index globals. At LMakeClosure emit, we push
 // `(global.get $<name>_idx)` to get the i32 table index — no list
 // lookup needed at emit time. One global per top-level function.
-fn emit_fn_index_globals(names, idx) = {
-  if names.len == 0 { () }
-  else {
-    perform wat_emit("  (global $")
-    perform wat_emit(list_head(names))
-    perform wat_emit("_idx i32 (i32.const ")
-    perform wat_emit(int_to_str(idx))
-    perform wat_emit("))\n")
-    emit_fn_index_globals(list_tail(names), idx + 1)
-  }
-}
+fn emit_fn_index_globals(names, base_idx) = for_each((indexed) => {
+  let (i, name) = indexed
+  perform wat_emit("  (global $")
+  perform wat_emit(name)
+  perform wat_emit("_idx i32 (i32.const ")
+  perform wat_emit(int_to_str(base_idx + i))
+  perform wat_emit("))\n")
+}, enumerate(names))
 
 // Top-level closure records as STATIC DATA. The graph knows every
 // top-level fn's closure layout at compile time — fn_idx + 0
@@ -658,29 +639,25 @@ fn emit_fn_index_globals(names, idx) = {
 // closure records dynamically at LMakeClosure emit (their captures
 // are non-empty in general).
 
-fn emit_static_top_closures(top_names, all_names, slot) = {
-  if top_names.len == 0 { () }
-  else {
-    let name = list_head(top_names)
-    let fn_idx = ls_find_str_local(all_names, name, 0)
-    let addr = 256 + slot * 8
-    // Static data segment for the 8-byte closure record.
-    perform wat_emit("  (data (i32.const ")
-    perform wat_emit(int_to_str(addr))
-    perform wat_emit(") \"")
-    emit_le4_escape(fn_idx)
-    emit_le4_escape(0)
-    perform wat_emit("\")\n")
-    // Immutable global pointing at the record. VarRef → LGlobal →
-    // (global.get $<name>) returns the static closure pointer.
-    perform wat_emit("  (global $")
-    perform wat_emit(name)
-    perform wat_emit(" i32 (i32.const ")
-    perform wat_emit(int_to_str(addr))
-    perform wat_emit("))\n")
-    emit_static_top_closures(list_tail(top_names), all_names, slot + 1)
-  }
-}
+fn emit_static_top_closures(top_names, all_names, base_slot) = for_each((indexed) => {
+  let (i, name) = indexed
+  let fn_idx = ls_find_str_local(all_names, name, 0)
+  let addr = 256 + (base_slot + i) * 8
+  // Static data segment for the 8-byte closure record.
+  perform wat_emit("  (data (i32.const ")
+  perform wat_emit(int_to_str(addr))
+  perform wat_emit(") \"")
+  emit_le4_escape(fn_idx)
+  emit_le4_escape(0)
+  perform wat_emit("\")\n")
+  // Immutable global pointing at the record. VarRef → LGlobal →
+  // (global.get $<name>) returns the static closure pointer.
+  perform wat_emit("  (global $")
+  perform wat_emit(name)
+  perform wat_emit(" i32 (i32.const ")
+  perform wat_emit(int_to_str(addr))
+  perform wat_emit("))\n")
+}, enumerate(top_names))
 
 // Find the index of a string in a list. Returns -1 if not found.
 fn ls_find_str_local(lst, target, i) = {
@@ -890,13 +867,7 @@ fn emit_functions(lowered) = {
   emit_fns_list(lowered)
 }
 
-fn emit_fns_list(exprs) = {
-  if exprs.len == 0 { () }
-  else {
-    emit_fns_expr(list_head(exprs))
-    emit_fns_list(list_tail(exprs))
-  }
-}
+fn emit_fns_list(exprs) = for_each(emit_fns_expr, exprs)
 
 fn emit_fns_expr(expr) = match expr {
   LMakeClosure(_h, LFn(name, _arity, param_names, body, _row), captures, ev) => {

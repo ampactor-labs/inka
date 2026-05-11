@@ -1375,17 +1375,10 @@ fn intent_id_eq(a, b) with Pure = {
 /// counter) reserved for genuinely-large N — this is not it.
 
 fn intents_without(intents, id) with Pure = {
-  if intents.len == 0 { [] }
-  else {
-    let head = list_head(intents)
-    let rest = list_tail(intents)
-    let (head_id, _) = head
-    if intent_id_eq(head_id, id) {
-      intents_without(rest, id)
-    } else {
-      [head] ++ intents_without(rest, id)
-    }
-  }
+  filter((intent) => {
+    let (head_id, _) = intent
+    !intent_id_eq(head_id, id)
+  }, intents)
 }
 
 // ─── mentl_voice_default — Interact handler ───────────────────────────

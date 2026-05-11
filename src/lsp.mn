@@ -452,63 +452,32 @@ fn hover_from_reason(reason) with Memory + Alloc + GraphRead + !Mutate = {
 /// kind=14 = Keyword as v1 placeholder). Other slot kinds skipped.
 
 fn completion_items_from_slots(slots) with Memory + Alloc = {
-  completion_items_loop(slots, 0, slots.len, [])
-}
-
-fn completion_items_loop(slots, i, n, acc_rev) with Memory + Alloc = {
-  if i >= n { reverse_list_lsp(acc_rev) }
-  else {
-    let s = list_index(slots, i)
-    let next = match s {
-      SIdent(name)        => [CompletionItem(name, "", 14)] ++ acc_rev,
-      SType(_)            => acc_rev,
-      SRow(_)             => acc_rev,
-      SSpan(_)            => acc_rev,
-      SReason(_)          => acc_rev,
-      SCap(_)             => acc_rev,
-      SAnnot(_)           => acc_rev,
-      SLit(_)             => acc_rev
-    }
-    completion_items_loop(slots, i + 1, n, next)
-  }
+  flatten(map((s) => match s {
+    SIdent(name)        => [CompletionItem(name, "", 14)],
+    SType(_)            => [],
+    SRow(_)             => [],
+    SSpan(_)            => [],
+    SReason(_)          => [],
+    SCap(_)             => [],
+    SAnnot(_)           => [],
+    SLit(_)             => []
+  }, slots))
 }
 
 /// code_actions_from_slots — project VoiceLine slots to LSP
 /// CodeActions. SLit slots carrying suggestion text become actions.
 
 fn code_actions_from_slots(slots) with Memory + Alloc = {
-  code_actions_loop(slots, 0, slots.len, [])
-}
-
-fn code_actions_loop(slots, i, n, acc_rev) with Memory + Alloc = {
-  if i >= n { reverse_list_lsp(acc_rev) }
-  else {
-    let s = list_index(slots, i)
-    let next = match s {
-      SLit(text)          => [CodeAction(text, "")] ++ acc_rev,
-      SIdent(_)           => acc_rev,
-      SType(_)            => acc_rev,
-      SRow(_)             => acc_rev,
-      SSpan(_)            => acc_rev,
-      SReason(_)          => acc_rev,
-      SCap(_)             => acc_rev,
-      SAnnot(_)           => acc_rev
-    }
-    code_actions_loop(slots, i + 1, n, next)
-  }
-}
-
-fn reverse_list_lsp(xs) with Pure = {
-  reverse_list_lsp_loop(xs, [])
-}
-
-fn reverse_list_lsp_loop(xs, acc) with Pure = {
-  if xs.len == 0 { acc }
-  else {
-    let head = list_head(xs)
-    let rest = list_tail(xs)
-    reverse_list_lsp_loop(rest, [head] ++ acc)
-  }
+  flatten(map((s) => match s {
+    SLit(text)          => [CodeAction(text, "")],
+    SIdent(_)           => [],
+    SType(_)            => [],
+    SRow(_)             => [],
+    SSpan(_)            => [],
+    SReason(_)          => [],
+    SCap(_)             => [],
+    SAnnot(_)           => []
+  }, slots))
 }
 
 fn line_of(pos) with Pure = {

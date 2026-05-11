@@ -335,7 +335,7 @@ fn join_field_regions(ref tags, ref fields, current) with !Mutate = {
 }
 
 fn join_field_regions_loop(ref tags, ref fields, current, i, n) with !Mutate = {
-  if i >= n { acc }
+  if i >= n { current }
   else {
     let fh = list_index(fields, i)
     let entry = lookup_tag(tags, fh)
@@ -343,7 +343,7 @@ fn join_field_regions_loop(ref tags, ref fields, current, i, n) with !Mutate = {
       None     => 0,
       Some(t)  => t.region_id
     }
-    let next = if field_rid > acc { field_rid } else { acc }
+    let next = if field_rid > current { field_rid } else { current }
     join_field_regions_loop(tags, fields, next, i + 1, n)
   }
 }

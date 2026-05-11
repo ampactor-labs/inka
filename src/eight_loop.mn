@@ -364,17 +364,6 @@ fn reason_invite_for(handle, reason) with Pure = {
   )
 }
 
-// ─── Walking the graph — buffer-counter substrate ──────────────────
-
-fn walk_all_loop(i, n, buf, buf_len) with Interrogate + !Mutate = {
-  if i >= n { buf_len }
-  else {
-    let report = perform interrogate_at(i)
-    list_set(buf, buf_len, report)
-    walk_all_loop(i + 1, n, buf, buf_len + 1)
-  }
-}
-
 // ─── Verdict extraction — for queries against a specific axis ──────
 
 fn extract_verdict(report, kind) with Pure = {
@@ -408,50 +397,38 @@ fn verdict_is_clear(v) with Pure = match v {
 // project-wide gradient-density at various granularities.
 
 fn count_invites_by_kind(reports, kind) with Pure = {
-  count_invites_loop(reports, 0, reports.len, kind, 0)
-}
-
-fn count_invites_loop(reports, i, n, kind, acc) with Pure = {
-  if i >= n { acc }
-  else {
-    let report = list_index(reports, i)
-    let next_acc = if verdict_is_invite(extract_verdict(report, kind)) {
-      acc + 1
-    } else { acc }
-    count_invites_loop(reports, i + 1, n, kind, next_acc)
-  }
+  count((report) => verdict_is_invite(extract_verdict(report, kind)), reports)
 }
 
 /// Project-wide eight-tentacle gradient density. Returns one Int per
 /// interrogation kind. The eight numbers ARE the project's
 /// "distance from ULTIMATE FORM" along each axis.
+///
+/// `<|` divergence: one source (reports) borrowed by eight parallel
+/// branches, each counting one kind's invites. Tuple output preserves
+/// kind ordering. parallel_compose dispatches the eight branches across
+/// cores; sequential_compose runs them on one thread. Same source,
+/// handler swap.
 fn project_gradient_density(reports) with Pure = {
-  let buf = make_list(0)
-  let buf_8 = list_extend_to(buf, 8)
-  list_set(buf_8, 0, count_invites_by_kind(reports, IntGraph))
-  list_set(buf_8, 1, count_invites_by_kind(reports, IntHandler))
-  list_set(buf_8, 2, count_invites_by_kind(reports, IntVerb))
-  list_set(buf_8, 3, count_invites_by_kind(reports, IntRow))
-  list_set(buf_8, 4, count_invites_by_kind(reports, IntOwnership))
-  list_set(buf_8, 5, count_invites_by_kind(reports, IntRefinement))
-  list_set(buf_8, 6, count_invites_by_kind(reports, IntGradient))
-  list_set(buf_8, 7, count_invites_by_kind(reports, IntReason))
-  buf_8
+  let (g, h, v, r, o, ref, grad, why) =
+    reports
+      <| (
+        (rs) => count_invites_by_kind(rs, IntGraph),
+        (rs) => count_invites_by_kind(rs, IntHandler),
+        (rs) => count_invites_by_kind(rs, IntVerb),
+        (rs) => count_invites_by_kind(rs, IntRow),
+        (rs) => count_invites_by_kind(rs, IntOwnership),
+        (rs) => count_invites_by_kind(rs, IntRefinement),
+        (rs) => count_invites_by_kind(rs, IntGradient),
+        (rs) => count_invites_by_kind(rs, IntReason)
+      )
+  [g, h, v, r, o, ref, grad, why]
 }
 
 /// Total-clear count: positions where ALL EIGHT clear. Reading
 /// ULTIMATE FORM as the limit.
 fn total_clear_positions(reports) with Pure = {
-  total_clear_loop(reports, 0, reports.len, 0)
-}
-
-fn total_clear_loop(reports, i, n, acc) with Pure = {
-  if i >= n { acc }
-  else {
-    let report = list_index(reports, i)
-    let next_acc = if all_eight_clear(report) { acc + 1 } else { acc }
-    total_clear_loop(reports, i + 1, n, next_acc)
-  }
+  count(all_eight_clear, reports)
 }
 
 fn all_eight_clear(report) with Pure = {

@@ -153,7 +153,7 @@ type LowExpr
   | LStateGet(Int, Int)
   | LStateSet(Int, Int, LowExpr)
   | LRegion(Int, List)                         // arena scope
-  | LHandleWith(Int, LowExpr, LowExpr)         // ~> desugaring
+  | LHandleWith(Int, LowExpr, LowExpr, String) // ~> desugaring; 4th = handler_name ("" for anonymous) — needed by emit to set $<handler_name>_state_g per protocol_handler_is_state_is_closure_is_evidence.md
   | LFeedback(Int, LowExpr, LowExpr)           // <~ desugaring (iterative ctx required)
   | LPerform(Int, String, List)                // effect op invocation — monomorphic direct-call form
   | LHandle(Int, LowExpr, List)                // body + arms (handle-expression)
@@ -225,7 +225,7 @@ fn lexpr_handle(e) with Pure = match e {
   LStateGet(h, _)         => h,
   LStateSet(h, _, _)      => h,
   LRegion(h, _)           => h,
-  LHandleWith(h, _, _)    => h,
+  LHandleWith(h, _, _, _) => h,
   LFeedback(h, _, _)      => h,
   LPerform(h, _, _)       => h,
   LHandle(h, _, _)        => h,
@@ -648,18 +648,20 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     // correct tree shape: PTeeBlock for newline-before-~> (wraps the
     // whole prior chain), PTeeInline for no-newline (wraps the
     // preceding stage). At the LIR level both lower identically —
-    // LHandleWith(handle, body, handler) — because the body's shape
-    // is already baked into the tree; emit reads the scope from the
-    // expression layout, not from a LIR variant.
+    // LHandleWith(handle, body, handler, handler_name) — because the
+    // body's shape is already baked into the tree; emit reads the
+    // scope from the expression layout. handler_name threads from the
+    // AST right-side via extract_handler_name so emit can build
+    // `$<handler_name>_state_g` per protocol_handler_is_state_is_closure_is_evidence.md.
     let lo_l = lower_expr(left)
     let lo_r = lower_expr(right)
-    LHandleWith(handle, lo_l, lo_r)
+    LHandleWith(handle, lo_l, lo_r, extract_handler_name(right))
   },
 
   PTeeInline => {
     let lo_l = lower_expr(left)
     let lo_r = lower_expr(right)
-    LHandleWith(handle, lo_l, lo_r)
+    LHandleWith(handle, lo_l, lo_r, extract_handler_name(right))
   },
 
   PFeedback => {
@@ -669,6 +671,31 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     let lo_r = lower_expr(right)
     LFeedback(handle, lo_l, lo_r)
   }
+}
+
+/// Extract the handler-name string from the AST node on the right side
+/// of a `body ~> handler` pipe. Recognized shapes:
+///   VarRef(name)                  — `~> map_h`
+///   CallExpr(VarRef(name), args)  — `~> map_h(f)` (handler-decl with config)
+/// Returns "" for anonymous handle-expressions or unrecognized shapes
+/// (productive-under-error per Hazel; emit checks "" sentinel and
+/// skips global-set for anonymous handlers).
+///
+/// Drift refused:
+/// - 7 parallel-rep: returning a record `{kind, name}` would duplicate
+///   info already encoded in the AST shape. String + "" sentinel IS the
+///   canonical projection.
+/// - 8 string-keyed-when-structured: name is genuinely a String here
+///   (handler symbol resolved at install); this is NOT a mode-int.
+/// - 9 deferred-by-omission: the wheel-side mirror of seed's
+///   $extract_handler_name (bootstrap/src/lower/walk_handle.wat:638).
+fn extract_handler_name(node) = match node {
+  VarRef(name) => name,
+  CallExpr(callee, _args) => match callee {
+    VarRef(name) => name,
+    _ => ""
+  },
+  _ => ""
 }
 
 /// `><` × Thread effect dispatch. Each branch is synthesized as a

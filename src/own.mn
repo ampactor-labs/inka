@@ -170,26 +170,13 @@ fn union_all_deltas(ref deltas) with !Mutate = {
 /// branch pair in its own diagnostic. Span is the branching verb's
 /// span — the site where the violation becomes observable.
 fn report_branch_collisions(ref deltas, ref span) with !Mutate = {
-  report_collisions_outer(deltas, 0, deltas.len, span)
-}
-
-fn report_collisions_outer(ref deltas, i, n, ref span) with !Mutate = {
-  if i >= n { () }
-  else {
-    report_collisions_inner(deltas, i, i + 1, n, span)
-    report_collisions_outer(deltas, i + 1, n, span)
-  }
-}
-
-fn report_collisions_inner(ref deltas, i, j, n, ref span) with !Mutate = {
-  if j >= n { () }
-  else {
-    let delta_i = list_index(deltas, i)
-    let delta_j = list_index(deltas, j)
-    let collisions = set_intersect(delta_i, delta_j)
-    report_each_collision(collisions, span)
-    report_collisions_inner(deltas, i, j + 1, n, span)
-  }
+  let n = deltas.len
+  for_each((i) => {
+    for_each((j) => {
+      let collisions = set_intersect(list_index(deltas, i), list_index(deltas, j))
+      report_each_collision(collisions, span)
+    }, range(i + 1, n))
+  }, range(0, n))
 }
 
 /// Tofte-Talpin region escape tracker (I12). Installed per-function
@@ -291,16 +278,8 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
 }
 
 fn lookup_tag(ref tags, handle) with !Mutate = {
-  lookup_tag_loop(tags, handle, 0, tags.len)
-}
-
-fn lookup_tag_loop(ref tags, handle, i, n) with !Mutate = {
-  if i >= n { None }
-  else {
-    let tag = list_index(tags, i)
-    if tag.handle == handle { Some(tag) }
-    else { lookup_tag_loop(tags, handle, i + 1, n) }
-  }
+  let hits = filter((tag) => tag.handle == handle, tags)
+  if hits.len == 0 { None } else { Some(head(hits)) }
 }
 
 fn region_on_stack(ref stack, rid) with !Mutate = {
@@ -335,15 +314,14 @@ fn report_each_collision(ref names, ref span) with !Mutate = {
 }
 
 fn find_first_span(ref sites, ref name) with !Mutate = {
-  find_first_span_loop(sites, name, 0, sites.len)
-}
-
-fn find_first_span_loop(ref sites, ref name, i, n) with !Mutate = {
-  if i >= n { span_zero() }
+  let hits = filter((entry) => {
+    let (entry_name, _) = entry
+    str_eq(entry_name, name)
+  }, sites)
+  if hits.len == 0 { span_zero() }
   else {
-    let (entry_name, entry_span) = list_index(sites, i)
-    if str_eq(entry_name, name) { entry_span }
-    else { find_first_span_loop(sites, name, i + 1, n) }
+    let (_, sp) = head(hits)
+    sp
   }
 }
 
@@ -364,30 +342,15 @@ fn check_ref_escape(ref params, ref body) with !Mutate = {
          else { walk_return_positions(refs, body) }
 }
 
-/// Phase-A4: collect_ref_params returns `slice(buf, 0, count)` — a
-/// tag=4 view with len = count. One alloc for the worst-case buffer
-/// + one slice-node alloc; same big-O as pre-trim, but the slice
-/// preserves O(1) read into the original buffer (no copy).
+/// Phase-A4: filter Ref-discipline params, projecting their names.
+/// The prelude verbs filter + map cascade the substrate-honest residue;
+/// the prior buffer-counter loop was the foreign-fluency form.
 fn collect_ref_params(ref params) with !Mutate = {
-  let flat = list_to_flat(params)
-  let n = flat.len
-  let buf = make_list(n)
-  let count = collect_ref_params_loop(flat, 0, n, buf, 0)
-  slice(buf, 0, count)
-}
-
-fn collect_ref_params_loop(ref params, i, n, own buf, buf_len) with !Mutate = {
-  if i >= n { buf_len }
-  else {
-    let TParam(name, _, auth, res) = list_index(params, i)
-    match res {
-      Ref => {
-        list_set(buf, buf_len, name)
-        collect_ref_params_loop(params, i + 1, n, buf, buf_len + 1)
-      },
-      _ => collect_ref_params_loop(params, i + 1, n, buf, buf_len)
-    }
-  }
+  map((p) => { let TParam(name, _, _, _) = p; name },
+    filter((p) => {
+      let TParam(_, _, _, res) = p
+      match res { Ref => true, _ => false }
+    }, list_to_flat(params)))
 }
 
 fn walk_return_positions(ref refs, ref node) with !Mutate = {

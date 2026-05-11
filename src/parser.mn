@@ -1840,10 +1840,111 @@ fn parse_type_expr(ref tokens, pos) = {
 // Predicates — minimal (expressions after `where`)
 
 fn parse_predicate(ref tokens, pos) = {
-  // Phase 1: collect tokens up to semicolon or newline as PTrue.
-  // Full predicate parsing (comparisons, logical ops) in Arc F.1.
-  let p = skip_to_stmt_end(tokens, pos)
-  (PTrue, p)
+  // Per T1.3 refinement-types-with-predicate-capture: parse the
+  // predicate body as a generic expression via parse_expr, then
+  // walk the resulting AST and project to the Predicate ADT. The
+  // expression form admits comparisons (`<`, `<=`, `==`), logical
+  // composition (`&&`, `||`, `!`), and fn application
+  // (`even(self)`, `bytes_valid_utf8(self)`). `self` in the body
+  // refers to the value being refined and projects to PSelf.
+  //
+  // W_RedundantWhere narration: if the resulting Predicate is the
+  // literal PTrue (no constraint), emit the gradient hint per
+  // SYNTAX.md:1604-1611 — the where-clause adds nothing.
+  let (expr_node, p) = parse_expr(tokens, pos)
+  let N(body, span, _) = expr_node
+  let pred = match body {
+    NExpr(LitBool(true))   => PTrue,
+    NExpr(e)               => expr_to_predicate(e, span),
+    _                      => PTrue
+  }
+  match pred {
+    PTrue => perform report("parser", "W_RedundantWhere", "Warning",
+      "`where true` or vacuous predicate — the refinement adds no constraint over the base type",
+      span, "MachineApplicable"),
+    _     => ()
+  }
+  (pred, p)
+}
+
+// Project an Expr (the predicate body's AST) to a Predicate. The
+// kernel's Predicate ADT (types.mn:677) admits PEq / PLt / PLeq /
+// PAnd / POr / PNot / PCall over PExprs; the parser surfaces them
+// directly from the expression's structure. Unmappable forms (e.g.
+// arithmetic) project to PTrue — a substrate-honest fallback per the
+// drift discipline (W_RedundantWhere fires from the caller).
+fn expr_to_predicate(e, span: ValidSpan) = match e {
+  BinOpExpr(BEq, l, r) =>
+    PEq(node_to_pexpr(l), node_to_pexpr(r)),
+  BinOpExpr(BLt, l, r) =>
+    PLt(node_to_pexpr(l), node_to_pexpr(r)),
+  BinOpExpr(BLe, l, r) =>
+    PLeq(node_to_pexpr(l), node_to_pexpr(r)),
+  BinOpExpr(BGt, l, r) =>
+    PLt(node_to_pexpr(r), node_to_pexpr(l)),
+  BinOpExpr(BGe, l, r) =>
+    PLeq(node_to_pexpr(r), node_to_pexpr(l)),
+  BinOpExpr(BAnd, l, r) =>
+    PAnd(node_to_predicate(l, span), node_to_predicate(r, span)),
+  BinOpExpr(BOr, l, r) =>
+    POr(node_to_predicate(l, span), node_to_predicate(r, span)),
+  UnaryOpExpr(UNot, inner) =>
+    PNot(node_to_predicate(inner, span)),
+  CallExpr(callee, args) => {
+    let N(body, _, _) = callee
+    let fname = match body {
+      NExpr(VarRef(n)) => n,
+      _                => ""
+    }
+    PCall(fname, pexprs_of(args))
+  },
+  LitBool(true)  => PTrue,
+  _              => PTrue
+}
+
+fn node_to_predicate(node, span: ValidSpan) = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(e) => expr_to_predicate(e, span),
+    _        => PTrue
+  }
+}
+
+// Project an Expr-node to a PExpr (the predicate-expression ADT).
+// Self IS PSelf; literals project to PInt/PFloat/PString; variable
+// refs to PEVar (predicate-expression variable, disambiguated from
+// Pat.PVar's tag namespace); fn calls to PApp.
+fn node_to_pexpr(node) = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(VarRef(name)) =>
+      if str_eq(name, "self") { PSelf }
+      else { PEVar(name) },
+    NExpr(LitInt(n))    => PInt(n),
+    NExpr(LitFloat(f))  => PFloat(f),
+    NExpr(LitString(s)) => PString(s),
+    NExpr(CallExpr(callee, args)) => {
+      let N(cbody, _, _) = callee
+      let fname = match cbody {
+        NExpr(VarRef(n)) => n,
+        _                => ""
+      }
+      PApp(fname, pexprs_of(args))
+    },
+    _ => PEVar("?")     // unmappable expr form; surfaces as opaque var
+  }
+}
+
+fn pexprs_of(nodes) = pexprs_of_loop(nodes, 0, nodes.len, make_list(2), 0)
+
+fn pexprs_of_loop(nodes, i, n, buf, count) = {
+  if i >= n { slice(buf, 0, count) }
+  else {
+    let pe = node_to_pexpr(list_index(nodes, i))
+    let extended = list_extend_to(buf, count + 1)
+    let written  = list_set(extended, count, pe)
+    pexprs_of_loop(nodes, i + 1, n, written, count + 1)
+  }
 }
 
 fn skip_to_stmt_end(ref tokens, pos) = match kind_at(tokens, pos) {

@@ -79,24 +79,24 @@ fn pexpr_eq_decide(ref a, ref b) with Pure = match a {
     PInt(nb)    => Some(na == nb),
     PFloat(_)   => Some(false),
     PString(_)  => Some(false),
-    PVar(_)     => None,
+    PEVar(_)    => None,
     PApp(_, _)  => None
   },
   PFloat(fa)  => match b {
     PInt(_)     => Some(false),
     PFloat(fb)  => Some(fa == fb),
     PString(_)  => Some(false),
-    PVar(_)     => None,
+    PEVar(_)    => None,
     PApp(_, _)  => None
   },
   PString(sa) => match b {
     PInt(_)     => Some(false),
     PFloat(_)   => Some(false),
     PString(sb) => Some(str_eq(sa, sb)),
-    PVar(_)     => None,
+    PEVar(_)    => None,
     PApp(_, _)  => None
   },
-  PVar(_)     => None,
+  PEVar(_)    => None,
   PApp(_, _)  => None
 }
 
@@ -108,18 +108,18 @@ fn pexpr_lt_decide(ref a, ref b) with Pure = match a {
     PInt(nb)    => Some(na < nb),
     PFloat(_)   => None,
     PString(_)  => None,
-    PVar(_)     => None,
+    PEVar(_)    => None,
     PApp(_, _)  => None
   },
   PFloat(fa)  => match b {
     PInt(_)     => None,
     PFloat(fb)  => Some(fa < fb),
     PString(_)  => None,
-    PVar(_)     => None,
+    PEVar(_)    => None,
     PApp(_, _)  => None
   },
   PString(_)  => None,
-  PVar(_)     => None,
+  PEVar(_)    => None,
   PApp(_, _)  => None
 }
 
@@ -128,18 +128,18 @@ fn pexpr_leq_decide(ref a, ref b) with Pure = match a {
     PInt(nb)    => Some(na <= nb),
     PFloat(_)   => None,
     PString(_)  => None,
-    PVar(_)     => None,
+    PEVar(_)    => None,
     PApp(_, _)  => None
   },
   PFloat(fa)  => match b {
     PInt(_)     => None,
     PFloat(fb)  => Some(fa <= fb),
     PString(_)  => None,
-    PVar(_)     => None,
+    PEVar(_)    => None,
     PApp(_, _)  => None
   },
   PString(_)  => None,
-  PVar(_)     => None,
+  PEVar(_)    => None,
   PApp(_, _)  => None
 }
 
@@ -317,6 +317,6 @@ fn pexpr_to_smt(ref e) with Memory + Alloc = match e {
   PInt(n)        => int_to_str(n),
   PFloat(_)      => "0.0",
   PString(s)     => "\"" |> str_concat(s) |> str_concat("\""),
-  PVar(name)     => name,
+  PEVar(name)    => name,
   PApp(name, args) => smt_call(name, args)
 }

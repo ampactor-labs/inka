@@ -337,7 +337,7 @@ fn predicate_inner_to_str(pred) with Pure = match pred {
 fn pexpr_to_str(pe) with Pure = match pe {
   PSelf => "self",
   PInt(n) => int_to_str(n),
-  PVar(name) => name,
+  PEVar(name) => name,
   PCall(name, args) =>
     name |> str_concat("(") |> str_concat(pexpr_args_to_str(args)) |> str_concat(")")
 }

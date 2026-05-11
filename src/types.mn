@@ -680,7 +680,7 @@ type PExpr
   | PInt(Int)
   | PFloat(Float)
   | PString(String)
-  | PVar(String)
+  | PEVar(String)           // predicate-expression variable — disambiguated from Pat.PVar (different constructor namespace not yet enforced; closes #144's downstream cfv-trap by avoiding tag collision)
   | PApp(String, List)
 
 
@@ -1109,7 +1109,7 @@ fn show_pexpr(ref pe) with !Mutate = {
       "\""
         |> str_concat(s)
         |> str_concat("\""),
-    PVar(v)     => v,
+    PEVar(v)    => v,
     PApp(name, args) =>
       name
         |> str_concat("(")

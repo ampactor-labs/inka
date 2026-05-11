@@ -62,6 +62,7 @@ fn kind_eq(a, b) with Pure = match a {
   TPerform   => match b { TPerform   => true, _ => false },
   TImport    => match b { TImport    => true, _ => false },
   TWhere     => match b { TWhere     => true, _ => false },
+  TCapability => match b { TCapability => true, _ => false },
   TOwn       => match b { TOwn       => true, _ => false },
   TRef       => match b { TRef       => true, _ => false },
   TPure      => match b { TPure      => true, _ => false },
@@ -141,6 +142,7 @@ fn show_token_kind(k) with Pure = match k {
   THandle => "handle", THandler => "handler", TWith => "with",
   TResume => "resume", TPerform => "perform",
   TImport => "import", TWhere => "where",
+  TCapability => "capability",
   TOwn => "own", TRef => "ref", TPure => "Pure",   // drift-audit: ignore — human-facing token-display rendering, not effect keying; tracked for item 11.B token-rendering normalization
   TTrue => "true", TFalse => "false",
   TIdent(s) => s,
@@ -1497,7 +1499,7 @@ fn parse_handle(ref tokens, pos, span: ValidSpan) = {
     if at(tokens, p3, TWith) {
       let p_open = expect(tokens,
         skip_ws(tokens, skip_past_ident(tokens, p3 + 1)),
-        "LBrace")
+        TLBrace)
       parse_handler_arms(tokens, skip_ws(tokens, p_open))
     } else if at(tokens, p3, TLBrace) {
       parse_handler_arms(tokens, skip_ws(tokens, p3 + 1))

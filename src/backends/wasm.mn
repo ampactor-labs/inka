@@ -595,14 +595,10 @@ fn emit_fn_table(fn_names) = {
   }
 }
 
-fn emit_fn_refs(names) = {
-  if names.len == 0 { () }
-  else {
-    perform wat_emit(" $")
-    perform wat_emit(list_head(names))
-    emit_fn_refs(list_tail(names))
-  }
-}
+fn emit_fn_refs(names) = for_each((name) => {
+  perform wat_emit(" $")
+  perform wat_emit(name)
+}, names)
 
 // Per-function table-index globals. At LMakeClosure emit, we push
 // `(global.get $<name>_idx)` to get the i32 table index — no list
@@ -979,13 +975,7 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
 // as a function-level local. Stops at LMakeClosure boundaries
 // (those are other functions with their own locals). Must cover
 // every LowExpr container that can hold LLet descendants.
-fn emit_let_locals_list(stmts) = {
-  if stmts.len == 0 { () }
-  else {
-    emit_let_locals_expr(list_head(stmts))
-    emit_let_locals_list(list_tail(stmts))
-  }
-}
+fn emit_let_locals_list(stmts) = for_each(emit_let_locals_expr, stmts)
 
 fn emit_let_locals_expr(expr) = match expr {
   LLet(_h, name, inner) => {
@@ -1080,15 +1070,11 @@ fn emit_let_locals_expr(expr) = match expr {
 // LMatch arm walker: each pattern-bound LPVar becomes a function-level
 // local so the (local.set $name) inside emit_match_arms validates.
 // Bodies are walked for nested LLet locals as usual.
-fn emit_let_locals_arms(arms) = {
-  if arms.len == 0 { () }
-  else {
-    let (pat, body) = list_head(arms)
-    emit_let_locals_pat(pat)
-    emit_let_locals_expr(body)
-    emit_let_locals_arms(list_tail(arms))
-  }
-}
+fn emit_let_locals_arms(arms) = for_each((arm) => {
+  let (pat, body) = arm
+  emit_let_locals_pat(pat)
+  emit_let_locals_expr(body)
+}, arms)
 
 fn emit_let_locals_pat(pat) = match pat {
   LPVar(name) => {
@@ -1104,42 +1090,20 @@ fn emit_let_locals_pat(pat) = match pat {
   LPLit(_)              => ()
 }
 
-fn emit_let_locals_pat_record(field_binds) = {
-  if field_binds.len == 0 { () }
-  else {
-    let (_, _, sub_pat) = list_head(field_binds)
-    emit_let_locals_pat(sub_pat)
-    emit_let_locals_pat_record(list_tail(field_binds))
-  }
-}
+fn emit_let_locals_pat_record(field_binds) = for_each((fb) => {
+  let (_, _, sub_pat) = fb
+  emit_let_locals_pat(sub_pat)
+}, field_binds)
 
-fn emit_let_locals_pat_list(pats) = {
-  if pats.len == 0 { () }
-  else {
-    emit_let_locals_pat(list_head(pats))
-    emit_let_locals_pat_list(list_tail(pats))
-  }
-}
+fn emit_let_locals_pat_list(pats) = for_each(emit_let_locals_pat, pats)
 
-fn emit_params(names) = {
-  if names.len == 0 { () }
-  else {
-    perform wat_emit(" (param $")
-    perform wat_emit(list_head(names))
-    perform wat_emit(" i32)")
-    emit_params(list_tail(names))
-  }
-}
+fn emit_params(names) = for_each((name) => {
+  perform wat_emit(" (param $")
+  perform wat_emit(name)
+  perform wat_emit(" i32)")
+}, names)
 
-fn emit_body(stmts) = emit_body_at(stmts, 0, stmts.len)
-
-fn emit_body_at(stmts, i, n) = {
-  if i >= n { () }
-  else {
-    emit_expr(list_index(stmts, i))
-    emit_body_at(stmts, i + 1, n)
-  }
-}
+fn emit_body(stmts) = for_each(emit_expr, stmts)
 
 fn emit_start(top_fn_names) = {
   // Top-level closures are static data — no init routine. _start

@@ -2073,91 +2073,59 @@ fn subst_ty(ty, mapping) = match ty {
   TAlias(name, inner)   => TAlias(name, subst_ty(inner, mapping))
 }
 
-fn subst_list(tys, mapping) = {
-  if tys.len == 0 { [] }
-  else { [subst_ty(list_head(tys), mapping)] ++ subst_list(list_tail(tys), mapping) }
-}
+fn subst_list(tys, mapping) = map((t) => subst_ty(t, mapping), tys)
 
-fn subst_params(params, mapping) = {
-  if params.len == 0 { [] }
-  else {
-    let TParam(name, ty, auth, res) = list_head(params)
-    [TParam(name, subst_ty(ty, mapping), auth, res)] ++ subst_params(list_tail(params), mapping)
-  }
-}
+fn subst_params(params, mapping) = map((p) => {
+  let TParam(name, ty, auth, res) = p
+  TParam(name, subst_ty(ty, mapping), auth, res)
+}, params)
 
-fn subst_fields(fields, mapping) = {
-  if fields.len == 0 { [] }
-  else {
-    let (name, ty) = list_head(fields)
-    [(name, subst_ty(ty, mapping))] ++ subst_fields(list_tail(fields), mapping)
-  }
-}
+fn subst_fields(fields, mapping) = map((fld) => {
+  let (name, ty) = fld
+  (name, subst_ty(ty, mapping))
+}, fields)
 
 fn find_mapping(mapping, id) = {
-  if mapping.len == 0 { -1 }
+  let hits = filter((entry) => {
+    let (old, _) = entry
+    old == id
+  }, mapping)
+  if hits.len == 0 { -1 }
   else {
-    let (old, fresh) = list_head(mapping)
-    if old == id { fresh } else { find_mapping(list_tail(mapping), id) }
+    let (_, fresh) = head(hits)
+    fresh
   }
 }
 
 // Registration — ADT constructors, effect ops, handlers
 
-fn mint_params(params, owner_name) = {
-  mint_params_at(params, owner_name, 0)
-}
+fn mint_param_placeholders(params, owner_name) = map((indexed) => {
+  let (idx, _) = indexed
+  perform mint(FnParam(owner_name, idx, Inferred("param of '" |> str_concat(owner_name) |> str_concat("'"))))
+}, enumerate(params))
 
-fn mint_param_placeholders(params, owner_name) = {
-  mint_param_placeholders_at(params, owner_name, 0)
-}
+fn mint_params(params, owner_name) = map((indexed) => {
+  let (idx, p) = indexed
+  let TParam(name, _, _, _) = p
+  let h = perform mint(FnParam(owner_name, idx, Inferred("param of '" |> str_concat(owner_name) |> str_concat("'"))))
+  perform env_extend(name, Forall([], TVar(h)), Declared(name), FnScheme)
+  h
+}, enumerate(params))
 
-fn mint_param_placeholders_at(params, owner_name, idx) = {
-  if params.len == 0 { [] }
-  else {
-    let TParam(_, _, _, _) = list_head(params)
-    let h = perform mint(FnParam(owner_name, idx, Inferred("param of '" |> str_concat(owner_name) |> str_concat("'"))))
-    [h] ++ mint_param_placeholders_at(list_tail(params), owner_name, idx + 1)
-  }
-}
+fn build_param_types(params, handles) = map((pair) => {
+  let (TParam(name, _, auth, res), h) = pair
+  TParam(name, TVar(h), auth, res)
+}, zip(params, handles))
 
-fn mint_params_at(params, owner_name, idx) = {
-  if params.len == 0 { [] }
-  else {
-    let TParam(name, _, _, _) = list_head(params)
-    let h = perform mint(FnParam(owner_name, idx, Inferred("param of '" |> str_concat(owner_name) |> str_concat("'"))))
-    perform env_extend(name, Forall([], TVar(h)), Declared(name), FnScheme)
-    [h] ++ mint_params_at(list_tail(params), owner_name, idx + 1)
-  }
-}
-
-fn build_param_types(params, handles) = {
-  if params.len == 0 { [] }
-  else {
-    let TParam(name, _, auth, res) = list_head(params)
-    let h = list_head(handles)
-    [TParam(name, TVar(h), auth, res)] ++ build_param_types(list_tail(params), list_tail(handles))
-  }
-}
-
-fn build_inferred_params(handles) = {
-  if handles.len == 0 { [] }
-  else {
-    let h = list_head(handles)
-    [TParam("_", TVar(h), Inferred, Inferred)] ++ build_inferred_params(list_tail(handles))
-  }
-}
+fn build_inferred_params(handles) = map((h) =>
+  TParam("_", TVar(h), Inferred, Inferred), handles)
 
 fn register_type_constructors(type_name, type_args, variants) = {
-  register_variants_at(type_name, type_args, variants, 0, variants.len)
-}
-
-fn register_variants_at(type_name, type_args, variants, tag_id, total) = {
-  if variants.len == 0 { () }
-  else {
-    register_one_variant(type_name, type_args, list_head(variants), tag_id, total)
-    register_variants_at(type_name, type_args, list_tail(variants), tag_id + 1, total)
-  }
+  let total = variants.len
+  for_each((indexed) => {
+    let (tag_id, variant) = indexed
+    register_one_variant(type_name, type_args, variant, tag_id, total)
+  }, enumerate(variants))
 }
 
 fn register_one_variant(type_name, type_args, variant, tag_id, total) = {
@@ -2195,21 +2163,13 @@ fn is_record_ty(ty) with Pure = match ty {
   _                 => false
 }
 
-fn build_ctor_params(field_types, idx) = {
-  if field_types.len == 0 { [] }
-  else {
-    let ty = list_head(field_types)
-    [TParam("_" |> str_concat(int_to_str(idx)), ty, Inferred, Inferred)]
-      ++ build_ctor_params(list_tail(field_types), idx + 1)
-  }
-}
+fn build_ctor_params(field_types, base_idx) = map((indexed) => {
+  let (i, ty) = indexed
+  TParam("_" |> str_concat(int_to_str(base_idx + i)), ty, Inferred, Inferred)
+}, enumerate(field_types))
 
 fn register_effect_ops(effect_name, ops) = {
-  if ops.len == 0 { () }
-  else {
-    register_one_op(effect_name, list_head(ops))
-    register_effect_ops(effect_name, list_tail(ops))
-  }
+  for_each((op) => register_one_op(effect_name, op), ops)
 }
 
 fn register_one_op(effect_name, op) = {

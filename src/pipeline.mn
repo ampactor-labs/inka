@@ -466,30 +466,37 @@ handler fresh_for_query with next_display = 0 {
 
 // Collection helpers — consumed by teach / audit
 
+/// Per-fn gradient projection. Each FnStmt's teach_gradient is
+/// independent of siblings (no shared state mutation among reads).
+/// parallel_map dispatches via the Thread effect handler; on a multi-
+/// core host with parallel_compose installed, the N functions' gradients
+/// compute on N threads. Same source, handler swap.
 fn collect_gradients(ast) = {
-  if ast.len == 0 { [] }
-  else {
-    let node = list_head(ast)
-    let N(body, _, handle) = node
-    let entry = match body {
-      NStmt(FnStmt(name, _, _, _, _)) =>
-        [(name, perform teach_gradient(handle))],
-      _ => []
-    }
-    entry ++ collect_gradients(list_tail(ast))
-  }
+  ast
+    |> parallel_map((node) => {
+         let N(body, _, handle) = node
+         match body {
+           NStmt(FnStmt(name, _, _, _, _)) =>
+             [(name, perform teach_gradient(handle))],
+           _ => []
+         }
+       })
+    |> flatten
 }
 
 fn render_gradients(gradients) = {
   if gradients.len == 0 {
     "All functions are at maximum annotation density.\n"
   } else {
-    let (name, result) = list_head(gradients)
-    name
-      |> str_concat(": ")
-      |> str_concat(render_gradient_result(result))
-      |> str_concat("\n")
-      |> str_concat(render_gradients(list_tail(gradients)))
+    gradients
+      |> map((entry) => {
+           let (name, result) = entry
+           name
+             |> str_concat(": ")
+             |> str_concat(render_gradient_result(result))
+             |> str_concat("\n")
+         })
+      |> fold("", (acc, line) => acc |> str_concat(line))
   }
 }
 
@@ -507,25 +514,26 @@ fn render_gradient_result(result) = match result {
 fn join_unlock_labels(labels) with Pure = {
   if labels.len == 0 { "(no capabilities)" }
   else {
-    let head = list_head(labels)
-    let tail = list_tail(labels)
-    if tail.len == 0 { head }
-    else { head |> str_concat(", ") |> str_concat(join_unlock_labels(tail)) }
+    let first = head(labels)
+    let rest = tail(labels)
+    fold(rest, first, (acc, label) => acc |> str_concat(", ") |> str_concat(label))
   }
 }
 
+/// Per-fn audit projection. Each FnStmt's row + capability set is
+/// independently computable from its handle's graph state. parallel_map
+/// dispatches via Thread; spatial dispatch lights up cores per N fns.
 fn collect_fn_rows(ast) = {
-  if ast.len == 0 { [] }
-  else {
-    let node = list_head(ast)
-    let N(body, _, handle) = node
-    let entry = match body {
-      NStmt(FnStmt(name, _, _, _, _)) =>
-        [build_audit_report(name, perform lookup_ty(handle))],
-      _ => []
-    }
-    entry ++ collect_fn_rows(list_tail(ast))
-  }
+  ast
+    |> parallel_map((node) => {
+         let N(body, _, handle) = node
+         match body {
+           NStmt(FnStmt(name, _, _, _, _)) =>
+             [build_audit_report(name, perform lookup_ty(handle))],
+           _ => []
+         }
+       })
+    |> flatten
 }
 
 // H5: AuditReport record per fn — the structured projection Mentl's

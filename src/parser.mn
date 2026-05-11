@@ -1400,16 +1400,41 @@ fn parse_match(ref tokens, pos, span: ValidSpan) = {
 
 fn parse_match_arms(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
-  if at(tokens, p, TRBrace) { (buf, count, p + 1) }
-  else {
-    let (pat, p2) = parse_pat(tokens, p)
-    let p3 = expect(tokens, skip_ws(tokens, p2), TFatArrow)
-    let (body, p4) = parse_expr(tokens, skip_ws(tokens, p3))
-    let p5 = skip_ws(tokens, p4)
-    let p6 = if at(tokens, p5, TComma) { p5 + 1 } else { p5 }
-    let (b1, c1) = push_node(buf, count, (pat, body))
-    parse_match_arms(tokens, skip_ws(tokens, p6), b1, c1)
+  match kind_at(tokens, p) {
+    TRBrace => (buf, count, p + 1),
+    TEof    => unclosed_eof(tokens, p, "match arms", buf, count),
+    _       => {
+      let (pat, p2) = parse_pat(tokens, p)
+      let p3 = expect(tokens, skip_ws(tokens, p2), TFatArrow)
+      let (body, p4) = parse_expr(tokens, skip_ws(tokens, p3))
+      let p5 = skip_ws(tokens, p4)
+      let p6 = if at(tokens, p5, TComma) { p5 + 1 } else { p5 }
+      let (b1, c1) = push_node(buf, count, (pat, body))
+      parse_match_arms(tokens, skip_ws(tokens, p6), b1, c1)
+    }
   }
+}
+
+// Substrate-honest EOF terminator for nested parser loops. Emits
+// ONE diagnostic (not the infinite per-iteration emit-and-retry
+// drift pattern), returns the accumulated buf+count at the EOF
+// position so the caller's chain unwinds cleanly. Every nested
+// loop (parse_call_args, parse_match_arms, parse_record_fields,
+// parse_variants, etc.) uses this at its TEof arm. Top-level
+// parse_stmt_list's TEof is NOT routed here — top-level EOF is
+// the natural terminator, not an unclosed construct.
+//
+// Per protocol_no_silent_fallback.md: the diagnostic IS the
+// substrate-honest projection of "unexpected EOF inside <construct>",
+// with span at EOF and applicability MaybeIncorrect (the developer's
+// intent is unrecoverable without more input).
+fn unclosed_eof(ref tokens, p, construct, own buf, count) = {
+  perform report("parser", "P_UnclosedConstruct", "ParseError",
+    "unexpected end of input inside "
+      |> str_concat(construct)
+      |> str_concat("; the construct was never closed"),
+    span_at(tokens, p), "MaybeIncorrect")
+  (buf, count, p)
 }
 
 fn parse_handle(ref tokens, pos, span: ValidSpan) = {

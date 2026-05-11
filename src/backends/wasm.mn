@@ -993,6 +993,13 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   // polymorphic path lands as a peer handle tracked in ROADMAP.md.
   perform set_body_captures(captures_count)
   perform set_body_evidence([])
+  // Hβ.emit.reason-chain-comments: SourceMap-style annotation at fn
+  // boundary. Why-engine consumers (`mentl query --why`, browser
+  // inspector, terminal trace) read these to walk from WAT back to
+  // source. Per protocol_emit_is_graph_projection.md: emit's per-
+  // handle output IS the graph's Reason projected as bytes; the
+  // SourceMap comment makes the projection observable downstream.
+  emit_reason_comment_for_fn(name, body)
   perform wat_emit("  (func $")
   perform wat_emit(name)
   perform wat_emit(" (param $__state i32)")
@@ -1009,6 +1016,62 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   perform wat_emit("\n")
   emit_body(body)
   perform wat_emit("  )\n")
+}
+
+/// Hβ.emit.reason-chain-comments — project the first body expression's
+/// Reason chain (chased from the graph at the LowExpr's handle) as a
+/// SourceMap-style WAT comment. The Why-engine reads these to walk
+/// from WAT back to source. Empty body skipped; chase-failure (handle
+/// == 0) skipped.
+fn emit_reason_comment_for_fn(name, body) = {
+  if body.len == 0 { () }
+  else {
+    let first = list_head(body)
+    let h = lexpr_handle(first)
+    if h == 0 { () }
+    else {
+      perform wat_emit("  ;; fn ")
+      perform wat_emit(name)
+      perform wat_emit(" reason: ")
+      perform wat_emit(emit_reason_summary(h))
+      perform wat_emit("\n")
+    }
+  }
+}
+
+/// Render a Reason chain as a one-line comment string. The full
+/// structured walk lives in show_reason (types.mn); emit's variant
+/// truncates to a single line so WAT stays readable.
+fn emit_reason_summary(handle) with !Mutate = {
+  let GNode(_, reason) = perform graph_chase(handle)
+  emit_render_reason_oneline(reason)
+}
+
+fn emit_render_reason_oneline(reason) with !Mutate = match reason {
+  Declared(n)                     => "declared as " |> str_concat(n),
+  Inferred(ctx)                   => "inferred from " |> str_concat(ctx),
+  Located(_, inner)               => emit_render_reason_oneline(inner),
+  FnReturn(n, _)                  => "return of " |> str_concat(n),  // drift-audit: ignore — "return" is the string-rendered Reason variant name, not control flow
+  FnParam(n, idx, _)              => "param " |> str_concat(int_to_str(idx)) |> str_concat(" of ") |> str_concat(n),
+  VarLookup(n, _)                 => "lookup " |> str_concat(n),
+  Fresh(_)                        => "fresh tyvar",
+  InferredCallReturn(n, _)        => "call return of " |> str_concat(n),  // drift-audit: ignore — string-rendered Reason variant name
+  InferredPipeResult(n, _)        => "pipe result of " |> str_concat(n),
+  IfBranch(_)                     => "if branch",
+  MatchBranch(_, _)               => "match branch",
+  OpConstraint(op, _, _)          => "op " |> str_concat(op),
+  ListElement(_)                  => "list element",
+  Refinement(_, _)                => "refinement",
+  Instantiation(_, _)             => "instantiation",
+  GeneralizationOver(_, _)        => "generalization",
+  NFree(_)                        => "free",
+  AppArgument(_, _, _)            => "app argument",
+  Subsumption(_, _)               => "subsumption",
+  HandlerAbsorbs(_)               => "handler absorbs",
+  PipeStage(_, _)                 => "pipe stage",
+  RowAssignment(_, _)             => "row assignment",
+  GraphChase(_)                   => "graph chase",
+  RefinementCheck(_, _)           => "refinement check"
 }
 
 // Walk the function body to collect every LLet name and declare it

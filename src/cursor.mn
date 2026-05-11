@@ -586,14 +586,7 @@ fn insert_descending(item, sorted) with Pure = match sorted {
   }
 }
 
-fn take_first_n(list, n) with Pure = {
-  if n <= 0 || list.len == 0 { [] }
-  else {
-    let head = list_head(list)
-    let tail = list_tail(list)
-    [head] ++ take_first_n(tail, n - 1)
-  }
-}
+fn take_first_n(list, n) with Pure = slice(list, 0, n)
 
 // reason_of_located — extracts the Reason from a Located wrapper.
 // Pure helper for gradient_step's caret advance.

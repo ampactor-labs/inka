@@ -188,13 +188,7 @@ fn infer_program(stmts) = {
   } with infer_ctx
 }
 
-fn pre_register_fn_sigs(stmts) = {
-  if stmts.len == 0 { () }
-  else {
-    pre_register_stmt(list_head(stmts))
-    pre_register_fn_sigs(list_tail(stmts))
-  }
-}
+fn pre_register_fn_sigs(stmts) = for_each(pre_register_stmt, stmts)
 
 fn pre_register_stmt(ref node) = {
   let N(body, span, handle) = node
@@ -220,13 +214,7 @@ fn pre_register_fn_sig(name, params, handle, span: ValidSpan) = {
   perform env_extend(name, Forall([], fn_ty), Declared(name), FnScheme)
 }
 
-fn infer_stmt_list(stmts) = {
-  if stmts.len == 0 { () }
-  else {
-    infer_stmt(list_head(stmts))
-    infer_stmt_list(list_tail(stmts))
-  }
-}
+fn infer_stmt_list(stmts) = for_each(infer_stmt, stmts)
 
 // Statement inference
 
@@ -2843,37 +2831,23 @@ fn mint_handler_config_tparams(config, hname, idx) = {
 
 // Utilities
 
-fn infer_expr_list(ref nodes) = {
-  if nodes.len == 0 { () }
-  else {
-    infer_expr(list_head(nodes))
-    infer_expr_list(list_tail(nodes))
-  }
-}
+fn infer_expr_list(ref nodes) = for_each(infer_expr, nodes)
 
-fn collect_handles(ref nodes) = {
-  if nodes.len == 0 { [] }
-  else {
-    let N(_, _, h) = list_head(nodes)
-    [h] ++ collect_handles(list_tail(nodes))
-  }
-}
+fn collect_handles(ref nodes) = map((node) => {
+  let N(_, _, h) = node
+  h
+}, nodes)
 
-fn collect_tvar_types(ref nodes) = {
-  if nodes.len == 0 { [] }
-  else {
-    let N(_, _, h) = list_head(nodes)
-    [TVar(h)] ++ collect_tvar_types(list_tail(nodes))
-  }
-}
+fn collect_tvar_types(ref nodes) = map((node) => {
+  let N(_, _, h) = node
+  TVar(h)
+}, nodes)
 
 fn unify_list_elems(elems, target_h, span: ValidSpan) = {
-  if elems.len == 0 { () }
-  else {
-    let N(_, _, eh) = list_head(elems)
+  for_each((elem) => {
+    let N(_, _, eh) = elem
     unify(eh, target_h, span, ListElement(Inferred("list element")))
-    unify_list_elems(list_tail(elems), target_h, span)
-  }
+  }, elems)
 }
 
 // Each string-interpolation fragment binds to TString. Today's

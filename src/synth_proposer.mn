@@ -191,29 +191,8 @@ fn enumerate_constructors(name, args, context) with GraphRead + !Mutate = {
   // its variants as ConstructorScheme entries per
   // walk_stmt.wat:818-874). For each ctor, build a candidate Node
   // that calls the constructor with hole-args.
-  let bindings = perform env_constructors_of(name)
-  if bindings.len == 0 { [] }
-  else {
-    enumerate_constructor_loop(bindings, 0, bindings.len, context)
-  }
-}
-
-fn enumerate_constructor_loop(bindings, i, n, context)
-    with GraphRead + !Mutate = {
-  let buf = make_list(0)
-  let buf_n = list_extend_to(buf, n)
-  enumerate_constructor_step(bindings, i, n, buf_n, 0, context)
-}
-
-fn enumerate_constructor_step(bindings, i, n, buf, buf_len, context)
-    with GraphRead + !Mutate = {
-  if i >= n { slice(buf, 0, buf_len) }
-  else {
-    let binding = list_index(bindings, i)
-    let candidate = ctor_to_enriched_candidate(binding, context)
-    list_set(buf, buf_len, candidate)
-    enumerate_constructor_step(bindings, i + 1, n, buf, buf_len + 1, context)
-  }
+  map((binding) => ctor_to_enriched_candidate(binding, context),
+      perform env_constructors_of(name))
 }
 
 fn ctor_to_enriched_candidate(binding, context) with Pure = {
@@ -386,49 +365,23 @@ fn enumerate_tuple_candidates(elems, context) with GraphRead + !Mutate = {
 // EnrichedCandidate replacing (Annotation, Capability) pairs.
 
 fn verify_each_enriched(candidates) with Synth + GraphRead + !Mutate = {
-  let n = candidates.len
-  let buf = make_list(n)
-  let kept = verify_enriched_loop(candidates, 0, n, buf, 0)
-  slice(buf, 0, kept)
-}
-
-fn verify_enriched_loop(candidates, i, n, buf, buf_len)
-    with Synth + GraphRead + !Mutate = {
-  if i >= n { buf_len }
-  else {
-    let candidate = list_index(candidates, i)
+  filter((candidate) => {
     let EnrichedCandidate(c) = candidate
     let inner = Candidate(c.node, c.reason)
     let cp = perform graph_push_checkpoint()
     let proven = perform verify_candidate(inner)
     perform graph_rollback(cp)
-    if proven {
-      list_set(buf, buf_len, candidate)
-      verify_enriched_loop(candidates, i + 1, n, buf, buf_len + 1)
-    } else {
-      verify_enriched_loop(candidates, i + 1, n, buf, buf_len)
-    }
-  }
+    proven
+  }, candidates)
 }
 
 // ─── map_to_nodes — strip the EnrichedCandidate wrapper for the ───
 //                    Synth effect's List<Node> return contract.
 
-fn map_to_nodes(enriched) with Pure = {
-  let n = enriched.len
-  let buf = make_list(n)
-  map_to_nodes_loop(enriched, 0, n, buf)
-}
-
-fn map_to_nodes_loop(enriched, i, n, buf) with Pure = {
-  if i >= n { buf }
-  else {
-    let candidate = list_index(enriched, i)
-    let EnrichedCandidate(c) = candidate
-    list_set(buf, i, c.node)
-    map_to_nodes_loop(enriched, i + 1, n, buf)
-  }
-}
+fn map_to_nodes(enriched) with Pure = map((candidate) => {
+  let EnrichedCandidate(c) = candidate
+  c.node
+}, enriched)
 
 // ─── Node synthesizers — per-shape AST construction ─────────────────
 //

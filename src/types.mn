@@ -422,6 +422,9 @@ type TokenKind
   | TImport | TWhere
   | TOwn | TRef | TPure
   | TTrue | TFalse
+  | TCapability                     // `capability` keyword per parser.mn:337
+                                    //   parse_capability_decl entry; SYNTAX.md
+                                    //   capability declarations
 
   // ─── Identifiers and literals (5, with payload) ──────────────────
   | TIdent(String)

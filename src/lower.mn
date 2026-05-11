@@ -156,12 +156,9 @@ handler handler_state_inits_default {
 }
 
 fn find_state_inits_by_name(name, ledger) = {
-  if ledger.len == 0 { [] }
-  else {
-    let entry = list_head(ledger)
-    if str_eq(entry.name, name) { entry.inits }
-    else { find_state_inits_by_name(name, list_tail(ledger)) }
-  }
+  let hits = filter((entry) => str_eq(entry.name, name), ledger)
+  if hits.len == 0 { [] }
+  else { head(hits).inits }
 }
 
 /// Every variant carries a source TypeHandle (Int), never a cached Ty.
@@ -318,13 +315,10 @@ fn mark_tail_last_in(stmts) with Memory + Alloc = {
   }
 }
 
-fn mark_tail_arms(arms) with Memory = {
-  if arms.len == 0 { [] }
-  else {
-    let (pat, body) = list_head(arms)
-    [(pat, mark_tail(body))] ++ mark_tail_arms(list_tail(arms))   // mirrors lower_match_arms shape
-  }
-}
+fn mark_tail_arms(arms) with Memory = map((arm) => {
+  let (pat, body) = arm
+  (pat, mark_tail(body))
+}, arms)
 
 /// When the callee's effect row is ground (no unresolved row var),
 /// emit `LCall` (direct). When open, emit `LSuspend` (evidence-passing
@@ -854,36 +848,27 @@ fn lower_diverge_via_thread(handle, left, right) = {
 /// Per H.2.e (lower-lambda-capture-substrate): the closure
 /// machinery used here is the same machinery that lowers user-
 /// written lambdas; compiler-synthesized thunks reuse it.
-fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_nodes, idx) = {
-  if branch_nodes.len == 0 { [] }
-  else {
-    let branch_node = list_head(branch_nodes)
-    let N(_, _, branch_h) = branch_node
-    let thunk_name = "diverge_" |> str_concat(int_to_str(idx))
-                                |> str_concat("_")
-                                |> str_concat(int_to_str(parent_handle))
-    let lo_branch = lower_expr(branch_node)
-    let input_ref = LLocal(input_h, input_local_name)
-    let thunk_body = LCall(branch_h, lo_branch, [input_ref])
-    let fn_ir = LFn(thunk_name, 0, [], [thunk_body], EfPure)
-    let captures_exprs = [LLocal(input_h, input_local_name)]
-    let thunk = LMakeClosure(parent_handle, fn_ir, captures_exprs, [])
-    list_concat([thunk], synthesize_diverge_thunks(parent_handle, input_h, input_local_name, list_tail(branch_nodes), idx + 1))
-  }
-}
+fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_nodes, base_idx) = map((indexed) => {
+  let (i, branch_node) = indexed
+  let N(_, _, branch_h) = branch_node
+  let thunk_name = "diverge_" |> str_concat(int_to_str(base_idx + i))
+                              |> str_concat("_")
+                              |> str_concat(int_to_str(parent_handle))
+  let lo_branch = lower_expr(branch_node)
+  let input_ref = LLocal(input_h, input_local_name)
+  let thunk_body = LCall(branch_h, lo_branch, [input_ref])
+  let fn_ir = LFn(thunk_name, 0, [], [thunk_body], EfPure)
+  let captures_exprs = [LLocal(input_h, input_local_name)]
+  LMakeClosure(parent_handle, fn_ir, captures_exprs, [])
+}, enumerate(branch_nodes))
 
 /// Per-thunk: spawn the thunk, join the resulting handle. Returns
 /// the list of LPerform("join", [LPerform("spawn", [thunk_i])]).
 /// Source-branch order preserved per Q-B.7.3 determinism.
-fn spawn_join_each(handle, thunks) = {
-  if thunks.len == 0 { [] }
-  else {
-    let thunk = list_head(thunks)
-    let h_spawn = LPerform(handle, "spawn", [thunk])
-    let r_join = LPerform(handle, "join", [h_spawn])
-    list_concat([r_join], spawn_join_each(handle, list_tail(thunks)))
-  }
-}
+fn spawn_join_each(handle, thunks) = map((thunk) => {
+  let h_spawn = LPerform(handle, "spawn", [thunk])
+  LPerform(handle, "join", [h_spawn])
+}, thunks)
 
 /// Branch-as-thunk synthesis. Mirrors LambdaExpr's lowering above —
 /// collect_free_vars over an EMPTY bound-set (a thunk has no params,
@@ -1112,18 +1097,14 @@ fn lower_stmt_as_expr(s, handle, span) = {
 
 // Pattern lowering
 
-fn lower_match_arms(arms) = {
-  if arms.len == 0 { [] }
-  else {
-    let (pat, body) = list_head(arms)
-    let cp = perform ls_push_scope()
-    bind_pat_locals(pat)
-    let lo_body = lower_expr(body)
-    perform ls_pop_scope(cp)
-    [(lower_pat(pat), lo_body)]
-      ++ lower_match_arms(list_tail(arms))
-  }
-}
+fn lower_match_arms(arms) = map((arm) => {
+  let (pat, body) = arm
+  let cp = perform ls_push_scope()
+  bind_pat_locals(pat)
+  let lo_body = lower_expr(body)
+  perform ls_pop_scope(cp)
+  (lower_pat(pat), lo_body)
+}, arms)
 
 /// Bind every `PVar` in the pattern as a local in the current frame so
 /// arm-body `VarRef` resolution sees pattern-introduced names. Pattern
@@ -1146,22 +1127,12 @@ fn bind_pat_locals(pat) = match pat {
   PLit(_)           => ()
 }
 
-fn bind_pat_locals_fields(flds) = {
-  if flds.len == 0 { () }
-  else {
-    let (_, sub_pat) = list_head(flds)
-    bind_pat_locals(sub_pat)
-    bind_pat_locals_fields(list_tail(flds))
-  }
-}
+fn bind_pat_locals_fields(flds) = for_each((fld) => {
+  let (_, sub_pat) = fld
+  bind_pat_locals(sub_pat)
+}, flds)
 
-fn bind_pat_locals_list(pats) = {
-  if pats.len == 0 { () }
-  else {
-    bind_pat_locals(list_head(pats))
-    bind_pat_locals_list(list_tail(pats))
-  }
-}
+fn bind_pat_locals_list(pats) = for_each(bind_pat_locals, pats)
 
 fn lower_pat(pat) = match pat {
   PVar(name)       => LPVar(name),
@@ -1186,14 +1157,11 @@ fn lower_pat(pat) = match pat {
 /// Pattern fields are sorted-by-name (parser invariant); position
 /// IS the byte offset (`4 * index`) per `LMakeRecord`'s untagged layout.
 /// No tag prefix to skip — offset 0 is the first field.
-fn lower_pat_record_fields(flds, i) = {
-  if flds.len == 0 { [] }
-  else {
-    let (name, sub_pat) = list_head(flds)
-    [(name, i * 4, lower_pat(sub_pat))]
-      ++ lower_pat_record_fields(list_tail(flds), i + 1)
-  }
-}
+fn lower_pat_record_fields(flds, base) = map((indexed) => {
+  let (i, fld) = indexed
+  let (name, sub_pat) = fld
+  (name, (base + i) * 4, lower_pat(sub_pat))
+}, enumerate(flds))
 
 fn lower_lit_value(v) with Pure = match v {
   LVInt(n)    => LInt(n),
@@ -1202,115 +1170,84 @@ fn lower_lit_value(v) with Pure = match v {
   LVBool(b)   => LBool(b)
 }
 
-fn lower_pats(pats) = {
-  if pats.len == 0 { [] }
-  else { [lower_pat(list_head(pats))] ++ lower_pats(list_tail(pats)) }
-}
+fn lower_pats(pats) = map(lower_pat, pats)
 
 /// Each arm = `(op_name, arg_names, body)`. Lowered as a pair for emit
 /// to dispatch through the handler's state machine.
-fn lower_handler_arms(arms) = {
-  if arms.len == 0 { [] }
-  else {
-    let arm = list_head(arms)
-    // Handler arm args bind into the arm body's scope — push a fresh
-    // locals checkpoint, register each arg, lower body, restore.
-    let cp = perform ls_push_scope()
-    bind_names_as_locals(arm.args)
-    let lo_body = mark_tail(lower_expr(arm.body))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
-    perform ls_pop_scope(cp)
-    let lo_arm = {args: arm.args, body: lo_body, op_name: arm.op_name}
-    [lo_arm] ++ lower_handler_arms(list_tail(arms))
-  }
-}
+fn lower_handler_arms(arms) = map((arm) => {
+  // Handler arm args bind into the arm body's scope — push a fresh
+  // locals checkpoint, register each arg, lower body, restore.
+  let cp = perform ls_push_scope()
+  bind_names_as_locals(arm.args)
+  let lo_body = mark_tail(lower_expr(arm.body))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
+  perform ls_pop_scope(cp)
+  {args: arm.args, body: lo_body, op_name: arm.op_name}
+}, arms)
 
 /// H1.4 — lower handler arms to `LDeclareFn` entries: pure module-level
 /// fn declarations, no runtime allocation. Each arm body becomes a wasm
 /// function `op_<op_name>` taking the arm's args (plus the implicit
 /// `__state` per the calling convention). Stateful handlers (with state
 /// slots) land with H1.6's evidence wiring.
-fn lower_handler_arms_as_decls(arms, discriminator, config, state) = {
-  if arms.len == 0 { [] }
-  else {
-    let arm = list_head(arms)
-    let fn_name = "op_"
-      |> str_concat(discriminator)
-      |> str_concat("_")
-      |> str_concat(arm.op_name)
-    // Hβ.first-light.arm-body-fresh-frame: each handler-arm body is
-    // its own WASM function with __state IS the handler state record
-    // (per protocol_handler_is_state_is_closure_is_evidence.md). The
-    // arm body needs a FRESH frame so state-field references (e.g.
-    // `frames`, `globals`) resolve to LUpval(0..N-1), emitting
-    // `(local.get $__state)(i32.load offset=8 + idx*4)` — the
-    // canonical closure-record layout. Using ls_push_scope alone
-    // contaminates with the outer fn's accumulated locals (slot 34
-    // → offset 144, past the state record entirely; OOB trap).
-    //
-    // captures_names = config_names ++ state_field_names (sources
-    // for closure-record slots at install time). args go as locals
-    // (arm fn params at WASM call-arity). zero handles per
-    // bind_names_as_locals convention.
-    let config_names = config
-    let state_field_names = state_field_names_of(state)
-    let captures_names = config_names ++ state_field_names
-    let captures_handles = zeros_of_len(captures_names.len)
-    let locals_handles = zeros_of_len(arm.args.len)
-    perform ls_enter_frame(
-      fn_name,
-      arm.args, locals_handles,
-      captures_names, captures_handles
-    )
-    // Hβ.first-light.resume-with-state-mutation: install arm_state_ctx
-    // around arm body lowering so lower_expr's ResumeExpr arm resolves
-    // `with field = NEW` updates' slot offsets via current_state_fields().
-    let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(state))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
-    perform ls_exit_frame()
-    let fn_ir = LFn(fn_name, arm.args.len, arm.args, [lo_body], EfPure)
-    [LDeclareFn(fn_ir)] ++ lower_handler_arms_as_decls(list_tail(arms), discriminator, config, state)
-  }
-}
+fn lower_handler_arms_as_decls(arms, discriminator, config, state) = map((arm) => {
+  let fn_name = "op_"
+    |> str_concat(discriminator)
+    |> str_concat("_")
+    |> str_concat(arm.op_name)
+  // Hβ.first-light.arm-body-fresh-frame: each handler-arm body is
+  // its own WASM function with __state IS the handler state record
+  // (per protocol_handler_is_state_is_closure_is_evidence.md). The
+  // arm body needs a FRESH frame so state-field references (e.g.
+  // `frames`, `globals`) resolve to LUpval(0..N-1), emitting
+  // `(local.get $__state)(i32.load offset=8 + idx*4)` — the
+  // canonical closure-record layout. Using ls_push_scope alone
+  // contaminates with the outer fn's accumulated locals (slot 34
+  // → offset 144, past the state record entirely; OOB trap).
+  //
+  // captures_names = config_names ++ state_field_names (sources
+  // for closure-record slots at install time). args go as locals
+  // (arm fn params at WASM call-arity). zero handles per
+  // bind_names_as_locals convention.
+  let config_names = config
+  let state_field_names = state_field_names_of(state)
+  let captures_names = config_names ++ state_field_names
+  let captures_handles = zeros_of_len(captures_names.len)
+  let locals_handles = zeros_of_len(arm.args.len)
+  perform ls_enter_frame(
+    fn_name,
+    arm.args, locals_handles,
+    captures_names, captures_handles
+  )
+  // Hβ.first-light.resume-with-state-mutation: install arm_state_ctx
+  // around arm body lowering so lower_expr's ResumeExpr arm resolves
+  // `with field = NEW` updates' slot offsets via current_state_fields().
+  let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(state))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
+  perform ls_exit_frame()
+  let fn_ir = LFn(fn_name, arm.args.len, arm.args, [lo_body], EfPure)
+  LDeclareFn(fn_ir)
+}, arms)
 
 /// Extract just the `name` field from each state-fields record.
 /// Per parse_handler_state_fields, each entry is `{name, init}`.
-fn state_field_names_of(state) = {
-  if state.len == 0 { [] }
-  else {
-    let field = list_head(state)
-    [field.name] ++ state_field_names_of(list_tail(state))
-  }
-}
+fn state_field_names_of(state) = map((field) => field.name, state)
 
 /// Lower each state-field's init expression to LowExpr in source order.
 /// The returned list[i] is the LowExpr for the i-th state field's init.
 /// emit_lhandlewith stores list[i] at offset 8 + i*4 of the freshly-
 /// allocated state record at handler-install per
 /// protocol_handler_is_state_is_closure_is_evidence.md.
-fn lower_state_field_inits(state) = {
-  if state.len == 0 { [] }
-  else {
-    let field = list_head(state)
-    [lower_expr(field.init)] ++ lower_state_field_inits(list_tail(state))
-  }
-}
+fn lower_state_field_inits(state) = map((field) => lower_expr(field.init), state)
 
 /// Build a list of n zero handles. Used as the handle-list for arm
 /// captures and locals where lower-time has no type-handle info.
-fn zeros_of_len(n) = {
-  if n <= 0 { [] }
-  else { [0] ++ zeros_of_len(n - 1) }
-}
+fn zeros_of_len(n) = map((_) => 0, range(0, n))
 
 fn bind_names_as_locals(names) = {
-  if names.len == 0 { () }
-  else {
-    // Handler-arm args don't carry separate type handles at lower
-    // time; the op's signature gives them inferentially. 0 is the
-    // sentinel — capture-handle correctness here is bounded by
-    // future reach into op-arg type plumbing (Phase D evidence).
-    perform ls_bind_local(list_head(names), 0)
-    bind_names_as_locals(list_tail(names))
-  }
+  // Handler-arm args don't carry separate type handles at lower
+  // time; the op's signature gives them inferentially. 0 is the
+  // sentinel — capture-handle correctness here is bounded by
+  // future reach into op-arg type plumbing (Phase D evidence).
+  for_each((name) => perform ls_bind_local(name, 0), names)
 }
 
 /// Lower the state_updates list of a ResumeExpr to a sequence of
@@ -1321,15 +1258,10 @@ fn bind_names_as_locals(names) = {
 /// arm, etc.) lower to LStateSlotStore(handle, -1, value) — emit
 /// time silently skips negative offsets per
 /// protocol_resume_state_mutation_substrate.md productive-under-error.
-fn lower_state_slot_stores(handle, updates, fields) = {
-  if updates.len == 0 { [] }
-  else {
-    let upd = list_head(updates)
-    let offset = resolve_state_slot_offset(upd.name, fields, 0)
-    [LStateSlotStore(handle, offset, lower_expr(upd.init))]
-      ++ lower_state_slot_stores(handle, list_tail(updates), fields)
-  }
-}
+fn lower_state_slot_stores(handle, updates, fields) = map((upd) => {
+  let offset = resolve_state_slot_offset(upd.name, fields)
+  LStateSlotStore(handle, offset, lower_expr(upd.init))
+}, updates)
 
 /// Resolve a state-field name to its byte offset in the handler state
 /// record. State-fields share the closure-record layout per
@@ -1338,10 +1270,16 @@ fn lower_state_slot_stores(handle, updates, fields) = {
 /// State-field at source-order position N → offset 8 + N*4 (mirroring
 /// LUpval emit at backends/wasm.mn:1186-1193). Returns -1 when name
 /// is not in fields (productive-under-error).
-fn resolve_state_slot_offset(name, fields, idx) = {
-  if fields.len == 0 { 0 - 1 }
-  else if str_eq(list_head(fields).name, name) { 8 + idx * 4 }
-  else { resolve_state_slot_offset(name, list_tail(fields), idx + 1) }
+fn resolve_state_slot_offset(name, fields) = {
+  let hits = filter((indexed) => {
+    let (_, field) = indexed
+    str_eq(field.name, name)
+  }, enumerate(fields))
+  if hits.len == 0 { 0 - 1 }
+  else {
+    let (idx, _) = head(hits)
+    8 + idx * 4
+  }
 }
 
 /// Walk free vars through a `resume() with` updates list. Each update's
@@ -1349,12 +1287,8 @@ fn resolve_state_slot_offset(name, fields, idx) = {
 /// `[frame] ++ frames` where `frame` is a let-bound local in the arm
 /// body). cfv reports those that aren't in `bound`.
 fn cfv_state_updates(updates, bound) = {
-  if updates.len == 0 { [] }
-  else {
-    let upd = list_head(updates)
-    cfv_merge(collect_free_vars(upd.init, bound),
-              cfv_state_updates(list_tail(updates), bound))
-  }
+  fold(updates, [], (acc, upd) =>
+    cfv_merge(acc, collect_free_vars(upd.init, bound)))
 }
 
 /// Bind handler state-field names as arm-scope locals. Per
@@ -1368,50 +1302,38 @@ fn cfv_state_updates(updates, bound) = {
 /// Drift refused: 5 (state extracted from records, not parallel
 /// arrays); 9 (init-time lowering at install handled at install site).
 fn bind_state_field_names_as_locals(state) = {
-  if state.len == 0 { () }
-  else {
-    let field = list_head(state)
-    perform ls_bind_local(field.name, 0)
-    bind_state_field_names_as_locals(list_tail(state))
-  }
+  for_each((field) => perform ls_bind_local(field.name, 0), state)
 }
 
 // Parameter name lowering (for LFn metadata)
 
-fn lower_param_names(params) = {
-  if params.len == 0 { [] }
-  else {
-    let TParam(name, _, _, _) = list_head(params)
-    [name] ++ lower_param_names(list_tail(params))
-  }
-}
+fn lower_param_names(params) = map((p) => {
+  let TParam(name, _, _, _) = p
+  name
+}, params)
 
 // Phase-A1: extract each param's type handle for the LowerScope
 // frame. A param's type is `TVar(handle)` for inferred params (the
 // common case after infer mints fresh handles); for ground types
 // without a handle, 0 stands as a sentinel.
-fn lower_param_handles(params) = {
-  if params.len == 0 { [] }
-  else {
-    let TParam(_, ty, _, _) = list_head(params)
-    let h = match ty {
-      TVar(handle)        => handle,
-      TInt                => 0,
-      TFloat              => 0,
-      TString             => 0,
-      TUnit               => 0,
-      TList(_)            => 0,
-      TTuple(_)           => 0,
-      TFun(_, _, _)       => 0,
-      TName(_, _)         => 0,
-      TRecord(_)          => 0,
-      TRecordOpen(_, _)   => 0,
-      TRefined(_, _)      => 0,
-      TCont(_, _)         => 0
-    }
-    [h] ++ lower_param_handles(list_tail(params))
+fn lower_param_handles(params) = map((p) => {
+  let TParam(_, ty, _, _) = p
+  match ty {
+    TVar(handle)        => handle,
+    TInt                => 0,
+    TFloat              => 0,
+    TString             => 0,
+    TUnit               => 0,
+    TList(_)            => 0,
+    TTuple(_)           => 0,
+    TFun(_, _, _)       => 0,
+    TName(_, _)         => 0,
+    TRecord(_)          => 0,
+    TRecordOpen(_, _)   => 0,
+    TRefined(_, _)      => 0,
+    TCont(_, _)         => 0
   }
-}
+}, params)
 
 /// W7 phase 1 — walks a lambda body collecting every `VarRef` whose
 /// name is not in the lambda's local scope. Nested lambdas augment

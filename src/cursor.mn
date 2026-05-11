@@ -231,26 +231,10 @@ fn cursor_argmax_compute(caret) with GraphRead + !Mutate =
 
 fn enumerate_gradient_positions() with GraphRead + !Mutate = {
   let Graph(_nodes, _epoch, next, _overlays, _spans) = perform graph_snapshot()
-  let buf = make_list(next)
-  collect_unfilled_loop(0, next, buf, 0)
-    |> (kept) => slice(buf, 0, kept)
-}
-
-// Buffer-counter substrate (CLAUDE.md "Bug classes that cost hours"):
-// list_extend_to + list_set + counter + slice. Bump allocator traps
-// at 16 MB; suffix-append in a loop is O(N²) and out — drift 11.
-
-fn collect_unfilled_loop(i, n, buf, buf_len) with GraphRead + !Mutate = {
-  if i >= n { buf_len }
-  else {
-    match perform teach_gradient(i) {
-      None    => collect_unfilled_loop(i + 1, n, buf, buf_len),
-      Some(_) => {
-        list_set(buf, buf_len, i)
-        collect_unfilled_loop(i + 1, n, buf, buf_len + 1)
-      }
-    }
-  }
+  filter((i) => match perform teach_gradient(i) {
+    None    => false,
+    Some(_) => true
+  }, range(0, next))
 }
 
 fn score_all_positions(handles, caret) with GraphRead + !Mutate =
@@ -380,18 +364,11 @@ fn argmax_or_default(scored, caret) with Pure = {
 }
 
 fn reduce_max_by_score(scored) with Pure = {
-  reduce_max_loop(scored, 1, scored.len, list_head(scored))
-}
-
-fn reduce_max_loop(scored, i, n, best) with Pure = {
-  if i >= n { best }
-  else {
-    let candidate = list_index(scored, i)
+  reduce(scored, (best, candidate) => {
     let Cursor(_, _, c_impact) = candidate
     let Cursor(_, _, b_impact) = best
-    let next_best = if c_impact > b_impact { candidate } else { best }
-    reduce_max_loop(scored, i + 1, n, next_best)
-  }
+    if c_impact > b_impact { candidate } else { best }
+  })
 }
 
 // ─── Pinned impact sentinel ─────────────────────────────────────────

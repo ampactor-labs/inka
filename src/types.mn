@@ -506,6 +506,16 @@ type Expr
   | MakeTupleExpr(List)
   | MakeRecordExpr(List)           // [(field_name: String, value: Node)] — sorted at parse
   | NamedRecordExpr(String, List)  // type_name + sorted fields — nominal record literal
+  | MakeStringExpr(List)           // string interpolation fragments — Node list
+                                   // where each Node is either NExpr(LitString(s))
+                                   // for literal chunks OR an arbitrary expression
+                                   // node for a splice. Semantic-preserving form
+                                   // per #138; parser produces this instead of an
+                                   // eager str_concat fold so infer can narrow
+                                   // (each splice must be Showable) and the
+                                   // gradient can teach which splices are constant
+                                   // (foldable at compile time) per Mentl-ultimate
+                                   // string-substrate discipline.
   | FieldExpr(Node, String)
   | PipeExpr(PipeKind, Node, Node) // |> <| >< ~> <~
   | ExprPlaceholder                // ? — parser spawns NHole

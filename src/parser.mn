@@ -1171,18 +1171,36 @@ fn parse_tuple_tail(ref tokens, pos, own buf, count) = {
 // (single fragment, no splice → loop terminates immediately, returns
 // nexpr(LitString(first_chunk), span)).
 fn parse_string_interpolation(ref tokens, pos, first_chunk, start_span) = {
-  let initial = nexpr(LitString(first_chunk), start_span)
-  parse_string_interpolation_loop(tokens, pos, initial, start_span)
+  // Per #138 — interpolation is a SEMANTIC AST node (MakeStringExpr)
+  // carrying alternating literal-fragments + splice-exprs. The prior
+  // eager-str_concat-fold drift committed result shape at parse time;
+  // the new form lets infer narrow (Show-able splice check) and the
+  // gradient teach constant-foldable splices at the cursor's read.
+  //
+  // If the lexer emitted no TStringSplice after first_chunk, the
+  // interpolation degenerates to a bare LitString — preserve that
+  // form so non-interpolating strings stay maximally narrow.
+  if at(tokens, pos, TStringSplice) {
+    let first_node = nexpr(LitString(first_chunk), start_span)
+    let buf = make_list(4)
+    let (b1, c1) = push_node(buf, 0, first_node)
+    let (final_buf, final_count, final_pos) =
+      parse_string_interpolation_loop(tokens, pos, b1, c1, start_span)
+    (nexpr(MakeStringExpr(slice(final_buf, 0, final_count)), start_span), final_pos)
+  } else {
+    (nexpr(LitString(first_chunk), start_span), pos)
+  }
 }
 
-fn parse_string_interpolation_loop(ref tokens, pos, acc, start_span) = {
+fn parse_string_interpolation_loop(ref tokens, pos, own buf, count, start_span) = {
   if at(tokens, pos, TStringSplice) {
     let (splice_expr, p2) = parse_expr(tokens, pos + 1)
     let (next_chunk, p3) = consume_string_part(tokens, p2)
     let next_chunk_node = nexpr(LitString(next_chunk), start_span)
-    let combined = build_str_concat(build_str_concat(acc, splice_expr, start_span), next_chunk_node, start_span)
-    parse_string_interpolation_loop(tokens, p3, combined, start_span)
-  } else { (acc, pos) }
+    let (b1, c1) = push_node(buf, count, splice_expr)
+    let (b2, c2) = push_node(b1, c1, next_chunk_node)
+    parse_string_interpolation_loop(tokens, p3, b2, c2, start_span)
+  } else { (buf, count, pos) }
 }
 
 // After a TStringSplice's inner expression, the next token must be a

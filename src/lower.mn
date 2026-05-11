@@ -537,6 +537,17 @@ fn lower_expr_body(e, handle, span) = match e {
   MakeTupleExpr(elems) =>
     LMakeTuple(handle, lower_expr_list(elems)),
 
+  MakeStringExpr(fragments) =>
+    // Per #138: MakeStringExpr is the semantic-preserving form of
+    // string interpolation (alternating literal + splice fragments).
+    // Lower projects it to a left-fold of str_concat calls at this
+    // cursor — the runtime substrate is the str_concat composition.
+    // Post-Mentl-ultimate-strings (peer Hβ.runtime.zero-copy-string-
+    // view's view-substrate), the fold materializes to one alloc per
+    // concat node; the view-substrate ensures zero byte-copy through
+    // each splice's lex-produced view operand.
+    lower_string_interpolation(handle, lower_expr_list(fragments)),
+
   MakeRecordExpr(fields) =>
     LMakeRecord(handle, lower_record_field_values(fields)),
 
@@ -1656,6 +1667,34 @@ fn cfv_contains_loop(lst, s, i, n) = {
   if i >= n { false }
   else if str_eq(list_index(lst, i), s) { true }
   else { cfv_contains_loop(lst, s, i + 1, n) }
+}
+
+// String interpolation lowering. Reduce a list of LowExpr fragments
+// (alternating literal-chunks + spliced-exprs) to a left-fold of
+// LCall(VarRef("str_concat"), [acc, next]). Per Mentl-substrate's
+// runtime-strings-substrate (Hβ.runtime.zero-copy-string-view): each
+// concat allocates ONE flat result; view-substrate makes literal
+// chunks zero-copy reads from source. Empty list → empty string;
+// singleton → that fragment unchanged.
+fn lower_string_interpolation(handle, lowered_fragments) = {
+  if lowered_fragments.len == 0 {
+    LConst(handle, LString(""))
+  } else if lowered_fragments.len == 1 {
+    list_head(lowered_fragments)
+  } else {
+    let head = list_head(lowered_fragments)
+    let rest = list_tail(lowered_fragments)
+    lower_str_concat_fold(handle, head, rest)
+  }
+}
+
+fn lower_str_concat_fold(handle, acc, rest) = {
+  if rest.len == 0 { acc }
+  else {
+    let next = list_head(rest)
+    let combined = LCall(handle, LGlobal(handle, "str_concat"), [acc, next])
+    lower_str_concat_fold(handle, combined, list_tail(rest))
+  }
 }
 
 // Expression list

@@ -647,6 +647,20 @@ fn infer_expr(ref node) = {
       perform tag_alloc_join(handle, collect_handles(elems))
     },
 
+    NExpr(MakeStringExpr(fragments)) => {
+      // Per #138 — interpolation fragments alternate literal-strings
+      // + splice-exprs. Infer each fragment; each splice must be
+      // Showable. Today: the substrate concretizes Show as TString
+      // (every fragment's type unifies to TString) which matches the
+      // bootstrap str_concat lowering. Post-L1 (peer Hβ.infer.show-
+      // typeclass): non-String splices register a Show obligation
+      // discharged via verify_ledger; gradient narrates each splice's
+      // ascent toward Show-able.
+      infer_expr_list(fragments)
+      unify_string_fragments(fragments, span)
+      perform graph_bind(handle, TString, Located(span, Inferred("string interpolation")))
+    },
+
     NExpr(MakeRecordExpr(fields)) => {
       // Each field's value is inferred; the record's type is
       // TRecord((field_name, TVar(value_handle))) sorted by name.
@@ -2840,6 +2854,19 @@ fn unify_list_elems(elems, target_h, span: ValidSpan) = {
     let N(_, _, eh) = list_head(elems)
     unify(eh, target_h, span, ListElement(Inferred("list element")))
     unify_list_elems(list_tail(elems), target_h, span)
+  }
+}
+
+// Each string-interpolation fragment binds to TString. Today's
+// bootstrap form unifies every fragment to TString directly;
+// post-Show-typeclass (peer Hβ.infer.show-typeclass), non-String
+// splices register a Show obligation that verify_ledger discharges.
+fn unify_string_fragments(fragments, span: ValidSpan) = {
+  if fragments.len == 0 { () }
+  else {
+    let N(_, _, fh) = list_head(fragments)
+    perform graph_bind(fh, TString, Located(span, Inferred("interpolation fragment")))
+    unify_string_fragments(list_tail(fragments), span)
   }
 }
 

@@ -26851,7 +26851,7 @@
   ;;                                       when W5 arena handler-swap
   ;;                                       lands.
 
-  ;; ─── Chunk-private byte-emission helpers ──────────────────────────
+  ;; ─── Chunk-private byte-emission projections ──────────────────────
   ;; Inline-byte design per emit_const.wat + emit_local.wat precedent —
   ;; the [0, 4096) data region is densely packed; inline $emit_byte
   ;; sequences are substrate-honest at the seed layer.
@@ -27461,7 +27461,7 @@
     (call $emit_byte (i32.const 110)) (call $emit_byte (i32.const 100))
     (call $emit_byte (i32.const 41)))
 
-  ;; ─── Byte-emission helpers for match dispatch ───────────────────────
+  ;; ─── Byte-emission projections for match dispatch ───────────────────
 
   (func $ec5_emit_local_get_scrut_tmp
     ;; emits: (local.get $scrut_tmp)

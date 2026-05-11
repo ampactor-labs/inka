@@ -186,8 +186,10 @@ fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, co
     } else if b == 34 {
       // double-quoted string — amendment C brace-interpolation.
       // scan_string emits TStringPart/TStringSplice tokens directly
-      // into buf and returns the updated (buf, count).
-      let (new_pos, new_col, b1, c1) = scan_string(source, n, pos + 1, line, col + 1, buf, count, "")
+      // into buf and returns (new_pos, new_col, buf, count). Per
+      // Hβ.lex.scan-string-on-to-on-restructure: scan-to-break +
+      // single str_slice per chunk, replacing per-byte acc-concat.
+      let (new_pos, new_col, b1, c1) = scan_string(source, n, pos + 1, line, col + 1, buf, count)
       lex_from(source, n, new_pos, line, new_col, b1, c1, term_byte, depth)
     } else if b == 39 {
       // single-quoted literal string (amendment G) — no interpolation.
@@ -270,31 +272,55 @@ fn skip_line_comment(ref source, n: ValidOffset, pos: ValidOffset) = scan_to_eol
 /// Returns `(new_pos, new_col, buf, count)` — buffer threaded directly.
 /// Peer sub-handles: B.12.5.1 (triple-quoted `"""..."""`, amendment D),
 /// B.12.5.2 (nested-brace splices beyond depth 0).
-fn scan_string(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, count, own acc) = {
+fn scan_string(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, count) = {
+  scan_string_chunk(source, n, pos, pos, line, col, buf, count)
+}
+
+// chunk_start carries the start-byte of the current literal chunk;
+// pos advances byte-by-byte without allocation until a break-byte
+// halts the scan (close-quote, splice-open, doubled-brace, backslash-
+// escape, EOF). On halt, one str_slice(source, chunk_start, pos)
+// materializes the TStringPart payload — O(N) total scan + O(N) total
+// bytes copied across all chunks. The prior per-byte `acc |> str_concat`
+// form was O(N²) on the heap (CLAUDE.md "++ in a loop is a memory
+// bomb"); for the wheel's ~13KB of string content that was hundreds
+// of millions of bytes through the bump allocator, exhausting heap
+// before completion. Future peer: Hβ.runtime.zero-copy-string-view
+// represents TStringPart payload as (offset, length) into source,
+// eliminating the slice-alloc entirely — O(1) per chunk.
+fn scan_string_chunk(ref source, n: ValidOffset, chunk_start: ValidOffset, pos: ValidOffset, line, col, own buf, count) = {
   if pos >= n {
-    // Unterminated — emit final part; parser surfaces diagnostic next.
-    let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(acc), line, col, line, col))
+    let part = str_slice(source, chunk_start, pos)
+    let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col))
     (pos, col, b1, c1)
   } else {
     let b = byte_at(source, pos)
     if b == 34 {
       // closing "
-      let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(acc), line, col, line, col + 1))
+      let part = str_slice(source, chunk_start, pos)
+      let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col + 1))
       (pos + 1, col + 1, b1, c1)
     } else if b == 123 && pos + 1 < n && byte_at(source, pos + 1) == 123 {
-      // {{ — literal brace escape
-      scan_string(source, n, pos + 2, line, col + 2, buf, count,
-        acc |> str_concat("{"))
+      // {{ — flush prior chunk including the first `{`; restart after the second.
+      let part = str_slice(source, chunk_start, pos + 1)
+      let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col + 1))
+      scan_string_chunk(source, n, pos + 2, pos + 2, line, col + 2, b1, c1)
     } else if b == 125 && pos + 1 < n && byte_at(source, pos + 1) == 125 {
-      // }} — literal close-brace escape
-      scan_string(source, n, pos + 2, line, col + 2, buf, count,
-        acc |> str_concat("}"))
+      // }} — flush prior chunk including the first `}`; restart after the second.
+      let part = str_slice(source, chunk_start, pos + 1)
+      let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col + 1))
+      scan_string_chunk(source, n, pos + 2, pos + 2, line, col + 2, b1, c1)
     } else if b == 123 {
       // { — start of interpolation splice (amendment C).
-      let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(acc), line, col, line, col))
+      let part = str_slice(source, chunk_start, pos)
+      let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col))
       let (b2, c2) = push_tok(b1, c1, mk_tok(TStringSplice, line, col, line, col + 1))
       scan_string_after_splice(source, n, pos + 1, line, col + 1, b2, c2)
     } else if b == 92 && pos + 1 < n {
+      // Escape sequence — flush prior chunk, emit translated escape as
+      // its own TStringPart, restart after the escape's two bytes.
+      let pre = str_slice(source, chunk_start, pos)
+      let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(pre), line, col, line, col))
       let esc = byte_at(source, pos + 1)
       let escaped =
         if      esc == 110 { "\n" }
@@ -302,12 +328,11 @@ fn scan_string(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf,
         else if esc == 92  { "\\" }
         else if esc == 34  { "\"" }
         else { str_slice(source, pos + 1, pos + 2) }
-      scan_string(source, n, pos + 2, line, col + 2, buf, count,
-        acc |> str_concat(escaped))
+      let (b2, c2) = push_tok(b1, c1, mk_tok(TStringPart(escaped), line, col, line, col + 2))
+      scan_string_chunk(source, n, pos + 2, pos + 2, line, col + 2, b2, c2)
     } else {
-      // non-escape byte — append its 1-byte slice view
-      scan_string(source, n, pos + 1, line, col + 1, buf, count,
-        acc |> str_concat(str_slice(source, pos, pos + 1)))
+      // non-break byte — advance pos; chunk_start unchanged.
+      scan_string_chunk(source, n, chunk_start, pos + 1, line, col + 1, buf, count)
     }
   }
 }
@@ -319,7 +344,7 @@ fn scan_string(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf,
 /// peer sub-handle B.12.5.2 extends this to multiple nesting levels.
 fn scan_string_after_splice(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, count) = {
   let (new_pos, new_col, b1, c1) = lex_from(source, n, pos, line, col, buf, count, 125, 0)
-  scan_string(source, n, new_pos, line, new_col, b1, c1, "")
+  scan_string(source, n, new_pos, line, new_col, b1, c1)
 }
 
 /// Amendment G single-quoted string scanner — no interpolation, no brace

@@ -875,7 +875,44 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
         p2)
     } else { (e, pos) }
   },
+  // Turbofish at call site `f<T>(args)` per SYNTAX.md:158-160.
+  // Type parameters are inferred at call sites; explicit annotation
+  // is rejected. Detection: peek for balanced `<...>` followed by `(`.
+  // If turbofish: emit E_ExplicitTypeParams, strip type args, continue
+  // as plain call. If not: return (e, pos) so the infix parser sees
+  // `<` as comparison.
+  TLt => match turbofish_lookahead(tokens, pos + 1, 1) {
+    Some(p_after_gt) => {
+      if at(tokens, p_after_gt, TLParen) {
+        perform report("parser", "E_ExplicitTypeParams", "Warning",
+          "type parameters are inferred at call sites; remove the explicit annotation",
+          span_at(tokens, pos), "MachineApplicable")
+        postfix_loop(tokens, e, p_after_gt)
+      } else {
+        (e, pos)
+      }
+    },
+    None => (e, pos)
+  },
   _ => (e, pos)
+}
+
+// Scan from `pos` (just after an opening TLt — caller passes depth=1)
+// across a balanced type-arg sequence. Returns Some(pos-after-matching-TGt)
+// when balance reaches 0 without hitting a structural barrier; else None.
+// Accepts: TIdent, TComma, TLt (depth+1), TGt (depth-1), nested whitespace.
+// Rejects (returns None): TLParen, TLBrace, TLBracket, TNewline, TEof,
+// keywords — these structural tokens never appear inside a type arg list.
+fn turbofish_lookahead(ref tokens, pos, depth) = {
+  let p = skip_ws(tokens, pos)
+  match kind_at(tokens, p) {
+    TGt => if depth == 1 { Some(p + 1) }
+           else { turbofish_lookahead(tokens, p + 1, depth - 1) },
+    TLt    => turbofish_lookahead(tokens, p + 1, depth + 1),
+    TIdent => turbofish_lookahead(tokens, p + 1, depth),
+    TComma => turbofish_lookahead(tokens, p + 1, depth),
+    _      => None
+  }
 }
 
 /// Parse the body of a nominal record literal — same shape as

@@ -1339,6 +1339,19 @@ fn parse_block_body(ref tokens, pos, own buf, count) = {
   if at(tokens, p, TRBrace) {
     let start = span_at(tokens, p)
     (buf, count, nexpr(LitUnit, start), p + 1)
+  } else if at(tokens, p, TEof) {
+    // Unclosed block at EOF — emit ONE diagnostic + halt with
+    // synthetic LitUnit final-expr at EOF span. Mirrors
+    // parse_match_arms's TEof arm per Hβ.parser.unclosed-construct-
+    // eof-recovery. Without this branch the loop would re-enter
+    // parse_expr at EOF, get an NError at the same position, and
+    // recurse forever (each iteration emitting one P_ExpectedToken
+    // diagnostic, exhausting heap).
+    let start = span_at(tokens, p)
+    perform report("parser", "P_UnclosedConstruct", "ParseError",
+      "unexpected end of input inside block; expected `}` to close",
+      start, "MaybeIncorrect")
+    (buf, count, nexpr(LitUnit, start), p)
   } else {
     let is_decl = match kind_at(tokens, p) {
       TLet => true,

@@ -1261,7 +1261,7 @@ fn emit_expr(expr) = match expr {
   LBinOp(_h, op, l, r) => {
     emit_expr(l)
     emit_expr(r)
-    emit_binop(op)
+    emit_binop_for(op, lexpr_handle(l))
   },
 
   LUnaryOp(_h, op, inner) => {
@@ -1828,6 +1828,30 @@ fn emit_const(v) = match v {
 }
 
 
+/// emit_binop_for — emit a binop with type-dispatched concat (BConcat
+/// resolves to $list_concat or $str_concat based on the LEFT operand's
+/// chase-deep Ty). Per emit-side substrate this mirrors the seed's
+/// emit_call.wat:283-323 dispatch — TList (tag 105) → list_concat,
+/// TString (tag 102) or unresolved → str_concat. The seed's substrate
+/// is the canonical reference; wheel-side type-dispatch must mirror.
+///
+/// Drift refused: 8 (no mode-flag — type-tag is the dispatch key);
+/// 1 (no vtable — direct conditional on integer Ty tag).
+fn emit_binop_for(op, left_h) = match op {
+  BConcat => {
+    perform wat_emit("    (local.set $callee_closure)\n")
+    perform wat_emit("    (local.set $state_tmp)\n")
+    perform wat_emit("    (local.get $__state)\n")
+    perform wat_emit("    (local.get $state_tmp)\n")
+    perform wat_emit("    (local.get $callee_closure)\n")
+    match perform lookup_ty(left_h) {
+      TList(_) => perform wat_emit("    (call $list_concat)\n"),
+      _        => perform wat_emit("    (call $str_concat)\n")
+    }
+  },
+  _ => emit_binop(op)
+}
+
 fn emit_binop(op) = match op {
   BAdd    => perform wat_emit("    (i32.add)\n"),
   BSub    => perform wat_emit("    (i32.sub)\n"),
@@ -1845,6 +1869,9 @@ fn emit_binop(op) = match op {
   // Per Hβ.emit.runtime-helper-state-push: str_concat is W7-compiled
   // (state, a, b). Stack here has [a, b]; insert state UNDER via
   // save-reload through pre-declared $state_tmp + $callee_closure.
+  // BConcat callers via emit_binop_for resolve to list_concat or
+  // str_concat per the left operand's Ty — this default kept for
+  // call sites without operand handle.
   BConcat => {
     perform wat_emit("    (local.set $callee_closure)\n")
     perform wat_emit("    (local.set $state_tmp)\n")

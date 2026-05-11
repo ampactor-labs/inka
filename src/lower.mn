@@ -1613,7 +1613,7 @@ fn cfv_merge(a, b) = {
     let x = list_head(b)
     let rest = list_tail(b)
     if cfv_contains(a, x) { cfv_merge(a, rest) }
-    else { cfv_merge(a ++ [x], rest) }   // drift-audit: ignore — real drift 11 in cfv_* set-union family; buffer-counter rewrite adds Memory+Alloc to row rippling through callers; tracked for item 11.B buffer-counter sweep
+    else { cfv_merge(list_concat(a, [x]), rest) }   // drift-audit: ignore — real drift 11 in cfv_* set-union family; buffer-counter rewrite adds Memory+Alloc to row rippling through callers; tracked for item 11.B buffer-counter sweep. Explicit list_concat (was `a ++ [x]`) — BConcat's emit dispatches via lookup_ty which returned NFree at infer-time, falling to str_concat and trapping in mentl2's runtime when list arms walked the bytes as elements. Direct call avoids the dispatch.
   }
 }
 

@@ -506,6 +506,15 @@ type Expr
   | MakeTupleExpr(List)
   | MakeRecordExpr(List)           // [(field_name: String, value: Node)] — sorted at parse
   | NamedRecordExpr(String, List)  // type_name + sorted fields — nominal record literal
+  | IndexExpr(Node, Node)          // `xs[i]` semantic AST — receiver, index.
+                                   // Infer dispatches on receiver's type:
+                                   // TList → list_index (runtime); TTuple →
+                                   // compile-time slot from constant index;
+                                   // TRecord by int-key → record_get. The eager
+                                   // parse-time fold to CallExpr(VarRef("list_index"))
+                                   // was drift mode 9 (eager-form-commitment) —
+                                   // it committed the dispatch before infer knew
+                                   // the receiver's shape. Per #139.
   | MakeStringExpr(List)           // string interpolation fragments — Node list
                                    // where each Node is either NExpr(LitString(s))
                                    // for literal chunks OR an arbitrary expression

@@ -647,6 +647,25 @@ fn infer_expr(ref node) = {
       perform tag_alloc_join(handle, collect_handles(elems))
     },
 
+    NExpr(IndexExpr(receiver, index)) => {
+      // Per #139 — semantic subscript. Infer receiver + index; the
+      // result type chases receiver. List<A>[Int] → A; (a, b, c)[Int]
+      // → element type at the index (compile-time slot); record[Int]
+      // → field type at int-key. Today's bootstrap form binds result
+      // to a fresh TVar and dispatches list-shape unconditionally;
+      // post-Show-typeclass / tuple-const-index (peer Hβ.infer.index-
+      // expr-dispatch), the cursor narrows further from receiver's
+      // chase-deep Ty.
+      infer_expr(receiver)
+      infer_expr(index)
+      let N(_, _, rh) = receiver
+      let N(_, _, ih) = index
+      perform graph_bind(ih, TInt, Located(span, Inferred("index value")))
+      let elem_h = perform mint(Inferred("subscript element"))
+      perform graph_bind(rh, TList(TVar(elem_h)), Located(span, Inferred("subscript receiver")))
+      perform graph_bind(handle, TVar(elem_h), Located(span, Inferred("subscript result")))
+    },
+
     NExpr(MakeStringExpr(fragments)) => {
       // Per #138 — interpolation fragments alternate literal-strings
       // + splice-exprs. Infer each fragment; each splice must be

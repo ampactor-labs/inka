@@ -548,6 +548,18 @@ fn lower_expr_body(e, handle, span) = match e {
     // each splice's lex-produced view operand.
     lower_string_interpolation(handle, lower_expr_list(fragments)),
 
+  IndexExpr(receiver, index) =>
+    // Per #139: subscript dispatch at lower-time. Today's projection
+    // emits LCall(VarRef("list_index"), [receiver_lo, index_lo]) —
+    // matching the prior eager-parse form at the runtime layer.
+    // Post-tuple-const-index (peer Hβ.lower.indexexpr-tuple-slot):
+    // when receiver's chase-deep Ty is TTuple, lower emits
+    // LFieldLoad(receiver_lo, slot_offset) with slot_offset computed
+    // from the constant integer index at compile time — no runtime
+    // dispatch, gradient-ascent-discharged bounds.
+    LCall(handle, LGlobal(handle, "list_index"),
+          [lower_expr(receiver), lower_expr(index)]),
+
   MakeRecordExpr(fields) =>
     LMakeRecord(handle, lower_record_field_values(fields)),
 

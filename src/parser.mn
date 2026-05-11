@@ -899,21 +899,24 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
       nexpr(CallExpr(e, args), span_join(start_span, end_span)),
       p2)
   },
-  // Subscript `xs[i]` per SYNTAX.md:611-632. Desugars to
-  // CallExpr(VarRef("list_index"), [xs, i]). Infer dispatches by the
-  // receiver's type — List<A> → list_index; tuple → compile-time slot;
-  // record-by-int-key → record_get. For first-light, the wheel-source
-  // uses subscript almost exclusively on lists (argv[i], nodes[idx],
-  // matrix rows); tuples use destructuring. Post-L1: refinements over
-  // the index elide the runtime bounds check via gradient ascent.
+  // Subscript `xs[i]` per SYNTAX.md:611-632 + #139. The parser
+  // produces IndexExpr(receiver, index) as a semantic AST node;
+  // infer dispatches on the receiver's chase-deep Ty:
+  //   TList<A> → list_index runtime call
+  //   TTuple → compile-time slot from constant index
+  //   TRecord-by-int-key → record_get
+  // The prior eager fold to CallExpr(VarRef("list_index")) at parse
+  // time committed the dispatch before infer knew the receiver's
+  // shape — drift mode 9. Refinements on the index elide the
+  // runtime bounds check via gradient ascent (peer Hβ.emit.refinement-
+  // elide-bounds).
   TLBracket => {
     let (idx_expr, p2) = parse_expr(tokens, skip_ws(tokens, pos + 1))
     let p3 = expect(tokens, skip_ws(tokens, p2), TRBracket)
     let N(_, start_span, _) = e
     let end_span = span_at(tokens, p3 - 1)
-    let callee = nexpr(VarRef("list_index"), start_span)
     postfix_loop(tokens,
-      nexpr(CallExpr(callee, [e, idx_expr]), span_join(start_span, end_span)),
+      nexpr(IndexExpr(e, idx_expr), span_join(start_span, end_span)),
       p3)
   },
   TDot => {

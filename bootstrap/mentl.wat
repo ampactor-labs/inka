@@ -29675,13 +29675,17 @@
       (then
         (return (call $cwo_walk (local.get $buf)
                   (call $lexpr_lhandle_body (local.get $expr))))))
-    ;; LHandleWith (329) — handle body + handler expression.
+    ;; LHandleWith (329) — handle body + handler + state_inits.
+    ;; state_inits may `perform wasi_*` so include them in WASI op walk.
+    ;; Hβ.seed.handler-state-init-writes-mirror.
     (if (i32.eq (local.get $tag) (i32.const 329))
       (then
         (local.set $buf (call $cwo_walk (local.get $buf)
                           (call $lexpr_lhandlewith_body (local.get $expr))))
-        (return (call $cwo_walk (local.get $buf)
-                  (call $lexpr_lhandlewith_handler (local.get $expr))))))
+        (local.set $buf (call $cwo_walk (local.get $buf)
+                          (call $lexpr_lhandlewith_handler (local.get $expr))))
+        (return (call $cwo_walk_list (local.get $buf)
+                  (call $lexpr_lhandlewith_state_inits (local.get $expr))))))
     (local.get $buf))
 
   ;; $buf_push_unique — push if no existing buffer entry str_eq's str.
@@ -29906,13 +29910,18 @@
     ;; LHandle (332) — recurse into body for arity contributions.
     (if (i32.eq (local.get $tag) (i32.const 332))
       (then (return (call $max_arity_expr (call $lexpr_lhandle_body (local.get $expr))))))
-    ;; LHandleWith (329) — max(body, handler).
+    ;; LHandleWith (329) — max(body, handler, state_inits).
+    ;; state_inits may contain LCall with higher arity than body/handler;
+    ;; their type sigs must be in the type-section. Hβ.seed.handler-
+    ;; state-init-writes-mirror.
     (if (i32.eq (local.get $tag) (i32.const 329))
       (then
         (return
-          (call $max_i32
-            (call $max_arity_expr (call $lexpr_lhandlewith_body (local.get $expr)))
-            (call $max_arity_expr (call $lexpr_lhandlewith_handler (local.get $expr)))))))
+          (call $max_arity_in
+            (call $lexpr_lhandlewith_state_inits (local.get $expr))
+            (call $max_i32
+              (call $max_arity_expr (call $lexpr_lhandlewith_body (local.get $expr)))
+              (call $max_arity_expr (call $lexpr_lhandlewith_handler (local.get $expr))))))))
     ;; Common containers used by current lower output.
     (if (i32.eq (local.get $tag) (i32.const 306))
       (then
@@ -30417,6 +30426,12 @@
         (call $emit_hstate_local_decl (call $lexpr_handle (local.get $expr)))
         (call $emit_let_locals_walk (call $lexpr_lhandlewith_body (local.get $expr)))
         (call $emit_let_locals_walk (call $lexpr_lhandlewith_handler (local.get $expr)))
+        ;; Hβ.seed.handler-state-init-writes-mirror — state_inits are
+        ;; lowered LowExprs emitted at install via $emit_state_init_writes.
+        ;; Their $call_<H>/$variant_<H>/$tuple_<H>/etc. temporaries must
+        ;; appear in the enclosing fn's locals preamble or wat2wasm
+        ;; rejects with "undefined local variable".
+        (call $emit_let_locals (call $lexpr_lhandlewith_state_inits (local.get $expr)))
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 330))         ;; LFeedback
       (then
@@ -30654,6 +30669,11 @@
           (call $lexpr_lhandlewith_body (local.get $expr)))
         (call $emit_alloc_handle_locals_walk
           (call $lexpr_lhandlewith_handler (local.get $expr)))
+        ;; Hβ.seed.handler-state-init-writes-mirror — state_inits are
+        ;; emitted at install; their alloc handles (LMakeRecord / etc.)
+        ;; need the per-handle `(local $alloc_<h> i32)` declarations.
+        (call $emit_alloc_handle_locals
+          (call $lexpr_lhandlewith_state_inits (local.get $expr)))
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 330))         ;; LFeedback
       (then
@@ -31148,6 +31168,11 @@
           (call $lexpr_lhandlewith_body (local.get $expr)))
         (call $emit_handler_state_globals_walk
           (call $lexpr_lhandlewith_handler (local.get $expr)))
+        ;; Hβ.seed.handler-state-init-writes-mirror — recurse into inits
+        ;; so nested `~>` installs inside an init expression declare
+        ;; their $<handler>_state_g globals.
+        (call $emit_handler_state_globals
+          (call $lexpr_lhandlewith_state_inits (local.get $expr)))
         (return)))
     ;; Container recursion — minimal coverage matching feedback walker.
     (if (i32.eq (local.get $tag) (i32.const 304))         ;; LLet

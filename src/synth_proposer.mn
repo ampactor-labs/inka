@@ -365,14 +365,24 @@ fn enumerate_tuple_candidates(elems, context) with GraphRead + !Mutate = {
 // EnrichedCandidate replacing (Annotation, Capability) pairs.
 
 fn verify_each_enriched(candidates) with Synth + GraphRead + !Mutate = {
-  filter((candidate) => {
-    let EnrichedCandidate(c) = candidate
-    let inner = Candidate(c.node, c.reason)
-    let cp = perform graph_push_checkpoint()
-    let proven = perform verify_candidate(inner)
-    perform graph_rollback(cp)
-    proven
-  }, candidates)
+  // Per-candidate proof-search is the divergent-fanout topology
+  // (checkpoint isolates each branch from siblings). parallel_map
+  // dispatches via the Thread effect handler upstream — symmetric
+  // with oracle's per-candidate dispatch at src/oracle.mn:357 +
+  // mentl.mn's try_each_annotation. Same source, handler swap
+  // (sequential_compose vs parallel_compose) decides spatial vs
+  // temporal proof-search.
+  candidates
+    |> parallel_map((candidate) => {
+         let EnrichedCandidate(c) = candidate
+         let inner = Candidate(c.node, c.reason)
+         let cp = perform graph_push_checkpoint()
+         let proven = perform verify_candidate(inner)
+         perform graph_rollback(cp)
+         (candidate, proven)
+       })
+    |> filter((pair) => { let (_, p) = pair; p })
+    |> map((pair) => { let (c, _) = pair; c })
 }
 
 // ─── map_to_nodes — strip the EnrichedCandidate wrapper for the ───

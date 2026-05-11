@@ -200,14 +200,10 @@ fn lookup_kai_in_cache(cached, target) with Pure = {
 }
 
 fn remove_module(cached, target) with Pure = {
-  if cached.len == 0 { [] }
-  else {
-    let (name, extended) = list_head(cached)
-    if str_eq(name, target) { list_tail(cached) }
-    else {
-      [(name, extended)] ++ remove_module(list_tail(cached), target)
-    }
-  }
+  filter((entry) => {
+    let (name, _) = entry
+    !str_eq(name, target)
+  }, cached)
 }
 
 // ─── Oracle queue construction — per-module after IC re-infer ───────
@@ -266,21 +262,18 @@ fn build_queue_loop(handles, i, n, buf, buf_len)
 // ─── Cross-module entry collection + scoring ───────────────────────
 
 fn collect_all_entries(cached) with Pure = {
-  if cached.len == 0 { [] }
-  else {
-    let (_, extended) = list_head(cached)
+  flatten(map((entry) => {
+    let (_, extended) = entry
     let ExtendedKaiFile(e) = extended
-    e.oracle_queue ++ collect_all_entries(list_tail(cached))
-  }
+    e.oracle_queue
+  }, cached))
 }
 
+/// Per-entry scoring is independent (read-only graph chase from each
+/// entry's handle + pure caret_proximity_weight). parallel_map dispatches
+/// via Thread; spatial multi-core when parallel_compose installed.
 fn score_all_entries(entries, caret) with GraphRead + !Mutate = {
-  if entries.len == 0 { [] }
-  else {
-    let head = list_head(entries)
-    let scored_head = score_one_entry(head, caret)
-    [scored_head] ++ score_all_entries(list_tail(entries), caret)
-  }
+  parallel_map((entry) => score_one_entry(entry, caret), entries)
 }
 
 fn score_one_entry(entry_pair, caret) with GraphRead + !Mutate = {

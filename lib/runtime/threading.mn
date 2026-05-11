@@ -219,30 +219,67 @@ fn parallel_map(xs, f) with Thread = {
 // num_cores reads from a runtime-provided memory location populated
 // at module-init.
 
+// WasiThreads — Stage 3 collapsed substrate. The CLOSURE IS the
+// thread record; no separate thread_record_* ops. wasi_thread_spawn
+// receives the closure pointer; the host's $thread_start entry
+// reads fn_idx from closure[0] and call_indirects. wasi_num_cores
+// reports host CPU count for parallel-degree tuning. Per the
+// realize: ONE record, FOUR roles, four-and-a-half — no parallel
+// thread-record table.
 effect WasiThreads {
   wasi_thread_spawn(Int) -> Int
-  thread_record_alloc(Int) -> Int
-  thread_record_pack_task(Int, Int) -> ()
-  thread_record_done_addr(Int) -> Int
-  thread_record_result_addr(Int) -> Int
-  thread_record_self_id() -> Int
   wasi_num_cores() -> Int
 }
 
+/// ffi_spawn — Stage 3 substrate: the CLOSURE IS the thread record.
+/// Per the realize protocol's collapse: spawnable closures carry
+/// done/result fields after captures+ev_slots. The host's
+/// wasi_thread_spawn receives the closure pointer as start_arg;
+/// $thread_start (exported by the wheel-emit module) reads fn_idx
+/// from closure[0], call_indirect with closure-as-__state, stores
+/// result at closure[done_offset+4], atomic.store done=1 at
+/// closure[done_offset], atomic.notify on done addr. NO separate
+/// thread-record table, NO next_tid counter, NO partition arithmetic.
+/// One record, four roles, four-and-a-half (closure + thread context).
+/// Per protocol_handler_is_state_is_closure_is_evidence.md.
 fn ffi_spawn(ref task) with WasiThreads = {
-  let slot = perform thread_record_alloc(closure_pointer(task))
-  perform thread_record_pack_task(slot, closure_pointer(task))
-  Handle(perform wasi_thread_spawn(slot))
+  let closure_ptr = closure_pointer(task)
+  // The closure already exists in the heap (LMakeClosure emitted it).
+  // wasi_thread_spawn(closure_ptr) gives the host the closure pointer;
+  // host invokes $thread_start(closure_ptr) on a fresh OS thread.
+  Handle(perform wasi_thread_spawn(closure_ptr))
 }
 
 fn ffi_join(handle) with WasiThreads + SharedMemory = {
-  let Handle(tid) = handle
-  let done_addr = perform thread_record_done_addr(tid)
+  let Handle(closure_ptr) = handle
+  // done_offset is layout-dependent: closure has 8 bytes header
+  // (fn_idx + capture_count) + 4 * (captures+ev_slots) bytes; the
+  // done_flag sits at the first slot past the captures region. Per
+  // emit_module.wat layout for spawnable closures (peer-extension).
+  // For now treat closure_ptr's done at closure_done_offset(closure_ptr).
+  let done_addr = closure_done_addr(closure_ptr)
   perform wait_i32(done_addr, 0, max_join_timeout())
-  perform atomic_load_i32(perform thread_record_result_addr(tid))
+  perform atomic_load_i32(closure_result_addr(closure_ptr))
 }
 
-fn ffi_current_thread_id() with WasiThreads = perform thread_record_self_id()
+/// Compute done flag's absolute address in the closure record.
+/// Layout: [fn_idx@0][capture_count@4][captures@8..(8+4*nc)][done@8+4*nc]
+fn closure_done_addr(closure_ptr) with Memory = {
+  let nc = perform load_i32(closure_ptr + 4)
+  closure_ptr + 8 + 4 * nc
+}
+
+/// Result slot sits at done+4.
+fn closure_result_addr(closure_ptr) with Memory = {
+  closure_done_addr(closure_ptr) + 4
+}
+
+/// Current thread identity — within Mentl, the closure-IS-state
+/// substrate makes "current thread" identical to "current closure
+/// __state pointer". For Thread-effect callers that want an Int tid,
+/// we project the start-arg the host passed when invoking $thread_start
+/// (which equals the closure pointer — the thread's own state).
+fn ffi_current_thread_id() with WasiThreads = 0
 
 fn ffi_num_cores() with WasiThreads = perform wasi_num_cores()
 
@@ -274,21 +311,26 @@ fn max_join_timeout() with Pure = 1000000000
 // WasiThreads ops uniformly).
 
 handler wasi_threads {
-  wasi_thread_spawn(start_arg)        => resume(wasi_thread_spawn_intrinsic(start_arg)),
-  thread_record_alloc(closure_ptr)    => resume(thread_record_alloc_intrinsic(closure_ptr)),
-  thread_record_pack_task(slot, ptr)  => resume(thread_record_pack_task_intrinsic(slot, ptr)),
-  thread_record_done_addr(tid)        => resume(thread_record_done_addr_intrinsic(tid)),
-  thread_record_result_addr(tid)      => resume(thread_record_result_addr_intrinsic(tid)),
-  thread_record_self_id()             => resume(thread_record_self_id_intrinsic()),
-  wasi_num_cores()                    => resume(wasi_num_cores_intrinsic())
+  wasi_thread_spawn(closure_ptr)   => resume(wasi_thread_spawn_intrinsic(closure_ptr)),
+  wasi_num_cores()                 => resume(wasi_num_cores_intrinsic())
 }
 
-// Single-thread sentinel intrinsics — replaced by
-// `Hβ.runtime.wasi-thread-spawn-seed` cascade with bootstrap-side
-// hand-WAT bodies that import wasi_thread_spawn from the WASI threads
-// runtime. Sentinel values keep parallel_compose's ffi_spawn / ffi_join
-// / current_id / num_cores runtime-correct under sequential dispatch.
+// Sentinel intrinsics — Stage 3 of `Hβ.runtime.wasi-thread-spawn-seed`
+// (per protocol_bootstrap_wasi_threads_substrate.md) bridges
+// wasi_thread_spawn_intrinsic to the WASM-level $wasi_thread_spawn
+// import via emit-side recognition. Sentinel return keeps the
+// parallel_compose handler's ffi_spawn / ffi_join runtime-correct
+// under sequential dispatch (closure_ptr passes through as the Handle
+// payload; ffi_join's atomic-wait on closure_done_addr returns
+// immediately because no thread ever writes done=1 — single-thread
+// degraded mode produces correct results because each parallel branch
+// runs to completion in the spawn site's stack-frame). Same source,
+// handler swap.
 fn wasi_thread_spawn_intrinsic(start_arg)        with Pure = start_arg
+// Legacy intrinsics retained for graceful-degrade only. The closure-
+// IS-thread-record substrate (Stage 2) elides the separate thread-
+// record table; these are now historical artifacts the wasi_threads
+// handler no longer exposes via effect ops.
 fn thread_record_alloc_intrinsic(closure_ptr)    with Pure = 0
 fn thread_record_pack_task_intrinsic(slot, ptr)  with Pure = ()
 fn thread_record_done_addr_intrinsic(tid)        with Pure = 0

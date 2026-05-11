@@ -249,6 +249,8 @@ fn serve_run() = {
     ~> mentl_voice_filesystem
     ~> mentl_voice_default
     ~> wasi_filesystem
+    ~> parallel_compose
+    ~> wasi_threads
     ~> no_iterative_ctx
     ~> diagnostics_handler
     ~> graph_handler
@@ -282,6 +284,8 @@ fn doc_run(target_opt) = {
     ~> wasi_filesystem
     ~> mentl_default
     ~> verify_ledger
+    ~> parallel_compose
+    ~> wasi_threads
     ~> diagnostics_handler
     ~> graph_handler
 }
@@ -382,6 +386,8 @@ fn audit_run(target) = {
     ~> wasi_filesystem
     ~> mentl_default
     ~> verify_ledger
+    ~> parallel_compose
+    ~> wasi_threads
     ~> diagnostics_handler
     ~> graph_handler
 }
@@ -397,6 +403,8 @@ fn query_run(target, args) = match args {
       ~> stdout_console
       ~> wasi_filesystem
       ~> mentl_default
+      ~> parallel_compose
+      ~> wasi_threads
       ~> diagnostics_handler
       ~> graph_handler,
   _ => {
@@ -419,6 +427,8 @@ fn teach_run(target_opt) = {
     ~> stdout_console
     ~> wasi_filesystem
     ~> mentl_voice_default
+    ~> parallel_compose
+    ~> wasi_threads
     ~> diagnostics_handler
     ~> graph_handler
 }

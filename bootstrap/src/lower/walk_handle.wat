@@ -400,7 +400,9 @@
         (local.set $op_name   (call $record_get (local.get $arm) (i32.const 2)))
         (local.set $lo_body   (call $lower_handler_arm_body_capturing
                                 (local.get $arg_names)
-                                (local.get $body_node)))
+                                (local.get $body_node)
+                                (local.get $config)
+                                (local.get $state)))
         ;; fn_name = "op_" ++ discriminator ++ "_" ++ op_name
         (local.set $fn_name (call $str_concat (i32.const 504) (local.get $discriminator)))
         (local.set $fn_name (call $str_concat (local.get $fn_name) (i32.const 4400)))
@@ -441,13 +443,26 @@
   ;; $lower_lambda's discipline; per H.2.e closure-capture path,
   ;; each fn-body's captures live in a fresh slot region.
   (func $lower_handler_arm_body_capturing
-        (param $args i32) (param $body_node i32) (result i32)
+        (param $args i32) (param $body_node i32)
+        (param $config i32) (param $state i32) (result i32)
     (local $cp i32) (local $prev_frame i32) (local $lo_body i32)
     (local $prev_captures_len i32)
     (local.set $cp (call $ls_push_scope))
     (local.set $prev_frame (call $ls_enter_frame))
     (local.set $prev_captures_len (global.get $lower_captures_len_g))
     (global.set $lower_captures_len_g (i32.const 0))
+    ;; Hβ.seed.handler-arm-captures-canonical-order — pre-allocate
+    ;; capture entries in canonical (config ++ state) source-order
+    ;; matching the wheel's src/lower.mn:1117-1123 captures_names. The
+    ;; arm-body lookup via $ls_lookup_or_capture then finds each name
+    ;; at the slot whose offset matches install-time init writes
+    ;; (slot i → offset 8+i*4 per protocol_handler_is_state_is_closure_
+    ;; is_evidence.md). Without this, captures get use-order slots and
+    ;; arm reads land at install-written offsets for OTHER fields —
+    ;; the empirical #144 OOM (graph_fresh_ty reading nodes_ptr where
+    ;; it expected next=0).
+    (call $pre_allocate_config_captures (local.get $config))
+    (call $pre_allocate_state_captures  (local.get $state))
     (call $bind_handler_arg_names (local.get $args))
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
     ;; Hβ.lower.tail-call-mark-pass — handler arm body is in tail position.
@@ -456,6 +471,57 @@
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     (local.get $lo_body))
+
+  ;; $pre_allocate_config_captures — config is List<String>; one
+  ;; CAPTURE_ENTRY per name in source order.
+  (func $pre_allocate_config_captures (param $config i32)
+    (local $n i32) (local $i i32) (local $name i32)
+    (local $entry i32) (local $new_len i32)
+    (local.set $n (call $len (local.get $config)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $name (call $list_index (local.get $config) (local.get $i)))
+        (local.set $entry (call $make_record (i32.const 281) (i32.const 2)))
+        (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
+        (call $record_set (local.get $entry) (i32.const 1) (i32.const 0))
+        (local.set $new_len
+          (i32.add (global.get $lower_captures_len_g) (i32.const 1)))
+        (global.set $lower_captures_ptr
+          (call $list_extend_to (global.get $lower_captures_ptr) (local.get $new_len)))
+        (drop (call $list_set (global.get $lower_captures_ptr)
+                              (global.get $lower_captures_len_g)
+                              (local.get $entry)))
+        (global.set $lower_captures_len_g (local.get $new_len))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each))))
+
+  ;; $pre_allocate_state_captures — state is List<{name, init}>; one
+  ;; CAPTURE_ENTRY per field.name in source order.
+  (func $pre_allocate_state_captures (param $state i32)
+    (local $n i32) (local $i i32) (local $field i32) (local $name i32)
+    (local $entry i32) (local $new_len i32)
+    (local.set $n (call $len (local.get $state)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $field (call $list_index (local.get $state) (local.get $i)))
+        (local.set $name  (call $record_get (local.get $field) (i32.const 0)))
+        (local.set $entry (call $make_record (i32.const 281) (i32.const 2)))
+        (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
+        (call $record_set (local.get $entry) (i32.const 1) (i32.const 0))
+        (local.set $new_len
+          (i32.add (global.get $lower_captures_len_g) (i32.const 1)))
+        (global.set $lower_captures_ptr
+          (call $list_extend_to (global.get $lower_captures_ptr) (local.get $new_len)))
+        (drop (call $list_set (global.get $lower_captures_ptr)
+                              (global.get $lower_captures_len_g)
+                              (local.get $entry)))
+        (global.set $lower_captures_len_g (local.get $new_len))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each))))
 
   ;; ─── $lower_handler_arms_records — chunk-private arm-record list ──
   ;; Per src/lower.mn:732-744 wheel canonical. Returns list of

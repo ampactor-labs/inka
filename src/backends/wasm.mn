@@ -289,6 +289,7 @@ fn collect_strings_expr(expr, buf, count, next_offset) = match expr {
   },
   LFeedback(_, b, s)          => collect_strings_bin(b, s, buf, count, next_offset),
   LPerform(_, _, args)        => collect_strings_list(args, buf, count, next_offset),
+  LWasiCall(_, _, args)       => collect_strings_list(args, buf, count, next_offset),
   LHandle(_, b, _arms)        => collect_strings_expr(b, buf, count, next_offset),
   LEvPerform(_, _, _, args)   => collect_strings_list(args, buf, count, next_offset),
   LFieldLoad(_, rec, _)       => collect_strings_expr(rec, buf, count, next_offset),
@@ -389,6 +390,7 @@ fn collect_slots_expr(expr, buf, count) = match expr {
     collect_slots_bin_list(hn, inits, buf1, count1)
   },
   LPerform(_, _, args)       => collect_slots_list(args, buf, count),
+  LWasiCall(_, _, args)      => collect_slots_list(args, buf, count),
   LHandle(_, b, _arms)       => collect_slots_expr(b, buf, count),
   LEvPerform(_, _, _, args)  => collect_slots_list(args, buf, count),
   LFieldLoad(_, rec, _)      => collect_slots_expr(rec, buf, count),
@@ -547,6 +549,7 @@ fn collect_fn_names_expr(expr, buf, count) = match expr {
     collect_fn_names_expr(s, b1, c1)
   },
   LPerform(_h, _n, args)     => collect_fn_names_list(args, buf, count),
+  LWasiCall(_h, _n, args)    => collect_fn_names_list(args, buf, count),
   LHandle(_h, b, _arms)      => collect_fn_names_expr(b, buf, count),
   LEvPerform(_h, _n, _s, a)  => collect_fn_names_list(a, buf, count),
   LFieldLoad(_h, rec, _off)  => collect_fn_names_expr(rec, buf, count),
@@ -746,6 +749,7 @@ fn max_arity_expr(expr) = match expr {
   LTailCall(_, _, args)     => args.len + 1,
   LSuspend(_, _, _, args, _) => args.len + 1,
   LPerform(_, _, args)      => args.len,
+  LWasiCall(_, _, args)     => args.len,
   LEvPerform(_, _, _, args) => args.len + 1,
   LLet(_, _, inner)         => max_arity_expr(inner),
   LMakeClosure(_, _, _, _)         => 0,
@@ -982,6 +986,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   LFeedback(_h, b, s)        => collect_fn_emit_records_expr(b)
                                   ++ collect_fn_emit_records_expr(s),
   LPerform(_h, _n, args)     => collect_fn_emit_records(args),
+  LWasiCall(_h, _n, args)    => collect_fn_emit_records(args),
   LHandle(_h, b, _arms)      => collect_fn_emit_records_expr(b),
   LEvPerform(_h, _n, _s, a)  => collect_fn_emit_records(a),
   LFieldLoad(_h, rec, _off)  => collect_fn_emit_records_expr(rec),
@@ -1173,6 +1178,7 @@ fn emit_let_locals_expr(expr) = match expr {
     perform wat_emit(" i32)\n")
   },
   LPerform(_h, _n, args)    => emit_let_locals_list(args),
+  LWasiCall(_h, _n, args)   => emit_let_locals_list(args),
   LHandle(_h, b, _arms)     => emit_let_locals_expr(b),
   LEvPerform(_h, _n, _s, a) => emit_let_locals_list(a),
   LFieldLoad(_h, rec, _off) => emit_let_locals_expr(rec),
@@ -1787,6 +1793,17 @@ fn emit_expr(expr) = match expr {
     emit_expr_list(args)
     perform wat_emit("    (call $op_")
     perform wat_emit(op_name)
+    perform wat_emit(")\n")
+  },
+
+  LWasiCall(_h, import_name, args) => {
+    // Stage 4a: direct WASM-level import call. NO __state push
+    // (WASI imports don't take a closure record); NO $op_ prefix
+    // (the import IS the bridge). Per
+    // protocol_bootstrap_wasi_threads_substrate.md.
+    emit_expr_list(args)
+    perform wat_emit("    (call $")
+    perform wat_emit(import_name)
     perform wat_emit(")\n")
   },
 

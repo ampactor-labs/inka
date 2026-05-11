@@ -223,6 +223,14 @@ type LowExpr
   // protocol_handler_is_state_is_closure_is_evidence.md, so the store
   // mutates handler state across resume calls.
   | LStateSlotStore(Int, Int, LowExpr)         // handle, slot_offset, value
+  // Stage 4a: direct WASM-level import call. perform-form recognized at
+  // lower-time when op_name matches a known WASI import (wasi_thread_
+  // spawn, wasi_num_cores, fd_write, fd_read, path_open, etc.) bridges
+  // through this variant so emit produces `(call $<import_name> args)`
+  // directly — bypassing the LPerform/$op_<name> handler-arm dispatch
+  // (which would require a wrapper fn). The import IS the bridge; no
+  // wrapper. Per protocol_bootstrap_wasi_threads_substrate.md Stage 4.
+  | LWasiCall(Int, String, List)               // handle, import name (no $ prefix), args
 
 type LowValue
   = LInt(Int)
@@ -278,7 +286,8 @@ fn lexpr_handle(e) with Pure = match e {
   LHandle(h, _, _)        => h,
   LEvPerform(h, _, _, _)  => h,
   LFieldLoad(h, _, _)     => h,
-  LStateSlotStore(h, _, _) => h
+  LStateSlotStore(h, _, _) => h,
+  LWasiCall(h, _, _)      => h
 }
 
 fn lexpr_ty(e) with LookupTy = {
@@ -610,14 +619,22 @@ fn lower_expr_body(e, handle, span) = match e {
     // for the innermost handler that handles op_name; the resolved
     // handler_name combines with op_name into the discriminated
     // target $op_<handler>_<op>.
+    //
+    // Stage 4a: WASI import names bridge directly to the WASM-level
+    // import — no handler-arm wrapper needed. The import IS the bridge.
+    // Per protocol_bootstrap_wasi_threads_substrate.md.
     let lo_args = lower_expr_list(args)
-    match perform inf_handler_provider(op_name) {
-      Some(handler_name) =>
-        LPerform(handle,
-                 handler_name |> str_concat("_") |> str_concat(op_name),
-                 lo_args),
-      None =>
-        LPerform(handle, op_name, lo_args)
+    if is_wasi_import_op(op_name) {
+      LWasiCall(handle, op_name, lo_args)
+    } else {
+      match perform inf_handler_provider(op_name) {
+        Some(handler_name) =>
+          LPerform(handle,
+                   handler_name |> str_concat("_") |> str_concat(op_name),
+                   lo_args),
+        None =>
+          LPerform(handle, op_name, lo_args)
+      }
     }
   },
 
@@ -1563,6 +1580,32 @@ fn cfv_merge(a, b) = {
 }
 
 fn cfv_contains(lst, s) = any((x) => str_eq(x, s), lst)
+
+/// Stage 4a: WASI import-name predicate. Recognized op names bridge
+/// to the WASM-level import via LWasiCall instead of LPerform's
+/// $op_<name> handler-arm dispatch. Per
+/// protocol_bootstrap_wasi_threads_substrate.md — the import IS the
+/// bridge; no wrapper function required.
+fn is_wasi_import_op(name) with Pure = {
+  str_eq(name, "wasi_thread_spawn")
+    || str_eq(name, "wasi_num_cores")
+    || str_eq(name, "fd_write")
+    || str_eq(name, "fd_read")
+    || str_eq(name, "fd_close")
+    || str_eq(name, "path_open")
+    || str_eq(name, "path_create_directory")
+    || str_eq(name, "path_filestat_get")
+    || str_eq(name, "path_unlink_file")
+    || str_eq(name, "path_rename")
+    || str_eq(name, "fd_readdir")
+    || str_eq(name, "proc_exit")
+    || str_eq(name, "atomic_load_i32")
+    || str_eq(name, "atomic_store_i32")
+    || str_eq(name, "atomic_rmw")
+    || str_eq(name, "wait_i32")
+    || str_eq(name, "notify")
+    || str_eq(name, "fence")
+}
 
 // String interpolation lowering. Reduce a list of LowExpr fragments
 // (alternating literal-chunks + spliced-exprs) to a left-fold of

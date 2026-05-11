@@ -976,7 +976,19 @@ fn lower_stmt_body(s, handle, span) = match s {
         perform ls_bind_local(name, expr_h)
         LLet(handle, name, lo)
       },
-      _ => lo     // non-binding let (destructure handled by emit)
+      _ => {
+        // Destructure patterns (PTuple, PCon, PList, PRecord): each
+        // leaf-PVar must register as a local so subsequent VarRef
+        // lookups in this scope resolve to a local, not LUnresolved.
+        // bind_pat_locals walks the pat tree and ls_bind_locals every
+        // leaf. The runtime destructure itself (loading tuple-field
+        // values into the local slots) lands at emit time per
+        // Hβ.emit.pattern-destructure-let; for now the name-resolution
+        // path is the substrate move that unblocks compile-time
+        // resolution of all leaves.
+        bind_pat_locals(pat)
+        lo
+      }
     }
   },
 

@@ -263,7 +263,10 @@ fn collect_strings_expr(expr, buf, count, next_offset) = match expr {
   LStateGet(_, _)             => (buf, count, next_offset),
   LStateSet(_, _, v)          => collect_strings_expr(v, buf, count, next_offset),
   LRegion(_, body)            => collect_strings_list(body, buf, count, next_offset),
-  LHandleWith(_, b, hn, _hname) => collect_strings_bin(b, hn, buf, count, next_offset),
+  LHandleWith(_, b, hn, _hname, inits) => {
+    let (buf1, count1, o1) = collect_strings_expr(b, buf, count, next_offset)
+    collect_strings_bin_list(hn, inits, buf1, count1, o1)
+  },
   LFeedback(_, b, s)          => collect_strings_bin(b, s, buf, count, next_offset),
   LPerform(_, _, args)        => collect_strings_list(args, buf, count, next_offset),
   LHandle(_, b, _arms)        => collect_strings_expr(b, buf, count, next_offset),
@@ -361,7 +364,10 @@ fn collect_slots_expr(expr, buf, count) = match expr {
     collect_slots_list(ev, buf1, count1)
   },
   LRegion(_, body)           => collect_slots_list(body, buf, count),
-  LHandleWith(_, b, hn, _hname) => collect_slots_bin(b, hn, buf, count),
+  LHandleWith(_, b, hn, _hname, inits) => {
+    let (buf1, count1) = collect_slots_expr(b, buf, count)
+    collect_slots_bin_list(hn, inits, buf1, count1)
+  },
   LPerform(_, _, args)       => collect_slots_list(args, buf, count),
   LHandle(_, b, _arms)       => collect_slots_expr(b, buf, count),
   LEvPerform(_, _, _, args)  => collect_slots_list(args, buf, count),
@@ -527,9 +533,10 @@ fn collect_fn_names_expr(expr, buf, count) = match expr {
   },
   LStateSet(_h, _s, v)       => collect_fn_names_expr(v, buf, count),
   LRegion(_h, body)          => collect_fn_names_list(body, buf, count),
-  LHandleWith(_h, b, hn, _hname) => {
+  LHandleWith(_h, b, hn, _hname, inits) => {
     let (b1, c1) = collect_fn_names_expr(b, buf, count)
-    collect_fn_names_expr(hn, b1, c1)
+    let (b2, c2) = collect_fn_names_expr(hn, b1, c1)
+    collect_fn_names_list(inits, b2, c2)
   },
   LFeedback(_h, b, s) => {
     let (b1, c1) = collect_fn_names_expr(b, buf, count)
@@ -773,7 +780,7 @@ fn max_arity_expr(expr) = match expr {
   LStateGet(_, _)           => 0,
   LStateSet(_, _, _)        => 0,
   LRegion(_, _)             => 0,
-  LHandleWith(_, _, _, _)   => 0,
+  LHandleWith(_, _, _, _, _) => 0,
   LFeedback(_, _, _)        => 0,
   LHandle(_, _, _)          => 0,
   LFieldLoad(_, _, _)       => 0,
@@ -941,7 +948,11 @@ fn emit_fns_expr(expr) = match expr {
   },
   LStateSet(_h, _s, v)       => emit_fns_expr(v),
   LRegion(_h, body)          => emit_fns_list(body),
-  LHandleWith(_h, b, hn, _hname) => { emit_fns_expr(b); emit_fns_expr(hn) },
+  LHandleWith(_h, b, hn, _hname, inits) => {
+    emit_fns_expr(b)
+    emit_fns_expr(hn)
+    emit_fns_list(inits)
+  },
   LFeedback(_h, b, s)        => { emit_fns_expr(b); emit_fns_expr(s) },
   LPerform(_h, _n, args)     => emit_fns_list(args),
   LHandle(_h, b, _arms)      => emit_fns_expr(b),
@@ -1058,7 +1069,11 @@ fn emit_let_locals_expr(expr) = match expr {
   },
   LStateSet(_h, _s, v)      => emit_let_locals_expr(v),
   LRegion(_h, body)         => emit_let_locals_list(body),
-  LHandleWith(_h, b, hn, _hname) => { emit_let_locals_expr(b); emit_let_locals_expr(hn) },
+  LHandleWith(_h, b, hn, _hname, inits) => {
+    emit_let_locals_expr(b)
+    emit_let_locals_expr(hn)
+    emit_let_locals_list(inits)
+  },
   LFeedback(h, b, s)        => {
     emit_let_locals_expr(b)
     emit_let_locals_expr(s)
@@ -1175,6 +1190,32 @@ fn emit_start(top_fn_names) = {
   perform wat_emit("    (call $proc_exit (i32.const 0))\n")
   perform wat_emit("  )\n")
   perform wat_emit("  (export \"_start\" (func $_start))\n")
+}
+
+// Emit a sequence of `(local.get $<state_local>) <init_emit> (i32.store
+// offset=<8+i*4>)` for each init in source order. Used by LHandleWith's
+// emit arm to populate the freshly-allocated state record before the
+// global-set. Per protocol_handler_is_state_is_closure_is_evidence.md
+// (ONE record, FOUR roles) — state slots live at 8+i*4, matching
+// resolve_state_slot_offset in lower.mn:1195 so arm-body reads match.
+//
+// Drift refused:
+// - 11 list-accumulator concat in loop: recursion uses list_head /
+//   list_tail directly; no append-by-one accumulator pattern.
+// - 9 deferred-by-omission: closes #145 in this commit alongside the
+//   lower-side threading.
+fn emit_state_init_writes(state_local, inits, idx) = {
+  if inits.len == 0 { () }
+  else {
+    perform wat_emit("(local.get $")
+    perform wat_emit(state_local)
+    perform wat_emit(")")
+    emit_expr(list_head(inits))
+    perform wat_emit("(i32.store offset=")
+    perform wat_emit(int_to_str(8 + idx * 4))
+    perform wat_emit(")\n")
+    emit_state_init_writes(state_local, list_tail(inits), idx + 1)
+  }
 }
 
 // Exhaustive match on every LowExpr variant; no _ fallback.
@@ -1552,31 +1593,35 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    ;; region exit\n")
   },
 
-  LHandleWith(h, body, _handler, hname) => {
-    // ~> install — allocate state record, bind to $<handler_name>_state_g
-    // per protocol_handler_is_state_is_closure_is_evidence.md (ONE record,
-    // FOUR roles). Mirrors seed's $emit_lhandlewith
-    // (bootstrap/src/emit/emit_handler.wat:415-442) so mentl3.wat matches
-    // mentl2.wat byte-for-byte at L1 closure.
+  LHandleWith(h, body, _handler, hname, inits) => {
+    // ~> install — allocate state record, write `with field = init`
+    // values at offset 8+i*4 of the record, bind global. Mirrors seed's
+    // $emit_lhandlewith (bootstrap/src/emit/emit_handler.wat) so
+    // mentl3.wat matches mentl2.wat byte-for-byte at L1.
     //
-    // Anonymous handle-expressions have hname = "" — no global to set;
-    // skip and emit body only (matches seed's $emit_hstate_global_set's
-    // i32.eqz handler_name early-return).
+    // Per protocol_handler_is_state_is_closure_is_evidence.md (ONE
+    // record, FOUR roles): state slots live at offsets 8+i*4 where i
+    // is source-order position in the handler-decl's `with` clause.
+    // resolve_state_slot_offset (lower.mn:1195) uses the same scheme
+    // so arm-body reads match install-time writes.
     //
-    // State-field init writes are the NEXT substrate step
-    // (Hβ.emit.handler-state-field-init-writes — peer follow-up):
-    // each `with field = init` value lowers + stores at offset 8+i*4.
-    // Currently zero-init via $alloc which is wrong for non-empty
-    // initial values (e.g. graph_handler's nodes=[] is a heap empty-list
-    // record, not 0). #144 is the empirical witness.
+    // Anonymous handle-expressions have hname = "" — no global to set
+    // (matches seed's $emit_hstate_global_set i32.eqz early-return);
+    // emit body only.
     if str_eq(hname, "") {
       emit_expr(body)
     } else {
-      perform wat_emit("(global.get $heap_ptr)(local.set $__hstate_")
-      perform wat_emit(int_to_str(h))
-      perform wat_emit(")(global.get $heap_ptr)(i32.const 64)(i32.add)(global.set $heap_ptr)")
-      perform wat_emit("(local.get $__hstate_")
-      perform wat_emit(int_to_str(h))
+      let local_name = str_concat("__hstate_", int_to_str(h))
+      // alloc 64 bytes via the canonical bump pattern (mirrors seed's
+      // $emit_alloc 5-piece form).
+      perform wat_emit("(global.get $heap_ptr)(local.set $")
+      perform wat_emit(local_name)
+      perform wat_emit(")(global.get $heap_ptr)(i32.const 64)(i32.add)(global.set $heap_ptr)\n")
+      // Write each state-field init at offset 8+i*4 in source order.
+      emit_state_init_writes(local_name, inits, 0)
+      // Bind the freshly-init'd record to $<hname>_state_g.
+      perform wat_emit("(local.get $")
+      perform wat_emit(local_name)
       perform wat_emit(")(global.set $")
       perform wat_emit(hname)
       perform wat_emit("_state_g)\n")

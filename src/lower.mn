@@ -114,6 +114,56 @@ handler arm_state_default {
   current_state_fields() => resume([])
 }
 
+/// Per-handler state-field-init registry. HandlerDeclStmt lowering
+/// registers (handler_name, lowered_state_inits); PTee install sites
+/// query by name to embed inits into LHandleWith. emit_lhandlewith
+/// emits each init's store at offset 8+i*4 of the freshly-allocated
+/// state record per protocol_handler_is_state_is_closure_is_evidence.md.
+///
+/// Drift refused:
+/// - 7 parallel-rep: ledger is single source of truth; no separate
+///   handler_name_list + state_inits_list arrays.
+/// - 3 string-keyed-when-structured: name is genuinely a String here
+///   (the handler's symbol used at install).
+/// - 9 deferred-by-omission: the second half of #144 substrate, paired
+///   with commit 5fccd9c's first half (alloc + global set). State-init
+///   writes complete the handler-state-record install per
+///   protocol_call_indirect_paradox_2026_05_10.md.
+effect HandlerStateInitsRegistry {
+  register_handler_state_inits(String, List) -> Int
+  lookup_handler_state_inits(String) -> List
+}
+
+handler handler_state_inits_registry with ledger = [] {
+  register_handler_state_inits(name, inits) => {
+    // Prepend: O(1) on snoc-tree lists; lookup walks head-first so
+    // most-recent registration wins (handler names are unique per
+    // source so order is not semantically observable).
+    resume(0)
+      with ledger = [{name: name, inits: inits}] ++ ledger
+  },
+  lookup_handler_state_inits(name) => {
+    resume(find_state_inits_by_name(name, ledger))
+  }
+}
+
+/// Empty default for contexts where the registry isn't installed (e.g.
+/// arm-body lowering invoked outside lower_program). Returns [] for any
+/// lookup; register is a no-op.
+handler handler_state_inits_default {
+  register_handler_state_inits(_name, _inits) => resume(0),
+  lookup_handler_state_inits(_name)           => resume([])
+}
+
+fn find_state_inits_by_name(name, ledger) = {
+  if ledger.len == 0 { [] }
+  else {
+    let entry = list_head(ledger)
+    if str_eq(entry.name, name) { entry.inits }
+    else { find_state_inits_by_name(name, list_tail(ledger)) }
+  }
+}
+
 /// Every variant carries a source TypeHandle (Int), never a cached Ty.
 /// Type reads go through `perform lookup_ty(h)`. Emit consumes this IR;
 /// the handle is the live bridge back to the graph.
@@ -153,7 +203,7 @@ type LowExpr
   | LStateGet(Int, Int)
   | LStateSet(Int, Int, LowExpr)
   | LRegion(Int, List)                         // arena scope
-  | LHandleWith(Int, LowExpr, LowExpr, String) // ~> desugaring; 4th = handler_name ("" for anonymous) — needed by emit to set $<handler_name>_state_g per protocol_handler_is_state_is_closure_is_evidence.md
+  | LHandleWith(Int, LowExpr, LowExpr, String, List) // ~> desugaring; 4th = handler_name ("" for anonymous), 5th = state_inits as List<LowExpr> (one per source-order state field) — emit allocates record, writes inits at offset 8+i*4, sets $<handler_name>_state_g per protocol_handler_is_state_is_closure_is_evidence.md
   | LFeedback(Int, LowExpr, LowExpr)           // <~ desugaring (iterative ctx required)
   | LPerform(Int, String, List)                // effect op invocation — monomorphic direct-call form
   | LHandle(Int, LowExpr, List)                // body + arms (handle-expression)
@@ -225,7 +275,7 @@ fn lexpr_handle(e) with Pure = match e {
   LStateGet(h, _)         => h,
   LStateSet(h, _, _)      => h,
   LRegion(h, _)           => h,
-  LHandleWith(h, _, _, _) => h,
+  LHandleWith(h, _, _, _, _) => h,
   LFeedback(h, _, _)      => h,
   LPerform(h, _, _)       => h,
   LHandle(h, _, _)        => h,
@@ -648,20 +698,25 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     // correct tree shape: PTeeBlock for newline-before-~> (wraps the
     // whole prior chain), PTeeInline for no-newline (wraps the
     // preceding stage). At the LIR level both lower identically —
-    // LHandleWith(handle, body, handler, handler_name) — because the
-    // body's shape is already baked into the tree; emit reads the
-    // scope from the expression layout. handler_name threads from the
-    // AST right-side via extract_handler_name so emit can build
-    // `$<handler_name>_state_g` per protocol_handler_is_state_is_closure_is_evidence.md.
+    // LHandleWith(handle, body, handler, handler_name, state_inits).
+    // handler_name threads from the AST right-side via
+    // extract_handler_name. state_inits come from the per-handler
+    // registry populated at HandlerDeclStmt lower time, retrieved by
+    // name. Empty list when handler-name is "" (anonymous handle-expr)
+    // or unregistered (registry returns []).
     let lo_l = lower_expr(left)
     let lo_r = lower_expr(right)
-    LHandleWith(handle, lo_l, lo_r, extract_handler_name(right))
+    let hname = extract_handler_name(right)
+    let inits = perform lookup_handler_state_inits(hname)
+    LHandleWith(handle, lo_l, lo_r, hname, inits)
   },
 
   PTeeInline => {
     let lo_l = lower_expr(left)
     let lo_r = lower_expr(right)
-    LHandleWith(handle, lo_l, lo_r, extract_handler_name(right))
+    let hname = extract_handler_name(right)
+    let inits = perform lookup_handler_state_inits(hname)
+    LHandleWith(handle, lo_l, lo_r, hname, inits)
   },
 
   PFeedback => {
@@ -990,6 +1045,14 @@ fn lower_stmt_body(s, handle, span) = match s {
     // sites (monomorphic) or routes to LEvPerform via evidence-slot
     // dispatch (multi-handler / polymorphic — H1.6).
     let arm_decls = lower_handler_arms_as_decls(arms, name, config, state)
+    // Lower each state-field's init expression and register the list
+    // in the handler-state-inits registry so PTee install sites can
+    // embed inits into LHandleWith. Per
+    // protocol_handler_is_state_is_closure_is_evidence.md the init
+    // writes complete the state record at install (commit 5fccd9c
+    // landed alloc + global set; this lands the field writes).
+    let state_inits_lowered = lower_state_field_inits(state)
+    perform register_handler_state_inits(name, state_inits_lowered)
     LBlock(handle, list_concat(arm_decls, [LConst(handle, LInt(0))]))
   },
   ImportStmt(_module)                       => LConst(handle, LInt(0)),
@@ -1172,6 +1235,19 @@ fn state_field_names_of(state) = {
   else {
     let field = list_head(state)
     [field.name] ++ state_field_names_of(list_tail(state))
+  }
+}
+
+/// Lower each state-field's init expression to LowExpr in source order.
+/// The returned list[i] is the LowExpr for the i-th state field's init.
+/// emit_lhandlewith stores list[i] at offset 8 + i*4 of the freshly-
+/// allocated state record at handler-install per
+/// protocol_handler_is_state_is_closure_is_evidence.md.
+fn lower_state_field_inits(state) = {
+  if state.len == 0 { [] }
+  else {
+    let field = list_head(state)
+    [lower_expr(field.init)] ++ lower_state_field_inits(list_tail(state))
   }
 }
 
@@ -1611,6 +1687,7 @@ fn lower_program(stmts) = {
   let globals = collect_top_level_names(stmts)
   perform ls_register_globals(globals)
   lower_stmt_list(stmts)
+    ~> handler_state_inits_registry
 }
 
 /// Ω.3 — top-level name collection uses the buffer substrate. The number

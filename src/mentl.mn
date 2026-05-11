@@ -186,17 +186,7 @@ fn suggestion_kind_of(ann) with Pure = match ann {
 
 /// Capability ADT to display label list. Used by AnnotationSuggestion.unlocks.
 /// Composition over `show_capability` (already in mentl.mn).
-fn capability_labels(caps) with Pure = {
-  capability_labels_loop(caps, 0, caps.len, make_list(caps.len), 0)
-}
-
-fn capability_labels_loop(caps, i, n, buf, buf_len) with Pure = {
-  if i >= n { slice(buf, 0, buf_len) }
-  else {
-    list_set(buf, buf_len, show_capability(list_index(caps, i)))
-    capability_labels_loop(caps, i + 1, n, buf, buf_len + 1)
-  }
-}
+fn capability_labels(caps) with Pure = map(show_capability, caps)
 
 /// Suggestion's Reason edge. Wraps the candidate's anchor reason in a
 /// Located/Inferred chain that the Why-tentacle walks. Span comes from
@@ -226,29 +216,24 @@ fn suggestion_kind_label(k) with Pure = match k {
 }
 
 /// Try each candidate: checkpoint → tentative apply → verify → rollback.
+/// Per-candidate is the divergent-fanout topology — each ann's
+/// checkpoint isolates it from siblings; the predicate-with-side-effect
+/// IS the proof-search step. Filter retains proven ones; map wraps as
+/// (ann, capability). Each branch independently verifiable: the
+/// `<|` parallel-fanout substrate empowers this once a per-thread
+/// graph lands (peer `Hβ.cursor.speculative-compile`); the sequential
+/// filter IS the same semantics under single-graph dispatch.
 /// Returns [(Annotation, Capability)] for annotations that passed.
 fn try_each_annotation(handle, candidates, base_ty) = {
-  let n = candidates.len
-  let buf = make_list(n)
-  let proven_len = try_each_annotation_loop(handle, candidates, base_ty, 0, n, buf, 0)
-  slice(buf, 0, proven_len)
-}
-
-fn try_each_annotation_loop(handle, candidates, base_ty, i, n, buf, buf_len) = {
-  if i >= n { buf_len }
-  else {
-    let ann = list_index(candidates, i)
-    let cp = perform graph_push_checkpoint()
-    apply_annotation_tentatively(handle, ann, base_ty)
-    let ok = verify_after_apply(handle)
-    perform graph_rollback(cp)
-    if ok {
-      list_set(buf, buf_len, (ann, unlock_capability(ann)))
-      try_each_annotation_loop(handle, candidates, base_ty, i + 1, n, buf, buf_len + 1)
-    } else {
-      try_each_annotation_loop(handle, candidates, base_ty, i + 1, n, buf, buf_len)
-    }
-  }
+  candidates
+    |> filter((ann) => {
+         let cp = perform graph_push_checkpoint()
+         apply_annotation_tentatively(handle, ann, base_ty)
+         let ok = verify_after_apply(handle)
+         perform graph_rollback(cp)
+         ok
+       })
+    |> map((ann) => (ann, unlock_capability(ann)))
 }
 
 /// Speculative apply: compute the narrowed type/row and graph_bind it.
@@ -373,28 +358,15 @@ fn verify_after_apply(handle) = {
 }
 
 fn ownership_candidates(params) = {
-  let flat = list_to_flat(params)
-  let n = flat.len
-  // Each Inferred param yields 2 candidates (AOwn + ARef); buffer
-  // sized for the maximum (2n); slice trims to the actual count.
-  let buf = make_list(n * 2)
-  let filled = ownership_candidates_loop(flat, 0, n, buf, 0)
-  slice(buf, 0, filled)
-}
-
-fn ownership_candidates_loop(params, i, n, buf, buf_len) = {
-  if i >= n { buf_len }
-  else {
-    let TParam(name, _, _, res) = list_index(params, i)
-    match res {
-      Inferred => {
-        list_set(buf, buf_len, AOwn(name, None))
-        list_set(buf, buf_len + 1, ARef(name, None))
-        ownership_candidates_loop(params, i + 1, n, buf, buf_len + 2)
-      },
-      _ => ownership_candidates_loop(params, i + 1, n, buf, buf_len)
-    }
-  }
+  list_to_flat(params)
+    |> filter((p) => {
+         let TParam(_, _, _, res) = p
+         match res { Inferred => true, _ => false }
+       })
+    |> (inferred_params) => flatten(map((p) => {
+         let TParam(name, _, _, _) = p
+         [AOwn(name, None), ARef(name, None)]
+       }, inferred_params))
 }
 
 fn pick_highest_leverage(proven) = {
@@ -410,31 +382,20 @@ fn pick_highest_leverage(proven) = {
 }
 
 fn find_by_priority(proven, priorities) = {
-  find_by_priority_loop(proven, priorities, 0, priorities.len)
-}
-
-fn find_by_priority_loop(proven, priorities, i, n) = {
-  if i >= n { None }
-  else {
-    let target = list_index(priorities, i)
-    match find_annotation(proven, target) {
-      Some(pair) => Some(pair),
-      None       => find_by_priority_loop(proven, priorities, i + 1, n)
-    }
-  }
+  let matches = filter((target) => match find_annotation(proven, target) {
+    Some(_) => true,
+    None    => false
+  }, priorities)
+  if matches.len == 0 { None }
+  else { find_annotation(proven, head(matches)) }
 }
 
 fn find_annotation(proven, target) = {
-  find_annotation_loop(proven, target, 0, proven.len)
-}
-
-fn find_annotation_loop(proven, target, i, n) = {
-  if i >= n { None }
-  else {
-    let (ann, cap) = list_index(proven, i)
-    if annotation_eq(ann, target) { Some((ann, cap)) }
-    else { find_annotation_loop(proven, target, i + 1, n) }
-  }
+  let hits = filter((pair) => {
+    let (ann, _) = pair
+    annotation_eq(ann, target)
+  }, proven)
+  if hits.len == 0 { None } else { Some(head(hits)) }
 }
 
 /// Span-insensitive: two APure(_) compare equal regardless of source
@@ -532,25 +493,7 @@ handler synth_enumerative {
   enumerate_inhabitants(_ty, _eff, _ctx) => resume([])
 }
 
-fn verify_each(candidates) = {
-  let n = candidates.len
-  let buf = make_list(n)
-  let kept = verify_each_loop(candidates, 0, n, buf, 0)
-  slice(buf, 0, kept)
-}
-
-fn verify_each_loop(candidates, i, n, buf, buf_len) = {
-  if i >= n { buf_len }
-  else {
-    let c = list_index(candidates, i)
-    if perform verify_candidate(c) {
-      list_set(buf, buf_len, c)
-      verify_each_loop(candidates, i + 1, n, buf, buf_len + 1)
-    } else {
-      verify_each_loop(candidates, i + 1, n, buf, buf_len)
-    }
-  }
-}
+fn verify_each(candidates) = filter((c) => perform verify_candidate(c), candidates)
 
 /// Fill a typed hole with the first proven candidate from the Synth proposer chain.
 fn teach_synthesize(hole_handle, context) = {

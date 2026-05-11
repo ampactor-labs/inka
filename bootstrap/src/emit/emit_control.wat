@@ -664,54 +664,100 @@
     (local.get $new_path))
 
   ;; $ec5_emit_pat_nested_predicate — recursive nested-LPCon tag-check
-  ;; predicate. Walks sub_pats; for each LPCon at index i, emits
-  ;; (local.get $scrut_tmp)(load chain)(i32.load offset=field_offset)
-  ;; (i32.load offset=0)(i32.const sub_tag)(i32.eq)(i32.and). The
-  ;; (i32.and) combines this check with the previously-on-stack predicate
-  ;; (the outer LPCon's tag check pushed by emit_lmatch). Recurses into
-  ;; each nested LPCon's sub-pats with extended path.
+  ;; predicate with SHORT-CIRCUIT evaluation. Caller has pushed the
+  ;; prior tag-eq bool on the wasm stack. For each LPCon sub-pat at
+  ;; index i, wraps the continuation in (if (result i32) (then <new
+  ;; check + recursion>) (else (i32.const 0))) so the inner sub-field
+  ;; load only fires when the outer tag matched. Avoids reading
+  ;; offset-4 of a variant that doesn't have an inner field
+  ;; (e.g. NError sentinel vs NStmt), which surfaces as memory-fault
+  ;; on speculative i32.load. Mirrors src/backends/wasm.mn's
+  ;; emit_pat_nested_predicate post-Hβ.first-light.lex-from-and-scan-
+  ;; string-return-shape-unification.
   ;;
-  ;; Per protocol_emit_is_graph_projection.md: the graph's pat tree IS
-  ;; the predicate; emit projects all tag-checks into one cumulative
-  ;; conjunction. Drift refusals: 1 (recursive emit, no dispatch table);
-  ;; 8 (i32.and combine, not flag-state).
+  ;; Recursive (not loop) — each LPCon arm naturally opens one (if
+  ;; (then) (else)) and closes it after descending into its own
+  ;; sub_pats then recursing on the tail. Non-LPCon (LPVar/LPWild/etc.)
+  ;; pass through with no predicate contribution.
   (func $ec5_emit_pat_nested_predicate
-        (param $sub_pats i32) (param $i_in i32)
+        (param $sub_pats i32) (param $i i32)
         (param $path i32) (param $path_len i32)
     (local $n i32) (local $p i32) (local $ptag i32) (local $field_offset i32)
-    (local $extended_path i32) (local $i i32)
-    (local.set $i (local.get $i_in))
+    (local $extended_path i32)
     (local.set $n (call $len (local.get $sub_pats)))
-    (block $done
-      (loop $iter
-        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $p (call $list_index (local.get $sub_pats) (local.get $i)))
-        (local.set $ptag (call $tag_of (local.get $p)))
-        (if (i32.eq (local.get $ptag) (i32.const 363))            ;; LPCon
-          (then
-            (local.set $field_offset
-              (i32.add (i32.const 4) (i32.mul (i32.const 4) (local.get $i))))
-            ;; Emit AND + nested tag check.
-            (call $ec5_emit_local_get_scrut_tmp)
-            (call $ec5_emit_load_chain
-              (local.get $path) (local.get $path_len))
-            (call $el_emit_i32_load_offset (local.get $field_offset))
-            (call $el_emit_i32_load_offset (i32.const 0))
-            (call $emit_i32_const (call $lowpat_lpcon_tag_id (local.get $p)))
-            (call $ec5_emit_i32_eq)
-            (call $ec5_emit_i32_and)
-            ;; Recurse into nested LPCon's sub-pats with extended path.
-            (local.set $extended_path
-              (call $ec5_path_extend
-                (local.get $path) (local.get $path_len)
-                (local.get $field_offset)))
-            (call $ec5_emit_pat_nested_predicate
-              (call $lowpat_lpcon_args (local.get $p))
-              (i32.const 0)
-              (local.get $extended_path)
-              (i32.add (local.get $path_len) (i32.const 1)))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter))))
+    (if (i32.ge_u (local.get $i) (local.get $n))
+      (then (return)))
+    (local.set $p (call $list_index (local.get $sub_pats) (local.get $i)))
+    (local.set $ptag (call $tag_of (local.get $p)))
+    (if (i32.eq (local.get $ptag) (i32.const 363))            ;; LPCon
+      (then
+        (local.set $field_offset
+          (i32.add (i32.const 4) (i32.mul (i32.const 4) (local.get $i))))
+        ;; Open short-circuit if; consumes prior bool from stack.
+        (call $ec5_emit_if_result_i32_then)
+        ;; Emit new check: scrut + load_chain + load offset + load 0 + const + eq.
+        (call $ec5_emit_local_get_scrut_tmp)
+        (call $ec5_emit_load_chain
+          (local.get $path) (local.get $path_len))
+        (call $el_emit_i32_load_offset (local.get $field_offset))
+        (call $el_emit_i32_load_offset (i32.const 0))
+        (call $emit_i32_const (call $lowpat_lpcon_tag_id (local.get $p)))
+        (call $ec5_emit_i32_eq)
+        ;; Recurse into this LPCon's sub-pats with extended path.
+        (local.set $extended_path
+          (call $ec5_path_extend
+            (local.get $path) (local.get $path_len)
+            (local.get $field_offset)))
+        (call $ec5_emit_pat_nested_predicate
+          (call $lowpat_lpcon_args (local.get $p))
+          (i32.const 0)
+          (local.get $extended_path)
+          (i32.add (local.get $path_len) (i32.const 1)))
+        ;; Continue with sibling sub-pats (still inside the if-then).
+        (call $ec5_emit_pat_nested_predicate
+          (local.get $sub_pats)
+          (i32.add (local.get $i) (i32.const 1))
+          (local.get $path) (local.get $path_len))
+        ;; Close: (else (i32.const 0))).
+        (call $ec5_emit_else_const_0_close))
+      (else
+        ;; Non-LPCon — pass through, recurse to next sibling.
+        (call $ec5_emit_pat_nested_predicate
+          (local.get $sub_pats)
+          (i32.add (local.get $i) (i32.const 1))
+          (local.get $path) (local.get $path_len)))))
+
+  ;; $ec5_emit_if_result_i32_then — emits: (if (result i32)(then
+  ;; Short-circuit predicate open: consumes prior bool on stack.
+  (func $ec5_emit_if_result_i32_then
+    (call $ec5_emit_if_open_with_result_i32)
+    (call $ec5_emit_then_open))
+
+  ;; $ec5_emit_else_const_0_close — emits: )(else(i32.const 0)))
+  ;; Closes short-circuit predicate. If outer was false, pushes 0
+  ;; instead of evaluating inner predicate.
+  (func $ec5_emit_else_const_0_close
+    (call $emit_byte (i32.const 41))   ;; ')' close then-block
+    (call $emit_byte (i32.const 40))   ;; '('
+    (call $emit_byte (i32.const 101))  ;; 'e'
+    (call $emit_byte (i32.const 108))  ;; 'l'
+    (call $emit_byte (i32.const 115))  ;; 's'
+    (call $emit_byte (i32.const 101))  ;; 'e'
+    (call $emit_byte (i32.const 40))   ;; '('
+    (call $emit_byte (i32.const 105))  ;; 'i'
+    (call $emit_byte (i32.const 51))   ;; '3'
+    (call $emit_byte (i32.const 50))   ;; '2'
+    (call $emit_byte (i32.const 46))   ;; '.'
+    (call $emit_byte (i32.const 99))   ;; 'c'
+    (call $emit_byte (i32.const 111))  ;; 'o'
+    (call $emit_byte (i32.const 110))  ;; 'n'
+    (call $emit_byte (i32.const 115))  ;; 's'
+    (call $emit_byte (i32.const 116))  ;; 't'
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $emit_byte (i32.const 48))   ;; '0'
+    (call $emit_byte (i32.const 41))   ;; ')' close i32.const
+    (call $emit_byte (i32.const 41))   ;; ')' close else
+    (call $emit_byte (i32.const 41)))  ;; ')' close if
 
   ;; $ec5_emit_i32_and — emit (i32.and).
   (func $ec5_emit_i32_and

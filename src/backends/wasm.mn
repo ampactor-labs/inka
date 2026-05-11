@@ -2294,12 +2294,14 @@ fn emit_load_chain(path, k, path_len) = {
   }
 }
 
-// emit_pat_nested_predicate — recursive nested-LPCon tag-check predicate.
-// Walks sub_pats; for each LPCon at index i, emits the chain that loads
-// the sub-field's tag, compares to sub_tag, and i32.ands with the
-// previously-on-stack predicate. Recurses into each nested LPCon's
-// sub-pats with extended path. Same buffer-counter discipline as
-// emit_pat_field_binds_path.
+// emit_pat_nested_predicate — recursive nested-LPCon tag-check predicate
+// with SHORT-CIRCUIT evaluation. Caller has pushed the prior tag-eq
+// bool on stack. For each nested LPCon at index i, wraps the
+// continuation in `(if (result i32) (then <new check + recursion>)
+// (else (i32.const 0)))` so the inner sub-field load only fires when
+// the outer tag matched. Avoids reading offset-4 of a variant that
+// doesn't have an inner field (e.g. NError sentinel vs NStmt), which
+// would surface as memory-fault on speculative i32.load.
 fn emit_pat_nested_predicate(sub_pats, i, path, path_len) = {
   if sub_pats.len == 0 { () }
   else {
@@ -2307,6 +2309,7 @@ fn emit_pat_nested_predicate(sub_pats, i, path, path_len) = {
     let field_offset = 4 + i * 4
     match p {
       LPCon(_, tag_id, sub) => {
+        perform wat_emit("    (if (result i32)\n      (then\n")
         perform wat_emit("    (local.get $scrut_tmp)\n")
         emit_load_chain(path, 0, path_len)
         perform wat_emit("    (i32.load offset=")
@@ -2317,13 +2320,13 @@ fn emit_pat_nested_predicate(sub_pats, i, path, path_len) = {
         perform wat_emit(int_to_str(tag_id))
         perform wat_emit(")\n")
         perform wat_emit("    (i32.eq)\n")
-        perform wat_emit("    (i32.and)\n")
         let extended = list_set(path, path_len, field_offset)
         emit_pat_nested_predicate(sub, 0, extended, path_len + 1)
+        emit_pat_nested_predicate(list_tail(sub_pats), i + 1, path, path_len)
+        perform wat_emit("      )\n      (else (i32.const 0)))\n")
       },
-      _ => ()
+      _ => emit_pat_nested_predicate(list_tail(sub_pats), i + 1, path, path_len)
     }
-    emit_pat_nested_predicate(list_tail(sub_pats), i + 1, path, path_len)
   }
 }
 

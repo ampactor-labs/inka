@@ -44,14 +44,36 @@ handler wat_stdout {
   }
 }
 
-/// wat_to_string — buffer wat_emit calls into a String; wat_collect
-/// returns the buffer. Handles BOTH WasmOut.wat_emit AND WatBuffer.
-/// wat_collect — one handler, two effects. Per
-/// protocol_handler_is_state_is_closure_is_evidence.md: state IS the
-/// buffer; the handler arm body chains it through resume() with.
-handler wat_to_string with buf = "" {
-  wat_emit(s) => resume() with buf = buf |> str_concat(s),
-  wat_collect() => resume(buf)
+/// wat_to_string — buffer wat_emit calls into a flat String; wat_collect
+/// materializes ONCE at the end via str_concat_all. Handles BOTH
+/// WasmOut.wat_emit AND WatBuffer.wat_collect — one handler, two effects.
+///
+/// Per the eight interrogations on the substrate-honest accumulator:
+///   Graph:      buf is a List<String-handle>; count tracks position.
+///   Handler:    one arm per op; resume OneShot.
+///   Verb:       `~>` install (per-fn parallel emit-to-string).
+///   Row:        +Memory (per-yield list_set) — NO Alloc per yield; +Alloc
+///               fires ONCE at wat_collect via str_concat_all.
+///   Ownership:  buf owned by handler state; refs to each emitted string
+///               are borrows (immutable). Materialized result is owned.
+///   Refinement: count <= buf.len by buffer-counter discipline (Ω.3).
+///   Gradient:   O(1) amortized append per yield (doubling); O(B+N) one-
+///               time materialization at collect — locked. No narrower
+///               form exists. Drift-11 (acc ++ x in loop) closed.
+///   Reason:     each yield's source chains through unchanged; result's
+///               Reason = "concatenated emit stream from N wat_emit sites".
+///
+/// Pre-substrate (str_concat-in-resume) was O(B^2): per yield copied the
+/// growing buf bytes. For 1965-fn wheel emission, aggregate bump-allocator
+/// pressure exhausted memory mid-pass. Buffer-counter substrate cuts work
+/// to O(B+N) — millions-times speedup at wheel-scale.
+handler wat_to_string with buf = make_list(64), count = 0 {
+  wat_emit(s) => {
+    let extended = list_extend_to(buf, count + 1)
+    let written  = list_set(extended, count, s)
+    resume() with buf = written, count = count + 1
+  },
+  wat_collect() => resume(str_concat_all(slice(buf, 0, count)))
 }
 
 /// heap_base is the threshold separating sentinel ADT values from heap

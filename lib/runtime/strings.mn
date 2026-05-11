@@ -133,6 +133,50 @@ fn str_concat(a, b) with Memory + Alloc = {
   dest
 }
 
+/// str_concat_all — materialize a list of strings into ONE flat string.
+/// O(B + N) total: pass 1 sums byte_lens (O(N) graph reads); pass 2 allocs
+/// once + memcpys each view_base-resolved payload (O(B) copies, ONE alloc).
+/// View-substrate aware: each string's bytes resolve through view_base
+/// regardless of flat-vs-view shape.
+///
+/// THE substrate-honest accumulator-materialize primitive. Per the eight
+/// interrogations on drift-11 closure (acc ++ x in a loop):
+///   Graph:      list of string-handles IS the accumulator's graph state.
+///   Handler:    one arm per op; resume discipline OneShot.
+///   Verb:       this fn IS materialization; called once at result().
+///   Row:        +Memory (byte reads) +Alloc (ONE).
+///   Ownership:  refs in the list are borrows; result owns the new flat.
+///   Refinement: dest.byte_len == sum(byte_len(xs[i])) by construction.
+///   Gradient:   O(B+N) IS the locked gradient — no narrower form exists.
+///   Reason:     each input string's Reason chains through unmodified.
+///
+/// Pattern: every accumulator handler in the wheel materializes via this.
+/// Per-yield work is O(1) amortized (list_extend_to + list_set); per-result
+/// work is O(B+N) one-time. Total across N yields of B bytes: O(B + N).
+/// Drift-11 (acc-mutation-in-loop) closed structurally — no per-yield
+/// byte-copying ever happens.
+fn str_concat_all(xs) with Memory + Alloc = {
+  let total = sum_byte_lens(xs, 0, 0)
+  let dest  = perform alloc(4 + total)
+  perform store_i32(dest, total)
+  copy_strings_to(xs, dest, 4, 0)
+  dest
+}
+
+fn sum_byte_lens(xs, i, acc) with Memory =
+  if i >= xs.len { acc }
+  else { sum_byte_lens(xs, i + 1, acc + byte_len(xs[i])) }
+
+fn copy_strings_to(xs, dest, off, i) with Memory =
+  if i >= xs.len { () }
+  else {
+    let s = xs[i]
+    let n = byte_len(s)
+    let (base_buf, base_off) = view_base(s)
+    perform mem_copy(dest + off, base_buf + 4 + base_off, n)
+    copy_strings_to(xs, dest, off + n, i + 1)
+  }
+
 /// view_base — given a string of either shape, return the (flat buf,
 /// absolute start offset) backing its payload. Collapses view-of-
 /// view chains so the substrate invariant holds: every view's buf

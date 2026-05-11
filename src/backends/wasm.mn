@@ -861,9 +861,20 @@ fn emit_runtime_imports() = {
 }
 
 fn emit_memory_decl() = {
-  perform wat_emit("  (memory (export \"memory\") 32768 65536)\n")
+  // Shared memory + WASI thread-spawn import: every emitted program
+  // ships threading-ready substrate. parallel_compose handler (if
+  // installed in the program's ~> chain) dispatches via these
+  // primitives; programs that don't install parallel_compose still
+  // run identically — the shared memory + import are inert overhead
+  // when SharedMemory effects are absent. Per
+  // protocol_bootstrap_wasi_threads_substrate.md cascade Stage 2.
+  perform wat_emit("  (import \"wasi\" \"thread-spawn\" (func $wasi_thread_spawn (param i32) (result i32)))\n")
+  perform wat_emit("  (memory (export \"memory\") 32768 65536 shared)\n")
   // Bump heap starts at 1MB. The 64KB..1MB region holds static
   // string data (W5) and can accommodate future static tables.
+  // $heap_ptr is read+written through atomic.rmw on the threading
+  // path; non-threaded programs use plain global.get/set with no
+  // contention. The mut+i32 declaration supports both.
   perform wat_emit("  (global $heap_ptr (mut i32) (i32.const 1048576))\n")
   // Arena pointer (W5 swap surface). emit_memory_arena allocates
   // from this pointer; scope exits reset it to a saved snapshot
@@ -871,6 +882,14 @@ fn emit_memory_decl() = {
   // bump heap; only one strategy is active per emit (the installed
   // EmitMemory handler decides which pointer moves).
   perform wat_emit("  (global $arena_ptr (mut i32) (i32.const 1048576))\n")
+  // Thread record region: [0x800, 0x1000) = 2KB / 16 bytes per record
+  // = 128 thread slots. Layout per record (16 bytes):
+  //   offset 0: closure_ptr (i32)
+  //   offset 4: done_flag (i32 — atomic accessed)
+  //   offset 8: result (i32)
+  //   offset 12: reserved
+  // Atomic next-tid counter at offset 0x40 (clear of WASI scratch
+  // 0x50..0x250). Programs that never spawn don't touch this region.
 }
 
 // emit_functions deep-walks the lowered program and emits a WASM

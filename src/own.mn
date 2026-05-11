@@ -461,6 +461,8 @@ fn walk_return_positions(ref refs, ref node) with !Mutate = {
     NExpr(ResumeExpr(_, _))  => (),
     NExpr(MakeListExpr(_))   => (),
     NExpr(MakeTupleExpr(_))  => (),
+    NExpr(MakeStringExpr(_)) => (),
+    NExpr(IndexExpr(_, _))   => (),
     NExpr(MakeRecordExpr(_)) => (),
     NExpr(NamedRecordExpr(_, _)) => (),
     NExpr(FieldExpr(_, _))   => (),
@@ -544,6 +546,9 @@ fn count_uses(ref name, ref node) with !Mutate = {
       count_uses(name, b),
     NExpr(MakeListExpr(elems))  => count_uses_list(name, elems),
     NExpr(MakeTupleExpr(elems)) => count_uses_list(name, elems),
+    NExpr(MakeStringExpr(fragments)) => count_uses_list(name, fragments),
+    NExpr(IndexExpr(receiver, index)) =>
+      count_uses(name, receiver) + count_uses(name, index),
     NExpr(MakeRecordExpr(flds)) => count_uses_record_fields(name, flds),
     NExpr(NamedRecordExpr(_, flds)) => count_uses_record_fields(name, flds),
     NExpr(FieldExpr(rec, _))    => count_uses(name, rec),

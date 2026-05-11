@@ -1483,6 +1483,10 @@ fn cfv_expr(e, bound) = match e {
 
   MakeListExpr(elems)  => cfv_list(elems, bound),
   MakeTupleExpr(elems) => cfv_list(elems, bound),
+  MakeStringExpr(fragments) => cfv_list(fragments, bound),
+  IndexExpr(receiver, index) =>
+    cfv_merge(collect_free_vars(receiver, bound),
+              collect_free_vars(index, bound)),
   MakeRecordExpr(flds)        => cfv_record_fields(flds, bound),
   NamedRecordExpr(_, flds)    => cfv_record_fields(flds, bound),
 

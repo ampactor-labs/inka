@@ -233,17 +233,24 @@ fn ty_to_wasm_type(ty) with Pure = match ty {
 // includes the `__state` slot).
 
 fn emit_module(lowered) = {
-  let all_fn_names = collect_fn_names(lowered)
-  let top_fn_names = collect_top_level_fn_names(lowered)
-  // W5 string interning — collect every LString in the lowered
-  // program, assign each unique literal a 4-byte-aligned offset in
-  // the string-data region (starts at 0x10000 = 64KB). The pre-pass
-  // produces [(String, Int)] pairs; set_string_entries seeds the
-  // string_table handler so downstream LString emits can look up
-  // the offset via perform string_offset.
-  let string_entries = collect_string_literals(lowered)
+  // Four pre-passes deep-walk `lowered` independently — collect_fn_names,
+  // collect_top_level_fn_names, collect_string_literals, collect_state_slots.
+  // Each reads the same input and produces an independent projection;
+  // no shared mutable state across them. `<|` divergence fans them out
+  // — one source, four parallel reads. parallel_compose handler in
+  // upstream chain dispatches the four to OS threads when installed.
+  // Same source, handler swap.
+  let (all_fn_names, top_fn_names, string_entries, state_slots) =
+    lowered
+      <| (
+        (l) => collect_fn_names(l),
+        (l) => collect_top_level_fn_names(l),
+        (l) => collect_string_literals(l),
+        (l) => collect_state_slots(l)
+      )
+  // W5 string interning — seed the string_table handler so downstream
+  // LString emits can look up the offset via perform string_offset.
   perform set_string_entries(string_entries)
-  let state_slots = collect_state_slots(lowered)
   emit_header()
   emit_type_section(lowered)
   emit_runtime_imports()

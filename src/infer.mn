@@ -1771,14 +1771,11 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
   }
 }
 
-fn build_pat_record_field_specs(flds, span: ValidSpan) = {
-  if flds.len == 0 { [] }
-  else {
-    let (name, _) = list_head(flds)
-    let h = perform mint(Inferred("record pattern field"))
-    [(name, TVar(h))] ++ build_pat_record_field_specs(list_tail(flds), span)
-  }
-}
+fn build_pat_record_field_specs(flds, span: ValidSpan) = map((fld) => {
+  let (name, _) = fld
+  let h = perform mint(Inferred("record pattern field"))
+  (name, TVar(h))
+}, flds)
 
 fn infer_pat_record_subs(flds, specs, span: ValidSpan) = {
   for_each((pair) => {
@@ -1973,26 +1970,17 @@ fn chase_deep(ty) = match ty {
   TAlias(name, inner)  => TAlias(name, chase_deep(inner))
 }
 
-fn map_chase_ty(tys) = {
-  if tys.len == 0 { [] }
-  else { [chase_deep(list_head(tys))] ++ map_chase_ty(list_tail(tys)) }
-}
+fn map_chase_ty(tys) = map(chase_deep, tys)
 
-fn chase_params(params) = {
-  if params.len == 0 { [] }
-  else {
-    let TParam(name, ty, auth, res) = list_head(params)
-    [TParam(name, chase_deep(ty), auth, res)] ++ chase_params(list_tail(params))
-  }
-}
+fn chase_params(params) = map((p) => {
+  let TParam(name, ty, auth, res) = p
+  TParam(name, chase_deep(ty), auth, res)
+}, params)
 
-fn chase_fields(fields) = {
-  if fields.len == 0 { [] }
-  else {
-    let (name, ty) = list_head(fields)
-    [(name, chase_deep(ty))] ++ chase_fields(list_tail(fields))
-  }
-}
+fn chase_fields(fields) = map((fld) => {
+  let (name, ty) = fld
+  (name, chase_deep(ty))
+}, fields)
 
 // H6: exhaustive Ty enumeration. Scalars have no free handles;
 // aggregates recurse; TVar IS a free handle; TRecordOpen's row
@@ -2729,15 +2717,12 @@ fn node_handle(node) = {
 /// tfun-shape (2026-05-06). Drift refused: 7 (one list of TParam
 /// records, not (names, types) parallel arrays); 8 (TParam is the
 /// established positional shape, not name-keyed map).
-fn mint_handler_config_tparams(config, hname, idx) = {
-  if config.len == 0 { [] }
-  else {
-    let name = list_head(config)
-    let h = perform mint(FnParam(hname, idx, Inferred("config-param of '" |> str_concat(hname) |> str_concat("'"))))   // drift-audit: ignore — |> inside string-build arg, not a pipe verb
-    [TParam(name, TVar(h), Inferred, Inferred)]
-      ++ mint_handler_config_tparams(list_tail(config), hname, idx + 1)
-  }
-}
+fn mint_handler_config_tparams(config, hname, base_idx) = map((indexed) => {
+  let (i, name) = indexed
+  let idx = base_idx + i
+  let h = perform mint(FnParam(hname, idx, Inferred("config-param of '" |> str_concat(hname) |> str_concat("'"))))   // drift-audit: ignore — |> inside string-build arg, not a pipe verb
+  TParam(name, TVar(h), Inferred, Inferred)
+}, enumerate(config))
 
 // Utilities
 

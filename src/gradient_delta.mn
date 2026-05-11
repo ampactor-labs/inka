@@ -370,14 +370,7 @@ fn capabilities_unlocked_by_negation(row) with Pure = match row {
   _ => []
 }
 
-fn negation_caps(names) with Pure = {
-  if names.len == 0 { [] }
-  else {
-    let head_caps = caps_for_negated_eff(list_head(names))
-    let tail_caps = negation_caps(list_tail(names))
-    head_caps ++ tail_caps
-  }
-}
+fn negation_caps(names) with Pure = flatten(map(caps_for_negated_eff, names))
 
 fn caps_for_negated_eff(name) with Pure = match name {
   ENamed(s) =>

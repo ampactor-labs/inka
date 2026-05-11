@@ -587,7 +587,7 @@ fn infer_expr(ref node) = {
       let N(_, _, th) = then_e
       let N(_, _, eh) = else_e
       let N(else_body, _, _) = else_e
-      perform graph_bind(ch, TName("Bool", []), Located(span, Inferred("if condition")))
+      perform graph_bind(ch, TName("Bool", []), Located(span, IfBranch(Inferred("condition"))))
       // E_IfMissingElse per SYNTAX.md: detect synthesized-LitUnit else
       // (parser produces LitUnit when no else clause — src/parser.mn:1275).
       // If the then-branch produces a non-unit value, the missing else

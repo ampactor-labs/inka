@@ -2116,30 +2116,26 @@ fn filter_arms_by_shape_loop(arms, want_shape, i, n, buf, count) = {
 // but uses each field's pre-resolved offset (lower.mn baked them in)
 // instead of computing 4 + 4*i. Field-puning patterns are LPVar
 // sub-pats; nested record/list patterns fall through (TODO).
-fn emit_record_field_binds(binds) = {
-  if binds.len == 0 { () }
-  else {
-    let (_field_name, offset, sub_pat) = list_head(binds)
-    match sub_pat {
-      LPVar(name) => {
-        perform wat_emit("    (local.get $scrut_tmp)\n")
-        perform wat_emit("    (i32.load offset=")
-        perform wat_emit(int_to_str(offset))
-        perform wat_emit(")\n")
-        perform wat_emit("    (local.set $")
-        perform wat_emit(name)
-        perform wat_emit(")\n")
-      },
-      LPWild     => (),
-      LPLit(_)   => (),
-      LPCon(_, _, _) => (),
-      LPTuple(_) => (),
-      LPList(_)  => (),
-      LPRecord(_) => ()       // nested record destructure — TODO
-    }
-    emit_record_field_binds(list_tail(binds))
+fn emit_record_field_binds(binds) = for_each((bind) => {
+  let (_field_name, offset, sub_pat) = bind
+  match sub_pat {
+    LPVar(name) => {
+      perform wat_emit("    (local.get $scrut_tmp)\n")
+      perform wat_emit("    (i32.load offset=")
+      perform wat_emit(int_to_str(offset))
+      perform wat_emit(")\n")
+      perform wat_emit("    (local.set $")
+      perform wat_emit(name)
+      perform wat_emit(")\n")
+    },
+    LPWild     => (),
+    LPLit(_)   => (),
+    LPCon(_, _, _) => (),
+    LPTuple(_) => (),
+    LPList(_)  => (),
+    LPRecord(_) => ()       // nested record destructure — peer follow-up
   }
-}
+}, binds)
 
 // Per Hβ.emit.match-nested-lpcon-substrate (2026-05-09): pat is a TREE.
 // Emit walks the tree recursively. For each LPVar leaf at offset path
@@ -2293,20 +2289,17 @@ fn emit_list_literal(elems) = {
   emit_list_stores(elems, 0)
 }
 
-fn emit_list_stores(elems, idx) = {
-  if elems.len == 0 { () }
-  else {
-    perform wat_emit("    (local.set $callee_closure)\n")
-    perform wat_emit("    (local.get $__state)\n")
-    perform wat_emit("    (local.get $callee_closure)\n")
-    perform wat_emit("    (i32.const ")
-    perform wat_emit(int_to_str(idx))
-    perform wat_emit(")\n")
-    emit_expr(list_head(elems))
-    perform wat_emit("    (call $list_set)\n")
-    emit_list_stores(list_tail(elems), idx + 1)
-  }
-}
+fn emit_list_stores(elems, base_idx) = for_each((indexed) => {
+  let (i, elem) = indexed
+  perform wat_emit("    (local.set $callee_closure)\n")
+  perform wat_emit("    (local.get $__state)\n")
+  perform wat_emit("    (local.get $callee_closure)\n")
+  perform wat_emit("    (i32.const ")
+  perform wat_emit(int_to_str(base_idx + i))
+  perform wat_emit(")\n")
+  emit_expr(elem)
+  perform wat_emit("    (call $list_set)\n")
+}, enumerate(elems))
 
 fn emit_tuple_literal(elems) = {
   emit_expr_list(elems)

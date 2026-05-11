@@ -20407,15 +20407,36 @@
     (local.set $expr  (i32.load offset=4 (local.get $nexpr)))
     (i32.load offset=4 (local.get $expr)))
 
+  ;; Hβ.lower.lit-type-redundant-bind (2026-05-11) — graph_bind the literal
+  ;; handle to its substrate type at lower-time. Infer's lit_* arms already
+  ;; bind, but for handler-arm-body literals the binding can be lost
+  ;; (graph_chase returns NFree at emit time, $emit_lconst's TString
+  ;; dispatch misses, fall-through emits raw seed-heap str_ptr instead of
+  ;; interned wheel-offset). Redundant lower-time bind closes the gap
+  ;; structurally — the lit-tag IS the type witness per
+  ;; protocol_canonical_projection_pattern.md: lower projects type from
+  ;; lit_tag; the second projection at emit reads the same graph state.
+  ;; Drift 9 refused (substrate fix, not deferral); drift 5 refused (single
+  ;; bind per lit, not parallel ledger); drift 7 refused (graph IS the
+  ;; single source of truth).
+
+  ;; Reason data offsets reused from infer/walk_expr.wat:
+  ;;   3392 = "int literal", 3416 = "float literal",
+  ;;   3440 = "string literal", 3480 = "unit".
+
   ;; ─── $lower_lit_int — tag 80 → LConst(handle, value) tag 300 ─────────
   ;; Per src/lower.mn:296-307 lower_expr_body LitInt arm + Lock #4 (LowValue
   ;; is opaque i32 today — the raw integer is passed through directly to
   ;; LConst field 1). Avoids Drift 6 (no special-case for int vs other lit).
   (func $lower_lit_int (export "lower_lit_int") (param $node i32) (result i32)
-    ;; Avoids Drift 1: direct call, no dispatch table.
-    ;; Avoids Drift 9: fully bodied, not a stub.
+    (local $h i32)
+    (local.set $h (call $walk_expr_node_handle (local.get $node)))
+    (call $graph_bind
+      (local.get $h)
+      (call $ty_make_tint)
+      (call $reason_make_inferred (i32.const 3392)))
     (call $lexpr_make_lconst
-      (call $walk_expr_node_handle (local.get $node))
+      (local.get $h)
       (call $walk_const_payload_i32 (local.get $node))))
 
   ;; ─── $lower_lit_float — tag 81 → LConst(handle, raw_f32_bits) tag 300 ─
@@ -20425,8 +20446,14 @@
   ;; Avoids Lock #5 drift-9: arm lands even without a harness today
   ;; (named follow-up Hβ.lower.litfloat-litunit-harness).
   (func $lower_lit_float (export "lower_lit_float") (param $node i32) (result i32)
+    (local $h i32)
+    (local.set $h (call $walk_expr_node_handle (local.get $node)))
+    (call $graph_bind
+      (local.get $h)
+      (call $ty_make_tfloat)
+      (call $reason_make_inferred (i32.const 3416)))
     (call $lexpr_make_lconst
-      (call $walk_expr_node_handle (local.get $node))
+      (local.get $h)
       (call $walk_const_payload_i32 (local.get $node))))
 
   ;; ─── $lower_lit_string — tag 82 → LConst(handle, str_ptr) tag 300 ─────
@@ -20434,8 +20461,14 @@
   ;; AST payload is passed as the LConst value field directly.
   ;; Avoids Drift 8: no string-keyed dispatch here — tag-82 at chunk #11.
   (func $lower_lit_string (export "lower_lit_string") (param $node i32) (result i32)
+    (local $h i32)
+    (local.set $h (call $walk_expr_node_handle (local.get $node)))
+    (call $graph_bind
+      (local.get $h)
+      (call $ty_make_tstring)
+      (call $reason_make_inferred (i32.const 3440)))   ;; "string literal"
     (call $lexpr_make_lconst
-      (call $walk_expr_node_handle (local.get $node))
+      (local.get $h)
       (call $walk_const_payload_i32 (local.get $node))))
 
   ;; ─── $lower_lit_bool — tag 83 → LMakeVariant(handle, b, []) tag 319 ───
@@ -20463,8 +20496,14 @@
   ;; Arm lands this commit; harness deferred to Hβ.lower.litfloat-litunit-harness.
   ;; Avoids Drift 9: arm is fully bodied (not a stub), even without a harness.
   (func $lower_lit_unit (export "lower_lit_unit") (param $node i32) (result i32)
+    (local $h i32)
+    (local.set $h (call $walk_expr_node_handle (local.get $node)))
+    (call $graph_bind
+      (local.get $h)
+      (call $ty_make_tunit)
+      (call $reason_make_inferred (i32.const 3480)))
     (call $lexpr_make_lconst
-      (call $walk_expr_node_handle (local.get $node))
+      (local.get $h)
       (i32.const 0)))    ;; unit sentinel — zero in [0, HEAP_BASE)
 
   ;; ─── $lower_var_ref — tag 85 → LLocal/LUpval/LGlobal triage ────────────

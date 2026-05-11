@@ -913,6 +913,58 @@ handler affine_ledger with !Consume {
 
 ---
 
+## Capability declarations
+
+A **capability** is a named effect row — the substrate's row algebra (`+` `-` `&` `!` `Pure`) named for developer intent. `capability File = read + write` introduces `File` as a row alias; any signature can write `with File + Network` and the row composes structurally.
+
+Surfaces kernel primitive **#4** (full Boolean effect algebra). Per SUBSTRATE.md §IV: effect rows ARE first-class kernel values; a capability declaration is the surface that names a frequently-used row.
+
+### Canonical form
+
+```
+capability File = read + write
+capability Network = http + dns
+capability ApiClient = File + Network
+```
+
+Each declaration:
+- `capability` keyword (lexer: TCapability per token enumeration §«TCapability»)
+- name (an upper-case identifier; conventional but not yet enforced)
+- `=`
+- effect-row expression: one or more effect-op names or capability names, combined with `+` `-` `&` `!`
+
+The row expression follows the same algebra as `with E1 + E2` clauses (§«With-clauses»). After declaration, the capability name IS a row value at every site that takes a row.
+
+### Use
+
+```
+fn fetch(url: String) with ApiClient =
+  let body = perform http("GET", url)
+  perform write(local_cache_path(url), body)
+```
+
+The capability `ApiClient` unpacks to its underlying row at sig-check; the body's `perform http` and `perform write` discharge against that row.
+
+### Negation form
+
+```
+capability ReadOnly = File - write
+```
+
+`-` removes an effect from a capability. The resulting row admits `read` but rejects `write` at the structural-gate.
+
+### Diagnostic
+
+A capability that resolves to the empty row (`Pure`) — e.g., all effects subtracted out — is `W_CapabilityEmpty` (the row IS `Pure`; the capability adds no constraint above and beyond `with Pure`; suggest dropping the declaration).
+
+A capability whose body references an undeclared effect name surfaces `E_MissingVariable` at the row position with span at the unresolved name.
+
+### Kernel correspondence
+
+A `CapabilityDeclStmt(name, effs)` AST node lowers to an env binding `name ↦ Row(effs)`. There is no runtime cost — capability use is fully resolved at compile-time via row composition. Per the row-alias ultimate-form discipline (peer `Hβ.types.capability-as-row-alias`), `capability` is structurally equivalent to `type name = RowOf<effs>`; the keyword surfaces developer intent ("this row IS a named capability") rather than introducing a new substrate primitive.
+
+---
+
 ## Pipeline + handler installation in code
 
 ### Block handle
@@ -1409,6 +1461,7 @@ type TokenKind
   | TImport | TWhere
   | TOwn | TRef | TPure
   | TTrue | TFalse
+  | TCapability                      // capability KEYWORD — see §«Capability declarations»
   // Note: `loop`, `break`, `continue`, `return`, `for`, `in` are NOT
   // reserved keywords — Mentl has no imperative control flow constructs.
   // Iteration is via `|>` + `<~` + `Iterate` effect handlers.
@@ -1472,6 +1525,7 @@ type TokenKind
 | `TPure`         | `Pure`           | —         | `with Pure` declaration                        |
 | `TTrue`         | `true`           | —         | Bool literal                                   |
 | `TFalse`        | `false`          | —         | Bool literal                                   |
+| `TCapability`   | `capability`     | —         | capability declaration (§«Capability declarations») |
 | **Identifiers and literals (5)** |  |           |                                                |
 | `TIdent(s)`     | `[A-Za-z_][...]` | name      | variable refs, fn names, type names, etc.      |
 | `TInt(n)`       | `[0-9][0-9_]*`, `0x[0-9A-Fa-f_]+`, `0b[01_]+`, `0o[0-7_]+` | i32 value | integer literal (decimal / hex / binary / octal; underscores allowed for readability) |
@@ -1609,6 +1663,10 @@ The applicability tag determines automation: `MachineApplicable` patches are aut
 | `T_Gradient`          | an annotation INPUT would narrow the cursor's projection | `MachineApplicable` | accept the suggestion to narrow             |
 | `W_Suggestion`        | probable Quick Fix available                  | `MaybeIncorrect`     | (Mentl-proposed)                                |
 | `W_RedundantWhere`    | `type X = Y where true` — vacuous predicate   | `MachineApplicable`  | drop the `where true`; alias is transparent     |
+| `W_CapabilityEmpty`   | `capability X = ...` row resolves to `Pure`   | `MaybeIncorrect`     | drop the declaration; the row IS Pure already   |
+| `P_ExpectedToken`     | parser expected one token kind, found another | `MaybeIncorrect`     | (parser-emitted; pre-substrate-classification)  |
+| `P_UnexpectedToken`   | token kind not valid at this position         | `MaybeIncorrect`     | restructure per the surrounding form            |
+| `P_UnclosedConstruct` | EOF inside a construct (block, match arms, etc.) before its closer | `MaybeIncorrect` | close the construct OR remove its opening token |
 
 See `docs/specs/simulations/syntax/diagnostic-catalog-substrate.md` for the substrate analysis.
 

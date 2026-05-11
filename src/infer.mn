@@ -455,10 +455,9 @@ fn build_declared_row(effs) = {
 }
 
 fn expand_capabilities(effs) = {
-  if effs.len == 0 { [] }
-  else {
-    let (name, negated) = list_head(effs)
-    let expanded_part = match name {
+  flatten(map((eff) => {
+    let (name, negated) = eff
+    match name {
       ENamed(s) => match perform env_lookup(s) {
         Some(entry) => {
           let (_, _, _, kind) = entry
@@ -476,36 +475,24 @@ fn expand_capabilities(effs) = {
       },
       _ => [(name, negated)]
     }
-    expanded_part ++ expand_capabilities(list_tail(effs))
-  }
+  }, effs))
 }
 
-fn has_pure_declared(effs) = {
-  has_pure_declared_loop(effs, 0, effs.len)
-}
-
-fn has_pure_declared_loop(effs, i, n) = {
-  if i >= n { false }
-  else {
-    let (name, _) = list_index(effs, i)
-    match name {
-      ENamed(s) => if str_eq(s, "Pure") { true }   // drift-audit: ignore — real drift mode 8 (EffName should have EPure variant, not ENamed(string)); tracked for item 11.B EffName refactor
-                   else { has_pure_declared_loop(effs, i + 1, n) },
-      _         => has_pure_declared_loop(effs, i + 1, n)
-    }
+fn has_pure_declared(effs) = any((eff) => {
+  let (name, _) = eff
+  match name {
+    ENamed(s) => str_eq(s, "Pure"),   // drift-audit: ignore — real drift mode 8 (EffName should have EPure variant, not ENamed(string)); tracked for item 11.B EffName refactor
+    _         => false
   }
-}
+}, effs)
 
-fn partition_declared(effs, pos, neg) = {
-  if effs.len == 0 { (pos, neg) }
-  else {
-    let (name, negated) = list_head(effs)
-    if negated {
-      partition_declared(list_tail(effs), pos, push(neg, name))
-    } else {
-      partition_declared(list_tail(effs), push(pos, name), neg)
-    }
-  }
+fn partition_declared(effs, pos_init, neg_init) = {
+  fold(effs, (pos_init, neg_init), (acc, eff) => {
+    let (pos, neg) = acc
+    let (name, negated) = eff
+    if negated { (pos, push(neg, name)) }
+    else       { (push(pos, name), neg) }
+  })
 }
 
 fn build_from_partition(pos, neg) = {
@@ -1493,26 +1480,20 @@ fn infer_record_field_values(fields) = {
   }
 }
 
-fn build_record_field_types(fields) = {
-  if fields.len == 0 { [] }
-  else {
-    let (name, value) = list_head(fields)
-    let N(_, _, vh) = value
-    [(name, TVar(vh))] ++ build_record_field_types(list_tail(fields))
-  }
-}
+fn build_record_field_types(fields) = map((fld) => {
+  let (name, value) = fld
+  let N(_, _, vh) = value
+  (name, TVar(vh))
+}, fields)
 
-// H4.1 helper — pull the value handles out of a record-field list
+// H4.1 projection — pull the value handles out of a record-field list
 // for region-join lookup. Field names aren't needed for region
 // tracking; only the per-value handles matter.
-fn record_field_handles(fields) = {
-  if fields.len == 0 { [] }
-  else {
-    let (_, value) = list_head(fields)
-    let N(_, _, vh) = value
-    [vh] ++ record_field_handles(list_tail(fields))
-  }
-}
+fn record_field_handles(fields) = map((fld) => {
+  let (_, value) = fld
+  let N(_, _, vh) = value
+  vh
+}, fields)
 
 // H2.3: validate a nominal record literal's fields against the
 // declared schema. Both lists arrive sorted by field name (parser
@@ -1800,25 +1781,20 @@ fn build_pat_record_field_specs(flds, span: ValidSpan) = {
 }
 
 fn infer_pat_record_subs(flds, specs, span: ValidSpan) = {
-  if flds.len == 0 { () }
-  else {
-    let (_, sub_pat) = list_head(flds)
-    let (_, ty) = list_head(specs)
+  for_each((pair) => {
+    let ((_, sub_pat), (_, ty)) = pair
     match ty {
       TVar(h) => infer_pat(sub_pat, h, span),
       _       => ()
     }
-    infer_pat_record_subs(list_tail(flds), list_tail(specs), span)
-  }
+  }, zip(flds, specs))
 }
 
 fn infer_pat_tuple(pats, parent_handle, span: ValidSpan) = {
-  if pats.len == 0 { () }
-  else {
+  for_each((p) => {
     let sub_h = perform mint(Inferred("tuple pattern element"))
-    infer_pat(list_head(pats), sub_h, span)
-    infer_pat_tuple(list_tail(pats), parent_handle, span)
-  }
+    infer_pat(p, sub_h, span)
+  }, pats)
 }
 
 // Bind each PCon sub-pattern to its corresponding constructor param
@@ -1826,16 +1802,13 @@ fn infer_pat_tuple(pats, parent_handle, span: ValidSpan) = {
 // distinct entry into env. Param-list / sub-pat length mismatch falls
 // through silently — surfaced separately as E_ConstructorArity (TODO).
 fn bind_pcon_subpats(params, sub_pats, span: ValidSpan, reason, ctor_name) = {
-  if params.len == 0 || sub_pats.len == 0 { () }
-  else {
-    let TParam(_, pty, _, _) = list_head(params)
+  for_each((pair) => {
+    let (TParam(_, pty, _, _), sub_pat) = pair
     let sub_h = perform mint(VarLookup(ctor_name, reason))
     perform graph_bind(sub_h, pty,
       Located(span, VarLookup(ctor_name, reason)))
-    infer_pat(list_head(sub_pats), sub_h, span)
-    bind_pcon_subpats(list_tail(params), list_tail(sub_pats),
-      span, reason, ctor_name)
-  }
+    infer_pat(sub_pat, sub_h, span)
+  }, zip(params, sub_pats))
 }
 
 fn infer_match_arms(arms, scrut, result_h, span: ValidSpan) = {
@@ -1859,26 +1832,23 @@ fn infer_match_arms(arms, scrut, result_h, span: ValidSpan) = {
 }
 
 fn infer_match_arm_iter(arms, scrut, result_h, span: ValidSpan) = {
-  if arms.len == 0 { () }
-  else {
-    let (pat, body) = list_head(arms)
+  for_each((arm) => {
+    let (pat, body) = arm
     perform env_scope_enter()
     infer_pat(pat, scrut, span)
     infer_expr(body)
     let N(_, _, bh) = body
     unify(bh, result_h, span, MatchBranch(Inferred("arm body"), Inferred("result")))
     perform env_scope_exit()
-    infer_match_arm_iter(list_tail(arms), scrut, result_h, span)
-  }
+  }, arms)
 }
 
 // Walk arms, gathering each PCon's tag_id (deduped via set_insert).
 // Non-PCon arms (wildcards, vars, lits) contribute no tag.
-fn collect_arm_tags(arms, own acc) = {
-  if arms.len == 0 { acc }
-  else {
-    let (pat, _body) = list_head(arms)
-    let next = match pat {
+fn collect_arm_tags(arms, own init) = {
+  fold(arms, init, (acc, arm) => {
+    let (pat, _body) = arm
+    match pat {
       PCon(name, _) => match perform env_lookup(name) {
         Some(entry) => {
           let (_, _, kind) = entry
@@ -1891,8 +1861,7 @@ fn collect_arm_tags(arms, own acc) = {
       },
       _ => acc
     }
-    collect_arm_tags(list_tail(arms), next)
-  }
+  })
 }
 
 // Read total_variants from any one PCon arm's ConstructorScheme.
@@ -1921,32 +1890,26 @@ fn arms_total_variants(arms) = {
 
 // Wildcard detection: PWild or PVar at the top level catches
 // everything the prior arms don't.
-fn arms_have_wildcard(arms) = {
-  if arms.len == 0 { false }
-  else {
-    let (pat, _body) = list_head(arms)
-    match pat {
-      PWild    => true,
-      PVar(_)  => true,
-      _        => arms_have_wildcard(list_tail(arms))
-    }
+fn arms_have_wildcard(arms) = any((arm) => {
+  let (pat, _body) = arm
+  match pat {
+    PWild   => true,
+    PVar(_) => true,
+    _       => false
   }
-}
+}, arms)
 
 /// Handler arm inference — each arm's body is inferred; its type
 /// unifies with the body's type so the `handle` expression has a
 /// single consistent result type.
 fn infer_handler_arms(arms, body_h, span: ValidSpan) = {
-  if arms.len == 0 { () }
-  else {
-    let arm = list_head(arms)
+  for_each((arm) => {
     perform env_scope_enter()
     infer_expr(arm.body)
     let N(_, _, abh) = arm.body
     unify(abh, body_h, span, Inferred("handler arm result"))
     perform env_scope_exit()
-    infer_handler_arms(list_tail(arms), body_h, span)
-  }
+  }, arms)
 }
 
 /// Generalization — Damas-Milner let-gen.
@@ -2052,26 +2015,17 @@ fn free_in_ty(ty) = match ty {
   TAlias(_, inner)       => free_in_ty(inner)
 }
 
-fn free_in_list(tys) = {
-  if tys.len == 0 { [] }
-  else { free_in_ty(list_head(tys)) ++ free_in_list(list_tail(tys)) }
-}
+fn free_in_list(tys) = flatten(map(free_in_ty, tys))
 
-fn free_in_params(params) = {
-  if params.len == 0 { [] }
-  else {
-    let TParam(_, ty, _, _) = list_head(params)
-    free_in_ty(ty) ++ free_in_params(list_tail(params))
-  }
-}
+fn free_in_params(params) = flatten(map((p) => {
+  let TParam(_, ty, _, _) = p
+  free_in_ty(ty)
+}, params))
 
-fn free_in_fields(fields) = {
-  if fields.len == 0 { [] }
-  else {
-    let (_, ty) = list_head(fields)
-    free_in_ty(ty) ++ free_in_fields(list_tail(fields))
-  }
-}
+fn free_in_fields(fields) = flatten(map((fld) => {
+  let (_, ty) = fld
+  free_in_ty(ty)
+}, fields))
 
 /// Instantiation — one function, two handlers.
 /// inference handler: `mint(r) => resume(perform graph_fresh_ty(r))`
@@ -2087,14 +2041,10 @@ fn instantiate(scheme) = {
   }
 }
 
-fn build_inst_mapping(qs) = {
-  if qs.len == 0 { [] }
-  else {
-    let old = list_head(qs)
-    let fresh = perform mint(Instantiation("inst", Fresh(old)))
-    [(old, fresh)] ++ build_inst_mapping(list_tail(qs))
-  }
-}
+fn build_inst_mapping(qs) = map((old) => {
+  let fresh = perform mint(Instantiation("inst", Fresh(old)))
+  (old, fresh)
+}, qs)
 
 // H6: exhaustive Ty enumeration. Scalars pass through;
 // aggregates recurse. Substitution is identity for unresolved

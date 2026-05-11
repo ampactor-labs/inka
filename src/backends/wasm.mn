@@ -255,21 +255,16 @@ fn ty_to_wasm_type(ty) with Pure = match ty {
 // includes the `__state` slot).
 
 fn emit_module(lowered) = {
-  // Four pre-passes deep-walk `lowered` independently — collect_fn_names,
-  // collect_top_level_fn_names, collect_string_literals, collect_state_slots.
-  // Each reads the same input and produces an independent projection;
-  // no shared mutable state across them. `<|` divergence fans them out
-  // — one source, four parallel reads. parallel_compose handler in
-  // upstream chain dispatches the four to OS threads when installed.
-  // Same source, handler swap.
+  // Single-walk multi-projection pre-pass. project_emit_state walks the
+  // LowExpr tree ONCE; four visitor-handlers chained via `~>` accumulate
+  // their projections in encounter order; the wrapper drains all four at
+  // the end and returns a 4-tuple. Per Hβ.emit.consolidate-pre-pass-walks
+  // (2026-05-11): replaces the prior `<|` fan-out (four parallel walks
+  // of the same tree, 16+ helper fns, 4x the structural drift surface).
+  // Adding a fifth projection = one new handler + one new visit-site in
+  // walk_lemit_expr. The graph IS the index; the chain IS the projector.
   let (all_fn_names, top_fn_names, string_entries, state_slots) =
-    lowered
-      <| (
-        (l) => collect_fn_names(l),
-        (l) => collect_top_level_fn_names(l),
-        (l) => collect_string_literals(l),
-        (l) => collect_state_slots(l)
-      )
+    project_emit_state(lowered)
   // W5 string interning — seed the string_table handler so downstream
   // LString emits can look up the offset via perform string_offset.
   perform set_string_entries(string_entries)
@@ -287,103 +282,97 @@ fn emit_module(lowered) = {
   emit_footer()
 }
 
-// Deep-walk the lowered program collecting every unique LString in
-// encounter order; assign each a 4-byte-aligned offset starting at
-// 0x10000 (64KB — sits above the static-closure region at 0x100
-// and below the bump heap at 1MB). Each string occupies
-// `4 + byte_length(s)` bytes with layout [len:i32][utf8_bytes].
+// ─── Single-walk multi-projection emit pre-pass ─────────────────────
+// Per protocol_cursor_is_the_substrate.md + Hβ.emit.consolidate-pre-pass-walks
+// (2026-05-11): the four prior `collect_X` passes (fn_names, top_fn_names,
+// string_literals, state_slots) over the SAME LowExpr tree were the
+// canonical "imperative subsystem" drift (#102) at the emit layer — each
+// pass an independent deep tree walk with duplicated 30+ variant match,
+// parallel buffer-counter accumulation, 16 helper fns total.
+//
+// Substrate-honest form: ONE walk (walk_lemit / walk_lemit_expr) firing
+// per-node `perform visit_X` ops; FOUR visitor handlers chained via `~>`
+// each maintaining their own buffer-counter accumulator. Adding a fifth
+// projection = adding ONE handler + ONE visit-site in walk_lemit_expr.
+// The graph IS the index; the handler-chain IS the projector.
+//
+// Per the eight interrogations on this consolidation:
+//   Graph:      tree walked ONCE; every node visited exactly once.
+//   Handler:    four visitor handlers; each with visit op + drain op;
+//               resume OneShot throughout.
+//   Verb:       `~>` install — four handlers chained over walk_lemit.
+//   Row:        each visitor adds its visit op to body's row; drain ops
+//               execute after walk completes.
+//   Ownership:  each visitor owns its accumulator (buffer-counter);
+//               no shared mutable state across visitors.
+//   Refinement: count <= buf.len per buffer-counter (Ω.3) invariant.
+//   Gradient:   adding a 5th projection = adding a `~>`-link; one new
+//               handler decl + one new visit-site in walk_lemit_expr.
+//   Reason:     each accumulated element retains its source-handle
+//               Reason via the LowExpr's handle (offset 0 of every variant).
 
-fn collect_string_literals(lowered) = {
-  let buf = make_list(16)
-  let (final_buf, final_count, _) = collect_strings_list(lowered, buf, 0, 65536)
-  slice(final_buf, 0, final_count)
+effect EmitFnNamesOp {
+  visit_fn(String) -> ()
+  drain_fn_names() -> List
 }
 
-fn collect_strings_list(exprs, buf, count, next_offset) = {
-  if exprs.len == 0 { (buf, count, next_offset) }
-  else {
-    let (buf2, count2, off2) = collect_strings_expr(list_head(exprs), buf, count, next_offset)
-    collect_strings_list(list_tail(exprs), buf2, count2, off2)
-  }
+effect EmitTopFnNamesOp {
+  visit_top_fn(String) -> ()
+  drain_top_fn_names() -> List
 }
 
-fn collect_strings_expr(expr, buf, count, next_offset) = match expr {
-  LConst(_, LString(s)) => {
-    if string_entry_exists(buf, s, 0, count) { (buf, count, next_offset) }
+effect EmitStringLiteralOp {
+  visit_string(String) -> ()
+  drain_string_literals() -> List
+}
+
+effect EmitStateSlotOp {
+  visit_state_slot(Int) -> ()
+  drain_state_slots() -> List
+}
+
+handler fn_names_collector with buf = make_list(64), count = 0 {
+  visit_fn(name) => {
+    let extended = list_extend_to(buf, count + 1)
+    let written  = list_set(extended, count, name)
+    resume() with buf = written, count = count + 1
+  },
+  drain_fn_names() => resume(slice(buf, 0, count))
+}
+
+handler top_fn_names_collector with buf = make_list(16), count = 0 {
+  visit_top_fn(name) => {
+    let extended = list_extend_to(buf, count + 1)
+    let written  = list_set(extended, count, name)
+    resume() with buf = written, count = count + 1
+  },
+  drain_top_fn_names() => resume(slice(buf, 0, count))
+}
+
+handler string_literal_collector with buf = make_list(16), count = 0, next_offset = 65536 {
+  visit_string(s) => {
+    if string_entry_exists(buf, s, 0, count) { resume() }
     else {
-      let size = 4 + byte_len(s)                // 4-byte length prefix + UTF-8 bytes
-      let aligned_size = (size + 3) / 4 * 4     // round up to 4-byte multiple
+      let size = 4 + byte_len(s)
+      let aligned_size = (size + 3) / 4 * 4
       let extended = list_extend_to(buf, count + 1)
       let written  = list_set(extended, count, (s, next_offset))
-      (written, count + 1, next_offset + aligned_size)
+      resume() with buf = written, count = count + 1, next_offset = next_offset + aligned_size
     }
   },
-  LConst(_, _)                => (buf, count, next_offset),
-  LLocal(_, _)                => (buf, count, next_offset),
-  LGlobal(_, _)               => (buf, count, next_offset),
-  LUpval(_, _)                => (buf, count, next_offset),
-  LStore(_, _, v)             => collect_strings_expr(v, buf, count, next_offset),
-  LLet(_, _, inner)           => collect_strings_expr(inner, buf, count, next_offset),
-  LBinOp(_, _, l, r)          => collect_strings_bin(l, r, buf, count, next_offset),
-  LUnaryOp(_, _, inner)       => collect_strings_expr(inner, buf, count, next_offset),
-  LCall(_, f, args)           => collect_strings_bin_list(f, args, buf, count, next_offset),
-  LTailCall(_, f, args)       => collect_strings_bin_list(f, args, buf, count, next_offset),
-  LReturn(_, inner)           => collect_strings_expr(inner, buf, count, next_offset),
-  LMakeClosure(_, LFn(_, _, _, body, _), caps, ev) => {
-    let (buf1, count1, o1) = collect_strings_list(body, buf, count, next_offset)
-    let (buf2, count2, o2) = collect_strings_list(caps, buf1, count1, o1)
-    collect_strings_list(ev, buf2, count2, o2)
-  },
-  LMakeContinuation(_, LFn(_, _, _, body, _), caps, ev, _, _) => {
-    // H7 — same string-collection shape as LMakeClosure (resume_fn body
-    // + captures + ev_slots). state_index and ret_slot are Ints; no
-    // string contributions.
-    let (buf1, count1, o1) = collect_strings_list(body, buf, count, next_offset)
-    let (buf2, count2, o2) = collect_strings_list(caps, buf1, count1, o1)
-    collect_strings_list(ev, buf2, count2, o2)
-  },
-  LDeclareFn(LFn(_, _, _, body, _)) =>
-    collect_strings_list(body, buf, count, next_offset),
-  LIf(_, c, t, e) => {
-    let (b1, c1, o1) = collect_strings_expr(c, buf, count, next_offset)
-    let (b2, c2, o2) = collect_strings_list(t, b1, c1, o1)
-    collect_strings_list(e, b2, c2, o2)
-  },
-  LBlock(_, stmts)            => collect_strings_list(stmts, buf, count, next_offset),
-  LMakeList(_, elems)         => collect_strings_list(elems, buf, count, next_offset),
-  LMakeTuple(_, elems)        => collect_strings_list(elems, buf, count, next_offset),
-  LMakeRecord(_, fs)          => collect_strings_list(fs, buf, count, next_offset),
-  LMakeVariant(_, _, fs)      => collect_strings_list(fs, buf, count, next_offset),
-  LIndex(_, b, i, _)          => collect_strings_bin(b, i, buf, count, next_offset),
-  LMatch(_, s, _arms)         => collect_strings_expr(s, buf, count, next_offset),
-  LSuspend(_, _, f, args, ev) => {
-    let (buf1, count1, o1) = collect_strings_bin_list(f, args, buf, count, next_offset)
-    collect_strings_list(ev, buf1, count1, o1)
-  },
-  LStateGet(_, _)             => (buf, count, next_offset),
-  LStateSet(_, _, v)          => collect_strings_expr(v, buf, count, next_offset),
-  LRegion(_, body)            => collect_strings_list(body, buf, count, next_offset),
-  LHandleWith(_, b, hn, _hname, inits) => {
-    let (buf1, count1, o1) = collect_strings_expr(b, buf, count, next_offset)
-    collect_strings_bin_list(hn, inits, buf1, count1, o1)
-  },
-  LFeedback(_, b, s)          => collect_strings_bin(b, s, buf, count, next_offset),
-  LPerform(_, _, args)        => collect_strings_list(args, buf, count, next_offset),
-  LWasiCall(_, _, args)       => collect_strings_list(args, buf, count, next_offset),
-  LHandle(_, b, _arms)        => collect_strings_expr(b, buf, count, next_offset),
-  LEvPerform(_, _, _, args)   => collect_strings_list(args, buf, count, next_offset),
-  LFieldLoad(_, rec, _)       => collect_strings_expr(rec, buf, count, next_offset),
-  LStateSlotStore(_, _, v)    => collect_strings_expr(v, buf, count, next_offset)
+  drain_string_literals() => resume(slice(buf, 0, count))
 }
 
-fn collect_strings_bin(a, b, buf, count, off) = {
-  let (buf1, count1, o1) = collect_strings_expr(a, buf, count, off)
-  collect_strings_expr(b, buf1, count1, o1)
-}
-
-fn collect_strings_bin_list(a, bs, buf, count, off) = {
-  let (buf1, count1, o1) = collect_strings_expr(a, buf, count, off)
-  collect_strings_list(bs, buf1, count1, o1)
+handler state_slots_collector with buf = make_list(8), count = 0 {
+  visit_state_slot(slot) => {
+    if slot_already_recorded(buf, slot, 0, count) { resume() }
+    else {
+      let extended = list_extend_to(buf, count + 1)
+      let written  = list_set(extended, count, slot)
+      resume() with buf = written, count = count + 1
+    }
+  },
+  drain_state_slots() => resume(slice(buf, 0, count))
 }
 
 fn string_entry_exists(entries, target, i, n) = {
@@ -395,115 +384,147 @@ fn string_entry_exists(entries, target, i, n) = {
   }
 }
 
-/// State-slot collection — sweeps LIR for every LFeedback handle (the
-/// per-site state slot) plus any LStateGet/LStateSet slot index, and
-/// returns the unique-sorted list. Each slot becomes `(global $s<n>
-/// (mut i32) (i32.const 0))` at module init so the LFeedback
-/// load-tee-store cycle has somewhere to read and write. v1 uses
-/// module-level globals; LF.M peer sub-handle migrates to handler-
-/// state offsets when threading composition surfaces (per LF
-/// walkthrough §1.4 + drift mode 9 — name the deferred piece).
-
-fn collect_state_slots(lowered) = {
-  let buf = make_list(8)
-  let (final_buf, final_count) = collect_slots_list(lowered, buf, 0)
-  slice(final_buf, 0, final_count)
-}
-
-fn collect_slots_list(exprs, buf, count) = {
-  if exprs.len == 0 { (buf, count) }
-  else {
-    let (buf2, count2) = collect_slots_expr(list_head(exprs), buf, count)
-    collect_slots_list(list_tail(exprs), buf2, count2)
-  }
-}
-
-fn collect_slots_expr(expr, buf, count) = match expr {
-  LFeedback(h, b, s) => {
-    let (buf1, count1) = record_slot(buf, count, h)
-    let (buf2, count2) = collect_slots_expr(b, buf1, count1)
-    collect_slots_expr(s, buf2, count2)
-  },
-  LStateGet(_, slot)         => record_slot(buf, count, slot),
-  LStateSet(_, slot, v)      => {
-    let (buf1, count1) = record_slot(buf, count, slot)
-    collect_slots_expr(v, buf1, count1)
-  },
-  LStore(_, _, v)            => collect_slots_expr(v, buf, count),
-  LLet(_, _, inner)          => collect_slots_expr(inner, buf, count),
-  LBinOp(_, _, l, r)         => collect_slots_bin(l, r, buf, count),
-  LUnaryOp(_, _, inner)      => collect_slots_expr(inner, buf, count),
-  LCall(_, f, args)          => collect_slots_bin_list(f, args, buf, count),
-  LTailCall(_, f, args)      => collect_slots_bin_list(f, args, buf, count),
-  LReturn(_, inner)          => collect_slots_expr(inner, buf, count),
-  LMakeClosure(_, LFn(_, _, _, body, _), caps, ev) => {
-    let (buf1, count1) = collect_slots_list(body, buf, count)
-    let (buf2, count2) = collect_slots_list(caps, buf1, count1)
-    collect_slots_list(ev, buf2, count2)
-  },
-  LMakeContinuation(_, LFn(_, _, _, body, _), caps, ev, _, _) => {
-    let (buf1, count1) = collect_slots_list(body, buf, count)
-    let (buf2, count2) = collect_slots_list(caps, buf1, count1)
-    collect_slots_list(ev, buf2, count2)
-  },
-  LDeclareFn(LFn(_, _, _, body, _)) =>
-    collect_slots_list(body, buf, count),
-  LIf(_, c, t, e) => {
-    let (b1, c1) = collect_slots_expr(c, buf, count)
-    let (b2, c2) = collect_slots_list(t, b1, c1)
-    collect_slots_list(e, b2, c2)
-  },
-  LBlock(_, stmts)           => collect_slots_list(stmts, buf, count),
-  LMakeList(_, elems)        => collect_slots_list(elems, buf, count),
-  LMakeTuple(_, elems)       => collect_slots_list(elems, buf, count),
-  LMakeRecord(_, fs)         => collect_slots_list(fs, buf, count),
-  LMakeVariant(_, _, fs)     => collect_slots_list(fs, buf, count),
-  LIndex(_, b, i, _)         => collect_slots_bin(b, i, buf, count),
-  LMatch(_, s, _arms)        => collect_slots_expr(s, buf, count),
-  LSuspend(_, _, f, args, ev) => {
-    let (buf1, count1) = collect_slots_bin_list(f, args, buf, count)
-    collect_slots_list(ev, buf1, count1)
-  },
-  LRegion(_, body)           => collect_slots_list(body, buf, count),
-  LHandleWith(_, b, hn, _hname, inits) => {
-    let (buf1, count1) = collect_slots_expr(b, buf, count)
-    collect_slots_bin_list(hn, inits, buf1, count1)
-  },
-  LPerform(_, _, args)       => collect_slots_list(args, buf, count),
-  LWasiCall(_, _, args)      => collect_slots_list(args, buf, count),
-  LHandle(_, b, _arms)       => collect_slots_expr(b, buf, count),
-  LEvPerform(_, _, _, args)  => collect_slots_list(args, buf, count),
-  LFieldLoad(_, rec, _)      => collect_slots_expr(rec, buf, count),
-  LStateSlotStore(_, _, v)   => collect_slots_expr(v, buf, count),
-  LConst(_, _)               => (buf, count),
-  LLocal(_, _)               => (buf, count),
-  LGlobal(_, _)              => (buf, count),
-  LUpval(_, _)               => (buf, count)
-}
-
-fn collect_slots_bin(a, b, buf, count) = {
-  let (buf1, count1) = collect_slots_expr(a, buf, count)
-  collect_slots_expr(b, buf1, count1)
-}
-
-fn collect_slots_bin_list(a, bs, buf, count) = {
-  let (buf1, count1) = collect_slots_expr(a, buf, count)
-  collect_slots_list(bs, buf1, count1)
-}
-
-fn record_slot(buf, count, slot) = {
-  if slot_already_recorded(buf, slot, 0, count) { (buf, count) }
-  else {
-    let extended = list_extend_to(buf, count + 1)
-    let written  = list_set(extended, count, slot)
-    (written, count + 1)
-  }
-}
-
 fn slot_already_recorded(entries, target, i, n) = {
   if i >= n { false }
   else if list_index(entries, i) == target { true }
   else { slot_already_recorded(entries, target, i + 1, n) }
+}
+
+/// project_emit_state — single-tree-walk; four projections drained at end.
+/// Returns (all_fn_names, top_fn_names, string_entries, state_slots).
+/// Replaces the prior `<|` fan-out (four parallel walks of the same tree)
+/// with ONE walk and four visitor-handler accumulators. Order-preserving:
+/// per-projection encounter order matches the prior per-walk order. The
+/// chained `~>` install establishes the handler stack at the body's
+/// perform sites; each visit-op routes to its handler unambiguously.
+fn project_emit_state(lowered) = {
+  walk_lemit(lowered)
+  let names = perform drain_fn_names()
+  let tops  = perform drain_top_fn_names()
+  let strs  = perform drain_string_literals()
+  let slots = perform drain_state_slots()
+  (names, tops, strs, slots)
+} ~> fn_names_collector ~> top_fn_names_collector
+  ~> string_literal_collector ~> state_slots_collector
+
+/// walk_lemit — top-level entry. Iterates `lowered`'s direct children;
+/// fires `visit_top_fn(name)` for each LLet-bound closure/continuation
+/// (the original collect_top_level_fn_names semantic). Then recursive
+/// descent via walk_lemit_expr collects the per-node projections.
+fn walk_lemit(exprs) = walk_lemit_top(exprs, 0)
+
+fn walk_lemit_top(exprs, i) = {
+  if i >= exprs.len { () }
+  else {
+    walk_lemit_top_one(list_index(exprs, i))
+    walk_lemit_top(exprs, i + 1)
+  }
+}
+
+fn walk_lemit_top_one(expr) = {
+  let top_name = extract_top_fn_name(expr)
+  if str_eq(top_name, "") { walk_lemit_expr(expr) }
+  else {
+    perform visit_top_fn(top_name)
+    walk_lemit_expr(expr)
+  }
+}
+
+/// walk_lemit_expr — recursive descent. EXHAUSTIVE over LowExpr variants.
+/// Fires visit_fn at fn-bearing variants (anywhere), visit_string at
+/// LConst(LString), visit_state_slot at LStateGet/LStateSet/LFeedback.
+/// Drift 9 closed: every arm explicit; no `_ =>` catch-all would silently
+/// miss projections for a new variant.
+fn walk_lemit_expr(expr) = match expr {
+  LMakeClosure(_, LFn(name, _, _, body, _), captures, ev) => {
+    perform visit_fn(name)
+    walk_lemit_list(body)
+    walk_lemit_list(captures)
+    walk_lemit_list(ev)
+  },
+  LMakeContinuation(_, LFn(name, _, _, body, _), captures, ev, _, _) => {
+    perform visit_fn(name)
+    walk_lemit_list(body)
+    walk_lemit_list(captures)
+    walk_lemit_list(ev)
+  },
+  LDeclareFn(LFn(name, _, _, body, _)) => {
+    perform visit_fn(name)
+    walk_lemit_list(body)
+  },
+  LConst(_, LString(s))     => perform visit_string(s),
+  LConst(_, _)              => (),
+  LLocal(_, _)              => (),
+  LGlobal(_, _)             => (),
+  LUpval(_, _)              => (),
+  LStore(_, _, v)           => walk_lemit_expr(v),
+  LLet(_, _, inner)         => walk_lemit_expr(inner),
+  LBinOp(_, _, l, r) => {
+    walk_lemit_expr(l)
+    walk_lemit_expr(r)
+  },
+  LUnaryOp(_, _, inner)     => walk_lemit_expr(inner),
+  LCall(_, f, args) => {
+    walk_lemit_expr(f)
+    walk_lemit_list(args)
+  },
+  LTailCall(_, f, args) => {
+    walk_lemit_expr(f)
+    walk_lemit_list(args)
+  },
+  LReturn(_, inner)         => walk_lemit_expr(inner),
+  LIf(_, c, t, e) => {
+    walk_lemit_expr(c)
+    walk_lemit_list(t)
+    walk_lemit_list(e)
+  },
+  LBlock(_, stmts)          => walk_lemit_list(stmts),
+  LMakeList(_, elems)       => walk_lemit_list(elems),
+  LMakeTuple(_, elems)      => walk_lemit_list(elems),
+  LMakeRecord(_, fs)        => walk_lemit_list(fs),
+  LMakeVariant(_, _, fs)    => walk_lemit_list(fs),
+  LIndex(_, b, i, _) => {
+    walk_lemit_expr(b)
+    walk_lemit_expr(i)
+  },
+  LMatch(_, s, _arms)       => walk_lemit_expr(s),
+  LSuspend(_, _, f, args, ev) => {
+    walk_lemit_expr(f)
+    walk_lemit_list(args)
+    walk_lemit_list(ev)
+  },
+  LStateGet(_, slot)        => perform visit_state_slot(slot),
+  LStateSet(_, slot, v) => {
+    perform visit_state_slot(slot)
+    walk_lemit_expr(v)
+  },
+  LRegion(_, body)          => walk_lemit_list(body),
+  LHandleWith(_, b, hn, _hname, inits) => {
+    walk_lemit_expr(b)
+    walk_lemit_expr(hn)
+    walk_lemit_list(inits)
+  },
+  LFeedback(h, b, s) => {
+    perform visit_state_slot(h)
+    walk_lemit_expr(b)
+    walk_lemit_expr(s)
+  },
+  LPerform(_, _, args)      => walk_lemit_list(args),
+  LWasiCall(_, _, args)     => walk_lemit_list(args),
+  LHandle(_, b, _arms)      => walk_lemit_expr(b),
+  LEvPerform(_, _, _, args) => walk_lemit_list(args),
+  LFieldLoad(_, rec, _)     => walk_lemit_expr(rec),
+  LStateSlotStore(_, _, v)  => walk_lemit_expr(v)
+}
+
+fn walk_lemit_list(exprs) = walk_lemit_list_loop(exprs, 0)
+
+fn walk_lemit_list_loop(exprs, i) = {
+  if i >= exprs.len { () }
+  else {
+    walk_lemit_expr(list_index(exprs, i))
+    walk_lemit_list_loop(exprs, i + 1)
+  }
 }
 
 /// Emit `(global $s<n> (mut i32) (i32.const 0))` for each unique
@@ -540,142 +561,10 @@ fn emit_string_bytes(s, i, n) = {
   }
 }
 
-// Deep-walk the lowered program, collecting every LMakeClosure's
-// function name in encounter order. Each name gets a stable table
-// index (its position in this list). Lifts inline lambdas alongside
-// top-level functions — no lambda left behind.
-fn collect_fn_names(lowered) = {
-  let buf = make_list(16)
-  let (final_buf, final_count) = collect_fn_names_list(lowered, buf, 0)
-  slice(final_buf, 0, final_count)
-}
-
-fn collect_fn_names_list(exprs, buf, count) = {
-  if exprs.len == 0 { (buf, count) }
-  else {
-    let (buf2, count2) = collect_fn_names_expr(list_head(exprs), buf, count)
-    collect_fn_names_list(list_tail(exprs), buf2, count2)
-  }
-}
-
-fn collect_fn_names_expr(expr, buf, count) = match expr {
-  LMakeClosure(_h, LFn(name, _arity, _ps, body, _row), captures, ev) => {
-    let extended = list_extend_to(buf, count + 1)
-    let written  = list_set(extended, count, name)
-    let (buf1, count1) = collect_fn_names_list(body, written, count + 1)
-    let (buf2, count2) = collect_fn_names_list(captures, buf1, count1)
-    collect_fn_names_list(ev, buf2, count2)
-  },
-  LMakeContinuation(_h, LFn(name, _arity, _ps, body, _row), captures, ev, _, _) => {
-    // H7 — same fn-name collection shape; the resume_fn becomes
-    // a registered top-level fn alongside other LMakeClosure-derived
-    // fns. state_index and ret_slot are Ints (no fn names).
-    let extended = list_extend_to(buf, count + 1)
-    let written  = list_set(extended, count, name)
-    let (buf1, count1) = collect_fn_names_list(body, written, count + 1)
-    let (buf2, count2) = collect_fn_names_list(captures, buf1, count1)
-    collect_fn_names_list(ev, buf2, count2)
-  },
-  LDeclareFn(LFn(name, _arity, _ps, body, _row)) => {
-    let extended = list_extend_to(buf, count + 1)
-    let written  = list_set(extended, count, name)
-    collect_fn_names_list(body, written, count + 1)
-  },
-  LLet(_h, _n, inner)        => collect_fn_names_expr(inner, buf, count),
-  LStore(_h, _s, val)        => collect_fn_names_expr(val, buf, count),
-  LBinOp(_h, _op, l, r) => {
-    let (b1, c1) = collect_fn_names_expr(l, buf, count)
-    collect_fn_names_expr(r, b1, c1)
-  },
-  LUnaryOp(_h, _op, inner)   => collect_fn_names_expr(inner, buf, count),
-  LCall(_h, f, args) => {
-    let (b1, c1) = collect_fn_names_expr(f, buf, count)
-    collect_fn_names_list(args, b1, c1)
-  },
-  LTailCall(_h, f, args) => {
-    let (b1, c1) = collect_fn_names_expr(f, buf, count)
-    collect_fn_names_list(args, b1, c1)
-  },
-  LReturn(_h, inner)         => collect_fn_names_expr(inner, buf, count),
-  LIf(_h, c, t, e) => {
-    let (b1, c1) = collect_fn_names_expr(c, buf, count)
-    let (b2, c2) = collect_fn_names_list(t, b1, c1)
-    collect_fn_names_list(e, b2, c2)
-  },
-  LBlock(_h, stmts)          => collect_fn_names_list(stmts, buf, count),
-  LMakeList(_h, elems)       => collect_fn_names_list(elems, buf, count),
-  LMakeTuple(_h, elems)      => collect_fn_names_list(elems, buf, count),
-  LMakeRecord(_h, fs)        => collect_fn_names_list(fs, buf, count),
-  LMakeVariant(_h, _t, fs)   => collect_fn_names_list(fs, buf, count),
-  LIndex(_h, b, i, _) => {
-    let (b1, c1) = collect_fn_names_expr(b, buf, count)
-    collect_fn_names_expr(i, b1, c1)
-  },
-  LMatch(_h, s, _arms)       => collect_fn_names_expr(s, buf, count),
-  LSuspend(_h, _o, f, args, ev) => {
-    let (b1, c1) = collect_fn_names_expr(f, buf, count)
-    let (b2, c2) = collect_fn_names_list(args, b1, c1)
-    collect_fn_names_list(ev, b2, c2)
-  },
-  LStateSet(_h, _s, v)       => collect_fn_names_expr(v, buf, count),
-  LRegion(_h, body)          => collect_fn_names_list(body, buf, count),
-  LHandleWith(_h, b, hn, _hname, inits) => {
-    let (b1, c1) = collect_fn_names_expr(b, buf, count)
-    let (b2, c2) = collect_fn_names_expr(hn, b1, c1)
-    collect_fn_names_list(inits, b2, c2)
-  },
-  LFeedback(_h, b, s) => {
-    let (b1, c1) = collect_fn_names_expr(b, buf, count)
-    collect_fn_names_expr(s, b1, c1)
-  },
-  LPerform(_h, _n, args)     => collect_fn_names_list(args, buf, count),
-  LWasiCall(_h, _n, args)    => collect_fn_names_list(args, buf, count),
-  LHandle(_h, b, _arms)      => collect_fn_names_expr(b, buf, count),
-  LEvPerform(_h, _n, _s, a)  => collect_fn_names_list(a, buf, count),
-  LFieldLoad(_h, rec, _off)  => collect_fn_names_expr(rec, buf, count),
-  LStateSlotStore(_h, _o, v) => collect_fn_names_expr(v, buf, count),
-  // H6: exhaustive LowExpr enumeration. Leaves with no fn-names
-  // inside (scalars, locals, globals, upvals, state reads) return
-  // the accumulator unchanged. A new LIR variant must decide its
-  // contribution explicitly — `_ => (buf, count)` would silently
-  // miss closures inside a new construct.
-  LConst(_, _)               => (buf, count),
-  LLocal(_, _)               => (buf, count),
-  LGlobal(_, _)              => (buf, count),
-  LUpval(_, _)               => (buf, count),
-  LStateGet(_, _)            => (buf, count)
-}
-
-// Top-level fn names — only top-level LLet-wrapped closures have
-// module-init closure globals. Inline lambdas construct their
-// records at the LMakeClosure emit site (not at module init).
-// Ω.3: top-level fn-name collection uses the buffer substrate.
-// Bounded-N (number of top-level LMakeClosure-bound LLet stmts);
-// the buffer pattern preserves O(N) total allocation regardless.
-fn collect_top_level_fn_names(lowered) = {
-  let n = lowered.len
-  let initial_capacity = if n < 4 { 4 } else { n }
-  let buf = make_list(initial_capacity)
-  let (final_buf, final_count) =
-    collect_top_level_fn_names_loop(lowered, 0, n, buf, 0)
-  slice(final_buf, 0, final_count)
-}
-
-fn collect_top_level_fn_names_loop(lowered, i, n, buf, count) = {
-  if i >= n { (buf, count) }
-  else {
-    let head_name = extract_top_fn_name(list_index(lowered, i))
-    let (new_buf, new_count) =
-      if str_eq(head_name, "") { (buf, count) }
-      else {
-        let extended = list_extend_to(buf, count + 1)
-        let written  = list_set(extended, count, head_name)
-        (written, count + 1)
-      }
-    collect_top_level_fn_names_loop(lowered, i + 1, n, new_buf, new_count)
-  }
-}
-
+/// extract_top_fn_name — read the binding name from a top-level LLet
+/// that wraps a closure/continuation. Used by walk_lemit_top_one to
+/// fire visit_top_fn at the correct sites. Returns "" for non-binding
+/// shapes (caller treats "" as no-op).
 fn extract_top_fn_name(stmt) with Pure = match stmt {
   LLet(_, name, LMakeClosure(_, _, _, _))           => name,
   LLet(_, name, LMakeContinuation(_, _, _, _, _, _)) => name,

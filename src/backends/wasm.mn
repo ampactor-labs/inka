@@ -27,11 +27,31 @@ effect WasmOut {
   wat_emit(String) -> ()
 }
 
+/// WatBuffer effect — collect_wat returns the accumulated buffer of a
+/// scoped emit. Used by row-aware-parallel-emit (per Hβ.emit.row-aware-
+/// parallel-emit): each fn body emits to a fresh wat_to_string handler
+/// in parallel, then the collected strings get sequential output
+/// preserving source order. parallel_map's per-branch handler isolation
+/// IS the substrate that makes per-fn emit safely parallel.
+effect WatBuffer {
+  wat_collect() -> String
+}
+
 handler wat_stdout {
   wat_emit(s) => {
     print_string(s)
     resume()
   }
+}
+
+/// wat_to_string — buffer wat_emit calls into a String; wat_collect
+/// returns the buffer. Handles BOTH WasmOut.wat_emit AND WatBuffer.
+/// wat_collect — one handler, two effects. Per
+/// protocol_handler_is_state_is_closure_is_evidence.md: state IS the
+/// buffer; the handler arm body chains it through resume() with.
+handler wat_to_string with buf = "" {
+  wat_emit(s) => resume() with buf = buf |> str_concat(s),
+  wat_collect() => resume(buf)
 }
 
 /// heap_base is the threshold separating sentinel ADT values from heap
@@ -859,81 +879,101 @@ fn emit_memory_decl() = {
 // inline lambdas use the handle-based `lambda_<handle>` name assigned
 // in lower.mn. Order matches `collect_fn_names` traversal, so
 // $<name>_idx globals line up with the function table.
+//
+// Cargo-class per-fn parallel emit (Hβ.emit.row-aware-parallel-emit):
+// each (name, params, body, captures_count) record is INDEPENDENT —
+// no shared state across fn bodies once the string-table / fn-index
+// pre-passes have run. parallel_map dispatches each to its own
+// wat_to_string handler instance; resulting strings emit sequentially
+// to wat_stdout preserving source order (Q-B.7.3 determinism guarantee).
 fn emit_functions(lowered) = {
-  emit_fns_list(lowered)
+  let fn_records = collect_fn_emit_records(lowered)
+  fn_records
+    |> parallel_map(emit_one_fn_to_string)
+    |> for_each((s) => perform wat_emit(s))
 }
 
-fn emit_fns_list(exprs) = for_each(emit_fns_expr, exprs)
+/// Per-fn emit-to-buffer. Installs wat_to_string locally; emit_fn_body's
+/// perform wat_emit calls go to that handler's buffer; wat_collect
+/// returns the buffer when the scoped block completes.
+fn emit_one_fn_to_string(record) = {
+  let (name, param_names, body, captures_count) = record
+  {
+    emit_fn_body(name, param_names, body, captures_count)
+    perform wat_collect()
+  } ~> wat_to_string
+}
 
-fn emit_fns_expr(expr) = match expr {
+/// Deep-walk the lowered program, projecting every fn-bearing variant
+/// (LMakeClosure / LMakeContinuation / LDeclareFn) to an emit record
+/// (name, param_names, body, captures_count). flatten(map) over the
+/// recursive structure produces the records in tree-traversal order —
+/// matching the prior emit_fns_expr ordering byte-for-byte so
+/// $<name>_idx globals line up with the function table.
+fn collect_fn_emit_records(exprs) =
+  flatten(map(collect_fn_emit_records_expr, exprs))
+
+fn collect_fn_emit_records_expr(expr) = match expr {
   LMakeClosure(_h, LFn(name, _arity, param_names, body, _row), captures, ev) => {
-    // H1: thread the body's captures count to emit_fn_body so its
-    // body_context install knows the fence between captures and
-    // evidence in __state. The fence determines LEvPerform's
-    // offset arithmetic inside the body.
-    emit_fn_body(name, param_names, body, captures.len)
-    // Recurse into body + captures + ev_slots for nested lambdas.
-    emit_fns_list(body)
-    emit_fns_list(captures)
-    emit_fns_list(ev)
+    [(name, param_names, body, captures.len)]
+      ++ collect_fn_emit_records(body)
+      ++ collect_fn_emit_records(captures)
+      ++ collect_fn_emit_records(ev)
   },
   LMakeContinuation(_h, LFn(name, _arity, param_names, body, _row), captures, ev, _, _) => {
-    // H7 — emit the resume_fn alongside other top-level fns. Same
-    // body_context install pattern as LMakeClosure (the resume fn
-    // takes a __state continuation pointer parameter; captures
-    // restored from offsets per H7 §1.2 layout). Recurse into body
-    // + captures + ev_slots for nested lambdas.
-    emit_fn_body(name, param_names, body, captures.len)
-    emit_fns_list(body)
-    emit_fns_list(captures)
-    emit_fns_list(ev)
+    [(name, param_names, body, captures.len)]
+      ++ collect_fn_emit_records(body)
+      ++ collect_fn_emit_records(captures)
+      ++ collect_fn_emit_records(ev)
   },
   LDeclareFn(LFn(name, _arity, param_names, body, _row)) => {
-    // H1.4: handler arm wasm fn declaration. No captures, no
-    // evidence — stateless arms in monomorphic context. Stateful
-    // handlers (with state slots) and poly dispatch land with H1.6.
-    emit_fn_body(name, param_names, body, 0)
-    emit_fns_list(body)
+    [(name, param_names, body, 0)]
+      ++ collect_fn_emit_records(body)
   },
-  LLet(_h, _n, inner)        => emit_fns_expr(inner),
-  LStore(_h, _s, val)        => emit_fns_expr(val),
-  LBinOp(_h, _op, l, r)      => { emit_fns_expr(l); emit_fns_expr(r) },
-  LUnaryOp(_h, _op, inner)   => emit_fns_expr(inner),
-  LCall(_h, f, args)         => { emit_fns_expr(f); emit_fns_list(args) },
-  LTailCall(_h, f, args)     => { emit_fns_expr(f); emit_fns_list(args) },
-  LReturn(_h, inner)         => emit_fns_expr(inner),
-  LIf(_h, c, t, e)           => { emit_fns_expr(c); emit_fns_list(t); emit_fns_list(e) },
-  LBlock(_h, stmts)          => emit_fns_list(stmts),
-  LMakeList(_h, elems)       => emit_fns_list(elems),
-  LMakeTuple(_h, elems)      => emit_fns_list(elems),
-  LMakeRecord(_h, fs)        => emit_fns_list(fs),
-  LMakeVariant(_h, _t, fs)   => emit_fns_list(fs),
-  LIndex(_h, b, i, _)        => { emit_fns_expr(b); emit_fns_expr(i) },
-  LMatch(_h, s, _arms)       => emit_fns_expr(s),
-  LSuspend(_h, _o, f, args, ev) => {
-    emit_fns_expr(f); emit_fns_list(args); emit_fns_list(ev)
-  },
-  LStateSet(_h, _s, v)       => emit_fns_expr(v),
-  LRegion(_h, body)          => emit_fns_list(body),
-  LHandleWith(_h, b, hn, _hname, inits) => {
-    emit_fns_expr(b)
-    emit_fns_expr(hn)
-    emit_fns_list(inits)
-  },
-  LFeedback(_h, b, s)        => { emit_fns_expr(b); emit_fns_expr(s) },
-  LPerform(_h, _n, args)     => emit_fns_list(args),
-  LHandle(_h, b, _arms)      => emit_fns_expr(b),
-  LEvPerform(_h, _n, _s, a)  => emit_fns_list(a),
-  LFieldLoad(_h, rec, _off)  => emit_fns_expr(rec),
-  LStateSlotStore(_h, _o, v) => emit_fns_expr(v),
+  LLet(_h, _n, inner)        => collect_fn_emit_records_expr(inner),
+  LStore(_h, _s, val)        => collect_fn_emit_records_expr(val),
+  LBinOp(_h, _op, l, r)      => collect_fn_emit_records_expr(l)
+                                  ++ collect_fn_emit_records_expr(r),
+  LUnaryOp(_h, _op, inner)   => collect_fn_emit_records_expr(inner),
+  LCall(_h, f, args)         => collect_fn_emit_records_expr(f)
+                                  ++ collect_fn_emit_records(args),
+  LTailCall(_h, f, args)     => collect_fn_emit_records_expr(f)
+                                  ++ collect_fn_emit_records(args),
+  LReturn(_h, inner)         => collect_fn_emit_records_expr(inner),
+  LIf(_h, c, t, e)           => collect_fn_emit_records_expr(c)
+                                  ++ collect_fn_emit_records(t)
+                                  ++ collect_fn_emit_records(e),
+  LBlock(_h, stmts)          => collect_fn_emit_records(stmts),
+  LMakeList(_h, elems)       => collect_fn_emit_records(elems),
+  LMakeTuple(_h, elems)      => collect_fn_emit_records(elems),
+  LMakeRecord(_h, fs)        => collect_fn_emit_records(fs),
+  LMakeVariant(_h, _t, fs)   => collect_fn_emit_records(fs),
+  LIndex(_h, b, i, _)        => collect_fn_emit_records_expr(b)
+                                  ++ collect_fn_emit_records_expr(i),
+  LMatch(_h, s, _arms)       => collect_fn_emit_records_expr(s),
+  LSuspend(_h, _o, f, args, ev) => collect_fn_emit_records_expr(f)
+                                     ++ collect_fn_emit_records(args)
+                                     ++ collect_fn_emit_records(ev),
+  LStateSet(_h, _s, v)       => collect_fn_emit_records_expr(v),
+  LRegion(_h, body)          => collect_fn_emit_records(body),
+  LHandleWith(_h, b, hn, _hname, inits) =>
+    collect_fn_emit_records_expr(b)
+      ++ collect_fn_emit_records_expr(hn)
+      ++ collect_fn_emit_records(inits),
+  LFeedback(_h, b, s)        => collect_fn_emit_records_expr(b)
+                                  ++ collect_fn_emit_records_expr(s),
+  LPerform(_h, _n, args)     => collect_fn_emit_records(args),
+  LHandle(_h, b, _arms)      => collect_fn_emit_records_expr(b),
+  LEvPerform(_h, _n, _s, a)  => collect_fn_emit_records(a),
+  LFieldLoad(_h, rec, _off)  => collect_fn_emit_records_expr(rec),
+  LStateSlotStore(_h, _o, v) => collect_fn_emit_records_expr(v),
   // H6: exhaustive LowExpr. Leaves with no fn-containing
-  // descendants emit nothing. New LIR variants that carry fn
-  // bodies (LMakeClosure-like) must decide their emission path.
-  LConst(_, _)               => (),
-  LLocal(_, _)               => (),
-  LGlobal(_, _)              => (),
-  LUpval(_, _)               => (),
-  LStateGet(_, _)            => ()
+  // descendants contribute no records.
+  LConst(_, _)               => [],
+  LLocal(_, _)               => [],
+  LGlobal(_, _)              => [],
+  LUpval(_, _)               => [],
+  LStateGet(_, _)            => []
 }
 
 fn emit_fn_body(name, param_names, body, captures_count) = {

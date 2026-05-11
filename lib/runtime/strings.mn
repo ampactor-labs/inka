@@ -1,10 +1,38 @@
 // strings.mn — String primitives for the Mentl runtime
 //
-// Strings are ALWAYS flat: [len:i32][bytes...].
-// No tags. No trees. No lazy views. Every operation here is O(N)
-// in the length of the strings involved — no hidden structure.
+// TWO SHAPES, ONE INTERFACE.
 //
-// Effects declared in std/compiler/types.mn (never re-declared here):
+// Shape A: FLAT — [len_i32 >= 0][bytes...]
+//   The bytes live contiguously after the length word. Constructed
+//   by alloc + mem_copy / store_i8; produced by str_concat,
+//   int_to_str, single-byte builders, and the seed's data-section
+//   literals. Length is non-negative.
+//
+// Shape B: VIEW — [-1_sentinel_i32][buf_ptr_i32][start_offset_i32][len_i32]
+//   A reference into another flat string's byte payload. The first
+//   word is -1 (no flat string can have negative length); the remaining
+//   12 bytes encode (flat_buf_ptr, start_offset, length). Constructed
+//   by str_slice — zero byte-copy regardless of slice length. The
+//   referenced buffer must be flat (chains of views collapse via
+//   view_base on slice) so byte_at remains O(1) not O(view-chain-depth).
+//
+// EVERY observer of bytes (byte_at, byte_len, str_eq, str_lt,
+// str_concat copy-from-source) reads through byte_at + byte_len,
+// which dispatch on `is_view(s) = load_i32(s) < 0`. The first-word
+// sentinel is the discriminant: positive = flat-length, -1 = view.
+//
+// SUBSTRATE-HONEST DESIGN per the eight interrogations on string
+// representation (2026-05-11 ultimate-form realization):
+//   Graph: source bytes already encoded at their original buffer
+//   Handler: +Memory only for byte_at; +Alloc only at concat/output
+//   Verb: |> sequential walk via byte_at — no copy
+//   Row: +Alloc(16) per slice, not +Alloc(N) — orders of magnitude lower
+//   Ownership: views borrow the buf; concat materializes (owns)
+//   Refinement: View carries (start, length) bounds on buf
+//   Gradient: future operations stay zero-copy until a boundary forces flatten
+//   Reason: provenance preserved — view points back at its source buf
+//
+// Effects declared in std/compiler/types.mn:
 //   Memory: load_i32, store_i32, load_i8, store_i8, mem_copy, byte_at, byte_len
 //   Alloc:  alloc(size) -> Int
 //
@@ -16,24 +44,43 @@
 
 import types
 
-// Byte-level accessors
+/// is_view — true iff s carries the view sentinel (-1) in its first
+/// word. Flat strings have non-negative length; view headers have
+/// -1 as the discriminant. `load_i32(s) < 0` separates them with
+/// one signed comparison — no bitwise needed.
+fn is_view(s) -> Bool with Memory = {
+  perform load_i32(s) < 0
+}
 
-/// byte_len — length of a string in bytes (the i32 header word).
+// Byte-level accessors — uniform interface, two-shape dispatch.
+
+/// byte_len — payload length. Flat: word at offset 0. View: word at
+/// offset 12 (after sentinel, buf_ptr, start_offset).
 fn byte_len(s) with Memory = {
-  perform load_i32(s)
+  if is_view(s) { perform load_i32(s + 12) }
+  else { perform load_i32(s) }
 }
 
-/// byte_at — load a single byte at position i (0-indexed into the payload).
+/// byte_at — load a single byte at position i (0-indexed into the
+/// payload). View: resolve (buf, start) from header, index into
+/// buf's flat payload. Flat: index after the length word.
 fn byte_at(s, i) with Memory = {
-  perform load_i8(s + 4 + i)
+  if is_view(s) {
+    let buf = perform load_i32(s + 4)
+    let off = perform load_i32(s + 8)
+    perform load_i8(buf + 4 + off + i)
+  } else {
+    perform load_i8(s + 4 + i)
+  }
 }
 
-// Equality and ordering
+// Equality and ordering — walk via byte_at so view/flat dispatch is
+// transparent at observer sites. byte_len gives the comparable length.
 
 fn str_eq_loop(a, b, slen, i) -> Bool with Memory =
   if i >= slen { true }
   else {
-    if perform load_i8(a + 4 + i) != perform load_i8(b + 4 + i) { false }
+    if byte_at(a, i) != byte_at(b, i) { false }
     else { str_eq_loop(a, b, slen, i + 1) }
   }
 
@@ -42,8 +89,8 @@ fn str_eq_loop(a, b, slen, i) -> Bool with Memory =
 /// (E_TypeMismatch under Mentl's type-distinct Bool). Bare `==` on
 /// string pointers is a pointer compare, not a content compare.
 fn str_eq(a, b) -> Bool with Memory =
-  let la = perform load_i32(a)
-  let lb = perform load_i32(b)
+  let la = byte_len(a)
+  let lb = byte_len(b)
   if la != lb { false }
   else { str_eq_loop(a, b, la, 0) }
 
@@ -52,8 +99,8 @@ fn str_lt_loop(a, b, la, lb, i) -> Bool with Memory =
   else if i >= la { true }
   else if i >= lb { false }
   else {
-    let ca = perform load_i8(a + 4 + i)
-    let cb = perform load_i8(b + 4 + i)
+    let ca = byte_at(a, i)
+    let cb = byte_at(b, i)
     if ca < cb { true }
     else if ca > cb { false }
     else { str_lt_loop(a, b, la, lb, i + 1) }
@@ -61,35 +108,64 @@ fn str_lt_loop(a, b, la, lb, i) -> Bool with Memory =
 
 /// str_lt — lexicographic less-than. Returns Bool.
 fn str_lt(a, b) -> Bool with Memory =
-  let la = perform load_i32(a)
-  let lb = perform load_i32(b)
+  let la = byte_len(a)
+  let lb = byte_len(b)
   str_lt_loop(a, b, la, lb, 0)
 
-// Concatenation and slicing
+// Concatenation and slicing — concat materializes (the boundary);
+// slice produces a view (zero byte-copy).
 
-/// str_concat — allocate a new flat string = a ++ b.
-/// The result shares nothing with a or b — bump allocator, immutable.
+/// str_concat — produce a new flat string = a ++ b. The materialization
+/// boundary: the result is always flat, never a chain of view nodes.
+/// Hot path: both operands flat → block-copy via mem_copy after
+/// resolving each operand's (base_buf, base_off, length) via
+/// view_base. View operands route through their base_buf — no
+/// per-byte fn dispatch. O(la + lb) bytes copied; one Alloc.
 fn str_concat(a, b) with Memory + Alloc = {
-  let la = perform load_i32(a)
-  let lb = perform load_i32(b)
+  let (a_buf, a_off) = view_base(a)
+  let (b_buf, b_off) = view_base(b)
+  let la = byte_len(a)
+  let lb = byte_len(b)
   let dest = perform alloc(4 + la + lb)
   perform store_i32(dest, la + lb)
-  perform mem_copy(dest + 4, a + 4, la)
-  perform mem_copy(dest + 4 + la, b + 4, lb)
+  perform mem_copy(dest + 4, a_buf + 4 + a_off, la)
+  perform mem_copy(dest + 4 + la, b_buf + 4 + b_off, lb)
   dest
 }
 
-/// str_slice — return a new flat string = s[start..end) (exclusive end).
+/// view_base — given a string of either shape, return the (flat buf,
+/// absolute start offset) backing its payload. Collapses view-of-
+/// view chains so the substrate invariant holds: every view's buf
+/// field IS a flat string (one byte_at dereference reaches bytes,
+/// not N). The graph already knows where the bytes live; this
+/// projection makes that direct at every slice site.
+fn view_base(s) with Memory = {
+  if is_view(s) {
+    let buf = perform load_i32(s + 4)
+    let off = perform load_i32(s + 8)
+    (buf, off)
+  } else {
+    (s, 0)
+  }
+}
+
+/// str_slice — return a VIEW into s covering bytes [start..end).
+/// Zero byte-copy regardless of slice length: 16 bytes of header
+/// allocation, no payload copying. View collapse via view_base
+/// guarantees the result's buf field is always a flat string.
 /// Clamps start and end to valid range — no panic, no sentinel.
 fn str_slice(s, start, end) with Memory + Alloc = {
-  let slen = perform load_i32(s)
+  let slen = byte_len(s)
   let cstart = if start < 0 { 0 } else if start > slen { slen } else { start }
   let cend   = if end < cstart { cstart } else if end > slen { slen } else { end }
   let n = cend - cstart
-  let dest = perform alloc(4 + n)
-  perform store_i32(dest, n)
-  perform mem_copy(dest + 4, s + 4 + cstart, n)
-  dest
+  let (base_buf, base_off) = view_base(s)
+  let view = perform alloc(16)
+  perform store_i32(view, 0 - 1)
+  perform store_i32(view + 4, base_buf)
+  perform store_i32(view + 8, base_off + cstart)
+  perform store_i32(view + 12, n)
+  view
 }
 
 // Integer conversion

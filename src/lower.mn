@@ -945,8 +945,27 @@ fn field_byte_offset(fields, target, i, n) = {
 // Statement lowering
 
 fn lower_stmt_list(stmts) = {
-  if stmts.len == 0 { [] }
-  else { list_concat([lower_stmt(list_head(stmts))], lower_stmt_list(list_tail(stmts))) }
+  let n = stmts.len
+  let initial_capacity = if n < 4 { 4 } else { n }
+  let buf = make_list(initial_capacity)
+  let (final_buf, final_count) = lower_stmt_list_loop(stmts, 0, n, buf, 0)
+  slice(final_buf, 0, final_count)
+}
+
+// Buffer-counter loop per Ω.3 discipline. Replaces the prior
+// `[lower_stmt(head)] ++ list_concat(lower_stmt_list(tail))` form
+// which was non-tail-recursive: each frame held list_concat's
+// continuation, so deep stmt lists (the wheel-source's hundreds of
+// fns at top level) blew the wasm stack. Tail recursion via
+// (buf, count) threading; one allocation per stmt; O(N) total.
+fn lower_stmt_list_loop(stmts, i, n, buf, count) = {
+  if i >= n { (buf, count) }
+  else {
+    let lo = lower_stmt(list_index(stmts, i))
+    let extended = list_extend_to(buf, count + 1)
+    let written  = list_set(extended, count, lo)
+    lower_stmt_list_loop(stmts, i + 1, n, written, count + 1)
+  }
 }
 
 // H6: exhaustive NodeBody enumeration. NPat and NHole at

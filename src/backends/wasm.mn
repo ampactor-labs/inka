@@ -1247,6 +1247,48 @@ fn emit_start(top_fn_names) = {
   perform wat_emit("    (call $proc_exit (i32.const 0))\n")
   perform wat_emit("  )\n")
   perform wat_emit("  (export \"_start\" (func $_start))\n")
+  // Emit the WASI threads entry point — closes the Stage 3 substrate
+  // cascade. Per protocol_bootstrap_wasi_threads_substrate.md.
+  emit_wasi_thread_start()
+}
+
+/// emit_wasi_thread_start — Stage 3 substrate per Hβ.runtime.wasi-thread-
+/// spawn-seed. The closure IS the thread record. WASI threads calls
+/// $wasi_thread_start(tid, start_arg) on a freshly-spawned thread;
+/// start_arg = closure pointer. The body reads fn_idx from closure[0],
+/// call_indirects with closure-as-__state, stores result at closure
+/// done_offset+4, atomic.store done=1, atomic.notify. Programs that
+/// don't spawn pay zero runtime cost — the entry is unreachable until
+/// wasi_thread_spawn is performed.
+///
+/// Layout precondition (per closure_done_addr in lib/runtime/threading.mn):
+///   [fn_idx@0][capture_count@4][captures@8..(8+4*nc)][done@8+4*nc][result@done+4]
+fn emit_wasi_thread_start() = {
+  perform wat_emit("  (func $wasi_thread_start (param $tid i32) (param $start_arg i32)\n")
+  perform wat_emit("    (local $closure_ptr i32)\n")
+  perform wat_emit("    (local $result i32)\n")
+  perform wat_emit("    (local $done_addr i32)\n")
+  perform wat_emit("    (local $nc i32)\n")
+  perform wat_emit("    ;; start_arg IS the closure pointer (Stage 3 substrate collapse)\n")
+  perform wat_emit("    (local.set $closure_ptr (local.get $start_arg))\n")
+  perform wat_emit("    ;; Invoke closure: push __state = closure_ptr, then call_indirect via fn_idx@0\n")
+  perform wat_emit("    (local.get $closure_ptr)\n")
+  perform wat_emit("    (local.get $closure_ptr) (i32.load offset=0)\n")
+  perform wat_emit("    (call_indirect (type $ft1))\n")
+  perform wat_emit("    (local.set $result)\n")
+  perform wat_emit("    ;; done_addr = closure_ptr + 8 + 4 * capture_count\n")
+  perform wat_emit("    (local.set $nc (i32.load offset=4 (local.get $closure_ptr)))\n")
+  perform wat_emit("    (local.set $done_addr\n")
+  perform wat_emit("      (i32.add (local.get $closure_ptr)\n")
+  perform wat_emit("        (i32.add (i32.const 8) (i32.mul (i32.const 4) (local.get $nc)))))\n")
+  perform wat_emit("    ;; Store result at done_addr + 4\n")
+  perform wat_emit("    (i32.store offset=4 (local.get $done_addr) (local.get $result))\n")
+  perform wat_emit("    ;; Atomic.store done = 1\n")
+  perform wat_emit("    (i32.atomic.store (local.get $done_addr) (i32.const 1))\n")
+  perform wat_emit("    ;; Notify any waiters on this done flag\n")
+  perform wat_emit("    (drop (memory.atomic.notify (local.get $done_addr) (i32.const -1)))\n")
+  perform wat_emit("  )\n")
+  perform wat_emit("  (export \"wasi_thread_start\" (func $wasi_thread_start))\n")
 }
 
 // Emit a sequence of `(local.get $<state_local>) <init_emit> (i32.store

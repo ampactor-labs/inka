@@ -2439,7 +2439,13 @@
     (call $emit_byte (i32.const 34))
     (call $emit_close)
     (call $emit_space)
-    (call $emit_int (i32.const 512))
+    (call $emit_int (i32.const 8192))   ;; 8192 pages × 64KB = 512MB
+                                         ;; — bump allocator headroom for
+                                         ;; full-wheel self-compile through
+                                         ;; mentl2; the 512-page (32MB)
+                                         ;; bootstrap default exhausts on
+                                         ;; accumulated string operations
+                                         ;; across many compile stages.
     (call $emit_close)
     (call $emit_nl)
 

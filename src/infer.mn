@@ -586,7 +586,27 @@ fn infer_expr(ref node) = {
       let N(_, _, ch) = cond
       let N(_, _, th) = then_e
       let N(_, _, eh) = else_e
+      let N(else_body, _, _) = else_e
       perform graph_bind(ch, TName("Bool", []), Located(span, Inferred("if condition")))
+      // E_IfMissingElse per SYNTAX.md: detect synthesized-LitUnit else
+      // (parser produces LitUnit when no else clause — src/parser.mn:1275).
+      // If the then-branch produces a non-unit value, the missing else
+      // is structurally invalid: the if would have to "produce nothing"
+      // on the false path. Emit before unify so user sees the structural
+      // cause, not the downstream E_TypeMismatch.
+      let else_is_synthesized_unit = match else_body {
+        NExpr(LitUnit) => true,
+        _              => false
+      }
+      if else_is_synthesized_unit {
+        let then_ty = perform lookup_ty(th)
+        match then_ty {
+          TName("Unit", _) => (),
+          _ => perform report("infer", "E_IfMissingElse", "TypeError",
+            "if-without-else expects unit-valued then-branch; add `else { ... }` or make then-branch evaluate to unit",
+            span, "MachineApplicable")
+        }
+      }
       unify(th, eh, span, IfBranch(Inferred("branches must match")))
       perform graph_bind(handle, TVar(th), Located(span, IfBranch(Inferred("if result"))))
     },

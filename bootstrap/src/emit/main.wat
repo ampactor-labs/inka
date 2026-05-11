@@ -1262,6 +1262,10 @@
       (then
         (call $emit_let_locals_walk (call $lexpr_lstateset_value (local.get $expr)))
         (return)))
+    (if (i32.eq (local.get $tag) (i32.const 336))         ;; LStateSlotStore
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lstateslotstore_value (local.get $expr)))
+        (return)))
     (if (i32.eq (local.get $tag) (i32.const 310))         ;; LReturn
       (then
         (call $emit_let_locals_walk (call $lexpr_lreturn_x (local.get $expr)))
@@ -1546,6 +1550,11 @@
       (then
         (call $emit_alloc_handle_locals_walk
           (call $lexpr_lstateset_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 336))         ;; LStateSlotStore
+      (then
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lstateslotstore_value (local.get $expr)))
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 328))         ;; LRegion
       (then

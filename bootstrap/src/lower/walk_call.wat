@@ -746,15 +746,59 @@
   ;; Hβ.lower.resume-state-updates-threading.
   (func $lower_resume (export "lower_resume") (param $node i32) (result i32)
     (local $h i32) (local $body i32) (local $resume_struct i32)
-    (local $val_node i32) (local $lo_val i32)
+    (local $val_node i32) (local $lo_val i32) (local $state_updates i32)
+    (local $n i32) (local $i i32) (local $upd i32)
+    (local $upd_name i32) (local $upd_init i32) (local $upd_lo i32)
+    (local $offset i32) (local $store i32)
+    (local $fields i32) (local $stmts i32)
     (local.set $h              (call $walk_expr_node_handle (local.get $node)))
     (local.set $body           (i32.load offset=4 (local.get $node)))
     (local.set $resume_struct  (i32.load offset=4 (local.get $body)))
     (local.set $val_node       (i32.load offset=4 (local.get $resume_struct)))
+    (local.set $state_updates  (i32.load offset=8 (local.get $resume_struct)))
     (local.set $lo_val         (call $lower_expr (local.get $val_node)))
-    (call $lexpr_make_lreturn
-      (local.get $h)
-      (local.get $lo_val)))
+    ;; Hβ.seed.resume-with-state-update-mirror — emit LStateSlotStore
+    ;; for each `with field = expr` update BEFORE the LReturn. Order
+    ;; matters: writes complete before continuation fires. Slot offsets
+    ;; resolved from the active arm's state-fields (source-order
+    ;; canonical per protocol_handler_is_state_is_closure_is_evidence.md).
+    ;; Empty state_updates → plain LReturn (current Lock #6 behavior).
+    (local.set $n (call $len (local.get $state_updates)))
+    (if (i32.eqz (local.get $n))
+      (then
+        (return (call $lexpr_make_lreturn
+                  (local.get $h)
+                  (local.get $lo_val)))))
+    ;; Non-empty updates — build LBlock([stores..., LReturn(lo_val)]).
+    (local.set $fields (call $lower_get_active_state_fields))
+    (local.set $stmts (call $make_list (i32.const 0)))
+    (local.set $stmts (call $list_extend_to (local.get $stmts)
+      (i32.add (local.get $n) (i32.const 1))))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $upd
+          (call $list_index (local.get $state_updates) (local.get $i)))
+        (local.set $upd_name
+          (call $list_index (local.get $upd) (i32.const 0)))
+        (local.set $upd_init
+          (call $list_index (local.get $upd) (i32.const 1)))
+        (local.set $upd_lo (call $lower_expr (local.get $upd_init)))
+        (local.set $offset (call $lower_resolve_state_slot_offset
+          (local.get $upd_name) (local.get $fields) (i32.const 0)))
+        ;; LStateSlotStore(h, offset, upd_lo) — emit-time writes value
+        ;; into __state at offset. Negative offset (name not in fields)
+        ;; is productive-under-error; emit's arm skips.
+        (local.set $store (call $lexpr_make_lstateslotstore
+          (local.get $h) (local.get $offset) (local.get $upd_lo)))
+        (drop (call $list_set (local.get $stmts) (local.get $i) (local.get $store)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    ;; Append LReturn at end.
+    (drop (call $list_set (local.get $stmts) (local.get $n)
+      (call $lexpr_make_lreturn (local.get $h) (local.get $lo_val))))
+    (call $lexpr_make_lblock (local.get $h) (local.get $stmts)))
 
   ;; ─── $lower_mark_tail — Hβ.lower.tail-call-mark-pass ─────────────────
   ;; Walk a LowExpr in tail position; rewrite LCall(308) → LTailCall(309)

@@ -7089,7 +7089,8 @@
   ;;   resume(v) with .. trailing absorbed by handler-arm boundary
   (func $parse_resume_expr (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
     (local $p i32) (local $val i32) (local $val_r i32) (local $p2 i32)
-    (local $tup i32) (local $empty_state_updates i32)
+    (local $tup i32) (local $state_updates i32) (local $p_after_with i32)
+    (local $updates_r i32)
     ;; Expect `(`.
     (local.set $p (call $expect (local.get $tokens)
       (call $skip_ws_p (local.get $tokens) (local.get $pos))
@@ -7110,14 +7111,107 @@
           (call $skip_ws_p (local.get $tokens)
             (call $list_index (local.get $val_r) (i32.const 1)))
           (i32.const 46)))))   ;; TRParen
-    ;; State-updates list: empty per Lock #6 (wheel-canonical seed shape).
-    (local.set $empty_state_updates (call $make_list (i32.const 0)))
+    ;; Hβ.seed.resume-with-state-update-mirror — parse `with field = expr,
+    ;; ...` after resume's close-paren. Mirrors wheel's parse-side of
+    ;; protocol_resume_state_mutation_substrate.md so the seed-compiled
+    ;; wheel propagates state updates to handler-state-record slots.
+    ;; TWith = 9. If no TWith, state_updates is empty (consistent with
+    ;; resume(val) without explicit state mutation).
+    (local.set $p_after_with (call $skip_ws_p (local.get $tokens) (local.get $p2)))
+    (if (call $at (local.get $tokens) (local.get $p_after_with) (i32.const 9))   ;; TWith
+      (then
+        (local.set $updates_r (call $parse_resume_state_updates
+          (local.get $tokens)
+          (i32.add (local.get $p_after_with) (i32.const 1))))
+        (local.set $state_updates (call $list_index (local.get $updates_r) (i32.const 0)))
+        (local.set $p2 (call $list_index (local.get $updates_r) (i32.const 1))))
+      (else
+        (local.set $state_updates (call $make_list (i32.const 0)))))
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $nexpr
-        (call $mk_ResumeExpr (local.get $val) (local.get $empty_state_updates))
+        (call $mk_ResumeExpr (local.get $val) (local.get $state_updates))
         (local.get $span))))
     (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p2)))
+    (local.get $tup))
+
+  ;; $parse_resume_state_updates — parse `field = expr (, field = expr)*`
+  ;; AFTER the TWith token. Terminator: comma NOT followed by `IDENT TEq`
+  ;; (i.e., the next match-arm or end of arm body) ends the list.
+  ;; Each entry is a 2-tuple (name, init_expr) matching parse_handler_state
+  ;; field shape — so $lower_resume's state-fields traversal is uniform
+  ;; across HandlerDeclStmt and ResumeExpr paths.
+  ;; Drift refused: 7 (parallel-rep — same {name,init} record shape);
+  ;; 9 (deferred-by-omission — closes the parse-side gap blocking
+  ;; protocol_resume_state_mutation_substrate.md's seed mirror).
+  (func $parse_resume_state_updates (param $tokens i32) (param $pos i32) (result i32)
+    (local $p i32) (local $buf i32) (local $count i32)
+    (local $field_name i32) (local $p_after_name i32) (local $p_after_eq i32)
+    (local $init_r i32) (local $init_expr i32) (local $p_after_init i32)
+    (local $field i32) (local $tup i32) (local $p_lookahead i32)
+    (local $name_lookahead i32)
+    (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
+    (local.set $buf (call $make_list (i32.const 4)))
+    (local.set $count (i32.const 0))
+    (block $done
+      (loop $fields
+        ;; Field name (TIdent).
+        (local.set $field_name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $field_name))
+          (then (br $done)))
+        (local.set $p_after_name (i32.add (local.get $p) (i32.const 1)))
+        ;; Expect TEq (60).
+        (local.set $p_after_eq (call $expect (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens) (local.get $p_after_name))
+          (i32.const 60)))
+        ;; Init expression.
+        (local.set $init_r (call $parse_expr (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens) (local.get $p_after_eq))))
+        (local.set $init_expr (call $list_index (local.get $init_r) (i32.const 0)))
+        (local.set $p_after_init (call $skip_ws_p (local.get $tokens)
+          (call $list_index (local.get $init_r) (i32.const 1))))
+        ;; Build field 2-tuple {name, init}.
+        (local.set $field (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $field) (i32.const 0) (local.get $field_name)))
+        (drop (call $list_set (local.get $field) (i32.const 1) (local.get $init_expr)))
+        ;; Append to buffer.
+        (local.set $buf (call $list_extend_to (local.get $buf)
+          (i32.add (local.get $count) (i32.const 1))))
+        (drop (call $list_set (local.get $buf) (local.get $count) (local.get $field)))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        ;; Comma → check if NEXT is `IDENT TEq` (another field) vs match-
+        ;; arm separator (IDENT followed by something else).
+        (if (call $at (local.get $tokens) (local.get $p_after_init) (i32.const 51))  ;; TComma
+          (then
+            (local.set $p_lookahead (call $skip_ws_p (local.get $tokens)
+              (i32.add (local.get $p_after_init) (i32.const 1))))
+            (local.set $name_lookahead
+              (call $ident_at_p (local.get $tokens) (local.get $p_lookahead)))
+            (if (i32.eqz (local.get $name_lookahead))
+              (then
+                ;; Comma not followed by IDENT — done.
+                (local.set $p (local.get $p_after_init))
+                (br $done)))
+            ;; IDENT at lookahead — check for TEq after it.
+            (if (i32.eqz (call $at (local.get $tokens)
+                  (call $skip_ws_p (local.get $tokens)
+                    (i32.add (local.get $p_lookahead) (i32.const 1)))
+                  (i32.const 60)))   ;; TEq
+              (then
+                ;; IDENT followed by non-TEq — match-arm pattern; done.
+                (local.set $p (local.get $p_after_init))
+                (br $done)))
+            ;; IDENT TEq — another field; continue.
+            (local.set $p (local.get $p_lookahead))
+            (br $fields))
+          (else
+            ;; No comma — done.
+            (local.set $p (local.get $p_after_init))
+            (br $done)))))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0)
+      (call $slice (local.get $buf) (i32.const 0) (local.get $count))))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))
 
   ;; ─── List literal ─────────────────────────────────────────────────
@@ -17332,6 +17426,15 @@
   (global $lower_state_inits_ledger_ptr (mut i32) (i32.const 0))
   (global $lower_state_inits_ledger_len_g (mut i32) (i32.const 0))
 
+  ;; Hβ.seed.resume-with-state-update-mirror — per-arm-body state-fields
+  ;; context. Set at $lower_handler_arm_body_capturing entry from the
+  ;; arm's handler decl state-fields list; queried by $lower_resume to
+  ;; resolve `resume() with field = ...` update names → source-order
+  ;; slot offsets (8 + i*4). Mirror of wheel-side current_state_fields
+  ;; effect (src/lower.mn:102-104 ArmStateContext) via global rather
+  ;; than handler since seed doesn't yet have user-defined effects.
+  (global $lower_active_state_fields_g (mut i32) (i32.const 0))
+
   ;; ─── Idempotent initializer (mirrors $infer_init / $graph_init) ────
   ;; Per the seed's discipline for module-level state chunks: every
   ;; public entry calls $lower_init first; subsequent calls no-op.
@@ -17355,7 +17458,42 @@
         (global.set $lower_default_op_handler_map_len_g (i32.const 0))
         (global.set $lower_state_inits_ledger_ptr (call $make_list (i32.const 8)))
         (global.set $lower_state_inits_ledger_len_g (i32.const 0))
+        (global.set $lower_active_state_fields_g (call $make_list (i32.const 0)))
         (global.set $lower_initialized    (i32.const 1)))))
+
+  ;; $lower_set_active_state_fields / $lower_get_active_state_fields —
+  ;; arm-body state-fields context. Save+restore pattern at arm boundary.
+  (func $lower_set_active_state_fields (param $fields i32)
+    (call $lower_init)
+    (global.set $lower_active_state_fields_g (local.get $fields)))
+
+  (func $lower_get_active_state_fields (result i32)
+    (call $lower_init)
+    (global.get $lower_active_state_fields_g))
+
+  ;; $lower_resolve_state_slot_offset(name, fields, idx) — walk fields
+  ;; by name; return slot offset 8 + idx*4 OR -1 if not found
+  ;; (productive-under-error sentinel; emit skips negative offsets).
+  ;; Mirror of wheel resolve_state_slot_offset (src/lower.mn:1195).
+  (func $lower_resolve_state_slot_offset
+        (param $name i32) (param $fields i32) (param $idx i32) (result i32)
+    (local $n i32) (local $i i32) (local $field i32) (local $field_name i32)
+    (local.set $n (call $len (local.get $fields)))
+    (local.set $i (local.get $idx))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $field
+          (call $list_index (local.get $fields) (local.get $i)))
+        (local.set $field_name
+          (call $list_index (local.get $field) (i32.const 0)))
+        (if (call $str_eq (local.get $field_name) (local.get $name))
+          (then
+            (return (i32.add (i32.const 8)
+                             (i32.mul (i32.const 4) (local.get $i))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const -1))
 
   ;; ─── $handler_state_inits_register / $handler_state_inits_lookup ──
   ;; Mirror of wheel-side handler_state_inits_registry (src/lower.mn).
@@ -18897,6 +19035,32 @@
   (func $lexpr_lhandlewith_state_inits (export "lexpr_lhandlewith_state_inits")
         (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 4)))
+
+  ;; ─── 336 = LStateSlotStore(handle, offset, value) — arity 3 ─────────
+  ;; Per Hβ.seed.resume-with-state-update-mirror: emit produces
+  ;; `(local.get $__state)(<value>)(i32.store offset=<offset>)` —
+  ;; writes value into the handler-state-record's slot at `offset`
+  ;; (8+i*4 per source-order index of the state field). Used by
+  ;; $lower_resume to thread `resume() with X = Y` state mutation
+  ;; into the typed-resume substrate per
+  ;; protocol_handler_is_state_is_closure_is_evidence.md.
+  ;; Tag 335 is already taken by LUnresolved; 336 is the next free.
+  (func $lexpr_make_lstateslotstore
+        (param $h i32) (param $offset i32) (param $value i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 336) (i32.const 3)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $offset))
+    (call $record_set (local.get $r) (i32.const 2) (local.get $value))
+    (local.get $r))
+
+  (func $lexpr_lstateslotstore_offset (export "lexpr_lstateslotstore_offset")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 1)))
+
+  (func $lexpr_lstateslotstore_value (export "lexpr_lstateslotstore_value")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 2)))
 
   ;; ─── 330 = LFeedback(handle, body, spec) — arity 3 ──────────────────
   ;; Per src/lower.mn:137 LFeedback(Int, LowExpr, LowExpr) — "<~
@@ -21112,15 +21276,59 @@
   ;; Hβ.lower.resume-state-updates-threading.
   (func $lower_resume (export "lower_resume") (param $node i32) (result i32)
     (local $h i32) (local $body i32) (local $resume_struct i32)
-    (local $val_node i32) (local $lo_val i32)
+    (local $val_node i32) (local $lo_val i32) (local $state_updates i32)
+    (local $n i32) (local $i i32) (local $upd i32)
+    (local $upd_name i32) (local $upd_init i32) (local $upd_lo i32)
+    (local $offset i32) (local $store i32)
+    (local $fields i32) (local $stmts i32)
     (local.set $h              (call $walk_expr_node_handle (local.get $node)))
     (local.set $body           (i32.load offset=4 (local.get $node)))
     (local.set $resume_struct  (i32.load offset=4 (local.get $body)))
     (local.set $val_node       (i32.load offset=4 (local.get $resume_struct)))
+    (local.set $state_updates  (i32.load offset=8 (local.get $resume_struct)))
     (local.set $lo_val         (call $lower_expr (local.get $val_node)))
-    (call $lexpr_make_lreturn
-      (local.get $h)
-      (local.get $lo_val)))
+    ;; Hβ.seed.resume-with-state-update-mirror — emit LStateSlotStore
+    ;; for each `with field = expr` update BEFORE the LReturn. Order
+    ;; matters: writes complete before continuation fires. Slot offsets
+    ;; resolved from the active arm's state-fields (source-order
+    ;; canonical per protocol_handler_is_state_is_closure_is_evidence.md).
+    ;; Empty state_updates → plain LReturn (current Lock #6 behavior).
+    (local.set $n (call $len (local.get $state_updates)))
+    (if (i32.eqz (local.get $n))
+      (then
+        (return (call $lexpr_make_lreturn
+                  (local.get $h)
+                  (local.get $lo_val)))))
+    ;; Non-empty updates — build LBlock([stores..., LReturn(lo_val)]).
+    (local.set $fields (call $lower_get_active_state_fields))
+    (local.set $stmts (call $make_list (i32.const 0)))
+    (local.set $stmts (call $list_extend_to (local.get $stmts)
+      (i32.add (local.get $n) (i32.const 1))))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $upd
+          (call $list_index (local.get $state_updates) (local.get $i)))
+        (local.set $upd_name
+          (call $list_index (local.get $upd) (i32.const 0)))
+        (local.set $upd_init
+          (call $list_index (local.get $upd) (i32.const 1)))
+        (local.set $upd_lo (call $lower_expr (local.get $upd_init)))
+        (local.set $offset (call $lower_resolve_state_slot_offset
+          (local.get $upd_name) (local.get $fields) (i32.const 0)))
+        ;; LStateSlotStore(h, offset, upd_lo) — emit-time writes value
+        ;; into __state at offset. Negative offset (name not in fields)
+        ;; is productive-under-error; emit's arm skips.
+        (local.set $store (call $lexpr_make_lstateslotstore
+          (local.get $h) (local.get $offset) (local.get $upd_lo)))
+        (drop (call $list_set (local.get $stmts) (local.get $i) (local.get $store)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    ;; Append LReturn at end.
+    (drop (call $list_set (local.get $stmts) (local.get $n)
+      (call $lexpr_make_lreturn (local.get $h) (local.get $lo_val))))
+    (call $lexpr_make_lblock (local.get $h) (local.get $stmts)))
 
   ;; ─── $lower_mark_tail — Hβ.lower.tail-call-mark-pass ─────────────────
   ;; Walk a LowExpr in tail position; rewrite LCall(308) → LTailCall(309)
@@ -21670,11 +21878,18 @@
         (param $args i32) (param $body_node i32)
         (param $config i32) (param $state i32) (result i32)
     (local $cp i32) (local $prev_frame i32) (local $lo_body i32)
-    (local $prev_captures_len i32)
+    (local $prev_captures_len i32) (local $prev_state_fields i32)
     (local.set $cp (call $ls_push_scope))
     (local.set $prev_frame (call $ls_enter_frame))
     (local.set $prev_captures_len (global.get $lower_captures_len_g))
     (global.set $lower_captures_len_g (i32.const 0))
+    ;; Hβ.seed.resume-with-state-update-mirror: install the arm's
+    ;; state-fields list as the active context. $lower_resume queries
+    ;; this when threading `resume() with field = expr` updates into
+    ;; LStateSlotStore offsets. Save+restore around the body lower
+    ;; preserves the caller's context (nested arms / sibling arms).
+    (local.set $prev_state_fields (call $lower_get_active_state_fields))
+    (call $lower_set_active_state_fields (local.get $state))
     ;; Hβ.seed.handler-arm-captures-canonical-order — pre-allocate
     ;; capture entries in canonical (config ++ state) source-order
     ;; matching the wheel's src/lower.mn:1117-1123 captures_names. The
@@ -21692,6 +21907,7 @@
     ;; Hβ.lower.tail-call-mark-pass — handler arm body is in tail position.
     (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
     (global.set $lower_captures_len_g (local.get $prev_captures_len))
+    (call $lower_set_active_state_fields (local.get $prev_state_fields))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     (local.get $lo_body))
@@ -26065,7 +26281,40 @@
       (then (call $emit_lfieldload   (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 335))
       (then (call $emit_lunresolved  (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 336))
+      (then (call $emit_lstateslotstore (local.get $r)) (return)))
     (unreachable))
+
+  ;; ─── $emit_lstateslotstore — LStateSlotStore tag 336 emit arm ──────
+  ;; Per Hβ.seed.resume-with-state-update-mirror. Emits:
+  ;;   (local.get $__state)<emit value>(i32.store offset=<offset>)
+  ;; Skips negative offsets (productive-under-error sentinel — name not
+  ;; in active state-fields). Used in $lower_resume's LBlock to
+  ;; thread `resume() with field = expr` updates into the handler
+  ;; state record before the resume returns control to the install
+  ;; site per protocol_handler_is_state_is_closure_is_evidence.md.
+  (func $emit_lstateslotstore (param $r i32)
+    (local $offset i32) (local $value i32)
+    (local.set $offset (call $lexpr_lstateslotstore_offset (local.get $r)))
+    (if (i32.lt_s (local.get $offset) (i32.const 0))
+      (then
+        ;; Productive-under-error: emit i32.const 0 sentinel so LBlock's
+        ;; (drop)-per-non-last-stmt finds a value to drop. Skipping
+        ;; entirely leaves stack underflow.
+        (call $emit_i32_const (i32.const 0))
+        (return)))
+    (local.set $value  (call $lexpr_lstateslotstore_value  (local.get $r)))
+    ;; (local.get $__state)
+    (call $el_emit_local_get_state)
+    ;; Emit the value expression.
+    (call $emit_lexpr (local.get $value))
+    ;; (i32.store offset=<offset>)
+    (call $el_emit_i32_store_offset (local.get $offset))
+    ;; Push i32.const 0 sentinel — emit_lblock's per-stmt (drop) needs
+    ;; a value to consume. LStateSlotStore is statement-position; the
+    ;; sentinel preserves WASM stack invariants without affecting
+    ;; semantics (the only meaningful effect was the i32.store).
+    (call $emit_i32_const (i32.const 0)))
 
   ;; ─── $emit_lunresolved — LUnresolved tag 335 emit arm ─────────────
   ;; Per protocol_no_silent_fallback.md (2026-05-08). Emits a
@@ -26351,6 +26600,22 @@
     (call $emit_byte (i32.const 61))
     (call $emit_int (local.get $off))
     (call $emit_byte (i32.const 41)))
+
+  (func $el_emit_i32_store_offset (export "el_emit_i32_store_offset") (param $off i32)
+    ;; emits: (i32.store offset=<off>)
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 105))   ;; "(i"
+    (call $emit_byte (i32.const 51)) (call $emit_byte (i32.const 50))   ;; "32"
+    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 115))  ;; ".s"
+    (call $emit_byte (i32.const 116)) (call $emit_byte (i32.const 111)) ;; "to"
+    (call $emit_byte (i32.const 114)) (call $emit_byte (i32.const 101)) ;; "re"
+    (call $emit_byte (i32.const 32))                                    ;; " "
+    (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 102)) ;; "of"
+    (call $emit_byte (i32.const 102)) (call $emit_byte (i32.const 115)) ;; "fs"
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 116)) ;; "et"
+    (call $emit_byte (i32.const 61))                                    ;; "="
+    (call $emit_int (local.get $off))
+    (call $emit_byte (i32.const 41))                                    ;; ")"
+    (call $emit_byte (i32.const 10)))                                   ;; "\n"
 
   ;; ─── $emit_llocal — LLocal tag 301 emit arm per §2.2 ───────────────
   ;; Per src/backends/wasm.mn:1146-1150. Reads name string via
@@ -30439,6 +30704,10 @@
       (then
         (call $emit_let_locals_walk (call $lexpr_lstateset_value (local.get $expr)))
         (return)))
+    (if (i32.eq (local.get $tag) (i32.const 336))         ;; LStateSlotStore
+      (then
+        (call $emit_let_locals_walk (call $lexpr_lstateslotstore_value (local.get $expr)))
+        (return)))
     (if (i32.eq (local.get $tag) (i32.const 310))         ;; LReturn
       (then
         (call $emit_let_locals_walk (call $lexpr_lreturn_x (local.get $expr)))
@@ -30723,6 +30992,11 @@
       (then
         (call $emit_alloc_handle_locals_walk
           (call $lexpr_lstateset_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 336))         ;; LStateSlotStore
+      (then
+        (call $emit_alloc_handle_locals_walk
+          (call $lexpr_lstateslotstore_value (local.get $expr)))
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 328))         ;; LRegion
       (then

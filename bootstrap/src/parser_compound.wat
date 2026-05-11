@@ -651,7 +651,8 @@
   ;;   resume(v) with .. trailing absorbed by handler-arm boundary
   (func $parse_resume_expr (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
     (local $p i32) (local $val i32) (local $val_r i32) (local $p2 i32)
-    (local $tup i32) (local $empty_state_updates i32)
+    (local $tup i32) (local $state_updates i32) (local $p_after_with i32)
+    (local $updates_r i32)
     ;; Expect `(`.
     (local.set $p (call $expect (local.get $tokens)
       (call $skip_ws_p (local.get $tokens) (local.get $pos))
@@ -672,14 +673,107 @@
           (call $skip_ws_p (local.get $tokens)
             (call $list_index (local.get $val_r) (i32.const 1)))
           (i32.const 46)))))   ;; TRParen
-    ;; State-updates list: empty per Lock #6 (wheel-canonical seed shape).
-    (local.set $empty_state_updates (call $make_list (i32.const 0)))
+    ;; Hβ.seed.resume-with-state-update-mirror — parse `with field = expr,
+    ;; ...` after resume's close-paren. Mirrors wheel's parse-side of
+    ;; protocol_resume_state_mutation_substrate.md so the seed-compiled
+    ;; wheel propagates state updates to handler-state-record slots.
+    ;; TWith = 9. If no TWith, state_updates is empty (consistent with
+    ;; resume(val) without explicit state mutation).
+    (local.set $p_after_with (call $skip_ws_p (local.get $tokens) (local.get $p2)))
+    (if (call $at (local.get $tokens) (local.get $p_after_with) (i32.const 9))   ;; TWith
+      (then
+        (local.set $updates_r (call $parse_resume_state_updates
+          (local.get $tokens)
+          (i32.add (local.get $p_after_with) (i32.const 1))))
+        (local.set $state_updates (call $list_index (local.get $updates_r) (i32.const 0)))
+        (local.set $p2 (call $list_index (local.get $updates_r) (i32.const 1))))
+      (else
+        (local.set $state_updates (call $make_list (i32.const 0)))))
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $nexpr
-        (call $mk_ResumeExpr (local.get $val) (local.get $empty_state_updates))
+        (call $mk_ResumeExpr (local.get $val) (local.get $state_updates))
         (local.get $span))))
     (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p2)))
+    (local.get $tup))
+
+  ;; $parse_resume_state_updates — parse `field = expr (, field = expr)*`
+  ;; AFTER the TWith token. Terminator: comma NOT followed by `IDENT TEq`
+  ;; (i.e., the next match-arm or end of arm body) ends the list.
+  ;; Each entry is a 2-tuple (name, init_expr) matching parse_handler_state
+  ;; field shape — so $lower_resume's state-fields traversal is uniform
+  ;; across HandlerDeclStmt and ResumeExpr paths.
+  ;; Drift refused: 7 (parallel-rep — same {name,init} record shape);
+  ;; 9 (deferred-by-omission — closes the parse-side gap blocking
+  ;; protocol_resume_state_mutation_substrate.md's seed mirror).
+  (func $parse_resume_state_updates (param $tokens i32) (param $pos i32) (result i32)
+    (local $p i32) (local $buf i32) (local $count i32)
+    (local $field_name i32) (local $p_after_name i32) (local $p_after_eq i32)
+    (local $init_r i32) (local $init_expr i32) (local $p_after_init i32)
+    (local $field i32) (local $tup i32) (local $p_lookahead i32)
+    (local $name_lookahead i32)
+    (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
+    (local.set $buf (call $make_list (i32.const 4)))
+    (local.set $count (i32.const 0))
+    (block $done
+      (loop $fields
+        ;; Field name (TIdent).
+        (local.set $field_name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $field_name))
+          (then (br $done)))
+        (local.set $p_after_name (i32.add (local.get $p) (i32.const 1)))
+        ;; Expect TEq (60).
+        (local.set $p_after_eq (call $expect (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens) (local.get $p_after_name))
+          (i32.const 60)))
+        ;; Init expression.
+        (local.set $init_r (call $parse_expr (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens) (local.get $p_after_eq))))
+        (local.set $init_expr (call $list_index (local.get $init_r) (i32.const 0)))
+        (local.set $p_after_init (call $skip_ws_p (local.get $tokens)
+          (call $list_index (local.get $init_r) (i32.const 1))))
+        ;; Build field 2-tuple {name, init}.
+        (local.set $field (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $field) (i32.const 0) (local.get $field_name)))
+        (drop (call $list_set (local.get $field) (i32.const 1) (local.get $init_expr)))
+        ;; Append to buffer.
+        (local.set $buf (call $list_extend_to (local.get $buf)
+          (i32.add (local.get $count) (i32.const 1))))
+        (drop (call $list_set (local.get $buf) (local.get $count) (local.get $field)))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        ;; Comma → check if NEXT is `IDENT TEq` (another field) vs match-
+        ;; arm separator (IDENT followed by something else).
+        (if (call $at (local.get $tokens) (local.get $p_after_init) (i32.const 51))  ;; TComma
+          (then
+            (local.set $p_lookahead (call $skip_ws_p (local.get $tokens)
+              (i32.add (local.get $p_after_init) (i32.const 1))))
+            (local.set $name_lookahead
+              (call $ident_at_p (local.get $tokens) (local.get $p_lookahead)))
+            (if (i32.eqz (local.get $name_lookahead))
+              (then
+                ;; Comma not followed by IDENT — done.
+                (local.set $p (local.get $p_after_init))
+                (br $done)))
+            ;; IDENT at lookahead — check for TEq after it.
+            (if (i32.eqz (call $at (local.get $tokens)
+                  (call $skip_ws_p (local.get $tokens)
+                    (i32.add (local.get $p_lookahead) (i32.const 1)))
+                  (i32.const 60)))   ;; TEq
+              (then
+                ;; IDENT followed by non-TEq — match-arm pattern; done.
+                (local.set $p (local.get $p_after_init))
+                (br $done)))
+            ;; IDENT TEq — another field; continue.
+            (local.set $p (local.get $p_lookahead))
+            (br $fields))
+          (else
+            ;; No comma — done.
+            (local.set $p (local.get $p_after_init))
+            (br $done)))))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0)
+      (call $slice (local.get $buf) (i32.const 0) (local.get $count))))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))
 
   ;; ─── List literal ─────────────────────────────────────────────────

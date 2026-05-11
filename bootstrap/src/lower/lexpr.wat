@@ -724,6 +724,32 @@
         (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 4)))
 
+  ;; ─── 336 = LStateSlotStore(handle, offset, value) — arity 3 ─────────
+  ;; Per Hβ.seed.resume-with-state-update-mirror: emit produces
+  ;; `(local.get $__state)(<value>)(i32.store offset=<offset>)` —
+  ;; writes value into the handler-state-record's slot at `offset`
+  ;; (8+i*4 per source-order index of the state field). Used by
+  ;; $lower_resume to thread `resume() with X = Y` state mutation
+  ;; into the typed-resume substrate per
+  ;; protocol_handler_is_state_is_closure_is_evidence.md.
+  ;; Tag 335 is already taken by LUnresolved; 336 is the next free.
+  (func $lexpr_make_lstateslotstore
+        (param $h i32) (param $offset i32) (param $value i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 336) (i32.const 3)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $offset))
+    (call $record_set (local.get $r) (i32.const 2) (local.get $value))
+    (local.get $r))
+
+  (func $lexpr_lstateslotstore_offset (export "lexpr_lstateslotstore_offset")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 1)))
+
+  (func $lexpr_lstateslotstore_value (export "lexpr_lstateslotstore_value")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 2)))
+
   ;; ─── 330 = LFeedback(handle, body, spec) — arity 3 ──────────────────
   ;; Per src/lower.mn:137 LFeedback(Int, LowExpr, LowExpr) — "<~
   ;; desugaring (iterative ctx required)". Field 2 is the spec LowExpr

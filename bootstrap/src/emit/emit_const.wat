@@ -743,7 +743,40 @@
       (then (call $emit_lfieldload   (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 335))
       (then (call $emit_lunresolved  (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 336))
+      (then (call $emit_lstateslotstore (local.get $r)) (return)))
     (unreachable))
+
+  ;; ─── $emit_lstateslotstore — LStateSlotStore tag 336 emit arm ──────
+  ;; Per Hβ.seed.resume-with-state-update-mirror. Emits:
+  ;;   (local.get $__state)<emit value>(i32.store offset=<offset>)
+  ;; Skips negative offsets (productive-under-error sentinel — name not
+  ;; in active state-fields). Used in $lower_resume's LBlock to
+  ;; thread `resume() with field = expr` updates into the handler
+  ;; state record before the resume returns control to the install
+  ;; site per protocol_handler_is_state_is_closure_is_evidence.md.
+  (func $emit_lstateslotstore (param $r i32)
+    (local $offset i32) (local $value i32)
+    (local.set $offset (call $lexpr_lstateslotstore_offset (local.get $r)))
+    (if (i32.lt_s (local.get $offset) (i32.const 0))
+      (then
+        ;; Productive-under-error: emit i32.const 0 sentinel so LBlock's
+        ;; (drop)-per-non-last-stmt finds a value to drop. Skipping
+        ;; entirely leaves stack underflow.
+        (call $emit_i32_const (i32.const 0))
+        (return)))
+    (local.set $value  (call $lexpr_lstateslotstore_value  (local.get $r)))
+    ;; (local.get $__state)
+    (call $el_emit_local_get_state)
+    ;; Emit the value expression.
+    (call $emit_lexpr (local.get $value))
+    ;; (i32.store offset=<offset>)
+    (call $el_emit_i32_store_offset (local.get $offset))
+    ;; Push i32.const 0 sentinel — emit_lblock's per-stmt (drop) needs
+    ;; a value to consume. LStateSlotStore is statement-position; the
+    ;; sentinel preserves WASM stack invariants without affecting
+    ;; semantics (the only meaningful effect was the i32.store).
+    (call $emit_i32_const (i32.const 0)))
 
   ;; ─── $emit_lunresolved — LUnresolved tag 335 emit arm ─────────────
   ;; Per protocol_no_silent_fallback.md (2026-05-08). Emits a

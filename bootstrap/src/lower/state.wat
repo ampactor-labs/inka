@@ -208,6 +208,15 @@
   (global $lower_state_inits_ledger_ptr (mut i32) (i32.const 0))
   (global $lower_state_inits_ledger_len_g (mut i32) (i32.const 0))
 
+  ;; Hβ.seed.resume-with-state-update-mirror — per-arm-body state-fields
+  ;; context. Set at $lower_handler_arm_body_capturing entry from the
+  ;; arm's handler decl state-fields list; queried by $lower_resume to
+  ;; resolve `resume() with field = ...` update names → source-order
+  ;; slot offsets (8 + i*4). Mirror of wheel-side current_state_fields
+  ;; effect (src/lower.mn:102-104 ArmStateContext) via global rather
+  ;; than handler since seed doesn't yet have user-defined effects.
+  (global $lower_active_state_fields_g (mut i32) (i32.const 0))
+
   ;; ─── Idempotent initializer (mirrors $infer_init / $graph_init) ────
   ;; Per the seed's discipline for module-level state chunks: every
   ;; public entry calls $lower_init first; subsequent calls no-op.
@@ -231,7 +240,42 @@
         (global.set $lower_default_op_handler_map_len_g (i32.const 0))
         (global.set $lower_state_inits_ledger_ptr (call $make_list (i32.const 8)))
         (global.set $lower_state_inits_ledger_len_g (i32.const 0))
+        (global.set $lower_active_state_fields_g (call $make_list (i32.const 0)))
         (global.set $lower_initialized    (i32.const 1)))))
+
+  ;; $lower_set_active_state_fields / $lower_get_active_state_fields —
+  ;; arm-body state-fields context. Save+restore pattern at arm boundary.
+  (func $lower_set_active_state_fields (param $fields i32)
+    (call $lower_init)
+    (global.set $lower_active_state_fields_g (local.get $fields)))
+
+  (func $lower_get_active_state_fields (result i32)
+    (call $lower_init)
+    (global.get $lower_active_state_fields_g))
+
+  ;; $lower_resolve_state_slot_offset(name, fields, idx) — walk fields
+  ;; by name; return slot offset 8 + idx*4 OR -1 if not found
+  ;; (productive-under-error sentinel; emit skips negative offsets).
+  ;; Mirror of wheel resolve_state_slot_offset (src/lower.mn:1195).
+  (func $lower_resolve_state_slot_offset
+        (param $name i32) (param $fields i32) (param $idx i32) (result i32)
+    (local $n i32) (local $i i32) (local $field i32) (local $field_name i32)
+    (local.set $n (call $len (local.get $fields)))
+    (local.set $i (local.get $idx))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $field
+          (call $list_index (local.get $fields) (local.get $i)))
+        (local.set $field_name
+          (call $list_index (local.get $field) (i32.const 0)))
+        (if (call $str_eq (local.get $field_name) (local.get $name))
+          (then
+            (return (i32.add (i32.const 8)
+                             (i32.mul (i32.const 4) (local.get $i))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const -1))
 
   ;; ─── $handler_state_inits_register / $handler_state_inits_lookup ──
   ;; Mirror of wheel-side handler_state_inits_registry (src/lower.mn).

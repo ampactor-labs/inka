@@ -230,6 +230,22 @@
     (call $emit_int (local.get $off))
     (call $emit_byte (i32.const 41)))
 
+  (func $el_emit_i32_store_offset (export "el_emit_i32_store_offset") (param $off i32)
+    ;; emits: (i32.store offset=<off>)
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 105))   ;; "(i"
+    (call $emit_byte (i32.const 51)) (call $emit_byte (i32.const 50))   ;; "32"
+    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 115))  ;; ".s"
+    (call $emit_byte (i32.const 116)) (call $emit_byte (i32.const 111)) ;; "to"
+    (call $emit_byte (i32.const 114)) (call $emit_byte (i32.const 101)) ;; "re"
+    (call $emit_byte (i32.const 32))                                    ;; " "
+    (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 102)) ;; "of"
+    (call $emit_byte (i32.const 102)) (call $emit_byte (i32.const 115)) ;; "fs"
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 116)) ;; "et"
+    (call $emit_byte (i32.const 61))                                    ;; "="
+    (call $emit_int (local.get $off))
+    (call $emit_byte (i32.const 41))                                    ;; ")"
+    (call $emit_byte (i32.const 10)))                                   ;; "\n"
+
   ;; ─── $emit_llocal — LLocal tag 301 emit arm per §2.2 ───────────────
   ;; Per src/backends/wasm.mn:1146-1150. Reads name string via
   ;; $lexpr_llocal_name; emits "(local.get $<name>)".

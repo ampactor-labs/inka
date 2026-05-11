@@ -441,7 +441,7 @@ fn synthesize_float_literal_node(f) with Pure = synth_node(LitFloat(f))
 fn synthesize_string_literal_node(s) with Pure = synth_node(LitString(s))
 fn synthesize_unit_literal_node() with Pure = synth_node(LitUnit)
 fn synthesize_hole_node() with Pure = synth_hole_node()
-fn synthesize_resume_node() with Pure = synth_node(ResumeExpr(synth_unit_node()))
+fn synthesize_resume_node() with Pure = synth_node(ResumeExpr(synth_unit_node(), []))
 fn synthesize_empty_list_node() with Pure = synth_node(MakeListExpr([]))
 
 fn synthesize_singleton_list_node(elem) with Pure = {

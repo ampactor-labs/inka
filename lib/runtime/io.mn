@@ -37,12 +37,16 @@ import runtime/strings
 
 // Stdout
 
-/// print_string — write a flat Mentl string to stdout (fd=1).
-/// Layout: the string pointer carries [len:i32][bytes...].
-/// We fill the iov record in scratch memory then call fd_write.
+/// print_string — write a Mentl string to stdout (fd=1). Routes
+/// through byte_len + view_base so both flat and view shapes
+/// resolve to (base_buf, byte_offset, length) before writing the
+/// WASI iov. Io IS the materialization boundary in the gradient —
+/// the bytes must be contiguous; view_base collapses the chain to
+/// the underlying flat buffer's payload region (base_buf + 4 + off).
 fn print_string(s) with Memory + WASI = {
-  let slen = perform load_i32(s)
-  perform store_i32(80, s + 4)
+  let slen = byte_len(s)
+  let (base_buf, base_off) = view_base(s)
+  perform store_i32(80, base_buf + 4 + base_off)
   perform store_i32(84, slen)
   perform fd_write(1, 80, 1, 88)
   ()
@@ -66,10 +70,13 @@ fn print_newline() with Memory + WASI = {
 
 // Stderr
 
-/// eprint_string — write a flat Mentl string to stderr (fd=2).
+/// eprint_string — write a Mentl string to stderr (fd=2). View-
+/// transparent via byte_len + view_base; the materialization
+/// boundary resolves to the underlying flat buffer's payload region.
 fn eprint_string(s) with Memory + WASI = {
-  let slen = perform load_i32(s)
-  perform store_i32(80, s + 4)
+  let slen = byte_len(s)
+  let (base_buf, base_off) = view_base(s)
+  perform store_i32(80, base_buf + 4 + base_off)
   perform store_i32(84, slen)
   perform fd_write(2, 80, 1, 88)
   ()
@@ -122,8 +129,9 @@ fn read_chunk(buf, size) with Memory + WASI = {
 /// region at offset 256. Returns the byte length. Used by every fs
 /// op before invoking the path_* syscall.
 fn fs_write_path(s) with Memory = {
-  let slen = perform load_i32(s)
-  perform mem_copy(256, s + 4, slen)
+  let slen = byte_len(s)
+  let (base_buf, base_off) = view_base(s)
+  perform mem_copy(256, base_buf + 4 + base_off, slen)
   slen
 }
 
@@ -195,8 +203,9 @@ fn fs_write_file_impl(path_str, bytes_str) with Memory + WASI = {
   if open_errno != 0 { () }
   else {
     let fd = perform load_i32(576)
-    let blen = perform load_i32(bytes_str)
-    perform store_i32(80, bytes_str + 4)
+    let blen = byte_len(bytes_str)
+    let (bb_buf, bb_off) = view_base(bytes_str)
+    perform store_i32(80, bb_buf + 4 + bb_off)
     perform store_i32(84, blen)
     perform fd_write(fd, 80, 1, 88)
     perform fd_close(fd)
@@ -241,8 +250,9 @@ fn fs_unlink_impl(path_str) with Memory + WASI = {
 fn fs_rename_impl(old_str, new_str) with Memory + WASI = {
   let old_len = fs_write_path(old_str)
   let new_offset = 256 + old_len + 1
-  let new_len = perform load_i32(new_str)
-  perform mem_copy(new_offset, new_str + 4, new_len)
+  let new_len = byte_len(new_str)
+  let (nb_buf, nb_off) = view_base(new_str)
+  perform mem_copy(new_offset, nb_buf + 4 + nb_off, new_len)
   let errno = perform path_rename(3, 256, old_len, 3, new_offset, new_len)
   errno == 0
 }

@@ -89,6 +89,17 @@ cat > "$OUT" <<'EOF'
   (import "wasi_snapshot_preview1" "fd_readdir"
     (func $wasi_fd_readdir (param i32 i32 i32 i64 i32) (result i32)))
 
+  ;; ─── WASI Threads (Hβ.runtime.wasi-thread-spawn-seed) ─────────────
+  ;; wasi-threads provides thread-spawn(start_arg) -> tid as the only
+  ;; primitive. Host runs $thread_start (entry exported) on the new
+  ;; thread with the start_arg; join via SharedMemory atomics on the
+  ;; thread record's done flag. parallel_compose handler upstream
+  ;; dispatches lib/runtime/threading.mn's ffi_spawn / ffi_join through
+  ;; the wasi_threads handler whose intrinsics resolve here. Per
+  ;; protocol_bootstrap_wasi_threads_substrate.md cascade closure.
+  (import "wasi" "thread-spawn"
+    (func $wasi_thread_spawn (param i32) (result i32)))
+
   ;; ─── Memory & Globals (Layer 0) ───────────────────────────────────
   ;; 2 GiB total. Wheel size at Phase μ closure (962 KB source ×
   ;; ~1265 top-level fns × ~188 reason_make_* sites in walk_expr.wat
@@ -111,7 +122,11 @@ cat > "$OUT" <<'EOF'
   ;; Output buffer at 2 GiB (post-fn) prevents perm-grows-past-16MiB
   ;; from corrupting the buffer's address range — substrate-honest
   ;; arena disjointness instead of probabilistic non-collision.
-  (memory (export "memory") 32896)  ;; 2 GiB + 8 MiB
+  ;; Shared memory for WASI threads atomics (per
+  ;; protocol_bootstrap_wasi_threads_substrate.md). Both min and max
+  ;; specified — shared memory invariant. Min == Max keeps the layout
+  ;; immobile (no grow); the 2 GiB + 8 MiB partition stays.
+  (memory (export "memory") 32896 32896 shared)
 
   (global $heap_base i32 (i32.const 4096))
   (global $heap_ptr (mut i32) (i32.const 1048576))
@@ -179,7 +194,7 @@ echo "Assembled: $LINES lines"
 
 # ─── Compile ─────────────────────────────────────────────────────────
 echo "Compiling WAT → WASM..."
-wat2wasm "$OUT" -o "$WASM" --debug-names
+wat2wasm "$OUT" -o "$WASM" --debug-names --enable-threads
 echo "Built: $WASM ($(wc -c < "$WASM") bytes)"
 
 # ─── Optional: run tests ─────────────────────────────────────────────

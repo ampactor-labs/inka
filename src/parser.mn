@@ -782,6 +782,7 @@ fn binop_loop(ref tokens, left, pos, min_prec) = {
   let prec = effective_prec(k, saw_newline)
   if prec >= min_prec && prec > 0 {
     let op_span = span_at(tokens, p)
+    check_pcompose_layout(tokens, p, op_span, saw_newline, k)
     let (right, p2) = parse_binop(tokens, p + 1, prec + 1)
     let N(_, left_span, _) = left
     let combined_span = span_join(left_span, op_span)
@@ -805,6 +806,51 @@ fn binop_loop(ref tokens, left, pos, min_prec) = {
     binop_loop(tokens, node, p2, min_prec)
   } else {
     (left, p)
+  }
+}
+
+// Walk back from `pos` over TNewline tokens; returns position of the
+// first non-newline token, or 0 if scan underflows. Used for `><`
+// layout-conformance checks where the preceding-non-whitespace token
+// must be TRParen for the branch to count as parenthesized.
+fn prev_non_newline(ref tokens, pos) = {
+  if pos <= 0 { 0 }
+  else if at(tokens, pos, TNewline) { prev_non_newline(tokens, pos - 1) }
+  else { pos }
+}
+
+// Per SYNTAX.md:439-455 — E_BranchNotParenthesized (each side must
+// be parenthesized) and E_OperatorIsolation (Form A requires newline
+// before AND after `><`). Fires only for TGtLt; other binops pass
+// through unchanged. Detection is at op-token granularity — multi-
+// branch shape consistency (E_MixedShapeBranches) and arity-1
+// trees (E_ParallelComposeArity) are post-parse passes (named peer
+// follow-ups Hβ.parser.gtlt-multi-branch-shape and Hβ.parser.gtlt-
+// single-branch-detection respectively — they need the full chain
+// after parse_binop returns, which this op-local fn cannot see).
+fn check_pcompose_layout(ref tokens, op_pos, op_span, saw_newline_before, k) = {
+  match k {
+    TGtLt => {
+      let prev_p = prev_non_newline(tokens, op_pos - 1)
+      if !at(tokens, prev_p, TRParen) {
+        perform report("parser", "E_BranchNotParenthesized", "ParseError",
+          "`><` requires parenthesized pipelines on each side — wrap left branch in (...)",
+          op_span, "MachineApplicable")
+      }
+      let next_p = skip_ws(tokens, op_pos + 1)
+      if !at(tokens, next_p, TLParen) {
+        perform report("parser", "E_BranchNotParenthesized", "ParseError",
+          "`><` requires parenthesized pipelines on each side — wrap right branch in (...)",
+          op_span, "MachineApplicable")
+      }
+      let next_is_newline = at(tokens, op_pos + 1, TNewline)
+      if saw_newline_before && !next_is_newline {
+        perform report("parser", "E_OperatorIsolation", "Warning",
+          "`><` on its own line (Form A) requires a newline both before AND after",
+          op_span, "MachineApplicable")
+      }
+    },
+    _ => ()
   }
 }
 

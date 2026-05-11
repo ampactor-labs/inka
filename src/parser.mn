@@ -784,6 +784,7 @@ fn binop_loop(ref tokens, left, pos, min_prec) = {
     let op_span = span_at(tokens, p)
     check_pcompose_layout(tokens, p, op_span, saw_newline, k)
     let (right, p2) = parse_binop(tokens, p + 1, prec + 1)
+    check_pcompose_branches(left, right, op_span, k)
     let N(_, left_span, _) = left
     let combined_span = span_join(left_span, op_span)
     let node = match op_to_pipe_kind_layout(k, saw_newline) {
@@ -806,6 +807,35 @@ fn binop_loop(ref tokens, left, pos, min_prec) = {
     binop_loop(tokens, node, p2, min_prec)
   } else {
     (left, p)
+  }
+}
+
+// Per SYNTAX.md:455 — E_LayoutViolation at `><`: branches must be
+// pipelines (sequences of stages), not value expressions. Detection
+// inspects the parsed branch AST: a pipeline carries a PipeExpr at
+// its top-level body; a tuple/value expression does not. Fires only
+// for TGtLt; other binops pass through.
+fn check_pcompose_branches(left, right, op_span, k) = match k {
+  TGtLt => {
+    if !is_pipeline_branch(left) {
+      perform report("parser", "E_LayoutViolation", "Warning",
+        "`><` branches must be pipelines (sequences of stages), not value expressions — rewrite left branch with `|>`",
+        op_span, "MaybeIncorrect")
+    }
+    if !is_pipeline_branch(right) {
+      perform report("parser", "E_LayoutViolation", "Warning",
+        "`><` branches must be pipelines (sequences of stages), not value expressions — rewrite right branch with `|>`",
+        op_span, "MaybeIncorrect")
+    }
+  },
+  _ => ()
+}
+
+fn is_pipeline_branch(node) = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(PipeExpr(_, _, _)) => true,
+    _                        => false
   }
 }
 

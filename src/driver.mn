@@ -78,42 +78,31 @@ fn driver_collect_visit(ref module_name, own collected, own visited)
 
 fn driver_collect_visit_list(ref modules, own collected, own visited)
   with Memory + Alloc + Filesystem = {
-  if modules.len == 0 { (collected, visited) }
-  else {
-    let m = list_head(modules)
-    let (c2, v2) = driver_collect_visit(m, collected, visited)
-    driver_collect_visit_list(list_tail(modules), c2, v2)
-  }
+  fold(modules, (collected, visited), (acc, m) => {
+    let (c, v) = acc
+    driver_collect_visit(m, c, v)
+  })
 }
 
 // Lex + parse just enough of a source to extract its ImportStmt
 // nodes. Full inference doesn't run here — we want module names
 // only, no env work yet. The parser produces a top-level stmt list;
-// we filter for ImportStmt and pull the path.
+// flatten + map projects each ImportStmt's path; non-import stmts
+// project [] and flatten collapses them out.
 fn driver_extract_imports(ref source) with Memory + Alloc = {
-  let tokens = lex(source)
-  let ast = parse_program(tokens)
-  let n = ast.len
-  let (buf, count) = driver_extract_imports_loop(ast, 0, n, make_list(n), 0)
-  slice(buf, 0, count)
+  source
+    |> lex
+    |> parse_program
+    |> driver_extract_imports_from_ast
 }
 
-fn driver_extract_imports_loop(ref ast, i, n, own buf, count) = {
-  if i >= n { (buf, count) }
-  else {
-    let node = list_index(ast, i)
-    let N(body, _, _) = node
-    let (next_buf, next_count) = match body {
-      NStmt(ImportStmt(path)) => {
-        let extended = list_extend_to(buf, count + 1)
-        let written  = list_set(extended, count, path)
-        (written, count + 1)
-      },
-      _ => (buf, count)
-    }
-    driver_extract_imports_loop(ast, i + 1, n, next_buf, next_count)
+fn driver_extract_imports_from_ast(ast) = flatten(map((node) => {
+  let N(body, _, _) = node
+  match body {
+    NStmt(ImportStmt(path)) => [path],
+    _                        => []
   }
-}
+}, ast))
 
 /// Consult the cache; on miss run full inference for this module
 /// and write a fresh `.kai`. Returns the env entries this module
@@ -156,9 +145,7 @@ fn driver_infer_module(ref module_name, ref source, ref source_hash)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   let tokens = lex(source)
   let ast = parse_program(tokens)
-  let n_ast = ast.len
-  let (import_buf, import_count) = driver_extract_imports_loop(ast, 0, n_ast, make_list(n_ast), 0)
-  let imports = slice(import_buf, 0, import_count)
+  let imports = driver_extract_imports_from_ast(ast)
   let imports_hashes = driver_collect_dep_hashes(imports)
   // Snapshot env BEFORE inference so we can diff after to find
   // this module's exported entries.
@@ -279,20 +266,18 @@ fn driver_install_qualified_loop(ref short, ref entries, i, n) with Memory + All
   }
 }
 
-// ─── Sequential walk; topological-layer par-map is a peer ──────────
+// ─── Module walk via for_each over the post-order DAG ──────────────
 //
-// `driver_check_modules_loop` walks the post-order DAG sequentially —
-// each module's check runs to completion before the next begins.
-// Topological-layer parallelism (Kahn-style: modules at the same
-// dep-depth fan out via `parallel_map`; cross-layer sequential gates
-// dep-installation) is named peer follow-up
-// `Hβ.driver.topological-layer-par-map`. Structurally orthogonal to
-// the wheel-side parallelism substrate (`parallel_map` +
-// `parallel_compose` + `wasi_threads` landed in the same commit-set):
-// the par-walk requires dep-graph partitioning logic, while the
-// wheel-side primitive lands as the N-arity fold via `><` per
-// `lib/runtime/threading.mn:parallel_map`. Drift 9 closure: the peer
-// has positive-form description and structural-orthogonality reason.
+// `driver_collect_dag` produces modules in post-order (deps before
+// dependents). for_each preserves this ordering — each module's check
+// runs to completion before the next begins. Within a topological
+// layer (same dep-depth), modules are independent and could `<|`
+// fanout via parallel_map; per `Hβ.driver.topological-layer-par-map`
+// the dep-graph partitioning that exposes layer membership is peer
+// follow-up. The verb at the walk layer is for_each; the par-map
+// version lifts when the layer-partition lands. Same source, handler
+// swap (sequential_compose vs parallel_compose decides spatial vs
+// temporal dispatch).
 
 /// Process the entry module and all its transitive dependencies.
 /// Each module either loads from cache or re-infers; envs install in
@@ -300,15 +285,5 @@ fn driver_install_qualified_loop(ref short, ref entries, i, n) with Memory + All
 /// the entry module's inference runs.
 fn driver_check(ref entry_module)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
-  let modules = driver_collect_dag(entry_module)
-  driver_check_modules_loop(modules, 0, modules.len)
+  for_each(driver_check_module, driver_collect_dag(entry_module))
 }
-
-fn driver_check_modules_loop(ref modules, i, n)
-  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx =
-  if i >= n { () }
-  else {
-    let m = list_index(modules, i)
-    driver_check_module(m)
-    driver_check_modules_loop(modules, i + 1, n)
-  }

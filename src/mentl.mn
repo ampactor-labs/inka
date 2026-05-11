@@ -217,23 +217,26 @@ fn suggestion_kind_label(k) with Pure = match k {
 
 /// Try each candidate: checkpoint → tentative apply → verify → rollback.
 /// Per-candidate is the divergent-fanout topology — each ann's
-/// checkpoint isolates it from siblings; the predicate-with-side-effect
-/// IS the proof-search step. Filter retains proven ones; map wraps as
-/// (ann, capability). Each branch independently verifiable: the
-/// `<|` parallel-fanout substrate empowers this once a per-thread
-/// graph lands (peer `Hβ.cursor.speculative-compile`); the sequential
-/// filter IS the same semantics under single-graph dispatch.
+/// checkpoint isolates it from siblings, which IS the proof-search step.
+/// parallel_map dispatches the per-candidate proof through the Thread
+/// effect handler installed upstream; parallel_compose runs branches on
+/// distinct cores when per-thread graph is available (peer
+/// Hβ.cursor.speculative-compile), sequential_compose runs them on one
+/// thread today. Same source, handler swap. The verb is `><` (the
+/// binary parallel step parallel_map decomposes into) — symmetric with
+/// the oracle's per-position dispatch at src/oracle.mn:309.
 /// Returns [(Annotation, Capability)] for annotations that passed.
 fn try_each_annotation(handle, candidates, base_ty) = {
   candidates
-    |> filter((ann) => {
+    |> parallel_map((ann) => {
          let cp = perform graph_push_checkpoint()
          apply_annotation_tentatively(handle, ann, base_ty)
          let ok = verify_after_apply(handle)
          perform graph_rollback(cp)
-         ok
+         (ann, ok)
        })
-    |> map((ann) => (ann, unlock_capability(ann)))
+    |> filter((pair) => { let (_, ok) = pair; ok })
+    |> map((pair) => { let (ann, _) = pair; (ann, unlock_capability(ann)) })
 }
 
 /// Speculative apply: compute the narrowed type/row and graph_bind it.
@@ -493,7 +496,19 @@ handler synth_enumerative {
   enumerate_inhabitants(_ty, _eff, _ctx) => resume([])
 }
 
-fn verify_each(candidates) = filter((c) => perform verify_candidate(c), candidates)
+fn verify_each(candidates) = {
+  // Per-candidate verify IS independent (each verify_candidate runs in
+  // its own graph checkpoint scope per the verify handler chain).
+  // parallel_map dispatches via the Thread effect handler upstream;
+  // parallel_compose runs branches genuinely parallel when installed,
+  // sequential_compose runs them on one thread. Same source, handler
+  // swap. Symmetric with oracle's per-candidate dispatch at
+  // src/oracle.mn:357.
+  candidates
+    |> parallel_map((c) => (c, perform verify_candidate(c)))
+    |> filter((pair) => { let (_, ok) = pair; ok })
+    |> map((pair) => { let (c, _) = pair; c })
+}
 
 /// Fill a typed hole with the first proven candidate from the Synth proposer chain.
 fn teach_synthesize(hole_handle, context) = {

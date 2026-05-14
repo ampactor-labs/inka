@@ -47,7 +47,9 @@ type KaiFile = {
 //   v6 — SchemeKind canonicalization: CapabilityScheme(List) variant
 //        added (env entries for `capability` decls round-trip through
 //        Pack/Unpack with new tag byte 4)
-fn cache_compiler_version() with Pure = 6
+//   v7 — EffectDeclKind(List) added: effect→ops mapping carried in
+//        the graph as a first-class SchemeKind (tag byte 5)
+fn cache_compiler_version() with Pure = 7
 
 /// 32-bit FNV-1a hash of the source bytes. Non-cryptographic;
 /// collision resistance is sufficient for cache invalidation.
@@ -168,7 +170,8 @@ fn cache_pack_scheme(scheme) with Pack + !Unpack = {
 }
 
 // SchemeKind tags: 0=FnScheme, 1=ConstructorScheme, 2=EffectOpScheme,
-//                  3=RecordSchemeKind, 4=CapabilityScheme
+//                  3=RecordSchemeKind, 4=CapabilityScheme,
+//                  5=EffectDeclKind
 fn cache_pack_kind(kind) with Pack + !Unpack = match kind {
   FnScheme => perform pack_byte(0),
   ConstructorScheme(tag, total) => {
@@ -189,6 +192,11 @@ fn cache_pack_kind(kind) with Pack + !Unpack = match kind {
     perform pack_byte(4)
     perform pack_i32(eff_pairs.len)
     cache_pack_eff_pairs(eff_pairs, 0, eff_pairs.len)
+  },
+  EffectDeclKind(op_names) => {
+    perform pack_byte(5)
+    perform pack_i32(op_names.len)
+    cache_pack_string_list(op_names, 0, op_names.len)
   }
 }
 
@@ -468,6 +476,11 @@ fn cache_unpack_kind() with Unpack + !Pack = {
     let n_pairs = perform unpack_i32()
     let pairs = cache_unpack_eff_pairs(n_pairs, 0, make_list(n_pairs))
     CapabilityScheme(pairs)
+  }
+  else if tag == 5 {
+    let n_ops = perform unpack_i32()
+    let op_names = cache_unpack_string_list(n_ops, 0, make_list(n_ops))
+    EffectDeclKind(op_names)
   }
   else { FnScheme }
 }

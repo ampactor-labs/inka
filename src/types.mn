@@ -102,6 +102,12 @@ type Scheme
 // `perform op_name(args)` reads this to know which effect this op
 // participates in without re-inspecting the row.
 //
+// EffectDeclKind(op_names) is the effect declaration itself.
+// `env_lookup("Iterate")` reads this to know the effect's ops
+// (["yield", "result"]) — the graph carries effect→ops so
+// derive_ev_slots can produce per-op evidence at call sites,
+// and the Cursor can project effect structure at any position.
+//
 // CapabilityScheme(eff_pairs) carries the `(EffName, Bool)` pairs
 // declared in `capability Foo = E1 + E2 + !E3`. `expand_capabilities`
 // reads this at effect-row build time and substitutes the bundle's
@@ -110,11 +116,14 @@ type Scheme
 // callable values; the SchemeKind variant carries the real payload.
 
 type SchemeKind
-  = FnScheme
-  | ConstructorScheme(TagId, Int)
-  | EffectOpScheme(String)
-  | RecordSchemeKind(List)               // [(field_name: String, ty: Ty)] declared
-  | CapabilityScheme(List)               // [(EffName, Bool)] expansion bundle
+  = FnScheme                                     // tag 0
+  | ConstructorScheme(TagId, Int)                // tag 1
+  | EffectOpScheme(String)                       // tag 2
+  | RecordSchemeKind(List)                       // tag 3 — [(field_name, ty)]
+  | CapabilityScheme(List)                       // tag 4 — [(EffName, Bool)]
+  | EffectDeclKind(List)                         // tag 5 — [op_name: String]
+  // EffectDeclKind appended (not inserted) to preserve tag-ID stability
+  // with the seed's hardcoded constants for tags 0-4.
 
 // The Boolean algebra lives as functions in effects.mn; the ADT
 // lives here so every module that speaks types can speak rows.

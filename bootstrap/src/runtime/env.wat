@@ -13,11 +13,12 @@
   ;;             $env_binding_reason, $env_binding_kind,
   ;;             $schemekind_make_fn, $schemekind_make_ctor,
   ;;             $schemekind_make_effectop, $schemekind_make_record,
-  ;;             $schemekind_make_capability,
+  ;;             $schemekind_make_capability, $schemekind_make_effectdecl,
   ;;             $schemekind_ctor_tag_id, $schemekind_ctor_total,
   ;;             $schemekind_effectop_name,
   ;;             $schemekind_record_fields,
   ;;             $schemekind_capability_pairs,
+  ;;             $schemekind_effectdecl_ops,
   ;;             $schemekind_tag, $schemekind_wire_byte
   ;; Uses:       $alloc (alloc.wat), $make_record/$record_get/$record_set/
   ;;             $tag_of (record.wat), $make_list/$list_index/$list_set/
@@ -78,7 +79,8 @@
   ;;   133   SCHEMEKIND_EFFECTOP_TAG       — EffectOpScheme(name)
   ;;   134   SCHEMEKIND_RECORD_TAG         — RecordSchemeKind(fields)
   ;;   135   SCHEMEKIND_CAPABILITY_TAG     — CapabilityScheme(eff_pairs)
-  ;;   136-149 reserved for future env-substrate records
+  ;;   136   SCHEMEKIND_EFFECTDECL_TAG     — EffectDeclKind(op_names)
+  ;;   137-149 reserved for future env-substrate records
   ;;
   ;; SchemeKind tag-byte invariant: runtime_tag - 131 == cache_wire_byte.
   ;;   FnScheme              → byte 0  (cache.mn:165)
@@ -86,6 +88,7 @@
   ;;   EffectOpScheme        → byte 2  (cache.mn:171-174)
   ;;   RecordSchemeKind      → byte 3  (cache.mn:175-179)
   ;;   CapabilityScheme      → byte 4  (cache.mn:180-184)
+  ;;   EffectDeclKind        → byte 5  (cache.mn — tag 5 per types.mn)
   ;; Drift-mode-8 closed by ADT dispatch on the runtime tag — NEVER
   ;; by `mode == 0/1/2/3/4` int.
   ;;
@@ -197,6 +200,19 @@
     (local.get $r))
 
   (func $schemekind_capability_pairs (param $k i32) (result i32)
+    (call $record_get (local.get $k) (i32.const 0)))
+
+  ;; EffectDeclKind(op_names: List of String) — graph-native effect→ops
+  ;; mapping. Per types.mn:EffectDeclKind(List). Tag 136, appended after
+  ;; CapabilityScheme to preserve tag-ID stability with the wheel's ADT
+  ;; ordinals. The graph carries what it should carry.
+  (func $schemekind_make_effectdecl (param $op_names i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 136) (i32.const 1)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $op_names))
+    (local.get $r))
+
+  (func $schemekind_effectdecl_ops (param $k i32) (result i32)
     (call $record_get (local.get $k) (i32.const 0)))
 
   ;; SchemeKind tag dispatch — sentinel-collapse for FnScheme.

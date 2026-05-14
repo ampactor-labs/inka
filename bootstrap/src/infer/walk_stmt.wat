@@ -903,7 +903,12 @@
     (local $op i32) (local $op_name i32) (local $param_tys_parser i32)
     (local $ret_ty_parser i32) (local $param_tys i32) (local $ret_ty i32)
     (local $row_h i32) (local $op_ty i32) (local $scheme i32) (local $reason i32)
+    (local $op_names i32)
     (local.set $n_ops (call $len (local.get $ops)))
+    ;; Build op_names list for EffectDeclKind registration (graph empowerment).
+    (local.set $op_names (call $make_list (i32.const 0)))
+    (local.set $op_names
+      (call $list_extend_to (local.get $op_names) (local.get $n_ops)))
     (local.set $i (i32.const 0))
     (block $done
       (loop $each
@@ -936,8 +941,23 @@
           (local.get $scheme)
           (local.get $reason)
           (call $schemekind_make_effectop (local.get $eff_name)))
+        ;; Collect op_name into op_names list for EffectDeclKind.
+        (drop (call $list_set (local.get $op_names) (local.get $i)
+                              (local.get $op_name)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $each))))
+        (br $each)))
+    ;; Graph empowerment: register effect name → EffectDeclKind(op_names).
+    ;; Mirrors wheel src/infer.mn register_effect_ops. The graph carries
+    ;; what it should carry — no separate registry needed.
+    (call $env_extend
+      (local.get $eff_name)
+      (call $scheme_make_forall
+        (call $make_list (i32.const 0))
+        (call $ty_make_tunit))
+      (call $reason_make_located
+        (local.get $span)
+        (call $reason_make_declared (local.get $eff_name)))
+      (call $schemekind_make_effectdecl (local.get $op_names))))
 
   (func $infer_walk_stmt_effect_decl
         (export "infer_walk_stmt_effect_decl")

@@ -640,6 +640,9 @@
     (local $h i32) (local $body i32) (local $pipe_struct i32)
     (local $kind i32) (local $left_node i32) (local $right_node i32)
     (local $lo_l i32) (local $lo_r i32) (local $hname i32)
+    (local $config_arg_nodes i32) (local $config_inits i32)
+    (local $state_inits i32) (local $all_inits i32)
+    (local $n_config i32) (local $n_state i32) (local $i i32)
     (local.set $h           (call $walk_expr_node_handle (local.get $node)))
     (local.set $body        (i32.load offset=4 (local.get $node)))
     (local.set $pipe_struct (i32.load offset=4 (local.get $body)))
@@ -659,12 +662,6 @@
         (local.set $hname (call $extract_handler_name (local.get $right_node)))
         (if (i32.ne (local.get $hname) (i32.const 0))
           (then
-            ;; Per protocol_handler_is_state_is_closure_is_evidence.md:
-            ;; mint state-local-name "__hstate_<h>" from this `~>` site's
-            ;; graph handle. emit_lhandlewith will alloc + init the state
-            ;; record and bind it to this local; perform sites within body
-            ;; thread this local-name as their __state arg via the
-            ;; handler-stack pair.
             (call $lower_handler_push_with_state
               (local.get $hname)
               (call $str_concat (i32.const 5408)               ;; "__hstate_"
@@ -672,15 +669,61 @@
         (local.set $lo_l (call $lower_expr (local.get $left_node)))
         (if (i32.ne (local.get $hname) (i32.const 0))
           (then (call $lower_handler_pop)))
-        ;; Thread handler_name (extracted earlier) and state_inits
-        ;; (queried by name from the registry populated at
-        ;; $lower_walk_stmt_handler_decl) into LHandleWith so emit can
-        ;; allocate + init the state record without re-deriving from
-        ;; lo_r's closure shape. Hβ.seed.handler-state-init-writes-mirror.
+        ;; Per protocol_handler_is_state_is_closure_is_evidence.md
+        ;; (ONE record, FOUR roles): config values write FIRST into
+        ;; the state record at offsets 8+i*4, THEN state-field inits.
+        ;; The arm body's captures are ordered config ++ state (per
+        ;; $pre_allocate_config_captures + $pre_allocate_state_captures
+        ;; at walk_handle.wat:471-472). Without this ordering, arm
+        ;; reads land on wrong fields — the #148 trap.
+        ;;
+        ;; Extract config args from `~> handler(arg1, arg2)` and lower.
+        (local.set $config_arg_nodes
+          (call $extract_handler_config_args (local.get $right_node)))
+        (local.set $n_config (call $len (local.get $config_arg_nodes)))
+        (local.set $config_inits (call $make_list (i32.const 0)))
+        (local.set $config_inits
+          (call $list_extend_to (local.get $config_inits) (local.get $n_config)))
+        (local.set $i (i32.const 0))
+        (block $cfg_done
+          (loop $cfg_each
+            (br_if $cfg_done (i32.ge_u (local.get $i) (local.get $n_config)))
+            (drop (call $list_set (local.get $config_inits) (local.get $i)
+                    (call $lower_expr
+                      (call $list_index (local.get $config_arg_nodes) (local.get $i)))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $cfg_each)))
+        ;; Prepend config_inits to state_inits → all_inits.
+        (local.set $state_inits
+          (call $handler_state_inits_lookup (local.get $hname)))
+        (local.set $n_state (call $len (local.get $state_inits)))
+        (local.set $all_inits (call $make_list (i32.const 0)))
+        (local.set $all_inits
+          (call $list_extend_to (local.get $all_inits)
+            (i32.add (local.get $n_config) (local.get $n_state))))
+        ;; Copy config inits first.
+        (local.set $i (i32.const 0))
+        (block $c_done
+          (loop $c_each
+            (br_if $c_done (i32.ge_u (local.get $i) (local.get $n_config)))
+            (drop (call $list_set (local.get $all_inits) (local.get $i)
+                    (call $list_index (local.get $config_inits) (local.get $i))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $c_each)))
+        ;; Copy state inits after config.
+        (local.set $i (i32.const 0))
+        (block $s_done
+          (loop $s_each
+            (br_if $s_done (i32.ge_u (local.get $i) (local.get $n_state)))
+            (drop (call $list_set (local.get $all_inits)
+                    (i32.add (local.get $n_config) (local.get $i))
+                    (call $list_index (local.get $state_inits) (local.get $i))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $s_each)))
         (return (call $lexpr_make_lhandlewith_with_inits
                   (local.get $h) (local.get $lo_l) (local.get $lo_r)
                   (local.get $hname)
-                  (call $handler_state_inits_lookup (local.get $hname))))))
+                  (local.get $all_inits)))))
     ;; Non-handle pipes — lower left+right normally.
     (local.set $lo_l (call $lower_expr (local.get $left_node)))
     (local.set $lo_r (call $lower_expr (local.get $right_node)))
@@ -739,6 +782,29 @@
         (if (i32.eq (i32.load (local.get $callee_expr)) (i32.const 85))
           (then (return (i32.load offset=4 (local.get $callee_expr)))))))
     (i32.const 0))
+
+  ;; $extract_handler_config_args — given the right-side AST node of a
+  ;; `body ~> handler(args)` pipe, return the args list from CallExpr.
+  ;; For bare VarRef `~> collector`, returns empty list (no config args).
+  ;; These args are the handler's config params (e.g. `f` in `map_collector(f)`).
+  ;; Per protocol_handler_is_state_is_closure_is_evidence.md (ONE record,
+  ;; FOUR roles): config values write FIRST into the state record at
+  ;; offsets 8+i*4 (before state-field inits) so arm-body capture reads
+  ;; match install-time writes. Graph empowerment — the graph carries
+  ;; what it should carry.
+  (func $extract_handler_config_args (param $node i32) (result i32)
+    (local $body i32) (local $expr i32) (local $tag i32)
+    (if (i32.lt_u (local.get $node) (global.get $heap_base))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $body (i32.load offset=4 (local.get $node)))
+    (if (i32.ne (i32.load (local.get $body)) (i32.const 110))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $expr (i32.load offset=4 (local.get $body)))
+    (local.set $tag (i32.load (local.get $expr)))
+    ;; CallExpr tag = 88; offset 8 = args list.
+    (if (i32.eq (local.get $tag) (i32.const 88))
+      (then (return (i32.load offset=8 (local.get $expr)))))
+    (call $make_list (i32.const 0)))
 
   ;; ─── $lower_pipe_forward — `|>` arm ───────────────────────────────
   ;; Per Hβ.first-light.pipe-forward-flatten (chain link 5 closure):

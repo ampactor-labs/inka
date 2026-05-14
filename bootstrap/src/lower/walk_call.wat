@@ -549,13 +549,12 @@
                                       (local.get $lo_args)
                                       (call $lower_lookup_default_handler_for_op (local.get $name)))))
                       (else
-                        ;; Polymorphic perform — same band-aid as
-                        ;; $lower_perform's else branch above. LConst(0)
-                        ;; placeholder until evidence-poly-call-transient
-                        ;; substrate lands.
-                        (return (call $lexpr_make_lconst
+                        ;; Tier 2: evidence-passing per graph EffectDeclKind.
+                        (return (call $lexpr_make_levperform
                                       (local.get $h)
-                                      (i32.const 0)))))))))))))
+                                      (local.get $name)
+                                      (call $lower_compute_ev_slot_for_op (local.get $name))
+                                      (local.get $lo_args)))))))))))))
     ;; Default closure-call form per Lock #3.
     (local.set $lo_f    (call $lower_expr (local.get $callee_node)))
     (local.set $lo_args (call $lower_args (local.get $args_list)))
@@ -650,6 +649,49 @@
       (then (return (call $str_concat (i32.const 4576) (local.get $op_name)))))
     (i32.const 0))
 
+  ;; ─── $lower_compute_ev_slot_for_op — graph-empowered slot index ──────
+  ;; Per wheel src/lower.mn compute_slot_index + effect_slot_in_row.
+  ;; Reads the graph: op_name → EffectOpScheme(effect_name) →
+  ;; EffectDeclKind(op_names) → find op_name's position.
+  ;; Returns 0 as fallback (productive-under-error).
+  (func $lower_compute_ev_slot_for_op (param $op_name i32) (result i32)
+    (local $binding i32) (local $kind i32) (local $kind_tag i32)
+    (local $effect_name i32) (local $decl_binding i32) (local $decl_kind i32)
+    (local $op_names i32) (local $n i32) (local $j i32)
+    ;; Step 1: op_name → EffectOpScheme(effect_name)
+    (local.set $binding (call $env_lookup (local.get $op_name)))
+    (if (i32.eqz (local.get $binding))
+      (then (return (i32.const 0))))
+    (local.set $kind (call $env_binding_kind (local.get $binding)))
+    (if (i32.lt_u (local.get $kind) (global.get $heap_base))
+      (then (return (i32.const 0))))
+    (local.set $kind_tag (call $tag_of (local.get $kind)))
+    (if (i32.ne (local.get $kind_tag) (i32.const 133))  ;; EffectOpScheme
+      (then (return (i32.const 0))))
+    (local.set $effect_name (call $schemekind_effectop_name (local.get $kind)))
+    ;; Step 2: effect_name → EffectDeclKind(op_names)
+    (local.set $decl_binding (call $env_lookup (local.get $effect_name)))
+    (if (i32.eqz (local.get $decl_binding))
+      (then (return (i32.const 0))))
+    (local.set $decl_kind (call $env_binding_kind (local.get $decl_binding)))
+    (if (i32.lt_u (local.get $decl_kind) (global.get $heap_base))
+      (then (return (i32.const 0))))
+    (if (i32.ne (call $tag_of (local.get $decl_kind)) (i32.const 136))  ;; EffectDeclKind
+      (then (return (i32.const 0))))
+    (local.set $op_names (call $schemekind_effectdecl_ops (local.get $decl_kind)))
+    ;; Step 3: find op_name's index in op_names
+    (local.set $n (call $len (local.get $op_names)))
+    (local.set $j (i32.const 0))
+    (block $found
+      (loop $search
+        (br_if $found (i32.ge_u (local.get $j) (local.get $n)))
+        (if (call $str_eq (call $list_index (local.get $op_names) (local.get $j))
+                          (local.get $op_name))
+          (then (return (local.get $j))))
+        (local.set $j (i32.add (local.get $j) (i32.const 1)))
+        (br $search)))
+    (i32.const 0))
+
   ;; ─── $lower_perform — PerformExpr arm (parser tag 94) ──────────────
   ;; Per src/lower.mn:442-443 + Lock #2 (wheel-parity LPerform for ALL
   ;; ResumeDiscipline values; H7 MultiShot dispatch is named follow-up
@@ -701,37 +743,28 @@
     ;; "<handler>_<op>" matches the module-level $op_<handler>_<op>
     ;; symbol minted by $lower_handler_arms_as_decls (commit 22a4bbc).
     ;; If not found (no handler in scope or op not an EffectOpScheme),
-    ;; emit undiscriminated for productive-under-error.
-    ;;
-    ;; Tier 1 ULTIMATE FORM monomorphic direct-call per SUBSTRATE.md
-    ;; §"Three Tiers of Effect Compilation"; mirrors src/lower.mn
-    ;; commit 50a9512's wheel-canonical PerformExpr discrimination.
+    ;; emit LEvPerform — evidence-passing dispatch per Koka JFP 2022.
+    ;; The graph carries EffectDeclKind; we read it to compute the
+    ;; evidence slot index. No separate registry. Graph empowerment.
     (local.set $resolved (call $lower_resolve_handler_for_op (local.get $op_name)))
     (if (result i32) (i32.ne (local.get $resolved) (i32.const 0))
       (then
-        ;; Thread the handler's NAME (for `$<handler>_state_g` global) per
-        ;; protocol_handler_is_state_is_closure_is_evidence.md. Tier 1.5
-        ;; single-instance (global state-ptr); Tier 3 multi-instance via
-        ;; stack-of-records is named follow-up. emit reads the handler-
-        ;; name and emits `(global.get $<name>_state_g)` for arm-call's
-        ;; __state, threading the install-time state record.
+        ;; Tier 1: monomorphic direct-call. Handler resolved at lower-time.
         (call $lexpr_make_lperform_with_state
           (local.get $h)
           (local.get $resolved)
           (local.get $lo_args)
           (call $lower_lookup_default_handler_for_op (local.get $op_name))))
       (else
-        ;; Per Hβ.first-light.evidence-poly-call-transient (named peer
-        ;; from commit 5b94fbb): polymorphic perform — no handler in
-        ;; scope at lower-time means the discriminated symbol is
-        ;; unknown until handler-install time. Real Tier 2 substrate
-        ;; (evidence-passing per Koka JFP 2022) reads from a closure
-        ;; ev-slot via call_indirect. Until that lands, emit LConst(0)
-        ;; as a deterministic placeholder so wat2wasm validates and
-        ;; both passes of the L1 fixpoint produce identical bytes.
-        ;; Productive-under-error; runtime will not execute this
-        ;; correctly but L1 byte-identity holds.
-        (call $lexpr_make_lconst (local.get $h) (i32.const 0)))))
+        ;; Tier 2: polymorphic evidence-passing. The handler is provided
+        ;; by the caller via evidence slots in __state. Compute slot_idx
+        ;; from the graph's EffectDeclKind — the graph carries the
+        ;; effect→ops mapping as first-class substrate.
+        (call $lexpr_make_levperform
+          (local.get $h)
+          (local.get $op_name)
+          (call $lower_compute_ev_slot_for_op (local.get $op_name))
+          (local.get $lo_args)))))
 
   ;; ─── $lower_resume — ResumeExpr arm (parser tag 95) ────────────────
   ;; Per src/lower.mn:445-448 + Lock #6. ResumeExpr is "structurally a

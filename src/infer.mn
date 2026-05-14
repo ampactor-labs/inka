@@ -2157,6 +2157,15 @@ fn build_ctor_params(field_types, base_idx) = map((indexed) => {
 }, enumerate(field_types))
 
 fn register_effect_ops(effect_name, ops) = {
+  // Register the effect name itself with its op names.
+  // EffectDeclKind is the graph's vocabulary for "this is an effect
+  // declaration carrying these ops." derive_ev_slots reads it;
+  // the Cursor can project it at any position mentioning the effect.
+  let op_names = map((op) => { let (n, _, _) = op; n }, ops)
+  perform env_extend(effect_name,
+    Forall([], TTuple([])),
+    Declared(effect_name),
+    EffectDeclKind(op_names))
   for_each((op) => register_one_op(effect_name, op), ops)
 }
 

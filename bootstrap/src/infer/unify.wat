@@ -993,6 +993,33 @@
     (local $name i32) (local $pa i32) (local $pb i32)
     (local $ea i32) (local $eb i32)
     (local $located i32)
+    (local $g_va i32) (local $g_vb i32)
+    (local $tag_va i32) (local $tag_vb i32)
+    (local $ty_va i32) (local $ty_vb i32)
+    
+    ;; 1. Chase va and vb to see if they are already bound.
+    (local.set $g_va (call $graph_chase (local.get $va)))
+    (local.set $tag_va (call $node_kind_tag (call $gnode_kind (local.get $g_va))))
+    (local.set $g_vb (call $graph_chase (local.get $vb)))
+    (local.set $tag_vb (call $node_kind_tag (call $gnode_kind (local.get $g_vb))))
+
+    ;; If va is bound (62 NRowBound or 60 NBound), unify TRecordOpen(fa, va) with TRecordOpen(fb, vb) fully
+    ;; by letting unify handle the resolved types, preventing information loss!
+    (if (i32.eq (local.get $tag_va) (i32.const 62))
+      (then
+        (local.set $ty_va (call $node_kind_payload (call $gnode_kind (local.get $g_va))))
+        (call $unify_types (call $ty_make_trecordopen (local.get $fa) (local.get $va))
+                           (call $ty_make_trecordopen (local.get $fb) (local.get $vb))
+                           (local.get $span) (local.get $reason))
+        (return)))
+
+    (if (i32.eq (local.get $tag_vb) (i32.const 62))
+      (then
+        (local.set $ty_vb (call $node_kind_payload (call $gnode_kind (local.get $g_vb))))
+        (call $unify_types (call $ty_make_trecordopen (local.get $fa) (local.get $va))
+                           (call $ty_make_trecordopen (local.get $fb) (local.get $vb))
+                           (local.get $span) (local.get $reason))
+        (return)))
     (local.set $shared (call $intersect_record_fields
       (local.get $fa) (local.get $fb)))
     ;; Iterate shared field-pairs (NAME-keyed lookup in both sides) +

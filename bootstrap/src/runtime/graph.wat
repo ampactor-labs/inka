@@ -279,6 +279,15 @@
   ;; For now, NBound terminals return the GNode as-is; the caller
   ;; (Hβ.infer) chases through Ty structure via its own Ty-variant
   ;; dispatch.
+  ;; $graph_chase_handle — follows TVar chains and returns the CANONICAL
+  ;; HANDLE (integer), not the GNode.
+  (func $graph_chase_handle (param $h i32) (result i32)
+    (local $g i32) (local $nk i32) (local $nk_tag i32) (local $ty i32)
+    (local.set $g (call $graph_node_at (local.get $h)))
+    (local.set $nk (call $gnode_kind (local.get $g)))
+    (local.set $nk_tag (call $node_kind_tag (local.get $nk)))
+    (if (i32.eq (local.get $nk_tag) (i32.const 60)) (then (local.set $ty (call $node_kind_payload (local.get $nk))) (if (i32.eq (call $ty_tag (local.get $ty)) (i32.const 104)) (then (return (call $graph_chase_handle (call $ty_tvar_handle (local.get $ty)))))))) (local.get $h))
+
   (func $graph_chase (param $handle i32) (result i32)
     (call $graph_chase_loop (local.get $handle) (i32.const 0)))
 
@@ -398,7 +407,37 @@
   ;; $graph_bind_row — bind handle to row.
   (func $graph_bind_row (param $handle i32) (param $row_ptr i32) (param $reason i32)
     (local $old_gnode i32) (local $new_nk i32) (local $new_g i32)
+    (local $old_nk i32) (local $old_tag i32)
+    (local $old_ty i32) (local $old_fields i32)
+    (local $new_ty_tag i32) (local $new_fields i32)
+    (local $merged_fields i32)
     (call $graph_init)
+
+    (local.set $old_nk (call $gnode_kind (call $graph_node_at (local.get $handle))))
+    (local.set $old_tag (call $node_kind_tag (local.get $old_nk)))
+    (if (i32.eq (local.get $old_tag) (i32.const 62))  ;; NRowBound
+      (then
+        (local.set $old_ty (call $node_kind_payload (local.get $old_nk)))
+        (if (i32.eq (call $ty_tag (local.get $old_ty)) (i32.const 109))  ;; TRecord
+          (then
+            (local.set $old_fields (call $ty_trecord_fields (local.get $old_ty)))
+            (local.set $new_ty_tag (call $ty_tag (local.get $row_ptr)))
+            (if (i32.eq (local.get $new_ty_tag) (i32.const 109))
+              (then
+                ;; Merge fields
+                (local.set $new_fields (call $ty_trecord_fields (local.get $row_ptr)))
+                (local.set $merged_fields (call $row_merge_fields (local.get $old_fields) (local.get $new_fields)))
+                (local.set $row_ptr (call $ty_make_trecord (local.get $merged_fields))))
+              (else
+                (if (i32.eq (local.get $new_ty_tag) (i32.const 104))
+                  (then
+                    ;; Binding a TRecord row to a TVar(fresh_row).
+                    ;; Bind fresh_row to the TRecord to preserve information!
+                    (call $graph_bind_row
+                      (call $ty_tvar_handle (local.get $row_ptr))
+                      (local.get $old_ty)
+                      (local.get $reason))))))))))
+
     (local.set $old_gnode (call $graph_node_at (local.get $handle)))
     (local.set $new_nk (call $node_kind_make_nrowbound (local.get $row_ptr)))
     (local.set $new_g  (call $gnode_make (local.get $new_nk) (local.get $reason)))
@@ -412,6 +451,41 @@
       (call $mutation_make_set_row (local.get $handle) (local.get $old_gnode)))
     (global.set $graph_epoch_g
       (i32.add (global.get $graph_epoch_g) (i32.const 1))))
+
+  ;; $row_merge_fields — utility for graph_bind_row.
+  (func $row_merge_fields (param $a i32) (param $b i32) (result i32)
+    (local $na i32) (local $nb i32) (local $total i32)
+    (local $ia i32) (local $ib i32) (local $out_i i32)
+    (local $out i32) (local $ea i32) (local $eb i32)
+    (local $name_a i32) (local $name_b i32) (local $cmp i32)
+    (local.set $na (call $len (local.get $a)))
+    (local.set $nb (call $len (local.get $b)))
+    (local.set $total (i32.add (local.get $na) (local.get $nb)))
+    (local.set $out (call $make_list (local.get $total)))
+    (local.set $out (call $list_extend_to (local.get $out) (local.get $total)))
+    (local.set $ia (i32.const 0))
+    (local.set $ib (i32.const 0))
+    (local.set $out_i (i32.const 0))
+    (block $done
+      (loop $merge
+        (br_if $done (i32.ge_u (local.get $out_i) (local.get $total)))
+        (if (i32.ge_u (local.get $ia) (local.get $na))
+          (then (drop (call $list_set (local.get $out) (local.get $out_i) (call $list_index (local.get $b) (local.get $ib)))) (local.set $ib (i32.add (local.get $ib) (i32.const 1))) (local.set $out_i (i32.add (local.get $out_i) (i32.const 1))) (br $merge)))
+        (if (i32.ge_u (local.get $ib) (local.get $nb))
+          (then (drop (call $list_set (local.get $out) (local.get $out_i) (call $list_index (local.get $a) (local.get $ia)))) (local.set $ia (i32.add (local.get $ia) (i32.const 1))) (local.set $out_i (i32.add (local.get $out_i) (i32.const 1))) (br $merge)))
+        (local.set $ea (call $list_index (local.get $a) (local.get $ia)))
+        (local.set $eb (call $list_index (local.get $b) (local.get $ib)))
+        (local.set $name_a (call $record_get (local.get $ea) (i32.const 0)))
+        (local.set $name_b (call $record_get (local.get $eb) (i32.const 0)))
+        (local.set $cmp (call $str_compare (local.get $name_a) (local.get $name_b)))
+        (if (i32.eq (local.get $cmp) (i32.const -1))
+          (then (drop (call $list_set (local.get $out) (local.get $out_i) (local.get $ea))) (local.set $ia (i32.add (local.get $ia) (i32.const 1))))
+          (else (if (i32.eq (local.get $cmp) (i32.const 1))
+            (then (drop (call $list_set (local.get $out) (local.get $out_i) (local.get $eb))) (local.set $ib (i32.add (local.get $ib) (i32.const 1))))
+            (else (drop (call $list_set (local.get $out) (local.get $out_i) (local.get $ea))) (local.set $ia (i32.add (local.get $ia) (i32.const 1))) (local.set $ib (i32.add (local.get $ib) (i32.const 1)))))))
+        (local.set $out_i (i32.add (local.get $out_i) (i32.const 1)))
+        (br $merge)))
+    (call $slice (local.get $out) (i32.const 0) (local.get $out_i)))
 
   ;; $graph_bind_kind — bind handle to an already-constructed NodeKind
   ;; record (NErrorHole / NBound / etc). Used by emit_diag.wat's helpers

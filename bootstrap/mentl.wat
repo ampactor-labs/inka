@@ -1967,6 +1967,15 @@
   ;; For now, NBound terminals return the GNode as-is; the caller
   ;; (Hβ.infer) chases through Ty structure via its own Ty-variant
   ;; dispatch.
+  ;; $graph_chase_handle — follows TVar chains and returns the CANONICAL
+  ;; HANDLE (integer), not the GNode.
+  (func $graph_chase_handle (param $h i32) (result i32)
+    (local $g i32) (local $nk i32) (local $nk_tag i32) (local $ty i32)
+    (local.set $g (call $graph_node_at (local.get $h)))
+    (local.set $nk (call $gnode_kind (local.get $g)))
+    (local.set $nk_tag (call $node_kind_tag (local.get $nk)))
+    (if (i32.eq (local.get $nk_tag) (i32.const 60)) (then (local.set $ty (call $node_kind_payload (local.get $nk))) (if (i32.eq (call $ty_tag (local.get $ty)) (i32.const 104)) (then (return (call $graph_chase_handle (call $ty_tvar_handle (local.get $ty)))))))) (local.get $h))
+
   (func $graph_chase (param $handle i32) (result i32)
     (call $graph_chase_loop (local.get $handle) (i32.const 0)))
 
@@ -2086,7 +2095,37 @@
   ;; $graph_bind_row — bind handle to row.
   (func $graph_bind_row (param $handle i32) (param $row_ptr i32) (param $reason i32)
     (local $old_gnode i32) (local $new_nk i32) (local $new_g i32)
+    (local $old_nk i32) (local $old_tag i32)
+    (local $old_ty i32) (local $old_fields i32)
+    (local $new_ty_tag i32) (local $new_fields i32)
+    (local $merged_fields i32)
     (call $graph_init)
+
+    (local.set $old_nk (call $gnode_kind (call $graph_node_at (local.get $handle))))
+    (local.set $old_tag (call $node_kind_tag (local.get $old_nk)))
+    (if (i32.eq (local.get $old_tag) (i32.const 62))  ;; NRowBound
+      (then
+        (local.set $old_ty (call $node_kind_payload (local.get $old_nk)))
+        (if (i32.eq (call $ty_tag (local.get $old_ty)) (i32.const 109))  ;; TRecord
+          (then
+            (local.set $old_fields (call $ty_trecord_fields (local.get $old_ty)))
+            (local.set $new_ty_tag (call $ty_tag (local.get $row_ptr)))
+            (if (i32.eq (local.get $new_ty_tag) (i32.const 109))
+              (then
+                ;; Merge fields
+                (local.set $new_fields (call $ty_trecord_fields (local.get $row_ptr)))
+                (local.set $merged_fields (call $row_merge_fields (local.get $old_fields) (local.get $new_fields)))
+                (local.set $row_ptr (call $ty_make_trecord (local.get $merged_fields))))
+              (else
+                (if (i32.eq (local.get $new_ty_tag) (i32.const 104))
+                  (then
+                    ;; Binding a TRecord row to a TVar(fresh_row).
+                    ;; Bind fresh_row to the TRecord to preserve information!
+                    (call $graph_bind_row
+                      (call $ty_tvar_handle (local.get $row_ptr))
+                      (local.get $old_ty)
+                      (local.get $reason))))))))))
+
     (local.set $old_gnode (call $graph_node_at (local.get $handle)))
     (local.set $new_nk (call $node_kind_make_nrowbound (local.get $row_ptr)))
     (local.set $new_g  (call $gnode_make (local.get $new_nk) (local.get $reason)))
@@ -2100,6 +2139,41 @@
       (call $mutation_make_set_row (local.get $handle) (local.get $old_gnode)))
     (global.set $graph_epoch_g
       (i32.add (global.get $graph_epoch_g) (i32.const 1))))
+
+  ;; $row_merge_fields — utility for graph_bind_row.
+  (func $row_merge_fields (param $a i32) (param $b i32) (result i32)
+    (local $na i32) (local $nb i32) (local $total i32)
+    (local $ia i32) (local $ib i32) (local $out_i i32)
+    (local $out i32) (local $ea i32) (local $eb i32)
+    (local $name_a i32) (local $name_b i32) (local $cmp i32)
+    (local.set $na (call $len (local.get $a)))
+    (local.set $nb (call $len (local.get $b)))
+    (local.set $total (i32.add (local.get $na) (local.get $nb)))
+    (local.set $out (call $make_list (local.get $total)))
+    (local.set $out (call $list_extend_to (local.get $out) (local.get $total)))
+    (local.set $ia (i32.const 0))
+    (local.set $ib (i32.const 0))
+    (local.set $out_i (i32.const 0))
+    (block $done
+      (loop $merge
+        (br_if $done (i32.ge_u (local.get $out_i) (local.get $total)))
+        (if (i32.ge_u (local.get $ia) (local.get $na))
+          (then (drop (call $list_set (local.get $out) (local.get $out_i) (call $list_index (local.get $b) (local.get $ib)))) (local.set $ib (i32.add (local.get $ib) (i32.const 1))) (local.set $out_i (i32.add (local.get $out_i) (i32.const 1))) (br $merge)))
+        (if (i32.ge_u (local.get $ib) (local.get $nb))
+          (then (drop (call $list_set (local.get $out) (local.get $out_i) (call $list_index (local.get $a) (local.get $ia)))) (local.set $ia (i32.add (local.get $ia) (i32.const 1))) (local.set $out_i (i32.add (local.get $out_i) (i32.const 1))) (br $merge)))
+        (local.set $ea (call $list_index (local.get $a) (local.get $ia)))
+        (local.set $eb (call $list_index (local.get $b) (local.get $ib)))
+        (local.set $name_a (call $record_get (local.get $ea) (i32.const 0)))
+        (local.set $name_b (call $record_get (local.get $eb) (i32.const 0)))
+        (local.set $cmp (call $str_compare (local.get $name_a) (local.get $name_b)))
+        (if (i32.eq (local.get $cmp) (i32.const -1))
+          (then (drop (call $list_set (local.get $out) (local.get $out_i) (local.get $ea))) (local.set $ia (i32.add (local.get $ia) (i32.const 1))))
+          (else (if (i32.eq (local.get $cmp) (i32.const 1))
+            (then (drop (call $list_set (local.get $out) (local.get $out_i) (local.get $eb))) (local.set $ib (i32.add (local.get $ib) (i32.const 1))))
+            (else (drop (call $list_set (local.get $out) (local.get $out_i) (local.get $ea))) (local.set $ia (i32.add (local.get $ia) (i32.const 1))) (local.set $ib (i32.add (local.get $ib) (i32.const 1)))))))
+        (local.set $out_i (i32.add (local.get $out_i) (i32.const 1)))
+        (br $merge)))
+    (call $slice (local.get $out) (i32.const 0) (local.get $out_i)))
 
   ;; $graph_bind_kind — bind handle to an already-constructed NodeKind
   ;; record (NErrorHole / NBound / etc). Used by emit_diag.wat's helpers
@@ -2203,11 +2277,12 @@
   ;;             $env_binding_reason, $env_binding_kind,
   ;;             $schemekind_make_fn, $schemekind_make_ctor,
   ;;             $schemekind_make_effectop, $schemekind_make_record,
-  ;;             $schemekind_make_capability,
+  ;;             $schemekind_make_capability, $schemekind_make_effectdecl,
   ;;             $schemekind_ctor_tag_id, $schemekind_ctor_total,
   ;;             $schemekind_effectop_name,
   ;;             $schemekind_record_fields,
   ;;             $schemekind_capability_pairs,
+  ;;             $schemekind_effectdecl_ops,
   ;;             $schemekind_tag, $schemekind_wire_byte
   ;; Uses:       $alloc (alloc.wat), $make_record/$record_get/$record_set/
   ;;             $tag_of (record.wat), $make_list/$list_index/$list_set/
@@ -2268,7 +2343,8 @@
   ;;   133   SCHEMEKIND_EFFECTOP_TAG       — EffectOpScheme(name)
   ;;   134   SCHEMEKIND_RECORD_TAG         — RecordSchemeKind(fields)
   ;;   135   SCHEMEKIND_CAPABILITY_TAG     — CapabilityScheme(eff_pairs)
-  ;;   136-149 reserved for future env-substrate records
+  ;;   136   SCHEMEKIND_EFFECTDECL_TAG     — EffectDeclKind(op_names)
+  ;;   137-149 reserved for future env-substrate records
   ;;
   ;; SchemeKind tag-byte invariant: runtime_tag - 131 == cache_wire_byte.
   ;;   FnScheme              → byte 0  (cache.mn:165)
@@ -2276,6 +2352,7 @@
   ;;   EffectOpScheme        → byte 2  (cache.mn:171-174)
   ;;   RecordSchemeKind      → byte 3  (cache.mn:175-179)
   ;;   CapabilityScheme      → byte 4  (cache.mn:180-184)
+  ;;   EffectDeclKind        → byte 5  (cache.mn — tag 5 per types.mn)
   ;; Drift-mode-8 closed by ADT dispatch on the runtime tag — NEVER
   ;; by `mode == 0/1/2/3/4` int.
   ;;
@@ -2387,6 +2464,19 @@
     (local.get $r))
 
   (func $schemekind_capability_pairs (param $k i32) (result i32)
+    (call $record_get (local.get $k) (i32.const 0)))
+
+  ;; EffectDeclKind(op_names: List of String) — graph-native effect→ops
+  ;; mapping. Per types.mn:EffectDeclKind(List). Tag 136, appended after
+  ;; CapabilityScheme to preserve tag-ID stability with the wheel's ADT
+  ;; ordinals. The graph carries what it should carry.
+  (func $schemekind_make_effectdecl (param $op_names i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 136) (i32.const 1)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $op_names))
+    (local.get $r))
+
+  (func $schemekind_effectdecl_ops (param $k i32) (result i32)
     (call $record_get (local.get $k) (i32.const 0)))
 
   ;; SchemeKind tag dispatch — sentinel-collapse for FnScheme.
@@ -12663,6 +12753,33 @@
     (local $name i32) (local $pa i32) (local $pb i32)
     (local $ea i32) (local $eb i32)
     (local $located i32)
+    (local $g_va i32) (local $g_vb i32)
+    (local $tag_va i32) (local $tag_vb i32)
+    (local $ty_va i32) (local $ty_vb i32)
+    
+    ;; 1. Chase va and vb to see if they are already bound.
+    (local.set $g_va (call $graph_chase (local.get $va)))
+    (local.set $tag_va (call $node_kind_tag (call $gnode_kind (local.get $g_va))))
+    (local.set $g_vb (call $graph_chase (local.get $vb)))
+    (local.set $tag_vb (call $node_kind_tag (call $gnode_kind (local.get $g_vb))))
+
+    ;; If va is bound (62 NRowBound or 60 NBound), unify TRecordOpen(fa, va) with TRecordOpen(fb, vb) fully
+    ;; by letting unify handle the resolved types, preventing information loss!
+    (if (i32.eq (local.get $tag_va) (i32.const 62))
+      (then
+        (local.set $ty_va (call $node_kind_payload (call $gnode_kind (local.get $g_va))))
+        (call $unify_types (call $ty_make_trecordopen (local.get $fa) (local.get $va))
+                           (call $ty_make_trecordopen (local.get $fb) (local.get $vb))
+                           (local.get $span) (local.get $reason))
+        (return)))
+
+    (if (i32.eq (local.get $tag_vb) (i32.const 62))
+      (then
+        (local.set $ty_vb (call $node_kind_payload (call $gnode_kind (local.get $g_vb))))
+        (call $unify_types (call $ty_make_trecordopen (local.get $fa) (local.get $va))
+                           (call $ty_make_trecordopen (local.get $fb) (local.get $vb))
+                           (local.get $span) (local.get $reason))
+        (return)))
     (local.set $shared (call $intersect_record_fields
       (local.get $fa) (local.get $fb)))
     ;; Iterate shared field-pairs (NAME-keyed lookup in both sides) +
@@ -16309,7 +16426,12 @@
     (local $op i32) (local $op_name i32) (local $param_tys_parser i32)
     (local $ret_ty_parser i32) (local $param_tys i32) (local $ret_ty i32)
     (local $row_h i32) (local $op_ty i32) (local $scheme i32) (local $reason i32)
+    (local $op_names i32)
     (local.set $n_ops (call $len (local.get $ops)))
+    ;; Build op_names list for EffectDeclKind registration (graph empowerment).
+    (local.set $op_names (call $make_list (i32.const 0)))
+    (local.set $op_names
+      (call $list_extend_to (local.get $op_names) (local.get $n_ops)))
     (local.set $i (i32.const 0))
     (block $done
       (loop $each
@@ -16342,8 +16464,23 @@
           (local.get $scheme)
           (local.get $reason)
           (call $schemekind_make_effectop (local.get $eff_name)))
+        ;; Collect op_name into op_names list for EffectDeclKind.
+        (drop (call $list_set (local.get $op_names) (local.get $i)
+                              (local.get $op_name)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $each))))
+        (br $each)))
+    ;; Graph empowerment: register effect name → EffectDeclKind(op_names).
+    ;; Mirrors wheel src/infer.mn register_effect_ops. The graph carries
+    ;; what it should carry — no separate registry needed.
+    (call $env_extend
+      (local.get $eff_name)
+      (call $scheme_make_forall
+        (call $make_list (i32.const 0))
+        (call $ty_make_tunit))
+      (call $reason_make_located
+        (local.get $span)
+        (call $reason_make_declared (local.get $eff_name)))
+      (call $schemekind_make_effectdecl (local.get $op_names))))
 
   (func $infer_walk_stmt_effect_decl
         (export "infer_walk_stmt_effect_decl")
@@ -21149,13 +21286,12 @@
                                       (local.get $lo_args)
                                       (call $lower_lookup_default_handler_for_op (local.get $name)))))
                       (else
-                        ;; Polymorphic perform — same band-aid as
-                        ;; $lower_perform's else branch above. LConst(0)
-                        ;; placeholder until evidence-poly-call-transient
-                        ;; substrate lands.
-                        (return (call $lexpr_make_lconst
+                        ;; Tier 2: evidence-passing per graph EffectDeclKind.
+                        (return (call $lexpr_make_levperform
                                       (local.get $h)
-                                      (i32.const 0)))))))))))))
+                                      (local.get $name)
+                                      (call $lower_compute_ev_slot_for_op (local.get $name))
+                                      (local.get $lo_args)))))))))))))
     ;; Default closure-call form per Lock #3.
     (local.set $lo_f    (call $lower_expr (local.get $callee_node)))
     (local.set $lo_args (call $lower_args (local.get $args_list)))
@@ -21250,6 +21386,49 @@
       (then (return (call $str_concat (i32.const 4576) (local.get $op_name)))))
     (i32.const 0))
 
+  ;; ─── $lower_compute_ev_slot_for_op — graph-empowered slot index ──────
+  ;; Per wheel src/lower.mn compute_slot_index + effect_slot_in_row.
+  ;; Reads the graph: op_name → EffectOpScheme(effect_name) →
+  ;; EffectDeclKind(op_names) → find op_name's position.
+  ;; Returns 0 as fallback (productive-under-error).
+  (func $lower_compute_ev_slot_for_op (param $op_name i32) (result i32)
+    (local $binding i32) (local $kind i32) (local $kind_tag i32)
+    (local $effect_name i32) (local $decl_binding i32) (local $decl_kind i32)
+    (local $op_names i32) (local $n i32) (local $j i32)
+    ;; Step 1: op_name → EffectOpScheme(effect_name)
+    (local.set $binding (call $env_lookup (local.get $op_name)))
+    (if (i32.eqz (local.get $binding))
+      (then (return (i32.const 0))))
+    (local.set $kind (call $env_binding_kind (local.get $binding)))
+    (if (i32.lt_u (local.get $kind) (global.get $heap_base))
+      (then (return (i32.const 0))))
+    (local.set $kind_tag (call $tag_of (local.get $kind)))
+    (if (i32.ne (local.get $kind_tag) (i32.const 133))  ;; EffectOpScheme
+      (then (return (i32.const 0))))
+    (local.set $effect_name (call $schemekind_effectop_name (local.get $kind)))
+    ;; Step 2: effect_name → EffectDeclKind(op_names)
+    (local.set $decl_binding (call $env_lookup (local.get $effect_name)))
+    (if (i32.eqz (local.get $decl_binding))
+      (then (return (i32.const 0))))
+    (local.set $decl_kind (call $env_binding_kind (local.get $decl_binding)))
+    (if (i32.lt_u (local.get $decl_kind) (global.get $heap_base))
+      (then (return (i32.const 0))))
+    (if (i32.ne (call $tag_of (local.get $decl_kind)) (i32.const 136))  ;; EffectDeclKind
+      (then (return (i32.const 0))))
+    (local.set $op_names (call $schemekind_effectdecl_ops (local.get $decl_kind)))
+    ;; Step 3: find op_name's index in op_names
+    (local.set $n (call $len (local.get $op_names)))
+    (local.set $j (i32.const 0))
+    (block $found
+      (loop $search
+        (br_if $found (i32.ge_u (local.get $j) (local.get $n)))
+        (if (call $str_eq (call $list_index (local.get $op_names) (local.get $j))
+                          (local.get $op_name))
+          (then (return (local.get $j))))
+        (local.set $j (i32.add (local.get $j) (i32.const 1)))
+        (br $search)))
+    (i32.const 0))
+
   ;; ─── $lower_perform — PerformExpr arm (parser tag 94) ──────────────
   ;; Per src/lower.mn:442-443 + Lock #2 (wheel-parity LPerform for ALL
   ;; ResumeDiscipline values; H7 MultiShot dispatch is named follow-up
@@ -21301,37 +21480,28 @@
     ;; "<handler>_<op>" matches the module-level $op_<handler>_<op>
     ;; symbol minted by $lower_handler_arms_as_decls (commit 22a4bbc).
     ;; If not found (no handler in scope or op not an EffectOpScheme),
-    ;; emit undiscriminated for productive-under-error.
-    ;;
-    ;; Tier 1 ULTIMATE FORM monomorphic direct-call per SUBSTRATE.md
-    ;; §"Three Tiers of Effect Compilation"; mirrors src/lower.mn
-    ;; commit 50a9512's wheel-canonical PerformExpr discrimination.
+    ;; emit LEvPerform — evidence-passing dispatch per Koka JFP 2022.
+    ;; The graph carries EffectDeclKind; we read it to compute the
+    ;; evidence slot index. No separate registry. Graph empowerment.
     (local.set $resolved (call $lower_resolve_handler_for_op (local.get $op_name)))
     (if (result i32) (i32.ne (local.get $resolved) (i32.const 0))
       (then
-        ;; Thread the handler's NAME (for `$<handler>_state_g` global) per
-        ;; protocol_handler_is_state_is_closure_is_evidence.md. Tier 1.5
-        ;; single-instance (global state-ptr); Tier 3 multi-instance via
-        ;; stack-of-records is named follow-up. emit reads the handler-
-        ;; name and emits `(global.get $<name>_state_g)` for arm-call's
-        ;; __state, threading the install-time state record.
+        ;; Tier 1: monomorphic direct-call. Handler resolved at lower-time.
         (call $lexpr_make_lperform_with_state
           (local.get $h)
           (local.get $resolved)
           (local.get $lo_args)
           (call $lower_lookup_default_handler_for_op (local.get $op_name))))
       (else
-        ;; Per Hβ.first-light.evidence-poly-call-transient (named peer
-        ;; from commit 5b94fbb): polymorphic perform — no handler in
-        ;; scope at lower-time means the discriminated symbol is
-        ;; unknown until handler-install time. Real Tier 2 substrate
-        ;; (evidence-passing per Koka JFP 2022) reads from a closure
-        ;; ev-slot via call_indirect. Until that lands, emit LConst(0)
-        ;; as a deterministic placeholder so wat2wasm validates and
-        ;; both passes of the L1 fixpoint produce identical bytes.
-        ;; Productive-under-error; runtime will not execute this
-        ;; correctly but L1 byte-identity holds.
-        (call $lexpr_make_lconst (local.get $h) (i32.const 0)))))
+        ;; Tier 2: polymorphic evidence-passing. The handler is provided
+        ;; by the caller via evidence slots in __state. Compute slot_idx
+        ;; from the graph's EffectDeclKind — the graph carries the
+        ;; effect→ops mapping as first-class substrate.
+        (call $lexpr_make_levperform
+          (local.get $h)
+          (local.get $op_name)
+          (call $lower_compute_ev_slot_for_op (local.get $op_name))
+          (local.get $lo_args)))))
 
   ;; ─── $lower_resume — ResumeExpr arm (parser tag 95) ────────────────
   ;; Per src/lower.mn:445-448 + Lock #6. ResumeExpr is "structurally a
@@ -22142,6 +22312,9 @@
     (local $h i32) (local $body i32) (local $pipe_struct i32)
     (local $kind i32) (local $left_node i32) (local $right_node i32)
     (local $lo_l i32) (local $lo_r i32) (local $hname i32)
+    (local $config_arg_nodes i32) (local $config_inits i32)
+    (local $state_inits i32) (local $all_inits i32)
+    (local $n_config i32) (local $n_state i32) (local $i i32)
     (local.set $h           (call $walk_expr_node_handle (local.get $node)))
     (local.set $body        (i32.load offset=4 (local.get $node)))
     (local.set $pipe_struct (i32.load offset=4 (local.get $body)))
@@ -22161,12 +22334,6 @@
         (local.set $hname (call $extract_handler_name (local.get $right_node)))
         (if (i32.ne (local.get $hname) (i32.const 0))
           (then
-            ;; Per protocol_handler_is_state_is_closure_is_evidence.md:
-            ;; mint state-local-name "__hstate_<h>" from this `~>` site's
-            ;; graph handle. emit_lhandlewith will alloc + init the state
-            ;; record and bind it to this local; perform sites within body
-            ;; thread this local-name as their __state arg via the
-            ;; handler-stack pair.
             (call $lower_handler_push_with_state
               (local.get $hname)
               (call $str_concat (i32.const 5408)               ;; "__hstate_"
@@ -22174,15 +22341,61 @@
         (local.set $lo_l (call $lower_expr (local.get $left_node)))
         (if (i32.ne (local.get $hname) (i32.const 0))
           (then (call $lower_handler_pop)))
-        ;; Thread handler_name (extracted earlier) and state_inits
-        ;; (queried by name from the registry populated at
-        ;; $lower_walk_stmt_handler_decl) into LHandleWith so emit can
-        ;; allocate + init the state record without re-deriving from
-        ;; lo_r's closure shape. Hβ.seed.handler-state-init-writes-mirror.
+        ;; Per protocol_handler_is_state_is_closure_is_evidence.md
+        ;; (ONE record, FOUR roles): config values write FIRST into
+        ;; the state record at offsets 8+i*4, THEN state-field inits.
+        ;; The arm body's captures are ordered config ++ state (per
+        ;; $pre_allocate_config_captures + $pre_allocate_state_captures
+        ;; at walk_handle.wat:471-472). Without this ordering, arm
+        ;; reads land on wrong fields — the #148 trap.
+        ;;
+        ;; Extract config args from `~> handler(arg1, arg2)` and lower.
+        (local.set $config_arg_nodes
+          (call $extract_handler_config_args (local.get $right_node)))
+        (local.set $n_config (call $len (local.get $config_arg_nodes)))
+        (local.set $config_inits (call $make_list (i32.const 0)))
+        (local.set $config_inits
+          (call $list_extend_to (local.get $config_inits) (local.get $n_config)))
+        (local.set $i (i32.const 0))
+        (block $cfg_done
+          (loop $cfg_each
+            (br_if $cfg_done (i32.ge_u (local.get $i) (local.get $n_config)))
+            (drop (call $list_set (local.get $config_inits) (local.get $i)
+                    (call $lower_expr
+                      (call $list_index (local.get $config_arg_nodes) (local.get $i)))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $cfg_each)))
+        ;; Prepend config_inits to state_inits → all_inits.
+        (local.set $state_inits
+          (call $handler_state_inits_lookup (local.get $hname)))
+        (local.set $n_state (call $len (local.get $state_inits)))
+        (local.set $all_inits (call $make_list (i32.const 0)))
+        (local.set $all_inits
+          (call $list_extend_to (local.get $all_inits)
+            (i32.add (local.get $n_config) (local.get $n_state))))
+        ;; Copy config inits first.
+        (local.set $i (i32.const 0))
+        (block $c_done
+          (loop $c_each
+            (br_if $c_done (i32.ge_u (local.get $i) (local.get $n_config)))
+            (drop (call $list_set (local.get $all_inits) (local.get $i)
+                    (call $list_index (local.get $config_inits) (local.get $i))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $c_each)))
+        ;; Copy state inits after config.
+        (local.set $i (i32.const 0))
+        (block $s_done
+          (loop $s_each
+            (br_if $s_done (i32.ge_u (local.get $i) (local.get $n_state)))
+            (drop (call $list_set (local.get $all_inits)
+                    (i32.add (local.get $n_config) (local.get $i))
+                    (call $list_index (local.get $state_inits) (local.get $i))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $s_each)))
         (return (call $lexpr_make_lhandlewith_with_inits
                   (local.get $h) (local.get $lo_l) (local.get $lo_r)
                   (local.get $hname)
-                  (call $handler_state_inits_lookup (local.get $hname))))))
+                  (local.get $all_inits)))))
     ;; Non-handle pipes — lower left+right normally.
     (local.set $lo_l (call $lower_expr (local.get $left_node)))
     (local.set $lo_r (call $lower_expr (local.get $right_node)))
@@ -22241,6 +22454,29 @@
         (if (i32.eq (i32.load (local.get $callee_expr)) (i32.const 85))
           (then (return (i32.load offset=4 (local.get $callee_expr)))))))
     (i32.const 0))
+
+  ;; $extract_handler_config_args — given the right-side AST node of a
+  ;; `body ~> handler(args)` pipe, return the args list from CallExpr.
+  ;; For bare VarRef `~> collector`, returns empty list (no config args).
+  ;; These args are the handler's config params (e.g. `f` in `map_collector(f)`).
+  ;; Per protocol_handler_is_state_is_closure_is_evidence.md (ONE record,
+  ;; FOUR roles): config values write FIRST into the state record at
+  ;; offsets 8+i*4 (before state-field inits) so arm-body capture reads
+  ;; match install-time writes. Graph empowerment — the graph carries
+  ;; what it should carry.
+  (func $extract_handler_config_args (param $node i32) (result i32)
+    (local $body i32) (local $expr i32) (local $tag i32)
+    (if (i32.lt_u (local.get $node) (global.get $heap_base))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $body (i32.load offset=4 (local.get $node)))
+    (if (i32.ne (i32.load (local.get $body)) (i32.const 110))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $expr (i32.load offset=4 (local.get $body)))
+    (local.set $tag (i32.load (local.get $expr)))
+    ;; CallExpr tag = 88; offset 8 = args list.
+    (if (i32.eq (local.get $tag) (i32.const 88))
+      (then (return (i32.load offset=8 (local.get $expr)))))
+    (call $make_list (i32.const 0)))
 
   ;; ─── $lower_pipe_forward — `|>` arm ───────────────────────────────
   ;; Per Hβ.first-light.pipe-forward-flatten (chain link 5 closure):
@@ -22377,6 +22613,8 @@
       (local.get $h)
       (local.get $lo_l)
       (local.get $lo_r)))
+
+
 
   ;; ═══ walk_compound.wat — Hβ.lower compound-Expr arms (Tier 7) ═══════
   ;; Hβ.lower cascade chunk #9 of 11 per Hβ-lower-substrate.md §12.3 dep order.
@@ -22840,6 +23078,7 @@
     (local $n i32) (local $i i32) (local $buf i32)
     (local $entry i32) (local $name i32) (local $sub_pat i32)
     (local $lo_pat i32) (local $triple i32)
+    (local $offset i32)
     (local.set $n   (call $len (local.get $fields)))
     (local.set $buf (call $make_list (i32.const 0)))
     (local.set $buf (call $list_extend_to (local.get $buf) (local.get $n)))
@@ -22853,8 +23092,11 @@
         (local.set $lo_pat  (call $lower_pat (local.get $sub_pat) (local.get $scrut_h)))
         (local.set $triple  (call $make_record (i32.const 0) (i32.const 3)))
         (call $record_set (local.get $triple) (i32.const 0) (local.get $name))
-        (call $record_set (local.get $triple) (i32.const 1)
-          (i32.mul (i32.add (local.get $field_idx) (local.get $i)) (i32.const 4)))
+        
+        ;; Use the graph to resolve the canonical byte offset for this field!
+        (local.set $offset (call $resolve_field_offset (local.get $scrut_h) (local.get $name)))
+        (call $record_set (local.get $triple) (i32.const 1) (local.get $offset))
+        
         (call $record_set (local.get $triple) (i32.const 2) (local.get $lo_pat))
         (drop (call $list_set (local.get $buf) (local.get $i) (local.get $triple)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -23203,27 +23445,440 @@
       (local.get $lo_fields)))
 
   ;; ─── $lower_field — FieldExpr arm (parser tag 100) ───────────────────
-  ;; Per src/lower.mn:450-461 + Lock #4 (offset sentinel 0 at seed pending
-  ;; ty.wat record-fields walker). AST per Lock #9:
+  ;; Per src/lower.mn:450-461. AST per Lock #9:
   ;;   [tag=100][rec_node][field_name_str] offsets 0/4/8.
-  ;; field_name_str THREADED but NOT COMPARED (drift-8 closure).
-  ;;
-  ;; Lists per lib/runtime/lists.mn:28 store [count@0, tag@4, data@8];
-  ;; `.len` reads offset 0 directly which IS the count. Other field
-  ;; names also currently route through offset 0 until ty.wat structural
-  ;; record-fields walker exposes per-field lookup.
+  ;; ULTIMATE FORM: resolve field byte offset from graph type via
+  ;; $resolve_field_offset. Closes Lock #4 (Hβ.lower.field-offset-resolution).
+  ;; Per protocol_handler_is_state_is_closure_is_evidence.md: sorted-by-name
+  ;; field layout at 4*i. The graph carries what it should carry.
   (func $lower_field (export "lower_field") (param $node i32) (result i32)
     (local $h i32) (local $body i32) (local $field_struct i32)
-    (local $rec_node i32) (local $lo_rec i32)
+    (local $rec_node i32) (local $field_name i32)
+    (local $lo_rec i32) (local $rec_h i32) (local $offset i32)
     (local.set $h            (call $walk_expr_node_handle (local.get $node)))
     (local.set $body         (i32.load offset=4 (local.get $node)))
     (local.set $field_struct (i32.load offset=4 (local.get $body)))
     (local.set $rec_node     (i32.load offset=4 (local.get $field_struct)))
+    (local.set $field_name   (i32.load offset=8 (local.get $field_struct)))
+    (local.set $rec_h        (call $walk_expr_node_handle (local.get $rec_node)))
     (local.set $lo_rec       (call $lower_expr (local.get $rec_node)))
+    (local.set $offset       (call $resolve_field_offset
+                               (local.get $rec_h)
+                               (local.get $field_name)))
     (call $lexpr_make_lfieldload
       (local.get $h)
       (local.get $lo_rec)
-      (i32.const 0)))
+      (local.get $offset)))
+
+  ;; $resolve_field_offset — per src/lower.mn:1052-1071.
+  ;; lookup_ty(rec_handle) → TRecord/TRecordOpen → walk fields list.
+  ;; TName → chase env to RecordSchemeKind. TVar → recurse on inner handle.
+  ;; Fallback 0.
+  ;; The graph carries what it should carry — field offset IS graph-resident.
+  ;; $resolve_field_offset_from_ty — given a Ty, find the field offset.
+  ;; Chases TVar chains, dispatches on TRecord/TRecordOpen/TName.
+  (func $resolve_field_offset_from_ty
+        (param $ty i32) (param $field_name i32) (result i32)
+    (local $tag i32) (local $fields i32)
+    (local $binding i32) (local $kind i32)
+    (call $eprint_string (local.get $field_name))
+    (local.set $tag (call $ty_tag (local.get $ty)))
+    ;; TVar (104) — chase to inner handle, then resolve from that handle.
+    (if (i32.eq (local.get $tag) (i32.const 104))
+      (then
+        (return_call $resolve_field_offset
+          (call $ty_tvar_handle (local.get $ty))
+          (local.get $field_name))))
+    ;; TRecord (109) — FULL field list → correct offset.
+    (if (i32.eq (local.get $tag) (i32.const 109))
+      (then
+        (local.set $fields (call $ty_trecord_fields (local.get $ty)))
+        (return (call $field_byte_offset
+                  (local.get $fields) (local.get $field_name)
+                  (i32.const 0) (call $len (local.get $fields))))))
+    ;; TRecordOpen (110) — PARTIAL field list + rowvar. Chase the rowvar
+    ;; to get the residual fields (TRecord from unification). Merge the
+    ;; two field lists (both alphabetically sorted) to reconstruct the
+    ;; FULL record shape. The graph carries what it should carry.
+    (if (i32.eq (local.get $tag) (i32.const 110))
+      (then
+        (return (call $resolve_from_record_open
+                  (local.get $ty) (local.get $field_name)))))
+    ;; TName (108) — chase env to RecordSchemeKind.
+    (if (i32.eq (local.get $tag) (i32.const 108))
+      (then
+        (local.set $binding (call $env_lookup (call $ty_tname_name (local.get $ty))))
+        (if (i32.ne (local.get $binding) (i32.const 0))
+          (then
+            (local.set $kind (call $env_binding_kind (local.get $binding)))
+            ;; RecordSchemeKind tag = 134 per env.wat:80.
+            (if (i32.eq (call $schemekind_tag (local.get $kind)) (i32.const 134))
+              (then
+                (local.set $fields (call $schemekind_record_fields (local.get $kind)))
+                (return (call $field_byte_offset
+                          (local.get $fields) (local.get $field_name)
+                          (i32.const 0) (call $len (local.get $fields))))))))))
+    ;; Fallback.
+    (i32.const 0))
+
+  ;; $resolve_field_offset — directly chase the graph to find the REAL
+  ;; Ty, bypassing $lookup_ty which converts NFree to terror_hole.
+  ;; After unification, a handle that was NFree might now be
+  ;; NBound(TVar(other_h)) → chase through that TVar to find TRecord.
+  ;; ═══ Field accumulator ═══════════════════════════════════════════
+  ;; ULTIMATE SUBSTRATE: the graph carries partial TRecordOpen types,
+  ;; but row composition is incomplete at the seed. To reconstruct
+  ;; the FULL sorted field list, the inference side records every
+  ;; field access per record handle. At lower time, the accumulated
+  ;; fields give the complete alphabetical layout.
+  ;;
+  ;; Storage: parallel flat arrays (handles[] + field_lists[]).
+  ;; $fa_record_field(handle, field_name) — inference calls this.
+  ;; $fa_lookup_fields(handle) — lower calls this, gets sorted field list.
+  (global $fa_handles_ptr (mut i32) (i32.const 0))
+  (global $fa_fields_ptr  (mut i32) (i32.const 0))
+  (global $fa_len         (mut i32) (i32.const 0))
+  (global $fa_initialized (mut i32) (i32.const 0))
+
+  (func $fa_init
+    (if (global.get $fa_initialized) (then (return)))
+    (global.set $fa_handles_ptr (call $make_list (i32.const 64)))
+    (global.set $fa_fields_ptr  (call $make_list (i32.const 64)))
+    (global.set $fa_len         (i32.const 0))
+    (global.set $fa_initialized (i32.const 1)))
+
+  ;; $fa_find_slot — find the index for a given handle. Returns -1 if not found.
+  (func $fa_find_slot (param $handle i32) (result i32)
+    (local $i i32) (local $n i32)
+    (call $fa_init)
+    (local.set $n (global.get $fa_len))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $scan
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (if (i32.eq (call $list_index (global.get $fa_handles_ptr) (local.get $i))
+                    (local.get $handle))
+          (then (return (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $scan)))
+    (i32.const -1))
+
+  ;; $fa_record_field — called by FieldExpr inference. Records that
+  ;; `handle` has field `field_name`. Inserts into sorted field list.
+  (func $fa_record_field (export "fa_record_field")
+        (param $handle i32) (param $field_name i32)
+    (local $slot i32) (local $fields i32) (local $n i32)
+    (local $i i32) (local $existing i32) (local $cmp i32)
+    (local $new_fields i32) (local $j i32)
+    (call $fa_init)
+    (local.set $slot (call $fa_find_slot (local.get $handle)))
+    (if (i32.eq (local.get $slot) (i32.const -1))
+      (then
+        ;; New handle — create entry.
+        (local.set $slot (global.get $fa_len))
+        (global.set $fa_handles_ptr
+          (call $list_set
+            (call $list_extend_to (global.get $fa_handles_ptr)
+              (i32.add (local.get $slot) (i32.const 1)))
+            (local.get $slot) (local.get $handle)))
+        (global.set $fa_fields_ptr
+          (call $list_set
+            (call $list_extend_to (global.get $fa_fields_ptr)
+              (i32.add (local.get $slot) (i32.const 1)))
+            (local.get $slot) (call $make_list (i32.const 4))))
+        (global.set $fa_len (i32.add (global.get $fa_len) (i32.const 1)))))
+    ;; Get current fields list.
+    (local.set $fields (call $list_index (global.get $fa_fields_ptr) (local.get $slot)))
+    (local.set $n (call $len (local.get $fields)))
+    ;; Find sorted insertion point; skip if already present.
+    (local.set $i (i32.const 0))
+    (block $insert_done
+      (loop $find_pos
+        (br_if $insert_done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $existing
+          (call $list_index (local.get $fields) (local.get $i)))
+        (local.set $cmp (call $str_compare (local.get $field_name) (local.get $existing)))
+        ;; Already present — done.
+        (if (i32.eqz (local.get $cmp)) (then (return)))
+        ;; field_name < existing — insert here.
+        (if (i32.eq (local.get $cmp) (i32.const -1))
+          (then (br $insert_done)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $find_pos)))
+    ;; Insert at position $i: shift elements right, then set.
+    (local.set $new_fields
+      (call $list_extend_to (local.get $fields)
+        (i32.add (local.get $n) (i32.const 1))))
+    ;; Shift from end down to $i.
+    (local.set $j (local.get $n))
+    (block $shift_done
+      (loop $shift
+        (br_if $shift_done (i32.le_u (local.get $j) (local.get $i)))
+        (drop (call $list_set (local.get $new_fields) (local.get $j)
+          (call $list_index (local.get $new_fields)
+            (i32.sub (local.get $j) (i32.const 1)))))
+        (local.set $j (i32.sub (local.get $j) (i32.const 1)))
+        (br $shift)))
+    ;; Place field_name at position $i.
+    (drop (call $list_set (local.get $new_fields) (local.get $i)
+      (local.get $field_name)))
+    ;; Update the stored fields list (list_set may have reallocated).
+    (drop (call $list_set (global.get $fa_fields_ptr) (local.get $slot)
+      (local.get $new_fields))))
+
+  ;; $fa_lookup_fields — returns the accumulated sorted field name list
+  ;; for a handle. Returns 0 if handle not found.
+  (func $fa_lookup_fields (export "fa_lookup_fields")
+        (param $handle i32) (result i32)
+    (local $slot i32)
+    (call $fa_init)
+    (local.set $slot (call $fa_find_slot (local.get $handle)))
+    (if (i32.eq (local.get $slot) (i32.const -1))
+      (then (return (i32.const 0))))
+    (call $list_index (global.get $fa_fields_ptr) (local.get $slot)))
+
+  ;; $fa_field_byte_offset — given a sorted field name list (strings,
+  ;; not field_pairs), find the target and return 4*i.
+  (func $fa_field_byte_offset
+        (param $names i32) (param $target i32)
+        (param $i i32) (param $n i32) (result i32)
+    (if (i32.ge_u (local.get $i) (local.get $n))
+      (then (return (i32.const 0))))
+    (if (call $str_eq (call $list_index (local.get $names) (local.get $i))
+                      (local.get $target))
+      (then (return (i32.mul (local.get $i) (i32.const 4)))))
+    (return_call $fa_field_byte_offset
+      (local.get $names) (local.get $target)
+      (i32.add (local.get $i) (i32.const 1)) (local.get $n)))
+
+  ;; $resolve_field_offset — ULTIMATE FORM. The graph carries the full
+  ;; truth. $graph_bind_row composes row residuals instead of overwriting,
+  ;; so TRecordOpen's rowvar accumulates ALL residual fields. Chase the
+  ;; graph, dispatch on Ty tag, resolve offset.
+  (func $resolve_field_offset (param $rec_handle i32) (param $field_name i32) (result i32)
+    (local $g i32) (local $nk i32) (local $tag i32) (local $ty i32)
+    (local.set $g (call $graph_chase (local.get $rec_handle)))
+    (local.set $nk (call $gnode_kind (local.get $g)))
+    (local.set $tag (call $node_kind_tag (local.get $nk)))
+    ;; NBound (60) — has a Ty payload, resolve from it.
+    (if (i32.eq (local.get $tag) (i32.const 60))
+      (then
+        (local.set $ty (call $node_kind_payload (local.get $nk)))
+        (return (call $resolve_field_offset_from_ty
+                  (local.get $ty) (local.get $field_name)))))
+    (if (i32.eq (local.get $tag) (i32.const 62))
+      (then
+        (local.set $ty (call $node_kind_payload (local.get $nk)))
+        (return (call $resolve_field_offset_from_ty
+                  (local.get $ty) (local.get $field_name)))))
+    ;; NFree (61) — truly unresolved. Fallback 0.
+    ;; NErrorHole (64) — error. Fallback 0.
+    (i32.const 0))
+
+  ;; $fa_collect_fields — scan ALL accumulator entries. For each entry,
+  ;; chase its recorded handle (graph is complete at lower time) to
+  ;; the canonical terminal. If it matches $target_canonical, merge
+  ;; that entry's fields into the result. Returns a sorted field name
+  ;; list with all fields from all matching entries, or 0 if none found.
+  (func $fa_collect_fields (param $target_canonical i32) (result i32)
+    (local $i i32) (local $n i32) (local $entry_h i32) (local $entry_canonical i32)
+    (local $entry_fields i32) (local $result i32)
+    (local $j i32) (local $fn i32) (local $fn_n i32)
+    (call $fa_init)
+    (local.set $n (global.get $fa_len))
+    (local.set $result (i32.const 0))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $scan
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $entry_h
+          (call $list_index (global.get $fa_handles_ptr) (local.get $i)))
+        (local.set $entry_canonical
+          (call $graph_chase_handle (local.get $entry_h)))
+        (if (i32.eq (local.get $entry_canonical) (local.get $target_canonical))
+          (then
+            ;; This entry's handle resolves to the same variable.
+            ;; Merge its fields into result.
+            (local.set $entry_fields
+              (call $list_index (global.get $fa_fields_ptr) (local.get $i)))
+            (if (i32.eqz (local.get $result))
+              (then
+                ;; First match — clone the fields list.
+                (local.set $result (call $fa_clone_fields (local.get $entry_fields))))
+              (else
+                ;; Subsequent match — merge into result.
+                (local.set $fn_n (call $len (local.get $entry_fields)))
+                (local.set $j (i32.const 0))
+                (block $merge_done
+                  (loop $merge
+                    (br_if $merge_done (i32.ge_u (local.get $j) (local.get $fn_n)))
+                    (local.set $fn
+                      (call $list_index (local.get $entry_fields) (local.get $j)))
+                    (local.set $result
+                      (call $fa_insert_sorted (local.get $result) (local.get $fn)))
+                    (local.set $j (i32.add (local.get $j) (i32.const 1)))
+                    (br $merge)))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $scan)))
+    (local.get $result))
+
+  ;; $fa_clone_fields — shallow clone a field name list.
+  (func $fa_clone_fields (param $src i32) (result i32)
+    (local $n i32) (local $out i32) (local $i i32)
+    (local.set $n (call $len (local.get $src)))
+    (local.set $out (call $make_list (local.get $n)))
+    (local.set $out (call $list_extend_to (local.get $out) (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $copy
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (drop (call $list_set (local.get $out) (local.get $i)
+          (call $list_index (local.get $src) (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $copy)))
+    (local.get $out))
+
+  ;; $fa_insert_sorted — insert a field name into a sorted list,
+  ;; skipping if already present. Returns the (possibly reallocated) list.
+  (func $fa_insert_sorted (param $list i32) (param $name i32) (result i32)
+    (local $n i32) (local $i i32) (local $existing i32) (local $cmp i32)
+    (local $new_list i32) (local $j i32)
+    (local.set $n (call $len (local.get $list)))
+    (local.set $i (i32.const 0))
+    (block $found_pos
+      (loop $scan
+        (br_if $found_pos (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $existing (call $list_index (local.get $list) (local.get $i)))
+        (local.set $cmp (call $str_compare (local.get $name) (local.get $existing)))
+        (if (i32.eqz (local.get $cmp)) (then (return (local.get $list))))
+        (if (i32.eq (local.get $cmp) (i32.const -1))
+          (then (br $found_pos)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $scan)))
+    ;; Insert at position $i.
+    (local.set $new_list
+      (call $list_extend_to (local.get $list)
+        (i32.add (local.get $n) (i32.const 1))))
+    (local.set $j (local.get $n))
+    (block $shift_done
+      (loop $shift
+        (br_if $shift_done (i32.le_u (local.get $j) (local.get $i)))
+        (drop (call $list_set (local.get $new_list) (local.get $j)
+          (call $list_index (local.get $new_list)
+            (i32.sub (local.get $j) (i32.const 1)))))
+        (local.set $j (i32.sub (local.get $j) (i32.const 1)))
+        (br $shift)))
+    (drop (call $list_set (local.get $new_list) (local.get $i) (local.get $name)))
+    (local.get $new_list))
+
+  ;; $field_byte_offset — per src/lower.mn:1074-1081.
+  ;; Linear scan of sorted fields list. Each entry is (name, ty) pair;
+  ;; name at list_index(fields, i) then record_get offset 0.
+  ;; Returns 4*i when str_eq(name, target). Tail-recursive.
+  (func $field_byte_offset
+        (param $fields i32) (param $target i32)
+        (param $i i32) (param $n i32) (result i32)
+    (local $entry i32) (local $name i32)
+    (if (i32.ge_u (local.get $i) (local.get $n))
+      (then (return (i32.const 0))))
+    (local.set $entry (call $list_index (local.get $fields) (local.get $i)))
+    ;; Fields list entries are (name, ty) pairs — name at offset 0.
+    (local.set $name (call $list_index (local.get $entry) (i32.const 0)))
+    (if (call $str_eq (local.get $name) (local.get $target))
+      (then (return (i32.mul (local.get $i) (i32.const 4)))))
+    (return_call $field_byte_offset
+      (local.get $fields) (local.get $target)
+      (i32.add (local.get $i) (i32.const 1)) (local.get $n)))
+
+  ;; $resolve_from_record_open — chase TRecordOpen's rowvar to get the
+  ;; full field list. The rowvar, after unification with a TRecord,
+  ;; holds NRowBound(TRecord(residual_fields)). Merge the partial
+  ;; fields with the residual to reconstruct the FULL sorted field list.
+  ;; The graph carries what it should carry.
+  (func $resolve_from_record_open
+        (param $trecordopen i32) (param $field_name i32) (result i32)
+    (local $partial i32) (local $rowvar_h i32)
+    (local $g i32) (local $nk i32) (local $nk_tag i32)
+    (local $row_ty i32) (local $row_tag i32)
+    (local $residual i32) (local $merged i32)
+    ;; Get partial fields and rowvar handle.
+    (local.set $partial (call $ty_trecordopen_fields (local.get $trecordopen)))
+    (local.set $rowvar_h (call $ty_trecordopen_rowvar (local.get $trecordopen)))
+    ;; Chase the rowvar handle through the graph.
+    (local.set $g (call $graph_chase (local.get $rowvar_h)))
+    (local.set $nk (call $gnode_kind (local.get $g)))
+    (local.set $nk_tag (call $node_kind_tag (local.get $nk)))
+    ;; NRowBound (62) — payload is the residual Ty (TRecord).
+    (if (i32.eq (local.get $nk_tag) (i32.const 62))
+      (then
+        (local.set $row_ty (call $node_kind_payload (local.get $nk)))
+        (local.set $row_tag (call $ty_tag (local.get $row_ty)))
+        ;; If residual is TRecord (109), merge fields.
+        (if (i32.eq (local.get $row_tag) (i32.const 109))
+          (then
+            (local.set $residual (call $ty_trecord_fields (local.get $row_ty)))
+            (local.set $merged (call $merge_sorted_fields
+                                 (local.get $partial) (local.get $residual)))
+            (return (call $field_byte_offset
+                      (local.get $merged) (local.get $field_name)
+                      (i32.const 0) (call $len (local.get $merged))))))))
+    ;; NRowFree (63) — row not yet resolved. Can only use partial.
+    ;; This means we can't determine the full field list. Fallback 0.
+    (i32.const 0))
+
+  ;; $merge_sorted_fields — merge two alphabetically-sorted field-pair
+  ;; lists into one. Both inputs are List of field_pair records (tag 203)
+  ;; with name at record_get(entry, 0). Standard sorted merge.
+  (func $merge_sorted_fields
+        (param $a i32) (param $b i32) (result i32)
+    (local $na i32) (local $nb i32) (local $total i32)
+    (local $ia i32) (local $ib i32) (local $out_i i32)
+    (local $out i32)
+    (local $ea i32) (local $eb i32)
+    (local $name_a i32) (local $name_b i32)
+    (local.set $na (call $len (local.get $a)))
+    (local.set $nb (call $len (local.get $b)))
+    (local.set $total (i32.add (local.get $na) (local.get $nb)))
+    (local.set $out (call $make_list (local.get $total)))
+    (local.set $out (call $list_extend_to (local.get $out) (local.get $total)))
+    (local.set $ia (i32.const 0))
+    (local.set $ib (i32.const 0))
+    (local.set $out_i (i32.const 0))
+    (block $done
+      (loop $merge
+        (br_if $done (i32.ge_u (local.get $out_i) (local.get $total)))
+        ;; If a exhausted, take from b.
+        (if (i32.ge_u (local.get $ia) (local.get $na))
+          (then
+            (drop (call $list_set (local.get $out) (local.get $out_i)
+              (call $list_index (local.get $b) (local.get $ib))))
+            (local.set $ib (i32.add (local.get $ib) (i32.const 1)))
+            (local.set $out_i (i32.add (local.get $out_i) (i32.const 1)))
+            (br $merge)))
+        ;; If b exhausted, take from a.
+        (if (i32.ge_u (local.get $ib) (local.get $nb))
+          (then
+            (drop (call $list_set (local.get $out) (local.get $out_i)
+              (call $list_index (local.get $a) (local.get $ia))))
+            (local.set $ia (i32.add (local.get $ia) (i32.const 1)))
+            (local.set $out_i (i32.add (local.get $out_i) (i32.const 1)))
+            (br $merge)))
+        ;; Both have elements — compare names.
+        (local.set $ea (call $list_index (local.get $a) (local.get $ia)))
+        (local.set $eb (call $list_index (local.get $b) (local.get $ib)))
+        (local.set $name_a (call $field_pair_name (local.get $ea)))
+        (local.set $name_b (call $field_pair_name (local.get $eb)))
+        (if (i32.eq (call $str_compare (local.get $name_a) (local.get $name_b))
+                    (i32.const -1))
+          (then
+            (drop (call $list_set (local.get $out) (local.get $out_i) (local.get $ea)))
+            (local.set $ia (i32.add (local.get $ia) (i32.const 1))))
+          (else
+            (drop (call $list_set (local.get $out) (local.get $out_i) (local.get $eb)))
+            (local.set $ib (i32.add (local.get $ib) (i32.const 1)))))
+        (local.set $out_i (i32.add (local.get $out_i) (i32.const 1)))
+        (br $merge)))
+    (local.get $out))
 
   ;; ─── $lower_lambda — LambdaExpr arm (parser tag 89) ──────────────────
   ;; Per src/lower.mn:402-428 + H.2.e lambda-capture-substrate.

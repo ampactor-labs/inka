@@ -329,14 +329,24 @@ fn mark_tail_arms(arms) with Memory = map((arm) => {
   (pat, mark_tail(body))
 }, arms)
 
-/// When the callee's effect row is ground (no unresolved row var),
-/// emit `LCall` (direct). When open, emit `LSuspend` (evidence-passing
-/// through a runtime call-indirect on the closure's fn-pointer field).
+/// When the callee's effect row is ground AND pure (EfPure or empty
+/// EfClosed), emit `LCall` (direct). A ground non-empty row like
+/// `EfClosed([Iterate])` still needs evidence — the callee performs
+/// effects whose handler comes from the caller. The row IS the
+/// evidence contract: non-empty row → evidence threading required.
 fn monomorphic_at(h) with LookupTy = {
   match perform lookup_ty(h) {
-    TFun(_, _, row) => row_is_ground(row),
+    TFun(_, _, row) => row_is_ground(row) && row_is_effectless(row),
     _               => true
   }
+}
+
+/// True when the row carries no effect names — the callee performs
+/// nothing, so no handler evidence is needed at the call site.
+fn row_is_effectless(row) = match row {
+  EfPure          => true,
+  EfClosed(names) => names.len == 0,
+  _               => false
 }
 
 /// Read the construction-origin metadata an env entry carries.
@@ -370,12 +380,15 @@ fn lower_call_default(handle, f, fh, lo_args) = {
 }
 
 /// H1.6 — derive `ev_slots` from the callee's row at lower time. Each
-/// `op_name` in the callee's row that needs evidence resolves to a
-/// `LowExpr` loading `(global.get $op_<name>_idx)` — the static `fn_idx`
-/// of the global handler arm. With single-handler-per-op naming (H1.4),
-/// this resolution is unambiguous; multi-handler dispatch would need
-/// `handler_stack` tracking, but the compiler-on-itself's monomorphic
-/// handlers don't exercise it.
+/// effect name in the callee's row resolves to the CALLER's handler
+/// arm fn_idx via `inf_handler_provider`. The CALLER knows which handler
+/// is installed; the callee needs that fn_ptr as evidence. Each call
+/// site produces different evidence because each caller may install a
+/// different handler.
+///
+/// The naming is DISCRIMINATED: `$op_<handler>_<op>_idx`, matching the
+/// globals emitted by `emit_fn_index_globals` for each LDeclareFn.
+/// Undiscriminated `$op_<op>_idx` was drift — no such globals exist.
 fn derive_ev_slots(callee_handle) = {
   match perform lookup_ty(callee_handle) {
     TFun(_, _, row) => derive_ev_slots_from_row(row),
@@ -391,16 +404,163 @@ fn derive_ev_slots_from_row(row) = match row {
 }
 
 fn derive_ev_slots_from_names(names) = {
-  map((name) => {
-    let op_name = match name {
+  flat_map((name) => {
+    let eff_name = match name {
       ENamed(s)            => s,
       EParameterized(s, _) => s
     }
-    // The slot's value is the handler arm's fn_idx — loaded from
-    // the per-arm global emitted by emit_fn_index_globals when
-    // emit_fns_expr lifted the LDeclareFn.
-    LGlobal(0, "op_" |> str_concat(op_name) |> str_concat("_idx"))
+    // For each effect name, find the ops it declares and resolve
+    // each op's handler fn_idx at the CALLER's scope.
+    let op_names = lookup_effect_op_names(eff_name)
+    map((op_name) => {
+      // Use the CALLER's handler context for discriminated naming
+      match perform inf_handler_provider(op_name) {
+        Some(handler_name) =>
+          LGlobal(0, "op_" |> str_concat(handler_name)
+                          |> str_concat("_")
+                          |> str_concat(op_name)
+                          |> str_concat("_idx")),
+        None =>
+          // No handler in caller scope — undiscriminated fallback
+          // (productive-under-error; will surface as wat2wasm reject)
+          LGlobal(0, "op_" |> str_concat(op_name) |> str_concat("_idx"))
+      }
+    }, op_names)
   }, names)
+}
+
+/// Look up the op names for an effect by reading the graph.
+/// EffectDeclKind(op_names) carries effect→ops as a first-class
+/// fact — registered at EffectDeclStmt by register_effect_ops.
+fn lookup_effect_op_names(eff_name) = {
+  match perform env_lookup(eff_name) {
+    Some(entry) => {
+      let (_, _, kind) = entry
+      match kind {
+        EffectDeclKind(op_names) => op_names,
+        _ => [eff_name]
+      }
+    },
+    None => [eff_name]
+  }
+}
+/// Row-guided perform dispatch — the single decision point.
+/// The row IS the evidence contract:
+///   - Effect in the current fn's declared row → LEvPerform
+///     (handler comes from caller via evidence slot on __state)
+///   - Effect NOT in row → LPerform (handler is locally installed,
+///     direct call — Tier 1 monomorphic per SUBSTRATE.md §III)
+fn lower_perform_dispatch(handle, op_name, lo_args) = {
+  if effect_in_current_fn_row(op_name) {
+    let slot = effect_slot_in_row(op_name)
+    LEvPerform(handle, op_name, slot, lo_args)
+  } else {
+    match perform inf_handler_provider(op_name) {
+      Some(handler_name) =>
+        LPerform(handle,
+                 handler_name |> str_concat("_") |> str_concat(op_name),
+                 lo_args),
+      None =>
+        LPerform(handle, op_name, lo_args)
+    }
+  }
+}
+
+/// Check if op_name's parent effect is in the current fn's declared row.
+/// inf_declared_effs() returns the `with` clause effects — [] for
+/// functions without a `with` clause (all compiler functions),
+/// leaving them on the LPerform path unchanged.
+fn effect_in_current_fn_row(op_name) = {
+  let declared = perform inf_declared_effs()
+  if declared.len == 0 { false }
+  else {
+    // Look up op_name's parent effect via EffectOpScheme
+    let ename = lookup_parent_effect(op_name)
+    match ename {
+      Some(en) => any_eff_matches(declared, en),
+      None => false
+    }
+  }
+}
+
+/// Look up which effect an op belongs to via EffectOpScheme.
+fn lookup_parent_effect(op_name) = {
+  match perform env_lookup(op_name) {
+    Some(entry) => {
+      let (_, _, kind) = entry
+      match kind {
+        EffectOpScheme(ename) => Some(ename),
+        _ => None
+      }
+    },
+    None => None
+  }
+}
+
+/// Check if any declared effect matches the target name.
+fn any_eff_matches(declared, target) = {
+  if declared.len == 0 { false }
+  else {
+    any_eff_matches_loop(declared, target, 0)
+  }
+}
+
+fn any_eff_matches_loop(declared, target, i) = {
+  if i >= declared.len { false }
+  else {
+    let (name, _negated) = declared[i]
+    let s = match name {
+      ENamed(s) => s,
+      EParameterized(s, _) => s
+    }
+    if str_eq(s, target) { true }
+    else { any_eff_matches_loop(declared, target, i + 1) }
+  }
+}
+
+/// Find the evidence slot index for an op within the current fn's row.
+/// Slot ordering: for each effect in the declared row, ops expand
+/// in EffectDeclKind order. Must match derive_ev_slots_from_names.
+fn effect_slot_in_row(op_name) = {
+  let declared = perform inf_declared_effs()
+  let ename = lookup_parent_effect(op_name)
+  match ename {
+    Some(en) => compute_slot_index(declared, en, op_name),
+    None => 0
+  }
+}
+
+/// Compute the evidence slot index by walking declared effects,
+/// expanding each into its ops (via EffectDeclKind), and counting
+/// until we hit the target op_name.
+fn compute_slot_index(declared, target_eff, target_op) = {
+  compute_slot_loop(declared, target_eff, target_op, 0, 0)
+}
+
+fn compute_slot_loop(declared, target_eff, target_op, eff_idx, slot_base) = {
+  if eff_idx >= declared.len { 0 }
+  else {
+    let (name, _) = declared[eff_idx]
+    let eff_name = match name {
+      ENamed(s) => s,
+      EParameterized(s, _) => s
+    }
+    let ops = lookup_effect_op_names(eff_name)
+    if str_eq(eff_name, target_eff) {
+      // Found the effect — find the op within it
+      find_op_in_list(ops, target_op, slot_base, 0)
+    } else {
+      // Skip this effect's ops
+      compute_slot_loop(declared, target_eff, target_op,
+                        eff_idx + 1, slot_base + ops.len)
+    }
+  }
+}
+
+fn find_op_in_list(ops, target, slot_base, i) = {
+  if i >= ops.len { slot_base }
+  else if str_eq(ops[i], target) { slot_base + i }
+  else { find_op_in_list(ops, target, slot_base, i + 1) }
 }
 
 // Lower walk — exhaustive, live
@@ -472,35 +632,13 @@ fn lower_expr_body(e, handle, span) = match e {
         Some(ConstructorScheme(tag_id, _)) =>
           LMakeVariant(handle, tag_id, lo_args),
         Some(EffectOpScheme(_)) =>
-          // Tier 1 monomorphic perform per SUBSTRATE.md §"Three Tiers
-          // of Effect Compilation" — the ~85% direct-call path.
-          // inf_handler_provider walks handler_stack innermost-first;
-          // the resolved handler_name combines with op_name into the
-          // discriminated symbol $op_<handler>_<op> minted by lower_
-          // handler_arms_as_decls (commit 22a4bbc).
-          //
-          // Per H1 §"Pure monomorphic chains" — when handler_stack
-          // covers every perform, this IS the canonical kernel-native
-          // dispatch (handler IS state, but state is statically known
-          // so call_indirect collapses to direct call).
-          //
-          // Polymorphic pass-through case is named peer
-          // Hβ.first-light.evidence-poly-call-transient: caller's
-          // own __state carries the evidence; PerformExpr lowers to
-          // LEvPerform with slot_idx from row inference. Tier 2/3
-          // (linear / multi-shot) substrate per SUBSTRATE.md.
-          match perform inf_handler_provider(name) {
-            Some(handler_name) =>
-              LPerform(handle,
-                       handler_name |> str_concat("_") |> str_concat(name),
-                       lo_args),
-            None =>
-              // No handler in scope — keep undiscriminated for
-              // productive-under-error diagnostic. Surfaces as
-              // wat2wasm rejection at the perform site if the
-              // surrounding row required a handler.
-              LPerform(handle, name, lo_args)
-          },
+          // Row-guided dispatch per SUBSTRATE.md §"Three Tiers of
+          // Effect Compilation". The row IS the evidence contract:
+          //   - Effect in declared row → Tier 2: LEvPerform (handler
+          //     comes from caller via evidence slot on __state)
+          //   - Effect NOT in row → Tier 1: LPerform (handler is
+          //     locally installed, direct call)
+          lower_perform_dispatch(handle, name, lo_args),
         _ => lower_call_default(handle, f, fh, lo_args)
       },
       _ => lower_call_default(handle, f, fh, lo_args)
@@ -614,27 +752,13 @@ fn lower_expr_body(e, handle, span) = match e {
   },
 
   PerformExpr(op_name, args) => {
-    // Tier 1 monomorphic perform — symmetric to the EffectOpScheme
-    // CallExpr arm above. inf_handler_provider walks handler_stack
-    // for the innermost handler that handles op_name; the resolved
-    // handler_name combines with op_name into the discriminated
-    // target $op_<handler>_<op>.
-    //
-    // Stage 4a: WASI import names bridge directly to the WASM-level
-    // import — no handler-arm wrapper needed. The import IS the bridge.
-    // Per protocol_bootstrap_wasi_threads_substrate.md.
+    // Row-guided dispatch — symmetric to the EffectOpScheme CallExpr
+    // arm above. Stage 4a: WASI imports bridge directly.
     let lo_args = lower_expr_list(args)
     if is_wasi_import_op(op_name) {
       LWasiCall(handle, op_name, lo_args)
     } else {
-      match perform inf_handler_provider(op_name) {
-        Some(handler_name) =>
-          LPerform(handle,
-                   handler_name |> str_concat("_") |> str_concat(op_name),
-                   lo_args),
-        None =>
-          LPerform(handle, op_name, lo_args)
-      }
+      lower_perform_dispatch(handle, op_name, lo_args)
     }
   },
 

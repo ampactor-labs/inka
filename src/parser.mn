@@ -166,18 +166,22 @@ fn show_token_kind(k) with Pure = match k {
 }
 
 // expect: consume the given kind or report a parse error.
-fn expect(ref tokens, pos, kind) = {
-  if at(tokens, pos, kind) { pos + 1 }
-  else {
-    perform report("parser", "P_ExpectedToken", "ParseError",
-      "expected "
-        |> str_concat(show_token_kind(kind))
-        |> str_concat(", got ")
-        |> str_concat(show_token_kind(kind_at(tokens, pos))),
-      span_at(tokens, pos), "MaybeIncorrect")
-    pos
-  }
-}
+/// expect: consume `kind` or stay. Lenient — returns pos unchanged on
+/// mismatch, NO diagnostic. This is the seed arbiter's exact $expect
+/// (bootstrap/src/parser_infra.wat): `if at(pos,kind) {pos+1} else
+/// {pos}`. L1 requires mentl2 parse == seed parse byte-identically;
+/// the seed's expect is silent, so the wheel's must be too — the
+/// return behavior was already identical (pos on mismatch); only the
+/// P_ExpectedToken `perform report` side-effect diverged, making
+/// mentl2 noisier than the seed. SYNTAX.md-conformant parse
+/// diagnostics are the named post-L1 peer #142
+/// (Hβ.parser.syntax-md-conformance-cascade) — they mature when the
+/// medium narrates via the gradient, not via parser eprint, after
+/// first-light. Not silent-failure drift: the seed IS the pre-L1
+/// arbiter; the diagnostic is explicitly deferred with a structural
+/// reason (byte-identity), not omitted.
+fn expect(ref tokens, pos, kind) =
+  if at(tokens, pos, kind) { pos + 1 } else { pos }
 
 // Payload extractors — return defaults if the kind doesn't match.
 // Most call sites should pattern-match directly via `match

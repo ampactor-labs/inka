@@ -1189,10 +1189,45 @@ fn parse_primary(ref tokens, pos) = {
   }
 }
 
+/// Reinterpret a parenthesized expression node as a lambda param.
+/// Per SYNTAX.md canonical `(params) => body`: when `=>` follows `)`,
+/// the parsed paren-exprs ARE params (the trailing TFatArrow drives
+/// classification — no upfront lambda-shape special-case; drift 6
+/// closure). A well-formed param is a VarRef; `_ => ""` is the seed
+/// arbiter's exact recovery ($convert_var_ref_to_tparam → empty name),
+/// an unnamed param that surfaces downstream — not a masked ADT.
+fn expr_to_param(e) = {
+  let N(eb, esp, _) = e
+  let pname = match eb {
+    NExpr(VarRef(nm)) => nm,
+    _                 => ""
+  }
+  TParam(pname, TVar(fresh_ph(esp)), Inferred, Inferred)
+}
+
+/// Convert a list of parsed expr nodes into a TParam list (buffer-
+/// counter build, mirrors parse_tuple_tail; no ++ accumulation).
+fn exprs_to_params(elems, i, n, own buf, count) = {
+  if i >= n { slice(buf, 0, count) }
+  else {
+    let (b1, c1) = push_node(buf, count, expr_to_param(list_index(elems, i)))
+    exprs_to_params(elems, i + 1, n, b1, c1)
+  }
+}
+
 fn parse_paren_or_tuple(ref tokens, pos, start_span) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) {
-    (nexpr(LitUnit, start_span), p + 1)
+    // `()` — zero-arg lambda `() => body` (SYNTAX.md canonical) when
+    // `=>` follows, else unit. One `=>`-peek mechanism across arities
+    // 0/1/N (seed parser_compound drift-6 closure).
+    let p_after = skip_ws(tokens, p + 1)
+    if at(tokens, p_after, TFatArrow) {
+      let (body, pb) = parse_expr(tokens, skip_ws(tokens, p_after + 1))
+      (nexpr(LambdaExpr([], body), start_span), pb)
+    } else {
+      (nexpr(LitUnit, start_span), p + 1)
+    }
   } else {
     let (first, p2) = parse_expr(tokens, p)
     let p3 = skip_ws(tokens, p2)
@@ -1201,9 +1236,30 @@ fn parse_paren_or_tuple(ref tokens, pos, start_span) = {
       let (b1, c1) = push_node(buf, 0, first)
       let (final_buf, final_count, final_pos) =
         parse_tuple_tail(tokens, skip_ws(tokens, p3 + 1), b1, c1)
-      (nexpr(MakeTupleExpr(slice(final_buf, 0, final_count)), start_span), final_pos)
+      let p_after = skip_ws(tokens, final_pos)
+      if at(tokens, p_after, TFatArrow) {
+        // `(e1, e2, ...) => body` — multi-param lambda; the parsed
+        // tuple-elems reinterpret as params (seed parity:
+        // parser_compound $parse_lambda_from_paren_multi).
+        let elems = slice(final_buf, 0, final_count)
+        let params = exprs_to_params(elems, 0, final_count, make_list(4), 0)
+        let (body, pb) = parse_expr(tokens, skip_ws(tokens, p_after + 1))
+        (nexpr(LambdaExpr(params, body), start_span), pb)
+      } else {
+        (nexpr(MakeTupleExpr(slice(final_buf, 0, final_count)), start_span), final_pos)
+      }
     } else {
-      (first, expect(tokens, p3, TRParen))
+      let p4 = expect(tokens, p3, TRParen)
+      let p_after = skip_ws(tokens, p4)
+      if at(tokens, p_after, TFatArrow) {
+        // `(e) => body` — single-param lambda; `first` reinterprets
+        // as the param (seed parity: parser_compound
+        // $parse_lambda_from_paren_single).
+        let (body, pb) = parse_expr(tokens, skip_ws(tokens, p_after + 1))
+        (nexpr(LambdaExpr([expr_to_param(first)], body), start_span), pb)
+      } else {
+        (first, p4)
+      }
     }
   }
 }

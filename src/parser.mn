@@ -1631,7 +1631,19 @@ fn parse_lambda_params(ref tokens, pos, own buf, count) = {
 fn parse_body(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TLBrace) {
-    parse_block_expr_checked(tokens, p + 1, span_at(tokens, p))
+    // Per Hβ.parser.fn-body-pipe-continuation (#125; seed
+    // parser_fn.wat:319-341 canonical): a brace body is the LEFT
+    // operand of any trailing pipe chain — `{ ... } ~> h1 ~> h2` is
+    // ONE PipeExpr, not a block with a dangling `~>`.
+    // parse_block_expr_checked alone returns the BlockExpr and loses
+    // every trailing `~>` (perform sites then fall to LConst(0); the
+    // orphaned `~>` surfaces as E_OrphanHandlerAttach). Feed the block
+    // into binop_loop to absorb the chain while keeping the brace-
+    // context diagnostics parse_block_expr_checked emits. Converges
+    // the brace path to the seed's "route through parse_expr ALWAYS".
+    let (block, p_block) =
+      parse_block_expr_checked(tokens, p + 1, span_at(tokens, p))
+    binop_loop(tokens, block, p_block, 1)
   } else {
     // SYNTAX.md:126-142 — E_MissingBracesMultiLine: a multi-line fn
     // body (no braces) is REJECTED — braces anchor the function

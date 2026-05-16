@@ -290,46 +290,40 @@ fn scan_string(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf,
 // eliminating the slice-alloc entirely — O(1) per chunk.
 fn scan_string_chunk(ref source, n: ValidOffset, chunk_start: ValidOffset, pos: ValidOffset, line, col, own buf, count) = {
   if pos >= n {
-    let part = str_slice(source, chunk_start, pos)
+    let part = str_unescape(str_slice(source, chunk_start, pos))
     let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col))
     (pos, col, b1, c1)
   } else {
     let b = byte_at(source, pos)
     if b == 34 {
       // closing "
-      let part = str_slice(source, chunk_start, pos)
+      let part = str_unescape(str_slice(source, chunk_start, pos))
       let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col + 1))
       (pos + 1, col + 1, b1, c1)
     } else if b == 123 && pos + 1 < n && byte_at(source, pos + 1) == 123 {
       // {{ — flush prior chunk including the first `{`; restart after the second.
-      let part = str_slice(source, chunk_start, pos + 1)
+      let part = str_unescape(str_slice(source, chunk_start, pos + 1))
       let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col + 1))
       scan_string_chunk(source, n, pos + 2, pos + 2, line, col + 2, b1, c1)
     } else if b == 125 && pos + 1 < n && byte_at(source, pos + 1) == 125 {
       // }} — flush prior chunk including the first `}`; restart after the second.
-      let part = str_slice(source, chunk_start, pos + 1)
+      let part = str_unescape(str_slice(source, chunk_start, pos + 1))
       let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col + 1))
       scan_string_chunk(source, n, pos + 2, pos + 2, line, col + 2, b1, c1)
     } else if b == 123 {
       // { — start of interpolation splice (amendment C).
-      let part = str_slice(source, chunk_start, pos)
+      let part = str_unescape(str_slice(source, chunk_start, pos))
       let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col))
       let (b2, c2) = push_tok(b1, c1, mk_tok(TStringSplice, line, col, line, col + 1))
       scan_string_after_splice(source, n, pos + 1, line, col + 1, b2, c2)
     } else if b == 92 && pos + 1 < n {
-      // Escape sequence — flush prior chunk, emit translated escape as
-      // its own TStringPart, restart after the escape's two bytes.
-      let pre = str_slice(source, chunk_start, pos)
-      let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(pre), line, col, line, col))
-      let esc = byte_at(source, pos + 1)
-      let escaped =
-        if      esc == 110 { "\n" }
-        else if esc == 116 { "\t" }
-        else if esc == 92  { "\\" }
-        else if esc == 34  { "\"" }
-        else { str_slice(source, pos + 1, pos + 2) }
-      let (b2, c2) = push_tok(b1, c1, mk_tok(TStringPart(escaped), line, col, line, col + 2))
-      scan_string_chunk(source, n, pos + 2, pos + 2, line, col + 2, b2, c2)
+      // Escape: NOT a chunk break — `\X` is two source bytes resolved
+      // once by str_unescape at the chunk-flush sites (matches the
+      // seed arbiter $scan_string_end + $str_unescape). chunk_start
+      // unchanged so `\"` does not falsely close the string. The
+      // prior per-escape TStringPart flush was the design flaw the
+      // parser then had to un-coalesce — deleted, not decorated.
+      scan_string_chunk(source, n, chunk_start, pos + 2, line, col + 2, buf, count)
     } else {
       // non-break byte — advance pos; chunk_start unchanged.
       scan_string_chunk(source, n, chunk_start, pos + 1, line, col + 1, buf, count)

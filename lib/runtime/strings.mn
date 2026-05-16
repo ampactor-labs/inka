@@ -212,6 +212,50 @@ fn str_slice(s, start, end) with Memory + Alloc = {
   view
 }
 
+/// str_unescape — resolve SYNTAX.md §1077 escape codes in a string
+/// literal's raw source bytes: \n→LF \r→CR \t→TAB \0→NUL; \\ \" and
+/// any other \X → the second byte literally. A lone trailing `\`
+/// (no following byte) stays a literal backslash. Mirrors the seed
+/// arbiter bootstrap/src/runtime/str.wat $str_unescape exactly (the
+/// lexer projects source bytes → graph bytes, per
+/// Hβ.first-light.lexer-string-escape-substrate). Two-pass: count
+/// decoded length, then one alloc + byte-store fill. The two-pass IS
+/// the O(N²)-bomb avoidance the scan_string comment warns about — a
+/// single alloc, no per-byte str_concat.
+fn str_unescape(s) with Memory + Alloc = {
+  let n = byte_len(s)
+  let dlen = str_unescape_count(s, 0, n, 0)
+  let ptr = perform alloc(4 + dlen)
+  perform store_i32(ptr, dlen)
+  str_unescape_into(s, 0, n, ptr, 0)
+  ptr
+}
+
+fn str_unescape_count(s, i, n, acc) with Memory =
+  if i >= n { acc }
+  else if byte_at(s, i) == 92 && i + 1 < n {
+    str_unescape_count(s, i + 2, n, acc + 1)
+  } else {
+    str_unescape_count(s, i + 1, n, acc + 1)
+  }
+
+fn str_unescape_into(s, i, n, dest, w) with Memory + Alloc =
+  if i >= n { () }
+  else if byte_at(s, i) == 92 && i + 1 < n {
+    let esc = byte_at(s, i + 1)
+    let decoded =
+      if      esc == 110 { 10 }
+      else if esc == 114 { 13 }
+      else if esc == 116 { 9 }
+      else if esc == 48  { 0 }
+      else { esc }
+    perform store_i8(dest + 4 + w, decoded)
+    str_unescape_into(s, i + 2, n, dest, w + 1)
+  } else {
+    perform store_i8(dest + 4 + w, byte_at(s, i))
+    str_unescape_into(s, i + 1, n, dest, w + 1)
+  }
+
 // Integer conversion
 
 /// int_to_str — decimal representation of a signed 32-bit integer.

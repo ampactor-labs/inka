@@ -399,10 +399,49 @@ fn parse_fn(ref tokens, pos) = {
   (stmt_node, p9)
 }
 
+/// A param-name token: TIdent or the contextual keywords
+/// own/ref/handle (SYNTAX.md — contextual keywords are idents outside
+/// keyword-role position; #117 class). Pure structural match — no
+/// string, no .len-on-call (the canonical projection mirroring seed
+/// $ident_at_p; one predicate, both call sites).
+fn is_param_name_tok(ref tokens, p) = match kind_at(tokens, p) {
+  TIdent(_) => true,
+  TOwn      => true,
+  TRef      => true,
+  THandle   => true,
+  _         => false
+}
+
+/// Does a real param start at p? TIdent → yes. `own`/`ref` → yes ONLY
+/// when a param name follows (`own x`); a bare `own`/`ref` (next is
+/// `)`/`,`/`:`/`with`) is NOT a param start — seed parity: seed
+/// parse_one_param returns null there → parse_fn_params `br $done`,
+/// the param-list terminates (verified empirically: `fn f(own)` → 0
+/// params; `fn f(own,b)` → 0 params; `fn f(a,own)` → [a]).
+fn param_starts_here(ref tokens, p) = match kind_at(tokens, p) {
+  TIdent(_) => true,
+  TOwn      => is_param_name_tok(tokens, skip_ws(tokens, p + 1)),
+  TRef      => is_param_name_tok(tokens, skip_ws(tokens, p + 1)),
+  _         => false
+}
+
+/// Advance to the token after the next TRParen. Param lists are flat
+/// (no nested parens), so a linear scan is exact. TEof-bounded
+/// (substrate-honest, like the seed's skip_to_eq_or_brace bound).
+fn skip_to_rparen(ref tokens, p) =
+  if at(tokens, p, TRParen) { p + 1 }
+  else if at(tokens, p, TEof) { p }
+  else { skip_to_rparen(tokens, p + 1) }
+
 fn parse_fn_params(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { ([], p + 1) }
-  else {
+  else if !param_starts_here(tokens, p) {
+    // Bare own/ref (no name follows) — seed parse_one_param returns
+    // null → param-list terminates here; tokens to `)` discarded
+    // (seed skip_to_eq_or_brace). 0 params; pos past `)`.
+    ([], skip_to_rparen(tokens, p))
+  } else {
     let buf = make_list(4)
     let (first, p2) = parse_one_param(tokens, p)
     let (b1, c1) = push_node(buf, 0, first)
@@ -414,9 +453,16 @@ fn parse_fn_params(ref tokens, pos) = {
 fn parse_params_tail(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TComma) {
-    let (next, p2) = parse_one_param(tokens, skip_ws(tokens, p + 1))
-    let (b1, c1) = push_node(buf, count, next)
-    parse_params_tail(tokens, p2, b1, c1)
+    let pn = skip_ws(tokens, p + 1)
+    if !param_starts_here(tokens, pn) {
+      // Bare own/ref after `,` — list terminates (seed parity:
+      // `fn f(a, own)` → [a], rest discarded to `)`).
+      (buf, count, skip_to_rparen(tokens, pn))
+    } else {
+      let (next, p2) = parse_one_param(tokens, pn)
+      let (b1, c1) = push_node(buf, count, next)
+      parse_params_tail(tokens, p2, b1, c1)
+    }
   } else {
     (buf, count, expect(tokens, p, TRParen))
   }

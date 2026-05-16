@@ -1122,6 +1122,13 @@ fn parse_primary(ref tokens, pos) = {
       } else {
         (nexpr(VarRef("handle"), span), pos + 1)
       },
+    // `own`/`ref` are contextual keywords (ownership prefixes in
+    // param position only); in expression position they are idents
+    // (`match own { }`, `= ref`). Exact #117 THandle-arm clone; seed
+    // parity ($ident_at_p maps TOwn→"own"/TRef→"ref" — the seed parses
+    // `match own {}` as a VarRef scrutinee, verified empirically).
+    TOwn         => (nexpr(VarRef("own"), span), pos + 1),
+    TRef         => (nexpr(VarRef("ref"), span), pos + 1),
     TPerform     => parse_perform(tokens, pos + 1, span),
     TResume      => parse_resume(tokens, pos + 1, span),
     TPipe        => {

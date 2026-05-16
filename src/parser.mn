@@ -1110,7 +1110,18 @@ fn parse_primary(ref tokens, pos) = {
     TLBrace      => parse_brace_expr(tokens, pos + 1, span),
     TIf          => parse_if(tokens, pos + 1, span),
     TMatch       => parse_match(tokens, pos + 1, span),
-    THandle      => parse_handle(tokens, pos + 1, span),
+    THandle      =>
+      // SYNTAX.md:69 — `handle` is a canonical parameter name; THandle
+      // is a contextual keyword. handle-expr is ALWAYS `handle {` (block
+      // body); a bare `handle` in expression/argument position is the
+      // ident. Discriminate by TLBrace lookahead — exactly the seed
+      // arbiter's rule ($ident_at_p + parser_expr.wat:254-269). Two-arm
+      // structural disambiguation, not multi-arm form-classification.
+      if at(tokens, skip_ws(tokens, pos + 1), TLBrace) {
+        parse_handle(tokens, pos + 1, span)
+      } else {
+        (nexpr(VarRef("handle"), span), pos + 1)
+      },
     TPerform     => parse_perform(tokens, pos + 1, span),
     TResume      => parse_resume(tokens, pos + 1, span),
     TPipe        => {

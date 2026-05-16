@@ -412,6 +412,22 @@ fn is_param_name_tok(ref tokens, p) = match kind_at(tokens, p) {
   _         => false
 }
 
+/// Lexeme of an ident-shaped token: TIdent payload, or the contextual
+/// keyword's spelling (own/ref/handle). The canonical contextual-ident
+/// LEXEME projection (paired with is_param_name_tok, the Bool gate) —
+/// mirrors seed $ident_at_p (TIdent payload; THandle→"handle",
+/// TOwn→"own", TRef→"ref"). "" = not an ident-shaped token (seed-
+/// canonical null; surfaces downstream, not a masked ADT). Used for
+/// record-field names: SYNTAX.md §572 admits keyword-named fields
+/// (s.handle, e.with, r.ref) — record construction is symmetric.
+fn ident_or_kw_at(ref tokens, p) = match kind_at(tokens, p) {
+  TIdent(s) => s,
+  TOwn      => "own",
+  TRef      => "ref",
+  THandle   => "handle",
+  _         => ""
+}
+
 /// Does a real param start at p? TIdent → yes. `own`/`ref` → yes ONLY
 /// when a param name follows (`own x`); a bare `own`/`ref` (next is
 /// `)`/`,`/`:`/`with`) is NOT a param start — seed parity: seed
@@ -1440,17 +1456,22 @@ fn parse_list_elems(ref tokens, pos, own buf, count) = {
 /// the brace — no backtracking, no ambiguity that escapes the parser.
 fn parse_brace_expr(ref tokens, pos, start_span) = {
   let p = skip_ws(tokens, pos)
-  match kind_at(tokens, p) {
-    TIdent(_) => {
-      let p2 = skip_ws(tokens, p + 1)
-      match kind_at(tokens, p2) {
-        TColon  => parse_record_literal(tokens, pos, start_span),
-        TComma  => parse_record_literal(tokens, pos, start_span),
-        TRBrace => parse_record_literal(tokens, pos, start_span),
-        _       => parse_block_expr(tokens, pos, start_span)
-      }
-    },
-    _ => parse_block_expr(tokens, pos, start_span)
+  // A record literal opens with an ident-shaped field name (incl. the
+  // contextual keywords own/ref/handle — SYNTAX.md §572, #117 class)
+  // followed by `:` / `,` / `}`. Canonical projection is_param_name_tok
+  // (the Bool gate) extends the discrimination uniformly; otherwise a
+  // block. `{ handle: handle, ... }` was mis-read as a block → `:`
+  // unexpected.
+  if is_param_name_tok(tokens, p) {
+    let p2 = skip_ws(tokens, p + 1)
+    match kind_at(tokens, p2) {
+      TColon  => parse_record_literal(tokens, pos, start_span),
+      TComma  => parse_record_literal(tokens, pos, start_span),
+      TRBrace => parse_record_literal(tokens, pos, start_span),
+      _       => parse_block_expr(tokens, pos, start_span)
+    }
+  } else {
+    parse_block_expr(tokens, pos, start_span)
   }
 }
 
@@ -1468,7 +1489,9 @@ fn parse_record_fields(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) { (buf, count, p + 1) }
   else {
-    let name = ident_at(tokens, p)
+    // Contextual-keyword field names (handle/own/ref) resolve to their
+    // spelling — SYNTAX.md §572; canonical ident_or_kw_at projection.
+    let name = ident_or_kw_at(tokens, p)
     let name_span = span_at(tokens, p)
     let p1 = p + 1
     let p2 = skip_ws(tokens, p1)

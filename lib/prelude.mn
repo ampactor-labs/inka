@@ -53,8 +53,9 @@ fn iterate_from(xs, i, n) with Iterate =
 // vs the O(N²) concat-plus-element pattern (drift mode 11).
 //
 // Scalar-producing operations (fold, any, all, find, count, for_each)
-// already use inline handle form — scalar `acc = f(acc, elem)` is not
-// drift-11, no fusion needed.
+// use named handlers + ~> pipe — uniform with map/filter/take/drop.
+// Per Hβ.prelude-ultimate-form (2026-05-14): all iteration operations
+// use the canonical ~> pipe verb form per SYNTAX.md §1466-1468.
 
 handler map_collector(f) with buf = make_list(16), count = 0 {
   yield(elem) => {
@@ -121,49 +122,51 @@ fn filter(p, xs)  = { iterate(xs); result() } ~> filter_collector(p)
 fn take(xs, n)    = { iterate(xs); result() } ~> take_collector(n)
 fn drop(n, xs)    = { iterate(xs); result() } ~> drop_collector(n)
 
-// Scalar-producing operations — inline handle form; no drift-11
-// because `acc = f(acc, elem)` is scalar state update, not list append.
+// Scalar-producing operations — named handler + ~> pipe form.
+// Per Hβ.prelude-ultimate-form (2026-05-14): inline `handle { } { }`
+// was an imperative escape hatch that bypassed the handler-stack push
+// in $lower_handle / HandleExpr. Converting to named handlers + `~>`
+// pipe makes these uniform with map/filter/take/drop above, and the
+// `~>` PTee path already correctly pushes the handler stack. Zero
+// call-site changes — function signatures unchanged.
 
-fn fold(xs, init, f) = {
-  handle { iterate(xs); result() } with acc = init {
-    yield(elem) => resume() with acc = f(acc, elem),
-    result() => resume(acc)
-  }
+handler fold_handler(f, init) with acc = init {
+  yield(elem) => resume() with acc = f(acc, elem),
+  result() => resume(acc)
 }
 
-fn for_each(f, xs) = {
-  handle { iterate(xs) } {
-    yield(elem) => { f(elem); resume() }
-  }
+handler each_handler(f) {
+  yield(elem) => { f(elem); resume() }
 }
 
-fn any(pred, xs) = {
-  handle { iterate(xs); result() } with found = false {
-    yield(elem) => if pred(elem) { resume() with found = true } else { resume() },
-    result() => resume(found)
-  }
+handler any_handler(pred) with found = false {
+  yield(elem) => if pred(elem) { resume() with found = true } else { resume() },
+  result() => resume(found)
 }
 
-fn all(pred, xs) = {
-  handle { iterate(xs); result() } with ok = true {
-    yield(elem) => if pred(elem) { resume() } else { resume() with ok = false },
-    result() => resume(ok)
-  }
+handler all_handler(pred) with ok = true {
+  yield(elem) => if pred(elem) { resume() } else { resume() with ok = false },
+  result() => resume(ok)
 }
 
-fn find(pred, xs) = {
-  handle { iterate(xs); result() } with acc = [] {
-    yield(elem) => if pred(elem) { resume() with acc = [elem] } else { resume() },
-    result() => resume(acc)
-  }
+handler find_handler(pred) with acc = [] {
+  yield(elem) => if pred(elem) { resume() with acc = [elem] } else { resume() },
+  result() => resume(acc)
 }
 
-fn count(pred, xs) = {
-  handle { iterate(xs); result() } with n = 0 {
-    yield(elem) => if pred(elem) { resume() with n = n + 1 } else { resume() },
-    result() => resume(n)
-  }
+handler count_handler(pred) with n = 0 {
+  yield(elem) => if pred(elem) { resume() with n = n + 1 } else { resume() },
+  result() => resume(n)
 }
+
+// Scalar-producing operations — ~> pipe with named handlers.
+
+fn fold(xs, init, f) = { iterate(xs); result() } ~> fold_handler(f, init)
+fn for_each(f, xs)   = { iterate(xs) } ~> each_handler(f)
+fn any(pred, xs)     = { iterate(xs); result() } ~> any_handler(pred)
+fn all(pred, xs)     = { iterate(xs); result() } ~> all_handler(pred)
+fn find(pred, xs)    = { iterate(xs); result() } ~> find_handler(pred)
+fn count(pred, xs)   = { iterate(xs); result() } ~> count_handler(pred)
 
 // ─── Derived (built on the handlers above) ──────────────────
 

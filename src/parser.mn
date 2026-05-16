@@ -720,9 +720,14 @@ fn parse_effect_ops(ref tokens, pos) = {
 /// this stays SYNTAX.md-aligned.
 fn parse_op_param_one(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
-  // peek `<ident> :` — if present, skip the name + colon and parse the type.
+  // peek `<ident> :` — if present, skip the name + colon and parse the
+  // type. is_param_name_tok is the canonical pure-structural projection
+  // (TIdent + contextual kw); it replaces `ident_at(tokens, p).len > 0`
+  // — `.len`-on-a-call-result mis-evaluates in compiled mentl2 (the
+  // same construct behind the #154 O2 regression; broader audit is the
+  // named peer Hβ.parser.len-on-call-result-miscompile-audit).
   let after_ws = skip_ws(tokens, p + 1)
-  let is_ident_here = ident_at(tokens, p).len > 0
+  let is_ident_here = is_param_name_tok(tokens, p)
   let typed_form = is_ident_here && at(tokens, after_ws, TColon)
   if typed_form {
     parse_type_ty(tokens, skip_ws(tokens, after_ws + 1))

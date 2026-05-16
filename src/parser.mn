@@ -449,6 +449,17 @@ fn skip_to_rparen(ref tokens, p) =
   else if at(tokens, p, TEof) { p }
   else { skip_to_rparen(tokens, p + 1) }
 
+/// Advance to (not past) the next TLBrace. For handler `with !E` /
+/// `with E [+ E]` effect-row guards, which the seed skips to the arms
+/// block. Structural effect-row extraction is the seed's own named
+/// post-L1 peer Hβ.parser-handler-effect-row-record; effects are
+/// WAT-invisible so skip-vs-parse is byte-equivalent at L1. TEof-
+/// bounded, mirrors skip_to_rparen.
+fn skip_to_lbrace(ref tokens, p) =
+  if at(tokens, p, TLBrace) { p }
+  else if at(tokens, p, TEof) { p }
+  else { skip_to_lbrace(tokens, p + 1) }
+
 fn parse_fn_params(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { ([], p + 1) }
@@ -761,10 +772,28 @@ fn parse_handler_decl(ref tokens, pos) = {
   let (config, p_after_config) = if at(tokens, p_after_name, TLParen) {
     parse_arg_names(tokens, skip_ws(tokens, p_after_name + 1))
   } else { ([], p_after_name) }
-  // Optional `with field = init [, field = init]*` — state-fields.
-  let (state, p_after_state) = if at(tokens, skip_ws(tokens, p_after_config), TWith) {
-    parse_handler_state_fields(tokens, skip_ws(tokens, p_after_config + 1))
-  } else { ([], p_after_config) }
+  // Optional `with` clause. Seed parser_handler.wat $parse_handler_state
+  // disambiguation:
+  //   with !E              — effect-row guard (SYNTAX.md §904-912)
+  //   with E [+ E]         — effect-row (IDENT not followed by `=`)
+  //   with f = init [, ..] — state-init
+  // Effect-row → skip to the arms `{`, empty state. Structural row
+  // extraction is the seed's OWN named post-L1 peer
+  // Hβ.parser-handler-effect-row-record (effects are WAT-invisible;
+  // skip == parse at L1 byte-faithfulness — not drift 9).
+  let (state, p_after_state) =
+    if at(tokens, skip_ws(tokens, p_after_config), TWith) {
+      let p_w = skip_ws(tokens, p_after_config)
+      let p_with = skip_ws(tokens, p_w + 1)
+      if at(tokens, p_with, TBang) {
+        ([], skip_to_lbrace(tokens, p_with))
+      } else if is_param_name_tok(tokens, p_with) &&
+                !at(tokens, skip_ws(tokens, p_with + 1), TEq) {
+        ([], skip_to_lbrace(tokens, p_with))
+      } else {
+        parse_handler_state_fields(tokens, p_with)
+      }
+    } else { ([], p_after_config) }
   let p_open = expect(tokens, skip_ws(tokens, p_after_state), TLBrace)
   let (arms, p_close) = parse_handler_arms(tokens, skip_ws(tokens, p_open))
   (nstmt(HandlerDeclStmt(name, "", config, state, arms), start), p_close)

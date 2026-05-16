@@ -718,6 +718,40 @@ fn parse_handler_state_fields(ref tokens, pos) = {
   }
 }
 
+/// Parse `field = init [, field = init]*` for a `resume(v) with ...`
+/// clause. Distinct terminator from parse_handler_state_fields: a comma
+/// is a field separator ONLY when followed by `IDENT =`. A comma
+/// followed by anything else is the match-arm separator (consumed by
+/// parse_handler_arms via skip_sep), so the list ends BEFORE it.
+/// Canonical predicate mirrors seed bootstrap/src/parser_compound.wat
+/// $parse_resume_state_updates — the arbiter, since pass-2 proves it.
+/// Same {name, init} record shape as parse_handler_state_fields (drift
+/// 7 refused); a separate fn, not a context flag (drift 8 refused —
+/// mirrors the seed's $parse_handler_state / $parse_resume_state_updates
+/// two-function split).
+fn parse_resume_state_updates(ref tokens, pos) = {
+  let name = ident_at(tokens, pos)
+  let p_eq = expect(tokens, skip_ws(tokens, pos + 1), TEq)
+  let (init, p_after_init) = parse_expr(tokens, skip_ws(tokens, p_eq))
+  let field = {name: name, init: init}
+  let p_next = skip_ws(tokens, p_after_init)
+  if at(tokens, p_next, TComma) {
+    let p_la = skip_ws(tokens, p_next + 1)
+    match kind_at(tokens, p_la) {
+      TIdent(_) =>
+        if at(tokens, skip_ws(tokens, p_la + 1), TEq) {
+          let (rest, p_end) = parse_resume_state_updates(tokens, p_la)
+          ([field] ++ rest, p_end)
+        } else {
+          ([field], p_next)
+        },
+      _ => ([field], p_next)
+    }
+  } else {
+    ([field], p_next)
+  }
+}
+
 fn parse_handler_arms(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) { ([], p + 1) }
@@ -727,8 +761,15 @@ fn parse_handler_arms(ref tokens, pos) = {
     let (args, p3) = parse_arg_names(tokens, skip_ws(tokens, p2))
     let p4 = expect(tokens, skip_ws(tokens, p3), TFatArrow)
     let (body, p5) = parse_expr(tokens, skip_ws(tokens, p4))
-    let p6 = skip_sep(tokens, p5)
-    let (rest, p7) = parse_handler_arms(tokens, p6)
+    // Arm separator IS the match-arm separator — handler arms mirror
+    // parse_match_arms (seed parser_handler.wat $parse_handler_arms
+    // asserts this mirror). Optional `,` between arms (SYNTAX.md:862
+    // shows trailing-comma form); skip_ws absorbs newline-separated
+    // arms. Converges the prior skip_sep divergence to the canonical
+    // sibling idiom.
+    let p5b = skip_ws(tokens, p5)
+    let p6 = if at(tokens, p5b, TComma) { p5b + 1 } else { p5b }
+    let (rest, p7) = parse_handler_arms(tokens, skip_ws(tokens, p6))
     // Per Ω.5 frame-record discipline + H1.4 future wiring,
     // arms are records keyed by field name. New fields (e.g.,
     // arm_fn_idx for handler arm fn indexing) land additively.
@@ -1525,7 +1566,20 @@ fn parse_perform(ref tokens, pos, span: ValidSpan) = {
 
 fn parse_resume(ref tokens, pos, span: ValidSpan) = {
   let p = expect(tokens, skip_ws(tokens, pos), TLParen)
-  let (val, p2) = parse_expr(tokens, skip_ws(tokens, p))
+  // SYNTAX.md:766-777 — for ops returning `()`, `resume()` is the
+  // canonical form (No-Redundant-Form + Parameters-ARE-Tuples). When
+  // `(` is immediately followed by `)`, the resumed value is unit.
+  // Synthetic LitUnit at the resume span mirrors the implicit-else
+  // LitUnit synthesis (parser.mn IfExpr arm). Two-arm structural
+  // disambiguation (TRParen-immediate vs expr) — not multi-arm
+  // form-classification, so not parser-eager-form drift.
+  let p_arg = skip_ws(tokens, p)
+  let (val, p2) =
+    if at(tokens, p_arg, TRParen) {
+      (nexpr(LitUnit, span), p_arg)
+    } else {
+      parse_expr(tokens, p_arg)
+    }
   let p3 = expect(tokens, skip_ws(tokens, p2), TRParen)
   // Hβ.first-light.resume-with-state-mutation: `resume(val) with field =
   // expr [, field = expr]*` captures state_updates as list of
@@ -1534,7 +1588,7 @@ fn parse_resume(ref tokens, pos, span: ValidSpan) = {
   // the LReturn, so handler state actually mutates across resume calls.
   let p_with = skip_ws(tokens, p3)
   let (state_updates, p4) = if at(tokens, p_with, TWith) {
-    parse_handler_state_fields(tokens, skip_ws(tokens, p_with + 1))
+    parse_resume_state_updates(tokens, skip_ws(tokens, p_with + 1))
   } else { ([], p3) }
   (nexpr(ResumeExpr(val, state_updates), span), p4)
 }

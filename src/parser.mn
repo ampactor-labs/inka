@@ -885,7 +885,13 @@ fn binop_loop(ref tokens, left, pos, min_prec) = {
   if prec >= min_prec && prec > 0 {
     let op_span = span_at(tokens, p)
     check_pcompose_layout(tokens, p, op_span, saw_newline, k)
-    let (right, p2) = parse_binop(tokens, p + 1, prec + 1)
+    // Per Hβ.parser.binop-skip-ws-after-op (seed parser_expr.wat:41-45):
+    // skip TNewlines AFTER the operator before the right operand.
+    // `a == b() &&\n  c` had the right-recursion start at p+1 (the
+    // trailing newline) → parse_primary truncates the chain. Newlines
+    // between a binop and its operand are transparent (SYNTAX.md —
+    // newlines aren't binop terminators).
+    let (right, p2) = parse_binop(tokens, skip_ws(tokens, p + 1), prec + 1)
     check_pcompose_branches(left, right, op_span, k)
     let N(_, left_span, _) = left
     let combined_span = span_join(left_span, op_span)

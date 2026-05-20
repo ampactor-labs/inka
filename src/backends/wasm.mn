@@ -1181,10 +1181,25 @@ fn emit_let_locals_pat(pat) = match pat {
   },
   LPCon(_, _, sub_pats) => emit_let_locals_pat_list(sub_pats),
   LPTuple(sub_pats)     => emit_let_locals_pat_list(sub_pats),
-  LPList(sub_pats)      => emit_let_locals_pat_list(sub_pats),
+  LPList(sub_pats, rest) => {
+    emit_let_locals_pat_list(sub_pats)
+    emit_let_locals_pat_rest(rest)
+  },
   LPRecord(field_binds) => emit_let_locals_pat_record(field_binds),
   LPWild                => (),
   LPLit(_)              => ()
+}
+
+fn emit_let_locals_pat_rest(rest) = match rest {
+  None => (),
+  Some(name) => {
+    if str_eq(name, "_") { () }
+    else {
+      perform wat_emit(" (local $")
+      perform wat_emit(name)
+      perform wat_emit(" i32)")
+    }
+  }
 }
 
 fn emit_let_locals_pat_record(field_binds) = for_each((fb) => {
@@ -2206,7 +2221,7 @@ fn emit_match_arms_uniform(arms, shape) = {
         emit_expr(body)
       },
       LPTuple(_) => emit_match_arms_uniform(rest, shape),
-      LPList(_)  => emit_match_arms_uniform(rest, shape)
+      LPList(_, _) => emit_match_arms_uniform(rest, shape)
     }
   }
 }
@@ -2282,7 +2297,7 @@ fn emit_record_field_binds(binds) = for_each((bind) => {
     LPLit(_)   => (),
     LPCon(_, _, _) => (),
     LPTuple(_) => (),
-    LPList(_)  => (),
+    LPList(_, _) => (),
     LPRecord(_) => ()       // nested record destructure — peer follow-up
   }
 }, binds)
@@ -2331,7 +2346,7 @@ fn emit_pat_field_binds_path(sub_pats, i, path, path_len) = {
         emit_pat_field_binds_path(sub, 0, extended, path_len + 1)
       },
       LPTuple(_) => (),
-      LPList(_)  => (),
+      LPList(_, _) => (),
       LPRecord(_) => ()
     }
     emit_pat_field_binds_path(list_tail(sub_pats), i + 1, path, path_len)

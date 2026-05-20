@@ -901,6 +901,7 @@
     (local $tparam i32) (local $tp_ty i32)
     (local $lit_val i32) (local $lit_tag i32)
     (local $elems i32) (local $n_elems i32) (local $elem_h i32)
+    (local $rest_opt i32) (local $rest_name i32)
     ;; PWild sentinel (131) — no binding, no unification.
     (if (i32.eq (local.get $pat) (i32.const 131))
       (then (return)))
@@ -1073,6 +1074,7 @@
     (if (i32.eq (local.get $tag) (i32.const 135))
       (then
         (local.set $elems (i32.load offset=4 (local.get $pat)))
+        (local.set $rest_opt (i32.load offset=8 (local.get $pat)))
         (local.set $n_elems (call $len (local.get $elems)))
         (local.set $elem_h (call $graph_fresh_ty
           (call $reason_make_inferred (i32.const 4032))))
@@ -1093,6 +1095,27 @@
             (call $ty_make_tvar (local.get $elem_h)))
           (call $reason_make_located (local.get $span)
             (call $reason_make_inferred (i32.const 4032))))
+        (if (i32.and
+              (i32.ge_u (local.get $rest_opt) (global.get $heap_base))
+              (i32.eq (call $tag_of (local.get $rest_opt)) (i32.const 1)))
+          (then
+            (local.set $rest_name (i32.load offset=4 (local.get $rest_opt)))
+            (if (i32.or
+                  (i32.ne (call $str_len (local.get $rest_name)) (i32.const 1))
+                  (i32.ne (call $byte_at (local.get $rest_name) (i32.const 0)) (i32.const 95)))
+              (then
+                (local.set $reason (call $reason_make_located
+                  (local.get $span)
+                  (call $reason_make_letbinding (local.get $rest_name)
+                    (call $reason_make_inferred (i32.const 4032)))))
+                (call $env_extend
+                  (local.get $rest_name)
+                  (call $scheme_make_forall
+                    (call $make_list (i32.const 0))
+                    (call $ty_make_tlist
+                      (call $ty_make_tvar (local.get $elem_h))))
+                  (local.get $reason)
+                  (call $schemekind_make_fn))))))
         (call $unify (local.get $result_h) (local.get $scrut_h)
           (local.get $span)
           (call $reason_make_located (local.get $span)

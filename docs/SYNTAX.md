@@ -1016,7 +1016,7 @@ Patterns appear in `let`, `match`, function parameters, and lambda parameters.
 | `PLit`              | `42`, `"hello"`, `true`, `()`     | matches literal    |
 | `PCon`              | `Some(v)`, `Branch(l, x, r)`      | binds inner pats   |
 | `PTuple`            | `(a, b, c)`                       | positional binds   |
-| `PList`             | `[a, b, c]`, `[head, ...rest]`    | positional + rest  |
+| `PList(prefix, rest)` | `[a, b, c]`, `[head, ...rest]`, `[_, ..._]` | positional prefix + optional rest |
 | `PRecord`           | `{name, age}`, `{name: n, ...r}`  | field punning + rest |
 | `PAlt`              | `pat_1 \| pat_2 \| ...`            | matches if any branch matches; no variable bindings inside alternatives |
 | `PAs`               | `name @ pat`                      | binds `name` to whole value AND destructures via `pat` |
@@ -1034,6 +1034,7 @@ match list {
   []                 => "empty",
   [single]           => "one element: " ++ show(single),
   [head, ...rest]    => "head + " ++ int_to_str(len(rest)),
+  [_, ..._]          => "non-empty",
 }
 
 match user {
@@ -1059,6 +1060,11 @@ let (x, y) = point
 let {name, age} = user
 let [first, second, ...rest] = items
 ```
+
+List rest uses the same `...rest` surface as record rest. `rest` is
+optional in the AST; no rest means exact-length match, while `..._`
+accepts any remaining tail without binding it. `|` remains pattern
+alternation / type-variant separation and is never list-cons syntax.
 
 ### Exhaustiveness
 

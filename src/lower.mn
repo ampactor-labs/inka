@@ -248,7 +248,7 @@ type LowPat
   | LPCon(String, TagId, List)       // name, tag_id (from ConstructorScheme), sub-pats
   | LPTuple(List)
   | LPLit(LowValue)
-  | LPList(List)                     // list pattern — runtime-tag dispatch (runtime/lists.mn)
+  | LPList(List, Option)             // prefix pats, optional rest name
   | LPRecord(List)                   // [(field_name: String, offset_bytes: Int, sub_pat: LowPat)]
 
 /// Extract the source TypeHandle from any `LowExpr` variant.
@@ -531,8 +531,8 @@ fn effect_slot_in_row(op_name) = {
 }
 
 /// Compute the evidence slot index by walking declared effects,
-/// expanding each into its ops (via EffectDeclKind), and counting
-/// until we hit the target op_name.
+/// expanding each into its ops (via EffectDeclKind), stopping at the
+/// target op_name.
 fn compute_slot_index(declared, target_eff, target_op) = {
   compute_slot_loop(declared, target_eff, target_op, 0, 0)
 }
@@ -1262,10 +1262,24 @@ fn bind_pat_locals(pat) = match pat {
   },
   PCon(_, sub_pats) => bind_pat_locals_list(sub_pats),
   PTuple(sub_pats)  => bind_pat_locals_list(sub_pats),
-  PList(sub_pats)   => bind_pat_locals_list(sub_pats),
+  PList(sub_pats, rest) => {
+    bind_pat_locals_list(sub_pats)
+    bind_pat_rest(rest)
+  },
   PRecord(flds)     => bind_pat_locals_fields(flds),
   PWild             => (),
   PLit(_)           => ()
+}
+
+fn bind_pat_rest(rest) = match rest {
+  None => (),
+  Some(name) => {
+    if str_eq(name, "_") { () }
+    else {
+      perform ls_bind_local(name, 0)
+      ()
+    }
+  }
 }
 
 fn bind_pat_locals_fields(flds) = for_each((fld) => {
@@ -1291,7 +1305,7 @@ fn lower_pat(pat) = match pat {
     LPCon(name, tag, lower_pats(sub))
   },
   PTuple(sub)      => LPTuple(lower_pats(sub)),
-  PList(sub)       => LPList(lower_pats(sub)),
+  PList(sub, rest) => LPList(lower_pats(sub), rest),
   PRecord(flds)    => LPRecord(lower_pat_record_fields(flds, 0))
 }
 
@@ -1674,10 +1688,16 @@ fn cfv_pat_binds(pat) = match pat {
   PVar(name)         => [name],
   PCon(_, sub_pats)  => cfv_pat_binds_list(sub_pats),
   PTuple(sub_pats)   => cfv_pat_binds_list(sub_pats),
-  PList(sub_pats)    => cfv_pat_binds_list(sub_pats),
+  PList(sub_pats, rest) =>
+    cfv_merge(cfv_pat_binds_list(sub_pats), cfv_pat_rest_binds(rest)),
   PRecord(flds)      => cfv_pat_binds_fields(flds),
   PWild              => [],
   PLit(_)            => []
+}
+
+fn cfv_pat_rest_binds(rest) = match rest {
+  None => [],
+  Some(name) => if str_eq(name, "_") { [] } else { [name] }
 }
 
 /// Extract binder names from record-pattern fields `[(name, Pat)]`.

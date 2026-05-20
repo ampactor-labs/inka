@@ -582,7 +582,7 @@ fn sort_by_score_desc(scored) with Pure = {
 
 fn insert_descending(item, sorted) with Pure = match sorted {
   []            => [item],
-  [head | rest] => {
+  [head, ...rest] => {
     let Cursor(_, _, item_score) = item
     let Cursor(_, _, head_score) = head
     if item_score >= head_score { [item, head] ++ rest }

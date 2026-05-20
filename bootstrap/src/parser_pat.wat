@@ -7,7 +7,7 @@
   ;;   PLit(lit_val)       → [tag=132][lit_val]
   ;;   PCon(ctor, sub)     → [tag=133][ctor_name][sub_pats_list]
   ;;   PTuple(sub)         → [tag=134][sub_pats_list]
-  ;;   PList(sub)          → [tag=135][sub_pats_list]
+  ;;   PList(sub, rest)    → [tag=135][sub_pats_list][rest_option]
   ;;   PRecord(fields)     → [tag=136][fields_list]
   ;;
   ;; LitVal ADT:
@@ -28,7 +28,7 @@
   ;;   TTrue               → PLit(LVBool(true))
   ;;   TFalse              → PLit(LVBool(false))
   ;;   TLParen             → PTuple(sub_pats)
-  ;;   TLBracket           → PList(sub_pats)
+  ;;   TLBracket           → PList(sub_pats, rest_option)
   ;;   TLBrace             → PRecord(fields)
   ;;   _                   → PWild (error recovery)
 
@@ -83,10 +83,18 @@
     (i32.store offset=4 (local.get $p) (local.get $subs))
     (local.get $p))
 
-  (func $mk_PList (param $subs i32) (result i32)
-    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+  (func $mk_PList (param $subs i32) (param $rest i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 12)))
     (i32.store (local.get $p) (i32.const 135))
     (i32.store offset=4 (local.get $p) (local.get $subs))
+    (i32.store offset=8 (local.get $p) (local.get $rest))
+    (local.get $p))
+
+  ;; Option.Some(value) for PList rest names. None is nullary tag 0.
+  (func $mk_pat_Some (param $value i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 1))
+    (i32.store offset=4 (local.get $p) (local.get $value))
     (local.get $p))
 
   ;; first_char_code: get first byte of a string (0 if empty)
@@ -145,7 +153,7 @@
               (call $list_index (local.get $subs_r) (i32.const 1))))
             (return (local.get $tup))))
 
-        ;; TLBracket (49) → PList(sub_pats)
+        ;; TLBracket (49) → PList(sub_pats, rest_option)
         (if (i32.eq (local.get $k) (i32.const 49))
           (then
             (local.set $subs_r (call $parse_pat_list_args
@@ -153,9 +161,11 @@
               (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))))
             (local.set $tup (call $make_list (i32.const 2)))
             (drop (call $list_set (local.get $tup) (i32.const 0)
-              (call $mk_PList (call $list_index (local.get $subs_r) (i32.const 0)))))
+              (call $mk_PList
+                (call $list_index (local.get $subs_r) (i32.const 0))
+                (call $list_index (local.get $subs_r) (i32.const 1)))))
             (drop (call $list_set (local.get $tup) (i32.const 1)
-              (call $list_index (local.get $subs_r) (i32.const 1))))
+              (call $list_index (local.get $subs_r) (i32.const 2))))
             (return (local.get $tup))))
 
         ;; THandle (sentinel kind 7) — `handle` is a keyword in expression
@@ -316,24 +326,64 @@
     (local.get $tup))
 
   ;; ─── parse_pat_list_args: patterns until RBracket ─────────────────
+  ;; Returns [prefix_pats, rest_option, next_pos]. `...rest` is three
+  ;; TDot tokens followed by an ident; `..._` records anonymous rest.
 
   (func $parse_pat_list_args (param $tokens i32) (param $pos i32) (result i32)
     (local $p i32) (local $buf i32) (local $count i32)
     (local $result i32) (local $pat i32) (local $p2 i32) (local $p3 i32)
-    (local $tup i32)
+    (local $tup i32) (local $rest_name i32) (local $name_pos i32)
+    (local $rest_opt i32)
     (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
     (if (call $at (local.get $tokens) (local.get $p) (i32.const 50)) ;; TRBracket
       (then
-        (local.set $tup (call $make_list (i32.const 2)))
+        (local.set $tup (call $make_list (i32.const 3)))
         (drop (call $list_set (local.get $tup) (i32.const 0)
           (call $make_list (i32.const 0))))
         (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.const 0))) ;; None
+        (drop (call $list_set (local.get $tup) (i32.const 2)
           (i32.add (local.get $p) (i32.const 1))))
+        (return (local.get $tup))))
+    ;; `...rest` / `..._`
+    (if (i32.and
+          (i32.and
+            (call $at (local.get $tokens) (local.get $p) (i32.const 52))       ;; TDot
+            (call $at (local.get $tokens) (i32.add (local.get $p) (i32.const 1)) (i32.const 52)))
+          (call $at (local.get $tokens) (i32.add (local.get $p) (i32.const 2)) (i32.const 52)))
+      (then
+        (local.set $name_pos
+          (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p) (i32.const 3))))
+        (local.set $rest_name (call $ident_at_p (local.get $tokens) (local.get $name_pos)))
+        (local.set $p3 (call $skip_ws_p (local.get $tokens)
+          (i32.add (local.get $name_pos) (i32.const 1))))
+        (local.set $tup (call $make_list (i32.const 3)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $make_list (i32.const 0))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (call $mk_pat_Some (local.get $rest_name))))
+        (drop (call $list_set (local.get $tup) (i32.const 2)
+          (call $expect (local.get $tokens) (local.get $p3) (i32.const 50))))
         (return (local.get $tup))))
     (local.set $buf (call $make_list (i32.const 4)))
     (local.set $count (i32.const 0))
+    (local.set $rest_opt (i32.const 0))
     (block $done
       (loop $args
+        (if (i32.and
+              (i32.and
+                (call $at (local.get $tokens) (local.get $p) (i32.const 52))
+                (call $at (local.get $tokens) (i32.add (local.get $p) (i32.const 1)) (i32.const 52)))
+              (call $at (local.get $tokens) (i32.add (local.get $p) (i32.const 2)) (i32.const 52)))
+          (then
+            (local.set $name_pos
+              (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p) (i32.const 3))))
+            (local.set $rest_name (call $ident_at_p (local.get $tokens) (local.get $name_pos)))
+            (local.set $rest_opt (call $mk_pat_Some (local.get $rest_name)))
+            (local.set $p3 (call $skip_ws_p (local.get $tokens)
+              (i32.add (local.get $name_pos) (i32.const 1))))
+            (local.set $p (call $expect (local.get $tokens) (local.get $p3) (i32.const 50)))
+            (br $done)))
         (local.set $result (call $parse_pat (local.get $tokens) (local.get $p)))
         (local.set $pat (call $list_index (local.get $result) (i32.const 0)))
         (local.set $p2 (call $list_index (local.get $result) (i32.const 1)))
@@ -350,10 +400,11 @@
           (else
             (local.set $p (call $expect (local.get $tokens) (local.get $p3) (i32.const 50)))
             (br $done)))))
-    (local.set $tup (call $make_list (i32.const 2)))
+    (local.set $tup (call $make_list (i32.const 3)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $slice (local.get $buf) (i32.const 0) (local.get $count))))
-    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $rest_opt)))
+    (drop (call $list_set (local.get $tup) (i32.const 2) (local.get $p)))
     (local.get $tup))
 
   ;; ─── parse_match_arms: pat => expr, ... until RBrace ──────────────

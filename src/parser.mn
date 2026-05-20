@@ -1424,25 +1424,27 @@ fn parse_string_interpolation(ref tokens, pos, first_chunk, start_span) = {
   // the new form lets infer narrow (Show-able splice check) and the
   // gradient teach constant-foldable splices at the cursor's read.
   //
-  // If the lexer emitted no TStringSplice after first_chunk, the
-  // interpolation degenerates to a bare LitString — preserve that
-  // form so non-interpolating strings stay maximally narrow.
-  if at(tokens, pos, TStringSplice) {
-    let first_node = nexpr(LitString(first_chunk), start_span)
+  // If the lexer emitted no TStringSplice after the literal prefix, the
+  // interpolation degenerates to a bare LitString. Adjacent TStringPart tokens
+  // are normal for doubled braces (`{{` / `}}`), so coalesce them before
+  // deciding whether the string is interpolating.
+  let (prefix, p0) = consume_string_parts(tokens, pos, first_chunk)
+  if at(tokens, p0, TStringSplice) {
+    let first_node = nexpr(LitString(prefix), start_span)
     let buf = make_list(4)
     let (b1, c1) = push_node(buf, 0, first_node)
     let (final_buf, final_count, final_pos) =
-      parse_string_interpolation_loop(tokens, pos, b1, c1, start_span)
+      parse_string_interpolation_loop(tokens, p0, b1, c1, start_span)
     (nexpr(MakeStringExpr(slice(final_buf, 0, final_count)), start_span), final_pos)
   } else {
-    (nexpr(LitString(first_chunk), start_span), pos)
+    (nexpr(LitString(prefix), start_span), p0)
   }
 }
 
 fn parse_string_interpolation_loop(ref tokens, pos, own buf, count, start_span) = {
   if at(tokens, pos, TStringSplice) {
     let (splice_expr, p2) = parse_expr(tokens, pos + 1)
-    let (next_chunk, p3) = consume_string_part(tokens, p2)
+    let (next_chunk, p3) = consume_string_parts(tokens, p2, "")
     let next_chunk_node = nexpr(LitString(next_chunk), start_span)
     let (b1, c1) = push_node(buf, count, splice_expr)
     let (b2, c2) = push_node(b1, c1, next_chunk_node)
@@ -1450,15 +1452,12 @@ fn parse_string_interpolation_loop(ref tokens, pos, own buf, count, start_span) 
   } else { (buf, count, pos) }
 }
 
-// After a TStringSplice's inner expression, the next token must be a
-// TStringPart (the trailing literal chunk — possibly empty when two splices
-// abut as `"{x}{y}"`). Returns (chunk, advanced_pos). On non-TStringPart
-// (lexer drift — should not occur per Amendment C+G invariants) returns the
-// empty string + unchanged pos, surfacing as a downstream parse error rather
-// than fabricating an AST.
-fn consume_string_part(ref tokens, pos) = match kind_at(tokens, pos) {
-  TStringPart(s) => (s, pos + 1),
-  _              => ("", pos)
+// After a TStringSplice's inner expression, the next token must be one or more
+// TStringPart chunks. More than one chunk is normal when doubled braces split
+// the literal run. Returns (coalesced_chunk, advanced_pos).
+fn consume_string_parts(ref tokens, pos, acc) = match kind_at(tokens, pos) {
+  TStringPart(s) => consume_string_parts(tokens, pos + 1, acc |> str_concat(s)),
+  _              => (acc, pos)
 }
 
 fn build_str_concat(a, b, span) = {
@@ -1928,8 +1927,8 @@ fn parse_pat(ref tokens, pos) = {
       (PTuple(sub), p)
     },
     TLBracket  => {
-      let (sub, p) = parse_pat_list_args(tokens, skip_ws(tokens, pos + 1))
-      (PList(sub), p)
+      let (sub, rest, p) = parse_pat_list_args(tokens, skip_ws(tokens, pos + 1))
+      (PList(sub, rest), p)
     },
     TLBrace    => {
       let (flds, p) = parse_pat_record_fields(tokens, skip_ws(tokens, pos + 1))
@@ -1985,18 +1984,29 @@ fn parse_pat_args(ref tokens, pos) = {
 
 fn parse_pat_list_args(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
-  if at(tokens, p, TRBracket) { ([], p + 1) }
+  if at(tokens, p, TRBracket) { ([], None, p + 1) }
+  else if at_ellipsis(tokens, p) {
+    let name_pos = skip_ws(tokens, p + 3)
+    let rest_name = ident_at(tokens, name_pos)
+    let p_after_name = skip_ws(tokens, name_pos + 1)
+    ([], Some(rest_name), expect(tokens, p_after_name, TRBracket))
+  }
   else {
     let (pat, p2) = parse_pat(tokens, p)
     let p3 = skip_ws(tokens, p2)
     if at(tokens, p3, TComma) {
-      let (rest, p4) = parse_pat_list_args(tokens, skip_ws(tokens, p3 + 1))
-      ([pat] ++ rest, p4)
+      let (rest_pats, rest_name, p4) = parse_pat_list_args(tokens, skip_ws(tokens, p3 + 1))
+      ([pat] ++ rest_pats, rest_name, p4)
     } else {
-      ([pat], expect(tokens, p3, TRBracket))
+      ([pat], None, expect(tokens, p3, TRBracket))
     }
   }
 }
+
+fn at_ellipsis(ref tokens, pos) =
+  at(tokens, pos, TDot) &&
+  at(tokens, pos + 1, TDot) &&
+  at(tokens, pos + 2, TDot)
 
 // Per Hβ.first-light.first-char-code-via-byte-at: chars/char_code aren't
 // defined in the wheel runtime; byte_at is the substrate-honest primitive.

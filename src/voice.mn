@@ -426,7 +426,7 @@ fn silence_predicate(situation) with OracleQuery = {
   let queue = perform query_project_queue()
   match queue {
     []        => true,    // gradient at top — full silence
-    [_ | _]   => false    // queue has items — Mentl surfaces something
+    [_, ..._] => false    // queue has items — Mentl surfaces something
   }
 }
 
@@ -1920,4 +1920,3 @@ fn path_to_module_name(ref s) with Memory + Alloc = {
     str_slice(stripped_prefix, 0, byte_len(stripped_prefix) - 3)
   } else { stripped_prefix }
 }
-

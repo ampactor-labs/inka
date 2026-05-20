@@ -239,9 +239,9 @@ fn render_compose_chain(left, right) with Format + !Mutate = {
 // Block form: ~> on its own line at left-edge indent. Newline before
 // is the disambiguator from the inline form per SYNTAX.md §469.
 
-fn render_tee_block(body, handler) with Format + !Mutate = {
+fn render_tee_block(body, handler_expr) with Format + !Mutate = {
   let body_str = perform format_chain(body)
-  let handler_str = perform format_chain(handler)
+  let handler_str = perform format_chain(handler_expr)
   body_str
     |> str_concat("\n")
     |> str_concat(spaces(left_edge_indent()))
@@ -254,7 +254,7 @@ fn render_tee_block(body, handler) with Format + !Mutate = {
 // Canonical per SYNTAX.md §461-467:
 //
 //   raw_string
-//     |> parse_json ~> catch_parse_error(default = "{}")
+//     |> parse_json ~> catch_parse_error(default = "{{}}")
 //     |> validate ~> log_warnings
 //
 // Inline form: no newline before ~>. Wraps only the immediately
@@ -262,9 +262,9 @@ fn render_tee_block(body, handler) with Format + !Mutate = {
 // the only place in Mentl where whitespace is semantically load-bearing
 // per SYNTAX.md §469.
 
-fn render_tee_inline(stage, handler) with Format + !Mutate = {
+fn render_tee_inline(stage, handler_expr) with Format + !Mutate = {
   let stage_str = perform format_chain(stage)
-  let handler_str = perform format_chain(handler)
+  let handler_str = perform format_chain(handler_expr)
   stage_str
     |> str_concat(" ~> ")
     |> str_concat(handler_str)

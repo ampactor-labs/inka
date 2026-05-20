@@ -1751,10 +1751,7 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
 
   PTuple(pats) => infer_pat_tuple(pats, handle, span),
 
-  // H6: PList stub remains until list-pattern destructure lands (the
-  // runtime/lists tag dispatch surfaces during emit; inference treats
-  // the scrutinee as TList(elem) with each sub-pat against elem).
-  PList(_pats)   => (),
+  PList(pats, rest) => infer_pat_list(pats, rest, handle, span),
 
   PRecord(flds) => {
     // Bind scrutinee to TRecordOpen of the named fields with a
@@ -1792,6 +1789,25 @@ fn infer_pat_tuple(pats, parent_handle, span: ValidSpan) = {
     let sub_h = perform mint(Inferred("tuple pattern element"))
     infer_pat(p, sub_h, span)
   }, pats)
+}
+
+fn infer_pat_list(pats, rest, parent_handle, span: ValidSpan) = {
+  let elem_h = perform mint(Inferred("list pattern element"))
+  for_each((p) => infer_pat(p, elem_h, span), pats)
+  let list_ty = TList(TVar(elem_h))
+  perform graph_bind(parent_handle, list_ty,
+    Located(span, Inferred("list pattern")))
+  match rest {
+    None => (),
+    Some(name) => {
+      if str_eq(name, "_") { () }
+      else {
+        perform env_extend(name, Forall([], list_ty),
+          Located(span, LetBinding(name, Inferred("list rest pattern"))),
+          FnScheme)
+      }
+    }
+  }
 }
 
 // Bind each PCon sub-pattern to its corresponding constructor param

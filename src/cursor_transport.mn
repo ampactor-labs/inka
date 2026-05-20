@@ -521,7 +521,7 @@ type LspFrame
 
 // ─── Bridges (declared; bodies land in transport-specific peers) ────
 
-fn lsp_initialize_response() with Pure = LspFrame("initialize", "{}")
+fn lsp_initialize_response() with Pure = LspFrame("initialize", "{{}}")
 
 fn lsp_textDocument_publishDiagnostics(cursor, view) with Pure = {
   let CursorView(_, _, _, _, _, verify, _, _) = view

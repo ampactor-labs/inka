@@ -404,8 +404,8 @@ fn empty_queue() with Pure = OracleQueue([])
 
 fn filter_some(opts) with Pure = match opts {
   []                => [],
-  [None | t]        => filter_some(t),
-  [Some(x) | t]     => [x] ++ filter_some(t)
+  [None, ...t]      => filter_some(t),
+  [Some(x), ...t]   => [x] ++ filter_some(t)
 }
 
 /// speculate_handler — the Speculate effect's canonical handler.
@@ -440,7 +440,7 @@ fn silence_predicate_oracle(situation) with OracleQuery = {
   let queue = perform query_project_queue()
   match queue {
     []        => true,    // gradient at top — full silence
-    [_ | _]   => false    // queue has items — Mentl surfaces something
+    [_, ..._] => false    // queue has items — Mentl surfaces something
   }
 }
 

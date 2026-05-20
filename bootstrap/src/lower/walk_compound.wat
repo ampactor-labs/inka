@@ -506,7 +506,7 @@
 
   (func $lower_pat (param $pat i32) (param $scrut_h i32) (result i32)
     (local $tag i32) (local $lit i32) (local $lit_tag i32)
-    (local $name i32) (local $subs i32)
+    (local $name i32) (local $subs i32) (local $rest_opt i32) (local $rest_var i32)
     (local $binding i32) (local $kind i32) (local $ctor_tag_id i32)
     (if (i32.eq (local.get $pat) (i32.const 131))
       (then (return (call $lowpat_make_lpwild (local.get $scrut_h)))))
@@ -578,12 +578,24 @@
                     (local.get $scrut_h))))))
     (if (i32.eq (local.get $tag) (i32.const 135))
       (then
+        (local.set $rest_var (i32.const 0))
+        (local.set $rest_opt (i32.load offset=8 (local.get $pat)))
+        (if (i32.and
+              (i32.ge_u (local.get $rest_opt) (global.get $heap_base))
+              (i32.eq (call $tag_of (local.get $rest_opt)) (i32.const 1)))
+          (then
+            (local.set $rest_var (i32.load offset=4 (local.get $rest_opt)))
+            (if (i32.and
+                  (i32.eq (call $str_len (local.get $rest_var)) (i32.const 1))
+                  (i32.eq (call $byte_at (local.get $rest_var) (i32.const 0)) (i32.const 95)))
+              (then
+                (local.set $rest_var (i32.const 0))))))
         (return (call $lowpat_make_lplist
                   (local.get $scrut_h)
                   (call $lower_pats
                     (i32.load offset=4 (local.get $pat))
                     (local.get $scrut_h))
-                  (i32.const 0)))))
+                  (local.get $rest_var)))))
     (if (i32.eq (local.get $tag) (i32.const 136))
       (then
         (return (call $lowpat_make_lprecord

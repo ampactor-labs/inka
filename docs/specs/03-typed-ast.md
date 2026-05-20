@@ -109,7 +109,7 @@ type Pat
   | PLit(LitValue)
   | PCon(String, List)
   | PTuple(List)
-  | PList(List)
+  | PList(List, Option)          // prefix pats, optional `...rest` name
   | PRecord(List)               // (fieldname, Pat)
 ```
 

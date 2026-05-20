@@ -345,10 +345,11 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
         EfClosed(nb) =>
           if list_eq_str(na, nb) { () }
           else { report_effect_mismatch(a, b, span) },
-        EfOpen(nb, v) =>
+        EfOpen(nb, v) => {
           // Closed(A) ~ Open(B, v) → bind v to Closed(A - B)
           let residual = list_diff_str(na, nb) |> closed_or_pure
-          perform graph_bind_row(v, residual, Located(span, reason)),
+          perform graph_bind_row(v, residual, Located(span, reason))
+        },
         _ => unify_row_canonical(a, normalize_row(b), span, reason)
       },
     EfOpen(na, va) =>
@@ -359,10 +360,11 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
           } else {
             report_purity_mismatch(a, span)
           },
-        EfClosed(nb) =>
+        EfClosed(nb) => {
           // Open(A, v) ~ Closed(B) → bind v to Closed(B - A)
           let residual = list_diff_str(nb, na) |> closed_or_pure
-          perform graph_bind_row(va, residual, Located(span, reason)),
+          perform graph_bind_row(va, residual, Located(span, reason))
+        },
         EfOpen(nb, vb) =>
           if va == vb {
             if list_eq_str(na, nb) { () }

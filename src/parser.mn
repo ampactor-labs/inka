@@ -983,10 +983,11 @@ fn parse_let_expr(ref tokens, pos, start_span) = {
   // parse the body expression.
   let p6 = skip_sep(tokens, p5)
   let (body, p7) = parse_expr(tokens, p6)
-  // Desugar: wrap as BlockExpr([LetStmt(pat, val), ExprStmt(body)])
+  // Desugar: wrap as BlockExpr([LetStmt(pat, val)], body)
+  // BlockExpr takes (stmts, final_expr) — the let is a statement,
+  // body is the final expression value of the block.
   let let_stmt = nstmt(LetStmt(pat, val), start_span)
-  let body_stmt = nstmt(ExprStmt(body), start_span)
-  (nexpr(BlockExpr([let_stmt, body_stmt]), start_span), p7)
+  (nexpr(BlockExpr([let_stmt], body), start_span), p7)
 }
 
 fn parse_binop(ref tokens, pos, min_prec) = {

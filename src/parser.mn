@@ -156,7 +156,7 @@ fn show_token_kind(k) with Pure = match k {
   TTildeGt => "~>", TLtTilde => "<~",
   TAndAnd => "&&", TOrOr => "||", TColonColon => "::",
   TLParen => "(", TRParen => ")",
-  TLBrace => "{", TRBrace => "}",
+  TLBrace => "{{", TRBrace => "}}",
   TLBracket => "[", TRBracket => "]",
   TComma => ",", TDot => ".", TColon => ":", TSemicolon => ";",
   TPlus => "+", TMinus => "-", TStar => "*", TSlash => "/", TPercent => "%",
@@ -863,7 +863,16 @@ fn parse_resume_state_updates(ref tokens, pos) = {
 fn parse_handler_arms(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) { ([], p + 1) }
-  else {
+  else if at(tokens, p, TEof) { ([], p) }
+  else if !is_param_name_tok(tokens, p) {
+    // Non-ident at arm start (e.g., `///` doc-comment preceding the arm,
+    // or stray tokens). Seed parity: $parse_handler_arm returns null when
+    // $ident_at_p returns null → arm loop terminates. Doc-comment
+    // attachment inside handler blocks is a named post-L1 peer
+    // (Hβ.parser.handler-arm-doc-attachment); for now, skip the token
+    // and retry — same discipline as parse_effect_ops (line 693-700).
+    parse_handler_arms(tokens, skip_sep(tokens, p + 1))
+  } else {
     let op_name = ident_at(tokens, p)
     let p2 = expect(tokens, skip_ws(tokens, p + 1), TLParen)
     let (args, p3) = parse_arg_names(tokens, skip_ws(tokens, p2))
@@ -932,7 +941,52 @@ fn parse_import_path(ref tokens, pos, own acc) = {
 // Expressions — precedence-climbing
 
 fn parse_expr(ref tokens, pos) = {
-  parse_binop(tokens, pos, 1)
+  let p = skip_ws(tokens, pos)
+  let span = span_at(tokens, p)
+  // Let-expression at expression-top. Seed parity: the seed's parse_expr
+  // handles `let` as an expression form (let X = Y; Z or let X = Y\n Z).
+  // This enables braceless fn bodies with let-chains:
+  //   fn f(x) -> Int with Pure = let y = x; y
+  // The let-expression parses binding + continuation (after ; or newline).
+  if at(tokens, p, TLet) {
+    parse_let_expr(tokens, p + 1, span)
+  // Handle-expression dispatch at expression-top, NOT at operand level.
+  // Seed parity: $parse_handle_expr is called from parse_expr (before
+  // binop); $ident_at_p always maps THandle→"handle" (VarRef). Placing
+  // the dispatch here means `handle { body }` at expression start parses
+  // correctly, while `x == handle { ... }` treats `handle` as VarRef
+  // (the `{` belongs to the enclosing if-then block, not a handle body).
+  } else if at(tokens, p, THandle) && at(tokens, skip_ws(tokens, p + 1), TLBrace) {
+    parse_handle(tokens, p + 1, span)
+  } else {
+    parse_binop(tokens, p, 1)
+  }
+}
+
+// Let-expression in expression position. Desugars to BlockExpr:
+//   let PAT = VAL; BODY  →  BlockExpr([LetStmt(PAT, VAL), ExprStmt(BODY)])
+// This reuses the existing BlockExpr infrastructure (lowerer, inferrer,
+// emitter all handle it). Chained lets nest naturally:
+//   let a = 1; let b = 2; a + b
+//   → BlockExpr([LetStmt(a, 1), ExprStmt(BlockExpr([LetStmt(b, 2), ExprStmt(a+b)]))])
+// Seed parity: parser_expr.wat $parse_let_expr.
+fn parse_let_expr(ref tokens, pos, start_span) = {
+  let (pat, p) = parse_pat(tokens, pos)
+  let p2 = skip_ws(tokens, p)
+  let p3 = if at(tokens, p2, TColon) {
+    let (_, p_ty) = parse_type_ty(tokens, skip_ws(tokens, p2 + 1))
+    skip_ws(tokens, p_ty)
+  } else { p2 }
+  let p4 = expect(tokens, p3, TEq)
+  let (val, p5) = parse_expr(tokens, skip_ws(tokens, p4))
+  // Continuation: after the value, skip separator (; or newline) and
+  // parse the body expression.
+  let p6 = skip_sep(tokens, p5)
+  let (body, p7) = parse_expr(tokens, p6)
+  // Desugar: wrap as BlockExpr([LetStmt(pat, val), ExprStmt(body)])
+  let let_stmt = nstmt(LetStmt(pat, val), start_span)
+  let body_stmt = nstmt(ExprStmt(body), start_span)
+  (nexpr(BlockExpr([let_stmt, body_stmt]), start_span), p7)
 }
 
 fn parse_binop(ref tokens, pos, min_prec) = {
@@ -1225,17 +1279,13 @@ fn parse_primary(ref tokens, pos) = {
     TIf          => parse_if(tokens, pos + 1, span),
     TMatch       => parse_match(tokens, pos + 1, span),
     THandle      =>
-      // SYNTAX.md:69 — `handle` is a canonical parameter name; THandle
-      // is a contextual keyword. handle-expr is ALWAYS `handle {` (block
-      // body); a bare `handle` in expression/argument position is the
-      // ident. Discriminate by TLBrace lookahead — exactly the seed
-      // arbiter's rule ($ident_at_p + parser_expr.wat:254-269). Two-arm
-      // structural disambiguation, not multi-arm form-classification.
-      if at(tokens, skip_ws(tokens, pos + 1), TLBrace) {
-        parse_handle(tokens, pos + 1, span)
-      } else {
-        (nexpr(VarRef("handle"), span), pos + 1)
-      },
+      // Seed parity: $ident_at_p always maps THandle→"handle" (VarRef)
+      // at the operand level. Handle-expression dispatch lives at
+      // parse_expr (expression top), not here in parse_primary. This
+      // prevents `if x == handle { 1 }` from consuming the then-block
+      // as a handle body — the `{` is the if's then-block, not a
+      // handle-expr body.
+      (nexpr(VarRef("handle"), span), pos + 1),
     // `own`/`ref` are contextual keywords (ownership prefixes in
     // param position only); in expression position they are idents
     // (`match own { }`, `= ref`). Exact #117 THandle-arm clone; seed
@@ -1243,6 +1293,11 @@ fn parse_primary(ref tokens, pos) = {
     // `match own {}` as a VarRef scrutinee, verified empirically).
     TOwn         => (nexpr(VarRef("own"), span), pos + 1),
     TRef         => (nexpr(VarRef("ref"), span), pos + 1),
+    // `handler` is a contextual keyword (handler declarations in
+    // parse_stmt); in expression position it is an ident
+    // (`return handler`, `handler` as param name). Same treatment as
+    // THandle/TOwn/TRef — seed $ident_at_p maps THandler→"handler".
+    THandler     => (nexpr(VarRef("handler"), span), pos + 1),
     TPerform     => parse_perform(tokens, pos + 1, span),
     TResume      => parse_resume(tokens, pos + 1, span),
     TPipe        => {
@@ -1444,7 +1499,13 @@ fn parse_string_interpolation(ref tokens, pos, first_chunk, start_span) = {
 fn parse_string_interpolation_loop(ref tokens, pos, own buf, count, start_span) = {
   if at(tokens, pos, TStringSplice) {
     let (splice_expr, p2) = parse_expr(tokens, pos + 1)
-    let (next_chunk, p3) = consume_string_parts(tokens, p2, "")
+    // After the splice expression, the lexer emits TRBrace as the
+    // splice terminator (lexer.mn:230-235). Consume it before looking
+    // for the next TStringPart chunk. Seed parity: $parse_string_expr
+    // expects and skips the terminating `}` at offset+1 past the inner
+    // expression.
+    let p2b = if at(tokens, p2, TRBrace) { p2 + 1 } else { p2 }
+    let (next_chunk, p3) = consume_string_parts(tokens, p2b, "")
     let next_chunk_node = nexpr(LitString(next_chunk), start_span)
     let (b1, c1) = push_node(buf, count, splice_expr)
     let (b2, c2) = push_node(b1, c1, next_chunk_node)
@@ -1620,7 +1681,7 @@ fn parse_block_body(ref tokens, pos, own buf, count) = {
     // diagnostic, exhausting heap).
     let start = span_at(tokens, p)
     perform report("parser", "P_UnclosedConstruct", "ParseError",
-      "unexpected end of input inside block; expected `}` to close",
+      "unexpected end of input inside block; expected `}}` to close",
       start, "MaybeIncorrect")
     (buf, count, nexpr(LitUnit, start), p)
   } else {
@@ -1730,18 +1791,71 @@ fn parse_handle(ref tokens, pos, span: ValidSpan) = {
       parse_expr(tokens, p)
     }
   let p3 = skip_ws(tokens, p2)
+  // Three handle-expr forms per seed $parse_handle_expr + SYNTAX.md §968-1003:
+  //   1. `with IDENT = INIT [, ...] { ARMS }` — state-init (anon handler)
+  //   2. `with EXPR`                          — install (named handler ref)
+  //   3. `{ ARMS }` (no `with`)               — anonymous arms
+  // Disambiguation: after TWith, peek TIdent + TEq → form 1; else → form 2.
   let (arms, p4) =
     if at(tokens, p3, TWith) {
-      let p_open = expect(tokens,
-        skip_ws(tokens, skip_past_ident(tokens, p3 + 1)),
-        TLBrace)
-      parse_handler_arms(tokens, skip_ws(tokens, p_open))
+      let p_with = skip_ws(tokens, p3 + 1)
+      let is_state_init = is_param_name_tok(tokens, p_with) &&
+        at(tokens, skip_ws(tokens, p_with + 1), TEq)
+      if is_state_init {
+        // Form 1: state-init — parse fields, then expect `{ ARMS }`
+        let (state, p_after_state) =
+          parse_handle_state_fields(tokens, p_with)
+        let p_open = expect(tokens, skip_ws(tokens, p_after_state), TLBrace)
+        let (a, pa) = parse_handler_arms(tokens, skip_ws(tokens, p_open))
+        // State fields are consumed but not yet threaded into AST
+        // (seed parity: $parse_handle_expr stores state at offset 12;
+        // the wheel's HandleExpr(body, arms) is 2-field — state-init
+        // wiring is named peer Hβ.handle-expr-state-to-ast). The arms
+        // ARE lifted into HandleExpr — the parse position is correct.
+        (a, pa)
+      } else {
+        // Form 2: install — `with handler_name(args)` or `with expr`.
+        // Parse the install expression; no inline arms follow.
+        let (install_expr, p_install) = parse_expr(tokens, p_with)
+        // install_expr is not yet wired into HandleExpr (seed stores
+        // at offset 16; same named peer as above). For L1 parse
+        // position parity, the key is that subsequent top-level fns
+        // are NOT consumed as arms.
+        ([], p_install)
+      }
     } else if at(tokens, p3, TLBrace) {
+      // Form 3: anonymous arms (no `with` clause)
       parse_handler_arms(tokens, skip_ws(tokens, p3 + 1))
     } else {
       ([], p3)
     }
   (nexpr(HandleExpr(body, arms), span), p4)
+}
+
+/// Parse `FIELD = INIT [, FIELD = INIT]*` for handle-expr state-init.
+/// Same shape as parse_handler_state_fields but for handle-expr context
+/// (terminates at non-comma, not at `{`). Returns (state_list, next_pos).
+fn parse_handle_state_fields(ref tokens, pos) = {
+  let buf = make_list(4)
+  parse_handle_state_loop(tokens, pos, buf, 0)
+}
+
+fn parse_handle_state_loop(ref tokens, pos, own buf, count) = {
+  let name = ident_or_kw_at(tokens, pos)
+  if str_eq(name, "") { (slice(buf, 0, count), pos) }
+  else {
+    let p2 = expect(tokens, skip_ws(tokens, pos + 1), TEq)
+    let (init, p3) = parse_expr(tokens, skip_ws(tokens, p2))
+    let field = {name: name, init: init}
+    let b1 = list_extend_to(buf, count + 1)
+    let b2 = list_set(b1, count, field)
+    let p4 = skip_ws(tokens, p3)
+    if at(tokens, p4, TComma) {
+      parse_handle_state_loop(tokens, skip_ws(tokens, p4 + 1), b2, count + 1)
+    } else {
+      (slice(b2, 0, count + 1), p4)
+    }
+  }
 }
 
 fn skip_past_ident(ref tokens, pos) = {

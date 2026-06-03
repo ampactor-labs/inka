@@ -532,18 +532,21 @@ fn walk_lemit_list_loop(exprs, i) = {
 /// prior iteration" at LFeedback's first entry. v1 single-threaded
 /// scope; LF.M migrates to per-handler-state offsets.
 
-fn emit_state_globals(slots) = for_each((slot) => {
+fn emit_state_globals(slots) = {
+  for_each((slot) => {
   perform wat_emit("  (global $s")
   perform wat_emit(int_to_str(slot))
   perform wat_emit(" (mut i32) (i32.const 0))\n")
-}, slots)
+  }, slots)
+}
 
 // Emit `(data (i32.const <offset>) "<escaped-bytes>")` for each
 // string entry. Layout per string: first 4 bytes are the little-
 // endian length (emit_le4_escape emits four \xx escapes), followed
 // by the UTF-8 bytes (each byte emitted as \xx so the WAT parser
 // accepts the whole payload uniformly regardless of byte values).
-fn emit_string_data(entries) = for_each((entry) => {
+fn emit_string_data(entries) = {
+  for_each((entry) => {
   let (s, offset) = entry
   perform wat_emit("  (data (i32.const ")
   perform wat_emit(int_to_str(offset))
@@ -551,7 +554,8 @@ fn emit_string_data(entries) = for_each((entry) => {
   emit_le4_escape(byte_len(s))
   emit_string_bytes(s, 0, byte_len(s))
   perform wat_emit("\")\n")
-}, entries)
+  }, entries)
+}
 
 fn emit_string_bytes(s, i, n) = {
   if i >= n { () }
@@ -587,22 +591,26 @@ fn emit_fn_table(fn_names) = {
   }
 }
 
-fn emit_fn_refs(names) = for_each((name) => {
+fn emit_fn_refs(names) = {
+  for_each((name) => {
   perform wat_emit(" $")
   perform wat_emit(name)
-}, names)
+  }, names)
+}
 
 // Per-function table-index globals. At LMakeClosure emit, we push
 // `(global.get $<name>_idx)` to get the i32 table index — no list
 // lookup needed at emit time. One global per top-level function.
-fn emit_fn_index_globals(names, base_idx) = for_each((indexed) => {
+fn emit_fn_index_globals(names, base_idx) = {
+  for_each((indexed) => {
   let (i, name) = indexed
   perform wat_emit("  (global $")
   perform wat_emit(name)
   perform wat_emit("_idx i32 (i32.const ")
   perform wat_emit(int_to_str(base_idx + i))
   perform wat_emit("))\n")
-}, enumerate(names))
+  }, enumerate(names))
+}
 
 // Top-level closure records as STATIC DATA. The graph knows every
 // top-level fn's closure layout at compile time — fn_idx + 0
@@ -627,7 +635,8 @@ fn emit_fn_index_globals(names, base_idx) = for_each((indexed) => {
 // closure records dynamically at LMakeClosure emit (their captures
 // are non-empty in general).
 
-fn emit_static_top_closures(top_names, all_names, base_slot) = for_each((indexed) => {
+fn emit_static_top_closures(top_names, all_names, base_slot) = {
+  for_each((indexed) => {
   let (i, name) = indexed
   let fn_idx = ls_find_str_local(all_names, name, 0)
   let addr = 256 + (base_slot + i) * 8
@@ -645,7 +654,8 @@ fn emit_static_top_closures(top_names, all_names, base_slot) = for_each((indexed
   perform wat_emit(" i32 (i32.const ")
   perform wat_emit(int_to_str(addr))
   perform wat_emit("))\n")
-}, enumerate(top_names))
+  }, enumerate(top_names))
+}
 
 // Find the index of a string in a list. Returns -1 if not found.
 fn ls_find_str_local(lst, target, i) = {
@@ -1167,11 +1177,13 @@ fn emit_let_locals_expr(expr) = match expr {
 // LMatch arm walker: each pattern-bound LPVar becomes a function-level
 // local so the (local.set $name) inside emit_match_arms validates.
 // Bodies are walked for nested LLet locals as usual.
-fn emit_let_locals_arms(arms) = for_each((arm) => {
+fn emit_let_locals_arms(arms) = {
+  for_each((arm) => {
   let (pat, body) = arm
   emit_let_locals_pat(pat)
   emit_let_locals_expr(body)
-}, arms)
+  }, arms)
+}
 
 fn emit_let_locals_pat(pat) = match pat {
   LPVar(name) => {
@@ -1202,18 +1214,22 @@ fn emit_let_locals_pat_rest(rest) = match rest {
   }
 }
 
-fn emit_let_locals_pat_record(field_binds) = for_each((fb) => {
+fn emit_let_locals_pat_record(field_binds) = {
+  for_each((fb) => {
   let (_, _, sub_pat) = fb
   emit_let_locals_pat(sub_pat)
-}, field_binds)
+  }, field_binds)
+}
 
 fn emit_let_locals_pat_list(pats) = for_each(emit_let_locals_pat, pats)
 
-fn emit_params(names) = for_each((name) => {
+fn emit_params(names) = {
+  for_each((name) => {
   perform wat_emit(" (param $")
   perform wat_emit(name)
   perform wat_emit(" i32)")
-}, names)
+  }, names)
+}
 
 fn emit_body(stmts) = for_each(emit_expr, stmts)
 
@@ -1293,7 +1309,8 @@ fn emit_wasi_thread_start() = {
 //   list_tail directly; no append-by-one accumulator pattern.
 // - 9 deferred-by-omission: closes #145 in this commit alongside the
 //   lower-side threading.
-fn emit_state_init_writes(state_local, inits, base_idx) = for_each((indexed) => {
+fn emit_state_init_writes(state_local, inits, base_idx) = {
+  for_each((indexed) => {
   let (i, init) = indexed
   perform wat_emit("(local.get $")
   perform wat_emit(state_local)
@@ -1302,7 +1319,8 @@ fn emit_state_init_writes(state_local, inits, base_idx) = for_each((indexed) => 
   perform wat_emit("(i32.store offset=")
   perform wat_emit(int_to_str(8 + (base_idx + i) * 4))
   perform wat_emit(")\n")
-}, enumerate(inits))
+  }, enumerate(inits))
+}
 
 // Exhaustive match on every LowExpr variant; no _ fallback.
 
@@ -1990,14 +2008,16 @@ fn emit_unaryop(op) = match op {
 
 // Emit the stores for each capture in the closure record.
 // Captures are indexed from 0; each stored at offset 8 + 4*i.
-fn emit_capture_stores(captures, base_i) = for_each((indexed) => {
+fn emit_capture_stores(captures, base_i) = {
+  for_each((indexed) => {
   let (i, capture) = indexed
   perform wat_emit("    (local.get $state_tmp)\n")
   emit_expr(capture)
   perform wat_emit("    (i32.store offset=")
   perform wat_emit(int_to_str(8 + (base_i + i) * 4))
   perform wat_emit(")\n")
-}, enumerate(captures))
+  }, enumerate(captures))
+}
 
 // Emit the stores for each evidence slot in the closure record.
 // Evidence slots live AFTER captures: offset 8 + 4*nc + 4*j.
@@ -2005,14 +2025,16 @@ fn emit_capture_stores(captures, base_i) = for_each((indexed) => {
 // evidence-providing scope; here we just emit whatever LowExpr
 // the lowering layer produced — typically LConst(LInt(fn_idx))
 // or a load from the enclosing __state for poly pass-through).
-fn emit_ev_slot_stores(ev_exprs, nc, base_j) = for_each((indexed) => {
+fn emit_ev_slot_stores(ev_exprs, nc, base_j) = {
+  for_each((indexed) => {
   let (j, ev) = indexed
   perform wat_emit("    (local.get $state_tmp)\n")
   emit_expr(ev)
   perform wat_emit("    (i32.store offset=")
   perform wat_emit(int_to_str(8 + 4 * nc + 4 * (base_j + j)))
   perform wat_emit(")\n")
-}, enumerate(ev_exprs))
+  }, enumerate(ev_exprs))
+}
 
 /// emit_capture_stores_at_offset — H7 variant of emit_capture_stores
 /// with explicit base_offset parameter. LMakeContinuation's heap layout
@@ -2021,33 +2043,38 @@ fn emit_ev_slot_stores(ev_exprs, nc, base_j) = for_each((indexed) => {
 /// offset 8 (no state_index). The substrate is otherwise identical;
 /// only the base offset differs.
 
-fn emit_capture_stores_at_offset(captures, base_offset, base_i) = for_each((indexed) => {
+fn emit_capture_stores_at_offset(captures, base_offset, base_i) = {
+  for_each((indexed) => {
   let (i, capture) = indexed
   perform wat_emit("    (local.get $state_tmp)\n")
   emit_expr(capture)
   perform wat_emit("    (i32.store offset=")
   perform wat_emit(int_to_str(base_offset + (base_i + i) * 4))
   perform wat_emit(")\n")
-}, enumerate(captures))
+  }, enumerate(captures))
+}
 
 /// emit_ev_slot_stores_at_offset — H7 variant of emit_ev_slot_stores
 /// with explicit base_offset (the offset where the first ev_slot lives,
 /// already past the captures). For LMakeContinuation: base_offset =
 /// 12 + 4 * nc.
 
-fn emit_ev_slot_stores_at_offset(ev_exprs, base_offset, base_j) = for_each((indexed) => {
+fn emit_ev_slot_stores_at_offset(ev_exprs, base_offset, base_j) = {
+  for_each((indexed) => {
   let (j, ev) = indexed
   perform wat_emit("    (local.get $state_tmp)\n")
   emit_expr(ev)
   perform wat_emit("    (i32.store offset=")
   perform wat_emit(int_to_str(base_offset + (base_j + j) * 4))
   perform wat_emit(")\n")
-}, enumerate(ev_exprs))
+  }, enumerate(ev_exprs))
+}
 
 // H1.6: dynamic-offset variant for LSuspend's transient closure.
 // nc is runtime-known (loaded from $callee_closure[4]); each ev
 // slot's address is base + 8 + 4*nc + 4*j computed at runtime.
-fn emit_ev_slots_dynamic(ev_exprs, base_j) = for_each((indexed) => {
+fn emit_ev_slots_dynamic(ev_exprs, base_j) = {
+  for_each((indexed) => {
   let (j, ev) = indexed
   // Address: state_tmp + 8 + 4*nc + 4*j
   perform wat_emit("    (local.get $state_tmp)\n")
@@ -2060,14 +2087,16 @@ fn emit_ev_slots_dynamic(ev_exprs, base_j) = for_each((indexed) => {
   // Value: emit the slot's fn_idx LowExpr
   emit_expr(ev)
   perform wat_emit("    (i32.store)\n")
-}, enumerate(ev_exprs))
+  }, enumerate(ev_exprs))
+}
 
 // Emit the stores for each field in an ADT variant record.
 // Fields are indexed from 0; each stored at offset 4 + 4*i (offset 0
 // holds the tag_id). Mirrors emit_capture_stores; the only delta is
 // the base offset (4 vs 8) — closures reserve slot 1 for capture
 // count, variants don't.
-fn emit_variant_field_stores_at(fields, base_i, local_name) = for_each((indexed) => {
+fn emit_variant_field_stores_at(fields, base_i, local_name) = {
+  for_each((indexed) => {
   let (i, fld) = indexed
   perform wat_emit("    (local.get $")
   perform wat_emit(local_name)
@@ -2076,20 +2105,23 @@ fn emit_variant_field_stores_at(fields, base_i, local_name) = for_each((indexed)
   perform wat_emit("    (i32.store offset=")
   perform wat_emit(int_to_str(4 + (base_i + i) * 4))
   perform wat_emit(")\n")
-}, enumerate(fields))
+  }, enumerate(fields))
+}
 
 // Record field stores (H2): mirror of emit_variant_field_stores
 // without the tag offset — records carry identity in the type
 // system, no runtime tag. Field i lands at byte 4*i, matching
 // LFieldLoad's offset arithmetic in lower.mn.
-fn emit_record_field_stores(fields, base_i) = for_each((indexed) => {
+fn emit_record_field_stores(fields, base_i) = {
+  for_each((indexed) => {
   let (i, fld) = indexed
   perform wat_emit("    (local.get $record_tmp)\n")
   emit_expr(fld)
   perform wat_emit("    (i32.store offset=")
   perform wat_emit(int_to_str((base_i + i) * 4))
   perform wat_emit(")\n")
-}, enumerate(fields))
+  }, enumerate(fields))
+}
 
 // Cascading if-else over arm patterns. Classify the WHOLE arm set
 // once: pure-nullary (sentinel compare), pure-fielded (offset=0 load
@@ -2281,7 +2313,8 @@ fn filter_arms_by_shape_loop(arms, want_shape, i, n, buf, count) = {
 // but uses each field's pre-resolved offset (lower.mn baked them in)
 // instead of computing 4 + 4*i. Field-puning patterns are LPVar
 // sub-pats; nested record/list patterns fall through (TODO).
-fn emit_record_field_binds(binds) = for_each((bind) => {
+fn emit_record_field_binds(binds) = {
+  for_each((bind) => {
   let (_field_name, offset, sub_pat) = bind
   match sub_pat {
     LPVar(name) => {
@@ -2300,7 +2333,8 @@ fn emit_record_field_binds(binds) = for_each((bind) => {
     LPList(_, _) => (),
     LPRecord(_) => ()       // nested record destructure — peer follow-up
   }
-}, binds)
+  }, binds)
+}
 
 // Per Hβ.emit.match-nested-lpcon-substrate (2026-05-09): pat is a TREE.
 // Emit walks the tree recursively. For each LPVar leaf at offset path
@@ -2454,7 +2488,8 @@ fn emit_list_literal(elems) = {
   emit_list_stores(elems, 0)
 }
 
-fn emit_list_stores(elems, base_idx) = for_each((indexed) => {
+fn emit_list_stores(elems, base_idx) = {
+  for_each((indexed) => {
   let (i, elem) = indexed
   perform wat_emit("    (local.set $callee_closure)\n")
   perform wat_emit("    (local.get $__state)\n")
@@ -2464,7 +2499,8 @@ fn emit_list_stores(elems, base_idx) = for_each((indexed) => {
   perform wat_emit(")\n")
   emit_expr(elem)
   perform wat_emit("    (call $list_set)\n")
-}, enumerate(elems))
+  }, enumerate(elems))
+}
 
 fn emit_tuple_literal(elems) = {
   emit_expr_list(elems)

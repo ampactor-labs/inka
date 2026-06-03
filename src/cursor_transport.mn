@@ -126,13 +126,15 @@ type TransportState
       last_render:  Reason              // why-chain of last surfaced view
     })
 
-fn transport_state_init(initial_caret) with Pure = TransportState({
+fn transport_state_init(initial_caret) with Pure = {
+  TransportState({
   caret:       initial_caret,
   cursor:      Cursor(0, Inferred("session-init"), 0.0),
   cadence:     default_cadence(),
   session_id:  0,
   last_render: Inferred("none")
-})
+  })
+}
 
 // ─── terminal_transport — text-mode rendering ───────────────────────
 //

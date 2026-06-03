@@ -96,13 +96,15 @@ fn driver_extract_imports(ref source) with Memory + Alloc = {
     |> driver_extract_imports_from_ast
 }
 
-fn driver_extract_imports_from_ast(ast) = flatten(map((node) => {
+fn driver_extract_imports_from_ast(ast) = {
+  flatten(map((node) => {
   let N(body, _, _) = node
   match body {
     NStmt(ImportStmt(path)) => [path],
     _                        => []
   }
-}, ast))
+  }, ast))
+}
 
 /// Consult the cache; on miss run full inference for this module
 /// and write a fresh `.kai`. Returns the env entries this module

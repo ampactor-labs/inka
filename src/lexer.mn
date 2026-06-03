@@ -272,6 +272,29 @@ fn skip_line_comment(ref source, n: ValidOffset, pos: ValidOffset) = scan_to_eol
 /// Returns `(new_pos, new_col, buf, count)` — buffer threaded directly.
 /// Peer sub-handles: B.12.5.1 (triple-quoted `"""..."""`, amendment D),
 /// B.12.5.2 (nested-brace splices beyond depth 0).
+/// is_splice_start_byte — true for bytes that can begin an expression
+/// inside a string splice: identifiers (a-z, A-Z, _), digits (0-9),
+/// parens, brackets. False for `"` (which would close the string),
+/// `}` (empty splice), whitespace, and EOF. This prevents `"{"` from
+/// triggering splice mode — the `{` is a literal brace character.
+fn is_splice_start_byte(b) with Pure = {
+  // a-z
+  if b >= 97 && b <= 122 { true }
+  // A-Z
+  else if b >= 65 && b <= 90 { true }
+  // _ (underscore — ident start)
+  else if b == 95 { true }
+  // 0-9 (digit — numeric expression)
+  else if b >= 48 && b <= 57 { true }
+  // ( — parenthesized expression
+  else if b == 40 { true }
+  // [ — list literal
+  else if b == 91 { true }
+  // ! — negation
+  else if b == 33 { true }
+  else { false }
+}
+
 fn scan_string(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, count) = {
   scan_string_chunk(source, n, pos, pos, line, col, buf, count)
 }
@@ -310,8 +333,11 @@ fn scan_string_chunk(ref source, n: ValidOffset, chunk_start: ValidOffset, pos: 
       let part = str_unescape(str_slice(source, chunk_start, pos + 1))
       let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col + 1))
       scan_string_chunk(source, n, pos + 2, pos + 2, line, col + 2, b1, c1)
-    } else if b == 123 {
-      // { — start of interpolation splice (amendment C).
+    } else if b == 123 && pos + 1 < n && is_splice_start_byte(byte_at(source, pos + 1)) {
+      // { — start of interpolation splice (amendment C). Only when the
+      // next byte is an expression-start (ident, digit, paren, etc.);
+      // `"{"` and `"{}"` are literal strings, not splices. Matches the
+      // seed's scan_string behavior exactly.
       let part = str_unescape(str_slice(source, chunk_start, pos))
       let (b1, c1) = push_tok(buf, count, mk_tok(TStringPart(part), line, col, line, col))
       let (b2, c2) = push_tok(b1, c1, mk_tok(TStringSplice, line, col, line, col + 1))

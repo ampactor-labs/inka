@@ -127,7 +127,10 @@ L1_INPUT="$WORKDIR/l1-input.mn"
 L1_OUT_2="$WORKDIR/l1-pass2.wat"
 L1_OUT_3="$WORKDIR/l1-pass3.wat"
 L1_ERR_2="$WORKDIR/l1-pass2.err"
+L1_ERR_3="$WORKDIR/l1-pass3.err"
 L1_WASM_2="$WORKDIR/l1-pass2.wasm"
+L1_STATUS=0
+L1_STATUS_MSG="not yet probed"
 
 # Concatenate the wheel in canonical order (src then lib, same as
 # CLAUDE.md operational essentials). Exclude lib/tutorial/ — tutorials
@@ -155,30 +158,46 @@ if [ "$PASS2_FNS" -le "2" ]; then
   echo "       L1 not yet ready — pass-2 emits only seed scaffolding (need more wheel-fn surface)"
   echo "       NFre diagnostics: $PASS2_NFRE (target 0); fn count: $PASS2_FNS (target ≥ dozens)"
   echo "       This is the cursor — Phase H handles narrow toward L1 closure per PLAN-to-first-light.md §5."
+  L1_STATUS_MSG="not ready — pass-2 emits only seed scaffolding"
 else
   # Pass 2 produced real wheel output. Compile it and run pass 3.
-  wat2wasm "$L1_OUT_2" -o "$L1_WASM_2" --debug-names --enable-threads --enable-tail-call 2>/dev/null \
-    || { echo "       pass-2 WAT failed wat2wasm — wheel substrate produced invalid WASM"; exit 1; }
-  wasm-validate --enable-threads --enable-tail-call "$L1_WASM_2" \
-    || { echo "       pass-2 WASM failed wasm-validate — runtime correctness gap"; exit 1; }
-
-  # Pass 3: pass-2.wasm → wheel → mentl3.wat
-  wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$L1_WASM_2" < "$L1_INPUT" > "$L1_OUT_3" 2>/dev/null || true
-  PASS3_FNS=$(grep -c "^  (func " "$L1_OUT_3" || true)
-  PASS3_LINES=$(wc -l < "$L1_OUT_3")
-  echo "       pass3: $PASS3_FNS funcs, $PASS3_LINES lines"
-
-  if diff -q "$L1_OUT_2" "$L1_OUT_3" >/dev/null; then
-    echo "       L1 FIXPOINT CLOSED — pass-2 ≡ pass-3 byte-identical."
-    echo "       The medium has folded into its seed. Tier 3 begins."
+  if ! wat2wasm "$L1_OUT_2" -o "$L1_WASM_2" --debug-names --enable-threads --enable-tail-call 2>/dev/null; then
+    echo "       pass-2 WAT failed wat2wasm — wheel substrate produced invalid WASM"
+    L1_STATUS=1
+    L1_STATUS_MSG="not closed — pass-2 WAT failed wat2wasm"
+  elif ! wasm-validate --enable-threads --enable-tail-call "$L1_WASM_2"; then
+    echo "       pass-2 WASM failed wasm-validate — runtime correctness gap"
+    L1_STATUS=1
+    L1_STATUS_MSG="not closed — pass-2 WASM failed validation"
   else
-    DIFF_LINES=$(diff "$L1_OUT_2" "$L1_OUT_3" | wc -l)
-    echo "       L1 fixpoint NOT closed — diff size: $DIFF_LINES lines."
-    echo "       Pass-3 differs from pass-2; investigate emit determinism or"
-    echo "       inference-order divergence per PLAN-to-first-light.md §6.2."
-    exit 1
+    # Pass 3: pass-2.wasm → wheel → mentl3.wat. Keep stderr: when pass-3
+    # collapses to 0 funcs, parser diagnostics are the active evidence.
+    wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$L1_WASM_2" < "$L1_INPUT" > "$L1_OUT_3" 2> "$L1_ERR_3" || true
+    PASS3_FNS=$(grep -c "^  (func " "$L1_OUT_3" || true)
+    PASS3_LINES=$(wc -l < "$L1_OUT_3")
+    PASS3_PARSE_ERRORS=$(tr -d '\0' < "$L1_ERR_3" | grep -c "P_" || true)
+    echo "       pass3: $PASS3_FNS funcs, $PASS3_LINES lines, $PASS3_PARSE_ERRORS parser diagnostics"
+
+    if [ "$PASS3_PARSE_ERRORS" -gt "0" ]; then
+      echo "       pass3 stderr tail:"
+      tr -d '\0' < "$L1_ERR_3" | tail -12 | sed 's/^/         /'
+    fi
+
+    if diff -q "$L1_OUT_2" "$L1_OUT_3" >/dev/null; then
+      echo "       L1 FIXPOINT CLOSED — pass-2 ≡ pass-3 byte-identical."
+      echo "       The medium has folded into its seed. Tier 3 begins."
+      L1_STATUS_MSG="closed — pass-2 and pass-3 byte-identical"
+    else
+      DIFF_LINES=$(diff "$L1_OUT_2" "$L1_OUT_3" | wc -l)
+      echo "       L1 fixpoint NOT closed — diff size: $DIFF_LINES lines."
+      echo "       Pass-3 differs from pass-2; investigate parser/runtime correctness,"
+      echo "       emit determinism, or inference-order divergence per PLAN-to-first-light.md §6.2."
+      L1_STATUS=1
+      L1_STATUS_MSG="not closed — pass-2/pass-3 differ"
+    fi
   fi
 fi
 
 echo ""
-echo "=== WABT gate: PASS ==="
+echo "=== WABT gate: PASS; L1: $L1_STATUS_MSG ==="
+exit "$L1_STATUS"

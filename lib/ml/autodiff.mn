@@ -7,20 +7,20 @@ import ml/tensor
 // ── Tape entries ────────────────────────────────────────────
 
 type TapeEntry =
-    TapeMatVecMul { w: List<List<Float>>, x: List<Float>, out: List<Float> }
-  | TapeVecAdd { a: List<Float>, b: List<Float> }
-  | TapeRelu { input: List<Float> }
-  | TapeSigmoid { out: List<Float> }
+    TapeMatVecMul { w: List, x: List, out: List }
+  | TapeVecAdd { a: List, b: List }
+  | TapeRelu { input: List }
+  | TapeSigmoid { out: List }
 
 // ── Compute effect ──────────────────────────────────────────
 // Type annotations are nominal — the checker uses them for
 // unification but the runtime passes actual lists/matrices.
 
 effect Compute {
-  forward_mat_vec_mul(w: List<List<Float>>, x: List<Float>) -> List<Float>
-  forward_vec_add(a: List<Float>, b: List<Float>) -> List<Float>
-  forward_relu(xs: List<Float>) -> List<Float>
-  forward_sigmoid(xs: List<Float>) -> List<Float>
+  forward_mat_vec_mul(w: List, x: List) -> List
+  forward_vec_add(a: List, b: List) -> List
+  forward_relu(xs: List) -> List
+  forward_sigmoid(xs: List) -> List
   get_tape() -> List
 }
 

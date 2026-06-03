@@ -478,13 +478,15 @@ fn expand_capabilities(effs) = {
   }, effs))
 }
 
-fn has_pure_declared(effs) = any((eff) => {
+fn has_pure_declared(effs) = {
+  any((eff) => {
   let (name, _) = eff
   match name {
     ENamed(s) => str_eq(s, "Pure"),   // drift-audit: ignore — real drift mode 8 (EffName should have EPure variant, not ENamed(string)); tracked for item 11.B EffName refactor
     _         => false
   }
-}, effs)
+  }, effs)
+}
 
 fn partition_declared(effs, pos_init, neg_init) = {
   fold(effs, (pos_init, neg_init), (acc, eff) => {
@@ -578,7 +580,7 @@ fn infer_expr(ref node) = {
         match then_ty {
           TName("Unit", _) => (),
           _ => perform report("infer", "E_IfMissingElse", "TypeError",
-            "if-without-else expects unit-valued then-branch; add `else { ... }` or make then-branch evaluate to unit",
+            "if-without-else expects unit-valued then-branch; add `else {{...}}` or make then-branch evaluate to unit",
             span, "MachineApplicable")
         }
       }
@@ -1480,11 +1482,13 @@ fn infer_record_field_values(fields) = {
   }
 }
 
-fn build_record_field_types(fields) = map((fld) => {
+fn build_record_field_types(fields) = {
+  map((fld) => {
   let (name, value) = fld
   let N(_, _, vh) = value
   (name, TVar(vh))
-}, fields)
+  }, fields)
+}
 
 // H4.1 projection — pull the value handles out of a record-field list
 // for region-join lookup. Field names aren't needed for region

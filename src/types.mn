@@ -391,7 +391,7 @@ fn span_zero() with Pure = Span(0, 0, 0, 0)
 type Handle = Int where 0 <= self
 type TagId = Int where 0 <= self && self <= 255
 type ValidOffset = Int where 0 <= self
-type NonEmptyList<A> = List<A> where len(self) > 0
+type NonEmptyList = List where len(self) > 0
 
 fn span_valid(s) with Pure = {
   let Span(sl, sc, el, ec) = s
@@ -957,15 +957,15 @@ fn show_type(ref ty) with GraphRead + !Mutate = {
       name
         |> str_concat(show_type_args(args)),
     TRecord(fields) =>
-      "{ "
+      "{{ "
         |> str_concat(show_list(fields, show_field, ", "))
-        |> str_concat(" }"),
+        |> str_concat(" }}"),
     TRecordOpen(fields, v) =>
-      "{ "
+      "{{ "
         |> str_concat(show_list(fields, show_field, ", "))
         |> str_concat(" | ")
         |> str_concat(show_handle(v))
-        |> str_concat(" }"),
+        |> str_concat(" }}"),
     TRefined(base, pred) =>
       show_type(base)
         |> str_concat(" where ")

@@ -55,15 +55,14 @@ import runtime/lists
 /// Per drift mode 7 (parallel-arrays-instead-of-record): one record
 /// carries both fields, NOT two parallel collections.
 
-type Buffer<A> = {data: List<A>, count: Int}
-  where buf_invariant(self)
+type Buffer = {data: List, count: Int}
 
 /// `buf_invariant(b)` — the structural invariant: count never
 /// exceeds the underlying capacity. Named so the refinement
 /// predicate composes cleanly + Mentl can surface it as the Why
 /// edge for any "buffer over-fill" diagnostic.
 
-fn buf_invariant<A>(b: Buffer<A>) -> Bool with Pure =
+fn buf_invariant(b: Buffer) -> Bool with Pure =
   buf_count(b) <= len(buf_data(b))
 
 /// `buf_make()` — fresh empty buffer. Storage starts as the empty
@@ -72,31 +71,31 @@ fn buf_invariant<A>(b: Buffer<A>) -> Bool with Pure =
 /// (bootstrap/src/runtime/buffer.wat) uses flat-with-doubling for
 /// O(1) push + O(N) freeze in fewer cache lines.
 
-fn buf_make<A>() -> Buffer<A> with Memory + Alloc =
+fn buf_make() -> Buffer with Memory + Alloc =
   Buffer{data: make_list(0), count: 0}
 
 /// `buf_push(buf, x)` — append `x` to the buffer; bump count.
 /// Snoc-based: `push` allocates a tag-1 node wrapping the previous
 /// data. Amortized O(1) per push regardless of buffer size.
 
-fn buf_push<A>(own buf: Buffer<A>, x: A) -> Buffer<A> with Memory + Alloc =
-  {...buf, data: push(buf.data, x), count: buf.count + 1}
+fn buf_push(own buf: Buffer, x) -> Buffer with Memory + Alloc =
+  Buffer{data: push(buf.data, x), count: buf.count + 1}
 
 /// `buf_count(buf)` — read the logical count (used slots).
 
-fn buf_count<A>(ref buf: Buffer<A>) -> Int with Pure = buf.count
+fn buf_count(ref buf: Buffer) -> Int with Pure = buf.count
 
 /// `buf_data(buf)` — read the underlying List<A>. Note this may be
 /// snoc-shaped during the buffer's lifetime; use `buf_freeze` to
 /// materialize a clean flat List of just the valid prefix.
 
-fn buf_data<A>(ref buf: Buffer<A>) -> List<A> with Pure = buf.data
+fn buf_data(ref buf: Buffer) -> List with Pure = buf.data
 
 /// `buf_freeze(buf)` — materialize the underlying List as a flat
 /// tag-0 List, returning ownership. The buffer is consumed; after
 /// freeze, callers operate on the resulting List.
 
-fn buf_freeze<A>(own buf: Buffer<A>) -> List<A> with Memory + Alloc =
+fn buf_freeze(own buf: Buffer) -> List with Memory + Alloc =
   list_to_flat(buf.data)
 
 // ─── Connection to the kernel ─────────────────────────────────────────

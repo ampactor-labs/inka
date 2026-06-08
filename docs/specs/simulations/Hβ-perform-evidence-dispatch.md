@@ -332,8 +332,38 @@ the op.
   with the handler-record evidence for calls to effect-open callees.
 
 This is THE first-light gate; the §4 fallback deletion is its step 1
-(kept as WIP, not committed alone — drift 9 otherwise). Resolving the one
-layout is the highest-leverage move in the project.
+(committed `d1714f5`). Resolving the one layout is the highest-leverage
+move in the project.
+
+### 4.6 The build entry point + de-risk (2026-06-07)
+
+The coordinated build's first piece is the **`monomorphic_at` / `row_is_ground`
+semantics**, and tracing it de-risked the whole arc:
+
+- `$row_is_ground` (`bootstrap/src/lower/lookup.wat`) returns "ground"
+  (→ monomorphic → `LCall`, no evidence) when the row is **pure OR closed**.
+  `iterate_from`'s `with Iterate` is a *closed* row `{Iterate}`, so it is
+  wrongly treated as monomorphic. **"Closed" (no row variable) was conflated
+  with "needs no handler evidence"** — a remnant of the retired static-
+  dispatch design. The fix: a call needs evidence iff its row contains a
+  *handler-dispatched* op (i.e. non-pure, minus builtin direct-emit ops
+  WASI/memory) — closed or open is irrelevant. This is the entry that makes
+  `LSuspend` fire for the `iterate` chain so the rest of the set engages.
+- **Blocker 1 is NOT gated on Blocker 2.** For `row_is_ground` to run,
+  `monomorphic_at` already observed `ty_tag == 107` (`TFun`) at the
+  `iterate_from` call — the call's type *resolved*. The evidence build does
+  not wait on the `NFree` type-resolution gap. Independent arcs.
+
+Build order, lands-together, seed then wheel: (1) `monomorphic_at` row-
+evidence semantics; (2) `derive_ev_slots` returns the handler-record
+evidence (install-scope: installed arm fn-idx; polymorphic-scope: forward
+own ev-slot); (3) `LSuspend` threads it; (4) `LEvPerform` loads it +
+fence-relative offset + arm runs against the handler record; (5)
+`LStateSlotStore` offset unified to `8 + 4·i`. Per the project's own
+`protocol_mrcr_jit_recall.md` (compact before a new handle; deep windows
+blind the midsection), this coordinated multi-file WAT build is best opened
+in a fresh window with this walkthrough + `protocol_reflexive_interiority.md`
+as the durable design anchor.
 
 ## 5. Empirical verification (Anchor 7 — before claiming closure)
 

@@ -523,6 +523,29 @@ activation input for perform-evidence-dispatch. (`lookup_row_for` + the
 row-chase in `derive_ev_slots` are committed and correct; they are dormant
 only because rows are unbound upstream.)
 
+**Exact source localization (the fix is 2–3 stubs + a row-scope stack):**
+
+- `bootstrap/src/infer/walk_expr.wat:393` `$walk_expr_inf_add_row` is a
+  **no-op** (`(drop (local.get $row))`). The perform arm (`:1266`) and call
+  arms (`:742`, `:1580`) already CALL it with the op/callee row — the row is
+  just discarded.
+- `:399` `$walk_expr_inf_enter_fn` is likewise a no-op (should push a fresh
+  accumulating row scope per fn).
+- Missing: the exit/bind step — on FnStmt exit, `graph_bind` the fn's row
+  handle (`ty_tfun_row(fn_ty)`, minted NRowFree at `walk_stmt.wat:580`) to the
+  accumulated row, so it becomes `NRowBound[union]` that `lookup_row_for`
+  resolves.
+
+Wheel canonical: `src/infer.mn:36-50` (`inf_enter_fn` row-scope push) + `:843`
+(`inf_add_row` composes callee row into the caller's accumulating row). The
+implementation: an infer-state row-scope STACK; `enter_fn` pushes the fn's row
+handle; `add_row` `row_union`s each performed/called effect into the top; an
+`exit_fn` binds the handle to the accumulation. `row_union` already exists
+(`runtime/row.wat:354`). This is a bounded infer-substrate landing — best in a
+fresh window with `docs/specs/04-inference.md` + `Hβ-infer-substrate.md`
+loaded, validated against the `deep`/`mid` micro-test (must reach NRowBound[E],
+1 LSuspend) before re-running the wheel.
+
 ## 5. Empirical verification (Anchor 7 — before claiming closure)
 
 1. **Micro, pre-fix (captured):** `fn main(x)=x` → mentl2 traps at

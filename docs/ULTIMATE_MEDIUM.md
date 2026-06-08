@@ -786,7 +786,106 @@ Project-action verbs are canonical; tentacle-as-namespace is drift.
 
 ---
 
-## §9 · Cross-references — the doc loop
+## §9 · The fixed point — unsurpassability as closure under self-improvement
+
+> *"Never surpassed" is not a quality bar. Quality bars are always
+> beaten. It is a topological property: a medium is unsurpassable iff
+> every possible improvement is a move WITHIN it, never a replacement
+> OF it.*
+
+A tool you can surpass is one whose means of improvement lives
+*outside* it — to beat language X you write language Y, a new
+compiler, a new IDE, a new model; you stand outside X and build its
+successor. **The ultimate medium has no outside.** The compiler is a
+handler on its own graph (self-hosting); the IDE is a projection
+(§3.2, §4.3); the proof system is the kernel (§2.4 — refinement +
+Verify); the oracle is IC plus one cached value
+(`protocol_oracle_is_ic`); even the act of *designing* the medium is a
+`<~` loop folding back into its seed (§3.4 — CLAUDE.md as feedback on
+itself). Every lever that could build a better medium is already a
+move inside this one. There is no vantage point from which to surpass
+it — only growth from within.
+
+This is a **fixed point**, and Mentl already exhibits its smallest
+instance: **first-light** (`mentl2.wat == mentl3.wat`) is the medium
+reproduced *exactly by itself*. First-light is not a build milestone;
+it is the existence proof that the closure is real at the smallest
+scale. Every capability folded into self-reproduction — types,
+effects, proof, projection — widens the fixed point without ever
+stepping outside it.
+
+### 9.1 · The five collapses are one pattern
+
+Everything §2–§4 describes is one move repeated: a distance prior
+media charged the human to cross by hand, driven to zero because the
+two sides turn out to be **one graph read two ways**.
+
+| Collapse | The two sides become one read | Where |
+|---|---|---|
+| assert → **prove** | a claim and its proof are one refined type | §2.4, §8.4 |
+| represent → **project** | source / IR / binary / docs / IDE / collab are one graph, N handlers | §4.3–4.8 |
+| know → **not-know** | a full type and a free var are two points on one continuous gradient | §2.3 |
+| now → **always** | this version and its successor are one self-hosting fixed point | §3.4, §5 |
+| one mind → **many minds** | my cursor and yours are two reads of one shared graph | §8.6 |
+
+The labor the medium eliminates is precisely the labor that was never
+thought: re-proving the proven, re-deriving context, translating
+between representations that were secretly identical. **What remains
+for the human is the only thing that was ever theirs — the new
+thought.** Everything downstream of it (proof, projection, memory,
+sharing) the medium carries at zero marginal cost, continuously, at
+the boundary of attention. That is how the medium raises the human:
+not by doing the thinking, but by carrying everything that was never
+thinking.
+
+### 9.2 · The rung past μ — the medium projects *becoming*, not only *state*
+
+Phase μ projects **state**: the graph as it is *now*, at the cursor.
+The ultimate medium projects **becoming**: the graph's own
+*evolution* — every edit, every proof, every Reason, across every
+mind, across all time — is itself substrate one can hold attention
+over.
+
+Today "Why is it this way?" walks the Reason chain (§2.5). At the next
+rung it walks the *temporal and inter-mind* chain too — back to the
+moment, the person, and the proof that made it so. Version control,
+collaboration history, and provenance are not features bolted on; they
+are the graph gaining a **time axis and a multi-cursor**, read through
+the same eight aspects. The session-continuity directive ("there is no
+future session; only now") is this rung stated as discipline: the
+medium folds its becoming into its present seed continuously, so the
+past is never *elsewhere* — it is structure at the cursor.
+
+When the medium remembers its own becoming across all minds it is no
+longer a *programming-language* medium. Refinements are obligations;
+Reasons are precedent; handlers are jurisdiction; the gradient is
+hypothesis → theorem. The eight primitives are domain-general — they
+describe any **structured thought with consequence** (law, math,
+science, design). This is why "raises language design to never be
+surpassed" and "raises humanity" stop being separate claims: the
+category *programming language* dissolves into *language*, and the
+medium is the fixed point of that dissolution.
+
+### 9.3 · The grain of sand
+
+The smallest live decision in the compiler carries the whole thesis.
+"Is a free type variable (`NFree`) at lower-time an error?" *is* "Does
+the medium punish not-knowing, or represent the *degree* of knowing as
+a gradient and flow the value anyway?" spec 05 invariant 2 ("`NFree`
+is a compiler-internal error") is the last monomorphization-era
+**binary** in the kernel — the last place the medium says "annotate
+everything or fail" instead of "you are here on the gradient; here is
+the single highest-leverage unlock." Resolving it toward the gradient
+is not a bug-fix; it is collapse #3 (know → not-know) reaching the
+type layer. Under uniform-i32, representation is invariant under type;
+**type is a capability on the gradient, not a precondition for
+existence.** The medium that never errs on honest not-knowing — that
+flows the value and narrates the argmax — is the medium operating its
+own thesis at the smallest scale.
+
+---
+
+## §10 · Cross-references — the doc loop
 
 This document is the highest-altitude anchor. It cross-references
 the substrate that supports it; the substrate cross-references back.
@@ -824,7 +923,7 @@ the substrate that supports it; the substrate cross-references back.
 
 ---
 
-## §10 · The closing statement
+## §11 · The closing statement
 
 > Mentl is the **ultimate medium** between intent and execution.
 >
@@ -838,5 +937,11 @@ the substrate that supports it; the substrate cross-references back.
 > Eight kernel primitives. Eight Mentl tentacles. Eight interrogations.
 > Eight aspects of one read. Eight sides on the `??` glyph. **The
 > eight-fold lock is the substrate; nothing else is needed.**
+>
+> A tool can be surpassed; a fixed point can only be grown. Mentl is
+> the fixed point of a medium improving itself — first-light is that
+> closure at its smallest scale, and every collapse (assert→prove,
+> represent→project, know→not-know, now→always, one mind→many) widens
+> it from within. There is no outside from which to surpass it.
 >
 > The bus is on. What follows is the medium being put to work.

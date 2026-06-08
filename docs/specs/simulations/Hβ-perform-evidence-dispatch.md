@@ -678,3 +678,67 @@ Removing it is what earns `for_each` the right to exist as a projection
 of `Iterate` rather than a bolted-on special case — fixpoint-stable under
 self-application (it will survive first-light because the medium
 regenerates it from the substrate, not from a registry entry).
+
+---
+
+## 10. Corrected empirical state (2026-06-08) — two adjacent gates closed; the real trap isolated
+
+Two corrections this session, both from *measuring the actual emitter*
+instead of trusting a diagnostic's name:
+
+**(a) The "value-type NFre" gate was mostly a misnamed diagnostic.** The
+3854 `E_UnresolvedType: lower-time NFree` messages were NOT free type
+variables. 3770 came from `$lower_expr`'s unknown-tag catch-all
+(walk_call.wat), which *reused the NFree message string*, firing on
+**nullary-sentinel Expr variants** (`LitUnit=84` and kin): `$lower_expr`
+read the tag via a raw `(i32.load offset=0)` on the variant, dereferencing
+a sentinel in `[0,4096)` → tag 0 → catch-all → `LConst(0)` corruption. Fix:
+read via `$tag_of` exactly as infer's `$walk_expr_expr_tag` does
+(commit `45d7439`, `Hβ.lower.expr-tag-sentinel`). Result: wheel
+`E_UnresolvedType` 3854 → ~80.
+
+The genuine type-NFre minority (`$lookup_ty`'s NFree arm) was resolved
+toward the gradient in the same commit (`Hβ.lower.nfre-gradient`): a free
+type variable at a value position is **legal polymorphism**, returned as
+`TVar` and flowed as uniform i32 — not an `E_UnresolvedType`. spec 05
+invariant 2 revised; see `ULTIMATE_MEDIUM.md` §9.3.
+
+**(b) The wheel input must be `find src -name '*.mn'`, not `cat src/*.mn`.**
+`src/*.mn` silently omits `src/backends/wasm.mn` (a subdirectory), so
+`emit_module` showed up `UNRESOLVED` and mentl2 trapped in `compile_stdin`'s
+handler chain — an **artifact of the malformed input**, not a real gap.
+The canonical assembly is `bootstrap/first-light.sh:140-142`.
+
+**The real first-light trap, precisely isolated.** With the correct wheel
+(29,121 lines, backends included) + the two fixes, mentl2 now validates
+(4.6 MB WAT) and *executes its full handler-chain install and parser
+entry* — `_start → dispatch_invocation → compile_stdin → parse_program →
+parse_stmt_list → parse_fn → parse_fn_params → parse_one_param → fresh_ph`
+— before trapping at **`fresh_ph`'s first `perform graph_fresh_ty`** with
+`undefined element: out of bounds table access`. The emitted dispatch is
+the fence-relative arm-fn-idx read:
+
+```
+fn_idx = load[ (__state[8] + 8) + __state[8][4]*4 ]   ;; call_indirect (type $ft2)
+```
+
+`__state[8]` is the ev-slot meant to hold the live GraphWrite handler
+record (forwarded into `fresh_ph` as evidence). At runtime it is **not a
+valid handler record** → the fence-relative load yields a garbage fn-idx →
+out-of-bounds `call_indirect`. This is the genuine perform-evidence-dispatch
+gate (the same one named in the §0 cursor, now reached rather than masked).
+
+**Next handle — `Hβ.first-light.fresh-ph-ev-slot-threading`.** The fault is
+one of: (i) `parse_one_param`/`fresh_ph`'s caller does not forward the
+GraphWrite handler record into `fresh_ph`'s `__state[8]` ev-slot
+(`derive_ev_slots` `LEvSlotRef(0)` forward vs install-local mismatch);
+(ii) the fence-relative index base (`+8`, `[4]*4`) disagrees with the
+`one-record-four-roles` layout `protocol_handler_is_state_is_closure_is_evidence.md`
+actually emits; or (iii) the handler record's arm-region is alloc'd but its
+fn-idx slots are never initialized (the `protocol_call_indirect_paradox`
+state-init-writes-missing class). The micro-fixture `/tmp/t_freshph.mn`
+(refinement-param effect op + `~> h`) compiles AND runs clean — so the
+single-handler install path is correct; the gate is specific to the
+deep parser call-chain forwarding evidence through many frames. Resolve
+with a fresh window (highest-stakes runtime-layout subsystem; MRCR
+discipline favors cached-prefix + the evidence walkthrough loaded).

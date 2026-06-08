@@ -17897,21 +17897,11 @@
                                         (return (local.get $target))))))))))))))))))
         (local.set $i (i32.sub (local.get $i) (i32.const 1)))
         (br $iter)))
-    ;; Hβ.first-light.tier2-perform-or-env-scan — fall back to the
-    ;; default-handler-per-op map. The wheel uses each effect with a
-    ;; single default handler; map lookup returns hname for ops the
-    ;; handler-stack walk couldn't find.
-    (local.set $hname (call $lower_lookup_default_handler_for_op
-                            (local.get $op_name)))
-    (if (i32.ne (local.get $hname) (i32.const 0))
-      (then
-        (local.set $target (call $str_concat
-                                  (local.get $hname)
-                                  (i32.const 4400)))         ;; "_"
-        (local.set $target (call $str_concat
-                                  (local.get $target)
-                                  (local.get $op_name)))
-        (return (local.get $target))))
+    ;; No handler lexically in scope: the op is dispatched via evidence
+    ;; supplied by the caller. Return 0 → $lower_perform emits LEvPerform.
+    ;; A perform reads the handler stack at the perform site; it never
+    ;; guesses a global default (Hβ.first-light.perform-evidence-not-
+    ;; default-handler; protocol_reflexive_interiority.md).
     (i32.const 0))
 
   ;; Hβ.first-light.tier2-perform-or-env-scan — register/lookup the

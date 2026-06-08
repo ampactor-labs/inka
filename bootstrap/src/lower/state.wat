@@ -283,13 +283,18 @@
   ;; Used by $lower_walk_stmt_handler_decl (register) and $lower_pipe at
   ;; PTee path (lookup). emit_lhandlewith reads lhandlewith's inits
   ;; field directly — no emit-time lookup needed.
+  ;; Entry is 3 fields: (handler_name, state_inits, arm_names). arm_names is
+  ;; the op-slot-indexed arm fn-name list (Hβ-perform-evidence-dispatch.md
+  ;; §4.7) — built at decl from the handler's actual arms, read at LHandleWith
+  ;; install to write the record's arm region. One ledger, no parallel array.
   (func $handler_state_inits_register (export "handler_state_inits_register")
-        (param $name i32) (param $inits i32)
+        (param $name i32) (param $inits i32) (param $arm_names i32)
     (local $entry i32) (local $new_len i32)
     (call $lower_init)
-    (local.set $entry (call $make_record (i32.const 282) (i32.const 2)))
+    (local.set $entry (call $make_record (i32.const 282) (i32.const 3)))
     (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
     (call $record_set (local.get $entry) (i32.const 1) (local.get $inits))
+    (call $record_set (local.get $entry) (i32.const 2) (local.get $arm_names))
     (local.set $new_len
       (i32.add (global.get $lower_state_inits_ledger_len_g) (i32.const 1)))
     (global.set $lower_state_inits_ledger_ptr
@@ -319,6 +324,29 @@
         (br $iter)))
     ;; Not found — productive-under-error: return empty list (matches
     ;; wheel's handler_state_inits_default behavior).
+    (call $make_list (i32.const 0)))
+
+  ;; ─── $handler_arm_names_lookup — op-slot-indexed arm fn-names by hname ─
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. Reads field 2 of the same
+  ;; per-handler ledger entry $handler_state_inits_register populated. The
+  ;; install site ($lower_pipe) threads this into LHandleWith.
+  (func $handler_arm_names_lookup (export "handler_arm_names_lookup")
+        (param $name i32) (result i32)
+    (local $i i32) (local $n i32) (local $entry i32) (local $entry_name i32)
+    (call $lower_init)
+    (local.set $n (global.get $lower_state_inits_ledger_len_g))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $entry
+          (call $list_index (global.get $lower_state_inits_ledger_ptr)
+                            (local.get $i)))
+        (local.set $entry_name (call $record_get (local.get $entry) (i32.const 0)))
+        (if (call $str_eq (local.get $entry_name) (local.get $name))
+          (then (return (call $record_get (local.get $entry) (i32.const 2)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
     (call $make_list (i32.const 0)))
 
   ;; Hβ.first-light.seed-lperform-discriminator-mirror —
@@ -522,6 +550,57 @@
     (if (i32.ne (call $tag_of (local.get $kind)) (i32.const 133))
       (then (return (i32.const 0))))
     (local.set $ename (call $schemekind_effectop_name (local.get $kind)))
+    (local.set $i (i32.sub (global.get $lower_handler_count_g) (i32.const 1)))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.lt_s (local.get $i) (i32.const 0)))
+        (local.set $stack_entry
+          (call $list_index (global.get $lower_handler_stack_ptr) (local.get $i)))
+        (local.set $hname       (call $record_get (local.get $stack_entry) (i32.const 0)))
+        (local.set $state_local (call $record_get (local.get $stack_entry) (i32.const 1)))
+        (local.set $h_entry (call $env_lookup (local.get $hname)))
+        (if (i32.ne (local.get $h_entry) (i32.const 0))
+          (then
+            (local.set $sch (call $env_binding_scheme (local.get $h_entry)))
+            (local.set $body (call $scheme_body (local.get $sch)))
+            (if (i32.ge_u (local.get $body) (global.get $heap_base))
+              (then
+                (if (i32.eq (call $ty_tag (local.get $body)) (i32.const 108))
+                  (then
+                    (if (call $str_eq
+                              (call $ty_tname_name (local.get $body))
+                              (i32.const 4320))
+                      (then
+                        (local.set $args (call $ty_tname_args (local.get $body)))
+                        (if (i32.eq (call $len (local.get $args)) (i32.const 1))
+                          (then
+                            (local.set $arg0 (call $list_index (local.get $args) (i32.const 0)))
+                            (if (i32.ge_u (local.get $arg0) (global.get $heap_base))
+                              (then
+                                (if (i32.eq (call $ty_tag (local.get $arg0)) (i32.const 108))
+                                  (then
+                                    (if (call $str_eq
+                                              (call $ty_tname_name (local.get $arg0))
+                                              (local.get $ename))
+                                      (then (return (local.get $state_local))))))))))))))))))
+        (local.set $i (i32.sub (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 0))
+
+  ;; ─── $lower_resolve_handler_state_for_ename — by-effect-name variant ──
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. $derive_ev_slots has the
+  ;; EFFECT name (from the callee's row), not an op-name, so it resolves the
+  ;; handler's state-local directly by ename. Same innermost-first stack walk
+  ;; as $lower_resolve_handler_state_for_op but without the op→ename step.
+  ;; Returns the state-record-local-name ("__hstate_<h>") or 0 if no handler
+  ;; for ename is lexically in scope (→ forward via LEvSlotRef).
+  (func $lower_resolve_handler_state_for_ename
+        (export "lower_resolve_handler_state_for_ename")
+        (param $ename i32) (result i32)
+    (local $i i32) (local $stack_entry i32) (local $hname i32)
+    (local $state_local i32) (local $h_entry i32) (local $sch i32)
+    (local $body i32) (local $args i32) (local $arg0 i32)
+    (call $lower_init)
     (local.set $i (i32.sub (global.get $lower_handler_count_g) (i32.const 1)))
     (block $done
       (loop $iter

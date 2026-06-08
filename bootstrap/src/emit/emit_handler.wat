@@ -414,6 +414,7 @@
   ;; `(func $op_<name> ...)` declarations.
   (func $emit_lhandlewith (param $r i32)
     (local $h i32) (local $hstate_name i32) (local $inits i32)
+    (local $arm_names i32) (local $nstate i32) (local $nops i32)
     ;; Per protocol_handler_is_state_is_closure_is_evidence.md: allocate
     ;; the handler's state record at install — ONE record carrying state
     ;; slots + ev_slots + (post-H7) continuation. Bind to local minted in
@@ -433,13 +434,32 @@
     (local.set $h (call $lexpr_handle (local.get $r)))
     (local.set $hstate_name
       (call $str_concat (i32.const 5408) (call $int_to_str (local.get $h))))
-    ;; Use the canonical $emit_alloc (5-piece bump pattern via the
-    ;; EmitMemory swap surface — same path as LMakeRecord/LMakeVariant).
-    (call $emit_alloc (i32.const 64) (local.get $hstate_name))
+    (local.set $inits     (call $lexpr_lhandlewith_state_inits (local.get $r)))
+    (local.set $arm_names (call $lexpr_lhandlewith_arm_names   (local.get $r)))
+    (local.set $nstate    (call $len (local.get $inits)))
+    (local.set $nops      (call $len (local.get $arm_names)))
+    ;; Per Hβ-perform-evidence-dispatch.md §4.7: the handler record is the
+    ;; ONE record (state IS closure IS evidence). Layout:
+    ;;   [0]=fn_ptr (unused for state dispatch); [4]=nstate FENCE;
+    ;;   [8+4*i]=state slot i (config++with, source order);
+    ;;   [8+4*nstate+4*k]=arm fn-idx k (EffectDeclKind op order).
+    ;; Size precisely (graph_handler's many ops overflow a fixed 64) via the
+    ;; canonical $emit_alloc (5-piece bump pattern; EmitMemory swap surface).
+    (call $emit_alloc
+      (i32.add (i32.const 8)
+        (i32.mul (i32.const 4) (i32.add (local.get $nstate) (local.get $nops))))
+      (local.get $hstate_name))
+    ;; Write the nstate FENCE at offset 4 so $emit_levperform can locate the
+    ;; arm region fence-relative (interior read of record[4]).
+    (call $ec_emit_local_get_dollar (local.get $hstate_name))
+    (call $emit_i32_const (local.get $nstate))
+    (call $el_emit_i32_store_offset (i32.const 4))
     ;; Emit init writes BEFORE the global-set so the record is fully
     ;; populated by the time any perform-site reads it.
-    (local.set $inits (call $lexpr_lhandlewith_state_inits (local.get $r)))
     (call $emit_state_init_writes (local.get $hstate_name) (local.get $inits) (i32.const 0))
+    ;; Write the arm region: arm fn-idx k at offset 8+4*nstate+4*k.
+    (call $emit_arm_region_writes
+      (local.get $hstate_name) (local.get $nstate) (local.get $arm_names))
     ;; Per-handler GLOBAL state-ptr write (cross-fn projection of the
     ;; install-time state record). Read handler_name from LHandleWith's
     ;; new slot 3 (threaded by lower_pipe from extract_handler_name).
@@ -489,6 +509,34 @@
         (call $emit_byte (i32.const 41))   ;; ')'
         (call $emit_byte (i32.const 10))   ;; '\n'
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each))))
+
+  ;; ─── $emit_arm_region_writes — populate the handler record's arm region ──
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. For each arm fn-name at op-slot
+  ;; k (EffectDeclKind order), emit:
+  ;;   (local.get $<state_local>)(global.get $<arm_name>_idx)(i32.store offset=8+4*nstate+4*k)
+  ;; A 0 entry (op with no arm) leaves its slot unwritten — never read, since
+  ;; an unhandled op of this effect cannot dispatch to this record.
+  ;; $emit_levperform reads record[8+4*nstate+4*op_slot] fence-relative.
+  (func $emit_arm_region_writes (param $state_local i32) (param $nstate i32) (param $arm_names i32)
+    (local $n i32) (local $k i32) (local $arm_name i32) (local $offset i32)
+    (local.set $n (call $len (local.get $arm_names)))
+    (local.set $k (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $k) (local.get $n)))
+        (local.set $arm_name (call $list_index (local.get $arm_names) (local.get $k)))
+        (if (i32.ne (local.get $arm_name) (i32.const 0))
+          (then
+            (local.set $offset
+              (i32.add (i32.const 8)
+                (i32.add
+                  (i32.mul (i32.const 4) (local.get $nstate))
+                  (i32.mul (i32.const 4) (local.get $k)))))
+            (call $ec_emit_local_get_dollar (local.get $state_local))
+            (call $ec8_emit_global_get_name_idx (local.get $arm_name))
+            (call $el_emit_i32_store_offset (local.get $offset))))
+        (local.set $k (i32.add (local.get $k) (i32.const 1)))
         (br $each))))
 
   ;; Emit `(global.get $<handler_name>_state_g)`.
@@ -623,15 +671,17 @@
         (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
         (call $emit_memory_op_wasm (local.get $op_name))
         (return)))
-    ;; Per protocol_handler_is_state_is_closure_is_evidence.md: state_local
-    ;; carries the handler-NAME str_ptr; emit produces `(global.get
-    ;; $<handler>_state_g)` for the arm-call's __state — the cross-fn
-    ;; projection of the install-time state record. state_local == 0
-    ;; means no handler resolved (env-scan fallthrough); fall back to
-    ;; caller's __state for productive-under-error.
+    ;; Per Hβ-perform-evidence-dispatch.md §4.7: state_local carries the
+    ;; install-LOCAL name "__hstate_<h>" (from $lower_resolve_handler_state_for_op),
+    ;; the local bound by $emit_lhandlewith to the handler's state record.
+    ;; A Tier-1 perform is lexically within the install fn's body, so the
+    ;; local is in scope; emit `(local.get $__hstate_<h>)` as the arm-call's
+    ;; __state — the SAME record the arm was installed against (no _state_g
+    ;; global guess). state_local == 0 → no handler resolved → caller's
+    ;; __state (productive-under-error).
     (if (i32.ne (local.get $state_local) (i32.const 0))
       (then
-        (call $emit_handler_state_global_get (local.get $state_local)))
+        (call $ec_emit_local_get_dollar (local.get $state_local)))
       (else
         (call $el_emit_local_get_state)))
     (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
@@ -901,19 +951,66 @@
   ;; SUBSTRATE.md §I third truth "polymorphic minority" — evidence-
   ;; dispatched perform when row inference cannot ground the handler
   ;; stack at compile time.
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7 (the unified-record-layout
+  ;; resolution). The ev-slot holds the HANDLER RECORD POINTER (not a bare
+  ;; arm fn-idx). The arm fn-idx lives in the record's arm region, after the
+  ;; state fence; the arm runs against the handler record as its __state, so
+  ;; it reads f/buf/count at 8+4*i — the record it was installed against.
+  ;;
+  ;;   EV       = 8 + 4*body_capture_count + 4*ev_index   (ev_index=0, the
+  ;;              single-open-effect L1 scope; multi-effect is the named peer
+  ;;              Hβ.lower.multi-effect-ev-index-map)
+  ;;   record   = __state[EV]                              (the handler record ptr)
+  ;;   arm_fn   = record[8 + 4*slot_idx + 4*record[4]]     (fence-relative: record[4]=nstate)
+  ;;   dispatch = call_indirect (type $ft<argc+1>) (record, args…, arm_fn)
+  ;;
+  ;; The arm-offset is read fence-relative off the record's OWN nstate
+  ;; (record[4]) — an interior read of the record, not a static body-captures
+  ;; guess (protocol_reflexive_interiority.md). Drift 1 refusal preserved:
+  ;; arm_fn is an i32 field on a graph-derived record, NOT a vtable.
   (func $emit_levperform (param $r i32)
-    (local $args i32) (local $offset i32)
+    (local $args i32) (local $ev_off i32) (local $arm_const i32)
     (local.set $args (call $lexpr_levperform_args (local.get $r)))
-    (local.set $offset
+    (local.set $ev_off
+      (i32.add (i32.const 8) (i32.mul (i32.const 4) (call $emit_body_captures_count))))
+    (local.set $arm_const
+      (i32.add (i32.const 8)
+        (i32.mul (i32.const 4) (call $lexpr_levperform_slot_idx (local.get $r)))))
+    ;; (1) arm __state = handler record = __state[EV]
+    (call $el_emit_local_get_state)
+    (call $el_emit_i32_load_offset (local.get $ev_off))
+    ;; (2) user args
+    (call $ec6_emit_args (local.get $args))
+    ;; (3) arm fn_idx = record[arm_const + 4*record[4]]
+    (call $el_emit_local_get_state)
+    (call $el_emit_i32_load_offset (local.get $ev_off))         ;; record
+    (call $ec6_emit_i32_const_lit (local.get $arm_const))       ;; 8 + 4*slot_idx
+    (call $ec6_emit_i32_add)                                     ;; record + arm_const
+    (call $el_emit_local_get_state)
+    (call $el_emit_i32_load_offset (local.get $ev_off))         ;; record
+    (call $ec6_emit_i32_load_offset_4)                          ;; nstate = record[4]
+    (call $ec6_emit_i32_const_lit (i32.const 4))
+    (call $ec6_emit_i32_mul)                                     ;; 4*nstate
+    (call $ec6_emit_i32_add)                                     ;; full arm-field address
+    (call $ec6_emit_i32_load_offset_0)                          ;; arm_fn idx
+    ;; (4) dispatch
+    (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
+
+  ;; ─── $emit_levslotref — LEvSlotRef tag 337: forward own ev-slot ─────
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. The polymorphic-scope forward
+  ;; of derive_ev_slots: emit a load of the current fn's own ev-slot (the
+  ;; handler record pointer threaded into __state by the caller's LSuspend),
+  ;; to be re-threaded by reference into a deeper callee's record.
+  ;;   (local.get $__state)(i32.load offset=8 + 4*body_capture_count + 4*ev_index)
+  (func $emit_levslotref (param $r i32)
+    (local $off i32)
+    (local.set $off
       (i32.add (i32.const 8)
         (i32.add
           (i32.mul (i32.const 4) (call $emit_body_captures_count))
-          (i32.mul (i32.const 4) (call $lexpr_levperform_slot_idx (local.get $r))))))
+          (i32.mul (i32.const 4) (call $lexpr_levslotref_ev_index (local.get $r))))))
     (call $el_emit_local_get_state)
-    (call $ec6_emit_args (local.get $args))
-    (call $el_emit_local_get_state)
-    (call $el_emit_i32_load_offset (local.get $offset))
-    (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
+    (call $el_emit_i32_load_offset (local.get $off)))
 
   ;; ─── $emit_lmakeclosure — LMakeClosure tag 311 emit arm ─────────────
   ;; Hβ.emit.handler-fnref-substrate — Phase D closed here.

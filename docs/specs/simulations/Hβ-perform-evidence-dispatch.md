@@ -365,6 +365,132 @@ blind the midsection), this coordinated multi-file WAT build is best opened
 in a fresh window with this walkthrough + `protocol_reflexive_interiority.md`
 as the durable design anchor.
 
+### 4.7 The precise layout, empirically grounded (2026-06-07, build session)
+
+Rebuilding the seed with `d1714f5` (fallback deleted) and running mentl2 on
+`fn main(x)=x` moved the trap — exactly the §4 empirical fork — from the
+`for_each`/`iterate_from` chain to the **parser's first graph perform**:
+
+```
+0: fresh_ph          ← TRAP at call_indirect (indirect call type mismatch)
+1: parse_one_param
+2: parse_fn_params
+… → compile_stdin → _start
+```
+
+`fresh_ph` (src/parser.mn:19) is `perform graph_fresh_ty(Placeholder(span))`.
+`graph_handler` is installed at the pipeline top; the perform fires deep in
+the parser. **The entire parser is open over `Graph`** — so the canonical
+case is not iterate-specific: it is *every* deep perform of an effect
+handled far up the call stack. The fix is the one general evidence chain;
+graph ops simply run first.
+
+**What is already correct (do not rebuild):**
+
+- The **arm fn body + its state layout.** `op_<hname>_<op>` reads config +
+  `with`-fields as captures at `__state[8 + 4·slot]`, pre-allocated in
+  (config ++ state) source order (`walk_handle.wat` `pre_allocate_*_captures`).
+  This is *exactly* the handler record's `8 + 4·i` layout. The arm only needs
+  to receive the **handler's** record as `__state`.
+- **`emit_lsuspend`** (`emit_call.wat:633`) already copies the callee
+  closure header + captures into a transient record and writes the `evs`
+  list into the ev region at `8 + 4·nc + 4·j`, then dispatches with that
+  record as `__state`. It needs `derive_ev_slots` to *produce* the evs.
+
+**The unified record layout (precise):**
+
+```
+handler state record  (built by emit_lhandlewith):
+  offset 0:                   fn_ptr        (handler identity; 0 / unused for state dispatch)
+  offset 4:                   nstate        (FENCE — count of state slots = len(state_inits))
+  offset 8 + 4·i:             state slot i  (config params, then `with` fields, source order)
+  offset 8 + 4·nstate + 4·k:  arm_fn_idx k  (per handled effect's EffectDeclKind op order)
+```
+
+The arm region is REQUIRED: the arm body's capture reads pin state to
+`8 + 4·i`, so arm fn-idxs cannot live in the header — they sit after the
+state fence. Per-op closures (one closure per arm) were rejected: they would
+fork the handler's *mutable* state (`buf`/`count`) across ops, breaking
+`resume() with buf = …`. ONE shared record, arm fns indexed off the fence.
+
+**Evidence is per-EFFECT, carrying the record pointer (not per-op arm-idx):**
+a fn open over effect `E` receives one ev-slot holding `E`'s handler-record
+pointer. `derive_ev_slots(callee)` walks the callee's open-row effects; per
+handler-dispatched effect:
+- **lexical handler in lower-stack** → emit the handler record ptr
+  (`(global.get $<hname>_state_g)`, or install-local — Tier-1 install scope);
+- **else (E is in the *current* fn's own open row)** → forward the current
+  fn's ev-slot for `E` (`(local.get $__state)(i32.load offset=8+4·body_cc+4·ev_index)`).
+
+`LEvPerform(op)` then: load record ptr from own ev-slot at
+`8 + 4·body_cc + 4·ev_index`; read `nstate = record[4]`; arm_fn =
+`record[8 + 4·nstate + 4·op_slot]` (`op_slot` from `compute_ev_slot_for_op`,
+the EffectDeclKind position); `call_indirect (arm_fn)` with **the record** as
+`__state` + args. The arm-offset read is fence-relative — an interior read
+of the record, not a static body-captures guess (reflexive interiority).
+
+**Scope decision (single-open-effect; multi-effect is a named peer).** Every
+fn in the iterate chain AND the parser/graph chain is open over exactly ONE
+handler-dispatched effect, so `ev_index = 0`. Fns simultaneously open over
+≥2 distinct handler-dispatched effects need an `ev_index`-per-effect map
+threaded from row order into both `derive_ev_slots` and `LEvPerform` — a
+structurally-orthogonal mechanism (the row→ev-index assignment), named
+**`Hβ.lower.multi-effect-ev-index-map`**. Single-effect closes the L1 gate;
+multi-effect is its positive-form peer with the structural reason articulated
+(per the pre-action question's orthogonality clause, not drift 9).
+
+Tier-1 (perform lexically inside the handler's scope) keeps its static arm
+bind but takes its state from `$lower_resolve_handler_state_for_op` (reads
+the handler stack's state-local), NOT the deleted default-per-op map.
+
+### 4.8 DECISIVE empirical finding — activation is gated on effect-row inference (Blocker 2)
+
+The full evidence chain is implemented (lexpr `LEvSlotRef`; `derive_ev_slots`
+as the canonical gate; arm-region + `nstate` fence in `emit_lhandlewith`;
+record-deref + fence-relative arm in `emit_levperform`; by-ename handler-state
+resolver; op-slot-indexed arm-name ledger; `|>` forward routed through the
+gate). The seed assembles and **mentl2 (seed's wheel-compile) is a valid
+924 KB module** — the machinery is correct WAT.
+
+But running mentl2 on `fn main(x)=x` still traps — now `out of bounds table
+access` at `fresh_ph`'s `perform graph_fresh_ty` (the trap MOVED from "indirect
+call type mismatch", the §4 empirical fork). The decisive measurements:
+
+- **0** `LSuspend` transient-record builds anywhere in the 66 K-line m2.wat
+  (`grep -c 'local.set $alloc_size'` = 0). **No call threads evidence.**
+- The seed reports **~5015 type-inference diagnostics** compiling the wheel
+  (`E_Mismatch`, `(), found {...}`, `Ty, found TokenKind`, …).
+
+These two facts are one fact. `derive_ev_slots` reads `lookup_ty(callee) →
+TFun.row` to decide evidence. With the wheel's effect rows unresolved
+(~5015 errors; the seed's HM/effect inference is incomplete on full wheel
+source), `lookup_ty` returns non-`TFun`/error types, so `derive_ev_slots`
+returns `[]` for every callee → every call is `LCall` → the deep graph perform
+reads an unthreaded ev-slot → OOB. The perform side is correct (`LEvPerform`,
+op-name-driven, type-free); the **caller side cannot know a callee performs an
+effect without effect-row inference.** There is no type-free shortcut: knowing
+"`fresh_ph` transitively performs `Graph`" IS effect inference.
+
+**This falsifies §4.6's "Blocker 1 is NOT gated on Blocker 2" claim.** That
+held for one specific call's resolved type, not the chain. The honest,
+general statement: **perform-evidence-dispatch is the correct and complete
+ultimate form, and its *activation* is gated on effect-row inference
+(Blocker 2).** Once the seed's inference resolves the wheel's rows,
+`derive_ev_slots` sees the effects, `LSuspend` threads the records, and the
+chain closes — for BOTH the singleton (graph) and multi-handler (iterate)
+cases uniformly. No default-handler global is reintroduced: the singleton
+case worked before only because the deleted op→handler map guessed a global,
+which the multi-handler case structurally cannot use ([[protocol_no_silent_fallback]]).
+The OOB trap is the *honest* "evidence not yet available" state — the complete
+machinery waiting on its one input.
+
+**Named gate (the activation dependency, positive form):**
+**`Hβ.first-light.effect-row-inference-on-wheel`** — make the seed's
+inference resolve the wheel's effect rows (drive the ~5015 diagnostics toward
+0). It is structurally orthogonal to dispatch (HM + effect-row solving, a
+different subsystem), so it is a peer gate, not drift-9 deferral. L1 closure
+is `effect-row-inference-on-wheel` ∧ `perform-evidence-dispatch` (this, done).
+
 ## 5. Empirical verification (Anchor 7 — before claiming closure)
 
 1. **Micro, pre-fix (captured):** `fn main(x)=x` → mentl2 traps at

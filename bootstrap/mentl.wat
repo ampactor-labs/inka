@@ -17743,13 +17743,18 @@
   ;; Used by $lower_walk_stmt_handler_decl (register) and $lower_pipe at
   ;; PTee path (lookup). emit_lhandlewith reads lhandlewith's inits
   ;; field directly — no emit-time lookup needed.
+  ;; Entry is 3 fields: (handler_name, state_inits, arm_names). arm_names is
+  ;; the op-slot-indexed arm fn-name list (Hβ-perform-evidence-dispatch.md
+  ;; §4.7) — built at decl from the handler's actual arms, read at LHandleWith
+  ;; install to write the record's arm region. One ledger, no parallel array.
   (func $handler_state_inits_register (export "handler_state_inits_register")
-        (param $name i32) (param $inits i32)
+        (param $name i32) (param $inits i32) (param $arm_names i32)
     (local $entry i32) (local $new_len i32)
     (call $lower_init)
-    (local.set $entry (call $make_record (i32.const 282) (i32.const 2)))
+    (local.set $entry (call $make_record (i32.const 282) (i32.const 3)))
     (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
     (call $record_set (local.get $entry) (i32.const 1) (local.get $inits))
+    (call $record_set (local.get $entry) (i32.const 2) (local.get $arm_names))
     (local.set $new_len
       (i32.add (global.get $lower_state_inits_ledger_len_g) (i32.const 1)))
     (global.set $lower_state_inits_ledger_ptr
@@ -17779,6 +17784,29 @@
         (br $iter)))
     ;; Not found — productive-under-error: return empty list (matches
     ;; wheel's handler_state_inits_default behavior).
+    (call $make_list (i32.const 0)))
+
+  ;; ─── $handler_arm_names_lookup — op-slot-indexed arm fn-names by hname ─
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. Reads field 2 of the same
+  ;; per-handler ledger entry $handler_state_inits_register populated. The
+  ;; install site ($lower_pipe) threads this into LHandleWith.
+  (func $handler_arm_names_lookup (export "handler_arm_names_lookup")
+        (param $name i32) (result i32)
+    (local $i i32) (local $n i32) (local $entry i32) (local $entry_name i32)
+    (call $lower_init)
+    (local.set $n (global.get $lower_state_inits_ledger_len_g))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $entry
+          (call $list_index (global.get $lower_state_inits_ledger_ptr)
+                            (local.get $i)))
+        (local.set $entry_name (call $record_get (local.get $entry) (i32.const 0)))
+        (if (call $str_eq (local.get $entry_name) (local.get $name))
+          (then (return (call $record_get (local.get $entry) (i32.const 2)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
     (call $make_list (i32.const 0)))
 
   ;; Hβ.first-light.seed-lperform-discriminator-mirror —
@@ -17982,6 +18010,57 @@
     (if (i32.ne (call $tag_of (local.get $kind)) (i32.const 133))
       (then (return (i32.const 0))))
     (local.set $ename (call $schemekind_effectop_name (local.get $kind)))
+    (local.set $i (i32.sub (global.get $lower_handler_count_g) (i32.const 1)))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.lt_s (local.get $i) (i32.const 0)))
+        (local.set $stack_entry
+          (call $list_index (global.get $lower_handler_stack_ptr) (local.get $i)))
+        (local.set $hname       (call $record_get (local.get $stack_entry) (i32.const 0)))
+        (local.set $state_local (call $record_get (local.get $stack_entry) (i32.const 1)))
+        (local.set $h_entry (call $env_lookup (local.get $hname)))
+        (if (i32.ne (local.get $h_entry) (i32.const 0))
+          (then
+            (local.set $sch (call $env_binding_scheme (local.get $h_entry)))
+            (local.set $body (call $scheme_body (local.get $sch)))
+            (if (i32.ge_u (local.get $body) (global.get $heap_base))
+              (then
+                (if (i32.eq (call $ty_tag (local.get $body)) (i32.const 108))
+                  (then
+                    (if (call $str_eq
+                              (call $ty_tname_name (local.get $body))
+                              (i32.const 4320))
+                      (then
+                        (local.set $args (call $ty_tname_args (local.get $body)))
+                        (if (i32.eq (call $len (local.get $args)) (i32.const 1))
+                          (then
+                            (local.set $arg0 (call $list_index (local.get $args) (i32.const 0)))
+                            (if (i32.ge_u (local.get $arg0) (global.get $heap_base))
+                              (then
+                                (if (i32.eq (call $ty_tag (local.get $arg0)) (i32.const 108))
+                                  (then
+                                    (if (call $str_eq
+                                              (call $ty_tname_name (local.get $arg0))
+                                              (local.get $ename))
+                                      (then (return (local.get $state_local))))))))))))))))))
+        (local.set $i (i32.sub (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 0))
+
+  ;; ─── $lower_resolve_handler_state_for_ename — by-effect-name variant ──
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. $derive_ev_slots has the
+  ;; EFFECT name (from the callee's row), not an op-name, so it resolves the
+  ;; handler's state-local directly by ename. Same innermost-first stack walk
+  ;; as $lower_resolve_handler_state_for_op but without the op→ename step.
+  ;; Returns the state-record-local-name ("__hstate_<h>") or 0 if no handler
+  ;; for ename is lexically in scope (→ forward via LEvSlotRef).
+  (func $lower_resolve_handler_state_for_ename
+        (export "lower_resolve_handler_state_for_ename")
+        (param $ename i32) (result i32)
+    (local $i i32) (local $stack_entry i32) (local $hname i32)
+    (local $state_local i32) (local $h_entry i32) (local $sch i32)
+    (local $body i32) (local $args i32) (local $arg0 i32)
+    (call $lower_init)
     (local.set $i (i32.sub (global.get $lower_handler_count_g) (i32.const 1)))
     (block $done
       (loop $iter
@@ -19230,18 +19309,36 @@
   ;;   4: state_inits (list of LowExpr — one per source-order state field;
   ;;                   emit writes each at offset 8+i*4 of the freshly-
   ;;                   allocated state record at $emit_lhandlewith time)
-  (func $lexpr_make_lhandlewith_with_inits
+  ;;   5: arm_names (list of str_ptr — the handled effect's arm fn-names in
+  ;;                 EffectDeclKind op order, "op_<hname>_<op>"; 0 entries
+  ;;                 for ops with no arm. emit writes each fn-idx at offset
+  ;;                 8 + 4*nstate + 4*op_slot of the state record — the arm
+  ;;                 region read by $emit_levperform's fence-relative lookup.
+  ;;                 Per Hβ-perform-evidence-dispatch.md §4.7: emit cannot
+  ;;                 reach env, so the op-ordered arm list is resolved at
+  ;;                 lower time and threaded here.)
+  (func $lexpr_make_lhandlewith_with_arm_names
         (param $h i32) (param $body i32) (param $handler i32)
-        (param $handler_name i32) (param $state_inits i32)
+        (param $handler_name i32) (param $state_inits i32) (param $arm_names i32)
         (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 329) (i32.const 5)))
+    (local.set $r (call $make_record (i32.const 329) (i32.const 6)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
     (call $record_set (local.get $r) (i32.const 1) (local.get $body))
     (call $record_set (local.get $r) (i32.const 2) (local.get $handler))
     (call $record_set (local.get $r) (i32.const 3) (local.get $handler_name))
     (call $record_set (local.get $r) (i32.const 4) (local.get $state_inits))
+    (call $record_set (local.get $r) (i32.const 5) (local.get $arm_names))
     (local.get $r))
+
+  (func $lexpr_make_lhandlewith_with_inits
+        (param $h i32) (param $body i32) (param $handler i32)
+        (param $handler_name i32) (param $state_inits i32)
+        (result i32)
+    (call $lexpr_make_lhandlewith_with_arm_names
+      (local.get $h) (local.get $body) (local.get $handler)
+      (local.get $handler_name) (local.get $state_inits)
+      (call $make_list (i32.const 0))))
 
   (func $lexpr_make_lhandlewith_with_name
         (param $h i32) (param $body i32) (param $handler i32) (param $handler_name i32)
@@ -19268,6 +19365,10 @@
         (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 4)))
 
+  (func $lexpr_lhandlewith_arm_names (export "lexpr_lhandlewith_arm_names")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 5)))
+
   ;; ─── 336 = LStateSlotStore(handle, offset, value) — arity 3 ─────────
   ;; Per Hβ.seed.resume-with-state-update-mirror: emit produces
   ;; `(local.get $__state)(<value>)(i32.store offset=<offset>)` —
@@ -19293,6 +19394,33 @@
   (func $lexpr_lstateslotstore_value (export "lexpr_lstateslotstore_value")
         (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
+
+  ;; ─── 337 = LEvSlotRef(handle, ev_index) — arity 2 ───────────────────
+  ;; Forward the current fn's evidence slot `ev_index` by reference. Emits
+  ;; a load of __state's ev region:
+  ;;   (local.get $__state)(i32.load offset=8 + 4*body_capture_count + 4*ev_index)
+  ;; body_capture_count is resolved at emit time ($emit_body_captures_count,
+  ;; the evidence fence at __state[4]); ev_index is the effect's slot among
+  ;; the current fn's open-row effects (0 in the single-open-effect L1 scope;
+  ;; the multi-effect ev_index→effect map is the named peer
+  ;; Hβ.lower.multi-effect-ev-index-map). This IS the polymorphic-scope
+  ;; forward of $derive_ev_slots: by the row-typing invariant, a perform
+  ;; whose effect has no lexical handler is open in the current fn's row, so
+  ;; its evidence (the handler record pointer) already sits in the current
+  ;; fn's own ev-slot — forwarded by reference into the callee's record.
+  ;; Per protocol_reflexive_interiority.md: the forward is an interior read
+  ;; of the record threaded into __state, never a global default guess.
+  (func $lexpr_make_levslotref (export "lexpr_make_levslotref")
+        (param $h i32) (param $ev_index i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 337) (i32.const 2)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $ev_index))
+    (local.get $r))
+
+  (func $lexpr_levslotref_ev_index (export "lexpr_levslotref_ev_index")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 1)))
 
   ;; ─── 330 = LFeedback(handle, body, spec) — arity 3 ──────────────────
   ;; Per src/lower.mn:137 LFeedback(Int, LowExpr, LowExpr) — "<~
@@ -21193,18 +21321,64 @@
         (br $each)))
     (local.get $buf))
 
-  ;; ─── $derive_ev_slots — H1.6 polymorphic ev-list (Lock #7 empty) ──
-  ;; Per Lock #7 above + named follow-up Hβ.lower.derive-ev-slots-naming.
-  ;; Conservative seed default: returns empty list. Wheel-parity
-  ;; matching wheel src/lower.mn:264-269 EfPure case — which IS empty.
-  ;; The seed effectively treats every callee as Pure-row at this layer;
-  ;; emit's H1.4 substrate handles the per-op naming when it grows.
-  ;;
-  ;; This is NOT drift-9: the function exists at the named symbol,
-  ;; returns a defensible value (empty list — what wheel returns for
-  ;; EfPure, the >95% case), and the future enrichment is a peer.
+  ;; ─── $derive_ev_slots — H1.6 evidence list (Hβ.first-light.perform-evidence) ──
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. The handler-record evidence the
+  ;; caller threads into the callee's record so the callee's deep performs
+  ;; dispatch to the right handler. Single-open-effect L1 scope: produce
+  ;; exactly ONE ev-slot (matches $emit_levperform's single-slot read).
+  ;;   - callee not TFun / pure row → no evidence ([]) → caller emits LCall.
+  ;;   - a lexical handler for some effect in the callee's row is on the
+  ;;     lower handler-stack → evidence = LLocal("__hstate_<h>") (the install
+  ;;     local holding that handler's record).
+  ;;   - else (the effect is open in the current fn's own row, by the
+  ;;     row-typing invariant) → forward the current fn's own ev-slot 0 via
+  ;;     LEvSlotRef(0).
+  ;; Multi-distinct-effect rows need an ev_index→effect map (named peer
+  ;; Hβ.lower.multi-effect-ev-index-map). Builtin-only rows (WASI/Memory)
+  ;; get a harmless unused forward slot — the perform short-circuits to
+  ;; direct emit and never reads it; precise builtin-effect filtering is the
+  ;; named optimization peer Hβ.lower.ev-slot-builtin-effect-filter.
   (func $derive_ev_slots (export "derive_ev_slots") (param $callee_handle i32) (result i32)
-    (call $make_list (i32.const 0)))
+    (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $i i32)
+    (local $ename i32) (local $state_local i32) (local $evs i32)
+    (local.set $ty (call $lookup_ty (local.get $callee_handle)))
+    (if (i32.lt_u (local.get $ty) (global.get $heap_base))
+      (then (return (call $make_list (i32.const 0)))))
+    (if (i32.ne (call $ty_tag (local.get $ty)) (i32.const 107))   ;; not TFun
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $row (call $ty_tfun_row (local.get $ty)))
+    ;; Only Closed/Open rows carry nameable effects. Pure → no evidence;
+    ;; Neg/Sub/Inter/unresolved rows → no evidence (row_names traps on those).
+    (if (i32.eqz (i32.or (call $row_is_closed (local.get $row))
+                         (call $row_is_open   (local.get $row))))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $names (call $row_names (local.get $row)))
+    (local.set $n (call $len (local.get $names)))
+    (if (i32.eqz (local.get $n))
+      (then (return (call $make_list (i32.const 0)))))
+    ;; Find a lexically-handled effect → use its install-local record.
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $ename (call $list_index (local.get $names) (local.get $i)))
+        (local.set $state_local
+          (call $lower_resolve_handler_state_for_ename (local.get $ename)))
+        (if (i32.ne (local.get $state_local) (i32.const 0))
+          (then
+            (local.set $evs (call $make_list (i32.const 0)))
+            (local.set $evs (call $list_extend_to (local.get $evs) (i32.const 1)))
+            (drop (call $list_set (local.get $evs) (i32.const 0)
+                    (call $lexpr_make_llocal (i32.const 0) (local.get $state_local))))
+            (return (local.get $evs))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    ;; No lexical handler for any effect in the row → forward own ev-slot 0.
+    (local.set $evs (call $make_list (i32.const 0)))
+    (local.set $evs (call $list_extend_to (local.get $evs) (i32.const 1)))
+    (drop (call $list_set (local.get $evs) (i32.const 0)
+            (call $lexpr_make_levslotref (i32.const 0) (i32.const 0))))
+    (local.get $evs))
 
   ;; ─── $lower_call_default — monomorphic-vs-polymorphic gate ─────────
   ;; Per src/lower.mn:242-249 + Lock #1. The gradient cash-out.
@@ -21225,13 +21399,19 @@
         (param $handle i32) (param $lo_f i32) (param $fh i32) (param $lo_args i32)
         (result i32)
     (local $evs i32)
-    (if (call $monomorphic_at (local.get $handle))
+    ;; Per Hβ-perform-evidence-dispatch.md §4.7: $derive_ev_slots IS the gate
+    ;; (canonical projection — one source of truth). A callee needs evidence
+    ;; iff its row carries a handler-dispatched effect; if so the call must
+    ;; LSuspend to thread the handler record into the callee's __state, else a
+    ;; deep perform reads an unthreaded ev-slot and traps. Empty → LCall (the
+    ;; monomorphic >95% case). Replaces the row_is_ground/$monomorphic_at
+    ;; gate, which conflated "closed row" with "needs no evidence".
+    (local.set $evs (call $derive_ev_slots (local.get $fh)))
+    (if (i32.eqz (call $len (local.get $evs)))
       (then (return (call $lexpr_make_lcall
                       (local.get $handle)
                       (local.get $lo_f)
                       (local.get $lo_args)))))
-    ;; Polymorphic — H1.6 evidence-passing thunk via LSuspend.
-    (local.set $evs (call $derive_ev_slots (local.get $fh)))
     (call $lexpr_make_lsuspend
       (local.get $handle)
       (local.get $fh)
@@ -21348,7 +21528,7 @@
                                       (local.get $h)
                                       (local.get $tag_id)
                                       (local.get $lo_args)
-                                      (call $lower_lookup_default_handler_for_op (local.get $name)))))
+                                      (call $lower_resolve_handler_state_for_op (local.get $name)))))
                       (else
                         ;; Tier 2: evidence-passing per graph EffectDeclKind.
                         (return (call $lexpr_make_levperform
@@ -21555,7 +21735,7 @@
           (local.get $h)
           (local.get $resolved)
           (local.get $lo_args)
-          (call $lower_lookup_default_handler_for_op (local.get $op_name))))
+          (call $lower_resolve_handler_state_for_op (local.get $op_name))))
       (else
         ;; Tier 2: polymorphic evidence-passing. The handler is provided
         ;; by the caller via evidence slots in __state. Compute slot_idx
@@ -22366,6 +22546,68 @@
   (data (i32.const 5408) "\09\00\00\00__hstate_")
   (data (i32.const 5424) "\08\00\00\00_state_g")
 
+  ;; ─── $lower_handler_effect_arm_names — op-slot-indexed arm fn-names ──
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. Looks up the arm-name list
+  ;; registered at handler-decl time (built from the handler's ACTUAL arms,
+  ;; sparse-indexed by op-slot). Threaded into LHandleWith so emit writes the
+  ;; arm region. Lookup (not effect-resolution) so only IMPLEMENTED ops get
+  ;; entries — the EffectDeclKind op-list can be contaminated by return-type
+  ;; names (e.g. Thread's "A"/"Handle" from `spawn(...) -> A`), and unhandled
+  ;; ops have no emitted arm fn; resolving from arms sidesteps both.
+  (func $lower_handler_effect_arm_names (param $hname i32) (result i32)
+    (call $handler_arm_names_lookup (local.get $hname)))
+
+  ;; ─── $build_handler_arm_names — sparse op-slot→arm-fn-name list ─────
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. From the handler's arms,
+  ;; build a list indexed by op-slot (= $lower_compute_ev_slot_for_op of the
+  ;; op, the same index $emit_levperform reads), placing "op_<hname>_<op>" at
+  ;; each implemented op's slot and 0 elsewhere. Registered at decl time.
+  (func $build_handler_arm_names (param $hname i32) (param $arms i32) (result i32)
+    (local $n i32) (local $i i32) (local $arm i32) (local $op_name i32)
+    (local $slot i32) (local $maxslot i32) (local $buf i32) (local $nm i32)
+    (local.set $n (call $len (local.get $arms)))
+    ;; pass 1 — max op-slot among implemented arms.
+    (local.set $maxslot (i32.const -1))
+    (local.set $i (i32.const 0))
+    (block $d1
+      (loop $l1
+        (br_if $d1 (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
+        (local.set $op_name (call $record_get (local.get $arm) (i32.const 2)))
+        (local.set $slot (call $lower_compute_ev_slot_for_op (local.get $op_name)))
+        (if (i32.gt_s (local.get $slot) (local.get $maxslot))
+          (then (local.set $maxslot (local.get $slot))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $l1)))
+    (if (i32.lt_s (local.get $maxslot) (i32.const 0))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $buf (call $make_list (i32.const 0)))
+    (local.set $buf
+      (call $list_extend_to (local.get $buf) (i32.add (local.get $maxslot) (i32.const 1))))
+    ;; zero-init every slot (list_extend_to may leave prior garbage).
+    (local.set $i (i32.const 0))
+    (block $d0
+      (loop $l0
+        (br_if $d0 (i32.gt_s (local.get $i) (local.get $maxslot)))
+        (drop (call $list_set (local.get $buf) (local.get $i) (i32.const 0)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $l0)))
+    ;; pass 2 — fill implemented arms at their op-slot.
+    (local.set $i (i32.const 0))
+    (block $d2
+      (loop $l2
+        (br_if $d2 (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
+        (local.set $op_name (call $record_get (local.get $arm) (i32.const 2)))
+        (local.set $slot (call $lower_compute_ev_slot_for_op (local.get $op_name)))
+        (local.set $nm (call $str_concat (i32.const 504) (local.get $hname)))   ;; "op_" ++ hname
+        (local.set $nm (call $str_concat (local.get $nm) (i32.const 4400)))     ;; ++ "_"
+        (local.set $nm (call $str_concat (local.get $nm) (local.get $op_name))) ;; ++ op
+        (drop (call $list_set (local.get $buf) (local.get $slot) (local.get $nm)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $l2)))
+    (local.get $buf))
+
   ;; ─── $lower_pipe — PipeExpr arm (parser tag 101) — 5-verb dispatch ──
   ;; Per src/lower.mn:470-504 + spec 10. Five PipeKinds, one arm each.
   ;; Lock #2: PTeeBlock + PTeeInline collapse to one arm.
@@ -22456,17 +22698,19 @@
                     (call $list_index (local.get $state_inits) (local.get $i))))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $s_each)))
-        (return (call $lexpr_make_lhandlewith_with_inits
+        (return (call $lexpr_make_lhandlewith_with_arm_names
                   (local.get $h) (local.get $lo_l) (local.get $lo_r)
                   (local.get $hname)
-                  (local.get $all_inits)))))
+                  (local.get $all_inits)
+                  (call $lower_handler_effect_arm_names (local.get $hname))))))
     ;; Non-handle pipes — lower left+right normally.
     (local.set $lo_l (call $lower_expr (local.get $left_node)))
     (local.set $lo_r (call $lower_expr (local.get $right_node)))
-    ;; PForward (160) — `left |> right` → LCall(h, right, [left]).
+    ;; PForward (160) — `left |> right` → LCall/LSuspend(h, right, [left]).
     (if (i32.eq (local.get $kind) (i32.const 160))
       (then (return (call $lower_pipe_forward
-                      (local.get $h) (local.get $lo_l) (local.get $lo_r)))))
+                      (local.get $h) (local.get $lo_l) (local.get $lo_r)
+                      (call $walk_expr_node_handle (local.get $right_node))))))
     ;; PDiverge (161) — `<|` per Lock #3.
     (if (i32.eq (local.get $kind) (i32.const 161))
       (then (return (call $lower_pipe_diverge
@@ -22558,8 +22802,14 @@
   ;; [lo_l] ++ args). Else LCall(lo_r, [lo_l]) per the bare-fn shape.
   ;; Drift refused: 1 (no vtable; structural tag-308 dispatch); 9
   ;; (lands the closure here, not a pre-pipe-rewrite peer follow-up).
+  ;; $fh is the callee node-handle (right side of the pipe) — needed so the
+  ;; simple `x |> f` form routes through $lower_call_default's evidence gate
+  ;; (Hβ-perform-evidence-dispatch.md §4.7): a `|>` call to an effectful
+  ;; callee must LSuspend to thread the handler record, exactly like a
+  ;; CallExpr. Without this, every `|>` chain (pervasive in the wheel) emits
+  ;; LCall and the evidence never threads.
   (func $lower_pipe_forward (export "lower_pipe_forward")
-        (param $h i32) (param $lo_l i32) (param $lo_r i32) (result i32)
+        (param $h i32) (param $lo_l i32) (param $lo_r i32) (param $fh i32) (result i32)
     (local $args i32) (local $r_args i32) (local $r_args_n i32)
     (local $i i32) (local $r_fn i32) (local $r_tag i32)
     (local.set $r_tag (call $tag_of (local.get $lo_r)))
@@ -22591,11 +22841,19 @@
                                   (call $list_index (local.get $r_args) (local.get $i))))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $copy_iter)))
+        ;; Preserve evidence when flattening: an already-LSuspend right side
+        ;; keeps its evs + callee-handle (slot 1); LCall stays LCall.
+        (if (i32.eq (local.get $r_tag) (i32.const 325))
+          (then (return (call $lexpr_make_lsuspend (local.get $h)
+                          (call $record_get (local.get $lo_r) (i32.const 1))
+                          (local.get $r_fn) (local.get $args)
+                          (call $lexpr_lsuspend_evs (local.get $lo_r))))))
         (return (call $lexpr_make_lcall (local.get $h) (local.get $r_fn) (local.get $args)))))
     (local.set $args (call $make_list (i32.const 0)))
     (local.set $args (call $list_extend_to (local.get $args) (i32.const 1)))
     (drop (call $list_set (local.get $args) (i32.const 0) (local.get $lo_l)))
-    (call $lexpr_make_lcall (local.get $h) (local.get $lo_r) (local.get $args)))
+    ;; Simple `x |> f` — route through the evidence gate (LCall vs LSuspend).
+    (call $lower_call_default (local.get $h) (local.get $lo_r) (local.get $fh) (local.get $args)))
 
   ;; ─── $lower_pipe_diverge — `<|` arm per Lock #3 ───────────────────
   ;; Per src/lower.mn:480-481 + 506-517. Right MUST be LMakeTuple (tag 317);
@@ -24861,7 +25119,12 @@
     ;; the inits into LHandleWith for emit-time stores at offset 8+i*4
     ;; per protocol_handler_is_state_is_closure_is_evidence.md.
     (local.set $state_inits (call $lower_state_field_inits (local.get $state_fields)))
-    (call $handler_state_inits_register (local.get $handler_name) (local.get $state_inits))
+    ;; Hβ-perform-evidence-dispatch.md §4.7: build the op-slot-indexed arm
+    ;; fn-name list from the handler's actual arms and register it alongside
+    ;; the state-inits (one ledger entry, 3 fields). $emit_lhandlewith reads
+    ;; it via the install site to write the record's arm region.
+    (call $handler_state_inits_register (local.get $handler_name) (local.get $state_inits)
+      (call $build_handler_arm_names (local.get $handler_name) (local.get $arms)))
     ;; Lock #7: invoke chunk #8's helper (third caller — abstraction earned).
     ;; Per Hβ.first-light.handler-arm-fn-name-discriminator: pass the
     ;; handler_name as the discriminator so each top-level handler's
@@ -27084,6 +27347,8 @@
       (then (call $emit_lunresolved  (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 336))
       (then (call $emit_lstateslotstore (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 337))
+      (then (call $emit_levslotref   (local.get $r)) (return)))
     (unreachable))
 
   ;; ─── $emit_lstateslotstore — LStateSlotStore tag 336 emit arm ──────
@@ -29684,6 +29949,7 @@
   ;; `(func $op_<name> ...)` declarations.
   (func $emit_lhandlewith (param $r i32)
     (local $h i32) (local $hstate_name i32) (local $inits i32)
+    (local $arm_names i32) (local $nstate i32) (local $nops i32)
     ;; Per protocol_handler_is_state_is_closure_is_evidence.md: allocate
     ;; the handler's state record at install — ONE record carrying state
     ;; slots + ev_slots + (post-H7) continuation. Bind to local minted in
@@ -29703,13 +29969,32 @@
     (local.set $h (call $lexpr_handle (local.get $r)))
     (local.set $hstate_name
       (call $str_concat (i32.const 5408) (call $int_to_str (local.get $h))))
-    ;; Use the canonical $emit_alloc (5-piece bump pattern via the
-    ;; EmitMemory swap surface — same path as LMakeRecord/LMakeVariant).
-    (call $emit_alloc (i32.const 64) (local.get $hstate_name))
+    (local.set $inits     (call $lexpr_lhandlewith_state_inits (local.get $r)))
+    (local.set $arm_names (call $lexpr_lhandlewith_arm_names   (local.get $r)))
+    (local.set $nstate    (call $len (local.get $inits)))
+    (local.set $nops      (call $len (local.get $arm_names)))
+    ;; Per Hβ-perform-evidence-dispatch.md §4.7: the handler record is the
+    ;; ONE record (state IS closure IS evidence). Layout:
+    ;;   [0]=fn_ptr (unused for state dispatch); [4]=nstate FENCE;
+    ;;   [8+4*i]=state slot i (config++with, source order);
+    ;;   [8+4*nstate+4*k]=arm fn-idx k (EffectDeclKind op order).
+    ;; Size precisely (graph_handler's many ops overflow a fixed 64) via the
+    ;; canonical $emit_alloc (5-piece bump pattern; EmitMemory swap surface).
+    (call $emit_alloc
+      (i32.add (i32.const 8)
+        (i32.mul (i32.const 4) (i32.add (local.get $nstate) (local.get $nops))))
+      (local.get $hstate_name))
+    ;; Write the nstate FENCE at offset 4 so $emit_levperform can locate the
+    ;; arm region fence-relative (interior read of record[4]).
+    (call $ec_emit_local_get_dollar (local.get $hstate_name))
+    (call $emit_i32_const (local.get $nstate))
+    (call $el_emit_i32_store_offset (i32.const 4))
     ;; Emit init writes BEFORE the global-set so the record is fully
     ;; populated by the time any perform-site reads it.
-    (local.set $inits (call $lexpr_lhandlewith_state_inits (local.get $r)))
     (call $emit_state_init_writes (local.get $hstate_name) (local.get $inits) (i32.const 0))
+    ;; Write the arm region: arm fn-idx k at offset 8+4*nstate+4*k.
+    (call $emit_arm_region_writes
+      (local.get $hstate_name) (local.get $nstate) (local.get $arm_names))
     ;; Per-handler GLOBAL state-ptr write (cross-fn projection of the
     ;; install-time state record). Read handler_name from LHandleWith's
     ;; new slot 3 (threaded by lower_pipe from extract_handler_name).
@@ -29759,6 +30044,34 @@
         (call $emit_byte (i32.const 41))   ;; ')'
         (call $emit_byte (i32.const 10))   ;; '\n'
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each))))
+
+  ;; ─── $emit_arm_region_writes — populate the handler record's arm region ──
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. For each arm fn-name at op-slot
+  ;; k (EffectDeclKind order), emit:
+  ;;   (local.get $<state_local>)(global.get $<arm_name>_idx)(i32.store offset=8+4*nstate+4*k)
+  ;; A 0 entry (op with no arm) leaves its slot unwritten — never read, since
+  ;; an unhandled op of this effect cannot dispatch to this record.
+  ;; $emit_levperform reads record[8+4*nstate+4*op_slot] fence-relative.
+  (func $emit_arm_region_writes (param $state_local i32) (param $nstate i32) (param $arm_names i32)
+    (local $n i32) (local $k i32) (local $arm_name i32) (local $offset i32)
+    (local.set $n (call $len (local.get $arm_names)))
+    (local.set $k (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $k) (local.get $n)))
+        (local.set $arm_name (call $list_index (local.get $arm_names) (local.get $k)))
+        (if (i32.ne (local.get $arm_name) (i32.const 0))
+          (then
+            (local.set $offset
+              (i32.add (i32.const 8)
+                (i32.add
+                  (i32.mul (i32.const 4) (local.get $nstate))
+                  (i32.mul (i32.const 4) (local.get $k)))))
+            (call $ec_emit_local_get_dollar (local.get $state_local))
+            (call $ec8_emit_global_get_name_idx (local.get $arm_name))
+            (call $el_emit_i32_store_offset (local.get $offset))))
+        (local.set $k (i32.add (local.get $k) (i32.const 1)))
         (br $each))))
 
   ;; Emit `(global.get $<handler_name>_state_g)`.
@@ -29893,15 +30206,17 @@
         (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
         (call $emit_memory_op_wasm (local.get $op_name))
         (return)))
-    ;; Per protocol_handler_is_state_is_closure_is_evidence.md: state_local
-    ;; carries the handler-NAME str_ptr; emit produces `(global.get
-    ;; $<handler>_state_g)` for the arm-call's __state — the cross-fn
-    ;; projection of the install-time state record. state_local == 0
-    ;; means no handler resolved (env-scan fallthrough); fall back to
-    ;; caller's __state for productive-under-error.
+    ;; Per Hβ-perform-evidence-dispatch.md §4.7: state_local carries the
+    ;; install-LOCAL name "__hstate_<h>" (from $lower_resolve_handler_state_for_op),
+    ;; the local bound by $emit_lhandlewith to the handler's state record.
+    ;; A Tier-1 perform is lexically within the install fn's body, so the
+    ;; local is in scope; emit `(local.get $__hstate_<h>)` as the arm-call's
+    ;; __state — the SAME record the arm was installed against (no _state_g
+    ;; global guess). state_local == 0 → no handler resolved → caller's
+    ;; __state (productive-under-error).
     (if (i32.ne (local.get $state_local) (i32.const 0))
       (then
-        (call $emit_handler_state_global_get (local.get $state_local)))
+        (call $ec_emit_local_get_dollar (local.get $state_local)))
       (else
         (call $el_emit_local_get_state)))
     (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
@@ -30171,19 +30486,66 @@
   ;; SUBSTRATE.md §I third truth "polymorphic minority" — evidence-
   ;; dispatched perform when row inference cannot ground the handler
   ;; stack at compile time.
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7 (the unified-record-layout
+  ;; resolution). The ev-slot holds the HANDLER RECORD POINTER (not a bare
+  ;; arm fn-idx). The arm fn-idx lives in the record's arm region, after the
+  ;; state fence; the arm runs against the handler record as its __state, so
+  ;; it reads f/buf/count at 8+4*i — the record it was installed against.
+  ;;
+  ;;   EV       = 8 + 4*body_capture_count + 4*ev_index   (ev_index=0, the
+  ;;              single-open-effect L1 scope; multi-effect is the named peer
+  ;;              Hβ.lower.multi-effect-ev-index-map)
+  ;;   record   = __state[EV]                              (the handler record ptr)
+  ;;   arm_fn   = record[8 + 4*slot_idx + 4*record[4]]     (fence-relative: record[4]=nstate)
+  ;;   dispatch = call_indirect (type $ft<argc+1>) (record, args…, arm_fn)
+  ;;
+  ;; The arm-offset is read fence-relative off the record's OWN nstate
+  ;; (record[4]) — an interior read of the record, not a static body-captures
+  ;; guess (protocol_reflexive_interiority.md). Drift 1 refusal preserved:
+  ;; arm_fn is an i32 field on a graph-derived record, NOT a vtable.
   (func $emit_levperform (param $r i32)
-    (local $args i32) (local $offset i32)
+    (local $args i32) (local $ev_off i32) (local $arm_const i32)
     (local.set $args (call $lexpr_levperform_args (local.get $r)))
-    (local.set $offset
+    (local.set $ev_off
+      (i32.add (i32.const 8) (i32.mul (i32.const 4) (call $emit_body_captures_count))))
+    (local.set $arm_const
+      (i32.add (i32.const 8)
+        (i32.mul (i32.const 4) (call $lexpr_levperform_slot_idx (local.get $r)))))
+    ;; (1) arm __state = handler record = __state[EV]
+    (call $el_emit_local_get_state)
+    (call $el_emit_i32_load_offset (local.get $ev_off))
+    ;; (2) user args
+    (call $ec6_emit_args (local.get $args))
+    ;; (3) arm fn_idx = record[arm_const + 4*record[4]]
+    (call $el_emit_local_get_state)
+    (call $el_emit_i32_load_offset (local.get $ev_off))         ;; record
+    (call $ec6_emit_i32_const_lit (local.get $arm_const))       ;; 8 + 4*slot_idx
+    (call $ec6_emit_i32_add)                                     ;; record + arm_const
+    (call $el_emit_local_get_state)
+    (call $el_emit_i32_load_offset (local.get $ev_off))         ;; record
+    (call $ec6_emit_i32_load_offset_4)                          ;; nstate = record[4]
+    (call $ec6_emit_i32_const_lit (i32.const 4))
+    (call $ec6_emit_i32_mul)                                     ;; 4*nstate
+    (call $ec6_emit_i32_add)                                     ;; full arm-field address
+    (call $ec6_emit_i32_load_offset_0)                          ;; arm_fn idx
+    ;; (4) dispatch
+    (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
+
+  ;; ─── $emit_levslotref — LEvSlotRef tag 337: forward own ev-slot ─────
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. The polymorphic-scope forward
+  ;; of derive_ev_slots: emit a load of the current fn's own ev-slot (the
+  ;; handler record pointer threaded into __state by the caller's LSuspend),
+  ;; to be re-threaded by reference into a deeper callee's record.
+  ;;   (local.get $__state)(i32.load offset=8 + 4*body_capture_count + 4*ev_index)
+  (func $emit_levslotref (param $r i32)
+    (local $off i32)
+    (local.set $off
       (i32.add (i32.const 8)
         (i32.add
           (i32.mul (i32.const 4) (call $emit_body_captures_count))
-          (i32.mul (i32.const 4) (call $lexpr_levperform_slot_idx (local.get $r))))))
+          (i32.mul (i32.const 4) (call $lexpr_levslotref_ev_index (local.get $r))))))
     (call $el_emit_local_get_state)
-    (call $ec6_emit_args (local.get $args))
-    (call $el_emit_local_get_state)
-    (call $el_emit_i32_load_offset (local.get $offset))
-    (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
+    (call $el_emit_i32_load_offset (local.get $off)))
 
   ;; ─── $emit_lmakeclosure — LMakeClosure tag 311 emit arm ─────────────
   ;; Hβ.emit.handler-fnref-substrate — Phase D closed here.

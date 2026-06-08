@@ -630,6 +630,68 @@
   (data (i32.const 5408) "\09\00\00\00__hstate_")
   (data (i32.const 5424) "\08\00\00\00_state_g")
 
+  ;; ─── $lower_handler_effect_arm_names — op-slot-indexed arm fn-names ──
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. Looks up the arm-name list
+  ;; registered at handler-decl time (built from the handler's ACTUAL arms,
+  ;; sparse-indexed by op-slot). Threaded into LHandleWith so emit writes the
+  ;; arm region. Lookup (not effect-resolution) so only IMPLEMENTED ops get
+  ;; entries — the EffectDeclKind op-list can be contaminated by return-type
+  ;; names (e.g. Thread's "A"/"Handle" from `spawn(...) -> A`), and unhandled
+  ;; ops have no emitted arm fn; resolving from arms sidesteps both.
+  (func $lower_handler_effect_arm_names (param $hname i32) (result i32)
+    (call $handler_arm_names_lookup (local.get $hname)))
+
+  ;; ─── $build_handler_arm_names — sparse op-slot→arm-fn-name list ─────
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. From the handler's arms,
+  ;; build a list indexed by op-slot (= $lower_compute_ev_slot_for_op of the
+  ;; op, the same index $emit_levperform reads), placing "op_<hname>_<op>" at
+  ;; each implemented op's slot and 0 elsewhere. Registered at decl time.
+  (func $build_handler_arm_names (param $hname i32) (param $arms i32) (result i32)
+    (local $n i32) (local $i i32) (local $arm i32) (local $op_name i32)
+    (local $slot i32) (local $maxslot i32) (local $buf i32) (local $nm i32)
+    (local.set $n (call $len (local.get $arms)))
+    ;; pass 1 — max op-slot among implemented arms.
+    (local.set $maxslot (i32.const -1))
+    (local.set $i (i32.const 0))
+    (block $d1
+      (loop $l1
+        (br_if $d1 (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
+        (local.set $op_name (call $record_get (local.get $arm) (i32.const 2)))
+        (local.set $slot (call $lower_compute_ev_slot_for_op (local.get $op_name)))
+        (if (i32.gt_s (local.get $slot) (local.get $maxslot))
+          (then (local.set $maxslot (local.get $slot))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $l1)))
+    (if (i32.lt_s (local.get $maxslot) (i32.const 0))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $buf (call $make_list (i32.const 0)))
+    (local.set $buf
+      (call $list_extend_to (local.get $buf) (i32.add (local.get $maxslot) (i32.const 1))))
+    ;; zero-init every slot (list_extend_to may leave prior garbage).
+    (local.set $i (i32.const 0))
+    (block $d0
+      (loop $l0
+        (br_if $d0 (i32.gt_s (local.get $i) (local.get $maxslot)))
+        (drop (call $list_set (local.get $buf) (local.get $i) (i32.const 0)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $l0)))
+    ;; pass 2 — fill implemented arms at their op-slot.
+    (local.set $i (i32.const 0))
+    (block $d2
+      (loop $l2
+        (br_if $d2 (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
+        (local.set $op_name (call $record_get (local.get $arm) (i32.const 2)))
+        (local.set $slot (call $lower_compute_ev_slot_for_op (local.get $op_name)))
+        (local.set $nm (call $str_concat (i32.const 504) (local.get $hname)))   ;; "op_" ++ hname
+        (local.set $nm (call $str_concat (local.get $nm) (i32.const 4400)))     ;; ++ "_"
+        (local.set $nm (call $str_concat (local.get $nm) (local.get $op_name))) ;; ++ op
+        (drop (call $list_set (local.get $buf) (local.get $slot) (local.get $nm)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $l2)))
+    (local.get $buf))
+
   ;; ─── $lower_pipe — PipeExpr arm (parser tag 101) — 5-verb dispatch ──
   ;; Per src/lower.mn:470-504 + spec 10. Five PipeKinds, one arm each.
   ;; Lock #2: PTeeBlock + PTeeInline collapse to one arm.
@@ -720,17 +782,19 @@
                     (call $list_index (local.get $state_inits) (local.get $i))))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $s_each)))
-        (return (call $lexpr_make_lhandlewith_with_inits
+        (return (call $lexpr_make_lhandlewith_with_arm_names
                   (local.get $h) (local.get $lo_l) (local.get $lo_r)
                   (local.get $hname)
-                  (local.get $all_inits)))))
+                  (local.get $all_inits)
+                  (call $lower_handler_effect_arm_names (local.get $hname))))))
     ;; Non-handle pipes — lower left+right normally.
     (local.set $lo_l (call $lower_expr (local.get $left_node)))
     (local.set $lo_r (call $lower_expr (local.get $right_node)))
-    ;; PForward (160) — `left |> right` → LCall(h, right, [left]).
+    ;; PForward (160) — `left |> right` → LCall/LSuspend(h, right, [left]).
     (if (i32.eq (local.get $kind) (i32.const 160))
       (then (return (call $lower_pipe_forward
-                      (local.get $h) (local.get $lo_l) (local.get $lo_r)))))
+                      (local.get $h) (local.get $lo_l) (local.get $lo_r)
+                      (call $walk_expr_node_handle (local.get $right_node))))))
     ;; PDiverge (161) — `<|` per Lock #3.
     (if (i32.eq (local.get $kind) (i32.const 161))
       (then (return (call $lower_pipe_diverge
@@ -822,8 +886,14 @@
   ;; [lo_l] ++ args). Else LCall(lo_r, [lo_l]) per the bare-fn shape.
   ;; Drift refused: 1 (no vtable; structural tag-308 dispatch); 9
   ;; (lands the closure here, not a pre-pipe-rewrite peer follow-up).
+  ;; $fh is the callee node-handle (right side of the pipe) — needed so the
+  ;; simple `x |> f` form routes through $lower_call_default's evidence gate
+  ;; (Hβ-perform-evidence-dispatch.md §4.7): a `|>` call to an effectful
+  ;; callee must LSuspend to thread the handler record, exactly like a
+  ;; CallExpr. Without this, every `|>` chain (pervasive in the wheel) emits
+  ;; LCall and the evidence never threads.
   (func $lower_pipe_forward (export "lower_pipe_forward")
-        (param $h i32) (param $lo_l i32) (param $lo_r i32) (result i32)
+        (param $h i32) (param $lo_l i32) (param $lo_r i32) (param $fh i32) (result i32)
     (local $args i32) (local $r_args i32) (local $r_args_n i32)
     (local $i i32) (local $r_fn i32) (local $r_tag i32)
     (local.set $r_tag (call $tag_of (local.get $lo_r)))
@@ -855,11 +925,19 @@
                                   (call $list_index (local.get $r_args) (local.get $i))))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $copy_iter)))
+        ;; Preserve evidence when flattening: an already-LSuspend right side
+        ;; keeps its evs + callee-handle (slot 1); LCall stays LCall.
+        (if (i32.eq (local.get $r_tag) (i32.const 325))
+          (then (return (call $lexpr_make_lsuspend (local.get $h)
+                          (call $record_get (local.get $lo_r) (i32.const 1))
+                          (local.get $r_fn) (local.get $args)
+                          (call $lexpr_lsuspend_evs (local.get $lo_r))))))
         (return (call $lexpr_make_lcall (local.get $h) (local.get $r_fn) (local.get $args)))))
     (local.set $args (call $make_list (i32.const 0)))
     (local.set $args (call $list_extend_to (local.get $args) (i32.const 1)))
     (drop (call $list_set (local.get $args) (i32.const 0) (local.get $lo_l)))
-    (call $lexpr_make_lcall (local.get $h) (local.get $lo_r) (local.get $args)))
+    ;; Simple `x |> f` — route through the evidence gate (LCall vs LSuspend).
+    (call $lower_call_default (local.get $h) (local.get $lo_r) (local.get $fh) (local.get $args)))
 
   ;; ─── $lower_pipe_diverge — `<|` arm per Lock #3 ───────────────────
   ;; Per src/lower.mn:480-481 + 506-517. Right MUST be LMakeTuple (tag 317);

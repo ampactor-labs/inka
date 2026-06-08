@@ -744,7 +744,12 @@
     ;; the inits into LHandleWith for emit-time stores at offset 8+i*4
     ;; per protocol_handler_is_state_is_closure_is_evidence.md.
     (local.set $state_inits (call $lower_state_field_inits (local.get $state_fields)))
-    (call $handler_state_inits_register (local.get $handler_name) (local.get $state_inits))
+    ;; Hβ-perform-evidence-dispatch.md §4.7: build the op-slot-indexed arm
+    ;; fn-name list from the handler's actual arms and register it alongside
+    ;; the state-inits (one ledger entry, 3 fields). $emit_lhandlewith reads
+    ;; it via the install site to write the record's arm region.
+    (call $handler_state_inits_register (local.get $handler_name) (local.get $state_inits)
+      (call $build_handler_arm_names (local.get $handler_name) (local.get $arms)))
     ;; Lock #7: invoke chunk #8's helper (third caller — abstraction earned).
     ;; Per Hβ.first-light.handler-arm-fn-name-discriminator: pass the
     ;; handler_name as the discriminator so each top-level handler's

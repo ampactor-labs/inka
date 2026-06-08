@@ -392,18 +392,64 @@
         (br $each)))
     (local.get $buf))
 
-  ;; ─── $derive_ev_slots — H1.6 polymorphic ev-list (Lock #7 empty) ──
-  ;; Per Lock #7 above + named follow-up Hβ.lower.derive-ev-slots-naming.
-  ;; Conservative seed default: returns empty list. Wheel-parity
-  ;; matching wheel src/lower.mn:264-269 EfPure case — which IS empty.
-  ;; The seed effectively treats every callee as Pure-row at this layer;
-  ;; emit's H1.4 substrate handles the per-op naming when it grows.
-  ;;
-  ;; This is NOT drift-9: the function exists at the named symbol,
-  ;; returns a defensible value (empty list — what wheel returns for
-  ;; EfPure, the >95% case), and the future enrichment is a peer.
+  ;; ─── $derive_ev_slots — H1.6 evidence list (Hβ.first-light.perform-evidence) ──
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7. The handler-record evidence the
+  ;; caller threads into the callee's record so the callee's deep performs
+  ;; dispatch to the right handler. Single-open-effect L1 scope: produce
+  ;; exactly ONE ev-slot (matches $emit_levperform's single-slot read).
+  ;;   - callee not TFun / pure row → no evidence ([]) → caller emits LCall.
+  ;;   - a lexical handler for some effect in the callee's row is on the
+  ;;     lower handler-stack → evidence = LLocal("__hstate_<h>") (the install
+  ;;     local holding that handler's record).
+  ;;   - else (the effect is open in the current fn's own row, by the
+  ;;     row-typing invariant) → forward the current fn's own ev-slot 0 via
+  ;;     LEvSlotRef(0).
+  ;; Multi-distinct-effect rows need an ev_index→effect map (named peer
+  ;; Hβ.lower.multi-effect-ev-index-map). Builtin-only rows (WASI/Memory)
+  ;; get a harmless unused forward slot — the perform short-circuits to
+  ;; direct emit and never reads it; precise builtin-effect filtering is the
+  ;; named optimization peer Hβ.lower.ev-slot-builtin-effect-filter.
   (func $derive_ev_slots (export "derive_ev_slots") (param $callee_handle i32) (result i32)
-    (call $make_list (i32.const 0)))
+    (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $i i32)
+    (local $ename i32) (local $state_local i32) (local $evs i32)
+    (local.set $ty (call $lookup_ty (local.get $callee_handle)))
+    (if (i32.lt_u (local.get $ty) (global.get $heap_base))
+      (then (return (call $make_list (i32.const 0)))))
+    (if (i32.ne (call $ty_tag (local.get $ty)) (i32.const 107))   ;; not TFun
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $row (call $ty_tfun_row (local.get $ty)))
+    ;; Only Closed/Open rows carry nameable effects. Pure → no evidence;
+    ;; Neg/Sub/Inter/unresolved rows → no evidence (row_names traps on those).
+    (if (i32.eqz (i32.or (call $row_is_closed (local.get $row))
+                         (call $row_is_open   (local.get $row))))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $names (call $row_names (local.get $row)))
+    (local.set $n (call $len (local.get $names)))
+    (if (i32.eqz (local.get $n))
+      (then (return (call $make_list (i32.const 0)))))
+    ;; Find a lexically-handled effect → use its install-local record.
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $ename (call $list_index (local.get $names) (local.get $i)))
+        (local.set $state_local
+          (call $lower_resolve_handler_state_for_ename (local.get $ename)))
+        (if (i32.ne (local.get $state_local) (i32.const 0))
+          (then
+            (local.set $evs (call $make_list (i32.const 0)))
+            (local.set $evs (call $list_extend_to (local.get $evs) (i32.const 1)))
+            (drop (call $list_set (local.get $evs) (i32.const 0)
+                    (call $lexpr_make_llocal (i32.const 0) (local.get $state_local))))
+            (return (local.get $evs))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    ;; No lexical handler for any effect in the row → forward own ev-slot 0.
+    (local.set $evs (call $make_list (i32.const 0)))
+    (local.set $evs (call $list_extend_to (local.get $evs) (i32.const 1)))
+    (drop (call $list_set (local.get $evs) (i32.const 0)
+            (call $lexpr_make_levslotref (i32.const 0) (i32.const 0))))
+    (local.get $evs))
 
   ;; ─── $lower_call_default — monomorphic-vs-polymorphic gate ─────────
   ;; Per src/lower.mn:242-249 + Lock #1. The gradient cash-out.
@@ -424,13 +470,19 @@
         (param $handle i32) (param $lo_f i32) (param $fh i32) (param $lo_args i32)
         (result i32)
     (local $evs i32)
-    (if (call $monomorphic_at (local.get $handle))
+    ;; Per Hβ-perform-evidence-dispatch.md §4.7: $derive_ev_slots IS the gate
+    ;; (canonical projection — one source of truth). A callee needs evidence
+    ;; iff its row carries a handler-dispatched effect; if so the call must
+    ;; LSuspend to thread the handler record into the callee's __state, else a
+    ;; deep perform reads an unthreaded ev-slot and traps. Empty → LCall (the
+    ;; monomorphic >95% case). Replaces the row_is_ground/$monomorphic_at
+    ;; gate, which conflated "closed row" with "needs no evidence".
+    (local.set $evs (call $derive_ev_slots (local.get $fh)))
+    (if (i32.eqz (call $len (local.get $evs)))
       (then (return (call $lexpr_make_lcall
                       (local.get $handle)
                       (local.get $lo_f)
                       (local.get $lo_args)))))
-    ;; Polymorphic — H1.6 evidence-passing thunk via LSuspend.
-    (local.set $evs (call $derive_ev_slots (local.get $fh)))
     (call $lexpr_make_lsuspend
       (local.get $handle)
       (local.get $fh)
@@ -547,7 +599,7 @@
                                       (local.get $h)
                                       (local.get $tag_id)
                                       (local.get $lo_args)
-                                      (call $lower_lookup_default_handler_for_op (local.get $name)))))
+                                      (call $lower_resolve_handler_state_for_op (local.get $name)))))
                       (else
                         ;; Tier 2: evidence-passing per graph EffectDeclKind.
                         (return (call $lexpr_make_levperform
@@ -754,7 +806,7 @@
           (local.get $h)
           (local.get $resolved)
           (local.get $lo_args)
-          (call $lower_lookup_default_handler_for_op (local.get $op_name))))
+          (call $lower_resolve_handler_state_for_op (local.get $op_name))))
       (else
         ;; Tier 2: polymorphic evidence-passing. The handler is provided
         ;; by the caller via evidence slots in __state. Compute slot_idx

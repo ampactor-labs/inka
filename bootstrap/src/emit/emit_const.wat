@@ -745,6 +745,8 @@
       (then (call $emit_lunresolved  (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 336))
       (then (call $emit_lstateslotstore (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 337))
+      (then (call $emit_levslotref   (local.get $r)) (return)))
     (unreachable))
 
   ;; ─── $emit_lstateslotstore — LStateSlotStore tag 336 emit arm ──────

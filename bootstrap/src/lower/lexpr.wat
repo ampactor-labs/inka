@@ -686,18 +686,36 @@
   ;;   4: state_inits (list of LowExpr — one per source-order state field;
   ;;                   emit writes each at offset 8+i*4 of the freshly-
   ;;                   allocated state record at $emit_lhandlewith time)
-  (func $lexpr_make_lhandlewith_with_inits
+  ;;   5: arm_names (list of str_ptr — the handled effect's arm fn-names in
+  ;;                 EffectDeclKind op order, "op_<hname>_<op>"; 0 entries
+  ;;                 for ops with no arm. emit writes each fn-idx at offset
+  ;;                 8 + 4*nstate + 4*op_slot of the state record — the arm
+  ;;                 region read by $emit_levperform's fence-relative lookup.
+  ;;                 Per Hβ-perform-evidence-dispatch.md §4.7: emit cannot
+  ;;                 reach env, so the op-ordered arm list is resolved at
+  ;;                 lower time and threaded here.)
+  (func $lexpr_make_lhandlewith_with_arm_names
         (param $h i32) (param $body i32) (param $handler i32)
-        (param $handler_name i32) (param $state_inits i32)
+        (param $handler_name i32) (param $state_inits i32) (param $arm_names i32)
         (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 329) (i32.const 5)))
+    (local.set $r (call $make_record (i32.const 329) (i32.const 6)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
     (call $record_set (local.get $r) (i32.const 1) (local.get $body))
     (call $record_set (local.get $r) (i32.const 2) (local.get $handler))
     (call $record_set (local.get $r) (i32.const 3) (local.get $handler_name))
     (call $record_set (local.get $r) (i32.const 4) (local.get $state_inits))
+    (call $record_set (local.get $r) (i32.const 5) (local.get $arm_names))
     (local.get $r))
+
+  (func $lexpr_make_lhandlewith_with_inits
+        (param $h i32) (param $body i32) (param $handler i32)
+        (param $handler_name i32) (param $state_inits i32)
+        (result i32)
+    (call $lexpr_make_lhandlewith_with_arm_names
+      (local.get $h) (local.get $body) (local.get $handler)
+      (local.get $handler_name) (local.get $state_inits)
+      (call $make_list (i32.const 0))))
 
   (func $lexpr_make_lhandlewith_with_name
         (param $h i32) (param $body i32) (param $handler i32) (param $handler_name i32)
@@ -724,6 +742,10 @@
         (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 4)))
 
+  (func $lexpr_lhandlewith_arm_names (export "lexpr_lhandlewith_arm_names")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 5)))
+
   ;; ─── 336 = LStateSlotStore(handle, offset, value) — arity 3 ─────────
   ;; Per Hβ.seed.resume-with-state-update-mirror: emit produces
   ;; `(local.get $__state)(<value>)(i32.store offset=<offset>)` —
@@ -749,6 +771,33 @@
   (func $lexpr_lstateslotstore_value (export "lexpr_lstateslotstore_value")
         (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
+
+  ;; ─── 337 = LEvSlotRef(handle, ev_index) — arity 2 ───────────────────
+  ;; Forward the current fn's evidence slot `ev_index` by reference. Emits
+  ;; a load of __state's ev region:
+  ;;   (local.get $__state)(i32.load offset=8 + 4*body_capture_count + 4*ev_index)
+  ;; body_capture_count is resolved at emit time ($emit_body_captures_count,
+  ;; the evidence fence at __state[4]); ev_index is the effect's slot among
+  ;; the current fn's open-row effects (0 in the single-open-effect L1 scope;
+  ;; the multi-effect ev_index→effect map is the named peer
+  ;; Hβ.lower.multi-effect-ev-index-map). This IS the polymorphic-scope
+  ;; forward of $derive_ev_slots: by the row-typing invariant, a perform
+  ;; whose effect has no lexical handler is open in the current fn's row, so
+  ;; its evidence (the handler record pointer) already sits in the current
+  ;; fn's own ev-slot — forwarded by reference into the callee's record.
+  ;; Per protocol_reflexive_interiority.md: the forward is an interior read
+  ;; of the record threaded into __state, never a global default guess.
+  (func $lexpr_make_levslotref (export "lexpr_make_levslotref")
+        (param $h i32) (param $ev_index i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 337) (i32.const 2)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $ev_index))
+    (local.get $r))
+
+  (func $lexpr_levslotref_ev_index (export "lexpr_levslotref_ev_index")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 1)))
 
   ;; ─── 330 = LFeedback(handle, body, spec) — arity 3 ──────────────────
   ;; Per src/lower.mn:137 LFeedback(Int, LowExpr, LowExpr) — "<~

@@ -541,10 +541,47 @@ Wheel canonical: `src/infer.mn:36-50` (`inf_enter_fn` row-scope push) + `:843`
 implementation: an infer-state row-scope STACK; `enter_fn` pushes the fn's row
 handle; `add_row` `row_union`s each performed/called effect into the top; an
 `exit_fn` binds the handle to the accumulation. `row_union` already exists
-(`runtime/row.wat:354`). This is a bounded infer-substrate landing — best in a
-fresh window with `docs/specs/04-inference.md` + `Hβ-infer-substrate.md`
-loaded, validated against the `deep`/`mid` micro-test (must reach NRowBound[E],
-1 LSuspend) before re-running the wheel.
+(`runtime/row.wat:354`).
+
+### 4.10 CLOSED (2026-06-08, commit `b84caf1`) — and the value-type gate isolated
+
+The effect-row gate is **closed**. Five coordinated fixes realized the wheel's
+`InferCtx` (src/infer.mn:36-118) in the seed:
+
+1. **The fundamental binding** (`walk_stmt.wat $infer_register_effect_ops`): an
+   op's row IS `row_make_closed([eff_name])` — bound to its effect in its type,
+   definitionally, at declaration. Was a fresh unbound row var (severed op from
+   effect → effect inference dead). THE root. (`[[protocol_effect_op_binding_definitional]]`)
+2. **Row-scope frame stack** (`walk_expr.wat`): the dormant `$infer_fn_stack`
+   realized as `{accumulated_row, span, row_handle}` frames; `inf_add_row`
+   unions (guarded Pure/Closed/Open — Neg/Sub/Inter is the named peer
+   `Hβ.infer.row-normalize-full`); `inf_exit_fn` binds `row_handle` →
+   `NRowBound[union]`.
+3. **FnStmt wiring** (`walk_stmt.wat`): body walk wrapped with `inf_enter_fn`/
+   `inf_exit_fn`; bind before `generalize`.
+4. **Row unification** (`unify.wat $unify_row` + `$is_unbound_row_handle`): a
+   callee's concrete row flows into the caller's fresh row var; the TFun arm
+   no longer preserves the row verbatim.
+5. **`$lookup_row_for`** (`lookup.wat`): rows are graph handles, chased like types.
+
+**Verified end-to-end:** `min_eff` and `fp.mn` micro-tests (`effect E`; a fn
+performs `E`; a caller calls it; a handler installs) — **NFre=0, 2 `LSuspend`
+each, compile AND RUN CLEAN**. The 29k-line wheel threads **38 `LSuspend`**
+(was 0). The row binds even when value types carry free TVars — row resolution
+is independent of monotype resolution.
+
+**The remaining L1 gate is now cleanly isolated and orthogonal:**
+**`Hβ.infer.value-type-nfre-on-wheel`** — ~3901 `E_UnresolvedType` (free *type*
+vars, not row vars) from the wheel's RICH types (refinements like `ValidSpan`,
+ADTs, generics `<A,B>`), NOT from basic fn/effect/typed-param/block/let
+patterns (those resolve — proven by `fp.mn`). `derive_ev_slots` bails at its
+`ty_tag != TFun` check when a callee's type is NFre, so the parser/graph chain
+(`fresh_ph` over `GraphWrite`) doesn't thread *until value types resolve*. The
+evidence machinery is correct and waiting on this one input; closing it is HM
+completeness on rich types — a different subsystem from row inference.
+
+L1 closure = `value-type-nfre-on-wheel` ∧ `perform-effect-row-propagation`
+(this, CLOSED) ∧ `perform-evidence-dispatch` (CLOSED). Two of three gates shut.
 
 ## 5. Empirical verification (Anchor 7 — before claiming closure)
 

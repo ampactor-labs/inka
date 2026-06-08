@@ -40,15 +40,17 @@
   ;;                       nullary sentinel; tag 114). Hazel productive-
   ;;                       under-error — emit dispatches tag 114 to
   ;;                       (unreachable); build continues.
-  ;;     61 NFree        — compiler-internal bug per spec 05 invariant 2
-  ;;                       ("NFree is a compiler-internal error
-  ;;                       (E_UnresolvedType)"). The seed traps via
-  ;;                       (unreachable); emit_diag.wat (chunk #4)
-  ;;                       retrofits to E_UnresolvedType emit when it
-  ;;                       lands — peer follow-up
-  ;;                       Hβ.lower.unresolved-emit-retrofit below.
-  ;;                       The user-facing diagnostic is named, not
-  ;;                       silently-deferred (Drift 9 closure).
+  ;;     61 NFree        — a free TYPE variable at a value position is
+  ;;                       LEGAL POLYMORPHISM, not an error. Return the
+  ;;                       TVar itself (the honest representation); the
+  ;;                       value flows as uniform i32 (SUBSTRATE.md §IX).
+  ;;                       Resolves spec 05 invariant 2's last
+  ;;                       monomorphization-era binary toward the gradient
+  ;;                       (ULTIMATE_MEDIUM.md §9.3 "the grain of sand"):
+  ;;                       type is a capability on the gradient, not a
+  ;;                       precondition for existence. Genuinely
+  ;;                       type-load-bearing consumers (classify_handler's
+  ;;                       TCont guard) surface any gap at their own site.
   ;;     62 NRowBound    — should never reach $lookup_ty (rows queried
   ;;     63 NRowFree       via $lookup_row_for / $row_for_handle peer —
   ;;                       named follow-up Hβ.lower.lookup-row below).
@@ -197,20 +199,28 @@
     ;; NErrorHole — return $ty_make_terror_hole sentinel (tag 114).
     (if (i32.eq (local.get $tag) (i32.const 64))
       (then (return (call $ty_make_terror_hole))))
-    ;; NFree — compiler-internal bug per spec 05 invariant 2.
-    ;; emit + halt per the closed Hβ.lower.unresolved-emit-retrofit
-    ;; follow-up (chunk #4 emit_diag.wat landed alongside this retrofit).
-    ;; The (unreachable) is preserved per spec 05 invariant 2 trap
-    ;; discipline; $wasi_proc_exit's exit code 1 reaches the caller in
-    ;; well-formed runtimes; the (unreachable) guards against runtimes
-    ;; that don't honor proc_exit.
+    ;; NFree — a free type variable at a value position is LEGAL
+    ;; POLYMORPHISM, not a compiler-internal error. Under uniform-i32
+    ;; (SUBSTRATE.md §IX "the heap has one story"; ULTIMATE_MEDIUM.md
+    ;; §9.3 "the grain of sand") representation is invariant under type:
+    ;; type is a CAPABILITY on the continuous gradient, not a
+    ;; precondition for a value to exist. The value flows as uniform i32
+    ;; whether or not its type is concrete. So $lookup_ty returns the
+    ;; type variable ITSELF (TVar) — the honest representation of "a value
+    ;; whose type is open here" — and does NOT diagnose. The consumers
+    ;; that genuinely need a concrete type surface the gap at their own
+    ;; load-bearing site (e.g. $classify_handler's TCont guard); the four
+    ;; value-position consumers (monomorphic_at, derive_ev_slots,
+    ;; emit_lconst, emit_call `++`) already flow a non-concrete type as
+    ;; uniform i32. This resolves spec 05 invariant 2's last
+    ;; monomorphization-era binary toward the gradient: not-knowing a type
+    ;; is not failure. NErrorHole (a GENUINE inference error, already
+    ;; diagnosed upstream and bound by emit) stays the error path above.
     (if (i32.eq (local.get $tag) (i32.const 61))                       ;; NFREE
-      (then
-        (call $lower_emit_unresolved_type (local.get $handle))
-        (return (call $ty_make_terror_hole))))
-    ;; Hazel productive-under-error: any other tag (NRowBound/NRowFree
-    ;; surfacing here, or sentinel) is substrate-honest reported as
-    ;; unresolved — emit diagnostic + return TErrorHole sentinel.
+      (then (return (call $ty_make_tvar (local.get $handle)))))
+    ;; Any other tag surfacing here (NRowBound/NRowFree — a row queried as
+    ;; a type, i.e. a real category confusion, not a gradient position) is
+    ;; the genuine compiler-internal bug $lower_emit_unresolved_type names.
     (call $lower_emit_unresolved_type (local.get $handle))
     (call $ty_make_terror_hole))
 

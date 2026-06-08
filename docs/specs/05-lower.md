@@ -41,25 +41,33 @@ handler lookup_ty_graph with GraphRead {
     match kind {
       NBound(t) => resume(t),
       NErrorHole(_) => resume(TName("ERROR_HOLE", [])),
-      NFree(epoch) => {
-        perform report("", "E_UnresolvedType", "UnresolvedType",
-          "handle " ++ show(h) ++ " @epoch=" ++ show(epoch),
-          Span(0, 0, 0, 0), "MaybeIncorrect")
-        resume(TName("UNRESOLVED", []))    // sentinel — halts build
-      },
+      NFree(_) => resume(TVar(h)),    // legal polymorphism — see Invariant
       _ => panic("LookupTy on row-kind handle")
     }
   }
 }
 ```
 
-**Invariant.** After inference, every expression node's handle is
-either `NBound` (well-typed) or `NErrorHole` (explicit failure from
-spec 04). `NErrorHole` lowers to a WASM `unreachable` trap — the
-build continues, the user sees a runtime trap if they hit that path,
-but all other well-typed code compiles. `NFree` is a compiler-
-internal bug (inference failed to populate); emits `E_UnresolvedType` and halts.
-No silent fallback to TUnit. No `val_concat` reachable.
+**Invariant (gradient resolution).** After inference, an expression
+node's handle is `NBound` (a concrete type), `NErrorHole` (an explicit
+inference failure from spec 04), or `NFree` (a free type variable).
+`NErrorHole` lowers to a WASM `unreachable` trap — the build continues;
+the user sees a runtime trap only if they hit that path; all other code
+compiles. **`NFree` is NOT an error — it is legal polymorphism.** Under
+uniform-i32 (§IX "the heap has one story") representation is invariant
+under type, so a value whose type is open here flows as a uniform i32
+regardless; `lookup_ty` returns the type variable itself (`TVar(h)`).
+Type is a *capability on the continuous gradient*, not a precondition
+for a value to exist (ULTIMATE_MEDIUM.md §9.3). The consumers that
+genuinely require a concrete type — e.g. `classify_handler`, which needs
+`TCont` to pick a resume strategy — surface any gap at their own
+load-bearing site; the value-position consumers (`monomorphic_at`,
+`derive_ev_slots`, `emit_lconst`, the `++` disambiguator) already flow a
+non-concrete type as uniform i32. Returning `TVar(h)` is the *honest*
+type, NOT a silent fallback: there is still no fabricated `TUnit`, no
+`val_concat` reachable. (This revises the earlier reading — "`NFree` is
+a compiler-internal error that halts" — which assumed monomorphization;
+the uniform-i32 substrate obsoletes that assumption. 2026-06-08.)
 
 The `with GraphRead` declaration is load-bearing: this handler
 has read-only access to the graph by effect-row subsumption (spec 00).
@@ -198,8 +206,9 @@ graph writes, no rebinds, no snapshots.
 
 2. **Complete.** Every LowExpr whose handle chases to `NBound` has a
    ground type; handles that chase to `NErrorHole` lower to
-   `unreachable`; `NFree` is a compiler-internal error (`E_UnresolvedType`). No
-   silent TUnit fallback.
+   `unreachable`; `NFree` is legal polymorphism → `TVar(h)`, flowed as
+   uniform i32 (gradient resolution above). No silent TUnit fallback —
+   `TVar(h)` is the honest open type, not a fabricated default.
 
 3. **No defaults.** No `_ => TUnit`. No wildcard arms without
    enumeration. Exhaustiveness is a checker concern — missing arms

@@ -18631,20 +18631,28 @@
     ;; NErrorHole — return $ty_make_terror_hole sentinel (tag 114).
     (if (i32.eq (local.get $tag) (i32.const 64))
       (then (return (call $ty_make_terror_hole))))
-    ;; NFree — compiler-internal bug per spec 05 invariant 2.
-    ;; emit + halt per the closed Hβ.lower.unresolved-emit-retrofit
-    ;; follow-up (chunk #4 emit_diag.wat landed alongside this retrofit).
-    ;; The (unreachable) is preserved per spec 05 invariant 2 trap
-    ;; discipline; $wasi_proc_exit's exit code 1 reaches the caller in
-    ;; well-formed runtimes; the (unreachable) guards against runtimes
-    ;; that don't honor proc_exit.
+    ;; NFree — a free type variable at a value position is LEGAL
+    ;; POLYMORPHISM, not a compiler-internal error. Under uniform-i32
+    ;; (SUBSTRATE.md §IX "the heap has one story"; ULTIMATE_MEDIUM.md
+    ;; §9.3 "the grain of sand") representation is invariant under type:
+    ;; type is a CAPABILITY on the continuous gradient, not a
+    ;; precondition for a value to exist. The value flows as uniform i32
+    ;; whether or not its type is concrete. So $lookup_ty returns the
+    ;; type variable ITSELF (TVar) — the honest representation of "a value
+    ;; whose type is open here" — and does NOT diagnose. The consumers
+    ;; that genuinely need a concrete type surface the gap at their own
+    ;; load-bearing site (e.g. $classify_handler's TCont guard); the four
+    ;; value-position consumers (monomorphic_at, derive_ev_slots,
+    ;; emit_lconst, emit_call `++`) already flow a non-concrete type as
+    ;; uniform i32. This resolves spec 05 invariant 2's last
+    ;; monomorphization-era binary toward the gradient: not-knowing a type
+    ;; is not failure. NErrorHole (a GENUINE inference error, already
+    ;; diagnosed upstream and bound by emit) stays the error path above.
     (if (i32.eq (local.get $tag) (i32.const 61))                       ;; NFREE
-      (then
-        (call $lower_emit_unresolved_type (local.get $handle))
-        (return (call $ty_make_terror_hole))))
-    ;; Hazel productive-under-error: any other tag (NRowBound/NRowFree
-    ;; surfacing here, or sentinel) is substrate-honest reported as
-    ;; unresolved — emit diagnostic + return TErrorHole sentinel.
+      (then (return (call $ty_make_tvar (local.get $handle)))))
+    ;; Any other tag surfacing here (NRowBound/NRowFree — a row queried as
+    ;; a type, i.e. a real category confusion, not a gradient position) is
+    ;; the genuine compiler-internal bug $lower_emit_unresolved_type names.
     (call $lower_emit_unresolved_type (local.get $handle))
     (call $ty_make_terror_hole))
 
@@ -21341,7 +21349,16 @@
     (local $body i32) (local $expr i32) (local $tag i32)
     (local.set $body (i32.load offset=4 (local.get $node)))
     (local.set $expr (i32.load offset=4 (local.get $body)))
-    (local.set $tag  (i32.load offset=0 (local.get $expr)))
+    ;; Read the Expr tag via $tag_of — NOT a raw (i32.load offset=0). A
+    ;; nullary-sentinel variant (LitUnit=84, and any other nullary Expr
+    ;; whose variant is the bare tag, not a heap record) lives in the
+    ;; sentinel region [0, heap_base); dereferencing it reads address 84
+    ;; → 0 → the unknown-tag catch-all → LConst(0) corruption. $tag_of
+    ;; returns the value itself when it is a sentinel and loads [0] only
+    ;; for heap records — exactly as infer's $walk_expr_expr_tag does
+    ;; (walk_expr.wat:322). This is the SAME-reader discipline: lower
+    ;; classifies the Expr the way infer classified it.
+    (local.set $tag  (call $tag_of (local.get $expr)))
     (if (i32.eq (local.get $tag) (i32.const 80))
       (then (return (call $lower_lit_int    (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 81))

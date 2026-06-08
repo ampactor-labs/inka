@@ -308,7 +308,16 @@
     (local $body i32) (local $expr i32) (local $tag i32)
     (local.set $body (i32.load offset=4 (local.get $node)))
     (local.set $expr (i32.load offset=4 (local.get $body)))
-    (local.set $tag  (i32.load offset=0 (local.get $expr)))
+    ;; Read the Expr tag via $tag_of — NOT a raw (i32.load offset=0). A
+    ;; nullary-sentinel variant (LitUnit=84, and any other nullary Expr
+    ;; whose variant is the bare tag, not a heap record) lives in the
+    ;; sentinel region [0, heap_base); dereferencing it reads address 84
+    ;; → 0 → the unknown-tag catch-all → LConst(0) corruption. $tag_of
+    ;; returns the value itself when it is a sentinel and loads [0] only
+    ;; for heap records — exactly as infer's $walk_expr_expr_tag does
+    ;; (walk_expr.wat:322). This is the SAME-reader discipline: lower
+    ;; classifies the Expr the way infer classified it.
+    (local.set $tag  (call $tag_of (local.get $expr)))
     (if (i32.eq (local.get $tag) (i32.const 80))
       (then (return (call $lower_lit_int    (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 81))

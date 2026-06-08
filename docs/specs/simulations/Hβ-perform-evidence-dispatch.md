@@ -491,6 +491,38 @@ inference resolve the wheel's effect rows (drive the ~5015 diagnostics toward
 different subsystem), so it is a peer gate, not drift-9 deferral. L1 closure
 is `effect-row-inference-on-wheel` ∧ `perform-evidence-dispatch` (this, done).
 
+### 4.9 Root sharpened: function rows are NRowFree — `perform` effects aren't propagated
+
+A minimal effect program (`effect E { ping(x)->Int }`, `fn deep(x)=perform
+ping(x)`, `fn mid(x)=deep(x)`, `handler h{...}`, `fn main(y)={mid(y)}~>h`)
+compiles with **NFre=0** (value types fully resolved!) yet STILL threads no
+evidence (0 `LSuspend`). Probing `derive_ev_slots` revealed the precise root:
+
+1. A `TFun`'s row field is a **row-var handle** (e.g. 29/32), not a resolved
+   `EffRow` — it must be chased through the graph like a type handle. Fixed by
+   **`$lookup_row_for`** (`lookup.wat`; mirrors `$lookup_ty`, lands the
+   `Hβ.lower.lookup-row` follow-up), now used by `derive_ev_slots`.
+2. But the chase resolves to **Pure**: handle 29/32 → `NRowFree` (an *unbound*
+   row variable). `deep` performs `ping` yet its inferred function row is a
+   free variable — **the seed's inference never adds `perform op`'s effect to
+   the enclosing function's row** (nor propagates a callee's row to its
+   caller).
+
+So the real gate is sharper than "~5015 type errors / NFre": value-type
+resolution (NFre) is **not** the blocker (the minimal case has none). The
+blocker is **effect-row inference proper** — `perform`/call effect propagation
+and row-variable binding. Once a fn that performs `E` carries row `{E}` (or an
+open row over `E`), `lookup_row_for` resolves it, `derive_ev_slots` sees the
+effect, and the (already-correct) evidence machinery threads it.
+
+**Refined gate:** `Hβ.infer.perform-effect-row-propagation` — at a `perform
+op`, unify the enclosing fn's row to include `op`'s effect; at a call, unify
+the caller's row with the callee's. This is the precise, minimal-reproducible
+root (the `deep`/`mid` micro-test is its regression fixture), and the true
+activation input for perform-evidence-dispatch. (`lookup_row_for` + the
+row-chase in `derive_ev_slots` are committed and correct; they are dormant
+only because rows are unbound upstream.)
+
 ## 5. Empirical verification (Anchor 7 — before claiming closure)
 
 1. **Micro, pre-fix (captured):** `fn main(x)=x` → mentl2 traps at

@@ -417,7 +417,10 @@
       (then (return (call $make_list (i32.const 0)))))
     (if (i32.ne (call $ty_tag (local.get $ty)) (i32.const 107))   ;; not TFun
       (then (return (call $make_list (i32.const 0)))))
-    (local.set $row (call $ty_tfun_row (local.get $ty)))
+    ;; The TFun row field is a row-var HANDLE — chase it to the bound EffRow
+    ;; (Hβ-perform-evidence-dispatch.md §4.8). Row resolution is independent of
+    ;; value-type (NFre) resolution: the row binds even when arg/ret TVars are free.
+    (local.set $row (call $lookup_row_for (call $ty_tfun_row (local.get $ty))))
     ;; Only Closed/Open rows carry nameable effects. Pure → no evidence;
     ;; Neg/Sub/Inter/unresolved rows → no evidence (row_names traps on those).
     (if (i32.eqz (i32.or (call $row_is_closed (local.get $row))

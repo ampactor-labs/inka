@@ -18605,6 +18605,33 @@
     (local.set $row (call $ty_tfun_row (local.get $ty)))
     (call $row_is_ground (local.get $row)))
 
+  ;; ─── $lookup_row_for — live graph read for a row handle (peer to $lookup_ty) ─
+  ;; Per Hβ.lower.lookup-row (named follow-up, now landed for evidence dispatch)
+  ;; + Hβ-perform-evidence-dispatch.md §4.8. A TFun's row field is a row-var
+  ;; HANDLE (e.g. 29/32), not a resolved EffRow — it must be chased through the
+  ;; graph just as $lookup_ty chases type handles. NRowBound(EffRow) → the bound
+  ;; row; NRowFree → unresolved → Pure (no nameable effects). Already-resolved
+  ;; row values (Pure sentinel 150, or Closed/Open/Neg/Sub/Inter records) pass
+  ;; through. THE fix that lets derive_ev_slots see effect rows even when value
+  ;; types carry free TVars (NFre) — row resolution is independent of monotype
+  ;; resolution.
+  (func $lookup_row_for (export "lookup_row_for") (param $handle i32) (result i32)
+    (local $g i32) (local $nk i32) (local $tag i32)
+    ;; Pure sentinel (nullary value 150) — already a row.
+    (if (i32.eq (call $tag_of (local.get $handle)) (i32.const 150))
+      (then (return (local.get $handle))))
+    ;; Heap record (Closed/Open/Neg/Sub/Inter) — already a row.
+    (if (i32.ge_u (local.get $handle) (global.get $heap_base))
+      (then (return (local.get $handle))))
+    ;; Small-int handle → chase to the bound row.
+    (local.set $g (call $graph_chase (local.get $handle)))
+    (local.set $nk (call $gnode_kind (local.get $g)))
+    (local.set $tag (call $node_kind_tag (local.get $nk)))
+    (if (i32.eq (local.get $tag) (i32.const 62))     ;; NRowBound → EffRow payload
+      (then (return (call $node_kind_payload (local.get $nk)))))
+    ;; NRowFree / anything else → unresolved row → Pure.
+    (call $row_make_pure))
+
   ;; ─── $resume_discipline_of — TCont.discipline accessor ───────────
   ;; Per Hβ-lower-substrate.md §3.1 lines 317-323. Surfaces the
   ;; ResumeDiscipline sentinel (250 OneShot / 251 MultiShot / 252 Either)
@@ -21346,7 +21373,10 @@
       (then (return (call $make_list (i32.const 0)))))
     (if (i32.ne (call $ty_tag (local.get $ty)) (i32.const 107))   ;; not TFun
       (then (return (call $make_list (i32.const 0)))))
-    (local.set $row (call $ty_tfun_row (local.get $ty)))
+    ;; The TFun row field is a row-var HANDLE — chase it to the bound EffRow
+    ;; (Hβ-perform-evidence-dispatch.md §4.8). Row resolution is independent of
+    ;; value-type (NFre) resolution: the row binds even when arg/ret TVars are free.
+    (local.set $row (call $lookup_row_for (call $ty_tfun_row (local.get $ty))))
     ;; Only Closed/Open rows carry nameable effects. Pure → no evidence;
     ;; Neg/Sub/Inter/unresolved rows → no evidence (row_names traps on those).
     (if (i32.eqz (i32.or (call $row_is_closed (local.get $row))

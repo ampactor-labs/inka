@@ -386,24 +386,63 @@
         (br $each)))
     (local.get $buf))
 
-  ;; $walk_expr_inf_add_row — Hβ.infer.row-normalize stub. Wheel's
-  ;; inf_add_row composes the callee's row into the caller's accumulating
-  ;; row (src/infer.mn:843); seed pass-through no-op until row.wat sibling
-  ;; lands.
+  ;; ─── Hβ.infer.perform-effect-row-propagation (row-normalize landed) ──
+  ;; The wheel's InferCtx (src/infer.mn:36-50, :62-118): each FnStmt/Lambda
+  ;; pushes a frame {accumulated_row, fn_span, row_handle}; every perform/call
+  ;; adds its effect row to the frame's accumulation; on exit the accumulation
+  ;; binds to the row handle (NRowFree → NRowBound[union]). The seed realizes
+  ;; this on the dormant $infer_fn_stack (state.wat) — the slot the system
+  ;; reserved (audit-dormant-first) — storing frame records rather than bare
+  ;; handles. Frame record tag 213: [0]=accumulated_row [1]=fn_span [2]=row_handle.
+  ;; THIS is the activation input for perform-evidence-dispatch: once a fn that
+  ;; performs E carries row {E}, $lookup_row_for resolves it and derive_ev_slots
+  ;; threads the handler record (Hβ-perform-evidence-dispatch.md §4.9).
+
+  ;; $walk_expr_inf_add_row — union the performed-op / called-callee row into
+  ;; the current frame. `row` is an EffRow value (perform: the op's Closed[E])
+  ;; OR a row handle (call: the callee's row-var); $lookup_row_for resolves
+  ;; both. No active frame (module top-level) → no-op (wheel stack.len==0 arm).
   (func $walk_expr_inf_add_row (param $row i32)
-    (drop (local.get $row)))
+    (local $frame i32) (local $resolved i32)
+    (if (i32.eqz (call $infer_fn_stack_len)) (then (return)))
+    (local.set $resolved (call $lookup_row_for (local.get $row)))
+    ;; Only Pure/Closed/Open rows are nameable by the seed's row algebra;
+    ;; row_union → row_names traps on Neg/Sub/Inter (effect masking/sub/inter,
+    ;; the named peer Hβ.infer.row-normalize-full). Skip those — they carry no
+    ;; handler-dispatched effect for evidence threading; the union stays sound.
+    (if (i32.eqz (i32.or (call $row_is_pure   (local.get $resolved))
+                  (i32.or (call $row_is_closed (local.get $resolved))
+                          (call $row_is_open   (local.get $resolved)))))
+      (then (return)))
+    (local.set $frame (call $infer_fn_stack_top))
+    (call $record_set (local.get $frame) (i32.const 0)
+      (call $row_union
+        (call $record_get (local.get $frame) (i32.const 0))
+        (local.get $resolved))))
 
-  ;; $walk_expr_inf_enter_fn — Hβ.infer.row-normalize stub. Wheel's
-  ;; inf_enter_fn pushes a row scope onto the FnStmt stack
-  ;; (src/infer.mn:36-50); seed no-op.
+  ;; $walk_expr_inf_enter_fn — push a fresh {Pure, span, row_handle} frame.
   (func $walk_expr_inf_enter_fn (param $row_h i32) (param $span i32)
-    (drop (local.get $row_h))
-    (drop (local.get $span)))
+    (local $frame i32)
+    (local.set $frame (call $make_record (i32.const 213) (i32.const 3)))
+    (call $record_set (local.get $frame) (i32.const 0) (call $row_make_pure))
+    (call $record_set (local.get $frame) (i32.const 1) (local.get $span))
+    (call $record_set (local.get $frame) (i32.const 2) (local.get $row_h))
+    (call $infer_fn_stack_push (local.get $frame)))
 
-  ;; $walk_expr_inf_exit_fn — Hβ.infer.row-normalize stub. Wheel's
-  ;; inf_exit_fn pops the FnStmt row scope; seed no-op.
+  ;; $walk_expr_inf_exit_fn — bind the fn's row handle to the accumulated row
+  ;; (NRowFree → NRowBound[union]) so downstream $lookup_row_for resolves it,
+  ;; then pop. No active frame → no-op.
   (func $walk_expr_inf_exit_fn
-    (nop))
+    (local $frame i32)
+    (if (i32.eqz (call $infer_fn_stack_len)) (then (return)))
+    (local.set $frame (call $infer_fn_stack_top))
+    (call $graph_bind_row
+      (call $record_get (local.get $frame) (i32.const 2))
+      (call $record_get (local.get $frame) (i32.const 0))
+      (call $reason_make_located
+        (call $record_get (local.get $frame) (i32.const 1))
+        (call $reason_make_inferred (i32.const 3984))))   ;; fn effect row
+    (call $infer_fn_stack_pop))
 
   ;; $walk_expr_inf_push_handler — Hβ.infer.handler-stack stub. Wheel's
   ;; inf_push_handler tags the handler-stack frame with handled-effect

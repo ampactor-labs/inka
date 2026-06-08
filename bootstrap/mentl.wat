@@ -8489,8 +8489,13 @@
   (global $infer_ref_escape_ptr     (mut i32) (i32.const 0))
   (global $infer_ref_escape_len_g   (mut i32) (i32.const 0))
 
-  ;; FnStmt-handle stack. Flat list of i32 handles (no record wrap —
-  ;; pure i32 entries). Length tracks current top-of-stack + 1.
+  ;; FnStmt/Lambda row-accumulation stack (Hβ.infer.perform-effect-row-
+  ;; propagation). Each entry is a frame record (tag 213):
+  ;;   [0]=accumulated_row (EffRow)  [1]=fn_span  [2]=row_handle (NRowFree)
+  ;; pushed by $walk_expr_inf_enter_fn, mutated by $walk_expr_inf_add_row,
+  ;; bound + popped by $walk_expr_inf_exit_fn. Length = top-of-stack + 1.
+  ;; (Was a dormant pure-i32 handle stack; realized as the row-scope per
+  ;; protocol_audit_dormant_first — the slot the system reserved.)
   (global $infer_fn_stack_ptr       (mut i32) (i32.const 0))
   (global $infer_fn_stack_len_g     (mut i32) (i32.const 0))
 
@@ -12093,6 +12098,30 @@
   ;;   104=TVar, 105=TList, 106=TTuple, 107=TFun
   ;;   108=TName, 109=TRecord, 110=TRecordOpen
   ;;   111=TRefined, 112=TCont, 113=TAlias
+  ;; $is_unbound_row_handle — a small-int row handle (not the Pure sentinel)
+  ;; whose graph node is NRowFree (63). Per Hβ.infer.perform-effect-row-
+  ;; propagation: only such a side is bindable in row unification.
+  (func $is_unbound_row_handle (param $x i32) (result i32)
+    (if (i32.ge_u (local.get $x) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.eq (local.get $x) (i32.const 150)) (then (return (i32.const 0))))   ;; Pure value
+    (i32.eq (call $node_kind_tag (call $gnode_kind (call $graph_chase (local.get $x))))
+            (i32.const 63)))                                                     ;; NRowFree
+
+  ;; $unify_row — minimal row unification: bind an unbound row var to the
+  ;; other side's resolved row (NRowFree → NRowBound[row]). This is what
+  ;; call-site inference needs — a callee's concrete row {E} flows into the
+  ;; caller's fresh row var, so the caller accumulates {E}. The full row
+  ;; algebra (union of two concrete rows, open-row residuals) is the named
+  ;; peer Hβ.infer.row-normalize-full; both-concrete is left as-is here
+  ;; (the dominant call shape unifies a fresh var against a concrete row).
+  (func $unify_row (param $a i32) (param $b i32) (param $span i32) (param $reason i32)
+    (if (call $is_unbound_row_handle (local.get $a))
+      (then (call $graph_bind_row (local.get $a)
+              (call $lookup_row_for (local.get $b)) (local.get $reason)) (return)))
+    (if (call $is_unbound_row_handle (local.get $b))
+      (then (call $graph_bind_row (local.get $b)
+              (call $lookup_row_for (local.get $a)) (local.get $reason)) (return))))
+
   (func $unify_types (param $a i32) (param $b i32)
                       (param $span i32) (param $reason i32)
     (local $ta i32) (local $tb i32)
@@ -12216,13 +12245,12 @@
               (call $ty_tfun_return (local.get $b))
               (local.get $span)
               (call $reason_make_fnreturn (i32.const 3008) (local.get $reason)))
-            ;; Row preserved verbatim — row.wat $row_unify is the named
-            ;; Hβ.infer.row-normalize follow-up per Hβ-infer-substrate.md
-            ;; §12. Drop the row reads to satisfy WAT (zero-arg discard
-            ;; of the chase-side view; the actual row mutation lands when
-            ;; row.wat ships).
-            (drop (call $ty_tfun_row (local.get $a)))
-            (drop (call $ty_tfun_row (local.get $b)))
+            ;; Unify the rows: a callee's concrete effect row flows into the
+            ;; caller's fresh row var (Hβ.infer.perform-effect-row-propagation).
+            (call $unify_row
+              (call $ty_tfun_row (local.get $a))
+              (call $ty_tfun_row (local.get $b))
+              (local.get $span) (local.get $reason))
             (return)))
         (if (i32.eq (local.get $tb) (i32.const 104))
           (then
@@ -14143,24 +14171,63 @@
         (br $each)))
     (local.get $buf))
 
-  ;; $walk_expr_inf_add_row — Hβ.infer.row-normalize stub. Wheel's
-  ;; inf_add_row composes the callee's row into the caller's accumulating
-  ;; row (src/infer.mn:843); seed pass-through no-op until row.wat sibling
-  ;; lands.
+  ;; ─── Hβ.infer.perform-effect-row-propagation (row-normalize landed) ──
+  ;; The wheel's InferCtx (src/infer.mn:36-50, :62-118): each FnStmt/Lambda
+  ;; pushes a frame {accumulated_row, fn_span, row_handle}; every perform/call
+  ;; adds its effect row to the frame's accumulation; on exit the accumulation
+  ;; binds to the row handle (NRowFree → NRowBound[union]). The seed realizes
+  ;; this on the dormant $infer_fn_stack (state.wat) — the slot the system
+  ;; reserved (audit-dormant-first) — storing frame records rather than bare
+  ;; handles. Frame record tag 213: [0]=accumulated_row [1]=fn_span [2]=row_handle.
+  ;; THIS is the activation input for perform-evidence-dispatch: once a fn that
+  ;; performs E carries row {E}, $lookup_row_for resolves it and derive_ev_slots
+  ;; threads the handler record (Hβ-perform-evidence-dispatch.md §4.9).
+
+  ;; $walk_expr_inf_add_row — union the performed-op / called-callee row into
+  ;; the current frame. `row` is an EffRow value (perform: the op's Closed[E])
+  ;; OR a row handle (call: the callee's row-var); $lookup_row_for resolves
+  ;; both. No active frame (module top-level) → no-op (wheel stack.len==0 arm).
   (func $walk_expr_inf_add_row (param $row i32)
-    (drop (local.get $row)))
+    (local $frame i32) (local $resolved i32)
+    (if (i32.eqz (call $infer_fn_stack_len)) (then (return)))
+    (local.set $resolved (call $lookup_row_for (local.get $row)))
+    ;; Only Pure/Closed/Open rows are nameable by the seed's row algebra;
+    ;; row_union → row_names traps on Neg/Sub/Inter (effect masking/sub/inter,
+    ;; the named peer Hβ.infer.row-normalize-full). Skip those — they carry no
+    ;; handler-dispatched effect for evidence threading; the union stays sound.
+    (if (i32.eqz (i32.or (call $row_is_pure   (local.get $resolved))
+                  (i32.or (call $row_is_closed (local.get $resolved))
+                          (call $row_is_open   (local.get $resolved)))))
+      (then (return)))
+    (local.set $frame (call $infer_fn_stack_top))
+    (call $record_set (local.get $frame) (i32.const 0)
+      (call $row_union
+        (call $record_get (local.get $frame) (i32.const 0))
+        (local.get $resolved))))
 
-  ;; $walk_expr_inf_enter_fn — Hβ.infer.row-normalize stub. Wheel's
-  ;; inf_enter_fn pushes a row scope onto the FnStmt stack
-  ;; (src/infer.mn:36-50); seed no-op.
+  ;; $walk_expr_inf_enter_fn — push a fresh {Pure, span, row_handle} frame.
   (func $walk_expr_inf_enter_fn (param $row_h i32) (param $span i32)
-    (drop (local.get $row_h))
-    (drop (local.get $span)))
+    (local $frame i32)
+    (local.set $frame (call $make_record (i32.const 213) (i32.const 3)))
+    (call $record_set (local.get $frame) (i32.const 0) (call $row_make_pure))
+    (call $record_set (local.get $frame) (i32.const 1) (local.get $span))
+    (call $record_set (local.get $frame) (i32.const 2) (local.get $row_h))
+    (call $infer_fn_stack_push (local.get $frame)))
 
-  ;; $walk_expr_inf_exit_fn — Hβ.infer.row-normalize stub. Wheel's
-  ;; inf_exit_fn pops the FnStmt row scope; seed no-op.
+  ;; $walk_expr_inf_exit_fn — bind the fn's row handle to the accumulated row
+  ;; (NRowFree → NRowBound[union]) so downstream $lookup_row_for resolves it,
+  ;; then pop. No active frame → no-op.
   (func $walk_expr_inf_exit_fn
-    (nop))
+    (local $frame i32)
+    (if (i32.eqz (call $infer_fn_stack_len)) (then (return)))
+    (local.set $frame (call $infer_fn_stack_top))
+    (call $graph_bind_row
+      (call $record_get (local.get $frame) (i32.const 2))
+      (call $record_get (local.get $frame) (i32.const 0))
+      (call $reason_make_located
+        (call $record_get (local.get $frame) (i32.const 1))
+        (call $reason_make_inferred (i32.const 3984))))   ;; fn effect row
+    (call $infer_fn_stack_pop))
 
   ;; $walk_expr_inf_push_handler — Hβ.infer.handler-stack stub. Wheel's
   ;; inf_push_handler tags the handler-stack frame with handled-effect
@@ -16155,11 +16222,10 @@
     ;;                   per Hβ.infer.declared-effs-enforcement)
     (local.set $body_node (i32.load offset=20 (local.get $stmt)))
 
-    ;; Push fn handle onto inference stack so $generalize knows current
-    ;; quantification scope (state.wat substrate; consumed by future
-    ;; Hβ.infer.scope-aware-generalize follow-up — at the seed
-    ;; $generalize uses chase + $free_in_ty so the stack is bookkeeping).
-    (call $infer_fn_stack_push (local.get $handle))
+    ;; The fn's row-accumulation frame is pushed via $walk_expr_inf_enter_fn
+    ;; AFTER row_h is computed (below, just before the body walk) per
+    ;; Hβ.infer.perform-effect-row-propagation. (Replaces the old bare-handle
+    ;; push — that value was never read; the frame carries the per-fn scope.)
 
     ;; Enter fn-body scope. Param env-extends + body's let-extends live
     ;; in this scope; on exit they all go out.
@@ -16257,6 +16323,9 @@
     )
 
     ;; ─── Walk fn body ────────────────────────────────────────────────
+    ;; Push the row-accumulation frame so the body's perform/call sites
+    ;; accumulate their effects into this fn's row (row_h), then walk.
+    (call $walk_expr_inf_enter_fn (local.get $row_h) (local.get $span))
     (local.set $body_h (call $infer_walk_expr (local.get $body_node)))
     ;; Body's type unifies with declared return per src/infer.mn:289
     ;; unify(body_handle, ret_handle, span, FnReturn(name,
@@ -16265,6 +16334,9 @@
       (local.get $body_h) (local.get $ret_h) (local.get $span)
       (call $reason_make_fnreturn (local.get $name)
         (call $reason_make_inferred (i32.const 4064))))   ;; "return"
+    ;; Bind row_h → accumulated row (NRowFree → NRowBound[union]) BEFORE
+    ;; generalize, so the generalized scheme carries the resolved effect row.
+    (call $walk_expr_inf_exit_fn)
 
     ;; ─── Exit scope, generalize, re-extend env ───────────────────────
     (call $env_scope_exit)
@@ -16272,10 +16344,7 @@
     (call $env_extend
       (local.get $name) (local.get $generalized_scheme)
       (local.get $declared_reason)
-      (call $schemekind_make_fn))
-
-    ;; Pop fn handle from inference stack.
-    (call $infer_fn_stack_pop))
+      (call $schemekind_make_fn)))
 
   ;; ─── parser-Ty → infer-Ty translator ────────────────────────────
   ;; Per parser_fn.wat:36-37 + parser_decl.wat the parser emits one of:
@@ -16522,11 +16591,19 @@
           (call $walk_stmt_build_field_tparams (local.get $param_tys_parser)))
         (local.set $ret_ty
           (call $walk_stmt_parser_ty_to_ty (local.get $ret_ty_parser)))
-        (local.set $row_h (call $graph_fresh_row
-          (call $reason_make_located (local.get $span)
-            (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
+        ;; THE FUNDAMENTAL BINDING (Hβ.infer.perform-effect-row-propagation):
+        ;; the op's effect row IS Closed[eff_name] — the op is bound to its
+        ;; effect in its very type, at declaration, definitionally. `perform
+        ;; ping` carries {E} because ping's type carries {E}. A fresh unbound
+        ;; row var (the prior form) severed the op from its effect, so no
+        ;; enclosing fn ever accumulated it; a side registry would be drift.
+        ;; The graph holds the truth: the op's row names its effect.
+        (local.set $row_h (call $make_list (i32.const 0)))
+        (local.set $row_h (call $list_extend_to (local.get $row_h) (i32.const 1)))
+        (drop (call $list_set (local.get $row_h) (i32.const 0) (local.get $eff_name)))
         (local.set $op_ty (call $ty_make_tfun
-          (local.get $param_tys) (local.get $ret_ty) (local.get $row_h)))
+          (local.get $param_tys) (local.get $ret_ty)
+          (call $row_make_closed (local.get $row_h))))
         (local.set $scheme (call $scheme_make_forall
           (call $make_list (i32.const 0))
           (local.get $op_ty)))

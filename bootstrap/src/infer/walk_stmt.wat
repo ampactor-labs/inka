@@ -558,11 +558,10 @@
     ;;                   per Hβ.infer.declared-effs-enforcement)
     (local.set $body_node (i32.load offset=20 (local.get $stmt)))
 
-    ;; Push fn handle onto inference stack so $generalize knows current
-    ;; quantification scope (state.wat substrate; consumed by future
-    ;; Hβ.infer.scope-aware-generalize follow-up — at the seed
-    ;; $generalize uses chase + $free_in_ty so the stack is bookkeeping).
-    (call $infer_fn_stack_push (local.get $handle))
+    ;; The fn's row-accumulation frame is pushed via $walk_expr_inf_enter_fn
+    ;; AFTER row_h is computed (below, just before the body walk) per
+    ;; Hβ.infer.perform-effect-row-propagation. (Replaces the old bare-handle
+    ;; push — that value was never read; the frame carries the per-fn scope.)
 
     ;; Enter fn-body scope. Param env-extends + body's let-extends live
     ;; in this scope; on exit they all go out.
@@ -660,6 +659,9 @@
     )
 
     ;; ─── Walk fn body ────────────────────────────────────────────────
+    ;; Push the row-accumulation frame so the body's perform/call sites
+    ;; accumulate their effects into this fn's row (row_h), then walk.
+    (call $walk_expr_inf_enter_fn (local.get $row_h) (local.get $span))
     (local.set $body_h (call $infer_walk_expr (local.get $body_node)))
     ;; Body's type unifies with declared return per src/infer.mn:289
     ;; unify(body_handle, ret_handle, span, FnReturn(name,
@@ -668,6 +670,9 @@
       (local.get $body_h) (local.get $ret_h) (local.get $span)
       (call $reason_make_fnreturn (local.get $name)
         (call $reason_make_inferred (i32.const 4064))))   ;; "return"
+    ;; Bind row_h → accumulated row (NRowFree → NRowBound[union]) BEFORE
+    ;; generalize, so the generalized scheme carries the resolved effect row.
+    (call $walk_expr_inf_exit_fn)
 
     ;; ─── Exit scope, generalize, re-extend env ───────────────────────
     (call $env_scope_exit)
@@ -675,10 +680,7 @@
     (call $env_extend
       (local.get $name) (local.get $generalized_scheme)
       (local.get $declared_reason)
-      (call $schemekind_make_fn))
-
-    ;; Pop fn handle from inference stack.
-    (call $infer_fn_stack_pop))
+      (call $schemekind_make_fn)))
 
   ;; ─── parser-Ty → infer-Ty translator ────────────────────────────
   ;; Per parser_fn.wat:36-37 + parser_decl.wat the parser emits one of:
@@ -925,11 +927,19 @@
           (call $walk_stmt_build_field_tparams (local.get $param_tys_parser)))
         (local.set $ret_ty
           (call $walk_stmt_parser_ty_to_ty (local.get $ret_ty_parser)))
-        (local.set $row_h (call $graph_fresh_row
-          (call $reason_make_located (local.get $span)
-            (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
+        ;; THE FUNDAMENTAL BINDING (Hβ.infer.perform-effect-row-propagation):
+        ;; the op's effect row IS Closed[eff_name] — the op is bound to its
+        ;; effect in its very type, at declaration, definitionally. `perform
+        ;; ping` carries {E} because ping's type carries {E}. A fresh unbound
+        ;; row var (the prior form) severed the op from its effect, so no
+        ;; enclosing fn ever accumulated it; a side registry would be drift.
+        ;; The graph holds the truth: the op's row names its effect.
+        (local.set $row_h (call $make_list (i32.const 0)))
+        (local.set $row_h (call $list_extend_to (local.get $row_h) (i32.const 1)))
+        (drop (call $list_set (local.get $row_h) (i32.const 0) (local.get $eff_name)))
         (local.set $op_ty (call $ty_make_tfun
-          (local.get $param_tys) (local.get $ret_ty) (local.get $row_h)))
+          (local.get $param_tys) (local.get $ret_ty)
+          (call $row_make_closed (local.get $row_h))))
         (local.set $scheme (call $scheme_make_forall
           (call $make_list (i32.const 0))
           (local.get $op_ty)))

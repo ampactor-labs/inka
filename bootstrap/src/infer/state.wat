@@ -83,8 +83,13 @@
   (global $infer_ref_escape_ptr     (mut i32) (i32.const 0))
   (global $infer_ref_escape_len_g   (mut i32) (i32.const 0))
 
-  ;; FnStmt-handle stack. Flat list of i32 handles (no record wrap —
-  ;; pure i32 entries). Length tracks current top-of-stack + 1.
+  ;; FnStmt/Lambda row-accumulation stack (Hβ.infer.perform-effect-row-
+  ;; propagation). Each entry is a frame record (tag 213):
+  ;;   [0]=accumulated_row (EffRow)  [1]=fn_span  [2]=row_handle (NRowFree)
+  ;; pushed by $walk_expr_inf_enter_fn, mutated by $walk_expr_inf_add_row,
+  ;; bound + popped by $walk_expr_inf_exit_fn. Length = top-of-stack + 1.
+  ;; (Was a dormant pure-i32 handle stack; realized as the row-scope per
+  ;; protocol_audit_dormant_first — the slot the system reserved.)
   (global $infer_fn_stack_ptr       (mut i32) (i32.const 0))
   (global $infer_fn_stack_len_g     (mut i32) (i32.const 0))
 

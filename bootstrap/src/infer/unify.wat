@@ -282,6 +282,30 @@
   ;;   104=TVar, 105=TList, 106=TTuple, 107=TFun
   ;;   108=TName, 109=TRecord, 110=TRecordOpen
   ;;   111=TRefined, 112=TCont, 113=TAlias
+  ;; $is_unbound_row_handle — a small-int row handle (not the Pure sentinel)
+  ;; whose graph node is NRowFree (63). Per Hβ.infer.perform-effect-row-
+  ;; propagation: only such a side is bindable in row unification.
+  (func $is_unbound_row_handle (param $x i32) (result i32)
+    (if (i32.ge_u (local.get $x) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.eq (local.get $x) (i32.const 150)) (then (return (i32.const 0))))   ;; Pure value
+    (i32.eq (call $node_kind_tag (call $gnode_kind (call $graph_chase (local.get $x))))
+            (i32.const 63)))                                                     ;; NRowFree
+
+  ;; $unify_row — minimal row unification: bind an unbound row var to the
+  ;; other side's resolved row (NRowFree → NRowBound[row]). This is what
+  ;; call-site inference needs — a callee's concrete row {E} flows into the
+  ;; caller's fresh row var, so the caller accumulates {E}. The full row
+  ;; algebra (union of two concrete rows, open-row residuals) is the named
+  ;; peer Hβ.infer.row-normalize-full; both-concrete is left as-is here
+  ;; (the dominant call shape unifies a fresh var against a concrete row).
+  (func $unify_row (param $a i32) (param $b i32) (param $span i32) (param $reason i32)
+    (if (call $is_unbound_row_handle (local.get $a))
+      (then (call $graph_bind_row (local.get $a)
+              (call $lookup_row_for (local.get $b)) (local.get $reason)) (return)))
+    (if (call $is_unbound_row_handle (local.get $b))
+      (then (call $graph_bind_row (local.get $b)
+              (call $lookup_row_for (local.get $a)) (local.get $reason)) (return))))
+
   (func $unify_types (param $a i32) (param $b i32)
                       (param $span i32) (param $reason i32)
     (local $ta i32) (local $tb i32)
@@ -405,13 +429,12 @@
               (call $ty_tfun_return (local.get $b))
               (local.get $span)
               (call $reason_make_fnreturn (i32.const 3008) (local.get $reason)))
-            ;; Row preserved verbatim — row.wat $row_unify is the named
-            ;; Hβ.infer.row-normalize follow-up per Hβ-infer-substrate.md
-            ;; §12. Drop the row reads to satisfy WAT (zero-arg discard
-            ;; of the chase-side view; the actual row mutation lands when
-            ;; row.wat ships).
-            (drop (call $ty_tfun_row (local.get $a)))
-            (drop (call $ty_tfun_row (local.get $b)))
+            ;; Unify the rows: a callee's concrete effect row flows into the
+            ;; caller's fresh row var (Hβ.infer.perform-effect-row-propagation).
+            (call $unify_row
+              (call $ty_tfun_row (local.get $a))
+              (call $ty_tfun_row (local.get $b))
+              (local.get $span) (local.get $reason))
             (return)))
         (if (i32.eq (local.get $tb) (i32.const 104))
           (then

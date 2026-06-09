@@ -282,28 +282,41 @@
   ;;   104=TVar, 105=TList, 106=TTuple, 107=TFun
   ;;   108=TName, 109=TRecord, 110=TRecordOpen
   ;;   111=TRefined, 112=TCont, 113=TAlias
-  ;; $is_unbound_row_handle — a small-int row handle (not the Pure sentinel)
-  ;; whose graph node is NRowFree (63). Per Hβ.infer.perform-effect-row-
-  ;; propagation: only such a side is bindable in row unification.
-  (func $is_unbound_row_handle (param $x i32) (result i32)
-    (if (i32.ge_u (local.get $x) (global.get $heap_base)) (then (return (i32.const 0))))
-    (if (i32.eq (local.get $x) (i32.const 150)) (then (return (i32.const 0))))   ;; Pure value
-    (i32.eq (call $node_kind_tag (call $gnode_kind (call $graph_chase (local.get $x))))
-            (i32.const 63)))                                                     ;; NRowFree
+  ;; $row_bindable_open — EfOpen(names=[], v) whose v chases to NRowFree (63).
+  ;; Per Stage 1A ADT discipline (src/types.mn law: a bare handle cannot occupy
+  ;; a row slot): the ONLY bindable side in row unification. EfPure/EfClosed
+  ;; are never bindable; EfOpen with non-empty names is the row-residual case
+  ;; (named peer Hβ.infer.row-normalize-full).
+  (func $row_bindable_open (param $x i32) (result i32)
+    (if (i32.ne (call $tag_of (local.get $x)) (i32.const 152)) ;; EfOpen
+      (then (return (i32.const 0))))
+    (if (i32.ne (call $len (call $row_names (local.get $x))) (i32.const 0))
+      (then (return (i32.const 0))))
+    (i32.eq (call $node_kind_tag (call $gnode_kind (call $graph_chase
+              (call $row_handle (local.get $x)))))
+            (i32.const 63)))                                   ;; NRowFree
 
-  ;; $unify_row — minimal row unification: bind an unbound row var to the
-  ;; other side's resolved row (NRowFree → NRowBound[row]). This is what
-  ;; call-site inference needs — a callee's concrete row {E} flows into the
-  ;; caller's fresh row var, so the caller accumulates {E}. The full row
-  ;; algebra (union of two concrete rows, open-row residuals) is the named
-  ;; peer Hβ.infer.row-normalize-full; both-concrete is left as-is here
-  ;; (the dominant call shape unifies a fresh var against a concrete row).
+  ;; $unify_row — minimal row unification on EffRow VALUES: bind the open
+  ;; side's row var to the other side's resolved row (NRowFree →
+  ;; NRowBound[row]). This is what call-site inference needs — a callee's
+  ;; concrete row {E} flows into the caller's fresh row var, so the caller
+  ;; accumulates {E}. Same-var guard prevents v := EfOpen([], v) cycles when
+  ;; both sides wrap one var. The full row algebra (union of two concrete
+  ;; rows, open-row residuals) is the named peer Hβ.infer.row-normalize-full;
+  ;; both-concrete is left as-is here (the dominant call shape unifies a
+  ;; fresh var against a concrete row).
   (func $unify_row (param $a i32) (param $b i32) (param $span i32) (param $reason i32)
-    (if (call $is_unbound_row_handle (local.get $a))
-      (then (call $graph_bind_row (local.get $a)
+    (if (i32.and (call $row_bindable_open (local.get $a))
+                 (call $row_bindable_open (local.get $b)))
+      (then
+        (if (i32.eq (call $row_handle (local.get $a))
+                    (call $row_handle (local.get $b)))
+          (then (return)))))
+    (if (call $row_bindable_open (local.get $a))
+      (then (call $graph_bind_row (call $row_handle (local.get $a))
               (call $lookup_row_for (local.get $b)) (local.get $reason)) (return)))
-    (if (call $is_unbound_row_handle (local.get $b))
-      (then (call $graph_bind_row (local.get $b)
+    (if (call $row_bindable_open (local.get $b))
+      (then (call $graph_bind_row (call $row_handle (local.get $b))
               (call $lookup_row_for (local.get $a)) (local.get $reason)) (return))))
 
   (func $unify_types (param $a i32) (param $b i32)

@@ -379,7 +379,7 @@
     (local.set $fn_ty (call $ty_make_tfun
       (local.get $tparam_list)
       (call $ty_make_tvar (local.get $ret_h))
-      (local.get $row_h)))
+      (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
     (local.set $reason (call $reason_make_located
       (local.get $span)
       (call $reason_make_declared (local.get $name))))
@@ -640,7 +640,7 @@
         (local.set $fn_ty (call $ty_make_tfun
           (local.get $tparam_list)
           (call $ty_make_tvar (local.get $ret_h))
-          (local.get $row_h)))
+          (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
         (local.set $declared_reason (call $reason_make_located
           (local.get $span)
           (call $reason_make_declared (local.get $name))))
@@ -825,7 +825,7 @@
     (local $vname i32) (local $field_tys_parser i32)
     (local $field_tys i32) (local $field_count i32)
     (local $result_ty i32) (local $ctor_ty i32)
-    (local $row_h i32) (local $scheme i32) (local $reason i32)
+    (local $scheme i32) (local $reason i32)
 
     (local.set $total (call $len (local.get $variants)))
     ;; Build the result type once: TName(type_name, []) — every variant
@@ -854,13 +854,10 @@
             (local.set $field_tys
               (call $walk_stmt_build_field_tparams
                 (local.get $field_tys_parser)))
-            (local.set $row_h (call $graph_fresh_row
-              (call $reason_make_located (local.get $span)
-                (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
             (local.set $ctor_ty (call $ty_make_tfun
               (local.get $field_tys)
               (local.get $result_ty)
-              (local.get $row_h)))))
+              (call $row_make_pure)))))
         (local.set $scheme (call $scheme_make_forall
           (call $make_list (i32.const 0))
           (local.get $ctor_ty)))
@@ -1276,7 +1273,7 @@
           (local.set $op_ty (call $ty_make_tfun
             (local.get $tparam_list)
             (call $ty_make_tvar (local.get $ret_h))
-            (local.get $row_h)))
+            (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
           ;; Polymorphic over param tyvars + ret tyvar (row stays opaque
           ;; per the H1.4 separation — see line 87+ commentary).
           (local.set $tyvar_handles

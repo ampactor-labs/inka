@@ -399,9 +399,10 @@
   ;; threads the handler record (Hβ-perform-evidence-dispatch.md §4.9).
 
   ;; $walk_expr_inf_add_row — union the performed-op / called-callee row into
-  ;; the current frame. `row` is an EffRow value (perform: the op's Closed[E])
-  ;; OR a row handle (call: the callee's row-var); $lookup_row_for resolves
-  ;; both. No active frame (module top-level) → no-op (wheel stack.len==0 arm).
+  ;; the current frame. `row` is an EffRow VALUE (wheel inf_add_row(EffRow)
+  ;; signature parity — callers chase handles to bound rows before calling);
+  ;; $lookup_row_for resolves EfOpen wrappers through the graph. No active
+  ;; frame (module top-level) → no-op (wheel stack.len==0 arm).
   (func $walk_expr_inf_add_row (param $row i32)
     (local $frame i32) (local $resolved i32)
     (if (i32.eqz (call $infer_fn_stack_len)) (then (return)))
@@ -737,7 +738,7 @@
     (local $arg_handles i32) (local $params i32)
     (local $ret_h i32) (local $row_h i32)
     (local $expected i32) (local $expected_h i32)
-    (local $cname i32)
+    (local $cname i32) (local $row_nk i32)
     ;; Layout: [tag=88][callee][args]
     (local.set $func (i32.load offset=4 (local.get $expr)))
     (local.set $args (i32.load offset=8 (local.get $expr)))
@@ -757,7 +758,7 @@
     (local.set $expected (call $ty_make_tfun
       (local.get $params)
       (call $ty_make_tvar (local.get $ret_h))
-      (local.get $row_h)))
+      (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
     (local.set $expected_h (call $graph_fresh_ty
       (call $reason_make_inferredcallreturn (local.get $cname)
         (call $reason_make_inferred (i32.const 3720)))))   ;; "expected"
@@ -776,9 +777,13 @@
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferredcallreturn (local.get $cname)
           (call $reason_make_inferred (i32.const 3584)))))  ;; "result"
-    ;; Row composition: src/infer.mn:842-845 chases row_h + adds to caller.
-    ;; SEED-STUB per Hβ.infer.row-normalize.
-    (call $walk_expr_inf_add_row (local.get $row_h))
+    ;; Row composition: src/infer.mn:926-931 — chase row_h; NRowBound(row)
+    ;; flows the callee's row into the caller's frame; a still-free var
+    ;; adds nothing.
+    (local.set $row_nk (call $gnode_kind (call $graph_chase (local.get $row_h))))
+    (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))
+      (then (call $walk_expr_inf_add_row
+        (call $node_kind_payload (local.get $row_nk)))))
     (local.get $handle))
 
   ;; LambdaExpr arm — src/infer.mn:724-740. Builds TFun([], TVar(body_h),
@@ -838,7 +843,7 @@
       (call $ty_make_tfun
         (local.get $tparam_list)
         (call $ty_make_tvar (local.get $bh))
-        (local.get $row_h))
+        (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h)))
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferred (i32.const 3984))))   ;; "lambda"
     (call $env_scope_exit)
@@ -1577,7 +1582,7 @@
     (local $ret_h i32) (local $row_h i32)
     (local $param i32) (local $param_list i32)
     (local $expected i32) (local $expected_h i32)
-    (local $pipe_str i32)
+    (local $pipe_str i32) (local $row_nk i32)
     (local.set $lh (call $infer_walk_expr (local.get $left)))
     (local.set $rh (call $infer_walk_expr (local.get $right)))
     (local.set $pipe_str (call $int_to_str (i32.const 160)))
@@ -1599,7 +1604,7 @@
     (local.set $expected (call $ty_make_tfun
       (local.get $param_list)
       (call $ty_make_tvar (local.get $ret_h))
-      (local.get $row_h)))
+      (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
     (local.set $expected_h (call $graph_fresh_ty
       (call $reason_make_inferredpiperesult (local.get $pipe_str)
         (call $reason_make_inferred (i32.const 3720)))))   ;; "expected"
@@ -1615,8 +1620,12 @@
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferredpiperesult (local.get $pipe_str)
           (call $reason_make_inferred (i32.const 3584)))))  ;; "result"
-    ;; Row composition seed-stub
-    (call $walk_expr_inf_add_row (local.get $row_h))
+    ;; Row composition: src/infer.mn pipe arm — chase row_h; NRowBound(row)
+    ;; flows the stage's row into the caller's frame.
+    (local.set $row_nk (call $gnode_kind (call $graph_chase (local.get $row_h))))
+    (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))
+      (then (call $walk_expr_inf_add_row
+        (call $node_kind_payload (local.get $row_nk)))))
     (local.get $handle))
 
   ;; PCompose (><) — src/infer.mn:985-995. branch_enter; walk left;

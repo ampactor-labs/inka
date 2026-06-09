@@ -258,32 +258,56 @@
     (local.set $row (call $ty_tfun_row (local.get $ty)))
     (call $row_is_ground (local.get $row)))
 
-  ;; ─── $lookup_row_for — live graph read for a row handle (peer to $lookup_ty) ─
-  ;; Per Hβ.lower.lookup-row (named follow-up, now landed for evidence dispatch)
-  ;; + Hβ-perform-evidence-dispatch.md §4.8. A TFun's row field is a row-var
-  ;; HANDLE (e.g. 29/32), not a resolved EffRow — it must be chased through the
-  ;; graph just as $lookup_ty chases type handles. NRowBound(EffRow) → the bound
-  ;; row; NRowFree → unresolved → Pure (no nameable effects). Already-resolved
-  ;; row values (Pure sentinel 150, or Closed/Open/Neg/Sub/Inter records) pass
-  ;; through. THE fix that lets derive_ev_slots see effect rows even when value
-  ;; types carry free TVars (NFre) — row resolution is independent of monotype
-  ;; resolution.
-  (func $lookup_row_for (export "lookup_row_for") (param $handle i32) (result i32)
-    (local $g i32) (local $nk i32) (local $tag i32)
-    ;; Pure sentinel (nullary value 150) — already a row.
-    (if (i32.eq (call $tag_of (local.get $handle)) (i32.const 150))
-      (then (return (local.get $handle))))
-    ;; Heap record (Closed/Open/Neg/Sub/Inter) — already a row.
-    (if (i32.ge_u (local.get $handle) (global.get $heap_base))
-      (then (return (local.get $handle))))
-    ;; Small-int handle → chase to the bound row.
-    (local.set $g (call $graph_chase (local.get $handle)))
-    (local.set $nk (call $gnode_kind (local.get $g)))
-    (local.set $tag (call $node_kind_tag (local.get $nk)))
-    (if (i32.eq (local.get $tag) (i32.const 62))     ;; NRowBound → EffRow payload
-      (then (return (call $node_kind_payload (local.get $nk)))))
-    ;; NRowFree / anything else → unresolved row → Pure.
-    (call $row_make_pure))
+  ;; ─── $lookup_row_for — live graph read for an EffRow value (peer to $lookup_ty) ─
+  ;; Per Stage 1A ADT discipline + Hβ-perform-evidence-dispatch.md §4.8. A row
+  ;; slot holds an EffRow VALUE by type law (src/types.mn: a bare handle cannot
+  ;; occupy a row slot — an open row is EfOpen(names, v) with the var WRAPPED).
+  ;; Dispatch on the row tag:
+  ;;   EfPure 150 / EfClosed 151 — already resolved; self.
+  ;;   EfNeg 153 / EfSub 154 / EfInter 155 — intermediate forms; pass through
+  ;;     (reduction is the named peer Hβ.infer.row-normalize-full).
+  ;;   EfOpen 152 — chase the wrapped var v: NRowBound → recurse on the bound
+  ;;     row (chains hop through records; cycles unrepresentable per
+  ;;     $unify_row's same-var guard), unioning any carried names;
+  ;;     NRowFree → the row is HONESTLY still open — return the EfOpen itself
+  ;;     (never Pure: "unresolved" and "no effects" are different truths).
+  ;;   Anything else — category error: a non-row reached a row read.
+  ;; THE fix that lets derive_ev_slots see effect rows even when value types
+  ;; carry free TVars (NFre) — row resolution is independent of monotype
+  ;; resolution, and total at any graph size (no magnitude tests).
+  (func $lookup_row_for (export "lookup_row_for") (param $row i32) (result i32)
+    (local $tag i32) (local $nk i32) (local $ntag i32)
+    (local $names i32) (local $resolved i32)
+    (local.set $tag (call $tag_of (local.get $row)))
+    ;; EfPure sentinel / EfClosed / Neg / Sub / Inter — already a row value.
+    (if (i32.eq (local.get $tag) (i32.const 150)) (then (return (local.get $row))))
+    (if (i32.eq (local.get $tag) (i32.const 151)) (then (return (local.get $row))))
+    (if (i32.eq (local.get $tag) (i32.const 153)) (then (return (local.get $row))))
+    (if (i32.eq (local.get $tag) (i32.const 154)) (then (return (local.get $row))))
+    (if (i32.eq (local.get $tag) (i32.const 155)) (then (return (local.get $row))))
+    ;; EfOpen(names, v) — chase v through the graph.
+    (if (i32.eq (local.get $tag) (i32.const 152))
+      (then
+        (local.set $nk (call $gnode_kind (call $graph_chase
+          (call $row_handle (local.get $row)))))
+        (local.set $ntag (call $node_kind_tag (local.get $nk)))
+        (if (i32.eq (local.get $ntag) (i32.const 62))   ;; NRowBound
+          (then
+            (local.set $resolved (call $lookup_row_for
+              (call $node_kind_payload (local.get $nk))))
+            (local.set $names (call $row_names (local.get $row)))
+            (if (i32.eqz (call $len (local.get $names)))
+              (then (return (local.get $resolved))))
+            (return (call $row_union
+              (call $row_make_closed (local.get $names))
+              (local.get $resolved)))))
+        (if (i32.eq (local.get $ntag) (i32.const 63))   ;; NRowFree — still open
+          (then (return (local.get $row))))
+        ;; Row var bound to a non-row node kind — graph corruption.
+        (unreachable)))
+    ;; Non-row value in a row read — category error (the ADT discipline
+    ;; makes bare handles in row slots unrepresentable; surface, don't guess).
+    (unreachable))
 
   ;; ─── $resume_discipline_of — TCont.discipline accessor ───────────
   ;; Per Hβ-lower-substrate.md §3.1 lines 317-323. Surfaces the

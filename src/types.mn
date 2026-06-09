@@ -763,7 +763,7 @@ effect GraphRead {
 
 effect GraphWrite {
   graph_fresh_ty(Reason) -> Handle
-  graph_fresh_row(Reason) -> Int
+  graph_fresh_row(Reason) -> Handle
   graph_bind(Int, Ty, Reason) -> ()
   graph_bind_row(Int, EffRow, Reason) -> ()
   graph_fork(String) -> ()

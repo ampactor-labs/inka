@@ -16262,7 +16262,11 @@
         (local.set $fn_ty (call $node_kind_payload (local.get $existing_kind)))
         (local.set $tparam_list (call $ty_tfun_params (local.get $fn_ty)))
         (local.set $ret_h (call $ty_tvar_handle (call $ty_tfun_return (local.get $fn_ty))))
-        (local.set $row_h (call $ty_tfun_row (local.get $fn_ty)))
+        ;; The row slot holds EfOpen([], v) by Stage 1A's ADT law; the
+        ;; accumulation frame needs the VAR v (exit_fn graph_bind_row's
+        ;; target). Unwrap at the consumer — the exact inverse of the
+        ;; pre-register producer's wrap.
+        (local.set $row_h (call $row_handle (call $ty_tfun_row (local.get $fn_ty))))
         
         ;; Extend env with extracted params
         (local.set $n_params (call $len (local.get $params)))

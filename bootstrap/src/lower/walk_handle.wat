@@ -641,56 +641,78 @@
   (func $lower_handler_effect_arm_names (param $hname i32) (result i32)
     (call $handler_arm_names_lookup (local.get $hname)))
 
-  ;; ─── $build_handler_arm_names — sparse op-slot→arm-fn-name list ─────
-  ;; Per Hβ-perform-evidence-dispatch.md §4.7. From the handler's arms,
-  ;; build a list indexed by op-slot (= $lower_compute_ev_slot_for_op of the
-  ;; op, the same index $emit_levperform reads), placing "op_<hname>_<op>" at
-  ;; each implemented op's slot and 0 elsewhere. Registered at decl time.
+  ;; ─── $build_handler_arm_names — per-EFFECT arm-fn-name groups ──────
+  ;; Per Hβ.lower.multi-effect-ev-index-map (Part 2). A handler can cover
+  ;; multiple effects (graph_handler: GraphWrite + GraphRead). op-slot is
+  ;; op-decl-relative WITHIN an effect, so a single flat region COLLIDES
+  ;; (GraphWrite op 0 and GraphRead op 0 both want slot 0). The no-waste
+  ;; fix: group arms by their effect (read from the graph via
+  ;; $lower_effect_name_of_op), each group an arm-list indexed by op-slot
+  ;; (op-decl order within that effect). Returns a list of 2-records
+  ;; (ename, arm_list). $emit_lhandlewith lays each group contiguously in
+  ;; the ONE state record and builds a thin per-effect evidence-entry
+  ;; [record, base] selected by the ev-slot. The graph carries the
+  ;; op→effect edge; we read it, never a side registry (drift 8 refused).
   (func $build_handler_arm_names (param $hname i32) (param $arms i32) (result i32)
     (local $n i32) (local $i i32) (local $arm i32) (local $op_name i32)
-    (local $slot i32) (local $maxslot i32) (local $buf i32) (local $nm i32)
+    (local $ename i32) (local $slot i32) (local $nm i32)
+    (local $groups i32) (local $gn i32) (local $j i32) (local $g i32)
+    (local $found i32) (local $arm_list i32) (local $cur i32) (local $k i32)
     (local.set $n (call $len (local.get $arms)))
-    ;; pass 1 — max op-slot among implemented arms.
-    (local.set $maxslot (i32.const -1))
+    (local.set $groups (call $make_list (i32.const 0)))
     (local.set $i (i32.const 0))
-    (block $d1
-      (loop $l1
-        (br_if $d1 (i32.ge_u (local.get $i) (local.get $n)))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
         (local.set $op_name (call $record_get (local.get $arm) (i32.const 2)))
-        (local.set $slot (call $lower_compute_ev_slot_for_op (local.get $op_name)))
-        (if (i32.gt_s (local.get $slot) (local.get $maxslot))
-          (then (local.set $maxslot (local.get $slot))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $l1)))
-    (if (i32.lt_s (local.get $maxslot) (i32.const 0))
-      (then (return (call $make_list (i32.const 0)))))
-    (local.set $buf (call $make_list (i32.const 0)))
-    (local.set $buf
-      (call $list_extend_to (local.get $buf) (i32.add (local.get $maxslot) (i32.const 1))))
-    ;; zero-init every slot (list_extend_to may leave prior garbage).
-    (local.set $i (i32.const 0))
-    (block $d0
-      (loop $l0
-        (br_if $d0 (i32.gt_s (local.get $i) (local.get $maxslot)))
-        (drop (call $list_set (local.get $buf) (local.get $i) (i32.const 0)))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $l0)))
-    ;; pass 2 — fill implemented arms at their op-slot.
-    (local.set $i (i32.const 0))
-    (block $d2
-      (loop $l2
-        (br_if $d2 (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
-        (local.set $op_name (call $record_get (local.get $arm) (i32.const 2)))
+        (local.set $ename (call $lower_effect_name_of_op (local.get $op_name)))
+        ;; Fallback (op not an EffectOpScheme in scope): key the group by the
+        ;; op-name itself so the arm is never dropped (productive-under-error).
+        (if (i32.eqz (local.get $ename)) (then (local.set $ename (local.get $op_name))))
         (local.set $slot (call $lower_compute_ev_slot_for_op (local.get $op_name)))
         (local.set $nm (call $str_concat (i32.const 504) (local.get $hname)))   ;; "op_" ++ hname
         (local.set $nm (call $str_concat (local.get $nm) (i32.const 4400)))     ;; ++ "_"
         (local.set $nm (call $str_concat (local.get $nm) (local.get $op_name))) ;; ++ op
-        (drop (call $list_set (local.get $buf) (local.get $slot) (local.get $nm)))
+        ;; find-or-create the group for $ename.
+        (local.set $found (i32.const 0))
+        (local.set $gn (call $len (local.get $groups)))
+        (local.set $j (i32.const 0))
+        (block $gdone
+          (loop $gsearch
+            (br_if $gdone (i32.ge_u (local.get $j) (local.get $gn)))
+            (local.set $g (call $list_index (local.get $groups) (local.get $j)))
+            (if (call $str_eq (call $record_get (local.get $g) (i32.const 0)) (local.get $ename))
+              (then (local.set $found (local.get $g)) (br $gdone)))
+            (local.set $j (i32.add (local.get $j) (i32.const 1)))
+            (br $gsearch)))
+        (if (i32.eqz (local.get $found))
+          (then
+            (local.set $found (call $make_record (i32.const 0) (i32.const 2)))
+            (call $record_set (local.get $found) (i32.const 0) (local.get $ename))
+            (call $record_set (local.get $found) (i32.const 1) (call $make_list (i32.const 0)))
+            (local.set $groups
+              (call $list_extend_to (local.get $groups) (i32.add (local.get $gn) (i32.const 1))))
+            (drop (call $list_set (local.get $groups) (local.get $gn) (local.get $found)))))
+        ;; place $nm at op-slot within the group's arm_list (extend + zero-fill).
+        (local.set $arm_list (call $record_get (local.get $found) (i32.const 1)))
+        (if (i32.ge_s (local.get $slot) (call $len (local.get $arm_list)))
+          (then
+            (local.set $cur (call $len (local.get $arm_list)))
+            (local.set $arm_list
+              (call $list_extend_to (local.get $arm_list) (i32.add (local.get $slot) (i32.const 1))))
+            (local.set $k (local.get $cur))
+            (block $zd
+              (loop $zl
+                (br_if $zd (i32.gt_s (local.get $k) (local.get $slot)))
+                (drop (call $list_set (local.get $arm_list) (local.get $k) (i32.const 0)))
+                (local.set $k (i32.add (local.get $k) (i32.const 1)))
+                (br $zl)))
+            (call $record_set (local.get $found) (i32.const 1) (local.get $arm_list))))
+        (drop (call $list_set (local.get $arm_list) (local.get $slot) (local.get $nm)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $l2)))
-    (local.get $buf))
+        (br $each)))
+    (local.get $groups))
 
   ;; ─── $lower_pipe — PipeExpr arm (parser tag 101) — 5-verb dispatch ──
   ;; Per src/lower.mn:470-504 + spec 10. Five PipeKinds, one arm each.

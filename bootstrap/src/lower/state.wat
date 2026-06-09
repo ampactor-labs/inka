@@ -587,19 +587,43 @@
         (br $iter)))
     (i32.const 0))
 
+  ;; ─── $handler_covers_ename — graph-derived effect-coverage predicate ──
+  ;; Does the handler named $hname cover effect $ename? Reads its per-effect
+  ;; arm-GROUPS (each arm's op→effect via $lower_effect_name_of_op, grouped at
+  ;; decl by $build_handler_arm_names) — the authoritative, MULTI-EFFECT-correct
+  ;; source. A handler over GraphWrite+GraphRead has a group for each; the
+  ;; single-effect `Handler(eff)` scheme tag could only name ONE, which made
+  ;; resolution silently miss the second effect (the multi-effect HANDLER trap).
+  ;; This reads the graph, never a side registry.
+  (func $handler_covers_ename (param $hname i32) (param $ename i32) (result i32)
+    (local $groups i32) (local $gn i32) (local $gj i32) (local $g i32)
+    (local.set $groups (call $lower_handler_effect_arm_names (local.get $hname)))
+    (local.set $gn (call $len (local.get $groups)))
+    (local.set $gj (i32.const 0))
+    (block $done
+      (loop $gl
+        (br_if $done (i32.ge_u (local.get $gj) (local.get $gn)))
+        (local.set $g (call $list_index (local.get $groups) (local.get $gj)))
+        (if (call $str_eq (call $record_get (local.get $g) (i32.const 0)) (local.get $ename))
+          (then (return (i32.const 1))))
+        (local.set $gj (i32.add (local.get $gj) (i32.const 1)))
+        (br $gl)))
+    (i32.const 0))
+
   ;; ─── $lower_resolve_handler_state_for_ename — by-effect-name variant ──
-  ;; Per Hβ-perform-evidence-dispatch.md §4.7. $derive_ev_slots has the
-  ;; EFFECT name (from the callee's row), not an op-name, so it resolves the
-  ;; handler's state-local directly by ename. Same innermost-first stack walk
-  ;; as $lower_resolve_handler_state_for_op but without the op→ename step.
-  ;; Returns the state-record-local-name ("__hstate_<h>") or 0 if no handler
-  ;; for ename is lexically in scope (→ forward via LEvSlotRef).
+  ;; Per Hβ-perform-evidence-dispatch.md §4.7 + Part 2. $derive_ev_slots has
+  ;; the EFFECT name (from the callee's row). Returns the per-effect EVIDENCE-
+  ;; ENTRY local "__hstate_<h>_<ename>" (= state_local ++ "_" ++ ename) for the
+  ;; innermost handler in scope that COVERS $ename — the thin [record, base]
+  ;; view $emit_handler_effect_entries bound at install. $derive_ev_slots
+  ;; forwards this entry (LLocal) into the callee's ev-slot; $emit_levperform
+  ;; reads (record, base) from it. Coverage is read from the graph-derived
+  ;; arm-groups via $handler_covers_ename (multi-effect-correct). Returns 0 if
+  ;; no covering handler is lexically in scope (→ forward via LEvSlotRef).
   (func $lower_resolve_handler_state_for_ename
         (export "lower_resolve_handler_state_for_ename")
         (param $ename i32) (result i32)
-    (local $i i32) (local $stack_entry i32) (local $hname i32)
-    (local $state_local i32) (local $h_entry i32) (local $sch i32)
-    (local $body i32) (local $args i32) (local $arg0 i32)
+    (local $i i32) (local $stack_entry i32) (local $hname i32) (local $state_local i32)
     (call $lower_init)
     (local.set $i (i32.sub (global.get $lower_handler_count_g) (i32.const 1)))
     (block $done
@@ -609,31 +633,11 @@
           (call $list_index (global.get $lower_handler_stack_ptr) (local.get $i)))
         (local.set $hname       (call $record_get (local.get $stack_entry) (i32.const 0)))
         (local.set $state_local (call $record_get (local.get $stack_entry) (i32.const 1)))
-        (local.set $h_entry (call $env_lookup (local.get $hname)))
-        (if (i32.ne (local.get $h_entry) (i32.const 0))
-          (then
-            (local.set $sch (call $env_binding_scheme (local.get $h_entry)))
-            (local.set $body (call $scheme_body (local.get $sch)))
-            (if (i32.ge_u (local.get $body) (global.get $heap_base))
-              (then
-                (if (i32.eq (call $ty_tag (local.get $body)) (i32.const 108))
-                  (then
-                    (if (call $str_eq
-                              (call $ty_tname_name (local.get $body))
-                              (i32.const 4320))
-                      (then
-                        (local.set $args (call $ty_tname_args (local.get $body)))
-                        (if (i32.eq (call $len (local.get $args)) (i32.const 1))
-                          (then
-                            (local.set $arg0 (call $list_index (local.get $args) (i32.const 0)))
-                            (if (i32.ge_u (local.get $arg0) (global.get $heap_base))
-                              (then
-                                (if (i32.eq (call $ty_tag (local.get $arg0)) (i32.const 108))
-                                  (then
-                                    (if (call $str_eq
-                                              (call $ty_tname_name (local.get $arg0))
-                                              (local.get $ename))
-                                      (then (return (local.get $state_local))))))))))))))))))
+        (if (call $handler_covers_ename (local.get $hname) (local.get $ename))
+          (then (return
+            (call $str_concat
+              (call $str_concat (local.get $state_local) (i32.const 4400))
+              (local.get $ename)))))
         (local.set $i (i32.sub (local.get $i) (i32.const 1)))
         (br $iter)))
     (i32.const 0))

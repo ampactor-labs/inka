@@ -1200,14 +1200,37 @@
   ;; (call $alloc ...))` at install. The local-name string is built from
   ;; "__hstate_" + int_to_str(h), matching the lower-time mint in
   ;; $lower_pipe (walk_handle.wat).
-  (func $emit_hstate_local_decl (param $h i32)
-    (local $name i32)
+  (func $emit_hstate_local_decl (param $r i32)
+    (local $h i32) (local $name i32) (local $groups i32)
+    (local $gn i32) (local $gi i32) (local $g i32) (local $ename i32) (local $entry_name i32)
+    (local.set $h (call $lexpr_handle (local.get $r)))
     (local.set $name (call $str_concat (i32.const 5408) (call $int_to_str (local.get $h))))
+    ;; the state-record local "__hstate_<h>"
     (if (call $emit_fn_local_check (local.get $name))
       (then
         (call $emit_cstr (i32.const 4146) (i32.const 9))   ;; " (local $"
         (call $emit_str (local.get $name))
-        (call $emit_cstr (i32.const 4155) (i32.const 5))))) ;; " i32)"
+        (call $emit_cstr (i32.const 4155) (i32.const 5))))  ;; " i32)"
+    ;; one per-effect evidence-entry local "__hstate_<h>_<ename>" per group
+    ;; (Hβ.lower.multi-effect-ev-index-map Part 2) — bound at install by
+    ;; $emit_handler_effect_entries, forwarded by the ev-slot.
+    (local.set $groups (call $lexpr_lhandlewith_arm_names (local.get $r)))
+    (local.set $gn (call $len (local.get $groups)))
+    (local.set $gi (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $gi) (local.get $gn)))
+        (local.set $g (call $list_index (local.get $groups) (local.get $gi)))
+        (local.set $ename (call $record_get (local.get $g) (i32.const 0)))
+        (local.set $entry_name
+          (call $str_concat (call $str_concat (local.get $name) (i32.const 4400)) (local.get $ename)))
+        (if (call $emit_fn_local_check (local.get $entry_name))
+          (then
+            (call $emit_cstr (i32.const 4146) (i32.const 9))   ;; " (local $"
+            (call $emit_str (local.get $entry_name))
+            (call $emit_cstr (i32.const 4155) (i32.const 5))))  ;; " i32)"
+        (local.set $gi (i32.add (local.get $gi) (i32.const 1)))
+        (br $each))))
 
   ;; Single-expr walker companion to $emit_let_locals (which takes a
   ;; list). Used when recursing into LLet's value (a single expr).
@@ -1316,7 +1339,7 @@
         ;; `__hstate_<h>` local for the state record allocated at install.
         ;; Each `~>` site mints a unique local; perform sites within body
         ;; read it via $emit_lperform's state_local-aware path.
-        (call $emit_hstate_local_decl (call $lexpr_handle (local.get $expr)))
+        (call $emit_hstate_local_decl (local.get $expr))
         (call $emit_let_locals_walk (call $lexpr_lhandlewith_body (local.get $expr)))
         (call $emit_let_locals_walk (call $lexpr_lhandlewith_handler (local.get $expr)))
         ;; Hβ.seed.handler-state-init-writes-mirror — state_inits are

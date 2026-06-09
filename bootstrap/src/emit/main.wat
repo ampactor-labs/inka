@@ -2095,7 +2095,9 @@
         (call $emit_handler_state_globals
           (call $lexpr_lhandlewith_state_inits (local.get $expr)))
         (return)))
-    ;; Container recursion — minimal coverage matching feedback walker.
+    ;; Container recursion — COMPLETE set per $emit_functions_walk (the
+    ;; reference container enumeration; same invariant as the feedback
+    ;; walk: decl walks cover every container the body emit reaches).
     (if (i32.eq (local.get $tag) (i32.const 304))         ;; LLet
       (then
         (call $emit_handler_state_globals_walk (call $lexpr_llet_value (local.get $expr)))
@@ -2106,6 +2108,7 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 314))         ;; LIf
       (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lif_cond (local.get $expr)))
         (call $emit_handler_state_globals (call $lexpr_lif_then (local.get $expr)))
         (call $emit_handler_state_globals (call $lexpr_lif_else (local.get $expr)))
         (return)))
@@ -2180,6 +2183,37 @@
     (if (i32.eq (local.get $tag) (i32.const 328))         ;; LRegion
       (then
         (call $emit_handler_state_globals_walk (call $lexpr_lregion_body (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 312))         ;; LMakeContinuation
+      (then
+        (call $emit_handler_state_globals
+          (call $lowfn_body (call $lexpr_lmakecontinuation_fn (local.get $expr))))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 325))         ;; LSuspend
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lsuspend_fn (local.get $expr)))
+        (call $emit_handler_state_globals (call $lexpr_lsuspend_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 303))         ;; LStore
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lstore_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 327))         ;; LStateSet
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lstateset_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 332))         ;; LHandle
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lhandle_body (local.get $expr)))
+        (call $emit_handler_state_globals_arms (call $lexpr_lhandle_arms (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 333))         ;; LEvPerform
+      (then
+        (call $emit_handler_state_globals (call $lexpr_levperform_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 334))         ;; LFieldLoad
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lfieldload_record (local.get $expr)))
         (return)))
     (return))
 
@@ -2317,7 +2351,13 @@
         (call $emit_feedback_state_globals_walk
           (call $lexpr_lfeedback_spec (local.get $expr)))
         (return)))
-    ;; Container recursion — same set as $emit_alloc_handle_locals_walk.
+    ;; Container recursion — COMPLETE set per $emit_functions_walk (the
+    ;; reference container enumeration). Invariant: every module-level
+    ;; decl walk covers every container tag emit_functions_walk covers —
+    ;; a use-site the body emit reaches that a decl walk cannot reach is
+    ;; an undefined-symbol wat2wasm error ($s13228 / $__hstate class).
+    ;; The wheel's consolidated visitor walk (7d962ab) is the surviving
+    ;; form; the seed hand-holds the invariant until Stage 8.
     (if (i32.eq (local.get $tag) (i32.const 304))         ;; LLet
       (then
         (call $emit_feedback_state_globals_walk
@@ -2330,6 +2370,8 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 314))         ;; LIf
       (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lif_cond (local.get $expr)))
         (call $emit_feedback_state_globals
           (call $lexpr_lif_then (local.get $expr)))
         (call $emit_feedback_state_globals
@@ -2390,6 +2432,8 @@
           (call $lexpr_lhandlewith_body (local.get $expr)))
         (call $emit_feedback_state_globals_walk
           (call $lexpr_lhandlewith_handler (local.get $expr)))
+        (call $emit_feedback_state_globals
+          (call $lexpr_lhandlewith_state_inits (local.get $expr)))
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 332))         ;; LHandle
       (then
@@ -2397,6 +2441,82 @@
           (call $lexpr_lhandle_body (local.get $expr)))
         (call $emit_feedback_state_globals_match_arms
           (call $lexpr_lhandle_arms (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 306))         ;; LBinOp
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lbinop_l (local.get $expr)))
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lbinop_r (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 307))         ;; LUnaryOp
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lunaryop_x (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 310))         ;; LReturn
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lreturn_x (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 316))         ;; LMakeList
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmakelist_elems (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 317))         ;; LMakeTuple
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmaketuple_elems (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 318))         ;; LMakeRecord
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmakerecord_fields (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 319))         ;; LMakeVariant
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmakevariant_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 320))         ;; LIndex
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lindex_base (local.get $expr)))
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lindex_idx (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 325))         ;; LSuspend
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lsuspend_fn (local.get $expr)))
+        (call $emit_feedback_state_globals
+          (call $lexpr_lsuspend_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 303))         ;; LStore
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lstore_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 327))         ;; LStateSet
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lstateset_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 331))         ;; LPerform
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lperform_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 333))         ;; LEvPerform
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_levperform_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 334))         ;; LFieldLoad
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lfieldload_record (local.get $expr)))
         (return)))
     (return))
 

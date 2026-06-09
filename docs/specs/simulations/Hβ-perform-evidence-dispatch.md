@@ -866,3 +866,40 @@ Why it surpasses the field: Koka coerces evidence vectors at every
 subsumption; OCaml-5 multicore searches the handler stack at O(depth);
 this is two loads, O(1), with the row *proving* the entry exists — and the
 layout is the row, projected (each effect an entry), wasting nothing.
+
+### 11.2 — BOTH parts LANDED + proven; the wheel's true blocker isolated (2026-06-09)
+
+Parts 1 (ev-slot, `9e8b86f`) and 2 (per-effect entries, `3ce7c0a`) are
+complete and **proven** on three minimal repros — `repro_multi_effect_ev_slot_collision.mn`
+(two single-effect handlers, one fn), `repro_multi_effect_handler.mn` (ONE
+handler over two effects, Tier-2), and a 6-frame deep multi-effect chain —
+all red→green; battery + trace-suite 66/17 unchanged. mentl2 advances past
+the fresh_ph out-of-bounds.
+
+**The wheel's residual is NOT the dispatch mechanism — it is upstream of it.**
+Empirical (2026-06-09): the wheel creates **102 per-effect evidence
+entries** at handler installs but **forwards 0** of them; there are **0
+ev-slot stores wheel-wide**. `derive_ev_slots` (walk_call.wat) returns `[]`
+for *every* call, because it bails at `ty_tag != TFun` and **every callee's
+type on the wheel is `NFre` (→`TVar`, tag 104), never `TFun` (tag 107)**.
+So no evidence is ever threaded; every `perform` reads garbage from an
+unpopulated `__state` slot; fresh_ph traps. The micro-repros work precisely
+because their callee types DO infer to `TFun` and evidence forwards.
+
+**Therefore the whole evidence path's first-light blocker reduces to one
+root:** HM inference must bind a call's **callee reference node** to its
+instantiated `TFun` scheme (params→ret with a resolved row) on the wheel's
+rich functions — the `Hβ.infer.value-type-nfre-on-wheel` gate, now with a
+precise consumer-driven target: `derive_ev_slots` needs `lookup_ty(callee)
+== TFun`. The pre-register pass binds each fn's *own* handle to a
+polymorphic `TFun`; the gap is the **VarRef-at-call-site** node not being
+bound to the instantiated `TFun` (it surfaces as `NFre`). Close that and
+the proven dispatch substrate threads evidence end-to-end with no further
+mechanism work. The wheel-source mirror (src/lower.mn + src/backends/wasm.mn)
+of Parts 1+2 is the parallel L1-parity follow-up.
+
+This is the thesis in one line: **the effect ROW is the evidence layout, and
+it can only lay out what inference has resolved.** Dispatch (the row
+projected) is done; resolution (the row made whole) is the remaining work,
+and it is the same kernel primitive reaching completeness — one fix
+sharpening inference, types, and evidence together.

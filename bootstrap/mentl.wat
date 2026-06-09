@@ -12098,28 +12098,41 @@
   ;;   104=TVar, 105=TList, 106=TTuple, 107=TFun
   ;;   108=TName, 109=TRecord, 110=TRecordOpen
   ;;   111=TRefined, 112=TCont, 113=TAlias
-  ;; $is_unbound_row_handle — a small-int row handle (not the Pure sentinel)
-  ;; whose graph node is NRowFree (63). Per Hβ.infer.perform-effect-row-
-  ;; propagation: only such a side is bindable in row unification.
-  (func $is_unbound_row_handle (param $x i32) (result i32)
-    (if (i32.ge_u (local.get $x) (global.get $heap_base)) (then (return (i32.const 0))))
-    (if (i32.eq (local.get $x) (i32.const 150)) (then (return (i32.const 0))))   ;; Pure value
-    (i32.eq (call $node_kind_tag (call $gnode_kind (call $graph_chase (local.get $x))))
-            (i32.const 63)))                                                     ;; NRowFree
+  ;; $row_bindable_open — EfOpen(names=[], v) whose v chases to NRowFree (63).
+  ;; Per Stage 1A ADT discipline (src/types.mn law: a bare handle cannot occupy
+  ;; a row slot): the ONLY bindable side in row unification. EfPure/EfClosed
+  ;; are never bindable; EfOpen with non-empty names is the row-residual case
+  ;; (named peer Hβ.infer.row-normalize-full).
+  (func $row_bindable_open (param $x i32) (result i32)
+    (if (i32.ne (call $tag_of (local.get $x)) (i32.const 152)) ;; EfOpen
+      (then (return (i32.const 0))))
+    (if (i32.ne (call $len (call $row_names (local.get $x))) (i32.const 0))
+      (then (return (i32.const 0))))
+    (i32.eq (call $node_kind_tag (call $gnode_kind (call $graph_chase
+              (call $row_handle (local.get $x)))))
+            (i32.const 63)))                                   ;; NRowFree
 
-  ;; $unify_row — minimal row unification: bind an unbound row var to the
-  ;; other side's resolved row (NRowFree → NRowBound[row]). This is what
-  ;; call-site inference needs — a callee's concrete row {E} flows into the
-  ;; caller's fresh row var, so the caller accumulates {E}. The full row
-  ;; algebra (union of two concrete rows, open-row residuals) is the named
-  ;; peer Hβ.infer.row-normalize-full; both-concrete is left as-is here
-  ;; (the dominant call shape unifies a fresh var against a concrete row).
+  ;; $unify_row — minimal row unification on EffRow VALUES: bind the open
+  ;; side's row var to the other side's resolved row (NRowFree →
+  ;; NRowBound[row]). This is what call-site inference needs — a callee's
+  ;; concrete row {E} flows into the caller's fresh row var, so the caller
+  ;; accumulates {E}. Same-var guard prevents v := EfOpen([], v) cycles when
+  ;; both sides wrap one var. The full row algebra (union of two concrete
+  ;; rows, open-row residuals) is the named peer Hβ.infer.row-normalize-full;
+  ;; both-concrete is left as-is here (the dominant call shape unifies a
+  ;; fresh var against a concrete row).
   (func $unify_row (param $a i32) (param $b i32) (param $span i32) (param $reason i32)
-    (if (call $is_unbound_row_handle (local.get $a))
-      (then (call $graph_bind_row (local.get $a)
+    (if (i32.and (call $row_bindable_open (local.get $a))
+                 (call $row_bindable_open (local.get $b)))
+      (then
+        (if (i32.eq (call $row_handle (local.get $a))
+                    (call $row_handle (local.get $b)))
+          (then (return)))))
+    (if (call $row_bindable_open (local.get $a))
+      (then (call $graph_bind_row (call $row_handle (local.get $a))
               (call $lookup_row_for (local.get $b)) (local.get $reason)) (return)))
-    (if (call $is_unbound_row_handle (local.get $b))
-      (then (call $graph_bind_row (local.get $b)
+    (if (call $row_bindable_open (local.get $b))
+      (then (call $graph_bind_row (call $row_handle (local.get $b))
               (call $lookup_row_for (local.get $a)) (local.get $reason)) (return))))
 
   (func $unify_types (param $a i32) (param $b i32)
@@ -14184,9 +14197,10 @@
   ;; threads the handler record (Hβ-perform-evidence-dispatch.md §4.9).
 
   ;; $walk_expr_inf_add_row — union the performed-op / called-callee row into
-  ;; the current frame. `row` is an EffRow value (perform: the op's Closed[E])
-  ;; OR a row handle (call: the callee's row-var); $lookup_row_for resolves
-  ;; both. No active frame (module top-level) → no-op (wheel stack.len==0 arm).
+  ;; the current frame. `row` is an EffRow VALUE (wheel inf_add_row(EffRow)
+  ;; signature parity — callers chase handles to bound rows before calling);
+  ;; $lookup_row_for resolves EfOpen wrappers through the graph. No active
+  ;; frame (module top-level) → no-op (wheel stack.len==0 arm).
   (func $walk_expr_inf_add_row (param $row i32)
     (local $frame i32) (local $resolved i32)
     (if (i32.eqz (call $infer_fn_stack_len)) (then (return)))
@@ -14522,7 +14536,7 @@
     (local $arg_handles i32) (local $params i32)
     (local $ret_h i32) (local $row_h i32)
     (local $expected i32) (local $expected_h i32)
-    (local $cname i32)
+    (local $cname i32) (local $row_nk i32)
     ;; Layout: [tag=88][callee][args]
     (local.set $func (i32.load offset=4 (local.get $expr)))
     (local.set $args (i32.load offset=8 (local.get $expr)))
@@ -14542,7 +14556,7 @@
     (local.set $expected (call $ty_make_tfun
       (local.get $params)
       (call $ty_make_tvar (local.get $ret_h))
-      (local.get $row_h)))
+      (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
     (local.set $expected_h (call $graph_fresh_ty
       (call $reason_make_inferredcallreturn (local.get $cname)
         (call $reason_make_inferred (i32.const 3720)))))   ;; "expected"
@@ -14561,9 +14575,13 @@
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferredcallreturn (local.get $cname)
           (call $reason_make_inferred (i32.const 3584)))))  ;; "result"
-    ;; Row composition: src/infer.mn:842-845 chases row_h + adds to caller.
-    ;; SEED-STUB per Hβ.infer.row-normalize.
-    (call $walk_expr_inf_add_row (local.get $row_h))
+    ;; Row composition: src/infer.mn:926-931 — chase row_h; NRowBound(row)
+    ;; flows the callee's row into the caller's frame; a still-free var
+    ;; adds nothing.
+    (local.set $row_nk (call $gnode_kind (call $graph_chase (local.get $row_h))))
+    (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))
+      (then (call $walk_expr_inf_add_row
+        (call $node_kind_payload (local.get $row_nk)))))
     (local.get $handle))
 
   ;; LambdaExpr arm — src/infer.mn:724-740. Builds TFun([], TVar(body_h),
@@ -14623,7 +14641,7 @@
       (call $ty_make_tfun
         (local.get $tparam_list)
         (call $ty_make_tvar (local.get $bh))
-        (local.get $row_h))
+        (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h)))
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferred (i32.const 3984))))   ;; "lambda"
     (call $env_scope_exit)
@@ -15362,7 +15380,7 @@
     (local $ret_h i32) (local $row_h i32)
     (local $param i32) (local $param_list i32)
     (local $expected i32) (local $expected_h i32)
-    (local $pipe_str i32)
+    (local $pipe_str i32) (local $row_nk i32)
     (local.set $lh (call $infer_walk_expr (local.get $left)))
     (local.set $rh (call $infer_walk_expr (local.get $right)))
     (local.set $pipe_str (call $int_to_str (i32.const 160)))
@@ -15384,7 +15402,7 @@
     (local.set $expected (call $ty_make_tfun
       (local.get $param_list)
       (call $ty_make_tvar (local.get $ret_h))
-      (local.get $row_h)))
+      (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
     (local.set $expected_h (call $graph_fresh_ty
       (call $reason_make_inferredpiperesult (local.get $pipe_str)
         (call $reason_make_inferred (i32.const 3720)))))   ;; "expected"
@@ -15400,8 +15418,12 @@
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferredpiperesult (local.get $pipe_str)
           (call $reason_make_inferred (i32.const 3584)))))  ;; "result"
-    ;; Row composition seed-stub
-    (call $walk_expr_inf_add_row (local.get $row_h))
+    ;; Row composition: src/infer.mn pipe arm — chase row_h; NRowBound(row)
+    ;; flows the stage's row into the caller's frame.
+    (local.set $row_nk (call $gnode_kind (call $graph_chase (local.get $row_h))))
+    (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))
+      (then (call $walk_expr_inf_add_row
+        (call $node_kind_payload (local.get $row_nk)))))
     (local.get $handle))
 
   ;; PCompose (><) — src/infer.mn:985-995. branch_enter; walk left;
@@ -16043,7 +16065,7 @@
     (local.set $fn_ty (call $ty_make_tfun
       (local.get $tparam_list)
       (call $ty_make_tvar (local.get $ret_h))
-      (local.get $row_h)))
+      (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
     (local.set $reason (call $reason_make_located
       (local.get $span)
       (call $reason_make_declared (local.get $name))))
@@ -16304,7 +16326,7 @@
         (local.set $fn_ty (call $ty_make_tfun
           (local.get $tparam_list)
           (call $ty_make_tvar (local.get $ret_h))
-          (local.get $row_h)))
+          (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
         (local.set $declared_reason (call $reason_make_located
           (local.get $span)
           (call $reason_make_declared (local.get $name))))
@@ -16489,7 +16511,7 @@
     (local $vname i32) (local $field_tys_parser i32)
     (local $field_tys i32) (local $field_count i32)
     (local $result_ty i32) (local $ctor_ty i32)
-    (local $row_h i32) (local $scheme i32) (local $reason i32)
+    (local $scheme i32) (local $reason i32)
 
     (local.set $total (call $len (local.get $variants)))
     ;; Build the result type once: TName(type_name, []) — every variant
@@ -16518,13 +16540,10 @@
             (local.set $field_tys
               (call $walk_stmt_build_field_tparams
                 (local.get $field_tys_parser)))
-            (local.set $row_h (call $graph_fresh_row
-              (call $reason_make_located (local.get $span)
-                (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
             (local.set $ctor_ty (call $ty_make_tfun
               (local.get $field_tys)
               (local.get $result_ty)
-              (local.get $row_h)))))
+              (call $row_make_pure)))))
         (local.set $scheme (call $scheme_make_forall
           (call $make_list (i32.const 0))
           (local.get $ctor_ty)))
@@ -16940,7 +16959,7 @@
           (local.set $op_ty (call $ty_make_tfun
             (local.get $tparam_list)
             (call $ty_make_tvar (local.get $ret_h))
-            (local.get $row_h)))
+            (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
           ;; Polymorphic over param tyvars + ret tyvar (row stays opaque
           ;; per the H1.4 separation — see line 87+ commentary).
           (local.set $tyvar_handles
@@ -18696,32 +18715,56 @@
     (local.set $row (call $ty_tfun_row (local.get $ty)))
     (call $row_is_ground (local.get $row)))
 
-  ;; ─── $lookup_row_for — live graph read for a row handle (peer to $lookup_ty) ─
-  ;; Per Hβ.lower.lookup-row (named follow-up, now landed for evidence dispatch)
-  ;; + Hβ-perform-evidence-dispatch.md §4.8. A TFun's row field is a row-var
-  ;; HANDLE (e.g. 29/32), not a resolved EffRow — it must be chased through the
-  ;; graph just as $lookup_ty chases type handles. NRowBound(EffRow) → the bound
-  ;; row; NRowFree → unresolved → Pure (no nameable effects). Already-resolved
-  ;; row values (Pure sentinel 150, or Closed/Open/Neg/Sub/Inter records) pass
-  ;; through. THE fix that lets derive_ev_slots see effect rows even when value
-  ;; types carry free TVars (NFre) — row resolution is independent of monotype
-  ;; resolution.
-  (func $lookup_row_for (export "lookup_row_for") (param $handle i32) (result i32)
-    (local $g i32) (local $nk i32) (local $tag i32)
-    ;; Pure sentinel (nullary value 150) — already a row.
-    (if (i32.eq (call $tag_of (local.get $handle)) (i32.const 150))
-      (then (return (local.get $handle))))
-    ;; Heap record (Closed/Open/Neg/Sub/Inter) — already a row.
-    (if (i32.ge_u (local.get $handle) (global.get $heap_base))
-      (then (return (local.get $handle))))
-    ;; Small-int handle → chase to the bound row.
-    (local.set $g (call $graph_chase (local.get $handle)))
-    (local.set $nk (call $gnode_kind (local.get $g)))
-    (local.set $tag (call $node_kind_tag (local.get $nk)))
-    (if (i32.eq (local.get $tag) (i32.const 62))     ;; NRowBound → EffRow payload
-      (then (return (call $node_kind_payload (local.get $nk)))))
-    ;; NRowFree / anything else → unresolved row → Pure.
-    (call $row_make_pure))
+  ;; ─── $lookup_row_for — live graph read for an EffRow value (peer to $lookup_ty) ─
+  ;; Per Stage 1A ADT discipline + Hβ-perform-evidence-dispatch.md §4.8. A row
+  ;; slot holds an EffRow VALUE by type law (src/types.mn: a bare handle cannot
+  ;; occupy a row slot — an open row is EfOpen(names, v) with the var WRAPPED).
+  ;; Dispatch on the row tag:
+  ;;   EfPure 150 / EfClosed 151 — already resolved; self.
+  ;;   EfNeg 153 / EfSub 154 / EfInter 155 — intermediate forms; pass through
+  ;;     (reduction is the named peer Hβ.infer.row-normalize-full).
+  ;;   EfOpen 152 — chase the wrapped var v: NRowBound → recurse on the bound
+  ;;     row (chains hop through records; cycles unrepresentable per
+  ;;     $unify_row's same-var guard), unioning any carried names;
+  ;;     NRowFree → the row is HONESTLY still open — return the EfOpen itself
+  ;;     (never Pure: "unresolved" and "no effects" are different truths).
+  ;;   Anything else — category error: a non-row reached a row read.
+  ;; THE fix that lets derive_ev_slots see effect rows even when value types
+  ;; carry free TVars (NFre) — row resolution is independent of monotype
+  ;; resolution, and total at any graph size (no magnitude tests).
+  (func $lookup_row_for (export "lookup_row_for") (param $row i32) (result i32)
+    (local $tag i32) (local $nk i32) (local $ntag i32)
+    (local $names i32) (local $resolved i32)
+    (local.set $tag (call $tag_of (local.get $row)))
+    ;; EfPure sentinel / EfClosed / Neg / Sub / Inter — already a row value.
+    (if (i32.eq (local.get $tag) (i32.const 150)) (then (return (local.get $row))))
+    (if (i32.eq (local.get $tag) (i32.const 151)) (then (return (local.get $row))))
+    (if (i32.eq (local.get $tag) (i32.const 153)) (then (return (local.get $row))))
+    (if (i32.eq (local.get $tag) (i32.const 154)) (then (return (local.get $row))))
+    (if (i32.eq (local.get $tag) (i32.const 155)) (then (return (local.get $row))))
+    ;; EfOpen(names, v) — chase v through the graph.
+    (if (i32.eq (local.get $tag) (i32.const 152))
+      (then
+        (local.set $nk (call $gnode_kind (call $graph_chase
+          (call $row_handle (local.get $row)))))
+        (local.set $ntag (call $node_kind_tag (local.get $nk)))
+        (if (i32.eq (local.get $ntag) (i32.const 62))   ;; NRowBound
+          (then
+            (local.set $resolved (call $lookup_row_for
+              (call $node_kind_payload (local.get $nk))))
+            (local.set $names (call $row_names (local.get $row)))
+            (if (i32.eqz (call $len (local.get $names)))
+              (then (return (local.get $resolved))))
+            (return (call $row_union
+              (call $row_make_closed (local.get $names))
+              (local.get $resolved)))))
+        (if (i32.eq (local.get $ntag) (i32.const 63))   ;; NRowFree — still open
+          (then (return (local.get $row))))
+        ;; Row var bound to a non-row node kind — graph corruption.
+        (unreachable)))
+    ;; Non-row value in a row read — category error (the ADT discipline
+    ;; makes bare handles in row slots unrepresentable; surface, don't guess).
+    (unreachable))
 
   ;; ─── $resume_discipline_of — TCont.discipline accessor ───────────
   ;; Per Hβ-lower-substrate.md §3.1 lines 317-323. Surfaces the
@@ -33027,7 +33070,9 @@
         (call $emit_handler_state_globals
           (call $lexpr_lhandlewith_state_inits (local.get $expr)))
         (return)))
-    ;; Container recursion — minimal coverage matching feedback walker.
+    ;; Container recursion — COMPLETE set per $emit_functions_walk (the
+    ;; reference container enumeration; same invariant as the feedback
+    ;; walk: decl walks cover every container the body emit reaches).
     (if (i32.eq (local.get $tag) (i32.const 304))         ;; LLet
       (then
         (call $emit_handler_state_globals_walk (call $lexpr_llet_value (local.get $expr)))
@@ -33038,6 +33083,7 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 314))         ;; LIf
       (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lif_cond (local.get $expr)))
         (call $emit_handler_state_globals (call $lexpr_lif_then (local.get $expr)))
         (call $emit_handler_state_globals (call $lexpr_lif_else (local.get $expr)))
         (return)))
@@ -33112,6 +33158,37 @@
     (if (i32.eq (local.get $tag) (i32.const 328))         ;; LRegion
       (then
         (call $emit_handler_state_globals_walk (call $lexpr_lregion_body (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 312))         ;; LMakeContinuation
+      (then
+        (call $emit_handler_state_globals
+          (call $lowfn_body (call $lexpr_lmakecontinuation_fn (local.get $expr))))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 325))         ;; LSuspend
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lsuspend_fn (local.get $expr)))
+        (call $emit_handler_state_globals (call $lexpr_lsuspend_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 303))         ;; LStore
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lstore_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 327))         ;; LStateSet
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lstateset_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 332))         ;; LHandle
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lhandle_body (local.get $expr)))
+        (call $emit_handler_state_globals_arms (call $lexpr_lhandle_arms (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 333))         ;; LEvPerform
+      (then
+        (call $emit_handler_state_globals (call $lexpr_levperform_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 334))         ;; LFieldLoad
+      (then
+        (call $emit_handler_state_globals_walk (call $lexpr_lfieldload_record (local.get $expr)))
         (return)))
     (return))
 
@@ -33249,7 +33326,13 @@
         (call $emit_feedback_state_globals_walk
           (call $lexpr_lfeedback_spec (local.get $expr)))
         (return)))
-    ;; Container recursion — same set as $emit_alloc_handle_locals_walk.
+    ;; Container recursion — COMPLETE set per $emit_functions_walk (the
+    ;; reference container enumeration). Invariant: every module-level
+    ;; decl walk covers every container tag emit_functions_walk covers —
+    ;; a use-site the body emit reaches that a decl walk cannot reach is
+    ;; an undefined-symbol wat2wasm error ($s13228 / $__hstate class).
+    ;; The wheel's consolidated visitor walk (7d962ab) is the surviving
+    ;; form; the seed hand-holds the invariant until Stage 8.
     (if (i32.eq (local.get $tag) (i32.const 304))         ;; LLet
       (then
         (call $emit_feedback_state_globals_walk
@@ -33262,6 +33345,8 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 314))         ;; LIf
       (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lif_cond (local.get $expr)))
         (call $emit_feedback_state_globals
           (call $lexpr_lif_then (local.get $expr)))
         (call $emit_feedback_state_globals
@@ -33322,6 +33407,8 @@
           (call $lexpr_lhandlewith_body (local.get $expr)))
         (call $emit_feedback_state_globals_walk
           (call $lexpr_lhandlewith_handler (local.get $expr)))
+        (call $emit_feedback_state_globals
+          (call $lexpr_lhandlewith_state_inits (local.get $expr)))
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 332))         ;; LHandle
       (then
@@ -33329,6 +33416,82 @@
           (call $lexpr_lhandle_body (local.get $expr)))
         (call $emit_feedback_state_globals_match_arms
           (call $lexpr_lhandle_arms (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 306))         ;; LBinOp
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lbinop_l (local.get $expr)))
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lbinop_r (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 307))         ;; LUnaryOp
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lunaryop_x (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 310))         ;; LReturn
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lreturn_x (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 316))         ;; LMakeList
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmakelist_elems (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 317))         ;; LMakeTuple
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmaketuple_elems (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 318))         ;; LMakeRecord
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmakerecord_fields (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 319))         ;; LMakeVariant
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lmakevariant_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 320))         ;; LIndex
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lindex_base (local.get $expr)))
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lindex_idx (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 325))         ;; LSuspend
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lsuspend_fn (local.get $expr)))
+        (call $emit_feedback_state_globals
+          (call $lexpr_lsuspend_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 303))         ;; LStore
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lstore_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 327))         ;; LStateSet
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lstateset_value (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 331))         ;; LPerform
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_lperform_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 333))         ;; LEvPerform
+      (then
+        (call $emit_feedback_state_globals
+          (call $lexpr_levperform_args (local.get $expr)))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 334))         ;; LFieldLoad
+      (then
+        (call $emit_feedback_state_globals_walk
+          (call $lexpr_lfieldload_record (local.get $expr)))
         (return)))
     (return))
 

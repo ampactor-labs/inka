@@ -808,3 +808,61 @@ and arm-position diverge, on top of the ev-slot-0 collision.
 Regression harness for the fix (all must stay green): `min_eff`, `fp`,
 `tD`, `tM`, `tW`, `t_evchain` (single-effect / uniform-sig cases), plus
 `tE` (the new multi-effect-differing-arity case) must go red→green.
+
+### 11.1 — Part 1 LANDED (ev-slot); Part 2 design (multi-effect HANDLER, no-waste)
+
+**Part 1 (commit 9e8b86f) — the ev-slot.** `LEvPerform` is arity 5
+`(handle, op_name, ev_slot, op_slot, args)`; `lower_compute_ev_index_for_effect`
+reads the current fn's row (via its own scheme) and returns the effect's
+canonical index; `derive_ev_slots` returns one ev per effect (canonical
+order, each lexical-`LLocal` or forwarded-`LEvSlotRef`); `emit_levperform`
+reads `__state[8 + 4*caps + 4*ev_slot]`. `tE` red→green; battery green;
+trace suite 66/17. This is the multi-effect-in-one-FUNCTION facet.
+
+**Part 2 (open) — the multi-effect HANDLER facet (the wheel's fresh_ph).**
+A single handler can cover multiple effects (`graph_handler` covers
+GraphWrite + GraphRead). `op_slot` is effect-decl-relative, and
+`$build_handler_arm_names` already places each arm at `op_slot` in a FLAT
+region (`list_set(buf, compute_ev_slot_for_op(op), name)`). So for a
+multi-effect handler the slots **collide**: graph_fresh_ty (GraphWrite op
+0) and graph_chase (GraphRead op 0) both target `buf[0]`, last-write-wins
+→ the arm region is corrupted. (This, not handler-decl-order, is the exact
+fault.)
+
+**The no-waste ultimate form — per-effect evidence-entries.** Each effect
+is a first-class algebraic unit (interrogation #4, Row), so each deserves
+its own evidence entry — *not* a flattened region (which conflates ops
+across effects) and *not* a global sparse index (which pads unused slots
+for earlier-declared effects) and *not* a coercion table (a discarded-and-
+rebuilt side map). Leverage what exists:
+- The **state record stays** (handler IS state — reused). It need no longer
+  carry the flat arm region.
+- For each effect E the handler covers, build a thin **ev-entry**:
+  `[state_record_ptr@0, arm₀@4, arm₁@8, … arm_{k-1}]` — E's arms in E's
+  op-decl order, plus a pointer *into* the shared state record. A view,
+  not a copy.
+- The **ev-slot (Part 1)** points at E's entry. `op_slot` stays op-decl-
+  relative and indexes within the entry. Arm fns are UNCHANGED — they
+  still receive the state record as `__state`.
+- `emit_levperform`: `entry = __state[8+4*caps+4*ev_slot]; record =
+  entry[0]; arm = entry[4 + 4*op_slot]; call arm(record, args)`.
+
+**Five-site execution plan (fresh window; `tE` must stay green, wheel
+`fresh_ph` is the target):**
+1. `build_handler_arm_names` → `build_handler_effect_entries`: group arms by
+   op's effect (`lower_effect_name_of_op`), each effect → its arms indexed
+   by `op_slot` (no cross-effect collision).
+2. `emit_lhandlewith`: emit the state record (drop the flat arm region) +
+   one ev-entry per covered effect; the per-effect global/install-local
+   holds the entry pointer.
+3. `lower_resolve_handler_state_for_ename(E)` → E's entry (Tier-2
+   forwarding). `lower_resolve_handler_state_for_op` (Tier-1 direct) keeps
+   returning the state record (arm fns take the record). The two
+   resolutions now return different things — record vs entry — by design.
+4. `emit_levperform`: the two-load entry→state+arm dispatch above.
+5. Seed mirror: `src/lower.mn` + `src/backends/wasm.mn`, same shape.
+
+Why it surpasses the field: Koka coerces evidence vectors at every
+subsumption; OCaml-5 multicore searches the handler stack at O(depth);
+this is two loads, O(1), with the row *proving* the entry exists — and the
+layout is the row, projected (each effect an entry), wasting nothing.

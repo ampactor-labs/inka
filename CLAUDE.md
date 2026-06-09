@@ -10,6 +10,7 @@
 > - `docs/specs/simulations/` — per-handle walkthroughs (H*.md cascade; MV/MSR/TH/DM/QA Phase II); `IE-mentl-edit.md` + `F1-mentl-doc.md` + `EH-entry-handlers.md` + `Hμ-cursor.md` are the developer-surface load-bearing walkthroughs
 > - `docs/traces/a-day.md` — integration trace
 > - `ROADMAP.md` — live sequencing (`docs/PLAN.md` is a shim)
+> - `~/.claude/plans/noble-greeting-dijkstra.md` — **the master plan to final form** (stages 0–9: first-light keystone → … → Phase ν becoming; the thesis + execution in one durable file; supersedes deep-toasting-bachman)
 > - `MEMORY.md` index + `protocol_*.md` files at `~/.claude/projects/-home-suds-Projects-mentl/memory/` — discipline crystallizations; **`protocol_developer_experience_vision.md`** crystallizes the day-in-the-medium throughline (read alongside CLAUDE+MEMORY at session start; cite when proposing surface decisions)
 > - `tools/drift-audit.sh` — PostToolUse drift detector
 > - `tools/drift-patterns.tsv` — extended drift mode catalog (drift 38 mascot-as-command-prefix lives here; clarified in red-flag table below)
@@ -420,7 +421,10 @@ in `std/compiler/` IS the compiler. A disposable bootstrap translator
 (~3-5K lines) compiles it once; after that, Mentl compiles itself; the
 translator is deleted. Live sequencing: `ROADMAP.md`.
 
-**Cascade state.** γ approach (γ = handle-graph). Landed: Σ (SYNTAX),
+**Cascade state.** Live cursor + the full current-state inventory live in
+the **master plan** (`~/.claude/plans/noble-greeting-dijkstra.md` "Current
+state" — including the 2026-06-09 code-surpassed-docs inventory); the list
+below is historical record. γ approach (γ = handle-graph). Landed: Σ (SYNTAX),
 Ω.0–Ω.5, H6, H3, H3.1, H2, HB, H1 substrate, H4 substrate, H2.3,
 **Hβ.infer cascade CLOSED** (11/11 chunks; commit `b6e1f23` 2026-04-27),
 **Hβ.lower cascade CLOSED** (11/11 chunks; commit `c53904d` 2026-04-28),
@@ -594,7 +598,10 @@ wasm-objdump -x bootstrap/build/lux3.wasm
 scoped arenas).
 
 **Representations.**
-- **Strings** always flat: `[len_i32][bytes...]`. `str_concat` copies.
+- **Strings** are TWO SHAPES, one interface (since `a414804`): flat
+  `[len_i32 >= 0][bytes...]` + view `[-1][buf_ptr][start][len]` (zero-copy
+  slice). Discriminant is the first word's sign (`is_view`); ALL byte
+  observers read through `byte_at`/`byte_len`. `str_concat` materializes flat.
 - **Lists** CAN be trees: tag 0 = flat, 1 = snoc, 3 = concat, 4 = slice.
   `list_to_flat` materializes at hot-path entrances.
 
@@ -614,6 +621,7 @@ print, run once, fix.
 | `src/own.mn` | Ownership as Consume effect |
 | `src/verify.mn` | Verify ledger (Arc F.1 swaps to SMT) |
 | `src/mentl.mn` | Teaching substrate (Teach effect, 5 ops) |
+| `src/{cursor,cursor_transport,cursor_cache,synth_proposer,gradient_delta,eight_loop,voice}.mn` | Phase μ surface (wheel-side landed 2026-05/06; substrate-shaped, not substrate-proven — verify per master plan Stage 3 before composing) |
 | `src/lexer.mn` / `src/parser.mn` | Tokenizer + recursive descent (all PipeKind) |
 | `src/backends/wasm.mn` | LowIR → WAT (one peer; native/test/browser sibling handlers) |
 | `src/driver.mn` / `src/cache.mn` | Incremental DAG walk + binary Pack/Unpack cache |

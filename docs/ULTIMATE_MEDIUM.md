@@ -685,6 +685,25 @@ has a ceiling — it asymptotes against ground truth and never
 reaches. Proof has no ceiling — it IS ground truth. This is why
 the obsolescence is genuine, not marketing.
 
+The ceilings are structural, three of them. A model **approximates**
+(asymptotes against ground truth, never reaches), **forgets** (its
+memory is a decaying context window, not a substrate), and **cannot
+know** (truth is exogenous to it — verification happens somewhere
+else). The medium inverts all three: the graph is a live posterior
+over THIS project's intent; the Reason chain + IC cache are the
+memory of becoming; the kernel proves endogenously. And the medium
+is **closed over proposers**: any external intelligence —
+enumerative, SMT, a model, whatever follows models — plugs in as a
+`Synth` handler whose candidates must survive checkpoint → infer →
+Verify → rollback before any human or artifact sees them. A stronger
+proposer makes the medium stronger; it can never surpass the medium,
+because its only path to execution runs through the kernel. The unit
+of conversation with a model is the token — lossy, ambiguous,
+decaying. The unit of conversation with the medium is the
+**constraint** — lossless, monotone, compounding: every keystroke,
+`??`, `///`, annotation, acceptance, and *rejection* lands as a
+Reason and narrows the space forever.
+
 **Forbidden vocabulary in user-facing surfaces:** "AI" / "agent" /
 "completion" / "assistant" / "chatbot" / "prompt" / "model" /
 "training" / "hallucination" / "may want to" / "might consider".
@@ -806,6 +825,15 @@ itself). Every lever that could build a better medium is already a
 move inside this one. There is no vantage point from which to surpass
 it — only growth from within.
 
+The closure extends over proposers: every intelligence that might
+out-design the medium is, by construction, a `Synth` handler inside
+it (§8.4) — its strength accrues to the medium; its access to
+execution runs through the kernel. And the claim itself is
+kernel-shaped: exactly as `!E` proves the absence of a capability,
+the fixed point proves the absence of an outside.
+**Unsurpassability is `!Outside`** — the medium's own negation
+primitive applied at topology altitude. One move, two altitudes.
+
 This is a **fixed point**, and Mentl already exhibits its smallest
 instance: **first-light** (`mentl2.wat == mentl3.wat`) is the medium
 reproduced *exactly by itself*. First-light is not a build milestone;
@@ -865,6 +893,13 @@ science, design). This is why "raises language design to never be
 surpassed" and "raises humanity" stop being separate claims: the
 category *programming language* dissolves into *language*, and the
 medium is the fixed point of that dissolution.
+
+In the master plan this rung is **Phase ν** — Stage 9 of
+`~/.claude/plans/noble-greeting-dijkstra.md`. It gates on the collab
+substrate (Phase Z / Stage 7), and it constrains every earlier stage
+now: carried truth includes carried *history* — never discard a
+Reason for being old, never make the trail unreadable, never design
+a projection that assumes single-mind, single-time reads.
 
 ### 9.3 · The grain of sand
 

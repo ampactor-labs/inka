@@ -253,14 +253,19 @@ live, 22 total cascade chunks). Hβ.emit cascade is **chunks #1-#8 closed**
 main). Hβ.arena cascade is **closed** at commit `d57e20c` (single-chunk
 arena.wat + alloc.wat retrofit + arena_smoke harness).
 
-The cursor is the **deep-toasting-bachman plan** at
-`~/.claude/plans/deep-toasting-bachman.md` — the comprehensive Phase A-H
-sequencing toward first-light-L1 self-compile fixed point. Phase A
-(arena substrate) closed in commit `d57e20c`. Phase B (infer-substrate
-completeness) in progress as of commit `1d88211` — diagnostic harness
-landed; pivoting to TypeDefStmt + EffectDeclStmt + HandlerDeclStmt arms
-+ match-pattern constructor-aware lookup + arena routing for transient
-Reasons.
+The cursor is the **master plan** at
+`~/.claude/plans/noble-greeting-dijkstra.md` — the single durable,
+cross-session plan from the current state to the final form (stages
+0–9: first-light keystone → language surface → cursor+gradient →
+transports → domains → total proof → collab → seed dissolution →
+becoming/Phase ν). It supersedes deep-toasting-bachman (whose Phases
+A–G closed; its Phase H decomposition now lives in the master plan's
+Stages 0–1). Live gate: **Stage 1A — address space as
+refinement-typed disjoint domains** (restore the wheel's `EfOpen`
+ADT discipline in the seed's two conflator fns), then Stage 1B
+residue → Stage 1C fixpoint. The master plan's "Current state"
+section also carries the 2026-06-09 code-surpassed-docs inventory —
+trust it over older status lines in this file.
 
 ### Phase A-H sequence — the active path
 
@@ -400,6 +405,16 @@ with !Mutate`). Zero invented kernel substrate.
 
 ### Phase μ peer handles (named to prevent drift 9 — deferred-by-omission)
 
+> **Status correction (2026-06-09).** All five peers below have
+> wheel-side substrate LANDED (`src/cursor_transport.mn`,
+> `src/synth_proposer.mn`, `src/gradient_delta.mn`,
+> `src/cursor_cache.mn`, `src/eight_loop.mn`, plus `src/voice.mn`),
+> authored 2026-05/06 by earlier-generation models. Per the master
+> plan's corpus-authority verdict they are **substrate-shaped, not
+> substrate-proven** — master plan Stage 3 is the verify + compose +
+> fire pass. Seed-side `.seed` transcriptions remain post-L1 (Tier 3),
+> exactly as stated below.
+
 - **Hμ.cursor.transport** — transport handlers (terminal, LSP,
   web-WASM, vim) that surface `cursor_default`'s `CursorView`
   through different render targets. Cadence-decision (real-time /
@@ -516,6 +531,28 @@ what git does.**
 ---
 
 
+## Phase ν — The medium projects becoming (post-Z; the rung past μ)
+
+**Opens after Phase Z's shared-graph substrate is empirically real.**
+Per `docs/ULTIMATE_MEDIUM.md` §9.2 + master plan Stage 9: Phase μ
+projects **state** (the graph as it is now, at the cursor); Phase ν
+projects **becoming** (the graph's own evolution — every edit, proof,
+Reason, across minds and time — as cursorable substrate). The trail +
+git-bridge Reasons ARE the substrate (no parallel history store);
+`cursor_at` gains a time coordinate; the eight aspects read history
+through the same one read. Named handles: `Hν.becoming.time-axis`,
+`Hν.becoming.temporal-cursor`, `Hν.becoming.inter-mind-chain`,
+`Hν.domain.beyond-code` (the first non-code handler vocabulary —
+where *programming language* dissolves into *language*).
+
+**Standing constraint on every earlier phase, effective now:** carried
+truth includes carried history — never discard a Reason for being old,
+never make trail entries unreadable, never design a projection that
+assumes single-mind, single-time reads.
+
+---
+
+
 ## Critical Path To First-Light
 
 ### Phase A — Hβ Bootstrap Rewrite
@@ -625,13 +662,18 @@ Goals:
 
 ## Near-Term Execution Order
 
-The deep-toasting-bachman plan at `~/.claude/plans/deep-toasting-bachman.md`
-is the canonical sequencing through first-light-L1. Phases A-H land the
-ultimate form within scope. Beyond Phase H, the post-L1 cascade roadmap
-(see "Phase A-H sequence — the active path" above) names peer cascades
-that compose on this plan's substrate.
+The **master plan** at `~/.claude/plans/noble-greeting-dijkstra.md` is
+the canonical sequencing — from the Stage 1A keystone through
+first-light (Stage 1C) to the final form (Stage 9 / Phase ν). It
+supersedes deep-toasting-bachman as the live plan; Phases A–G of that
+plan closed and its Phase H decomposition now lives in the master
+plan's Stages 0–1.
 
-Current cursor: **Phase H first-light-L1 in progress** (2026-05-05). Empirically-driven empirical-real handle landings closing the seed↔wheel bridge:
+Current cursor: **master plan Stage 1A** — address space as
+refinement-typed disjoint domains (the seed's two magnitude-conflators
+restored to the wheel's `EfOpen` ADT discipline), then Stage 1B residue
+→ Stage 1C fixpoint. Historical Phase-H landings (2026-05-05 era,
+retained as record):
 
 - ✓ `Hβ.first-light.handler-decl-emit-cascade` 19-box (commit `b95500d`)
 - ✓ Phase B parser fixes — named-param effect ops, @resume= skip, TDocComment skip (commits `dc0d9a6` / `a0beab7` / `95a4cff`)

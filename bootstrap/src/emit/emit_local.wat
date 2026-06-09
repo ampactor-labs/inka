@@ -145,7 +145,11 @@
   ;; substrate-honest at the seed layer.
 
   (func $el_emit_local_get_dollar (param $name i32)
-    ;; emits: (local.get $<name>)  — name is length-prefixed str_ptr
+    ;; emits: (local.get $<name>)  — name is length-prefixed str_ptr.
+    ;; Declare-at-emission: the emission declares what it touches; a
+    ;; read whose bind path was skipped (alternation arms, productive-
+    ;; under-error) still gets a preamble decl + WASM's zero default.
+    (drop (call $emit_fn_local_check (local.get $name)))
     (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 108))
     (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 99))
     (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))

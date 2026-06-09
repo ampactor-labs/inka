@@ -237,7 +237,10 @@
     (call $emit_byte (i32.const 41)))
 
   (func $ec7_emit_local_set_fb_prev_h (param $h i32)
-    ;; emits: (local.set $__fb_prev_<h>)
+    ;; emits: (local.set $__fb_prev_<h>) — registers the minted name
+    ;; (declare-at-emission; prefix data at emit_const.wat:1664).
+    (drop (call $emit_fn_local_check
+      (call $str_concat (i32.const 1664) (call $int_to_str (local.get $h)))))
     (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 108))
     (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 99))
     (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))
@@ -253,7 +256,10 @@
     (call $emit_byte (i32.const 41)))
 
   (func $ec7_emit_local_tee_fb_h (param $h i32)
-    ;; emits: (local.tee $__fb_<h>)
+    ;; emits: (local.tee $__fb_<h>) — registers the minted name
+    ;; (declare-at-emission; prefix data at emit_const.wat:1648).
+    (drop (call $emit_fn_local_check
+      (call $str_concat (i32.const 1648) (call $int_to_str (local.get $h)))))
     (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 108))
     (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 99))
     (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))

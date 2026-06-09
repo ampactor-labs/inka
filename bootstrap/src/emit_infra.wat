@@ -25,6 +25,9 @@
       (then (call $emit_flush_partial))))
 
   (func $emit_flush_partial
+    ;; A scratch buffer never streams — overflowing the per-fn scratch
+    ;; ceiling is a structural bug, surfaced honestly.
+    (if (global.get $out_scratch_mode) (then (unreachable)))
     (i32.store (i32.const 240) (global.get $out_base))
     (i32.store (i32.const 244) (global.get $out_pos))
     (drop (call $wasi_fd_write (i32.const 1) (i32.const 240) (i32.const 1) (i32.const 248)))
@@ -33,6 +36,45 @@
   (func $emit_flush
     (if (i32.gt_u (global.get $out_pos) (i32.const 0))
       (then (call $emit_flush_partial))))
+
+  ;; ─── Scratch buffer — declare-at-emission substrate ────────────────
+  ;; Per Hβ.emit.declare-at-emission: a fn's BODY emits into scratch
+  ;; while every minted local registers in the fn ledger at its
+  ;; local.set projection; the preamble is then written FROM the ledger
+  ;; and the scratch splices in. The emission IS the locals walk —
+  ;; decl/use divergence is unrepresentable. Scratch region
+  ;; [2GiB+4MiB, 2GiB+8MiB) — the upper half of build.sh's appended
+  ;; 8 MiB; one depth only ($emit_fn_body never nests — guarded).
+
+  (global $out_saved_base   (mut i32) (i32.const 0))
+  (global $out_saved_pos    (mut i32) (i32.const 0))
+  (global $out_scratch_mode (mut i32) (i32.const 0))
+  (global $out_scratch_src  (mut i32) (i32.const 0))
+  (global $out_scratch_len  (mut i32) (i32.const 0))
+
+  (func $emit_scratch_begin
+    (if (global.get $out_scratch_mode) (then (unreachable)))
+    (global.set $out_saved_base (global.get $out_base))
+    (global.set $out_saved_pos  (global.get $out_pos))
+    (global.set $out_base (i32.const 2151677952))   ;; 2 GiB + 4 MiB
+    (global.set $out_pos (i32.const 0))
+    (global.set $out_scratch_mode (i32.const 1)))
+
+  (func $emit_scratch_end
+    (global.set $out_scratch_src (global.get $out_base))
+    (global.set $out_scratch_len (global.get $out_pos))
+    (global.set $out_base (global.get $out_saved_base))
+    (global.set $out_pos  (global.get $out_saved_pos))
+    (global.set $out_scratch_mode (i32.const 0)))
+
+  (func $emit_scratch_splice
+    (local $i i32)
+    (local.set $i (i32.const 0))
+    (block $done (loop $cp
+      (br_if $done (i32.ge_u (local.get $i) (global.get $out_scratch_len)))
+      (call $emit_byte (i32.load8_u (i32.add (global.get $out_scratch_src) (local.get $i))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $cp))))
 
   ;; ─── String / memory emission ─────────────────────────────────────
 

@@ -272,6 +272,10 @@
 
   (func $ec_emit_local_set_dollar (param $name i32)
     ;; emits: (local.set $<name>)  — name is length-prefixed str_ptr
+    ;; Declare-at-emission: every minted local registers in the fn
+    ;; ledger AT its store projection; emit_fn_body dumps the ledger as
+    ;; the preamble. The emission IS the locals walk.
+    (drop (call $emit_fn_local_check (local.get $name)))
     (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 108))
     (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 99))
     (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))
@@ -282,7 +286,11 @@
     (call $emit_byte (i32.const 41)))
 
   (func $ec_emit_local_get_dollar (param $name i32)
-    ;; emits: (local.get $<name>)
+    ;; emits: (local.get $<name>) — registers too: the emission declares
+    ;; what it TOUCHES. A read whose bind path was skipped (alternation
+    ;; arms, productive-under-error) still gets a preamble decl and
+    ;; WASM's zero default — the old walks' semantics, now by law.
+    (drop (call $emit_fn_local_check (local.get $name)))
     (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 108))
     (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 99))
     (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))

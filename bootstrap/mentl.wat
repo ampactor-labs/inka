@@ -18474,15 +18474,17 @@
   ;;                       nullary sentinel; tag 114). Hazel productive-
   ;;                       under-error — emit dispatches tag 114 to
   ;;                       (unreachable); build continues.
-  ;;     61 NFree        — compiler-internal bug per spec 05 invariant 2
-  ;;                       ("NFree is a compiler-internal error
-  ;;                       (E_UnresolvedType)"). The seed traps via
-  ;;                       (unreachable); emit_diag.wat (chunk #4)
-  ;;                       retrofits to E_UnresolvedType emit when it
-  ;;                       lands — peer follow-up
-  ;;                       Hβ.lower.unresolved-emit-retrofit below.
-  ;;                       The user-facing diagnostic is named, not
-  ;;                       silently-deferred (Drift 9 closure).
+  ;;     61 NFree        — a free TYPE variable at a value position is
+  ;;                       LEGAL POLYMORPHISM, not an error. Return the
+  ;;                       TVar itself (the honest representation); the
+  ;;                       value flows as uniform i32 (SUBSTRATE.md §IX).
+  ;;                       Resolves spec 05 invariant 2's last
+  ;;                       monomorphization-era binary toward the gradient
+  ;;                       (ULTIMATE_MEDIUM.md §9.3 "the grain of sand"):
+  ;;                       type is a capability on the gradient, not a
+  ;;                       precondition for existence. Genuinely
+  ;;                       type-load-bearing consumers (classify_handler's
+  ;;                       TCont guard) surface any gap at their own site.
   ;;     62 NRowBound    — should never reach $lookup_ty (rows queried
   ;;     63 NRowFree       via $lookup_row_for / $row_for_handle peer —
   ;;                       named follow-up Hβ.lower.lookup-row below).
@@ -19604,31 +19606,47 @@
   (func $lexpr_lhandle_arms (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
 
-  ;; ─── 333 = LEvPerform(handle, op_name, slot_idx, args) — arity 4 ────
-  ;; Per src/lower.mn:149 LEvPerform(Int, String, Int, List) — "handle,
-  ;; op_name, slot_idx, args". H1: loads fn_idx from __state at the
-  ;; compile-time-resolved slot_idx offset; dispatches via call_indirect.
-  ;; Only polymorphic perform sites (open row) become LEvPerform; monomorphic
-  ;; sites stay LPerform (tag 331).
+  ;; ─── 333 = LEvPerform(handle, op_name, ev_slot, op_slot, args) — arity 5 ─
+  ;; Per src/lower.mn LEvPerform(Int, String, Int, Int, List). Two indices,
+  ;; both projected from the effect ROW (the Boolean effect algebra cashing
+  ;; out as the runtime evidence layout — Hβ.lower.multi-effect-ev-index-map):
+  ;;   - ev_slot: WHICH forwarded handler record (= which effect). The
+  ;;     effect's canonical index in the CURRENT fn's row (row_names is
+  ;;     sorted-lex, so caller and callee agree by construction). Emit reads
+  ;;     the record from __state[8 + 4*captures + 4*ev_slot].
+  ;;   - op_slot: WHICH arm within that record. The op's index in its
+  ;;     effect's EffectDeclKind op list. Emit reads the arm fn-idx fence-
+  ;;     relative: record[8 + 4*nstate + 4*op_slot].
+  ;; This is Koka-style evidence-vector indexing (JFP 2022) derived from a
+  ;; richer row (+ - & ! proves effect ABSENCE) and dispatched O(1) (vs
+  ;; OCaml-5 multicore's O(depth) handler-stack search). Only polymorphic
+  ;; perform sites (handler not lexically in scope) become LEvPerform;
+  ;; lexically-resolved sites stay LPerform-with-state (tag 331).
   (func $lexpr_make_levperform (param $h i32) (param $op_name i32)
-                                (param $slot_idx i32) (param $args i32)
+                                (param $ev_slot i32) (param $op_slot i32) (param $args i32)
                                 (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 333) (i32.const 4)))
+    (local.set $r (call $make_record (i32.const 333) (i32.const 5)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
     (call $record_set (local.get $r) (i32.const 1) (local.get $op_name))
-    (call $record_set (local.get $r) (i32.const 2) (local.get $slot_idx))
-    (call $record_set (local.get $r) (i32.const 3) (local.get $args))
+    (call $record_set (local.get $r) (i32.const 2) (local.get $ev_slot))
+    (call $record_set (local.get $r) (i32.const 3) (local.get $op_slot))
+    (call $record_set (local.get $r) (i32.const 4) (local.get $args))
     (local.get $r))
 
   (func $lexpr_levperform_op_name (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 1)))
 
-  (func $lexpr_levperform_slot_idx (param $r i32) (result i32)
+  ;; ev_slot — which forwarded handler record (effect's index in the fn's row).
+  (func $lexpr_levperform_ev_slot (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
 
-  (func $lexpr_levperform_args (param $r i32) (result i32)
+  ;; op_slot — which arm within the handler record (op's index in its effect).
+  (func $lexpr_levperform_op_slot (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 3)))
+
+  (func $lexpr_levperform_args (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 4)))
 
   ;; ─── 334 = LFieldLoad(handle, record, offset_bytes) — arity 3 ────────
   ;; Per src/lower.mn:150 LFieldLoad(Int, LowExpr, Int) — "W6: handle,
@@ -21480,7 +21498,19 @@
     (local.set $n (call $len (local.get $names)))
     (if (i32.eqz (local.get $n))
       (then (return (call $make_list (i32.const 0)))))
-    ;; Find a lexically-handled effect → use its install-local record.
+    ;; ONE ev per effect, in canonical (row_names sorted-lex) order = the
+    ;; callee's ev-slot order (ec6_emit_ev_slot_stores writes evs[i] at the
+    ;; callee record's slot i). Each effect resolves to its handler record:
+    ;;   - lexically installed in THIS scope → LLocal(install_local);
+    ;;   - else forward THIS fn's own ev-slot for that effect →
+    ;;     LEvSlotRef(effect's index in THIS fn's row).
+    ;; The shared sorted-lex order makes the caller→callee slot remapping
+    ;; correct WITHOUT a coercion table (Koka evidence coercion, by
+    ;; construction — Hβ.lower.multi-effect-ev-index-map). A builtin effect
+    ;; (WASI/Memory) gets a forward slot that is never read (its perform
+    ;; short-circuits to direct emit) — harmless, and keeps the user effects
+    ;; beside it at their correct indices.
+    (local.set $evs (call $list_extend_to (call $make_list (i32.const 0)) (local.get $n)))
     (local.set $i (i32.const 0))
     (block $done
       (loop $each
@@ -21490,18 +21520,14 @@
           (call $lower_resolve_handler_state_for_ename (local.get $ename)))
         (if (i32.ne (local.get $state_local) (i32.const 0))
           (then
-            (local.set $evs (call $make_list (i32.const 0)))
-            (local.set $evs (call $list_extend_to (local.get $evs) (i32.const 1)))
-            (drop (call $list_set (local.get $evs) (i32.const 0)
-                    (call $lexpr_make_llocal (i32.const 0) (local.get $state_local))))
-            (return (local.get $evs))))
+            (drop (call $list_set (local.get $evs) (local.get $i)
+                    (call $lexpr_make_llocal (i32.const 0) (local.get $state_local)))))
+          (else
+            (drop (call $list_set (local.get $evs) (local.get $i)
+                    (call $lexpr_make_levslotref (i32.const 0)
+                      (call $lower_compute_ev_index_for_effect (local.get $ename)))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
-    ;; No lexical handler for any effect in the row → forward own ev-slot 0.
-    (local.set $evs (call $make_list (i32.const 0)))
-    (local.set $evs (call $list_extend_to (local.get $evs) (i32.const 1)))
-    (drop (call $list_set (local.get $evs) (i32.const 0)
-            (call $lexpr_make_levslotref (i32.const 0) (i32.const 0))))
     (local.get $evs))
 
   ;; ─── $lower_call_default — monomorphic-vs-polymorphic gate ─────────
@@ -21658,6 +21684,8 @@
                         (return (call $lexpr_make_levperform
                                       (local.get $h)
                                       (local.get $name)
+                                      (call $lower_compute_ev_index_for_effect
+                                        (call $lower_effect_name_of_op (local.get $name)))
                                       (call $lower_compute_ev_slot_for_op (local.get $name))
                                       (local.get $lo_args)))))))))))))
     ;; Default closure-call form per Lock #3.
@@ -21797,6 +21825,61 @@
         (br $search)))
     (i32.const 0))
 
+  ;; ─── $lower_effect_name_of_op — op_name → its declaring effect's name ─
+  ;; The graph already carries this: op_name binds to EffectOpScheme(effect).
+  ;; Read it; never a side registry (drift 8 refused). Returns 0 if op_name
+  ;; is not an effect op in scope (productive-under-error).
+  (func $lower_effect_name_of_op (param $op_name i32) (result i32)
+    (local $binding i32) (local $kind i32)
+    (local.set $binding (call $env_lookup (local.get $op_name)))
+    (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
+    (local.set $kind (call $env_binding_kind (local.get $binding)))
+    (if (i32.lt_u (local.get $kind) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.ne (call $tag_of (local.get $kind)) (i32.const 133))   ;; EffectOpScheme
+      (then (return (i32.const 0))))
+    (call $schemekind_effectop_name (local.get $kind)))
+
+  ;; ─── $lower_compute_ev_index_for_effect — ev-slot = effect's index in
+  ;; the CURRENT fn's row ─────────────────────────────────────────────────
+  ;; The Boolean effect ROW projected as the runtime evidence layout. The
+  ;; current fn's row is read from its own scheme (env_lookup(fn_name) →
+  ;; scheme_body → TFun row). row_names is sorted-lex canonical, so a caller
+  ;; building a callee's __state (derive_ev_slots, iterating the CALLEE's
+  ;; row) and the callee reading its own ev-slot agree by construction —
+  ;; Koka-style evidence coercion falls out of the shared canonical order,
+  ;; with no coercion table. Returns 0 as fallback (a single-effect fn is
+  ;; correct at slot 0; productive-under-error otherwise).
+  (func $lower_compute_ev_index_for_effect (param $effect_name i32) (result i32)
+    (local $fn_name i32) (local $binding i32) (local $scheme i32)
+    (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $j i32)
+    (if (i32.eqz (local.get $effect_name)) (then (return (i32.const 0))))
+    (local.set $fn_name (call $ls_outer_fn_name))
+    (if (i32.eqz (local.get $fn_name)) (then (return (i32.const 0))))
+    (local.set $binding (call $env_lookup (local.get $fn_name)))
+    (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
+    (local.set $scheme (call $env_binding_scheme (local.get $binding)))
+    (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const 0))))
+    (local.set $ty (call $scheme_body (local.get $scheme)))
+    (if (i32.lt_u (local.get $ty) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.ne (call $ty_tag (local.get $ty)) (i32.const 107))   ;; not TFun
+      (then (return (i32.const 0))))
+    (local.set $row (call $lookup_row_for (call $ty_tfun_row (local.get $ty))))
+    (if (i32.eqz (i32.or (call $row_is_closed (local.get $row))
+                         (call $row_is_open   (local.get $row))))
+      (then (return (i32.const 0))))
+    (local.set $names (call $row_names (local.get $row)))
+    (local.set $n (call $len (local.get $names)))
+    (local.set $j (i32.const 0))
+    (block $found
+      (loop $search
+        (br_if $found (i32.ge_u (local.get $j) (local.get $n)))
+        (if (call $str_eq (call $list_index (local.get $names) (local.get $j))
+                          (local.get $effect_name))
+          (then (return (local.get $j))))
+        (local.set $j (i32.add (local.get $j) (i32.const 1)))
+        (br $search)))
+    (i32.const 0))
+
   ;; ─── $lower_perform — PerformExpr arm (parser tag 94) ──────────────
   ;; Per src/lower.mn:442-443 + Lock #2 (wheel-parity LPerform for ALL
   ;; ResumeDiscipline values; H7 MultiShot dispatch is named follow-up
@@ -21868,6 +21951,8 @@
         (call $lexpr_make_levperform
           (local.get $h)
           (local.get $op_name)
+          (call $lower_compute_ev_index_for_effect
+            (call $lower_effect_name_of_op (local.get $op_name)))
           (call $lower_compute_ev_slot_for_op (local.get $op_name))
           (local.get $lo_args)))))
 
@@ -30630,11 +30715,20 @@
   (func $emit_levperform (param $r i32)
     (local $args i32) (local $ev_off i32) (local $arm_const i32)
     (local.set $args (call $lexpr_levperform_args (local.get $r)))
+    ;; ev_off selects WHICH forwarded handler record: __state[8 + 4*captures
+    ;; + 4*ev_slot]. ev_slot = the effect's index in this fn's row (the row
+    ;; projected as evidence layout). Pre-fix this read a FIXED ev-slot 0, so
+    ;; every distinct effect collided on one record — the multi-effect trap.
     (local.set $ev_off
-      (i32.add (i32.const 8) (i32.mul (i32.const 4) (call $emit_body_captures_count))))
+      (i32.add (i32.const 8)
+        (i32.add
+          (i32.mul (i32.const 4) (call $emit_body_captures_count))
+          (i32.mul (i32.const 4) (call $lexpr_levperform_ev_slot (local.get $r))))))
+    ;; arm_const selects WHICH arm within that record (fence-relative below):
+    ;; record[8 + 4*nstate + 4*op_slot]. op_slot = op's index in its effect.
     (local.set $arm_const
       (i32.add (i32.const 8)
-        (i32.mul (i32.const 4) (call $lexpr_levperform_slot_idx (local.get $r)))))
+        (i32.mul (i32.const 4) (call $lexpr_levperform_op_slot (local.get $r)))))
     ;; (1) arm __state = handler record = __state[EV]
     (call $el_emit_local_get_state)
     (call $el_emit_i32_load_offset (local.get $ev_off))

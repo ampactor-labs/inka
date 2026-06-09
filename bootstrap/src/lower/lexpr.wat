@@ -869,31 +869,47 @@
   (func $lexpr_lhandle_arms (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
 
-  ;; ─── 333 = LEvPerform(handle, op_name, slot_idx, args) — arity 4 ────
-  ;; Per src/lower.mn:149 LEvPerform(Int, String, Int, List) — "handle,
-  ;; op_name, slot_idx, args". H1: loads fn_idx from __state at the
-  ;; compile-time-resolved slot_idx offset; dispatches via call_indirect.
-  ;; Only polymorphic perform sites (open row) become LEvPerform; monomorphic
-  ;; sites stay LPerform (tag 331).
+  ;; ─── 333 = LEvPerform(handle, op_name, ev_slot, op_slot, args) — arity 5 ─
+  ;; Per src/lower.mn LEvPerform(Int, String, Int, Int, List). Two indices,
+  ;; both projected from the effect ROW (the Boolean effect algebra cashing
+  ;; out as the runtime evidence layout — Hβ.lower.multi-effect-ev-index-map):
+  ;;   - ev_slot: WHICH forwarded handler record (= which effect). The
+  ;;     effect's canonical index in the CURRENT fn's row (row_names is
+  ;;     sorted-lex, so caller and callee agree by construction). Emit reads
+  ;;     the record from __state[8 + 4*captures + 4*ev_slot].
+  ;;   - op_slot: WHICH arm within that record. The op's index in its
+  ;;     effect's EffectDeclKind op list. Emit reads the arm fn-idx fence-
+  ;;     relative: record[8 + 4*nstate + 4*op_slot].
+  ;; This is Koka-style evidence-vector indexing (JFP 2022) derived from a
+  ;; richer row (+ - & ! proves effect ABSENCE) and dispatched O(1) (vs
+  ;; OCaml-5 multicore's O(depth) handler-stack search). Only polymorphic
+  ;; perform sites (handler not lexically in scope) become LEvPerform;
+  ;; lexically-resolved sites stay LPerform-with-state (tag 331).
   (func $lexpr_make_levperform (param $h i32) (param $op_name i32)
-                                (param $slot_idx i32) (param $args i32)
+                                (param $ev_slot i32) (param $op_slot i32) (param $args i32)
                                 (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 333) (i32.const 4)))
+    (local.set $r (call $make_record (i32.const 333) (i32.const 5)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
     (call $record_set (local.get $r) (i32.const 1) (local.get $op_name))
-    (call $record_set (local.get $r) (i32.const 2) (local.get $slot_idx))
-    (call $record_set (local.get $r) (i32.const 3) (local.get $args))
+    (call $record_set (local.get $r) (i32.const 2) (local.get $ev_slot))
+    (call $record_set (local.get $r) (i32.const 3) (local.get $op_slot))
+    (call $record_set (local.get $r) (i32.const 4) (local.get $args))
     (local.get $r))
 
   (func $lexpr_levperform_op_name (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 1)))
 
-  (func $lexpr_levperform_slot_idx (param $r i32) (result i32)
+  ;; ev_slot — which forwarded handler record (effect's index in the fn's row).
+  (func $lexpr_levperform_ev_slot (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
 
-  (func $lexpr_levperform_args (param $r i32) (result i32)
+  ;; op_slot — which arm within the handler record (op's index in its effect).
+  (func $lexpr_levperform_op_slot (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 3)))
+
+  (func $lexpr_levperform_args (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 4)))
 
   ;; ─── 334 = LFieldLoad(handle, record, offset_bytes) — arity 3 ────────
   ;; Per src/lower.mn:150 LFieldLoad(Int, LowExpr, Int) — "W6: handle,

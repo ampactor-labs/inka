@@ -971,11 +971,20 @@
   (func $emit_levperform (param $r i32)
     (local $args i32) (local $ev_off i32) (local $arm_const i32)
     (local.set $args (call $lexpr_levperform_args (local.get $r)))
+    ;; ev_off selects WHICH forwarded handler record: __state[8 + 4*captures
+    ;; + 4*ev_slot]. ev_slot = the effect's index in this fn's row (the row
+    ;; projected as evidence layout). Pre-fix this read a FIXED ev-slot 0, so
+    ;; every distinct effect collided on one record — the multi-effect trap.
     (local.set $ev_off
-      (i32.add (i32.const 8) (i32.mul (i32.const 4) (call $emit_body_captures_count))))
+      (i32.add (i32.const 8)
+        (i32.add
+          (i32.mul (i32.const 4) (call $emit_body_captures_count))
+          (i32.mul (i32.const 4) (call $lexpr_levperform_ev_slot (local.get $r))))))
+    ;; arm_const selects WHICH arm within that record (fence-relative below):
+    ;; record[8 + 4*nstate + 4*op_slot]. op_slot = op's index in its effect.
     (local.set $arm_const
       (i32.add (i32.const 8)
-        (i32.mul (i32.const 4) (call $lexpr_levperform_slot_idx (local.get $r)))))
+        (i32.mul (i32.const 4) (call $lexpr_levperform_op_slot (local.get $r)))))
     ;; (1) arm __state = handler record = __state[EV]
     (call $el_emit_local_get_state)
     (call $el_emit_i32_load_offset (local.get $ev_off))

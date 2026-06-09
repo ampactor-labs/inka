@@ -439,7 +439,19 @@
     (local.set $n (call $len (local.get $names)))
     (if (i32.eqz (local.get $n))
       (then (return (call $make_list (i32.const 0)))))
-    ;; Find a lexically-handled effect → use its install-local record.
+    ;; ONE ev per effect, in canonical (row_names sorted-lex) order = the
+    ;; callee's ev-slot order (ec6_emit_ev_slot_stores writes evs[i] at the
+    ;; callee record's slot i). Each effect resolves to its handler record:
+    ;;   - lexically installed in THIS scope → LLocal(install_local);
+    ;;   - else forward THIS fn's own ev-slot for that effect →
+    ;;     LEvSlotRef(effect's index in THIS fn's row).
+    ;; The shared sorted-lex order makes the caller→callee slot remapping
+    ;; correct WITHOUT a coercion table (Koka evidence coercion, by
+    ;; construction — Hβ.lower.multi-effect-ev-index-map). A builtin effect
+    ;; (WASI/Memory) gets a forward slot that is never read (its perform
+    ;; short-circuits to direct emit) — harmless, and keeps the user effects
+    ;; beside it at their correct indices.
+    (local.set $evs (call $list_extend_to (call $make_list (i32.const 0)) (local.get $n)))
     (local.set $i (i32.const 0))
     (block $done
       (loop $each
@@ -449,18 +461,14 @@
           (call $lower_resolve_handler_state_for_ename (local.get $ename)))
         (if (i32.ne (local.get $state_local) (i32.const 0))
           (then
-            (local.set $evs (call $make_list (i32.const 0)))
-            (local.set $evs (call $list_extend_to (local.get $evs) (i32.const 1)))
-            (drop (call $list_set (local.get $evs) (i32.const 0)
-                    (call $lexpr_make_llocal (i32.const 0) (local.get $state_local))))
-            (return (local.get $evs))))
+            (drop (call $list_set (local.get $evs) (local.get $i)
+                    (call $lexpr_make_llocal (i32.const 0) (local.get $state_local)))))
+          (else
+            (drop (call $list_set (local.get $evs) (local.get $i)
+                    (call $lexpr_make_levslotref (i32.const 0)
+                      (call $lower_compute_ev_index_for_effect (local.get $ename)))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
-    ;; No lexical handler for any effect in the row → forward own ev-slot 0.
-    (local.set $evs (call $make_list (i32.const 0)))
-    (local.set $evs (call $list_extend_to (local.get $evs) (i32.const 1)))
-    (drop (call $list_set (local.get $evs) (i32.const 0)
-            (call $lexpr_make_levslotref (i32.const 0) (i32.const 0))))
     (local.get $evs))
 
   ;; ─── $lower_call_default — monomorphic-vs-polymorphic gate ─────────
@@ -617,6 +625,8 @@
                         (return (call $lexpr_make_levperform
                                       (local.get $h)
                                       (local.get $name)
+                                      (call $lower_compute_ev_index_for_effect
+                                        (call $lower_effect_name_of_op (local.get $name)))
                                       (call $lower_compute_ev_slot_for_op (local.get $name))
                                       (local.get $lo_args)))))))))))))
     ;; Default closure-call form per Lock #3.
@@ -756,6 +766,61 @@
         (br $search)))
     (i32.const 0))
 
+  ;; ─── $lower_effect_name_of_op — op_name → its declaring effect's name ─
+  ;; The graph already carries this: op_name binds to EffectOpScheme(effect).
+  ;; Read it; never a side registry (drift 8 refused). Returns 0 if op_name
+  ;; is not an effect op in scope (productive-under-error).
+  (func $lower_effect_name_of_op (param $op_name i32) (result i32)
+    (local $binding i32) (local $kind i32)
+    (local.set $binding (call $env_lookup (local.get $op_name)))
+    (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
+    (local.set $kind (call $env_binding_kind (local.get $binding)))
+    (if (i32.lt_u (local.get $kind) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.ne (call $tag_of (local.get $kind)) (i32.const 133))   ;; EffectOpScheme
+      (then (return (i32.const 0))))
+    (call $schemekind_effectop_name (local.get $kind)))
+
+  ;; ─── $lower_compute_ev_index_for_effect — ev-slot = effect's index in
+  ;; the CURRENT fn's row ─────────────────────────────────────────────────
+  ;; The Boolean effect ROW projected as the runtime evidence layout. The
+  ;; current fn's row is read from its own scheme (env_lookup(fn_name) →
+  ;; scheme_body → TFun row). row_names is sorted-lex canonical, so a caller
+  ;; building a callee's __state (derive_ev_slots, iterating the CALLEE's
+  ;; row) and the callee reading its own ev-slot agree by construction —
+  ;; Koka-style evidence coercion falls out of the shared canonical order,
+  ;; with no coercion table. Returns 0 as fallback (a single-effect fn is
+  ;; correct at slot 0; productive-under-error otherwise).
+  (func $lower_compute_ev_index_for_effect (param $effect_name i32) (result i32)
+    (local $fn_name i32) (local $binding i32) (local $scheme i32)
+    (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $j i32)
+    (if (i32.eqz (local.get $effect_name)) (then (return (i32.const 0))))
+    (local.set $fn_name (call $ls_outer_fn_name))
+    (if (i32.eqz (local.get $fn_name)) (then (return (i32.const 0))))
+    (local.set $binding (call $env_lookup (local.get $fn_name)))
+    (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
+    (local.set $scheme (call $env_binding_scheme (local.get $binding)))
+    (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const 0))))
+    (local.set $ty (call $scheme_body (local.get $scheme)))
+    (if (i32.lt_u (local.get $ty) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.ne (call $ty_tag (local.get $ty)) (i32.const 107))   ;; not TFun
+      (then (return (i32.const 0))))
+    (local.set $row (call $lookup_row_for (call $ty_tfun_row (local.get $ty))))
+    (if (i32.eqz (i32.or (call $row_is_closed (local.get $row))
+                         (call $row_is_open   (local.get $row))))
+      (then (return (i32.const 0))))
+    (local.set $names (call $row_names (local.get $row)))
+    (local.set $n (call $len (local.get $names)))
+    (local.set $j (i32.const 0))
+    (block $found
+      (loop $search
+        (br_if $found (i32.ge_u (local.get $j) (local.get $n)))
+        (if (call $str_eq (call $list_index (local.get $names) (local.get $j))
+                          (local.get $effect_name))
+          (then (return (local.get $j))))
+        (local.set $j (i32.add (local.get $j) (i32.const 1)))
+        (br $search)))
+    (i32.const 0))
+
   ;; ─── $lower_perform — PerformExpr arm (parser tag 94) ──────────────
   ;; Per src/lower.mn:442-443 + Lock #2 (wheel-parity LPerform for ALL
   ;; ResumeDiscipline values; H7 MultiShot dispatch is named follow-up
@@ -827,6 +892,8 @@
         (call $lexpr_make_levperform
           (local.get $h)
           (local.get $op_name)
+          (call $lower_compute_ev_index_for_effect
+            (call $lower_effect_name_of_op (local.get $op_name)))
           (call $lower_compute_ev_slot_for_op (local.get $op_name))
           (local.get $lo_args)))))
 

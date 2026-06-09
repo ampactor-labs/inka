@@ -1,0 +1,35 @@
+// Repro: Hβ.lower.multi-effect-ev-index-map (first-light blocker, 2026-06-08).
+//
+// A function performing TWO distinct effects collides on ev-slot 0:
+// $emit_levperform reads the handler record from a FIXED __state[8] for
+// every effect, and $lower_compute_ev_slot_for_op only computes the
+// OP-slot (op's index within its effect), never the EV-slot (which
+// effect's forwarded handler record). So `perform opb` dispatches through
+// `ha`'s arm instead of `hb`'s.
+//
+// The differing ARITY (opa: 1 arg, opb: 2 args) is what makes the bug
+// VISIBLE — with uniform (Int)->Int signatures a wrong dispatch
+// type-checks by luck and the trap is masked.
+//
+// Expected once the ev-index-map lands: compiles AND runs clean.
+// Today: `wat2wasm` valid, but running traps with
+//   `wasm trap: indirect call type mismatch`.
+//
+// This is the same substrate gap that traps the wheel's fresh_ph
+// (graph_handler spans GraphWrite + GraphRead; graph_fresh_ty and
+// graph_index_span are different ops of one effect dispatched against a
+// 13-arm record). See docs/specs/simulations/Hβ-perform-evidence-dispatch.md §11.
+
+effect A { opa(Int) -> Int }
+effect B { opb(Int, Int) -> Int }
+
+fn d2(x) = {
+  let p = perform opa(x)
+  perform opb(x, p)
+}
+fn d1(x) = d2(x)
+
+handler ha { opa(v) => resume(v) }
+handler hb { opb(a, b) => resume(b) }
+
+fn main(y) = { d1(y) } ~> ha ~> hb

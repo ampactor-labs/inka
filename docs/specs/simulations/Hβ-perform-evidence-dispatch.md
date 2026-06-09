@@ -742,3 +742,69 @@ single-handler install path is correct; the gate is specific to the
 deep parser call-chain forwarding evidence through many frames. Resolve
 with a fresh window (highest-stakes runtime-layout subsystem; MRCR
 discipline favors cached-prefix + the evidence walkthrough loaded).
+
+---
+
+## 11. Root cause cracked (2026-06-08) — `Hβ.lower.multi-effect-ev-index-map`, with a 9-line repro
+
+The deep parser call-chain was a red herring; the minimal trigger is
+**one function performing two distinct effects of differing arity**. The
+9-line repro (verification harness for the fix):
+
+```
+effect A { opa(Int) -> Int }
+effect B { opb(Int, Int) -> Int }       // differing arity is what makes the bug VISIBLE
+fn d2(x) = { let p = perform opa(x); perform opb(x, p) }
+fn d1(x) = d2(x)
+handler ha { opa(v) => resume(v) }
+handler hb { opb(a, b) => resume(b) }
+fn main(y) = { d1(y) } ~> ha ~> hb
+```
+
+→ `wasm trap: indirect call type mismatch`. (Earlier multi-handler tests
+passed only because uniform `(Int)→Int` ops made a wrong dispatch
+type-check *by luck* — `tD`/`tM`/`tW`/`min_eff` all use uniform sigs.)
+
+**Exact mechanism.** Two indices are needed at a `perform` site; only one
+exists:
+- **op-slot** (which arm *within* a handler): `$lower_compute_ev_slot_for_op`
+  (walk_call.wat:721) returns op_name's index in its effect's
+  `EffectDeclKind` op list. `opa`=0 of A, `opb`=0 of B → **both 0**.
+- **ev-slot** (which forwarded handler record = *which effect*): **does not
+  exist.** `$emit_levperform` reads the handler record from a *fixed*
+  `__state[8]` for every effect. `derive_ev_slots` (walk_call.wat:421)
+  returns a length-1 list (slot 0). So every distinct effect in a function
+  collides on ev-slot 0 → `opb` dispatches through `ha`'s arm 0 → arity
+  mismatch.
+
+This is also why the wheel's `fresh_ph` traps: `graph_handler` handles
+**two effects** (GraphWrite + GraphRead, 13 arms total). `fresh_ph`
+performs `graph_fresh_ty` (GraphWrite op 0) and `graph_index_span`
+(GraphWrite op 6); the op-slot is computed *effect-decl-relative* while the
+handler's arm region is laid out *handler-arm-relative* (13 arms spanning
+both effects) — so even single-record dispatch misaligns once the op-slot
+and arm-position diverge, on top of the ev-slot-0 collision.
+
+**Fix design (the ev-index-map; `tE` is the harness):**
+1. `LEvPerform` carries **(ev_slot, op_slot)** — two fields, intuitively
+   named: `ev_slot` = the effect's index in the function's row (canonical
+   effect order); `op_slot` = op's index in that effect (already computed).
+2. `$lower_perform` computes `ev_slot` via a new
+   `$lower_compute_ev_index_for_effect(op_name)` (effect's position in the
+   current fn's row, canonical order).
+3. `$emit_levperform` reads the record from `__state[8 + 4*ev_slot]`, then
+   the arm fn-idx fence-relative within it (`record[8 + 4*nstate +
+   4*op_slot]`) — unchanged once `ev_slot` selects the right record.
+4. `$derive_ev_slots` returns **one ev per effect** in the callee's row
+   (canonical order), and the caller's `__state` build stores each at
+   `8 + 4*i`. Handler install places each handler at its effect's ev-slot.
+5. **Alignment invariant:** handler arm-region order MUST equal the
+   effect's `EffectDeclKind` op order (so op_slot indexes the right arm).
+   `$build_handler_arm_names` must order arms by op-decl order, padding a
+   `0` for ops the handler doesn't cover (the unwritten-slot discipline in
+   `$emit_arm_region_writes` already tolerates 0).
+6. Seed mirror: the same in `src/lower.mn` + `src/backends/wasm.mn`.
+
+Regression harness for the fix (all must stay green): `min_eff`, `fp`,
+`tD`, `tM`, `tW`, `t_evchain` (single-effect / uniform-sig cases), plus
+`tE` (the new multi-effect-differing-arity case) must go red→green.

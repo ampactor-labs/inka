@@ -188,10 +188,10 @@
     (local.set $count (i32.const 0))
     (block $done
       (loop $fields
-        ;; null return per protocol_parser_fabrication_substrate.md
-        ;; means "no TIdent at this position." Substrate-honest
-        ;; recovery: terminate the loop; no field pushed.
-        (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        ;; Field name — NAME position admits keywords (`handle: Int`),
+        ;; same projection as postfix `.field` + record literals. Null
+        ;; per protocol_parser_fabrication_substrate.md → terminate.
+        (local.set $name (call $ident_or_keyword_at_p (local.get $tokens) (local.get $p)))
         (if (i32.eqz (local.get $name))
           (then (br $done)))
         (local.set $p2 (call $expect

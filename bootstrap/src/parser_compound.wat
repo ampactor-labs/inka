@@ -548,15 +548,18 @@
     ;; Empty `{}` → block.
     (if (call $at (local.get $tokens) (local.get $p1) (i32.const 48))   ;; TRBrace
       (then (return (i32.const 0))))
-    ;; First token must be TIdent (fielded; tag-25 heap record, NOT
-    ;; sentinel). Per parser_handler.wat:362 canonical "is TIdent"
-    ;; probe — `is_sentinel == false && tag_of == 25`.
-    (local.set $k1 (call $kind_at (local.get $tokens) (local.get $p1)))
-    (if (call $is_sentinel (local.get $k1))
+    ;; First token must be NAME-SHAPED. Field-name position is a NAME
+    ;; position: keywords are admitted (`handle:`, `match:` are valid
+    ;; field names — the lexer's keyword classification is context-free;
+    ;; name-position consumers read $ident_or_keyword_at_p, the same
+    ;; projection postfix `.field` access reads). Pre-fix the TIdent-only
+    ;; check made every record literal whose FIRST field is a keyword
+    ;; (`{handle: h, ...}` across the wheel's cursor records) misparse
+    ;; as a block, leaking all fields as VarRefs.
+    (if (i32.eqz (call $ident_or_keyword_at_p (local.get $tokens) (local.get $p1)))
       (then (return (i32.const 0))))
-    (if (i32.ne (call $tag_of (local.get $k1)) (i32.const 25))
-      (then (return (i32.const 0))))
-    ;; Next non-ws must be TColon (sentinel kind 53).
+    ;; Next non-ws must be TColon (sentinel kind 53). `name :` is
+    ;; unambiguous — no statement form starts with name-colon.
     (local.set $p2 (call $skip_ws_p (local.get $tokens)
                           (i32.add (local.get $p1) (i32.const 1))))
     (if (i32.eq (call $kind_at (local.get $tokens) (local.get $p2)) (i32.const 53))
@@ -585,10 +588,10 @@
           (then
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $done)))
-        ;; Read field name (TIdent). Substrate-honest recovery on mis-parse
-        ;; per protocol_parser_fabrication_substrate.md: ident_at_p
-        ;; returns 0 on non-TIdent → produce NErrorExpr-wrapped sentinel.
-        (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
+        ;; Read field name — NAME position admits keywords (`handle:`),
+        ;; same projection as postfix `.field`. Null per
+        ;; protocol_parser_fabrication_substrate.md → terminate loop.
+        (local.set $name (call $ident_or_keyword_at_p (local.get $tokens) (local.get $p)))
         (if (i32.eqz (local.get $name))
           (then (br $done)))
         (local.set $p (call $skip_ws_p (local.get $tokens)

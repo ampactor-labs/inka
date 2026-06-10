@@ -90,6 +90,14 @@
     (i32.store offset=8 (local.get $p) (local.get $rest))
     (local.get $p))
 
+  ;; PAlt (137) — pattern alternation `pat_1 | pat_2 | ...` per
+  ;; SYNTAX.md §"Pattern alternation — rule". Branches list at offset 4.
+  (func $mk_PAlt (param $branches i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 137))
+    (i32.store offset=4 (local.get $p) (local.get $branches))
+    (local.get $p))
+
   ;; Option.Some(value) for PList rest names. None is nullary tag 0.
   (func $mk_pat_Some (param $value i32) (result i32)
     (local $p i32) (local.set $p (call $alloc (i32.const 8)))
@@ -411,6 +419,47 @@
   ;; Each arm is a 2-tuple (pat, body_expr).
   ;; Mirrors src/parser.mn parse_match_arms (lines 1106-1117).
 
+  ;; ─── $parse_pat_alt — pattern alternation at the arm grammar ───────
+  ;; One pat, then a TPipe(64) loop collecting branches; single-branch
+  ;; stays the bare pat (no degenerate PAlt — walkthrough §7). skip_ws
+  ;; before the peek: multi-line alternation puts `|` after TNewline.
+  ;; Returns (pat, new_pos) 2-tuple like $parse_pat.
+  (func $parse_pat_alt (param $tokens i32) (param $pos i32) (result i32)
+    (local $first_r i32) (local $first i32) (local $p i32)
+    (local $buf i32) (local $count i32) (local $next_r i32)
+    (local $pw i32) (local $tup i32)
+    (local.set $first_r (call $parse_pat (local.get $tokens) (local.get $pos)))
+    (local.set $first (call $list_index (local.get $first_r) (i32.const 0)))
+    (local.set $p     (call $list_index (local.get $first_r) (i32.const 1)))
+    (if (i32.eqz (call $at (local.get $tokens)
+                   (call $skip_ws_p (local.get $tokens) (local.get $p))
+                   (i32.const 64)))                          ;; TPipe
+      (then (return (local.get $first_r))))
+    (local.set $buf (call $make_list (i32.const 4)))
+    (drop (call $list_set (local.get $buf) (i32.const 0) (local.get $first)))
+    (local.set $count (i32.const 1))
+    (block $done
+      (loop $branches
+        (local.set $pw (call $skip_ws_p (local.get $tokens) (local.get $p)))
+        (br_if $done (i32.eqz (call $at (local.get $tokens) (local.get $pw)
+                                (i32.const 64))))            ;; TPipe
+        (local.set $next_r (call $parse_pat (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens)
+            (i32.add (local.get $pw) (i32.const 1)))))
+        (local.set $buf (call $list_extend_to (local.get $buf)
+          (i32.add (local.get $count) (i32.const 1))))
+        (drop (call $list_set (local.get $buf) (local.get $count)
+          (call $list_index (local.get $next_r) (i32.const 0))))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        (local.set $p (call $list_index (local.get $next_r) (i32.const 1)))
+        (br $branches)))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0)
+      (call $mk_PAlt
+        (call $slice (local.get $buf) (i32.const 0) (local.get $count)))))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
+    (local.get $tup))
+
   (func $parse_match_arms_full (param $tokens i32) (param $pos i32) (result i32)
     (local $p i32) (local $buf i32) (local $count i32)
     (local $pat_r i32) (local $pat i32) (local $p2 i32) (local $p3 i32)
@@ -428,8 +477,18 @@
           (then
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $done)))
-        ;; Parse pattern
-        (local.set $pat_r (call $parse_pat (local.get $tokens) (local.get $p)))
+        ;; Doc-comment block before an arm — drop-and-continue, same
+        ;; convention as parse_stmt_p + parse_handler_arm.
+        (block $doc_done
+          (loop $doc_skip
+            (br_if $doc_done (i32.eqz
+              (call $is_doc_comment_at (local.get $tokens) (local.get $p))))
+            (local.set $p (call $skip_ws_p (local.get $tokens)
+              (i32.add (local.get $p) (i32.const 1))))
+            (br $doc_skip)))
+        ;; Parse pattern (with `|` alternation at the arm grammar per
+        ;; SYNTAX.md §1605 — TPipe in match arm body).
+        (local.set $pat_r (call $parse_pat_alt (local.get $tokens) (local.get $p)))
         (local.set $pat (call $list_index (local.get $pat_r) (i32.const 0)))
         (local.set $p2 (call $list_index (local.get $pat_r) (i32.const 1)))
         ;; Expect =>

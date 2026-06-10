@@ -250,6 +250,9 @@ type LowPat
   | LPLit(LowValue)
   | LPList(List, Option)             // prefix pats, optional rest name
   | LPRecord(List)                   // [(field_name: String, offset_bytes: Int, sub_pat: LowPat)]
+  | LPAlt(List)                      // alternation branches; arm matches if ANY
+                                     // branch matches (predicate = OR); branches
+                                     // bind the same names (infer's law)
 
 /// Extract the source TypeHandle from any `LowExpr` variant.
 /// One arm per variant, no fallback — new variants surface at compile time.
@@ -1306,7 +1309,8 @@ fn lower_pat(pat) = match pat {
   },
   PTuple(sub)      => LPTuple(lower_pats(sub)),
   PList(sub, rest) => LPList(lower_pats(sub), rest),
-  PRecord(flds)    => LPRecord(lower_pat_record_fields(flds, 0))
+  PRecord(flds)    => LPRecord(lower_pat_record_fields(flds, 0)),
+  PAlt(branches)   => LPAlt(lower_pats(branches))
 }
 
 /// Pattern fields are sorted-by-name (parser invariant); position

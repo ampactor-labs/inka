@@ -4659,6 +4659,17 @@
                         (call $tag_of (local.get $b))))
           (else (i32.const 0))))))
 
+  ;; is_doc_comment_at: TDocComment detection. The kind is FIELDED —
+  ;; a heap record [tag=29][doc_str] — so sentinel compares (raw i32.eq
+  ;; or $at against 29) can never fire; the tag lives behind the
+  ;; pointer. Canonical projection: every doc-skip site reads this.
+  (func $is_doc_comment_at (param $tokens i32) (param $pos i32) (result i32)
+    (local $k i32)
+    (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
+    (if (i32.lt_u (local.get $k) (global.get $heap_base))
+      (then (return (i32.const 0))))
+    (i32.eq (call $tag_of (local.get $k)) (i32.const 29)))
+
   ;; at: check if token at pos has given kind
   (func $at (param $tokens i32) (param $pos i32) (param $kind i32) (result i32)
     (call $kind_eq_s
@@ -4943,6 +4954,14 @@
     (i32.store (local.get $p) (i32.const 135))
     (i32.store offset=4 (local.get $p) (local.get $subs))
     (i32.store offset=8 (local.get $p) (local.get $rest))
+    (local.get $p))
+
+  ;; PAlt (137) — pattern alternation `pat_1 | pat_2 | ...` per
+  ;; SYNTAX.md §"Pattern alternation — rule". Branches list at offset 4.
+  (func $mk_PAlt (param $branches i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 137))
+    (i32.store offset=4 (local.get $p) (local.get $branches))
     (local.get $p))
 
   ;; Option.Some(value) for PList rest names. None is nullary tag 0.
@@ -5266,6 +5285,47 @@
   ;; Each arm is a 2-tuple (pat, body_expr).
   ;; Mirrors src/parser.mn parse_match_arms (lines 1106-1117).
 
+  ;; ─── $parse_pat_alt — pattern alternation at the arm grammar ───────
+  ;; One pat, then a TPipe(64) loop collecting branches; single-branch
+  ;; stays the bare pat (no degenerate PAlt — walkthrough §7). skip_ws
+  ;; before the peek: multi-line alternation puts `|` after TNewline.
+  ;; Returns (pat, new_pos) 2-tuple like $parse_pat.
+  (func $parse_pat_alt (param $tokens i32) (param $pos i32) (result i32)
+    (local $first_r i32) (local $first i32) (local $p i32)
+    (local $buf i32) (local $count i32) (local $next_r i32)
+    (local $pw i32) (local $tup i32)
+    (local.set $first_r (call $parse_pat (local.get $tokens) (local.get $pos)))
+    (local.set $first (call $list_index (local.get $first_r) (i32.const 0)))
+    (local.set $p     (call $list_index (local.get $first_r) (i32.const 1)))
+    (if (i32.eqz (call $at (local.get $tokens)
+                   (call $skip_ws_p (local.get $tokens) (local.get $p))
+                   (i32.const 64)))                          ;; TPipe
+      (then (return (local.get $first_r))))
+    (local.set $buf (call $make_list (i32.const 4)))
+    (drop (call $list_set (local.get $buf) (i32.const 0) (local.get $first)))
+    (local.set $count (i32.const 1))
+    (block $done
+      (loop $branches
+        (local.set $pw (call $skip_ws_p (local.get $tokens) (local.get $p)))
+        (br_if $done (i32.eqz (call $at (local.get $tokens) (local.get $pw)
+                                (i32.const 64))))            ;; TPipe
+        (local.set $next_r (call $parse_pat (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens)
+            (i32.add (local.get $pw) (i32.const 1)))))
+        (local.set $buf (call $list_extend_to (local.get $buf)
+          (i32.add (local.get $count) (i32.const 1))))
+        (drop (call $list_set (local.get $buf) (local.get $count)
+          (call $list_index (local.get $next_r) (i32.const 0))))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        (local.set $p (call $list_index (local.get $next_r) (i32.const 1)))
+        (br $branches)))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0)
+      (call $mk_PAlt
+        (call $slice (local.get $buf) (i32.const 0) (local.get $count)))))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
+    (local.get $tup))
+
   (func $parse_match_arms_full (param $tokens i32) (param $pos i32) (result i32)
     (local $p i32) (local $buf i32) (local $count i32)
     (local $pat_r i32) (local $pat i32) (local $p2 i32) (local $p3 i32)
@@ -5283,8 +5343,18 @@
           (then
             (local.set $p (i32.add (local.get $p) (i32.const 1)))
             (br $done)))
-        ;; Parse pattern
-        (local.set $pat_r (call $parse_pat (local.get $tokens) (local.get $p)))
+        ;; Doc-comment block before an arm — drop-and-continue, same
+        ;; convention as parse_stmt_p + parse_handler_arm.
+        (block $doc_done
+          (loop $doc_skip
+            (br_if $doc_done (i32.eqz
+              (call $is_doc_comment_at (local.get $tokens) (local.get $p))))
+            (local.set $p (call $skip_ws_p (local.get $tokens)
+              (i32.add (local.get $p) (i32.const 1))))
+            (br $doc_skip)))
+        ;; Parse pattern (with `|` alternation at the arm grammar per
+        ;; SYNTAX.md §1605 — TPipe in match arm body).
+        (local.set $pat_r (call $parse_pat_alt (local.get $tokens) (local.get $p)))
         (local.set $pat (call $list_index (local.get $pat_r) (i32.const 0)))
         (local.set $p2 (call $list_index (local.get $pat_r) (i32.const 1)))
         ;; Expect =>
@@ -7688,6 +7758,19 @@
     (local $body_r i32) (local $body i32) (local $p5 i32) (local $p6 i32)
     (local $arm i32) (local $tup i32)
     (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
+    ;; Doc-comment block before the arm — drop-and-continue, same
+    ;; convention as parse_stmt_p's TDocComment dispatch. Without this
+    ;; skip the arm loop terminated at the first documented arm and the
+    ;; remaining arm bodies re-parsed as TOP-LEVEL stmts (param/state
+    ;; references then missed env → the E_MissingVariable handler-arm
+    ;; class: question/target/fh/reason ×40+ in the wheel).
+    (block $doc_done
+      (loop $doc_skip
+        (br_if $doc_done (i32.eqz
+          (call $is_doc_comment_at (local.get $tokens) (local.get $p))))
+        (local.set $p (call $skip_ws_p (local.get $tokens)
+          (i32.add (local.get $p) (i32.const 1))))
+        (br $doc_skip)))
     ;; Op name (TIdent). Null return per protocol_parser_fabrication_substrate.md
     ;; means "no TIdent at this position." Substrate-honest recovery:
     ;; return null tuple; caller $parse_handler_arms loop terminates.
@@ -8240,7 +8323,10 @@
     ;; Hβ.first-light.documented-stmt-substrate wraps the next stmt in
     ;; the Documented(doc, inner) tag-128 ADT (the infer-side arm at
     ;; walk_stmt.wat:467-471 already recurses through that wrapper).
-    (if (i32.eq (local.get $k) (i32.const 29))  ;; TDocComment
+    ;; Detection via $is_doc_comment_at — the kind is FIELDED (heap
+    ;; record [29][str]); the prior raw `k == 29` compare could never
+    ;; fire (the kind field is a pointer).
+    (if (call $is_doc_comment_at (local.get $tokens) (local.get $pos))
       (then (return (call $parse_stmt_p (local.get $tokens)
         (call $skip_ws_p (local.get $tokens)
           (i32.add (local.get $pos) (i32.const 1)))))))
@@ -15078,6 +15164,30 @@
           (local.get $span)
           (call $reason_make_located (local.get $span)
             (call $reason_make_inferred (i32.const 4032))))
+        (return)))
+    ;; ── PAlt (137) — pattern alternation ────────────────────────
+    ;; Every branch constrains the SAME scrutinee handle — branch
+    ;; pattern types unify through it by construction. The binding
+    ;; law (same names, unifiable types across branches → else
+    ;; E_PatternAlternationBindingMismatch) is the WHEEL's infer
+    ;; (enforce_alt_binding_law, src/infer.mn); the seed walks
+    ;; branches so law-abiding wheel source compiles whole. The
+    ;; wheel's own alternation arms are binder-free; the disposable
+    ;; seed does not duplicate the wheel's diagnostic surface.
+    (if (i32.eq (local.get $tag) (i32.const 137))
+      (then
+        (local.set $elems (i32.load offset=4 (local.get $pat)))
+        (local.set $n_elems (call $len (local.get $elems)))
+        (local.set $i (i32.const 0))
+        (block $alt_done
+          (loop $alt_each
+            (br_if $alt_done
+              (i32.ge_u (local.get $i) (local.get $n_elems)))
+            (call $infer_walk_pat
+              (call $list_index (local.get $elems) (local.get $i))
+              (local.get $scrut_h) (local.get $span))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $alt_each)))
         (return)))
     ;; ── PRecord (136) — peer follow-up Hβ.infer.walk_pat.record ─
     ;; Record pattern field-name matching deferred to peer cascade.
@@ -23846,6 +23956,17 @@
     (if (i32.eq (local.get $tag) (i32.const 136))
       (then
         (call $bind_pat_locals_fields (i32.load offset=4 (local.get $pat)))
+        (return)))
+    ;; PAlt (137): branches bind the same names (the wheel-infer law) —
+    ;; register branch 0's set once; per-branch would double-bind.
+    (if (i32.eq (local.get $tag) (i32.const 137))
+      (then
+        (if (i32.gt_u (call $len (i32.load offset=4 (local.get $pat)))
+                      (i32.const 0))
+          (then
+            (call $bind_pat_locals
+              (call $list_index (i32.load offset=4 (local.get $pat))
+                (i32.const 0)))))
         (return))))
 
   (func $lower_pat_record_fields (param $fields i32) (param $field_idx i32) (param $scrut_h i32) (result i32)
@@ -23995,6 +24116,14 @@
                     (i32.const 0)
                     (local.get $scrut_h))
                   (i32.const 0)))))
+    ;; PAlt (137) → LPAlt: lower each branch against the same scrutinee.
+    (if (i32.eq (local.get $tag) (i32.const 137))
+      (then
+        (return (call $lowpat_make_lpalt
+                  (local.get $scrut_h)
+                  (call $lower_pats
+                    (i32.load offset=4 (local.get $pat))
+                    (local.get $scrut_h))))))
     (unreachable))
 
   (func $lower_match_arms (param $arms i32) (param $scrut_h i32) (result i32)
@@ -28609,319 +28738,520 @@
     (call $ec5_emit_body (call $lexpr_lblock_stmts (local.get $r))))
 
   ;; ─── $emit_lmatch — LMatch tag 321 emit arm per §2.3 ───────────────
-  ;; Per src/backends/wasm.mn:1379-1394 + emit_match_arms at line 1792+.
+  ;; Per src/backends/wasm.mn emit_match_arms (pattern algebra).
   ;;
-  ;; Three-shape dispatch — the H6 gradient cash-out:
-  ;;   PureNullary (shape 0): every LPCon has empty sub_pats.
-  ;;     Scrutinee IS the sentinel. Direct compare: scrut == tag_id.
-  ;;   PureFielded (shape 1): every LPCon has non-empty sub_pats.
-  ;;     Scrutinee IS a heap pointer. Load tag at offset=0, compare.
-  ;;   Mixed (shape 2): both kinds present. Threshold gate at
-  ;;     heap_base=4096: (scrut < 4096) → nullary cascade, else fielded.
-  ;;
-  ;; Bool is NOT special. True/False are sentinels 0/1. Option.None is
-  ;; a sentinel. Every nullary variant compiles through the same path.
-  ;; One mechanism for all ADT matching. No Drift 6.
-  ;;
-  ;; Per SUBSTRATE.md §IX "the heap has one story" — sentinels live in
-  ;; [0, 4096); heap pointers live at [1 MiB, ∞). The threshold
-  ;; comparison discriminates without ambiguity.
+  ;; A pattern is the Boolean algebra of value space — the row algebra's
+  ;; mirror: nesting is short-circuit AND, alternation is short-circuit
+  ;; OR, tags/literals are atomic predicates, wildcards/vars are true.
+  ;; A match is an ordered OR-ELSE fold over arms; each arm emits
+  ;;   (pred) (if (result i32) (then binds body) (else rest)).
+  ;; Every constructor's predicate carries its OWN representation guard:
+  ;; nullary ctors compare the sentinel directly (HB — Bool is NOT
+  ;; special); fielded ctors guard (scrut >= 4096) before loading the
+  ;; tag, so sentinel values short-circuit to 0 instead of reading low
+  ;; memory. The per-ctor guard makes mixed matches, cross-shape
+  ;; alternation, and nested sentinel/fielded sub-patterns compose from
+  ;; ONE predicate projection + ONE binds projection — no arm-set shape
+  ;; classification, no threshold fork, no filtered cascades, no
+  ;; dropped pattern forms. Guard elision when the scrutinee's type
+  ;; proves every ctor fielded is a gradient cash-out (graph-driven).
   (func $emit_lmatch (param $r i32)
-    (local $arms i32) (local $shape i32)
     (call $emit_lexpr (call $lexpr_lmatch_scrut (local.get $r)))
     (call $ec5_emit_local_set_scrut_tmp)
-    (local.set $arms (call $lexpr_lmatch_arms (local.get $r)))
-    (if (i32.eqz (call $len (local.get $arms)))
-      (then (call $ec_emit_unreachable))
-      (else
-        (local.set $shape (call $ec5_classify_arms_shape (local.get $arms)))
-        (if (i32.eq (local.get $shape) (i32.const 2))
-          (then (call $ec5_emit_match_arms_mixed (local.get $arms)))
-          (else (call $ec5_emit_match_arms_from
-                  (local.get $arms) (i32.const 0) (local.get $shape)))))))
+    (call $ec5_emit_match_arms_from
+      (call $lexpr_lmatch_arms (local.get $r)) (i32.const 0)))
 
-  ;; ─── $ec5_classify_arms_shape — classify arm set shape ──────────────
-  ;; Per src/backends/wasm.mn:1807-1829 classify_arms_shape.
-  ;; Walk arms list. For each LPCon, check len(sub_pats):
-  ;;   0 → nullary, >0 → fielded. Track accumulated shape.
-  ;; Returns: 0=PureNullary, 1=PureFielded, 2=Mixed.
-  ;; Non-LPCon patterns (LPWild, LPVar, LPLit) are shape-neutral.
-  (func $ec5_classify_arms_shape (param $arms i32) (result i32)
-    (local $i i32) (local $n i32) (local $acc i32) (local $seen i32)
-    (local $arm i32) (local $pat i32) (local $arm_shape i32)
-    (local.set $n (call $len (local.get $arms)))
-    (local.set $acc (i32.const 1))   ;; default PureFielded
-    (local.set $seen (i32.const 0))
-    (local.set $i (i32.const 0))
-    (block $done
-      (loop $iter
-        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
-        (local.set $pat (call $lowpat_lparm_pat (local.get $arm)))
-        (if (i32.eq (call $tag_of (local.get $pat)) (i32.const 363)) ;; LPCon
-          (then
-            (local.set $arm_shape
-              (if (result i32)
-                  (i32.eqz (call $len (call $lowpat_lpcon_args (local.get $pat))))
-                (then (i32.const 0))   ;; PureNullary
-                (else (i32.const 1)))) ;; PureFielded
-            (if (i32.eqz (local.get $seen))
-              (then
-                (local.set $acc (local.get $arm_shape))
-                (local.set $seen (i32.const 1)))
-              (else
-                (if (i32.ne (local.get $acc) (local.get $arm_shape))
-                  (then (local.set $acc (i32.const 2))))))))  ;; Mixed
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter)))
-    (if (result i32) (local.get $seen)
-      (then (local.get $acc))
-      (else (i32.const 1))))   ;; No LPCon seen → PureFielded default
-
-  ;; ─── $ec5_emit_match_arms_from — uniform-shape arm dispatch ─────────
-  ;; Per src/backends/wasm.mn:1842-1903 emit_match_arms_uniform.
-  ;; Recursive: emits arms starting from index $idx.
-  ;; Per-arm dispatch on LowPat tag:
-  ;;   LPCon (363): load scrut (shape-dependent), compare tag_id,
-  ;;     emit (if (result i32) (then ...body...) (else ...rest...)).
-  ;;   LPWild (361): always-match terminal. Emit body directly.
-  ;;   LPVar (360): bind scrut to name, emit body.
-  ;;   LPLit (362): scalar equality check on scrut value.
-  ;;   LPTuple/LPList/LPRecord/LPAlt/LPAs: skip (NAMED follow-up).
-  (func $ec5_emit_match_arms_from
-        (param $arms i32) (param $idx i32) (param $shape i32)
+  ;; ─── $ec5_emit_match_arms_from — ordered OR-ELSE fold over arms ─────
+  ;; Per src/backends/wasm.mn emit_match_arms (pattern algebra). Each
+  ;; arm: predicate → (if (result i32) (then binds body) (else rest)).
+  ;; Always-matching arms (wild/var/irrefutable structure) are terminal.
+  (func $ec5_emit_match_arms_from (param $arms i32) (param $idx i32)
     (local $arm i32) (local $pat i32) (local $body i32)
-    (local $ptag i32) (local $sub_pats i32)
     ;; Base case: no more arms → unreachable (exhaustiveness trap).
     (if (i32.ge_u (local.get $idx) (call $len (local.get $arms)))
       (then (call $ec_emit_unreachable) (return)))
     (local.set $arm (call $list_index (local.get $arms) (local.get $idx)))
     (local.set $pat (call $lowpat_lparm_pat (local.get $arm)))
     (local.set $body (call $lowpat_lparm_body (local.get $arm)))
-    (local.set $ptag (call $tag_of (local.get $pat)))
-
-    ;; ── LPCon (363) — constructor pattern ──
-    ;; Per Hβ.emit.match-nested-lpcon-substrate: predicate = (outer.tag ==
-    ;; outer_tag) AND-chain (sub_field.tag == sub_tag) for each nested
-    ;; LPCon sub-pat. This handles `match body { NStmt(LetStmt(...)) =>
-    ;; ..., NStmt(FnStmt(...)) => ..., ... }` where outer-tag dispatch
-    ;; alone collapses all arms into one — the nested inner-tag check
-    ;; distinguishes them.
-    (if (i32.eq (local.get $ptag) (i32.const 363))
+    (if (call $ec5_pat_always_matches (local.get $pat))
       (then
-        (local.set $sub_pats (call $lowpat_lpcon_args (local.get $pat)))
-        ;; Hβ.first-light.match-mixed-recursive-filter: arm-shape filter
-        ;; per LPCon arm so mixed-cascade dispatch keeps filtering as
-        ;; the recursion descends; pure-shape matches pass-through
-        ;; cleanly (every arm matches $shape by classify).
-        (if (i32.ne (call $ec5_classify_pat_shape (local.get $sub_pats))
-                    (local.get $shape))
-          (then
-            (call $ec5_emit_match_arms_from
-              (local.get $arms) (i32.add (local.get $idx) (i32.const 1))
-              (local.get $shape))
-            (return)))
-        ;; OUTER predicate.
-        (call $ec5_emit_local_get_scrut_tmp)
-        (if (i32.eq (local.get $shape) (i32.const 1))
-          (then (call $el_emit_i32_load_offset (i32.const 0))))
-        (call $emit_i32_const (call $lowpat_lpcon_tag_id (local.get $pat)))
-        (call $ec5_emit_i32_eq)
-        ;; NESTED predicate — for each nested LPCon sub-pat, AND-chain
-        ;; its tag check. PureFielded shape only (sentinel-shape has no
-        ;; field structure to descend into).
-        (if (i32.eq (local.get $shape) (i32.const 1))
-          (then
-            (call $ec5_emit_pat_nested_predicate
-              (local.get $sub_pats) (i32.const 0)
-              (call $make_list (i32.const 0)) (i32.const 0))))
-        ;; (if (result i32) (then ...body...) (else ...rest...))
-        (call $ec5_emit_if_open_with_result_i32)
-        (call $ec5_emit_then_open)
-        ;; Bind fields (recursive — descends nested LPCons via path).
-        (if (i32.eq (local.get $shape) (i32.const 1))
-          (then (call $ec5_emit_pat_field_binds
-                  (local.get $sub_pats) (i32.const 0))))
-        (call $emit_lexpr (local.get $body))
-        (call $emit_close)   ;; close then
-        (call $ec5_emit_else_open)
-        ;; Recurse on rest.
-        (call $ec5_emit_match_arms_from
-          (local.get $arms) (i32.add (local.get $idx) (i32.const 1))
-          (local.get $shape))
-        (call $emit_close)   ;; close else
-        (call $emit_close)   ;; close if
-        (return)))
-
-    ;; ── LPWild (361) — always-match terminal ──
-    (if (i32.eq (local.get $ptag) (i32.const 361))
-      (then
+        (call $ec5_emit_pat_binds_at (local.get $pat)
+          (call $make_list (i32.const 0)) (i32.const 0))
         (call $emit_lexpr (local.get $body))
         (return)))
-
-    ;; ── LPVar (360) — bind scrut to name ──
-    (if (i32.eq (local.get $ptag) (i32.const 360))
-      (then
-        (call $ec5_emit_local_get_scrut_tmp)
-        (call $ec_emit_local_set_dollar
-          (call $lowpat_lpvar_name (local.get $pat)))
-        (call $emit_lexpr (local.get $body))
-        (return)))
-
-    ;; ── LPLit (362) — scalar equality ──
-    (if (i32.eq (local.get $ptag) (i32.const 362))
-      (then
-        (call $ec5_emit_local_get_scrut_tmp)
-        (call $emit_i32_const (call $lowpat_lplit_value (local.get $pat)))
-        (call $ec5_emit_i32_eq)
-        (call $ec5_emit_if_open_with_result_i32)
-        (call $ec5_emit_then_open)
-        (call $emit_lexpr (local.get $body))
-        (call $emit_close)
-        (call $ec5_emit_else_open)
-        (call $ec5_emit_match_arms_from
-          (local.get $arms) (i32.add (local.get $idx) (i32.const 1))
-          (local.get $shape))
-        (call $emit_close)
-        (call $emit_close)
-        (return)))
-
-    ;; ── LPTuple/LPList/LPRecord/LPAlt/LPAs — skip (NAMED follow-up) ──
-    (call $ec5_emit_match_arms_from
-      (local.get $arms) (i32.add (local.get $idx) (i32.const 1))
-      (local.get $shape)))
-
-  ;; ─── $ec5_classify_pat_shape — sub_pats list → 0 (nullary) | 1 (fielded)
-  ;; Canonical projection of LPCon arm shape per
-  ;; protocol_canonical_projection_pattern.md. Empty sub_pats = nullary
-  ;; (sentinel-only); non-empty = fielded (heap-tag dispatch).
-  (func $ec5_classify_pat_shape (param $sub_pats i32) (result i32)
-    (if (result i32) (call $len (local.get $sub_pats))
-      (then (i32.const 1))
-      (else (i32.const 0))))
-
-  ;; ─── $ec5_emit_match_arms_mixed — threshold gate dispatch ───────────
-  ;; Per src/backends/wasm.mn:1909-1922 emit_match_arms_mixed.
-  ;; Emits:
-  ;;   (local.get $scrut_tmp)(i32.const 4096)(i32.lt_u)
-  ;;   (if (result i32)
-  ;;     (then <nullary_cascade>)
-  ;;     (else <fielded_cascade>))
-  ;; Each cascade filters arms by shape, keeping wildcards/vars/lits
-  ;; in both (they always-match irrespective of shape).
-  (func $ec5_emit_match_arms_mixed (param $arms i32)
-    (call $ec5_emit_local_get_scrut_tmp)
-    (call $emit_i32_const (i32.const 4096))
-    (call $ec5_emit_i32_lt_u)
+    (call $ec5_emit_pat_predicate_at (local.get $pat)
+      (call $make_list (i32.const 0)) (i32.const 0))
     (call $ec5_emit_if_open_with_result_i32)
     (call $ec5_emit_then_open)
-    ;; Nullary cascade — filter to PureNullary LPCon + always-match.
-    (call $ec5_emit_match_arms_filtered_from
-      (local.get $arms) (i32.const 0) (i32.const 0))
+    (call $ec5_emit_pat_binds_at (local.get $pat)
+      (call $make_list (i32.const 0)) (i32.const 0))
+    (call $emit_lexpr (local.get $body))
     (call $emit_close)   ;; close then
     (call $ec5_emit_else_open)
-    ;; Fielded cascade — filter to PureFielded LPCon + always-match.
-    (call $ec5_emit_match_arms_filtered_from
-      (local.get $arms) (i32.const 0) (i32.const 1))
+    (call $ec5_emit_match_arms_from
+      (local.get $arms) (i32.add (local.get $idx) (i32.const 1)))
     (call $emit_close)   ;; close else
     (call $emit_close))  ;; close if
 
-  ;; ─── $ec5_emit_match_arms_filtered_from — shape-filtered dispatch ───
-  ;; Called from mixed-dispatch. Skips LPCon arms whose shape doesn't
-  ;; match $want_shape; always processes LPWild/LPVar/LPLit.
-  ;; $want_shape: 0=PureNullary, 1=PureFielded.
-  (func $ec5_emit_match_arms_filtered_from
-        (param $arms i32) (param $idx i32) (param $want_shape i32)
-    (local $arm i32) (local $pat i32) (local $ptag i32)
-    ;; Base case: no more arms → unreachable.
-    (if (i32.ge_u (local.get $idx) (call $len (local.get $arms)))
-      (then (call $ec_emit_unreachable) (return)))
-    (local.set $arm (call $list_index (local.get $arms) (local.get $idx)))
-    (local.set $pat (call $lowpat_lparm_pat (local.get $arm)))
-    (local.set $ptag (call $tag_of (local.get $pat)))
-    ;; LPCon: check shape match.
-    (if (i32.eq (local.get $ptag) (i32.const 363))
-      (then
-        (if (i32.ne
-              (call $ec5_classify_pat_shape (call $lowpat_lpcon_args (local.get $pat)))
-              (local.get $want_shape))
-          (then
-            (call $ec5_emit_match_arms_filtered_from
-              (local.get $arms) (i32.add (local.get $idx) (i32.const 1))
-              (local.get $want_shape))
-            (return)))))
-    ;; Shape matches, or non-LPCon (always process). Delegate to
-    ;; uniform dispatch with the want_shape.
-    (call $ec5_emit_match_arms_from
-      (local.get $arms) (local.get $idx) (local.get $want_shape)))
+  ;; ─── $ec5_pat_always_matches — irrefutable-pattern predicate ────────
+  ;; LPWild/LPVar always match; tuples/records match iff every sub does;
+  ;; alternation matches if ANY branch does; tags/literals/lists refute.
+  (func $ec5_pat_always_matches (param $pat i32) (result i32)
+    (local $tag i32)
+    (if (i32.eq (local.get $pat) (i32.const 131))     ;; parse-PWild sentinel
+      (then (return (i32.const 1))))
+    (if (i32.lt_u (local.get $pat) (global.get $heap_base))
+      (then (return (i32.const 0))))
+    (local.set $tag (call $tag_of (local.get $pat)))
+    (if (i32.eq (local.get $tag) (i32.const 360)) (then (return (i32.const 1))))  ;; LPVar
+    (if (i32.eq (local.get $tag) (i32.const 361)) (then (return (i32.const 1))))  ;; LPWild
+    (if (i32.eq (local.get $tag) (i32.const 364))                                  ;; LPTuple
+      (then (return (call $ec5_pats_always_match
+                      (call $lowpat_lptuple_elems (local.get $pat))))))
+    (if (i32.eq (local.get $tag) (i32.const 366))                                  ;; LPRecord
+      (then (return (call $ec5_record_pats_always_match
+                      (call $lowpat_lprecord_fields (local.get $pat))))))
+    (if (i32.eq (local.get $tag) (i32.const 367))                                  ;; LPAlt
+      (then (return (call $ec5_alt_any_always_matches
+                      (call $lowpat_lpalt_branches (local.get $pat))))))
+    (i32.const 0))
 
-  ;; ─── $ec5_emit_pat_field_binds — per-field sub-pattern binding ──────
-  ;; Per Hβ.emit.match-nested-lpcon-substrate (2026-05-09): pat is a TREE.
-  ;; Emit walks the tree recursively. For each LPVar leaf at offset path
-  ;; [N_1, N_2, ...], emit (local.get $scrut_tmp)(i32.load offset=N_1)
-  ;; (i32.load offset=N_2)...(local.set $name). For nested LPCon sub-pats,
-  ;; recurse — extending the path with their field offsets. LPWild leaves
-  ;; bind nothing.
-  ;;
-  ;; Per protocol_emit_is_graph_projection.md: the graph encodes pat
-  ;; hierarchy explicitly; emit projects through it. Pre-fix only
-  ;; depth-1 LPVars bound (nested LPCon TODO); for `match body {
-  ;; NStmt(LetStmt(p, e)) => ..., NStmt(FnStmt(...)) => ... }` ALL arms
-  ;; received identical outer NStmt-tag dispatch → first arm fired for
-  ;; any NStmt → wrong body executed → mentl2 trap at infer_pat with
-  ;; garbage values.
-  ;;
-  ;; $base_offset accumulates the chained-load prefix bytes via successive
-  ;; (i32.load offset=N) emissions BEFORE the final bind's load. For
-  ;; depth-1 (no parent LPCon), $base_offset = 0 and only the final
-  ;; (i32.load offset=4+4*i) emits.
-  (func $ec5_emit_pat_field_binds (param $sub_pats i32) (param $i i32)
-    (call $ec5_emit_pat_field_binds_path
-      (local.get $sub_pats) (local.get $i)
-      (call $make_list (i32.const 0)) (i32.const 0)))
-
-  ;; Recursive walk with offset-path. $path is a Mentl-flat list of i32
-  ;; offsets to chain-load before reaching the parent of $sub_pats.
-  ;; $path_len tracks length (separate per Ω.3 buffer-counter).
-  (func $ec5_emit_pat_field_binds_path
-        (param $sub_pats i32) (param $i i32)
-        (param $path i32) (param $path_len i32)
-    (local $n i32) (local $p i32) (local $ptag i32) (local $field_offset i32)
-    (local $extended_path i32)
-    (local.set $n (call $len (local.get $sub_pats)))
+  (func $ec5_pats_always_match (param $subs i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $subs)))
+    (local.set $i (i32.const 0))
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $p (call $list_index (local.get $sub_pats) (local.get $i)))
-        (local.set $ptag (call $tag_of (local.get $p)))
-        (local.set $field_offset
-          (i32.add (i32.const 4) (i32.mul (i32.const 4) (local.get $i))))
-        ;; LPVar (360): bind via chained-load path + final field offset.
-        (if (i32.eq (local.get $ptag) (i32.const 360))
+        (if (i32.eqz (call $ec5_pat_always_matches
+                       (call $list_index (local.get $subs) (local.get $i))))
+          (then (return (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 1))
+
+  (func $ec5_record_pats_always_match (param $fbs i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $fbs)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (if (i32.eqz (call $ec5_pat_always_matches
+                       (call $record_get
+                         (call $list_index (local.get $fbs) (local.get $i))
+                         (i32.const 2))))
+          (then (return (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 1))
+
+  (func $ec5_alt_any_always_matches (param $branches i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $branches)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (if (call $ec5_pat_always_matches
+              (call $list_index (local.get $branches) (local.get $i)))
+          (then (return (i32.const 1))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 0))
+
+  ;; ─── $ec5_emit_scrut_at — the value at an offset path ───────────────
+  (func $ec5_emit_scrut_at (param $path i32) (param $path_len i32)
+    (call $ec5_emit_local_get_scrut_tmp)
+    (call $ec5_emit_load_chain (local.get $path) (local.get $path_len)))
+
+  ;; ─── $ec5_emit_pat_predicate_at — ONE i32 on the emitted stack ──────
+  ;; The Boolean algebra of value space: AND via short-circuit
+  ;; (if (result i32) (then inner) (else (i32.const 0))) nesting, OR via
+  ;; (if (result i32) (then (i32.const 1)) (else next)) chaining. Each
+  ;; fielded LPCon guards (scrut >= heap_base) before its tag load.
+  (func $ec5_emit_pat_predicate_at
+        (param $pat i32) (param $path i32) (param $path_len i32)
+    (local $tag i32) (local $subs i32) (local $rest i32)
+    (if (i32.eq (local.get $pat) (i32.const 131))
+      (then (call $emit_i32_const (i32.const 1)) (return)))
+    (if (i32.lt_u (local.get $pat) (global.get $heap_base))
+      (then (unreachable)))
+    (local.set $tag (call $tag_of (local.get $pat)))
+    ;; LPVar (360) / LPWild (361) — true.
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 360))
+                (i32.eq (local.get $tag) (i32.const 361)))
+      (then (call $emit_i32_const (i32.const 1)) (return)))
+    ;; LPLit (362) — scalar equality.
+    (if (i32.eq (local.get $tag) (i32.const 362))
+      (then
+        (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
+        (call $emit_i32_const (call $lowpat_lplit_value (local.get $pat)))
+        (call $ec5_emit_i32_eq)
+        (return)))
+    ;; LPCon (363) — nullary: sentinel compare; fielded: guard+tag+subs.
+    (if (i32.eq (local.get $tag) (i32.const 363))
+      (then
+        (local.set $subs (call $lowpat_lpcon_args (local.get $pat)))
+        (if (i32.eqz (call $len (local.get $subs)))
           (then
-            (call $ec5_emit_local_get_scrut_tmp)
-            (call $ec5_emit_load_chain
-              (local.get $path) (local.get $path_len))
-            (call $el_emit_i32_load_offset (local.get $field_offset))
-            (call $ec_emit_local_set_dollar
-              (call $lowpat_lpvar_name (local.get $p)))))
-        ;; LPCon (363): nested constructor — recurse with path + field_offset.
-        ;; The nested sub-pats live at scrut.<path>.<field_offset>; their
-        ;; binds chain through the extended path.
-        (if (i32.eq (local.get $ptag) (i32.const 363))
+            (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
+            (call $emit_i32_const (call $lowpat_lpcon_tag_id (local.get $pat)))
+            (call $ec5_emit_i32_eq)
+            (return)))
+        (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
+        (call $emit_i32_const (i32.const 4096))
+        (call $ec5_emit_i32_ge_u)
+        (call $ec5_emit_if_result_i32_then)
+        (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
+        (call $el_emit_i32_load_offset (i32.const 0))
+        (call $emit_i32_const (call $lowpat_lpcon_tag_id (local.get $pat)))
+        (call $ec5_emit_i32_eq)
+        (call $ec5_emit_pat_subs_predicate
+          (local.get $subs) (i32.const 0)
+          (local.get $path) (local.get $path_len) (i32.const 4))
+        (call $ec5_emit_else_const_0_close)
+        (return)))
+    ;; LPTuple (364) — untagged; AND of refutable elements at 0,4,...
+    (if (i32.eq (local.get $tag) (i32.const 364))
+      (then
+        (call $emit_i32_const (i32.const 1))
+        (call $ec5_emit_pat_subs_predicate
+          (call $lowpat_lptuple_elems (local.get $pat)) (i32.const 0)
+          (local.get $path) (local.get $path_len) (i32.const 0))
+        (return)))
+    ;; LPList (365) — flat list facts: len@0, elems@8+4i. Prefix-len
+    ;; check (eq without rest; ge_u with), then element AND-chain.
+    (if (i32.eq (local.get $tag) (i32.const 365))
+      (then
+        (local.set $subs (call $lowpat_lplist_elems (local.get $pat)))
+        (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
+        (call $el_emit_i32_load_offset (i32.const 0))
+        (call $emit_i32_const (call $len (local.get $subs)))
+        (if (i32.eqz (call $lowpat_lplist_rest (local.get $pat)))
+          (then (call $ec5_emit_i32_eq))
+          (else (call $ec5_emit_i32_ge_u)))
+        (call $ec5_emit_pat_subs_predicate
+          (local.get $subs) (i32.const 0)
+          (local.get $path) (local.get $path_len) (i32.const 8))
+        (return)))
+    ;; LPRecord (366) — AND of refutable fields at baked offsets.
+    (if (i32.eq (local.get $tag) (i32.const 366))
+      (then
+        (call $emit_i32_const (i32.const 1))
+        (call $ec5_emit_pat_record_subs_predicate
+          (call $lowpat_lprecord_fields (local.get $pat))
+          (local.get $path) (local.get $path_len))
+        (return)))
+    ;; LPAlt (367) — OR over branches at the SAME position.
+    (if (i32.eq (local.get $tag) (i32.const 367))
+      (then
+        (call $ec5_emit_pat_alt_predicate
+          (call $lowpat_lpalt_branches (local.get $pat)) (i32.const 0)
+          (local.get $path) (local.get $path_len))
+        (return)))
+    ;; LPAs (368) — unproducible until the parse arm lands.
+    (unreachable))
+
+  ;; AND-composition over sibling sub-patterns at base + 4*i. A bool is
+  ;; on the emitted stack when called; each refutable sub wraps it in
+  ;; (if (result i32) (then <sub-pred> <rest>) (else (i32.const 0))).
+  (func $ec5_emit_pat_subs_predicate
+        (param $subs i32) (param $i i32)
+        (param $path i32) (param $path_len i32) (param $base i32)
+    (local $n i32) (local $p i32)
+    (local.set $n (call $len (local.get $subs)))
+    (if (i32.ge_u (local.get $i) (local.get $n))
+      (then (return)))
+    (local.set $p (call $list_index (local.get $subs) (local.get $i)))
+    (if (call $ec5_pat_always_matches (local.get $p))
+      (then
+        (call $ec5_emit_pat_subs_predicate
+          (local.get $subs) (i32.add (local.get $i) (i32.const 1))
+          (local.get $path) (local.get $path_len) (local.get $base))
+        (return)))
+    (call $ec5_emit_if_result_i32_then)
+    (call $ec5_emit_pat_predicate_at
+      (local.get $p)
+      (call $ec5_path_extend (local.get $path) (local.get $path_len)
+        (i32.add (local.get $base) (i32.mul (i32.const 4) (local.get $i))))
+      (i32.add (local.get $path_len) (i32.const 1)))
+    (call $ec5_emit_pat_subs_predicate
+      (local.get $subs) (i32.add (local.get $i) (i32.const 1))
+      (local.get $path) (local.get $path_len) (local.get $base))
+    (call $ec5_emit_else_const_0_close))
+
+  ;; Record fields carry pre-resolved byte offsets (lower baked them).
+  (func $ec5_emit_pat_record_subs_predicate
+        (param $fbs i32) (param $path i32) (param $path_len i32)
+    (call $ec5_emit_pat_record_subs_predicate_from
+      (local.get $fbs) (i32.const 0) (local.get $path) (local.get $path_len)))
+
+  (func $ec5_emit_pat_record_subs_predicate_from
+        (param $fbs i32) (param $i i32)
+        (param $path i32) (param $path_len i32)
+    (local $n i32) (local $fb i32) (local $sub i32)
+    (local.set $n (call $len (local.get $fbs)))
+    (if (i32.ge_u (local.get $i) (local.get $n))
+      (then (return)))
+    (local.set $fb (call $list_index (local.get $fbs) (local.get $i)))
+    (local.set $sub (call $record_get (local.get $fb) (i32.const 2)))
+    (if (call $ec5_pat_always_matches (local.get $sub))
+      (then
+        (call $ec5_emit_pat_record_subs_predicate_from
+          (local.get $fbs) (i32.add (local.get $i) (i32.const 1))
+          (local.get $path) (local.get $path_len))
+        (return)))
+    (call $ec5_emit_if_result_i32_then)
+    (call $ec5_emit_pat_predicate_at
+      (local.get $sub)
+      (call $ec5_path_extend (local.get $path) (local.get $path_len)
+        (call $record_get (local.get $fb) (i32.const 1)))
+      (i32.add (local.get $path_len) (i32.const 1)))
+    (call $ec5_emit_pat_record_subs_predicate_from
+      (local.get $fbs) (i32.add (local.get $i) (i32.const 1))
+      (local.get $path) (local.get $path_len))
+    (call $ec5_emit_else_const_0_close))
+
+  ;; OR-composition over alternation branches, short-circuit: the first
+  ;; matching branch yields 1 without evaluating the rest.
+  (func $ec5_emit_pat_alt_predicate
+        (param $branches i32) (param $i i32)
+        (param $path i32) (param $path_len i32)
+    (local $n i32)
+    (local.set $n (call $len (local.get $branches)))
+    (if (i32.ge_u (local.get $i) (local.get $n))
+      (then (call $emit_i32_const (i32.const 0)) (return)))
+    (call $ec5_emit_pat_predicate_at
+      (call $list_index (local.get $branches) (local.get $i))
+      (local.get $path) (local.get $path_len))
+    (if (i32.eq (i32.add (local.get $i) (i32.const 1)) (local.get $n))
+      (then (return)))
+    (call $ec5_emit_if_result_i32_then)
+    (call $emit_i32_const (i32.const 1))
+    (call $emit_close)   ;; close then
+    (call $ec5_emit_else_open)
+    (call $ec5_emit_pat_alt_predicate
+      (local.get $branches) (i32.add (local.get $i) (i32.const 1))
+      (local.get $path) (local.get $path_len))
+    (call $emit_close)   ;; close else
+    (call $emit_close))  ;; close if
+
+  ;; ─── $ec5_emit_pat_binds_at — binds projection ──────────────────────
+  ;; The pattern's second role: every binder gets (local.get $scrut_tmp)
+  ;; <load chain> (local.set $name). Descends every pattern form.
+  (func $ec5_emit_pat_binds_at
+        (param $pat i32) (param $path i32) (param $path_len i32)
+    (local $tag i32) (local $subs i32) (local $rest i32)
+    (if (i32.eq (local.get $pat) (i32.const 131))
+      (then (return)))
+    (if (i32.lt_u (local.get $pat) (global.get $heap_base))
+      (then (return)))
+    (local.set $tag (call $tag_of (local.get $pat)))
+    ;; LPVar (360) — the binder.
+    (if (i32.eq (local.get $tag) (i32.const 360))
+      (then
+        (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
+        (call $ec_emit_local_set_dollar
+          (call $lowpat_lpvar_name (local.get $pat)))
+        (return)))
+    ;; LPWild (361) / LPLit (362) — nothing to bind.
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 361))
+                (i32.eq (local.get $tag) (i32.const 362)))
+      (then (return)))
+    ;; LPCon (363) — fields at 4 + 4*i.
+    (if (i32.eq (local.get $tag) (i32.const 363))
+      (then
+        (call $ec5_emit_pat_subs_binds
+          (call $lowpat_lpcon_args (local.get $pat)) (i32.const 0)
+          (local.get $path) (local.get $path_len) (i32.const 4))
+        (return)))
+    ;; LPTuple (364) — elements at 0, 4, ...
+    (if (i32.eq (local.get $tag) (i32.const 364))
+      (then
+        (call $ec5_emit_pat_subs_binds
+          (call $lowpat_lptuple_elems (local.get $pat)) (i32.const 0)
+          (local.get $path) (local.get $path_len) (i32.const 0))
+        (return)))
+    ;; LPList (365) — elements at 8 + 4*i; rest = slice(xs, n, len(xs)).
+    (if (i32.eq (local.get $tag) (i32.const 365))
+      (then
+        (local.set $subs (call $lowpat_lplist_elems (local.get $pat)))
+        (call $ec5_emit_pat_subs_binds
+          (local.get $subs) (i32.const 0)
+          (local.get $path) (local.get $path_len) (i32.const 8))
+        (local.set $rest (call $lowpat_lplist_rest (local.get $pat)))
+        (if (i32.ne (local.get $rest) (i32.const 0))
           (then
-            (local.set $extended_path
-              (call $ec5_path_extend
-                (local.get $path) (local.get $path_len)
-                (local.get $field_offset)))
-            (call $ec5_emit_pat_field_binds_path
-              (call $lowpat_lpcon_args (local.get $p))
-              (i32.const 0)
-              (local.get $extended_path)
-              (i32.add (local.get $path_len) (i32.const 1)))))
-        ;; LPWild (361), LPLit (362), others: skip (no binding).
+            ;; $slice is the W7 runtime fn (state-first; builtin-only
+            ;; row → const-0 state is honest, never read).
+            (call $emit_i32_const (i32.const 0))
+            (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
+            (call $emit_i32_const (call $len (local.get $subs)))
+            (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
+            (call $el_emit_i32_load_offset (i32.const 0))
+            (call $ec5_emit_call_slice)
+            (call $ec_emit_local_set_dollar (local.get $rest))))
+        (return)))
+    ;; LPRecord (366) — baked offsets.
+    (if (i32.eq (local.get $tag) (i32.const 366))
+      (then
+        (call $ec5_emit_pat_record_binds
+          (call $lowpat_lprecord_fields (local.get $pat)) (i32.const 0)
+          (local.get $path) (local.get $path_len))
+        (return)))
+    ;; LPAlt (367) — branches bind the same names (infer's law) along
+    ;; their OWN paths: re-dispatch on the branch that matched. The
+    ;; binder-free case (common tag-union alternation) emits nothing.
+    (if (i32.eq (local.get $tag) (i32.const 367))
+      (then
+        (local.set $subs (call $lowpat_lpalt_branches (local.get $pat)))
+        (if (call $ec5_alt_has_binders (local.get $subs))
+          (then
+            (call $ec5_emit_pat_alt_binds_dispatch
+              (local.get $subs) (i32.const 0)
+              (local.get $path) (local.get $path_len))))
+        (return)))
+    ;; LPAs (368) — unproducible until the parse arm lands.
+    (unreachable))
+
+  (func $ec5_emit_pat_subs_binds
+        (param $subs i32) (param $i i32)
+        (param $path i32) (param $path_len i32) (param $base i32)
+    (local $n i32)
+    (local.set $n (call $len (local.get $subs)))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (call $ec5_emit_pat_binds_at
+          (call $list_index (local.get $subs) (local.get $i))
+          (call $ec5_path_extend (local.get $path) (local.get $path_len)
+            (i32.add (local.get $base) (i32.mul (i32.const 4) (local.get $i))))
+          (i32.add (local.get $path_len) (i32.const 1)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter))))
+
+  (func $ec5_emit_pat_record_binds
+        (param $fbs i32) (param $i i32)
+        (param $path i32) (param $path_len i32)
+    (local $n i32) (local $fb i32)
+    (local.set $n (call $len (local.get $fbs)))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $fb (call $list_index (local.get $fbs) (local.get $i)))
+        (call $ec5_emit_pat_binds_at
+          (call $record_get (local.get $fb) (i32.const 2))
+          (call $ec5_path_extend (local.get $path) (local.get $path_len)
+            (call $record_get (local.get $fb) (i32.const 1)))
+          (i32.add (local.get $path_len) (i32.const 1)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
+
+  ;; ─── Alternation binder presence (drives the binds re-dispatch) ─────
+  (func $ec5_alt_has_binders (param $branches i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $branches)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (if (call $ec5_pat_has_binders
+              (call $list_index (local.get $branches) (local.get $i)))
+          (then (return (i32.const 1))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 0))
+
+  (func $ec5_pat_has_binders (param $pat i32) (result i32)
+    (local $tag i32)
+    (if (i32.eq (local.get $pat) (i32.const 131))
+      (then (return (i32.const 0))))
+    (if (i32.lt_u (local.get $pat) (global.get $heap_base))
+      (then (return (i32.const 0))))
+    (local.set $tag (call $tag_of (local.get $pat)))
+    (if (i32.eq (local.get $tag) (i32.const 360)) (then (return (i32.const 1))))
+    (if (i32.eq (local.get $tag) (i32.const 363))
+      (then (return (call $ec5_pats_have_binders
+                      (call $lowpat_lpcon_args (local.get $pat))))))
+    (if (i32.eq (local.get $tag) (i32.const 364))
+      (then (return (call $ec5_pats_have_binders
+                      (call $lowpat_lptuple_elems (local.get $pat))))))
+    (if (i32.eq (local.get $tag) (i32.const 365))
+      (then
+        (if (call $ec5_pats_have_binders
+              (call $lowpat_lplist_elems (local.get $pat)))
+          (then (return (i32.const 1))))
+        (return (i32.ne (call $lowpat_lplist_rest (local.get $pat))
+                        (i32.const 0)))))
+    (if (i32.eq (local.get $tag) (i32.const 366))
+      (then (return (call $ec5_record_pats_have_binders
+                      (call $lowpat_lprecord_fields (local.get $pat))))))
+    (if (i32.eq (local.get $tag) (i32.const 367))
+      (then (return (call $ec5_alt_has_binders
+                      (call $lowpat_lpalt_branches (local.get $pat))))))
+    (i32.const 0))
+
+  (func $ec5_pats_have_binders (param $subs i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $subs)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (if (call $ec5_pat_has_binders
+              (call $list_index (local.get $subs) (local.get $i)))
+          (then (return (i32.const 1))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 0))
+
+  (func $ec5_record_pats_have_binders (param $fbs i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $fbs)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (if (call $ec5_pat_has_binders
+              (call $record_get
+                (call $list_index (local.get $fbs) (local.get $i))
+                (i32.const 2)))
+          (then (return (i32.const 1))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 0))
+
+  ;; Re-dispatch per branch for binds: (pred_b) (if (then binds_b)
+  ;; (else next)). Void if — binds produce no value. The last branch
+  ;; binds without a test (matched by elimination; the arm's predicate
+  ;; already held).
+  (func $ec5_emit_pat_alt_binds_dispatch
+        (param $branches i32) (param $i i32)
+        (param $path i32) (param $path_len i32)
+    (local $n i32) (local $b i32)
+    (local.set $n (call $len (local.get $branches)))
+    (if (i32.ge_u (local.get $i) (local.get $n))
+      (then (return)))
+    (local.set $b (call $list_index (local.get $branches) (local.get $i)))
+    (if (i32.eq (i32.add (local.get $i) (i32.const 1)) (local.get $n))
+      (then
+        (call $ec5_emit_pat_binds_at
+          (local.get $b) (local.get $path) (local.get $path_len))
+        (return)))
+    (call $ec5_emit_pat_predicate_at
+      (local.get $b) (local.get $path) (local.get $path_len))
+    (call $ec5_emit_if_open)
+    (call $ec5_emit_then_open)
+    (call $ec5_emit_pat_binds_at
+      (local.get $b) (local.get $path) (local.get $path_len))
+    (call $emit_close)   ;; close then
+    (call $ec5_emit_else_open)
+    (call $ec5_emit_pat_alt_binds_dispatch
+      (local.get $branches) (i32.add (local.get $i) (i32.const 1))
+      (local.get $path) (local.get $path_len))
+    (call $emit_close)   ;; close else
+    (call $emit_close))  ;; close if
 
   ;; $ec5_emit_load_chain — emit (i32.load offset=Nk) for each offset in
   ;; the path. Caller has already emitted (local.get $scrut_tmp); this
@@ -28959,69 +29289,28 @@
                           (local.get $offset)))
     (local.get $new_path))
 
-  ;; $ec5_emit_pat_nested_predicate — recursive nested-LPCon tag-check
-  ;; predicate with SHORT-CIRCUIT evaluation. Caller has pushed the
-  ;; prior tag-eq bool on the wasm stack. For each LPCon sub-pat at
-  ;; index i, wraps the continuation in (if (result i32) (then <new
-  ;; check + recursion>) (else (i32.const 0))) so the inner sub-field
-  ;; load only fires when the outer tag matched. Avoids reading
-  ;; offset-4 of a variant that doesn't have an inner field
-  ;; (e.g. NError sentinel vs NStmt), which surfaces as memory-fault
-  ;; on speculative i32.load. Mirrors src/backends/wasm.mn's
-  ;; emit_pat_nested_predicate post-Hβ.first-light.lex-from-and-scan-
-  ;; string-return-shape-unification.
-  ;;
-  ;; Recursive (not loop) — each LPCon arm naturally opens one (if
-  ;; (then) (else)) and closes it after descending into its own
-  ;; sub_pats then recursing on the tail. Non-LPCon (LPVar/LPWild/etc.)
-  ;; pass through with no predicate contribution.
-  (func $ec5_emit_pat_nested_predicate
-        (param $sub_pats i32) (param $i i32)
-        (param $path i32) (param $path_len i32)
-    (local $n i32) (local $p i32) (local $ptag i32) (local $field_offset i32)
-    (local $extended_path i32)
-    (local.set $n (call $len (local.get $sub_pats)))
-    (if (i32.ge_u (local.get $i) (local.get $n))
-      (then (return)))
-    (local.set $p (call $list_index (local.get $sub_pats) (local.get $i)))
-    (local.set $ptag (call $tag_of (local.get $p)))
-    (if (i32.eq (local.get $ptag) (i32.const 363))            ;; LPCon
-      (then
-        (local.set $field_offset
-          (i32.add (i32.const 4) (i32.mul (i32.const 4) (local.get $i))))
-        ;; Open short-circuit if; consumes prior bool from stack.
-        (call $ec5_emit_if_result_i32_then)
-        ;; Emit new check: scrut + load_chain + load offset + load 0 + const + eq.
-        (call $ec5_emit_local_get_scrut_tmp)
-        (call $ec5_emit_load_chain
-          (local.get $path) (local.get $path_len))
-        (call $el_emit_i32_load_offset (local.get $field_offset))
-        (call $el_emit_i32_load_offset (i32.const 0))
-        (call $emit_i32_const (call $lowpat_lpcon_tag_id (local.get $p)))
-        (call $ec5_emit_i32_eq)
-        ;; Recurse into this LPCon's sub-pats with extended path.
-        (local.set $extended_path
-          (call $ec5_path_extend
-            (local.get $path) (local.get $path_len)
-            (local.get $field_offset)))
-        (call $ec5_emit_pat_nested_predicate
-          (call $lowpat_lpcon_args (local.get $p))
-          (i32.const 0)
-          (local.get $extended_path)
-          (i32.add (local.get $path_len) (i32.const 1)))
-        ;; Continue with sibling sub-pats (still inside the if-then).
-        (call $ec5_emit_pat_nested_predicate
-          (local.get $sub_pats)
-          (i32.add (local.get $i) (i32.const 1))
-          (local.get $path) (local.get $path_len))
-        ;; Close: (else (i32.const 0))).
-        (call $ec5_emit_else_const_0_close))
-      (else
-        ;; Non-LPCon — pass through, recurse to next sibling.
-        (call $ec5_emit_pat_nested_predicate
-          (local.get $sub_pats)
-          (i32.add (local.get $i) (i32.const 1))
-          (local.get $path) (local.get $path_len)))))
+  ;; $ec5_emit_i32_ge_u — emits: (i32.ge_u)
+  (func $ec5_emit_i32_ge_u
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 105))
+    (call $emit_byte (i32.const 51)) (call $emit_byte (i32.const 50))
+    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 103))
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 95))
+    (call $emit_byte (i32.const 117)) (call $emit_byte (i32.const 41)))
+
+  ;; $ec5_emit_call_slice — emits: (call $slice)
+  (func $ec5_emit_call_slice
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 99))
+    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 32))
+    (call $emit_byte (i32.const 36)) (call $emit_byte (i32.const 115))
+    (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 105))
+    (call $emit_byte (i32.const 99)) (call $emit_byte (i32.const 101))
+    (call $emit_byte (i32.const 41)))
+
+  ;; $ec5_emit_if_open — emits: (if   (void form for binds dispatch)
+  (func $ec5_emit_if_open
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 105))
+    (call $emit_byte (i32.const 102)))
 
   ;; $ec5_emit_if_result_i32_then — emits: (if (result i32)(then
   ;; Short-circuit predicate open: consumes prior bool on stack.
@@ -29734,12 +30023,24 @@
   ;;              pre-2264 "over-declared")
   (data (i32.const 1856) "\0a\00\00\00alloc_size")
   (data (i32.const 2244) "\09\00\00\00state_tmp")
+  ;;   6480-6487: "sst_" per-handle LSuspend state prefix (4 hdr + 4
+  ;;              body = 8 bytes; 6000+ relocation band, post-6456 ":")
+  (data (i32.const 6480) "\04\00\00\00sst_")
 
   (func $emit_lsuspend (param $r i32)
-    (local $args i32) (local $evs i32) (local $ne i32)
+    (local $args i32) (local $evs i32) (local $ne i32) (local $sname i32)
     (local.set $args (call $lexpr_lsuspend_args (local.get $r)))
     (local.set $evs  (call $lexpr_lsuspend_evs  (local.get $r)))
     (local.set $ne   (call $len (local.get $evs)))
+    ;; Per-handle state local "sst_<h>" (1fa5f97 per-handle discipline,
+    ;; extended to LSuspend): nested suspends emit inside the ARGS, and
+    ;; at runtime the inner suspend clobbers any SHARED scratch before
+    ;; the outer dispatch's fn_idx read — stage N then call_indirects
+    ;; through stage N-1's record (the ft-mismatch class). The handle
+    ;; names the record; declare-at-emission declares the local at the
+    ;; alloc's store projection.
+    (local.set $sname (call $str_concat (i32.const 6480)
+      (call $int_to_str (call $lexpr_handle (local.get $r)))))
     ;; Save callee closure to $callee_closure.
     (call $emit_lexpr (call $lexpr_lsuspend_fn (local.get $r)))
     (call $ec6_emit_local_set_callee_closure)
@@ -29758,24 +30059,24 @@
     ;; EmitMemory swap surface: dynamic-size bump-alloc into $state_tmp,
     ;; reading $alloc_size at runtime. Future arena/gc handlers swap
     ;; this body without touching the LSuspend arm.
-    (call $emit_alloc_dyn (i32.const 1856) (i32.const 2244))   ;; "alloc_size" → bind to "state_tmp"
-    ;; Copy header: state_tmp[0] = callee[0]; state_tmp[4] = callee[4].
-    (call $ec6_emit_local_get_state_tmp)
+    (call $emit_alloc_dyn (i32.const 1856) (local.get $sname))   ;; "alloc_size" → bind to "sst_<h>"
+    ;; Copy header: sst[0] = callee[0]; sst[4] = callee[4].
+    (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_local_get_callee_closure)
     (call $ec6_emit_i32_load_offset_0)
     (call $ec6_emit_i32_store_offset_0)
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_local_get_callee_closure)
     (call $ec6_emit_i32_load_offset_4)
     (call $ec6_emit_i32_store_offset_4)
-    ;; Runtime loop: copy nc captures from callee to state_tmp.
-    (call $ec6_emit_capture_copy_loop)
+    ;; Runtime loop: copy nc captures from callee to sst_<h>.
+    (call $ec6_emit_capture_copy_loop (local.get $sname))
     ;; Store each ev_slot at runtime-computed offset 8 + 4*nc + 4*j.
-    (call $ec6_emit_ev_slot_stores (local.get $evs))
-    ;; Dispatch: (state_tmp, args..., fn_ptr) → call_indirect $ft<N+1>.
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec6_emit_ev_slot_stores (local.get $evs) (local.get $sname))
+    ;; Dispatch: (sst_<h>, args..., fn_ptr) → call_indirect $ft<N+1>.
+    (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_args (local.get $args))
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_i32_load_offset_0)
     (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
 
@@ -29905,7 +30206,7 @@
   ;; vary by callee. Inlining vs runtime trade-off: inlining grows
   ;; emit-time WAT linearly per LSuspend; runtime loop keeps emit-size
   ;; constant. Runtime loop chosen per wheel parity.
-  (func $ec6_emit_capture_copy_loop
+  (func $ec6_emit_capture_copy_loop (param $sname i32)
     ;; (i32.const 0) (local.set $loop_i)
     (call $ec6_emit_i32_const_lit (i32.const 0))
     (call $ec6_emit_local_set_loop_i)
@@ -29921,8 +30222,8 @@
     ;; (i32.ge_u) (br_if $copy_done)
     (call $ec6_emit_i32_ge_u)
     (call $ec6_emit_br_if_copy_done)
-    ;; dst = state_tmp + 8 + 4*loop_i
-    (call $ec6_emit_local_get_state_tmp)
+    ;; dst = <sname> + 8 + 4*loop_i
+    (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_local_get_loop_i)
     (call $ec6_emit_i32_const_lit (i32.const 4))
     (call $ec6_emit_i32_mul)
@@ -30061,7 +30362,7 @@
   ;;   (i32.const 4*j) (i32.add)
   ;;   <ev_slot expr>
   ;;   (i32.store)
-  (func $ec6_emit_ev_slot_stores (param $evs i32)
+  (func $ec6_emit_ev_slot_stores (param $evs i32) (param $sname i32)
     (local $j i32) (local $n i32) (local $ev i32)
     (local.set $n (call $len (local.get $evs)))
     (local.set $j (i32.const 0))
@@ -30069,7 +30370,7 @@
       (loop $iter
         (br_if $done (i32.ge_u (local.get $j) (local.get $n)))
         (local.set $ev (call $list_index (local.get $evs) (local.get $j)))
-        (call $ec6_emit_local_get_state_tmp)
+        (call $ec_emit_local_get_dollar (local.get $sname))
         (call $ec6_emit_i32_const_lit (i32.const 8))
         (call $ec6_emit_i32_add)
         (call $ec6_emit_local_get_callee_closure)

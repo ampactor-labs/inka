@@ -1750,7 +1750,7 @@ fn parse_match_arms(ref tokens, pos, own buf, count) = {
     TRBrace => (buf, count, p + 1),
     TEof    => unclosed_eof(tokens, p, "match arms", buf, count),
     _       => {
-      let (pat, p2) = parse_pat(tokens, p)
+      let (pat, p2) = parse_pat_alt(tokens, p)
       let p3 = expect(tokens, skip_ws(tokens, p2), TFatArrow)
       let (body, p4) = parse_expr(tokens, skip_ws(tokens, p3))
       let p5 = skip_ws(tokens, p4)
@@ -1758,6 +1758,32 @@ fn parse_match_arms(ref tokens, pos, own buf, count) = {
       let (b1, c1) = push_node(buf, count, (pat, body))
       parse_match_arms(tokens, skip_ws(tokens, p6), b1, c1)
     }
+  }
+}
+
+/// Pattern alternation at the match-arm grammar (SYNTAX.md §1605:
+/// `|` is TPipe — variant separator in `type` body + pattern
+/// alternation in match arm body). One pat, then a TPipe loop;
+/// single-branch stays the bare pat (no degenerate PAlt — walkthrough
+/// §7 "Single-branch alternation").
+fn parse_pat_alt(ref tokens, pos) = {
+  let (first, p) = parse_pat(tokens, pos)
+  if at(tokens, skip_ws(tokens, p), TPipe) {
+    let (branches, p2) = parse_pat_alt_branches(tokens, p, [first], 1)
+    (PAlt(branches), p2)
+  } else {
+    (first, p)
+  }
+}
+
+fn parse_pat_alt_branches(ref tokens, pos, own buf, count) = {
+  let p = skip_ws(tokens, pos)
+  if at(tokens, p, TPipe) {
+    let (next, p2) = parse_pat(tokens, skip_ws(tokens, p + 1))
+    let (b1, c1) = push_node(buf, count, next)
+    parse_pat_alt_branches(tokens, p2, b1, c1)
+  } else {
+    (slice(buf, 0, count), p)
   }
 }
 

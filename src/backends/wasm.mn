@@ -79,19 +79,10 @@ handler wat_to_string with buf = make_list(64), count = 0 {
 /// heap_base is the threshold separating sentinel ADT values from heap
 /// pointers. The bump allocator's $heap_ptr starts at 1 MiB (1048576);
 /// sentinels live in [0, heap_base()). Mixed-variant match dispatch
-/// (emit_match_arms_mixed) compares scrutinee against this value to
-/// discriminate. Single source of truth — every other reference to "4096"
-/// is a comment crosslinked to this constant.
+/// (each fielded constructor's predicate) compares scrutinee against this
+/// value to discriminate. Single source of truth — every other reference
+/// to "4096" is a comment crosslinked to this constant.
 fn heap_base() with Pure = 4096
-
-/// MatchShape — classification of an ADT match's arm set. Decided once per
-/// match at emit entry; drives whether arms compare scrutinee directly
-/// (sentinel) or load the tag at offset 0 (heap-pointer). Mixed types fork
-/// via the heap_base threshold.
-type MatchShape
-  = ShapePureNullary       // every LPCon arm has empty sub_pats
-  | ShapePureFielded       // every LPCon arm has non-empty sub_pats
-  | ShapeMixed             // both kinds present
 
 // EmitMemory effect — alloc strategy as a handler swap.
 // `perform emit_alloc(size, target_local)` emits the WAT sequence that
@@ -1199,7 +1190,13 @@ fn emit_let_locals_pat(pat) = match pat {
   },
   LPRecord(field_binds) => emit_let_locals_pat_record(field_binds),
   LPWild                => (),
-  LPLit(_)              => ()
+  LPLit(_)              => (),
+  // Branches bind the same names (infer's alternation law) — declare
+  // branch 0's set once; declaring per-branch would duplicate locals.
+  LPAlt(branches)       => match branches {
+    []         => (),
+    [b0, ..._] => emit_let_locals_pat(b0)
+  }
 }
 
 fn emit_let_locals_pat_rest(rest) = match rest {
@@ -2131,265 +2128,342 @@ fn emit_record_field_stores(fields, base_i) = {
 // HB substrate: nullary variants emit as (i32.const tag) sentinels;
 // fielded variants are heap pointers ≥ HEAP_BASE. The threshold
 // comparison `(scrut < HEAP_BASE)` discriminates without ambiguity.
+/// Pattern algebra — predicate ⊕ projection.
+//
+// A pattern is the Boolean algebra of value space — the row algebra's
+// mirror (SUBSTRATE.md §IV): nesting is intersection (short-circuit
+// AND), alternation is union (short-circuit OR), tags and literals are
+// atomic predicates, wildcards and vars are `true`. A match is an
+// ordered OR-ELSE fold over arms; each arm is
+//
+//   (pred) (if (result i32) (then binds body) (else rest))
+//
+// Every constructor's predicate carries its OWN representation guard:
+// a nullary constructor compares the sentinel directly; a fielded
+// constructor guards (scrut >= heap_base) before loading the tag, so
+// sentinel values short-circuit to 0 instead of reading low memory.
+// The guard makes mixed matches, cross-shape alternation, and nested
+// sentinel/fielded sub-patterns compose from the same two recursive
+// projections — no arm-set shape classification, no runtime threshold
+// fork, no filtered cascades, no dropped pattern forms. Eliding the
+// guard when the scrutinee's type proves every constructor fielded is
+// a gradient cash-out (graph-driven), not a shape system.
 fn emit_match_arms(arms) = {
   if arms.len == 0 {
     perform wat_emit("    (unreachable)\n")
   } else {
-    let shape = classify_arms_shape(arms)
-    match shape {
-      ShapeMixed       => emit_match_arms_mixed(arms),
-      ShapePureNullary => emit_match_arms_uniform(arms, shape),
-      ShapePureFielded => emit_match_arms_uniform(arms, shape)
-    }
-  }
-}
-
-// Walk LPCon arms; classify the WHOLE arm set as Pure-Nullary
-// (every LPCon has empty sub_pats), Pure-Fielded (all non-empty),
-// or Mixed. Wildcards / vars / lits are shape-neutral.
-fn classify_arms_shape(arms) = {
-  classify_arms_shape_loop(arms, 0, arms.len, ShapePureFielded, false)
-}
-
-fn classify_arms_shape_loop(arms, i, n, acc, seen) = {
-  if i >= n {
-    // No LPCon arms seen → default to Pure-Fielded (load offset=0
-    // is sound for any heap value; LPLit / LPVar / LPWild ignore
-    // the path discriminator anyway).
-    if seen { acc } else { ShapePureFielded }
-  } else {
-    let (pat, _) = list_index(arms, i)
-    match pat {
-      LPCon(_, _, sub_pats) => {
-        let arm_shape = if sub_pats.len == 0 { ShapePureNullary }
-                        else { ShapePureFielded }
-        let next = if !seen { arm_shape }
-                   else if shape_eq(acc, arm_shape) { acc }
-                   else { ShapeMixed }
-        classify_arms_shape_loop(arms, i + 1, n, next, true)
-      },
-      _ => classify_arms_shape_loop(arms, i + 1, n, acc, seen)
-    }
-  }
-}
-
-fn shape_eq(a, b) with Pure = match a {
-  ShapePureNullary => match b { ShapePureNullary => true, _ => false },
-  ShapePureFielded => match b { ShapePureFielded => true, _ => false },
-  ShapeMixed       => match b { ShapeMixed       => true, _ => false }
-}
-
-// Uniform-shape dispatch: every LPCon arm uses the same compare
-// (sentinel direct vs offset=0 load) determined by `shape`. Called
-// either directly (pure-shape match) or recursively from
-// emit_match_arms_mixed's two branches (each handed a filtered
-// arm subset).
-fn emit_match_arms_uniform(arms, shape) = {
-  if arms.len == 0 {
-    perform wat_emit("    (unreachable)\n")
-  } else {
     let (pat, body) = list_head(arms)
-    let rest = list_tail(arms)
-    match pat {
-      LPCon(_name, tag, sub_pats) => {
-        match shape {
-          ShapePureNullary => {
-            perform wat_emit("    (local.get $scrut_tmp)\n")
-          },
-          ShapePureFielded => {
-            perform wat_emit("    (local.get $scrut_tmp)\n")
-            perform wat_emit("    (i32.load offset=0)\n")
-          },
-          ShapeMixed => {
-            perform wat_emit("    (unreachable)\n")
-          }
-        }
-        perform wat_emit("    (i32.const ")
-        perform wat_emit(int_to_str(tag))
-        perform wat_emit(")\n")
-        perform wat_emit("    (i32.eq)\n")
-        // Per Hβ.emit.match-nested-lpcon-substrate: emit AND-chain of
-        // nested LPCon tag-checks. PureFielded shape only — sentinel
-        // shape has no field structure to descend into. Each nested
-        // LPCon contributes (i32.and (sub_field.tag == sub_tag)) to the
-        // cumulative predicate; LPVars/LPWilds/LPLits are shape-neutral.
-        match shape {
-          ShapePureFielded => {
-            let path_buf = make_list(8)
-            emit_pat_nested_predicate(sub_pats, 0, path_buf, 0)
-          },
-          _ => ()
-        }
-        perform wat_emit("    (if (result i32)\n      (then\n")
-        match shape {
-          ShapePureFielded => emit_pat_field_binds(sub_pats, 0),
-          _                => ()
-        }
-        emit_expr(body)
-        perform wat_emit("      )\n      (else\n")
-        emit_match_arms_uniform(rest, shape)
-        perform wat_emit("      ))\n")
-      },
-      LPLit(lv) => {
-        perform wat_emit("    (local.get $scrut_tmp)\n")
-        emit_low_value_const(lv)
-        perform wat_emit("    (i32.eq)\n")
-        perform wat_emit("    (if (result i32)\n      (then\n")
-        emit_expr(body)
-        perform wat_emit("      )\n      (else\n")
-        emit_match_arms_uniform(rest, shape)
-        perform wat_emit("      ))\n")
-      },
-      LPVar(name) => {
-        perform wat_emit("    (local.get $scrut_tmp)\n")
-        perform wat_emit("    (local.set $")
-        perform wat_emit(name)
-        perform wat_emit(")\n")
-        emit_expr(body)
-      },
-      LPWild => emit_expr(body),
-      LPRecord(field_binds) => {
-        emit_record_field_binds(field_binds)
-        emit_expr(body)
-      },
-      LPTuple(_) => emit_match_arms_uniform(rest, shape),
-      LPList(_, _) => emit_match_arms_uniform(rest, shape)
-    }
-  }
-}
-
-// Mixed-shape dispatch: heap_base() threshold gate. Sentinel values
-// (< heap_base) take the nullary cascade; pointers (≥ heap_base)
-// take the fielded cascade. Wildcards/vars/lits appear in both
-// since they always-match irrespective of shape.
-fn emit_match_arms_mixed(arms) = {
-  let nullary_arms = filter_arms_by_shape(arms, ShapePureNullary)
-  let fielded_arms = filter_arms_by_shape(arms, ShapePureFielded)
-  perform wat_emit("    (local.get $scrut_tmp)\n")
-  perform wat_emit("    (i32.const ")
-  perform wat_emit(int_to_str(heap_base()))
-  perform wat_emit(")\n")
-  perform wat_emit("    (i32.lt_u)\n")
-  perform wat_emit("    (if (result i32)\n      (then\n")
-  emit_match_arms_uniform(nullary_arms, ShapePureNullary)
-  perform wat_emit("      )\n      (else\n")
-  emit_match_arms_uniform(fielded_arms, ShapePureFielded)
-  perform wat_emit("      ))\n")
-}
-
-// Keep arms whose LPCon fits the requested shape; always keep
-// wildcards/vars/lits/records (always-match terminals).
-fn filter_arms_by_shape(arms, want_shape) = {
-  let n = arms.len
-  let (buf, count) = filter_arms_by_shape_loop(arms, want_shape, 0, n, make_list(n), 0)
-  slice(buf, 0, count)
-}
-
-fn filter_arms_by_shape_loop(arms, want_shape, i, n, buf, count) = {
-  if i >= n { (buf, count) }
-  else {
-    let arm = list_index(arms, i)
-    let (pat, _) = arm
-    let keep = match pat {
-      LPCon(_, _, sub_pats) => {
-        let arm_shape = if sub_pats.len == 0 { ShapePureNullary }
-                        else { ShapePureFielded }
-        shape_eq(arm_shape, want_shape)
-      },
-      _ => true
-    }
-    let (next_buf, next_count) = if keep {
-      let extended = list_extend_to(buf, count + 1)
-      let written  = list_set(extended, count, arm)
-      (written, count + 1)
+    if pat_always_matches(pat) {
+      emit_pat_binds(pat)
+      emit_expr(body)
     } else {
-      (buf, count)
+      emit_pat_predicate(pat)
+      perform wat_emit("    (if (result i32)\n      (then\n")
+      emit_pat_binds(pat)
+      emit_expr(body)
+      perform wat_emit("      )\n      (else\n")
+      emit_match_arms(list_tail(arms))
+      perform wat_emit("      ))\n")
     }
-    filter_arms_by_shape_loop(arms, want_shape, i + 1, n, next_buf, next_count)
   }
 }
 
-// Per-field binding for LPRecord arms. Mirrors emit_pat_field_binds
-// but uses each field's pre-resolved offset (lower.mn baked them in)
-// instead of computing 4 + 4*i. Field-puning patterns are LPVar
-// sub-pats; nested record/list patterns fall through (TODO).
-fn emit_record_field_binds(binds) = {
-  for_each((bind) => {
-  let (_field_name, offset, sub_pat) = bind
-  match sub_pat {
-    LPVar(name) => {
-      perform wat_emit("    (local.get $scrut_tmp)\n")
-      perform wat_emit("    (i32.load offset=")
-      perform wat_emit(int_to_str(offset))
+// A pattern that matches every value of its type — the arm is terminal
+// (arms after it are dead; the fold stops descending).
+fn pat_always_matches(pat) = match pat {
+  LPWild          => true,
+  LPVar(_)        => true,
+  LPLit(_)        => false,
+  LPCon(_, _, _)  => false,
+  LPList(_, _)    => false,
+  LPTuple(subs)   => pats_always_match(subs),
+  LPRecord(fbs)   => record_pats_always_match(fbs),
+  LPAlt(branches) => alt_any_always_matches(branches)
+}
+
+fn pats_always_match(subs) = {
+  if subs.len == 0 { true }
+  else if pat_always_matches(list_head(subs)) { pats_always_match(list_tail(subs)) }
+  else { false }
+}
+
+fn record_pats_always_match(fbs) = {
+  if fbs.len == 0 { true }
+  else {
+    let (_, _, sub_pat) = list_head(fbs)
+    if pat_always_matches(sub_pat) { record_pats_always_match(list_tail(fbs)) }
+    else { false }
+  }
+}
+
+fn alt_any_always_matches(branches) = {
+  if branches.len == 0 { false }
+  else if pat_always_matches(list_head(branches)) { true }
+  else { alt_any_always_matches(list_tail(branches)) }
+}
+
+// ── emit_scrut_at — the value at an offset path ─────────────────────
+// path[0..path_len) is the load chain from $scrut_tmp to this
+// pattern's position; path_len 0 is the scrutinee itself. Ω.3
+// buffer-counter discipline: one 8-slot buffer per walk, slot D owned
+// by depth D, siblings overwrite cleanly.
+fn emit_scrut_at(path, path_len) = {
+  perform wat_emit("    (local.get $scrut_tmp)\n")
+  emit_load_chain(path, 0, path_len)
+}
+
+// ── Predicate projection — ONE i32 on the stack ─────────────────────
+fn emit_pat_predicate(pat) = emit_pat_predicate_at(pat, make_list(8), 0)
+
+fn emit_pat_predicate_at(pat, path, path_len) = match pat {
+  LPWild   => perform wat_emit("    (i32.const 1)\n"),
+  LPVar(_) => perform wat_emit("    (i32.const 1)\n"),
+  LPLit(lv) => {
+    emit_scrut_at(path, path_len)
+    emit_low_value_const(lv)
+    perform wat_emit("    (i32.eq)\n")
+  },
+  LPCon(_, tag, sub_pats) => {
+    if sub_pats.len == 0 {
+      // Nullary constructor IS its sentinel (HB) — direct compare.
+      emit_scrut_at(path, path_len)
+      perform wat_emit("    (i32.const ")
+      perform wat_emit(int_to_str(tag))
+      perform wat_emit(")\n    (i32.eq)\n")
+    } else {
+      // Representation guard, then tag, then sub-predicates — each
+      // layer short-circuits so loads only fire on live paths.
+      emit_scrut_at(path, path_len)
+      perform wat_emit("    (i32.const ")
+      perform wat_emit(int_to_str(heap_base()))
+      perform wat_emit(")\n    (i32.ge_u)\n")
+      perform wat_emit("    (if (result i32)\n      (then\n")
+      emit_scrut_at(path, path_len)
+      perform wat_emit("    (i32.load offset=0)\n")
+      perform wat_emit("    (i32.const ")
+      perform wat_emit(int_to_str(tag))
+      perform wat_emit(")\n    (i32.eq)\n")
+      emit_pat_subs_predicate(sub_pats, 0, path, path_len, 4)
+      perform wat_emit("      )\n      (else (i32.const 0)))\n")
+    }
+  },
+  LPTuple(subs) => {
+    // Tuples are untagged (elements at 0, 4, ...); structure always
+    // matches — the predicate is the AND of refutable elements.
+    perform wat_emit("    (i32.const 1)\n")
+    emit_pat_subs_predicate(subs, 0, path, path_len, 0)
+  },
+  LPRecord(fbs) => {
+    perform wat_emit("    (i32.const 1)\n")
+    emit_pat_record_subs_predicate(fbs, path, path_len)
+  },
+  LPList(sub_pats, rest) => {
+    // Flat list facts: len@0, tag@4, elems@8+4i (lists materialize
+    // flat at construction; runtime/lists.mn owns tree shapes).
+    emit_scrut_at(path, path_len)
+    perform wat_emit("    (i32.load offset=0)\n")
+    perform wat_emit("    (i32.const ")
+    perform wat_emit(int_to_str(sub_pats.len))
+    perform wat_emit(")\n")
+    match rest {
+      None    => perform wat_emit("    (i32.eq)\n"),
+      Some(_) => perform wat_emit("    (i32.ge_u)\n")
+    }
+    emit_pat_subs_predicate(sub_pats, 0, path, path_len, 8)
+  },
+  LPAlt(branches) => emit_pat_alt_predicate(branches, path, path_len)
+}
+
+// AND-composition over sibling sub-patterns at base + 4*i. A bool is
+// on the stack when called; each refutable sub wraps it in
+// (if (result i32) (then <sub-pred> <rest>) (else (i32.const 0))) —
+// short-circuit, so a failed outer test never evaluates inner loads.
+fn emit_pat_subs_predicate(subs, i, path, path_len, base) = {
+  if subs.len == 0 { () }
+  else {
+    let p = list_head(subs)
+    if pat_always_matches(p) {
+      emit_pat_subs_predicate(list_tail(subs), i + 1, path, path_len, base)
+    } else {
+      perform wat_emit("    (if (result i32)\n      (then\n")
+      let extended = list_set(path, path_len, base + i * 4)
+      emit_pat_predicate_at(p, extended, path_len + 1)
+      emit_pat_subs_predicate(list_tail(subs), i + 1, path, path_len, base)
+      perform wat_emit("      )\n      (else (i32.const 0)))\n")
+    }
+  }
+}
+
+// Record fields carry pre-resolved byte offsets (lower.mn baked them).
+fn emit_pat_record_subs_predicate(fbs, path, path_len) = {
+  if fbs.len == 0 { () }
+  else {
+    let (_, offset, sub_pat) = list_head(fbs)
+    if pat_always_matches(sub_pat) {
+      emit_pat_record_subs_predicate(list_tail(fbs), path, path_len)
+    } else {
+      perform wat_emit("    (if (result i32)\n      (then\n")
+      let extended = list_set(path, path_len, offset)
+      emit_pat_predicate_at(sub_pat, extended, path_len + 1)
+      emit_pat_record_subs_predicate(list_tail(fbs), path, path_len)
+      perform wat_emit("      )\n      (else (i32.const 0)))\n")
+    }
+  }
+}
+
+// OR-composition over alternation branches, short-circuit: the first
+// matching branch yields 1 without evaluating the rest. All branches
+// read the SAME position (path unchanged).
+fn emit_pat_alt_predicate(branches, path, path_len) = {
+  if branches.len == 0 {
+    perform wat_emit("    (i32.const 0)\n")
+  } else {
+    emit_pat_predicate_at(list_head(branches), path, path_len)
+    let rest = list_tail(branches)
+    if rest.len == 0 { () }
+    else {
+      perform wat_emit("    (if (result i32)\n      (then (i32.const 1))\n      (else\n")
+      emit_pat_alt_predicate(rest, path, path_len)
+      perform wat_emit("      ))\n")
+    }
+  }
+}
+
+// ── Binds projection — local.set for every binder ───────────────────
+fn emit_pat_binds(pat) = emit_pat_binds_at(pat, make_list(8), 0)
+
+fn emit_pat_binds_at(pat, path, path_len) = match pat {
+  LPVar(name) => {
+    emit_scrut_at(path, path_len)
+    perform wat_emit("    (local.set $")
+    perform wat_emit(name)
+    perform wat_emit(")\n")
+  },
+  LPWild   => (),
+  LPLit(_) => (),
+  LPCon(_, _, sub_pats)  => emit_pat_subs_binds(sub_pats, 0, path, path_len, 4),
+  LPTuple(subs)          => emit_pat_subs_binds(subs, 0, path, path_len, 0),
+  LPRecord(fbs)          => emit_pat_record_binds(fbs, path, path_len),
+  LPList(sub_pats, rest) => {
+    emit_pat_subs_binds(sub_pats, 0, path, path_len, 8)
+    emit_pat_list_rest_bind(sub_pats.len, rest, path, path_len)
+  },
+  LPAlt(branches) => emit_pat_alt_binds(branches, path, path_len)
+}
+
+fn emit_pat_subs_binds(subs, i, path, path_len, base) = {
+  if subs.len == 0 { () }
+  else {
+    let extended = list_set(path, path_len, base + i * 4)
+    emit_pat_binds_at(list_head(subs), extended, path_len + 1)
+    emit_pat_subs_binds(list_tail(subs), i + 1, path, path_len, base)
+  }
+}
+
+fn emit_pat_record_binds(fbs, path, path_len) = {
+  if fbs.len == 0 { () }
+  else {
+    let (_, offset, sub_pat) = list_head(fbs)
+    let extended = list_set(path, path_len, offset)
+    emit_pat_binds_at(sub_pat, extended, path_len + 1)
+    emit_pat_record_binds(list_tail(fbs), path, path_len)
+  }
+}
+
+// rest = slice(xs, n_prefix, len(xs)). $slice is the W7 runtime fn
+// (state-first; builtin-only row → const-0 state arg is the honest
+// form, the state is never read).
+fn emit_pat_list_rest_bind(n_prefix, rest, path, path_len) = match rest {
+  None => (),
+  Some(name) => {
+    if str_eq(name, "_") { () }
+    else {
+      perform wat_emit("    (i32.const 0)\n")
+      emit_scrut_at(path, path_len)
+      perform wat_emit("    (i32.const ")
+      perform wat_emit(int_to_str(n_prefix))
       perform wat_emit(")\n")
+      emit_scrut_at(path, path_len)
+      perform wat_emit("    (i32.load offset=0)\n")
+      perform wat_emit("    (call $slice)\n")
       perform wat_emit("    (local.set $")
       perform wat_emit(name)
       perform wat_emit(")\n")
-    },
-    LPWild     => (),
-    LPLit(_)   => (),
-    LPCon(_, _, _) => (),
-    LPTuple(_) => (),
-    LPList(_, _) => (),
-    LPRecord(_) => ()       // nested record destructure — peer follow-up
-  }
-  }, binds)
-}
-
-// Per Hβ.emit.match-nested-lpcon-substrate (2026-05-09): pat is a TREE.
-// Emit walks the tree recursively. For each LPVar leaf at offset path
-// [N_1, N_2, ...], emit (local.get $scrut_tmp)(i32.load offset=N_1)
-// (i32.load offset=N_2)...(local.set $name). For nested LPCon sub-pats,
-// recurse with extended path. Pre-fix only depth-1 LPVars bound; for
-// `match body { NStmt(LetStmt(p, e)) | NStmt(FnStmt(...)) | ... }`
-// ALL arms received identical outer-NStmt-tag dispatch → first arm
-// fired for any NStmt → mentl2 trap at infer_pat. Per protocol_emit_
-// is_graph_projection.md: the graph encodes pat hierarchy explicitly;
-// emit projects through it.
-//
-// Per Ω.3 buffer-counter substrate: path is a pre-allocated 8-slot
-// buffer, mutated in-place via list_set; path_len tracks current depth.
-// Each depth D fully owns slot path[D] for its iteration; recursion
-// below D mutates path[D+1..] freely; sibling iteration at D
-// overwrites slot D cleanly. No O(N²) accumulator (drift 11 refused).
-fn emit_pat_field_binds(sub_pats, i) = {
-  let path = make_list(8)
-  emit_pat_field_binds_path(sub_pats, i, path, 0)
-}
-
-fn emit_pat_field_binds_path(sub_pats, i, path, path_len) = {
-  if sub_pats.len == 0 { () }
-  else {
-    let p = list_head(sub_pats)
-    let field_offset = 4 + i * 4
-    match p {
-      LPVar(name) => {
-        perform wat_emit("    (local.get $scrut_tmp)\n")
-        emit_load_chain(path, 0, path_len)
-        perform wat_emit("    (i32.load offset=")
-        perform wat_emit(int_to_str(field_offset))
-        perform wat_emit(")\n")
-        perform wat_emit("    (local.set $")
-        perform wat_emit(name)
-        perform wat_emit(")\n")
-      },
-      LPWild     => (),
-      LPLit(_)   => (),
-      LPCon(_, _, sub) => {
-        let extended = list_set(path, path_len, field_offset)
-        emit_pat_field_binds_path(sub, 0, extended, path_len + 1)
-      },
-      LPTuple(_) => (),
-      LPList(_, _) => (),
-      LPRecord(_) => ()
     }
-    emit_pat_field_binds_path(list_tail(sub_pats), i + 1, path, path_len)
+  }
+}
+
+// Alternation binds: branches bind the same names (infer's law), but
+// each branch extracts along ITS OWN paths — re-dispatch on the branch
+// that matched. Binder-free alternation (the common tag-union case)
+// emits nothing.
+fn emit_pat_alt_binds(branches, path, path_len) = {
+  if alt_has_binders(branches) {
+    emit_pat_alt_binds_dispatch(branches, path, path_len)
+  } else { () }
+}
+
+fn alt_has_binders(branches) = {
+  if branches.len == 0 { false }
+  else if lowpat_has_binders(list_head(branches)) { true }
+  else { alt_has_binders(list_tail(branches)) }
+}
+
+fn lowpat_has_binders(pat) = match pat {
+  LPVar(_)        => true,
+  LPWild          => false,
+  LPLit(_)        => false,
+  LPCon(_, _, sub_pats) => lowpats_have_binders(sub_pats),
+  LPTuple(subs)   => lowpats_have_binders(subs),
+  LPRecord(fbs)   => record_pats_have_binders(fbs),
+  LPList(sub_pats, rest) => {
+    if lowpats_have_binders(sub_pats) { true }
+    else {
+      match rest {
+        None    => false,
+        Some(n) => !str_eq(n, "_")
+      }
+    }
+  },
+  LPAlt(branches) => alt_has_binders(branches)
+}
+
+fn lowpats_have_binders(subs) = {
+  if subs.len == 0 { false }
+  else if lowpat_has_binders(list_head(subs)) { true }
+  else { lowpats_have_binders(list_tail(subs)) }
+}
+
+fn record_pats_have_binders(fbs) = {
+  if fbs.len == 0 { false }
+  else {
+    let (_, _, sub_pat) = list_head(fbs)
+    if lowpat_has_binders(sub_pat) { true }
+    else { record_pats_have_binders(list_tail(fbs)) }
+  }
+}
+
+fn emit_pat_alt_binds_dispatch(branches, path, path_len) = {
+  if branches.len == 0 { () }
+  else {
+    let rest = list_tail(branches)
+    if rest.len == 0 {
+      // Last branch: matched by elimination (the arm predicate held).
+      emit_pat_binds_at(list_head(branches), path, path_len)
+    } else {
+      emit_pat_predicate_at(list_head(branches), path, path_len)
+      perform wat_emit("    (if\n      (then\n")
+      emit_pat_binds_at(list_head(branches), path, path_len)
+      perform wat_emit("      )\n      (else\n")
+      emit_pat_alt_binds_dispatch(rest, path, path_len)
+      perform wat_emit("      ))\n")
+    }
   }
 }
 
 // emit_load_chain — emit (i32.load offset=path[k]) for k in 0..path_len.
 // Caller has already emitted (local.get $scrut_tmp); this chains the
-// field-traversal loads to reach the deepest parent.
+// field-traversal loads to reach the pattern's position.
 fn emit_load_chain(path, k, path_len) = {
   if k == path_len { () }
   else {
@@ -2397,42 +2471,6 @@ fn emit_load_chain(path, k, path_len) = {
     perform wat_emit(int_to_str(list_index(path, k)))
     perform wat_emit(")\n")
     emit_load_chain(path, k + 1, path_len)
-  }
-}
-
-// emit_pat_nested_predicate — recursive nested-LPCon tag-check predicate
-// with SHORT-CIRCUIT evaluation. Caller has pushed the prior tag-eq
-// bool on stack. For each nested LPCon at index i, wraps the
-// continuation in `(if (result i32) (then <new check + recursion>)
-// (else (i32.const 0)))` so the inner sub-field load only fires when
-// the outer tag matched. Avoids reading offset-4 of a variant that
-// doesn't have an inner field (e.g. NError sentinel vs NStmt), which
-// would surface as memory-fault on speculative i32.load.
-fn emit_pat_nested_predicate(sub_pats, i, path, path_len) = {
-  if sub_pats.len == 0 { () }
-  else {
-    let p = list_head(sub_pats)
-    let field_offset = 4 + i * 4
-    match p {
-      LPCon(_, tag_id, sub) => {
-        perform wat_emit("    (if (result i32)\n      (then\n")
-        perform wat_emit("    (local.get $scrut_tmp)\n")
-        emit_load_chain(path, 0, path_len)
-        perform wat_emit("    (i32.load offset=")
-        perform wat_emit(int_to_str(field_offset))
-        perform wat_emit(")\n")
-        perform wat_emit("    (i32.load offset=0)\n")
-        perform wat_emit("    (i32.const ")
-        perform wat_emit(int_to_str(tag_id))
-        perform wat_emit(")\n")
-        perform wat_emit("    (i32.eq)\n")
-        let extended = list_set(path, path_len, field_offset)
-        emit_pat_nested_predicate(sub, 0, extended, path_len + 1)
-        emit_pat_nested_predicate(list_tail(sub_pats), i + 1, path, path_len)
-        perform wat_emit("      )\n      (else (i32.const 0)))\n")
-      },
-      _ => emit_pat_nested_predicate(list_tail(sub_pats), i + 1, path, path_len)
-    }
   }
 }
 

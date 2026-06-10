@@ -146,41 +146,47 @@ fn transport_state_init(initial_caret) with Pure = {
 handler terminal_transport with state = transport_state_init(Caret(0, Inferred("term-init"))) {
 
   surface_handshake() => {
-    perform write_stdout("Mentl @ mentl teach — eight tentacles ready.\n")
+    print_string("Mentl @ mentl teach — eight tentacles ready.\n")
     resume()
   },
 
   surface_render(cursor, view) => {
-    let CursorView(query, propose, topology, row, trace, verify, teach, why) = view
-    perform write_stdout("Mentl @ ")
-    perform write_stdout(show_handle_label(cursor))
-    perform write_stdout("\n────────────────────────────────────────────\n")
-    perform write_stdout("Query    │ ")
-    perform write_stdout(show_node_kind(query))
-    perform write_stdout("\nPropose  │ ")
-    perform write_stdout(show_proposals(propose))
-    perform write_stdout("\nTopology │ ")
-    perform write_stdout(show_pipe_context(topology))
-    perform write_stdout("\nRow      │ ")
-    perform write_stdout(show_effrow(row))
-    perform write_stdout("\nTrace    │ ")
-    perform write_stdout(show_ownership(trace))
-    perform write_stdout("\nVerify   │ ")
-    perform write_stdout(show_verify_count(verify))
-    perform write_stdout("\nTeach    │ ")
-    perform write_stdout(show_suggestion(teach))
-    perform write_stdout("\nWhy      │ ")
-    perform write_stdout(show_reason(why))
-    perform write_stdout("\n")
+    print_string(render_cursor_block(cursor, view))
     resume() with state = state_with_render(state, cursor)
   },
 
   surface_action() => {
-    // Terminal: read one line from stdin; parse to Action.
-    let line = perform read_stdin_line()
-    let action = parse_action(line)
-    resume(action)
+    resume(parse_action(read_stdin_line()))
   }
+}
+
+/// render_cursor_block — project the eight-aspect CursorView to its
+/// terminal block form. Pure of I/O: the projection composes the
+/// labeled aspects into ONE string; the transport arm writes it at
+/// the WASI boundary in one print_string. Any text-mode surface
+/// (terminal, CI log, doc snapshot) reads the same projection.
+fn render_cursor_block(cursor, view) with GraphRead + !Mutate = {
+  let CursorView(query, propose, topology, row, trace, verify, teach, why) = view
+  "Mentl @ "
+    |> str_concat(show_handle_label(cursor))
+    |> str_concat("\n────────────────────────────────────────────\n")
+    |> str_concat("Query    │ ")
+    |> str_concat(show_node_kind(query))
+    |> str_concat("\nPropose  │ ")
+    |> str_concat(show_proposals(propose))
+    |> str_concat("\nTopology │ ")
+    |> str_concat(show_pipe_context(topology))
+    |> str_concat("\nRow      │ ")
+    |> str_concat(show_effrow(row))
+    |> str_concat("\nTrace    │ ")
+    |> str_concat(show_ownership(trace))
+    |> str_concat("\nVerify   │ ")
+    |> str_concat(show_verify_count(verify))
+    |> str_concat("\nTeach    │ ")
+    |> str_concat(show_suggestion(teach))
+    |> str_concat("\nWhy      │ ")
+    |> str_concat(show_reason(why))
+    |> str_concat("\n")
 }
 
 // ─── lsp_transport — JSON-RPC over stdio for IDE integration ────────

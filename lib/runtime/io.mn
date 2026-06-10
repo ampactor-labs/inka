@@ -119,6 +119,51 @@ fn read_chunk(buf, size) with Memory + WASI = {
   perform load_i32(88)
 }
 
+/// read_one_byte — read exactly 1 byte from stdin. Returns the byte
+/// value (0..255) or -1 on EOF. Substrate primitive for boundary-
+/// scanning reads (line endings, LSP \r\n headers) where the consumer
+/// can't know the boundary until it sees the byte. Reads into the
+/// 1-byte scratch region at offset 96. Honest: per-byte syscalls are
+/// slow for bulk data but correct for interactive prompts and ~50-byte
+/// header sections; bulk paths use read_chunk directly.
+fn read_one_byte() with Memory + Alloc + WASI = {
+  let nread = read_chunk(96, 1)
+  if nread == 0 { 0 - 1 }
+  else { perform load_i8(96) }
+}
+
+/// read_stdin_line — read one line from stdin (interactive-prompt
+/// discipline: one human action per line). Accumulates bytes until
+/// 0x0A or EOF; the newline is consumed, not returned. Returns a flat
+/// Mentl string [len:i32][bytes...].
+fn read_stdin_line() with Memory + Alloc + WASI = {
+  let initial_cap = 256
+  let buf = perform alloc(initial_cap)
+  let (final_buf, total) = read_line_loop(buf, 0, initial_cap)
+  let str = perform alloc(4 + total)
+  perform store_i32(str, total)
+  perform mem_copy(str + 4, final_buf, total)
+  str
+}
+
+fn read_line_loop(buf, offset, capacity) with Memory + Alloc + WASI = {
+  let (cur_buf, cur_cap) = if offset + 1 > capacity {
+    let new_cap = capacity * 2
+    let new_buf = perform alloc(new_cap)
+    perform mem_copy(new_buf, buf, offset)
+    (new_buf, new_cap)
+  } else { (buf, capacity) }
+  let b = read_one_byte()  // drift-audit: ignore — sequenced effectful stream-read; b consumed by 3 sites (EOF/newline/store)
+  if b < 0 { (cur_buf, offset) }
+  else {
+    if b == 10 { (cur_buf, offset) }
+    else {
+      perform store_i8(cur_buf + offset, b)
+      read_line_loop(cur_buf, offset + 1, cur_cap)
+    }
+  }
+}
+
 // Filesystem (FS) — four impl functions bridging the Filesystem effect
 // ops to WASI path_* syscalls. Each takes a String path (flat [len][bytes...]
 // shape) and delegates through the iov scratch pattern established

@@ -350,6 +350,17 @@
                         (call $tag_of (local.get $b))))
           (else (i32.const 0))))))
 
+  ;; is_doc_comment_at: TDocComment detection. The kind is FIELDED —
+  ;; a heap record [tag=29][doc_str] — so sentinel compares (raw i32.eq
+  ;; or $at against 29) can never fire; the tag lives behind the
+  ;; pointer. Canonical projection: every doc-skip site reads this.
+  (func $is_doc_comment_at (param $tokens i32) (param $pos i32) (result i32)
+    (local $k i32)
+    (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
+    (if (i32.lt_u (local.get $k) (global.get $heap_base))
+      (then (return (i32.const 0))))
+    (i32.eq (call $tag_of (local.get $k)) (i32.const 29)))
+
   ;; at: check if token at pos has given kind
   (func $at (param $tokens i32) (param $pos i32) (param $kind i32) (result i32)
     (call $kind_eq_s

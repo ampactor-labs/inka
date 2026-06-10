@@ -692,6 +692,9 @@ type Pat
   | PTuple(List)
   | PList(List, Option)    // prefix pats, optional rest name (`...rest`)
   | PRecord(List)           // [(fieldname, Pat)]
+  | PAlt(List)              // pat_1 | pat_2 | ... — any branch matches; branches
+                            // bind the same names with unifiable types (SYNTAX.md
+                            // §"Pattern alternation — rule")
 
 type LitValue
   = LVInt(Int)

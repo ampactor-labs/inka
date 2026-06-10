@@ -29,24 +29,8 @@ type LspFrame
   = LspFrame(String)               // body text, length-prefixed Mentl String
   | LspFrameEof                    // stdin closed; session terminates
 
-// ─── Byte-at-a-time stdin reader ──────────────────────────────────────
-
-/// read_one_byte — read exactly 1 byte from stdin. Returns the byte
-/// value (0..255) or -1 on EOF. Substrate primitive for header
-/// parsing (where we don't know boundaries until we see \r\n).
-///
-/// Uses read_chunk with size=1; the read goes into a 1-byte scratch
-/// region at fixed offset (96 — the small scratch buffer per io.mn
-/// §"Scratch layout"). Honest: per-byte syscalls are slow for bulk
-/// data but fine for the ~50-byte LSP header section.
-
-fn read_one_byte() with Memory + Alloc + WASI = {
-  let nread = read_chunk(96, 1)
-  if nread == 0 { 0 - 1 }
-  else { perform load_i8(96) }
-}
-
 // ─── Header parsing — accumulate bytes into a String until \r\n\r\n ───
+// Byte-at-a-time reads compose on read_one_byte (lib/runtime/io.mn).
 
 /// read_lsp_frame — entry point. Read header section (until \r\n\r\n),
 /// parse Content-Length, read body bytes. Returns LspFrameEof if stdin
@@ -73,7 +57,7 @@ fn read_lsp_frame() with Memory + Alloc + WASI = {
 /// up to (not including) the terminating \r\n\r\n.
 
 fn read_headers_until_blank(buf, written, cap) with Memory + Alloc + WASI = {
-  let b = read_one_byte()
+  let b = read_one_byte()  // drift-audit: ignore — sequenced effectful stream-read; b consumed by 2 sites (EOF/store)
   if b < 0 { None }
   else {
     let (buf2, cap2) = if written < cap { (buf, cap) }

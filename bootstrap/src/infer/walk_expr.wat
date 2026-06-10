@@ -1167,6 +1167,30 @@
           (call $reason_make_located (local.get $span)
             (call $reason_make_inferred (i32.const 4032))))
         (return)))
+    ;; ── PAlt (137) — pattern alternation ────────────────────────
+    ;; Every branch constrains the SAME scrutinee handle — branch
+    ;; pattern types unify through it by construction. The binding
+    ;; law (same names, unifiable types across branches → else
+    ;; E_PatternAlternationBindingMismatch) is the WHEEL's infer
+    ;; (enforce_alt_binding_law, src/infer.mn); the seed walks
+    ;; branches so law-abiding wheel source compiles whole. The
+    ;; wheel's own alternation arms are binder-free; the disposable
+    ;; seed does not duplicate the wheel's diagnostic surface.
+    (if (i32.eq (local.get $tag) (i32.const 137))
+      (then
+        (local.set $elems (i32.load offset=4 (local.get $pat)))
+        (local.set $n_elems (call $len (local.get $elems)))
+        (local.set $i (i32.const 0))
+        (block $alt_done
+          (loop $alt_each
+            (br_if $alt_done
+              (i32.ge_u (local.get $i) (local.get $n_elems)))
+            (call $infer_walk_pat
+              (call $list_index (local.get $elems) (local.get $i))
+              (local.get $scrut_h) (local.get $span))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $alt_each)))
+        (return)))
     ;; ── PRecord (136) — peer follow-up Hβ.infer.walk_pat.record ─
     ;; Record pattern field-name matching deferred to peer cascade.
     )

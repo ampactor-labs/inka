@@ -229,6 +229,19 @@
     (local $body_r i32) (local $body i32) (local $p5 i32) (local $p6 i32)
     (local $arm i32) (local $tup i32)
     (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
+    ;; Doc-comment block before the arm — drop-and-continue, same
+    ;; convention as parse_stmt_p's TDocComment dispatch. Without this
+    ;; skip the arm loop terminated at the first documented arm and the
+    ;; remaining arm bodies re-parsed as TOP-LEVEL stmts (param/state
+    ;; references then missed env → the E_MissingVariable handler-arm
+    ;; class: question/target/fh/reason ×40+ in the wheel).
+    (block $doc_done
+      (loop $doc_skip
+        (br_if $doc_done (i32.eqz
+          (call $is_doc_comment_at (local.get $tokens) (local.get $p))))
+        (local.set $p (call $skip_ws_p (local.get $tokens)
+          (i32.add (local.get $p) (i32.const 1))))
+        (br $doc_skip)))
     ;; Op name (TIdent). Null return per protocol_parser_fabrication_substrate.md
     ;; means "no TIdent at this position." Substrate-honest recovery:
     ;; return null tuple; caller $parse_handler_arms loop terminates.

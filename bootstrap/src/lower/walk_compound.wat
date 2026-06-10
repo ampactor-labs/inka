@@ -456,6 +456,17 @@
     (if (i32.eq (local.get $tag) (i32.const 136))
       (then
         (call $bind_pat_locals_fields (i32.load offset=4 (local.get $pat)))
+        (return)))
+    ;; PAlt (137): branches bind the same names (the wheel-infer law) —
+    ;; register branch 0's set once; per-branch would double-bind.
+    (if (i32.eq (local.get $tag) (i32.const 137))
+      (then
+        (if (i32.gt_u (call $len (i32.load offset=4 (local.get $pat)))
+                      (i32.const 0))
+          (then
+            (call $bind_pat_locals
+              (call $list_index (i32.load offset=4 (local.get $pat))
+                (i32.const 0)))))
         (return))))
 
   (func $lower_pat_record_fields (param $fields i32) (param $field_idx i32) (param $scrut_h i32) (result i32)
@@ -605,6 +616,14 @@
                     (i32.const 0)
                     (local.get $scrut_h))
                   (i32.const 0)))))
+    ;; PAlt (137) → LPAlt: lower each branch against the same scrutinee.
+    (if (i32.eq (local.get $tag) (i32.const 137))
+      (then
+        (return (call $lowpat_make_lpalt
+                  (local.get $scrut_h)
+                  (call $lower_pats
+                    (i32.load offset=4 (local.get $pat))
+                    (local.get $scrut_h))))))
     (unreachable))
 
   (func $lower_match_arms (param $arms i32) (param $scrut_h i32) (result i32)

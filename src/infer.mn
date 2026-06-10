@@ -1769,7 +1769,100 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
     perform graph_bind(handle, pat_ty,
       Located(span, Inferred("record pattern")))
     infer_pat_record_subs(flds, field_specs, span)
+  },
+
+  PAlt(branches) => {
+    // Every branch constrains the SAME scrutinee handle — branch
+    // pattern types unify through it by construction. The binding
+    // law (pattern-alternation-substrate.md §3): branches bind the
+    // same names with unifiable types; the body sees the unified
+    // type. Each branch's binder types are read back IMMEDIATELY
+    // after its walk (env entries shadow across branches; the law
+    // check needs per-branch snapshots).
+    let branch_binds = map((b) => infer_pat_alt_branch(b, handle, span), branches)
+    enforce_alt_binding_law(branch_binds, span)
   }
+}
+
+/// Walk one alternation branch, then snapshot its (name, type) binds
+/// while they are still the latest env entries.
+fn infer_pat_alt_branch(ref b, handle, span: ValidSpan) = {
+  infer_pat(b, handle, span)
+  map((n) => (n, alt_binder_ty(n, span)), pat_binders(b))
+}
+
+fn alt_binder_ty(ref n, span: ValidSpan) = match perform env_lookup(n) {
+  Some(entry) => {
+    let (scheme, _, _) = entry
+    instantiate(scheme)
+  },
+  None => {
+    // pat_binders said n binds, the walk did not extend it — the
+    // branch's binding genuinely failed; surface as the law's
+    // diagnostic rather than fabricating a type.
+    perform report("infer", "E_PatternAlternationBindingMismatch",
+      "PatternAlternationBindingMismatch",
+      "alternation binder never bound: " |> str_concat(n),
+      span, "MaybeIncorrect")
+    TVar(perform mint(Located(span, Inferred("alternation binder lost"))))
+  }
+}
+
+/// SYNTAX.md §"Pattern alternation — rule": all branches bind the
+/// same name set; per-name types unify across branches (the body
+/// sees the unified type). Branch 0 is the reference set.
+fn enforce_alt_binding_law(branch_binds, span: ValidSpan) = match branch_binds {
+  [] => (),
+  [first, ...rest] =>
+    for_each((bi) => {
+      if alt_same_name_set(first, bi) {
+        for_each((p) => {
+          let (n, ty_i) = p
+          match find((q) => { let (m, _) = q; str_eq(m, n) }, first) {
+            Some(q0) => {
+              let (_, ty_0) = q0
+              unify_types(ty_0, ty_i, span,
+                Located(span, Inferred("alternation common type")))
+            },
+            None => ()
+          }
+        }, bi)
+      } else {
+        perform report("infer", "E_PatternAlternationBindingMismatch",
+          "PatternAlternationBindingMismatch",
+          "alternation branches bind different names",
+          span, "MaybeIncorrect")
+      }
+    }, rest)
+}
+
+fn alt_same_name_set(a, b) =
+  a.len == b.len
+    && all((p) => { let (n, _) = p
+                    any((q) => { let (m, _) = q; str_eq(m, n) }, b) }, a)
+
+/// pat_binders — the names a pattern binds (pure structural walk).
+/// Wildcards and literals bind nothing; a PList rest name binds
+/// unless `_`; a nested alternation's binders are branch 0's (its
+/// own law check fires on its own walk).
+fn pat_binders(ref pat) = match pat {
+  PVar(name)        => [name],
+  PWild             => [],
+  PLit(_)           => [],
+  PCon(_, subs)     => flat_map(pat_binders, subs),
+  PTuple(subs)      => flat_map(pat_binders, subs),
+  PList(subs, rest) =>
+    flatten([flat_map(pat_binders, subs), plist_rest_binders(rest)]),
+  PRecord(flds)     => flat_map((fld) => { let (_, sub) = fld; pat_binders(sub) }, flds),
+  PAlt(branches)    => match branches {
+    []         => [],
+    [b0, ..._] => pat_binders(b0)
+  }
+}
+
+fn plist_rest_binders(rest) = match rest {
+  None    => [],
+  Some(n) => if str_eq(n, "_") { [] } else { [n] }
 }
 
 fn build_pat_record_field_specs(flds, span: ValidSpan) = map((fld) => {

@@ -13,7 +13,10 @@
     ;; Hβ.first-light.documented-stmt-substrate wraps the next stmt in
     ;; the Documented(doc, inner) tag-128 ADT (the infer-side arm at
     ;; walk_stmt.wat:467-471 already recurses through that wrapper).
-    (if (i32.eq (local.get $k) (i32.const 29))  ;; TDocComment
+    ;; Detection via $is_doc_comment_at — the kind is FIELDED (heap
+    ;; record [29][str]); the prior raw `k == 29` compare could never
+    ;; fire (the kind field is a pointer).
+    (if (call $is_doc_comment_at (local.get $tokens) (local.get $pos))
       (then (return (call $parse_stmt_p (local.get $tokens)
         (call $skip_ws_p (local.get $tokens)
           (i32.add (local.get $pos) (i32.const 1)))))))

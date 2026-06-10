@@ -55,6 +55,27 @@
 > form is the eager-form-commitment drift at the workflow layer
 > (chain-link-5).
 >
+> **The three constant questions** (locked 2026-06-10 by Morgan;
+> `protocol_three_questions_constant_audit.md`) — held at EVERY
+> cursor position, asked of the WHOLE SUBSYSTEM being touched, not
+> just the lines changing. Inherited code has zero precedent
+> authority: it was written by models that decorated drift with the
+> discipline's own vocabulary (the MatchShape system carried an "H6
+> gradient cash-out" header). Chunk headers are claims, not proofs.
+>
+> 1. **Have we discarded valuable info?** Does this code re-derive,
+>    classify at runtime, or guess at what the graph already proves
+>    (tags, arities, rows, ownership, spans)?
+> 2. **How does Mentl already show us how these unify/simplify?**
+>    Which kernel primitive IS this subsystem in disguise? (Patterns
+>    ARE the row algebra over value space; handler IS state IS
+>    closure IS evidence; every subsystem is the cursor in a mode.)
+> 3. **Is this what the ultimate form would do?** Every design
+>    decision is permanently open to improvement toward what Mentl
+>    COULD be — especially mid-grind, when symptom-chasing narrows
+>    the frame. The symptom is the entry point; the subsystem is
+>    the patient.
+>
 > The question's ANSWER is what gets implemented — not a "for now"
 > approximation, not a "named follow-up", not a "next-session"
 > plan. The ULTIMATE form lands NOW or it gets named as a peer

@@ -69,9 +69,9 @@ fn kind_eq(a, b) with Pure = match a {
   TTrue      => match b { TTrue      => true, _ => false },
   TFalse     => match b { TFalse     => true, _ => false },
   TIdent(_)  => match b { TIdent(_)  => true, _ => false },
-  TInt(_)    => match b { TInt(_)    => true, _ => false },
-  TFloat(_)  => match b { TFloat(_)  => true, _ => false },
-  TString(_) => match b { TString(_) => true, _ => false },
+  TIntLit(_)    => match b { TIntLit(_)    => true, _ => false },
+  TFloatLit(_)  => match b { TFloatLit(_)  => true, _ => false },
+  TStringLit(_) => match b { TStringLit(_) => true, _ => false },
   TDocComment(_)  => match b { TDocComment(_)  => true, _ => false },
   TStringPart(_)  => match b { TStringPart(_)  => true, _ => false },
   TStringSplice   => match b { TStringSplice   => true, _ => false },
@@ -146,7 +146,7 @@ fn show_token_kind(k) with Pure = match k {
   TOwn => "own", TRef => "ref", TPure => "Pure",   // drift-audit: ignore — human-facing token-display rendering, not effect keying; tracked for item 11.B token-rendering normalization
   TTrue => "true", TFalse => "false",
   TIdent(s) => s,
-  TInt(_) => "<int>", TFloat(_) => "<float>", TString(_) => "<string>",
+  TIntLit(_) => "<int>", TFloatLit(_) => "<float>", TStringLit(_) => "<string>",
   TDocComment(_) => "<doc-comment>",
   TStringPart(_) => "<string-part>",
   TStringSplice  => "<string-splice>",
@@ -185,7 +185,7 @@ fn expect(ref tokens, pos, kind) =
 
 // Payload extractors — return defaults if the kind doesn't match.
 // Most call sites should pattern-match directly via `match
-// kind_at(tokens, pos) { TIdent(s) => …, TInt(n) => …, … }`;
+// kind_at(tokens, pos) { TIdent(s) => …, TIntLit(n) => …, … }`;
 // these helpers are for the few sites (e.g., parse_fn extracting
 // the function name after dispatching past TFn) where the parent
 // has already verified the variant and just needs the payload.
@@ -198,21 +198,21 @@ fn ident_at(ref tokens, pos) = {
 
 fn int_at(ref tokens, pos) = {
   match kind_at(tokens, pos) {
-    TInt(n) => n,
+    TIntLit(n) => n,
     _       => 0
   }
 }
 
 fn float_at(ref tokens, pos) = {
   match kind_at(tokens, pos) {
-    TFloat(f) => f,
+    TFloatLit(f) => f,
     _         => 0.0
   }
 }
 
 fn string_at(ref tokens, pos) = {
   match kind_at(tokens, pos) {
-    TString(s) => s,
+    TStringLit(s) => s,
     _          => ""
   }
 }
@@ -579,9 +579,9 @@ fn parse_eff_args_tail(ref tokens, pos, own buf, count) = {
 }
 
 fn parse_one_eff_arg(ref tokens, pos) = match kind_at(tokens, pos) {
-  TInt(n)    => (EAInt(n), pos + 1),
-  TFloat(f)  => (EAFloat(f), pos + 1),
-  TString(s) => (EAString(s), pos + 1),
+  TIntLit(n)    => (EAInt(n), pos + 1),
+  TFloatLit(f)  => (EAFloat(f), pos + 1),
+  TStringLit(s) => (EAString(s), pos + 1),
   _          => (EAInt(0), pos + 1)    // diagnostic deferred — see error catalog
 }
 
@@ -1250,9 +1250,9 @@ fn parse_call_args(ref tokens, pos) = {
 fn parse_primary(ref tokens, pos) = {
   let span = span_at(tokens, pos)
   match kind_at(tokens, pos) {
-    TInt(n)      => (nexpr(LitInt(n), span), pos + 1),
-    TFloat(f)    => (nexpr(LitFloat(f), span), pos + 1),
-    TString(s)   => (nexpr(LitString(s), span), pos + 1),
+    TIntLit(n)      => (nexpr(LitInt(n), span), pos + 1),
+    TFloatLit(f)    => (nexpr(LitFloat(f), span), pos + 1),
+    TStringLit(s)   => (nexpr(LitString(s), span), pos + 1),
     TStringPart(s) => parse_string_interpolation(tokens, pos + 1, s, span),
     TTrue        => (nexpr(LitBool(true), span), pos + 1),
     TFalse       => (nexpr(LitBool(false), span), pos + 1),
@@ -2032,9 +2032,9 @@ fn parse_pat(ref tokens, pos) = {
         }
       }
     },
-    TInt(n)    => (PLit(LVInt(n)), pos + 1),
-    TFloat(f)  => (PLit(LVFloat(f)), pos + 1),
-    TString(s) => (PLit(LVString(s)), pos + 1),
+    TIntLit(n)    => (PLit(LVInt(n)), pos + 1),
+    TFloatLit(f)  => (PLit(LVFloat(f)), pos + 1),
+    TStringLit(s) => (PLit(LVString(s)), pos + 1),
     TTrue      => (PLit(LVBool(true)), pos + 1),
     TFalse     => (PLit(LVBool(false)), pos + 1),
     TLParen    => {

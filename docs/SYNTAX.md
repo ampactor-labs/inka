@@ -1479,10 +1479,15 @@ type TokenKind
   // canonical iteration patterns and gradient teaching.
 
   // ─── Identifiers and literals (carry payload) ─────────────────────
+  // Constructors share ONE namespace (env entries). The literal-token
+  // trio is named TIntLit/TFloatLit/TStringLit because Ty's canonical
+  // nullary TInt/TFloat/TString (spec 02) already claim the bare names —
+  // two declarations claiming one constructor name shadow silently and
+  // mis-unify (the 2026-06-09 "expected Ty, found TokenKind" ×95 class).
   | TIdent(String)
-  | TInt(Int)
-  | TFloat(Float)
-  | TString(String)
+  | TIntLit(Int)
+  | TFloatLit(Float)
+  | TStringLit(String)
   | TDocComment(String)             // /// — emitted ONLY when triple-slash
                                     //   detected; attaches to next decl
 
@@ -1534,9 +1539,9 @@ type TokenKind
 | `TCapability`   | `capability`     | —         | capability declaration (§«Capability declarations») |
 | **Identifiers and literals (5)** |  |           |                                                |
 | `TIdent(s)`     | `[A-Za-z_][...]` | name      | variable refs, fn names, type names, etc.      |
-| `TInt(n)`       | `[0-9][0-9_]*`, `0x[0-9A-Fa-f_]+`, `0b[01_]+`, `0o[0-7_]+` | i32 value | integer literal (decimal / hex / binary / octal; underscores allowed for readability) |
-| `TFloat(f)`     | `[0-9][0-9_]*\.[0-9][0-9_]*` | f64 value | floating-point literal (underscore separators allowed) |
-| `TString(s)`    | `"..."` or `"""..."""` | string content (escape-resolved, interp markers preserved) | string literal |
+| `TIntLit(n)`    | `[0-9][0-9_]*`, `0x[0-9A-Fa-f_]+`, `0b[01_]+`, `0o[0-7_]+` | i32 value | integer literal (decimal / hex / binary / octal; underscores allowed for readability) |
+| `TFloatLit(f)`  | `[0-9][0-9_]*\.[0-9][0-9_]*` | f64 value | floating-point literal (underscore separators allowed) |
+| `TStringLit(s)` | `"..."` or `"""..."""` | string content (escape-resolved, interp markers preserved) | string literal |
 | `TDocComment(s)`| `/// ...`        | comment text (one line, leading `///` stripped) | attaches to next declaration |
 | **Two-character operators (15)** |  |           |                                                |
 | `TEqEq`         | `==`             | —         | equality comparison                            |

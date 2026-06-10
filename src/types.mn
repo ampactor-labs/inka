@@ -437,9 +437,9 @@ type TokenKind
 
   // ─── Identifiers and literals (5, with payload) ──────────────────
   | TIdent(String)
-  | TInt(Int)
-  | TFloat(Float)
-  | TString(String)
+  | TIntLit(Int)
+  | TFloatLit(Float)
+  | TStringLit(String)
   | TDocComment(String)             // /// — emitted ONLY when triple-slash
                                     //   detected; attaches to next decl
   | TStringPart(String)             // literal chunk of a "..." string

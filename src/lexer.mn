@@ -156,7 +156,7 @@ fn push_tok(own buf, count, own t) = {
 /// `depth` tracks open brace nesting for splice termination.
 /// Amendments C + G: double-quote strings emit `TStringPart`/`TStringSplice`
 /// via `scan_string` (which threads `buf`/`count` directly); single-quote
-/// strings emit a single `TString(content)` with no interpolation.
+/// strings emit a single `TStringLit(content)` with no interpolation.
 fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, count, term_byte, depth) = {
   if pos >= n {
     let (b1, c1) = push_tok(buf, count, mk_tok(TEof, line, col, line, col))
@@ -194,14 +194,14 @@ fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, co
     } else if b == 39 {
       // single-quoted literal string (amendment G) — no interpolation.
       let (new_pos, new_col, str_val) = scan_literal_string(source, n, pos + 1, col + 1, "")
-      let (b1, c1) = push_tok(buf, count, mk_tok(TString(str_val), line, col, line, new_col))
+      let (b1, c1) = push_tok(buf, count, mk_tok(TStringLit(str_val), line, col, line, new_col))
       lex_from(source, n, new_pos, line, new_col, b1, c1, term_byte, depth)
     } else if is_digit(b) {
       let (new_pos, new_col, base, is_float) = scan_number(source, n, pos, col, false)
       let num_val = str_slice(source, pos, new_pos)
       let kind =
-        if is_float { TFloat(parse_float(strip_underscores(num_val))) }
-        else        { TInt(parse_int_base(strip_underscores(num_val), base)) }
+        if is_float { TFloatLit(parse_float(strip_underscores(num_val))) }
+        else        { TIntLit(parse_int_base(strip_underscores(num_val), base)) }
       let (b1, c1) = push_tok(buf, count, mk_tok(kind, line, col, line, new_col))
       lex_from(source, n, new_pos, line, new_col, b1, c1, term_byte, depth)
     } else if is_alpha(b) {

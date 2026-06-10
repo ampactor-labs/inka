@@ -422,6 +422,8 @@
   ;; ── Connector phrases ─────────────────────────────────────────────
   (data (i32.const 1824) "\0b\00\00\00 at handle ")                    ;; 11 bytes payload
   (data (i32.const 6160) "\0e\00\00\00 — expected ")                   ;; 14 bytes payload (em-dash 3 bytes; " — expected " is 14 bytes UTF-8)
+  (data (i32.const 6440) "\03\00\00\00 @ ")                            ;; 3 bytes payload — span coordinates prefix
+  (data (i32.const 6456) "\01\00\00\00:")                              ;; 1 byte payload — line:col separator
   ;; Note: ", found " (offset 1856 in earlier draft) overlapped with
   ;; preceding " — expected " (UTF-8 14 bytes ending 1858). Relocated
   ;; to safe offset 2864 below.
@@ -669,12 +671,24 @@
   ;; UnifyFailed(ty_a, ty_b) per reason.wat tag 233.
   (func $infer_emit_type_mismatch (param $handle i32) (param $ty_a i32)
                                     (param $ty_b i32) (param $reason i32)
+                                    (param $span i32)
     (local $msg i32)
-    ;; Construct message: "E_TypeMismatch: at handle <h> — expected
-    ;; <render(a)>, found <render(b)>\n"
+    ;; Construct message: "E_TypeMismatch: at handle <h> @ <sl>:<sc> —
+    ;; expected <render(a)>, found <render(b)>\n". Diagnostics carry
+    ;; coordinates (SYNTAX.md governing principle 5) — the span was
+    ;; always threaded through unify; the emitter now renders it.
     (local.set $msg (i32.const 6064))                          ;; "E_TypeMismatch: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
+    ;; " @ <start_line>:<start_col>" when the span is a real record.
+    (if (i32.ge_u (local.get $span) (global.get $heap_base))
+      (then
+        (local.set $msg (call $str_concat (local.get $msg) (i32.const 6440)))  ;; " @ "
+        (local.set $msg (call $str_concat (local.get $msg)
+          (call $int_to_str (i32.load offset=4 (local.get $span)))))
+        (local.set $msg (call $str_concat (local.get $msg) (i32.const 6456)))  ;; ":"
+        (local.set $msg (call $str_concat (local.get $msg)
+          (call $int_to_str (i32.load offset=8 (local.get $span)))))))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — expected "
     (local.set $msg (call $str_concat (local.get $msg) (call $render_ty (local.get $ty_a))))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2864)))   ;; ", found " (relocated from 1856)

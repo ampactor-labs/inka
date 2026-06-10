@@ -268,6 +268,7 @@
                   (call $reason_make_inferred (i32.const 3984)))   ;; fn effect row
                 (local.set $changed (i32.const 1))))
             (br $each)))
+        (call $eprint_string (call $int_to_str (i32.add (i32.const 760000000) (local.get $changed))))
         (local.set $iter (i32.add (local.get $iter) (i32.const 1)))
         (br_if $stable (i32.eqz (local.get $changed)))
         (if (i32.ge_u (local.get $iter) (i32.const 64)) (then (unreachable)))

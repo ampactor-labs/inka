@@ -690,7 +690,8 @@
       (local.get $span) (local.get $reason)))
     (local.set $diag_h (call $graph_fresh_ty (local.get $located)))
     (call $infer_emit_type_mismatch
-      (local.get $diag_h) (local.get $a) (local.get $b) (local.get $reason)))
+      (local.get $diag_h) (local.get $a) (local.get $b) (local.get $reason)
+      (local.get $span)))
 
   ;; ─── $arity_mismatch — function param-count diagnostic ───────────
   ;;

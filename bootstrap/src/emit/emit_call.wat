@@ -629,12 +629,24 @@
   ;;              pre-2264 "over-declared")
   (data (i32.const 1856) "\0a\00\00\00alloc_size")
   (data (i32.const 2244) "\09\00\00\00state_tmp")
+  ;;   6480-6487: "sst_" per-handle LSuspend state prefix (4 hdr + 4
+  ;;              body = 8 bytes; 6000+ relocation band, post-6456 ":")
+  (data (i32.const 6480) "\04\00\00\00sst_")
 
   (func $emit_lsuspend (param $r i32)
-    (local $args i32) (local $evs i32) (local $ne i32)
+    (local $args i32) (local $evs i32) (local $ne i32) (local $sname i32)
     (local.set $args (call $lexpr_lsuspend_args (local.get $r)))
     (local.set $evs  (call $lexpr_lsuspend_evs  (local.get $r)))
     (local.set $ne   (call $len (local.get $evs)))
+    ;; Per-handle state local "sst_<h>" (1fa5f97 per-handle discipline,
+    ;; extended to LSuspend): nested suspends emit inside the ARGS, and
+    ;; at runtime the inner suspend clobbers any SHARED scratch before
+    ;; the outer dispatch's fn_idx read — stage N then call_indirects
+    ;; through stage N-1's record (the ft-mismatch class). The handle
+    ;; names the record; declare-at-emission declares the local at the
+    ;; alloc's store projection.
+    (local.set $sname (call $str_concat (i32.const 6480)
+      (call $int_to_str (call $lexpr_handle (local.get $r)))))
     ;; Save callee closure to $callee_closure.
     (call $emit_lexpr (call $lexpr_lsuspend_fn (local.get $r)))
     (call $ec6_emit_local_set_callee_closure)
@@ -653,24 +665,24 @@
     ;; EmitMemory swap surface: dynamic-size bump-alloc into $state_tmp,
     ;; reading $alloc_size at runtime. Future arena/gc handlers swap
     ;; this body without touching the LSuspend arm.
-    (call $emit_alloc_dyn (i32.const 1856) (i32.const 2244))   ;; "alloc_size" → bind to "state_tmp"
-    ;; Copy header: state_tmp[0] = callee[0]; state_tmp[4] = callee[4].
-    (call $ec6_emit_local_get_state_tmp)
+    (call $emit_alloc_dyn (i32.const 1856) (local.get $sname))   ;; "alloc_size" → bind to "sst_<h>"
+    ;; Copy header: sst[0] = callee[0]; sst[4] = callee[4].
+    (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_local_get_callee_closure)
     (call $ec6_emit_i32_load_offset_0)
     (call $ec6_emit_i32_store_offset_0)
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_local_get_callee_closure)
     (call $ec6_emit_i32_load_offset_4)
     (call $ec6_emit_i32_store_offset_4)
-    ;; Runtime loop: copy nc captures from callee to state_tmp.
-    (call $ec6_emit_capture_copy_loop)
+    ;; Runtime loop: copy nc captures from callee to sst_<h>.
+    (call $ec6_emit_capture_copy_loop (local.get $sname))
     ;; Store each ev_slot at runtime-computed offset 8 + 4*nc + 4*j.
-    (call $ec6_emit_ev_slot_stores (local.get $evs))
-    ;; Dispatch: (state_tmp, args..., fn_ptr) → call_indirect $ft<N+1>.
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec6_emit_ev_slot_stores (local.get $evs) (local.get $sname))
+    ;; Dispatch: (sst_<h>, args..., fn_ptr) → call_indirect $ft<N+1>.
+    (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_args (local.get $args))
-    (call $ec6_emit_local_get_state_tmp)
+    (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_i32_load_offset_0)
     (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
 
@@ -800,7 +812,7 @@
   ;; vary by callee. Inlining vs runtime trade-off: inlining grows
   ;; emit-time WAT linearly per LSuspend; runtime loop keeps emit-size
   ;; constant. Runtime loop chosen per wheel parity.
-  (func $ec6_emit_capture_copy_loop
+  (func $ec6_emit_capture_copy_loop (param $sname i32)
     ;; (i32.const 0) (local.set $loop_i)
     (call $ec6_emit_i32_const_lit (i32.const 0))
     (call $ec6_emit_local_set_loop_i)
@@ -816,8 +828,8 @@
     ;; (i32.ge_u) (br_if $copy_done)
     (call $ec6_emit_i32_ge_u)
     (call $ec6_emit_br_if_copy_done)
-    ;; dst = state_tmp + 8 + 4*loop_i
-    (call $ec6_emit_local_get_state_tmp)
+    ;; dst = <sname> + 8 + 4*loop_i
+    (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_local_get_loop_i)
     (call $ec6_emit_i32_const_lit (i32.const 4))
     (call $ec6_emit_i32_mul)
@@ -956,7 +968,7 @@
   ;;   (i32.const 4*j) (i32.add)
   ;;   <ev_slot expr>
   ;;   (i32.store)
-  (func $ec6_emit_ev_slot_stores (param $evs i32)
+  (func $ec6_emit_ev_slot_stores (param $evs i32) (param $sname i32)
     (local $j i32) (local $n i32) (local $ev i32)
     (local.set $n (call $len (local.get $evs)))
     (local.set $j (i32.const 0))
@@ -964,7 +976,7 @@
       (loop $iter
         (br_if $done (i32.ge_u (local.get $j) (local.get $n)))
         (local.set $ev (call $list_index (local.get $evs) (local.get $j)))
-        (call $ec6_emit_local_get_state_tmp)
+        (call $ec_emit_local_get_dollar (local.get $sname))
         (call $ec6_emit_i32_const_lit (i32.const 8))
         (call $ec6_emit_i32_add)
         (call $ec6_emit_local_get_callee_closure)

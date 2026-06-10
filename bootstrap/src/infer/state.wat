@@ -104,6 +104,17 @@
   (global $infer_row_edges_ptr      (mut i32) (i32.const 0))
   (global $infer_row_edges_len_g    (mut i32) (i32.const 0))
 
+  ;; Typed-resume arm context (SUBSTRATE.md primitive #2): inside
+  ;; `op(args) => body` for `op : (P...) -> R` under a handler whose
+  ;; handle-result is S, `resume : R -> S`. $infer_walk_expr_resume
+  ;; reads these; arm walks set + save/restore around each body
+  ;; (handler decls nest inside arm bodies). 0 = no arm context —
+  ;; the seed binds resume to TUnit there (the wheel carries the
+  ;; E_ResumeOutsideArm diagnostic; the disposable seed stays
+  ;; productive-under-error). Mirror of wheel infer_ctx arm_stack.
+  (global $infer_arm_ret_ty_g       (mut i32) (i32.const 0))
+  (global $infer_arm_result_h_g     (mut i32) (i32.const 0))
+
   ;; Span index. Flat list of (span_ptr, handle) records tagged
   ;; SPAN_INDEX_ENTRY_TAG=211.
   (global $infer_span_index_ptr     (mut i32) (i32.const 0))

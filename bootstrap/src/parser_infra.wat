@@ -335,37 +335,35 @@
         (local.set $tok (call $list_index (local.get $tokens) (local.get $pos)))
         (i32.load offset=8 (local.get $tok)))))
 
-  ;; kind_eq_sentinel: compare two TokenKinds. For sentinels (<4096),
-  ;; direct i32 compare. For fielded, compare tags at offset 0.
-  (func $kind_eq_s (param $a i32) (param $b i32) (result i32)
-    (if (result i32) (i32.and
-          (call $is_sentinel (local.get $a))
-          (call $is_sentinel (local.get $b)))
-      (then (i32.eq (local.get $a) (local.get $b)))
-      (else
-        (if (result i32) (i32.and
-              (i32.eqz (call $is_sentinel (local.get $a)))
-              (i32.eqz (call $is_sentinel (local.get $b))))
-          (then (i32.eq (call $tag_of (local.get $a))
-                        (call $tag_of (local.get $b))))
-          (else (i32.const 0))))))
-
-  ;; is_doc_comment_at: TDocComment detection. The kind is FIELDED —
-  ;; a heap record [tag=29][doc_str] — so sentinel compares (raw i32.eq
-  ;; or $at against 29) can never fire; the tag lives behind the
-  ;; pointer. Canonical projection: every doc-skip site reads this.
-  (func $is_doc_comment_at (param $tokens i32) (param $pos i32) (result i32)
+  ;; kind_tag_at: THE canonical token-kind observer. TokenKind is TWO
+  ;; SHAPES, one identity — sentinel scalar (kind < heap_base IS the
+  ;; tag) or fielded heap record [tag][payload...] (TIdent 25, TInt 26,
+  ;; TString 27, TDocComment 29: the tag lives behind the pointer).
+  ;; Kind identity IS tag identity; payload is data, never identity.
+  ;; Every "is this kind X" read goes through this projection — raw
+  ;; i32 compares on kind_at are dead code for fielded kinds (the
+  ;; TDocComment lesson generalized; same law as strings' byte_at over
+  ;; flat/view).
+  (func $kind_tag_at (param $tokens i32) (param $pos i32) (result i32)
     (local $k i32)
     (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
-    (if (i32.lt_u (local.get $k) (global.get $heap_base))
-      (then (return (i32.const 0))))
-    (i32.eq (call $tag_of (local.get $k)) (i32.const 29)))
+    (if (result i32) (call $is_sentinel (local.get $k))
+      (then (local.get $k))
+      (else (call $tag_of (local.get $k)))))
 
-  ;; at: check if token at pos has given kind
+  ;; is_doc_comment_at: TDocComment detection via the canonical
+  ;; kind-tag projection.
+  (func $is_doc_comment_at (param $tokens i32) (param $pos i32) (result i32)
+    (i32.eq (call $kind_tag_at (local.get $tokens) (local.get $pos))
+            (i32.const 29)))
+
+  ;; at: check if token at pos has given kind TAG. Callers pass the
+  ;; sentinel tag constant; fielded kinds (TIdent 25 etc.) now compare
+  ;; live — the prior kind_eq_s mixed-shape compare returned 0 for
+  ;; them, making every `$at(_, _, 25)` site silently dead.
   (func $at (param $tokens i32) (param $pos i32) (param $kind i32) (result i32)
-    (call $kind_eq_s
-      (call $kind_at (local.get $tokens) (local.get $pos))
-      (local.get $kind)))
+    (i32.eq (call $kind_tag_at (local.get $tokens) (local.get $pos))
+            (local.get $kind)))
 
   ;; skip_ws: skip TNewline tokens
   (func $skip_ws_p (param $tokens i32) (param $pos i32) (result i32)

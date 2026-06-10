@@ -477,15 +477,18 @@
         ;; `name: Type` form (`load_i32(addr: Int) -> Int`). The seed
         ;; scans past TIdent + TColon when both present so $parse_type_ty
         ;; lands on the type position; otherwise the bare-type form
-        ;; `load_i32(Int) -> Int` still parses unchanged. Refuses
-        ;; drift mode 9 (deferred-by-omission) on the named-param surface
-        ;; that the wheel's Memory + Alloc effects rely on.
+        ;; `load_i32(Int) -> Int` still parses unchanged. TIdent is a
+        ;; FIELDED kind — detection reads $at (kind_tag_at projection);
+        ;; the prior raw kind_at compare was dead for every named param,
+        ;; so `check(condition: Bool, msg: String)` registered ONE
+        ;; garbage param TyName("condition") and arm-arg binding read
+        ;; past the params list.
         (if (i32.and
-              (i32.eq (call $kind_at (local.get $tokens) (local.get $p))
-                      (i32.const 25))   ;; TIdent
-              (i32.eq (call $kind_at (local.get $tokens)
-                        (i32.add (local.get $p) (i32.const 1)))
-                      (i32.const 53)))  ;; TColon
+              (call $at (local.get $tokens) (local.get $p)
+                    (i32.const 25))   ;; TIdent
+              (call $at (local.get $tokens)
+                    (i32.add (local.get $p) (i32.const 1))
+                    (i32.const 53)))  ;; TColon
           (then
             (local.set $p (call $skip_ws_p (local.get $tokens)
               (i32.add (local.get $p) (i32.const 2))))))

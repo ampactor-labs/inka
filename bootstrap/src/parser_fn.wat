@@ -40,6 +40,33 @@
     (i32.store offset=4 (local.get $p) (local.get $fields))
     (local.get $p))
 
+  ;; TyTuple(elems) → [tag=208][elems]; elems is a list of parser-Tys.
+  (func $mk_TyTuple (param $elems i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 208))
+    (i32.store offset=4 (local.get $p) (local.get $elems))
+    (local.get $p))
+
+  ;; TyList(elem) → [tag=209][elem]
+  (func $mk_TyList (param $elem i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 209))
+    (i32.store offset=4 (local.get $p) (local.get $elem))
+    (local.get $p))
+
+  ;; TyFun(params_ty, ret_ty) → [tag=210][params][ret]. params is the
+  ;; LHS parser-Ty as written (TyTuple for `(A, B) -> C`, single ty for
+  ;; `A -> B`); the converter unpacks. The annotation's structure IS
+  ;; user-proven info — discarding it (the prior "return rhs" form)
+  ;; bound `f: (Int) -> Int` to Int and made every call of f a false
+  ;; type mismatch.
+  (func $mk_TyFun (param $params i32) (param $ret i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 12)))
+    (i32.store (local.get $p) (i32.const 210))
+    (i32.store offset=4 (local.get $p) (local.get $params))
+    (i32.store offset=8 (local.get $p) (local.get $ret))
+    (local.get $p))
+
   ;; ─── parse_type_ty: type expression parser ────────────────────────
   ;; Int → 200, Float → 201, String → 202, Bool → TyName("Bool"),
   ;; Unit → 204, other ident → TyName(v), () → TyUnit
@@ -101,6 +128,7 @@
   ;; Recursive: `T1 -> T2 -> T3` consumes all arrows.
   (func $parse_type_ty (param $tokens i32) (param $pos i32) (result i32)
     (local $tup i32) (local $base_pos i32) (local $arrow_pos i32) (local $rhs_r i32)
+    (local $out i32)
     (local.set $tup (call $parse_type_ty_atom (local.get $tokens) (local.get $pos)))
     (local.set $base_pos (call $list_index (local.get $tup) (i32.const 1)))
     (local.set $arrow_pos (call $skip_ws_p (local.get $tokens) (local.get $base_pos)))
@@ -108,11 +136,16 @@
       (then
         (local.set $rhs_r (call $parse_type_ty (local.get $tokens)
           (call $skip_ws_p (local.get $tokens) (i32.add (local.get $arrow_pos) (i32.const 1)))))
-        ;; Discard base ty; result Ty is the rhs's Ty (the fn's return).
-        ;; Substrate-honest: the fn-type's structure is opaque to the
-        ;; seed; the wheel reconstructs via HM. Consume tokens; return
-        ;; rhs's Ty so the outer caller sees a parseable type.
-        (return (local.get $rhs_r))))
+        ;; Fn-type annotation: TyFun(base, ret) keeps the structure the
+        ;; user wrote; the converter unpacks params from base.
+        (local.set $out (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $out) (i32.const 0)
+          (call $mk_TyFun
+            (call $list_index (local.get $tup) (i32.const 0))
+            (call $list_index (local.get $rhs_r) (i32.const 0)))))
+        (drop (call $list_set (local.get $out) (i32.const 1)
+          (call $list_index (local.get $rhs_r) (i32.const 1))))
+        (return (local.get $out))))
     (local.get $tup))
 
   ;; Atom: TIdent (with optional <TypeArgs>) or `(...)` paren-form.
@@ -159,7 +192,7 @@
         (drop (call $list_set (local.get $tup) (i32.const 0) (call $mk_TyName (local.get $name))))
         (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $next)))
         (return (local.get $tup))))
-    ;; TLParen → () is TyUnit, or parse tuple type
+    ;; TLParen → `()` TyUnit | `(T)` grouping | `(T1, T2, ...)` TyTuple.
     (if (i32.and (call $is_sentinel (local.get $k)) (i32.eq (local.get $k) (i32.const 45)))
       (then
         (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
@@ -168,11 +201,67 @@
             (local.set $tup (call $make_list (i32.const 2)))
             (drop (call $list_set (local.get $tup) (i32.const 0) (i32.const 204)))
             (drop (call $list_set (local.get $tup) (i32.const 1) (i32.add (local.get $p) (i32.const 1))))
-            (return (local.get $tup))))))
-    ;; Fallback
+            (return (local.get $tup))))
+        (return (call $parse_type_ty_paren_tail (local.get $tokens) (local.get $p)))))
+    ;; TLBracket → `[T]` TyList.
+    (if (i32.and (call $is_sentinel (local.get $k)) (i32.eq (local.get $k) (i32.const 49)))
+      (then
+        (local.set $tup (call $parse_type_ty (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))))
+        (local.set $p (call $expect (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens)
+            (call $list_index (local.get $tup) (i32.const 1)))
+          (i32.const 50)))   ;; TRBracket
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $mk_TyList (call $list_index (local.get $tup) (i32.const 0)))))
+        (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
+        (return (local.get $tup))))
+    ;; Unknown type form: TyInfer (199) — "the graph will prove it".
+    ;; The prior form returned TyUnit, a CONCRETE LIE that unification
+    ;; then enforced against every use of the annotated binding.
     (local.set $tup (call $make_list (i32.const 2)))
-    (drop (call $list_set (local.get $tup) (i32.const 0) (i32.const 204)))
+    (drop (call $list_set (local.get $tup) (i32.const 0) (i32.const 199)))
     (drop (call $list_set (local.get $tup) (i32.const 1) (i32.add (local.get $pos) (i32.const 1))))
+    (local.get $tup))
+
+  ;; Paren tail after `(` with at least one inner type: parse the
+  ;; comma-list; one element is grouping, two-plus is TyTuple.
+  (func $parse_type_ty_paren_tail (param $tokens i32) (param $pos i32) (result i32)
+    (local $p i32) (local $buf i32) (local $count i32)
+    (local $elem_r i32) (local $tup i32)
+    (local.set $buf (call $make_list (i32.const 4)))
+    (local.set $count (i32.const 0))
+    (local.set $p (local.get $pos))
+    (block $done
+      (loop $elems
+        (local.set $elem_r (call $parse_type_ty (local.get $tokens) (local.get $p)))
+        (local.set $buf (call $list_extend_to (local.get $buf)
+          (i32.add (local.get $count) (i32.const 1))))
+        (drop (call $list_set (local.get $buf) (local.get $count)
+          (call $list_index (local.get $elem_r) (i32.const 0))))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        (local.set $p (call $skip_ws_p (local.get $tokens)
+          (call $list_index (local.get $elem_r) (i32.const 1))))
+        (if (call $at (local.get $tokens) (local.get $p) (i32.const 51))   ;; TComma
+          (then
+            (local.set $p (call $skip_ws_p (local.get $tokens)
+              (i32.add (local.get $p) (i32.const 1))))
+            (br $elems))
+          (else
+            (local.set $p (call $expect (local.get $tokens) (local.get $p)
+              (i32.const 46)))   ;; TRParen
+            (br $done)))))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (if (i32.eq (local.get $count) (i32.const 1))
+      (then
+        ;; `(T)` — grouping, not a 1-tuple.
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $list_index (local.get $buf) (i32.const 0)))))
+      (else
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $mk_TyTuple
+            (call $slice (local.get $buf) (i32.const 0) (local.get $count)))))))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))
 
   ;; ─── parse_one_param ──────────────────────────────────────────────

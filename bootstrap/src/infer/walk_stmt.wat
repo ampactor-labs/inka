@@ -727,6 +727,11 @@
       (then (return (call $ty_make_tstring))))
     (if (i32.eq (local.get $pty) (i32.const 204))
       (then (return (call $ty_make_tunit))))
+    ;; 199 TyInfer — the author left it to the graph; fresh TVar.
+    (if (i32.eq (local.get $pty) (i32.const 199))
+      (then (return (call $ty_make_tvar
+        (call $graph_fresh_ty
+          (call $reason_make_inferred (i32.const 4056)))))))   ;; "param"
     ;; Heap-allocated record — read tag from offset 0.
     (local.set $tag (i32.load (local.get $pty)))
     ;; tag=205 TyName(name) — extract name + build TName(name, [])
@@ -749,10 +754,65 @@
           (call $walk_stmt_parser_record_fields_to_ty_fields
             (i32.load offset=4 (local.get $pty))))
         (return (call $ty_make_trecord (local.get $fields)))))
+    ;; tag=208 TyTuple(elems) — convert each elem.
+    (if (i32.eq (local.get $tag) (i32.const 208))
+      (then (return (call $ty_make_ttuple
+        (call $walk_stmt_parser_tys_to_tys
+          (i32.load offset=4 (local.get $pty)))))))
+    ;; tag=209 TyList(elem).
+    (if (i32.eq (local.get $tag) (i32.const 209))
+      (then (return (call $ty_make_tlist
+        (call $walk_stmt_parser_ty_to_ty
+          (i32.load offset=4 (local.get $pty)))))))
+    ;; tag=210 TyFun(params, ret) — `(A, B) -> C` unpacks the TyTuple
+    ;; LHS into the param list; any other LHS is one param. Row is a
+    ;; fresh row var: the annotation names value types, not effects;
+    ;; the row flows from the fn's body through HM.
+    (if (i32.eq (local.get $tag) (i32.const 210))
+      (then (return (call $ty_make_tfun
+        (call $walk_stmt_build_field_tparams
+          (call $walk_stmt_tyfun_param_list
+            (i32.load offset=4 (local.get $pty))))
+        (call $walk_stmt_parser_ty_to_ty
+          (i32.load offset=8 (local.get $pty)))
+        (call $row_make_open
+          (call $make_list (i32.const 0))
+          (call $graph_fresh_row
+            (call $reason_make_inferred (i32.const 4056))))))))   ;; "param"
     ;; Unknown shape — productive-under-error: fresh TVar.
     (call $ty_make_tvar
       (call $graph_fresh_ty
         (call $reason_make_inferred (i32.const 4056)))))
+
+  ;; TyFun LHS → param parser-ty list: TyTuple unpacks; anything else
+  ;; is a single param.
+  (func $walk_stmt_tyfun_param_list (param $lhs i32) (result i32)
+    (local $out i32)
+    (if (i32.and
+          (i32.eqz (call $is_sentinel (local.get $lhs)))
+          (i32.eq (i32.load (local.get $lhs)) (i32.const 208)))
+      (then (return (i32.load offset=4 (local.get $lhs)))))
+    (local.set $out (call $list_extend_to
+      (call $make_list (i32.const 1)) (i32.const 1)))
+    (drop (call $list_set (local.get $out) (i32.const 0) (local.get $lhs)))
+    (local.get $out))
+
+  ;; Convert a list of parser-Tys.
+  (func $walk_stmt_parser_tys_to_tys (param $ptys i32) (result i32)
+    (local $n i32) (local $i i32) (local $out i32)
+    (local.set $n (call $len (local.get $ptys)))
+    (local.set $out (call $list_extend_to
+      (call $make_list (local.get $n)) (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (drop (call $list_set (local.get $out) (local.get $i)
+          (call $walk_stmt_parser_ty_to_ty
+            (call $list_index (local.get $ptys) (local.get $i)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (local.get $out))
 
   ;; ─── parser record fields → canonical Ty field pairs ─────────────
   ;; Parser record fields are list entries shaped as 2-tuples
@@ -1382,8 +1442,28 @@
     (local $binding i32) (local $scheme i32) (local $op_ty i32) (local $op_tag i32)
     (local $params i32) (local $ret_ty i32)
     (local $n_args i32) (local $n_params i32)
-    (local $body_h i32) (local $ret_h i32)
-    (local $declared_reason i32)
+    (local $body_h i32) (local $s_h i32)
+    (local $saved_ret i32) (local $saved_res i32)
+    (local $declared_reason i32) (local $decl_reason i32)
+    ;; Typed-resume law: ONE handle-result S per handler decl — every
+    ;; arm's body value IS the handle result (resume or abort); resume
+    ;; inside any arm yields S and carries the op's R.
+    (local.set $s_h (call $graph_fresh_ty
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 4336)))))   ;; "handler arm body"
+    ;; Decl scope: config params + state fields bind ONCE; every arm's
+    ;; nested scope sees them through the chain. State inits walk here
+    ;; — under config bindings (`handler take_h(n) with remaining = n`)
+    ;; — so each state name carries its init's proven type.
+    (call $env_scope_enter)
+    (local.set $decl_reason (call $reason_make_located
+      (local.get $span)
+      (call $reason_make_declared (local.get $handler_name))))
+    (call $infer_bind_handler_names
+      (local.get $config) (local.get $decl_reason) (local.get $span))
+    (call $infer_bind_state_pairs
+      (call $infer_handler_state_init_pairs (local.get $state))
+      (local.get $decl_reason) (local.get $span))
     (local.set $n (call $len (local.get $arms)))
     (local.set $i (i32.const 0))
     (block $done
@@ -1423,43 +1503,36 @@
           (then
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $each)))
-        ;; Enter arm scope — arg bindings live here.
+        ;; Enter arm scope — arg bindings live here; config + state
+        ;; resolve through the enclosing decl scope.
         (call $env_scope_enter)
         (local.set $declared_reason (call $reason_make_located
           (local.get $span)
           (call $reason_make_declared (local.get $op_name))))
-        ;; Per Hβ.first-light.handler-config-state-substrate (2026-05-06):
-        ;; bind handler config-params and state-fields BEFORE arg bindings
-        ;; so arm-body identifier lookup (handler map_h(f) yield arm
-        ;; references `f`; handler take_h with remaining=n yield arm
-        ;; references `remaining`) resolves to the correct scope. Each
-        ;; binding gets a fresh tyvar scheme — productive-under-error;
-        ;; full per-arm typing of config + state is the wheel's
-        ;; install-site work (HandleExpr inference at install time).
-        (call $infer_bind_handler_names
-          (local.get $config) (local.get $declared_reason) (local.get $span))
-        (call $infer_bind_handler_state_names
-          (local.get $state) (local.get $declared_reason) (local.get $span))
         ;; Bind each arg pattern to its corresponding op param type.
         (call $infer_handler_arm_bind_args
           (local.get $args) (local.get $params)
           (local.get $declared_reason) (local.get $span))
-        ;; Walk arm body expression.
+        ;; Walk arm body under the arm context (save/restore: handler
+        ;; decls nest inside arm bodies). resume(v) reads (R, S) from
+        ;; the context; the body's own value unifies with S — never R.
+        (local.set $saved_ret (global.get $infer_arm_ret_ty_g))
+        (local.set $saved_res (global.get $infer_arm_result_h_g))
+        (global.set $infer_arm_ret_ty_g   (local.get $ret_ty))
+        (global.set $infer_arm_result_h_g (local.get $s_h))
         (local.set $body_h (call $infer_walk_expr (local.get $body_node)))
-        ;; Unify body result ↔ op return type.
-        (local.set $ret_h (call $graph_fresh_ty
-          (call $reason_make_located (local.get $span)
-            (call $reason_make_inferred (i32.const 4336)))))   ;; "handler arm body"
-        (call $graph_bind (local.get $ret_h) (local.get $ret_ty)
-          (local.get $declared_reason))
+        (global.set $infer_arm_ret_ty_g   (local.get $saved_ret))
+        (global.set $infer_arm_result_h_g (local.get $saved_res))
         (call $unify
-          (local.get $body_h) (local.get $ret_h) (local.get $span)
+          (local.get $body_h) (local.get $s_h) (local.get $span)
           (call $reason_make_located (local.get $span)
             (call $reason_make_inferred (i32.const 4336))))    ;; "handler arm body"
         ;; Exit arm scope.
         (call $env_scope_exit)
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $each))))
+        (br $each)))
+    ;; Exit decl scope (config + state bindings).
+    (call $env_scope_exit))
 
   ;; $infer_bind_handler_names — env_extends each name in the list with
   ;; a fresh-tyvar Forall scheme. Used for handler config-params per
@@ -1491,33 +1564,55 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter))))
 
-  ;; $infer_bind_handler_state_names — like $infer_bind_handler_names
-  ;; but reads field-name from offset 0 of each state-field 2-tuple
-  ;; (per parser_handler.wat:391-393 (field_name, init_expr) shape).
-  ;; State init expressions are NOT inferred here — they evaluate at
-  ;; handler INSTALL time (HandleExpr install site); arm-body usage
-  ;; constrains the field's tyvar via unification.
-  ;; Drift refused: 5 ((name, init) tuple is the parser's chosen
-  ;; positional layout; not parallel arrays at the AST level); 8
-  ;; (positional tuple-access by index 0, not string-keyed).
-  (func $infer_bind_handler_state_names
-        (param $state i32) (param $reason i32) (param $span i32)
-    (local $n i32) (local $i i32) (local $field i32) (local $name i32) (local $h i32)
+  ;; $infer_handler_state_init_pairs — walk each (name, init) state
+  ;; field's INIT expression once and return (name, init_h) pairs.
+  ;; The graph already proves the state field's type by walking its
+  ;; init (`counts = (0, 0)` IS (Int, Int)); a fresh unconstrained
+  ;; tyvar would discard that proof (handler IS state IS closure IS
+  ;; evidence — the state record's types come from the install-site
+  ;; values). Inits walk in the CALLER's scope: decl-side under config
+  ;; bindings; expr-side at the install site.
+  (func $infer_handler_state_init_pairs (param $state i32) (result i32)
+    (local $n i32) (local $i i32) (local $field i32)
+    (local $init i32) (local $ih i32) (local $pair i32) (local $out i32)
     (local.set $n (call $len (local.get $state)))
+    (local.set $out (call $list_extend_to
+      (call $make_list (local.get $n)) (local.get $n)))
     (local.set $i (i32.const 0))
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $field (call $list_index (local.get $state) (local.get $i)))
-        (local.set $name (call $list_index (local.get $field) (i32.const 0)))
-        (local.set $h (call $graph_fresh_ty
-          (call $reason_make_located (local.get $span)
-            (call $reason_make_declared (local.get $name)))))
+        (local.set $init (call $list_index (local.get $field) (i32.const 1)))
+        (local.set $ih (call $infer_walk_expr (local.get $init)))
+        (local.set $pair (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $pair) (i32.const 0)
+          (call $list_index (local.get $field) (i32.const 0))))
+        (drop (call $list_set (local.get $pair) (i32.const 1) (local.get $ih)))
+        (drop (call $list_set (local.get $out) (local.get $i) (local.get $pair)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (local.get $out))
+
+  ;; $infer_bind_state_pairs — env_extend each (name, init_h) pair as
+  ;; Forall([], TVar(init_h)): the state name's type IS its init's type;
+  ;; arm-body usage constrains it further through the same handle.
+  (func $infer_bind_state_pairs
+        (param $pairs i32) (param $reason i32) (param $span i32)
+    (local $n i32) (local $i i32) (local $pair i32) (local $name i32)
+    (local.set $n (call $len (local.get $pairs)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $pair (call $list_index (local.get $pairs) (local.get $i)))
+        (local.set $name (call $list_index (local.get $pair) (i32.const 0)))
         (call $env_extend
           (local.get $name)
           (call $scheme_make_forall
             (call $make_list (i32.const 0))
-            (call $ty_make_tvar (local.get $h)))
+            (call $ty_make_tvar
+              (call $list_index (local.get $pair) (i32.const 1))))
           (local.get $reason)
           (call $schemekind_make_fn))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -1529,10 +1624,16 @@
   (func $infer_handler_arm_bind_args
         (param $args i32) (param $params i32)
         (param $reason i32) (param $span i32)
-    (local $n i32) (local $i i32)
+    (local $n i32) (local $n_params i32) (local $i i32)
     (local $arg i32) (local $tp i32) (local $param_ty i32)
     (local $arg_h i32)
+    ;; Zip law (wheel src/infer.mn bind_arm_args via zip): pair up to
+    ;; the SHORTER list. Arity mismatch is the arity diagnostic's job;
+    ;; indexing past the params list reads garbage as a tparam.
     (local.set $n (call $len (local.get $args)))
+    (local.set $n_params (call $len (local.get $params)))
+    (if (i32.gt_u (local.get $n) (local.get $n_params))
+      (then (local.set $n (local.get $n_params))))
     (local.set $i (i32.const 0))
     (block $done
       (loop $iter

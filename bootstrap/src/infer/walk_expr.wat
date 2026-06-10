@@ -487,10 +487,21 @@
   ;; each arm as an opaque record whose .body field lives at offset 4
   ;; (parser-emitted shape; lands as a peer record in walk_stmt.wat with
   ;; HANDLER_ARM tag — for now opaque-deref by offset).
+  ;; Inline-arm walk under the typed-resume law. Arm record per Lock #8
+  ;; alphabetical is {args=0, body=1, op_name=2} (records are
+  ;; [tag][arity][fields...] — field INDEX via record_get, never byte
+  ;; offsets). S for inline `handle { body } with { arms }` IS the
+  ;; handle-expr's body type: args bind to the op's declared params;
+  ;; resume reads (R, S) from the arm context; the body's own value
+  ;; unifies with S.
   (func $walk_expr_handle_arm_iter (param $arms i32) (param $body_h i32)
                                     (param $span i32)
     (local $n i32) (local $i i32)
     (local $arm i32) (local $arm_body i32) (local $abh i32)
+    (local $op_name i32) (local $args i32) (local $binding i32)
+    (local $op_ty i32) (local $ret_ty i32)
+    (local $saved_ret i32) (local $saved_res i32)
+    (local $declared_reason i32)
     (local.set $n (call $len (local.get $arms)))
     (local.set $i (i32.const 0))
     (block $done
@@ -498,17 +509,40 @@
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
         (call $env_scope_enter)
-        ;; Per Hβ.first-light.handle-expr-state-substrate (2026-05-06)
-        ;; bug-fix: arm record per Lock #8 alphabetical is {args=0,
-        ;; body=1, op_name=2} — body at FIELD INDEX 1, not byte offset
-        ;; 4. Records have [tag:i32][arity:i32][fields...] layout per
-        ;; runtime/record.wat:22, so byte offset 4 IS the arity field
-        ;; (always 3), not body. The original `i32.load offset=4` was
-        ;; a stub never exercised — arms list was always empty before
-        ;; layer 9 parser-side substrate landed (handle-expr-state
-        ;; only produces non-empty arms now).
+        (local.set $args     (call $record_get (local.get $arm) (i32.const 0)))
         (local.set $arm_body (call $record_get (local.get $arm) (i32.const 1)))
+        (local.set $op_name  (call $record_get (local.get $arm) (i32.const 2)))
+        ;; Op lookup → R + arg binds against declared params. A missed
+        ;; or shapeless op leaves R as a fresh var (productive-under-
+        ;; error; the op's own diagnostic already fired at decl/use).
+        (local.set $ret_ty (call $ty_make_tvar (call $graph_fresh_ty
+          (call $reason_make_located (local.get $span)
+            (call $reason_make_inferred (i32.const 3864))))))   ;; "arm body"
+        (local.set $binding (call $env_lookup (local.get $op_name)))
+        (if (i32.ne (local.get $binding) (i32.const 0))
+          (then
+            (local.set $op_ty (call $instantiate
+              (call $env_binding_scheme (local.get $binding))))
+            (if (i32.eq (call $ty_tag (local.get $op_ty)) (i32.const 107))
+              (then
+                (local.set $ret_ty (call $ty_tfun_return (local.get $op_ty)))
+                (local.set $declared_reason (call $reason_make_located
+                  (local.get $span)
+                  (call $reason_make_declared (local.get $op_name))))
+                (call $infer_handler_arm_bind_args
+                  (local.get $args)
+                  (call $ty_tfun_params (local.get $op_ty))
+                  (local.get $declared_reason) (local.get $span)))
+              (else
+                (local.set $ret_ty (local.get $op_ty))))))
+        ;; Walk body under the arm context (save/restore for nesting).
+        (local.set $saved_ret (global.get $infer_arm_ret_ty_g))
+        (local.set $saved_res (global.get $infer_arm_result_h_g))
+        (global.set $infer_arm_ret_ty_g   (local.get $ret_ty))
+        (global.set $infer_arm_result_h_g (local.get $body_h))
         (local.set $abh (call $infer_walk_expr (local.get $arm_body)))
+        (global.set $infer_arm_ret_ty_g   (local.get $saved_ret))
+        (global.set $infer_arm_result_h_g (local.get $saved_res))
         (call $unify (local.get $abh) (local.get $body_h)
                       (local.get $span)
                       (call $reason_make_inferred (i32.const 3864)))   ;; "arm body"
@@ -1270,9 +1304,18 @@
         (result i32)
     (local $body_node i32) (local $arms i32) (local $bh i32)
     (local $body_row_h i32) (local $arm_row_h i32)
-    ;; Layout: [tag=93][body][arms]
+    (local $state_pairs i32)
+    ;; Layout: [tag=93][body][arms][state][install] per parser_handler.wat
+    ;; HandleExpr build. State fields are (name, init) pairs from the
+    ;; `with FIELD = INIT` form-2 clause; install (offset 16) is the
+    ;; form-3 handler-value expression.
     (local.set $body_node (i32.load offset=4 (local.get $expr)))
     (local.set $arms      (i32.load offset=8 (local.get $expr)))
+    ;; State inits walk at the INSTALL site — their types are proven
+    ;; here (`with counts = (0, 0)` IS (Int, Int)); arm bodies read the
+    ;; names through the scope opened below.
+    (local.set $state_pairs (call $infer_handler_state_init_pairs
+      (i32.load offset=12 (local.get $expr))))
     ;; handler-stack push (seed-stub)
     (call $walk_expr_inf_push_handler
       (call $walk_expr_collect_handled_effects (local.get $arms)))
@@ -1282,12 +1325,18 @@
     (call $walk_expr_inf_enter_fn (local.get $body_row_h) (local.get $span))
     (local.set $bh (call $infer_walk_expr (local.get $body_node)))
     (call $walk_expr_inf_exit_fn)
-    ;; Arms inference
+    ;; Arms inference — state names in scope for every arm body.
     (local.set $arm_row_h (call $graph_fresh_row
       (call $reason_make_inferred (i32.const 3696))))
     (call $walk_expr_inf_enter_fn (local.get $arm_row_h) (local.get $span))
+    (call $env_scope_enter)
+    (call $infer_bind_state_pairs (local.get $state_pairs)
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 3584)))   ;; "result"
+      (local.get $span))
     (call $walk_expr_handle_arm_iter
       (local.get $arms) (local.get $bh) (local.get $span))
+    (call $env_scope_exit)
     (call $walk_expr_inf_exit_fn)
     ;; handler-stack pop
     (call $walk_expr_inf_pop_handler)
@@ -1342,20 +1391,44 @@
             (call $reason_make_varlookup (local.get $op_name) (local.get $reason))))))
     (local.get $handle))
 
-  ;; ResumeExpr arm — src/infer.mn:697-701. Walk val; bind handle to TUnit.
+  ;; ResumeExpr arm — typed-resume law (SUBSTRATE.md primitive #2,
+  ;; mirror of wheel src/infer.mn ResumeExpr): inside `op(args) => body`
+  ;; for `op : (P...) -> R` under handle-result S, `resume : R -> S`.
+  ;; The value flows to the perform site (v unifies with R); the
+  ;; expression's own value is the continuation's completion (S).
+  ;; No arm context (resume outside an arm): bind TUnit — productive-
+  ;; under-error; the wheel carries E_ResumeOutsideArm.
   (func $infer_walk_expr_resume
         (export "infer_walk_expr_resume")
         (param $expr i32) (param $handle i32) (param $span i32)
         (result i32)
-    (local $val i32) (local $vh i32)
+    (local $val i32) (local $vh i32) (local $r_h i32)
     ;; Layout: [tag=95][val][state_updates] — second field unused at seed
     (local.set $val (i32.load offset=4 (local.get $expr)))
     (local.set $vh (call $infer_walk_expr (local.get $val)))
-    (drop (local.get $vh))
-    (call $graph_bind (local.get $handle)
-      (call $ty_make_tunit)
+    (if (i32.eqz (global.get $infer_arm_result_h_g))
+      (then
+        (call $graph_bind (local.get $handle)
+          (call $ty_make_tunit)
+          (call $reason_make_located (local.get $span)
+            (call $reason_make_inferred (i32.const 3480))))   ;; "unit"
+        (return (local.get $handle))))
+    ;; v ↔ R
+    (local.set $r_h (call $graph_fresh_ty
       (call $reason_make_located (local.get $span)
-        (call $reason_make_inferred (i32.const 3480))))   ;; "unit"
+        (call $reason_make_inferred (i32.const 4336)))))   ;; "handler arm body"
+    (call $graph_bind (local.get $r_h)
+      (global.get $infer_arm_ret_ty_g)
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 4336))))
+    (call $unify (local.get $vh) (local.get $r_h) (local.get $span)
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 4336))))
+    ;; resume expr : S
+    (call $graph_bind (local.get $handle)
+      (call $ty_make_tvar (global.get $infer_arm_result_h_g))
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 4336))))
     (local.get $handle))
 
   ;; MakeListExpr arm — src/infer.mn:556-569. Empty: TList(TVar(fresh)).

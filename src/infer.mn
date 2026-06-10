@@ -45,6 +45,9 @@ effect InferCtx {
   inf_pop_handler() -> ()
   inf_handler_stack() -> List
   inf_handler_provider(String) -> Option
+  inf_enter_arm(Ty, Int) -> ()
+  inf_exit_arm() -> ()
+  inf_arm_tys() -> Option
 }
 
 // handler_stack (W4 prep, C4) — insertion-ordered stack of handler
@@ -53,11 +56,16 @@ effect InferCtx {
 // monomorphic dispatch reads this to know which handler position
 // to target; today it's a bookkeeping surface with no consumer but
 // the shape it captures is load-bearing for evidence reification.
-handler infer_ctx with stack = [], declared = [], handler_stack = [] {
+handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack = [] {
   // stack = [InferFrame, ...] where each InferFrame is a record:
   //   {accumulated_row: EffRow, fn_span: Span, row_handle: Int}
   // declared = [(EffName, negated)] — the current FnStmt's annotation
   // handler_stack = [handler_name, ...] — outer-to-inner installation order
+  // arm_stack = [(op_return_ty, handle_result_h), ...] — the typed-resume
+  //   context (SUBSTRATE.md primitive #2): inside `op(args) => body` for
+  //   `op : (P...) -> R` under a handler whose handle-result is S,
+  //   `resume : R -> S`. ResumeExpr reads the top frame; a stack because
+  //   handler decls nest inside arm bodies.
 
   inf_enter_fn(h, fn_span) => {
     let frame = {accumulated_row: EfPure, fn_span: fn_span, row_handle: h}
@@ -135,6 +143,20 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [] {
 
   inf_handler_stack() => {
     resume(handler_stack)
+  },
+
+  inf_enter_arm(op_ret_ty, result_h) => {
+    resume() with arm_stack = [(op_ret_ty, result_h)] ++ arm_stack
+  },
+
+  inf_exit_arm() => {
+    if arm_stack.len == 0 { resume() }
+    else { resume() with arm_stack = list_tail(arm_stack) }
+  },
+
+  inf_arm_tys() => {
+    if arm_stack.len == 0 { resume(None) }
+    else { resume(Some(list_head(arm_stack))) }
   },
 
   inf_handler_provider(op_name) => {
@@ -778,9 +800,30 @@ fn infer_expr(ref node) = {
     },
 
     NExpr(ResumeExpr(val, state_updates)) => {
+      // Typed-resume law (SUBSTRATE.md primitive #2): inside
+      // `op(args) => body` for `op : (P...) -> R` under a handler
+      // whose handle-result is S, `resume : R -> S`. The value flows
+      // to the perform site (v unifies with R); the expression's own
+      // value is the continuation's completion (S).
       infer_expr(val)
       let N(_, _, vh) = val
-      perform graph_bind(handle, TUnit, Located(span, Inferred("resume")))
+      match perform inf_arm_tys() {
+        Some(ctx) => {
+          let (op_ret_ty, result_h) = ctx
+          let r_h = perform mint(Inferred("op result at resume"))
+          perform graph_bind(r_h, op_ret_ty,
+            Located(span, Inferred("resume carries the op result")))
+          unify(vh, r_h, span, Inferred("resume carries the op result"))
+          perform graph_bind(handle, TVar(result_h),
+            Located(span, Inferred("resume yields the handle result")))
+        },
+        None =>
+          // resume outside any arm — parse admitted it; surface the
+          // structural fact rather than fabricating a type.
+          perform report("infer", "E_ResumeOutsideArm", "ResumeOutsideArm",
+            "resume used outside a handler arm",
+            span, "MaybeIncorrect")
+      }
     },
 
     NExpr(FieldExpr(rec, field)) => {
@@ -2015,12 +2058,56 @@ fn arms_have_wildcard(arms) = any((arm) => {
 fn infer_handler_arms(arms, body_h, span: ValidSpan) = {
   for_each((arm) => {
     perform env_scope_enter()
-    infer_expr(arm.body)
-    let N(_, _, abh) = arm.body
-    unify(abh, body_h, span, Inferred("handler arm result"))
+    infer_one_handler_arm(arm, body_h)
     perform env_scope_exit()
   }, arms)
 }
+
+/// One arm under the typed-resume law (SUBSTRATE.md primitive #2).
+/// `op(args) => body` for `op : (P...) -> R` under handle-result S:
+/// args bind to the op's DECLARED params (the graph already knows
+/// them — fresh vars would discard that); resume reads (R, S) from
+/// arm context; the body's own value unifies with S — the arm's
+/// value IS the handle result, whether it resumes or aborts.
+fn infer_one_handler_arm(arm, result_h) = {
+  let arm_span = span_of_node(arm.body)
+  let op_ret_ty = match perform env_lookup(arm.op_name) {
+    Some(entry) => {
+      let (scheme, _, _) = entry
+      match instantiate(scheme) {
+        TFun(params, ret_ty, _) => {
+          bind_arm_args(arm.args, params, arm.op_name, arm_span)
+          ret_ty
+        },
+        // An op registered without param structure IS its result type.
+        other => other
+      }
+    },
+    None => {
+      perform report("infer", "E_MissingVariable", "MissingVariable",
+        "handler arm op: " |> str_concat(arm.op_name),
+        arm_span, "MaybeIncorrect")
+      TVar(perform mint(Inferred("undeclared op result")))
+    }
+  }
+  perform inf_enter_arm(op_ret_ty, result_h)
+  infer_expr(arm.body)
+  perform inf_exit_arm()
+  let N(_, _, abh) = arm.body
+  unify(abh, result_h, arm_span, Inferred("handler arm result"))
+}
+
+/// Arm params take the op's declared param types, positionally.
+/// zip truncates on arity mismatch — the aligned prefix still binds
+/// (productive-under-error; the arity diagnostic is the op's).
+fn bind_arm_args(args, params, op_name, span: ValidSpan) =
+  for_each((pair) => {
+    let (name, param_ty) = pair
+    let h = perform mint(Located(span, LetBinding(name, Declared(op_name))))
+    perform graph_bind(h, param_ty, Located(span, Declared(op_name)))
+    perform env_extend(name, Forall([], TVar(h)),
+      Located(span, LetBinding(name, Declared(op_name))), FnScheme)
+  }, zip(args, params))
 
 /// Generalization — Damas-Milner let-gen.
 /// Quantify handles that are free in the body but NOT free in env.
@@ -2315,10 +2402,10 @@ fn register_handler(hname, ename, config, state, arms) = {
   // proven cardinality. There is no @resume= annotation; the body
   // IS the contract.
   let handler_ty = TName("Handler", [TName(ename, [])])
+  let config_tparams = mint_handler_config_tparams(config, hname, 0)
   let scheme_body = if config.len == 0 {
     handler_ty
   } else {
-    let config_tparams = mint_handler_config_tparams(config, hname, 0)
     TFun(config_tparams, handler_ty, mk_ef_closed([]))
   }
   perform env_extend(hname,
@@ -2335,7 +2422,44 @@ fn register_handler(hname, ename, config, state, arms) = {
     perform graph_bind_resume_kind(arm.op_name, ename, kind,
       Located(span_of_node(arm.body), Inferred("resume cardinality from arm body")))
   })
+  // Typed-resume arm typing (SUBSTRATE.md primitive #2): every arm
+  // body walks under the law with one per-decl handle-result S.
+  // Config params bind through the SAME TParam handles the scheme
+  // carries (install-site args constrain arm-body usage through them);
+  // state fields bind to their init expressions' inferred types — the
+  // graph already knows them, fresh vars would discard that.
+  let state_binds = infer_handler_state_inits(state)
+  let s_h = perform mint(Inferred("handler result of '" |> str_concat(hname) |> str_concat("'")))   // drift-audit: ignore — |> inside string-build arg, not a pipe verb
+  list_iter(arms, (arm) => {
+    perform env_scope_enter()
+    bind_handler_config_params(config_tparams, hname)
+    bind_handler_state_names(state_binds, hname, span_of_node(arm.body))
+    infer_one_handler_arm(arm, s_h)
+    perform env_scope_exit()
+  })
 }
+
+/// Walk each state field's init ONCE per decl; the init's inferred
+/// type IS the field's type in arm scope.
+fn infer_handler_state_inits(state) = map((sf) => {
+  infer_expr(sf.init)
+  let N(_, _, ih) = sf.init
+  (sf.name, ih)
+}, state)
+
+fn bind_handler_config_params(config_tparams, hname) =
+  for_each((tp) => {
+    let TParam(name, ty, _, _) = tp
+    perform env_extend(name, Forall([], ty),
+      Located(span_zero(), LetBinding(name, Declared(hname))), FnScheme)
+  }, config_tparams)
+
+fn bind_handler_state_names(state_binds, hname, span: ValidSpan) =
+  for_each((p) => {
+    let (name, ih) = p
+    perform env_extend(name, Forall([], TVar(ih)),
+      Located(span, LetBinding(name, Declared(hname))), FnScheme)
+  }, state_binds)
 
 /// $infer_resume_cardinality — Phase B substrate. Replaces the
 /// @resume= annotation that was erased from all effect declarations

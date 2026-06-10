@@ -278,11 +278,11 @@ Optional:
 
 ## §8 — Named peer follow-ups
 
-- **`Hβ.syntax.pat-alt-binding-relax`** — implement §4.2 (infer's binding-set + type-unification check).
-- **`Hβ.syntax.pat-alt-lower-substrate`** — implement §4.3 (lower's dispatch chain for PAlt with bindings).
-- **`Hβ.syntax.pat-alt-refinement-disjunction`** — implement §4.4 (refinement composition; or surface E_PatternAlternationRefinementUnsupported until L2).
-- **`Hβ.syntax.pat-alt-doc-revise`** — implement §5 (SYNTAX.md alternation rule revision).
-- **`Hβ.syntax.pat-alt-diagnostic-binding-mismatch`** — implement §6 (E_PatternAlternationBindingMismatch).
+- ✓ **`Hβ.syntax.pat-alt-binding-relax`** — §4.2 landed (commit 4ad2af4): `infer_pat` PAlt arm walks every branch against the SAME scrutinee handle (branch types unify by construction); `enforce_alt_binding_law` checks name-set equality + per-name `unify_types` across branches.
+- ✓ **`Hβ.syntax.pat-alt-lower-substrate`** — §4.3 landed (4ad2af4), GENERALIZED: instead of an `LMatchAlt` special form, the whole match emitter became the pattern algebra — predicate projection (AND via short-circuit nesting, OR via short-circuit chaining, per-ctor representation guards) ⊕ binds projection (per-branch re-dispatch when alternation binds). The arm-set shape system (MatchShape/classify/mixed/filter) dissolved in both layers.
+- **`Hβ.syntax.pat-alt-refinement-disjunction`** — §4.4 (refinement composition) stays post-L1 per its own structural reason: the disjunction substrate composes with multiple Verify-discharge sites.
+- ✓ **`Hβ.syntax.pat-alt-doc-revise`** — §5 was already live in SYNTAX.md §"Pattern alternation — rule" (the relaxed form with examples + diagnostic).
+- ✓ **`Hβ.syntax.pat-alt-diagnostic-binding-mismatch`** — §6 landed (4ad2af4): `E_PatternAlternationBindingMismatch` emits from `enforce_alt_binding_law` + `alt_binder_ty`'s binder-lost arm.
 
 ## §9 — Verification
 

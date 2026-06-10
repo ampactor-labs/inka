@@ -711,12 +711,28 @@
   ;; payload: MissingVar(name) per reason.wat tag 236.
   (func $infer_emit_missing_var (param $handle i32) (param $name i32)
                                   (param $reason i32)
-    (local $msg i32)
-    ;; Construct message: "E_MissingVariable: <name> at handle <h>\n"
+    (local $msg i32) (local $span i32)
+    ;; Construct message: "E_MissingVariable: <name> at handle <h>
+    ;; @ <l>:<c>\n" — coordinates from the Located reason (SYNTAX.md
+    ;; governing principle 5; the span was always in the reason chain,
+    ;; the emitter now renders it).
     (local.set $msg (i32.const 6096))                          ;; "E_MissingVariable: "
     (local.set $msg (call $str_concat (local.get $msg) (local.get $name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; " at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
+    (if (i32.and
+          (i32.ge_u (local.get $reason) (global.get $heap_base))
+          (i32.eq (call $tag_of (local.get $reason)) (i32.const 238)))   ;; Located
+      (then
+        (local.set $span (call $reason_located_span (local.get $reason)))
+        (if (i32.ge_u (local.get $span) (global.get $heap_base))
+          (then
+            (local.set $msg (call $str_concat (local.get $msg) (i32.const 6440)))  ;; " @ "
+            (local.set $msg (call $str_concat (local.get $msg)
+              (call $int_to_str (i32.load offset=4 (local.get $span)))))
+            (local.set $msg (call $str_concat (local.get $msg) (i32.const 6456)))  ;; ":"
+            (local.set $msg (call $str_concat (local.get $msg)
+              (call $int_to_str (i32.load offset=8 (local.get $span)))))))))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
     ;; Bind handle to NErrorHole(MissingVar(name))

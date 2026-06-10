@@ -216,6 +216,18 @@
           (call $mk_TyList (call $list_index (local.get $tup) (i32.const 0)))))
         (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
         (return (local.get $tup))))
+    ;; TLBrace → `{name: Ty, ...}` structural record TYPE. One arm makes
+    ;; record types live at EVERY type position — variant payloads
+    ;; (`Ctor({...})`), fn annotations, op params. Pre-fix the fallback
+    ;; fabricated TyInfer and the brace innards leaked to statement
+    ;; position as expressions (type names then missed env as variables).
+    (if (i32.and (call $is_sentinel (local.get $k)) (i32.eq (local.get $k) (i32.const 47)))
+      (then
+        (local.set $tup (call $parse_record_type_fields (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $mk_TyRecord (call $list_index (local.get $tup) (i32.const 0)))))
+        (return (local.get $tup))))
     ;; Unknown type form: TyInfer (199) — "the graph will prove it".
     ;; The prior form returned TyUnit, a CONCRETE LIE that unification
     ;; then enforced against every use of the annotated binding.

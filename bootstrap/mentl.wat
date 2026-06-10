@@ -5602,6 +5602,18 @@
           (call $mk_TyList (call $list_index (local.get $tup) (i32.const 0)))))
         (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
         (return (local.get $tup))))
+    ;; TLBrace → `{name: Ty, ...}` structural record TYPE. One arm makes
+    ;; record types live at EVERY type position — variant payloads
+    ;; (`Ctor({...})`), fn annotations, op params. Pre-fix the fallback
+    ;; fabricated TyInfer and the brace innards leaked to statement
+    ;; position as expressions (type names then missed env as variables).
+    (if (i32.and (call $is_sentinel (local.get $k)) (i32.eq (local.get $k) (i32.const 47)))
+      (then
+        (local.set $tup (call $parse_record_type_fields (local.get $tokens)
+          (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $mk_TyRecord (call $list_index (local.get $tup) (i32.const 0)))))
+        (return (local.get $tup))))
     ;; Unknown type form: TyInfer (199) — "the graph will prove it".
     ;; The prior form returned TyUnit, a CONCRETE LIE that unification
     ;; then enforced against every use of the annotated binding.
@@ -11881,12 +11893,28 @@
   ;; payload: MissingVar(name) per reason.wat tag 236.
   (func $infer_emit_missing_var (param $handle i32) (param $name i32)
                                   (param $reason i32)
-    (local $msg i32)
-    ;; Construct message: "E_MissingVariable: <name> at handle <h>\n"
+    (local $msg i32) (local $span i32)
+    ;; Construct message: "E_MissingVariable: <name> at handle <h>
+    ;; @ <l>:<c>\n" — coordinates from the Located reason (SYNTAX.md
+    ;; governing principle 5; the span was always in the reason chain,
+    ;; the emitter now renders it).
     (local.set $msg (i32.const 6096))                          ;; "E_MissingVariable: "
     (local.set $msg (call $str_concat (local.get $msg) (local.get $name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; " at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
+    (if (i32.and
+          (i32.ge_u (local.get $reason) (global.get $heap_base))
+          (i32.eq (call $tag_of (local.get $reason)) (i32.const 238)))   ;; Located
+      (then
+        (local.set $span (call $reason_located_span (local.get $reason)))
+        (if (i32.ge_u (local.get $span) (global.get $heap_base))
+          (then
+            (local.set $msg (call $str_concat (local.get $msg) (i32.const 6440)))  ;; " @ "
+            (local.set $msg (call $str_concat (local.get $msg)
+              (call $int_to_str (i32.load offset=4 (local.get $span)))))
+            (local.set $msg (call $str_concat (local.get $msg) (i32.const 6456)))  ;; ":"
+            (local.set $msg (call $str_concat (local.get $msg)
+              (call $int_to_str (i32.load offset=8 (local.get $span)))))))))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
     ;; Bind handle to NErrorHole(MissingVar(name))

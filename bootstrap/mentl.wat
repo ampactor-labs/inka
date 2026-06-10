@@ -12235,12 +12235,18 @@
         (if (i32.eq (call $row_handle (local.get $a))
                     (call $row_handle (local.get $b)))
           (then (return)))))
-    (if (call $row_bindable_open (local.get $a))
-      (then (call $graph_bind_row (call $row_handle (local.get $a))
-              (call $lookup_row_for (local.get $b)) (local.get $reason)) (return)))
+    ;; b-first: in the call shape b is the freshly-minted expected row;
+    ;; binding the FRESH var to the pre-existing truth (b := a's row)
+    ;; keeps the callsite var chasing through the callee — it late-binds
+    ;; when the callee's row closes, and the row-fixpoint's edges stay
+    ;; live for back-edges (mutual recursion). a-first bound the CALLEE
+    ;; var to the callsite's fresh one, orphaning every edge.
     (if (call $row_bindable_open (local.get $b))
       (then (call $graph_bind_row (call $row_handle (local.get $b))
-              (call $lookup_row_for (local.get $a)) (local.get $reason)) (return))))
+              (call $lookup_row_for (local.get $a)) (local.get $reason)) (return)))
+    (if (call $row_bindable_open (local.get $a))
+      (then (call $graph_bind_row (call $row_handle (local.get $a))
+              (call $lookup_row_for (local.get $b)) (local.get $reason)) (return))))
 
   (func $unify_types (param $a i32) (param $b i32)
                       (param $span i32) (param $reason i32)
@@ -18889,8 +18895,19 @@
   ;; carry free TVars (NFre) — row resolution is independent of monotype
   ;; resolution, and total at any graph size (no magnitude tests).
   (func $lookup_row_for (export "lookup_row_for") (param $row i32) (result i32)
+    (call $lookup_row_for_d (local.get $row) (i32.const 0)))
+
+  ;; Depth-bounded inner chase. Mutually-recursive fns produce
+  ;; legitimately co-referential open rows (A's row references B's var
+  ;; and vice versa); a cycle means "still open, self-referential" — the
+  ;; honest resolution is the EfOpen itself (the row fixpoint then
+  ;; unions names across the cycle monotonically). 64 bounds any real
+  ;; chain; the wheel-side form is union-find find on the graph.
+  (func $lookup_row_for_d (param $row i32) (param $depth i32) (result i32)
     (local $tag i32) (local $nk i32) (local $ntag i32)
     (local $names i32) (local $resolved i32)
+    (if (i32.ge_u (local.get $depth) (i32.const 64))
+      (then (return (local.get $row))))
     (local.set $tag (call $tag_of (local.get $row)))
     ;; EfPure sentinel / EfClosed / Neg / Sub / Inter — already a row value.
     (if (i32.eq (local.get $tag) (i32.const 150)) (then (return (local.get $row))))
@@ -18906,8 +18923,9 @@
         (local.set $ntag (call $node_kind_tag (local.get $nk)))
         (if (i32.eq (local.get $ntag) (i32.const 62))   ;; NRowBound
           (then
-            (local.set $resolved (call $lookup_row_for
-              (call $node_kind_payload (local.get $nk))))
+            (local.set $resolved (call $lookup_row_for_d
+              (call $node_kind_payload (local.get $nk))
+              (i32.add (local.get $depth) (i32.const 1))))
             (local.set $names (call $row_names (local.get $row)))
             (if (i32.eqz (call $len (local.get $names)))
               (then (return (local.get $resolved))))
@@ -22138,8 +22156,6 @@
     ;; The graph carries EffectDeclKind; we read it to compute the
     ;; evidence slot index. No separate registry. Graph empowerment.
     (local.set $resolved (call $lower_resolve_handler_for_op (local.get $op_name)))
-    (call $eprint_string (local.get $op_name))
-    (call $eprint_string (call $int_to_str (i32.add (i32.const 750000000) (i32.ne (local.get $resolved) (i32.const 0)))))
     (if (result i32) (i32.ne (local.get $resolved) (i32.const 0))
       (then
         ;; Tier 1: monomorphic direct-call. Handler resolved at lower-time.

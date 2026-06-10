@@ -276,8 +276,19 @@
   ;; carry free TVars (NFre) — row resolution is independent of monotype
   ;; resolution, and total at any graph size (no magnitude tests).
   (func $lookup_row_for (export "lookup_row_for") (param $row i32) (result i32)
+    (call $lookup_row_for_d (local.get $row) (i32.const 0)))
+
+  ;; Depth-bounded inner chase. Mutually-recursive fns produce
+  ;; legitimately co-referential open rows (A's row references B's var
+  ;; and vice versa); a cycle means "still open, self-referential" — the
+  ;; honest resolution is the EfOpen itself (the row fixpoint then
+  ;; unions names across the cycle monotonically). 64 bounds any real
+  ;; chain; the wheel-side form is union-find find on the graph.
+  (func $lookup_row_for_d (param $row i32) (param $depth i32) (result i32)
     (local $tag i32) (local $nk i32) (local $ntag i32)
     (local $names i32) (local $resolved i32)
+    (if (i32.ge_u (local.get $depth) (i32.const 64))
+      (then (return (local.get $row))))
     (local.set $tag (call $tag_of (local.get $row)))
     ;; EfPure sentinel / EfClosed / Neg / Sub / Inter — already a row value.
     (if (i32.eq (local.get $tag) (i32.const 150)) (then (return (local.get $row))))
@@ -293,8 +304,9 @@
         (local.set $ntag (call $node_kind_tag (local.get $nk)))
         (if (i32.eq (local.get $ntag) (i32.const 62))   ;; NRowBound
           (then
-            (local.set $resolved (call $lookup_row_for
-              (call $node_kind_payload (local.get $nk))))
+            (local.set $resolved (call $lookup_row_for_d
+              (call $node_kind_payload (local.get $nk))
+              (i32.add (local.get $depth) (i32.const 1))))
             (local.set $names (call $row_names (local.get $row)))
             (if (i32.eqz (call $len (local.get $names)))
               (then (return (local.get $resolved))))

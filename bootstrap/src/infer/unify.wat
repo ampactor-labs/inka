@@ -312,12 +312,18 @@
         (if (i32.eq (call $row_handle (local.get $a))
                     (call $row_handle (local.get $b)))
           (then (return)))))
-    (if (call $row_bindable_open (local.get $a))
-      (then (call $graph_bind_row (call $row_handle (local.get $a))
-              (call $lookup_row_for (local.get $b)) (local.get $reason)) (return)))
+    ;; b-first: in the call shape b is the freshly-minted expected row;
+    ;; binding the FRESH var to the pre-existing truth (b := a's row)
+    ;; keeps the callsite var chasing through the callee — it late-binds
+    ;; when the callee's row closes, and the row-fixpoint's edges stay
+    ;; live for back-edges (mutual recursion). a-first bound the CALLEE
+    ;; var to the callsite's fresh one, orphaning every edge.
     (if (call $row_bindable_open (local.get $b))
       (then (call $graph_bind_row (call $row_handle (local.get $b))
-              (call $lookup_row_for (local.get $a)) (local.get $reason)) (return))))
+              (call $lookup_row_for (local.get $a)) (local.get $reason)) (return)))
+    (if (call $row_bindable_open (local.get $a))
+      (then (call $graph_bind_row (call $row_handle (local.get $a))
+              (call $lookup_row_for (local.get $b)) (local.get $reason)) (return))))
 
   (func $unify_types (param $a i32) (param $b i32)
                       (param $span i32) (param $reason i32)

@@ -89,7 +89,6 @@ fn two_char_kind(a, b) with Pure = {
   else if a == 60 && b == 126 { Some(TLtTilde) }   // <~
   else if a == 38 && b == 38 { Some(TAndAnd) }     // &&
   else if a == 124 && b == 124 { Some(TOrOr) }     // ||
-  else if a == 58 && b == 58 { Some(TColonColon) } // ::
   else if a == 63 && b == 63 { Some(THole) }       // ?? — the gradient's absence marker
   else                       { None }
 }

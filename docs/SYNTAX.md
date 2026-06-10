@@ -15,9 +15,9 @@ Every form below exists to make one primitive of the kernel (DESIGN.md §0.5) re
 | # | Kernel primitive                                    | Tentacle   | Surface form                                                    |
 |---|-----------------------------------------------------|------------|-----------------------------------------------------------------|
 | 1 | Graph + Env                                    | Query      | AST nodes implicit; `import` brings module envs together         |
-| 2 | Handlers with typed resume discipline               | Propose    | `effect`, `handler`, `handle`/`~>`, `perform`, `resume`. Resume cardinality is INFERRED from arm body structure (count of resume sites under control-flow ancestry); never authored as annotation. |
+| 2 | Handlers with typed resume discipline               | Propose    | `effect`, `handler`, `handle`/`~>`, `resume`. Ops are invoked as BARE CALLS — effect-ness lives in the op's row (`Closed[eff]` at decl), never in a call-site keyword (`perform` is format-liftable ceremony; see §«Invoking effect operations»). Resume cardinality is INFERRED from arm body structure (count of resume sites under control-flow ancestry); never authored as annotation. |
 | 3 | Five verbs                                          | Topology   | `\|>`  `<\|`  `><`  `~>`  `<~` with canonical layout             |
-| 4 | Full Boolean effect algebra (`+ - & ! Pure`)        | Unlock     | `with E1 + !E2 + Pure` in fn sigs, handler sigs, types — declared row is a CONSTRAINT verified against the row inferred from the body's `perform` sites, never a contract |
+| 4 | Full Boolean effect algebra (`+ - & ! Pure`)        | Unlock     | `with E1 + !E2 + Pure` in fn sigs, handler sigs, types — declared row is a CONSTRAINT verified against the row inferred from the body's op-call sites, never a contract |
 | 5 | Ownership as an effect                              | Trace      | `own` / `ref` parameter markers; inferred from usage count by default (0/1/2+ → Inferred/Own/Ref) |
 | 6 | Refinement types                                    | Verify     | `type Name = Base where predicate`; per-program-point narrowing inferred from `if`/`match`/`assert` sites |
 | 7 | Continuous gradient                                 | Teach      | The gradient is continuous, derived (gates_unlocked × proximity); annotations are INPUTS that unlock gradient ascent at a position. The gradient itself is never authored — it emerges from the cursor reading the kernel's truth at P. |
@@ -371,8 +371,8 @@ Or equivalently with stage chains in branches:
 ```
 input
   <| (
-    fn (x) => x |> stage_a1 |> stage_a2,
-    fn (x) => x |> stage_b1,
+    (x) => x |> stage_a1 |> stage_a2,
+    (x) => x |> stage_b1,
     extract_c,
   )
 ```
@@ -750,6 +750,37 @@ effect State<S> {
 
 Each operation declares its parameter types and return type (if non-unit). **Resume cardinality is INFERRED at handler-decl time from each arm body** — never declared on the effect op. The infer pass counts resume call sites under control-flow ancestry; the inferred cardinality attaches to the op's `TCont` continuation type and drives lower's tier selection (Tier 1 direct call vs Tier 3 heap continuation). See `protocol_cursor_is_the_substrate.md` for the discipline.
 
+### Invoking effect operations
+
+An effect op is invoked as a **bare call** — the same surface as any
+function call:
+
+```
+fn expect_true(value) = {
+  check(value, "expected true")     // canonical — check is the Test effect's op
+}
+```
+
+The env binding proves op-ness (`EffectOpScheme`); the op's `TFun` row
+carries `Closed[eff]` definitionally from its declaration. The enclosing
+fn's `with` clause is verified against the row inferred from these call
+sites. The reader who needs suspension points reads the row in the
+signature or the cursor's projection — the medium narrates what a
+keyword would only whisper.
+
+```
+// FORMAT-LIFTED:
+perform check(value, "expected true")
+```
+
+Diagnostic: **`E_RedundantPerform`** (MachineApplicable) — the formatter
+strips the keyword silently; both forms produce the same graph, and per
+governing principle 2 the bare call is the one that survives. `resume`
+keeps its keyword: it is context-bound to handler arms, typed by the
+typed-resume law (`resume : R -> S`), and names the continuation — a
+value the call site cannot otherwise reach. See
+`docs/specs/simulations/syntax/perform-dissolution-substrate.md`.
+
 ### Unit return omission
 
 If an effect op returns unit `()`, the `-> ()` clause may be omitted:
@@ -768,7 +799,7 @@ For ops returning `()`, the handler arm calls `resume()` (no inner unit literal 
 ```
 handler stdout_console {
   print(msg) => {
-    perform fd_write(msg)
+    fd_write(msg)
     resume()                // canonical — not resume(())
   }
 }
@@ -849,27 +880,33 @@ Three parts:
 ```
 // No config, no state — pure handler
 handler log_to_stderr {
-  log(msg) => perform write_stderr(msg); resume(()),
+  log(msg) => {
+    write_stderr(msg)
+    resume()
+  },
 }
 
 // Config (URL captured at install) + no state
 handler websocket_sink(url: String) {
-  emit(ev) => perform ws_send(url, encode(ev)); resume(()),
+  emit(ev) => {
+    ws_send(url, encode(ev))
+    resume()
+  },
 }
 
 // State (counter that evolves)
 handler counter with n = 0 {
-  inc() => resume(()) with n = n + 1,
+  inc() => resume() with n = n + 1,
   get() => resume(n),
 }
 
 // Both config + state
 handler bounded_log(prefix: String) with count = 0, max = 100 {
   log(msg) => {
-    if count >= max { resume(()) }
+    if count >= max { resume() }
     else {
-      perform write_stderr(prefix ++ ": " ++ msg)
-      resume(()) with count = count + 1
+      write_stderr(prefix ++ ": " ++ msg)
+      resume() with count = count + 1
     }
   },
 }
@@ -880,7 +917,7 @@ handler bounded_log(prefix: String) with count = 0, max = 100 {
 When an arm wants to evolve state, it uses a `with` clause on `resume`:
 
 ```
-inc() => resume(()) with n = n + 1
+inc() => resume() with n = n + 1
 ```
 
 The `with` clause lists state updates by field name. Unlisted state stays unchanged.
@@ -938,12 +975,13 @@ The row expression follows the same algebra as `with E1 + E2` clauses (§«With-
 ### Use
 
 ```
-fn fetch(url: String) with ApiClient =
-  let body = perform http("GET", url)
-  perform write(local_cache_path(url), body)
+fn fetch(url: String) with ApiClient = {
+  let body = http("GET", url)
+  write(local_cache_path(url), body)
+}
 ```
 
-The capability `ApiClient` unpacks to its underlying row at sig-check; the body's `perform http` and `perform write` discharge against that row.
+The capability `ApiClient` unpacks to its underlying row at sig-check; the body's `http` and `write` op calls discharge against that row.
 
 ### Negation form
 
@@ -1131,6 +1169,8 @@ import lin/spectral
 dsp.spectral.fft(samples)
 lin.spectral.fft(matrix)
 ```
+
+**One-separator law:** `/` appears ONLY in import position (transport-honest — the module path maps to the file transport). Everywhere in expressions, `.` is the one access operator — fields and qualified names alike. There is no third separator; `::` is not a token.
 
 ---
 
@@ -1497,7 +1537,9 @@ type TokenKind
   | TPlusPlus                                // ++ concat
   | TPipeGt | TLtPipe | TGtLt | TTildeGt | TLtTilde   // five verbs
   | TAndAnd | TOrOr                          // logical
-  | TColonColon                              // :: (path separator, future)
+  // `::` is NOT a token. Module paths use `/` at import position;
+  // `.` is the one access operator in expressions. A token with no
+  // kernel correspondence is speculative inventory.
 
   // ─── Single-character operators and punctuation ───────────────────
   | TLParen | TRParen | TLBrace | TRBrace | TLBracket | TRBracket
@@ -1527,7 +1569,7 @@ type TokenKind
 | `THandler`      | `handler`        | —         | start of handler declaration                   |
 | `TWith`         | `with`           | —         | effect clauses, handler state, handle-with     |
 | `TResume`       | `resume`         | —         | inside handler arm body                        |
-| `TPerform`      | `perform`        | —         | invoking an effect operation                   |
+| `TPerform`      | `perform`        | —         | format-liftable ceremony — ops are invoked as bare calls (§«Invoking effect operations»); lexed so the formatter can strip it (`E_RedundantPerform`); dissolves with peer `Hβ.syntax.perform-dissolution` |
 | *(removed)*     | —                | —         | `for`, `in`, `loop`, `break`, `continue`, `return` were previously reserved but are NOT Mentl keywords. Iteration uses pipe verbs + Iterate effect; early-exit uses Abort effect. |
 | `TImport`       | `import`         | —         | top-level import statement                     |
 | `TWhere`        | `where`          | —         | refinement type clause                         |
@@ -1543,7 +1585,7 @@ type TokenKind
 | `TFloatLit(f)`  | `[0-9][0-9_]*\.[0-9][0-9_]*` | f64 value | floating-point literal (underscore separators allowed) |
 | `TStringLit(s)` | `"..."` or `"""..."""` | string content (escape-resolved, interp markers preserved) | string literal |
 | `TDocComment(s)`| `/// ...`        | comment text (one line, leading `///` stripped) | attaches to next declaration |
-| **Two-character operators (15)** |  |           |                                                |
+| **Two-character operators (14)** |  |           |                                                |
 | `TEqEq`         | `==`             | —         | equality comparison                            |
 | `TBangEq`       | `!=`             | —         | inequality comparison                          |
 | `TLtEq`         | `<=`             | —         | less-than-or-equal                             |
@@ -1558,7 +1600,6 @@ type TokenKind
 | `TLtTilde`      | `<~`             | —         | feedback                                       |
 | `TAndAnd`       | `&&`             | —         | logical and                                    |
 | `TOrOr`         | `\|\|`           | —         | logical or                                     |
-| `TColonColon`   | `::`             | —         | reserved (path separator, namespace future)    |
 | **Single-character operators and punctuation (23)** |  |           |                              |
 | `TLParen`       | `(`              | —         | grouping, params, tuples, calls                |
 | `TRParen`       | `)`              | —         | close grouping                                 |
@@ -1569,7 +1610,7 @@ type TokenKind
 | `TComma`        | `,`              | —         | separator in tuples, params, fields, lists     |
 | `TDot`          | `.`              | —         | field access                                   |
 | `TColon`        | `:`              | —         | type annotation, record field binding          |
-| `TSemicolon`    | `;`              | —         | statement separator (when explicit)            |
+| `TSemicolon`    | `;`              | —         | canonical-never — newlines separate statements; lexed so the formatter can lift it to newline layout (`E_StatementSemicolon`) |
 | `TPlus`         | `+`              | —         | addition; effect union                         |
 | `TMinus`        | `-`              | —         | subtraction; unary negate                      |
 | `TStar`         | `*`              | —         | multiplication                                 |
@@ -1581,13 +1622,13 @@ type TokenKind
 | `TBang`         | `!`              | —         | logical not; effect negation                   |
 | `TPipe`         | `\|`             | —         | type variant separator; lambda param fence (`\|x\| expr`) |
 | `TTilde`        | `~`              | —         | reserved                                       |
-| `TAt`           | `@`              | —         | reserved annotation marker (currently no user-facing form; @resume= erased per inference-from-body) |
+| `TAt`           | `@`              | —         | as-patterns: `name @ pat` binds the whole value AND destructures (§«As-patterns»); `@resume=` erased per inference-from-body |
 | `THole`         | `??`             | —         | hole — the gradient's syntactic absence marker; Mentl's Synth proposes candidates filling the position. The Mentl Mono ligature renders `??` as the octagonal-socket glyph (8 sides ↔ 8 kernel primitives). Single `?` is no longer a token. |
 | **Layout / structural (2)** |     |           |                                                |
 | `TNewline`      | `\n`             | —         | semantic per DESIGN Ch 2 (block-form `~>`)     |
 | `TEof`          | (end of input)   | —         | always last token; parser uses to terminate    |
 
-**Total: 69 variants.**
+**Total: 68 variants.** (`TColonColon` deleted 2026-06-10 — `::` was lexed and parsed nowhere; a token with no kernel correspondence is speculative inventory. Module paths use `/` at import position only; `.` is the one access operator in expressions. See `perform-dissolution-substrate.md` §6.)
 
 ### Lexer obligations
 
@@ -1640,6 +1681,8 @@ The applicability tag determines automation: `MachineApplicable` patches are aut
 | `E_RedundantBraces`   | braces around single-expression body          | strip the braces; user sees no diagnostic       |
 | `E_ExplicitTypeParams`| turbofish `f<T>(...)` at call site            | strip the type params; user sees no diagnostic  |
 | `E_IndentMismatch`    | wrong indent count                            | normalize indent; user sees no diagnostic       |
+| `E_RedundantPerform`  | `perform` before an op call                   | strip the keyword; ops are invoked as bare calls (§«Invoking effect operations») |
+| `E_StatementSemicolon`| `;` between statements                        | lift to newline layout; canonical text never contains `;` |
 
 ### Hard errors (substrate violations)
 
@@ -1663,6 +1706,7 @@ The applicability tag determines automation: `MachineApplicable` patches are aut
 | `E_LayoutViolation`   | wrong line / wrong wrapping (residual cases)  | `MaybeIncorrect`     | reformat per canonical layout                  |
 | `E_NotAKeyword`       | user typed `for`/`while`/`loop`/`break`/`continue`/`return` | `MaybeIncorrect` | rewrite as verb form per substrate             |
 | `E_PatternAlternationBindingMismatch` | branches in `\|` bind different names or types | `MaybeIncorrect` | adjust patterns to bind same names with unifiable types |
+| `E_ResumeOutsideArm`  | `resume` outside a handler-arm body           | `Unspecified`        | move the resume into an arm; the continuation only exists there |
 | `E_ConcatTypeMismatch` | `++` operands have unifiable but distinct types (e.g. `TList` ++ `TString`) | `MaybeIncorrect` | unify operand types via conversion |
 | `E_ConcatTypeUnresolved` | `++` operand type not bound at lower-time | `MaybeIncorrect`    | annotate operand to constrain type             |
 

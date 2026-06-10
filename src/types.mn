@@ -448,13 +448,12 @@ type TokenKind
                                     //   followed by ordinary tokens then
                                     //   TRBrace (re-used) closes it
 
-  // ─── Two-character operators (15) ────────────────────────────────
+  // ─── Two-character operators (14) ────────────────────────────────
   | TEqEq | TBangEq | TLtEq | TGtEq          // comparison
   | TArrow | TFatArrow                       // -> and =>
   | TPlusPlus                                // ++ concat
   | TPipeGt | TLtPipe | TGtLt | TTildeGt | TLtTilde   // five verbs
   | TAndAnd | TOrOr                          // logical
-  | TColonColon                              // :: (path separator, future)
 
   // ─── Single-character operators and punctuation (23) ─────────────
   | TLParen | TRParen | TLBrace | TRBrace | TLBracket | TRBracket

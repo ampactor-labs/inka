@@ -3620,7 +3620,7 @@
   ;;   TEqEq=30 TBangEq=31 TLtEq=32 TGtEq=33
   ;;   TArrow=34 TFatArrow=35 TPlusPlus=36
   ;;   TPipeGt=37 TLtPipe=38 TGtLt=39 TTildeGt=40 TLtTilde=41
-  ;;   TAndAnd=42 TOrOr=43 TColonColon=44
+  ;;   TAndAnd=42 TOrOr=43 (44 retired — `::` is not a token)
   ;; Single-char (45-67):
   ;;   TLParen=45 TRParen=46 TLBrace=47 TRBrace=48
   ;;   TLBracket=49 TRBracket=50
@@ -3838,9 +3838,7 @@
     (if (i32.and (i32.eq (local.get $a) (i32.const 124))
                  (i32.eq (local.get $b) (i32.const 124)))
       (then (return (call $mk_Some (i32.const 43)))))   ;; ||
-    (if (i32.and (i32.eq (local.get $a) (i32.const 58))
-                 (i32.eq (local.get $b) (i32.const 58)))
-      (then (return (call $mk_Some (i32.const 44)))))   ;; ::
+    ;; `::` is not a token (SYNTAX.md one-separator law; code 44 retired).
     (i32.const 70))  ;; None
 
   ;; ─── Single-char Operator Classification ──────────────────────────

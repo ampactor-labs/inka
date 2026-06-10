@@ -281,7 +281,7 @@
   (data (i32.const 4032) "\07\00\00\00pattern")              ;;  7 bytes
   (data (i32.const 4048) "\02\00\00\00fn")                   ;;  2 bytes
   (data (i32.const 4056) "\05\00\00\00param")                ;;  5 bytes
-  (data (i32.const 4064) "\06\00\00\00return")               ;;  6 bytes
+  (data (i32.const 6256) "\06\00\00\00return")               ;;  6 bytes
   (data (i32.const 4080) "\07\00\00\00effects")              ;;  7 bytes
 
   ;; ─── Private helpers ─────────────────────────────────────────────────
@@ -370,7 +370,7 @@
 
     (local.set $ret_h (call $graph_fresh_ty
       (call $reason_make_located (local.get $span)
-        (call $reason_make_inferred (i32.const 4064)))))   ;; "return"
+        (call $reason_make_inferred (i32.const 6256)))))   ;; "return"
     (local.set $row_h (call $graph_fresh_row
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
@@ -462,9 +462,26 @@
     ;; tag-124 (HandlerDeclStmt) — pre-register REMOVED per
     ;; Hβ.first-light.infer-handler-decl-arms-typing: the main-pass
     ;; $infer_walk_stmt_handler_decl does env_extend + per-arm typing.
-    ;; Pre-registering would double-bind the handler name. EffectDeclStmt
-    ;; (tag 123) pre-registers op names; HandlerDecl walks AFTER those
-    ;; are in env, so op_name lookup resolves in the main pass.
+    ;; tag-124 (HandlerDeclStmt) — pre-register a PLACEHOLDER scheme so
+    ;; install sites in earlier-walked modules resolve the name
+    ;; (declaration order cannot matter — the graph already knows; the
+    ;; E_MissingVariable: diagnostics_handler class). The main-pass arm
+    ;; re-extends with the real scheme; env_lookup is latest-first, so
+    ;; the real scheme shadows the placeholder — no double-bind hazard.
+    (if (i32.eq (local.get $tag) (i32.const 124))
+      (then
+        (call $env_extend
+          (i32.load offset=4 (local.get $stmt))
+          (call $scheme_make_forall
+            (call $make_list (i32.const 0))
+            (call $ty_make_tvar (call $graph_fresh_ty
+              (call $reason_make_located (local.get $span)
+                (call $reason_make_declared
+                  (i32.load offset=4 (local.get $stmt)))))))
+          (call $reason_make_located (local.get $span)
+            (call $reason_make_declared (i32.load offset=4 (local.get $stmt))))
+          (call $schemekind_make_fn))
+        (return)))
     (if (i32.eq (local.get $tag) (i32.const 128))
       (then
         ;; Documented(doc, inner_node): inner Node at offset 8.
@@ -634,7 +651,7 @@
 
         (local.set $ret_h (call $graph_fresh_ty
           (call $reason_make_located (local.get $span)
-            (call $reason_make_inferred (i32.const 4064)))))   ;; "return"
+            (call $reason_make_inferred (i32.const 6256)))))   ;; "return"
         (local.set $row_h (call $graph_fresh_row
           (call $reason_make_located (local.get $span)
             (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
@@ -673,7 +690,7 @@
     (call $unify
       (local.get $body_h) (local.get $ret_h) (local.get $span)
       (call $reason_make_fnreturn (local.get $name)
-        (call $reason_make_inferred (i32.const 4064))))   ;; "return"
+        (call $reason_make_inferred (i32.const 6256))))   ;; "return"
     ;; Bind row_h → accumulated row (NRowFree → NRowBound[union]) BEFORE
     ;; generalize, so the generalized scheme carries the resolved effect row.
     (call $walk_expr_inf_exit_fn)
@@ -1270,7 +1287,7 @@
             (call $walk_stmt_build_inferred_params (local.get $param_handles)))
           (local.set $ret_h (call $graph_fresh_ty
             (call $reason_make_located (local.get $span)
-              (call $reason_make_inferred (i32.const 4064)))))   ;; "return"
+              (call $reason_make_inferred (i32.const 6256)))))   ;; "return"
           (local.set $row_h (call $graph_fresh_row
             (call $reason_make_located (local.get $span)
               (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
@@ -1646,9 +1663,9 @@
         (call $graph_bind_kind
           (local.get $handle)
           (call $node_kind_make_nerrorhole
-            (call $reason_make_inferred (i32.const 5128)))   ;; "parser missing ident at <tok>"
+            (call $reason_make_inferred (i32.const 6400)))   ;; "parser missing ident at <tok>"
           (call $reason_make_located (local.get $span)
-            (call $reason_make_inferred (i32.const 5128))))
+            (call $reason_make_inferred (i32.const 6400))))
         (return)))
     ;; Unknown Stmt tag — H6 wildcard discipline: trap so future Stmt
     ;; variants force this dispatch table to be extended (drift mode 9

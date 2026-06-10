@@ -182,10 +182,10 @@
   ;; Per-segment offsets are 16-aligned to keep visual inspection of WAT
   ;; consistent (matches emit_diag.wat's 32-byte slot convention loosely;
   ;; this chunk's six segments fit within a 16-byte cadence).
-  (data (i32.const 3008) "\02\00\00\00fn")
+  (data (i32.const 6208) "\02\00\00\00fn")
   (data (i32.const 3024) "\19\00\00\00function arity mismatch: ")
   (data (i32.const 3056) "\0d\00\00\00 param(s) vs ")
-  (data (i32.const 3072) "\09\00\00\00 param(s)")
+  (data (i32.const 6224) "\09\00\00\00 param(s)")
   (data (i32.const 3088) "\1a\00\00\00type list arity mismatch: ")
   (data (i32.const 3120) "\04\00\00\00 vs ")
 
@@ -441,7 +441,7 @@
               (call $ty_tfun_return (local.get $a))
               (call $ty_tfun_return (local.get $b))
               (local.get $span)
-              (call $reason_make_fnreturn (i32.const 3008) (local.get $reason)))
+              (call $reason_make_fnreturn (i32.const 6208) (local.get $reason)))
             ;; Unify the rows: a callee's concrete effect row flows into the
             ;; caller's fresh row var (Hβ.infer.perform-effect-row-propagation).
             (call $unify_row
@@ -708,7 +708,7 @@
     (local.set $msg (call $str_concat
       (local.get $msg) (call $int_to_str (local.get $lb))))
     (local.set $msg (call $str_concat
-      (local.get $msg) (i32.const 3072)))                   ;; " param(s)"
+      (local.get $msg) (i32.const 6224)))                   ;; " param(s)"
     (call $eprint_string (local.get $msg))
     (drop (local.get $span)))
 

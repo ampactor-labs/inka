@@ -209,6 +209,11 @@
     (call $ls_reset_function)
     (local.set $globals (call $lower_collect_top_level_names (local.get $stmts)))
     (call $ls_register_globals (local.get $globals))
+    ;; Order-free handler ledgers (Hβ.infer.pre-register-all-decls, lower
+    ;; half): every handler decl's (state_inits, arm_names) registers
+    ;; before any stmt lowers, so install sites resolve handlers declared
+    ;; in later-sorted modules.
+    (call $lower_pre_register_handler_decls (local.get $stmts))
     (call $lower_stmt_list (local.get $stmts)))
 
   ;; ─── Top-level name collection ────────────────────────────────────

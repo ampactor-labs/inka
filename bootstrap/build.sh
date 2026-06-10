@@ -44,6 +44,14 @@ source "$(dirname "$0")/CHUNKS.sh"
 echo "═══ Mentl Bootstrap Build ═══"
 echo "Assembling ${#CHUNKS[@]} source chunks..."
 
+# ─── Data-segment overlap guard ──────────────────────────────────────
+# Hand-assigned data addresses across chunks WILL collide silently
+# (later segment wins at instantiation; the loser reads foreign bytes —
+# the 2026-06-09 diagnostic-corruption class: 12 overlaps, NUL-poisoned
+perl bootstrap/data_audit.pl || { echo "FATAL: data-segment overlap — fix addresses before building"; exit 1; }
+# stderr, lying prefixes). The assembler refuses to build on overlap.
+
+
 # ─── Layer 0: Module shell (inline) ─────────────────────────────────
 # Module wrapper + WASI preview1 imports + linear memory + Layer 0
 # globals ($heap_base / $heap_ptr per Hβ §1.1). All Layer 1 runtime

@@ -93,6 +93,17 @@
   (global $infer_fn_stack_ptr       (mut i32) (i32.const 0))
   (global $infer_fn_stack_len_g     (mut i32) (i32.const 0))
 
+  ;; Row-edge ledger (Hβ.infer.row-fixpoint-late-callees). Flat pairs
+  ;; (fn_row_var, callsite_row_var): every call site links its row var
+  ;; into the enclosing fn's row var. The frame's immediate union only
+  ;; sees callee rows ALREADY bound at walk time; later-defined and
+  ;; mutually-recursive callees contribute nothing — rows under-close
+  ;; across deep chains and evidence never threads. $infer_row_fixpoint
+  ;; (post-walk) unions late-bound callee rows into fn rows until
+  ;; stable — monotone over finite name sets, so convergent.
+  (global $infer_row_edges_ptr      (mut i32) (i32.const 0))
+  (global $infer_row_edges_len_g    (mut i32) (i32.const 0))
+
   ;; Span index. Flat list of (span_ptr, handle) records tagged
   ;; SPAN_INDEX_ENTRY_TAG=211.
   (global $infer_span_index_ptr     (mut i32) (i32.const 0))
@@ -115,6 +126,8 @@
         (global.set $infer_ref_escape_len_g (i32.const 0))
         (global.set $infer_fn_stack_ptr     (call $make_list (i32.const 8)))
         (global.set $infer_fn_stack_len_g   (i32.const 0))
+        (global.set $infer_row_edges_ptr    (call $make_list (i32.const 8)))
+        (global.set $infer_row_edges_len_g  (i32.const 0))
         (global.set $infer_span_index_ptr   (call $make_list (i32.const 8)))
         (global.set $infer_span_index_len_g (i32.const 0))
         (global.set $infer_intent_index_ptr (call $make_list (i32.const 8)))
@@ -180,6 +193,85 @@
   (func $infer_fn_stack_len (result i32)
     (call $infer_init)
     (global.get $infer_fn_stack_len_g))
+
+  ;; ─── Row-edge ledger + fixpoint (Hβ.infer.row-fixpoint-late-callees) ─
+
+  ;; Append the (enclosing-fn-row-var, callsite-row-var) edge. No active
+  ;; frame (module top-level) → no edge (top-level rows have no fn var).
+  (func $infer_row_edge_append (param $callsite_row_h i32)
+    (local $frame i32) (local $n i32)
+    (call $infer_init)
+    (if (i32.eqz (global.get $infer_fn_stack_len_g)) (then (return)))
+    (local.set $frame (call $infer_fn_stack_top))
+    (local.set $n (global.get $infer_row_edges_len_g))
+    (global.set $infer_row_edges_ptr
+      (call $list_extend_to (global.get $infer_row_edges_ptr)
+                            (i32.add (local.get $n) (i32.const 2))))
+    (drop (call $list_set (global.get $infer_row_edges_ptr) (local.get $n)
+                          (call $record_get (local.get $frame) (i32.const 2))))
+    (drop (call $list_set (global.get $infer_row_edges_ptr)
+                          (i32.add (local.get $n) (i32.const 1))
+                          (local.get $callsite_row_h)))
+    (global.set $infer_row_edges_len_g (i32.add (local.get $n) (i32.const 2))))
+
+  ;; Resolved row VALUE of a row var: NRowBound → lookup through;
+  ;; NRowFree → 0 (nothing to contribute yet).
+  (func $infer_row_var_resolved (param $h i32) (result i32)
+    (local $nk i32)
+    (local.set $nk (call $gnode_kind (call $graph_chase (local.get $h))))
+    (if (i32.eq (call $node_kind_tag (local.get $nk)) (i32.const 62))
+      (then (return (call $lookup_row_for
+        (call $node_kind_payload (local.get $nk))))))
+    (i32.const 0))
+
+  ;; Post-walk monotone fixpoint: union each call edge's late-bound
+  ;; callee row into the enclosing fn's row until no name set grows.
+  ;; Union over finite name sets is monotone → convergent; 64-pass
+  ;; ceiling is a structural-bug trap, far above any real depth.
+  (func $infer_row_fixpoint
+    (local $changed i32) (local $iter i32) (local $i i32)
+    (local $fh i32) (local $ch i32) (local $cur i32) (local $cal i32)
+    (local $new i32)
+    (call $infer_init)
+    (block $stable
+      (loop $pass
+        (local.set $changed (i32.const 0))
+        (local.set $i (i32.const 0))
+        (block $edges_done
+          (loop $each
+            (br_if $edges_done
+              (i32.ge_u (local.get $i) (global.get $infer_row_edges_len_g)))
+            (local.set $fh (call $list_index
+              (global.get $infer_row_edges_ptr) (local.get $i)))
+            (local.set $ch (call $list_index
+              (global.get $infer_row_edges_ptr)
+              (i32.add (local.get $i) (i32.const 1))))
+            (local.set $i (i32.add (local.get $i) (i32.const 2)))
+            (local.set $cal (call $infer_row_var_resolved (local.get $ch)))
+            (if (i32.eqz (local.get $cal)) (then (br $each)))
+            (if (i32.eqz (i32.or (call $row_is_closed (local.get $cal))
+                                 (call $row_is_open   (local.get $cal))))
+              (then (br $each)))
+            (if (i32.eqz (call $len (call $row_names (local.get $cal))))
+              (then (br $each)))
+            (local.set $cur (call $infer_row_var_resolved (local.get $fh)))
+            (if (i32.eqz (local.get $cur)) (then (br $each)))
+            (if (i32.eqz (i32.or (call $row_is_pure (local.get $cur))
+                          (i32.or (call $row_is_closed (local.get $cur))
+                                  (call $row_is_open  (local.get $cur)))))
+              (then (br $each)))
+            (local.set $new (call $row_union (local.get $cur) (local.get $cal)))
+            (if (i32.gt_u (call $len (call $row_names (local.get $new)))
+                          (call $len (call $row_names (local.get $cur))))
+              (then
+                (call $graph_bind_row (local.get $fh) (local.get $new)
+                  (call $reason_make_inferred (i32.const 3984)))   ;; fn effect row
+                (local.set $changed (i32.const 1))))
+            (br $each)))
+        (local.set $iter (i32.add (local.get $iter) (i32.const 1)))
+        (br_if $stable (i32.eqz (local.get $changed)))
+        (if (i32.ge_u (local.get $iter) (i32.const 64)) (then (unreachable)))
+        (br $pass))))
 
   ;; ─── Span index helpers ──────────────────────────────────────────
 

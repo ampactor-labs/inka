@@ -153,4 +153,9 @@
 
   (func $mentl_infer (export "mentl_infer")
         (param $stmts i32)
-    (call $infer_program (local.get $stmts)))
+    (call $infer_program (local.get $stmts))
+    ;; Row fixpoint: union late-bound callee rows into fn rows until
+    ;; stable (Hβ.infer.row-fixpoint-late-callees) — the row made whole
+    ;; across mutual recursion and define-after-use, so lower's evidence
+    ;; derivation sees complete effect rows.
+    (call $infer_row_fixpoint))

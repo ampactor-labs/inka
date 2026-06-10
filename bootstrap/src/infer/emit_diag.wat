@@ -411,9 +411,9 @@
   ;; Layout (each entry padded to 8-byte boundary for alignment):
 
   ;; ── Code-prefix strings (per docs/errors/ catalog naming) ─────────
-  (data (i32.const 1632) "\10\00\00\00E_TypeMismatch: ")              ;; 16 bytes payload
-  (data (i32.const 1656) "\13\00\00\00E_MissingVariable: ")            ;; 19 bytes payload
-  (data (i32.const 1680) "\0f\00\00\00E_OccursCheck: ")                ;; 15 bytes payload
+  (data (i32.const 6064) "\10\00\00\00E_TypeMismatch: ")              ;; 16 bytes payload
+  (data (i32.const 6096) "\13\00\00\00E_MissingVariable: ")            ;; 19 bytes payload
+  (data (i32.const 6128) "\0f\00\00\00E_OccursCheck: ")                ;; 15 bytes payload
   (data (i32.const 1704) "\15\00\00\00E_FeedbackNoContext: ")          ;; 21 bytes payload
   (data (i32.const 1736) "\18\00\00\00E_HandlerUninstallable: ")       ;; 24 bytes payload
   (data (i32.const 1768) "\17\00\00\00E_PatternInexhaustive: ")        ;; 23 bytes payload
@@ -421,7 +421,7 @@
 
   ;; ── Connector phrases ─────────────────────────────────────────────
   (data (i32.const 1824) "\0b\00\00\00 at handle ")                    ;; 11 bytes payload
-  (data (i32.const 1840) "\0e\00\00\00 — expected ")                   ;; 14 bytes payload (em-dash 3 bytes; " — expected " is 14 bytes UTF-8)
+  (data (i32.const 6160) "\0e\00\00\00 — expected ")                   ;; 14 bytes payload (em-dash 3 bytes; " — expected " is 14 bytes UTF-8)
   ;; Note: ", found " (offset 1856 in earlier draft) overlapped with
   ;; preceding " — expected " (UTF-8 14 bytes ending 1858). Relocated
   ;; to safe offset 2864 below.
@@ -672,10 +672,10 @@
     (local $msg i32)
     ;; Construct message: "E_TypeMismatch: at handle <h> — expected
     ;; <render(a)>, found <render(b)>\n"
-    (local.set $msg (i32.const 1632))                          ;; "E_TypeMismatch: "
+    (local.set $msg (i32.const 6064))                          ;; "E_TypeMismatch: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — expected "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — expected "
     (local.set $msg (call $str_concat (local.get $msg) (call $render_ty (local.get $ty_a))))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2864)))   ;; ", found " (relocated from 1856)
     (local.set $msg (call $str_concat (local.get $msg) (call $render_ty (local.get $ty_b))))
@@ -699,7 +699,7 @@
                                   (param $reason i32)
     (local $msg i32)
     ;; Construct message: "E_MissingVariable: <name> at handle <h>\n"
-    (local.set $msg (i32.const 1656))                          ;; "E_MissingVariable: "
+    (local.set $msg (i32.const 6096))                          ;; "E_MissingVariable: "
     (local.set $msg (call $str_concat (local.get $msg) (local.get $name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; " at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
@@ -724,12 +724,12 @@
     (local $msg i32)
     ;; Construct message: "E_OccursCheck: at handle <h> occurs in
     ;; type tree (infinite type) — <render(ty)>\n"
-    (local.set $msg (i32.const 1680))                          ;; "E_OccursCheck: "
+    (local.set $msg (i32.const 6128))                          ;; "E_OccursCheck: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1920)))   ;; " occurs in type tree"
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1872)))   ;; " (infinite type)"
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — expected "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — expected "
     (local.set $msg (call $str_concat (local.get $msg) (call $render_ty (local.get $ty))))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
@@ -752,7 +752,7 @@
     (local.set $msg (i32.const 1704))                          ;; "E_FeedbackNoContext: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1944)))   ;; "<~ requires …"
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
@@ -775,7 +775,7 @@
     (local.set $msg (i32.const 1736))                          ;; "E_HandlerUninstallable: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2000)))   ;; "handler arms require…"
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
@@ -798,7 +798,7 @@
     (local.set $msg (i32.const 1768))                          ;; "E_PatternInexhaustive: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2072)))   ;; "match does not cover…"
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
@@ -827,7 +827,7 @@
     (local.set $msg (i32.const 1800))                          ;; "T_OverDeclared: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2128)))   ;; "declared row strictly…"
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
@@ -849,7 +849,7 @@
     (local.set $msg (i32.const 2456))                          ;; "E_NotARecordType: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2736)))   ;; "'"
     (local.set $msg (call $str_concat (local.get $msg) (local.get $type_name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2736)))   ;; "'"
@@ -869,7 +869,7 @@
     (local.set $msg (i32.const 2480))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2600)))
     (local.set $msg (call $str_concat (local.get $msg) (local.get $field_name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2640)))
@@ -889,7 +889,7 @@
     (local.set $msg (i32.const 2504))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2656)))
     (local.set $msg (call $str_concat (local.get $msg) (local.get $field_name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2640)))
@@ -910,7 +910,7 @@
     (local.set $msg (i32.const 2536))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2696)))
     (local.set $msg (call $str_concat (local.get $msg) (local.get $capability_name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2736)))

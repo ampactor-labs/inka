@@ -725,6 +725,46 @@
         (br $each)))
     (local.get $buf))
 
+  ;; ─── $lower_pre_register_handler_decls — order-free handler ledgers ──
+  ;; (Hβ.infer.pre-register-all-decls, lower half.) Handler decls register
+  ;; their (state_inits, arm_names) ledgers BEFORE any stmt lowers, so an
+  ;; install site in an earlier-sorted module resolves a handler declared
+  ;; in a later one (main.mn `~> diagnostics_handler` with the decl in
+  ;; pipeline.mn). Declaration order cannot matter — the graph already
+  ;; knows. $handler_state_inits_register dedups by name; the walk-time
+  ;; registration below becomes a no-op for pre-registered names.
+  (func $lower_pre_register_handler_decls (export "lower_pre_register_handler_decls")
+        (param $stmts i32)
+    (local $n i32) (local $i i32) (local $node i32)
+    (local.set $n (call $len (local.get $stmts)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $node (call $list_index (local.get $stmts) (local.get $i)))
+        (call $lower_pre_register_handler_node (local.get $node))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each))))
+
+  (func $lower_pre_register_handler_node (param $node i32)
+    (local $body i32) (local $stmt i32) (local $tag i32)
+    (local.set $body (i32.load offset=4 (local.get $node)))
+    (if (i32.ne (i32.load (local.get $body)) (i32.const 111)) (then (return)))
+    (local.set $stmt (i32.load offset=4 (local.get $body)))
+    (local.set $tag (i32.load (local.get $stmt)))
+    ;; Documented(doc, inner) — unwrap to the declaration it documents.
+    (if (i32.eq (local.get $tag) (i32.const 128))
+      (then
+        (call $lower_pre_register_handler_node (i32.load offset=8 (local.get $stmt)))
+        (return)))
+    (if (i32.ne (local.get $tag) (i32.const 124)) (then (return)))
+    (call $handler_state_inits_register
+      (i32.load offset=4 (local.get $stmt))
+      (call $lower_state_field_inits (i32.load offset=16 (local.get $stmt)))
+      (call $build_handler_arm_names
+        (i32.load offset=4 (local.get $stmt))
+        (i32.load offset=12 (local.get $stmt)))))
+
   ;; ─── $lower_walk_stmt_handler_decl — HandlerDeclStmt arm (tag 124) ──
   ;; Per src/lower.mn:617-625 + Lock #7.
   ;; Layout assumption: [tag=124][handler_name][effect_name][arms_list]

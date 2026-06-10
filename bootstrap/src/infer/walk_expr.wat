@@ -298,7 +298,7 @@
   (data (i32.const 3960) "\0a\00\00\00empty list")           ;; 10 bytes
   (data (i32.const 3984) "\06\00\00\00lambda")               ;;  6 bytes
   (data (i32.const 4008) "\06\00\00\00<expr>")               ;;  6 bytes
-  (data (i32.const 5128) "\1c\00\00\00parser missing ident at <tok>")  ;; 28 bytes
+  (data (i32.const 6400) "\1d\00\00\00parser missing ident at <tok>")  ;; 28 bytes
 
   ;; ─── Private helpers ─────────────────────────────────────────────────
 
@@ -778,8 +778,10 @@
         (call $reason_make_inferredcallreturn (local.get $cname)
           (call $reason_make_inferred (i32.const 3584)))))  ;; "result"
     ;; Row composition: src/infer.mn:926-931 — chase row_h; NRowBound(row)
-    ;; flows the callee's row into the caller's frame; a still-free var
-    ;; adds nothing.
+    ;; flows the callee's row into the caller's frame NOW; the edge feeds
+    ;; $infer_row_fixpoint so late-bound callees (defined later /
+    ;; mutually recursive) flow in post-walk.
+    (call $infer_row_edge_append (local.get $row_h))
     (local.set $row_nk (call $gnode_kind (call $graph_chase (local.get $row_h))))
     (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))
       (then (call $walk_expr_inf_add_row
@@ -1621,7 +1623,9 @@
         (call $reason_make_inferredpiperesult (local.get $pipe_str)
           (call $reason_make_inferred (i32.const 3584)))))  ;; "result"
     ;; Row composition: src/infer.mn pipe arm — chase row_h; NRowBound(row)
-    ;; flows the stage's row into the caller's frame.
+    ;; flows the stage's row into the caller's frame NOW; the edge feeds
+    ;; $infer_row_fixpoint for late-bound stages.
+    (call $infer_row_edge_append (local.get $row_h))
     (local.set $row_nk (call $gnode_kind (call $graph_chase (local.get $row_h))))
     (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))
       (then (call $walk_expr_inf_add_row
@@ -1878,9 +1882,9 @@
         (call $graph_bind_kind
           (local.get $handle)
           (call $node_kind_make_nerrorhole
-            (call $reason_make_inferred (i32.const 5128)))   ;; "parser missing ident at <tok>"
+            (call $reason_make_inferred (i32.const 6400)))   ;; "parser missing ident at <tok>"
           (call $reason_make_located (local.get $span)
-            (call $reason_make_inferred (i32.const 5128))))
+            (call $reason_make_inferred (i32.const 6400))))
         (return (local.get $handle))))
     ;; Unknown tag — H6 wildcard discipline: trap so future Expr variants
     ;; force this dispatch table to be extended (drift mode 9 prevention).

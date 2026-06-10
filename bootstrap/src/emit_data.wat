@@ -189,7 +189,7 @@
   (data (i32.const 1256) " (param $size i32)")
   ;; Alloc body as raw WAT (padded to 200 bytes with spaces)
   (data (i32.const 1275) "(local $ptr i32)(local.set $ptr (global.get $heap_ptr))(global.set $heap_ptr (i32.add (global.get $heap_ptr)(i32.and (i32.add (local.get $size)(i32.const 7))(i32.const -8))))(local.get $ptr)                  ")
-  (data (i32.const 1475) " (param $v i32)")
+  (data (i32.const 6336) " (param $v i32)")
 
   ;; 1491: "_start_fn" (9) → 1500
   ;; 1500: " (export \"_start\")" (19, including escaped quotes) → 1519

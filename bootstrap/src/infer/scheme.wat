@@ -909,7 +909,7 @@
         ;; Reason = Instantiation("inst", Fresh(old))
         (local.set $reason
           (call $reason_make_instantiation
-            (i32.const 1620)                           ;; "inst" string ptr
+            (i32.const 6032)                           ;; "inst" string ptr
             (call $reason_make_fresh (local.get $old))))
         (local.set $fresh (call $graph_fresh_ty (local.get $reason)))
         (local.set $map (call $subst_map_extend
@@ -924,7 +924,7 @@
   ;; 1620 (above ty.wat's ERROR_DEEP_CHASE at 1600/20bytes; well
   ;; below HEAP_BASE = 4096). Per CLAUDE.md memory model + ty.wat
   ;; precedent for static string sentinels.
-  (data (i32.const 1620) "\04\00\00\00inst")
+  (data (i32.const 6032) "\04\00\00\00inst")
 
   ;; ─── $generalize(fn_handle) -> Scheme ─────────────────────────────
   ;;

@@ -289,8 +289,26 @@
   ;; install to write the record's arm region. One ledger, no parallel array.
   (func $handler_state_inits_register (export "handler_state_inits_register")
         (param $name i32) (param $inits i32) (param $arm_names i32)
-    (local $entry i32) (local $new_len i32)
+    (local $entry i32) (local $new_len i32) (local $i i32)
     (call $lower_init)
+    ;; Dedup by name (funcref-ledger precedent): the order-free pre-pass
+    ;; ($lower_pre_register_handler_decls) registers first; the walk-time
+    ;; call for the same decl becomes a no-op. First entry wins — the
+    ;; ledger lookups are first-match.
+    (local.set $i (i32.const 0))
+    (block $dedup_done
+      (loop $dedup
+        (br_if $dedup_done
+          (i32.ge_u (local.get $i) (global.get $lower_state_inits_ledger_len_g)))
+        (if (call $str_eq
+              (call $record_get
+                (call $list_index (global.get $lower_state_inits_ledger_ptr)
+                                  (local.get $i))
+                (i32.const 0))
+              (local.get $name))
+          (then (return)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $dedup)))
     (local.set $entry (call $make_record (i32.const 282) (i32.const 3)))
     (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
     (call $record_set (local.get $entry) (i32.const 1) (local.get $inits))

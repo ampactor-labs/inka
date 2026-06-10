@@ -227,8 +227,8 @@
   ;; and well below HEAP_BASE = 4096 per CLAUDE.md memory model.
   ;; Available: 2944 .. 4095 = 1152 bytes. Used: ~80 bytes. Headroom: ample.
 
-  (data (i32.const 2944) "\21\00\00\00E_UnresolvedType: lower-time NFree at handle ")  ;; 33 bytes payload (header)
-  (data (i32.const 2992) "\01\00\00\00\0a")                                              ;; "\n" — 1 byte payload
+  (data (i32.const 2944) "\2d\00\00\00E_UnresolvedType: lower-time NFree at handle ")  ;; 33 bytes payload (header)
+  (data (i32.const 6192) "\01\00\00\00\0a")                                              ;; "\n" — 1 byte payload
   (data (i32.const 3000) "\0c\00\00\00<error-hole>")                                     ;; 12 bytes payload (tag-114 render)
 
   ;; ─── $lower_emit_unresolved_type — E_UnresolvedType helper ────────
@@ -250,7 +250,7 @@
     (local $msg i32)
     (local.set $msg (i32.const 2944))                                  ;; "E_UnresolvedType: lower-time NFree at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 2992)))   ;; "\n"
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6192)))   ;; "\n"
     (call $eprint_string (local.get $msg)))
 
   ;; ─── $lower_render_ty — Ty walker with TError-hole sentinel arm ───

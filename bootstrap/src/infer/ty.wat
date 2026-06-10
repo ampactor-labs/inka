@@ -237,7 +237,7 @@
   ;; Lives at offset 1600 (well above emit_data.wat's highest at 1525,
   ;; well below HEAP_BASE = 4096); the [0, HEAP_BASE) sentinel region
   ;; per CLAUDE.md memory model. Read-only string constant; no GC concern.
-  (data (i32.const 1600) "\10\00\00\00ERROR_DEEP_CHASE")
+  (data (i32.const 6000) "\10\00\00\00ERROR_DEEP_CHASE")
 
   ;; ─── Universal Ty tag accessor ───────────────────────────────────
   ;; Returns the Ty record's tag (100-113). For nullary sentinels
@@ -522,7 +522,7 @@
   ;; module-level cached singleton; deferred until profiling shows hot).
   (func $ty_error_deep_chase (result i32)
     (call $ty_make_tname
-      (i32.const 1600)            ;; "ERROR_DEEP_CHASE" string ptr
+      (i32.const 6000)            ;; "ERROR_DEEP_CHASE" string ptr
       (call $make_list (i32.const 0))))
 
   ;; ─── $chase_deep — recursive Ty walker via $graph_chase ──────────

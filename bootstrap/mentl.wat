@@ -8499,6 +8499,17 @@
   (global $infer_fn_stack_ptr       (mut i32) (i32.const 0))
   (global $infer_fn_stack_len_g     (mut i32) (i32.const 0))
 
+  ;; Row-edge ledger (Hβ.infer.row-fixpoint-late-callees). Flat pairs
+  ;; (fn_row_var, callsite_row_var): every call site links its row var
+  ;; into the enclosing fn's row var. The frame's immediate union only
+  ;; sees callee rows ALREADY bound at walk time; later-defined and
+  ;; mutually-recursive callees contribute nothing — rows under-close
+  ;; across deep chains and evidence never threads. $infer_row_fixpoint
+  ;; (post-walk) unions late-bound callee rows into fn rows until
+  ;; stable — monotone over finite name sets, so convergent.
+  (global $infer_row_edges_ptr      (mut i32) (i32.const 0))
+  (global $infer_row_edges_len_g    (mut i32) (i32.const 0))
+
   ;; Span index. Flat list of (span_ptr, handle) records tagged
   ;; SPAN_INDEX_ENTRY_TAG=211.
   (global $infer_span_index_ptr     (mut i32) (i32.const 0))
@@ -8521,6 +8532,8 @@
         (global.set $infer_ref_escape_len_g (i32.const 0))
         (global.set $infer_fn_stack_ptr     (call $make_list (i32.const 8)))
         (global.set $infer_fn_stack_len_g   (i32.const 0))
+        (global.set $infer_row_edges_ptr    (call $make_list (i32.const 8)))
+        (global.set $infer_row_edges_len_g  (i32.const 0))
         (global.set $infer_span_index_ptr   (call $make_list (i32.const 8)))
         (global.set $infer_span_index_len_g (i32.const 0))
         (global.set $infer_intent_index_ptr (call $make_list (i32.const 8)))
@@ -8586,6 +8599,85 @@
   (func $infer_fn_stack_len (result i32)
     (call $infer_init)
     (global.get $infer_fn_stack_len_g))
+
+  ;; ─── Row-edge ledger + fixpoint (Hβ.infer.row-fixpoint-late-callees) ─
+
+  ;; Append the (enclosing-fn-row-var, callsite-row-var) edge. No active
+  ;; frame (module top-level) → no edge (top-level rows have no fn var).
+  (func $infer_row_edge_append (param $callsite_row_h i32)
+    (local $frame i32) (local $n i32)
+    (call $infer_init)
+    (if (i32.eqz (global.get $infer_fn_stack_len_g)) (then (return)))
+    (local.set $frame (call $infer_fn_stack_top))
+    (local.set $n (global.get $infer_row_edges_len_g))
+    (global.set $infer_row_edges_ptr
+      (call $list_extend_to (global.get $infer_row_edges_ptr)
+                            (i32.add (local.get $n) (i32.const 2))))
+    (drop (call $list_set (global.get $infer_row_edges_ptr) (local.get $n)
+                          (call $record_get (local.get $frame) (i32.const 2))))
+    (drop (call $list_set (global.get $infer_row_edges_ptr)
+                          (i32.add (local.get $n) (i32.const 1))
+                          (local.get $callsite_row_h)))
+    (global.set $infer_row_edges_len_g (i32.add (local.get $n) (i32.const 2))))
+
+  ;; Resolved row VALUE of a row var: NRowBound → lookup through;
+  ;; NRowFree → 0 (nothing to contribute yet).
+  (func $infer_row_var_resolved (param $h i32) (result i32)
+    (local $nk i32)
+    (local.set $nk (call $gnode_kind (call $graph_chase (local.get $h))))
+    (if (i32.eq (call $node_kind_tag (local.get $nk)) (i32.const 62))
+      (then (return (call $lookup_row_for
+        (call $node_kind_payload (local.get $nk))))))
+    (i32.const 0))
+
+  ;; Post-walk monotone fixpoint: union each call edge's late-bound
+  ;; callee row into the enclosing fn's row until no name set grows.
+  ;; Union over finite name sets is monotone → convergent; 64-pass
+  ;; ceiling is a structural-bug trap, far above any real depth.
+  (func $infer_row_fixpoint
+    (local $changed i32) (local $iter i32) (local $i i32)
+    (local $fh i32) (local $ch i32) (local $cur i32) (local $cal i32)
+    (local $new i32)
+    (call $infer_init)
+    (block $stable
+      (loop $pass
+        (local.set $changed (i32.const 0))
+        (local.set $i (i32.const 0))
+        (block $edges_done
+          (loop $each
+            (br_if $edges_done
+              (i32.ge_u (local.get $i) (global.get $infer_row_edges_len_g)))
+            (local.set $fh (call $list_index
+              (global.get $infer_row_edges_ptr) (local.get $i)))
+            (local.set $ch (call $list_index
+              (global.get $infer_row_edges_ptr)
+              (i32.add (local.get $i) (i32.const 1))))
+            (local.set $i (i32.add (local.get $i) (i32.const 2)))
+            (local.set $cal (call $infer_row_var_resolved (local.get $ch)))
+            (if (i32.eqz (local.get $cal)) (then (br $each)))
+            (if (i32.eqz (i32.or (call $row_is_closed (local.get $cal))
+                                 (call $row_is_open   (local.get $cal))))
+              (then (br $each)))
+            (if (i32.eqz (call $len (call $row_names (local.get $cal))))
+              (then (br $each)))
+            (local.set $cur (call $infer_row_var_resolved (local.get $fh)))
+            (if (i32.eqz (local.get $cur)) (then (br $each)))
+            (if (i32.eqz (i32.or (call $row_is_pure (local.get $cur))
+                          (i32.or (call $row_is_closed (local.get $cur))
+                                  (call $row_is_open  (local.get $cur)))))
+              (then (br $each)))
+            (local.set $new (call $row_union (local.get $cur) (local.get $cal)))
+            (if (i32.gt_u (call $len (call $row_names (local.get $new)))
+                          (call $len (call $row_names (local.get $cur))))
+              (then
+                (call $graph_bind_row (local.get $fh) (local.get $new)
+                  (call $reason_make_inferred (i32.const 3984)))   ;; fn effect row
+                (local.set $changed (i32.const 1))))
+            (br $each)))
+        (local.set $iter (i32.add (local.get $iter) (i32.const 1)))
+        (br_if $stable (i32.eqz (local.get $changed)))
+        (if (i32.ge_u (local.get $iter) (i32.const 64)) (then (unreachable)))
+        (br $pass))))
 
   ;; ─── Span index helpers ──────────────────────────────────────────
 
@@ -9354,7 +9446,7 @@
   ;; Lives at offset 1600 (well above emit_data.wat's highest at 1525,
   ;; well below HEAP_BASE = 4096); the [0, HEAP_BASE) sentinel region
   ;; per CLAUDE.md memory model. Read-only string constant; no GC concern.
-  (data (i32.const 1600) "\10\00\00\00ERROR_DEEP_CHASE")
+  (data (i32.const 6000) "\10\00\00\00ERROR_DEEP_CHASE")
 
   ;; ─── Universal Ty tag accessor ───────────────────────────────────
   ;; Returns the Ty record's tag (100-113). For nullary sentinels
@@ -9639,7 +9731,7 @@
   ;; module-level cached singleton; deferred until profiling shows hot).
   (func $ty_error_deep_chase (result i32)
     (call $ty_make_tname
-      (i32.const 1600)            ;; "ERROR_DEEP_CHASE" string ptr
+      (i32.const 6000)            ;; "ERROR_DEEP_CHASE" string ptr
       (call $make_list (i32.const 0))))
 
   ;; ─── $chase_deep — recursive Ty walker via $graph_chase ──────────
@@ -10807,7 +10899,7 @@
         ;; Reason = Instantiation("inst", Fresh(old))
         (local.set $reason
           (call $reason_make_instantiation
-            (i32.const 1620)                           ;; "inst" string ptr
+            (i32.const 6032)                           ;; "inst" string ptr
             (call $reason_make_fresh (local.get $old))))
         (local.set $fresh (call $graph_fresh_ty (local.get $reason)))
         (local.set $map (call $subst_map_extend
@@ -10822,7 +10914,7 @@
   ;; 1620 (above ty.wat's ERROR_DEEP_CHASE at 1600/20bytes; well
   ;; below HEAP_BASE = 4096). Per CLAUDE.md memory model + ty.wat
   ;; precedent for static string sentinels.
-  (data (i32.const 1620) "\04\00\00\00inst")
+  (data (i32.const 6032) "\04\00\00\00inst")
 
   ;; ─── $generalize(fn_handle) -> Scheme ─────────────────────────────
   ;;
@@ -11303,9 +11395,9 @@
   ;; Layout (each entry padded to 8-byte boundary for alignment):
 
   ;; ── Code-prefix strings (per docs/errors/ catalog naming) ─────────
-  (data (i32.const 1632) "\10\00\00\00E_TypeMismatch: ")              ;; 16 bytes payload
-  (data (i32.const 1656) "\13\00\00\00E_MissingVariable: ")            ;; 19 bytes payload
-  (data (i32.const 1680) "\0f\00\00\00E_OccursCheck: ")                ;; 15 bytes payload
+  (data (i32.const 6064) "\10\00\00\00E_TypeMismatch: ")              ;; 16 bytes payload
+  (data (i32.const 6096) "\13\00\00\00E_MissingVariable: ")            ;; 19 bytes payload
+  (data (i32.const 6128) "\0f\00\00\00E_OccursCheck: ")                ;; 15 bytes payload
   (data (i32.const 1704) "\15\00\00\00E_FeedbackNoContext: ")          ;; 21 bytes payload
   (data (i32.const 1736) "\18\00\00\00E_HandlerUninstallable: ")       ;; 24 bytes payload
   (data (i32.const 1768) "\17\00\00\00E_PatternInexhaustive: ")        ;; 23 bytes payload
@@ -11313,7 +11405,7 @@
 
   ;; ── Connector phrases ─────────────────────────────────────────────
   (data (i32.const 1824) "\0b\00\00\00 at handle ")                    ;; 11 bytes payload
-  (data (i32.const 1840) "\0e\00\00\00 — expected ")                   ;; 14 bytes payload (em-dash 3 bytes; " — expected " is 14 bytes UTF-8)
+  (data (i32.const 6160) "\0e\00\00\00 — expected ")                   ;; 14 bytes payload (em-dash 3 bytes; " — expected " is 14 bytes UTF-8)
   ;; Note: ", found " (offset 1856 in earlier draft) overlapped with
   ;; preceding " — expected " (UTF-8 14 bytes ending 1858). Relocated
   ;; to safe offset 2864 below.
@@ -11564,10 +11656,10 @@
     (local $msg i32)
     ;; Construct message: "E_TypeMismatch: at handle <h> — expected
     ;; <render(a)>, found <render(b)>\n"
-    (local.set $msg (i32.const 1632))                          ;; "E_TypeMismatch: "
+    (local.set $msg (i32.const 6064))                          ;; "E_TypeMismatch: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — expected "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — expected "
     (local.set $msg (call $str_concat (local.get $msg) (call $render_ty (local.get $ty_a))))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2864)))   ;; ", found " (relocated from 1856)
     (local.set $msg (call $str_concat (local.get $msg) (call $render_ty (local.get $ty_b))))
@@ -11591,7 +11683,7 @@
                                   (param $reason i32)
     (local $msg i32)
     ;; Construct message: "E_MissingVariable: <name> at handle <h>\n"
-    (local.set $msg (i32.const 1656))                          ;; "E_MissingVariable: "
+    (local.set $msg (i32.const 6096))                          ;; "E_MissingVariable: "
     (local.set $msg (call $str_concat (local.get $msg) (local.get $name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; " at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
@@ -11616,12 +11708,12 @@
     (local $msg i32)
     ;; Construct message: "E_OccursCheck: at handle <h> occurs in
     ;; type tree (infinite type) — <render(ty)>\n"
-    (local.set $msg (i32.const 1680))                          ;; "E_OccursCheck: "
+    (local.set $msg (i32.const 6128))                          ;; "E_OccursCheck: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1920)))   ;; " occurs in type tree"
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1872)))   ;; " (infinite type)"
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — expected "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — expected "
     (local.set $msg (call $str_concat (local.get $msg) (call $render_ty (local.get $ty))))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
@@ -11644,7 +11736,7 @@
     (local.set $msg (i32.const 1704))                          ;; "E_FeedbackNoContext: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1944)))   ;; "<~ requires …"
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
@@ -11667,7 +11759,7 @@
     (local.set $msg (i32.const 1736))                          ;; "E_HandlerUninstallable: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2000)))   ;; "handler arms require…"
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
@@ -11690,7 +11782,7 @@
     (local.set $msg (i32.const 1768))                          ;; "E_PatternInexhaustive: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2072)))   ;; "match does not cover…"
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
@@ -11719,7 +11811,7 @@
     (local.set $msg (i32.const 1800))                          ;; "T_OverDeclared: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2128)))   ;; "declared row strictly…"
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1912)))   ;; "\n"
     (call $eprint_string (local.get $msg))
@@ -11741,7 +11833,7 @@
     (local.set $msg (i32.const 2456))                          ;; "E_NotARecordType: "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))   ;; "at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))   ;; " — "
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))   ;; " — "
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2736)))   ;; "'"
     (local.set $msg (call $str_concat (local.get $msg) (local.get $type_name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2736)))   ;; "'"
@@ -11761,7 +11853,7 @@
     (local.set $msg (i32.const 2480))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2600)))
     (local.set $msg (call $str_concat (local.get $msg) (local.get $field_name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2640)))
@@ -11781,7 +11873,7 @@
     (local.set $msg (i32.const 2504))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2656)))
     (local.set $msg (call $str_concat (local.get $msg) (local.get $field_name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2640)))
@@ -11802,7 +11894,7 @@
     (local.set $msg (i32.const 2536))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 1824)))
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 1840)))
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6160)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2696)))
     (local.set $msg (call $str_concat (local.get $msg) (local.get $capability_name)))
     (local.set $msg (call $str_concat (local.get $msg) (i32.const 2736)))
@@ -11998,10 +12090,10 @@
   ;; Per-segment offsets are 16-aligned to keep visual inspection of WAT
   ;; consistent (matches emit_diag.wat's 32-byte slot convention loosely;
   ;; this chunk's six segments fit within a 16-byte cadence).
-  (data (i32.const 3008) "\02\00\00\00fn")
+  (data (i32.const 6208) "\02\00\00\00fn")
   (data (i32.const 3024) "\19\00\00\00function arity mismatch: ")
   (data (i32.const 3056) "\0d\00\00\00 param(s) vs ")
-  (data (i32.const 3072) "\09\00\00\00 param(s)")
+  (data (i32.const 6224) "\09\00\00\00 param(s)")
   (data (i32.const 3088) "\1a\00\00\00type list arity mismatch: ")
   (data (i32.const 3120) "\04\00\00\00 vs ")
 
@@ -12257,7 +12349,7 @@
               (call $ty_tfun_return (local.get $a))
               (call $ty_tfun_return (local.get $b))
               (local.get $span)
-              (call $reason_make_fnreturn (i32.const 3008) (local.get $reason)))
+              (call $reason_make_fnreturn (i32.const 6208) (local.get $reason)))
             ;; Unify the rows: a callee's concrete effect row flows into the
             ;; caller's fresh row var (Hβ.infer.perform-effect-row-propagation).
             (call $unify_row
@@ -12524,7 +12616,7 @@
     (local.set $msg (call $str_concat
       (local.get $msg) (call $int_to_str (local.get $lb))))
     (local.set $msg (call $str_concat
-      (local.get $msg) (i32.const 3072)))                   ;; " param(s)"
+      (local.get $msg) (i32.const 6224)))                   ;; " param(s)"
     (call $eprint_string (local.get $msg))
     (drop (local.get $span)))
 
@@ -14096,7 +14188,7 @@
   (data (i32.const 3960) "\0a\00\00\00empty list")           ;; 10 bytes
   (data (i32.const 3984) "\06\00\00\00lambda")               ;;  6 bytes
   (data (i32.const 4008) "\06\00\00\00<expr>")               ;;  6 bytes
-  (data (i32.const 5128) "\1c\00\00\00parser missing ident at <tok>")  ;; 28 bytes
+  (data (i32.const 6400) "\1d\00\00\00parser missing ident at <tok>")  ;; 28 bytes
 
   ;; ─── Private helpers ─────────────────────────────────────────────────
 
@@ -14576,8 +14668,10 @@
         (call $reason_make_inferredcallreturn (local.get $cname)
           (call $reason_make_inferred (i32.const 3584)))))  ;; "result"
     ;; Row composition: src/infer.mn:926-931 — chase row_h; NRowBound(row)
-    ;; flows the callee's row into the caller's frame; a still-free var
-    ;; adds nothing.
+    ;; flows the callee's row into the caller's frame NOW; the edge feeds
+    ;; $infer_row_fixpoint so late-bound callees (defined later /
+    ;; mutually recursive) flow in post-walk.
+    (call $infer_row_edge_append (local.get $row_h))
     (local.set $row_nk (call $gnode_kind (call $graph_chase (local.get $row_h))))
     (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))
       (then (call $walk_expr_inf_add_row
@@ -15419,7 +15513,9 @@
         (call $reason_make_inferredpiperesult (local.get $pipe_str)
           (call $reason_make_inferred (i32.const 3584)))))  ;; "result"
     ;; Row composition: src/infer.mn pipe arm — chase row_h; NRowBound(row)
-    ;; flows the stage's row into the caller's frame.
+    ;; flows the stage's row into the caller's frame NOW; the edge feeds
+    ;; $infer_row_fixpoint for late-bound stages.
+    (call $infer_row_edge_append (local.get $row_h))
     (local.set $row_nk (call $gnode_kind (call $graph_chase (local.get $row_h))))
     (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))
       (then (call $walk_expr_inf_add_row
@@ -15676,9 +15772,9 @@
         (call $graph_bind_kind
           (local.get $handle)
           (call $node_kind_make_nerrorhole
-            (call $reason_make_inferred (i32.const 5128)))   ;; "parser missing ident at <tok>"
+            (call $reason_make_inferred (i32.const 6400)))   ;; "parser missing ident at <tok>"
           (call $reason_make_located (local.get $span)
-            (call $reason_make_inferred (i32.const 5128))))
+            (call $reason_make_inferred (i32.const 6400))))
         (return (local.get $handle))))
     ;; Unknown tag — H6 wildcard discipline: trap so future Expr variants
     ;; force this dispatch table to be extended (drift mode 9 prevention).
@@ -15967,7 +16063,7 @@
   (data (i32.const 4032) "\07\00\00\00pattern")              ;;  7 bytes
   (data (i32.const 4048) "\02\00\00\00fn")                   ;;  2 bytes
   (data (i32.const 4056) "\05\00\00\00param")                ;;  5 bytes
-  (data (i32.const 4064) "\06\00\00\00return")               ;;  6 bytes
+  (data (i32.const 6256) "\06\00\00\00return")               ;;  6 bytes
   (data (i32.const 4080) "\07\00\00\00effects")              ;;  7 bytes
 
   ;; ─── Private helpers ─────────────────────────────────────────────────
@@ -16056,7 +16152,7 @@
 
     (local.set $ret_h (call $graph_fresh_ty
       (call $reason_make_located (local.get $span)
-        (call $reason_make_inferred (i32.const 4064)))))   ;; "return"
+        (call $reason_make_inferred (i32.const 6256)))))   ;; "return"
     (local.set $row_h (call $graph_fresh_row
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
@@ -16148,9 +16244,26 @@
     ;; tag-124 (HandlerDeclStmt) — pre-register REMOVED per
     ;; Hβ.first-light.infer-handler-decl-arms-typing: the main-pass
     ;; $infer_walk_stmt_handler_decl does env_extend + per-arm typing.
-    ;; Pre-registering would double-bind the handler name. EffectDeclStmt
-    ;; (tag 123) pre-registers op names; HandlerDecl walks AFTER those
-    ;; are in env, so op_name lookup resolves in the main pass.
+    ;; tag-124 (HandlerDeclStmt) — pre-register a PLACEHOLDER scheme so
+    ;; install sites in earlier-walked modules resolve the name
+    ;; (declaration order cannot matter — the graph already knows; the
+    ;; E_MissingVariable: diagnostics_handler class). The main-pass arm
+    ;; re-extends with the real scheme; env_lookup is latest-first, so
+    ;; the real scheme shadows the placeholder — no double-bind hazard.
+    (if (i32.eq (local.get $tag) (i32.const 124))
+      (then
+        (call $env_extend
+          (i32.load offset=4 (local.get $stmt))
+          (call $scheme_make_forall
+            (call $make_list (i32.const 0))
+            (call $ty_make_tvar (call $graph_fresh_ty
+              (call $reason_make_located (local.get $span)
+                (call $reason_make_declared
+                  (i32.load offset=4 (local.get $stmt)))))))
+          (call $reason_make_located (local.get $span)
+            (call $reason_make_declared (i32.load offset=4 (local.get $stmt))))
+          (call $schemekind_make_fn))
+        (return)))
     (if (i32.eq (local.get $tag) (i32.const 128))
       (then
         ;; Documented(doc, inner_node): inner Node at offset 8.
@@ -16320,7 +16433,7 @@
 
         (local.set $ret_h (call $graph_fresh_ty
           (call $reason_make_located (local.get $span)
-            (call $reason_make_inferred (i32.const 4064)))))   ;; "return"
+            (call $reason_make_inferred (i32.const 6256)))))   ;; "return"
         (local.set $row_h (call $graph_fresh_row
           (call $reason_make_located (local.get $span)
             (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
@@ -16359,7 +16472,7 @@
     (call $unify
       (local.get $body_h) (local.get $ret_h) (local.get $span)
       (call $reason_make_fnreturn (local.get $name)
-        (call $reason_make_inferred (i32.const 4064))))   ;; "return"
+        (call $reason_make_inferred (i32.const 6256))))   ;; "return"
     ;; Bind row_h → accumulated row (NRowFree → NRowBound[union]) BEFORE
     ;; generalize, so the generalized scheme carries the resolved effect row.
     (call $walk_expr_inf_exit_fn)
@@ -16956,7 +17069,7 @@
             (call $walk_stmt_build_inferred_params (local.get $param_handles)))
           (local.set $ret_h (call $graph_fresh_ty
             (call $reason_make_located (local.get $span)
-              (call $reason_make_inferred (i32.const 4064)))))   ;; "return"
+              (call $reason_make_inferred (i32.const 6256)))))   ;; "return"
           (local.set $row_h (call $graph_fresh_row
             (call $reason_make_located (local.get $span)
               (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
@@ -17332,9 +17445,9 @@
         (call $graph_bind_kind
           (local.get $handle)
           (call $node_kind_make_nerrorhole
-            (call $reason_make_inferred (i32.const 5128)))   ;; "parser missing ident at <tok>"
+            (call $reason_make_inferred (i32.const 6400)))   ;; "parser missing ident at <tok>"
           (call $reason_make_located (local.get $span)
-            (call $reason_make_inferred (i32.const 5128))))
+            (call $reason_make_inferred (i32.const 6400))))
         (return)))
     ;; Unknown Stmt tag — H6 wildcard discipline: trap so future Stmt
     ;; variants force this dispatch table to be extended (drift mode 9
@@ -17556,7 +17669,12 @@
 
   (func $mentl_infer (export "mentl_infer")
         (param $stmts i32)
-    (call $infer_program (local.get $stmts)))
+    (call $infer_program (local.get $stmts))
+    ;; Row fixpoint: union late-bound callee rows into fn rows until
+    ;; stable (Hβ.infer.row-fixpoint-late-callees) — the row made whole
+    ;; across mutual recursion and define-after-use, so lower's evidence
+    ;; derivation sees complete effect rows.
+    (call $infer_row_fixpoint))
 
   ;; ═══ state.wat — Hβ.lower per-function locals/captures ledger (Tier 4) ═══
   ;; Implements: Hβ-lower-substrate.md §1.2 — module-level globals for
@@ -17849,8 +17967,26 @@
   ;; install to write the record's arm region. One ledger, no parallel array.
   (func $handler_state_inits_register (export "handler_state_inits_register")
         (param $name i32) (param $inits i32) (param $arm_names i32)
-    (local $entry i32) (local $new_len i32)
+    (local $entry i32) (local $new_len i32) (local $i i32)
     (call $lower_init)
+    ;; Dedup by name (funcref-ledger precedent): the order-free pre-pass
+    ;; ($lower_pre_register_handler_decls) registers first; the walk-time
+    ;; call for the same decl becomes a no-op. First entry wins — the
+    ;; ledger lookups are first-match.
+    (local.set $i (i32.const 0))
+    (block $dedup_done
+      (loop $dedup
+        (br_if $dedup_done
+          (i32.ge_u (local.get $i) (global.get $lower_state_inits_ledger_len_g)))
+        (if (call $str_eq
+              (call $record_get
+                (call $list_index (global.get $lower_state_inits_ledger_ptr)
+                                  (local.get $i))
+                (i32.const 0))
+              (local.get $name))
+          (then (return)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $dedup)))
     (local.set $entry (call $make_record (i32.const 282) (i32.const 3)))
     (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
     (call $record_set (local.get $entry) (i32.const 1) (local.get $inits))
@@ -20306,8 +20442,8 @@
   ;; and well below HEAP_BASE = 4096 per CLAUDE.md memory model.
   ;; Available: 2944 .. 4095 = 1152 bytes. Used: ~80 bytes. Headroom: ample.
 
-  (data (i32.const 2944) "\21\00\00\00E_UnresolvedType: lower-time NFree at handle ")  ;; 33 bytes payload (header)
-  (data (i32.const 2992) "\01\00\00\00\0a")                                              ;; "\n" — 1 byte payload
+  (data (i32.const 2944) "\2d\00\00\00E_UnresolvedType: lower-time NFree at handle ")  ;; 33 bytes payload (header)
+  (data (i32.const 6192) "\01\00\00\00\0a")                                              ;; "\n" — 1 byte payload
   (data (i32.const 3000) "\0c\00\00\00<error-hole>")                                     ;; 12 bytes payload (tag-114 render)
 
   ;; ─── $lower_emit_unresolved_type — E_UnresolvedType helper ────────
@@ -20329,7 +20465,7 @@
     (local $msg i32)
     (local.set $msg (i32.const 2944))                                  ;; "E_UnresolvedType: lower-time NFree at handle "
     (local.set $msg (call $str_concat (local.get $msg) (call $int_to_str (local.get $handle))))
-    (local.set $msg (call $str_concat (local.get $msg) (i32.const 2992)))   ;; "\n"
+    (local.set $msg (call $str_concat (local.get $msg) (i32.const 6192)))   ;; "\n"
     (call $eprint_string (local.get $msg)))
 
   ;; ─── $lower_render_ty — Ty walker with TError-hole sentinel arm ───
@@ -25382,6 +25518,46 @@
         (br $each)))
     (local.get $buf))
 
+  ;; ─── $lower_pre_register_handler_decls — order-free handler ledgers ──
+  ;; (Hβ.infer.pre-register-all-decls, lower half.) Handler decls register
+  ;; their (state_inits, arm_names) ledgers BEFORE any stmt lowers, so an
+  ;; install site in an earlier-sorted module resolves a handler declared
+  ;; in a later one (main.mn `~> diagnostics_handler` with the decl in
+  ;; pipeline.mn). Declaration order cannot matter — the graph already
+  ;; knows. $handler_state_inits_register dedups by name; the walk-time
+  ;; registration below becomes a no-op for pre-registered names.
+  (func $lower_pre_register_handler_decls (export "lower_pre_register_handler_decls")
+        (param $stmts i32)
+    (local $n i32) (local $i i32) (local $node i32)
+    (local.set $n (call $len (local.get $stmts)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $node (call $list_index (local.get $stmts) (local.get $i)))
+        (call $lower_pre_register_handler_node (local.get $node))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each))))
+
+  (func $lower_pre_register_handler_node (param $node i32)
+    (local $body i32) (local $stmt i32) (local $tag i32)
+    (local.set $body (i32.load offset=4 (local.get $node)))
+    (if (i32.ne (i32.load (local.get $body)) (i32.const 111)) (then (return)))
+    (local.set $stmt (i32.load offset=4 (local.get $body)))
+    (local.set $tag (i32.load (local.get $stmt)))
+    ;; Documented(doc, inner) — unwrap to the declaration it documents.
+    (if (i32.eq (local.get $tag) (i32.const 128))
+      (then
+        (call $lower_pre_register_handler_node (i32.load offset=8 (local.get $stmt)))
+        (return)))
+    (if (i32.ne (local.get $tag) (i32.const 124)) (then (return)))
+    (call $handler_state_inits_register
+      (i32.load offset=4 (local.get $stmt))
+      (call $lower_state_field_inits (i32.load offset=16 (local.get $stmt)))
+      (call $build_handler_arm_names
+        (i32.load offset=4 (local.get $stmt))
+        (i32.load offset=12 (local.get $stmt)))))
+
   ;; ─── $lower_walk_stmt_handler_decl — HandlerDeclStmt arm (tag 124) ──
   ;; Per src/lower.mn:617-625 + Lock #7.
   ;; Layout assumption: [tag=124][handler_name][effect_name][arms_list]
@@ -25761,6 +25937,11 @@
     (call $ls_reset_function)
     (local.set $globals (call $lower_collect_top_level_names (local.get $stmts)))
     (call $ls_register_globals (local.get $globals))
+    ;; Order-free handler ledgers (Hβ.infer.pre-register-all-decls, lower
+    ;; half): every handler decl's (state_inits, arm_names) registers
+    ;; before any stmt lowers, so install sites resolve handlers declared
+    ;; in later-sorted modules.
+    (call $lower_pre_register_handler_decls (local.get $stmts))
     (call $lower_stmt_list (local.get $stmts)))
 
   ;; ─── Top-level name collection ────────────────────────────────────
@@ -26682,7 +26863,7 @@
   (data (i32.const 1256) " (param $size i32)")
   ;; Alloc body as raw WAT (padded to 200 bytes with spaces)
   (data (i32.const 1275) "(local $ptr i32)(local.set $ptr (global.get $heap_ptr))(global.set $heap_ptr (i32.add (global.get $heap_ptr)(i32.and (i32.add (local.get $size)(i32.const 7))(i32.const -8))))(local.get $ptr)                  ")
-  (data (i32.const 1475) " (param $v i32)")
+  (data (i32.const 6336) " (param $v i32)")
 
   ;; 1491: "_start_fn" (9) → 1500
   ;; 1500: " (export \"_start\")" (19, including escaped quotes) → 1519
@@ -34505,7 +34686,7 @@
     (call $emit_cstr (i32.const 584) (i32.const 6))
     (call $emit_byte (i32.const 36))
     (call $emit_cstr (i32.const 1037) (i32.const 6))  ;; tag_of
-    (call $emit_cstr (i32.const 1475) (i32.const 15))
+    (call $emit_cstr (i32.const 6336) (i32.const 15))
     (call $emit_cstr (i32.const 597) (i32.const 13))
     (call $emit_nl)
     (call $emit_indent)

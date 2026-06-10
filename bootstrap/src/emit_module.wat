@@ -327,7 +327,7 @@
     (call $emit_cstr (i32.const 584) (i32.const 6))
     (call $emit_byte (i32.const 36))
     (call $emit_cstr (i32.const 1037) (i32.const 6))  ;; tag_of
-    (call $emit_cstr (i32.const 1475) (i32.const 15))
+    (call $emit_cstr (i32.const 6336) (i32.const 15))
     (call $emit_cstr (i32.const 597) (i32.const 13))
     (call $emit_nl)
     (call $emit_indent)

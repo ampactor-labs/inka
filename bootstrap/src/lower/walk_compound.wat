@@ -568,7 +568,7 @@
         (local.set $name (i32.load offset=4 (local.get $pat)))
         (local.set $subs (i32.load offset=8 (local.get $pat)))
         (local.set $ctor_tag_id (i32.const -1))
-        (local.set $binding (call $env_lookup (local.get $name)))
+        (local.set $binding (call $env_lookup_value (local.get $name)))
         (if (i32.ne (local.get $binding) (i32.const 0))
           (then
             (local.set $kind (call $env_binding_kind (local.get $binding)))
@@ -922,7 +922,7 @@
     ;; TName (108) — chase env to RecordSchemeKind.
     (if (i32.eq (local.get $tag) (i32.const 108))
       (then
-        (local.set $binding (call $env_lookup (call $ty_tname_name (local.get $ty))))
+        (local.set $binding (call $env_lookup_value (call $ty_tname_name (local.get $ty))))
         (if (i32.ne (local.get $binding) (i32.const 0))
           (then
             (local.set $kind (call $env_binding_kind (local.get $binding)))

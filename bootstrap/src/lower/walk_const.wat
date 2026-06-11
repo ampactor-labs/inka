@@ -352,7 +352,7 @@
     ;; Avoids Drift 6 (Bool not special — Bool's True/False register as
     ;; ConstructorScheme(0,2)/(1,2) and flow through this same arm because
     ;; their scheme bodies are TName("Bool", [])).
-    (local.set $binding (call $env_lookup (local.get $name)))
+    (local.set $binding (call $env_lookup_value (local.get $name)))
     (if (i32.ne (local.get $binding) (i32.const 0))
       (then
         (local.set $kind (call $env_binding_kind (local.get $binding)))

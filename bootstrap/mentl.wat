@@ -2645,6 +2645,83 @@
         (br $scope_loop)))
     (local.get $default))
 
+  ;; ─── Kind-class lookups (Hβ.infer.kind-filtered-env-lookup) ──────
+  ;; A binding's SchemeKind is graph-proven at construction; name-only
+  ;; lookup discards it at the namespace boundary, so `type Cursor` +
+  ;; `effect Cursor` shadow each other. Value-position consumers
+  ;; (VarRef, ctor patterns, ctor calls, handler schemes) read through
+  ;; $env_lookup_value; effect→ops machinery reads through
+  ;; $env_lookup_effectdecl. Same newest-first walk as $env_lookup_or
+  ;; with the kind predicate inline.
+
+  ;; $env_lookup_value(name) — newest binding whose SchemeKind is NOT
+  ;; CapabilityScheme(135) / EffectDeclKind(136). Capability bundles
+  ;; and effect decls share the name-space but are never values.
+  (func $env_lookup_value (param $name i32) (result i32)
+    (local $scope_idx i32) (local $frame i32) (local $buf i32)
+    (local $binding_idx i32) (local $binding i32) (local $ktag i32)
+    (call $env_init)
+    (local.set $scope_idx (global.get $env_scope_count_g))
+    (block $outer_done
+      (loop $scope_loop
+        (br_if $outer_done (i32.eqz (local.get $scope_idx)))
+        (local.set $scope_idx (i32.sub (local.get $scope_idx) (i32.const 1)))
+        (local.set $frame
+          (call $list_index (global.get $env_scopes_ptr) (local.get $scope_idx)))
+        (local.set $buf (call $env_frame_buf (local.get $frame)))
+        (local.set $binding_idx (call $env_frame_len (local.get $frame)))
+        (block $inner_done
+          (loop $binding_loop
+            (br_if $inner_done (i32.eqz (local.get $binding_idx)))
+            (local.set $binding_idx (i32.sub (local.get $binding_idx) (i32.const 1)))
+            (local.set $binding
+              (call $list_index (local.get $buf) (local.get $binding_idx)))
+            (if (call $str_eq (call $env_binding_name (local.get $binding))
+                              (local.get $name))
+              (then
+                (local.set $ktag (call $schemekind_tag
+                  (call $env_binding_kind (local.get $binding))))
+                (if (i32.and
+                      (i32.ne (local.get $ktag) (i32.const 135))
+                      (i32.ne (local.get $ktag) (i32.const 136)))
+                  (then (return (local.get $binding))))))
+            (br $binding_loop)))
+        (br $scope_loop)))
+    (i32.const 0))
+
+  ;; $env_lookup_effectdecl(name) — newest binding whose SchemeKind IS
+  ;; EffectDeclKind(136): the effect→ops mapping for ev-slot derivation.
+  (func $env_lookup_effectdecl (param $name i32) (result i32)
+    (local $scope_idx i32) (local $frame i32) (local $buf i32)
+    (local $binding_idx i32) (local $binding i32)
+    (call $env_init)
+    (local.set $scope_idx (global.get $env_scope_count_g))
+    (block $outer_done
+      (loop $scope_loop
+        (br_if $outer_done (i32.eqz (local.get $scope_idx)))
+        (local.set $scope_idx (i32.sub (local.get $scope_idx) (i32.const 1)))
+        (local.set $frame
+          (call $list_index (global.get $env_scopes_ptr) (local.get $scope_idx)))
+        (local.set $buf (call $env_frame_buf (local.get $frame)))
+        (local.set $binding_idx (call $env_frame_len (local.get $frame)))
+        (block $inner_done
+          (loop $binding_loop
+            (br_if $inner_done (i32.eqz (local.get $binding_idx)))
+            (local.set $binding_idx (i32.sub (local.get $binding_idx) (i32.const 1)))
+            (local.set $binding
+              (call $list_index (local.get $buf) (local.get $binding_idx)))
+            (if (call $str_eq (call $env_binding_name (local.get $binding))
+                              (local.get $name))
+              (then
+                (if (i32.eq
+                      (call $schemekind_tag
+                        (call $env_binding_kind (local.get $binding)))
+                      (i32.const 136))
+                  (then (return (local.get $binding))))))
+            (br $binding_loop)))
+        (br $scope_loop)))
+    (i32.const 0))
+
   ;; $env_contains(name) — presence test. Returns 1 if name is bound
   ;; in any scope, else 0. Cleaner than checking $env_lookup result
   ;; for handle == 0 when 0 might be a legitimate fresh-allocated
@@ -14755,7 +14832,7 @@
     (local $scheme i32) (local $reason i32) (local $ty i32)
     ;; VarRef layout: [tag=85][name_ptr] — name at offset 4
     (local.set $name (i32.load offset=4 (local.get $expr)))
-    (local.set $binding (call $env_lookup (local.get $name)))
+    (local.set $binding (call $env_lookup_value (local.get $name)))
     (if (i32.eqz (local.get $binding))
       (then
         ;; Hazel productive-under-error: emit + bind NErrorHole + return.
@@ -15169,7 +15246,7 @@
       (then
         (local.set $ctor_name (i32.load offset=4 (local.get $pat)))
         (local.set $sub_pats (i32.load offset=8 (local.get $pat)))
-        (local.set $binding (call $env_lookup (local.get $ctor_name)))
+        (local.set $binding (call $env_lookup_value (local.get $ctor_name)))
         (if (i32.eqz (local.get $binding))
           (then
             ;; Constructor not in env — walk sub_pats with fresh handles
@@ -15684,7 +15761,7 @@
     ;; Layout: [tag=99][type_name][fields]
     (local.set $type_name (i32.load offset=4 (local.get $expr)))
     (local.set $fields    (i32.load offset=8 (local.get $expr)))
-    (local.set $binding (call $env_lookup (local.get $type_name)))
+    (local.set $binding (call $env_lookup_value (local.get $type_name)))
     (if (i32.eqz (local.get $binding))
       (then
         (call $infer_emit_missing_var
@@ -18557,7 +18634,7 @@
           (call $record_get
                 (call $list_index (global.get $lower_handler_stack_ptr) (local.get $i))
                 (i32.const 0)))
-        (local.set $h_entry (call $env_lookup (local.get $hname)))
+        (local.set $h_entry (call $env_lookup_value (local.get $hname)))
         (if (i32.ne (local.get $h_entry) (i32.const 0))
           (then
             (local.set $sch (call $env_binding_scheme (local.get $h_entry)))
@@ -18690,7 +18767,7 @@
           (call $list_index (global.get $lower_handler_stack_ptr) (local.get $i)))
         (local.set $hname       (call $record_get (local.get $stack_entry) (i32.const 0)))
         (local.set $state_local (call $record_get (local.get $stack_entry) (i32.const 1)))
-        (local.set $h_entry (call $env_lookup (local.get $hname)))
+        (local.set $h_entry (call $env_lookup_value (local.get $hname)))
         (if (i32.ne (local.get $h_entry) (i32.const 0))
           (then
             (local.set $sch (call $env_binding_scheme (local.get $h_entry)))
@@ -21645,7 +21722,7 @@
     ;; Avoids Drift 6 (Bool not special — Bool's True/False register as
     ;; ConstructorScheme(0,2)/(1,2) and flow through this same arm because
     ;; their scheme bodies are TName("Bool", [])).
-    (local.set $binding (call $env_lookup (local.get $name)))
+    (local.set $binding (call $env_lookup_value (local.get $name)))
     (if (i32.ne (local.get $binding) (i32.const 0))
       (then
         (local.set $kind (call $env_binding_kind (local.get $binding)))
@@ -22276,7 +22353,7 @@
         (if (i32.eq (i32.load (local.get $cb_expr)) (i32.const 85))
           (then
             (local.set $name (i32.load offset=4 (local.get $cb_expr)))
-            (local.set $binding (call $env_lookup (local.get $name)))
+            (local.set $binding (call $env_lookup_value (local.get $name)))
             (if (i32.ne (local.get $binding) (i32.const 0))
               (then
                 (local.set $kind (call $env_binding_kind (local.get $binding)))
@@ -22438,7 +22515,7 @@
       (then (return (i32.const 0))))
     (local.set $effect_name (call $schemekind_effectop_name (local.get $kind)))
     ;; Step 2: effect_name → EffectDeclKind(op_names)
-    (local.set $decl_binding (call $env_lookup (local.get $effect_name)))
+    (local.set $decl_binding (call $env_lookup_effectdecl (local.get $effect_name)))
     (if (i32.eqz (local.get $decl_binding))
       (then (return (i32.const 0))))
     (local.set $decl_kind (call $env_binding_kind (local.get $decl_binding)))
@@ -22490,7 +22567,7 @@
     (if (i32.eqz (local.get $effect_name)) (then (return (i32.const 0))))
     (local.set $fn_name (call $ls_outer_fn_name))
     (if (i32.eqz (local.get $fn_name)) (then (return (i32.const 0))))
-    (local.set $binding (call $env_lookup (local.get $fn_name)))
+    (local.set $binding (call $env_lookup_value (local.get $fn_name)))
     (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
     (local.set $scheme (call $env_binding_scheme (local.get $binding)))
     (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const 0))))
@@ -24372,7 +24449,7 @@
         (local.set $name (i32.load offset=4 (local.get $pat)))
         (local.set $subs (i32.load offset=8 (local.get $pat)))
         (local.set $ctor_tag_id (i32.const -1))
-        (local.set $binding (call $env_lookup (local.get $name)))
+        (local.set $binding (call $env_lookup_value (local.get $name)))
         (if (i32.ne (local.get $binding) (i32.const 0))
           (then
             (local.set $kind (call $env_binding_kind (local.get $binding)))
@@ -24726,7 +24803,7 @@
     ;; TName (108) — chase env to RecordSchemeKind.
     (if (i32.eq (local.get $tag) (i32.const 108))
       (then
-        (local.set $binding (call $env_lookup (call $ty_tname_name (local.get $ty))))
+        (local.set $binding (call $env_lookup_value (call $ty_tname_name (local.get $ty))))
         (if (i32.ne (local.get $binding) (i32.const 0))
           (then
             (local.set $kind (call $env_binding_kind (local.get $binding)))

@@ -381,6 +381,83 @@
         (br $scope_loop)))
     (local.get $default))
 
+  ;; ─── Kind-class lookups (Hβ.infer.kind-filtered-env-lookup) ──────
+  ;; A binding's SchemeKind is graph-proven at construction; name-only
+  ;; lookup discards it at the namespace boundary, so `type Cursor` +
+  ;; `effect Cursor` shadow each other. Value-position consumers
+  ;; (VarRef, ctor patterns, ctor calls, handler schemes) read through
+  ;; $env_lookup_value; effect→ops machinery reads through
+  ;; $env_lookup_effectdecl. Same newest-first walk as $env_lookup_or
+  ;; with the kind predicate inline.
+
+  ;; $env_lookup_value(name) — newest binding whose SchemeKind is NOT
+  ;; CapabilityScheme(135) / EffectDeclKind(136). Capability bundles
+  ;; and effect decls share the name-space but are never values.
+  (func $env_lookup_value (param $name i32) (result i32)
+    (local $scope_idx i32) (local $frame i32) (local $buf i32)
+    (local $binding_idx i32) (local $binding i32) (local $ktag i32)
+    (call $env_init)
+    (local.set $scope_idx (global.get $env_scope_count_g))
+    (block $outer_done
+      (loop $scope_loop
+        (br_if $outer_done (i32.eqz (local.get $scope_idx)))
+        (local.set $scope_idx (i32.sub (local.get $scope_idx) (i32.const 1)))
+        (local.set $frame
+          (call $list_index (global.get $env_scopes_ptr) (local.get $scope_idx)))
+        (local.set $buf (call $env_frame_buf (local.get $frame)))
+        (local.set $binding_idx (call $env_frame_len (local.get $frame)))
+        (block $inner_done
+          (loop $binding_loop
+            (br_if $inner_done (i32.eqz (local.get $binding_idx)))
+            (local.set $binding_idx (i32.sub (local.get $binding_idx) (i32.const 1)))
+            (local.set $binding
+              (call $list_index (local.get $buf) (local.get $binding_idx)))
+            (if (call $str_eq (call $env_binding_name (local.get $binding))
+                              (local.get $name))
+              (then
+                (local.set $ktag (call $schemekind_tag
+                  (call $env_binding_kind (local.get $binding))))
+                (if (i32.and
+                      (i32.ne (local.get $ktag) (i32.const 135))
+                      (i32.ne (local.get $ktag) (i32.const 136)))
+                  (then (return (local.get $binding))))))
+            (br $binding_loop)))
+        (br $scope_loop)))
+    (i32.const 0))
+
+  ;; $env_lookup_effectdecl(name) — newest binding whose SchemeKind IS
+  ;; EffectDeclKind(136): the effect→ops mapping for ev-slot derivation.
+  (func $env_lookup_effectdecl (param $name i32) (result i32)
+    (local $scope_idx i32) (local $frame i32) (local $buf i32)
+    (local $binding_idx i32) (local $binding i32)
+    (call $env_init)
+    (local.set $scope_idx (global.get $env_scope_count_g))
+    (block $outer_done
+      (loop $scope_loop
+        (br_if $outer_done (i32.eqz (local.get $scope_idx)))
+        (local.set $scope_idx (i32.sub (local.get $scope_idx) (i32.const 1)))
+        (local.set $frame
+          (call $list_index (global.get $env_scopes_ptr) (local.get $scope_idx)))
+        (local.set $buf (call $env_frame_buf (local.get $frame)))
+        (local.set $binding_idx (call $env_frame_len (local.get $frame)))
+        (block $inner_done
+          (loop $binding_loop
+            (br_if $inner_done (i32.eqz (local.get $binding_idx)))
+            (local.set $binding_idx (i32.sub (local.get $binding_idx) (i32.const 1)))
+            (local.set $binding
+              (call $list_index (local.get $buf) (local.get $binding_idx)))
+            (if (call $str_eq (call $env_binding_name (local.get $binding))
+                              (local.get $name))
+              (then
+                (if (i32.eq
+                      (call $schemekind_tag
+                        (call $env_binding_kind (local.get $binding)))
+                      (i32.const 136))
+                  (then (return (local.get $binding))))))
+            (br $binding_loop)))
+        (br $scope_loop)))
+    (i32.const 0))
+
   ;; $env_contains(name) — presence test. Returns 1 if name is bound
   ;; in any scope, else 0. Cleaner than checking $env_lookup result
   ;; for handle == 0 when 0 might be a legitimate fresh-allocated

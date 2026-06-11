@@ -443,7 +443,7 @@
           (call $record_get
                 (call $list_index (global.get $lower_handler_stack_ptr) (local.get $i))
                 (i32.const 0)))
-        (local.set $h_entry (call $env_lookup (local.get $hname)))
+        (local.set $h_entry (call $env_lookup_value (local.get $hname)))
         (if (i32.ne (local.get $h_entry) (i32.const 0))
           (then
             (local.set $sch (call $env_binding_scheme (local.get $h_entry)))
@@ -576,7 +576,7 @@
           (call $list_index (global.get $lower_handler_stack_ptr) (local.get $i)))
         (local.set $hname       (call $record_get (local.get $stack_entry) (i32.const 0)))
         (local.set $state_local (call $record_get (local.get $stack_entry) (i32.const 1)))
-        (local.set $h_entry (call $env_lookup (local.get $hname)))
+        (local.set $h_entry (call $env_lookup_value (local.get $hname)))
         (if (i32.ne (local.get $h_entry) (i32.const 0))
           (then
             (local.set $sch (call $env_binding_scheme (local.get $h_entry)))

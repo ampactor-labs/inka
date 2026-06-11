@@ -582,7 +582,7 @@
         (if (i32.eq (i32.load (local.get $cb_expr)) (i32.const 85))
           (then
             (local.set $name (i32.load offset=4 (local.get $cb_expr)))
-            (local.set $binding (call $env_lookup (local.get $name)))
+            (local.set $binding (call $env_lookup_value (local.get $name)))
             (if (i32.ne (local.get $binding) (i32.const 0))
               (then
                 (local.set $kind (call $env_binding_kind (local.get $binding)))
@@ -744,7 +744,7 @@
       (then (return (i32.const 0))))
     (local.set $effect_name (call $schemekind_effectop_name (local.get $kind)))
     ;; Step 2: effect_name → EffectDeclKind(op_names)
-    (local.set $decl_binding (call $env_lookup (local.get $effect_name)))
+    (local.set $decl_binding (call $env_lookup_effectdecl (local.get $effect_name)))
     (if (i32.eqz (local.get $decl_binding))
       (then (return (i32.const 0))))
     (local.set $decl_kind (call $env_binding_kind (local.get $decl_binding)))
@@ -796,7 +796,7 @@
     (if (i32.eqz (local.get $effect_name)) (then (return (i32.const 0))))
     (local.set $fn_name (call $ls_outer_fn_name))
     (if (i32.eqz (local.get $fn_name)) (then (return (i32.const 0))))
-    (local.set $binding (call $env_lookup (local.get $fn_name)))
+    (local.set $binding (call $env_lookup_value (local.get $fn_name)))
     (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
     (local.set $scheme (call $env_binding_scheme (local.get $binding)))
     (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const 0))))

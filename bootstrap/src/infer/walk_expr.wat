@@ -627,7 +627,7 @@
     (local $scheme i32) (local $reason i32) (local $ty i32)
     ;; VarRef layout: [tag=85][name_ptr] — name at offset 4
     (local.set $name (i32.load offset=4 (local.get $expr)))
-    (local.set $binding (call $env_lookup (local.get $name)))
+    (local.set $binding (call $env_lookup_value (local.get $name)))
     (if (i32.eqz (local.get $binding))
       (then
         ;; Hazel productive-under-error: emit + bind NErrorHole + return.
@@ -1041,7 +1041,7 @@
       (then
         (local.set $ctor_name (i32.load offset=4 (local.get $pat)))
         (local.set $sub_pats (i32.load offset=8 (local.get $pat)))
-        (local.set $binding (call $env_lookup (local.get $ctor_name)))
+        (local.set $binding (call $env_lookup_value (local.get $ctor_name)))
         (if (i32.eqz (local.get $binding))
           (then
             ;; Constructor not in env — walk sub_pats with fresh handles
@@ -1556,7 +1556,7 @@
     ;; Layout: [tag=99][type_name][fields]
     (local.set $type_name (i32.load offset=4 (local.get $expr)))
     (local.set $fields    (i32.load offset=8 (local.get $expr)))
-    (local.set $binding (call $env_lookup (local.get $type_name)))
+    (local.set $binding (call $env_lookup_value (local.get $type_name)))
     (if (i32.eqz (local.get $binding))
       (then
         (call $infer_emit_missing_var

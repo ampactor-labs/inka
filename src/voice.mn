@@ -18,7 +18,7 @@ import pipeline
 import driver
 import runtime/strings
 
-/// Topic is the focus of one voice turn. Cursor-of-attention projects
+/// Topic is the focus of one voice turn. Caret-of-attention projects
 /// onto a Topic; Mentl reads the graph at that topic. Five variants
 /// cover the four load-bearing attention surfaces (identifier / graph
 /// handle / cursor position / named error) plus the explicit ask path.
@@ -27,7 +27,7 @@ import runtime/strings
 type Topic
   = TopicIdent(String)                   // hover on identifier
   | TopicHandle(Int)                     // direct graph node
-  | TopicSpan(Span)                      // cursor position
+  | TopicSpan(Span)                      // caret position
   | TopicError(String, Span)             // specific diagnostic (code, span)
   | TopicAsk(Question)                   // user asked explicitly (via query.mn's Question)
 
@@ -243,20 +243,18 @@ type TreeEntry
   = TreeFile(Path)
   | TreeDir(Path)                   // expand via another tree_list call
 
-/// Cursor is the human's attention at a moment. Handle + Reason —
+/// Caret is the human's attention at a moment. Handle + Reason —
 /// which graph node, and why Mentl thinks so (last focus op / last
 /// edit's mutation site / last ask's target — the Reason traces
 /// back).
 /// Primitives: #1 (Handle) + #8 (Reason).
 
-type Cursor
-  = Cursor(Int, Reason)             // handle, reason
 
-/// CursorTarget is the input to `focus` — the various ways a surface
-/// can name what to attend to. Maps to a Cursor by resolving through
+/// CaretTarget is the input to `focus` — the various ways a surface
+/// can name what to attend to. Maps to a Caret by resolving through
 /// the graph (span → handle lookup via span_index).
 
-type CursorTarget
+type CaretTarget
   = TargetHandle(Int)
   | TargetSpan(Span)
   | TargetIdent(String)
@@ -360,11 +358,11 @@ effect Interact {
   edit(FileHandle, Patch)        -> EditOutcome
 
   // ─── Attention ops (2) ──────────────────────────────────────────
-  // Cursor-of-attention is (Handle, Reason). focus sets it; cursor
+  // Caret-of-attention is (Handle, Reason). focus sets it; cursor
   // reads it.
 
-  focus(CursorTarget)            -> ()
-  cursor()                       -> Cursor
+  focus(CaretTarget)            -> ()
+  caret()                       -> Caret
 
   // ─── Mentl voice ops (3) ────────────────────────────────────────
   // ask is user-initiated (Question); propose is Mentl-initiated
@@ -372,7 +370,7 @@ effect Interact {
   // speak surfaces a VoiceLine the surface should render.
 
   ask(Question)                  -> Answer
-  propose(CursorTarget)          -> VoiceLine
+  propose(CaretTarget)          -> VoiceLine
   speak(VoiceLine)               -> ()
 
   // ─── Run ops (4) ────────────────────────────────────────────────
@@ -973,7 +971,7 @@ fn fold_tentacles(situation, tentacles, i, n, acc, count) with Pure = {
 ///   - Inner gate: proof_derivable(situation_t) per tentacle — even
 ///     with non-empty queue, only tentacles with proven content fire
 ///
-/// Cursor-time consumers (LSP) call this and filter to the
+/// Caret-time consumers (LSP) call this and filter to the
 /// surface-specific tentacle; batch consumers (F.1 mentl doc) render
 /// all. Same machinery, different iteration scope. Tier-1 unification
 /// per INSIGHTS L509.
@@ -1131,12 +1129,12 @@ fn unimplemented_arm(op_name) with Abort = {
 //   Handler? — Interact's satisfied; one resume per arm
 //   Verb?    — flat let/match; pipe doesn't draw better topology
 //   Row?     — composed at arm site (Pure / GraphRead / OracleQuery)
-//   Owner?   — Cursor + VoiceLine own-to-handler; no escape
-//   Refine?  — Cursor.handle refinement deferred to MV.2.e.Q.refine
+//   Owner?   — Caret + VoiceLine own-to-handler; no escape
+//   Refine?  — Caret.handle refinement deferred to MV.2.e.Q.refine
 //   Gradient? each arm = one step toward LSP usability
-//   Reason?  — every cursor write threads a Reason per CursorTarget
+//   Reason?  — every cursor write threads a Reason per CaretTarget
 
-/// resolve_cursor_target — project a CursorTarget into a graph Handle.
+/// resolve_cursor_target — project a CaretTarget into a graph Handle.
 /// TargetHandle: identity. TargetSpan: span_index lookup via
 /// graph_snapshot (per query.mn find_tightest substrate). TargetIdent:
 /// env entries don't carry handles directly per current Env shape (the
@@ -1144,7 +1142,7 @@ fn unimplemented_arm(op_name) with Abort = {
 /// it isn't yet wired). Fallback for that variant: cursor unchanged.
 /// The MV.2.e.Q.ident peer sub-handle wires env→handle resolution.
 ///
-/// H6 exhaustive over CursorTarget — no `_` wildcard.
+/// H6 exhaustive over CaretTarget — no `_` wildcard.
 
 fn resolve_cursor_target(target, current_handle) with GraphRead = {
   match target {
@@ -1161,10 +1159,10 @@ fn resolve_cursor_target(target, current_handle) with GraphRead = {
   }
 }
 
-/// focus_reason — synthesize the Cursor's Reason from the focus
+/// focus_reason — synthesize the Caret's Reason from the focus
 /// gesture. Per MV §2 Q5 + primitive #8: every cursor write threads a
 /// Reason so the Why tentacle can later answer "why this cursor?". H6
-/// exhaustive over CursorTarget.
+/// exhaustive over CaretTarget.
 
 fn focus_reason(target) with Pure = {
   match target {
@@ -1390,7 +1388,7 @@ fn intents_without(intents, id) with Pure = {
 //
 // State (per MV §2.7.1 + §2.7.6 turn anatomy + Insight #9 records-as-
 // handler-state-shape):
-//   cursor          — current cursor-of-attention (Handle + Reason)
+//   caret           — current caret-of-attention (Handle + Reason)
 //   prior_turn      — last turn record; feeds prior_turn_topic /
 //                     prior_turn_tentacle into Situation composition
 //                     for cross-turn observation deltas
@@ -1420,7 +1418,7 @@ fn intents_without(intents, id) with Pure = {
 // via ~> with caller rows), #8 (every cursor write threads a Reason).
 
 handler mentl_voice_default
-  with cursor              = Cursor(0, Inferred("session start")),
+  with caret              = Caret(0, Inferred("session start")),
        prior_turn          = None,
        history             = [],
        intents             = [],
@@ -1439,17 +1437,17 @@ handler mentl_voice_default
 
   // ─── Attention ops (2) — MV.2.e.Q ─────────────────────────────────
 
-  /// focus — set the cursor-of-attention from a CursorTarget. Per MV
-  /// §2 Q5: every focus resets the cursor. The Cursor's Reason traces
-  /// back to the focus gesture (per CursorTarget variant via
+  /// focus — set the caret-of-attention from a CaretTarget. Per MV
+  /// §2 Q5: every focus resets the cursor. The Caret's Reason traces
+  /// back to the focus gesture (per CaretTarget variant via
   /// focus_reason). TargetSpan path performs graph_snapshot for span
   /// resolution; TargetIdent falls back to current handle (MV.2.e.Q.ident
   /// peer sub-handle wires env→handle resolution).
   focus(target)         => {
-    let Cursor(current_handle, _) = cursor
+    let Caret(current_handle, _) = caret
     let new_handle = resolve_cursor_target(target, current_handle)
     let new_reason = focus_reason(target)
-    let new_cursor = Cursor(new_handle, new_reason)
+    let new_cursor = Caret(new_handle, new_reason)
     let new_turn = TurnRecord({
       tentacle: TentQuery,
       topic:    TopicHandle(new_handle),
@@ -1457,14 +1455,14 @@ handler mentl_voice_default
       span_at:  span_zero()
     })
     resume()
-      with cursor     = new_cursor,
+      with caret     = new_cursor,
            prior_turn = Some(new_turn),
            history    = [new_turn] ++ history
   },
 
-  /// cursor — read the cursor-of-attention. Pure read of handler
+  /// caret — read the caret-of-attention. Pure read of handler
   /// state; per MV §2.7.1 cursor lives in handler state.
-  cursor()              => resume(cursor),
+  caret()              => resume(caret),
 
   // ─── Mentl voice ops (3) — ask in Q; propose + speak in MV.2.e.P ─
 
@@ -1479,7 +1477,7 @@ handler mentl_voice_default
   /// arms gracefully handle the sparse fields — output reflects what
   /// the substrate actually knows.
   ask(question)         => {
-    let Cursor(cursor_handle, _) = cursor
+    let Caret(cursor_handle, _) = caret
     let situation = compose_minimal_ask_situation(question, cursor_handle, prior_turn)
     let voiceline = if silence_predicate(situation) {
       Silence
@@ -1498,7 +1496,7 @@ handler mentl_voice_default
            history    = [new_turn] ++ history
   },
 
-  /// propose — Mentl-initiated proposal at a CursorTarget. Compose
+  /// propose — Mentl-initiated proposal at a CaretTarget. Compose
   /// Propose-tentacle Situation at the target → silence_predicate →
   /// render_propose_arm → return VoiceLine. Update prior_turn +
   /// history.
@@ -1509,7 +1507,7 @@ handler mentl_voice_default
   /// peer sub-handle. This sparse form ships the structural composition
   /// while oracle plumbing lands separately.
   propose(target)       => {
-    let Cursor(current_handle, _) = cursor
+    let Caret(current_handle, _) = caret
     let target_handle = resolve_cursor_target(target, current_handle)
     let target_reason = focus_reason(target)
     let situation = compose_propose_situation(target_handle, target_reason, prior_turn)
@@ -1582,7 +1580,7 @@ handler mentl_voice_default
   /// run_compile/run_audit add the fourth and fifth instances. Until
   /// then, the parallel form honors the substrate idiom.
   run_query(question)   => {
-    let Cursor(cursor_handle, _) = cursor
+    let Caret(cursor_handle, _) = caret
     let situation = compose_minimal_ask_situation(question, cursor_handle, prior_turn)
     let voiceline = if silence_predicate(situation) {
       Silence

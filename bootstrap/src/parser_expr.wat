@@ -92,6 +92,45 @@
           (call $mk_CallExpr (local.get $e) (local.get $args))
           (local.get $span)))
         (return (call $postfix_loop (local.get $tokens) (local.get $node) (local.get $p2)))))
+    ;; Named record: Name { field: v, ... } → NamedRecordExpr (tag 99).
+    ;; Fires only when e is a CAPITALIZED VarRef and the brace contents
+    ;; are record-shaped ($is_record_literal_start: `{ ident :`) —
+    ;; the same disambiguation the wheel runs (src/parser.mn:1160-66
+    ;; is_named_record). Lowercase VarRefs + braces stay blocks
+    ;; (match scrutinees, if conditions). Reuses $parse_record_lit and
+    ;; unwraps its MakeRecordExpr(98) for the sorted fields.
+    (if (i32.eq (local.get $k) (i32.const 47))  ;; TLBrace
+      (then
+        (local.set $field (i32.load offset=4 (local.get $e)))      ;; NodeBody
+        (if (i32.eq (i32.load (local.get $field)) (i32.const 110)) ;; NExpr
+          (then
+            (local.set $field (i32.load offset=4 (local.get $field)))
+            (if (i32.and
+                  (i32.eq (i32.load (local.get $field)) (i32.const 85))  ;; VarRef
+                  (call $is_record_literal_start (local.get $tokens) (local.get $pos)))
+              (then
+                (local.set $field (i32.load offset=4 (local.get $field)))  ;; name
+                (if (call $is_uppercase (call $first_char_code (local.get $field)))
+                  (then
+                    (local.set $span (i32.load offset=8 (local.get $e)))
+                    (local.set $args_result (call $parse_record_lit
+                      (local.get $tokens)
+                      (call $skip_ws_p (local.get $tokens)
+                        (i32.add (local.get $pos) (i32.const 1)))
+                      (local.get $span)))
+                    ;; Unwrap node → NExpr → MakeRecordExpr(98) → fields.
+                    (local.set $args (i32.load offset=4
+                      (i32.load offset=4
+                        (i32.load offset=4
+                          (call $list_index (local.get $args_result) (i32.const 0))))))
+                    (local.set $p2 (call $list_index (local.get $args_result) (i32.const 1)))
+                    (local.set $node (call $alloc (i32.const 12)))
+                    (i32.store (local.get $node) (i32.const 99))
+                    (i32.store offset=4 (local.get $node) (local.get $field))
+                    (i32.store offset=8 (local.get $node) (local.get $args))
+                    (local.set $node (call $nexpr (local.get $node) (local.get $span)))
+                    (return (call $postfix_loop (local.get $tokens)
+                      (local.get $node) (local.get $p2)))))))))))
     ;; Subscript: e[idx] → Call(VarRef("list_index"), [e, idx])
     (if (i32.eq (local.get $k) (i32.const 49))  ;; TLBracket
       (then

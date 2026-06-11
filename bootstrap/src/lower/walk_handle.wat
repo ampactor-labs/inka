@@ -16,9 +16,9 @@
   ;;     PForward  (160) → LCall      (tag 308)  — `left |> right` desugar
   ;;     PDiverge  (161) → LMakeTuple (tag 317)  — `<|` per Lock #3
   ;;     PCompose  (162) → LMakeTuple (tag 317)  — `><` independent pair
-  ;;     PTeeBlock (163) → LHandleWith (tag 329) — `~>` block (Lock #2)
-  ;;     PTeeInline(164) → LHandleWith (tag 329) — `~>` inline (Lock #2)
-  ;;     PFeedback (165) → LFeedback  (tag 330)  — `<~` per LF substrate
+  ;;     PTee (163) → LHandleWith (tag 329) — `~>` (Lock #2)
+  
+  ;;     PFeedback (164) → LFeedback  (tag 330)  — `<~` per LF substrate
   ;;
   ;; Implements: Hβ-lower-substrate.md §4.2 + §6.2 + §11 + §12.3 #8;
   ;;             src/lower.mn:430-440 HandleExpr arm (Lock #1);
@@ -55,7 +55,7 @@
   ;;          (LHandleWith) is the `body ~> handler` PIPE projection.
   ;;          Two distinct surface forms; two distinct LowExpr shapes.
   ;;
-  ;; Lock #2: PTeeBlock (163) + PTeeInline (164) collapse identically to
+  ;; Lock #2: PTee (163) lowers to
   ;;          LHandleWith per src/lower.mn:494-497. $lower_pipe dispatches
   ;;          both through one combined $lower_pipe_handle arm.
   ;;
@@ -121,7 +121,7 @@
   ;;                   <|  (161) → LMakeTuple (317) of LCalls per Lock #3
   ;;                   ><  (162) → LMakeTuple (317) pair
   ;;                   ~>  (163, 164) → LHandleWith (329) per Lock #2
-  ;;                   <~  (165) → LFeedback (330) per Lock #5
+  ;;                   <~  (164) → LFeedback (330) per Lock #5
   ;;                 The kernel's primitive #3 made physical at the
   ;;                 lowering layer.
   ;;
@@ -164,7 +164,7 @@
   ;;                                  this chunk. $lower_handle / $lower_pipe_*
   ;;                                  take ONE i32, return ONE i32.
   ;;
-  ;; - Drift 6 (primitive-special-case): PipeKind 160-165 nullary sentinels.
+  ;; - Drift 6 (primitive-special-case): PipeKind 160-164 nullary sentinels.
   ;;                                  NO "PForward is special because common-
   ;;                                  case" carveout.
   ;;
@@ -174,7 +174,7 @@
   ;;                                  body, op_name} alphabetical at 0/4/8.
   ;;
   ;; - Drift 8 (string-keyed):        Tag-int dispatch only. PipeKind i32
-  ;;                                  sentinels 160-165, NOT
+  ;;                                  sentinels 160-164, NOT
   ;;                                  if str_eq(pipe_kind_name, "PForward").
   ;;
   ;; - Drift 9 (deferred-by-omission): All 8 exports land FULLY BODIED.
@@ -339,7 +339,6 @@
   ;; data segment is 4360 + 20 = 4380; 4400 is 16-aligned and clear
   ;; of all prior segments).
   (data (i32.const 4400) "\01\00\00\00_")
-
 
   ;; ─── $lower_handler_arms_as_decls — Lock #7 real LDeclareFn list ───
   ;; Per src/lower.mn:745-755. Each arm becomes
@@ -717,7 +716,7 @@
 
   ;; ─── $lower_pipe — PipeExpr arm (parser tag 101) — 5-verb dispatch ──
   ;; Per src/lower.mn:470-504 + spec 10. Five PipeKinds, one arm each.
-  ;; Lock #2: PTeeBlock + PTeeInline collapse to one arm.
+  ;; Lock #2: PTee — one kind, one arm.
   ;;
   ;; AST: $node N-wrapper → offset 4 NExpr → offset 4 PipeExpr
   ;;      [tag=101][kind][left][right] per parser_infra.wat $mk_PipeExpr.
@@ -734,14 +733,13 @@
     (local.set $kind        (i32.load offset=4 (local.get $pipe_struct)))
     (local.set $left_node   (i32.load offset=8 (local.get $pipe_struct)))
     (local.set $right_node  (i32.load offset=12 (local.get $pipe_struct)))
-    ;; PTeeBlock (163) + PTeeInline (164) — `body ~> handler` install.
+    ;; PTee (163) — `body ~> handler` install.
     ;; Per Hβ.first-light.seed-lperform-discriminator-mirror: push the
     ;; handler-name onto $lower_handler_stack BEFORE lowering body so
     ;; perform sites within body see the active handler. Pop after.
     ;; PTee dispatch is handled here ahead of the generic left/right
     ;; lowering that PForward/PDiverge/PCompose/PFeedback share.
-    (if (i32.or (i32.eq (local.get $kind) (i32.const 163))
-                (i32.eq (local.get $kind) (i32.const 164)))
+    (if (i32.eq (local.get $kind) (i32.const 163))
       (then
         (local.set $lo_r (call $lower_expr (local.get $right_node)))
         (local.set $hname (call $extract_handler_name (local.get $right_node)))
@@ -826,8 +824,8 @@
     (if (i32.eq (local.get $kind) (i32.const 162))
       (then (return (call $lower_pipe_compose
                       (local.get $h) (local.get $lo_l) (local.get $lo_r)))))
-    ;; PFeedback (165) — `<~` per Lock #5.
-    (if (i32.eq (local.get $kind) (i32.const 165))
+    ;; PFeedback (164) — `<~` per Lock #5.
+    (if (i32.eq (local.get $kind) (i32.const 164))
       (then (return (call $lower_pipe_feedback
                       (local.get $h) (local.get $lo_l) (local.get $lo_r)))))
     ;; Unknown PipeKind — compiler-internal bug.
@@ -1024,7 +1022,7 @@
     (call $lexpr_make_lmaketuple (local.get $h) (local.get $pair)))
 
   ;; ─── $lower_pipe_handle — `~>` arm per Lock #2 ────────────────────
-  ;; Per src/lower.mn:494-497: PTeeBlock + PTeeInline collapse identically.
+  ;; Per src/lower.mn PTee arm.
   ;; LHandleWith(handle, body, handler) — tag 329.
   (func $lower_pipe_handle (export "lower_pipe_handle")
         (param $h i32) (param $lo_l i32) (param $lo_r i32) (result i32)

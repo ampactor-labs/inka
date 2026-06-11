@@ -4447,7 +4447,7 @@
   ;;   PTuple=134 PList=135 PRecord=136
   ;; BinOp: BAdd=140..BConcat=153
   ;; PipeKind: PForward=160 PDiverge=161 PCompose=162
-  ;;   PTeeBlock=163 PTeeInline=164 PFeedback=165
+  ;;   PTee=163 PFeedback=164
   ;; Ownership: Inferred=170 Own=171 Ref=172
 
   ;; N(body, span, handle) → [tag=0][body][span][handle]
@@ -4912,30 +4912,34 @@
       (then (i32.load offset=4 (local.get $k)))
       (else (i32.const 0))))
 
-  ;; ─── Operator precedence ──────────────────────────────────────────
+  ;; ─── Operator precedence — THE canonical table ───────────────────
+  ;; Identical literal integers in SYNTAX.md §Precedence and the wheel
+  ;; (src/parser.mn op_prec) — one table, three projections. The one
+  ;; law of `~>`: precedence 1, the loosest binary operator; the
+  ;; handler at the foot of a chain governs everything to its left.
   (func $op_prec (param $k i32) (result i32)
     ;; Only sentinels can be operators
     (if (i32.eqz (call $is_sentinel (local.get $k)))
       (then (return (i32.const 0))))
-    (if (i32.eq (local.get $k) (i32.const 43)) (then (return (i32.const 1))))  ;; TOrOr
-    (if (i32.eq (local.get $k) (i32.const 42)) (then (return (i32.const 2))))  ;; TAndAnd
-    (if (i32.eq (local.get $k) (i32.const 30)) (then (return (i32.const 3))))  ;; TEqEq
-    (if (i32.eq (local.get $k) (i32.const 31)) (then (return (i32.const 3))))  ;; TBangEq
-    (if (i32.eq (local.get $k) (i32.const 61)) (then (return (i32.const 4))))  ;; TLt
-    (if (i32.eq (local.get $k) (i32.const 62)) (then (return (i32.const 4))))  ;; TGt
-    (if (i32.eq (local.get $k) (i32.const 32)) (then (return (i32.const 4))))  ;; TLtEq
-    (if (i32.eq (local.get $k) (i32.const 33)) (then (return (i32.const 4))))  ;; TGtEq
-    (if (i32.eq (local.get $k) (i32.const 36)) (then (return (i32.const 5))))  ;; TPlusPlus
-    (if (i32.eq (local.get $k) (i32.const 39)) (then (return (i32.const 6))))  ;; TGtLt
-    (if (i32.eq (local.get $k) (i32.const 37)) (then (return (i32.const 7))))  ;; TPipeGt
-    (if (i32.eq (local.get $k) (i32.const 38)) (then (return (i32.const 8))))  ;; TLtPipe
-    (if (i32.eq (local.get $k) (i32.const 41)) (then (return (i32.const 9))))  ;; TLtTilde
-    (if (i32.eq (local.get $k) (i32.const 40)) (then (return (i32.const 10)))) ;; TTildeGt
-    (if (i32.eq (local.get $k) (i32.const 55)) (then (return (i32.const 11)))) ;; TPlus
-    (if (i32.eq (local.get $k) (i32.const 56)) (then (return (i32.const 11)))) ;; TMinus
-    (if (i32.eq (local.get $k) (i32.const 57)) (then (return (i32.const 12)))) ;; TStar
-    (if (i32.eq (local.get $k) (i32.const 58)) (then (return (i32.const 12)))) ;; TSlash
-    (if (i32.eq (local.get $k) (i32.const 59)) (then (return (i32.const 12)))) ;; TPercent
+    (if (i32.eq (local.get $k) (i32.const 40)) (then (return (i32.const 1))))  ;; TTildeGt
+    (if (i32.eq (local.get $k) (i32.const 38)) (then (return (i32.const 2))))  ;; TLtPipe
+    (if (i32.eq (local.get $k) (i32.const 39)) (then (return (i32.const 2))))  ;; TGtLt
+    (if (i32.eq (local.get $k) (i32.const 41)) (then (return (i32.const 2))))  ;; TLtTilde
+    (if (i32.eq (local.get $k) (i32.const 37)) (then (return (i32.const 3))))  ;; TPipeGt
+    (if (i32.eq (local.get $k) (i32.const 43)) (then (return (i32.const 4))))  ;; TOrOr
+    (if (i32.eq (local.get $k) (i32.const 42)) (then (return (i32.const 5))))  ;; TAndAnd
+    (if (i32.eq (local.get $k) (i32.const 30)) (then (return (i32.const 6))))  ;; TEqEq
+    (if (i32.eq (local.get $k) (i32.const 31)) (then (return (i32.const 6))))  ;; TBangEq
+    (if (i32.eq (local.get $k) (i32.const 61)) (then (return (i32.const 7))))  ;; TLt
+    (if (i32.eq (local.get $k) (i32.const 62)) (then (return (i32.const 7))))  ;; TGt
+    (if (i32.eq (local.get $k) (i32.const 32)) (then (return (i32.const 7))))  ;; TLtEq
+    (if (i32.eq (local.get $k) (i32.const 33)) (then (return (i32.const 7))))  ;; TGtEq
+    (if (i32.eq (local.get $k) (i32.const 36)) (then (return (i32.const 8))))  ;; TPlusPlus
+    (if (i32.eq (local.get $k) (i32.const 55)) (then (return (i32.const 9))))  ;; TPlus
+    (if (i32.eq (local.get $k) (i32.const 56)) (then (return (i32.const 9))))  ;; TMinus
+    (if (i32.eq (local.get $k) (i32.const 57)) (then (return (i32.const 10)))) ;; TStar
+    (if (i32.eq (local.get $k) (i32.const 58)) (then (return (i32.const 10)))) ;; TSlash
+    (if (i32.eq (local.get $k) (i32.const 59)) (then (return (i32.const 10)))) ;; TPercent
     (i32.const 0))
 
   ;; op_to_binop: map token kind → BinOp sentinel
@@ -4970,8 +4974,8 @@
     (if (i32.eq (local.get $k) (i32.const 37)) (then (return (i32.const 160)))) ;; PForward
     (if (i32.eq (local.get $k) (i32.const 38)) (then (return (i32.const 161)))) ;; PDiverge
     (if (i32.eq (local.get $k) (i32.const 39)) (then (return (i32.const 162)))) ;; PCompose
-    (if (i32.eq (local.get $k) (i32.const 40)) (then (return (i32.const 164)))) ;; PTeeInline
-    (if (i32.eq (local.get $k) (i32.const 41)) (then (return (i32.const 165)))) ;; PFeedback
+    (if (i32.eq (local.get $k) (i32.const 40)) (then (return (i32.const 163)))) ;; PTee
+    (if (i32.eq (local.get $k) (i32.const 41)) (then (return (i32.const 164)))) ;; PFeedback
     (i32.const 160))
 
   ;; ═══ Pattern Parsing ═══════════════════════════════════════════════
@@ -14603,9 +14607,9 @@
   ;;                Hβ.infer.handler-stack. The walk arms are SHAPED so the
   ;;                wheel's @resume=OneShot resume-discipline maps 1-1 onto
   ;;                the seed's direct return.
-  ;; 3. Verb?       PipeExpr arm dispatches on PipeKind tag (160-165 per
+  ;; 3. Verb?       PipeExpr arm dispatches on PipeKind tag (160-164 per
   ;;                parser_infra.wat:27): PForward / PDiverge / PCompose /
-  ;;                PTeeBlock / PTeeInline / PFeedback. Each verb arm's
+  ;;                PTee / PFeedback. Each verb arm's
   ;;                topology builds the typed AST per src/infer.mn
   ;;                infer_pipe / infer_compose / infer_diverge.
   ;; 4. Row?        TFun construction at CallExpr / LambdaExpr uses
@@ -14681,7 +14685,7 @@
   ;; - Drift 8 (mode flag / string-keyed): BinOp arm dispatches on BinOp
   ;;                                    tag (140-153 per parser_infra.wat:
   ;;                                    26+329-343); NEVER on string.
-  ;;                                    PipeKind dispatches on tag (160-165);
+  ;;                                    PipeKind dispatches on tag (160-164);
   ;;                                    NEVER on `kind == "|>"`.
   ;; - Drift 9 (deferred-by-omission):  Every Expr tag (80-101) gets an
   ;;                                    arm. BlockExpr forward-declares
@@ -14716,7 +14720,7 @@
   ;;   parser_infra.wat:14-19  Expr variants  80-101 (LitInt..PipeExpr)
   ;;   parser_infra.wat:20     NodeBody       110 (NExpr)
   ;;   parser_infra.wat:26     BinOp          140-153 (BAdd..BConcat)
-  ;;   parser_infra.wat:27     PipeKind       160-165 (PForward..PFeedback)
+  ;;   parser_infra.wat:27     PipeKind       160-164 (PForward..PFeedback)
   ;;   ty.wat:248              Ty             100-113 (TInt..TAlias)
   ;;   reason.wat              Reason         220-242
   ;;   own.wat                 USED_SITE_ENTRY 213, BRANCH_FRAME 214
@@ -14732,7 +14736,7 @@
   ;;   seed.
   ;; - Hβ.infer.handler-stack: $walk_expr_inf_push_handler /
   ;;   $walk_expr_inf_pop_handler (src/infer.mn:127-138) similarly inert.
-  ;;   HandleExpr / PTeeBlock / PTeeInline arms still bind correctly (the
+  ;;   HandleExpr / PTee arms still bind correctly (the
   ;;   body's type IS the result type) without handler-stack tracking; W4
   ;;   monomorphic-dispatch read happens later.
   ;; - Hβ.infer.region-tracker: H4 tag_alloc_join calls
@@ -16156,7 +16160,7 @@
     (local.get $handle))
 
   ;; ─── PipeExpr — five-verb dispatch ────────────────────────────────────
-  ;; src/infer.mn:742-755 + 898-974. Dispatches on PipeKind tag (160-165).
+  ;; src/infer.mn:742-755 + 898-974. Dispatches on PipeKind tag (160-164).
   ;; Per spec 10 + Hβ-infer §4.3 production pattern 4.
 
   (func $infer_walk_expr_pipe
@@ -16183,17 +16187,13 @@
       (then (return (call $infer_walk_expr_pipe_compose
                           (local.get $left) (local.get $right)
                           (local.get $handle) (local.get $span)))))
-    ;; PTeeBlock (163) / PTeeInline (164) — same shape per src/infer.mn:944-955
+    ;; PTee (163) — one precedence, one kind per src/infer.mn PTee arm
     (if (i32.eq (local.get $kind) (i32.const 163))
       (then (return (call $infer_walk_expr_pipe_tee
                           (local.get $left) (local.get $right)
                           (local.get $handle) (local.get $span)))))
+    ;; PFeedback (164)
     (if (i32.eq (local.get $kind) (i32.const 164))
-      (then (return (call $infer_walk_expr_pipe_tee
-                          (local.get $left) (local.get $right)
-                          (local.get $handle) (local.get $span)))))
-    ;; PFeedback (165)
-    (if (i32.eq (local.get $kind) (i32.const 165))
       (then (return (call $infer_walk_expr_pipe_feedback
                           (local.get $left) (local.get $right)
                           (local.get $handle) (local.get $span)))))
@@ -16359,7 +16359,7 @@
         (call $reason_make_inferred (i32.const 3912))))   ;; "tuple result"
     (local.get $handle))
 
-  ;; PTeeBlock / PTeeInline (~>) — src/infer.mn:944-955. Result type =
+  ;; PTee (~>) — src/infer.mn PTee arm. Result type =
   ;; TVar(lh). handler-stack push/pop seed-stubs.
   (func $infer_walk_expr_pipe_tee
         (export "infer_walk_expr_pipe_tee")
@@ -16376,7 +16376,7 @@
       (call $ty_make_tvar (local.get $lh))
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferredpiperesult
-          (call $int_to_str (i32.const 164))
+          (call $int_to_str (i32.const 163))
           (call $reason_make_inferred (i32.const 3584)))))   ;; "result"
     (call $walk_expr_inf_pop_handler)
     (local.get $handle))
@@ -16399,7 +16399,7 @@
       (local.get $handle)
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferredpiperesult
-          (call $int_to_str (i32.const 165))
+          (call $int_to_str (i32.const 164))
           (call $reason_make_inferred (i32.const 3520)))))   ;; "var ref"
     ;; emit_diag binds NErrorHole; we don't bind again (one-bind invariant).
     (drop (local.get $lh))
@@ -23524,9 +23524,9 @@
   ;;     PForward  (160) → LCall      (tag 308)  — `left |> right` desugar
   ;;     PDiverge  (161) → LMakeTuple (tag 317)  — `<|` per Lock #3
   ;;     PCompose  (162) → LMakeTuple (tag 317)  — `><` independent pair
-  ;;     PTeeBlock (163) → LHandleWith (tag 329) — `~>` block (Lock #2)
-  ;;     PTeeInline(164) → LHandleWith (tag 329) — `~>` inline (Lock #2)
-  ;;     PFeedback (165) → LFeedback  (tag 330)  — `<~` per LF substrate
+  ;;     PTee (163) → LHandleWith (tag 329) — `~>` (Lock #2)
+  
+  ;;     PFeedback (164) → LFeedback  (tag 330)  — `<~` per LF substrate
   ;;
   ;; Implements: Hβ-lower-substrate.md §4.2 + §6.2 + §11 + §12.3 #8;
   ;;             src/lower.mn:430-440 HandleExpr arm (Lock #1);
@@ -23563,7 +23563,7 @@
   ;;          (LHandleWith) is the `body ~> handler` PIPE projection.
   ;;          Two distinct surface forms; two distinct LowExpr shapes.
   ;;
-  ;; Lock #2: PTeeBlock (163) + PTeeInline (164) collapse identically to
+  ;; Lock #2: PTee (163) lowers to
   ;;          LHandleWith per src/lower.mn:494-497. $lower_pipe dispatches
   ;;          both through one combined $lower_pipe_handle arm.
   ;;
@@ -23629,7 +23629,7 @@
   ;;                   <|  (161) → LMakeTuple (317) of LCalls per Lock #3
   ;;                   ><  (162) → LMakeTuple (317) pair
   ;;                   ~>  (163, 164) → LHandleWith (329) per Lock #2
-  ;;                   <~  (165) → LFeedback (330) per Lock #5
+  ;;                   <~  (164) → LFeedback (330) per Lock #5
   ;;                 The kernel's primitive #3 made physical at the
   ;;                 lowering layer.
   ;;
@@ -23672,7 +23672,7 @@
   ;;                                  this chunk. $lower_handle / $lower_pipe_*
   ;;                                  take ONE i32, return ONE i32.
   ;;
-  ;; - Drift 6 (primitive-special-case): PipeKind 160-165 nullary sentinels.
+  ;; - Drift 6 (primitive-special-case): PipeKind 160-164 nullary sentinels.
   ;;                                  NO "PForward is special because common-
   ;;                                  case" carveout.
   ;;
@@ -23682,7 +23682,7 @@
   ;;                                  body, op_name} alphabetical at 0/4/8.
   ;;
   ;; - Drift 8 (string-keyed):        Tag-int dispatch only. PipeKind i32
-  ;;                                  sentinels 160-165, NOT
+  ;;                                  sentinels 160-164, NOT
   ;;                                  if str_eq(pipe_kind_name, "PForward").
   ;;
   ;; - Drift 9 (deferred-by-omission): All 8 exports land FULLY BODIED.
@@ -23847,7 +23847,6 @@
   ;; data segment is 4360 + 20 = 4380; 4400 is 16-aligned and clear
   ;; of all prior segments).
   (data (i32.const 4400) "\01\00\00\00_")
-
 
   ;; ─── $lower_handler_arms_as_decls — Lock #7 real LDeclareFn list ───
   ;; Per src/lower.mn:745-755. Each arm becomes
@@ -24225,7 +24224,7 @@
 
   ;; ─── $lower_pipe — PipeExpr arm (parser tag 101) — 5-verb dispatch ──
   ;; Per src/lower.mn:470-504 + spec 10. Five PipeKinds, one arm each.
-  ;; Lock #2: PTeeBlock + PTeeInline collapse to one arm.
+  ;; Lock #2: PTee — one kind, one arm.
   ;;
   ;; AST: $node N-wrapper → offset 4 NExpr → offset 4 PipeExpr
   ;;      [tag=101][kind][left][right] per parser_infra.wat $mk_PipeExpr.
@@ -24242,14 +24241,13 @@
     (local.set $kind        (i32.load offset=4 (local.get $pipe_struct)))
     (local.set $left_node   (i32.load offset=8 (local.get $pipe_struct)))
     (local.set $right_node  (i32.load offset=12 (local.get $pipe_struct)))
-    ;; PTeeBlock (163) + PTeeInline (164) — `body ~> handler` install.
+    ;; PTee (163) — `body ~> handler` install.
     ;; Per Hβ.first-light.seed-lperform-discriminator-mirror: push the
     ;; handler-name onto $lower_handler_stack BEFORE lowering body so
     ;; perform sites within body see the active handler. Pop after.
     ;; PTee dispatch is handled here ahead of the generic left/right
     ;; lowering that PForward/PDiverge/PCompose/PFeedback share.
-    (if (i32.or (i32.eq (local.get $kind) (i32.const 163))
-                (i32.eq (local.get $kind) (i32.const 164)))
+    (if (i32.eq (local.get $kind) (i32.const 163))
       (then
         (local.set $lo_r (call $lower_expr (local.get $right_node)))
         (local.set $hname (call $extract_handler_name (local.get $right_node)))
@@ -24334,8 +24332,8 @@
     (if (i32.eq (local.get $kind) (i32.const 162))
       (then (return (call $lower_pipe_compose
                       (local.get $h) (local.get $lo_l) (local.get $lo_r)))))
-    ;; PFeedback (165) — `<~` per Lock #5.
-    (if (i32.eq (local.get $kind) (i32.const 165))
+    ;; PFeedback (164) — `<~` per Lock #5.
+    (if (i32.eq (local.get $kind) (i32.const 164))
       (then (return (call $lower_pipe_feedback
                       (local.get $h) (local.get $lo_l) (local.get $lo_r)))))
     ;; Unknown PipeKind — compiler-internal bug.
@@ -24532,7 +24530,7 @@
     (call $lexpr_make_lmaketuple (local.get $h) (local.get $pair)))
 
   ;; ─── $lower_pipe_handle — `~>` arm per Lock #2 ────────────────────
-  ;; Per src/lower.mn:494-497: PTeeBlock + PTeeInline collapse identically.
+  ;; Per src/lower.mn PTee arm.
   ;; LHandleWith(handle, body, handler) — tag 329.
   (func $lower_pipe_handle (export "lower_pipe_handle")
         (param $h i32) (param $lo_l i32) (param $lo_r i32) (result i32)

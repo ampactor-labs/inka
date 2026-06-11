@@ -873,25 +873,15 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     lower_diverge_via_thread(handle, left, right)
   },
 
-  PTeeBlock => {
-    // ~> tee — handler attachment. The parser has already built the
-    // correct tree shape: PTeeBlock for newline-before-~> (wraps the
-    // whole prior chain), PTeeInline for no-newline (wraps the
-    // preceding stage). At the LIR level both lower identically —
-    // LHandleWith(handle, body, handler, handler_name, state_inits).
-    // handler_name threads from the AST right-side via
-    // extract_handler_name. state_inits come from the per-handler
-    // registry populated at HandlerDeclStmt lower time, retrieved by
-    // name. Empty list when handler-name is "" (anonymous handle-expr)
-    // or unregistered (registry returns []).
-    let lo_l = lower_expr(left)
-    let lo_r = lower_expr(right)
-    let hname = extract_handler_name(right)
-    let inits = perform lookup_handler_state_inits(hname)
-    LHandleWith(handle, lo_l, lo_r, hname, inits)
-  },
-
-  PTeeInline => {
+  PTee => {
+    // ~> tee — handler attachment. One precedence, one kind: the
+    // parser's table already scoped the handler over the whole chain
+    // to its left. Lowers to LHandleWith(handle, body, handler,
+    // handler_name, state_inits). handler_name threads from the AST
+    // right-side via extract_handler_name. state_inits come from the
+    // per-handler registry populated at HandlerDeclStmt lower time,
+    // retrieved by name. Empty list when handler-name is ""
+    // (anonymous handle-expr) or unregistered (registry returns []).
     let lo_l = lower_expr(left)
     let lo_r = lower_expr(right)
     let hname = extract_handler_name(right)

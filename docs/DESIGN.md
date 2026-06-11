@@ -597,28 +597,29 @@ installation made visible on the pipeline.
 intercept the effects `expr` performs, potentially transforming or
 absorbing them; the result of `expr` (post-handling) flows out.
 
-Two forms, layout-disambiguated:
+One law: `~>` is the loosest binary operator (precedence 1 — the
+handler-attach floor of the canonical table in SYNTAX.md). The
+handler at the foot of a chain governs everything to its left;
+parenthesize `(stage ~> h)` to narrow to one stage. Whitespace is
+never semantically load-bearing — block vs inline on the page is
+the formatter's projection of the same tree.
 
 ```
-// Form A — block-scoped: handler wraps the whole prior chain
 source
     |> lex |> parse |> infer
-    ~> env_handler          // wraps (lex |> parse |> infer)
+    ~> env_handler          // governs (source |> lex |> parse |> infer)
     ~> graph_handler        // wraps env_handler(...)
     ~> diagnostics_handler  // outermost — the sandbox boundary
 
-// Form B — inline: handler scoped to the immediately-preceding stage
 raw_string
-    |> parse_json ~> catch_parse_error(default = "{}")
-    |> validate_schema ~> log_warnings
+    |> (parse_json ~> catch_parse_error(default = "{}"))  // narrow: parens, visible at the site
     |> save_to_db
 ```
 
-A `Newline` before `~>` means Form A — the handler wraps the whole
-prior pipe chain. No newline means Form B — the handler wraps only
-the immediately preceding stage. This is the *one* place in Mentl where
-whitespace is semantically load-bearing, and it is load-bearing because
-the visual layout *is* the computation graph.
+The shape on the page still IS the computation graph — because the
+formatter projects the graph onto the page, not because the parser
+reads meaning from whitespace. Handlers at the foot of a pipeline
+govern the pipeline; that is the truth the precedence table carries.
 
 ### Flattening the Option Monad with `|>` and `~>`
 In legacy languages, deep optional data unwrapping (e.g., parsing graph nodes)

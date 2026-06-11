@@ -27,7 +27,7 @@
   ;;   PTuple=134 PList=135 PRecord=136
   ;; BinOp: BAdd=140..BConcat=153
   ;; PipeKind: PForward=160 PDiverge=161 PCompose=162
-  ;;   PTeeBlock=163 PTeeInline=164 PFeedback=165
+  ;;   PTee=163 PFeedback=164
   ;; Ownership: Inferred=170 Own=171 Ref=172
 
   ;; N(body, span, handle) → [tag=0][body][span][handle]
@@ -492,30 +492,34 @@
       (then (i32.load offset=4 (local.get $k)))
       (else (i32.const 0))))
 
-  ;; ─── Operator precedence ──────────────────────────────────────────
+  ;; ─── Operator precedence — THE canonical table ───────────────────
+  ;; Identical literal integers in SYNTAX.md §Precedence and the wheel
+  ;; (src/parser.mn op_prec) — one table, three projections. The one
+  ;; law of `~>`: precedence 1, the loosest binary operator; the
+  ;; handler at the foot of a chain governs everything to its left.
   (func $op_prec (param $k i32) (result i32)
     ;; Only sentinels can be operators
     (if (i32.eqz (call $is_sentinel (local.get $k)))
       (then (return (i32.const 0))))
-    (if (i32.eq (local.get $k) (i32.const 43)) (then (return (i32.const 1))))  ;; TOrOr
-    (if (i32.eq (local.get $k) (i32.const 42)) (then (return (i32.const 2))))  ;; TAndAnd
-    (if (i32.eq (local.get $k) (i32.const 30)) (then (return (i32.const 3))))  ;; TEqEq
-    (if (i32.eq (local.get $k) (i32.const 31)) (then (return (i32.const 3))))  ;; TBangEq
-    (if (i32.eq (local.get $k) (i32.const 61)) (then (return (i32.const 4))))  ;; TLt
-    (if (i32.eq (local.get $k) (i32.const 62)) (then (return (i32.const 4))))  ;; TGt
-    (if (i32.eq (local.get $k) (i32.const 32)) (then (return (i32.const 4))))  ;; TLtEq
-    (if (i32.eq (local.get $k) (i32.const 33)) (then (return (i32.const 4))))  ;; TGtEq
-    (if (i32.eq (local.get $k) (i32.const 36)) (then (return (i32.const 5))))  ;; TPlusPlus
-    (if (i32.eq (local.get $k) (i32.const 39)) (then (return (i32.const 6))))  ;; TGtLt
-    (if (i32.eq (local.get $k) (i32.const 37)) (then (return (i32.const 7))))  ;; TPipeGt
-    (if (i32.eq (local.get $k) (i32.const 38)) (then (return (i32.const 8))))  ;; TLtPipe
-    (if (i32.eq (local.get $k) (i32.const 41)) (then (return (i32.const 9))))  ;; TLtTilde
-    (if (i32.eq (local.get $k) (i32.const 40)) (then (return (i32.const 10)))) ;; TTildeGt
-    (if (i32.eq (local.get $k) (i32.const 55)) (then (return (i32.const 11)))) ;; TPlus
-    (if (i32.eq (local.get $k) (i32.const 56)) (then (return (i32.const 11)))) ;; TMinus
-    (if (i32.eq (local.get $k) (i32.const 57)) (then (return (i32.const 12)))) ;; TStar
-    (if (i32.eq (local.get $k) (i32.const 58)) (then (return (i32.const 12)))) ;; TSlash
-    (if (i32.eq (local.get $k) (i32.const 59)) (then (return (i32.const 12)))) ;; TPercent
+    (if (i32.eq (local.get $k) (i32.const 40)) (then (return (i32.const 1))))  ;; TTildeGt
+    (if (i32.eq (local.get $k) (i32.const 38)) (then (return (i32.const 2))))  ;; TLtPipe
+    (if (i32.eq (local.get $k) (i32.const 39)) (then (return (i32.const 2))))  ;; TGtLt
+    (if (i32.eq (local.get $k) (i32.const 41)) (then (return (i32.const 2))))  ;; TLtTilde
+    (if (i32.eq (local.get $k) (i32.const 37)) (then (return (i32.const 3))))  ;; TPipeGt
+    (if (i32.eq (local.get $k) (i32.const 43)) (then (return (i32.const 4))))  ;; TOrOr
+    (if (i32.eq (local.get $k) (i32.const 42)) (then (return (i32.const 5))))  ;; TAndAnd
+    (if (i32.eq (local.get $k) (i32.const 30)) (then (return (i32.const 6))))  ;; TEqEq
+    (if (i32.eq (local.get $k) (i32.const 31)) (then (return (i32.const 6))))  ;; TBangEq
+    (if (i32.eq (local.get $k) (i32.const 61)) (then (return (i32.const 7))))  ;; TLt
+    (if (i32.eq (local.get $k) (i32.const 62)) (then (return (i32.const 7))))  ;; TGt
+    (if (i32.eq (local.get $k) (i32.const 32)) (then (return (i32.const 7))))  ;; TLtEq
+    (if (i32.eq (local.get $k) (i32.const 33)) (then (return (i32.const 7))))  ;; TGtEq
+    (if (i32.eq (local.get $k) (i32.const 36)) (then (return (i32.const 8))))  ;; TPlusPlus
+    (if (i32.eq (local.get $k) (i32.const 55)) (then (return (i32.const 9))))  ;; TPlus
+    (if (i32.eq (local.get $k) (i32.const 56)) (then (return (i32.const 9))))  ;; TMinus
+    (if (i32.eq (local.get $k) (i32.const 57)) (then (return (i32.const 10)))) ;; TStar
+    (if (i32.eq (local.get $k) (i32.const 58)) (then (return (i32.const 10)))) ;; TSlash
+    (if (i32.eq (local.get $k) (i32.const 59)) (then (return (i32.const 10)))) ;; TPercent
     (i32.const 0))
 
   ;; op_to_binop: map token kind → BinOp sentinel
@@ -550,6 +554,6 @@
     (if (i32.eq (local.get $k) (i32.const 37)) (then (return (i32.const 160)))) ;; PForward
     (if (i32.eq (local.get $k) (i32.const 38)) (then (return (i32.const 161)))) ;; PDiverge
     (if (i32.eq (local.get $k) (i32.const 39)) (then (return (i32.const 162)))) ;; PCompose
-    (if (i32.eq (local.get $k) (i32.const 40)) (then (return (i32.const 164)))) ;; PTeeInline
-    (if (i32.eq (local.get $k) (i32.const 41)) (then (return (i32.const 165)))) ;; PFeedback
+    (if (i32.eq (local.get $k) (i32.const 40)) (then (return (i32.const 163)))) ;; PTee
+    (if (i32.eq (local.get $k) (i32.const 41)) (then (return (i32.const 164)))) ;; PFeedback
     (i32.const 160))

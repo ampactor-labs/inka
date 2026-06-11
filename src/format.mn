@@ -137,8 +137,7 @@ handler format_default with !Mutate {
       NPipeExpr(PConverge, l, r)   => render_converge_chain(l, r),  // |>
       NPipeExpr(PDiverge, l, r)    => render_diverge_chain(l, r),   // <|
       NPipeExpr(PCompose, l, r)    => render_compose_chain(l, r),   // ><
-      NPipeExpr(PTeeBlock, l, r)   => render_tee_block(l, r),       // ~> block
-      NPipeExpr(PTeeInline, l, r)  => render_tee_inline(l, r),      // ~> inline
+      NPipeExpr(PTee, l, r)        => render_tee(l, r),             // ~>
       NPipeExpr(PFeedback, l, r)   => render_feedback_chain(l, r),  // <~
       _                            => render_non_chain(chain_node)
     }
@@ -226,48 +225,37 @@ fn render_compose_chain(left, right) with Format + !Mutate = {
     |> str_concat(parenthesize(right_str))
 }
 
-// ─── Render a ~> chain — handler-attach (block form) ───────────────
+// ─── Render a ~> chain — handler-attach ────────────────────────────
 //
-// Canonical per SYNTAX.md §451-459:
+// One PTee node; layout is the formatter's projection of the LHS
+// shape (layout is never semantics — SYNTAX.md §~>). A chain body
+// earns the block layout, ~> on its own line at left-edge indent:
 //
 //   source
 //     |> lex
 //     |> parse
-//     ~> env_handler          // wraps prior chain
+//     ~> env_handler          // governs the whole prior chain
 //     ~> diagnostics_handler  // outermost — sandbox boundary
 //
-// Block form: ~> on its own line at left-edge indent. Newline before
-// is the disambiguator from the inline form per SYNTAX.md §469.
+// A single-stage body renders inline — same tree, same scope:
+//
+//   (try_fn()) ~> catch_abort
 
-fn render_tee_block(body, handler_expr) with Format + !Mutate = {
+fn render_tee(body, handler_expr) with Format + !Mutate = {
   let body_str = perform format_chain(body)
   let handler_str = perform format_chain(handler_expr)
-  body_str
-    |> str_concat("\n")
-    |> str_concat(spaces(left_edge_indent()))
-    |> str_concat("~> ")
-    |> str_concat(handler_str)
-}
-
-// ─── Render a ~> chain — handler-attach (inline form) ──────────────
-//
-// Canonical per SYNTAX.md §461-467:
-//
-//   raw_string
-//     |> parse_json ~> catch_parse_error(default = "{{}}")
-//     |> validate ~> log_warnings
-//
-// Inline form: no newline before ~>. Wraps only the immediately
-// preceding stage. The whitespace-before-~> IS the disambiguator —
-// the only place in Mentl where whitespace is semantically load-bearing
-// per SYNTAX.md §469.
-
-fn render_tee_inline(stage, handler_expr) with Format + !Mutate = {
-  let stage_str = perform format_chain(stage)
-  let handler_str = perform format_chain(handler_expr)
-  stage_str
-    |> str_concat(" ~> ")
-    |> str_concat(handler_str)
+  match ast_kind_of(body) {
+    NPipeExpr(_, _, _) =>
+      body_str
+        |> str_concat("\n")
+        |> str_concat(spaces(left_edge_indent()))
+        |> str_concat("~> ")
+        |> str_concat(handler_str),
+    _ =>
+      body_str
+        |> str_concat(" ~> ")
+        |> str_concat(handler_str)
+  }
 }
 
 // ─── Render a <~ chain — feedback / iterative ──────────────────────

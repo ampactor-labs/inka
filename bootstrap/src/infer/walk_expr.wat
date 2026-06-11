@@ -105,9 +105,9 @@
   ;;                Hβ.infer.handler-stack. The walk arms are SHAPED so the
   ;;                wheel's @resume=OneShot resume-discipline maps 1-1 onto
   ;;                the seed's direct return.
-  ;; 3. Verb?       PipeExpr arm dispatches on PipeKind tag (160-165 per
+  ;; 3. Verb?       PipeExpr arm dispatches on PipeKind tag (160-164 per
   ;;                parser_infra.wat:27): PForward / PDiverge / PCompose /
-  ;;                PTeeBlock / PTeeInline / PFeedback. Each verb arm's
+  ;;                PTee / PFeedback. Each verb arm's
   ;;                topology builds the typed AST per src/infer.mn
   ;;                infer_pipe / infer_compose / infer_diverge.
   ;; 4. Row?        TFun construction at CallExpr / LambdaExpr uses
@@ -183,7 +183,7 @@
   ;; - Drift 8 (mode flag / string-keyed): BinOp arm dispatches on BinOp
   ;;                                    tag (140-153 per parser_infra.wat:
   ;;                                    26+329-343); NEVER on string.
-  ;;                                    PipeKind dispatches on tag (160-165);
+  ;;                                    PipeKind dispatches on tag (160-164);
   ;;                                    NEVER on `kind == "|>"`.
   ;; - Drift 9 (deferred-by-omission):  Every Expr tag (80-101) gets an
   ;;                                    arm. BlockExpr forward-declares
@@ -218,7 +218,7 @@
   ;;   parser_infra.wat:14-19  Expr variants  80-101 (LitInt..PipeExpr)
   ;;   parser_infra.wat:20     NodeBody       110 (NExpr)
   ;;   parser_infra.wat:26     BinOp          140-153 (BAdd..BConcat)
-  ;;   parser_infra.wat:27     PipeKind       160-165 (PForward..PFeedback)
+  ;;   parser_infra.wat:27     PipeKind       160-164 (PForward..PFeedback)
   ;;   ty.wat:248              Ty             100-113 (TInt..TAlias)
   ;;   reason.wat              Reason         220-242
   ;;   own.wat                 USED_SITE_ENTRY 213, BRANCH_FRAME 214
@@ -234,7 +234,7 @@
   ;;   seed.
   ;; - Hβ.infer.handler-stack: $walk_expr_inf_push_handler /
   ;;   $walk_expr_inf_pop_handler (src/infer.mn:127-138) similarly inert.
-  ;;   HandleExpr / PTeeBlock / PTeeInline arms still bind correctly (the
+  ;;   HandleExpr / PTee arms still bind correctly (the
   ;;   body's type IS the result type) without handler-stack tracking; W4
   ;;   monomorphic-dispatch read happens later.
   ;; - Hβ.infer.region-tracker: H4 tag_alloc_join calls
@@ -1658,7 +1658,7 @@
     (local.get $handle))
 
   ;; ─── PipeExpr — five-verb dispatch ────────────────────────────────────
-  ;; src/infer.mn:742-755 + 898-974. Dispatches on PipeKind tag (160-165).
+  ;; src/infer.mn:742-755 + 898-974. Dispatches on PipeKind tag (160-164).
   ;; Per spec 10 + Hβ-infer §4.3 production pattern 4.
 
   (func $infer_walk_expr_pipe
@@ -1685,17 +1685,13 @@
       (then (return (call $infer_walk_expr_pipe_compose
                           (local.get $left) (local.get $right)
                           (local.get $handle) (local.get $span)))))
-    ;; PTeeBlock (163) / PTeeInline (164) — same shape per src/infer.mn:944-955
+    ;; PTee (163) — one precedence, one kind per src/infer.mn PTee arm
     (if (i32.eq (local.get $kind) (i32.const 163))
       (then (return (call $infer_walk_expr_pipe_tee
                           (local.get $left) (local.get $right)
                           (local.get $handle) (local.get $span)))))
+    ;; PFeedback (164)
     (if (i32.eq (local.get $kind) (i32.const 164))
-      (then (return (call $infer_walk_expr_pipe_tee
-                          (local.get $left) (local.get $right)
-                          (local.get $handle) (local.get $span)))))
-    ;; PFeedback (165)
-    (if (i32.eq (local.get $kind) (i32.const 165))
       (then (return (call $infer_walk_expr_pipe_feedback
                           (local.get $left) (local.get $right)
                           (local.get $handle) (local.get $span)))))
@@ -1861,7 +1857,7 @@
         (call $reason_make_inferred (i32.const 3912))))   ;; "tuple result"
     (local.get $handle))
 
-  ;; PTeeBlock / PTeeInline (~>) — src/infer.mn:944-955. Result type =
+  ;; PTee (~>) — src/infer.mn PTee arm. Result type =
   ;; TVar(lh). handler-stack push/pop seed-stubs.
   (func $infer_walk_expr_pipe_tee
         (export "infer_walk_expr_pipe_tee")
@@ -1878,7 +1874,7 @@
       (call $ty_make_tvar (local.get $lh))
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferredpiperesult
-          (call $int_to_str (i32.const 164))
+          (call $int_to_str (i32.const 163))
           (call $reason_make_inferred (i32.const 3584)))))   ;; "result"
     (call $walk_expr_inf_pop_handler)
     (local.get $handle))
@@ -1901,7 +1897,7 @@
       (local.get $handle)
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferredpiperesult
-          (call $int_to_str (i32.const 165))
+          (call $int_to_str (i32.const 164))
           (call $reason_make_inferred (i32.const 3520)))))   ;; "var ref"
     ;; emit_diag binds NErrorHole; we don't bind again (one-bind invariant).
     (drop (local.get $lh))

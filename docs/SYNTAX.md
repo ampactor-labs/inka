@@ -415,15 +415,17 @@ Three or more branches stack:
 (extract_x) >< (extract_y) >< (extract_z)
 ```
 
-**Layout requirements (parser-enforced):**
-- Each branch MUST be parenthesized — `(...)`.
-- Form A: each branch on its own line (or own indented multi-line block); `><` ALONE on its own line at INDENTED CENTER (4-space indent typical).
-- Form B: all branches single-line; `><` between branches with one space on each side.
-- Mixed-form rejected: `E_MixedShapeBranches` with Quick Fix to vertical.
+**Layout is the formatter's projection — never semantics.** The
+precedence table alone draws the tree: `><` binds looser than `|>`,
+so `a |> f >< b |> g` IS `(a |> f) >< (b |> g)` with or without
+parens. The formatter writes the parens and chooses the form; the
+parser enforces nothing about whitespace or parenthesization.
 
-**Render rule:** the formatter normalizes per branch length:
+**Render rule (formatter canon):**
+- Each branch rendered parenthesized — `(...)` — for visual branch boundaries.
 - All branches single-line + total fits target width → Form B (inline).
-- Any branch multi-line OR total exceeds width → Form A (vertical).
+- Any branch multi-line OR total exceeds width → Form A (vertical): each branch on its own line; `><` ALONE on its own line at INDENTED CENTER (4-space indent).
+- Mixed shapes normalize to vertical at save.
 
 The construct reads top-to-bottom (Form A) or left-to-right (Form B). After `><` the chain returns to LEFT EDGE for whatever consumes the tupled result:
 ```
@@ -433,61 +435,48 @@ The construct reads top-to-bottom (Form A) or left-to-right (Form B). After `><`
 |> stereo_mix
 ```
 
-### Rejected `><` forms
+### `><` branch typing
 
-```
-// REJECTED — not parenthesized:
-audio_left >< audio_right
-```
-Diagnostic: **`E_BranchNotParenthesized`** at `><`: "`><` requires parenthesized pipelines on each side. Wrap each branch in `(...)`."
-Quick Fix: insert parentheses around each operand.
-
-```
-// REJECTED — mixed shape (one inline branch + one multi-line):
-(branch_a) >< (branch_b
-              |> stage_1
-              |> stage_2)
-```
-Diagnostic: **`E_MixedShapeBranches`**: "`><` branches must share shape: all inline OR all vertical. Mixed shapes produce visual ambiguity."
-Quick Fix: reformat all branches to vertical (Form A).
-
-```
-// REJECTED — values, not pipelines:
-(audio, ctrl) >< (analyze, smooth)
-```
-Diagnostic: **`E_LayoutViolation`** at `><`: "`><` branches must be pipelines (sequences of stages), not value expressions. Did you mean `(audio |> analyze) >< (ctrl |> smooth)`?"
-Quick Fix: rewrite each branch as a pipeline.
-
-See `docs/specs/simulations/syntax/parallel-compose-layout-substrate.md` for the substrate analysis.
+Branch validity is a TYPE fact, not a layout fact. A `><` branch
+must be stage-typed (a pipeline / function of the composed input);
+a value tuple where stages belong surfaces at infer time with a
+Reason chain back to the `><` site (peer handle
+`Hβ.infer.pcompose-branch-stage-type`). The parser never inspects
+branch shape — parse-time form classification is the
+eager-form-commitment drift (`protocol_parse_is_eager_graph_projection.md`).
 
 ### `~>` — tee (handler-attach)
 
 `expr ~> h` ≡ `handle expr with h`. The handler intercepts effects expr performs.
 
-**Two layout-disambiguated forms:**
+**The one law:** `~>` has ONE precedence — **1, the loosest binary
+operator** (see §Precedence). The handler at the foot of a chain
+governs everything to its left in the expression; parenthesize
+`(stage ~> h)` to narrow the scope to one stage. There is no second
+rule: no layout sensitivity, no inline/block semantic split.
+**Whitespace is never semantically load-bearing in Mentl.**
 
-**Form A — block-scoped (newline-before).** Handler wraps the WHOLE prior chain.
 ```
 source
   |> lex
   |> parse
   |> infer
-  ~> env_handler          // wraps (lex |> parse |> infer)
+  ~> env_handler          // governs (source |> lex |> parse |> infer)
   ~> graph_handler        // wraps env_handler(...)
   ~> diagnostics_handler  // outermost — sandbox boundary
 ```
 
-**Form B — inline (no newline).** Handler scoped to the IMMEDIATELY PRECEDING stage only.
+Narrow scope is parens, visible at the site:
 ```
 raw_string
-  |> parse_json ~> catch_parse_error(default = "{}")
-  |> validate ~> log_warnings
+  |> (parse_json ~> catch_parse_error(default = "{}"))
   |> save_to_db
 ```
 
-A `Newline` token directly before `~>` means Form A. No newline means Form B. **This is the only place in Mentl where whitespace is semantically load-bearing.** It is load-bearing because the visual layout IS the computation graph.
-
-The newline-disambiguation is substrate-honest because no alternative disambiguator exists for `~>`'s scope (unlike `><` which has parens-per-branch). Form A and Form B produce structurally distinct AST nodes with different rows; the layout IS the only unambiguous signal. Parens override is always available for explicit cases: `(body |> chain) ~> handler` makes the scope explicit regardless of newline. See `docs/specs/simulations/syntax/handler-attach-newline-substrate.md` for the substrate analysis.
+Block vs inline on the page is the FORMATTER's choice, projected
+from tree shape: a chain body earns the block layout (`~>` on its
+own line at left-edge indent); a single-stage body renders inline.
+Same node, same scope, either way.
 
 **Type rule:** `row(expr ~> h) = row(expr) - handled(h) + row(h)`. The handler subtracts what it absorbs; anything its arms perform is added.
 
@@ -1298,25 +1287,33 @@ Triple-quoted strings span multiple lines. Leading whitespace common to all line
 
 ## Operator precedence
 
-One canonical table. Higher number = tighter binding.
+One canonical table. Higher number = tighter binding. **These are
+the literal integers** returned by `op_prec` in BOTH parsers
+(src/parser.mn and bootstrap/src/parser_infra.wat $op_prec) — one
+table, three projections, zero translation. Structural forms (call
+`f(args)`, field access `.`, indexing, unary `-`/`!`) bind tighter
+than every binary operator; `=` in let and `=>` in lambda sit at
+statement level — neither participates in the binop ladder.
 
 | Prec | Operators                                | Associativity   | Notes                          |
 |------|------------------------------------------|-----------------|--------------------------------|
-| 13   | `.` (field access), call `f(args)`       | left            | postfix                        |
-| 12   | unary `-`, unary `!`                     | right (prefix)  |                                |
-| 11   | `*`, `/`, `%`                            | left            |                                |
-| 10   | `+`, `-` (binary)                        | left            |                                |
-| 9    | `++`                                     | right           | concat — type-polymorphic; see §"Concatenation operator" |
-| 8    | `==`, `!=`, `<`, `>`, `<=`, `>=`         | non-associative |                                |
-| 7    | `&&`                                     | left            |                                |
-| 6    | `\|\|`                                   | left            |                                |
-| 5    | `\|>`                                    | left            | sequential pipe                |
-| 4    | `<\|`, `><`, `<~`, `~>` (inline)         | left            | convergent / inline tee        |
-| 3    | `~>` (block — newline before)            | left (lowest)   | wraps whole prior chain        |
-| 2    | `=` in let-binding, `=>` in lambda       | non-associative |                                |
-| 1    | (reserved)                               |                 |                                |
+| 10   | `*`, `/`, `%`                            | left            |                                |
+| 9    | `+`, `-` (binary)                        | left            |                                |
+| 8    | `++`                                     | left            | concat — type-polymorphic; associativity immaterial under concat-tree representation; see §"Concatenation operator" |
+| 7    | `<`, `>`, `<=`, `>=`                     | left            | comparison                     |
+| 6    | `==`, `!=`                               | left            | looser than comparison: `a < b == c < d` reads as `(a<b) == (c<d)` |
+| 5    | `&&`                                     | left            |                                |
+| 4    | `\|\|`                                   | left            |                                |
+| 3    | `\|>`                                    | left            | sequential pipe — looser than all value operators: `a == b \|> f` pipes the comparison |
+| 2    | `<\|`, `><`, `<~`                        | left            | convergent verbs — they draw shape around chains |
+| 1    | `~>`                                     | left (loosest)  | handler-attach floor — governs the whole chain to its left |
 
-The block-form `~>` deliberately has the LOWEST precedence so it captures the whole preceding chain as its body.
+`~>` deliberately has the LOWEST precedence so the handler at the
+foot of a chain captures everything to its left as its body — the
+one law of `~>` (§tee). Nonsense same-tier chains (`a < b < c`)
+are not a parser concern: inference rejects them with a typed
+Reason chain (`TBool` vs operand type), which localizes better
+than any associativity rule could.
 
 ### Concatenation operator
 
@@ -1337,13 +1334,15 @@ See `docs/specs/simulations/syntax/concat-operator-substrate.md` for the substra
 
 ---
 
-## Layout enforcement
+## Canonical layout (formatter canon)
 
-The parser enforces layout rules. Code that violates layout produces `E_LayoutViolation` with a Quick Fix that reformats to canonical form.
+Layout is never semantics. The precedence table alone draws the
+tree; the formatter projects the canonical shape at save. Nothing
+below is parser-enforced — it is what `mentl fmt` writes.
 
 ### Sequential verbs at LEFT EDGE
 
-`|>` and `~>` (both forms) sit at the left edge of the code's enclosing indent. Each stage on its own indented line:
+`|>` and `~>` sit at the left edge of the code's enclosing indent. Each stage on its own indented line:
 
 ```
 input
@@ -1713,11 +1712,7 @@ The applicability tag determines automation: `MachineApplicable` patches are aut
 | `E_TypeMismatch`      | unification failed                            | `Unspecified`        | adjust types; widen / narrow                   |
 | `E_OccursCheck`       | infinite type                                 | `Unspecified`        | restructure to break cycle                     |
 | `E_OrphanHandlerAttach` | `~>` with no preceding chain                | `Unspecified`        | delete `~>` or supply body                     |
-| `E_BranchNotParenthesized` | `><` branch missing parens               | `MachineApplicable`  | insert parens around each branch               |
-| `E_OperatorIsolation` | `><` not on its own line in Form A            | `MachineApplicable`  | reformat to canonical Form A layout            |
-| `E_MixedShapeBranches` | `><` mixes inline + multi-line branches      | `MachineApplicable`  | reformat to vertical (Form A)                  |
-| `E_ParallelComposeArity` | `><` with single branch                    | `Unspecified`        | restructure to single pipeline (no `><` needed) |
-| `E_LayoutViolation`   | wrong line / wrong wrapping (residual cases)  | `MaybeIncorrect`     | reformat per canonical layout                  |
+| `E_BranchNotStage`    | `><` branch is a value, not a stage (infer-time; peer `Hβ.infer.pcompose-branch-stage-type`) | `MaybeIncorrect` | rewrite branch as a pipeline |
 | `E_NotAKeyword`       | user typed `for`/`while`/`loop`/`break`/`continue`/`return` | `MaybeIncorrect` | rewrite as verb form per substrate             |
 | `E_PatternAlternationBindingMismatch` | branches in `\|` bind different names or types | `MaybeIncorrect` | adjust patterns to bind same names with unifiable types |
 | `E_ResumeOutsideArm`  | `resume` outside a handler-arm body           | `Unspecified`        | move the resume into an arm; the continuation only exists there |

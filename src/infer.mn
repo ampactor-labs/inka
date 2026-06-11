@@ -52,7 +52,7 @@ effect InferCtx {
 
 // handler_stack (W4 prep, C4) — insertion-ordered stack of handler
 // names currently installed at this inference point. HandleExpr and
-// PTeeBlock / PTeeInline sites push when entering their body, pop on exit. W4's
+// PTee sites push when entering their body, pop on exit. W4's
 // monomorphic dispatch reads this to know which handler position
 // to target; today it's a bookkeeping surface with no consumer but
 // the shape it captures is load-bearing for evidence reification.
@@ -874,8 +874,7 @@ fn infer_expr(ref node) = {
         PCompose    => infer_compose(left, right, handle, span),
         PDiverge    => infer_diverge(left, right, handle, span),
         PForward    => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) },
-        PTeeBlock   => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) },
-        PTeeInline  => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) },
+        PTee        => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) },
         PFeedback   => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) }
       }
     },
@@ -1072,16 +1071,10 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
     // resolvable here without handler-value typing, so the generic
     // "pipe_tee" tag marks the frame. W4 will refine this to carry
     // the concrete handler identity once evidence reification lands.
-    PTeeBlock => {
+    PTee => {
       perform inf_push_handler(callee_name(right))
       perform graph_bind(handle, TVar(lh),
-        Located(span, InferredPipeResult("~>", Inferred("handler attachment (block)"))))
-      perform inf_pop_handler()
-    },
-    PTeeInline => {
-      perform inf_push_handler(callee_name(right))
-      perform graph_bind(handle, TVar(lh),
-        Located(span, InferredPipeResult("~>", Inferred("handler attachment (inline)"))))
+        Located(span, InferredPipeResult("~>", Inferred("handler attachment"))))
       perform inf_pop_handler()
     },
 

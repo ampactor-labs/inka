@@ -304,7 +304,7 @@ fn refinement_verdict_for(handle, reason) with Verify + !Mutate = {
   // Refinement clears when no Verify-pending predicates attach to
   // this handle. Pending obligations surface as invites (the
   // gradient could resolve them via SMT or refinement annotation).
-  let pending = perform verify_pending_at(handle)
+  let pending = verify_pending_at(handle)
   if pending.len == 0 {
     VerdictClears(reason)
   } else {

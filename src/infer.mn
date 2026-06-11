@@ -2417,11 +2417,11 @@ fn register_handler(hname, ename, config, state, arms) = {
   // resume call sites under control-flow ancestry; produces
   // ResumeDiscipline. Same projection pattern as $collect_used_wasi_ops
   // in the seed: walk + predicate-filter + project.
-  list_iter(arms, (arm) => {
+  for_each((arm) => {
     let kind = infer_resume_cardinality(arm.body)
     perform graph_bind_resume_kind(arm.op_name, ename, kind,
       Located(span_of_node(arm.body), Inferred("resume cardinality from arm body")))
-  })
+  }, arms)
   // Typed-resume arm typing (SUBSTRATE.md primitive #2): every arm
   // body walks under the law with one per-decl handle-result S.
   // Config params bind through the SAME TParam handles the scheme
@@ -2430,13 +2430,13 @@ fn register_handler(hname, ename, config, state, arms) = {
   // graph already knows them, fresh vars would discard that.
   let state_binds = infer_handler_state_inits(state)
   let s_h = perform mint(Inferred("handler result of '" |> str_concat(hname) |> str_concat("'")))   // drift-audit: ignore — |> inside string-build arg, not a pipe verb
-  list_iter(arms, (arm) => {
+  for_each((arm) => {
     perform env_scope_enter()
     bind_handler_config_params(config_tparams, hname)
     bind_handler_state_names(state_binds, hname, span_of_node(arm.body))
     infer_one_handler_arm(arm, s_h)
     perform env_scope_exit()
-  })
+  }, arms)
 }
 
 /// Walk each state field's init ONCE per decl; the init's inferred
@@ -2507,7 +2507,7 @@ fn collect_resume_walk(buf, node) with GraphRead = {
   match body {
     NExpr(ResumeExpr(_, _)) => buf_push(buf, h),
     NExpr(BlockExpr(stmts, final)) => {
-      list_iter(stmts, (s) => collect_resume_walk(buf, s))
+      for_each((s) => collect_resume_walk(buf, s), stmts)
       collect_resume_walk(buf, final)
     },
     NExpr(IfExpr(c, t, e)) => {
@@ -2517,11 +2517,11 @@ fn collect_resume_walk(buf, node) with GraphRead = {
     },
     NExpr(MatchExpr(scrut, arms)) => {
       collect_resume_walk(buf, scrut)
-      list_iter(arms, (a) => collect_resume_walk(buf, a.body))
+      for_each((a) => collect_resume_walk(buf, a.body), arms)
     },
     NExpr(CallExpr(f, args)) => {
       collect_resume_walk(buf, f)
-      list_iter(args, (a) => collect_resume_walk(buf, a))
+      for_each((a) => collect_resume_walk(buf, a), args)
     },
     NExpr(BinOpExpr(_, l, r)) => {
       collect_resume_walk(buf, l)
@@ -2530,15 +2530,15 @@ fn collect_resume_walk(buf, node) with GraphRead = {
     NExpr(UnaryOpExpr(_, x)) => collect_resume_walk(buf, x),
     NExpr(LambdaExpr(_, body)) => collect_resume_walk(buf, body),
     NExpr(PerformExpr(_, args)) =>
-      list_iter(args, (a) => collect_resume_walk(buf, a)),
+      for_each((a) => collect_resume_walk(buf, a), args),
     NExpr(MakeListExpr(elems)) =>
-      list_iter(elems, (e) => collect_resume_walk(buf, e)),
+      for_each((e) => collect_resume_walk(buf, e), elems),
     NExpr(MakeTupleExpr(elems)) =>
-      list_iter(elems, (e) => collect_resume_walk(buf, e)),
+      for_each((e) => collect_resume_walk(buf, e), elems),
     NExpr(MakeRecordExpr(fields)) =>
-      list_iter(fields, (f) => collect_resume_walk(buf, f.value)),
+      for_each((f) => collect_resume_walk(buf, f.value), fields),
     NExpr(NamedRecordExpr(_, fields)) =>
-      list_iter(fields, (f) => collect_resume_walk(buf, f.value)),
+      for_each((f) => collect_resume_walk(buf, f.value), fields),
     NExpr(FieldExpr(b, _)) => collect_resume_walk(buf, b),
     NExpr(PipeExpr(_, l, r)) => {
       collect_resume_walk(buf, l)
@@ -2546,7 +2546,7 @@ fn collect_resume_walk(buf, node) with GraphRead = {
     },
     NExpr(HandleExpr(b, h_arms)) => {
       collect_resume_walk(buf, b)
-      list_iter(h_arms, (a) => collect_resume_walk(buf, a.body))
+      for_each((a) => collect_resume_walk(buf, a.body), h_arms)
     },
     NStmt(LetStmt(_, v)) => collect_resume_walk(buf, v),
     NStmt(ExprStmt(e)) => collect_resume_walk(buf, e),

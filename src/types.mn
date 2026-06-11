@@ -480,6 +480,11 @@ fn token_span(t) with Pure = let Tok(_, s) = t; s
 type Node
   = N(NodeBody, Span, Int)   // body, span, TypeHandle
 
+fn span_of_node(node) = {
+  let N(_, span, _) = node
+  span
+}
+
 type NodeBody
   = NExpr(Expr)
   | NStmt(Stmt)

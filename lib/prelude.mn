@@ -20,7 +20,7 @@ effect Iterate {
   result() -> ()
 }
 
-fn iterate(xs) with Iterate = iterate_from(xs, 0, xs.len)
+fn iterate(xs) with Iterate = iterate_from(xs, 0, len(xs))
 
 /// Top-level tail-recursive iteration — no nested closure. Lower's
 /// tail-call-mark-pass recognizes `iterate_from(xs, i+1, n)` as the
@@ -171,8 +171,8 @@ fn count(pred, xs)   = { iterate(xs); result() } ~> count_handler(pred)
 // ─── Derived (built on the handlers above) ──────────────────
 
 fn head(xs) = xs[0]
-fn tail(xs) = slice(xs, 1, xs.len)
-fn last(xs) = xs[xs.len - 1]
+fn tail(xs) = slice(xs, 1, len(xs))
+fn last(xs) = xs[len(xs) - 1]
 fn reverse_list(list) = reverse_list_pop(list, [])
 fn reverse_list_pop(list, acc) = {
   if list.len == 0 { acc }
@@ -334,3 +334,21 @@ fn ok(res)        = match res { Ok(v) => Some(v), Err(_) => None }
 fn err_val(res)   = match res { Ok(_) => None,    Err(e) => Some(e) }
 fn is_ok(res)     = match res { Ok(_) => true,    Err(_) => false }
 fn map_result(f, res) = match res { Ok(v) => Ok(f(v)), Err(e) => Err(e) }
+
+// ─── Feedback specs — the `<~` verb's RHS contract ──────────────────
+//
+// Per SYNTAX.md §`<~`: the feedback verb's RHS is a FeedbackSpec value.
+// `signal <~ delay(3)` closes a 3-sample cycle; `state <~ accumulate(s0)`
+// threads a running value; `filter <~ filter_spec(n, coeffs)` feeds N
+// prior outputs through coefficient taps. The spec names WHAT flows
+// back; the installed iterative handler (Sample/Tick/Clock) decides
+// WHEN the cycle advances.
+
+type FeedbackSpec<A>
+  = Delay(Int)
+  | Accumulate(A)
+  | FilterSpec(Int, List<Float>)
+
+fn delay(n) = Delay(n)
+fn accumulate(init) = Accumulate(init)
+fn filter_spec(n, coeffs) = FilterSpec(n, coeffs)

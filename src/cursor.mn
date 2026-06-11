@@ -25,11 +25,11 @@
 //                                         Hμ.synth-proposer fills the
 //                                         MultiShot semantics post-H7)
 //   verify_debt           — types.mn:807 (Verify effect)
-//   mentl_context_at      — small local pure helper (this file)
-//   pipe_context_of_node  — small local pure helper (this file)
-//   ownership_of_node     — small local pure helper (this file)
-//   row_of_node           — small local pure helper (this file)
-//   filter_pending_at     — small local pure helper (this file)
+//   mentl_context_at      — kind projection (this file)
+//   pipe_context_of_kind  — kind projection (this file)
+//   ownership_of_kind     — kind projection (this file)
+//   row_of_kind           — kind projection (this file)
+//   verify_pending_at     — ledger projection (this file)
 //
 // Drift-mode audit per Hμ-cursor.md §11: all nine PASS.
 // Drift 1 (vtable):   no dispatch table; named perform calls only.
@@ -106,13 +106,13 @@ handler cursor_default with !Mutate {
         <| (
           (_, k) => k,                                                       // 1. Graph + Env (Query)
           (h, k) => perform synth_propose(                                   // 2. Handlers (Propose) — Synth's MultiShot
-                      ty_of_kind(k),
+                      ty_of_kind(h, k),
                       row_of_kind(k),
                       mentl_context_at(h)),
-          (_, k) => pipe_context_of_node(k),                                 // 3. Five verbs (Topology)
+          (_, k) => pipe_context_of_kind(k),                                 // 3. Five verbs (Topology)
           (_, k) => row_of_kind(k),                                          // 4. Boolean row (Unlock)
           (_, k) => ownership_of_kind(k),                                    // 5. Ownership-as-effect (Trace)
-          (h, _) => filter_pending_at(h, perform verify_debt()),             // 6. Refinement (Verify)
+          (h, _) => verify_pending_at(h),                                    // 6. Refinement (Verify)
           (h, _) => perform teach_gradient(h),                               // 7. Continuous gradient (Teach)
           (h, _) => perform teach_why(h)                                     // 8. HM live + Reasons (Why)
         )
@@ -419,15 +419,17 @@ fn span_of_handle(handle) with GraphRead + !Mutate = {
   caret_span_from_reason(reason)
 }
 
-fn ty_of_kind(kind) with Pure = match kind {
+// An unbound node's type IS its own type variable — the chase
+// terminated at this handle, so TVar(handle) is what HM proves.
+fn ty_of_kind(handle, kind) with Pure = match kind {
   NBound(ty)    => ty,
-  NFree(_)      => TFree(0),       // sentinel; Synth proposes against fresh tyvar
-  NRowBound(_)  => TFree(0),
-  NRowFree(_)   => TFree(0),
-  NErrorHole(_) => TFree(0)
+  NFree(_)      => TVar(handle),
+  NRowBound(_)  => TVar(handle),
+  NRowFree(_)   => TVar(handle),
+  NErrorHole(_) => TVar(handle)
 }
 
-fn row_of_node(kind) with Pure = match kind {
+fn row_of_kind(kind) with Pure = match kind {
   NBound(ty)    => extract_row_local(ty),
   NRowBound(r)  => r,
   _             => EfPure
@@ -438,14 +440,14 @@ fn extract_row_local(ty) with Pure = match ty {
   _               => EfPure
 }
 
-// ownership_of_node — derives Ownership from the graph's binding
+// ownership_of_kind — derives Ownership from the graph's binding
 // shape. NBound(TFun(...)) carries TParam list each with authored +
 // resolved Ownership; for a node that IS a function, return the
 // resolved ownership of its first param (the substrate-honest
 // summary; full per-param ownership is in CursorView for handlers
 // that want it). For non-function nodes, default Inferred.
 
-fn ownership_of_node(kind) with Pure = match kind {
+fn ownership_of_kind(kind) with Pure = match kind {
   NBound(ty) => ownership_of_ty(ty),
   _          => Inferred
 }
@@ -460,7 +462,7 @@ fn ownership_of_ty(ty) with Pure = match ty {
   _ => Inferred
 }
 
-fn pipe_context_of_node(kind) with Pure = match kind {
+fn pipe_context_of_kind(kind) with Pure = match kind {
   // Pipe surroundings live in the parent chain via NodeBody (NPipeExpr).
   // Today the local helper returns NoPipe; the parent-walk landing is
   // Hμ.cursor.transport's render-time concern (the IDE's pipe-graph
@@ -476,15 +478,15 @@ fn mentl_context_at(handle) with GraphRead + !Mutate = {
   Context([], [])
 }
 
-// filter_pending_at — Verify ledger holds ALL pending refinement
-// obligations as a List. CursorView.verify wants the subset
-// associated with this handle. Today's verify_debt returns
-// (Span, Predicate, Reason) triples; filter by span overlap with
-// the handle's span.
+// verify_pending_at — Verify ledger holds ALL pending refinement
+// obligations as a List. Consumers (CursorView.verify, gradient
+// delta-refinement, eight-loop refinement verdict) want the subset
+// associated with one handle. verify_debt returns (Span, Predicate,
+// Reason) triples; filter by span overlap with the handle's span.
 
-fn filter_pending_at(handle, debt) with GraphRead + !Mutate = {
+fn verify_pending_at(handle) with Verify + GraphRead + !Mutate = {
   let target_span = span_of_handle(handle)
-  filter_by_span(target_span, debt)
+  filter_by_span(target_span, perform verify_debt())
 }
 
 fn filter_by_span(target, debt) with Pure = {

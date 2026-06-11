@@ -1,6 +1,7 @@
 // io.mn — I/O primitives for the Mentl runtime
 //
-// All I/O routes through the WASI effect (declared in types.mn).
+// All I/O routes through the WASI effect (declared below — the host
+// boundary IS an effect; the host runtime IS its handler).
 // No print-via-syscall magic. No fd_write call sites scattered
 // across the compiler. All of it lives here, behind named functions.
 //
@@ -35,6 +36,43 @@
 import types
 import runtime/strings
 
+// ─── The WASI effect — the host boundary IS an effect ─────────
+//
+// Every op mirrors a WASI preview1 import 1:1; the host runtime IS
+// the handler (lower maps each op to its `wasi_snapshot_preview1`
+// import — the import IS the handler install). Errno returns are
+// Int per the WASI ABI; refinement of errno spaces is Verify's
+// post-L2 work.
+
+effect WASI {
+  fd_write(fd: Int, iov_ptr: Int, iov_cnt: Int, nwritten_ptr: Int) -> Int
+  fd_read(fd: Int, iov_ptr: Int, iov_cnt: Int, nread_ptr: Int) -> Int
+  fd_close(fd: Int) -> Int
+  path_open(base_fd: Int, dirflags: Int, path_ptr: Int, path_len: Int, oflags: Int, rights_base: Int, rights_inherit: Int, fdflags: Int, fd_out_ptr: Int) -> Int
+  path_create_directory(fd: Int, path_ptr: Int, path_len: Int) -> Int
+  path_filestat_get(fd: Int, flags: Int, path_ptr: Int, path_len: Int, stat_ptr: Int) -> Int
+  path_unlink_file(fd: Int, path_ptr: Int, path_len: Int) -> Int
+  path_rename(old_fd: Int, old_ptr: Int, old_len: Int, new_fd: Int, new_ptr: Int, new_len: Int) -> Int
+}
+
+// ─── The Console effect — narration's output boundary ─────────
+//
+// The medium's voice performs `print`; WHERE it lands is the
+// installed handler's decision. stdout_console routes to fd 1;
+// sibling handlers (buffer_console for tests, lsp_console for the
+// LSP transport) swap without touching the narrating code.
+
+effect Console {
+  print(msg: String) -> ()
+}
+
+handler stdout_console {
+  print(msg) => {
+    print_string(msg)
+    resume()
+  },
+}
+
 // Stdout
 
 /// print_string — write a Mentl string to stdout (fd=1). Routes
@@ -66,6 +104,12 @@ fn print_newline() with Memory + WASI = {
   perform store_i32(84, 1)
   perform fd_write(1, 80, 1, 88)
   ()
+}
+
+/// println — write a string + newline to stdout.
+fn println(s) with Memory + WASI = {
+  print_string(s)
+  print_newline()
 }
 
 // Stderr

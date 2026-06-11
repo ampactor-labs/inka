@@ -49,7 +49,10 @@ type KaiFile = {
 //        Pack/Unpack with new tag byte 4)
 //   v7 — EffectDeclKind(List) added: effect→ops mapping carried in
 //        the graph as a first-class SchemeKind (tag byte 5)
-fn cache_compiler_version() with Pure = 7
+//   v8 — TRefined serializes its Predicate (placeholder retired);
+//        Reason/Predicate/PExpr/Span/BinOp serializers added — the
+//        Why chain persists with the value (handler IS evidence)
+fn cache_compiler_version() with Pure = 8
 
 /// 32-bit FNV-1a hash of the source bytes. Non-cryptographic;
 /// collision resistance is sufficient for cache invalidation.
@@ -245,10 +248,10 @@ fn cache_pack_ty(ty) with Pack + !Unpack = match ty {
     cache_pack_fields(fields, 0, fields.len)
     perform pack_i32(v)
   },
-  TRefined(base, _pred) => {
-    // Predicate not serialized yet — placeholder for v4.
+  TRefined(base, pred) => {
     perform pack_byte(11)
     cache_pack_ty(base)
+    cache_pack_predicate(pred)
   },
   TCont(ret, disc) => {
     perform pack_byte(12)
@@ -383,6 +386,231 @@ fn cache_pack_effarg(arg) with Pack + !Unpack = match arg {
   EAString(s) => {
     perform pack_byte(1)
     perform pack_str(s)
+  }
+}
+
+// Span — four i32 words, no tag (the shape is fixed).
+fn cache_pack_span(span) with Pack + !Unpack = {
+  let Span(sl, sc, el, ec) = span
+  pack_i32(sl)
+  pack_i32(sc)
+  pack_i32(el)
+  pack_i32(ec)
+}
+
+// BinOp tags: 0=BAdd, 1=BSub, 2=BMul, 3=BDiv, 4=BMod, 5=BEq, 6=BNe,
+//             7=BLt, 8=BGt, 9=BLe, 10=BGe, 11=BAnd, 12=BOr, 13=BConcat
+fn cache_pack_binop(op) with Pack + !Unpack = match op {
+  BAdd    => pack_byte(0),
+  BSub    => pack_byte(1),
+  BMul    => pack_byte(2),
+  BDiv    => pack_byte(3),
+  BMod    => pack_byte(4),
+  BEq     => pack_byte(5),
+  BNe     => pack_byte(6),
+  BLt     => pack_byte(7),
+  BGt     => pack_byte(8),
+  BLe     => pack_byte(9),
+  BGe     => pack_byte(10),
+  BAnd    => pack_byte(11),
+  BOr     => pack_byte(12),
+  BConcat => pack_byte(13)
+}
+
+// PExpr tags: 0=PSelf, 1=PInt, 2=PFloat, 3=PString, 4=PEVar, 5=PApp.
+// PFloat rides string transport (float_to_str / parse_float) — exact
+// f64 round-trip per strings.mn's 17-significant-digit rendering.
+fn cache_pack_pexpr(e) with Pack + !Unpack = match e {
+  PSelf => pack_byte(0),
+  PInt(n) => {
+    pack_byte(1)
+    pack_i32(n)
+  },
+  PFloat(f) => {
+    pack_byte(2)
+    pack_str(float_to_str(f))
+  },
+  PString(s) => {
+    pack_byte(3)
+    pack_str(s)
+  },
+  PEVar(name) => {
+    pack_byte(4)
+    pack_str(name)
+  },
+  PApp(name, args) => {
+    pack_byte(5)
+    pack_str(name)
+    pack_i32(len(args))
+    cache_pack_pexprs(args, 0, len(args))
+  }
+}
+
+fn cache_pack_pexprs(exprs, i, n) with Pack + !Unpack = {
+  if i >= n { () }
+  else {
+    cache_pack_pexpr(list_index(exprs, i))
+    cache_pack_pexprs(exprs, i + 1, n)
+  }
+}
+
+// Predicate tags: 0=PTrue, 1=PEq, 2=PLt, 3=PLeq, 4=PAnd, 5=POr,
+//                 6=PNot, 7=PCall
+fn cache_pack_predicate(p) with Pack + !Unpack = match p {
+  PTrue => pack_byte(0),
+  PEq(l, r) => {
+    pack_byte(1)
+    cache_pack_pexpr(l)
+    cache_pack_pexpr(r)
+  },
+  PLt(l, r) => {
+    pack_byte(2)
+    cache_pack_pexpr(l)
+    cache_pack_pexpr(r)
+  },
+  PLeq(l, r) => {
+    pack_byte(3)
+    cache_pack_pexpr(l)
+    cache_pack_pexpr(r)
+  },
+  PAnd(a, b) => {
+    pack_byte(4)
+    cache_pack_predicate(a)
+    cache_pack_predicate(b)
+  },
+  POr(a, b) => {
+    pack_byte(5)
+    cache_pack_predicate(a)
+    cache_pack_predicate(b)
+  },
+  PNot(inner) => {
+    pack_byte(6)
+    cache_pack_predicate(inner)
+  },
+  PCall(name, args) => {
+    pack_byte(7)
+    pack_str(name)
+    pack_i32(len(args))
+    cache_pack_pexprs(args, 0, len(args))
+  }
+}
+
+// Reason tags follow types.mn declaration order:
+//  0=Declared, 1=Inferred, 2=Fresh, 3=OpConstraint, 4=VarLookup,
+//  5=FnReturn, 6=FnParam, 7=MatchBranch, 8=ListElement, 9=IfBranch,
+// 10=LetBinding, 11=Unified, 12=Instantiation, 13=UnifyFailed,
+// 14=Placeholder, 15=BinOpPlaceholder, 16=MissingVar, 17=Refinement,
+// 18=Located, 19=InferredCallReturn, 20=InferredPipeResult,
+// 21=FreshInContext, 22=DocstringReason
+fn cache_pack_reason(r) with Pack + !Unpack = match r {
+  Declared(s) => {
+    pack_byte(0)
+    pack_str(s)
+  },
+  Inferred(s) => {
+    pack_byte(1)
+    pack_str(s)
+  },
+  Fresh(h) => {
+    pack_byte(2)
+    pack_i32(h)
+  },
+  OpConstraint(name, a, b) => {
+    pack_byte(3)
+    pack_str(name)
+    cache_pack_reason(a)
+    cache_pack_reason(b)
+  },
+  VarLookup(name, inner) => {
+    pack_byte(4)
+    pack_str(name)
+    cache_pack_reason(inner)
+  },
+  FnReturn(name, inner) => {
+    pack_byte(5)
+    pack_str(name)
+    cache_pack_reason(inner)
+  },
+  FnParam(name, idx, inner) => {
+    pack_byte(6)
+    pack_str(name)
+    pack_i32(idx)
+    cache_pack_reason(inner)
+  },
+  MatchBranch(a, b) => {
+    pack_byte(7)
+    cache_pack_reason(a)
+    cache_pack_reason(b)
+  },
+  ListElement(inner) => {
+    pack_byte(8)
+    cache_pack_reason(inner)
+  },
+  IfBranch(inner) => {
+    pack_byte(9)
+    cache_pack_reason(inner)
+  },
+  LetBinding(name, inner) => {
+    pack_byte(10)
+    pack_str(name)
+    cache_pack_reason(inner)
+  },
+  Unified(a, b) => {
+    pack_byte(11)
+    cache_pack_reason(a)
+    cache_pack_reason(b)
+  },
+  Instantiation(name, inner) => {
+    pack_byte(12)
+    pack_str(name)
+    cache_pack_reason(inner)
+  },
+  UnifyFailed(a, b) => {
+    pack_byte(13)
+    cache_pack_ty(a)
+    cache_pack_ty(b)
+  },
+  Placeholder(span) => {
+    pack_byte(14)
+    cache_pack_span(span)
+  },
+  BinOpPlaceholder(op) => {
+    pack_byte(15)
+    cache_pack_binop(op)
+  },
+  MissingVar(name) => {
+    pack_byte(16)
+    pack_str(name)
+  },
+  Refinement(expected, found) => {
+    pack_byte(17)
+    cache_pack_predicate(expected)
+    cache_pack_predicate(found)
+  },
+  Located(span, inner) => {
+    pack_byte(18)
+    cache_pack_span(span)
+    cache_pack_reason(inner)
+  },
+  InferredCallReturn(name, inner) => {
+    pack_byte(19)
+    pack_str(name)
+    cache_pack_reason(inner)
+  },
+  InferredPipeResult(verb, inner) => {
+    pack_byte(20)
+    pack_str(verb)
+    cache_pack_reason(inner)
+  },
+  FreshInContext(h, ctx) => {
+    pack_byte(21)
+    pack_i32(h)
+    pack_str(ctx)
+  },
+  DocstringReason(text, span) => {
+    pack_byte(22)
+    pack_str(text)
+    cache_pack_span(span)
   }
 }
 
@@ -530,8 +758,8 @@ fn cache_unpack_ty() with Unpack + !Pack = {
   }
   else if tag == 11 {
     let base = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    // Predicate placeholder — refinement deserialization is v4.
-    TRefined(base, PTrue)
+    let pred = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    TRefined(base, pred)
   }
   else if tag == 12 {
     let ret = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
@@ -663,6 +891,220 @@ fn cache_unpack_effarg() with Unpack + !Pack = {
   else {
     let s = perform unpack_str()
     EAString(s)
+  }
+}
+
+fn cache_unpack_span() with Unpack + !Pack = {
+  let sl = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let sc = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let el = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  let ec = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  Span(sl, sc, el, ec)
+}
+
+fn cache_unpack_binop() with Unpack + !Pack = {
+  let tag = unpack_byte()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  if tag == 0 { BAdd }
+  else if tag == 1 { BSub }
+  else if tag == 2 { BMul }
+  else if tag == 3 { BDiv }
+  else if tag == 4 { BMod }
+  else if tag == 5 { BEq }
+  else if tag == 6 { BNe }
+  else if tag == 7 { BLt }
+  else if tag == 8 { BGt }
+  else if tag == 9 { BLe }
+  else if tag == 10 { BGe }
+  else if tag == 11 { BAnd }
+  else if tag == 12 { BOr }
+  else { BConcat }
+}
+
+fn cache_unpack_pexpr() with Unpack + !Pack = {
+  let tag = unpack_byte()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  if tag == 0 { PSelf }
+  else if tag == 1 {
+    let n = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PInt(n)
+  }
+  else if tag == 2 {
+    let s = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PFloat(parse_float(s))
+  }
+  else if tag == 3 {
+    let s = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PString(s)
+  }
+  else if tag == 4 {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PEVar(name)
+  }
+  else {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let n = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let args = cache_unpack_pexprs(n, 0, make_list(n))
+    PApp(name, args)
+  }
+}
+
+fn cache_unpack_pexprs(n, i, buf) with Unpack + !Pack = {
+  if i >= n { slice(buf, 0, n) }
+  else {
+    let e = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    cache_unpack_pexprs(n, i + 1, list_set(buf, i, e))
+  }
+}
+
+fn cache_unpack_predicate() with Unpack + !Pack = {
+  let tag = unpack_byte()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  if tag == 0 { PTrue }
+  else if tag == 1 {
+    let l = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let r = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PEq(l, r)
+  }
+  else if tag == 2 {
+    let l = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let r = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PLt(l, r)
+  }
+  else if tag == 3 {
+    let l = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let r = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PLeq(l, r)
+  }
+  else if tag == 4 {
+    let a = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let b = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PAnd(a, b)
+  }
+  else if tag == 5 {
+    let a = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let b = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    POr(a, b)
+  }
+  else if tag == 6 {
+    let inner = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PNot(inner)
+  }
+  else {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let n = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let args = cache_unpack_pexprs(n, 0, make_list(n))
+    PCall(name, args)
+  }
+}
+
+fn cache_unpack_reason() with Unpack + !Pack = {
+  let tag = unpack_byte()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+  if tag == 0 {
+    let s = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    Declared(s)
+  }
+  else if tag == 1 {
+    let s = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    Inferred(s)
+  }
+  else if tag == 2 {
+    let h = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    Fresh(h)
+  }
+  else if tag == 3 {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let a = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let b = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    OpConstraint(name, a, b)
+  }
+  else if tag == 4 {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let inner = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    VarLookup(name, inner)
+  }
+  else if tag == 5 {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let inner = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    FnReturn(name, inner)
+  }
+  else if tag == 6 {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let idx = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let inner = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    FnParam(name, idx, inner)
+  }
+  else if tag == 7 {
+    let a = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let b = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    MatchBranch(a, b)
+  }
+  else if tag == 8 {
+    let inner = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    ListElement(inner)
+  }
+  else if tag == 9 {
+    let inner = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    IfBranch(inner)
+  }
+  else if tag == 10 {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let inner = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    LetBinding(name, inner)
+  }
+  else if tag == 11 {
+    let a = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let b = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    Unified(a, b)
+  }
+  else if tag == 12 {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let inner = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    Instantiation(name, inner)
+  }
+  else if tag == 13 {
+    let a = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let b = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    UnifyFailed(a, b)
+  }
+  else if tag == 14 {
+    let span = cache_unpack_span()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    Placeholder(span)
+  }
+  else if tag == 15 {
+    let op = cache_unpack_binop()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    BinOpPlaceholder(op)
+  }
+  else if tag == 16 {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    MissingVar(name)
+  }
+  else if tag == 17 {
+    let expected = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let found = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    Refinement(expected, found)
+  }
+  else if tag == 18 {
+    let span = cache_unpack_span()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let inner = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    Located(span, inner)
+  }
+  else if tag == 19 {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let inner = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    InferredCallReturn(name, inner)
+  }
+  else if tag == 20 {
+    let verb = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let inner = cache_unpack_reason()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    InferredPipeResult(verb, inner)
+  }
+  else if tag == 21 {
+    let h = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let ctx = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    FreshInContext(h, ctx)
+  }
+  else {
+    let text = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let span = cache_unpack_span()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    DocstringReason(text, span)
   }
 }
 

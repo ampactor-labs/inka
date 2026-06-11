@@ -32,6 +32,11 @@ fn make_list(count) with Memory + Alloc = {
   t
 }
 
+/// len — element count of any list. Every node shape carries its
+/// count at offset 0 (flat, snoc, concat, slice alike) — one load;
+/// the representation already proves it. No tag dispatch.
+fn len(xs) with Memory = load_i32(xs)
+
 // Mutation and access (tag-dispatched)
 
 /// list_set — write val into slot idx of a flat tag=0 list. Returns the

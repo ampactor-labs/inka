@@ -1961,6 +1961,45 @@ fn emit_binop_for(op, left_h) = match op {
       _        => perform wat_emit("    (call $str_concat)\n")
     }
   },
+  // == IS structural — operand-Ty dispatch per the BConcat precedent.
+  // TString → str_eq (W7-compiled (state, a, b); same save-reload
+  // state insert); BNe wraps i32.eqz. TList → (unreachable) per the
+  // LUnresolved no-silent-fallback precedent: pointer-eq lying as
+  // structural is the named wrong; element-typed deep eq is peer
+  // Hβ.eq.structural-deep. Scalars + TName fall to i32.eq/i32.ne
+  // (uniform value word; nullary ADTs and Bool are scalar tags —
+  // i32.eq IS structural for them; payload-ADT eq rides the peer).
+  // Handle-less LowExpr (left_h == 0, no graph address) → flat scalar
+  // compare; only graph-addressed operands consult lookup_ty.
+  BEq => if left_h == 0 { perform wat_emit("    (i32.eq)\n") } else {
+    match perform lookup_ty(left_h) {
+      TString => {
+        perform wat_emit("    (local.set $callee_closure)\n")
+        perform wat_emit("    (local.set $state_tmp)\n")
+        perform wat_emit("    (local.get $__state)\n")
+        perform wat_emit("    (local.get $state_tmp)\n")
+        perform wat_emit("    (local.get $callee_closure)\n")
+        perform wat_emit("    (call $str_eq)\n")
+      },
+      TList(_) => perform wat_emit("    ;; == on List — structural eq is peer Hβ.eq.structural-deep\n    (unreachable)\n"),
+      _ => perform wat_emit("    (i32.eq)\n")
+    }
+  },
+  BNe => if left_h == 0 { perform wat_emit("    (i32.ne)\n") } else {
+    match perform lookup_ty(left_h) {
+      TString => {
+        perform wat_emit("    (local.set $callee_closure)\n")
+        perform wat_emit("    (local.set $state_tmp)\n")
+        perform wat_emit("    (local.get $__state)\n")
+        perform wat_emit("    (local.get $state_tmp)\n")
+        perform wat_emit("    (local.get $callee_closure)\n")
+        perform wat_emit("    (call $str_eq)\n")
+        perform wat_emit("    (i32.eqz)\n")
+      },
+      TList(_) => perform wat_emit("    ;; != on List — structural eq is peer Hβ.eq.structural-deep\n    (unreachable)\n"),
+      _ => perform wat_emit("    (i32.ne)\n")
+    }
+  },
   _ => emit_binop(op)
 }
 

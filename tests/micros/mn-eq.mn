@@ -1,0 +1,15 @@
+fn main(q) = {
+  let a = "hello"
+  let b = "hel" ++ "lo"
+  let c = "world"
+  let scalar_ok = if 3 == 3 { 1 } else { 0 }
+  let str_true  = if a == b { 8 } else { 0 }
+  let str_false = if a == c { 16 } else { 0 }
+  let ne_ok     = if a != c { 64 } else { 0 }
+  scalar_ok + str_true + str_false + ne_ok
+}
+
+// Expected exit 73 (1 + 8 + 0 + 64): content equality.
+// A pointer-equality world exits 65 (heap-concat result never
+// pointer-matches the literal; str_true stays 0).
+}

@@ -321,6 +321,55 @@
         ;; Fall-through (TString, unresolved, or other): str_concat.
         (call $ec6_emit_call_str_concat)
         (return)))
+    ;; BEq (145) / BNe (146): == IS structural — operand-Ty dispatch
+    ;; per the BConcat precedent above. TString (102) → $str_eq
+    ;; (W7-compiled (state, a, b); same save-reload state insert);
+    ;; BNe wraps (i32.eqz). Scalars and all other tags fall to the
+    ;; flat i32.eq/i32.ne table. Deep types (TList/ADT) diag at
+    ;; wheel-lower time (E_StructuralEqUnsupported — peer
+    ;; Hβ.eq.structural-deep); never silent pointer-eq-as-structural.
+    (if (i32.or (i32.eq (local.get $op) (i32.const 145))
+                (i32.eq (local.get $op) (i32.const 146)))
+      (then
+        (local.set $left_h (call $lexpr_handle (local.get $left_lexpr)))
+        ;; Handle-less LowExpr (no graph address) → flat scalar compare;
+        ;; only graph-addressed operands consult $lookup_ty.
+        (if (i32.eqz (local.get $left_h))
+          (then
+            (call $ec6_emit_binop_op (local.get $op))
+            (return)))
+        (local.set $left_ty (call $lookup_ty (local.get $left_h)))
+        (local.set $left_ty_tag (call $ty_tag (local.get $left_ty)))
+        (if (i32.eq (local.get $left_ty_tag) (i32.const 102))   ;; TString
+          (then
+            (call $ec6_emit_local_set_callee_closure)    ;; pop right → scratch
+            (call $ec6_emit_local_set_state_tmp)         ;; pop left → scratch
+            (call $el_emit_local_get_state)              ;; push state
+            (call $ec6_emit_local_get_state_tmp)         ;; push left
+            (call $ec6_emit_local_get_callee_closure)    ;; push right
+            (call $ec6_emit_call_str_eq)
+            (if (i32.eq (local.get $op) (i32.const 146))
+              (then (call $ec6_emit_i32_eqz)))
+            (return)))
+        ;; TList (105): (unreachable) per LUnresolved no-silent-fallback —
+        ;; pointer-eq lying as structural is the named wrong; deep eq
+        ;; is peer Hβ.eq.structural-deep. Scalars + TName fall through.
+        (if (i32.eq (local.get $left_ty_tag) (i32.const 105))   ;; TList
+          (then
+            (call $emit_byte (i32.const 40))   ;; '('
+            (call $emit_byte (i32.const 117))  ;; 'u'
+            (call $emit_byte (i32.const 110))  ;; 'n'
+            (call $emit_byte (i32.const 114))  ;; 'r'
+            (call $emit_byte (i32.const 101))  ;; 'e'
+            (call $emit_byte (i32.const 97))   ;; 'a'
+            (call $emit_byte (i32.const 99))   ;; 'c'
+            (call $emit_byte (i32.const 104))  ;; 'h'
+            (call $emit_byte (i32.const 97))   ;; 'a'
+            (call $emit_byte (i32.const 98))   ;; 'b'
+            (call $emit_byte (i32.const 108))  ;; 'l'
+            (call $emit_byte (i32.const 101))  ;; 'e'
+            (call $emit_byte (i32.const 41))   ;; ')'
+            (return)))))
     (call $ec6_emit_binop_op (local.get $op)))
 
   ;; ─── $ec6_emit_binop_op — dispatch on integer tag 140-153 ──────────
@@ -474,6 +523,16 @@
     (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 110))
     (call $emit_byte (i32.const 99)) (call $emit_byte (i32.const 97))
     (call $emit_byte (i32.const 116)) (call $emit_byte (i32.const 41)))
+
+  (func $ec6_emit_call_str_eq
+    ;; emits: (call $str_eq)
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 99))
+    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 32))
+    (call $emit_byte (i32.const 36)) (call $emit_byte (i32.const 115))
+    (call $emit_byte (i32.const 116)) (call $emit_byte (i32.const 114))
+    (call $emit_byte (i32.const 95)) (call $emit_byte (i32.const 101))
+    (call $emit_byte (i32.const 113)) (call $emit_byte (i32.const 41)))
 
   ;; Per H.3.c emit-list-runtime-call: BConcat over TList operands
   ;; emits a call to wheel-defined $list_concat (lib/runtime/lists.mn:

@@ -396,8 +396,10 @@ audit the WHOLE file for:
 5. **Imperative for-loops (where Mentl has none — `loop`, `break`
    are not keywords per SYNTAX.md §1317-1320)** where iteration is
    `<|` `Iterate` handler or `<~` feedback.
-6. **Bare equality on strings (`a == b`)** where `str_eq(a, b)` is
-   the residue (CLAUDE.md "Bug classes that cost hours").
+6. **`str_eq(a, b)` where `a == b` is the residue** — `==` IS
+   structural (type-dispatched at emit per SYNTAX.md §Equality,
+   landed 2026-06-11); explicit str_eq calls are legacy surface
+   awaiting the migration sweep.
 
 Mentl will eventually enforce this at compile time (gradient teaches
 the conversion; the formatter rewrites at save). Until then, the
@@ -587,7 +589,7 @@ linear → state machine, multi-shot → heap struct.
 - Duplicate top-level function names (emitter picks one silently).
 - Flat-array list ops in Snoc-tree paths (`list[i]` in a loop — O(N²) and wrong semantics).
 - `println` inside `report(...)` handler arms (corrupts WAT stdout).
-- Bare `==` on strings — use `str_eq(a, b)`. Post-Ω.2: `if str_eq(a, b) { ... }` canonical.
+- (deleted 2026-06-11) the "never `==` on strings" trap — `==` IS structural now, type-dispatched at emit (TString → str_eq; deep types → peer Hβ.eq.structural-deep). The bug class emptied into the substrate.
 - `acc ++ [X]` in a loop body — O(N²). Use buffer-counter substrate
   (`list_extend_to(buf, count+1)` + `list_set(buf, count, x)` +
   counter + `slice(buf, 0, count)`).

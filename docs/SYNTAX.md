@@ -1332,6 +1332,24 @@ The dispatch is compile-time-only; no runtime type test. When the type is known,
 
 See `docs/specs/simulations/syntax/concat-operator-substrate.md` for the substrate analysis.
 
+### Equality operator
+
+`==`/`!=` are **structural**, type-dispatched at emit by the operand's
+inferred type (`lookup_ty`) — the same compile-time dispatch as `++`.
+There is no rule for the developer to remember: the graph knows the
+type; the substrate carries the comparison.
+
+| Operand type                | Emit projection                       | Semantics              |
+|-----------------------------|---------------------------------------|------------------------|
+| scalar (`Int`, `Bool`, byte, nullary ADT tag) | `i32.eq` / `i32.ne` | value equality IS structural |
+| `String`                    | `call $str_eq` (`!=` wraps `i32.eqz`) | content equality       |
+| `List(a)` / payload ADT     | `(unreachable)` + named peer          | deep structural eq is peer `Hβ.eq.structural-deep` (element-type-directed derived projection per the `to_string` dispatch precedent) |
+
+**Drift refusal:** `==` on a heap type never emits pointer comparison —
+pointer-eq lying as structural equality is the silent fallback
+`protocol_no_silent_fallback.md` forbids. `str_eq` remains the
+substrate fn `==` lowers to; it is no longer developer-facing law.
+
 ---
 
 ## Canonical layout (formatter canon)

@@ -153,13 +153,13 @@ fn driver_infer_module(ref module_name, ref source, ref source_hash)
   // this module's exported entries.
   let env_before = perform env_snapshot()
   let Env(entries_before) = env_before
-  let n_before = entries_before.len
+  let n_before = len(entries_before)
   // Run inference.
   infer_program(ast)
   // Snapshot env AFTER; the new entries are this module's exports.
   let env_after = perform env_snapshot()
   let Env(entries_after) = env_after
-  let n_after = entries_after.len
+  let n_after = len(entries_after)
   // entries are prepended in env_handler, so the new ones are at
   // the head; take the first (n_after - n_before).
   let new_count = n_after - n_before
@@ -184,7 +184,7 @@ fn driver_infer_module(ref module_name, ref source, ref source_hash)
 // cache-write moment so future invalidation can compare). For
 // caches written now, "now's" hash is what we record.
 fn driver_collect_dep_hashes(ref imports) with Memory + Alloc + Filesystem = {
-  let n = imports.len
+  let n = len(imports)
   driver_collect_dep_hashes_loop(imports, 0, n, make_list(n))
 }
 
@@ -202,7 +202,7 @@ fn driver_collect_dep_hashes_loop(ref imports, i, n, own buf)
 
 fn driver_take_first(ref entries, count) = {
   if count <= 0 { [] }
-  else if entries.len == 0 { [] }
+  else if len(entries) == 0 { [] }
   else { [list_head(entries)] ++ driver_take_first(list_tail(entries), count - 1) }
 }
 
@@ -212,7 +212,7 @@ fn driver_take_first(ref entries, count) = {
 
 fn driver_install_entries(ref module_name, ref entries) with Memory + Alloc + EnvWrite = {
   let short = module_short_name(module_name)
-  driver_install_loop(short, entries, 0, entries.len)
+  driver_install_loop(short, entries, 0, len(entries))
 }
 
 fn driver_install_loop(ref short, ref entries, i, n) with Memory + Alloc + EnvWrite = {
@@ -254,7 +254,7 @@ fn module_find_last_slash(ref path, i, n, last) = {
 
 fn driver_install_qualified_only(ref module_name, ref entries) with Memory + Alloc + EnvWrite = {
   let short = module_short_name(module_name)
-  driver_install_qualified_loop(short, entries, 0, entries.len)
+  driver_install_qualified_loop(short, entries, 0, len(entries))
 }
 
 fn driver_install_qualified_loop(ref short, ref entries, i, n) with Memory + Alloc + EnvWrite = {
@@ -333,13 +333,13 @@ fn driver_partition_layers(ref modules_with_deps) with Memory + Alloc = {
 
 fn driver_partition_peel(ref remaining, ref processed, ref layers_rev)
   with Memory + Alloc = {
-  if remaining.len == 0 { reverse(layers_rev) }
+  if len(remaining) == 0 { reverse(layers_rev) }
   else {
     let layer_pairs = filter((m_with_deps) => {
       let (_, deps) = m_with_deps
       all((d) => contains_module(processed, d), deps)
     }, remaining)
-    if layer_pairs.len == 0 {
+    if len(layer_pairs) == 0 {
       // Cycle or unsatisfiable dep — process remaining sequentially
       // as a final layer to surface diagnostics at driver_check_module.
       let leftover_names = map((p) => { let (m, _) = p; m }, remaining)

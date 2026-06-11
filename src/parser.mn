@@ -34,13 +34,13 @@ fn nhole(id, span: ValidSpan) = N(NHole(id), span, fresh_ph(span))
 
 // kind_at returns the TokenKind variant at position pos (or TEof if past end).
 fn kind_at(ref tokens, pos) = {
-  if pos >= tokens.len { TEof }
+  if pos >= len(tokens) { TEof }
   else { token_kind(tokens[pos]) }
 }
 
 // span_at returns the span of the token at position pos.
 fn span_at(ref tokens, pos) = {
-  if pos >= tokens.len { span_zero() }
+  if pos >= len(tokens) { span_zero() }
   else { token_span(tokens[pos]) }
 }
 
@@ -1161,7 +1161,7 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
     let N(body, start_span, _) = e
     let is_named_record = match body {
       NExpr(VarRef(name)) =>
-        name.len > 0 &&
+        byte_len(name) > 0 &&
         first_char_code(name) >= 65 &&
         first_char_code(name) <= 90,
       _ => false
@@ -1613,7 +1613,7 @@ fn parse_record_fields(ref tokens, pos, own buf, count) = {
 /// Insertion sort by field name. N≤~16 in practice; insertion is the
 /// natural shape and keeps the parser dependency-free.
 fn sort_record_fields(fields) = {
-  sort_record_fields_loop(fields, 0, fields.len, [])
+  sort_record_fields_loop(fields, 0, len(fields), [])
 }
 
 fn sort_record_fields_loop(fields, i, n, own acc) = {
@@ -1626,7 +1626,7 @@ fn sort_record_fields_loop(fields, i, n, own acc) = {
 
 fn record_field_insert(sorted, entry) = {
   let (name, _) = entry
-  let n = sorted.len
+  let n = len(sorted)
   let pos = record_field_find_pos(sorted, name, 0, n)
   if pos < n {
     let buf = make_list(n + 1)
@@ -2031,7 +2031,7 @@ fn is_foreign_keyword(name) =
   str_eq(name, "return")      // drift-audit: ignore
 
 fn is_empty_block_expr(e) = match e {
-  BlockExpr(stmts, _) => stmts.len == 0,
+  BlockExpr(stmts, _) => len(stmts) == 0,
   _                   => false
 }
 
@@ -2104,7 +2104,7 @@ fn parse_pat_record_fields(ref tokens, pos) = {
 }
 
 fn sort_pat_fields(fields) = {
-  sort_record_fields_loop(fields, 0, fields.len, [])
+  sort_record_fields_loop(fields, 0, len(fields), [])
 }
 
 fn parse_pat_args(ref tokens, pos) = {
@@ -2152,7 +2152,7 @@ fn at_ellipsis(ref tokens, pos) =
 // defined in the wheel runtime; byte_at is the substrate-honest primitive.
 // Strings are length-prefixed; byte_at(s, 0) reads s[0] as i32 directly.
 fn first_char_code(s) = {
-  if s.len == 0 { 0 }
+  if byte_len(s) == 0 { 0 }
   else { byte_at(s, 0) }
 }
 
@@ -2266,7 +2266,7 @@ fn parse_record_type_fields(ref tokens, pos) = {
 }
 
 fn sort_record_type_fields(fields) = {
-  sort_record_type_fields_loop(fields, 0, fields.len, [])
+  sort_record_type_fields_loop(fields, 0, len(fields), [])
 }
 
 fn sort_record_type_fields_loop(fields, i, n, own acc) = {

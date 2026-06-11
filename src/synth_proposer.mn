@@ -124,7 +124,7 @@ handler synth_default with !Mutate {
 
   enumerate_inhabitants(target_ty, allowed_effects, context) => {
     let enriched = enumerate_typed(target_ty, allowed_effects, context)
-    yield_inhabitants(enriched, 0, enriched.len)
+    yield_inhabitants(enriched, 0, len(enriched))
   }
 }
 
@@ -440,9 +440,9 @@ fn synth_hole_node() with Pure = {
 }
 
 fn synth_holes_for(elems) with Pure = {
-  if elems.len == 0 { [] }
+  if len(elems) == 0 { [] }
   else {
-    let n = elems.len
+    let n = len(elems)
     let buf = make_list(n)
     synth_holes_loop(0, n, buf)
   }
@@ -467,7 +467,7 @@ fn synth_holes_for_scheme(scheme) with Pure = {
 }
 
 fn synth_param_names(params) with Pure = {
-  let n = params.len
+  let n = len(params)
   let buf = make_list(n)
   synth_param_loop(params, 0, n, buf)
 }

@@ -87,7 +87,7 @@ effect Choice {
 
 handler pick_first {
   choose(options) =>
-    if options.len == 0 { perform abort() }
+    if len(options) == 0 { perform abort() }
     else                 { resume(list_index(options, 0)) }
 }
 
@@ -134,7 +134,7 @@ fn try_with_abort_catch(try_fn, catch_fn) with Abort = {
 handler backtrack with Choice + GraphRead + GraphWrite + Abort {
   choose(options) => {
     fn try_each(i) =
-      if i >= options.len { perform abort() }
+      if i >= len(options) { perform abort() }
       else {
         let checkpoint = perform graph_push_checkpoint()
         try_with_abort_catch(

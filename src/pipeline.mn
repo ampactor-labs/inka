@@ -316,7 +316,7 @@ fn frontend(source) = {
 
 // env_handler — scoped binding stack (spec 04)
 // Peer of graph_handler. One writer (inference). Scoping via
-// mark-and-truncate: enter pushes entries.len; exit truncates to
+// mark-and-truncate: enter pushes len(entries); exit truncates to
 // that mark. Functional; no mutable pointers.
 
 handler env_handler with entries = [], scopes = [] {
@@ -333,10 +333,10 @@ handler env_handler with entries = [], scopes = [] {
 
   env_scope_enter() =>
     resume()
-      with scopes = [entries.len] ++ scopes,
+      with scopes = [len(entries)] ++ scopes,
 
   env_scope_exit() =>
-    if scopes.len == 0 { resume() }
+    if len(scopes) == 0 { resume() }
     else {
       let mark = list_head(scopes)
       resume()
@@ -346,7 +346,7 @@ handler env_handler with entries = [], scopes = [] {
 }
 
 fn env_find(entries, name) = {
-  if entries.len == 0 { None }
+  if len(entries) == 0 { None }
   else {
     let (k, scheme, reason, kind) = list_head(entries)
     if str_eq(k, name) { Some((scheme, reason, kind)) }
@@ -355,7 +355,7 @@ fn env_find(entries, name) = {
 }
 
 fn take_last(lst, n) = {
-  if lst.len <= n { lst }
+  if len(lst) <= n { lst }
   else { take_last(list_tail(lst), n) }
 }
 
@@ -495,7 +495,7 @@ fn collect_gradients(ast) = {
 }
 
 fn render_gradients(gradients) = {
-  if gradients.len == 0 {
+  if len(gradients) == 0 {
     "All functions are at maximum annotation density.\n"
   } else {
     gradients
@@ -522,7 +522,7 @@ fn render_gradient_result(result) = match result {
 }
 
 fn join_unlock_labels(labels) with Pure = {
-  if labels.len == 0 { "(no capabilities)" }
+  if len(labels) == 0 { "(no capabilities)" }
   else {
     let first = head(labels)
     let rest = tail(labels)
@@ -572,7 +572,7 @@ fn build_audit_report(fn_name, ty) = {
 // capability without breaking the row.
 fn severance_candidates(reached) = {
   let canonical = [ENamed("Alloc"), ENamed("IO"), ENamed("Network")]   // drift-audit: ignore — real drift 8 (EffName should have EAlloc/EIO/ENetwork variants); tracked for item 11.B EffName refactor
-  filter_not_in(canonical, reached, 0, canonical.len, [])
+  filter_not_in(canonical, reached, 0, len(canonical), [])
 }
 
 fn filter_not_in(candidates, present, i, n, acc) = {
@@ -586,7 +586,7 @@ fn filter_not_in(candidates, present, i, n, acc) = {
 }
 
 fn name_in_list(names, target) = {
-  name_in_list_loop(names, target, 0, names.len)
+  name_in_list_loop(names, target, 0, len(names))
 }
 
 fn name_in_list_loop(names, target, i, n) = {
@@ -596,7 +596,7 @@ fn name_in_list_loop(names, target, i, n) = {
 }
 
 fn severance_unlocks(severable) = {
-  severance_unlocks_loop(severable, 0, severable.len, [])
+  severance_unlocks_loop(severable, 0, len(severable), [])
 }
 
 fn severance_unlocks_loop(severable, i, n, acc) = {
@@ -611,7 +611,7 @@ fn severance_unlocks_loop(severable, i, n, acc) = {
 // JSON / IDE-projection renderers are peer functions on the same
 // record (one substrate, multiple projections per CLAUDE.md insight 8).
 fn render_audit(entries) = {
-  if entries.len == 0 { "" }
+  if len(entries) == 0 { "" }
   else {
     let report = list_head(entries)
     let header = report.fn_name
@@ -619,7 +619,7 @@ fn render_audit(entries) = {
       |> str_concat(report.row_str)
       |> str_concat("\n")
     let severance_section =
-      if report.severable.len == 0 { "" }
+      if len(report.severable) == 0 { "" }
       else {
         "  severable: "
           |> str_concat(show_list(report.severable, show_eff_name, " + "))
@@ -643,24 +643,24 @@ fn render_query_result(result) = match result {
       |> str_concat(show_reason(reason)),
   QRUnresolved(entries) =>
     "→ "
-      |> str_concat(int_to_str(entries.len))
+      |> str_concat(int_to_str(len(entries)))
       |> str_concat(" unresolved entries"),
   QRChain(hops) =>
     "→ "
-      |> str_concat(int_to_str(hops.len))
+      |> str_concat(int_to_str(len(hops)))
       |> str_concat(" hops in chain"),
   QREffects(row) =>
     "→ "
       |> str_concat(show_effrow(row)),
   QROwnership(params) =>
     "→ "
-      |> str_concat(int_to_str(params.len))
+      |> str_concat(int_to_str(len(params)))
       |> str_concat(" params"),
   QRWhy(reason) =>
     show_reason(reason),
   QRVerifyDebt(obligations) =>
     "→ "
-      |> str_concat(int_to_str(obligations.len))
+      |> str_concat(int_to_str(len(obligations)))
       |> str_concat(" verification obligations pending"),
   QRError(msg) =>
     "error: "

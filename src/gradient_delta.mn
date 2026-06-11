@@ -170,7 +170,7 @@ handler delta_default with !Mutate {
   // candidate refinements (delta-7-safe seed).
   delta_refinement(handle) => {
     let pending = verify_pending_at(handle)
-    if pending.len == 0 { resume(None) }
+    if len(pending) == 0 { resume(None) }
     else {
       let predicate = list_head(pending)
       resume(Some(refinement_suggestion(handle, predicate)))
@@ -213,7 +213,7 @@ fn refinement_suggestion(handle, predicate) with Pure = {
 // ─── Helpers — walking the graph for delta candidates ──────────────
 
 fn first_inferred_with_classification(params, fn_handle) with Pure = {
-  if params.len == 0 { None }
+  if len(params) == 0 { None }
   else {
     let TParam(name, _, authored, resolved) = list_head(params)
     match authored {
@@ -233,7 +233,7 @@ fn first_inferred_with_classification(params, fn_handle) with Pure = {
 
 fn row_is_pure(row) with Pure = match row {
   EfPure => true,
-  EfClosed(names) => names.len == 0,
+  EfClosed(names) => len(names) == 0,
   _ => false
 }
 
@@ -267,8 +267,8 @@ fn row_to_with_clause_inner(row) with Pure = match row {
 }
 
 fn eff_names_to_str(names) with Pure = {
-  if names.len == 0 { "Pure" }                   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
-  else if names.len == 1 { eff_name_label(list_head(names)) }
+  if len(names) == 0 { "Pure" }                   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
+  else if len(names) == 1 { eff_name_label(list_head(names)) }
   else {
     eff_name_label(list_head(names))
       |> str_concat(" + ")
@@ -344,8 +344,8 @@ fn pexpr_to_str(pe) with Pure = match pe {
 }
 
 fn pexpr_args_to_str(args) with Pure = {
-  if args.len == 0 { "" }
-  else if args.len == 1 { pexpr_to_str(list_head(args)) }
+  if len(args) == 0 { "" }
+  else if len(args) == 1 { pexpr_to_str(list_head(args)) }
   else {
     pexpr_to_str(list_head(args))
       |> str_concat(", ")

@@ -76,7 +76,7 @@ fn get_authored_ownership(ref name) with !Mutate = {
            |> unwrap_env
            |> extract_fn_params
 
-         if idx < params.len {
+         if idx < len(params) {
            let TParam(_, _, auth, _) = list_index(params, idx)
            Some(auth)
          } else { None }
@@ -127,7 +127,7 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
   // to the frame's deltas list, then resets `used` to base so the
   // next branch sees the original scope.
   branch_divider(_span) => {
-    if branches.len == 0 { resume() }
+    if len(branches) == 0 { resume() }
     else {
       let (base, deltas) = list_head(branches)
       let delta = set_diff(used, base)
@@ -142,7 +142,7 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
   // E_OwnershipViolation at the branch site), merges all deltas into
   // `used` as base ∪ union(deltas), pops the frame.
   branch_exit(span) => {
-    if branches.len == 0 { resume() }
+    if len(branches) == 0 { resume() }
     else {
       let (base, prior_deltas) = list_head(branches)
       let last_delta = set_diff(used, base)
@@ -170,7 +170,7 @@ fn union_all_deltas(ref deltas) with !Mutate = {
 /// branch pair in its own diagnostic. Span is the branching verb's
 /// span — the site where the violation becomes observable.
 fn report_branch_collisions(ref deltas, ref span) with !Mutate = {
-  let n = deltas.len
+  let n = len(deltas)
   for_each((i) => {
     for_each((j) => {
       let collisions = set_intersect(list_index(deltas, i), list_index(deltas, j))
@@ -205,12 +205,12 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
   },
 
   region_exit(_rid) => {
-    if region_stack.len == 0 { resume() }
+    if len(region_stack) == 0 { resume() }
     else { resume() with region_stack = list_tail(region_stack) }
   },
 
   current_region() => {
-    if region_stack.len == 0 { resume(0) }
+    if len(region_stack) == 0 { resume(0) }
     else {
       let Region(rid, _) = list_head(region_stack)
       resume(rid)
@@ -223,9 +223,9 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
     // are records — adding metadata fields (e.g., region join
     // for record/variant fields per H4 addendum) is additive
     // without breaking lookup_tag's destructure.
-    let rid = if region_stack.len == 0 { 0 }
+    let rid = if len(region_stack) == 0 { 0 }
               else { let Region(r, _) = list_head(region_stack); r }
-    let install_span = if region_stack.len == 0 { span_zero() }
+    let install_span = if len(region_stack) == 0 { span_zero() }
                        else { let Region(_, s) = list_head(region_stack); s }
     let tag = {handle: value_handle, install_span: install_span, region_id: rid}
     resume()
@@ -240,9 +240,9 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
     // escaping the composite to outer scope would orphan the
     // inner-region pointer field. The escape check at fn return
     // uses this max-region tag.
-    let cur_rid = if region_stack.len == 0 { 0 }
+    let cur_rid = if len(region_stack) == 0 { 0 }
                   else { let Region(r, _) = list_head(region_stack); r }
-    let install_span = if region_stack.len == 0 { span_zero() }
+    let install_span = if len(region_stack) == 0 { span_zero() }
                        else { let Region(_, s) = list_head(region_stack); s }
     let joined = join_field_regions(tagged_values, field_handles, cur_rid)
     let tag = {handle: value_handle, install_span: install_span, region_id: joined}
@@ -279,7 +279,7 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
 
 fn lookup_tag(ref tags, handle) with !Mutate = {
   let hits = filter((tag) => tag.handle == handle, tags)
-  if hits.len == 0 { None } else { Some(head(hits)) }
+  if len(hits) == 0 { None } else { Some(head(hits)) }
 }
 
 fn region_on_stack(ref stack, rid) with !Mutate = {
@@ -318,7 +318,7 @@ fn find_first_span(ref sites, ref name) with !Mutate = {
     let (entry_name, _) = entry
     str_eq(entry_name, name)
   }, sites)
-  if hits.len == 0 { span_zero() }
+  if len(hits) == 0 { span_zero() }
   else {
     let (_, sp) = head(hits)
     sp
@@ -338,7 +338,7 @@ fn check_ref_escape(ref params, ref body) with !Mutate = {
   params
     |> collect_ref_params
     |> (refs) =>
-         if refs.len == 0 { () }
+         if len(refs) == 0 { () }
          else { walk_return_positions(refs, body) }
 }
 

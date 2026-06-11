@@ -20,7 +20,7 @@
 //   {data: List<A>, count: Int}
 //
 // `data` is the underlying List storage; `count` is the logical
-// fill (count <= data.len). Per kernel crystallization #9
+// fill (count <= len(data)). Per kernel crystallization #9
 // (Records-Are-Handler-State-Shape), Buffer is ONE record holding
 // both fields — never (List, Int) returned as parallel arrays
 // (drift mode 7).

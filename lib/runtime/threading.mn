@@ -137,7 +137,7 @@ handler parallel_compose with threads = [] {
 handler sequential_compose with results = [] {
   spawn(task) => {
     let result = task()  // drift-audit: ignore — task() is effectful; result feeds the with-clause's push, not chain-position
-    let handle = Handle(results.len)
+    let handle = Handle(len(results))
     resume(handle) with results = push(results, result)
   },
 
@@ -197,7 +197,7 @@ handler sequential_compose with results = [] {
 //   argmax. The gradient IS the priority queue; no scheduler module.
 
 fn parallel_map(xs, f) with Thread = {
-  if xs.len == 0 { [] }
+  if len(xs) == 0 { [] }
   else {
     let h = list_head(xs)
     let t = list_tail(xs)

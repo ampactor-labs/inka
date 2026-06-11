@@ -253,7 +253,7 @@ fn score_one_position(handle, caret) with GraphRead + !Mutate = {
     None => 0,
     Some(suggestion) => {
       let AnnotationSuggestion(_kind, _ann, unlocks, _reason) = suggestion
-      unlocks.len
+      len(unlocks)
     }
   }
   let target_span = span_of_handle(handle)
@@ -358,7 +358,7 @@ fn span_overlaps(a, b) with Pure = {
 // primitive-type-special-case).
 
 fn argmax_or_default(scored, caret) with Pure = {
-  if scored.len == 0 {
+  if len(scored) == 0 {
     let Caret(handle, reason) = caret
     Cursor(handle,
            Located(caret_span_from_reason(reason),
@@ -454,7 +454,7 @@ fn ownership_of_kind(kind) with Pure = match kind {
 
 fn ownership_of_ty(ty) with Pure = match ty {
   TFun(params, _, _) =>
-    if params.len == 0 { Inferred }
+    if len(params) == 0 { Inferred }
     else {
       let TParam(_, _, _, resolved) = list_index(params, 0)
       resolved
@@ -577,7 +577,7 @@ fn top_n_by_score(scored, n) with Pure = {
 }
 
 fn sort_by_score_desc(scored) with Pure = {
-  if scored.len <= 1 { scored }
+  if len(scored) <= 1 { scored }
   else {
     let head = list_head(scored)
     let tail = list_tail(scored)

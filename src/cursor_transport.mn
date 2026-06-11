@@ -399,8 +399,8 @@ fn show_node_kind(kind) with Pure = match kind {
 }
 
 fn show_proposals(props) with Pure =
-  if props.len == 0 { "(none)" }
-  else { int_to_str(props.len) |> str_concat(" candidate(s)") }
+  if len(props) == 0 { "(none)" }
+  else { int_to_str(len(props)) |> str_concat(" candidate(s)") }
 
 fn show_pipe_context(ctx) with Pure = match ctx {
   NoPipe => "(none)",
@@ -410,8 +410,8 @@ fn show_pipe_context(ctx) with Pure = match ctx {
 }
 
 fn show_verify_count(preds) with Pure =
-  if preds.len == 0 { "no obligations" }
-  else { int_to_str(preds.len) |> str_concat(" pending") }
+  if len(preds) == 0 { "no obligations" }
+  else { int_to_str(len(preds)) |> str_concat(" pending") }
 
 fn show_suggestion(opt) with Pure = match opt {
   None => "(no next-step)",
@@ -419,7 +419,7 @@ fn show_suggestion(opt) with Pure = match opt {
     let AnnotationSuggestion(_, ann_text, unlocks, _) = suggestion
     "add `" |> str_concat(ann_text)
             |> str_concat("` to unlock ")
-            |> str_concat(int_to_str(unlocks.len))
+            |> str_concat(int_to_str(len(unlocks)))
             |> str_concat(" capability(ies)")
   }
 }

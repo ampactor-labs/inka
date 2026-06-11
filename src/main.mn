@@ -75,7 +75,7 @@ type EntryHandlerInvocation
 // canonical 12-verb catalog).
 
 fn parse_cli_args(argv) with Pure = {
-  if argv.len < 2 { Invocation("compile_stdin_run", [], None) }
+  if len(argv) < 2 { Invocation("compile_stdin_run", [], None) }
   else {
     let mode = argv[1]
     if str_eq(mode, "edit") {
@@ -84,25 +84,25 @@ fn parse_cli_args(argv) with Pure = {
       Invocation("doc_run", [], optional_target(argv, 2))
     } else if str_eq(mode, "serve") {
       Invocation("serve_run", [], None)
-    } else if str_eq(mode, "compile") && argv.len >= 3 {
+    } else if str_eq(mode, "compile") && len(argv) >= 3 {
       Invocation("compile_run", [], Some(path_to_module(argv[2])))
-    } else if str_eq(mode, "run") && argv.len >= 3 {
+    } else if str_eq(mode, "run") && len(argv) >= 3 {
       Invocation("run_run", [], Some(path_to_module(argv[2])))
-    } else if str_eq(mode, "check") && argv.len >= 3 {
+    } else if str_eq(mode, "check") && len(argv) >= 3 {
       Invocation("check_run", [], Some(path_to_module(argv[2])))
     } else if str_eq(mode, "test") {
       Invocation("test_run", [], optional_target(argv, 2))
-    } else if str_eq(mode, "audit") && argv.len >= 3 {
+    } else if str_eq(mode, "audit") && len(argv) >= 3 {
       Invocation("audit_run", [], Some(path_to_module(argv[2])))
-    } else if str_eq(mode, "query") && argv.len >= 4 {
+    } else if str_eq(mode, "query") && len(argv) >= 4 {
       Invocation("query_run", [argv[3]], Some(path_to_module(argv[2])))
     } else if str_eq(mode, "teach") {
       Invocation("teach_run", [], optional_target(argv, 2))
     } else if str_eq(mode, "repl") {
       Invocation("repl_run", [], None)
-    } else if str_eq(mode, "new") && argv.len >= 3 {
+    } else if str_eq(mode, "new") && len(argv) >= 3 {
       Invocation("new_project", [argv[2]], None)
-    } else if str_eq(mode, "--with") && argv.len >= 3 {
+    } else if str_eq(mode, "--with") && len(argv) >= 3 {
       // Universal escape hatch — defer arbitrary handler-by-name
       // resolution to install_entry_handler. Named follow-up:
       // Hβ.cli.user-defined-entry-handler-resolution (resolves
@@ -120,7 +120,7 @@ fn parse_cli_args(argv) with Pure = {
 // path_to_module.
 
 fn optional_target(argv, idx) with Pure = {
-  if argv.len > idx { Some(path_to_module(argv[idx])) }
+  if len(argv) > idx { Some(path_to_module(argv[idx])) }
   else { None }
 }
 

@@ -74,7 +74,7 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
   },
 
   inf_exit_fn() => {
-    if stack.len == 0 { resume() }
+    if len(stack) == 0 { resume() }
     else {
       let frame = list_head(stack)
       perform graph_bind_row(frame.row_handle, frame.accumulated_row,
@@ -85,7 +85,7 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
   },
 
   inf_add_effect(name) => {
-    if stack.len == 0 { resume() }
+    if len(stack) == 0 { resume() }
     else {
       let frame = list_head(stack)
       // `name` is a String (legacy callers); wrap as bare ENamed.
@@ -102,7 +102,7 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
   },
 
   inf_add_row(row) => {
-    if stack.len == 0 { resume() }
+    if len(stack) == 0 { resume() }
     else {
       let frame = list_head(stack)
       let extended = union_row(frame.accumulated_row, row)
@@ -117,7 +117,7 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
   },
 
   inf_current_row() => {
-    if stack.len == 0 { resume(EfPure) }
+    if len(stack) == 0 { resume(EfPure) }
     else {
       let frame = list_head(stack)
       resume(frame.accumulated_row)
@@ -137,7 +137,7 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
   },
 
   inf_pop_handler() => {
-    if handler_stack.len == 0 { resume() }
+    if len(handler_stack) == 0 { resume() }
     else { resume() with handler_stack = list_tail(handler_stack) }
   },
 
@@ -150,12 +150,12 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
   },
 
   inf_exit_arm() => {
-    if arm_stack.len == 0 { resume() }
+    if len(arm_stack) == 0 { resume() }
     else { resume() with arm_stack = list_tail(arm_stack) }
   },
 
   inf_arm_tys() => {
-    if arm_stack.len == 0 { resume(None) }
+    if len(arm_stack) == 0 { resume(None) }
     else { resume(Some(list_head(arm_stack))) }
   },
 
@@ -175,7 +175,7 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
 }
 
 fn find_handler_for_effect(stack, ename) = {
-  if stack.len == 0 { None }
+  if len(stack) == 0 { None }
   else {
     let hname = list_head(stack)
     match perform env_lookup(hname) {
@@ -184,7 +184,7 @@ fn find_handler_for_effect(stack, ename) = {
         let Forall(_, ty) = scheme
         match ty {
           TName("Handler", args) => {
-            if args.len == 1 {
+            if len(args) == 1 {
               match list_head(args) {
                 TName(hename, _) =>
                   if str_eq(hename, ename) { Some(hname) }
@@ -357,7 +357,7 @@ fn infer_fn(name, params, body_node, handle, span: ValidSpan) = {
   // The declared row IS the gate — row_subsumes is the proof engine.
 
   let declared_effs = perform inf_declared_effs()
-  if declared_effs.len > 0 {
+  if len(declared_effs) > 0 {
     // D3 — `with Pure` is absolute: body row must be EfPure (not
     // merely ⊆ some sugar row named Pure). When Pure appears
     // anywhere in declared_effs, the declared row collapses to
@@ -451,7 +451,7 @@ fn call_is_alloc_returning(func) = {
 // load-bearing alloc-tracking case; non-Alloc handlers don't open
 // regions).
 fn names_include_alloc(names) = {
-  names_include_alloc_loop(names, 0, names.len)
+  names_include_alloc_loop(names, 0, len(names))
 }
 
 fn names_include_alloc_loop(names, i, n) = {
@@ -520,8 +520,8 @@ fn partition_declared(effs, pos_init, neg_init) = {
 }
 
 fn build_from_partition(pos, neg) = {
-  if pos.len == 0 && neg.len == 0 { EfPure }
-  else if pos.len == 0 { neg_row(mk_ef_closed(neg)) }
+  if len(pos) == 0 && len(neg) == 0 { EfPure }
+  else if len(pos) == 0 { neg_row(mk_ef_closed(neg)) }
   else {
     let base = mk_ef_closed(pos)
     fold_negations(neg, base)
@@ -529,7 +529,7 @@ fn build_from_partition(pos, neg) = {
 }
 
 fn fold_negations(neg, own acc) = {
-  if neg.len == 0 { acc }
+  if len(neg) == 0 { acc }
   else {
     let n = list_head(neg)
     let next = inter_row(acc, neg_row(mk_ef_closed([n])))
@@ -627,7 +627,7 @@ fn infer_expr(ref node) = {
 
     NExpr(MakeListExpr(elems)) => {
       infer_expr_list(elems)
-      if elems.len == 0 {
+      if len(elems) == 0 {
         let elem_h = perform mint(Inferred("empty list element"))
         perform graph_bind(handle, TList(TVar(elem_h)), Located(span, Inferred("empty list")))
       } else {
@@ -778,7 +778,7 @@ fn infer_expr(ref node) = {
       // E_HandlerUninstallable at the install span gives a tighter
       // diagnostic than waiting for E_EffectMismatch at fn exit.
       let declared_effs = perform inf_declared_effs()
-      if declared_effs.len > 0 {
+      if len(declared_effs) > 0 {
         let declared_row = build_declared_row(declared_effs)
         if row_subsumes(arm_row, declared_row) { () }
         else {
@@ -1006,15 +1006,15 @@ fn infer_perform(op_name, args, handle, span: ValidSpan) = {
 }
 
 fn unify_args_to_params(args, params, span: ValidSpan) = {
-  if args.len == 0 && params.len == 0 { () }
-  else if args.len == 0 || params.len == 0 {
+  if len(args) == 0 && len(params) == 0 { () }
+  else if len(args) == 0 || len(params) == 0 {
     // Arity mismatch: one list exhausted before the other.
     perform report(
       "infer", "E_TypeMismatch", "error",
       "arity mismatch in function call: expected "
-        |> str_concat(int_to_str(params.len))
+        |> str_concat(int_to_str(len(params)))
         |> str_concat(" argument(s) but got ")
-        |> str_concat(int_to_str(args.len)),
+        |> str_concat(int_to_str(len(args))),
       span, "MachineApplicable")
   } else {
     let N(_, _, ah) = list_head(args)
@@ -1143,7 +1143,7 @@ fn infer_diverge(left, right, handle, span: ValidSpan) = {
   let N(rbody, _, _) = right
   match rbody {
     NExpr(MakeTupleExpr(branches)) => {
-      let n = branches.len
+      let n = len(branches)
       if n == 0 {
         infer_expr(right)    // degenerate: <| () — empty branch tuple
       } else {
@@ -1350,15 +1350,15 @@ fn same_ground(ref a, ref b) with Pure = match a {
 }
 
 fn unify_type_lists(as_list, bs_list, span: ValidSpan, reason) = {
-  if as_list.len == 0 && bs_list.len == 0 { () }
-  else if as_list.len == 0 || bs_list.len == 0 {
+  if len(as_list) == 0 && len(bs_list) == 0 { () }
+  else if len(as_list) == 0 || len(bs_list) == 0 {
     // Arity mismatch: tuple/list lengths differ.
     perform report(
       "infer", "E_TypeMismatch", "error",
       "type list arity mismatch: "
-        |> str_concat(int_to_str(as_list.len))
+        |> str_concat(int_to_str(len(as_list)))
         |> str_concat(" vs ")
-        |> str_concat(int_to_str(bs_list.len)),
+        |> str_concat(int_to_str(len(bs_list))),
       span, "MachineApplicable")
   } else {
     unify_types(list_head(as_list), list_head(bs_list), span, reason)
@@ -1373,10 +1373,10 @@ fn unify_type_lists(as_list, bs_list, span: ValidSpan, reason) = {
 /// fields bind the open's row variable. Open×open: intersect known
 /// fields; bind one variable to the residual relative to the other.
 fn unify_record_fields_closed(fa, fb, span: ValidSpan, reason) = {
-  if fa.len != fb.len {
+  if len(fa) != len(fb) {
     type_mismatch(TRecord(fa), TRecord(fb), span, reason)
   } else {
-    unify_record_fields_loop(fa, fb, 0, fa.len, span, reason)
+    unify_record_fields_loop(fa, fb, 0, len(fa), span, reason)
   }
 }
 
@@ -1404,7 +1404,7 @@ fn unify_record_open_against_closed(closed_fields, open_fields, open_var, span: 
 }
 
 fn unify_record_open_subset(needed, available, span: ValidSpan, reason) = {
-  if needed.len == 0 { () }
+  if len(needed) == 0 { () }
   else {
     let (n, t) = list_head(needed)
     let pos = find_record_field_pos(available, n)
@@ -1428,7 +1428,7 @@ fn unify_two_open_records(fa, va, fb, vb, span: ValidSpan, reason) = {
   let extra_a = record_fields_diff(fa, fb)
   let extra_b = record_fields_diff(fb, fa)
   if va == vb {
-    if extra_a.len == 0 && extra_b.len == 0 { () }
+    if len(extra_a) == 0 && len(extra_b) == 0 { () }
     else { type_mismatch(TRecordOpen(fa, va), TRecordOpen(fb, vb), span, reason) }
   } else {
     perform graph_bind_row(va, mk_record_row_residual(extra_b),
@@ -1439,7 +1439,7 @@ fn unify_two_open_records(fa, va, fb, vb, span: ValidSpan, reason) = {
 }
 
 fn unify_record_fields_loop_shared(fa, fb, names, span: ValidSpan, reason) = {
-  if names.len == 0 { () }
+  if len(names) == 0 { () }
   else {
     let n = list_head(names)
     let pa = find_record_field_pos(fa, n)
@@ -1454,7 +1454,7 @@ fn unify_record_fields_loop_shared(fa, fb, names, span: ValidSpan, reason) = {
 }
 
 fn intersect_record_fields(fa, fb) = {
-  let n = fa.len
+  let n = len(fa)
   let (buf, count) = intersect_record_fields_loop(fa, fb, 0, n, make_list(n), 0)
   slice(buf, 0, count)
 }
@@ -1475,7 +1475,7 @@ fn intersect_record_fields_loop(fa, fb, i, n, own buf, count) = {
 }
 
 fn record_fields_diff(left, right) = {
-  let n = left.len
+  let n = len(left)
   let (buf, count) = record_fields_diff_loop(left, right, 0, n, make_list(n), 0)
   slice(buf, 0, count)
 }
@@ -1497,7 +1497,7 @@ fn record_fields_diff_loop(left, right, i, n, own buf, count) = {
 }
 
 fn find_record_field_pos(fields, name) = {
-  find_record_field_pos_loop(fields, name, 0, fields.len)
+  find_record_field_pos_loop(fields, name, 0, len(fields))
 }
 
 fn find_record_field_pos_loop(fields, name, i, n) = {
@@ -1510,14 +1510,14 @@ fn find_record_field_pos_loop(fields, name, i, n) = {
 }
 
 fn mk_record_row_residual(fields) = {
-  if fields.len == 0 { TRecord([]) }
+  if len(fields) == 0 { TRecord([]) }
   else { TRecord(fields) }
 }
 
 /// Infer each field's value expression; result handles are used by
 /// callers to build `TRecord` field-type lists and region-join sets.
 fn infer_record_field_values(fields) = {
-  if fields.len == 0 { () }
+  if len(fields) == 0 { () }
   else {
     let (_, value) = list_head(fields)
     infer_expr(value)
@@ -1550,7 +1550,7 @@ fn record_field_handles(fields) = map((fld) => {
 //   - matched name              → unify value's handle with declared ty
 fn check_nominal_record_fields(declared, provided, type_name, span: ValidSpan) = {
   check_nominal_record_loop(declared, provided, type_name, span, 0, 0,
-    declared.len, provided.len)
+    len(declared), len(provided))
 }
 
 fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, j, ni, nj) = {
@@ -1606,7 +1606,7 @@ fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, 
 }
 
 fn unify_param_lists(ref a, ref b, span: ValidSpan, reason) = {
-  if a.len == 0 || b.len == 0 { () }
+  if len(a) == 0 || len(b) == 0 { () }
   else {
     let TParam(_, ta, _, _) = list_head(a)
     let TParam(_, tb, _, _) = list_head(b)
@@ -1619,16 +1619,16 @@ fn unify_param_lists(ref a, ref b, span: ValidSpan, reason) = {
 /// rule that lets `|>` deliver a tuple to an N-ary function without a
 /// splat operator. Three cases:
 ///
-///   `pa.len == pb.len`          — pair positionally (the ordinary path)
-///   `pa.len == 1`, head is tuple — decompose, pair element-wise
-///   `pa.len == 1`, head is TVar  — bind TVar to TTuple(pb param types)
+///   `len(pa) == len(pb)`          — pair positionally (the ordinary path)
+///   `len(pa) == 1`, head is tuple — decompose, pair element-wise
+///   `len(pa) == 1`, head is TVar  — bind TVar to TTuple(pb param types)
 ///   symmetric for pb; otherwise   — arity mismatch
 ///
 /// Inference reads the shape and pairs structurally — the same discipline
 /// that pairs TInt with TInt or TList(a) with TList(b).
 fn pair_fn_params(pa, pb, span: ValidSpan, reason) = {
-  let la = pa.len
-  let lb = pb.len
+  let la = len(pa)
+  let lb = len(pb)
   if la == lb { unify_param_lists(pa, pb, span, reason) }
   else if la == 1 { try_tuple_decompose(list_head(pa), pb, span, reason) }
   else if lb == 1 { try_tuple_decompose(list_head(pb), pa, span, reason) }
@@ -1642,13 +1642,13 @@ fn pair_fn_params(pa, pb, span: ValidSpan, reason) = {
 ///   otherwise                         — arity mismatch
 fn try_tuple_decompose(single_param, many_params, span: ValidSpan, reason) = {
   let TParam(_, pty, _, _) = single_param
-  let lm = many_params.len
+  let lm = len(many_params)
   match pty {
     TTuple(elems) =>
-      if elems.len == lm {
+      if len(elems) == lm {
         unify_tuple_elems_with_params(elems, many_params, span, reason, 0, lm)
       } else {
-        arity_mismatch(elems.len, lm, span)
+        arity_mismatch(len(elems), lm, span)
       },
     TVar(_) => {
       let tup_ty = TTuple(param_types_flat(many_params))
@@ -1674,7 +1674,7 @@ fn unify_tuple_elems_with_params(elems, params, span: ValidSpan, reason, i, n) =
 /// element via `list_set` into a pre-sized buffer. The resulting list
 /// is tag=0 (flat); any subsequent `list_index` on it is O(1).
 fn param_types_flat(params) = {
-  let n = params.len
+  let n = len(params)
   param_types_loop(params, 0, n, make_list(n))
 }
 
@@ -1880,7 +1880,7 @@ fn enforce_alt_binding_law(branch_binds, span: ValidSpan) = match branch_binds {
 }
 
 fn alt_same_name_set(a, b) =
-  a.len == b.len
+  len(a) == len(b)
     && all((p) => { let (n, _) = p
                     any((q) => { let (m, _) = q; str_eq(m, n) }, b) }, a)
 
@@ -1973,10 +1973,10 @@ fn infer_match_arms(arms, scrut, result_h, span: ValidSpan) = {
   let covered = collect_arm_tags(arms, [])
   let total = arms_total_variants(arms)
   let has_wild = arms_have_wildcard(arms)
-  if total > 0 && covered.len < total && !has_wild {
+  if total > 0 && len(covered) < total && !has_wild {
     perform report("infer", "E_PatternInexhaustive", "PatternInexhaustive",
       "match misses "
-        |> str_concat(int_to_str(total - covered.len))
+        |> str_concat(int_to_str(total - len(covered)))
         |> str_concat(" of ")
         |> str_concat(int_to_str(total))
         |> str_concat(" variants — add the missing arms or a wildcard"),
@@ -2022,7 +2022,7 @@ fn collect_arm_tags(arms, own init) = {
 // FIRST hit is sufficient. Returns 0 when no PCon arm is present
 // (e.g., literal-only match) — the exhaustiveness check skips.
 fn arms_total_variants(arms) = {
-  if arms.len == 0 { 0 }
+  if len(arms) == 0 { 0 }
   else {
     let (pat, _body) = list_head(arms)
     match pat {
@@ -2222,7 +2222,7 @@ fn free_in_fields(fields) = flatten(map((fld) => {
 
 fn instantiate(scheme) = {
   let Forall(qs, ty) = scheme
-  if qs.len == 0 { ty }
+  if len(qs) == 0 { ty }
   else {
     let mapping = build_inst_mapping(qs)
     subst_ty(ty, mapping)
@@ -2278,7 +2278,7 @@ fn find_mapping(mapping, id) = {
     let (old, _) = entry
     old == id
   }, mapping)
-  if hits.len == 0 { -1 }
+  if len(hits) == 0 { -1 }
   else {
     let (_, fresh) = head(hits)
     fresh
@@ -2309,7 +2309,7 @@ fn build_inferred_params(handles) = map((h) =>
   TParam("_", TVar(h), Inferred, Inferred), handles)
 
 fn register_type_constructors(type_name, type_args, variants) = {
-  let total = variants.len
+  let total = len(variants)
   for_each((indexed) => {
     let (tag_id, variant) = indexed
     register_one_variant(type_name, type_args, variant, tag_id, total)
@@ -2325,7 +2325,7 @@ fn register_one_variant(type_name, type_args, variant, tag_id, total) = {
   // function arrow); NamedRecordExpr inference reads the
   // RecordSchemeKind to validate and lower constructions.
   if total == 1 &&
-     field_types.len == 1 &&
+     len(field_types) == 1 &&
      str_eq(ctor_name, type_name) &&
      is_record_ty(list_index(field_types, 0)) {
     let TRecord(declared_fields) = list_index(field_types, 0)
@@ -2334,7 +2334,7 @@ fn register_one_variant(type_name, type_args, variant, tag_id, total) = {
       RecordSchemeKind(declared_fields))
   } else {
     let kind = ConstructorScheme(tag_id, total)
-    if field_types.len == 0 {
+    if len(field_types) == 0 {
       perform env_extend(ctor_name, Forall([], result_ty),
         Declared(ctor_name), kind)
     } else {
@@ -2403,7 +2403,7 @@ fn register_handler(hname, ename, config, state, arms) = {
   // IS the contract.
   let handler_ty = TName("Handler", [TName(ename, [])])
   let config_tparams = mint_handler_config_tparams(config, hname, 0)
-  let scheme_body = if config.len == 0 {
+  let scheme_body = if len(config) == 0 {
     handler_ty
   } else {
     TFun(config_tparams, handler_ty, mk_ef_closed([]))
@@ -2481,8 +2481,8 @@ fn bind_handler_state_names(state_binds, hname, span: ValidSpan) =
 /// uniformly); 8 (no count-as-string; ResumeDiscipline IS the ADT).
 fn infer_resume_cardinality(arm_body) with GraphRead = {
   let resume_sites = collect_resume_sites(arm_body)
-  if resume_sites.len == 0 { OneShot }
-  else if resume_sites.len == 1 {
+  if len(resume_sites) == 0 { OneShot }
+  else if len(resume_sites) == 1 {
     let site = list_head(resume_sites)
     if has_loop_ancestor(site, arm_body) { MultiShot }
     else { OneShot }
@@ -2602,7 +2602,7 @@ fn all_disjoint_branches(sites, root) with GraphRead = {
 }
 
 fn pairwise_disjoint_loop(sites, root) with GraphRead = {
-  if sites.len <= 1 { true }
+  if len(sites) <= 1 { true }
   else {
     let head = list_head(sites)
     let tail = list_tail(sites)
@@ -2692,7 +2692,7 @@ fn lowest_common_ancestor(a, b, root) with GraphRead = {
 }
 
 fn lca_among_children(children, a, b) with GraphRead = {
-  if children.len == 0 { None }
+  if len(children) == 0 { None }
   else {
     let head = list_head(children)
     let tail = list_tail(children)
@@ -2709,7 +2709,7 @@ fn arm_index_containing(arms, target_handle) with GraphRead = {
 }
 
 fn arm_index_loop(arms, target_handle, idx) with GraphRead = {
-  if arms.len == 0 { -1 }
+  if len(arms) == 0 { -1 }
   else {
     let arm = list_head(arms)
     if contains_handle(arm.body, target_handle) { idx }
@@ -2848,7 +2848,7 @@ fn walk_refinement(map, node, path_pred) with GraphRead = {
 /// the arm body is walked, its refinement contributions don't leak
 /// to other arms (they're branch-disjoint; map-per-arm semantics).
 fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead = {
-  if arms.len == 0 { map }
+  if len(arms) == 0 { map }
   else {
     let arm = list_head(arms)
     let arm_pred = pattern_predicate_for(arm.pat, scrut)
@@ -2861,7 +2861,7 @@ fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead = {
 /// rest of the block. Threads path_pred through; each assert
 /// strengthens the predicate for subsequent stmts + final expression.
 fn walk_refinement_block(map, stmts, final, path_pred) with GraphRead = {
-  if stmts.len == 0 { walk_refinement(map, final, path_pred) }
+  if len(stmts) == 0 { walk_refinement(map, final, path_pred) }
   else {
     let stmt = list_head(stmts)
     let strengthened = strengthen_path_pred(path_pred, stmt)
@@ -2897,7 +2897,7 @@ fn walk_refinement_args_with_param_preds(map, f, args, path_pred) with GraphRead
 }
 
 fn walk_refinement_list(map, nodes, path_pred) with GraphRead = {
-  if nodes.len == 0 { map }
+  if len(nodes) == 0 { map }
   else {
     let head = list_head(nodes)
     let map_h = walk_refinement(map, head, path_pred)
@@ -2906,7 +2906,7 @@ fn walk_refinement_list(map, nodes, path_pred) with GraphRead = {
 }
 
 fn walk_refinement_fields(map, fields, path_pred) with GraphRead = {
-  if fields.len == 0 { map }
+  if len(fields) == 0 { map }
   else {
     let field = list_head(fields)
     let map_f = walk_refinement(map, field.value, path_pred)
@@ -2947,7 +2947,7 @@ fn is_assert_call(callee) with GraphRead = {
 }
 
 fn predicate_of_assert_arg(args) with GraphRead = {
-  if args.len == 0 { PTrue }
+  if len(args) == 0 { PTrue }
   else { predicate_of_bool_expr(list_head(args)) }
 }
 
@@ -3023,7 +3023,7 @@ fn collect_handled_effects(arms) = {
 }
 
 fn collect_handled_from(arms, own acc) = {
-  if arms.len == 0 { acc }
+  if len(arms) == 0 { acc }
   else {
     let arm = list_head(arms)
     let names = effect_names_of_op(arm.op_name)

@@ -157,7 +157,7 @@ handler handler_state_inits_default {
 
 fn find_state_inits_by_name(name, ledger) = {
   let hits = filter((entry) => str_eq(entry.name, name), ledger)
-  if hits.len == 0 { [] }
+  if len(hits) == 0 { [] }
   else { head(hits).inits }
 }
 
@@ -318,7 +318,7 @@ fn mark_tail(e) with Memory + Alloc = match e {
 /// Materializes via list_to_flat so callers can pass any list shape (concat,
 /// slice, snoc) — substrate-honest per list_set's tag=0 contract.
 fn mark_tail_last_in(stmts) with Memory + Alloc = {
-  let n = stmts.len
+  let n = len(stmts)
   if n == 0 { stmts }
   else {
     let flat = list_to_flat(stmts)
@@ -348,7 +348,7 @@ fn monomorphic_at(h) with LookupTy = {
 /// nothing, so no handler evidence is needed at the call site.
 fn row_is_effectless(row) = match row {
   EfPure          => true,
-  EfClosed(names) => names.len == 0,
+  EfClosed(names) => len(names) == 0,
   _               => false
 }
 
@@ -475,7 +475,7 @@ fn lower_perform_dispatch(handle, op_name, lo_args) = {
 /// leaving them on the LPerform path unchanged.
 fn effect_in_current_fn_row(op_name) = {
   let declared = perform inf_declared_effs()
-  if declared.len == 0 { false }
+  if len(declared) == 0 { false }
   else {
     // Look up op_name's parent effect via EffectOpScheme
     let ename = lookup_parent_effect(op_name)
@@ -502,14 +502,14 @@ fn lookup_parent_effect(op_name) = {
 
 /// Check if any declared effect matches the target name.
 fn any_eff_matches(declared, target) = {
-  if declared.len == 0 { false }
+  if len(declared) == 0 { false }
   else {
     any_eff_matches_loop(declared, target, 0)
   }
 }
 
 fn any_eff_matches_loop(declared, target, i) = {
-  if i >= declared.len { false }
+  if i >= len(declared) { false }
   else {
     let (name, _negated) = declared[i]
     let s = match name {
@@ -541,7 +541,7 @@ fn compute_slot_index(declared, target_eff, target_op) = {
 }
 
 fn compute_slot_loop(declared, target_eff, target_op, eff_idx, slot_base) = {
-  if eff_idx >= declared.len { 0 }
+  if eff_idx >= len(declared) { 0 }
   else {
     let (name, _) = declared[eff_idx]
     let eff_name = match name {
@@ -555,13 +555,13 @@ fn compute_slot_loop(declared, target_eff, target_op, eff_idx, slot_base) = {
     } else {
       // Skip this effect's ops
       compute_slot_loop(declared, target_eff, target_op,
-                        eff_idx + 1, slot_base + ops.len)
+                        eff_idx + 1, slot_base + len(ops))
     }
   }
 }
 
 fn find_op_in_list(ops, target, slot_base, i) = {
-  if i >= ops.len { slot_base }
+  if i >= len(ops) { slot_base }
   else if str_eq(ops[i], target) { slot_base + i }
   else { find_op_in_list(ops, target, slot_base, i + 1) }
 }
@@ -726,7 +726,7 @@ fn lower_expr_body(e, handle, span) = match e {
     perform ls_exit_frame()
     let fn_ir = LFn(
       lambda_name,
-      params.len,
+      len(params),
       param_names_list,
       [lo_body],
       EfPure
@@ -773,7 +773,7 @@ fn lower_expr_body(e, handle, span) = match e {
     // current_state_fields() returns the enclosing arm's state-fields
     // list (or [] outside arm context); resolve_state_slot_offset finds
     // the field's slot or -1 (not found, store skipped).
-    if state_updates.len == 0 {
+    if len(state_updates) == 0 {
       LReturn(handle, lower_expr(val))
     } else {
       let fields = perform current_state_fields()
@@ -1054,8 +1054,8 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
 /// the loader hits whatever offset 0 holds (best-effort graceful degrade).
 fn resolve_field_offset(rec_handle, field_name) = {
   match perform lookup_ty(rec_handle) {
-    TRecord(fields)        => field_byte_offset(fields, field_name, 0, fields.len),
-    TRecordOpen(fields, _) => field_byte_offset(fields, field_name, 0, fields.len),
+    TRecord(fields)        => field_byte_offset(fields, field_name, 0, len(fields)),
+    TRecordOpen(fields, _) => field_byte_offset(fields, field_name, 0, len(fields)),
     // H2.3: nominal records — chase TName through env to its
     // RecordSchemeKind for the field schema. Same offset arithmetic
     // applies (sorted-by-name, 4 bytes per i32-erased slot).
@@ -1064,7 +1064,7 @@ fn resolve_field_offset(rec_handle, field_name) = {
         let (_, _, kind) = entry
         match kind {
           RecordSchemeKind(fields) =>
-            field_byte_offset(fields, field_name, 0, fields.len),
+            field_byte_offset(fields, field_name, 0, len(fields)),
           _ => 0
         }
       },
@@ -1086,7 +1086,7 @@ fn field_byte_offset(fields, target, i, n) = {
 // Statement lowering
 
 fn lower_stmt_list(stmts) = {
-  let n = stmts.len
+  let n = len(stmts)
   let initial_capacity = if n < 4 { 4 } else { n }
   let buf = make_list(initial_capacity)
   let (final_buf, final_count) = lower_stmt_list_loop(stmts, 0, n, buf, 0)
@@ -1185,7 +1185,7 @@ fn lower_stmt_body(s, handle, span) = match s {
     perform ls_exit_frame()
     let fn_ir = LFn(
       fn_name,
-      params.len,
+      len(params),
       param_names_list,
       [lo_body],
       EfPure          // row resolved live via lookup_ty(handle)
@@ -1370,8 +1370,8 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = map((arm) =
   let config_names = config
   let state_field_names = state_field_names_of(state)
   let captures_names = config_names ++ state_field_names
-  let captures_handles = zeros_of_len(captures_names.len)
-  let locals_handles = zeros_of_len(arm.args.len)
+  let captures_handles = zeros_of_len(len(captures_names))
+  let locals_handles = zeros_of_len(len(arm.args))
   perform ls_enter_frame(
     fn_name,
     arm.args, locals_handles,
@@ -1382,7 +1382,7 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = map((arm) =
   // `with field = NEW` updates' slot offsets via current_state_fields().
   let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(state))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
   perform ls_exit_frame()
-  let fn_ir = LFn(fn_name, arm.args.len, arm.args, [lo_body], EfPure)
+  let fn_ir = LFn(fn_name, len(arm.args), arm.args, [lo_body], EfPure)
   LDeclareFn(fn_ir)
 }, arms)
 
@@ -1434,7 +1434,7 @@ fn resolve_state_slot_offset(name, fields) = {
     let (_, field) = indexed
     str_eq(field.name, name)
   }, enumerate(fields))
-  if hits.len == 0 { 0 - 1 }
+  if len(hits) == 0 { 0 - 1 }
   else {
     let (idx, _) = head(hits)
     8 + idx * 4
@@ -1628,7 +1628,7 @@ fn cfv_record_fields(flds, bound) = {
 /// subsequent statements see the new bindings. Returns
 /// `(accumulated_frees, final_bound)`.
 fn cfv_stmts(stmts, bound, acc_frees) = {
-  if stmts.len == 0 { (acc_frees, bound) }
+  if len(stmts) == 0 { (acc_frees, bound) }
   else {
     let stmt = list_head(stmts)
     let N(stmt_body, _, _) = stmt
@@ -1718,7 +1718,7 @@ fn cfv_pat_binds_list(pats) = {
 }
 
 fn cfv_merge(a, b) = {
-  if b.len == 0 { a }
+  if len(b) == 0 { a }
   else {
     let x = list_head(b)
     let rest = list_tail(b)
@@ -1763,9 +1763,9 @@ fn is_wasi_import_op(name) with Pure = {
 // chunks zero-copy reads from source. Empty list → empty string;
 // singleton → that fragment unchanged.
 fn lower_string_interpolation(handle, lowered_fragments) = {
-  if lowered_fragments.len == 0 {
+  if len(lowered_fragments) == 0 {
     LConst(handle, LString(""))
-  } else if lowered_fragments.len == 1 {
+  } else if len(lowered_fragments) == 1 {
     list_head(lowered_fragments)
   } else {
     let head = list_head(lowered_fragments)
@@ -1799,7 +1799,7 @@ fn lower_record_field_values(flds) = map((fld) => {
 /// triples. `captures_names` feeds `ls_enter_frame`; `captures_exprs` feeds
 /// `LMakeClosure`'s heap-record materialization at emit time.
 fn resolve_captures_outer(names, owner_h) = {
-  if names.len == 0 { ([], [], []) }
+  if len(names) == 0 { ([], [], []) }
   else {
     let name = list_head(names)
     let (res, local_h) = perform ls_resolve(name)
@@ -1839,7 +1839,7 @@ fn lower_program(stmts) = {
 /// through tail-recursion as `(buf, count)` because `list_extend_to`
 /// may return a fresh allocation if the current capacity is exceeded.
 fn collect_top_level_names(stmts) = {
-  let n = stmts.len
+  let n = len(stmts)
   let initial_capacity = if n < 4 { 4 } else { n }
   let buf = make_list(initial_capacity)
   let (final_buf, final_count) = collect_top_level_names_loop(stmts, 0, n, buf, 0)
@@ -1912,7 +1912,7 @@ handler lower_scope with frames = [], globals = [] {
   },
 
   ls_exit_frame() => {
-    if frames.len == 0 { resume() }
+    if len(frames) == 0 { resume() }
     else {
       resume()
         with frames = list_tail(frames)
@@ -1920,15 +1920,15 @@ handler lower_scope with frames = [], globals = [] {
   },
 
   ls_push_scope() => {
-    if frames.len == 0 { resume(0) }
+    if len(frames) == 0 { resume(0) }
     else {
       let frame = list_head(frames)
-      resume(frame.local_order.len)
+      resume(len(frame.local_order))
     }
   },
 
   ls_pop_scope(checkpoint) => {
-    if frames.len == 0 { resume() }
+    if len(frames) == 0 { resume() }
     else {
       let frame = list_head(frames)
       let truncated_order = list_take_n(frame.local_order, checkpoint)
@@ -1948,10 +1948,10 @@ handler lower_scope with frames = [], globals = [] {
   },
 
   ls_bind_local(name, h) => {
-    if frames.len == 0 { resume(0) }
+    if len(frames) == 0 { resume(0) }
     else {
       let frame = list_head(frames)
-      let slot = frame.local_order.len
+      let slot = len(frame.local_order)
       let updated = {
         capture_handles: frame.capture_handles,
         capture_order: frame.capture_order,
@@ -1967,7 +1967,7 @@ handler lower_scope with frames = [], globals = [] {
   },
 
   ls_resolve(name) => {
-    if frames.len == 0 {
+    if len(frames) == 0 {
       resume((RGlobal, 0))
     } else {
       let frame = list_head(frames)
@@ -2009,7 +2009,7 @@ handler lower_scope with frames = [], globals = [] {
 /// named-fn frame exists (top-level). Drift refused: 7 (frames is one
 /// list; we read it sequentially, not as parallel arrays).
 fn ls_outer_fn_name_loop(frames) = {
-  if frames.len == 0 { "" }
+  if len(frames) == 0 { "" }
   else {
     let frame = list_head(frames)
     if str_eq(frame.fn_name, "") { ls_outer_fn_name_loop(list_tail(frames)) }
@@ -2024,7 +2024,7 @@ fn ls_outer_fn_name_loop(frames) = {
 /// Only fires after a positive `set_contains`, so worst case is O(N)
 /// but expected case hits early since recently-bound names dominate.
 fn ls_find_in_order(lst, target, i) = {
-  ls_find_in_order_loop(lst, target, i, lst.len)
+  ls_find_in_order_loop(lst, target, i, len(lst))
 }
 
 fn ls_find_in_order_loop(lst, target, i, n) = {

@@ -56,7 +56,7 @@ handler wat_stdout {
 ///               fires ONCE at wat_collect via str_concat_all.
 ///   Ownership:  buf owned by handler state; refs to each emitted string
 ///               are borrows (immutable). Materialized result is owned.
-///   Refinement: count <= buf.len by buffer-counter discipline (Ω.3).
+///   Refinement: count <= len(buf) by buffer-counter discipline (Ω.3).
 ///   Gradient:   O(1) amortized append per yield (doubling); O(B+N) one-
 ///               time materialization at collect — locked. No narrower
 ///               form exists. Drift-11 (acc ++ x in loop) closed.
@@ -199,7 +199,7 @@ handler emit_memory_atomic_cas {
 // On lookup miss the handler returns 0 (points at the start of the
 // string region — an empty string whose emit is idempotent).
 handler string_table with entries = [] {
-  string_offset(s) => resume(string_offset_lookup(entries, s, 0, entries.len)),
+  string_offset(s) => resume(string_offset_lookup(entries, s, 0, len(entries))),
   set_string_entries(es) => resume() with entries = es
 }
 
@@ -296,7 +296,7 @@ fn emit_module(lowered) = {
 //               execute after walk completes.
 //   Ownership:  each visitor owns its accumulator (buffer-counter);
 //               no shared mutable state across visitors.
-//   Refinement: count <= buf.len per buffer-counter (Ω.3) invariant.
+//   Refinement: count <= len(buf) per buffer-counter (Ω.3) invariant.
 //   Gradient:   adding a 5th projection = adding a `~>`-link; one new
 //               handler decl + one new visit-site in walk_lemit_expr.
 //   Reason:     each accumulated element retains its source-handle
@@ -405,7 +405,7 @@ fn project_emit_state(lowered) = {
 fn walk_lemit(exprs) = walk_lemit_top(exprs, 0)
 
 fn walk_lemit_top(exprs, i) = {
-  if i >= exprs.len { () }
+  if i >= len(exprs) { () }
   else {
     walk_lemit_top_one(list_index(exprs, i))
     walk_lemit_top(exprs, i + 1)
@@ -511,7 +511,7 @@ fn walk_lemit_expr(expr) = match expr {
 fn walk_lemit_list(exprs) = walk_lemit_list_loop(exprs, 0)
 
 fn walk_lemit_list_loop(exprs, i) = {
-  if i >= exprs.len { () }
+  if i >= len(exprs) { () }
   else {
     walk_lemit_expr(list_index(exprs, i))
     walk_lemit_list_loop(exprs, i + 1)
@@ -570,7 +570,7 @@ fn extract_top_fn_name(stmt) with Pure = match stmt {
 // labels. Every closure's fn_ptr slot stores the i32 index into
 // this table; `call_indirect (type $ftK)` dispatches by index.
 fn emit_fn_table(fn_names) = {
-  let n = fn_names.len
+  let n = len(fn_names)
   if n == 0 { () }
   else {
     perform wat_emit("  (table $fns ")
@@ -650,7 +650,7 @@ fn emit_static_top_closures(top_names, all_names, base_slot) = {
 
 // Find the index of a string in a list. Returns -1 if not found.
 fn ls_find_str_local(lst, target, i) = {
-  ls_find_str_local_loop(lst, target, i, lst.len)
+  ls_find_str_local_loop(lst, target, i, len(lst))
 }
 
 fn ls_find_str_local_loop(lst, target, i, n) = {
@@ -697,7 +697,7 @@ fn emit_type_section(lowered) = {
 }
 
 fn max_arity_in(stmts, acc) = {
-  if stmts.len == 0 { acc }
+  if len(stmts) == 0 { acc }
   else {
     let bigger = max_int(acc, max_arity_expr(list_head(stmts)))
     max_arity_in(list_tail(stmts), bigger)
@@ -707,7 +707,7 @@ fn max_arity_in(stmts, acc) = {
 // Arity counting accounts for W7's implicit `__state` param: every
 // emitted function takes `__state` as its first parameter, and
 // every LCall pushes the closure pointer before the user args, so
-// the effective call arity is args.len+1.
+// the effective call arity is len(args)+1.
 // H6: exhaustive LowExpr enumeration. Call-producing variants
 // contribute their arity (+1 for the implicit __state slot when
 // relevant). Every other variant's own arity is 0; they need
@@ -715,12 +715,12 @@ fn max_arity_in(stmts, acc) = {
 // call form must decide whether to add a $ft entry — silent
 // `_ => 0` would emit a WASM module with missing type signatures.
 fn max_arity_expr(expr) = match expr {
-  LCall(_, _, args)         => args.len + 1,
-  LTailCall(_, _, args)     => args.len + 1,
-  LSuspend(_, _, _, args, _) => args.len + 1,
-  LPerform(_, _, args)      => args.len,
-  LWasiCall(_, _, args)     => args.len,
-  LEvPerform(_, _, _, args) => args.len + 1,
+  LCall(_, _, args)         => len(args) + 1,
+  LTailCall(_, _, args)     => len(args) + 1,
+  LSuspend(_, _, _, args, _) => len(args) + 1,
+  LPerform(_, _, args)      => len(args),
+  LWasiCall(_, _, args)     => len(args),
+  LEvPerform(_, _, _, args) => len(args) + 1,
   LLet(_, _, inner)         => max_arity_expr(inner),
   LMakeClosure(_, _, _, _)         => 0,
   LMakeContinuation(_, _, _, _, _, _) => 0,
@@ -908,13 +908,13 @@ fn collect_fn_emit_records(exprs) =
 
 fn collect_fn_emit_records_expr(expr) = match expr {
   LMakeClosure(_h, LFn(name, _arity, param_names, body, _row), captures, ev) => {
-    [(name, param_names, body, captures.len)]
+    [(name, param_names, body, len(captures))]
       ++ collect_fn_emit_records(body)
       ++ collect_fn_emit_records(captures)
       ++ collect_fn_emit_records(ev)
   },
   LMakeContinuation(_h, LFn(name, _arity, param_names, body, _row), captures, ev, _, _) => {
-    [(name, param_names, body, captures.len)]
+    [(name, param_names, body, len(captures))]
       ++ collect_fn_emit_records(body)
       ++ collect_fn_emit_records(captures)
       ++ collect_fn_emit_records(ev)
@@ -1018,7 +1018,7 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
 /// from WAT back to source. Empty body skipped; chase-failure (handle
 /// == 0) skipped.
 fn emit_reason_comment_for_fn(name, body) = {
-  if body.len == 0 { () }
+  if len(body) == 0 { () }
   else {
     let first = list_head(body)
     let h = lexpr_handle(first)
@@ -1110,7 +1110,7 @@ fn emit_let_locals_expr(expr) = match expr {
   LMakeTuple(_h, elems)     => emit_let_locals_list(elems),
   LMakeRecord(_h, fs)       => emit_let_locals_list(fs),
   LMakeVariant(h, _t, fs)   => {
-    if fs.len > 0 {
+    if len(fs) > 0 {
       perform wat_emit(" (local $variant_")
       perform wat_emit(int_to_str(h))
       perform wat_emit(" i32)")
@@ -1395,7 +1395,7 @@ fn emit_expr(expr) = match expr {
     perform wat_emit(int_to_str(h))
     perform wat_emit(") (i32.load offset=0)\n")
     perform wat_emit("    (call_indirect (type $ft")
-    perform wat_emit(int_to_str(args.len + 1))
+    perform wat_emit(int_to_str(len(args) + 1))
     perform wat_emit("))\n")
   },
 
@@ -1411,7 +1411,7 @@ fn emit_expr(expr) = match expr {
     perform wat_emit(int_to_str(h))
     perform wat_emit(") (i32.load offset=0)\n")
     perform wat_emit("    (return_call_indirect (type $ft")
-    perform wat_emit(int_to_str(args.len + 1))
+    perform wat_emit(int_to_str(len(args) + 1))
     perform wat_emit("))\n")
   },
 
@@ -1437,8 +1437,8 @@ fn emit_expr(expr) = match expr {
     // dispatched by the installed EmitMemory handler. Bump today;
     // future arena / GC handlers swap the WAT without touching
     // this site.
-    let nc = captures_exprs.len
-    let ne = ev_exprs.len
+    let nc = len(captures_exprs)
+    let ne = len(ev_exprs)
     let size = 8 + 4 * (nc + ne)
     perform emit_alloc(size, "state_tmp")
     // Store fn_ptr (table index) at offset 0.
@@ -1486,8 +1486,8 @@ fn emit_expr(expr) = match expr {
     // a plain i32 indexing into the WASM funcref table; resume happens
     // via call_indirect with the resume_fn's signature. Evidence
     // passing per Koka JFP 2022, not vtable indirection.
-    let nc = captures_exprs.len
-    let ne = ev_exprs.len
+    let nc = len(captures_exprs)
+    let ne = len(ev_exprs)
     let size = 12 + 4 * (nc + ne) + 4
     perform emit_alloc(size, "state_tmp")
     // Store fn_ptr (resume_fn table index) at offset 0.
@@ -1544,7 +1544,7 @@ fn emit_expr(expr) = match expr {
     // their identity in the type system; runtime sees raw fields.
     // emit_alloc routes through the EmitMemory swap surface, same
     // discipline as closures and variants.
-    let n = fields.len
+    let n = len(fields)
     let size = n * 4
     perform emit_alloc(size, "record_tmp")
     emit_record_field_stores(fields, 0)
@@ -1559,7 +1559,7 @@ fn emit_expr(expr) = match expr {
     // returned the INNER's pointer. Each LMakeVariant's identity IS
     // its graph handle per protocol_canonical_projection_pattern; the
     // scratch local name follows. HB: nullary variants stay sentinel.
-    let n = fields.len
+    let n = len(fields)
     if n == 0 {
       perform wat_emit("    (i32.const ")
       perform wat_emit(int_to_str(tag_id))
@@ -1617,7 +1617,7 @@ fn emit_expr(expr) = match expr {
     //   offset 4 : capture_count nc (copied)
     //   offset 8 + 4*i              : capture_i (copied via runtime loop)
     //   offset 8 + 4*nc + 4*j       : ev_slot_j (newly stored)
-    let ne = ev_slots.len
+    let ne = len(ev_slots)
     // Save callee closure pointer for header read + capture copy.
     emit_expr(func)
     perform wat_emit("    (local.set $callee_closure)\n")
@@ -1671,7 +1671,7 @@ fn emit_expr(expr) = match expr {
     emit_expr_list(args)
     perform wat_emit("    (local.get $state_tmp) (i32.load offset=0)\n")
     perform wat_emit("    (call_indirect (type $ft")
-    perform wat_emit(int_to_str(args.len + 1))
+    perform wat_emit(int_to_str(len(args) + 1))
     perform wat_emit("))\n")
   },
 
@@ -1842,7 +1842,7 @@ fn emit_expr(expr) = match expr {
     perform wat_emit(int_to_str(absolute_offset))
     perform wat_emit(")\n")
     perform wat_emit("    (call_indirect (type $ft")
-    perform wat_emit(int_to_str(args.len + 1))
+    perform wat_emit(int_to_str(len(args) + 1))
     perform wat_emit("))\n")
   },
 
@@ -1889,7 +1889,7 @@ fn emit_expr(expr) = match expr {
   }
 }
 
-fn emit_expr_list(exprs) = emit_expr_list_at(exprs, 0, exprs.len)
+fn emit_expr_list(exprs) = emit_expr_list_at(exprs, 0, len(exprs))
 
 fn emit_expr_list_at(exprs, i, n) = {
   if i >= n { () }
@@ -2149,7 +2149,7 @@ fn emit_record_field_stores(fields, base_i) = {
 // guard when the scrutinee's type proves every constructor fielded is
 // a gradient cash-out (graph-driven), not a shape system.
 fn emit_match_arms(arms) = {
-  if arms.len == 0 {
+  if len(arms) == 0 {
     perform wat_emit("    (unreachable)\n")
   } else {
     let (pat, body) = list_head(arms)
@@ -2182,13 +2182,13 @@ fn pat_always_matches(pat) = match pat {
 }
 
 fn pats_always_match(subs) = {
-  if subs.len == 0 { true }
+  if len(subs) == 0 { true }
   else if pat_always_matches(list_head(subs)) { pats_always_match(list_tail(subs)) }
   else { false }
 }
 
 fn record_pats_always_match(fbs) = {
-  if fbs.len == 0 { true }
+  if len(fbs) == 0 { true }
   else {
     let (_, _, sub_pat) = list_head(fbs)
     if pat_always_matches(sub_pat) { record_pats_always_match(list_tail(fbs)) }
@@ -2197,7 +2197,7 @@ fn record_pats_always_match(fbs) = {
 }
 
 fn alt_any_always_matches(branches) = {
-  if branches.len == 0 { false }
+  if len(branches) == 0 { false }
   else if pat_always_matches(list_head(branches)) { true }
   else { alt_any_always_matches(list_tail(branches)) }
 }
@@ -2224,7 +2224,7 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
     perform wat_emit("    (i32.eq)\n")
   },
   LPCon(_, tag, sub_pats) => {
-    if sub_pats.len == 0 {
+    if len(sub_pats) == 0 {
       // Nullary constructor IS its sentinel (HB) — direct compare.
       emit_scrut_at(path, path_len)
       perform wat_emit("    (i32.const ")
@@ -2263,7 +2263,7 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
     emit_scrut_at(path, path_len)
     perform wat_emit("    (i32.load offset=0)\n")
     perform wat_emit("    (i32.const ")
-    perform wat_emit(int_to_str(sub_pats.len))
+    perform wat_emit(int_to_str(len(sub_pats)))
     perform wat_emit(")\n")
     match rest {
       None    => perform wat_emit("    (i32.eq)\n"),
@@ -2279,7 +2279,7 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
 // (if (result i32) (then <sub-pred> <rest>) (else (i32.const 0))) —
 // short-circuit, so a failed outer test never evaluates inner loads.
 fn emit_pat_subs_predicate(subs, i, path, path_len, base) = {
-  if subs.len == 0 { () }
+  if len(subs) == 0 { () }
   else {
     let p = list_head(subs)
     if pat_always_matches(p) {
@@ -2296,7 +2296,7 @@ fn emit_pat_subs_predicate(subs, i, path, path_len, base) = {
 
 // Record fields carry pre-resolved byte offsets (lower.mn baked them).
 fn emit_pat_record_subs_predicate(fbs, path, path_len) = {
-  if fbs.len == 0 { () }
+  if len(fbs) == 0 { () }
   else {
     let (_, offset, sub_pat) = list_head(fbs)
     if pat_always_matches(sub_pat) {
@@ -2315,12 +2315,12 @@ fn emit_pat_record_subs_predicate(fbs, path, path_len) = {
 // matching branch yields 1 without evaluating the rest. All branches
 // read the SAME position (path unchanged).
 fn emit_pat_alt_predicate(branches, path, path_len) = {
-  if branches.len == 0 {
+  if len(branches) == 0 {
     perform wat_emit("    (i32.const 0)\n")
   } else {
     emit_pat_predicate_at(list_head(branches), path, path_len)
     let rest = list_tail(branches)
-    if rest.len == 0 { () }
+    if len(rest) == 0 { () }
     else {
       perform wat_emit("    (if (result i32)\n      (then (i32.const 1))\n      (else\n")
       emit_pat_alt_predicate(rest, path, path_len)
@@ -2346,13 +2346,13 @@ fn emit_pat_binds_at(pat, path, path_len) = match pat {
   LPRecord(fbs)          => emit_pat_record_binds(fbs, path, path_len),
   LPList(sub_pats, rest) => {
     emit_pat_subs_binds(sub_pats, 0, path, path_len, 8)
-    emit_pat_list_rest_bind(sub_pats.len, rest, path, path_len)
+    emit_pat_list_rest_bind(len(sub_pats), rest, path, path_len)
   },
   LPAlt(branches) => emit_pat_alt_binds(branches, path, path_len)
 }
 
 fn emit_pat_subs_binds(subs, i, path, path_len, base) = {
-  if subs.len == 0 { () }
+  if len(subs) == 0 { () }
   else {
     let extended = list_set(path, path_len, base + i * 4)
     emit_pat_binds_at(list_head(subs), extended, path_len + 1)
@@ -2361,7 +2361,7 @@ fn emit_pat_subs_binds(subs, i, path, path_len, base) = {
 }
 
 fn emit_pat_record_binds(fbs, path, path_len) = {
-  if fbs.len == 0 { () }
+  if len(fbs) == 0 { () }
   else {
     let (_, offset, sub_pat) = list_head(fbs)
     let extended = list_set(path, path_len, offset)
@@ -2404,7 +2404,7 @@ fn emit_pat_alt_binds(branches, path, path_len) = {
 }
 
 fn alt_has_binders(branches) = {
-  if branches.len == 0 { false }
+  if len(branches) == 0 { false }
   else if lowpat_has_binders(list_head(branches)) { true }
   else { alt_has_binders(list_tail(branches)) }
 }
@@ -2429,13 +2429,13 @@ fn lowpat_has_binders(pat) = match pat {
 }
 
 fn lowpats_have_binders(subs) = {
-  if subs.len == 0 { false }
+  if len(subs) == 0 { false }
   else if lowpat_has_binders(list_head(subs)) { true }
   else { lowpats_have_binders(list_tail(subs)) }
 }
 
 fn record_pats_have_binders(fbs) = {
-  if fbs.len == 0 { false }
+  if len(fbs) == 0 { false }
   else {
     let (_, _, sub_pat) = list_head(fbs)
     if lowpat_has_binders(sub_pat) { true }
@@ -2444,10 +2444,10 @@ fn record_pats_have_binders(fbs) = {
 }
 
 fn emit_pat_alt_binds_dispatch(branches, path, path_len) = {
-  if branches.len == 0 { () }
+  if len(branches) == 0 { () }
   else {
     let rest = list_tail(branches)
-    if rest.len == 0 {
+    if len(rest) == 0 {
       // Last branch: matched by elimination (the arm predicate held).
       emit_pat_binds_at(list_head(branches), path, path_len)
     } else {
@@ -2517,7 +2517,7 @@ fn emit_list_literal(elems) = {
   // named peer handle tracked in ROADMAP.md;
   // it does not change the emitted primitive when the fold doesn't
   // apply.
-  let n = elems.len
+  let n = len(elems)
   perform wat_emit("    (local.get $__state)\n")
   perform wat_emit("    (i32.const ")
   perform wat_emit(int_to_str(n))
@@ -2543,6 +2543,6 @@ fn emit_list_stores(elems, base_idx) = {
 fn emit_tuple_literal(elems) = {
   emit_expr_list(elems)
   perform wat_emit("    (i32.const ")
-  perform wat_emit(int_to_str(elems.len * 4))
+  perform wat_emit(int_to_str(len(elems) * 4))
   perform wat_emit(") (call $alloc_tuple)\n")
 }

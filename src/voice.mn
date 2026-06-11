@@ -679,7 +679,7 @@ fn situation_hash(situation) with Pure = {
 
 fn pick_from_pool(tentacle, hash) with Pure = {
   let pool = applicable_modifiers_for_tentacle(tentacle)
-  let n    = pool.len
+  let n    = len(pool)
   if n == 0 { NoMod }
   else      { list_index(pool, hash % n) }
 }
@@ -874,7 +874,7 @@ fn render_verify_arm(situation) with Pure = {
     SLit("Refinements at "),
     SSpan(topic_span_or_zero(s.topic)),
     SLit(": "),
-    SLit(int_to_str_lite(s.refinements.len)),
+    SLit(int_to_str_lite(len(s.refinements))),
     SLit(" obligations")
   ], select_modifier(situation, s.register))
 }
@@ -993,7 +993,7 @@ fn voice_lines_for(situation) with OracleQuery = {
   else {
     let tentacles = [TentQuery, TentPropose, TentTopology, TentUnlock,
                      TentTrace, TentVerify, TentTeach, TentWhy]
-    let n = tentacles.len
+    let n = len(tentacles)
     let buf = make_list(n)
     let count = fold_tentacles_to_voicelines(situation, tentacles, 0, n, buf, 0)
     slice(buf, 0, count)
@@ -1057,7 +1057,7 @@ fn voice_queue_walk(situation_seed) with OracleQuery = {
       }
     }
   }
-  let n = queue_items.len
+  let n = len(queue_items)
   fold_queue_items(situation_seed, queue_items, 0, n, make_list(n), 0)
 }
 
@@ -1311,7 +1311,7 @@ fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure
 /// voiceline_to_answer.
 
 fn answer_from_slots(slots, reason) with Pure = {
-  if slots.len == 0 { AnsSilence }
+  if len(slots) == 0 { AnsSilence }
   else {
     let head = list_head(slots)
     let rest = list_tail(slots)
@@ -1639,7 +1639,7 @@ handler mentl_voice_default
   /// VoiceLine / span; surfaces use this for observation-delta
   /// reasoning (silence_predicate's prior_turn input is the head).
   history(n) => {
-    let h_len = history.len
+    let h_len = len(history)
     if n >= h_len { resume(history) }
     else          { resume(slice(history, h_len - n, h_len)) }
   },
@@ -1682,7 +1682,7 @@ handler mentl_voice_default
 /// table holds open editor sessions, not arbitrary file enumerations).
 
 fn handles_table_lookup(table, target_handle) with Pure = {
-  if table.len == 0 { None }
+  if len(table) == 0 { None }
   else {
     let head = list_head(table)
     let rest = list_tail(table)
@@ -1714,7 +1714,7 @@ fn suggestion_unlocks_nonempty(opt) with Pure = match opt {
   None    => false,
   Some(s) => {
     let AnnotationSuggestion(_kind, _ann, unlocks, _reason) = s
-    unlocks.len > 0
+    len(unlocks) > 0
   }
 }
 
@@ -1725,11 +1725,11 @@ fn suggestion_unlocks_nonempty(opt) with Pure = match opt {
 /// honest.
 
 fn join_capability_labels(labels) with Pure = {
-  if labels.len == 0 { "" }
+  if len(labels) == 0 { "" }
   else {
     let head = list_head(labels)
     let tail = list_tail(labels)
-    if tail.len == 0 { head }
+    if len(tail) == 0 { head }
     else { head |> str_concat(", ") |> str_concat(join_capability_labels(tail)) }
   }
 }
@@ -1892,7 +1892,7 @@ fn byte_offset_at(ref source, target_l, target_c, idx, line, col, n) with Memory
 }
 
 fn update_file_text(ref table, fh, ref path, ref text) with Memory + Alloc = {
-  let n = table.len
+  let n = len(table)
   let buf = make_list(n)
   update_file_text_loop(table, fh, path, text, 0, n, buf)
 }

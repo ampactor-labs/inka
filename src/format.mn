@@ -329,8 +329,8 @@ fn parenthesize(s) with Pure = {
 }
 
 fn join_lines(lines) with Pure = {
-  if lines.len == 0 { "" }
-  else if lines.len == 1 { list_head(lines) }
+  if len(lines) == 0 { "" }
+  else if len(lines) == 1 { list_head(lines) }
   else {
     list_head(lines)
       |> str_concat("\n")
@@ -391,7 +391,7 @@ fn render_context_at(handle) with GraphRead + !Mutate = {
 }
 
 fn render_branch_tuple(branches) with Format + !Mutate = {
-  if branches.len == 0 { "" }
+  if len(branches) == 0 { "" }
   else {
     let head = list_head(branches)
     let tail = list_tail(branches)
@@ -399,7 +399,7 @@ fn render_branch_tuple(branches) with Format + !Mutate = {
     let head_line = spaces(indented_center())
       |> str_concat(head_str)
       |> str_concat(",")
-    if tail.len == 0 { head_line }
+    if len(tail) == 0 { head_line }
     else {
       head_line
         |> str_concat("\n")

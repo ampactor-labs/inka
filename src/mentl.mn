@@ -263,7 +263,7 @@ fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
     // wrap (splice `handle ... with handler_name` around body) is
     // a TEXT patch — out of substrate, into the patcher's surface.
     let absorbed = catalog_handled_effects(handler_name)
-    if absorbed.len == 0 { () }
+    if len(absorbed) == 0 { () }
     else {
       let absorbed_row = mk_ef_closed(absorbed)
       // The narrowed row is base_row - absorbed_row.
@@ -373,7 +373,7 @@ fn ownership_candidates(params) = {
 }
 
 fn pick_highest_leverage(proven) = {
-  if proven.len == 0 { None }
+  if len(proven) == 0 { None }
   else {
     let best = find_by_priority(proven,
       [ANotAlloc(None), ANotIO(None), ANotNetwork(None), APure(None)])
@@ -389,7 +389,7 @@ fn find_by_priority(proven, priorities) = {
     Some(_) => true,
     None    => false
   }, priorities)
-  if matches.len == 0 { None }
+  if len(matches) == 0 { None }
   else { find_annotation(proven, head(matches)) }
 }
 
@@ -398,7 +398,7 @@ fn find_annotation(proven, target) = {
     let (ann, _) = pair
     annotation_eq(ann, target)
   }, proven)
-  if hits.len == 0 { None } else { Some(head(hits)) }
+  if len(hits) == 0 { None } else { Some(head(hits)) }
 }
 
 /// Span-insensitive: two APure(_) compare equal regardless of source
@@ -517,7 +517,7 @@ fn teach_synthesize(hole_handle, context) = {
     NBound(ty) => {
       let row = extract_row(ty)
       let candidates = perform propose(ty, row, context)
-      if candidates.len == 0 { None }
+      if len(candidates) == 0 { None }
       else { Some(list_index(candidates, 0)) }
     },
     _ => None

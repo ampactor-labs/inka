@@ -83,7 +83,7 @@ fn tiebreak_reason_depth(survivors) with Pure = {
 
 fn tiebreak_declared_intent(survivors, cursor) with GraphRead = {
   let aligned = filter_list(survivors, (s) => intent_matches(s, cursor))
-  if aligned.len > 0 { aligned } else { survivors }
+  if len(aligned) > 0 { aligned } else { survivors }
 }
 
 fn tiebreak_source_span(survivors) with Pure = {
@@ -169,8 +169,8 @@ fn handler_name(_handler) with Pure = {
 fn effect_count(row) with Pure = {
   match row {
     EfPure              => 0,
-    EfClosed(names)     => names.len,
-    EfOpen(names, _)    => names.len,
+    EfClosed(names)     => len(names),
+    EfOpen(names, _)    => len(names),
     EfNeg(_)            => 1,
     EfSub(a, b)         => effect_count(a) + effect_count(b),
     EfInter(a, b)       => effect_count(a) + effect_count(b)
@@ -206,7 +206,7 @@ fn span_start(span) with Pure = {
 /// substrate refuses to fabricate values when invariants ever shift).
 
 fn list_head_or_default(lst) with Pure = {
-  if lst.len == 0 { 0 }   // 0 = "no survivor" sentinel
+  if len(lst) == 0 { 0 }   // 0 = "no survivor" sentinel
   else             { list_index(lst, 0) }
 }
 
@@ -214,7 +214,7 @@ fn list_head_or_default(lst) with Pure = {
 /// tiebreak steps.
 
 fn min_by_key(lst, key_fn) with Pure = {
-  let n = lst.len
+  let n = len(lst)
   if n == 0 { [] }
   else {
     let first = list_index(lst, 0)
@@ -239,7 +239,7 @@ fn min_by_key_loop(lst, key_fn, i, n, current_min, current_key) with Pure = {
 /// counter substrate.
 
 fn filter_list(lst, pred) with Pure = {
-  let n = lst.len
+  let n = len(lst)
   let buf = make_list(n)
   let count = filter_loop(lst, pred, 0, n, buf, 0)
   slice(buf, 0, count)
@@ -263,7 +263,7 @@ fn filter_loop(lst, pred, i, n, buf, count) with Pure = {
 /// substrate.
 
 fn map_list(lst, fn_apply) with Pure = {
-  let n = lst.len
+  let n = len(lst)
   let buf = make_list(n)
   let _ = map_loop(lst, fn_apply, 0, n, buf, 0)
   slice(buf, 0, n)

@@ -293,6 +293,33 @@ fn lexpr_handle(e) with Pure = match e {
   LWasiCall(h, _, _)      => h
 }
 
+/// to_string IS lower-time type dispatch — the same projection class
+/// as subscript (#139) and `++`'s string fold: the graph already
+/// proves the arg's type; lower picks the renderer; no runtime tag
+/// check. Ty enumerated exhaustively per H6 — every non-String,
+/// non-Float type renders its value word through the to_string
+/// default (kernel-uniform-i32; typed ADT show is the post-L1 peer
+/// Hβ.lower.to-string-show-derivation).
+fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic = {
+  let N(_, _, ah) = list_head(args)
+  match perform lookup_ty(ah) {
+    TString            => arg_lo,
+    TFloat             => LCall(handle, LGlobal(handle, "float_to_str"), [arg_lo]),
+    TInt               => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
+    TUnit              => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
+    TList(_)           => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
+    TTuple(_)          => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
+    TFun(_, _, _)      => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
+    TVar(_)            => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
+    TName(_, _)        => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
+    TRecord(_)         => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
+    TRecordOpen(_, _)  => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
+    TRefined(base, _)  => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
+    TCont(_, _)        => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
+    TAlias(_, _)       => LCall(handle, LGlobal(handle, "to_string"), [arg_lo])
+  }
+}
+
 fn lexpr_ty(e) with LookupTy = {
   perform lookup_ty(lexpr_handle(e))
 }
@@ -631,7 +658,10 @@ fn lower_expr_body(e, handle, span) = match e {
     let lo_args = lower_expr_list(args)
     let N(fbody, _, fh) = f
     match fbody {
-      NExpr(VarRef(name)) => match env_kind_of(name) {
+      NExpr(VarRef(name)) =>
+        if str_eq(name, "to_string") && len(args) == 1 {
+          lower_to_string_dispatch(handle, list_head(lo_args), args)
+        } else { match env_kind_of(name) {
         Some(ConstructorScheme(tag_id, _)) =>
           LMakeVariant(handle, tag_id, lo_args),
         Some(EffectOpScheme(_)) =>
@@ -643,7 +673,7 @@ fn lower_expr_body(e, handle, span) = match e {
           //     locally installed, direct call)
           lower_perform_dispatch(handle, name, lo_args),
         _ => lower_call_default(handle, f, fh, lo_args)
-      },
+      } },
       _ => lower_call_default(handle, f, fh, lo_args)
     }
   },

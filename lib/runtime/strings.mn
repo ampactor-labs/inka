@@ -39,7 +39,11 @@
 // Deleted forever (v1 tumors — do NOT recreate):
 //   val_concat — heuristic dispatch on unknown type. Gone.
 //   val_eq     — pointer-range "maybe a string" heuristic. Gone.
-//   to_string  — dispatch-by-magnitude heuristic. Gone.
+//   to_string  — dispatch-by-magnitude heuristic. Gone. (The NAME
+//                returned 2026-06-11 as the value-word default under
+//                lower_to_string_dispatch — lower projects the typed
+//                renderer from the graph's PROOF of the arg type.
+//                No runtime guessing; the opposite of the v1 tumor.)
 //   type_of    — "what is this value at runtime" heuristic. Gone.
 
 import types
@@ -321,6 +325,30 @@ fn int_to_str(n) with Memory + Alloc = {
   }
   else { int_to_str_positive(n) }
 }
+
+// ─── Show — rendering IS an effect ───────────────────────────────
+//
+// show_word's generic param instantiates fresh per call site, so
+// to_string stays polymorphic at infer (no Int contamination of
+// generic callers like assert_eq). The default handler renders the
+// kernel-uniform-i32 value word; the gradient's post-L1 typed
+// show-derivation is a handler swap (Hβ.lower.to-string-show-
+// derivation), not a rewrite. Lower's type dispatch
+// (src/lower.mn lower_to_string_dispatch) short-circuits proven
+// sites (TString identity / TFloat float_to_str / TInt int_to_str)
+// before the op round-trip. NOT the v1 dispatch-by-magnitude tumor
+// — the type is proven by the graph or deferred to the handler;
+// never guessed from the value.
+
+effect Show {
+  show_word(x: a) -> String
+}
+
+handler show_default {
+  show_word(w) => resume(int_to_str(w)),
+}
+
+fn to_string(x) with Show = show_word(x)
 
 fn str_of_single_byte(b) with Memory + Alloc = {
   let ptr = perform alloc(5)

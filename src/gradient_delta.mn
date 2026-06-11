@@ -10,7 +10,7 @@
 //
 //   1. Effect row delta — body row narrower than declared row
 //      OR body row computed but never declared
-//   2. Ownership delta — Inferred params that classified as Own/Ref
+//   2. Ownership delta — Unmarked params that classified as Own/Ref
 //   3. Refinement delta — return values consistently in a sub-range
 //      that admits a refinement predicate
 //
@@ -73,7 +73,7 @@ effect Delta {
   /// Effect-row tightening only (body row narrower than declared).
   delta_effect_row(Handle) -> Option<AnnotationSuggestion>
 
-  /// Ownership tightening only (Inferred → Own/Ref classification).
+  /// Ownership tightening only (Unmarked → Own/Ref classification).
   delta_ownership(Handle) -> Option<AnnotationSuggestion>
 
   /// Refinement tightening only (return-type sub-range opportunity).
@@ -147,7 +147,7 @@ handler delta_default with !Mutate {
 
   // ── Ownership delta ───────────────────────────────────────────────
   // Per GR §2 ownership delta site: infer_ownership classifies
-  // Inferred params into Own/Ref/Inferred. When a param classified
+  // Unmarked params into Own/Ref/Unmarked. When a param classified
   // as Own at proof-time, the gradient suggests `own` to make the
   // consumption discipline explicit.
   delta_ownership(handle) => {
@@ -217,12 +217,12 @@ fn first_inferred_with_classification(params, fn_handle) with Pure = {
   else {
     let TParam(name, _, authored, resolved) = list_head(params)
     match authored {
-      Inferred => match resolved {
+      Unmarked => match resolved {
         Own => Some(ownership_suggestion(name, "own",
                                           ["CDeterministicDrop", "CZeroCopy"])),
         Ref => Some(ownership_suggestion(name, "ref",
                                           ["CZeroCopy"])),
-        Inferred =>
+        Unmarked =>
           first_inferred_with_classification(list_tail(params), fn_handle)
       },
       _ =>

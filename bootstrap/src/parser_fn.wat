@@ -285,7 +285,7 @@
     (local $ty_r i32) (local $ty i32) (local $tup i32) (local $k i32)
     ;; Check ownership marker
     (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
-    (local.set $own (i32.const 170)) ;; Inferred
+    (local.set $own (i32.const 170)) ;; Unmarked
     (local.set $p (local.get $pos))
     (if (i32.eq (local.get $k) (i32.const 20)) ;; TOwn
       (then

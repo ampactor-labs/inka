@@ -502,7 +502,7 @@ fn parse_one_param(ref tokens, pos) = {
   let (own_marker, p) = match kind_at(tokens, pos) {
     TOwn => (Own, skip_ws(tokens, pos + 1)),
     TRef => (Ref, skip_ws(tokens, pos + 1)),
-    _    => (Inferred, pos)
+    _    => (Unmarked, pos)
   }
 
   let name = ident_at(tokens, p)
@@ -1378,7 +1378,7 @@ fn expr_to_param(e) = {
     NExpr(VarRef(nm)) => nm,
     _                 => ""
   }
-  TParam(pname, TVar(fresh_ph(esp)), Inferred, Inferred)
+  TParam(pname, TVar(fresh_ph(esp)), Unmarked, Unmarked)
 }
 
 /// Convert a list of parsed expr nodes into a TParam list (buffer-
@@ -1940,7 +1940,7 @@ fn parse_lambda_params(ref tokens, pos, own buf, count) = {
   else {
     let name = ident_at(tokens, p)
     let h = fresh_ph(span_at(tokens, p))
-    let param = TParam(name, TVar(h), Inferred, Inferred)
+    let param = TParam(name, TVar(h), Unmarked, Unmarked)
     let (b1, c1) = push_node(buf, count, param)
     let p2 = skip_ws(tokens, p + 1)
     if at(tokens, p2, TComma) {

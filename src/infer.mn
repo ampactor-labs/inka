@@ -1039,7 +1039,7 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
       let ret_h = perform mint(InferredPipeResult("|>", Inferred("return"))) // drift-audit: ignore — "return" is a Reason string; "|>" is a string literal key, not a pipe verb
       let row_h = perform graph_fresh_row(InferredPipeResult("|>", Inferred("effects")))
       let expected = TFun(
-        [TParam("_", TVar(lh), Inferred, Inferred)],
+        [TParam("_", TVar(lh), Unmarked, Unmarked)],
         TVar(ret_h),
         mk_ef_open([], row_h)
       )
@@ -2306,7 +2306,7 @@ fn build_param_types(params, handles) = map((pair) => {
 }, zip(params, handles))
 
 fn build_inferred_params(handles) = map((h) =>
-  TParam("_", TVar(h), Inferred, Inferred), handles)
+  TParam("_", TVar(h), Unmarked, Unmarked), handles)
 
 fn register_type_constructors(type_name, type_args, variants) = {
   let total = len(variants)
@@ -2353,7 +2353,7 @@ fn is_record_ty(ty) with Pure = match ty {
 
 fn build_ctor_params(field_types, base_idx) = map((indexed) => {
   let (i, ty) = indexed
-  TParam("_" |> str_concat(int_to_str(base_idx + i)), ty, Inferred, Inferred)
+  TParam("_" |> str_concat(int_to_str(base_idx + i)), ty, Unmarked, Unmarked)
 }, enumerate(field_types))
 
 fn register_effect_ops(effect_name, ops) = {
@@ -2733,8 +2733,8 @@ fn arm_index_loop(arms, target_handle, idx) with GraphRead = {
 ///     is a CONSTRAINT (must contain inferred), never a contract.
 ///
 ///   • Ownership inference (Peer 2) — operational at own.mn's
-///     infer_ownership. `Inferred`-marked params get classify_usage
-///     which counts var-uses in the body: 0 → Inferred; 1 → Own
+///     infer_ownership. `Unmarked`-marked params get classify_usage
+///     which counts var-uses in the body: 0 → Unmarked; 1 → Own
 ///     (affine consume); ≥2 → Ref (borrowed). Authored `own`/`ref`
 ///     is a constraint over the inferred form.
 ///
@@ -2958,7 +2958,7 @@ fn node_handle(node) = {
 
 /// Mint TParam list for handler config-params. Each name gets a
 /// fresh tyvar handle (via mint), wrapped as TParam(name, TVar(h),
-/// Inferred, Inferred) — Ownership is Inferred (no authored marker;
+/// Unmarked, Unmarked) — Ownership is Unmarked (no authored marker;
 /// arm-body usage may constrain). Per Hβ.first-light.handler-scheme-
 /// tfun-shape (2026-05-06). Drift refused: 7 (one list of TParam
 /// records, not (names, types) parallel arrays); 8 (TParam is the
@@ -2967,7 +2967,7 @@ fn mint_handler_config_tparams(config, hname, base_idx) = map((indexed) => {
   let (i, name) = indexed
   let idx = base_idx + i
   let h = perform mint(FnParam(hname, idx, Inferred("config-param of '" |> str_concat(hname) |> str_concat("'"))))   // drift-audit: ignore — |> inside string-build arg, not a pipe verb
-  TParam(name, TVar(h), Inferred, Inferred)
+  TParam(name, TVar(h), Unmarked, Unmarked)
 }, enumerate(config))
 
 // Utilities

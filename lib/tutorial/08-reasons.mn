@@ -2,7 +2,7 @@
 //
 // Mentl's inference is HINDLEY-MILNER but PRODUCTIVE under error.
 // Every unification step writes a Reason edge into the graph
-// (Located + Inferred + Unified + VarLookup + ...). When a type
+// (Located + Unmarked + Unified + VarLookup + ...). When a type
 // error arises, the compiler doesn't fail-fast; it inserts a
 // `NErrorHole` at the conflict site and KEEPS WALKING. Downstream
 // code still typechecks where it can.

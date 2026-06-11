@@ -290,9 +290,9 @@ fn cache_pack_params(params, i, n) with Pack + !Unpack = {
   }
 }
 
-// Ownership tags: 0=Inferred, 1=Own, 2=Ref
+// Ownership tags: 0=Unmarked, 1=Own, 2=Ref
 fn cache_pack_ownership(o) with Pack + !Unpack = match o {
-  Inferred => perform pack_byte(0),
+  Unmarked => perform pack_byte(0),
   Own      => perform pack_byte(1),
   Ref      => perform pack_byte(2)
 }
@@ -508,7 +508,7 @@ fn cache_pack_predicate(p) with Pack + !Unpack = match p {
 }
 
 // Reason tags follow types.mn declaration order:
-//  0=Declared, 1=Inferred, 2=Fresh, 3=OpConstraint, 4=VarLookup,
+//  0=Declared, 1=Unmarked, 2=Fresh, 3=OpConstraint, 4=VarLookup,
 //  5=FnReturn, 6=FnParam, 7=MatchBranch, 8=ListElement, 9=IfBranch,
 // 10=LetBinding, 11=Unified, 12=Instantiation, 13=UnifyFailed,
 // 14=Placeholder, 15=BinOpPlaceholder, 16=MissingVar, 17=Refinement,
@@ -811,7 +811,7 @@ fn cache_unpack_params(n, i, buf) with Unpack + !Pack = {
 
 fn cache_unpack_ownership() with Unpack + !Pack = {
   let tag = perform unpack_byte()
-  if tag == 0 { Inferred }
+  if tag == 0 { Unmarked }
   else if tag == 1 { Own }
   else { Ref }
 }

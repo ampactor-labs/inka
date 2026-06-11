@@ -52,7 +52,7 @@ fn dsp_step(input) with !Alloc = {
 /// `gradient_visible` — when a function's body is more constrained
 /// than its declared row, the gradient's INVERSE direction
 /// (gradient_delta.mn) surfaces a TIGHTENING. Here the declared row
-/// is open (Inferred); the body is Pure; Mentl proposes
+/// is open (Unmarked); the body is Pure; Mentl proposes
 /// `with Pure`. The arrow points TOWARD the unlock.
 fn gradient_visible(x) = {
   x + 1

@@ -25,7 +25,7 @@ import runtime/io
 ///                       predicates at compile time (see 06-refinement.mn).
 ///   #7 Gradient      — `with !Alloc` is a gradient annotation Mentl can propose; type `??`
 ///                       on the row to ask "what would this unlock?"
-///   #8 Reasons       — every unification leaves a Located/Inferred edge in the graph; the
+///   #8 Reasons       — every unification leaves a Located/Unmarked edge in the graph; the
 ///                       Why Engine walks them on demand via `mentl query reason name`.
 fn greet(ref name) with !Alloc = {
   "Hello, "

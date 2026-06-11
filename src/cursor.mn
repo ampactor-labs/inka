@@ -428,21 +428,21 @@ fn extract_row_local(ty) with Pure = match ty {
 // resolved Ownership; for a node that IS a function, return the
 // resolved ownership of its first param (the substrate-honest
 // summary; full per-param ownership is in CursorView for handlers
-// that want it). For non-function nodes, default Inferred.
+// that want it). For non-function nodes, default Unmarked.
 
 fn ownership_of_kind(kind) with Pure = match kind {
   NBound(ty) => ownership_of_ty(ty),
-  _          => Inferred
+  _          => Unmarked
 }
 
 fn ownership_of_ty(ty) with Pure = match ty {
   TFun(params, _, _) =>
-    if len(params) == 0 { Inferred }
+    if len(params) == 0 { Unmarked }
     else {
       let TParam(_, _, _, resolved) = list_index(params, 0)
       resolved
     },
-  _ => Inferred
+  _ => Unmarked
 }
 
 fn pipe_context_of_kind(kind) with Pure = match kind {

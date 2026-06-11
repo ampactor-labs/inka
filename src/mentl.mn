@@ -189,7 +189,7 @@ fn suggestion_kind_of(ann) with Pure = match ann {
 fn capability_labels(caps) with Pure = map(show_capability, caps)
 
 /// Suggestion's Reason edge. Wraps the candidate's anchor reason in a
-/// Located/Inferred chain that the Why-tentacle walks. Span comes from
+/// Located/Unmarked chain that the Why-tentacle walks. Span comes from
 /// the annotation's source-span field when present (user-originated
 /// candidate), span_zero otherwise (fully internal speculation).
 fn suggestion_reason(ann, anchor) = {
@@ -364,7 +364,7 @@ fn ownership_candidates(params) = {
   list_to_flat(params)
     |> filter((p) => {
          let TParam(_, _, _, res) = p
-         match res { Inferred => true, _ => false }
+         match res { Unmarked => true, _ => false }
        })
     |> (inferred_params) => flatten(map((p) => {
          let TParam(name, _, _, _) = p
@@ -415,7 +415,7 @@ fn annotation_eq(a, b) with Pure = match a {
 
 /// Walk the reason DAG from a graph handle. Every unification, instantiation, and
 /// subsumption wrote a Reason edge into the graph; `why_expand` recurses through the chain
-/// until leaf reasons (Declared, Inferred, MissingVar) terminate. Depth-limited at 20.    // drift-audit: ignore — "cycles" referencing graph cycle detection, not deferred work
+/// until leaf reasons (Declared, Unmarked, MissingVar) terminate. Depth-limited at 20.    // drift-audit: ignore — "cycles" referencing graph cycle detection, not deferred work
 fn why_from_handle(handle) = {
   let GNode(_, reason) = perform graph_chase(handle)
   why_expand(reason, 0)

@@ -91,7 +91,7 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
       let first = find_first_span(used_sites, name)
       let auth_hint = match get_authored_ownership(name) {
         Some(Own) => " — you explicitly declared it 'own'"
-        Some(Inferred) => " — it was inferred as 'own'"
+        Some(Unmarked) => " — it was inferred as 'own'"
         _ => ""
       }
       perform report("ownership", "E_OwnershipViolation", "OwnershipViolation",
@@ -417,15 +417,15 @@ fn walk_match_arms(ref refs, ref arms) with !Mutate = {
   }, arms)
 }
 
-/// Deduce `Own` vs `Ref` for `Inferred`-marked parameters by counting
-/// uses in the function body: 0 uses → `Inferred` (mark stays),
+/// Deduce `Own` vs `Ref` for `Unmarked`-marked parameters by counting
+/// uses in the function body: 0 uses → `Unmarked` (mark stays),
 /// 1 use → `Own` (consumed once — affine), ≥ 2 uses → `Ref`
 /// (borrowed multiple times).
 fn infer_ownership(ref params, ref body) with !Mutate = {
   map((p) => {
     let TParam(name, ty, authored, _old_resolved) = p
     let inferred = match authored {
-      Inferred => classify_usage(name, body),
+      Unmarked => classify_usage(name, body),
       _        => authored
     }
     TParam(name, ty, authored, inferred)
@@ -434,7 +434,7 @@ fn infer_ownership(ref params, ref body) with !Mutate = {
 
 fn classify_usage(ref name, ref body) with !Mutate = {
   let count = count_uses(name, body)
-  if count == 0      { Inferred }
+  if count == 0      { Unmarked }
   else if count == 1 { Own }
   else               { Ref }
 }

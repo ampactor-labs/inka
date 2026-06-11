@@ -153,7 +153,7 @@ F.4): `!Alloc + !Consume` = zero-copy AND zero-alloc.
 |-----------|------------------------|------------------|------------------|---------------------|
 | `own`     | `perform consume(n)`   | OK (moves out)   | OK (new owner)   | N/A                 |
 | `ref`     | read                   | ERROR (`E_OwnershipViolation`)     | ERROR (`E_OwnershipViolation`)     | structural walk     |
-| Inferred  | compiler decides       | depends          | depends          | default: no-escape  |
+| Unmarked  | compiler decides       | depends          | depends          | default: no-escape  |
 
 ---
 
@@ -186,7 +186,7 @@ the Fork deny/copy logic.
 
 The graph tracks type + row variables; it does NOT track ownership.
 Ownership is a static structural property of the Ty ADT
-(`TParam(_, _, Own|Ref|Inferred)`) plus the effect-based Consume
+(`TParam(_, _, Own|Ref|Unmarked)`) plus the effect-based Consume
 tracking.
 
 **Inference only.** Once a function's body is inferred, its TParam

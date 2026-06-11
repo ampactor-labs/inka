@@ -54,11 +54,11 @@ type Ty
 type TParam
   = TParam(String, Ty, Ownership, Ownership)
                                    // name, ty, authored, resolved
-                                   // OW.2 — authored = what developer typed (Own/Ref/Inferred)
+                                   // OW.2 — authored = what developer typed (Own/Ref/Unmarked)
                                    //        resolved = what infer_ownership determined
 
 type Ownership
-  = Inferred     // compiler decides (default)
+  = Unmarked     // compiler decides (default)
   | Own          // affine: consumed at use (performs Consume)
   | Ref          // borrowed: cannot escape return position
 
@@ -1042,8 +1042,8 @@ fn show_tparam(ref tp) with GraphRead + !Mutate = {
     |> str_concat(": ")
     |> str_concat(show_type(ty))
   match authored {
-    Inferred => match resolved {
-      Inferred => base,
+    Unmarked => match resolved {
+      Unmarked => base,
       _        => base |> str_concat(show_ownership(resolved)) |> str_concat(" — inferred")
     },
     _ => base |> str_concat(show_ownership(authored)) |> str_concat(" — declared")
@@ -1052,7 +1052,7 @@ fn show_tparam(ref tp) with GraphRead + !Mutate = {
 
 fn show_ownership(o) with Pure = {
   match o {
-    Inferred => "",
+    Unmarked => "",
     Own      => " own",
     Ref      => " ref"
   }

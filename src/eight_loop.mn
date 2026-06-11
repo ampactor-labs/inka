@@ -291,11 +291,11 @@ fn row_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
 }
 
 fn ownership_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
-  // Ownership clears when authored OR resolved is non-Inferred.
+  // Ownership clears when authored OR resolved is non-Unmarked.
   // Otherwise the gradient could suggest one (see Hμ.gradient-delta
   // delta_ownership).
   match ownership_of_kind(kind) {
-    Inferred => VerdictInvites(ownership_invite_for(handle, reason)),
+    Unmarked => VerdictInvites(ownership_invite_for(handle, reason)),
     _ => VerdictClears(reason)
   }
 }
@@ -340,7 +340,7 @@ fn ownership_invite_for(handle, reason) with Pure = {
     "own <param> | ref <param>",
     ["CDeterministicDrop", "CZeroCopy"],
     Located(span_zero(),
-      Inferred("eight-fold: Ownership interrogation invites — Inferred at this position"))
+      Inferred("eight-fold: Ownership interrogation invites — Unmarked at this position"))
   )
 }
 

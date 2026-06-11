@@ -1328,7 +1328,7 @@ fn answer_from_slots(slots, reason) with Pure = {
 
 /// voiceline_to_answer — project a VoiceLine into the Answer ADT.
 /// Silence → AnsSilence. Non-silence: extract reason from
-/// situation.reason_at_topic (Inferred fallback when sparse), then
+/// situation.reason_at_topic (Unmarked fallback when sparse), then
 /// scan slots for the first projectable kind via answer_from_slots.
 /// H6 exhaustive over VoiceLine.
 ///

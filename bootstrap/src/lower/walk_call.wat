@@ -418,6 +418,36 @@
   ;; get a harmless unused forward slot — the perform short-circuits to
   ;; direct emit and never reads it; precise builtin-effect filtering is the
   ;; named optimization peer Hβ.lower.ev-slot-builtin-effect-filter.
+  ;; Builtin effects — the raw substrate IS their handler (wasi import /
+  ;; wasm instruction); no handler record exists to thread. One shared
+  ;; projection feeds BOTH derive_ev_slots and the callee's own slot
+  ;; indexing, so caller layout and callee reads stay one truth.
+  ;; Closes Hβ.lower.ev-slot-builtin-effect-filter.
+  (data (i32.const 6496) "\06\00\00\00Memory")
+  (data (i32.const 6512) "\05\00\00\00Alloc")
+  (data (i32.const 6528) "\04\00\00\00WASI")
+  (func $row_dispatched_names (param $names i32) (result i32)
+    (local $n i32) (local $i i32) (local $name i32)
+    (local $buf i32) (local $count i32)
+    (local.set $n (call $len (local.get $names)))
+    (local.set $buf (call $make_list (local.get $n)))
+    (local.set $count (i32.const 0))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $name (call $list_index (local.get $names) (local.get $i)))
+        (if (i32.eqz (i32.or (i32.or
+              (call $str_eq (local.get $name) (i32.const 6496))
+              (call $str_eq (local.get $name) (i32.const 6512)))
+              (call $str_eq (local.get $name) (i32.const 6528))))
+          (then
+            (drop (call $list_set (local.get $buf) (local.get $count) (local.get $name)))
+            (local.set $count (i32.add (local.get $count) (i32.const 1)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
+
   (func $derive_ev_slots (export "derive_ev_slots") (param $callee_handle i32) (result i32)
     (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $i i32)
     (local $ename i32) (local $state_local i32) (local $evs i32)
@@ -612,6 +642,23 @@
                 (if (i32.eq (local.get $kind_tag) (i32.const 133))
                   (then
                     (local.set $lo_args (call $lower_args (local.get $args_list)))
+                    ;; Raw-target ops FIRST — the wasi import / wasm
+                    ;; instruction IS the handler; there is no evidence
+                    ;; to dispatch through (mirror of $lower_perform's
+                    ;; check order). Bare op calls are canon post-
+                    ;; perform-dissolution; without these checks they
+                    ;; fell to Tier-2 evidence dispatch that nothing
+                    ;; installs — m2's len() bare load_i32 dispatched a
+                    ;; garbage call_indirect (the pass-2 trap + the
+                    ;; all-NUL m3 output were both this).
+                    (local.set $tag_id (call $wasi_op_target_name (local.get $name)))
+                    (if (i32.ne (local.get $tag_id) (i32.const 0))
+                      (then (return (call $lexpr_make_lperform
+                        (local.get $h) (local.get $tag_id) (local.get $lo_args)))))
+                    (local.set $tag_id (call $memory_op_target_name (local.get $name)))
+                    (if (i32.ne (local.get $tag_id) (i32.const 0))
+                      (then (return (call $lexpr_make_lperform
+                        (local.get $h) (local.get $tag_id) (local.get $lo_args)))))
                     (local.set $tag_id (call $lower_resolve_handler_for_op (local.get $name)))
                     (if (i32.ne (local.get $tag_id) (i32.const 0))
                       (then
@@ -1012,6 +1059,19 @@
         (local.set $args (call $record_get (local.get $e) (i32.const 2)))
         (return (call $lexpr_make_ltailcall
                   (local.get $h) (local.get $fn) (local.get $args)))))
+    ;; LSuspend (325) → LTailSuspend (338): evidence-threaded calls in
+    ;; tail position return_call through the same record-build. Without
+    ;; this, EVERY effect-rowed recursion (scan_to_eol's Memory row,
+    ;; iterate_from's Iterate row) kept one frame per step and the
+    ;; wheel-sized inputs exhausted the stack at pass-2.
+    (if (i32.eq (local.get $tag) (i32.const 325))
+      (then
+        (return (call $lexpr_make_ltailsuspend
+          (call $record_get (local.get $e) (i32.const 0))
+          (call $record_get (local.get $e) (i32.const 1))
+          (call $record_get (local.get $e) (i32.const 2))
+          (call $record_get (local.get $e) (i32.const 3))
+          (call $record_get (local.get $e) (i32.const 4))))))
     ;; LIf (314): mark both branches in tail. Branches are single-element
     ;; lists per $lower_if (walk_compound.wat:689-694 Lock #10).
     (if (i32.eq (local.get $tag) (i32.const 314))

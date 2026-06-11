@@ -18984,29 +18984,63 @@
     (call $lower_init)
     (global.get $lower_active_state_fields_g))
 
-  ;; $lower_resolve_state_slot_offset(name, fields, idx) — walk fields
-  ;; by name; return slot offset 8 + idx*4 OR -1 if not found
+  ;; $lower_resolve_state_slot_offset(name, names, idx) — walk the
+  ;; slot-order NAME list; return offset 8 + idx*4 OR -1 if not found
   ;; (productive-under-error sentinel; emit skips negative offsets).
-  ;; Mirror of wheel resolve_state_slot_offset (src/lower.mn:1195).
+  ;; The list is the SAME (config ++ state) order the capture
+  ;; pre-allocation lays slots out by and install writes inits to —
+  ;; one truth for the record layout, no parallel state-only list
+  ;; (which resolved `buf` to slot 0 = the config param's slot; the
+  ;; second yield then called the buffer as a closure).
+  ;; Mirror of wheel resolve_state_slot_offset (src/lower.mn).
   (func $lower_resolve_state_slot_offset
         (param $name i32) (param $fields i32) (param $idx i32) (result i32)
-    (local $n i32) (local $i i32) (local $field i32) (local $field_name i32)
+    (local $n i32) (local $i i32)
     (local.set $n (call $len (local.get $fields)))
     (local.set $i (local.get $idx))
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $field
-          (call $list_index (local.get $fields) (local.get $i)))
-        (local.set $field_name
-          (call $list_index (local.get $field) (i32.const 0)))
-        (if (call $str_eq (local.get $field_name) (local.get $name))
+        (if (call $str_eq
+              (call $list_index (local.get $fields) (local.get $i))
+              (local.get $name))
           (then
             (return (i32.add (i32.const 8)
                              (i32.mul (i32.const 4) (local.get $i))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter)))
     (i32.const -1))
+
+  ;; $lower_combined_field_names(config, state) — the record's slot-
+  ;; order name list: config entries are bare names; state entries are
+  ;; (name, init) 2-lists whose name projects out.
+  (func $lower_combined_field_names
+        (param $config i32) (param $state i32) (result i32)
+    (local $nc i32) (local $ns i32) (local $i i32) (local $out i32)
+    (local.set $nc (call $len (local.get $config)))
+    (local.set $ns (call $len (local.get $state)))
+    (local.set $out (call $make_list
+      (i32.add (local.get $nc) (local.get $ns))))
+    (local.set $i (i32.const 0))
+    (block $c_done
+      (loop $c_each
+        (br_if $c_done (i32.ge_u (local.get $i) (local.get $nc)))
+        (drop (call $list_set (local.get $out) (local.get $i)
+          (call $list_index (local.get $config) (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $c_each)))
+    (local.set $i (i32.const 0))
+    (block $s_done
+      (loop $s_each
+        (br_if $s_done (i32.ge_u (local.get $i) (local.get $ns)))
+        (drop (call $list_set (local.get $out)
+          (i32.add (local.get $nc) (local.get $i))
+          (call $list_index
+            (call $list_index (local.get $state) (local.get $i))
+            (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $s_each)))
+    (local.get $out))
 
   ;; ─── $handler_state_inits_register / $handler_state_inits_lookup ──
   ;; Mirror of wheel-side handler_state_inits_registry (src/lower.mn).
@@ -19179,6 +19213,16 @@
           (then
             (local.set $sch (call $env_binding_scheme (local.get $h_entry)))
             (local.set $body (call $scheme_body (local.get $sch)))
+            ;; Parameterized handler — `handler h(k) with ...` registers
+            ;; TFun(config, TName("Handler",[ename]), row): the factory's
+            ;; RETURN is the handler. Unwrap before the shape check, or
+            ;; every config-bearing handler silently falls to Tier-2
+            ;; evidence dispatch its caller never threads.
+            (if (i32.ge_u (local.get $body) (global.get $heap_base))
+              (then
+                (if (i32.eq (call $ty_tag (local.get $body)) (i32.const 107))
+                  (then (local.set $body
+                    (call $ty_tfun_return (local.get $body)))))))
             ;; Check body is TName("Handler", [TName(ename_match)]).
             (if (i32.ge_u (local.get $body) (global.get $heap_base))
               (then
@@ -19312,6 +19356,16 @@
           (then
             (local.set $sch (call $env_binding_scheme (local.get $h_entry)))
             (local.set $body (call $scheme_body (local.get $sch)))
+            ;; Parameterized handler — `handler h(k) with ...` registers
+            ;; TFun(config, TName("Handler",[ename]), row): the factory's
+            ;; RETURN is the handler. Unwrap before the shape check, or
+            ;; every config-bearing handler silently falls to Tier-2
+            ;; evidence dispatch its caller never threads.
+            (if (i32.ge_u (local.get $body) (global.get $heap_base))
+              (then
+                (if (i32.eq (call $ty_tag (local.get $body)) (i32.const 107))
+                  (then (local.set $body
+                    (call $ty_tfun_return (local.get $body)))))))
             (if (i32.ge_u (local.get $body) (global.get $heap_base))
               (then
                 (if (i32.eq (call $ty_tag (local.get $body)) (i32.const 108))
@@ -20622,6 +20676,23 @@
 
   (func $lexpr_lsuspend_evs (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 4)))
+
+  ;; ─── 338 = LTailSuspend(handle, op_h, fn, args, evs) — arity 5 ─────
+  ;; LSuspend in tail position (the mark pass converts; emit produces
+  ;; return_call_indirect after the same record-build). Field shape
+  ;; identical to 325 — the lsuspend accessors serve both.
+  (func $lexpr_make_ltailsuspend
+        (param $h i32) (param $op_h i32) (param $fn i32)
+        (param $args i32) (param $evs i32)
+        (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 338) (i32.const 5)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $op_h))
+    (call $record_set (local.get $r) (i32.const 2) (local.get $fn))
+    (call $record_set (local.get $r) (i32.const 3) (local.get $args))
+    (call $record_set (local.get $r) (i32.const 4) (local.get $evs))
+    (local.get $r))
 
   ;; ─── 326 = LStateGet(handle, slot) — arity 2 ───────────────────────
   ;; Per src/lower.mn:133 LStateGet(Int, Int).
@@ -22729,6 +22800,36 @@
   ;; get a harmless unused forward slot — the perform short-circuits to
   ;; direct emit and never reads it; precise builtin-effect filtering is the
   ;; named optimization peer Hβ.lower.ev-slot-builtin-effect-filter.
+  ;; Builtin effects — the raw substrate IS their handler (wasi import /
+  ;; wasm instruction); no handler record exists to thread. One shared
+  ;; projection feeds BOTH derive_ev_slots and the callee's own slot
+  ;; indexing, so caller layout and callee reads stay one truth.
+  ;; Closes Hβ.lower.ev-slot-builtin-effect-filter.
+  (data (i32.const 6496) "\06\00\00\00Memory")
+  (data (i32.const 6512) "\05\00\00\00Alloc")
+  (data (i32.const 6528) "\04\00\00\00WASI")
+  (func $row_dispatched_names (param $names i32) (result i32)
+    (local $n i32) (local $i i32) (local $name i32)
+    (local $buf i32) (local $count i32)
+    (local.set $n (call $len (local.get $names)))
+    (local.set $buf (call $make_list (local.get $n)))
+    (local.set $count (i32.const 0))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $name (call $list_index (local.get $names) (local.get $i)))
+        (if (i32.eqz (i32.or (i32.or
+              (call $str_eq (local.get $name) (i32.const 6496))
+              (call $str_eq (local.get $name) (i32.const 6512)))
+              (call $str_eq (local.get $name) (i32.const 6528))))
+          (then
+            (drop (call $list_set (local.get $buf) (local.get $count) (local.get $name)))
+            (local.set $count (i32.add (local.get $count) (i32.const 1)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
+
   (func $derive_ev_slots (export "derive_ev_slots") (param $callee_handle i32) (result i32)
     (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $i i32)
     (local $ename i32) (local $state_local i32) (local $evs i32)
@@ -22923,6 +23024,23 @@
                 (if (i32.eq (local.get $kind_tag) (i32.const 133))
                   (then
                     (local.set $lo_args (call $lower_args (local.get $args_list)))
+                    ;; Raw-target ops FIRST — the wasi import / wasm
+                    ;; instruction IS the handler; there is no evidence
+                    ;; to dispatch through (mirror of $lower_perform's
+                    ;; check order). Bare op calls are canon post-
+                    ;; perform-dissolution; without these checks they
+                    ;; fell to Tier-2 evidence dispatch that nothing
+                    ;; installs — m2's len() bare load_i32 dispatched a
+                    ;; garbage call_indirect (the pass-2 trap + the
+                    ;; all-NUL m3 output were both this).
+                    (local.set $tag_id (call $wasi_op_target_name (local.get $name)))
+                    (if (i32.ne (local.get $tag_id) (i32.const 0))
+                      (then (return (call $lexpr_make_lperform
+                        (local.get $h) (local.get $tag_id) (local.get $lo_args)))))
+                    (local.set $tag_id (call $memory_op_target_name (local.get $name)))
+                    (if (i32.ne (local.get $tag_id) (i32.const 0))
+                      (then (return (call $lexpr_make_lperform
+                        (local.get $h) (local.get $tag_id) (local.get $lo_args)))))
                     (local.set $tag_id (call $lower_resolve_handler_for_op (local.get $name)))
                     (if (i32.ne (local.get $tag_id) (i32.const 0))
                       (then
@@ -23323,6 +23441,19 @@
         (local.set $args (call $record_get (local.get $e) (i32.const 2)))
         (return (call $lexpr_make_ltailcall
                   (local.get $h) (local.get $fn) (local.get $args)))))
+    ;; LSuspend (325) → LTailSuspend (338): evidence-threaded calls in
+    ;; tail position return_call through the same record-build. Without
+    ;; this, EVERY effect-rowed recursion (scan_to_eol's Memory row,
+    ;; iterate_from's Iterate row) kept one frame per step and the
+    ;; wheel-sized inputs exhausted the stack at pass-2.
+    (if (i32.eq (local.get $tag) (i32.const 325))
+      (then
+        (return (call $lexpr_make_ltailsuspend
+          (call $record_get (local.get $e) (i32.const 0))
+          (call $record_get (local.get $e) (i32.const 1))
+          (call $record_get (local.get $e) (i32.const 2))
+          (call $record_get (local.get $e) (i32.const 3))
+          (call $record_get (local.get $e) (i32.const 4))))))
     ;; LIf (314): mark both branches in tail. Branches are single-element
     ;; lists per $lower_if (walk_compound.wat:689-694 Lock #10).
     (if (i32.eq (local.get $tag) (i32.const 314))
@@ -23834,7 +23965,8 @@
     ;; LStateSlotStore offsets. Save+restore around the body lower
     ;; preserves the caller's context (nested arms / sibling arms).
     (local.set $prev_state_fields (call $lower_get_active_state_fields))
-    (call $lower_set_active_state_fields (local.get $state))
+    (call $lower_set_active_state_fields
+      (call $lower_combined_field_names (local.get $config) (local.get $state)))
     ;; Hβ.seed.handler-arm-captures-canonical-order — pre-allocate
     ;; capture entries in canonical (config ++ state) source-order
     ;; matching the wheel's src/lower.mn:1117-1123 captures_names. The
@@ -28921,7 +29053,9 @@
     (if (i32.eq (local.get $tag) (i32.const 321))
       (then (call $emit_lmatch       (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 325))
-      (then (call $emit_lsuspend     (local.get $r)) (return)))
+      (then (call $emit_lsuspend     (local.get $r) (i32.const 0)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 338))         ;; LTailSuspend
+      (then (call $emit_lsuspend     (local.get $r) (i32.const 1)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 326))
       (then (call $emit_lstateget    (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 327))
@@ -30948,7 +31082,7 @@
   ;;              body = 8 bytes; 6000+ relocation band, post-6456 ":")
   (data (i32.const 6480) "\04\00\00\00sst_")
 
-  (func $emit_lsuspend (param $r i32)
+  (func $emit_lsuspend (param $r i32) (param $tail i32)
     (local $args i32) (local $evs i32) (local $ne i32) (local $sname i32)
     (local.set $args (call $lexpr_lsuspend_args (local.get $r)))
     (local.set $evs  (call $lexpr_lsuspend_evs  (local.get $r)))
@@ -30999,7 +31133,11 @@
     (call $ec6_emit_args (local.get $args))
     (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_i32_load_offset_0)
-    (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
+    (if (i32.ne (local.get $tail) (i32.const 0))
+      (then (call $ec6_emit_return_call_indirect_ftN
+        (call $len (local.get $args))))
+      (else (call $ec6_emit_call_indirect_ftN
+        (call $len (local.get $args))))))
 
   ;; ─── LSuspend support helpers ──────────────────────────────────────
 
@@ -31994,6 +32132,16 @@
           (then
             (call $ec6_emit_args_path_open (call $lexpr_lperform_args (local.get $r)))
             (call $ec7_emit_call_dollar (local.get $op_name))
+            (return)))
+        ;; proc_exit never returns — the host terminates. `unreachable`
+        ;; after it is the wasm bottom: the enclosing fn's result type
+        ;; is satisfied regardless of arm shape (abort_exit's fail arm
+        ;; ends here with no resume).
+        (if (call $str_eq (local.get $op_name) (i32.const 5120))   ;; "wasi_proc_exit"
+          (then
+            (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
+            (call $ec7_emit_call_dollar (local.get $op_name))
+            (call $ec_emit_unreachable)
             (return)))
         (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
         (call $ec7_emit_call_dollar (local.get $op_name))
@@ -33221,7 +33369,7 @@
         (local.set $b (call $max_i32 (local.get $b)
           (call $max_arity_in (call $lexpr_ltailcall_args (local.get $expr)) (i32.const 0))))
         (return (call $max_i32 (local.get $a) (local.get $b)))))
-    (if (i32.eq (local.get $tag) (i32.const 325))
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 325)) (i32.eq (local.get $tag) (i32.const 338)))
       (then
         (local.set $a (i32.add (call $len (call $lexpr_lsuspend_args (local.get $expr))) (i32.const 1)))
         (local.set $b (call $max_arity_expr (call $lexpr_lsuspend_fn (local.get $expr))))
@@ -33807,7 +33955,7 @@
         (call $emit_functions (call $lexpr_lmakerecord_fields (local.get $expr)))
         (return)))
     ;; LSuspend (325) — fn IS a closure; recurse to find its inner LFn.
-    (if (i32.eq (local.get $tag) (i32.const 325))
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 325)) (i32.eq (local.get $tag) (i32.const 338)))
       (then
         (call $emit_functions_walk (call $lexpr_lsuspend_fn (local.get $expr)))
         (call $emit_functions (call $lexpr_lsuspend_args (local.get $expr)))
@@ -34010,7 +34158,7 @@
         (call $emit_handler_state_globals
           (call $lowfn_body (call $lexpr_lmakecontinuation_fn (local.get $expr))))
         (return)))
-    (if (i32.eq (local.get $tag) (i32.const 325))         ;; LSuspend
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 325)) (i32.eq (local.get $tag) (i32.const 338)))         ;; LSuspend
       (then
         (call $emit_handler_state_globals_walk (call $lexpr_lsuspend_fn (local.get $expr)))
         (call $emit_handler_state_globals (call $lexpr_lsuspend_args (local.get $expr)))
@@ -34307,7 +34455,7 @@
         (call $emit_feedback_state_globals_walk
           (call $lexpr_lindex_idx (local.get $expr)))
         (return)))
-    (if (i32.eq (local.get $tag) (i32.const 325))         ;; LSuspend
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 325)) (i32.eq (local.get $tag) (i32.const 338)))         ;; LSuspend
       (then
         (call $emit_feedback_state_globals_walk
           (call $lexpr_lsuspend_fn (local.get $expr)))

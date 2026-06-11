@@ -634,6 +634,23 @@
   (func $lexpr_lsuspend_evs (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 4)))
 
+  ;; ─── 338 = LTailSuspend(handle, op_h, fn, args, evs) — arity 5 ─────
+  ;; LSuspend in tail position (the mark pass converts; emit produces
+  ;; return_call_indirect after the same record-build). Field shape
+  ;; identical to 325 — the lsuspend accessors serve both.
+  (func $lexpr_make_ltailsuspend
+        (param $h i32) (param $op_h i32) (param $fn i32)
+        (param $args i32) (param $evs i32)
+        (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 338) (i32.const 5)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $op_h))
+    (call $record_set (local.get $r) (i32.const 2) (local.get $fn))
+    (call $record_set (local.get $r) (i32.const 3) (local.get $args))
+    (call $record_set (local.get $r) (i32.const 4) (local.get $evs))
+    (local.get $r))
+
   ;; ─── 326 = LStateGet(handle, slot) — arity 2 ───────────────────────
   ;; Per src/lower.mn:133 LStateGet(Int, Int).
   (func $lexpr_make_lstateget (param $h i32) (param $slot i32) (result i32)

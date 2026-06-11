@@ -633,7 +633,7 @@
   ;;              body = 8 bytes; 6000+ relocation band, post-6456 ":")
   (data (i32.const 6480) "\04\00\00\00sst_")
 
-  (func $emit_lsuspend (param $r i32)
+  (func $emit_lsuspend (param $r i32) (param $tail i32)
     (local $args i32) (local $evs i32) (local $ne i32) (local $sname i32)
     (local.set $args (call $lexpr_lsuspend_args (local.get $r)))
     (local.set $evs  (call $lexpr_lsuspend_evs  (local.get $r)))
@@ -684,7 +684,11 @@
     (call $ec6_emit_args (local.get $args))
     (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_i32_load_offset_0)
-    (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
+    (if (i32.ne (local.get $tail) (i32.const 0))
+      (then (call $ec6_emit_return_call_indirect_ftN
+        (call $len (local.get $args))))
+      (else (call $ec6_emit_call_indirect_ftN
+        (call $len (local.get $args))))))
 
   ;; ─── LSuspend support helpers ──────────────────────────────────────
 

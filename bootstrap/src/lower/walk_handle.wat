@@ -457,7 +457,8 @@
     ;; LStateSlotStore offsets. Save+restore around the body lower
     ;; preserves the caller's context (nested arms / sibling arms).
     (local.set $prev_state_fields (call $lower_get_active_state_fields))
-    (call $lower_set_active_state_fields (local.get $state))
+    (call $lower_set_active_state_fields
+      (call $lower_combined_field_names (local.get $config) (local.get $state)))
     ;; Hβ.seed.handler-arm-captures-canonical-order — pre-allocate
     ;; capture entries in canonical (config ++ state) source-order
     ;; matching the wheel's src/lower.mn:1117-1123 captures_names. The

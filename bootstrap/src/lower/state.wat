@@ -253,29 +253,63 @@
     (call $lower_init)
     (global.get $lower_active_state_fields_g))
 
-  ;; $lower_resolve_state_slot_offset(name, fields, idx) — walk fields
-  ;; by name; return slot offset 8 + idx*4 OR -1 if not found
+  ;; $lower_resolve_state_slot_offset(name, names, idx) — walk the
+  ;; slot-order NAME list; return offset 8 + idx*4 OR -1 if not found
   ;; (productive-under-error sentinel; emit skips negative offsets).
-  ;; Mirror of wheel resolve_state_slot_offset (src/lower.mn:1195).
+  ;; The list is the SAME (config ++ state) order the capture
+  ;; pre-allocation lays slots out by and install writes inits to —
+  ;; one truth for the record layout, no parallel state-only list
+  ;; (which resolved `buf` to slot 0 = the config param's slot; the
+  ;; second yield then called the buffer as a closure).
+  ;; Mirror of wheel resolve_state_slot_offset (src/lower.mn).
   (func $lower_resolve_state_slot_offset
         (param $name i32) (param $fields i32) (param $idx i32) (result i32)
-    (local $n i32) (local $i i32) (local $field i32) (local $field_name i32)
+    (local $n i32) (local $i i32)
     (local.set $n (call $len (local.get $fields)))
     (local.set $i (local.get $idx))
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $field
-          (call $list_index (local.get $fields) (local.get $i)))
-        (local.set $field_name
-          (call $list_index (local.get $field) (i32.const 0)))
-        (if (call $str_eq (local.get $field_name) (local.get $name))
+        (if (call $str_eq
+              (call $list_index (local.get $fields) (local.get $i))
+              (local.get $name))
           (then
             (return (i32.add (i32.const 8)
                              (i32.mul (i32.const 4) (local.get $i))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter)))
     (i32.const -1))
+
+  ;; $lower_combined_field_names(config, state) — the record's slot-
+  ;; order name list: config entries are bare names; state entries are
+  ;; (name, init) 2-lists whose name projects out.
+  (func $lower_combined_field_names
+        (param $config i32) (param $state i32) (result i32)
+    (local $nc i32) (local $ns i32) (local $i i32) (local $out i32)
+    (local.set $nc (call $len (local.get $config)))
+    (local.set $ns (call $len (local.get $state)))
+    (local.set $out (call $make_list
+      (i32.add (local.get $nc) (local.get $ns))))
+    (local.set $i (i32.const 0))
+    (block $c_done
+      (loop $c_each
+        (br_if $c_done (i32.ge_u (local.get $i) (local.get $nc)))
+        (drop (call $list_set (local.get $out) (local.get $i)
+          (call $list_index (local.get $config) (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $c_each)))
+    (local.set $i (i32.const 0))
+    (block $s_done
+      (loop $s_each
+        (br_if $s_done (i32.ge_u (local.get $i) (local.get $ns)))
+        (drop (call $list_set (local.get $out)
+          (i32.add (local.get $nc) (local.get $i))
+          (call $list_index
+            (call $list_index (local.get $state) (local.get $i))
+            (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $s_each)))
+    (local.get $out))
 
   ;; ─── $handler_state_inits_register / $handler_state_inits_lookup ──
   ;; Mirror of wheel-side handler_state_inits_registry (src/lower.mn).
@@ -448,6 +482,16 @@
           (then
             (local.set $sch (call $env_binding_scheme (local.get $h_entry)))
             (local.set $body (call $scheme_body (local.get $sch)))
+            ;; Parameterized handler — `handler h(k) with ...` registers
+            ;; TFun(config, TName("Handler",[ename]), row): the factory's
+            ;; RETURN is the handler. Unwrap before the shape check, or
+            ;; every config-bearing handler silently falls to Tier-2
+            ;; evidence dispatch its caller never threads.
+            (if (i32.ge_u (local.get $body) (global.get $heap_base))
+              (then
+                (if (i32.eq (call $ty_tag (local.get $body)) (i32.const 107))
+                  (then (local.set $body
+                    (call $ty_tfun_return (local.get $body)))))))
             ;; Check body is TName("Handler", [TName(ename_match)]).
             (if (i32.ge_u (local.get $body) (global.get $heap_base))
               (then
@@ -581,6 +625,16 @@
           (then
             (local.set $sch (call $env_binding_scheme (local.get $h_entry)))
             (local.set $body (call $scheme_body (local.get $sch)))
+            ;; Parameterized handler — `handler h(k) with ...` registers
+            ;; TFun(config, TName("Handler",[ename]), row): the factory's
+            ;; RETURN is the handler. Unwrap before the shape check, or
+            ;; every config-bearing handler silently falls to Tier-2
+            ;; evidence dispatch its caller never threads.
+            (if (i32.ge_u (local.get $body) (global.get $heap_base))
+              (then
+                (if (i32.eq (call $ty_tag (local.get $body)) (i32.const 107))
+                  (then (local.set $body
+                    (call $ty_tfun_return (local.get $body)))))))
             (if (i32.ge_u (local.get $body) (global.get $heap_base))
               (then
                 (if (i32.eq (call $ty_tag (local.get $body)) (i32.const 108))

@@ -687,6 +687,16 @@
             (call $ec6_emit_args_path_open (call $lexpr_lperform_args (local.get $r)))
             (call $ec7_emit_call_dollar (local.get $op_name))
             (return)))
+        ;; proc_exit never returns — the host terminates. `unreachable`
+        ;; after it is the wasm bottom: the enclosing fn's result type
+        ;; is satisfied regardless of arm shape (abort_exit's fail arm
+        ;; ends here with no resume).
+        (if (call $str_eq (local.get $op_name) (i32.const 5120))   ;; "wasi_proc_exit"
+          (then
+            (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
+            (call $ec7_emit_call_dollar (local.get $op_name))
+            (call $ec_emit_unreachable)
+            (return)))
         (call $ec6_emit_args (call $lexpr_lperform_args (local.get $r)))
         (call $ec7_emit_call_dollar (local.get $op_name))
         (return)))

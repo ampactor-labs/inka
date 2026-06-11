@@ -1410,7 +1410,7 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = map((arm) =
   // Hβ.first-light.resume-with-state-mutation: install arm_state_ctx
   // around arm body lowering so lower_expr's ResumeExpr arm resolves
   // `with field = NEW` updates' slot offsets via current_state_fields().
-  let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(state))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
+  let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
   perform ls_exit_frame()
   let fn_ir = LFn(fn_name, len(arm.args), arm.args, [lo_body], EfPure)
   LDeclareFn(fn_ir)
@@ -1452,17 +1452,20 @@ fn lower_state_slot_stores(handle, updates, fields) = map((upd) => {
   LStateSlotStore(handle, offset, lower_expr(upd.init))
 }, updates)
 
-/// Resolve a state-field name to its byte offset in the handler state
-/// record. State-fields share the closure-record layout per
-/// protocol_handler_is_state_is_closure_is_evidence.md (one heap record,
-/// four roles): [fn_ptr@0, capture_count@4, slot_0@8, slot_1@12, ...].
-/// State-field at source-order position N → offset 8 + N*4 (mirroring
-/// LUpval emit at backends/wasm.mn:1186-1193). Returns -1 when name
-/// is not in fields (productive-under-error).
+/// Resolve a field name to its byte offset in the handler state
+/// record. `fields` is the slot-order NAME list — config ++ state in
+/// declaration order, the SAME list captures_names lays slots out by
+/// and install writes inits to (one heap record, four roles, per
+/// protocol_handler_is_state_is_closure_is_evidence.md:
+/// [fn_ptr@0, count@4, slot_0@8, slot_1@12, ...]). A state-only list
+/// here was a parallel half-truth: `buf` resolved to slot 0 — the
+/// config param's slot — and the next dispatch called the buffer as
+/// a closure. Returns -1 when name is not in fields
+/// (productive-under-error).
 fn resolve_state_slot_offset(name, fields) = {
   let hits = filter((indexed) => {
     let (_, field) = indexed
-    str_eq(field.name, name)
+    str_eq(field, name)
   }, enumerate(fields))
   if len(hits) == 0 { 0 - 1 }
   else {

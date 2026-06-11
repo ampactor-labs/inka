@@ -730,7 +730,9 @@
     (if (i32.eq (local.get $tag) (i32.const 321))
       (then (call $emit_lmatch       (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 325))
-      (then (call $emit_lsuspend     (local.get $r)) (return)))
+      (then (call $emit_lsuspend     (local.get $r) (i32.const 0)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 338))         ;; LTailSuspend
+      (then (call $emit_lsuspend     (local.get $r) (i32.const 1)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 326))
       (then (call $emit_lstateget    (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 327))

@@ -745,7 +745,7 @@
         (local.set $b (call $max_i32 (local.get $b)
           (call $max_arity_in (call $lexpr_ltailcall_args (local.get $expr)) (i32.const 0))))
         (return (call $max_i32 (local.get $a) (local.get $b)))))
-    (if (i32.eq (local.get $tag) (i32.const 325))
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 325)) (i32.eq (local.get $tag) (i32.const 338)))
       (then
         (local.set $a (i32.add (call $len (call $lexpr_lsuspend_args (local.get $expr))) (i32.const 1)))
         (local.set $b (call $max_arity_expr (call $lexpr_lsuspend_fn (local.get $expr))))
@@ -1331,7 +1331,7 @@
         (call $emit_functions (call $lexpr_lmakerecord_fields (local.get $expr)))
         (return)))
     ;; LSuspend (325) — fn IS a closure; recurse to find its inner LFn.
-    (if (i32.eq (local.get $tag) (i32.const 325))
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 325)) (i32.eq (local.get $tag) (i32.const 338)))
       (then
         (call $emit_functions_walk (call $lexpr_lsuspend_fn (local.get $expr)))
         (call $emit_functions (call $lexpr_lsuspend_args (local.get $expr)))
@@ -1534,7 +1534,7 @@
         (call $emit_handler_state_globals
           (call $lowfn_body (call $lexpr_lmakecontinuation_fn (local.get $expr))))
         (return)))
-    (if (i32.eq (local.get $tag) (i32.const 325))         ;; LSuspend
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 325)) (i32.eq (local.get $tag) (i32.const 338)))         ;; LSuspend
       (then
         (call $emit_handler_state_globals_walk (call $lexpr_lsuspend_fn (local.get $expr)))
         (call $emit_handler_state_globals (call $lexpr_lsuspend_args (local.get $expr)))
@@ -1831,7 +1831,7 @@
         (call $emit_feedback_state_globals_walk
           (call $lexpr_lindex_idx (local.get $expr)))
         (return)))
-    (if (i32.eq (local.get $tag) (i32.const 325))         ;; LSuspend
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 325)) (i32.eq (local.get $tag) (i32.const 338)))         ;; LSuspend
       (then
         (call $emit_feedback_state_globals_walk
           (call $lexpr_lsuspend_fn (local.get $expr)))

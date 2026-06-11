@@ -1,0 +1,12 @@
+effect Q {
+  q_op(Int) -> Int
+  q_done() -> Int
+}
+handler q_h(k) with acc = 0 {
+  q_op(n) => resume(n + k),
+  q_done() => resume(acc),
+}
+fn main(x) = {
+  q_op(5)
+  q_done()
+} ~> q_h(10)

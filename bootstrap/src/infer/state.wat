@@ -115,6 +115,14 @@
   (global $infer_arm_ret_ty_g       (mut i32) (i32.const 0))
   (global $infer_arm_result_h_g     (mut i32) (i32.const 0))
 
+  ;; Ctor type-param quantification (Hβ.infer.ctor-scheme-type-params).
+  ;; (name, handle) pair-records for the variant currently registering:
+  ;; a lowercase TName leaf in a ctor's field tys IS a type parameter,
+  ;; not a nominal type — it quantifies in the ctor's Forall so
+  ;; instantiate freshens per use site. Reset per variant.
+  (global $typedef_qmap_g   (mut i32) (i32.const 0))
+  (global $typedef_qcount_g (mut i32) (i32.const 0))
+
   ;; Span index. Flat list of (span_ptr, handle) records tagged
   ;; SPAN_INDEX_ENTRY_TAG=211.
   (global $infer_span_index_ptr     (mut i32) (i32.const 0))

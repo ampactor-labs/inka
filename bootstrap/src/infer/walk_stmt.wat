@@ -899,6 +899,154 @@
   ;; False are nullary variants under `type Bool = False | True` per
   ;; types.mn:32 — they get ConstructorScheme(0, 2) and (1, 2) just like
   ;; any other ADT's nullary variants.
+  ;; $typedef_qmap_handles — the quantified handle list for the
+  ;; variant just walked (Forall's first field).
+  (func $typedef_qmap_handles (result i32)
+    (local $n i32) (local $i i32) (local $out i32)
+    (local.set $n (global.get $typedef_qcount_g))
+    (local.set $out (call $make_list (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (drop (call $list_set (local.get $out) (local.get $i)
+          (call $record_get
+            (call $list_index (global.get $typedef_qmap_g) (local.get $i))
+            (i32.const 1))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.get $out))
+
+  ;; ─── Ctor type-param quantification ──────────────────────────────
+  ;; $typedef_qmap_find_or_add — (name → handle) for the current
+  ;; variant; fresh graph handle on miss, appended to the qmap.
+  (func $typedef_qmap_find_or_add (param $name i32) (result i32)
+    (local $i i32) (local $pair i32) (local $h i32)
+    (local.set $i (i32.const 0))
+    (block $scan_done
+      (loop $scan
+        (br_if $scan_done (i32.ge_u (local.get $i) (global.get $typedef_qcount_g)))
+        (local.set $pair (call $list_index (global.get $typedef_qmap_g) (local.get $i)))
+        (if (call $str_eq (call $record_get (local.get $pair) (i32.const 0))
+                          (local.get $name))
+          (then (return (call $record_get (local.get $pair) (i32.const 1)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $scan)))
+    (local.set $h (call $graph_fresh_ty
+      (call $reason_make_declared (local.get $name))))
+    (local.set $pair (call $make_record (i32.const 0) (i32.const 2)))
+    (call $record_set (local.get $pair) (i32.const 0) (local.get $name))
+    (call $record_set (local.get $pair) (i32.const 1) (local.get $h))
+    (global.set $typedef_qmap_g
+      (call $list_set
+        (call $list_extend_to (global.get $typedef_qmap_g)
+          (i32.add (global.get $typedef_qcount_g) (i32.const 1)))
+        (global.get $typedef_qcount_g)
+        (local.get $pair)))
+    (global.set $typedef_qcount_g
+      (i32.add (global.get $typedef_qcount_g) (i32.const 1)))
+    (local.get $h))
+
+  ;; $ty_quantify_params — rebuild ty with lowercase TName leaves as
+  ;; quantified TVars. Capitalized TNames keep nominal identity; all
+  ;; compound forms recurse into children.
+  (func $ty_quantify_params (param $ty i32) (result i32)
+    (local $tag i32) (local $name i32) (local $args i32)
+    (local $n i32) (local $i i32) (local $out i32) (local $tp i32)
+    (if (i32.lt_u (local.get $ty) (global.get $heap_base))
+      (then (return (local.get $ty))))
+    (local.set $tag (call $ty_tag (local.get $ty)))
+    ;; TName (108) — the leaf that matters.
+    (if (i32.eq (local.get $tag) (i32.const 108))
+      (then
+        (local.set $name (call $record_get (local.get $ty) (i32.const 0)))
+        (local.set $args (call $record_get (local.get $ty) (i32.const 1)))
+        (if (i32.and
+              (i32.eqz (call $len (local.get $args)))
+              (i32.eqz (call $is_uppercase
+                (call $first_char_code (local.get $name)))))
+          (then (return (call $ty_make_tvar
+            (call $typedef_qmap_find_or_add (local.get $name))))))
+        ;; nominal: rebuild with quantified args
+        (local.set $n (call $len (local.get $args)))
+        (local.set $out (call $make_list (local.get $n)))
+        (local.set $i (i32.const 0))
+        (block $a_done
+          (loop $a_each
+            (br_if $a_done (i32.ge_u (local.get $i) (local.get $n)))
+            (drop (call $list_set (local.get $out) (local.get $i)
+              (call $ty_quantify_params
+                (call $list_index (local.get $args) (local.get $i)))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $a_each)))
+        (return (call $ty_make_tname (local.get $name) (local.get $out)))))
+    ;; TList (105)
+    (if (i32.eq (local.get $tag) (i32.const 105))
+      (then (return (call $ty_make_tlist
+        (call $ty_quantify_params (call $record_get (local.get $ty) (i32.const 0)))))))
+    ;; TTuple (106)
+    (if (i32.eq (local.get $tag) (i32.const 106))
+      (then
+        (local.set $args (call $record_get (local.get $ty) (i32.const 0)))
+        (local.set $n (call $len (local.get $args)))
+        (local.set $out (call $make_list (local.get $n)))
+        (local.set $i (i32.const 0))
+        (block $t_done
+          (loop $t_each
+            (br_if $t_done (i32.ge_u (local.get $i) (local.get $n)))
+            (drop (call $list_set (local.get $out) (local.get $i)
+              (call $ty_quantify_params
+                (call $list_index (local.get $args) (local.get $i)))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $t_each)))
+        (return (call $ty_make_ttuple (local.get $out)))))
+    ;; TFun (107) — rebuild TParams with quantified tys.
+    (if (i32.eq (local.get $tag) (i32.const 107))
+      (then
+        (local.set $args (call $record_get (local.get $ty) (i32.const 0)))
+        (local.set $n (call $len (local.get $args)))
+        (local.set $out (call $make_list (local.get $n)))
+        (local.set $i (i32.const 0))
+        (block $f_done
+          (loop $f_each
+            (br_if $f_done (i32.ge_u (local.get $i) (local.get $n)))
+            (local.set $tp (call $list_index (local.get $args) (local.get $i)))
+            (drop (call $list_set (local.get $out) (local.get $i)
+              (call $tparam_make
+                (call $tparam_name (local.get $tp))
+                (call $ty_quantify_params (call $tparam_ty (local.get $tp)))
+                (call $tparam_authored (local.get $tp))
+                (call $tparam_resolved (local.get $tp)))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $f_each)))
+        (return (call $ty_make_tfun
+          (local.get $out)
+          (call $ty_quantify_params (call $record_get (local.get $ty) (i32.const 1)))
+          (call $record_get (local.get $ty) (i32.const 2))))))
+    ;; TRecord (109)
+    (if (i32.eq (local.get $tag) (i32.const 109))
+      (then
+        (local.set $args (call $record_get (local.get $ty) (i32.const 0)))
+        (local.set $n (call $len (local.get $args)))
+        (local.set $out (call $make_list (local.get $n)))
+        (local.set $i (i32.const 0))
+        (block $r_done
+          (loop $r_each
+            (br_if $r_done (i32.ge_u (local.get $i) (local.get $n)))
+            (local.set $tp (call $list_index (local.get $args) (local.get $i)))
+            (drop (call $list_set (local.get $out) (local.get $i)
+              (call $field_pair_make
+                (call $field_pair_name (local.get $tp))
+                (call $ty_quantify_params
+                  (call $record_get (local.get $tp) (i32.const 1))))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $r_each)))
+        (return (call $ty_make_trecord (local.get $out)))))
+    ;; Everything else (TVar, TRecordOpen, TRefined, TCont, TAlias,
+    ;; scalars) passes through — no lowercase TName leaves reachable
+    ;; in ctor field positions for these in declared wheel source.
+    (local.get $ty))
+
     (func $infer_register_typedef_ctors
         (param $type_name i32) (param $variants i32) (param $span i32)
     (local $total i32)
@@ -929,18 +1077,23 @@
         (local.set $field_count (call $len (local.get $field_tys_parser)))
         ;; Build ctor type — nullary uses result_ty directly; N-ary
         ;; wraps in TFun(field_tys, result_ty, EfPure_row).
+        ;; Reset the quantification map for this variant; lowercase
+        ;; TName leaves become quantified TVars (type parameters).
+        (global.set $typedef_qmap_g (call $make_list (i32.const 2)))
+        (global.set $typedef_qcount_g (i32.const 0))
         (if (i32.eqz (local.get $field_count))
           (then (local.set $ctor_ty (local.get $result_ty)))
           (else
             (local.set $field_tys
               (call $walk_stmt_build_field_tparams
                 (local.get $field_tys_parser)))
-            (local.set $ctor_ty (call $ty_make_tfun
-              (local.get $field_tys)
-              (local.get $result_ty)
-              (call $row_make_pure)))))
+            (local.set $ctor_ty (call $ty_quantify_params
+              (call $ty_make_tfun
+                (local.get $field_tys)
+                (local.get $result_ty)
+                (call $row_make_pure))))))
         (local.set $scheme (call $scheme_make_forall
-          (call $make_list (i32.const 0))
+          (call $typedef_qmap_handles)
           (local.get $ctor_ty)))
         (local.set $reason (call $reason_make_located
           (local.get $span)

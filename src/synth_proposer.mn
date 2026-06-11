@@ -70,7 +70,7 @@ type ProposerKind
 
 // ─── EnrichedCandidate — Candidate + provenance + cost score ───────
 //
-// The Synth effect's `propose` returns List<Node>; this file's chain
+// The Synth effect's `propose` returns [Node]; this file's chain
 // wraps each Node with its proposer of origin + a cost score so the
 // gradient can rank. Drift 7 closure: ONE record-shape, never
 // parallel arrays.
@@ -386,7 +386,7 @@ fn verify_each_enriched(candidates) with Synth + GraphRead + !Mutate = {
 }
 
 // ─── map_to_nodes — strip the EnrichedCandidate wrapper for the ───
-//                    Synth effect's List<Node> return contract.
+//                    Synth effect's [Node] return contract.
 
 fn map_to_nodes(enriched) with Pure = map((candidate) => {
   let EnrichedCandidate(c) = candidate

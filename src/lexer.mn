@@ -1,6 +1,6 @@
 // lexer.mn — typed Token stream with full spans (spec 03 + SYNTAX.md)
 //
-// The tokenizer. Emits `List<Token>` where `Token = Tok(TokenKind, Span)`.
+// The tokenizer. Emits `[Token]` where `Token = Tok(TokenKind, Span)`.
 // Mirrors the AST Node wrapper pattern: structured value + positional
 // metadata. Per SYNTAX.md, the parser dispatches via exhaustive
 // `match Tok(kind, _) { … }` over the 69 TokenKind variants — H6's
@@ -121,7 +121,7 @@ fn single_char_kind(b) with Pure = {
   else             { None }
 }
 
-/// Entry point — tokenize `source` into a `List<Token>`.
+/// Entry point — tokenize `source` into a `[Token]`.
 /// Tokens accumulate into a flat buffer threaded through tail-recursion
 /// as `(buf, count)`. `push_tok` extends the buffer if needed and writes
 /// at the counter — O(1) amortized per emit; flat-buffer-plus-counter
@@ -129,7 +129,7 @@ fn single_char_kind(b) with Pure = {
 /// a tag=4 view with logical length = count.
 ///
 /// `source` is a flat byte-string. `byte_at(source, pos)` returns the
-/// `Int` byte code at position `pos`. No intermediate `List<String>` of
+/// `Int` byte code at position `pos`. No intermediate `[String]` of
 /// 1-char strings is allocated; all per-byte dispatch is `Int`-eq, not
 /// string-eq (drift mode 12 cure).
 fn lex(ref source) = {

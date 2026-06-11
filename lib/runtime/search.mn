@@ -69,7 +69,7 @@ import own        // for catch_abort handler
 /// that call site).
 
 effect Choice {
-  choose(options: List<A>) -> A
+  choose(options: [a]) -> a
 }
 
 /// pick_first — OneShot terminal handler. Per CE §1.2: resumes with

@@ -620,10 +620,10 @@ fn parse_type_decl(ref tokens, pos) = {
     let sorted = sort_record_type_fields(flds)
     let body = TRecord(sorted)
     let variant = (name, [body])     // single variant named after the type
-    (nstmt(TypeDefStmt(name, [], [variant]), start), p3)
+    (nstmt(TypeDefStmt(name, [variant]), start), p3)
   } else {
     let (variants, p3) = parse_variants(tokens, p2)
-    (nstmt(TypeDefStmt(name, [], variants), start), p3)
+    (nstmt(TypeDefStmt(name, variants), start), p3)
   }
 }
 
@@ -1126,7 +1126,7 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
   // Subscript `xs[i]` per SYNTAX.md:611-632 + #139. The parser
   // produces IndexExpr(receiver, index) as a semantic AST node;
   // infer dispatches on the receiver's chase-deep Ty:
-  //   TList<A> → list_index runtime call
+  //   T[A] → list_index runtime call
   //   TTuple → compile-time slot from constant index
   //   TRecord-by-int-key → record_get
   // The prior eager fold to CallExpr(VarRef("list_index")) at parse
@@ -1178,9 +1178,10 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
         p2)
     } else { (e, pos) }
   },
-  // Turbofish at call site `f<T>(args)` per SYNTAX.md:158-160.
-  // Type parameters are inferred at call sites; explicit annotation
-  // is rejected. Detection: peek for balanced `<...>` followed by `(`.
+  // Turbofish at call site `f<T>(args)` — angle-bracket generics are
+  // retired everywhere (the case rule IS the declaration; types apply
+  // with parens); this detector keeps the teaching surface alive.
+  // Detection: peek for balanced `<...>` followed by `(`.
   // If turbofish: emit E_ExplicitTypeParams, strip type args, continue
   // as plain call. If not: return (e, pos) so the infix parser sees
   // `<` as comparison.
@@ -2167,13 +2168,13 @@ fn parse_type_ty(ref tokens, pos) = match kind_at(tokens, pos) {
                else if str_eq(v, "Bool")   { TName("Bool", []) }
                else if str_eq(v, "Unit")   { TUnit }
                else                        { TName(v, []) }
-    // Generic application per SYNTAX.md:147: `Name<T1, T2, ...>`.
-    // After parse_type_ty's TIdent arm, look for TLt. If present, parse
-    // comma-separated type args until TGt; rewrap a TName base with args.
-    // Primitives (TInt etc.) shouldn't take args; per protocol_no_silent_
-    // fallback the args are discarded but the parse advances cleanly. A
-    // diagnostic could fire here (post-L1).
-    if at(tokens, base_pos, TLt) {
+    // Parens application — the one-application-syntax law: types
+    // apply like effects apply (`Sample(44100)`) and values apply
+    // (`f(x)`). `Option(Int)` rewraps a TName base with args.
+    // Unambiguous: no expression context exists in type position.
+    // Primitives (TInt etc.) take no args; per protocol_no_silent_
+    // fallback the args are discarded but the parse advances cleanly.
+    if at(tokens, base_pos, TLParen) {
       let (args, p_after) = parse_type_args(tokens, skip_ws(tokens, base_pos + 1))
       let typed = match base {
         TName(name, _) => TName(name, args),
@@ -2224,9 +2225,9 @@ fn parse_type_ty_tail(ref tokens, pos, own buf, count) = {
   }
 }
 
-// Parse comma-separated type arguments terminated by TGt. Caller has
-// already consumed the opening TLt. Returns (List<Ty>, pos-after-TGt).
-// Used for type application `Name<T1, T2, ...>` per SYNTAX.md:147.
+// Parse comma-separated type arguments terminated by TRParen. Caller
+// has already consumed the opening TLParen. Returns ([Ty], pos-after).
+// Used for type application `Name(T1, T2, ...)`.
 fn parse_type_args(ref tokens, pos) = {
   let buf = make_list(4)
   let (final_buf, final_count, p) = parse_type_args_loop(tokens, pos, buf, 0)
@@ -2235,7 +2236,7 @@ fn parse_type_args(ref tokens, pos) = {
 
 fn parse_type_args_loop(ref tokens, pos, own buf, count) = {
   let p = skip_ws(tokens, pos)
-  if at(tokens, p, TGt) { (buf, count, p + 1) }
+  if at(tokens, p, TRParen) { (buf, count, p + 1) }
   else {
     let (ty, p2) = parse_type_ty(tokens, p)
     let (b1, c1) = push_node(buf, count, ty)
@@ -2243,7 +2244,7 @@ fn parse_type_args_loop(ref tokens, pos, own buf, count) = {
     if at(tokens, p3, TComma) {
       parse_type_args_loop(tokens, skip_ws(tokens, p3 + 1), b1, c1)
     } else {
-      (b1, c1, expect(tokens, p3, TGt))
+      (b1, c1, expect(tokens, p3, TRParen))
     }
   }
 }

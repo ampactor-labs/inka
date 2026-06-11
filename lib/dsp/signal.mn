@@ -15,7 +15,7 @@ effect DSP {
 }
 
 // Capability effects — exist primarily to be NEGATED
-effect Alloc { alloc_buffer(size: Int) -> List<Float> }
+effect Alloc { alloc_buffer(size: Int) -> [Float] }
 effect Network { fetch_param(url: String) -> String }
 effect Feedback { delay_tap(samples: Int, x: Float) -> Float }
 

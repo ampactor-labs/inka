@@ -113,8 +113,8 @@ type WaitResult
 /// completion order — multi-core determinism by construction.
 ///
 /// Per drift mode 7 + kernel crystallization #9 (Records-Are-Handler-
-/// State-Shape): threads is List<Handle>, NOT (List<Int>,
-/// List<ThreadState>) parallel arrays.
+/// State-Shape): threads is [Handle], NOT ([Int],
+/// [ThreadState]) parallel arrays.
 
 handler parallel_compose with threads = [] {
   spawn(task) => {
@@ -402,7 +402,7 @@ fn wasi_num_cores_intrinsic()                    with Pure = 1
 /// - String-keyed RmwOp dispatch (drift mode 3). ADT-discriminated
 ///   per primitive #4 row algebra discipline.
 /// - Per-thread state via parallel arrays (drift mode 7). threads
-///   is List<Handle>; per-Handle state lives in the runtime's
+///   is [Handle]; per-Handle state lives in the runtime's
 ///   thread-local-storage substrate (per TH §3).
 /// - Foreign-language drift — NOT Goroutines (Go's syntax-level
 ///   construct); NOT Java's synchronized; NOT Python's threading.

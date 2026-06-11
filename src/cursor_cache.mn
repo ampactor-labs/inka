@@ -32,7 +32,7 @@
 //   Drift 5 (split state):  ONE KaiFile-extended record carries
 //                           both env + oracle_queue; not parallel
 //                           per-module structures.
-//   Drift 7 (parallel arr): oracle_queue is List<OracleEntry>;
+//   Drift 7 (parallel arr): oracle_queue is [OracleEntry];
 //                           one record-shape (handle + suggestion).
 //   Drift 8 (string flag):  CacheStatus tagged ADT (Hit / Miss /
 //                           StaleHash / StaleVersion).
@@ -79,7 +79,7 @@ type GradientDirection
 type ExtendedKaiFile
   = ExtendedKaiFile({
       kai:           KaiFile,                // existing IC cache record
-      oracle_queue:  List,                   // List<OracleEntry>
+      oracle_queue:  List,                   // [OracleEntry]
       queue_version: Int                      // bumps when gradient logic changes
     })
 
@@ -101,7 +101,7 @@ fn cursor_cache_queue_version() with Pure = 1
 effect CursorCache {
   /// Look up the oracle queue for a module. Returns None on miss
   /// (source hash changed, version mismatch, or not yet cached).
-  query_oracle_queue(String) -> Option<List>
+  query_oracle_queue(String) -> Option(List)
 
   /// Store the oracle queue for a module after re-inference.
   /// Called by the IC driver when re-walking a module's env.

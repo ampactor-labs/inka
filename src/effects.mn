@@ -572,7 +572,7 @@ fn eff_arg_lt(ref a, ref b) with !Mutate = match a {
 }
 
 // Row-name set algebra
-// Sorted-flat List<EffName> set ops. Mirror runtime/strings.mn's
+// Sorted-flat [EffName] set ops. Mirror runtime/strings.mn's
 // set_* surface but compare with eff_name_eq / eff_name_lt. Local to
 // effects.mn because EffName is row-internal vocabulary.
 //

@@ -101,7 +101,7 @@ type PriorityTier
 /// cache miss. Pure over (env + handler_chain + intent).
 
 type OracleQueue
-  = OracleQueue(List)               // List<QueueItem>, sorted by priority_gt
+  = OracleQueue(List)               // [QueueItem], sorted by priority_gt
 
 // ─── Mutate effect extension — graph_mutated event ───────────────────
 
@@ -138,9 +138,9 @@ type OracleQueue
 /// - Web playground — same as LSP, push via WebSocket on queue change
 
 effect OracleQuery {
-  query_at_position(Int)            -> List   // List<QueueItem> at this Handle
-  query_project_queue()             -> List   // List<QueueItem> merged from all modules
-  query_module_queue(String)        -> List   // List<QueueItem> for one module
+  query_at_position(Int)            -> List   // [QueueItem] at this Handle
+  query_project_queue()             -> List   // [QueueItem] merged from all modules
+  query_module_queue(String)        -> List   // [QueueItem] for one module
   cursor_relevant(Int, Int)         -> List   // (cursor_handle, max_distance_bytes); locality-filtered
 }
 
@@ -513,7 +513,7 @@ fn invalidation_walk(cache, mutation) with GraphRead = {
   perform compute_invalidation_set(cache, mutation)
 }
 
-/// merge_priority_queues — sorted merge of List<OracleQueue>.
+/// merge_priority_queues — sorted merge of [OracleQueue].
 /// Body in lib/runtime/lists.mn (or this file extends if no good home).
 /// O(N log M) where N = total items, M = module count.
 

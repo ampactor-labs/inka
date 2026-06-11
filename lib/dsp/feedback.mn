@@ -193,8 +193,8 @@ fn audio_chain(input: Sample, cutoff: Hz, sr: Int) -> Sample
 // - Hz as raw Float (drift mode 6 — primitive-type-special-case).
 //   Hz is refined; Sample is refined; Gain is refined; clipping
 //   bounds are refinement obligations not runtime asserts.
-// - Sample as List<Float> (drift mode 8 — int-coded-when-ADT).
-//   Sample is a refined Float; sample-streams are List<Sample>.
+// - Sample as [Float] (drift mode 8 — int-coded-when-ADT).
+//   Sample is a refined Float; sample-streams are [Sample].
 //   Per H3.1 parameterized effects + DM §1.1.
 // - `for sample in stream { ... }` (drift mode 30 — for/while).
 //   Per-sample iteration IS what `<~` draws; the verb makes the

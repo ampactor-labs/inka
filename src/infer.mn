@@ -255,8 +255,8 @@ fn infer_stmt(ref node) = {
       perform inf_set_declared([])
     },
 
-    NStmt(TypeDefStmt(name, args, variants)) =>
-      register_type_constructors(name, args, variants),
+    NStmt(TypeDefStmt(name, variants)) =>
+      register_type_constructors(name, variants),
 
     NStmt(EffectDeclStmt(name, ops)) =>
       register_effect_ops(name, ops),
@@ -648,7 +648,7 @@ fn infer_expr(ref node) = {
 
     NExpr(IndexExpr(receiver, index)) => {
       // Per #139 — semantic subscript. Infer receiver + index; the
-      // result type chases receiver. List<A>[Int] → A; (a, b, c)[Int]
+      // result type chases receiver. [A][Int] → A; (a, b, c)[Int]
       // → element type at the index (compile-time slot); record[Int]
       // → field type at int-key. Today's bootstrap form binds result
       // to a fresh TVar and dispatches list-shape unconditionally;
@@ -2308,17 +2308,109 @@ fn build_param_types(params, handles) = map((pair) => {
 fn build_inferred_params(handles) = map((h) =>
   TParam("_", TVar(h), Unmarked, Unmarked), handles)
 
-fn register_type_constructors(type_name, type_args, variants) = {
+fn register_type_constructors(type_name, variants) = {
   let total = len(variants)
+  // ONE quantification map per DECL (HM: every ctor of a type
+  // quantifies the type's full parameter set — None : Option(a)
+  // too). Lowercase TName leaves ARE the parameters: the case rule
+  // IS the declaration; no angle-bracket list exists to keep in sync.
+  let (converted, qmap) = quantify_variants(variants, make_list(total), 0, total, [])
+  let result_ty = TName(type_name, map((pair) => { let (_, h) = pair TVar(h) }, qmap))
+  let qhandles = map((pair) => { let (_, h) = pair h }, qmap)
   for_each((indexed) => {
     let (tag_id, variant) = indexed
-    register_one_variant(type_name, type_args, variant, tag_id, total)
+    register_one_variant(type_name, result_ty, qhandles,
+      list_index(converted, tag_id), variant, tag_id, total)
   }, enumerate(variants))
 }
 
-fn register_one_variant(type_name, type_args, variant, tag_id, total) = {
-  let (ctor_name, field_types) = variant
-  let result_ty = TName(type_name, type_args)
+/// Pass 1 — convert + quantify each variant's field types, threading
+/// the decl-wide (name, handle) parameter map.
+fn quantify_variants(variants, buf, i, n, qmap) = {
+  if i >= n { (slice(buf, 0, n), qmap) }
+  else {
+    let (_, field_types) = list_index(variants, i)
+    let (fields2, q2) = quantify_ty_list(field_types, qmap)
+    quantify_variants(variants, list_set(buf, i, fields2), i + 1, n, q2)
+  }
+}
+
+fn quantify_ty_list(tys, qmap) = {
+  if len(tys) == 0 { ([], qmap) }
+  else {
+    let (head2, q1) = quantify_ctor_ty(list_index(tys, 0), qmap)
+    let (rest2, q2) = quantify_ty_list(slice(tys, 1, len(tys)), q1)
+    ([head2] ++ rest2, q2)
+  }
+}
+
+/// Lowercase TName leaves become quantified TVars; capitalized names
+/// keep nominal identity (args recurse); compound forms recurse.
+fn quantify_ctor_ty(ty, qmap) = match ty {
+  TName(name, args) =>
+    if len(args) == 0 && first_char_code(name) >= 97 && first_char_code(name) <= 122 {
+      match qmap_find(qmap, name) {
+        Some(h) => (TVar(h), qmap),
+        None => {
+          let h = perform graph_fresh_ty(Declared(name))
+          (TVar(h), push(qmap, (name, h)))
+        }
+      }
+    } else {
+      let (args2, q2) = quantify_ty_list(args, qmap)
+      (TName(name, args2), q2)
+    },
+  TList(elem) => {
+    let (e2, q2) = quantify_ctor_ty(elem, qmap)
+    (TList(e2), q2)
+  },
+  TTuple(elems) => {
+    let (es2, q2) = quantify_ty_list(elems, qmap)
+    (TTuple(es2), q2)
+  },
+  TFun(params, ret, row) => {
+    let (ps2, q1) = quantify_tparam_list(params, qmap)
+    let (r2, q2) = quantify_ctor_ty(ret, q1)
+    (TFun(ps2, r2, row), q2)
+  },
+  TRecord(fields) => {
+    let (fs2, q2) = quantify_field_list(fields, qmap)
+    (TRecord(fs2), q2)
+  },
+  _ => (ty, qmap)
+}
+
+fn quantify_tparam_list(params, qmap) = {
+  if len(params) == 0 { ([], qmap) }
+  else {
+    let TParam(pname, pty, auth, res) = list_index(params, 0)
+    let (pty2, q1) = quantify_ctor_ty(pty, qmap)
+    let (rest2, q2) = quantify_tparam_list(slice(params, 1, len(params)), q1)
+    ([TParam(pname, pty2, auth, res)] ++ rest2, q2)
+  }
+}
+
+fn quantify_field_list(fields, qmap) = {
+  if len(fields) == 0 { ([], qmap) }
+  else {
+    let (fname, fty) = list_index(fields, 0)
+    let (fty2, q1) = quantify_ctor_ty(fty, qmap)
+    let (rest2, q2) = quantify_field_list(slice(fields, 1, len(fields)), q1)
+    ([(fname, fty2)] ++ rest2, q2)
+  }
+}
+
+fn qmap_find(qmap, name) = {
+  if len(qmap) == 0 { None }
+  else {
+    let (n, h) = list_index(qmap, 0)
+    if str_eq(n, name) { Some(h) }
+    else { qmap_find(slice(qmap, 1, len(qmap)), name) }
+  }
+}
+
+fn register_one_variant(type_name, result_ty, qhandles, field_types, variant, tag_id, total) = {
+  let (ctor_name, _) = variant
   // H2.3 nominal record: a single-variant type whose body is a
   // TRecord registers as RecordSchemeKind, not ConstructorScheme.
   // The env entry binds the type's name to TName directly (no
@@ -2329,18 +2421,18 @@ fn register_one_variant(type_name, type_args, variant, tag_id, total) = {
      str_eq(ctor_name, type_name) &&
      is_record_ty(list_index(field_types, 0)) {
     let TRecord(declared_fields) = list_index(field_types, 0)
-    perform env_extend(ctor_name, Forall([], result_ty),
+    perform env_extend(ctor_name, Forall(qhandles, result_ty),
       Declared(ctor_name),
       RecordSchemeKind(declared_fields))
   } else {
     let kind = ConstructorScheme(tag_id, total)
     if len(field_types) == 0 {
-      perform env_extend(ctor_name, Forall([], result_ty),
+      perform env_extend(ctor_name, Forall(qhandles, result_ty),
         Declared(ctor_name), kind)
     } else {
       let params = build_ctor_params(field_types, 0)
       perform env_extend(ctor_name,
-        Forall([], TFun(params, result_ty, EfPure)),
+        Forall(qhandles, TFun(params, result_ty, EfPure)),
         Declared(ctor_name), kind)
     }
   }

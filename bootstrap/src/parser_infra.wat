@@ -268,13 +268,14 @@
     (i32.store offset=4 (local.get $p) (local.get $path))
     (local.get $p))
 
-  ;; TypeDefStmt(name, targs, variants)
-  (func $mk_TypeDefStmt (param $name i32) (param $targs i32) (param $variants i32) (result i32)
-    (local $p i32) (local.set $p (call $alloc (i32.const 16)))
+  ;; TypeDefStmt(name, variants) — no targs slot: type parameters are
+  ;; the lowercase leaves in the variants themselves (the case rule
+  ;; IS the declaration).
+  (func $mk_TypeDefStmt (param $name i32) (param $variants i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 12)))
     (i32.store (local.get $p) (i32.const 122))
     (i32.store offset=4 (local.get $p) (local.get $name))
-    (i32.store offset=8 (local.get $p) (local.get $targs))
-    (i32.store offset=12 (local.get $p) (local.get $variants))
+    (i32.store offset=8 (local.get $p) (local.get $variants))
     (local.get $p))
 
   ;; EffectDeclStmt(name, ops)

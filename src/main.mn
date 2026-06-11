@@ -64,7 +64,7 @@ import oracle
 // fabricate an Invocation with placeholder fields).
 
 type EntryHandlerInvocation
-  = Invocation(String, List<String>, Option<String>)  // name, args, target
+  = Invocation(String, [String], Option(String))  // name, args, target
   | ParseError(String)
 
 // ─── argv parsing ─────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 // Pure tensor operations for Lux ML framework.
 // All functions are pure — no effects, no mutation.
-// Vectors are List<Float>, matrices are List<List<Float>>.
+// Vectors are [Float], matrices are List<[Float]>.
 
 // ── Vector constructors ─────────────────────────────────────
 

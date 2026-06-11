@@ -393,7 +393,7 @@ fn verdict_is_clear(v) with Pure = match v {
 // ─── Aggregate metrics — composed projections of reports ──────────
 //
 // The audit's structured surface. Each metric is a pure transform
-// over a List<InterrogationReport>. Cursor uses these to surface
+// over a [InterrogationReport]. Cursor uses these to surface
 // project-wide gradient-density at various granularities.
 
 fn count_invites_by_kind(reports, kind) with Pure = {

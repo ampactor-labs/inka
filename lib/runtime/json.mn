@@ -31,7 +31,7 @@ type JsonValue
   | JBool(Bool)
   | JNum(Float)
   | JStr(String)
-  | JArr(List)              // List<JsonValue>
+  | JArr(List)              // [JsonValue]
   | JObj(List)              // List<(String, JsonValue)>
 
 /// JsonResult — parser return shape. Per drift mode 9 prevention: no
@@ -292,7 +292,7 @@ fn decode_escape(e) with Pure = {
   else             { (0, false) }
 }
 
-// ─── parse_array — JSON array → JArr(List<JsonValue>) ─────────────────
+// ─── parse_array — JSON array → JArr([JsonValue]) ─────────────────
 
 /// parse_array — opening `[`, comma-separated values, closing `]`.
 /// Empty array `[]` returns JArr([]). Per drift mode 11: cons-prepend
@@ -498,7 +498,7 @@ fn serialize_object_inner(fields, i, n, acc) with Memory + Alloc = {
 
 // ─── Lookup helpers (consumed by lsp_adapter and other JSON consumers) ─
 
-/// json_obj_get — find a field by key in a JObj. Returns Option<JsonValue>.
+/// json_obj_get — find a field by key in a JObj. Returns Option(JsonValue).
 /// Linear scan; LSP messages are small. H6 over JsonValue (JObj only;
 /// other variants return None as type-safety).
 

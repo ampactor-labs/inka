@@ -458,7 +458,7 @@ effect WebSurface {
 effect VimSurface {
   vim_register_neovim_rpc() -> ()
   vim_set_virtual_text(Handle, String) -> ()
-  vim_set_signs(List<Predicate>) -> ()
+  vim_set_signs(signs: [Predicate]) -> ()
   vim_echo_at_cmdline(String) -> ()
   vim_next_key() -> Int
 }

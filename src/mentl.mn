@@ -124,7 +124,7 @@ handler mentl_default with annotations = [] {
 /// run unification → record → rollback. Only PROVEN annotations reach the user.
 /// The trail (graph.mn) makes the run O(M) where M = mutations recorded.
 ///
-/// Returns Option<AnnotationSuggestion> per Hμ.cursor §2 + GR §3.2 (live).
+/// Returns Option(AnnotationSuggestion) per Hμ.cursor §2 + GR §3.2 (live).
 /// Internally pick_highest_leverage produces Option<(Annotation, Capability)>;
 /// `to_annotation_suggestion` wraps at the boundary with kind / annotation
 /// text / unlocked-capability labels / Reason — the public shape Cursor

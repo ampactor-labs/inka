@@ -47,7 +47,7 @@ type QueryResult
   | QRWhy(Reason)
   | QRRefs(List)             // [Span]
   | QRVerifyDebt(List)       // [(Span, Predicate, Reason)]
-  | QRHandlerProvider(Option)// Option<String>
+  | QRHandlerProvider(Option)// Option(String)
   | QRError(String)
 
 /// The single-op effect that routes every forensic question through

@@ -344,10 +344,10 @@ fn map_result(f, res) = match res { Ok(v) => Ok(f(v)), Err(e) => Err(e) }
 // back; the installed iterative handler (Sample/Tick/Clock) decides
 // WHEN the cycle advances.
 
-type FeedbackSpec<A>
+type FeedbackSpec
   = Delay(Int)
-  | Accumulate(A)
-  | FilterSpec(Int, List<Float>)
+  | Accumulate(a)
+  | FilterSpec(Int, [Float])
 
 fn delay(n) = Delay(n)
 fn accumulate(init) = Accumulate(init)

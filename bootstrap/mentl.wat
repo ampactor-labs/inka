@@ -4688,13 +4688,14 @@
     (i32.store offset=4 (local.get $p) (local.get $path))
     (local.get $p))
 
-  ;; TypeDefStmt(name, targs, variants)
-  (func $mk_TypeDefStmt (param $name i32) (param $targs i32) (param $variants i32) (result i32)
-    (local $p i32) (local.set $p (call $alloc (i32.const 16)))
+  ;; TypeDefStmt(name, variants) — no targs slot: type parameters are
+  ;; the lowercase leaves in the variants themselves (the case rule
+  ;; IS the declaration).
+  (func $mk_TypeDefStmt (param $name i32) (param $variants i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 12)))
     (i32.store (local.get $p) (i32.const 122))
     (i32.store offset=4 (local.get $p) (local.get $name))
-    (i32.store offset=8 (local.get $p) (local.get $targs))
-    (i32.store offset=12 (local.get $p) (local.get $variants))
+    (i32.store offset=8 (local.get $p) (local.get $variants))
     (local.get $p))
 
   ;; EffectDeclStmt(name, ops)
@@ -5651,10 +5652,15 @@
     (local.get $p))
 
   ;; TyName(name) → [tag=205][name]
-  (func $mk_TyName (param $name i32) (result i32)
-    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+  ;; TyName(name, args) → [tag=205][name][args] — args is the parens
+  ;; application list (`Option(Int)`); empty for bare names. One
+  ;; application syntax at every level: values f(x), effects
+  ;; Sample(44100), types Option(Int).
+  (func $mk_TyName (param $name i32) (param $args i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 12)))
     (i32.store (local.get $p) (i32.const 205))
     (i32.store offset=4 (local.get $p) (local.get $name))
+    (i32.store offset=8 (local.get $p) (local.get $args))
     (local.get $p))
 
   ;; TyVar(handle) → [tag=206][handle]
@@ -5708,44 +5714,6 @@
   ;; "Int" at 536, "Float" at 544, "String" at 552, "Bool" at 564, "Unit" at 572
   ;; These need length prefixes for str_eq comparison.
 
-  ;; $skip_ty_args_p — advance past `<TypeArg, ...>` block. Per
-  ;; Hβ.parser.type-app-skip (2026-05-09): wheel-source uses generic
-  ;; type application (`List<Float>`, `List<List<Float>>`, etc.); the
-  ;; seed's $parse_type_ty doesn't yet structure TyApp. Pre-fix the
-  ;; parser left `<...>` after TyName, breaking surrounding parse
-  ;; contexts (record-field, fn-param) and cascading into 6500+
-  ;; LUnresolved names. Substrate-honest pre-L1: skip the block, treat
-  ;; ident as opaque type at infer; named follow-up Hβ.parser.type-app-
-  ;; structured (post-L1) emits TyApp(TyName, args) for proper
-  ;; substitution in HM unification.
-  ;;
-  ;; Token codes: TLt=61, TGt=62. Tracks nesting depth for nested
-  ;; `<List<Float>>` cases. Halts at TEof, TLBrace, TRBrace, TComma,
-  ;; TRParen — natural termination boundaries.
-  (func $skip_ty_args_p (param $tokens i32) (param $pos i32) (result i32)
-    (local $depth i32) (local $k i32)
-    (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
-    (if (i32.ne (local.get $k) (i32.const 61))   ;; not TLt
-      (then (return (local.get $pos))))
-    (local.set $depth (i32.const 1))
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-    (block $done
-      (loop $scan
-        (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
-        (br_if $done (i32.eq (local.get $k) (i32.const 69)))   ;; TEof
-        (if (i32.eq (local.get $k) (i32.const 61))             ;; TLt
-          (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
-        (if (i32.eq (local.get $k) (i32.const 62))             ;; TGt
-          (then
-            (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-            (if (i32.eqz (local.get $depth))
-              (then
-                (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-                (br $done)))))
-        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-        (br $scan)))
-    (local.get $pos))
-
   ;; Per Hβ.parser.arrow-type-substrate (2026-05-10): after the base
   ;; type is parsed, check for TArrow. If present, this is a fn-type
   ;; like `() -> A` (effect-op signature, SYNTAX.md §678-720; nested
@@ -5780,9 +5748,10 @@
         (return (local.get $out))))
     (local.get $tup))
 
-  ;; Atom: TIdent (with optional <TypeArgs>) or `(...)` paren-form.
+  ;; Atom: TIdent (with optional parens application) or `(...)` paren-form.
   (func $parse_type_ty_atom (param $tokens i32) (param $pos i32) (result i32)
     (local $k i32) (local $name i32) (local $tup i32) (local $p i32) (local $next i32)
+    (local $args_r i32)
     (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
     ;; TIdent → check for known type names
     (if (i32.and
@@ -5791,10 +5760,7 @@
       (then
         (local.set $name (i32.load offset=4 (local.get $k)))
         (local.set $tup (call $make_list (i32.const 2)))
-        ;; Compute next-pos including any optional `<TypeArgs>` block.
-        (local.set $next
-          (call $skip_ty_args_p (local.get $tokens)
-            (i32.add (local.get $pos) (i32.const 1))))
+        (local.set $next (i32.add (local.get $pos) (i32.const 1)))
         ;; Check known names via first char + length
         (if (i32.and (i32.eq (call $str_len (local.get $name)) (i32.const 3))
                      (i32.eq (call $byte_at (local.get $name) (i32.const 0)) (i32.const 73))) ;; 'I'
@@ -5820,8 +5786,23 @@
             (drop (call $list_set (local.get $tup) (i32.const 0) (i32.const 204)))
             (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $next)))
             (return (local.get $tup))))
-        ;; Default: TyName(name)
-        (drop (call $list_set (local.get $tup) (i32.const 0) (call $mk_TyName (local.get $name))))
+        ;; Parens application: `Option(Int)` — comma'd type list via
+        ;; $parse_variant_fields (the same comma'd-type-list shape;
+        ;; dormant-substrate reuse). Unambiguous: no expression
+        ;; context exists in type position.
+        (if (call $at (local.get $tokens) (local.get $next) (i32.const 45))
+          (then
+            (local.set $args_r (call $parse_variant_fields (local.get $tokens)
+              (call $skip_ws_p (local.get $tokens) (i32.add (local.get $next) (i32.const 1)))))
+            (drop (call $list_set (local.get $tup) (i32.const 0)
+              (call $mk_TyName (local.get $name)
+                (call $list_index (local.get $args_r) (i32.const 0)))))
+            (drop (call $list_set (local.get $tup) (i32.const 1)
+              (call $list_index (local.get $args_r) (i32.const 1))))
+            (return (local.get $tup))))
+        ;; Default: TyName(name) — bare, payload unconstrained.
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $mk_TyName (local.get $name) (call $make_list (i32.const 0)))))
         (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $next)))
         (return (local.get $tup))))
     ;; TLParen → `()` TyUnit | `(T)` grouping | `(T1, T2, ...)` TyTuple.
@@ -6024,7 +6005,6 @@
         (return (local.get $tup))))
     ;; Optional `<TypeParams>` per SYNTAX.md §1219 (`fn map<A, B>(...)`).
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
-    (local.set $p (call $skip_type_params_p (local.get $tokens) (local.get $p)))
     (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $p)))
     ;; Parse (params)
     (local.set $p (call $expect (local.get $tokens) (local.get $p) (i32.const 45))) ;; TLParen
@@ -6117,7 +6097,7 @@
   (func $parse_type_stmt (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
     (local $name i32) (local $p i32) (local $variants_r i32) (local $tup i32)
     (local $fields_r i32) (local $ty_record i32) (local $variant i32)
-    (local $variants i32) (local $field_tys i32) (local $targs i32)
+    (local $variants i32) (local $field_tys i32)
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
     ;; Null return per protocol_parser_fabrication_substrate.md means
     ;; "no TIdent at this position." Substrate-honest recovery:
@@ -6132,12 +6112,9 @@
           (i32.add (local.get $pos) (i32.const 1))))
         (return (local.get $tup))))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
-    ;; Optional `<TypeParams>` per SYNTAX.md §1219 — collected, not
-    ;; skipped: the param names ARE the ctor quantification proof.
-    (local.set $fields_r (call $parse_type_params_p (local.get $tokens) (local.get $p)))
-    (local.set $targs (call $list_index (local.get $fields_r) (i32.const 0)))
-    (local.set $p (call $skip_ws_p (local.get $tokens)
-      (call $list_index (local.get $fields_r) (i32.const 1))))
+    ;; No type-parameter list: the case rule IS the declaration —
+    ;; lowercase identifiers in field positions quantify implicitly
+    ;; (angle-bracket generics retired; E_ExplicitTypeParams).
     ;; Skip =
     (if (call $at (local.get $tokens) (local.get $p) (i32.const 60)) ;; TEq
       (then (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p) (i32.const 1))))))
@@ -6160,7 +6137,6 @@
         (drop (call $list_set (local.get $tup) (i32.const 0)
           (call $nstmt
             (call $mk_TypeDefStmt (local.get $name)
-              (local.get $targs)
               (local.get $variants))
             (local.get $span))))
         (drop (call $list_set (local.get $tup) (i32.const 1)
@@ -6222,86 +6198,10 @@
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $nstmt
         (call $mk_TypeDefStmt (local.get $name)
-          (local.get $targs)
           (call $list_index (local.get $variants_r) (i32.const 0)))
         (local.get $span))))
     (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))
-
-  ;; $parse_type_params_p — collect `<A, B, ...>` param NAMES.
-  ;; Returns (names_list, new_pos) 2-tuple; empty list + same pos
-  ;; when no `<` follows. The decl's params are the quantification
-  ;; proof — registration pre-seeds the qmap from them.
-  (func $parse_type_params_p (param $tokens i32) (param $pos i32) (result i32)
-    (local $buf i32) (local $count i32) (local $name i32)
-    (local $p i32) (local $tup i32)
-    (local.set $buf (call $make_list (i32.const 2)))
-    (local.set $count (i32.const 0))
-    (local.set $p (local.get $pos))
-    (if (call $at (local.get $tokens) (local.get $p) (i32.const 61))   ;; TLt
-      (then
-        (local.set $p (call $skip_ws_p (local.get $tokens)
-          (i32.add (local.get $p) (i32.const 1))))
-        (block $done
-          (loop $each
-            (br_if $done (call $at (local.get $tokens) (local.get $p) (i32.const 69)))  ;; TEof
-            (if (call $at (local.get $tokens) (local.get $p) (i32.const 62))            ;; TGt
-              (then
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (br $done)))
-            (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
-            (if (i32.ne (local.get $name) (i32.const 0))
-              (then
-                (local.set $buf (call $list_extend_to (local.get $buf)
-                  (i32.add (local.get $count) (i32.const 1))))
-                (drop (call $list_set (local.get $buf) (local.get $count) (local.get $name)))
-                (local.set $count (i32.add (local.get $count) (i32.const 1)))))
-            (local.set $p (call $skip_ws_p (local.get $tokens)
-              (i32.add (local.get $p) (i32.const 1))))
-            (if (call $at (local.get $tokens) (local.get $p) (i32.const 51))   ;; TComma
-              (then (local.set $p (call $skip_ws_p (local.get $tokens)
-                (i32.add (local.get $p) (i32.const 1))))))
-            (br $each)))))
-    (local.set $tup (call $make_list (i32.const 2)))
-    (drop (call $list_set (local.get $tup) (i32.const 0)
-      (call $slice (local.get $buf) (i32.const 0) (local.get $count))))
-    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
-    (local.get $tup))
-
-  ;; Skip optional `<TypeParams>` clause after a declaration name per
-  ;; SYNTAX.md §1219-1226 (`type Pair<A, B> = ...`,
-  ;; `fn map<A, B>(...) = ...`, `effect State<S> { ... }`). Returns
-  ;; new pos AFTER the closing TGt; if no TLt at $pos, returns $pos
-  ;; unchanged. Counts angle-bracket depth so nested forms like
-  ;; `Buffer<Option<A>>` close correctly. Per Hβ.parser.type-params-skip
-  ;; (2026-05-10): the seed consumes type params without structuring
-  ;; them; HM inference at the wheel layer projects polymorphism from
-  ;; usage. Substrate-honest deferral; the skip prevents <A>'s tokens
-  ;; from leaking into subsequent stmt parses (which previously caused
-  ;; a captures-len leak through malformed-AST cascade — now closed by
-  ;; Hβ.first-light.fnstmt-fresh-captures-len).
-  (func $skip_type_params_p (param $tokens i32) (param $pos i32) (result i32)
-    (local $depth i32) (local $k i32)
-    (if (i32.eqz (call $at (local.get $tokens) (local.get $pos) (i32.const 61)))   ;; TLt
-      (then (return (local.get $pos))))
-    (local.set $depth (i32.const 1))
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-    (block $done (loop $scan
-      (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
-      (br_if $done (i32.eq (local.get $k) (i32.const 69)))   ;; TEof
-      (br_if $done (i32.eq (local.get $k) (i32.const 68)))   ;; TNewline (defensive)
-      (if (i32.eq (local.get $k) (i32.const 61))             ;; TLt
-        (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
-      (if (i32.eq (local.get $k) (i32.const 62))             ;; TGt
-        (then
-          (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-          (if (i32.eqz (local.get $depth))
-            (then
-              (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-              (br $done)))))
-      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-      (br $scan)))
-    (local.get $pos))
 
   ;; Skip tokens until the next statement boundary — newline, EOF, or
   ;; a top-level declaration keyword (TFn, TLet, TType, TEffect,
@@ -6533,9 +6433,6 @@
           (i32.add (local.get $pos) (i32.const 1))))
         (return (local.get $tup))))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
-    ;; Optional `<TypeParams>` per SYNTAX.md §1226 (`effect State<S> { ... }`).
-    (local.set $p (call $skip_type_params_p (local.get $tokens) (local.get $p)))
-    (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $p)))
     (local.set $p (call $expect (local.get $tokens) (local.get $p) (i32.const 47))) ;; TLBrace
     (local.set $ops_r (call $parse_effect_ops (local.get $tokens)
       (call $skip_ws_p (local.get $tokens) (local.get $p))))
@@ -13372,18 +13269,11 @@
     (local.set $nb (call $len (local.get $bs_list)))
     (if (i32.and (i32.eqz (local.get $na)) (i32.eqz (local.get $nb)))
       (then (return)))
+    ;; One side empty = unconstrained: a bare-name annotation
+    ;; (`-> Option`) places no constraint on the payload. Silent —
+    ;; this is the annotation's semantics, not an anomaly.
     (if (i32.or (i32.eqz (local.get $na)) (i32.eqz (local.get $nb)))
-      (then
-        (local.set $msg (i32.const 3088))                   ;; "type list arity mismatch: "
-        (local.set $msg (call $str_concat
-          (local.get $msg) (call $int_to_str (local.get $na))))
-        (local.set $msg (call $str_concat
-          (local.get $msg) (i32.const 3120)))               ;; " vs "
-        (local.set $msg (call $str_concat
-          (local.get $msg) (call $int_to_str (local.get $nb))))
-        (call $eprint_string (local.get $msg))
-        (drop (local.get $span))
-        (return)))
+      (then (return)))
     ;; Both non-empty + same length (canonical uses recursive head/tail;
     ;; the seed flat-indexes both for O(N) without snoc-walk allocations).
     ;; Per CLAUDE.md hot-path discipline: flat-index loop on tag-0 lists.
@@ -17078,7 +16968,6 @@
         (call $infer_register_typedef_ctors
           (i32.load offset=4 (local.get $stmt))
           (i32.load offset=8 (local.get $stmt))
-          (i32.load offset=12 (local.get $stmt))
           (local.get $span))
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 123))
@@ -17363,11 +17252,13 @@
           (call $reason_make_inferred (i32.const 4056)))))))   ;; "param"
     ;; Heap-allocated record — read tag from offset 0.
     (local.set $tag (i32.load (local.get $pty)))
-    ;; tag=205 TyName(name) — extract name + build TName(name, [])
+    ;; tag=205 TyName(name, args) — parens application `Option(Int)`;
+    ;; each arg converts recursively.
     (if (i32.eq (local.get $tag) (i32.const 205))
       (then (return (call $ty_make_tname
         (i32.load offset=4 (local.get $pty))
-        (call $make_list (i32.const 0))))))
+        (call $walk_stmt_parser_tys_to_tys
+          (i32.load offset=8 (local.get $pty)))))))
     ;; tag=206 TyVar — fresh TVar via graph (productive-under-error
     ;; ignores the parser's variable name; future generics work will
     ;; thread the name through tparam.wat substrate).
@@ -17549,6 +17440,46 @@
   ;; ─── Ctor type-param quantification ──────────────────────────────
   ;; $typedef_qmap_find_or_add — (name → handle) for the current
   ;; variant; fresh graph handle on miss, appended to the qmap.
+  ;; $quantify_tparams — rebuild each TParam with its ty quantified.
+  (func $quantify_tparams (param $tparams i32) (result i32)
+    (local $n i32) (local $i i32) (local $out i32) (local $tp i32)
+    (local.set $n (call $len (local.get $tparams)))
+    (local.set $out (call $make_list (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $tp (call $list_index (local.get $tparams) (local.get $i)))
+        (drop (call $list_set (local.get $out) (local.get $i)
+          (call $tparam_make
+            (call $tparam_name (local.get $tp))
+            (call $ty_quantify_params (call $tparam_ty (local.get $tp)))
+            (call $tparam_authored (local.get $tp))
+            (call $tparam_resolved (local.get $tp)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.get $out))
+
+  ;; $typedef_qmap_tvars — the decl's parameters as TVars: the args
+  ;; of the result TName. Payload types FLOW through these
+  ;; (instantiate freshens them; unify threads them pairwise).
+  (func $typedef_qmap_tvars (result i32)
+    (local $n i32) (local $i i32) (local $out i32)
+    (local.set $n (global.get $typedef_qcount_g))
+    (local.set $out (call $make_list (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (drop (call $list_set (local.get $out) (local.get $i)
+          (call $ty_make_tvar
+            (call $record_get
+              (call $list_index (global.get $typedef_qmap_g) (local.get $i))
+              (i32.const 1)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.get $out))
+
   (func $typedef_qmap_lookup (param $name i32) (result i32)
     (local $i i32) (local $pair i32)
     (local.set $i (i32.const 0))
@@ -17597,17 +17528,12 @@
       (then
         (local.set $name (call $record_get (local.get $ty) (i32.const 0)))
         (local.set $args (call $record_get (local.get $ty) (i32.const 1)))
-        (if (i32.eqz (call $len (local.get $args)))
-          (then
-            ;; Declared type param (<A>, any case) — already in the map.
-            (local.set $n (call $typedef_qmap_lookup (local.get $name)))
-            (if (i32.ne (local.get $n) (i32.const 0))
-              (then (return (call $ty_make_tvar (local.get $n)))))
-            ;; Implicit lowercase param (Some(a) without <a>).
-            (if (i32.eqz (call $is_uppercase
-                  (call $first_char_code (local.get $name))))
-              (then (return (call $ty_make_tvar
-                (call $typedef_qmap_find_or_add (local.get $name))))))))
+        (if (i32.and
+              (i32.eqz (call $len (local.get $args)))
+              (i32.eqz (call $is_uppercase
+                (call $first_char_code (local.get $name)))))
+          (then (return (call $ty_make_tvar
+            (call $typedef_qmap_find_or_add (local.get $name))))))
         ;; nominal: rebuild with quantified args
         (local.set $n (call $len (local.get $args)))
         (local.set $out (call $make_list (local.get $n)))
@@ -17689,63 +17615,66 @@
     (local.get $ty))
 
     (func $infer_register_typedef_ctors
-        (param $type_name i32) (param $targs i32) (param $variants i32) (param $span i32)
+        (param $type_name i32) (param $variants i32) (param $span i32)
     (local $total i32)
     (local $tag_id i32) (local $variant i32)
     (local $vname i32) (local $field_tys_parser i32)
-    (local $field_tys i32) (local $field_count i32)
+    (local $field_tys i32)
     (local $result_ty i32) (local $ctor_ty i32)
     (local $scheme i32) (local $reason i32)
-    (local $seed_i i32) (local $seed_n i32)
+    (local $converted i32) (local $qhandles i32)
 
     (local.set $total (call $len (local.get $variants)))
-    ;; Build the result type once: TName(type_name, []) — every variant
-    ;; constructor returns this.
-    (local.set $result_ty (call $ty_make_tname
-      (local.get $type_name)
-      (call $make_list (i32.const 0))))
+    ;; Pass 1 — ONE quantification map per DECL (HM: every ctor of a
+    ;; type quantifies the type's full parameter set; None : Option(a)
+    ;; too). Convert + quantify each variant's field tparams; store
+    ;; per-variant (0 = nullary).
+    (global.set $typedef_qmap_g (call $make_list (i32.const 2)))
+    (global.set $typedef_qcount_g (i32.const 0))
+    (local.set $converted (call $make_list (local.get $total)))
     (local.set $tag_id (i32.const 0))
-    (block $done
-      (loop $each
-        (br_if $done (i32.ge_u (local.get $tag_id) (local.get $total)))
+    (block $p1_done
+      (loop $p1
+        (br_if $p1_done (i32.ge_u (local.get $tag_id) (local.get $total)))
         (local.set $variant
           (call $list_index (local.get $variants) (local.get $tag_id)))
-        ;; Each variant is a 2-tuple (vname, field_tys_parser) per
-        ;; parser_decl.wat:60-63.
-        (local.set $vname
-          (call $list_index (local.get $variant) (i32.const 0)))
         (local.set $field_tys_parser
           (call $list_index (local.get $variant) (i32.const 1)))
-        (local.set $field_count (call $len (local.get $field_tys_parser)))
-        ;; Build ctor type — nullary uses result_ty directly; N-ary
-        ;; wraps in TFun(field_tys, result_ty, EfPure_row).
-        ;; Reset the quantification map for this variant, pre-seeded
-        ;; with the DECLARED type params (<A>, any case) — the decl is
-        ;; the proof; lowercase leaves remain the implicit fallback.
-        (global.set $typedef_qmap_g (call $make_list (i32.const 2)))
-        (global.set $typedef_qcount_g (i32.const 0))
-        (local.set $seed_n (call $len (local.get $targs)))
-        (local.set $seed_i (i32.const 0))
-        (block $seed_done
-          (loop $seed_each
-            (br_if $seed_done (i32.ge_u (local.get $seed_i) (local.get $seed_n)))
-            (drop (call $typedef_qmap_find_or_add
-              (call $list_index (local.get $targs) (local.get $seed_i))))
-            (local.set $seed_i (i32.add (local.get $seed_i) (i32.const 1)))
-            (br $seed_each)))
-        (if (i32.eqz (local.get $field_count))
-          (then (local.set $ctor_ty (local.get $result_ty)))
-          (else
-            (local.set $field_tys
+        (if (i32.eqz (call $len (local.get $field_tys_parser)))
+          (then (drop (call $list_set (local.get $converted)
+            (local.get $tag_id) (i32.const 0))))
+          (else (drop (call $list_set (local.get $converted)
+            (local.get $tag_id)
+            (call $quantify_tparams
               (call $walk_stmt_build_field_tparams
-                (local.get $field_tys_parser)))
-            (local.set $ctor_ty (call $ty_quantify_params
-              (call $ty_make_tfun
-                (local.get $field_tys)
-                (local.get $result_ty)
-                (call $row_make_pure))))))
+                (local.get $field_tys_parser)))))))
+        (local.set $tag_id (i32.add (local.get $tag_id) (i32.const 1)))
+        (br $p1)))
+    ;; The result type carries the decl's quantified parameters —
+    ;; payload types flow through it.
+    (local.set $qhandles (call $typedef_qmap_handles))
+    (local.set $result_ty (call $ty_make_tname
+      (local.get $type_name)
+      (call $typedef_qmap_tvars)))
+    ;; Pass 2 — register each ctor with the FULL quantification.
+    (local.set $tag_id (i32.const 0))
+    (block $p2_done
+      (loop $p2
+        (br_if $p2_done (i32.ge_u (local.get $tag_id) (local.get $total)))
+        (local.set $variant
+          (call $list_index (local.get $variants) (local.get $tag_id)))
+        (local.set $vname
+          (call $list_index (local.get $variant) (i32.const 0)))
+        (local.set $field_tys
+          (call $list_index (local.get $converted) (local.get $tag_id)))
+        (if (i32.eqz (local.get $field_tys))
+          (then (local.set $ctor_ty (local.get $result_ty)))
+          (else (local.set $ctor_ty (call $ty_make_tfun
+            (local.get $field_tys)
+            (local.get $result_ty)
+            (call $row_make_pure)))))
         (local.set $scheme (call $scheme_make_forall
-          (call $typedef_qmap_handles)
+          (local.get $qhandles)
           (local.get $ctor_ty)))
         (local.set $reason (call $reason_make_located
           (local.get $span)
@@ -17757,7 +17686,7 @@
           (call $schemekind_make_ctor
             (local.get $tag_id) (local.get $total)))
         (local.set $tag_id (i32.add (local.get $tag_id) (i32.const 1)))
-        (br $each))))
+        (br $p2))))
 
   (func $infer_walk_stmt_typedef
         (export "infer_walk_stmt_typedef")
@@ -17766,7 +17695,6 @@
     (call $infer_register_typedef_ctors
       (i32.load offset=4 (local.get $stmt))
       (i32.load offset=8 (local.get $stmt))
-      (i32.load offset=12 (local.get $stmt))
       (local.get $span)))
 
   ;; ─── EffectDeclStmt arm (tag 123) — Phase B.3 ultimate-form ──────

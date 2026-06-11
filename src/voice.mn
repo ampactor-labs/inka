@@ -103,17 +103,17 @@ type Situation
   = Situation({
       tentacle:              Tentacle,
       topic:                 Topic,
-      handle:                Option,                // Option<Int>
-      env_snapshot:          List,                  // List<EnvEntry>
-      reason_at_topic:       Option,                // Option<Reason>
-      row_at_topic:          Option,                // Option<EffRow>
-      row_declared:          Option,                // Option<EffRow> — differs from row_at_topic → subsumption diag
-      ownership_at_topic:    Option,                // Option<Ownership>
-      refinements:           List,                  // List<Predicate>
-      gradient_next:          Option,                // Option<AnnotationSuggestion> per Hμ.cursor §2 + GR §3.2 live
-      handlers_installed:    List,                  // List<HandlerEntry>
-      prior_turn_topic:      Option,                // Option<Topic> — silence predicate input
-      prior_turn_tentacle:   Option,                // Option<Tentacle> — travels with prior_turn_topic for tentacle-different check
+      handle:                Option,                // Option(Int)
+      env_snapshot:          List,                  // [EnvEntry]
+      reason_at_topic:       Option,                // Option(Reason)
+      row_at_topic:          Option,                // Option(EffRow)
+      row_declared:          Option,                // Option(EffRow) — differs from row_at_topic → subsumption diag
+      ownership_at_topic:    Option,                // Option(Ownership)
+      refinements:           List,                  // [Predicate]
+      gradient_next:          Option,                // Option(AnnotationSuggestion) per Hμ.cursor §2 + GR §3.2 live
+      handlers_installed:    List,                  // [HandlerEntry]
+      prior_turn_topic:      Option,                // Option(Topic) — silence predicate input
+      prior_turn_tentacle:   Option,                // Option(Tentacle) — travels with prior_turn_topic for tentacle-different check
       facts:                 TopicFacts,            // pre-computed predicates over topic (§2.7.5 helpers as field reads)
       register:              Register
     })
@@ -137,7 +137,7 @@ type Situation
 type TopicFacts
   = TopicFacts({
       is_hole:                Bool,                 // TentPropose → TopicHandle(h): handle_is_hole(h)
-      error_code_at:          Option,               // Option<String> — TentPropose → TopicHandle(h): error_at(h)
+      error_code_at:          Option,               // Option(String) — TentPropose → TopicHandle(h): error_at(h)
       nested_call_depth:      Int                   // TentTopology → nested_calls_at_span(topic)
     })
 
@@ -150,7 +150,7 @@ type FormKind
   = FFactual          // "`x` is Pure." (Query)
   | FOffering         // "Adding `with Pure` unlocks memoization." (Propose / Topology)
   | FRefutation       // "`own x` consumed twice at L40." (Trace)
-  | FNavigation       // "`env_lookup` — returns `Option<Entry>`." (Query deep)
+  | FNavigation       // "`env_lookup` — returns `Option(Entry)`." (Query deep)
   | FCapability       // "`!Alloc` — real-time-safe." (Unlock)
   | FRefinement       // "`99999` violates `self <= 65535`." (Verify)
   | FGradient         // "Next: `with Pure` on line 12." (Teach)
@@ -199,7 +199,7 @@ type Modifier
 
 type VoiceLine
   = Silence
-  | VoiceLine(Tentacle, FormKind, List, Modifier)   // slots: List<Slot>
+  | VoiceLine(Tentacle, FormKind, List, Modifier)   // slots: [Slot]
 
 /// History feeds the silence predicate's
 /// observation_new_since_last_turn check. Bounded ring — the session
@@ -269,7 +269,7 @@ type Answer
   = AnsType(Ty, Reason)
   | AnsRow(EffRow, Reason)
   | AnsReason(Reason)               // full Reason chain for QWhy
-  | AnsRefs(List, Reason)           // List<Span> of references
+  | AnsRefs(List, Reason)           // [Span] of references
   | AnsSilence
 
 /// Edit is a Patch applied to a FileHandle. Outcome is either
@@ -288,13 +288,13 @@ type EditOutcome
 
 type CompileOutcome
   = CompileOk(Path)                 // emitted binary
-  | CompileFailed(List)             // List<Diagnostic>
+  | CompileFailed(List)             // [Diagnostic]
 
 type CheckOutcome
   = CheckOutcome(List, List)        // diagnostics, pending obligations
 
 type AuditReport
-  = AuditReport(List)               // List<AuditFinding> — drift + plan + effect-registry surfaces
+  = AuditReport(List)               // [AuditFinding] — drift + plan + effect-registry surfaces
 
 /// `declare_intent` lets the human say "I'm targeting embedded; keep
 /// me honest" — a constraint the silence predicate and Trace
@@ -341,7 +341,7 @@ effect Interact {
   // Text-files-first is a hard constraint. These ops are first-class.
 
   project_root()                 -> Path
-  tree_list(Path)                -> List   // List<TreeEntry>
+  tree_list(Path)                -> List   // [TreeEntry]
   open_file(Path)                -> FileHandle
   save_file(FileHandle)          -> ()
   create_file(Path, String)      -> FileHandle
@@ -390,7 +390,7 @@ effect Interact {
 
   declare_intent(Intent)         -> ()
   retract_intent(IntentId)       -> ()
-  history(Int)                   -> List   // List<TurnRecord>
+  history(Int)                   -> List   // [TurnRecord]
   cancel_pending()               -> ()
 }
 
@@ -575,7 +575,7 @@ fn tentacle_to_form_kind(tentacle) with Pure = {
 
 /// applicable_modifiers_for_tentacle — per MV §2.7.4, the per-tentacle
 /// subset of Modifier instances RPlayful selects from. Returns
-/// List<Modifier> of concrete TailConsequence / EmphasisClose /
+/// [Modifier] of concrete TailConsequence / EmphasisClose /
 /// ParenQualifier instances with their canonical phrase strings.
 /// Keyed on Tentacle (not FormKind — three tentacles share FOffering
 /// but have distinct subsets per §2.7.4 lines 559-567). H6 discipline.
@@ -963,7 +963,7 @@ fn fold_tentacles(situation, tentacles, i, n, acc, count) with Pure = {
 /// Verify → Teach → Why), composes per-tentacle Situation via
 /// with_tentacle, checks proof_derivable (Pure per-tentacle gate),
 /// renders surviving tentacles via render_for_tentacle, returns a
-/// List<VoiceLine> of length 0 to 8.
+/// [VoiceLine] of length 0 to 8.
 ///
 /// Two-tier silence per insight #11 + MV §2.7.5:
 ///   - Outer gate: silence_predicate(situation) — project queue empty
@@ -1332,7 +1332,7 @@ fn answer_from_slots(slots, reason) with Pure = {
 /// scan slots for the first projectable kind via answer_from_slots.
 /// H6 exhaustive over VoiceLine.
 ///
-/// AnsRefs (List<Span>) projection for QRefsOf is MV.2.e.Q.refs
+/// AnsRefs ([Span]) projection for QRefsOf is MV.2.e.Q.refs
 /// peer sub-handle territory; today returns AnsSilence when no
 /// projectable head is found rather than fabricating an empty AnsRefs.
 
@@ -1352,7 +1352,7 @@ fn voiceline_to_answer(voiceline, situation) with Pure = {
 //
 // Two pure helpers for intent management. Per drift mode 7 prevention:
 // intents are stored as List<(IntentId, Intent)> tuples on the handler
-// state, NOT as parallel List<IntentId> + List<Intent> arrays. Per
+// state, NOT as parallel [IntentId] + [Intent] arrays. Per
 // drift mode 8: IntentId is a structured ADT (Int wrapper), not a
 // raw integer.
 
@@ -1703,7 +1703,7 @@ fn file_handle_eq(a, b) with Pure = {
 }
 
 /// suggestion_unlocks_nonempty — silence-predicate input for TentUnlock.
-/// Per Hμ.cursor §2: AnnotationSuggestion's unlocks list (List<String>)
+/// Per Hμ.cursor §2: AnnotationSuggestion's unlocks list ([String])
 /// is non-empty iff the candidate proves at least one capability gate.
 /// Single-pass: `is_some` already checked at the call site, so the
 /// inner match is exhaustive over the Some branch.
@@ -1716,7 +1716,7 @@ fn suggestion_unlocks_nonempty(opt) with Pure = match opt {
   }
 }
 
-/// join_capability_labels — fold List<String> into a comma-joined
+/// join_capability_labels — fold [String] into a comma-joined
 /// String for FCapability rendering. Tail-recursive; allocation
 /// bounded by total label length. The capabilities_for_annotation
 /// substrate produces lists of size ≤ 3 today, so a flat fold is
@@ -1755,7 +1755,7 @@ handler mentl_voice_filesystem
   /// sub-handle when surfaces need absolute paths.
   project_root()        => resume(project_root_cache),
 
-  /// tree_list — directory listing as List<TreeEntry>. Stubbed
+  /// tree_list — directory listing as [TreeEntry]. Stubbed
   /// pending FX.A.dirent (fs_list_dir + dirent parsing) + FX.1
   /// (fs_filestat_is_dir for TreeFile vs TreeDir projection). Per
   /// drift mode 9: gap is named explicitly, not silently absorbed.

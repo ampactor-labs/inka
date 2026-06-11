@@ -753,18 +753,11 @@
     (local.set $nb (call $len (local.get $bs_list)))
     (if (i32.and (i32.eqz (local.get $na)) (i32.eqz (local.get $nb)))
       (then (return)))
+    ;; One side empty = unconstrained: a bare-name annotation
+    ;; (`-> Option`) places no constraint on the payload. Silent —
+    ;; this is the annotation's semantics, not an anomaly.
     (if (i32.or (i32.eqz (local.get $na)) (i32.eqz (local.get $nb)))
-      (then
-        (local.set $msg (i32.const 3088))                   ;; "type list arity mismatch: "
-        (local.set $msg (call $str_concat
-          (local.get $msg) (call $int_to_str (local.get $na))))
-        (local.set $msg (call $str_concat
-          (local.get $msg) (i32.const 3120)))               ;; " vs "
-        (local.set $msg (call $str_concat
-          (local.get $msg) (call $int_to_str (local.get $nb))))
-        (call $eprint_string (local.get $msg))
-        (drop (local.get $span))
-        (return)))
+      (then (return)))
     ;; Both non-empty + same length (canonical uses recursive head/tail;
     ;; the seed flat-indexes both for O(N) without snoc-walk allocations).
     ;; Per CLAUDE.md hot-path discipline: flat-index loop on tag-0 lists.

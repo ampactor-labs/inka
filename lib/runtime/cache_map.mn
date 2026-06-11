@@ -129,7 +129,7 @@ fn cache_copy_with_insert(entries, n, insert_at, new_key, new_val, buf, i) with 
 }
 
 /// cache_invalidate_set — remove a set of keys from the map. The keys
-/// argument is a sorted List<Int> (per the same invariant the map uses).
+/// argument is a sorted [Int] (per the same invariant the map uses).
 /// O(N + M) merge-style — walk both lists, drop entries whose keys are
 /// in the invalidation set.
 
@@ -173,7 +173,7 @@ fn cache_size(map) with Pure = {
   len(entries)
 }
 
-/// cache_keys — return List<Int> of all keys in the map (sorted, by
+/// cache_keys — return [Int] of all keys in the map (sorted, by
 /// invariant). O(N). Used by surface-side debugging + by snapshotting.
 
 fn cache_keys(map) with Memory + Alloc = {

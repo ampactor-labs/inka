@@ -78,7 +78,7 @@ fn chase_node(ref nodes, handle, depth) with !Mutate = {
   }
 }
 
-fn process(input: List<Float>) -> Result with !Alloc = {
+fn process(input: [Float]) -> Result with !Alloc = {
   let validated = input |> validate
   let normalized = validated |> normalize
   normalized |> fft |> extract
@@ -102,7 +102,7 @@ Do not write `fn name(a: Int)` when the graph can infer it. Do write `fn name(po
 When the function needs intermediate `let` bindings or multiple statements before its final expression:
 
 ```
-fn process(input: List<Float>) -> Result with !Alloc = {
+fn process(input: [Float]) -> Result with !Alloc = {
   let validated = input |> validate
   let normalized = validated |> normalize
   normalized |> fft |> extract
@@ -144,11 +144,14 @@ Quick Fix: add `{` after `=` and `}` at the end.
 ### Generic type parameters
 
 ```
-fn map<A, B>(f: A -> B, xs: List<A>) -> List<B> =
+fn map(f: a -> b, xs: [a]) -> [b] =
   ...
 ```
 
-Angle brackets at declaration. Inferred at call sites. **No turbofish.** Call:
+**The case rule IS the declaration**: lowercase identifiers in type
+position can only be type parameters (nominal types are capitalized),
+so there is no declaration list to write or keep in sync. Inferred at
+call sites. **No turbofish. No angle brackets — anywhere.** Call:
 ```
 map(double, [1, 2, 3])   // correct — A=Int, B=Int inferred
 ```
@@ -157,7 +160,7 @@ map(double, [1, 2, 3])   // correct — A=Int, B=Int inferred
 // REJECTED:
 map<Int, Int>(double, [1, 2, 3])
 ```
-Diagnostic: **`E_ExplicitTypeParams`**: "type parameters are inferred at call sites; remove the explicit annotation."
+Diagnostic: **`E_ExplicitTypeParams`**: "type parameters are inferred at call sites; remove the explicit annotation." The same diagnostic covers angle-bracket parameter lists in ANY declaration position (`type Box<A>`, `fn f<T>`, `effect E<S>`) — the list is retired; the case rule carries the meaning.
 
 ### With-clauses for effects
 
@@ -618,7 +621,7 @@ matrix[i][j]                 // chained indexing
 ```
 
 `xs[i]` lowers to the appropriate runtime call based on the receiver's inferred type:
-- `List<A>` → `list_index(xs, i)`.
+- `[a]` → `list_index(xs, i)`.
 - Tuple → compile-time position extraction.
 - Map / record-by-int-key → `record_get(xs, i)`.
 
@@ -626,7 +629,7 @@ Bounds-checking is runtime for lists (traps on out-of-range); compile-time for t
 
 Refinements over the index tighten bounds:
 ```
-fn safe_get(xs: List<A>, i: ValidIndex<xs>) -> A = xs[i]
+fn safe_get(xs: [a], i: ValidIndex(xs)) -> a = xs[i]
 ```
 
 When `i` is refined to a proven-valid index, the compiler elides the bounds check.
@@ -638,16 +641,22 @@ When `i` is refined to a proven-valid index, the compiler elides the bounds chec
 ### Type declaration
 
 ```
-type Option<A>
-  = Some(A)
+type Option
+  = Some(a)
   | None
 
-type Tree<A>
+type Tree
   = Leaf
-  | Branch(Tree<A>, A, Tree<A>)
+  | Branch(Tree(a), a, Tree(a))
 ```
 
-Each variant is a constructor with zero or more fields. Type parameters in angle brackets.
+Each variant is a constructor with zero or more fields. Type
+parameters are the lowercase identifiers in field positions — the
+case rule IS the declaration (uppercase = nominal type, lowercase =
+parameter). Every constructor of a type quantifies the type's full
+parameter set (`None : Option(a)` too). Types APPLY with parens,
+the one application syntax at every level: values `f(x)`, effects
+`Sample(44100)`, types `Option(Int)` / `Tree(a)`.
 
 ### Constructor calls (value construction)
 
@@ -688,7 +697,7 @@ Three forms of `type` declaration, distinguished by RHS shape:
 ```
 type Port = Int
 type Frequency = Float
-type Bytes = List<Int>
+type Bytes = [Int]
 ```
 
 Creates `TAlias("X", Y)`. The alias and underlying type unify transparently — `Port` and `Int` are interchangeable for type-checking. The name is preserved in Reason chains and in Mentl's voice.
@@ -724,7 +733,7 @@ No `newtype` keyword required; the record name carries the brand. Field access v
 
 ```
 type Sample = Float where -1.0 <= self <= 1.0
-type NonEmpty<A> = List<A> where len(self) > 0
+type NonEmpty = [a] where len(self) > 0
 type Even = Int where self % 2 == 0
 ```
 
@@ -742,9 +751,9 @@ effect IO {
   read() -> String
 }
 
-effect State<S> {
-  get() -> S
-  set(v: S)                        // unit return; `-> ()` omitted
+effect State {
+  get() -> s
+  set(v: s)                        // unit return; `-> ()` omitted
 }
 ```
 
@@ -1195,7 +1204,7 @@ let x = 1   // trailing comment
 /// References to `Sample` and `<~` are resolved by render handlers.
 ///
 /// Primitive: #5 (Trace) — exemplifies ownership-as-effect with `!Alloc`.
-fn lowpass_filter(samples: List<Sample>) -> List<Sample> with !Alloc =
+fn lowpass_filter(samples: [Sample]) -> [Sample] with !Alloc =
   ...
 ```
 
@@ -1311,11 +1320,11 @@ The block-form `~>` deliberately has the LOWEST precedence so it captures the wh
 
 ### Concatenation operator
 
-`++` is **type-polymorphic over `TList<A>` and `TString`**, dispatched at lower-time by reading the operand's inferred type from the graph (`lookup_ty`).
+`++` is **type-polymorphic over `TList(a)` and `TString`**, dispatched at lower-time by reading the operand's inferred type from the graph (`lookup_ty`).
 
 | Operand types               | Lower projection                                       | Runtime fn       |
 |-----------------------------|--------------------------------------------------------|------------------|
-| `TList<A>` ++ `TList<A>`    | `LCall(handle, LGlobal("list_concat"), [l, r])`        | `list_concat`    |
+| `TList(a)` ++ `TList(a)`    | `LCall(handle, LGlobal("list_concat"), [l, r])`        | `list_concat`    |
 | `TString` ++ `TString`      | `LCall(handle, LGlobal("str_concat"),  [l, r])`        | `str_concat`     |
 | mixed (`TList` ++ `TString`)| `E_ConcatTypeMismatch` at infer-time                   | (none)           |
 | unresolved (TVar / NFree)   | `E_ConcatTypeUnresolved` at lower-time                 | (none)           |
@@ -1414,12 +1423,17 @@ Per `protocol_oracle_is_ic.md`: format is idempotent (`format(format(x)) == form
 ### Declaration
 
 ```
-fn map<A, B>(f: A -> B, xs: List<A>) -> List<B> = ...
-type Pair<A, B> = {first: A, second: B}
-effect State<S> { get() -> S; set(v: S) -> () }
+fn map(f: a -> b, xs: [a]) -> [b] = ...
+type Pair = {first: a, second: b}
+effect State { get() -> s; set(v: s) -> () }
 ```
 
-Angle brackets at declaration. Type parameters scoped to the declaration's body.
+No declaration list. Lowercase identifiers in type position ARE the
+parameters (the case rule carries the meaning); they scope to the
+declaration that mentions them, and every mention of the same name
+within one declaration is the same parameter. Angle brackets are
+retired everywhere — `E_ExplicitTypeParams` fires on any `<...>`
+parameter list or argument list (MachineApplicable: strip it).
 
 ### Inferred at call sites
 
@@ -1442,7 +1456,7 @@ fn run_with<E>(f: fn() -> () with E) = ...
 
 ```
 type Sample = Float where -1.0 <= self <= 1.0
-type NonEmpty<A> = List<A> where len(self) > 0
+type NonEmpty = [a] where len(self) > 0
 type ValidPort = Int where self >= 1024 && self <= 65535
 ```
 

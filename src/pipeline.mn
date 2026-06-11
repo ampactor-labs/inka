@@ -553,10 +553,10 @@ fn collect_fn_rows(ast) = {
 //
 // Fields (sorted alphabetically per parser invariant):
 //   fn_name     — the function's identifier
-//   reached     — effects the body actually performs (List<EffName>)
+//   reached     — effects the body actually performs ([EffName])
 //   row_str     — pre-rendered row for terminal output
 //   severable   — effects NOT in body that could be added as !E
-//                 (List<EffName>, each unlocking capabilities)
+//                 ([EffName], each unlocking capabilities)
 //   unlocks     — capabilities gained from severing every severable
 fn build_audit_report(fn_name, ty) = {
   let body_row = extract_row(ty)

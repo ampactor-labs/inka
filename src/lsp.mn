@@ -69,12 +69,12 @@ type LspMethodKind
 
 type LspResponseBody
   = LspNullResp
-  | LspHoverResp(Option)            // Option<HoverContent>
-  | LspCompletionResp(List)         // List<CompletionItem>
-  | LspCodeActionResp(List)         // List<CodeAction>
-  | LspDiagnosticResp(List)         // List<Diagnostic>
-  | LspDefinitionResp(Option)       // Option<Location>
-  | LspReferencesResp(List)         // List<Location>
+  | LspHoverResp(Option)            // Option(HoverContent)
+  | LspCompletionResp(List)         // [CompletionItem]
+  | LspCodeActionResp(List)         // [CodeAction]
+  | LspDiagnosticResp(List)         // [Diagnostic]
+  | LspDefinitionResp(Option)       // Option(Location)
+  | LspReferencesResp(List)         // [Location]
   | LspInitializeResp(JsonValue)    // server capabilities + serverInfo
 
 type HoverContent = HoverContent(String)        // markdown text
@@ -343,7 +343,7 @@ fn handle_definition(params) with Memory + Alloc + Interact = {
   LspDefinitionResp(Some(Location(uri, line_of(pos), char_of(pos), line_of(pos), char_of(pos))))
 }
 
-/// handle_references — focus + ask(QRefsOf(name)) → List<Location>.
+/// handle_references — focus + ask(QRefsOf(name)) → [Location].
 /// Identifier-at-position resolution (span → name) is MV-LSP.refs-resolve
 /// peer; v1 returns empty list when name extraction unwired.
 fn handle_references(params) with Memory + Alloc + Interact = {

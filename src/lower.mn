@@ -200,7 +200,7 @@ type LowExpr
   | LStateGet(Int, Int)
   | LStateSet(Int, Int, LowExpr)
   | LRegion(Int, List)                         // arena scope
-  | LHandleWith(Int, LowExpr, LowExpr, String, List) // ~> desugaring; 4th = handler_name ("" for anonymous), 5th = state_inits as List<LowExpr> (one per source-order state field) — emit allocates record, writes inits at offset 8+i*4, sets $<handler_name>_state_g per protocol_handler_is_state_is_closure_is_evidence.md
+  | LHandleWith(Int, LowExpr, LowExpr, String, List) // ~> desugaring; 4th = handler_name ("" for anonymous), 5th = state_inits as [LowExpr] (one per source-order state field) — emit allocates record, writes inits at offset 8+i*4, sets $<handler_name>_state_g per protocol_handler_is_state_is_closure_is_evidence.md
   | LFeedback(Int, LowExpr, LowExpr)           // <~ desugaring (iterative ctx required)
   | LPerform(Int, String, List)                // effect op invocation — monomorphic direct-call form
   | LHandle(Int, LowExpr, List)                // body + arms (handle-expression)
@@ -991,7 +991,7 @@ fn lower_compose_via_thread(handle, left, right) = {
 ///
 /// Drift 5 closure: shared input is closure-state via __diverge_input
 /// capture, NOT a hidden parameter to spawn. Drift 7 closure:
-/// per-branch thunks are List<LowExpr>, not parallel arrays.
+/// per-branch thunks are [LowExpr], not parallel arrays.
 /// Drift 9 closure: this commit lands the let-local + per-branch
 /// thunks + spawn/join tuple atomically; row enforcement
 /// (`Hβ.infer.diverge-shared-memory-row`) and Reason variant
@@ -1223,7 +1223,7 @@ fn lower_stmt_body(s, handle, span) = match s {
     LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs, []))
   },
 
-  TypeDefStmt(_name, _args, _variants)      => LConst(handle, LInt(0)),
+  TypeDefStmt(_name, _variants)             => LConst(handle, LInt(0)),
   EffectDeclStmt(_name, _ops)               => LConst(handle, LInt(0)),
   HandlerDeclStmt(name, _ename, config, state, arms)       => {
     // H1.4: each handler arm becomes a callable wasm function. With
@@ -1630,7 +1630,7 @@ fn cfv_stmt(s, bound) = match s {
   LetStmt(_, expr)              => collect_free_vars(expr, bound),
   FnStmt(_, _, _, _, body_node) => collect_free_vars(body_node, bound),
   ExprStmt(expr)                => collect_free_vars(expr, bound),
-  TypeDefStmt(_, _, _)          => [],
+  TypeDefStmt(_, _)             => [],
   EffectDeclStmt(_, _)          => [],
   HandlerDeclStmt(_, _, _, _, _) => [],
   ImportStmt(_)                 => [],

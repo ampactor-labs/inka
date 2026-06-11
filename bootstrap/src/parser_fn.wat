@@ -19,10 +19,15 @@
     (local.get $p))
 
   ;; TyName(name) → [tag=205][name]
-  (func $mk_TyName (param $name i32) (result i32)
-    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+  ;; TyName(name, args) → [tag=205][name][args] — args is the parens
+  ;; application list (`Option(Int)`); empty for bare names. One
+  ;; application syntax at every level: values f(x), effects
+  ;; Sample(44100), types Option(Int).
+  (func $mk_TyName (param $name i32) (param $args i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 12)))
     (i32.store (local.get $p) (i32.const 205))
     (i32.store offset=4 (local.get $p) (local.get $name))
+    (i32.store offset=8 (local.get $p) (local.get $args))
     (local.get $p))
 
   ;; TyVar(handle) → [tag=206][handle]
@@ -76,44 +81,6 @@
   ;; "Int" at 536, "Float" at 544, "String" at 552, "Bool" at 564, "Unit" at 572
   ;; These need length prefixes for str_eq comparison.
 
-  ;; $skip_ty_args_p — advance past `<TypeArg, ...>` block. Per
-  ;; Hβ.parser.type-app-skip (2026-05-09): wheel-source uses generic
-  ;; type application (`List<Float>`, `List<List<Float>>`, etc.); the
-  ;; seed's $parse_type_ty doesn't yet structure TyApp. Pre-fix the
-  ;; parser left `<...>` after TyName, breaking surrounding parse
-  ;; contexts (record-field, fn-param) and cascading into 6500+
-  ;; LUnresolved names. Substrate-honest pre-L1: skip the block, treat
-  ;; ident as opaque type at infer; named follow-up Hβ.parser.type-app-
-  ;; structured (post-L1) emits TyApp(TyName, args) for proper
-  ;; substitution in HM unification.
-  ;;
-  ;; Token codes: TLt=61, TGt=62. Tracks nesting depth for nested
-  ;; `<List<Float>>` cases. Halts at TEof, TLBrace, TRBrace, TComma,
-  ;; TRParen — natural termination boundaries.
-  (func $skip_ty_args_p (param $tokens i32) (param $pos i32) (result i32)
-    (local $depth i32) (local $k i32)
-    (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
-    (if (i32.ne (local.get $k) (i32.const 61))   ;; not TLt
-      (then (return (local.get $pos))))
-    (local.set $depth (i32.const 1))
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-    (block $done
-      (loop $scan
-        (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
-        (br_if $done (i32.eq (local.get $k) (i32.const 69)))   ;; TEof
-        (if (i32.eq (local.get $k) (i32.const 61))             ;; TLt
-          (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
-        (if (i32.eq (local.get $k) (i32.const 62))             ;; TGt
-          (then
-            (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-            (if (i32.eqz (local.get $depth))
-              (then
-                (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-                (br $done)))))
-        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-        (br $scan)))
-    (local.get $pos))
-
   ;; Per Hβ.parser.arrow-type-substrate (2026-05-10): after the base
   ;; type is parsed, check for TArrow. If present, this is a fn-type
   ;; like `() -> A` (effect-op signature, SYNTAX.md §678-720; nested
@@ -148,9 +115,10 @@
         (return (local.get $out))))
     (local.get $tup))
 
-  ;; Atom: TIdent (with optional <TypeArgs>) or `(...)` paren-form.
+  ;; Atom: TIdent (with optional parens application) or `(...)` paren-form.
   (func $parse_type_ty_atom (param $tokens i32) (param $pos i32) (result i32)
     (local $k i32) (local $name i32) (local $tup i32) (local $p i32) (local $next i32)
+    (local $args_r i32)
     (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
     ;; TIdent → check for known type names
     (if (i32.and
@@ -159,10 +127,7 @@
       (then
         (local.set $name (i32.load offset=4 (local.get $k)))
         (local.set $tup (call $make_list (i32.const 2)))
-        ;; Compute next-pos including any optional `<TypeArgs>` block.
-        (local.set $next
-          (call $skip_ty_args_p (local.get $tokens)
-            (i32.add (local.get $pos) (i32.const 1))))
+        (local.set $next (i32.add (local.get $pos) (i32.const 1)))
         ;; Check known names via first char + length
         (if (i32.and (i32.eq (call $str_len (local.get $name)) (i32.const 3))
                      (i32.eq (call $byte_at (local.get $name) (i32.const 0)) (i32.const 73))) ;; 'I'
@@ -188,8 +153,23 @@
             (drop (call $list_set (local.get $tup) (i32.const 0) (i32.const 204)))
             (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $next)))
             (return (local.get $tup))))
-        ;; Default: TyName(name)
-        (drop (call $list_set (local.get $tup) (i32.const 0) (call $mk_TyName (local.get $name))))
+        ;; Parens application: `Option(Int)` — comma'd type list via
+        ;; $parse_variant_fields (the same comma'd-type-list shape;
+        ;; dormant-substrate reuse). Unambiguous: no expression
+        ;; context exists in type position.
+        (if (call $at (local.get $tokens) (local.get $next) (i32.const 45))
+          (then
+            (local.set $args_r (call $parse_variant_fields (local.get $tokens)
+              (call $skip_ws_p (local.get $tokens) (i32.add (local.get $next) (i32.const 1)))))
+            (drop (call $list_set (local.get $tup) (i32.const 0)
+              (call $mk_TyName (local.get $name)
+                (call $list_index (local.get $args_r) (i32.const 0)))))
+            (drop (call $list_set (local.get $tup) (i32.const 1)
+              (call $list_index (local.get $args_r) (i32.const 1))))
+            (return (local.get $tup))))
+        ;; Default: TyName(name) — bare, payload unconstrained.
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $mk_TyName (local.get $name) (call $make_list (i32.const 0)))))
         (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $next)))
         (return (local.get $tup))))
     ;; TLParen → `()` TyUnit | `(T)` grouping | `(T1, T2, ...)` TyTuple.
@@ -392,7 +372,6 @@
         (return (local.get $tup))))
     ;; Optional `<TypeParams>` per SYNTAX.md §1219 (`fn map<A, B>(...)`).
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
-    (local.set $p (call $skip_type_params_p (local.get $tokens) (local.get $p)))
     (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $p)))
     ;; Parse (params)
     (local.set $p (call $expect (local.get $tokens) (local.get $p) (i32.const 45))) ;; TLParen

@@ -61,23 +61,23 @@ import cursor
 // ─── The Delta effect ───────────────────────────────────────────────
 //
 // Mentl's gradient query: "what's the next-most-impactful TIGHTENING
-// of this fn's signature?" Each op returns Option<AnnotationSuggestion>.
+// of this fn's signature?" Each op returns Option(AnnotationSuggestion).
 // The Cursor handler's CursorView.teach field reads through delta_pick
 // when the inverse-direction gradient should fire.
 
 effect Delta {
   /// The inverse-direction gradient at one fn handle. Returns the
   /// single highest-leverage tightening or None.
-  delta_pick(Handle) -> Option<AnnotationSuggestion>
+  delta_pick(Handle) -> Option(AnnotationSuggestion)
 
   /// Effect-row tightening only (body row narrower than declared).
-  delta_effect_row(Handle) -> Option<AnnotationSuggestion>
+  delta_effect_row(Handle) -> Option(AnnotationSuggestion)
 
   /// Ownership tightening only (Unmarked → Own/Ref classification).
-  delta_ownership(Handle) -> Option<AnnotationSuggestion>
+  delta_ownership(Handle) -> Option(AnnotationSuggestion)
 
   /// Refinement tightening only (return-type sub-range opportunity).
-  delta_refinement(Handle) -> Option<AnnotationSuggestion>
+  delta_refinement(Handle) -> Option(AnnotationSuggestion)
 }
 
 // ─── delta_default — the canonical handler ─────────────────────────
@@ -389,7 +389,7 @@ fn capabilities_unlocked_by_tightening(declared, body) with Pure = {
 // canonical when the env-binding-extended-shape lands.
 
 effect DeltaQuery {
-  graph_declared_row(Handle) -> Option<EffRow>
+  graph_declared_row(Handle) -> Option(EffRow)
 }
 
 // ─── Composition with cursor_default ───────────────────────────────

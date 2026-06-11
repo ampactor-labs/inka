@@ -7,7 +7,7 @@
   (func $parse_type_stmt (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
     (local $name i32) (local $p i32) (local $variants_r i32) (local $tup i32)
     (local $fields_r i32) (local $ty_record i32) (local $variant i32)
-    (local $variants i32) (local $field_tys i32) (local $targs i32)
+    (local $variants i32) (local $field_tys i32)
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
     ;; Null return per protocol_parser_fabrication_substrate.md means
     ;; "no TIdent at this position." Substrate-honest recovery:
@@ -22,12 +22,9 @@
           (i32.add (local.get $pos) (i32.const 1))))
         (return (local.get $tup))))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
-    ;; Optional `<TypeParams>` per SYNTAX.md §1219 — collected, not
-    ;; skipped: the param names ARE the ctor quantification proof.
-    (local.set $fields_r (call $parse_type_params_p (local.get $tokens) (local.get $p)))
-    (local.set $targs (call $list_index (local.get $fields_r) (i32.const 0)))
-    (local.set $p (call $skip_ws_p (local.get $tokens)
-      (call $list_index (local.get $fields_r) (i32.const 1))))
+    ;; No type-parameter list: the case rule IS the declaration —
+    ;; lowercase identifiers in field positions quantify implicitly
+    ;; (angle-bracket generics retired; E_ExplicitTypeParams).
     ;; Skip =
     (if (call $at (local.get $tokens) (local.get $p) (i32.const 60)) ;; TEq
       (then (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p) (i32.const 1))))))
@@ -50,7 +47,6 @@
         (drop (call $list_set (local.get $tup) (i32.const 0)
           (call $nstmt
             (call $mk_TypeDefStmt (local.get $name)
-              (local.get $targs)
               (local.get $variants))
             (local.get $span))))
         (drop (call $list_set (local.get $tup) (i32.const 1)
@@ -112,86 +108,10 @@
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $nstmt
         (call $mk_TypeDefStmt (local.get $name)
-          (local.get $targs)
           (call $list_index (local.get $variants_r) (i32.const 0)))
         (local.get $span))))
     (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))
-
-  ;; $parse_type_params_p — collect `<A, B, ...>` param NAMES.
-  ;; Returns (names_list, new_pos) 2-tuple; empty list + same pos
-  ;; when no `<` follows. The decl's params are the quantification
-  ;; proof — registration pre-seeds the qmap from them.
-  (func $parse_type_params_p (param $tokens i32) (param $pos i32) (result i32)
-    (local $buf i32) (local $count i32) (local $name i32)
-    (local $p i32) (local $tup i32)
-    (local.set $buf (call $make_list (i32.const 2)))
-    (local.set $count (i32.const 0))
-    (local.set $p (local.get $pos))
-    (if (call $at (local.get $tokens) (local.get $p) (i32.const 61))   ;; TLt
-      (then
-        (local.set $p (call $skip_ws_p (local.get $tokens)
-          (i32.add (local.get $p) (i32.const 1))))
-        (block $done
-          (loop $each
-            (br_if $done (call $at (local.get $tokens) (local.get $p) (i32.const 69)))  ;; TEof
-            (if (call $at (local.get $tokens) (local.get $p) (i32.const 62))            ;; TGt
-              (then
-                (local.set $p (i32.add (local.get $p) (i32.const 1)))
-                (br $done)))
-            (local.set $name (call $ident_at_p (local.get $tokens) (local.get $p)))
-            (if (i32.ne (local.get $name) (i32.const 0))
-              (then
-                (local.set $buf (call $list_extend_to (local.get $buf)
-                  (i32.add (local.get $count) (i32.const 1))))
-                (drop (call $list_set (local.get $buf) (local.get $count) (local.get $name)))
-                (local.set $count (i32.add (local.get $count) (i32.const 1)))))
-            (local.set $p (call $skip_ws_p (local.get $tokens)
-              (i32.add (local.get $p) (i32.const 1))))
-            (if (call $at (local.get $tokens) (local.get $p) (i32.const 51))   ;; TComma
-              (then (local.set $p (call $skip_ws_p (local.get $tokens)
-                (i32.add (local.get $p) (i32.const 1))))))
-            (br $each)))))
-    (local.set $tup (call $make_list (i32.const 2)))
-    (drop (call $list_set (local.get $tup) (i32.const 0)
-      (call $slice (local.get $buf) (i32.const 0) (local.get $count))))
-    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
-    (local.get $tup))
-
-  ;; Skip optional `<TypeParams>` clause after a declaration name per
-  ;; SYNTAX.md §1219-1226 (`type Pair<A, B> = ...`,
-  ;; `fn map<A, B>(...) = ...`, `effect State<S> { ... }`). Returns
-  ;; new pos AFTER the closing TGt; if no TLt at $pos, returns $pos
-  ;; unchanged. Counts angle-bracket depth so nested forms like
-  ;; `Buffer<Option<A>>` close correctly. Per Hβ.parser.type-params-skip
-  ;; (2026-05-10): the seed consumes type params without structuring
-  ;; them; HM inference at the wheel layer projects polymorphism from
-  ;; usage. Substrate-honest deferral; the skip prevents <A>'s tokens
-  ;; from leaking into subsequent stmt parses (which previously caused
-  ;; a captures-len leak through malformed-AST cascade — now closed by
-  ;; Hβ.first-light.fnstmt-fresh-captures-len).
-  (func $skip_type_params_p (param $tokens i32) (param $pos i32) (result i32)
-    (local $depth i32) (local $k i32)
-    (if (i32.eqz (call $at (local.get $tokens) (local.get $pos) (i32.const 61)))   ;; TLt
-      (then (return (local.get $pos))))
-    (local.set $depth (i32.const 1))
-    (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-    (block $done (loop $scan
-      (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
-      (br_if $done (i32.eq (local.get $k) (i32.const 69)))   ;; TEof
-      (br_if $done (i32.eq (local.get $k) (i32.const 68)))   ;; TNewline (defensive)
-      (if (i32.eq (local.get $k) (i32.const 61))             ;; TLt
-        (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
-      (if (i32.eq (local.get $k) (i32.const 62))             ;; TGt
-        (then
-          (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
-          (if (i32.eqz (local.get $depth))
-            (then
-              (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-              (br $done)))))
-      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
-      (br $scan)))
-    (local.get $pos))
 
   ;; Skip tokens until the next statement boundary — newline, EOF, or
   ;; a top-level declaration keyword (TFn, TLet, TType, TEffect,
@@ -423,9 +343,6 @@
           (i32.add (local.get $pos) (i32.const 1))))
         (return (local.get $tup))))
     (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1))))
-    ;; Optional `<TypeParams>` per SYNTAX.md §1226 (`effect State<S> { ... }`).
-    (local.set $p (call $skip_type_params_p (local.get $tokens) (local.get $p)))
-    (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $p)))
     (local.set $p (call $expect (local.get $tokens) (local.get $p) (i32.const 47))) ;; TLBrace
     (local.set $ops_r (call $parse_effect_ops (local.get $tokens)
       (call $skip_ws_p (local.get $tokens) (local.get $p))))

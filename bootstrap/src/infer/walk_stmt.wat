@@ -450,7 +450,6 @@
         (call $infer_register_typedef_ctors
           (i32.load offset=4 (local.get $stmt))
           (i32.load offset=8 (local.get $stmt))
-          (i32.load offset=12 (local.get $stmt))
           (local.get $span))
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 123))
@@ -735,11 +734,13 @@
           (call $reason_make_inferred (i32.const 4056)))))))   ;; "param"
     ;; Heap-allocated record — read tag from offset 0.
     (local.set $tag (i32.load (local.get $pty)))
-    ;; tag=205 TyName(name) — extract name + build TName(name, [])
+    ;; tag=205 TyName(name, args) — parens application `Option(Int)`;
+    ;; each arg converts recursively.
     (if (i32.eq (local.get $tag) (i32.const 205))
       (then (return (call $ty_make_tname
         (i32.load offset=4 (local.get $pty))
-        (call $make_list (i32.const 0))))))
+        (call $walk_stmt_parser_tys_to_tys
+          (i32.load offset=8 (local.get $pty)))))))
     ;; tag=206 TyVar — fresh TVar via graph (productive-under-error
     ;; ignores the parser's variable name; future generics work will
     ;; thread the name through tparam.wat substrate).
@@ -921,6 +922,46 @@
   ;; ─── Ctor type-param quantification ──────────────────────────────
   ;; $typedef_qmap_find_or_add — (name → handle) for the current
   ;; variant; fresh graph handle on miss, appended to the qmap.
+  ;; $quantify_tparams — rebuild each TParam with its ty quantified.
+  (func $quantify_tparams (param $tparams i32) (result i32)
+    (local $n i32) (local $i i32) (local $out i32) (local $tp i32)
+    (local.set $n (call $len (local.get $tparams)))
+    (local.set $out (call $make_list (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $tp (call $list_index (local.get $tparams) (local.get $i)))
+        (drop (call $list_set (local.get $out) (local.get $i)
+          (call $tparam_make
+            (call $tparam_name (local.get $tp))
+            (call $ty_quantify_params (call $tparam_ty (local.get $tp)))
+            (call $tparam_authored (local.get $tp))
+            (call $tparam_resolved (local.get $tp)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.get $out))
+
+  ;; $typedef_qmap_tvars — the decl's parameters as TVars: the args
+  ;; of the result TName. Payload types FLOW through these
+  ;; (instantiate freshens them; unify threads them pairwise).
+  (func $typedef_qmap_tvars (result i32)
+    (local $n i32) (local $i i32) (local $out i32)
+    (local.set $n (global.get $typedef_qcount_g))
+    (local.set $out (call $make_list (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (drop (call $list_set (local.get $out) (local.get $i)
+          (call $ty_make_tvar
+            (call $record_get
+              (call $list_index (global.get $typedef_qmap_g) (local.get $i))
+              (i32.const 1)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.get $out))
+
   (func $typedef_qmap_lookup (param $name i32) (result i32)
     (local $i i32) (local $pair i32)
     (local.set $i (i32.const 0))
@@ -969,17 +1010,12 @@
       (then
         (local.set $name (call $record_get (local.get $ty) (i32.const 0)))
         (local.set $args (call $record_get (local.get $ty) (i32.const 1)))
-        (if (i32.eqz (call $len (local.get $args)))
-          (then
-            ;; Declared type param (<A>, any case) — already in the map.
-            (local.set $n (call $typedef_qmap_lookup (local.get $name)))
-            (if (i32.ne (local.get $n) (i32.const 0))
-              (then (return (call $ty_make_tvar (local.get $n)))))
-            ;; Implicit lowercase param (Some(a) without <a>).
-            (if (i32.eqz (call $is_uppercase
-                  (call $first_char_code (local.get $name))))
-              (then (return (call $ty_make_tvar
-                (call $typedef_qmap_find_or_add (local.get $name))))))))
+        (if (i32.and
+              (i32.eqz (call $len (local.get $args)))
+              (i32.eqz (call $is_uppercase
+                (call $first_char_code (local.get $name)))))
+          (then (return (call $ty_make_tvar
+            (call $typedef_qmap_find_or_add (local.get $name))))))
         ;; nominal: rebuild with quantified args
         (local.set $n (call $len (local.get $args)))
         (local.set $out (call $make_list (local.get $n)))
@@ -1061,63 +1097,66 @@
     (local.get $ty))
 
     (func $infer_register_typedef_ctors
-        (param $type_name i32) (param $targs i32) (param $variants i32) (param $span i32)
+        (param $type_name i32) (param $variants i32) (param $span i32)
     (local $total i32)
     (local $tag_id i32) (local $variant i32)
     (local $vname i32) (local $field_tys_parser i32)
-    (local $field_tys i32) (local $field_count i32)
+    (local $field_tys i32)
     (local $result_ty i32) (local $ctor_ty i32)
     (local $scheme i32) (local $reason i32)
-    (local $seed_i i32) (local $seed_n i32)
+    (local $converted i32) (local $qhandles i32)
 
     (local.set $total (call $len (local.get $variants)))
-    ;; Build the result type once: TName(type_name, []) — every variant
-    ;; constructor returns this.
-    (local.set $result_ty (call $ty_make_tname
-      (local.get $type_name)
-      (call $make_list (i32.const 0))))
+    ;; Pass 1 — ONE quantification map per DECL (HM: every ctor of a
+    ;; type quantifies the type's full parameter set; None : Option(a)
+    ;; too). Convert + quantify each variant's field tparams; store
+    ;; per-variant (0 = nullary).
+    (global.set $typedef_qmap_g (call $make_list (i32.const 2)))
+    (global.set $typedef_qcount_g (i32.const 0))
+    (local.set $converted (call $make_list (local.get $total)))
     (local.set $tag_id (i32.const 0))
-    (block $done
-      (loop $each
-        (br_if $done (i32.ge_u (local.get $tag_id) (local.get $total)))
+    (block $p1_done
+      (loop $p1
+        (br_if $p1_done (i32.ge_u (local.get $tag_id) (local.get $total)))
         (local.set $variant
           (call $list_index (local.get $variants) (local.get $tag_id)))
-        ;; Each variant is a 2-tuple (vname, field_tys_parser) per
-        ;; parser_decl.wat:60-63.
-        (local.set $vname
-          (call $list_index (local.get $variant) (i32.const 0)))
         (local.set $field_tys_parser
           (call $list_index (local.get $variant) (i32.const 1)))
-        (local.set $field_count (call $len (local.get $field_tys_parser)))
-        ;; Build ctor type — nullary uses result_ty directly; N-ary
-        ;; wraps in TFun(field_tys, result_ty, EfPure_row).
-        ;; Reset the quantification map for this variant, pre-seeded
-        ;; with the DECLARED type params (<A>, any case) — the decl is
-        ;; the proof; lowercase leaves remain the implicit fallback.
-        (global.set $typedef_qmap_g (call $make_list (i32.const 2)))
-        (global.set $typedef_qcount_g (i32.const 0))
-        (local.set $seed_n (call $len (local.get $targs)))
-        (local.set $seed_i (i32.const 0))
-        (block $seed_done
-          (loop $seed_each
-            (br_if $seed_done (i32.ge_u (local.get $seed_i) (local.get $seed_n)))
-            (drop (call $typedef_qmap_find_or_add
-              (call $list_index (local.get $targs) (local.get $seed_i))))
-            (local.set $seed_i (i32.add (local.get $seed_i) (i32.const 1)))
-            (br $seed_each)))
-        (if (i32.eqz (local.get $field_count))
-          (then (local.set $ctor_ty (local.get $result_ty)))
-          (else
-            (local.set $field_tys
+        (if (i32.eqz (call $len (local.get $field_tys_parser)))
+          (then (drop (call $list_set (local.get $converted)
+            (local.get $tag_id) (i32.const 0))))
+          (else (drop (call $list_set (local.get $converted)
+            (local.get $tag_id)
+            (call $quantify_tparams
               (call $walk_stmt_build_field_tparams
-                (local.get $field_tys_parser)))
-            (local.set $ctor_ty (call $ty_quantify_params
-              (call $ty_make_tfun
-                (local.get $field_tys)
-                (local.get $result_ty)
-                (call $row_make_pure))))))
+                (local.get $field_tys_parser)))))))
+        (local.set $tag_id (i32.add (local.get $tag_id) (i32.const 1)))
+        (br $p1)))
+    ;; The result type carries the decl's quantified parameters —
+    ;; payload types flow through it.
+    (local.set $qhandles (call $typedef_qmap_handles))
+    (local.set $result_ty (call $ty_make_tname
+      (local.get $type_name)
+      (call $typedef_qmap_tvars)))
+    ;; Pass 2 — register each ctor with the FULL quantification.
+    (local.set $tag_id (i32.const 0))
+    (block $p2_done
+      (loop $p2
+        (br_if $p2_done (i32.ge_u (local.get $tag_id) (local.get $total)))
+        (local.set $variant
+          (call $list_index (local.get $variants) (local.get $tag_id)))
+        (local.set $vname
+          (call $list_index (local.get $variant) (i32.const 0)))
+        (local.set $field_tys
+          (call $list_index (local.get $converted) (local.get $tag_id)))
+        (if (i32.eqz (local.get $field_tys))
+          (then (local.set $ctor_ty (local.get $result_ty)))
+          (else (local.set $ctor_ty (call $ty_make_tfun
+            (local.get $field_tys)
+            (local.get $result_ty)
+            (call $row_make_pure)))))
         (local.set $scheme (call $scheme_make_forall
-          (call $typedef_qmap_handles)
+          (local.get $qhandles)
           (local.get $ctor_ty)))
         (local.set $reason (call $reason_make_located
           (local.get $span)
@@ -1129,7 +1168,7 @@
           (call $schemekind_make_ctor
             (local.get $tag_id) (local.get $total)))
         (local.set $tag_id (i32.add (local.get $tag_id) (i32.const 1)))
-        (br $each))))
+        (br $p2))))
 
   (func $infer_walk_stmt_typedef
         (export "infer_walk_stmt_typedef")
@@ -1138,7 +1177,6 @@
     (call $infer_register_typedef_ctors
       (i32.load offset=4 (local.get $stmt))
       (i32.load offset=8 (local.get $stmt))
-      (i32.load offset=12 (local.get $stmt))
       (local.get $span)))
 
   ;; ─── EffectDeclStmt arm (tag 123) — Phase B.3 ultimate-form ──────

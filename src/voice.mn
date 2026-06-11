@@ -456,8 +456,8 @@ fn proof_derivable(situation) with Pure = {
     TentUnlock    =>
       is_some(s.gradient_next) && suggestion_unlocks_nonempty(s.gradient_next),
     TentTrace     =>
-      is_some(s.ownership_at_topic) || row_subsumption_fails(s.row_at_topic, s.row_declared),
-    TentVerify    => list_non_empty(s.refinements),
+      is_some(s.ownership_at_topic) || !row_subsumes(s.row_at_topic, s.row_declared),
+    TentVerify    => len(s.refinements) > 0,
     TentTeach     => is_some(s.gradient_next),
     TentWhy       =>
       match s.topic {
@@ -791,7 +791,7 @@ fn render_propose_arm(situation) with Pure = {
   let body = match s.topic {
     TopicHandle(_)       => [
       SLit(if f.is_hole { "Hole expects synthesis here." }
-           else if is_some(f.error_code_at) { SLit_to_str(f.error_code_at) }
+           else if is_some(f.error_code_at) { unwrap(f.error_code_at) }
            else { "" })
     ],
     TopicError(code, _)  => [SLit("Diagnostic at "), SIdent(code), SLit(" — codeAction available.")],
@@ -812,7 +812,7 @@ fn render_topology_arm(situation) with Pure = {
   let TopicFacts(f) = s.facts
   VoiceLine(TentTopology, FOffering, [
     SLit("Nested-call depth "),
-    SLit(int_to_str_lite(f.nested_call_depth)),
+    SLit(int_to_str(f.nested_call_depth)),
     SLit(" — `|>` would draw the topology")
   ], select_modifier(situation, s.register))
 }
@@ -872,7 +872,7 @@ fn render_verify_arm(situation) with Pure = {
     SLit("Refinements at "),
     SSpan(topic_span_or_zero(s.topic)),
     SLit(": "),
-    SLit(int_to_str_lite(len(s.refinements))),
+    SLit(int_to_str(len(s.refinements))),
     SLit(" obligations")
   ], select_modifier(situation, s.register))
 }

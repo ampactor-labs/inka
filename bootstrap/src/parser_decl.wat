@@ -295,11 +295,27 @@
           (i32.add (local.get $count) (i32.const 1))))
         (drop (call $list_set (local.get $buf) (local.get $count) (local.get $variant)))
         (local.set $count (i32.add (local.get $count) (i32.const 1)))
-        ;; Check for | separator
+        ;; Check for | separator. /// doc-comments between variants
+        ;; attach to the FOLLOWING variant (DS-docstring-edge); the
+        ;; variant list continues through them on both sides of `|`.
         (local.set $p4 (call $skip_ws_p (local.get $tokens) (local.get $p3)))
+        (block $doc_done
+          (loop $doc_skip
+            (br_if $doc_done (i32.eqz
+              (call $is_doc_comment_at (local.get $tokens) (local.get $p4))))
+            (local.set $p4 (call $skip_ws_p (local.get $tokens)
+              (i32.add (local.get $p4) (i32.const 1))))
+            (br $doc_skip)))
         (if (call $at (local.get $tokens) (local.get $p4) (i32.const 64)) ;; TPipe
           (then
             (local.set $p (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p4) (i32.const 1))))
+            (block $doc_done2
+              (loop $doc_skip2
+                (br_if $doc_done2 (i32.eqz
+                  (call $is_doc_comment_at (local.get $tokens) (local.get $p))))
+                (local.set $p (call $skip_ws_p (local.get $tokens)
+                  (i32.add (local.get $p) (i32.const 1))))
+                (br $doc_skip2)))
             (br $vars))
           (else
             (local.set $p (local.get $p4))

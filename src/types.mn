@@ -178,7 +178,8 @@ type Graph
       Int,     // epoch: bumps on every bind
       Int,     // next: next fresh allocation
       List,    // overlays: [(module_name, [handle])]
-      List     // span_index: [(ValidSpan, Int)] for Mentl QTypeAt queries
+      List,    // span_index: [(ValidSpan, Int)] for Mentl QTypeAt queries
+      List     // intent_index: [(Int, List<EffName>)] for QIntentOf — authored intent rows
     )
 
 // Trail mutations — append during forward execution, walk backwards

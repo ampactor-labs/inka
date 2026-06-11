@@ -30,6 +30,13 @@ type Question
   | QHandlerProvider(String) // "which handler provides OP"
   | QUnknown(String)
 
+// Predicate: is this question a why-walk? Every non-QWhy variant is
+// honestly false — predicate semantics, not a fabricated value.
+fn question_is_why(q) with Pure = match q {
+  QWhy(_) => true,
+  _       => false
+}
+
 type QueryResult
   = QRType(Ty, Reason)
   | QRIntent(List)           // [(EffName, Bool)]

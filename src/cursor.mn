@@ -231,7 +231,7 @@ fn cursor_argmax_compute(caret) with GraphRead + !Mutate = {
 }
 
 fn enumerate_gradient_positions() with GraphRead + !Mutate = {
-  let Graph(_nodes, _epoch, next, _overlays, _spans) = perform graph_snapshot()
+  let Graph(_nodes, _epoch, next, _overlays, _spans, _intents) = perform graph_snapshot()
   filter((i) => match perform teach_gradient(i) {
     None    => false,
     Some(_) => true
@@ -383,7 +383,7 @@ fn handle_at_span(span) with GraphRead + !Mutate = {
   // Today this is a forward scan via graph_snapshot; the indexed
   // lookup is peer-handle territory (Hμ.cursor.cache).
   let snapshot = perform graph_snapshot()
-  let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
+  let Graph(_nodes, _epoch, next, _overlays, _spans, _intents) = snapshot
   scan_for_span(span, 0, next)
 }
 

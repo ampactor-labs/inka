@@ -791,6 +791,7 @@ effect GraphWrite {
   graph_fork(String) -> ()
   graph_rollback(Int) -> ()
   graph_index_span(ValidSpan, Int) -> ()
+  graph_bind_resume_kind(String, String, ResumeDiscipline, Reason) -> ()
   // Per Hβ.first-light.graph-index-intent-effect-decl: graph_handler's
   // arm graph_index_intent (graph.mn:240) was undeclared in any effect.
   // parse_fn at parser.mn:396 perform-calls it. Infer couldn't ground

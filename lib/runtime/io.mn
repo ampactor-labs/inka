@@ -53,6 +53,7 @@ effect WASI {
   path_filestat_get(fd: Int, flags: Int, path_ptr: Int, path_len: Int, stat_ptr: Int) -> Int
   path_unlink_file(fd: Int, path_ptr: Int, path_len: Int) -> Int
   path_rename(old_fd: Int, old_ptr: Int, old_len: Int, new_fd: Int, new_ptr: Int, new_len: Int) -> Int
+  proc_exit(code: Int) -> ()
 }
 
 // ─── The Console effect — narration's output boundary ─────────
@@ -70,6 +71,20 @@ handler stdout_console {
   print(msg) => {
     print_string(msg)
     resume()
+  },
+}
+
+// ─── abort_exit — the host-boundary failure policy ─────────────
+//
+// Abort.fail never resumes; this handler prints the message and
+// exits through the WASI host. A test handler can swap in to
+// collect failures instead — the policy is the install, not the
+// call site.
+handler abort_exit {
+  fail(msg) => {
+    print_string(msg)
+    print_newline()
+    proc_exit(1)
   },
 }
 

@@ -380,8 +380,91 @@ fn render_doc_attached(node) with Pure = {
   ""
 }
 
-fn render_reason_chain(node) with Pure = ""
-fn render_sibling_separator(ctx) with Pure = ""
+// The reason aspect of the formatter's eight-fanout: the node's
+// handle chases to its GNode; the Reason renders compressed (the
+// leaf-most informative edge). Debug aspect — assemble_render
+// decides placement.
+fn render_reason_chain(node) with GraphRead + !Mutate = {
+  let N(_, _, h) = node
+  let GNode(_, reason) = perform graph_chase(h)
+  show_reason_compressed(reason)
+}
+
+// Sibling glue is a projection of RenderContext; the default context
+// carries no sibling info (render_context_at's parent-walk substrate),
+// so its separator is empty — an honest read, not a placeholder.
+fn render_sibling_separator(ctx) with Pure = match ctx {
+  RenderContextDefault => ""
+}
+
+// ─── Row + Reason renderers — the Why surface's text projections ───
+//
+// One renderer per vocabulary record, at the formatter's home.
+// Consumed by LSP hover (show_row / show_reason_compressed) and the
+// reason aspect above.
+
+fn show_effarg(arg) with Memory + Alloc = match arg {
+  EAInt(n)    => int_to_str(n),
+  EAFloat(f)  => float_to_str(f),
+  EAString(s) => s
+}
+
+fn show_effname(name) with Memory + Alloc = match name {
+  ENamed(s) => s,
+  EParameterized(s, args) =>
+    s |> str_concat("(") |> str_concat(show_joined(map(show_effarg, args), ", ")) |> str_concat(")")
+}
+
+fn show_joined(texts, sep) with Memory + Alloc = {
+  if len(texts) == 0 { "" }
+  else {
+    fold(tail(texts), head(texts), (acc, t) =>
+      acc |> str_concat(sep) |> str_concat(t))
+  }
+}
+
+fn show_row(row) with Memory + Alloc = match row {
+  EfPure => "Pure",   // drift-audit: ignore (renderer output literal — the match is on the ADT)
+  EfClosed(names) => show_joined(map(show_effname, names), " + "),
+  EfOpen(names, _) =>
+    if len(names) == 0 { "?" }
+    else { show_joined(map(show_effname, names), " + ") |> str_concat(" + ?") },
+  EfNeg(inner) => "!" |> str_concat(show_row(inner)),
+  EfSub(a, b) => show_row(a) |> str_concat(" - ") |> str_concat(show_row(b)),
+  EfInter(a, b) => show_row(a) |> str_concat(" & ") |> str_concat(show_row(b))
+}
+
+// Compressed = the leaf-most informative edge of the Reason chain;
+// wrapper edges (Located / Unified / MatchBranch) descend.
+fn show_reason_compressed(reason) with Memory + Alloc = match reason {
+  Declared(s)    => "declared: " |> str_concat(s),
+  Inferred(s)    => s,
+  Fresh(h)       => "fresh #" |> str_concat(int_to_str(h)),
+  OpConstraint(name, _, _) => "op '" |> str_concat(name) |> str_concat("'"),
+  VarLookup(name, _)  => "from '" |> str_concat(name) |> str_concat("'"),
+  FnReturn(name, _)   => "return of '" |> str_concat(name) |> str_concat("'"),   // drift-audit: ignore (output literal contains the word)
+  FnParam(name, i, _) =>
+    "param " |> str_concat(int_to_str(i)) |> str_concat(" of '")
+             |> str_concat(name) |> str_concat("'"),
+  MatchBranch(a, _)   => show_reason_compressed(a),
+  ListElement(_)      => "list element",
+  IfBranch(_)         => "if branch",
+  LetBinding(name, _) => "let '" |> str_concat(name) |> str_concat("'"),
+  Unified(a, _)       => show_reason_compressed(a),
+  Instantiation(name, _) => "instantiation of '" |> str_concat(name) |> str_concat("'"),
+  UnifyFailed(_, _)   => "unification failure",
+  Placeholder(_)      => "placeholder",
+  BinOpPlaceholder(_) => "operator",
+  MissingVar(name)    => "missing '" |> str_concat(name) |> str_concat("'"),
+  Refinement(_, _)    => "refinement obligation",
+  Located(_, inner)   => show_reason_compressed(inner),
+  InferredCallReturn(name, _) => "return of call to '" |> str_concat(name) |> str_concat("'"),   // drift-audit: ignore (output literal contains the word)
+  InferredPipeResult(verb, _) => "result of " |> str_concat(verb),
+  FreshInContext(h, ctx) =>
+    "fresh #" |> str_concat(int_to_str(h)) |> str_concat(" in '")
+              |> str_concat(ctx) |> str_concat("'"),
+  DocstringReason(text, _) => text
+}
 
 fn render_context_at(handle) with GraphRead + !Mutate = {
   // Render context = parent kind + sibling position + indent depth.

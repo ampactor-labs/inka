@@ -103,7 +103,7 @@ type EnrichedCandidate
 
 handler synth_default with !Mutate {
 
-  propose(target_ty, allowed_effects, context) => {
+  synth_propose(target_ty, allowed_effects, context) => {
     // Forward to enumerative with full multi-shot enrichment.
     let enriched = enumerate_typed(target_ty, allowed_effects, context)
     let verified = verify_each_enriched(enriched)

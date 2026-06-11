@@ -315,6 +315,14 @@ type Result
   = Ok(a)
   | Err(e)
 
+// Failure IS an effect — the kernel's answer to bottom. `fail` never
+// resumes, so its polymorphic return unifies with any consumer; the
+// installed handler decides the policy (io.mn abort_exit prints +
+// exits; a test handler collects instead).
+effect Abort {
+  fail(msg: String) -> a
+}
+
 fn unwrap(opt)            = match opt { Some(v) => v, None => fail("unwrap on None") }
 fn unwrap_or(opt, default) = match opt { Some(v) => v, None => default }
 fn is_some(opt)           = match opt { Some(_) => true,  None => false }

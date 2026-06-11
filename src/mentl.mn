@@ -87,7 +87,7 @@ effect Teach {
 // SMT, LLM, user — plugs in as a handler. The compiler verifies.
 
 effect Synth {
-  propose(Ty, EffRow, Context) -> List
+  synth_propose(Ty, EffRow, Context) -> List
   verify_candidate(Node) -> Bool
   enumerate_inhabitants(Ty, EffRow, Context) -> List
 }
@@ -462,7 +462,7 @@ fn why_expand(reason, depth) = {
 /// alternative proposer candidates before enumeration.
 handler synth_enumerative {
 
-  propose(target_ty, allowed_effects, context) => {
+  synth_propose(target_ty, allowed_effects, context) => {
     let raw = perform enumerate_inhabitants(target_ty, allowed_effects, context)
     let verified = verify_each(raw)
     resume(verified)
@@ -516,7 +516,7 @@ fn teach_synthesize(hole_handle, context) = {
   match kind {
     NBound(ty) => {
       let row = extract_row(ty)
-      let candidates = perform propose(ty, row, context)
+      let candidates = perform synth_propose(ty, row, context)
       if len(candidates) == 0 { None }
       else { Some(list_index(candidates, 0)) }
     },

@@ -281,7 +281,7 @@ fn handle_hover(params) with Memory + Alloc + Interact = {
   let span = position_to_span(pos)
   ensure_doc_open(uri)
   perform focus(TargetSpan(span))
-  let answer = perform ask(QTypeAt(span))
+  let answer = perform consult(QTypeAt(span))
   match answer {
     AnsSilence              => LspHoverResp(None),
     AnsType(ty, reason)     => LspHoverResp(Some(hover_from_type(ty, reason))),

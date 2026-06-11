@@ -292,22 +292,29 @@ fn score_one_entry(entry, caret) with GraphRead + !Mutate = {
 // version() bumps when the wire format changes.
 
 fn save_extended_kai_to_disk(module_name, extended)
-    with Pack + !Unpack + WasmFs = {
-  let ExtendedKaiFile(e) = extended
+    with Memory + Alloc + Filesystem = {
   let path = kai_extended_path_for(module_name)
-  cache_pack_extended_kai(extended)
-  perform fs_write_packed(path)
+  let bytes = extended_kai_serialize(extended)
+  perform fs_write_file(path, bytes)
 }
 
+fn extended_kai_serialize(extended) with Memory + Alloc = {
+  cache_pack_extended_kai(extended)
+  perform pack_finalize()
+} ~> buffer_packer
+
 fn load_extended_kai_from_disk(module_name)
-    with Unpack + WasmFs = {
+    with Memory + Alloc + Filesystem = {
   let path = kai_extended_path_for(module_name)
   if perform fs_exists(path) {
-    perform fs_open_for_read(path)
-    let extended = cache_unpack_extended_kai()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    Some(extended)
+    let bytes = perform fs_read_file(path)
+    extended_kai_deserialize(bytes)
   } else { None }
 }
+
+fn extended_kai_deserialize(bytes) with Memory + Alloc = {
+  Some(cache_unpack_extended_kai())
+} ~> buffer_unpacker(bytes)
 
 fn kai_extended_path_for(module_name) with Pure = {
   ".mentl/cache/" |> str_concat(module_name) |> str_concat(".kai+oracle")
@@ -437,12 +444,6 @@ fn cache_unpack_suggestion() with Unpack = {
 }
 
 // ─── Effect declarations consumed by cache I/O ──────────────────────
-
-effect WasmFs {
-  fs_exists(String) -> Bool
-  fs_open_for_read(String) -> ()
-  fs_write_packed(String) -> ()
-}
 
 // ─── Composition with cursor_default ────────────────────────────────
 //

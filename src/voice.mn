@@ -369,7 +369,7 @@ effect Interact {
   // at a target (returns the survivor candidate as VoiceLine);
   // speak surfaces a VoiceLine the surface should render.
 
-  ask(Question)                  -> Answer
+  consult(Question)              -> Answer
   propose(CaretTarget)          -> VoiceLine
   speak(VoiceLine)               -> ()
 
@@ -1476,7 +1476,7 @@ handler mentl_voice_default
   /// MV.2.e.Q.compose-ops peer sub-handle adds the graph reads. Render
   /// arms gracefully handle the sparse fields — output reflects what
   /// the substrate actually knows.
-  ask(question)         => {
+  consult(question)     => {
     let Caret(cursor_handle, _) = caret
     let situation = compose_minimal_ask_situation(question, cursor_handle, prior_turn)
     let voiceline = if silence_predicate(situation) {

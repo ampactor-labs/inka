@@ -464,8 +464,8 @@ effect VimSurface {
 }
 
 effect LspSurface {
-  lsp_frame_read() -> LspFrame
-  lsp_frame_write(LspFrame) -> ()
+  lsp_frame_read() -> LspMessage
+  lsp_frame_write(LspMessage) -> ()
 }
 
 effect Patch {
@@ -524,29 +524,29 @@ type WebEvent
   | WebSelection(Span)
   | WebHoverEnd
 
-type LspFrame
-  = LspFrame(String, String)   // method, json-payload
+type LspMessage
+  = LspMessage(String, String)   // method, json-payload
 
 // ─── Bridges (declared; bodies land in transport-specific peers) ────
 
-fn lsp_initialize_response() with Pure = LspFrame("initialize", "{{}}")
+fn lsp_initialize_response() with Pure = LspMessage("initialize", "{{}}")
 
 fn lsp_textDocument_publishDiagnostics(cursor, view) with Pure = {
   let CursorView(_, _, _, _, _, verify, _, _) = view
-  LspFrame("textDocument/publishDiagnostics", show_verify_count(verify))
+  LspMessage("textDocument/publishDiagnostics", show_verify_count(verify))
 }
 
 fn lsp_textDocument_hover(cursor, query, why) with Pure =
-  LspFrame("textDocument/hover", show_node_kind(query))
+  LspMessage("textDocument/hover", show_node_kind(query))
 
 fn lsp_textDocument_codeAction(cursor, propose) with Pure =
-  LspFrame("textDocument/codeAction", show_proposals(propose))
+  LspMessage("textDocument/codeAction", show_proposals(propose))
 
 fn lsp_workspace_diagnostic(verify) with Pure =
-  LspFrame("workspace/diagnostic", show_verify_count(verify))
+  LspMessage("workspace/diagnostic", show_verify_count(verify))
 
 fn lsp_frame_to_action(frame) with Pure = {
-  let LspFrame(method, _) = frame
+  let LspMessage(method, _) = frame
   if str_eq(method, "textDocument/didChange") { AccCaretMove(span_zero()) }
   else if str_eq(method, "textDocument/codeAction/resolve") { AccAccept }
   else { AccDefer }

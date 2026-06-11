@@ -98,6 +98,69 @@
     (i32.store offset=4 (local.get $p) (local.get $branches))
     (local.get $p))
 
+  (func $mk_PRecord (param $fields i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 136))
+    (i32.store offset=4 (local.get $p) (local.get $fields))
+    (local.get $p))
+
+  ;; ─── str_lt: lexicographic less-than (wheel strings.mn:110) ───────
+  (func $str_lt (param $a i32) (param $b i32) (result i32)
+    (local $la i32) (local $lb i32) (local $i i32)
+    (local $ca i32) (local $cb i32)
+    (local.set $la (call $str_len (local.get $a)))
+    (local.set $lb (call $str_len (local.get $b)))
+    (local.set $i (i32.const 0))
+    (loop $each
+      (if (i32.and (i32.ge_u (local.get $i) (local.get $la))
+                   (i32.ge_u (local.get $i) (local.get $lb)))
+        (then (return (i32.const 0))))
+      (if (i32.ge_u (local.get $i) (local.get $la))
+        (then (return (i32.const 1))))
+      (if (i32.ge_u (local.get $i) (local.get $lb))
+        (then (return (i32.const 0))))
+      (local.set $ca (call $byte_at (local.get $a) (local.get $i)))
+      (local.set $cb (call $byte_at (local.get $b) (local.get $i)))
+      (if (i32.lt_u (local.get $ca) (local.get $cb))
+        (then (return (i32.const 1))))
+      (if (i32.gt_u (local.get $ca) (local.get $cb))
+        (then (return (i32.const 0))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $each))
+    (i32.const 0))
+
+  ;; ─── sort_field_pairs: alphabetical by pair-record field 0 ────────
+  ;; In-place insertion sort via $list_set; N = field count (records
+  ;; are small). Serves record literals AND record patterns — the
+  ;; post-H2 invariant (fields sorted at parse, wheel src/parser.mn
+  ;; sort_record_fields:1615 + sort_pat_fields:2106) made physical
+  ;; in the seed.
+  (func $sort_field_pairs (param $fields i32) (result i32)
+    (local $n i32) (local $i i32) (local $j i32)
+    (local $cur i32) (local $prev i32)
+    (local.set $n (call $len (local.get $fields)))
+    (local.set $i (i32.const 1))
+    (block $outer_done
+      (loop $outer
+        (br_if $outer_done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $cur (call $list_index (local.get $fields) (local.get $i)))
+        (local.set $j (local.get $i))
+        (block $inner_done
+          (loop $inner
+            (br_if $inner_done (i32.eqz (local.get $j)))
+            (local.set $prev (call $list_index (local.get $fields)
+                               (i32.sub (local.get $j) (i32.const 1))))
+            (br_if $inner_done
+              (call $str_lt (call $record_get (local.get $prev) (i32.const 0))
+                            (call $record_get (local.get $cur) (i32.const 0))))
+            (drop (call $list_set (local.get $fields) (local.get $j) (local.get $prev)))
+            (local.set $j (i32.sub (local.get $j) (i32.const 1)))
+            (br $inner)))
+        (drop (call $list_set (local.get $fields) (local.get $j) (local.get $cur)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $outer)))
+    (local.get $fields))
+
   ;; Option.Some(value) for PList rest names. None is nullary tag 0.
   (func $mk_pat_Some (param $value i32) (result i32)
     (local $p i32) (local.set $p (call $alloc (i32.const 8)))
@@ -174,6 +237,24 @@
                 (call $list_index (local.get $subs_r) (i32.const 1)))))
             (drop (call $list_set (local.get $tup) (i32.const 1)
               (call $list_index (local.get $subs_r) (i32.const 2))))
+            (return (local.get $tup))))
+
+        ;; TLBrace (47) → PRecord(fields) — `{name, age}` / `{name: pat}`
+        ;; per src/parser.mn:2073-2076. Fields sorted by name at parse
+        ;; (the post-H2 invariant); lower resolves byte offsets by name
+        ;; via $resolve_field_offset either way.
+        (if (i32.eq (local.get $k) (i32.const 47))
+          (then
+            (local.set $subs_r (call $parse_pat_record_fields
+              (local.get $tokens)
+              (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))))
+            (local.set $tup (call $make_list (i32.const 2)))
+            (drop (call $list_set (local.get $tup) (i32.const 0)
+              (call $mk_PRecord
+                (call $sort_field_pairs
+                  (call $list_index (local.get $subs_r) (i32.const 0))))))
+            (drop (call $list_set (local.get $tup) (i32.const 1)
+              (call $list_index (local.get $subs_r) (i32.const 1))))
             (return (local.get $tup))))
 
         ;; THandle (sentinel kind 7) — `handle` is a keyword in expression
@@ -287,6 +368,58 @@
     (drop (call $list_set (local.get $tup) (i32.const 0) (i32.const 131)))
     (drop (call $list_set (local.get $tup) (i32.const 1)
       (i32.add (local.get $pos) (i32.const 1))))
+    (local.get $tup))
+
+  ;; ─── parse_pat_record_fields: `{name, age}` / `{name: pat, ...}` ──
+  ;; Returns (fields, new_pos) as 2-tuple. Field punning is the
+  ;; default — `{name}` ≡ `{name: PVar("name")}` per src/parser.mn
+  ;; :2081-2104. Fields are pair-records (tag 0, arity 2) matching
+  ;; $parse_record_lit's shape so $sort_field_pairs serves both.
+  ;; NAME position admits keywords via $ident_or_keyword_at_p; null
+  ;; per protocol_parser_fabrication_substrate.md → terminate loop.
+  (func $parse_pat_record_fields (param $tokens i32) (param $pos i32) (result i32)
+    (local $p i32) (local $buf i32) (local $count i32)
+    (local $name i32) (local $sub i32) (local $sub_r i32)
+    (local $p2 i32) (local $field i32) (local $tup i32)
+    (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
+    (local.set $buf (call $make_list (i32.const 4)))
+    (local.set $count (i32.const 0))
+    (block $done
+      (loop $each
+        (if (call $at (local.get $tokens) (local.get $p) (i32.const 48))  ;; TRBrace
+          (then
+            (local.set $p (i32.add (local.get $p) (i32.const 1)))
+            (br $done)))
+        (local.set $name (call $ident_or_keyword_at_p (local.get $tokens) (local.get $p)))
+        (if (i32.eqz (local.get $name))
+          (then (br $done)))
+        (local.set $p2 (call $skip_ws_p (local.get $tokens)
+                            (i32.add (local.get $p) (i32.const 1))))
+        (if (call $at (local.get $tokens) (local.get $p2) (i32.const 53))  ;; TColon
+          (then
+            (local.set $sub_r (call $parse_pat (local.get $tokens)
+              (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p2) (i32.const 1)))))
+            (local.set $sub (call $list_index (local.get $sub_r) (i32.const 0)))
+            (local.set $p (call $skip_ws_p (local.get $tokens)
+              (call $list_index (local.get $sub_r) (i32.const 1)))))
+          (else
+            (local.set $sub (call $mk_PVar (local.get $name)))
+            (local.set $p (local.get $p2))))
+        (local.set $field (call $make_record (i32.const 0) (i32.const 2)))
+        (call $record_set (local.get $field) (i32.const 0) (local.get $name))
+        (call $record_set (local.get $field) (i32.const 1) (local.get $sub))
+        (local.set $buf (call $list_extend_to (local.get $buf)
+                          (i32.add (local.get $count) (i32.const 1))))
+        (drop (call $list_set (local.get $buf) (local.get $count) (local.get $field)))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        (if (call $at (local.get $tokens) (local.get $p) (i32.const 51))  ;; TComma
+          (then (local.set $p (call $skip_ws_p (local.get $tokens)
+                                (i32.add (local.get $p) (i32.const 1))))))
+        (br $each)))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0)
+      (call $slice (local.get $buf) (i32.const 0) (local.get $count))))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))
 
   ;; ─── parse_pat_args: comma-separated patterns until RParen ────────

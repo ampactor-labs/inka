@@ -1225,8 +1225,39 @@
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $alt_each)))
         (return)))
-    ;; ── PRecord (136) — peer follow-up Hβ.infer.walk_pat.record ─
-    ;; Record pattern field-name matching deferred to peer cascade.
+    ;; ── PRecord (136) — record pattern (src/infer.mn:1803-1815) ─
+    ;; Scrutinee accepts any record with AT LEAST these fields: bind
+    ;; to TRecordOpen(field_specs, fresh row). Each sub-pattern walks
+    ;; against its field's fresh handle; punned fields are PVar and
+    ;; bind into env through the recursion.
+    (if (i32.eq (local.get $tag) (i32.const 136))
+      (then
+        (local.set $elems (i32.load offset=4 (local.get $pat)))
+        (local.set $n_elems (call $len (local.get $elems)))
+        (local.set $reason (call $reason_make_located
+          (local.get $span)
+          (call $reason_make_inferred (i32.const 4032))))  ;; "pattern"
+        (local.set $params (call $make_list (local.get $n_elems)))
+        (local.set $i (i32.const 0))
+        (block $rec_done
+          (loop $rec_each
+            (br_if $rec_done (i32.ge_u (local.get $i) (local.get $n_elems)))
+            (local.set $sub_pat (call $list_index (local.get $elems) (local.get $i)))
+            (local.set $name (call $record_get (local.get $sub_pat) (i32.const 0)))
+            (local.set $sub_h (call $graph_fresh_ty (local.get $reason)))
+            (drop (call $list_set (local.get $params) (local.get $i)
+              (call $field_pair_make (local.get $name)
+                (call $ty_make_tvar (local.get $sub_h)))))
+            (call $infer_walk_pat
+              (call $record_get (local.get $sub_pat) (i32.const 1))
+              (local.get $sub_h) (local.get $span))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $rec_each)))
+        (call $graph_bind (local.get $scrut_h)
+          (call $ty_make_trecordopen (local.get $params)
+            (call $graph_fresh_row (local.get $reason)))
+          (local.get $reason))
+        (return)))
     )
 
   ;; MatchExpr arm — src/infer.mn:550-553 + 1701-1733. Walks scrutinee +

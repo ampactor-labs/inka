@@ -620,17 +620,16 @@
           (else (local.set $p (local.get $p2))))
         (br $each)))
     ;; Slice buf to count and sort alphabetically per SYNTAX.md §"Sorting
-    ;; at parse time" — canonical AST has fields sorted by name. Sort is
-    ;; named follow-up Hβ.parser.record-lit-field-sort: the seed leaves
-    ;; insertion order for now (matches MakeRecord's emit which uses
-    ;; whatever order is given). Lower's $lower_record_field_values reads
-    ;; values uniformly. L1 fixpoint preservation: bootstrap and wheel
-    ;; both use insertion order, so byte-identical.
+    ;; at parse time" — canonical AST has fields sorted by name. The
+    ;; wheel sorts at parse (src/parser.mn:1582 sort_record_fields), so
+    ;; the seed must too or m2's record layouts differ from m3's and the
+    ;; fixpoint can never close. Closes Hβ.parser.record-lit-field-sort.
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $nexpr
         (call $mk_MakeRecordExpr
-          (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
+          (call $sort_field_pairs
+            (call $slice (local.get $buf) (i32.const 0) (local.get $count))))
         (local.get $span))))
     (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))

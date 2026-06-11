@@ -38,13 +38,13 @@ fn sigmoid_grad(out, upstream) = {
 
 fn backward_step(upstream, grad_pairs, entry) = {
   match entry {
-    TapeSigmoid { out } =>
+    TapeSigmoid({out}) =>
       (sigmoid_grad(out, upstream), grad_pairs),
-    TapeRelu { input } =>
+    TapeRelu({input}) =>
       (relu_grad(input, upstream), grad_pairs),
-    TapeVecAdd { a, b } =>
+    TapeVecAdd({a, b}) =>
       (upstream, grad_pairs),
-    TapeMatVecMul { w, x, out } =>
+    TapeMatVecMul({w, x, out}) =>
       (mat_vec_mul(transpose(w), upstream),
        push(grad_pairs, (outer_product(upstream, x), upstream))),
   }

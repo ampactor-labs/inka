@@ -294,12 +294,13 @@ fn outcome_verified(_outcome) with Pure = {
 /// per-fork mutations are bracketed within race_internal's shared
 /// checkpoint (rolled back collectively in one graph_rollback call).
 
-fn try_handler_with_rollback(handler, _checkpoint) with GraphRead + GraphWrite = {
-  // Stub: actual implementation invokes the handler over the body's
-  // MS resume continuation; the H7 substrate (LMakeContinuation
-  // commits 4236b96 + ad78384 + bafd63a) makes this fork-real.
-  // For V1, returns the handler itself as a placeholder outcome.
-  handler
+fn try_handler_with_rollback(h, checkpoint) with GraphRead + GraphWrite = {
+  // V1 outcome: the handler value itself. The MS-fork body (invoke h
+  // over the body's resume continuation, bracket trail mutations in
+  // the shared checkpoint) is the H7 substrate — peer with the
+  // arena_ms cluster (LMakeContinuation commits 4236b96 + ad78384 +
+  // bafd63a make the fork real).
+  h
 }
 
 /// replay_winner — re-applies the winner's mutations after the

@@ -734,6 +734,8 @@ type Predicate
   | POr(Predicate, Predicate)
   | PNot(Predicate)
   | PCall(String, List)
+  | PBoolNode(Int)           // predicate IS a bool expr's graph node — handle defers evaluation
+  | PPatternMatch(Pat, Int)  // predicate IS "scrutinee handle matches pat" — match-narrowing
 
 type PExpr
   = PSelf                   // the value being refined
@@ -1048,8 +1050,8 @@ fn show_tparam(ref tp) with GraphRead + !Mutate = {
   }
 }
 
-fn show_ownership(own) with Pure = {
-  match own {
+fn show_ownership(o) with Pure = {
+  match o {
     Inferred => "",
     Own      => " own",
     Ref      => " ref"

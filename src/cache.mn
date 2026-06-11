@@ -291,7 +291,7 @@ fn cache_pack_params(params, i, n) with Pack + !Unpack = {
 }
 
 // Ownership tags: 0=Inferred, 1=Own, 2=Ref
-fn cache_pack_ownership(own) with Pack + !Unpack = match own {
+fn cache_pack_ownership(o) with Pack + !Unpack = match o {
   Inferred => perform pack_byte(0),
   Own      => perform pack_byte(1),
   Ref      => perform pack_byte(2)
@@ -492,6 +492,18 @@ fn cache_pack_predicate(p) with Pack + !Unpack = match p {
     pack_str(name)
     pack_i32(len(args))
     cache_pack_pexprs(args, 0, len(args))
+  },
+  PBoolNode(h) => {
+    pack_byte(8)
+    pack_i32(h)
+  },
+  PPatternMatch(_, h) => {
+    // The wire carries the scrutinee handle; the pat re-derives from
+    // the handle's owning module at the SMT tier (the cache
+    // invalidates with the module hash — same trust boundary as
+    // TVar handles).
+    pack_byte(9)
+    pack_i32(h)
   }
 }
 
@@ -987,11 +999,21 @@ fn cache_unpack_predicate() with Unpack + !Pack = {
     let inner = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     PNot(inner)
   }
-  else {
+  else if tag == 7 {
     let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let n = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let args = cache_unpack_pexprs(n, 0, make_list(n))
     PCall(name, args)
+  }
+  else if tag == 8 {
+    let h = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PBoolNode(h)
+  }
+  else {
+    // tag 9 — the pat re-derives at the SMT tier; the wire carries
+    // the scrutinee handle.
+    let h = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PPatternMatch(PWild, h)
   }
 }
 

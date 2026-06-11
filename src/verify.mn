@@ -66,7 +66,9 @@ fn predicate_decide(ref pred) with Pure = match pred {
   PAnd(a, b)         => and_decide(predicate_decide(a), predicate_decide(b)),
   POr(a, b)          => or_decide(predicate_decide(a), predicate_decide(b)),
   PNot(inner)        => not_decide(predicate_decide(inner)),
-  PCall(_, _)        => None
+  PCall(_, _)        => None,
+  PBoolNode(_)       => None,        // graph-deferred; SMT tier evaluates (verify_smt-witness-L2)
+  PPatternMatch(_, _) => None        // match-narrowing; SMT tier evaluates
 }
 
 /// PEq decidable when both sides are kind-matched constants.
@@ -223,7 +225,9 @@ fn classify_predicate(pred) with Pure = match pred {
   PEq(_, _)    => "equality",
   PLt(_, _)    => "ordering",
   PLeq(_, _)   => "ordering",
-  PCall(_, _)  => "user-defined"
+  PCall(_, _)  => "user-defined",
+  PBoolNode(_) => "graph-deferred",
+  PPatternMatch(_, _) => "match-narrowing"
 }
 
 type SmtResult

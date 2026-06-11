@@ -195,7 +195,7 @@ fn driver_collect_dep_hashes_loop(ref imports, i, n, own buf)
     let m = list_index(imports, i)
     let path = driver_module_path(m)
     let h = if perform fs_exists(path) {
-      cache.hash_source(perform fs_read_file(path))
+      hash_source(perform fs_read_file(path))
     } else { 0 }
     driver_collect_dep_hashes_loop(imports, i + 1, n, list_set(buf, i, h))
   }

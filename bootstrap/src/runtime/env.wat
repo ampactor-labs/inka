@@ -425,6 +425,42 @@
         (br $scope_loop)))
     (i32.const 0))
 
+  ;; $env_lookup_ctor(name) — newest binding whose SchemeKind IS
+  ;; ConstructorScheme(132). Pattern-ctor position is ctor-only: a
+  ;; type ALIAS sharing the name (types.mn `type Handle = Int where
+  ;; ...` vs threading.mn `type Handle = Handle(Int)`) must not
+  ;; shadow the constructor the pattern destructures.
+  (func $env_lookup_ctor (param $name i32) (result i32)
+    (local $scope_idx i32) (local $frame i32) (local $buf i32)
+    (local $binding_idx i32) (local $binding i32)
+    (call $env_init)
+    (local.set $scope_idx (global.get $env_scope_count_g))
+    (block $outer_done
+      (loop $scope_loop
+        (br_if $outer_done (i32.eqz (local.get $scope_idx)))
+        (local.set $scope_idx (i32.sub (local.get $scope_idx) (i32.const 1)))
+        (local.set $frame
+          (call $list_index (global.get $env_scopes_ptr) (local.get $scope_idx)))
+        (local.set $buf (call $env_frame_buf (local.get $frame)))
+        (local.set $binding_idx (call $env_frame_len (local.get $frame)))
+        (block $inner_done
+          (loop $binding_loop
+            (br_if $inner_done (i32.eqz (local.get $binding_idx)))
+            (local.set $binding_idx (i32.sub (local.get $binding_idx) (i32.const 1)))
+            (local.set $binding
+              (call $list_index (local.get $buf) (local.get $binding_idx)))
+            (if (call $str_eq (call $env_binding_name (local.get $binding))
+                              (local.get $name))
+              (then
+                (if (i32.eq
+                      (call $schemekind_tag
+                        (call $env_binding_kind (local.get $binding)))
+                      (i32.const 132))
+                  (then (return (local.get $binding))))))
+            (br $binding_loop)))
+        (br $scope_loop)))
+    (i32.const 0))
+
   ;; $env_lookup_effectdecl(name) — newest binding whose SchemeKind IS
   ;; EffectDeclKind(136): the effect→ops mapping for ev-slot derivation.
   (func $env_lookup_effectdecl (param $name i32) (result i32)

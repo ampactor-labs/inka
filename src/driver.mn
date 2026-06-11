@@ -122,7 +122,7 @@ fn driver_check_module(ref module_name)
     []
   } else {
     let source = perform fs_read_file(path)
-    let current_hash = cache.hash_source(source)
+    let current_hash = hash_source(source)
     let cached = cache_read(module_name)
     match cached {
       Some(kai) => {

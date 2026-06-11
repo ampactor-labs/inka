@@ -1041,7 +1041,7 @@
       (then
         (local.set $ctor_name (i32.load offset=4 (local.get $pat)))
         (local.set $sub_pats (i32.load offset=8 (local.get $pat)))
-        (local.set $binding (call $env_lookup_value (local.get $ctor_name)))
+        (local.set $binding (call $env_lookup_ctor (local.get $ctor_name)))
         (if (i32.eqz (local.get $binding))
           (then
             ;; Constructor not in env — walk sub_pats with fresh handles

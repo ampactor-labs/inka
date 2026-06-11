@@ -256,7 +256,7 @@ fn ffi_join(handle) with WasiThreads + SharedMemory = {
   // (fn_idx + capture_count) + 4 * (captures+ev_slots) bytes; the
   // done_flag sits at the first slot past the captures region. Per
   // emit_module.wat layout for spawnable closures (peer-extension).
-  // For now treat closure_ptr's done at closure_done_offset(closure_ptr).
+  // done addr projection: closure_done_addr reads the layout.
   let done_addr = closure_done_addr(closure_ptr)
   perform wait_i32(done_addr, 0, max_join_timeout())
   perform atomic_load_i32(closure_result_addr(closure_ptr))

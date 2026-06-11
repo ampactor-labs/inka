@@ -199,16 +199,138 @@
         (br $each)))
     (local.get $out))
 
+  ;; ─── Pattern-param desugar (SYNTAX.md:268) ─────────────────────────
+  ;; `((a, b)) => body` — outer parens = param list; inner = tuple
+  ;; PATTERN. LambdaExpr params are TParams (name-based), so a
+  ;; pattern-param IS sugar for a synthesized binder + let-destructure
+  ;; prepended to the body: `(tpN) => { let (a, b) = tpN  body }`.
+  ;; The let-pattern substrate (infer_walk_pat + lower) does the rest —
+  ;; no parallel binding machinery. Kills the empty-string-name
+  ;; fabrication for non-VarRef params (protocol_parser_fabrication_
+  ;; substrate class).
+
+  ;; Node → Pat for param position. VarRef → PVar ("_" → PWild);
+  ;; MakeTupleExpr → PTuple (recursive). Anything else → PWild —
+  ;; $parse_pat's own error-recovery fallback, not a fabricated value.
+  (func $expr_to_pat (param $node i32) (result i32)
+    (local $body i32) (local $expr i32) (local $name i32)
+    (local $elems i32) (local $n i32) (local $i i32) (local $out i32)
+    (local.set $body (i32.load offset=4 (local.get $node)))
+    (if (i32.eq (i32.load (local.get $body)) (i32.const 110))
+      (then (local.set $expr (i32.load offset=4 (local.get $body))))
+      (else (local.set $expr (local.get $body))))
+    ;; VarRef (85)
+    (if (i32.eq (i32.load (local.get $expr)) (i32.const 85))
+      (then
+        (local.set $name (i32.load offset=4 (local.get $expr)))
+        (if (i32.and
+              (i32.eq (call $str_len (local.get $name)) (i32.const 1))
+              (i32.eq (call $byte_at (local.get $name) (i32.const 0)) (i32.const 95)))
+          (then (return (i32.const 131))))
+        (return (call $mk_PVar (local.get $name)))))
+    ;; MakeTupleExpr (97)
+    (if (i32.eq (i32.load (local.get $expr)) (i32.const 97))
+      (then
+        (local.set $elems (i32.load offset=4 (local.get $expr)))
+        (local.set $n (call $len (local.get $elems)))
+        (local.set $out (call $list_extend_to
+          (call $make_list (i32.const 0)) (local.get $n)))
+        (local.set $i (i32.const 0))
+        (block $done
+          (loop $each
+            (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+            (drop (call $list_set (local.get $out) (local.get $i)
+              (call $expr_to_pat
+                (call $list_index (local.get $elems) (local.get $i)))))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $each)))
+        (return (call $mk_PTuple (local.get $out)))))
+    (i32.const 131))
+
+  ;; Synthesized binder: "tp" + fresh handle — collision-proof against
+  ;; user names (fresh handles are globally unique ints).
+  (func $synth_param_name (result i32)
+    (local $prefix i32)
+    (local.set $prefix (call $str_alloc (i32.const 2)))
+    (i32.store8 offset=4 (local.get $prefix) (i32.const 116))  ;; 't'
+    (i32.store8 offset=5 (local.get $prefix) (i32.const 112))  ;; 'p'
+    (call $str_concat (local.get $prefix)
+                      (call $int_to_str (call $fresh_handle))))
+
+  ;; Normalize param exprs: VarRefs convert directly; pattern-shaped
+  ;; params get a synthesized binder + LetStmt(pat, binder) prepended
+  ;; to the body. Returns 2-list (tparams, body').
+  (func $lambda_params_normalize
+        (param $exprs i32) (param $body i32) (param $span i32)
+        (result i32)
+    (local $n i32) (local $i i32) (local $tparams i32)
+    (local $lets i32) (local $lets_count i32)
+    (local $node i32) (local $nbody i32) (local $expr i32)
+    (local $name i32) (local $tup i32)
+    (local.set $n (call $len (local.get $exprs)))
+    (local.set $tparams (call $list_extend_to
+      (call $make_list (i32.const 0)) (local.get $n)))
+    (local.set $lets (call $make_list (i32.const 4)))
+    (local.set $lets_count (i32.const 0))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $node (call $list_index (local.get $exprs) (local.get $i)))
+        (local.set $nbody (i32.load offset=4 (local.get $node)))
+        (if (i32.eq (i32.load (local.get $nbody)) (i32.const 110))
+          (then (local.set $expr (i32.load offset=4 (local.get $nbody))))
+          (else (local.set $expr (local.get $nbody))))
+        (if (i32.eq (i32.load (local.get $expr)) (i32.const 85))
+          (then
+            ;; Plain name param.
+            (drop (call $list_set (local.get $tparams) (local.get $i)
+              (call $convert_var_ref_to_tparam (local.get $node)))))
+          (else
+            ;; Pattern param: binder + let-destructure.
+            (local.set $name (call $synth_param_name))
+            (drop (call $list_set (local.get $tparams) (local.get $i)
+              (call $mk_TParam
+                (local.get $name)
+                (call $mk_TyVar (call $fresh_handle))
+                (i32.const 170))))
+            (local.set $lets (call $list_extend_to (local.get $lets)
+              (i32.add (local.get $lets_count) (i32.const 1))))
+            (drop (call $list_set (local.get $lets) (local.get $lets_count)
+              (call $nstmt
+                (call $mk_LetStmt
+                  (call $expr_to_pat (local.get $node))
+                  (call $nexpr (call $mk_VarRef (local.get $name))
+                               (local.get $span)))
+                (local.get $span))))
+            (local.set $lets_count
+              (i32.add (local.get $lets_count) (i32.const 1)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $tparams)))
+    (if (i32.gt_u (local.get $lets_count) (i32.const 0))
+      (then
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (call $nexpr
+            (call $mk_BlockExpr
+              (call $slice (local.get $lets) (i32.const 0) (local.get $lets_count))
+              (local.get $body))
+            (local.get $span)))))
+      (else
+        (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $body)))))
+    (local.get $tup))
+
   ;; Lambda from multi-paren `(x, y, ...) => body`. Caller has
   ;; already parsed the comma-separated expression list into $exprs
-  ;; and advanced to $past_rparen = position past `)`. Each expr
-  ;; must be a VarRef for well-formed lambda; convert to TParam
-  ;; list and parse body.
+  ;; and advanced to $past_rparen = position past `)`. Params
+  ;; normalize via $lambda_params_normalize (pattern-params desugar
+  ;; to binder + let-destructure).
   (func $parse_lambda_from_paren_multi
         (param $tokens i32) (param $exprs i32) (param $past_rparen i32) (param $span i32)
         (result i32)
     (local $p4 i32) (local $body_r i32) (local $body i32) (local $p5 i32)
-    (local $params i32) (local $tup i32)
+    (local $params i32) (local $tup i32) (local $norm i32)
     (local.set $p4 (call $expect (local.get $tokens)
                           (call $skip_ws_p (local.get $tokens) (local.get $past_rparen))
                           (i32.const 35)))
@@ -216,7 +338,10 @@
                               (call $skip_ws_p (local.get $tokens) (local.get $p4))))
     (local.set $body (call $list_index (local.get $body_r) (i32.const 0)))
     (local.set $p5   (call $list_index (local.get $body_r) (i32.const 1)))
-    (local.set $params (call $exprs_to_tparams (local.get $exprs)))
+    (local.set $norm (call $lambda_params_normalize
+      (local.get $exprs) (local.get $body) (local.get $span)))
+    (local.set $params (call $list_index (local.get $norm) (i32.const 0)))
+    (local.set $body   (call $list_index (local.get $norm) (i32.const 1)))
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $nexpr (call $mk_LambdaExpr (local.get $params) (local.get $body))
@@ -232,7 +357,7 @@
         (param $tokens i32) (param $first i32) (param $p3 i32) (param $span i32)
         (result i32)
     (local $p4 i32) (local $body_r i32) (local $body i32) (local $p5 i32)
-    (local $exprs i32) (local $params i32) (local $tup i32)
+    (local $exprs i32) (local $params i32) (local $tup i32) (local $norm i32)
     ;; Consume the TFatArrow.
     (local.set $p4 (call $expect (local.get $tokens)
                           (call $skip_ws_p (local.get $tokens) (local.get $p3))
@@ -242,11 +367,15 @@
                               (call $skip_ws_p (local.get $tokens) (local.get $p4))))
     (local.set $body (call $list_index (local.get $body_r) (i32.const 0)))
     (local.set $p5   (call $list_index (local.get $body_r) (i32.const 1)))
-    ;; Wrap $first in a 1-element list; convert to TParam list.
+    ;; Wrap $first in a 1-element list; normalize (pattern-params
+    ;; desugar to binder + let-destructure).
     (local.set $exprs (call $list_extend_to
       (call $make_list (i32.const 0)) (i32.const 1)))
     (drop (call $list_set (local.get $exprs) (i32.const 0) (local.get $first)))
-    (local.set $params (call $exprs_to_tparams (local.get $exprs)))
+    (local.set $norm (call $lambda_params_normalize
+      (local.get $exprs) (local.get $body) (local.get $span)))
+    (local.set $params (call $list_index (local.get $norm) (i32.const 0)))
+    (local.set $body   (call $list_index (local.get $norm) (i32.const 1)))
     ;; Build (LambdaExpr, p5).
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)

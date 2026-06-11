@@ -1346,7 +1346,7 @@ fn same_ground(ref a, ref b) with Pure = match a {
   TRecordOpen(_, _)  => false,
   TRefined(_, _)     => false,
   TCont(_, _)        => false,
-  TAlias(_, inner)   => is_concrete(inner)
+  TAlias(_, inner)   => same_ground(inner, b)
 }
 
 fn unify_type_lists(as_list, bs_list, span: ValidSpan, reason) = {
@@ -2497,7 +2497,7 @@ fn infer_resume_cardinality(arm_body) with GraphRead = {
 /// container NExpr arm enumerated explicitly, no _ wildcard
 /// fabricating ()).
 fn collect_resume_sites(arm_body) with GraphRead = {
-  let buf = make_buffer(8)
+  let buf = buf_make()   // drift-audit: ignore (buf borrowed by walk then frozen — reuse, Anchor 6)
   collect_resume_walk(buf, arm_body)
   buf_freeze(buf)
 }
@@ -2672,7 +2672,7 @@ fn lowest_common_ancestor(a, b, root) with GraphRead = {
   let N(body, _, _) = root
   let descendant_lca = match body {
     NExpr(BlockExpr(stmts, final)) =>
-      lca_among_children(append_one(stmts, final), a, b),
+      lca_among_children(push(stmts, final), a, b),
     NExpr(IfExpr(c, t, e)) => lca_among_children([c, t, e], a, b),
     NExpr(MatchExpr(scrut, arms)) =>
       lca_among_children([scrut] ++ map(arms, (arm) => arm.body), a, b),

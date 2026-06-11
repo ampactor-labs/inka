@@ -319,7 +319,7 @@ fn parse_array_elements(src, pos, acc_rev) with Memory + Alloc = {
       else {
         let next_acc = [v] ++ acc_rev
         let b = byte_at(src, p2)
-        if b == 93 { JOk(JArr(reverse_list(next_acc)), p2 + 1) }
+        if b == 93 { JOk(JArr(reverse(next_acc)), p2 + 1) }
         else if b == 44 {
           let p3 = json_skip_ws(src, p2 + 1)
           parse_array_elements(src, p3, next_acc)
@@ -374,7 +374,7 @@ fn parse_object_pairs(src, pos, acc_rev) with Memory + Alloc = {
             else {
               let next_acc = [(key, v)] ++ acc_rev
               let b = byte_at(src, p5)
-              if b == 125 { JOk(JObj(reverse_list(next_acc)), p5 + 1) }
+              if b == 125 { JOk(JObj(reverse(next_acc)), p5 + 1) }
               else if b == 44 {
                 let p6 = json_skip_ws(src, p5 + 1)
                 parse_object_pairs(src, p6, next_acc)

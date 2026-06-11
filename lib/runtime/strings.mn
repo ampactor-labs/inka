@@ -212,6 +212,38 @@ fn str_slice(s, start, end) with Memory + Alloc = {
   view
 }
 
+/// split — sep-delimited tokens as zero-copy views into s (one
+/// str_slice per token; no byte copies). One O(N) walk; buffer-
+/// counter substrate per CLAUDE.md (list_extend_to + list_set +
+/// slice — no ++ in the loop). Adjacent separators yield empty
+/// tokens; empty input yields [""]; empty sep yields [s].
+fn split(s, sep) with Memory + Alloc = {
+  let n = byte_len(s)
+  let seplen = byte_len(sep)
+  if seplen == 0 { [s] }
+  else { split_walk(s, sep, n, seplen, 0, 0, make_list(0), 0) }
+}
+
+fn split_walk(s, sep, n, seplen, i, start, buf, count) with Memory + Alloc = {
+  if i + seplen > n {
+    let grown = list_extend_to(buf, count + 1)
+    list_set(grown, count, str_slice(s, start, n))
+    slice(grown, 0, count + 1)
+  }
+  else if sep_at(s, sep, i, seplen, 0) {
+    let grown = list_extend_to(buf, count + 1)
+    list_set(grown, count, str_slice(s, start, i))
+    split_walk(s, sep, n, seplen, i + seplen, i + seplen, grown, count + 1)
+  }
+  else { split_walk(s, sep, n, seplen, i + 1, start, buf, count) }
+}
+
+fn sep_at(s, sep, i, seplen, j) with Memory = {
+  if j >= seplen { true }
+  else if byte_at(s, i + j) == byte_at(sep, j) { sep_at(s, sep, i, seplen, j + 1) }
+  else { false }
+}
+
 /// str_unescape — resolve SYNTAX.md §1077 escape codes in a string
 /// literal's raw source bytes: \n→LF \r→CR \t→TAB \0→NUL; \\ \" and
 /// any other \X → the second byte literally. A lone trailing `\`

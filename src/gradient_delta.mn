@@ -287,18 +287,9 @@ fn eff_name_label(name) with Pure = match name {
 // constants avoids the audit's literal-bytes false-positive on
 // `==` adjacent to string concat (we're producing source, not
 // comparing strings).
-fn op_text_eq() with Pure = " "  |> str_concat(eq_op_token()) |> str_concat(" ")
+fn op_text_eq() with Pure = " == "   // drift-audit: ignore (operator source-text literal, not a comparison)
 fn op_text_lt() with Pure = " < "
 fn op_text_and() with Pure = " && "
-
-// The equality operator's source-text — single source of truth.
-// Built character-by-character to avoid the audit's regex.
-fn eq_op_token() with Pure = {
-  let s = str_alloc(2)
-  str_set_byte(s, 0, 61)   // '='
-  str_set_byte(s, 1, 61)   // '='
-  s
-}
 
 fn predicate_to_where_clause(pred) with Pure = match pred {
   PTrue => "where true",

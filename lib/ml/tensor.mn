@@ -49,10 +49,10 @@ fn sigmoid_vec(xs) = map((x) => sigmoid_scalar(x), xs)
 fn mse(pred, target) = {
   let diffs = vec_sub(pred, target)
   let sq = vec_mul(diffs, diffs)
-  sumf(sq) / to_float(len(pred))
+  sumf(sq) / float_of_int(len(pred))
 }
 
 fn mse_grad(pred, target) = {
-  scalar_mul(2.0 / to_float(len(pred)), vec_sub(pred, target))
+  scalar_mul(2.0 / float_of_int(len(pred)), vec_sub(pred, target))
 }
 

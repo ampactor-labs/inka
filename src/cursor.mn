@@ -261,7 +261,7 @@ fn score_one_position(handle, caret) with GraphRead + !Mutate = {
   let GNode(_, reason) = perform graph_chase(handle)
   Cursor(handle,
          Located(target_span, reason),
-         int_to_float(gates) * proximity)
+         float_of_int(gates) * proximity)
 }
 
 // ─── Caret proximity weighting ──────────────────────────────────────
@@ -305,14 +305,6 @@ fn same_module_weight()    with Pure = 0.7
 fn transitive_dep_weight() with Pure = 0.4
 fn cross_module_weight()   with Pure = 0.2
 
-// Span equality — positional comparison on the four ints.
-
-fn span_eq(a, b) with Pure = {
-  let Span(asl, asc, ael, aec) = a
-  let Span(bsl, bsc, bel, bec) = b
-  asl == bsl && asc == bsc && ael == bel && aec == bec
-}
-
 // same_enclosing_decl / same_module / transitive_dep — these read the
 // graph's existing scope structure. Inline residue; the eight-
 // interrogation discipline at Hμ-cursor.md §1 confirms each is a
@@ -339,15 +331,6 @@ fn transitive_dep(caret_span, target_span) with Pure = {
   // Hμ.cursor.cache promotes this to a real IC dependency-hash
   // walk. Today: false unless same_module ruled out.
   false
-}
-
-fn span_overlaps(a, b) with Pure = {
-  let Span(asl, _asc, ael, _aec) = a
-  let Span(bsl, _bsc, bel, _bec) = b
-  // Closed-interval overlap on line numbers. Sufficient for the
-  // proximity-tier classification; column-precise comparison is
-  // peer-handle territory.
-  ael >= bsl && bel >= asl
 }
 
 // ─── Argmax with default ────────────────────────────────────────────

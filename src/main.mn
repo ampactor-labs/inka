@@ -282,7 +282,7 @@ fn serve_run() = {
 fn mentl_lsp_session() = {
   // Reads JSON-RPC frames from stdin; routes to Query / Teach /
   // Synth via lsp_adapter; writes responses to stdout. Per MV-LSP-adapter.
-  perform lsp_serve_loop()
+  lsp_session()
 }
 
 // ─── doc_run — documentation projection (F.1 substrate)

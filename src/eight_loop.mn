@@ -31,9 +31,9 @@
 //   graph_chase / NodeKind / Reason          — src/graph.mn + types.mn
 //   query_default (Query tentacle)           — src/query.mn
 //   synth_propose (Propose tentacle)         — src/mentl.mn
-//   PipeContext / pipe_context_of_node       — src/cursor.mn
-//   row_of_node / EffRow                     — src/cursor.mn + effects.mn
-//   ownership_of_node / Ownership            — src/cursor.mn + own.mn
+//   PipeContext / pipe_context_of_kind       — src/cursor.mn
+//   row_of_kind / EffRow                     — src/cursor.mn + effects.mn
+//   ownership_of_kind / Ownership            — src/cursor.mn + own.mn
 //   verify_pending_at / Predicate            — src/cursor.mn + verify.mn
 //   teach_gradient (Teach tentacle)          — src/mentl.mn
 //   teach_why (Why tentacle)                 — src/mentl.mn
@@ -158,7 +158,7 @@ handler interrogate_default with !Mutate {
   // bodied; no "later"); 11 (no acc-append in loop; <| outputs tuple).
   interrogate_at(handle) => {
     let GNode(kind, reason) = perform graph_chase(handle)
-    let span = perform graph_span_of(handle)
+    let span = span_of_handle(handle)
     let pos = (handle, kind, reason)
     let (graph_v, handler_v, verb_v, row_v, ownership_v, refinement_v, gradient_v, reason_v) =
       pos
@@ -266,8 +266,8 @@ fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
 fn verb_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
   // Verb clears when the position is inside a recognized pipe
   // topology OR is a leaf expression with no surrounding pipe.
-  // pipe_context_of_node reads the parent chain.
-  match pipe_context_of_node(kind) {
+  // pipe_context_of_kind reads the parent chain.
+  match pipe_context_of_kind(kind) {
     NoPipe => VerdictClears(reason),
     InsidePipe(_) => VerdictClears(reason),
     StartingPipe => VerdictClears(reason),
@@ -280,7 +280,7 @@ fn row_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
   // inference). Free row variables surface as invites.
   match kind {
     NBound(ty) =>
-      if row_is_ground(row_of_node(kind)) {
+      if row_is_ground(row_of_kind(kind)) {
         VerdictClears(reason)
       } else {
         VerdictInvites(row_invite_for(handle, reason))
@@ -294,7 +294,7 @@ fn ownership_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
   // Ownership clears when authored OR resolved is non-Inferred.
   // Otherwise the gradient could suggest one (see Hμ.gradient-delta
   // delta_ownership).
-  match ownership_of_node(kind) {
+  match ownership_of_kind(kind) {
     Inferred => VerdictInvites(ownership_invite_for(handle, reason)),
     _ => VerdictClears(reason)
   }

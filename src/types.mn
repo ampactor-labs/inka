@@ -381,6 +381,21 @@ fn span_join(a, b) with Pure = {
   Span(sl, sc, el, ec)
 }
 
+fn span_eq(a, b) with Pure = {
+  let Span(asl, asc, ael, aec) = a
+  let Span(bsl, bsc, bel, bec) = b
+  asl == bsl && asc == bsc && ael == bel && aec == bec
+}
+
+// Closed-interval overlap on line numbers. Sufficient for the
+// proximity-tier classification; column-precise comparison is
+// peer-handle territory.
+fn span_overlaps(a, b) with Pure = {
+  let Span(asl, _asc, ael, _aec) = a
+  let Span(bsl, _bsc, bel, _bec) = b
+  ael >= bsl && bel >= asl
+}
+
 fn span_zero() with Pure = Span(0, 0, 0, 0)
 
 // Inference + Verify ledger discharges obligations at construction
@@ -867,6 +882,8 @@ effect LowerScope {
   ls_resolve(String) -> (Resolution, Int)
   ls_register_globals(List) -> ()
   ls_outer_fn_name() -> String  // closest enclosing named-fn frame; "" for top-level
+  ls_push_scope() -> Int  // checkpoint = current frame's local count
+  ls_pop_scope(Int) -> ()  // truncate frame locals back to checkpoint
 }
 
 // Every refinement unification performs verify(span, pred, reason).

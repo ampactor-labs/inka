@@ -279,10 +279,10 @@ fn score_all_entries(entries, caret) with GraphRead + !Mutate = {
 fn score_one_entry(entry, caret) with GraphRead + !Mutate = {
   let OracleEntry(e) = entry
   let AnnotationSuggestion(_kind, _ann, unlocks, _reason) = e.suggestion
-  let target_span = perform graph_span_of(e.handle)
+  let target_span = span_of_handle(e.handle)
   let proximity = caret_proximity_weight(caret, target_span)
   let gates = len(unlocks)
-  Cursor(e.handle, e.reason, int_to_float(gates) * proximity)
+  Cursor(e.handle, e.reason, float_of_int(gates) * proximity)
 }
 
 // ─── Disk I/O — Pack/Unpack round-trip per cache.mn pattern ────────

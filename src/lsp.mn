@@ -6,7 +6,7 @@
 //
 // Composition (per Insight #1: handler chain IS capability stack):
 //
-//   inka_lsp_session()
+//   lsp_session()
 //     ~> lsp_adapter                 ← outermost = least trusted; sandbox boundary
 //     ~> mentl_voice_filesystem      ← FX.B: 7 file ops + handles_table
 //     ~> mentl_voice_default         ← MV.2.e: 10 voice/state arms
@@ -524,7 +524,7 @@ fn hover_content_to_json(content) with Memory + Alloc = {
 }
 
 fn map_completion_items_to_json(items, i, n, acc_rev) with Memory + Alloc = {
-  if i >= n { reverse_list_lsp(acc_rev) }
+  if i >= n { reverse(acc_rev) }
   else {
     let item = list_index(items, i)
     let CompletionItem(label, detail, kind) = item
@@ -538,7 +538,7 @@ fn map_completion_items_to_json(items, i, n, acc_rev) with Memory + Alloc = {
 }
 
 fn map_code_actions_to_json(actions, i, n, acc_rev) with Memory + Alloc = {
-  if i >= n { reverse_list_lsp(acc_rev) }
+  if i >= n { reverse(acc_rev) }
   else {
     let action = list_index(actions, i)
     let CodeAction(title, _edit) = action
@@ -551,7 +551,7 @@ fn map_code_actions_to_json(actions, i, n, acc_rev) with Memory + Alloc = {
 }
 
 fn map_diagnostics_to_json(diags, i, n, acc_rev) with Memory + Alloc = {
-  if i >= n { reverse_list_lsp(acc_rev) }
+  if i >= n { reverse(acc_rev) }
   else {
     let d = list_index(diags, i)
     let Diagnostic(sl, sc, el, ec, severity, code, msg) = d
@@ -566,7 +566,7 @@ fn map_diagnostics_to_json(diags, i, n, acc_rev) with Memory + Alloc = {
 }
 
 fn map_locations_to_json(locs, i, n, acc_rev) with Memory + Alloc = {
-  if i >= n { reverse_list_lsp(acc_rev) }
+  if i >= n { reverse(acc_rev) }
   else {
     let loc = list_index(locs, i)
     map_locations_to_json(locs, i + 1, n, [location_to_json(loc)] ++ acc_rev)
@@ -603,16 +603,12 @@ handler lsp_adapter
   graph_mutated(_epoch, _mutation) => resume()
 }
 
-/// inka_lsp_session — the session loop entry. Reads frames from stdin
+/// lsp_session — the session loop entry. Reads frames from stdin
 /// in a tail-recursive loop terminating on LspFrameEof; dispatches each
 /// message; writes responses to stdout. Composes through the full
 /// Mentl handler chain at install per MV-LSP-adapter §3.
 
-fn inka_lsp_session() with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate = {
-  loop_lsp_messages()
-}
-
-fn loop_lsp_messages() with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate = {
+fn lsp_session() with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate = {
   match read_lsp_frame() {
     LspFrameEof           => (),
     LspFrame(body)        => {
@@ -623,7 +619,7 @@ fn loop_lsp_messages() with Memory + Alloc + WASI + Filesystem + Interact + Grap
       }
       let msg = parse_lsp_message(dispatch_input)
       handle_message(msg)
-      loop_lsp_messages()
+      lsp_session()
     }
   }
 }

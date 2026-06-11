@@ -364,7 +364,7 @@ fn state_with_caret(state, new_caret) with Pure = {
 
 fn span_of_cursor(cursor) with GraphRead = {
   let Cursor(handle, _, _) = cursor
-  perform graph_span_of(handle)
+  span_of_handle(handle)
 }
 
 // handle_at_span() — see src/cursor.mn (canonical scan-based impl).

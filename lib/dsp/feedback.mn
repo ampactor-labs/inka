@@ -76,7 +76,7 @@ type Gain = Float where 0.0 <= self
 /// excludes invalid values upstream.
 
 fn compute_alpha(cutoff: Hz, sr: Int) -> Float with Pure + !Alloc =
-  let omega = 6.283185307 * cutoff / int_to_float(sr)
+  let omega = 6.283185307 * cutoff / float_of_int(sr)
   1.0 - exp(0.0 - omega)
 
 /// One-pole low-pass IIR filter. The `<~ delay(1)` back-edge feeds

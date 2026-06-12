@@ -70,11 +70,10 @@ type Expr
 ```
 
 ```lux
-// ~> splits by layout per DESIGN Ch 2 / spec I11 — newline-before-~>
-// binds outside the prior chain (PTeeBlock), no-newline tightens
-// around the preceding stage (PTeeInline). Inference and lowering
-// treat both identically; only the parser distinguishes.
-type PipeKind = PForward | PDiverge | PCompose | PTeeBlock | PTeeInline | PFeedback
+// ~> has ONE precedence (1, the loosest — SYNTAX.md §Precedence);
+// the handler at the foot of a chain governs everything to its
+// left. Layout is never semantics (Three Laws, 2026-06-11).
+type PipeKind = PForward | PDiverge | PCompose | PTee | PFeedback
 ```
 
 ---

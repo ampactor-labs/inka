@@ -67,9 +67,9 @@ fn slow_b() = 17
 // ─── ~> handler attachment — capability stack ───────────────────────
 //
 // Outermost (last in chain) is least trusted = sandbox boundary.
-// The inline form wraps the preceding stage; the block form wraps
-// the whole prior chain. Per SUBSTRATE.md §II both shapes lower
-// identically — emit reads scope from the expression layout.
+// ~> has ONE precedence (the loosest): each ~> governs everything
+// to its left, so stacked handlers nest outward. Parenthesize
+// (stage ~> h) to scope a handler to one stage.
 
 fn capability_demo() = {
   parallel_demo()

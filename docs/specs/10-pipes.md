@@ -41,22 +41,21 @@ acyclic uses the other four.
 ## Grammar (extends spec 03 `PipeKind`)
 
 ```lux
-// ~> splits by layout (I11): PTeeBlock when a newline precedes it
-// (wraps whole prior chain); PTeeInline when no newline (wraps
-// preceding stage). Parser carries the split; inference and
-// lowering treat both identically.
+// ~> has ONE precedence (1, the loosest binary operator — the
+// canonical table, SYNTAX.md §Precedence): the handler at the foot
+// of a chain governs everything to its left. Layout is never
+// semantics; block vs inline is the formatter's projection.
 type PipeKind
   = PForward       // |>
   | PDiverge       // <|
   | PCompose       // ><
-  | PTeeBlock      // ~>  block-form (newline-before)
-  | PTeeInline     // ~>  inline-form (no-newline)
+  | PTee           // ~>  handler-attach (one kind, one precedence)
   | PFeedback      // <~
 ```
 
-Spec 03 has the full six-variant shape (PTee split into PTeeBlock
-+ PTeeInline per I11). Parser handles the layout distinction; all
-non-~> pipes thread through unchanged.
+Five variants; the Three Laws (2026-06-11) collapsed the former
+PTeeBlock/PTeeInline layout split into one PTee — the precedence
+table alone draws the tree.
 
 ---
 
@@ -120,28 +119,25 @@ Two pipelines run as peers, outputs tupled. ✕ shape.
 input |> process1 |> process2 ~> logger |> output
 ```
 
-`~>` attaches a handler to the immediately-preceding expression.
-Inline: the handler scope is the single preceding stage. Layout
-(top-level `~>` on a continuation line after a newline-terminated
-chain): the handler wraps the whole previous pipe expression.
+`~>` attaches a handler to everything to its left in the
+expression — the one law. Narrow scope is parens, visible at the
+site: `(stage ~> h)`.
 
-### Two forms — layout-disambiguated
+### One form
 
 ```
-// Form A — layout-scoped: handler wraps the whole prior chain
 input
     |> p1 |> p2 |> p3
-    ~> h1       // h1 wraps (p1|>p2|>p3)
+    ~> h1       // h1 governs (input |> p1 |> p2 |> p3)
     ~> h2       // h2 wraps h1(...)
     ~> h3       // h3 wraps h2(...)
 
-// Form B — inline-local: handler scoped to immediately-prior stage
-input |> p1 ~> h1 |> p2 ~> h2 |> p3 ~> h3
+input |> (p1 ~> h1) |> (p2 ~> h2)   // per-stage scope: parens
 ```
 
-**Parser rule.** `~>` binds tighter than `|>` (Form B inline). A
-continuation-line `~>` attaches to the whole preceding pipe chain
-(Form A), via the newline-aware postfix parser.
+**Parser rule.** `~>` is precedence 1, the loosest binary operator,
+left-associative. No layout sensitivity exists anywhere in the
+grammar.
 
 **Semantics.** `expr ~> h` ≡ `handle expr with h`. If `h` is a
 function value, it's applied to `expr`'s result. The handler-is-a-

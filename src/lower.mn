@@ -446,14 +446,11 @@ fn derive_ev_slots_from_names(names) = {
       // Use the CALLER's handler context for discriminated naming
       match perform inf_handler_provider(op_name) {
         Some(handler_name) =>
-          LGlobal(0, "op_" |> str_concat(handler_name)
-                          |> str_concat("_")
-                          |> str_concat(op_name)
-                          |> str_concat("_idx")),
+          LGlobal(0, "op_{handler_name}_{op_name}_idx"),
         None =>
           // No handler in caller scope — undiscriminated fallback
           // (productive-under-error; will surface as wat2wasm reject)
-          LGlobal(0, "op_" |> str_concat(op_name) |> str_concat("_idx"))
+          LGlobal(0, "op_{op_name}_idx")
       }
     }, op_names)
   }, names)
@@ -488,7 +485,7 @@ fn lower_perform_dispatch(handle, op_name, lo_args) = {
     match perform inf_handler_provider(op_name) {
       Some(handler_name) =>
         LPerform(handle,
-                 handler_name |> str_concat("_") |> str_concat(op_name),
+                 "{handler_name}_{op_name}",
                  lo_args),
       None =>
         LPerform(handle, op_name, lo_args)
@@ -740,7 +737,7 @@ fn lower_expr_body(e, handle, span) = match e {
     // inline — into a WASM function entry in the `$fns` table.
     // Param + capture HANDLES are threaded into the frame so VarRef
     // resolution returns the local's actual type handle (Phase-A1).
-    let lambda_name = "lambda_" |> str_concat(int_to_str(handle))
+    let lambda_name = "lambda_{int_to_str(handle)}"
     let param_names_list = lower_param_names(params)
     let param_handles_list = lower_param_handles(params)
     let free_names = collect_free_vars(body_node, param_names_list)
@@ -988,7 +985,7 @@ fn lower_compose_via_thread(handle, left, right) = {
 /// (`Reason.branch-spawned-verb-tagged`) are named PEER handles.
 fn lower_diverge_via_thread(handle, left, right) = {
   let lo_input = lower_expr(left)
-  let input_local_name = "__diverge_input_" |> str_concat(int_to_str(handle))
+  let input_local_name = "__diverge_input_{int_to_str(handle)}"
   let N(_, _, input_h) = left
   let N(rbody, _, _) = right
   let branch_nodes = match rbody {
@@ -1015,9 +1012,7 @@ fn lower_diverge_via_thread(handle, left, right) = {
 fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_nodes, base_idx) = map((indexed) => {
   let (i, branch_node) = indexed
   let N(_, _, branch_h) = branch_node
-  let thunk_name = "diverge_" |> str_concat(int_to_str(base_idx + i))
-                              |> str_concat("_")
-                              |> str_concat(int_to_str(parent_handle))
+  let thunk_name = "diverge_{int_to_str(base_idx + i)}_{int_to_str(parent_handle)}"
   let lo_branch = lower_expr(branch_node)
   let input_ref = LLocal(input_h, input_local_name)
   let thunk_body = LCall(branch_h, lo_branch, [input_ref])
@@ -1045,10 +1040,7 @@ fn spawn_join_each(handle, thunks) = map((thunk) => {
 /// Drift 6 closure: same closure substrate — no special-case for
 /// "compiler-synthesized" thunks vs. user-written ones.
 fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
-  let thunk_name = "compose_"
-    |> str_concat(side_label)
-    |> str_concat("_")
-    |> str_concat(int_to_str(parent_handle))
+  let thunk_name = "compose_{side_label}_{int_to_str(parent_handle)}"
   let free_names = collect_free_vars(branch_node, [])
   let (captures_names, captures_exprs, captures_handles) =
     resolve_captures_outer(free_names, parent_handle)
@@ -1195,7 +1187,7 @@ fn lower_stmt_body(s, handle, span) = match s {
     // third-instance abstraction-earned shape).
     let outer = perform ls_outer_fn_name()
     let fn_name = if str_eq(outer, "") { name }
-      else { outer |> str_concat("_") |> str_concat(name) }
+      else { "{outer}_{name}" }
     perform ls_enter_frame(
       fn_name,
       param_names_list, param_handles_list,
@@ -1369,10 +1361,7 @@ fn lower_handler_arms(arms) = map((arm) => {
 /// `__state` per the calling convention). Stateful handlers (with state
 /// slots) land with H1.6's evidence wiring.
 fn lower_handler_arms_as_decls(arms, discriminator, config, state) = map((arm) => {
-  let fn_name = "op_"
-    |> str_concat(discriminator)
-    |> str_concat("_")
-    |> str_concat(arm.op_name)
+  let fn_name = "op_{discriminator}_{arm.op_name}"
   // Hβ.first-light.arm-body-fresh-frame: each handler-arm body is
   // its own WASM function with __state IS the handler state record
   // (per protocol_handler_is_state_is_closure_is_evidence.md). The

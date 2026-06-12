@@ -110,7 +110,7 @@ handler mentl_default with annotations = [] {
   teach_error(code, span, reason) =>
     resume(Explanation(
       code,
-      "docs/errors/" |> str_concat(code) |> str_concat(".md"),
+      "docs/errors/{code}.md",
       catalog_summary(code),
       None,
       reason
@@ -578,16 +578,14 @@ fn catalog_summary(code) = match code {
   "T_Gradient"            => "Annotation would unlock a capability",
   "T_OverDeclared"        => "Function declares a wider effect row than its body uses — tighten to unlock capabilities",
   "T_ContinuationEscapes" => "Multi-shot continuation captured inside arena",
-  _ => "Unknown error code: " |> str_concat(code)
+  _ => "Unknown error code: {code}"
 }
 
 // Display — for driver rendering
 
 fn render_explanation(exp) = {
   let Explanation(code, _md, summary, _fix, reason) = exp
-  code
-    |> str_concat(": ")
-    |> str_concat(summary)
+  "{code}: {summary}"
 }
 
 fn show_annotation(ann) = match ann {
@@ -595,9 +593,9 @@ fn show_annotation(ann) = match ann {
   ANotAlloc(_)         => "with !Alloc",
   ANotIO(_)            => "with !IO",
   ANotNetwork(_)       => "with !Network",
-  ARefined(name, _, _) => "refined " |> str_concat(name),
-  AOwn(name, _)        => "own " |> str_concat(name),
-  ARef(name, _)        => "ref " |> str_concat(name)
+  ARefined(name, _, _) => "refined {name}",
+  AOwn(name, _)        => "own {name}",
+  ARef(name, _)        => "ref {name}"
 }
 
 fn show_capability(cap) with Pure = match cap {
@@ -634,86 +632,40 @@ fn indent_for_loop(n, acc) = {
 fn render_why(reason) = render_why_at(reason, 0)
 
 fn render_why_at(reason, depth) = {
-  if depth > 20 { indent_for(depth) |> str_concat("[depth limit reached]\n") }
+  if depth > 20 { "{indent_for(depth)}[depth limit reached]\n" }
   else match reason {
     Located(span, inner) =>
-      indent_for(depth)
-        |> str_concat(show_span(span))
-        |> str_concat("\n")
-        |> str_concat(render_why_at(inner, depth + 1)),
+      "{indent_for(depth)}{show_span(span)}\n{render_why_at(inner, depth + 1)}",
 
     Unified(a, b) =>
-      indent_for(depth)
-        |> str_concat("unified:\n")
-        |> str_concat(render_why_at(a, depth + 1))
-        |> str_concat(indent_for(depth))
-        |> str_concat("with:\n")
-        |> str_concat(render_why_at(b, depth + 1)),
+      "{indent_for(depth)}unified:\n{render_why_at(a, depth + 1)}{indent_for(depth)}with:\n{render_why_at(b, depth + 1)}",
 
     OpConstraint(op, l, r) =>
-      indent_for(depth)
-        |> str_concat("op '")
-        |> str_concat(op)
-        |> str_concat("' constraint:\n")
-        |> str_concat(render_why_at(l, depth + 1))
-        |> str_concat(indent_for(depth))
-        |> str_concat("versus:\n")
-        |> str_concat(render_why_at(r, depth + 1)),
+      "{indent_for(depth)}op '{op}' constraint:\n{render_why_at(l, depth + 1)}{indent_for(depth)}versus:\n{render_why_at(r, depth + 1)}",
 
     VarLookup(name, inner) =>
-      indent_for(depth)
-        |> str_concat("var '")
-        |> str_concat(name)
-        |> str_concat("' lookup:\n")
-        |> str_concat(render_why_at(inner, depth + 1)),
+      "{indent_for(depth)}var '{name}' lookup:\n{render_why_at(inner, depth + 1)}",
 
     FnReturn(name, inner) =>
-      indent_for(depth)
-        |> str_concat("return of '")    // drift-audit: ignore — string literal content, not a control keyword
-        |> str_concat(name)
-        |> str_concat("':\n")
-        |> str_concat(render_why_at(inner, depth + 1)),
+      "{indent_for(depth)}return of '{name}':\n{render_why_at(inner, depth + 1)}",   // drift-audit: ignore — output literal
 
     FnParam(name, idx, inner) =>
-      indent_for(depth)
-        |> str_concat("param '")
-        |> str_concat(name)
-        |> str_concat("' (#")
-        |> str_concat(int_to_str(idx))
-        |> str_concat("):\n")
-        |> str_concat(render_why_at(inner, depth + 1)),
+      "{indent_for(depth)}param '{name}' (#{int_to_str(idx)}):\n{render_why_at(inner, depth + 1)}",
 
     MatchBranch(a, b) =>
-      indent_for(depth)
-        |> str_concat("match branches:\n")
-        |> str_concat(render_why_at(a, depth + 1))
-        |> str_concat(indent_for(depth))
-        |> str_concat("& \n")
-        |> str_concat(render_why_at(b, depth + 1)),
+      "{indent_for(depth)}match branches:\n{render_why_at(a, depth + 1)}{indent_for(depth)}& \n{render_why_at(b, depth + 1)}",
 
     ListElement(inner) =>
-      indent_for(depth)
-        |> str_concat("list element:\n")
-        |> str_concat(render_why_at(inner, depth + 1)),
+      "{indent_for(depth)}list element:\n{render_why_at(inner, depth + 1)}",
 
     IfBranch(inner) =>
-      indent_for(depth)
-        |> str_concat("if branch:\n")
-        |> str_concat(render_why_at(inner, depth + 1)),
+      "{indent_for(depth)}if branch:\n{render_why_at(inner, depth + 1)}",
 
     LetBinding(name, inner) =>
-      indent_for(depth)
-        |> str_concat("let '")
-        |> str_concat(name)
-        |> str_concat("':\n")
-        |> str_concat(render_why_at(inner, depth + 1)),
+      "{indent_for(depth)}let '{name}':\n{render_why_at(inner, depth + 1)}",
 
     Instantiation(name, inner) =>
-      indent_for(depth)
-        |> str_concat("instantiation of '")
-        |> str_concat(name)
-        |> str_concat("':\n")
-        |> str_concat(render_why_at(inner, depth + 1)),
+      "{indent_for(depth)}instantiation of '{name}':\n{render_why_at(inner, depth + 1)}",
 
     // Leaf variants — render via show_reason and terminate.
     Declared(_)          => render_leaf(reason, depth),
@@ -727,9 +679,7 @@ fn render_why_at(reason, depth) = {
 }
 
 fn render_leaf(reason, depth) = {
-  indent_for(depth)
-    |> str_concat(show_reason(reason))
-    |> str_concat("\n")
+  "{indent_for(depth)}{show_reason(reason)}\n"
 }
 
 // teach_why_string ties the effect-returning teach_why to the pure

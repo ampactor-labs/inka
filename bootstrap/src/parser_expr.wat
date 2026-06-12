@@ -431,6 +431,11 @@
           (call $nexpr (call $mk_LitString (i32.load offset=4 (local.get $k))) (local.get $span))))
         (drop (call $list_set (local.get $tup) (i32.const 1) (i32.add (local.get $pos) (i32.const 1))))
         (return (local.get $tup))))
+    ;; TStringPart (72) — string interpolation per #138 (wheel
+    ;; parser.mn:1476-1513): coalesce parts; MakeStringExpr on splice.
+    (if (i32.eq (local.get $n) (i32.const 72))
+      (then (return (call $parse_string_interp
+                      (local.get $tokens) (local.get $pos) (local.get $span)))))
     ;; Fallback: skip
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)

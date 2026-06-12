@@ -18,6 +18,7 @@
   ;;   MakeListExpr=96 MakeTupleExpr=97 MakeRecordExpr=98
   ;;   NamedRecordExpr=99 FieldExpr=100 PipeExpr=101
   ;;   NErrorExpr=102 (productive-under-error sentinel)
+  ;;   MakeStringExpr=103 (string interpolation, #138)
   ;; NodeBody: NExpr=110 NStmt=111 NPat=112 NHole=113
   ;; Stmt: LetStmt=120 FnStmt=121 TypeDefStmt=122
   ;;   EffectDeclStmt=123 HandlerDeclStmt=124 ExprStmt=125

@@ -3805,6 +3805,16 @@
     (i32.store offset=4 (local.get $ptr) (local.get $s))
     (local.get $ptr))
 
+  ;; TStringPart(s) → [tag=72][str_ptr] — literal chunk of an
+  ;; interpolating "..." string (amendment C; wheel types.mn:461-463).
+  ;; TStringSplice=73 is nullary (sentinel) — marks a `{expr}` splice.
+  (func $mk_TStringPart (param $s i32) (result i32)
+    (local $ptr i32)
+    (local.set $ptr (call $alloc (i32.const 8)))
+    (i32.store (local.get $ptr) (i32.const 72))
+    (i32.store offset=4 (local.get $ptr) (local.get $s))
+    (local.get $ptr))
+
   ;; TDocComment(s) → [tag=29][str_ptr]
   (func $mk_TDocComment (param $s i32) (result i32)
     (local $ptr i32)
@@ -4143,27 +4153,40 @@
     (local.get $pos))
 
   ;; ─── Main Lex Loop ─────────────────────────────────────────────────
-  ;; Iterative version of lex_from. Processes source byte-by-byte,
-  ;; building a flat token buffer. Returns (buf, count) as 2-tuple.
+  ;; $lex is the entry wrapper; $lex_from is the re-entrant loop —
+  ;; mirror of wheel src/lexer.mn lex_from(source, n, pos, line, col,
+  ;; buf, count, term_byte, depth). term_byte=125 terminates on the
+  ;; first `}` at depth 0 (string-splice lexing); depth tracks brace
+  ;; nesting. Returns a 4-tuple (pos, col, buf, count).
 
   (func $lex (param $source i32) (result i32)
-    (local $n i32) (local $pos i32) (local $line i32) (local $col i32)
-    (local $buf i32) (local $count i32)
+    (local $n i32) (local $cap i32) (local $buf i32)
+    (local $r4 i32) (local $tup i32)
+    (local.set $n (call $byte_len (local.get $source)))
+    (local.set $cap (if (result i32) (i32.lt_u (local.get $n) (i32.const 16))
+      (then (i32.const 16)) (else (local.get $n))))
+    (local.set $buf (call $make_list (local.get $cap)))
+    (local.set $r4 (call $lex_from (local.get $source) (local.get $n)
+      (i32.const 0) (i32.const 1) (i32.const 1)
+      (local.get $buf) (i32.const 0) (i32.const 0) (i32.const 0)))
+    ;; Legacy (buf, count) 2-tuple for existing consumers.
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0)
+      (call $list_index (local.get $r4) (i32.const 2))))
+    (drop (call $list_set (local.get $tup) (i32.const 1)
+      (call $list_index (local.get $r4) (i32.const 3))))
+    (local.get $tup))
+
+  (func $lex_from (param $source i32) (param $n i32) (param $pos i32)
+                  (param $line i32) (param $col i32)
+                  (param $buf i32) (param $count i32)
+                  (param $term_byte i32) (param $depth i32) (result i32)
     (local $b i32) (local $b2 i32)
     (local $new_pos i32) (local $word i32) (local $kind i32)
     (local $kw_result i32) (local $tok i32) (local $tup i32)
     (local $op_result i32) (local $str_val i32)
     (local $after i32) (local $end_col i32)
-    (local $cap i32)
-
-    (local.set $n (call $byte_len (local.get $source)))
-    (local.set $cap (if (result i32) (i32.lt_u (local.get $n) (i32.const 16))
-      (then (i32.const 16)) (else (local.get $n))))
-    (local.set $buf (call $make_list (local.get $cap)))
-    (local.set $count (i32.const 0))
-    (local.set $pos (i32.const 0))
-    (local.set $line (i32.const 1))
-    (local.set $col (i32.const 1))
+    (local $r4 i32)
 
     (block $exit
       (loop $main_loop
@@ -4237,6 +4260,23 @@
             (br $main_loop)))
 
         ;; String literal (byte 34 = ")
+        ;; Interpolating-or-brace-doubled strings route through
+        ;; $scan_dq_string (TStringPart/TStringSplice mirror of wheel
+        ;; scan_string); pure-plain strings keep the proven TString
+        ;; path below — zero churn for the corpus's plain strings.
+        (if (i32.and (i32.eq (local.get $b) (i32.const 34))
+                     (call $dq_needs_interp (local.get $source) (local.get $n)
+                       (i32.add (local.get $pos) (i32.const 1))))
+          (then
+            (local.set $r4 (call $scan_dq_string (local.get $source) (local.get $n)
+              (i32.add (local.get $pos) (i32.const 1))
+              (local.get $line) (i32.add (local.get $col) (i32.const 1))
+              (local.get $buf) (local.get $count)))
+            (local.set $pos   (call $list_index (local.get $r4) (i32.const 0)))
+            (local.set $col   (call $list_index (local.get $r4) (i32.const 1)))
+            (local.set $buf   (call $list_index (local.get $r4) (i32.const 2)))
+            (local.set $count (call $list_index (local.get $r4) (i32.const 3)))
+            (br $main_loop)))
         (if (i32.eq (local.get $b) (i32.const 34))
           (then
             (local.set $new_pos (call $scan_string_end (local.get $source) (local.get $n)
@@ -4336,6 +4376,28 @@
             (local.set $col (i32.add (local.get $col) (i32.const 2)))
             (br $main_loop)))
 
+        ;; Splice termination + brace depth (mirror wheel lexer.mn:224-239):
+        ;; `}` at depth 0 under term_byte=125 emits TRBrace and returns —
+        ;; the splice's expression tokens end here; $scan_dq_string resumes.
+        (if (i32.and (i32.eq (local.get $b) (i32.const 125))
+                     (i32.and (i32.eq (local.get $term_byte) (i32.const 125))
+                              (i32.eqz (local.get $depth))))
+          (then
+            (local.set $tok (call $mk_tok (i32.const 48)
+              (local.get $line) (local.get $col)
+              (local.get $line) (i32.add (local.get $col) (i32.const 1))))
+            (local.set $tup (call $push_tok (local.get $buf) (local.get $count) (local.get $tok)))
+            (local.set $buf (call $list_index (local.get $tup) (i32.const 0)))
+            (local.set $count (call $list_index (local.get $tup) (i32.const 1)))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (local.set $col (i32.add (local.get $col) (i32.const 1)))
+            (br $exit)))
+        (if (i32.eq (local.get $b) (i32.const 123))
+          (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
+        (if (i32.and (i32.eq (local.get $b) (i32.const 125))
+                     (i32.gt_u (local.get $depth) (i32.const 0)))
+          (then (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))))
+
         ;; Single-char operators
         (local.set $op_result (call $single_char_kind (local.get $b)))
         (if (i32.ne (local.get $op_result) (i32.const 70))
@@ -4356,10 +4418,174 @@
         (local.set $col (i32.add (local.get $col) (i32.const 1)))
         (br $main_loop)))
 
-    ;; Return (buf, count) as 2-tuple
-    (local.set $tup (call $make_list (i32.const 2)))
-    (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $buf)))
-    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $count)))
+    ;; Return (pos, col, buf, count) as 4-tuple — wheel lex_from order.
+    (local.set $tup (call $make_list (i32.const 4)))
+    (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $pos)))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $col)))
+    (drop (call $list_set (local.get $tup) (i32.const 2) (local.get $buf)))
+    (drop (call $list_set (local.get $tup) (i32.const 3) (local.get $count)))
+    (local.get $tup))
+
+  ;; ─── $dq_needs_interp — prescan: does this "..." string interpolate? ──
+  ;; True when the string body contains `{{`/`}}` (brace doubling) or a
+  ;; splice-open (`{` followed by an expression-start byte). Backslash
+  ;; escapes skip two bytes. pos enters AFTER the opening quote.
+  (func $dq_needs_interp (param $source i32) (param $n i32) (param $pos i32) (result i32)
+    (local $b i32)
+    (block $done
+      (loop $scan
+        (br_if $done (i32.ge_u (local.get $pos) (local.get $n)))
+        (local.set $b (call $byte_at (local.get $source) (local.get $pos)))
+        (if (i32.eq (local.get $b) (i32.const 34))
+          (then (return (i32.const 0))))
+        (if (i32.eq (local.get $b) (i32.const 92))
+          (then
+            (local.set $pos (i32.add (local.get $pos) (i32.const 2)))
+            (br $scan)))
+        (if (i32.eq (local.get $b) (i32.const 123))
+          (then
+            (if (i32.lt_u (i32.add (local.get $pos) (i32.const 1)) (local.get $n))
+              (then
+                (if (i32.eq (call $byte_at (local.get $source)
+                      (i32.add (local.get $pos) (i32.const 1))) (i32.const 123))
+                  (then (return (i32.const 1))))
+                (if (call $is_splice_start_byte (call $byte_at (local.get $source)
+                      (i32.add (local.get $pos) (i32.const 1))))
+                  (then (return (i32.const 1))))))))
+        (if (i32.and (i32.eq (local.get $b) (i32.const 125))
+                     (i32.lt_u (i32.add (local.get $pos) (i32.const 1)) (local.get $n)))
+          (then
+            (if (i32.eq (call $byte_at (local.get $source)
+                  (i32.add (local.get $pos) (i32.const 1))) (i32.const 125))
+              (then (return (i32.const 1))))))
+        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+        (br $scan)))
+    (i32.const 0))
+
+  ;; ─── $is_splice_start_byte — mirror wheel lexer.mn:279-295 EXACTLY ───
+  ;; a-z A-Z _ 0-9 ( [ ! can begin a splice expression; anything else
+  ;; (including `"` `}` whitespace) means the `{` is a literal brace.
+  ;; Guard parity with the wheel is a fixpoint requirement — divergence
+  ;; here tokenizes the same source differently across m2/m3.
+  (func $is_splice_start_byte (param $b i32) (result i32)
+    (if (i32.and (i32.ge_u (local.get $b) (i32.const 97))
+                 (i32.le_u (local.get $b) (i32.const 122)))
+      (then (return (i32.const 1))))
+    (if (i32.and (i32.ge_u (local.get $b) (i32.const 65))
+                 (i32.le_u (local.get $b) (i32.const 90)))
+      (then (return (i32.const 1))))
+    (if (i32.eq (local.get $b) (i32.const 95))
+      (then (return (i32.const 1))))
+    (if (i32.and (i32.ge_u (local.get $b) (i32.const 48))
+                 (i32.le_u (local.get $b) (i32.const 57)))
+      (then (return (i32.const 1))))
+    (if (i32.eq (local.get $b) (i32.const 40))
+      (then (return (i32.const 1))))
+    (if (i32.eq (local.get $b) (i32.const 91))
+      (then (return (i32.const 1))))
+    (if (i32.eq (local.get $b) (i32.const 33))
+      (then (return (i32.const 1))))
+    (i32.const 0))
+
+  ;; ─── $scan_dq_string — interpolating-string scanner ──────────────────
+  ;; Mirror of wheel scan_string/scan_string_chunk/scan_string_after_splice
+  ;; (lexer.mn:297-369). Emits TStringPart per literal chunk; on a splice
+  ;; emits TStringPart + TStringSplice then re-enters $lex_from with
+  ;; term_byte=125 (which emits the terminating TRBrace); resumes chunk
+  ;; scanning at the returned position. `{{`/`}}` flush the chunk
+  ;; including the first brace and skip the second (parser coalesces).
+  ;; pos enters AFTER the opening quote. Returns (pos, col, buf, count).
+  (func $scan_dq_string (param $source i32) (param $n i32) (param $pos i32)
+                        (param $line i32) (param $col i32)
+                        (param $buf i32) (param $count i32) (result i32)
+    (local $b i32) (local $chunk_start i32) (local $part i32)
+    (local $tok i32) (local $tup i32) (local $r4 i32)
+    (local.set $chunk_start (local.get $pos))
+    (block $closed
+      (loop $scan
+        ;; EOF — flush final chunk (malformed-input edge; mirror wheel).
+        (br_if $closed (i32.ge_u (local.get $pos) (local.get $n)))
+        (local.set $b (call $byte_at (local.get $source) (local.get $pos)))
+        ;; closing "
+        (if (i32.eq (local.get $b) (i32.const 34))
+          (then
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (local.set $col (i32.add (local.get $col) (i32.const 1)))
+            (local.set $part (call $str_unescape (local.get $source)
+              (local.get $chunk_start) (i32.sub (local.get $pos) (i32.const 1))))
+            (local.set $tok (call $mk_tok (call $mk_TStringPart (local.get $part))
+              (local.get $line) (local.get $col) (local.get $line) (local.get $col)))
+            (local.set $tup (call $push_tok (local.get $buf) (local.get $count) (local.get $tok)))
+            (local.set $buf (call $list_index (local.get $tup) (i32.const 0)))
+            (local.set $count (call $list_index (local.get $tup) (i32.const 1)))
+            (br $closed)))
+        ;; {{ or }} — flush chunk including the FIRST brace; skip the second.
+        (if (i32.and
+              (i32.or (i32.eq (local.get $b) (i32.const 123))
+                      (i32.eq (local.get $b) (i32.const 125)))
+              (i32.and
+                (i32.lt_u (i32.add (local.get $pos) (i32.const 1)) (local.get $n))
+                (i32.eq (call $byte_at (local.get $source)
+                  (i32.add (local.get $pos) (i32.const 1))) (local.get $b))))
+          (then
+            (local.set $part (call $str_unescape (local.get $source)
+              (local.get $chunk_start) (i32.add (local.get $pos) (i32.const 1))))
+            (local.set $tok (call $mk_tok (call $mk_TStringPart (local.get $part))
+              (local.get $line) (local.get $col) (local.get $line) (i32.add (local.get $col) (i32.const 1))))
+            (local.set $tup (call $push_tok (local.get $buf) (local.get $count) (local.get $tok)))
+            (local.set $buf (call $list_index (local.get $tup) (i32.const 0)))
+            (local.set $count (call $list_index (local.get $tup) (i32.const 1)))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 2)))
+            (local.set $col (i32.add (local.get $col) (i32.const 2)))
+            (local.set $chunk_start (local.get $pos))
+            (br $scan)))
+        ;; { + splice-start — flush chunk, emit TStringSplice, lex the
+        ;; splice expression via $lex_from(term=125), resume after it.
+        (if (i32.and (i32.eq (local.get $b) (i32.const 123))
+              (i32.and
+                (i32.lt_u (i32.add (local.get $pos) (i32.const 1)) (local.get $n))
+                (call $is_splice_start_byte (call $byte_at (local.get $source)
+                  (i32.add (local.get $pos) (i32.const 1))))))
+          (then
+            (local.set $part (call $str_unescape (local.get $source)
+              (local.get $chunk_start) (local.get $pos)))
+            (local.set $tok (call $mk_tok (call $mk_TStringPart (local.get $part))
+              (local.get $line) (local.get $col) (local.get $line) (local.get $col)))
+            (local.set $tup (call $push_tok (local.get $buf) (local.get $count) (local.get $tok)))
+            (local.set $buf (call $list_index (local.get $tup) (i32.const 0)))
+            (local.set $count (call $list_index (local.get $tup) (i32.const 1)))
+            (local.set $tok (call $mk_tok (i32.const 73)
+              (local.get $line) (local.get $col) (local.get $line) (i32.add (local.get $col) (i32.const 1))))
+            (local.set $tup (call $push_tok (local.get $buf) (local.get $count) (local.get $tok)))
+            (local.set $buf (call $list_index (local.get $tup) (i32.const 0)))
+            (local.set $count (call $list_index (local.get $tup) (i32.const 1)))
+            (local.set $r4 (call $lex_from (local.get $source) (local.get $n)
+              (i32.add (local.get $pos) (i32.const 1))
+              (local.get $line) (i32.add (local.get $col) (i32.const 1))
+              (local.get $buf) (local.get $count)
+              (i32.const 125) (i32.const 0)))
+            (local.set $pos   (call $list_index (local.get $r4) (i32.const 0)))
+            (local.set $col   (call $list_index (local.get $r4) (i32.const 1)))
+            (local.set $buf   (call $list_index (local.get $r4) (i32.const 2)))
+            (local.set $count (call $list_index (local.get $r4) (i32.const 3)))
+            (local.set $chunk_start (local.get $pos))
+            (br $scan)))
+        ;; backslash escape — two source bytes, resolved at chunk flush.
+        (if (i32.eq (local.get $b) (i32.const 92))
+          (then
+            (local.set $pos (i32.add (local.get $pos) (i32.const 2)))
+            (local.set $col (i32.add (local.get $col) (i32.const 2)))
+            (br $scan)))
+        ;; plain byte — advance.
+        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+        (local.set $col (i32.add (local.get $col) (i32.const 1)))
+        (br $scan)))
+    ;; Return (pos, col, buf, count).
+    (local.set $tup (call $make_list (i32.const 4)))
+    (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $pos)))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $col)))
+    (drop (call $list_set (local.get $tup) (i32.const 2) (local.get $buf)))
+    (drop (call $list_set (local.get $tup) (i32.const 3) (local.get $count)))
     (local.get $tup))
 
   ;; ─── Token Kind to String (for debug output) ──────────────────────
@@ -4438,6 +4664,7 @@
   ;;   MakeListExpr=96 MakeTupleExpr=97 MakeRecordExpr=98
   ;;   NamedRecordExpr=99 FieldExpr=100 PipeExpr=101
   ;;   NErrorExpr=102 (productive-under-error sentinel)
+  ;;   MakeStringExpr=103 (string interpolation, #138)
   ;; NodeBody: NExpr=110 NStmt=111 NPat=112 NHole=113
   ;; Stmt: LetStmt=120 FnStmt=121 TypeDefStmt=122
   ;;   EffectDeclStmt=123 HandlerDeclStmt=124 ExprStmt=125
@@ -7016,6 +7243,11 @@
           (call $nexpr (call $mk_LitString (i32.load offset=4 (local.get $k))) (local.get $span))))
         (drop (call $list_set (local.get $tup) (i32.const 1) (i32.add (local.get $pos) (i32.const 1))))
         (return (local.get $tup))))
+    ;; TStringPart (72) — string interpolation per #138 (wheel
+    ;; parser.mn:1476-1513): coalesce parts; MakeStringExpr on splice.
+    (if (i32.eq (local.get $n) (i32.const 72))
+      (then (return (call $parse_string_interp
+                      (local.get $tokens) (local.get $pos) (local.get $span)))))
     ;; Fallback: skip
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
@@ -7422,6 +7654,95 @@
     (i32.store (local.get $p) (i32.const 96))
     (i32.store offset=4 (local.get $p) (local.get $elems))
     (local.get $p))
+
+  ;; MakeStringExpr(fragments) → [tag=103][fragments] — string
+  ;; interpolation per #138 (wheel types.mn:547). Fragments alternate
+  ;; LitString literals and splice expressions; always odd count.
+  (func $mk_MakeStringExpr (param $frags i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 103))
+    (i32.store offset=4 (local.get $p) (local.get $frags))
+    (local.get $p))
+
+  ;; ─── $interp_coalesce_parts — coalesce adjacent TStringPart payloads ─
+  ;; Mirror wheel consume_string_parts (parser.mn): doubled braces split
+  ;; literal runs into multiple parts; coalesce into one chunk string.
+  ;; Returns (chunk_str, new_pos) 2-tuple.
+  (func $interp_coalesce_parts (param $tokens i32) (param $pos i32) (result i32)
+    (local $acc i32) (local $k i32) (local $tup i32)
+    (local.set $acc (call $str_alloc (i32.const 0)))
+    (block $done
+      (loop $parts
+        (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
+        (br_if $done (call $is_sentinel (local.get $k)))
+        (br_if $done (i32.ne (call $tag_of (local.get $k)) (i32.const 72)))
+        (local.set $acc (call $str_concat (local.get $acc)
+          (i32.load offset=4 (local.get $k))))
+        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+        (br $parts)))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $acc)))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $pos)))
+    (local.get $tup))
+
+  ;; ─── $parse_string_interp — TStringPart(72) primary arm ──────────────
+  ;; Mirror of wheel parse_string_interpolation + loop (parser.mn:1476-
+  ;; 1513): coalesce leading parts; no TStringSplice → degenerate bare
+  ;; LitString (node-count parity with the wheel's degenerate path);
+  ;; else fragments = [LitString(prefix), splice, LitString(chunk), ...]
+  ;; → MakeStringExpr. The splice's TRBrace terminator is consumed.
+  ;; Returns (node, new_pos) 2-tuple.
+  (func $parse_string_interp (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
+    (local $pre_r i32) (local $prefix i32) (local $p i32)
+    (local $buf i32) (local $count i32)
+    (local $splice_r i32) (local $chunk_r i32) (local $tup i32)
+    (local.set $pre_r (call $interp_coalesce_parts (local.get $tokens) (local.get $pos)))
+    (local.set $prefix (call $list_index (local.get $pre_r) (i32.const 0)))
+    (local.set $p      (call $list_index (local.get $pre_r) (i32.const 1)))
+    ;; Degenerate: no splice follows — bare LitString.
+    (if (i32.eqz (call $at (local.get $tokens) (local.get $p) (i32.const 73)))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nexpr (call $mk_LitString (local.get $prefix)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
+        (return (local.get $tup))))
+    ;; Interpolating: build the fragments list.
+    (local.set $buf (call $make_list (i32.const 4)))
+    (drop (call $list_set (local.get $buf) (i32.const 0)
+      (call $nexpr (call $mk_LitString (local.get $prefix)) (local.get $span))))
+    (local.set $count (i32.const 1))
+    (block $done
+      (loop $splices
+        (br_if $done (i32.eqz (call $at (local.get $tokens) (local.get $p) (i32.const 73))))
+        ;; splice expression after the TStringSplice marker
+        (local.set $splice_r (call $parse_expr (local.get $tokens)
+          (i32.add (local.get $p) (i32.const 1))))
+        (local.set $p (call $list_index (local.get $splice_r) (i32.const 1)))
+        ;; consume the TRBrace splice terminator (lexer emits it)
+        (if (call $at (local.get $tokens) (local.get $p) (i32.const 48))
+          (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+        (local.set $buf (call $list_extend_to (local.get $buf)
+          (i32.add (local.get $count) (i32.const 2))))
+        (drop (call $list_set (local.get $buf) (local.get $count)
+          (call $list_index (local.get $splice_r) (i32.const 0))))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        ;; trailing literal chunk (possibly empty)
+        (local.set $chunk_r (call $interp_coalesce_parts (local.get $tokens) (local.get $p)))
+        (local.set $p (call $list_index (local.get $chunk_r) (i32.const 1)))
+        (drop (call $list_set (local.get $buf) (local.get $count)
+          (call $nexpr
+            (call $mk_LitString (call $list_index (local.get $chunk_r) (i32.const 0)))
+            (local.get $span))))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        (br $splices)))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0)
+      (call $nexpr
+        (call $mk_MakeStringExpr (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
+        (local.get $span))))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
+    (local.get $tup))
 
   ;; ─── Block expression ─────────────────────────────────────────────
   ;; { stmt; stmt; final_expr }
@@ -16006,6 +16327,37 @@
         (call $reason_make_inferred (i32.const 3936))))   ;; "list result"
     (local.get $handle))
 
+  ;; MakeStringExpr arm — src/infer.mn:668-679 + unify_string_fragments.
+  ;; Every fragment (literal AND splice) binds to TString; the node
+  ;; binds TString. Post-L1 peer Hβ.infer.show-typeclass relaxes splices
+  ;; to Show obligations discharged via verify_ledger.
+  (func $infer_walk_expr_make_string
+        (export "infer_walk_expr_make_string")
+        (param $expr i32) (param $handle i32) (param $span i32)
+        (result i32)
+    (local $frags i32) (local $n i32) (local $i i32)
+    (local $frag i32) (local $fh i32)
+    ;; Layout: [tag=103][fragments]
+    (local.set $frags (i32.load offset=4 (local.get $expr)))
+    (local.set $n (call $len (local.get $frags)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $frag (call $list_index (local.get $frags) (local.get $i)))
+        (local.set $fh (call $infer_walk_expr (local.get $frag)))
+        (call $graph_bind (local.get $fh)
+          (call $ty_make_tstring)
+          (call $reason_make_located (local.get $span)
+            (call $reason_make_inferred (i32.const 3440))))   ;; "string literal"
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (call $graph_bind (local.get $handle)
+      (call $ty_make_tstring)
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 3440))))   ;; "string literal"
+    (local.get $handle))
+
   ;; MakeTupleExpr arm — src/infer.mn:571-575.
   (func $infer_walk_expr_make_tuple
         (export "infer_walk_expr_make_tuple")
@@ -16496,6 +16848,10 @@
               (local.get $expr) (local.get $handle) (local.get $span)))))
     (if (i32.eq (local.get $tag) (i32.const 101))
       (then (return (call $infer_walk_expr_pipe
+              (local.get $expr) (local.get $handle) (local.get $span)))))
+    ;; MakeStringExpr (103) — string interpolation per #138.
+    (if (i32.eq (local.get $tag) (i32.const 103))
+      (then (return (call $infer_walk_expr_make_string
               (local.get $expr) (local.get $handle) (local.get $span)))))
     ;; NErrorExpr (102): productive-under-error sentinel from parser.
     ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
@@ -22736,6 +23092,8 @@
       (then (return (call $lower_match       (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 96))
       (then (return (call $lower_make_list   (local.get $node)))))
+    (if (i32.eq (local.get $tag) (i32.const 103))
+      (then (return (call $lower_make_string (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 97))
       (then (return (call $lower_make_tuple  (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 98))
@@ -25358,6 +25716,43 @@
     (call $lexpr_make_lmakelist
       (local.get $h)
       (local.get $lo_elems)))
+
+  ;; ─── $lower_make_string — MakeStringExpr arm (parser tag 103) ────────
+  ;; Per src/lower.mn lower_string_interpolation (:1788-1799): empty →
+  ;; LConst(h, ""); singleton → that fragment unchanged; else LEFT-FOLD
+  ;; of LCall(h, LGlobal(h, "str_concat"), [acc, frag]) — every fold
+  ;; node reuses the MakeStringExpr node's handle, exactly as the wheel
+  ;; does (fixpoint parity: $call_<H> scratch names must match m3).
+  (data (i32.const 6560) "\0a\00\00\00str_concat")
+  (func $lower_make_string (export "lower_make_string") (param $node i32) (result i32)
+    (local $h i32) (local $body i32) (local $frag_struct i32)
+    (local $frags i32) (local $lo_frags i32)
+    (local $n i32) (local $i i32) (local $acc i32) (local $args i32)
+    (local.set $h           (call $walk_expr_node_handle (local.get $node)))
+    (local.set $body        (i32.load offset=4 (local.get $node)))
+    (local.set $frag_struct (i32.load offset=4 (local.get $body)))
+    (local.set $frags       (i32.load offset=4 (local.get $frag_struct)))
+    (local.set $lo_frags    (call $lower_expr_list_compound (local.get $frags)))
+    (local.set $n (call $len (local.get $lo_frags)))
+    (if (i32.eqz (local.get $n))
+      (then (return (call $lexpr_make_lconst (local.get $h)
+                          (call $str_alloc (i32.const 0))))))
+    (local.set $acc (call $list_index (local.get $lo_frags) (i32.const 0)))
+    (local.set $i (i32.const 1))
+    (block $done
+      (loop $fold
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $args (call $make_list (i32.const 0)))
+        (local.set $args (call $list_extend_to (local.get $args) (i32.const 2)))
+        (drop (call $list_set (local.get $args) (i32.const 0) (local.get $acc)))
+        (drop (call $list_set (local.get $args) (i32.const 1)
+          (call $list_index (local.get $lo_frags) (local.get $i))))
+        (local.set $acc (call $lexpr_make_lcall (local.get $h)
+          (call $lexpr_make_lglobal (local.get $h) (i32.const 6560))   ;; "str_concat"
+          (local.get $args)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $fold)))
+    (local.get $acc))
 
   ;; ─── $lower_make_tuple — MakeTupleExpr arm (parser tag 97) ───────────
   ;; Per src/lower.mn:388-389: MakeTupleExpr(elems) =>

@@ -398,6 +398,95 @@
     (i32.store offset=4 (local.get $p) (local.get $elems))
     (local.get $p))
 
+  ;; MakeStringExpr(fragments) → [tag=103][fragments] — string
+  ;; interpolation per #138 (wheel types.mn:547). Fragments alternate
+  ;; LitString literals and splice expressions; always odd count.
+  (func $mk_MakeStringExpr (param $frags i32) (result i32)
+    (local $p i32) (local.set $p (call $alloc (i32.const 8)))
+    (i32.store (local.get $p) (i32.const 103))
+    (i32.store offset=4 (local.get $p) (local.get $frags))
+    (local.get $p))
+
+  ;; ─── $interp_coalesce_parts — coalesce adjacent TStringPart payloads ─
+  ;; Mirror wheel consume_string_parts (parser.mn): doubled braces split
+  ;; literal runs into multiple parts; coalesce into one chunk string.
+  ;; Returns (chunk_str, new_pos) 2-tuple.
+  (func $interp_coalesce_parts (param $tokens i32) (param $pos i32) (result i32)
+    (local $acc i32) (local $k i32) (local $tup i32)
+    (local.set $acc (call $str_alloc (i32.const 0)))
+    (block $done
+      (loop $parts
+        (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
+        (br_if $done (call $is_sentinel (local.get $k)))
+        (br_if $done (i32.ne (call $tag_of (local.get $k)) (i32.const 72)))
+        (local.set $acc (call $str_concat (local.get $acc)
+          (i32.load offset=4 (local.get $k))))
+        (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+        (br $parts)))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $acc)))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $pos)))
+    (local.get $tup))
+
+  ;; ─── $parse_string_interp — TStringPart(72) primary arm ──────────────
+  ;; Mirror of wheel parse_string_interpolation + loop (parser.mn:1476-
+  ;; 1513): coalesce leading parts; no TStringSplice → degenerate bare
+  ;; LitString (node-count parity with the wheel's degenerate path);
+  ;; else fragments = [LitString(prefix), splice, LitString(chunk), ...]
+  ;; → MakeStringExpr. The splice's TRBrace terminator is consumed.
+  ;; Returns (node, new_pos) 2-tuple.
+  (func $parse_string_interp (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
+    (local $pre_r i32) (local $prefix i32) (local $p i32)
+    (local $buf i32) (local $count i32)
+    (local $splice_r i32) (local $chunk_r i32) (local $tup i32)
+    (local.set $pre_r (call $interp_coalesce_parts (local.get $tokens) (local.get $pos)))
+    (local.set $prefix (call $list_index (local.get $pre_r) (i32.const 0)))
+    (local.set $p      (call $list_index (local.get $pre_r) (i32.const 1)))
+    ;; Degenerate: no splice follows — bare LitString.
+    (if (i32.eqz (call $at (local.get $tokens) (local.get $p) (i32.const 73)))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nexpr (call $mk_LitString (local.get $prefix)) (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
+        (return (local.get $tup))))
+    ;; Interpolating: build the fragments list.
+    (local.set $buf (call $make_list (i32.const 4)))
+    (drop (call $list_set (local.get $buf) (i32.const 0)
+      (call $nexpr (call $mk_LitString (local.get $prefix)) (local.get $span))))
+    (local.set $count (i32.const 1))
+    (block $done
+      (loop $splices
+        (br_if $done (i32.eqz (call $at (local.get $tokens) (local.get $p) (i32.const 73))))
+        ;; splice expression after the TStringSplice marker
+        (local.set $splice_r (call $parse_expr (local.get $tokens)
+          (i32.add (local.get $p) (i32.const 1))))
+        (local.set $p (call $list_index (local.get $splice_r) (i32.const 1)))
+        ;; consume the TRBrace splice terminator (lexer emits it)
+        (if (call $at (local.get $tokens) (local.get $p) (i32.const 48))
+          (then (local.set $p (i32.add (local.get $p) (i32.const 1)))))
+        (local.set $buf (call $list_extend_to (local.get $buf)
+          (i32.add (local.get $count) (i32.const 2))))
+        (drop (call $list_set (local.get $buf) (local.get $count)
+          (call $list_index (local.get $splice_r) (i32.const 0))))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        ;; trailing literal chunk (possibly empty)
+        (local.set $chunk_r (call $interp_coalesce_parts (local.get $tokens) (local.get $p)))
+        (local.set $p (call $list_index (local.get $chunk_r) (i32.const 1)))
+        (drop (call $list_set (local.get $buf) (local.get $count)
+          (call $nexpr
+            (call $mk_LitString (call $list_index (local.get $chunk_r) (i32.const 0)))
+            (local.get $span))))
+        (local.set $count (i32.add (local.get $count) (i32.const 1)))
+        (br $splices)))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0)
+      (call $nexpr
+        (call $mk_MakeStringExpr (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
+        (local.get $span))))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
+    (local.get $tup))
+
   ;; ─── Block expression ─────────────────────────────────────────────
   ;; { stmt; stmt; final_expr }
   ;; Mirrors parser.mn parse_block_body (lines 1042-1069).

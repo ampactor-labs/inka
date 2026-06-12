@@ -88,6 +88,16 @@
     (i32.store offset=4 (local.get $ptr) (local.get $s))
     (local.get $ptr))
 
+  ;; TStringPart(s) → [tag=72][str_ptr] — literal chunk of an
+  ;; interpolating "..." string (amendment C; wheel types.mn:461-463).
+  ;; TStringSplice=73 is nullary (sentinel) — marks a `{expr}` splice.
+  (func $mk_TStringPart (param $s i32) (result i32)
+    (local $ptr i32)
+    (local.set $ptr (call $alloc (i32.const 8)))
+    (i32.store (local.get $ptr) (i32.const 72))
+    (i32.store offset=4 (local.get $ptr) (local.get $s))
+    (local.get $ptr))
+
   ;; TDocComment(s) → [tag=29][str_ptr]
   (func $mk_TDocComment (param $s i32) (result i32)
     (local $ptr i32)

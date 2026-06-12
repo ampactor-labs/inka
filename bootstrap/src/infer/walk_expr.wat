@@ -1504,6 +1504,37 @@
         (call $reason_make_inferred (i32.const 3936))))   ;; "list result"
     (local.get $handle))
 
+  ;; MakeStringExpr arm — src/infer.mn:668-679 + unify_string_fragments.
+  ;; Every fragment (literal AND splice) binds to TString; the node
+  ;; binds TString. Post-L1 peer Hβ.infer.show-typeclass relaxes splices
+  ;; to Show obligations discharged via verify_ledger.
+  (func $infer_walk_expr_make_string
+        (export "infer_walk_expr_make_string")
+        (param $expr i32) (param $handle i32) (param $span i32)
+        (result i32)
+    (local $frags i32) (local $n i32) (local $i i32)
+    (local $frag i32) (local $fh i32)
+    ;; Layout: [tag=103][fragments]
+    (local.set $frags (i32.load offset=4 (local.get $expr)))
+    (local.set $n (call $len (local.get $frags)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $frag (call $list_index (local.get $frags) (local.get $i)))
+        (local.set $fh (call $infer_walk_expr (local.get $frag)))
+        (call $graph_bind (local.get $fh)
+          (call $ty_make_tstring)
+          (call $reason_make_located (local.get $span)
+            (call $reason_make_inferred (i32.const 3440))))   ;; "string literal"
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (call $graph_bind (local.get $handle)
+      (call $ty_make_tstring)
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 3440))))   ;; "string literal"
+    (local.get $handle))
+
   ;; MakeTupleExpr arm — src/infer.mn:571-575.
   (func $infer_walk_expr_make_tuple
         (export "infer_walk_expr_make_tuple")
@@ -1994,6 +2025,10 @@
               (local.get $expr) (local.get $handle) (local.get $span)))))
     (if (i32.eq (local.get $tag) (i32.const 101))
       (then (return (call $infer_walk_expr_pipe
+              (local.get $expr) (local.get $handle) (local.get $span)))))
+    ;; MakeStringExpr (103) — string interpolation per #138.
+    (if (i32.eq (local.get $tag) (i32.const 103))
+      (then (return (call $infer_walk_expr_make_string
               (local.get $expr) (local.get $handle) (local.get $span)))))
     ;; NErrorExpr (102): productive-under-error sentinel from parser.
     ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4

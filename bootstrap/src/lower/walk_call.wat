@@ -354,6 +354,8 @@
       (then (return (call $lower_match       (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 96))
       (then (return (call $lower_make_list   (local.get $node)))))
+    (if (i32.eq (local.get $tag) (i32.const 103))
+      (then (return (call $lower_make_string (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 97))
       (then (return (call $lower_make_tuple  (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 98))

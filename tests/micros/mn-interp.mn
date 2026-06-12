@@ -1,0 +1,16 @@
+fn main(q) = {
+  let name = "wheel"
+  let s = "the {name} turns"
+  let direct = if s == "the wheel turns" { 1 } else { 0 }
+  // "{{ok}}" resolves to the 4 literal bytes {ok} — byte_len proves
+  // the doubling collapsed (6 source bytes → 4 content bytes).
+  let braces = if byte_len("{{ok}}") == 4 { 8 } else { 0 }
+  let multi = "a{name}b{name}c"
+  let multi_ok = if multi == "awheelbwheelc" { 16 } else { 0 }
+  let plain = if "no splices here" == "no splices here" { 32 } else { 0 }
+  direct + braces + multi_ok + plain
+}
+
+// Expected exit 57 (1 + 8 + 16 + 32): interpolation through the seed
+// builds content-equal strings; {{ }} resolve to literal braces;
+// plain strings keep the proven path.

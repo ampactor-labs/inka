@@ -808,6 +808,43 @@
       (local.get $h)
       (local.get $lo_elems)))
 
+  ;; ─── $lower_make_string — MakeStringExpr arm (parser tag 103) ────────
+  ;; Per src/lower.mn lower_string_interpolation (:1788-1799): empty →
+  ;; LConst(h, ""); singleton → that fragment unchanged; else LEFT-FOLD
+  ;; of LCall(h, LGlobal(h, "str_concat"), [acc, frag]) — every fold
+  ;; node reuses the MakeStringExpr node's handle, exactly as the wheel
+  ;; does (fixpoint parity: $call_<H> scratch names must match m3).
+  (data (i32.const 6560) "\0a\00\00\00str_concat")
+  (func $lower_make_string (export "lower_make_string") (param $node i32) (result i32)
+    (local $h i32) (local $body i32) (local $frag_struct i32)
+    (local $frags i32) (local $lo_frags i32)
+    (local $n i32) (local $i i32) (local $acc i32) (local $args i32)
+    (local.set $h           (call $walk_expr_node_handle (local.get $node)))
+    (local.set $body        (i32.load offset=4 (local.get $node)))
+    (local.set $frag_struct (i32.load offset=4 (local.get $body)))
+    (local.set $frags       (i32.load offset=4 (local.get $frag_struct)))
+    (local.set $lo_frags    (call $lower_expr_list_compound (local.get $frags)))
+    (local.set $n (call $len (local.get $lo_frags)))
+    (if (i32.eqz (local.get $n))
+      (then (return (call $lexpr_make_lconst (local.get $h)
+                          (call $str_alloc (i32.const 0))))))
+    (local.set $acc (call $list_index (local.get $lo_frags) (i32.const 0)))
+    (local.set $i (i32.const 1))
+    (block $done
+      (loop $fold
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $args (call $make_list (i32.const 0)))
+        (local.set $args (call $list_extend_to (local.get $args) (i32.const 2)))
+        (drop (call $list_set (local.get $args) (i32.const 0) (local.get $acc)))
+        (drop (call $list_set (local.get $args) (i32.const 1)
+          (call $list_index (local.get $lo_frags) (local.get $i))))
+        (local.set $acc (call $lexpr_make_lcall (local.get $h)
+          (call $lexpr_make_lglobal (local.get $h) (i32.const 6560))   ;; "str_concat"
+          (local.get $args)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $fold)))
+    (local.get $acc))
+
   ;; ─── $lower_make_tuple — MakeTupleExpr arm (parser tag 97) ───────────
   ;; Per src/lower.mn:388-389: MakeTupleExpr(elems) =>
   ;;   LMakeTuple(handle, lower_expr_list(elems)).

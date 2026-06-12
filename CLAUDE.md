@@ -328,7 +328,7 @@ Use the five pipe operators where they express the topology:
 - `|>` sequential flow (data transforms, compilation stages)
 - `<|` divergence (one input → parallel branches, borrows input)
 - `><` parallel composition (independent pipelines)
-- `~>` handler attachment (inline = wraps one stage; block = chain)
+- `~>` handler attachment — ONE precedence (1, loosest): the handler at the foot governs the whole chain to its left; parenthesize to narrow; layout is never semantics (Three Laws, 2026-06-11)
 - `<~` feedback loops (iterative algorithms, DSP, control)
 
 Canonical formatting (SUBSTRATE.md §II):
@@ -538,6 +538,23 @@ byte. Empirically-real residue per `Hβ-first-light-empirical.md` §2.3
       full pipeline through teach_run WITHOUT TRAP; returns heap-
       pointer-as-exit-code (next gate: WASI argv or compile_run path
       to enable mentl2 to actually emit mentl3.wat for fixpoint test).
+- ✓ **THE THREE LAWS (2026-06-11, composed-questing-feather)** — three
+  developer-borne rules dissolved into the substrate in one session
+  (see `protocol_three_laws_landed.md` for full detail):
+    - `~>` one-precedence law: TTildeGt=1 both parsers; canonical table
+      literal-identical spec/wheel/seed (pipes looser than value ops);
+      saw_newline + PTeeBlock/PTeeInline + ALL parse-time layout
+      enforcement deleted. ev2/ev3/ev4 = 57 (ev4 was 1 — the pass-2
+      inline-tee mis-scope dies); wheel diags 195→165.
+    - `==` IS structural: BEq/BNe join BConcat's operand-Ty emit
+      dispatch both layers; drift mode 12 retired; mn-eq = 73.
+    - Interpolation canonical: seed parses it end-to-end (TStringPart=72
+      /TStringSplice=73/MakeStringExpr=103; $lex_from re-entrant;
+      node-structure parity for $call_<H> fixpoint names); empty-edge
+      elision both layers; mn-interp = 59; ~70 wheel chains lifted
+      (diagnostics/Why-Engine/gradient narration speak in sentences).
+  Pass-2 cursor: fresh_ph table-OOB persists via parse_import path —
+  the multi-effect ev-index-map wheel-parity rung (NOT ~>).
 - ✗ `Hβ.first-light.wheel-emit-implementation` — broader cascade
   tracking surfaced wheel-side gaps as mentl2 progresses through the
   compile pipeline.

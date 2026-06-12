@@ -61,25 +61,38 @@
   ;; The row field IS the seed for what refinement types discharge at
   ;; compile time and what the Why Engine walks back through.
 
-  ;; ─── 350 = LowFn(name, arity, params, body, row) — arity 5 ────────
+  ;; ─── 350 = LowFn(name, arity, params, body, row, fence) — arity 6 ──
   ;; Per src/lower.mn canonical LFn record shape.
   ;;   field_0 = name (String — fn name for WAT $-prefix)
   ;;   field_1 = arity (i32 — static param count)
   ;;   field_2 = params (List of String — parameter names)
   ;;   field_3 = body (LowExpr — lowered fn body)
   ;;   field_4 = row (i32 — effect row handle; graph-read via $lookup_ty)
+  ;;   field_5 = fence (i32 — where this fn's __state ev region starts,
+  ;;             in slots past the 8-byte header: closures pass their
+  ;;             captures count; handler arm fns pass nstate+total_arms
+  ;;             (the record's evidence sits after state AND arms);
+  ;;             plain top-level fns pass 0. $emit_fn_body installs it
+  ;;             via $emit_set_body_context so $emit_levperform /
+  ;;             $emit_levslotref read 8+4*fence+4*slot — one uniform
+  ;;             rule across all three record shapes.
+  ;;             Hβ.emit.handler-record-ev-capture.)
   (func $lowfn_make (export "lowfn_make")
         (param $name i32) (param $arity i32) (param $params i32)
-        (param $body i32) (param $row i32)
+        (param $body i32) (param $row i32) (param $fence i32)
         (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 350) (i32.const 5)))
+    (local.set $r (call $make_record (i32.const 350) (i32.const 6)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $name))
     (call $record_set (local.get $r) (i32.const 1) (local.get $arity))
     (call $record_set (local.get $r) (i32.const 2) (local.get $params))
     (call $record_set (local.get $r) (i32.const 3) (local.get $body))
     (call $record_set (local.get $r) (i32.const 4) (local.get $row))
+    (call $record_set (local.get $r) (i32.const 5) (local.get $fence))
     (local.get $r))
+
+  (func $lowfn_fence (export "lowfn_fence") (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 5)))
 
   (func $lowfn_name (export "lowfn_name") (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 0)))

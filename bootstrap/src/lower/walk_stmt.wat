@@ -674,7 +674,8 @@
                         (call $len (local.get $params))
                         (local.get $param_names)
                         (local.get $body_list)
-                        (call $row_make_pure)))
+                        (call $row_make_pure)
+                        (call $len (local.get $caps))))
     (local.set $evs  (call $make_list (i32.const 0)))
     (local.set $closure (call $lexpr_make_lmakeclosure
                           (local.get $handle)

@@ -422,6 +422,7 @@
     (local $h i32) (local $hstate_name i32) (local $inits i32)
     (local $groups i32) (local $nstate i32) (local $total_arms i32)
     (local $gi i32) (local $gn i32) (local $g i32) (local $arm_list i32)
+    (local $cevs i32) (local $n_cevs i32) (local $ci i32)
     ;; Per protocol_handler_is_state_is_closure_is_evidence.md + Part 2 of
     ;; Hβ.lower.multi-effect-ev-index-map: ONE state record holds state slots
     ;; + the arm fn-idxs of ALL the handler's effects, laid out CONTIGUOUSLY
@@ -451,9 +452,18 @@
           (i32.add (local.get $total_arms) (call $len (local.get $arm_list))))
         (local.set $gi (i32.add (local.get $gi) (i32.const 1)))
         (br $tl)))
+    ;; Captured evidence (Hβ.emit.handler-record-ev-capture): the
+    ;; entries this handler's arm bodies perform through, resolved at
+    ;; lower time against THIS install position. They live after the
+    ;; arms — the arm fn's LowFn fence (nstate+total_arms) makes its
+    ;; LEvPerform reads land here.
+    (local.set $cevs (call $lexpr_lhandlewith_captured_evs (local.get $r)))
+    (local.set $n_cevs (call $len (local.get $cevs)))
     (call $emit_alloc
       (i32.add (i32.const 8)
-        (i32.mul (i32.const 4) (i32.add (local.get $nstate) (local.get $total_arms))))
+        (i32.mul (i32.const 4)
+          (i32.add (i32.add (local.get $nstate) (local.get $total_arms))
+                   (local.get $n_cevs))))
       (local.get $hstate_name))
     ;; Write the nstate FENCE at offset 4 so dispatch locates arms fence-relative.
     (call $ec_emit_local_get_dollar (local.get $hstate_name))
@@ -463,6 +473,20 @@
     ;; Lay each effect-group's arms contiguously + build its [record, base] entry.
     (call $emit_handler_effect_entries
       (local.get $hstate_name) (local.get $nstate) (local.get $groups))
+    ;; Write the captured evidence entries after the arms.
+    (local.set $ci (i32.const 0))
+    (block $cev_done
+      (loop $cev_each
+        (br_if $cev_done (i32.ge_u (local.get $ci) (local.get $n_cevs)))
+        (call $ec_emit_local_get_dollar (local.get $hstate_name))
+        (call $emit_lexpr (call $list_index (local.get $cevs) (local.get $ci)))
+        (call $el_emit_i32_store_offset
+          (i32.add (i32.const 8)
+            (i32.mul (i32.const 4)
+              (i32.add (i32.add (local.get $nstate) (local.get $total_arms))
+                       (local.get $ci)))))
+        (local.set $ci (i32.add (local.get $ci) (i32.const 1)))
+        (br $cev_each)))
     ;; Per-handler GLOBAL state-ptr write (record) for env-scan Tier-1 resolution.
     (call $emit_hstate_global_set (call $lexpr_lhandlewith_handler_name (local.get $r))
                                    (local.get $hstate_name))

@@ -366,9 +366,31 @@
     (local $op_name i32) (local $lo_body i32) (local $fn_name i32)
     (local $fn_body i32) (local $fn_ir i32)
     (local $outer_cp i32)
+    (local $fence i32) (local $fgroups i32) (local $fgi i32) (local $fgn i32) (local $fg i32)
     (local.set $n   (call $len (local.get $arms)))
     (local.set $buf (call $make_list (i32.const 0)))
     (local.set $buf (call $list_extend_to (local.get $buf) (local.get $n)))
+    ;; Hβ.emit.handler-record-ev-capture: the arm fn's __state IS the
+    ;; handler record [_, nstate, state.., arms.., evs..]; its ev region
+    ;; starts past state AND arms. fence = nstate + total_arms, computed
+    ;; from the SAME pre-registered groups the install's emit sums —
+    ;; the two sides agree by construction.
+    (local.set $fence (i32.add (call $len (local.get $config))
+                               (call $len (local.get $state))))
+    (local.set $fgroups (call $lower_handler_effect_arm_names (local.get $discriminator)))
+    (local.set $fgn (call $len (local.get $fgroups)))
+    (local.set $fgi (i32.const 0))
+    (block $fdone
+      (loop $fl
+        (br_if $fdone (i32.ge_u (local.get $fgi) (local.get $fgn)))
+        (local.set $fg (call $list_index (local.get $fgroups) (local.get $fgi)))
+        (local.set $fence (i32.add (local.get $fence)
+          (call $len (call $record_get (local.get $fg) (i32.const 1)))))
+        (local.set $fgi (i32.add (local.get $fgi) (i32.const 1)))
+        (br $fl)))
+    ;; Arm-body Tier-2 performs register their effects here; the indices
+    ;; ARE the captured-ev slots the install writes after the arms.
+    (call $lower_arm_ev_begin)
     ;; Per Hβ.first-light.handler-arm-capture-substrate (2026-05-06):
     ;; bind config + state names as locals in the OUTER scope (before
     ;; per-arm frames). Arm-body var resolution sees these via the
@@ -414,11 +436,15 @@
                             (call $len (local.get $arg_names))
                             (local.get $arg_names)
                             (local.get $fn_body)
-                            (call $row_make_pure)))
+                            (call $row_make_pure)
+                            (local.get $fence)))
         (drop (call $list_set (local.get $buf) (local.get $i)
                 (call $lexpr_make_ldeclarefn (local.get $fn_ir))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
+    ;; Register this handler's arm-body effect collection (discriminator
+    ;; → first-encounter ename list) for its install sites to capture.
+    (call $lower_arm_ev_end (local.get $discriminator))
     ;; Pop the outer scope so config + state locals don't leak into
     ;; sibling handler-decls or top-level decls processed afterward.
     (call $ls_pop_scope (local.get $outer_cp))
@@ -803,11 +829,12 @@
                     (call $list_index (local.get $state_inits) (local.get $i))))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $s_each)))
-        (return (call $lexpr_make_lhandlewith_with_arm_names
+        (return (call $lexpr_make_lhandlewith_with_evs
                   (local.get $h) (local.get $lo_l) (local.get $lo_r)
                   (local.get $hname)
                   (local.get $all_inits)
-                  (call $lower_handler_effect_arm_names (local.get $hname))))))
+                  (call $lower_handler_effect_arm_names (local.get $hname))
+                  (call $lower_captured_evs_for (local.get $hname))))))
     ;; Non-handle pipes — lower left+right normally.
     (local.set $lo_l (call $lower_expr (local.get $left_node)))
     (local.set $lo_r (call $lower_expr (local.get $right_node)))
@@ -1030,6 +1057,42 @@
       (local.get $h)
       (local.get $lo_l)
       (local.get $lo_r)))
+
+  ;; ─── $lower_captured_evs_for — install-site evidence capture ───────
+  ;; Per Hβ.emit.handler-record-ev-capture (handler IS closure IS
+  ;; evidence): the effects this handler's ARM BODIES perform (the
+  ;; decl's first-encounter ledger) resolve at THIS install position —
+  ;; an outer install's entry local (LLocal) when one covers the
+  ;; effect, else a forward of the installing fn's own slot
+  ;; (LEvSlotRef via $lower_ev_index_in_frame). Same per-ename
+  ;; resolution as $derive_ev_slots — one truth, two record shapes.
+  ;; Emit writes these after the record's arm region; the arm fn's
+  ;; LowFn fence makes its LEvPerform reads land on them.
+  (func $lower_captured_evs_for (param $hname i32) (result i32)
+    (local $names i32) (local $n i32) (local $i i32) (local $ename i32)
+    (local $evs i32) (local $state_local i32)
+    (local.set $names (call $lower_handler_arm_ev_names (local.get $hname)))
+    (local.set $n (call $len (local.get $names)))
+    (local.set $evs (call $list_extend_to (call $make_list (i32.const 0))
+                      (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $ename (call $list_index (local.get $names) (local.get $i)))
+        (local.set $state_local
+          (call $lower_resolve_handler_state_for_ename (local.get $ename)))
+        (if (i32.ne (local.get $state_local) (i32.const 0))
+          (then
+            (drop (call $list_set (local.get $evs) (local.get $i)
+                    (call $lexpr_make_llocal (i32.const 0) (local.get $state_local)))))
+          (else
+            (drop (call $list_set (local.get $evs) (local.get $i)
+                    (call $lexpr_make_levslotref (i32.const 0)
+                      (call $lower_ev_index_in_frame (local.get $ename)))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.get $evs))
 
   ;; ─── $lower_pipe_feedback — `<~` arm per Lock #5 ──────────────────
   ;; Per src/lower.mn:501-502: PFeedback => LFeedback(handle, lo_l, lo_r).

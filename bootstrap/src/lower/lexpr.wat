@@ -711,19 +711,39 @@
   ;;                 Per Hβ-perform-evidence-dispatch.md §4.7: emit cannot
   ;;                 reach env, so the op-ordered arm list is resolved at
   ;;                 lower time and threaded here.)
-  (func $lexpr_make_lhandlewith_with_arm_names
+  ;;   6: captured_evs (list of LowExpr — the evidence entries this
+  ;;      handler's ARM BODIES perform through, resolved at the install
+  ;;      site (LLocal of an outer install's entry, else LEvSlotRef into
+  ;;      the installing fn's own slots) in the decl's first-encounter
+  ;;      ledger order. emit writes each at offset
+  ;;      8 + 4*nstate + 4*total_arms + 4*i — the record's ev region,
+  ;;      read by arm-fn LEvPerform via the LowFn fence.
+  ;;      Hβ.emit.handler-record-ev-capture: handler IS closure IS
+  ;;      evidence — the record captures its install context.)
+  (func $lexpr_make_lhandlewith_with_evs
         (param $h i32) (param $body i32) (param $handler i32)
         (param $handler_name i32) (param $state_inits i32) (param $arm_names i32)
+        (param $captured_evs i32)
         (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 329) (i32.const 6)))
+    (local.set $r (call $make_record (i32.const 329) (i32.const 7)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
     (call $record_set (local.get $r) (i32.const 1) (local.get $body))
     (call $record_set (local.get $r) (i32.const 2) (local.get $handler))
     (call $record_set (local.get $r) (i32.const 3) (local.get $handler_name))
     (call $record_set (local.get $r) (i32.const 4) (local.get $state_inits))
     (call $record_set (local.get $r) (i32.const 5) (local.get $arm_names))
+    (call $record_set (local.get $r) (i32.const 6) (local.get $captured_evs))
     (local.get $r))
+
+  (func $lexpr_make_lhandlewith_with_arm_names
+        (param $h i32) (param $body i32) (param $handler i32)
+        (param $handler_name i32) (param $state_inits i32) (param $arm_names i32)
+        (result i32)
+    (call $lexpr_make_lhandlewith_with_evs
+      (local.get $h) (local.get $body) (local.get $handler)
+      (local.get $handler_name) (local.get $state_inits) (local.get $arm_names)
+      (call $make_list (i32.const 0))))
 
   (func $lexpr_make_lhandlewith_with_inits
         (param $h i32) (param $body i32) (param $handler i32)
@@ -762,6 +782,10 @@
   (func $lexpr_lhandlewith_arm_names (export "lexpr_lhandlewith_arm_names")
         (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 5)))
+
+  (func $lexpr_lhandlewith_captured_evs (export "lexpr_lhandlewith_captured_evs")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 6)))
 
   ;; ─── 336 = LStateSlotStore(handle, offset, value) — arity 3 ─────────
   ;; Per Hβ.seed.resume-with-state-update-mirror: emit produces

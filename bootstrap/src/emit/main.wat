@@ -1084,6 +1084,13 @@
     ;; this is the first wiring of $emit_fn_reset (state.wat exports it
     ;; but no caller existed pre-this-commit).
     (call $emit_fn_reset)
+    ;; Install this fn's ev fence (Hβ.emit.handler-record-ev-capture):
+    ;; closures pass their captures count, handler arm fns pass
+    ;; nstate+total_arms, plain fns 0. $emit_levperform/$emit_levslotref
+    ;; read 8+4*fence+4*slot — the first caller of the until-now-dormant
+    ;; $emit_set_body_context.
+    (call $emit_set_body_context
+      (call $lowfn_fence (local.get $fn_r)) (i32.const 0) (i32.const 0))
     ;; Register param names in fn-local ledger so emit_let_locals's
     ;; emit_fn_local_check skips re-declaring locals that shadow
     ;; params (per the eight: a name appearing as both param and

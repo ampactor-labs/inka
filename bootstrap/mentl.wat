@@ -19809,6 +19809,89 @@
         (br $iter)))
     (i32.const 0))
 
+  ;; ─── Arm-body evidence ledger (Hβ.emit.handler-record-ev-capture) ────
+  ;; A handler record is also the closure of its arm bodies — and a
+  ;; closure captures the evidence its body performs through (handler IS
+  ;; state IS closure IS evidence). While a handler decl's arm bodies
+  ;; lower, every Tier-2 perform's EFFECT registers here in first-
+  ;; encounter order. That index IS the arm-body LEvPerform's ev_slot;
+  ;; the install site writes the captured entries in the SAME order
+  ;; after the record's arm region — one index space, no coercion table.
+  ;; The (discriminator → names) registry carries the decl's collection
+  ;; to every install site of that handler.
+  (global $lower_arm_ev_active_g (mut i32) (i32.const 0))
+  (global $lower_arm_ev_names_g  (mut i32) (i32.const 0))
+  (global $lower_hev_entries_g   (mut i32) (i32.const 0))
+  (global $lower_hev_len_g       (mut i32) (i32.const 0))
+
+  (func $lower_arm_ev_begin
+    (global.set $lower_arm_ev_active_g (i32.const 1))
+    (global.set $lower_arm_ev_names_g (call $make_list (i32.const 0))))
+
+  (func $lower_arm_ev_active (export "lower_arm_ev_active") (result i32)
+    (global.get $lower_arm_ev_active_g))
+
+  ;; Append-or-get the captured-ev index for an effect name. First-
+  ;; encounter order — indices already handed out never shift.
+  (func $lower_arm_ev_index_for (export "lower_arm_ev_index_for")
+        (param $ename i32) (result i32)
+    (local $names i32) (local $n i32) (local $i i32)
+    (local.set $names (global.get $lower_arm_ev_names_g))
+    (local.set $n (call $len (local.get $names)))
+    (local.set $i (i32.const 0))
+    (block $found
+      (loop $iter
+        (br_if $found (i32.ge_u (local.get $i) (local.get $n)))
+        (if (call $str_eq (call $list_index (local.get $names) (local.get $i))
+                          (local.get $ename))
+          (then (return (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (local.set $names (call $list_extend_to (local.get $names)
+                        (i32.add (local.get $n) (i32.const 1))))
+    (drop (call $list_set (local.get $names) (local.get $n) (local.get $ename)))
+    (global.set $lower_arm_ev_names_g (local.get $names))
+    (local.get $n))
+
+  ;; Close the collection: register (discriminator → names), deactivate.
+  (func $lower_arm_ev_end (param $discriminator i32)
+    (local $entry i32) (local $n i32)
+    (if (i32.eqz (global.get $lower_hev_entries_g))
+      (then (global.set $lower_hev_entries_g (call $make_list (i32.const 0)))))
+    (local.set $entry (call $make_record (i32.const 215) (i32.const 2)))
+    (call $record_set (local.get $entry) (i32.const 0) (local.get $discriminator))
+    (call $record_set (local.get $entry) (i32.const 1)
+      (global.get $lower_arm_ev_names_g))
+    (local.set $n (global.get $lower_hev_len_g))
+    (global.set $lower_hev_entries_g
+      (call $list_extend_to (global.get $lower_hev_entries_g)
+        (i32.add (local.get $n) (i32.const 1))))
+    (drop (call $list_set (global.get $lower_hev_entries_g) (local.get $n)
+      (local.get $entry)))
+    (global.set $lower_hev_len_g (i32.add (local.get $n) (i32.const 1)))
+    (global.set $lower_arm_ev_active_g (i32.const 0))
+    (global.set $lower_arm_ev_names_g (i32.const 0)))
+
+  ;; The effects a handler's arm bodies perform — read at install sites.
+  ;; hname 0 (anonymous handle-expr) → empty list.
+  (func $lower_handler_arm_ev_names (export "lower_handler_arm_ev_names")
+        (param $hname i32) (result i32)
+    (local $i i32) (local $entry i32)
+    (if (i32.eqz (local.get $hname))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $i (i32.sub (global.get $lower_hev_len_g) (i32.const 1)))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.lt_s (local.get $i) (i32.const 0)))
+        (local.set $entry
+          (call $list_index (global.get $lower_hev_entries_g) (local.get $i)))
+        (if (call $str_eq (call $record_get (local.get $entry) (i32.const 0))
+                          (local.get $hname))
+          (then (return (call $record_get (local.get $entry) (i32.const 1)))))
+        (local.set $i (i32.sub (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (call $make_list (i32.const 0)))
+
   ;; ─── $ls_register_globals — install top-level names for this walk ──
   (func $ls_register_globals (param $names i32)
     (call $lower_init)
@@ -21118,19 +21201,39 @@
   ;;                 Per Hβ-perform-evidence-dispatch.md §4.7: emit cannot
   ;;                 reach env, so the op-ordered arm list is resolved at
   ;;                 lower time and threaded here.)
-  (func $lexpr_make_lhandlewith_with_arm_names
+  ;;   6: captured_evs (list of LowExpr — the evidence entries this
+  ;;      handler's ARM BODIES perform through, resolved at the install
+  ;;      site (LLocal of an outer install's entry, else LEvSlotRef into
+  ;;      the installing fn's own slots) in the decl's first-encounter
+  ;;      ledger order. emit writes each at offset
+  ;;      8 + 4*nstate + 4*total_arms + 4*i — the record's ev region,
+  ;;      read by arm-fn LEvPerform via the LowFn fence.
+  ;;      Hβ.emit.handler-record-ev-capture: handler IS closure IS
+  ;;      evidence — the record captures its install context.)
+  (func $lexpr_make_lhandlewith_with_evs
         (param $h i32) (param $body i32) (param $handler i32)
         (param $handler_name i32) (param $state_inits i32) (param $arm_names i32)
+        (param $captured_evs i32)
         (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 329) (i32.const 6)))
+    (local.set $r (call $make_record (i32.const 329) (i32.const 7)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
     (call $record_set (local.get $r) (i32.const 1) (local.get $body))
     (call $record_set (local.get $r) (i32.const 2) (local.get $handler))
     (call $record_set (local.get $r) (i32.const 3) (local.get $handler_name))
     (call $record_set (local.get $r) (i32.const 4) (local.get $state_inits))
     (call $record_set (local.get $r) (i32.const 5) (local.get $arm_names))
+    (call $record_set (local.get $r) (i32.const 6) (local.get $captured_evs))
     (local.get $r))
+
+  (func $lexpr_make_lhandlewith_with_arm_names
+        (param $h i32) (param $body i32) (param $handler i32)
+        (param $handler_name i32) (param $state_inits i32) (param $arm_names i32)
+        (result i32)
+    (call $lexpr_make_lhandlewith_with_evs
+      (local.get $h) (local.get $body) (local.get $handler)
+      (local.get $handler_name) (local.get $state_inits) (local.get $arm_names)
+      (call $make_list (i32.const 0))))
 
   (func $lexpr_make_lhandlewith_with_inits
         (param $h i32) (param $body i32) (param $handler i32)
@@ -21169,6 +21272,10 @@
   (func $lexpr_lhandlewith_arm_names (export "lexpr_lhandlewith_arm_names")
         (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 5)))
+
+  (func $lexpr_lhandlewith_captured_evs (export "lexpr_lhandlewith_captured_evs")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 6)))
 
   ;; ─── 336 = LStateSlotStore(handle, offset, value) — arity 3 ─────────
   ;; Per Hβ.seed.resume-with-state-update-mirror: emit produces
@@ -21415,25 +21522,38 @@
   ;; The row field IS the seed for what refinement types discharge at
   ;; compile time and what the Why Engine walks back through.
 
-  ;; ─── 350 = LowFn(name, arity, params, body, row) — arity 5 ────────
+  ;; ─── 350 = LowFn(name, arity, params, body, row, fence) — arity 6 ──
   ;; Per src/lower.mn canonical LFn record shape.
   ;;   field_0 = name (String — fn name for WAT $-prefix)
   ;;   field_1 = arity (i32 — static param count)
   ;;   field_2 = params (List of String — parameter names)
   ;;   field_3 = body (LowExpr — lowered fn body)
   ;;   field_4 = row (i32 — effect row handle; graph-read via $lookup_ty)
+  ;;   field_5 = fence (i32 — where this fn's __state ev region starts,
+  ;;             in slots past the 8-byte header: closures pass their
+  ;;             captures count; handler arm fns pass nstate+total_arms
+  ;;             (the record's evidence sits after state AND arms);
+  ;;             plain top-level fns pass 0. $emit_fn_body installs it
+  ;;             via $emit_set_body_context so $emit_levperform /
+  ;;             $emit_levslotref read 8+4*fence+4*slot — one uniform
+  ;;             rule across all three record shapes.
+  ;;             Hβ.emit.handler-record-ev-capture.)
   (func $lowfn_make (export "lowfn_make")
         (param $name i32) (param $arity i32) (param $params i32)
-        (param $body i32) (param $row i32)
+        (param $body i32) (param $row i32) (param $fence i32)
         (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 350) (i32.const 5)))
+    (local.set $r (call $make_record (i32.const 350) (i32.const 6)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $name))
     (call $record_set (local.get $r) (i32.const 1) (local.get $arity))
     (call $record_set (local.get $r) (i32.const 2) (local.get $params))
     (call $record_set (local.get $r) (i32.const 3) (local.get $body))
     (call $record_set (local.get $r) (i32.const 4) (local.get $row))
+    (call $record_set (local.get $r) (i32.const 5) (local.get $fence))
     (local.get $r))
+
+  (func $lowfn_fence (export "lowfn_fence") (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 5)))
 
   (func $lowfn_name (export "lowfn_name") (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 0)))
@@ -23201,6 +23321,17 @@
         (br $each)))
     (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
 
+  ;; ─── $lower_ev_index_in_frame — which of MY ev slots holds $ename ────
+  ;; The one projection both perform-dispatch and derive_ev_slots index
+  ;; with. Inside a handler arm body, the frame's evidence is the
+  ;; record-captured set (first-encounter ledger order); everywhere
+  ;; else it is the fn's row (canonical order). One index space per
+  ;; frame shape — Hβ.emit.handler-record-ev-capture.
+  (func $lower_ev_index_in_frame (param $ename i32) (result i32)
+    (if (call $lower_arm_ev_active)
+      (then (return (call $lower_arm_ev_index_for (local.get $ename)))))
+    (call $lower_compute_ev_index_for_effect (local.get $ename)))
+
   (func $derive_ev_slots (export "derive_ev_slots") (param $callee_handle i32) (result i32)
     (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $i i32)
     (local $ename i32) (local $state_local i32) (local $evs i32)
@@ -23249,7 +23380,7 @@
           (else
             (drop (call $list_set (local.get $evs) (local.get $i)
                     (call $lexpr_make_levslotref (i32.const 0)
-                      (call $lower_compute_ev_index_for_effect (local.get $ename)))))))
+                      (call $lower_ev_index_in_frame (local.get $ename)))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
     (local.get $evs))
@@ -23692,7 +23823,7 @@
         (call $lexpr_make_levperform
           (local.get $h)
           (local.get $op_name)
-          (call $lower_compute_ev_index_for_effect
+          (call $lower_ev_index_in_frame
             (call $lower_effect_name_of_op (local.get $op_name)))
           (call $lower_compute_ev_slot_for_op (local.get $op_name))
           (local.get $lo_args)))))
@@ -24267,9 +24398,31 @@
     (local $op_name i32) (local $lo_body i32) (local $fn_name i32)
     (local $fn_body i32) (local $fn_ir i32)
     (local $outer_cp i32)
+    (local $fence i32) (local $fgroups i32) (local $fgi i32) (local $fgn i32) (local $fg i32)
     (local.set $n   (call $len (local.get $arms)))
     (local.set $buf (call $make_list (i32.const 0)))
     (local.set $buf (call $list_extend_to (local.get $buf) (local.get $n)))
+    ;; Hβ.emit.handler-record-ev-capture: the arm fn's __state IS the
+    ;; handler record [_, nstate, state.., arms.., evs..]; its ev region
+    ;; starts past state AND arms. fence = nstate + total_arms, computed
+    ;; from the SAME pre-registered groups the install's emit sums —
+    ;; the two sides agree by construction.
+    (local.set $fence (i32.add (call $len (local.get $config))
+                               (call $len (local.get $state))))
+    (local.set $fgroups (call $lower_handler_effect_arm_names (local.get $discriminator)))
+    (local.set $fgn (call $len (local.get $fgroups)))
+    (local.set $fgi (i32.const 0))
+    (block $fdone
+      (loop $fl
+        (br_if $fdone (i32.ge_u (local.get $fgi) (local.get $fgn)))
+        (local.set $fg (call $list_index (local.get $fgroups) (local.get $fgi)))
+        (local.set $fence (i32.add (local.get $fence)
+          (call $len (call $record_get (local.get $fg) (i32.const 1)))))
+        (local.set $fgi (i32.add (local.get $fgi) (i32.const 1)))
+        (br $fl)))
+    ;; Arm-body Tier-2 performs register their effects here; the indices
+    ;; ARE the captured-ev slots the install writes after the arms.
+    (call $lower_arm_ev_begin)
     ;; Per Hβ.first-light.handler-arm-capture-substrate (2026-05-06):
     ;; bind config + state names as locals in the OUTER scope (before
     ;; per-arm frames). Arm-body var resolution sees these via the
@@ -24315,11 +24468,15 @@
                             (call $len (local.get $arg_names))
                             (local.get $arg_names)
                             (local.get $fn_body)
-                            (call $row_make_pure)))
+                            (call $row_make_pure)
+                            (local.get $fence)))
         (drop (call $list_set (local.get $buf) (local.get $i)
                 (call $lexpr_make_ldeclarefn (local.get $fn_ir))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
+    ;; Register this handler's arm-body effect collection (discriminator
+    ;; → first-encounter ename list) for its install sites to capture.
+    (call $lower_arm_ev_end (local.get $discriminator))
     ;; Pop the outer scope so config + state locals don't leak into
     ;; sibling handler-decls or top-level decls processed afterward.
     (call $ls_pop_scope (local.get $outer_cp))
@@ -24704,11 +24861,12 @@
                     (call $list_index (local.get $state_inits) (local.get $i))))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $s_each)))
-        (return (call $lexpr_make_lhandlewith_with_arm_names
+        (return (call $lexpr_make_lhandlewith_with_evs
                   (local.get $h) (local.get $lo_l) (local.get $lo_r)
                   (local.get $hname)
                   (local.get $all_inits)
-                  (call $lower_handler_effect_arm_names (local.get $hname))))))
+                  (call $lower_handler_effect_arm_names (local.get $hname))
+                  (call $lower_captured_evs_for (local.get $hname))))))
     ;; Non-handle pipes — lower left+right normally.
     (local.set $lo_l (call $lower_expr (local.get $left_node)))
     (local.set $lo_r (call $lower_expr (local.get $right_node)))
@@ -24931,6 +25089,42 @@
       (local.get $h)
       (local.get $lo_l)
       (local.get $lo_r)))
+
+  ;; ─── $lower_captured_evs_for — install-site evidence capture ───────
+  ;; Per Hβ.emit.handler-record-ev-capture (handler IS closure IS
+  ;; evidence): the effects this handler's ARM BODIES perform (the
+  ;; decl's first-encounter ledger) resolve at THIS install position —
+  ;; an outer install's entry local (LLocal) when one covers the
+  ;; effect, else a forward of the installing fn's own slot
+  ;; (LEvSlotRef via $lower_ev_index_in_frame). Same per-ename
+  ;; resolution as $derive_ev_slots — one truth, two record shapes.
+  ;; Emit writes these after the record's arm region; the arm fn's
+  ;; LowFn fence makes its LEvPerform reads land on them.
+  (func $lower_captured_evs_for (param $hname i32) (result i32)
+    (local $names i32) (local $n i32) (local $i i32) (local $ename i32)
+    (local $evs i32) (local $state_local i32)
+    (local.set $names (call $lower_handler_arm_ev_names (local.get $hname)))
+    (local.set $n (call $len (local.get $names)))
+    (local.set $evs (call $list_extend_to (call $make_list (i32.const 0))
+                      (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $ename (call $list_index (local.get $names) (local.get $i)))
+        (local.set $state_local
+          (call $lower_resolve_handler_state_for_ename (local.get $ename)))
+        (if (i32.ne (local.get $state_local) (i32.const 0))
+          (then
+            (drop (call $list_set (local.get $evs) (local.get $i)
+                    (call $lexpr_make_llocal (i32.const 0) (local.get $state_local)))))
+          (else
+            (drop (call $list_set (local.get $evs) (local.get $i)
+                    (call $lexpr_make_levslotref (i32.const 0)
+                      (call $lower_ev_index_in_frame (local.get $ename)))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.get $evs))
 
   ;; ─── $lower_pipe_feedback — `<~` arm per Lock #5 ──────────────────
   ;; Per src/lower.mn:501-502: PFeedback => LFeedback(handle, lo_l, lo_r).
@@ -26451,7 +26645,8 @@
                         (call $len (local.get $params))
                         (local.get $param_names)
                         (local.get $body_list)
-                        (call $row_make_pure)))
+                        (call $row_make_pure)
+                        (call $len (local.get $caps))))
     (local.set $evs  (call $make_list (i32.const 0)))
     (call $lexpr_make_lmakeclosure
       (local.get $h)
@@ -27135,7 +27330,8 @@
                         (call $len (local.get $params))
                         (local.get $param_names)
                         (local.get $body_list)
-                        (call $row_make_pure)))
+                        (call $row_make_pure)
+                        (call $len (local.get $caps))))
     (local.set $evs  (call $make_list (i32.const 0)))
     (local.set $closure (call $lexpr_make_lmakeclosure
                           (local.get $handle)
@@ -32379,6 +32575,7 @@
     (local $h i32) (local $hstate_name i32) (local $inits i32)
     (local $groups i32) (local $nstate i32) (local $total_arms i32)
     (local $gi i32) (local $gn i32) (local $g i32) (local $arm_list i32)
+    (local $cevs i32) (local $n_cevs i32) (local $ci i32)
     ;; Per protocol_handler_is_state_is_closure_is_evidence.md + Part 2 of
     ;; Hβ.lower.multi-effect-ev-index-map: ONE state record holds state slots
     ;; + the arm fn-idxs of ALL the handler's effects, laid out CONTIGUOUSLY
@@ -32408,9 +32605,18 @@
           (i32.add (local.get $total_arms) (call $len (local.get $arm_list))))
         (local.set $gi (i32.add (local.get $gi) (i32.const 1)))
         (br $tl)))
+    ;; Captured evidence (Hβ.emit.handler-record-ev-capture): the
+    ;; entries this handler's arm bodies perform through, resolved at
+    ;; lower time against THIS install position. They live after the
+    ;; arms — the arm fn's LowFn fence (nstate+total_arms) makes its
+    ;; LEvPerform reads land here.
+    (local.set $cevs (call $lexpr_lhandlewith_captured_evs (local.get $r)))
+    (local.set $n_cevs (call $len (local.get $cevs)))
     (call $emit_alloc
       (i32.add (i32.const 8)
-        (i32.mul (i32.const 4) (i32.add (local.get $nstate) (local.get $total_arms))))
+        (i32.mul (i32.const 4)
+          (i32.add (i32.add (local.get $nstate) (local.get $total_arms))
+                   (local.get $n_cevs))))
       (local.get $hstate_name))
     ;; Write the nstate FENCE at offset 4 so dispatch locates arms fence-relative.
     (call $ec_emit_local_get_dollar (local.get $hstate_name))
@@ -32420,6 +32626,20 @@
     ;; Lay each effect-group's arms contiguously + build its [record, base] entry.
     (call $emit_handler_effect_entries
       (local.get $hstate_name) (local.get $nstate) (local.get $groups))
+    ;; Write the captured evidence entries after the arms.
+    (local.set $ci (i32.const 0))
+    (block $cev_done
+      (loop $cev_each
+        (br_if $cev_done (i32.ge_u (local.get $ci) (local.get $n_cevs)))
+        (call $ec_emit_local_get_dollar (local.get $hstate_name))
+        (call $emit_lexpr (call $list_index (local.get $cevs) (local.get $ci)))
+        (call $el_emit_i32_store_offset
+          (i32.add (i32.const 8)
+            (i32.mul (i32.const 4)
+              (i32.add (i32.add (local.get $nstate) (local.get $total_arms))
+                       (local.get $ci)))))
+        (local.set $ci (i32.add (local.get $ci) (i32.const 1)))
+        (br $cev_each)))
     ;; Per-handler GLOBAL state-ptr write (record) for env-scan Tier-1 resolution.
     (call $emit_hstate_global_set (call $lexpr_lhandlewith_handler_name (local.get $r))
                                    (local.get $hstate_name))
@@ -34219,6 +34439,13 @@
     ;; this is the first wiring of $emit_fn_reset (state.wat exports it
     ;; but no caller existed pre-this-commit).
     (call $emit_fn_reset)
+    ;; Install this fn's ev fence (Hβ.emit.handler-record-ev-capture):
+    ;; closures pass their captures count, handler arm fns pass
+    ;; nstate+total_arms, plain fns 0. $emit_levperform/$emit_levslotref
+    ;; read 8+4*fence+4*slot — the first caller of the until-now-dormant
+    ;; $emit_set_body_context.
+    (call $emit_set_body_context
+      (call $lowfn_fence (local.get $fn_r)) (i32.const 0) (i32.const 0))
     ;; Register param names in fn-local ledger so emit_let_locals's
     ;; emit_fn_local_check skips re-declaring locals that shadow
     ;; params (per the eight: a name appearing as both param and

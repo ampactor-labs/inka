@@ -714,6 +714,89 @@
         (br $iter)))
     (i32.const 0))
 
+  ;; ─── Arm-body evidence ledger (Hβ.emit.handler-record-ev-capture) ────
+  ;; A handler record is also the closure of its arm bodies — and a
+  ;; closure captures the evidence its body performs through (handler IS
+  ;; state IS closure IS evidence). While a handler decl's arm bodies
+  ;; lower, every Tier-2 perform's EFFECT registers here in first-
+  ;; encounter order. That index IS the arm-body LEvPerform's ev_slot;
+  ;; the install site writes the captured entries in the SAME order
+  ;; after the record's arm region — one index space, no coercion table.
+  ;; The (discriminator → names) registry carries the decl's collection
+  ;; to every install site of that handler.
+  (global $lower_arm_ev_active_g (mut i32) (i32.const 0))
+  (global $lower_arm_ev_names_g  (mut i32) (i32.const 0))
+  (global $lower_hev_entries_g   (mut i32) (i32.const 0))
+  (global $lower_hev_len_g       (mut i32) (i32.const 0))
+
+  (func $lower_arm_ev_begin
+    (global.set $lower_arm_ev_active_g (i32.const 1))
+    (global.set $lower_arm_ev_names_g (call $make_list (i32.const 0))))
+
+  (func $lower_arm_ev_active (export "lower_arm_ev_active") (result i32)
+    (global.get $lower_arm_ev_active_g))
+
+  ;; Append-or-get the captured-ev index for an effect name. First-
+  ;; encounter order — indices already handed out never shift.
+  (func $lower_arm_ev_index_for (export "lower_arm_ev_index_for")
+        (param $ename i32) (result i32)
+    (local $names i32) (local $n i32) (local $i i32)
+    (local.set $names (global.get $lower_arm_ev_names_g))
+    (local.set $n (call $len (local.get $names)))
+    (local.set $i (i32.const 0))
+    (block $found
+      (loop $iter
+        (br_if $found (i32.ge_u (local.get $i) (local.get $n)))
+        (if (call $str_eq (call $list_index (local.get $names) (local.get $i))
+                          (local.get $ename))
+          (then (return (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (local.set $names (call $list_extend_to (local.get $names)
+                        (i32.add (local.get $n) (i32.const 1))))
+    (drop (call $list_set (local.get $names) (local.get $n) (local.get $ename)))
+    (global.set $lower_arm_ev_names_g (local.get $names))
+    (local.get $n))
+
+  ;; Close the collection: register (discriminator → names), deactivate.
+  (func $lower_arm_ev_end (param $discriminator i32)
+    (local $entry i32) (local $n i32)
+    (if (i32.eqz (global.get $lower_hev_entries_g))
+      (then (global.set $lower_hev_entries_g (call $make_list (i32.const 0)))))
+    (local.set $entry (call $make_record (i32.const 215) (i32.const 2)))
+    (call $record_set (local.get $entry) (i32.const 0) (local.get $discriminator))
+    (call $record_set (local.get $entry) (i32.const 1)
+      (global.get $lower_arm_ev_names_g))
+    (local.set $n (global.get $lower_hev_len_g))
+    (global.set $lower_hev_entries_g
+      (call $list_extend_to (global.get $lower_hev_entries_g)
+        (i32.add (local.get $n) (i32.const 1))))
+    (drop (call $list_set (global.get $lower_hev_entries_g) (local.get $n)
+      (local.get $entry)))
+    (global.set $lower_hev_len_g (i32.add (local.get $n) (i32.const 1)))
+    (global.set $lower_arm_ev_active_g (i32.const 0))
+    (global.set $lower_arm_ev_names_g (i32.const 0)))
+
+  ;; The effects a handler's arm bodies perform — read at install sites.
+  ;; hname 0 (anonymous handle-expr) → empty list.
+  (func $lower_handler_arm_ev_names (export "lower_handler_arm_ev_names")
+        (param $hname i32) (result i32)
+    (local $i i32) (local $entry i32)
+    (if (i32.eqz (local.get $hname))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $i (i32.sub (global.get $lower_hev_len_g) (i32.const 1)))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.lt_s (local.get $i) (i32.const 0)))
+        (local.set $entry
+          (call $list_index (global.get $lower_hev_entries_g) (local.get $i)))
+        (if (call $str_eq (call $record_get (local.get $entry) (i32.const 0))
+                          (local.get $hname))
+          (then (return (call $record_get (local.get $entry) (i32.const 1)))))
+        (local.set $i (i32.sub (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (call $make_list (i32.const 0)))
+
   ;; ─── $ls_register_globals — install top-level names for this walk ──
   (func $ls_register_globals (param $names i32)
     (call $lower_init)

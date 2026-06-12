@@ -455,6 +455,17 @@
         (br $each)))
     (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
 
+  ;; ─── $lower_ev_index_in_frame — which of MY ev slots holds $ename ────
+  ;; The one projection both perform-dispatch and derive_ev_slots index
+  ;; with. Inside a handler arm body, the frame's evidence is the
+  ;; record-captured set (first-encounter ledger order); everywhere
+  ;; else it is the fn's row (canonical order). One index space per
+  ;; frame shape — Hβ.emit.handler-record-ev-capture.
+  (func $lower_ev_index_in_frame (param $ename i32) (result i32)
+    (if (call $lower_arm_ev_active)
+      (then (return (call $lower_arm_ev_index_for (local.get $ename)))))
+    (call $lower_compute_ev_index_for_effect (local.get $ename)))
+
   (func $derive_ev_slots (export "derive_ev_slots") (param $callee_handle i32) (result i32)
     (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $i i32)
     (local $ename i32) (local $state_local i32) (local $evs i32)
@@ -503,7 +514,7 @@
           (else
             (drop (call $list_set (local.get $evs) (local.get $i)
                     (call $lexpr_make_levslotref (i32.const 0)
-                      (call $lower_compute_ev_index_for_effect (local.get $ename)))))))
+                      (call $lower_ev_index_in_frame (local.get $ename)))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
     (local.get $evs))
@@ -946,7 +957,7 @@
         (call $lexpr_make_levperform
           (local.get $h)
           (local.get $op_name)
-          (call $lower_compute_ev_index_for_effect
+          (call $lower_ev_index_in_frame
             (call $lower_effect_name_of_op (local.get $op_name)))
           (call $lower_compute_ev_slot_for_op (local.get $op_name))
           (local.get $lo_args)))))

@@ -420,10 +420,7 @@ handler lookup_ty_graph {
       NErrorHole(_)    => resume(TName("ERROR_HOLE", [])),
       NFree(epoch) => {
         perform report("pipeline", "E_UnresolvedType", "UnresolvedType",
-          "handle "
-            |> str_concat(int_to_str(h))
-            |> str_concat(" @epoch=")
-            |> str_concat(int_to_str(epoch)),
+          "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",
           span_zero(), "MaybeIncorrect")
         resume(TName("UNRESOLVED", []))
       },
@@ -441,18 +438,7 @@ handler lookup_ty_graph {
 handler diagnostics_handler {
 
   report(source, code, kind, msg, span, applicability) => {
-    eprint_string(
-      source
-        |> str_concat(": ")
-        |> str_concat(code)
-        |> str_concat(" ")
-        |> str_concat(kind)
-        |> str_concat(": ")
-        |> str_concat(msg)
-        |> str_concat(" at ")
-        |> str_concat(show_span(span))
-        |> str_concat("\n")
-    )
+    eprint_string("{source}: {code} {kind}: {msg} at {show_span(span)}\n")
     resume()
   }
 }
@@ -501,10 +487,7 @@ fn render_gradients(gradients) = {
     gradients
       |> map((entry) => {
            let (name, result) = entry
-           name
-             |> str_concat(": ")
-             |> str_concat(render_gradient_result(result))
-             |> str_concat("\n")
+           "{name}: {render_gradient_result(result)}\n"
          })
       |> fold("", (acc, line) => acc |> str_concat(line))
   }
@@ -514,10 +497,7 @@ fn render_gradient_result(result) = match result {
   None => "(no next-step annotation suggested)",
   Some(suggestion) => {
     let AnnotationSuggestion(_kind, ann_text, unlocks, _reason) = suggestion
-    "→ add "
-      |> str_concat(ann_text)
-      |> str_concat(" to unlock ")
-      |> str_concat(join_unlock_labels(unlocks))
+    "→ add {ann_text} to unlock {join_unlock_labels(unlocks)}"
   }
 }
 
@@ -614,57 +594,28 @@ fn render_audit(entries) = {
   if len(entries) == 0 { "" }
   else {
     let report = list_head(entries)
-    let header = report.fn_name
-      |> str_concat(" : ")
-      |> str_concat(report.row_str)
-      |> str_concat("\n")
+    let header = "{report.fn_name} : {report.row_str}\n"
     let severance_section =
       if len(report.severable) == 0 { "" }
       else {
-        "  severable: "
-          |> str_concat(show_list(report.severable, show_eff_name, " + "))
-          |> str_concat(" — unlocks ")
-          |> str_concat(show_list(report.unlocks, show_capability, ", "))
-          |> str_concat("\n")
+        "  severable: {show_list(report.severable, show_eff_name, " + ")} — unlocks {show_list(report.unlocks, show_capability, ", ")}\n"
       }
-    header
-      |> str_concat(severance_section)
-      |> str_concat(render_audit(list_tail(entries)))
+    "{header}{severance_section}{render_audit(list_tail(entries))}"
   }
 }
 
 // Query rendering — delegates to query.mn for Question parsing
 
 fn render_query_result(result) = match result {
-  QRType(ty, reason) =>
-    "→ "
-      |> str_concat(show_type(ty))
-      |> str_concat("\n  Reason: ")
-      |> str_concat(show_reason(reason)),
-  QRUnresolved(entries) =>
-    "→ "
-      |> str_concat(int_to_str(len(entries)))
-      |> str_concat(" unresolved entries"),
-  QRChain(hops) =>
-    "→ "
-      |> str_concat(int_to_str(len(hops)))
-      |> str_concat(" hops in chain"),
-  QREffects(row) =>
-    "→ "
-      |> str_concat(show_effrow(row)),
-  QROwnership(params) =>
-    "→ "
-      |> str_concat(int_to_str(len(params)))
-      |> str_concat(" params"),
+  QRType(ty, reason) => "→ {show_type(ty)}\n  Reason: {show_reason(reason)}",
+  QRUnresolved(entries) => "→ {int_to_str(len(entries))} unresolved entries",
+  QRChain(hops) => "→ {int_to_str(len(hops))} hops in chain",
+  QREffects(row) => "→ {show_effrow(row)}",
+  QROwnership(params) => "→ {int_to_str(len(params))} params",
   QRWhy(reason) =>
     show_reason(reason),
-  QRVerifyDebt(obligations) =>
-    "→ "
-      |> str_concat(int_to_str(len(obligations)))
-      |> str_concat(" verification obligations pending"),
-  QRError(msg) =>
-    "error: "
-      |> str_concat(msg)
+  QRVerifyDebt(obligations) => "→ {int_to_str(len(obligations))} verification obligations pending",
+  QRError(msg) => "error: {msg}"
 }
 
 fn parse_query_string(q) = {

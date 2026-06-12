@@ -284,20 +284,18 @@ fn empty_render() with Pure = ""
 
 fn spaces(n) with Pure = {
   if n == 0 { "" }
-  else { " " |> str_concat(spaces(n - 1)) }
+  else { " {spaces(n - 1)}" }
 }
 
 fn parenthesize(s) with Pure = {
-  "(" |> str_concat(s) |> str_concat(")")
+  "({s})"
 }
 
 fn join_lines(lines) with Pure = {
   if len(lines) == 0 { "" }
   else if len(lines) == 1 { list_head(lines) }
   else {
-    list_head(lines)
-      |> str_concat("\n")
-      |> str_concat(join_lines(list_tail(lines)))
+    "{list_head(lines)}\n{join_lines(list_tail(lines))}"
   }
 }
 
@@ -375,7 +373,7 @@ fn show_effarg(arg) with Memory + Alloc = match arg {
 fn show_effname(name) with Memory + Alloc = match name {
   ENamed(s) => s,
   EParameterized(s, args) =>
-    s |> str_concat("(") |> str_concat(show_joined(map(show_effarg, args), ", ")) |> str_concat(")")
+    "{s}({show_joined(map(show_effarg, args), ", ")})"
 }
 
 fn show_joined(texts, sep) with Memory + Alloc = {
@@ -391,41 +389,37 @@ fn show_row(row) with Memory + Alloc = match row {
   EfClosed(names) => show_joined(map(show_effname, names), " + "),
   EfOpen(names, _) =>
     if len(names) == 0 { "?" }
-    else { show_joined(map(show_effname, names), " + ") |> str_concat(" + ?") },
-  EfNeg(inner) => "!" |> str_concat(show_row(inner)),
-  EfSub(a, b) => show_row(a) |> str_concat(" - ") |> str_concat(show_row(b)),
-  EfInter(a, b) => show_row(a) |> str_concat(" & ") |> str_concat(show_row(b))
+    else { "{show_joined(map(show_effname, names), " + ")} + ?" },
+  EfNeg(inner) => "!{show_row(inner)}",
+  EfSub(a, b) => "{show_row(a)} - {show_row(b)}",
+  EfInter(a, b) => "{show_row(a)} & {show_row(b)}"
 }
 
 // Compressed = the leaf-most informative edge of the Reason chain;
 // wrapper edges (Located / Unified / MatchBranch) descend.
 fn show_reason_compressed(reason) with Memory + Alloc = match reason {
-  Declared(s)    => "declared: " |> str_concat(s),
+  Declared(s)    => "declared: {s}",
   Inferred(s)    => s,
-  Fresh(h)       => "fresh #" |> str_concat(int_to_str(h)),
-  OpConstraint(name, _, _) => "op '" |> str_concat(name) |> str_concat("'"),
-  VarLookup(name, _)  => "from '" |> str_concat(name) |> str_concat("'"),
-  FnReturn(name, _)   => "return of '" |> str_concat(name) |> str_concat("'"),   // drift-audit: ignore (output literal contains the word)
-  FnParam(name, i, _) =>
-    "param " |> str_concat(int_to_str(i)) |> str_concat(" of '")
-             |> str_concat(name) |> str_concat("'"),
+  Fresh(h)       => "fresh #{int_to_str(h)}",
+  OpConstraint(name, _, _) => "op '{name}'",
+  VarLookup(name, _)  => "from '{name}'",
+  FnReturn(name, _)   => "return of '{name}'",   // drift-audit: ignore (output literal contains the word)
+  FnParam(name, i, _) => "param {int_to_str(i)} of '{name}'",
   MatchBranch(a, _)   => show_reason_compressed(a),
   ListElement(_)      => "list element",
   IfBranch(_)         => "if branch",
-  LetBinding(name, _) => "let '" |> str_concat(name) |> str_concat("'"),
+  LetBinding(name, _) => "let '{name}'",
   Unified(a, _)       => show_reason_compressed(a),
-  Instantiation(name, _) => "instantiation of '" |> str_concat(name) |> str_concat("'"),
+  Instantiation(name, _) => "instantiation of '{name}'",
   UnifyFailed(_, _)   => "unification failure",
   Placeholder(_)      => "placeholder",
   BinOpPlaceholder(_) => "operator",
-  MissingVar(name)    => "missing '" |> str_concat(name) |> str_concat("'"),
+  MissingVar(name)    => "missing '{name}'",
   Refinement(_, _)    => "refinement obligation",
   Located(_, inner)   => show_reason_compressed(inner),
-  InferredCallReturn(name, _) => "return of call to '" |> str_concat(name) |> str_concat("'"),   // drift-audit: ignore (output literal contains the word)
-  InferredPipeResult(verb, _) => "result of " |> str_concat(verb),
-  FreshInContext(h, ctx) =>
-    "fresh #" |> str_concat(int_to_str(h)) |> str_concat(" in '")
-              |> str_concat(ctx) |> str_concat("'"),
+  InferredCallReturn(name, _) => "return of call to '{name}'",   // drift-audit: ignore (output literal contains the word)
+  InferredPipeResult(verb, _) => "result of {verb}",
+  FreshInContext(h, ctx) => "fresh #{int_to_str(h)} in '{ctx}'",
   DocstringReason(text, _) => text
 }
 

@@ -430,21 +430,16 @@ fn uri_starts_with(uri, prefix, i, n) with Memory = {
 
 fn hover_from_type(ty, _reason) with Memory + Alloc + GraphRead + !Mutate = {
   let type_text = show_type(ty)
-  HoverContent("`"
-    |> str_concat(type_text)
-    |> str_concat("`"))
+  HoverContent("`{type_text}`")
 }
 
 fn hover_from_row(row, _reason) with Memory + Alloc + GraphRead + !Mutate = {
   let row_text = show_row(row)
-  HoverContent("Effect row: `"
-    |> str_concat(row_text)
-    |> str_concat("`"))
+  HoverContent("Effect row: `{row_text}`")
 }
 
 fn hover_from_reason(reason) with Memory + Alloc + GraphRead + !Mutate = {
-  HoverContent("Reason: "
-    |> str_concat(show_reason_compressed(reason)))
+  HoverContent("Reason: {show_reason_compressed(reason)}")
 }
 
 /// completion_items_from_slots — project VoiceLine slots to LSP

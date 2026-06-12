@@ -1168,7 +1168,7 @@ fn focus_reason(target) with Pure = {
   match target {
     TargetHandle(_)    => Inferred("explicit handle focus"),
     TargetSpan(s)      => Located(s, Inferred("span focus gesture")),
-    TargetIdent(name)  => Inferred("identifier focus: " |> str_concat(name))
+    TargetIdent(name)  => Inferred("identifier focus: {name}")
   }
 }
 
@@ -1728,7 +1728,7 @@ fn join_capability_labels(labels) with Pure = {
     let head = list_head(labels)
     let tail = list_tail(labels)
     if len(tail) == 0 { head }
-    else { head |> str_concat(", ") |> str_concat(join_capability_labels(tail)) }
+    else { "{head}, {join_capability_labels(tail)}" }
   }
 }
 
@@ -1874,9 +1874,7 @@ fn replace_span_in_text(ref source, span, ref replacement) with Memory + Alloc =
   let Span(sl, sc, el, ec) = span
   let start_pos = byte_offset_at(source, sl, sc, 0, 1, 1, n)
   let end_pos = byte_offset_at(source, el, ec, 0, 1, 1, n)
-  str_slice(source, 0, start_pos)
-    |> str_concat(replacement)
-    |> str_concat(str_slice(source, end_pos, n))
+  "{str_slice(source, 0, start_pos)}{replacement}{str_slice(source, end_pos, n)}"
 }
 
 fn byte_offset_at(ref source, target_l, target_c, idx, line, col, n) with Memory = {

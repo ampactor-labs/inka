@@ -1042,18 +1042,18 @@ fn emit_reason_summary(handle) with !Mutate = {
 }
 
 fn emit_render_reason_oneline(reason) with !Mutate = match reason {
-  Declared(n)                     => "declared as " |> str_concat(n),
-  Inferred(ctx)                   => "inferred from " |> str_concat(ctx),
+  Declared(n)                     => "declared as {n}",
+  Inferred(ctx)                   => "inferred from {ctx}",
   Located(_, inner)               => emit_render_reason_oneline(inner),
-  FnReturn(n, _)                  => "return of " |> str_concat(n),  // drift-audit: ignore — "return" is the string-rendered Reason variant name, not control flow
-  FnParam(n, idx, _)              => "param " |> str_concat(int_to_str(idx)) |> str_concat(" of ") |> str_concat(n),
-  VarLookup(n, _)                 => "lookup " |> str_concat(n),
+  FnReturn(n, _)                  => "return of {n}",  // drift-audit: ignore — output literal, not control flow
+  FnParam(n, idx, _)              => "param {int_to_str(idx)} of {n}",
+  VarLookup(n, _)                 => "lookup {n}",
   Fresh(_)                        => "fresh tyvar",
-  InferredCallReturn(n, _)        => "call return of " |> str_concat(n),  // drift-audit: ignore — string-rendered Reason variant name
-  InferredPipeResult(n, _)        => "pipe result of " |> str_concat(n),
+  InferredCallReturn(n, _)        => "call return of {n}",  // drift-audit: ignore — output literal
+  InferredPipeResult(n, _)        => "pipe result of {n}",
   IfBranch(_)                     => "if branch",
   MatchBranch(_, _)               => "match branch",
-  OpConstraint(op, _, _)          => "op " |> str_concat(op),
+  OpConstraint(op, _, _)          => "op {op}",
   ListElement(_)                  => "list element",
   Refinement(_, _)                => "refinement",
   Instantiation(_, _)             => "instantiation",
@@ -1566,7 +1566,7 @@ fn emit_expr(expr) = match expr {
       perform wat_emit(")\n")
     } else {
       let size = 4 + n * 4
-      let local_name = "variant_" |> str_concat(int_to_str(h))
+      let local_name = "variant_{int_to_str(h)}"
       perform emit_alloc(size, local_name)
       perform wat_emit("    (local.get $")
       perform wat_emit(local_name)
@@ -1712,7 +1712,7 @@ fn emit_expr(expr) = match expr {
     if str_eq(hname, "") {
       emit_expr(body)
     } else {
-      let local_name = str_concat("__hstate_", int_to_str(h))
+      let local_name = "__hstate_{int_to_str(h)}"
       // alloc 64 bytes via the canonical bump pattern (mirrors seed's
       // $emit_alloc 5-piece form).
       perform wat_emit("(global.get $heap_ptr)(local.set $")

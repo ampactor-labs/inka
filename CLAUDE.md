@@ -553,8 +553,34 @@ byte. Empirically-real residue per `Hβ-first-light-empirical.md` §2.3
       node-structure parity for $call_<H> fixpoint names); empty-edge
       elision both layers; mn-interp = 59; ~70 wheel chains lifted
       (diagnostics/Why-Engine/gradient narration speak in sentences).
-  Pass-2 cursor: fresh_ph table-OOB persists via parse_import path —
-  the multi-effect ev-index-map wheel-parity rung (NOT ~>).
+- ✓ **THE FRESH_PH RUNG (2026-06-12; commits `95ad250`→`6424340`;
+  `protocol_fresh_ph_rung_2026_06_12.md`)** — three landings:
+    - `lower_resume_snapshot` both layers — resume value + update RHSs
+      read PRE-update state into scratch LLets (ev8d 58→57; gate
+      tests/micros/mn-ev8.mn=57). tools/run-micro.sh is the canonical
+      micro harness (exit codes captured directly, never via pipe).
+    - Row unification late-binds through the var (seed unify.wat) —
+      binding to lookup_row_for's RESOLUTION was a mid-walk snapshot the
+      post-walk fixpoint never reached; frontend's row froze at 2 while
+      parse_program grew to 5. + `mutate_sink` (graph.mn) — the Mutate
+      effect's no-subscriber floor, installed outside graph_handler at
+      all 18 one-shot chains (handler-swap: IC loop swaps in oracle's
+      invalidator).
+    - `Hβ.emit.handler-record-ev-capture` — handler records carry
+      install-site evidence after their arms ([_, nstate, state, arms,
+      captured_evs]); LowFn field 5 = fence activates the dormant
+      $emit_set_body_context; arm-body Tier-2 performs dispatch true.
+      Honest gate tests/micros/mn-ev16.mn=18 (stateful arm; ev14/15
+      passed by table-index-0 COINCIDENCE — exit codes alone cannot
+      gate arm-evidence).
+  Pass-2 cursor: the wheel pipeline under m2 RUNS parse → infer →
+  lower (12k wheel-parser diags through the wheel's own
+  diagnostics_handler; first stdout bytes). Next rungs: m2-wheel-parse
+  fidelity (P_UnexpectedToken ×12k, first at `->` 27:20);
+  $monomorphic_at indirect-call type mismatch via lower_call_default;
+  wheel mirrors for L1 parity (ev-capture + LowFn fence + LHandleWith
+  evs in src/lower.mn+backends/wasm.mn; row fixpoint + wrapper-binding
+  in src/infer.mn/effects.mn).
 - ✗ `Hβ.first-light.wheel-emit-implementation` — broader cascade
   tracking surfaced wheel-side gaps as mentl2 progresses through the
   compile pipeline.

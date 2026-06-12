@@ -168,11 +168,7 @@ fn indented_center() with Pure = 4
 fn render_converge_chain(left, right) with Format + !Mutate = {
   let left_str = perform format_chain(left)
   let right_str = perform format_chain(right)
-  left_str
-    |> str_concat("\n")
-    |> str_concat(spaces(left_edge_indent()))
-    |> str_concat("|> ")
-    |> str_concat(right_str)
+  "{left_str}\n{spaces(left_edge_indent())}|> {right_str}"
 }
 
 // ─── Render a <| chain — divergence with branch tuple ───────────────
@@ -193,14 +189,7 @@ fn render_converge_chain(left, right) with Format + !Mutate = {
 fn render_diverge_chain(input, branches_tuple) with Format + !Mutate = {
   let input_str = perform format_chain(input)
   let branches = render_branch_tuple(branches_tuple)
-  input_str
-    |> str_concat("\n")
-    |> str_concat(spaces(left_edge_indent()))
-    |> str_concat("<| (\n")
-    |> str_concat(branches)
-    |> str_concat("\n")
-    |> str_concat(spaces(left_edge_indent()))
-    |> str_concat(")")
+  "{input_str}\n{spaces(left_edge_indent())}<| (\n{branches}\n{spaces(left_edge_indent())})"
 }
 
 // ─── Render a >< chain — parallel composition ───────────────────────
@@ -218,11 +207,7 @@ fn render_diverge_chain(input, branches_tuple) with Format + !Mutate = {
 fn render_compose_chain(left, right) with Format + !Mutate = {
   let left_str = perform format_chain(left)
   let right_str = perform format_chain(right)
-  parenthesize(left_str)
-    |> str_concat("\n")
-    |> str_concat(spaces(indented_center()))
-    |> str_concat("><\n")
-    |> str_concat(parenthesize(right_str))
+  "{parenthesize(left_str)}\n{spaces(indented_center())}><\n{parenthesize(right_str)}"
 }
 
 // ─── Render a ~> chain — handler-attach ────────────────────────────
@@ -246,15 +231,9 @@ fn render_tee(body, handler_expr) with Format + !Mutate = {
   let handler_str = perform format_chain(handler_expr)
   match ast_kind_of(body) {
     NPipeExpr(_, _, _) =>
-      body_str
-        |> str_concat("\n")
-        |> str_concat(spaces(left_edge_indent()))
-        |> str_concat("~> ")
-        |> str_concat(handler_str),
+      "{body_str}\n{spaces(left_edge_indent())}~> {handler_str}",
     _ =>
-      body_str
-        |> str_concat(" ~> ")
-        |> str_concat(handler_str)
+      "{body_str} ~> {handler_str}"
   }
 }
 
@@ -272,11 +251,7 @@ fn render_tee(body, handler_expr) with Format + !Mutate = {
 fn render_feedback_chain(input, spec) with Format + !Mutate = {
   let input_str = perform format_chain(input)
   let spec_str = perform format_chain(spec)
-  input_str
-    |> str_concat("\n")
-    |> str_concat(spaces(indented_center()))
-    |> str_concat("<~ ")
-    |> str_concat(spec_str)
+  "{input_str}\n{spaces(indented_center())}<~ {spec_str}"
 }
 
 // ─── Multi-source format — `parallel_map` over an AST list ──────────

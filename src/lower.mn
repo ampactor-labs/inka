@@ -156,7 +156,7 @@ handler handler_state_inits_default {
 }
 
 fn find_state_inits_by_name(name, ledger) = {
-  let hits = filter((entry) => str_eq(entry.name, name), ledger)
+  let hits = filter((entry) => entry.name == name, ledger)
   if len(hits) == 0 { [] }
   else { head(hits).inits }
 }
@@ -540,7 +540,7 @@ fn any_eff_matches_loop(declared, target, i) = {
       ENamed(s) => s,
       EParameterized(s, _) => s
     }
-    if str_eq(s, target) { true }
+    if s == target { true }
     else { any_eff_matches_loop(declared, target, i + 1) }
   }
 }
@@ -573,7 +573,7 @@ fn compute_slot_loop(declared, target_eff, target_op, eff_idx, slot_base) = {
       EParameterized(s, _) => s
     }
     let ops = lookup_effect_op_names(eff_name)
-    if str_eq(eff_name, target_eff) {
+    if eff_name == target_eff {
       // Found the effect — find the op within it
       find_op_in_list(ops, target_op, slot_base, 0)
     } else {
@@ -586,7 +586,7 @@ fn compute_slot_loop(declared, target_eff, target_op, eff_idx, slot_base) = {
 
 fn find_op_in_list(ops, target, slot_base, i) = {
   if i >= len(ops) { slot_base }
-  else if str_eq(ops[i], target) { slot_base + i }
+  else if ops[i] == target { slot_base + i }
   else { find_op_in_list(ops, target, slot_base, i + 1) }
 }
 
@@ -656,7 +656,7 @@ fn lower_expr_body(e, handle, span) = match e {
     let N(fbody, _, fh) = f
     match fbody {
       NExpr(VarRef(name)) =>
-        if str_eq(name, "to_string") && len(args) == 1 {
+        if name == "to_string" && len(args) == 1 {
           lower_to_string_dispatch(handle, list_head(lo_args), args)
         } else { match env_kind_of(name) {
         Some(ConstructorScheme(tag_id, _)) =>
@@ -1090,7 +1090,7 @@ fn field_byte_offset(fields, target, i, n) = {
   if i >= n { 0 }
   else {
     let (name, _) = list_index(fields, i)
-    if str_eq(name, target) { 4 * i }
+    if name == target { 4 * i }
     else { field_byte_offset(fields, target, i + 1, n) }
   }
 }
@@ -1186,7 +1186,7 @@ fn lower_stmt_body(s, handle, span) = match s {
     // peer — symmetric with handler-arm-fn-name-discriminator's
     // third-instance abstraction-earned shape).
     let outer = perform ls_outer_fn_name()
-    let fn_name = if str_eq(outer, "") { name }
+    let fn_name = if outer == "" { name }
       else { "{outer}_{name}" }
     perform ls_enter_frame(
       fn_name,
@@ -1289,7 +1289,7 @@ fn bind_pat_locals(pat) = match pat {
 fn bind_pat_rest(rest) = match rest {
   None => (),
   Some(name) => {
-    if str_eq(name, "_") { () }
+    if name == "_" { () }
     else {
       perform ls_bind_local(name, 0)
       ()
@@ -1444,7 +1444,7 @@ fn lower_state_slot_stores(handle, updates, fields) = map((upd) => {
 fn resolve_state_slot_offset(name, fields) = {
   let hits = filter((indexed) => {
     let (_, field) = indexed
-    str_eq(field, name)
+    field == name
   }, enumerate(fields))
   if len(hits) == 0 { 0 - 1 }
   else {
@@ -1713,7 +1713,7 @@ fn cfv_pat_binds(pat) = match pat {
 
 fn cfv_pat_rest_binds(rest) = match rest {
   None => [],
-  Some(name) => if str_eq(name, "_") { [] } else { [name] }
+  Some(name) => if name == "_" { [] } else { [name] }
 }
 
 /// Extract binder names from record-pattern fields `[(name, Pat)]`.
@@ -1739,7 +1739,7 @@ fn cfv_merge(a, b) = {
   }
 }
 
-fn cfv_contains(lst, s) = any((x) => str_eq(x, s), lst)
+fn cfv_contains(lst, s) = any((x) => x == s, lst)
 
 /// Stage 4a: WASI import-name predicate. Recognized op names bridge
 /// to the WASM-level import via LWasiCall instead of LPerform's
@@ -1747,24 +1747,24 @@ fn cfv_contains(lst, s) = any((x) => str_eq(x, s), lst)
 /// protocol_bootstrap_wasi_threads_substrate.md — the import IS the
 /// bridge; no wrapper function required.
 fn is_wasi_import_op(name) with Pure = {
-  str_eq(name, "wasi_thread_spawn")
-    || str_eq(name, "wasi_num_cores")
-    || str_eq(name, "fd_write")
-    || str_eq(name, "fd_read")
-    || str_eq(name, "fd_close")
-    || str_eq(name, "path_open")
-    || str_eq(name, "path_create_directory")
-    || str_eq(name, "path_filestat_get")
-    || str_eq(name, "path_unlink_file")
-    || str_eq(name, "path_rename")
-    || str_eq(name, "fd_readdir")
-    || str_eq(name, "proc_exit")
-    || str_eq(name, "atomic_load_i32")
-    || str_eq(name, "atomic_store_i32")
-    || str_eq(name, "atomic_rmw")
-    || str_eq(name, "wait_i32")
-    || str_eq(name, "notify")
-    || str_eq(name, "fence")
+  name == "wasi_thread_spawn"
+    || name == "wasi_num_cores"
+    || name == "fd_write"
+    || name == "fd_read"
+    || name == "fd_close"
+    || name == "path_open"
+    || name == "path_create_directory"
+    || name == "path_filestat_get"
+    || name == "path_unlink_file"
+    || name == "path_rename"
+    || name == "fd_readdir"
+    || name == "proc_exit"
+    || name == "atomic_load_i32"
+    || name == "atomic_store_i32"
+    || name == "atomic_rmw"
+    || name == "wait_i32"
+    || name == "notify"
+    || name == "fence"
 }
 
 // String interpolation lowering. Reduce a list of LowExpr fragments
@@ -2034,7 +2034,7 @@ fn ls_outer_fn_name_loop(frames) = {
   if len(frames) == 0 { "" }
   else {
     let frame = list_head(frames)
-    if str_eq(frame.fn_name, "") { ls_outer_fn_name_loop(list_tail(frames)) }
+    if frame.fn_name == "" { ls_outer_fn_name_loop(list_tail(frames)) }
     else { frame.fn_name }
   }
 }
@@ -2051,7 +2051,7 @@ fn ls_find_in_order(lst, target, i) = {
 
 fn ls_find_in_order_loop(lst, target, i, n) = {
   if i >= n { -1 }
-  else if str_eq(list_index(lst, i), target) { i }
+  else if list_index(lst, i) == target { i }
   else { ls_find_in_order_loop(lst, target, i + 1, n) }
 }
 

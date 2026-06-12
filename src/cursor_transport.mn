@@ -422,8 +422,8 @@ fn show_suggestion(opt) with Pure = match opt {
 }
 
 fn parse_action(line) with Pure =
-  if str_eq(line, "y") { AccAccept }
-  else if str_eq(line, "n") { AccDefer }
+  if line == "y" { AccAccept }
+  else if line == "n" { AccDefer }
   else { AccDefer }
 
 fn format_inline(teach_opt) with Pure = match teach_opt {
@@ -542,8 +542,8 @@ fn lsp_workspace_diagnostic(verify) with Pure =
 
 fn lsp_frame_to_action(frame) with Pure = {
   let LspMessage(method, _) = frame
-  if str_eq(method, "textDocument/didChange") { AccCaretMove(span_zero()) }
-  else if str_eq(method, "textDocument/codeAction/resolve") { AccAccept }
+  if method == "textDocument/didChange" { AccCaretMove(span_zero()) }
+  else if method == "textDocument/codeAction/resolve" { AccAccept }
   else { AccDefer }
 }
 

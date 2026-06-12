@@ -318,7 +318,7 @@ fn driver_module_in_dag_deps(ref module_name, ref dag_modules)
 }
 
 fn contains_module(ref modules, ref target) with Pure = {
-  any((m) => str_eq(m, target), modules)
+  any((m) => m == target, modules)
 }
 
 /// Partition modules-with-deps into topological layers. Each pass

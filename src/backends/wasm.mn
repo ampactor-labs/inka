@@ -207,7 +207,7 @@ fn string_offset_lookup(entries, target, i, n) = {
   if i >= n { 0 }
   else {
     let (s, offset) = list_index(entries, i)
-    if str_eq(s, target) { offset }
+    if s == target { offset }
     else { string_offset_lookup(entries, target, i + 1, n) }
   }
 }
@@ -370,7 +370,7 @@ fn string_entry_exists(entries, target, i, n) = {
   if i >= n { false }
   else {
     let (s, _) = list_index(entries, i)
-    if str_eq(s, target) { true }
+    if s == target { true }
     else { string_entry_exists(entries, target, i + 1, n) }
   }
 }
@@ -414,7 +414,7 @@ fn walk_lemit_top(exprs, i) = {
 
 fn walk_lemit_top_one(expr) = {
   let top_name = extract_top_fn_name(expr)
-  if str_eq(top_name, "") { walk_lemit_expr(expr) }
+  if top_name == "" { walk_lemit_expr(expr) }
   else {
     perform visit_top_fn(top_name)
     walk_lemit_expr(expr)
@@ -655,7 +655,7 @@ fn ls_find_str_local(lst, target, i) = {
 
 fn ls_find_str_local_loop(lst, target, i, n) = {
   if i >= n { -1 }
-  else if str_eq(list_index(lst, i), target) { i }
+  else if list_index(lst, i) == target { i }
   else { ls_find_str_local_loop(lst, target, i + 1, n) }
 }
 
@@ -1202,7 +1202,7 @@ fn emit_let_locals_pat(pat) = match pat {
 fn emit_let_locals_pat_rest(rest) = match rest {
   None => (),
   Some(name) => {
-    if str_eq(name, "_") { () }
+    if name == "_" { () }
     else {
       perform wat_emit(" (local $")
       perform wat_emit(name)
@@ -1709,7 +1709,7 @@ fn emit_expr(expr) = match expr {
     // Anonymous handle-expressions have hname = "" — no global to set
     // (matches seed's $emit_hstate_global_set i32.eqz early-return);
     // emit body only.
-    if str_eq(hname, "") {
+    if hname == "" {
       emit_expr(body)
     } else {
       let local_name = "__hstate_{int_to_str(h)}"
@@ -2415,7 +2415,7 @@ fn emit_pat_record_binds(fbs, path, path_len) = {
 fn emit_pat_list_rest_bind(n_prefix, rest, path, path_len) = match rest {
   None => (),
   Some(name) => {
-    if str_eq(name, "_") { () }
+    if name == "_" { () }
     else {
       perform wat_emit("    (i32.const 0)\n")
       emit_scrut_at(path, path_len)
@@ -2460,7 +2460,7 @@ fn lowpat_has_binders(pat) = match pat {
     else {
       match rest {
         None    => false,
-        Some(n) => !str_eq(n, "_")
+        Some(n) => n != "_"
       }
     }
   },

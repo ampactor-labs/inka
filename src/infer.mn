@@ -187,7 +187,7 @@ fn find_handler_for_effect(stack, ename) = {
             if len(args) == 1 {
               match list_head(args) {
                 TName(hename, _) =>
-                  if str_eq(hename, ename) { Some(hname) }
+                  if hename == ename { Some(hname) }
                   else { find_handler_for_effect(list_tail(stack), ename) },
                 _ => find_handler_for_effect(list_tail(stack), ename)
               }
@@ -448,7 +448,7 @@ fn names_include_alloc_loop(names, i, n) = {
       ENamed(s)              => s,
       EParameterized(s, _)   => s
     }
-    if str_eq(s, "Alloc") { true }   // drift-audit: ignore — real drift mode 8 (EffName should have EAlloc variant, not ENamed(string)); tracked for item 11.B EffName refactor
+    if s == "Alloc" { true }   // drift-audit: ignore — real drift mode 8 (EffName should have EAlloc variant, not ENamed(string)); tracked for item 11.B EffName refactor
     else { names_include_alloc_loop(names, i + 1, n) }
   }
 }
@@ -490,7 +490,7 @@ fn has_pure_declared(effs) = {
   any((eff) => {
   let (name, _) = eff
   match name {
-    ENamed(s) => str_eq(s, "Pure"),   // drift-audit: ignore — real drift mode 8 (EffName should have EPure variant, not ENamed(string)); tracked for item 11.B EffName refactor
+    ENamed(s) => s == "Pure",   // drift-audit: ignore — real drift mode 8 (EffName should have EPure variant, not ENamed(string)); tracked for item 11.B EffName refactor
     _         => false
   }
   }, effs)
@@ -1228,7 +1228,7 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
     TName(na, aa) =>
       match b {
         TName(nb, ab) =>
-          if str_eq(na, nb) {
+          if na == nb {
             unify_type_lists(aa, ab, span, reason)
           } else { type_mismatch(a, b, span, reason) },
         TVar(_) => unify_types(b, a, span, reason),
@@ -1354,7 +1354,7 @@ fn unify_record_fields_loop(fa, fb, i, n, span: ValidSpan, reason) = {
   else {
     let (na, ta) = list_index(fa, i)
     let (nb, tb) = list_index(fb, i)
-    if str_eq(na, nb) {
+    if na == nb {
       unify_types(ta, tb, span, reason)
       unify_record_fields_loop(fa, fb, i + 1, n, span, reason)
     } else {
@@ -1473,7 +1473,7 @@ fn find_record_field_pos_loop(fields, name, i, n) = {
   if i >= n { -1 }
   else {
     let (existing, _) = list_index(fields, i)
-    if str_eq(existing, name) { i }
+    if existing == name { i }
     else { find_record_field_pos_loop(fields, name, i + 1, n) }
   }
 }
@@ -1540,7 +1540,7 @@ fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, 
   } else {
     let (dn, dt) = list_index(declared, i)
     let (pn, pv) = list_index(provided, j)
-    if str_eq(dn, pn) {
+    if dn == pn {
       let N(_, _, vh) = pv
       let expect_h = perform mint(Inferred("record field type"))
       perform graph_bind(expect_h, dt,
@@ -1812,7 +1812,7 @@ fn enforce_alt_binding_law(branch_binds, span: ValidSpan) = match branch_binds {
       if alt_same_name_set(first, bi) {
         for_each((p) => {
           let (n, ty_i) = p
-          match find((q) => { let (m, _) = q; str_eq(m, n) }, first) {
+          match find((q) => { let (m, _) = q; m == n }, first) {
             Some(q0) => {
               let (_, ty_0) = q0
               unify_types(ty_0, ty_i, span,
@@ -1833,7 +1833,7 @@ fn enforce_alt_binding_law(branch_binds, span: ValidSpan) = match branch_binds {
 fn alt_same_name_set(a, b) =
   len(a) == len(b)
     && all((p) => { let (n, _) = p
-                    any((q) => { let (m, _) = q; str_eq(m, n) }, b) }, a)
+                    any((q) => { let (m, _) = q; m == n }, b) }, a)
 
 /// pat_binders — the names a pattern binds (pure structural walk).
 /// Wildcards and literals bind nothing; a PList rest name binds
@@ -1856,7 +1856,7 @@ fn pat_binders(ref pat) = match pat {
 
 fn plist_rest_binders(rest) = match rest {
   None    => [],
-  Some(n) => if str_eq(n, "_") { [] } else { [n] }
+  Some(n) => if n == "_" { [] } else { [n] }
 }
 
 fn build_pat_record_field_specs(flds, span: ValidSpan) = map((fld) => {
@@ -1891,7 +1891,7 @@ fn infer_pat_list(pats, rest, parent_handle, span: ValidSpan) = {
   match rest {
     None => (),
     Some(name) => {
-      if str_eq(name, "_") { () }
+      if name == "_" { () }
       else {
         perform env_extend(name, Forall([], list_ty),
           Located(span, LetBinding(name, Inferred("list rest pattern"))),
@@ -2351,7 +2351,7 @@ fn qmap_find(qmap, name) = {
   if len(qmap) == 0 { None }
   else {
     let (n, h) = list_index(qmap, 0)
-    if str_eq(n, name) { Some(h) }
+    if n == name { Some(h) }
     else { qmap_find(slice(qmap, 1, len(qmap)), name) }
   }
 }
@@ -2365,7 +2365,7 @@ fn register_one_variant(type_name, result_ty, qhandles, field_types, variant, ta
   // RecordSchemeKind to validate and lower constructions.
   if total == 1 &&
      len(field_types) == 1 &&
-     str_eq(ctor_name, type_name) &&
+     ctor_name == type_name &&
      is_record_ty(list_index(field_types, 0)) {
     let TRecord(declared_fields) = list_index(field_types, 0)
     perform env_extend(ctor_name, Forall(qhandles, result_ty),
@@ -2980,7 +2980,7 @@ fn pattern_predicate_for(pat, scrut) with GraphRead = {
 fn is_assert_call(callee) with GraphRead = {
   let N(body, _, _) = callee
   match body {
-    NExpr(VarRef(name)) => str_eq(name, "assert"),
+    NExpr(VarRef(name)) => name == "assert",
     _ => false
   }
 }

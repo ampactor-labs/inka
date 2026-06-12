@@ -1771,7 +1771,7 @@ fn parse_handle_state_fields(ref tokens, pos) = {
 
 fn parse_handle_state_loop(ref tokens, pos, own buf, count) = {
   let name = ident_or_kw_at(tokens, pos)
-  if str_eq(name, "") { (slice(buf, 0, count), pos) }
+  if name == "" { (slice(buf, 0, count), pos) }
   else {
     let p2 = expect(tokens, skip_ws(tokens, pos + 1), TEq)
     let (init, p3) = parse_expr(tokens, skip_ws(tokens, p2))
@@ -1926,12 +1926,12 @@ fn is_empty_block(node) = {
 // surface toward Mentl idiom. The string literals below ARE the
 // detection target — drift-audit suppress is the residue form.
 fn is_foreign_keyword(name) =
-  str_eq(name, "for") ||      // drift-audit: ignore
-  str_eq(name, "while") ||    // drift-audit: ignore
-  str_eq(name, "loop") ||     // drift-audit: ignore
-  str_eq(name, "break") ||    // drift-audit: ignore
-  str_eq(name, "continue") || // drift-audit: ignore
-  str_eq(name, "return")      // drift-audit: ignore
+  name == "for" ||      // drift-audit: ignore
+  name == "while" ||    // drift-audit: ignore
+  name == "loop" ||     // drift-audit: ignore
+  name == "break" ||    // drift-audit: ignore
+  name == "continue" || // drift-audit: ignore
+  name == "return"      // drift-audit: ignore
 
 fn is_empty_block_expr(e) = match e {
   BlockExpr(stmts, _) => len(stmts) == 0,
@@ -1943,7 +1943,7 @@ fn is_empty_block_expr(e) = match e {
 fn parse_pat(ref tokens, pos) = {
   match kind_at(tokens, pos) {
     TIdent(v) => {
-      if str_eq(v, "_") { (PWild, pos + 1) }
+      if v == "_" { (PWild, pos + 1) }
       else {
         let first_code = first_char_code(v)
         if first_code >= 65 && first_code <= 90 {
@@ -2064,11 +2064,11 @@ fn first_char_code(s) = {
 fn parse_type_ty(ref tokens, pos) = match kind_at(tokens, pos) {
   TIdent(v) => {
     let base_pos = pos + 1
-    let base = if str_eq(v, "Int")        { TInt }
-               else if str_eq(v, "Float")  { TFloat }
-               else if str_eq(v, "String") { TString }
-               else if str_eq(v, "Bool")   { TName("Bool", []) }
-               else if str_eq(v, "Unit")   { TUnit }
+    let base = if v == "Int"        { TInt }
+               else if v == "Float"  { TFloat }
+               else if v == "String" { TString }
+               else if v == "Bool"   { TName("Bool", []) }
+               else if v == "Unit"   { TUnit }
                else                        { TName(v, []) }
     // Parens application — the one-application-syntax law: types
     // apply like effects apply (`Sample(44100)`) and values apply
@@ -2268,7 +2268,7 @@ fn node_to_pexpr(node) = {
   let N(body, _, _) = node
   match body {
     NExpr(VarRef(name)) =>
-      if str_eq(name, "self") { PSelf }
+      if name == "self" { PSelf }
       else { PEVar(name) },
     NExpr(LitInt(n))    => PInt(n),
     NExpr(LitFloat(f))  => PFloat(f),

@@ -497,7 +497,7 @@ fn topic_equal(a, b) with Pure = {
   match a {
     TopicIdent(n1)        =>
       match b {
-        TopicIdent(n2)      => str_eq(n1, n2),
+        TopicIdent(n2)      => n1 == n2,
         TopicHandle(_)      => false,
         TopicSpan(_)        => false,
         TopicError(_, _)    => false,
@@ -521,7 +521,7 @@ fn topic_equal(a, b) with Pure = {
       },
     TopicError(c1, s1)    =>
       match b {
-        TopicError(c2, s2)  => str_eq(c1, c2) && span_eq(s1, s2),
+        TopicError(c2, s2)  => c1 == c2 && span_eq(s1, s2),
         TopicIdent(_)       => false,
         TopicHandle(_)      => false,
         TopicSpan(_)        => false,

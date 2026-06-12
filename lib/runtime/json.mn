@@ -510,7 +510,7 @@ fn json_obj_get_loop(fields, key, i, n) with Memory = {
   else {
     let pair = list_index(fields, i)
     let (k, v) = pair
-    if str_eq(k, key) { Some(v) }
+    if k == key { Some(v) }
     else              { json_obj_get_loop(fields, key, i + 1, n) }
   }
 }

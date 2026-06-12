@@ -205,7 +205,7 @@ fn reason_chain_stable(a, b) with Pure = {
 }
 
 fn reason_eq(a, b) with Pure = match (a, b) {
-  (Inferred(s1), Inferred(s2))   => str_eq(s1, s2),
+  (Inferred(s1), Inferred(s2))   => s1 == s2,
   (Located(_, r1), Located(_, r2)) => reason_eq(r1, r2),
   (Fresh(h1), Fresh(h2))         => h1 == h2,
   _                              => false

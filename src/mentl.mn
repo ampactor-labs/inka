@@ -290,11 +290,11 @@ fn unwrap_source_span(opt) with Pure = match opt {
 /// proposal: when a body row has an effect E, look up handlers that
 /// absorb E, propose the closest match.
 fn catalog_handled_effects(handler_name) = {
-  if str_eq(handler_name, "mem_bump")    { [ENamed("Alloc")] }         // drift-audit: ignore — static HandlerCatalog table pending substrate replacement; real drift 8 on EffName+handler-name; both tracked for item 11.B EffName refactor + HandlerCatalog runtime registration
-  else if str_eq(handler_name, "temp_arena") { [ENamed("Alloc")] }     // drift-audit: ignore — same as above
-  else if str_eq(handler_name, "stdout_handler") { [ENamed("IO")] }    // drift-audit: ignore — same as above
-  else if str_eq(handler_name, "sandbox_io")    { [ENamed("IO")] }     // drift-audit: ignore — same as above
-  else if str_eq(handler_name, "sandbox_net")   { [ENamed("Network")] }
+  if handler_name == "mem_bump"    { [ENamed("Alloc")] }         // drift-audit: ignore — static HandlerCatalog table pending substrate replacement; real drift 8 on EffName+handler-name; both tracked for item 11.B EffName refactor + HandlerCatalog runtime registration
+  else if handler_name == "temp_arena" { [ENamed("Alloc")] }     // drift-audit: ignore — same as above
+  else if handler_name == "stdout_handler" { [ENamed("IO")] }    // drift-audit: ignore — same as above
+  else if handler_name == "sandbox_io"    { [ENamed("IO")] }     // drift-audit: ignore — same as above
+  else if handler_name == "sandbox_net"   { [ENamed("Network")] }
   else { [] }
 }
 
@@ -317,9 +317,9 @@ fn capabilities_for_annotation(ann) with Pure = match ann {
 /// keyed by EffName (severance candidate's name).
 fn capabilities_for_severance(name) = match name {
   ENamed(n) =>
-    if str_eq(n, "Alloc")   { [CRealTime] }                          // drift-audit: ignore — capability-for-severance table; real drift 8 (should match on EAlloc/EIO variants); tracked for item 11.B EffName refactor
-    else if str_eq(n, "IO") { [CCompileTimeEval, CSandbox] }          // drift-audit: ignore — same as above
-    else if str_eq(n, "Network") { [CSandbox] }
+    if n == "Alloc"   { [CRealTime] }                          // drift-audit: ignore — capability-for-severance table; real drift 8 (should match on EAlloc/EIO variants); tracked for item 11.B EffName refactor
+    else if n == "IO" { [CCompileTimeEval, CSandbox] }          // drift-audit: ignore — same as above
+    else if n == "Network" { [CSandbox] }
     else { [] },
   EParameterized(_, _) => []
 }

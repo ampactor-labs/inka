@@ -94,7 +94,7 @@ fn pexpr_eq_decide(ref a, ref b) with Pure = match a {
   PString(sa) => match b {
     PInt(_)     => Some(false),
     PFloat(_)   => Some(false),
-    PString(sb) => Some(str_eq(sa, sb)),
+    PString(sb) => Some(sa == sb),
     PEVar(_)    => None,
     PApp(_, _)  => None
   },

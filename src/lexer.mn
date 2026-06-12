@@ -48,26 +48,26 @@ fn is_oct_digit(b) with Pure = b >= 48 && b <= 55
 /// Keyword classification — returns `Some(TokenKind)` if `word` is a
 /// reserved keyword; `None` otherwise (caller emits `TIdent(word)`).
 fn keyword_kind(ref word) with !Mutate = {
-  if str_eq(word, "fn")       { Some(TFn) }
-  else if str_eq(word, "let")       { Some(TLet) }
-  else if str_eq(word, "if")        { Some(TIf) }
-  else if str_eq(word, "else")      { Some(TElse) }
-  else if str_eq(word, "match")     { Some(TMatch) }
-  else if str_eq(word, "type")      { Some(TType) }
-  else if str_eq(word, "effect")    { Some(TEffect) }
-  else if str_eq(word, "handle")    { Some(THandle) }
-  else if str_eq(word, "handler")   { Some(THandler) }
-  else if str_eq(word, "with")      { Some(TWith) }
-  else if str_eq(word, "resume")    { Some(TResume) }
-  else if str_eq(word, "perform")   { Some(TPerform) }
-  else if str_eq(word, "import")    { Some(TImport) }
-  else if str_eq(word, "where")     { Some(TWhere) }
-  else if str_eq(word, "own")       { Some(TOwn) }
-  else if str_eq(word, "ref")       { Some(TRef) }
-  else if str_eq(word, "capability"){ Some(TCapability) }
-  else if str_eq(word, "Pure")      { Some(TPure) }   // drift-audit: ignore — legitimate keyword str_eq at word granularity, NOT effect-name match; "Pure" is a reserved word (TPure is its TokenKind).
-  else if str_eq(word, "true")      { Some(TTrue) }
-  else if str_eq(word, "false")     { Some(TFalse) }
+  if word == "fn"       { Some(TFn) }
+  else if word == "let"       { Some(TLet) }
+  else if word == "if"        { Some(TIf) }
+  else if word == "else"      { Some(TElse) }
+  else if word == "match"     { Some(TMatch) }
+  else if word == "type"      { Some(TType) }
+  else if word == "effect"    { Some(TEffect) }
+  else if word == "handle"    { Some(THandle) }
+  else if word == "handler"   { Some(THandler) }
+  else if word == "with"      { Some(TWith) }
+  else if word == "resume"    { Some(TResume) }
+  else if word == "perform"   { Some(TPerform) }
+  else if word == "import"    { Some(TImport) }
+  else if word == "where"     { Some(TWhere) }
+  else if word == "own"       { Some(TOwn) }
+  else if word == "ref"       { Some(TRef) }
+  else if word == "capability"{ Some(TCapability) }
+  else if word == "Pure"      { Some(TPure) }   // drift-audit: ignore — legitimate keyword str_eq at word granularity, NOT effect-name match; "Pure" is a reserved word (TPure is its TokenKind).
+  else if word == "true"      { Some(TTrue) }
+  else if word == "false"     { Some(TFalse) }
   else                                    { None }
 }
 

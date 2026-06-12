@@ -184,7 +184,7 @@ fn lookup_module_in_cache(cached, target) with Pure = {
   if len(cached) == 0 { None }
   else {
     let (name, extended) = list_head(cached)
-    if str_eq(name, target) { Some(extended) }
+    if name == target { Some(extended) }
     else { lookup_module_in_cache(list_tail(cached), target) }
   }
 }
@@ -202,7 +202,7 @@ fn lookup_kai_in_cache(cached, target) with Pure = {
 fn remove_module(cached, target) with Pure = {
   filter((entry) => {
     let (name, _) = entry
-    !str_eq(name, target)
+    name != target
   }, cached)
 }
 

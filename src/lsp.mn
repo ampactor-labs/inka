@@ -132,20 +132,20 @@ fn parse_lsp_message(v) with Memory = {
 /// projected, not stored.
 
 fn classify_method(method) with Memory = {
-  if      str_eq(method, "initialize")               { LspInitialize }
-  else if str_eq(method, "initialized")              { LspInitialized }
-  else if str_eq(method, "shutdown")                 { LspShutdown }
-  else if str_eq(method, "exit")                     { LspExit }
-  else if str_eq(method, "textDocument/didOpen")     { LspTextDocDidOpen }
-  else if str_eq(method, "textDocument/didChange")   { LspTextDocDidChange }
-  else if str_eq(method, "textDocument/didSave")     { LspTextDocDidSave }
-  else if str_eq(method, "textDocument/didClose")    { LspTextDocDidClose }
-  else if str_eq(method, "textDocument/hover")       { LspTextDocHover }
-  else if str_eq(method, "textDocument/completion")  { LspTextDocCompletion }
-  else if str_eq(method, "textDocument/codeAction")  { LspTextDocCodeAction }
-  else if str_eq(method, "textDocument/diagnostic")  { LspTextDocDiagnostic }
-  else if str_eq(method, "textDocument/definition")  { LspTextDocDefinition }
-  else if str_eq(method, "textDocument/references")  { LspTextDocReferences }
+  if      method == "initialize"               { LspInitialize }
+  else if method == "initialized"              { LspInitialized }
+  else if method == "shutdown"                 { LspShutdown }
+  else if method == "exit"                     { LspExit }
+  else if method == "textDocument/didOpen"     { LspTextDocDidOpen }
+  else if method == "textDocument/didChange"   { LspTextDocDidChange }
+  else if method == "textDocument/didSave"     { LspTextDocDidSave }
+  else if method == "textDocument/didClose"    { LspTextDocDidClose }
+  else if method == "textDocument/hover"       { LspTextDocHover }
+  else if method == "textDocument/completion"  { LspTextDocCompletion }
+  else if method == "textDocument/codeAction"  { LspTextDocCodeAction }
+  else if method == "textDocument/diagnostic"  { LspTextDocDiagnostic }
+  else if method == "textDocument/definition"  { LspTextDocDefinition }
+  else if method == "textDocument/references"  { LspTextDocReferences }
   else                                               { LspUnknown(method) }
 }
 

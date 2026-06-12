@@ -307,7 +307,7 @@ fn report_each_collision(ref names, ref span) with !Mutate = {
 fn find_first_span(ref sites, ref name) with !Mutate = {
   let hits = filter((entry) => {
     let (entry_name, _) = entry
-    str_eq(entry_name, name)
+    entry_name == name
   }, sites)
   if len(hits) == 0 { span_zero() }
   else {
@@ -432,7 +432,7 @@ fn count_uses(ref name, ref node) with !Mutate = {
   let N(body, _, _) = node
   match body {
     NExpr(VarRef(n)) =>
-      if str_eq(n, name) { 1 } else { 0 },
+      if n == name { 1 } else { 0 },
     NExpr(CallExpr(f, args)) =>
       count_uses(name, f) + count_uses_list(name, args),
     NExpr(BinOpExpr(_, l, r)) =>

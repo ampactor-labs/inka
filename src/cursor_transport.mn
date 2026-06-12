@@ -387,7 +387,7 @@ fn apply_suggestion(view) with GraphRead + !Mutate = {
 
 fn show_handle_label(cursor) with Pure = {
   let Cursor(handle, _, _) = cursor
-  "handle=" |> str_concat(int_to_str(handle))
+  "handle={int_to_str(handle)}"
 }
 
 fn show_node_kind(kind) with Pure = match kind {
@@ -400,27 +400,24 @@ fn show_node_kind(kind) with Pure = match kind {
 
 fn show_proposals(props) with Pure =
   if len(props) == 0 { "(none)" }
-  else { int_to_str(len(props)) |> str_concat(" candidate(s)") }
+  else { "{int_to_str(len(props))} candidate(s)" }
 
 fn show_pipe_context(ctx) with Pure = match ctx {
   NoPipe => "(none)",
-  InsidePipe(pk) => "inside " |> str_concat(show_pipe_kind(pk)),
+  InsidePipe(pk) => "inside {show_pipe_kind(pk)}",
   StartingPipe => "starts pipe",
   EndingPipe => "ends pipe"
 }
 
 fn show_verify_count(preds) with Pure =
   if len(preds) == 0 { "no obligations" }
-  else { int_to_str(len(preds)) |> str_concat(" pending") }
+  else { "{int_to_str(len(preds))} pending" }
 
 fn show_suggestion(opt) with Pure = match opt {
   None => "(no next-step)",
   Some(suggestion) => {
     let AnnotationSuggestion(_, ann_text, unlocks, _) = suggestion
-    "add `" |> str_concat(ann_text)
-            |> str_concat("` to unlock ")
-            |> str_concat(int_to_str(len(unlocks)))
-            |> str_concat(" capability(ies)")
+    "add `{ann_text}` to unlock {int_to_str(len(unlocks))} capability(ies)"
   }
 }
 
@@ -433,7 +430,7 @@ fn format_inline(teach_opt) with Pure = match teach_opt {
   None => "",
   Some(suggestion) => {
     let AnnotationSuggestion(_, ann_text, _, _) = suggestion
-    " ⟜ " |> str_concat(ann_text)
+    " ⟜ {ann_text}"
   }
 }
 
@@ -490,15 +487,13 @@ handler patch_to_file with target_module = "" {
 }
 
 fn indent_annotation(ref text) with Memory + Alloc = {
-  "  " |> str_concat(text) |> str_concat("\n")
+  "  {text}\n"
 }
 
 fn splice_before_line(ref source, target_line, ref insert) with Memory + Alloc = {
   let n = byte_len(source)
   let pos = find_line_start(source, target_line, 1, 0, n)
-  str_slice(source, 0, pos)
-    |> str_concat(insert)
-    |> str_concat(str_slice(source, pos, n))
+  "{str_slice(source, 0, pos)}{insert}{str_slice(source, pos, n)}"
 }
 
 fn find_line_start(ref source, target, current, idx, n) with Memory = {

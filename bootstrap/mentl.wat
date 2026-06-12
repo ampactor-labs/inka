@@ -25732,7 +25732,31 @@
     (local.set $body        (i32.load offset=4 (local.get $node)))
     (local.set $frag_struct (i32.load offset=4 (local.get $body)))
     (local.set $frags       (i32.load offset=4 (local.get $frag_struct)))
-    (local.set $lo_frags    (call $lower_expr_list_compound (local.get $frags)))
+    ;; Empty literal fragments (LitString "" — the alternation edges)
+    ;; elide before lowering; mirrors the wheel's is_empty_lconst_string
+    ;; filter in lower_string_interpolation (identical elision set —
+    ;; fixpoint parity; canonical form IS the efficient form).
+    (local.set $lo_frags (call $make_list (i32.const 0)))
+    (local.set $n (call $len (local.get $frags)))
+    (local.set $i (i32.const 0))
+    (local.set $acc (i32.const 0))   ;; reused as kept-count
+    (block $filtered
+      (loop $keep
+        (br_if $filtered (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $args (call $list_index (local.get $frags) (local.get $i)))   ;; frag node
+        (local.set $body (i32.load offset=4 (local.get $args)))                  ;; node body
+        (if (i32.eqz (i32.and
+              (i32.eq (i32.load (local.get $body)) (i32.const 82))               ;; LitString
+              (i32.eqz (call $byte_len (i32.load offset=4 (local.get $body))))))
+          (then
+            (local.set $lo_frags (call $list_extend_to (local.get $lo_frags)
+              (i32.add (local.get $acc) (i32.const 1))))
+            (drop (call $list_set (local.get $lo_frags) (local.get $acc)
+              (call $lower_expr (local.get $args))))
+            (local.set $acc (i32.add (local.get $acc) (i32.const 1)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $keep)))
+    (local.set $lo_frags (call $slice (local.get $lo_frags) (i32.const 0) (local.get $acc)))
     (local.set $n (call $len (local.get $lo_frags)))
     (if (i32.eqz (local.get $n))
       (then (return (call $lexpr_make_lconst (local.get $h)

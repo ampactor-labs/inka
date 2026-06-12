@@ -1786,16 +1786,26 @@ fn is_wasi_import_op(name) with Pure = {
 // chunks zero-copy reads from source. Empty list → empty string;
 // singleton → that fragment unchanged.
 fn lower_string_interpolation(handle, lowered_fragments) = {
-  if len(lowered_fragments) == 0 {
+  // Empty literal fragments (the "" edges the parser keeps for the
+  // alternation invariant) elide before the fold — the canonical form
+  // is also the efficient form (no str_concat with "" at runtime).
+  // The seed's $lower_make_string elides IDENTICALLY (fixpoint parity).
+  let fragments = filter((f) => !is_empty_lconst_string(f), lowered_fragments)
+  if len(fragments) == 0 {
     LConst(handle, LString(""))
-  } else if len(lowered_fragments) == 1 {
-    list_head(lowered_fragments)
+  } else if len(fragments) == 1 {
+    list_head(fragments)
   } else {
-    let head = list_head(lowered_fragments)
-    let rest = list_tail(lowered_fragments)
+    let head = list_head(fragments)
+    let rest = list_tail(fragments)
     fold(rest, head, (acc, frag) =>
       LCall(handle, LGlobal(handle, "str_concat"), [acc, frag]))
   }
+}
+
+fn is_empty_lconst_string(frag) = match frag {
+  LConst(_, LString(s)) => byte_len(s) == 0,
+  _                     => false
 }
 
 // Expression list

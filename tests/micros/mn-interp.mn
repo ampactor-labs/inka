@@ -8,9 +8,12 @@ fn main(q) = {
   let multi = "a{name}b{name}c"
   let multi_ok = if multi == "awheelbwheelc" { 16 } else { 0 }
   let plain = if "no splices here" == "no splices here" { 32 } else { 0 }
-  direct + braces + multi_ok + plain
+  // leading splice — the parser's empty "" prefix fragment elides at
+  // lower time (both layers identically); content unchanged.
+  let edge = if "{name}!" == "wheel!" { 2 } else { 0 }
+  direct + braces + multi_ok + plain + edge
 }
 
-// Expected exit 57 (1 + 8 + 16 + 32): interpolation through the seed
-// builds content-equal strings; {{ }} resolve to literal braces;
-// plain strings keep the proven path.
+// Expected exit 59 (1 + 8 + 16 + 32 + 2): interpolation through the
+// seed builds content-equal strings; {{ }} resolve to literal braces;
+// empty edge fragments elide; plain strings keep the proven path.

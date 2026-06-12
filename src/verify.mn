@@ -191,8 +191,7 @@ fn not_decide(ref e) with Pure = match e {
 fn report_refinement_rejected(ref pred, ref span, ref reason) with !Mutate = {
   perform report(
     "verify", "E_RefinementRejected", "error",
-    "refinement predicate proven false at compile time: "
-      |> str_concat(show_predicate(pred)),
+    "refinement predicate proven false at compile time: {show_predicate(pred)}",
     span, "MaybeIncorrect"
   )
 }
@@ -203,8 +202,7 @@ fn report_verify_debt(debt) = {
   if len(debt) == 0 { () }
   else {
     perform report("verify", "V_Pending", "VerificationPending",
-      int_to_str(len(debt))
-        |> str_concat(" verification obligations pending"),
+      "{int_to_str(len(debt))} verification obligations pending",
       span_zero(), "MaybeIncorrect")
   }
 }
@@ -267,7 +265,7 @@ handler verify_smt with witnesses = [] {
 }
 
 fn predicate_to_smt_lib(ref pred) with Memory + Alloc = {
-  "(assert " |> str_concat(predicate_to_smt(pred)) |> str_concat(")\n(check-sat)")
+  "(assert {predicate_to_smt(pred)})\n(check-sat)"
 }
 
 fn predicate_to_smt(ref pred) with Memory + Alloc = match pred {
@@ -277,46 +275,33 @@ fn predicate_to_smt(ref pred) with Memory + Alloc = match pred {
   PLeq(a, b)      => smt_binop("<=", a, b),
   PAnd(a, b)      => smt_logop("and", a, b),
   POr(a, b)       => smt_logop("or", a, b),
-  PNot(inner)     => "(not " |> str_concat(predicate_to_smt(inner)) |> str_concat(")"),
+  PNot(inner)     => "(not {predicate_to_smt(inner)})",
   PCall(name, args) => smt_call(name, args)
 }
 
 fn smt_binop(ref op, ref a, ref b) with Memory + Alloc = {
-  "(" |> str_concat(op)
-      |> str_concat(" ")
-      |> str_concat(pexpr_to_smt(a))
-      |> str_concat(" ")
-      |> str_concat(pexpr_to_smt(b))
-      |> str_concat(")")
+  "({op} {pexpr_to_smt(a)} {pexpr_to_smt(b)})"
 }
 
 fn smt_logop(ref op, ref a, ref b) with Memory + Alloc = {
-  "(" |> str_concat(op)
-      |> str_concat(" ")
-      |> str_concat(predicate_to_smt(a))
-      |> str_concat(" ")
-      |> str_concat(predicate_to_smt(b))
-      |> str_concat(")")
+  "({op} {predicate_to_smt(a)} {predicate_to_smt(b)})"
 }
 
 fn smt_call(ref name, ref args) with Memory + Alloc = {
-  "(" |> str_concat(name)
-      |> str_concat(smt_args(args, 0, len(args)))
-      |> str_concat(")")
+  "({name}{smt_args(args, 0, len(args))})"
 }
 
 fn smt_args(ref args, i, n) with Memory + Alloc = {
   if i >= n { "" }
   else {
-    " " |> str_concat(pexpr_to_smt(list_index(args, i)))
-        |> str_concat(smt_args(args, i + 1, n))
+    " {pexpr_to_smt(list_index(args, i))}{smt_args(args, i + 1, n)}"
   }
 }
 
 fn pexpr_to_smt(ref e) with Memory + Alloc = match e {
   PInt(n)        => int_to_str(n),
   PFloat(_)      => "0.0",
-  PString(s)     => "\"" |> str_concat(s) |> str_concat("\""),
+  PString(s)     => "\"{s}\"",
   PEVar(name)    => name,
   PApp(name, args) => smt_call(name, args)
 }

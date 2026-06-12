@@ -154,6 +154,16 @@ projection closed under self-application). See [`ROADMAP.md`](ROADMAP.md)
 and `docs/specs/simulations/Hβ-first-light-empirical.md` for the
 empirically-real residue.
 
+**The Three Laws (2026-06-11).** Three rules developers had to
+remember dissolved into the substrate in one session: `~>` gained
+ONE precedence (the loosest — the handler at the foot of a chain
+governs the chain; layout is never semantics; the newline-split
+form is dead), `==` became structural (type-dispatched at emit —
+`"hello" == "hel" ++ "lo"` is true; the str_eq footgun is deleted),
+and interpolation became the canonical string-build with the seed
+parsing `"the {name} turns"` end-to-end. Each law made the spec
+SHORTER — the discipline corpus shrinks as the substrate strengthens.
+
 **Phase μ — Mentl active-surface composition.** `src/cursor.mn`
 lands the `Cursor` effect + `cursor_default` handler: the eight
 tentacles are eight aspects of one read at a position. Five peer
@@ -165,6 +175,35 @@ sealed kernel; nothing extends it.
 shared `graph_handler` opens with `Hμ.collab.shared-graph-handler`
 — the walkthrough names the substrate; collab is what the kernel
 delivers when shared.
+
+---
+
+## Standing on the frontier — honestly
+
+Every adjacent project does one thing at world class. Mentl's claim
+is not that each piece is unprecedented — it is that **no shipped
+system composes them into one kernel**, and that two pieces are
+genuinely ahead of anything shipped (verified against the 2026
+research frontier):
+
+| Project | What it does best | What the kernel absorbs |
+|---|---|---|
+| **Rust** | ownership with zero runtime cost — but everyone must live at full annotation | ownership is an EFFECT on a continuous gradient: annotate per-function, from arena-handled to statically-placed |
+| **Koka** | row-polymorphic effects + evidence-passing compilation | the three-tier handler elimination builds on Koka's results; Mentl adds typed resume discipline INFERRED from arm bodies |
+| **Flix** | Boolean effect algebra with negation, shipped | Mentl's row algebra is the same family — composed with ownership and refinement in one inference |
+| **Effekt / OCaml 5** | effect handlers in production runtimes | both chose one-shot to dodge the linearity trap; Mentl's graph carries proven resume cardinality + ownership marks, making the unsound case statically expressible |
+| **Unison** | content-addressed code-as-database | Mentl's graph carries types, effects, ownership, spans, AND provenance — refactoring re-proves, not just re-points |
+| **Zig** | self-hosted bootstrap rigor (wasm2c) | the wat-fixpoint seed (`mentl2.wat == mentl3.wat`) is the same family of rigor, byte-identical |
+| **Hazel** | typed holes + live programming research | productive-under-error is kernel-native here, not an environment feature |
+
+**Genuinely ahead of anything shipped** (no known counterpart):
+the **continuous annotation gradient with compiler narration** —
+each annotation monotonically converts a runtime check into a
+compile-time capability, and the compiler TELLS you the exchange
+rate — and **graph+Reason proof-carrying transformation** — every
+fact knows why it holds, so every transformation can re-prove
+itself. These two are the medium's destiny; everything else is the
+floor it stands on.
 
 ---
 

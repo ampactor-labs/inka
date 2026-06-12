@@ -225,8 +225,8 @@ fn pre_register_stmt(ref node) = {
 
 fn pre_register_fn_sig(name, params, handle, span: ValidSpan) = {
   let param_handles = mint_param_placeholders(params, name)
-  let ret_handle = perform mint(FnReturn(name, Inferred("return of '" |> str_concat(name) |> str_concat("'")))) // drift-audit: ignore — |> inside string-build arg, not a pipe verb
-  let row_handle = perform graph_fresh_row(Inferred("effects of '" |> str_concat(name) |> str_concat("'")))
+  let ret_handle = perform mint(FnReturn(name, Inferred("return of '{name}'"))) // drift-audit: ignore — Reason string, not a control keyword
+  let row_handle = perform graph_fresh_row(Inferred("effects of '{name}'"))
   let fn_ty = TFun(
     build_param_types(params, param_handles),
     TVar(ret_handle),
@@ -313,8 +313,8 @@ fn infer_fn(name, params, body_node, handle, span: ValidSpan) = {
   perform env_scope_enter()
 
   let param_handles = mint_params(params, name)
-  let ret_handle = perform mint(FnReturn(name, Inferred("return of '" |> str_concat(name) |> str_concat("'")))) // drift-audit: ignore — |> inside string-build arg, not a pipe verb
-  let row_handle = perform graph_fresh_row(Inferred("effects of '" |> str_concat(name) |> str_concat("'")))
+  let ret_handle = perform mint(FnReturn(name, Inferred("return of '{name}'"))) // drift-audit: ignore — Reason string, not a control keyword
+  let row_handle = perform graph_fresh_row(Inferred("effects of '{name}'"))
 
   let fn_ty = TFun(
     build_param_types(params, param_handles),
@@ -382,13 +382,7 @@ fn infer_fn(name, params, body_node, handle, span: ValidSpan) = {
           if row_subsumes(declared_row, body_row) { () }
           else {
             perform report("infer", "T_OverDeclared", "warning",
-              "function '"
-                |> str_concat(name)
-                |> str_concat("' declares ")
-                |> str_concat(show_effrow(declared_row))
-                |> str_concat(" but body only uses ")
-                |> str_concat(show_effrow(body_row))
-                |> str_concat(" — tighten the signature to unlock capabilities"),
+              "function '{name}' declares {show_effrow(declared_row)} but body only uses {show_effrow(body_row)} — tighten the signature to unlock capabilities",
               span, "MachineApplicable")
           }
           perform graph_bind_row(row_handle, declared_row,
@@ -396,17 +390,9 @@ fn infer_fn(name, params, body_node, handle, span: ValidSpan) = {
         } else {
           let code = if has_pure { "E_PurityViolated" } else { "E_EffectMismatch" }
           let summary = if has_pure {
-            "function '"
-              |> str_concat(name)
-              |> str_concat("' declares Pure but body performs ")
-              |> str_concat(show_effrow(body_row))
+            "function '{name}' declares Pure but body performs {show_effrow(body_row)}"
           } else {
-            "function '"
-              |> str_concat(name)
-              |> str_concat("' declares ")
-              |> str_concat(show_effrow(declared_row))
-              |> str_concat(" but body inferred ")
-              |> str_concat(show_effrow(body_row))
+            "function '{name}' declares {show_effrow(declared_row)} but body inferred {show_effrow(body_row)}"
           }
           perform report("infer", code, "error", summary, span, "MachineApplicable")
         }
@@ -486,7 +472,7 @@ fn expand_capabilities(effs) = {
           match kind {
             CapabilityScheme(cap_effs) => {
               if negated {
-                perform report("infer", "E_CannotNegateCapability", "error", "cannot negate capability bundle " |> str_concat(s), span_zero(), "MachineApplicable")
+                perform report("infer", "E_CannotNegateCapability", "error", "cannot negate capability bundle {s}", span_zero(), "MachineApplicable")
                 cap_effs
               } else { cap_effs }
             },
@@ -700,7 +686,7 @@ fn infer_expr(ref node) = {
       match perform env_lookup(type_name) {
         None =>
           perform report("infer", "E_MissingVariable", "MissingVariable",
-            "record type: " |> str_concat(type_name),
+            "record type: {type_name}",
             span, "MaybeIncorrect"),
         Some(entry) => {
           let (_, _, kind) = entry
@@ -712,7 +698,7 @@ fn infer_expr(ref node) = {
             },
             _ =>
               perform report("infer", "E_NotARecordType", "TypeError",
-                type_name |> str_concat(" is not a record type"),
+                "{type_name} is not a record type",
                 span, "MaybeIncorrect")
           }
         }
@@ -783,11 +769,7 @@ fn infer_expr(ref node) = {
         if row_subsumes(arm_row, declared_row) { () }
         else {
           perform report("infer", "E_HandlerUninstallable", "error",
-            "handler arms require effects not admitted by the enclosing declaration ("
-              |> str_concat(show_effrow(arm_row))
-              |> str_concat(" ⊄ ")
-              |> str_concat(show_effrow(declared_row))
-              |> str_concat(")"),
+            "handler arms require effects not admitted by the enclosing declaration ({show_effrow(arm_row)} ⊄ {show_effrow(declared_row)})",
             span, "MachineApplicable")
         }
       }
@@ -837,7 +819,7 @@ fn infer_expr(ref node) = {
       let N(rbody, _, _) = rec
       match rbody {
         NExpr(VarRef(left_name)) => {
-          let qualified = left_name |> str_concat(".") |> str_concat(field)
+          let qualified = "{left_name}.{field}"
           match perform env_lookup(qualified) {
             Some(_) => infer_var_ref(qualified, handle, span),
             None    => infer_field_access_record(rec, field, handle, span)
@@ -981,7 +963,7 @@ fn infer_perform(op_name, args, handle, span: ValidSpan) = {
   match perform env_lookup(op_name) {
     None => {
       perform report("infer", "E_MissingVariable", "MissingVariable",
-        "effect op: " |> str_concat(op_name),
+        "effect op: {op_name}",
         span, "MaybeIncorrect")
       perform graph_bind(handle, TVar(handle), Located(span, MissingVar(op_name)))
     },
@@ -1010,10 +992,7 @@ fn unify_args_to_params(args, params, span: ValidSpan) = {
     // Arity mismatch: one list exhausted before the other.
     perform report(
       "infer", "E_TypeMismatch", "error",
-      "arity mismatch in function call: expected "
-        |> str_concat(int_to_str(len(params)))
-        |> str_concat(" argument(s) but got ")
-        |> str_concat(int_to_str(len(args))),
+      "arity mismatch in function call: expected {int_to_str(len(params))} argument(s) but got {int_to_str(len(args))}",
       span, "MachineApplicable")
   } else {
     let N(_, _, ah) = list_head(args)
@@ -1348,10 +1327,7 @@ fn unify_type_lists(as_list, bs_list, span: ValidSpan, reason) = {
     // Arity mismatch: tuple/list lengths differ.
     perform report(
       "infer", "E_TypeMismatch", "error",
-      "type list arity mismatch: "
-        |> str_concat(int_to_str(len(as_list)))
-        |> str_concat(" vs ")
-        |> str_concat(int_to_str(len(bs_list))),
+      "type list arity mismatch: {int_to_str(len(as_list))} vs {int_to_str(len(bs_list))}",
       span, "MachineApplicable")
   } else {
     unify_types(list_head(as_list), list_head(bs_list), span, reason)
@@ -1552,19 +1528,13 @@ fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, 
     // Provided has extras
     let (extra, _) = list_index(provided, j)
     perform report("infer", "E_RecordFieldExtra", "TypeError",
-      "record literal has unknown field '"
-        |> str_concat(extra)
-        |> str_concat("' for type ") // drift-audit: ignore — |> in string-build chain
-        |> str_concat(type_name),
+      "record literal has unknown field '{extra}' for type {type_name}", // drift-audit: ignore — diagnostic message string, not a control keyword
       span, "MaybeIncorrect")
     check_nominal_record_loop(declared, provided, type_name, span, i, j + 1, ni, nj)
   } else if j >= nj {
     let (missing, _) = list_index(declared, i)
     perform report("infer", "E_RecordFieldMissing", "TypeError",
-      "record literal missing field '"
-        |> str_concat(missing)
-        |> str_concat("' for type ") // drift-audit: ignore — |> in string-build chain
-        |> str_concat(type_name),
+      "record literal missing field '{missing}' for type {type_name}", // drift-audit: ignore — diagnostic message string, not a control keyword
       span, "MaybeIncorrect")
     check_nominal_record_loop(declared, provided, type_name, span, i + 1, j, ni, nj)
   } else {
@@ -1580,18 +1550,12 @@ fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, 
       check_nominal_record_loop(declared, provided, type_name, span, i + 1, j + 1, ni, nj)
     } else if str_lt(dn, pn) {
       perform report("infer", "E_RecordFieldMissing", "TypeError",
-        "record literal missing field '"
-          |> str_concat(dn)
-          |> str_concat("' for type ") // drift-audit: ignore — |> in string-build chain
-          |> str_concat(type_name),
+        "record literal missing field '{dn}' for type {type_name}", // drift-audit: ignore — diagnostic message string, not a control keyword
         span, "MaybeIncorrect")
       check_nominal_record_loop(declared, provided, type_name, span, i + 1, j, ni, nj)
     } else {
       perform report("infer", "E_RecordFieldExtra", "TypeError",
-        "record literal has unknown field '"
-          |> str_concat(pn)
-          |> str_concat("' for type ") // drift-audit: ignore — |> in string-build chain
-          |> str_concat(type_name),
+        "record literal has unknown field '{pn}' for type {type_name}", // drift-audit: ignore — diagnostic message string, not a control keyword
         span, "MaybeIncorrect")
       check_nominal_record_loop(declared, provided, type_name, span, i, j + 1, ni, nj)
     }
@@ -1681,19 +1645,13 @@ fn param_types_loop(params, i, n, own acc) = {
 
 fn arity_mismatch(la, lb, span: ValidSpan) = {
   perform report("infer", "E_TypeMismatch", "TypeMismatch",
-    "function arity mismatch: "
-      |> str_concat(int_to_str(la))
-      |> str_concat(" param(s) vs ")
-      |> str_concat(int_to_str(lb))
-      |> str_concat(" param(s)"),
+    "function arity mismatch: {int_to_str(la)} param(s) vs {int_to_str(lb)} param(s)",
     span, "MachineApplicable")
 }
 
 fn type_mismatch(ref a, ref b, span: ValidSpan, reason) = {
   perform report("infer", "E_TypeMismatch", "TypeMismatch",
-    show_type(a)
-      |> str_concat(" vs ")
-      |> str_concat(show_type(b)),
+    "{show_type(a)} vs {show_type(b)}",
     span, "MachineApplicable")
 }
 
@@ -1763,7 +1721,7 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
     match perform env_lookup(name) {
       None =>
         perform report("infer", "E_MissingVariable", "MissingVariable",
-          "constructor: " |> str_concat(name),
+          "constructor: {name}",
           span, "MaybeIncorrect"),
       Some(entry) => {
         // ConstructorScheme bindings carry one of two ty shapes:
@@ -1838,7 +1796,7 @@ fn alt_binder_ty(ref n, span: ValidSpan) = match perform env_lookup(n) {
     // diagnostic rather than fabricating a type.
     perform report("infer", "E_PatternAlternationBindingMismatch",
       "PatternAlternationBindingMismatch",
-      "alternation binder never bound: " |> str_concat(n),
+      "alternation binder never bound: {n}",
       span, "MaybeIncorrect")
     TVar(perform mint(Located(span, Inferred("alternation binder lost"))))
   }
@@ -1968,11 +1926,7 @@ fn infer_match_arms(arms, scrut, result_h, span: ValidSpan) = {
   let has_wild = arms_have_wildcard(arms)
   if total > 0 && len(covered) < total && !has_wild {
     perform report("infer", "E_PatternInexhaustive", "PatternInexhaustive",
-      "match misses "
-        |> str_concat(int_to_str(total - len(covered)))
-        |> str_concat(" of ")
-        |> str_concat(int_to_str(total))
-        |> str_concat(" variants — add the missing arms or a wildcard"),
+      "match misses {int_to_str(total - len(covered))} of {int_to_str(total)} variants — add the missing arms or a wildcard",
       span, "MachineApplicable")
   }
 }
@@ -2078,7 +2032,7 @@ fn infer_one_handler_arm(arm, result_h) = {
     },
     None => {
       perform report("infer", "E_MissingVariable", "MissingVariable",
-        "handler arm op: " |> str_concat(arm.op_name),
+        "handler arm op: {arm.op_name}",
         arm_span, "MaybeIncorrect")
       TVar(perform mint(Inferred("undeclared op result")))
     }
@@ -2282,13 +2236,13 @@ fn find_mapping(mapping, id) = {
 
 fn mint_param_placeholders(params, owner_name) = map((indexed) => {
   let (idx, _) = indexed
-  perform mint(FnParam(owner_name, idx, Inferred("param of '" |> str_concat(owner_name) |> str_concat("'"))))
+  perform mint(FnParam(owner_name, idx, Inferred("param of '{owner_name}'")))
 }, enumerate(params))
 
 fn mint_params(params, owner_name) = map((indexed) => {
   let (idx, p) = indexed
   let TParam(name, _, _, _) = p
-  let h = perform mint(FnParam(owner_name, idx, Inferred("param of '" |> str_concat(owner_name) |> str_concat("'"))))
+  let h = perform mint(FnParam(owner_name, idx, Inferred("param of '{owner_name}'")))
   perform env_extend(name, Forall([], TVar(h)), Declared(name), FnScheme)
   h
 }, enumerate(params))
@@ -2438,7 +2392,7 @@ fn is_record_ty(ty) with Pure = match ty {
 
 fn build_ctor_params(field_types, base_idx) = map((indexed) => {
   let (i, ty) = indexed
-  TParam("_" |> str_concat(int_to_str(base_idx + i)), ty, Unmarked, Unmarked)
+  TParam("_{int_to_str(base_idx + i)}", ty, Unmarked, Unmarked)
 }, enumerate(field_types))
 
 fn register_effect_ops(effect_name, ops) = {
@@ -2514,7 +2468,7 @@ fn register_handler(hname, ename, config, state, arms) = {
   // state fields bind to their init expressions' inferred types — the
   // graph already knows them, fresh vars would discard that.
   let state_binds = infer_handler_state_inits(state)
-  let s_h = perform mint(Inferred("handler result of '" |> str_concat(hname) |> str_concat("'")))   // drift-audit: ignore — |> inside string-build arg, not a pipe verb
+  let s_h = perform mint(Inferred("handler result of '{hname}'"))
   for_each((arm) => {
     perform env_scope_enter()
     bind_handler_config_params(config_tparams, hname)
@@ -3051,7 +3005,7 @@ fn node_handle(node) = {
 fn mint_handler_config_tparams(config, hname, base_idx) = map((indexed) => {
   let (i, name) = indexed
   let idx = base_idx + i
-  let h = perform mint(FnParam(hname, idx, Inferred("config-param of '" |> str_concat(hname) |> str_concat("'"))))   // drift-audit: ignore — |> inside string-build arg, not a pipe verb
+  let h = perform mint(FnParam(hname, idx, Inferred("config-param of '{hname}'")))
   TParam(name, TVar(h), Unmarked, Unmarked)
 }, enumerate(config))
 
@@ -3100,7 +3054,7 @@ fn unify_string_fragments(fragments, span: ValidSpan) = {
 /// handler-value identity arrives with evidence reification; the
 /// handled-name set is the marker H1.4 preserves as a fallback.
 fn handler_stack_tag(handled_names) = {
-  "handle:" |> str_concat(show_list(handled_names, show_eff_name, "|"))
+  "handle:{show_list(handled_names, show_eff_name, "|")}"
 }
 
 fn collect_handled_effects(arms) = {

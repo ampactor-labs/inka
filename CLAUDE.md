@@ -9,7 +9,7 @@
 > - `docs/specs/00–11-*.md` — per-module declarative contracts
 > - `docs/specs/simulations/` — per-handle walkthroughs (H*.md cascade; MV/MSR/TH/DM/QA Phase II); `IE-mentl-edit.md` + `F1-mentl-doc.md` + `EH-entry-handlers.md` + `Hμ-cursor.md` are the developer-surface load-bearing walkthroughs
 > - `docs/traces/a-day.md` — integration trace
-> - `ROADMAP.md` — live sequencing (`docs/PLAN.md` is a shim)
+> - `ROADMAP.md` — live sequencing
 > - `~/.claude/plans/noble-greeting-dijkstra.md` — **the master plan to final form** (stages 0–9: first-light keystone → … → Phase ν becoming; the thesis + execution in one durable file; supersedes deep-toasting-bachman)
 > - `MEMORY.md` index + `protocol_*.md` files at `~/.claude/projects/-home-suds-Projects-mentl/memory/` — discipline crystallizations; **`protocol_developer_experience_vision.md`** crystallizes the day-in-the-medium throughline (read alongside CLAUDE+MEMORY at session start; cite when proposing surface decisions)
 > - `tools/drift-audit.sh` — PostToolUse drift detector

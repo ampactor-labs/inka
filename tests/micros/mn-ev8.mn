@@ -1,0 +1,28 @@
+// Resume-with-state SNAPSHOT semantics: the resume value reads the
+// PRE-update state; the writeback commits after. Pre-snapshot
+// lowering emitted the slot stores before the value evaluated — the
+// writeback raced the value (ev8d, the fresh_ph rung's root cause).
+//
+//   mint #1: ctr=50 -> resume(50 + 7) = 57, then ctr -> 51
+//   mint #2: ctr=51 -> resume(51 + 7) = 58, then ctr -> 52
+//   main:    57 + 58 - 58 = 57
+//
+// Failure modes are distinct exits: snapshot broken (value reads NEW
+// ctr) -> 58+59-58 = 59; commit broken (update never lands) ->
+// 57+57-58 = 56. The first perform sits two frames below the staged
+// expression (the m2 parse-fn shape).
+effect Mint { mint(n: Int) -> Int }
+
+handler counter with ctr = 50 {
+  mint(n) => resume(ctr + n) with ctr = ctr + 1
+}
+
+fn deep(a)  = perform mint(a)
+fn stage(q) = deep(7) + perform mint(7) - 58
+
+fn main(q) = {
+  stage(q)
+    ~> counter
+}
+
+// Expected exit 57.

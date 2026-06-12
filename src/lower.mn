@@ -793,19 +793,18 @@ fn lower_expr_body(e, handle, span) = match e {
   },
 
   ResumeExpr(val, state_updates) =>
-    // Hβ.first-light.resume-with-state-mutation per SUBSTRATE.md L660-694:
-    // each (field, value) update lowers to LStateSlotStore at the field's
-    // source-order slot offset; the sequence of stores precedes the
-    // LReturn, mutating the handler state record across resume calls.
+    // Hβ.first-light.resume-with-state-mutation per SUBSTRATE.md L660-694,
+    // SNAPSHOT semantics: the resume value AND every update RHS read the
+    // PRE-update state. `resume(ctr + n) with ctr = ctr + 1` returns the
+    // OLD ctr + n. lower_resume_snapshot evaluates all of them into
+    // scratch locals in source order BEFORE any slot store commits.
     // current_state_fields() returns the enclosing arm's state-fields
-    // list (or [] outside arm context); resolve_state_slot_offset finds
-    // the field's slot or -1 (not found, store skipped).
+    // list (or [] outside arm context).
     if len(state_updates) == 0 {
       LReturn(handle, lower_expr(val))
     } else {
       let fields = perform current_state_fields()
-      let stores = lower_state_slot_stores(handle, state_updates, fields)
-      LBlock(handle, list_concat(stores, [LReturn(handle, lower_expr(val))]))
+      lower_resume_snapshot(handle, val, state_updates, fields)
     },
 
   FieldExpr(rec, field) => {
@@ -1418,18 +1417,36 @@ fn bind_names_as_locals(names) = {
   for_each((name) => perform ls_bind_local(name, 0), names)
 }
 
-/// Lower the state_updates list of a ResumeExpr to a sequence of
-/// LStateSlotStore expressions. Each update's slot offset comes from
-/// the field's source-order position in the enclosing arm's state-
-/// fields (resolved via the ArmStateContext handler). Updates whose
-/// field name is not in scope (mismatched arm body, no enclosing
-/// arm, etc.) lower to LStateSlotStore(handle, -1, value) — emit
-/// time silently skips negative offsets per
-/// protocol_resume_state_mutation_substrate.md productive-under-error.
-fn lower_state_slot_stores(handle, updates, fields) = map((upd) => {
-  let offset = resolve_state_slot_offset(upd.name, fields)
-  LStateSlotStore(handle, offset, lower_expr(upd.init))
-}, updates)
+/// Lower a ResumeExpr's value + state updates with SNAPSHOT semantics:
+/// the resume value and every update RHS evaluate against the arm's
+/// PRE-update state, in source order, into per-site scratch locals;
+/// only then do the slot stores commit, and the saved value returns.
+/// Without the snapshot, `resume(ctr + n) with ctr = ctr + 1` returned
+/// the NEW ctr + n — the writeback raced the value (ev8d, 58-not-57).
+/// Slot offsets come from the field's source-order position in the
+/// enclosing arm's state-fields (resolved via the ArmStateContext
+/// handler). Updates whose field name is not in scope lower to
+/// LStateSlotStore(handle, -1, value) — emit time skips negative
+/// offsets per protocol_resume_state_mutation_substrate.md
+/// productive-under-error.
+fn lower_resume_snapshot(handle, val, updates, fields) = {
+  let val_name = "__resume_val_{int_to_str(handle)}"
+  let val_let = LLet(handle, val_name, lower_expr(val))
+  let lets = map((pair) => {
+    let (i, upd) = pair
+    LLet(handle, "__resume_upd_{int_to_str(i)}_{int_to_str(handle)}", lower_expr(upd.init))
+  }, enumerate(updates))
+  let stores = map((pair) => {
+    let (i, upd) = pair
+    LStateSlotStore(handle, resolve_state_slot_offset(upd.name, fields),
+                    LLocal(handle, "__resume_upd_{int_to_str(i)}_{int_to_str(handle)}"))
+  }, enumerate(updates))
+  LBlock(handle,
+    [val_let]
+      ++ lets
+      ++ stores
+      ++ [LReturn(handle, LLocal(handle, val_name))])  // drift-audit: ignore — one-shot stmt-list concat, no loop
+}
 
 /// Resolve a field name to its byte offset in the handler state
 /// record. `fields` is the slot-order NAME list — config ++ state in

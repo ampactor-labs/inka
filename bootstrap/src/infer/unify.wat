@@ -313,17 +313,26 @@
                     (call $row_handle (local.get $b)))
           (then (return)))))
     ;; b-first: in the call shape b is the freshly-minted expected row;
-    ;; binding the FRESH var to the pre-existing truth (b := a's row)
-    ;; keeps the callsite var chasing through the callee — it late-binds
-    ;; when the callee's row closes, and the row-fixpoint's edges stay
-    ;; live for back-edges (mutual recursion). a-first bound the CALLEE
-    ;; var to the callsite's fresh one, orphaning every edge.
+    ;; binding the FRESH var to the pre-existing truth keeps the callsite
+    ;; var chasing through the callee — it late-binds when the callee's
+    ;; row closes, and the row-fixpoint's edges stay live for back-edges
+    ;; (mutual recursion). a-first bound the CALLEE var to the callsite's
+    ;; fresh one, orphaning every edge.
+    ;;
+    ;; Bind to the other side's WRAPPER VALUE, never lookup_row_for's
+    ;; resolution: resolving here takes a SNAPSHOT of the callee row
+    ;; mid-walk, and the post-walk fixpoint's growth (mutual recursion,
+    ;; define-after-use) never reaches the copy — the wheel's frontend
+    ;; row froze at {Alloc, Memory} while parse_program's grew to 5
+    ;; (fresh_ph evidence garbage, 2026-06-12). $lookup_row_for resolves
+    ;; through EfOpen wrappers AT READ TIME (depth-64, cycle-honest), so
+    ;; the binding stays a live link into the callee's row var.
     (if (call $row_bindable_open (local.get $b))
       (then (call $graph_bind_row (call $row_handle (local.get $b))
-              (call $lookup_row_for (local.get $a)) (local.get $reason)) (return)))
+              (local.get $a) (local.get $reason)) (return)))
     (if (call $row_bindable_open (local.get $a))
       (then (call $graph_bind_row (call $row_handle (local.get $a))
-              (call $lookup_row_for (local.get $b)) (local.get $reason)) (return))))
+              (local.get $b) (local.get $reason)) (return))))
 
   (func $unify_types (param $a i32) (param $b i32)
                       (param $span i32) (param $reason i32)

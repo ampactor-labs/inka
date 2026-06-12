@@ -75,6 +75,7 @@ fn compile(entry_module) = {
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
+    ~> mutate_sink
     ~> parallel_compose
     ~> wasi_threads
     ~> diagnostics_handler
@@ -110,6 +111,7 @@ fn compile_stdin() = {
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
+    ~> mutate_sink
     ~> parallel_compose
     ~> wasi_threads
     ~> diagnostics_handler
@@ -122,6 +124,7 @@ fn check(entry_module) = {
     ~> verify_ledger
     ~> env_handler
     ~> graph_handler
+    ~> mutate_sink
     ~> parallel_compose
     ~> wasi_threads
     ~> diagnostics_handler
@@ -148,6 +151,7 @@ fn compile_source(source) = {
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
+    ~> mutate_sink
     ~> parallel_compose
     ~> wasi_threads
     ~> diagnostics_handler
@@ -162,6 +166,7 @@ fn check_source(source) = {
     ~> verify_ledger
     ~> env_handler
     ~> graph_handler
+    ~> mutate_sink
     ~> parallel_compose
     ~> wasi_threads
     ~> diagnostics_handler
@@ -181,6 +186,7 @@ fn query(source, question) = {
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
+    ~> mutate_sink
     ~> parallel_compose
     ~> wasi_threads
     ~> diagnostics_handler
@@ -198,6 +204,7 @@ fn teach(source) = {
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
+    ~> mutate_sink
     ~> parallel_compose
     ~> wasi_threads
     ~> diagnostics_handler
@@ -215,6 +222,7 @@ fn audit(source) = {
     ~> lookup_ty_graph
     ~> env_handler
     ~> graph_handler
+    ~> mutate_sink
     ~> parallel_compose
     ~> wasi_threads
     ~> diagnostics_handler

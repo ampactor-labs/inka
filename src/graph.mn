@@ -263,6 +263,17 @@ handler graph_handler
   }
 }
 
+/// The Mutate effect's no-subscriber floor. graph_handler's write arms
+/// perform graph_mutated at every outermost commit; subscribers are a
+/// handler-swap surface (cached_check_with_oracle invalidates IC caches,
+/// MV-LSP.push streams diagnostics). One-shot compile paths have no
+/// subscriber — this sink acknowledges the event and resumes. Installed
+/// OUTSIDE graph_handler in every chain that has no live subscriber;
+/// the IC loop swaps it for oracle's invalidation arm.
+handler mutate_sink {
+  graph_mutated(_epoch, _mutation) => resume()
+}
+
 // Pure graph operations — the mechanism
 // Internal machinery the handler delegates to. All pure; all
 // deterministic; no effects.

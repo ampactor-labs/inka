@@ -9576,7 +9576,6 @@
                   (call $reason_make_inferred (i32.const 3984)))   ;; fn effect row
                 (local.set $changed (i32.const 1))))
             (br $each)))
-        (call $eprint_string (call $int_to_str (i32.add (i32.const 760000000) (local.get $changed))))
         (local.set $iter (i32.add (local.get $iter) (i32.const 1)))
         (br_if $stable (i32.eqz (local.get $changed)))
         (if (i32.ge_u (local.get $iter) (i32.const 64)) (then (unreachable)))
@@ -13154,17 +13153,26 @@
                     (call $row_handle (local.get $b)))
           (then (return)))))
     ;; b-first: in the call shape b is the freshly-minted expected row;
-    ;; binding the FRESH var to the pre-existing truth (b := a's row)
-    ;; keeps the callsite var chasing through the callee — it late-binds
-    ;; when the callee's row closes, and the row-fixpoint's edges stay
-    ;; live for back-edges (mutual recursion). a-first bound the CALLEE
-    ;; var to the callsite's fresh one, orphaning every edge.
+    ;; binding the FRESH var to the pre-existing truth keeps the callsite
+    ;; var chasing through the callee — it late-binds when the callee's
+    ;; row closes, and the row-fixpoint's edges stay live for back-edges
+    ;; (mutual recursion). a-first bound the CALLEE var to the callsite's
+    ;; fresh one, orphaning every edge.
+    ;;
+    ;; Bind to the other side's WRAPPER VALUE, never lookup_row_for's
+    ;; resolution: resolving here takes a SNAPSHOT of the callee row
+    ;; mid-walk, and the post-walk fixpoint's growth (mutual recursion,
+    ;; define-after-use) never reaches the copy — the wheel's frontend
+    ;; row froze at {Alloc, Memory} while parse_program's grew to 5
+    ;; (fresh_ph evidence garbage, 2026-06-12). $lookup_row_for resolves
+    ;; through EfOpen wrappers AT READ TIME (depth-64, cycle-honest), so
+    ;; the binding stays a live link into the callee's row var.
     (if (call $row_bindable_open (local.get $b))
       (then (call $graph_bind_row (call $row_handle (local.get $b))
-              (call $lookup_row_for (local.get $a)) (local.get $reason)) (return)))
+              (local.get $a) (local.get $reason)) (return)))
     (if (call $row_bindable_open (local.get $a))
       (then (call $graph_bind_row (call $row_handle (local.get $a))
-              (call $lookup_row_for (local.get $b)) (local.get $reason)) (return))))
+              (local.get $b) (local.get $reason)) (return))))
 
   (func $unify_types (param $a i32) (param $b i32)
                       (param $span i32) (param $reason i32)
@@ -23166,6 +23174,11 @@
   (data (i32.const 6496) "\06\00\00\00Memory")
   (data (i32.const 6512) "\05\00\00\00Alloc")
   (data (i32.const 6528) "\04\00\00\00WASI")
+  ;; $lower_resume snapshot scratch-name fragments (wheel parity:
+  ;; lower_resume_snapshot mints "__resume_val_<h>" / "__resume_upd_<i>_<h>").
+  (data (i32.const 6576) "\0d\00\00\00__resume_val_")
+  (data (i32.const 6596) "\0d\00\00\00__resume_upd_")
+  (data (i32.const 6616) "\01\00\00\00_")
   (func $row_dispatched_names (param $names i32) (result i32)
     (local $n i32) (local $i i32) (local $name i32)
     (local $buf i32) (local $count i32)
@@ -23685,46 +23698,56 @@
           (local.get $lo_args)))))
 
   ;; ─── $lower_resume — ResumeExpr arm (parser tag 95) ────────────────
-  ;; Per src/lower.mn:445-448 + Lock #6. ResumeExpr is "structurally a
-  ;; return from the handler arm" per the wheel comment. Seed emits
-  ;; LReturn(handle, lower_expr(val)).
+  ;; Mirror of the wheel's ResumeExpr arm + lower_resume_snapshot
+  ;; (src/lower.mn). AST layout: [tag=95][val_ptr][state_updates_ptr].
   ;;
-  ;; AST navigation: $mk_ResumeExpr does NOT yet exist in parser_infra.wat
-  ;; (named follow-up Hβ.lower.resume-harness covers parser-side support).
-  ;; Layout assumption: [tag=95][val_ptr][state_updates_ptr]. Lower
-  ;; IGNORES state_updates per wheel underscore-pattern. State-machine
-  ;; threading at handler-elimination is named follow-up
-  ;; Hβ.lower.resume-state-updates-threading.
+  ;; SNAPSHOT semantics: the resume value AND every update RHS read the
+  ;; PRE-update state. All of them evaluate into scratch locals in
+  ;; source order BEFORE any slot store commits; the saved value
+  ;; returns. Without the snapshot, `resume(ctr + n) with ctr = ctr+1`
+  ;; returned the NEW ctr + n (ev8d micro: 58-not-57) — the writeback
+  ;; raced the value. Slot offsets resolved from the active arm's
+  ;; state-fields (source-order canonical per
+  ;; protocol_handler_is_state_is_closure_is_evidence.md); negative
+  ;; offset (name not in fields) is productive-under-error; emit skips.
+  ;; Empty state_updates → plain LReturn (Lock #6 behavior).
+  ;;
+  ;; Non-empty layout, stmts list of 2n+2 (identical to the wheel for
+  ;; node-structure fixpoint parity):
+  ;;   [0]      LLet("__resume_val_<h>", lo_val)
+  ;;   [1+i]    LLet("__resume_upd_<i>_<h>", lower(upd_init_i))
+  ;;   [1+n+i]  LStateSlotStore(off_i, LLocal("__resume_upd_<i>_<h>"))
+  ;;   [2n+1]   LReturn(LLocal("__resume_val_<h>"))
   (func $lower_resume (export "lower_resume") (param $node i32) (result i32)
     (local $h i32) (local $body i32) (local $resume_struct i32)
     (local $val_node i32) (local $lo_val i32) (local $state_updates i32)
     (local $n i32) (local $i i32) (local $upd i32)
     (local $upd_name i32) (local $upd_init i32) (local $upd_lo i32)
-    (local $offset i32) (local $store i32)
+    (local $offset i32)
     (local $fields i32) (local $stmts i32)
+    (local $val_name i32) (local $scratch_name i32)
     (local.set $h              (call $walk_expr_node_handle (local.get $node)))
     (local.set $body           (i32.load offset=4 (local.get $node)))
     (local.set $resume_struct  (i32.load offset=4 (local.get $body)))
     (local.set $val_node       (i32.load offset=4 (local.get $resume_struct)))
     (local.set $state_updates  (i32.load offset=8 (local.get $resume_struct)))
     (local.set $lo_val         (call $lower_expr (local.get $val_node)))
-    ;; Hβ.seed.resume-with-state-update-mirror — emit LStateSlotStore
-    ;; for each `with field = expr` update BEFORE the LReturn. Order
-    ;; matters: writes complete before continuation fires. Slot offsets
-    ;; resolved from the active arm's state-fields (source-order
-    ;; canonical per protocol_handler_is_state_is_closure_is_evidence.md).
-    ;; Empty state_updates → plain LReturn (current Lock #6 behavior).
     (local.set $n (call $len (local.get $state_updates)))
     (if (i32.eqz (local.get $n))
       (then
         (return (call $lexpr_make_lreturn
                   (local.get $h)
                   (local.get $lo_val)))))
-    ;; Non-empty updates — build LBlock([stores..., LReturn(lo_val)]).
     (local.set $fields (call $lower_get_active_state_fields))
+    ;; "__resume_val_" ++ h
+    (local.set $val_name (call $str_concat (i32.const 6576)
+      (call $int_to_str (local.get $h))))
     (local.set $stmts (call $make_list (i32.const 0)))
     (local.set $stmts (call $list_extend_to (local.get $stmts)
-      (i32.add (local.get $n) (i32.const 1))))
+      (i32.add (i32.shl (local.get $n) (i32.const 1)) (i32.const 2))))
+    (drop (call $list_set (local.get $stmts) (i32.const 0)
+      (call $lexpr_make_llet (local.get $h) (local.get $val_name)
+        (local.get $lo_val))))
     (local.set $i (i32.const 0))
     (block $done
       (loop $each
@@ -23738,17 +23761,29 @@
         (local.set $upd_lo (call $lower_expr (local.get $upd_init)))
         (local.set $offset (call $lower_resolve_state_slot_offset
           (local.get $upd_name) (local.get $fields) (i32.const 0)))
-        ;; LStateSlotStore(h, offset, upd_lo) — emit-time writes value
-        ;; into __state at offset. Negative offset (name not in fields)
-        ;; is productive-under-error; emit's arm skips.
-        (local.set $store (call $lexpr_make_lstateslotstore
-          (local.get $h) (local.get $offset) (local.get $upd_lo)))
-        (drop (call $list_set (local.get $stmts) (local.get $i) (local.get $store)))
+        ;; "__resume_upd_" ++ i ++ "_" ++ h
+        (local.set $scratch_name
+          (call $str_concat
+            (call $str_concat
+              (call $str_concat (i32.const 6596)
+                (call $int_to_str (local.get $i)))
+              (i32.const 6616))
+            (call $int_to_str (local.get $h))))
+        (drop (call $list_set (local.get $stmts)
+          (i32.add (local.get $i) (i32.const 1))
+          (call $lexpr_make_llet (local.get $h) (local.get $scratch_name)
+            (local.get $upd_lo))))
+        (drop (call $list_set (local.get $stmts)
+          (i32.add (i32.add (local.get $i) (i32.const 1)) (local.get $n))
+          (call $lexpr_make_lstateslotstore
+            (local.get $h) (local.get $offset)
+            (call $lexpr_make_llocal (local.get $h) (local.get $scratch_name)))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
-    ;; Append LReturn at end.
-    (drop (call $list_set (local.get $stmts) (local.get $n)
-      (call $lexpr_make_lreturn (local.get $h) (local.get $lo_val))))
+    (drop (call $list_set (local.get $stmts)
+      (i32.add (i32.shl (local.get $n) (i32.const 1)) (i32.const 1))
+      (call $lexpr_make_lreturn (local.get $h)
+        (call $lexpr_make_llocal (local.get $h) (local.get $val_name)))))
     (call $lexpr_make_lblock (local.get $h) (local.get $stmts)))
 
   ;; ─── $lower_mark_tail — Hβ.lower.tail-call-mark-pass ─────────────────

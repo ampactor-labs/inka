@@ -208,6 +208,7 @@ fn dispatch_invocation(name, args, target) = {
   }
     ~> env_handler
     ~> graph_handler
+    ~> mutate_sink
     ~> diagnostics_handler
     ~> parallel_compose
     ~> wasi_threads
@@ -254,6 +255,7 @@ fn edit_run(target_opt) = {
     ~> verify_ledger
     ~> diagnostics_handler
     ~> graph_handler
+    ~> mutate_sink
 }
 
 fn mentl_edit_session(entry_module) = {
@@ -277,6 +279,7 @@ fn serve_run() = {
     ~> no_iterative_ctx
     ~> diagnostics_handler
     ~> graph_handler
+    ~> mutate_sink
 }
 
 fn mentl_lsp_session() = {
@@ -309,6 +312,7 @@ fn doc_run(target_opt) = {
     ~> verify_ledger
     ~> diagnostics_handler
     ~> graph_handler
+    ~> mutate_sink
 }
 
 fn doc_project(entry_module) = {
@@ -334,6 +338,7 @@ fn compile_run(target) = {
     ~> no_iterative_ctx
     ~> diagnostics_handler
     ~> graph_handler
+    ~> mutate_sink
 }
 
 // Per Hβ.first-light.compile-stdin-substrate: stdin-source compile entry.
@@ -346,6 +351,7 @@ fn compile_stdin_run() = {
     ~> no_iterative_ctx
     ~> diagnostics_handler
     ~> graph_handler
+    ~> mutate_sink
 }
 
 fn run_run(target) = {
@@ -370,6 +376,7 @@ fn check_run(target) = {
     ~> no_iterative_ctx
     ~> diagnostics_handler
     ~> graph_handler
+    ~> mutate_sink
 }
 
 // ─── test_run — Test effect handler chain
@@ -403,6 +410,7 @@ fn audit_run(target) = {
     ~> verify_ledger
     ~> diagnostics_handler
     ~> graph_handler
+    ~> mutate_sink
 }
 
 // ─── query_run — structured ad-hoc query
@@ -417,7 +425,8 @@ fn query_run(target, args) = match args {
       ~> wasi_filesystem
       ~> mentl_default
       ~> diagnostics_handler
-      ~> graph_handler,
+      ~> graph_handler
+      ~> mutate_sink,
   _ => {
     eprint_string("mentl query <module> <question> — args mismatch\n")
   }
@@ -440,6 +449,7 @@ fn teach_run(target_opt) = {
     ~> mentl_voice_default
     ~> diagnostics_handler
     ~> graph_handler
+    ~> mutate_sink
 }
 
 // ─── repl_run — line REPL

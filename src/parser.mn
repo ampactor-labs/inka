@@ -350,7 +350,7 @@ fn collect_docstring(ref tokens, pos, own acc) = {
   match kind_at(tokens, p) {
     TDocComment(next_line) =>
       collect_docstring(tokens, p + 1,
-        acc |> str_concat("\n") |> str_concat(next_line)),
+        "{acc}\n{next_line}"),
     _ => (acc, p)
   }
 }
@@ -916,8 +916,7 @@ fn parse_import_path(ref tokens, pos, own acc) = {
   let joined = acc |> str_concat(name)
   let p = pos + 1
   if at(tokens, p, TSlash) {
-    parse_import_path(tokens, p + 1,
-      joined |> str_concat("/"))
+    parse_import_path(tokens, p + 1, "{joined}/")
   } else {
     (joined, p)
   }
@@ -1268,7 +1267,7 @@ fn parse_primary(ref tokens, pos) = {
     },
     _ => {
       perform report("parser", "P_UnexpectedToken", "ParseError",
-        "unexpected token: " |> str_concat(show_token_kind(kind_at(tokens, pos))),
+        "unexpected token: {show_token_kind(kind_at(tokens, pos))}",
         span, "MaybeIncorrect")
       let id = fresh_ph(span)
       (nhole(id, span), pos + 1)
@@ -1430,11 +1429,6 @@ fn parse_string_interpolation_loop(ref tokens, pos, own buf, count, start_span) 
 fn consume_string_parts(ref tokens, pos, acc) = match kind_at(tokens, pos) {
   TStringPart(s) => consume_string_parts(tokens, pos + 1, acc |> str_concat(s)),
   _              => (acc, pos)
-}
-
-fn build_str_concat(a, b, span) = {
-  let callee = nexpr(VarRef("str_concat"), span)
-  nexpr(CallExpr(callee, [a, b]), span)
 }
 
 fn parse_list_literal(ref tokens, pos, start_span) = {
@@ -1712,9 +1706,7 @@ fn parse_pat_alt_branches(ref tokens, pos, own buf, count) = {
 // intent is unrecoverable without more input).
 fn unclosed_eof(ref tokens, p, construct, own buf, count) = {
   perform report("parser", "P_UnclosedConstruct", "ParseError",
-    "unexpected end of input inside "
-      |> str_concat(construct)
-      |> str_concat("; the construct was never closed"),
+    "unexpected end of input inside {construct}; the construct was never closed",
     span_at(tokens, p), "MaybeIncorrect")
   (buf, count, p)
 }

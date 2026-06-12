@@ -410,9 +410,7 @@ fn json_serialize(v) with Memory + Alloc = {
 }
 
 fn serialize_string(s) with Memory + Alloc = {
-  "\""
-    |> str_concat(escape_string(s))
-    |> str_concat("\"")
+  "\"{escape_string(s)}\""
 }
 
 /// escape_string — escape JSON-special bytes (\, ", control chars).
@@ -460,9 +458,7 @@ fn escape_string_loop(s, i, n, buf, written, cap) with Memory + Alloc = {
 }
 
 fn serialize_array(items) with Memory + Alloc = {
-  "["
-    |> str_concat(serialize_array_inner(items, 0, len(items), ""))
-    |> str_concat("]")
+  "[{serialize_array_inner(items, 0, len(items), "")}]"
 }
 
 fn serialize_array_inner(items, i, n, acc) with Memory + Alloc = {
@@ -477,9 +473,7 @@ fn serialize_array_inner(items, i, n, acc) with Memory + Alloc = {
 }
 
 fn serialize_object(fields) with Memory + Alloc = {
-  "{"
-    |> str_concat(serialize_object_inner(fields, 0, len(fields), ""))
-    |> str_concat("}")
+  "{{{serialize_object_inner(fields, 0, len(fields), "")}}}"
 }
 
 fn serialize_object_inner(fields, i, n, acc) with Memory + Alloc = {
@@ -487,9 +481,7 @@ fn serialize_object_inner(fields, i, n, acc) with Memory + Alloc = {
   else {
     let pair = list_index(fields, i)
     let (key, value) = pair
-    let pair_str = serialize_string(key)
-      |> str_concat(":")
-      |> str_concat(json_serialize(value))
+    let pair_str = "{serialize_string(key)}:{json_serialize(value)}"
     let sep = if i == 0 { "" } else { "," }
     let next_acc = acc |> str_concat(sep) |> str_concat(pair_str)
     serialize_object_inner(fields, i + 1, n, next_acc)

@@ -1132,34 +1132,13 @@ fn show_eff_arg(ref arg) with !Mutate = match arg {
 fn show_predicate(ref pred) with !Mutate = {
   match pred {
     PTrue      => "true",
-    PEq(a, b)  =>
-      show_pexpr(a)
-        |> str_concat(" == ")   // drift-audit: ignore — drift-12 heuristic false-positive on predicate rendering text (show_predicate produces human-facing "x == y" output); not runtime string comparison
-        |> str_concat(show_pexpr(b)),
-    PLt(a, b)  =>
-      show_pexpr(a)
-        |> str_concat(" < ")
-        |> str_concat(show_pexpr(b)),
-    PLeq(a, b) =>
-      show_pexpr(a)
-        |> str_concat(" <= ")
-        |> str_concat(show_pexpr(b)),
-    PAnd(a, b) =>
-      show_predicate(a)
-        |> str_concat(" && ")
-        |> str_concat(show_predicate(b)),
-    POr(a, b)  =>
-      show_predicate(a)
-        |> str_concat(" || ")
-        |> str_concat(show_predicate(b)),
-    PNot(p)    =>
-      "!"
-        |> str_concat(show_predicate(p)),
-    PCall(name, args) =>
-      name
-        |> str_concat("(")
-        |> str_concat(show_list(args, show_pexpr, ", "))
-        |> str_concat(")")
+    PEq(a, b)  => "{show_pexpr(a)} == {show_pexpr(b)}",
+    PLt(a, b)  => "{show_pexpr(a)} < {show_pexpr(b)}",
+    PLeq(a, b) => "{show_pexpr(a)} <= {show_pexpr(b)}",
+    PAnd(a, b) => "{show_predicate(a)} && {show_predicate(b)}",
+    POr(a, b)  => "{show_predicate(a)} || {show_predicate(b)}",
+    PNot(p)    => "!{show_predicate(p)}",
+    PCall(name, args) => "{name}({show_list(args, show_pexpr, ", ")})"
   }
 }
 

@@ -212,20 +212,17 @@ solves Mentl.
 
 ## Precedence and layout
 
-Loose-to-tight:
-1. `><` (parallel; loosest)
-2. `|>` (converge)
-3. `<|` (diverge)
-4. `<~` (feedback)
-5. `~>` (tee; tightest)
+One canonical table (SYNTAX.md §Precedence), loosest-to-tightest
+among the verbs:
+1. `~>` (handler-attach; the floor — governs everything to its left)
+2. `<|` `><` `<~` (the convergent/divergent verbs)
+3. `|>` (converge; tightest verb, looser than all value operators)
 
-Parentheses override. Newline terminates a pipe expression; a
-continuation line starting with a pipe operator attaches to the
-previous expression's result.
-
-Layout-sensitive attachment for `~>` (Form A vs Form B) is the
-single exception to pure precedence: a start-of-continuation-line
-`~>` treats the preceding multi-line expression as a single unit.
+Parentheses override. A continuation line starting with a pipe
+operator attaches to the previous expression's result — that is
+token continuation, never semantics. **Layout is never semantics**
+(the Three Laws, 2026-06-11): the parser has one table; the
+formatter owns the shape on the page.
 
 ---
 
@@ -278,5 +275,8 @@ the effect algebra (spec 01), not pipe-specific rules:
 - **`><` as function composition (`f ∘ g`).** That's just `g |> f`
   with different reading direction. `><` is reserved for the `✕`
   topology — two parallel pipelines, not sequential composition.
-- **Layout-sensitive parsing for all verbs.** Only `~>` needs it
-  (Form A vs B). Keeping the rule minimal keeps the parser simple.
+- **Layout-sensitive parsing, for any verb.** An operator whose
+  meaning changes with a newline is invisible action-at-distance;
+  the Three Laws (2026-06-11) deleted the last instance (the old
+  `~>` Form A/B split). One precedence table draws every tree;
+  the formatter projects the layout.

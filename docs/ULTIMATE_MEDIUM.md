@@ -239,7 +239,7 @@ Eight primitives, structurally live since 2026-04-24
 (`protocol_kernel_closure.md`):
 
 1. **Graph + Env** — the program IS the graph; every output is a handler projection.
-2. **Handlers with typed resume discipline** — `@resume=OneShot|MultiShot|Either`; MultiShot is Mentl's oracle substrate.
+2. **Handlers with typed resume discipline** — OneShot / MultiShot / Either, INFERRED from each arm body's resume sites (the `@resume=` annotations were erased; the body IS the contract); MultiShot is Mentl's oracle substrate.
 3. **Five verbs** — topologically complete basis for computation graphs.
 4. **Boolean effect algebra** — `+ - & ! Pure` with negation proving absence.
 5. **Ownership as effect** — `own` performs `Consume`; `ref` is a row constraint; `!Mutate` is the universe-minus stance.

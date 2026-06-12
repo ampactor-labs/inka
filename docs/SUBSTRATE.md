@@ -349,10 +349,13 @@ reads the shape.
 //      |> actuator                       └──→ actuator     (forward)
 ```
 
-A `Newline` before `~>` tells the parser "this is Form A — wrap the
-entire preceding chain." No `Newline` means Form B — wrap only the
-immediately preceding stage. The visual indentation is cosmetic but
-the newline is semantic.
+The layout is the FORMATTER's projection of the tree, never the
+parser's input (the Three Laws, 2026-06-11 — the old Form A/B
+newline-semantic split is deleted). `~>` has one precedence — 1,
+the loosest binary operator — so the handler at the foot of a chain
+governs everything to its left; `(stage ~> h)` narrows, visibly, at
+the site. The parser has one table; the shape on the page is the
+formatter drawing the graph the table already proved.
 
 #### Canonical Formatting Rules
 
@@ -395,38 +398,33 @@ The indented `><` creates a visual pinch between two branches. The
 indented `<~` creates a visual loop-back. The formatter enforces this
 because the shape of the code IS the shape of the computation.
 
-#### Inline `~>` vs Block-Scoped `~>` (Form B vs Form A)
+#### `~>` — one precedence, one law
 
-Because `~>` has the **tightest precedence** of all pipe operators,
-inline `~>` (no Newline) wraps only the immediately preceding
-expression:
-
-```lux
-// Form B (inline) — each ~> wraps ONE stage
-raw_string
-    |> parse_json ~> catch_json_error(default = "{}")
-    |> validate_schema ~> log_validation_warnings
-    |> save_to_db
-```
-
-Parses as:
-`raw_string |> (parse_json ~> catch_error) |> (validate ~> log_warn) |> save`
-
-Each handler catches effects from ONE stage. The pipeline continues.
-Per-stage error handling without try/catch.
-
-Block-scoped `~>` (Newline before `~>`) wraps the **entire preceding
-chain** — used when a handler should catch effects from all stages:
+`~>` has **one precedence — 1, the loosest binary operator** (the
+Three Laws, 2026-06-11). The handler at the foot of a chain governs
+everything to its left:
 
 ```lux
-// Form A (block-scoped) — each ~> wraps the ENTIRE pipeline above
 source
     |> frontend
     |> infer_program
-    ~> env_handler           // catches EnvRead/Write from ALL above
-    ~> graph_handler         // catches Graph* from ALL above
-    ~> diagnostics_handler   // catches Diagnostic from ALL above
+    ~> env_handler           // governs (source |> frontend |> infer_program)
+    ~> graph_handler         // wraps env_handler(...)
+    ~> diagnostics_handler   // outermost — the sandbox boundary
 ```
+
+Per-stage handling is parens, visible at the site:
+
+```lux
+raw_string
+    |> (parse_json ~> catch_json_error(default = "{}"))
+    |> (validate_schema ~> log_validation_warnings)
+    |> save_to_db
+```
+
+Each parenthesized handler catches effects from ONE stage; the
+pipeline continues. Per-stage error handling without try/catch —
+and the scope is on the page, never in the whitespace.
 
 #### `<|` vs `><`: Ownership Is the Structural Difference
 

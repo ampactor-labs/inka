@@ -27,8 +27,13 @@ resume disciplines).
 
 ## Shared op metadata
 
-Every op decl carries `@resume=OneShot | MultiShot | Either` (Affect
-POPL 2025; landed in spec 02's `TCont`). Parser delta in spec 03.
+Resume discipline (`OneShot | MultiShot | Either`, Affect POPL 2025;
+spec 02's `TCont`) is **INFERRED** from each handler arm's body —
+resume-site count under control-flow ancestry (`infer_resume_cardinality`;
+the `@resume=` annotations were erased wheel-wide, commit `5bf7c8b` —
+the body IS the contract, per SUBSTRATE §VI "annotations declare
+INPUTS, never emergent properties"). The `@resume=` tags below are
+the DERIVED disciplines, recorded for the catalog's contract value.
 `Diagnostic.report`'s `code` and `applicability` become refined
 Strings in Arc F.1; Phase 1 treat them as free Strings.
 
@@ -230,6 +235,23 @@ Handler swap: **Phase 1** default `verify_ledger` accrues
 obligations (emits `V_Pending`); **Arc F.1** `verify_smt` discharges
 via Z3/cvc5/Bitwuzla (emits `E_RefinementRejected` on reject). No
 stub. See spec 02.
+
+### Mutate (graph-mutation events — src/types.mn)
+
+```lux
+effect Mutate {
+  graph_mutated(Int, Mutation) -> ()         @resume=OneShot
+}
+```
+
+Performed by `graph_handler`'s write arms at every OUTERMOST commit
+boundary (checkpoint stack empty — speculative writes never emit it).
+Subscribers are a handler-swap surface: `cached_check_with_oracle`
+(oracle.mn) invalidates IC caches; MV-LSP.push streams diagnostics;
+**`mutate_sink` (graph.mn) is the no-subscriber floor** installed
+outside `graph_handler` in every one-shot compile chain. A perform
+with no subscriber is NOT a no-op by default — the row algebra
+requires a handler; the sink IS that handler, honestly.
 
 ### LookupTy (spec 05)
 

@@ -95,12 +95,7 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
         _ => ""
       }
       perform report("ownership", "E_OwnershipViolation", "OwnershipViolation",
-        "'"
-          |> str_concat(name)
-          |> str_concat("' consumed twice (first at ")
-          |> str_concat(show_span(first))
-          |> str_concat(")")
-          |> str_concat(auth_hint),
+        "'{name}' consumed twice (first at {show_span(first)}){auth_hint}",
         span, "MachineApplicable")
       resume()
     } else {
@@ -264,9 +259,7 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
           resume()
         } else {
           perform report("region", "E_RegionEscape", "OwnershipViolation",
-            "value allocated in a scope that ended before this return — region " // drift-audit: ignore
-              |> str_concat(int_to_str(tag.region_id))
-              |> str_concat(" no longer live"),
+            "value allocated in a scope that ended before this return — region {int_to_str(tag.region_id)} no longer live",   // drift-audit: ignore
             escape_span, "MaybeIncorrect")
           // tag.install_span retained for future multi-span
           // diagnostic (Located secondary at the alloc site).
@@ -306,9 +299,7 @@ fn join_field_regions(ref tags, ref fields, current) with !Mutate = {
 fn report_each_collision(ref names, ref span) with !Mutate = {
   for_each((name) => {
     perform report("ownership", "E_OwnershipViolation", "OwnershipViolation",
-      "'"
-        |> str_concat(name)
-        |> str_concat("' consumed in two parallel branches"),
+      "'{name}' consumed in two parallel branches",
       span, "MachineApplicable")
   }, names)
 }
@@ -359,9 +350,7 @@ fn walk_return_positions(ref refs, ref node) with !Mutate = {
     NExpr(VarRef(name)) =>
       if string_in_list(refs, name) {
         perform report("ownership", "E_OwnershipViolation", "OwnershipViolation",
-          "ref binding '"
-            |> str_concat(name)
-            |> str_concat("' escapes its scope (returned)"),
+          "ref binding '{name}' escapes its scope (returned)",
           span, "MachineApplicable")
       } else { () },
 

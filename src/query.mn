@@ -67,7 +67,7 @@ handler query_default {
 
     QTypeOf(name) =>
       match perform env_lookup(name) {
-        None => resume(QRError("not found: " |> str_concat(name))),
+        None => resume(QRError("not found: {name}")),
         Some(entry) => {
           let (scheme, reason, _kind) = entry
           let Forall(_, ty) = scheme
@@ -96,7 +96,7 @@ handler query_default {
     QIntentOf(handle) => {
       let Graph(_, _, _, _, _, intent_index) = perform graph_snapshot()
       match find_intent(intent_index, handle, 0, len(intent_index)) {
-        None => resume(QRError("no intent recorded for handle " |> str_concat(int_to_str(handle)))), // drift-audit: ignore
+        None => resume(QRError("no intent recorded for handle {int_to_str(handle)}")), // drift-audit: ignore
         Some(effs) => resume(QRIntent(effs))
       }
     },
@@ -111,37 +111,33 @@ handler query_default {
 
     QEffects(name) =>
       match perform env_lookup(name) {
-        None => resume(QRError("not found: " |> str_concat(name))),
+        None => resume(QRError("not found: {name}")),
         Some(entry) => {
           let (scheme, _, _) = entry
           let Forall(_, ty) = scheme
           match chase_type_deep(ty) {
             TFun(_, _, row) => resume(QREffects(row)),
-            _ => resume(QRError(
-              name
-                |> str_concat(" is not a function")))
+            _ => resume(QRError("{name} is not a function"))
           }
         }
       },
 
     QOwnership(name) =>
       match perform env_lookup(name) {
-        None => resume(QRError("not found: " |> str_concat(name))),
+        None => resume(QRError("not found: {name}")),
         Some(entry) => {
           let (scheme, _, _) = entry
           let Forall(_, ty) = scheme
           match chase_type_deep(ty) {
             TFun(params, _, _) => resume(QROwnership(params)),
-            _ => resume(QRError(
-              name
-                |> str_concat(" is not a function")))
+            _ => resume(QRError("{name} is not a function"))
           }
         }
       },
 
     QWhy(name) =>
       match perform env_lookup(name) {
-        None => resume(QRError("not found: " |> str_concat(name))),
+        None => resume(QRError("not found: {name}")),
         Some(entry) => {
           let (_, reason, _) = entry
           resume(QRWhy(reason))
@@ -162,7 +158,7 @@ handler query_default {
       resume(QRError("handler_provider requires active inference context")),
 
     QUnknown(q) =>
-      resume(QRError("unknown query: " |> str_concat(q)))
+      resume(QRError("unknown query: {q}"))
   }
 }
 

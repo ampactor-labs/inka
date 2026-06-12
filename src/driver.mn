@@ -26,11 +26,11 @@ import runtime/io
 ///   `"infer"` → `"src/infer.mn"`,
 ///   `"runtime/strings"` → `"lib/runtime/strings.mn"`.
 fn driver_module_path(ref module_name) with Memory + Alloc + Filesystem = {
-  let src_path = "src/" |> str_concat(module_name) |> str_concat(".mn")
+  let src_path = "src/{module_name}.mn"
   if perform fs_exists(src_path) {
     src_path
   } else {
-    "lib/" |> str_concat(module_name) |> str_concat(".mn")
+    "lib/{module_name}.mn"
   }
 }
 
@@ -114,10 +114,7 @@ fn driver_check_module(ref module_name)
   let path = driver_module_path(module_name)
   if !perform fs_exists(path) {
     perform report("driver", "E_MissingModule", "MissingVariable",
-      "module source not found: " |> str_concat(module_name)
-        |> str_concat(" (expected at ")
-        |> str_concat(path)
-        |> str_concat(")"),
+      "module source not found: {module_name} (expected at {path})",
       span_zero(), "MaybeIncorrect")
     []
   } else {
@@ -223,7 +220,7 @@ fn driver_install_loop(ref short, ref entries, i, n) with Memory + Alloc + EnvWr
     // Flat short-name install (current behavior).
     perform env_extend(name, scheme, reason, kind)
     // Qualified install — dotted name as env key.
-    let dotted = short |> str_concat(".") |> str_concat(name)
+    let dotted = "{short}.{name}"
     perform env_extend(dotted, scheme, reason, kind)
     driver_install_loop(short, entries, i + 1, n)
   }
@@ -260,7 +257,7 @@ fn driver_install_qualified_only(ref module_name, ref entries) with Memory + All
 fn driver_install_qualified_loop(ref short, ref entries, i, n) with Memory + Alloc + EnvWrite = {
   for_each((entry) => {
     let (name, scheme, reason, kind) = entry
-    let dotted = short |> str_concat(".") |> str_concat(name)
+    let dotted = "{short}.{name}"
     perform env_extend(dotted, scheme, reason, kind)
   }, entries)
 }

@@ -21,7 +21,7 @@ if [ $compile_exit -ne 0 ]; then
   echo "FAIL(compile) $MICRO: seed exit=$compile_exit diags=$diags"
   tail -4 "$base.err"; exit 1
 fi
-if ! wat2wasm --enable-threads --enable-tail-call "$base.wat" -o "$base.wasm" 2> "$base.w2e"; then
+if ! wat2wasm --debug-names --enable-threads --enable-tail-call "$base.wat" -o "$base.wasm" 2> "$base.w2e"; then
   echo "FAIL(wat) $MICRO: $(head -1 "$base.w2e")"; exit 1
 fi
 "${WT[@]}" "$base.wasm" > "$base.out" 2> "$base.run-err"

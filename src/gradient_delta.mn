@@ -193,7 +193,7 @@ fn row_suggestion(handle, ann_text, capability_labels) with Pure = {
 fn ownership_suggestion(param_name, marker_text, capability_labels) with Pure = {
   AnnotationSuggestion(
     SuggestOwnership,
-    marker_text |> str_concat(" ") |> str_concat(param_name),
+    "{marker_text} {param_name}",
     capability_labels,
     Located(span_zero(),
       Inferred("inferred-ownership classification — single-use proof"))
@@ -254,10 +254,8 @@ fn row_strictly_narrower(body_row, decl_row) with Pure = {
 
 fn row_to_with_clause(row) with Pure = match row {
   EfPure => "with Pure",
-  EfClosed(names) =>
-    "with " |> str_concat(eff_names_to_str(names)),
-  EfNeg(inner) =>
-    "with !" |> str_concat(row_to_with_clause_inner(inner)),
+  EfClosed(names) => "with {eff_names_to_str(names)}",
+  EfNeg(inner) => "with !{row_to_with_clause_inner(inner)}",
   _ => "with ..."   // open-row case; named follow-up: surface row variable
 }
 
@@ -270,9 +268,7 @@ fn eff_names_to_str(names) with Pure = {
   if len(names) == 0 { "Pure" }                   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
   else if len(names) == 1 { eff_name_label(list_head(names)) }
   else {
-    eff_name_label(list_head(names))
-      |> str_concat(" + ")
-      |> str_concat(eff_names_to_str(list_tail(names)))
+    "{eff_name_label(list_head(names))} + {eff_names_to_str(list_tail(names))}"
   }
 }
 
@@ -281,66 +277,36 @@ fn eff_name_label(name) with Pure = match name {
   EParameterized(s, _) => s   // arg-aware rendering is named follow-up
 }
 
-// Source-text operator constants. These are pretty-printer output
-// fragments — the parser consumes Token streams, NOT these strings.
-// Drift 12 closure: extracting source-text fragments to named
-// constants avoids the audit's literal-bytes false-positive on
-// `==` adjacent to string concat (we're producing source, not
-// comparing strings).
-fn op_text_eq() with Pure = " == "   // drift-audit: ignore (operator source-text literal, not a comparison)
-fn op_text_lt() with Pure = " < "
-fn op_text_and() with Pure = " && "
-
 fn predicate_to_where_clause(pred) with Pure = match pred {
   PTrue => "where true",
   PFalse => "where false",
-  PEq(a, b) =>
-    "where " |> str_concat(pexpr_to_str(a))
-              |> str_concat(op_text_eq())
-              |> str_concat(pexpr_to_str(b)),
-  PLt(a, b) =>
-    "where " |> str_concat(pexpr_to_str(a))
-              |> str_concat(op_text_lt())
-              |> str_concat(pexpr_to_str(b)),
-  PAnd(a, b) =>
-    predicate_to_where_clause(a)
-      |> str_concat(op_text_and())
-      |> str_concat(predicate_inner_to_str(b)),
-  PNot(inner) =>
-    "where !(" |> str_concat(predicate_inner_to_str(inner))
-                |> str_concat(")")
+  PEq(a, b) => "where {pexpr_to_str(a)} == {pexpr_to_str(b)}",
+  PLt(a, b) => "where {pexpr_to_str(a)} < {pexpr_to_str(b)}",
+  PAnd(a, b) => "{predicate_to_where_clause(a)} && {predicate_inner_to_str(b)}",
+  PNot(inner) => "where !({predicate_inner_to_str(inner)})"
 }
 
 fn predicate_inner_to_str(pred) with Pure = match pred {
   PTrue => "true",
   PFalse => "false",
-  PEq(a, b) =>
-    pexpr_to_str(a) |> str_concat(op_text_eq()) |> str_concat(pexpr_to_str(b)),
-  PLt(a, b) =>
-    pexpr_to_str(a) |> str_concat(op_text_lt()) |> str_concat(pexpr_to_str(b)),
-  PAnd(a, b) =>
-    predicate_inner_to_str(a)
-      |> str_concat(op_text_and())
-      |> str_concat(predicate_inner_to_str(b)),
-  PNot(inner) =>
-    "!(" |> str_concat(predicate_inner_to_str(inner)) |> str_concat(")")
+  PEq(a, b) => "{pexpr_to_str(a)} == {pexpr_to_str(b)}",
+  PLt(a, b) => "{pexpr_to_str(a)} < {pexpr_to_str(b)}",
+  PAnd(a, b) => "{predicate_inner_to_str(a)} && {predicate_inner_to_str(b)}",
+  PNot(inner) => "!({predicate_inner_to_str(inner)})"
 }
 
 fn pexpr_to_str(pe) with Pure = match pe {
   PSelf => "self",
   PInt(n) => int_to_str(n),
   PEVar(name) => name,
-  PCall(name, args) =>
-    name |> str_concat("(") |> str_concat(pexpr_args_to_str(args)) |> str_concat(")")
+  PCall(name, args) => "{name}({pexpr_args_to_str(args)})"
 }
 
 fn pexpr_args_to_str(args) with Pure = {
   if len(args) == 0 { "" }
   else if len(args) == 1 { pexpr_to_str(list_head(args)) }
   else {
-    pexpr_to_str(list_head(args))
-      |> str_concat(", ")
-      |> str_concat(pexpr_args_to_str(list_tail(args)))
+    "{pexpr_to_str(list_head(args))}, {pexpr_args_to_str(list_tail(args))}"
   }
 }
 

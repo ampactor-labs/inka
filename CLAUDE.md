@@ -10,7 +10,7 @@
 > - `docs/specs/simulations/` — per-handle walkthroughs (H*.md cascade; MV/MSR/TH/DM/QA Phase II); `IE-mentl-edit.md` + `F1-mentl-doc.md` + `EH-entry-handlers.md` + `Hμ-cursor.md` are the developer-surface load-bearing walkthroughs
 > - `docs/traces/a-day.md` — integration trace
 > - `ROADMAP.md` — live sequencing
-> - `~/.claude/plans/noble-greeting-dijkstra.md` — **the master plan to final form** (stages 0–9: first-light keystone → … → Phase ν becoming; the thesis + execution in one durable file; supersedes deep-toasting-bachman)
+> - `~/.claude/plans/composed-questing-feather.md` — **the unified master plan to ultimate form** (§0 canonical status → §1 final form → §2 first-principles → §3 single-model inline discipline → §4 grounded current state → §5–§7 the ten-stage arc → §8 forever-form → §11 verification; the thesis + execution in one durable file; supersedes noble-greeting-dijkstra + the Three-Laws plan)
 > - `MEMORY.md` index + `protocol_*.md` files at `~/.claude/projects/-home-suds-Projects-mentl/memory/` — discipline crystallizations; **`protocol_developer_experience_vision.md`** crystallizes the day-in-the-medium throughline (read alongside CLAUDE+MEMORY at session start; cite when proposing surface decisions)
 > - `tools/drift-audit.sh` — PostToolUse drift detector
 > - `tools/drift-patterns.tsv` — extended drift mode catalog (drift 38 mascot-as-command-prefix lives here; clarified in red-flag table below)
@@ -445,9 +445,9 @@ in `std/compiler/` IS the compiler. A disposable bootstrap translator
 translator is deleted. Live sequencing: `ROADMAP.md`.
 
 **Cascade state.** Live cursor + the full current-state inventory live in
-the **master plan** (`~/.claude/plans/noble-greeting-dijkstra.md` "Current
-state" — including the 2026-06-09 code-surpassed-docs inventory); the list
-below is historical record. γ approach (γ = handle-graph). Landed: Σ (SYNTAX),
+the **unified master plan** (`~/.claude/plans/composed-questing-feather.md`
+§4 "Current state" — Three Laws + fresh_ph rung landed; the precise pending
+L1 wheel-mirror table); the list below is historical record. γ approach (γ = handle-graph). Landed: Σ (SYNTAX),
 Ω.0–Ω.5, H6, H3, H3.1, H2, HB, H1 substrate, H4 substrate, H2.3,
 **Hβ.infer cascade CLOSED** (11/11 chunks; commit `b6e1f23` 2026-04-27),
 **Hβ.lower cascade CLOSED** (11/11 chunks; commit `c53904d` 2026-04-28),
@@ -659,9 +659,11 @@ wasm-objdump -x bootstrap/build/lux3.wasm
 | `alloc` with huge size | Garbage pointer read as string length |
 | `list_index` returning 1000 | Unknown list tag — flat treated as tree |
 
-**Memory model.** Bump allocator, monotonic, never frees. Traps at
-16 MB. `++` in a loop is a memory bomb. GC is a handler (Arc F.4
-scoped arenas).
+**Memory model.** Bump allocator, monotonic, never frees. The 2 GiB
+linear-memory partition (arena.wat:27-37): permanent heap
+[1 MiB, 1537 MiB), per-stage arena [1537, 1921 MiB), per-fn arena
+[1921, 2048 MiB) — each traps at ITS ceiling. `++` in a loop is a
+memory bomb. GC is a handler (Arc F.4 scoped arenas).
 
 **Representations.**
 - **Strings** are TWO SHAPES, one interface (since `a414804`): flat

@@ -439,7 +439,7 @@ fn span_contains(outer, inner) with Pure = {
 type Token = Tok(TokenKind, Span)
 
 type TokenKind
-  // ─── Keywords (19) ───────────────────────────────────────────────
+  // ─── Keywords (20) ───────────────────────────────────────────────
   = TFn | TLet | TIf | TElse | TMatch | TType
   | TEffect | THandle | THandler | TWith
   | TResume | TPerform
@@ -451,7 +451,7 @@ type TokenKind
                                     //   parse_capability_decl entry; SYNTAX.md
                                     //   capability declarations
 
-  // ─── Identifiers and literals (5, with payload) ──────────────────
+  // ─── Identifiers and literals (7) ────────────────────────────────
   | TIdent(String)
   | TIntLit(Int)
   | TFloatLit(Float)

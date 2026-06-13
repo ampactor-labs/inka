@@ -728,6 +728,14 @@ type Even = Int where self % 2 == 0
 
 `self` refers to the value being refined. The refinement is a `Predicate` discharged by the `Verify` effect at construction sites and elsewhere as needed.
 
+```
+let s: Sample = 0.5      // Verify discharges -1.0 <= 0.5 <= 1.0 statically
+let p: ValidPort = 8080  // statically discharged
+let bad: Sample = 1.5    // E_RefinementRejected — 1.5 violates -1.0 <= self <= 1.0
+```
+
+The predicate is a compile-time obligation; at gradient-top it erases entirely (no runtime check). `Verify`'s default ledger accrues what it cannot discharge statically (`V_Pending`); the Arc F.1 SMT handler swap discharges those by residual theory — same source, deeper proof engine.
+
 ---
 
 ## Effect declarations
@@ -1435,63 +1443,6 @@ Per `protocol_oracle_is_ic.md`: format is idempotent (`format(format(x)) == form
 
 ---
 
-## Generic type parameters
-
-### Declaration
-
-```
-fn map(f: a -> b, xs: [a]) -> [b] = ...
-type Pair = {first: a, second: b}
-effect State { get() -> s; set(v: s) -> () }
-```
-
-No declaration list. Lowercase identifiers in type position ARE the
-parameters (the case rule carries the meaning); they scope to the
-declaration that mentions them, and every mention of the same name
-within one declaration is the same parameter. Angle brackets are
-retired everywhere — `E_ExplicitTypeParams` fires on any `<...>`
-parameter list or argument list (MachineApplicable: strip it).
-
-### Inferred at call sites
-
-```
-let doubled = map(double, [1, 2, 3])   // A=Int, B=Int — inferred from arg types
-```
-
-No turbofish (`map<Int, Int>(...)`) is allowed. Inference must succeed; if it can't, it's a type error indicating the user needs to provide more context (typically by annotating an intermediate let-binding).
-
-### Higher-rank parameters
-
-For polymorphism that crosses scopes (rare; usually inferred):
-```
-fn run_with<E>(f: fn() -> () with E) = ...
-```
-
----
-
-## Refinement types
-
-```
-type Sample = Float where -1.0 <= self <= 1.0
-type NonEmpty = [a] where len(self) > 0
-type ValidPort = Int where self >= 1024 && self <= 65535
-```
-
-`self` refers to the value being refined. The refinement is a `Predicate`; the `Verify` effect discharges the obligation at construction sites.
-
-Construction:
-```
-let s: Sample = 0.5    // verify discharges -1.0 <= 0.5 <= 1.0 statically
-let p: ValidPort = 8080 // statically discharged
-```
-
-Refinement violations:
-```
-let bad: Sample = 1.5   // E_RefinementRejected: 1.5 violates -1.0 <= self <= 1.0
-```
-
----
-
 ## Top-level program structure
 
 A `.mn` file is a sequence of top-level statements. Each is one of:
@@ -1561,6 +1512,10 @@ type TokenKind
   | TStringLit(String)
   | TDocComment(String)             // /// — emitted ONLY when triple-slash
                                     //   detected; attaches to next decl
+  | TStringPart(String)             // literal chunk of an interpolating "..."
+                                    //   string (amendment-C brace scan)
+  | TStringSplice                   // marks the start of a `{expr}` splice;
+                                    //   ordinary tokens follow, TRBrace closes
 
   // ─── Two-character operators ──────────────────────────────────────
   | TEqEq | TBangEq | TLtEq | TGtEq          // comparison
@@ -1588,7 +1543,7 @@ type TokenKind
 
 | Variant         | Lexical form     | Payload   | Where parser expects it                       |
 |-----------------|------------------|-----------|------------------------------------------------|
-| **Keywords (24)** |                |           |                                                |
+| **Keywords (20)** |                |           |                                                |
 | `TFn`           | `fn`             | —         | start of function declaration / lambda         |
 | `TLet`          | `let`            | —         | start of let-binding                           |
 | `TIf`           | `if`             | —         | start of if-expression                         |
@@ -1610,12 +1565,14 @@ type TokenKind
 | `TTrue`         | `true`           | —         | Bool literal                                   |
 | `TFalse`        | `false`          | —         | Bool literal                                   |
 | `TCapability`   | `capability`     | —         | capability declaration (§«Capability declarations») |
-| **Identifiers and literals (5)** |  |           |                                                |
+| **Identifiers and literals (7)** |  |           |                                                |
 | `TIdent(s)`     | `[A-Za-z_][...]` | name      | variable refs, fn names, type names, etc.      |
 | `TIntLit(n)`    | `[0-9][0-9_]*`, `0x[0-9A-Fa-f_]+`, `0b[01_]+`, `0o[0-7_]+` | i32 value | integer literal (decimal / hex / binary / octal; underscores allowed for readability) |
 | `TFloatLit(f)`  | `[0-9][0-9_]*\.[0-9][0-9_]*` | f64 value | floating-point literal (underscore separators allowed) |
-| `TStringLit(s)` | `"..."` or `"""..."""` | string content (escape-resolved, interp markers preserved) | string literal |
+| `TStringLit(s)` | `"..."` or `"""..."""` | string content (escape-resolved, interp markers preserved) | string literal (degenerate single-chunk interpolating string) |
 | `TDocComment(s)`| `/// ...`        | comment text (one line, leading `///` stripped) | attaches to next declaration |
+| `TStringPart(s)`| literal chunk between splices in an interpolating `"..."` | chunk text | string interpolation (amendment-C brace scan → MakeStringExpr) |
+| `TStringSplice` | start of a `{expr}` splice inside `"..."` | — | followed by ordinary tokens; `TRBrace` closes the splice |
 | **Two-character operators (14)** |  |           |                                                |
 | `TEqEq`         | `==`             | —         | equality comparison                            |
 | `TBangEq`       | `!=`             | —         | inequality comparison                          |
@@ -1648,22 +1605,22 @@ type TokenKind
 | `TSlash`        | `/`              | —         | division; module-path separator                |
 | `TPercent`      | `%`              | —         | modulo                                         |
 | `TEq`           | `=`              | —         | binding (let / fn / type)                      |
-| `TLt`           | `<`              | —         | less-than; generic-param open                  |
-| `TGt`           | `>`              | —         | greater-than; generic-param close              |
+| `TLt`           | `<`              | —         | less-than comparison (no generic-param role — angle brackets retired; a call-site `ident<...>(` is recognized only to emit format-liftable `E_ExplicitTypeParams`) |
+| `TGt`           | `>`              | —         | greater-than comparison (no generic-param role; see `TLt`) |
 | `TBang`         | `!`              | —         | logical not; effect negation                   |
-| `TPipe`         | `\|`             | —         | type variant separator; lambda param fence (`\|x\| expr`) |
-| `TTilde`        | `~`              | —         | reserved                                       |
+| `TPipe`         | `\|`             | —         | type-variant separator; pattern alternation in match arms (the `\|x\|` lambda fence is rejected — `E_LambdaFence`) |
+| `TTilde`        | `~`              | —         | reserved, no current production. `~>`/`<~` are their own tokens; bare `~` is speculative inventory like `::` was, but cannot be deleted yet — the seed's flat tag-space shares one counter with the Option ADT, so removing it would cascade-renumber `None`/`Some`. Removed post-L1 when per-type tag assignment lands. |
 | `TAt`           | `@`              | —         | as-patterns: `name @ pat` binds the whole value AND destructures (§«As-patterns»); `@resume=` erased per inference-from-body |
 | `THole`         | `??`             | —         | hole — the gradient's syntactic absence marker; Mentl's Synth proposes candidates filling the position. The Mentl Mono ligature renders `??` as the octagonal-socket glyph (8 sides ↔ 8 kernel primitives). Single `?` is no longer a token. |
 | **Layout / structural (2)** |     |           |                                                |
 | `TNewline`      | `\n`             | —         | semantic per DESIGN Ch 2 (block-form `~>`)     |
 | `TEof`          | (end of input)   | —         | always last token; parser uses to terminate    |
 
-**Total: 68 variants.** (`TColonColon` deleted 2026-06-10 — `::` was lexed and parsed nowhere; a token with no kernel correspondence is speculative inventory. Module paths use `/` at import position only; `.` is the one access operator in expressions. See `perform-dissolution-substrate.md` §6.)
+**Total: 66 variants** (20 keywords + 7 identifiers/literals + 14 two-char operators + 23 single-char operators/punctuation + 2 layout). (`TColonColon` deleted 2026-06-10 — `::` was lexed and parsed nowhere; a token with no kernel correspondence is speculative inventory. Module paths use `/` at import position only; `.` is the one access operator in expressions. `TStringPart`/`TStringSplice` joined the literals group with the interpolation substrate. See `perform-dissolution-substrate.md` §6.)
 
 ### Lexer obligations
 
-- **Every emitted Token MUST be one of the 69 enumerated variants.** Adding a new token kind requires updating SYNTAX.md first, then the lexer, then the parser's match (which fails to compile until the new variant is handled — H6's discipline applied at the lexical layer).
+- **Every emitted Token MUST be one of the 66 enumerated variants.** Adding a new token kind requires updating SYNTAX.md first, then the lexer, then the parser's match (which fails to compile until the new variant is handled — H6's discipline applied at the lexical layer).
 - **Whitespace (other than `\n`) is silently consumed.** The lexer skips spaces and tabs without emitting a token. Only newlines are semantic.
 - **Line comments `// ...` are silently consumed.** No token emitted.
 - **Doc comments `/// ...` emit `TDocComment(text)`** with the leading `///` stripped. The parser attaches each `TDocComment` to the next declaration it sees.
@@ -1673,7 +1630,7 @@ type TokenKind
 
 - **Match on `Token` must be exhaustive.** No wildcard arms over `TokenKind` without explicit per-variant enumeration. H6's discipline: `_ => …` on a load-bearing ADT is rejected by code review and substrate convention.
 - **Span propagation.** Every parsed AST node is constructed with the joined span of its constituent tokens. Use `span_join(token_span(first), token_span(last))`.
-- **Generic-type angle brackets disambiguated by context.** `<` and `>` are TLt/TGt at expression position; in type position (after `:`, `->`, in fn-decl angle params), they open/close generic parameter lists. This is parser-internal context tracking, not a separate token kind.
+- **Angle brackets are retired; `<`/`>` are always comparison.** `<` and `>` are TLt/TGt everywhere. Generic type parameters are the lowercase-identifier convention (the case rule IS the declaration — §«Generic type parameters»); there is no angle-bracket parameter list in any declaration position. The parser recognizes a call-site `ident<...>(` pattern ONLY to emit the format-liftable `E_ExplicitTypeParams` (strip the turbofish), turning a stale-fluency keystroke into a teaching surface — never parsing it as a generic-application form.
 - **Pipe-vs-or disambiguation.** `|` is TPipe (variant separator in `type` body + pattern alternation in match arm body); `||` is TOrOr (logical or). No `|x|` lambda fence — lambdas use `(params) => body`.
 
 ### `if` without `else` — unit-returning conditional

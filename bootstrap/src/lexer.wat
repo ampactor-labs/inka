@@ -23,7 +23,7 @@
   ;;   TComma=51 TDot=52 TColon=53 TSemicolon=54
   ;;   TPlus=55 TMinus=56 TStar=57 TSlash=58 TPercent=59
   ;;   TEq=60 TLt=61 TGt=62 TBang=63
-  ;;   TPipe=64 TTilde=65 TAt=66 TQuestion=67
+  ;;   TPipe=64 TTilde=65 TAt=66 THole=67   (`??` only; single `?` is not a token)
   ;; Layout (68-69): TNewline=68 TEof=69
   ;; Option: None=70 Some=71 (fielded)
 
@@ -244,6 +244,9 @@
     (if (i32.and (i32.eq (local.get $a) (i32.const 124))
                  (i32.eq (local.get $b) (i32.const 124)))
       (then (return (call $mk_Some (i32.const 43)))))   ;; ||
+    (if (i32.and (i32.eq (local.get $a) (i32.const 63))
+                 (i32.eq (local.get $b) (i32.const 63)))
+      (then (return (call $mk_Some (i32.const 67)))))   ;; ?? — THole (the gradient's absence marker)
     ;; `::` is not a token (SYNTAX.md one-separator law; code 44 retired).
     (i32.const 70))  ;; None
 
@@ -293,8 +296,8 @@
       (then (return (call $mk_Some (i32.const 65)))))   ;; ~
     (if (i32.eq (local.get $b) (i32.const 64))
       (then (return (call $mk_Some (i32.const 66)))))   ;; @
-    (if (i32.eq (local.get $b) (i32.const 63))
-      (then (return (call $mk_Some (i32.const 67)))))   ;; ?
+    ;; Single `?` is NOT a token (SYNTAX.md: only `??` = THole, handled in
+    ;; $two_char_kind). A bare `?` falls through to unexpected-char.
     (i32.const 70))  ;; None
 
   ;; ─── push_tok: append token to buffer ─────────────────────────────

@@ -33,7 +33,7 @@ Each section below labels which primitive(s) its forms surface.
 
 Five rules every syntactic decision below honors:
 
-1. **Layout IS contract.** The shape of the code on the page IS the computation graph. The parser enforces layout — code with the wrong layout is a parse error, not a stylistic preference.
+1. **Layout is projection, never contract.** The shape of the code on the page IS the computation graph — because the formatter *projects* the graph onto the page in canonical form, not because the parser reads meaning from whitespace. The parser has ONE precedence table; layout is never semantics (the `~>` one-precedence law, 2026-06-11). Wrong layout is normalized at save by `mentl fmt`, never a parse error.
 
 2. **No redundant form.** If two syntactic forms produce the same graph, one is rejected. The medium refuses ceremony the substrate doesn't require.
 
@@ -390,9 +390,9 @@ input
 
 **Two or more INDEPENDENT pipelines run in parallel.** Each branch has its own input. Outputs are tupled.
 
-**`><` is a structural N-ary construct accepting two layouts**, distinguished by branch shape:
+**`><` is a structural N-ary construct the formatter renders in one of two layouts** (a presentation choice, never a parse distinction — there are no semantic "forms," only render shapes):
 
-**Form A — vertical (canonical for multi-line branches):**
+**Vertical layout (formatter-canonical for multi-line branches):**
 ```
 (pipeline_a)
     ><
@@ -408,7 +408,7 @@ Three or more branches stack:
 (pipeline_c)
 ```
 
-**Form B — inline (canonical for atomic branches):**
+**Inline layout (formatter-canonical for atomic branches):**
 ```
 (branch_a) >< (branch_b)
 (audio_l |> compress) >< (audio_r |> compress)
@@ -418,16 +418,16 @@ Three or more branches stack:
 **Layout is the formatter's projection — never semantics.** The
 precedence table alone draws the tree: `><` binds looser than `|>`,
 so `a |> f >< b |> g` IS `(a |> f) >< (b |> g)` with or without
-parens. The formatter writes the parens and chooses the form; the
+parens. The formatter writes the parens and chooses the layout; the
 parser enforces nothing about whitespace or parenthesization.
 
 **Render rule (formatter canon):**
 - Each branch rendered parenthesized — `(...)` — for visual branch boundaries.
-- All branches single-line + total fits target width → Form B (inline).
-- Any branch multi-line OR total exceeds width → Form A (vertical): each branch on its own line; `><` ALONE on its own line at INDENTED CENTER (4-space indent).
+- All branches single-line + total fits target width → inline layout.
+- Any branch multi-line OR total exceeds width → vertical layout: each branch on its own line; `><` ALONE on its own line at INDENTED CENTER (4-space indent).
 - Mixed shapes normalize to vertical at save.
 
-The construct reads top-to-bottom (Form A) or left-to-right (Form B). After `><` the chain returns to LEFT EDGE for whatever consumes the tupled result:
+The construct reads top-to-bottom (vertical) or left-to-right (inline). After `><` the chain returns to LEFT EDGE for whatever consumes the tupled result:
 ```
 (audio_left  |> compress |> limit)
     ><
@@ -1411,15 +1411,15 @@ After a convergent construct, the chain returns to the left edge:
 
 **The medium handles formatting; the developer types meaning.**
 
-Mentl's canonical layout: 2-space indent for left-edge verbs (`|>`, `~>`, `<|`); 4-space indent for indented-center convergent verbs (`><`, `<~`). The shape on the page IS the computation graph (per §36 governing principle 1).
+Mentl's canonical layout: 2-space indent for left-edge verbs (`|>`, `~>`, `<|`); 4-space indent for indented-center convergent verbs (`><`, `<~`). The shape on the page IS the computation graph because the formatter projects it there (governing principle 1).
 
-**Parse rule** (relative ordering, not absolute counts):
-- Left-edge verbs MUST be indented MORE than their input.
-- Convergent verbs (`><`, `<~`) MUST be indented at least as much as left-edge verbs of the same chain.
-- Each stage of a `|>` / `~>` chain at the SAME indent as its peers within the chain.
-- Within a `<|` branch tuple, branches at the SAME indent as each other.
+**Formatter canon** (the shape `mentl fmt` writes — NOT a parse rule; the parser has one precedence table and ignores whitespace entirely):
+- Left-edge verbs render indented MORE than their input.
+- Convergent verbs (`><`, `<~`) render at least as indented as the left-edge verbs of the same chain.
+- Each stage of a `|>` / `~>` chain renders at the SAME indent as its peers.
+- Within a `<|` branch tuple, branches render at the SAME indent as each other.
 
-Tabs are accepted at parse time and converted to spaces by the formatter. Absolute column counts are NOT enforced at parse — what matters is structural ordering. This applies the chain-link-5 discipline (`protocol_parse_is_eager_graph_projection.md`) at the layout layer: indent is a render decision, not a parse contract.
+The parser accepts any whitespace; the precedence table alone draws the tree (chain-link-5, `protocol_parse_is_eager_graph_projection.md`). Tabs are converted to spaces at save. Indent is a render decision, never a parse contract — there is no ill-indented program, only un-normalized source the formatter has not yet touched.
 
 **Render rule** (canonical):
 - The formatter renders code in canonical 2-space / 4-space form on save.
@@ -1535,7 +1535,7 @@ type TokenKind
   | TPipe | TTilde | TAt | THole
 
   // ─── Layout / structural ──────────────────────────────────────────
-  | TNewline                        // semantic per DESIGN Ch 2 / `~>` form
+  | TNewline                        // statement separator; transparent around binops (layout is never semantics)
   | TEof                            // end of input — always last
 ```
 
@@ -1613,7 +1613,7 @@ type TokenKind
 | `TAt`           | `@`              | —         | as-patterns: `name @ pat` binds the whole value AND destructures (§«As-patterns»); `@resume=` erased per inference-from-body |
 | `THole`         | `??`             | —         | hole — the gradient's syntactic absence marker; Mentl's Synth proposes candidates filling the position. The Mentl Mono ligature renders `??` as the octagonal-socket glyph (8 sides ↔ 8 kernel primitives). Single `?` is no longer a token. |
 | **Layout / structural (2)** |     |           |                                                |
-| `TNewline`      | `\n`             | —         | semantic per DESIGN Ch 2 (block-form `~>`)     |
+| `TNewline`      | `\n`             | —         | statement separator; transparent around binops (layout is never semantics) |
 | `TEof`          | (end of input)   | —         | always last token; parser uses to terminate    |
 
 **Total: 66 variants** (20 keywords + 7 identifiers/literals + 14 two-char operators + 23 single-char operators/punctuation + 2 layout). (`TColonColon` deleted 2026-06-10 — `::` was lexed and parsed nowhere; a token with no kernel correspondence is speculative inventory. Module paths use `/` at import position only; `.` is the one access operator in expressions. `TStringPart`/`TStringSplice` joined the literals group with the interpolation substrate. See `perform-dissolution-substrate.md` §6.)
@@ -1717,7 +1717,7 @@ See `docs/specs/simulations/syntax/diagnostic-catalog-substrate.md` for the subs
 - DESIGN.md Ch 4 — the substrate (graph + handler)
 - SUBSTRATE.md §II — Visual Programming in Plain Text; Five Verbs Are a Complete Topological Basis
 - spec 03 — Typed AST (NodeBody, Expr, Stmt, Pat)
-- spec 10 — Pipes (PipeKind, layout enforcement)
+- spec 10 — Pipes (PipeKind; layout as formatter projection)
 - spec 11 — Clock (iterative context for `<~`)
 - protocol_pattern_completion_check.md — output-boundary discipline
 

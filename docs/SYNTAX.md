@@ -177,6 +177,8 @@ fn audio_stage(samples) with Sample(44100) + !Alloc + IO =
 
 `Pure` is the identity element of `+`. Writing `with Pure` is allowed (and an explicit purity declaration); `with Pure + IO` simplifies to `with IO`.
 
+**`with` is one keyword, not four.** It reads identically everywhere it appears — *"this construct is accompanied by / carries X"* — and the four surfaces are one concept, not overload: a function carries effects (`fn f() with E`); a handler carries state (`handler h with s = init`); a handle expression runs accompanied by a handler (`handle body with h`, the block form of `~>`); a resume carries a state update (`resume(v) with s = s + 1`). The grammar disambiguates by position (a row after a signature, `name = init` bindings after a handler/resume, a handler value after a handle body); the meaning is constant.
+
 ### Return type omission
 
 ```

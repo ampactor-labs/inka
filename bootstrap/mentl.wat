@@ -4009,8 +4009,11 @@
       (then (return (call $mk_Some (i32.const 63)))))   ;; !
     (if (i32.eq (local.get $b) (i32.const 124))
       (then (return (call $mk_Some (i32.const 64)))))   ;; |
-    (if (i32.eq (local.get $b) (i32.const 126))
-      (then (return (call $mk_Some (i32.const 65)))))   ;; ~
+    ;; Byte 126 `~` is NOT a single-char token: valid only as `~>`/`<~`
+    ;; (lexed in $two_char_kind). A standalone `~` falls through to
+    ;; unexpected-char, exactly as a standalone `?` does. TTilde=65 stays
+    ;; a pinned-but-dead slot (the flat tag-space shares one counter with
+    ;; the Option ADT — see the registry note).
     (if (i32.eq (local.get $b) (i32.const 64))
       (then (return (call $mk_Some (i32.const 66)))))   ;; @
     ;; Single `?` is NOT a token (SYNTAX.md: only `??` = THole, handled in

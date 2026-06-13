@@ -116,7 +116,10 @@ fn single_char_kind(b) with Pure = {
   else if b == 62  { Some(TGt) }
   else if b == 33  { Some(TBang) }
   else if b == 124 { Some(TPipe) }
-  else if b == 126 { Some(TTilde) }
+  // byte 126 `~` is NOT a single-char token: it is valid only as `~>`
+  // (handler-attach) / `<~` (feedback), lexed by maximal munch before
+  // here. A standalone `~` falls through to None → unexpected-char,
+  // exactly as a standalone `?` does (`??` is the only `?` form).
   else if b == 64  { Some(TAt) }
   else             { None }
 }

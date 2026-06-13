@@ -130,20 +130,27 @@ handler arm_state_default {
 ///   writes complete the handler-state-record install per
 ///   protocol_call_indirect_paradox_2026_05_10.md.
 effect HandlerStateInitsRegistry {
-  register_handler_state_inits(String, List) -> Int
+  register_handler_state_inits(String, List, List) -> Int
   lookup_handler_state_inits(String) -> List
+  lookup_handler_arm_names(String) -> List
 }
 
 handler handler_state_inits_registry with ledger = [] {
-  register_handler_state_inits(name, inits) => {
+  register_handler_state_inits(name, inits, arm_names) => {
     // Prepend: O(1) on snoc-tree lists; lookup walks head-first so
     // most-recent registration wins (handler names are unique per
-    // source so order is not semantically observable).
+    // source so order is not semantically observable). ONE entry holds
+    // both the state-init list and the per-effect arm-name groups — the
+    // handler-record's static shape, read by every install site. Drift 7
+    // refused: not parallel name/inits/arm_names arrays.
     resume(0)
-      with ledger = [{name: name, inits: inits}] ++ ledger
+      with ledger = [{name: name, inits: inits, arm_names: arm_names}] ++ ledger
   },
   lookup_handler_state_inits(name) => {
-    resume(find_state_inits_by_name(name, ledger))
+    resume(find_registry_field(name, ledger, (e) => e.inits))
+  },
+  lookup_handler_arm_names(name) => {
+    resume(find_registry_field(name, ledger, (e) => e.arm_names))
   }
 }
 
@@ -151,14 +158,86 @@ handler handler_state_inits_registry with ledger = [] {
 /// arm-body lowering invoked outside lower_program). Returns [] for any
 /// lookup; register is a no-op.
 handler handler_state_inits_default {
-  register_handler_state_inits(_name, _inits) => resume(0),
-  lookup_handler_state_inits(_name)           => resume([])
+  register_handler_state_inits(_name, _inits, _arm_names) => resume(0),
+  lookup_handler_state_inits(_name)                       => resume([]),
+  lookup_handler_arm_names(_name)                         => resume([])
 }
 
-fn find_state_inits_by_name(name, ledger) = {
+fn find_registry_field(name, ledger, project) = {
   let hits = filter((entry) => entry.name == name, ledger)
   if len(hits) == 0 { [] }
-  else { head(hits).inits }
+  else { project(head(hits)) }
+}
+
+/// ─── Lower-phase handler-stack ─────────────────────────────────────
+/// Pushed at each `~>` / handle install (before the body lowers), popped
+/// after. A Tier-1 perform inside the body resolves the innermost handler
+/// installed for its op AND that install's handle — so emit threads the
+/// SAME state record (`__hstate_<h>`) the arm was installed against, not
+/// the caller's __state misread as state. The seed's $lower_handler_stack
+/// expressed as a Mentl effect (handler IS state); the install handle is
+/// graph-carried, never re-derived (Anchor 1).
+effect LowerHandlerStack {
+  lower_handler_push(String, Int) -> Int
+  lower_handler_pop() -> Int
+  lower_handler_stack_now() -> List
+}
+
+handler lower_handler_stack_ctx with stack = [] {
+  lower_handler_push(name, install_handle) => {
+    resume(0) with stack = [{name: name, handle: install_handle}] ++ stack
+  },
+  lower_handler_pop() => {
+    if len(stack) == 0 { resume(0) }
+    else { resume(0) with stack = list_tail(stack) }
+  },
+  // Head-first = innermost-first; resolution walks it as a plain fn.
+  lower_handler_stack_now() => resume(stack)
+}
+
+/// ─── Arm-body evidence ledger ──────────────────────────────────────
+/// While a handler's arm bodies lower, their Tier-2 performs record the
+/// effects they dispatch through (first-encounter order). The recorded
+/// names ARE the captured-ev slots the install writes after the arms; the
+/// arm fn's LowFn fence makes its LEvPerform reads land there. Closed per
+/// discriminator into the hev registry so install sites read them back.
+/// Hβ.emit.handler-record-ev-capture, the seed's $lower_arm_ev_* globals.
+effect ArmEvLedger {
+  arm_ev_begin() -> Int
+  arm_ev_active() -> Bool
+  arm_ev_index_for(String) -> Int
+  arm_ev_end(String) -> Int
+  lookup_handler_arm_ev_names(String) -> List
+}
+
+handler arm_ev_ledger_ctx with active = false, names = [], entries = [] {
+  arm_ev_begin()  => resume(0) with active = true, names = [],
+  arm_ev_active() => resume(active),
+  arm_ev_index_for(ename) => {
+    // Append-or-get: indices already handed out never shift, so the
+    // first-encounter slot the install writes and the arm's LEvSlotRef
+    // read agree by construction. Append is structural (prepend would
+    // renumber prior indices); the seed's list_extend_to+list_set residue.
+    let idx = index_of_name(names, ename, 0)
+    if idx >= 0 { resume(idx) }
+    else { resume(len(names)) with names = list_concat(names, [ename]) }
+  },
+  arm_ev_end(discriminator) => {
+    resume(0)
+      with entries = [{name: discriminator, evs: names}] ++ entries,
+           active  = false,
+           names   = []
+  },
+  lookup_handler_arm_ev_names(hname) => {
+    if hname == "" { resume([]) }
+    else { resume(find_registry_field(hname, entries, (e) => e.evs)) }
+  }
+}
+
+fn index_of_name(names, target, i) = {
+  if i >= len(names) { -1 }
+  else if names[i] == target { i }
+  else { index_of_name(names, target, i + 1) }
 }
 
 /// Every variant carries a source TypeHandle (Int), never a cached Ty.
@@ -200,20 +279,43 @@ type LowExpr
   | LStateGet(Int, Int)
   | LStateSet(Int, Int, LowExpr)
   | LRegion(Int, List)                         // arena scope
-  | LHandleWith(Int, LowExpr, LowExpr, String, List) // ~> desugaring; 4th = handler_name ("" for anonymous), 5th = state_inits as [LowExpr] (one per source-order state field) — emit allocates record, writes inits at offset 8+i*4, sets $<handler_name>_state_g per protocol_handler_is_state_is_closure_is_evidence.md
+  // ~> desugaring. ONE handler record (handler IS state IS closure IS
+  // evidence): [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous][captured_evs].
+  //   4th = handler_name ("" for anonymous — no `_state_g` global).
+  //   5th = state_inits ([LowExpr], source-order; written at 8+i*4).
+  //   6th = arm_names — per-effect groups [(ename, [arm_fn_name])], op-decl
+  //         order within each effect; emit lays each group contiguously and
+  //         builds a thin [record, base] evidence-entry per effect.
+  //   7th = captured_evs ([LowExpr]) — the install-site evidence the arm
+  //         bodies perform through, resolved at THIS position; written after
+  //         the arms so the arm fn's LowFn fence lands its LEvPerform reads.
+  // Per protocol_handler_is_state_is_closure_is_evidence.md +
+  // Hβ.lower.multi-effect-ev-index-map (Part 2) + Hβ.emit.handler-record-ev-capture.
+  | LHandleWith(Int, LowExpr, LowExpr, String, List, List, List)
   | LFeedback(Int, LowExpr, LowExpr)           // <~ desugaring (iterative ctx required)
-  | LPerform(Int, String, List)                // effect op invocation — monomorphic direct-call form
+  // effect op invocation — Tier-1 direct-call form. 4th = state_local: the
+  // install-LOCAL name "__hstate_<h>" of the lexically-enclosing handler the
+  // arm runs against ("" sentinel = use caller __state). Threads the handler's
+  // STATE RECORD as the arm-call's __state per handler-IS-state.
+  | LPerform(Int, String, List, String)
   | LHandle(Int, LowExpr, List)                // body + arms (handle-expression)
-  // H1: evidence is now a slot-set on LMakeClosure (the closure
-  // record IS the evidence record — DESIGN Ch 4 "handler IS state"
-  // in its ultimate form). LBuildEvidence has been deleted; closure
-  // records grow ev_slots after captures. LEvPerform loads the
-  // fn_idx from __state at the compile-time-resolved offset and
-  // dispatches via call_indirect. When inference determines a
-  // perform site is in monomorphic context, it stays as LPerform
-  // (direct call to `$op_<name>`); only polymorphic sites become
-  // LEvPerform.
-  | LEvPerform(Int, String, Int, List)         // handle, op_name, slot_idx, args
+  // Tier-2 evidence-dispatched perform (handler comes from the caller via
+  // an evidence slot on __state — handler IS evidence). The ev-slot holds
+  // a per-effect entry [record_ptr, base]; the arm runs against that RECORD
+  // as its __state. ev_slot = the effect's index in this fn's row (the
+  // Boolean row projected as evidence layout); op_slot = the op's index
+  // within its effect (op-decl order). emit reads:
+  //   entry  = __state[8 + 4*fence + 4*ev_slot]
+  //   record = entry[0];  base = entry[1]
+  //   arm    = record[8 + 4*record[4] + 4*(base + op_slot)]  (fence-relative
+  //            off the record's OWN nstate@4) — an interior read, never a
+  //            static body-captures guess (protocol_reflexive_interiority).
+  | LEvPerform(Int, String, Int, Int, List)    // handle, op_name, ev_slot, op_slot, args
+  // Forward THIS fn's own ev-slot for an effect (the handler record the
+  // caller threaded into __state) by reference into a deeper callee's record
+  // or an install's captured-ev region. The polymorphic-scope companion of
+  // derive_ev_slots' record-pointer entries.
+  | LEvSlotRef(Int, Int)                       // handle, ev_index in this frame
   | LFieldLoad(Int, LowExpr, Int)              // W6: handle, record, offset_bytes
   // Hβ.first-light.resume-with-state-mutation: `resume(val) with field =
   // expr` per SUBSTRATE.md L660-694 lowers each (field, value) update to
@@ -239,8 +341,15 @@ type LowValue
   | LBool(Bool)
 
 type LowFn
-  = LFn(String, Int, List, List, EffRow)
-                  // name, arity, param names, body stmts, effect row
+  = LFn(String, Int, List, List, EffRow, Int)
+                  // name, arity, param names, body stmts, effect row, fence.
+                  // fence = where this fn's __state evidence region starts,
+                  // in slots past the 8-byte header: closures pass their
+                  // capture count; handler arm fns pass nstate+total_arms
+                  // (the record's captured-evs sit after state AND arms);
+                  // plain top-level fns pass 0. emit_fn_body installs it as
+                  // the body-context so every LEvPerform/LEvSlotRef reads
+                  // 8+4*fence+4*slot — one rule across all three fn shapes.
 
 type LowPat
   = LPVar(String)
@@ -283,11 +392,12 @@ fn lexpr_handle(e) with Pure = match e {
   LStateGet(h, _)         => h,
   LStateSet(h, _, _)      => h,
   LRegion(h, _)           => h,
-  LHandleWith(h, _, _, _, _) => h,
+  LHandleWith(h, _, _, _, _, _, _) => h,
   LFeedback(h, _, _)      => h,
-  LPerform(h, _, _)       => h,
+  LPerform(h, _, _, _)    => h,
   LHandle(h, _, _)        => h,
-  LEvPerform(h, _, _, _)  => h,
+  LEvPerform(h, _, _, _, _) => h,
+  LEvSlotRef(h, _)        => h,
   LFieldLoad(h, _, _)     => h,
   LStateSlotStore(h, _, _) => h,
   LWasiCall(h, _, _)      => h
@@ -409,16 +519,17 @@ fn lower_call_default(handle, f, fh, lo_args) = {
   }
 }
 
-/// H1.6 — derive `ev_slots` from the callee's row at lower time. Each
-/// effect name in the callee's row resolves to the CALLER's handler
-/// arm fn_idx via `inf_handler_provider`. The CALLER knows which handler
-/// is installed; the callee needs that fn_ptr as evidence. Each call
-/// site produces different evidence because each caller may install a
-/// different handler.
-///
-/// The naming is DISCRIMINATED: `$op_<handler>_<op>_idx`, matching the
-/// globals emitted by `emit_fn_index_globals` for each LDeclareFn.
-/// Undiscriminated `$op_<op>_idx` was drift — no such globals exist.
+/// Derive the per-effect evidence the caller threads into a polymorphic
+/// callee's __state record. ONE ev per effect in the callee's row
+/// (canonical sorted-lex order, builtin effects filtered) — NOT one per op
+/// and NOT a fn-index global (that was drift 5, a C dictionary-of-function-
+/// pointers). The ev is a RECORD POINTER: handler IS state IS closure IS
+/// evidence. Each effect resolves to either the lexically-installed
+/// handler's state record (`LLocal "__hstate_<h>"`) or a forward of THIS
+/// fn's own ev-slot for that effect (`LEvSlotRef`). The shared sorted-lex
+/// order makes caller→callee slot remapping correct WITHOUT a coercion
+/// table — Koka evidence coercion by construction. Mirrors the seed's
+/// $derive_ev_slots (record-pointer, proven mn-ev16).
 fn derive_ev_slots(callee_handle) = {
   match perform lookup_ty(callee_handle) {
     TFun(_, _, row) => derive_ev_slots_from_row(row),
@@ -427,33 +538,205 @@ fn derive_ev_slots(callee_handle) = {
 }
 
 fn derive_ev_slots_from_row(row) = match row {
-  EfPure          => [],
-  EfClosed(names) => derive_ev_slots_from_names(names),
+  EfPure           => [],
+  EfClosed(names)  => derive_ev_slots_from_names(names),
   EfOpen(names, _) => derive_ev_slots_from_names(names),
-  _               => []
+  _                => []
 }
 
-fn derive_ev_slots_from_names(names) = {
-  flat_map((name) => {
-    let eff_name = match name {
-      ENamed(s)            => s,
-      EParameterized(s, _) => s
+fn derive_ev_slots_from_names(names) =
+  map(resolve_ev_for_ename, row_dispatched_names(eff_names_of(names)))
+
+/// One ev per effect-name: the installed handler's record (LLocal) when a
+/// handler is lexically in scope, else a forward of this frame's own slot
+/// (LEvSlotRef). Both derive_ev_slots and an install's captured_evs read
+/// through this one projection — one truth, two record shapes.
+fn resolve_ev_for_ename(ename) = {
+  let state_local = lower_resolve_handler_state_for_ename(ename)
+  if state_local == "" {
+    LEvSlotRef(0, lower_ev_index_in_frame(ename))
+  } else {
+    LLocal(0, state_local)
+  }
+}
+
+/// Effect-row names as bare strings, in the row's (already-canonical) order.
+fn eff_names_of(names) = map((name) => match name {
+  ENamed(s)            => s,
+  EParameterized(s, _) => s
+}, names)
+
+/// Builtin effects have no handler record — the raw substrate IS their
+/// handler (wasm instruction / WASI import). Drop them from the evidence
+/// layout so user effects keep their correct indices. The builtin set is
+/// carried as DATA (one membership projection), not an inline `== "X"`
+/// chain. The ultimate form carries builtin-ness STRUCTURALLY as an
+/// EffectDeclKind variant (BuiltinEffect vs UserEffect) read from the
+/// graph; that touches the effect-declaration substrate in both layers
+/// (peer Hβ.row.builtin-effect-kind) and changes no evidence bytes —
+/// the membership result is identical, so it composes after L1.
+fn row_dispatched_names(names) =
+  filter((n) => !is_builtin_effect(n), names)
+
+fn is_builtin_effect(ename) =
+  index_of_name(["Memory", "Alloc", "WASI"], ename, 0) >= 0   // drift-audit: ignore — byte-parity requires the SAME name set the seed filters (row_dispatched_names data segs 6496/6512/6528); a structural BuiltinEffect EffectDeclKind variant must change both layers together (peer Hβ.row.builtin-effect-kind, post-L1) or the evidence layout diverges from m2's.
+
+/// op_name → its declaring effect's name via EffectOpScheme ("" if not an
+/// effect op in scope — productive-under-error). The graph carries the
+/// op→effect edge; read it, never a side registry.
+fn lower_effect_name_of_op(op_name) = match lookup_parent_effect(op_name) {
+  Some(en) => en,
+  None     => ""
+}
+
+/// op's index WITHIN its own effect (op-decl order). The per-effect arm
+/// region is laid out in this order, so op_slot indexes it directly.
+fn lower_compute_ev_slot_for_op(op_name) = match lookup_parent_effect(op_name) {
+  Some(ename) => clamp_index(index_of_name(lookup_effect_op_names(ename), op_name, 0)),
+  None        => 0
+}
+
+/// The effect's index in the CURRENT fn's row — the Boolean row projected
+/// as the runtime evidence layout. sorted-lex canonical so the caller
+/// (building the callee's __state) and the callee (reading its own slot)
+/// agree by construction.
+fn lower_compute_ev_index_for_effect(ename) = {
+  let declared = perform inf_declared_effs()
+  let dispatched = row_dispatched_names(sort_unique(declared_eff_names(declared)))
+  clamp_index(index_of_name(dispatched, ename, 0))
+}
+
+fn declared_eff_names(declared) = map((d) => {
+  let (name, _negated) = d
+  match name {
+    ENamed(s)            => s,
+    EParameterized(s, _) => s
+  }
+}, declared)
+
+/// Inside a handler arm body the frame's evidence is the captured set
+/// (first-encounter ledger order); everywhere else it is the fn's row
+/// (canonical order). One index space per frame shape.
+fn lower_ev_index_in_frame(ename) = {
+  if perform arm_ev_active() {
+    perform arm_ev_index_for(ename)
+  } else {
+    lower_compute_ev_index_for_effect(ename)
+  }
+}
+
+fn clamp_index(i) = if i < 0 { 0 } else { i }
+
+/// ─── Lexical handler resolution (lower-phase, install-handle-bearing) ──
+/// Walk the lower-handler-stack innermost-first; return the discriminated
+/// arm target "<handler>_<op>" and the install handle of the first stacked
+/// handler whose effect-groups cover op_name's effect. None when no lexical
+/// handler handles it — the Tier-2 evidence path. The install handle gives
+/// emit the `__hstate_<h>` record the arm runs against.
+fn lower_resolve_handler_for_op(op_name) = {
+  let ename = lower_effect_name_of_op(op_name)
+  resolve_in_stack(op_name, ename, perform lower_handler_stack_now())
+}
+
+fn resolve_in_stack(op_name, ename, stack) = {
+  if ename == "" || len(stack) == 0 { None }
+  else {
+    let e = list_head(stack)
+    if handler_covers_effect(e.name, ename) {
+      Some({target: "{e.name}_{op_name}", handle: e.handle})
+    } else {
+      resolve_in_stack(op_name, ename, list_tail(stack))
     }
-    // For each effect name, find the ops it declares and resolve
-    // each op's handler fn_idx at the CALLER's scope.
-    let op_names = lookup_effect_op_names(eff_name)
-    map((op_name) => {
-      // Use the CALLER's handler context for discriminated naming
-      match perform inf_handler_provider(op_name) {
-        Some(handler_name) =>
-          LGlobal(0, "op_{handler_name}_{op_name}_idx"),
-        None =>
-          // No handler in caller scope — undiscriminated fallback
-          // (productive-under-error; will surface as wat2wasm reject)
-          LGlobal(0, "op_{op_name}_idx")
-      }
-    }, op_names)
-  }, names)
+  }
+}
+
+/// A handler covers an effect iff one of its arm-name groups keys on that
+/// effect — read from the same registry emit lays the arms by (one truth).
+fn handler_covers_effect(hname, ename) =
+  any((g) => g.ename == ename, perform lookup_handler_arm_names(hname))
+
+/// The handler-state record local "__hstate_<h>" for the innermost handler
+/// handling op_name's effect ("" sentinel = none in scope → caller __state).
+fn lower_resolve_handler_state_for_op(op_name) = match lower_resolve_handler_for_op(op_name) {
+  Some(r) => "__hstate_{int_to_str(r.handle)}",
+  None    => ""
+}
+
+/// Same, keyed by effect name (derive_ev_slots / captured_evs path), but
+/// resolving to the per-effect ENTRY local "__hstate_<h>_<ename>" (the thin
+/// [record, base] view the ev-slot forwards) — NOT the bare record. Resolve
+/// through the effect's first op to find the install handle.
+fn lower_resolve_handler_state_for_ename(ename) = {
+  let ops = lookup_effect_op_names(ename)
+  if len(ops) == 0 { "" }
+  else {
+    match lower_resolve_handler_for_op(list_head(ops)) {
+      Some(r) => "__hstate_{int_to_str(r.handle)}_{ename}",
+      None    => ""
+    }
+  }
+}
+
+/// The install-site evidence a handler's arm bodies perform through,
+/// resolved at THIS install position. Emit writes these after the record's
+/// arm region; the arm fn's LowFn fence lands its LEvPerform reads on them.
+fn lower_captured_evs_for(hname) =
+  map(resolve_ev_for_ename, perform lookup_handler_arm_ev_names(hname))
+
+/// Per-effect arm-fn-name groups [(ename, [arm_fn_name])], op-decl order
+/// within each effect. A handler can cover multiple effects (graph_handler:
+/// GraphWrite + GraphRead); op-slot is op-decl-relative WITHIN an effect, so
+/// a flat region would collide (each effect's op 0 wants slot 0). Grouping
+/// by effect (read from the graph via lower_effect_name_of_op) lets emit lay
+/// each group contiguously and build a thin per-effect [record, base] entry.
+fn build_handler_arm_names(hname, arms) = {
+  let placements = map((arm) => {
+    let ename = lower_effect_name_of_op(arm.op_name)
+    {ename: if ename == "" { arm.op_name } else { ename },
+     slot:  lower_compute_ev_slot_for_op(arm.op_name),
+     name:  "op_{hname}_{arm.op_name}"}
+  }, arms)
+  fold(placements, [], place_arm_in_groups)
+}
+
+/// Place one arm at its op-slot in its effect-group's arm_list, find-or-
+/// create the group. The arm_list is dense [0, max_slot] with the empty-
+/// string gap sentinel for ops this handler doesn't implement; emit skips
+/// gaps but counts the length, so the per-effect base advances correctly.
+fn place_arm_in_groups(groups, arm) = {
+  let (before, grp, after) = split_group_by_ename(groups, arm.ename)
+  let filled = set_at_extend(grp.arms, arm.slot, arm.name)
+  list_concat(before, [{ename: arm.ename, arms: filled}] ++ after)
+}
+
+fn split_group_by_ename(groups, ename) =
+  split_group_loop([], groups, ename)
+
+fn split_group_loop(before, rest, ename) = {
+  if len(rest) == 0 {
+    (before, {ename: ename, arms: []}, [])
+  } else if list_head(rest).ename == ename {
+    (before, list_head(rest), list_tail(rest))
+  } else {
+    split_group_loop(list_concat(before, [list_head(rest)]), list_tail(rest), ename)
+  }
+}
+
+/// Functional set arms[slot] = name. Replace in place when slot is in
+/// range; else grow with "" gaps and append. Tree-safe (slice + concat,
+/// not flat list_set) — the arm_list may be a concat-tree.
+fn set_at_extend(arms, slot, name) = {
+  if slot < len(arms) {
+    list_concat(slice(arms, 0, slot),
+                [name] ++ slice(arms, slot + 1, len(arms)))
+  } else {
+    list_concat(grow_to_with_gaps(arms, slot), [name])
+  }
+}
+
+fn grow_to_with_gaps(arms, n) = {
+  if len(arms) >= n { arms }
+  else { grow_to_with_gaps(list_concat(arms, [""]), n) }
 }
 
 /// Look up the op names for an effect by reading the graph.
@@ -471,44 +754,26 @@ fn lookup_effect_op_names(eff_name) = {
     None => [eff_name]
   }
 }
-/// Row-guided perform dispatch — the single decision point.
-/// The row IS the evidence contract:
-///   - Effect in the current fn's declared row → LEvPerform
-///     (handler comes from caller via evidence slot on __state)
-///   - Effect NOT in row → LPerform (handler is locally installed,
-///     direct call — Tier 1 monomorphic per SUBSTRATE.md §III)
-fn lower_perform_dispatch(handle, op_name, lo_args) = {
-  if effect_in_current_fn_row(op_name) {
-    let slot = effect_slot_in_row(op_name)
-    LEvPerform(handle, op_name, slot, lo_args)
-  } else {
-    match perform inf_handler_provider(op_name) {
-      Some(handler_name) =>
-        LPerform(handle,
-                 "{handler_name}_{op_name}",
-                 lo_args),
-      None =>
-        LPerform(handle, op_name, lo_args)
-    }
+/// Perform dispatch — the single decision point, lexical-install first.
+///   - A handler is lexically installed for the op's effect → Tier 1:
+///     LPerform-with-state, a direct `$op_<handler>_<op>` call against the
+///     install's OWN state record (`__hstate_<h>`), the SAME record the arm
+///     was installed against.
+///   - Else → Tier 2: LEvPerform, evidence-passing. The caller threads the
+///     handler record via an ev-slot on __state; ev_slot = the effect's
+///     index in this fn's row, op_slot = the op's index within its effect.
+/// Lexical install wins over the row (a nested handler shadows the caller's
+/// evidence) — the seed's $lower_perform order, byte-faithful.
+fn lower_perform_dispatch(handle, op_name, lo_args) =
+  match lower_resolve_handler_for_op(op_name) {
+    Some(r) =>
+      LPerform(handle, r.target, lo_args, "__hstate_{int_to_str(r.handle)}"),
+    None =>
+      LEvPerform(handle, op_name,
+                 lower_ev_index_in_frame(lower_effect_name_of_op(op_name)),
+                 lower_compute_ev_slot_for_op(op_name),
+                 lo_args)
   }
-}
-
-/// Check if op_name's parent effect is in the current fn's declared row.
-/// inf_declared_effs() returns the `with` clause effects — [] for
-/// functions without a `with` clause (all compiler functions),
-/// leaving them on the LPerform path unchanged.
-fn effect_in_current_fn_row(op_name) = {
-  let declared = perform inf_declared_effs()
-  if len(declared) == 0 { false }
-  else {
-    // Look up op_name's parent effect via EffectOpScheme
-    let ename = lookup_parent_effect(op_name)
-    match ename {
-      Some(en) => any_eff_matches(declared, en),
-      None => false
-    }
-  }
-}
 
 /// Look up which effect an op belongs to via EffectOpScheme.
 fn lookup_parent_effect(op_name) = {
@@ -524,71 +789,6 @@ fn lookup_parent_effect(op_name) = {
   }
 }
 
-/// Check if any declared effect matches the target name.
-fn any_eff_matches(declared, target) = {
-  if len(declared) == 0 { false }
-  else {
-    any_eff_matches_loop(declared, target, 0)
-  }
-}
-
-fn any_eff_matches_loop(declared, target, i) = {
-  if i >= len(declared) { false }
-  else {
-    let (name, _negated) = declared[i]
-    let s = match name {
-      ENamed(s) => s,
-      EParameterized(s, _) => s
-    }
-    if s == target { true }
-    else { any_eff_matches_loop(declared, target, i + 1) }
-  }
-}
-
-/// Find the evidence slot index for an op within the current fn's row.
-/// Slot ordering: for each effect in the declared row, ops expand
-/// in EffectDeclKind order. Must match derive_ev_slots_from_names.
-fn effect_slot_in_row(op_name) = {
-  let declared = perform inf_declared_effs()
-  let ename = lookup_parent_effect(op_name)
-  match ename {
-    Some(en) => compute_slot_index(declared, en, op_name),
-    None => 0
-  }
-}
-
-/// Compute the evidence slot index by walking declared effects,
-/// expanding each into its ops (via EffectDeclKind), stopping at the
-/// target op_name.
-fn compute_slot_index(declared, target_eff, target_op) = {
-  compute_slot_loop(declared, target_eff, target_op, 0, 0)
-}
-
-fn compute_slot_loop(declared, target_eff, target_op, eff_idx, slot_base) = {
-  if eff_idx >= len(declared) { 0 }
-  else {
-    let (name, _) = declared[eff_idx]
-    let eff_name = match name {
-      ENamed(s) => s,
-      EParameterized(s, _) => s
-    }
-    let ops = lookup_effect_op_names(eff_name)
-    if eff_name == target_eff {
-      // Found the effect — find the op within it
-      find_op_in_list(ops, target_op, slot_base, 0)
-    } else {
-      // Skip this effect's ops
-      compute_slot_loop(declared, target_eff, target_op,
-                        eff_idx + 1, slot_base + len(ops))
-    }
-  }
-}
-
-fn find_op_in_list(ops, target, slot_base, i) = {
-  if i >= len(ops) { slot_base }
-  else if ops[i] == target { slot_base + i }
-  else { find_op_in_list(ops, target, slot_base, i + 1) }
-}
 
 // Lower walk — exhaustive, live
 
@@ -756,7 +956,8 @@ fn lower_expr_body(e, handle, span) = match e {
       len(params),
       param_names_list,
       [lo_body],
-      EfPure
+      EfPure,
+      len(captures_exprs)   // closure fence = capture count
     )
     LMakeClosure(handle, fn_ir, captures_exprs, [])
   },
@@ -870,19 +1071,27 @@ fn lower_pipe(kind, left, right, handle) = match kind {
   },
 
   PTee => {
-    // ~> tee — handler attachment. One precedence, one kind: the
-    // parser's table already scoped the handler over the whole chain
-    // to its left. Lowers to LHandleWith(handle, body, handler,
-    // handler_name, state_inits). handler_name threads from the AST
-    // right-side via extract_handler_name. state_inits come from the
-    // per-handler registry populated at HandlerDeclStmt lower time,
-    // retrieved by name. Empty list when handler-name is ""
-    // (anonymous handle-expr) or unregistered (registry returns []).
-    let lo_l = lower_expr(left)
+    // ~> tee — handler attachment. One precedence, one kind: the parser's
+    // table already scoped the handler over the whole chain to its left.
+    // Push the handler onto the lower-stack BEFORE lowering the body so a
+    // Tier-1 perform inside resolves to it AND learns the install handle
+    // (→ `__hstate_<h>`, the SAME record the arm runs against). Pop after.
+    //
+    // The ONE handler record (protocol_handler_is_state_is_closure_is_evidence)
+    // carries config args (from `~> handler(args)`, written FIRST) then
+    // state inits at 8+i*4, the per-effect arm groups, and the arm-bodies'
+    // captured evidence — resolved at THIS install position (handler popped,
+    // so they route to the enclosing scope, not self).
     let lo_r = lower_expr(right)
     let hname = extract_handler_name(right)
-    let inits = perform lookup_handler_state_inits(hname)
-    LHandleWith(handle, lo_l, lo_r, hname, inits)
+    perform lower_handler_push(hname, handle)
+    let lo_l = lower_expr(left)
+    perform lower_handler_pop()
+    let config_inits = map(lower_expr, extract_handler_config_args(right))
+    let all_inits = config_inits ++ perform lookup_handler_state_inits(hname)
+    LHandleWith(handle, lo_l, lo_r, hname, all_inits,
+                perform lookup_handler_arm_names(hname),
+                lower_captured_evs_for(hname))
   },
 
   PFeedback => {
@@ -919,6 +1128,14 @@ fn extract_handler_name(node) = match node {
   _ => ""
 }
 
+/// Config args from `~> handler(arg1, arg2)` — the parameterized-handler
+/// factory's arguments, lowered and written FIRST into the install record
+/// (before state inits). A bare `~> handler` (VarRef) has none.
+fn extract_handler_config_args(node) = match node {
+  CallExpr(_callee, args) => args,
+  _                       => []
+}
+
 /// `><` × Thread effect dispatch. Each branch is synthesized as a
 /// 0-arg thunk closure (mirroring LambdaExpr's capture resolution at
 /// lower.mn:402-428). The spawn op returns a Handle; join retrieves
@@ -944,11 +1161,11 @@ fn extract_handler_name(node) = match node {
 fn lower_compose_via_thread(handle, left, right) = {
   let thunk_l = synthesize_branch_thunk(handle, "l", left)
   let thunk_r = synthesize_branch_thunk(handle, "r", right)
-  let h_l = LPerform(handle, "spawn", [thunk_l])
-  let h_r = LPerform(handle, "spawn", [thunk_r])
+  let h_l = LPerform(handle, "spawn", [thunk_l], "")
+  let h_r = LPerform(handle, "spawn", [thunk_r], "")
   LMakeTuple(handle,
-    [ LPerform(handle, "join", [h_l]),
-      LPerform(handle, "join", [h_r]) ])
+    [ LPerform(handle, "join", [h_l], ""),
+      LPerform(handle, "join", [h_r], "") ])
 }
 
 /// `<|` × Thread effect dispatch. Symmetric peer to
@@ -1015,8 +1232,8 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   let lo_branch = lower_expr(branch_node)
   let input_ref = LLocal(input_h, input_local_name)
   let thunk_body = LCall(branch_h, lo_branch, [input_ref])
-  let fn_ir = LFn(thunk_name, 0, [], [thunk_body], EfPure)
   let captures_exprs = [LLocal(input_h, input_local_name)]
+  let fn_ir = LFn(thunk_name, 0, [], [thunk_body], EfPure, len(captures_exprs))
   LMakeClosure(parent_handle, fn_ir, captures_exprs, [])
 }, enumerate(branch_nodes))
 
@@ -1024,8 +1241,8 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
 /// the list of LPerform("join", [LPerform("spawn", [thunk_i])]).
 /// Source-branch order preserved per Q-B.7.3 determinism.
 fn spawn_join_each(handle, thunks) = map((thunk) => {
-  let h_spawn = LPerform(handle, "spawn", [thunk])
-  LPerform(handle, "join", [h_spawn])
+  let h_spawn = LPerform(handle, "spawn", [thunk], "")
+  LPerform(handle, "join", [h_spawn], "")
 }, thunks)
 
 /// Branch-as-thunk synthesis. Mirrors LambdaExpr's lowering above —
@@ -1052,7 +1269,8 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
     0,
     [],
     [lo_body],
-    EfPure
+    EfPure,
+    len(captures_exprs)   // closure fence = capture count
   )
   LMakeClosure(parent_handle, fn_ir, captures_exprs, [])
 }
@@ -1199,7 +1417,8 @@ fn lower_stmt_body(s, handle, span) = match s {
       len(params),
       param_names_list,
       [lo_body],
-      EfPure          // row resolved live via lookup_ty(handle)
+      EfPure,         // row resolved live via lookup_ty(handle)
+      len(captures_exprs)   // closure fence = capture count
     )
     LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs, []))
   },
@@ -1222,20 +1441,13 @@ fn lower_stmt_body(s, handle, span) = match s {
     // captures (config) or state-loads (state). Threaded through
     // lower_handler_arms_as_decls.
     //
-    // Named peer Hβ.first-light.lperform-handler-discriminator:
-    // LPerform's `(call $op_<n>)` currently resolves to undiscriminated
-    // names; the matching update threads handler_name through perform
-    // sites (monomorphic) or routes to LEvPerform via evidence-slot
-    // dispatch (multi-handler / polymorphic — H1.6).
+    // The handler's (state_inits, arm_names) ledger entry is registered
+    // order-free by lower_pre_register_handler_decls BEFORE any stmt lowers
+    // (so an install in an earlier-sorted module resolves a handler whose
+    // decl follows it, and so lower_handler_arms_as_decls reads the arm-name
+    // groups for its fence). Here we only lower the arms to their
+    // `op_<handler>_<op>` fn declarations.
     let arm_decls = lower_handler_arms_as_decls(arms, name, config, state)
-    // Lower each state-field's init expression and register the list
-    // in the handler-state-inits registry so PTee install sites can
-    // embed inits into LHandleWith. Per
-    // protocol_handler_is_state_is_closure_is_evidence.md the init
-    // writes complete the state record at install (commit 5fccd9c
-    // landed alloc + global set; this lands the field writes).
-    let state_inits_lowered = lower_state_field_inits(state)
-    perform register_handler_state_inits(name, state_inits_lowered)
     LBlock(handle, list_concat(arm_decls, [LConst(handle, LInt(0))]))
   },
   ImportStmt(_module)                       => LConst(handle, LInt(0)),
@@ -1359,7 +1571,24 @@ fn lower_handler_arms(arms) = map((arm) => {
 /// function `op_<op_name>` taking the arm's args (plus the implicit
 /// `__state` per the calling convention). Stateful handlers (with state
 /// slots) land with H1.6's evidence wiring.
-fn lower_handler_arms_as_decls(arms, discriminator, config, state) = map((arm) => {
+fn lower_handler_arms_as_decls(arms, discriminator, config, state) = {
+  // The arm fn's __state IS the handler record [_, nstate FENCE, state..,
+  // arms.., evs..]; its captured-ev region starts past state AND arms, so
+  // fence = nstate + total_arms — summed from the SAME registered arm-name
+  // groups the install's emit lays the arms by (the two sides agree by
+  // construction). Inline handle-exprs aren't pre-registered → 0 arms.
+  let nstate = len(config) + len(state)
+  let fence = nstate + sum_group_arm_lens(perform lookup_handler_arm_names(discriminator))
+  // Open the arm-body evidence ledger: Tier-2 performs in the arm bodies
+  // record their effects (first-encounter order); the indices ARE the
+  // captured-ev slots the install writes after the arms.
+  perform arm_ev_begin()
+  let decls = map((arm) => lower_one_arm_decl(arm, discriminator, config, state, fence), arms)
+  perform arm_ev_end(discriminator)
+  decls
+}
+
+fn lower_one_arm_decl(arm, discriminator, config, state, fence) = {
   let fn_name = "op_{discriminator}_{arm.op_name}"
   // Hβ.first-light.arm-body-fresh-frame: each handler-arm body is
   // its own WASM function with __state IS the handler state record
@@ -1367,9 +1596,7 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = map((arm) =
   // arm body needs a FRESH frame so state-field references (e.g.
   // `frames`, `globals`) resolve to LUpval(0..N-1), emitting
   // `(local.get $__state)(i32.load offset=8 + idx*4)` — the
-  // canonical closure-record layout. Using ls_push_scope alone
-  // contaminates with the outer fn's accumulated locals (slot 34
-  // → offset 144, past the state record entirely; OOB trap).
+  // canonical closure-record layout.
   //
   // captures_names = config_names ++ state_field_names (sources
   // for closure-record slots at install time). args go as locals
@@ -1390,9 +1617,15 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = map((arm) =
   // `with field = NEW` updates' slot offsets via current_state_fields().
   let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
   perform ls_exit_frame()
-  let fn_ir = LFn(fn_name, len(arm.args), arm.args, [lo_body], EfPure)
+  // fence = nstate + total_arms; the arm's LEvPerform reads land on the
+  // record's captured-ev region (past state AND arms).
+  let fn_ir = LFn(fn_name, len(arm.args), arm.args, [lo_body], EfPure, fence)
   LDeclareFn(fn_ir)
-}, arms)
+}
+
+/// Sum each effect-group's arm-list length — the handler record's total
+/// arm-slot count, contiguous per effect.
+fn sum_group_arm_lens(groups) = fold(groups, 0, (acc, g) => acc + len(g.arms))
 
 /// Extract just the `name` field from each state-fields record.
 /// Per parse_handler_state_fields, each entry is `{name, init}`.
@@ -1867,8 +2100,36 @@ fn resolve_captures_outer(names, owner_h) = {
 fn lower_program(stmts) = {
   let globals = collect_top_level_names(stmts)
   perform ls_register_globals(globals)
-  lower_stmt_list(stmts)
+  {
+    // Order-free handler registration: every handler decl's (state_inits,
+    // arm_names) ledger entry lands BEFORE any stmt lowers, so an install
+    // resolves a handler whose decl follows it and every fence reads its
+    // arm-name groups. The lower-handler-stack tracks lexical installs;
+    // the arm-ev ledger collects each handler's arm-body evidence.
+    lower_pre_register_handler_decls(stmts)
+    lower_stmt_list(stmts)
+  }
+    ~> arm_ev_ledger_ctx
+    ~> lower_handler_stack_ctx
     ~> handler_state_inits_registry
+}
+
+/// Register every handler decl's (state_inits, arm_names) before lowering.
+fn lower_pre_register_handler_decls(stmts) =
+  for_each(lower_pre_register_handler_node, stmts)
+
+fn lower_pre_register_handler_node(node) = {
+  let N(body, _, _) = node
+  match body {
+    NStmt(HandlerDeclStmt(name, _ename, _config, state, arms)) => {
+      perform register_handler_state_inits(name,
+        lower_state_field_inits(state),
+        build_handler_arm_names(name, arms))
+      ()
+    },
+    NStmt(Documented(_, inner)) => lower_pre_register_handler_node(inner),
+    _ => ()
+  }
 }
 
 /// Ω.3 — top-level name collection uses the buffer substrate. The number

@@ -427,19 +427,19 @@ fn walk_lemit_top_one(expr) = {
 /// Drift 9 closed: every arm explicit; no `_ =>` catch-all would silently
 /// miss projections for a new variant.
 fn walk_lemit_expr(expr) = match expr {
-  LMakeClosure(_, LFn(name, _, _, body, _), captures, ev) => {
+  LMakeClosure(_, LFn(name, _, _, body, _, _), captures, ev) => {
     perform visit_fn(name)
     walk_lemit_list(body)
     walk_lemit_list(captures)
     walk_lemit_list(ev)
   },
-  LMakeContinuation(_, LFn(name, _, _, body, _), captures, ev, _, _) => {
+  LMakeContinuation(_, LFn(name, _, _, body, _, _), captures, ev, _, _) => {
     perform visit_fn(name)
     walk_lemit_list(body)
     walk_lemit_list(captures)
     walk_lemit_list(ev)
   },
-  LDeclareFn(LFn(name, _, _, body, _)) => {
+  LDeclareFn(LFn(name, _, _, body, _, _)) => {
     perform visit_fn(name)
     walk_lemit_list(body)
   },
@@ -490,20 +490,22 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_expr(v)
   },
   LRegion(_, body)          => walk_lemit_list(body),
-  LHandleWith(_, b, hn, _hname, inits) => {
+  LHandleWith(_, b, hn, _hname, inits, _arm_names, captured_evs) => {
     walk_lemit_expr(b)
     walk_lemit_expr(hn)
     walk_lemit_list(inits)
+    walk_lemit_list(captured_evs)
   },
   LFeedback(h, b, s) => {
     perform visit_state_slot(h)
     walk_lemit_expr(b)
     walk_lemit_expr(s)
   },
-  LPerform(_, _, args)      => walk_lemit_list(args),
+  LPerform(_, _, args, _)   => walk_lemit_list(args),
   LWasiCall(_, _, args)     => walk_lemit_list(args),
   LHandle(_, b, _arms)      => walk_lemit_expr(b),
-  LEvPerform(_, _, _, args) => walk_lemit_list(args),
+  LEvPerform(_, _, _, _, args) => walk_lemit_list(args),
+  LEvSlotRef(_, _)          => (),
   LFieldLoad(_, rec, _)     => walk_lemit_expr(rec),
   LStateSlotStore(_, _, v)  => walk_lemit_expr(v)
 }
@@ -718,9 +720,9 @@ fn max_arity_expr(expr) = match expr {
   LCall(_, _, args)         => len(args) + 1,
   LTailCall(_, _, args)     => len(args) + 1,
   LSuspend(_, _, _, args, _) => len(args) + 1,
-  LPerform(_, _, args)      => len(args),
+  LPerform(_, _, args, _)   => len(args),
   LWasiCall(_, _, args)     => len(args),
-  LEvPerform(_, _, _, args) => len(args) + 1,
+  LEvPerform(_, _, _, _, args) => len(args) + 1,
   LLet(_, _, inner)         => max_arity_expr(inner),
   LMakeClosure(_, _, _, _)         => 0,
   LMakeContinuation(_, _, _, _, _, _) => 0,
@@ -747,9 +749,10 @@ fn max_arity_expr(expr) = match expr {
   LStateGet(_, _)           => 0,
   LStateSet(_, _, _)        => 0,
   LRegion(_, _)             => 0,
-  LHandleWith(_, _, _, _, _) => 0,
+  LHandleWith(_, _, _, _, _, _, _) => 0,
   LFeedback(_, _, _)        => 0,
   LHandle(_, _, _)          => 0,
+  LEvSlotRef(_, _)          => 0,
   LFieldLoad(_, _, _)       => 0,
   LStateSlotStore(_, _, _)  => 0
 }
@@ -907,20 +910,24 @@ fn collect_fn_emit_records(exprs) =
   flatten(map(collect_fn_emit_records_expr, exprs))
 
 fn collect_fn_emit_records_expr(expr) = match expr {
-  LMakeClosure(_h, LFn(name, _arity, param_names, body, _row), captures, ev) => {
-    [(name, param_names, body, len(captures))]
+  // The LowFn fence IS the body-context every fn shape carries: closures
+  // pass their capture count, handler arm fns nstate+total_arms, plain fns
+  // 0. emit_fn_body installs it so LEvPerform/LEvSlotRef read 8+4*fence+
+  // 4*slot — one rule, set at lower time, not re-derived per shape.
+  LMakeClosure(_h, LFn(name, _arity, param_names, body, _row, fence), captures, ev) => {
+    [(name, param_names, body, fence)]
       ++ collect_fn_emit_records(body)
       ++ collect_fn_emit_records(captures)
       ++ collect_fn_emit_records(ev)
   },
-  LMakeContinuation(_h, LFn(name, _arity, param_names, body, _row), captures, ev, _, _) => {
-    [(name, param_names, body, len(captures))]
+  LMakeContinuation(_h, LFn(name, _arity, param_names, body, _row, fence), captures, ev, _, _) => {
+    [(name, param_names, body, fence)]
       ++ collect_fn_emit_records(body)
       ++ collect_fn_emit_records(captures)
       ++ collect_fn_emit_records(ev)
   },
-  LDeclareFn(LFn(name, _arity, param_names, body, _row)) => {
-    [(name, param_names, body, 0)]
+  LDeclareFn(LFn(name, _arity, param_names, body, _row, fence)) => {
+    [(name, param_names, body, fence)]
       ++ collect_fn_emit_records(body)
   },
   LLet(_h, _n, inner)        => collect_fn_emit_records_expr(inner),
@@ -949,16 +956,18 @@ fn collect_fn_emit_records_expr(expr) = match expr {
                                      ++ collect_fn_emit_records(ev),
   LStateSet(_h, _s, v)       => collect_fn_emit_records_expr(v),
   LRegion(_h, body)          => collect_fn_emit_records(body),
-  LHandleWith(_h, b, hn, _hname, inits) =>
+  LHandleWith(_h, b, hn, _hname, inits, _arm_names, captured_evs) =>
     collect_fn_emit_records_expr(b)
       ++ collect_fn_emit_records_expr(hn)
-      ++ collect_fn_emit_records(inits),
+      ++ collect_fn_emit_records(inits)
+      ++ collect_fn_emit_records(captured_evs),
   LFeedback(_h, b, s)        => collect_fn_emit_records_expr(b)
                                   ++ collect_fn_emit_records_expr(s),
-  LPerform(_h, _n, args)     => collect_fn_emit_records(args),
+  LPerform(_h, _n, args, _)  => collect_fn_emit_records(args),
   LWasiCall(_h, _n, args)    => collect_fn_emit_records(args),
   LHandle(_h, b, _arms)      => collect_fn_emit_records_expr(b),
-  LEvPerform(_h, _n, _s, a)  => collect_fn_emit_records(a),
+  LEvPerform(_h, _n, _e, _s, a) => collect_fn_emit_records(a),
+  LEvSlotRef(_h, _e)         => [],
   LFieldLoad(_h, rec, _off)  => collect_fn_emit_records_expr(rec),
   LStateSlotStore(_h, _o, v) => collect_fn_emit_records_expr(v),
   // H6: exhaustive LowExpr. Leaves with no fn-containing
@@ -1127,10 +1136,11 @@ fn emit_let_locals_expr(expr) = match expr {
   },
   LStateSet(_h, _s, v)      => emit_let_locals_expr(v),
   LRegion(_h, body)         => emit_let_locals_list(body),
-  LHandleWith(_h, b, hn, _hname, inits) => {
+  LHandleWith(_h, b, hn, _hname, inits, _arm_names, captured_evs) => {
     emit_let_locals_expr(b)
     emit_let_locals_expr(hn)
     emit_let_locals_list(inits)
+    emit_let_locals_list(captured_evs)
   },
   LFeedback(h, b, s)        => {
     emit_let_locals_expr(b)
@@ -1147,10 +1157,11 @@ fn emit_let_locals_expr(expr) = match expr {
     perform wat_emit(int_to_str(h))
     perform wat_emit(" i32)\n")
   },
-  LPerform(_h, _n, args)    => emit_let_locals_list(args),
+  LPerform(_h, _n, args, _) => emit_let_locals_list(args),
   LWasiCall(_h, _n, args)   => emit_let_locals_list(args),
   LHandle(_h, b, _arms)     => emit_let_locals_expr(b),
-  LEvPerform(_h, _n, _s, a) => emit_let_locals_list(a),
+  LEvPerform(_h, _n, _e, _s, a) => emit_let_locals_list(a),
+  LEvSlotRef(_h, _e)        => (),
   LFieldLoad(_h, rec, _off) => emit_let_locals_expr(rec),
   LStateSlotStore(_h, _o, v) => emit_let_locals_expr(v),
   // H6: exhaustive LowExpr. Leaves declare no locals; LUpval,
@@ -1319,6 +1330,89 @@ fn emit_state_init_writes(state_local, inits, base_idx) = {
   }, enumerate(inits))
 }
 
+/// Total arm-slot count across a handler's per-effect groups — the record's
+/// contiguous arm region size.
+fn sum_arm_name_lens(groups) = fold(groups, 0, (acc, g) => acc + len(g.arms))
+
+/// Lay each effect-group's arm fn-indices contiguously in the ONE record
+/// (at 8+4*nstate+4*(base+op_slot)) with a running base, and alloc a thin
+/// per-effect [record, base] evidence-entry bound to "__hstate_<h>_<ename>"
+/// (= state_local ++ "_" ++ ename). The ev-slot forwards that entry;
+/// emit_levperform reads (record, base) from it. Mirrors the seed's
+/// $emit_handler_effect_entries.
+fn emit_handler_effect_entries(state_local, nstate, groups) = {
+  fold(groups, 0, (base, g) => {
+    emit_arm_writes(state_local, nstate, base, g.arms, 0)
+    let entry_name = "{state_local}_{g.ename}"
+    // alloc the 8-byte [record, base] entry (bump pattern)
+    perform wat_emit("(global.get $heap_ptr)(local.set $")
+    perform wat_emit(entry_name)
+    perform wat_emit(")(global.get $heap_ptr)(i32.const 8)(i32.add)(global.set $heap_ptr)\n")
+    perform wat_emit("(local.get $")
+    perform wat_emit(entry_name)
+    perform wat_emit(")(local.get $")
+    perform wat_emit(state_local)
+    perform wat_emit(")(i32.store offset=0)\n")           // entry[0] = record
+    perform wat_emit("(local.get $")
+    perform wat_emit(entry_name)
+    perform wat_emit(")(i32.const ")
+    perform wat_emit(int_to_str(base))
+    perform wat_emit(")(i32.store offset=4)\n")            // entry[1] = base
+    base + len(g.arms)
+  })
+  ()
+}
+
+/// Write each non-gap arm fn-index into the record. The arm's fn-index lives
+/// in the global `$<arm_name>_idx` (emitted per LDeclareFn); the install
+/// copies it into the record so the perform reads the record, not a global —
+/// per-install evidence, not a static vtable. "" gaps (unimplemented ops)
+/// are skipped; their slot stays zero.
+fn emit_arm_writes(state_local, nstate, base, arms, k) = {
+  if k >= len(arms) { () }
+  else {
+    let arm_name = arms[k]
+    if arm_name == "" { () }
+    else {
+      perform wat_emit("(local.get $")
+      perform wat_emit(state_local)
+      perform wat_emit(")(global.get $")
+      perform wat_emit(arm_name)
+      perform wat_emit("_idx)(i32.store offset=")
+      perform wat_emit(int_to_str(8 + 4 * nstate + 4 * (base + k)))
+      perform wat_emit(")\n")
+    }
+    emit_arm_writes(state_local, nstate, base, arms, k + 1)
+  }
+}
+
+/// Write the arm-bodies' captured evidence after the arm region, at
+/// 8+4*(nstate+total_arms+i). Each is a LowExpr (an outer entry LLocal or an
+/// LEvSlotRef forward); emit_expr pushes it, then store into the record.
+fn emit_captured_evs(state_local, nstate, total_arms, cevs, i) = {
+  if i >= len(cevs) { () }
+  else {
+    perform wat_emit("(local.get $")
+    perform wat_emit(state_local)
+    perform wat_emit(")")
+    emit_expr(cevs[i])
+    perform wat_emit("(i32.store offset=")
+    perform wat_emit(int_to_str(8 + 4 * (nstate + total_arms + i)))
+    perform wat_emit(")\n")
+    emit_captured_evs(state_local, nstate, total_arms, cevs, i + 1)
+  }
+}
+
+/// Push the per-effect evidence ENTRY pointer from this fn's __state ev-slot:
+/// `(local.get $__state)(i32.load offset=<ev_off>)`. emit_levperform reads
+/// record=entry[0], base=entry[1] off it.
+fn emit_ev_entry(ev_off) = {
+  perform wat_emit("    (local.get $__state)\n")
+  perform wat_emit("    (i32.load offset=")
+  perform wat_emit(int_to_str(ev_off))
+  perform wat_emit(")\n")
+}
+
 // Exhaustive match on every LowExpr variant; no _ fallback.
 
 fn emit_expr(expr) = match expr {
@@ -1420,7 +1514,7 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    (return)\n") // drift-audit: ignore
   },
 
-  LMakeClosure(_h, LFn(fn_name, _arity, _param_names, _body, _row), captures_exprs, ev_exprs) => {
+  LMakeClosure(_h, LFn(fn_name, _arity, _param_names, _body, _row, _fence), captures_exprs, ev_exprs) => {
     // H1 closure-record layout (the unified handler state):
     //   offset 0: fn_ptr (i32) — table index into $fns
     //   offset 4: capture_count (i32) — fence between captures and evidence
@@ -1460,7 +1554,7 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    (local.get $state_tmp)\n")
   },
 
-  LMakeContinuation(_h, LFn(resume_fn_name, _arity, _param_names, _body, _row), captures_exprs, ev_exprs, state_idx, ret_slot) => {
+  LMakeContinuation(_h, LFn(resume_fn_name, _arity, _param_names, _body, _row, _fence), captures_exprs, ev_exprs, state_idx, ret_slot) => {
     // H7 §4.2 — multi-shot continuation record layout. Mirrors
     // LMakeClosure's heap-record shape with two added i32 fields:
     // state_index at offset 4 (between fn_ptr and capture_count) and
@@ -1694,40 +1788,45 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    ;; region exit\n")
   },
 
-  LHandleWith(h, body, _handler, hname, inits) => {
-    // ~> install — allocate state record, write `with field = init`
-    // values at offset 8+i*4 of the record, bind global. Mirrors seed's
-    // $emit_lhandlewith (bootstrap/src/emit/emit_handler.wat) so
-    // mentl3.wat matches mentl2.wat byte-for-byte at L1.
-    //
-    // Per protocol_handler_is_state_is_closure_is_evidence.md (ONE
-    // record, FOUR roles): state slots live at offsets 8+i*4 where i
-    // is source-order position in the handler-decl's `with` clause.
-    // resolve_state_slot_offset (lower.mn:1195) uses the same scheme
-    // so arm-body reads match install-time writes.
-    //
-    // Anonymous handle-expressions have hname = "" — no global to set
-    // (matches seed's $emit_hstate_global_set i32.eqz early-return);
-    // emit body only.
-    if hname == "" {
-      emit_expr(body)
-    } else {
-      let local_name = "__hstate_{int_to_str(h)}"
-      // alloc 64 bytes via the canonical bump pattern (mirrors seed's
-      // $emit_alloc 5-piece form).
-      perform wat_emit("(global.get $heap_ptr)(local.set $")
-      perform wat_emit(local_name)
-      perform wat_emit(")(global.get $heap_ptr)(i32.const 64)(i32.add)(global.set $heap_ptr)\n")
-      // Write each state-field init at offset 8+i*4 in source order.
-      emit_state_init_writes(local_name, inits, 0)
-      // Bind the freshly-init'd record to $<hname>_state_g.
+  LHandleWith(h, body, _handler, hname, inits, arm_names, captured_evs) => {
+    // ~> install — build the ONE handler record (handler IS state IS
+    // closure IS evidence; protocol_handler_is_state_is_closure_is_evidence):
+    //   [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous][captured_evs]
+    // Mirrors the seed's $emit_lhandlewith so mentl3.wat matches mentl2.wat
+    // byte-for-byte at L1. The record is built regardless of hname; only the
+    // `_state_g` global binding is skipped for an anonymous handler.
+    let local_name = "__hstate_{int_to_str(h)}"
+    let nstate = len(inits)
+    let total_arms = sum_arm_name_lens(arm_names)
+    let n_cevs = len(captured_evs)
+    let size = 8 + 4 * (nstate + total_arms + n_cevs)
+    // alloc (mirrors seed $emit_alloc 5-piece bump pattern)
+    perform wat_emit("(global.get $heap_ptr)(local.set $")
+    perform wat_emit(local_name)
+    perform wat_emit(")(global.get $heap_ptr)(i32.const ")
+    perform wat_emit(int_to_str(size))
+    perform wat_emit(")(i32.add)(global.set $heap_ptr)\n")
+    // FENCE @ offset 4 = nstate — dispatch locates arms fence-relative.
+    perform wat_emit("(local.get $")
+    perform wat_emit(local_name)
+    perform wat_emit(")(i32.const ")
+    perform wat_emit(int_to_str(nstate))
+    perform wat_emit(")(i32.store offset=4)\n")
+    // state-field inits at 8+i*4 (config first, then `with` fields)
+    emit_state_init_writes(local_name, inits, 0)
+    // each effect-group's arms contiguous + its [record, base] entry
+    emit_handler_effect_entries(local_name, nstate, arm_names)
+    // the arm-bodies' captured evidence, after the arms
+    emit_captured_evs(local_name, nstate, total_arms, captured_evs, 0)
+    // bind the record to $<hname>_state_g for env-scan Tier-1 resolution
+    if hname == "" { () } else {
       perform wat_emit("(local.get $")
       perform wat_emit(local_name)
       perform wat_emit(")(global.set $")
       perform wat_emit(hname)
       perform wat_emit("_state_g)\n")
-      emit_expr(body)
     }
+    emit_expr(body)
   },
 
   LFeedback(h, body, _spec) => {
@@ -1775,20 +1874,21 @@ fn emit_expr(expr) = match expr {
     perform wat_emit(")\n")
   },
 
-  LPerform(_h, op_name, args) => {
-    // Perform emits a direct call to the op's installed handler arm.
-    // In monomorphic handler stacks (the common case — lower.mn's
-    // row_is_ground proves it for >95% of call sites) the symbol
-    // `$op_<name>` resolves statically. The polymorphic path goes
-    // through LEvPerform, which loads a function pointer from the
-    // evidence vector and uses call_indirect.
-    //
-    // Handler-arm fns declared by lower_handler_arms_as_decls take
-    // __state as their first param (lower.mn LowFn(name, arity, args,
-    // body, row); emit prepends __state per emit handler convention).
-    // Caller pushes __state from its enclosing frame to match. Per
-    // Hβ.first-light.emit-lperform-state-arg.
-    perform wat_emit("    (local.get $__state)\n")
+  LPerform(_h, op_name, args, state_local) => {
+    // Tier-1 perform: a direct `(call $op_<handler>_<op>)` against the
+    // lexically-installed handler's OWN state record. state_local carries
+    // the install-LOCAL "__hstate_<h>" (the record the arm was installed
+    // against, per handler-IS-state); the "" sentinel falls back to the
+    // caller's __state (productive-under-error). The arm fn takes __state
+    // as its implicit first param, so we push the record, then args, then
+    // the direct call. Mirrors the seed's $emit_lperform handler-arm path.
+    if state_local == "" {
+      perform wat_emit("    (local.get $__state)\n")
+    } else {
+      perform wat_emit("    (local.get $")
+      perform wat_emit(state_local)
+      perform wat_emit(")\n")
+    }
     emit_expr_list(args)
     perform wat_emit("    (call $op_")
     perform wat_emit(op_name)
@@ -1811,39 +1911,55 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    ;; handle expression — arms emitted separately\n")
   },
 
-  // H1: evidence-dispatched perform. The op's handler arm fn_idx
-  // sits at `offset_base = 8 + 4*body_capture_count + 4*slot_idx`
-  // inside the callee's __state. Load it and call_indirect with
-  // `(args, __state)` (the arm itself takes __state as implicit
-  // first param, like every Mentl function). Today this path is
-  // gated by inference's evidence-shape synthesis; monomorphic
-  // perform sites still route through LPerform's direct-call form.
-  LEvPerform(_h, op_name, slot, args) => {
-    // H1: evidence-dispatched perform. The op's handler arm fn_idx
-    // sits at byte offset (8 + 4*body_capture_count + 4*slot) inside
-    // the body's __state. Load it, push __state for the callee's
-    // implicit first param, push args, dispatch via call_indirect
-    // through the appropriate type signature ($ft<argc+1>).
-    let body_cc = perform current_body_captures()
-    let absolute_offset = 8 + 4 * body_cc + 4 * slot
-    perform wat_emit("    ;; H1 LEvPerform '")
-    perform wat_emit(op_name)
-    perform wat_emit("' via slot ")
-    perform wat_emit(int_to_str(slot))
-    perform wat_emit(" (offset=")
-    perform wat_emit(int_to_str(absolute_offset))
-    perform wat_emit(")\n")
-    // __state is the implicit first arg; load it and the args
-    perform wat_emit("    (local.get $__state)\n")
+  // Tier-2 evidence-dispatched perform. The ev-slot on __state holds a
+  // per-effect entry [record_ptr, base]; the arm runs against that RECORD
+  // as its own __state (handler IS evidence), and its fn_idx lives in the
+  // record's arm region, fence-relative off the record's OWN nstate. An
+  // interior read of a graph-derived record — never a vtable.
+  //   ev_off = 8 + 4*fence + 4*ev_slot   (fence = this fn's body-context)
+  //   record = __state[ev_off][0];  base = __state[ev_off][1]
+  //   arm_fn = record[(8 + 4*op_slot) + 4*base + 4*record[4]]
+  //   dispatch = call_indirect (type $ft<argc+1>) (record, args…, arm_fn)
+  LEvPerform(_h, _op_name, ev_slot, op_slot, args) => {
+    let fence = perform current_body_captures()
+    let ev_off = 8 + 4 * fence + 4 * ev_slot
+    let arm_const = 8 + 4 * op_slot
+    // (1) arm __state = record = entry[0]
+    emit_ev_entry(ev_off)
+    perform wat_emit("    (i32.load offset=0)\n")
+    // (2) user args
     emit_expr_list(args)
-    // Load the fn_idx for the dispatch
-    perform wat_emit("    (local.get $__state)\n")
-    perform wat_emit("    (i32.load offset=")
-    perform wat_emit(int_to_str(absolute_offset))
-    perform wat_emit(")\n")
+    // (3) arm fn_idx = record[arm_const + 4*base + 4*nstate]
+    emit_ev_entry(ev_off)
+    perform wat_emit("    (i32.load offset=0)\n")             // record
+    perform wat_emit("    (i32.const ")
+    perform wat_emit(int_to_str(arm_const))
+    perform wat_emit(")(i32.add)\n")                          // + arm_const
+    emit_ev_entry(ev_off)
+    perform wat_emit("    (i32.load offset=4)\n")             // base
+    perform wat_emit("    (i32.const 4)(i32.mul)(i32.add)\n") // + 4*base
+    emit_ev_entry(ev_off)
+    perform wat_emit("    (i32.load offset=0)(i32.load offset=4)\n")  // nstate = record[4]
+    perform wat_emit("    (i32.const 4)(i32.mul)(i32.add)\n") // + 4*nstate
+    perform wat_emit("    (i32.load offset=0)\n")             // arm_fn idx
+    // (4) dispatch
     perform wat_emit("    (call_indirect (type $ft")
     perform wat_emit(int_to_str(len(args) + 1))
     perform wat_emit("))\n")
+  },
+
+  // Forward THIS fn's own ev-slot for an effect — push the handler-record
+  // entry the caller threaded into __state, by reference. Used when an
+  // install's captured_evs region or a deeper callee's record needs the
+  // record this frame already carries. Same 8+4*fence+4*ev offset the
+  // perform-dispatch reads it from.
+  LEvSlotRef(_h, ev_index) => {
+    let fence = perform current_body_captures()
+    let off = 8 + 4 * fence + 4 * ev_index
+    perform wat_emit("    (local.get $__state)\n")
+    perform wat_emit("    (i32.load offset=")
+    perform wat_emit(int_to_str(off))
+    perform wat_emit(")\n")
   },
 
   // W6: record field load. The offset was resolved at lower-time

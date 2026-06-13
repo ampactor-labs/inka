@@ -842,6 +842,55 @@ scale. Every capability folded into self-reproduction — types,
 effects, proof, projection — widens the fixed point without ever
 stepping outside it.
 
+### 9.0 · "Surpass every system, forever" is a theorem, not a boast
+
+Three structural guarantees, each a kernel primitive cashed out at
+altitude; together they ARE `!Outside`:
+
+1. **Zero loss — nothing to surpass *across*.** Every other medium
+   loses structure at a boundary (intent → syntax → AST → IR →
+   machine); each step drops what the next reconstructs or assumes, and
+   **the gap a system can be surpassed across IS its loss**. Mentl
+   starts lossless: the graph carries every Reason / refinement / row /
+   ownership mark / annotation at every position through the whole
+   pipeline; source, WAT, docs, the IDE are projections of one graph.
+   With zero loss there is no gap to improve across.
+2. **The constraint is the atom — monotone compounding.** The unit of
+   conversation with a model is the *token* (lossy, ambiguous,
+   decaying); with the medium it is the *constraint* (lossless,
+   monotone, compounding). Every keystroke, `??`, `///`, annotation,
+   acceptance — **and rejection** — lands as a Reason and *narrows* the
+   space forever; nothing ever widens it; the graph only ever gets more
+   proven. Knowledge that only ever increases cannot be overtaken by a
+   system that starts from zero.
+3. **The proposer closure — the forever-engine.** Every external
+   intelligence — enumerative, SMT, a model, AGI, *whatever follows* —
+   plugs in as a `Synth` handler whose candidates must survive
+   checkpoint → infer → Verify → rollback before any human or artifact
+   sees them. Every future advance in machine intelligence
+   **automatically accrues to the medium and is automatically made safe
+   by it**; the stronger proposer *becomes a component of it*, never a
+   successor to it. The kernel is the trust, not the proposer.
+
+**It surpasses the field by absorbing it** — every point-tool becomes
+something you merely *install*:
+
+| The system it replaces | Becomes, in Mentl |
+|---|---|
+| Programming language (Rust / Haskell / Koka / Zig) | the surface form; the gradient dissolves its commitment schedule, negation proves what it cannot |
+| IDE (VSCode / JetBrains) | a transport handler on `CursorView` — the cursor's natural environment, not a wrapper |
+| AI coding tool (Copilot / Cursor-editor) | a `Synth` handler; multi-shot **proven** instead of model-**approximated** — proof has no ceiling, approximation does |
+| Build / test / deploy | handler projections (IC cache; examples-as-tests; `~> production_handlers`) — no Bazel, no CI config |
+| Version control / collaboration | a shared `graph_handler` + a thin `git_handler`; presence, RBAC, causal record are substrate consequences |
+| The category *programming* itself | dissolves into *language* — structured thought with consequence (math, law, science, design) on the same eight primitives (§9.2) |
+
+The felt surface of all three guarantees is the gradient (§2.3, §3.4):
+MultiShot is the proposer engine, the cursor is the argmax, the
+gradient is the response curve the human mixes into. The human
+supplies the one thing that was ever theirs — the new thought; the
+medium carries everything that was never thinking. **The deliverable
+is the programmer the human becomes; the programs are the means.**
+
 ### 9.1 · The five collapses are one pattern
 
 Everything §2–§4 describes is one move repeated: a distance prior

@@ -5,6 +5,14 @@
 # Suppress a single line with a trailing `# drift-audit: ignore` comment.
 # Append patterns; do not edit the script.
 #
+# ROOT: every pattern here is a syntactic tell of ONE violation — THE
+# CARRIED-TRUTH LAW (protocol_carried_truth_law.md): the graph proved X; a
+# consumer re-derived / discarded / fabricated / cached X instead of reading
+# it live. vtable(1), string-keyed(3), parallel-arrays(7), flag-as-int(8) are
+# re-derivation tells; the `_ => <fabricated>` row is the fabrication tell.
+# This file is the proto-`mentl audit` — the medium's drift detector, inside
+# the medium. Post-L1 the patterns become predicates over graph shapes.
+#
 1	Rust vtable (closure-as-vtable)	\{\s*(fn|handler)_\w+\s*:\s*(fn|\|)	ka	A record of functions named like a vtable is Mentl drawn as Rust. Use graph + handler.
 2	Scheme env frame (scope-as-frame-stack)	\b(parent_env|env_stack|push_frame|pop_frame|env_chain)\b	ka	Env lookup is an effect. `perform env_lookup(name)` — no parent-pointer frame walk.
 3	Python dict (effect-name-set-as-strings)	perform\s+"[A-Z]	ka	Effect names are EffName ADTs. Raw strings flatten parameterization.

@@ -315,11 +315,22 @@ compiler IS the AI; the AI coding tools the industry pays for are
 proposers; Mentl verifies. Measure against the vision, never against
 the old compiler.
 
-### 1. Does my graph already know this?
+### 1. Does my graph already know this? — THE CARRIED-TRUTH LAW
 
 Before any flat question, the inference graph, AST, or env usually
 has the answer one step away. Read from the graph. Every latent
 bug in this repo has been a flat shortcut bypassing richer structure.
+
+This is **the root invariant — every Mentl bug is one bug**: the mint
+proved X at a handle; a consumer re-derived, discarded, fabricated, or
+cached X instead of reading it live. (Union-find bound the surface alias
+and stranded the proven `String`; `lower_param_handles` dropped the param
+handle to 0; `$ident_at_p` fabricated an empty string; `lookup_row_for`
+snapshotted. Four files, one shape.) **Carry the handle, read live.** The
+fix is always toward LESS code — delete the re-derivation. The eight
+interrogations, nine drift modes, three questions, `state.sh`, and
+drift-audit are all instruments of this one law. Full proof + forcing-
+function map: `protocol_carried_truth_law.md` (always-loaded via MEMORY).
 
 ### 2. Don't patch. Restructure or stop.
 

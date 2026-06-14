@@ -778,6 +778,7 @@ effect EnvWrite {
 
 effect GraphRead {
   graph_chase(Int) -> GNode
+  graph_chase_handle(Int) -> Int    // the canonical ROOT handle of a TVar chain (union-find find)
   graph_epoch() -> Int
   graph_reason_edge(Int, Int) -> Reason
   graph_snapshot() -> Graph

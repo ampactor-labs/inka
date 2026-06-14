@@ -571,7 +571,7 @@
       (then
         (drop (call $ls_bind_local (local.get $name) (local.get $handle)))))
     (local.set $param_names   (call $lower_param_names   (local.get $params)))
-    (local.set $param_handles (call $lower_param_handles (local.get $params)))
+    (local.set $param_handles (call $param_handles_of (local.get $handle) (local.get $params)))
     ;; Per Hβ.first-light.nested-fn-name-discriminator (2026-05-06):
     ;; query outer fn name BEFORE setting our own. Empty outer (0)
     ;; means top-level: keep bare name. Otherwise mint outer ++ "_" ++

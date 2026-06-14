@@ -394,6 +394,52 @@
         (br $each)))
     (local.get $buf))
 
+  ;; $param_handles_of — a param's graph HANDLE, read from the fn's
+  ;; INFERRED TFun, never from the parsed TParam.ty. The parsed ty caches
+  ;; the resolved type and drops the handle for any concrete-typed param
+  ;; (the 0-sentinel $lower_param_handles returns), so the lowered local
+  ;; goes type-blind and `word == "fn"` emits pointer i32.eq instead of
+  ;; $str_eq — keyword_kind's literal table never matches and every
+  ;; keyword lexes as TIdent. lookup_ty is a shallow top-chase
+  ;; (lookup.wat:191): for an NBound fn handle it returns the stored TFun
+  ;; with each TParam(name, TVar(h)) intact ($chase_deep keeps TFun params
+  ;; opaque — ty.wat:160), so $map_tparam_handles recovers h. The local
+  ;; then live-chases its type via $lookup_ty, so every type-dispatched op
+  ;; (==, ++, to_string) sees the type the graph proved. Wheel mirror:
+  ;; src/lower.mn param_handles_of. Falls back to $lower_param_handles
+  ;; only when the fn handle isn't yet a matching-arity TFun.
+  (func $param_handles_of (param $fn_handle i32) (param $params i32) (result i32)
+    (local $fty i32) (local $tparams i32)
+    (local.set $fty (call $lookup_ty (local.get $fn_handle)))
+    (if (i32.eq (call $ty_tag (local.get $fty)) (i32.const 107))   ;; TFun
+      (then
+        (local.set $tparams (call $ty_tfun_params (local.get $fty)))
+        (if (i32.eq (call $len (local.get $tparams)) (call $len (local.get $params)))
+          (then (return (call $map_tparam_handles (local.get $tparams)))))))
+    (call $lower_param_handles (local.get $params)))
+
+  ;; $map_tparam_handles — buffer-counter map of tparam_handle over the
+  ;; TFun's TParam list. tparam_handle: TVar(h) → h, else 0.
+  (func $map_tparam_handles (param $tparams i32) (result i32)
+    (local $n i32) (local $i i32) (local $buf i32)
+    (local $tp i32) (local $ty i32) (local $h i32)
+    (local.set $n   (call $len (local.get $tparams)))
+    (local.set $buf (call $make_list (i32.const 0)))
+    (local.set $buf (call $list_extend_to (local.get $buf) (local.get $n)))
+    (local.set $i   (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $tp (call $list_index (local.get $tparams) (local.get $i)))
+        (local.set $ty (call $tparam_ty (local.get $tp)))
+        (local.set $h  (i32.const 0))
+        (if (i32.eq (call $ty_tag (local.get $ty)) (i32.const 104))   ;; TVar
+          (then (local.set $h (call $ty_tvar_handle (local.get $ty)))))
+        (drop (call $list_set (local.get $buf) (local.get $i) (local.get $h)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.get $buf))
+
   (func $bind_names_as_locals (param $names i32) (param $handles i32)
     (local $n i32) (local $i i32)
     (local.set $n (call $len (local.get $names)))
@@ -1463,7 +1509,7 @@
     (local.set $params        (i32.load offset=4 (local.get $lambda_struct)))
     (local.set $body_node     (i32.load offset=8 (local.get $lambda_struct)))
     (local.set $param_names   (call $lower_param_names (local.get $params)))
-    (local.set $param_handles (call $lower_param_handles (local.get $params)))
+    (local.set $param_handles (call $param_handles_of (local.get $h) (local.get $params)))
     ;; H.2.e step 1: snapshot captures-ledger AND push frame so lookups
     ;; in body see ONLY lambda-local names.
     (local.set $caps_snapshot (call $lower_captures_len))

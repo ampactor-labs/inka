@@ -83,6 +83,10 @@ handler graph_handler
     resume(chase_node(nodes, handle, 0))
   },
 
+  graph_chase_handle(handle) => {
+    resume(chase_handle(nodes, handle, 0))
+  },
+
   graph_epoch() => {
     resume(epoch)
   },
@@ -299,6 +303,25 @@ fn chase_node(ref nodes, handle, depth) with !Mutate = {
           _ => GNode(kind, reason)
         },
       _ => GNode(kind, reason)
+    }
+  }
+}
+
+/// chase_handle — union-find `find`: follow the TVar chain to the
+/// canonical ROOT handle (the integer), not the node. unify unions the
+/// roots; binding a surface alias instead strands the canonical var
+/// free. Mirror of chase_node's NBound(TVar) arm, returning the handle.
+fn chase_handle(ref nodes, handle, depth) with !Mutate = {
+  if depth > 100 { handle }
+  else {
+    let GNode(kind, _) = graph_node_at(nodes, handle)
+    match kind {
+      NBound(ty) =>
+        match ty {
+          TVar(next) => chase_handle(nodes, next, depth + 1),
+          _          => handle
+        },
+      _ => handle
     }
   }
 }

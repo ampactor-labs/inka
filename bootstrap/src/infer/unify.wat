@@ -207,9 +207,21 @@
     (local $ka i32) (local $kb i32)
     (local $ta i32) (local $tb i32)
     (local $located i32)
+    (local $ra i32) (local $rb i32)
 
-    ;; Identity short-circuit (src/infer.mn:1039)
-    (if (i32.eq (local.get $h_a) (local.get $h_b))
+    ;; Union-find: find both ROOTS first (graph_chase_handle follows the
+    ;; TVar chain to the canonical handle), then union the ROOTS — never
+    ;; the surface aliases. The earlier surface-binding ($graph_bind h_a)
+    ;; left an aliased canonical var orphaned: a use-site handle bound to
+    ;; TVar(param_h) would be re-bound to the concrete type, stranding
+    ;; param_h FREE, so lower read the param local as type-blind and
+    ;; `word == "fn"` emitted pointer i32.eq. The root-equality guard
+    ;; (ra == rb → done) is load-bearing: it stops a root from being
+    ;; bound to a handle that chases back to it (the self-cycle that made
+    ;; unify_two_open_records recurse forever).
+    (local.set $ra (call $graph_chase_handle (local.get $h_a)))
+    (local.set $rb (call $graph_chase_handle (local.get $h_b)))
+    (if (i32.eq (local.get $ra) (local.get $rb))
       (then (return)))
 
     (local.set $na (call $graph_chase (local.get $h_a)))
@@ -220,23 +232,23 @@
     (local.set $located (call $reason_make_located
       (local.get $span) (local.get $reason)))
 
-    ;; ka = NFree (61): bind h_a → TVar(h_b) regardless of kb
+    ;; ka = NFree (61): union the roots — bind ra → TVar(rb)
     ;; (src/infer.mn:1046-1047)
     (if (i32.eq (local.get $ka) (i32.const 61))
       (then
-        (call $graph_bind (local.get $h_a)
-                          (call $ty_make_tvar (local.get $h_b))
+        (call $graph_bind (local.get $ra)
+                          (call $ty_make_tvar (local.get $rb))
                           (local.get $located))
         (return)))
 
     ;; ka = NBound (60): payload Ty pointer; behavior depends on kb
     (if (i32.eq (local.get $ka) (i32.const 60))
       (then
-        ;; kb = NFree: bind h_b → TVar(h_a)
+        ;; kb = NFree: bind rb → TVar(ra)
         (if (i32.eq (local.get $kb) (i32.const 61))
           (then
-            (call $graph_bind (local.get $h_b)
-                              (call $ty_make_tvar (local.get $h_a))
+            (call $graph_bind (local.get $rb)
+                              (call $ty_make_tvar (local.get $ra))
                               (local.get $located))
             (return)))
         ;; kb = NBound: extract Ty payloads + recurse via $unify_types
@@ -1038,33 +1050,15 @@
     (local $name i32) (local $pa i32) (local $pb i32)
     (local $ea i32) (local $eb i32)
     (local $located i32)
-    (local $g_va i32) (local $g_vb i32)
-    (local $tag_va i32) (local $tag_vb i32)
-    (local $ty_va i32) (local $ty_vb i32)
-    
-    ;; 1. Chase va and vb to see if they are already bound.
-    (local.set $g_va (call $graph_chase (local.get $va)))
-    (local.set $tag_va (call $node_kind_tag (call $gnode_kind (local.get $g_va))))
-    (local.set $g_vb (call $graph_chase (local.get $vb)))
-    (local.set $tag_vb (call $node_kind_tag (call $gnode_kind (local.get $g_vb))))
 
-    ;; If va is bound (62 NRowBound or 60 NBound), unify TRecordOpen(fa, va) with TRecordOpen(fb, vb) fully
-    ;; by letting unify handle the resolved types, preventing information loss!
-    (if (i32.eq (local.get $tag_va) (i32.const 62))
-      (then
-        (local.set $ty_va (call $node_kind_payload (call $gnode_kind (local.get $g_va))))
-        (call $unify_types (call $ty_make_trecordopen (local.get $fa) (local.get $va))
-                           (call $ty_make_trecordopen (local.get $fb) (local.get $vb))
-                           (local.get $span) (local.get $reason))
-        (return)))
-
-    (if (i32.eq (local.get $tag_vb) (i32.const 62))
-      (then
-        (local.set $ty_vb (call $node_kind_payload (call $gnode_kind (local.get $g_vb))))
-        (call $unify_types (call $ty_make_trecordopen (local.get $fa) (local.get $va))
-                           (call $ty_make_trecordopen (local.get $fb) (local.get $vb))
-                           (local.get $span) (local.get $reason))
-        (return)))
+    ;; Wheel-canonical (src/infer.mn unify_two_open_records): intersect
+    ;; known fields, unify the shared types, bind each rowvar to the
+    ;; residual relative to the other. va/vb are the FREE row vars at this
+    ;; point — the caller chased the records before dispatching here. (The
+    ;; old seed-only "if va NRowBound → re-wrap TRecordOpen(fa, va)" branch
+    ;; re-dispatched with the SAME unbound va, so unify_types→
+    ;; unify_two_open_records recurred forever the moment union-find left a
+    ;; rowvar bound at entry.)
     (local.set $shared (call $intersect_record_fields
       (local.get $fa) (local.get $fb)))
     ;; Iterate shared field-pairs (NAME-keyed lookup in both sides) +

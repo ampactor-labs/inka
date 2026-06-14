@@ -1150,18 +1150,27 @@ fn infer_diverge_branches(branches, span: ValidSpan, i, n) = {
 /// returns `Unified(Located, Located)` per DESIGN Ch 8.
 
 fn unify(h_a, h_b, span: ValidSpan, reason) = {
-  if h_a == h_b { () }
+  // Union-find: find both ROOTS (graph_chase_handle follows the TVar
+  // chain to the canonical handle), then union the ROOTS — never the
+  // surface aliases. Binding the surface re-points an aliased use-site
+  // (NBound(TVar(root))) and strands `root` free, so lower reads the
+  // param local type-blind and `word == "fn"` emits pointer i32.eq. The
+  // root-equality guard stops a root being bound to a handle that chases
+  // back to it (the self-cycle a record unification would loop on).
+  let ra = perform graph_chase_handle(h_a)
+  let rb = perform graph_chase_handle(h_b)
+  if ra == rb { () }
   else {
-    let na = perform graph_chase(h_a)
-    let nb = perform graph_chase(h_b)
+    let na = perform graph_chase(ra)
+    let nb = perform graph_chase(rb)
     let GNode(ka, _) = na
     let GNode(kb, _) = nb
     match ka {
       NFree(_) =>
-        perform graph_bind(h_a, TVar(h_b), Located(span, reason)),
+        perform graph_bind(ra, TVar(rb), Located(span, reason)),
       NBound(ta) =>
         match kb {
-          NFree(_)       => perform graph_bind(h_b, TVar(h_a), Located(span, reason)),
+          NFree(_)       => perform graph_bind(rb, TVar(ra), Located(span, reason)),
           NBound(tb)     => unify_types(ta, tb, span, reason),
           NErrorHole(_)  => (),
           _              => ()

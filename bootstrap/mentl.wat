@@ -13053,9 +13053,21 @@
     (local $ka i32) (local $kb i32)
     (local $ta i32) (local $tb i32)
     (local $located i32)
+    (local $ra i32) (local $rb i32)
 
-    ;; Identity short-circuit (src/infer.mn:1039)
-    (if (i32.eq (local.get $h_a) (local.get $h_b))
+    ;; Union-find: find both ROOTS first (graph_chase_handle follows the
+    ;; TVar chain to the canonical handle), then union the ROOTS — never
+    ;; the surface aliases. The earlier surface-binding ($graph_bind h_a)
+    ;; left an aliased canonical var orphaned: a use-site handle bound to
+    ;; TVar(param_h) would be re-bound to the concrete type, stranding
+    ;; param_h FREE, so lower read the param local as type-blind and
+    ;; `word == "fn"` emitted pointer i32.eq. The root-equality guard
+    ;; (ra == rb → done) is load-bearing: it stops a root from being
+    ;; bound to a handle that chases back to it (the self-cycle that made
+    ;; unify_two_open_records recurse forever).
+    (local.set $ra (call $graph_chase_handle (local.get $h_a)))
+    (local.set $rb (call $graph_chase_handle (local.get $h_b)))
+    (if (i32.eq (local.get $ra) (local.get $rb))
       (then (return)))
 
     (local.set $na (call $graph_chase (local.get $h_a)))
@@ -13066,23 +13078,23 @@
     (local.set $located (call $reason_make_located
       (local.get $span) (local.get $reason)))
 
-    ;; ka = NFree (61): bind h_a → TVar(h_b) regardless of kb
+    ;; ka = NFree (61): union the roots — bind ra → TVar(rb)
     ;; (src/infer.mn:1046-1047)
     (if (i32.eq (local.get $ka) (i32.const 61))
       (then
-        (call $graph_bind (local.get $h_a)
-                          (call $ty_make_tvar (local.get $h_b))
+        (call $graph_bind (local.get $ra)
+                          (call $ty_make_tvar (local.get $rb))
                           (local.get $located))
         (return)))
 
     ;; ka = NBound (60): payload Ty pointer; behavior depends on kb
     (if (i32.eq (local.get $ka) (i32.const 60))
       (then
-        ;; kb = NFree: bind h_b → TVar(h_a)
+        ;; kb = NFree: bind rb → TVar(ra)
         (if (i32.eq (local.get $kb) (i32.const 61))
           (then
-            (call $graph_bind (local.get $h_b)
-                              (call $ty_make_tvar (local.get $h_a))
+            (call $graph_bind (local.get $rb)
+                              (call $ty_make_tvar (local.get $ra))
                               (local.get $located))
             (return)))
         ;; kb = NBound: extract Ty payloads + recurse via $unify_types
@@ -13884,33 +13896,15 @@
     (local $name i32) (local $pa i32) (local $pb i32)
     (local $ea i32) (local $eb i32)
     (local $located i32)
-    (local $g_va i32) (local $g_vb i32)
-    (local $tag_va i32) (local $tag_vb i32)
-    (local $ty_va i32) (local $ty_vb i32)
-    
-    ;; 1. Chase va and vb to see if they are already bound.
-    (local.set $g_va (call $graph_chase (local.get $va)))
-    (local.set $tag_va (call $node_kind_tag (call $gnode_kind (local.get $g_va))))
-    (local.set $g_vb (call $graph_chase (local.get $vb)))
-    (local.set $tag_vb (call $node_kind_tag (call $gnode_kind (local.get $g_vb))))
 
-    ;; If va is bound (62 NRowBound or 60 NBound), unify TRecordOpen(fa, va) with TRecordOpen(fb, vb) fully
-    ;; by letting unify handle the resolved types, preventing information loss!
-    (if (i32.eq (local.get $tag_va) (i32.const 62))
-      (then
-        (local.set $ty_va (call $node_kind_payload (call $gnode_kind (local.get $g_va))))
-        (call $unify_types (call $ty_make_trecordopen (local.get $fa) (local.get $va))
-                           (call $ty_make_trecordopen (local.get $fb) (local.get $vb))
-                           (local.get $span) (local.get $reason))
-        (return)))
-
-    (if (i32.eq (local.get $tag_vb) (i32.const 62))
-      (then
-        (local.set $ty_vb (call $node_kind_payload (call $gnode_kind (local.get $g_vb))))
-        (call $unify_types (call $ty_make_trecordopen (local.get $fa) (local.get $va))
-                           (call $ty_make_trecordopen (local.get $fb) (local.get $vb))
-                           (local.get $span) (local.get $reason))
-        (return)))
+    ;; Wheel-canonical (src/infer.mn unify_two_open_records): intersect
+    ;; known fields, unify the shared types, bind each rowvar to the
+    ;; residual relative to the other. va/vb are the FREE row vars at this
+    ;; point — the caller chased the records before dispatching here. (The
+    ;; old seed-only "if va NRowBound → re-wrap TRecordOpen(fa, va)" branch
+    ;; re-dispatched with the SAME unbound va, so unify_types→
+    ;; unify_two_open_records recurred forever the moment union-find left a
+    ;; rowvar bound at entry.)
     (local.set $shared (call $intersect_record_fields
       (local.get $fa) (local.get $fb)))
     ;; Iterate shared field-pairs (NAME-keyed lookup in both sides) +
@@ -25538,6 +25532,52 @@
         (br $each)))
     (local.get $buf))
 
+  ;; $param_handles_of — a param's graph HANDLE, read from the fn's
+  ;; INFERRED TFun, never from the parsed TParam.ty. The parsed ty caches
+  ;; the resolved type and drops the handle for any concrete-typed param
+  ;; (the 0-sentinel $lower_param_handles returns), so the lowered local
+  ;; goes type-blind and `word == "fn"` emits pointer i32.eq instead of
+  ;; $str_eq — keyword_kind's literal table never matches and every
+  ;; keyword lexes as TIdent. lookup_ty is a shallow top-chase
+  ;; (lookup.wat:191): for an NBound fn handle it returns the stored TFun
+  ;; with each TParam(name, TVar(h)) intact ($chase_deep keeps TFun params
+  ;; opaque — ty.wat:160), so $map_tparam_handles recovers h. The local
+  ;; then live-chases its type via $lookup_ty, so every type-dispatched op
+  ;; (==, ++, to_string) sees the type the graph proved. Wheel mirror:
+  ;; src/lower.mn param_handles_of. Falls back to $lower_param_handles
+  ;; only when the fn handle isn't yet a matching-arity TFun.
+  (func $param_handles_of (param $fn_handle i32) (param $params i32) (result i32)
+    (local $fty i32) (local $tparams i32)
+    (local.set $fty (call $lookup_ty (local.get $fn_handle)))
+    (if (i32.eq (call $ty_tag (local.get $fty)) (i32.const 107))   ;; TFun
+      (then
+        (local.set $tparams (call $ty_tfun_params (local.get $fty)))
+        (if (i32.eq (call $len (local.get $tparams)) (call $len (local.get $params)))
+          (then (return (call $map_tparam_handles (local.get $tparams)))))))
+    (call $lower_param_handles (local.get $params)))
+
+  ;; $map_tparam_handles — buffer-counter map of tparam_handle over the
+  ;; TFun's TParam list. tparam_handle: TVar(h) → h, else 0.
+  (func $map_tparam_handles (param $tparams i32) (result i32)
+    (local $n i32) (local $i i32) (local $buf i32)
+    (local $tp i32) (local $ty i32) (local $h i32)
+    (local.set $n   (call $len (local.get $tparams)))
+    (local.set $buf (call $make_list (i32.const 0)))
+    (local.set $buf (call $list_extend_to (local.get $buf) (local.get $n)))
+    (local.set $i   (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $tp (call $list_index (local.get $tparams) (local.get $i)))
+        (local.set $ty (call $tparam_ty (local.get $tp)))
+        (local.set $h  (i32.const 0))
+        (if (i32.eq (call $ty_tag (local.get $ty)) (i32.const 104))   ;; TVar
+          (then (local.set $h (call $ty_tvar_handle (local.get $ty)))))
+        (drop (call $list_set (local.get $buf) (local.get $i) (local.get $h)))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.get $buf))
+
   (func $bind_names_as_locals (param $names i32) (param $handles i32)
     (local $n i32) (local $i i32)
     (local.set $n (call $len (local.get $names)))
@@ -26607,7 +26647,7 @@
     (local.set $params        (i32.load offset=4 (local.get $lambda_struct)))
     (local.set $body_node     (i32.load offset=8 (local.get $lambda_struct)))
     (local.set $param_names   (call $lower_param_names (local.get $params)))
-    (local.set $param_handles (call $lower_param_handles (local.get $params)))
+    (local.set $param_handles (call $param_handles_of (local.get $h) (local.get $params)))
     ;; H.2.e step 1: snapshot captures-ledger AND push frame so lookups
     ;; in body see ONLY lambda-local names.
     (local.set $caps_snapshot (call $lower_captures_len))
@@ -27233,7 +27273,7 @@
       (then
         (drop (call $ls_bind_local (local.get $name) (local.get $handle)))))
     (local.set $param_names   (call $lower_param_names   (local.get $params)))
-    (local.set $param_handles (call $lower_param_handles (local.get $params)))
+    (local.set $param_handles (call $param_handles_of (local.get $handle) (local.get $params)))
     ;; Per Hβ.first-light.nested-fn-name-discriminator (2026-05-06):
     ;; query outer fn name BEFORE setting our own. Empty outer (0)
     ;; means top-level: keep bare name. Otherwise mint outer ++ "_" ++

@@ -1888,19 +1888,54 @@
         (call $reason_make_inferred (i32.const 3912))))   ;; "tuple result"
     (local.get $handle))
 
-  ;; PTee (~>) — src/infer.mn PTee arm. Result type =
-  ;; TVar(lh). handler-stack push/pop seed-stubs.
+  ;; $read_bound_row — the row bound at a row handle (graph_chase → NRowBound
+  ;; payload), else Pure. Mirrors src/infer.mn read_bound_row.
+  (func $read_bound_row (param $handle i32) (result i32)
+    (local $nk i32)
+    (local.set $nk (call $gnode_kind (call $graph_chase (local.get $handle))))
+    (if (i32.eq (call $node_kind_tag (local.get $nk)) (i32.const 62))   ;; NRowBound
+      (then (return (call $node_kind_payload (local.get $nk)))))
+    (call $row_make_pure))
+
+  ;; PTee (~>) — handler-effect typing: row(expr ~> h) = (row(expr) − E) ⊕ R.
+  ;; Body in a NESTED row scope (so its effects don't leak — subtraction needs
+  ;; it); install the handler value (binds config args → R picks up their
+  ;; effect); add (body_row − E) ⊕ R read from the RHS handler's HandlerKind.
+  ;; Mirrors src/infer.mn infer_pipe_tee. Result type = TVar(lh).
   (func $infer_walk_expr_pipe_tee
         (export "infer_walk_expr_pipe_tee")
         (param $left i32) (param $right i32)
         (param $handle i32) (param $span i32)
         (result i32)
-    (local $lh i32) (local $rh i32) (local $cname i32)
+    (local $lh i32) (local $cname i32) (local $body_row_h i32) (local $body_row i32)
+    (local $binding i32) (local $kind i32) (local $ename i32) (local $resid i32)
+    (local $names i32) (local $result_row i32)
+    (local.set $body_row_h (call $graph_fresh_row
+      (call $reason_make_inferred (i32.const 3584))))   ;; "result"
+    (call $walk_expr_inf_enter_fn (local.get $body_row_h) (local.get $span))
     (local.set $lh (call $infer_walk_expr (local.get $left)))
-    (local.set $rh (call $infer_walk_expr (local.get $right)))
-    (drop (local.get $rh))
+    (call $walk_expr_inf_exit_fn)
     (local.set $cname (call $walk_expr_callee_name (local.get $right)))
     (call $walk_expr_inf_push_handler (local.get $cname))
+    (drop (call $infer_walk_expr (local.get $right)))
+    (local.set $body_row (call $read_bound_row (local.get $body_row_h)))
+    (local.set $result_row (local.get $body_row))   ;; default: pass-through
+    (local.set $binding (call $env_lookup_value (local.get $cname)))
+    (if (i32.ne (local.get $binding) (i32.const 0))
+      (then
+        (local.set $kind (call $env_binding_kind (local.get $binding)))
+        (if (i32.eq (call $schemekind_tag (local.get $kind)) (i32.const 137))   ;; HandlerKind
+          (then
+            (local.set $ename (call $schemekind_handler_ename (local.get $kind)))
+            (local.set $resid (call $read_bound_row
+              (call $schemekind_handler_residual (local.get $kind))))
+            (local.set $names (call $make_list (i32.const 1)))
+            (drop (call $list_set (local.get $names) (i32.const 0) (local.get $ename)))
+            (local.set $result_row
+              (call $row_union
+                (call $row_diff (local.get $body_row) (call $row_make_closed (local.get $names)))
+                (local.get $resid)))))))
+    (call $walk_expr_inf_add_row (local.get $result_row))
     (call $graph_bind (local.get $handle)
       (call $ty_make_tvar (local.get $lh))
       (call $reason_make_located (local.get $span)

@@ -856,7 +856,7 @@ fn infer_expr(ref node) = {
         PCompose    => infer_compose(left, right, handle, span),
         PDiverge    => infer_diverge(left, right, handle, span),
         PForward    => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) },
-        PTee        => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) },
+        PTee        => infer_pipe_tee(left, right, handle, span),
         PFeedback   => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) }
       }
     },
@@ -1004,8 +1004,60 @@ fn unify_args_to_params(args, params, span: ValidSpan) = {
   }
 }
 
+/// `~>` handler attachment — the row algebra's handler operator. A handler is
+/// (a ! E+r) ⟿ (a ! R+r): row(expr ~> h) = (row(expr) − E) ⊕ R. The body is
+/// inferred in a NESTED row scope so its effects do NOT leak (subtraction would
+/// be impossible once leaked — the HandleExpr discipline); the handler value is
+/// installed (binding its config args, so a config-param handler's R picks up
+/// the actual arg's effect); then (body_row − E) ⊕ R joins the caller's row.
+/// Reading the RHS handler's HandlerKind(E, R) is what completes the row algebra
+/// — without it map/for_each lose every effect performed in their arms.
+fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
+  let body_row_h = perform graph_fresh_row(Inferred("~> body row"))
+  perform inf_enter_fn(body_row_h, span)
+  infer_expr(left)
+  perform inf_exit_fn()
+
+  perform inf_push_handler(callee_name(right))
+  infer_expr(right)
+  let body_row = read_bound_row(body_row_h)
+  match handler_e_r(right) {
+    Some(er) => {
+      let (handled, resid_h) = er
+      perform inf_add_row(
+        absorb_row(body_row, mk_ef_closed([ENamed(handled)]), read_bound_row(resid_h)))
+    },
+    // Handler value not resolvable to a HandlerKind decl (e.g. a let-bound
+    // handler) — productive-under-error: pass the body's row through. The
+    // graph proves the handler identity at a decl; a value forwards.
+    None => perform inf_add_row(body_row)
+  }
+  perform inf_pop_handler()
+
+  let N(_, _, lh) = left
+  perform graph_bind(handle, TVar(lh),
+    Located(span, InferredPipeResult("~>", Inferred("handler attachment"))))
+}
+
+/// The RHS handler's (handled_effect, residual_row) from its HandlerKind env
+/// entry — read live from the graph, never re-derived. None when the RHS isn't
+/// a named handler decl.
+fn handler_e_r(right) = match callee_name(right) {
+  "" => None,
+  name => match perform env_lookup(name) {
+    Some(entry) => {
+      let (_, _, kind) = entry
+      match kind {
+        HandlerKind(e, r) => Some((e, r)),
+        _                 => None
+      }
+    },
+    None => None
+  }
+}
+
 /// The five verbs, each inferred by its topology.
-/// `PDiverge` and `PCompose` are handled BEFORE `infer_pipe` fires
+/// `PDiverge`, `PCompose`, and `PTee` are handled BEFORE `infer_pipe` fires
 /// (see `PipeExpr` arm in `infer_expr`); their arms here are unreachable stubs.
 fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
   let N(_, _, lh) = left

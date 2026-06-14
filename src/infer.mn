@@ -266,7 +266,7 @@ fn infer_stmt(ref node) = {
     },
 
     NStmt(HandlerDeclStmt(hname, ename, config, state, arms)) =>
-      register_handler(hname, ename, config, state, arms),
+      register_handler(hname, ename, config, state, arms, span),
 
     NStmt(ExprStmt(expr)) =>
       infer_expr(expr),
@@ -2429,7 +2429,7 @@ fn register_one_op(effect_name, op) = {
     EffectOpScheme(effect_name))
 }
 
-fn register_handler(hname, ename, config, state, arms) = {
+fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   // Handlers are first-class values. Per Hβ.first-light.handler-
   // scheme-tfun-shape (2026-05-06): when the handler decl has
   // config-params, its scheme is `TFun([config_tys], Handler<E>,
@@ -2456,10 +2456,18 @@ fn register_handler(hname, ename, config, state, arms) = {
   } else {
     TFun(config_tparams, handler_ty, mk_ef_closed([]))
   }
+  // The handler's residual row R: the effects its arms PERFORM (calling a
+  // config arg `f`, performing other ops) — distinct from the effect E it
+  // HANDLES. A handler is (a ! E+r) ⟿ (a ! R+r); `~> h` reads HandlerKind to
+  // compute row(expr ~> h) = (row(expr) − E) ⊕ R. r_handle is a LIVE row var
+  // (union-find), config-polymorphic: an arm's call to `f` joins f's effect
+  // var into R, so installing the handler propagates the lambda's effect.
+  // Accumulated below by inferring the arms under inf_enter_fn(r_handle).
+  let r_handle = perform graph_fresh_row(Inferred("residual of handler '{hname}'"))
   perform env_extend(hname,
     Forall([], scheme_body),
     Declared(hname),
-    FnScheme)
+    HandlerKind(ename, r_handle))
   // Phase B: infer per-arm resume cardinality and bind onto each
   // op's continuation type. The cursor walks each arm body; counts
   // resume call sites under control-flow ancestry; produces
@@ -2478,6 +2486,11 @@ fn register_handler(hname, ename, config, state, arms) = {
   // graph already knows them, fresh vars would discard that.
   let state_binds = infer_handler_state_inits(state)
   let s_h = perform mint(Inferred("handler result of '{hname}'"))
+  // Accumulate the arms' residual row R into r_handle: inferring each arm
+  // body under this row scope routes every effect it performs (incl. a call
+  // to a config arg `f`) into r_handle via inf_add_effect/inf_add_row. On
+  // exit, r_handle binds to R — the row `~> h` adds to the caller.
+  perform inf_enter_fn(r_handle, span)
   for_each((arm) => {
     perform env_scope_enter()
     bind_handler_config_params(config_tparams, hname)
@@ -2485,6 +2498,7 @@ fn register_handler(hname, ename, config, state, arms) = {
     infer_one_handler_arm(arm, s_h)
     perform env_scope_exit()
   }, arms)
+  perform inf_exit_fn()
 }
 
 /// Walk each state field's init ONCE per decl; the init's inferred

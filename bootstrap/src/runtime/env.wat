@@ -215,6 +215,24 @@
   (func $schemekind_effectdecl_ops (param $k i32) (result i32)
     (call $record_get (local.get $k) (i32.const 0)))
 
+  ;; HandlerKind(handled_ename: String, residual_row_handle: Int) — tag 137,
+  ;; wire byte 6 (137 − 131). A handler is (a ! E+r) ⟿ (a ! R+r): handled_ename
+  ;; = E, residual_row = R (the live row var of the effects its arms perform).
+  ;; `~>` reads it to compute row(expr ~> h) = (row(expr) − E) ⊕ R. Mirrors the
+  ;; wheel's HandlerKind (types.mn tag 6 / cache.mn byte 6).
+  (func $schemekind_make_handler (param $ename i32) (param $row_handle i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 137) (i32.const 2)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $ename))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $row_handle))
+    (local.get $r))
+
+  (func $schemekind_handler_ename (param $k i32) (result i32)
+    (call $record_get (local.get $k) (i32.const 0)))
+
+  (func $schemekind_handler_residual (param $k i32) (result i32)
+    (call $record_get (local.get $k) (i32.const 1)))
+
   ;; SchemeKind tag dispatch — sentinel-collapse for FnScheme.
   (func $schemekind_tag (param $k i32) (result i32)
     (if (i32.lt_u (local.get $k) (global.get $heap_base))

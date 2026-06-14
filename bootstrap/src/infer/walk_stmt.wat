@@ -1335,7 +1335,7 @@
         (param $stmt i32) (param $handle i32) (param $span i32)
     (local $handler_name i32) (local $effect_name i32)
     (local $effect_ty i32) (local $handler_ty i32)
-    (local $scheme i32) (local $reason i32)
+    (local $scheme i32) (local $reason i32) (local $r_handle i32)
     (drop (local.get $handle))
     ;; HandlerDeclStmt: [tag=124][name][effect][arms] (offsets 0/4/8/12)
     (local.set $handler_name (i32.load offset=4 (local.get $stmt)))
@@ -1399,11 +1399,17 @@
     (local.set $reason (call $reason_make_located
       (local.get $span)
       (call $reason_make_declared (local.get $handler_name))))
+    ;; The handler's residual row R (effects its arms perform, incl. calling
+    ;; a config arg) — a live row var accumulated by the arm walk below under
+    ;; inf_enter_fn(r_handle). HandlerKind carries it so `~>` adds R to the
+    ;; caller. Mirrors src/infer.mn register_handler.
+    (local.set $r_handle (call $graph_fresh_row
+      (call $reason_make_declared (local.get $handler_name))))
     (call $env_extend
       (local.get $handler_name)
       (local.get $scheme)
       (local.get $reason)
-      (call $schemekind_make_fn))
+      (call $schemekind_make_handler (local.get $effect_name) (local.get $r_handle)))
     ;; ─── Per-arm typing (Hβ.first-light.infer-handler-decl-arms-typing) ──
     ;; HandlerDeclStmt offset 12 = arms list. Each arm is make_record(0, 3)
     ;; with {args, body, op_name} at field indices 0/1/2 (Lock #8
@@ -1417,12 +1423,17 @@
     ;; with remaining = n) resolve. Pre-substrate the diagnostic mass
     ;; was 331 E_MissingVariable + 314 E_TypeMismatch at wheel-prefix
     ;; scale; bind-in-arm-scope collapses both classes.
+    ;; Accumulate the arms' residual row R into r_handle: walking the arm
+    ;; bodies under this row scope routes every effect they perform (incl. a
+    ;; call to a config arg) into r_handle. On exit r_handle binds to R.
+    (call $walk_expr_inf_enter_fn (local.get $r_handle) (local.get $span))
     (call $infer_handler_decl_arms_walk
       (i32.load offset=12 (local.get $stmt))
       (local.get $handler_name)
       (local.get $span)
       (i32.load offset=20 (local.get $stmt))
       (i32.load offset=16 (local.get $stmt)))
+    (call $walk_expr_inf_exit_fn)
     ;; Hβ.first-light.tier2-perform-or-env-scan — register each arm's
     ;; op_name → handler_name in the default-handler-per-op map.
     ;; lower_resolve_handler_for_op falls back to this map when the

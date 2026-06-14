@@ -47,74 +47,13 @@ fn span_at(ref tokens, pos) = {
 // kind_eq compares two TokenKind values for variant identity. Used
 // at the few sites where dispatch needs a passed-in kind value;
 // most sites just pattern-match directly via `match kind_at(...)`.
-fn kind_eq(a, b) with Pure = match a {
-  TFn        => match b { TFn        => true, _ => false },
-  TLet       => match b { TLet       => true, _ => false },
-  TIf        => match b { TIf        => true, _ => false },
-  TElse      => match b { TElse      => true, _ => false },
-  TMatch     => match b { TMatch     => true, _ => false },
-  TType      => match b { TType      => true, _ => false },
-  TEffect    => match b { TEffect    => true, _ => false },
-  THandle    => match b { THandle    => true, _ => false },
-  THandler   => match b { THandler   => true, _ => false },
-  TWith      => match b { TWith      => true, _ => false },
-  TResume    => match b { TResume    => true, _ => false },
-  TPerform   => match b { TPerform   => true, _ => false },
-  TImport    => match b { TImport    => true, _ => false },
-  TWhere     => match b { TWhere     => true, _ => false },
-  TCapability => match b { TCapability => true, _ => false },
-  TOwn       => match b { TOwn       => true, _ => false },
-  TRef       => match b { TRef       => true, _ => false },
-  TPure      => match b { TPure      => true, _ => false },
-  TTrue      => match b { TTrue      => true, _ => false },
-  TFalse     => match b { TFalse     => true, _ => false },
-  TIdent(_)  => match b { TIdent(_)  => true, _ => false },
-  TIntLit(_)    => match b { TIntLit(_)    => true, _ => false },
-  TFloatLit(_)  => match b { TFloatLit(_)  => true, _ => false },
-  TStringLit(_) => match b { TStringLit(_) => true, _ => false },
-  TDocComment(_)  => match b { TDocComment(_)  => true, _ => false },
-  TStringPart(_)  => match b { TStringPart(_)  => true, _ => false },
-  TStringSplice   => match b { TStringSplice   => true, _ => false },
-  TEqEq      => match b { TEqEq      => true, _ => false },
-  TBangEq    => match b { TBangEq    => true, _ => false },
-  TLtEq      => match b { TLtEq      => true, _ => false },
-  TGtEq      => match b { TGtEq      => true, _ => false },
-  TArrow     => match b { TArrow     => true, _ => false },
-  TFatArrow  => match b { TFatArrow  => true, _ => false },
-  TPlusPlus  => match b { TPlusPlus  => true, _ => false },
-  TPipeGt    => match b { TPipeGt    => true, _ => false },
-  TLtPipe    => match b { TLtPipe    => true, _ => false },
-  TGtLt      => match b { TGtLt      => true, _ => false },
-  TTildeGt   => match b { TTildeGt   => true, _ => false },
-  TLtTilde   => match b { TLtTilde   => true, _ => false },
-  TAndAnd    => match b { TAndAnd    => true, _ => false },
-  TOrOr      => match b { TOrOr      => true, _ => false },
-  TLParen    => match b { TLParen    => true, _ => false },
-  TRParen    => match b { TRParen    => true, _ => false },
-  TLBrace    => match b { TLBrace    => true, _ => false },
-  TRBrace    => match b { TRBrace    => true, _ => false },
-  TLBracket  => match b { TLBracket  => true, _ => false },
-  TRBracket  => match b { TRBracket  => true, _ => false },
-  TComma     => match b { TComma     => true, _ => false },
-  TDot       => match b { TDot       => true, _ => false },
-  TColon     => match b { TColon     => true, _ => false },
-  TSemicolon => match b { TSemicolon => true, _ => false },
-  TPlus      => match b { TPlus      => true, _ => false },
-  TMinus     => match b { TMinus     => true, _ => false },
-  TStar      => match b { TStar      => true, _ => false },
-  TSlash     => match b { TSlash     => true, _ => false },
-  TPercent   => match b { TPercent   => true, _ => false },
-  TEq        => match b { TEq        => true, _ => false },
-  TLt        => match b { TLt        => true, _ => false },
-  TGt        => match b { TGt        => true, _ => false },
-  TBang      => match b { TBang      => true, _ => false },
-  TPipe      => match b { TPipe      => true, _ => false },
-  TTilde     => match b { TTilde     => true, _ => false },
-  TAt        => match b { TAt        => true, _ => false },
-  THole      => match b { THole      => true, _ => false },
-  TNewline   => match b { TNewline   => true, _ => false },
-  TEof       => match b { TEof       => true, _ => false }
-}
+/// Constructor identity IS the value word. Every nullary TokenKind compiles
+/// to a distinct sentinel (HB: "the value-level tag is the discriminant"),
+/// and `==` is structural — type-dispatched at emit to `i32.eq` for an ADT
+/// operand. The kernel proves variant identity; the comparison reads it.
+/// `at` only ever compares against nullary kind literals, so value-word
+/// equality IS constructor equality.
+fn kind_eq(a, b) with Pure = a == b
 
 // at: predicate form of kind_eq for a position-and-expected pair.
 fn at(ref tokens, pos, kind) = kind_eq(kind_at(tokens, pos), kind)

@@ -112,6 +112,35 @@
 
 ---
 
+## ⊚ Ground in reality FIRST ⊚
+
+> **Before any theory, any edit, any assertion: run `bash tools/state.sh`.**
+>
+> It derives the real current state from the artifacts THIS run — tree, seed
+> build, wheel census + breakdown, micro battery, the two-pass / first-light,
+> and the first actual failure. Prose drifts (this file, the plan, comments,
+> memory); reality does not. If a doc disagrees with `state.sh`, the doc is
+> stale — trust the tool and fix the doc.
+>
+> `state.sh` is a dissolving scaffold; its ultimate form is `mentl where` —
+> the cursor's argmax projection over the project's own development graph
+> (Phase ν, reflexive). State is not computed; it IS the graph, read by the
+> cursor. The seed is the only running projector pre-L1, so we ask it.
+>
+> **On a runtime bug the first move is a PROBE, not a hypothesis.** mentl2's
+> working observation channel is `perform report` with a REGISTERED diag code
+> (`eprint_string` and fabricated codes are silent in m2; the seed runs
+> directly so `eprint_string` works at seed level). Trace the WHOLE chain to
+> bedrock before touching code — the symptom is the entry point, the floor is
+> the patient. **Verify before asserting**: "X is the cause" is a claim until
+> a trace or a minimal repro proves it. Theory-thrash is the expensive failure
+> mode; a probe is minutes. (`protocol_ground_truth_first_observe_before_theorize`.)
+>
+> Ultimate form and current state are ONE move: you cannot aim at the ultimate
+> form of a thing you have not first observed, exhaustively, as it actually is.
+
+---
+
 ## ⌒ The seven authoring skills (five verbs + two bootstrap) ⌒
 
 > Mentl's five-verb topology projects onto Claude's authoring

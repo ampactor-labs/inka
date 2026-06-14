@@ -939,7 +939,7 @@ fn lower_expr_body(e, handle, span) = match e {
     // resolution returns the local's actual type handle (Phase-A1).
     let lambda_name = "lambda_{int_to_str(handle)}"
     let param_names_list = lower_param_names(params)
-    let param_handles_list = lower_param_handles(params)
+    let param_handles_list = param_handles_of(handle, params)
     let free_names = collect_free_vars(body_node, param_names_list)
     let (captures_names, captures_exprs, captures_handles) =
       resolve_captures_outer(free_names, handle)
@@ -1386,7 +1386,7 @@ fn lower_stmt_body(s, handle, span) = match s {
     // the type handle (TFun bound to handle by infer).
     perform ls_bind_local(name, handle)
     let param_names_list = lower_param_names(params)
-    let param_handles_list = lower_param_handles(params)
+    let param_handles_list = param_handles_of(handle, params)
     let free_names = collect_free_vars(body_node, param_names_list)
     let (captures_names, captures_exprs, captures_handles) =
       resolve_captures_outer(free_names, handle)
@@ -1733,10 +1733,34 @@ fn lower_param_names(params) = map((p) => {
   name
 }, params)
 
-// Phase-A1: extract each param's type handle for the LowerScope
-// frame. A param's type is `TVar(handle)` for inferred params (the
-// common case after infer mints fresh handles); for ground types
-// without a handle, 0 stands as a sentinel.
+/// Each param's graph handle for the LowerScope frame — read from the fn's
+/// INFERRED type, the live graph proof. infer mints a fresh handle per param
+/// and `build_param_types` records it as `TParam(name, TVar(h), …)` in the
+/// fn's `TFun`; that handle carries the param's resolved type. The parsed
+/// `TParam.ty` caches the resolved type and loses the handle, so reading it
+/// (lower_param_handles) returns 0 for any concrete-typed param and the
+/// lowered local goes type-blind. Reading the TFun keeps the handle: the
+/// local then live-chases its type via lookup_ty, so type-dispatched ops
+/// (==, ++, to_string) see the type the graph proved. (Discipline: never
+/// cache the resolved Ty; carry the handle and chase — types.mn.)
+fn param_handles_of(fn_handle, params) = match perform lookup_ty(fn_handle) {
+  TFun(tparams, _, _) =>
+    if len(tparams) == len(params) { map(tparam_handle, tparams) }
+    else { lower_param_handles(params) },
+  _ => lower_param_handles(params)
+}
+
+fn tparam_handle(tp) = {
+  let TParam(_, ty, _, _) = tp
+  match ty {
+    TVar(h) => h,
+    _       => 0
+  }
+}
+
+// Fallback when the fn's type isn't a resolved TFun: a param's parsed type
+// is `TVar(handle)` only while still un-ground; ground types carry no handle
+// (0 sentinel). param_handles_of reads the inferred TFun instead.
 fn lower_param_handles(params) = map((p) => {
   let TParam(_, ty, _, _) = p
   match ty {

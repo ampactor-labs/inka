@@ -200,6 +200,15 @@ fn cache_pack_kind(kind) with Pack + !Unpack = match kind {
     perform pack_byte(5)
     perform pack_i32(len(op_names))
     cache_pack_string_list(op_names, 0, len(op_names))
+  },
+  // HandlerKind(handled_ename, residual_row_handle). The handle is graph-
+  // relative; cross-compile handler-residual caching packs the RESOLVED row
+  // (peer Hβ.cache.handler-residual-row, post-L1). The single-file first-light
+  // path never round-trips this, so the raw handle is sound here.
+  HandlerKind(ename, row_handle) => {
+    perform pack_byte(6)
+    perform pack_str(ename)
+    perform pack_i32(row_handle)
   }
 }
 
@@ -721,6 +730,11 @@ fn cache_unpack_kind() with Unpack + !Pack = {
     let n_ops = perform unpack_i32()
     let op_names = cache_unpack_string_list(n_ops, 0, make_list(n_ops))
     EffectDeclKind(op_names)
+  }
+  else if tag == 6 {
+    let ename = perform unpack_str()
+    let row_handle = perform unpack_i32()
+    HandlerKind(ename, row_handle)
   }
   else { FnScheme }
 }

@@ -122,8 +122,15 @@ type SchemeKind
   | RecordSchemeKind(List)                       // tag 3 — [(field_name, ty)]
   | CapabilityScheme(List)                       // tag 4 — [(EffName, Bool)]
   | EffectDeclKind(List)                         // tag 5 — [op_name: String]
+  | HandlerKind(String, Int)                     // tag 6 — (handled_ename, residual_row_handle)
   // EffectDeclKind appended (not inserted) to preserve tag-ID stability
-  // with the seed's hardcoded constants for tags 0-4.
+  // with the seed's hardcoded constants for tags 0-4. HandlerKind (tag 6)
+  // is the full handler-effect type: a handler is (a ! E+r) ⟿ (a ! R+r) —
+  // it REMOVES the handled effect (handled_ename) AND ADDS its arms'
+  // residual row (residual_row_handle, a live row var, config-polymorphic).
+  // `~>` reads it: row(expr ~> h) = (row(expr) − E) ⊕ R. Without R the
+  // handler-attachment can't transform the row and every map/for_each loses
+  // the effects performed in its arms (protocol_handler_effect_typing).
 
 // The Boolean algebra lives as functions in effects.mn; the ADT
 // lives here so every module that speaks types can speak rows.

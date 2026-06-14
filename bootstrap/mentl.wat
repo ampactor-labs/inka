@@ -23349,11 +23349,18 @@
     (if (i32.eqz (i32.or (call $row_is_closed (local.get $row))
                          (call $row_is_open   (local.get $row))))
       (then (return (call $make_list (i32.const 0)))))
-    (local.set $names (call $row_names (local.get $row)))
+    ;; Builtin effects (Memory/Alloc/WASI) carry NO evidence slot — the raw
+    ;; substrate IS their handler. Filter them, exactly as the wheel does
+    ;; (src/lower.mn derive_ev_slots_from_names → row_dispatched_names). The
+    ;; old form left builtins in with dead slots; that disagreed with the
+    ;; wheel's filtered placement, so m2's seed-baked READ slot missed the
+    ;; wheel-PLACED slot once a builtin preceded a user effect → wrong arm.
+    (local.set $names (call $row_dispatched_names (call $row_names (local.get $row))))
     (local.set $n (call $len (local.get $names)))
     (if (i32.eqz (local.get $n))
       (then (return (call $make_list (i32.const 0)))))
-    ;; ONE ev per effect, in canonical (row_names sorted-lex) order = the
+    ;; ONE ev per USER effect, in canonical (sorted-lex, builtins removed)
+    ;; order = the
     ;; callee's ev-slot order (ec6_emit_ev_slot_stores writes evs[i] at the
     ;; callee record's slot i). Each effect resolves to its handler record:
     ;;   - lexically installed in THIS scope → LLocal(install_local);
@@ -23739,7 +23746,10 @@
     (if (i32.eqz (i32.or (call $row_is_closed (local.get $row))
                          (call $row_is_open   (local.get $row))))
       (then (return (i32.const 0))))
-    (local.set $names (call $row_names (local.get $row)))
+    ;; Builtins carry no ev-slot — filter them so this READ index matches the
+    ;; (filtered) PLACEMENT in derive_ev_slots and the wheel. Mirror of the
+    ;; wheel's lower_compute_ev_index_for_effect (row_dispatched_names).
+    (local.set $names (call $row_dispatched_names (call $row_names (local.get $row))))
     (local.set $n (call $len (local.get $names)))
     (local.set $j (i32.const 0))
     (block $found

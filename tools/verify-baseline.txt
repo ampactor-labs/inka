@@ -1,0 +1,21 @@
+# tools/verify-baseline.txt — the Mentl-thesis gate's recorded baseline.
+#
+# tools/verify.sh fails (and the .githooks/pre-commit hook BLOCKS the commit)
+# if the wheel census exceeds census_max OR any micro regresses. This makes a
+# thesis-violating state impossible to land.
+#
+# The census ratchets toward 0 (first-light = mentl2.wat == mentl3.wat, zero
+# diags). Moving census_max DOWN is progress — do it whenever the wheel
+# census drops. Moving it UP must be a deliberate, explained edit here; there
+# is no silent regression by construction.
+#
+# census = count of wheel-compile stderr lines starting with E_ or W_
+#          ( grep -cE '^(E_|W_)' on the seed's compile of src/ + lib/ ).
+census_max=171
+
+# micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
+micro:ev2=57
+micro:ev4=57
+micro:ev8=57
+micro:ev5=21
+micro:ev16=18

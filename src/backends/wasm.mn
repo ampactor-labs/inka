@@ -1323,7 +1323,20 @@ fn emit_state_init_writes(state_local, inits, base_idx) = {
   perform wat_emit("(local.get $")
   perform wat_emit(state_local)
   perform wat_emit(")")
-  emit_expr(init)
+  // A `with field = config_arg` init is a config reference: LUpval(slot)
+  // reads config slot `slot` of THIS record (config region written first).
+  // The handler record IS the closure — the state slot reads the config
+  // slot of the same record. Everywhere else, emit the value normally.
+  match init {
+    LUpval(_, slot) => {
+      perform wat_emit("(local.get $")
+      perform wat_emit(state_local)
+      perform wat_emit(")(i32.load offset=")
+      perform wat_emit(int_to_str(8 + slot * 4))
+      perform wat_emit(")")
+    },
+    _ => emit_expr(init)
+  }
   perform wat_emit("(i32.store offset=")
   perform wat_emit(int_to_str(8 + (base_idx + i) * 4))
   perform wat_emit(")\n")

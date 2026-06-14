@@ -1636,7 +1636,23 @@ fn state_field_names_of(state) = map((field) => field.name, state)
 /// emit_lhandlewith stores list[i] at offset 8 + i*4 of the freshly-
 /// allocated state record at handler-install per
 /// protocol_handler_is_state_is_closure_is_evidence.md.
-fn lower_state_field_inits(state) = map((field) => lower_expr(field.init), state)
+///
+/// `with field = init` is evaluated in the scope of the handler's config
+/// params (that's where the clause is written). So the inits lower in a
+/// frame where the config names are captures — a config reference becomes
+/// LUpval(config_slot), which emit reads from the SAME record's config
+/// region (written first). Handler IS state IS closure IS evidence: a
+/// state slot initialized from a config arg is one record reading itself.
+/// Without the frame, `acc = init` resolves `init` to a non-existent
+/// global → LUnresolved → (unreachable) at install (fold_handler,
+/// take_collector). Prior-state references in later inits are a peer
+/// (extend the capture set field-by-field); the wheel has none.
+fn lower_state_field_inits(config, state) = {
+  perform ls_enter_frame("__state_init", [], [], config, zeros_of_len(len(config)))
+  let inits = map((field) => lower_expr(field.init), state)
+  perform ls_exit_frame()
+  inits
+}
 
 /// Build a list of n zero handles. Used as the handle-list for arm
 /// captures and locals where lower-time has no type-handle info.
@@ -2145,9 +2161,9 @@ fn lower_pre_register_handler_decls(stmts) =
 fn lower_pre_register_handler_node(node) = {
   let N(body, _, _) = node
   match body {
-    NStmt(HandlerDeclStmt(name, _ename, _config, state, arms)) => {
+    NStmt(HandlerDeclStmt(name, _ename, config, state, arms)) => {
       perform register_handler_state_inits(name,
-        lower_state_field_inits(state),
+        lower_state_field_inits(config, state),
         build_handler_arm_names(name, arms))
       ()
     },

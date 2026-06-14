@@ -506,10 +506,21 @@
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $init   (call $list_index (local.get $inits) (local.get $i)))
         (local.set $offset (i32.add (i32.const 8) (i32.mul (i32.const 4) (local.get $i))))
-        ;; Emit (local.get $<state_local>)
+        ;; Emit (local.get $<state_local>) — the store target
         (call $ec_emit_local_get_dollar (local.get $state_local))
-        ;; Emit init's value
-        (call $emit_lexpr (local.get $init))
+        ;; A `with field = config_arg` init is LUpval(slot, tag 305): read
+        ;; config slot `slot` of THIS record (config region written first).
+        ;; The handler record IS the closure — a state slot reads the config
+        ;; slot of the same record. Mirror of src/backends/wasm.mn
+        ;; emit_state_init_writes. Everywhere else, emit the value normally.
+        (if (i32.eq (call $tag_of (local.get $init)) (i32.const 305))   ;; LUpval
+          (then
+            (call $ec_emit_local_get_dollar (local.get $state_local))
+            (call $el_emit_i32_load_offset
+              (i32.add (i32.const 8) (i32.mul (i32.const 4)
+                (call $lexpr_lupval_slot (local.get $init))))))
+          (else
+            (call $emit_lexpr (local.get $init))))
         ;; Emit (i32.store offset=<offset>)
         (call $emit_byte (i32.const 40))   ;; '('
         (call $emit_byte (i32.const 105))  ;; 'i'

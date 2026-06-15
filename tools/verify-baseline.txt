@@ -11,7 +11,19 @@
 #
 # census = count of wheel-compile stderr lines starting with E_ or W_
 #          ( grep -cE '^(E_|W_)' on the seed's compile of src/ + lib/ ).
-census_max=171
+#
+# 2026-06-15: bumped 171 -> 190 (deliberate, explained). The field-pair-name
+# fix (walk_compound.wat $field_byte_offset) corrected record field-offset
+# resolution: multi-field `.field` previously collapsed to offset 0 (the seed
+# read a field_pair RECORD via list_index). With correct offsets, lowering
+# reaches 19 more sites where a record-field type is still NFree at lower time,
+# each emitting a productive `E_UnresolvedType: lower-time NFree` (56 -> 75).
+# E_TypeMismatch (70) / E_MissingVariable (37) / E_FeedbackNoContext (8) are
+# unchanged — no new real errors. These 19 NFree are the next ratchet-down
+# target (seed record-field type-resolution completeness). The fix is a hard
+# pass-2 prerequisite: it clears the grow_to_with_gaps OOB (placement.slot was
+# reading ename, a string pointer).
+census_max=190
 
 # micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
 micro:ev2=57

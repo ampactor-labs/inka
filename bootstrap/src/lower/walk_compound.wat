@@ -1003,7 +1003,6 @@
         (param $ty i32) (param $field_name i32) (result i32)
     (local $tag i32) (local $fields i32)
     (local $binding i32) (local $kind i32)
-    (call $eprint_string (local.get $field_name))
     (local.set $tag (call $ty_tag (local.get $ty)))
     ;; TVar (104) — chase to inner handle, then resolve from that handle.
     (if (i32.eq (local.get $tag) (i32.const 104))
@@ -1304,8 +1303,12 @@
     (if (i32.ge_u (local.get $i) (local.get $n))
       (then (return (i32.const 0))))
     (local.set $entry (call $list_index (local.get $fields) (local.get $i)))
-    ;; Fields list entries are (name, ty) pairs — name at offset 0.
-    (local.set $name (call $list_index (local.get $entry) (i32.const 0)))
+    ;; Entries are field_pair records (FIELD_PAIR=203, $field_pair_make) —
+    ;; read the name via the field_pair accessor. list_index reads a record
+    ;; as a flat list and yields the wrong slot → "" → str_eq never matches
+    ;; → every multi-field .field collapses to offset 0 (the root of the
+    ;; placement.slot-reads-ename OOB during wheel arm pre-registration).
+    (local.set $name (call $field_pair_name (local.get $entry)))
     (if (call $str_eq (local.get $name) (local.get $target))
       (then (return (i32.mul (local.get $i) (i32.const 4)))))
     (return_call $field_byte_offset

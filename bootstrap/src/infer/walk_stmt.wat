@@ -1336,6 +1336,7 @@
     (local $handler_name i32) (local $effect_name i32)
     (local $effect_ty i32) (local $handler_ty i32)
     (local $scheme i32) (local $reason i32) (local $r_handle i32)
+    (local $config_tparams i32)
     (drop (local.get $handle))
     ;; HandlerDeclStmt: [tag=124][name][effect][arms] (offsets 0/4/8/12)
     (local.set $handler_name (i32.load offset=4 (local.get $stmt)))
@@ -1380,7 +1381,18 @@
     ;; config-tyvars. Empty-config handlers keep the bare Handler Ty
     ;; since `~> h` (no parens) is direct application without an
     ;; intermediate call. Mirrors src/infer.mn:2236-2284.
-    (if (i32.eqz (call $len (i32.load offset=20 (local.get $stmt))))
+    ;; Mint the config tparams ONCE; the scheme AND the arm-scope binding
+    ;; below share these handles so the arm's `f(elem)` types the SAME var
+    ;; the install-site `~> h(f)` unifies against. Minting them twice (a
+    ;; separate fresh var per side) left the scheme's config param a bare
+    ;; TVar — the arm proved `f : a→b!e` on a handle the scheme never saw,
+    ;; so every higher-order fn lost its argument's effect (the row leak).
+    (local.set $config_tparams (call $mint_handler_config_tparams
+      (i32.load offset=20 (local.get $stmt))
+      (local.get $handler_name)
+      (local.get $span)
+      (i32.const 0)))
+    (if (i32.eqz (call $len (local.get $config_tparams)))
       (then
         (local.set $scheme (call $scheme_make_forall
           (call $make_list (i32.const 0))
@@ -1389,11 +1401,7 @@
         (local.set $scheme (call $scheme_make_forall
           (call $make_list (i32.const 0))
           (call $ty_make_tfun
-            (call $mint_handler_config_tparams
-              (i32.load offset=20 (local.get $stmt))
-              (local.get $handler_name)
-              (local.get $span)
-              (i32.const 0))
+            (local.get $config_tparams)
             (local.get $handler_ty)
             (call $row_make_pure))))))
     (local.set $reason (call $reason_make_located
@@ -1431,7 +1439,7 @@
       (i32.load offset=12 (local.get $stmt))
       (local.get $handler_name)
       (local.get $span)
-      (i32.load offset=20 (local.get $stmt))
+      (local.get $config_tparams)
       (i32.load offset=16 (local.get $stmt)))
     (call $walk_expr_inf_exit_fn)
     ;; Hβ.first-light.tier2-perform-or-env-scan — register each arm's
@@ -1769,23 +1777,25 @@
   ;; (walk_stmt.wat:603-630) at single-name granularity.
   ;; Drift refused: 7 (one list of names, not parallel arrays); 9
   ;; (binding lands here, not deferred).
+  ;; Bind each config TParam's NAME to its OWN ty (TVar(h_scheme)) — the
+  ;; SAME handle the handler scheme carries — so the arm body's use of `f`
+  ;; types the var the install site unifies against. (Was: mint a fresh var
+  ;; per name, severing the arm's typing from the scheme. Now takes the
+  ;; tparam list, not a name list.)
   (func $infer_bind_handler_names
-        (param $names i32) (param $reason i32) (param $span i32)
-    (local $n i32) (local $i i32) (local $name i32) (local $h i32)
-    (local.set $n (call $len (local.get $names)))
+        (param $tparams i32) (param $reason i32) (param $span i32)
+    (local $n i32) (local $i i32) (local $tp i32)
+    (local.set $n (call $len (local.get $tparams)))
     (local.set $i (i32.const 0))
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $name (call $list_index (local.get $names) (local.get $i)))
-        (local.set $h (call $graph_fresh_ty
-          (call $reason_make_located (local.get $span)
-            (call $reason_make_declared (local.get $name)))))
+        (local.set $tp (call $list_index (local.get $tparams) (local.get $i)))
         (call $env_extend
-          (local.get $name)
+          (call $tparam_name (local.get $tp))
           (call $scheme_make_forall
             (call $make_list (i32.const 0))
-            (call $ty_make_tvar (local.get $h)))
+            (call $tparam_ty (local.get $tp)))
           (local.get $reason)
           (call $schemekind_make_fn))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))

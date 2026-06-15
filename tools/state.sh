@@ -53,10 +53,19 @@ else
 fi
 
 echo "▸ MICRO BATTERY  (gates the seed; each exit code captured directly)"
-for spec in "ev2 57" "ev4 57" "ev8 57" "ev5 21" "ev16 18" "eq 73" "interp 59"; do
-  set -- $spec; m=$1; want=$2; f="tests/micros/mn-$m.mn"
+# String-using micros (eq/interp) need the runtime trio that defines str_concat;
+# the seed emits helpers on demand, so the call without its definition is an
+# assembly-time lie, not a regression. Pass the libs (marker `rt`) so the tool
+# tells the truth.
+RTLIBS="lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn"
+for spec in "ev2 57" "ev4 57" "ev8 57" "ev5 21" "ev16 18" "eq 73 rt" "interp 59 rt"; do
+  set -- $spec; m=$1; want=$2; needrt="${3:-}"; f="tests/micros/mn-$m.mn"
   [ -f "$f" ] || { printf "      %-7s (no file)\n" "$m"; continue; }
-  out=$(tools/run-micro.sh "$f" 2>/dev/null | tail -1)
+  if [ "$needrt" = "rt" ]; then
+    out=$(tools/run-micro.sh "$f" "$want" $RTLIBS 2>/dev/null | tail -1)
+  else
+    out=$(tools/run-micro.sh "$f" "$want" 2>/dev/null | tail -1)
+  fi
   printf "      %-7s want=%-3s  %s\n" "$m" "$want" "$out"
 done
 

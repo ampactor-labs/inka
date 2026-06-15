@@ -865,6 +865,7 @@
   (func $lower_compute_ev_index_for_effect (param $effect_name i32) (result i32)
     (local $fn_name i32) (local $binding i32) (local $scheme i32)
     (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $j i32)
+    (local $nl i32)
     (if (i32.eqz (local.get $effect_name)) (then (return (i32.const 0))))
     (local.set $fn_name (call $ls_outer_fn_name))
     (if (i32.eqz (local.get $fn_name)) (then (return (i32.const 0))))
@@ -894,6 +895,16 @@
           (then (return (local.get $j))))
         (local.set $j (i32.add (local.get $j) (i32.const 1)))
         (br $search)))
+    ;; ROW-CONSERVATION LEAK (proto-W_RowLeak): we hold this fn's row and
+    ;; searched it, yet $effect_name is absent — something forwards/performs an
+    ;; effect the row never accumulated. The silent slot-0 clamp masked it; make
+    ;; it speak. `<fn>_<effect>` per line on stderr (uncounted by the census).
+    (local.set $nl (call $str_alloc (i32.const 1)))
+    (i32.store8 (i32.add (local.get $nl) (i32.const 4)) (i32.const 10))
+    (call $eprint_string (local.get $fn_name))
+    (call $eprint_string (i32.const 4400))
+    (call $eprint_string (local.get $effect_name))
+    (call $eprint_string (local.get $nl))
     (i32.const 0))
 
   ;; ─── $lower_perform — PerformExpr arm (parser tag 94) ──────────────

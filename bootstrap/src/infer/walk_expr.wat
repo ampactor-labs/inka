@@ -473,6 +473,12 @@
     ;; FieldExpr (100): field at offset 8 ([tag=100][rec][field])
     (if (i32.eq (local.get $tag) (i32.const 100))
       (then (return (i32.load offset=8 (local.get $expr)))))
+    ;; CallExpr (88): a config handler `~> h(args)` ([tag=88][callee][args]).
+    ;; The handler's name IS the callee; recurse so HandlerKind resolves and
+    ;; its residual row applies — without this, every config handler
+    ;; (map_collector(f), fold_handler(f,init)) loses its arm effects.
+    (if (i32.eq (local.get $tag) (i32.const 88))
+      (then (return (call $walk_expr_callee_name (i32.load offset=4 (local.get $expr))))))
     (i32.const 4008))   ;; "<expr>"
 
   ;; $walk_expr_collect_handled_effects(arms) — placeholder per
@@ -820,6 +826,15 @@
     (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))   ;; NRowBound
       (then (call $walk_expr_inf_add_row
         (call $node_kind_payload (local.get $row_nk)))))
+    ;; NRowFree (63): the callee is effect-POLYMORPHIC — its row is still a
+    ;; free var (a fn PARAM `f` whose effect isn't yet known: map(f,xs),
+    ;; a handler arm calling its config `f`). Add the row VARIABLE so the
+    ;; caller becomes polymorphic in it too; generalize quantifies it and
+    ;; the call site instantiates it. Mirror of src/infer.mn:961 — without
+    ;; this, every higher-order fn loses its argument's effects.
+    (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 63))   ;; NRowFree
+      (then (call $walk_expr_inf_add_row
+        (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h)))))
     (local.get $handle))
 
   ;; LambdaExpr arm — src/infer.mn:724-740. Builds TFun([], TVar(body_h),

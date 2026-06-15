@@ -1,0 +1,22 @@
+// mn-hoeffect — higher-order effect propagation (the L1 first-light blocker).
+// A lambda performing a USER effect, passed to `map`, under a handler. For the
+// evidence to thread, map must be effect-polymorphic: (a→b ! e) → [a] → [b] ! e,
+// so use_each's row picks up the lambda's {Env2}. When it doesn't, the lambda
+// reads its "Env2 evidence" from use_each's frame slot 0 (a DIFFERENT effect's
+// slot) → wrong arm fn → `indirect call type mismatch` trap.
+//
+// Run: tools/run-micro.sh tests/micros/mn-hoeffect.mn 42 \
+//        $(find lib -name '*.mn' -not -path '*/tutorial/*' | sort)
+// Expected exit 42: map((x)=>perform lookup2(x), [2]) = [2+40]; head = 42.
+
+effect Env2 { lookup2(k) -> Int }
+
+handler env2_handler {
+  lookup2(k) => resume(k + 40)
+}
+
+fn use_each(xs) = map((x) => perform lookup2(x), xs)
+
+fn run() = { use_each([2]) } ~> env2_handler
+
+fn main(q) = head(run())

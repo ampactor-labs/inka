@@ -321,6 +321,15 @@ fn chase_handle(ref nodes, handle, depth) with !Mutate = {
           TVar(next) => chase_handle(nodes, next, depth + 1),
           _          => handle
         },
+      // Row aliases: unify_row links open row vars as `va → EfOpen(_, vb)`.
+      // find follows them to the canonical root var, exactly as it follows
+      // TVar — so generalize/instantiate quantify a buried row tail (the row
+      // mirror of the type-var find). Type handles never reach this arm.
+      NRowBound(row) =>
+        match row {
+          EfOpen(_, next) => chase_handle(nodes, next, depth + 1),
+          _               => handle
+        },
       _ => handle
     }
   }

@@ -923,6 +923,11 @@ fn callee_name(func_node) with Pure = {
   match body {
     NExpr(VarRef(name)) => name,
     NExpr(FieldExpr(_, field)) => field,
+    // A config handler `~> h(args)` is a CallExpr; the handler's name IS
+    // the callee. Recurse so handler_e_r resolves its HandlerKind and the
+    // residual row applies — without this every config handler
+    // (map_collector(f), fold_handler(f,init)) silently loses its arm effects.
+    NExpr(CallExpr(callee, _)) => callee_name(callee),
     _ => "<expr>"
   }
 }
@@ -2143,10 +2148,7 @@ fn generalize(handle) = {
   match kind {
     NBound(ty) => {
       let body_ty = chase_deep(ty)
-      let body_free = free_in_ty(body_ty)
-      // env_free_vars is optional — if unavailable, treat as empty.
-      // Conservatively: quantify all body-free handles.
-      Forall(body_free, body_ty)
+      Forall(free_in_ty(body_ty), body_ty)
     },
     NFree(_)      => Forall([], TVar(handle)),    // unresolved — monotype stays
     NRowBound(_)  => Forall([], TVar(handle)),    // row handle — not a Ty; monotype
@@ -2244,7 +2246,14 @@ fn free_in_fields(fields) = flatten(map((fld) => {
 fn free_in_row(eff) = match eff {
   EfPure        => [],
   EfClosed(_)   => [],
-  EfOpen(_, v)  => if row_var_is_free(v) { [v] } else { [] },
+  EfOpen(_, v)  => {
+    // find the row var's union-find ROOT — a buried free tail (the residual of
+    // a `~> h(f)` / map's f-effect) is reached only through the alias chain.
+    // Collect the root, so generalize quantifies it and instantiate (subst_row,
+    // same find) freshens it — effect-polymorphism as HM over the row sort.
+    let r = perform graph_chase_handle(v)
+    if row_var_is_free(r) { [r] } else { [] }
+  },
   EfNeg(inner)  => free_in_row(inner),
   EfSub(a, b)   => free_in_row(a) ++ free_in_row(b),
   EfInter(a, b) => free_in_row(a) ++ free_in_row(b)
@@ -2336,7 +2345,10 @@ fn subst_row(eff, mapping) = match eff {
   EfPure        => EfPure,
   EfClosed(ns)  => EfClosed(ns),
   EfOpen(ns, v) => {
-    let r = find_mapping(mapping, v)
+    // Substitute by the row var's union-find ROOT — the same find generalize
+    // quantified by. Without it a buried alias misses the mapping and the
+    // call instantiates an unlinked tail (the f-effect never threads).
+    let r = find_mapping(mapping, perform graph_chase_handle(v))
     if r >= 0 { mk_ef_open(ns, r) } else { eff }
   },
   EfNeg(inner)  => EfNeg(subst_row(inner, mapping)),

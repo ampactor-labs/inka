@@ -192,6 +192,31 @@
 
 ---
 
+## ⊘ Report, don't perform ⊘
+
+> Locked 2026-06-15 by Morgan ("why am I so fucking annoyed"). A turn ends
+> with what CHANGED and the MEASURED result — never an essay.
+>
+> - **Work not done → the headline is "not done," in the first sentence.**
+>   Never frame a non-result as progress; never spin a failure into a vision.
+>   "I built a scaffold / narrowed the search" is not a result; the result
+>   is the number that moved (or didn't).
+> - **No closing thesis-poems.** The thesis is cached (ULTIMATE_MEDIUM.md,
+>   the plan, this file). Restating it is noise. The "what would the ultimate
+>   medium look like" reflex, the day-in-the-medium lyricism — that is the
+>   drift, not the discipline, when a result was owed.
+> - **Lyricism in a status update IS avoidance** — the metaphor reached for
+>   in place of the result you don't have. When you notice yourself writing
+>   "the negative of the session developed into a photograph," stop: you are
+>   dodging an uncomfortable number.
+> - **Center the artifact and the measurement, not yourself.** Not "the
+>   instrument I built / the day I spent" — the dial, the census, the diff.
+> - **Shortest response that carries result + next move.** Earn every
+>   sentence; when unsure, cut. Verbosity, optimism, and Mentl-vocabulary
+>   garnish are not depth.
+
+---
+
 ## ⌒ The seven authoring skills (five verbs + two bootstrap) ⌒
 
 > Mentl's five-verb topology projects onto Claude's authoring

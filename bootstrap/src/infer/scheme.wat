@@ -867,7 +867,7 @@
 
   ;; $free_in_row(eff) — the open tail var is the row's free handle.
   (func $free_in_row (param $eff i32) (result i32)
-    (local $tag i32)
+    (local $tag i32) (local $root i32)
     (local.set $tag (call $row_tag (local.get $eff)))
     (if (i32.eq (local.get $tag) (i32.const 150))   ;; Pure
       (then (return (call $make_list (i32.const 0)))))
@@ -879,10 +879,13 @@
         ;; row mirror of free_in_ty's TVar arm (chase_deep folds bound
         ;; tails; a bound tail is not a free var). Quantifying a bound tail
         ;; would re-freshen a monomorphic fn's shared row handle.
+        ;; find the row var's union-find ROOT — a buried free tail (a `~> h(f)`
+        ;; / map's f-effect residual) is reached only through the alias chain.
+        (local.set $root (call $graph_chase_handle (call $row_handle (local.get $eff))))
         (if (i32.eq (call $node_kind_tag (call $gnode_kind
-              (call $graph_chase (call $row_handle (local.get $eff)))))
+              (call $graph_chase (local.get $root))))
               (i32.const 63))   ;; NRowFree
-          (then (return (call $singleton_handle (call $row_handle (local.get $eff)))))
+          (then (return (call $singleton_handle (local.get $root))))
           (else (return (call $make_list (i32.const 0)))))))
     (if (i32.eq (local.get $tag) (i32.const 153))   ;; Neg(inner)
       (then (return
@@ -909,7 +912,10 @@
     (if (i32.eq (local.get $tag) (i32.const 151)) (then (return (local.get $eff))))
     (if (i32.eq (local.get $tag) (i32.const 152))   ;; Open
       (then
-        (local.set $v (call $row_handle (local.get $eff)))
+        ;; substitute by the union-find ROOT — the same find generalize
+        ;; quantified by; a buried alias would miss the map and leave the
+        ;; instantiated tail unlinked (the f-effect never threads).
+        (local.set $v (call $graph_chase_handle (call $row_handle (local.get $eff))))
         (local.set $fresh (call $subst_map_lookup
           (local.get $map) (local.get $map_len) (local.get $v)))
         (if (i32.lt_s (local.get $fresh) (i32.const 0))

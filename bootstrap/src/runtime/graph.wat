@@ -282,11 +282,22 @@
   ;; $graph_chase_handle — follows TVar chains and returns the CANONICAL
   ;; HANDLE (integer), not the GNode.
   (func $graph_chase_handle (param $h i32) (result i32)
+    (call $graph_chase_handle_d (local.get $h) (i32.const 0)))
+
+  ;; Depth-bounded find — TVar chains AND row-alias chains (EfOpen tails).
+  ;; The row arm is the row mirror of the TVar find: generalize/instantiate
+  ;; quantify a buried row tail (effect-polymorphism). Row aliases can cycle
+  ;; (unify_row has no occurs-check), so the bound terminates like the wheel's.
+  (func $graph_chase_handle_d (param $h i32) (param $depth i32) (result i32)
     (local $g i32) (local $nk i32) (local $nk_tag i32) (local $ty i32)
+    (if (i32.gt_u (local.get $depth) (i32.const 100)) (then (return (local.get $h))))
     (local.set $g (call $graph_node_at (local.get $h)))
     (local.set $nk (call $gnode_kind (local.get $g)))
     (local.set $nk_tag (call $node_kind_tag (local.get $nk)))
-    (if (i32.eq (local.get $nk_tag) (i32.const 60)) (then (local.set $ty (call $node_kind_payload (local.get $nk))) (if (i32.eq (call $ty_tag (local.get $ty)) (i32.const 104)) (then (return (call $graph_chase_handle (call $ty_tvar_handle (local.get $ty)))))))) (local.get $h))
+    (if (i32.eq (local.get $nk_tag) (i32.const 60)) (then (local.set $ty (call $node_kind_payload (local.get $nk))) (if (i32.eq (call $ty_tag (local.get $ty)) (i32.const 104)) (then (return (call $graph_chase_handle_d (call $ty_tvar_handle (local.get $ty)) (i32.add (local.get $depth) (i32.const 1))))))))
+    ;; NRowBound(EfOpen(_, next)) — follow the row-alias chain to the root var.
+    (if (i32.eq (local.get $nk_tag) (i32.const 62)) (then (local.set $ty (call $node_kind_payload (local.get $nk))) (if (call $row_is_open (local.get $ty)) (then (return (call $graph_chase_handle_d (call $row_handle (local.get $ty)) (i32.add (local.get $depth) (i32.const 1))))))))
+    (local.get $h))
 
   (func $graph_chase (param $handle i32) (result i32)
     (call $graph_chase_loop (local.get $handle) (i32.const 0)))

@@ -1970,11 +1970,22 @@
   ;; $graph_chase_handle — follows TVar chains and returns the CANONICAL
   ;; HANDLE (integer), not the GNode.
   (func $graph_chase_handle (param $h i32) (result i32)
+    (call $graph_chase_handle_d (local.get $h) (i32.const 0)))
+
+  ;; Depth-bounded find — TVar chains AND row-alias chains (EfOpen tails).
+  ;; The row arm is the row mirror of the TVar find: generalize/instantiate
+  ;; quantify a buried row tail (effect-polymorphism). Row aliases can cycle
+  ;; (unify_row has no occurs-check), so the bound terminates like the wheel's.
+  (func $graph_chase_handle_d (param $h i32) (param $depth i32) (result i32)
     (local $g i32) (local $nk i32) (local $nk_tag i32) (local $ty i32)
+    (if (i32.gt_u (local.get $depth) (i32.const 100)) (then (return (local.get $h))))
     (local.set $g (call $graph_node_at (local.get $h)))
     (local.set $nk (call $gnode_kind (local.get $g)))
     (local.set $nk_tag (call $node_kind_tag (local.get $nk)))
-    (if (i32.eq (local.get $nk_tag) (i32.const 60)) (then (local.set $ty (call $node_kind_payload (local.get $nk))) (if (i32.eq (call $ty_tag (local.get $ty)) (i32.const 104)) (then (return (call $graph_chase_handle (call $ty_tvar_handle (local.get $ty)))))))) (local.get $h))
+    (if (i32.eq (local.get $nk_tag) (i32.const 60)) (then (local.set $ty (call $node_kind_payload (local.get $nk))) (if (i32.eq (call $ty_tag (local.get $ty)) (i32.const 104)) (then (return (call $graph_chase_handle_d (call $ty_tvar_handle (local.get $ty)) (i32.add (local.get $depth) (i32.const 1))))))))
+    ;; NRowBound(EfOpen(_, next)) — follow the row-alias chain to the root var.
+    (if (i32.eq (local.get $nk_tag) (i32.const 62)) (then (local.set $ty (call $node_kind_payload (local.get $nk))) (if (call $row_is_open (local.get $ty)) (then (return (call $graph_chase_handle_d (call $row_handle (local.get $ty)) (i32.add (local.get $depth) (i32.const 1))))))))
+    (local.get $h))
 
   (func $graph_chase (param $handle i32) (result i32)
     (call $graph_chase_loop (local.get $handle) (i32.const 0)))
@@ -11783,7 +11794,7 @@
 
   ;; $free_in_row(eff) — the open tail var is the row's free handle.
   (func $free_in_row (param $eff i32) (result i32)
-    (local $tag i32)
+    (local $tag i32) (local $root i32)
     (local.set $tag (call $row_tag (local.get $eff)))
     (if (i32.eq (local.get $tag) (i32.const 150))   ;; Pure
       (then (return (call $make_list (i32.const 0)))))
@@ -11795,10 +11806,13 @@
         ;; row mirror of free_in_ty's TVar arm (chase_deep folds bound
         ;; tails; a bound tail is not a free var). Quantifying a bound tail
         ;; would re-freshen a monomorphic fn's shared row handle.
+        ;; find the row var's union-find ROOT — a buried free tail (a `~> h(f)`
+        ;; / map's f-effect residual) is reached only through the alias chain.
+        (local.set $root (call $graph_chase_handle (call $row_handle (local.get $eff))))
         (if (i32.eq (call $node_kind_tag (call $gnode_kind
-              (call $graph_chase (call $row_handle (local.get $eff)))))
+              (call $graph_chase (local.get $root))))
               (i32.const 63))   ;; NRowFree
-          (then (return (call $singleton_handle (call $row_handle (local.get $eff)))))
+          (then (return (call $singleton_handle (local.get $root))))
           (else (return (call $make_list (i32.const 0)))))))
     (if (i32.eq (local.get $tag) (i32.const 153))   ;; Neg(inner)
       (then (return
@@ -11825,7 +11839,10 @@
     (if (i32.eq (local.get $tag) (i32.const 151)) (then (return (local.get $eff))))
     (if (i32.eq (local.get $tag) (i32.const 152))   ;; Open
       (then
-        (local.set $v (call $row_handle (local.get $eff)))
+        ;; substitute by the union-find ROOT — the same find generalize
+        ;; quantified by; a buried alias would miss the map and leave the
+        ;; instantiated tail unlinked (the f-effect never threads).
+        (local.set $v (call $graph_chase_handle (call $row_handle (local.get $eff))))
         (local.set $fresh (call $subst_map_lookup
           (local.get $map) (local.get $map_len) (local.get $v)))
         (if (i32.lt_s (local.get $fresh) (i32.const 0))
@@ -15415,6 +15432,12 @@
     ;; FieldExpr (100): field at offset 8 ([tag=100][rec][field])
     (if (i32.eq (local.get $tag) (i32.const 100))
       (then (return (i32.load offset=8 (local.get $expr)))))
+    ;; CallExpr (88): a config handler `~> h(args)` ([tag=88][callee][args]).
+    ;; The handler's name IS the callee; recurse so HandlerKind resolves and
+    ;; its residual row applies — without this, every config handler
+    ;; (map_collector(f), fold_handler(f,init)) loses its arm effects.
+    (if (i32.eq (local.get $tag) (i32.const 88))
+      (then (return (call $walk_expr_callee_name (i32.load offset=4 (local.get $expr))))))
     (i32.const 4008))   ;; "<expr>"
 
   ;; $walk_expr_collect_handled_effects(arms) — placeholder per
@@ -15762,6 +15785,15 @@
     (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))   ;; NRowBound
       (then (call $walk_expr_inf_add_row
         (call $node_kind_payload (local.get $row_nk)))))
+    ;; NRowFree (63): the callee is effect-POLYMORPHIC — its row is still a
+    ;; free var (a fn PARAM `f` whose effect isn't yet known: map(f,xs),
+    ;; a handler arm calling its config `f`). Add the row VARIABLE so the
+    ;; caller becomes polymorphic in it too; generalize quantifies it and
+    ;; the call site instantiates it. Mirror of src/infer.mn:961 — without
+    ;; this, every higher-order fn loses its argument's effects.
+    (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 63))   ;; NRowFree
+      (then (call $walk_expr_inf_add_row
+        (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h)))))
     (local.get $handle))
 
   ;; LambdaExpr arm — src/infer.mn:724-740. Builds TFun([], TVar(body_h),
@@ -18364,6 +18396,7 @@
     (local $handler_name i32) (local $effect_name i32)
     (local $effect_ty i32) (local $handler_ty i32)
     (local $scheme i32) (local $reason i32) (local $r_handle i32)
+    (local $config_tparams i32)
     (drop (local.get $handle))
     ;; HandlerDeclStmt: [tag=124][name][effect][arms] (offsets 0/4/8/12)
     (local.set $handler_name (i32.load offset=4 (local.get $stmt)))
@@ -18408,7 +18441,18 @@
     ;; config-tyvars. Empty-config handlers keep the bare Handler Ty
     ;; since `~> h` (no parens) is direct application without an
     ;; intermediate call. Mirrors src/infer.mn:2236-2284.
-    (if (i32.eqz (call $len (i32.load offset=20 (local.get $stmt))))
+    ;; Mint the config tparams ONCE; the scheme AND the arm-scope binding
+    ;; below share these handles so the arm's `f(elem)` types the SAME var
+    ;; the install-site `~> h(f)` unifies against. Minting them twice (a
+    ;; separate fresh var per side) left the scheme's config param a bare
+    ;; TVar — the arm proved `f : a→b!e` on a handle the scheme never saw,
+    ;; so every higher-order fn lost its argument's effect (the row leak).
+    (local.set $config_tparams (call $mint_handler_config_tparams
+      (i32.load offset=20 (local.get $stmt))
+      (local.get $handler_name)
+      (local.get $span)
+      (i32.const 0)))
+    (if (i32.eqz (call $len (local.get $config_tparams)))
       (then
         (local.set $scheme (call $scheme_make_forall
           (call $make_list (i32.const 0))
@@ -18417,11 +18461,7 @@
         (local.set $scheme (call $scheme_make_forall
           (call $make_list (i32.const 0))
           (call $ty_make_tfun
-            (call $mint_handler_config_tparams
-              (i32.load offset=20 (local.get $stmt))
-              (local.get $handler_name)
-              (local.get $span)
-              (i32.const 0))
+            (local.get $config_tparams)
             (local.get $handler_ty)
             (call $row_make_pure))))))
     (local.set $reason (call $reason_make_located
@@ -18459,7 +18499,7 @@
       (i32.load offset=12 (local.get $stmt))
       (local.get $handler_name)
       (local.get $span)
-      (i32.load offset=20 (local.get $stmt))
+      (local.get $config_tparams)
       (i32.load offset=16 (local.get $stmt)))
     (call $walk_expr_inf_exit_fn)
     ;; Hβ.first-light.tier2-perform-or-env-scan — register each arm's
@@ -18797,23 +18837,25 @@
   ;; (walk_stmt.wat:603-630) at single-name granularity.
   ;; Drift refused: 7 (one list of names, not parallel arrays); 9
   ;; (binding lands here, not deferred).
+  ;; Bind each config TParam's NAME to its OWN ty (TVar(h_scheme)) — the
+  ;; SAME handle the handler scheme carries — so the arm body's use of `f`
+  ;; types the var the install site unifies against. (Was: mint a fresh var
+  ;; per name, severing the arm's typing from the scheme. Now takes the
+  ;; tparam list, not a name list.)
   (func $infer_bind_handler_names
-        (param $names i32) (param $reason i32) (param $span i32)
-    (local $n i32) (local $i i32) (local $name i32) (local $h i32)
-    (local.set $n (call $len (local.get $names)))
+        (param $tparams i32) (param $reason i32) (param $span i32)
+    (local $n i32) (local $i i32) (local $tp i32)
+    (local.set $n (call $len (local.get $tparams)))
     (local.set $i (i32.const 0))
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $name (call $list_index (local.get $names) (local.get $i)))
-        (local.set $h (call $graph_fresh_ty
-          (call $reason_make_located (local.get $span)
-            (call $reason_make_declared (local.get $name)))))
+        (local.set $tp (call $list_index (local.get $tparams) (local.get $i)))
         (call $env_extend
-          (local.get $name)
+          (call $tparam_name (local.get $tp))
           (call $scheme_make_forall
             (call $make_list (i32.const 0))
-            (call $ty_make_tvar (local.get $h)))
+            (call $tparam_ty (local.get $tp)))
           (local.get $reason)
           (call $schemekind_make_fn))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -23888,6 +23930,7 @@
   (func $lower_compute_ev_index_for_effect (param $effect_name i32) (result i32)
     (local $fn_name i32) (local $binding i32) (local $scheme i32)
     (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $j i32)
+    (local $nl i32)
     (if (i32.eqz (local.get $effect_name)) (then (return (i32.const 0))))
     (local.set $fn_name (call $ls_outer_fn_name))
     (if (i32.eqz (local.get $fn_name)) (then (return (i32.const 0))))
@@ -23917,6 +23960,16 @@
           (then (return (local.get $j))))
         (local.set $j (i32.add (local.get $j) (i32.const 1)))
         (br $search)))
+    ;; ROW-CONSERVATION LEAK (proto-W_RowLeak): we hold this fn's row and
+    ;; searched it, yet $effect_name is absent — something forwards/performs an
+    ;; effect the row never accumulated. The silent slot-0 clamp masked it; make
+    ;; it speak. `<fn>_<effect>` per line on stderr (uncounted by the census).
+    (local.set $nl (call $str_alloc (i32.const 1)))
+    (i32.store8 (i32.add (local.get $nl) (i32.const 4)) (i32.const 10))
+    (call $eprint_string (local.get $fn_name))
+    (call $eprint_string (i32.const 4400))
+    (call $eprint_string (local.get $effect_name))
+    (call $eprint_string (local.get $nl))
     (i32.const 0))
 
   ;; ─── $lower_perform — PerformExpr arm (parser tag 94) ──────────────

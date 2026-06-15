@@ -1,0 +1,34 @@
+// mn-hoeff6 — hoeff5 + the `use_each` wrapper: the lambda performing lookup2 is
+// created inside use_each (a DIFFERENT fn from run, where env2_handler installs),
+// mirroring the prelude's `use_each(xs) = map(lambda, xs)`. So Env2 evidence must
+// thread run(install) → use_each → the lambda closure, not be captured directly
+// in run's scope (as hoeff5 did). No lists yet. Expected exit 42.
+
+effect Env2 { lookup2(k) -> Int }
+
+handler env2_handler {
+  lookup2(k) => resume(k + 40)
+}
+
+effect Step {
+  emit(v) -> ()
+  done() -> Int
+}
+
+handler collect(g) with total = 0 {
+  emit(v) => {
+    let r = g(v)
+    resume() with total = total + r
+  },
+  done() => resume(total)
+}
+
+fn source(v, n) with Step = if n > 0 { emit(v); source(v, n - 1) }
+
+fn apply_each(g, v) = { source(v, 1); done() } ~> collect(g)
+
+fn use_each(v) = apply_each((x) => perform lookup2(x), v)
+
+fn run() = { use_each(2) } ~> env2_handler
+
+fn main(q) = run()

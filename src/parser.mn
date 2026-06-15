@@ -16,16 +16,16 @@ import lexer
 
 // Handle minting and node wrapping
 
-fn fresh_ph(span: ValidSpan) = {
+fn fresh_handle(span: ValidSpan) = {
   let h = perform graph_fresh_ty(Placeholder(span))
   perform graph_index_span(span, h)
   h
 }
 
-fn nexpr(e, span: ValidSpan) = N(NExpr(e), span, fresh_ph(span))
-fn nstmt(s, span: ValidSpan) = N(NStmt(s), span, fresh_ph(span))
-fn npat(p, span: ValidSpan)  = N(NPat(p), span, fresh_ph(span))
-fn nhole(id, span: ValidSpan) = N(NHole(id), span, fresh_ph(span))
+fn nexpr(e, span: ValidSpan) = N(NExpr(e), span, fresh_handle(span))
+fn nstmt(s, span: ValidSpan) = N(NStmt(s), span, fresh_handle(span))
+fn npat(p, span: ValidSpan)  = N(NPat(p), span, fresh_handle(span))
+fn nhole(id, span: ValidSpan) = N(NHole(id), span, fresh_handle(span))
 
 // Token navigation
 // Tokens are typed: `Tok(TokenKind, Span)`. Helpers extract payload
@@ -439,7 +439,7 @@ fn parse_one_param(ref tokens, pos) = {
   } else {
     // Type inferred via TVar allocated at parse
     let placeholder_span = span_at(tokens, p)
-    let h = fresh_ph(placeholder_span)
+    let h = fresh_handle(placeholder_span)
     (TParam(name, TVar(h), own_marker, own_marker), p2)
   }
 }
@@ -1119,7 +1119,7 @@ fn parse_primary(ref tokens, pos) = {
       (nexpr(VarRef(name), span), pos + 1)
     },
     THole        => {
-      let id = fresh_ph(span)
+      let id = fresh_handle(span)
       (nhole(id, span), pos + 1)
     },
     TLParen      => parse_paren_or_tuple(tokens, pos + 1, span),
@@ -1201,14 +1201,14 @@ fn parse_primary(ref tokens, pos) = {
       perform report("parser", "E_OrphanHandlerAttach", "ParseError",
         "the tee-arrow has no preceding chain — supply a body before it or remove the tee-arrow",
         span, "Unspecified")
-      let id = fresh_ph(span)
+      let id = fresh_handle(span)
       (nhole(id, span), pos + 1)
     },
     _ => {
       perform report("parser", "P_UnexpectedToken", "ParseError",
         "unexpected token: {show_token_kind(kind_at(tokens, pos))}",
         span, "MaybeIncorrect")
-      let id = fresh_ph(span)
+      let id = fresh_handle(span)
       (nhole(id, span), pos + 1)
     }
   }
@@ -1227,7 +1227,7 @@ fn expr_to_param(e) = {
     NExpr(VarRef(nm)) => nm,
     _                 => ""
   }
-  TParam(pname, TVar(fresh_ph(esp)), Unmarked, Unmarked)
+  TParam(pname, TVar(fresh_handle(esp)), Unmarked, Unmarked)
 }
 
 /// Convert a list of parsed expr nodes into a TParam list (buffer-
@@ -1781,7 +1781,7 @@ fn parse_lambda_params(ref tokens, pos, own buf, count) = {
   if at(tokens, p, TPipe) { (buf, count, p + 1) }
   else {
     let name = ident_at(tokens, p)
-    let h = fresh_ph(span_at(tokens, p))
+    let h = fresh_handle(span_at(tokens, p))
     let param = TParam(name, TVar(h), Unmarked, Unmarked)
     let (b1, c1) = push_node(buf, count, param)
     let p2 = skip_ws(tokens, p + 1)

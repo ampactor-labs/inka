@@ -1738,9 +1738,9 @@ fn resolve_state_slot_offset(name, fields) = {
 /// init expression may reference outer-scope names (e.g., a freshly-built
 /// `[frame] ++ frames` where `frame` is a let-bound local in the arm
 /// body). cfv reports those that aren't in `bound`.
-fn cfv_state_updates(updates, bound) = {
+fn free_vars_state_updates(updates, bound) = {
   fold(updates, [], (acc, upd) =>
-    cfv_merge(acc, collect_free_vars(upd.init, bound)))
+    free_vars_merge(acc, collect_free_vars(upd.init, bound)))
 }
 
 /// Bind handler state-field names as arm-scope locals. Per
@@ -1827,14 +1827,14 @@ fn lower_param_handles(params) = map((p) => {
 fn collect_free_vars(node, bound) = {
   let N(body, _, _) = node
   match body {
-    NExpr(e) => cfv_expr(e, bound),
-    NStmt(s) => cfv_stmt(s, bound),
+    NExpr(e) => free_vars_expr(e, bound),
+    NStmt(s) => free_vars_stmt(s, bound),
     NPat(_)  => [],
     NHole(_) => []
   }
 }
 
-fn cfv_expr(e, bound) = match e {
+fn free_vars_expr(e, bound) = match e {
   LitInt(_)    => [],
   LitFloat(_)  => [],
   LitString(_) => [],
@@ -1842,60 +1842,60 @@ fn cfv_expr(e, bound) = match e {
   LitUnit      => [],
 
   VarRef(name) =>
-    if cfv_contains(bound, name) { [] }
+    if free_vars_contains(bound, name) { [] }
     else { [name] },
 
   BinOpExpr(_, l, r) =>
-    cfv_merge(collect_free_vars(l, bound), collect_free_vars(r, bound)),
+    free_vars_merge(collect_free_vars(l, bound), collect_free_vars(r, bound)),
 
   UnaryOpExpr(_, inner) =>
     collect_free_vars(inner, bound),
 
   CallExpr(f, args) =>
-    cfv_merge(collect_free_vars(f, bound), cfv_list(args, bound)),
+    free_vars_merge(collect_free_vars(f, bound), free_vars_list(args, bound)),
 
   IfExpr(c, t, e) =>
-    cfv_merge(
+    free_vars_merge(
       collect_free_vars(c, bound),
-      cfv_merge(collect_free_vars(t, bound), collect_free_vars(e, bound))
+      free_vars_merge(collect_free_vars(t, bound), collect_free_vars(e, bound))
     ),
 
   BlockExpr(stmts, final_e) => {
-    let (frees, bound_after) = cfv_stmts(stmts, bound, [])
-    cfv_merge(frees, collect_free_vars(final_e, bound_after))
+    let (frees, bound_after) = free_vars_stmts(stmts, bound, [])
+    free_vars_merge(frees, collect_free_vars(final_e, bound_after))
   },
 
   MatchExpr(scrut, arms) =>
-    cfv_merge(collect_free_vars(scrut, bound), cfv_match_arms(arms, bound)),
+    free_vars_merge(collect_free_vars(scrut, bound), free_vars_match_arms(arms, bound)),
 
-  MakeListExpr(elems)  => cfv_list(elems, bound),
-  MakeTupleExpr(elems) => cfv_list(elems, bound),
-  MakeStringExpr(fragments) => cfv_list(fragments, bound),
+  MakeListExpr(elems)  => free_vars_list(elems, bound),
+  MakeTupleExpr(elems) => free_vars_list(elems, bound),
+  MakeStringExpr(fragments) => free_vars_list(fragments, bound),
   IndexExpr(receiver, index) =>
-    cfv_merge(collect_free_vars(receiver, bound),
+    free_vars_merge(collect_free_vars(receiver, bound),
               collect_free_vars(index, bound)),
-  MakeRecordExpr(flds)        => cfv_record_fields(flds, bound),
-  NamedRecordExpr(_, flds)    => cfv_record_fields(flds, bound),
+  MakeRecordExpr(flds)        => free_vars_record_fields(flds, bound),
+  NamedRecordExpr(_, flds)    => free_vars_record_fields(flds, bound),
 
   LambdaExpr(params, body) => {
-    let inner_bound = cfv_merge(bound, cfv_param_names(params))
+    let inner_bound = free_vars_merge(bound, free_vars_param_names(params))
     collect_free_vars(body, inner_bound)
   },
 
   HandleExpr(body, arms) =>
-    cfv_merge(
+    free_vars_merge(
       collect_free_vars(body, bound),
-      cfv_handler_arms(arms, bound)
+      free_vars_handler_arms(arms, bound)
     ),
 
-  PerformExpr(_, args) => cfv_list(args, bound),
+  PerformExpr(_, args) => free_vars_list(args, bound),
   ResumeExpr(val, state_updates) =>
-    cfv_merge(collect_free_vars(val, bound),
-              cfv_state_updates(state_updates, bound)),
+    free_vars_merge(collect_free_vars(val, bound),
+              free_vars_state_updates(state_updates, bound)),
   FieldExpr(rec, _)    => collect_free_vars(rec, bound),
 
   PipeExpr(_, l, r) =>
-    cfv_merge(collect_free_vars(l, bound), collect_free_vars(r, bound)),
+    free_vars_merge(collect_free_vars(l, bound), collect_free_vars(r, bound)),
 
   ExprPlaceholder      => [],
 
@@ -1913,7 +1913,7 @@ fn cfv_expr(e, bound) = match e {
 // declarations and imports contribute no value-level free vars
 // to closure capture. Refinement stmts similarly. Named
 // explicitly so new Stmt variants decide their cfv behavior.
-fn cfv_stmt(s, bound) = match s {
+fn free_vars_stmt(s, bound) = match s {
   LetStmt(_, expr)              => collect_free_vars(expr, bound),
   FnStmt(_, _, _, _, body_node) => collect_free_vars(body_node, bound),
   ExprStmt(expr)                => collect_free_vars(expr, bound),
@@ -1926,25 +1926,25 @@ fn cfv_stmt(s, bound) = match s {
   Documented(_, inner_node)     => collect_free_vars(inner_node, bound)
 }
 
-fn cfv_list(nodes, bound) = {
+fn free_vars_list(nodes, bound) = {
   fold(nodes, [], (acc, node) =>
-    cfv_merge(acc, collect_free_vars(node, bound)))
+    free_vars_merge(acc, collect_free_vars(node, bound)))
 }
 
 /// Free variables in a record-literal expression: union of frees in
 /// each field's value. Field names are not value-position references
 /// (the parser already desugared pun-syntax to `VarRef` nodes).
-fn cfv_record_fields(flds, bound) = {
+fn free_vars_record_fields(flds, bound) = {
   fold(flds, [], (acc, fld) => {
     let (_, value) = fld
-    cfv_merge(acc, collect_free_vars(value, bound))
+    free_vars_merge(acc, collect_free_vars(value, bound))
   })
 }
 
 /// Walk a statement list, threading `bound` through `LetStmt`s so
 /// subsequent statements see the new bindings. Returns
 /// `(accumulated_frees, final_bound)`.
-fn cfv_stmts(stmts, bound, acc_frees) = {
+fn free_vars_stmts(stmts, bound, acc_frees) = {
   if len(stmts) == 0 { (acc_frees, bound) }
   else {
     let stmt = list_head(stmts)
@@ -1952,51 +1952,51 @@ fn cfv_stmts(stmts, bound, acc_frees) = {
     match stmt_body {
       NStmt(LetStmt(pat, expr)) => {
         let frees = collect_free_vars(expr, bound)
-        let new_bound = cfv_merge(bound, cfv_pat_binds(pat))
-        cfv_stmts(
+        let new_bound = free_vars_merge(bound, free_vars_pat_binds(pat))
+        free_vars_stmts(
           list_tail(stmts),
           new_bound,
-          cfv_merge(acc_frees, frees)
+          free_vars_merge(acc_frees, frees)
         )
       },
       NStmt(FnStmt(name, _, _, _, body_node)) => {
         // Nested named fn — its name is in scope for siblings and the
         // final expression (recursive / mutual references resolve via env).
         let frees = collect_free_vars(body_node, bound)
-        let new_bound = cfv_merge(bound, [name])
-        cfv_stmts(
+        let new_bound = free_vars_merge(bound, [name])
+        free_vars_stmts(
           list_tail(stmts),
           new_bound,
-          cfv_merge(acc_frees, frees)
+          free_vars_merge(acc_frees, frees)
         )
       },
       _ => {
         let frees = collect_free_vars(stmt, bound)
-        cfv_stmts(list_tail(stmts), bound, cfv_merge(acc_frees, frees))
+        free_vars_stmts(list_tail(stmts), bound, free_vars_merge(acc_frees, frees))
       }
     }
   }
 }
 
-fn cfv_match_arms(arms, bound) = {
+fn free_vars_match_arms(arms, bound) = {
   fold(arms, [], (acc, arm) => {
     let (pat, body) = arm
-    let arm_bound = cfv_merge(bound, cfv_pat_binds(pat))
-    cfv_merge(acc, collect_free_vars(body, arm_bound))
+    let arm_bound = free_vars_merge(bound, free_vars_pat_binds(pat))
+    free_vars_merge(acc, collect_free_vars(body, arm_bound))
   })
 }
 
 /// Handler arm shape: `(op_name, arg_names, body)`. The `arg_names` bind
 /// inside `body`; `op_name` is the effect op being handled (global scope).
-fn cfv_handler_arms(arms, bound) = {
+fn free_vars_handler_arms(arms, bound) = {
   fold(arms, [], (acc, arm) => {
     let (op_name, arg_names, body) = arm
-    let arm_bound = cfv_merge(bound, arg_names)
-    cfv_merge(acc, collect_free_vars(body, arm_bound))
+    let arm_bound = free_vars_merge(bound, arg_names)
+    free_vars_merge(acc, collect_free_vars(body, arm_bound))
   })
 }
 
-fn cfv_param_names(params) = map((p) => {
+fn free_vars_param_names(params) = map((p) => {
   let TParam(name, _, _, _) = p
   name
 }, params)
@@ -2005,46 +2005,46 @@ fn cfv_param_names(params) = map((p) => {
 // binds a name; compound patterns recurse into sub-patterns.
 // PWild / PLit bind nothing. New Pat variants must decide their
 // binder-name contribution explicitly.
-fn cfv_pat_binds(pat) = match pat {
+fn free_vars_pat_binds(pat) = match pat {
   PVar(name)         => [name],
-  PCon(_, sub_pats)  => cfv_pat_binds_list(sub_pats),
-  PTuple(sub_pats)   => cfv_pat_binds_list(sub_pats),
+  PCon(_, sub_pats)  => free_vars_pat_binds_list(sub_pats),
+  PTuple(sub_pats)   => free_vars_pat_binds_list(sub_pats),
   PList(sub_pats, rest) =>
-    cfv_merge(cfv_pat_binds_list(sub_pats), cfv_pat_rest_binds(rest)),
-  PRecord(flds)      => cfv_pat_binds_fields(flds),
+    free_vars_merge(free_vars_pat_binds_list(sub_pats), free_vars_pat_rest_binds(rest)),
+  PRecord(flds)      => free_vars_pat_binds_fields(flds),
   PWild              => [],
   PLit(_)            => []
 }
 
-fn cfv_pat_rest_binds(rest) = match rest {
+fn free_vars_pat_rest_binds(rest) = match rest {
   None => [],
   Some(name) => if name == "_" { [] } else { [name] }
 }
 
 /// Extract binder names from record-pattern fields `[(name, Pat)]`.
 /// Each field contributes its sub-pat's binders.
-fn cfv_pat_binds_fields(flds) = {
+fn free_vars_pat_binds_fields(flds) = {
   fold(flds, [], (acc, fld) => {
     let (_, sub_pat) = fld
-    cfv_merge(acc, cfv_pat_binds(sub_pat))
+    free_vars_merge(acc, free_vars_pat_binds(sub_pat))
   })
 }
 
-fn cfv_pat_binds_list(pats) = {
-  fold(pats, [], (acc, p) => cfv_merge(acc, cfv_pat_binds(p)))
+fn free_vars_pat_binds_list(pats) = {
+  fold(pats, [], (acc, p) => free_vars_merge(acc, free_vars_pat_binds(p)))
 }
 
-fn cfv_merge(a, b) = {
+fn free_vars_merge(a, b) = {
   if len(b) == 0 { a }
   else {
     let x = list_head(b)
     let rest = list_tail(b)
-    if cfv_contains(a, x) { cfv_merge(a, rest) }
-    else { cfv_merge(list_concat(a, [x]), rest) }   // drift-audit: ignore — real drift 11 in cfv_* set-union family; buffer-counter rewrite adds Memory+Alloc to row rippling through callers; tracked for item 11.B buffer-counter sweep. Explicit list_concat (was `a ++ [x]`) — BConcat's emit dispatches via lookup_ty which returned NFree at infer-time, falling to str_concat and trapping in mentl2's runtime when list arms walked the bytes as elements. Direct call avoids the dispatch.
+    if free_vars_contains(a, x) { free_vars_merge(a, rest) }
+    else { free_vars_merge(list_concat(a, [x]), rest) }   // drift-audit: ignore — real drift 11 in free_vars_* set-union family; buffer-counter rewrite adds Memory+Alloc to row rippling through callers; tracked for item 11.B buffer-counter sweep. Explicit list_concat (was `a ++ [x]`) — BConcat's emit dispatches via lookup_ty which returned NFree at infer-time, falling to str_concat and trapping in mentl2's runtime when list arms walked the bytes as elements. Direct call avoids the dispatch.
   }
 }
 
-fn cfv_contains(lst, s) = any((x) => x == s, lst)
+fn free_vars_contains(lst, s) = any((x) => x == s, lst)
 
 /// Stage 4a: WASI import-name predicate. Recognized op names bridge
 /// to the WASM-level import via LWasiCall instead of LPerform's

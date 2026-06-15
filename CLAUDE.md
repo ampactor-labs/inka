@@ -1,5 +1,41 @@
 # Mentl — CLAUDE.md  |  File extension: `.mn`
 
+## ⌖ Prime directive — think in the five verbs ⌖
+
+> **Reason, write, and design in Mentl's five topological operators —
+> always, in thinking and in prose, not only in `.mn` code.** A generic
+> arrow (`->`, "and then", "leads to") is an UNCLASSIFIED flow; every flow
+> already has a shape, and naming it is the discipline that catches
+> foreign-fluency drift before it sets.
+>
+> - `|>` sequential — A then B, each value used once
+> - `<|` divergent — one input fans to parallel branches (borrows it)
+> - `><` parallel — independent pipelines, no shared input
+> - `~>` handler — the foot governs the whole chain to its left
+> - `<~` feedback — output loops back as the next input
+>
+> This holds at EVERY altitude, not just code: a debug trace is a `|>`
+> chain; competing hypotheses fanned from one symptom are `<|`; a probe
+> run UNDER a context is `~>`; the fix→observe→fix loop — and this very
+> file — is `<~`. The moment you reach for `->`, stop and name the verb.
+> The topology was always there; the operator makes it visible, and the
+> act of classifying it is what surfaces the drift.
+
+## ⟲ The manual self-optimizes — a `<~` loop on itself ⟲
+
+> **CLAUDE.md folds into itself exactly as Mentl folds into its seed.**
+> Every session that surfaces a durable meta-lesson folds it back — here,
+> or into a `protocol_*.md` memory — and every line gone stale is pruned in
+> the same motion: the discipline's output (what a session learned about
+> how to SEE the medium) becomes the discipline's next input. Hold this
+> file to the SAME standard as `.mn` source (Anchor 6): every touch leaves
+> it in its most powerful form; CONSOLIDATE toward the tightest cached
+> prefix, never append-and-bloat (the MRCR cliff is real — a longer manual
+> recalls worse). It ratchets DOWNWARD toward the anchor as the medium
+> absorbs its own discipline (master plan §8, "the bug-class table empties
+> into the gradient"); the end state is a manual small enough that `mentl
+> audit` IS the manual.
+
 > **CLAUDE.md is the cached-prefix interface, not the manifesto.**
 > Cited docs load cursor-adjacent on relevance, not Session-Zero-bulk.
 >
@@ -127,14 +163,29 @@
 > (Phase ν, reflexive). State is not computed; it IS the graph, read by the
 > cursor. The seed is the only running projector pre-L1, so we ask it.
 >
-> **On a runtime bug the first move is a PROBE, not a hypothesis.** mentl2's
-> working observation channel is `perform report` with a REGISTERED diag code
-> (`eprint_string` and fabricated codes are silent in m2; the seed runs
-> directly so `eprint_string` works at seed level). Trace the WHOLE chain to
-> bedrock before touching code — the symptom is the entry point, the floor is
-> the patient. **Verify before asserting**: "X is the cause" is a claim until
-> a trace or a minimal repro proves it. Theory-thrash is the expensive failure
+> **On a runtime bug the first move is a PROBE, not a hypothesis.**
+> `eprint_string` DOES print in mentl2 (verified 2026-06-15; the older "silent
+> in m2" note was STALE — always verify a channel at a provably-live site before
+> trusting its silence); `perform report` with a REGISTERED diag code is the
+> other channel. Caveat: do NOT add eprint to a fn deep in the lowering pipeline
+> — it adds Memory+WASI to that fn's row, shifts ev-slots, and destabilizes the
+> very dispatch you're probing; disassemble the emitted WAT at a non-effectful
+> site instead. Trace the WHOLE chain to bedrock — the symptom is the entry
+> point, the floor is the patient.
+>
+> **Probe the ARTIFACT, not the plan's hypothesis.** A plan/spec/comment that
+> says "the blocker is X" is a CLAIM — the corpus-authority verdict applies to
+> plans too. This session the master plan's "effect-row incompleteness"
+> hypothesis cost a full row-poly build before a 5-minute disassembly of the
+> trapping fn revealed the real root (`;; UNRESOLVED: init`). Read the trap, not
+> the prose. **Verify before asserting**: "X is the cause" is a claim until a
+> trace or a minimal repro proves it. Theory-thrash is the expensive failure
 > mode; a probe is minutes. (`protocol_ground_truth_first_observe_before_theorize`.)
+>
+> **The trap marches.** At first-light each root-cause fix moves the trap DEEPER
+> (parser → fold → record-access → pre-registration → evidence-threading) — that
+> is PROGRESS, not regression. Fix the root the trap NAMES, gate-green, and let
+> it advance to the next link; never patch the symptom to mask the march.
 >
 > Ultimate form and current state are ONE move: you cannot aim at the ultimate
 > form of a thing you have not first observed, exhaustively, as it actually is.

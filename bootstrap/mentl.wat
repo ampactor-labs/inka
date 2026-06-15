@@ -26215,7 +26215,6 @@
         (param $ty i32) (param $field_name i32) (result i32)
     (local $tag i32) (local $fields i32)
     (local $binding i32) (local $kind i32)
-    (call $eprint_string (local.get $field_name))
     (local.set $tag (call $ty_tag (local.get $ty)))
     ;; TVar (104) — chase to inner handle, then resolve from that handle.
     (if (i32.eq (local.get $tag) (i32.const 104))
@@ -26516,8 +26515,12 @@
     (if (i32.ge_u (local.get $i) (local.get $n))
       (then (return (i32.const 0))))
     (local.set $entry (call $list_index (local.get $fields) (local.get $i)))
-    ;; Fields list entries are (name, ty) pairs — name at offset 0.
-    (local.set $name (call $list_index (local.get $entry) (i32.const 0)))
+    ;; Entries are field_pair records (FIELD_PAIR=203, $field_pair_make) —
+    ;; read the name via the field_pair accessor. list_index reads a record
+    ;; as a flat list and yields the wrong slot → "" → str_eq never matches
+    ;; → every multi-field .field collapses to offset 0 (the root of the
+    ;; placement.slot-reads-ename OOB during wheel arm pre-registration).
+    (local.set $name (call $field_pair_name (local.get $entry)))
     (if (call $str_eq (local.get $name) (local.get $target))
       (then (return (i32.mul (local.get $i) (i32.const 4)))))
     (return_call $field_byte_offset
@@ -27483,13 +27486,29 @@
   ;; offset 4 = init AST node). Returns a flat list of LowExprs ready
   ;; for emit_state_init_writes (mirror of wheel-side lower_state_field_inits).
   ;; Buffer-counter discipline (Ω.3); no acc-concat in loop.
+  ;; `with field = init` is evaluated in the scope of the handler's config
+  ;; params. Lower the inits in a frame where the config names are captures
+  ;; (reusing $pre_allocate_config_captures, the same canonical-order setup
+  ;; arm bodies use) so a config reference becomes LUpval(config_slot); emit
+  ;; reads it from the SAME record's config region (written first). Handler
+  ;; IS state IS closure IS evidence — a state slot initialized from a config
+  ;; arg is one record reading itself. Without config in scope, `acc = init`
+  ;; resolves `init` to a non-existent global → LUnresolved → (unreachable)
+  ;; at install (fold_handler, take_collector). Mirror of src/lower.mn
+  ;; lower_state_field_inits + $lower_handler_arm_body_capturing.
   (func $lower_state_field_inits (export "lower_state_field_inits")
-        (param $state_fields i32) (result i32)
+        (param $config i32) (param $state_fields i32) (result i32)
     (local $n i32) (local $i i32) (local $buf i32)
     (local $field i32) (local $init_node i32) (local $lo i32)
+    (local $cp i32) (local $prev_frame i32) (local $prev_captures_len i32)
     (local.set $n   (call $len (local.get $state_fields)))
     (local.set $buf (call $make_list (i32.const 0)))
     (local.set $buf (call $list_extend_to (local.get $buf) (local.get $n)))
+    (local.set $cp (call $ls_push_scope))
+    (local.set $prev_frame (call $ls_enter_frame))
+    (local.set $prev_captures_len (global.get $lower_captures_len_g))
+    (global.set $lower_captures_len_g (i32.const 0))
+    (call $pre_allocate_config_captures (local.get $config))
     (local.set $i   (i32.const 0))
     (block $done
       (loop $each
@@ -27500,6 +27519,9 @@
         (drop (call $list_set (local.get $buf) (local.get $i) (local.get $lo)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
+    (global.set $lower_captures_len_g (local.get $prev_captures_len))
+    (call $ls_exit_frame (local.get $prev_frame))
+    (call $ls_pop_scope (local.get $cp))
     (local.get $buf))
 
   ;; ─── $lower_pre_register_handler_decls — order-free handler ledgers ──
@@ -27537,7 +27559,10 @@
     (if (i32.ne (local.get $tag) (i32.const 124)) (then (return)))
     (call $handler_state_inits_register
       (i32.load offset=4 (local.get $stmt))
-      (call $lower_state_field_inits (i32.load offset=16 (local.get $stmt)))
+      ;; config@20, state_fields@16 (mk_handler_decl_full layout)
+      (call $lower_state_field_inits
+        (i32.load offset=20 (local.get $stmt))
+        (i32.load offset=16 (local.get $stmt)))
       (call $build_handler_arm_names
         (i32.load offset=4 (local.get $stmt))
         (i32.load offset=12 (local.get $stmt)))))
@@ -27560,7 +27585,9 @@
     ;; install sites query via $handler_state_inits_lookup and embed
     ;; the inits into LHandleWith for emit-time stores at offset 8+i*4
     ;; per protocol_handler_is_state_is_closure_is_evidence.md.
-    (local.set $state_inits (call $lower_state_field_inits (local.get $state_fields)))
+    (local.set $state_inits (call $lower_state_field_inits
+      (i32.load offset=20 (local.get $stmt))   ;; config@20
+      (local.get $state_fields)))
     ;; Hβ-perform-evidence-dispatch.md §4.7: build the op-slot-indexed arm
     ;; fn-name list from the handler's actual arms and register it alongside
     ;; the state-inits (one ledger entry, 3 fields). $emit_lhandlewith reads
@@ -32779,10 +32806,21 @@
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $init   (call $list_index (local.get $inits) (local.get $i)))
         (local.set $offset (i32.add (i32.const 8) (i32.mul (i32.const 4) (local.get $i))))
-        ;; Emit (local.get $<state_local>)
+        ;; Emit (local.get $<state_local>) — the store target
         (call $ec_emit_local_get_dollar (local.get $state_local))
-        ;; Emit init's value
-        (call $emit_lexpr (local.get $init))
+        ;; A `with field = config_arg` init is LUpval(slot, tag 305): read
+        ;; config slot `slot` of THIS record (config region written first).
+        ;; The handler record IS the closure — a state slot reads the config
+        ;; slot of the same record. Mirror of src/backends/wasm.mn
+        ;; emit_state_init_writes. Everywhere else, emit the value normally.
+        (if (i32.eq (call $tag_of (local.get $init)) (i32.const 305))   ;; LUpval
+          (then
+            (call $ec_emit_local_get_dollar (local.get $state_local))
+            (call $el_emit_i32_load_offset
+              (i32.add (i32.const 8) (i32.mul (i32.const 4)
+                (call $lexpr_lupval_slot (local.get $init))))))
+          (else
+            (call $emit_lexpr (local.get $init))))
         ;; Emit (i32.store offset=<offset>)
         (call $emit_byte (i32.const 40))   ;; '('
         (call $emit_byte (i32.const 105))  ;; 'i'

@@ -1,0 +1,38 @@
+// mn-higher-order-effect-builtin-no-wrapper — the -builtin-state repro with the
+// `use_each` wrapper REMOVED: the lambda is created directly in run's scope (the
+// same fn that installs env2_handler), so its Env2 evidence is captured LEXICALLY
+// rather than forwarded through a wrapper fn's row. PASSES (exit 42) even though
+// the handler still has the make_list (Memory) state init.
+//
+// So the bug is a CONJUNCTION: the builtin-effecting state init breaks the
+// config-param effect-poly propagation, but that break is only OBSERVABLE when a
+// wrapper fn forces the lambda's evidence to be forwarded through its row
+// (-builtin-state). Lexical capture under the install (here) hides it. This guard
+// pins the wrapper as load-bearing, not incidental.
+
+effect Env2 { lookup2(k) -> Int }
+
+handler env2_handler {
+  lookup2(k) => resume(k + 40)
+}
+
+effect Step {
+  emit(v) -> ()
+  done() -> Int
+}
+
+handler collect(g) with acc = 0, buf = make_list(4) {
+  emit(v) => {
+    let r = g(v)
+    resume() with acc = acc + r
+  },
+  done() => resume(acc)
+}
+
+fn source(v, n) with Step = if n > 0 { emit(v); source(v, n - 1) }
+
+fn apply_each(g, v) = { source(v, 1); done() } ~> collect(g)
+
+fn run() = { apply_each((x) => perform lookup2(x), 2) } ~> env2_handler
+
+fn main(q) = run()

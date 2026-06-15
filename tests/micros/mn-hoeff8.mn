@@ -1,0 +1,35 @@
+// mn-hoeff8 — hoeff6 + map_collector's MULTI-STATE-FIELD shape (two state fields,
+// both updated in the arm via resume-with-state), but WITHOUT lists / Memory
+// effects (both fields are Int). Discriminates "multiple state fields break the
+// residual propagation" from "the make_list Memory-effecting state init / list
+// arms break it". If this PASSES, the breaker is the Memory effect in the
+// handler, not multi-field. Expected exit 42 = g(2) = 2 + 40.
+
+effect Env2 { lookup2(k) -> Int }
+
+handler env2_handler {
+  lookup2(k) => resume(k + 40)
+}
+
+effect Step {
+  emit(v) -> ()
+  done() -> Int
+}
+
+handler collect(g) with acc = 0, count = 0 {
+  emit(v) => {
+    let r = g(v)
+    resume() with acc = acc + r, count = count + 1
+  },
+  done() => resume(acc)
+}
+
+fn source(v, n) with Step = if n > 0 { emit(v); source(v, n - 1) }
+
+fn apply_each(g, v) = { source(v, 1); done() } ~> collect(g)
+
+fn use_each(v) = apply_each((x) => perform lookup2(x), v)
+
+fn run() = { use_each(2) } ~> env2_handler
+
+fn main(q) = run()

@@ -906,22 +906,29 @@
   ;; collides (an open tail only ever matches a row entry).
   (func $subst_row (param $eff i32) (param $map i32) (param $map_len i32)
                    (result i32)
-    (local $tag i32) (local $v i32) (local $fresh i32)
+    (local $tag i32) (local $v i32) (local $fresh i32) (local $resolved i32)
     (local.set $tag (call $row_tag (local.get $eff)))
     (if (i32.eq (local.get $tag) (i32.const 150)) (then (return (local.get $eff))))
     (if (i32.eq (local.get $tag) (i32.const 151)) (then (return (local.get $eff))))
     (if (i32.eq (local.get $tag) (i32.const 152))   ;; Open
       (then
-        ;; substitute by the union-find ROOT — the same find generalize
-        ;; quantified by; a buried alias would miss the map and leave the
-        ;; instantiated tail unlinked (the f-effect never threads).
-        (local.set $v (call $graph_chase_handle (call $row_handle (local.get $eff))))
-        (local.set $fresh (call $subst_map_lookup
-          (local.get $map) (local.get $map_len) (local.get $v)))
-        (if (i32.lt_s (local.get $fresh) (i32.const 0))
-          (then (return (local.get $eff)))
-          (else (return (call $row_make_open
-            (call $row_names (local.get $eff)) (local.get $fresh)))))))
+        ;; Resolve the row deeply (lookup_row_for — the same resolution
+        ;; derive_ev_slots + lower read) and substitute the poly TAIL by its
+        ;; root, CARRYING the concrete effects. $graph_chase_handle alone skips
+        ;; names to the tail; substituting that loses the concrete row an
+        ;; instantiated poly fn carries → the caller threads wrong evidence.
+        (local.set $resolved (call $lookup_row_for (local.get $eff)))
+        (if (call $row_is_open (local.get $resolved))   ;; EfOpen(concrete, tail)
+          (then
+            (local.set $v (call $graph_chase_handle (call $row_handle (local.get $resolved))))
+            (local.set $fresh (call $subst_map_lookup
+              (local.get $map) (local.get $map_len) (local.get $v)))
+            (if (i32.lt_s (local.get $fresh) (i32.const 0))
+              (then (return (local.get $eff)))
+              (else (return (call $row_make_open
+                (call $row_names (local.get $resolved)) (local.get $fresh)))))))
+        ;; EfClosed / EfPure resolved — monomorphic, no tail; verbatim.
+        (return (local.get $eff))))
     (if (i32.eq (local.get $tag) (i32.const 153))   ;; Neg
       (then (return (call $row_make_neg
         (call $subst_row (call $record_get (local.get $eff) (i32.const 0))

@@ -2344,13 +2344,26 @@ fn subst_fields(fields, mapping) = map((fld) => {
 fn subst_row(eff, mapping) = match eff {
   EfPure        => EfPure,
   EfClosed(ns)  => EfClosed(ns),
-  EfOpen(ns, v) => {
-    // Substitute by the row var's union-find ROOT — the same find generalize
-    // quantified by. Without it a buried alias misses the mapping and the
-    // call instantiates an unlinked tail (the f-effect never threads).
-    let r = find_mapping(mapping, perform graph_chase_handle(v))
-    if r >= 0 { mk_ef_open(ns, r) } else { eff }
-  },
+  EfOpen(ns, v) =>
+    // Resolve v's row live and substitute the poly TAIL by its union-find root
+    // (the var generalize quantified), CARRYING the concrete effects v performs.
+    // graph_chase_handle skips names to the tail; substituting that alone drops
+    // the concrete row — an instantiated poly fn would lose the effects it
+    // carries and the caller would thread the wrong evidence. Carried-Truth.
+    match perform graph_chase(v) {
+      GNode(NRowBound(inner), _) => match inner {
+        EfOpen(c, t) => {
+          let r = find_mapping(mapping, perform graph_chase_handle(t))
+          if r >= 0 { mk_ef_open(c, r) } else { eff }
+        },
+        _ => eff   // EfClosed / EfPure — monomorphic, no tail to substitute
+      },
+      GNode(NRowFree(_), _) => {
+        let r = find_mapping(mapping, perform graph_chase_handle(v))
+        if r >= 0 { mk_ef_open(ns, r) } else { eff }
+      },
+      _ => eff
+    },
   EfNeg(inner)  => EfNeg(subst_row(inner, mapping)),
   EfSub(a, b)   => EfSub(subst_row(a, mapping), subst_row(b, mapping)),
   EfInter(a, b) => EfInter(subst_row(a, mapping), subst_row(b, mapping))

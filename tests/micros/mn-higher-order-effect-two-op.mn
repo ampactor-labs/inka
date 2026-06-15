@@ -1,8 +1,9 @@
-// mn-hoeff5 — mirrors the prelude's map exactly: a TWO-OP declared effect
-// (emit slot 0 + done slot 1), one handler covering both, emit performed
-// Tier-2 (one fn-call deep in `source`, like iterate_from) and done performed
-// Tier-1 (lexically in the installing body, like map's `result()`). This is
-// the real hoeffect shape with declared ops (no undeclared-arm collision).
+// mn-higher-order-effect-two-op — mirrors the prelude's map exactly: a TWO-OP
+// declared effect (emit slot 0 + done slot 1), one handler covering both, emit
+// performed Tier-2 (one fn-call deep in `source`, like iterate_from) and done
+// performed Tier-1 (lexically in the installing body, like map's `result()`).
+// This is the real shape with declared ops (no undeclared-arm collision). PASSES
+// -> multi-arm Tier-2 evidence dispatch is correct.
 // Expected exit 42 = g(2) = 2 + 40 (one emit), done returns accumulated total.
 
 effect Env2 { lookup2(k) -> Int }

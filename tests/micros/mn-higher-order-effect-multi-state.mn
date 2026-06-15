@@ -1,9 +1,9 @@
-// mn-hoeff8 — hoeff6 + map_collector's MULTI-STATE-FIELD shape (two state fields,
-// both updated in the arm via resume-with-state), but WITHOUT lists / Memory
-// effects (both fields are Int). Discriminates "multiple state fields break the
-// residual propagation" from "the make_list Memory-effecting state init / list
-// arms break it". If this PASSES, the breaker is the Memory effect in the
-// handler, not multi-field. Expected exit 42 = g(2) = 2 + 40.
+// mn-higher-order-effect-multi-state — the -wrapper repro + map_collector's
+// MULTI-STATE-FIELD shape (two state fields, both updated in the arm via
+// resume-with-state), but WITHOUT lists / Memory effects (both fields are Int).
+// Discriminates "multiple state fields break residual propagation" from "the
+// make_list Memory-effecting state init breaks it". PASSES -> the breaker is the
+// Memory effect in the handler, NOT multi-field. Expected exit 42 = g(2) = 2 + 40.
 
 effect Env2 { lookup2(k) -> Int }
 

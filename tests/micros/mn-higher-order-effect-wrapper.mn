@@ -1,8 +1,9 @@
-// mn-hoeff6 — hoeff5 + the `use_each` wrapper: the lambda performing lookup2 is
-// created inside use_each (a DIFFERENT fn from run, where env2_handler installs),
-// mirroring the prelude's `use_each(xs) = map(lambda, xs)`. So Env2 evidence must
-// thread run(install) → use_each → the lambda closure, not be captured directly
-// in run's scope (as hoeff5 did). No lists yet. Expected exit 42.
+// mn-higher-order-effect-wrapper — the -two-op repro + a `use_each` wrapper: the
+// lambda performing lookup2 is created inside use_each (a DIFFERENT fn from run,
+// where env2_handler installs), mirroring the prelude's `use_each(xs) = map(lambda,
+// xs)`. So Env2 evidence must thread run(install) → use_each → the lambda closure,
+// not be captured directly in run's scope. No lists yet. PASSES -> wrapper-
+// threading of captured evidence is correct. Expected exit 42.
 
 effect Env2 { lookup2(k) -> Int }
 

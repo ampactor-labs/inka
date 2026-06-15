@@ -1637,21 +1637,29 @@ fn state_field_names_of(state) = map((field) => field.name, state)
 /// allocated state record at handler-install per
 /// protocol_handler_is_state_is_closure_is_evidence.md.
 ///
-/// `with field = init` is evaluated in the scope of the handler's config
-/// params (that's where the clause is written). So the inits lower in a
-/// frame where the config names are captures — a config reference becomes
-/// LUpval(config_slot), which emit reads from the SAME record's config
-/// region (written first). Handler IS state IS closure IS evidence: a
-/// state slot initialized from a config arg is one record reading itself.
-/// Without the frame, `acc = init` resolves `init` to a non-existent
-/// global → LUnresolved → (unreachable) at install (fold_handler,
-/// take_collector). Prior-state references in later inits are a peer
-/// (extend the capture set field-by-field); the wheel has none.
-fn lower_state_field_inits(config, state) = {
-  perform ls_enter_frame("__state_init", [], [], config, zeros_of_len(len(config)))
-  let inits = map((field) => lower_expr(field.init), state)
-  perform ls_exit_frame()
-  inits
+/// `with field = init` is written in the scope of the handler's config
+/// params. When the init IS exactly a config-arg reference, the state slot
+/// reads that config slot of the SAME handler record (config is written
+/// first) — LUpval(config_slot), which emit reads record-relative. Handler
+/// IS state IS closure IS evidence: one record reading itself, resolved
+/// STRUCTURALLY (the config slot is known by name — carried truth, not
+/// re-derived) rather than via a frame the install must thread evidence
+/// for. Other inits (literals, `make_list(16)`, `0`) lower normally.
+/// A config ref nested inside a larger expression (`acc = init + 1`) is a
+/// peer: it needs the config-capture frame, which needs evidence-complete
+/// effect propagation through the ~> install chain; the wheel has none.
+fn lower_state_field_inits(config, state) =
+  map((field) => lower_state_init(config, field), state)
+
+fn lower_state_init(config, field) = {
+  let N(body, _, _) = field.init
+  match body {
+    NExpr(VarRef(name)) => {
+      let slot = index_of_name(config, name, 0)
+      if slot >= 0 { LUpval(0, slot) } else { lower_expr(field.init) }
+    },
+    _ => lower_expr(field.init)
+  }
 }
 
 /// Build a list of n zero handles. Used as the handle-list for arm
@@ -2155,8 +2163,26 @@ fn lower_program(stmts) = {
 }
 
 /// Register every handler decl's (state_inits, arm_names) before lowering.
+/// Direct recursive walk (mirrors the seed's $lower_pre_register_handler_decls
+/// loop and lower_stmt_list_loop). lower_pre_register_handler_node performs
+/// register_handler_state_inits, handled by the registry installed in
+/// lower_program's ~> chain. for_each runs its lambda inside an iterate-handler
+/// ARM, and its arm does not yet capture+thread the install-site evidence for
+/// an effect the lambda performs that for_each itself does not handle — so the
+/// register dispatch reads a wrong slot (indirect call type mismatch). A direct
+/// call threads that evidence the same way lower_stmt_list does. for_each
+/// returns here once handler-arm evidence-capture is complete (the ev-capture /
+/// row-var let-polymorphism rework).
 fn lower_pre_register_handler_decls(stmts) =
-  for_each(lower_pre_register_handler_node, stmts)
+  pre_register_handler_loop(stmts, 0, len(stmts))
+
+fn pre_register_handler_loop(stmts, i, n) = {
+  if i >= n { () }
+  else {
+    lower_pre_register_handler_node(list_index(stmts, i))
+    pre_register_handler_loop(stmts, i + 1, n)
+  }
+}
 
 fn lower_pre_register_handler_node(node) = {
   let N(body, _, _) = node

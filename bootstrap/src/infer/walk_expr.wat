@@ -817,7 +817,7 @@
     ;; mutually recursive) flow in post-walk.
     (call $infer_row_edge_append (local.get $row_h))
     (local.set $row_nk (call $gnode_kind (call $graph_chase (local.get $row_h))))
-    (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))
+    (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))   ;; NRowBound
       (then (call $walk_expr_inf_add_row
         (call $node_kind_payload (local.get $row_nk)))))
     (local.get $handle))
@@ -1782,7 +1782,7 @@
     ;; $infer_row_fixpoint for late-bound stages.
     (call $infer_row_edge_append (local.get $row_h))
     (local.set $row_nk (call $gnode_kind (call $graph_chase (local.get $row_h))))
-    (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))
+    (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 62))   ;; NRowBound
       (then (call $walk_expr_inf_add_row
         (call $node_kind_payload (local.get $row_nk)))))
     (local.get $handle))

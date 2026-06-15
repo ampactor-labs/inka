@@ -468,15 +468,16 @@
     (if (i32.eq (local.get $tag) (i32.const 106))
       (then (return
         (call $free_in_list (call $ty_ttuple_elems (local.get $ty))))))
-    ;; ── TFun(params, ret, row) — recurse on params (via $free_in_params
-    ;;    over TParam-list) + ret. Row stays opaque per Hβ-infer §6.1
-    ;;    answer-4 + §12 row-normalize follow-up — row.wat owns row's
-    ;;    free-handle walk; this chunk reaches Ty-side parity only. ──
+    ;; ── TFun(params, ret, row) — params + ret + the row's open tail var.
+    ;;    The row is a first-class quantifiable domain; $free_in_row reads
+    ;;    its free handle exactly as TVar reads its own. ──
     (if (i32.eq (local.get $tag) (i32.const 107))
       (then (return
         (call $list_concat
-          (call $free_in_params (call $ty_tfun_params (local.get $ty)))
-          (call $free_in_ty (call $ty_tfun_return (local.get $ty)))))))
+          (call $list_concat
+            (call $free_in_params (call $ty_tfun_params (local.get $ty)))
+            (call $free_in_ty (call $ty_tfun_return (local.get $ty))))
+          (call $free_in_row (call $ty_tfun_row (local.get $ty)))))))
     ;; ── TName(name, args) — concat free across arg list ────────────
     (if (i32.eq (local.get $tag) (i32.const 108))
       (then (return
@@ -710,10 +711,9 @@
           (call $ty_substitute_list
             (call $ty_ttuple_elems (local.get $ty))
             (local.get $map) (local.get $map_len))))))
-    ;; ── TFun(params, ret, row) — substitute params (via TParam list
-    ;;    walk) + ret. Row stays opaque per Hβ-infer §6.1 answer-4 +
-    ;;    §12 row-normalize follow-up. Per src/infer.mn:1961-1965 exact
-    ;;    recursion shape (subst_params + subst_ty + eff verbatim). ──
+    ;; ── TFun(params, ret, row) — substitute params + ret + the row's
+    ;;    open tail var via $subst_row over the same map. Mirrors
+    ;;    src/infer.mn subst_ty TFun arm. ──
     (if (i32.eq (local.get $tag) (i32.const 107))
       (then (return
         (call $ty_make_tfun
@@ -723,7 +723,9 @@
           (call $ty_substitute
             (call $ty_tfun_return (local.get $ty))
             (local.get $map) (local.get $map_len))
-          (call $ty_tfun_row (local.get $ty))))))
+          (call $subst_row
+            (call $ty_tfun_row (local.get $ty))
+            (local.get $map) (local.get $map_len))))))
     ;; ── TName(name, args) — rebuild with substituted arg list ────
     (if (i32.eq (local.get $tag) (i32.const 108))
       (then (return
@@ -854,6 +856,93 @@
         (br $iter)))
     (local.get $out))
 
+  ;; ─── Row-domain scheme machinery — effect-polymorphism ─────────────
+  ;; The effect row is a first-class structural component of every TFun;
+  ;; its open tail is a graph node (NRowFree) exactly like a type var
+  ;; (NFree). Effect-polymorphism is value-polymorphism over the row
+  ;; domain: free_in / substitute / chase-deep treat the row exactly as
+  ;; they treat the type. Mirrors src/infer.mn free_in_row / subst_row /
+  ;; resolve_row_deep. Row tags: 150 Pure, 151 Closed, 152 Open, 153 Neg,
+  ;; 154 Sub, 155 Inter.
+
+  ;; $free_in_row(eff) — the open tail var is the row's free handle.
+  (func $free_in_row (param $eff i32) (result i32)
+    (local $tag i32)
+    (local.set $tag (call $row_tag (local.get $eff)))
+    (if (i32.eq (local.get $tag) (i32.const 150))   ;; Pure
+      (then (return (call $make_list (i32.const 0)))))
+    (if (i32.eq (local.get $tag) (i32.const 151))   ;; Closed
+      (then (return (call $make_list (i32.const 0)))))
+    (if (i32.eq (local.get $tag) (i32.const 152))   ;; Open
+      (then
+        ;; Collect the tail var ONLY when genuinely free (NRowFree) — the
+        ;; row mirror of free_in_ty's TVar arm (chase_deep folds bound
+        ;; tails; a bound tail is not a free var). Quantifying a bound tail
+        ;; would re-freshen a monomorphic fn's shared row handle.
+        (if (i32.eq (call $node_kind_tag (call $gnode_kind
+              (call $graph_chase (call $row_handle (local.get $eff)))))
+              (i32.const 63))   ;; NRowFree
+          (then (return (call $singleton_handle (call $row_handle (local.get $eff)))))
+          (else (return (call $make_list (i32.const 0)))))))
+    (if (i32.eq (local.get $tag) (i32.const 153))   ;; Neg(inner)
+      (then (return
+        (call $free_in_row (call $record_get (local.get $eff) (i32.const 0))))))
+    (if (i32.eq (local.get $tag) (i32.const 154))   ;; Sub(a, b)
+      (then (return (call $list_concat
+        (call $free_in_row (call $record_get (local.get $eff) (i32.const 0)))
+        (call $free_in_row (call $record_get (local.get $eff) (i32.const 1)))))))
+    (if (i32.eq (local.get $tag) (i32.const 155))   ;; Inter(a, b)
+      (then (return (call $list_concat
+        (call $free_in_row (call $record_get (local.get $eff) (i32.const 0)))
+        (call $free_in_row (call $record_get (local.get $eff) (i32.const 1)))))))
+    (unreachable))
+
+  ;; $subst_row(eff, map, map_len) — replace the open tail var with its
+  ;; fresh instance from the same map $ty_substitute reads. Row handles
+  ;; and type handles are disjoint graph nodes; the shared map never
+  ;; collides (an open tail only ever matches a row entry).
+  (func $subst_row (param $eff i32) (param $map i32) (param $map_len i32)
+                   (result i32)
+    (local $tag i32) (local $v i32) (local $fresh i32)
+    (local.set $tag (call $row_tag (local.get $eff)))
+    (if (i32.eq (local.get $tag) (i32.const 150)) (then (return (local.get $eff))))
+    (if (i32.eq (local.get $tag) (i32.const 151)) (then (return (local.get $eff))))
+    (if (i32.eq (local.get $tag) (i32.const 152))   ;; Open
+      (then
+        (local.set $v (call $row_handle (local.get $eff)))
+        (local.set $fresh (call $subst_map_lookup
+          (local.get $map) (local.get $map_len) (local.get $v)))
+        (if (i32.lt_s (local.get $fresh) (i32.const 0))
+          (then (return (local.get $eff)))
+          (else (return (call $row_make_open
+            (call $row_names (local.get $eff)) (local.get $fresh)))))))
+    (if (i32.eq (local.get $tag) (i32.const 153))   ;; Neg
+      (then (return (call $row_make_neg
+        (call $subst_row (call $record_get (local.get $eff) (i32.const 0))
+          (local.get $map) (local.get $map_len))))))
+    (if (i32.eq (local.get $tag) (i32.const 154))   ;; Sub
+      (then (return (call $row_make_sub
+        (call $subst_row (call $record_get (local.get $eff) (i32.const 0))
+          (local.get $map) (local.get $map_len))
+        (call $subst_row (call $record_get (local.get $eff) (i32.const 1))
+          (local.get $map) (local.get $map_len))))))
+    (if (i32.eq (local.get $tag) (i32.const 155))   ;; Inter
+      (then (return (call $row_make_inter
+        (call $subst_row (call $record_get (local.get $eff) (i32.const 0))
+          (local.get $map) (local.get $map_len))
+        (call $subst_row (call $record_get (local.get $eff) (i32.const 1))
+          (local.get $map) (local.get $map_len))))))
+    (unreachable))
+
+  ;; $is_row_handle(h) — domain read: a quantified var that chases to a row
+  ;; node (NRowBound/NRowFree) is a row variable, minted fresh as a row.
+  (func $is_row_handle (param $h i32) (result i32)
+    (local $t i32)
+    (local.set $t (call $node_kind_tag
+      (call $gnode_kind (call $graph_chase (local.get $h)))))
+    (i32.or (i32.eq (local.get $t) (i32.const 62))     ;; NRowBound
+            (i32.eq (local.get $t) (i32.const 63))))    ;; NRowFree
+
   ;; ─── $instantiate(scheme) -> Ty ────────────────────────────────────
   ;;
   ;; Per src/infer.mn:1931-1998 + spec 04 §Instantiations. Walks
@@ -911,7 +1000,11 @@
           (call $reason_make_instantiation
             (i32.const 6032)                           ;; "inst" string ptr
             (call $reason_make_fresh (local.get $old))))
-        (local.set $fresh (call $graph_fresh_ty (local.get $reason)))
+        ;; Domain carried in the graph: a row var mints fresh as a row,
+        ;; a type var as a type. Mirrors the wheel mint/mint_row split.
+        (if (call $is_row_handle (local.get $old))
+          (then (local.set $fresh (call $graph_fresh_row (local.get $reason))))
+          (else (local.set $fresh (call $graph_fresh_ty (local.get $reason)))))
         (local.set $map (call $subst_map_extend
           (local.get $map) (local.get $i)
           (local.get $old) (local.get $fresh)))

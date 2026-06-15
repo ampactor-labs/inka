@@ -460,10 +460,17 @@ handler fresh_for_inference {
     let h = perform graph_fresh_ty(reason)
     resume(h)
   }
+  mint_row(reason) => {
+    let h = perform graph_fresh_row(reason)
+    resume(h)
+  }
 }
 
 handler fresh_for_query with next_display = 0 {
   mint(_reason) =>
+    resume(next_display)
+      with next_display = next_display + 1
+  mint_row(_reason) =>
     resume(next_display)
       with next_display = next_display + 1
 }

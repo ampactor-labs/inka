@@ -946,11 +946,19 @@ fn infer_call(func, args, handle, span: ValidSpan) = {
   perform graph_bind(handle, TVar(ret_h), Located(span, InferredCallReturn(cname, Inferred("result"))))
 
   // The callee's effect row flows into the caller's row.
-  // After unification, row_h is bound to the callee's row;
-  // chase it and add to InferCtx.
+  // After unification, row_h is bound to the callee's row; chase it and
+  // add to InferCtx. When the callee is effect-polymorphic — a function
+  // PARAM `f` whose row is still a free var (NRowFree) — add the row
+  // VARIABLE so the caller becomes polymorphic in it too. This is what
+  // makes `map(f, xs)` / a handler arm calling its config `f(x)` carry
+  // f's effects: generalize quantifies the var (free_in_row), the call
+  // site instantiates it (subst_row), and ev-capture threads f's actual
+  // effects. Without this arm the higher-order fn's row is missing its
+  // argument's effects entirely.
   let row_node = perform graph_chase(row_h)
   match row_node {
     GNode(NRowBound(row), _) => perform inf_add_row(row),
+    GNode(NRowFree(_), _)    => perform inf_add_row(mk_ef_open([], row_h)),
     _ => ()
   }
 }
@@ -1077,10 +1085,12 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
       perform graph_bind(expected_h, expected, Located(span, InferredPipeResult("|>", Inferred("expected"))))
       unify(rh, expected_h, span, InferredPipeResult("|>", Inferred("target")))
       perform graph_bind(handle, TVar(ret_h), Located(span, InferredPipeResult("|>", Inferred("result"))))
-      // callee's row flows into caller's row
+      // callee's row flows into caller's row — including the open row
+      // VARIABLE when the piped-into fn is effect-polymorphic.
       let row_node = perform graph_chase(row_h)
       match row_node {
         GNode(NRowBound(row), _) => perform inf_add_row(row),
+        GNode(NRowFree(_), _)    => perform inf_add_row(mk_ef_open([], row_h)),
         _ => ()
       }
     },
@@ -2202,7 +2212,7 @@ fn free_in_ty(ty) = match ty {
   TVar(id)               => [id],
   TList(elem)            => free_in_ty(elem),
   TTuple(elems)          => free_in_list(elems),
-  TFun(params, ret, _)   => free_in_params(params) ++ free_in_ty(ret),
+  TFun(params, ret, eff) => free_in_params(params) ++ free_in_ty(ret) ++ free_in_row(eff),
   TName(_, args)         => free_in_list(args),
   TRecord(fields)        => free_in_fields(fields),
   TRecordOpen(fields, v) => [v] ++ free_in_fields(fields),
@@ -2223,6 +2233,28 @@ fn free_in_fields(fields) = flatten(map((fld) => {
   free_in_ty(ty)
 }, fields))
 
+// A row's free variable is its open tail — the same first-class graph
+// node a type variable is. Effect-polymorphism IS value-polymorphism over
+// the row domain; the row var is quantified exactly like a TVar. Collect
+// the tail ONLY when it is genuinely free (NRowFree): a tail already bound
+// to a concrete row is not a free var, and quantifying it would re-freshen
+// a monomorphic fn's row at every call site. chase_deep leaves the row
+// verbatim, so the freeness check happens here (the row mirror of how
+// chase_deep resolves bound TVars before free_in_ty collects the free ones).
+fn free_in_row(eff) = match eff {
+  EfPure        => [],
+  EfClosed(_)   => [],
+  EfOpen(_, v)  => if row_var_is_free(v) { [v] } else { [] },
+  EfNeg(inner)  => free_in_row(inner),
+  EfSub(a, b)   => free_in_row(a) ++ free_in_row(b),
+  EfInter(a, b) => free_in_row(a) ++ free_in_row(b)
+}
+
+fn row_var_is_free(v) = match perform graph_chase(v) {
+  GNode(NRowFree(_), _) => true,
+  _                     => false
+}
+
 /// Instantiation — one function, two handlers.
 /// inference handler: `mint(r) => resume(perform graph_fresh_ty(r))`
 /// query handler:     `mint(r) => resume(next_display_id(r))`
@@ -2237,10 +2269,25 @@ fn instantiate(scheme) = {
   }
 }
 
+// A quantified var's domain is carried in the graph — NRowFree means a row
+// variable, minted fresh as a row (graph_fresh_row); NFree means a type
+// variable (graph_fresh_ty). The mint/mint_row op split mirrors
+// graph_fresh_ty/graph_fresh_row and keeps the handler swap total (query
+// renders both as display ids). Read the domain live; never re-derive it.
 fn build_inst_mapping(qs) = map((old) => {
-  let fresh = perform mint(Instantiation("inst", Fresh(old)))
+  let fresh = if is_row_handle(old) {
+    perform mint_row(Instantiation("inst", Fresh(old)))
+  } else {
+    perform mint(Instantiation("inst", Fresh(old)))
+  }
   (old, fresh)
 }, qs)
+
+fn is_row_handle(h) = match perform graph_chase(h) {
+  GNode(NRowFree(_), _)  => true,
+  GNode(NRowBound(_), _) => true,
+  _                      => false
+}
 
 // H6: exhaustive Ty enumeration. Scalars pass through;
 // aggregates recurse. Substitution is identity for unresolved
@@ -2259,7 +2306,7 @@ fn subst_ty(ty, mapping) = match ty {
   TFun(params, ret, eff) => TFun(
     subst_params(params, mapping),
     subst_ty(ret, mapping),
-    eff
+    subst_row(eff, mapping)
   ),
   TName(name, args) => TName(name, subst_list(args, mapping)),
   TRecord(fields) => TRecord(subst_fields(fields, mapping)),
@@ -2280,6 +2327,22 @@ fn subst_fields(fields, mapping) = map((fld) => {
   let (name, ty) = fld
   (name, subst_ty(ty, mapping))
 }, fields)
+
+// Substitution over the row domain — the open tail var is replaced by its
+// fresh instance from the same mapping subst_ty reads. Row handles and type
+// handles are disjoint graph nodes, so the shared mapping never collides:
+// an open tail only ever matches a row entry, a TVar only a type entry.
+fn subst_row(eff, mapping) = match eff {
+  EfPure        => EfPure,
+  EfClosed(ns)  => EfClosed(ns),
+  EfOpen(ns, v) => {
+    let r = find_mapping(mapping, v)
+    if r >= 0 { mk_ef_open(ns, r) } else { eff }
+  },
+  EfNeg(inner)  => EfNeg(subst_row(inner, mapping)),
+  EfSub(a, b)   => EfSub(subst_row(a, mapping), subst_row(b, mapping)),
+  EfInter(a, b) => EfInter(subst_row(a, mapping), subst_row(b, mapping))
+}
 
 fn find_mapping(mapping, id) = {
   let hits = filter((entry) => {

@@ -864,6 +864,7 @@ effect LookupTy {
 
 effect FreshHandle {
   mint(Reason) -> Int
+  mint_row(Reason) -> Int
 }
 
 // Tracks the stack of (locals, captures) frames so VarRef can resolve

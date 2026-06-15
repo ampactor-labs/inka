@@ -959,7 +959,14 @@ fn lower_expr_body(e, handle, span) = match e {
       EfPure,
       len(captures_exprs)   // closure fence = capture count
     )
-    LMakeClosure(handle, fn_ir, captures_exprs, [])
+    // A closure IS state IS evidence: the lambda captures the evidence for
+    // the effects ITS BODY performs (derive_ev_slots reads the lambda's row),
+    // resolved at THIS definition site (where those effects' handlers are in
+    // scope). Without it the closure's evidence region is empty and a perform
+    // inside the lambda reads a bad slot when the closure is called elsewhere
+    // (e.g. a higher-order fn's arm calling `f(x)`). This is the per-closure
+    // mirror of a handler arm's captured_evs — the same record, four roles.
+    LMakeClosure(handle, fn_ir, captures_exprs, derive_ev_slots(handle))
   },
 
   HandleExpr(body_node, arms) => {
@@ -1420,7 +1427,7 @@ fn lower_stmt_body(s, handle, span) = match s {
       EfPure,         // row resolved live via lookup_ty(handle)
       len(captures_exprs)   // closure fence = capture count
     )
-    LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs, []))
+    LLet(handle, name, LMakeClosure(handle, fn_ir, captures_exprs, derive_ev_slots(handle)))
   },
 
   TypeDefStmt(_name, _variants)             => LConst(handle, LInt(0)),

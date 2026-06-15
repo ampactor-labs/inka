@@ -676,7 +676,10 @@
                         (local.get $body_list)
                         (call $row_make_pure)
                         (call $len (local.get $caps))))
-    (local.set $evs  (call $make_list (i32.const 0)))
+    ;; A closure IS state IS evidence: capture the evidence for the effects
+    ;; this closure's body performs (the let-bound mirror of the inline-lambda
+    ;; path at walk_compound.wat + src/lower.mn LambdaExpr).
+    (local.set $evs  (call $derive_ev_slots (local.get $handle)))
     (local.set $closure (call $lexpr_make_lmakeclosure
                           (local.get $handle)
                           (local.get $fn_ir)

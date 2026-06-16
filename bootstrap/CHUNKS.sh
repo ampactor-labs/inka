@@ -150,5 +150,4 @@ CHUNKS=(
   "bootstrap/src/emit_expr.wat"
   "bootstrap/src/emit_compound.wat"
   "bootstrap/src/emit_stmt.wat"
-  "bootstrap/src/emit_module.wat"
 )

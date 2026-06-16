@@ -404,11 +404,11 @@
     (call $emit_close)
     (call $emit_nl))
 
-  ;; $emit_wasi_imports_inka — cursor-projected entry. Walks lowered
+  ;; $emit_wasi_imports — cursor-projected entry. Walks lowered
   ;; program for used wasi_* op-names; emits one import per. Insertion
   ;; order is graph-traversal-deterministic; both L1 iterations
   ;; produce identical import section.
-  (func $emit_wasi_imports_inka (param $lowexprs i32)
+  (func $emit_wasi_imports (param $lowexprs i32)
     (local $used i32) (local $i i32) (local $n i32) (local $op i32)
     (local.set $used (call $collect_used_wasi_ops (local.get $lowexprs)))
     (local.set $n (call $len (local.get $used)))
@@ -465,6 +465,24 @@
         (br $iter)))
     (local.get $buf))
 
+  ;; $cwo_walk_match_arms — thread the wasi-op buffer through each arm
+  ;; body. The let-IS-match dissolution routes destructure-lets into
+  ;; match arms, so a `perform wasi_*` after `let (a,b) = v` now lives
+  ;; in an arm body; without this the import projection drifts.
+  (func $cwo_walk_match_arms (param $buf i32) (param $arms i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $buf (call $cwo_walk (local.get $buf)
+          (call $lowpat_lparm_body
+            (call $list_index (local.get $arms) (local.get $i)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (local.get $buf))
+
   ;; $cwo_walk — recurse into one LowExpr; push wasi_* op_names into
   ;; the Buffer at any depth. Mirrors $cfn_walk's recursion shape so
   ;; every emitted fn body's perform sites get visited.
@@ -509,6 +527,16 @@
       (then
         (return (call $cwo_walk_list (local.get $buf)
                   (call $lexpr_lblock_stmts (local.get $expr))))))
+    ;; LMatch (321) — scrut + each arm body. The let-IS-match dissolution
+    ;; routes destructure-let bodies into arms; the projection descends so
+    ;; a `perform wasi_*` after `let (a,b) = v` is collected (this is the
+    ;; bug that surfaced as undefined $wasi_path_rename).
+    (if (i32.eq (local.get $tag) (i32.const 321))
+      (then
+        (local.set $buf (call $cwo_walk (local.get $buf)
+                          (call $lexpr_lmatch_scrut (local.get $expr))))
+        (return (call $cwo_walk_match_arms (local.get $buf)
+                  (call $lexpr_lmatch_arms (local.get $expr))))))
     ;; LIf (314).
     (if (i32.eq (local.get $tag) (i32.const 314))
       (then
@@ -1923,7 +1951,7 @@
     (call $emit_type_section (local.get $lowexprs))
 
     ;; ── WASI imports (cursor-projected from used-(effect, op) set) ──
-    (call $emit_wasi_imports_inka (local.get $lowexprs))
+    (call $emit_wasi_imports (local.get $lowexprs))
 
     ;; ── Memory & Globals ──
     (call $emit_indent)

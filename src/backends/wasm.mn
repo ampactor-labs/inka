@@ -254,14 +254,14 @@ fn emit_module(lowered) = {
   // of the same tree, 16+ helper fns, 4x the structural drift surface).
   // Adding a fifth projection = one new handler + one new visit-site in
   // walk_lemit_expr. The graph IS the index; the chain IS the projector.
-  let (all_fn_names, top_fn_names, string_entries, state_slots) =
+  let (all_fn_names, top_fn_names, string_entries, state_slots, wasi_ops) =
     project_emit_state(lowered)
   // W5 string interning — seed the string_table handler so downstream
   // LString emits can look up the offset via perform string_offset.
   perform set_string_entries(string_entries)
   emit_header()
   emit_type_section(lowered)
-  emit_runtime_imports()
+  emit_runtime_imports(wasi_ops)
   emit_memory_decl()
   emit_state_globals(state_slots)
   emit_string_data(string_entries)
@@ -322,6 +322,11 @@ effect EmitStateSlotOp {
   drain_state_slots() -> List
 }
 
+effect EmitWasiOp {
+  visit_wasi_op(String) -> ()
+  drain_wasi_ops() -> List
+}
+
 handler fn_names_collector with buf = make_list(64), count = 0 {
   visit_fn(name) => {
     let extended = list_extend_to(buf, count + 1)
@@ -366,6 +371,23 @@ handler state_slots_collector with buf = make_list(8), count = 0 {
   drain_state_slots() => resume(slice(buf, 0, count))
 }
 
+// The WASI import set IS the fifth projection of the one emit-state walk: every
+// op a program's LWasiCall nodes invoke, collected unique, read live. The import
+// section projects from this — no hardcoded list to drift from actual usage.
+// (slot_already_recorded is the generic scalar-membership check; `==` is
+// structural, so it dedups op-name strings as readily as slot ints.)
+handler wasi_ops_collector with buf = make_list(8), count = 0 {
+  visit_wasi_op(op) => {
+    if slot_already_recorded(buf, op, 0, count) { resume() }
+    else {
+      let extended = list_extend_to(buf, count + 1)
+      let written  = list_set(extended, count, op)
+      resume() with buf = written, count = count + 1
+    }
+  },
+  drain_wasi_ops() => resume(slice(buf, 0, count))
+}
+
 fn string_entry_exists(entries, target, i, n) = {
   if i >= n { false }
   else {
@@ -394,9 +416,10 @@ fn project_emit_state(lowered) = {
   let tops  = perform drain_top_fn_names()
   let strs  = perform drain_string_literals()
   let slots = perform drain_state_slots()
-  (names, tops, strs, slots)
+  let wasi  = perform drain_wasi_ops()
+  (names, tops, strs, slots, wasi)
 } ~> fn_names_collector ~> top_fn_names_collector
-  ~> string_literal_collector ~> state_slots_collector
+  ~> string_literal_collector ~> state_slots_collector ~> wasi_ops_collector
 
 /// walk_lemit — top-level entry. Iterates `lowered`'s direct children;
 /// fires `visit_top_fn(name)` for each LLet-bound closure/continuation
@@ -478,7 +501,10 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_expr(b)
     walk_lemit_expr(i)
   },
-  LMatch(_, s, _arms)       => walk_lemit_expr(s),
+  LMatch(_, s, arms) => {
+    walk_lemit_expr(s)
+    walk_lemit_arms(arms)
+  },
   LSuspend(_, _, f, args, ev) => {
     walk_lemit_expr(f)
     walk_lemit_list(args)
@@ -502,7 +528,10 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_expr(s)
   },
   LPerform(_, _, args, _)   => walk_lemit_list(args),
-  LWasiCall(_, _, args)     => walk_lemit_list(args),
+  LWasiCall(_, op_name, args) => {
+    perform visit_wasi_op(op_name)
+    walk_lemit_list(args)
+  },
   LHandle(_, b, _arms)      => walk_lemit_expr(b),
   LEvPerform(_, _, _, _, args) => walk_lemit_list(args),
   LEvSlotRef(_, _)          => (),
@@ -519,6 +548,15 @@ fn walk_lemit_list_loop(exprs, i) = {
     walk_lemit_list_loop(exprs, i + 1)
   }
 }
+
+/// Each lowered match arm is `(LowPat, LowExpr-body)`; the body carries the
+/// projections (fn defs, strings, state slots, WASI ops). The pattern is
+/// structural — nothing to collect. The let-IS-match dissolution routes
+/// destructure-let bodies through arms, so this descent is load-bearing.
+fn walk_lemit_arms(arms) = for_each((arm) => {
+  let (_, body) = arm
+  walk_lemit_expr(body)
+}, arms)
 
 /// Emit `(global $s<n> (mut i32) (i32.const 0))` for each unique
 /// state slot. Globals initialize to 0 — the convention for "no
@@ -787,55 +825,50 @@ fn emit_footer() = {
   perform wat_emit(")\n")
 }
 
-fn emit_runtime_imports() = {
-  perform wat_emit(
-    "  (import \"wasi_snapshot_preview1\" \"fd_write\"\n"
-  )
-  perform wat_emit(
-    "    (func $fd_write (param i32 i32 i32 i32) (result i32)))\n"
-  )
-  perform wat_emit(
-    "  (import \"wasi_snapshot_preview1\" \"fd_read\"\n"
-  )
-  perform wat_emit(
-    "    (func $fd_read (param i32 i32 i32 i32) (result i32)))\n"
-  )
-  // FS substrate — WASI preview1 filesystem ops. path_open returns
-  // a fresh fd relative to a preopen base fd (wasmtime grants
-  // preopen fd 3 via --dir=. by convention). fd_close releases.
-  // path_create_directory mkdir's relative to the base fd.
-  // path_filestat_get is the existence check (returns 0 on success).
-  perform wat_emit(
-    "  (import \"wasi_snapshot_preview1\" \"path_open\"\n"
-  )
-  perform wat_emit(
-    "    (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))\n"
-  )
-  perform wat_emit(
-    "  (import \"wasi_snapshot_preview1\" \"fd_close\"\n"
-  )
-  perform wat_emit(
-    "    (func $fd_close (param i32) (result i32)))\n"
-  )
-  perform wat_emit(
-    "  (import \"wasi_snapshot_preview1\" \"path_create_directory\"\n"
-  )
-  perform wat_emit(
-    "    (func $path_create_directory (param i32 i32 i32) (result i32)))\n"
-  )
-  perform wat_emit(
-    "  (import \"wasi_snapshot_preview1\" \"path_filestat_get\"\n"
-  )
-  perform wat_emit(
-    "    (func $path_filestat_get (param i32 i32 i32 i32 i32) (result i32)))\n"
-  )
-  perform wat_emit(
-    "  (import \"wasi_snapshot_preview1\" \"proc_exit\"\n"
-  )
-  perform wat_emit(
-    "    (func $proc_exit (param i32)))\n"
-  )
+/// emit_runtime_imports — the WASI import section, projected from the program's
+/// actual LWasiCall usage (project_emit_state's fifth projection). proc_exit is
+/// emitted by _start's epilogue (outside the program graph), so it's injected;
+/// every other import appears iff the program invokes its op. No hardcoded list:
+/// the graph IS the import set, so it can never drift from what is called.
+fn emit_runtime_imports(wasi_ops) = {
+  emit_one_wasi_import("proc_exit")
+  for_each((op) => {
+    if op == "proc_exit" { () } else { emit_one_wasi_import(op) }
+  }, wasi_ops)
 }
+
+/// One `(import "wasi_snapshot_preview1" "<op>" (func $<op> <sig>))`. The
+/// internal name is `$<op>` (no prefix) — the import IS the bridge, matching
+/// LWasiCall's `(call $<op>)`. Ops with no preview1 signature (atomics,
+/// thread-spawn — WASM instructions or imported elsewhere) carry no import.
+fn emit_one_wasi_import(op) = {
+  let sig = wasi_import_sig(op)
+  if sig == "" { () }
+  else {
+    perform wat_emit("  (import \"wasi_snapshot_preview1\" \"")
+    perform wat_emit(op)
+    perform wat_emit("\"\n    (func $")
+    perform wat_emit(op)
+    perform wat_emit(" ")
+    perform wat_emit(sig)
+    perform wat_emit("))\n")
+  }
+}
+
+/// The WASI preview1 ABI signatures — the FFI boundary's external facts, keyed
+/// on the op name LWasiCall carries. "" = not a preview1 import (skip).
+fn wasi_import_sig(op) =
+  if op == "proc_exit"                  { "(param i32)" }
+  else if op == "fd_write"              { "(param i32 i32 i32 i32) (result i32)" }
+  else if op == "fd_read"               { "(param i32 i32 i32 i32) (result i32)" }
+  else if op == "fd_close"              { "(param i32) (result i32)" }
+  else if op == "path_open"             { "(param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)" }
+  else if op == "path_create_directory" { "(param i32 i32 i32) (result i32)" }
+  else if op == "path_filestat_get"     { "(param i32 i32 i32 i32 i32) (result i32)" }
+  else if op == "path_unlink_file"      { "(param i32 i32 i32) (result i32)" }
+  else if op == "path_rename"           { "(param i32 i32 i32 i32 i32 i32) (result i32)" }
+  else if op == "fd_readdir"            { "(param i32 i32 i32 i64 i32) (result i32)" }
+  else { "" }
 
 fn emit_memory_decl() = {
   // Shared memory + WASI thread-spawn import: every emitted program

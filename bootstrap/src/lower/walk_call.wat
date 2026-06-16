@@ -927,7 +927,7 @@
     (local.set $lo_args        (call $lower_args (local.get $args_list)))
     ;; Per Hβ.emit.wasi-effect-op-direct-emit (2026-05-07): WASI-named
     ;; effect ops emit direct $wasi_<op> calls (matching the seed's
-    ;; emit_wasi_imports_inka import declarations). Without this
+    ;; emit_wasi_imports import declarations). Without this
     ;; dispatch, WASI performs fall through to the polymorphic-perform
     ;; band-aid (LConst(0)), and `print_string`-like Mentl programs
     ;; produce no output. The graph KNOWS WASI ops (effect declared);

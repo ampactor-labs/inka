@@ -415,10 +415,17 @@ fn report_effect_mismatch(ref a, ref b, ref span) with !Mutate = {
 
 /// Handler absorption: `handle { body with E } { arms for F }` normalizes to
 /// `(E - F) + arm_row`. Algebra falls out.
+///
+/// Flow-edge: `union_row` keeps the FIRST open arg's rowvar. `extra_row` (the
+/// handler's residual) carries the polymorphic escaping tail (its config effects);
+/// `(body − handled)`'s rowvar carries the now-HANDLED body effects. The residual
+/// goes FIRST so the poly tail survives and the handled-effect rowvar is dropped —
+/// else the installing fn's row reads live as the handled effect and loses its
+/// argument's effect (the higher-order-effect trap).
 fn absorb_row(ref body_row, ref handled_row, ref extra_row) with !Mutate = {
   body_row
     |> diff_row(handled_row)
-    |> union_row(extra_row)
+    |> (handled_residue) => union_row(extra_row, handled_residue)
 }
 
 /// Ground-row predicate: a row with no unresolved row variables. Ground rows let lowering

@@ -1946,10 +1946,16 @@
               (call $schemekind_handler_residual (local.get $kind))))
             (local.set $names (call $make_list (i32.const 1)))
             (drop (call $list_set (local.get $names) (i32.const 0) (local.get $ename)))
+            ;; Flow-edge: row_union keeps the FIRST open arg's rowvar. The residual
+            ;; carries the handler's polymorphic escaping tail (its config effects);
+            ;; (body − handled)'s rowvar carries the now-HANDLED body effects. Put
+            ;; resid FIRST so the poly tail survives and the handled-effect rowvar
+            ;; is dropped — else the fn's row reads live as the handled effect and
+            ;; loses its argument's effect (the higher-order-effect trap).
             (local.set $result_row
               (call $row_union
-                (call $row_diff (local.get $body_row) (call $row_make_closed (local.get $names)))
-                (local.get $resid)))))))
+                (local.get $resid)
+                (call $row_diff (local.get $body_row) (call $row_make_closed (local.get $names)))))))))
     (call $walk_expr_inf_add_row (local.get $result_row))
     (call $graph_bind (local.get $handle)
       (call $ty_make_tvar (local.get $lh))

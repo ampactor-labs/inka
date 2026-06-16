@@ -800,6 +800,9 @@
   ;; Per src/lower.mn:374-380 + Lock #2 (seed lowers final_expr only).
   ;; AST per parser_infra.wat:128-133:
   ;;   [tag=91][stmts_list][final_expr_node] offsets 0/4/8.
+  ;; A destructure-let is a `match` by the time it reaches here — the parser's
+  ;; $desugar_block splits the block at the node's birth, so LetStmt is PVar-only
+  ;; and lowering simply walks stmts + final. (protocol_one_graph_two_operations.)
   (func $lower_block (export "lower_block") (param $node i32) (result i32)
     (local $h i32) (local $body i32) (local $block_struct i32)
     (local $stmt_nodes i32) (local $final_node i32)

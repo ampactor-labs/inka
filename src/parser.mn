@@ -910,7 +910,7 @@ fn parse_let_expr(ref tokens, pos, start_span) = {
   // BlockExpr takes (stmts, final_expr) — the let is a statement,
   // body is the final expression value of the block.
   let let_stmt = nstmt(LetStmt(pat, val), start_span)
-  (nexpr(BlockExpr([let_stmt], body), start_span), p7)
+  (nexpr(desugar_block([let_stmt], body, start_span), start_span), p7)
 }
 
 fn parse_binop(ref tokens, pos, min_prec) = {
@@ -1507,7 +1507,7 @@ fn record_field_copy_suffix(src, dst, src_idx, dst_idx, n) = {
 fn parse_block_expr(ref tokens, pos, start_span) = {
   let buf = make_list(8)
   let (final_buf, final_count, final_e, p) = parse_block_body(tokens, pos, buf, 0)
-  (nexpr(BlockExpr(slice(final_buf, 0, final_count), final_e), start_span), p)
+  (nexpr(desugar_block(slice(final_buf, 0, final_count), final_e, start_span), start_span), p)
 }
 
 fn parse_block_body(ref tokens, pos, own buf, count) = {
@@ -1550,6 +1550,51 @@ fn parse_block_body(ref tokens, pos, own buf, count) = {
       }
     }
   }
+}
+
+/// `let pat = v; rest` IS `match v { pat => rest }`. A destructuring let in a
+/// block is the match projection wearing let's syntax — split the block at the
+/// first one, wrapping the remainder (and final) as its single match arm, so the
+/// node is born a `match` and INFERENCE types it (lowering merely projects it).
+/// PVar/PWild/PLit lets stay direct, so `LetStmt` carries only PVar by
+/// construction. The audit: a let-destructure RE-DERIVES match; unify it INTO
+/// match at the node's birth, never re-derive it downstream.
+/// (protocol_one_graph_two_operations.)
+fn desugar_block(stmts, final_e, span) = match find_destructure_let(stmts, 0) {
+  None    => BlockExpr(stmts, final_e),
+  Some(i) => {
+    let N(NStmt(LetStmt(pat, v)), lsp, _) = list_index(stmts, i)
+    let rest_stmts = slice(stmts, i + 1, len(stmts))
+    // The arm body is exactly what follows the destructure — a bare final when
+    // nothing intervenes, else the desugared remainder. No redundant block.
+    let arm_body = if len(rest_stmts) == 0 { final_e }
+                   else { nexpr(desugar_block(rest_stmts, final_e, lsp), lsp) }
+    let m = MatchExpr(v, [(pat, arm_body)])
+    // A destructure at the head IS the match (no empty-prefix block); otherwise
+    // the prefix stmts carry the match as their final. Byte-for-byte a
+    // hand-written `match`.
+    if i == 0 { m } else { BlockExpr(slice(stmts, 0, i), nexpr(m, lsp)) }
+  }
+}
+
+fn find_destructure_let(stmts, i) =
+  if i >= len(stmts) { None }
+  else {
+    match list_index(stmts, i) {
+      N(NStmt(LetStmt(pat, _)), _, _) =>
+        if is_destructure_pat(pat) { Some(i) } else { find_destructure_let(stmts, i + 1) },
+      _ => find_destructure_let(stmts, i + 1)
+    }
+  }
+
+fn is_destructure_pat(pat) = match pat {
+  PVar(_)     => false,
+  PWild       => false,
+  PLit(_)     => false,
+  PTuple(_)   => true,
+  PCon(_, _)  => true,
+  PList(_, _) => true,
+  PRecord(_)  => true
 }
 
 fn parse_if(ref tokens, pos, span: ValidSpan) = {

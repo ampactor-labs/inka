@@ -487,6 +487,83 @@
     (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))
 
+  ;; ─── Block desugar: let-destructure IS match ────────────────────────
+  ;; `let pat = v; rest` IS `match v { pat => rest }`. A destructuring let in a
+  ;; block is the match projection wearing let's syntax — split the block at the
+  ;; first one, wrapping the remainder (and final) as its single match arm, so the
+  ;; node is born a `match` (fresh handles via $nexpr) and INFERENCE types it;
+  ;; lowering merely projects it. PVar/PWild/PLit lets stay direct, so LetStmt is
+  ;; PVar-only by construction. Mirrors src/parser.mn desugar_block.
+  ;; (protocol_one_graph_two_operations.)
+
+  ;; Index of the first destructuring let (PCon 133 / PTuple 134 / PList 135 /
+  ;; PRecord 136) in the stmt list; -1 if none. PVar/PWild/PLit bind no leaves.
+  (func $find_destructure_let (param $stmt_nodes i32) (result i32)
+    (local $n i32) (local $i i32) (local $node i32) (local $body i32)
+    (local $stmt i32) (local $pat i32) (local $pt i32)
+    (local.set $n (call $len (local.get $stmt_nodes)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $node (call $list_index (local.get $stmt_nodes) (local.get $i)))
+        (local.set $body (i32.load offset=4 (local.get $node)))
+        (if (i32.eq (call $tag_of (local.get $body)) (i32.const 111))       ;; NStmt
+          (then
+            (local.set $stmt (i32.load offset=4 (local.get $body)))
+            (if (i32.eq (call $tag_of (local.get $stmt)) (i32.const 120))   ;; LetStmt
+              (then
+                (local.set $pat (i32.load offset=4 (local.get $stmt)))
+                (local.set $pt (call $tag_of (local.get $pat)))
+                (if (i32.and (i32.ge_u (local.get $pt) (i32.const 133))     ;; PCon..PRecord
+                             (i32.le_u (local.get $pt) (i32.const 136)))
+                  (then (return (local.get $i))))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (i32.const -1))
+
+  ;; $desugar_block(stmts, final, span) -> expr. No destructure-let →
+  ;; mk_BlockExpr verbatim. Otherwise split at the first one: the arm body is a
+  ;; bare final when nothing follows (else the desugared remainder), and a
+  ;; head destructure IS the match (no empty-prefix block) — byte-for-byte a
+  ;; hand-written `match`, no redundant blocks/scopes.
+  (func $desugar_block (param $stmts i32) (param $final i32) (param $span i32) (result i32)
+    (local $di i32) (local $n i32) (local $lstmt i32) (local $lsp i32)
+    (local $sbody i32) (local $letstmt i32) (local $pat i32) (local $v i32)
+    (local $arm_body i32) (local $arm i32) (local $arms i32) (local $mexpr i32)
+    (local.set $di (call $find_destructure_let (local.get $stmts)))
+    (if (i32.lt_s (local.get $di) (i32.const 0))
+      (then (return (call $mk_BlockExpr (local.get $stmts) (local.get $final)))))
+    (local.set $n       (call $len (local.get $stmts)))
+    (local.set $lstmt   (call $list_index (local.get $stmts) (local.get $di)))
+    (local.set $lsp     (i32.load offset=8 (local.get $lstmt)))
+    (local.set $sbody   (i32.load offset=4 (local.get $lstmt)))
+    (local.set $letstmt (i32.load offset=4 (local.get $sbody)))
+    (local.set $pat     (i32.load offset=4 (local.get $letstmt)))
+    (local.set $v       (i32.load offset=8 (local.get $letstmt)))
+    ;; arm_body: bare final when nothing follows, else the desugared remainder.
+    (if (i32.eq (i32.add (local.get $di) (i32.const 1)) (local.get $n))
+      (then (local.set $arm_body (local.get $final)))
+      (else
+        (local.set $arm_body (call $nexpr
+          (call $desugar_block
+            (call $slice (local.get $stmts) (i32.add (local.get $di) (i32.const 1)) (local.get $n))
+            (local.get $final) (local.get $lsp))
+          (local.get $lsp)))))
+    ;; arm = [pat, arm_body] ; arms = [arm]
+    (local.set $arm (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $arm) (i32.const 0) (local.get $pat)))
+    (drop (call $list_set (local.get $arm) (i32.const 1) (local.get $arm_body)))
+    (local.set $arms (call $make_list (i32.const 1)))
+    (drop (call $list_set (local.get $arms) (i32.const 0) (local.get $arm)))
+    (local.set $mexpr (call $mk_MatchExpr (local.get $v) (local.get $arms)))
+    ;; A destructure at the head IS the match; else the prefix carries it.
+    (if (i32.eqz (local.get $di))
+      (then (return (local.get $mexpr))))
+    (call $mk_BlockExpr
+      (call $slice (local.get $stmts) (i32.const 0) (local.get $di))
+      (call $nexpr (local.get $mexpr) (local.get $lsp))))
+
   ;; ─── Block expression ─────────────────────────────────────────────
   ;; { stmt; stmt; final_expr }
   ;; Mirrors parser.mn parse_block_body (lines 1042-1069).
@@ -545,9 +622,10 @@
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $nexpr
-        (call $mk_BlockExpr
+        (call $desugar_block
           (call $slice (local.get $buf) (i32.const 0) (local.get $count))
-          (local.get $expr))
+          (local.get $expr)
+          (local.get $span))
         (local.get $span))))
     (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))
@@ -628,9 +706,10 @@
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $nexpr
-        (call $mk_BlockExpr
+        (call $desugar_block
           (call $slice (local.get $buf) (i32.const 0) (local.get $count))
-          (local.get $expr))
+          (local.get $expr)
+          (local.get $span))
         (local.get $span))))
     (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p)))
     (local.get $tup))

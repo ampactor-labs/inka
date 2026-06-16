@@ -918,7 +918,7 @@
   (func $lower_perform (export "lower_perform") (param $node i32) (result i32)
     (local $h i32) (local $body i32) (local $perform_struct i32)
     (local $op_name i32) (local $args_list i32) (local $lo_args i32)
-    (local $resolved i32) (local $wasi_target i32)
+    (local $resolved i32) (local $wasi_target i32) (local $hname i32)
     (local.set $h              (call $walk_expr_node_handle (local.get $node)))
     (local.set $body           (i32.load offset=4 (local.get $node)))
     (local.set $perform_struct (i32.load offset=4 (local.get $body)))
@@ -975,13 +975,63 @@
         ;; by the caller via evidence slots in __state. Compute slot_idx
         ;; from the graph's EffectDeclKind — the graph carries the
         ;; effect→ops mapping as first-class substrate.
-        (call $lexpr_make_levperform
-          (local.get $h)
-          (local.get $op_name)
-          (call $lower_ev_index_in_frame
-            (call $lower_effect_name_of_op (local.get $op_name)))
-          (call $lower_compute_ev_slot_for_op (local.get $op_name))
-          (local.get $lo_args)))))
+        ;; THE DISPATCH GRADIENT cash-out (seed mirror of src/lower.mn
+        ;; lower_perform_dispatch). The op has a statically-known handler
+        ;; (op→handler map) — and the seed is one-shot, so a known handler is
+        ;; sufficient to cash to a DIRECT call. This dissolves the evidence
+        ;; call_indirect whose arm-offset arithmetic trapped at fresh_handle.
+        ;; Only genuinely unknown-handler ops keep the evidence floor.
+        (local.set $hname (call $lower_lookup_default_handler_for_op (local.get $op_name)))
+        (if (result i32) (i32.ne (local.get $hname) (i32.const 0))
+          (then
+            (call $lower_direct_from_evidence
+              (local.get $h) (local.get $op_name) (local.get $hname) (local.get $lo_args)))
+          (else
+            (call $lexpr_make_levperform
+              (local.get $h)
+              (local.get $op_name)
+              (call $lower_ev_index_in_frame
+                (call $lower_effect_name_of_op (local.get $op_name)))
+              (call $lower_compute_ev_slot_for_op (local.get $op_name))
+              (local.get $lo_args)))))))
+
+  ;; Tier-1 GLOBAL (the L1 closer): call the statically-known arm directly,
+  ;; reading its record from the static singleton's GLOBAL HOME
+  ;; `$<hname>_state_g` — never the threaded ev-region. The handler is installed
+  ;; once (graph_handler, lower_scope, env_handler …); its record lives at one
+  ;; home; the arm mutates that record IN PLACE, so the global keeps pointing to
+  ;; the live state. The `_state_g` global was WRITE-ONLY (set at install, never
+  ;; read) — this is its reader. Carried-Truth: read the fact live at its home,
+  ;; never re-thread / re-index. This dissolves evidence threading AND the
+  ;; cross-frame ev-region coercion (caller-row ≠ callee-row mis-alignment) for
+  ;; every static handler — the ~85% case. Build LBlock([LLet(rec,
+  ;; LGlobal(<hname>_state_g)), LPerform(<h>_<op>, args, rec)]); emit prepends
+  ;; "op_" to the target, matching Tier-1.
+  (func $lower_direct_from_evidence
+        (param $h i32) (param $op_name i32) (param $hname i32) (param $lo_args i32) (result i32)
+    (local $rec_local i32) (local $target i32)
+    (local $rec_read i32) (local $llet i32) (local $lperform i32) (local $stmts i32)
+    ;; rec_local = "_" + int_to_str(h)   (unique per node; emit declares it)
+    (local.set $rec_local
+      (call $str_concat (i32.const 4400) (call $int_to_str (local.get $h))))
+    ;; target = hname + "_" + op_name
+    (local.set $target
+      (call $str_concat
+        (call $str_concat (local.get $hname) (i32.const 4400))
+        (local.get $op_name)))
+    ;; rec_read = LGlobal("<hname>_state_g") — the singleton record at its home.
+    (local.set $rec_read
+      (call $lexpr_make_lglobal (local.get $h)
+        (call $str_concat (local.get $hname) (i32.const 5424))))
+    (local.set $llet
+      (call $lexpr_make_llet (local.get $h) (local.get $rec_local) (local.get $rec_read)))
+    (local.set $lperform
+      (call $lexpr_make_lperform_with_state (local.get $h) (local.get $target)
+        (local.get $lo_args) (local.get $rec_local)))
+    (local.set $stmts (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $stmts) (i32.const 0) (local.get $llet)))
+    (drop (call $list_set (local.get $stmts) (i32.const 1) (local.get $lperform)))
+    (call $lexpr_make_lblock (local.get $h) (local.get $stmts)))
 
   ;; ─── $lower_resume — ResumeExpr arm (parser tag 95) ────────────────
   ;; Mirror of the wheel's ResumeExpr arm + lower_resume_snapshot

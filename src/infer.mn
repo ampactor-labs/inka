@@ -836,6 +836,14 @@ fn infer_expr(ref node) = {
       perform inf_enter_fn(row_handle, span)
       infer_expr(body_node)
       perform inf_exit_fn()
+      // CREATE-CAPTURES-EVIDENCE flow edge: a closure created here captures THIS
+      // fn's evidence for the effects it performs (it reads that frame at call
+      // time), so the enclosing fn's row receives the closure's row — read live.
+      // The dual of the call edge (the NRowBound/NRowFree inf_add_row below) that
+      // flows a callee's row into the frame; closure-creation flowed nothing, and
+      // that asymmetry lost an escaping closure's effects (the higher-order-effect
+      // leak). The graph already proved the lambda's row; flow it, never re-derive.
+      perform inf_add_row(mk_ef_open([], row_handle))
       let N(_, _, bh) = body_node
       perform graph_bind(handle, TFun(
         build_param_types(params, param_handles),

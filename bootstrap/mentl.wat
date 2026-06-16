@@ -15855,6 +15855,16 @@
     (call $walk_expr_inf_enter_fn (local.get $row_h) (local.get $span))
     (local.set $bh (call $infer_walk_expr (local.get $body_node)))
     (call $walk_expr_inf_exit_fn)
+    ;; CREATE-CAPTURES-EVIDENCE FLOW EDGE. A closure created here CAPTURES the
+    ;; enclosing fn's evidence for the effects it performs (it reads that frame
+    ;; at call time), so the enclosing fn's row RECEIVES this closure's row —
+    ;; read live (open([], row_h) resolves to the lambda's accumulated effects).
+    ;; This is the dual of the call edge ($infer_row_edge_append) that already
+    ;; flows a callee's row into the frame; closure-creation flowed nothing —
+    ;; that asymmetry lost the escaping closure's effects (use_each_Env2). The
+    ;; graph already proved the lambda's row; flow it, never re-derive.
+    (call $walk_expr_inf_add_row
+      (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h)))
 
     (call $graph_bind (local.get $handle)
       (call $ty_make_tfun

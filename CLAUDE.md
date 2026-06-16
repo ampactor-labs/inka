@@ -249,13 +249,28 @@ to "just do the work directly" is the same drift this section closes.
 
 ---
 
-## ⌁ Mentl's anchor — the eight interrogations ⌁
+## ⌁ Mentl's anchor — one graph, two operations ⌁
 
-> *My job is not to write Mentl. My job is to find what Mentl already
-> does and write only what's left.*
+> **One graph. Two operations: draw an edge, project. There is no third.**
+> Every fact lives at ONE home node; every other appearance is a PROJECTION
+> read live (`chase`/`find` = the cursor at a position) — never computed,
+> copied, snapshotted, or re-derived. THE UNIVERSAL AUDIT, asked of the WHOLE
+> subsystem at every cursor:
+>
+> > *Is this fact computed, copied, snapshotted, or re-derived anywhere it
+> > could be read live? If yes, it is the bug. Unify it into a projection at
+> > its home.*
+>
+> My job is not to write Mentl — it is to find what Mentl already PROVES and
+> draw only the residual edge. (`protocol_one_graph_two_operations.md`. The
+> Carried-Truth Law (Anchor 1) is this law's root corollary; the eight
+> interrogations below are its eight projections — eight ways of asking "what
+> does the graph already hold here.")
 
-Each line of Mentl clears the eight before it earns existence —
-one per kernel primitive, one per Mentl tentacle. Type only the residue.
+### The eight interrogations — corollaries of the audit
+
+Each line clears the eight before it earns existence — one per kernel
+primitive, one per Mentl tentacle. Type only the residue.
 
 | # | Interrogation | Primitive | Tentacle |
 |---|---|---|---|

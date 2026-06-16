@@ -519,33 +519,35 @@ fn lower_call_default(handle, f, fh, lo_args) = {
   }
 }
 
-/// Derive the per-effect evidence the caller threads into a polymorphic
-/// callee's __state record. ONE ev per effect in the callee's row
-/// (canonical sorted-lex order, builtin effects filtered) — NOT one per op
-/// and NOT a fn-index global (that was drift 5, a C dictionary-of-function-
-/// pointers). The ev is a RECORD POINTER: handler IS state IS closure IS
-/// evidence. Each effect resolves to either the lexically-installed
-/// handler's state record (`LLocal "__hstate_<h>"`) or a forward of THIS
-/// fn's own ev-slot for that effect (`LEvSlotRef`). The shared sorted-lex
-/// order makes caller→callee slot remapping correct WITHOUT a coercion
-/// table — Koka evidence coercion by construction. Mirrors the seed's
-/// $derive_ev_slots (record-pointer, proven mn-ev16).
-fn derive_ev_slots(callee_handle) = {
-  match perform lookup_ty(callee_handle) {
-    TFun(_, _, row) => derive_ev_slots_from_row(row),
-    _               => []
-  }
+/// THE SEAM (master plan §6 1★ Stage 0). The single projection of a fn's
+/// dispatched effect-row names — canonical order, builtins filtered. The
+/// CALLER building a callee's __state (`derive_ev_slots`, via the callee's
+/// type) and the CALLEE reading its own slot (`lower_compute_ev_index_for_effect`,
+/// via its own scheme) BOTH read through THIS ONE truth, so their slots agree
+/// by construction — the dual re-derivation collapses to one read. Today reads
+/// the inferred TFun row; Stage 1 swaps THIS BODY to the live flow-closure
+/// (walk the fn's body / call-edges, subtract installs) and neither consumer
+/// changes (docs/specs/simulations/polymorphism-as-flow-edges.md §8 Step 0/1).
+fn effects_of(fn_ty) = match fn_ty {
+  TFun(_, _, row) => effects_of_row(row),
+  _               => []
 }
 
-fn derive_ev_slots_from_row(row) = match row {
-  EfPure           => [],
-  EfClosed(names)  => derive_ev_slots_from_names(names),
-  EfOpen(names, _) => derive_ev_slots_from_names(names),
+fn effects_of_row(row) = match row {
+  EfClosed(names)  => row_dispatched_names(eff_names_of(names)),
+  EfOpen(names, _) => row_dispatched_names(eff_names_of(names)),
   _                => []
 }
 
-fn derive_ev_slots_from_names(names) =
-  map(resolve_ev_for_ename, row_dispatched_names(eff_names_of(names)))
+/// The per-effect evidence the caller threads into a polymorphic callee's
+/// __state record. ONE ev per effect in the callee's row — the ev is a RECORD
+/// POINTER (handler IS state IS closure IS evidence), NOT a fn-index global
+/// (drift 5). Each effect resolves to the lexically-installed handler's state
+/// record (`LLocal "__hstate_<h>"`) or a forward of THIS fn's own ev-slot
+/// (`LEvSlotRef`). The shared canonical order makes caller→callee slot
+/// remapping correct WITHOUT a coercion table (Koka evidence coercion).
+fn derive_ev_slots(callee_handle) =
+  map(resolve_ev_for_ename, effects_of(perform lookup_ty(callee_handle)))
 
 /// One ev per effect-name: the installed handler's record (LLocal) when a
 /// handler is lexically in scope, else a forward of this frame's own slot
@@ -596,23 +598,21 @@ fn lower_compute_ev_slot_for_op(op_name) = match lookup_parent_effect(op_name) {
   None        => 0
 }
 
-/// The effect's index in the CURRENT fn's row — the Boolean row projected
-/// as the runtime evidence layout. sorted-lex canonical so the caller
-/// (building the callee's __state) and the callee (reading its own slot)
-/// agree by construction.
-fn lower_compute_ev_index_for_effect(ename) = {
-  let declared = perform inf_declared_effs()
-  let dispatched = row_dispatched_names(sort_unique(declared_eff_names(declared)))
-  clamp_index(index_of_name(dispatched, ename, 0))
-}
-
-fn declared_eff_names(declared) = map((d) => {
-  let (name, _negated) = d
-  match name {
-    ENamed(s)            => s,
-    EParameterized(s, _) => s
+/// The effect's index in the CURRENT fn's row — read through THE SEAM
+/// (`effects_of`), from the SAME source `derive_ev_slots` reads (the fn's
+/// inferred TFun row), so the callee's READ index == the caller's PLACED index
+/// by construction. The current fn is `ls_outer_fn_name`; its inferred type is
+/// its scheme body. (Was `perform inf_declared_effs()` — the declared `with`
+/// row, a CONSTRAINT, never the dispatch source: a spec violation now retired.)
+fn lower_compute_ev_index_for_effect(ename) =
+  match perform env_lookup(perform ls_outer_fn_name()) {
+    Some(entry) => {
+      let (scheme, _, _) = entry
+      let Forall(_, ty) = scheme
+      clamp_index(index_of_name(effects_of(ty), ename, 0))
+    },
+    None => 0
   }
-}, declared)
 
 /// Inside a handler arm body the frame's evidence is the captured set
 /// (first-encounter ledger order); everywhere else it is the fn's row

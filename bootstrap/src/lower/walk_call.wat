@@ -466,30 +466,36 @@
       (then (return (call $lower_arm_ev_index_for (local.get $ename)))))
     (call $lower_compute_ev_index_for_effect (local.get $ename)))
 
-  (func $derive_ev_slots (export "derive_ev_slots") (param $callee_handle i32) (result i32)
-    (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $i i32)
-    (local $ename i32) (local $state_local i32) (local $evs i32)
-    (local.set $ty (call $lookup_ty (local.get $callee_handle)))
-    (if (i32.lt_u (local.get $ty) (global.get $heap_base))
+  ;; ─── $effects_of — THE SEAM (master plan §6 1★ Stage 0). The single
+  ;; projection of a fn's dispatched effect-row names (canonical order, builtins
+  ;; filtered). The CALLER building a callee's __state ($derive_ev_slots, via the
+  ;; callee's type) and the CALLEE reading its own slot
+  ;; ($lower_compute_ev_index_for_effect, via its own scheme) BOTH read through
+  ;; THIS ONE truth, so their slots agree BY CONSTRUCTION — the dual re-derivation
+  ;; collapses to one read. Today reads the inferred TFun row from the graph;
+  ;; Stage 1 swaps THIS BODY to the live flow-closure and NEITHER consumer
+  ;; changes (docs/specs/simulations/polymorphism-as-flow-edges.md §8 Step 0/1).
+  ;; The TFun row field is a row-var HANDLE — chase it to the bound EffRow; row
+  ;; resolution is independent of value-type (NFre) resolution. Closed/Open carry
+  ;; nameable effects; Pure → none; Neg/Sub/Inter/unresolved → none (row_names
+  ;; traps). Builtins (Memory/Alloc/WASI) carry NO ev slot ($row_dispatched_names
+  ;; filters them) — the raw substrate IS their handler.
+  (func $effects_of (export "effects_of") (param $fn_ty i32) (result i32)
+    (local $row i32)
+    (if (i32.lt_u (local.get $fn_ty) (global.get $heap_base))
       (then (return (call $make_list (i32.const 0)))))
-    (if (i32.ne (call $ty_tag (local.get $ty)) (i32.const 107))   ;; not TFun
+    (if (i32.ne (call $ty_tag (local.get $fn_ty)) (i32.const 107))   ;; not TFun
       (then (return (call $make_list (i32.const 0)))))
-    ;; The TFun row field is a row-var HANDLE — chase it to the bound EffRow
-    ;; (Hβ-perform-evidence-dispatch.md §4.8). Row resolution is independent of
-    ;; value-type (NFre) resolution: the row binds even when arg/ret TVars are free.
-    (local.set $row (call $lookup_row_for (call $ty_tfun_row (local.get $ty))))
-    ;; Only Closed/Open rows carry nameable effects. Pure → no evidence;
-    ;; Neg/Sub/Inter/unresolved rows → no evidence (row_names traps on those).
+    (local.set $row (call $lookup_row_for (call $ty_tfun_row (local.get $fn_ty))))
     (if (i32.eqz (i32.or (call $row_is_closed (local.get $row))
                          (call $row_is_open   (local.get $row))))
       (then (return (call $make_list (i32.const 0)))))
-    ;; Builtin effects (Memory/Alloc/WASI) carry NO evidence slot — the raw
-    ;; substrate IS their handler. Filter them, exactly as the wheel does
-    ;; (src/lower.mn derive_ev_slots_from_names → row_dispatched_names). The
-    ;; old form left builtins in with dead slots; that disagreed with the
-    ;; wheel's filtered placement, so m2's seed-baked READ slot missed the
-    ;; wheel-PLACED slot once a builtin preceded a user effect → wrong arm.
-    (local.set $names (call $row_dispatched_names (call $row_names (local.get $row))))
+    (call $row_dispatched_names (call $row_names (local.get $row))))
+
+  (func $derive_ev_slots (export "derive_ev_slots") (param $callee_handle i32) (result i32)
+    (local $names i32) (local $n i32) (local $i i32)
+    (local $ename i32) (local $state_local i32) (local $evs i32)
+    (local.set $names (call $effects_of (call $lookup_ty (local.get $callee_handle))))
     (local.set $n (call $len (local.get $names)))
     (if (i32.eqz (local.get $n))
       (then (return (call $make_list (i32.const 0)))))
@@ -864,7 +870,7 @@
   ;; correct at slot 0; productive-under-error otherwise).
   (func $lower_compute_ev_index_for_effect (param $effect_name i32) (result i32)
     (local $fn_name i32) (local $binding i32) (local $scheme i32)
-    (local $ty i32) (local $row i32) (local $names i32) (local $n i32) (local $j i32)
+    (local $names i32) (local $n i32) (local $j i32)
     (local $nl i32)
     (if (i32.eqz (local.get $effect_name)) (then (return (i32.const 0))))
     (local.set $fn_name (call $ls_outer_fn_name))
@@ -873,18 +879,12 @@
     (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
     (local.set $scheme (call $env_binding_scheme (local.get $binding)))
     (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const 0))))
-    (local.set $ty (call $scheme_body (local.get $scheme)))
-    (if (i32.lt_u (local.get $ty) (global.get $heap_base)) (then (return (i32.const 0))))
-    (if (i32.ne (call $ty_tag (local.get $ty)) (i32.const 107))   ;; not TFun
-      (then (return (i32.const 0))))
-    (local.set $row (call $lookup_row_for (call $ty_tfun_row (local.get $ty))))
-    (if (i32.eqz (i32.or (call $row_is_closed (local.get $row))
-                         (call $row_is_open   (local.get $row))))
-      (then (return (i32.const 0))))
-    ;; Builtins carry no ev-slot — filter them so this READ index matches the
-    ;; (filtered) PLACEMENT in derive_ev_slots and the wheel. Mirror of the
-    ;; wheel's lower_compute_ev_index_for_effect (row_dispatched_names).
-    (local.set $names (call $row_dispatched_names (call $row_names (local.get $row))))
+    ;; THE SEAM: one $effects_of read — the SAME projection $derive_ev_slots uses,
+    ;; from the SAME source (the fn's inferred TFun row), so this READ index ==
+    ;; the PLACED index by construction (no re-derivation contract, no declared-
+    ;; vs-inferred-row divergence). Stage 1 swaps $effects_of to the live
+    ;; flow-closure and this consumer does not change.
+    (local.set $names (call $effects_of (call $scheme_body (local.get $scheme))))
     (local.set $n (call $len (local.get $names)))
     (local.set $j (i32.const 0))
     (block $found

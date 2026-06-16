@@ -5,8 +5,11 @@
 > higher-order-effect micro ladder, not by compilation). Opened 2026-06-15 when the
 > L1 higher-order-effect trap bisected to a *class*: a polymorphic relationship the
 > graph should carry as a live edge, re-derived instead as copied free variables
-> that lose their link. This doc designs the ultimate form of that relationship and
-> every subsystem it touches.
+> that lose their link. **Hardened 2026-06-16** by four refuted attempts to patch the
+> relationship in place (§1.5) — each carried-truth-*correct* yet each regressing 200+
+> unrelated sites or no-op'ing. That experiment is the proof that this is a
+> **representation replacement behind a seam (§8 Step 0)**, not an algorithm patch.
+> This doc designs the ultimate form of that relationship and every subsystem it touches.
 
 ---
 
@@ -55,26 +58,62 @@ Five of these are the same red flag: a fact the mint already proved (which nodes
 are polymorphic, what the residual is, which slot an effect occupies) is **re-derived
 or copied** downstream instead of **read live from the graph** ([[protocol_carried_truth_law]]).
 
-### 1.2 The canonical instance — the higher-order-effect trap
+### 1.2 The canonical instance — the higher-order-effect trap (empirically grounded 2026-06-16)
 
-`use_each(xs) = map(lambda, xs)` under `~> env2_handler`. Bisected to root
-(`tests/micros/mn-higher-order-effect*`, [[protocol_hoeffect_bisection_2026_06_15]]):
+`use_each(xs) = map(lambda, xs)` under `~> env2_handler`. The clean truth table
+(`tests/micros/mn-higher-order-effect*`, full prelude assembled in bash — see §1.5 on
+the *tooling* that lied about this earlier):
 
-- A config-param handler `map_collector(f)`'s arm calls `f`. The residual `r_handle`
-  should make `map` effect-polymorphic: `map`'s row var **is** `f`'s effect var.
-- But `generalize(map)` collects them as **separate** quantified vars (the residual
-  accumulator and the param var never got union-find-linked). So at the call
-  `map(lambda)`, `instantiate` freshens two unrelated vars; `unify(lambda, f)` binds
-  one; the other (map's row) stays free. `use_each`'s row never receives `{Env2}`.
-- **The leak is present in *every* wrapper case** (`-wrapper`, `-multi-state` both
-  leak `use_each_Env2` and still "pass") — the silent slot-0 fallback masks it: with
-  one effect to thread, slot 0 is coincidentally right. `-builtin-state` only *traps*
-  because a `make_list` adds a slot, shifting Env2's true position off the lucky 0.
+| variant | handler state init | exit | `use_each_Env2` leak |
+|---|---|---|---|
+| `-two-op`, `-builtin-no-wrapper` (no wrapper) | — / `make_list` | **42 ✓** | 0 |
+| `-wrapper`, `-multi-state`, `-builtin-state`, canonical (wrapper) | pure / `make_list` | **134** | 2 |
 
-So the bug is not the `make_list`, not the residual scope, not the wrapper alone —
-it is that **effect-polymorphism through a config-param handler is structurally
-broken, and a guess masks it**. Both halves are the same root: the graph should
-carry `map.row ⊇ f.row` as an edge; it carries two disconnected copied vars instead.
+- **The wrapper is the discriminator, 1:1 with the leak** — and `make_list`/Memory is a
+  red herring (`-builtin-no-wrapper` passes *with* `make_list`). The wrapper is real
+  prelude code: `use_each(xs) = map(λ, xs)`; `map` *is* the wrapper.
+- **The root is broader than the handler residual.** A *handler-free* repro reproduces
+  the leak: `fn forward(g,v)=g(v); fn use_each(v)=forward(λ,v)` leaks `use_each_Env2`
+  with no `~>`, no residual, no `make_list` — and still runs 42 (slot-0 coincidence,
+  no shift). So it is not the `r_handle` accumulator specifically; it is **call-site
+  effect-polymorphism itself**: the lambda's `{Env2}` does not flow through `forward`'s
+  effect var into `use_each`'s row.
+- **`use_each`'s row is *provably empty*** (instrumented the lower leak-site to dump the
+  searched row names: **zero** names). The effect did not arrive *diminished* — it never
+  arrived. `instantiate` mints `forward`'s shared effect var, `unify(λ, g)` binds it in
+  the *param* position, and the *result-row* occurrence is left free; `project`'s
+  row-fixpoint reads `NRowFree`, so `use_each`'s row is an empty open var.
+- **The leak alone is survivable; the trap needs a slot shift.** With one effect, slot 0
+  is coincidentally right (`-wrapper`/`-multi-state` leak yet pass). `-builtin-state`
+  *traps* only because `make_list` adds a slot, moving Env2 off the lucky 0. So the
+  silent `clamp_index → 0` fallback is what lets the leak masquerade as success.
+
+So the bug is not the `make_list`, not the residual scope, not the wrapper alone — it
+is that **call-site effect-polymorphism is structurally lossy (the shared row var is
+copied, not flowed) and a guess masks it.** The graph should carry `caller.row ⊒
+callee.row @φ` as a *live edge*; it carries disconnected copied vars instead.
+
+### 1.5 The unpatchability theorem — why this is a representation replacement (empirical)
+
+Four attempts to make this *one site* carried-truth-honest, each individually correct
+under union-find reasoning, each gated against the wheel census (baseline **189**):
+
+| Attempt | What it did | Result |
+|---|---|---|
+| find-before-bind at top of `unify_types` | chase both sides before dispatch | census **189 → 482**, leak unchanged |
+| resolved-arg-types in `build_inferred_params` | resolve arg types before building `expected` | census **189 → 384**, leak unchanged |
+| union-find chase in the `unify_types` TVar arm | mirror the handle-level `$unify` root-chase before `graph_bind` | census **189 → 465** *and* a **no-op** on the leak (the path is never taken for this bug) |
+| (probe) instrument the TVar/TFun param path | observe which unify path the lambda takes | **zero** markers — the path I kept editing **never executes** |
+
+**The lesson, paid for in census points:** the materialized HM's *correctness* depends,
+non-locally and invisibly, on the exact copy/raw-bind behavior at hundreds of call
+sites. You cannot make it carried-truth-honest one line at a time — every local "fix"
+that reads the graph live where one site needs it **breaks 200–280 sites that silently
+relied on the copy.** The coupling *is* the disease. Therefore the path is **not** to
+patch `generalize`/`instantiate`/`subst`/`unify`; it is to **replace the polymorphism
+representation behind a stable read-interface** (§8 Step 0) so the swap is local and
+gated. This experiment is the empirical floor under the whole design: the dream code is
+not an aesthetic preference, it is the only non-regressing route.
 
 ---
 
@@ -325,6 +364,19 @@ The "two tiers" (`LPerform` lexical / `LEvPerform` evidence) stop being two
 hand-maintained code paths that must agree — they are two readings of one flow graph
 at two gradient positions.
 
+**The floor itself is a backend handler choice (Anchor 5), not a kernel law.** The
+kernel carries the *resolved-handler identity* as graph truth — a FlowEdge from the
+perform to its installer — **decoupled from the type-row**, so a type-row imperfection
+can never again corrupt dispatch (the L1 trap's whole shape). How that identity is
+realized for the dynamic residue is the backend's call: the **evidence-vector** the
+seed already emits (kept for L1, so the seed is *not* rewritten), or a **dynamic-scope
+stack** (a post-L1 backend option, maximally wrapper-transparent). Both are handlers on
+the same graph fact; `lib/runtime/*` owns the floor; the kernel and wheel stay
+floor-agnostic. This is the master plan's chosen paradigm — *flow-closure-driven
+evidence interface, decoupled from the type-row* — which closes L1 **and** dissolves the
+class **and** leaves the runtime floor swappable, never over-committing the kernel to
+one dispatch mechanism.
+
 ---
 
 ## §8 · Incremental path — how to get here without a big-bang rewrite
@@ -333,27 +385,54 @@ Each step is gated by the higher-order-effect ladder (**leak → 0 across `-two-
 `-wrapper`, `-multi-state`, `-builtin-state`, `-builtin-no-wrapper`; `-builtin-state`
 → 42**) + the micro battery (byte-identical) + the census, both layers, wheel-first.
 
-- **Step 1 — residual as a live edge (closes L1).** Replace `HandlerKind`'s
-  `r_handle` accumulator with: the install reads the handler's arm rows **live**
-  (the arms are graph nodes) and draws `installing-fn.row ⊒ config.row`. The config
-  var becomes the fn's row var *by construction* (one node) → `generalize` sees one
-  var → `use_each` receives `{Env2}` → leak → 0 everywhere. **And** make the slot-0
-  fallback fatal (`E_RowConservationLeak`), so luck can never mask again. This is the
-  smallest move that is *in the edge model's direction*, not a bookkeeping patch.
-- **Step 2 — carried ev-layout.** Assign the ev-layout once on the fn node from
-  `project_row`; both `derive_ev_slots` and `compute_ev_index` read it. Delete the
-  dual derivation + the sorted-order coercion contract.
+- **Step 0 — THE SEAM (the move every prior attempt skipped; §1.5 is why it is
+  mandatory).** Introduce **one** projection that every consumer of "what is N's
+  type / what effects does N have" routes through:
+
+  ```
+  effects_of(fn_or_node)   // the ONLY way to ask for a row, anywhere
+  type_of(handle)          // the ONLY way to ask for a type, anywhere
+  ```
+
+  Today these *wrap the existing materialized HM verbatim* — `effects_of` = the
+  current `lookup_row_for(scheme_body.row)`, `type_of` = the current `chase_deep`.
+  **No behavior change; the census stays 189 exactly** (that census-unchanged is the
+  gate that proves the seam is faithful). Route **every** caller through it: the call-
+  site row read in `infer_call`, `generalize`'s free-var scan, lower's
+  `derive_ev_slots` and `lower_compute_ev_index_for_effect`. This is pure plumbing —
+  and it is the whole reason Steps 1–4 can land *without* the 200-site regression that
+  killed every in-place patch (§1.5). **The representation lives behind the seam; the
+  algorithm above it never gets patched, it gets *bypassed*.** This is the discipline
+  the four refuted attempts bought: never edit the coupled algorithm; move the
+  representation behind a read-interface and swap it there.
+
+- **Step 1 — KEYSTONE: `effects_of(fn)` reads the flow-closure (closes L1).** Behind
+  the seam, change `effects_of(fn)` from "read the snapshotted row" to `project_row` —
+  walk the fn's own performs, follow its call/param FlowEdges live, subtract its
+  BlockEdges. `use_each`'s flow-closure transitively reaches the lambda's `{Env2}` *by
+  construction* (`lambda.row → forward.row @φ → use_each.row`), so the leak → 0 with no
+  copied var to drop. `derive_ev_slots` and `compute_ev_index` already route through
+  `effects_of` (Step 0), so they collapse to one reading automatically — the dual
+  derivation is gone the moment the seam exists. Make the slot-0 fallback fatal
+  (`E_RowConservationLeak`): a forwarded effect outside `effects_of(fn)` is now
+  structurally impossible, never a guess. **This is where the wrapper dissolves and
+  pass-2 stops trapping.**
+
+- **Step 2 — carried ev-layout.** Assign the ordered ev-layout once on the fn node from
+  `effects_of(fn)`; caller and callee read the carried layout, not a re-sorted row.
+  Delete the sorted-order coercion contract.
 - **Step 3 — flow edges replace `free_in`/`subst` for rows.** `generalize`/
-  `instantiate`/`subst_row` for the *row* sort become draw-edge / open-frame / read-
-  live. Type sort stays HM-classic for now (§6.2).
+  `instantiate`/`subst_row`/`free_in_row` for the *row* sort become draw-edge /
+  open-frame / read-live behind the seam. Type sort stays HM-classic for now (§6.2).
 - **Step 4 — instance frames replace copying.** Generalize Step 3 to no-copy frames
   for the type sort too; delete `build_inst_mapping`'s whole-type copy. (Gated hard;
   §6 checkpoints first.)
-- **Step 5 — fold refinement/ownership/cursor onto the same edges** (post-L1, the
-  peer upgrades in §5.6–§5.8).
+- **Step 5 — fold refinement/ownership/cursor + the runtime-floor handler onto the
+  same edges** (post-L1, §5.6–§5.8 + §7's backend-selectable floor).
 
-L1 closes at **Step 1**. Steps 2–5 are the dissolution proper, each shrinking
-`infer.mn` and the seed while the gate stays green.
+L1 closes at **Step 1** (which is only safe because **Step 0** exists). Steps 2–5 are
+the dissolution proper, each shrinking `infer.mn`/`effects.mn`/`lower.mn` + the seed
+while the seam holds the interface and the gate stays green.
 
 ---
 

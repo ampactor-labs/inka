@@ -477,7 +477,7 @@
         (br $each))))
 
   (func $bind_pat_locals (param $pat i32)
-    (local $tag i32)
+    (local $tag i32) (local $rest_opt i32) (local $rest_var i32)
     (if (i32.eq (local.get $pat) (i32.const 131))
       (then (return)))
     (if (i32.lt_u (local.get $pat) (global.get $heap_base))
@@ -498,6 +498,20 @@
     (if (i32.eq (local.get $tag) (i32.const 135))
       (then
         (call $bind_pat_locals_list (i32.load offset=4 (local.get $pat)))
+        ;; ALSO bind the `...rest` tail (offset 8 = Option<String>). The pattern
+        ;; PROVED this binding; binding the element subs but not the tail left
+        ;; every `rest` use UNRESOLVED (insert_descending, enforce_alt_binding_law).
+        ;; Mirror $lower_pat's rest-var extraction exactly, incl. the `_` skip.
+        (local.set $rest_opt (i32.load offset=8 (local.get $pat)))
+        (if (i32.and
+              (i32.ge_u (local.get $rest_opt) (global.get $heap_base))
+              (i32.eq (call $tag_of (local.get $rest_opt)) (i32.const 1)))   ;; Some
+          (then
+            (local.set $rest_var (i32.load offset=4 (local.get $rest_opt)))
+            (if (i32.eqz (i32.and
+                  (i32.eq (call $str_len (local.get $rest_var)) (i32.const 1))
+                  (i32.eq (call $byte_at (local.get $rest_var) (i32.const 0)) (i32.const 95))))
+              (then (drop (call $ls_bind_local (local.get $rest_var) (i32.const 0)))))))
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 136))
       (then

@@ -64,6 +64,28 @@ at three scales: Mentl's kernel never fabricates a fact it can read live;
 software for humanity must never hallucinate intent; and Claude must carry the
 real reasoning, never perform unearned confidence.
 
+**The deepest scale of that same law — the medium is its own builder's
+safeguard.** This session proved, pointedly, that *discipline written down cannot
+enforce itself*: with the most rigorous docs that could be written (the
+Carried-Truth Law as the first anchor, the Universal Audit as the first
+interrogation), Claude still drifted repeatedly — debugging the symptom before
+auditing the structure, trusting memory over the artifact, offering a risk-hedge
+as if it were a decision — until the human caught it. Discipline-as-prose fails
+exactly the way a language fails its developers: it *asks* for correctness
+instead of *enforcing* it (`// please don't allocate here` has never saved
+anyone). The only real safeguard is the medium making the wrong move *unsayable* —
+which is precisely what `mentl audit` will do: flag a Carried-Truth violation
+(the §7 registry) *before a line is written*. **So first-light is not merely
+self-compilation — it is the medium becoming able to enforce its own discipline
+on its own construction.** Until it is real, the human is `mentl audit` by hand
+and these docs are the *spec, not the guarantee* — the discipline is an ACTION
+taken first, every time, never a paragraph trusted-as-absorbed. The convergence
+completes: **docs : Claude :: language : developer :: human : `mentl audit`** —
+when Mentl is real, all three collapse into one (the graph, projected, keeping
+its own truth). This is the deepest reason to get the medium real (§5): so it
+keeps every builder — Claude included — honest, the way it will keep developers
+honest.
+
 Mentl is not a programming language with good features. It is a **medium** — a
 lens so clear the developer looks through it and sees their program, not the
 language. The programs are the means; **the developer they become is the end.**
@@ -105,6 +127,13 @@ that could build a better medium is already a move *inside* this one.
 > third.** THE UNIVERSAL AUDIT: *Is this fact computed, copied, snapshotted, or
 > re-derived anywhere it could be read live? If yes, it is the bug.* The fix is
 > always toward LESS code.
+>
+> **A verb DRAWS an edge.** `~> h` connects the install to handler `h`'s node;
+> `|>` connects stage to stage; `<~` closes a cycle. Reading what an edge already
+> connects **by name** (a ledger, an index, an env re-lookup) instead of
+> following the edge is the canonical re-derivation — the §7 registry trap in one
+> sentence. Follow the edge; read the live node; never re-resolve by name what the
+> graph already connected.
 
 **The irreducible bottom is not eight things.** It is the **graph** (nodes carry
 values; typed edges carry types, effects, ownership, refinement, Reasons) and
@@ -328,31 +357,46 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > edit — it derives real state from THIS run's artifacts. Prose drifts; artifacts
 > do not. On a runtime bug the first move is a PROBE, not a hypothesis.
 
-- **Census 192** (baseline 165; ~75 UnresolvedType / ~69 TypeMismatch / 37
-  MissingVariable / 8 FeedbackNoContext). 7/7 micros green. Seed builds. The +2
-  over 190 is effect-poly residue from the uncommitted multi-shot producer.
-- **Pass-2 reaches the LOWER phase (parser clean).** The `[T]` list-type parser
-  gap was a genuine wheel gap, fixed. The trap then marched: `collect_resume_walk`
-  `_`-less match (fixed, total) → `build_handler_arm_names` effectful-`map`
-  (fixed via `build_arm_groups` direct loop).
-- **THE L1 BLOCKER, correctly framed (§4③ + §4①):** `mentl2` traps compiling any
-  handler because the seed's `++` emits unconditional `str_concat`
-  (`bootstrap/src/emit_expr.wat:224`; the seed's emit has no type-of-node
-  accessor, so it structurally cannot dispatch). This is a *symptom*, not the
-  disease — the disease is (a) the row-effect-poly higher-order leak (§4③: the
-  effect variable doesn't ride through `map`, so an effectful lambda loses its
-  row → wrong evidence slot) and (b) the un-derived value ontology (§4①: str vs
-  list shouldn't be two types). **Pragmatic path (§5 stage 1):** complete the
-  effect-row inference for higher-order functions enough to self-host (kill the
-  leak), and give the seed's `++` the type-dispatch the wheel already has. Do not
-  chase the modal form yet.
-- **Multi-shot producer — uncommitted, INNOCENT of the blocker.** The rail
-  dissolved the write-only `resume_kinds` ledger (cardinality is a live
-  projection). Closure-based producer built but runtime-unverifiable pre-L1.
-- **Self-audit — bolts to unwind toward ultimate (§4③):** `build_arm_groups`
-  (a direct-loop *workaround* for the effect-poly gap, not the ultimate `map`+row)
-  and `collect_resume_walk _=>()` (catch-all). Diagnostically load-bearing; they
-  are decoration. They dissolve when §4③'s effect-row completion lands.
+- **Census 192**, 7/7 micros green, seed builds, m2.wat assembles. **Pass-2
+  reaches the LOWER phase** (parser clean), then `mentl2` traps compiling any
+  handler.
+- **THE L1 BLOCKER — the cursor (VERIFIED by wasmtime backtrace 2026-06-19, not
+  theorized).** Trap chain: `lower_program → lower_stmt_list → lower_stmt_body →
+  lower_handler_arms_as_decls → lookup_handler_arm_names → find_registry_field →
+  filter → iterate_from → list_index → (unreachable)`. `list_index` is a `_`-less
+  match on the list tag, so the `unreachable` means a **non-list** was fed to it:
+  the `handler_state_inits_registry`'s `ledger` is malformed. **The registry IS
+  the bug — a Carried-Truth violation** (CLAUDE.md Anchor 1 / the Universal
+  Audit): a side-ledger, grown by `register`'s `[{entry}] ++ ledger`, that
+  **copies projections of each handler's arms** (arm-names, arm-kinds,
+  state-inits) keyed by name, and reads them back. The graph already holds the
+  handler decl; the projections are pure functions of its `arms`. The infer side
+  already dissolved the identical twin ledger (`resume_kinds` — see infer.mn:2619
+  comment); the lower side re-committed the crime.
+- **THE FIX — delete the registry; read the arms live** (NOT fix the ledger;
+  *delete* it — its `++` is what malforms). Verified site map:
+  - `lower_handler_arms_as_decls` **has `arms`** → `build_handler_arm_names(d,
+    arms)` directly; `lower_one_arm_decl` **has `arm`** → `resume_kind_of(arm.body)`
+    directly. (Two of four reads are pure redundancy — they look up a projection
+    of arms they're holding.)
+  - The install (`~> h` / `LHandleWith`) and `handler_covers_effect` have only
+    `hname` → read the handler's node LIVE: `~> h` draws an edge to the handler's
+    node and the env names it (infer.mn:2615 binds `hname`→`HandlerKind`) — **read
+    the node, never look it up by name.** The one-home is the env/graph, not a
+    side-ledger and not a parallel index.
+  - Delete `effect HandlerStateInitsRegistry` + its handler + `lower_pre_register_
+    handler_decls`. **Complete the seed to match** (byte-parity, mentl2==mentl3,
+    is the gate AFTER the trap dies) — never hedge the wheel against the seed.
+- **DISCARD these (disproven by probe, kept here so they're not re-chased):** the
+  seed's `++` is *not* unconditional `str_concat` (it type-dispatches in
+  `emit_call.wat`); the seed's emit *does* have `$lookup_ty`; infer *does* bind
+  `MakeListExpr`→`TList`. The disease is the registry's *existence*, not its
+  contents or the `++` dispatch. (`str_concat`/offset/effect-poly were
+  symptom-chasing — the cost of debugging before auditing.)
+- **Bolts that dissolve with the registry:** `build_arm_groups` and
+  `collect_resume_walk _=>()` were workarounds for the registry-population path;
+  the uncommitted multi-shot producer (`MsSuspend`, `build_arm_kinds`) is innocent
+  of the trap and runtime-unverifiable pre-L1.
 
 ---
 
@@ -390,9 +434,18 @@ asserting.
 4. **Mentl solves Mentl.** Reaching for a framework = a missing primitive. Every
    subsystem is the cursor in a different mode.
 5. **Build the wheel; never wrap the axle.** No V1 to wrap — only the final form.
-6. **The trap marches deeper per fix = progress.** Probe before hypothesis;
-   trace to bedrock; each fix exposing the next is the signal you're descending
-   correctly.
+6. **Audit before the symptom; probe before hypothesis** (the lesson of
+   2026-06-18, paid for in a full session of drift). Your FIRST move on any work —
+   above all a bug — is the Universal Audit of the structures you'll touch (*does
+   the graph already know this? is this copied / cached / re-derived?*) BEFORE
+   tracing any trap; debugging a symptom's mechanism before auditing whether the
+   structure should EXIST is the drift itself. Then probe the artifact, never a
+   hypothesis; the trap marches deeper per fix (progress). A probe that disproves
+   you does NOT crown the next symptom as the root — keep digging until it cannot
+   reduce; verify every claim with a tool (memory and prose drift; the artifact is
+   truth). And a "choice" between the ultimate form and a safer/lower-risk hedge
+   is itself the drift — the ultimate form wins; never hedge the wheel against the
+   seed.
 7. **Never force the dispatch floor unverified.** A silent multi-shot miscompile
    is the worst failure. Verify via `mentl2`/WABT before claiming.
 8. **No bolts onto non-ultimate forms.** When the audit finds you working around
@@ -420,13 +473,17 @@ diagnostic's NAME can lie.
    context. Reference nothing else unless debugging a specific artifact.
 2. **Run `bash tools/state.sh`.** Trust its numbers over any prose here; if they
    disagree, the prose is stale — fix it.
-3. **The cursor is §5 (real → felt → unsurpassable) at its first un-done stage:
-   close first-light** via §7's pragmatic path (complete effect-row inference for
-   higher-order functions; give the seed's `++` type-dispatch). Then the felt
-   surface; then the long game.
-4. **Every edit:** project the eight arms (§2); obey Carried-Truth (§9.1);
-   dream-code first (§9.3); never bolt (§9.8); interrogate, don't absorb (§9.9).
-   Ask: *what does the ultimate medium do here?* Implement that.
+3. **The cursor is §5's first stage — *real*: close first-light.** Per §7
+   (verified by backtrace): DELETE the `handler_state_inits_registry` (a
+   Carried-Truth side-ledger) and read each handler's arms LIVE — the sites
+   holding the arms compute directly; the install / `handler_covers_effect` read
+   the handler's node via the env (the `~> h` edge), never by name; complete the
+   seed to match (byte-parity is the gate after the trap dies). Then *felt*, then
+   *unsurpassable*.
+4. **Open with the Universal Audit, not the trap (§9.6).** Then every edit:
+   project the eight arms (§2); obey Carried-Truth (§9.1); dream-code first
+   (§9.3); never bolt (§9.8); interrogate, don't absorb (§9.9). Ask: *what does
+   the ultimate medium do here?* Implement that.
 5. **Keep the three docs in ultimate form.** Each touch consolidates toward the
    tightest *complete* prefix, one home per truth. They are the only durable
    memory — the investment that means this session never recurs.

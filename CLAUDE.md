@@ -27,6 +27,15 @@
 > Never absorb a doc as gospel; never distill from memory and call it
 > understanding — read the source, then interrogate it. This is the law that means
 > the deep re-grounding session never has to happen again.
+>
+> **And these docs are the SPEC, not the guarantee.** Discipline written down
+> cannot enforce itself — this session is the proof: Claude drifted with the most
+> rigorous docs it could write (Carried-Truth as Anchor 1, the Universal Audit as
+> the first interrogation), repeatedly, until the human caught it. The safeguard
+> is the ACTION, taken first and every time — run the audit, probe the artifact,
+> read the source — **never trust that you have "absorbed" a paragraph.** Until
+> `mentl audit` is real and makes the wrong move *unsayable* (`PLAN.md §0`), YOU
+> are `mentl audit`, by hand, every turn.
 
 ## ⌖ Prime directive — think in the five verbs ⌖
 
@@ -51,9 +60,26 @@
 ## ⊕ Ground in reality · ask the medium · there is only now ⊕
 
 > **Before any theory, edit, or assertion: run `bash tools/state.sh`.** Prose
-> drifts (this file, PLAN.md, comments, memory); artifacts do not. On a runtime
-> bug the first move is a PROBE, not a hypothesis. Verify before asserting. The
-> trap marches deeper per fix — that is progress.
+> drifts (this file, PLAN.md, comments, memory); artifacts do not.
+
+> **AUDIT BEFORE THE SYMPTOM — the load-bearing first move** (the lesson paid for
+> in a full session of drift, 2026-06-18). Your FIRST action on ANY work, above
+> all a bug, is the **Universal Audit** (§anchor) of the structures you will
+> touch: *does the graph already know this? is this fact computed / copied /
+> snapshotted / re-derived?* — BEFORE you trace any trap. Debugging a symptom's
+> mechanism before auditing whether the structure should EXIST is the drift
+> itself (it cost a backtrace + three user corrections to surface a side-ledger
+> the first interrogation flags in one read). Then PROBE the artifact, never a
+> hypothesis; the trap marches deeper per fix (that is progress). Three
+> corollaries, each proven that session:
+> - **A probe disproved you? Do NOT crown the next thing you see as the root.**
+>   The first symptom is rarely the ground; keep digging until it cannot reduce.
+> - **Verify every claim with a tool before asserting.** Session-memory and prose
+>   drift; the artifact is truth ("X is the cause" is a claim until a trace shows it).
+> - **A "choice" between the ultimate form and a safer/lower-risk hedge is the
+>   drift.** The ultimate form wins; risk is paid by doing it right; you never
+>   hedge the wheel against the seed (that is shaping the wheel around its
+>   silhouette — forbidden).
 
 > **Before ANY new thing, ASK: "What does the ULTIMATE MEDIUM do here?"** The
 > three constant questions at EVERY cursor: (1) **Discarded info?** Re-deriving
@@ -134,6 +160,9 @@ rewrite in residue form inline.)
 | "Vtable" / "dispatch table" | Word never appears in correct Mentl (Drift 1) |
 | `_ => <fabricated value>` / `_ => str_concat` | A silent surrender-fallback — DELETE it, don't wrap; explicit enumeration |
 | "I'll work around this gap" (direct-loop, catch-all) | That's a BOLT onto a non-ultimate form — do the ultimate restructure |
+| Tracing a trap / symptom before auditing the structure | AUDIT FIRST — the structure may not belong; the first symptom is rarely the root |
+| "Look up X by name" (ledger / index / map) | If a `~>` edge or the env already connects it → re-derivation (Anchor 1); follow the edge, read the live node |
+| Presenting "Option A (ultimate) vs Option B (safer/lower-risk)" — to me OR to the user | The fork IS the drift; the thesis already answers it. Ultimate form wins; DECIDE it, don't outsource a thesis-answered call; never hedge the wheel against the seed |
 | "It's a big change, so later" / "today was good" | Forbidden. Keep going; report result + next move |
 | "AI"/"agent"/"completion" in user-facing text | Substrate vocabulary: "medium proposes" / "cursor argmax" |
 

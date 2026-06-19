@@ -2,9 +2,29 @@
 
 > *The form that best translates intent into computation.*
 
+> **One of the three documents (the contract).** Mentl's read-path is exactly
+> three self-contained docs — `CLAUDE.md` (*method*), `PLAN.md` (*substance*),
+> and this one, `SYNTAX.md` (*surface*). This file is the **authority on syntax**
+> and supersedes any syntactic claim in the other two. For *what Mentl is*, the
+> kernel, and the resolved design decisions, see `PLAN.md`; for *how to work*,
+> `CLAUDE.md`. The former `docs/**` corpus (DESIGN.md, SUBSTRATE.md, the per-
+> module specs) is git archaeology, out of the read-path — its load-bearing
+> truths live in the three docs now. **Interrogate, don't absorb** (CLAUDE.md):
+> every form below is the current best answer, to be re-checked against "what
+> does the ultimate medium do here," not gospel.
+
 This document is **the authoritative syntactic spec for Mentl**. It binds the parser; the parser implements exactly this. It is written under dream-code discipline: every decision below is the IDEAL form, not a description of the current parser. Where the current parser deviates, the parser is wrong; SYNTAX.md is the wheel, the parser is the lathe being adjusted to it.
 
-DESIGN.md articulates the medium's vision. The 12 specs in `docs/specs/` describe per-module behavior. SUBSTRATE.md crystallizes load-bearing structural truths (kernel, verbs, algebra, handlers, gradient, refinement, theorems). **SYNTAX.md is the layer between vision and implementation: the surface form by which intent reaches the substrate.**
+> **Resolved-design forward-pointer (`PLAN.md §4`).** Two `PLAN.md` decisions
+> bear on the surface and are the *long-game* target (real-before-perfect, §5):
+> **§4① the value ontology** — `String`/`Int`/`Float`/`Bool` ultimately *derive*
+> from five node-kinds (`Bool` already does), so the two string forms and the
+> `++`/`==` type-dispatch below are a *view* over one sequence kind, not a
+> primitive split; and **§4③ the effect system** keeps Boolean negation (`!E`)
+> while evolving toward modal effects to kill the higher-order leak. The current
+> forms below stand and ship; the derivation lands underneath without breaking
+> them. Where a form here looks like a special-case primitive, that is the
+> pragmatic surface, not the final ontology.
 
 ---
 

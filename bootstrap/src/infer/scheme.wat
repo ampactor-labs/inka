@@ -755,19 +755,27 @@
           (call $ty_substitute_fields
             (call $ty_trecord_fields (local.get $ty))
             (local.get $map) (local.get $map_len))))))
-    ;; ── TRecordOpen(fields, rowvar) — substitute fields via field-pair
-    ;;    list walk; preserve rowvar verbatim (rowvar substitution awaits
-    ;;    row.wat $row_substitute extension — Hβ-infer §12 named follow-
-    ;;    up). Per src/infer.mn:1968 `mk_record_open(subst_fields(fields,
-    ;;    mapping), v)` — at the WAT layer the smart constructor is just
-    ;;    $ty_make_trecordopen with the substituted fields + original v. ─
+    ;; ── TRecordOpen(fields, rowvar) — substitute fields AND freshen the
+    ;;    rowvar via the same root-keyed map lookup the TVar arm (tag 104)
+    ;;    uses. $free_in_ty COLLECTS the rowvar (it is quantified), so
+    ;;    $instantiate MUST freshen it; preserving ONE tail across every
+    ;;    instantiation of an open-record scheme stranded the quantified tail
+    ;;    (the open-record let-poly leak). Closes the Hβ-infer §12 deferred
+    ;;    follow-up; mirrors src/infer.mn subst_ty. ─
     (if (i32.eq (local.get $tag) (i32.const 110))
-      (then (return
-        (call $ty_make_trecordopen
-          (call $ty_substitute_fields
-            (call $ty_trecordopen_fields (local.get $ty))
-            (local.get $map) (local.get $map_len))
-          (call $ty_trecordopen_rowvar (local.get $ty))))))
+      (then
+        (local.set $fresh
+          (call $subst_map_lookup (local.get $map) (local.get $map_len)
+                (call $graph_chase_handle
+                  (call $ty_trecordopen_rowvar (local.get $ty)))))
+        (return
+          (call $ty_make_trecordopen
+            (call $ty_substitute_fields
+              (call $ty_trecordopen_fields (local.get $ty))
+              (local.get $map) (local.get $map_len))
+            (if (result i32) (i32.lt_s (local.get $fresh) (i32.const 0))
+              (then (call $ty_trecordopen_rowvar (local.get $ty)))
+              (else (local.get $fresh)))))))
     ;; ── TRefined(base, pred) — substitute base; preserve pred ───
     (if (i32.eq (local.get $tag) (i32.const 111))
       (then (return

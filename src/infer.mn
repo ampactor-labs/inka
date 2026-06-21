@@ -233,7 +233,18 @@ fn pre_register_fn_sig(name, params, handle, span: ValidSpan) = {
     mk_ef_open([], row_handle)
   )
   perform graph_bind(handle, fn_ty, Located(span, Declared(name)))
-  perform env_extend(name, Forall([], fn_ty), Declared(name), FnScheme)
+  // Quantify the fresh param/return/row vars so a FORWARD reference — a fn used
+  // before its own body is inferred (e.g. src/ inferred before lib/prelude, so
+  // lower.mn's map/fold calls precede the prelude bodies that generalize them) —
+  // is POLYMORPHIC, not a shared monotype. Forall([]) here made every forward
+  // call site reuse ONE set of param vars, so their argument record types all
+  // unified into one (the handler-arm type {args,body,op_name} absorbing the
+  // placement {ename,name,slot} + group {ename,arms} fields → the 7-field bloat
+  // → arm.body@8). This IS HM generalization of forward refs: instantiate
+  // freshens per call site. Recursion stays monomorphic — infer_fn binds the
+  // handle (graph_bind above + the unify branch) so the vars are bound by the
+  // time the body's self-calls instantiate this scheme.
+  perform env_extend(name, Forall(free_in_ty(fn_ty), fn_ty), Declared(name), FnScheme)
 }
 
 fn infer_stmt_list(stmts) = for_each(infer_stmt, stmts)
@@ -2449,7 +2460,22 @@ fn subst_ty(ty, mapping) = match ty {
   ),
   TName(name, args) => TName(name, subst_list(args, mapping)),
   TRecord(fields) => TRecord(subst_fields(fields, mapping)),
-  TRecordOpen(fields, v) => mk_record_open(subst_fields(fields, mapping), v),
+  TRecordOpen(fields, v) => {
+    // Freshen the open tail, mirroring subst_row's EfOpen: free_in_ty COLLECTS
+    // v (TRecordOpen ⇒ [v] ++ fields), so generalize quantifies it and
+    // instantiate MUST freshen it. Dropping v here shared the SAME row tail
+    // across every instantiation of an open-record scheme — a proven let-poly
+    // asymmetry (generalize quantifies v; instantiate must not strand it).
+    // Carried-Truth: the free_in_ty ↔ subst_ty symmetry was broken at this arm.
+    let fields2 = subst_fields(fields, mapping)
+    match perform graph_chase(v) {
+      GNode(NRowFree(_), _) => {
+        let r = find_mapping(mapping, perform graph_chase_handle(v))
+        if r >= 0 { mk_record_open(fields2, r) } else { mk_record_open(fields2, v) }
+      },
+      _ => mk_record_open(fields2, v)
+    }
+  },
   TRefined(base, pred) => TRefined(subst_ty(base, mapping), pred),
   TCont(ret, disc)      => TCont(subst_ty(ret, mapping), disc),
   TAlias(name, inner)   => TAlias(name, subst_ty(inner, mapping))

@@ -79,7 +79,7 @@
 > mechanism before auditing whether the structure should EXIST is the drift
 > itself (it cost a backtrace + three user corrections to surface a side-ledger
 > the first interrogation flags in one read). Then PROBE the artifact, never a
-> hypothesis; the trap marches deeper per fix (that is progress). Three
+> hypothesis; the trap marches deeper per fix (that is progress). Four
 > corollaries, each proven that session:
 > - **A probe disproved you? Do NOT crown the next thing you see as the root.**
 >   The first symptom is rarely the ground; keep digging until it cannot reduce.
@@ -89,6 +89,11 @@
 >   drift.** The ultimate form wins; risk is paid by doing it right; you never
 >   hedge the wheel against the seed (that is shaping the wheel around its
 >   silhouette — forbidden).
+> - **A proven-correct fix that doesn't clear the symptom STAYS — stack the next.**
+>   The bug is a CONJUNCTION; the trap marches THROUGH each correct fix. Reverting
+>   verified-safe, traced work because a symptom persists is the loop-forever
+>   anti-pattern — "incomplete" ≠ "wrong" (only the artifact proving a regression
+>   justifies a revert). Trust the thesis; forward, not back (Morgan 2026-06-21).
 
 > **Before ANY new thing, ASK: "What does the ULTIMATE MEDIUM do here?"** The
 > four constant questions at EVERY cursor: (1) **Discarded info?** Re-deriving

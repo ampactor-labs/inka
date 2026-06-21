@@ -306,6 +306,14 @@
   ;; H2 record substrate: field i lands at byte 4*i; offset_bytes is
   ;; pre-computed by Hβ.lower walk_compound's $lower_field arm.
   (func $emit_lfieldload (param $r i32)
-    (call $emit_lexpr (call $lexpr_lfieldload_record (local.get $r)))
-    (call $el_emit_i32_load_offset
-      (call $lexpr_lfieldload_offset_bytes (local.get $r))))
+    (local $off i32)
+    (local.set $off (call $lexpr_lfieldload_offset_bytes (local.get $r)))
+    ;; NO SILENT FALLBACK (twin of the wheel's LFieldLoad guard, PLAN §0):
+    ;; offset < 0 = resolve_field_offset could not prove the offset → emit
+    ;; (unreachable), the named wrong, never i32.load offset=-1 (invalid WAT)
+    ;; nor a fabricated load reading a foreign field.
+    (if (i32.lt_s (local.get $off) (i32.const 0))
+      (then (call $ec_emit_unreachable))
+      (else
+        (call $emit_lexpr (call $lexpr_lfieldload_record (local.get $r)))
+        (call $el_emit_i32_load_offset (local.get $off)))))

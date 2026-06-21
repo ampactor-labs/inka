@@ -1922,6 +1922,85 @@
       (then (return (call $node_kind_payload (local.get $nk)))))
     (call $row_make_pure))
 
+  ;; ─── Install-time payload flow (parametric effects) ──────────────────
+  ;; At `expr ~> h`, the body performs E(a) (in its row) and the handler value
+  ;; is Handler<E(P)>; unify a = P so the handler's arm param (elem : P) becomes
+  ;; the performed value type. This is what makes `field` in
+  ;; `map((field)=>field.name, xs)` resolve to xs's element. The dispatch
+  ;; gradient applied to DATA. Mirrors src/infer.mn unify_install_payload /
+  ;; handler_payload_ty / row_effect_payload / names_effect_payload.
+
+  ;; $handler_payload_ty(ty) — P from a Handler<E(P)> handler value type, or 0.
+  (func $handler_payload_ty (param $ty i32) (result i32)
+    (local $args i32) (local $inner i32) (local $inner_args i32)
+    (if (i32.ne (call $ty_tag (local.get $ty)) (i32.const 108))   ;; not TName
+      (then (return (i32.const 0))))
+    (if (i32.eqz (call $str_eq (call $ty_tname_name (local.get $ty))
+                               (call $handler_decl_handler_name_ptr)))
+      (then (return (i32.const 0))))
+    (local.set $args (call $ty_tname_args (local.get $ty)))
+    (if (i32.ne (call $len (local.get $args)) (i32.const 1))
+      (then (return (i32.const 0))))
+    (local.set $inner (call $list_index (local.get $args) (i32.const 0)))
+    (if (i32.ne (call $ty_tag (local.get $inner)) (i32.const 108))   ;; inner TName(E, [P])
+      (then (return (i32.const 0))))
+    (local.set $inner_args (call $ty_tname_args (local.get $inner)))
+    (if (i32.ne (call $len (local.get $inner_args)) (i32.const 1))
+      (then (return (i32.const 0))))
+    (call $list_index (local.get $inner_args) (i32.const 0)))
+
+  ;; $names_effect_payload(names, ename) — the payload Ty of the row's E(a)
+  ;; entry (the performed payload), or 0 if E is absent or bare.
+  (func $names_effect_payload (param $names i32) (param $ename i32) (result i32)
+    (local $n i32) (local $i i32) (local $elem i32)
+    (local.set $n (call $len (local.get $names)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $elem (call $list_index (local.get $names) (local.get $i)))
+        (if (call $eff_pname_is (local.get $elem))
+          (then
+            (if (call $str_eq (call $record_get (local.get $elem) (i32.const 0))
+                              (local.get $ename))
+              (then (return (call $eff_pname_payload (local.get $elem)))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 0))
+
+  ;; $row_effect_payload(row, ename) — the performed payload `a` from a row's
+  ;; E(a) entry, or 0 (Closed/Open scanned; Pure/others none).
+  (func $row_effect_payload (param $row i32) (param $ename i32) (result i32)
+    (local $tag i32)
+    (local.set $tag (call $row_tag (local.get $row)))
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 151))
+                (i32.eq (local.get $tag) (i32.const 152)))
+      (then (return (call $names_effect_payload
+        (call $row_names (local.get $row)) (local.get $ename)))))
+    (i32.const 0))
+
+  ;; $unify_install_payload — flow the op payload performer→handler at the
+  ;; install: body performs E(a), handler value is Handler<E(P)>; unify a = P.
+  ;; A no-op (None-tolerant) when either side lacks the payload — a handler
+  ;; whose body never performs the parameterized effect must NOT be forced.
+  (func $unify_install_payload (param $body_row i32) (param $handled i32)
+                               (param $rh i32) (param $span i32)
+    (local $pty i32) (local $aty i32) (local $h1 i32) (local $h2 i32)
+    (local.set $pty (call $handler_payload_ty (call $lookup_ty (local.get $rh))))
+    (if (i32.eqz (local.get $pty)) (then (return)))
+    (local.set $aty (call $row_effect_payload (local.get $body_row) (local.get $handled)))
+    (if (i32.eqz (local.get $aty)) (then (return)))
+    (local.set $h1 (call $graph_fresh_ty
+      (call $reason_make_inferred (i32.const 4080))))   ;; "effects"
+    (call $graph_bind (local.get $h1) (local.get $pty)
+      (call $reason_make_inferred (i32.const 4080)))
+    (local.set $h2 (call $graph_fresh_ty
+      (call $reason_make_inferred (i32.const 4080))))
+    (call $graph_bind (local.get $h2) (local.get $aty)
+      (call $reason_make_inferred (i32.const 4080)))
+    (call $unify (local.get $h1) (local.get $h2) (local.get $span)
+      (call $reason_make_inferred (i32.const 4080))))
+
   ;; PTee (~>) — handler-effect typing: row(expr ~> h) = (row(expr) − E) ⊕ R.
   ;; Body in a NESTED row scope (so its effects don't leak — subtraction needs
   ;; it); install the handler value (binds config args → R picks up their
@@ -1954,6 +2033,11 @@
             (local.set $ename (call $schemekind_handler_ename (local.get $kind)))
             (local.set $resid (call $read_bound_row
               (call $schemekind_handler_residual (local.get $kind))))
+            ;; THE INSTALL CONNECTION: flow the op payload performer→handler.
+            ;; body performs E(a); handler value is Handler<E(P)>; unify a = P.
+            (call $unify_install_payload
+              (local.get $body_row) (local.get $ename)
+              (call $walk_expr_node_handle (local.get $right)) (local.get $span))
             (local.set $names (call $make_list (i32.const 1)))
             (drop (call $list_set (local.get $names) (i32.const 0) (local.get $ename)))
             ;; Flow-edge: row_union keeps the FIRST open arg's rowvar. The residual

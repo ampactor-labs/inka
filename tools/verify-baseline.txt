@@ -23,7 +23,22 @@
 # target (seed record-field type-resolution completeness). The fix is a hard
 # pass-2 prerequisite: it clears the grow_to_with_gaps OOB (placement.slot was
 # reading ename, a string pointer).
-census_max=190
+#
+# 2026-06-21: bumped 190 -> 201 (deliberate, explained). Census is a SHADOW
+# (Morgan 2026-06-21): the real first-light oracle is the FIXED POINT (m3==m4)
+# + micros + the pass-2 trap-march, NOT the diagnostic count. The type-
+# parameterized-effects substrate (EAType; register_effect_ops full var set;
+# subst_ty/instantiate chase-to-root) RESOLVED 41 E_UnresolvedType (75->34:
+# state-field types that were NFree at lower time now resolve) at the cost of
+# 56 more E_TypeMismatch (70->126: the medium now CONNECTS types it previously
+# left free — proof-beats-review honesty, in-progress, expected to ratchet
+# back DOWN as the offset-flow completes). The handler_state_inits_registry
+# dissolution (this commit) carried the census DOWN 204->201 and cleared the
+# filter-in-arm trap. Verified: micros 7/7, seed compiles the wheel, drift
+# clean, no dangling refs to removed symbols, pass-2 trap marched filter ->
+# lower_one_arm_decl/lower_expr (deeper = progress). Next ratchet-down: those
+# 56 E_TypeMismatch + the lower_expr trap.
+census_max=201
 
 # micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
 micro:ev2=57

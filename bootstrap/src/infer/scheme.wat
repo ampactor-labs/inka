@@ -676,7 +676,7 @@
 
   (func $ty_substitute (param $ty i32) (param $map i32) (param $map_len i32)
                         (result i32)
-    (local $tag i32) (local $h i32) (local $fresh i32)
+    (local $tag i32) (local $h i32) (local $fresh i32) (local $g i32) (local $nk_tag i32)
     (local.set $tag (call $ty_tag (local.get $ty)))
     ;; ── Nullary Ty sentinels — identity ───────────────────────────
     (if (i32.eq (local.get $tag) (i32.const 100))
@@ -691,9 +691,22 @@
     (if (i32.eq (local.get $tag) (i32.const 104))
       (then
         (local.set $h (call $ty_tvar_handle (local.get $ty)))
+        ;; Read the LIVE node (union-find / Carried-Truth), mirroring
+        ;; src/infer.mn subst_ty: a var BOUND after generalize (a handler
+        ;; config-param the arm-walk linked to the payload) substitutes its
+        ;; RESOLVED type so the payload freshens WITH it; a free var maps
+        ;; through its ROOT (the map is root-keyed) so an aliased qvar still
+        ;; freshens. Was: lookup on the raw handle — left bound/aliased stale.
+        (local.set $g (call $graph_chase (local.get $h)))
+        (local.set $nk_tag (call $node_kind_tag (call $gnode_kind (local.get $g))))
+        (if (i32.eq (local.get $nk_tag) (i32.const 60))   ;; NBound — resolve + subst
+          (then (return
+            (call $ty_substitute
+              (call $node_kind_payload (call $gnode_kind (local.get $g)))
+              (local.get $map) (local.get $map_len)))))
         (local.set $fresh
           (call $subst_map_lookup (local.get $map) (local.get $map_len)
-                                  (local.get $h)))
+                                  (call $graph_chase_handle (local.get $h))))
         (if (i32.lt_s (local.get $fresh) (i32.const 0))
           (then (return (local.get $ty)))     ;; absent — identity
           (else (return (call $ty_make_tvar (local.get $fresh)))))))
@@ -865,14 +878,86 @@
   ;; resolve_row_deep. Row tags: 150 Pure, 151 Closed, 152 Open, 153 Neg,
   ;; 154 Sub, 155 Inter.
 
-  ;; $free_in_row(eff) — the open tail var is the row's free handle.
+  ;; $free_in_eff_names(names) — the free type vars inside a name-set's
+  ;; parameterized payloads (Iterate(a) ⇒ a's free vars). Bare ENamed
+  ;; entries carry none. Mirrors src/infer.mn free_in_eff_names /
+  ;; free_in_eff_arg: each EAType payload recurses via $free_in_ty.
+  (func $free_in_eff_names (param $names i32) (result i32)
+    (local $n i32) (local $i i32) (local $elem i32)
+    (local $sub i32) (local $sub_n i32) (local $sub_j i32)
+    (local $out i32) (local $out_n i32)
+    (local.set $n (call $len (local.get $names)))
+    (local.set $out (call $make_list (i32.const 4)))
+    (local.set $out_n (i32.const 0))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $elem (call $list_index (local.get $names) (local.get $i)))
+        ;; A bare ENamed entry contributes no free vars; a parameterized
+        ;; record's payload Ty is recursed for its free type vars.
+        (if (call $eff_pname_is (local.get $elem))
+          (then
+            (local.set $sub (call $free_in_ty (call $eff_pname_payload (local.get $elem))))
+            (local.set $sub_n (call $len (local.get $sub)))
+            (local.set $sub_j (i32.const 0))
+            (block $sub_done
+              (loop $sub_iter
+                (br_if $sub_done (i32.ge_u (local.get $sub_j) (local.get $sub_n)))
+                (local.set $out
+                  (call $list_extend_to (local.get $out)
+                                        (i32.add (local.get $out_n) (i32.const 1))))
+                (drop (call $list_set (local.get $out) (local.get $out_n)
+                  (call $list_index (local.get $sub) (local.get $sub_j))))
+                (local.set $out_n (i32.add (local.get $out_n) (i32.const 1)))
+                (local.set $sub_j (i32.add (local.get $sub_j) (i32.const 1)))
+                (br $sub_iter)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (call $slice (local.get $out) (i32.const 0) (local.get $out_n)))
+
+  ;; $subst_eff_names(names, map, map_len) — substitute parameterized
+  ;; payload TYPES through a name-set (the row mirror of subst_ty over
+  ;; the row's carried types). Bare entries pass verbatim; a
+  ;; parameterized entry's EAType payload is freshened. Mirrors
+  ;; src/infer.mn subst_eff_names — what makes each op USE a fresh
+  ;; payload instance.
+  (func $subst_eff_names (param $names i32) (param $map i32) (param $map_len i32)
+                         (result i32)
+    (local $n i32) (local $i i32) (local $elem i32) (local $out i32)
+    (local.set $n (call $len (local.get $names)))
+    (local.set $out (call $make_list (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $elem (call $list_index (local.get $names) (local.get $i)))
+        (if (call $eff_pname_is (local.get $elem))
+          (then
+            (drop (call $list_set (local.get $out) (local.get $i)
+              (call $eff_pname_make
+                (call $record_get (local.get $elem) (i32.const 0))
+                (call $ty_substitute (call $eff_pname_payload (local.get $elem))
+                  (local.get $map) (local.get $map_len))))))
+          (else
+            (drop (call $list_set (local.get $out) (local.get $i) (local.get $elem)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (local.get $out))
+
+  ;; $free_in_row(eff) — the open tail var is the row's free handle;
+  ;; parameterized payloads contribute their free type vars too.
   (func $free_in_row (param $eff i32) (result i32)
     (local $tag i32) (local $root i32)
     (local.set $tag (call $row_tag (local.get $eff)))
     (if (i32.eq (local.get $tag) (i32.const 150))   ;; Pure
       (then (return (call $make_list (i32.const 0)))))
+    ;; A parameterized effect carries its op-payload TYPE (Iterate(a)); the
+    ;; payload's free vars are the row's free vars, so generalize quantifies
+    ;; them and instantiate (subst_row) freshens them — each op USE is a
+    ;; fresh effect instance, reconciled to the handler's at the install.
     (if (i32.eq (local.get $tag) (i32.const 151))   ;; Closed
-      (then (return (call $make_list (i32.const 0)))))
+      (then (return (call $free_in_eff_names (call $row_names (local.get $eff))))))
     (if (i32.eq (local.get $tag) (i32.const 152))   ;; Open
       (then
         ;; Collect the tail var ONLY when genuinely free (NRowFree) — the
@@ -881,12 +966,15 @@
         ;; would re-freshen a monomorphic fn's shared row handle.
         ;; find the row var's union-find ROOT — a buried free tail (a `~> h(f)`
         ;; / map's f-effect residual) is reached only through the alias chain.
+        ;; The concrete names' payloads contribute their free vars too.
         (local.set $root (call $graph_chase_handle (call $row_handle (local.get $eff))))
         (if (i32.eq (call $node_kind_tag (call $gnode_kind
               (call $graph_chase (local.get $root))))
               (i32.const 63))   ;; NRowFree
-          (then (return (call $singleton_handle (local.get $root))))
-          (else (return (call $make_list (i32.const 0)))))))
+          (then (return (call $list_concat
+            (call $free_in_eff_names (call $row_names (local.get $eff)))
+            (call $singleton_handle (local.get $root)))))
+          (else (return (call $free_in_eff_names (call $row_names (local.get $eff))))))))
     (if (i32.eq (local.get $tag) (i32.const 153))   ;; Neg(inner)
       (then (return
         (call $free_in_row (call $record_get (local.get $eff) (i32.const 0))))))
@@ -909,14 +997,21 @@
     (local $tag i32) (local $v i32) (local $fresh i32) (local $resolved i32)
     (local.set $tag (call $row_tag (local.get $eff)))
     (if (i32.eq (local.get $tag) (i32.const 150)) (then (return (local.get $eff))))
-    (if (i32.eq (local.get $tag) (i32.const 151)) (then (return (local.get $eff))))
+    ;; Closed: substitute parameterized payload TYPES (Iterate(a) ⇒
+    ;; Iterate(fresh)) so each op USE is a fresh effect instance — the row
+    ;; mirror of freshening a TVar. Bare names pass through unchanged.
+    (if (i32.eq (local.get $tag) (i32.const 151))
+      (then (return (call $row_make_closed
+        (call $subst_eff_names (call $row_names (local.get $eff))
+          (local.get $map) (local.get $map_len))))))
     (if (i32.eq (local.get $tag) (i32.const 152))   ;; Open
       (then
         ;; Resolve the row deeply (lookup_row_for — the same resolution
         ;; derive_ev_slots + lower read) and substitute the poly TAIL by its
-        ;; root, CARRYING the concrete effects. $graph_chase_handle alone skips
-        ;; names to the tail; substituting that loses the concrete row an
-        ;; instantiated poly fn carries → the caller threads wrong evidence.
+        ;; root, CARRYING the concrete effects (with their payloads freshened).
+        ;; $graph_chase_handle alone skips names to the tail; substituting that
+        ;; loses the concrete row an instantiated poly fn carries → the caller
+        ;; threads wrong evidence.
         (local.set $resolved (call $lookup_row_for (local.get $eff)))
         (if (call $row_is_open (local.get $resolved))   ;; EfOpen(concrete, tail)
           (then
@@ -924,11 +1019,21 @@
             (local.set $fresh (call $subst_map_lookup
               (local.get $map) (local.get $map_len) (local.get $v)))
             (if (i32.lt_s (local.get $fresh) (i32.const 0))
-              (then (return (local.get $eff)))
+              (then (return (call $row_make_open
+                (call $subst_eff_names (call $row_names (local.get $resolved))
+                  (local.get $map) (local.get $map_len))
+                (call $row_handle (local.get $resolved)))))
               (else (return (call $row_make_open
-                (call $row_names (local.get $resolved)) (local.get $fresh)))))))
-        ;; EfClosed / EfPure resolved — monomorphic, no tail; verbatim.
-        (return (local.get $eff))))
+                (call $subst_eff_names (call $row_names (local.get $resolved))
+                  (local.get $map) (local.get $map_len))
+                (local.get $fresh)))))))
+        ;; EfClosed / EfPure resolved — monomorphic tail; substitute the
+        ;; resolved row's names (payloads still freshen) and return it.
+        (if (call $row_is_closed (local.get $resolved))
+          (then (return (call $row_make_closed
+            (call $subst_eff_names (call $row_names (local.get $resolved))
+              (local.get $map) (local.get $map_len))))))
+        (return (local.get $resolved))))
     (if (i32.eq (local.get $tag) (i32.const 153))   ;; Neg
       (then (return (call $row_make_neg
         (call $subst_row (call $record_get (local.get $eff) (i32.const 0))
@@ -1007,7 +1112,9 @@
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $qs_n)))
-        (local.set $old (call $list_index (local.get $qs) (local.get $i)))
+        ;; Key by the union-find ROOT, matching $ty_substitute's root-keyed
+        ;; lookup: a quantified var aliased after generalize still freshens.
+        (local.set $old (call $graph_chase_handle (call $list_index (local.get $qs) (local.get $i))))
         ;; Reason = Instantiation("inst", Fresh(old))
         (local.set $reason
           (call $reason_make_instantiation

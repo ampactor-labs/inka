@@ -150,9 +150,54 @@
       (then (return (call $record_get (local.get $row) (i32.const 1)))))
     (i32.const 0))
 
+  ;; ─── Parameterized effect-name records (EffName.EParameterized) ───
+  ;; The wheel's row name-set carries EffName records (ENamed(s) /
+  ;; EParameterized(s, [EffArg])); the seed historically stored BARE
+  ;; string ptrs (the ENamed case). Parametric effects (Iterate(a))
+  ;; need the op-payload TYPE to ride alongside the name so it flows
+  ;; performer→handler at the install. The seed-private encoding: a
+  ;; name-set element is EITHER a bare string ptr (ENamed) OR a
+  ;; 2-field record (tag 156): field_0 = name string, field_1 = payload
+  ;; Ty. $eff_name_str canonicalizes both to the NAME, so every name
+  ;; comparison (set ops + dispatch) keys on the name alone — a bare
+  ;; entry and its parameterized twin are the SAME effect (mirrors wheel
+  ;; eff_arg_eq: EAType==EAType→true; payloads unified, not value-
+  ;; compared). Tag 156 sits in row.wat's private 150-179 region, just
+  ;; past EfInter=155.
+  ;;
+  ;; EFFNAME_PNAME_TAG = 156, arity 2.
+  (func $eff_pname_make (param $name i32) (param $payload i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 156) (i32.const 2)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $name))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $payload))
+    (local.get $r))
+
+  ;; $eff_pname_is — true iff n is a parameterized-name record (tag 156).
+  ;; A bare string is a heap/data ptr whose first word is its LENGTH
+  ;; (effect names are short — far under 156 — so no collision); a
+  ;; sentinel (< heap_base) is never 156. So tag_of(n)==156 is exact.
+  (func $eff_pname_is (param $n i32) (result i32)
+    (i32.eq (call $tag_of (local.get $n)) (i32.const 156)))
+
+  (func $eff_pname_payload (param $n i32) (result i32)
+    (call $record_get (local.get $n) (i32.const 1)))
+
+  ;; $eff_name_str — the NAME string of a name-set element. A bare
+  ;; string IS its own name; a parameterized record's name is field_0.
+  ;; Every name comparison routes through here so bare/parameterized
+  ;; entries of the same effect canonicalize identically.
+  (func $eff_name_str (param $n i32) (result i32)
+    (if (call $eff_pname_is (local.get $n))
+      (then (return (call $record_get (local.get $n) (i32.const 0)))))
+    (local.get $n))
+
   ;; ─── Name-set helpers (sorted-lex flat lists) ────────────────────
-  ;; Inputs are flat lists of string-ptrs, sorted lex-order, deduped.
-  ;; Outputs are the same shape. All operations preserve canonical form.
+  ;; Inputs are flat lists of EffName elements (bare string OR
+  ;; parameterized record), sorted lex-order by $eff_name_str, deduped.
+  ;; Outputs are the same shape. All operations preserve canonical form
+  ;; and compare via $eff_name_str (the name alone identifies the effect;
+  ;; the payload rides along but never participates in the order).
 
   ;; $name_set_contains — single-element membership. Linear scan
   ;; (binary search is a follow-up optimization when callers profile
@@ -164,8 +209,9 @@
     (block $done
       (loop $scan
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (if (call $str_eq (call $list_index (local.get $set) (local.get $i))
-                          (local.get $name))
+        (if (call $str_eq (call $eff_name_str
+                            (call $list_index (local.get $set) (local.get $i)))
+                          (call $eff_name_str (local.get $name)))
           (then (return (i32.const 1))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $scan)))
@@ -181,8 +227,9 @@
     (block $done
       (loop $cmp
         (br_if $done (i32.ge_u (local.get $i) (local.get $na)))
-        (if (i32.eqz (call $str_eq (call $list_index (local.get $a) (local.get $i))
-                                   (call $list_index (local.get $b) (local.get $i))))
+        (if (i32.eqz (call $str_eq
+                       (call $eff_name_str (call $list_index (local.get $a) (local.get $i)))
+                       (call $eff_name_str (call $list_index (local.get $b) (local.get $i)))))
           (then (return (i32.const 0))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $cmp)))
@@ -242,10 +289,14 @@
                 (local.set $k (i32.add (local.get $k) (i32.const 1)))
                 (br $copy_a)))
             (br $done)))
-        ;; Both have elements — compare.
+        ;; Both have elements — compare by NAME (payload rides along, never
+        ;; participates in the order). The full element is stored so a
+        ;; parameterized entry's payload survives the merge.
         (local.set $ai (call $list_index (local.get $a) (local.get $i)))
         (local.set $bj (call $list_index (local.get $b) (local.get $j)))
-        (local.set $cmp (call $str_compare (local.get $ai) (local.get $bj)))
+        (local.set $cmp (call $str_compare
+          (call $eff_name_str (local.get $ai))
+          (call $eff_name_str (local.get $bj))))
         (if (i32.lt_s (local.get $cmp) (i32.const 0))
           (then
             (drop (call $list_set (local.get $out) (local.get $k) (local.get $ai)))
@@ -258,8 +309,11 @@
                 (local.set $j (i32.add (local.get $j) (i32.const 1)))
                 (local.set $k (i32.add (local.get $k) (i32.const 1))))
               (else
-                ;; equal — emit once, advance both
-                (drop (call $list_set (local.get $out) (local.get $k) (local.get $ai)))
+                ;; equal name — emit once (prefer the parameterized entry so a
+                ;; carried payload is never dropped for a bare twin), advance both
+                (drop (call $list_set (local.get $out) (local.get $k)
+                  (if (result i32) (call $eff_pname_is (local.get $ai))
+                    (then (local.get $ai)) (else (local.get $bj)))))
                 (local.set $i (i32.add (local.get $i) (i32.const 1)))
                 (local.set $j (i32.add (local.get $j) (i32.const 1)))
                 (local.set $k (i32.add (local.get $k) (i32.const 1)))))))
@@ -284,15 +338,20 @@
         (br_if $done (i32.ge_u (local.get $j) (local.get $nb)))
         (local.set $ai (call $list_index (local.get $a) (local.get $i)))
         (local.set $bj (call $list_index (local.get $b) (local.get $j)))
-        (local.set $cmp (call $str_compare (local.get $ai) (local.get $bj)))
+        (local.set $cmp (call $str_compare
+          (call $eff_name_str (local.get $ai))
+          (call $eff_name_str (local.get $bj))))
         (if (i32.lt_s (local.get $cmp) (i32.const 0))
           (then (local.set $i (i32.add (local.get $i) (i32.const 1))))
           (else
             (if (i32.gt_s (local.get $cmp) (i32.const 0))
               (then (local.set $j (i32.add (local.get $j) (i32.const 1))))
               (else
-                ;; equal — keep + advance both
-                (drop (call $list_set (local.get $out) (local.get $k) (local.get $ai)))
+                ;; equal name — keep (prefer parameterized so payload survives)
+                ;; + advance both
+                (drop (call $list_set (local.get $out) (local.get $k)
+                  (if (result i32) (call $eff_pname_is (local.get $ai))
+                    (then (local.get $ai)) (else (local.get $bj)))))
                 (local.set $i (i32.add (local.get $i) (i32.const 1)))
                 (local.set $j (i32.add (local.get $j) (i32.const 1)))
                 (local.set $k (i32.add (local.get $k) (i32.const 1)))))))
@@ -322,10 +381,12 @@
             (local.set $k (i32.add (local.get $k) (i32.const 1)))
             (br $merge)))
         (local.set $bj (call $list_index (local.get $b) (local.get $j)))
-        (local.set $cmp (call $str_compare (local.get $ai) (local.get $bj)))
+        (local.set $cmp (call $str_compare
+          (call $eff_name_str (local.get $ai))
+          (call $eff_name_str (local.get $bj))))
         (if (i32.lt_s (local.get $cmp) (i32.const 0))
           (then
-            ;; ai not in b — keep
+            ;; ai's name not in b — keep the full element (payload survives)
             (drop (call $list_set (local.get $out) (local.get $k) (local.get $ai)))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (local.set $k (i32.add (local.get $k) (i32.const 1))))

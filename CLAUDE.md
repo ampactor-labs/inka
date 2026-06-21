@@ -15,6 +15,15 @@
 > NOT a constraint (Morgan 2026-06-18): completeness wins** — hold the ENTIRETY,
 > not a recollection. Hold all three to the source standard (Anchor 6): every
 > touch consolidates toward the tightest *complete* form.
+>
+> **The contract is mechanical, not trusted.** This file **imports** the other
+> two (the `@`-lines below), so "read all three" loads all three at launch — the
+> edge drawn once, never re-derived each session (Anchor 1, Carried-Truth). The
+> act of *interrogating* them stays yours; the import only guarantees they are
+> present to interrogate, never that they were absorbed.
+
+@PLAN.md
+@docs/SYNTAX.md
 
 ## ⊜ Interrogate, don't absorb — the law that prevents the next re-grounding ⊜
 
@@ -82,10 +91,24 @@
 >   silhouette — forbidden).
 
 > **Before ANY new thing, ASK: "What does the ULTIMATE MEDIUM do here?"** The
-> three constant questions at EVERY cursor: (1) **Discarded info?** Re-deriving
+> four constant questions at EVERY cursor: (1) **Discarded info?** Re-deriving
 > what the graph already proves? (2) **Unify/simplify?** Which kernel primitive
-> IS this subsystem? (3) **Ultimate form?** Would the finished medium do this?
-> Implement THAT — not a band-aid, not "next-substrate-handle."
+> IS this subsystem? (3) **Ultimate form — INVARIANT to the current substrate.**
+> Would the *finished* medium (perfect Mentl source on a perfect substrate) do
+> this? Implement THAT. When the substrate can't express it, the SEED is
+> incomplete — dream-code the true form and complete the disposable seed to
+> match; NEVER lower the target to fit. The tells of the lowered target —
+> "ultimate form reachable now," "realistic/honest ultimate," "given the current
+> substrate," "the deeper ideal is a follow-up" — are the underhanded drift in
+> the discipline's costume (it still *says* "ultimate"). Sequence the WORK
+> (`PLAN.md §5`, real→felt→unsurpassable); NEVER sequence the TARGET. (4) **Novel
+> leap?** Past removing duplication: how do the three deepest capabilities —
+> **multi-shot (TIME: fork/cache/persist the graph), threading (SPACE: parallel
+> cursors on the shared image), WASM linear memory (SUBSTRATE: one flat handle-
+> addressed image; the unified record handler=state=closure=evidence=continuation)**
+> — plus the frontier (modal effects, IFC) make THIS primitive AND the whole
+> system better? The reductive pass finds less code; the generative pass finds
+> the leap. Run BOTH, every cursor. (Substance: `PLAN.md §2`, §9.3.)
 
 > **There is only now.** Do NOT schedule background agents, propose cron
 > routines, or offer `/schedule`. Make one more substrate-honest commit and
@@ -99,13 +122,41 @@
 > - Center artifact and measurement, not yourself
 > - Shortest response that carries result + next move
 
-## ⧗ Inline only — no dispatch, no ceremony ⧗
+## ⧗ Power × anti-drift is the criterion — not token-frugality ⧗
 
-> ALL Mentl work executes in THIS conversation: no agents, no Workflow, no
-> teams, no model parameters. Depth lives in the single accumulated context —
-> the live conversation is the handler; dispatch loses it. Skills are tools, not
-> ceremony — apply the discipline silently; never invoke a skill as a reflexive
-> preamble. (The `mentl-implementer`/`mentl-planner` agents are deleted.)
+> Token cost is NOT a constraint (Morgan upgraded 2026-06-21; frugality was a
+> reason for the old inline-only rule, now retired). The governing variable is
+> what is MOST POWERFUL for developing Mentl, working with novel concepts, and
+> AVOIDING DRIFT / fluency traps. Choose the structure by that — standing
+> permission, no per-task asking.
+>
+> Two motivations were conflated in "inline only." Frugality is gone. The other —
+> proven, token-INDEPENDENT — is **context-loss drift**: a dispatched agent on a
+> cold brief misses the altitude the live conversation just produced. So the
+> unlock is NOT "dispatch everywhere"; it is using each tool where it reduces
+> drift:
+> - **Deep kernel / novel-concept reasoning → INLINE.** Holding the whole
+>   accumulated state (the seam, the ev-slots, the probes that disproved prior
+>   root-causes) is irreplaceable; the single conversation is the handler.
+> - **Verifying my OWN conclusions → ADVERSARIAL DISPATCH.** After reasoning
+>   inline to a root-cause / design / fix, spawn independent agents to REFUTE it
+>   ("default to refuted if uncertain"). A fresh mind does not share my
+>   accumulated fluency-bias — the highest-leverage anti-fluency tool, and a
+>   systematic proxy for the human-catches-the-drift loop (PLAN §0: prose can't
+>   enforce itself). The old rule foreclosed this; embrace it.
+> - **Breadth / exhaustive coverage → WORKFLOW fan-out** (audits, multi-file
+>   sweeps, judge-panels of N independent approaches).
+> - **Synthesis stays INLINE** — agents inform the conclusion; I hold it.
+>
+> Scope every dispatch so it does NOT need the live context (scout inline first,
+> hand a complete brief), OR use it precisely BECAUSE it is independent
+> (adversarial verify). Never hand off the live deep-reasoning thread on a cold
+> brief — that is the one proven drift. Omit model parameters (agents inherit the
+> session model); the eight interrogations + Carried-Truth govern every agent.
+>
+> Skills are tools, not ceremony — apply the discipline silently; never invoke a
+> skill as a reflexive preamble. (`mentl-implementer`/`mentl-planner` are deleted;
+> dispatch is ad-hoc Workflow/Agent fan-out under this criterion.)
 
 ---
 
@@ -160,6 +211,8 @@ rewrite in residue form inline.)
 | "Vtable" / "dispatch table" | Word never appears in correct Mentl (Drift 1) |
 | `_ => <fabricated value>` / `_ => str_concat` | A silent surrender-fallback — DELETE it, don't wrap; explicit enumeration |
 | "I'll work around this gap" (direct-loop, catch-all) | That's a BOLT onto a non-ultimate form — do the ultimate restructure |
+| "ultimate form reachable now" / "realistic ultimate" / "the deeper ideal is a follow-up" | Equivocating "ultimate" DOWNWARD to fit the seed — the underhanded drift in the discipline's costume. Ultimate is substrate-INVARIANT; the SEED yields, the target NEVER lowers. Dream-code the true form; sequence the work (§5), never the target |
+| Reductive audit only ("delete the duplication") with no novel pass | Run the GENERATIVE question too: how do multi-shot (time) / threading (space) / WASM-memory (substrate) + the frontier improve this primitive AND the system? Seek the leap, not only less code |
 | Tracing a trap / symptom before auditing the structure | AUDIT FIRST — the structure may not belong; the first symptom is rarely the root |
 | "Look up X by name" (ledger / index / map) | If a `~>` edge or the env already connects it → re-derivation (Anchor 1); follow the edge, read the live node |
 | Presenting "Option A (ultimate) vs Option B (safer/lower-risk)" — to me OR to the user | The fork IS the drift; the thesis already answers it. Ultimate form wins; DECIDE it, don't outsource a thesis-answered call; never hedge the wheel against the seed |
@@ -172,6 +225,11 @@ rewrite in residue form inline.)
 
 **0. Dream code.** Write the code you WISH existed; verify by simulation, not
 compilation. The compiler IS the oracle; AI tools are proposers; Mentl verifies.
+The wish is INVARIANT to the substrate — write perfect Mentl source for the
+perfect substrate; complete the disposable seed to match it, never bend the
+source to the seed ("reachable now" is the wish lowered — Red-flags). And the
+wish GROWS: the generative pass (multi-shot/threading/memory + frontier, §2) is
+how it reaches a newer ultimate — always seek the novel leap, not only less code.
 
 **1. Does my graph already know this? — THE CARRIED-TRUTH LAW.** Every Mentl bug
 is ONE bug: the mint proved X; a consumer re-derived / discarded / fabricated /

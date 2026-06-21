@@ -201,14 +201,19 @@ fn cache_pack_kind(kind) with Pack + !Unpack = match kind {
     perform pack_i32(len(op_names))
     cache_pack_string_list(op_names, 0, len(op_names))
   },
-  // HandlerKind(handled_ename, residual_row_handle). The handle is graph-
-  // relative; cross-compile handler-residual caching packs the RESOLVED row
-  // (peer Hβ.cache.handler-residual-row, post-L1). The single-file first-light
-  // path never round-trips this, so the raw handle is sound here.
-  HandlerKind(ename, row_handle) => {
+  // HandlerKind(handled_ename, residual_row_handle, config, state, arms). The
+  // row handle is graph-relative; cross-compile handler-residual caching packs
+  // the RESOLVED row (peer Hβ.cache.handler-residual-row, post-L1). The single-
+  // file first-light path never round-trips this, so the raw handle is sound
+  // here; config/state/arms are live-only (see below).
+  HandlerKind(ename, row_handle, _, _, _) => {
     perform pack_byte(6)
     perform pack_str(ename)
     perform pack_i32(row_handle)
+    // config/state/arms are live-only references to the decl (the env names the
+    // node); not serialized — cross-file caching reconstructs them from source
+    // (peer Hβ.cache.handler-decl-from-source, post-L1). First-light is single-
+    // file and never round-trips this.
   }
 }
 
@@ -734,7 +739,10 @@ fn cache_unpack_kind() with Unpack + !Pack = {
   else if tag == 6 {
     let ename = perform unpack_str()
     let row_handle = perform unpack_i32()
-    HandlerKind(ename, row_handle)
+    // config/state/arms are live-only (reconstructed from source on cross-file
+    // load — peer Hβ.cache.handler-decl-from-source); empty here, never read in
+    // the single-file first-light path.
+    HandlerKind(ename, row_handle, [], [], [])
   }
   else { FnScheme }
 }

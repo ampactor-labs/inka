@@ -12,7 +12,9 @@ shift 2 2>/dev/null || shift 1
 LIBS=("$@")
 SEED="bootstrap/mentl.wasm"
 WT=(wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y)
-base="/tmp/$(basename "$MICRO" .mn)"
+# Honor TMPDIR (state.sh points it at a luks build dir); never hardwire the
+# RAM-backed tmpfs — wasmtime's shared-memory partition exhausts its quota.
+base="${TMPDIR:-/tmp}/$(basename "$MICRO" .mn)"
 
 cat "${LIBS[@]}" "$MICRO" 2>/dev/null | "${WT[@]}" "$SEED" > "$base.wat" 2> "$base.err"
 compile_exit=$?

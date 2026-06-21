@@ -24,6 +24,50 @@
 
 ---
 
+> ## ⟲ REVISION 2026-06-18 — what we know now (supersedes the draft where they conflict)
+>
+> The draft predates the dispatch gradient, the Carried-Truth Law, and the
+> single-model-inline era. Its CORE is sound and unchanged: in WASM (no stack
+> capture) the continuation MUST be the body-slice-after-the-perform reified as a
+> `resume_fn` keyed by `state_index`, heap-captured, trail-bounded — that is
+> *delimited continuations*, not async-coloring (the split is the substrate, not a
+> function color). The backend emit (`wasm.mn:1603`) already realizes the record.
+> What the draft got era-wrong, corrected:
+>
+> 1. **MS emit is Tier-3 of the dispatch gradient, not a standalone branch.**
+>    `dispatch_tier = resume_kind_of × handler-staticness`. Tier-1 (static×OneShot →
+>    direct `LPerform`) is ALREADY CASHED OUT (`413bdc2`); Tier-2 (polymorphic →
+>    `LEvPerform` evidence floor) stands. H7's "lower_perform MS arm" (§2.2/§4.1
+>    Change 3) IS Tier-3 — read the live fact, branch the one decision point
+>    (`lower_perform_dispatch`). See `protocol_dispatch_gradient.md`.
+>
+> 2. **The rail is a LIVE PROJECTION; the `resume_kinds` ledger is DISSOLVED.**
+>    §2.2 says read cardinality "from the op's TCont" — correct intent, but the era
+>    built a write-only `resume_kinds` graph ledger (`graph.mn:67/253`,
+>    `infer.mn:2626`) that NOTHING reads. Cardinality is a *pure projection of the
+>    arm body* (`infer_resume_cardinality` → rename `resume_kind_of`); caching it is
+>    the Carried-Truth bug. Call it LIVE at the dispatch (peer of `effects_of`);
+>    DELETE the ledger + `graph_bind_resume_kind`. Fix = less code.
+>
+> 3. **`LowerState` (§4.1 Change 4) is a CANDIDATE SUBSYSTEM — audit before minting.**
+>    Per "no subsystems / empower what we have": the per-fn state ordinals + ret-slots
+>    must first be sought in existing lower-phase state (the arm registry
+>    `handler_state_inits_registry`; local allocation `ls_bind_local`; the
+>    perform-site graph handles which already ordinal-ize the body). Mint a new effect
+>    ONLY for the bookkeeping the graph genuinely does not already carry.
+>
+> 4. **Implementation order = simple-case-first, each verified through WABT + `mentl2`.**
+>    Land single-perform / no-capture / no-loop (`tests/micros/mn-ms-both.mn` → 30)
+>    before general multi-perform / captures / loop-resume. Verify via the
+>    seed-compiled wheel (`mentl2`) compiling the micro — NOT the seed (`§4.5`
+>    bootstrap deferral is VINDICATED: the wheel does not self-use MS, so no
+>    `bootstrap/src` edit gates the proof). `wat2wasm` + `wasm-validate` every emit.
+>
+> 5. **Cache version is `8`, not `3`.** §4.3's `v3→v4` is stale; bump `8→9` when
+>    `LMakeContinuation` production first emits.
+
+---
+
 ## 0. Framing — why H7 is the keystone of Phase B
 
 ### 0.1 What H7 resolves

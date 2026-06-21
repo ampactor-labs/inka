@@ -534,56 +534,29 @@
     ;; default-handler; protocol_reflexive_interiority.md).
     (i32.const 0))
 
-  ;; Hβ.first-light.tier2-perform-or-env-scan — register/lookup the
-  ;; default handler for each op-name. Called from infer_walk_stmt's
-  ;; HandlerDeclStmt arm at handler-decl time (per-arm registration).
-  ;; Each entry is a 2-record (op_name, handler_name).
-  (func $lower_register_default_handler_for_op (export "lower_register_default_handler_for_op")
-        (param $op_name i32) (param $handler_name i32)
-    (local $entry i32) (local $i i32) (local $existing_op i32)
-    (call $lower_init)
-    ;; Skip if already registered (first-handler-wins for the L1 case).
-    (local.set $i (i32.const 0))
-    (block $skip
-      (loop $iter
-        (br_if $skip (i32.ge_u (local.get $i) (global.get $lower_default_op_handler_map_len_g)))
-        (local.set $entry (call $list_index
-                                (global.get $lower_default_op_handler_map_ptr)
-                                (local.get $i)))
-        (local.set $existing_op (call $record_get (local.get $entry) (i32.const 0)))
-        (if (call $str_eq (local.get $existing_op) (local.get $op_name))
-          (then (return)))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter)))
-    (local.set $entry (call $make_record (i32.const 0) (i32.const 2)))
-    (call $record_set (local.get $entry) (i32.const 0) (local.get $op_name))
-    (call $record_set (local.get $entry) (i32.const 1) (local.get $handler_name))
-    (global.set $lower_default_op_handler_map_ptr
-      (call $list_extend_to (global.get $lower_default_op_handler_map_ptr)
-        (i32.add (global.get $lower_default_op_handler_map_len_g) (i32.const 1))))
-    (drop (call $list_set
-                (global.get $lower_default_op_handler_map_ptr)
-                (global.get $lower_default_op_handler_map_len_g)
-                (local.get $entry)))
-    (global.set $lower_default_op_handler_map_len_g
-      (i32.add (global.get $lower_default_op_handler_map_len_g) (i32.const 1))))
+  ;; The op→handler default-handler REGISTRY is DELETED (writer + ZZINSTRUMENT +
+  ;; the infer-time registration call). Dispatch reads the implementing handler's
+  ;; arm live from the env (HandlerKind.arms@field4) via the uniqueness-counting
+  ;; $lower_lookup_default_handler_for_op below — no side-ledger.
 
+  ;; ─── $lower_lookup_default_handler_for_op — op→handler dispatch, READ O(1) ──
+  ;; The op CARRIES its unique default handler on its own EffectOpScheme binding,
+  ;; drawn once at handler-decl pre-register ($lower_pre_register_handler_node,
+  ;; where the real arms live). Dispatch is a READ, not a scan: resolve the op's
+  ;; binding (standard name resolution) and read its carried handler. 0 =
+  ;; none/ambiguous → thread (ev16's `note` has two implementers → ambiguous;
+  ;; graph_chase has one → graph_handler). "I already have this" — the graph
+  ;; holds the dispatch fact on the op itself; no env scan, no side-ledger.
   (func $lower_lookup_default_handler_for_op (export "lower_lookup_default_handler_for_op")
         (param $op_name i32) (result i32)
-    (local $entry i32) (local $i i32) (local $existing_op i32)
-    (call $lower_init)
-    (local.set $i (i32.const 0))
-    (block $done
-      (loop $iter
-        (br_if $done (i32.ge_u (local.get $i) (global.get $lower_default_op_handler_map_len_g)))
-        (local.set $entry (call $list_index
-                                (global.get $lower_default_op_handler_map_ptr)
-                                (local.get $i)))
-        (local.set $existing_op (call $record_get (local.get $entry) (i32.const 0)))
-        (if (call $str_eq (local.get $existing_op) (local.get $op_name))
-          (then (return (call $record_get (local.get $entry) (i32.const 1)))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter)))
+    (local $bind i32) (local $kind i32)
+    (call $env_init)
+    (local.set $bind (call $env_lookup (local.get $op_name)))
+    (if (i32.eqz (local.get $bind)) (then (return (i32.const 0))))
+    (local.set $kind (call $env_binding_kind (local.get $bind)))
+    (if (i32.and (i32.ge_u (local.get $kind) (global.get $heap_base))
+                 (i32.eq (call $tag_of (local.get $kind)) (i32.const 133)))
+      (then (return (call $schemekind_effectop_default_handler (local.get $kind)))))
     (i32.const 0))
 
   ;; Per protocol_handler_is_state_is_closure_is_evidence.md — return the
@@ -712,6 +685,64 @@
               (local.get $ename)))))
         (local.set $i (i32.sub (local.get $i) (i32.const 1)))
         (br $iter)))
+    (i32.const 0))
+
+  ;; ─── $handler_is_no_config — singleton predicate ─────────────────────
+  ;; A handler with NO config params installs ONCE (a singleton: its
+  ;; `$<h>_state_g` home IS its evidence everywhere). A config-bearing handler
+  ;; installs per-call → its evidence is genuinely threaded. config is field 2
+  ;; of HandlerKind(handled_ename, residual, config, state, arms); the kind IS a
+  ;; HandlerKind iff its runtime tag == $schemekind_handler_tag (the NAMED
+  ;; single-source constant — never the raw number, never the ADT byte 6).
+  (func $handler_is_no_config (param $handler i32) (result i32)
+    (local $binding i32) (local $kind i32)
+    (local.set $binding (call $env_lookup_value (local.get $handler)))
+    (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
+    (local.set $kind (call $env_binding_kind (local.get $binding)))
+    (if (i32.lt_u (local.get $kind) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.ne (call $tag_of (local.get $kind)) (global.get $schemekind_handler_tag)) (then (return (i32.const 0))))
+    (i32.eqz (call $len (call $record_get (local.get $kind) (i32.const 2)))))
+
+  ;; ─── $lower_lookup_default_handler_for_ename — singleton home gate ────
+  ;; The no-config handler covering $ename — read live from the env (the env
+  ;; NAMES every handler's node). Reached ONLY at gradient step 3 (the resolve
+  ;; loop tries the threaded slot FIRST), so it resolves only effects the frame
+  ;; does NOT thread — the ambient route handlers (graph/env/lower-scope). That
+  ;; ordering is what prevents the over-match: a genuinely-threaded effect (the
+  ;; ev2/ev4 evidence path) never reaches here. The O(1)-filter (no-config
+  ;; HandlerKind read from the binding in hand) keeps the scan O(env), not
+  ;; O(env²). Recording this on the node at infer time (read O(1) by handle) is
+  ;; the named peer Hβ.lower.dispatch-recorded-by-inference.
+  (func $lower_lookup_default_handler_for_ename (param $ename i32) (result i32)
+    (local $scope_idx i32) (local $frame i32) (local $buf i32)
+    (local $binding_idx i32) (local $binding i32) (local $kind i32) (local $hname i32)
+    (call $env_init)
+    (local.set $scope_idx (global.get $env_scope_count_g))
+    (block $outer_done
+      (loop $scope_loop
+        (br_if $outer_done (i32.eqz (local.get $scope_idx)))
+        (local.set $scope_idx (i32.sub (local.get $scope_idx) (i32.const 1)))
+        (local.set $frame
+          (call $list_index (global.get $env_scopes_ptr) (local.get $scope_idx)))
+        (local.set $buf (call $env_frame_buf (local.get $frame)))
+        (local.set $binding_idx (call $env_frame_len (local.get $frame)))
+        (block $inner_done
+          (loop $binding_loop
+            (br_if $inner_done (i32.eqz (local.get $binding_idx)))
+            (local.set $binding_idx (i32.sub (local.get $binding_idx) (i32.const 1)))
+            (local.set $binding
+              (call $list_index (local.get $buf) (local.get $binding_idx)))
+            (local.set $kind (call $env_binding_kind (local.get $binding)))
+            (if (i32.and (i32.ge_u (local.get $kind) (global.get $heap_base))
+                  (i32.and (i32.eq (call $tag_of (local.get $kind))
+                                   (global.get $schemekind_handler_tag))
+                           (i32.eqz (call $len (call $record_get (local.get $kind) (i32.const 2))))))
+              (then
+                (local.set $hname (call $env_binding_name (local.get $binding)))
+                (if (call $handler_covers_ename (local.get $hname) (local.get $ename))
+                  (then (return (local.get $hname))))))
+            (br $binding_loop)))
+        (br $scope_loop)))
     (i32.const 0))
 
   ;; ─── Arm-body evidence ledger (Hβ.emit.handler-record-ev-capture) ────

@@ -1567,7 +1567,7 @@ fn emit_expr(expr) = match expr {
     //   offset 8 + 4*i:                   capture_i
     //   offset 8 + 4*nc + 4*j:            ev_slot_j (handler arm fn_idx)
     //
-    // INKA-NATIVE: the record IS the calling convention's $__state.
+    // MENTL-NATIVE: the record IS the calling convention's $__state.
     // Captures and evidence are both projections of the same shape.
     // DESIGN Ch 4 "handler IS state" in its ultimate form. Empty
     // ev_exprs (the common case for monomorphic closures) collapses
@@ -2014,10 +2014,18 @@ fn emit_expr(expr) = match expr {
   // field erases to i32 per ty_to_wasm (pointers for non-scalar
   // fields). One i32.load with an immediate offset.
   LFieldLoad(_h, rec, offset) => {
-    emit_expr(rec)
-    perform wat_emit("    (i32.load offset=")
-    perform wat_emit(int_to_str(offset))
-    perform wat_emit(")\n")
+    if offset < 0 {
+      // NO SILENT FALLBACK (resolve_field_offset returned -1): the field's
+      // offset was not provable from the graph. Emit (unreachable) — the
+      // named wrong — not a fabricated offset-0 load that reads a foreign
+      // field. The medium makes the wrong move unsayable (PLAN §0).
+      perform wat_emit("    (unreachable)  ;; field offset unprovable\n")
+    } else {
+      emit_expr(rec)
+      perform wat_emit("    (i32.load offset=")
+      perform wat_emit(int_to_str(offset))
+      perform wat_emit(")\n")
+    }
   },
 
   LStateSlotStore(_h, slot_offset, value) => {

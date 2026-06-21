@@ -422,14 +422,18 @@ handler wasi_filesystem {
 handler lookup_ty_graph {
 
   lookup_ty(h) => {
-    let GNode(kind, _) = perform graph_chase(h)
+    let GNode(kind, reason) = graph_chase(h)
     match kind {
       NBound(t)        => resume(t),
       NErrorHole(_)    => resume(TName("ERROR_HOLE", [])),
       NFree(epoch) => {
-        perform report("pipeline", "E_UnresolvedType", "UnresolvedType",
+        // Carry the handle, read its span LIVE. The node's Reason already
+        // proves WHERE this handle was minted (its caret) — reporting at
+        // span_zero discards the truth the graph holds. The Why projection in
+        // proto form: a diagnostic positions itself by the graph, not 0:0.
+        report("pipeline", "E_UnresolvedType", "UnresolvedType",
           "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",
-          span_zero(), "MaybeIncorrect")
+          caret_span_from_reason(reason), "MaybeIncorrect")
         resume(TName("UNRESOLVED", []))
       },
       NRowBound(_)     => resume(TUnit),

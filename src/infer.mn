@@ -1045,6 +1045,12 @@ fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
   match handler_e_r(right) {
     Some(er) => {
       let (handled, resid_h) = er
+      // THE INSTALL CONNECTION: flow the op payload performer→handler.
+      // The body performs E(a); the handler is Handler<E(P)>; unify a = P,
+      // so the handler's arm param (elem : P) becomes the performed value
+      // type. This is what makes `field` in `map((field)=>field.name, xs)`
+      // resolve to xs's element. The dispatch gradient applied to data.
+      unify_install_payload(body_row, handled, right, span)
       perform inf_add_row(
         absorb_row(body_row, mk_ef_closed([ENamed(handled)]), read_bound_row(resid_h)))
     },
@@ -1069,12 +1075,68 @@ fn handler_e_r(right) = match callee_name(right) {
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
-        HandlerKind(e, r) => Some((e, r)),
-        _                 => None
+        HandlerKind(e, r, _, _, _) => Some((e, r)),
+        _                          => None
       }
     },
     None => None
   }
+}
+
+/// Flow the op payload performer→handler at the install: the body performs
+/// `E(a)` (in its row), the handler value is `Handler<E(P)>`; unify a = P.
+fn unify_install_payload(body_row, handled, right, span: ValidSpan) = {
+  let N(_, _, rh) = right
+  match handler_payload_ty(perform lookup_ty(rh)) {
+    None      => (),
+    Some(pty) => match row_effect_payload(body_row, handled) {
+      None      => (),
+      Some(aty) => {
+        let h1 = perform mint(Located(span, Inferred("handler payload")))
+        perform graph_bind(h1, pty, Located(span, Inferred("handler payload")))
+        let h2 = perform mint(Located(span, Inferred("performed payload")))
+        perform graph_bind(h2, aty, Located(span, Inferred("performed payload")))
+        unify(h1, h2, span, Inferred("effect payload performer→handler"))
+      }
+    }
+  }
+}
+
+/// `P` from a `Handler<E(P)>` handler value type.
+fn handler_payload_ty(ty) = match ty {
+  TName(n, args) =>
+    if n == "Handler" {
+      match args {
+        [inner] => match inner {
+          TName(_, [pty]) => Some(pty),
+          _               => None
+        },
+        _ => None
+      }
+    } else { None },
+  _ => None
+}
+
+/// `a` from a row's `E(a)` entry (the performed payload), None if E is
+/// absent or bare.
+fn row_effect_payload(row, ename) = match row {
+  EfClosed(names)  => names_effect_payload(names, ename),
+  EfOpen(names, _) => names_effect_payload(names, ename),
+  _                => None
+}
+
+fn names_effect_payload(names, ename) = {
+  let tys = flatten(map((n) => match n {
+    EParameterized(nm, args) =>
+      if nm == ename {
+        flatten(map((arg) => match arg {
+          EAType(t) => [t],
+          _         => []
+        }, args))
+      } else { [] },
+    ENamed(_) => []
+  }, names))
+  if len(tys) == 0 { None } else { Some(list_head(tys)) }
 }
 
 /// The five verbs, each inferred by its topology.
@@ -2100,13 +2162,17 @@ fn infer_handler_arms(arms, body_h, span: ValidSpan) = {
 /// them — fresh vars would discard that); resume reads (R, S) from
 /// arm context; the body's own value unifies with S — the arm's
 /// value IS the handle result, whether it resumes or aborts.
-fn infer_one_handler_arm(arm, result_h) = {
+fn infer_one_handler_arm(arm, result_h, payload_h) = {   // drift-audit: ignore — result_h (arm result) and payload_h (effect payload) are distinct handles
   let arm_span = span_of_node(arm.body)
   let op_ret_ty = match perform env_lookup(arm.op_name) {
     Some(entry) => {
       let (scheme, _, _) = entry
       match instantiate(scheme) {
-        TFun(params, ret_ty, _) => {
+        TFun(params, ret_ty, op_row) => {
+          // The op's instantiated payload (Iterate(a) ⇒ a) IS this handler's
+          // P, so the arm param binds the var `~>` unifies with the body's
+          // performed E. Payload flows performer→handler through P.
+          unify_op_payload(op_row, payload_h, arm_span)
           bind_arm_args(arm.args, params, arm.op_name, arm_span)
           ret_ty
         },
@@ -2139,6 +2205,28 @@ fn bind_arm_args(args, params, op_name, span: ValidSpan) =
     perform env_extend(name, Forall([], TVar(h)),
       Located(span, LetBinding(name, Declared(op_name))), FnScheme)
   }, zip(args, params))
+
+/// Unify a handler's payload var with the op's payload type carried in its
+/// (instantiated) row — Iterate(a) ⇒ unify a with P. This is the handler
+/// half of the payload flow; `~>` then unifies P with the body's E(performed).
+fn unify_op_payload(op_row, payload_h, span: ValidSpan) = match op_row {
+  EfClosed(names)  => unify_payload_in_names(names, payload_h, span),
+  EfOpen(names, _) => unify_payload_in_names(names, payload_h, span),
+  _                => ()
+}
+
+fn unify_payload_in_names(names, payload_h, span: ValidSpan) =
+  for_each((n) => match n {
+    ENamed(_)               => (),
+    EParameterized(_, args) => for_each((arg) => match arg {
+      EAType(ty) => {
+        let th = perform mint(Located(span, Inferred("op payload")))
+        perform graph_bind(th, ty, Located(span, Inferred("op payload")))
+        unify(th, payload_h, span, Inferred("effect payload to handler"))
+      },
+      _          => ()
+    }, args)
+  }, names)
 
 /// Generalization — Damas-Milner let-gen.
 /// Quantify handles that are free in the body but NOT free in env.
@@ -2253,18 +2341,37 @@ fn free_in_fields(fields) = flatten(map((fld) => {
 // chase_deep resolves bound TVars before free_in_ty collects the free ones).
 fn free_in_row(eff) = match eff {
   EfPure        => [],
-  EfClosed(_)   => [],
-  EfOpen(_, v)  => {
+  // A parameterized effect carries its op-payload TYPE (Iterate(a)); the
+  // payload's free vars are the row's free vars, so generalize quantifies
+  // them and instantiate freshens them — each op USE is a fresh effect
+  // instance, reconciled to the handler's at the install.
+  EfClosed(names) => free_in_eff_names(names),
+  EfOpen(names, v)  => {
     // find the row var's union-find ROOT — a buried free tail (the residual of
     // a `~> h(f)` / map's f-effect) is reached only through the alias chain.
     // Collect the root, so generalize quantifies it and instantiate (subst_row,
     // same find) freshens it — effect-polymorphism as HM over the row sort.
     let r = perform graph_chase_handle(v)
-    if row_var_is_free(r) { [r] } else { [] }
+    let tail = if row_var_is_free(r) { [r] } else { [] }
+    free_in_eff_names(names) ++ tail
   },
   EfNeg(inner)  => free_in_row(inner),
   EfSub(a, b)   => free_in_row(a) ++ free_in_row(b),
   EfInter(a, b) => free_in_row(a) ++ free_in_row(b)
+}
+
+/// The free type vars inside an effect-row's parameterized payloads
+/// (Iterate(a) ⇒ a's free vars). Bare ENamed effects carry none.
+fn free_in_eff_names(names) = flatten(map((n) => match n {
+  ENamed(_)               => [],
+  EParameterized(_, args) => flatten(map(free_in_eff_arg, args))
+}, names))
+
+fn free_in_eff_arg(arg) = match arg {
+  EAInt(_)    => [],
+  EAFloat(_)  => [],
+  EAString(_) => [],
+  EAType(ty)  => free_in_ty(ty)
 }
 
 fn row_var_is_free(v) = match perform graph_chase(v) {
@@ -2292,12 +2399,16 @@ fn instantiate(scheme) = {
 // graph_fresh_ty/graph_fresh_row and keeps the handler swap total (query
 // renders both as display ids). Read the domain live; never re-derive it.
 fn build_inst_mapping(qs) = map((old) => {
-  let fresh = if is_row_handle(old) {
-    perform mint_row(Instantiation("inst", Fresh(old)))
+  // Key by the union-find ROOT, matching subst_ty's root-keyed lookup: a
+  // quantified var aliased after generalize still freshens (read the root,
+  // carry the whole instance).
+  let root = perform graph_chase_handle(old)
+  let fresh = if is_row_handle(root) {
+    perform mint_row(Instantiation("inst", Fresh(root)))
   } else {
-    perform mint(Instantiation("inst", Fresh(old)))
+    perform mint(Instantiation("inst", Fresh(root)))
   }
-  (old, fresh)
+  (root, fresh)
 }, qs)
 
 fn is_row_handle(h) = match perform graph_chase(h) {
@@ -2315,8 +2426,19 @@ fn subst_ty(ty, mapping) = match ty {
   TString => ty,
   TUnit   => ty,
   TVar(id) => {
-    let replacement = find_mapping(mapping, id)
-    if replacement >= 0 { TVar(replacement) } else { ty }
+    // Read the LIVE node, not the raw captured TVar (union-find / Carried-Truth).
+    // A var free at generalize but BOUND after (a handler config-param the
+    // arm-walk linked to the payload) must substitute its RESOLVED type, so the
+    // payload freshens WITH it. A free var maps through its ROOT (the mapping is
+    // root-keyed) so an aliased qvar still freshens. Was: find_mapping on the raw
+    // id — left bound/aliased vars stale, breaking the config↔payload link.
+    match perform graph_chase(id) {
+      GNode(NBound(inner), _) => subst_ty(inner, mapping),
+      _ => {
+        let replacement = find_mapping(mapping, perform graph_chase_handle(id))
+        if replacement >= 0 { TVar(replacement) } else { ty }
+      }
+    }
   },
   TList(elem) => TList(subst_ty(elem, mapping)),
   TTuple(elems) => TTuple(subst_list(elems, mapping)),
@@ -2351,8 +2473,12 @@ fn subst_fields(fields, mapping) = map((fld) => {
 // an open tail only ever matches a row entry, a TVar only a type entry.
 fn subst_row(eff, mapping) = match eff {
   EfPure        => EfPure,
-  EfClosed(ns)  => EfClosed(ns),
-  EfOpen(ns, v) =>
+  // Substitute parameterized payload TYPES (Iterate(a) ⇒ Iterate(fresh))
+  // so each op USE is a fresh effect instance — the row mirror of
+  // freshening a TVar. Without this, ops re-share one global payload var.
+  EfClosed(ns)  => EfClosed(subst_eff_names(ns, mapping)),
+  EfOpen(ns, v) => {
+    let ns2 = subst_eff_names(ns, mapping)
     // Resolve v's row live and substitute the poly TAIL by its union-find root
     // (the var generalize quantified), CARRYING the concrete effects v performs.
     // graph_chase_handle skips names to the tail; substituting that alone drops
@@ -2362,20 +2488,31 @@ fn subst_row(eff, mapping) = match eff {
       GNode(NRowBound(inner), _) => match inner {
         EfOpen(c, t) => {
           let r = find_mapping(mapping, perform graph_chase_handle(t))
-          if r >= 0 { mk_ef_open(c, r) } else { eff }
+          if r >= 0 { mk_ef_open(subst_eff_names(c, mapping), r) } else { mk_ef_open(ns2, v) }
         },
-        _ => eff   // EfClosed / EfPure — monomorphic, no tail to substitute
+        _ => mk_ef_open(ns2, v)   // EfClosed / EfPure — monomorphic tail
       },
       GNode(NRowFree(_), _) => {
         let r = find_mapping(mapping, perform graph_chase_handle(v))
-        if r >= 0 { mk_ef_open(ns, r) } else { eff }
+        if r >= 0 { mk_ef_open(ns2, r) } else { mk_ef_open(ns2, v) }
       },
-      _ => eff
-    },
+      _ => mk_ef_open(ns2, v)
+    }
+  },
   EfNeg(inner)  => EfNeg(subst_row(inner, mapping)),
   EfSub(a, b)   => EfSub(subst_row(a, mapping), subst_row(b, mapping)),
   EfInter(a, b) => EfInter(subst_row(a, mapping), subst_row(b, mapping))
 }
+
+/// Substitute parameterized payload types through an effect-name list
+/// (the row mirror of subst_ty over the row's carried types).
+fn subst_eff_names(names, mapping) = map((n) => match n {
+  ENamed(s)               => ENamed(s),
+  EParameterized(s, args) => EParameterized(s, map((arg) => match arg {
+    EAType(ty) => EAType(subst_ty(ty, mapping)),
+    _          => arg
+  }, args))
+}, names)
 
 fn find_mapping(mapping, id) = {
   let hits = filter((entry) => {
@@ -2562,17 +2699,41 @@ fn register_effect_ops(effect_name, ops) = {
     Forall([], TTuple([])),
     Declared(effect_name),
     EffectDeclKind(op_names))
-  for_each((op) => register_one_op(effect_name, op), ops)
+  // THE EFFECT'S COMPLETE TYPE-VAR STRUCTURE: the free type vars across ALL
+  // its ops' signatures (params + returns), deduped — the effect's type
+  // params. An effect whose ops are all CONCRETE has zero vars → bare
+  // ENamed (no payload, no spurious unification). Every op shares ONE row —
+  // EParameterized(E, the vars) — so yield(a)/result() both carry Iterate(a)
+  // (the SAME a); the install unifies the whole instance per-position. This
+  // is per-EFFECT-instance carrying ALL its vars — NOT one-payload-per-effect.
+  let eff_vars = unique(effect_type_vars(ops))
+  let eff_name = if len(eff_vars) == 0 {
+    ENamed(effect_name)
+  } else {
+    EParameterized(effect_name, map((v) => EAType(TVar(v)), eff_vars))
+  }
+  for_each((op) => register_one_op(effect_name, eff_name, op), ops)
 }
 
-fn register_one_op(effect_name, op) = {
+/// The free type vars across all an effect's ops' signatures — the effect's
+/// type-parameter set (the instance's polymorphic dimensions).
+fn effect_type_vars(ops) =
+  flatten(map((op) => {
+    let (_, ptys, rty) = op
+    flatten(map(free_in_ty, ptys)) ++ free_in_ty(rty)
+  }, ops))
+
+fn register_one_op(effect_name, eff_name, op) = {
   let (op_name, param_types, ret_type) = op
   let params = build_ctor_params(param_types, 0)
-  // The op's row is the bare effect name; install-time `with Name(args)`
-  // attaches args at the install site, not at op declaration. Op-level
-  // params binding to install args is a v2 extension.
+  // Every op of the effect carries the SAME instance row (eff_name), so the
+  // payload flows performer→handler at the install. Generalize over the
+  // op's free vars INCLUDING the instance's (free_in_row) ⇒ each op USE is a
+  // fresh effect instance the handle reconciles to the handler's.
+  let row = mk_ef_closed([eff_name])
+  let qvars = unique(free_in_params(params) ++ free_in_ty(ret_type) ++ free_in_row(row))
   perform env_extend(op_name,
-    Forall([], TFun(params, ret_type, mk_ef_closed([ENamed(effect_name)]))),
+    Forall(qvars, TFun(params, ret_type, row)),
     Declared(op_name),
     EffectOpScheme(effect_name))
 }
@@ -2597,7 +2758,13 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   // Tier 1 (OneShot direct call) vs Tier 3 (heap continuation) per
   // proven cardinality. There is no @resume= annotation; the body
   // IS the contract.
-  let handler_ty = TName("Handler", [TName(ename, [])])
+  // The handler carries the effect's op-payload type P as a quantified
+  // var: Handler<E(P)>. At each install the scheme instantiates a FRESH P,
+  // and `~>` unifies it with the body's performed E(a) — so the arm's op
+  // param (elem : P) becomes the performer's value type. The data-twin of
+  // the dispatch gradient: a fact fixed at the install, not the decl.
+  let payload_h = perform mint(Inferred("effect '{ename}' payload type"))
+  let handler_ty = TName("Handler", [TName(ename, [TVar(payload_h)])])
   let config_tparams = mint_handler_config_tparams(config, hname, 0)
   let scheme_body = if len(config) == 0 {
     handler_ty
@@ -2612,10 +2779,14 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   // var into R, so installing the handler propagates the lambda's effect.
   // Accumulated below by inferring the arms under inf_enter_fn(r_handle).
   let r_handle = perform graph_fresh_row(Inferred("residual of handler '{hname}'"))
+  // The env NAMES the handler's node: HandlerKind carries the decl's
+  // (config, state, arms) so lower reads the handler's static shape LIVE
+  // (handler_decl_of) — no handler_state_inits_registry side-ledger
+  // re-deriving what the graph already holds (Anchor 1, Carried-Truth).
   perform env_extend(hname,
-    Forall([], scheme_body),
+    Forall([payload_h], scheme_body),
     Declared(hname),
-    HandlerKind(ename, r_handle))
+    HandlerKind(ename, r_handle, config, state, arms))
   // Phase B: infer per-arm resume cardinality and bind onto each
   // op's continuation type. The cursor walks each arm body; counts
   // resume call sites under control-flow ancestry; produces
@@ -2643,7 +2814,7 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
     perform env_scope_enter()
     bind_handler_config_params(config_tparams, hname)
     bind_handler_state_names(state_binds, hname, span_of_node(arm.body))
-    infer_one_handler_arm(arm, s_h)
+    infer_one_handler_arm(arm, s_h, payload_h)   // drift-audit: ignore — s_h (result) and payload_h (effect payload) are distinct, not parallel arrays
     perform env_scope_exit()
   }, arms)
   perform inf_exit_fn()

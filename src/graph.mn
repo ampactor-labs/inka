@@ -64,7 +64,6 @@ handler graph_handler
        current_overlay = "global",
        span_index = [],
        intent_index = [],
-       resume_kinds = [],
        checkpoint_stack = [] {
 
   // checkpoint_stack tracks active speculation depth. Each

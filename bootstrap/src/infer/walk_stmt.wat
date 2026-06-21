@@ -1193,6 +1193,20 @@
   ;; The effect-name field on EffectOpScheme is the surface for
   ;; handler-arm matching at handler installation; the wheel's
   ;; row.wat substrate composes on this.
+  ;; $eff_for_op — the op's name-set entry carrying its payload type.
+  ;; `yield(a)` ⇒ Iterate(a) (the first param's type); a nullary op
+  ;; (`result()`) carries a FRESH payload var so every op of an effect has
+  ;; uniform parameterized arity — the install unifies one payload per
+  ;; effect. Mirrors src/infer.mn eff_for_op (the seed's record IS the
+  ;; wheel's EParameterized(name, [EAType(ty)]) — name + payload).
+  (func $eff_for_op (param $eff_name i32) (param $param_tys i32) (result i32)
+    (if (i32.eqz (call $len (local.get $param_tys)))
+      (then (return (call $eff_pname_make (local.get $eff_name)
+        (call $ty_make_tvar (call $graph_fresh_ty
+          (call $reason_make_inferred (i32.const 4080))))))))   ;; "effects"
+    (call $eff_pname_make (local.get $eff_name)
+      (call $tparam_ty (call $list_index (local.get $param_tys) (i32.const 0)))))
+
     (func $infer_register_effect_ops
         (param $eff_name i32) (param $ops i32) (param $span i32)
     (local $n_ops i32) (local $i i32)
@@ -1222,20 +1236,32 @@
         (local.set $ret_ty
           (call $walk_stmt_parser_ty_to_ty (local.get $ret_ty_parser)))
         ;; THE FUNDAMENTAL BINDING (Hβ.infer.perform-effect-row-propagation):
-        ;; the op's effect row IS Closed[eff_name] — the op is bound to its
+        ;; the op's effect row IS Closed[E(payload)] — the op is bound to its
         ;; effect in its very type, at declaration, definitionally. `perform
         ;; ping` carries {E} because ping's type carries {E}. A fresh unbound
         ;; row var (the prior form) severed the op from its effect, so no
         ;; enclosing fn ever accumulated it; a side registry would be drift.
         ;; The graph holds the truth: the op's row names its effect.
+        ;;
+        ;; PARAMETRIC: the name-set entry is a parameterized record carrying
+        ;; the op's PAYLOAD type (yield(a) ⇒ Iterate(a)) so the payload flows
+        ;; performer→handler at the install. $eff_for_op derives it (first
+        ;; param's type, or a fresh var for a nullary op). The scheme then
+        ;; quantifies the payload (free_in_row reaches the EAType var) so each
+        ;; op USE is a fresh effect instance the handle reconciles.
         (local.set $row_h (call $make_list (i32.const 0)))
         (local.set $row_h (call $list_extend_to (local.get $row_h) (i32.const 1)))
-        (drop (call $list_set (local.get $row_h) (i32.const 0) (local.get $eff_name)))
+        (drop (call $list_set (local.get $row_h) (i32.const 0)
+          (call $eff_for_op (local.get $eff_name) (local.get $param_tys))))
         (local.set $op_ty (call $ty_make_tfun
           (local.get $param_tys) (local.get $ret_ty)
           (call $row_make_closed (local.get $row_h))))
         (local.set $scheme (call $scheme_make_forall
-          (call $make_list (i32.const 0))
+          (call $list_concat
+            (call $list_concat
+              (call $free_in_params (local.get $param_tys))
+              (call $free_in_ty (local.get $ret_ty)))
+            (call $free_in_row (call $ty_tfun_row (local.get $op_ty))))
           (local.get $op_ty)))
         (local.set $reason (call $reason_make_located
           (local.get $span)
@@ -1336,7 +1362,7 @@
     (local $handler_name i32) (local $effect_name i32)
     (local $effect_ty i32) (local $handler_ty i32)
     (local $scheme i32) (local $reason i32) (local $r_handle i32)
-    (local $config_tparams i32)
+    (local $config_tparams i32) (local $payload_h i32)
     (drop (local.get $handle))
     ;; HandlerDeclStmt: [tag=124][name][effect][arms] (offsets 0/4/8/12)
     (local.set $handler_name (i32.load offset=4 (local.get $stmt)))
@@ -1361,11 +1387,20 @@
     ;; ls_push_scope env_extends as EffectOpScheme("lower_scope") below.
     (if (i32.eqz (call $str_len (local.get $effect_name)))
       (then (local.set $effect_name (local.get $handler_name))))
-    ;; Build TName(ename, []) — the inner effect-name Ty.
+    ;; The handler carries the effect's op-payload type P as a quantified
+    ;; var: Handler<E(P)>. At each install the scheme instantiates a FRESH P,
+    ;; and `~>` unifies it with the body's performed E(a) — so the arm's op
+    ;; param (elem : P) becomes the performer's value type. The data-twin of
+    ;; the dispatch gradient: a fact fixed at the install, not the decl.
+    ;; Mirrors src/infer.mn register_handler payload_h.
+    (local.set $payload_h (call $graph_fresh_ty
+      (call $reason_make_inferred (i32.const 4080))))   ;; "effects"
+    ;; Build TName(ename, [TVar(payload_h)]) — the inner effect-name Ty with
+    ;; its op-payload as the single type argument.
     (local.set $effect_ty
       (call $ty_make_tname
         (local.get $effect_name)
-        (call $make_list (i32.const 0))))
+        (call $singleton_handle (call $ty_make_tvar (local.get $payload_h)))))
     ;; Build TName("Handler", [TName(ename, [])]) — the outer Handler Ty
     ;; with the effect-name as its single type argument. "Handler" is at
     ;; offset 4112 in the data segment per data-offset audit (lives near
@@ -1392,14 +1427,16 @@
       (local.get $handler_name)
       (local.get $span)
       (i32.const 0)))
+    ;; Quantify payload_h — Forall([payload_h], scheme_body) — so each
+    ;; install instantiates a FRESH P that `~>` unifies with the body's E(a).
     (if (i32.eqz (call $len (local.get $config_tparams)))
       (then
         (local.set $scheme (call $scheme_make_forall
-          (call $make_list (i32.const 0))
+          (call $singleton_handle (local.get $payload_h))
           (local.get $handler_ty))))
       (else
         (local.set $scheme (call $scheme_make_forall
-          (call $make_list (i32.const 0))
+          (call $singleton_handle (local.get $payload_h))
           (call $ty_make_tfun
             (local.get $config_tparams)
             (local.get $handler_ty)
@@ -1417,7 +1454,8 @@
       (local.get $handler_name)
       (local.get $scheme)
       (local.get $reason)
-      (call $schemekind_make_handler (local.get $effect_name) (local.get $r_handle)))
+      (call $schemekind_make_handler (local.get $effect_name) (local.get $r_handle)
+        (i32.load offset=12 (local.get $stmt))))
     ;; ─── Per-arm typing (Hβ.first-light.infer-handler-decl-arms-typing) ──
     ;; HandlerDeclStmt offset 12 = arms list. Each arm is make_record(0, 3)
     ;; with {args, body, op_name} at field indices 0/1/2 (Lock #8
@@ -1440,7 +1478,8 @@
       (local.get $handler_name)
       (local.get $span)
       (local.get $config_tparams)
-      (i32.load offset=16 (local.get $stmt)))
+      (i32.load offset=16 (local.get $stmt))
+      (local.get $payload_h))
     (call $walk_expr_inf_exit_fn)
     ;; Hβ.first-light.tier2-perform-or-env-scan — register each arm's
     ;; op_name → handler_name in the default-handler-per-op map.
@@ -1538,10 +1577,8 @@
         (local.set $arm     (call $list_index (local.get $arms) (local.get $i)))
         (local.set $args    (call $record_get (local.get $arm) (i32.const 0)))
         (local.set $op_name (call $record_get (local.get $arm) (i32.const 2)))
-        ;; Lower default-handler-map registration (existing behavior).
-        (call $lower_register_default_handler_for_op
-          (local.get $op_name)
-          (local.get $handler_name))
+        ;; (op→handler registry dissolved — dispatch reads arms@HandlerKind
+        ;;  field-4 live via $lower_lookup_default_handler_for_op; no side-ledger.)
         ;; EffectOpScheme env_extend (new substrate). Skip if already
         ;; bound as EffectOpScheme from a prior `effect E { op() }`
         ;; declaration — the handler's arm just attaches a body to an
@@ -1583,15 +1620,22 @@
           (local.set $ret_h (call $graph_fresh_ty
             (call $reason_make_located (local.get $span)
               (call $reason_make_inferred (i32.const 6256)))))   ;; "return"
-          (local.set $row_h (call $graph_fresh_row
-            (call $reason_make_located (local.get $span)
-              (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
+          ;; PARAMETRIC: the arm op's row IS Closed[E(payload)] — the payload
+          ;; is the op's FIRST param type (or a fresh var for a nullary op),
+          ;; carried in a parameterized name-set entry exactly like
+          ;; $infer_register_effect_ops. So a handler that IS its own effect
+          ;; flows its op payload performer→handler at the install too. The
+          ;; payload var is one of the quantified param tyvars (or freshly
+          ;; minted by $eff_for_op), so it freshens per op use.
+          (local.set $row_h (call $row_make_closed
+            (call $singleton_handle
+              (call $eff_for_op (local.get $effect_name) (local.get $tparam_list)))))
           (local.set $op_ty (call $ty_make_tfun
             (local.get $tparam_list)
             (call $ty_make_tvar (local.get $ret_h))
-            (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
-          ;; Polymorphic over param tyvars + ret tyvar (row stays opaque
-          ;; per the H1.4 separation — see line 87+ commentary).
+            (local.get $row_h)))
+          ;; Polymorphic over param tyvars + ret tyvar; the payload var rides
+          ;; in the row and is quantified via free_in_row at op USE sites.
           (local.set $tyvar_handles
             (call $list_extend_to (local.get $tyvar_handles)
               (i32.add (local.get $n_args) (i32.const 1))))
@@ -1664,6 +1708,45 @@
   ;; $ty_tfun_params + $ty_tfun_return + $env_scope_enter/exit +
   ;; $infer_walk_pat + $infer_walk_expr + $unify — all existing substrate.
 
+  ;; $unify_op_payload — unify a handler's payload var (payload_h) with the
+  ;; op's payload type carried in its (instantiated) row — Iterate(a) ⇒ unify
+  ;; a with P. The handler half of the payload flow; `~>` then unifies P with
+  ;; the body's E(performed). Mirrors src/infer.mn unify_op_payload /
+  ;; unify_payload_in_names. unify takes HANDLES, so each EAType payload is
+  ;; bound to a fresh handle then unified with payload_h.
+  (func $unify_op_payload (param $op_row i32) (param $payload_h i32) (param $span i32)
+    (local $tag i32)
+    (local.set $tag (call $row_tag (local.get $op_row)))
+    ;; Closed (151) or Open (152) — walk the concrete names; Pure/others none.
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 151))
+                (i32.eq (local.get $tag) (i32.const 152)))
+      (then (call $unify_payload_in_names
+        (call $row_names (local.get $op_row)) (local.get $payload_h)
+        (local.get $span)))))
+
+  (func $unify_payload_in_names (param $names i32) (param $payload_h i32)
+                                (param $span i32)
+    (local $n i32) (local $i i32) (local $elem i32) (local $th i32)
+    (local.set $n (call $len (local.get $names)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $elem (call $list_index (local.get $names) (local.get $i)))
+        (if (call $eff_pname_is (local.get $elem))
+          (then
+            (local.set $th (call $graph_fresh_ty
+              (call $reason_make_located (local.get $span)
+                (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
+            (call $graph_bind (local.get $th)
+              (call $eff_pname_payload (local.get $elem))
+              (call $reason_make_located (local.get $span)
+                (call $reason_make_inferred (i32.const 4080))))
+            (call $unify (local.get $th) (local.get $payload_h) (local.get $span)
+              (call $reason_make_inferred (i32.const 4080)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
+
   ;; Data segments for handler-arm typing diagnostics.
   ;; Offsets 4336+ (past "Handler" at 4320+11=4331; 4336 is 16-aligned).
   (data (i32.const 4336) "\10\00\00\00handler arm body")             ;; 16 bytes
@@ -1671,11 +1754,11 @@
 
   (func $infer_handler_decl_arms_walk
         (param $arms i32) (param $handler_name i32) (param $span i32)
-        (param $config i32) (param $state i32)
+        (param $config i32) (param $state i32) (param $payload_h i32)
     (local $n i32) (local $i i32)
     (local $arm i32) (local $args i32) (local $body_node i32) (local $op_name i32)
     (local $binding i32) (local $scheme i32) (local $op_ty i32) (local $op_tag i32)
-    (local $params i32) (local $ret_ty i32)
+    (local $params i32) (local $ret_ty i32) (local $op_row i32)
     (local $n_args i32) (local $n_params i32)
     (local $body_h i32) (local $s_h i32)
     (local $saved_ret i32) (local $saved_res i32)
@@ -1717,19 +1800,29 @@
             ;; effect. Skip this arm; continue to next.
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $each)))
-        ;; Extract op's type: scheme_body gives the TFun directly
-        ;; (monomorphic Forall([], op_ty) per $infer_register_effect_ops).
+        ;; Extract op's type: INSTANTIATE the scheme so the op's payload var
+        ;; is a FRESH instance (the op scheme now quantifies its E(payload) —
+        ;; $infer_register_effect_ops). The fresh params/ret/row share that
+        ;; one fresh payload, so unifying the row's payload with the handler's
+        ;; payload_h makes the arm param (elem) the performer's value type.
         (local.set $scheme (call $env_binding_scheme (local.get $binding)))
-        (local.set $op_ty (call $scheme_body (local.get $scheme)))
+        (local.set $op_ty (call $instantiate (local.get $scheme)))
         ;; Verify it's a TFun (tag 107). If not, skip (productive-under-error).
         (local.set $op_tag (call $ty_tag (local.get $op_ty)))
         (if (i32.ne (local.get $op_tag) (i32.const 107))
           (then
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $each)))
-        ;; Extract params list + return type from the op's TFun.
+        ;; Extract params list + return type + row from the op's TFun.
         (local.set $params (call $ty_tfun_params (local.get $op_ty)))
         (local.set $ret_ty (call $ty_tfun_return (local.get $op_ty)))
+        (local.set $op_row (call $ty_tfun_row (local.get $op_ty)))
+        ;; Payload flow (handler half): unify the op's instantiated payload
+        ;; (Iterate(a) ⇒ a) with this handler's P (payload_h). `~>` then unifies
+        ;; P with the body's performed E — so the arm param binds the performer's
+        ;; value type. Mirrors src/infer.mn unify_op_payload.
+        (call $unify_op_payload
+          (local.get $op_row) (local.get $payload_h) (local.get $span))
         ;; Arity check: len(args) vs len(params). Skip arm on mismatch
         ;; (productive-under-error — arity diagnostic is post-L1).
         (local.set $n_args (call $len (local.get $args)))

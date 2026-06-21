@@ -24,6 +24,11 @@ cd "$(dirname "$0")/.." || exit 1
 WT="$HOME/.wasmtime/bin/wasmtime"
 WTRUN="$WT run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y"
 QUICK="${1:-}"
+# Intermediates + wasmtime's temp belong on disk, NOT the RAM-backed tmpfs
+# (/tmp is a ~6G quota; the wheel WAT + wasmtime's ~2G shared-memory partition
+# exhaust it per multi-pass run). A luks-backed build dir dissolves the
+# recurring EDQUOT — regenerable artifacts on the 99G disk, never the quota.
+B="${MENTL_BUILD:-$PWD/.build}"; mkdir -p "$B"; export TMPDIR="$B"
 hr() { printf '─%.0s' {1..72}; echo; }
 
 echo
@@ -35,21 +40,21 @@ sc=$(git status --short); echo "    uncommitted: $([ -z "$sc" ] && echo none || 
 [ -n "$sc" ] && echo "$sc" | sed 's/^/      /'
 
 echo "▸ SEED"
-if bash bootstrap/build.sh >/tmp/state_build.log 2>&1; then
-  echo "    build: OK ($(grep -oE 'mentl.wasm \([0-9]+ bytes\)' /tmp/state_build.log | tail -1))"
+if bash bootstrap/build.sh >$B/state_build.log 2>&1; then
+  echo "    build: OK ($(grep -oE 'mentl.wasm \([0-9]+ bytes\)' $B/state_build.log | tail -1))"
 else
-  echo "    build: ✗ FAILED — see /tmp/state_build.log"; tail -3 /tmp/state_build.log | sed 's/^/      /'; exit 1
+  echo "    build: ✗ FAILED — see $B/state_build.log"; tail -3 $B/state_build.log | sed 's/^/      /'; exit 1
 fi
 
-echo "▸ WHEEL CENSUS  (seed compiles the wheel source; baseline target = 165 exact)"
+echo "▸ WHEEL CENSUS  (seed compiles the wheel source; fewer diagnostics is better — the PASS-2 trap below is the real gate, not this count)"
 { find src -name '*.mn' | sort | xargs cat; \
-  find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; } > /tmp/state_wheel.mn
-if $WTRUN bootstrap/mentl.wasm < /tmp/state_wheel.mn > /tmp/state_m2.wat 2>/tmp/state_m2.err; then
-  total=$(grep -cE '^[EPW]_[A-Za-z]+' /tmp/state_m2.err)
-  echo "    seed compiles wheel: OK   m2.wat = $(wc -l < /tmp/state_m2.wat) lines   diagnostics = $total"
-  grep -oE '^[EPW]_[A-Za-z]+' /tmp/state_m2.err | sort | uniq -c | sort -rn | head -6 | sed 's/^/      /'
+  find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; } > $B/state_wheel.mn
+if $WTRUN bootstrap/mentl.wasm < $B/state_wheel.mn > $B/state_m2.wat 2>$B/state_m2.err; then
+  total=$(grep -cE '^[EPW]_[A-Za-z]+' $B/state_m2.err)
+  echo "    seed compiles wheel: OK   m2.wat = $(wc -l < $B/state_m2.wat) lines   diagnostics = $total"
+  grep -oE '^[EPW]_[A-Za-z]+' $B/state_m2.err | sort | uniq -c | sort -rn | head -6 | sed 's/^/      /'
 else
-  echo "    seed compiles wheel: ✗ TRAP — see /tmp/state_m2.err"; tail -3 /tmp/state_m2.err | sed 's/^/      /'
+  echo "    seed compiles wheel: ✗ TRAP — see $B/state_m2.err"; tail -3 $B/state_m2.err | sed 's/^/      /'
 fi
 
 echo "▸ MICRO BATTERY  (gates the seed; each exit code captured directly)"
@@ -71,22 +76,37 @@ done
 
 if [ "$QUICK" = "--quick" ]; then hr; echo "  (--quick: two-pass skipped)"; hr; echo; exit 0; fi
 
-echo "▸ PASS-2  (does the seed-compiled wheel compile the wheel? → first-light at empty diff)"
-if wat2wasm /tmp/state_m2.wat -o /tmp/state_m2.wasm --debug-names --enable-threads --enable-tail-call 2>/tmp/state_w2w.err; then
+echo "▸ PASS-2  (the FIXED POINT: m3 == m4, the medium reproduced BY ITSELF — NOT m2==m3)"
+echo "    m2 is the wheel compiled by the DISPOSABLE seed; its bytes are the seed's, not the wheel's."
+echo "    First-light = diff(m3,m4) empty AND correctness (the micros above green). m2 may differ from m3."
+if wat2wasm $B/state_m2.wat -o $B/state_m2.wasm --debug-names --enable-threads --enable-tail-call 2>$B/state_w2w.err; then
   echo "    m2.wat assembles: OK"
-  if timeout 300 $WTRUN /tmp/state_m2.wasm < /tmp/state_wheel.mn > /tmp/state_m3.wat 2>/tmp/state_m3.err; then
-    if diff -q /tmp/state_m2.wat /tmp/state_m3.wat >/dev/null 2>&1; then
-      echo "    *** mentl2 == mentl3 — FIRST LIGHT (L1 closed) ***"
+  if timeout 300 $WTRUN $B/state_m2.wasm < $B/state_wheel.mn > $B/state_m3.wat 2>$B/state_m3.err; then
+    echo "    m2 → m3.wat = $(wc -l < $B/state_m3.wat) lines  (m2==m3 is NOT the check; m2's bytes are disposable)"
+    if wat2wasm $B/state_m3.wat -o $B/state_m3.wasm --debug-names --enable-threads --enable-tail-call 2>$B/state_w3w.err; then
+      echo "    m3.wat assembles: OK"
+      if timeout 300 $WTRUN $B/state_m3.wasm < $B/state_wheel.mn > $B/state_m4.wat 2>$B/state_m4.err; then
+        if diff -q $B/state_m3.wat $B/state_m4.wat >/dev/null 2>&1; then
+          echo "    *** m3 == m4 — FIXED POINT REACHED. FIRST LIGHT at correctness (micros above MUST be green). ***"
+        else
+          echo "    m3 → m4.wat = $(wc -l < $B/state_m4.wat) lines; diff(m3,m4) = $(diff $B/state_m3.wat $B/state_m4.wat | wc -l) lines  (not yet fixpoint — the change is still propagating)"
+        fi
+      else
+        echo "    m3 TRAPPED compiling the wheel — fixpoint blocked (m2 produced a buggy m3; m2 is not yet a CORRECT compiler)."
+        echo "    ─ WASM TRAP + backtrace (innermost first — THIS is the cursor):"
+        grep -E '<unknown>!|wasm trap:|memory fault|error while executing' $B/state_m4.err | tail -20 | sed 's/^/      /'
+      fi
     else
-      echo "    m2 compiled the wheel → m3.wat = $(wc -l < /tmp/state_m3.wat) lines; diff vs m2 = $(diff /tmp/state_m2.wat /tmp/state_m3.wat | wc -l) lines"
+      echo "    m3.wat assembles: ✗ $(wc -l < $B/state_w3w.err) wat2wasm error(s)"; head -2 $B/state_w3w.err | sed 's/^/      /'
     fi
   else
-    echo "    mentl2 TRAPPED compiling the wheel (exit) — pass-2 blocked. first failures:"
-    grep -E 'P_|E_' /tmp/state_m3.err | head -2 | sed 's/^/      /'
-    echo "      P_UnexpectedToken count: $(grep -c 'P_UnexpectedToken' /tmp/state_m3.err)"
+    echo "    mentl2 TRAPPED compiling the wheel (exit) — pass-2 blocked (the seed did not spark a correct m2)."
+    echo "    ─ WASM TRAP + backtrace (innermost first — THIS is the cursor):"
+    grep -E '<unknown>!|wasm trap:|memory fault|error while executing' $B/state_m3.err | tail -20 | sed 's/^/      /'
+    echo "    ─ diagnostics emitted before the trap: $(grep -cE '^[EPW]_|^parser:' $B/state_m3.err)  (P_UnexpectedToken: $(grep -c 'P_UnexpectedToken' $B/state_m3.err))"
   fi
 else
-  echo "    m2.wat assembles: ✗ $(wc -l < /tmp/state_w2w.err) wat2wasm error(s)"; head -2 /tmp/state_w2w.err | sed 's/^/      /'
+  echo "    m2.wat assembles: ✗ $(wc -l < $B/state_w2w.err) wat2wasm error(s)"; head -2 $B/state_w2w.err | sed 's/^/      /'
 fi
 
 hr

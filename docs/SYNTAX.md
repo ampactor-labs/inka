@@ -11,7 +11,12 @@
 > module specs) is git archaeology, out of the read-path — its load-bearing
 > truths live in the three docs now. **Interrogate, don't absorb** (CLAUDE.md):
 > every form below is the current best answer, to be re-checked against "what
-> does the ultimate medium do here," not gospel.
+> does the ultimate medium do here," not gospel — REDUCTIVELY (is this the minimal
+> graph-correspondence?) AND GENERATIVELY (how do multi-shot / threading / WASM-
+> memory + the frontier make the surface *better*? — `PLAN.md §2`). Like the
+> source, the surface is INVARIANT to the current parser: it is never lowered to
+> "what parses now" (§ below — the parser is the lathe adjusted to SYNTAX.md), and
+> "form reachable now" is the same downward-equivocation drift at the surface.
 
 This document is **the authoritative syntactic spec for Mentl**. It binds the parser; the parser implements exactly this. It is written under dream-code discipline: every decision below is the IDEAL form, not a description of the current parser. Where the current parser deviates, the parser is wrong; SYNTAX.md is the wheel, the parser is the lathe being adjusted to it.
 

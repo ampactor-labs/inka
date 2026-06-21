@@ -109,6 +109,16 @@
   (global $env_scope_count_g   (mut i32) (i32.const 0))
   (global $env_initialized     (mut i32) (i32.const 0))
 
+  ;; The runtime heap tag of a HandlerKind binding's kind record (= 131 + ADT
+  ;; byte 6, per the SchemeKind tag-byte invariant above). NAMED once, here —
+  ;; every site that asks "is this kind a HandlerKind?" reads THIS, never the raw
+  ;; number, so value and meaning cannot drift apart. (The whole pass-2 clamp
+  ;; came from a raw `6` — the ADT byte, not the runtime tag — guarded by a
+  ;; stale "tag 6" comment: it matched no binding, so every effect lost its
+  ;; singleton home. A raw number carrying meaning is the bug class; a name is
+  ;; the fix.)
+  (global $schemekind_handler_tag i32 (i32.const 137))
+
   ;; ─── Frame discipline (substrate-honest buffer-counter pattern) ─
   ;; Each scope-frame is a 2-element record (tag=137):
   ;;   field 0 = buf      (List of bindings; count field treated as cap)
@@ -173,14 +183,42 @@
     (call $record_get (local.get $k) (i32.const 1)))
 
   ;; EffectOpScheme(effect_name: String)
+  ;; EffectOpScheme = (effect_name@0, default_handler@1, ambiguous@2). The op
+  ;; CARRIES its own default handler — drawn ONCE at handler-decl pre-register
+  ;; (where the real arms live) — so dispatch READS it O(1), never SCANS the env.
+  ;; default_handler@1 = 0 (none) until a handler-decl whose arms include this op
+  ;; sets it; ambiguous@2 = 1 when a SECOND distinct handler also implements it
+  ;; (ev16's `note` via hb+hb_alt → ambiguous → thread; graph_chase has one →
+  ;; home). "I already have this": the op binding IS the dispatch fact.
   (func $schemekind_make_effectop (param $effect_name i32) (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 133) (i32.const 1)))
+    (local.set $r (call $make_record (i32.const 133) (i32.const 3)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $effect_name))
+    (call $record_set (local.get $r) (i32.const 1) (i32.const 0))
+    (call $record_set (local.get $r) (i32.const 2) (i32.const 0))
     (local.get $r))
 
   (func $schemekind_effectop_name (param $k i32) (result i32)
     (call $record_get (local.get $k) (i32.const 0)))
+
+  ;; The op's resolved default handler iff unique — 0 when none or ambiguous
+  ;; (→ thread). The O(1) dispatch read; no scan, no side-ledger.
+  (func $schemekind_effectop_default_handler (export "schemekind_effectop_default_handler")
+        (param $k i32) (result i32)
+    (if (result i32) (i32.ne (call $record_get (local.get $k) (i32.const 2)) (i32.const 0))
+      (then (i32.const 0))
+      (else (call $record_get (local.get $k) (i32.const 1)))))
+
+  ;; Draw op→handler at decl: 0→H (first), H'≠H→mark ambiguous, H==H→noop.
+  (func $schemekind_effectop_set_handler (export "schemekind_effectop_set_handler")
+        (param $k i32) (param $hname i32)
+    (local $cur i32)
+    (local.set $cur (call $record_get (local.get $k) (i32.const 1)))
+    (if (i32.eqz (local.get $cur))
+      (then (call $record_set (local.get $k) (i32.const 1) (local.get $hname)))
+      (else
+        (if (i32.eqz (call $str_eq (local.get $cur) (local.get $hname)))
+          (then (call $record_set (local.get $k) (i32.const 2) (i32.const 1)))))))
 
   ;; RecordSchemeKind(fields: List of (name, ty) pairs)
   (func $schemekind_make_record (param $fields i32) (result i32)
@@ -220,11 +258,24 @@
   ;; = E, residual_row = R (the live row var of the effects its arms perform).
   ;; `~>` reads it to compute row(expr ~> h) = (row(expr) − E) ⊕ R. Mirrors the
   ;; wheel's HandlerKind (types.mn tag 6 / cache.mn byte 6).
-  (func $schemekind_make_handler (param $ename i32) (param $row_handle i32) (result i32)
+  ;; HandlerKind = the ONE 5-field record the wheel uses
+  ;; (handled_ename, residual_row, config, state, arms) — seed == wheel, no
+  ;; impoverished 2-field drift. arms@4 IS the live op->handler dispatch source
+  ;; (first_handler_implementing_op reads it), dissolving both the op->handler
+  ;; registry and the $handler_arm_names_lookup side-table. config@2 is read by
+  ;; the no-config singleton predicate; the seed parser does not yet separate
+  ;; config/state (HandlerDeclStmt = [name][effect][arms]) so they are empty here
+  ;; — state@3 is sourced from the state-inits ledger; config@2 empty means the
+  ;; seed's route handlers read as no-config singletons (correct for them).
+  (func $schemekind_make_handler
+        (param $ename i32) (param $row_handle i32) (param $arms i32) (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 137) (i32.const 2)))
+    (local.set $r (call $make_record (i32.const 137) (i32.const 5)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $ename))
     (call $record_set (local.get $r) (i32.const 1) (local.get $row_handle))
+    (call $record_set (local.get $r) (i32.const 2) (call $make_list (i32.const 0)))
+    (call $record_set (local.get $r) (i32.const 3) (call $make_list (i32.const 0)))
+    (call $record_set (local.get $r) (i32.const 4) (local.get $arms))
     (local.get $r))
 
   (func $schemekind_handler_ename (param $k i32) (result i32)

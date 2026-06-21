@@ -437,7 +437,7 @@
     ;; A closure IS state IS evidence: capture the evidence for the effects
     ;; this closure's body performs (the let-bound mirror of the inline-lambda
     ;; path at walk_compound.wat + src/lower.mn LambdaExpr).
-    (local.set $evs  (call $derive_ev_slots (local.get $handle)))
+    (local.set $evs  (call $derive_closure_evs (local.get $handle)))
     (local.set $closure (call $lexpr_make_lmakeclosure
                           (local.get $handle)
                           (local.get $fn_ir)
@@ -529,6 +529,8 @@
 
   (func $lower_pre_register_handler_node (param $node i32)
     (local $body i32) (local $stmt i32) (local $tag i32)
+    (local $arms i32) (local $hname i32) (local $i i32) (local $n i32)
+    (local $arm i32) (local $opn i32) (local $bind i32) (local $kind i32)
     (local.set $body (i32.load offset=4 (local.get $node)))
     (if (i32.ne (i32.load (local.get $body)) (i32.const 111)) (then (return)))
     (local.set $stmt (i32.load offset=4 (local.get $body)))
@@ -539,15 +541,37 @@
         (call $lower_pre_register_handler_node (i32.load offset=8 (local.get $stmt)))
         (return)))
     (if (i32.ne (local.get $tag) (i32.const 124)) (then (return)))
+    (local.set $hname (i32.load offset=4  (local.get $stmt)))
+    (local.set $arms  (i32.load offset=12 (local.get $stmt)))
     (call $handler_state_inits_register
-      (i32.load offset=4 (local.get $stmt))
+      (local.get $hname)
       ;; config@20, state_fields@16 (mk_handler_decl_full layout)
       (call $lower_state_field_inits
         (i32.load offset=20 (local.get $stmt))
         (i32.load offset=16 (local.get $stmt)))
-      (call $build_handler_arm_names
-        (i32.load offset=4 (local.get $stmt))
-        (i32.load offset=12 (local.get $stmt)))))
+      (call $build_handler_arm_names (local.get $hname) (local.get $arms)))
+    ;; DRAW op→handler ONTO THE OP: each arm's op carries this handler as its
+    ;; unique default. The REAL arms live HERE (offset 12 at lower; infer's are
+    ;; empty); a second distinct implementer marks the op ambiguous (→ thread).
+    ;; Dispatch then READS this O(1) — no env scan, no side-ledger. "I already
+    ;; have this": the op's EffectOpScheme binding IS the dispatch fact.
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
+        (local.set $opn (call $record_get (local.get $arm) (i32.const 2)))
+        (local.set $bind (call $env_lookup (local.get $opn)))
+        (if (local.get $bind)
+          (then
+            (local.set $kind (call $env_binding_kind (local.get $bind)))
+            (if (i32.and (i32.ge_u (local.get $kind) (global.get $heap_base))
+                         (i32.eq (call $tag_of (local.get $kind)) (i32.const 133)))
+              (then (call $schemekind_effectop_set_handler
+                          (local.get $kind) (local.get $hname))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $l))))
 
   ;; ─── $lower_walk_stmt_handler_decl — HandlerDeclStmt arm (tag 124) ──
   ;; Per src/lower.mn:617-625 + Lock #7.

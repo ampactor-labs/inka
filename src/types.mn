@@ -122,15 +122,21 @@ type SchemeKind
   | RecordSchemeKind(List)                       // tag 3 — [(field_name, ty)]
   | CapabilityScheme(List)                       // tag 4 — [(EffName, Bool)]
   | EffectDeclKind(List)                         // tag 5 — [op_name: String]
-  | HandlerKind(String, Int)                     // tag 6 — (handled_ename, residual_row_handle)
+  | HandlerKind(String, Int, List, List, List)   // tag 6 — (handled_ename, residual_row_handle, config, state, arms)
   // EffectDeclKind appended (not inserted) to preserve tag-ID stability
   // with the seed's hardcoded constants for tags 0-4. HandlerKind (tag 6)
-  // is the full handler-effect type: a handler is (a ! E+r) ⟿ (a ! R+r) —
-  // it REMOVES the handled effect (handled_ename) AND ADDS its arms'
-  // residual row (residual_row_handle, a live row var, config-polymorphic).
-  // `~>` reads it: row(expr ~> h) = (row(expr) − E) ⊕ R. Without R the
-  // handler-attachment can't transform the row and every map/for_each loses
+  // is the full handler-effect type AND the handler's identity: a handler is
+  // (a ! E+r) ⟿ (a ! R+r) — it REMOVES the handled effect (handled_ename) AND
+  // ADDS its arms' residual row (residual_row_handle, a live row var, config-
+  // polymorphic). `~>` reads it: row(expr ~> h) = (row(expr) − E) ⊕ R. Without R
+  // the handler-attachment can't transform the row and every map/for_each loses
   // the effects performed in its arms (protocol_handler_effect_typing).
+  // ONE-GRAPH: the binding also carries the decl's (config, state, arms) — the
+  // env NAMES the handler's node, so lower reads its arms/state LIVE here and
+  // projects on demand (no registry, no pre-register pass). These are references
+  // to the parsed decl (the one home), never copies. (config/state/arms are not
+  // cache-serialized — live-only; cross-file handler caching reconstructs them
+  // from the decl, peer Hβ.cache.handler-decl-from-source, post-L1.)
 
 // The Boolean algebra lives as functions in effects.mn; the ADT
 // lives here so every module that speaks types can speak rows.
@@ -164,6 +170,9 @@ type EffArg
   = EAInt(Int)
   | EAFloat(Float)
   | EAString(String)
+  | EAType(Ty)                     // type payload — the effect's op payload type
+                                   // (Iterate(a)). Flows performer→handler at the
+                                   // install; unified, not value-compared. Emit erases.
 
 // Substrate owned by graph.mn. The ADTs live here because every
 // consumer of the graph names them — Read/Write/Speculate effects,
@@ -693,10 +702,14 @@ type Stmt
                            // Parser produces via parse_capability_decl
                            // (src/parser.mn:726); infer's NStmt arm at
                            // infer.mn:254 unpacks via the same shape.
-  | HandlerDeclStmt(String, String, List, List, List)
+  | HandlerDeclStmt(String, String, List, List({init: Node, name: String}), List)
                            // handler name, effect name, config-params, state-fields, arms
                            // config: [String] — closure-captured at install site
                            // state:  List<{name: String, init: Node}> — per-arm scope; updates via `resume(...) with f = e`
+                           // The state element type is CARRIED in the ADT field
+                           // (not bare `List`) so `.name`/`.init` resolve to sorted
+                           // offsets at lower-time — never field-offset-resolution's
+                           // silent offset-0 fabrication on an erased element type.
                            // arms:   List<{args, body, op_name}>
                            // Per Hβ.first-light.handler-config-state-substrate (2026-05-06):
                            // config + state extracted at parse time; bound in arm scope at infer + lower
@@ -800,7 +813,6 @@ effect GraphWrite {
   graph_fork(String) -> ()
   graph_rollback(Int) -> ()
   graph_index_span(ValidSpan, Int) -> ()
-  graph_bind_resume_kind(String, String, ResumeDiscipline, Reason) -> ()
   // Per Hβ.first-light.graph-index-intent-effect-decl: graph_handler's
   // arm graph_index_intent (graph.mn:240) was undeclared in any effect.
   // parse_fn at parser.mn:396 perform-calls it. Infer couldn't ground
@@ -1072,7 +1084,8 @@ fn show_eff_name(ref name) with !Mutate = match name {
 fn show_eff_arg(ref arg) with !Mutate = match arg {
   EAInt(n)    => int_to_str(n),
   EAFloat(_)  => "<float>",
-  EAString(s) => "\"{s}\""
+  EAString(s) => "\"{s}\"",
+  EAType(_)   => "<type>"
 }
 
 fn show_predicate(ref pred) with !Mutate = {

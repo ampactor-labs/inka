@@ -2384,6 +2384,16 @@
   (global $env_scope_count_g   (mut i32) (i32.const 0))
   (global $env_initialized     (mut i32) (i32.const 0))
 
+  ;; The runtime heap tag of a HandlerKind binding's kind record (= 131 + ADT
+  ;; byte 6, per the SchemeKind tag-byte invariant above). NAMED once, here —
+  ;; every site that asks "is this kind a HandlerKind?" reads THIS, never the raw
+  ;; number, so value and meaning cannot drift apart. (The whole pass-2 clamp
+  ;; came from a raw `6` — the ADT byte, not the runtime tag — guarded by a
+  ;; stale "tag 6" comment: it matched no binding, so every effect lost its
+  ;; singleton home. A raw number carrying meaning is the bug class; a name is
+  ;; the fix.)
+  (global $schemekind_handler_tag i32 (i32.const 137))
+
   ;; ─── Frame discipline (substrate-honest buffer-counter pattern) ─
   ;; Each scope-frame is a 2-element record (tag=137):
   ;;   field 0 = buf      (List of bindings; count field treated as cap)
@@ -2448,14 +2458,42 @@
     (call $record_get (local.get $k) (i32.const 1)))
 
   ;; EffectOpScheme(effect_name: String)
+  ;; EffectOpScheme = (effect_name@0, default_handler@1, ambiguous@2). The op
+  ;; CARRIES its own default handler — drawn ONCE at handler-decl pre-register
+  ;; (where the real arms live) — so dispatch READS it O(1), never SCANS the env.
+  ;; default_handler@1 = 0 (none) until a handler-decl whose arms include this op
+  ;; sets it; ambiguous@2 = 1 when a SECOND distinct handler also implements it
+  ;; (ev16's `note` via hb+hb_alt → ambiguous → thread; graph_chase has one →
+  ;; home). "I already have this": the op binding IS the dispatch fact.
   (func $schemekind_make_effectop (param $effect_name i32) (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 133) (i32.const 1)))
+    (local.set $r (call $make_record (i32.const 133) (i32.const 3)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $effect_name))
+    (call $record_set (local.get $r) (i32.const 1) (i32.const 0))
+    (call $record_set (local.get $r) (i32.const 2) (i32.const 0))
     (local.get $r))
 
   (func $schemekind_effectop_name (param $k i32) (result i32)
     (call $record_get (local.get $k) (i32.const 0)))
+
+  ;; The op's resolved default handler iff unique — 0 when none or ambiguous
+  ;; (→ thread). The O(1) dispatch read; no scan, no side-ledger.
+  (func $schemekind_effectop_default_handler (export "schemekind_effectop_default_handler")
+        (param $k i32) (result i32)
+    (if (result i32) (i32.ne (call $record_get (local.get $k) (i32.const 2)) (i32.const 0))
+      (then (i32.const 0))
+      (else (call $record_get (local.get $k) (i32.const 1)))))
+
+  ;; Draw op→handler at decl: 0→H (first), H'≠H→mark ambiguous, H==H→noop.
+  (func $schemekind_effectop_set_handler (export "schemekind_effectop_set_handler")
+        (param $k i32) (param $hname i32)
+    (local $cur i32)
+    (local.set $cur (call $record_get (local.get $k) (i32.const 1)))
+    (if (i32.eqz (local.get $cur))
+      (then (call $record_set (local.get $k) (i32.const 1) (local.get $hname)))
+      (else
+        (if (i32.eqz (call $str_eq (local.get $cur) (local.get $hname)))
+          (then (call $record_set (local.get $k) (i32.const 2) (i32.const 1)))))))
 
   ;; RecordSchemeKind(fields: List of (name, ty) pairs)
   (func $schemekind_make_record (param $fields i32) (result i32)
@@ -2495,11 +2533,24 @@
   ;; = E, residual_row = R (the live row var of the effects its arms perform).
   ;; `~>` reads it to compute row(expr ~> h) = (row(expr) − E) ⊕ R. Mirrors the
   ;; wheel's HandlerKind (types.mn tag 6 / cache.mn byte 6).
-  (func $schemekind_make_handler (param $ename i32) (param $row_handle i32) (result i32)
+  ;; HandlerKind = the ONE 5-field record the wheel uses
+  ;; (handled_ename, residual_row, config, state, arms) — seed == wheel, no
+  ;; impoverished 2-field drift. arms@4 IS the live op->handler dispatch source
+  ;; (first_handler_implementing_op reads it), dissolving both the op->handler
+  ;; registry and the $handler_arm_names_lookup side-table. config@2 is read by
+  ;; the no-config singleton predicate; the seed parser does not yet separate
+  ;; config/state (HandlerDeclStmt = [name][effect][arms]) so they are empty here
+  ;; — state@3 is sourced from the state-inits ledger; config@2 empty means the
+  ;; seed's route handlers read as no-config singletons (correct for them).
+  (func $schemekind_make_handler
+        (param $ename i32) (param $row_handle i32) (param $arms i32) (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 137) (i32.const 2)))
+    (local.set $r (call $make_record (i32.const 137) (i32.const 5)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $ename))
     (call $record_set (local.get $r) (i32.const 1) (local.get $row_handle))
+    (call $record_set (local.get $r) (i32.const 2) (call $make_list (i32.const 0)))
+    (call $record_set (local.get $r) (i32.const 3) (call $make_list (i32.const 0)))
+    (call $record_set (local.get $r) (i32.const 4) (local.get $arms))
     (local.get $r))
 
   (func $schemekind_handler_ename (param $k i32) (result i32)
@@ -2969,9 +3020,54 @@
       (then (return (call $record_get (local.get $row) (i32.const 1)))))
     (i32.const 0))
 
+  ;; ─── Parameterized effect-name records (EffName.EParameterized) ───
+  ;; The wheel's row name-set carries EffName records (ENamed(s) /
+  ;; EParameterized(s, [EffArg])); the seed historically stored BARE
+  ;; string ptrs (the ENamed case). Parametric effects (Iterate(a))
+  ;; need the op-payload TYPE to ride alongside the name so it flows
+  ;; performer→handler at the install. The seed-private encoding: a
+  ;; name-set element is EITHER a bare string ptr (ENamed) OR a
+  ;; 2-field record (tag 156): field_0 = name string, field_1 = payload
+  ;; Ty. $eff_name_str canonicalizes both to the NAME, so every name
+  ;; comparison (set ops + dispatch) keys on the name alone — a bare
+  ;; entry and its parameterized twin are the SAME effect (mirrors wheel
+  ;; eff_arg_eq: EAType==EAType→true; payloads unified, not value-
+  ;; compared). Tag 156 sits in row.wat's private 150-179 region, just
+  ;; past EfInter=155.
+  ;;
+  ;; EFFNAME_PNAME_TAG = 156, arity 2.
+  (func $eff_pname_make (param $name i32) (param $payload i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 156) (i32.const 2)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $name))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $payload))
+    (local.get $r))
+
+  ;; $eff_pname_is — true iff n is a parameterized-name record (tag 156).
+  ;; A bare string is a heap/data ptr whose first word is its LENGTH
+  ;; (effect names are short — far under 156 — so no collision); a
+  ;; sentinel (< heap_base) is never 156. So tag_of(n)==156 is exact.
+  (func $eff_pname_is (param $n i32) (result i32)
+    (i32.eq (call $tag_of (local.get $n)) (i32.const 156)))
+
+  (func $eff_pname_payload (param $n i32) (result i32)
+    (call $record_get (local.get $n) (i32.const 1)))
+
+  ;; $eff_name_str — the NAME string of a name-set element. A bare
+  ;; string IS its own name; a parameterized record's name is field_0.
+  ;; Every name comparison routes through here so bare/parameterized
+  ;; entries of the same effect canonicalize identically.
+  (func $eff_name_str (param $n i32) (result i32)
+    (if (call $eff_pname_is (local.get $n))
+      (then (return (call $record_get (local.get $n) (i32.const 0)))))
+    (local.get $n))
+
   ;; ─── Name-set helpers (sorted-lex flat lists) ────────────────────
-  ;; Inputs are flat lists of string-ptrs, sorted lex-order, deduped.
-  ;; Outputs are the same shape. All operations preserve canonical form.
+  ;; Inputs are flat lists of EffName elements (bare string OR
+  ;; parameterized record), sorted lex-order by $eff_name_str, deduped.
+  ;; Outputs are the same shape. All operations preserve canonical form
+  ;; and compare via $eff_name_str (the name alone identifies the effect;
+  ;; the payload rides along but never participates in the order).
 
   ;; $name_set_contains — single-element membership. Linear scan
   ;; (binary search is a follow-up optimization when callers profile
@@ -2983,8 +3079,9 @@
     (block $done
       (loop $scan
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (if (call $str_eq (call $list_index (local.get $set) (local.get $i))
-                          (local.get $name))
+        (if (call $str_eq (call $eff_name_str
+                            (call $list_index (local.get $set) (local.get $i)))
+                          (call $eff_name_str (local.get $name)))
           (then (return (i32.const 1))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $scan)))
@@ -3000,8 +3097,9 @@
     (block $done
       (loop $cmp
         (br_if $done (i32.ge_u (local.get $i) (local.get $na)))
-        (if (i32.eqz (call $str_eq (call $list_index (local.get $a) (local.get $i))
-                                   (call $list_index (local.get $b) (local.get $i))))
+        (if (i32.eqz (call $str_eq
+                       (call $eff_name_str (call $list_index (local.get $a) (local.get $i)))
+                       (call $eff_name_str (call $list_index (local.get $b) (local.get $i)))))
           (then (return (i32.const 0))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $cmp)))
@@ -3061,10 +3159,14 @@
                 (local.set $k (i32.add (local.get $k) (i32.const 1)))
                 (br $copy_a)))
             (br $done)))
-        ;; Both have elements — compare.
+        ;; Both have elements — compare by NAME (payload rides along, never
+        ;; participates in the order). The full element is stored so a
+        ;; parameterized entry's payload survives the merge.
         (local.set $ai (call $list_index (local.get $a) (local.get $i)))
         (local.set $bj (call $list_index (local.get $b) (local.get $j)))
-        (local.set $cmp (call $str_compare (local.get $ai) (local.get $bj)))
+        (local.set $cmp (call $str_compare
+          (call $eff_name_str (local.get $ai))
+          (call $eff_name_str (local.get $bj))))
         (if (i32.lt_s (local.get $cmp) (i32.const 0))
           (then
             (drop (call $list_set (local.get $out) (local.get $k) (local.get $ai)))
@@ -3077,8 +3179,11 @@
                 (local.set $j (i32.add (local.get $j) (i32.const 1)))
                 (local.set $k (i32.add (local.get $k) (i32.const 1))))
               (else
-                ;; equal — emit once, advance both
-                (drop (call $list_set (local.get $out) (local.get $k) (local.get $ai)))
+                ;; equal name — emit once (prefer the parameterized entry so a
+                ;; carried payload is never dropped for a bare twin), advance both
+                (drop (call $list_set (local.get $out) (local.get $k)
+                  (if (result i32) (call $eff_pname_is (local.get $ai))
+                    (then (local.get $ai)) (else (local.get $bj)))))
                 (local.set $i (i32.add (local.get $i) (i32.const 1)))
                 (local.set $j (i32.add (local.get $j) (i32.const 1)))
                 (local.set $k (i32.add (local.get $k) (i32.const 1)))))))
@@ -3103,15 +3208,20 @@
         (br_if $done (i32.ge_u (local.get $j) (local.get $nb)))
         (local.set $ai (call $list_index (local.get $a) (local.get $i)))
         (local.set $bj (call $list_index (local.get $b) (local.get $j)))
-        (local.set $cmp (call $str_compare (local.get $ai) (local.get $bj)))
+        (local.set $cmp (call $str_compare
+          (call $eff_name_str (local.get $ai))
+          (call $eff_name_str (local.get $bj))))
         (if (i32.lt_s (local.get $cmp) (i32.const 0))
           (then (local.set $i (i32.add (local.get $i) (i32.const 1))))
           (else
             (if (i32.gt_s (local.get $cmp) (i32.const 0))
               (then (local.set $j (i32.add (local.get $j) (i32.const 1))))
               (else
-                ;; equal — keep + advance both
-                (drop (call $list_set (local.get $out) (local.get $k) (local.get $ai)))
+                ;; equal name — keep (prefer parameterized so payload survives)
+                ;; + advance both
+                (drop (call $list_set (local.get $out) (local.get $k)
+                  (if (result i32) (call $eff_pname_is (local.get $ai))
+                    (then (local.get $ai)) (else (local.get $bj)))))
                 (local.set $i (i32.add (local.get $i) (i32.const 1)))
                 (local.set $j (i32.add (local.get $j) (i32.const 1)))
                 (local.set $k (i32.add (local.get $k) (i32.const 1)))))))
@@ -3141,10 +3251,12 @@
             (local.set $k (i32.add (local.get $k) (i32.const 1)))
             (br $merge)))
         (local.set $bj (call $list_index (local.get $b) (local.get $j)))
-        (local.set $cmp (call $str_compare (local.get $ai) (local.get $bj)))
+        (local.set $cmp (call $str_compare
+          (call $eff_name_str (local.get $ai))
+          (call $eff_name_str (local.get $bj))))
         (if (i32.lt_s (local.get $cmp) (i32.const 0))
           (then
-            ;; ai not in b — keep
+            ;; ai's name not in b — keep the full element (payload survives)
             (drop (call $list_set (local.get $out) (local.get $k) (local.get $ai)))
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (local.set $k (i32.add (local.get $k) (i32.const 1))))
@@ -11682,7 +11794,7 @@
 
   (func $ty_substitute (param $ty i32) (param $map i32) (param $map_len i32)
                         (result i32)
-    (local $tag i32) (local $h i32) (local $fresh i32)
+    (local $tag i32) (local $h i32) (local $fresh i32) (local $g i32) (local $nk_tag i32)
     (local.set $tag (call $ty_tag (local.get $ty)))
     ;; ── Nullary Ty sentinels — identity ───────────────────────────
     (if (i32.eq (local.get $tag) (i32.const 100))
@@ -11697,9 +11809,22 @@
     (if (i32.eq (local.get $tag) (i32.const 104))
       (then
         (local.set $h (call $ty_tvar_handle (local.get $ty)))
+        ;; Read the LIVE node (union-find / Carried-Truth), mirroring
+        ;; src/infer.mn subst_ty: a var BOUND after generalize (a handler
+        ;; config-param the arm-walk linked to the payload) substitutes its
+        ;; RESOLVED type so the payload freshens WITH it; a free var maps
+        ;; through its ROOT (the map is root-keyed) so an aliased qvar still
+        ;; freshens. Was: lookup on the raw handle — left bound/aliased stale.
+        (local.set $g (call $graph_chase (local.get $h)))
+        (local.set $nk_tag (call $node_kind_tag (call $gnode_kind (local.get $g))))
+        (if (i32.eq (local.get $nk_tag) (i32.const 60))   ;; NBound — resolve + subst
+          (then (return
+            (call $ty_substitute
+              (call $node_kind_payload (call $gnode_kind (local.get $g)))
+              (local.get $map) (local.get $map_len)))))
         (local.set $fresh
           (call $subst_map_lookup (local.get $map) (local.get $map_len)
-                                  (local.get $h)))
+                                  (call $graph_chase_handle (local.get $h))))
         (if (i32.lt_s (local.get $fresh) (i32.const 0))
           (then (return (local.get $ty)))     ;; absent — identity
           (else (return (call $ty_make_tvar (local.get $fresh)))))))
@@ -11871,14 +11996,86 @@
   ;; resolve_row_deep. Row tags: 150 Pure, 151 Closed, 152 Open, 153 Neg,
   ;; 154 Sub, 155 Inter.
 
-  ;; $free_in_row(eff) — the open tail var is the row's free handle.
+  ;; $free_in_eff_names(names) — the free type vars inside a name-set's
+  ;; parameterized payloads (Iterate(a) ⇒ a's free vars). Bare ENamed
+  ;; entries carry none. Mirrors src/infer.mn free_in_eff_names /
+  ;; free_in_eff_arg: each EAType payload recurses via $free_in_ty.
+  (func $free_in_eff_names (param $names i32) (result i32)
+    (local $n i32) (local $i i32) (local $elem i32)
+    (local $sub i32) (local $sub_n i32) (local $sub_j i32)
+    (local $out i32) (local $out_n i32)
+    (local.set $n (call $len (local.get $names)))
+    (local.set $out (call $make_list (i32.const 4)))
+    (local.set $out_n (i32.const 0))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $elem (call $list_index (local.get $names) (local.get $i)))
+        ;; A bare ENamed entry contributes no free vars; a parameterized
+        ;; record's payload Ty is recursed for its free type vars.
+        (if (call $eff_pname_is (local.get $elem))
+          (then
+            (local.set $sub (call $free_in_ty (call $eff_pname_payload (local.get $elem))))
+            (local.set $sub_n (call $len (local.get $sub)))
+            (local.set $sub_j (i32.const 0))
+            (block $sub_done
+              (loop $sub_iter
+                (br_if $sub_done (i32.ge_u (local.get $sub_j) (local.get $sub_n)))
+                (local.set $out
+                  (call $list_extend_to (local.get $out)
+                                        (i32.add (local.get $out_n) (i32.const 1))))
+                (drop (call $list_set (local.get $out) (local.get $out_n)
+                  (call $list_index (local.get $sub) (local.get $sub_j))))
+                (local.set $out_n (i32.add (local.get $out_n) (i32.const 1)))
+                (local.set $sub_j (i32.add (local.get $sub_j) (i32.const 1)))
+                (br $sub_iter)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (call $slice (local.get $out) (i32.const 0) (local.get $out_n)))
+
+  ;; $subst_eff_names(names, map, map_len) — substitute parameterized
+  ;; payload TYPES through a name-set (the row mirror of subst_ty over
+  ;; the row's carried types). Bare entries pass verbatim; a
+  ;; parameterized entry's EAType payload is freshened. Mirrors
+  ;; src/infer.mn subst_eff_names — what makes each op USE a fresh
+  ;; payload instance.
+  (func $subst_eff_names (param $names i32) (param $map i32) (param $map_len i32)
+                         (result i32)
+    (local $n i32) (local $i i32) (local $elem i32) (local $out i32)
+    (local.set $n (call $len (local.get $names)))
+    (local.set $out (call $make_list (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $elem (call $list_index (local.get $names) (local.get $i)))
+        (if (call $eff_pname_is (local.get $elem))
+          (then
+            (drop (call $list_set (local.get $out) (local.get $i)
+              (call $eff_pname_make
+                (call $record_get (local.get $elem) (i32.const 0))
+                (call $ty_substitute (call $eff_pname_payload (local.get $elem))
+                  (local.get $map) (local.get $map_len))))))
+          (else
+            (drop (call $list_set (local.get $out) (local.get $i) (local.get $elem)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (local.get $out))
+
+  ;; $free_in_row(eff) — the open tail var is the row's free handle;
+  ;; parameterized payloads contribute their free type vars too.
   (func $free_in_row (param $eff i32) (result i32)
     (local $tag i32) (local $root i32)
     (local.set $tag (call $row_tag (local.get $eff)))
     (if (i32.eq (local.get $tag) (i32.const 150))   ;; Pure
       (then (return (call $make_list (i32.const 0)))))
+    ;; A parameterized effect carries its op-payload TYPE (Iterate(a)); the
+    ;; payload's free vars are the row's free vars, so generalize quantifies
+    ;; them and instantiate (subst_row) freshens them — each op USE is a
+    ;; fresh effect instance, reconciled to the handler's at the install.
     (if (i32.eq (local.get $tag) (i32.const 151))   ;; Closed
-      (then (return (call $make_list (i32.const 0)))))
+      (then (return (call $free_in_eff_names (call $row_names (local.get $eff))))))
     (if (i32.eq (local.get $tag) (i32.const 152))   ;; Open
       (then
         ;; Collect the tail var ONLY when genuinely free (NRowFree) — the
@@ -11887,12 +12084,15 @@
         ;; would re-freshen a monomorphic fn's shared row handle.
         ;; find the row var's union-find ROOT — a buried free tail (a `~> h(f)`
         ;; / map's f-effect residual) is reached only through the alias chain.
+        ;; The concrete names' payloads contribute their free vars too.
         (local.set $root (call $graph_chase_handle (call $row_handle (local.get $eff))))
         (if (i32.eq (call $node_kind_tag (call $gnode_kind
               (call $graph_chase (local.get $root))))
               (i32.const 63))   ;; NRowFree
-          (then (return (call $singleton_handle (local.get $root))))
-          (else (return (call $make_list (i32.const 0)))))))
+          (then (return (call $list_concat
+            (call $free_in_eff_names (call $row_names (local.get $eff)))
+            (call $singleton_handle (local.get $root)))))
+          (else (return (call $free_in_eff_names (call $row_names (local.get $eff))))))))
     (if (i32.eq (local.get $tag) (i32.const 153))   ;; Neg(inner)
       (then (return
         (call $free_in_row (call $record_get (local.get $eff) (i32.const 0))))))
@@ -11915,14 +12115,21 @@
     (local $tag i32) (local $v i32) (local $fresh i32) (local $resolved i32)
     (local.set $tag (call $row_tag (local.get $eff)))
     (if (i32.eq (local.get $tag) (i32.const 150)) (then (return (local.get $eff))))
-    (if (i32.eq (local.get $tag) (i32.const 151)) (then (return (local.get $eff))))
+    ;; Closed: substitute parameterized payload TYPES (Iterate(a) ⇒
+    ;; Iterate(fresh)) so each op USE is a fresh effect instance — the row
+    ;; mirror of freshening a TVar. Bare names pass through unchanged.
+    (if (i32.eq (local.get $tag) (i32.const 151))
+      (then (return (call $row_make_closed
+        (call $subst_eff_names (call $row_names (local.get $eff))
+          (local.get $map) (local.get $map_len))))))
     (if (i32.eq (local.get $tag) (i32.const 152))   ;; Open
       (then
         ;; Resolve the row deeply (lookup_row_for — the same resolution
         ;; derive_ev_slots + lower read) and substitute the poly TAIL by its
-        ;; root, CARRYING the concrete effects. $graph_chase_handle alone skips
-        ;; names to the tail; substituting that loses the concrete row an
-        ;; instantiated poly fn carries → the caller threads wrong evidence.
+        ;; root, CARRYING the concrete effects (with their payloads freshened).
+        ;; $graph_chase_handle alone skips names to the tail; substituting that
+        ;; loses the concrete row an instantiated poly fn carries → the caller
+        ;; threads wrong evidence.
         (local.set $resolved (call $lookup_row_for (local.get $eff)))
         (if (call $row_is_open (local.get $resolved))   ;; EfOpen(concrete, tail)
           (then
@@ -11930,11 +12137,21 @@
             (local.set $fresh (call $subst_map_lookup
               (local.get $map) (local.get $map_len) (local.get $v)))
             (if (i32.lt_s (local.get $fresh) (i32.const 0))
-              (then (return (local.get $eff)))
+              (then (return (call $row_make_open
+                (call $subst_eff_names (call $row_names (local.get $resolved))
+                  (local.get $map) (local.get $map_len))
+                (call $row_handle (local.get $resolved)))))
               (else (return (call $row_make_open
-                (call $row_names (local.get $resolved)) (local.get $fresh)))))))
-        ;; EfClosed / EfPure resolved — monomorphic, no tail; verbatim.
-        (return (local.get $eff))))
+                (call $subst_eff_names (call $row_names (local.get $resolved))
+                  (local.get $map) (local.get $map_len))
+                (local.get $fresh)))))))
+        ;; EfClosed / EfPure resolved — monomorphic tail; substitute the
+        ;; resolved row's names (payloads still freshen) and return it.
+        (if (call $row_is_closed (local.get $resolved))
+          (then (return (call $row_make_closed
+            (call $subst_eff_names (call $row_names (local.get $resolved))
+              (local.get $map) (local.get $map_len))))))
+        (return (local.get $resolved))))
     (if (i32.eq (local.get $tag) (i32.const 153))   ;; Neg
       (then (return (call $row_make_neg
         (call $subst_row (call $record_get (local.get $eff) (i32.const 0))
@@ -12013,7 +12230,9 @@
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $qs_n)))
-        (local.set $old (call $list_index (local.get $qs) (local.get $i)))
+        ;; Key by the union-find ROOT, matching $ty_substitute's root-keyed
+        ;; lookup: a quantified var aliased after generalize still freshens.
+        (local.set $old (call $graph_chase_handle (call $list_index (local.get $qs) (local.get $i))))
         ;; Reason = Instantiation("inst", Fresh(old))
         (local.set $reason
           (call $reason_make_instantiation
@@ -16967,6 +17186,85 @@
       (then (return (call $node_kind_payload (local.get $nk)))))
     (call $row_make_pure))
 
+  ;; ─── Install-time payload flow (parametric effects) ──────────────────
+  ;; At `expr ~> h`, the body performs E(a) (in its row) and the handler value
+  ;; is Handler<E(P)>; unify a = P so the handler's arm param (elem : P) becomes
+  ;; the performed value type. This is what makes `field` in
+  ;; `map((field)=>field.name, xs)` resolve to xs's element. The dispatch
+  ;; gradient applied to DATA. Mirrors src/infer.mn unify_install_payload /
+  ;; handler_payload_ty / row_effect_payload / names_effect_payload.
+
+  ;; $handler_payload_ty(ty) — P from a Handler<E(P)> handler value type, or 0.
+  (func $handler_payload_ty (param $ty i32) (result i32)
+    (local $args i32) (local $inner i32) (local $inner_args i32)
+    (if (i32.ne (call $ty_tag (local.get $ty)) (i32.const 108))   ;; not TName
+      (then (return (i32.const 0))))
+    (if (i32.eqz (call $str_eq (call $ty_tname_name (local.get $ty))
+                               (call $handler_decl_handler_name_ptr)))
+      (then (return (i32.const 0))))
+    (local.set $args (call $ty_tname_args (local.get $ty)))
+    (if (i32.ne (call $len (local.get $args)) (i32.const 1))
+      (then (return (i32.const 0))))
+    (local.set $inner (call $list_index (local.get $args) (i32.const 0)))
+    (if (i32.ne (call $ty_tag (local.get $inner)) (i32.const 108))   ;; inner TName(E, [P])
+      (then (return (i32.const 0))))
+    (local.set $inner_args (call $ty_tname_args (local.get $inner)))
+    (if (i32.ne (call $len (local.get $inner_args)) (i32.const 1))
+      (then (return (i32.const 0))))
+    (call $list_index (local.get $inner_args) (i32.const 0)))
+
+  ;; $names_effect_payload(names, ename) — the payload Ty of the row's E(a)
+  ;; entry (the performed payload), or 0 if E is absent or bare.
+  (func $names_effect_payload (param $names i32) (param $ename i32) (result i32)
+    (local $n i32) (local $i i32) (local $elem i32)
+    (local.set $n (call $len (local.get $names)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $elem (call $list_index (local.get $names) (local.get $i)))
+        (if (call $eff_pname_is (local.get $elem))
+          (then
+            (if (call $str_eq (call $record_get (local.get $elem) (i32.const 0))
+                              (local.get $ename))
+              (then (return (call $eff_pname_payload (local.get $elem)))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const 0))
+
+  ;; $row_effect_payload(row, ename) — the performed payload `a` from a row's
+  ;; E(a) entry, or 0 (Closed/Open scanned; Pure/others none).
+  (func $row_effect_payload (param $row i32) (param $ename i32) (result i32)
+    (local $tag i32)
+    (local.set $tag (call $row_tag (local.get $row)))
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 151))
+                (i32.eq (local.get $tag) (i32.const 152)))
+      (then (return (call $names_effect_payload
+        (call $row_names (local.get $row)) (local.get $ename)))))
+    (i32.const 0))
+
+  ;; $unify_install_payload — flow the op payload performer→handler at the
+  ;; install: body performs E(a), handler value is Handler<E(P)>; unify a = P.
+  ;; A no-op (None-tolerant) when either side lacks the payload — a handler
+  ;; whose body never performs the parameterized effect must NOT be forced.
+  (func $unify_install_payload (param $body_row i32) (param $handled i32)
+                               (param $rh i32) (param $span i32)
+    (local $pty i32) (local $aty i32) (local $h1 i32) (local $h2 i32)
+    (local.set $pty (call $handler_payload_ty (call $lookup_ty (local.get $rh))))
+    (if (i32.eqz (local.get $pty)) (then (return)))
+    (local.set $aty (call $row_effect_payload (local.get $body_row) (local.get $handled)))
+    (if (i32.eqz (local.get $aty)) (then (return)))
+    (local.set $h1 (call $graph_fresh_ty
+      (call $reason_make_inferred (i32.const 4080))))   ;; "effects"
+    (call $graph_bind (local.get $h1) (local.get $pty)
+      (call $reason_make_inferred (i32.const 4080)))
+    (local.set $h2 (call $graph_fresh_ty
+      (call $reason_make_inferred (i32.const 4080))))
+    (call $graph_bind (local.get $h2) (local.get $aty)
+      (call $reason_make_inferred (i32.const 4080)))
+    (call $unify (local.get $h1) (local.get $h2) (local.get $span)
+      (call $reason_make_inferred (i32.const 4080))))
+
   ;; PTee (~>) — handler-effect typing: row(expr ~> h) = (row(expr) − E) ⊕ R.
   ;; Body in a NESTED row scope (so its effects don't leak — subtraction needs
   ;; it); install the handler value (binds config args → R picks up their
@@ -16999,6 +17297,11 @@
             (local.set $ename (call $schemekind_handler_ename (local.get $kind)))
             (local.set $resid (call $read_bound_row
               (call $schemekind_handler_residual (local.get $kind))))
+            ;; THE INSTALL CONNECTION: flow the op payload performer→handler.
+            ;; body performs E(a); handler value is Handler<E(P)>; unify a = P.
+            (call $unify_install_payload
+              (local.get $body_row) (local.get $ename)
+              (call $walk_expr_node_handle (local.get $right)) (local.get $span))
             (local.set $names (call $make_list (i32.const 1)))
             (drop (call $list_set (local.get $names) (i32.const 0) (local.get $ename)))
             ;; Flow-edge: row_union keeps the FIRST open arg's rowvar. The residual
@@ -18355,6 +18658,20 @@
   ;; The effect-name field on EffectOpScheme is the surface for
   ;; handler-arm matching at handler installation; the wheel's
   ;; row.wat substrate composes on this.
+  ;; $eff_for_op — the op's name-set entry carrying its payload type.
+  ;; `yield(a)` ⇒ Iterate(a) (the first param's type); a nullary op
+  ;; (`result()`) carries a FRESH payload var so every op of an effect has
+  ;; uniform parameterized arity — the install unifies one payload per
+  ;; effect. Mirrors src/infer.mn eff_for_op (the seed's record IS the
+  ;; wheel's EParameterized(name, [EAType(ty)]) — name + payload).
+  (func $eff_for_op (param $eff_name i32) (param $param_tys i32) (result i32)
+    (if (i32.eqz (call $len (local.get $param_tys)))
+      (then (return (call $eff_pname_make (local.get $eff_name)
+        (call $ty_make_tvar (call $graph_fresh_ty
+          (call $reason_make_inferred (i32.const 4080))))))))   ;; "effects"
+    (call $eff_pname_make (local.get $eff_name)
+      (call $tparam_ty (call $list_index (local.get $param_tys) (i32.const 0)))))
+
     (func $infer_register_effect_ops
         (param $eff_name i32) (param $ops i32) (param $span i32)
     (local $n_ops i32) (local $i i32)
@@ -18384,20 +18701,32 @@
         (local.set $ret_ty
           (call $walk_stmt_parser_ty_to_ty (local.get $ret_ty_parser)))
         ;; THE FUNDAMENTAL BINDING (Hβ.infer.perform-effect-row-propagation):
-        ;; the op's effect row IS Closed[eff_name] — the op is bound to its
+        ;; the op's effect row IS Closed[E(payload)] — the op is bound to its
         ;; effect in its very type, at declaration, definitionally. `perform
         ;; ping` carries {E} because ping's type carries {E}. A fresh unbound
         ;; row var (the prior form) severed the op from its effect, so no
         ;; enclosing fn ever accumulated it; a side registry would be drift.
         ;; The graph holds the truth: the op's row names its effect.
+        ;;
+        ;; PARAMETRIC: the name-set entry is a parameterized record carrying
+        ;; the op's PAYLOAD type (yield(a) ⇒ Iterate(a)) so the payload flows
+        ;; performer→handler at the install. $eff_for_op derives it (first
+        ;; param's type, or a fresh var for a nullary op). The scheme then
+        ;; quantifies the payload (free_in_row reaches the EAType var) so each
+        ;; op USE is a fresh effect instance the handle reconciles.
         (local.set $row_h (call $make_list (i32.const 0)))
         (local.set $row_h (call $list_extend_to (local.get $row_h) (i32.const 1)))
-        (drop (call $list_set (local.get $row_h) (i32.const 0) (local.get $eff_name)))
+        (drop (call $list_set (local.get $row_h) (i32.const 0)
+          (call $eff_for_op (local.get $eff_name) (local.get $param_tys))))
         (local.set $op_ty (call $ty_make_tfun
           (local.get $param_tys) (local.get $ret_ty)
           (call $row_make_closed (local.get $row_h))))
         (local.set $scheme (call $scheme_make_forall
-          (call $make_list (i32.const 0))
+          (call $list_concat
+            (call $list_concat
+              (call $free_in_params (local.get $param_tys))
+              (call $free_in_ty (local.get $ret_ty)))
+            (call $free_in_row (call $ty_tfun_row (local.get $op_ty))))
           (local.get $op_ty)))
         (local.set $reason (call $reason_make_located
           (local.get $span)
@@ -18498,7 +18827,7 @@
     (local $handler_name i32) (local $effect_name i32)
     (local $effect_ty i32) (local $handler_ty i32)
     (local $scheme i32) (local $reason i32) (local $r_handle i32)
-    (local $config_tparams i32)
+    (local $config_tparams i32) (local $payload_h i32)
     (drop (local.get $handle))
     ;; HandlerDeclStmt: [tag=124][name][effect][arms] (offsets 0/4/8/12)
     (local.set $handler_name (i32.load offset=4 (local.get $stmt)))
@@ -18523,11 +18852,20 @@
     ;; ls_push_scope env_extends as EffectOpScheme("lower_scope") below.
     (if (i32.eqz (call $str_len (local.get $effect_name)))
       (then (local.set $effect_name (local.get $handler_name))))
-    ;; Build TName(ename, []) — the inner effect-name Ty.
+    ;; The handler carries the effect's op-payload type P as a quantified
+    ;; var: Handler<E(P)>. At each install the scheme instantiates a FRESH P,
+    ;; and `~>` unifies it with the body's performed E(a) — so the arm's op
+    ;; param (elem : P) becomes the performer's value type. The data-twin of
+    ;; the dispatch gradient: a fact fixed at the install, not the decl.
+    ;; Mirrors src/infer.mn register_handler payload_h.
+    (local.set $payload_h (call $graph_fresh_ty
+      (call $reason_make_inferred (i32.const 4080))))   ;; "effects"
+    ;; Build TName(ename, [TVar(payload_h)]) — the inner effect-name Ty with
+    ;; its op-payload as the single type argument.
     (local.set $effect_ty
       (call $ty_make_tname
         (local.get $effect_name)
-        (call $make_list (i32.const 0))))
+        (call $singleton_handle (call $ty_make_tvar (local.get $payload_h)))))
     ;; Build TName("Handler", [TName(ename, [])]) — the outer Handler Ty
     ;; with the effect-name as its single type argument. "Handler" is at
     ;; offset 4112 in the data segment per data-offset audit (lives near
@@ -18554,14 +18892,16 @@
       (local.get $handler_name)
       (local.get $span)
       (i32.const 0)))
+    ;; Quantify payload_h — Forall([payload_h], scheme_body) — so each
+    ;; install instantiates a FRESH P that `~>` unifies with the body's E(a).
     (if (i32.eqz (call $len (local.get $config_tparams)))
       (then
         (local.set $scheme (call $scheme_make_forall
-          (call $make_list (i32.const 0))
+          (call $singleton_handle (local.get $payload_h))
           (local.get $handler_ty))))
       (else
         (local.set $scheme (call $scheme_make_forall
-          (call $make_list (i32.const 0))
+          (call $singleton_handle (local.get $payload_h))
           (call $ty_make_tfun
             (local.get $config_tparams)
             (local.get $handler_ty)
@@ -18579,7 +18919,8 @@
       (local.get $handler_name)
       (local.get $scheme)
       (local.get $reason)
-      (call $schemekind_make_handler (local.get $effect_name) (local.get $r_handle)))
+      (call $schemekind_make_handler (local.get $effect_name) (local.get $r_handle)
+        (i32.load offset=12 (local.get $stmt))))
     ;; ─── Per-arm typing (Hβ.first-light.infer-handler-decl-arms-typing) ──
     ;; HandlerDeclStmt offset 12 = arms list. Each arm is make_record(0, 3)
     ;; with {args, body, op_name} at field indices 0/1/2 (Lock #8
@@ -18602,7 +18943,8 @@
       (local.get $handler_name)
       (local.get $span)
       (local.get $config_tparams)
-      (i32.load offset=16 (local.get $stmt)))
+      (i32.load offset=16 (local.get $stmt))
+      (local.get $payload_h))
     (call $walk_expr_inf_exit_fn)
     ;; Hβ.first-light.tier2-perform-or-env-scan — register each arm's
     ;; op_name → handler_name in the default-handler-per-op map.
@@ -18700,10 +19042,8 @@
         (local.set $arm     (call $list_index (local.get $arms) (local.get $i)))
         (local.set $args    (call $record_get (local.get $arm) (i32.const 0)))
         (local.set $op_name (call $record_get (local.get $arm) (i32.const 2)))
-        ;; Lower default-handler-map registration (existing behavior).
-        (call $lower_register_default_handler_for_op
-          (local.get $op_name)
-          (local.get $handler_name))
+        ;; (op→handler registry dissolved — dispatch reads arms@HandlerKind
+        ;;  field-4 live via $lower_lookup_default_handler_for_op; no side-ledger.)
         ;; EffectOpScheme env_extend (new substrate). Skip if already
         ;; bound as EffectOpScheme from a prior `effect E { op() }`
         ;; declaration — the handler's arm just attaches a body to an
@@ -18745,15 +19085,22 @@
           (local.set $ret_h (call $graph_fresh_ty
             (call $reason_make_located (local.get $span)
               (call $reason_make_inferred (i32.const 6256)))))   ;; "return"
-          (local.set $row_h (call $graph_fresh_row
-            (call $reason_make_located (local.get $span)
-              (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
+          ;; PARAMETRIC: the arm op's row IS Closed[E(payload)] — the payload
+          ;; is the op's FIRST param type (or a fresh var for a nullary op),
+          ;; carried in a parameterized name-set entry exactly like
+          ;; $infer_register_effect_ops. So a handler that IS its own effect
+          ;; flows its op payload performer→handler at the install too. The
+          ;; payload var is one of the quantified param tyvars (or freshly
+          ;; minted by $eff_for_op), so it freshens per op use.
+          (local.set $row_h (call $row_make_closed
+            (call $singleton_handle
+              (call $eff_for_op (local.get $effect_name) (local.get $tparam_list)))))
           (local.set $op_ty (call $ty_make_tfun
             (local.get $tparam_list)
             (call $ty_make_tvar (local.get $ret_h))
-            (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
-          ;; Polymorphic over param tyvars + ret tyvar (row stays opaque
-          ;; per the H1.4 separation — see line 87+ commentary).
+            (local.get $row_h)))
+          ;; Polymorphic over param tyvars + ret tyvar; the payload var rides
+          ;; in the row and is quantified via free_in_row at op USE sites.
           (local.set $tyvar_handles
             (call $list_extend_to (local.get $tyvar_handles)
               (i32.add (local.get $n_args) (i32.const 1))))
@@ -18826,6 +19173,45 @@
   ;; $ty_tfun_params + $ty_tfun_return + $env_scope_enter/exit +
   ;; $infer_walk_pat + $infer_walk_expr + $unify — all existing substrate.
 
+  ;; $unify_op_payload — unify a handler's payload var (payload_h) with the
+  ;; op's payload type carried in its (instantiated) row — Iterate(a) ⇒ unify
+  ;; a with P. The handler half of the payload flow; `~>` then unifies P with
+  ;; the body's E(performed). Mirrors src/infer.mn unify_op_payload /
+  ;; unify_payload_in_names. unify takes HANDLES, so each EAType payload is
+  ;; bound to a fresh handle then unified with payload_h.
+  (func $unify_op_payload (param $op_row i32) (param $payload_h i32) (param $span i32)
+    (local $tag i32)
+    (local.set $tag (call $row_tag (local.get $op_row)))
+    ;; Closed (151) or Open (152) — walk the concrete names; Pure/others none.
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 151))
+                (i32.eq (local.get $tag) (i32.const 152)))
+      (then (call $unify_payload_in_names
+        (call $row_names (local.get $op_row)) (local.get $payload_h)
+        (local.get $span)))))
+
+  (func $unify_payload_in_names (param $names i32) (param $payload_h i32)
+                                (param $span i32)
+    (local $n i32) (local $i i32) (local $elem i32) (local $th i32)
+    (local.set $n (call $len (local.get $names)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $elem (call $list_index (local.get $names) (local.get $i)))
+        (if (call $eff_pname_is (local.get $elem))
+          (then
+            (local.set $th (call $graph_fresh_ty
+              (call $reason_make_located (local.get $span)
+                (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
+            (call $graph_bind (local.get $th)
+              (call $eff_pname_payload (local.get $elem))
+              (call $reason_make_located (local.get $span)
+                (call $reason_make_inferred (i32.const 4080))))
+            (call $unify (local.get $th) (local.get $payload_h) (local.get $span)
+              (call $reason_make_inferred (i32.const 4080)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter))))
+
   ;; Data segments for handler-arm typing diagnostics.
   ;; Offsets 4336+ (past "Handler" at 4320+11=4331; 4336 is 16-aligned).
   (data (i32.const 4336) "\10\00\00\00handler arm body")             ;; 16 bytes
@@ -18833,11 +19219,11 @@
 
   (func $infer_handler_decl_arms_walk
         (param $arms i32) (param $handler_name i32) (param $span i32)
-        (param $config i32) (param $state i32)
+        (param $config i32) (param $state i32) (param $payload_h i32)
     (local $n i32) (local $i i32)
     (local $arm i32) (local $args i32) (local $body_node i32) (local $op_name i32)
     (local $binding i32) (local $scheme i32) (local $op_ty i32) (local $op_tag i32)
-    (local $params i32) (local $ret_ty i32)
+    (local $params i32) (local $ret_ty i32) (local $op_row i32)
     (local $n_args i32) (local $n_params i32)
     (local $body_h i32) (local $s_h i32)
     (local $saved_ret i32) (local $saved_res i32)
@@ -18879,19 +19265,29 @@
             ;; effect. Skip this arm; continue to next.
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $each)))
-        ;; Extract op's type: scheme_body gives the TFun directly
-        ;; (monomorphic Forall([], op_ty) per $infer_register_effect_ops).
+        ;; Extract op's type: INSTANTIATE the scheme so the op's payload var
+        ;; is a FRESH instance (the op scheme now quantifies its E(payload) —
+        ;; $infer_register_effect_ops). The fresh params/ret/row share that
+        ;; one fresh payload, so unifying the row's payload with the handler's
+        ;; payload_h makes the arm param (elem) the performer's value type.
         (local.set $scheme (call $env_binding_scheme (local.get $binding)))
-        (local.set $op_ty (call $scheme_body (local.get $scheme)))
+        (local.set $op_ty (call $instantiate (local.get $scheme)))
         ;; Verify it's a TFun (tag 107). If not, skip (productive-under-error).
         (local.set $op_tag (call $ty_tag (local.get $op_ty)))
         (if (i32.ne (local.get $op_tag) (i32.const 107))
           (then
             (local.set $i (i32.add (local.get $i) (i32.const 1)))
             (br $each)))
-        ;; Extract params list + return type from the op's TFun.
+        ;; Extract params list + return type + row from the op's TFun.
         (local.set $params (call $ty_tfun_params (local.get $op_ty)))
         (local.set $ret_ty (call $ty_tfun_return (local.get $op_ty)))
+        (local.set $op_row (call $ty_tfun_row (local.get $op_ty)))
+        ;; Payload flow (handler half): unify the op's instantiated payload
+        ;; (Iterate(a) ⇒ a) with this handler's P (payload_h). `~>` then unifies
+        ;; P with the body's performed E — so the arm param binds the performer's
+        ;; value type. Mirrors src/infer.mn unify_op_payload.
+        (call $unify_op_payload
+          (local.get $op_row) (local.get $payload_h) (local.get $span))
         ;; Arity check: len(args) vs len(params). Skip arm on mismatch
         ;; (productive-under-error — arity diagnostic is post-L1).
         (local.set $n_args (call $len (local.get $args)))
@@ -19930,56 +20326,29 @@
     ;; default-handler; protocol_reflexive_interiority.md).
     (i32.const 0))
 
-  ;; Hβ.first-light.tier2-perform-or-env-scan — register/lookup the
-  ;; default handler for each op-name. Called from infer_walk_stmt's
-  ;; HandlerDeclStmt arm at handler-decl time (per-arm registration).
-  ;; Each entry is a 2-record (op_name, handler_name).
-  (func $lower_register_default_handler_for_op (export "lower_register_default_handler_for_op")
-        (param $op_name i32) (param $handler_name i32)
-    (local $entry i32) (local $i i32) (local $existing_op i32)
-    (call $lower_init)
-    ;; Skip if already registered (first-handler-wins for the L1 case).
-    (local.set $i (i32.const 0))
-    (block $skip
-      (loop $iter
-        (br_if $skip (i32.ge_u (local.get $i) (global.get $lower_default_op_handler_map_len_g)))
-        (local.set $entry (call $list_index
-                                (global.get $lower_default_op_handler_map_ptr)
-                                (local.get $i)))
-        (local.set $existing_op (call $record_get (local.get $entry) (i32.const 0)))
-        (if (call $str_eq (local.get $existing_op) (local.get $op_name))
-          (then (return)))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter)))
-    (local.set $entry (call $make_record (i32.const 0) (i32.const 2)))
-    (call $record_set (local.get $entry) (i32.const 0) (local.get $op_name))
-    (call $record_set (local.get $entry) (i32.const 1) (local.get $handler_name))
-    (global.set $lower_default_op_handler_map_ptr
-      (call $list_extend_to (global.get $lower_default_op_handler_map_ptr)
-        (i32.add (global.get $lower_default_op_handler_map_len_g) (i32.const 1))))
-    (drop (call $list_set
-                (global.get $lower_default_op_handler_map_ptr)
-                (global.get $lower_default_op_handler_map_len_g)
-                (local.get $entry)))
-    (global.set $lower_default_op_handler_map_len_g
-      (i32.add (global.get $lower_default_op_handler_map_len_g) (i32.const 1))))
+  ;; The op→handler default-handler REGISTRY is DELETED (writer + ZZINSTRUMENT +
+  ;; the infer-time registration call). Dispatch reads the implementing handler's
+  ;; arm live from the env (HandlerKind.arms@field4) via the uniqueness-counting
+  ;; $lower_lookup_default_handler_for_op below — no side-ledger.
 
+  ;; ─── $lower_lookup_default_handler_for_op — op→handler dispatch, READ O(1) ──
+  ;; The op CARRIES its unique default handler on its own EffectOpScheme binding,
+  ;; drawn once at handler-decl pre-register ($lower_pre_register_handler_node,
+  ;; where the real arms live). Dispatch is a READ, not a scan: resolve the op's
+  ;; binding (standard name resolution) and read its carried handler. 0 =
+  ;; none/ambiguous → thread (ev16's `note` has two implementers → ambiguous;
+  ;; graph_chase has one → graph_handler). "I already have this" — the graph
+  ;; holds the dispatch fact on the op itself; no env scan, no side-ledger.
   (func $lower_lookup_default_handler_for_op (export "lower_lookup_default_handler_for_op")
         (param $op_name i32) (result i32)
-    (local $entry i32) (local $i i32) (local $existing_op i32)
-    (call $lower_init)
-    (local.set $i (i32.const 0))
-    (block $done
-      (loop $iter
-        (br_if $done (i32.ge_u (local.get $i) (global.get $lower_default_op_handler_map_len_g)))
-        (local.set $entry (call $list_index
-                                (global.get $lower_default_op_handler_map_ptr)
-                                (local.get $i)))
-        (local.set $existing_op (call $record_get (local.get $entry) (i32.const 0)))
-        (if (call $str_eq (local.get $existing_op) (local.get $op_name))
-          (then (return (call $record_get (local.get $entry) (i32.const 1)))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter)))
+    (local $bind i32) (local $kind i32)
+    (call $env_init)
+    (local.set $bind (call $env_lookup (local.get $op_name)))
+    (if (i32.eqz (local.get $bind)) (then (return (i32.const 0))))
+    (local.set $kind (call $env_binding_kind (local.get $bind)))
+    (if (i32.and (i32.ge_u (local.get $kind) (global.get $heap_base))
+                 (i32.eq (call $tag_of (local.get $kind)) (i32.const 133)))
+      (then (return (call $schemekind_effectop_default_handler (local.get $kind)))))
     (i32.const 0))
 
   ;; Per protocol_handler_is_state_is_closure_is_evidence.md — return the
@@ -20108,6 +20477,64 @@
               (local.get $ename)))))
         (local.set $i (i32.sub (local.get $i) (i32.const 1)))
         (br $iter)))
+    (i32.const 0))
+
+  ;; ─── $handler_is_no_config — singleton predicate ─────────────────────
+  ;; A handler with NO config params installs ONCE (a singleton: its
+  ;; `$<h>_state_g` home IS its evidence everywhere). A config-bearing handler
+  ;; installs per-call → its evidence is genuinely threaded. config is field 2
+  ;; of HandlerKind(handled_ename, residual, config, state, arms); the kind IS a
+  ;; HandlerKind iff its runtime tag == $schemekind_handler_tag (the NAMED
+  ;; single-source constant — never the raw number, never the ADT byte 6).
+  (func $handler_is_no_config (param $handler i32) (result i32)
+    (local $binding i32) (local $kind i32)
+    (local.set $binding (call $env_lookup_value (local.get $handler)))
+    (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
+    (local.set $kind (call $env_binding_kind (local.get $binding)))
+    (if (i32.lt_u (local.get $kind) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.ne (call $tag_of (local.get $kind)) (global.get $schemekind_handler_tag)) (then (return (i32.const 0))))
+    (i32.eqz (call $len (call $record_get (local.get $kind) (i32.const 2)))))
+
+  ;; ─── $lower_lookup_default_handler_for_ename — singleton home gate ────
+  ;; The no-config handler covering $ename — read live from the env (the env
+  ;; NAMES every handler's node). Reached ONLY at gradient step 3 (the resolve
+  ;; loop tries the threaded slot FIRST), so it resolves only effects the frame
+  ;; does NOT thread — the ambient route handlers (graph/env/lower-scope). That
+  ;; ordering is what prevents the over-match: a genuinely-threaded effect (the
+  ;; ev2/ev4 evidence path) never reaches here. The O(1)-filter (no-config
+  ;; HandlerKind read from the binding in hand) keeps the scan O(env), not
+  ;; O(env²). Recording this on the node at infer time (read O(1) by handle) is
+  ;; the named peer Hβ.lower.dispatch-recorded-by-inference.
+  (func $lower_lookup_default_handler_for_ename (param $ename i32) (result i32)
+    (local $scope_idx i32) (local $frame i32) (local $buf i32)
+    (local $binding_idx i32) (local $binding i32) (local $kind i32) (local $hname i32)
+    (call $env_init)
+    (local.set $scope_idx (global.get $env_scope_count_g))
+    (block $outer_done
+      (loop $scope_loop
+        (br_if $outer_done (i32.eqz (local.get $scope_idx)))
+        (local.set $scope_idx (i32.sub (local.get $scope_idx) (i32.const 1)))
+        (local.set $frame
+          (call $list_index (global.get $env_scopes_ptr) (local.get $scope_idx)))
+        (local.set $buf (call $env_frame_buf (local.get $frame)))
+        (local.set $binding_idx (call $env_frame_len (local.get $frame)))
+        (block $inner_done
+          (loop $binding_loop
+            (br_if $inner_done (i32.eqz (local.get $binding_idx)))
+            (local.set $binding_idx (i32.sub (local.get $binding_idx) (i32.const 1)))
+            (local.set $binding
+              (call $list_index (local.get $buf) (local.get $binding_idx)))
+            (local.set $kind (call $env_binding_kind (local.get $binding)))
+            (if (i32.and (i32.ge_u (local.get $kind) (global.get $heap_base))
+                  (i32.and (i32.eq (call $tag_of (local.get $kind))
+                                   (global.get $schemekind_handler_tag))
+                           (i32.eqz (call $len (call $record_get (local.get $kind) (i32.const 2))))))
+              (then
+                (local.set $hname (call $env_binding_name (local.get $binding)))
+                (if (call $handler_covers_ename (local.get $hname) (local.get $ename))
+                  (then (return (local.get $hname))))))
+            (br $binding_loop)))
+        (br $scope_loop)))
     (i32.const 0))
 
   ;; ─── Arm-body evidence ledger (Hβ.emit.handler-record-ev-capture) ────
@@ -23610,7 +24037,13 @@
     (block $done
       (loop $each
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $name (call $list_index (local.get $names) (local.get $i)))
+        ;; Project the name-set ELEMENT to its bare NAME string ($eff_name_str:
+        ;; a parameterized entry's payload rides on the row for inference but
+        ;; dispatch indexes by name alone). Every downstream ev-slot consumer
+        ;; reads this bare-string projection, so the dispatch layer is invariant
+        ;; to the row carrying payload types.
+        (local.set $name (call $eff_name_str
+          (call $list_index (local.get $names) (local.get $i))))
         (if (i32.eqz (i32.or (i32.or
               (call $str_eq (local.get $name) (i32.const 6496))
               (call $str_eq (local.get $name) (i32.const 6512)))
@@ -23632,6 +24065,38 @@
     (if (call $lower_arm_ev_active)
       (then (return (call $lower_arm_ev_index_for (local.get $ename)))))
     (call $lower_compute_ev_index_for_effect (local.get $ename)))
+
+  ;; ─── $lower_ev_slot_raw — the effect's slot in THIS frame's row, or -1 ──
+  ;; The UN-clamped read for the dispatch gradient: -1 means the frame does NOT
+  ;; thread $ename (it is ambient / home-dispatched), so the gradient branches
+  ;; to the singleton home rather than fabricating slot 0. Arm bodies append on
+  ;; first-encounter (always >= 0); a fn-body searches its row and returns -1
+  ;; when absent. NO eprint — a not-found here is the CORRECT home-dispatch path,
+  ;; not the row-conservation leak.
+  (func $lower_ev_slot_raw (param $ename i32) (result i32)
+    (local $fn_name i32) (local $binding i32) (local $scheme i32)
+    (local $names i32) (local $n i32) (local $j i32)
+    (if (call $lower_arm_ev_active)
+      (then (return (call $lower_arm_ev_index_for (local.get $ename)))))
+    (if (i32.eqz (local.get $ename)) (then (return (i32.const -1))))
+    (local.set $fn_name (call $ls_outer_fn_name))
+    (if (i32.eqz (local.get $fn_name)) (then (return (i32.const -1))))
+    (local.set $binding (call $env_lookup_value (local.get $fn_name)))
+    (if (i32.eqz (local.get $binding)) (then (return (i32.const -1))))
+    (local.set $scheme (call $env_binding_scheme (local.get $binding)))
+    (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const -1))))
+    (local.set $names (call $effects_of (call $scheme_body (local.get $scheme))))
+    (local.set $n (call $len (local.get $names)))
+    (local.set $j (i32.const 0))
+    (block $found
+      (loop $search
+        (br_if $found (i32.ge_u (local.get $j) (local.get $n)))
+        (if (call $str_eq (call $list_index (local.get $names) (local.get $j))
+                          (local.get $ename))
+          (then (return (local.get $j))))
+        (local.set $j (i32.add (local.get $j) (i32.const 1)))
+        (br $search)))
+    (i32.const -1))
 
   ;; ─── $effects_of — THE SEAM (master plan §6 1★ Stage 0). The single
   ;; projection of a fn's dispatched effect-row names (canonical order, builtins
@@ -23659,10 +24124,15 @@
       (then (return (call $make_list (i32.const 0)))))
     (call $row_dispatched_names (call $row_names (local.get $row))))
 
-  (func $derive_ev_slots (export "derive_ev_slots") (param $callee_handle i32) (result i32)
-    (local $names i32) (local $n i32) (local $i i32)
-    (local $ename i32) (local $state_local i32) (local $evs i32)
-    (local.set $names (call $effects_of (call $lookup_ty (local.get $callee_handle))))
+  ;; ─── $resolve_evs_for_names — effect-names → evidence list (the shared read) ─
+  ;; One ev per USER effect, in canonical (sorted-lex) order = the callee's
+  ;; ev-slot order. Both the call-seam ($derive_ev_slots — names from the
+  ;; callee's env scheme) and a closure's OWN evidence ($derive_closure_evs —
+  ;; names from its handle's inferred row) resolve through HERE: one projection,
+  ;; two effect-sources, never the call-site instantiation.
+  (func $resolve_evs_for_names (param $names i32) (result i32)
+    (local $n i32) (local $i i32)
+    (local $ename i32) (local $state_local i32) (local $evs i32) (local $hname i32) (local $raw i32)
     (local.set $n (call $len (local.get $names)))
     (if (i32.eqz (local.get $n))
       (then (return (call $make_list (i32.const 0)))))
@@ -23692,12 +24162,59 @@
             (drop (call $list_set (local.get $evs) (local.get $i)
                     (call $lexpr_make_llocal (i32.const 0) (local.get $state_local)))))
           (else
-            (drop (call $list_set (local.get $evs) (local.get $i)
-                    (call $lexpr_make_levslotref (i32.const 0)
-                      (call $lower_ev_index_in_frame (local.get $ename)))))))
+            ;; THE DISPATCH GRADIENT (mirror of src/lower.mn resolve_ev_for_ename):
+            ;;   step 2 — effect THREADED in this frame (present in its row) →
+            ;;     forwarded slot. Checked FIRST so a genuinely-threaded effect
+            ;;     (the ev2/ev4 evidence path) is never mistaken for a singleton.
+            ;;   step 3 — effect the row does NOT carry → ambient install; a
+            ;;     no-config global singleton reads its `$<h>_state_g` HOME.
+            ;;   step 4 — neither → slot-0 floor, never a fabricated thread.
+            (local.set $raw (call $lower_ev_slot_raw (local.get $ename)))
+            (if (i32.ge_s (local.get $raw) (i32.const 0))
+              (then
+                (drop (call $list_set (local.get $evs) (local.get $i)
+                        (call $lexpr_make_levslotref (i32.const 0) (local.get $raw)))))
+              (else
+                (local.set $hname (call $lower_lookup_default_handler_for_ename (local.get $ename)))
+                (if (i32.ne (local.get $hname) (i32.const 0))
+                  (then
+                    (drop (call $list_set (local.get $evs) (local.get $i)
+                            (call $lexpr_make_lglobal (i32.const 0)
+                              (call $str_concat (local.get $hname) (i32.const 5424))))))
+                  (else
+                    (drop (call $list_set (local.get $evs) (local.get $i)
+                            (call $lexpr_make_levslotref (i32.const 0) (i32.const 0))))))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
     (local.get $evs))
+
+  ;; ─── $derive_ev_slots — evidence to THREAD to a named callee (the seam) ──────
+  ;; Read the layout from the home INFERENCE wrote: the callee's env scheme by
+  ;; name — the SAME read $lower_compute_ev_index_for_effect uses. One fact, two
+  ;; readers; never the call-site instantiation. A non-global callee (closure /
+  ;; value) carries its own evidence → nothing to thread.
+  (func $derive_ev_slots (export "derive_ev_slots") (param $lo_f i32) (result i32)
+    (local $name i32) (local $binding i32) (local $scheme i32)
+    (if (i32.ne (call $tag_of (local.get $lo_f)) (i32.const 302))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $name (call $lexpr_lglobal_name (local.get $lo_f)))
+    (local.set $binding (call $env_lookup_value (local.get $name)))
+    (if (i32.eqz (local.get $binding))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $scheme (call $env_binding_scheme (local.get $binding)))
+    (if (i32.lt_u (local.get $scheme) (global.get $heap_base))
+      (then (return (call $make_list (i32.const 0)))))
+    (call $resolve_evs_for_names
+      (call $effects_of (call $scheme_body (local.get $scheme)))))
+
+  ;; ─── $derive_closure_evs — a closure's OWN evidence (its handle's row) ───────
+  ;; The effects THIS closure's body performs, from its inferred type at the
+  ;; handle ($lookup_ty), resolved at the definition site. NOT a callee scheme:
+  ;; a lambda / let-bound closure has no env name and CARRIES its evidence where
+  ;; a call threads it. Mirror of src/lower.mn $derive_closure_evs.
+  (func $derive_closure_evs (param $handle i32) (result i32)
+    (call $resolve_evs_for_names
+      (call $effects_of (call $lookup_ty (local.get $handle)))))
 
   ;; ─── $lower_call_default — monomorphic-vs-polymorphic gate ─────────
   ;; Per src/lower.mn:242-249 + Lock #1. The gradient cash-out.
@@ -23725,7 +24242,7 @@
     ;; deep perform reads an unthreaded ev-slot and traps. Empty → LCall (the
     ;; monomorphic >95% case). Replaces the row_is_ground/$monomorphic_at
     ;; gate, which conflated "closed row" with "needs no evidence".
-    (local.set $evs (call $derive_ev_slots (local.get $fh)))
+    (local.set $evs (call $derive_ev_slots (local.get $lo_f)))
     (if (i32.eqz (call $len (local.get $evs)))
       (then (return (call $lexpr_make_lcall
                       (local.get $handle)
@@ -23866,6 +24383,16 @@
                                       (local.get $lo_args)
                                       (call $lower_resolve_handler_state_for_op (local.get $name)))))
                       (else
+                        ;; THE DISPATCH GRADIENT (unify with $lower_perform): the op
+                        ;; CARRIES its unique default handler (drawn at pre-register).
+                        ;; Read O(1) — a known singleton homes to its $<h>_state_g,
+                        ;; never the threaded ev-slot. "I already have this." Only
+                        ;; ambiguous / genuinely-unknown ops keep the evidence floor.
+                        (local.set $tag_id (call $lower_lookup_default_handler_for_op (local.get $name)))
+                        (if (i32.ne (local.get $tag_id) (i32.const 0))
+                          (then (return (call $lower_direct_from_evidence
+                                          (local.get $h) (local.get $name)
+                                          (local.get $tag_id) (local.get $lo_args)))))
                         ;; Tier 2: evidence-passing per graph EffectDeclKind.
                         (return (call $lexpr_make_levperform
                                       (local.get $h)
@@ -26827,14 +27354,13 @@
         (param $fields i32) (param $target i32)
         (param $i i32) (param $n i32) (result i32)
     (local $entry i32) (local $name i32)
+    ;; field-not-found → -1 (the loud floor; LFieldLoad emit guards <0 ->
+    ;; (unreachable)). field_byte_offset itself is CORRECT (probe-confirmed:
+    ;; it reads real field_pair names and finds the target at 4*i for
+    ;; multi-field records — the old "collapses to 0" comment was stale).
     (if (i32.ge_u (local.get $i) (local.get $n))
-      (then (return (i32.const 0))))
+      (then (return (i32.const -1))))
     (local.set $entry (call $list_index (local.get $fields) (local.get $i)))
-    ;; Entries are field_pair records (FIELD_PAIR=203, $field_pair_make) —
-    ;; read the name via the field_pair accessor. list_index reads a record
-    ;; as a flat list and yields the wrong slot → "" → str_eq never matches
-    ;; → every multi-field .field collapses to offset 0 (the root of the
-    ;; placement.slot-reads-ename OOB during wheel arm pre-registration).
     (local.set $name (call $field_pair_name (local.get $entry)))
     (if (call $str_eq (local.get $name) (local.get $target))
       (then (return (i32.mul (local.get $i) (i32.const 4)))))
@@ -27091,7 +27617,7 @@
     ;; region is empty and a perform inside the lambda reads a bad slot when
     ;; the closure is called elsewhere (a higher-order fn's arm calling f(x)).
     ;; Mirror of src/lower.mn LambdaExpr.
-    (local.set $evs  (call $derive_ev_slots (local.get $h)))
+    (local.set $evs  (call $derive_closure_evs (local.get $h)))
     (call $lexpr_make_lmakeclosure
       (local.get $h)
       (local.get $fn_ir)
@@ -27537,7 +28063,7 @@
     ;; A closure IS state IS evidence: capture the evidence for the effects
     ;; this closure's body performs (the let-bound mirror of the inline-lambda
     ;; path at walk_compound.wat + src/lower.mn LambdaExpr).
-    (local.set $evs  (call $derive_ev_slots (local.get $handle)))
+    (local.set $evs  (call $derive_closure_evs (local.get $handle)))
     (local.set $closure (call $lexpr_make_lmakeclosure
                           (local.get $handle)
                           (local.get $fn_ir)
@@ -27629,6 +28155,8 @@
 
   (func $lower_pre_register_handler_node (param $node i32)
     (local $body i32) (local $stmt i32) (local $tag i32)
+    (local $arms i32) (local $hname i32) (local $i i32) (local $n i32)
+    (local $arm i32) (local $opn i32) (local $bind i32) (local $kind i32)
     (local.set $body (i32.load offset=4 (local.get $node)))
     (if (i32.ne (i32.load (local.get $body)) (i32.const 111)) (then (return)))
     (local.set $stmt (i32.load offset=4 (local.get $body)))
@@ -27639,15 +28167,37 @@
         (call $lower_pre_register_handler_node (i32.load offset=8 (local.get $stmt)))
         (return)))
     (if (i32.ne (local.get $tag) (i32.const 124)) (then (return)))
+    (local.set $hname (i32.load offset=4  (local.get $stmt)))
+    (local.set $arms  (i32.load offset=12 (local.get $stmt)))
     (call $handler_state_inits_register
-      (i32.load offset=4 (local.get $stmt))
+      (local.get $hname)
       ;; config@20, state_fields@16 (mk_handler_decl_full layout)
       (call $lower_state_field_inits
         (i32.load offset=20 (local.get $stmt))
         (i32.load offset=16 (local.get $stmt)))
-      (call $build_handler_arm_names
-        (i32.load offset=4 (local.get $stmt))
-        (i32.load offset=12 (local.get $stmt)))))
+      (call $build_handler_arm_names (local.get $hname) (local.get $arms)))
+    ;; DRAW op→handler ONTO THE OP: each arm's op carries this handler as its
+    ;; unique default. The REAL arms live HERE (offset 12 at lower; infer's are
+    ;; empty); a second distinct implementer marks the op ambiguous (→ thread).
+    ;; Dispatch then READS this O(1) — no env scan, no side-ledger. "I already
+    ;; have this": the op's EffectOpScheme binding IS the dispatch fact.
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $l
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
+        (local.set $opn (call $record_get (local.get $arm) (i32.const 2)))
+        (local.set $bind (call $env_lookup (local.get $opn)))
+        (if (local.get $bind)
+          (then
+            (local.set $kind (call $env_binding_kind (local.get $bind)))
+            (if (i32.and (i32.ge_u (local.get $kind) (global.get $heap_base))
+                         (i32.eq (call $tag_of (local.get $kind)) (i32.const 133)))
+              (then (call $schemekind_effectop_set_handler
+                          (local.get $kind) (local.get $hname))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $l))))
 
   ;; ─── $lower_walk_stmt_handler_decl — HandlerDeclStmt arm (tag 124) ──
   ;; Per src/lower.mn:617-625 + Lock #7.
@@ -30351,9 +30901,17 @@
   ;; H2 record substrate: field i lands at byte 4*i; offset_bytes is
   ;; pre-computed by Hβ.lower walk_compound's $lower_field arm.
   (func $emit_lfieldload (param $r i32)
-    (call $emit_lexpr (call $lexpr_lfieldload_record (local.get $r)))
-    (call $el_emit_i32_load_offset
-      (call $lexpr_lfieldload_offset_bytes (local.get $r))))
+    (local $off i32)
+    (local.set $off (call $lexpr_lfieldload_offset_bytes (local.get $r)))
+    ;; NO SILENT FALLBACK (twin of the wheel's LFieldLoad guard, PLAN §0):
+    ;; offset < 0 = resolve_field_offset could not prove the offset → emit
+    ;; (unreachable), the named wrong, never i32.load offset=-1 (invalid WAT)
+    ;; nor a fabricated load reading a foreign field.
+    (if (i32.lt_s (local.get $off) (i32.const 0))
+      (then (call $ec_emit_unreachable))
+      (else
+        (call $emit_lexpr (call $lexpr_lfieldload_record (local.get $r)))
+        (call $el_emit_i32_load_offset (local.get $off)))))
 
   ;; ═══ emit_control.wat — Hβ.emit control family (Tier 6, chunk #5) ═══
   ;; Implements: Hβ-emit-substrate.md §2.3 (control family — LIf tag 314 +
@@ -35209,32 +35767,56 @@
   ;; not yet seen. Needed when arms are reached via env-scan without a
   ;; covering `~>` LHandleWith in the LowExpr tree (typical for nested
   ;; handlers whose install lives in a fn we don't inline-lower).
-  (func $emit_handler_state_globals_from_default_map
-    (local $i i32) (local $entry i32) (local $hname i32) (local $global_name i32)
-    (call $lower_init)
-    (local.set $i (i32.const 0))
-    (block $done
-      (loop $iter
-        (br_if $done (i32.ge_u (local.get $i)
-                               (global.get $lower_default_op_handler_map_len_g)))
-        (local.set $entry (call $list_index
-                                (global.get $lower_default_op_handler_map_ptr)
-                                (local.get $i)))
-        (local.set $hname (call $record_get (local.get $entry) (i32.const 1)))
-        (if (call $emit_handler_state_register_first (local.get $hname))
-          (then
-            (call $emit_indent)
-            (call $emit_cstr (i32.const 862) (i32.const 8))
-            (call $emit_byte (i32.const 36))
-            (local.set $global_name
-              (call $str_concat (local.get $hname) (i32.const 5424)))
-            (call $emit_str (local.get $global_name))
-            (call $emit_cstr (i32.const 1110) (i32.const 11))
-            (call $emit_i32_const (i32.const 0))
-            (call $emit_close)
-            (call $emit_nl)))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter))))
+  ;; Declare a `$<h>_state_g` home global for every no-config handler in the
+  ;; env — the SAME set lower's gradient (step 3, $lower_lookup_default_handler_
+  ;; for_ename) home-dispatches to. emit and lower MUST agree on which handlers
+  ;; have a home: lower reads the env live, so emit reads the env live too (one
+  ;; criterion, two readers — never the registry on one side and the env on the
+  ;; other). Installed handlers' globals are SET at install (emit_handler_state_
+  ;; globals above); a no-config handler never installed in this program (a
+  ;; post-first-light feature: fork/multishot, SMT, DSP) stays 0 — never read,
+  ;; since its effect is never performed here, but its home reference assembles.
+  (func $emit_noconfig_handler_globals
+    (local $scope_idx i32) (local $frame i32) (local $buf i32)
+    (local $binding_idx i32) (local $binding i32) (local $kind i32)
+    (local $hname i32) (local $global_name i32)
+    (call $env_init)
+    (local.set $scope_idx (global.get $env_scope_count_g))
+    (block $outer_done
+      (loop $scope_loop
+        (br_if $outer_done (i32.eqz (local.get $scope_idx)))
+        (local.set $scope_idx (i32.sub (local.get $scope_idx) (i32.const 1)))
+        (local.set $frame
+          (call $list_index (global.get $env_scopes_ptr) (local.get $scope_idx)))
+        (local.set $buf (call $env_frame_buf (local.get $frame)))
+        (local.set $binding_idx (call $env_frame_len (local.get $frame)))
+        (block $inner_done
+          (loop $binding_loop
+            (br_if $inner_done (i32.eqz (local.get $binding_idx)))
+            (local.set $binding_idx (i32.sub (local.get $binding_idx) (i32.const 1)))
+            (local.set $binding
+              (call $list_index (local.get $buf) (local.get $binding_idx)))
+            (local.set $kind (call $env_binding_kind (local.get $binding)))
+            (if (i32.and (i32.ge_u (local.get $kind) (global.get $heap_base))
+                  (i32.and (i32.eq (call $tag_of (local.get $kind))
+                                   (global.get $schemekind_handler_tag))
+                           (i32.eqz (call $len (call $record_get (local.get $kind) (i32.const 2))))))
+              (then
+                (local.set $hname (call $env_binding_name (local.get $binding)))
+                (if (call $emit_handler_state_register_first (local.get $hname))
+                  (then
+                    (call $emit_indent)
+                    (call $emit_cstr (i32.const 862) (i32.const 8))
+                    (call $emit_byte (i32.const 36))
+                    (local.set $global_name
+                      (call $str_concat (local.get $hname) (i32.const 5424)))
+                    (call $emit_str (local.get $global_name))
+                    (call $emit_cstr (i32.const 1110) (i32.const 11))
+                    (call $emit_i32_const (i32.const 0))
+                    (call $emit_close)
+                    (call $emit_nl)))))
+            (br $binding_loop)))
+        (br $scope_loop))))
 
   ;; Per-handler-name "first-time-seen" ledger. Dedupes the global emit
   ;; across multiple `~>` installs of the same handler.
@@ -35583,7 +36165,7 @@
     ;; lex-scope) — every handler whose arm fns appear in m2.wat needs a
     ;; state global, even when only env-scan-reached.
     (call $emit_handler_state_globals (local.get $lowexprs))
-    (call $emit_handler_state_globals_from_default_map)
+    (call $emit_noconfig_handler_globals)
 
     ;; ── Per-site feedback state globals (LFeedback `<~` substrate) ──
     (call $emit_feedback_state_globals (local.get $lowexprs))

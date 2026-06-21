@@ -1614,32 +1614,56 @@
   ;; not yet seen. Needed when arms are reached via env-scan without a
   ;; covering `~>` LHandleWith in the LowExpr tree (typical for nested
   ;; handlers whose install lives in a fn we don't inline-lower).
-  (func $emit_handler_state_globals_from_default_map
-    (local $i i32) (local $entry i32) (local $hname i32) (local $global_name i32)
-    (call $lower_init)
-    (local.set $i (i32.const 0))
-    (block $done
-      (loop $iter
-        (br_if $done (i32.ge_u (local.get $i)
-                               (global.get $lower_default_op_handler_map_len_g)))
-        (local.set $entry (call $list_index
-                                (global.get $lower_default_op_handler_map_ptr)
-                                (local.get $i)))
-        (local.set $hname (call $record_get (local.get $entry) (i32.const 1)))
-        (if (call $emit_handler_state_register_first (local.get $hname))
-          (then
-            (call $emit_indent)
-            (call $emit_cstr (i32.const 862) (i32.const 8))
-            (call $emit_byte (i32.const 36))
-            (local.set $global_name
-              (call $str_concat (local.get $hname) (i32.const 5424)))
-            (call $emit_str (local.get $global_name))
-            (call $emit_cstr (i32.const 1110) (i32.const 11))
-            (call $emit_i32_const (i32.const 0))
-            (call $emit_close)
-            (call $emit_nl)))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $iter))))
+  ;; Declare a `$<h>_state_g` home global for every no-config handler in the
+  ;; env — the SAME set lower's gradient (step 3, $lower_lookup_default_handler_
+  ;; for_ename) home-dispatches to. emit and lower MUST agree on which handlers
+  ;; have a home: lower reads the env live, so emit reads the env live too (one
+  ;; criterion, two readers — never the registry on one side and the env on the
+  ;; other). Installed handlers' globals are SET at install (emit_handler_state_
+  ;; globals above); a no-config handler never installed in this program (a
+  ;; post-first-light feature: fork/multishot, SMT, DSP) stays 0 — never read,
+  ;; since its effect is never performed here, but its home reference assembles.
+  (func $emit_noconfig_handler_globals
+    (local $scope_idx i32) (local $frame i32) (local $buf i32)
+    (local $binding_idx i32) (local $binding i32) (local $kind i32)
+    (local $hname i32) (local $global_name i32)
+    (call $env_init)
+    (local.set $scope_idx (global.get $env_scope_count_g))
+    (block $outer_done
+      (loop $scope_loop
+        (br_if $outer_done (i32.eqz (local.get $scope_idx)))
+        (local.set $scope_idx (i32.sub (local.get $scope_idx) (i32.const 1)))
+        (local.set $frame
+          (call $list_index (global.get $env_scopes_ptr) (local.get $scope_idx)))
+        (local.set $buf (call $env_frame_buf (local.get $frame)))
+        (local.set $binding_idx (call $env_frame_len (local.get $frame)))
+        (block $inner_done
+          (loop $binding_loop
+            (br_if $inner_done (i32.eqz (local.get $binding_idx)))
+            (local.set $binding_idx (i32.sub (local.get $binding_idx) (i32.const 1)))
+            (local.set $binding
+              (call $list_index (local.get $buf) (local.get $binding_idx)))
+            (local.set $kind (call $env_binding_kind (local.get $binding)))
+            (if (i32.and (i32.ge_u (local.get $kind) (global.get $heap_base))
+                  (i32.and (i32.eq (call $tag_of (local.get $kind))
+                                   (global.get $schemekind_handler_tag))
+                           (i32.eqz (call $len (call $record_get (local.get $kind) (i32.const 2))))))
+              (then
+                (local.set $hname (call $env_binding_name (local.get $binding)))
+                (if (call $emit_handler_state_register_first (local.get $hname))
+                  (then
+                    (call $emit_indent)
+                    (call $emit_cstr (i32.const 862) (i32.const 8))
+                    (call $emit_byte (i32.const 36))
+                    (local.set $global_name
+                      (call $str_concat (local.get $hname) (i32.const 5424)))
+                    (call $emit_str (local.get $global_name))
+                    (call $emit_cstr (i32.const 1110) (i32.const 11))
+                    (call $emit_i32_const (i32.const 0))
+                    (call $emit_close)
+                    (call $emit_nl)))))
+            (br $binding_loop)))
+        (br $scope_loop))))
 
   ;; Per-handler-name "first-time-seen" ledger. Dedupes the global emit
   ;; across multiple `~>` installs of the same handler.
@@ -1988,7 +2012,7 @@
     ;; lex-scope) — every handler whose arm fns appear in m2.wat needs a
     ;; state global, even when only env-scan-reached.
     (call $emit_handler_state_globals (local.get $lowexprs))
-    (call $emit_handler_state_globals_from_default_map)
+    (call $emit_noconfig_handler_globals)
 
     ;; ── Per-site feedback state globals (LFeedback `<~` substrate) ──
     (call $emit_feedback_state_globals (local.get $lowexprs))

@@ -2093,6 +2093,15 @@ fn parse_type_ty(ref tokens, pos) = match kind_at(tokens, pos) {
     let (flds, p) = parse_record_type_fields(tokens, skip_ws(tokens, pos + 1))
     (TRecord(sort_record_type_fields(flds)), p)
   },
+  TLBracket => {
+    // List type `[T]` → TList(T) — the canonical list-type notation
+    // (SYNTAX.md:691 `type Bytes = [Int]`). The seed parses it; this arm
+    // closes the wheel-parser fidelity gap (`[String]` in main.mn's
+    // Invocation ctor desynced into the silent `_ => TUnit` fallback →
+    // P_UnexpectedToken at pass-2). One element type, then `]`.
+    let (elem, p) = parse_type_ty(tokens, skip_ws(tokens, pos + 1))
+    (TList(elem), expect(tokens, skip_ws(tokens, p), TRBracket))
+  },
   _ => (TUnit, pos + 1)
 }
 

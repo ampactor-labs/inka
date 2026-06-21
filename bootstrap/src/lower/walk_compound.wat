@@ -1317,14 +1317,13 @@
         (param $fields i32) (param $target i32)
         (param $i i32) (param $n i32) (result i32)
     (local $entry i32) (local $name i32)
+    ;; field-not-found → -1 (the loud floor; LFieldLoad emit guards <0 ->
+    ;; (unreachable)). field_byte_offset itself is CORRECT (probe-confirmed:
+    ;; it reads real field_pair names and finds the target at 4*i for
+    ;; multi-field records — the old "collapses to 0" comment was stale).
     (if (i32.ge_u (local.get $i) (local.get $n))
-      (then (return (i32.const 0))))
+      (then (return (i32.const -1))))
     (local.set $entry (call $list_index (local.get $fields) (local.get $i)))
-    ;; Entries are field_pair records (FIELD_PAIR=203, $field_pair_make) —
-    ;; read the name via the field_pair accessor. list_index reads a record
-    ;; as a flat list and yields the wrong slot → "" → str_eq never matches
-    ;; → every multi-field .field collapses to offset 0 (the root of the
-    ;; placement.slot-reads-ename OOB during wheel arm pre-registration).
     (local.set $name (call $field_pair_name (local.get $entry)))
     (if (call $str_eq (local.get $name) (local.get $target))
       (then (return (i32.mul (local.get $i) (i32.const 4)))))
@@ -1581,7 +1580,7 @@
     ;; region is empty and a perform inside the lambda reads a bad slot when
     ;; the closure is called elsewhere (a higher-order fn's arm calling f(x)).
     ;; Mirror of src/lower.mn LambdaExpr.
-    (local.set $evs  (call $derive_ev_slots (local.get $h)))
+    (local.set $evs  (call $derive_closure_evs (local.get $h)))
     (call $lexpr_make_lmakeclosure
       (local.get $h)
       (local.get $fn_ir)

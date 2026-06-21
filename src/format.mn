@@ -367,7 +367,8 @@ fn render_sibling_separator(ctx) with Pure = match ctx {
 fn show_effarg(arg) with Memory + Alloc = match arg {
   EAInt(n)    => int_to_str(n),
   EAFloat(f)  => float_to_str(f),
-  EAString(s) => s
+  EAString(s) => s,
+  EAType(_)   => "<type>"
 }
 
 fn show_effname(name) with Memory + Alloc = match name {

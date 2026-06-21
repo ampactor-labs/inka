@@ -511,17 +511,30 @@ fn eff_arg_eq(ref a, ref b) with !Mutate = match a {
   EAInt(n)    => match b {
     EAInt(m)    => n == m,
     EAFloat(_)  => false,
-    EAString(_) => false
+    EAString(_) => false,
+    EAType(_)   => false
   },
   EAFloat(_)  => match b {
     EAInt(_)    => false,
     EAFloat(_)  => false,    // float equality at compile time deferred
-    EAString(_) => false
+    EAString(_) => false,
+    EAType(_)   => false
   },
   EAString(s) => match b {
     EAInt(_)    => false,
     EAFloat(_)  => false,
-    EAString(t) => s == t
+    EAString(t) => s == t,
+    EAType(_)   => false
+  },
+  // Type args identify the SAME effect (Iterate(a) IS Iterate(b)); the
+  // payloads are unified at the install, not value-compared. So they
+  // match for row-canonicalization — one Iterate entry, payload reconciled
+  // by unify_row. (Value args like Sample(44100) stay value-distinct.)
+  EAType(_)   => match b {
+    EAInt(_)    => false,
+    EAFloat(_)  => false,
+    EAString(_) => false,
+    EAType(_)   => true
   }
 }
 
@@ -564,17 +577,27 @@ fn eff_arg_lt(ref a, ref b) with !Mutate = match a {
   EAInt(n)    => match b {
     EAInt(m)    => n < m,
     EAFloat(_)  => true,
-    EAString(_) => true
+    EAString(_) => true,
+    EAType(_)   => true
   },
   EAFloat(_)  => match b {
     EAInt(_)    => false,
     EAFloat(_)  => false,
-    EAString(_) => true
+    EAString(_) => true,
+    EAType(_)   => true
   },
   EAString(s) => match b {
     EAInt(_)    => false,
     EAFloat(_)  => false,
-    EAString(t) => str_lt(s, t)
+    EAString(t) => str_lt(s, t),
+    EAType(_)   => true
+  },
+  // EAType sorts last and is order-equal to any EAType (one effect entry).
+  EAType(_)   => match b {
+    EAInt(_)    => false,
+    EAFloat(_)  => false,
+    EAString(_) => false,
+    EAType(_)   => false
   }
 }
 

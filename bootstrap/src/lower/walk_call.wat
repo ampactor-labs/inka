@@ -443,7 +443,13 @@
     (block $done
       (loop $each
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $name (call $list_index (local.get $names) (local.get $i)))
+        ;; Project the name-set ELEMENT to its bare NAME string ($eff_name_str:
+        ;; a parameterized entry's payload rides on the row for inference but
+        ;; dispatch indexes by name alone). Every downstream ev-slot consumer
+        ;; reads this bare-string projection, so the dispatch layer is invariant
+        ;; to the row carrying payload types.
+        (local.set $name (call $eff_name_str
+          (call $list_index (local.get $names) (local.get $i))))
         (if (i32.eqz (i32.or (i32.or
               (call $str_eq (local.get $name) (i32.const 6496))
               (call $str_eq (local.get $name) (i32.const 6512)))
@@ -465,6 +471,38 @@
     (if (call $lower_arm_ev_active)
       (then (return (call $lower_arm_ev_index_for (local.get $ename)))))
     (call $lower_compute_ev_index_for_effect (local.get $ename)))
+
+  ;; ─── $lower_ev_slot_raw — the effect's slot in THIS frame's row, or -1 ──
+  ;; The UN-clamped read for the dispatch gradient: -1 means the frame does NOT
+  ;; thread $ename (it is ambient / home-dispatched), so the gradient branches
+  ;; to the singleton home rather than fabricating slot 0. Arm bodies append on
+  ;; first-encounter (always >= 0); a fn-body searches its row and returns -1
+  ;; when absent. NO eprint — a not-found here is the CORRECT home-dispatch path,
+  ;; not the row-conservation leak.
+  (func $lower_ev_slot_raw (param $ename i32) (result i32)
+    (local $fn_name i32) (local $binding i32) (local $scheme i32)
+    (local $names i32) (local $n i32) (local $j i32)
+    (if (call $lower_arm_ev_active)
+      (then (return (call $lower_arm_ev_index_for (local.get $ename)))))
+    (if (i32.eqz (local.get $ename)) (then (return (i32.const -1))))
+    (local.set $fn_name (call $ls_outer_fn_name))
+    (if (i32.eqz (local.get $fn_name)) (then (return (i32.const -1))))
+    (local.set $binding (call $env_lookup_value (local.get $fn_name)))
+    (if (i32.eqz (local.get $binding)) (then (return (i32.const -1))))
+    (local.set $scheme (call $env_binding_scheme (local.get $binding)))
+    (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const -1))))
+    (local.set $names (call $effects_of (call $scheme_body (local.get $scheme))))
+    (local.set $n (call $len (local.get $names)))
+    (local.set $j (i32.const 0))
+    (block $found
+      (loop $search
+        (br_if $found (i32.ge_u (local.get $j) (local.get $n)))
+        (if (call $str_eq (call $list_index (local.get $names) (local.get $j))
+                          (local.get $ename))
+          (then (return (local.get $j))))
+        (local.set $j (i32.add (local.get $j) (i32.const 1)))
+        (br $search)))
+    (i32.const -1))
 
   ;; ─── $effects_of — THE SEAM (master plan §6 1★ Stage 0). The single
   ;; projection of a fn's dispatched effect-row names (canonical order, builtins
@@ -492,10 +530,15 @@
       (then (return (call $make_list (i32.const 0)))))
     (call $row_dispatched_names (call $row_names (local.get $row))))
 
-  (func $derive_ev_slots (export "derive_ev_slots") (param $callee_handle i32) (result i32)
-    (local $names i32) (local $n i32) (local $i i32)
-    (local $ename i32) (local $state_local i32) (local $evs i32)
-    (local.set $names (call $effects_of (call $lookup_ty (local.get $callee_handle))))
+  ;; ─── $resolve_evs_for_names — effect-names → evidence list (the shared read) ─
+  ;; One ev per USER effect, in canonical (sorted-lex) order = the callee's
+  ;; ev-slot order. Both the call-seam ($derive_ev_slots — names from the
+  ;; callee's env scheme) and a closure's OWN evidence ($derive_closure_evs —
+  ;; names from its handle's inferred row) resolve through HERE: one projection,
+  ;; two effect-sources, never the call-site instantiation.
+  (func $resolve_evs_for_names (param $names i32) (result i32)
+    (local $n i32) (local $i i32)
+    (local $ename i32) (local $state_local i32) (local $evs i32) (local $hname i32) (local $raw i32)
     (local.set $n (call $len (local.get $names)))
     (if (i32.eqz (local.get $n))
       (then (return (call $make_list (i32.const 0)))))
@@ -525,12 +568,59 @@
             (drop (call $list_set (local.get $evs) (local.get $i)
                     (call $lexpr_make_llocal (i32.const 0) (local.get $state_local)))))
           (else
-            (drop (call $list_set (local.get $evs) (local.get $i)
-                    (call $lexpr_make_levslotref (i32.const 0)
-                      (call $lower_ev_index_in_frame (local.get $ename)))))))
+            ;; THE DISPATCH GRADIENT (mirror of src/lower.mn resolve_ev_for_ename):
+            ;;   step 2 — effect THREADED in this frame (present in its row) →
+            ;;     forwarded slot. Checked FIRST so a genuinely-threaded effect
+            ;;     (the ev2/ev4 evidence path) is never mistaken for a singleton.
+            ;;   step 3 — effect the row does NOT carry → ambient install; a
+            ;;     no-config global singleton reads its `$<h>_state_g` HOME.
+            ;;   step 4 — neither → slot-0 floor, never a fabricated thread.
+            (local.set $raw (call $lower_ev_slot_raw (local.get $ename)))
+            (if (i32.ge_s (local.get $raw) (i32.const 0))
+              (then
+                (drop (call $list_set (local.get $evs) (local.get $i)
+                        (call $lexpr_make_levslotref (i32.const 0) (local.get $raw)))))
+              (else
+                (local.set $hname (call $lower_lookup_default_handler_for_ename (local.get $ename)))
+                (if (i32.ne (local.get $hname) (i32.const 0))
+                  (then
+                    (drop (call $list_set (local.get $evs) (local.get $i)
+                            (call $lexpr_make_lglobal (i32.const 0)
+                              (call $str_concat (local.get $hname) (i32.const 5424))))))
+                  (else
+                    (drop (call $list_set (local.get $evs) (local.get $i)
+                            (call $lexpr_make_levslotref (i32.const 0) (i32.const 0))))))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
     (local.get $evs))
+
+  ;; ─── $derive_ev_slots — evidence to THREAD to a named callee (the seam) ──────
+  ;; Read the layout from the home INFERENCE wrote: the callee's env scheme by
+  ;; name — the SAME read $lower_compute_ev_index_for_effect uses. One fact, two
+  ;; readers; never the call-site instantiation. A non-global callee (closure /
+  ;; value) carries its own evidence → nothing to thread.
+  (func $derive_ev_slots (export "derive_ev_slots") (param $lo_f i32) (result i32)
+    (local $name i32) (local $binding i32) (local $scheme i32)
+    (if (i32.ne (call $tag_of (local.get $lo_f)) (i32.const 302))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $name (call $lexpr_lglobal_name (local.get $lo_f)))
+    (local.set $binding (call $env_lookup_value (local.get $name)))
+    (if (i32.eqz (local.get $binding))
+      (then (return (call $make_list (i32.const 0)))))
+    (local.set $scheme (call $env_binding_scheme (local.get $binding)))
+    (if (i32.lt_u (local.get $scheme) (global.get $heap_base))
+      (then (return (call $make_list (i32.const 0)))))
+    (call $resolve_evs_for_names
+      (call $effects_of (call $scheme_body (local.get $scheme)))))
+
+  ;; ─── $derive_closure_evs — a closure's OWN evidence (its handle's row) ───────
+  ;; The effects THIS closure's body performs, from its inferred type at the
+  ;; handle ($lookup_ty), resolved at the definition site. NOT a callee scheme:
+  ;; a lambda / let-bound closure has no env name and CARRIES its evidence where
+  ;; a call threads it. Mirror of src/lower.mn $derive_closure_evs.
+  (func $derive_closure_evs (param $handle i32) (result i32)
+    (call $resolve_evs_for_names
+      (call $effects_of (call $lookup_ty (local.get $handle)))))
 
   ;; ─── $lower_call_default — monomorphic-vs-polymorphic gate ─────────
   ;; Per src/lower.mn:242-249 + Lock #1. The gradient cash-out.
@@ -558,7 +648,7 @@
     ;; deep perform reads an unthreaded ev-slot and traps. Empty → LCall (the
     ;; monomorphic >95% case). Replaces the row_is_ground/$monomorphic_at
     ;; gate, which conflated "closed row" with "needs no evidence".
-    (local.set $evs (call $derive_ev_slots (local.get $fh)))
+    (local.set $evs (call $derive_ev_slots (local.get $lo_f)))
     (if (i32.eqz (call $len (local.get $evs)))
       (then (return (call $lexpr_make_lcall
                       (local.get $handle)
@@ -699,6 +789,16 @@
                                       (local.get $lo_args)
                                       (call $lower_resolve_handler_state_for_op (local.get $name)))))
                       (else
+                        ;; THE DISPATCH GRADIENT (unify with $lower_perform): the op
+                        ;; CARRIES its unique default handler (drawn at pre-register).
+                        ;; Read O(1) — a known singleton homes to its $<h>_state_g,
+                        ;; never the threaded ev-slot. "I already have this." Only
+                        ;; ambiguous / genuinely-unknown ops keep the evidence floor.
+                        (local.set $tag_id (call $lower_lookup_default_handler_for_op (local.get $name)))
+                        (if (i32.ne (local.get $tag_id) (i32.const 0))
+                          (then (return (call $lower_direct_from_evidence
+                                          (local.get $h) (local.get $name)
+                                          (local.get $tag_id) (local.get $lo_args)))))
                         ;; Tier 2: evidence-passing per graph EffectDeclKind.
                         (return (call $lexpr_make_levperform
                                       (local.get $h)

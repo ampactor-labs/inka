@@ -56,7 +56,17 @@
 # inferred, surfacing 1 real relationship while E_TypeMismatch dropped (126->123)
 # — net more-correct inference. Verified: micros 7/7, seed compiles the wheel,
 # drift clean. Next ratchet-down: the lower_scope handler-state element type.
-census_max=202
+#
+# 2026-06-21: ratcheted 202 -> 181 (DOWN = progress). ResumeExpr inference now
+# unifies each `with field = expr` state update with the state field's type
+# (both layers: src/infer.mn + the seed's $infer_walk_expr_resume, which had the
+# updates as "second field unused"). The updates were DISCARDED — a Carried-Truth
+# violation — so a state field stayed at its init type forever (an empty-list init
+# = List(?free)). Carrying the update's type in resolved 29 E_UnresolvedType
+# (34->5); E_TypeMismatch +8 (the medium now connects those formerly-free state
+# types — proof-beats-review, expected to ratchet down as offset-flow completes).
+# Verified: micros 7/7, seed compiles the wheel, drift clean.
+census_max=181
 
 # micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
 micro:ev2=57

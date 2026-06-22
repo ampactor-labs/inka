@@ -817,6 +817,29 @@ fn infer_expr(ref node) = {
             "resume used outside a handler arm",
             span, "MaybeIncorrect")
       }
+      // State updates: each `with name = expr` EVOLVES the handler state, so the
+      // update's type MUST unify with the state field's type (carried in arm
+      // scope as TVar(init_handle) by bind_handler_state_names). DROPPING them —
+      // as this arm did — leaves the field at ONLY its init type: an empty-list
+      // init stays List(?free), and a later `state_field.field` read on that free
+      // element is exactly the lower_scope ls_push_scope trap (resolve_field_offset
+      // returns -1 → unreachable). Carry the update's type into the field; never
+      // discard what the graph could prove (Carried-Truth).
+      for_each((upd) => {
+        infer_expr(upd.init)
+        let N(_, _, uh) = upd.init
+        match perform env_lookup(upd.name) {
+          Some(entry) => {
+            let (scheme, reason, _) = entry
+            let fh = perform mint(Inferred("resume state field type"))
+            perform graph_bind(fh, instantiate(scheme),
+              Located(span, VarLookup(upd.name, reason)))
+            unify(uh, fh, span,
+              Inferred("resume state update carries the state field's type"))
+          },
+          None => ()
+        }
+      }, state_updates)
     },
 
     NExpr(FieldExpr(rec, field)) => {

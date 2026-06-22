@@ -16731,7 +16731,10 @@
         (param $expr i32) (param $handle i32) (param $span i32)
         (result i32)
     (local $val i32) (local $vh i32) (local $r_h i32)
-    ;; Layout: [tag=95][val][state_updates] — second field unused at seed
+    (local $ups i32) (local $nu i32) (local $ui i32) (local $upd i32)
+    (local $uname i32) (local $uinit i32) (local $uvh i32)
+    (local $sbind i32) (local $sscheme i32) (local $sreason i32) (local $fh i32)
+    ;; Layout: [tag=95][val][state_updates] — state_updates NOW unified (below)
     (local.set $val (i32.load offset=4 (local.get $expr)))
     (local.set $vh (call $infer_walk_expr (local.get $val)))
     (if (i32.eqz (global.get $infer_arm_result_h_g))
@@ -16757,6 +16760,41 @@
       (call $ty_make_tvar (global.get $infer_arm_result_h_g))
       (call $reason_make_located (local.get $span)
         (call $reason_make_inferred (i32.const 4336))))
+    ;; State updates (offset 8): each (name@0, init@1) 2-tuple EVOLVES the
+    ;; handler state, so the update's type MUST unify with the state field's
+    ;; type (bound in arm scope as Forall([], TVar(init_handle)) by
+    ;; $infer_bind_state_pairs). The prior "second field unused" DROPPED them:
+    ;; an empty-list-init field stayed List(?free), and a later state.field read
+    ;; on the free element was the lower_scope ls_push_scope trap
+    ;; (resolve_field_offset -> -1 -> unreachable). Mirror of the wheel
+    ;; src/infer.mn ResumeExpr fix; carry the update's type into the field.
+    (local.set $ups (i32.load offset=8 (local.get $expr)))
+    (local.set $nu (call $len (local.get $ups)))
+    (local.set $ui (i32.const 0))
+    (block $ups_done
+      (loop $ups_each
+        (br_if $ups_done (i32.ge_u (local.get $ui) (local.get $nu)))
+        (local.set $upd (call $list_index (local.get $ups) (local.get $ui)))
+        (local.set $uname (call $list_index (local.get $upd) (i32.const 0)))
+        (local.set $uinit (call $list_index (local.get $upd) (i32.const 1)))
+        (local.set $uvh (call $infer_walk_expr (local.get $uinit)))
+        (local.set $sbind (call $env_lookup_value (local.get $uname)))
+        (if (i32.ne (local.get $sbind) (i32.const 0))
+          (then
+            (local.set $sscheme (call $env_binding_scheme (local.get $sbind)))
+            (local.set $sreason (call $env_binding_reason (local.get $sbind)))
+            (local.set $fh (call $graph_fresh_ty
+              (call $reason_make_located (local.get $span)
+                (call $reason_make_varlookup (local.get $uname) (local.get $sreason)))))
+            (call $graph_bind (local.get $fh)
+              (call $instantiate (local.get $sscheme))
+              (call $reason_make_located (local.get $span)
+                (call $reason_make_varlookup (local.get $uname) (local.get $sreason))))
+            (call $unify (local.get $uvh) (local.get $fh) (local.get $span)
+              (call $reason_make_located (local.get $span)
+                (call $reason_make_inferred (i32.const 4336))))))
+        (local.set $ui (i32.add (local.get $ui) (i32.const 1)))
+        (br $ups_each)))
     (local.get $handle))
 
   ;; MakeListExpr arm — src/infer.mn:556-569. Empty: TList(TVar(fresh)).

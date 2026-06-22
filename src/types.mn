@@ -184,6 +184,7 @@ type NodeKind
   | NRowBound(EffRow)   // resolved effect row
   | NRowFree(Int)       // unresolved effect row variable
   | NErrorHole(Reason)  // inference observed failure (Hazel marked hole)
+  | NProgram(NodeBody)  // a parse-written AST node, register-once, resolved by handle (graph_node_body) — the AST lives in the one graph, never mutated by bind/chase
 
 type GNode
   = GNode(NodeKind, Reason)   // every node carries its justification
@@ -745,12 +746,12 @@ type LitValue
 
 type Predicate
   = PTrue
-  | PCompare(BinOp, Node, Node)  // comparison over two LIVE operand nodes — Verify reads each Expr live, never a PExpr copy
+  | PCompare(BinOp, Int, Int)    // op over two operand node HANDLES — graph_node_body resolves each Expr live; the AST lives in the graph, the predicate carries the edge
   | PAnd(Predicate, Predicate)
   | POr(Predicate, Predicate)
   | PNot(Predicate)
-  | PBoolNode(Node)              // predicate IS a bool expr node — read live (a boolean call or bare bool var folds in here)
-  | PPatternMatch(Pat, Node)     // predicate IS "scrutinee node matches pat" — match-narrowing
+  | PBoolNode(Int)               // predicate IS a bool expr node, by handle (a boolean call or bare bool var folds in here)
+  | PPatternMatch(Pat, Int)      // scrutinee node handle matches pat — match-narrowing
 
 // PExpr is GONE: its leaves (PSelf/PInt/PEVar/PApp) were a lossy COPY of the
 // expression the AST node already holds (`node_to_pexpr` re-derived it with a
@@ -797,11 +798,13 @@ effect GraphRead {
   graph_reason_edge(Int, Int) -> Reason
   graph_snapshot() -> Graph
   graph_push_checkpoint() -> Int
+  graph_node_body(Int) -> NodeBody    // resolve a registered AST node by handle — the NProgram cell's body (NHole if the cell is not a program node)
 }
 
 effect GraphWrite {
   graph_fresh_ty(Reason) -> Handle
   graph_fresh_row(Reason) -> Handle
+  graph_register_node(NodeBody, Reason) -> Handle    // register a parse-written AST node in the one graph; the handle resolves via graph_node_body
   graph_bind(Int, Ty, Reason) -> ()
   graph_bind_row(Int, EffRow, Reason) -> ()
   graph_fork(String) -> ()
@@ -1082,7 +1085,7 @@ fn show_eff_arg(ref arg) with !Mutate = match arg {
   EAType(_)   => "<type>"
 }
 
-fn show_predicate(ref pred) with !Mutate = {
+fn show_predicate(ref pred) with GraphRead = {
   match pred {
     PTrue      => "true",
     PCompare(op, a, b) => "{show_pred_operand(a)} {show_cmp_op(op)} {show_pred_operand(b)}",
@@ -1101,10 +1104,9 @@ fn show_cmp_op(ref op) with !Mutate = match op {
   _   => "?"
 }
 
-// Render a predicate operand by reading its Expr LIVE — no PExpr copy.
-fn show_pred_operand(ref node) with !Mutate = {
-  let N(body, _, _) = node
-  match body {
+// Resolve a predicate operand HANDLE to its Expr live and render it.
+fn show_pred_operand(handle) with GraphRead = {
+  match perform graph_node_body(handle) {
     NExpr(VarRef(name)) => name,
     NExpr(LitInt(n))    => int_to_str(n),
     NExpr(LitFloat(f))  => float_to_str(f),

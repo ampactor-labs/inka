@@ -102,6 +102,14 @@ handler graph_handler
     resume(Graph(nodes, epoch, next, overlays_view, span_index, intent_index))
   },
 
+  graph_node_body(handle) => {
+    let GNode(kind, _) = graph_node_at(nodes, handle)
+    resume(match kind {
+      NProgram(body) => body,
+      _              => NHole(0)
+    })
+  },
+
   graph_push_checkpoint() => {
     resume(trail_len)
       with checkpoint_stack = push(checkpoint_stack, trail_len)
@@ -138,6 +146,31 @@ handler graph_handler
     let new_nodes = nodes
       |> graph_extend_to(handle + 1)
       |> list_set(handle, GNode(NRowFree(epoch), reason))
+    let (new_bufs, new_lens) =
+      overlay_register_at(overlay_bufs, overlay_lens, current_overlay_idx, handle)
+    let new_trail = trail_append(trail, trail_len, MFreshNode(handle))
+    if len(checkpoint_stack) == 0 {
+      perform graph_mutated(epoch, MFreshNode(handle))
+    }
+    resume(handle)
+      with nodes = new_nodes,
+           next = next + 1,
+           trail = new_trail,
+           trail_len = trail_len + 1,
+           overlay_bufs = new_bufs,
+           overlay_lens = new_lens
+  },
+
+  // Register a parse-written AST node IN the one graph (NProgram cell),
+  // reusing the fresh-allocation machinery — trail (MFreshNode → rollback
+  // un-allocates), overlay, next. The cell is register-once: never bound
+  // or chased, so its parse-written-immutable discipline holds even though
+  // it cohabits the array with the mutable union-find type cells.
+  graph_register_node(body, reason) => {
+    let handle = next
+    let new_nodes = nodes
+      |> graph_extend_to(handle + 1)
+      |> list_set(handle, GNode(NProgram(body), reason))
     let (new_bufs, new_lens) =
       overlay_register_at(overlay_bufs, overlay_lens, current_overlay_idx, handle)
     let new_trail = trail_append(trail, trail_len, MFreshNode(handle))

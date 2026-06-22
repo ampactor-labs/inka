@@ -58,39 +58,35 @@ handler verify_ledger with debt = [] {
 /// them — cross-kind equality is Some(false) (type mismatch is a
 /// stronger refusal than undecidable), cross-kind ordering is None.
 /// PAnd / POr / PNot recurse with three-valued short-circuit.
-fn predicate_decide(ref pred) with Pure = match pred {
+fn predicate_decide(ref pred) with GraphRead = match pred {
   PTrue              => Some(true),
   PCompare(op, l, r) => compare_decide(op, l, r),
   PAnd(a, b)         => and_decide(predicate_decide(a), predicate_decide(b)),
   POr(a, b)          => or_decide(predicate_decide(a), predicate_decide(b)),
   PNot(inner)        => not_decide(predicate_decide(inner)),
-  PBoolNode(_)       => None,        // a bool expr node — the SMT tier reads it live
+  PBoolNode(_)       => None,        // a bool expr node — the SMT tier resolves it live
   PPatternMatch(_, _) => None        // match-narrowing — the SMT tier evaluates
 }
 
-/// A comparison decides at compile time iff BOTH operand nodes are
-/// literal constants; otherwise None (defer to the solver).
-fn compare_decide(ref op, ref ln, ref rn) with Pure = match node_const(ln) {
-  Some(lv) => match node_const(rn) {
+/// A comparison decides at compile time iff BOTH operand handles resolve
+/// to literal constants; otherwise None (defer to the solver).
+fn compare_decide(op, lh, rh) with GraphRead = match node_const(lh) {
+  Some(lv) => match node_const(rh) {
     Some(rv) => litval_compare(op, lv, rv),
     None     => None
   },
   None => None
 }
 
-/// Read an operand node's literal value LIVE from its Expr — Some for a
-/// compile-time constant, None for anything else (a var, a call, a
-/// compound expr). The carry-the-handle / read-live move that retired
-/// the PExpr copy.
-fn node_const(ref node) with Pure = {
-  let N(body, _, _) = node
-  match body {
-    NExpr(LitInt(n))    => Some(LVInt(n)),
-    NExpr(LitFloat(f))  => Some(LVFloat(f)),
-    NExpr(LitString(s)) => Some(LVString(s)),
-    NExpr(LitBool(b))   => Some(LVBool(b)),
-    _                   => None
-  }
+/// Resolve an operand HANDLE to its literal value, reading the Expr LIVE
+/// from the graph (graph_node_body) — Some for a compile-time constant,
+/// None otherwise. Carry the handle, read live.
+fn node_const(handle) with GraphRead = match perform graph_node_body(handle) {
+  NExpr(LitInt(n))    => Some(LVInt(n)),
+  NExpr(LitFloat(f))  => Some(LVFloat(f)),
+  NExpr(LitString(s)) => Some(LVString(s)),
+  NExpr(LitBool(b))   => Some(LVBool(b)),
+  _                   => None
 }
 
 /// Fold a comparison over two constant operand values.
@@ -246,14 +242,14 @@ fn predicate_to_smt_lib(ref pred) with Memory + Alloc = {
   "(assert {predicate_to_smt(pred)})\n(check-sat)"
 }
 
-fn predicate_to_smt(ref pred) with Memory + Alloc = match pred {
+fn predicate_to_smt(ref pred) with GraphRead + Memory + Alloc = match pred {
   PTrue              => "true",
-  PCompare(op, l, r) => "({smt_cmp_op(op)} {node_to_smt(l)} {node_to_smt(r)})",
+  PCompare(op, l, r) => "({smt_cmp_op(op)} {handle_to_smt(l)} {handle_to_smt(r)})",
   PAnd(a, b)         => smt_logop("and", a, b),
   POr(a, b)          => smt_logop("or", a, b),
   PNot(inner)        => "(not {predicate_to_smt(inner)})",
-  PBoolNode(n)       => node_to_smt(n),
-  PPatternMatch(_, n) => node_to_smt(n)
+  PBoolNode(n)       => handle_to_smt(n),
+  PPatternMatch(_, n) => handle_to_smt(n)
 }
 
 fn smt_cmp_op(ref op) with Pure = match op {
@@ -263,22 +259,28 @@ fn smt_cmp_op(ref op) with Pure = match op {
   _   => "="
 }
 
-fn smt_logop(ref op, ref a, ref b) with Memory + Alloc = {
+fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc = {
   "({op} {predicate_to_smt(a)} {predicate_to_smt(b)})"
 }
 
-/// Render an operand node as an SMT term, reading its Expr LIVE — the
-/// node-reading twin of the retired pexpr_to_smt.
+/// Resolve an operand HANDLE to its Expr (graph_node_body) and render it.
+fn handle_to_smt(handle) with GraphRead + Memory + Alloc = {
+  body_to_smt(perform graph_node_body(handle))
+}
+
+/// Render a nested operand NODE (a call's argument) as an SMT term.
 fn node_to_smt(ref node) with Memory + Alloc = {
   let N(body, _, _) = node
-  match body {
-    NExpr(LitInt(n))    => int_to_str(n),
-    NExpr(LitFloat(_))  => "0.0",
-    NExpr(LitString(s)) => "\"{s}\"",
-    NExpr(VarRef(name)) => name,
-    NExpr(CallExpr(callee, args)) => smt_node_call(callee, args),
-    _                   => "true"
-  }
+  body_to_smt(body)
+}
+
+fn body_to_smt(body) with Memory + Alloc = match body {
+  NExpr(LitInt(n))    => int_to_str(n),
+  NExpr(LitFloat(_))  => "0.0",
+  NExpr(LitString(s)) => "\"{s}\"",
+  NExpr(VarRef(name)) => name,
+  NExpr(CallExpr(callee, args)) => smt_node_call(callee, args),
+  _                   => "true"
 }
 
 fn smt_node_call(ref callee, ref args) with Memory + Alloc = {

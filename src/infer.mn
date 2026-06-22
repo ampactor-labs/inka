@@ -3362,8 +3362,9 @@ fn walk_refinement_fields(map, fields, path_pred) with GraphRead = {
 /// Predicate ADT instances. Peer follow-up
 /// `Hβ.infer.predicate-from-bool-expression` covers the full case
 /// enumeration.
-fn predicate_of_bool_expr(node) with GraphRead = {
-  PBoolNode(node)
+fn predicate_of_bool_expr(node) with GraphWrite = {
+  let h = register_operand(node)
+  PBoolNode(h)
 }
 
 fn negation_of(pred) = PNot(pred)
@@ -3372,8 +3373,9 @@ fn conjunction(p, q) = PAnd(p, q)
 
 fn empty_refinement_map() = []
 
-fn pattern_predicate_for(pat, scrut) with GraphRead = {
-  PPatternMatch(pat, scrut)
+fn pattern_predicate_for(pat, scrut) with GraphWrite = {
+  let h = register_operand(scrut)
+  PPatternMatch(pat, h)
 }
 
 fn is_assert_call(callee) with GraphRead = {

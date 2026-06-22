@@ -431,33 +431,13 @@ fn cache_pack_binop(op) with Pack + !Unpack = match op {
   BConcat => pack_byte(13)
 }
 
-// A predicate operand serializes the bounded Expr subset it can hold;
-// unpack reconstructs a synthetic node carrying that Expr (Verify reads
-// the Expr, never the zeroed handle). Operand tags: 0=var, 1=int,
-// 2=float (string transport for exact f64 round-trip), 3=string,
-// 4=opaque (a non-literal/var operand — Verify defers it to the solver).
-fn cache_pack_operand(node) with Pack + !Unpack = {
-  let N(body, _, _) = node
-  match body {
-    NExpr(VarRef(name)) => {
-      pack_byte(0)
-      pack_str(name)
-    },
-    NExpr(LitInt(n)) => {
-      pack_byte(1)
-      pack_i32(n)
-    },
-    NExpr(LitFloat(f)) => {
-      pack_byte(2)
-      pack_str(float_to_str(f))
-    },
-    NExpr(LitString(s)) => {
-      pack_byte(3)
-      pack_str(s)
-    },
-    _ => pack_byte(4)
-  }
-}
+// A predicate operand is a graph handle now — serialize it TRIVIALLY (i32),
+// the operand-as-resolvable-handle payoff. Cross-compile the handle is stale
+// (the program store is per-compile); the cache invalidates with the module
+// hash, and a cache-loaded operand resolves to NHole → Verify defers to the
+// solver (safe). The lossless round-trip lands with graph-memcpy
+// serialization (the LEAP-1 sequel — the whole graph travels in one memcpy).
+fn cache_pack_operand(handle) with Pack + !Unpack = pack_i32(handle)
 
 // Predicate tags: 0=PTrue, 1=PCompare, 2=PAnd, 3=POr, 4=PNot,
 //                 5=PBoolNode, 6=PPatternMatch.
@@ -926,32 +906,8 @@ fn cache_unpack_binop() with Unpack + !Pack = {
   else { BConcat }
 }
 
-// Reconstruct a predicate operand as a synthetic node carrying its Expr —
-// span_zero + handle 0; Verify reads the Expr, never the handle. Operand
-// tags mirror cache_pack_operand: 0=var, 1=int, 2=float, 3=string, 4=opaque.
-fn cache_unpack_operand() with Unpack + !Pack = {
-  let tag = unpack_byte()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-  let e = if tag == 0 {
-    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    VarRef(name)
-  }
-  else if tag == 1 {
-    let n = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    LitInt(n)
-  }
-  else if tag == 2 {
-    let s = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    LitFloat(parse_float(s))
-  }
-  else if tag == 3 {
-    let s = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    LitString(s)
-  }
-  else {
-    VarRef("_opaque")
-  }
-  N(NExpr(e), span_zero(), 0)
-}
+// A predicate operand round-trips as its bare i32 handle (see cache_pack_operand).
+fn cache_unpack_operand() with Unpack + !Pack = unpack_i32()
 
 fn cache_unpack_predicate() with Unpack + !Pack = {
   let tag = unpack_byte()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)

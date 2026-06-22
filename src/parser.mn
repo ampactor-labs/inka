@@ -2207,27 +2207,41 @@ fn parse_predicate(ref tokens, pos) = {
   (pred, p)
 }
 
-// Project a predicate-body AST node to the Predicate ADT, reading the
-// LIVE operand nodes — never a PExpr copy. A comparison carries its two
-// operand nodes (Verify reads each Expr live); `>`/`>=` normalize to
-// `<`/`<=` with swapped operands; `&&`/`||`/`!` compose recursively; ANY
-// other boolean expression (a refinement call, a bare bool var) IS its
-// graph node — `PBoolNode(node)`, read live. No lossy fallback: every
-// form has a live home, so nothing is surrendered to PTrue / PEVar("?").
-fn node_to_predicate(node, span: ValidSpan) = {
+// Project a predicate-body AST node to the Predicate ADT, REGISTERING each
+// operand node in the one graph and carrying its handle — graph_node_body
+// resolves the Expr live, so the predicate holds the edge, not a copy. A
+// comparison registers its two operands; `>`/`>=` normalize to `<`/`<=`
+// with swapped operands; `&&`/`||`/`!` compose recursively; ANY other
+// boolean expression (a refinement call, a bare bool var) IS its graph
+// node — PBoolNode(handle), registered and read live. No lossy fallback.
+fn node_to_predicate(node, span: ValidSpan) with GraphWrite = {
   let N(body, _, _) = node
   match body {
-    NExpr(BinOpExpr(BEq, l, r))     => PCompare(BEq, l, r),
-    NExpr(BinOpExpr(BLt, l, r))     => PCompare(BLt, l, r),
-    NExpr(BinOpExpr(BLe, l, r))     => PCompare(BLe, l, r),
-    NExpr(BinOpExpr(BGt, l, r))     => PCompare(BLt, r, l),
-    NExpr(BinOpExpr(BGe, l, r))     => PCompare(BLe, r, l),
+    NExpr(BinOpExpr(BEq, l, r))     => compare_pred(BEq, l, r),
+    NExpr(BinOpExpr(BLt, l, r))     => compare_pred(BLt, l, r),
+    NExpr(BinOpExpr(BLe, l, r))     => compare_pred(BLe, l, r),
+    NExpr(BinOpExpr(BGt, l, r))     => compare_pred(BLt, r, l),
+    NExpr(BinOpExpr(BGe, l, r))     => compare_pred(BLe, r, l),
     NExpr(BinOpExpr(BAnd, l, r))    => PAnd(node_to_predicate(l, span), node_to_predicate(r, span)),
     NExpr(BinOpExpr(BOr, l, r))     => POr(node_to_predicate(l, span), node_to_predicate(r, span)),
     NExpr(UnaryOpExpr(UNot, inner)) => PNot(node_to_predicate(inner, span)),
     NExpr(LitBool(true))            => PTrue,
-    _                               => PBoolNode(node)
+    _                               => PBoolNode(register_operand(node))
   }
+}
+
+// Register a comparison's two operands and carry their handles.
+fn compare_pred(op, l, r) with GraphWrite = {
+  let lh = register_operand(l)
+  let rh = register_operand(r)
+  PCompare(op, lh, rh)
+}
+
+// Register an operand AST node in the one graph; the handle resolves its
+// Expr live via graph_node_body. The operand's span rides the Reason.
+fn register_operand(node) with GraphWrite = {
+  let N(body, span, _) = node
+  perform graph_register_node(body, Located(span, Inferred("refinement operand")))
 }
 
 fn skip_to_stmt_end(ref tokens, pos) = match kind_at(tokens, pos) {

@@ -38,7 +38,25 @@
 # clean, no dangling refs to removed symbols, pass-2 trap marched filter ->
 # lower_one_arm_decl/lower_expr (deeper = progress). Next ratchet-down: those
 # 56 E_TypeMismatch + the lower_expr trap.
-census_max=201
+#
+# 2026-06-21: bumped 201 -> 202 (deliberate, explained). The headline change is
+# NOT census — it is that the emit CORRUPTION (a silent resolve_field_offset
+# `_ => 0` fallback: an unresolved-type field access returned offset 0, read the
+# node's word-0 = a graph pointer, and wat_emit dumped 150GB) is DELETED. The
+# ultimate form has no silent surrender: resolve_field_offset returns -1 (both
+# layers), and the ONE load-offset primitive ($el_emit_i32_load_offset / the
+# wheel's emit_load_chain) guards off<0 -> (unreachable). m2 now ASSEMBLES and
+# RUNS, and the corruption is a CLEAN, LOCATABLE trap at lower_scope ls_push_scope
+# (frame.local_order on a still-NFree List element type — the next root). That is
+# the medium naming its own unprovable offset (the first sliver of mentl audit),
+# the real oracle (fixpoint + micros + trap-march), NOT the count. The +1 itself
+# is the inline-handler arity fix (infer_handler_arms now mints + passes payload_h;
+# the prior 2-arg call to the 3-param infer_one_handler_arm left it garbage):
+# lib/dsp/processors.mn's inline `handle { } with { }` arms are now ACTUALLY
+# inferred, surfacing 1 real relationship while E_TypeMismatch dropped (126->123)
+# — net more-correct inference. Verified: micros 7/7, seed compiles the wheel,
+# drift clean. Next ratchet-down: the lower_scope handler-state element type.
+census_max=202
 
 # micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
 micro:ev2=57

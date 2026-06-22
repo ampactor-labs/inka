@@ -221,7 +221,14 @@
     (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 41)))
 
   (func $el_emit_i32_load_offset (param $off i32)
-    ;; emits: (i32.load offset=<off>)
+    ;; emits: (i32.load offset=<off>) — but NO negative offset ever reaches WAT.
+    ;; off < 0 = an unprovable field offset (resolve_field_offset could not prove
+    ;; it: a non-record / unresolved receiver). Emit (unreachable) — the loud
+    ;; floor — never i32.load offset=-1 (invalid WAT) nor a silent foreign-field
+    ;; read. The guard lives HERE, at the ONE load-offset primitive, so EVERY
+    ;; caller (emit_lfieldload, the record-pattern destructure, …) is loud.
+    (if (i32.lt_s (local.get $off) (i32.const 0))
+      (then (call $ec_emit_unreachable) (return)))
     (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 105))
     (call $emit_byte (i32.const 51)) (call $emit_byte (i32.const 50))
     (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 108))

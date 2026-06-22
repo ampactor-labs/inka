@@ -1056,8 +1056,11 @@
                 (return (call $field_byte_offset
                           (local.get $fields) (local.get $field_name)
                           (i32.const 0) (call $len (local.get $fields))))))))))
-    ;; Fallback.
-    (i32.const 0))
+    ;; NO silent fallback: a field whose receiver type is non-record / unresolved
+    ;; returns -1, and $emit_lfieldload (offset < 0) emits a LOUD (unreachable) —
+    ;; never a silent offset-0 read of the node's word 0 (a graph pointer) that
+    ;; wat_emit then dumps (the emit corruption). Mirrors src/lower.mn.
+    (i32.const -1))
 
   ;; $resolve_field_offset — directly chase the graph to find the REAL
   ;; Ty, bypassing $lookup_ty which converts NFree to terror_hole.
@@ -1181,7 +1184,7 @@
         (param $names i32) (param $target i32)
         (param $i i32) (param $n i32) (result i32)
     (if (i32.ge_u (local.get $i) (local.get $n))
-      (then (return (i32.const 0))))
+      (then (return (i32.const -1))))   ;; NO silent 0 — an absent field is an unprovable offset
     (if (call $str_eq (call $list_index (local.get $names) (local.get $i))
                       (local.get $target))
       (then (return (i32.mul (local.get $i) (i32.const 4)))))
@@ -1209,9 +1212,12 @@
         (local.set $ty (call $node_kind_payload (local.get $nk)))
         (return (call $resolve_field_offset_from_ty
                   (local.get $ty) (local.get $field_name)))))
-    ;; NFree (61) — truly unresolved. Fallback 0.
-    ;; NErrorHole (64) — error. Fallback 0.
-    (i32.const 0))
+    ;; NFree (61) — truly unresolved. NErrorHole (64) — error. NO silent
+    ;; fallback: return -1 so $emit_lfieldload (offset < 0) emits a LOUD
+    ;; (unreachable) instead of a silent offset-0 read of the node's word 0 (a
+    ;; graph pointer) that wat_emit then dumps as the heap (the emit corruption).
+    ;; The loud trap NAMES the unresolved receiver. Mirrors src/lower.mn.
+    (i32.const -1))
 
   ;; $fa_collect_fields — scan ALL accumulator entries. For each entry,
   ;; chase its recorded handle (graph is complete at lower time) to
@@ -1363,9 +1369,11 @@
             (return (call $field_byte_offset
                       (local.get $merged) (local.get $field_name)
                       (i32.const 0) (call $len (local.get $merged))))))))
-    ;; NRowFree (63) — row not yet resolved. Can only use partial.
-    ;; This means we can't determine the full field list. Fallback 0.
-    (i32.const 0))
+    ;; NRowFree (63) — row not yet resolved → the FULL field list is unknown,
+    ;; so NO offset is provable (a residual field could sort before this one).
+    ;; Return -1 (loud (unreachable) at emit), never a silent 0 that reads word 0
+    ;; (a graph pointer). Mirrors src/lower.mn's no-silent-fallback discipline.
+    (i32.const -1))
 
   ;; $merge_sorted_fields — merge two alphabetically-sorted field-pair
   ;; lists into one. Both inputs are List of field_pair records (tag 203)

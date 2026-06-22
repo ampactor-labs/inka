@@ -1270,35 +1270,39 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
 }
 
 /// W6 — resolve a field's byte offset from the record's live type.
-/// Fields are sorted (field-canonicalize invariants in `effects.mn`),
-/// so the field's index in `TRecord(fields)` / `TRecordOpen(fields, _)`
-/// maps directly to `4 * idx`. If `lookup_ty` returns a non-record
-/// type (inference unresolved or error-hole), fall back to 0 —
-/// the loader hits whatever offset 0 holds (best-effort graceful degrade).
+/// Fields are sorted (field-canonicalize invariants in `effects.mn`), so the
+/// field's index in `TRecord(fields)` / `TRecordOpen(fields, _)` maps directly
+/// to `4 * idx`. There is NO graceful degrade: if `lookup_ty` returns a
+/// non-record type (the receiver's type mis-resolved) or the field is absent,
+/// return -1 — `emit_lfieldload` guards `offset < 0` and emits a LOUD
+/// `(unreachable)` with a Located Reason. The former silent `0` read the node's
+/// word-0 as the field value (a graph pointer) and `wat_emit` dumped the heap:
+/// the emit corruption. The ultimate form refuses to guess an offset it cannot
+/// prove; the loud trap names the unresolved receiver instead of masking it.
 fn resolve_field_offset(rec_handle, field_name) = {
   match perform lookup_ty(rec_handle) {
     TRecord(fields)        => field_byte_offset(fields, field_name, 0, len(fields)),
     TRecordOpen(fields, _) => field_byte_offset(fields, field_name, 0, len(fields)),
     // H2.3: nominal records — chase TName through env to its
     // RecordSchemeKind for the field schema. Same offset arithmetic
-    // applies (sorted-by-name, 4 bytes per i32-erased slot).
+    // (sorted-by-name, 4 bytes per i32-erased slot).
     TName(name, _)         => match perform env_lookup(name) {
       Some(entry) => {
         let (_, _, kind) = entry
         match kind {
           RecordSchemeKind(fields) =>
             field_byte_offset(fields, field_name, 0, len(fields)),
-          _ => 0
+          _ => -1
         }
       },
-      None => 0
+      None => -1
     },
-    _                      => 0
+    _                      => -1
   }
 }
 
 fn field_byte_offset(fields, target, i, n) = {
-  if i >= n { 0 }
+  if i >= n { -1 }   // field absent — unprovable offset, NOT a silent 0
   else {
     let (name, _) = list_index(fields, i)
     if name == target { 4 * i }

@@ -2676,10 +2676,21 @@ fn emit_pat_alt_binds_dispatch(branches, path, path_len) = {
 fn emit_load_chain(path, k, path_len) = {
   if k == path_len { () }
   else {
-    perform wat_emit("    (i32.load offset=")
-    perform wat_emit(int_to_str(list_index(path, k)))
-    perform wat_emit(")\n")
-    emit_load_chain(path, k + 1, path_len)
+    let off = list_index(path, k)
+    // NO negative offset reaches WAT: off < 0 = resolve_field_offset could not
+    // PROVE this field's offset (the scrutinee's type is non-record/unresolved
+    // or the field is absent). Emit (unreachable) — the loud floor, the wheel
+    // twin of emit_local.wat's $el_emit_i32_load_offset guard — never
+    // i32.load offset=-1 (invalid WAT) nor a silent foreign-field read. The
+    // chain stops here: anything after the unreachable is dead.
+    if off < 0 {
+      perform wat_emit("    (unreachable)\n")
+    } else {
+      perform wat_emit("    (i32.load offset=")
+      perform wat_emit(int_to_str(off))
+      perform wat_emit(")\n")
+      emit_load_chain(path, k + 1, path_len)
+    }
   }
 }
 

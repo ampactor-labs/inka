@@ -27107,8 +27107,11 @@
                 (return (call $field_byte_offset
                           (local.get $fields) (local.get $field_name)
                           (i32.const 0) (call $len (local.get $fields))))))))))
-    ;; Fallback.
-    (i32.const 0))
+    ;; NO silent fallback: a field whose receiver type is non-record / unresolved
+    ;; returns -1, and $emit_lfieldload (offset < 0) emits a LOUD (unreachable) —
+    ;; never a silent offset-0 read of the node's word 0 (a graph pointer) that
+    ;; wat_emit then dumps (the emit corruption). Mirrors src/lower.mn.
+    (i32.const -1))
 
   ;; $resolve_field_offset — directly chase the graph to find the REAL
   ;; Ty, bypassing $lookup_ty which converts NFree to terror_hole.
@@ -27232,7 +27235,7 @@
         (param $names i32) (param $target i32)
         (param $i i32) (param $n i32) (result i32)
     (if (i32.ge_u (local.get $i) (local.get $n))
-      (then (return (i32.const 0))))
+      (then (return (i32.const -1))))   ;; NO silent 0 — an absent field is an unprovable offset
     (if (call $str_eq (call $list_index (local.get $names) (local.get $i))
                       (local.get $target))
       (then (return (i32.mul (local.get $i) (i32.const 4)))))
@@ -27260,9 +27263,12 @@
         (local.set $ty (call $node_kind_payload (local.get $nk)))
         (return (call $resolve_field_offset_from_ty
                   (local.get $ty) (local.get $field_name)))))
-    ;; NFree (61) — truly unresolved. Fallback 0.
-    ;; NErrorHole (64) — error. Fallback 0.
-    (i32.const 0))
+    ;; NFree (61) — truly unresolved. NErrorHole (64) — error. NO silent
+    ;; fallback: return -1 so $emit_lfieldload (offset < 0) emits a LOUD
+    ;; (unreachable) instead of a silent offset-0 read of the node's word 0 (a
+    ;; graph pointer) that wat_emit then dumps as the heap (the emit corruption).
+    ;; The loud trap NAMES the unresolved receiver. Mirrors src/lower.mn.
+    (i32.const -1))
 
   ;; $fa_collect_fields — scan ALL accumulator entries. For each entry,
   ;; chase its recorded handle (graph is complete at lower time) to
@@ -27414,9 +27420,11 @@
             (return (call $field_byte_offset
                       (local.get $merged) (local.get $field_name)
                       (i32.const 0) (call $len (local.get $merged))))))))
-    ;; NRowFree (63) — row not yet resolved. Can only use partial.
-    ;; This means we can't determine the full field list. Fallback 0.
-    (i32.const 0))
+    ;; NRowFree (63) — row not yet resolved → the FULL field list is unknown,
+    ;; so NO offset is provable (a residual field could sort before this one).
+    ;; Return -1 (loud (unreachable) at emit), never a silent 0 that reads word 0
+    ;; (a graph pointer). Mirrors src/lower.mn's no-silent-fallback discipline.
+    (i32.const -1))
 
   ;; $merge_sorted_fields — merge two alphabetically-sorted field-pair
   ;; lists into one. Both inputs are List of field_pair records (tag 203)
@@ -30830,7 +30838,14 @@
     (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 41)))
 
   (func $el_emit_i32_load_offset (param $off i32)
-    ;; emits: (i32.load offset=<off>)
+    ;; emits: (i32.load offset=<off>) — but NO negative offset ever reaches WAT.
+    ;; off < 0 = an unprovable field offset (resolve_field_offset could not prove
+    ;; it: a non-record / unresolved receiver). Emit (unreachable) — the loud
+    ;; floor — never i32.load offset=-1 (invalid WAT) nor a silent foreign-field
+    ;; read. The guard lives HERE, at the ONE load-offset primitive, so EVERY
+    ;; caller (emit_lfieldload, the record-pattern destructure, …) is loud.
+    (if (i32.lt_s (local.get $off) (i32.const 0))
+      (then (call $ec_emit_unreachable) (return)))
     (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 105))
     (call $emit_byte (i32.const 51)) (call $emit_byte (i32.const 50))
     (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 108))

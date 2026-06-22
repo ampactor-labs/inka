@@ -2158,11 +2158,19 @@ fn arms_have_wildcard(arms) = any((arm) => {
 
 /// Handler arm inference — each arm's body is inferred; its type
 /// unifies with the body's type so the `handle` expression has a
-/// single consistent result type.
+/// single consistent result type. The arms share ONE effect payload
+/// (the handled effect's op-payload type, Iterate(a) ⇒ a), exactly as
+/// register_handler mints one payload per declared handler. Passing it is
+/// REQUIRED: infer_one_handler_arm takes the arm, a result handle, then the
+/// payload handle, and unifies the op-payload through the last. The prior
+/// 2-arg call left the payload uninitialized → unify_op_payload corrupted the
+/// payload type into a junk handle (a sibling of the field-offset class —
+/// flagged by the first cross-unification workflow and left unfixed).
 fn infer_handler_arms(arms, body_h, span: ValidSpan) = {
+  let payload_h = perform mint(Inferred("inline handler arm payload"))
   for_each((arm) => {
     perform env_scope_enter()
-    infer_one_handler_arm(arm, body_h)
+    infer_one_handler_arm(arm, body_h, payload_h)   // drift-audit: ignore — body_h (result) + payload_h (effect payload) are distinct handles, not parallel arrays
     perform env_scope_exit()
   }, arms)
 }

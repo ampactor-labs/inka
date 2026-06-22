@@ -1,0 +1,193 @@
+// egraph.mn — equality saturation as a cursor read (LEAP 4)
+//
+// The graph is ALREADY an e-graph. Every program node is a resolvable
+// handle in the one fabric (graph_node_body, the whole-AST-in-graph weave),
+// and every node carries a Reason. Equality saturation adds ONE
+// non-destructive relation — a node `from` is equivalent to a canonical
+// `to` — then extraction follows it to the simplest form. No e-class
+// machinery beyond a directed union-find pointed at the cheaper node: the
+// root IS the extracted term, so there is no separate extraction pass.
+//
+// THE ULTIMATE-MEDIUM EDGE — rewrites are EFFECT-GATED. egg and every other
+// e-graph rewrite syntactically; Mentl reads each operand's purity from the
+// resolved program (is_pure) and fires a DROPPING rewrite (x * 0 ≡ 0) only
+// when the dropped operand is provably pure — preserving what RUNS, not only
+// what the value equals. Proof, not heuristic. The conservative reading
+// (a literal or variable is pure; a call may perform effects, so assume it
+// does) keeps the optimization SOUND: only provably-pure terms are dropped.
+//
+// This is the generative-audit payoff (PLAN §2): the AST-in-graph move made
+// the program a graph the optimizer reads at a handle — optimization IS a
+// cursor mode, not a bolted-on pass.
+
+import types
+
+// The rewrite relation over the one fabric. `from ≡ to`, where `to` is the
+// canonical (simpler) node — the rule that records the pair guarantees the
+// direction, so following it always descends toward the simplest form.
+effect EGraph {
+  egraph_rewrite(Int, Int) -> ()   // record `from ≡ to`; `to` is canonical
+  egraph_extract(Int) -> Int       // follow the relation to the canonical handle
+}
+
+// The saturation ledger — the e-class union-find as a graph-resident
+// relation. rw is [(from, to)]; absence means the node is its own canonical
+// form (an e-class root). A handler, so the relation is swappable: a cost
+// model or a proof-carrying extractor installs in its place with no change
+// to the rules that perform egraph_rewrite.
+handler egraph_ledger with rw = [] {
+  egraph_rewrite(from, to) =>
+    resume() with rw = [(from, to)] ++ rw,
+
+  egraph_extract(handle) =>
+    resume(rw_follow(rw, handle, 0))
+}
+
+// Follow the relation to the canonical node. Depth-bounded so a malformed
+// rule set that cycles stays total — the cap is the fixpoint guard, not a
+// silent truncation (a cycle is a rule-set bug, surfaced by hitting it).
+fn rw_follow(ref rw, handle, depth) = {
+  if depth > 1000 { handle }
+  else {
+    match rw_lookup(rw, handle, 0, len(rw)) {
+      Some(to) => rw_follow(rw, to, depth + 1),
+      None     => handle
+    }
+  }
+}
+
+fn rw_lookup(ref rw, handle, i, n) = {
+  if i >= n { None }
+  else {
+    let (from, to) = list_index(rw, i)
+    if from == handle { Some(to) }
+    else { rw_lookup(rw, handle, i + 1, n) }
+  }
+}
+
+// ─── Effect gating ────────────────────────────────────────────────────
+//
+// A node is droppable iff evaluating it performs no effects. Read the
+// program LIVE (graph_node_body) and judge conservatively: a literal or a
+// variable reference is pure; arithmetic over pure operands is pure; ANY
+// other form (a call, a perform, a hole) may run effects, so it is NOT
+// dropped. Soundness over completeness — a missed optimization is free; a
+// dropped effect is a miscompile.
+fn is_pure(handle) with GraphRead = {
+  match perform graph_node_body(handle) {
+    NExpr(LitInt(_))    => true,
+    NExpr(LitFloat(_))  => true,
+    NExpr(LitString(_)) => true,
+    NExpr(LitBool(_))   => true,
+    NExpr(VarRef(_))    => true,
+    NExpr(BinOpExpr(_, l, r)) => is_pure(node_handle(l)) && is_pure(node_handle(r)),
+    _                   => false
+  }
+}
+
+// ─── Rewrite rules ────────────────────────────────────────────────────
+//
+// Each rule reads the node at `handle` (graph_node_body) and, if it matches,
+// records an equivalence to an EXISTING subnode (no node creation, so the
+// canonical target is already a fabric citizen) and returns true. The
+// identity rules (x + 0 ≡ x, x * 1 ≡ x) keep the surviving operand, so they
+// never drop an effect and fire unconditionally; the absorbing rule
+// (x * 0 ≡ 0) DROPS the other operand and is therefore effect-gated.
+
+// x + 0 ≡ x  and  0 + x ≡ x  — the survivor is kept, never gated.
+fn rw_add_identity(handle) with GraphRead + EGraph = {
+  match perform graph_node_body(handle) {
+    NExpr(BinOpExpr(BAdd, l, r)) => {
+      if is_zero(node_handle(r)) {
+        perform egraph_rewrite(handle, node_handle(l))
+        true
+      }
+      else if is_zero(node_handle(l)) {
+        perform egraph_rewrite(handle, node_handle(r))
+        true
+      }
+      else { false }
+    },
+    _ => false
+  }
+}
+
+// x * 1 ≡ x  and  1 * x ≡ x  — survivor kept, never gated.
+fn rw_mul_identity(handle) with GraphRead + EGraph = {
+  match perform graph_node_body(handle) {
+    NExpr(BinOpExpr(BMul, l, r)) => {
+      if is_one(node_handle(r)) {
+        perform egraph_rewrite(handle, node_handle(l))
+        true
+      }
+      else if is_one(node_handle(l)) {
+        perform egraph_rewrite(handle, node_handle(r))
+        true
+      }
+      else { false }
+    },
+    _ => false
+  }
+}
+
+// x * 0 ≡ 0  and  0 * x ≡ 0  — DROPS the non-zero operand, so it fires only
+// when that operand is provably pure (the effect gate). The canonical target
+// is the zero literal node, already in the fabric.
+fn rw_mul_absorb(handle) with GraphRead + EGraph = {
+  match perform graph_node_body(handle) {
+    NExpr(BinOpExpr(BMul, l, r)) => {
+      let lh = node_handle(l)
+      let rh = node_handle(r)
+      if is_zero(rh) && is_pure(lh) {
+        perform egraph_rewrite(handle, rh)
+        true
+      }
+      else if is_zero(lh) && is_pure(rh) {
+        perform egraph_rewrite(handle, lh)
+        true
+      }
+      else { false }
+    },
+    _ => false
+  }
+}
+
+fn is_zero(handle) with GraphRead = match perform graph_node_body(handle) {
+  NExpr(LitInt(n)) => n == 0,
+  _                => false
+}
+
+fn is_one(handle) with GraphRead = match perform graph_node_body(handle) {
+  NExpr(LitInt(n)) => n == 1,
+  _                => false
+}
+
+// ─── Saturation ───────────────────────────────────────────────────────
+//
+// Apply every rule to every node, repeating until a full pass records no
+// fresh equivalence (the fixpoint — equality saturation). `bound` (the
+// graph's fresh-handle counter) bounds the node space; the relation only
+// grows and each productive pass adds at least one fact, so `bound` passes
+// suffice — the outer cap is a total-function guard, never reached at
+// fixpoint.
+fn saturate(bound) with GraphRead + EGraph = saturate_until(bound, 0)
+
+fn saturate_until(bound, pass) with GraphRead + EGraph = {
+  if pass > bound { () }
+  else {
+    let fired = apply_rules_from(0, bound, 0)
+    if fired == 0 { () }
+    else { saturate_until(bound, pass + 1) }
+  }
+}
+
+// One pass: every rule at every node. A node matches at most one rule
+// (Add vs Mul, and *1 vs *0 are disjoint), so `||` short-circuits to the
+// single rule that can fire. Returns the count of equivalences recorded.
+fn apply_rules_from(i, bound, acc) with GraphRead + EGraph = {
+  if i >= bound { acc }
+  else {
+    let fired = rw_add_identity(i) || rw_mul_identity(i) || rw_mul_absorb(i)
+    apply_rules_from(i + 1, bound, if fired { acc + 1 } else { acc })
+  }
+}

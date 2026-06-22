@@ -162,6 +162,76 @@ fn is_one(handle) with GraphRead = match perform graph_node_body(handle) {
   _                => false
 }
 
+// ─── Constant folding — lit op lit ≡ lit (the one rule that CREATES) ───
+//
+// A binary op over two integer literals folds to a single literal. This is
+// the only rule that MINTS a node: the folded literal is registered in the
+// program weave AND type-bound to Int — saturate runs after inference, so an
+// un-bound new node would be NFree at lower time. Div/mod by zero does NOT
+// fold: the trap is the program's meaning, not a constant.
+fn const_int(handle) with GraphRead = match perform graph_node_body(handle) {
+  NExpr(LitInt(n)) => Some(n),
+  _                => None
+}
+
+fn fold_int(op, a, b) with Pure = match op {
+  BAdd => Some(a + b),
+  BSub => Some(a - b),
+  BMul => Some(a * b),
+  BDiv => if b == 0 { None } else { Some(a / b) },
+  BMod => if b == 0 { None } else { Some(a % b) },
+  _    => None
+}
+
+fn rw_const_fold(handle) with GraphRead + GraphWrite + EGraph = {
+  match perform graph_node_body(handle) {
+    NExpr(BinOpExpr(op, l, r)) =>
+      match const_int(node_handle(l)) {
+        Some(a) =>
+          match const_int(node_handle(r)) {
+            Some(b) =>
+              match fold_int(op, a, b) {
+                Some(v) => {
+                  let h = perform graph_fresh_ty(Inferred("const-fold"))
+                  perform graph_register_node(h, NExpr(LitInt(v)))
+                  perform graph_bind(h, TInt, Inferred("const-fold result : Int"))
+                  perform egraph_rewrite(handle, h)
+                  true
+                },
+                None => false
+              },
+            None => false
+          },
+        None => false
+      },
+    _ => false
+  }
+}
+
+// x - 0 ≡ x — survivor kept, never gated. (0 - x is NOT x, so left only.)
+fn rw_sub_identity(handle) with GraphRead + EGraph = {
+  match perform graph_node_body(handle) {
+    NExpr(BinOpExpr(BSub, l, r)) =>
+      if is_zero(node_handle(r)) {
+        perform egraph_rewrite(handle, node_handle(l))
+        true
+      } else { false },
+    _ => false
+  }
+}
+
+// x / 1 ≡ x — survivor kept, never gated.
+fn rw_div_identity(handle) with GraphRead + EGraph = {
+  match perform graph_node_body(handle) {
+    NExpr(BinOpExpr(BDiv, l, r)) =>
+      if is_one(node_handle(r)) {
+        perform egraph_rewrite(handle, node_handle(l))
+        true
+      } else { false },
+    _ => false
+  }
+}
+
 // ─── Saturation ───────────────────────────────────────────────────────
 //
 // Apply every rule to every node, repeating until a full pass records no
@@ -170,18 +240,18 @@ fn is_one(handle) with GraphRead = match perform graph_node_body(handle) {
 // grows and each productive pass adds at least one fact, so `bound` passes
 // suffice — the outer cap is a total-function guard, never reached at
 // fixpoint.
-fn saturate(bound) with GraphRead + EGraph = saturate_until(bound, 0)
+fn saturate(bound) with GraphRead + GraphWrite + EGraph = saturate_until(bound, 0)
 
 // The saturation pass: populate the e-graph over the whole node space
 // (graph_next bounds it), then pass the program through unchanged — the
 // equivalences are the side effect lower reads via egraph_extract. A `|>`
 // stage between frontend and lower in the pipeline spine.
-fn saturate_pass(program) with GraphRead + EGraph = {
+fn saturate_pass(program) with GraphRead + GraphWrite + EGraph = {
   saturate(perform graph_next())
   program
 }
 
-fn saturate_until(bound, pass) with GraphRead + EGraph = {
+fn saturate_until(bound, pass) with GraphRead + GraphWrite + EGraph = {
   if pass > bound { () }
   else {
     let fired = apply_rules_from(0, bound, 0)
@@ -190,13 +260,15 @@ fn saturate_until(bound, pass) with GraphRead + EGraph = {
   }
 }
 
-// One pass: every rule at every node. A node matches at most one rule
-// (Add vs Mul, and *1 vs *0 are disjoint), so `||` short-circuits to the
-// single rule that can fire. Returns the count of equivalences recorded.
-fn apply_rules_from(i, bound, acc) with GraphRead + EGraph = {
+// One pass: every rule at every node. const-fold is tried first (it only
+// matches lit-op-lit); the algebraic identities match var-involving forms;
+// the cases are disjoint, so `||` short-circuits to the single rule that can
+// fire. Returns the count of equivalences recorded this pass.
+fn apply_rules_from(i, bound, acc) with GraphRead + GraphWrite + EGraph = {
   if i >= bound { acc }
   else {
-    let fired = rw_add_identity(i) || rw_mul_identity(i) || rw_mul_absorb(i)
+    let fired = rw_const_fold(i) || rw_add_identity(i) || rw_mul_identity(i)
+             || rw_mul_absorb(i) || rw_sub_identity(i) || rw_div_identity(i)
     apply_rules_from(i + 1, bound, if fired { acc + 1 } else { acc })
   }
 }

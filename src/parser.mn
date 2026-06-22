@@ -2189,18 +2189,15 @@ fn parse_predicate(ref tokens, pos) = {
   // expression form admits comparisons (`<`, `<=`, `==`), logical
   // composition (`&&`, `||`, `!`), and fn application
   // (`even(self)`, `bytes_valid_utf8(self)`). `self` in the body
-  // refers to the value being refined and projects to PSelf.
+  // refers to the value being refined; node_to_predicate reads each
+  // operand node LIVE (no PExpr copy).
   //
   // W_RedundantWhere narration: if the resulting Predicate is the
   // literal PTrue (no constraint), emit the gradient hint per
   // SYNTAX.md:1604-1611 — the where-clause adds nothing.
   let (expr_node, p) = parse_expr(tokens, pos)
-  let N(body, span, _) = expr_node
-  let pred = match body {
-    NExpr(LitBool(true))   => PTrue,
-    NExpr(e)               => expr_to_predicate(e, span),
-    _                      => PTrue
-  }
+  let N(_, span, _) = expr_node
+  let pred = node_to_predicate(expr_node, span)
   match pred {
     PTrue => perform report("parser", "W_RedundantWhere", "Warning",
       "`where true` or vacuous predicate — the refinement adds no constraint over the base type",
@@ -2210,75 +2207,28 @@ fn parse_predicate(ref tokens, pos) = {
   (pred, p)
 }
 
-// Project an Expr (the predicate body's AST) to a Predicate. The
-// kernel's Predicate ADT (types.mn:677) admits PEq / PLt / PLeq /
-// PAnd / POr / PNot / PCall over PExprs; the parser surfaces them
-// directly from the expression's structure. Unmappable forms (e.g.
-// arithmetic) project to PTrue — a substrate-honest fallback per the
-// drift discipline (W_RedundantWhere fires from the caller).
-fn expr_to_predicate(e, span: ValidSpan) = match e {
-  BinOpExpr(BEq, l, r) =>
-    PEq(node_to_pexpr(l), node_to_pexpr(r)),
-  BinOpExpr(BLt, l, r) =>
-    PLt(node_to_pexpr(l), node_to_pexpr(r)),
-  BinOpExpr(BLe, l, r) =>
-    PLeq(node_to_pexpr(l), node_to_pexpr(r)),
-  BinOpExpr(BGt, l, r) =>
-    PLt(node_to_pexpr(r), node_to_pexpr(l)),
-  BinOpExpr(BGe, l, r) =>
-    PLeq(node_to_pexpr(r), node_to_pexpr(l)),
-  BinOpExpr(BAnd, l, r) =>
-    PAnd(node_to_predicate(l, span), node_to_predicate(r, span)),
-  BinOpExpr(BOr, l, r) =>
-    POr(node_to_predicate(l, span), node_to_predicate(r, span)),
-  UnaryOpExpr(UNot, inner) =>
-    PNot(node_to_predicate(inner, span)),
-  CallExpr(callee, args) => {
-    let N(body, _, _) = callee
-    let fname = match body {
-      NExpr(VarRef(n)) => n,
-      _                => ""
-    }
-    PCall(fname, pexprs_of(args))
-  },
-  LitBool(true)  => PTrue,
-  _              => PTrue
-}
-
+// Project a predicate-body AST node to the Predicate ADT, reading the
+// LIVE operand nodes — never a PExpr copy. A comparison carries its two
+// operand nodes (Verify reads each Expr live); `>`/`>=` normalize to
+// `<`/`<=` with swapped operands; `&&`/`||`/`!` compose recursively; ANY
+// other boolean expression (a refinement call, a bare bool var) IS its
+// graph node — `PBoolNode(node)`, read live. No lossy fallback: every
+// form has a live home, so nothing is surrendered to PTrue / PEVar("?").
 fn node_to_predicate(node, span: ValidSpan) = {
   let N(body, _, _) = node
   match body {
-    NExpr(e) => expr_to_predicate(e, span),
-    _        => PTrue
+    NExpr(BinOpExpr(BEq, l, r))     => PCompare(BEq, l, r),
+    NExpr(BinOpExpr(BLt, l, r))     => PCompare(BLt, l, r),
+    NExpr(BinOpExpr(BLe, l, r))     => PCompare(BLe, l, r),
+    NExpr(BinOpExpr(BGt, l, r))     => PCompare(BLt, r, l),
+    NExpr(BinOpExpr(BGe, l, r))     => PCompare(BLe, r, l),
+    NExpr(BinOpExpr(BAnd, l, r))    => PAnd(node_to_predicate(l, span), node_to_predicate(r, span)),
+    NExpr(BinOpExpr(BOr, l, r))     => POr(node_to_predicate(l, span), node_to_predicate(r, span)),
+    NExpr(UnaryOpExpr(UNot, inner)) => PNot(node_to_predicate(inner, span)),
+    NExpr(LitBool(true))            => PTrue,
+    _                               => PBoolNode(node)
   }
 }
-
-// Project an Expr-node to a PExpr (the predicate-expression ADT).
-// Self IS PSelf; literals project to PInt/PFloat/PString; variable
-// refs to PEVar (predicate-expression variable, disambiguated from
-// Pat.PVar's tag namespace); fn calls to PApp.
-fn node_to_pexpr(node) = {
-  let N(body, _, _) = node
-  match body {
-    NExpr(VarRef(name)) =>
-      if name == "self" { PSelf }
-      else { PEVar(name) },
-    NExpr(LitInt(n))    => PInt(n),
-    NExpr(LitFloat(f))  => PFloat(f),
-    NExpr(LitString(s)) => PString(s),
-    NExpr(CallExpr(callee, args)) => {
-      let N(cbody, _, _) = callee
-      let fname = match cbody {
-        NExpr(VarRef(n)) => n,
-        _                => ""
-      }
-      PApp(fname, pexprs_of(args))
-    },
-    _ => PEVar("?")     // unmappable expr form; surfaces as opaque var
-  }
-}
-
-fn pexprs_of(nodes) = map(node_to_pexpr, nodes)
 
 fn skip_to_stmt_end(ref tokens, pos) = match kind_at(tokens, pos) {
   TSemicolon => pos,

@@ -277,38 +277,10 @@ fn eff_name_label(name) with Pure = match name {
   EParameterized(s, _) => s   // arg-aware rendering is named follow-up
 }
 
-fn predicate_to_where_clause(pred) with Pure = match pred {
-  PTrue => "where true",
-  PFalse => "where false",
-  PEq(a, b) => "where {pexpr_to_str(a)} == {pexpr_to_str(b)}",
-  PLt(a, b) => "where {pexpr_to_str(a)} < {pexpr_to_str(b)}",
-  PAnd(a, b) => "{predicate_to_where_clause(a)} && {predicate_inner_to_str(b)}",
-  PNot(inner) => "where !({predicate_inner_to_str(inner)})"
-}
-
-fn predicate_inner_to_str(pred) with Pure = match pred {
-  PTrue => "true",
-  PFalse => "false",
-  PEq(a, b) => "{pexpr_to_str(a)} == {pexpr_to_str(b)}",
-  PLt(a, b) => "{pexpr_to_str(a)} < {pexpr_to_str(b)}",
-  PAnd(a, b) => "{predicate_inner_to_str(a)} && {predicate_inner_to_str(b)}",
-  PNot(inner) => "!({predicate_inner_to_str(inner)})"
-}
-
-fn pexpr_to_str(pe) with Pure = match pe {
-  PSelf => "self",
-  PInt(n) => int_to_str(n),
-  PEVar(name) => name,
-  PCall(name, args) => "{name}({pexpr_args_to_str(args)})"
-}
-
-fn pexpr_args_to_str(args) with Pure = {
-  if len(args) == 0 { "" }
-  else if len(args) == 1 { pexpr_to_str(list_head(args)) }
-  else {
-    "{pexpr_to_str(list_head(args))}, {pexpr_args_to_str(list_tail(args))}"
-  }
-}
+// The where-clause rendering IS the predicate's canonical display with a
+// `where` prefix — reuse show_predicate (types.mn), never a second
+// predicate-to-string walk. Carry the one projection, read it live.
+fn predicate_to_where_clause(pred) = "where {show_predicate(pred)}"
 
 // ─── Capabilities tables — per delta axis ───────────────────────────
 //

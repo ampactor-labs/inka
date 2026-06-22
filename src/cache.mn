@@ -431,93 +431,65 @@ fn cache_pack_binop(op) with Pack + !Unpack = match op {
   BConcat => pack_byte(13)
 }
 
-// PExpr tags: 0=PSelf, 1=PInt, 2=PFloat, 3=PString, 4=PEVar, 5=PApp.
-// PFloat rides string transport (float_to_str / parse_float) — exact
-// f64 round-trip per strings.mn's 17-significant-digit rendering.
-fn cache_pack_pexpr(e) with Pack + !Unpack = match e {
-  PSelf => pack_byte(0),
-  PInt(n) => {
-    pack_byte(1)
-    pack_i32(n)
-  },
-  PFloat(f) => {
-    pack_byte(2)
-    pack_str(float_to_str(f))
-  },
-  PString(s) => {
-    pack_byte(3)
-    pack_str(s)
-  },
-  PEVar(name) => {
-    pack_byte(4)
-    pack_str(name)
-  },
-  PApp(name, args) => {
-    pack_byte(5)
-    pack_str(name)
-    pack_i32(len(args))
-    cache_pack_pexprs(args, 0, len(args))
+// A predicate operand serializes the bounded Expr subset it can hold;
+// unpack reconstructs a synthetic node carrying that Expr (Verify reads
+// the Expr, never the zeroed handle). Operand tags: 0=var, 1=int,
+// 2=float (string transport for exact f64 round-trip), 3=string,
+// 4=opaque (a non-literal/var operand — Verify defers it to the solver).
+fn cache_pack_operand(node) with Pack + !Unpack = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(VarRef(name)) => {
+      pack_byte(0)
+      pack_str(name)
+    },
+    NExpr(LitInt(n)) => {
+      pack_byte(1)
+      pack_i32(n)
+    },
+    NExpr(LitFloat(f)) => {
+      pack_byte(2)
+      pack_str(float_to_str(f))
+    },
+    NExpr(LitString(s)) => {
+      pack_byte(3)
+      pack_str(s)
+    },
+    _ => pack_byte(4)
   }
 }
 
-fn cache_pack_pexprs(exprs, i, n) with Pack + !Unpack = {
-  if i >= n { () }
-  else {
-    cache_pack_pexpr(list_index(exprs, i))
-    cache_pack_pexprs(exprs, i + 1, n)
-  }
-}
-
-// Predicate tags: 0=PTrue, 1=PEq, 2=PLt, 3=PLeq, 4=PAnd, 5=POr,
-//                 6=PNot, 7=PCall
+// Predicate tags: 0=PTrue, 1=PCompare, 2=PAnd, 3=POr, 4=PNot,
+//                 5=PBoolNode, 6=PPatternMatch.
 fn cache_pack_predicate(p) with Pack + !Unpack = match p {
   PTrue => pack_byte(0),
-  PEq(l, r) => {
+  PCompare(op, l, r) => {
     pack_byte(1)
-    cache_pack_pexpr(l)
-    cache_pack_pexpr(r)
-  },
-  PLt(l, r) => {
-    pack_byte(2)
-    cache_pack_pexpr(l)
-    cache_pack_pexpr(r)
-  },
-  PLeq(l, r) => {
-    pack_byte(3)
-    cache_pack_pexpr(l)
-    cache_pack_pexpr(r)
+    cache_pack_binop(op)
+    cache_pack_operand(l)
+    cache_pack_operand(r)
   },
   PAnd(a, b) => {
-    pack_byte(4)
+    pack_byte(2)
     cache_pack_predicate(a)
     cache_pack_predicate(b)
   },
   POr(a, b) => {
-    pack_byte(5)
+    pack_byte(3)
     cache_pack_predicate(a)
     cache_pack_predicate(b)
   },
   PNot(inner) => {
-    pack_byte(6)
+    pack_byte(4)
     cache_pack_predicate(inner)
   },
-  PCall(name, args) => {
-    pack_byte(7)
-    pack_str(name)
-    pack_i32(len(args))
-    cache_pack_pexprs(args, 0, len(args))
+  PBoolNode(n) => {
+    pack_byte(5)
+    cache_pack_operand(n)
   },
-  PBoolNode(h) => {
-    pack_byte(8)
-    pack_i32(h)
-  },
-  PPatternMatch(_, h) => {
-    // The wire carries the scrutinee handle; the pat re-derives from
-    // the handle's owning module at the SMT tier (the cache
-    // invalidates with the module hash — same trust boundary as
-    // TVar handles).
-    pack_byte(9)
-    pack_i32(h)
+  PPatternMatch(_, n) => {
+    pack_byte(6)
+    cache_pack_operand(n)
   }
 }
 
@@ -954,88 +926,65 @@ fn cache_unpack_binop() with Unpack + !Pack = {
   else { BConcat }
 }
 
-fn cache_unpack_pexpr() with Unpack + !Pack = {
+// Reconstruct a predicate operand as a synthetic node carrying its Expr —
+// span_zero + handle 0; Verify reads the Expr, never the handle. Operand
+// tags mirror cache_pack_operand: 0=var, 1=int, 2=float, 3=string, 4=opaque.
+fn cache_unpack_operand() with Unpack + !Pack = {
   let tag = unpack_byte()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-  if tag == 0 { PSelf }
+  let e = if tag == 0 {
+    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    VarRef(name)
+  }
   else if tag == 1 {
     let n = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    PInt(n)
+    LitInt(n)
   }
   else if tag == 2 {
     let s = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    PFloat(parse_float(s))
+    LitFloat(parse_float(s))
   }
   else if tag == 3 {
     let s = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    PString(s)
-  }
-  else if tag == 4 {
-    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    PEVar(name)
+    LitString(s)
   }
   else {
-    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    let n = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    let args = cache_unpack_pexprs(n, 0, make_list(n))
-    PApp(name, args)
+    VarRef("_opaque")
   }
-}
-
-fn cache_unpack_pexprs(n, i, buf) with Unpack + !Pack = {
-  if i >= n { slice(buf, 0, n) }
-  else {
-    let e = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    cache_unpack_pexprs(n, i + 1, list_set(buf, i, e))
-  }
+  N(NExpr(e), span_zero(), 0)
 }
 
 fn cache_unpack_predicate() with Unpack + !Pack = {
   let tag = unpack_byte()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
   if tag == 0 { PTrue }
   else if tag == 1 {
-    let l = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    let r = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    PEq(l, r)
+    let op = cache_unpack_binop()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let l = cache_unpack_operand()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let r = cache_unpack_operand()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PCompare(op, l, r)
   }
   else if tag == 2 {
-    let l = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    let r = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    PLt(l, r)
-  }
-  else if tag == 3 {
-    let l = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    let r = cache_unpack_pexpr()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    PLeq(l, r)
-  }
-  else if tag == 4 {
     let a = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let b = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     PAnd(a, b)
   }
-  else if tag == 5 {
+  else if tag == 3 {
     let a = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let b = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     POr(a, b)
   }
-  else if tag == 6 {
+  else if tag == 4 {
     let inner = cache_unpack_predicate()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     PNot(inner)
   }
-  else if tag == 7 {
-    let name = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    let n = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    let args = cache_unpack_pexprs(n, 0, make_list(n))
-    PCall(name, args)
-  }
-  else if tag == 8 {
-    let h = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    PBoolNode(h)
+  else if tag == 5 {
+    let n = cache_unpack_operand()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PBoolNode(n)
   }
   else {
-    // tag 9 — the pat re-derives at the SMT tier; the wire carries
-    // the scrutinee handle.
-    let h = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    PPatternMatch(PWild, h)
+    // tag 6 — match-narrowing; the pat re-derives at the SMT tier from
+    // the operand node (the cache invalidates with the module hash).
+    let n = cache_unpack_operand()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    PPatternMatch(PWild, n)
   }
 }
 

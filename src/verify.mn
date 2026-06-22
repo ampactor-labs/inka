@@ -49,100 +49,81 @@ handler verify_ledger with debt = [] {
 }
 
 /// Compile-time decidable discharge. Returns Some(true) when the
-/// predicate proves true on its constant leaves alone; Some(false)
-/// when it proves false; None when reaching a PVar / PApp / PCall
-/// (the undecidable boundary — defers to ledger or solver). Pure.
+/// predicate proves true on its constant operands alone; Some(false)
+/// when it proves false; None at the undecidable boundary (a variable,
+/// a call, a compound expr) — defers to ledger or solver. Pure.
 ///
-/// PEq / PLt / PLeq are decidable iff both PExpr leaves are constants
-/// of compatible kind (Int-Int or Float-Float; cross-kind equality
-/// short-circuits to Some(false) on type mismatch). PAnd / POr / PNot
-/// recurse: short-circuit semantics fold partial decidability into
-/// Some when one branch decides the result regardless of the other.
+/// A PCompare is decidable iff BOTH operand nodes are literal constants
+/// (read LIVE via node_const, never a PExpr copy); litval_compare folds
+/// them — cross-kind equality is Some(false) (type mismatch is a
+/// stronger refusal than undecidable), cross-kind ordering is None.
+/// PAnd / POr / PNot recurse with three-valued short-circuit.
 fn predicate_decide(ref pred) with Pure = match pred {
   PTrue              => Some(true),
-  PEq(left, right)   => pexpr_eq_decide(left, right),
-  PLt(left, right)   => pexpr_lt_decide(left, right),
-  PLeq(left, right)  => pexpr_leq_decide(left, right),
+  PCompare(op, l, r) => compare_decide(op, l, r),
   PAnd(a, b)         => and_decide(predicate_decide(a), predicate_decide(b)),
   POr(a, b)          => or_decide(predicate_decide(a), predicate_decide(b)),
   PNot(inner)        => not_decide(predicate_decide(inner)),
-  PCall(_, _)        => None,
-  PBoolNode(_)       => None,        // graph-deferred; SMT tier evaluates (verify_smt-witness-L2)
-  PPatternMatch(_, _) => None        // match-narrowing; SMT tier evaluates
+  PBoolNode(_)       => None,        // a bool expr node — the SMT tier reads it live
+  PPatternMatch(_, _) => None        // match-narrowing — the SMT tier evaluates
 }
 
-/// PEq decidable when both sides are kind-matched constants.
-/// PInt vs PInt: integer equality. PFloat vs PFloat: float equality.
-/// PString vs PString: str_eq. Cross-kind: Some(false) — type
-/// mismatch is a stronger refusal than undecidable. PVar / PApp:
-/// None — runtime value or user fn.
-fn pexpr_eq_decide(ref a, ref b) with Pure = match a {
-  PInt(na)    => match b {
-    PInt(nb)    => Some(na == nb),
-    PFloat(_)   => Some(false),
-    PString(_)  => Some(false),
-    PEVar(_)    => None,
-    PApp(_, _)  => None
+/// A comparison decides at compile time iff BOTH operand nodes are
+/// literal constants; otherwise None (defer to the solver).
+fn compare_decide(ref op, ref ln, ref rn) with Pure = match node_const(ln) {
+  Some(lv) => match node_const(rn) {
+    Some(rv) => litval_compare(op, lv, rv),
+    None     => None
   },
-  PFloat(fa)  => match b {
-    PInt(_)     => Some(false),
-    PFloat(fb)  => Some(fa == fb),
-    PString(_)  => Some(false),
-    PEVar(_)    => None,
-    PApp(_, _)  => None
-  },
-  PString(sa) => match b {
-    PInt(_)     => Some(false),
-    PFloat(_)   => Some(false),
-    PString(sb) => Some(sa == sb),
-    PEVar(_)    => None,
-    PApp(_, _)  => None
-  },
-  PEVar(_)    => None,
-  PApp(_, _)  => None
+  None => None
 }
 
-/// PLt decidable when both sides are numeric constants of matching
-/// kind. Strings carry no canonical Lt in the wheel's predicate
-/// universe; PLt on PString is None (defer to user fn or ledger).
-fn pexpr_lt_decide(ref a, ref b) with Pure = match a {
-  PInt(na)    => match b {
-    PInt(nb)    => Some(na < nb),
-    PFloat(_)   => None,
-    PString(_)  => None,
-    PEVar(_)    => None,
-    PApp(_, _)  => None
-  },
-  PFloat(fa)  => match b {
-    PInt(_)     => None,
-    PFloat(fb)  => Some(fa < fb),
-    PString(_)  => None,
-    PEVar(_)    => None,
-    PApp(_, _)  => None
-  },
-  PString(_)  => None,
-  PEVar(_)    => None,
-  PApp(_, _)  => None
+/// Read an operand node's literal value LIVE from its Expr — Some for a
+/// compile-time constant, None for anything else (a var, a call, a
+/// compound expr). The carry-the-handle / read-live move that retired
+/// the PExpr copy.
+fn node_const(ref node) with Pure = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(LitInt(n))    => Some(LVInt(n)),
+    NExpr(LitFloat(f))  => Some(LVFloat(f)),
+    NExpr(LitString(s)) => Some(LVString(s)),
+    NExpr(LitBool(b))   => Some(LVBool(b)),
+    _                   => None
+  }
 }
 
-fn pexpr_leq_decide(ref a, ref b) with Pure = match a {
-  PInt(na)    => match b {
-    PInt(nb)    => Some(na <= nb),
-    PFloat(_)   => None,
-    PString(_)  => None,
-    PEVar(_)    => None,
-    PApp(_, _)  => None
-  },
-  PFloat(fa)  => match b {
-    PInt(_)     => None,
-    PFloat(fb)  => Some(fa <= fb),
-    PString(_)  => None,
-    PEVar(_)    => None,
-    PApp(_, _)  => None
-  },
-  PString(_)  => None,
-  PEVar(_)    => None,
-  PApp(_, _)  => None
+/// Fold a comparison over two constant operand values.
+fn litval_compare(ref op, ref a, ref b) with Pure = match op {
+  BEq => litval_eq(a, b),
+  BLt => litval_lt(a, b),
+  BLe => litval_le(a, b),
+  _   => None
+}
+
+/// Equality over constants. Same-kind compares; cross-kind is Some(false)
+/// (different-kind constants are unequal — a stronger refusal than None).
+fn litval_eq(ref a, ref b) with Pure = match a {
+  LVInt(na)    => match b { LVInt(nb) => Some(na == nb), LVFloat(_) => Some(false), LVString(_) => Some(false), LVBool(_) => Some(false) },
+  LVFloat(fa)  => match b { LVInt(_) => Some(false), LVFloat(fb) => Some(fa == fb), LVString(_) => Some(false), LVBool(_) => Some(false) },
+  LVString(sa) => match b { LVInt(_) => Some(false), LVFloat(_) => Some(false), LVString(sb) => Some(sa == sb), LVBool(_) => Some(false) },
+  LVBool(ba)   => match b { LVInt(_) => Some(false), LVFloat(_) => Some(false), LVString(_) => Some(false), LVBool(bb) => Some(ba == bb) }
+}
+
+/// Strict order over numeric constants; strings/bools carry no order
+/// here (None — defer); cross-kind numeric is None.
+fn litval_lt(ref a, ref b) with Pure = match a {
+  LVInt(na)    => match b { LVInt(nb) => Some(na < nb), LVFloat(_) => None, LVString(_) => None, LVBool(_) => None },
+  LVFloat(fa)  => match b { LVInt(_) => None, LVFloat(fb) => Some(fa < fb), LVString(_) => None, LVBool(_) => None },
+  LVString(_)  => None,
+  LVBool(_)    => None
+}
+
+fn litval_le(ref a, ref b) with Pure = match a {
+  LVInt(na)    => match b { LVInt(nb) => Some(na <= nb), LVFloat(_) => None, LVString(_) => None, LVBool(_) => None },
+  LVFloat(fa)  => match b { LVInt(_) => None, LVFloat(fb) => Some(fa <= fb), LVString(_) => None, LVBool(_) => None },
+  LVString(_)  => None,
+  LVBool(_)    => None
 }
 
 /// Conjunction with three-valued short-circuit. Some(false) on either
@@ -220,10 +201,7 @@ fn classify_predicate(pred) with Pure = match pred {
   PNot(_)      => "negation",
   PAnd(_, _)   => "conjunction",
   POr(_, _)    => "disjunction",
-  PEq(_, _)    => "equality",
-  PLt(_, _)    => "ordering",
-  PLeq(_, _)   => "ordering",
-  PCall(_, _)  => "user-defined",
+  PCompare(_, _, _) => "comparison",
   PBoolNode(_) => "graph-deferred",
   PPatternMatch(_, _) => "match-narrowing"
 }
@@ -269,39 +247,52 @@ fn predicate_to_smt_lib(ref pred) with Memory + Alloc = {
 }
 
 fn predicate_to_smt(ref pred) with Memory + Alloc = match pred {
-  PTrue           => "true",
-  PEq(a, b)       => smt_binop("=", a, b),
-  PLt(a, b)       => smt_binop("<", a, b),
-  PLeq(a, b)      => smt_binop("<=", a, b),
-  PAnd(a, b)      => smt_logop("and", a, b),
-  POr(a, b)       => smt_logop("or", a, b),
-  PNot(inner)     => "(not {predicate_to_smt(inner)})",
-  PCall(name, args) => smt_call(name, args)
+  PTrue              => "true",
+  PCompare(op, l, r) => "({smt_cmp_op(op)} {node_to_smt(l)} {node_to_smt(r)})",
+  PAnd(a, b)         => smt_logop("and", a, b),
+  POr(a, b)          => smt_logop("or", a, b),
+  PNot(inner)        => "(not {predicate_to_smt(inner)})",
+  PBoolNode(n)       => node_to_smt(n),
+  PPatternMatch(_, n) => node_to_smt(n)
 }
 
-fn smt_binop(ref op, ref a, ref b) with Memory + Alloc = {
-  "({op} {pexpr_to_smt(a)} {pexpr_to_smt(b)})"
+fn smt_cmp_op(ref op) with Pure = match op {
+  BEq => "=",
+  BLt => "<",
+  BLe => "<=",
+  _   => "="
 }
 
 fn smt_logop(ref op, ref a, ref b) with Memory + Alloc = {
   "({op} {predicate_to_smt(a)} {predicate_to_smt(b)})"
 }
 
-fn smt_call(ref name, ref args) with Memory + Alloc = {
-  "({name}{smt_args(args, 0, len(args))})"
+/// Render an operand node as an SMT term, reading its Expr LIVE — the
+/// node-reading twin of the retired pexpr_to_smt.
+fn node_to_smt(ref node) with Memory + Alloc = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(LitInt(n))    => int_to_str(n),
+    NExpr(LitFloat(_))  => "0.0",
+    NExpr(LitString(s)) => "\"{s}\"",
+    NExpr(VarRef(name)) => name,
+    NExpr(CallExpr(callee, args)) => smt_node_call(callee, args),
+    _                   => "true"
+  }
+}
+
+fn smt_node_call(ref callee, ref args) with Memory + Alloc = {
+  let N(cbody, _, _) = callee
+  let fname = match cbody {
+    NExpr(VarRef(n)) => n,
+    _                => "_"
+  }
+  "({fname}{smt_args(args, 0, len(args))})"
 }
 
 fn smt_args(ref args, i, n) with Memory + Alloc = {
   if i >= n { "" }
   else {
-    " {pexpr_to_smt(list_index(args, i))}{smt_args(args, i + 1, n)}"
+    " {node_to_smt(list_index(args, i))}{smt_args(args, i + 1, n)}"
   }
-}
-
-fn pexpr_to_smt(ref e) with Memory + Alloc = match e {
-  PInt(n)        => int_to_str(n),
-  PFloat(_)      => "0.0",
-  PString(s)     => "\"{s}\"",
-  PEVar(name)    => name,
-  PApp(name, args) => smt_call(name, args)
 }

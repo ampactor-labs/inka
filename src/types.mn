@@ -745,23 +745,17 @@ type LitValue
 
 type Predicate
   = PTrue
-  | PEq(PExpr, PExpr)
-  | PLt(PExpr, PExpr)
-  | PLeq(PExpr, PExpr)
+  | PCompare(BinOp, Node, Node)  // comparison over two LIVE operand nodes — Verify reads each Expr live, never a PExpr copy
   | PAnd(Predicate, Predicate)
   | POr(Predicate, Predicate)
   | PNot(Predicate)
-  | PCall(String, List)
-  | PBoolNode(Int)           // predicate IS a bool expr's graph node — handle defers evaluation
-  | PPatternMatch(Pat, Int)  // predicate IS "scrutinee handle matches pat" — match-narrowing
+  | PBoolNode(Node)              // predicate IS a bool expr node — read live (a boolean call or bare bool var folds in here)
+  | PPatternMatch(Pat, Node)     // predicate IS "scrutinee node matches pat" — match-narrowing
 
-type PExpr
-  = PSelf                   // the value being refined
-  | PInt(Int)
-  | PFloat(Float)
-  | PString(String)
-  | PEVar(String)           // predicate-expression variable — disambiguated from Pat.PVar (different constructor namespace not yet enforced; closes #144's downstream cfv-trap by avoiding tag collision)
-  | PApp(String, List)
+// PExpr is GONE: its leaves (PSelf/PInt/PEVar/PApp) were a lossy COPY of the
+// expression the AST node already holds (`node_to_pexpr` re-derived it with a
+// `_ => PEVar("?")` surrender). The predicate now carries the live operand Node
+// and Verify reads its Expr live — carry the handle, read live, delete the copy.
 
 
 type Option
@@ -1091,24 +1085,40 @@ fn show_eff_arg(ref arg) with !Mutate = match arg {
 fn show_predicate(ref pred) with !Mutate = {
   match pred {
     PTrue      => "true",
-    PEq(a, b)  => "{show_pexpr(a)} == {show_pexpr(b)}",
-    PLt(a, b)  => "{show_pexpr(a)} < {show_pexpr(b)}",
-    PLeq(a, b) => "{show_pexpr(a)} <= {show_pexpr(b)}",
+    PCompare(op, a, b) => "{show_pred_operand(a)} {show_cmp_op(op)} {show_pred_operand(b)}",
     PAnd(a, b) => "{show_predicate(a)} && {show_predicate(b)}",
     POr(a, b)  => "{show_predicate(a)} || {show_predicate(b)}",
     PNot(p)    => "!{show_predicate(p)}",
-    PCall(name, args) => "{name}({show_list(args, show_pexpr, ", ")})"
+    PBoolNode(n) => show_pred_operand(n),
+    PPatternMatch(_, n) => "{show_pred_operand(n)} matches _"
   }
 }
 
-fn show_pexpr(ref pe) with !Mutate = {
-  match pe {
-    PSelf       => "self",
-    PInt(n)     => int_to_str(n),
-    PFloat(f)   => float_to_str(f),
-    PString(s)       => "\"{s}\"",
-    PEVar(v)         => v,
-    PApp(name, args) => "{name}({show_list(args, show_pexpr, ", ")})"
+fn show_cmp_op(ref op) with !Mutate = match op {
+  BEq => "==",
+  BLt => "<",
+  BLe => "<=",
+  _   => "?"
+}
+
+// Render a predicate operand by reading its Expr LIVE — no PExpr copy.
+fn show_pred_operand(ref node) with !Mutate = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(VarRef(name)) => name,
+    NExpr(LitInt(n))    => int_to_str(n),
+    NExpr(LitFloat(f))  => float_to_str(f),
+    NExpr(LitString(s)) => "\"{s}\"",
+    NExpr(CallExpr(callee, _)) => "{show_callee_name(callee)}(...)",
+    _                   => "<expr>"
+  }
+}
+
+fn show_callee_name(ref callee) with !Mutate = {
+  let N(cbody, _, _) = callee
+  match cbody {
+    NExpr(VarRef(n)) => n,
+    _                => "_"
   }
 }
 

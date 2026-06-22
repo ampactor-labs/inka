@@ -184,7 +184,6 @@ type NodeKind
   | NRowBound(EffRow)   // resolved effect row
   | NRowFree(Int)       // unresolved effect row variable
   | NErrorHole(Reason)  // inference observed failure (Hazel marked hole)
-  | NProgram(NodeBody)  // a parse-written AST node, register-once, resolved by handle (graph_node_body) — the AST lives in the one graph, never mutated by bind/chase
 
 type GNode
   = GNode(NodeKind, Reason)   // every node carries its justification
@@ -798,13 +797,13 @@ effect GraphRead {
   graph_reason_edge(Int, Int) -> Reason
   graph_snapshot() -> Graph
   graph_push_checkpoint() -> Int
-  graph_node_body(Int) -> NodeBody    // resolve a registered AST node by handle — the NProgram cell's body (NHole if the cell is not a program node)
+  graph_node_body(Int) -> NodeBody    // resolve a node's body by its handle from the parallel program weave — every AST node is registered there at construction (NHole if absent)
 }
 
 effect GraphWrite {
   graph_fresh_ty(Reason) -> Handle
   graph_fresh_row(Reason) -> Handle
-  graph_register_node(NodeBody, Reason) -> Handle    // register a parse-written AST node in the one graph; the handle resolves via graph_node_body
+  graph_register_node(Int, NodeBody) -> ()    // edge-link a node's body into the one graph at its handle (the parallel program weave); resolves via graph_node_body
   graph_bind(Int, Ty, Reason) -> ()
   graph_bind_row(Int, EffRow, Reason) -> ()
   graph_fork(String) -> ()

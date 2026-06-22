@@ -64,7 +64,8 @@ handler graph_handler
        current_overlay = "global",
        span_index = [],
        intent_index = [],
-       checkpoint_stack = [] {
+       checkpoint_stack = [],
+       program = [] {
 
   // checkpoint_stack tracks active speculation depth. Each
   // graph_push_checkpoint pushes the current trail_len; each
@@ -103,11 +104,7 @@ handler graph_handler
   },
 
   graph_node_body(handle) => {
-    let GNode(kind, _) = graph_node_at(nodes, handle)
-    resume(match kind {
-      NProgram(body) => body,
-      _              => NHole(0)
-    })
+    resume(if handle < len(program) { list_index(program, handle) } else { NHole(0) })
   },
 
   graph_push_checkpoint() => {
@@ -161,29 +158,18 @@ handler graph_handler
            overlay_lens = new_lens
   },
 
-  // Register a parse-written AST node IN the one graph (NProgram cell),
-  // reusing the fresh-allocation machinery — trail (MFreshNode → rollback
-  // un-allocates), overlay, next. The cell is register-once: never bound
-  // or chased, so its parse-written-immutable discipline holds even though
-  // it cohabits the array with the mutable union-find type cells.
-  graph_register_node(body, reason) => {
-    let handle = next
-    let new_nodes = nodes
-      |> graph_extend_to(handle + 1)
-      |> list_set(handle, GNode(NProgram(body), reason))
-    let (new_bufs, new_lens) =
-      overlay_register_at(overlay_bufs, overlay_lens, current_overlay_idx, handle)
-    let new_trail = trail_append(trail, trail_len, MFreshNode(handle))
-    if len(checkpoint_stack) == 0 {
-      perform graph_mutated(epoch, MFreshNode(handle))
-    }
-    resume(handle)
-      with nodes = new_nodes,
-           next = next + 1,
-           trail = new_trail,
-           trail_len = trail_len + 1,
-           overlay_bufs = new_bufs,
-           overlay_lens = new_lens
+  // Edge-link a node's body into the one graph at its handle — the parallel
+  // program weave (indexed by handle, like `nodes`). Every AST node registers
+  // here at construction, so any handle resolves to its body live
+  // (graph_node_body). The parse-written program projection, distinct from
+  // the mutable union-find type cell at the same handle in `nodes` — one
+  // handle, two co-indexed weaves. No trail: the weave only grows at parse,
+  // before speculation, so rollback never touches it.
+  graph_register_node(handle, body) => {
+    resume()
+      with program = program
+        |> list_extend_to(handle + 1)
+        |> list_set(handle, body)
   },
 
   graph_bind(handle, ty, reason) => {

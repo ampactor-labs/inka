@@ -22,10 +22,21 @@ fn fresh_handle(span: ValidSpan) = {
   h
 }
 
-fn nexpr(e, span: ValidSpan) = N(NExpr(e), span, fresh_handle(span))
-fn nstmt(s, span: ValidSpan) = N(NStmt(s), span, fresh_handle(span))
-fn npat(p, span: ValidSpan)  = N(NPat(p), span, fresh_handle(span))
-fn nhole(id, span: ValidSpan) = N(NHole(id), span, fresh_handle(span))
+// Every node is born here: mint its handle, edge-link its body into the
+// one graph (graph_register_node at the handle), and wrap it. The body is
+// registered AND carried in N — one heap object, two references (the AST
+// projection in N, the graph weave keyed by handle), never a copy — so
+// resolving the handle (graph_node_body) reads the same body the tree holds.
+fn mint_node(body, span: ValidSpan) = {
+  let h = fresh_handle(span)
+  perform graph_register_node(h, body)
+  N(body, span, h)
+}
+
+fn nexpr(e, span: ValidSpan) = mint_node(NExpr(e), span)
+fn nstmt(s, span: ValidSpan) = mint_node(NStmt(s), span)
+fn npat(p, span: ValidSpan)  = mint_node(NPat(p), span)
+fn nhole(id, span: ValidSpan) = mint_node(NHole(id), span)
 
 // Token navigation
 // Tokens are typed: `Tok(TokenKind, Span)`. Helpers extract payload
@@ -2207,14 +2218,15 @@ fn parse_predicate(ref tokens, pos) = {
   (pred, p)
 }
 
-// Project a predicate-body AST node to the Predicate ADT, REGISTERING each
-// operand node in the one graph and carrying its handle — graph_node_body
-// resolves the Expr live, so the predicate holds the edge, not a copy. A
-// comparison registers its two operands; `>`/`>=` normalize to `<`/`<=`
-// with swapped operands; `&&`/`||`/`!` compose recursively; ANY other
-// boolean expression (a refinement call, a bare bool var) IS its graph
-// node — PBoolNode(handle), registered and read live. No lossy fallback.
-fn node_to_predicate(node, span: ValidSpan) with GraphWrite = {
+// Project a predicate-body AST node to the Predicate ADT, carrying each
+// operand node's HANDLE — every node is registered in the one graph at
+// construction (mint_node), so graph_node_body resolves its Expr live and
+// the predicate holds the edge, not a copy. A comparison carries its two
+// operand handles; `>`/`>=` normalize to `<`/`<=` with swapped operands;
+// `&&`/`||`/`!` compose recursively; ANY other boolean expression (a
+// refinement call, a bare bool var) IS its graph node — PBoolNode(handle),
+// read live. No lossy fallback.
+fn node_to_predicate(node, span: ValidSpan) = {
   let N(body, _, _) = node
   match body {
     NExpr(BinOpExpr(BEq, l, r))     => compare_pred(BEq, l, r),
@@ -2226,23 +2238,12 @@ fn node_to_predicate(node, span: ValidSpan) with GraphWrite = {
     NExpr(BinOpExpr(BOr, l, r))     => POr(node_to_predicate(l, span), node_to_predicate(r, span)),
     NExpr(UnaryOpExpr(UNot, inner)) => PNot(node_to_predicate(inner, span)),
     NExpr(LitBool(true))            => PTrue,
-    _                               => PBoolNode(register_operand(node))
+    _                               => PBoolNode(node_handle(node))
   }
 }
 
-// Register a comparison's two operands and carry their handles.
-fn compare_pred(op, l, r) with GraphWrite = {
-  let lh = register_operand(l)
-  let rh = register_operand(r)
-  PCompare(op, lh, rh)
-}
-
-// Register an operand AST node in the one graph; the handle resolves its
-// Expr live via graph_node_body. The operand's span rides the Reason.
-fn register_operand(node) with GraphWrite = {
-  let N(body, span, _) = node
-  perform graph_register_node(body, Located(span, Inferred("refinement operand")))
-}
+// A comparison carries its two operand handles (resolved live via graph_node_body).
+fn compare_pred(op, l, r) = PCompare(op, node_handle(l), node_handle(r))
 
 fn skip_to_stmt_end(ref tokens, pos) = match kind_at(tokens, pos) {
   TSemicolon => pos,

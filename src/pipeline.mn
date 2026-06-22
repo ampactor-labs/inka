@@ -59,7 +59,7 @@ fn compile(entry_module) = {
   {
     driver_check(entry_module)
     let entry_source = perform fs_read_file(driver_module_path(entry_module))
-    entry_source |> frontend |> lower_program |> emit_module
+    entry_source |> frontend |> saturate_pass |> lower_program |> emit_module
   }
     ~> wat_stdout
     ~> wasi_filesystem       // FS — per-file byte I/O for driver / cache
@@ -74,6 +74,7 @@ fn compile(entry_module) = {
     ~> arm_state_default
     ~> lookup_ty_graph
     ~> env_handler
+    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -95,7 +96,7 @@ fn compile(entry_module) = {
 // produce byte-identical output when the wheel-source emit is
 // deterministic AND substrate-aligned across seed + wheel.
 fn compile_stdin() = {
-  read_stdin() |> frontend |> lower_program |> emit_module
+  read_stdin() |> frontend |> saturate_pass |> lower_program |> emit_module
 }
     ~> wat_stdout
     ~> wasi_filesystem
@@ -110,6 +111,7 @@ fn compile_stdin() = {
     ~> arm_state_default
     ~> lookup_ty_graph
     ~> env_handler
+    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -123,6 +125,7 @@ fn check(entry_module) = {
     ~> affine_ledger
     ~> verify_ledger
     ~> env_handler
+    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -150,6 +153,7 @@ fn compile_source(source) = {
     ~> arm_state_default
     ~> lookup_ty_graph
     ~> env_handler
+    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -165,6 +169,7 @@ fn check_source(source) = {
     ~> affine_ledger
     ~> verify_ledger
     ~> env_handler
+    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -185,6 +190,7 @@ fn query(source, question) = {
     ~> verify_ledger
     ~> lookup_ty_graph
     ~> env_handler
+    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -203,6 +209,7 @@ fn teach(source) = {
     ~> verify_ledger
     ~> lookup_ty_graph
     ~> env_handler
+    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -221,6 +228,7 @@ fn audit(source) = {
     ~> verify_ledger
     ~> lookup_ty_graph
     ~> env_handler
+    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose

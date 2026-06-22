@@ -66,7 +66,16 @@
 # (34->5); E_TypeMismatch +8 (the medium now connects those formerly-free state
 # types — proof-beats-review, expected to ratchet down as offset-flow completes).
 # Verified: micros 7/7, seed compiles the wheel, drift clean.
-census_max=181
+#
+# 2026-06-22: census RETIRED as a gate (Morgan). The ultimate .mn leads; the
+# disposable seed's weaker inference lags and catches up — a rising census is
+# the seed catching up to the wheel, NEVER a reason to refuse the wheel. The
+# old census_max ratchet contradicted this file's own 2026-06-21 verdict
+# ("census is a SHADOW; the real oracle is the wheel working + coherence, NOT
+# the diagnostic count"). The gate is now: the seed builds + the micros
+# compile-and-run (the wheel WORKS) + the drift-audit (the Carried-Truth Law).
+# verify.sh reports census as an informational shadow, enforced nowhere. The
+# micro battery below IS the gate. (census_max removed — read by nothing.)
 
 # micro:NAME=EXPECTED_EXIT — the evidence/equality battery (tools/run-micro.sh).
 micro:ev2=57

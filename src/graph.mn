@@ -91,6 +91,8 @@ handler graph_handler
     resume(epoch)
   },
 
+  graph_next() => resume(next),
+
   graph_reason_edge(h1, h2) => {
     let GNode(_, r1) = chase_node(nodes, h1, 0)
     let GNode(_, r2) = chase_node(nodes, h2, 0)

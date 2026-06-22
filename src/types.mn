@@ -794,6 +794,7 @@ effect GraphRead {
   graph_chase(Int) -> GNode
   graph_chase_handle(Int) -> Int    // the canonical ROOT handle of a TVar chain (union-find find)
   graph_epoch() -> Int
+  graph_next() -> Int                 // the fresh-handle counter — the node-space bound for saturation
   graph_reason_edge(Int, Int) -> Reason
   graph_snapshot() -> Graph
   graph_push_checkpoint() -> Int

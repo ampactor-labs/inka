@@ -172,6 +172,15 @@ fn is_one(handle) with GraphRead = match perform graph_node_body(handle) {
 // fixpoint.
 fn saturate(bound) with GraphRead + EGraph = saturate_until(bound, 0)
 
+// The saturation pass: populate the e-graph over the whole node space
+// (graph_next bounds it), then pass the program through unchanged — the
+// equivalences are the side effect lower reads via egraph_extract. A `|>`
+// stage between frontend and lower in the pipeline spine.
+fn saturate_pass(program) with GraphRead + EGraph = {
+  saturate(perform graph_next())
+  program
+}
+
 fn saturate_until(bound, pass) with GraphRead + EGraph = {
   if pass > bound { () }
   else {

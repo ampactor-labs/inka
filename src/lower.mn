@@ -779,13 +779,22 @@ fn lookup_parent_effect(op_name) = {
 
 // Lower walk — exhaustive, live
 
+// lower reads the fabric: before lowering, resolve the node's CANONICAL
+// form from the e-graph (egraph_extract = the e-class root, the simplest
+// proven-equivalent term). For an un-rewritten node the root is the node
+// itself, so this is identity on the common path; for x + 0 the root IS x
+// and lower emits x — optimization as a cursor read, not a separate pass.
+// The canonical handle carries the type lookups, since a rewrite preserves
+// the type (and, for a dropping rewrite, the effect row — the gate proved it).
 fn lower_expr(node) = {
-  let N(body, span, handle) = node
+  let N(obody, span, handle) = node
+  let canon = perform egraph_extract(handle)
+  let body = if canon == handle { obody } else { perform graph_node_body(canon) }
   match body {
-    NExpr(e)     => lower_expr_body(e, handle, span),
-    NStmt(s)     => lower_stmt_as_expr(s, handle, span),
-    NPat(_)      => LConst(handle, LInt(0)),   // patterns don't lower as expr
-    NHole(_)     => LConst(handle, LInt(0))    // Hazel hole → unreachable trap at emit
+    NExpr(e)     => lower_expr_body(e, canon, span),
+    NStmt(s)     => lower_stmt_as_expr(s, canon, span),
+    NPat(_)      => LConst(canon, LInt(0)),   // patterns don't lower as expr
+    NHole(_)     => LConst(canon, LInt(0))    // Hazel hole → unreachable trap at emit
   }
 }
 

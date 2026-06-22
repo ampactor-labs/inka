@@ -20,27 +20,30 @@
 
 This document is **the authoritative syntactic spec for Mentl**. It binds the parser; the parser implements exactly this. It is written under dream-code discipline: every decision below is the IDEAL form, not a description of the current parser. Where the current parser deviates, the parser is wrong; SYNTAX.md is the wheel, the parser is the lathe being adjusted to it.
 
-> **Resolved-design forward-pointer (`PLAN.md §4`).** Two `PLAN.md` decisions
-> bear on the surface and are the *long-game* target (real-before-perfect, §5):
-> **§4① the value ontology** — `String`/`Int`/`Float`/`Bool` ultimately *derive*
-> from five node-kinds (`Bool` already does), so the two string forms and the
-> `++`/`==` type-dispatch below are a *view* over one sequence kind, not a
-> primitive split; and **§4③ the effect system** keeps Boolean negation (`!E`)
-> while evolving toward modal effects to kill the higher-order leak. The current
-> forms below stand and ship; the derivation lands underneath without breaking
-> them. Where a form here looks like a special-case primitive, that is the
-> pragmatic surface, not the final ontology.
+> **Resolved-design note (`PLAN.md §4`).** The value ontology (`§4①`) is realized
+> **on the surface now**, not deferred. There is ONE sequence node-kind, so
+> `String` IS `[Byte]` + a parse-time text/interpolation view; `++` is one
+> `seq_concat`; `==` is one structural-eq derivation; `Int`/`Float` are `Word` +
+> a representation gradient (`Bool` already derives — `False | True`). The surface
+> is INVARIANT to the substrate, and the byte-sequence ontology is that invariant
+> form, so it IS the form on the page — the *lowering* is sequenced to catch up to
+> the surface (§5/§5.3), never the surface lowered to current lowering. The one
+> genuinely post-real forward-pointer is the **effect system** (`§4③`): `!E` is
+> present and load-bearing now; the modal synthesis that closes the higher-order
+> leak, and the IFC flow-constraint (`§4⑥`), are sequenced after first-light —
+> their absence named in positive form where each would land, never a hedge that
+> the present forms are "pragmatic, not final."
 
 ---
 
 ## Syntax ↔ the eight-primitive kernel
 
-Every form below exists to make one primitive of the kernel (DESIGN.md §0.5) reachable as text. No form exists without a kernel correspondence. This is not decoration — it is a load-bearing constraint: a syntactic feature with no kernel primitive behind it has no semantic home, and every such feature in peer languages has been regretted. The kernel has eight primitives; Mentl has eight tentacles; the surface forms below have eight corresponding surfacing groups.
+Every form below exists to make one primitive of the kernel (`PLAN.md §2`) reachable as text. No form exists without a kernel correspondence. This is not decoration — it is a load-bearing constraint: a syntactic feature with no kernel primitive behind it has no semantic home, and every such feature in peer languages has been regretted. The kernel has eight primitives; Mentl has eight tentacles; the surface forms below have eight corresponding surfacing groups.
 
 | # | Kernel primitive                                    | Tentacle   | Surface form                                                    |
 |---|-----------------------------------------------------|------------|-----------------------------------------------------------------|
 | 1 | Graph + Env                                    | Query      | AST nodes implicit; `import` brings module envs together         |
-| 2 | Handlers with typed resume discipline               | Propose    | `effect`, `handler`, `handle`/`~>`, `resume`. Ops are invoked as BARE CALLS — effect-ness lives in the op's row (`Closed[eff]` at decl), never in a call-site keyword (`perform` is format-liftable ceremony; see §«Invoking effect operations»). Resume cardinality is INFERRED from arm body structure (count of resume sites under control-flow ancestry); never authored as annotation. |
+| 2 | Handlers with typed resume discipline               | Propose    | `effect`, `handler`, `~>` (the one install verb), `resume`. Ops are invoked as BARE CALLS — effect-ness lives in the op's row (`Closed[eff]` at decl), never in a call-site keyword (`perform` is format-liftable ceremony; see §«Invoking effect operations»). Resume cardinality is INFERRED from arm body structure (count of resume sites under control-flow ancestry); never authored as annotation. |
 | 3 | Five verbs                                          | Topology   | `\|>`  `<\|`  `><`  `~>`  `<~` with canonical layout             |
 | 4 | Full Boolean effect algebra (`+ - & ! Pure`)        | Unlock     | `with E1 + !E2 + Pure` in fn sigs, handler sigs, types — declared row is a CONSTRAINT verified against the row inferred from the body's op-call sites, never a contract |
 | 5 | Ownership as an effect                              | Trace      | `own` / `ref` parameter markers; inferred from usage count by default (0/1/2+ → Inferred/Own/Ref) |
@@ -58,7 +61,7 @@ Each section below labels which primitive(s) its forms surface.
 
 Five rules every syntactic decision below honors:
 
-1. **Layout is projection, never contract.** The shape of the code on the page IS the computation graph — because the formatter *projects* the graph onto the page in canonical form, not because the parser reads meaning from whitespace. The parser has ONE precedence table; layout is never semantics (the `~>` one-precedence law, 2026-06-11). Wrong layout is normalized at save by `mentl fmt`, never a parse error.
+1. **Layout is projection, never contract.** The shape of the code on the page IS the computation graph — because the formatter *projects* the graph onto the page in canonical form, not because the parser reads meaning from whitespace. This is *forced* by the kernel, not chosen: a contract would make whitespace a SECOND writer into the graph, but the kernel has exactly one writer (inference) — one graph, two operations, there is no third — so layout is necessarily a READ of the already-written graph, and `mentl fmt` is that read at the surface. The parser has ONE precedence table; wrong layout is normalized at save by `mentl fmt`, never a parse error.
 
 2. **No redundant form.** If two syntactic forms produce the same graph, one is rejected. The medium refuses ceremony the substrate doesn't require.
 
@@ -86,12 +89,17 @@ fn add(a, b) with Pure = a + b
 fn parse(path: ValidPath) = path |> read_file |> decode
 ```
 
-### Canonical form — multi-line body requires braces
+### Canonical form — block body requires braces
 
-**Rule:** if the body spans more than one line (statements, multi-line expressions like `if`/`match`, etc.), braces are required. They anchor the function boundary visually and enable editor code-folding at every function.
+**Rule:** braces are required exactly when the body introduces `let`-bindings or
+statements — i.e. when it IS a `BlockExpr`. The braces ARE the `BlockExpr` literal
+(a scope sequencing statements before a final expression); they are NOT keyed on
+line count. A single expression — even a multi-line `if`/`match`/pipe chain — needs
+no braces; `mentl fmt` projects fold-points and indentation as layout, never as a
+parse contract (Governing Principle 1: layout is never semantics).
 
 ```
-fn chase_node(ref nodes, handle, depth) with !Mutate = {
+fn chase_node(ref nodes, handle, depth) with !Mutate =
   if depth > 100 {
     GNode(NErrorHole(Inferred("depth exceeded")), Fresh(handle))
   } else {
@@ -101,16 +109,18 @@ fn chase_node(ref nodes, handle, depth) with !Mutate = {
       _          => GNode(kind, reason),
     }
   }
-}
 
 fn process(input: [Float]) -> Result with !Alloc = {
-  let validated = input |> validate
+  let validated = input |> validate      // let-bindings ⇒ a BlockExpr ⇒ braces
   let normalized = validated |> normalize
   normalized |> fft |> extract
 }
 ```
 
-The braces enclose a `BlockExpr(stmts, final_expr)` when `let`/intermediate statements are present, or a single multi-line expression otherwise.
+`chase_node`'s body is one multi-line `if`/`match` expression — **no braces** (not
+a `BlockExpr`). `process` introduces `let`-bindings — **braces required**, enclosing
+a `BlockExpr(stmts, final_expr)`. The sole question is "does this body introduce
+bindings/statements?", read live from the graph — never "how many lines."
 
 ### The Intent Boundary Rule for Parameters
 
@@ -122,49 +132,35 @@ Mentl uses Hindley-Milner type inference. **You do not need to annotate base typ
 
 Do not write `fn name(a: Int)` when the graph can infer it. Do write `fn name(pos: ValidOffset)` to erect a graph-backed semantic contract.
 
-### Canonical form — block body
-
-When the function needs intermediate `let` bindings or multiple statements before its final expression:
+### Redundant braces — braces wrapping a non-BlockExpr
 
 ```
-fn process(input: [Float]) -> Result with !Alloc = {
-  let validated = input |> validate
-  let normalized = validated |> normalize
-  normalized |> fft |> extract
-}
-```
-
-Braces ARE required when there are statements. The braces enclose a `BlockExpr(stmts, final_expr)`.
-
-### Rejected form — braces around single-line expression
-
-```
-// REJECTED:
+// braces around a body with no statements (a bare expression):
 fn parse(path: Path) -> Config = { path |> read_file |> decode }
 ```
 
-Diagnostic: **`E_RedundantBraces`** at the opening `{`.
-> "this body fits on one line; remove the braces. Use braces only for multi-line bodies."
+Diagnostic: **`E_RedundantBraces`** (format-liftable — the formatter strips the
+braces; the user sees no error). Trigger: braces enclose a body that introduces no
+`let`-bindings/statements (not a `BlockExpr`), regardless of line count.
 
 Quick Fix: remove the `{` and `}`.
 
-### Rejected form — missing braces on multi-line body
+### Missing braces — statements written without a block
 
 ```
-// REJECTED:
-fn chase_node(...) =
-  if depth > 100 {
-    ...
-  } else {
-    let node = graph_node_at(...)
-    ...
-  }
+// a body that introduces let-bindings but omits the braces:
+fn process(input) =
+  let validated = input |> validate
+  validated |> fft |> extract
 ```
 
-Diagnostic: **`E_MissingBracesMultiLine`** at the `=`.
-> "multi-line function bodies require braces to anchor the function boundary. Wrap the body in `{ ... }`."
+Diagnostic: **`E_BlockNeedsBraces`** (format-liftable — the formatter wraps the
+statements in `{ }`; the user sees no error). Trigger: a body containing
+`let`-bindings/statements (a `BlockExpr`) written without its braces — NOT keyed on
+line count. The earlier `chase_node` (a single multi-line `if` expression) needs no
+braces precisely because it introduces no statements.
 
-Quick Fix: add `{` after `=` and `}` at the end.
+Quick Fix: wrap the statement sequence in `{ ... }`.
 
 ### Generic type parameters
 
@@ -202,7 +198,7 @@ fn audio_stage(samples) with Sample(44100) + !Alloc + IO =
 
 `Pure` is the identity element of `+`. Writing `with Pure` is allowed (and an explicit purity declaration); `with Pure + IO` simplifies to `with IO`.
 
-**`with` is one keyword, not four.** It reads identically everywhere it appears — *"this construct is accompanied by / carries X"* — and the four surfaces are one concept, not overload: a function carries effects (`fn f() with E`); a handler carries state (`handler h with s = init`); a handle expression runs accompanied by a handler (`handle body with h`, the block form of `~>`); a resume carries a state update (`resume(v) with s = s + 1`). The grammar disambiguates by position (a row after a signature, `name = init` bindings after a handler/resume, a handler value after a handle body); the meaning is constant.
+**`with` is one keyword, not three.** It reads identically everywhere it appears — *"this construct is accompanied by / carries X"* — and the three surfaces are one concept, not overload: a function carries effects (`fn f() with E`); a handler carries state (`handler h with s = init`); a resume carries a state update (`resume(v) with s = s + 1`). The grammar disambiguates by position (a row after a signature, or `name = init` bindings after a handler/resume); the meaning is constant. (Handler *installation* is not a `with`-surface — it is the `~>` verb; the `handle body with h` spelling is format-lifted to `(body) ~> h`.)
 
 ### Return type omission
 
@@ -225,7 +221,7 @@ compress(sample, threshold = -6.0)                  // label to skip over ratio
 compress(sample, ratio = 2.0, threshold = -18.0)   // fully labeled
 ```
 
-Defaults are evaluated per-call-site (not at declaration time); they may reference earlier parameters but not later ones.
+A default **desugars once at the declaration** to a callee-scoped fill: when a call-site argument edge is absent, the parameter is filled by projecting the default's node, evaluated in the **callee's** parameter scope — where earlier parameters are in scope as a sequential binding chain (the same letrec scope nested fns use), never the caller's context. The default has one home (the signature node) and one evaluation context (the callee); the call site only omits an edge. A defaulted slot leaves a `DefaultReason(param, decl_site)` edge — `mentl why` at the slot walks to the declaration ("`ratio` defaulted to `4.0` from `compress` — annotate to pin").
 
 ### Labeled call arguments
 
@@ -239,7 +235,7 @@ spawn_task(5, config, timeout_ms = 5000)                        // positional + 
 spawn_task(priority = 5, config = current, timeout_ms = 5000)   // all labeled
 ```
 
-Labeled args improve readability at call sites with many parameters and allow skipping defaults. Parser resolves labels against the declared parameter names; unknown label = `E_UnknownArgLabel`.
+**Defaults and labeled args are not two features — they are the parameter list AS a product node-kind.** A parameter list is a positional product (`PLAN.md §2`, L1); like every product it may be constructed positionally (`f(a, b)`), by field (`f(x = a, y = b)`), or mixed (`f(a, y = b)`) — the identical machinery as record literals `{a, b}` / `{x: a, y: b}` (punning + field-naming), and a default is a product field's fallback construction (the identical machinery as a record-field default). There is no second call-site feature; the product node-kind mandates all four forms. Labels resolve against the declared parameter names; an unknown label is `E_UnknownArgLabel`. (Under threading/multi-shot a labeled call is order-independent at the product level — the cursor may fill fields in any order.)
 
 ### Nested function declarations
 
@@ -307,12 +303,12 @@ One syntax for all anonymous functions. `(` opens the parameter list; `)` closes
 }
 ```
 
-### Rule — braces only for multi-line / statement bodies
+### Rule — braces are the BlockExpr literal
 
-- **Single-line, single expression body:** no braces. `(x) => x + 1`.
-- **Multi-line OR containing `let` statements:** braces required. `(x) => { let y = ...; y + 1 }`.
+- **A single expression body** (even multi-line) needs no braces: `(x) => x + 1`, `(x) => if c { a } else { b }`.
+- **A body that introduces `let`-bindings/statements (a `BlockExpr`)** requires braces: `(x) => { let y = setup(x); y + 1 }`.
 
-This matches the brace discipline for named fn bodies (see §"Function declarations").
+Identical to named-fn bodies (§"Function declarations"): the brace requirement keys on "is this a `BlockExpr`?", never on line count.
 
 ### Inline higher-order use
 
@@ -411,11 +407,24 @@ input
 
 **Type rule:** if `input: T` and branches are `(T -> A, T -> B, T -> C)`, the result is `(A, B, C)`. Row is union of all branch rows + upstream row.
 
-**Ownership:** input is shared (borrowed). `own` values cannot flow through `<|` — `E_OwnershipViolation`.
+**Ownership:** input is shared (borrowed) — and this ownership *is* the discriminator. `own` values cannot flow through `<|` (`E_OwnershipViolation`); a branch that must consume its input independently is `><`, the own-consuming surface of the *same* parallel-fanout topology (see §`><`).
 
 ### `><` — parallel compose (structural N-ary)
 
 **Two or more INDEPENDENT pipelines run in parallel.** Each branch has its own input. Outputs are tupled.
+
+**`<|` and `><` are two surfaces of ONE parallel-fanout topology, discriminated by
+input OWNERSHIP (arm 5)** — not two different shapes. `<|` ref-borrows ONE shared
+input across N branches; `><` own-consumes N independent inputs. Both fan out and
+tuple the results; the share-vs-consume reading is inferred from the branch input
+types (the same use-count inference that drives `own`/`ref`). Two glyphs, one
+topology read through ownership — never two topological primitives.
+
+**Independence is the topology; concurrent EXECUTION is a handler choice.** `><`
+declares the branches independent; whether they run on parallel threads or are
+sequentialized is decided by installing a `Thread` handler in the enclosing `~>`
+chain — exactly as persistence is a handler swap (`PLAN.md §4④`). The verb stays
+pure topology; the cursor reads the execution strategy from the handler stack.
 
 **`><` is a structural N-ary construct the formatter renders in one of two layouts** (a presentation choice, never a parse distinction — there are no semantic "forms," only render shapes):
 
@@ -474,7 +483,7 @@ eager-form-commitment drift (`protocol_parse_is_eager_graph_projection.md`).
 
 ### `~>` — tee (handler-attach)
 
-`expr ~> h` ≡ `handle expr with h`. The handler intercepts effects expr performs.
+`expr ~> h` installs handler `h` over `expr` — drawing the install edge to `h`'s node and intercepting the effects `expr` performs. (The `handle expr with h` keyword spelling is format-lifted to `~>`, the one install verb.)
 
 **The one law:** `~>` has ONE precedence — **1, the loosest binary
 operator** (see §Precedence). The handler at the foot of a chain
@@ -523,7 +532,7 @@ signal
     <~ delay(3)
 ```
 
-**Type rule:** `<~` requires an iterative context (`Sample`, `Tick`, `Clock` handler installed somewhere in the enclosing handler stack). RHS must be a `FeedbackSpec` value (constructed via `delay(N)`, `accumulate(init)`, `filter_spec(N, coeffs)`, etc.). Without iterative context: `E_FeedbackNoContext` at the `<~` site.
+**Type rule:** `<~` requires an **iterative context** — the structural presence of a cycle/iteration-resume handler (an `Iterate`-class effect) in the enclosing stack; `Sample`/`Tick`/`Clock` are *instances* of that class, not a hardcoded name-allowlist (a name-allowlist would be the string-keyed drift at the handler layer). Its RHS is a **state-element** — a value that performs the iterative effect (carries state across ticks); `delay(N)`, `accumulate(init)`, `filter_spec(N, coeffs)` are examples, and any user-defined register of that shape qualifies. Without an iterative context: `E_FeedbackNoContext` at the `<~` site.
 
 ---
 
@@ -627,7 +636,7 @@ let tagged = {...event, timestamp: now(), processed: true}
 
 ## Indexing
 
-Subscript access for lists, tuples, and integer-keyed records.
+Subscript access for lists and tuples.
 
 ```
 argv[1]                      // list index
@@ -639,7 +648,6 @@ matrix[i][j]                 // chained indexing
 `xs[i]` lowers to the appropriate runtime call based on the receiver's inferred type:
 - `[a]` → `list_index(xs, i)`.
 - Tuple → compile-time position extraction.
-- Map / record-by-int-key → `record_get(xs, i)`.
 
 Bounds-checking is runtime for lists (traps on out-of-range); compile-time for tuples (H6 exhaustiveness).
 
@@ -838,7 +846,7 @@ handler stdout_console {
 }
 ```
 
-Per §"Parameters ARE tuples," a zero-arg call unifies with a unit parameter type. `resume()` and `resume(())` are grammatically equivalent; `resume()` is canonical by §"No redundant form."
+Per the parameter-list-as-product rule (§"Labeled call arguments"), a zero-arg call unifies with a unit parameter type. `resume()` and `resume(())` are grammatically equivalent; `resume()` is canonical by §"No redundant form."
 
 ### Parameterized effect (first-class)
 
@@ -872,7 +880,7 @@ Resume cardinality is **inferred from each handler arm body** at handler-decl ti
 - **`MultiShot`** (inferred when one or more resume sites under loop/recursion ancestry, or two sites both reachable from one path) — continuation captured to the heap as a closure. Enables backtracking, non-determinism, generators.
 - **`Either`** (inferred when callers pin distinct kinds at different install sites; gradient-undecided at the EffectOpScheme) — handler arms may use either; loses some optimization headroom.
 
-The cardinality is **load-bearing on type+lower** — it's why Mentl can express real-time DSP and constraint-search backtracking under one effect algebra. But the **annotation form is drift** (per `protocol_cursor_is_the_substrate.md`): authoring `@resume=` would declare what the body already proves. The body IS the contract; the cursor projects the cardinality. See `src/infer.mn`'s `infer_resume_cardinality` for the substrate.
+The cardinality is **load-bearing on type+lower** — it's why Mentl can express real-time DSP and constraint-search backtracking under one effect algebra (and why a persisted multi-shot continuation is `memcpy`-serializable while a one-shot is a stack frame). But the **annotation form is drift**: authoring `@resume=` would declare what the body already proves. The body IS the contract — and because a fact this load-bearing must be legible ("systems explain themselves", `PLAN.md §0`), the cursor **projects** it read-only: `mentl where` shows the op's `TCont` as `R ->1 S` (one-shot) or `R ->* S` (multi-shot), a derived badge — never an authored annotation. The body remains the contract; the projection is output, not input.
 
 ### Negation in `with` clauses
 
@@ -883,7 +891,9 @@ fn pure_op(x: Int) -> Int with !Alloc + !IO =
 
 `!E` proves ABSENCE of effect E. Stronger than not-mentioning E because it propagates transitively through the call graph: any callee that performs E causes the whole declaration to fail with `E_EffectMismatch`.
 
-When used alone (e.g., `with !Mutate`), it creates a **capability stance** representing "anything except this effect" (universe-minus). This is how Mentl expresses region-freezes and borrows (`ref`) mathematically without a separate borrow-checker.
+When used alone (e.g., `with !Mutate`), it creates a **negative capability stance** representing "anything except this effect" (universe-minus). This is how Mentl expresses region-freezes and borrows (`ref`) mathematically without a separate borrow-checker.
+
+**Modal-readiness is a mechanism, not a claim (`PLAN.md §4③`, forward-pointer).** The modal effect synthesis (rows + capabilities unified, closing the higher-order leak) threads effects as *lexical capabilities* through the EXISTING `~>` binding: `~> h` lexically scopes the effect `h` absorbs — that IS the capability mechanism. So the modal form adds only a typing rule (a row variable becomes a lexical capability handle at `~>`), no new surface form: rows give `!E`, `~>` gives the lexical capability, modal is their unification on forms that already exist. Sequenced post-real (§5).
 
 `Pure` is shorthand for "the body's row must be EfPure (literally empty)":
 ```
@@ -957,19 +967,23 @@ The `with` clause lists state updates by field name. Unlisted state stays unchan
 
 ### Installation
 
-Two equivalent forms:
+`~>` is the ONE handler-installation operator — it draws the install edge to the
+handler's node (`PLAN.md §2`):
 
 ```
-// Block form
-handle {
-  body_expr
-} with handler_name(cfg_args)
-
-// Pipe form
 body_expr ~> handler_name(cfg_args)
 ```
 
-Pipe form is preferred for chains; block form for embedded sub-scopes.
+A sub-scope is a brace-block — a first-class `BlockExpr` — installed the same way:
+
+```
+{ let a = setup(); work(a) } ~> handler_name(cfg_args)
+```
+
+The `handle { body } with h` keyword spelling produces the *identical* graph
+(`(body) ~> h`), so by no-redundant-form (Governing Principle 2) it is not a second
+form — it lexes but is format-lifted to `~>` (**`E_RedundantHandleBlock`**,
+MachineApplicable). There is no "block form vs pipe form" choice: one verb, one edge.
 
 ### Negation guards on handlers
 
@@ -983,81 +997,68 @@ handler affine_ledger with !Consume {
 
 ---
 
-## Capability declarations
+## Named effect rows (capabilities)
 
-A **capability** is a named effect row — the substrate's row algebra (`+` `-` `&` `!` `Pure`) named for developer intent. `capability File = read + write` introduces `File` as a row alias; any signature can write `with File + Network` and the row composes structurally.
-
-Surfaces kernel primitive **#4** (full Boolean effect algebra). Per SUBSTRATE.md §IV: effect rows ARE first-class kernel values; a capability declaration is the surface that names a frequently-used row.
-
-### Canonical form
+Surfaces kernel primitive **#4** (the Boolean effect row). An effect row is a
+first-class kernel value (`PLAN.md §2`), so **naming a row is what `type` already
+does** — there is no separate `capability` keyword:
 
 ```
-capability File = read + write
-capability Network = http + dns
-capability ApiClient = File + Network
+type File = read + write
+type Network = http + dns
+type ApiClient = File + Network
 ```
 
-Each declaration:
-- `capability` keyword (lexer: TCapability per token enumeration §«TCapability»)
-- name (an upper-case identifier; conventional but not yet enforced)
-- `=`
-- effect-row expression: one or more effect-op names or capability names, combined with `+` `-` `&` `!`
+`type Name = <row-expr>` is a transparent alias (§Type aliases): `Name` unpacks to
+its row at every site that takes a row, and `with File + Network` composes
+structurally. The RHS uses the full Boolean algebra `+ - & ! Pure`:
 
-The row expression follows the same algebra as `with E1 + E2` clauses (§«With-clauses»). After declaration, the capability name IS a row value at every site that takes a row.
-
-### Use
+- `+` **union** — `type ApiClient = File + Network`
+- `-` **difference** — `type ReadOnly = File - write` (admits `read`, rejects `write` at the structural gate)
+- `&` **intersection** — `type Shared = ServiceA & ServiceB` (effects BOTH require — the natural typing of a `<|` divergent join); the identity `E - F = E & !F` holds (`EfInter`)
+- `!` **negation** — `!Alloc` (universe-minus; transitive proof-of-absence)
 
 ```
-fn fetch(url: String) with ApiClient = {
+fn fetch(url) with ApiClient = {
   let body = http("GET", url)
   write(local_cache_path(url), body)
 }
 ```
 
-The capability `ApiClient` unpacks to its underlying row at sig-check; the body's `http` and `write` op calls discharge against that row.
+A row that resolves to `Pure` (everything subtracted out) is `W_CapabilityEmpty`
+(the alias adds no constraint — drop it); a row referencing an undeclared effect
+surfaces `E_MissingVariable` at the unresolved name.
 
-### Negation form
-
-```
-capability ReadOnly = File - write
-```
-
-`-` removes an effect from a capability. The resulting row admits `read` but rejects `write` at the structural-gate.
-
-### Diagnostic
-
-A capability that resolves to the empty row (`Pure`) — e.g., all effects subtracted out — is `W_CapabilityEmpty` (the row IS `Pure`; the capability adds no constraint above and beyond `with Pure`; suggest dropping the declaration).
-
-A capability whose body references an undeclared effect name surfaces `E_MissingVariable` at the row position with span at the unresolved name.
-
-### Kernel correspondence
-
-A `CapabilityDeclStmt(name, effs)` AST node lowers to an env binding `name ↦ Row(effs)`. There is no runtime cost — capability use is fully resolved at compile-time via row composition. Per the row-alias ultimate-form discipline (peer `Hβ.types.capability-as-row-alias`), `capability` is structurally equivalent to `type name = RowOf<effs>`; the keyword surfaces developer intent ("this row IS a named capability") rather than introducing a new substrate primitive.
+**Dissolved:** the `capability` keyword and the `TCapability` token. `capability X
+= <row>` was structurally `type X = <row>` (the doc's own prior admission, peer
+`Hβ.types.capability-as-row-alias`) — a row is a type-level value, so naming one IS
+a type alias, and a second keyword for it is the redundant form Governing Principle
+2 rejects. (Want *nominal* row identity — a row that does not unify with its
+structural equal? That is record-style branding; but capabilities want structural
+composition, so the transparent alias is the ultimate form.)
 
 ---
 
 ## Pipeline + handler installation in code
 
-### Block handle
-
-```
-let result = handle {
-  computation()
-} with state_handler with s = 0 {
-  ...
-}
-```
-
-### Inline pipe handle
+### Installing a handler in code
 
 ```
 let result = computation() ~> state_handler
 ```
 
-For handlers with config:
+A sub-scope is a brace-block installed the same way; config args ride on the
+handler:
+
 ```
-let log = handle { work() } with bounded_log("INFO")
+let result = { let x = setup(); work(x) } ~> state_handler
+let log    = { work() } ~> bounded_log("INFO")
 ```
+
+(The `handle { body } with h` keyword spelling — and the double-`with`
+`handle {…} with h with s = 0 {…}` it enabled — are format-lifted to `(body) ~> h`;
+handler state and arms live at the handler *declaration*, never at the install
+site.)
 
 ### Multi-handler chain (capability stack)
 
@@ -1192,16 +1193,14 @@ Only the listed names are brought into scope.
 
 ### No rename / alias
 
-There is no `import X as Y`. Full paths in source are clearer than aliases. If a name conflict arises, use the full qualified name at the call site:
+There is no `import X as Y` — an alias is a redundant second name for an edge the import already drew (no-redundant-form). A name collision is resolved **once, at the import edge**, not re-derived at N call sites: selective import narrows each side so each name binds one edge.
 
 ```
-import dsp/spectral
-import lin/spectral
-
-// At usage:
-dsp.spectral.fft(samples)
-lin.spectral.fft(matrix)
+import dsp/spectral {fft}
+import lin/spectral {fft}    // E_ImportNameCollision — two edges into `fft`
 ```
+
+The graph **refuses** two edges into one name rather than papering over it with a re-resolved dotted path; the developer narrows the selective sets (or, if both are genuinely needed, binds each module's resolved env node once and reaches `.fft` through that single edge). A qualified `dsp.spectral.fft` re-resolves the import edge **by name** at every call site — the canonical re-derivation (`PLAN.md §2`) — so it is the residue the formatter rewrites, never the recommended disambiguator.
 
 **One-separator law:** `/` appears ONLY in import position (transport-honest — the module path maps to the file transport). Everywhere in expressions, `.` is the one access operator — fields and qualified names alike. There is no third separator; `::` is not a token.
 
@@ -1209,51 +1208,40 @@ lin.spectral.fft(matrix)
 
 ## Comments
 
-### Line comments
+Surfaces primitive #8 (HM with Reasons — a comment is a Reason edge).
+
+There is **ONE comment form**, `//`, and it is **graph content** — the medium
+never blinds itself to prose. The lexer emits a comment token; the parser attaches
+each comment to the node it precedes (the following declaration, or — with none —
+the enclosing block / the file's synthetic `Module` handle) as a
+`CommentReason(text, span)` edge, walked by the Why engine and surfaced in Mentl's
+voice. "Lossless intent" (`PLAN.md §0`) means a `// HACK: …` is intent the graph
+carries, never noise the lexer drops.
 
 ```
-// This is a line comment
-let x = 1   // trailing comment
-```
-
-### Doc comments
-
-`///` is the developer's one voice into the substrate. The lexer emits `TDocComment(text)` (per Token enumeration §`TDocComment`). The parser attaches each `TDocComment` to the immediately-following declaration via the `Documented(content, stmt)` AST wrapper (per DS walkthrough §3.1 + §3.2). Inference threads the docstring into the env entry as a `DocstringReason(content, span)` Reason edge (per DS §3.1 candidate C). Mentl's voice handler surfaces the docstring **verbatim alongside her canonical projection** (per MV §2.7 + F.1 §3.1, §5).
-
-```
-/// Single-pole IIR low-pass with cutoff frequency parameterized by
-/// the sample rate. Real-time-safe.
-///
-/// Use in audio callbacks where allocation would cause dropouts.
-/// References to `Sample` and `<~` are resolved by render handlers.
-///
-/// Primitive: #5 (Trace) — exemplifies ownership-as-effect with `!Alloc`.
+// Single-pole IIR low-pass, sample-rate-parameterized. Real-time-safe.
+//
+// Use in audio callbacks where allocation would cause dropouts.
+// References to `Sample` and `<~` are resolved by render handlers.
 fn lowpass_filter(samples: [Sample]) -> [Sample] with !Alloc =
   ...
 ```
 
-#### What `///` IS
+### What a comment IS
 
-- **Pure prose.** Multi-line allowed; contiguous `///` lines concatenate to one String (per DS §5 AT-DS3). Blank `///` line becomes paragraph break.
-- **Attaches to the immediately-following declaration.** Top-level `fn` / `type` / `effect` / `handler` / `let` accept `///`. Module-level `///` (no preceding declaration in the file) attaches to the synthetic `Module` handle for that file (per F.1 §3.2). One `///` block per declaration.
-- **Surfaces verbatim.** Mentl has no semantic parse of `///`. She reads the String, renders it alongside her canonical voice (per MV §2.7 + F.1 §5). Render handlers (per F.1 §3.6) interpret presentation per target — HTML may render backticks as `<code>`, terminal as ANSI, markdown as fenced. The substrate stores raw String per DS §8; render handlers decide the rest.
-- **Lede + body structure.** First sentence is the lede — the one sentence Mentl shows in `RTerse` register. Subsequent paragraphs add nuance, invariants, the `Why:` behind non-obvious choices. Mentl shows the full body in `RExplain`.
-- **Cross-references via backticks.** Reference other identifiers, types, effects, handlers, capabilities in `` `backticks` ``. Render handlers resolve to links per target. The author writes the reference; the handler resolves.
-- **Code blocks compile via the same pipeline.** A `///` block containing Mentl source IS just Mentl source; the compile pipeline verifies it. If it doesn't compile, the project's compile fails at the `doc_attach` site. There are no doc-tests as a separate category (INSIGHTS §"Examples, Not Tests" L398).
+- **Pure prose, graph-attached.** Contiguous `//` lines concatenate to one String; a blank `//` line is a paragraph break. The comment attaches to the immediately-following declaration (`fn`/`type`/`effect`/`handler`/`let`), or — with none — to the enclosing block / the file's `Module` handle. It is **never dropped**; an orphan with genuinely no home surfaces `P_OrphanDocstring` (gradient-narration), never a silent discard.
+- **Register is a projection, not a delimiter.** How much surfaces — the one-line lede in `RTerse`, the full body in `RExplain` — is the gradient reading the comment's relevance at the cursor (the same gradient that drives every projection), NOT an author-chosen `//`-vs-`///` audience split. The author writes prose; the cursor decides what shows. First sentence = lede.
+- **Surfaces verbatim, rendered per target.** The substrate stores the raw String; render handlers interpret presentation — HTML `<code>` for `` `backticks` ``, terminal ANSI, markdown fence. `` `backticks` `` cross-reference identifiers; the author writes the reference, the handler resolves it.
+- **Code blocks compile via the same pipeline.** A comment containing Mentl source IS Mentl source — the compile verifies it; there is no separate doc-test category.
 
-#### What `///` is NOT
+### What a comment is NOT
 
-- **Not a markup language.** No `=== headers ===` or `// ───── name ─────` decorations inside `///`; the declaration's name IS the heading. Render handlers add their own presentation chrome.
-- **Not JSDoc / JavaDoc / Sphinx tags.** No `@param`, `@returns`, `@throws`, `@since`, `@deprecated`, `:func:`, `:type:`. The effect row + refinement substrate already carries parameter, return, and capability information; tags would duplicate. Lifecycle vocabulary (`@deprecated`, `@since`, "previously", "no longer", "legacy") is forbidden by the positive-form discipline (CLAUDE.md global). Doc shows what IS, not what was.
-- **Not gated by the docstring's content.** Mentl is unsilenceable; `///` adds, never gates, never silences. A declaration with no `///` still surfaces Mentl's substrate-derived tentacles per silence_predicate (MV §2.7.5).
-- **Not the only voice.** Mentl's substrate voice (per-tentacle, silence-gated, derived from the graph) is the second voice. Two speakers per declaration; no editorial third (F.1 §5).
-- **Not module-level via `///` floating with no following declaration outside a file's prelude.** A module-level `///` block must precede the synthetic Module handle's position (the start of the file, before the first import or declaration). Behavior of `///` blocks elsewhere with no following declaration is owned by the DS substrate (current DS substrate per §3.1 candidate A: the parser tracks the most-recent `TDocComment` as pending; if no following declaration accepts it, the docstring is dropped silently. A future diagnostic may surface the orphan as `P_OrphanDocstring` if the pattern proves error-prone in practice).
+- **Not a markup language.** No `=== headers ===` decorations; the declaration's name IS the heading. Render handlers add presentation chrome.
+- **Not JSDoc / Sphinx tags.** No `@param`/`@returns`/`@throws`/`@since`/`@deprecated`: the effect row + refinement substrate already carries parameter/return/capability information. Lifecycle vocabulary ("previously", "no longer", "legacy", `@deprecated`) is forbidden by the positive-form discipline — a comment shows what IS, not what was.
+- **Not a gate.** A comment adds, never silences: a declaration with no comment still surfaces Mentl's substrate-derived tentacles (the silence predicate).
+- **Not the only voice.** Mentl's substrate voice (per-tentacle, derived from the graph) is the second voice. Two speakers per declaration; no editorial third.
 
-#### Relationship to `//`
-
-`//` is human-only scaffolding. The lexer silently consumes `//` comments — no token emitted, no graph presence, no Mentl presence. Use `//` for implementation notes inside function bodies (where the note describes a step in the algorithm, not the function itself) or for short file-skim section markers when no `///` would fit.
-
-The choice between `//` and `///` is the choice between **"this is human-only context"** and **"this is part of the substrate the medium reads."** When in doubt — does Mentl need to know? `///`. Does only the human reader need to know? `//`.
+**Dissolved:** the `//`-vs-`///` split. `//` was "the medium deliberately does NOT read this" — a category of prose the self-explaining, unsilenceable medium blinded itself to, contradicting `PLAN.md §0`. One form, all graph content, register projected.
 
 ### No block comments
 
@@ -1263,17 +1251,11 @@ Mentl does not have `/* ... */` block comments. Composability of the substrate m
 
 ## Strings
 
-Mentl has **two string forms** distinguished by quote character:
+Surfaces primitive #1 (the sequence node-kind).
 
-- **`"..."`** — double-quoted; **supports interpolation** via `{expr}`.
-- **`'...'`** — single-quoted; **literal**, no interpolation.
-
-Each form has a multi-line variant (triple-quoted):
-
-- **`"""..."""`** — multi-line + interpolating.
-- **`'''...'''`** — multi-line + literal.
-
-### Double-quoted (interpolating)
+A string is a **sequence of bytes** — `String = [Byte]` (`PLAN.md §4①`), not a
+primitive. There is **ONE string form**, `"..."`, and interpolation is **always
+live**:
 
 ```
 "hello"
@@ -1283,40 +1265,36 @@ Each form has a multi-line variant (triple-quoted):
 "hello, {name}!"
 ```
 
-**Interpolation:** `{expr}` is replaced with the expression's value at runtime. The expression's type must implement `Show` (or be a String already). For a literal `{` or `}` inside an interpolating string, double the brace: `{{` → literal `{`, `}}` → literal `}`.
+**Interpolation is a graph edge, not runtime substitution.** A `{expr}` splice
+carries the spliced node's type, **effect row**, and (under the IFC frontier,
+`§4⑥`) flow-label up into the enclosing string-construction expression: so
+`"{network_call()}"` adds `Network` to the row, and `"{secret}" ~> Log` is a
+provable non-interference violation — not a runtime surprise. Splice rendering
+dispatches `to_string` structurally at lower from the spliced node's inferred type
+(the `++`/`==` proof-becomes-dispatch precedent — no `Show` trait-bound).
 
-**Escape codes:** `\n`, `\r`, `\t`, `\\`, `\"`, `\0`, `\xHH` (hex byte).
+**Literal braces** are `\{` and `\}` — a region the splice-scanner skips — never
+brace-doubling and never a second delimiter.
 
-### Single-quoted (literal)
-
-```
-'raw text — {name} stays literal'
-'use {{brace}} syntax {verbatim}'
-'regex: ^[a-z]+\s*$'
-```
-
-No interpolation. Braces are literal characters — no doubling needed. Useful for format strings, regex, shell commands, documentation snippets about Mentl itself.
-
-**Escape codes:** `\\`, `\'`, `\0`, `\xHH`. NO `\n` expansion — newlines must be literal (use triple-quoted form for multi-line literal content).
+**Escape codes:** `\n`, `\r`, `\t`, `\\`, `\"`, `\{`, `\}`, `\0`, `\xHH` (hex byte).
 
 ### Multi-line
 
+`"""..."""` is the multi-line variant of the one form (interpolation still live);
+leading whitespace common to all lines is stripped (indentation-aware):
+
 ```
-let interpolating_block = """
+let block = """
   Hello, {name}.
   Your age is {age}.
 """
-
-let literal_block = '''
-  This is a literal multi-line block.
-  Braces like {this} are NOT interpolated.
-'''
 ```
 
-Triple-quoted strings span multiple lines. Leading whitespace common to all lines is stripped (indentation-aware).
-
-`"""..."""` inherits interpolation semantics from `"..."`.
-`'''...'''` inherits literal semantics from `'...'`.
+**Dissolved** (redundant-form + foreign fluency): the `'...'` literal form, its
+`'''...'''` variant, and `{{`/`}}` brace-doubling. A splice-free `"abc"` and
+`'abc'` produced an identical byte-sequence graph; literalness is a property of a
+*region* (`\{`), read by the cursor — never a mode hoisted onto the quote
+character (the Python/shell convention). One sequence kind ⇒ one string surface.
 
 ---
 
@@ -1334,7 +1312,7 @@ statement level — neither participates in the binop ladder.
 |------|------------------------------------------|-----------------|--------------------------------|
 | 10   | `*`, `/`, `%`                            | left            |                                |
 | 9    | `+`, `-` (binary)                        | left            |                                |
-| 8    | `++`                                     | left            | concat — type-polymorphic; associativity immaterial under concat-tree representation; see §"Concatenation operator" |
+| 8    | `++`                                     | left            | one `seq_concat` over the sequence kind; associativity immaterial under the concat-tree representation; see §"Concatenation operator" |
 | 7    | `<`, `>`, `<=`, `>=`                     | left            | comparison                     |
 | 6    | `==`, `!=`                               | left            | looser than comparison: `a < b == c < d` reads as `(a<b) == (c<d)` |
 | 5    | `&&`                                     | left            |                                |
@@ -1352,38 +1330,49 @@ than any associativity rule could.
 
 ### Concatenation operator
 
-`++` is **type-polymorphic over `TList(a)` and `TString`**, dispatched at lower-time by reading the operand's inferred type from the graph (`lookup_ty`).
+`++` is **one total `seq_concat`** over the sequence node-kind — element-agnostic
+over the unified `[len][bytes]`/view record (`PLAN.md §4①`, §6). There is no
+`String`-vs-`List` dispatch because there is no split: `String` IS `[Byte]`, so
+`"ab" ++ "cd"` and `[1, 2] ++ [3, 4]` are the same operation on different element
+types.
 
-| Operand types               | Lower projection                                       | Runtime fn       |
-|-----------------------------|--------------------------------------------------------|------------------|
-| `TList(a)` ++ `TList(a)`    | `LCall(handle, LGlobal("list_concat"), [l, r])`        | `list_concat`    |
-| `TString` ++ `TString`      | `LCall(handle, LGlobal("str_concat"),  [l, r])`        | `str_concat`     |
-| mixed (`TList` ++ `TString`)| `E_ConcatTypeMismatch` at infer-time                   | (none)           |
-| unresolved (TVar / NFree)   | `E_ConcatTypeUnresolved` at lower-time                 | (none)           |
+The graph carries the element type only to **typecheck that the operands' element
+types unify** (ordinary HM unification) — never to choose the operator. So an
+operand of not-yet-resolved element type is an open `[?a]` that **still
+concatenates**; "unresolved operand" is not a failure mode. Element-type mismatch
+(`[Int] ++ [Bool]`) surfaces as an ordinary unification failure with a Reason
+chain back to the `++` site — **`E_ConcatTypeMismatch`**, a type error, not a
+dispatch artifact.
 
-The dispatch is compile-time-only; no runtime type test. When the type is known, the operator IS a direct call. When the type is not known, the diagnostic surfaces with the operand handle's source span — the user must constrain the type.
-
-**Drift refusal:** `++` does NOT silently default to `str_concat` when type is unresolved. Per `protocol_no_silent_fallback.md`, the substrate names the failure rather than fabricating a fallback. The `LUnresolved` sentinel emits `(unreachable)` with a Located reason chain back to the `++` site.
-
-See `docs/specs/simulations/syntax/concat-operator-substrate.md` for the substrate analysis.
+**Drift-refusal preserved:** `++` never fabricates a result for a genuinely
+untypable operand — it surfaces the unification failure with a Located reason (the
+no-silent-fallback law, `protocol_no_silent_fallback`). **Dissolved:** the
+`list_concat`-vs-`str_concat` dispatch table and `E_ConcatTypeUnresolved`
+(`(unreachable)` when lower couldn't pick a representation) — both existed only to
+choose between two representations the unified ontology does not have. A
+representation gradient (packed-byte vs boxed) is a lower-time cash-out of the
+proven element type, invisible at the surface, never two surface operators.
 
 ### Equality operator
 
-`==`/`!=` are **structural**, type-dispatched at emit by the operand's
-inferred type (`lookup_ty`) — the same compile-time dispatch as `++`.
-There is no rule for the developer to remember: the graph knows the
-type; the substrate carries the comparison.
+`==`/`!=` are **one structural-equality derivation**, directed by the operand's
+element/field type (read at emit from the graph). There is no rule to remember and
+no representation split — `String` is just the `[Byte]` instance of the sequence
+case (what was `str_eq`):
 
-| Operand type                | Emit projection                       | Semantics              |
-|-----------------------------|---------------------------------------|------------------------|
-| scalar (`Int`, `Bool`, byte, nullary ADT tag) | `i32.eq` / `i32.ne` | value equality IS structural |
-| `String`                    | `call $str_eq` (`!=` wraps `i32.eqz`) | content equality       |
-| `List(a)` / payload ADT     | `(unreachable)` + named peer          | deep structural eq is peer `Hβ.eq.structural-deep` (element-type-directed derived projection per the `to_string` dispatch precedent) |
+| Operand shape                              | Structural-eq projection                          |
+|--------------------------------------------|---------------------------------------------------|
+| scalar (`Int`, `Bool`, byte, nullary tag)  | `i32.eq` / `i32.ne` — value equality IS structural |
+| sequence (`[a]`, incl. `String = [Byte]`)  | length-then-element recursion (`[Byte]` case is byte-compare) |
+| product (record / tuple)                   | field-wise recursion over the sorted field set    |
+| sum (ADT)                                  | tag-equality then payload recursion               |
 
-**Drift refusal:** `==` on a heap type never emits pointer comparison —
+**Drift-refusal preserved:** `==` on a heap value never emits pointer comparison —
 pointer-eq lying as structural equality is the silent fallback
-`protocol_no_silent_fallback.md` forbids. `str_eq` remains the
-substrate fn `==` lowers to; it is no longer developer-facing law.
+`protocol_no_silent_fallback` forbids. The derivation is **total over the five
+node-kinds** (the `Hβ.eq.structural-deep` peer is this general definition realized,
+not a carve-out); `str_eq` is the byte-sequence instance the surface `==` lowers
+to, never a developer-facing primitive.
 
 ---
 
@@ -1475,7 +1464,7 @@ Per `protocol_oracle_is_ic.md`: format is idempotent (`format(format(x)) == form
 A `.mn` file is a sequence of top-level statements. Each is one of:
 
 - `import path/to/module` — module imports
-- `type Name<P> = ...` — type declarations
+- `type Name = ...` — type declarations (ADTs, aliases, refinements, named rows)
 - `effect Name { ... }` — effect declarations
 - `handler name(...) with ... { ... }` — handler declarations
 - `fn name(...) = ...` — function declarations
@@ -1489,7 +1478,7 @@ A `.mn` file with `fn main()` is an EXECUTABLE — `_start` invokes `main`.
 
 ## Token enumeration
 
-The lexer emits a stream of `Token` values. The parser consumes them via exhaustive match. Both the wrapper shape and the variant enumeration are canonical here; Ω.4's parser refactor implements them exactly.
+The lexer emits a stream of `Token` values. The parser consumes them via exhaustive match. Both the wrapper shape and the variant enumeration are canonical here; the parser implements them exactly.
 
 ### Token wrapper — substrate-native pattern
 
@@ -1516,7 +1505,6 @@ type TokenKind
   | TImport | TWhere
   | TOwn | TRef | TPure
   | TTrue | TFalse
-  | TCapability                      // capability KEYWORD — see §«Capability declarations»
   // Note: `loop`, `break`, `continue`, `return`, `for`, `in` are NOT
   // reserved keywords — Mentl has no imperative control flow constructs.
   // Iteration is via `|>` + `<~` + `Iterate` effect handlers.
@@ -1530,15 +1518,15 @@ type TokenKind
   // ─── Identifiers and literals (carry payload) ─────────────────────
   // Constructors share ONE namespace (env entries). The literal-token
   // trio is named TIntLit/TFloatLit/TStringLit because Ty's canonical
-  // nullary TInt/TFloat/TString (spec 02) already claim the bare names —
+  // nullary TInt/TFloat/TString (the canonical Ty enumeration) already claim the bare names —
   // two declarations claiming one constructor name shadow silently and
   // mis-unify (the 2026-06-09 "expected Ty, found TokenKind" ×95 class).
   | TIdent(String)
   | TIntLit(Int)
   | TFloatLit(Float)
   | TStringLit(String)
-  | TDocComment(String)             // /// — emitted ONLY when triple-slash
-                                    //   detected; attaches to next decl
+  | TComment(String)                // // — every comment is graph content,
+                                    //   attached to the next decl / enclosing node
   | TStringPart(String)             // literal chunk of an interpolating "..."
                                     //   string (amendment-C brace scan)
   | TStringSplice                   // marks the start of a `{expr}` splice;
@@ -1559,7 +1547,7 @@ type TokenKind
   | TComma | TDot | TColon | TSemicolon
   | TPlus | TMinus | TStar | TSlash | TPercent
   | TEq | TLt | TGt | TBang
-  | TPipe | TTilde | TAt | THole
+  | TPipe | TAt | THole
 
   // ─── Layout / structural ──────────────────────────────────────────
   | TNewline                        // statement separator; transparent around binops (layout is never semantics)
@@ -1570,7 +1558,7 @@ type TokenKind
 
 | Variant         | Lexical form     | Payload   | Where parser expects it                       |
 |-----------------|------------------|-----------|------------------------------------------------|
-| **Keywords (20)** |                |           |                                                |
+| **Keywords (19)** |                |           |                                                |
 | `TFn`           | `fn`             | —         | start of function declaration / lambda         |
 | `TLet`          | `let`            | —         | start of let-binding                           |
 | `TIf`           | `if`             | —         | start of if-expression                         |
@@ -1591,13 +1579,12 @@ type TokenKind
 | `TPure`         | `Pure`           | —         | `with Pure` declaration                        |
 | `TTrue`         | `true`           | —         | Bool literal                                   |
 | `TFalse`        | `false`          | —         | Bool literal                                   |
-| `TCapability`   | `capability`     | —         | capability declaration (§«Capability declarations») |
 | **Identifiers and literals (7)** |  |           |                                                |
 | `TIdent(s)`     | `[A-Za-z_][...]` | name      | variable refs, fn names, type names, etc.      |
 | `TIntLit(n)`    | `[0-9][0-9_]*`, `0x[0-9A-Fa-f_]+`, `0b[01_]+`, `0o[0-7_]+` | i32 value | integer literal (decimal / hex / binary / octal; underscores allowed for readability) |
 | `TFloatLit(f)`  | `[0-9][0-9_]*\.[0-9][0-9_]*` | f64 value | floating-point literal (underscore separators allowed) |
 | `TStringLit(s)` | `"..."` or `"""..."""` | string content (escape-resolved, interp markers preserved) | string literal (degenerate single-chunk interpolating string) |
-| `TDocComment(s)`| `/// ...`        | comment text (one line, leading `///` stripped) | attaches to next declaration |
+| `TComment(s)`   | `// ...`         | comment text (contiguous lines concatenated, leading `//` stripped) | graph content; attaches to next decl / enclosing node |
 | `TStringPart(s)`| literal chunk between splices in an interpolating `"..."` | chunk text | string interpolation (amendment-C brace scan → MakeStringExpr) |
 | `TStringSplice` | start of a `{expr}` splice inside `"..."` | — | followed by ordinary tokens; `TRBrace` closes the splice |
 | **Two-character operators (14)** |  |           |                                                |
@@ -1607,15 +1594,15 @@ type TokenKind
 | `TGtEq`         | `>=`             | —         | greater-than-or-equal                          |
 | `TArrow`        | `->`             | —         | function return type, fn-type form             |
 | `TFatArrow`     | `=>`             | —         | match arm separator, lambda body separator     |
-| `TPlusPlus`     | `++`             | —         | string/list concat                             |
+| `TPlusPlus`     | `++`             | —         | sequence concat (`seq_concat`)                 |
 | `TPipeGt`       | `\|>`            | —         | sequential pipe                                |
 | `TLtPipe`       | `<\|`            | —         | divergent pipe (fanout)                        |
 | `TGtLt`         | `><`             | —         | parallel compose (structural N-ary)            |
-| `TTildeGt`      | `~>`             | —         | handler-attach (block / inline by newline)     |
+| `TTildeGt`      | `~>`             | —         | handler-attach (the one install verb); `~` is consumed by maximal munch only into `~>`/`<~`, so a standalone `~` is an unexpected-char lex error (no bare-`~` token) |
 | `TLtTilde`      | `<~`             | —         | feedback                                       |
 | `TAndAnd`       | `&&`             | —         | logical and                                    |
 | `TOrOr`         | `\|\|`           | —         | logical or                                     |
-| **Single-character operators and punctuation (23)** |  |           |                              |
+| **Single-character operators and punctuation (22)** |  |           |                              |
 | `TLParen`       | `(`              | —         | grouping, params, tuples, calls                |
 | `TRParen`       | `)`              | —         | close grouping                                 |
 | `TLBrace`       | `{`              | —         | blocks, records, handler arms, type variants   |
@@ -1636,21 +1623,19 @@ type TokenKind
 | `TGt`           | `>`              | —         | greater-than comparison (no generic-param role; see `TLt`) |
 | `TBang`         | `!`              | —         | logical not; effect negation                   |
 | `TPipe`         | `\|`             | —         | type-variant separator; pattern alternation in match arms (the `\|x\|` lambda fence is rejected — `E_LambdaFence`) |
-| `TTilde`        | `~`              | —         | the `~` CHARACTER is load-bearing — `~>` (handler-attach) and `<~` (feedback) are two of the five verbs, lexed by maximal munch as their own tokens (`TTildeGt`/`TLtTilde`) before a bare `~` is ever considered. A STANDALONE `~` is invalid and lex-errors as unexpected-char (exactly as a standalone `?` does — both characters exist only inside their two-char tokens). `TTilde` is therefore never produced: a fully-dead enum slot that would vanish like `::` did, except the seed's flat tag-space shares one counter with the Option ADT (deleting it cascade-renumbers `None`/`Some`). Pinned now; removed post-L1 when per-type tag assignment lands. |
 | `TAt`           | `@`              | —         | as-patterns: `name @ pat` binds the whole value AND destructures (§«As-patterns»); `@resume=` erased per inference-from-body |
 | `THole`         | `??`             | —         | hole — the gradient's syntactic absence marker; Mentl's Synth proposes candidates filling the position. The Mentl Mono ligature renders `??` as the octagonal-socket glyph (8 sides ↔ 8 kernel primitives). Single `?` is no longer a token. |
 | **Layout / structural (2)** |     |           |                                                |
 | `TNewline`      | `\n`             | —         | statement separator; transparent around binops (layout is never semantics) |
 | `TEof`          | (end of input)   | —         | always last token; parser uses to terminate    |
 
-**Total: 66 variants** (20 keywords + 7 identifiers/literals + 14 two-char operators + 23 single-char operators/punctuation + 2 layout). (`TColonColon` deleted 2026-06-10 — `::` was lexed and parsed nowhere; a token with no kernel correspondence is speculative inventory. Module paths use `/` at import position only; `.` is the one access operator in expressions. `TStringPart`/`TStringSplice` joined the literals group with the interpolation substrate. See `perform-dissolution-substrate.md` §6.)
+**Checksum: 64 variants** (19 keywords + 7 identifiers/literals + 14 two-char operators + 22 single-char operators/punctuation + 2 layout) — a reviewer cross-check that the `TokenKind` declaration and this catalog enumerate the SAME set; the hand-maintained stand-in for `mentl audit` until the cursor projects it from the graph. Exhaustiveness over the ADT (§Lexer/Parser obligations) IS the cardinality guarantee — the number is its shadow, not its source. (`TColonColon`, `TCapability`, and `TTilde` are absent: a token with no kernel correspondence is speculative inventory. `TStringPart`/`TStringSplice` carry the interpolation substrate.)
 
 ### Lexer obligations
 
-- **Every emitted Token MUST be one of the 66 enumerated variants.** Adding a new token kind requires updating SYNTAX.md first, then the lexer, then the parser's match (which fails to compile until the new variant is handled — H6's discipline applied at the lexical layer).
+- **Every emitted Token MUST be a variant of the `TokenKind` ADT declared above** — exhaustiveness, not a magic number, is the law (the parser's exhaustive match, §Parser obligations, guarantees completeness). Adding a token kind means updating SYNTAX.md first, then the lexer, then the parser's match (which fails to compile until the new variant is handled — H6 at the lexical layer).
 - **Whitespace (other than `\n`) is silently consumed.** The lexer skips spaces and tabs without emitting a token. Only newlines are semantic.
-- **Line comments `// ...` are silently consumed.** No token emitted.
-- **Doc comments `/// ...` emit `TDocComment(text)`** with the leading `///` stripped. The parser attaches each `TDocComment` to the next declaration it sees.
+- **Comments `// ...` emit `TComment(text)`** (leading `//` stripped, contiguous lines concatenated). A comment is graph content — the parser attaches each to the following declaration / enclosing node; the medium never silently consumes prose. There is one comment form.
 - **Block comments do not exist.** Per the Comments section of this spec.
 
 ### Parser obligations
@@ -1675,29 +1660,53 @@ Diagnostic on non-unit if-without-else: **`E_IfMissingElse`** with Quick Fix sug
 
 ## Diagnostic catalog (syntax-level errors introduced by SYNTAX.md)
 
-Mentl's diagnostics are TEACHING surfaces, not punishment. The catalog is classified into three categories per substrate role:
+Mentl's diagnostics are TEACHING surfaces, not punishment — and a diagnostic IS a
+**projection of the graph**, not a hand-maintained registry. Each is a `DiagKind`
+constructor (`type DiagKind = ERedundantBraces(Span) | EEffectMismatch(EffRow, EffRow, Span) | …`)
+carrying its **Located Reason edge** (arm 8) and its **Applicability**
+(`type Applicability = MachineApplicable | MaybeIncorrect | HasPlaceholders | Unspecified`
+— an ADT, never a string). The live catalog is `mentl diagnostics` walking those
+constructors, the same way `mentl where`/`mentl audit` project; the tables below are
+worked EXAMPLES at the forms where each is introduced, not the source of truth.
 
-- **Format-liftable** — the formatter (`format_default` handler) auto-corrects on save / auto-format keystroke. The user does not see the diagnostic; the medium silently applies the rewrite.
-- **Hard error** — substrate violation; the user must restructure. The medium cannot auto-recover.
-- **Gradient narration** — not an error; a teaching surface in Mentl's voice. The user may accept or dismiss.
+Two axes describe every diagnostic; the **category is their product, not a third
+column** (drift-7 avoided): **severity** (error vs narration) and **applicability**
+(the four-value ADT, which drives automation — `MachineApplicable` auto-applies,
+`MaybeIncorrect` confirms, `HasPlaceholders` fills in, `Unspecified` is text-only). A
+**Quick Fix is a draw-an-edge** the medium applies to the shared graph image, then
+the IC cursor re-projects to show the resolved state and any newly-surfaced
+downstream Reason — the same `<~ accumulate(graph)` loop the formatter uses. The
+diagnostic surface IS a `~>` handler re-projecting the graph, exactly like
+`format_default`. (Relocating diagnostic IDENTITY fully onto the `DiagKind` ADT — so
+`report` takes a `DiagKind`, not strings, and these three tables become a projection
+of `types.mn` — is the unsurpassable form, sequenced as the
+`Hβ.diag.catalog-as-projection` follow-up.)
 
-Every diagnostic carries:
+The three groupings below are **derived bands**, not authored law:
+- **Format-liftable** ≡ `MachineApplicable` ∧ the redundant form has no graph node (next section).
+- **Hard error** ≡ severity=error — a substrate violation the medium cannot auto-recover.
+- **Gradient narration** ≡ severity=narration — Mentl's voice; accept or dismiss.
 
-- **Located reason chain** — source span + `ReasonKind`
-- **Applicability tag** — `MachineApplicable` / `MaybeIncorrect` / `HasPlaceholders` / `Unspecified`
-- **Quick Fix Patch** — where mechanically derivable
+### Format-liftable (parse-canonicalized — no graph node to "strip")
 
-The applicability tag determines automation: `MachineApplicable` patches are auto-applied; `MaybeIncorrect` surfaces with user confirmation; `HasPlaceholders` requires user fill-in; `Unspecified` is text-only.
+Not a formatter strip-pass: a redundant form parses to the **same canonical graph**
+as its minimal form, so it has no node by the time `format_default` runs — "lifting"
+is the formatter projecting the canonical graph back, and the redundant input never
+survives parse (`format(format(x)) == format(x)` because `parse(x)` already lost the
+redundancy). A format-lift earns a (silent) code **IFF it removes/transforms a
+graph-present artifact — a `TokenKind` the lexer actually emitted**. Whitespace
+re-flow emits no token, so it carries no code — which is exactly why
+`E_IndentMismatch` does **not** exist (there is no ill-indented program, only
+un-normalized source the formatter has not yet touched).
 
-### Format-liftable (formatter handles silently)
-
-| Code                  | Trigger                                       | Formatter action                                |
-|-----------------------|-----------------------------------------------|--------------------------------------------------|
-| `E_RedundantBraces`   | braces around single-expression body          | strip the braces; user sees no diagnostic       |
-| `E_ExplicitTypeParams`| turbofish `f<T>(...)` at call site            | strip the type params; user sees no diagnostic  |
-| `E_IndentMismatch`    | wrong indent count                            | normalize indent; user sees no diagnostic       |
-| `E_RedundantPerform`  | `perform` before an op call                   | strip the keyword; ops are invoked as bare calls (§«Invoking effect operations») |
-| `E_StatementSemicolon`| `;` between statements                        | lift to newline layout; canonical text never contains `;` |
+| Code                  | Trigger (an emitted token, removed/transformed)         | Canonicalization                                 |
+|-----------------------|---------------------------------------------------------|--------------------------------------------------|
+| `E_RedundantBraces`   | braces wrapping a non-`BlockExpr` (no statements)       | drop the braces; user sees no diagnostic         |
+| `E_BlockNeedsBraces`  | statements (a `BlockExpr`) written without braces       | wrap the statements in `{ }`; user sees no diagnostic |
+| `E_RedundantHandleBlock` | the `handle { body } with h` spelling                | rewrite to `(body) ~> h` — `~>` is the one install verb |
+| `E_ExplicitTypeParams`| turbofish `f<T>(...)` at a call site                    | strip the type params (the case rule infers them) |
+| `E_RedundantPerform`  | `perform` before an op call                             | strip the keyword; ops are bare calls            |
+| `E_StatementSemicolon`| `;` between statements                                  | lift to newline layout; canonical text has no `;` |
 
 ### Hard errors (substrate violations)
 
@@ -1707,10 +1716,12 @@ The applicability tag determines automation: `MachineApplicable` patches are aut
 | `E_RefinementRejected`| value violates refinement predicate           | `Unspecified`        | adjust value or widen refinement               |
 | `E_EffectMismatch`    | declared row doesn't subsume body row         | `MaybeIncorrect`     | widen declaration OR install absorbing handler |
 | `E_PurityViolated`    | `with Pure` body performs non-empty effects   | `MaybeIncorrect`     | remove `with Pure` or absorb the effect        |
-| `E_FeedbackNoContext` | `<~` used without iterative context           | `MaybeIncorrect`     | install `Sample`/`Tick`/`Clock` handler        |
+| `E_FeedbackNoContext` | `<~` used without iterative context           | `MaybeIncorrect`     | install an `Iterate`-class handler (`Sample`/`Tick`/`Clock`)        |
 | `E_OwnershipViolation`| `own` consumed twice / escapes ref scope      | `Unspecified`        | restructure to single-consume or use `ref`     |
 | `E_HandlerUninstallable` | handler arms need effects context disallows | `MaybeIncorrect`   | widen ambient row or restructure handler       |
 | `E_MissingVariable`   | name not in scope                             | `MaybeIncorrect`     | check spelling; check imports                  |
+| `E_ImportNameCollision` | two selective imports bind the same name    | `MaybeIncorrect`     | narrow the selective sets so each name binds one edge |
+| `E_UnknownArgLabel`   | a labeled arg names no declared parameter     | `MaybeIncorrect`     | check the label against the parameter names    |
 | `E_TypeMismatch`      | unification failed                            | `Unspecified`        | adjust types; widen / narrow                   |
 | `E_OccursCheck`       | infinite type                                 | `Unspecified`        | restructure to break cycle                     |
 | `E_OrphanHandlerAttach` | `~>` with no preceding chain                | `Unspecified`        | delete `~>` or supply body                     |
@@ -1718,8 +1729,7 @@ The applicability tag determines automation: `MachineApplicable` patches are aut
 | `E_NotAKeyword`       | user typed `for`/`while`/`loop`/`break`/`continue`/`return` | `MaybeIncorrect` | rewrite as verb form per substrate             |
 | `E_PatternAlternationBindingMismatch` | branches in `\|` bind different names or types | `MaybeIncorrect` | adjust patterns to bind same names with unifiable types |
 | `E_ResumeOutsideArm`  | `resume` outside a handler-arm body           | `Unspecified`        | move the resume into an arm; the continuation only exists there |
-| `E_ConcatTypeMismatch` | `++` operands have unifiable but distinct types (e.g. `TList` ++ `TString`) | `MaybeIncorrect` | unify operand types via conversion |
-| `E_ConcatTypeUnresolved` | `++` operand type not bound at lower-time | `MaybeIncorrect`    | annotate operand to constrain type             |
+| `E_ConcatTypeMismatch` | `++` operands' element types fail to unify (e.g. `[Int] ++ [Bool]`) | `MaybeIncorrect` | unify the element types |
 
 ### Gradient narration (teaching surfaces)
 
@@ -1729,24 +1739,11 @@ The applicability tag determines automation: `MachineApplicable` patches are aut
 | `T_Gradient`          | an annotation INPUT would narrow the cursor's projection | `MachineApplicable` | accept the suggestion to narrow             |
 | `W_Suggestion`        | probable Quick Fix available                  | `MaybeIncorrect`     | (Mentl-proposed)                                |
 | `W_RedundantWhere`    | `type X = Y where true` — vacuous predicate   | `MachineApplicable`  | drop the `where true`; alias is transparent     |
-| `W_CapabilityEmpty`   | `capability X = ...` row resolves to `Pure`   | `MaybeIncorrect`     | drop the declaration; the row IS Pure already   |
+| `W_EmptyRow`          | a named row (`type X = <row>`) resolves to `Pure` | `MaybeIncorrect`     | drop the alias; the row IS `Pure` already       |
 | `P_ExpectedToken`     | parser expected one token kind, found another | `MaybeIncorrect`     | (parser-emitted; pre-substrate-classification)  |
 | `P_UnexpectedToken`   | token kind not valid at this position         | `MaybeIncorrect`     | restructure per the surrounding form            |
 | `P_UnclosedConstruct` | EOF inside a construct (block, match arms, etc.) before its closer | `MaybeIncorrect` | close the construct OR remove its opening token |
-
-See `docs/specs/simulations/syntax/diagnostic-catalog-substrate.md` for the substrate analysis.
-
----
-
-## Cross-references
-
-- DESIGN.md Ch 2 — the five verbs, with worked examples
-- DESIGN.md Ch 4 — the substrate (graph + handler)
-- SUBSTRATE.md §II — Visual Programming in Plain Text; Five Verbs Are a Complete Topological Basis
-- spec 03 — Typed AST (NodeBody, Expr, Stmt, Pat)
-- spec 10 — Pipes (PipeKind; layout as formatter projection)
-- spec 11 — Clock (iterative context for `<~`)
-- protocol_pattern_completion_check.md — output-boundary discipline
+| `P_OrphanDocstring`   | a `//` comment with no following declaration, outside the prelude | `MaybeIncorrect` | attach to the next declaration, or bind to the enclosing node (never dropped) |
 
 ---
 
@@ -1755,14 +1752,14 @@ See `docs/specs/simulations/syntax/diagnostic-catalog-substrate.md` for the subs
 - NOT a tutorial. See `examples/` for tutorials.
 - NOT a reference for stdlib functions. See `std/` source + generated docs.
 - NOT a description of the current parser. The parser implements this; where they disagree, the parser is wrong.
-- NOT an aspirational wishlist. Every form here is required to land in the parser by Phase Ω.4.
+- NOT an aspirational wishlist. Every form here is required to land in the parser — closing the gap between this spec and the parser is a standing obligation, not a someday (the parser is the lathe turned to SYNTAX.md; where they disagree, the parser is wrong).
 
 ---
 
 ## Authority
 
-This document supersedes any syntactic decisions implicit in DESIGN.md, SUBSTRATE.md, the 12 specs, or current parser behavior. Where another document conflicts with SYNTAX.md, SYNTAX.md is correct and the other document gets a corrective revision.
+This document is the authority on syntax: it supersedes any syntactic claim in `CLAUDE.md`/`PLAN.md` (the live three-doc contract) and in the archived `docs/**` corpus (git archaeology — DESIGN.md, SUBSTRATE.md, the per-module specs). Where any of them conflicts with SYNTAX.md, SYNTAX.md is correct.
 
-Mentl's discipline applies to syntax: every form below was decided by asking the eight interrogations — one per kernel primitive (DESIGN.md §0.5), one per Mentl tentacle. Graph (what AST does it produce?), handler + inferred resume cardinality (what installed handler reads it, what cardinality does the arm body prove?), verb (which topology?), row (what `+ - & !` constraint does the body's perform sites prove?), ownership (what `own`/`ref` does the use-count infer?), refinement (what predicate does the path narrow?), gradient (what annotation INPUT or body-structure unlocks the cursor's projection here?), Reason (what edge does it leave for the Why Engine?). Forms that failed any of the eight were rejected. **Annotations declare INPUTS to the cursor; never the emergent property itself** (per `protocol_cursor_is_the_substrate.md`).
+Mentl's discipline applies to syntax: every form below was decided by asking the eight interrogations — one per kernel primitive (`PLAN.md §2`; the table lives in `CLAUDE.md`), one per Mentl tentacle. Graph (what AST does it produce?), handler + inferred resume cardinality (what installed handler reads it, what cardinality does the arm body prove?), verb (which topology?), row (what `+ - & !` constraint do the body's op-call sites prove?), ownership (what `own`/`ref` does the use-count infer?), refinement (what predicate does the path narrow?), gradient (what annotation INPUT or body-structure unlocks the cursor's projection here?), Reason (what edge does it leave for the Why Engine?). Forms that failed any of the eight were rejected. **Annotations declare INPUTS to the cursor; never the emergent property itself.**
 
-When questions arise about syntax not yet covered here: open a γ-style walkthrough in `docs/specs/simulations/syntax/<topic>.md`, resolve the design question, then update this document.
+When questions arise about syntax not yet covered here: resolve the design question by interrogating it against the kernel (`PLAN.md §2`) — reductively (minimal graph-correspondence?) and generatively (what do multi-shot / threading / unified-memory + the frontier make better?) — then update this document. SYNTAX.md is the one home for the surface.

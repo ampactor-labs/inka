@@ -364,6 +364,8 @@
       (then (return (call $lower_named_record (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 100))
       (then (return (call $lower_field       (local.get $node)))))
+    (if (i32.eq (local.get $tag) (i32.const 104))   ;; IndexExpr — xs[i]
+      (then (return (call $lower_index       (local.get $node)))))
     ;; NErrorExpr (102): productive-under-error sentinel from parser.
     ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
     ;; (NErrorHole peer at graph layer): parse-time diagnostic already
@@ -380,6 +382,33 @@
     (call $lexpr_make_lconst
       (call $walk_expr_node_handle (local.get $node))
       (i32.const 0)))
+
+  ;; ─── $lower_index — IndexExpr (104) xs[i] → list_index call ─────────────
+  ;; The TYPE (element a) was projected by infer onto this node's handle (the
+  ;; kernel sequence-index projection). Lower emits the substrate access by
+  ;; reconstructing Call(VarRef("list_index"), [recv, idx]) and lowering it —
+  ;; the same call the old parse-time desugar produced, relocated here so infer
+  ;; saw the element-typed IndexExpr first. The reconstructed node carries THIS
+  ;; node's handle so the lowered call's result is the element, not a fresh var.
+  (func $lower_index (param $node i32) (result i32)
+    (local $body i32) (local $expr i32) (local $rec i32) (local $idx i32)
+    (local $span i32) (local $args i32) (local $call_node i32)
+    (local.set $body (i32.load offset=4 (local.get $node)))
+    (local.set $expr (i32.load offset=4 (local.get $body)))
+    (local.set $rec  (i32.load offset=4 (local.get $expr)))
+    (local.set $idx  (i32.load offset=8 (local.get $expr)))
+    (local.set $span (i32.load offset=8 (local.get $node)))
+    (local.set $args (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $args) (i32.const 0) (local.get $rec)))
+    (drop (call $list_set (local.get $args) (i32.const 1) (local.get $idx)))
+    (local.set $call_node (call $nexpr
+      (call $mk_CallExpr
+        (call $nexpr (call $mk_VarRef (i32.const 4288)) (local.get $span))
+        (local.get $args))
+      (local.get $span)))
+    (i32.store offset=12 (local.get $call_node)
+      (i32.load offset=12 (local.get $node)))   ;; carry IndexExpr's handle (element)
+    (call $lower_call (local.get $call_node)))
 
   ;; ─── $lower_args — chunk-private buffer-counter helper (Lock #5) ──
   ;; Per src/lower.mn:1055-1057 lower_expr_list. Buffer-counter substrate

@@ -131,7 +131,13 @@
                     (local.set $node (call $nexpr (local.get $node) (local.get $span)))
                     (return (call $postfix_loop (local.get $tokens)
                       (local.get $node) (local.get $p2)))))))))))
-    ;; Subscript: e[idx] → Call(VarRef("list_index"), [e, idx])
+    ;; Subscript: e[idx] → IndexExpr(e, idx) — [tag=104][receiver][index].
+    ;; The kernel sequence-index PROJECTION node, mirroring the wheel's
+    ;; IndexExpr (src/types.mn:554). Infer reads the element type from e's
+    ;; TList(a) (Carried-Truth); lower emits a list_index call. The former
+    ;; eager fold to Call(VarRef("list_index")) committed e to list_index's
+    ;; Int param and DISCARDED the element type — drift 9 (eager-form-
+    ;; commitment), the root of `list_head(state).field` failing.
     (if (i32.eq (local.get $k) (i32.const 49))  ;; TLBracket
       (then
         (local.set $args_result
@@ -142,14 +148,11 @@
         (local.set $p2 (call $expect (local.get $tokens)
           (call $skip_ws_p (local.get $tokens) (local.get $p2)) (i32.const 50)))
         (local.set $span (i32.load offset=8 (local.get $e)))
-        (local.set $args (call $make_list (i32.const 2)))
-        (drop (call $list_set (local.get $args) (i32.const 0) (local.get $e)))
-        (drop (call $list_set (local.get $args) (i32.const 1) (local.get $field)))
-        (local.set $node (call $nexpr
-          (call $mk_CallExpr
-            (call $nexpr (call $mk_VarRef (i32.const 4288)) (local.get $span))
-            (local.get $args))
-          (local.get $span)))
+        (local.set $node (call $alloc (i32.const 12)))
+        (i32.store (local.get $node) (i32.const 104))              ;; IndexExpr tag
+        (i32.store offset=4 (local.get $node) (local.get $e))      ;; receiver
+        (i32.store offset=8 (local.get $node) (local.get $field))  ;; index
+        (local.set $node (call $nexpr (local.get $node) (local.get $span)))
         (return (call $postfix_loop (local.get $tokens) (local.get $node) (local.get $p2)))))
     ;; Field: e.field
     (if (i32.eq (local.get $k) (i32.const 52))  ;; TDot

@@ -1751,6 +1751,39 @@
         (call $reason_make_inferred (i32.const 3888))))   ;; "record result"
     (local.get $handle))
 
+  ;; ─── IndexExpr arm — xs[i] kernel sequence-index projection ───────────
+  ;; Mirror of the wheel src/infer.mn:646-662. Layout: [tag=104][recv][index].
+  ;; FORCE the receiver to a list (unify with TList(TVar(elem_h)) — preserves a
+  ;; concrete receiver's element) and bind the result to that ELEMENT. The
+  ;; Carried-Truth Law: the graph proves the sequence's element type via
+  ;; TList(a); the projection reads it, never re-deriving Int from list_index's
+  ;; load_i32 body. Lower emits the list_index call (the substrate).
+  (func $infer_walk_expr_index
+        (export "infer_walk_expr_index")
+        (param $expr i32) (param $handle i32) (param $span i32)
+        (result i32)
+    (local $rec i32) (local $idx i32) (local $rh i32)
+    (local $elem_h i32) (local $list_ty_h i32)
+    (local.set $rec (i32.load offset=4 (local.get $expr)))
+    (local.set $idx (i32.load offset=8 (local.get $expr)))
+    (local.set $rh (call $infer_walk_expr (local.get $rec)))
+    (drop (call $infer_walk_expr (local.get $idx)))
+    (local.set $elem_h (call $graph_fresh_ty
+      (call $reason_make_inferred (i32.const 3888))))   ;; "record result" — element
+    (local.set $list_ty_h (call $graph_fresh_ty
+      (call $reason_make_inferred (i32.const 3888))))
+    (call $graph_bind (local.get $list_ty_h)
+      (call $ty_make_tlist (call $ty_make_tvar (local.get $elem_h)))
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 3888))))
+    (call $unify (local.get $rh) (local.get $list_ty_h) (local.get $span)
+      (call $reason_make_inferred (i32.const 3888)))
+    (call $graph_bind (local.get $handle)
+      (call $ty_make_tvar (local.get $elem_h))
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 3888))))
+    (local.get $handle))
+
   ;; ─── PipeExpr — five-verb dispatch ────────────────────────────────────
   ;; src/infer.mn:742-755 + 898-974. Dispatches on PipeKind tag (160-164).
   ;; Per spec 10 + Hβ-infer §4.3 production pattern 4.
@@ -2217,6 +2250,10 @@
     ;; MakeStringExpr (103) — string interpolation per #138.
     (if (i32.eq (local.get $tag) (i32.const 103))
       (then (return (call $infer_walk_expr_make_string
+              (local.get $expr) (local.get $handle) (local.get $span)))))
+    ;; IndexExpr (104) — xs[i] kernel sequence-index projection.
+    (if (i32.eq (local.get $tag) (i32.const 104))
+      (then (return (call $infer_walk_expr_index
               (local.get $expr) (local.get $handle) (local.get $span)))))
     ;; NErrorExpr (102): productive-under-error sentinel from parser.
     ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4

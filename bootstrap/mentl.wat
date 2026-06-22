@@ -7090,7 +7090,13 @@
                     (local.set $node (call $nexpr (local.get $node) (local.get $span)))
                     (return (call $postfix_loop (local.get $tokens)
                       (local.get $node) (local.get $p2)))))))))))
-    ;; Subscript: e[idx] → Call(VarRef("list_index"), [e, idx])
+    ;; Subscript: e[idx] → IndexExpr(e, idx) — [tag=104][receiver][index].
+    ;; The kernel sequence-index PROJECTION node, mirroring the wheel's
+    ;; IndexExpr (src/types.mn:554). Infer reads the element type from e's
+    ;; TList(a) (Carried-Truth); lower emits a list_index call. The former
+    ;; eager fold to Call(VarRef("list_index")) committed e to list_index's
+    ;; Int param and DISCARDED the element type — drift 9 (eager-form-
+    ;; commitment), the root of `list_head(state).field` failing.
     (if (i32.eq (local.get $k) (i32.const 49))  ;; TLBracket
       (then
         (local.set $args_result
@@ -7101,14 +7107,11 @@
         (local.set $p2 (call $expect (local.get $tokens)
           (call $skip_ws_p (local.get $tokens) (local.get $p2)) (i32.const 50)))
         (local.set $span (i32.load offset=8 (local.get $e)))
-        (local.set $args (call $make_list (i32.const 2)))
-        (drop (call $list_set (local.get $args) (i32.const 0) (local.get $e)))
-        (drop (call $list_set (local.get $args) (i32.const 1) (local.get $field)))
-        (local.set $node (call $nexpr
-          (call $mk_CallExpr
-            (call $nexpr (call $mk_VarRef (i32.const 4288)) (local.get $span))
-            (local.get $args))
-          (local.get $span)))
+        (local.set $node (call $alloc (i32.const 12)))
+        (i32.store (local.get $node) (i32.const 104))              ;; IndexExpr tag
+        (i32.store offset=4 (local.get $node) (local.get $e))      ;; receiver
+        (i32.store offset=8 (local.get $node) (local.get $field))  ;; index
+        (local.set $node (call $nexpr (local.get $node) (local.get $span)))
         (return (call $postfix_loop (local.get $tokens) (local.get $node) (local.get $p2)))))
     ;; Field: e.field
     (if (i32.eq (local.get $k) (i32.const 52))  ;; TDot
@@ -17023,6 +17026,39 @@
         (call $reason_make_inferred (i32.const 3888))))   ;; "record result"
     (local.get $handle))
 
+  ;; ─── IndexExpr arm — xs[i] kernel sequence-index projection ───────────
+  ;; Mirror of the wheel src/infer.mn:646-662. Layout: [tag=104][recv][index].
+  ;; FORCE the receiver to a list (unify with TList(TVar(elem_h)) — preserves a
+  ;; concrete receiver's element) and bind the result to that ELEMENT. The
+  ;; Carried-Truth Law: the graph proves the sequence's element type via
+  ;; TList(a); the projection reads it, never re-deriving Int from list_index's
+  ;; load_i32 body. Lower emits the list_index call (the substrate).
+  (func $infer_walk_expr_index
+        (export "infer_walk_expr_index")
+        (param $expr i32) (param $handle i32) (param $span i32)
+        (result i32)
+    (local $rec i32) (local $idx i32) (local $rh i32)
+    (local $elem_h i32) (local $list_ty_h i32)
+    (local.set $rec (i32.load offset=4 (local.get $expr)))
+    (local.set $idx (i32.load offset=8 (local.get $expr)))
+    (local.set $rh (call $infer_walk_expr (local.get $rec)))
+    (drop (call $infer_walk_expr (local.get $idx)))
+    (local.set $elem_h (call $graph_fresh_ty
+      (call $reason_make_inferred (i32.const 3888))))   ;; "record result" — element
+    (local.set $list_ty_h (call $graph_fresh_ty
+      (call $reason_make_inferred (i32.const 3888))))
+    (call $graph_bind (local.get $list_ty_h)
+      (call $ty_make_tlist (call $ty_make_tvar (local.get $elem_h)))
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 3888))))
+    (call $unify (local.get $rh) (local.get $list_ty_h) (local.get $span)
+      (call $reason_make_inferred (i32.const 3888)))
+    (call $graph_bind (local.get $handle)
+      (call $ty_make_tvar (local.get $elem_h))
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 3888))))
+    (local.get $handle))
+
   ;; ─── PipeExpr — five-verb dispatch ────────────────────────────────────
   ;; src/infer.mn:742-755 + 898-974. Dispatches on PipeKind tag (160-164).
   ;; Per spec 10 + Hβ-infer §4.3 production pattern 4.
@@ -17489,6 +17525,10 @@
     ;; MakeStringExpr (103) — string interpolation per #138.
     (if (i32.eq (local.get $tag) (i32.const 103))
       (then (return (call $infer_walk_expr_make_string
+              (local.get $expr) (local.get $handle) (local.get $span)))))
+    ;; IndexExpr (104) — xs[i] kernel sequence-index projection.
+    (if (i32.eq (local.get $tag) (i32.const 104))
+      (then (return (call $infer_walk_expr_index
               (local.get $expr) (local.get $handle) (local.get $span)))))
     ;; NErrorExpr (102): productive-under-error sentinel from parser.
     ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
@@ -24010,6 +24050,8 @@
       (then (return (call $lower_named_record (local.get $node)))))
     (if (i32.eq (local.get $tag) (i32.const 100))
       (then (return (call $lower_field       (local.get $node)))))
+    (if (i32.eq (local.get $tag) (i32.const 104))   ;; IndexExpr — xs[i]
+      (then (return (call $lower_index       (local.get $node)))))
     ;; NErrorExpr (102): productive-under-error sentinel from parser.
     ;; Per protocol_parser_fabrication_substrate.md + DESIGN.md §4
     ;; (NErrorHole peer at graph layer): parse-time diagnostic already
@@ -24026,6 +24068,33 @@
     (call $lexpr_make_lconst
       (call $walk_expr_node_handle (local.get $node))
       (i32.const 0)))
+
+  ;; ─── $lower_index — IndexExpr (104) xs[i] → list_index call ─────────────
+  ;; The TYPE (element a) was projected by infer onto this node's handle (the
+  ;; kernel sequence-index projection). Lower emits the substrate access by
+  ;; reconstructing Call(VarRef("list_index"), [recv, idx]) and lowering it —
+  ;; the same call the old parse-time desugar produced, relocated here so infer
+  ;; saw the element-typed IndexExpr first. The reconstructed node carries THIS
+  ;; node's handle so the lowered call's result is the element, not a fresh var.
+  (func $lower_index (param $node i32) (result i32)
+    (local $body i32) (local $expr i32) (local $rec i32) (local $idx i32)
+    (local $span i32) (local $args i32) (local $call_node i32)
+    (local.set $body (i32.load offset=4 (local.get $node)))
+    (local.set $expr (i32.load offset=4 (local.get $body)))
+    (local.set $rec  (i32.load offset=4 (local.get $expr)))
+    (local.set $idx  (i32.load offset=8 (local.get $expr)))
+    (local.set $span (i32.load offset=8 (local.get $node)))
+    (local.set $args (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $args) (i32.const 0) (local.get $rec)))
+    (drop (call $list_set (local.get $args) (i32.const 1) (local.get $idx)))
+    (local.set $call_node (call $nexpr
+      (call $mk_CallExpr
+        (call $nexpr (call $mk_VarRef (i32.const 4288)) (local.get $span))
+        (local.get $args))
+      (local.get $span)))
+    (i32.store offset=12 (local.get $call_node)
+      (i32.load offset=12 (local.get $node)))   ;; carry IndexExpr's handle (element)
+    (call $lower_call (local.get $call_node)))
 
   ;; ─── $lower_args — chunk-private buffer-counter helper (Lock #5) ──
   ;; Per src/lower.mn:1055-1057 lower_expr_list. Buffer-counter substrate

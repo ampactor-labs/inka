@@ -344,28 +344,34 @@ systems, so L6 is not Stage-3 garnish.
 
 ---
 
-## §5 · The arc — real → felt → unsurpassable
+## §5 · real · felt · unsurpassable — three aspects of one ultimate form
 
-**Apply Mentl's own gradient to Mentl's own development.** The three stages each
-serve Mentl, humanity, and the makers at once:
+**Apply Mentl's own gradient to Mentl's own development.** These are NOT a
+sequence to march through — they are three ASPECTS of the one ultimate form,
+written in FULL. The discredited reading ("do real first, then felt, then
+unsurpassable; close first-light before anything above it") is the phasing the
+makers rejected. You write the ultimate `.mn` answering ONLY to "what is the
+ultimate form?"; the disposable seed's weaker inference catches up afterward
+("write the ultimate form, THEN we make it work"). first-light is not a phase to
+*close first* — it ARRIVES when the complete wheel meets a caught-up seed.
 
-1. **REAL — close first-light (L7).** The forcing function: the substrate must
-   compile *itself* (the hardest program) end-to-end. Use the pragmatic
-   effect-row fix (§4③) — kill the higher-order leak enough to self-host. Reframe
-   from the old plan: first-light is not scaffolding, it is the smallest instance
-   of `!Outside`.
-2. **FELT — the human surface (L6).** Once the substrate is real, the felt
-   experience *falls out as projections*: `mentl where/why/edit`, the gradient,
-   the Why button, reactivity. This is the founding's payoff and the point.
-3. **UNSURPASSABLE — the long game.** The modal effect synthesis (§4③), the IFC
+1. **REAL — it WORKS.** The substrate compiles real programs end-to-end; the
+   micros run; the wheel emits correct WAT. first-light (the wheel compiling
+   ITSELF to a fixed point) is the smallest instance of `!Outside` — a milestone
+   that arrives when the wheel is complete, never a gate chased ahead of the form.
+2. **FELT — the human surface (L6).** The felt experience *falls out as
+   projections*: `mentl where/why/edit`, the gradient, the Why button,
+   reactivity. The founding's payoff and the point.
+3. **UNSURPASSABLE — the frontier.** The modal effect synthesis (§4③), the IFC
    frontier (§4⑥), durable-execution-as-handler (§4④), the value-ontology
-   derivation (§4①), Verify→SMT, native/GPU backends (handler swaps). Each a move
+   derivation (§4①), Verify→SMT, native/GPU backends (handler swaps), the
+   e-graph (effect-aware equality saturation, live in lower). Each a move
    *within* the medium.
 
-Do them in this order. Each layer above inherits the one below, so a perfect
-upper layer on a non-real lower one helps no one — but a real lower layer with a
-merely-pragmatic effect system still lets the felt experience exist and be used,
-then improves underneath without source change (the gradient).
+Write the ultimate form in FULL — all three aspects at once. A leap that advances
+*unsurpassable* (the e-graph) before the seed can self-host is NOT premature: the
+seed catches up, and the census it raises is a SHADOW (§8), never a reason to
+hedge the wheel against the seed (the one named drift, §9.6).
 
 ---
 
@@ -419,14 +425,25 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-06-18; verify with `state.sh`)
+## §7 · Current state (grounded 2026-06-22; verify with `verify.sh`)
 
-> **GROUND IN REALITY FIRST.** Run `bash tools/state.sh` before any theory or
-> edit — it derives real state from THIS run's artifacts. Prose drifts; artifacts
-> do not. On a runtime bug the first move is a PROBE, not a hypothesis.
+> **GROUND IN REALITY FIRST.** Run `bash tools/verify.sh` before any theory or
+> edit — the gate is the wheel WORKING (micros) + coherence (drift-audit). Census
+> is a SHADOW it reports (the seed lagging the wheel), never enforced. Prose
+> drifts; artifacts do not. On a runtime bug the first move is a PROBE.
 
-- **Census 189**, 7/7 micros green, seed builds, m2.wat assembles, pass-1 (seed
-  compiles the wheel) OK.
+- **THE CURSOR — the ultimate-form arc (2026-06-22, all landed + pushed):**
+  SYNTAX.md to ultimate form; PExpr dissolved into live operand nodes; the whole
+  AST in the one graph (the fabric — `mint_node` edge-links every node's body at
+  birth; any handle resolves live via `graph_node_body`); the e-graph engine
+  (effect-aware equality saturation, the union-find pointed at the cheaper node)
+  LIVE in lower (`lower_expr` reads the canonical form via `egraph_extract`).
+  Micros 5/5 green — the seam HELD (EGraph in the lowering row did not perturb
+  the ev-slots); census 184 (shadow — the seed lags the e-graph code; "make it
+  work" catches it up). The detail below is 2026-06-18 first-light-blocker
+  archaeology, kept for the substrate mechanics it documents — NOT the cursor.
+- **Census 189** (2026-06-18 reading), 7/7 micros green, seed builds, m2.wat
+  assembles, pass-1 (seed compiles the wheel) OK.
 - **LANDED — the handler registry dissolved into the one-graph live-read.** The
   `handler_state_inits_registry` + its pre-register pass + `build_arm_kinds` +
   `arm_kind_in` are gone; `HandlerKind` now carries the decl's (config, state,
@@ -618,16 +635,19 @@ diagnostic's NAME can lie.
 
 1. **Read `CLAUDE.md`, `PLAN.md`, `SYNTAX.md`.** That is the entire required
    context. Reference nothing else unless debugging a specific artifact.
-2. **Run `bash tools/state.sh`.** Trust its numbers over any prose here; if they
-   disagree, the prose is stale — fix it.
-3. **The cursor is §5's first stage — *real*: close first-light.** Per §7: the
-   handler registry is dissolved (landed). The live blocker is a BUG in the
-   legitimate funcref FLOOR (§6), inside the disposable seed — its funcref/
-   static-closure machinery corrupts on the re-entrant `map(node_to_pexpr)` of
-   refinement parsing. PROBE it to bedrock and fix it in the seed (completing the
-   by-design non-ultimate seed enough to self-host — not a wheel patch). The
-   FUNCTION-DISPATCH GRADIENT (direct for known operators, funcref the floor) is
-   §5.3 unsurpassable, not a first-light blocker. Then *felt*, then *unsurpassable*.
+2. **Run `bash tools/verify.sh`.** The gate is the wheel WORKING (the micros
+   compile-and-run) + coherence (the drift-audit). Census is a SHADOW it reports,
+   never enforces — a rising count is the seed lagging the ultimate wheel,
+   expected progress. Trust the micros + the artifact over any prose here; if
+   prose disagrees, fix the prose.
+3. **The cursor is the ULTIMATE-FORM arc — write the `.mn` in full.** NOT a
+   first-light blocker to chase. Recent leaps that ARE the cursor: the whole AST
+   in the one graph (the fabric — every node a resolvable handle); the e-graph
+   engine (effect-aware equality saturation) live in lower. The seed's weaker
+   inference lags this and catches up ("then we make it work"); NEVER hedge the
+   wheel against the seed — that fork (ultimate form vs safer-for-the-seed) IS
+   the drift, paid for in a wrongful revert (2026-06-22). All three §5 aspects in
+   full — real, felt, unsurpassable — never one phase chased before the others.
 4. **Open with the Universal Audit, not the trap (§9.6).** Then every edit:
    project the eight arms (§2); obey Carried-Truth (§9.1); dream-code first
    (§9.3); never bolt (§9.8); interrogate, don't absorb (§9.9). Ask: *what does

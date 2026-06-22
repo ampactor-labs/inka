@@ -81,11 +81,24 @@ echo "    m2 is the wheel compiled by the DISPOSABLE seed; its bytes are the see
 echo "    First-light = diff(m3,m4) empty AND correctness (the micros above green). m2 may differ from m3."
 if wat2wasm $B/state_m2.wat -o $B/state_m2.wasm --debug-names --enable-threads --enable-tail-call 2>$B/state_w2w.err; then
   echo "    m2.wat assembles: OK"
-  if timeout 300 $WTRUN $B/state_m2.wasm < $B/state_wheel.mn > $B/state_m3.wat 2>$B/state_m3.err; then
+  # CAP: a sane m3/m4 is a few MB; cap at 500MB so a wat-emission RUNAWAY
+  # (the emit corruption dumps 150GB) is FLAGGED, not written to disk. The
+  # wasmtime exit is read via PIPESTATUS (head closing the pipe = SIGPIPE only
+  # happens when the cap is hit, which the size check catches first).
+  CAP=524288000
+  timeout 300 $WTRUN $B/state_m2.wasm < $B/state_wheel.mn 2>$B/state_m3.err | head -c $CAP > $B/state_m3.wat
+  m2rc=${PIPESTATUS[0]}; m3sz=$(wc -c < $B/state_m3.wat)
+  if [ "$m3sz" -ge "$CAP" ]; then
+    echo "    *** m2 EMIT RUNAWAY — m3 hit the $((CAP/1048576))MB cap (wat-emission corruption; NOT a clean compile). ***"
+  elif [ "$m2rc" -eq 0 ]; then
     echo "    m2 → m3.wat = $(wc -l < $B/state_m3.wat) lines  (m2==m3 is NOT the check; m2's bytes are disposable)"
     if wat2wasm $B/state_m3.wat -o $B/state_m3.wasm --debug-names --enable-threads --enable-tail-call 2>$B/state_w3w.err; then
       echo "    m3.wat assembles: OK"
-      if timeout 300 $WTRUN $B/state_m3.wasm < $B/state_wheel.mn > $B/state_m4.wat 2>$B/state_m4.err; then
+      timeout 300 $WTRUN $B/state_m3.wasm < $B/state_wheel.mn 2>$B/state_m4.err | head -c $CAP > $B/state_m4.wat
+      m3rc=${PIPESTATUS[0]}; m4sz=$(wc -c < $B/state_m4.wat)
+      if [ "$m4sz" -ge "$CAP" ]; then
+        echo "    *** m3 EMIT RUNAWAY — m4 hit the cap. ***"
+      elif [ "$m3rc" -eq 0 ]; then
         if diff -q $B/state_m3.wat $B/state_m4.wat >/dev/null 2>&1; then
           echo "    *** m3 == m4 — FIXED POINT REACHED. FIRST LIGHT at correctness (micros above MUST be green). ***"
         else

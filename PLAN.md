@@ -516,20 +516,44 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > is a SHADOW it reports (the seed lagging the wheel), never enforced. Prose
 > drifts; artifacts do not. On a runtime bug the first move is a PROBE.
 
-- **THE CURSOR — the value layer (2026-06-23, design VERIFIED, six-step build in
-  progress).** The four deep value-layer axes — representation gradient,
-  multi-shot continuation reification, parallel-topology execution, total
-  structural fold — are FOUR PROJECTIONS OF ONE CURSOR ON ONE HEAP RECORD joined
-  at `match lookup_ty(h)` (full design + arc: §5.U). Verified by a 21-agent
-  adversarial workflow; each step a Carried-Truth deletion the artifact already
-  names (`infer.mn:1122` Thread-drift peer; `infer.mn:2714` "attach to TCont";
-  `wasm.mn:2079` `$ftN` blocker; `emit_struct_eq` product/sum floor). The
-  binding keystone is `TCont(Ty, ResumeDiscipline, EffRow)` — the effect-WORLD on
-  the continuation (`!E` lifted to TIME; the modal frontier §4③ landing here). The
-  docs (SYNTAX §Type aliases `repr` pin, §`<|`/`><` the Schedule handler + the
-  `PFanout` kernel-merge) LEAD; the build implements against them. LAW 7: the
-  existing i32 / OneShot / sequential paths stay BYTE-IDENTICAL — the new forms
-  (f64 / multishot / fanout) are ADDED arms.
+- **THE CURSOR — the value layer (2026-06-23, design VERIFIED, six-step build
+  LANDED — all 6 commits in, Law 7 held).** The four deep value-layer axes —
+  representation gradient, multi-shot continuation reification, parallel-topology
+  execution, total structural fold — are FOUR PROJECTIONS OF ONE CURSOR ON ONE
+  HEAP RECORD joined at `match lookup_ty(h)` (full design + arc: §5.U). Verified
+  by a 21-agent adversarial workflow; each step a Carried-Truth deletion the
+  artifact already named (`infer.mn:1122` Thread-drift peer; `infer.mn:2714`
+  "attach to TCont"; `wasm.mn:2079` `$ftN` blocker; `emit_struct_eq` product/sum
+  floor). **Landed:** STEP 0 `repr_of` (46e4801); STEP 1 the representation
+  gradient, i32-floor + boxed-f64 peer DELETED (2cf717b); STEP 2 the structural
+  fold's eq leaf, the loud product/sum floor dissolved (d138274); STEP 3 the
+  multi-shot producer minting the dormant `LMakeContinuation`, the write-only
+  `resume_kinds` ledger DELETED (7b72790); STEP 4 the `PDiverge|PCompose` →
+  `PFanout` verb-collapse + the hardwired `inf_add_row(Thread)` DELETED, schedule
+  read live (600bc88); STEP 5 the binding keystone `TCont(Ty, ResumeDiscipline,
+  EffRow)` — the effect-WORLD on the continuation (`!E` lifted to TIME; the modal
+  frontier §4③ landing here), all ~14 destructure sites + the seed's
+  `$ty_make_tcont` + 6 classify/scheme/render seed-tests moved in lock-step
+  (27edc30). The docs (SYNTAX §Type aliases `repr` pin, §`<|`/`><` the Schedule
+  handler + the `PFanout` kernel-merge) LED; the build implemented against them.
+  **LAW 7 held:** the existing i32 / OneShot / sequential paths are
+  BYTE-IDENTICAL — ev2/4/8=57, ev5=21, ev16=18, eq=73, interp=59 green before AND
+  after; the new forms (f64 / multishot / fanout) are ADDED arms. **Enforced
+  gates (run through the seed):** repr-width=40, struct-eq-deep=20 (fold control
+  shape), fanout-seq=30 (`><` default-sequential value gate), resume-world=42
+  (world-index inert on the single-world OneShot path). **Seed-lag gates named as
+  positive-form peers (the .mn leads, the seed catches up):**
+  `Hβ.seed.float-gradient` (mn-float-arith → exit 3 needs the wheel's f64 emit;
+  the seed still floors LFloat to i32, exit 0); `Hβ.seed.multishot-producer`
+  (mn-multishot → exit 30 needs the producer in the compiler that compiles it;
+  the seed lowers OneShot, exit 10). **Unsurpassable-tier follow-ups (named, not
+  built):** `Hβ.lower.fanout-simd-lane-cashout` (reads STEP 1's v128),
+  `fanout-gpu-backend-handler`, `fanout-durable-persist-handler` (reads STEP 3's
+  persist); `Hβ.types.resume-world-mismatch-value-gate` + `Hβ.infer.tcont-world-
+  capture-at-reify` (cross-world boundary needs STEP 3's persist resume-catcher);
+  `Hβ.eq.fold-seed-value-gate`. The m3==m4 fixed point stays blocked on the
+  pre-existing parse-path ev-slot seam (`fresh_ty ← mint_node ← parse_import`,
+  below) — UNTOUCHED by the value layer.
 - **THE CURSOR — the ultimate-form arc (2026-06-22, all landed + pushed):**
   SYNTAX.md to ultimate form; PExpr dissolved into live operand nodes; the whole
   AST in the one graph (the fabric — `mint_node` edge-links every node's body at

@@ -1802,6 +1802,7 @@ un-normalized source the formatter has not yet touched).
 | `E_NotAKeyword`       | user typed `for`/`while`/`loop`/`break`/`continue`/`return` | `MaybeIncorrect` | rewrite as verb form per substrate             |
 | `E_PatternAlternationBindingMismatch` | branches in `\|` bind different names or types | `MaybeIncorrect` | adjust patterns to bind same names with unifiable types |
 | `E_ResumeOutsideArm`  | `resume` outside a handler-arm body           | `Unspecified`        | move the resume into an arm; the continuation only exists there |
+| `E_ResumeWorldMismatch` | a continuation (`TCont(_, _, world)`) is resumed under an effect-WORLD that does not unify with the one it was frozen under (`!E` lifted to the TIME axis — a persisted/cross-context resume meeting a changed handler-set; `unify`'s TCont arm, §4③) | `MaybeIncorrect` | re-install the absorbing handler before the resume, OR widen the continuation's world |
 | `E_ConcatTypeMismatch` | `++` operands' element types fail to unify (e.g. `[Int] ++ [Bool]`) | `MaybeIncorrect` | unify the element types |
 
 ### Gradient narration (teaching surfaces)

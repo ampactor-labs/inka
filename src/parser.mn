@@ -91,7 +91,6 @@ fn show_token_kind(k) with Pure = match k {
   THandle => "handle", THandler => "handler", TWith => "with",
   TResume => "resume", TPerform => "perform",
   TImport => "import", TWhere => "where",
-  TCapability => "capability",
   TOwn => "own", TRef => "ref", TPure => "Pure",   // drift-audit: ignore — human-facing token-display rendering, not effect keying; tracked for item 11.B token-rendering normalization
   TTrue => "true", TFalse => "false",
   TIdent(s) => s,
@@ -275,7 +274,6 @@ fn parse_stmt(ref tokens, pos) = match kind_at(tokens, pos) {
   TType     => parse_type_decl(tokens, pos + 1),
   TEffect   => parse_effect_decl(tokens, pos + 1),
   THandler  => parse_handler_decl(tokens, pos + 1),
-  TCapability => parse_capability_decl(tokens, pos + 1),
   TImport   => parse_import(tokens, pos + 1),
   // DS.2 — docstring attachment: collect consecutive /// lines,
   // parse the following declaration, wrap in Documented(doc, stmt).
@@ -828,15 +826,6 @@ fn parse_handler_arms(ref tokens, pos) = {
     let arm = {args: args, body: body, op_name: op_name}
     ([arm] ++ rest, p7)
   }
-}
-
-/// Parse `capability X = effs`.
-fn parse_capability_decl(ref tokens, pos) = {
-  let start = span_at(tokens, pos)
-  let name = ident_at(tokens, pos)
-  let p = expect(tokens, skip_ws(tokens, pos + 1), TEq)
-  let (effs, p2) = parse_effect_list(tokens, skip_ws(tokens, p))
-  (nstmt(CapabilityDeclStmt(name, effs), start), p2)
 }
 
 fn parse_arg_names(ref tokens, pos) = {

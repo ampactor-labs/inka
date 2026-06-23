@@ -108,24 +108,15 @@ type Scheme
 // derive_ev_slots can produce per-op evidence at call sites,
 // and the Cursor can project effect structure at any position.
 //
-// CapabilityScheme(eff_pairs) carries the `(EffName, Bool)` pairs
-// declared in `capability Foo = E1 + E2 + !E3`. `expand_capabilities`
-// reads this at effect-row build time and substitutes the bundle's
-// contents inline at every reference site. The Scheme stored beside it
-// is the degenerate `Forall([], TTuple([]))` — capabilities are not
-// callable values; the SchemeKind variant carries the real payload.
-
 type SchemeKind
   = FnScheme                                     // tag 0
   | ConstructorScheme(TagId, Int)                // tag 1
   | EffectOpScheme(String)                       // tag 2
   | RecordSchemeKind(List)                       // tag 3 — [(field_name, ty)]
-  | CapabilityScheme(List)                       // tag 4 — [(EffName, Bool)]
-  | EffectDeclKind(List)                         // tag 5 — [op_name: String]
+  | EffectDeclKind(List)                         // tag 5 — [op_name: String]  (cache byte 5; byte 4 retired with the dissolved capability)
   | HandlerKind(String, Int, List, List, List)   // tag 6 — (handled_ename, residual_row_handle, config, state, arms)
-  // EffectDeclKind appended (not inserted) to preserve tag-ID stability
-  // with the seed's hardcoded constants for tags 0-4. HandlerKind (tag 6)
-  // is the full handler-effect type AND the handler's identity: a handler is
+  // HandlerKind (tag 6) is the full handler-effect type AND the handler's
+  // identity: a handler is
   // (a ! E+r) ⟿ (a ! R+r) — it REMOVES the handled effect (handled_ename) AND
   // ADDS its arms' residual row (residual_row_handle, a live row var, config-
   // polymorphic). `~>` reads it: row(expr ~> h) = (row(expr) − E) ⊕ R. Without R
@@ -463,9 +454,6 @@ type TokenKind
   | TImport | TWhere
   | TOwn | TRef | TPure
   | TTrue | TFalse
-  | TCapability                     // `capability` keyword per parser.mn:337
-                                    //   parse_capability_decl entry; SYNTAX.md
-                                    //   capability declarations
 
   // ─── Identifiers and literals (7) ────────────────────────────────
   | TIdent(String)
@@ -696,12 +684,6 @@ type Stmt
                            // effect name, ops (each is (op_name, param_tys, ret_ty);
                            // ResumeDiscipline is inferred at handler-decl time
                            // from each arm body, not declared on the effect op)
-  | CapabilityDeclStmt(String, List)
-                           // capability name, effect ops bundled into one
-                           // capability per SYNTAX.md `capability` keyword.
-                           // Parser produces via parse_capability_decl
-                           // (src/parser.mn:726); infer's NStmt arm at
-                           // infer.mn:254 unpacks via the same shape.
   | HandlerDeclStmt(String, String, List, List({init: Node, name: String}), List)
                            // handler name, effect name, config-params, state-fields, arms
                            // config: [String] — closure-captured at install site

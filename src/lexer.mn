@@ -64,7 +64,6 @@ fn keyword_kind(ref word) with !Mutate = {
   else if word == "where"     { Some(TWhere) }
   else if word == "own"       { Some(TOwn) }
   else if word == "ref"       { Some(TRef) }
-  else if word == "capability"{ Some(TCapability) }
   else if word == "Pure"      { Some(TPure) }   // drift-audit: ignore — legitimate keyword str_eq at word granularity, NOT effect-name match; "Pure" is a reserved word (TPure is its TokenKind).
   else if word == "true"      { Some(TTrue) }
   else if word == "false"     { Some(TFalse) }

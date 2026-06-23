@@ -1,0 +1,99 @@
+// persist.mn — durable execution as a handler swap (PLAN §4④, W08)
+//
+// THE INSIGHT (PLAN §2/§4④): persisted multi-shot IS the same primitive as
+// the oracle's search and the runtime's backtrack — ONE resumable continuation,
+// distinguished ONLY by which handler catches the resume and whether that
+// handler persists the record. search.mn's `backtrack` catches the resume and
+// forks the trail; THIS file's `persist` catches the resume and memcpy's the
+// continuation record to disk. There is no second mechanism, no second runtime.
+//
+// Because the continuation is the unified heap record (handler = state =
+// closure = evidence = continuation, PLAN §6) — ONE contiguous, handle-
+// addressed region in the monotonic bump image, every interior pointer a
+// handle/offset into that same image — persisting it is a SINGLE memcpy and
+// rehydrating it is a SINGLE memcpy. Durable execution falls OUT of the memory
+// model: NO bespoke heap-walking serializer (Temporal/Restate/DBOS each
+// hand-write one), NO reflection, NO schema. The record IS the wire.
+//
+// The wire is self-describing (the B1 pack-leaf format, binary.mn): a persisted
+// continuation is `[world_tag : i32][size : i32][record bytes : size]`. On
+// rehydrate the world_tag is read FIRST and compared against the LIVE handler-
+// stack world (the caller passes the world it is resuming under) — a mismatch
+// is the value-gate E_ResumeWorldMismatch (W06; the §4③ modal frontier on the
+// TIME axis: !E proven across a persist/recompile boundary). A now-unhandled or
+// layout-shifted resume is caught at LOAD, never a silent memcpy'd miscompile.
+//
+// SOTA: no published durable-execution system types the effect-world on the
+// continuation. Temporal/Restate/DBOS persist+resume with ZERO static OR
+// load-time check that the resume world still matches — a now-unhandled resume
+// is a 3am production corruption. Here it is a load-time error, by construction.
+
+import types
+import runtime/memory
+import runtime/binary
+import runtime/io
+
+/// Persist — the durable catch. `persist` writes a continuation record to a
+/// path; `rehydrate` reads it back, checking the captured world against the
+/// live world the caller resumes under. The catching handler decides WHERE
+/// (disk path here; a network/object-store handler is a swap, same wire).
+///
+/// `k` is the continuation record pointer (LMakeContinuation's heap value).
+/// `size` is its total byte length (the producer knows nc+ne at construct;
+/// rehydrate recovers it from the wire — fully self-describing). `world_tag`
+/// is the record's frozen-world hash, read from the record's final field.
+effect Persist {
+  persist(k: Int, size: Int, world_tag: Int, path: String) -> ()
+  rehydrate(path: String, live_world_tag: Int) -> Int
+}
+
+/// persist_to_disk — the default durable handler. The wire is the B1 pack-leaf
+/// format, so a different destination (network, object store) is purely a
+/// handler swap with the SAME wire. memcpy is the whole serializer.
+handler persist_to_disk {
+
+  persist(k, size, world_tag, path) => {
+    // The continuation record is contiguous from `k` for `size` bytes — view
+    // it as a [len][bytes] sequence (the one sequence node-kind, PLAN §4①) and
+    // pack it whole. world_tag leads so rehydrate reads it before allocating.
+    let wire = persist_pack_record(world_tag, k, size)
+    fs_write_file(path, wire)
+    resume()
+  },
+
+  rehydrate(path, live_world_tag) => {
+    let wire = fs_read_file(path)
+    // world_tag is the first i32 of the wire (the value gate's input).
+    let captured_world = load_i32(wire + 4)
+    // THE VALUE GATE (W06): a continuation frozen under one handler-world,
+    // resumed under another, is E_ResumeWorldMismatch — caught at LOAD, never a
+    // silent miscompile. world_tag 0 (EfPure) is the unconstrained world and
+    // unifies with anything (the empty world is a subset of every world).
+    if captured_world != 0 && captured_world != live_world_tag {
+      report("persist", "E_ResumeWorldMismatch", "error",
+             "continuation frozen under world {int_to_str(captured_world)} cannot resume under world {int_to_str(live_world_tag)}",
+             span_zero(), "MaybeIncorrect")
+      resume(0)
+    } else {
+      // memcpy the record back into a fresh heap region — relocation-stable
+      // because every interior pointer is a handle/offset into the one image.
+      let size = load_i32(wire + 8)
+      let k = alloc(size)
+      mem_copy(k, wire + 12, size)
+      resume(k)
+    }
+  }
+}
+
+/// persist_pack_record — lay the self-describing wire: [world_tag][size][bytes].
+/// The record bytes are mem_copy'd whole; no field-walking. The leading two i32
+/// headers make rehydrate fully self-describing (it never needs the producer's
+/// nc/ne). This IS the pack-leaf wire (binary.mn) at the record granularity.
+fn persist_pack_record(world_tag, k, size) with Memory + Alloc = {
+  let wire = alloc(4 + 4 + 4 + size)
+  store_i32(wire, 4 + 4 + size)         // [len] header for the [len][bytes] view
+  store_i32(wire + 4, world_tag)        // world_tag (the value-gate input)
+  store_i32(wire + 8, size)             // record byte size (self-describing)
+  mem_copy(wire + 12, k, size)          // the continuation record, verbatim
+  wire
+}

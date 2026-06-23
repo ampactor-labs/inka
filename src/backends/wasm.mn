@@ -456,7 +456,7 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_list(captures)
     walk_lemit_list(ev)
   },
-  LMakeContinuation(_, LFn(name, _, _, body, _, _), captures, ev, _, _) => {
+  LMakeContinuation(_, LFn(name, _, _, body, _, _), captures, ev, _, _, _) => {
     visit_fn(name)
     walk_lemit_list(body)
     walk_lemit_list(captures)
@@ -601,7 +601,7 @@ fn emit_string_bytes(s, i, n) = {
 /// shapes (caller treats "" as no-op).
 fn extract_top_fn_name(stmt) with Pure = match stmt {
   LLet(_, name, LMakeClosure(_, _, _, _))           => name,
-  LLet(_, name, LMakeContinuation(_, _, _, _, _, _)) => name,
+  LLet(_, name, LMakeContinuation(_, _, _, _, _, _, _)) => name,
   _                                                  => ""
 }
 
@@ -772,7 +772,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
     collect_call_vectors_list(body,
       collect_call_vectors_list(caps, collect_call_vectors_list(ev, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _) =>
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_call_vectors_list(body,
       collect_call_vectors_list(caps, collect_call_vectors_list(ev, acc))),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_call_vectors_list(body, acc),
@@ -858,7 +858,7 @@ fn max_arity_expr(expr) = match expr {
   LEvPerform(_, _, _, _, args) => len(args) + 1,
   LLet(_, _, inner)         => max_arity_expr(inner),
   LMakeClosure(_, _, _, _)         => 0,
-  LMakeContinuation(_, _, _, _, _, _) => 0,
+  LMakeContinuation(_, _, _, _, _, _, _) => 0,
   LDeclareFn(_)                    => 0,
 
   // Non-call LIR variants contribute 0. Explicit so a new
@@ -1121,7 +1121,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
       ++ collect_fn_emit_records(captures)
       ++ collect_fn_emit_records(ev)
   },
-  LMakeContinuation(_h, LFn(name, _arity, param_names, body, _row, fence), captures, ev, _, _) => {
+  LMakeContinuation(_h, LFn(name, _arity, param_names, body, _row, fence), captures, ev, _, _, _) => {
     [(name, param_names, body, fence)]
       ++ collect_fn_emit_records(body)
       ++ collect_fn_emit_records(captures)
@@ -1303,7 +1303,7 @@ fn emit_let_locals_expr(expr) = match expr {
     emit_let_locals_expr(inner)
   },
   LMakeClosure(_, _, _, _)         => (),  // function boundary — its locals are its own
-  LMakeContinuation(_, _, _, _, _, _) => (),  // resume_fn boundary — its locals are its own (H7)
+  LMakeContinuation(_, _, _, _, _, _, _) => (),  // resume_fn boundary — its locals are its own (H7)
   LDeclareFn(_)                    => (),  // module-level fn declaration — its body has its own locals
   LBlock(_h, stmts)         => emit_let_locals_list(stmts),
   LIf(_h, c, t, e)          => {
@@ -1500,7 +1500,7 @@ fn find_local_handle_list(name, stmts) = {
 fn find_local_handle_expr(name, expr) = match expr {
   LLocal(h, n)              => if n == name { h } else { 0 },
   LMakeClosure(_, _, _, _)         => 0,
-  LMakeContinuation(_, _, _, _, _, _) => 0,
+  LMakeContinuation(_, _, _, _, _, _, _) => 0,
   LDeclareFn(_)                    => 0,
   LLet(_h, _n, inner)       => find_local_handle_expr(name, inner),
   LStore(_h, _s, v)         => find_local_handle_expr(name, v),
@@ -1902,7 +1902,7 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (local.get $state_tmp)\n")
   },
 
-  LMakeContinuation(_h, LFn(resume_fn_name, _arity, _param_names, _body, _row, _fence), captures_exprs, ev_exprs, state_idx, ret_slot) => {
+  LMakeContinuation(_h, LFn(resume_fn_name, _arity, _param_names, _body, _row, _fence), captures_exprs, ev_exprs, state_idx, ret_slot, world_tag) => {
     // H7 §4.2 — multi-shot continuation record layout. Mirrors
     // LMakeClosure's heap-record shape with two added i32 fields:
     // state_index at offset 4 (between fn_ptr and capture_count) and
@@ -1915,6 +1915,13 @@ fn emit_expr(expr) = match expr {
     //   offset 12 + 4*i:                   capture_i
     //   offset 12 + 4*nc + 4*j:            ev_slot_j
     //   offset 12 + 4*nc + 4*ne:           ret_slot (i32)
+    //   offset 16 + 4*nc + 4*ne:           world_tag (i32) — the frozen
+    //                                      handler-WORLD's interned hash (§5.U
+    //                                      TIME axis, W06). It is the LAST field
+    //                                      so memcpy of the contiguous record
+    //                                      carries it whole; the Persist load
+    //                                      reads it to fire the value-gate
+    //                                      E_ResumeWorldMismatch.
     //
     // The continuation IS Mentl's oracle substrate — heap-captured
     // closure struct (captures + evidence + state + ret_slot)
@@ -1930,7 +1937,8 @@ fn emit_expr(expr) = match expr {
     // passing per Koka JFP 2022, not vtable indirection.
     let nc = len(captures_exprs)
     let ne = len(ev_exprs)
-    let size = 12 + 4 * (nc + ne) + 4
+    // header (12) + captures + ev-slots + ret_slot (4) + world_tag (4).
+    let size = 12 + 4 * (nc + ne) + 4 + 4
     emit_alloc(size, "state_tmp")
     // Store fn_ptr (resume_fn table index) at offset 0.
     wat_emit("    (local.get $state_tmp)\n")
@@ -1953,13 +1961,25 @@ fn emit_expr(expr) = match expr {
     emit_capture_stores_at_offset(captures_exprs, 12, 0)
     // Store each ev_slot at offset 12 + 4*nc + 4*j.
     emit_ev_slot_stores_at_offset(ev_exprs, 12 + 4 * nc, 0)
-    // Store ret_slot at the final offset.
+    // Store ret_slot.
     let ret_offset = 12 + 4 * (nc + ne)
     wat_emit("    (local.get $state_tmp)\n")
     wat_emit("    (i32.const ")
     wat_emit(int_to_str(ret_slot))
     wat_emit(") (i32.store offset=")
     wat_emit(int_to_str(ret_offset))
+    wat_emit(")\n")
+    // Store world_tag at the final offset (W06) — the interned hash of the
+    // captured handler-WORLD. memcpy carries it into a persisted record; the
+    // Persist load compares it against the live stack world, firing the
+    // value-gate E_ResumeWorldMismatch when a continuation is rehydrated under
+    // a changed handler-set (the §4③ modal frontier on the TIME axis).
+    let world_offset = ret_offset + 4
+    wat_emit("    (local.get $state_tmp)\n")
+    wat_emit("    (i32.const ")
+    wat_emit(int_to_str(world_tag))
+    wat_emit(") (i32.store offset=")
+    wat_emit(int_to_str(world_offset))
     wat_emit(")\n")
     // Result: continuation pointer on stack.
     wat_emit("    (local.get $state_tmp)\n")
@@ -3077,7 +3097,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
     collect_eq_product_tys_list(body,
       collect_eq_product_tys_list(caps, collect_eq_product_tys_list(ev, acc))),
-  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _) =>
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_eq_product_tys_list(body,
       collect_eq_product_tys_list(caps, collect_eq_product_tys_list(ev, acc))),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_eq_product_tys_list(body, acc),

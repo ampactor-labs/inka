@@ -1,16 +1,30 @@
-// mn-multishot — STEP 3 gate: the MULTI-SHOT PRODUCER.
+// mn-multishot — STEP 3 / W07 gate: the MULTI-SHOT PRODUCER + LIVE CAPTURES.
 //
 // A handler arm with TWO sequential (non-disjoint) resume sites classifies
 // MultiShot (infer_resume_cardinality: multiple sites, not branch-disjoint).
 // The continuation must be reified (LMakeContinuation) and CALLED TWICE — the
-// arm resumes once with 10, once with 20; the body after `pick()` doubles its
-// input and the handler sums the two runs: (1*10) + (1*20) = 30, NOT the
-// one-shot 10. Proves the producer mints the heap record and the catching
-// handler re-enters it a second time.
+// arm resumes once with 10, once with 20; the body after `pick()` returns its
+// input and the handler sums the two runs: 10 + 20 = 30, NOT the one-shot 10.
+// Proves the producer mints the heap record and the catching handler re-enters
+// it a second time.
+//
+// W07 — REAL CAPTURES: the arm sums `a + b`, the two arm-frame locals bound by
+// the two resumptions. With the live-capture lowering, the continuation record
+// captures EXACTLY the free vars the resumption body reads (the same
+// collect_free_vars/resolve_captures_outer the closure path uses — handler =
+// state = closure = continuation, ONE capture mechanism). The former `[]`
+// captures left a resumed body reading garbage; the real set makes `a + b` read
+// the actual 10 and 20.
 //
 // LAW 7: the OneShot path (every ev*/eq micro) stays byte-identical — this is
 // an ADDED form, not a perturbation. The MultiShot producer fires ONLY for an
 // arm the body proves multi-shot.
+//
+// SEED PEER: the seed's WAT (bootstrap/src/lower/*, tag 312 arity-6) lags the
+// 7-field record + live-capture reification — it still resolves resume one-shot
+// (exit 10, not 30). Named positive-form peer Hβ.seed.multishot-capture: the
+// seed catches up to the .mn-led continuation-reification codegen. The .mn
+// leads; this micro is the structural gate the seed will satisfy at first-light.
 //
 // Run: tools/run-micro.sh tests/micros/mn-multishot.mn 30
 // Expected exit 30: total = run(10) + run(20) = 10 + 20.

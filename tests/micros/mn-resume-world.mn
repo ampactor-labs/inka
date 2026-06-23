@@ -14,10 +14,14 @@
 //
 // The CROSS-WORLD value gate — two continuations frozen under DIFFERENT
 // handler-sets meeting at a persist/resume boundary, surfacing
-// E_ResumeWorldMismatch — needs STEP 3's persist handler (the resume-catcher
-// swap) to construct the boundary; named positive-form peer
-// Hβ.types.resume-world-mismatch-value-gate (NOT forced here; Law 7 — a path
-// the gate cannot construct deterministically is never claimed).
+// E_ResumeWorldMismatch — the VALUE gate (the runtime/load-time twin of this
+// compile-time unify check) is now REALIZED: the continuation record carries
+// the world_tag field (W06) and the Persist handler (lib/runtime/persist.mn,
+// W08) memcpy's it through the persist/rehydrate boundary, comparing the
+// captured world against the live world on load (tests/micros/mn-persist.mn is
+// its round-trip gate). The peer Hβ.types.resume-world-mismatch-value-gate is
+// thus DISCHARGED at the .mn layer; the seed catches up to the Persist chain
+// (Hβ.seed.durable-persist). Law 7 — this OneShot micro stays byte-identical.
 //
 // Run: tools/run-micro.sh tests/micros/mn-resume-world.mn 42
 // Expected exit 42: resume(41) flows to body, body adds 1.

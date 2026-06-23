@@ -252,14 +252,19 @@ type LowExpr
   | LTailCall(Int, LowExpr, List)
   | LReturn(Int, LowExpr)
   | LMakeClosure(Int, LowFn, List, List)         // handle, fn, captures, ev_slots
-  | LMakeContinuation(Int, LowFn, List, List, Int, Int)
+  | LMakeContinuation(Int, LowFn, List, List, Int, Int, Int)
   // H7 — multi-shot continuation record per the H7 walkthrough §1.2.
-  // handle, resume_fn, captures_exprs, ev_slots, state_index, ret_slot.
-  // Heap-allocated through emit_alloc (one allocator per kernel
+  // handle, resume_fn, captures_exprs, ev_slots, state_index, ret_slot,
+  // world_tag. Heap-allocated through emit_alloc (one allocator per kernel
   // crystallization #8 — the heap has one story); fn_index field
   // points to the synthesized __resume function registered in the
   // WASM funcref table; state_index discriminates which perform site
-  // resumed; ret_slot reserves the local slot for the resumed value.
+  // resumed; ret_slot reserves the local slot for the resumed value;
+  // world_tag is the interned hash of the captured effect-WORLD (§5.U,
+  // the TIME axis) — memcpy carries it, so a persisted continuation
+  // rehydrated under a CHANGED handler-set is caught at LOAD as the
+  // value-gate E_ResumeWorldMismatch (the §4③ modal frontier landing on
+  // TIME: !E proven across persist/recompile, never a silent miscompile).
   // Composes with LMakeClosure's capture/ev-store loops; emit shares
   // the per-field store helpers (per H7 §4.2).
   | LDeclareFn(LowFn)                            // module-level fn declaration (handler arm) — no runtime slot
@@ -373,7 +378,7 @@ fn lexpr_handle(e) with Pure = match e {
   LTailCall(h, _, _)      => h,
   LReturn(h, _)           => h,
   LMakeClosure(h, _, _, _) => h,
-  LMakeContinuation(h, _, _, _, _, _) => h,
+  LMakeContinuation(h, _, _, _, _, _, _) => h,
   LDeclareFn(_)            => 0,
   LIf(h, _, _, _)         => h,
   LBlock(h, _)            => h,
@@ -1808,12 +1813,40 @@ fn lower_resume_multishot(handle, val, state_updates) = {
   // against → the silent cross-handler-set miscompile Law 7 forbids). The
   // resume fn's row IS that world; persist=memcpy then carries it.
   let world = resume_world_of(handle)
-  let resume_fn = LFn(resume_fn_name, 1, ["__resume_in"], [prologue], world, 0)
-  // Captures = the arm's live locals (the continuation re-enters reading them);
+  // Captures = the arm's live locals the resumption body actually reads (W07):
+  // exactly the free vars of the resumed VALUE and every `with` update RHS,
+  // collected against the EMPTY bound-set (the resumption fn re-enters — those
+  // names are not bound inside it, so they ARE its captures), resolved through
+  // the SAME resolve_captures_outer the LambdaExpr path uses (handler = state =
+  // closure = continuation: ONE capture mechanism, four roles). The former `[]`
+  // left a resumed body reading garbage for any arm local; the live set makes
+  // the unified-record continuation realize its memcpy-serializable promise —
+  // a resumed `a + b` reads the real `a`, `b`.
+  let free_names =
+    free_vars_merge(collect_free_vars(val, []),
+                    free_vars_state_updates(state_updates, []))
+  let (_, captures_exprs, _) = resolve_captures_outer(free_names, handle)
+  let captures_fence = len(captures_exprs)
+  let resume_fn = LFn(resume_fn_name, 1, ["__resume_in"], [prologue], world, captures_fence)
+  // ret_slot reserves the resumed-value field. The resumed value flows into the
+  // resumption fn as its `__resume_in` PARAMETER (the prologue returns it), so
+  // the record's ret_slot field has no live READER — it stays the perform-site
+  // handle (a stable per-site discriminator), NOT a fabricated 0. Carried-Truth:
+  // a value with no consumer is not minted from an uninstalled allocator (the
+  // dormant LowerState ms_alloc_ret_slot has no install in the lowering chain —
+  // calling it would be an unhandled perform); the handle the graph already
+  // proves IS the discriminator the slot needs.
+  let ret_slot = handle
+  // world_tag = the interned hash of the captured world (W06) — a deterministic
+  // projection of the canonical row (sorted names → FNV), so memcpy carries the
+  // frozen handler-set into the persisted record; the load-time value gate
+  // compares it against the live stack world. EfPure → 0.
+  let world_tag = world_tag_of_row(world)
   // ev = the effects the resumed body still performs (the row already proves
   // them — derive_ev_slots reads it live). state_idx = the perform-site
-  // discriminator (the resume handle); ret_slot reserves the resumed-value slot.
-  LMakeContinuation(handle, resume_fn, [], derive_ev_slots(handle), handle, 0)
+  // discriminator (the resume handle).
+  LMakeContinuation(handle, resume_fn, captures_exprs, derive_ev_slots(handle),
+                    handle, ret_slot, world_tag)
 }
 
 /// The effect-world a continuation is frozen under, read LIVE from the
@@ -1834,6 +1867,43 @@ fn resume_world_of(handle) = match env_lookup(ls_outer_fn_name()) {
     }
   },
   None => EfPure
+}
+
+/// world_tag_of_row — the continuation's frozen handler-WORLD interned to one
+/// deterministic i32 (§5.U, the TIME axis; W06). The row is first normalized to
+/// its canonical form (EfPure | EfClosed(sorted) | EfOpen(sorted, v)) so two
+/// rows that are EQUAL under the Boolean algebra hash IDENTICALLY (determinism =
+/// fixpoint, PLAN §6) — the tag is a pure projection of the row's identity, the
+/// same way repr_of projects a width. EfPure → 0 (the empty world needs no tag,
+/// and 0 reads as "unconstrained" at the load-time value gate). The hash IS the
+/// FNV-1a the cache uses (one hash story, Carried-Truth — not a second
+/// algorithm): fold the sorted effect-name bytes, names separated by 0, so the
+/// open row-var contributes nothing (a row-var is a hole, not a captured
+/// effect). memcpy then carries this tag into a persisted record; the Persist
+/// handler's load compares it against the live stack world → the value-gate
+/// E_ResumeWorldMismatch.
+fn world_tag_of_row(row) = match normalize_row(row) {
+  EfPure          => 0,
+  EfClosed(names) => world_tag_hash_names(eff_names_of(names), 0, 2166136261),
+  EfOpen(names, _) => world_tag_hash_names(eff_names_of(names), 0, 2166136261)
+}
+
+fn world_tag_hash_names(names, i, h) = {
+  if i >= len(names) { h }
+  else {
+    let h2 = world_tag_hash_bytes(list_index(names, i), 0, byte_len(list_index(names, i)), h)
+    // Name separator (0) so {Ask}{Network} and {AskNetwork} never collide.
+    let h3 = i32_xor(h2, 0) * 16777619
+    world_tag_hash_names(names, i + 1, h3)
+  }
+}
+
+fn world_tag_hash_bytes(s, i, n, h) = {
+  if i >= n { h }
+  else {
+    let mixed = i32_xor(h, byte_at(s, i)) * 16777619
+    world_tag_hash_bytes(s, i + 1, n, mixed)
+  }
 }
 
 /// Lower a ResumeExpr's value + state updates with SNAPSHOT semantics:

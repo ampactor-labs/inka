@@ -129,8 +129,9 @@ Mentl uses Hindley-Milner type inference. **You do not need to annotate base typ
 **Rule:** Parameter type annotations are strictly reserved for **Intent Boundaries**. Use them to explicitly declare:
 1. **Refinement Types** (e.g., `pos: ValidOffset`, `span: ValidSpan`) which encode predicates that `Verify` must discharge.
 2. **Ownership Markers** (e.g., `ast: own Node`, `env: ref Env`) which enforce linearity and aliasing.
+3. **Representation Pins** (e.g., `s: f32`, `coeff: f64`) which PIN a width the gradient would otherwise infer — the representation peer of the ownership marker (§"Type aliases", representation-pinned alias). `s: f32` is the bare-width form of `s: Float repr f32`.
 
-Do not write `fn name(a: Int)` when the graph can infer it. Do write `fn name(pos: ValidOffset)` to erect a graph-backed semantic contract.
+Do not write `fn name(a: Int)` when the graph can infer it. Do write `fn name(pos: ValidOffset)` to erect a graph-backed semantic contract — and `fn name(s: f32)` only when a narrower-than-inferred width is the control decision.
 
 ### Redundant braces — braces wrapping a non-BlockExpr
 
@@ -407,7 +408,14 @@ input
 
 **Type rule:** if `input: T` and branches are `(T -> A, T -> B, T -> C)`, the result is `(A, B, C)`. Row is union of all branch rows + upstream row.
 
-**Ownership:** input is shared (borrowed) — and this ownership *is* the discriminator. `own` values cannot flow through `<|` (`E_OwnershipViolation`); a branch that must consume its input independently is `><`, the own-consuming surface of the *same* parallel-fanout topology (see §`><`).
+**Ownership:** input is shared (borrowed, `ref` / `!Mutate`) across all N branches
+(use-count N → borrowed) — and this ownership *is* the discriminator. `own` values
+cannot flow through `<|` (`E_OwnershipViolation` — a coherent authored glyph the
+formatter never silently rewrites; it teaches the violation); a branch that must
+consume its input independently is `><`, the own-consuming surface of the *same*
+parallel-fanout topology (see §`><`). The read-only borrow is what makes
+execution-as-a-handler PROVABLY race-free: a shared value borrowed read-only is
+safe across threads.
 
 ### `><` — parallel compose (structural N-ary)
 
@@ -415,16 +423,38 @@ input
 
 **`<|` and `><` are two surfaces of ONE parallel-fanout topology, discriminated by
 input OWNERSHIP (arm 5)** — not two different shapes. `<|` ref-borrows ONE shared
-input across N branches; `><` own-consumes N independent inputs. Both fan out and
-tuple the results; the share-vs-consume reading is inferred from the branch input
-types (the same use-count inference that drives `own`/`ref`). Two glyphs, one
-topology read through ownership — never two topological primitives.
+input across N branches (use-count N → borrowed); `><` own-consumes N independent
+inputs (each use-count 1 → consumed). Both fan out and tuple the results; the
+share-vs-distribute reading is inferred from the branch input use-count (the same
+inference that drives `own`/`ref`). Two glyphs, one topology read through
+ownership — never two topological primitives.
 
-**Independence is the topology; concurrent EXECUTION is a handler choice.** `><`
-declares the branches independent; whether they run on parallel threads or are
-sequentialized is decided by installing a `Thread` handler in the enclosing `~>`
-chain — exactly as persistence is a handler swap (`PLAN.md §4④`). The verb stays
-pure topology; the cursor reads the execution strategy from the handler stack.
+**THE KERNEL MERGES THEM TO ONE NODE.** At the substrate there is one `PFanout`
+node carrying an arity + an ownership aspect — the duplicate `PDiverge`/`PCompose`
+nodes and their parallel infer/lower paths collapse into it (Carried-Truth: the
+share-vs-distribute fact is read from use-count, never re-derived as a second node
+kind). **The surface keeps BOTH glyphs authored** as intent, with ownership
+CHECKING coherence, never silently overwriting: an `own` value through `<|` is
+`E_OwnershipViolation` (teach the violation); a genuinely-shared input under `><`
+fmt-canonicalizes to `<|` (the formatter fixes *incoherent* source) — but a
+coherent authored glyph is never silently rewritten. The author writes the shape
+they mean; ownership keeps it honest.
+
+**Independence is the topology; concurrent EXECUTION is a `~>` handler choice.**
+`><` declares the branches independent; whether they run sequential / threaded /
+SIMD-lane-packed / on a device is decided by a `Schedule` handler installed in the
+enclosing `~>` chain — `type Strategy = Seq | Thread | Simd | Gpu` (an ADT, never
+a `mode == 0/1/2` int). The verb stays PURE TOPOLOGY contributing zero effects; the
+cursor reads the strategy from the live handler stack (the same `resolve_in_stack`
+every `perform` uses), exactly as persistence is a handler swap (`PLAN.md §4④`).
+**No `Schedule` installed → `Seq`** — inline-eval in source order, deterministic
+and debuggable, the invisible default. `~> Thread` runs the branches on parallel
+threads; `~> Simd` cashes a `[f32; 4]` branch tuple to a v128 lane (the
+representation gradient and the topology axis composing in ONE read). Because `<|`
+borrows read-only and `><` shares nothing, the schedule is PROVABLY race-free; a
+real-time region can declare `with !Thread` and the medium PROVES, transitively,
+that no spawn occurs (provable like `!Alloc` — Rayon/Faust cannot state this).
+`mentl where` badges the chosen strategy: `>< [Thread ×4]`, output not input.
 
 **`><` is a structural N-ary construct the formatter renders in one of two layouts** (a presentation choice, never a parse distinction — there are no semantic "forms," only render shapes):
 
@@ -515,6 +545,16 @@ own line at left-edge indent); a single-stage body renders inline.
 Same node, same scope, either way.
 
 **Type rule:** `row(expr ~> h) = row(expr) - handled(h) + row(h)`. The handler subtracts what it absorbs; anything its arms perform is added.
+
+**`~>` governs the topology to its left — including a `><` / `<|` fanout.** Because
+`~>` is the loosest operator, a `Schedule` handler at the foot of a chain governs
+every fanout in the body: `(a |> f) >< (b |> g) ~> Thread` runs both branches
+threaded; the branch bodies do not change (there is no second version to keep in
+sync). The fanout verb stays pure topology; the cursor reads the execution
+strategy LIVE from this install edge (§`><`) — adding `~> Thread`, swapping it for
+`~> Simd`, or installing `~> persist(...)` over a multi-shot branch is the entire
+diff between sequential, parallel, lane-packed, and crash-surviving. The schedule
+is a fact in the `~>` edge, never baked into the verb.
 
 ### `<~` — feedback (cycle closure)
 
@@ -734,6 +774,39 @@ type Sample = Float where -1.0 <= self <= 1.0
 ```
 
 Creates `TRefined(TAlias("X", Y), pred)`. The alias names the type; the refinement narrows it via predicate. Verify discharges the predicate at construction sites.
+
+**Representation-pinned alias** — `type X = Y repr <width>` (optionally `where pred`).
+
+```
+type Cents     = Int repr i64 where self >= 0
+type Coeff     = Float repr f64
+type LaneGain  = Float repr f32
+type Pixels    = Int repr v128            // four packed lanes
+```
+
+`repr <width>` is a **gradient INPUT — a PIN, not a constructor** (the peer of
+`own`/`ref` at the representation altitude; it surfaces primitive #7). The gradient
+INFERS a value's representation from its type and use (`Word` is the i32 FLOOR;
+`i64`/`f64`/`f32`/`v128` are cash-outs the gradient reaches on its own — a `0.5`
+literal is native unboxed f64 with no annotation). `repr` only PINS one when asking
+for a specific width is a control decision — wider precision (`i64` so money never
+loses a cent — the refinement then PROVES it), a hardware lane (`f32`/`v128` for a
+bandwidth-bound DSP stage), never a default the developer must type. The pin is a
+field of the alias node read at lower (`repr_of(lookup_ty(h))` → `RI32 | RI64 |
+RF64 | RF32 | RV128`, an ADT — `repr_width` is 4/8/16 by match, never `==4`), so
+`type Coeff = Float repr f64` makes every `Coeff` field a full-precision `f64.*`
+slot. The record POINTER stays a word (a handle IS a word) — handle-uniformity and
+memcpy-serializability are invariant under the pin.
+
+`mentl where` projects the chosen width as a derived badge — `s : Float @ f32
+(pinned)` when authored, `c : Float @ f64 (inferred)` when the gradient reached it
+— output, never input. A pin that names the width the gradient would already infer
+is `W_RedundantRepr` (drop it; the gradient reaches it anyway). A pin equal to the
+floor on an integral type is likewise vacuous. **The same `repr` pin is a
+parameter annotation** (the Intent-Boundary peer of `own`/`ref` — §"The Intent
+Boundary Rule"): `fn gain(s: f32, k: f32) = s * k` pins the bare-width form (`f32`
+≡ `Float repr f32` at the parameter altitude); the gradient infers every unpinned
+parameter's representation from use.
 
 **Nominal record** — `type X = {f1: T1, f2: T2, ...}`.
 

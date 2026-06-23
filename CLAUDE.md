@@ -182,7 +182,7 @@
 | 4 | **Row?** What `+ - & ! Pure` gates this? | Boolean row |
 | 5 | **Ownership?** `own`/`ref` or `Consume`/`!Alloc`/`!Mutate`? | Ownership |
 | 6 | **Refinement?** Predicate or `Verify` bounds this? | Refinement |
-| 7 | **Gradient?** Annotation unlocks compile-time capability? | Gradient |
+| 7 | **Gradient?** Annotation INPUT unlocks capability (e.g. `repr` width)? | Gradient |
 | 8 | **Reason?** What Reason edge for the Why Engine? | HM + Reasons |
 
 ### The nine drift modes (the syntactic tells of the Carried-Truth Law violated)

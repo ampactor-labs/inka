@@ -368,10 +368,94 @@ ultimate form?"; the disposable seed's weaker inference catches up afterward
    e-graph (effect-aware equality saturation, live in lower). Each a move
    *within* the medium.
 
+### §5.U · The value layer — four projections of one cursor on one heap record
+
+*Verified by a 21-agent adversarial workflow; the inevitable form, not a choice.*
+
+**The four deepest value-layer axes are NOT four features — they are ONE cursor
+reading ONE heap record at four altitudes, joined at one emit-time read:
+`match lookup_ty(h)`.** That read already exists — `emit_binop_for`
+(`backends/wasm.mn`) dispatches `++`/`==` on `lookup_ty(left)` ("the proof
+becomes the dispatch"); the AST-in-graph fabric put the handle on every node, and
+lower threads it on every LowExpr. There is no second mechanism to build — only a
+**refusal-to-read at four slots, deleted**. The shared record is PLAN §6's
+`[fn_ptr@0][nstate@4][state@8..][arms][captured_evs]` — *handler = state =
+closure = evidence = continuation*, now extended: **= branch-thunk = fold-target =
+representation-host**, ONE contiguous handle-addressed shape:
+
+- **REPRESENTATION GRADIENT (the field widths).** `repr_of(lookup_ty(h))` projects
+  `Repr = RI32 | RI64 | RF64 | RF32 | RV128` (an ADT; `repr_width` 4/8/16 by match,
+  never `==4`). i32 is the floor; i64/f64/f32/v128 are gradient cash-outs. The
+  record POINTER stays a word (a handle IS a word) — handle-uniformity and
+  memcpy-serializability survive while fields gain real precision. Today `3.14`
+  silently emits `(i32.const 0)` (the developer's value becomes ZERO); the gradient
+  makes it native unboxed f64 — no NaN-tax, no box, no tag, and the boxed-float
+  peer (OCaml's alloc-per-op disease, fatal to DSP) is unsayable.
+- **MULTI-SHOT CONTINUATION (the same record FROZEN at a resume site, TIME
+  altitude).** `LMakeContinuation` is dimensionally `LMakeClosure + state_index +
+  ret_slot` — emittable today, **constructed nowhere**; lower fabricates OneShot.
+  Read the op's cardinality LIVE: OneShot → `LReturn` (byte-identical, ~85%);
+  MultiShot → the dormant continuation record. Because it is one contiguous
+  handle-addressed record in the monotonic bump image, **persist = `memcpy`** —
+  durable execution falls out of the memory model, zero serializer. The
+  write-only `resume_kinds` side-ledger (zero readers) is the textbook
+  Carried-Truth violation; the cardinality rides the TCont.
+- **PARALLEL TOPOLOGY (the same record FORKED as N branch thunks, SPACE
+  altitude).** The thunk is portable across a thread boundary, packable into a
+  v128 lane (the gradient's vector cash-out), shippable to a device, or persisted
+  mid-flight (a crashed branch re-runs from its memcpy'd thunk — SPACE and TIME
+  are the same arm, §4④). The verb is PURE TOPOLOGY contributing zero effects
+  (delete the hardwired `Thread` injection); a `~> Schedule` handler reads the
+  live handler stack to pick `Seq | Thread | Simd | Gpu` (an ADT, never an int).
+- **STRUCTURAL FOLD (the record's TYPE-node recursed by SHAPE, the read itself).**
+  `==`/compare/hash/show/pack/unpack are one `fold(ty, leaf)` over the five
+  node-kinds; the word-leaf reads the gradient (`f64.eq` for an f64 field), the
+  function-leaf serializes a continuation by memcpy. Retire the three hand-copies
+  (the `emit_struct_eq` product/sum floor, the `lower_to_string` fall-through, the
+  cache pack/unpack walk) into one projection — LESS code. Every type, the instant
+  it exists, HAS total `==`/`<`/hash/show/pack; the eq/hash-divergence footgun is
+  structurally unsayable.
+
+**THE BINDING KEYSTONE — `TCont(Ty, ResumeDiscipline, EffRow)`.** Today TCont is
+two-arg and unify DROPS the discipline. Carrying the **effect-WORLD** on the
+continuation lifts `!E` to TIME (the modal frontier §4③ lands HERE): a persisted
+`k` resumed under a changed handler-set is `E_ResumeWorldMismatch` — a
+compile-time error, not a 3am production corruption. ONE arity change (the
+coordinated edit across ~14 destructure sites — a representation change, not a
+patch, per the unpatchability theorem) closes the multi-shot Law-7 gap AND types
+the fold's hardest leaf. One edge, two arms.
+
+**The six-step build arc** (each a Carried-Truth deletion the artifact already
+names): **(0)** `repr_of(Ty) -> Repr` — the shared read, built once. **(1)** the
+representation gradient — delete the arity-keyed i32 deciders, read the handle;
+the `$ft`-table keys on the interned Repr-vector (a function type is a product;
+`call_indirect`'s match IS structural-equality, so the arity-`$ftN` fork
+dissolves). **(2)** the structural fold — three hand-walks → one
+`fold(leaf, ty)`; lowest-risk, no arity ripple. **(3)** the multi-shot producer —
+the additive half (OneShot byte-identical). **(4)** the parallel-topology collapse
+— `PDiverge | PCompose` → one `PFanout` (share-vs-distribute an ownership aspect
+read from use-count; Carried-Truth at the node layer). **(5)** the `TCont` arity —
+the one coordinated breaking edit, the seed mirrored in lockstep (NOT a
+census-shadow follow-up).
+
+**The inevitability.** The four cannot be separated without re-introducing the
+bug: you cannot reify a continuation without the gradient (its fields need real
+widths or the persisted f64 state corrupts); you cannot persist a thunk without
+the unified record (no other serializer to write); you cannot type the fold's
+function-leaf without TCont's world; you cannot schedule a fanout without the
+record's portability (thunk = closure = continuation). The medium's own comments
+name every fix — `infer.mn:1122` names the Thread-drift peer; `infer.mn:2714`
+comments "attach to TCont"; `wasm.mn:2079` names the `$ftN` blocker but surrenders
+to heap-boxing; `emit_struct_eq` refuses product/sum at a loud floor. This is
+`!Outside` at the value layer: a better representation is a deeper `repr_of` arm;
+a better schedule is a different `~>` handler; a sixth structural operation is
+another leaf; stronger persistence is a different `Persist` catcher. Every lever
+is already a move INSIDE the medium.
+
 Write the ultimate form in FULL — all three aspects at once. A leap that advances
-*unsurpassable* (the e-graph) before the seed can self-host is NOT premature: the
-seed catches up, and the census it raises is a SHADOW (§8), never a reason to
-hedge the wheel against the seed (the one named drift, §9.6).
+*unsurpassable* (the e-graph, the value layer) before the seed can self-host is
+NOT premature: the seed catches up, and the census it raises is a SHADOW (§8),
+never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 ---
 
@@ -432,6 +516,20 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > is a SHADOW it reports (the seed lagging the wheel), never enforced. Prose
 > drifts; artifacts do not. On a runtime bug the first move is a PROBE.
 
+- **THE CURSOR — the value layer (2026-06-23, design VERIFIED, six-step build in
+  progress).** The four deep value-layer axes — representation gradient,
+  multi-shot continuation reification, parallel-topology execution, total
+  structural fold — are FOUR PROJECTIONS OF ONE CURSOR ON ONE HEAP RECORD joined
+  at `match lookup_ty(h)` (full design + arc: §5.U). Verified by a 21-agent
+  adversarial workflow; each step a Carried-Truth deletion the artifact already
+  names (`infer.mn:1122` Thread-drift peer; `infer.mn:2714` "attach to TCont";
+  `wasm.mn:2079` `$ftN` blocker; `emit_struct_eq` product/sum floor). The
+  binding keystone is `TCont(Ty, ResumeDiscipline, EffRow)` — the effect-WORLD on
+  the continuation (`!E` lifted to TIME; the modal frontier §4③ landing here). The
+  docs (SYNTAX §Type aliases `repr` pin, §`<|`/`><` the Schedule handler + the
+  `PFanout` kernel-merge) LEAD; the build implements against them. LAW 7: the
+  existing i32 / OneShot / sequential paths stay BYTE-IDENTICAL — the new forms
+  (f64 / multishot / fanout) are ADDED arms.
 - **THE CURSOR — the ultimate-form arc (2026-06-22, all landed + pushed):**
   SYNTAX.md to ultimate form; PExpr dissolved into live operand nodes; the whole
   AST in the one graph (the fabric — `mint_node` edge-links every node's body at

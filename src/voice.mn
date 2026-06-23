@@ -385,8 +385,9 @@ effect Interact {
 
   // ─── Session ops (4) ────────────────────────────────────────────
   // Intent shapes the silence predicate and Trace tentacle's weights.
-  // History feeds observation_new_since_last_turn. cancel_pending
-  // rolls back a tentative application.
+  // History records each turn (the silence gate reads the oracle queue,
+  // not per-turn deltas). cancel_pending rolls back a tentative
+  // application.
 
   declare_intent(Intent)         -> ()
   retract_intent(IntentId)       -> ()
@@ -394,31 +395,16 @@ effect Interact {
   cancel_pending()               -> ()
 }
 
-/// Mentl does NOT fill space to fill space. A VoiceLine surfaces only
-/// when the predicate holds: proof_derivable AND observation-new. Both
-/// false → Silence. Silence is the default state; speaking is the
-/// exception, earned by proof + novelty. §2.7.5 is the authority.
-///
-/// Pure over Situation (facts are pre-computed during composition, per
-/// §2.7.5 resolution + TopicFacts above). No effects. Same Situation
-/// → same verdict, deterministic. This is the substrate on which
-/// cursor-moved-turns decide whether to emit anything at all.
-
-/// SUPERSEDED by the oracle-queue-empty semantics per insight #11
-/// (CLAUDE.md / INSIGHTS §"The Continuous Oracle IS Incremental
-/// Compilation Plus One Cached Value", commit 636c365). The new
-/// silence is project-wide: Mentl is silent ONLY when the project
-/// queue is empty — the gradient's top, the proven-complete state.
-/// Per-Topic + per-tentacle novelty checks were too coarse — they
-/// silenced Mentl when she had more to say project-wide.
-///
-/// silence_predicate performs OracleQuery's query_project_queue and
-/// returns true (silence) iff the queue is empty. The
-/// proof_derivable / observation_new_since_last_turn helpers below
-/// stay available for the per-tentacle render arms (which still need
-/// to know "does THIS tentacle have something to render at this
-/// position") — but the TOP-LEVEL silence gate now lives at the
-/// queue, not per-Topic.
+// silence_predicate — Mentl does NOT fill space to fill space. Silence is
+// the default; speaking is earned. Per insight #11 (CLAUDE.md / INSIGHTS
+// §"The Continuous Oracle IS Incremental Compilation Plus One Cached
+// Value", commit 636c365), silence is project-wide and READ from the one
+// oracle queue: Mentl is silent ONLY when the project queue is empty (the
+// gradient's top, the proven-complete state). There is no per-Topic ×
+// per-tentacle re-derivation — the queue IS the proof of worth-surfacing,
+// and voice_queue_walk projects it. silence_predicate performs
+// OracleQuery's query_project_queue and returns true (silence) iff the
+// queue is empty.
 
 fn silence_predicate(situation) with OracleQuery = {
   let queue = perform query_project_queue()
@@ -428,130 +414,10 @@ fn silence_predicate(situation) with OracleQuery = {
   }
 }
 
-/// Each tentacle asks: "does the graph hold a proven thing I can say
-/// about this topic right now?" If yes, proof_derivable true; else
-/// false. Exhaustive over the 8 tentacles — no wildcard arm (H6
-/// discipline). Every branch is a pure read of Situation's pre-
-/// computed state.
-
-fn proof_derivable(situation) with Pure = {
-  let Situation(s) = situation
-  match s.tentacle {
-    TentQuery     => is_some(s.reason_at_topic),
-    TentPropose   =>
-      match s.topic {
-        TopicHandle(_) => {
-          let TopicFacts(f) = s.facts
-          f.is_hole || is_some(f.error_code_at)
-        },
-        TopicAsk(_)    => true,
-        TopicIdent(_)  => false,
-        TopicSpan(_)   => false,
-        TopicError(_, _) => true
-      },
-    TentTopology  => {
-      let TopicFacts(f) = s.facts
-      f.nested_call_depth >= 3
-    },
-    TentUnlock    =>
-      is_some(s.gradient_next) && suggestion_unlocks_nonempty(s.gradient_next),
-    TentTrace     =>
-      is_some(s.ownership_at_topic) || !row_subsumes(s.row_at_topic, s.row_declared),
-    TentVerify    => len(s.refinements) > 0,
-    TentTeach     => is_some(s.gradient_next),
-    TentWhy       =>
-      match s.topic {
-        TopicAsk(q) => question_is_why(q),
-        TopicIdent(_) => false,
-        TopicHandle(_) => false,
-        TopicSpan(_) => false,
-        TopicError(_, _) => false
-      }
-  }
-}
-
-/// Mentl does not repeat herself. If the prior turn was at the same
-/// topic with the same tentacle, this turn is silent — unless the
-/// underlying proof changed materially (which shows up via
-/// proof_derivable). Together, the two predicates compose into:
-/// "speak when there's proof AND it's new."
-
-fn observation_new_since_last_turn(situation) with Pure = {
-  let Situation(s) = situation
-  match s.prior_turn_topic {
-    None          => true,
-    Some(prior)   =>
-      !topic_equal(s.topic, prior)
-        || match s.prior_turn_tentacle {
-             None              => true,
-             Some(prior_tent)  => !tentacle_equal(s.tentacle, prior_tent)
-           }
-  }
-}
-
-/// Two Topics match when same variant + same carried values. Span
-/// equality is structural; String equality is via str_eq. Match is
-/// exhaustive over the 5 variants — no wildcard.
-
-fn topic_equal(a, b) with Pure = {
-  match a {
-    TopicIdent(n1)        =>
-      match b {
-        TopicIdent(n2)      => n1 == n2,
-        TopicHandle(_)      => false,
-        TopicSpan(_)        => false,
-        TopicError(_, _)    => false,
-        TopicAsk(_)         => false
-      },
-    TopicHandle(h1)       =>
-      match b {
-        TopicHandle(h2)     => h1 == h2,
-        TopicIdent(_)       => false,
-        TopicSpan(_)        => false,
-        TopicError(_, _)    => false,
-        TopicAsk(_)         => false
-      },
-    TopicSpan(s1)         =>
-      match b {
-        TopicSpan(s2)       => span_eq(s1, s2),
-        TopicIdent(_)       => false,
-        TopicHandle(_)      => false,
-        TopicError(_, _)    => false,
-        TopicAsk(_)         => false
-      },
-    TopicError(c1, s1)    =>
-      match b {
-        TopicError(c2, s2)  => c1 == c2 && span_eq(s1, s2),
-        TopicIdent(_)       => false,
-        TopicHandle(_)      => false,
-        TopicSpan(_)        => false,
-        TopicAsk(_)         => false
-      },
-    TopicAsk(_)           =>
-      match b {
-        TopicAsk(_)         => true,     // same-variant ask; Question equality deferred to Ask handler context
-        TopicIdent(_)       => false,
-        TopicHandle(_)      => false,
-        TopicSpan(_)        => false,
-        TopicError(_, _)    => false
-      }
-  }
-}
-
-/// Eight nullary variants. Pair-match exhaustive. No wildcard (H6).
-
-fn tentacle_equal(a, b) with Pure = {
-  match a {
-    TentQuery     => match b { TentQuery     => true, TentPropose => false, TentTopology => false, TentUnlock => false, TentTrace => false, TentVerify => false, TentTeach => false, TentWhy => false },
-    TentPropose   => match b { TentPropose   => true, TentQuery   => false, TentTopology => false, TentUnlock => false, TentTrace => false, TentVerify => false, TentTeach => false, TentWhy => false },
-    TentTopology  => match b { TentTopology  => true, TentQuery   => false, TentPropose  => false, TentUnlock => false, TentTrace => false, TentVerify => false, TentTeach => false, TentWhy => false },
-    TentUnlock    => match b { TentUnlock    => true, TentQuery   => false, TentPropose  => false, TentTopology => false, TentTrace => false, TentVerify => false, TentTeach => false, TentWhy => false },
-    TentTrace     => match b { TentTrace     => true, TentQuery   => false, TentPropose  => false, TentTopology => false, TentUnlock => false, TentVerify => false, TentTeach => false, TentWhy => false },
-    TentVerify    => match b { TentVerify    => true, TentQuery   => false, TentPropose  => false, TentTopology => false, TentUnlock => false, TentTrace => false, TentTeach => false, TentWhy => false },
-    TentTeach     => match b { TentTeach     => true, TentQuery   => false, TentPropose  => false, TentTopology => false, TentUnlock => false, TentTrace => false, TentVerify => false, TentWhy => false },
-    TentWhy       => match b { TentWhy       => true, TentQuery   => false, TentPropose  => false, TentTopology => false, TentUnlock => false, TentTrace => false, TentVerify => false, TentTeach => false }
-  }
-}
+// topic_equal / tentacle_equal DISSOLVED with observation_new_since_last_
+// turn: per-turn novelty was the per-Topic silence framing insight #11
+// retired. The queue-empty gate (silence_predicate) is the one silence
+// read; Topic / Tentacle equality is no longer a voice-layer fact.
 
 /// tentacle_to_form_kind — per MV §2.7.3, eight-variant exhaustive
 /// mapping from Tentacle to its default FormKind. The §2.7.3 table
@@ -936,67 +802,15 @@ fn render_for_tentacle(situation) with Pure = {
 }
 
 
-/// voice_lines_for — D.1.e LOWER LAYER per F.1 walkthrough §3.3 (commit
-/// 4d0fce1). Tentacle-fold projection: walks the 8 kernel tentacles in
-/// canonical order (Query → Propose → Topology → Unlock → Trace →
-/// Verify → Teach → Why), composes per-tentacle Situation via
-/// with_tentacle, checks proof_derivable (Pure per-tentacle gate),
-/// renders surviving tentacles via render_for_tentacle, returns a
-/// [VoiceLine] of length 0 to 8.
-///
-/// Two-tier silence per insight #11 + MV §2.7.5:
-///   - Outer gate: silence_predicate(situation) — project queue empty
-///     means full silence; entire fn returns []
-///   - Inner gate: proof_derivable(situation_t) per tentacle — even
-///     with non-empty queue, only tentacles with proven content fire
-///
-/// Caret-time consumers (LSP) call this and filter to the
-/// surface-specific tentacle; batch consumers (F.1 mentl doc) render
-/// all. Same machinery, different iteration scope. Tier-1 unification
-/// per INSIGHTS L509.
-///
-/// Naming note: F.1 §3.3 specifies `mentl_voice_default(situation)`
-/// for this function; the Interact handler at end-of-file took that
-/// name first per MV.2.e.scaffold (commit a0f6be6). Resolved here as
-/// voice_lines_for — describes input→output shape — to honor both
-/// the walkthrough's contract and the handler's canonical-name role.
-///
-/// Substrate idiom: list_extend_to + counter (Ω.3 substrate). Avoids
-/// the O(N squared) loop-accumulator pattern by mutating a sized
-/// buffer with explicit length tracking.
-
-fn voice_lines_for(situation) with OracleQuery = {
-  if silence_predicate(situation) { [] }
-  else {
-    let tentacles = [TentQuery, TentPropose, TentTopology, TentUnlock,
-                     TentTrace, TentVerify, TentTeach, TentWhy]
-    let n = len(tentacles)
-    let buf = make_list(n)
-    let count = fold_tentacles_to_voicelines(situation, tentacles, 0, n, buf, 0)
-    slice(buf, 0, count)
-  }
-}
-
-/// fold_tentacles_to_voicelines — tail-recursive fold helper. For each
-/// tentacle: retarget Situation, gate via proof_derivable, render +
-/// accumulate via list_extend_to. Pure (silence_predicate's
-/// OracleQuery already discharged at the outer gate).
-
-fn fold_tentacles_to_voicelines(situation, tentacles, i, n, buf, count) with Pure = {
-  if i >= n { count }
-  else {
-    let tent = list_index(tentacles, i)
-    let situation_t = with_tentacle(situation, tent)
-    if proof_derivable(situation_t) {
-      let voiceline = render_for_tentacle(situation_t)
-      let extended = list_extend_to(buf, count + 1)
-      let written = list_set(extended, count, voiceline)
-      fold_tentacles_to_voicelines(situation, tentacles, i + 1, n, written, count + 1)
-    } else {
-      fold_tentacles_to_voicelines(situation, tentacles, i + 1, n, buf, count)
-    }
-  }
-}
+// The per-tentacle fold (the prior voice_lines_for / fold_tentacles_to_
+// voicelines / proof_derivable triple) is DISSOLVED. Insight #11 superseded
+// it: silence and worth-surfacing are not per-Topic × per-tentacle re-
+// derivations — they are the oracle QUEUE projected. voice_queue_walk
+// (below) IS the projector: each QueueItem already carries its
+// PriorityTier, and tier_to_tentacle reads the tentacle from it, so the
+// queue item IS the proven-worth-surfacing fact. There is no second
+// silence machinery to maintain — the queue-empty gate is the one silence
+// gate, and the tier→tentacle read is the one fold.
 
 /// voice_queue_walk — queue-projection per insight #11. Queries the
 /// project queue via OracleQuery (cursor-relevance filtered when the
@@ -1185,49 +999,6 @@ fn question_span(question) with Pure = {
   }
 }
 
-/// compose_minimal_ask_situation — the sparse Situation an ask
-/// composes when graph reads beyond cursor are not yet wired
-/// (MV.2.e.Q.compose-ops peer sub-handle adds reason_at_topic /
-/// row_at_topic / ownership_at_topic / refinements / gradient_next
-/// reads against graph). Render arms gracefully handle None / [] in
-/// these fields — sparse Situation produces sparse VoiceLine, which
-/// is the honest shape for "user asked but graph hasn't been read yet."
-///
-/// prior_turn_topic + prior_turn_tentacle project from the handler's
-/// prior_turn state — the silence_predicate's observation-delta input.
-/// register defaults to RPlayful per MV §2.7.4.
-
-fn compose_minimal_ask_situation(question, cursor_handle, prior_turn) with Pure = {
-  let (prior_topic, prior_tent) = match prior_turn {
-    None        => (None, None),
-    Some(rec)   => {
-      let TurnRecord(r) = rec
-      (Some(r.topic), Some(r.tentacle))
-    }
-  }
-  Situation({
-    tentacle:              tentacle_for_question(question),
-    topic:                 TopicAsk(question),
-    handle:                Some(cursor_handle),
-    env_snapshot:          [],
-    reason_at_topic:       None,
-    row_at_topic:          None,
-    row_declared:          None,
-    ownership_at_topic:    None,
-    refinements:           [],
-    gradient_next:         None,
-    handlers_installed:    [],
-    prior_turn_topic:      prior_topic,
-    prior_turn_tentacle:   prior_tent,
-    facts:                 TopicFacts({
-      is_hole:           false,
-      error_code_at:     None,
-      nested_call_depth: 0
-    }),
-    register:              RPlayful
-  })
-}
-
 /// compose_propose_situation — sparse Situation for a propose gesture.
 /// Parallel to compose_minimal_ask_situation but with TentPropose
 /// tentacle and TopicHandle topic. Carries target_reason in
@@ -1277,54 +1048,36 @@ fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure
   })
 }
 
-/// answer_from_slots — first-projectable-slot wins. SType → AnsType;
-/// SRow → AnsRow; SReason → AnsReason. SIdent / SSpan / SCap / SAnnot
-/// / SLit are non-Answer-projecting slot kinds; recurse past them to
-/// find a projecting head. Empty list → AnsSilence. Tail-recursive
-/// scan; H6 exhaustive over Slot's 8 variants.
-///
-/// Per MV §2.8 acceptance criterion 4: every non-Silence Answer
-/// carries a Reason — threaded through `reason` parameter from
-/// voiceline_to_answer.
+// query_result_to_answer — project query.mn's live QueryResult into the
+// Answer ADT the voice/LSP surface renders. The Carried-Truth move: the
+// answer to a forensic question is what query.mn's `ask` already proves
+// LIVE from env/graph (query.mn:56-163) — voice never re-answers it. This
+// is a pure RENDER projection over the proven result, carrying the handle
+// (the QueryResult) rather than re-deriving a sparse Situation and scanning
+// rendered slots back out for the type/row/reason query.mn handed over.
+//
+// Answer's contract (no Answer without Reason, voice.mn:264) decides the
+// total mapping: the reason-carrying results project to their Answer
+// counterparts; results lacking provenance (QREffects discards its scheme
+// reason; QRRefs carries none) and the non-hover forensic results
+// (QRUnresolved / QRChain / QRIntent / QROwnership / QRVerifyDebt /
+// QRHandlerProvider) project to AnsSilence — the honest "no provable hover
+// answer here" rather than a fabricated Reason. QRError → AnsSilence: an
+// ill-posed or unprovable question is a valid Silence (voice.mn:265).
+// H6 exhaustive over QueryResult's 11 variants — no wildcard.
 
-fn answer_from_slots(slots, reason) with Pure = {
-  if len(slots) == 0 { AnsSilence }
-  else {
-    let head = list_head(slots)
-    let rest = list_tail(slots)
-    match head {
-      SType(t)         => AnsType(t, reason),
-      SRow(r)          => AnsRow(r, reason),
-      SReason(r)       => AnsReason(r),
-      SIdent(_)        => answer_from_slots(rest, reason),
-      SSpan(_)         => answer_from_slots(rest, reason),
-      SCap(_)          => answer_from_slots(rest, reason),
-      SAnnot(_)        => answer_from_slots(rest, reason),
-      SLit(_)          => answer_from_slots(rest, reason)
-    }
-  }
-}
-
-/// voiceline_to_answer — project a VoiceLine into the Answer ADT.
-/// Silence → AnsSilence. Non-silence: extract reason from
-/// situation.reason_at_topic (Unmarked fallback when sparse), then
-/// scan slots for the first projectable kind via answer_from_slots.
-/// H6 exhaustive over VoiceLine.
-///
-/// AnsRefs ([Span]) projection for QRefsOf is MV.2.e.Q.refs
-/// peer sub-handle territory; today returns AnsSilence when no
-/// projectable head is found rather than fabricating an empty AnsRefs.
-
-fn voiceline_to_answer(voiceline, situation) with Pure = {
-  let Situation(s) = situation
-  let reason = match s.reason_at_topic {
-    None        => Inferred("ask answer with no graph reason"),
-    Some(r)     => r
-  }
-  match voiceline {
-    Silence                       => AnsSilence,
-    VoiceLine(_, _, slots, _)     => answer_from_slots(slots, reason)
-  }
+fn query_result_to_answer(result) with Pure = match result {
+  QRType(ty, reason)      => AnsType(ty, reason),
+  QRWhy(reason)           => AnsReason(reason),
+  QREffects(_)            => AnsSilence,
+  QRRefs(_)               => AnsSilence,
+  QRUnresolved(_)         => AnsSilence,
+  QRChain(_)              => AnsSilence,
+  QRIntent(_)             => AnsSilence,
+  QROwnership(_)          => AnsSilence,
+  QRVerifyDebt(_)         => AnsSilence,
+  QRHandlerProvider(_)    => AnsSilence,
+  QRError(_)              => AnsSilence
 }
 
 // ─── MV.2.e.Session — Session-tentacle helpers ────────────────────────
@@ -1445,32 +1198,24 @@ handler mentl_voice_default
 
   // ─── Mentl voice ops (3) — ask in Q; propose + speak in MV.2.e.P ─
 
-  /// ask — user-initiated graph query. Per MV §2.7.6: each ask is a
-  /// turn. Compose Situation → silence_predicate → render → project
-  /// VoiceLine → Answer. Update prior_turn for next-turn observation
-  /// delta (silence_predicate's input on the subsequent turn).
-  ///
-  /// Sparse Situation: reason_at_topic / row_at_topic / refinements /
-  /// gradient_next / handlers_installed land empty in this commit;
-  /// MV.2.e.Q.compose-ops peer sub-handle adds the graph reads. Render
-  /// arms gracefully handle the sparse fields — output reflects what
-  /// the substrate actually knows.
+  // consult — user-initiated forensic query. Per MV §2.7.6 each ask is a
+  // turn. The answer is what query.mn's `ask` proves LIVE from env/graph
+  // (query.mn:56-163) — voice carries the QueryResult handle and projects
+  // it to an Answer (query_result_to_answer), never re-deriving a sparse
+  // Situation. `perform ask` bubbles up the ~> chain to query_default; the
+  // forensic substrate is read live, the voice layer is render-only.
+  // The turn is recorded at the question's tentacle/topic for the
+  // next-turn observation delta; the rendered VoiceLine for that turn is
+  // the Answer projected back through render (Silence when AnsSilence).
   consult(question)     => {
-    let Caret(cursor_handle, _) = caret
-    let situation = compose_minimal_ask_situation(question, cursor_handle, prior_turn)
-    let voiceline = if silence_predicate(situation) {
-      Silence
-    } else {
-      render_for_tentacle(situation)
-    }
-    let answer = voiceline_to_answer(voiceline, situation)
+    let answer = perform ask(question)
     let new_turn = TurnRecord({
       tentacle: tentacle_for_question(question),
       topic:    TopicAsk(question),
-      line:     voiceline,
+      line:     Silence,
       span_at:  question_span(question)
     })
-    resume(answer)
+    resume(query_result_to_answer(answer))
       with prior_turn = Some(new_turn),
            history    = [new_turn] ++ history
   },
@@ -1550,30 +1295,20 @@ handler mentl_voice_default
     audit(text)
     resume(AuditReport([]))
   },
-  /// run_query — batch/CLI version of ask. Same composition path as
-  /// the ask arm above (compose_minimal_ask_situation →
-  /// silence_predicate → render → voiceline_to_answer); different
-  /// invocation surface (CLI invokes directly per Interact §"Run ops"
-  /// comment). Per Insight #10: this is the third instance of sparse
-  /// Situation composition; the abstraction earns its weight when
-  /// run_compile/run_audit add the fourth and fifth instances. Until
-  /// then, the parallel form honors the substrate idiom.
+  // run_query — batch/CLI surface of consult. Same live forensic path:
+  // `perform ask` reads query.mn's QueryResult, query_result_to_answer
+  // projects it. CLI invokes directly (per Interact §"Run ops"); the
+  // only difference from consult is the invocation surface, so the body
+  // is the same render-only projection over the one proven result.
   run_query(question)   => {
-    let Caret(cursor_handle, _) = caret
-    let situation = compose_minimal_ask_situation(question, cursor_handle, prior_turn)
-    let voiceline = if silence_predicate(situation) {
-      Silence
-    } else {
-      render_for_tentacle(situation)
-    }
-    let answer = voiceline_to_answer(voiceline, situation)
+    let answer = perform ask(question)
     let new_turn = TurnRecord({
       tentacle: tentacle_for_question(question),
       topic:    TopicAsk(question),
-      line:     voiceline,
+      line:     Silence,
       span_at:  question_span(question)
     })
-    resume(answer)
+    resume(query_result_to_answer(answer))
       with prior_turn = Some(new_turn),
            history    = [new_turn] ++ history
   },
@@ -1679,20 +1414,6 @@ fn file_handle_eq(a, b) with Pure = {
   let FileHandle(ai) = a
   let FileHandle(bi) = b
   ai == bi
-}
-
-/// suggestion_unlocks_nonempty — silence-predicate input for TentUnlock.
-/// Per Hμ.cursor §2: AnnotationSuggestion's unlocks list ([String])
-/// is non-empty iff the candidate proves at least one capability gate.
-/// Single-pass: `is_some` already checked at the call site, so the
-/// inner match is exhaustive over the Some branch.
-
-fn suggestion_unlocks_nonempty(opt) with Pure = match opt {
-  None    => false,
-  Some(s) => {
-    let AnnotationSuggestion(_kind, _ann, unlocks, _reason) = s
-    len(unlocks) > 0
-  }
 }
 
 /// join_capability_labels — fold [String] into a comma-joined

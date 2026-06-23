@@ -565,6 +565,7 @@ fn walk_lemit_expr(expr) = match expr {
   LBlock(_, stmts)          => walk_lemit_list(stmts),
   LMakeList(_, elems)       => walk_lemit_list(elems),
   LMakeTuple(_, elems)      => walk_lemit_list(elems),
+  LSimdLanes(_, lanes)      => walk_lemit_list(lanes),
   LMakeRecord(_, fs)        => walk_lemit_list(fs),
   LMakeVariant(_, _, fs)    => walk_lemit_list(fs),
   LIndex(_, b, i, _) => {
@@ -852,6 +853,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LBlock(_h, stmts)     => collect_call_vectors_list(stmts, acc),
   LMakeList(_h, es)     => collect_call_vectors_list(es, acc),
   LMakeTuple(_h, es)    => collect_call_vectors_list(es, acc),
+  LSimdLanes(_h, lanes) => collect_call_vectors_list(lanes, acc),
   LMakeRecord(_h, fs)   => collect_call_vectors_list(fs, acc),
   LMakeVariant(_h, _t, fs) => collect_call_vectors_list(fs, acc),
   LIndex(_h, b, i, _)   => collect_call_vectors_expr(i, collect_call_vectors_expr(b, acc)),
@@ -947,6 +949,7 @@ fn max_arity_expr(expr) = match expr {
   LBlock(_, _)              => 0,
   LMakeList(_, _)           => 0,
   LMakeTuple(_, _)          => 0,
+  LSimdLanes(_, _)          => 0,
   LMakeRecord(_, _)         => 0,
   LMakeVariant(_, _, _)     => 0,
   LIndex(_, _, _, _)        => 0,
@@ -1220,6 +1223,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   LBlock(_h, stmts)          => collect_fn_emit_records(stmts),
   LMakeList(_h, elems)       => collect_fn_emit_records(elems),
   LMakeTuple(_h, elems)      => collect_fn_emit_records(elems),
+  LSimdLanes(_h, lanes)      => collect_fn_emit_records(lanes),
   LMakeRecord(_h, fs)        => collect_fn_emit_records(fs),
   LMakeVariant(_h, _t, fs)   => collect_fn_emit_records(fs),
   LIndex(_h, b, i, _)        => collect_fn_emit_records_expr(b)
@@ -1409,6 +1413,16 @@ fn emit_let_locals_expr(expr) = match expr {
       wat_emit(" i32)")
     }
     emit_let_locals_list(elems)
+  },
+  // SIMD lanes need a v128 accumulator local — replace_lane reads-modifies the
+  // running vector. No heap local (the value is pure stack v128, not a pointer).
+  LSimdLanes(h, lanes)      => {
+    if len(lanes) > 0 {
+      wat_emit(" (local $simd_")
+      wat_emit(int_to_str(h))
+      wat_emit(" v128)")
+    }
+    emit_let_locals_list(lanes)
   },
   LMakeRecord(_h, fs)       => emit_let_locals_list(fs),
   LMakeVariant(h, _t, fs)   => {
@@ -1618,6 +1632,7 @@ fn find_local_handle_expr(name, expr) = match expr {
   LBlock(_h, stmts)         => find_local_handle_list(name, stmts),
   LMakeList(_h, elems)      => find_local_handle_list(name, elems),
   LMakeTuple(_h, elems)     => find_local_handle_list(name, elems),
+  LSimdLanes(_h, lanes)     => find_local_handle_list(name, lanes),
   LMakeRecord(_h, fs)       => find_local_handle_list(name, fs),
   LMakeVariant(_h, _t, fs)  => find_local_handle_list(name, fs),
   LIndex(_h, b, i, _)       => {
@@ -2089,6 +2104,8 @@ fn emit_expr(expr) = match expr {
   LMakeList(_h, elems) => emit_list_literal(elems),
 
   LMakeTuple(h, elems) => emit_tuple_literal(h, elems),
+
+  LSimdLanes(h, lanes) => emit_simd_lanes(h, lanes),
 
   LMakeRecord(_h, fields) => {
     // Untagged heap layout: fields at the width-summed offset in declaration
@@ -3195,6 +3212,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LBlock(_h, stmts)      => collect_eq_product_tys_list(stmts, acc),
   LMakeList(_h, es)      => collect_eq_product_tys_list(es, acc),
   LMakeTuple(_h, es)     => collect_eq_product_tys_list(es, acc),
+  LSimdLanes(_h, lanes)  => collect_eq_product_tys_list(lanes, acc),
   LMakeRecord(_h, fs)    => collect_eq_product_tys_list(fs, acc),
   LMakeVariant(_h, _t, fs) => collect_eq_product_tys_list(fs, acc),
   LIndex(_h, b, i, _)    => collect_eq_product_tys_expr(i,
@@ -3711,6 +3729,7 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LBlock(_h, stmts)      => collect_show_tys_list(stmts, acc),
   LMakeList(_h, es)      => collect_show_tys_list(es, acc),
   LMakeTuple(_h, es)     => collect_show_tys_list(es, acc),
+  LSimdLanes(_h, lanes)  => collect_show_tys_list(lanes, acc),
   LMakeRecord(_h, fs)    => collect_show_tys_list(fs, acc),
   LMakeVariant(_h, _t, fs) => collect_show_tys_list(fs, acc),
   LIndex(_h, b, i, _)    => collect_show_tys_expr(i, collect_show_tys_expr(b, acc)),
@@ -4677,3 +4696,41 @@ fn emit_tuple_literal(h, elems) = {
   wat_emit(local_name)
   wat_emit(")\n")
 }
+
+// SIMD lane pack — the `~> Simd` fanout collector (W13). The N branch results
+// (each an f32, the branch's RV128-element repr) become the lanes of one v128:
+// zero the accumulator, then `f32x4.replace_lane i` each branch value into it.
+// The result is one v128 the lane ops (emit_binop_v128: f32x4.add/mul) process
+// four-at-once — the value layer's RV128 repr meeting the `><` parallel verb at
+// the SPACE axis. NOT a heap allocation: a v128 is a stack/register value, so
+// the accumulator is the $simd_<h> v128 local (declared in emit_let_locals).
+fn emit_simd_lanes(h, lanes) = {
+  let local_name = "simd_{int_to_str(h)}"
+  wat_emit("    (local.set $")
+  wat_emit(local_name)
+  wat_emit(" (v128.const f32x4 0 0 0 0))\n")
+  emit_simd_replace_lanes(lanes, 0, local_name)
+  wat_emit("    (local.get $")
+  wat_emit(local_name)
+  wat_emit(")\n")
+}
+
+// Place each branch result into lane i. The wasm SIMD instruction
+// `f32x4.replace_lane i` takes (v128, f32) → v128 with lane i overwritten;
+// reading the running accumulator keeps the prior lanes. Bounded at 4 lanes
+// (the f32x4 width) — a fanout wider than the lane vector overflows the
+// representation, an upstream repr/arity check, never a fabricated wider op.
+fn emit_simd_replace_lanes(lanes, i, local_name) =
+  if len(lanes) == 0 { () }
+  else {
+    wat_emit("    (local.set $")
+    wat_emit(local_name)
+    wat_emit(" (f32x4.replace_lane ")
+    wat_emit(int_to_str(i))
+    wat_emit(" (local.get $")
+    wat_emit(local_name)
+    wat_emit(")\n")
+    emit_expr(list_head(lanes))
+    wat_emit("    ))\n")
+    emit_simd_replace_lanes(list_tail(lanes), i + 1, local_name)
+  }

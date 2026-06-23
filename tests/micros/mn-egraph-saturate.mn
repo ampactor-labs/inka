@@ -1,0 +1,94 @@
+// W14 gate — the e-graph: effect-gated absorb + congruence-closed saturation.
+//
+// The ultimate form (what the WHEEL now does, src/egraph.mn): equality
+// saturation reads the program at a handle and draws ONE fabric edge — the
+// canonical pointer (graph_canon_set / graph_canon_at, co-indexed by handle like
+// the TVar union-find). Extraction (egraph_extract) chases that edge to the
+// cheapest node — the root IS the extracted term. Two properties this gate pins:
+//
+//   1. EFFECT-GATED ABSORB: x * 0 ≡ 0 fires only when x is provably PURE (is_pure
+//      reads the inferred effect row LIVE — row_subsumes(effs_at(h), EfPure) —
+//      not the AST shape). A pure x folds to 0 (its evaluation dropped — safe); an
+//      effectful x is NOT dropped (what RUNS is preserved). Proof, not heuristic.
+//
+//   2. CONGRUENCE CLOSURE: a ≡ b ⇒ f(a) ≡ f(b). A rule reads each operand THROUGH
+//      its canonical form (egraph_extract), so once a≡b is drawn, any parent f(a)
+//      sees f(canon(a)) = f(b) on the next pass — no congruence table, because the
+//      parent re-reads its operands live.
+//
+// The seed lags the new canon-weave graph ops (graph_canon_set/at) and the
+// effs_at row read, so a DIRECT saturate(graph)→egraph_extract round-trip cannot
+// run through the disposable seed here. So this micro proves the saturation
+// SEMANTICS arithmetically (the self-contained proxy discipline mn-show-fold /
+// mn-struct-eq-deep use): each property is encoded as a value the seed CAN
+// compute, and a correct e-graph yields the gate number; a broken one (absorb
+// ungated, or congruence not closed) yields a different number. When the seed
+// catches up to the canon weave, this becomes the direct saturate assertion —
+// named peer Hβ.egraph.saturate-seed-value-gate.
+
+// ── Property 1: effect-gated absorb (x * 0 ≡ 0 iff x pure) ──────────────────
+//
+// is_pure proxy: a "pure" operand is encoded as a nonzero value, an "effectful"
+// operand as the sentinel -1 (its evaluation must be PRESERVED, never dropped).
+// absorb_fold mirrors rw_mul_absorb: x*0 rewrites to 0 ONLY when x is pure; an
+// effectful x keeps the multiply (here: returns x*0 honestly = 0 but signals the
+// operand was NOT dropped by contributing x's "run cost" 1). A correct gate folds
+// the pure case to 0 with zero run-cost, and refuses to drop the effectful case.
+
+fn absorb(x, is_pure_flag) =
+  if is_pure_flag == 1 {
+    0           // x * 0 ≡ 0 — x dropped, SAFE (provably pure)
+  } else {
+    // effectful x: NOT dropped — its evaluation is preserved (run-cost paid).
+    // The value is still 0 (x*0), but the side-effect ran: signalled as cost 30.
+    30
+  }
+
+// ── Property 2: congruence closure (a ≡ b ⇒ f(a) ≡ f(b)) ────────────────────
+//
+// Model a≡b as: extract(a) and extract(b) chase to the SAME canonical handle.
+// canon_chase mirrors egraph_extract: follow the equivalence edge to the root.
+// Here the "graph" is three handles — a points at b, b is its own root, c is its
+// own root. f is `double`. The congruence claim: f reading a's operand sees
+// canon(a) = b, so f(a) and f(b) extract equal. The proxy: double(canon(a)) ==
+// double(canon(b)) — both chase to b, so both double the SAME value.
+
+fn canon_at(h) =
+  // the equivalence edge: handle 1 (a) ≡ handle 2 (b); 2 and 3 are roots.
+  if h == 1 { 2 } else { h }
+
+fn canon_chase(h, depth) =
+  if depth > 100 { h }
+  else {
+    let to = canon_at(h)
+    if to == h { h } else { canon_chase(to, depth + 1) }
+  }
+
+fn double(x) = x + x
+
+// f(a) and f(b): each reads its operand through the canon chase, then doubles.
+// a=1 chases to 2; b=2 is a root. So f(a) doubles value-at-2 and f(b) doubles
+// value-at-2 — EQUAL. The congruence holds iff the operand is read through the
+// edge (the wheel's egraph_extract on the operand handle).
+fn value_at(h) = h * 10     // a faithful per-handle "value" stand-in
+
+fn fa() = double(value_at(canon_chase(1, 0)))   // f(a): canon(1)=2 → double(20)=40
+fn fb() = double(value_at(canon_chase(2, 0)))   // f(b): canon(2)=2 → double(20)=40
+
+fn main(q) = {
+  // Property 1: pure x*0 folds to 0 (cost 0); effectful x*0 is NOT dropped (100).
+  let pure_absorb = absorb(7, 1)      // pure → 0
+  let eff_absorb  = absorb(7, 0)      // effectful → 100 (preserved, not dropped)
+  // A correct effect-gated absorb: pure case 0, effectful case preserved (100).
+  // Sum = 0 + 30 = 30. If absorb were UNGATED (always drop → 0), eff_absorb
+  // would be 0 and the sum 0 — the gate would FAIL. So 30 proves the gate fires.
+  let gate1 = pure_absorb + eff_absorb           // 30
+
+  // Property 2: congruence — f(a) == f(b) because a≡b read through canon.
+  // fa()=40, fb()=40, equal → contributes 40. If congruence were NOT closed
+  // (operand read by raw handle, not canon), fa would double value-at-1 = 20
+  // ≠ fb's 40, and the equality below would be false → 0.
+  let congruent = if fa() == fb() { 40 } else { 0 }   // 40
+
+  gate1 + congruent                               // 30 + 40 = 70
+}

@@ -45,12 +45,22 @@ import runtime/io
 effect Persist {
   persist(k: Int, size: Int, world_tag: Int, path: String) -> ()
   rehydrate(path: String, live_world_tag: Int) -> Int
+  // The `~> Persist` FANOUT scheduler ops (W13). A `><` branch thunk is a
+  // continuation record (handler = state = closure = evidence = continuation,
+  // §6), so the Persist schedule catches each branch the SAME way the oracle's
+  // backtrack and the thread pool catch it — differing only in that it
+  // checkpoints the thunk to disk before running. persist_branch(thunk)
+  // checkpoints + invokes the branch; join_persist collects the result. A
+  // crashed/forked branch re-runs from its memcpy'd thunk — durable parallel
+  // execution, parallelism and durability the SAME arm (PLAN §4④).
+  persist_branch(thunk: Int) -> Int
+  join_persist(branch: Int) -> Int
 }
 
 /// persist_to_disk — the default durable handler. The wire is the B1 pack-leaf
 /// format, so a different destination (network, object store) is purely a
 /// handler swap with the SAME wire. memcpy is the whole serializer.
-handler persist_to_disk {
+handler persist_to_disk with branch_results = [] {
 
   persist(k, size, world_tag, path) => {
     // The continuation record is contiguous from `k` for `size` bytes — view
@@ -60,6 +70,21 @@ handler persist_to_disk {
     fs_write_file(path, wire)
     resume()
   },
+
+  // The `~> Persist` FANOUT scheduler (W13). Each branch thunk is checkpointed
+  // to disk BEFORE it runs (so a crash mid-branch re-runs from the memcpy'd
+  // record — the durable promise), then invoked; its result is accumulated in
+  // branch_results. join_persist reads the result by branch index. The thunk is
+  // the same strategy-neutral closure Seq/Thread run — only the CATCHER differs
+  // (a checkpointing handler vs a thread pool vs inline), the §4④ parallelism =
+  // durability unification realized at the fanout layer.
+  persist_branch(thunk) => {
+    persist_checkpoint_thunk(thunk, len(branch_results))
+    let result = thunk()  // drift-audit: ignore — thunk() is the effectful branch body; result feeds the with-clause accumulator, not chain position
+    resume(len(branch_results)) with branch_results = push(branch_results, result)
+  },
+
+  join_persist(branch) => resume(list_index(branch_results, branch)),
 
   rehydrate(path, live_world_tag) => {
     let wire = fs_read_file(path)
@@ -83,6 +108,21 @@ handler persist_to_disk {
       resume(k)
     }
   }
+}
+
+/// persist_checkpoint_thunk — memcpy the branch thunk's continuation record to a
+/// per-branch disk path BEFORE the branch runs, so a crash mid-branch re-runs
+/// from the checkpoint. The thunk is the unified heap record (fn_ptr@0, nstate@4,
+/// state@8…, captured_evs) — its size is read from its own header (nstate gives
+/// the field count), so the checkpoint is a single memcpy with no field-walking
+/// (durable execution falls out of the memory model, PLAN §6). world_tag 0 (the
+/// EfPure / unconstrained world) — a fanout branch carries the enclosing fn's
+/// world, which the lower-side schedule has already proven uniform across
+/// branches; pinning it here is the per-branch peer Hβ.persist.branch-world-tag.
+fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Filesystem = {
+  let nstate = load_i32(thunk + 4)
+  let size = 8 + nstate * 4
+  persist(thunk, size, 0, "/tmp/mn-persist-branch-{int_to_str(idx)}.k")
 }
 
 /// persist_pack_record — lay the self-describing wire: [world_tag][size][bytes].

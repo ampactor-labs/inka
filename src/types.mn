@@ -988,6 +988,7 @@ effect GraphRead {
   graph_push_checkpoint() -> Int
   graph_node_body(Int) -> NodeBody    // resolve a node's body by its handle from the parallel program weave — every AST node is registered there at construction (NHole if absent)
   graph_comment_at(Int) -> String     // resolve a node's parse-attached comment prose from the parallel comment weave (empty string if absent); the Why engine / formatter / cursor project it
+  graph_canon_at(Int) -> Int          // the e-graph canonical pointer at a handle — the equivalence weave's `find` step (returns the handle itself if it is its own e-class root). One co-indexed weave, exactly like `nodes`' TVar union-find; egraph_extract chases it live.
 }
 
 effect GraphWrite {
@@ -995,6 +996,7 @@ effect GraphWrite {
   graph_fresh_row(Reason) -> Handle
   graph_register_node(Int, NodeBody) -> ()    // edge-link a node's body into the one graph at its handle (the parallel program weave); resolves via graph_node_body
   graph_attach_comment(Int, String) -> ()      // attach parse-collected comment prose to a node's handle (the parallel comment weave); resolves via graph_comment_at — a comment is graph content
+  graph_canon_set(Int, Int) -> ()              // draw the e-graph equivalence edge `from ≡ to` — point `from`'s canonical pointer at the cheaper `to`. The union-find `union` over the equivalence weave; saturation reads it back via graph_canon_at (find). Idempotent: re-pointing an already-rooted `from` overwrites in place (one cell), never grows a ledger.
   graph_bind(Int, Ty, Reason) -> ()
   graph_bind_row(Int, EffRow, Reason) -> ()
   graph_fork(String) -> ()

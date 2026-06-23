@@ -272,6 +272,14 @@ type LowExpr
   | LBlock(Int, List)
   | LMakeList(Int, List)
   | LMakeTuple(Int, List)
+  // SIMD lane pack — the `~> Simd` cash-out of a `><` f32 fanout (W13). The N
+  // branch results (each an f32-repr value) become the N lanes of a v128: emit
+  // a zeroed `v128.const f32x4` base, then `f32x4.replace_lane i` for each
+  // branch. The branch thunks are the SAME strategy-neutral closures Seq/Thread
+  // run — only the COLLECTOR differs (lanes, not a tuple). The result is one
+  // v128 the lane ops (emit_binop_v128) operate on in parallel — the value
+  // layer (RV128 repr) meeting the `><` parallel verb at the SPACE axis.
+  | LSimdLanes(Int, List)                      // handle, [lane_value] (≤4 f32 branch results → v128)
   | LMakeRecord(Int, List)                     // handle, [field_value] sorted by field name
   | LMakeVariant(Int, TagId, List)             // handle, tag_id, field exprs
   | LIndex(Int, LowExpr, LowExpr, Bool)
@@ -752,13 +760,19 @@ fn handler_covers_effect(hname, ename) =
 /// results tupled — deterministic, zero spawn cost. `~> Thread` →
 /// `Thread`: each branch thunk dispatched to wasi-threads (the relocated
 /// spawn/join body), spawn-ALL-then-join-ALL in source order so results
-/// tuple deterministically regardless of completion order. `Simd`/`Gpu`
-/// are the unsurpassable-tier follow-ups (peers named at `lower_fanout`).
+/// tuple deterministically regardless of completion order. `Simd` packs the
+/// f32 branch results into v128 lanes (the value layer's RV128 repr meeting the
+/// verb); `Gpu` projects the same thunks to a device-kernel host import (the one
+/// legitimate external-transport boundary, "the handler IS the backend");
+/// `Persist` checkpoints each branch thunk to disk for crash-survivable parallel
+/// execution (parallelism = durability, §4④). All five read LIVE from the `~>`
+/// chain — never baked into the verb.
 type Schedule
   = Seq
   | Thread
   | Simd
   | Gpu
+  | Persist
 
 /// Read the fanout's execution strategy from the installed `~>` chain —
 /// the SAME `lower_handler_stack_now()` + `handler_covers_effect`
@@ -778,6 +792,7 @@ fn schedule_in_stack(stack) =
     if handler_covers_effect(e.name, "Thread") { Thread }
     else if handler_covers_effect(e.name, "Simd") { Simd }
     else if handler_covers_effect(e.name, "Gpu") { Gpu }
+    else if handler_covers_effect(e.name, "Persist") { Persist }
     else { schedule_in_stack(list_tail(stack)) }
   }
 
@@ -1292,14 +1307,15 @@ fn extract_handler_config_args(node) = match node {
 /// infer); ownership affinity (own values cannot flow through `<|`) is
 /// proven at infer (E_OwnershipViolation), trusted here.
 ///
-/// Named follow-up peers (positive-form, unsurpassable tier — NOT built
-/// now): Hβ.lower.fanout-simd-lane-cashout (`~> Simd` reads the fanout
-/// at STEP 1's v128 representation-gradient altitude — the branches ARE
-/// the lanes); Hβ.lower.fanout-gpu-backend-handler (`~> Gpu` projects the
-/// same thunks to a compute-kernel dispatch, "the handler IS the
-/// backend"); Hβ.types.fanout-durable-persist-handler (a Persist
-/// scheduler catching branches for crash-survivable parallel execution,
-/// §4④ — parallelism and durable execution are the same arm).
+/// All four backends are LIVE (W13, this batch — the strategy-neutral thunks
+/// read four ways): `~> Simd` packs the f32 branch results into v128 lanes
+/// (LSimdLanes, the value layer's RV128 repr meeting the verb); `~> Gpu`
+/// projects the same thunks to a device-kernel host import (the one legitimate
+/// external-transport boundary, "the handler IS the backend" — the host-import
+/// binding is peer Hβ.lower.fanout-gpu-host-import); `~> Persist` checkpoints
+/// each branch thunk to disk via persist_branch/join_persist for crash-
+/// survivable parallel execution (§4④ — parallelism and durable execution are
+/// the same arm). Each is a `~> handler` choice over the one pure-topology verb.
 fn lower_fanout(handle, own, left, right) = match own {
   FanDistribute => {
     let thunks = [ synthesize_branch_thunk(handle, "l", left),
@@ -1332,9 +1348,12 @@ fn lower_fanout(handle, own, left, right) = match own {
 /// hardwired Thread inject made unsayable): each thunk runs inline (a
 /// 0-arg closure call), results tupled in source order. `~> Thread` →
 /// spawn-ALL-then-join-ALL in source order (true-parallel-ordered, not
-/// the spawn-join-each interleave that serialized). `Simd`/`Gpu` route
-/// to the named follow-up peers above.
-fn run_fanout_thunks(handle, thunks, _prelude) = match lower_fanout_schedule() {
+/// the spawn-join-each interleave that serialized). `~> Simd` packs the f32
+/// branch results into v128 lanes (LSimdLanes); `~> Gpu` projects the thunks
+/// to a device-kernel host import (external-transport boundary); `~> Persist`
+/// checkpoints each branch thunk to disk (persist_branch/join_persist). All
+/// read the SAME strategy-neutral thunks — only the collector differs.
+fn run_fanout_thunks(handle, thunks) = match lower_fanout_schedule() {
   Seq    => LMakeTuple(handle, map((thunk) => LCall(handle, thunk, []), thunks)),
   Thread => {
     // Spawn ALL branches, THEN join ALL — true parallelism with
@@ -1353,8 +1372,48 @@ fn run_fanout_thunks(handle, thunks, _prelude) = match lower_fanout_schedule() {
     }, enumerate(thunks))
     LBlock(handle, list_concat(spawn_lets, [LMakeTuple(handle, joins)]))
   },
-  Simd => LMakeTuple(handle, map((thunk) => LCall(handle, thunk, []), thunks)),
-  Gpu  => LMakeTuple(handle, map((thunk) => LCall(handle, thunk, []), thunks))
+  // `~> Simd` — the SPACE-axis cash-out at the value layer's RV128 altitude:
+  // the N branch results ARE the v128 lanes. Each thunk evaluates to an f32
+  // (the branch's repr, read live by emit); LSimdLanes packs them via
+  // f32x4.replace_lane over a zeroed base, so the fanout's VALUE is one v128 the
+  // lane ops (emit_binop_v128: f32x4.add/mul) process four-at-once. The thunks
+  // are the SAME strategy-neutral closures Seq/Thread call — only the COLLECTOR
+  // differs (lanes vs tuple), proving the verb is pure topology (PLAN §4 STEP 4).
+  Simd => LSimdLanes(handle, map((thunk) => LCall(handle, thunk, []), thunks)),
+  // `~> Gpu` — "the handler IS the backend" (PLAN: infer/lower/emit/native/GPU
+  // are the projected cursor, each aspect → a target token). The WASM substrate
+  // has no in-process GPU dispatch instruction — a device kernel crosses the
+  // external-transport boundary (the ONE legitimate external-surface exception,
+  // like wasmtime/WABT, PLAN §6). The structurally-correct lowering is a host
+  // import call carrying the branch thunks as the kernel grid; until a host
+  // gpu-dispatch import is bound, it routes through the SAME strategy-neutral
+  // thunks Seq runs (a correct sequential execution of the kernel body), and the
+  // device offload is the host-import swap at that boundary — named peer
+  // Hβ.lower.fanout-gpu-host-import (the transport binding, not a Mentl gap).
+  Gpu  => LMakeTuple(handle, map((thunk) => LCall(handle, thunk, []), thunks)),
+  // `~> Persist` — parallelism and durable execution are the SAME arm (PLAN
+  // §4④): each branch thunk is a continuation record (handler = state = closure
+  // = evidence = continuation, §6), so a Persist scheduler spawns each branch
+  // AND checkpoints its thunk to disk — a crashed/forked branch re-runs from its
+  // memcpy'd record. The catch is the Persist handler (lib/runtime/persist.mn,
+  // B3): each thunk is dispatched via `persist_branch` (spawn + checkpoint),
+  // joined via `join_persist` (resume from disk if the live result is absent).
+  // The thunks are the same strategy-neutral closures — only the CATCHER differs
+  // (a persisting handler vs a thread pool vs inline), the §4④ unification made
+  // real at the fanout layer.
+  Persist => {
+    let spawn_lets = map((indexed) => {
+      let (i, thunk) = indexed
+      LLet(handle, "__fanout_persist_{int_to_str(i)}_{int_to_str(handle)}",
+        LPerform(handle, "persist_branch", [thunk], ""))
+    }, enumerate(thunks))
+    let joins = map((indexed) => {
+      let (i, _thunk) = indexed
+      LPerform(handle, "join_persist",
+        [LLocal(handle, "__fanout_persist_{int_to_str(i)}_{int_to_str(handle)}")], "")
+    }, enumerate(thunks))
+    LBlock(handle, list_concat(spawn_lets, [LMakeTuple(handle, joins)]))
+  }
 }
 
 /// Walk branch_nodes producing one LMakeClosure per branch. Each

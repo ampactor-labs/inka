@@ -66,7 +66,8 @@ handler graph_handler
        intent_index = [],
        checkpoint_stack = [],
        program = [],
-       comments = [] {
+       comments = [],
+       canon = [] {
 
   // checkpoint_stack tracks active speculation depth. Each
   // graph_push_checkpoint pushes the current trail_len; each
@@ -192,6 +193,35 @@ handler graph_handler
 
   graph_comment_at(handle) => {
     resume(if handle < len(comments) { list_index(comments, handle) } else { "" })
+  },
+
+  // The e-graph equivalence weave — union-find as a fabric EDGE, co-indexed by
+  // handle exactly like `program`/`comments`/`nodes` (the TVar union-find
+  // precedent). `graph_canon_set(from, to)` draws the equivalence edge `from ≡
+  // to`; `graph_canon_at(handle)` reads the one-step pointer (the node's
+  // e-class root pointer, or the handle itself if it is its own root). The
+  // rule that records the pair guarantees `to` is the cheaper node, so
+  // chasing the edge always descends toward the simplest form — egraph_extract
+  // (egraph.mn) follows it live. No side-ledger: an already-rooted `from`
+  // overwrites its one cell, so saturation never grows an O(N²) pair-list (the
+  // OOM the snoc-list ledger caused). No trail: saturation is a `|>` stage
+  // between infer and lower, before speculation, so rollback never touches it.
+  graph_canon_set(from, to) => {
+    resume()
+      with canon = canon
+        |> list_extend_to(from + 1)
+        |> list_set(from, to)
+  },
+
+  // A handle with no edge (absent, or a self-pointer) is its own e-class root —
+  // the extracted term. `list_extend_to` fills gaps with 0, and handle 0 is the
+  // synthetic Module root (never an expr operand), so a 0 cell reads as "no
+  // edge" ⇒ return the handle itself.
+  graph_canon_at(handle) => {
+    resume(if handle < len(canon) {
+      let to = list_index(canon, handle)
+      if to == 0 { handle } else { to }
+    } else { handle })
   },
 
   graph_bind(handle, ty, reason) => {

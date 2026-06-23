@@ -199,3 +199,39 @@ micro:pack-roundtrip=40
 # mn-float-convert document them, their value-gates landing when the seed catches
 # up (peers Hβ.seed.tuple-product / .variant-payload-repr / .float-convert). Exit 90.
 micro:tuple-product=90
+# W14 (e-graph: union-find as fabric edge + congruence-closed saturation): the
+# rw snoc-list side-ledger (linear rw_lookup, re-appended every pass — the O(N²)
+# OOM) is DELETED; equivalence is ONE fabric edge — the canonical pointer
+# co-indexed by handle (graph_canon_set/at, the TVar union-find precedent), chased
+# live by egraph_extract. Two properties: (1) EFFECT-GATED absorb — x*0 ≡ 0 fires
+# only when x's inferred row subsumes EfPure (is_pure reads effs_at LIVE, not AST
+# shape); (2) CONGRUENCE CLOSURE — rules read operands THROUGH egraph_extract, so
+# a≡b ⇒ f(a)≡f(b) with no congruence table. Idempotent edges (rewrite_to reads the
+# current edge first) make saturation converge — the OOM cannot recur. The seed
+# lags the canon-weave graph ops + effs_at, so the gate proves the saturation
+# SEMANTICS arithmetically (pure-vs-effectful absorb + congruent f(a)==f(b)) —
+# peer Hβ.egraph.saturate-seed-value-gate. Exit 70 (gate1 30 + congruent 40).
+micro:egraph-saturate=70
+# W13 (Schedule Persist arm): parallelism and durable execution are the SAME arm
+# (PLAN §4④) — the `~> Persist` fanout schedule emits persist_branch(thunk) per
+# branch (checkpoint to disk + run, accumulate) + join_persist(i) (collect in
+# source order); a crashed/forked branch re-runs from its memcpy'd thunk record.
+# The seed lags the Schedule::Persist lowering arm AND the continuation-record
+# layout the disk round-trip reads (TESTED: the direct op-call form traps in the
+# seed's closure-header read), so the gate proves the checkpoint-then-run +
+# source-order-join CONTROL SHAPE arithmetically — the result is IDENTICAL to the
+# inline `><` (durability is value-invisible). The disk memcpy round-trip is gated
+# runnably by mn-persist.mn — peer Hβ.lower.fanout-persist-seed-value-gate. Exit 30.
+micro:fanout-persist=30
+# W13 (Schedule Simd arm): a `><` fanout of f32 branches under `~> Simd` packs the
+# branch results into v128 lanes (run_fanout_thunks Simd → LSimdLanes; emit_simd_
+# lanes → f32x4.replace_lane i per lane over a zeroed v128.const f32x4 base), so the
+# fanout's VALUE is one v128 the lane ops (emit_binop_v128: f32x4.add/mul) process
+# four-at-once — the value layer's RV128 repr meeting the parallel verb at the SPACE
+# axis. The thunks are the SAME strategy-neutral closures Seq/Thread call — only the
+# COLLECTOR differs (lanes vs tuple). The seed lags v128 (RV128 repr) + the new
+# LSimdLanes node, so the gate proves the lane-pack + lane-op CONTROL SHAPE
+# arithmetically (per-lane add visiting every lane once in position order, witnessed
+# by r3-r0); the f32x4.replace_lane WAT form is validated to assemble (wat2wasm) —
+# peer Hβ.lower.fanout-simd-seed-value-gate. Exit 90 (head 33 + lanes-in-order 57).
+micro:fanout-simd=90

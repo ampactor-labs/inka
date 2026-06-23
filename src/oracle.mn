@@ -12,9 +12,10 @@
 // Three things the graph/repo already proves, carried (not re-derived):
 //   - the SEARCH is mentl.mn's gradient_next / try_each_annotation —
 //     checkpoint -> apply -> verify -> rollback, already working.
-//   - the SATURATION is egraph.mn's saturate / rw_follow — the live
-//     graph's epoch-versioned union-find pointed at the cheaper node,
-//     effect-aware (a rewrite that changes the row is rejected).
+//   - the SATURATION is egraph.mn's saturate / egraph_extract — the live
+//     graph's union-find as a fabric EDGE (the canon weave, graph_canon_set/
+//     graph_canon_at), pointed at the cheaper node, effect-aware (a dropping
+//     rewrite fires only when the dropped operand's row subsumes EfPure).
 //   - the CACHE is graph_handler's epoch (graph.mn) + the egraph
 //     union-find — not a third sorted-list. The queue is a DERIVED
 //     PROJECTION (every QueueItem is a proven-and-rolled-back
@@ -29,7 +30,7 @@
 // Authority: docs/SYNTAX.md (surface) · PLAN.md §2 (the kernel) ·
 // src/mentl.mn (the proposer — gradient_next, try_each_annotation,
 // apply_annotation_tentatively, verify_after_apply, why_from_handle) ·
-// src/egraph.mn (saturate / rw_follow) · src/graph.mn (graph_handler:
+// src/egraph.mn (saturate / egraph_extract) · src/graph.mn (graph_handler:
 // epoch, intent_index, span_index, graph_push_checkpoint/rollback,
 // graph_mutated at the outermost commit boundary).
 
@@ -195,7 +196,7 @@ handler project_queue_merger
 // the graph epoch IS the cache. The e-graph supplies the TStyle-tier
 // equivalences (topology nudges) effect-awarely via egraph.mn.
 
-fn project_queue() with Verify + GraphRead + GraphWrite + EGraph = {
+fn project_queue() with Verify + GraphRead + GraphWrite = {
   positions_with_dependents()
     |> map((pos) => candidates_at(pos))
     |> flatten
@@ -209,7 +210,7 @@ fn project_queue() with Verify + GraphRead + GraphWrite + EGraph = {
 // (gradient_candidates_at); each survivor carries the e-graph-aware
 // priority and the Why-walkable Reason mentl.mn already minted.
 
-fn candidates_at(pos) with Verify + GraphRead + GraphWrite + EGraph = {
+fn candidates_at(pos) with Verify + GraphRead + GraphWrite = {
   let node = graph_chase(pos)
   let GNode(kind, anchor) = node
   match kind {
@@ -580,8 +581,9 @@ fn handle_distance(a, b) with Pure = if a >= b { a - b } else { b - a }
 // accumulate(...)` (the IC fixpoint). The cycle is visible on the page.
 //
 // Primitive #4 (Effect row) — project_queue performs `Verify +
-// GraphRead + GraphWrite + EGraph` (the proposer's checkpoint/verify/
-// rollback + the e-graph's saturation); OracleQuery is read-only.
+// GraphRead + GraphWrite` (the proposer's checkpoint/verify/rollback;
+// the e-graph's saturation is GraphRead/GraphWrite now — the canon weave
+// IS the graph, no separate EGraph effect); OracleQuery is read-only.
 //
 // Primitive #5 (Ownership) — the queue `own`s its items; surfaces read
 // via `ref` (OracleQuery returns lists they do not consume).

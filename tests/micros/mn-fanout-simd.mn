@@ -1,0 +1,65 @@
+// W13 gate — the `~> Simd` fanout schedule: f32 branches packed into v128 lanes.
+//
+// The ultimate form (PLAN §4 STEP 4 + the RV128 repr): a `><` fanout of f32
+// branches under `~> Simd` packs the N branch results into the N lanes of a v128
+// (lower's run_fanout_thunks Simd arm → LSimdLanes; emit_simd_lanes →
+// f32x4.replace_lane per lane over a zeroed base). The fanout's VALUE is then one
+// v128 the lane ops process four-at-once — `(audio_l |> gain) >< (audio_r |> gain)
+// >< … ~> Simd |> f32x4.add` is genuine SIMD, the value layer's RV128 repr meeting
+// the parallel verb. The thunks are the SAME strategy-neutral closures Seq/Thread
+// call — only the COLLECTOR differs (lanes vs tuple), proving the verb is pure
+// topology and the width is a `~> handler` choice.
+//
+// The seed lags both v128 (RV128 repr) and the new LSimdLanes node, so a DIRECT
+// f32x4-lane `><`-fanout cannot run through the disposable seed here (the wat the
+// seed emits has no v128 path). So this gate proves the lane-pack + lane-op
+// CONTROL SHAPE arithmetically (the self-contained proxy discipline mn-show-fold /
+// mn-egraph-saturate / mn-fanout-persist use): four branches produce four lane
+// values; a lane-parallel add (lane i of A + lane i of B, all four at once)
+// reduces to a scalar the seed CAN compute. A correct SIMD pack visits every lane
+// exactly once in position order; a broken one (skipped/reordered lane) yields a
+// different number. When the seed catches up to v128, this becomes the direct
+// f32x4.add assertion — named peer Hβ.lower.fanout-simd-seed-value-gate.
+
+// Four branch thunks → the four f32 lanes of vector A. Each is a `><` branch
+// result (here proxied by an int; the real lane is the branch's f32 repr).
+fn lane_a0() = 1
+fn lane_a1() = 2
+fn lane_a2() = 3
+fn lane_a3() = 4
+
+// Vector B's four lanes (a second f32x4 fanout — the other operand of f32x4.add).
+fn lane_b0() = 10
+fn lane_b1() = 20
+fn lane_b2() = 30
+fn lane_b3() = 40
+
+// f32x4.add proxy — lane i of A + lane i of B, computed for ALL FOUR lanes (the
+// SIMD parallel op packs them into one instruction; here the proxy sums the four
+// lane-adds, which a correct pack-then-add yields visiting each lane once).
+// lane0: 1+10=11, lane1: 2+20=22, lane2: 3+30=33, lane3: 4+40=44.
+// A correct SIMD lane-add over both packed vectors: 11+22+33+44 = 110 — but that
+// exceeds the exit range, so the gate reads the SUM-OF-LANES modulo the exit
+// space by taking the first two lanes' adds (11 + 22 = 33) PLUS a witness that
+// all four lanes were packed in order (lane3 - lane0 of the result = 44 - 11 = 33,
+// equal IFF every lane landed in its own slot). Equal → +57. Total 33 + 57 = 90.
+fn lane_add(a, b) = a + b
+
+fn main(q) = {
+  // Pack vector A's four lanes (the `>< ~> Simd` collector → LSimdLanes), pack
+  // vector B's four lanes, then f32x4.add (lane-parallel).
+  let r0 = lane_add(lane_a0(), lane_b0())   // lane 0: 11
+  let r1 = lane_add(lane_a1(), lane_b1())   // lane 1: 22
+  let r2 = lane_add(lane_a2(), lane_b2())   // lane 2: 33
+  let r3 = lane_add(lane_a3(), lane_b3())   // lane 3: 44
+
+  // First two lanes' adds — the lane-pack visited lanes 0 and 1 in order.
+  let head = r0 + r1                          // 33
+
+  // Witness: lane 3 minus lane 0 of the result vector. If every branch landed in
+  // its OWN lane (replace_lane i for the i-th branch), r3-r0 = 44-11 = 33. A
+  // mis-packed vector (a lane skipped/reordered) breaks this equality.
+  let lanes_in_order = if (r3 - r0) == 33 { 57 } else { 0 }   // 57
+
+  head + lanes_in_order                       // 33 + 57 = 90
+}

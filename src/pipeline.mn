@@ -74,7 +74,6 @@ fn compile(entry_module) = {
     ~> arm_state_default
     ~> lookup_ty_graph
     ~> env_handler
-    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -111,7 +110,6 @@ fn compile_stdin() = {
     ~> arm_state_default
     ~> lookup_ty_graph
     ~> env_handler
-    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -125,7 +123,6 @@ fn check(entry_module) = {
     ~> affine_ledger
     ~> verify_ledger
     ~> env_handler
-    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -153,7 +150,6 @@ fn compile_source(source) = {
     ~> arm_state_default
     ~> lookup_ty_graph
     ~> env_handler
-    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -169,7 +165,6 @@ fn check_source(source) = {
     ~> affine_ledger
     ~> verify_ledger
     ~> env_handler
-    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -190,7 +185,6 @@ fn query(source, question) = {
     ~> verify_ledger
     ~> lookup_ty_graph
     ~> env_handler
-    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -209,7 +203,6 @@ fn teach(source) = {
     ~> verify_ledger
     ~> lookup_ty_graph
     ~> env_handler
-    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose
@@ -228,7 +221,6 @@ fn audit(source) = {
     ~> verify_ledger
     ~> lookup_ty_graph
     ~> env_handler
-    ~> egraph_ledger         // the e-graph relation — lower reads canonical forms through it
     ~> graph_handler
     ~> mutate_sink
     ~> parallel_compose

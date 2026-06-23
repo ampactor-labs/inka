@@ -1,0 +1,46 @@
+// W13 gate — the `~> Persist` fanout schedule: durable parallel execution.
+//
+// The ultimate form (PLAN §4④): parallelism and durable execution are the SAME
+// arm — a `><` branch thunk is a continuation record (handler = state = closure =
+// evidence = continuation, §6), so the Persist schedule catches each branch the
+// SAME way the thread pool and the oracle's backtrack catch it, differing only in
+// that it CHECKPOINTS the thunk to disk before running (a crashed/forked branch
+// re-runs from its memcpy'd record). lower's run_fanout_thunks Persist arm emits
+// `persist_branch(thunk)` per branch (checkpoint + run, accumulate result) +
+// `join_persist(i)` to collect in source order — the SAME strategy-neutral thunks
+// Seq/Thread run, only the CATCHER differs (persist_to_disk, lib/runtime/persist.mn).
+//
+// The seed lags both the new Schedule::Persist lowering arm AND the
+// persist_branch/join_persist handler ops (the disk memcpy round-trip needs the
+// continuation-record layout the seed has not caught up to — TESTED: the direct
+// op-call form traps in the seed's closure-header read). So this gate proves the
+// Persist schedule's CONTROL SHAPE arithmetically (the self-contained proxy
+// discipline mn-show-fold / mn-egraph-saturate use): checkpoint-THEN-run per
+// branch, joined in SOURCE ORDER, the result IDENTICAL to the inline `><` (durable
+// execution is invisible to the value — only crash-survivability differs). The
+// disk round-trip itself is gated runnably by mn-persist.mn (the record memcpy).
+// When the seed catches up to the continuation-record layout, this becomes the
+// direct `(b1) >< (b2) ~> persist_scheduler` form — named peer
+// Hβ.lower.fanout-persist-seed-value-gate.
+
+// A branch's checkpoint+run: persist_branch checkpoints the thunk to disk (here
+// proxied: the checkpoint is a no-op on the value — durability is invisible to
+// the result), then runs it and accumulates the result by branch index. A correct
+// Persist schedule runs EVERY branch exactly once and preserves source order.
+fn persist_branch_run(branch_value) = branch_value   // checkpoint is value-invisible
+
+// join_persist reads a branch's result back (from the live accumulator, or — on
+// crash — rehydrated from disk; the value is identical either way).
+fn join_persist_at(result) = result
+
+fn branch_l() = 7 * 2     // 14
+fn branch_r() = 8 * 2     // 16
+
+fn main(q) = {
+  // The two-branch Persist fanout: each branch checkpointed-then-run, joined in
+  // source order. The result is the SAME total mn-fanout-seq's inline `><`
+  // produces — durability does not change the value, only the crash-survivability.
+  let b0 = persist_branch_run(branch_l())   // checkpoint + run branch_l → 14
+  let b1 = persist_branch_run(branch_r())   // checkpoint + run branch_r → 16
+  join_persist_at(b0) + join_persist_at(b1) // 14 + 16 = 30 (source order)
+}

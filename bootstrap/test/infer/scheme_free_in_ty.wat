@@ -248,7 +248,7 @@
 
     ;; ── 13. TCont(TVar(7), 250) → [7] (discipline opaque) ──
     (local.set $free (call $free_in_ty
-                       (call $ty_make_tcont (local.get $tv7) (i32.const 250))))
+                       (call $ty_make_tcont (local.get $tv7) (i32.const 250) (i32.const 150))))  ;; world = EfPure (150)
     (if (i32.ne (call $len (local.get $free)) (i32.const 1))
       (then
         (call $eprint_string (i32.const 3544))

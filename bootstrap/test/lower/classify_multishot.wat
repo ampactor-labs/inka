@@ -30,7 +30,7 @@
 
     ;; Phase 1: build TCont(TInt, MultiShot=251).
     (local.set $tint (call $ty_make_tint))
-    (local.set $tcont (call $ty_make_tcont (local.get $tint) (i32.const 251)))
+    (local.set $tcont (call $ty_make_tcont (local.get $tint) (i32.const 251) (i32.const 150)))  ;; world = EfPure (150)
 
     ;; Phase 2: bind a fresh handle to TCont.
     (local.set $h (call $graph_fresh_ty (i32.const 0)))

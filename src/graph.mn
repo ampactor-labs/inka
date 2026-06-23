@@ -472,7 +472,7 @@ fn occurs_in(handle, ref ty) with !Mutate = {
     TRecordOpen(fields, v) =>
       v == handle || occurs_in_fields(handle, fields),
     TRefined(base, _) => occurs_in(handle, base),
-    TCont(ret, _)    => occurs_in(handle, ret)
+    TCont(ret, _, _) => occurs_in(handle, ret)
   }
 }
 

@@ -205,7 +205,7 @@
         (local.set $failed (i32.const 1))))
 
     ;; 14. TCont(TInt, 250) → "Cont<Int>"
-    (local.set $r (call $render_ty (call $ty_make_tcont (local.get $tint) (i32.const 250))))
+    (local.set $r (call $render_ty (call $ty_make_tcont (local.get $tint) (i32.const 250) (i32.const 150))))  ;; world = EfPure (150)
     (if (i32.eqz (call $str_eq (local.get $r) (i32.const 4128)))
       (then
         (call $eprint_string (i32.const 3648))

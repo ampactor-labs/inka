@@ -1337,9 +1337,28 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
         }
       },
 
-    TCont(ra, da) =>
+    TCont(ra, da, wa) =>
       match b {
-        TCont(rb, db) => unify_types(ra, rb, span, reason),
+        TCont(rb, db, wb) => {
+          // The continuation's TYPE carries three facts; unify ALL three —
+          // the prior form dropped da/db (and there was no world). (1) return
+          // type. (2) resume cardinality: OneShot/MultiShot are distinct
+          // representations (stack frame vs heap record), so a mismatch is a
+          // hard E_ResumeWorldMismatch; Either is gradient-undecided and
+          // unifies with either. (3) the effect-WORLD: a row unification at the
+          // resume edge — resuming a continuation under a changed handler-set
+          // is unify(captured_world, resume_site_world). !E lifted to the TIME
+          // axis (§4③ modal frontier); a now-unhandled resume is a compile/load
+          // error, never a silent memcpy'd miscompile (Law 7).
+          unify_types(ra, rb, span, reason)
+          if disciplines_compatible(da, db) { () }
+          else {
+            report("infer", "E_ResumeWorldMismatch", "error",
+              "resume cardinality mismatch: {show_discipline(da)} vs {show_discipline(db)}",
+              span, "MaybeIncorrect")
+          }
+          unify_row(wa, wb, span, reason)
+        },
         TVar(_)       => unify_types(b, a, span, reason),
         _             => type_mismatch(a, b, span, reason)
       },
@@ -1388,8 +1407,19 @@ fn same_ground(ref a, ref b) with Pure = match a {
   TRecord(_)         => false,
   TRecordOpen(_, _)  => false,
   TRefined(_, _)     => false,
-  TCont(_, _)        => false,
+  TCont(_, _, _)     => false,
   TAlias(_, inner)   => same_ground(inner, b)
+}
+
+// Two resume cardinalities unify iff they pick the SAME representation, OR
+// one side is Either (gradient-undecided — it instantiates to the other).
+// OneShot (stack frame) vs MultiShot (heap continuation record) is the
+// representation conflict E_ResumeWorldMismatch names. H6-exhaustive over the
+// ResumeDiscipline ADT (drift 8: no count-as-int — the ADT IS the comparison).
+fn disciplines_compatible(a, b) with Pure = match a {
+  Either   => true,
+  OneShot  => match b { OneShot  => true, Either => true, MultiShot => false },
+  MultiShot => match b { MultiShot => true, Either => true, OneShot  => false }
 }
 
 fn unify_type_lists(as_list, bs_list, span: ValidSpan, reason) = {
@@ -2227,7 +2257,7 @@ fn chase_deep(ty) = match ty {
   TRecord(fields) => TRecord(chase_fields(fields)),
   TRecordOpen(fields, v) => mk_record_open(chase_fields(fields), v),
   TRefined(base, pred) => TRefined(chase_deep(base), pred),
-  TCont(ret, disc)     => TCont(chase_deep(ret), disc),
+  TCont(ret, disc, world) => TCont(chase_deep(ret), disc, world),   // world preserved unchased, mirroring TFun's eff at this site
   TAlias(name, inner)  => TAlias(name, chase_deep(inner))
 }
 
@@ -2260,7 +2290,7 @@ fn free_in_ty(ty) = match ty {
   TRecord(fields)        => free_in_fields(fields),
   TRecordOpen(fields, v) => [v] ++ free_in_fields(fields),
   TRefined(base, _)      => free_in_ty(base),
-  TCont(ret, _)          => free_in_ty(ret),
+  TCont(ret, _, _)       => free_in_ty(ret),
   TAlias(_, inner)       => free_in_ty(inner)
 }
 
@@ -2411,7 +2441,7 @@ fn subst_ty(ty, mapping) = match ty {
     }
   },
   TRefined(base, pred) => TRefined(subst_ty(base, mapping), pred),
-  TCont(ret, disc)      => TCont(subst_ty(ret, mapping), disc),
+  TCont(ret, disc, world) => TCont(subst_ty(ret, mapping), disc, subst_row(world, mapping)),   // world is a row: freshen its row-var like TFun's eff (free_in/subst symmetry)
   TAlias(name, inner)   => TAlias(name, subst_ty(inner, mapping))
 }
 

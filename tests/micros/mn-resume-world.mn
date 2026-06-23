@@ -1,0 +1,36 @@
+// mn-resume-world — STEP 5 gate: TCont carries the effect-WORLD; the
+// world-index is INERT on the OneShot path (Law 7) and the unify arm that
+// now compares disciplines AND unifies world-rows never spuriously fires
+// E_ResumeWorldMismatch on a well-typed single-world program.
+//
+// A OneShot handler arm (one resume site, not under a loop → OneShot) whose
+// continuation type is TCont(Int, OneShot, <world>). The world is the ambient
+// effect-row at the suspend point (here: the Ask effect itself). The arm
+// resumes once with the configured answer; the body adds 1. Compiling this
+// drives the continuation type through unify (the keystone arm) with a SINGLE
+// consistent world, so disciplines_compatible holds and unify_row succeeds —
+// no E_ResumeWorldMismatch. The OneShot lowering stays the byte-identical
+// LReturn floor (every ev*/eq micro proves this is unperturbed).
+//
+// The CROSS-WORLD value gate — two continuations frozen under DIFFERENT
+// handler-sets meeting at a persist/resume boundary, surfacing
+// E_ResumeWorldMismatch — needs STEP 3's persist handler (the resume-catcher
+// swap) to construct the boundary; named positive-form peer
+// Hβ.types.resume-world-mismatch-value-gate (NOT forced here; Law 7 — a path
+// the gate cannot construct deterministically is never claimed).
+//
+// Run: tools/run-micro.sh tests/micros/mn-resume-world.mn 42
+// Expected exit 42: resume(41) flows to body, body adds 1.
+
+effect Ask { ask() -> Int }
+
+handler give with answer = 41 {
+  ask() => {
+    let r = resume(answer)
+    r
+  }
+}
+
+fn body() = ask() + 1
+
+fn main(q) = { body() } ~> give

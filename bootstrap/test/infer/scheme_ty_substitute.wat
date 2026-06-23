@@ -239,7 +239,7 @@
     ;; ── 13. TCont(TVar(7), 250)
     ;;       → TCont(TVar(999), 250) (discipline preserved verbatim) ──
     (local.set $result (call $ty_substitute
-                         (call $ty_make_tcont (local.get $tv7) (i32.const 250))
+                         (call $ty_make_tcont (local.get $tv7) (i32.const 250) (i32.const 150))  ;; world = EfPure (150)
                          (local.get $map) (i32.const 1)))
     (if (i32.ne (call $ty_tvar_handle (call $ty_tcont_return (local.get $result))) (i32.const 999))
       (then

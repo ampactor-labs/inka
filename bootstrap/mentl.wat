@@ -10460,7 +10460,7 @@
   ;;   109 = TRecord(List)                                     arity 1 (List of (name, Ty) pairs)
   ;;   110 = TRecordOpen(List, Int)                            arity 2 (fields list + rowvar handle)
   ;;   111 = TRefined(Ty, Predicate)                           arity 2 (base Ty + opaque predicate ptr)
-  ;;   112 = TCont(Ty, ResumeDiscipline)                       arity 2 (return Ty + discipline sentinel)
+  ;;   112 = TCont(Ty, ResumeDiscipline, EffRow)               arity 3 (return Ty + discipline sentinel + effect-world row)
   ;;   113 = TAlias(String, Ty)                                arity 2 (RN.1 — alias name + resolved Ty)
   ;;
   ;; ResumeDiscipline per-variant (matches src/types.mn:70-73 verbatim):
@@ -10731,17 +10731,22 @@
   (func $ty_trefined_pred (param $t i32) (result i32)
     (call $record_get (local.get $t) (i32.const 1)))
 
-  ;; ─── 112 = TCont(Ty, ResumeDiscipline) — arity 2 ─────────────────
+  ;; ─── 112 = TCont(Ty, ResumeDiscipline, EffRow) — arity 3 ─────────
   ;; Field 0: return Ty pointer.
   ;; Field 1: ResumeDiscipline sentinel (250-252).
+  ;; Field 2: EffRow — the effect-WORLD the continuation was frozen under
+  ;;          (the modal-effect lexical-capability set; !E on the TIME axis).
+  ;;          A persisted resume under a changed handler-set is a row
+  ;;          unification → E_ResumeWorldMismatch (wheel src/types.mn:47).
   ;; Per spec 02: handler continuation type — Hβ.lower's
   ;; $classify_handler reads the discipline field via $ty_tcont_discipline
   ;; to choose TailResumptive / Linear / MultiShot lowering strategy.
-  (func $ty_make_tcont (param $ret i32) (param $disc i32) (result i32)
+  (func $ty_make_tcont (param $ret i32) (param $disc i32) (param $world i32) (result i32)
     (local $t i32)
-    (local.set $t (call $make_record (i32.const 112) (i32.const 2)))
+    (local.set $t (call $make_record (i32.const 112) (i32.const 3)))
     (call $record_set (local.get $t) (i32.const 0) (local.get $ret))
     (call $record_set (local.get $t) (i32.const 1) (local.get $disc))
+    (call $record_set (local.get $t) (i32.const 2) (local.get $world))
     (local.get $t))
 
   (func $ty_tcont_return (param $t i32) (result i32)
@@ -10749,6 +10754,9 @@
 
   (func $ty_tcont_discipline (param $t i32) (result i32)
     (call $record_get (local.get $t) (i32.const 1)))
+
+  (func $ty_tcont_world (param $t i32) (result i32)
+    (call $record_get (local.get $t) (i32.const 2)))
 
   ;; ─── 113 = TAlias(String, Ty) — arity 2 (RN.1 substrate) ─────────
   ;; Field 0: alias name string ptr (e.g. "Port" for type Port = Refined(Int, ...)).
@@ -10987,7 +10995,8 @@
               (call $ty_trefined_base (local.get $ty))
               (i32.add (local.get $depth) (i32.const 1)))
             (call $ty_trefined_pred (local.get $ty))))))
-    ;; ── TCont(ret, disc) — rebuild with chased ret ──────────────
+    ;; ── TCont(ret, disc, world) — rebuild with chased ret; disc +
+    ;;    world preserved (mirrors the wheel: world unchased here) ──
     (if (i32.eq (local.get $tag) (i32.const 112))
       (then
         (return
@@ -10995,7 +11004,8 @@
             (call $chase_deep_loop
               (call $ty_tcont_return (local.get $ty))
               (i32.add (local.get $depth) (i32.const 1)))
-            (call $ty_tcont_discipline (local.get $ty))))))
+            (call $ty_tcont_discipline (local.get $ty))
+            (call $ty_tcont_world (local.get $ty))))))
     ;; ── TAlias(name, resolved) — preserve verbatim (RN.1) ───────
     ;; chase_deep does NOT unwrap TAlias — that would lose the intent
     ;; edge (show_type prefers the alias name over the expanded form).
@@ -11905,14 +11915,17 @@
             (call $ty_trefined_base (local.get $ty))
             (local.get $map) (local.get $map_len))
           (call $ty_trefined_pred (local.get $ty))))))
-    ;; ── TCont(ret, disc) — substitute ret; preserve discipline ──
+    ;; ── TCont(ret, disc, world) — substitute ret; preserve disc +
+    ;;    world (the seed lags the wheel's subst_row row-var freshen;
+    ;;    a coarse-but-correct image — the seed catches up) ──
     (if (i32.eq (local.get $tag) (i32.const 112))
       (then (return
         (call $ty_make_tcont
           (call $ty_substitute
             (call $ty_tcont_return (local.get $ty))
             (local.get $map) (local.get $map_len))
-          (call $ty_tcont_discipline (local.get $ty))))))
+          (call $ty_tcont_discipline (local.get $ty))
+          (call $ty_tcont_world (local.get $ty))))))
     ;; ── TAlias(name, resolved) — substitute resolved; preserve name ─
     (if (i32.eq (local.get $tag) (i32.const 113))
       (then (return

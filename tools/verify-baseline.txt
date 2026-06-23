@@ -126,3 +126,27 @@ micro:struct-eq-deep=20
 # follow-ups: Hβ.lower.fanout-simd-lane-cashout (reads STEP 1 v128), fanout-gpu-
 # backend-handler, fanout-durable-persist-handler (reads STEP 3).
 micro:fanout-seq=30
+# STEP 5 (TCont world-index): TCont(Ty, ResumeDiscipline) → TCont(Ty,
+# ResumeDiscipline, EffRow) — the ONE coordinated breaking arity change (the
+# unpatchability theorem: swap the representation, never patch). The third field
+# is the effect-WORLD the continuation was frozen under — the modal-effect
+# lexical-capability set, !E lifted to the TIME axis (§4③ frontier lands here).
+# unify's TCont arm now compares the discipline (disciplines_compatible:
+# OneShot/MultiShot distinct, Either flexes) AND unifies the world-rows
+# (unify_row) → E_ResumeWorldMismatch, the diagnostic the prior 2-arg form
+# DROPPED. All ~14 wheel destructure sites + the seed's $ty_make_tcont
+# (arity-3 + $ty_tcont_world) + the 6 classify/scheme/render seed-test calls
+# moved in lock-step (the directive's one mandatory coordinated seed edit; the
+# seed builds + classify_{oneshot,multishot,either} PASS world-typed). This gate
+# proves the world-index is INERT on the well-typed single-world OneShot path
+# (Law 7 — every ev*/eq micro byte-identical, the new unify arm never spuriously
+# fires): a OneShot Ask handler whose continuation is TCont(Int, OneShot, {Ask})
+# compiles diags=0 and resume(41)+1 → 42. The CROSS-WORLD value gate (two
+# continuations frozen under different handler-sets meeting at a persist/resume
+# boundary → E_ResumeWorldMismatch) needs STEP 3's persist resume-catcher to
+# construct the boundary — peer Hβ.types.resume-world-mismatch-value-gate (NOT
+# forced; Law 7 — a path the gate cannot construct deterministically is never
+# claimed). The world-CAPTURE plumbing is live: infer's inf_current_row()
+# already projects the ambient row at the suspend point, ready to fill the field
+# at the producer's mint — peer Hβ.infer.tcont-world-capture-at-reify.
+micro:resume-world=42

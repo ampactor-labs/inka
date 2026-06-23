@@ -44,7 +44,7 @@ type Ty
   | TRecord(List)                 // [(name, Ty)]
   | TRecordOpen(List, Int)        // fields + row-variable handle
   | TRefined(Ty, Predicate)       // refinement type (Verify discharges)
-  | TCont(Ty, ResumeDiscipline)   // handler continuation type
+  | TCont(Ty, ResumeDiscipline, EffRow)   // handler continuation type: return, resume cardinality, and the effect-WORLD it was frozen under (the modal-effect lexical-capability set — !E lifted to the TIME axis; a persisted resume under a changed handler-set is a row unification → E_ResumeWorldMismatch, never a silent memcpy'd miscompile)
   | TAlias(String, Ty)            // RN.1 — authored alias name (e.g. "Port") wrapping resolved type
 
 // ─── Representation — the value-representation gradient (STEP 0) ─────
@@ -101,7 +101,7 @@ fn repr_of(ty) with Pure = match ty {
   TName(_, _)       => RI32,    // variant pointer (Bool lives here — a tag is a word)
   TRecord(_)        => RI32,    // record pointer
   TRecordOpen(_, _) => RI32,    // record pointer
-  TCont(_, _)       => RI32     // continuation pointer
+  TCont(_, _, _)    => RI32     // continuation pointer
 }
 
 // repr_width — the byte width of a representation class, by ADT match
@@ -1114,7 +1114,7 @@ fn show_type(ref ty) with GraphRead + !Mutate = {
     TRecordOpen(fields, v) =>
       "\{ {show_list(fields, show_field, ", ")} | {show_handle(v)} \}",
     TRefined(base, pred) => "{show_type(base)} where {show_predicate(pred)}",
-    TCont(ret, disc) => "Cont({show_type(ret)}, {show_discipline(disc)})",
+    TCont(ret, disc, world) => "Cont({show_type(ret)}, {show_discipline(disc)}{show_row_suffix(world)})",
     // RN.1 — show the alias name (intent), not the resolved type
     TAlias(name, _) => name
   }

@@ -784,14 +784,17 @@
             (call $ty_trefined_base (local.get $ty))
             (local.get $map) (local.get $map_len))
           (call $ty_trefined_pred (local.get $ty))))))
-    ;; ── TCont(ret, disc) — substitute ret; preserve discipline ──
+    ;; ── TCont(ret, disc, world) — substitute ret; preserve disc +
+    ;;    world (the seed lags the wheel's subst_row row-var freshen;
+    ;;    a coarse-but-correct image — the seed catches up) ──
     (if (i32.eq (local.get $tag) (i32.const 112))
       (then (return
         (call $ty_make_tcont
           (call $ty_substitute
             (call $ty_tcont_return (local.get $ty))
             (local.get $map) (local.get $map_len))
-          (call $ty_tcont_discipline (local.get $ty))))))
+          (call $ty_tcont_discipline (local.get $ty))
+          (call $ty_tcont_world (local.get $ty))))))
     ;; ── TAlias(name, resolved) — substitute resolved; preserve name ─
     (if (i32.eq (local.get $tag) (i32.const 113))
       (then (return

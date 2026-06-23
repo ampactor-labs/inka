@@ -498,7 +498,7 @@ fn extract_row(ty) with Pure = match ty {
   TRecord(_)        => EfPure,
   TRecordOpen(_, _) => EfPure,
   TRefined(_, _)    => EfPure,
-  TCont(_, _)       => EfPure,
+  TCont(_, _, world) => world,   // resuming a continuation performs its frozen world (the TFun analog: extract_row(TFun) => row)
   TAlias(_, inner)  => extract_row(inner)
 }
 

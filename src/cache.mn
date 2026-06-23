@@ -273,10 +273,11 @@ fn cache_pack_ty(ty) with Pack + !Unpack = match ty {
     cache_pack_ty(base)
     cache_pack_predicate(pred)
   },
-  TCont(ret, disc) => {
+  TCont(ret, disc, world) => {
     pack_byte(12)
     cache_pack_ty(ret)
     cache_pack_resume_disc(disc)
+    cache_pack_effrow(world)
   }
 }
 
@@ -739,7 +740,8 @@ fn cache_unpack_ty() with Unpack + !Pack = {
   else if tag == 12 {
     let ret = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let disc = cache_unpack_resume_disc()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    TCont(ret, disc)
+    let world = cache_unpack_effrow()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    TCont(ret, disc, world)
   }
   else { TUnit }
 }

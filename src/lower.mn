@@ -424,7 +424,7 @@ fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + Loo
     TRecord(_)         => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
     TRecordOpen(_, _)  => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
     TRefined(base, _)  => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
-    TCont(_, _)        => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
+    TCont(_, _, _)     => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
     TAlias(_, _)       => LCall(handle, LGlobal(handle, "to_string"), [arg_lo])
   }
 }
@@ -1921,7 +1921,7 @@ fn lower_param_handles(params) = map((p) => {
     TRecord(_)          => 0,
     TRecordOpen(_, _)   => 0,
     TRefined(_, _)      => 0,
-    TCont(_, _)         => 0
+    TCont(_, _, _)      => 0
   }
 }, params)
 

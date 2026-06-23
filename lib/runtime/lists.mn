@@ -134,6 +134,42 @@ fn list_eq_loop(a, b, n, i) -> Bool with Memory =
     else { list_eq_loop(a, b, n, i + 1) }
   }
 
+// list_compare — the 3-way lexicographic ordering: the [a] instance of the ONE
+// compare leaf (sibling of str_compare's [Byte] instance). Returns -1 / 0 / 1.
+// The first differing element decides; on a common prefix the shorter list is
+// less. Elements compare as words here (the i32 instance the eq loop also uses);
+// the generated $compare_<sig> fold descends element-typed aggregates at the
+// emit layer, the same place the eq leaf does. length-then-element ordering.
+fn list_compare_loop(a, b, la, lb, i) -> Int with Memory =
+  if i >= la && i >= lb { 0 }
+  else if i >= la { 0 - 1 }
+  else if i >= lb { 1 }
+  else {
+    let ea = list_index(a, i)
+    let eb = list_index(b, i)
+    if ea < eb { 0 - 1 }
+    else if ea > eb { 1 }
+    else { list_compare_loop(a, b, la, lb, i + 1) }
+  }
+
+fn list_compare(a, b) -> Int with Memory =
+  let la = load_i32(a)
+  let lb = load_i32(b)
+  list_compare_loop(a, b, la, lb, 0)
+
+// list_hash — FNV-1a over the elements: the [a] instance of the ONE hash leaf.
+// Structural-equal lists (element-equal, equal length) hash equal (list_eq ⇒
+// list_hash equal — the eq/hash agreement). The length seeds the mix so [1] and
+// [1,1] differ; the same FNV constants str_hash / hash_source share.
+fn list_hash_loop(xs, i, n, h) -> Int with Memory =
+  if i >= n { h }
+  else { list_hash_loop(xs, i + 1, n, i32_xor(h, list_index(xs, i)) * 16777619) }
+
+fn list_hash(xs) -> Int with Memory = {
+  let n = load_i32(xs)
+  list_hash_loop(xs, 0, n, i32_xor(2166136261, n) * 16777619)
+}
+
 // Push — O(1) snoc
 
 /// push — append val to list, returning a new snoc node (tag=1).

@@ -1,0 +1,90 @@
+// COMPARE gate — the structural fold's ORDERING leaf: total `<`/`>`/`<=`/`>=`
+// over aggregates (records / tuples / sums) from ONE 3-way fold.
+//
+// The ultimate form (what the WHEEL now emits): a `<` (or `>`/`<=`/`>=`) on an
+// aggregate operand is a CALL to the generated recursive 3-way $compare_<sig>
+// helper (emit_one_compare_helper / emit_one_compare_sum_helper,
+// src/backends/wasm.mn) returning -1/0/1, then a sign test the op selects
+// (`<` → `< 0`). The helper's CONTROL SHAPE, which this micro proves:
+//
+//   1. SCALAR sign — a word/payload field orders by sign-of-difference
+//      (lt ⇒ -1, gt ⇒ 1, else 0): a TOTAL order, never a Bool that loses the
+//      "equal so far, keep going" signal a field-wise fold needs.
+//   2. SUM tag-then-payload — compare tags first (sign of the tag difference);
+//      EQUAL tags descend that variant's payload (the matched variant's fields).
+//   3. PRODUCT/PAYLOAD short-circuit — the FIRST non-equal field decides the
+//      order; on a tie recurse to the next field. A nested aggregate field
+//      re-enters the leaf (the same $compare_<sig>, finite on the value).
+//
+// The DIRECT `a < b` on an ADT cannot round-trip the SEED yet (its compare leaf
+// lags the wheel — it would pointer-compare two distinct heap addresses). So
+// the micro proves the helper's control shape in seed-supported constructs
+// (match-destructure + the 3-way sign), the same proxy discipline
+// mn-struct-eq-sum uses. When the seed catches up, this becomes the direct
+// `a < b` assertion — named peer: Hβ.fold.compare-sum-seed-value-gate.
+//
+// Expected exit 47: lt(8) + eq0(0... see below) + payload(16) + tie-recur(23).
+
+type Pair
+  = MkPair(Int, Int)
+  | Nil
+
+// box_tag / box_payload mirror $compare_nPair's i32.load offset=0 / offset=4+4i.
+fn pair_tag(p) = match p {
+  MkPair(_, _) => 0,
+  Nil          => 1,
+}
+
+fn pair_fst(p) = match p {
+  MkPair(a, _) => a,
+  Nil          => 0,
+}
+
+fn pair_snd(p) = match p {
+  MkPair(_, b) => b,
+  Nil          => 0,
+}
+
+// sign — the scalar leaf: -1/0/1 (the emit_word_sign_compare select shape).
+fn sign(a, b) = if a < b { 0 - 1 } else if a > b { 1 } else { 0 }
+
+// The compare control shape: tag-then-payload, field-wise short-circuit on the
+// FIRST non-zero field compare (the emit_cmp_*_chain shape).
+fn pair_compare(p, q) = {
+  let tp = pair_tag(p)
+  let tq = pair_tag(q)
+  let ts = sign(tp, tq)
+  if ts != 0 {
+    ts                               // tags differ → tag order decides
+  } else {
+    if tp == 0 {
+      // MkPair — compare fst first; non-zero decides, else compare snd.
+      let c0 = sign(pair_fst(p), pair_fst(q))
+      if c0 != 0 { c0 } else { sign(pair_snd(p), pair_snd(q)) }
+    } else {
+      0                              // both Nil — equal
+    }
+  }
+}
+
+fn main(arg) = {
+  let a = MkPair(1, 5)
+  let b = MkPair(1, 9)               // ties on fst, b greater on snd
+  let c = MkPair(2, 0)               // greater on fst (first field decides)
+  let n = Nil                        // greater tag (1 > 0)
+
+  // 1. payload short-circuit: a < b decided by snd (5 < 9), fst tied.
+  let lt_snd  = if pair_compare(a, b) < 0 { 8 }  else { 0 }
+  // 2. first-field decides: a < c by fst (1 < 2), snd irrelevant.
+  let lt_fst  = if pair_compare(a, c) < 0 { 16 } else { 0 }
+  // 3. tag order: MkPair(_) < Nil (tag 0 < 1).
+  let lt_tag  = if pair_compare(a, n) < 0 { 1 }  else { 0 }
+  // 4. equal: a <= a and not a < a (the 3-way 0 sign-tests correctly).
+  let eq_le   = if pair_compare(a, a) <= 0 { 4 }  else { 0 }
+  let eq_nlt  = if pair_compare(a, a) < 0 { 0 }   else { 2 }
+  // 5. ge / gt mirror: c > a, n >= a.
+  let gt_ok   = if pair_compare(c, a) > 0 { 8 }   else { 0 }
+  let ge_ok   = if pair_compare(n, a) >= 0 { 8 }  else { 0 }
+
+  lt_snd + lt_fst + lt_tag + eq_le + eq_nlt + gt_ok + ge_ok   // 8+16+1+4+2+8+8 = 47
+}

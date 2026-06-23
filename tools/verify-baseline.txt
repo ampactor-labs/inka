@@ -250,3 +250,5 @@ micro:fanout-simd=90
 # closures the LF.B lambda; the wheel inlines it), so it is NOT in the run-set.
 micro:autodiff=6
 micro:distort=18
+micro:compare-fold=47
+micro:hash-fold=50

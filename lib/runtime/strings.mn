@@ -116,6 +116,42 @@ fn str_lt(a, b) -> Bool with Memory =
   let lb = byte_len(b)
   str_lt_loop(a, b, la, lb, 0)
 
+// str_compare — the 3-way lexicographic ordering: the [Byte] instance of the
+// ONE compare leaf (SYNTAX.md §Equality's ordering sibling). Returns -1 / 0 / 1
+// so a generated $compare_<sig> fold can short-circuit on the first non-equal
+// element (a Bool str_lt cannot — it loses the "equal so far, keep going"
+// signal). Byte-exact, walking via byte_at so view/flat dispatch is
+// transparent; the first differing byte decides, else the shorter string is
+// less (the [a]/[Byte] instance of length-then-element ordering).
+fn str_compare_loop(a, b, la, lb, i) -> Int with Memory =
+  if i >= la && i >= lb { 0 }
+  else if i >= la { 0 - 1 }
+  else if i >= lb { 1 }
+  else {
+    let ca = byte_at(a, i)
+    let cb = byte_at(b, i)
+    if ca < cb { 0 - 1 }
+    else if ca > cb { 1 }
+    else { str_compare_loop(a, b, la, lb, i + 1) }
+  }
+
+fn str_compare(a, b) -> Int with Memory =
+  let la = byte_len(a)
+  let lb = byte_len(b)
+  str_compare_loop(a, b, la, lb, 0)
+
+// str_hash — FNV-1a over the bytes: the [Byte] instance of the ONE hash leaf.
+// Structural-equal strings (byte-equal) hash equal by construction (str_eq ⇒
+// str_hash equal — the eq/hash agreement the whole fold enforces). The SAME
+// FNV mix cache.mn's hash_source uses (offset basis 2166136261, prime 16777619);
+// the generated $hash_<sig> fold mixes a string field by calling this.
+fn str_hash_loop(s, i, n, h) -> Int with Memory =
+  if i >= n { h }
+  else { str_hash_loop(s, i + 1, n, i32_xor(h, byte_at(s, i)) * 16777619) }
+
+fn str_hash(s) -> Int with Memory =
+  str_hash_loop(s, 0, byte_len(s), 2166136261)
+
 // Concatenation and slicing — concat materializes (the boundary);
 // slice produces a view (zero byte-copy).
 

@@ -493,6 +493,48 @@ fn lower_show_call(handle, ah, arg_lo) with LookupTy = {
   LCall(handle, LGlobal(handle, "show_{fold_sig(lookup_ty(ah))}"), [arg_lo])
 }
 
+/// hash(x) IS lower-time type dispatch — the HASH leaf of the SAME structural
+/// fold show/eq/compare ride, the operand type read live (lookup_ty) to project
+/// the leaf, never to choose a surface operator. Structural-equal values hash
+/// equal by construction (the eq/hash agreement the whole fold enforces): a
+/// scalar word hashes to itself (i32 identity — `x == y` ⇒ same word ⇒ same
+/// hash); a sequence to str_hash/list_hash (byte/element FNV); an aggregate to
+/// the generated recursive $hash_<sig> (field/payload FNV mix). A float hashes
+/// its decimal-string bytes (str_hash(float_to_str)) so two equal f64s hash
+/// equal regardless of bit-noise — the value-faithful leaf, never the raw bits.
+fn lower_hash_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic = {
+  let N(_, _, ah) = list_head(args)
+  match fold_strip(lookup_ty(ah)) {
+    TString            => lower_hash_call(handle, ah, arg_lo, "str_hash"),
+    TList(_)           => lower_hash_call(handle, ah, arg_lo, "list_hash"),
+    // Float: hash the value-faithful decimal rendering (equal f64 ⇒ equal
+    // string ⇒ equal hash), composing the show word-leaf with str_hash.
+    TFloat             => LCall(handle, LGlobal(handle, "str_hash"),
+                            [LCall(handle, LGlobal(handle, "float_to_str"), [arg_lo])]),
+    // Aggregates — the generated $hash_<sig> fold leaf, named by the operand's
+    // fold-signature (the SAME sig the eq/compare/show leaves read).
+    TRecord(_)         => lower_hash_agg_call(handle, ah, arg_lo),
+    TRecordOpen(_, _)  => lower_hash_agg_call(handle, ah, arg_lo),
+    TTuple(_)          => lower_hash_agg_call(handle, ah, arg_lo),
+    TName(_, _)        => lower_hash_agg_call(handle, ah, arg_lo),
+    // Int / Unit / unresolved-TVar / closure / continuation — the value word
+    // IS its hash (i32 identity: equal words hash equal, the scalar leaf).
+    _                  => arg_lo
+  }
+}
+
+/// A sequence hash: the runtime str_hash/list_hash ([Byte]/[a] FNV instance),
+/// state-threaded like every Memory-rowed runtime call.
+fn lower_hash_call(handle, ah, arg_lo, rt) with LookupTy = {
+  LCall(handle, LGlobal(handle, rt), [arg_lo])
+}
+
+/// An aggregate hash: the generated recursive $hash_<sig> helper, named by the
+/// proven fold-signature — sibling of $eq_<sig> / $compare_<sig> / $show_<sig>.
+fn lower_hash_agg_call(handle, ah, arg_lo) with LookupTy = {
+  LCall(handle, LGlobal(handle, "hash_{fold_sig(lookup_ty(ah))}"), [arg_lo])
+}
+
 fn lexpr_ty(e) with LookupTy = {
   lookup_ty(lexpr_handle(e))
 }
@@ -1020,6 +1062,11 @@ fn lower_expr_body(e, handle, span) = match e {
       NExpr(VarRef(name)) =>
         if name == "to_string" && len(args) == 1 {
           lower_to_string_dispatch(handle, list_head(lo_args), args)
+        } else if name == "hash" && len(args) == 1 {
+          // hash(x) IS the HASH leaf of the structural fold — lower-time type
+          // dispatch (scalar word-identity / sequence str_hash·list_hash /
+          // aggregate $hash_<sig>), the sibling of to_string's show leaf.
+          lower_hash_dispatch(handle, list_head(lo_args), args)
         } else if name == "float_of_int" && len(args) == 1 {
           // W11: the gradient's coercion arm — a REAL i32->f64 widen
           // (f64.convert_i32_s), never an identity stub reinterpreting bits.

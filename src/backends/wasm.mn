@@ -269,6 +269,15 @@ fn emit_module(lowered) = {
   // the program's functions, before _start. A pure-scalar/sequence program
   // collects none (byte-identical to the pre-fold module, Law 7).
   emit_fold_eq_helpers(lowered)
+  // The compare-leaf: one recursive 3-way $compare_<sig> helper per distinct
+  // aggregate at a `<`/`>`/`<=`/`>=` site (the graph IS the index, the same
+  // dedup). Sibling of $eq_<sig>; ordering where eq tests equality. A program
+  // with no aggregate ordering collects none (byte-identical, Law 7).
+  emit_fold_compare_helpers(lowered)
+  // The hash-leaf: one recursive $hash_<sig> helper per distinct aggregate at a
+  // `hash(x)` site (FNV mix over the SAME field set the eq leaf reads, so eq ⇒
+  // hash equal). A program with no aggregate hash collects none (Law 7).
+  emit_fold_hash_helpers(lowered)
   // The show-leaf of the structural fold: one recursive $show_<sig> helper per
   // distinct aggregate type rendered by to_string (the graph IS the index, the
   // same dedup the eq leaf uses). Sibling generator, sibling leaf — six ops, one
@@ -2653,13 +2662,24 @@ fn emit_binop_for(op, left_h) = match op {
   // (left_h == 0) is a flat scalar by construction.
   BEq => emit_struct_eq(left_h, false),
   BNe => emit_struct_eq(left_h, true),
-  // Arithmetic/comparison/logical: the representation gradient at the binop
-  // layer. The operand's PROVEN type (read live, never re-derived) projects
-  // the machine-width instruction — the same "proof becomes the dispatch"
-  // move ++/== make above. RI32 emits the i32.* floor byte-identical to the
-  // pre-gradient form (Law 7); RF64/RF32/RI64/RV128 are the cash-outs a
-  // float/wide/lane operand reaches with no surface-operator split (+ stays
-  // + for every width, exactly as ++ is one seq_concat).
+  // < / > / <= / >= over an AGGREGATE operand: the ordering leaf of the SAME
+  // structural fold. A record/tuple/sum/sequence has no machine-width compare
+  // instruction — a bare i32.lt_s on the heap address is a pointer compare
+  // lying as a value ordering, the SAME silent footgun pointer-eq is for `==`
+  // (Carried-Truth: the value's ORDER is a property of its proven structure,
+  // never its address). emit_struct_cmp routes aggregates to the generated
+  // 3-way $compare_<sig> helper (-1/0/1) + the sign test the op selects;
+  // scalar words keep the byte-identical emit_binop_repr floor (Law 7).
+  BLt => emit_struct_cmp(op, left_h),
+  BGt => emit_struct_cmp(op, left_h),
+  BLe => emit_struct_cmp(op, left_h),
+  BGe => emit_struct_cmp(op, left_h),
+  // Arithmetic/logical: the representation gradient at the binop layer. The
+  // operand's PROVEN type (read live, never re-derived) projects the machine-
+  // width instruction — the same "proof becomes the dispatch" move ++/== make
+  // above. RI32 emits the i32.* floor byte-identical to the pre-gradient form
+  // (Law 7); RF64/RF32/RI64/RV128 are the cash-outs a float/wide/lane operand
+  // reaches with no surface-operator split (+ stays + for every width).
   _ => emit_binop_repr(op, repr_of(lookup_ty(left_h)))
 }
 
@@ -3105,6 +3125,383 @@ fn emit_swap_under_state() = {
   wat_emit("    (local.get $state_tmp)\n")
   wat_emit("    (local.get $alloc_size)\n")          // a_field
   wat_emit("    (local.get $callee_closure)\n")      // b_field
+}
+
+// ─── The COMPARE leaf of the structural fold: 3-way ordering ──────────────
+// `<`/`>`/`<=`/`>=` on an AGGREGATE is the ordering sibling of `==`: the SAME
+// fold-over-five-node-kinds, the leaf returning -1/0/1 (a TOTAL order, not a
+// Bool — so a field-wise/lexicographic fold short-circuits on the first non-
+// equal element, which a Bool `<` cannot). The op then sign-tests the 3-way
+// result: `<` is `< 0`, `>` is `> 0`, `<=` is `<= 0`, `>=` is `>= 0`. Word/
+// float operands keep the byte-identical emit_binop_repr machine compare
+// (Law 7); aggregates route to the generated recursive $compare_<sig> helper.
+// One traversal, the eq/compare/hash family cannot diverge.
+fn emit_struct_cmp(op, left_h) =
+  if left_h == 0 {
+    // Flat scalar word by construction — the machine compare floor.
+    emit_binop_repr(op, RI32)
+  } else {
+    emit_cmp_for_ty(op, fold_strip(lookup_ty(left_h)))
+  }
+
+// The compare leaf over an already-stripped operand type. Aggregates (product/
+// tuple/sum/sequence) call the 3-way helper then sign-test; scalar words/floats
+// fall to the machine compare at the operand's proven repr (the same gradient
+// the arithmetic binops ride). A sequence is the str_compare/list_compare
+// [Byte]/[a] instance; a product/sum the generated $compare_<sig>.
+fn emit_cmp_for_ty(op, ty) = match ty {
+  TString => emit_cmp_seq_call("str_compare", op),
+  TList(_) => emit_cmp_seq_call("list_compare", op),
+  TRecord(_)        => emit_cmp_agg_call(fold_sig(ty), op),
+  TRecordOpen(_, _) => emit_cmp_agg_call(fold_sig(ty), op),
+  TTuple(_)         => emit_cmp_agg_call(fold_sig(ty), op),
+  TName(_, _)       => emit_cmp_agg_call(fold_sig(ty), op),
+  TFloat            => emit_binop_repr(op, RF64),
+  // Int / Unit / resolved-TVar / nullary-tag / fn-idx / cont-ptr — word compare.
+  _                 => emit_binop_repr(op, RI32)
+}
+
+// A sequence compare: insert __state under (a, b) (the W7 convention), call the
+// 3-way runtime compare, then sign-test for the op. Both [Byte] (str_compare)
+// and [a] (list_compare) are the ONE length-then-element ordering.
+fn emit_cmp_seq_call(rt, op) = {
+  emit_helper_state_insert()
+  wat_emit("    (call $")
+  wat_emit(rt)
+  wat_emit(")\n")
+  emit_cmp_sign_test(op)
+}
+
+// An aggregate (product/tuple/sum) compare: call the generated $compare_<sig>
+// helper (state-threaded like $eq_<sig>) then sign-test. The deep field/payload
+// ordering lives in the helper, generated once per distinct type and deduped.
+fn emit_cmp_agg_call(sig, op) = {
+  emit_helper_state_insert()
+  wat_emit("    (call $compare_")
+  wat_emit(sig)
+  wat_emit(")\n")
+  emit_cmp_sign_test(op)
+}
+
+// The 3-way result (-1/0/1) on the stack → the Bool the op asked for. `<` is
+// `(i32.lt_s r 0)`, `>` is `(i32.gt_s r 0)`, `<=` is `(i32.le_s r 0)`, `>=` is
+// `(i32.ge_s r 0)`. The order's sign IS the comparison — one compare, four
+// sign tests (never four separate traversals).
+fn emit_cmp_sign_test(op) = {
+  wat_emit("    (i32.const 0)\n")
+  match op {
+    BLt => wat_emit("    (i32.lt_s)\n"),
+    BGt => wat_emit("    (i32.gt_s)\n"),
+    BLe => wat_emit("    (i32.le_s)\n"),
+    BGe => wat_emit("    (i32.ge_s)\n"),
+    _   => wat_emit("    (i32.lt_s)\n")
+  }
+}
+
+// ─── The compare-leaf generator: recursive $compare_<sig> helpers ─────────
+// Mirror of emit_fold_eq_helpers: a pre-pass collects the aggregate operand
+// type at every BLt/BGt/BLe/BGe site (+ its nested-aggregate closure, the SAME
+// eq_subtys reach), each distinct sig emitting ONE recursive 3-way helper.
+fn emit_fold_compare_helpers(lowered) with EnvRead = {
+  let tys = collect_cmp_agg_tys_list(lowered, [])
+  emit_distinct_compare_helpers(tys, [])
+}
+
+fn emit_distinct_compare_helpers(tys, seen) with EnvRead = {
+  if len(tys) == 0 { () }
+  else {
+    let ty = list_head(tys)
+    let sig = fold_sig(ty)
+    if ls_find_str_local(seen, sig, 0) >= 0 {
+      emit_distinct_compare_helpers(list_tail(tys), seen)
+    } else {
+      emit_one_compare_helper(sig, ty)
+      emit_distinct_compare_helpers(list_tail(tys), [sig] ++ seen)
+    }
+  }
+}
+
+// emit_one_compare_helper — the $compare_<sig> recursive body. (__state, a, b)
+// → i32 ∈ {-1,0,1}. A PRODUCT (record/tuple) compares fields in canonical order,
+// returning the first non-zero field-compare (else 0); a SUM (TName payload-ADT)
+// compares tags first (sign of the tag difference), then the matched variant's
+// payload fields. One generator, two of the five leaves — divergence unsayable.
+fn emit_one_compare_helper(sig, ty) with EnvRead = match fold_strip(ty) {
+  TName(name, _) => emit_one_compare_sum_helper(sig, name),
+  _ => {
+    wat_emit("  (func $compare_")
+    wat_emit(sig)
+    wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)")
+    wat_emit(" (local $c i32) (local $state_tmp i32)")
+    wat_emit(" (local $callee_closure i32) (local $alloc_size i32)\n")
+    let fields = product_field_tys(ty)
+    emit_cmp_helper_chain(fields, 0, len(fields), 0)
+    wat_emit("  )\n")
+  }
+}
+
+// emit_one_compare_sum_helper — the $compare_n<Name> sum helper. A nullary
+// variant is a sentinel word, a fielded variant a heap record [tag@0][f0@4]…:
+//   - if either operand is a sentinel (< heap_base): compare as words (sub-sign).
+//     A nullary tag word vs another word orders by the value; that IS the tag
+//     order (declaration order = tag id = sentinel value).
+//   - else both heap records: compare tags (sign of difference); if equal,
+//     descend the matched variant's payload conjunction (first non-zero wins).
+fn emit_one_compare_sum_helper(sig, type_name) with EnvRead = {
+  let specs = variant_specs_of(type_name)
+  wat_emit("  (func $compare_")
+  wat_emit(sig)
+  wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)")
+  wat_emit(" (local $ta i32) (local $tb i32) (local $c i32)")
+  wat_emit(" (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)\n")
+  // Sentinel guard: either operand below heap_base ⇒ word ordering (sign of a-b).
+  wat_emit("    (if (result i32)\n")
+  wat_emit("      (i32.or\n")
+  wat_emit("        (i32.lt_u (local.get $a) (i32.const ")
+  wat_emit(int_to_str(heap_base()))
+  wat_emit("))\n")
+  wat_emit("        (i32.lt_u (local.get $b) (i32.const ")
+  wat_emit(int_to_str(heap_base()))
+  wat_emit(")))\n")
+  wat_emit("      (then ")
+  emit_word_sign_compare("(local.get $a)", "(local.get $b)")
+  wat_emit(")\n")
+  wat_emit("      (else\n")
+  wat_emit("        (local.set $ta (i32.load offset=0 (local.get $a)))\n")
+  wat_emit("        (local.set $tb (i32.load offset=0 (local.get $b)))\n")
+  wat_emit("        (if (result i32)\n")
+  wat_emit("          (i32.ne (local.get $ta) (local.get $tb))\n")
+  wat_emit("          (then ")
+  emit_word_sign_compare("(local.get $ta)", "(local.get $tb)")
+  wat_emit(")\n")
+  wat_emit("          (else\n")
+  emit_compare_sum_tag_dispatch(specs, 0, len(specs))
+  wat_emit("          )))))\n")
+  wat_emit("  )\n")
+}
+
+// Sign of (x - y) as -1/0/1, both operands WAT s-expression strings on demand.
+// `(select 1 (select -1 0 (i32.lt_s x y)) (i32.gt_s x y))`: gt ⇒ 1, else lt ⇒
+// -1, else 0. Unsigned-domain tag/sentinel values stay in i32 range, lt_s/gt_s
+// order them correctly (heap_base() < 2^31).
+fn emit_word_sign_compare(x, y) = {
+  wat_emit("(select (i32.const 1) (select (i32.const -1) (i32.const 0) (i32.lt_s ")
+  wat_emit(x)
+  wat_emit(" ")
+  wat_emit(y)
+  wat_emit(")) (i32.gt_s ")
+  wat_emit(x)
+  wat_emit(" ")
+  wat_emit(y)
+  wat_emit("))")
+}
+
+// Per-variant tag dispatch for compare: tags already proven equal, descend the
+// matched fielded variant's payload conjunction. A purely-nullary variant
+// contributes nothing (its values never reach here — the sentinel guard caught
+// them). No fielded variant matched past equal tags ⇒ equal nullary records
+// (impossible past the guard): terminal 0 (equal).
+fn emit_compare_sum_tag_dispatch(specs, i, n) = {
+  if i >= n { wat_emit("            (i32.const 0)\n") }
+  else {
+    let (tag_id, payloads) = list_index(specs, i)
+    if len(payloads) == 0 {
+      emit_compare_sum_tag_dispatch(specs, i + 1, n)
+    } else {
+      wat_emit("            (if (result i32)\n")
+      wat_emit("              (i32.eq (local.get $ta) (i32.const ")
+      wat_emit(int_to_str(tag_id))
+      wat_emit("))\n")
+      wat_emit("              (then\n")
+      emit_cmp_variant_payload_chain(payloads, 0, len(payloads), 4)
+      wat_emit("              )\n")
+      wat_emit("              (else\n")
+      emit_compare_sum_tag_dispatch(specs, i + 1, n)
+      wat_emit("              ))\n")
+    }
+  }
+}
+
+// The payload chain for one variant: compare payload field i; if non-zero,
+// THAT is the order; else recurse to field i+1; the last field's compare is
+// the result. `off` is the running byte offset (variant payload base 4,
+// width-summed — the SAME variant_payload_offset the eq + store sides read).
+fn emit_cmp_variant_payload_chain(payloads, i, n, off) = {
+  if n == 0 { wat_emit("                (i32.const 0)\n") }
+  else if i >= n { () }
+  else {
+    let pty = fold_strip(list_index(payloads, i))
+    let r = repr_of(pty)
+    if i + 1 >= n {
+      // Last payload field — its compare IS the variant's order.
+      emit_field_load_pair(off, r)
+      emit_field_cmp(pty)
+    } else {
+      // (local.set $c <field compare>) ; if $c != 0 return $c else next field.
+      wat_emit("                (local.set $c ")
+      emit_field_load_pair(off, r)
+      emit_field_cmp(pty)
+      wat_emit(")\n")
+      wat_emit("                (if (result i32) (i32.ne (local.get $c) (i32.const 0))\n")
+      wat_emit("                  (then (local.get $c))\n")
+      wat_emit("                  (else\n")
+      emit_cmp_variant_payload_chain(payloads, i + 1, n, off + repr_width(r))
+      wat_emit("                  ))\n")
+    }
+  }
+}
+
+// The product compare chain: field i's compare; first non-zero wins, else
+// recurse. Mirror of emit_eq_helper_conjunction but short-circuiting on order
+// (not ANDing Bools). `off` is the width-summed running offset (align_for +
+// repr_width — the SAME fold the eq leaf and the store side run).
+fn emit_cmp_helper_chain(fields, i, n, off) = {
+  if n == 0 { wat_emit("    (i32.const 0)\n") }   // empty product — equal
+  else if i >= n { () }
+  else {
+    let fty = list_index(fields, i)
+    let r = repr_of(fty)
+    let here = align_for(off, r)
+    if i + 1 >= n {
+      emit_field_load_pair(here, r)
+      emit_field_cmp(fold_strip(fty))
+    } else {
+      wat_emit("    (local.set $c ")
+      emit_field_load_pair(here, r)
+      emit_field_cmp(fold_strip(fty))
+      wat_emit(")\n")
+      wat_emit("    (if (result i32) (i32.ne (local.get $c) (i32.const 0))\n")
+      wat_emit("      (then (local.get $c))\n")
+      wat_emit("      (else\n")
+      emit_cmp_helper_chain(fields, i + 1, n, here + repr_width(r))
+      wat_emit("      ))\n")
+    }
+  }
+}
+
+// The leaf compare instruction over a stripped field type, two field values on
+// the stack → i32 ∈ {-1,0,1}. Word → sign-of-difference; float → f64 sign;
+// sequence → the state-threaded str_compare/list_compare; product/sum → a
+// recursive $compare_<sig> call. The SAME five-node-kind leaf emit_cmp_for_ty
+// drives at the top-level compare — eq and compare cannot diverge.
+fn emit_field_cmp(fty) = match fty {
+  TString  => { wat_emit("    (local.get $__state)\n")
+                emit_swap_under_state()
+                wat_emit("    (call $str_compare)\n") },
+  TList(_) => { wat_emit("    (local.get $__state)\n")
+                emit_swap_under_state()
+                wat_emit("    (call $list_compare)\n") },
+  TRecord(_)        => emit_field_agg_cmp(fold_sig(fty)),
+  TRecordOpen(_, _) => emit_field_agg_cmp(fold_sig(fty)),
+  TTuple(_)         => emit_field_agg_cmp(fold_sig(fty)),
+  TName(_, _)       => emit_field_agg_cmp(fold_sig(fty)),
+  // f64 sign: gt ⇒ 1, else lt ⇒ -1, else 0 (the same select shape, f64 ops).
+  TFloat            => wat_emit("    (select (i32.const 1) (select (i32.const -1) (i32.const 0) (f64.lt)) (f64.gt))\n"),
+  // Int / Unit / resolved-TVar / nullary-tag — word sign-of-difference. The
+  // stack has [a_field, b_field]; (select 1 (select -1 0 (i32.lt_s)) (i32.gt_s))
+  // needs the pair twice, so reload through scratch.
+  _                 => emit_word_field_sign_compare()
+}
+
+// Word field compare with the pair on the stack: save both, then emit the
+// select using the saved locals twice. Reuses the helper's $alloc_size (a) and
+// $callee_closure (b) scratch.
+fn emit_word_field_sign_compare() = {
+  wat_emit("    (local.set $callee_closure)\n")   // b
+  wat_emit("    (local.set $alloc_size)\n")       // a
+  emit_word_sign_compare("(local.get $alloc_size)", "(local.get $callee_closure)")
+  wat_emit("\n")
+}
+
+// A nested aggregate field compare: insert __state under the pair, recurse into
+// $compare_<sig> (the same convention emit_field_product_eq uses for eq).
+fn emit_field_agg_cmp(sig) = {
+  wat_emit("    (local.get $__state)\n")
+  emit_swap_under_state()
+  wat_emit("    (call $compare_")
+  wat_emit(sig)
+  wat_emit(")\n")
+}
+
+// The compare collection pre-pass: the aggregate operand type at every BLt/BGt/
+// BLe/BGe site, plus its nested-aggregate closure (eq_subtys — the SAME reach
+// the eq leaf collects, since compare descends the identical structure). A
+// scalar/float operand contributes nothing (the machine compare needs no helper).
+fn cmp_agg_operand_contrib(left_h, acc) = {
+  if left_h == 0 { acc }
+  else { eq_subtys(fold_strip(lookup_ty(left_h)), [], acc) }
+}
+
+fn collect_cmp_agg_tys_list(stmts, acc) = {
+  if len(stmts) == 0 { acc }
+  else {
+    collect_cmp_agg_tys_list(list_tail(stmts),
+      collect_cmp_agg_tys_expr(list_head(stmts), acc))
+  }
+}
+
+fn collect_cmp_agg_tys_expr(expr, acc) = match expr {
+  LBinOp(_h, BLt, l, _r) => collect_cmp_agg_tys_expr(l,
+                              cmp_agg_operand_contrib(lexpr_handle(l), acc)),
+  LBinOp(_h, BGt, l, _r) => collect_cmp_agg_tys_expr(l,
+                              cmp_agg_operand_contrib(lexpr_handle(l), acc)),
+  LBinOp(_h, BLe, l, _r) => collect_cmp_agg_tys_expr(l,
+                              cmp_agg_operand_contrib(lexpr_handle(l), acc)),
+  LBinOp(_h, BGe, l, _r) => collect_cmp_agg_tys_expr(l,
+                              cmp_agg_operand_contrib(lexpr_handle(l), acc)),
+  LBinOp(_h, _op, l, r)  => collect_cmp_agg_tys_expr(r,
+                              collect_cmp_agg_tys_expr(l, acc)),
+  LCall(_h, f, args)     => collect_cmp_agg_tys_expr(f,
+                              collect_cmp_agg_tys_list(args, acc)),
+  LTailCall(_h, f, args) => collect_cmp_agg_tys_expr(f,
+                              collect_cmp_agg_tys_list(args, acc)),
+  LSuspend(_h, _o, f, args, ev) => collect_cmp_agg_tys_expr(f,
+                              collect_cmp_agg_tys_list(args,
+                                collect_cmp_agg_tys_list(ev, acc))),
+  LEvPerform(_h, _n, _e, _s, args) => collect_cmp_agg_tys_list(args, acc),
+  LLet(_h, _n, inner)    => collect_cmp_agg_tys_expr(inner, acc),
+  LStore(_h, _s, v)      => collect_cmp_agg_tys_expr(v, acc),
+  LUnaryOp(_h, _op, i)   => collect_cmp_agg_tys_expr(i, acc),
+  LReturn(_h, i)         => collect_cmp_agg_tys_expr(i, acc),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
+    collect_cmp_agg_tys_list(body,
+      collect_cmp_agg_tys_list(caps, collect_cmp_agg_tys_list(ev, acc))),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
+    collect_cmp_agg_tys_list(body,
+      collect_cmp_agg_tys_list(caps, collect_cmp_agg_tys_list(ev, acc))),
+  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_cmp_agg_tys_list(body, acc),
+  LIf(_h, c, t, e)       => collect_cmp_agg_tys_list(e,
+                              collect_cmp_agg_tys_list(t,
+                                collect_cmp_agg_tys_expr(c, acc))),
+  LBlock(_h, stmts)      => collect_cmp_agg_tys_list(stmts, acc),
+  LMakeList(_h, es)      => collect_cmp_agg_tys_list(es, acc),
+  LMakeTuple(_h, es)     => collect_cmp_agg_tys_list(es, acc),
+  LSimdLanes(_h, lanes)  => collect_cmp_agg_tys_list(lanes, acc),
+  LMakeRecord(_h, fs)    => collect_cmp_agg_tys_list(fs, acc),
+  LMakeVariant(_h, _t, fs) => collect_cmp_agg_tys_list(fs, acc),
+  LIndex(_h, b, i, _)    => collect_cmp_agg_tys_expr(i,
+                              collect_cmp_agg_tys_expr(b, acc)),
+  LMatch(_h, s, _arms)   => collect_cmp_agg_tys_expr(s, acc),
+  LRegion(_h, body)      => collect_cmp_agg_tys_list(body, acc),
+  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
+    collect_cmp_agg_tys_expr(b,
+      collect_cmp_agg_tys_expr(hn,
+        collect_cmp_agg_tys_list(inits, collect_cmp_agg_tys_list(cevs, acc)))),
+  LFeedback(_h, b, s)    => collect_cmp_agg_tys_expr(s,
+                              collect_cmp_agg_tys_expr(b, acc)),
+  LPerform(_h, _n, args, _) => collect_cmp_agg_tys_list(args, acc),
+  LWasiCall(_h, _n, args)   => collect_cmp_agg_tys_list(args, acc),
+  LStateSet(_h, _s, v)   => collect_cmp_agg_tys_expr(v, acc),
+  LFieldLoad(_h, rec, _o) => collect_cmp_agg_tys_expr(rec, acc),
+  LConvert(_h, _, operand) => collect_cmp_agg_tys_expr(operand, acc),
+  LStateSlotStore(_h, _o, v) => collect_cmp_agg_tys_expr(v, acc),
+  LConst(_, _)           => acc,
+  LLocal(_, _)           => acc,
+  LFeedbackPrior(_)      => acc,
+  LGlobal(_, _)          => acc,
+  LUpval(_, _)           => acc,
+  LStateGet(_, _)        => acc,
+  LEvSlotRef(_, _)       => acc
 }
 
 // The product's field types, in canonical (sorted-for-record, positional-for-
@@ -3761,6 +4158,269 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LFieldLoad(_h, rec, _o) => collect_show_tys_expr(rec, acc),
   LConvert(_h, _, operand) => collect_show_tys_expr(operand, acc),
   LStateSlotStore(_h, _o, v) => collect_show_tys_expr(v, acc),
+  LConst(_, _)           => acc,
+  LLocal(_, _)           => acc,
+  LFeedbackPrior(_)      => acc,
+  LGlobal(_, _)          => acc,
+  LUpval(_, _)           => acc,
+  LStateGet(_, _)        => acc,
+  LEvSlotRef(_, _)       => acc
+}
+
+// ─── The HASH leaf of the structural fold: generated recursive $hash_<sig> ──
+// hash(x) on an AGGREGATE is a CALL to the generated recursive $hash_<sig>
+// helper (lower_hash_agg_call named it; here the backend emits it). The SAME
+// fold-over-five-node-kinds the eq/compare/show leaves walk, with the HASH
+// leaf: FNV-1a mix — h = (h xor field_hash) * prime, folded over the fields /
+// payload / elements. Structural-equal values hash equal by construction (eq ⇒
+// hash, the agreement the fold enforces): the field set, offsets, and recursion
+// are the SAME the eq leaf reads, so two values eq returns true for hash
+// identically. The runtime str_hash/list_hash are the sequence leaf; a scalar
+// word IS its own hash; a nested aggregate recurses its own $hash_<sig>.
+
+fn emit_fold_hash_helpers(lowered) with EnvRead = {
+  let tys = collect_hash_tys_list(lowered, [])
+  emit_distinct_hash_helpers(tys, [])
+}
+
+fn emit_distinct_hash_helpers(tys, seen) with EnvRead = {
+  if len(tys) == 0 { () }
+  else {
+    let ty = list_head(tys)
+    let sig = fold_sig(ty)
+    if ls_find_str_local(seen, sig, 0) >= 0 {
+      emit_distinct_hash_helpers(list_tail(tys), seen)
+    } else {
+      emit_one_hash_helper(sig, ty)
+      emit_distinct_hash_helpers(list_tail(tys), [sig] ++ seen)
+    }
+  }
+}
+
+// emit_one_hash_helper — the $hash_<sig> recursive body. (__state, a) → i32.
+// A PRODUCT (record/tuple) folds the FNV mix over each field's hash at its
+// canonical offset; a SUM seeds the mix with the tag, then mixes the matched
+// variant's payload. The FNV offset basis (2166136261) and prime (16777619)
+// are the SAME str_hash / hash_source share — one hash family, no divergence.
+fn emit_one_hash_helper(sig, ty) with EnvRead = match fold_strip(ty) {
+  TName(name, _) => emit_one_hash_sum_helper(sig, name),
+  _ => {
+    wat_emit("  (func $hash_")
+    wat_emit(sig)
+    wat_emit(" (param $__state i32) (param $a i32) (result i32)")
+    wat_emit(" (local $h i32) (local $state_tmp i32) (local $callee_closure i32)\n")
+    wat_emit("    (local.set $h (i32.const 2166136261))\n")
+    let fields = product_field_tys(ty)
+    emit_hash_field_mix(fields, 0, len(fields), 0)
+    wat_emit("    (local.get $h)\n")
+    wat_emit("  )\n")
+  }
+}
+
+// emit_one_hash_sum_helper — the $hash_n<Name> sum helper. A nullary variant is
+// a sentinel word (its value IS its hash-seed); a fielded variant a heap record
+// [tag@0][f0@4]…, so: seed $h with the FNV basis; if the operand is a sentinel
+// (< heap_base) mix the word itself; else mix tag@0, then the matched variant's
+// payload fields. Two structurally-equal ADT values fold identically.
+fn emit_one_hash_sum_helper(sig, type_name) with EnvRead = {
+  let specs = variant_specs_of(type_name)
+  wat_emit("  (func $hash_")
+  wat_emit(sig)
+  wat_emit(" (param $__state i32) (param $a i32) (result i32)")
+  wat_emit(" (local $h i32) (local $ta i32)")
+  wat_emit(" (local $state_tmp i32) (local $callee_closure i32)\n")
+  wat_emit("    (local.set $h (i32.const 2166136261))\n")
+  wat_emit("    (if\n")
+  wat_emit("      (i32.lt_u (local.get $a) (i32.const ")
+  wat_emit(int_to_str(heap_base()))
+  wat_emit("))\n")
+  // Sentinel (nullary): mix the word itself.
+  wat_emit("      (then (local.set $h (i32.mul (i32.xor (local.get $h) (local.get $a)) (i32.const 16777619))))\n")
+  wat_emit("      (else\n")
+  wat_emit("        (local.set $ta (i32.load offset=0 (local.get $a)))\n")
+  wat_emit("        (local.set $h (i32.mul (i32.xor (local.get $h) (local.get $ta)) (i32.const 16777619)))\n")
+  emit_hash_sum_tag_dispatch(specs, 0, len(specs))
+  wat_emit("      ))\n")
+  wat_emit("    (local.get $h)\n")
+  wat_emit("  )\n")
+}
+
+// Per-variant tag dispatch for hash: the tag already mixed, descend the matched
+// fielded variant's payload mix. A nullary variant has no payload (nothing to
+// mix past its tag). No fielded variant matched ⇒ a nullary record (its tag is
+// its full hash): nothing more to mix.
+fn emit_hash_sum_tag_dispatch(specs, i, n) = {
+  if i >= n { () }
+  else {
+    let (tag_id, payloads) = list_index(specs, i)
+    if len(payloads) == 0 {
+      emit_hash_sum_tag_dispatch(specs, i + 1, n)
+    } else {
+      wat_emit("        (if\n")
+      wat_emit("          (i32.eq (local.get $ta) (i32.const ")
+      wat_emit(int_to_str(tag_id))
+      wat_emit("))\n")
+      wat_emit("          (then\n")
+      emit_hash_variant_payload_mix(payloads, 0, len(payloads), 4)
+      wat_emit("          )\n")
+      wat_emit("          (else\n")
+      emit_hash_sum_tag_dispatch(specs, i + 1, n)
+      wat_emit("          ))\n")
+    }
+  }
+}
+
+// Mix each payload field at its width-summed offset (variant base 4 — the SAME
+// offset fold the eq/compare leaves read). h = (h xor field_hash) * prime.
+fn emit_hash_variant_payload_mix(payloads, i, n, off) = {
+  if i >= n { () }
+  else {
+    let pty = fold_strip(list_index(payloads, i))
+    let r = repr_of(pty)
+    wat_emit("            (local.set $h (i32.mul (i32.xor (local.get $h) ")
+    emit_field_hash(off, r, pty)
+    wat_emit(") (i32.const 16777619)))\n")
+    emit_hash_variant_payload_mix(payloads, i + 1, n, off + repr_width(r))
+  }
+}
+
+// The product hash mix chain: fold the FNV mix over each field at its width-
+// summed offset (align_for + repr_width — the SAME fold the eq leaf reads).
+fn emit_hash_field_mix(fields, i, n, off) = {
+  if i >= n { () }
+  else {
+    let fty = list_index(fields, i)
+    let r = repr_of(fty)
+    let here = align_for(off, r)
+    wat_emit("    (local.set $h (i32.mul (i32.xor (local.get $h) ")
+    emit_field_hash(here, r, fold_strip(fty))
+    wat_emit(") (i32.const 16777619)))\n")
+    emit_hash_field_mix(fields, i + 1, n, here + repr_width(r))
+  }
+}
+
+// The leaf hash of one field at byte offset `off` → an i32 hash s-expression.
+// Word → the loaded word itself; float → str_hash(float_to_str) (value-faithful,
+// equal f64 ⇒ equal hash); sequence → the state-threaded str_hash/list_hash;
+// product/sum → a recursive $hash_<sig> call. The SAME five-node-kind leaf the
+// lower_hash_dispatch drives — eq, compare, and hash cannot diverge.
+fn emit_field_hash(off, r, fty) = match fty {
+  TString  => emit_field_hash_seq_call(off, "str_hash"),
+  TList(_) => emit_field_hash_seq_call(off, "list_hash"),
+  TRecord(_)        => emit_field_hash_agg_call(off, fold_sig(fty)),
+  TRecordOpen(_, _) => emit_field_hash_agg_call(off, fold_sig(fty)),
+  TTuple(_)         => emit_field_hash_agg_call(off, fold_sig(fty)),
+  TName(_, _)       => emit_field_hash_agg_call(off, fold_sig(fty)),
+  // Float field: hash the decimal rendering of the loaded f64 (value-faithful).
+  TFloat => {
+    wat_emit("(call $str_hash (call $float_to_str (f64.load offset=")
+    wat_emit(int_to_str(off))
+    wat_emit(" (local.get $a))))")
+  },
+  // Int / Unit / resolved-TVar / nullary-tag — the loaded word IS its hash.
+  _ => {
+    wat_emit("(")
+    wat_emit(repr_load_op(r))
+    wat_emit(" offset=")
+    wat_emit(int_to_str(off))
+    wat_emit(" (local.get $a))")
+  }
+}
+
+// A sequence field hash: load the field pointer at `off`, call the runtime
+// str_hash/list_hash with __state threaded (the W7 (state, ptr) convention).
+fn emit_field_hash_seq_call(off, rt) = {
+  wat_emit("(call $")
+  wat_emit(rt)
+  wat_emit(" (local.get $__state) (i32.load offset=")
+  wat_emit(int_to_str(off))
+  wat_emit(" (local.get $a)))")
+}
+
+// A nested aggregate field hash: load the field pointer, recurse its own
+// $hash_<sig> (state-threaded). Finite on the value (the call, never inline).
+fn emit_field_hash_agg_call(off, sig) = {
+  wat_emit("(call $hash_")
+  wat_emit(sig)
+  wat_emit(" (local.get $__state) (i32.load offset=")
+  wat_emit(int_to_str(off))
+  wat_emit(" (local.get $a)))")
+}
+
+// The hash collection pre-pass: the aggregate operand type at every $hash_<sig>
+// call (lower_hash_agg_call's LGlobal "hash_…") + its nested-aggregate closure
+// (the SAME eq_subtys reach). Mirror of collect_show_tys but keyed on "hash_".
+fn is_hash_global(f) = match f {
+  LGlobal(_, name) =>
+    byte_len(name) >= 5
+      && byte_at(name, 0) == 104   // 'h'
+      && byte_at(name, 1) == 97    // 'a'
+      && byte_at(name, 2) == 115   // 's'
+      && byte_at(name, 3) == 104   // 'h'
+      && byte_at(name, 4) == 95,   // '_'
+  _ => false
+}
+
+fn hash_operand_contrib(arg, acc) with LookupTy = {
+  let h = lexpr_handle(arg)
+  if h == 0 { acc }
+  else { eq_subtys(fold_strip(lookup_ty(h)), [], acc) }
+}
+
+fn collect_hash_tys_list(stmts, acc) with LookupTy = {
+  if len(stmts) == 0 { acc }
+  else {
+    collect_hash_tys_list(list_tail(stmts),
+      collect_hash_tys_expr(list_head(stmts), acc))
+  }
+}
+
+fn collect_hash_tys_expr(expr, acc) with LookupTy = match expr {
+  LCall(_h, f, args) =>
+    if is_hash_global(f) && len(args) == 1 {
+      collect_hash_tys_expr(f,
+        hash_operand_contrib(list_head(args), collect_hash_tys_list(args, acc)))
+    } else {
+      collect_hash_tys_expr(f, collect_hash_tys_list(args, acc))
+    },
+  LTailCall(_h, f, args) => collect_hash_tys_expr(f, collect_hash_tys_list(args, acc)),
+  LBinOp(_h, _op, l, r)  => collect_hash_tys_expr(r, collect_hash_tys_expr(l, acc)),
+  LSuspend(_h, _o, f, args, ev) => collect_hash_tys_expr(f,
+                              collect_hash_tys_list(args, collect_hash_tys_list(ev, acc))),
+  LEvPerform(_h, _n, _e, _s, args) => collect_hash_tys_list(args, acc),
+  LLet(_h, _n, inner)    => collect_hash_tys_expr(inner, acc),
+  LStore(_h, _s, v)      => collect_hash_tys_expr(v, acc),
+  LUnaryOp(_h, _op, i)   => collect_hash_tys_expr(i, acc),
+  LReturn(_h, i)         => collect_hash_tys_expr(i, acc),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
+    collect_hash_tys_list(body,
+      collect_hash_tys_list(caps, collect_hash_tys_list(ev, acc))),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
+    collect_hash_tys_list(body,
+      collect_hash_tys_list(caps, collect_hash_tys_list(ev, acc))),
+  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_hash_tys_list(body, acc),
+  LIf(_h, c, t, e)       => collect_hash_tys_list(e,
+                              collect_hash_tys_list(t, collect_hash_tys_expr(c, acc))),
+  LBlock(_h, stmts)      => collect_hash_tys_list(stmts, acc),
+  LMakeList(_h, es)      => collect_hash_tys_list(es, acc),
+  LMakeTuple(_h, es)     => collect_hash_tys_list(es, acc),
+  LSimdLanes(_h, lanes)  => collect_hash_tys_list(lanes, acc),
+  LMakeRecord(_h, fs)    => collect_hash_tys_list(fs, acc),
+  LMakeVariant(_h, _t, fs) => collect_hash_tys_list(fs, acc),
+  LIndex(_h, b, i, _)    => collect_hash_tys_expr(i, collect_hash_tys_expr(b, acc)),
+  LMatch(_h, s, _arms)   => collect_hash_tys_expr(s, acc),
+  LRegion(_h, body)      => collect_hash_tys_list(body, acc),
+  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
+    collect_hash_tys_expr(b,
+      collect_hash_tys_expr(hn,
+        collect_hash_tys_list(inits, collect_hash_tys_list(cevs, acc)))),
+  LFeedback(_h, b, s)    => collect_hash_tys_expr(s, collect_hash_tys_expr(b, acc)),
+  LPerform(_h, _n, args, _) => collect_hash_tys_list(args, acc),
+  LWasiCall(_h, _n, args)   => collect_hash_tys_list(args, acc),
+  LStateSet(_h, _s, v)   => collect_hash_tys_expr(v, acc),
+  LFieldLoad(_h, rec, _o) => collect_hash_tys_expr(rec, acc),
+  LConvert(_h, _, operand) => collect_hash_tys_expr(operand, acc),
+  LStateSlotStore(_h, _o, v) => collect_hash_tys_expr(v, acc),
   LConst(_, _)           => acc,
   LLocal(_, _)           => acc,
   LFeedbackPrior(_)      => acc,

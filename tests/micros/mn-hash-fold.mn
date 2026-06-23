@@ -1,0 +1,82 @@
+// HASH gate — the structural fold's HASH leaf: total `hash(x)` over aggregates
+// from ONE FNV mix, with the eq ⇒ hash agreement built in.
+//
+// The ultimate form (what the WHEEL now emits): hash(x) on an aggregate is a
+// CALL to the generated recursive $hash_<sig> helper (emit_one_hash_helper /
+// emit_one_hash_sum_helper, src/backends/wasm.mn) — an FNV-1a mix folded over
+// the SAME field set / payload / offsets the eq leaf reads, so two values `==`
+// returns true for hash IDENTICALLY (the eq/hash agreement). The control shape:
+//
+//   1. SEED — the FNV-1a offset basis (2166136261), each step
+//      h = (h xor field_hash) * prime (16777619) — the SAME constants str_hash
+//      and cache.mn's hash_source share (one hash family, no divergence).
+//   2. SUM tag-then-payload — mix the tag, then the matched variant's payload.
+//   3. PRODUCT field fold — mix each field at its canonical offset; a sequence
+//      field calls str_hash/list_hash; a nested aggregate recurses $hash_<sig>.
+//   4. THE AGREEMENT — structurally-equal values fold identically ⇒ equal hash;
+//      differing values diverge at the first differing field's mix.
+//
+// The DIRECT hash(record) needs the seed's hash generator + the string runtime
+// (the libless harness links neither), so the micro proves the FNV mix control
+// shape + the eq ⇒ hash agreement self-containedly, the same proxy discipline
+// mn-show-fold / mn-struct-eq-sum use. The direct hash(a) == hash(b) lands when
+// the seed catches up — named peer: Hβ.fold.hash-seed-value-gate.
+//
+// Expected exit 50: agree(20) + tag-differs(10) + payload-differs(10) + seed(10).
+
+type Box
+  = Wrap(Int, Int)
+  | Empty
+
+fn box_tag(b) = match b {
+  Wrap(_, _) => 0,
+  Empty      => 1,
+}
+
+fn box_fst(b) = match b {
+  Wrap(a, _) => a,
+  Empty      => 0,
+}
+
+fn box_snd(b) = match b {
+  Wrap(_, c) => c,
+  Empty      => 0,
+}
+
+// mix — a deterministic structural mix (multiply-accumulate). The wheel's
+// $hash_<sig> leaf uses the FNV-1a xor form (the Memory i32_xor intrinsic); this
+// self-contained proxy uses a pure multiply-add so it runs in the libless micro
+// harness, proving the same control shape and the same eq->hash agreement. The
+// direct hash(record) lands once the harness links the Memory runtime
+// (Hβ.fold.hash-seed-value-gate).
+fn mix(h, x) = h * 16777619 + x
+
+// hash control shape: seed with the basis, mix the tag, then (for the
+// fielded variant) mix each payload field — the emit_one_hash_sum_helper shape.
+fn box_hash(b) = {
+  let h0 = mix(2166136261, box_tag(b))
+  if box_tag(b) == 0 {
+    let h1 = mix(h0, box_fst(b))
+    mix(h1, box_snd(b))
+  } else {
+    h0                               // Empty — the tag IS the full hash
+  }
+}
+
+fn main(arg) = {
+  let a = Wrap(7, 3)
+  let b = Wrap(7, 3)                 // structurally equal to a
+  let c = Wrap(7, 9)                 // differs at snd payload
+  let e = Empty                      // differs at tag
+
+  // 1. THE AGREEMENT: equal structure ⇒ equal hash.
+  let agree = if box_hash(a) == box_hash(b) { 20 } else { 0 }
+  // 2. tag differs ⇒ hash differs (Wrap vs Empty).
+  let tag_d = if box_hash(a) == box_hash(e) { 0 } else { 10 }
+  // 3. payload differs ⇒ hash differs (snd 3 vs 9).
+  let pay_d = if box_hash(a) == box_hash(c) { 0 } else { 10 }
+  // 4. the mix is deterministic (re-hashing a gives the same value).
+  let det   = if box_hash(a) == box_hash(a) { 10 } else { 0 }
+
+  agree + tag_d + pay_d + det        // 20 + 10 + 10 + 10 = 50
+}

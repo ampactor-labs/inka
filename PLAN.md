@@ -741,8 +741,20 @@ WAT for archaeology. `wasm-interp` CANNOT run m2 (no WASI — fails on the
    truth). And a "choice" between the ultimate form and a safer/lower-risk hedge
    is itself the drift — the ultimate form wins; never hedge the wheel against the
    seed.
-7. **Never force the dispatch floor unverified.** A silent multi-shot miscompile
-   is the worst failure. Verify via `mentl2`/WABT before claiming.
+7. **Verify the dispatch floor with a GATE; never DEFER the ultimate form for
+   it.** A wrong dispatch / evidence / wire-format resolution is a real trap, so
+   PROVE each new path: keep the cheap no-regression signal (the existing micros
+   stay byte-identical, which catches a broken *working* path early) AND write the
+   gate that exercises the NEW path (a round-trip equality, a fresh micro) where
+   the seed can run it, structural otherwise. FORBIDDEN is the *other* response to
+   risk — SEQUENCING or hedging an ultimate-form feature because the seed might
+   miscompile it: the seed-compiled micros are a SHADOW (they prove the seed's
+   behaviour, not the wheel's self-hosted correctness); the real oracle is
+   first-light (§6); deferring the wheel to protect the shadow is the §3 / §10
+   hedge inverted. Risky path → add the gate, write the FULL form (Anchor 0), move
+   on. Caution that VERIFIES, yes; caution that DEFERS the ultimate form, no.
+   (Corrected 2026-06-23 — Tier-1 sequenced two *verifiable* completions, W03 the
+   fold family and W10 tuple-index, under the old wording; Morgan caught it.)
 8. **No bolts onto non-ultimate forms.** When the audit finds you working around
    a gap, the move is the ultimate restructure, not another per-layer patch.
 9. **Interrogate, don't absorb** (the law that prevents the next re-grounding —

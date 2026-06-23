@@ -457,60 +457,10 @@ fn why_expand(reason, depth) = {
   }
 }
 
-/// Default Synth handler: enumerates candidates and verifies each via checkpoint/rollback.
-/// Handler fall-through: install `~> synth_llm` inside `~> synth_enumerative` to prepend
-/// alternative proposer candidates before enumeration.
-handler synth_enumerative {
-
-  synth_propose(target_ty, allowed_effects, context) => {
-    let raw = perform enumerate_inhabitants(target_ty, allowed_effects, context)
-    let verified = verify_each(raw)
-    resume(verified)
-  },
-
-  verify_candidate(candidate) => {
-    // A candidate's node was typed when it was proposed; its handle
-    // sits in the graph in some state. The candidate is valid iff
-    // chasing the handle lands on NBound — i.e., the type it carries
-    // holds in the current graph without conflict. No injection is
-    // needed because the candidate's type is already materialized;
-    // we just confirm the graph still accepts it.
-    let Candidate(node, _) = candidate
-    let N(_, _, h) = node
-    let GNode(kind, _) = perform graph_chase(h)
-    match kind {
-      NBound(_)     => resume(true),
-      NErrorHole(_) => resume(false),
-      _             => resume(false)
-    }
-  },
-
-  // Substrate-level enumerator: the surface is here and callable. The
-  // empty result means propose's verify_each immediately yields [], so
-  // teach_synthesize returns None — the compiler says "no proven
-  // candidate" rather than hallucinating. Real search (enumerative /
-  // SMT / LLM proposers) is a sibling Synth handler installed in front
-  // of this one by the post-cascade Arc F.1 surface; the swap surface
-  // IS the thesis. Without that swap installed, returning [] is the
-  // honest substrate behavior.
-  enumerate_inhabitants(_ty, _eff, _ctx) => resume([])
-}
-
-fn verify_each(candidates) = {
-  // Per-candidate verify IS independent (each verify_candidate runs in
-  // its own graph checkpoint scope per the verify handler chain).
-  // parallel_map dispatches via the Thread effect handler upstream;
-  // parallel_compose runs branches genuinely parallel when installed,
-  // sequential_compose runs them on one thread. Same source, handler
-  // swap. Symmetric with oracle's per-candidate dispatch at
-  // src/oracle.mn:357.
-  candidates
-    |> parallel_map((c) => (c, perform verify_candidate(c)))
-    |> filter((pair) => { let (_, ok) = pair; ok })
-    |> map((pair) => { let (c, _) = pair; c })
-}
-
-/// Fill a typed hole with the first proven candidate from the Synth proposer chain.
+// Fill a typed hole with the first proven candidate from the Synth proposer
+// chain — the entry that performs synth_propose, handled by the live
+// synth_default handler (synth_proposer.mn). The dead duplicate handler
+// synth_enumerative + its private verify_each were dissolved (superseded).
 fn teach_synthesize(hole_handle, context) = {
   let GNode(kind, _) = perform graph_chase(hole_handle)
   match kind {

@@ -935,27 +935,6 @@ fn render_for_tentacle(situation) with Pure = {
   }
 }
 
-/// fold_tentacles — walks the kernel-ordered tentacle list, retargets
-/// the Situation at each, checks silence_predicate, accumulates the
-/// VoiceLines that pass. Tail-recursive accumulator pattern; flat-
-/// array fold via list_extend_to + counter (Ω.3 substrate).
-
-fn fold_tentacles(situation, tentacles, i, n, acc, count) with Pure = {
-  if i >= n { slice(acc, 0, count) }
-  else {
-    let tentacle = list_index(tentacles, i)
-    let situation_for_t = with_tentacle(situation, tentacle)
-    if silence_predicate(situation_for_t) {
-      let voiceline = render_for_tentacle(situation_for_t)
-      let extended  = list_extend_to(acc, count + 1)
-      let written   = list_set(extended, count, voiceline)
-      fold_tentacles(situation, tentacles, i + 1, n, written, count + 1)
-    }
-    else {
-      fold_tentacles(situation, tentacles, i + 1, n, acc, count)
-    }
-  }
-}
 
 /// voice_lines_for — D.1.e LOWER LAYER per F.1 walkthrough §3.3 (commit
 /// 4d0fce1). Tentacle-fold projection: walks the 8 kernel tentacles in

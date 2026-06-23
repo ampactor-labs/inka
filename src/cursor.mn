@@ -201,14 +201,7 @@ fn reason_chain_stable(a, b) with Pure = {
   let Cursor(_, located_b, _) = b
   let Located(_, reason_a) = located_a
   let Located(_, reason_b) = located_b
-  reason_eq(reason_a, reason_b)
-}
-
-fn reason_eq(a, b) with Pure = match (a, b) {
-  (Inferred(s1), Inferred(s2))   => s1 == s2,
-  (Located(_, r1), Located(_, r2)) => reason_eq(r1, r2),
-  (Fresh(h1), Fresh(h2))         => h1 == h2,
-  _                              => false
+  reason_a == reason_b
 }
 
 // ─── Argmax computation — pure transform on the live graph ──────────

@@ -723,10 +723,106 @@ fn hex_digit(d) with Pure = match d {
 fn emit_type_section(lowered) = {
   // _start calls main via $ft1 (__state alone); ensure the table
   // always contains at least that entry even for programs with no
-  // multi-arg calls.
+  // multi-arg calls. The arity-keyed all-i32 types stay byte-identical
+  // (Law 7) — they are the all-RI32 instance of the repr-vector key.
   let observed = max_arity_in(lowered, 0)
   let max_arity = if observed < 1 { 1 } else { observed }
   emit_type_decls(0, max_arity)
+  // Then the DISTINCT non-i32 repr-vectors the program's call sites use —
+  // each a structural function-type the gradient reached (an f64 arg, an
+  // f64 result). Collected from the lowered IR (the graph IS the index),
+  // deduped by ft_name (structural function-type equality), and emitted so
+  // every call_indirect's repr-vector type resolves. A pure-i32 program
+  // collects none — the type section is byte-identical to today.
+  let vectors = collect_call_vectors_list(lowered, [])
+  emit_distinct_repr_ft_types(vectors, [])
+}
+
+// Walk the lowered program collecting the repr-vector (param_reprs,
+// result_repr) at every indirect-dispatch site — the same vectors the call
+// sites reference via call_ft_name. Only call-producing variants contribute.
+fn collect_call_vectors_list(stmts, acc) = {
+  if len(stmts) == 0 { acc }
+  else {
+    collect_call_vectors_list(list_tail(stmts),
+      collect_call_vectors_expr(list_head(stmts), acc))
+  }
+}
+
+fn collect_call_vectors_expr(expr, acc) = match expr {
+  LCall(h, f, args)     => collect_call_vectors_expr(f,
+                             collect_call_vectors_list(args, vec_push(args, h, acc))),
+  LTailCall(h, f, args) => collect_call_vectors_expr(f,
+                             collect_call_vectors_list(args, vec_push(args, h, acc))),
+  LSuspend(h, _o, f, args, ev) => collect_call_vectors_expr(f,
+                             collect_call_vectors_list(args,
+                               collect_call_vectors_list(ev, vec_push(args, h, acc)))),
+  LEvPerform(h, _n, _e, _s, args) => collect_call_vectors_list(args, vec_push(args, h, acc)),
+  LLet(_h, _n, inner)   => collect_call_vectors_expr(inner, acc),
+  LStore(_h, _s, v)     => collect_call_vectors_expr(v, acc),
+  LBinOp(_h, _op, l, r) => collect_call_vectors_expr(r, collect_call_vectors_expr(l, acc)),
+  LUnaryOp(_h, _op, i)  => collect_call_vectors_expr(i, acc),
+  LReturn(_h, i)        => collect_call_vectors_expr(i, acc),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
+    collect_call_vectors_list(body,
+      collect_call_vectors_list(caps, collect_call_vectors_list(ev, acc))),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _) =>
+    collect_call_vectors_list(body,
+      collect_call_vectors_list(caps, collect_call_vectors_list(ev, acc))),
+  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_call_vectors_list(body, acc),
+  LIf(_h, c, t, e)      => collect_call_vectors_list(e,
+                             collect_call_vectors_list(t, collect_call_vectors_expr(c, acc))),
+  LBlock(_h, stmts)     => collect_call_vectors_list(stmts, acc),
+  LMakeList(_h, es)     => collect_call_vectors_list(es, acc),
+  LMakeTuple(_h, es)    => collect_call_vectors_list(es, acc),
+  LMakeRecord(_h, fs)   => collect_call_vectors_list(fs, acc),
+  LMakeVariant(_h, _t, fs) => collect_call_vectors_list(fs, acc),
+  LIndex(_h, b, i, _)   => collect_call_vectors_expr(i, collect_call_vectors_expr(b, acc)),
+  LMatch(_h, s, _arms)  => collect_call_vectors_expr(s, acc),
+  LRegion(_h, body)     => collect_call_vectors_list(body, acc),
+  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
+    collect_call_vectors_expr(b,
+      collect_call_vectors_expr(hn,
+        collect_call_vectors_list(inits, collect_call_vectors_list(cevs, acc)))),
+  LFeedback(_h, b, s)   => collect_call_vectors_expr(s, collect_call_vectors_expr(b, acc)),
+  LPerform(_h, _n, args, _) => collect_call_vectors_list(args, acc),
+  LWasiCall(_h, _n, args)   => collect_call_vectors_list(args, acc),
+  LStateSet(_h, _s, v)  => collect_call_vectors_expr(v, acc),
+  LFieldLoad(_h, rec, _o) => collect_call_vectors_expr(rec, acc),
+  LStateSlotStore(_h, _o, v) => collect_call_vectors_expr(v, acc),
+  LConst(_, _)          => acc,
+  LLocal(_, _)          => acc,
+  LGlobal(_, _)         => acc,
+  LUpval(_, _)          => acc,
+  LStateGet(_, _)       => acc,
+  LEvSlotRef(_, _)      => acc
+}
+
+// Push a call site's repr-vector (the i32 state slot, then arg reprs, then
+// the result repr) onto the accumulator — the same vector call_ft_name reads.
+// Prepended (cons), not appended: the emit order of distinct function types is
+// immaterial (call_indirect matches by structural type, not declaration
+// order), so the O(1) cons is the residue form of the O(N²) append.
+fn vec_push(args, result_h, acc) =
+  [( [RI32] ++ arg_reprs(args), repr_of(lookup_ty(result_h)) )] ++ acc
+
+// Emit each DISTINCT non-i32 repr-vector once. `seen` carries the ft_names
+// already emitted; an all-i32 vector is skipped (its $ftN already exists from
+// emit_type_decls). Dedup is by name = structural function-type equality.
+fn emit_distinct_repr_ft_types(vectors, seen) = {
+  if len(vectors) == 0 { () }
+  else {
+    let (param_reprs, result_repr) = list_head(vectors)
+    let nm = ft_name(param_reprs, result_repr)
+    let skip = (all_ri32(param_reprs) && repr_is_i32(result_repr))
+                 || ls_find_str_local(seen, nm, 0) >= 0
+    if skip {
+      emit_distinct_repr_ft_types(list_tail(vectors), seen)
+    } else {
+      emit_repr_ft_type(param_reprs, result_repr)
+      emit_distinct_repr_ft_types(list_tail(vectors), [nm] ++ seen)
+    }
+  }
 }
 
 fn max_arity_in(stmts, acc) = {
@@ -807,6 +903,80 @@ fn emit_param_types(n) = {
     wat_emit(" (param i32)")
     emit_param_types(n - 1)
   }
+}
+
+// ─── The $ft type-table keyed on the REPR-VECTOR ────────────────────
+// A wasm function type is a PRODUCT node-kind (PLAN §3 L1), and
+// call_indirect's type-match is STRUCTURAL EQUALITY over that product —
+// the identical structural-eq the cursor derives for records. So a function
+// type is keyed by its canonical repr-vector (state-i32, param-reprs...,
+// result-repr), NOT by arity alone. The arity-keyed `$ftN` of emit_type_decls
+// is the all-i32 instance of this key (every slot RI32, result RI32) — kept
+// byte-identical (Law 7); a vector with any wider slot interns a distinct
+// `$ft_<sig>` whose structural equality IS the calling-convention match.
+//
+// ft_name — the naming projection. An all-i32 vector of arity K (K params
+// incl. __state) renders to "$ftK" (the existing name, byte-identical); any
+// non-i32 slot renders "$ft_<param-codes>_<result-code>" — a deterministic
+// structural signature, two functions sharing a name iff their repr-products
+// are structurally equal (which is exactly when they ARE the same signature).
+fn ft_name(param_reprs, result_repr) =
+  if all_ri32(param_reprs) && repr_is_i32(result_repr) {
+    "$ft{int_to_str(len(param_reprs))}"
+  } else {
+    "$ft_{repr_codes(param_reprs)}_{repr_code(result_repr)}"
+  }
+
+fn repr_is_i32(r) with Pure = match r { RI32 => true, _ => false }
+
+fn all_ri32(reprs) = {
+  if len(reprs) == 0 { true }
+  else if repr_is_i32(list_head(reprs)) { all_ri32(list_tail(reprs)) }
+  else { false }
+}
+
+// A one-character structural code per repr — the canonical signature alphabet.
+fn repr_code(r) with Pure = match r {
+  RI32 => "i", RI64 => "l", RF64 => "d", RF32 => "f", RV128 => "v"
+}
+
+fn repr_codes(reprs) = {
+  if len(reprs) == 0 { "" }
+  else { repr_code(list_head(reprs)) ++ repr_codes(list_tail(reprs)) }
+}
+
+// call_ft_name — the $ft name a call site references, computed from the live
+// arg + result handles. The dispatched function's param-vector is the i32
+// __state/record slot followed by each arg's repr; the result is the call's
+// own repr (read at result_h). The structural function-type the callee was
+// emitted with (emit_fn_body's param/result widths) is THE SAME vector, so the
+// names coincide and call_indirect's runtime structural match succeeds.
+fn call_ft_name(args, result_h) =
+  ft_name([RI32] ++ arg_reprs(args), repr_of(lookup_ty(result_h)))
+
+fn arg_reprs(args) = {
+  if len(args) == 0 { [] }
+  else {
+    [repr_of(lookup_ty(lexpr_handle(list_head(args))))]
+      ++ arg_reprs(list_tail(args))
+  }
+}
+
+// Emit one `(type $ft_<sig> (func (param <wat>)... (result <wat>)))` for a
+// repr-vector. Used for the DISTINCT non-i32 vectors collected from the
+// program's call sites — the arity-keyed all-i32 types stay in emit_type_decls.
+fn emit_repr_ft_type(param_reprs, result_repr) = {
+  wat_emit("  (type ")
+  wat_emit(ft_name(param_reprs, result_repr))
+  wat_emit(" (func")
+  for_each((r) => {
+    wat_emit(" (param ")
+    wat_emit(repr_wat(r))
+    wat_emit(")")
+  }, param_reprs)
+  wat_emit(" (result ")
+  wat_emit(repr_wat(result_repr))
+  wat_emit(")))\n")
 }
 
 fn emit_header() = {
@@ -1030,8 +1200,15 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   wat_emit("  (func $")
   wat_emit(name)
   wat_emit(" (param $__state i32)")
-  emit_params(param_names)
-  wat_emit(" (result i32)")
+  emit_params(param_names, body)
+  // The result WIDTH is the body's tail-expression repr (read live), the
+  // value the fn actually returns — i32 byte-identical for the floor (Law 7),
+  // f64 when the body computes a float. The result is part of the function's
+  // structural signature (the repr-vector), so call_indirect sites that
+  // dispatch to a float-returning fn carry the matching result width.
+  wat_emit(" (result ")
+  wat_emit(repr_wat(body_result_repr(body)))
+  wat_emit(")")
   wat_emit(" (local $state_tmp i32)")
   wat_emit(" (local $variant_tmp i32)")
   wat_emit(" (local $record_tmp i32)")
@@ -1108,10 +1285,15 @@ fn emit_render_reason_oneline(reason) with !Mutate = match reason {
 fn emit_let_locals_list(stmts) = for_each(emit_let_locals_expr, stmts)
 
 fn emit_let_locals_expr(expr) = match expr {
-  LLet(_h, name, inner) => {
+  LLet(h, name, inner) => {
+    // The local's WIDTH is the bound value's proven repr (repr_of at the
+    // LLet handle) — i32 byte-identical for the floor (Law 7), f64 for a
+    // float-typed let. The handle the graph already drew, read live.
     wat_emit(" (local $")
     wat_emit(name)
-    wat_emit(" i32)")
+    wat_emit(" ")
+    wat_emit(repr_wat(repr_of(lookup_ty(h))))
+    wat_emit(")")
     emit_let_locals_expr(inner)
   },
   LMakeClosure(_, _, _, _)         => (),  // function boundary — its locals are its own
@@ -1254,12 +1436,132 @@ fn emit_let_locals_pat_record(field_binds) = {
 
 fn emit_let_locals_pat_list(pats) = for_each(emit_let_locals_pat, pats)
 
-fn emit_params(names) = {
+// The repr of a fn body's result = the repr of the value its tail expression
+// leaves on the stack. The body is a stmt list; the result is the last stmt,
+// unwrapped through the value-producing wrappers (LReturn / LBlock tail /
+// LIf via its then-branch tail — both branches unify to one type). An empty
+// body or an unresolved tail projects RI32 (the floor). Read live from the
+// tail handle, never re-derived.
+fn body_result_repr(body) = {
+  if len(body) == 0 { RI32 }
+  else { tail_expr_repr(list_index(body, len(body) - 1)) }
+}
+
+fn tail_expr_repr(expr) = match expr {
+  LReturn(_h, inner) => tail_expr_repr(inner),
+  LBlock(_h, stmts)  => if len(stmts) == 0 { RI32 } else { tail_expr_repr(list_index(stmts, len(stmts) - 1)) },
+  LIf(_h, _c, t, _e) => if len(t) == 0 { RI32 } else { tail_expr_repr(list_index(t, len(t) - 1)) },
+  other              => {
+    let h = lexpr_handle(other)
+    if h == 0 { RI32 } else { repr_of(lookup_ty(h)) }
+  }
+}
+
+// A parameter's WAT width is the repr of its PROVEN type — read live from a
+// body use-site `LLocal(h, name)`, the same edge the graph already drew when
+// it typed the reference. No LowFn shape change: the param's type is recovered
+// from the graph through its use, never re-derived from arity. A param with no
+// body use-site (genuinely unread) projects RI32 — the word floor, correct for
+// an unconstrained slot. For an all-i32 fn this is byte-identical (Law 7).
+fn emit_params(names, body) = {
   for_each((name) => {
   wat_emit(" (param $")
   wat_emit(name)
-  wat_emit(" i32)")
+  wat_emit(" ")
+  wat_emit(repr_wat(param_repr_from_body(name, body)))
+  wat_emit(")")
   }, names)
+}
+
+// Find the repr of `name` by locating its first `LLocal(h, name)` read in the
+// body and projecting repr_of(lookup_ty(h)). The floor RI32 when unread.
+fn param_repr_from_body(name, body) = {
+  let h = find_local_handle_list(name, body)
+  if h == 0 { RI32 } else { repr_of(lookup_ty(h)) }
+}
+
+fn find_local_handle_list(name, stmts) = {
+  if len(stmts) == 0 { 0 }
+  else {
+    let h = find_local_handle_expr(name, list_head(stmts))
+    if h != 0 { h } else { find_local_handle_list(name, list_tail(stmts)) }
+  }
+}
+
+// Walk a LowExpr for the first `LLocal(h, name)` matching `name`. Stops at
+// nested fn boundaries (LMakeClosure/LMakeContinuation/LDeclareFn) — an inner
+// fn's `name` is its own binding, not this param. Returns 0 if absent.
+fn find_local_handle_expr(name, expr) = match expr {
+  LLocal(h, n)              => if n == name { h } else { 0 },
+  LMakeClosure(_, _, _, _)         => 0,
+  LMakeContinuation(_, _, _, _, _, _) => 0,
+  LDeclareFn(_)                    => 0,
+  LLet(_h, _n, inner)       => find_local_handle_expr(name, inner),
+  LStore(_h, _s, v)         => find_local_handle_expr(name, v),
+  LBinOp(_h, _op, l, r)     => {
+    let lh = find_local_handle_expr(name, l)
+    if lh != 0 { lh } else { find_local_handle_expr(name, r) }
+  },
+  LUnaryOp(_h, _op, inner)  => find_local_handle_expr(name, inner),
+  LCall(_h, f, args)        => {
+    let fh = find_local_handle_expr(name, f)
+    if fh != 0 { fh } else { find_local_handle_list(name, args) }
+  },
+  LTailCall(_h, f, args)    => {
+    let fh = find_local_handle_expr(name, f)
+    if fh != 0 { fh } else { find_local_handle_list(name, args) }
+  },
+  LReturn(_h, inner)        => find_local_handle_expr(name, inner),
+  LIf(_h, c, t, e)          => {
+    let ch = find_local_handle_expr(name, c)
+    if ch != 0 { ch }
+    else {
+      let th = find_local_handle_list(name, t)
+      if th != 0 { th } else { find_local_handle_list(name, e) }
+    }
+  },
+  LBlock(_h, stmts)         => find_local_handle_list(name, stmts),
+  LMakeList(_h, elems)      => find_local_handle_list(name, elems),
+  LMakeTuple(_h, elems)     => find_local_handle_list(name, elems),
+  LMakeRecord(_h, fs)       => find_local_handle_list(name, fs),
+  LMakeVariant(_h, _t, fs)  => find_local_handle_list(name, fs),
+  LIndex(_h, b, i, _)       => {
+    let bh = find_local_handle_expr(name, b)
+    if bh != 0 { bh } else { find_local_handle_expr(name, i) }
+  },
+  LMatch(_h, s, _arms)      => find_local_handle_expr(name, s),
+  LSuspend(_h, _o, f, args, ev) => {
+    let fh = find_local_handle_expr(name, f)
+    if fh != 0 { fh } else { find_local_handle_list(name, args) }
+  },
+  LRegion(_h, body)         => find_local_handle_list(name, body),
+  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) => {
+    let bh = find_local_handle_expr(name, b)
+    if bh != 0 { bh }
+    else {
+      let hh = find_local_handle_expr(name, hn)
+      if hh != 0 { hh }
+      else {
+        let ih = find_local_handle_list(name, inits)
+        if ih != 0 { ih } else { find_local_handle_list(name, cevs) }
+      }
+    }
+  },
+  LFeedback(_h, b, s)       => {
+    let bh = find_local_handle_expr(name, b)
+    if bh != 0 { bh } else { find_local_handle_expr(name, s) }
+  },
+  LPerform(_h, _n, args, _) => find_local_handle_list(name, args),
+  LWasiCall(_h, _n, args)   => find_local_handle_list(name, args),
+  LEvPerform(_h, _n, _e, _s, a) => find_local_handle_list(name, a),
+  LFieldLoad(_h, rec, _off) => find_local_handle_expr(name, rec),
+  LStateSlotStore(_h, _o, v) => find_local_handle_expr(name, v),
+  LConst(_, _)              => 0,
+  LGlobal(_, _)             => 0,
+  LUpval(_, _)              => 0,
+  LStateGet(_, _)           => 0,
+  LStateSet(_h, _s, v)      => find_local_handle_expr(name, v),
+  LEvSlotRef(_, _)          => 0
 }
 
 fn emit_body(stmts) = for_each(emit_expr, stmts)
@@ -1452,7 +1754,7 @@ fn emit_ev_entry(ev_off) = {
 // Exhaustive match on every LowExpr variant; no _ fallback.
 
 fn emit_expr(expr) = match expr {
-  LConst(_h, val) => emit_const(val),
+  LConst(h, val) => emit_const(val, h),
 
   LLocal(_h, name) => {
     wat_emit("    (local.get $")
@@ -1524,8 +1826,12 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (local.get $call_")
     wat_emit(int_to_str(h))
     wat_emit(") (i32.load offset=0)\n")
-    wat_emit("    (call_indirect (type $ft")
-    wat_emit(int_to_str(len(args) + 1))
+    // The dispatched signature is the callee's repr-vector, computed live from
+    // the arg handles (params, under __state) + the result handle h. Structural
+    // function-type equality at the indirect site (call_indirect's own runtime
+    // match) makes this sound; an all-i32 vector renders $ft<N+1>, byte-identical.
+    wat_emit("    (call_indirect (type ")
+    wat_emit(call_ft_name(args, h))
     wat_emit("))\n")
   },
 
@@ -1540,8 +1846,8 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (local.get $call_")
     wat_emit(int_to_str(h))
     wat_emit(") (i32.load offset=0)\n")
-    wat_emit("    (return_call_indirect (type $ft")
-    wat_emit(int_to_str(len(args) + 1))
+    wat_emit("    (return_call_indirect (type ")
+    wat_emit(call_ft_name(args, h))
     wat_emit("))\n")
   },
 
@@ -1734,7 +2040,7 @@ fn emit_expr(expr) = match expr {
     emit_match_arms(arms)
   },
 
-  LSuspend(_h, _op_h, func, args, ev_slots) => {
+  LSuspend(h, _op_h, func, args, ev_slots) => {
     // H1.6: poly call with transient evidence record. Build a
     // fresh closure copy of the callee with the same fn_ptr +
     // captures, plus ev_slots filled from the caller's scope.
@@ -1800,8 +2106,8 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (local.get $state_tmp)\n")
     emit_expr_list(args)
     wat_emit("    (local.get $state_tmp) (i32.load offset=0)\n")
-    wat_emit("    (call_indirect (type $ft")
-    wat_emit(int_to_str(len(args) + 1))
+    wat_emit("    (call_indirect (type ")
+    wat_emit(call_ft_name(args, h))
     wat_emit("))\n")
   },
 
@@ -1951,7 +2257,7 @@ fn emit_expr(expr) = match expr {
   //   record = __state[ev_off][0];  base = __state[ev_off][1]
   //   arm_fn = record[(8 + 4*op_slot) + 4*base + 4*record[4]]
   //   dispatch = call_indirect (type $ft<argc+1>) (record, args…, arm_fn)
-  LEvPerform(_h, _op_name, ev_slot, op_slot, args) => {
+  LEvPerform(h, _op_name, ev_slot, op_slot, args) => {
     let fence = current_body_captures()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let ev_off = 8 + 4 * fence + 4 * ev_slot
     let arm_const = 8 + 4 * op_slot
@@ -1973,9 +2279,9 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (i32.load offset=0)(i32.load offset=4)\n")  // nstate = record[4]
     wat_emit("    (i32.const 4)(i32.mul)(i32.add)\n") // + 4*nstate
     wat_emit("    (i32.load offset=0)\n")             // arm_fn idx
-    // (4) dispatch
-    wat_emit("    (call_indirect (type $ft")
-    wat_emit(int_to_str(len(args) + 1))
+    // (4) dispatch — the arm's repr-vector (record-i32, args..., result)
+    wat_emit("    (call_indirect (type ")
+    wat_emit(call_ft_name(args, h))
     wat_emit("))\n")
   },
 
@@ -1993,12 +2299,13 @@ fn emit_expr(expr) = match expr {
     wat_emit(")\n")
   },
 
-  // W6: record field load. The offset was resolved at lower-time
-  // from the record's inferred type (sorted-field position * 4).
-  // Records lay out as [field_0_i32, field_1_i32, ...] — every
-  // field erases to i32 per ty_to_wasm (pointers for non-scalar
-  // fields). One i32.load with an immediate offset.
-  LFieldLoad(_h, rec, offset) => {
+  // W6: record field load. The offset was resolved at lower-time from the
+  // record's inferred type (prefix-sum of repr_width over the sorted fields).
+  // The load WIDTH is the field's PROVEN repr (repr_of at the field handle h):
+  // an i32/pointer field is i32.load (byte-identical to the pre-gradient
+  // form, Law 7), an f64 field is f64.load at its width-summed offset — the
+  // genuine 8 inline bytes, no box, no chase.
+  LFieldLoad(h, rec, offset) => {
     if offset < 0 {
       // NO SILENT FALLBACK (resolve_field_offset returned -1): the field's
       // offset was not provable from the graph. Emit (unreachable) — the
@@ -2007,7 +2314,9 @@ fn emit_expr(expr) = match expr {
       wat_emit("    (unreachable)  ;; field offset unprovable\n")
     } else {
       emit_expr(rec)
-      wat_emit("    (i32.load offset=")
+      wat_emit("    (")
+      wat_emit(repr_wat(repr_of(lookup_ty(h))))
+      wat_emit(".load offset=")
       wat_emit(int_to_str(offset))
       wat_emit(")\n")
     }
@@ -2017,7 +2326,9 @@ fn emit_expr(expr) = match expr {
     // Hβ.first-light.resume-with-state-mutation: store VALUE into the
     // arm fn's __state record at slot_offset, mutating handler state
     // across resume calls. __state IS the state record per
-    // protocol_handler_is_state_is_closure_is_evidence.md. Negative
+    // protocol_handler_is_state_is_closure_is_evidence.md. The store WIDTH
+    // is the stored value's proven repr (i32.store byte-identical for an
+    // i32 value, Law 7; f64.store for an f64 state field). Negative
     // slot_offset = lower-time name-resolution miss (productive-under-
     // error per protocol_resume_state_mutation_substrate.md): emit
     // the value as drop, no store. Block-position emit produces no
@@ -2028,7 +2339,9 @@ fn emit_expr(expr) = match expr {
     } else {
       wat_emit("    (local.get $__state)\n")
       emit_expr(value)
-      wat_emit("    (i32.store offset=")
+      wat_emit("    (")
+      wat_emit(repr_wat(repr_of(lookup_ty(lexpr_handle(value)))))
+      wat_emit(".store offset=")
       wat_emit(int_to_str(slot_offset))
       wat_emit(")\n")
     }
@@ -2061,33 +2374,23 @@ fn emit_expr_list_at(exprs, i, n) = {
 /// drift surfacing here; named peer Hβ.lower.lconst-adt-canonical
 /// closes the upstream gap. Until then, the diagnostic is the
 /// wat-comment + sentinel — one mechanism, no silent failure.
-fn emit_const(v) = match v {
+fn emit_const(v, h) = match v {
   LInt(n) => {
     wat_emit("    (i32.const ")
     wat_emit(int_to_str(n))
     wat_emit(")\n")
   },
-  // Float = Word + a representation gradient (PLAN §4①; SYNTAX.md
-  // §Strings/precedence: "Int/Float are Word + a representation gradient").
-  // The value WORD is uniform — every param/local/result/call_indirect $ftN
-  // type-decl is generated by ARITY ALONE (emit_type_decls / emit_param_types
-  // / emit_params, all hardcoded i32), and the entire evidence-dispatch call
-  // table threads arbitrary handlers through ONE shared `$ftN`. So a typed
-  // f64 param would fork that table per-signature and break the uniform
-  // call_indirect the handler substrate depends on. The coherent cash-out of
-  // f64 precision is therefore a HEAP-BOXED f64 (an 8-byte box, the i32
-  // pointer riding the uniform value word — like every other non-scalar in
-  // ty_to_wasm), with f64.reinterpret_i64 at the box boundary and the
-  // float_* arithmetic loading/computing/re-boxing. Emitting (f64.const ...)
-  // here WITHOUT that boxed substrate is the documented cascade (a prior
-  // attempt produced f64 values that flowed into i32 slots → wat2wasm
-  // rejection at every downstream boundary). The boxed-float substrate is one
-  // coherent substrate-wide increment (LAW 7 — verified in sequence, never
-  // forced): peer Hβ.emit.float-boxed-substrate. Until it lands the word is
-  // the i32 floor; the carried Float value is rendered to text by the wheel
-  // for emit only once the box exists. (No silent precision claim — this is
-  // the floor, named, not a fabrication that the float is zero.)
-  LFloat(_) => wat_emit("    (i32.const 0)\n"),
+  // Float = Word + a representation gradient (PLAN §4①). The literal's
+  // PROVEN type (read live at the const handle) projects its machine width:
+  // the inferred default is RF64, so a bare `3.14` is a native unboxed
+  // (f64.const 3.14) flowing into an f64 slot the gradient made f64
+  // everywhere it reaches (param/local/result/field all read the same
+  // repr_of). A `repr f32` pin yields (f32.const ...); a lane-sequence pin
+  // yields (v128.const ...). The box, the i32-floor zero, and the
+  // f64.reinterpret_i64 re-boxing are DELETED — unsayable: with every slot
+  // width-typed by repr_of, the float never flows into an i32 slot, so
+  // there is nothing to box and no precision to fabricate.
+  LFloat(f) => emit_float_const(f, repr_of(lookup_ty(h))),
   LBool(b) =>
     if b { wat_emit("    (i32.const 1)\n") }
     else { wat_emit("    (i32.const 0)\n") },
@@ -2104,6 +2407,40 @@ fn emit_const(v) = match v {
   _ => {
     wat_emit("    ;; emit_const: unknown LowValue shape\n")
     wat_emit("    (i32.const 0)\n")
+  }
+}
+
+// emit_float_const — a float literal rendered at its proven representation.
+// The same float value `f` projects to f64/f32/v128 by the repr_of at the
+// literal's handle; RV128 broadcasts the scalar across four lanes (a literal
+// in lane context is the uniform splat). A pointer-repr (RI32) at a float
+// literal is an upstream type error — loud floor, never a fabricated zero.
+fn emit_float_const(f, r) = match r {
+  RF64 => {
+    wat_emit("    (f64.const ")
+    wat_emit(float_to_str(f))
+    wat_emit(")\n")
+  },
+  RF32 => {
+    wat_emit("    (f32.const ")
+    wat_emit(float_to_str(f))
+    wat_emit(")\n")
+  },
+  RV128 => {
+    wat_emit("    (v128.const f32x4 ")
+    wat_emit(float_to_str(f))
+    wat_emit(" ")
+    wat_emit(float_to_str(f))
+    wat_emit(" ")
+    wat_emit(float_to_str(f))
+    wat_emit(" ")
+    wat_emit(float_to_str(f))
+    wat_emit(")\n")
+  },
+  _ => {
+    wat_emit("    ;; float literal at a non-float representation —\n")
+    wat_emit("    ;; an HM type error upstream, not a fabricated value.\n")
+    wat_emit("    (unreachable)\n")
   }
 }
 
@@ -2151,7 +2488,14 @@ fn emit_binop_for(op, left_h) = match op {
   // (left_h == 0) is a flat scalar by construction.
   BEq => emit_struct_eq(left_h, false),
   BNe => emit_struct_eq(left_h, true),
-  _ => emit_binop(op)
+  // Arithmetic/comparison/logical: the representation gradient at the binop
+  // layer. The operand's PROVEN type (read live, never re-derived) projects
+  // the machine-width instruction — the same "proof becomes the dispatch"
+  // move ++/== make above. RI32 emits the i32.* floor byte-identical to the
+  // pre-gradient form (Law 7); RF64/RF32/RI64/RV128 are the cash-outs a
+  // float/wide/lane operand reaches with no surface-operator split (+ stays
+  // + for every width, exactly as ++ is one seq_concat).
+  _ => emit_binop_repr(op, repr_of(lookup_ty(left_h)))
 }
 
 // Insert the runtime-helper state argument UNDER [a, b] on the stack
@@ -2219,6 +2563,82 @@ fn emit_eq_deep_unsupported(_kind) = {
   wat_emit("    ;; == on aggregate (record/tuple/payload-ADT) —\n")
   wat_emit("    ;; field-wise structural recursion is peer\n")
   wat_emit("    ;; Hβ.eq.structural-deep; pointer-eq would lie. (loud floor)\n")
+  wat_emit("    (unreachable)\n")
+}
+
+// emit_binop_repr — the arithmetic/comparison binop projected at the operand's
+// representation. The (op, repr) pair selects the machine instruction: the
+// RI32 arm IS emit_binop's i32.* floor (byte-identical, Law 7); the RF64/RF32
+// arms are the float cash-outs (f64.add, f32.mul — no box, no NaN-tax);
+// RI64 is the wide-integer cash-out; RV128 the SIMD lane cash-out. Comparison
+// results are a Bool (RI32) regardless of operand width, so the comparison
+// arms below project f64.lt etc. but the value they leave is i32. div/mod on
+// floats use f64.div (no _s); integer div keeps the signed form.
+fn emit_binop_repr(op, r) = match r {
+  RI32  => emit_binop(op),
+  RF64  => emit_binop_f64(op),
+  RF32  => emit_binop_f32(op),
+  RI64  => emit_binop_i64(op),
+  RV128 => emit_binop_v128(op)
+}
+
+fn emit_binop_f64(op) = match op {
+  BAdd => wat_emit("    (f64.add)\n"),
+  BSub => wat_emit("    (f64.sub)\n"),
+  BMul => wat_emit("    (f64.mul)\n"),
+  BDiv => wat_emit("    (f64.div)\n"),
+  BLt  => wat_emit("    (f64.lt)\n"),
+  BGt  => wat_emit("    (f64.gt)\n"),
+  BLe  => wat_emit("    (f64.le)\n"),
+  BGe  => wat_emit("    (f64.ge)\n"),
+  // BMod/BAnd/BOr/BEq/BNe/BConcat are not float operations; an inferred-float
+  // operand reaching them is an HM type error upstream (Reason-carrying),
+  // never a fabricated f64 instruction. Loud floor, no silent guess.
+  _    => emit_binop_repr_unsupported("f64", op)
+}
+
+fn emit_binop_f32(op) = match op {
+  BAdd => wat_emit("    (f32.add)\n"),
+  BSub => wat_emit("    (f32.sub)\n"),
+  BMul => wat_emit("    (f32.mul)\n"),
+  BDiv => wat_emit("    (f32.div)\n"),
+  BLt  => wat_emit("    (f32.lt)\n"),
+  BGt  => wat_emit("    (f32.gt)\n"),
+  BLe  => wat_emit("    (f32.le)\n"),
+  BGe  => wat_emit("    (f32.ge)\n"),
+  _    => emit_binop_repr_unsupported("f32", op)
+}
+
+fn emit_binop_i64(op) = match op {
+  BAdd => wat_emit("    (i64.add)\n"),
+  BSub => wat_emit("    (i64.sub)\n"),
+  BMul => wat_emit("    (i64.mul)\n"),
+  BDiv => wat_emit("    (i64.div_s)\n"),
+  BMod => wat_emit("    (i64.rem_s)\n"),
+  BLt  => wat_emit("    (i64.lt_s)\n"),
+  BGt  => wat_emit("    (i64.gt_s)\n"),
+  BLe  => wat_emit("    (i64.le_s)\n"),
+  BGe  => wat_emit("    (i64.ge_s)\n"),
+  BAnd => wat_emit("    (i64.and)\n"),
+  BOr  => wat_emit("    (i64.or)\n"),
+  _    => emit_binop_repr_unsupported("i64", op)
+}
+
+fn emit_binop_v128(op) = match op {
+  // Homogeneous f32x4 lanes — the value layer meeting the >< parallel verb.
+  BAdd => wat_emit("    (f32x4.add)\n"),
+  BSub => wat_emit("    (f32x4.sub)\n"),
+  BMul => wat_emit("    (f32x4.mul)\n"),
+  BDiv => wat_emit("    (f32x4.div)\n"),
+  _    => emit_binop_repr_unsupported("v128", op)
+}
+
+// A binop with no machine instruction at the operand's repr (e.g. BMod on a
+// float) — an upstream HM type error, surfaced loud, never a fabricated op.
+fn emit_binop_repr_unsupported(_w, _op) = {
+  wat_emit("    ;; binop has no instruction at this representation —\n")
+  wat_emit("    ;; an inferred-width mismatch is an HM type error upstream,\n")
+  wat_emit("    ;; not a fabricated op here. (loud floor, no silent guess)\n")
   wat_emit("    (unreachable)\n")
 }
 
@@ -2477,9 +2897,16 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
   LPWild   => wat_emit("    (i32.const 1)\n"),
   LPVar(_) => wat_emit("    (i32.const 1)\n"),
   LPLit(lv) => {
+    // The literal-pattern guard compares the scrutinee to the constant at the
+    // value's representation: a float literal is an (f64.const v) compared with
+    // f64.eq (the gradient at the match layer), every other value the i32.eq
+    // floor (byte-identical, Law 7). The const and the comparison project the
+    // same repr — they cannot disagree.
     emit_scrut_at(path, path_len)
     emit_low_value_const(lv)
-    wat_emit("    (i32.eq)\n")
+    wat_emit("    (")
+    wat_emit(repr_wat(low_value_repr(lv)))
+    wat_emit(".eq)\n")
   },
   LPCon(_, tag, sub_pats) => {
     if len(sub_pats) == 0 {
@@ -2755,14 +3182,24 @@ fn emit_low_value_const(lv) = match lv {
     wat_emit(if b { "1" } else { "0" })
     wat_emit(")\n")
   },
-  // Float = Word + representation gradient: the value word is the i32 floor;
-  // the f64 precision cash-out is the boxed-f64 substrate (peer
-  // Hβ.emit.float-boxed-substrate; the expression-position LFloat arm carries
-  // the call-table-uniformity reason). The pattern-position const reads the
-  // same carried Float word as the expression position; both project the same
-  // representation, so the two arms always agree.
-  LFloat(_)  => wat_emit("    (i32.const 0) ;; float literal pattern — i32 floor (peer Hβ.emit.float-boxed-substrate)\n"),
+  // Float literal pattern: the native (f64.const v) at the default float repr,
+  // compared with f64.eq (the LPLit guard). The i32-floor zero and its boxed-
+  // f64 peer are DELETED — unsayable now that the value flows at its real
+  // width. The pattern and expression positions project the SAME repr.
+  LFloat(f)  => {
+    wat_emit("    (f64.const ")
+    wat_emit(float_to_str(f))
+    wat_emit(")\n")
+  },
   LString(_) => wat_emit("    (i32.const 0) ;; string literal pattern unsupported\n")
+}
+
+// The repr a low-value (a literal) projects: a float literal is RF64 (the
+// gradient's inferred default), every other literal is the i32 word floor.
+// Drives the LPLit guard's comparison width so the const and the compare agree.
+fn low_value_repr(lv) with Pure = match lv {
+  LFloat(_) => RF64,
+  _         => RI32
 }
 
 fn emit_list_literal(elems) = {

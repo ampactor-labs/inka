@@ -1338,13 +1338,33 @@ fn resolve_field_offset(rec_handle, field_name) = {
   }
 }
 
-fn field_byte_offset(fields, target, i, n) = {
+// A field's byte offset is the prefix-sum of repr_width over the canonically-
+// sorted fields preceding it — NOT 4*i. The width is the field's PROVEN repr
+// (repr_of of its Ty, read live): an i32/pointer field is 4, an f64/i64 field
+// is 8, a v128 lane field is 16. For an all-i32 record this is exactly 4*i
+// (Law 7 byte-identity); a float field genuinely occupies 8 inline bytes.
+fn field_byte_offset(fields, target, i, n) =
+  field_byte_offset_acc(fields, target, i, n, 0)
+
+fn field_byte_offset_acc(fields, target, i, n, acc) = {
   if i >= n { -1 }   // field absent — unprovable offset, NOT a silent 0
   else {
-    let (name, _) = list_index(fields, i)
-    if name == target { 4 * i }
-    else { field_byte_offset(fields, target, i + 1, n) }
+    let (name, ty) = list_index(fields, i)
+    if name == target { align_for(acc, repr_of(ty)) }
+    else {
+      let here = align_for(acc, repr_of(ty))
+      field_byte_offset_acc(fields, target, i + 1, n,
+                            here + repr_width(repr_of(ty)))
+    }
   }
+}
+
+// v128 lanes want 16-byte alignment for aligned loads/stores; every other
+// width is naturally aligned by the prefix-sum (4/8 byte fields). Pad the
+// running offset up to the field's alignment before placing it.
+fn align_for(off, r) with Pure = match r {
+  RV128 => { let m = off % 16; if m == 0 { off } else { off + (16 - m) } },
+  _     => off
 }
 
 // Statement lowering

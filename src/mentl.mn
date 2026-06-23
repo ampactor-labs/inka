@@ -283,19 +283,26 @@ fn unwrap_source_span(opt) with Pure = match opt {
   None    => span_zero()
 }
 
-/// H5: HandlerCatalog — registry of which compiler-built-in handlers
-/// absorb which effects. Today a static table; the full effect-based
-/// handler_catalog (with runtime registration) lands when user-level
-/// handler discovery is exercised. The catalog enables AWrapHandler
-/// proposal: when a body row has an effect E, look up handlers that
-/// absorb E, propose the closest match.
-fn catalog_handled_effects(handler_name) = {
-  if handler_name == "mem_bump"    { [ENamed("Alloc")] }         // drift-audit: ignore — static HandlerCatalog table pending substrate replacement; real drift 8 on EffName+handler-name; both tracked for item 11.B EffName refactor + HandlerCatalog runtime registration
-  else if handler_name == "temp_arena" { [ENamed("Alloc")] }     // drift-audit: ignore — same as above
-  else if handler_name == "stdout_handler" { [ENamed("IO")] }    // drift-audit: ignore — same as above
-  else if handler_name == "sandbox_io"    { [ENamed("IO")] }     // drift-audit: ignore — same as above
-  else if handler_name == "sandbox_net"   { [ENamed("Network")] }
-  else { [] }
+// H5: the effects a named handler absorbs — read LIVE from its env
+// binding, never a static string-keyed table. A handler binds as
+// HandlerKind(handled_ename, ...) (types.mn:117): the env already
+// PROVES which effect each handler absorbs (the `~>` row algebra
+// row(expr ~> h) = (row − E) ⊕ R reads the same E). The AWrapHandler
+// proposer reads it the same way — carry the handle, read the binding
+// live; the string table that re-derived this is dissolved. A name
+// that binds no handler (not found, or a non-handler kind) absorbs
+// nothing.
+fn catalog_handled_effects(handler_name) with EnvRead + !Mutate = {
+  match perform env_lookup(handler_name) {
+    None => [],
+    Some(entry) => {
+      let (_scheme, _reason, kind) = entry
+      match kind {
+        HandlerKind(handled_ename, _, _, _, _) => [ENamed(handled_ename)],
+        _ => []
+      }
+    }
+  }
 }
 
 /// H5: capability unlocks for an annotation. !Alloc unlocks

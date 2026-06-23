@@ -446,12 +446,31 @@ fn pipe_context_of_kind(kind) with Pure = match kind {
   _ => NoPipe
 }
 
-fn mentl_context_at(handle) with GraphRead + !Mutate = {
-  // Synth's Context is the (scope_bindings, active_effects) pair.
-  // Today: empty context — the OneShot stub returns [] regardless.
-  // Hμ.synth-proposer fills the real context construction when H7
-  // MultiShot emit lands and synth_propose returns real candidates.
-  Context([], [])
+fn mentl_context_at(handle) with EnvRead + GraphRead + !Mutate = {
+  // Synth's Context is the (scope_bindings, active_effects) pair, both
+  // read LIVE from the graph the cursor sits in — never fabricated.
+  // Scope bindings ARE the live env snapshot (env_snapshot, the same
+  // bindings infer wrote); active effects ARE the effect-name list of
+  // the row already bound at this handle. Carried-Truth: the env and
+  // the node's row both already prove this; the cursor reads them, the
+  // OneShot empty-Context stub is dissolved.
+  let Env(scope_bindings) = perform env_snapshot()
+  let GNode(kind, _) = perform graph_chase(handle)
+  Context(scope_bindings, active_effects_of_row(row_of_kind(kind)))
+}
+
+// The effect names live at this position: an EffRow's name set. Closed
+// and open rows carry their names directly; a negated/pure row admits
+// none at the cursor (the synth gate reads the FORBIDDEN set from the
+// row algebra, not this positive list). One read of the row the graph
+// already bound — no re-derivation.
+fn active_effects_of_row(row) with Pure = match row {
+  EfPure          => [],
+  EfClosed(names) => names,
+  EfOpen(names, _) => names,
+  EfNeg(_)        => [],
+  EfSub(_, _)     => [],
+  EfInter(_, _)   => []
 }
 
 // verify_pending_at — Verify ledger holds ALL pending refinement

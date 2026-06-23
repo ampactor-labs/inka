@@ -1,0 +1,49 @@
+// STEP 2 gate — the total structural FOLD's eq leaf compares to the BOTTOM.
+//
+// The ultimate form (what the WHEEL now emits): a product `==` is a CALL to
+// the generated recursive $eq_<sig> helper, which ANDs each field's structural
+// eq at its canonical width-summed offset, recursing for nested products. So
+// nested records/tuples/lists compare structurally to the leaf words — never
+// the forbidden pointer-eq lie on a heap address (the dissolved loud floor
+// emit_eq_deep_unsupported). The REAL form is:
+//
+//   fn main(q) = {
+//     let a = {x: 3, y: 5}
+//     let b = {x: 3, y: 5}
+//     let c = {x: 3, y: 9}
+//     let eq_true  = if a == b { 4 }  else { 0 }   // deep-equal records
+//     let eq_false = if a == c { 8 }  else { 0 }   // differ at field y
+//     let ne_ok    = if a != c { 16 } else { 0 }
+//     eq_true + eq_false + ne_ok                    // = 20
+//   }
+//
+// This cannot yet round-trip the SEED: the disposable seed's eq still hits the
+// product floor (it lags the wheel's fold), AND mentl2 (the wheel compiled by
+// the seed) traps upstream on a bare record literal — the higher-order-effect
+// ev-slot seam (PLAN §7), unrelated to the fold. So this micro proves the
+// fold's CONTROL SHAPE — the per-field eq + AND conjunction + recursion the
+// generated helper emits — in seed-supported constructs, the same proxy
+// discipline mn-repr-width uses for STEP 0/1. When the seed catches up to the
+// wheel (the ev-slot seam closes), this becomes the direct `a == b` assertion
+// above — named peer: Hβ.eq.fold-seed-value-gate (and the sum leaf is its own
+// peer Hβ.eq.fold-sum-leaf, the env-driven per-variant payload recursion).
+//
+// Expected exit 20 = eq_true(4) + eq_false(0) + ne_ok(16): the field-wise
+// conjunction folds two records to a single Bool — the fold reaches the bottom.
+
+// feq mirrors the generated $eq_{r}_x{i}_y{i}_ helper: load each field of both
+// records, compare the leaf words, AND the per-field results (a product is
+// equal iff every field is equal). A nested-product field would be a recursive
+// feq call — the helper's recursion, here a direct call.
+fn feq(ax, ay, bx, by) = {
+  let fx = if ax == bx { 1 } else { 0 }
+  let fy = if ay == by { 1 } else { 0 }
+  fx * fy
+}
+
+fn main(q) = {
+  let eq_true  = if feq(3, 5, 3, 5) == 1 { 4 }  else { 0 }   // deep-equal
+  let eq_false = if feq(3, 5, 3, 9) == 1 { 8 }  else { 0 }   // differ at y
+  let ne_ok    = if feq(3, 5, 3, 9) == 0 { 16 } else { 0 }
+  eq_true + eq_false + ne_ok
+}

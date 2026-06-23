@@ -263,6 +263,12 @@ fn emit_module(lowered) = {
   emit_fn_index_globals(all_fn_names, 0)
   emit_static_top_closures(top_fn_names, all_fn_names, 0)
   emit_functions(lowered)
+  // The eq-leaf of the structural fold: one recursive $eq_<sig> helper per
+  // distinct product type appearing at a `==`/`!=` site (the graph IS the
+  // index). Plain top-level fns, called directly like $str_eq — emitted after
+  // the program's functions, before _start. A pure-scalar/sequence program
+  // collects none (byte-identical to the pre-fold module, Law 7).
+  emit_fold_eq_helpers(lowered)
   emit_start(top_fn_names)
   emit_footer()
 }
@@ -2509,42 +2515,73 @@ fn emit_helper_state_insert() = {
   wat_emit("    (local.get $callee_closure)\n")
 }
 
-// The one structural-eq derivation. `neg` selects != (i32.eqz the result).
+// The one structural-eq derivation — the eq LEAF of the total structural
+// FOLD (STEP 2). `==`/`!=` is the cursor projecting a value against the TYPE
+// the graph proved (lookup_ty), recursing the five node-kinds: word (i32/f64
+// value-eq), sequence (str_eq/list_eq — the [Byte]/[a] instances), product
+// (field-wise recursion via the generated $eq_<sig> helper), sum (tag-then-
+// payload). The fold-THROUGH arms (TAlias->inner, TRefined->base, resolved-
+// TVar) strip FIRST — representation/structure is a property of the carried
+// type, never the authored name or the predicate (the same resolve repr_of
+// does). `neg` selects != (i32.eqz the result).
 fn emit_struct_eq(left_h, neg) =
   if left_h == 0 {
     // Flat scalar word — value equality IS structural.
     if neg { wat_emit("    (i32.ne)\n") }
     else { wat_emit("    (i32.eq)\n") }
   } else {
-    match lookup_ty(left_h) {
-      // Sequence case — the [Byte] (str_eq) and [a] (list_eq) instances
-      // of the ONE length-then-element recursion. Both return Bool;
-      // != wraps i32.eqz.
-      TString => {
-        emit_helper_state_insert()
-        wat_emit("    (call $str_eq)\n")
-        if neg { wat_emit("    (i32.eqz)\n") } else { () }
-      },
-      TList(_) => {
-        emit_helper_state_insert()
-        wat_emit("    (call $list_eq)\n")
-        if neg { wat_emit("    (i32.eqz)\n") } else { () }
-      },
-      // Product / payload-sum: structural recursion over the field/payload
-      // set is peer Hβ.eq.structural-deep. Pointer-eq here would be the
-      // forbidden silent lie, so this surfaces a loud Reason-carrying
-      // diagnostic instead of (i32.eq) on the heap address.
-      TRecord(_)        => emit_eq_deep_unsupported("record"),
-      TRecordOpen(_, _) => emit_eq_deep_unsupported("record"),
-      TTuple(_)         => emit_eq_deep_unsupported("tuple"),
-      // Scalar word: Int / Unit / Float-as-word / unresolved sentinel /
-      // nullary ADT tag (TName) / fn-table index / continuation pointer.
-      // i32.eq IS structural for a single value word.
-      _ =>
-        if neg { wat_emit("    (i32.ne)\n") }
-        else { wat_emit("    (i32.eq)\n") }
-    }
+    emit_eq_for_ty(eq_strip(lookup_ty(left_h)), neg)
   }
+
+// Alias-strip / refinement-unwrap FIRST (TAlias->inner, TRefined->base) — the
+// fold-through arms, structurally identical to repr_of's prologue. A `Port`
+// (= Int) folds as Int; a `Sample` (= Float where ..) folds as Float. The
+// predicate is erased at runtime, so eq reads the underlying value.
+fn eq_strip(ty) with Pure = match ty {
+  TAlias(_, inner)  => eq_strip(inner),
+  TRefined(base, _) => eq_strip(base),
+  _                 => ty
+}
+
+// The eq leaf over an ALREADY-STRIPPED type — H6-exhaustive over the five
+// node-kinds. Product (TRecord/TTuple/TRecordOpen) routes to its generated
+// recursive helper $eq_<sig> (field-wise deep recursion, never a pointer-eq
+// lie). The sum (TName payload-ADT) leaf — env-driven per-variant payload
+// recursion — is the positive-form peer Hβ.eq.fold-sum-leaf (the generator
+// receives it next; nullary ADT tags ARE words and fold here as i32.eq).
+fn emit_eq_for_ty(ty, neg) = match ty {
+  // Sequence case — the [Byte] (str_eq) and [a] (list_eq) instances of the
+  // ONE length-then-element recursion. Both return Bool; != wraps i32.eqz.
+  TString => {
+    emit_helper_state_insert()
+    wat_emit("    (call $str_eq)\n")
+    if neg { wat_emit("    (i32.eqz)\n") } else { () }
+  },
+  TList(_) => {
+    emit_helper_state_insert()
+    wat_emit("    (call $list_eq)\n")
+    if neg { wat_emit("    (i32.eqz)\n") } else { () }
+  },
+  // Product — field-wise structural recursion. The generated $eq_<sig>
+  // helper (emit_fold_eq_helpers) takes (__state, a, b) and ANDs each
+  // field's eq at the canonical width-summed offset, recursing for nested
+  // products. The eq/hash-disagreement footgun is unsayable: ONE traversal.
+  TRecord(fields)        => emit_eq_product_call(ty_fold_sig(ty), neg),
+  TRecordOpen(fields, _) => emit_eq_product_call(ty_fold_sig(ty), neg),
+  TTuple(elems)          => emit_eq_product_call(ty_fold_sig(ty), neg),
+  // Sum payload-ADT — per-variant tag-then-payload recursion is the named
+  // peer Hβ.eq.fold-sum-leaf (needs the env's ConstructorScheme variant
+  // payload types, the channel the next leaf-increment threads). A nullary
+  // ADT value is a bare tag word and folds at the scalar arm below.
+  TName(_, _) => emit_eq_sum_leaf_pending(neg),
+  // Scalar word: Int / Unit / Float-as-word / unresolved TVar (a handle IS
+  // a word) / fn-table index / continuation pointer. i32.eq IS structural
+  // for a single value word (the f64 word-leaf rides STEP 1's repr at the
+  // operand binop, not here — `==` leaves a Bool regardless of operand width).
+  _ =>
+    if neg { wat_emit("    (i32.ne)\n") }
+    else { wat_emit("    (i32.eq)\n") }
+}
 
 // A ++ on a genuinely-unresolved operand element type: no representation
 // to project, so emit refuses to guess (the dissolved unresolved→str_concat
@@ -2556,14 +2593,315 @@ fn emit_concat_unresolved(_ty) = {
   wat_emit("    (unreachable)\n")
 }
 
-// == / != on a product or payload-sum: field/payload structural recursion
-// is the named peer Hβ.eq.structural-deep. The loud floor replaces the
-// forbidden pointer-eq-as-structural lie.
-fn emit_eq_deep_unsupported(_kind) = {
-  wat_emit("    ;; == on aggregate (record/tuple/payload-ADT) —\n")
-  wat_emit("    ;; field-wise structural recursion is peer\n")
-  wat_emit("    ;; Hβ.eq.structural-deep; pointer-eq would lie. (loud floor)\n")
+// Product == : call the generated recursive fold helper. The state-insert
+// reorders the stack to (__state, a, b) — the W7 convention str_eq/list_eq
+// also take. The helper returns Bool; != wraps i32.eqz, the same derivation
+// negated. The deep field recursion lives in the helper, generated once per
+// distinct product type and deduped (the e-graph canonicalizes equal folds).
+fn emit_eq_product_call(sig, neg) = {
+  emit_helper_state_insert()
+  wat_emit("    (call $eq_")
+  wat_emit(sig)
+  wat_emit(")\n")
+  if neg { wat_emit("    (i32.eqz)\n") } else { () }
+}
+
+// Sum (TName payload-ADT) eq — the per-variant tag-then-payload fold reads
+// the env's ConstructorScheme for each variant's payload types, the channel
+// the next leaf-increment threads into emit (emit declares only GraphRead +
+// LookupTy today). Named peer Hβ.eq.fold-sum-leaf — a LOUD, LOCATABLE floor
+// (never a pointer-eq lie on the variant address), positive-form per Drift 9.
+fn emit_eq_sum_leaf_pending(_neg) = {
+  wat_emit("    ;; == on payload-ADT (sum) — per-variant tag-then-payload\n")
+  wat_emit("    ;; recursion is peer Hβ.eq.fold-sum-leaf (env variant types).\n")
+  wat_emit("    ;; pointer-eq would lie. (loud floor, named follow-up)\n")
   wat_emit("    (unreachable)\n")
+}
+
+// ─── The eq-leaf of the structural fold: generated recursive helpers ──────
+// A product == is a CALL to $eq_<sig>, generated once per distinct product
+// type and deduped (the e-graph canonicalizes equal folds). The generator
+// mirrors emit_distinct_repr_ft_types exactly: a pre-pass walks the lowered
+// IR collecting the product types that appear at a `==`/`!=` site (the graph
+// IS the index), and each distinct sig emits ONE recursive helper. The helper
+// is well-founded on the value's finite structure: a nested product is a CALL
+// to its own helper (recursive ADTs descend the value at runtime, finite);
+// inline expansion would not terminate on a self-referential type, a call does.
+
+// ty_fold_sig — a deterministic structural name for a type, the dedup key and
+// helper-name suffix. Two types share a sig iff they fold identically (the
+// same structural-eq the cursor derives for records — the proof IS the name).
+// Alias/refinement-stripped first, like every other fold-through.
+fn ty_fold_sig(ty) with Pure = match eq_strip(ty) {
+  TInt              => "i",
+  TFloat            => "d",
+  TUnit             => "u",
+  TString           => "s",
+  TVar(_)           => "i",          // unresolved handle — a word
+  TList(elem)       => "l{ty_fold_sig(elem)}",
+  TName(n, _)       => "n{n}",       // nominal — name carries identity
+  TTuple(elems)     => "t{ty_fold_sig_list(elems, 0, len(elems))}_",
+  TRecord(fs)       => "r{ty_fold_sig_fields(fs, 0, len(fs))}_",
+  TRecordOpen(fs,_) => "r{ty_fold_sig_fields(fs, 0, len(fs))}_",
+  TFun(_, _, _)     => "fn",         // closure — folds at the function leaf (identity)
+  TCont(_, _)       => "k",          // continuation pointer — a word here
+  // eq_strip already removed TAlias/TRefined; reaching them is impossible.
+  TAlias(_, inner)  => ty_fold_sig(inner),
+  TRefined(base, _) => ty_fold_sig(base)
+}
+
+fn ty_fold_sig_list(elems, i, n) =
+  if i >= n { "" }
+  else { "_{ty_fold_sig(list_index(elems, i))}{ty_fold_sig_list(elems, i + 1, n)}" }
+
+fn ty_fold_sig_fields(fields, i, n) =
+  if i >= n { "" }
+  else {
+    let (name, ty) = list_index(fields, i)
+    "_{name}{ty_fold_sig(ty)}{ty_fold_sig_fields(fields, i + 1, n)}"
+  }
+
+// emit_fold_eq_helpers — the generator pre-pass. Collect the product types at
+// every BEq/BNe site, then emit each DISTINCT $eq_<sig> recursive helper once.
+// Called from emit_module after emit_functions (the helpers are plain top-
+// level functions, called directly like $str_eq — no fn-table entry needed).
+fn emit_fold_eq_helpers(lowered) = {
+  let tys = collect_eq_product_tys_list(lowered, [])
+  emit_distinct_eq_helpers(tys, [])
+}
+
+fn emit_distinct_eq_helpers(tys, seen) = {
+  if len(tys) == 0 { () }
+  else {
+    let ty = list_head(tys)
+    let sig = ty_fold_sig(ty)
+    if ls_find_str_local(seen, sig, 0) >= 0 {
+      emit_distinct_eq_helpers(list_tail(tys), seen)
+    } else {
+      emit_one_eq_helper(sig, ty)
+      emit_distinct_eq_helpers(list_tail(tys), [sig] ++ seen)
+    }
+  }
+}
+
+// emit_one_eq_helper — the $eq_<sig> recursive helper body. Takes (__state,
+// a, b) per W7, returns Bool. ANDs each field's structural eq at its canonical
+// width-summed offset (field_offsets, the SAME projection lower's
+// field_byte_offset computes — Carried-Truth, never a re-derived 4*i). An
+// empty product is trivially equal (i32.const 1).
+fn emit_one_eq_helper(sig, ty) = {
+  wat_emit("  (func $eq_")
+  wat_emit(sig)
+  wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)\n")
+  let fields = product_field_tys(ty)
+  emit_eq_helper_conjunction(fields, 0, len(fields), 0)
+  wat_emit("  )\n")
+}
+
+// The conjunction body: for field i, push eq(a.field_i, b.field_i) then AND
+// with the running accumulator. `off` is the running byte offset (width-summed
+// over the canonically-sorted fields, the field_byte_offset arithmetic). The
+// first field seeds the accumulator; each subsequent field ANDs in.
+fn emit_eq_helper_conjunction(fields, i, n, off) = {
+  if n == 0 { wat_emit("    (i32.const 1)\n") }   // empty product — equal
+  else if i >= n { () }
+  else {
+    let fty = list_index(fields, i)
+    let r = repr_of(fty)
+    let here = align_for(off, r)
+    emit_field_load_pair(here, r)
+    emit_field_eq(eq_strip(fty))
+    if i == 0 { () } else { wat_emit("    (i32.and)\n") }
+    emit_eq_helper_conjunction(fields, i + 1, n, here + repr_width(r))
+  }
+}
+
+// Load a.field and b.field at byte offset `off`. An f64 field loads f64 (the
+// width-typed load the repr proves); every other width loads i32 (a pointer or
+// a 32-bit word). The pair is left on the stack for the field-eq instruction.
+fn emit_field_load_pair(off, r) = {
+  let ld = repr_load_op(r)
+  wat_emit("    (local.get $a) (")
+  wat_emit(ld)
+  wat_emit(" offset=")
+  wat_emit(int_to_str(off))
+  wat_emit(")\n    (local.get $b) (")
+  wat_emit(ld)
+  wat_emit(" offset=")
+  wat_emit(int_to_str(off))
+  wat_emit(")\n")
+}
+
+fn repr_load_op(r) with Pure = match r {
+  RF64  => "f64.load",
+  RF32  => "f32.load",
+  RI64  => "i64.load",
+  RV128 => "v128.load",
+  RI32  => "i32.load"
+}
+
+// The leaf eq instruction over an already-stripped field type, with the two
+// field values on the stack. Word -> width-typed value-eq; sequence -> the
+// state-threaded str_eq/list_eq call; product -> a recursive $eq_<sig> call;
+// sum -> the named-peer floor. The eq/hash family CANNOT split: this IS the
+// same five-node-kind leaf emit_eq_for_ty drives at the top-level `==`.
+fn emit_field_eq(fty) = match fty {
+  TString  => { wat_emit("    (local.get $__state)\n")
+                emit_swap_under_state()
+                wat_emit("    (call $str_eq)\n") },
+  TList(_) => { wat_emit("    (local.get $__state)\n")
+                emit_swap_under_state()
+                wat_emit("    (call $list_eq)\n") },
+  TRecord(_)        => emit_field_product_eq(ty_fold_sig(fty)),
+  TRecordOpen(_, _) => emit_field_product_eq(ty_fold_sig(fty)),
+  TTuple(_)         => emit_field_product_eq(ty_fold_sig(fty)),
+  TName(_, _)       => emit_eq_sum_leaf_pending(false),
+  TFloat            => wat_emit("    (f64.eq)\n"),
+  // Int / Unit / resolved-TVar / nullary-tag / fn-idx / cont-ptr — word eq.
+  _                 => wat_emit("    (i32.eq)\n")
+}
+
+// A nested product field: the two field pointers are on the stack; insert
+// __state under them (the W7 (state, a, b) convention) and recurse.
+fn emit_field_product_eq(sig) = {
+  wat_emit("    (local.get $__state)\n")
+  emit_swap_under_state()
+  wat_emit("    (call $eq_")
+  wat_emit(sig)
+  wat_emit(")\n")
+}
+
+// Stack has [a_field, b_field, __state]; rotate __state UNDER the pair to
+// (__state, a_field, b_field). Reuse the fn-preamble scratch the W7 helper
+// path already declares ($state_tmp, $callee_closure).
+fn emit_swap_under_state() = {
+  wat_emit("    (local.set $state_tmp)\n")           // pop __state
+  wat_emit("    (local.set $callee_closure)\n")      // pop b_field
+  wat_emit("    (local.set $alloc_size)\n")          // pop a_field
+  wat_emit("    (local.get $state_tmp)\n")
+  wat_emit("    (local.get $alloc_size)\n")          // a_field
+  wat_emit("    (local.get $callee_closure)\n")      // b_field
+}
+
+// The product's field types, in canonical (sorted-for-record, positional-for-
+// tuple) order — the field set the fold descends. Read live from the proven
+// type (the fields TRecord/TTuple already carry; a tuple's positional elems
+// ARE its product fields). Non-product types have no field set (empty).
+fn product_field_tys(ty) with Pure = match eq_strip(ty) {
+  TRecord(fields)        => field_tys_of(fields, 0, len(fields)),
+  TRecordOpen(fields, _) => field_tys_of(fields, 0, len(fields)),
+  TTuple(elems)          => elems,
+  _                      => []
+}
+
+fn field_tys_of(fields, i, n) =
+  if i >= n { [] }
+  else {
+    let (_name, ty) = list_index(fields, i)
+    [ty] ++ field_tys_of(fields, i + 1, n)
+  }
+
+// ─── The collection pre-pass: product types at every == / != site ─────────
+// Walk the lowered IR collecting the operand type at each LBinOp(BEq/BNe).
+// Only product operands need a helper (word/sequence fold inline at the `==`
+// site). The walk mirrors collect_call_vectors_expr's H6-exhaustive shape.
+fn collect_eq_product_tys_list(stmts, acc) = {
+  if len(stmts) == 0 { acc }
+  else {
+    collect_eq_product_tys_list(list_tail(stmts),
+      collect_eq_product_tys_expr(list_head(stmts), acc))
+  }
+}
+
+// A == operand contributes its product type AND the nested product types its
+// fields reach (a record-of-records needs a helper per level). product_subtys
+// flattens the type's product closure so every nested helper is generated.
+fn eq_operand_contrib(left_h, acc) = {
+  if left_h == 0 { acc }
+  else { product_subtys(eq_strip(lookup_ty(left_h)), acc) }
+}
+
+// The product types reachable from a type (itself if product, plus the
+// products its fields/elements/list-element reach). Words and sequences-of-
+// words contribute nothing; a list-of-records contributes the record.
+fn product_subtys(ty, acc) = match eq_strip(ty) {
+  TRecord(fields)        => product_subtys_fields(fields, 0, len(fields), [ty] ++ acc),
+  TRecordOpen(fields, _) => product_subtys_fields(fields, 0, len(fields), [ty] ++ acc),
+  TTuple(elems)          => product_subtys_list(elems, 0, len(elems), [ty] ++ acc),
+  TList(elem)            => product_subtys(elem, acc),
+  _                      => acc
+}
+
+fn product_subtys_fields(fields, i, n, acc) = {
+  if i >= n { acc }
+  else {
+    let (_name, ty) = list_index(fields, i)
+    product_subtys_fields(fields, i + 1, n, product_subtys(ty, acc))
+  }
+}
+
+fn product_subtys_list(elems, i, n, acc) = {
+  if i >= n { acc }
+  else {
+    product_subtys_list(elems, i + 1, n, product_subtys(list_index(elems, i), acc))
+  }
+}
+
+fn collect_eq_product_tys_expr(expr, acc) = match expr {
+  LBinOp(_h, BEq, l, _r) => collect_eq_product_tys_expr(l,
+                              eq_operand_contrib(lexpr_handle(l), acc)),
+  LBinOp(_h, BNe, l, _r) => collect_eq_product_tys_expr(l,
+                              eq_operand_contrib(lexpr_handle(l), acc)),
+  LBinOp(_h, _op, l, r)  => collect_eq_product_tys_expr(r,
+                              collect_eq_product_tys_expr(l, acc)),
+  LCall(_h, f, args)     => collect_eq_product_tys_expr(f,
+                              collect_eq_product_tys_list(args, acc)),
+  LTailCall(_h, f, args) => collect_eq_product_tys_expr(f,
+                              collect_eq_product_tys_list(args, acc)),
+  LSuspend(_h, _o, f, args, ev) => collect_eq_product_tys_expr(f,
+                              collect_eq_product_tys_list(args,
+                                collect_eq_product_tys_list(ev, acc))),
+  LEvPerform(_h, _n, _e, _s, args) => collect_eq_product_tys_list(args, acc),
+  LLet(_h, _n, inner)    => collect_eq_product_tys_expr(inner, acc),
+  LStore(_h, _s, v)      => collect_eq_product_tys_expr(v, acc),
+  LUnaryOp(_h, _op, i)   => collect_eq_product_tys_expr(i, acc),
+  LReturn(_h, i)         => collect_eq_product_tys_expr(i, acc),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
+    collect_eq_product_tys_list(body,
+      collect_eq_product_tys_list(caps, collect_eq_product_tys_list(ev, acc))),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _) =>
+    collect_eq_product_tys_list(body,
+      collect_eq_product_tys_list(caps, collect_eq_product_tys_list(ev, acc))),
+  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_eq_product_tys_list(body, acc),
+  LIf(_h, c, t, e)       => collect_eq_product_tys_list(e,
+                              collect_eq_product_tys_list(t,
+                                collect_eq_product_tys_expr(c, acc))),
+  LBlock(_h, stmts)      => collect_eq_product_tys_list(stmts, acc),
+  LMakeList(_h, es)      => collect_eq_product_tys_list(es, acc),
+  LMakeTuple(_h, es)     => collect_eq_product_tys_list(es, acc),
+  LMakeRecord(_h, fs)    => collect_eq_product_tys_list(fs, acc),
+  LMakeVariant(_h, _t, fs) => collect_eq_product_tys_list(fs, acc),
+  LIndex(_h, b, i, _)    => collect_eq_product_tys_expr(i,
+                              collect_eq_product_tys_expr(b, acc)),
+  LMatch(_h, s, _arms)   => collect_eq_product_tys_expr(s, acc),
+  LRegion(_h, body)      => collect_eq_product_tys_list(body, acc),
+  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
+    collect_eq_product_tys_expr(b,
+      collect_eq_product_tys_expr(hn,
+        collect_eq_product_tys_list(inits, collect_eq_product_tys_list(cevs, acc)))),
+  LFeedback(_h, b, s)    => collect_eq_product_tys_expr(s,
+                              collect_eq_product_tys_expr(b, acc)),
+  LPerform(_h, _n, args, _) => collect_eq_product_tys_list(args, acc),
+  LWasiCall(_h, _n, args)   => collect_eq_product_tys_list(args, acc),
+  LStateSet(_h, _s, v)   => collect_eq_product_tys_expr(v, acc),
+  LFieldLoad(_h, rec, _o) => collect_eq_product_tys_expr(rec, acc),
+  LStateSlotStore(_h, _o, v) => collect_eq_product_tys_expr(v, acc),
+  LConst(_, _)           => acc,
+  LLocal(_, _)           => acc,
+  LGlobal(_, _)          => acc,
+  LUpval(_, _)           => acc,
+  LStateGet(_, _)        => acc,
+  LEvSlotRef(_, _)       => acc
 }
 
 // emit_binop_repr — the arithmetic/comparison binop projected at the operand's

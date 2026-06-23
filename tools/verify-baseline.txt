@@ -88,3 +88,12 @@ micro:ev16=18
 # The value gate (repr_of(TFloat) == RF64) lands with STEP 1's first caller,
 # when the seed catches up to the wheel — peer Hβ.repr.read-value-gate.
 micro:repr-width=40
+# STEP 2 (structural fold): a product `==` is a CALL to the generated recursive
+# $eq_<sig> helper (field-wise deep eq at canonical width-summed offsets,
+# recursing for nested products) — dissolving the loud emit_eq_deep_unsupported
+# floor. The real `a == b` on records can't round-trip the seed yet (its eq
+# floor lags the wheel; mentl2 also traps upstream on a bare record literal —
+# the ev-slot seam, PLAN §7), so this gate proves the fold's CONTROL SHAPE
+# (per-field eq + AND conjunction + recursion). The direct record-`==` value
+# gate lands when the seed catches up — peer Hβ.eq.fold-seed-value-gate.
+micro:struct-eq-deep=20

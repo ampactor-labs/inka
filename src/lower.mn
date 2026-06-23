@@ -394,7 +394,12 @@ fn lexpr_handle(e) with Pure = match e {
 /// check. Ty enumerated exhaustively per H6 — every non-String,
 /// non-Float type renders its value word through the to_string
 /// default (kernel-uniform-i32; typed ADT show is the post-L1 peer
-/// Hβ.lower.to-string-show-derivation).
+/// Hβ.lower.to-string-show-derivation). The aggregate fall-throughs
+/// below are the SHOW leaf of the STEP 2 structural fold (the eq leaf
+/// landed in backends/wasm.mn emit_fold_eq_helpers): each becomes a
+/// generated recursive $show_<sig> helper — field-wise "{name: …}" /
+/// "[…]" / "Ctor(…)" assembly — peer Hβ.fold.show-leaf, riding the
+/// same emit generator once it threads the env's variant payload types.
 fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic = {
   let N(_, _, ah) = list_head(args)
   match lookup_ty(ah) {

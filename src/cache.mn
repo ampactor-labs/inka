@@ -113,6 +113,17 @@ fn cache_flatten_loop(s, i, n, acc) with Memory + Alloc = {
 
 // Binary serialization — Pack direction. Tag bytes per variant,
 // exhaustive match, no text assembly.
+//
+// This hand-written per-Ty fold IS the PACK leaf of the STEP 2 structural fold
+// (the eq leaf landed in backends/wasm.mn emit_fold_eq_helpers): cache_pack /
+// cache_unpack are the one structural traversal under the Pack / Unpack effects
+// (the `<~` dual closing the byte cycle). Collapsing them into a generated
+// $pack_<sig> / $unpack_<sig> on the same emit generator is peer
+// Hβ.fold.pack-leaf — and it is durable-state-critical (Law 7): the generated
+// pack MUST reproduce the EXACT wire format below (magic "IKAI", compiler_version
+// tag, the per-Ty / per-SchemeKind tag-byte assignments) byte-for-byte, or every
+// cached .kai and every persisted continuation breaks. The wire format here is
+// the pack-leaf's byte-parity invariant, not a free leaf swap.
 
 // Magic bytes: "IKAI" (0x49, 0x4B, 0x41, 0x49) — Mentl KAI binary.
 fn cache_pack_magic() with Pack + !Unpack = {

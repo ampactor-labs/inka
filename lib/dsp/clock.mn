@@ -11,8 +11,9 @@
 //
 // Each is negated independently (`!Clock`, `!Tick`, `!Sample`,
 // `!Deadline`) through spec 01's Boolean algebra. `<~` feedback
-// (spec 10) requires ONE of Clock / Tick / Sample as iterative
-// context; IterativeContext is checked at inference time.
+// (spec 10) requires an Iterate-class handler (Clock / Tick / Sample
+// are instances) as iterative context; the IterContext marker is read
+// structurally from the handler stack at inference time.
 //
 // Four handler tiers per effect: real (delegates to host) · test
 // (deterministic) · record (tees to trace) · replay (reads trace).
@@ -48,33 +49,34 @@ effect Deadline {
   remaining() -> Duration
 }
 
-/// IterativeContext — `<~` feedback checker. `<~` in the PipeExpr ADT
-/// requires an ambient Clock / Tick / Sample handler. Inference performs
-/// check_iterative_context(); returns Some(tag) if any is installed, None
-/// otherwise. The handler reports which time-effect is in scope.
-effect IterativeContext {
-  check_iterative_context() -> Option
+// IterContext — the Iterate-class MARKER capability. `<~` feedback
+// requires the structural presence of an Iterate-class handler (a
+// cycle/iteration-resume context) in the enclosing stack. Membership is
+// a STRUCTURAL property, never a name-allowlist (a name-allowlist is the
+// string-keyed drift, drift mode 8): an effect joins the class by its
+// handler providing this marker. `iter_context()` returns a Bool — pure
+// presence, no string tag (the tag re-derived what the handler stack
+// already proves; Carried-Truth). Inference reads this at the `<~` site.
+// Clock / Tick / Sample are INSTANCES of the class — they provide the
+// marker; any user-defined register of that shape (a value that performs
+// an iterative effect carrying state across ticks) provides it too.
+effect IterContext {
+  iter_context() -> Bool
 }
 
-/// no_iterative_ctx is the identity-element handler for IterativeContext —
-/// the safe default when no time handler is on the stack. `<~` performed
-/// under this handler returns None, which inference reads as
-/// E_FeedbackNoContext. The handler stack installs clock_iterative_ctx /
-/// tick_iterative_ctx / sample_iterative_ctx when a time handler is present.
-handler no_iterative_ctx {
-  check_iterative_context() => resume(None)
+// no_iter_context is the identity element — the safe default when no
+// Iterate-class handler is on the stack. `<~` under this handler reads
+// false, which inference surfaces as E_FeedbackNoContext. An Iterate-class
+// time handler (installed nearer the `<~`) shadows it with `true`.
+handler no_iter_context {
+  iter_context() => resume(False)
 }
 
-handler clock_iterative_ctx {
-  check_iterative_context() => resume(Some("Clock"))
-}
-
-handler tick_iterative_ctx {
-  check_iterative_context() => resume(Some("Tick"))
-}
-
-handler sample_iterative_ctx {
-  check_iterative_context() => resume(Some("Sample"))
+// iterate_context — the marker provider every Iterate-class time handler
+// installs alongside itself. One handler, not three per-name: presence,
+// not identity, is what `<~` needs.
+handler iterate_context {
+  iter_context() => resume(True)
 }
 
 // Tier 1: real — delegates to host via HostClock. In WASM builds, host_*

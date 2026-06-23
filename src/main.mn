@@ -279,7 +279,7 @@ fn serve_run() = {
     ~> query_default          // consult/run_query bubble Query.ask here — the live forensic read
     ~> env_handler            // query_default's env_lookup / env_snapshot
     ~> wasi_filesystem
-    ~> no_iterative_ctx
+    ~> no_iter_context
     ~> diagnostics_handler
     ~> graph_handler
     ~> mutate_sink
@@ -338,7 +338,7 @@ fn compile_run(target) = {
   compile(target)
     ~> wat_stdout
     ~> wasi_filesystem
-    ~> no_iterative_ctx
+    ~> no_iter_context
     ~> diagnostics_handler
     ~> graph_handler
     ~> mutate_sink
@@ -351,7 +351,7 @@ fn compile_run(target) = {
 // goes through the same handler) + the substrate stack.
 fn compile_stdin_run() = {
   compile_stdin()
-    ~> no_iterative_ctx
+    ~> no_iter_context
     ~> diagnostics_handler
     ~> graph_handler
     ~> mutate_sink
@@ -376,7 +376,7 @@ fn run_run(target) = {
 fn check_run(target) = {
   check(target)
     ~> wasi_filesystem
-    ~> no_iterative_ctx
+    ~> no_iter_context
     ~> diagnostics_handler
     ~> graph_handler
     ~> mutate_sink

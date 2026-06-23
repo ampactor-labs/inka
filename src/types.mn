@@ -11,7 +11,7 @@
 //
 //   graph.mn (spec 00)   → chase / occurs / trail revert / graph_handler
 //   effects.mn (spec 01) → row algebra (normalize / subsumes / unify)
-//   clock.mn (spec 11)   → Clock / Tick / Sample / Deadline + IterativeContext
+//   clock.mn (spec 11)   → Clock / Tick / Sample / Deadline + IterContext
 //   own.mn (spec 07)     → affine_ledger handler arms, escape check
 //   verify.mn (spec 02)  → verify_ledger handler arms
 //   mentl.mn (spec 09)   → Annotation / Capability / Explanation / Patch
@@ -236,7 +236,7 @@ type BinOp
   = BAdd | BSub | BMul | BDiv | BMod          // arithmetic (5)
   | BEq  | BNe  | BLt  | BGt  | BLe  | BGe    // comparison (6)
   | BAnd | BOr                                 // boolean (2)
-  | BConcat                                    // string/list concat (1)
+  | BConcat                                    // seq_concat over the unified sequence kind (1)
 
 // UnaryOp — the two unary operators per SYNTAX.md operator table
 // (line 1119): unary `-` and unary `!`. Mirrors BinOp's ADT discipline;

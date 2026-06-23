@@ -1130,21 +1130,21 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
       perform inf_pop_handler()
     },
 
-    // <~ feedback — requires iterative context (Clock/Sample/Tick).
-    // Absence is a type error at this site.
+    // <~ feedback — requires an iterative context: the structural
+    // presence of an Iterate-class handler (a cycle/iteration-resume
+    // context — Clock/Tick/Sample are instances) in the enclosing
+    // stack. Read it LIVE from the marker capability; absence is a type
+    // error at this site. SYNTAX.md §«<~»: not a name-allowlist — the
+    // marker is provided by any Iterate-class handler.
     PFeedback => {
-      let ctx = perform check_iterative_context()
-      match ctx {
-        None => {
-          perform report("infer", "E_FeedbackNoContext", "error",
-            "<~ requires an iterative context (Clock, Sample, or Tick handler)",
-            span, "MachineApplicable")
-          perform graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("no context"))))
-        },
-        Some(_) => {
-          unify(lh, rh, span, InferredPipeResult("<~", Inferred("feedback wiring")))
-          perform graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("feedback"))))
-        }
+      if perform iter_context() {
+        unify(lh, rh, span, InferredPipeResult("<~", Inferred("feedback wiring")))
+        perform graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("feedback"))))
+      } else {
+        perform report("infer", "E_FeedbackNoContext", "error",
+          "<~ requires an iterative context (install an Iterate-class handler)",
+          span, "MaybeIncorrect")
+        perform graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("no context"))))
       }
     }
   }
@@ -1167,6 +1167,13 @@ fn infer_compose(left, right, handle, span: ValidSpan) = {
   perform branch_exit(span)
   let N(_, _, lh) = left
   let N(_, _, rh) = right
+  // Branch validity is a TYPE fact (SYNTAX.md §«>< branch typing»): each
+  // branch must be stage-shaped — a pipeline / function of the composed
+  // input — never a bare value where a stage belongs. Read the branch
+  // shape live and surface E_BranchNotStage with a Reason back to the
+  // `><` site (peer Hβ.infer.pcompose-branch-stage-type).
+  check_branch_is_stage(left, span)
+  check_branch_is_stage(right, span)
   perform graph_bind(handle, TTuple([TVar(lh), TVar(rh)]),
     Located(span, Inferred(">< parallel compose — branches affinity-checked")))
   // `><` × Thread row contribution. Per threading.mn §"parallel_compose"
@@ -1177,7 +1184,48 @@ fn infer_compose(left, right, handle, span: ValidSpan) = {
   // constraint enforces the choice at compile time — `><` without
   // either handler installed produces E_HandlerUninstallable. Drift 1
   // closure: no vtable; the chain IS the dispatch.
+  //
+  // Peer Hβ.infer.pcompose-independence-not-thread (SYNTAX.md §«><»):
+  // independence is the topology; concurrent EXECUTION is a handler
+  // choice (parallel_compose vs sequential_compose installed in the `~>`
+  // chain). The ultimate form contributes only the independence/branch-
+  // affinity facts here and carries Thread in the row ONLY when a Thread
+  // handler is actually installed — dissolving the hardwired spawn/join
+  // in lower (lower_compose_via_thread). Sequenced post-real: the
+  // sequential lowering path + handler-gated row is a both-layers
+  // restructure with seed byte-parity, named not bolted.
   perform inf_add_row(mk_ef_closed([ENamed("Thread")]))
+}
+
+/// A `><` branch is stage-shaped iff it is a pipeline (PipeExpr — a
+/// chain of stages) or a function value (TFun — a stage applied to the
+/// composed input). A bare value (literal / non-function var / record)
+/// where a stage belongs is E_BranchNotStage, with a Reason back to the
+/// `><` site (SYNTAX.md §«>< branch typing»). The check reads the branch
+/// node shape AND its inferred type live — never a parse-time form
+/// commitment (the parser never inspects branch shape).
+fn check_branch_is_stage(branch, span: ValidSpan) = {
+  let N(body, _, bh) = branch
+  let is_pipe = match body {
+    NExpr(PipeExpr(_, _, _)) => true,
+    _ => false
+  }
+  if is_pipe { () }
+  else {
+    let bnode = perform graph_chase(bh)
+    let is_fn = match bnode {
+      GNode(NBound(TFun(_, _, _)), _) => true,
+      GNode(NBound(TVar(_)), _)       => true,   // not-yet-resolved — productive
+      GNode(NFree(_), _)              => true,   // open — productive-under-error
+      _                               => false
+    }
+    if is_fn { () }
+    else {
+      perform report("infer", "E_BranchNotStage", "error",
+        ">< branch is a value, not a stage — rewrite the branch as a pipeline",
+        span, "MaybeIncorrect")
+    }
+  }
 }
 
 fn infer_diverge(left, right, handle, span: ValidSpan) = {

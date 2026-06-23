@@ -686,12 +686,27 @@ type Expr
 // to its left; parenthesize to narrow. Layout is never semantics —
 // block vs inline on the page is the formatter's projection of the
 // same PTee node.
+// `<|` and `><` are ONE parallel-fanout topology — both fan out to N
+// branches and tuple the results — discriminated by INPUT OWNERSHIP
+// (arm 5), the share-vs-distribute aspect read from the FanOwnership
+// the glyph authors. `<|` = ONE input shared/borrowed (ref, !Mutate)
+// across all branches; `><` = N independent owned inputs (each
+// consumed). The merge is at the KERNEL (one PFanout node, the
+// share-vs-distribute an ownership aspect) — collapsing the duplicate
+// PDiverge/PCompose nodes+paths (Carried-Truth). The surface keeps
+// BOTH authored glyphs as intent; ownership CHECKS coherence. A verb
+// draws an edge; it does NOT schedule — execution (Seq/Thread/Simd/
+// Gpu) is a `~>` handler choice over the pure-topology verb, never
+// baked into the verb. SYNTAX.md §«><»/§«<|».
+type FanOwnership
+  = FanShare        // <|   ONE input ref-borrowed across all branches
+  | FanDistribute   // ><   N independent owned inputs
+
 type PipeKind
-  = PForward      // |>   converge — transparent wire
-  | PDiverge      // <|   fanout — borrows input to all branches
-  | PCompose      // ><   parallel compose — independent inputs, tupled
-  | PTee          // ~>   handler-attach — governs the whole chain to its left
-  | PFeedback     // <~   feedback — closes cycle under ambient clock
+  = PForward          // |>   converge — transparent wire
+  | PFanout(FanOwnership)  // <| / ><   parallel fanout, ownership-discriminated
+  | PTee              // ~>   handler-attach — governs the whole chain to its left
+  | PFeedback         // <~   feedback — closes cycle under ambient clock
 
 // FeedbackSpec (spec I10) — the RHS shape of `<~`. Recognized by
 // inference to desugar the feedback verb into a stateful handler
@@ -1272,11 +1287,11 @@ fn show_scheme(ref sch) with GraphRead + !Mutate = {
 
 fn show_pipe_kind(pk) with Pure = {
   match pk {
-    PForward    => "|>",
-    PDiverge    => "<|",
-    PCompose    => "><",
-    PTee        => "~>",
-    PFeedback   => "<~"
+    PForward              => "|>",
+    PFanout(FanShare)     => "<|",
+    PFanout(FanDistribute) => "><",
+    PTee                  => "~>",
+    PFeedback             => "<~"
   }
 }
 

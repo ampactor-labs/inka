@@ -110,3 +110,19 @@ micro:struct-eq-deep=20
 # the value gate lands when the seed's lower catches up to the wheel's producer —
 # peer Hβ.seed.multishot-producer (NOT enforced here; the .mn leads, the seed
 # follows). STEP 5 (TCont arity + world-index) closes cross-context resume safety.
+# STEP 4 (parallel topology): `<|` and `><` collapsed to ONE PFanout verb
+# (ownership-discriminated; the duplicate PDiverge/PCompose nodes+paths dissolved
+# — Carried-Truth). A verb draws an edge; it does NOT schedule — the hardwired
+# inf_add_row(Thread) is DELETED (effects_of(fanout) = ⋃ branch rows), and the
+# execution strategy (Seq default / Thread / Simd / Gpu) is read LIVE from the
+# `~>` chain at lower (lower_fanout_schedule via resolve_in_stack). The NET-NEW
+# DEFAULT — a bare `><`/`<|` with no scheduler runs SEQUENTIAL, inline, tupled in
+# source order — the behavior change this micro VERIFIES (was E_HandlerUninstallable
+# under the old Thread inject). VALUE gate round-trips the seed: dbl(7)=14 >< dbl(8)=16
+# → 30. The `~> Thread` schedule (spawn-ALL-then-join-ALL in source order over the
+# strategy-neutral thunks) is structurally landed but needs the wasi-threads runtime
+# to run end-to-end — peer Hβ.lower.fanout-thread-value-gate (NOT forced; Law 7 — a
+# schedule the gate can't verify deterministically is never claimed). Unsurpassable
+# follow-ups: Hβ.lower.fanout-simd-lane-cashout (reads STEP 1 v128), fanout-gpu-
+# backend-handler, fanout-durable-persist-handler (reads STEP 3).
+micro:fanout-seq=30

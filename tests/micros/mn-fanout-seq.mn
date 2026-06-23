@@ -1,0 +1,25 @@
+// mn-fanout-seq — STEP 4 gate: PARALLEL TOPOLOGY, the SEQUENTIAL default.
+//
+// `><` is ONE parallel-fanout verb (collapsed from PDiverge|PCompose into
+// PFanout, ownership-discriminated). A verb draws an edge; it does NOT
+// schedule. With NO scheduler handler installed, the fanout runs SEQUENTIAL
+// — branches evaluate inline, results tupled in SOURCE order. This is the
+// net-new default the old hardwired `inf_add_row(Thread)` made unsayable (a
+// bare `><` was E_HandlerUninstallable). The Thread/Simd/Gpu schedules are a
+// `~> handler` choice over the same pure-topology verb, read LIVE at lower.
+//
+// LAW 7: the existing OneShot/i32 paths (every ev*/eq micro) stay
+// byte-identical — this exercises an ADDED match-arm (PFanout) + the new
+// default-Seq projection, never a perturbation of the existing arms.
+//
+// Run: tools/run-micro.sh tests/micros/mn-fanout-seq.mn 30
+// Expected exit 30: branch_l(7)=14, branch_r(8)=16 (each doubles its input);
+// the `><` tuples them in source order; sum = 14 + 16 = 30.
+
+fn dbl(x) = x * 2
+
+fn main(q) = {
+  let pair = (7 |> dbl) >< (8 |> dbl)
+  let (l, r) = pair
+  l + r
+}

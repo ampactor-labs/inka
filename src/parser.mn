@@ -215,8 +215,14 @@ fn op_prec(k) with Pure = match k {
 fn op_to_pipe_kind(k) with Pure = match k {
   TTildeGt => Some(PTee),
   TPipeGt  => Some(PForward),
-  TLtPipe  => Some(PDiverge),
-  TGtLt    => Some(PCompose),
+  // `<|` and `><` are ONE PFanout topology; the glyph authors the
+  // ownership aspect (FanShare = one ref-borrowed input; FanDistribute
+  // = N owned inputs). The surface keeps both glyphs; ownership CHECKS
+  // coherence (own through `<|` → E_OwnershipViolation; the cursor
+  // projects the glyph from the inferred ownership at fmt). The verb
+  // contributes ZERO execution facts — schedule is a `~>` handler.
+  TLtPipe  => Some(PFanout(FanShare)),
+  TGtLt    => Some(PFanout(FanDistribute)),
   TLtTilde => Some(PFeedback),
   _        => None
 }

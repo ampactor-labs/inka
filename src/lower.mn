@@ -694,6 +694,44 @@ fn resolve_in_stack(op_name, ename, stack) = {
 fn handler_covers_effect(hname, ename) =
   any((g) => g.ename == ename, lookup_handler_arm_names_of(hname))
 
+/// The execution strategy a fanout (`<|`/`><`) runs under — read LIVE
+/// from the installed `~>` chain, NEVER baked into the verb. A verb
+/// draws an edge; it does not schedule (the deleted Thread-inject was
+/// the category error). `Schedule` is an ADT of scheduler classes —
+/// never a `mode==0/1/2` int (drift 8). NO scheduler installed → `Seq`,
+/// the invisible default: branches evaluate inline, in source order,
+/// results tupled — deterministic, zero spawn cost. `~> Thread` →
+/// `Thread`: each branch thunk dispatched to wasi-threads (the relocated
+/// spawn/join body), spawn-ALL-then-join-ALL in source order so results
+/// tuple deterministically regardless of completion order. `Simd`/`Gpu`
+/// are the unsurpassable-tier follow-ups (peers named at `lower_fanout`).
+type Schedule
+  = Seq
+  | Thread
+  | Simd
+  | Gpu
+
+/// Read the fanout's execution strategy from the installed `~>` chain —
+/// the SAME `lower_handler_stack_now()` + `handler_covers_effect`
+/// machinery every `perform` resolves through (`resolve_in_stack`). The
+/// innermost handler covering a scheduler-class effect (`Thread`/`Simd`/
+/// `Gpu`) wins; with none installed the strategy is `Seq` — the net-new
+/// default the old hardwired `Thread` inject made unsayable (a bare `><`
+/// was `E_HandlerUninstallable`; now it just runs single-threaded).
+/// `!Thread` proves the negative: a region with `Thread` subtracted from
+/// its row provably runs `Seq` (a real-time-DSP guarantee).
+fn lower_fanout_schedule() = schedule_in_stack(lower_handler_stack_now())
+
+fn schedule_in_stack(stack) =
+  if len(stack) == 0 { Seq }
+  else {
+    let e = list_head(stack)
+    if handler_covers_effect(e.name, "Thread") { Thread }
+    else if handler_covers_effect(e.name, "Simd") { Simd }
+    else if handler_covers_effect(e.name, "Gpu") { Gpu }
+    else { schedule_in_stack(list_tail(stack)) }
+  }
+
 /// The handler-state record local "__hstate_<h>" for the innermost handler
 /// handling op_name's effect ("" sentinel = none in scope → caller __state).
 fn lower_resolve_handler_state_for_op(op_name) = match lower_resolve_handler_for_op(op_name) {
@@ -1081,19 +1119,18 @@ fn lower_expr_body(e, handle, span) = match e {
 }
 
 fn lower_pipe(kind, left, right, handle) = match kind {
-  // `>< parallel compose — independent tracks dispatched as Thread-effect
-  // spawns. Each branch becomes a 0-arg thunk closure (capture-resolved
-  // exactly as LambdaExpr above); spawn returns a Handle; join retrieves
-  // each branch's result; the joined values tuple back at the `><` site.
-  // Per primitive #2 (handlers): the row constraint at infer_compose
-  // (infer.mn) requires Thread effect — parallel_compose dispatches each
-  // thunk to a real OS thread via wasi-threads; sequential_compose runs
-  // synchronously inline. Same LIR shape, two semantics, one chain
-  // choice. Drift 1 closure: handler chain IS the dispatch table; no
-  // vtable. Drift 5 closure: state lives in the chosen handler's `with`
-  // clause, never in an ad-hoc parallel struct.
-  PCompose =>
-    lower_compose_via_thread(handle, left, right),
+  // `<|`/`><` — ONE parallel-fanout topology, discriminated by input
+  // ownership (the FanOwnership aspect). The verb draws the independence
+  // edge + tuples the branch results; it does NOT schedule. HOW the
+  // branches run is read LIVE from the installed `~>` chain
+  // (`lower_fanout_schedule()` → Seq/Thread/Simd/Gpu) — the same handler
+  // stack every `perform` resolves through. NO scheduler → Seq (the
+  // invisible default): branches evaluate inline, tupled in source order.
+  // Drift 1 closure: the handler chain IS the dispatch; no vtable. Drift
+  // 5 closure: any per-thread state lives in the chosen handler's `with`,
+  // never an ad-hoc parallel struct.
+  PFanout(own) =>
+    lower_fanout(handle, own, left, right),
 
   PForward => {
     // Hβ.first-light.pipe-forward-flatten — `x |> f(a, b)` flattens to
@@ -1106,20 +1143,6 @@ fn lower_pipe(kind, left, right, handle) = match kind {
       LCall(_, fn_, args) => LCall(handle, fn_, list_concat([lo_l], args)),
       _                   => LCall(handle, lo_r, [lo_l])
     }
-  },
-
-  PDiverge => {
-    // <| diverge — input ref-borrowed to each branch; outputs tupled.
-    // SUBSTRATE.md §431: structural difference from >< is ownership,
-    // NOT serial-vs-parallel; both verbs route through Thread effect.
-    // Each branch lowers as a 0-arg thunk closure capturing the
-    // shared input by let-local handle; spawn/join per thunk; join
-    // results tuple at the <| site. Drift 5 closure: shared input
-    // is closure-state, not a hidden `__shared_input` parameter.
-    // Ownership affinity (own values cannot flow through <|) is
-    // checked at infer time (E_OwnershipViolation); lower trusts
-    // the infer-side proof. Hβ.lower.diverge-via-thread walkthrough.
-    lower_diverge_via_thread(handle, left, right)
   },
 
   PTee => {
@@ -1188,84 +1211,88 @@ fn extract_handler_config_args(node) = match node {
   _                       => []
 }
 
-/// `><` × Thread effect dispatch. Each branch is synthesized as a
-/// 0-arg thunk closure (mirroring LambdaExpr's capture resolution at
-/// lower.mn:402-428). The spawn op returns a Handle; join retrieves
-/// the branch result; the two joins tuple at the `><` site.
+/// Fanout lowering — ONE path for `<|` and `>< `, discriminated by the
+/// FanOwnership aspect. The verb produces strategy-NEUTRAL branch thunks
+/// (each a 0-arg closure, the unified heap record — handler = state =
+/// closure = evidence = continuation, §6 — so a branch is portable
+/// across a thread boundary, packable into a SIMD lane, shippable to a
+/// device, or persisted mid-flight: four backends, four readings of ONE
+/// record shape). HOW they run is read LIVE from the installed `~>`
+/// chain via `lower_fanout_schedule()` — never baked into the verb.
 ///
-/// Composition with the multi-shot quartet (per threading.mn §1):
-/// - parallel_compose × race: forks GENUINELY execute across cores
-///   when both installed; race's tiebreak preserves determinism per
-///   Q-B.7.3 (output order preserved regardless of completion order).
-/// - parallel_compose × Choice: backtrack's per-option exploration
-///   parallelizes across threads.
-/// - parallel_compose × arena_ms: per-thread bump_allocator;
-///   replay_safe / fork_deny / fork_copy compose with thread-local
-///   arenas.
+///   `FanDistribute` (`><`) — BINARY: two independent owned-input
+///       branches, each a `synthesize_branch_thunk`.
+///   `FanShare` (`<|`) — one input ref-borrowed: bind the input once as
+///       a let-local, then N shared-input thunks each applying their
+///       branch fn to it (the `__fanout_input` capture).
 ///
-/// Each thunk's free variables resolve via the outer-frame capture
-/// substrate (resolve_captures_outer). Captures flow through closure
-/// records; thread-local data lives in the spawned thread's frame.
-/// Cross-thread shared values require SharedMemory effect explicitly —
-/// `!SharedMemory` proves single-threaded-memory by row at compile
-/// time. Drift 7 closure: captures are one ordered list per thunk,
-/// never parallel arrays.
-fn lower_compose_via_thread(handle, left, right) = {
-  let thunk_l = synthesize_branch_thunk(handle, "l", left)
-  let thunk_r = synthesize_branch_thunk(handle, "r", right)
-  let h_l = LPerform(handle, "spawn", [thunk_l], "")
-  let h_r = LPerform(handle, "spawn", [thunk_r], "")
-  LMakeTuple(handle,
-    [ LPerform(handle, "join", [h_l], ""),
-      LPerform(handle, "join", [h_r], "") ])
+/// `effects_of(fanout) = ⋃ branch rows` (the Thread inject is deleted at
+/// infer); ownership affinity (own values cannot flow through `<|`) is
+/// proven at infer (E_OwnershipViolation), trusted here.
+///
+/// Named follow-up peers (positive-form, unsurpassable tier — NOT built
+/// now): Hβ.lower.fanout-simd-lane-cashout (`~> Simd` reads the fanout
+/// at STEP 1's v128 representation-gradient altitude — the branches ARE
+/// the lanes); Hβ.lower.fanout-gpu-backend-handler (`~> Gpu` projects the
+/// same thunks to a compute-kernel dispatch, "the handler IS the
+/// backend"); Hβ.types.fanout-durable-persist-handler (a Persist
+/// scheduler catching branches for crash-survivable parallel execution,
+/// §4④ — parallelism and durable execution are the same arm).
+fn lower_fanout(handle, own, left, right) = match own {
+  FanDistribute => {
+    let thunks = [ synthesize_branch_thunk(handle, "l", left),
+                   synthesize_branch_thunk(handle, "r", right) ]
+    run_fanout_thunks(handle, thunks)
+  },
+  FanShare => {
+    let lo_input = lower_expr(left)
+    let input_local_name = "__fanout_input_{int_to_str(handle)}"
+    let N(_, _, input_h) = left
+    let N(rbody, _, _) = right
+    let branch_nodes = match rbody {
+      NExpr(MakeTupleExpr(elems)) => elems,
+      _                            => [right]
+    }
+    let thunks = synthesize_diverge_thunks(handle, input_h, input_local_name, branch_nodes, 0)
+    // Bind the shared input ONCE, then run the thunks (each captures it).
+    LBlock(handle, [
+      LLet(input_h, input_local_name, lo_input),
+      run_fanout_thunks(handle, thunks)
+    ])
+  }
 }
 
-/// `<|` × Thread effect dispatch. Symmetric peer to
-/// `lower_compose_via_thread`. The structural difference: `<|`
-/// branches share ONE input (ref-borrowed per SUBSTRATE.md §431);
-/// each thunk closure captures the same `__diverge_input` let-local.
-///
-/// Lowering:
-///   1. Lower the input expression once; bind it as let-local
-///      `__diverge_input_<handle>`.
-///   2. Per branch_node in `right` (a parser-level MakeTupleExpr):
-///      synthesize a 0-arg thunk closure whose body is
-///      `Call(branch_node, [__diverge_input])` — applying the
-///      branch fn to the shared input. Each thunk captures the
-///      let-local by handle (one capture; uniform across branches).
-///   3. Spawn each thunk; join each handle; tuple the joined
-///      results in source-branch order (Q-B.7.3 determinism).
-///
-/// Composition (per threading.mn §1):
-/// - parallel_compose × <|: each branch dispatched to a distinct
-///   OS thread; per-thread bump_allocator; tuple order preserved.
-/// - sequential_compose × <|: each thunk evaluated synchronously
-///   inline (Q-B.7.1 graceful fallback).
-/// - <| × race: orthogonal topologies (race per branch is fine;
-///   race over <| outputs is |> composition, not handler stacking).
-///
-/// Drift 5 closure: shared input is closure-state via __diverge_input
-/// capture, NOT a hidden parameter to spawn. Drift 7 closure:
-/// per-branch thunks are [LowExpr], not parallel arrays.
-/// Drift 9 closure: this commit lands the let-local + per-branch
-/// thunks + spawn/join tuple atomically; row enforcement
-/// (`Hβ.infer.diverge-shared-memory-row`) and Reason variant
-/// (`Reason.branch-spawned-verb-tagged`) are named PEER handles.
-fn lower_diverge_via_thread(handle, left, right) = {
-  let lo_input = lower_expr(left)
-  let input_local_name = "__diverge_input_{int_to_str(handle)}"
-  let N(_, _, input_h) = left
-  let N(rbody, _, _) = right
-  let branch_nodes = match rbody {
-    NExpr(MakeTupleExpr(elems)) => elems,
-    _                            => [right]
-  }
-  let thunks = synthesize_diverge_thunks(handle, input_h, input_local_name, branch_nodes, 0)
-  let spawn_joins = spawn_join_each(handle, thunks)
-  LBlock(handle, [
-    LLet(input_h, input_local_name, lo_input),
-    LMakeTuple(handle, spawn_joins)
-  ])
+/// Project the strategy-neutral branch thunks through the schedule read
+/// LIVE from the installed `~>` chain. `prelude` are statements that must
+/// run before the thunks (the `<|` input let-local); the result is the
+/// branch-result tuple in SOURCE order — determinism is the verb's, not
+/// the scheduler's. NO scheduler → Seq (the invisible default the old
+/// hardwired Thread inject made unsayable): each thunk runs inline (a
+/// 0-arg closure call), results tupled in source order. `~> Thread` →
+/// spawn-ALL-then-join-ALL in source order (true-parallel-ordered, not
+/// the spawn-join-each interleave that serialized). `Simd`/`Gpu` route
+/// to the named follow-up peers above.
+fn run_fanout_thunks(handle, thunks, _prelude) = match lower_fanout_schedule() {
+  Seq    => LMakeTuple(handle, map((thunk) => LCall(handle, thunk, []), thunks)),
+  Thread => {
+    // Spawn ALL branches, THEN join ALL — true parallelism with
+    // source-order collection (the spawn-join-each interleave
+    // serialized). The spawn handles bind as let-locals so the joins
+    // read them after every spawn has launched.
+    let spawn_lets = map((indexed) => {
+      let (i, thunk) = indexed
+      LLet(handle, "__fanout_spawn_{int_to_str(i)}_{int_to_str(handle)}",
+        LPerform(handle, "spawn", [thunk], ""))
+    }, enumerate(thunks))
+    let joins = map((indexed) => {
+      let (i, _thunk) = indexed
+      LPerform(handle, "join",
+        [LLocal(handle, "__fanout_spawn_{int_to_str(i)}_{int_to_str(handle)}")], "")
+    }, enumerate(thunks))
+    LBlock(handle, list_concat(spawn_lets, [LMakeTuple(handle, joins)]))
+  },
+  Simd => LMakeTuple(handle, map((thunk) => LCall(handle, thunk, []), thunks)),
+  Gpu  => LMakeTuple(handle, map((thunk) => LCall(handle, thunk, []), thunks))
 }
 
 /// Walk branch_nodes producing one LMakeClosure per branch. Each
@@ -1288,14 +1315,6 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   let fn_ir = LFn(thunk_name, 0, [], [thunk_body], EfPure, len(captures_exprs))
   LMakeClosure(parent_handle, fn_ir, captures_exprs, [])
 }, enumerate(branch_nodes))
-
-/// Per-thunk: spawn the thunk, join the resulting handle. Returns
-/// the list of LPerform("join", [LPerform("spawn", [thunk_i])]).
-/// Source-branch order preserved per Q-B.7.3 determinism.
-fn spawn_join_each(handle, thunks) = map((thunk) => {
-  let h_spawn = LPerform(handle, "spawn", [thunk], "")
-  LPerform(handle, "join", [h_spawn], "")
-}, thunks)
 
 /// Branch-as-thunk synthesis. Mirrors LambdaExpr's lowering above —
 /// collect_free_vars over an EMPTY bound-set (a thunk has no params,

@@ -133,9 +133,12 @@ handler format_default with !Mutate {
   format_chain(chain_node) => {
     let kind = ast_kind_of(chain_node)
     let rendered = match kind {
-      NPipeExpr(PConverge, l, r)   => render_converge_chain(l, r),  // |>
-      NPipeExpr(PDiverge, l, r)    => render_diverge_chain(l, r),   // <|
-      NPipeExpr(PCompose, l, r)    => render_compose_chain(l, r),   // ><
+      NPipeExpr(PForward, l, r)            => render_converge_chain(l, r),  // |>
+      // `<|`/`><` are ONE PFanout; the formatter projects the glyph from
+      // the ownership aspect — FanShare → `<|`, FanDistribute → `><` (the
+      // surface keeps both authored glyphs as intent).
+      NPipeExpr(PFanout(FanShare), l, r)      => render_diverge_chain(l, r),   // <|
+      NPipeExpr(PFanout(FanDistribute), l, r) => render_compose_chain(l, r),   // ><
       NPipeExpr(PTee, l, r)        => render_tee(l, r),             // ~>
       NPipeExpr(PFeedback, l, r)   => render_feedback_chain(l, r),  // <~
       _                            => render_non_chain(chain_node)

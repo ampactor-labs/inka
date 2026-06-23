@@ -353,12 +353,13 @@ fn wasi_num_cores_intrinsic()                    with Pure = 1
 /// Structural Difference"); parallel_compose is the handler that
 /// gives BOTH verbs multi-core semantics. Same source — single-
 /// threaded baseline OR multi-core scale-out — depending only
-/// on the installed handler. The verbs differ in input ownership
-/// (`<|` ref-borrowed shared; `><` own-consumed independent),
-/// not in dispatch story. Per Hβ.lower.diverge-via-thread:
-/// PDiverge lowers as per-branch thunk closures over a shared
-/// captured input + spawn/join, symmetric to PCompose's per-
-/// branch thunks over independent inputs.
+/// on the installed handler. The two glyphs are ONE PFanout verb,
+/// discriminated by input ownership (`<|` = FanShare, ref-borrowed
+/// shared; `><` = FanDistribute, own-consumed independent), not a
+/// dispatch story. The Schedule (Seq default / Thread / Simd / Gpu)
+/// is read LIVE from the `~>` chain at lower; with this Thread
+/// handler installed, `lower_fanout` projects spawn-all-then-join-
+/// all over the strategy-neutral branch thunks in source order.
 ///
 /// Primitive #4 (Effect row algebra) — `Thread + !SharedMemory` for
 /// isolated tracks; `SharedMemory` for atomic-sync ops. `!Thread`

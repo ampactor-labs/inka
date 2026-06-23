@@ -780,8 +780,7 @@ fn infer_expr(ref node) = {
       // same own-name. Non-branching verbs use the straight-through
       // infer-both-sides / then-infer_pipe pattern.
       match kind {
-        PCompose    => infer_compose(left, right, handle, span),
-        PDiverge    => infer_diverge(left, right, handle, span),
+        PFanout(own) => infer_fanout(own, left, right, handle, span),
         PForward    => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) },
         PTee        => infer_pipe_tee(left, right, handle, span),
         PFeedback   => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) }
@@ -1010,7 +1009,7 @@ fn names_effect_payload(names, ename) = {
 }
 
 /// The five verbs, each inferred by its topology.
-/// `PDiverge`, `PCompose`, and `PTee` are handled BEFORE `infer_pipe` fires
+/// `PFanout` (`<|`/`><`) and `PTee` are handled BEFORE `infer_pipe` fires
 /// (see `PipeExpr` arm in `infer_expr`); their arms here are unreachable stubs.
 fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
   let N(_, _, lh) = left
@@ -1040,11 +1039,10 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
       }
     },
 
-    // PDiverge and PCompose are now handled BEFORE infer_pipe fires
-    // (see PipeExpr arm in infer_expr). Their branches run under a
-    // branching-ledger scope so parallel consumes collide correctly.
-    PDiverge => (),    // unreachable; handled in infer_diverge
-    PCompose => (),    // unreachable; handled in infer_compose
+    // PFanout (<| and ><) is handled BEFORE infer_pipe fires (see the
+    // PipeExpr arm in infer_expr → infer_fanout). Its branches run under
+    // a branching-ledger scope so parallel consumes collide correctly.
+    PFanout(_) => (),    // unreachable; handled in infer_fanout
 
     // ~> tee — handler attachment. Result type = body type. Row:
     // row(expr ~> h) = (row(expr) - handled(h)) + row(h). Today we
@@ -1084,51 +1082,58 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
   }
 }
 
-/// Branching-verb inference (W2 · W3). `><` and `<|` run their
-/// sub-branches inside an `affine_ledger` branching frame
-/// (`branch_enter` / `branch_divider` / `branch_exit`). The handler
+/// Fanout-verb inference (W2 · W3) — ONE path for `<|` and `>< `, the
+/// two surfaces of the one parallel-fanout topology discriminated by
+/// input ownership (the `FanOwnership` aspect the glyph authors). Both
+/// run their sub-branches inside an `affine_ledger` branching frame
+/// (`branch_enter` / `branch_divider` / `branch_exit`); the handler
 /// pairwise-checks cross-branch consumes at `branch_exit`, reporting
 /// `E_OwnershipViolation` for any name consumed in two or more parallel
-/// branches. Result types:
-///   `><` — `TTuple([left_ty, right_ty])`
-///   `<|` — `TTuple` of each branch's return type (tuple-of-branches form)
-///           or a single branch's type (single-branch form).
-fn infer_compose(left, right, handle, span: ValidSpan) = {
-  branch_enter()
-  infer_expr(left)
-  branch_divider(span)
-  infer_expr(right)
-  branch_exit(span)
-  let N(_, _, lh) = left
-  let N(_, _, rh) = right
-  // Branch validity is a TYPE fact (SYNTAX.md §«>< branch typing»): each
-  // branch must be stage-shaped — a pipeline / function of the composed
-  // input — never a bare value where a stage belongs. Read the branch
-  // shape live and surface E_BranchNotStage with a Reason back to the
-  // `><` site (peer Hβ.infer.pcompose-branch-stage-type).
-  check_branch_is_stage(left, span)
-  check_branch_is_stage(right, span)
-  graph_bind(handle, TTuple([TVar(lh), TVar(rh)]),
-    Located(span, Inferred(">< parallel compose — branches affinity-checked")))
-  // `><` × Thread row contribution. Per threading.mn §"parallel_compose"
-  // and primitives #2 (handlers) + #4 (row algebra): the compose verb's
-  // semantics ARE the chosen handler. parallel_compose dispatches each
-  // branch to a real OS thread via ffi_spawn / ffi_join; sequential_
-  // compose runs synchronously; same source, two semantics. The row
-  // constraint enforces the choice at compile time — `><` without
-  // either handler installed produces E_HandlerUninstallable. Drift 1
-  // closure: no vtable; the chain IS the dispatch.
-  //
-  // Peer Hβ.infer.pcompose-independence-not-thread (SYNTAX.md §«><»):
-  // independence is the topology; concurrent EXECUTION is a handler
-  // choice (parallel_compose vs sequential_compose installed in the `~>`
-  // chain). The ultimate form contributes only the independence/branch-
-  // affinity facts here and carries Thread in the row ONLY when a Thread
-  // handler is actually installed — dissolving the hardwired spawn/join
-  // in lower (lower_compose_via_thread). Sequenced post-real: the
-  // sequential lowering path + handler-gated row is a both-layers
-  // restructure with seed byte-parity, named not bolted.
-  inf_add_row(mk_ef_closed([ENamed("Thread")]))
+/// branches.
+///
+/// A VERB DRAWS AN EDGE; IT DOES NOT SCHEDULE. The fanout contributes
+/// ZERO effects of its own — `effects_of(fanout) = ⋃ branch rows` — so
+/// there is NO injected `Thread` row (the deleted category error: a verb
+/// writing an EXECUTION fact into the topology layer). WHO runs the
+/// branches is a `~>` handler choice (Seq/Thread/Simd/Gpu), read LIVE at
+/// lower from the installed chain — never re-derived here. Closes peer
+/// Hβ.infer.pcompose-independence-not-thread (named at the old
+/// infer.mn:1131 Thread inject).
+///
+/// The two AST shapes are reconciled by the ownership aspect:
+///   `FanDistribute` (`><`) — BINARY: `left >< right`, two branches per
+///       node (N-ary `><` nests). Result `TTuple([left_ty, right_ty])`.
+///   `FanShare` (`<|`) — INPUT-vs-N-tuple: one input ref-borrowed into a
+///       `MakeTupleExpr` of N branches (degenerate single-branch + empty
+///       `<| ()` forms). Result `TTuple` of branch return types, or the
+///       single branch's type.
+/// Net-new follow-up (positive-form, NOT folded into this collapse):
+/// Hβ.infer.fanout-ownership-from-use-count — derive the share-vs-own
+/// reading from branch-input use-count (the 0/1/2+ inference that drives
+/// own/ref, §4⑤) and project the glyph at fmt, so an `own` value through
+/// `<|` surfaces E_OwnershipViolation and a shared input under `><`
+/// fmt-canonicalizes to `<|`. Today the aspect is authored by the glyph;
+/// ownership CHECKS coherence in that follow-up.
+fn infer_fanout(own, left, right, handle, span: ValidSpan) = match own {
+  FanDistribute => {
+    branch_enter()
+    infer_expr(left)
+    branch_divider(span)
+    infer_expr(right)
+    branch_exit(span)
+    let N(_, _, lh) = left
+    let N(_, _, rh) = right
+    // Branch validity is a TYPE fact (SYNTAX.md §«>< branch typing»): each
+    // branch must be stage-shaped — a pipeline / function of the composed
+    // input — never a bare value where a stage belongs. Read the branch
+    // shape live and surface E_BranchNotStage with a Reason back to the
+    // `><` site (peer Hβ.infer.pcompose-branch-stage-type).
+    check_branch_is_stage(left, span)
+    check_branch_is_stage(right, span)
+    graph_bind(handle, TTuple([TVar(lh), TVar(rh)]),
+      Located(span, Inferred(">< parallel fanout — branches affinity-checked")))
+  },
+  FanShare => infer_fanout_share(left, right, handle, span)
 }
 
 /// A `><` branch is stage-shaped iff it is a pipeline (PipeExpr — a
@@ -1162,10 +1167,12 @@ fn check_branch_is_stage(branch, span: ValidSpan) = {
   }
 }
 
-fn infer_diverge(left, right, handle, span: ValidSpan) = {
-  // Input is inferred once; each branch receives a BORROW of the
-  // input's value. Branches run under the branching ledger so any
-  // two branches that consume the same outer-scope own collide.
+/// The `FanShare` (`<|`) shape of fanout inference — one input
+/// ref-borrowed into N branches. Input is inferred once; each branch
+/// receives a BORROW of the input's value. Branches run under the
+/// branching ledger so any two branches that consume the same
+/// outer-scope own collide.
+fn infer_fanout_share(left, right, handle, span: ValidSpan) = {
   infer_expr(left)
   let N(rbody, _, _) = right
   match rbody {
@@ -1175,26 +1182,26 @@ fn infer_diverge(left, right, handle, span: ValidSpan) = {
         infer_expr(right)    // degenerate: <| () — empty branch tuple
       } else {
         branch_enter()
-        infer_diverge_branches(branches, span, 0, n)
+        infer_fanout_share_branches(branches, span, 0, n)
         branch_exit(span)
         let N(_, _, rh) = right
         graph_bind(rh, TTuple(collect_tvar_types(branches)),
-          Located(span, Inferred("<| diverge — tuple of branch outputs")))
+          Located(span, Inferred("<| fanout — tuple of branch outputs")))
       }
     },
     _ => infer_expr(right)   // single-branch form — no branching ledger needed
   }
   let N(_, _, rh) = right
   graph_bind(handle, TVar(rh),
-    Located(span, Inferred("<| diverge — result type is branch-tuple type")))
+    Located(span, Inferred("<| fanout — result type is branch-tuple type")))
 }
 
-fn infer_diverge_branches(branches, span: ValidSpan, i, n) = {
+fn infer_fanout_share_branches(branches, span: ValidSpan, i, n) = {
   if i >= n { () }
   else {
     infer_expr(list_index(branches, i))
     if i + 1 < n { branch_divider(span) }
-    infer_diverge_branches(branches, span, i + 1, n)
+    infer_fanout_share_branches(branches, span, i + 1, n)
   }
 }
 

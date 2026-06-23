@@ -215,7 +215,7 @@ fn refinement_suggestion(handle, predicate) with Pure = {
 fn first_inferred_with_classification(params, fn_handle) with Pure = {
   if len(params) == 0 { None }
   else {
-    let TParam(name, _, authored, resolved) = list_head(params)
+    let TParam(name, _, authored, resolved, _) = list_head(params)
     match authored {
       Unmarked => match resolved {
         Own => Some(ownership_suggestion(name, "own",

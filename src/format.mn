@@ -421,7 +421,8 @@ fn show_reason_compressed(reason) with Memory + Alloc = match reason {
   InferredCallReturn(name, _) => "return of call to '{name}'",   // drift-audit: ignore (output literal contains the word)
   InferredPipeResult(verb, _) => "result of {verb}",
   FreshInContext(h, ctx) => "fresh #{int_to_str(h)} in '{ctx}'",
-  DocstringReason(text, _) => text
+  DocstringReason(text, _) => text,
+  DefaultReason(pname, _) => "{pname} defaulted"
 }
 
 fn render_context_at(handle) with GraphRead + !Mutate = {

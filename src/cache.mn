@@ -290,7 +290,7 @@ fn cache_pack_fields(fields, i, n) with Pack + !Unpack = {
 fn cache_pack_params(params, i, n) with Pack + !Unpack = {
   if i >= n { () }
   else {
-    let TParam(name, ty, authored, resolved) = list_index(params, i)
+    let TParam(name, ty, authored, resolved, _) = list_index(params, i)
     perform pack_str(name)
     cache_pack_ty(ty)
     cache_pack_ownership(authored)
@@ -572,6 +572,11 @@ fn cache_pack_reason(r) with Pack + !Unpack = match r {
     pack_byte(22)
     pack_str(text)
     cache_pack_span(span)
+  },
+  DefaultReason(pname, span) => {
+    pack_byte(23)
+    pack_str(pname)
+    cache_pack_span(span)
   }
 }
 
@@ -757,7 +762,14 @@ fn cache_unpack_params(n, i, buf) with Unpack + !Pack = {
     let ty = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let authored = cache_unpack_ownership()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let resolved = cache_unpack_ownership()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    cache_unpack_params(n, i + 1, list_set(buf, i, TParam(name, ty, authored, resolved)))
+    // The default-expr node is live-only (not serialized) — same class as
+    // the handler decl's config/state/arms (live-only, reconstructed from
+    // source). A cross-file cached fn whose param has a `= default`
+    // reconstructs the default from the parsed decl: peer
+    // Hβ.cache.param-default-from-source, post-L1. Unpack reads None;
+    // intra-module compiles (the L1 path) carry the default in the live
+    // TParam, never through the cache.
+    cache_unpack_params(n, i + 1, list_set(buf, i, TParam(name, ty, authored, resolved, None)))
   }
 }
 
@@ -1018,10 +1030,15 @@ fn cache_unpack_reason() with Unpack + !Pack = {
     let ctx = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     FreshInContext(h, ctx)
   }
-  else {
+  else if tag == 22 {
     let text = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let span = cache_unpack_span()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     DocstringReason(text, span)
+  }
+  else {
+    let pname = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    let span = cache_unpack_span()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
+    DefaultReason(pname, span)   // tag == 23
   }
 }
 

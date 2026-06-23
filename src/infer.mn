@@ -287,6 +287,14 @@ fn infer_stmt(ref node) = {
       perform verify(span, pred, Refinement(pred, PTrue))
     },
 
+    // Transparent alias `type X = T`: register TAlias(X, T) so X and T
+    // unify transparently (unify_types' TAlias arm reads the inner live),
+    // the authored name travelling in the wrapper for Reason chains. No
+    // predicate, no Verify — the difference from RefineStmt is exactly
+    // the absent `where` (SYNTAX.md §«Type aliases»).
+    NStmt(AliasStmt(name, ty)) =>
+      perform env_extend(name, Forall([], TAlias(name, ty)), Declared(name), FnScheme),
+
     // DS.3 — unwrap docstring, infer the inner declaration, then
     // re-extend the declared name's env entry with the docstring Reason.
     // The docstring becomes a graph-queryable edge via DocstringReason.
@@ -463,47 +471,47 @@ fn names_include_alloc_loop(names, i, n) = {
 /// Build an `EffRow` from a declared `(name, negated)` list. Negated
 /// names produce `EfNeg(EfClosed([name]))` and compose with intersection;
 /// positive names union. Normalization reduces to canonical form.
-fn build_declared_row(effs) = {
-  let (pos, neg) = partition_declared(effs, [], [])
-  build_from_partition(pos, neg)
-}
-
-fn has_pure_declared(effs) = {
-  any((eff) => {
-  let (name, _) = eff
-  match name {
-    ENamed(s) => s == "Pure",   // drift-audit: ignore — real drift mode 8 (EffName should have EPure variant, not ENamed(string)); tracked for item 11.B EffName refactor
-    _         => false
-  }
-  }, effs)
-}
-
-fn partition_declared(effs, pos_init, neg_init) = {
-  fold(effs, (pos_init, neg_init), (acc, eff) => {
-    let (pos, neg) = acc
-    let (name, negated) = eff
-    if negated { (pos, push(neg, name)) }
-    else       { (push(pos, name), neg) }
+// Fold the parsed surface effect terms — each (EffName, negated, EConn)
+// — into one EffRow, applying each term's connective via the existing
+// effects.mn Boolean algebra (union_row / diff_row / inter_row). The
+// parser named the topology (`+ - &`) and the per-term negation (`!`);
+// here the row is BUILT by reading that algebra live, never re-derived.
+// The accumulator starts at EfPure (the union identity); the first
+// term carries EcUnion so `acc = Pure ∪ term = term`.
+fn build_declared_row(effs) =
+  fold(effs, EfPure, (acc, eff) => {
+    let (name, negated, conn) = eff
+    // `Pure` is the union identity (SYNTAX.md: `with Pure + IO`
+    // simplifies to `with IO`) — its term IS EfPure, so a `+ Pure`
+    // adds nothing and `acc` is preserved by union_row. This keeps
+    // build_declared_row correct at every caller, not only those that
+    // pre-check has_pure_declared.
+    let term =
+      if is_pure_eff_name(name) { EfPure }
+      else if negated           { neg_row(mk_ef_closed([name])) }
+      else                      { mk_ef_closed([name]) }
+    apply_connective(conn, acc, term)
   })
+
+fn is_pure_eff_name(name) = match name {
+  ENamed(s) => s == "Pure",   // drift-audit: ignore — same shape as has_pure_declared; the EPure variant (vs ENamed("Pure")) is the tracked item 11.B EffName refactor
+  _         => false
 }
 
-fn build_from_partition(pos, neg) = {
-  if len(pos) == 0 && len(neg) == 0 { EfPure }
-  else if len(pos) == 0 { neg_row(mk_ef_closed(neg)) }
-  else {
-    let base = mk_ef_closed(pos)
-    fold_negations(neg, base)
-  }
+fn apply_connective(conn, own acc, own term) = match conn {
+  EcUnion => union_row(acc, term),
+  EcDiff  => diff_row(acc, term),
+  EcInter => inter_row(acc, term)
 }
 
-fn fold_negations(neg, own acc) = {
-  if len(neg) == 0 { acc }
-  else {
-    let n = list_head(neg)
-    let next = inter_row(acc, neg_row(mk_ef_closed([n])))
-    fold_negations(list_tail(neg), next)
-  }
-}
+fn has_pure_declared(effs) =
+  any((eff) => {
+    let (name, _, _) = eff
+    match name {
+      ENamed(s) => s == "Pure",   // drift-audit: ignore — real drift mode 8 (EffName should have EPure variant, not ENamed(string)); tracked for item 11.B EffName refactor
+      _         => false
+    }
+  }, effs)
 
 // Expression inference
 
@@ -657,6 +665,23 @@ fn infer_expr(ref node) = {
         Located(span, Inferred("record literal")))
       // H4.1: record fields may carry inner-region pointers; join.
       perform tag_alloc_join(handle, record_field_handles(fields))
+    },
+
+    NExpr(RecordUpdateExpr(base, overrides)) => {
+      // {...base, f: v} — non-destructive update. Infer the base (its
+      // record fields are the copy source) and each override value;
+      // the result type is the base's record fields with each override
+      // overwritten-or-added by name (the field set lower reads live).
+      // The base's proven record type IS the source of truth — the
+      // result is derived from it, never fabricated.
+      infer_expr(base)
+      infer_record_field_values(overrides)
+      let base_fields = record_fields_of_node(base)
+      let override_types = build_record_field_types(overrides)
+      let merged = merge_override_fields(base_fields, override_types)
+      perform graph_bind(handle, TRecord(merged),
+        Located(span, Inferred("record update")))
+      perform tag_alloc_join(handle, record_field_handles(overrides))
     },
 
     NExpr(NamedRecordExpr(type_name, fields)) => {
@@ -1014,15 +1039,28 @@ fn infer_perform(op_name, args, handle, span: ValidSpan) = {
 
 fn unify_args_to_params(args, params, span: ValidSpan) = {
   if len(args) == 0 && len(params) == 0 { () }
-  else if len(args) == 0 || len(params) == 0 {
-    // Arity mismatch: one list exhausted before the other.
+  else if len(args) == 0 {
+    // Args exhausted with params remaining: valid IFF every remaining
+    // param carries a default (SYNTAX.md §«Default parameter values» —
+    // the call omits the trailing edges, lower fills them from the
+    // callee-scoped default). A remaining param with NO default is a
+    // genuine arity error.
+    if all((p) => { let TParam(_, _, _, _, d) = p; is_some(d) }, params) { () }
+    else {
+      perform report(
+        "infer", "E_TypeMismatch", "error",
+        "arity mismatch in function call: expected {int_to_str(len(params))} argument(s) but got 0 (a remaining param has no default)",
+        span, "MachineApplicable")
+    }
+  }
+  else if len(params) == 0 {
     perform report(
       "infer", "E_TypeMismatch", "error",
-      "arity mismatch in function call: expected {int_to_str(len(params))} argument(s) but got {int_to_str(len(args))}",
+      "arity mismatch in function call: too many arguments, none expected",
       span, "MachineApplicable")
   } else {
     let N(_, _, ah) = list_head(args)
-    let TParam(_, pty, _, _) = list_head(params)
+    let TParam(_, pty, _, _, _) = list_head(params)
     let expected_h = perform mint(Inferred("arg param"))
     perform graph_bind(expected_h, pty, Located(span, Inferred("expected param type")))
     unify(ah, expected_h, span, Inferred("arg to param"))
@@ -1157,7 +1195,7 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
       let ret_h = perform mint(InferredPipeResult("|>", Inferred("return"))) // drift-audit: ignore — "return" is a Reason string; "|>" is a string literal key, not a pipe verb
       let row_h = perform graph_fresh_row(InferredPipeResult("|>", Inferred("effects")))
       let expected = TFun(
-        [TParam("_", TVar(lh), Unmarked, Unmarked)],
+        [TParam("_", TVar(lh), Unmarked, Unmarked, None)],
         TVar(ret_h),
         mk_ef_open([], row_h)
       )
@@ -1653,6 +1691,37 @@ fn build_record_field_types(fields) = {
   }, fields)
 }
 
+// The record field list inferred at a node — chase its handle to the
+// bound type and read its fields LIVE (TRecord / TRecordOpen carry them;
+// any other resolved type yields []). The record-update result derives
+// from this, so it reads the base's proven shape, never a copy.
+fn record_fields_of_node(node) = {
+  let N(_, _, h) = node
+  match perform graph_chase(h) {
+    GNode(NBound(ty), _) => match ty {
+      TRecord(fields)        => fields,
+      TRecordOpen(fields, _) => fields,
+      _                      => []
+    },
+    _ => []
+  }
+}
+
+// Merge override field-types into a base field list: each override
+// overwrites the same-named base field or is added, and the result is
+// kept in the one canonical name-sorted layout via the parser's
+// record_field_insert (the same sort lower's offset arithmetic assumes
+// — the sort has ONE home, not re-derived here). The override wins by
+// name (last-writer over the base copy) — the spread semantics.
+fn merge_override_fields(base_fields, overrides) =
+  fold(overrides, base_fields, (acc, ov) => {
+    let (oname, _) = ov
+    record_field_insert(reject_field(acc, oname), ov)
+  })
+
+fn reject_field(fields, target) =
+  filter((f) => { let (n, _) = f; n != target }, fields)
+
 // H4.1 projection — pull the value handles out of a record-field list
 // for region-join lookup. Field names aren't needed for region
 // tracking; only the per-value handles matter.
@@ -1716,8 +1785,8 @@ fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, 
 fn unify_param_lists(ref a, ref b, span: ValidSpan, reason) = {
   if len(a) == 0 || len(b) == 0 { () }
   else {
-    let TParam(_, ta, _, _) = list_head(a)
-    let TParam(_, tb, _, _) = list_head(b)
+    let TParam(_, ta, _, _, _) = list_head(a)
+    let TParam(_, tb, _, _, _) = list_head(b)
     unify_types(ta, tb, span, reason)
     unify_param_lists(list_tail(a), list_tail(b), span, reason)
   }
@@ -1749,7 +1818,7 @@ fn pair_fn_params(pa, pb, span: ValidSpan, reason) = {
 ///   `TVar(_)`                         — unify TVar with TTuple of param types
 ///   otherwise                         — arity mismatch
 fn try_tuple_decompose(single_param, many_params, span: ValidSpan, reason) = {
-  let TParam(_, pty, _, _) = single_param
+  let TParam(_, pty, _, _, _) = single_param
   let lm = len(many_params)
   match pty {
     TTuple(elems) =>
@@ -1772,7 +1841,7 @@ fn unify_tuple_elems_with_params(elems, params, span: ValidSpan, reason, i, n) =
   if i >= n { () }
   else {
     let e = list_index(elems, i)
-    let TParam(_, pt, _, _) = list_index(params, i)
+    let TParam(_, pt, _, _, _) = list_index(params, i)
     unify_types(e, pt, span, reason)
     unify_tuple_elems_with_params(elems, params, span, reason, i + 1, n)
   }
@@ -1789,7 +1858,7 @@ fn param_types_flat(params) = {
 fn param_types_loop(params, i, n, own acc) = {
   if i >= n { acc }
   else {
-    let TParam(_, t, _, _) = list_index(params, i)
+    let TParam(_, t, _, _, _) = list_index(params, i)
     param_types_loop(params, i + 1, n, list_set(acc, i, t))
   }
 }
@@ -2058,7 +2127,7 @@ fn infer_pat_list(pats, rest, parent_handle, span: ValidSpan) = {
 // through silently — surfaced separately as E_ConstructorArity (TODO).
 fn bind_pcon_subpats(params, sub_pats, span: ValidSpan, reason, ctor_name) = {
   for_each((pair) => {
-    let (TParam(_, pty, _, _), sub_pat) = pair
+    let (TParam(_, pty, _, _, _), sub_pat) = pair
     let sub_h = perform mint(VarLookup(ctor_name, reason))
     perform graph_bind(sub_h, pty,
       Located(span, VarLookup(ctor_name, reason)))
@@ -2302,8 +2371,8 @@ fn chase_deep(ty) = match ty {
 fn map_chase_ty(tys) = map(chase_deep, tys)
 
 fn chase_params(params) = map((p) => {
-  let TParam(name, ty, auth, res) = p
-  TParam(name, chase_deep(ty), auth, res)
+  let TParam(name, ty, auth, res, default) = p
+  TParam(name, chase_deep(ty), auth, res, default)
 }, params)
 
 fn chase_fields(fields) = map((fld) => {
@@ -2335,7 +2404,7 @@ fn free_in_ty(ty) = match ty {
 fn free_in_list(tys) = flatten(map(free_in_ty, tys))
 
 fn free_in_params(params) = flatten(map((p) => {
-  let TParam(_, ty, _, _) = p
+  let TParam(_, ty, _, _, _) = p
   free_in_ty(ty)
 }, params))
 
@@ -2486,8 +2555,8 @@ fn subst_ty(ty, mapping) = match ty {
 fn subst_list(tys, mapping) = map((t) => subst_ty(t, mapping), tys)
 
 fn subst_params(params, mapping) = map((p) => {
-  let TParam(name, ty, auth, res) = p
-  TParam(name, subst_ty(ty, mapping), auth, res)
+  let TParam(name, ty, auth, res, default) = p
+  TParam(name, subst_ty(ty, mapping), auth, res, default)
 }, params)
 
 fn subst_fields(fields, mapping) = map((fld) => {
@@ -2563,19 +2632,23 @@ fn mint_param_placeholders(params, owner_name) = map((indexed) => {
 
 fn mint_params(params, owner_name) = map((indexed) => {
   let (idx, p) = indexed
-  let TParam(name, _, _, _) = p
+  let TParam(name, _, _, _, _) = p
   let h = perform mint(FnParam(owner_name, idx, Inferred("param of '{owner_name}'")))
   perform env_extend(name, Forall([], TVar(h)), Declared(name), FnScheme)
   h
 }, enumerate(params))
 
 fn build_param_types(params, handles) = map((pair) => {
-  let (TParam(name, _, auth, res), h) = pair
-  TParam(name, TVar(h), auth, res)
+  let (TParam(name, _, auth, res, default), h) = pair
+  // Preserve the default — it travels with the param's type into the
+  // generalized scheme so call sites resolving against TFun's params
+  // can read it to fill an omitted arg (SYNTAX.md §«Default parameter
+  // values»). Dropping it here would lose the default at every call.
+  TParam(name, TVar(h), auth, res, default)
 }, zip(params, handles))
 
 fn build_inferred_params(handles) = map((h) =>
-  TParam("_", TVar(h), Unmarked, Unmarked), handles)
+  TParam("_", TVar(h), Unmarked, Unmarked, None), handles)
 
 fn register_type_constructors(type_name, variants) = {
   let total = len(variants)
@@ -2652,10 +2725,10 @@ fn quantify_ctor_ty(ty, qmap) = match ty {
 fn quantify_tparam_list(params, qmap) = {
   if len(params) == 0 { ([], qmap) }
   else {
-    let TParam(pname, pty, auth, res) = list_index(params, 0)
+    let TParam(pname, pty, auth, res, _) = list_index(params, 0)
     let (pty2, q1) = quantify_ctor_ty(pty, qmap)
     let (rest2, q2) = quantify_tparam_list(slice(params, 1, len(params)), q1)
-    ([TParam(pname, pty2, auth, res)] ++ rest2, q2)
+    ([TParam(pname, pty2, auth, res, None)] ++ rest2, q2)
   }
 }
 
@@ -2714,7 +2787,7 @@ fn is_record_ty(ty) with Pure = match ty {
 
 fn build_ctor_params(field_types, base_idx) = map((indexed) => {
   let (i, ty) = indexed
-  TParam("_{int_to_str(base_idx + i)}", ty, Unmarked, Unmarked)
+  TParam("_{int_to_str(base_idx + i)}", ty, Unmarked, Unmarked, None)
 }, enumerate(field_types))
 
 fn register_effect_ops(effect_name, ops) = {
@@ -2858,7 +2931,7 @@ fn infer_handler_state_inits(state) = map((sf) => {
 
 fn bind_handler_config_params(config_tparams, hname) =
   for_each((tp) => {
-    let TParam(name, ty, _, _) = tp
+    let TParam(name, ty, _, _, _) = tp
     perform env_extend(name, Forall([], ty),
       Located(span_zero(), LetBinding(name, Declared(hname))), FnScheme)
   }, config_tparams)
@@ -2946,6 +3019,10 @@ fn collect_resume_walk(buf, node) with GraphRead = {
       for_each((e) => collect_resume_walk(buf, e), elems),
     NExpr(MakeRecordExpr(fields)) =>
       for_each((f) => collect_resume_walk(buf, f.value), fields),
+    NExpr(RecordUpdateExpr(base, fields)) => {
+      collect_resume_walk(buf, base)
+      for_each((f) => collect_resume_walk(buf, f.value), fields)
+    },
     NExpr(NamedRecordExpr(_, fields)) =>
       for_each((f) => collect_resume_walk(buf, f.value), fields),
     NExpr(FieldExpr(b, _)) => collect_resume_walk(buf, b),
@@ -3227,6 +3304,8 @@ fn walk_refinement(map, node, path_pred) with GraphRead = {
       walk_refinement_list(map, elems, path_pred),
     NExpr(MakeRecordExpr(fields)) =>
       walk_refinement_fields(map, fields, path_pred),
+    NExpr(RecordUpdateExpr(base, fields)) =>
+      walk_refinement_fields(walk_refinement(map, base, path_pred), fields, path_pred),
     NExpr(NamedRecordExpr(_, fields)) =>
       walk_refinement_fields(map, fields, path_pred),
     NExpr(FieldExpr(b, _)) =>
@@ -3372,7 +3451,7 @@ fn mint_handler_config_tparams(config, hname, base_idx) = map((indexed) => {
   let (i, name) = indexed
   let idx = base_idx + i
   let h = perform mint(FnParam(hname, idx, Inferred("config-param of '{hname}'")))
-  TParam(name, TVar(h), Unmarked, Unmarked)
+  TParam(name, TVar(h), Unmarked, Unmarked, None)
 }, enumerate(config))
 
 // Utilities

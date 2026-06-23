@@ -109,6 +109,7 @@ fn show_token_kind(k) with Pure = match k {
   TComma => ",", TDot => ".", TColon => ":", TSemicolon => ";",
   TPlus => "+", TMinus => "-", TStar => "*", TSlash => "/", TPercent => "%",
   TEq => "=", TLt => "<", TGt => ">", TBang => "!",
+  TAmp => "&",
   TPipe => "|", TTilde => "~", TAt => "@", THole => "??",
   TNewline => "<newline>", TEof => "<eof>"
 }
@@ -432,6 +433,16 @@ fn parse_params_tail(ref tokens, pos, own buf, count) = {
   }
 }
 
+// Destructuring patterns in param position (`({name, age}) => …`,
+// `((a, b)) => …`, `([h, ...t]) => …` — SYNTAX.md §«Anonymous functions»)
+// bind a full PRecord/PTuple/PList at the parameter. The ultimate form
+// desugars each to a fresh-named param plus a destructure-bind at the
+// function entry (the same desugar that turns a destructuring `let` into
+// a match) — which requires TParam to carry a Pat (not just a String
+// name) and the param parser to coordinate with the body desugar. That
+// param-as-pattern substrate is the structural peer
+// Hβ.parser.param-as-pattern; until it lands a param binds a bare name
+// (plus optional `: Ty` and `= default`, below).
 fn parse_one_param(ref tokens, pos) = {
   let (own_marker, p) = match kind_at(tokens, pos) {
     TOwn => (Own, skip_ws(tokens, pos + 1)),
@@ -442,29 +453,52 @@ fn parse_one_param(ref tokens, pos) = {
   let name = ident_at(tokens, p)
   let p2 = skip_ws(tokens, p + 1)
 
-  if at(tokens, p2, TColon) {
-    let (ty, p3) = parse_type_ty(tokens, skip_ws(tokens, p2 + 1))
-    (TParam(name, ty, own_marker, own_marker), p3)
+  // Optional `: Ty` annotation (the Intent Boundary), then optional
+  // `= default` (SYNTAX.md §«Default parameter values»). The default
+  // expr is parser-minted graph content; it rides in the TParam's
+  // default slot to its one home, evaluated in the callee's scope when
+  // a call omits the arg edge.
+  let (ty, p_ty) =
+    if at(tokens, p2, TColon) {
+      parse_type_ty(tokens, skip_ws(tokens, p2 + 1))
+    } else {
+      (TVar(fresh_handle(span_at(tokens, p))), p2)
+    }
+  let p_after_ty = skip_ws(tokens, p_ty)
+  if at(tokens, p_after_ty, TEq) {
+    let (default_expr, p_def) = parse_expr(tokens, skip_ws(tokens, p_after_ty + 1))
+    (TParam(name, ty, own_marker, own_marker, Some(default_expr)), p_def)
   } else {
-    // Type inferred via TVar allocated at parse
-    let placeholder_span = span_at(tokens, p)
-    let h = fresh_handle(placeholder_span)
-    (TParam(name, TVar(h), own_marker, own_marker), p2)
+    (TParam(name, ty, own_marker, own_marker, None), p_ty)
   }
 }
 
-/// Effect lists use `+` per SYNTAX.md (`with E1 + E2 + !E3`). Each
-/// entry parses through `parse_one_effect`; the row is built from this
-/// list at infer time (`build_declared_row`).
-fn parse_effect_list(ref tokens, pos) = {
+// Effect rows use the full Boolean algebra `+ - & ! Pure` per SYNTAX.md
+// §«Named effect rows» (`with E1 + !E2 & E3 - E4`). `!` is the per-term
+// negation flag; `+ - &` are the connectives joining each term to the
+// row accumulated to its left. The first term carries EcUnion (joining
+// onto the EfPure base = itself). Each entry is (EffName, negated,
+// EConn); infer folds the list applying each connective via the
+// existing union_row / diff_row / inter_row algebra (build_declared_row)
+// — the parser names the topology, infer reads the algebra live.
+fn parse_effect_list(ref tokens, pos) =
+  parse_effect_list_from(tokens, pos, EcUnion)
+
+fn parse_effect_list_from(ref tokens, pos, conn) = {
   let (name, negated, p) = parse_one_effect(tokens, pos)
-  let entry = (name, negated)
+  let entry = (name, negated, conn)
   let p2 = skip_ws(tokens, p)
-  if at(tokens, p2, TPlus) {
-    let (rest, p3) = parse_effect_list(tokens, skip_ws(tokens, p2 + 1))
-    ([entry] ++ rest, p3)
-  } else {
-    ([entry], p2)
+  let next_conn =
+    if at(tokens, p2, TPlus)       { Some(EcUnion) }
+    else if at(tokens, p2, TMinus) { Some(EcDiff) }
+    else if at(tokens, p2, TAmp)   { Some(EcInter) }
+    else                           { None }
+  match next_conn {
+    Some(c) => {
+      let (rest, p3) = parse_effect_list_from(tokens, skip_ws(tokens, p2 + 1), c)
+      ([entry] ++ rest, p3)
+    },
+    None => ([entry], p2)
   }
 }
 
@@ -550,14 +584,31 @@ fn parse_type_decl(ref tokens, pos) = {
     // Single-variant type whose body is the record. Reuse
     // parse_record_type_fields so the field-sort invariant matches
     // structural records exactly.
-    let (flds, p3) = parse_record_type_fields(tokens, skip_ws(tokens, p2 + 1))
+    let (flds, _rest_var, p3) = parse_record_type_fields(tokens, skip_ws(tokens, p2 + 1))
     let sorted = sort_record_type_fields(flds)
+    // A nominal record is closed by definition — its name IS the brand,
+    // so an open rest is meaningless here; the closed TRecord is the body.
     let body = TRecord(sorted)
     let variant = (name, [body])     // single variant named after the type
     (nstmt(TypeDefStmt(name, [variant]), start), p3)
   } else {
-    let (variants, p3) = parse_variants(tokens, p2)
-    (nstmt(TypeDefStmt(name, variants), start), p3)
+    // Transparent alias vs ADT (SYNTAX.md §«Type aliases»): a RHS that is
+    // a single type-expression with no `|`-alternation is a transparent
+    // alias (`type Port = Int`, `type Bytes = [Int]`, `type H = Option(Int)`);
+    // a `|` after the first term marks a multi-variant ADT. A trailing
+    // row operator (`+ - &`) is the named-effect-row form (out of this
+    // form's scope) — left to parse_variants unchanged. Parse the RHS as
+    // a type and read the terminator live; the token decides, never a
+    // line-count or a pre-commitment.
+    let (alias_ty, p_alias) = parse_type_ty(tokens, p2)
+    let term = skip_ws(tokens, p_alias)
+    if at(tokens, term, TPipe) || at(tokens, term, TPlus)
+       || at(tokens, term, TMinus) || at(tokens, term, TAmp) {
+      let (variants, p3) = parse_variants(tokens, p2)
+      (nstmt(TypeDefStmt(name, variants), start), p3)
+    } else {
+      (nstmt(AliasStmt(name, alias_ty), start), p_alias)
+    }
   }
 }
 
@@ -1078,6 +1129,19 @@ fn parse_named_record_body(ref tokens, pos) = {
   (sorted, p)
 }
 
+// Labeled call arguments (`f(x = a, y = b)` — SYNTAX.md §«Labeled call
+// arguments») are the parameter-list-AS-product surface: a call may
+// construct its arg product positionally, by field, or mixed — the same
+// machinery as a record literal. The ultimate form carries the label on
+// each arg entry so infer resolves it against the callee's declared
+// param names (E_UnknownArgLabel on a miss) and reorders to positional.
+// That requires CallExpr's arg list to become the product form
+// [(Option(String), Node)] read at all 23 CallExpr consumers — the same
+// product-node-kind substrate the record-update spread completed. The
+// label substrate is the structural peer Hβ.parser.call-args-as-product,
+// landed with the CallExpr-arg-product migration; until then a call's
+// args are positional Nodes (the closed form below) and a `name =` at a
+// call site parses as a positional expression.
 fn parse_call_args(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRParen) { ([], p + 1) }
@@ -1227,7 +1291,7 @@ fn expr_to_param(e) = {
     NExpr(VarRef(nm)) => nm,
     _                 => ""
   }
-  TParam(pname, TVar(fresh_handle(esp)), Unmarked, Unmarked)
+  TParam(pname, TVar(fresh_handle(esp)), Unmarked, Unmarked, None)
 }
 
 /// Convert a list of parsed expr nodes into a TParam list (buffer-
@@ -1406,7 +1470,12 @@ fn parse_brace_expr(ref tokens, pos, start_span) = {
   // (the Bool gate) extends the discrimination uniformly; otherwise a
   // block. `{ handle: handle, ... }` was mis-read as a block → `:`
   // unexpected.
-  if is_param_name_tok(tokens, p) {
+  if is_dot_dot_dot(tokens, p) {
+    // `{...base, f: v}` — non-destructive record update (SYNTAX.md
+    // §«Record update»). The leading spread is unambiguous: a block
+    // never opens with `...`.
+    parse_record_update(tokens, p, start_span)
+  } else if is_param_name_tok(tokens, p) {
     let p2 = skip_ws(tokens, p + 1)
     match kind_at(tokens, p2) {
       TColon  => parse_record_literal(tokens, pos, start_span),
@@ -1416,6 +1485,29 @@ fn parse_brace_expr(ref tokens, pos, start_span) = {
     }
   } else {
     parse_block_expr(tokens, pos, start_span)
+  }
+}
+
+// `{...base, f: v, ...}` → RecordUpdateExpr(base, sorted_override_fields).
+// The spread base is parsed as an expression; the remaining fields parse
+// through the same parse_record_fields machinery as a plain record
+// literal and sort identically. Non-destructive: lower copies base's
+// fields then overwrites/adds the listed ones (the base is read, never
+// mutated). One spread per literal — the canonical form leads with it.
+fn parse_record_update(ref tokens, pos, start_span) = {
+  let after_dots = skip_ws(tokens, pos + 3)
+  let (base, p_base) = parse_expr(tokens, after_dots)
+  let p_after = skip_ws(tokens, p_base)
+  // Override fields follow a comma; a bare `{...base}` is a pure copy
+  // (no overrides) closing at `}`.
+  if at(tokens, p_after, TComma) {
+    let buf = make_list(4)
+    let (final_buf, final_count, p) =
+      parse_record_fields(tokens, skip_ws(tokens, p_after + 1), buf, 0)
+    let sorted = sort_record_fields(slice(final_buf, 0, final_count))
+    (nexpr(RecordUpdateExpr(base, sorted), start_span), p)
+  } else {
+    (nexpr(RecordUpdateExpr(base, []), start_span), expect(tokens, p_after, TRBrace))
   }
 }
 
@@ -1829,7 +1921,7 @@ fn parse_lambda_params(ref tokens, pos, own buf, count) = {
   else {
     let name = ident_at(tokens, p)
     let h = fresh_handle(span_at(tokens, p))
-    let param = TParam(name, TVar(h), Unmarked, Unmarked)
+    let param = TParam(name, TVar(h), Unmarked, Unmarked, None)
     let (b1, c1) = push_node(buf, count, param)
     let p2 = skip_ws(tokens, p + 1)
     if at(tokens, p2, TComma) {
@@ -2083,11 +2175,19 @@ fn parse_type_ty(ref tokens, pos) = match kind_at(tokens, pos) {
     }
   },
   TLBrace => {
-    // Structural record type: `{name: Ty, age: Ty}`. Sorted at parse;
-    // mk_record_open applied if a `...R` row variable is present
-    // (deferred — first form is closed records only).
-    let (flds, p) = parse_record_type_fields(tokens, skip_ws(tokens, pos + 1))
-    (TRecord(sort_record_type_fields(flds)), p)
+    // Structural record type `{name: Ty, age: Ty}` (closed) or open
+    // `{name: Ty, ...}` / `{name: Ty, ...R}` (accepts any record with AT
+    // LEAST these fields — SYNTAX.md §«Row polymorphism»). Sorted at
+    // parse; an open rest mints a fresh row var and the field set becomes
+    // a TRecordOpen (mk_record_open canonicalizes the fields with the
+    // row var); closed stays TRecord.
+    let (flds, rest_var, p) = parse_record_type_fields(tokens, skip_ws(tokens, pos + 1))
+    let sorted = sort_record_type_fields(flds)
+    let ty = match rest_var {
+      Some(v) => mk_record_open(sorted, v),
+      None    => TRecord(sorted)
+    }
+    (ty, p)
   },
   TLBracket => {
     // List type `[T]` → TList(T) — the canonical list-type notation
@@ -2144,19 +2244,41 @@ fn parse_type_args_loop(ref tokens, pos, own buf, count) = {
   }
 }
 
+// Parse a structural record type's field list, recognizing an optional
+// trailing open-row rest `...` / `...R` (SYNTAX.md §«Row polymorphism»).
+// Returns (fields, rest_var, pos-after-`}`): rest_var is Some(row-handle)
+// for an open record (accepts any record with AT LEAST these fields),
+// None for a closed one. `...` mints a fresh anonymous row var; `...R`
+// binds the row var name R (the reuse of R across sites within one
+// signature is a named-row-var environment threaded through type-parse —
+// the structural peer Hβ.parser.named-row-var-reuse; here both mint a
+// fresh row var). The downstream substrate (TRecordOpen, unify_types'
+// row-poly arms) is already built; this parse closes the surface.
 fn parse_record_type_fields(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
-  if at(tokens, p, TRBrace) { ([], p + 1) }
-  else {
+  if at(tokens, p, TRBrace) { ([], None, p + 1) }
+  else if is_dot_dot_dot(tokens, p) {
+    // `...` or `...R` rest — the open-row marker. A name after the three
+    // dots binds the row var (R); absent = anonymous. Both mint a fresh
+    // row-var handle; consume to the closing `}`.
+    let after_dots = p + 3
+    let named = match kind_at(tokens, after_dots) {
+      TIdent(_) => true,
+      _         => false
+    }
+    let p_rest = if named { after_dots + 1 } else { after_dots }
+    let row_var = fresh_handle(span_at(tokens, p))
+    ([], Some(row_var), expect(tokens, skip_ws(tokens, p_rest), TRBrace))
+  } else {
     let name = ident_at(tokens, p)
     let p1 = expect(tokens, p + 1, TColon)
     let (ty, p2) = parse_type_ty(tokens, skip_ws(tokens, p1))
     let p3 = skip_ws(tokens, p2)
     if at(tokens, p3, TComma) {
-      let (rest, p4) = parse_record_type_fields(tokens, skip_ws(tokens, p3 + 1))
-      ([(name, ty)] ++ rest, p4)
+      let (rest, rest_var, p4) = parse_record_type_fields(tokens, skip_ws(tokens, p3 + 1))
+      ([(name, ty)] ++ rest, rest_var, p4)
     } else {
-      ([(name, ty)], expect(tokens, p3, TRBrace))
+      ([(name, ty)], None, expect(tokens, p3, TRBrace))
     }
   }
 }

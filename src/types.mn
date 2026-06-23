@@ -52,10 +52,18 @@ type Ty
 // Inference fills unmarked parameters; Own/Ref are explicit commitments.
 
 type TParam
-  = TParam(String, Ty, Ownership, Ownership)
-                                   // name, ty, authored, resolved
+  = TParam(String, Ty, Ownership, Ownership, Option(Node))
+                                   // name, ty, authored, resolved, default
                                    // OW.2 — authored = what developer typed (Own/Ref/Unmarked)
                                    //        resolved = what infer_ownership determined
+                                   // default = Some(expr_node) when the param has a
+                                   //   trailing `= expr` (SYNTAX.md §«Default parameter
+                                   //   values»); None otherwise. The default node lives
+                                   //   in the graph (parser-minted); lower fills an
+                                   //   absent call-site arg edge by projecting it in the
+                                   //   callee's scope — the default has ONE home (this
+                                   //   slot) and one eval context (the callee). A
+                                   //   defaulted slot leaves a DefaultReason edge.
 
 type Ownership
   = Unmarked     // compiler decides (default)
@@ -164,6 +172,19 @@ type EffArg
   | EAType(Ty)                     // type payload — the effect's op payload type
                                    // (Iterate(a)). Flows performer→handler at the
                                    // install; unified, not value-compared. Emit erases.
+
+// The Boolean connective joining a surface effect term to the row
+// accumulated to its left — the topology the surface `+ - &` draws
+// (SYNTAX.md §«Named effect rows»: full algebra `+ - & ! Pure`).
+// `!` is the per-term `negated` flag, not a connective. The first
+// term carries EcUnion (joining onto the EfPure base = itself). The
+// fold reads the existing effects.mn algebra live (union_row /
+// diff_row / inter_row) — the parser names the connective, infer
+// applies it; no row is re-derived.
+type EConn
+  = EcUnion                        // `+` — set union
+  | EcDiff                         // `-` — set difference (E - F = E & !F)
+  | EcInter                        // `&` — set intersection
 
 // Substrate owned by graph.mn. The ADTs live here because every
 // consumer of the graph names them — Read/Write/Speculate effects,
@@ -295,6 +316,11 @@ type Reason
   | InferredPipeResult(String, Reason)   // pipe_verb ("|>", "~>", "<~"), inner — verb identity in Why chain
   | FreshInContext(Int, String)          // handle, context_name — "fresh in 'process'" not "fresh 42"
   | DocstringReason(String, Span)        // DS.1 — authored /// docstring as intent edge
+  | DefaultReason(String, Span)          // a param defaulted from `= expr` at the
+                                         // decl_site — the Why projection at a
+                                         // defaulted call slot walks here ("`ratio`
+                                         // defaulted to its declaration; annotate to
+                                         // pin"). SYNTAX.md §«Default parameter values».
 
 
 // Caret — the user's text-attention position. ONE input among many to
@@ -480,6 +506,11 @@ type TokenKind
   | TComma | TDot | TColon | TSemicolon
   | TPlus | TMinus | TStar | TSlash | TPercent
   | TEq | TLt | TGt | TBang
+  | TAmp                            // `&` — effect-row intersection (EfInter);
+                                    // the surface of the Boolean row algebra's `&`
+                                    // (SYNTAX.md §«Named effect rows»). `&&` is the
+                                    // distinct TAndAnd (logical and); maximal munch
+                                    // lexes `&&` before a bare `&` reaches here.
   | TPipe | TTilde | TAt | THole
 
   // ─── Layout / structural (2) ─────────────────────────────────────
@@ -538,6 +569,13 @@ type Expr
   | MakeListExpr(List)
   | MakeTupleExpr(List)
   | MakeRecordExpr(List)           // [(field_name: String, value: Node)] — sorted at parse
+  | RecordUpdateExpr(Node, List)   // {...base, f: v, ...} — non-destructive update:
+                                   // copy base's fields, overwrite/add the listed
+                                   // [(name, value)] (sorted). base is owned-read,
+                                   // not mutated (SYNTAX.md §«Record update»). One
+                                   // spread base per literal; the override fields
+                                   // are the same product-field machinery as
+                                   // MakeRecordExpr.
   | NamedRecordExpr(String, List)  // type_name + sorted fields — nominal record literal
   | IndexExpr(Node, Node)          // `xs[i]` semantic AST — receiver, index.
                                    // Infer dispatches on receiver's type:
@@ -699,6 +737,12 @@ type Stmt
   | ImportStmt(String)
   | RefineStmt(String, Ty, Predicate)
                            // type X = T where P — nominal refinement
+  | AliasStmt(String, Ty)
+                           // type X = T — transparent alias (no `where`, RHS a
+                           // single type-expression, not a record literal, not a
+                           // `|`-alternation). Infer registers TAlias(X, T); X and
+                           // T unify transparently (SYNTAX.md §«Type aliases»). The
+                           // authored name travels in the TAlias for Reason chains.
   | Documented(String, Node)
                            // DS.1 — /// docstring wrapping a declaration stmt
 
@@ -1001,7 +1045,7 @@ fn show_handle(h) with GraphRead + !Mutate = {
 }
 
 fn show_tparam(ref tp) with GraphRead + !Mutate = {
-  let TParam(name, ty, authored, resolved) = tp
+  let TParam(name, ty, authored, resolved, _) = tp
   let base = "{name}: {show_type(ty)}"
   match authored {
     Unmarked => match resolved {
@@ -1134,7 +1178,8 @@ fn show_reason(ref reason) with GraphRead + !Mutate = {
     InferredCallReturn(callee, inner) => "call to '{callee}' → {show_reason(inner)}",
     InferredPipeResult(verb, inner)   => "{verb} pipe → {show_reason(inner)}",
     FreshInContext(id, ctx)           => "fresh {show_handle(id)} in '{ctx}'",
-    DocstringReason(doc, span)        => "/// {doc} at {show_span(span)}"
+    DocstringReason(doc, span)        => "/// {doc} at {show_span(span)}",
+    DefaultReason(pname, span)        => "{pname} defaulted at {show_span(span)}"
   }
 }
 

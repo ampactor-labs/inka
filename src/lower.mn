@@ -490,6 +490,46 @@ fn env_kind_of(name) = {
   }
 }
 
+// Default-fill (SYNTAX.md §«Default parameter values»): a named call
+// that omits trailing args has those slots filled from the callee's
+// param defaults — read LIVE from the callee's TFun params (the one
+// home, build_param_types carries them). Each omitted param's default
+// node is lowered and appended; the call site only omitted an edge.
+// Params with no default (or a callee whose scheme isn't a ground
+// function) contribute nothing — arity is the infer pass's concern.
+fn lower_args_with_defaults(name, args, lo_args) = {
+  let params = callee_params_of(name)
+  let n_given = len(lo_args)
+  if len(params) <= n_given { lo_args }
+  else {
+    let extra = lower_default_fills(slice(params, n_given, len(params)))
+    list_concat(lo_args, extra)
+  }
+}
+
+fn callee_params_of(name) = match perform env_lookup(name) {
+  Some(entry) => {
+    let (scheme, _, _) = entry
+    match scheme {
+      Forall(_, TVar(h)) => match perform graph_chase(h) {
+        GNode(NBound(TFun(params, _, _)), _) => params,
+        _ => []
+      },
+      _ => []
+    }
+  },
+  None => []
+}
+
+fn lower_default_fills(missing_params) =
+  fold(missing_params, [], (acc, p) => {
+    let TParam(_, _, _, _, default) = p
+    match default {
+      Some(expr) => list_concat(acc, [lower_expr(expr)]),
+      None       => acc
+    }
+  })
+
 /// The `CallExpr` dispatch falls back to this when the callee isn't a
 /// `SchemeKind`-recognized constructor or effect op. Monomorphic case:
 /// direct `LCall` (callee's row is ground; no evidence needed).
@@ -865,7 +905,10 @@ fn lower_expr_body(e, handle, span) = match e {
           //   - Effect NOT in row → Tier 1: LPerform (handler is
           //     locally installed, direct call)
           lower_perform_dispatch(handle, name, lo_args),
-        _ => lower_call_default(handle, f, fh, lo_args)
+        // A plain function call fills any omitted trailing args from the
+        // callee's param defaults (read live off its TFun) before the
+        // direct/evidence call.
+        _ => lower_call_default(handle, f, fh, lower_args_with_defaults(name, args, lo_args))
       } },
       _ => lower_call_default(handle, f, fh, lo_args)
     }
@@ -925,6 +968,16 @@ fn lower_expr_body(e, handle, span) = match e {
     // raw fields. The type name is preserved in the AST for
     // diagnostics and IDE projection but doesn't reach LIR.
     LMakeRecord(handle, lower_record_field_values(fields)),
+
+  RecordUpdateExpr(base, overrides) =>
+    // {...base, f: v} — non-destructive update. The RESULT record's
+    // field set is PROVEN by infer (base's fields ∪ overrides), read
+    // live via lookup_ty(handle); each result field is either an
+    // override value or a field-load COPIED from base at its proven
+    // offset — never re-derived, never a runtime field-copy loop. The
+    // base is evaluated once into a temp local (LLet) and field-loaded
+    // N times (LLocal) — the share the spread semantics demand.
+    lower_record_update(handle, base, overrides),
 
   LambdaExpr(params, body_node) => {
     // DESIGN Ch 1: lambdas close over their free variables. Each
@@ -1452,6 +1505,9 @@ fn lower_stmt_body(s, handle, span) = match s {
   },
   ImportStmt(_module)                       => LConst(handle, LInt(0)),
   RefineStmt(_name, _ty, _pred)             => LConst(handle, LInt(0)),
+  // Transparent alias: type-level only, no runtime presence — the alias
+  // and its underlying type unify at infer; emit erases (like RefineStmt).
+  AliasStmt(_name, _ty)                     => LConst(handle, LInt(0)),
   // DS — docstring wrapper: lower the inner declaration, discard doc
   Documented(_, inner_node)                 => lower_stmt(inner_node),
 
@@ -1753,7 +1809,7 @@ fn bind_state_field_names_as_locals(state) = {
 // Parameter name lowering (for LFn metadata)
 
 fn lower_param_names(params) = map((p) => {
-  let TParam(name, _, _, _) = p
+  let TParam(name, _, _, _, _) = p
   name
 }, params)
 
@@ -1775,7 +1831,7 @@ fn param_handles_of(fn_handle, params) = match perform lookup_ty(fn_handle) {
 }
 
 fn tparam_handle(tp) = {
-  let TParam(_, ty, _, _) = tp
+  let TParam(_, ty, _, _, _) = tp
   match ty {
     TVar(h) => h,
     _       => 0
@@ -1786,7 +1842,7 @@ fn tparam_handle(tp) = {
 // is `TVar(handle)` only while still un-ground; ground types carry no handle
 // (0 sentinel). param_handles_of reads the inferred TFun instead.
 fn lower_param_handles(params) = map((p) => {
-  let TParam(_, ty, _, _) = p
+  let TParam(_, ty, _, _, _) = p
   match ty {
     TVar(handle)        => handle,
     TInt                => 0,
@@ -1868,6 +1924,9 @@ fn free_vars_expr(e, bound) = match e {
     free_vars_merge(collect_free_vars(receiver, bound),
               collect_free_vars(index, bound)),
   MakeRecordExpr(flds)        => free_vars_record_fields(flds, bound),
+  RecordUpdateExpr(base, flds) =>
+    free_vars_merge(collect_free_vars(base, bound),
+                    free_vars_record_fields(flds, bound)),
   NamedRecordExpr(_, flds)    => free_vars_record_fields(flds, bound),
 
   LambdaExpr(params, body) => {
@@ -1915,6 +1974,7 @@ fn free_vars_stmt(s, bound) = match s {
   HandlerDeclStmt(_, _, _, _, _) => [],
   ImportStmt(_)                 => [],
   RefineStmt(_, _, _)           => [],
+  AliasStmt(_, _)               => [],
   // DS — docstring wrapper: free vars come from the inner
   Documented(_, inner_node)     => collect_free_vars(inner_node, bound)
 }
@@ -1990,7 +2050,7 @@ fn free_vars_handler_arms(arms, bound) = {
 }
 
 fn free_vars_param_names(params) = map((p) => {
-  let TParam(name, _, _, _) = p
+  let TParam(name, _, _, _, _) = p
   name
 }, params)
 
@@ -2107,6 +2167,63 @@ fn lower_record_field_values(flds) = map((fld) => {
   let (_, value) = fld
   lower_expr(value)
 }, flds)
+
+// {...base, f: v} — lower a non-destructive record update. The result
+// record's field set is read LIVE from the inferred type at `handle`
+// (infer proved it = base's fields ∪ overrides); the base is bound once
+// to a temp local, then each result field is filled either from the
+// override expr (carried by name) or by copying the base's proven field
+// (LFieldLoad at base's offset). No runtime copy loop, no re-derivation —
+// the proof IS the layout (Carried-Truth at the record layer).
+fn lower_record_update(handle, base, overrides) = {
+  let result_fields = record_fields_of_handle(handle)
+  let tmp = "__upd_{int_to_str(handle)}"
+  let base_lo = lower_expr(base)
+  let field_exprs = map((rf) => {
+    let (fname, _) = rf
+    match find_override(overrides, fname) {
+      Some(v) => lower_expr(v),
+      None    => LFieldLoad(handle, LLocal(handle, tmp),
+                            resolve_field_offset_in(base, fname))
+    }
+  }, result_fields)
+  LBlock(handle, [
+    LLet(handle, tmp, base_lo),
+    LMakeRecord(handle, field_exprs)
+  ])
+}
+
+// The sorted field list of the record type inferred at a handle —
+// TRecord / TRecordOpen carry it directly; a nominal TName chases the
+// env to its RecordSchemeKind (same shape resolve_field_offset reads).
+fn record_fields_of_handle(handle) = match perform lookup_ty(handle) {
+  TRecord(fields)        => fields,
+  TRecordOpen(fields, _) => fields,
+  TName(name, _)         => match perform env_lookup(name) {
+    Some(entry) => {
+      let (_, _, kind) = entry
+      match kind {
+        RecordSchemeKind(fields) => fields,
+        _                        => []
+      }
+    },
+    None => []
+  },
+  _ => []
+}
+
+// The byte offset of `field` within the record inferred at `base`'s
+// handle — base's own field layout (the source we copy from), distinct
+// from the result layout. Reuses resolve_field_offset's proven offset.
+fn resolve_field_offset_in(base, field) = {
+  let N(_, _, bh) = base
+  resolve_field_offset(bh, field)
+}
+
+fn find_override(overrides, target) = match overrides {
+  []            => None,
+  [(n, v), ...t] => if n == target { Some(v) } else { find_override(t, target) }
+}
 
 /// W7.1 — called at `LambdaExpr` / `FnStmt` lower-time, BEFORE entering
 /// the new frame. Each free name is resolved against the CURRENT (enclosing)

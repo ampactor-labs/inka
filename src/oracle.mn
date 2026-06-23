@@ -345,6 +345,7 @@ fn expr_child_handles(e) with Pure = match e {
   MakeListExpr(elems)      => map(node_handle, elems),
   MakeTupleExpr(elems)     => map(node_handle, elems),
   MakeRecordExpr(fields)   => map(record_field_handle, fields),
+  RecordUpdateExpr(base, flds) => [node_handle(base)] ++ map(record_field_handle, flds),
   NamedRecordExpr(_, flds) => map(record_field_handle, flds),
   IndexExpr(recv, idx)     => [node_handle(recv), node_handle(idx)],
   MakeStringExpr(frags)    => map(node_handle, frags),

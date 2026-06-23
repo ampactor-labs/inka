@@ -432,7 +432,7 @@ fn ownership_of_ty(ty) with Pure = match ty {
   TFun(params, _, _) =>
     if len(params) == 0 { Unmarked }
     else {
-      let TParam(_, _, _, resolved) = list_index(params, 0)
+      let TParam(_, _, _, resolved, _) = list_index(params, 0)
       resolved
     },
   _ => Unmarked

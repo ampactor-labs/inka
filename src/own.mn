@@ -77,7 +77,7 @@ fn get_authored_ownership(ref name) with !Mutate = {
            |> extract_fn_params
 
          if idx < len(params) {
-           let TParam(_, _, auth, _) = list_index(params, idx)
+           let TParam(_, _, auth, _, _) = list_index(params, idx)
            Some(auth)
          } else { None }
        }
@@ -337,9 +337,9 @@ fn check_ref_escape(ref params, ref body) with !Mutate = {
 /// The prelude verbs filter + map cascade the substrate-honest residue;
 /// the prior buffer-counter loop was the foreign-fluency form.
 fn collect_ref_params(ref params) with !Mutate = {
-  map((p) => { let TParam(name, _, _, _) = p; name },
+  map((p) => { let TParam(name, _, _, _, _) = p; name },
     filter((p) => {
-      let TParam(_, _, _, res) = p
+      let TParam(_, _, _, res, _) = p
       match res { Ref => true, _ => false }
     }, list_to_flat(params)))
 }
@@ -389,6 +389,7 @@ fn walk_return_positions(ref refs, ref node) with !Mutate = {
     NExpr(MakeStringExpr(_)) => (),
     NExpr(IndexExpr(_, _))   => (),
     NExpr(MakeRecordExpr(_)) => (),
+    NExpr(RecordUpdateExpr(_, _)) => (),
     NExpr(NamedRecordExpr(_, _)) => (),
     NExpr(FieldExpr(_, _))   => (),
     NExpr(PipeExpr(_, _, _)) => (),
@@ -412,12 +413,12 @@ fn walk_match_arms(ref refs, ref arms) with !Mutate = {
 /// (borrowed multiple times).
 fn infer_ownership(ref params, ref body) with !Mutate = {
   map((p) => {
-    let TParam(name, ty, authored, _old_resolved) = p
+    let TParam(name, ty, authored, _old_resolved, _) = p
     let inferred = match authored {
       Unmarked => classify_usage(name, body),
       _        => authored
     }
-    TParam(name, ty, authored, inferred)
+    TParam(name, ty, authored, inferred, None)
   }, list_to_flat(params))
 }
 
@@ -459,6 +460,8 @@ fn count_uses(ref name, ref node) with !Mutate = {
     NExpr(IndexExpr(receiver, index)) =>
       count_uses(name, receiver) + count_uses(name, index),
     NExpr(MakeRecordExpr(flds)) => count_uses_record_fields(name, flds),
+    NExpr(RecordUpdateExpr(base, flds)) =>
+      count_uses(name, base) + count_uses_record_fields(name, flds),
     NExpr(NamedRecordExpr(_, flds)) => count_uses_record_fields(name, flds),
     NExpr(FieldExpr(rec, _))    => count_uses(name, rec),
 

@@ -1866,37 +1866,27 @@ fn parse_body(ref tokens, pos) = {
       parse_block_expr_checked(tokens, p + 1, span_at(tokens, p))
     binop_loop(tokens, block, p_block, 1)
   } else {
-    // SYNTAX.md:126-142 — E_MissingBracesMultiLine: a multi-line fn
-    // body (no braces) is REJECTED — braces anchor the function
-    // boundary visually and enable editor folding. After parse_expr
-    // returns the body's span, check if start_line != end_line; if
-    // so, emit the diagnostic.
-    let (body, p_end) = parse_expr(tokens, p)
-    let N(_, body_span, _) = body
-    let Span(sl, _, el, _) = body_span
-    if sl != el {
-      perform report("parser", "E_MissingBracesMultiLine", "Warning",
-        "multi-line fn body requires braces — wrap the body to anchor the function boundary per SYNTAX.md:126-142",
-        body_span, "MachineApplicable")
-    } else { () }
-    (body, p_end)
+    // SYNTAX.md «Function declarations»: braces are required EXACTLY when the
+    // body is a BlockExpr (it introduces let-bindings/statements) — NEVER keyed
+    // on line count. A single expression, even a multi-line if/match/pipe chain,
+    // needs no braces. So a braceless body IS one expression: parse_expr is the
+    // whole story, nothing is emitted. (A braceless body that introduces
+    // statements is a parse error at the statement keyword; E_BlockNeedsBraces
+    // is the recovery diagnostic there — peer Hβ.parser.block-needs-braces.)
+    parse_expr(tokens, p)
   }
 }
 
-// Wrapper around parse_block_expr that emits E_RedundantBraces when the
-// fn body fits one line (no stmts, opening { and closing } on same line).
-// Per SYNTAX.md:117-124 — applies only to fn body context (parse_body
-// is the only fn-body-parsing site; nested blocks under `if`/`match`
-// arms use parse_block_expr directly without this check).
+// Wrapper around parse_block_expr that emits E_RedundantBraces when braces wrap
+// a non-BlockExpr body (no statements) — keyed on BlockExpr-SHAPE, NEVER on line
+// count (SYNTAX.md «Redundant braces»: the trigger is "braces enclose a body
+// that introduces no let-bindings/statements", regardless of line count).
 fn parse_block_expr_checked(ref tokens, pos, start_span) = {
   let (block_node, p_end) = parse_block_expr(tokens, pos, start_span)
-  let end_span = span_at(tokens, p_end - 1)
-  let Span(sl, _, _, _) = start_span
-  let Span(_, _, el, _) = end_span
-  if sl == el && is_empty_block(block_node) {
+  if is_empty_block(block_node) {
     perform report("parser", "E_RedundantBraces", "Warning",
-      "this body fits on one line; remove the braces. Braces apply only to multi-line bodies.",
-      span_join(start_span, end_span), "MachineApplicable")
+      "these braces wrap a single expression (no statements) — remove them; braces are the BlockExpr literal, not a line-count rule.",
+      span_join(start_span, span_at(tokens, p_end - 1)), "MachineApplicable")
   } else { () }
   (block_node, p_end)
 }

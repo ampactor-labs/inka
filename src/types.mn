@@ -510,7 +510,7 @@ type TokenKind
                                     // (SYNTAX.md §«Named effect rows»). `&&` is the
                                     // distinct TAndAnd (logical and); maximal munch
                                     // lexes `&&` before a bare `&` reaches here.
-  | TPipe | TTilde | TAt | THole
+  | TPipe | TAt | THole
 
   // ─── Layout / structural (2) ─────────────────────────────────────
   | TNewline                        // statement separator; transparent around binops (layout is never semantics)

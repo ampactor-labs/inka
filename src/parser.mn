@@ -120,7 +120,7 @@ fn show_token_kind(k) with Pure = match k {
   TPlus => "+", TMinus => "-", TStar => "*", TSlash => "/", TPercent => "%",
   TEq => "=", TLt => "<", TGt => ">", TBang => "!",
   TAmp => "&",
-  TPipe => "|", TTilde => "~", TAt => "@", THole => "??",
+  TPipe => "|", TAt => "@", THole => "??",
   TNewline => "<newline>", TEof => "<eof>"
 }
 

@@ -374,9 +374,17 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
             graph_bind_row(va, EfOpen(residual_names, vb), Located(span, reason))
           },
         EfNeg(inner) =>
-          // Open(A, v) ~ !B => v must not perform B. 
-          // For now, exact match or error for universe-minus open rows.
-          report_effect_mismatch(a, b, span),
+          // Open(A, v) ~ !B: the open tail must equal the negative capability
+          // `!B` (universe-minus-B). SOUND modal closure (PLAN §4③) realized
+          // through the row representation, NOT a patch to unify: bind v to the
+          // NEGATION itself (`EfNeg(B)`), so the var CARRIES the forbidden set
+          // forward — generalize quantifies it, instantiate freshens it (the
+          // graph already crosses EfNeg in free_in_row/subst_row), and a
+          // downstream unification that tries to widen v to include an effect
+          // in B fails at the EfNeg arm. A's known names must be disjoint from
+          // B (A holds no forbidden effect), else the `!B` stance is violated
+          // at the install — the higher-order leak Koka omits negation to dodge.
+          bind_open_to_neg(va, na, inner, span, reason),
         _ => unify_row_canonical(a, normalize_row(b), span, reason)
       },
     EfNeg(inner_a) =>
@@ -384,12 +392,49 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
         EfNeg(inner_b) =>
           // !A ~ !B => A ~ B
           unify_row_canonical(inner_a, inner_b, span, reason),
+        // `!A ~ Open(B, v)`: symmetric to the open-against-neg case above —
+        // bind v to carry the negation; the open tail becomes the negative
+        // capability. The known names B must be disjoint from A.
+        EfOpen(nb, vb) => bind_open_to_neg(vb, nb, inner_a, span, reason),
+        // `!A` is universe-minus-A — an infinite set; a finite Closed/Pure row
+        // can never EQUAL it (unification is structural equality, not
+        // subsumption). The forbidden-set check is the subsumption gate
+        // (row_subsumes), not unify.
         EfPure => report_effect_mismatch(a, b, span),
         EfClosed(_) => report_effect_mismatch(a, b, span),
-        EfOpen(_, _) => report_effect_mismatch(a, b, span),
         _ => unify_row_canonical(a, normalize_row(b), span, reason)
       },
     _ => unify_row_canonical(normalize_row(a), b, span, reason)
+  }
+}
+
+/// `Open(known, v) ~ !inner`: bind the open row var to the negation so the
+/// var CARRIES the forbidden set forward (the modal lexical-capability stance,
+/// PLAN §4③, threaded through the existing EfOpen var — the graph is the
+/// ROUTE). The known names must be disjoint from inner's forbidden set, else
+/// the row already holds an effect `!inner` forbids — surface it, never bind a
+/// contradictory capability. `inner` is normalized before reading its names so
+/// EfSub/EfInter reduce to the forbidden closed set first.
+fn bind_open_to_neg(va, ref known, ref inner, ref span, ref reason) with !Mutate = {
+  let forbidden = row_forbidden_names(normalize_row(inner))
+  if list_disjoint(known, forbidden) {
+    graph_bind_row(va, EfNeg(normalize_row(inner)), Located(span, reason))
+  } else {
+    report_effect_mismatch(EfOpen(known, va), EfNeg(inner), span)
+  }
+}
+
+/// The effect names a negation `!inner` forbids. EfPure forbids none (`!Pure`
+/// is the universe); a closed/open inner forbids its known names. A nested
+/// negation (`!!E`) double-collapses in normalize before this is reached.
+fn row_forbidden_names(ref inner) with !Mutate = {
+  match inner {
+    EfPure          => [],
+    EfClosed(names) => names,
+    EfOpen(names, _) => names,
+    EfNeg(_)        => [],
+    EfSub(_, _)     => [],
+    EfInter(_, _)   => []
   }
 }
 

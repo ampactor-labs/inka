@@ -392,6 +392,12 @@ fn merge_row(ref names, ref row) with !Mutate = {
       else { mk_ef_closed(names) },
     EfClosed(inner)  => mk_ef_closed(name_set_union(names, inner)),
     EfOpen(inner, v) => mk_ef_open(name_set_union(names, inner), v),
+    // A var bound to `!E` (the sound modal stance, effects.mn bind_open_to_neg):
+    // the accumulated `names` were proven DISJOINT from E at the bind, so the
+    // universe-minus-E set already contains them — the negation subsumes the
+    // known present effects. Carry the negation forward (the var carries the
+    // forbidden set), names folded in by subsumption.
+    EfNeg(_)         => row,
     _ => row
   }
 }

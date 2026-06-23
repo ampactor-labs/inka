@@ -1800,12 +1800,40 @@ fn lower_resume_multishot(handle, val, state_updates) = {
   // The resumption prologue: commit the snapshot, return the resumed value.
   // The resumed value is the resumption fn's single parameter `__resume_in`.
   let prologue = lower_resume_snapshot(handle, val, state_updates, fields)
-  let resume_fn = LFn(resume_fn_name, 1, ["__resume_in"], [prologue], EfPure, 0)
+  // The continuation is FROZEN under an effect-WORLD (§5.U, the TIME axis): the
+  // row the resumed body performs. The graph already proves it — the resume
+  // handle's type is TCont(R, disc, world) (the infer-side world-CAPTURE),
+  // so READ it live, never default to EfPure (Carried-Truth: EfPure DISCARDS
+  // the captured world, leaving a persisted resume with nothing to unify
+  // against → the silent cross-handler-set miscompile Law 7 forbids). The
+  // resume fn's row IS that world; persist=memcpy then carries it.
+  let world = resume_world_of(handle)
+  let resume_fn = LFn(resume_fn_name, 1, ["__resume_in"], [prologue], world, 0)
   // Captures = the arm's live locals (the continuation re-enters reading them);
   // ev = the effects the resumed body still performs (the row already proves
   // them — derive_ev_slots reads it live). state_idx = the perform-site
   // discriminator (the resume handle); ret_slot reserves the resumed-value slot.
   LMakeContinuation(handle, resume_fn, [], derive_ev_slots(handle), handle, 0)
+}
+
+/// The effect-world a continuation is frozen under, read LIVE from the
+/// enclosing arm fn's inferred row — the SAME source derive_ev_slots reads
+/// (the fn's TFun row, lower_compute_ev_index_for_effect), so the world IS the
+/// effects the resumed body performs, by construction. Carried-Truth: the
+/// graph already proves this row; reading it here (not re-binding the resume
+/// handle to TCont, which would corrupt the typed-resume value S) is the
+/// world-CAPTURE at the producer's mint. A fn with no inferred type yet
+/// captures the empty world EfPure — honest, not a fabricated default.
+fn resume_world_of(handle) = match env_lookup(ls_outer_fn_name()) {
+  Some(entry) => {
+    let (scheme, _, _) = entry
+    let Forall(_, ty) = scheme
+    match ty {
+      TFun(_, _, row) => row,
+      _               => EfPure
+    }
+  },
+  None => EfPure
 }
 
 /// Lower a ResumeExpr's value + state updates with SNAPSHOT semantics:

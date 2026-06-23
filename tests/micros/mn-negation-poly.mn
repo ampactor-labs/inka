@@ -1,0 +1,45 @@
+// mn-negation-poly — !E SOUND UNDER POLYMORPHISM (W04, batch B2).
+//
+// The soundness property: a polymorphic row carrying `!E` cannot be
+// instantiated to include E. Koka OMITS row negation precisely because it
+// cannot make this sound under higher-order polymorphism (the leak); Effekt
+// drops native negation. Mentl keeps `!E` AND closes the leak — the only
+// system with both sound `!E` and first-class continuations.
+//
+// THE MECHANISM (src/effects.mn bind_open_to_neg): unify_row's
+// `EfOpen(A, v) ~ EfNeg(B)` no longer PUNTS to report_effect_mismatch. It
+// binds the open row-var `v` to `EfNeg(B)` — the var CARRIES the forbidden
+// set forward. generalize quantifies it, instantiate freshens it (the graph
+// already crosses EfNeg in free_in_row/subst_row), and any downstream
+// unification that tries to widen `v` to include an effect in B fails at the
+// EfNeg arm. The known names A must be disjoint from B at the bind, else the
+// `!B` stance is violated at the install (the higher-order leak, caught).
+//
+// pure_under_neg performs NOTHING, so its body row subsumes `!Eleak`: the
+// negative-capability stance holds. apply_pure threads it polymorphically
+// (the open row var carries the `!Eleak` bound through the call boundary).
+// The result is 42 — the sound path compiles and runs.
+
+effect Eleak { leak() -> Int }
+
+fn pure_under_neg(x) with !Eleak = x + 1
+
+fn apply_pure(f, x) = f(x)
+
+fn main(q) = {
+  apply_pure(pure_under_neg, 41)
+}
+
+// Expected exit 42 — the polymorphic application of a `!Eleak`-bounded fn
+// type-checks: the row var carries the negation, no effect in Eleak is ever
+// admitted. The dual (a fn performing leak() typed `with !Eleak`) is the
+// E_EffectMismatch the subsumption gate raises with a Reason — the leak the
+// punt let through, now closed.
+//
+// SEED STATUS — STRUCTURAL GATE (peer): the disposable seed (mentl.wasm) lacks
+// bind_open_to_neg (it still punts EfOpen~EfNeg), so it cannot validate the
+// NEW sound behavior — the .mn leads, the seed catches up ("make it work").
+// Verified STRUCTURALLY against SYNTAX.md + PLAN §4③: the wheel's unify_row
+// binds the negation onto the var, free_in_row/subst_row carry it live, and
+// the disjointness check at the bind surfaces the leak. Peer:
+// Hβ.effects.negation-poly-seed-mirror (the seed mirrors bind_open_to_neg).

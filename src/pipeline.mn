@@ -292,25 +292,27 @@ type CursorSessionResult
 // each module's compile to a separate thread; render targets attach
 // via `~>` to the per-module wat output. Drift 6 erasure.
 
-// ─── ic_compile_loop — `<~` feedback closing on cache stability ───────
+// ─── ic_compile_loop — `<~` feedback closing on queue stability ───────
 //
-// Build IS the `<~` loop closing at fixpoint. Per
-// protocol_oracle_is_ic.md: every source change triggers IC
-// invalidation; the cache tells affected modules to re-infer; the
-// queue updates; the cursor surfaces the highest-priority residue.
-// The cycle converges when no module's cache hash changes between
-// cycles — the project at gradient top.
+// Build IS the `<~` loop closing at fixpoint (PLAN §2). Every source
+// change bumps the graph epoch at the outermost commit (graph_mutated,
+// graph.mn); project_queue_merger re-projects the oracle queue live
+// (memoized by that epoch — one re-projection per real change); the
+// cursor surfaces the highest-priority residue. The cycle converges when
+// the projection stops changing — the project at the gradient's top.
 //
-// `<~` requires iterative context per SYNTAX.md §489. The IC handler
-// installed upstream provides it. accumulate(initial_cache) starts at
-// empty cache and IC-narrows toward the proven-complete state.
+// `<~` runs under IC — the Iterate-class context SYNTAX.md §`<~`
+// requires (an iteration-resume effect, not a Mutate event). The graph
+// epoch IS the one cache; there is no separate cache layer. project_-
+// queue_merger handles the OracleQuery ops the surfaces (voice) perform.
 //
 // This composition exhibits ALL FIVE verbs at the project level:
 //   |>  source through frontend |> infer_program |> ... |> emit
 //   <|  source borrowed to four surface projections (cursor_session)
-//   ><  multi-module parallel composition (compile_pair_modules)
-//   ~>  handler stack — diagnostics outermost, lookup_ty innermost
-//   <~  IC fixpoint closing on cache-hash stability
+//   ><  multi-module parallel composition
+//   ~>  handler stack — diagnostics outermost, project_queue_merger
+//        projecting the queue over the checked program
+//   <~  IC fixpoint closing on queue stability (memoized by graph epoch)
 //
 // `mentl edit` IS this loop running. There is no separate `compile`
 // — the edit IS the compile IS the projection IS the loop closing.
@@ -318,8 +320,8 @@ type CursorSessionResult
 fn ic_compile_loop(initial_entry) with IC + !Mutate = {
   initial_entry
     |> driver_check
-    ~> cached_check_with_oracle
-      <~ accumulate(empty_cache())
+    ~> project_queue_merger
+      <~ accumulate(empty_queue())
 }
 
 // frontend — lex |> parse

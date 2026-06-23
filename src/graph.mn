@@ -70,12 +70,12 @@ handler graph_handler
   // checkpoint_stack tracks active speculation depth. Each
   // graph_push_checkpoint pushes the current trail_len; each
   // graph_rollback pops. When the stack is empty, writes are at the
-  // OUTERMOST commit boundary — perform graph_mutated so subscribers
-  // (cached_check_with_oracle per src/oracle.mn) catch only
-  // real graph state changes. Speculative writes (Mentl's oracle
-  // exploration between push+rollback) leave stack non-empty and
-  // never emit graph_mutated — otherwise infinite recursion (Mentl
-  // would subscribe to her own speculations).
+  // OUTERMOST commit boundary — perform graph_mutated so the IC fixpoint
+  // (the oracle's project_queue_merger re-projects, src/oracle.mn) bumps
+  // its epoch only on real graph state changes. Speculative writes
+  // (Mentl's oracle exploration between push+rollback) leave the stack
+  // non-empty and never emit graph_mutated — otherwise infinite recursion
+  // (Mentl would subscribe to her own speculations).
 
   // ─── Read ops ────────────────────────────────────────────────────
 
@@ -287,13 +287,13 @@ handler graph_handler
   }
 }
 
-/// The Mutate effect's no-subscriber floor. graph_handler's write arms
-/// perform graph_mutated at every outermost commit; subscribers are a
-/// handler-swap surface (cached_check_with_oracle invalidates IC caches,
-/// MV-LSP.push streams diagnostics). One-shot compile paths have no
-/// subscriber — this sink acknowledges the event and resumes. Installed
-/// OUTSIDE graph_handler in every chain that has no live subscriber;
-/// the IC loop swaps it for oracle's invalidation arm.
+// The Mutate effect's no-subscriber floor. graph_handler's write arms
+// perform graph_mutated at every outermost commit; subscribers are a
+// handler-swap surface (the IC loop's project_queue_merger re-projects on
+// the bumped epoch, MV-LSP.push streams diagnostics). One-shot compile
+// paths have no subscriber — this sink acknowledges the event and
+// resumes. Installed OUTSIDE graph_handler in every chain that has no
+// live subscriber; the IC loop swaps it for the oracle's re-projection.
 handler mutate_sink {
   graph_mutated(_epoch, _mutation) => resume()
 }

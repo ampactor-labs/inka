@@ -1521,7 +1521,7 @@ fn parse_brace_expr(ref tokens, pos, start_span) = {
   // (the Bool gate) extends the discrimination uniformly; otherwise a
   // block. `{ handle: handle, ... }` was mis-read as a block → `:`
   // unexpected.
-  if is_dot_dot_dot(tokens, p) {
+  if at_ellipsis(tokens, p) {
     // `{...base, f: v}` — non-destructive record update (SYNTAX.md
     // §«Record update»). The leading spread is unambiguous: a block
     // never opens with `...`.
@@ -2045,7 +2045,7 @@ fn parse_pat(ref tokens, pos) = {
     },
     TIntLit(n)    => (PLit(LVInt(n)), pos + 1),
     TFloatLit(f)  => (PLit(LVFloat(f)), pos + 1),
-    TStringLit(s) => (PLit(LVString(s)), pos + 1),
+    TStringPart(s) => (PLit(LVString(s)), pos + 1),
     TTrue      => (PLit(LVBool(true)), pos + 1),
     TFalse     => (PLit(LVBool(false)), pos + 1),
     TLParen    => {
@@ -2277,7 +2277,7 @@ fn parse_type_args_loop(ref tokens, pos, own buf, count) = {
 fn parse_record_type_fields(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) { ([], None, p + 1) }
-  else if is_dot_dot_dot(tokens, p) {
+  else if at_ellipsis(tokens, p) {
     // `...` or `...R` rest — the open-row marker. A name after the three
     // dots binds the row var (R); absent = anonymous. Both mint a fresh
     // row-var handle; consume to the closing `}`.
@@ -2376,10 +2376,3 @@ fn node_to_predicate(node, span: ValidSpan) = {
 // A comparison carries its two operand handles (resolved live via graph_node_body).
 fn compare_pred(op, l, r) = PCompare(op, node_handle(l), node_handle(r))
 
-fn skip_to_stmt_end(ref tokens, pos) = match kind_at(tokens, pos) {
-  TSemicolon => pos,
-  TNewline   => pos,
-  TEof       => pos,
-  TRBrace    => pos,
-  _          => skip_to_stmt_end(tokens, pos + 1)
-}

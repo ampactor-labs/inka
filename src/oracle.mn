@@ -38,6 +38,7 @@
 import types
 import mentl
 import graph
+import runtime/cache_map
 
 // ─── QueueItem — one proven candidate in the oracle's queue ──────────
 
@@ -102,6 +103,13 @@ type PriorityTier
 
 type OracleQueue
   = OracleQueue(List)               // [QueueItem], sorted by priority_gt
+
+// CachedEntry — the per-module value the IC cache stores: the checked env
+// plus the oracle queue derived from it. Pure over (env + handler_chain +
+// intent); invalidates with env on any cache miss. The Value that
+// cache_map.mn (lib/runtime) carries for the oracle case.
+type CachedEntry
+  = CachedEntry(Env, OracleQueue)
 
 // ─── Mutate effect extension — graph_mutated event ───────────────────
 
@@ -290,7 +298,7 @@ handler project_queue_merger
 ///   <~  oracle_ic_fixpoint closes the cycle when the queue stops
 ///         changing across cycles (the silence_predicate condition)
 
-fn run_oracle(env, module_path) with Verify + Speculate = {
+fn run_oracle(env, module_path) with Verify + GraphRead + GraphWrite = {
   let positions = collect_positions_with_dependents(env)
   let candidates_per_position = explore_each_position(positions, env, module_path)
   OracleQueue(sort_by_priority(flatten(candidates_per_position)))
@@ -304,10 +312,9 @@ fn run_oracle(env, module_path) with Verify + Speculate = {
 /// is parallel-honest by construction; threading dispatch is at handler
 /// install per protocol_parallelism_symmetry.md).
 
-fn explore_each_position(positions, env, module_path) with Verify + Speculate = {
+fn explore_each_position(positions, env, module_path) with Verify + GraphRead + GraphWrite = {
   positions
     |> parallel_map((pos) => explore_at_position(pos, env, module_path))
-    ~> speculate_handler
 }
 
 /// explore_at_position — `<|` divergence into three strategies; `><`
@@ -328,7 +335,7 @@ fn explore_each_position(positions, env, module_path) with Verify + Speculate = 
 /// (one record per QueueItem, never parallel-arrays); 9 (no deferred
 /// strategy — all three land in this commit).
 
-fn explore_at_position(pos, env, module_path) with Verify + Speculate = {
+fn explore_at_position(pos, env, module_path) with Verify + GraphRead + GraphWrite = {
   let (refinement_candidates, row_candidates, ownership_candidates) =
     pos
       <| (
@@ -353,11 +360,11 @@ fn explore_at_position(pos, env, module_path) with Verify + Speculate = {
 /// continuation per H7 walkthrough; speculation forks compose without
 /// a separate concurrency runtime (kernel primitive #2).
 
-fn verify_each_candidate(pos, env, module_path) with Verify + Speculate =
+fn verify_each_candidate(pos, env, module_path) with Verify + GraphRead + GraphWrite =
   (candidates) => parallel_map((cand) => speculate_one(pos, cand, env, module_path), candidates)
                   |> filter_some
 
-fn speculate_one(pos, cand, env, module_path) with Verify + Speculate = {
+fn speculate_one(pos, cand, env, module_path) with Verify + GraphRead + GraphWrite = {
   let cp = perform graph_push_checkpoint()
   apply_candidate_tentatively(pos, cand, env)
   let proven = verify_after_apply(pos)
@@ -391,7 +398,7 @@ fn speculate_one(pos, cand, env, module_path) with Verify + Speculate = {
 /// updates the queue, which surfaces through the cursor. The cycle
 /// IS the medium.
 
-fn oracle_ic_fixpoint(initial_env, module_path) with Verify + Speculate + IC = {
+fn oracle_ic_fixpoint(initial_env, module_path) with Verify + GraphRead + GraphWrite + IC = {
   initial_env
     |> (env) => run_oracle(env, module_path)
     ~> cached_check_with_oracle
@@ -408,17 +415,53 @@ fn filter_some(opts) with Pure = match opts {
   [Some(x), ...t]   => [x] ++ filter_some(t)
 }
 
-/// speculate_handler — the Speculate effect's canonical handler.
-/// MultiShot resume per kernel primitive #2: each branch captures the
-/// continuation; checkpoint/rollback maintains the speculation tree.
-/// Substrate per SUBSTRATE.md §"The Heap Has One Story" — continuation
-/// records live on the heap as closures; resume is call_indirect on
-/// the closure's fn-pointer.
+fn qitem_position(item) with Pure = { let QueueItem(r) = item; r.position }
+fn qitem_impact(item) with Pure = { let QueueItem(r) = item; r.impact }
 
-handler speculate_handler {
-  graph_push_checkpoint() => resume(perform graph_checkpoint_now()),
-  graph_rollback(cp)      => resume(perform graph_rollback_to(cp))
+// sort_by_priority — order QueueItems by DESCENDING priority. Merge sort
+// (stable, O(N log N)); the comparator is priority_gt over each item's
+// impact. The flat candidate stream becomes the module's ranked queue.
+fn sort_by_priority(items) with Memory + Alloc = {
+  let n = len(items)
+  if n <= 1 { items }
+  else {
+    let mid = n / 2
+    merge_by_impact(sort_by_priority(slice(items, 0, mid)),
+                    sort_by_priority(slice(items, mid, n)))
+  }
 }
+
+fn merge_by_impact(a, b) with Memory + Alloc = match (a, b) {
+  ([], _)                    => b,
+  (_, [])                    => a,
+  ([ha, ...ta], [hb, ...tb]) =>
+    if priority_gt(qitem_impact(ha), qitem_impact(hb)) {
+      [ha] ++ merge_by_impact(ta, b)
+    } else {
+      [hb] ++ merge_by_impact(a, tb)
+    }
+}
+
+// filter_at_position — items whose candidate applies at this Handle.
+fn filter_at_position(items, handle) with Memory + Alloc = match items {
+  []        => [],
+  [h, ...t] =>
+    if qitem_position(h) == handle { [h] ++ filter_at_position(t, handle) }
+    else { filter_at_position(t, handle) }
+}
+
+// filter_by_locality — items within max_distance handles of the cursor.
+// Handle distance is the locality proxy: handle order is parse order, so
+// the delta tracks source proximity.
+fn filter_by_locality(items, cursor_handle, max_distance) with Memory + Alloc = match items {
+  []        => [],
+  [h, ...t] =>
+    if handle_distance(qitem_position(h), cursor_handle) <= max_distance {
+      [h] ++ filter_by_locality(t, cursor_handle, max_distance)
+    } else { filter_by_locality(t, cursor_handle, max_distance) }
+}
+
+fn handle_distance(a, b) with Pure = if a >= b { a - b } else { b - a }
 
 // ─── silence_predicate (revised per Q-Morgan-B) ──────────────────────
 
@@ -513,13 +556,16 @@ fn invalidation_walk(cache, mutation) with GraphRead = {
   perform compute_invalidation_set(cache, mutation)
 }
 
-/// merge_priority_queues — sorted merge of [OracleQueue].
-/// Body in lib/runtime/lists.mn (or this file extends if no good home).
-/// O(N log M) where N = total items, M = module count.
+// merge_priority_queues — every module's queue is already ranked, so the
+// project queue is their concatenation re-ranked. sort_by_priority IS the
+// ordering; a separate k-way merge primitive would re-derive it.
+fn merge_priority_queues(queues) with Memory + Alloc = {
+  OracleQueue(sort_by_priority(concat_queue_items(queues)))
+}
 
-fn merge_priority_queues(queues) with Memory = {
-  // Implemented by merge_sorted_lists with priority_gt as comparator.
-  perform merge_lists_by(queues, priority_gt)
+fn concat_queue_items(queues) with Memory + Alloc = match queues {
+  []                         => [],
+  [OracleQueue(items), ...t] => items ++ concat_queue_items(t)
 }
 
 /// filter_at_position / filter_by_locality / collect_module_queues /

@@ -97,3 +97,16 @@ micro:repr-width=40
 # (per-field eq + AND conjunction + recursion). The direct record-`==` value
 # gate lands when the seed catches up — peer Hβ.eq.fold-seed-value-gate.
 micro:struct-eq-deep=20
+# STEP 3 (multi-shot producer): the wheel's ResumeExpr now reads the op's proven
+# cardinality LIVE (current_resume_discipline, the deleted write-only resume_kinds
+# ledger) and mints the dormant LMakeContinuation for MultiShot arms — the
+# unified heap record's fifth role, capturing live locals + derive_ev_slots, its
+# fn_ptr the synthesized $__k_<arm>_<site> resumption fn (lower_resume_snapshot as
+# prologue). The OneShot floor (~85%, every ev*/eq micro) stays BYTE-IDENTICAL
+# (Law 7 — proven: 7/7 green, census stable). The MultiShot VALUE gate
+# (tests/micros/mn-multishot.mn: a two-resume arm → exit 30 not 10) needs the
+# PRODUCER in the compiler that compiles it; the disposable seed lags it (TESTED:
+# seed compiles the arm OneShot → exit 10, the documented pre-producer state), so
+# the value gate lands when the seed's lower catches up to the wheel's producer —
+# peer Hβ.seed.multishot-producer (NOT enforced here; the .mn leads, the seed
+# follows). STEP 5 (TCont arity + world-index) closes cross-context resume safety.

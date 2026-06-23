@@ -2744,16 +2744,13 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
     Forall([payload_h], scheme_body),
     Declared(hname),
     HandlerKind(ename, r_handle, config, state, arms))
-  // Phase B: infer per-arm resume cardinality and bind onto each
-  // op's continuation type. The cursor walks each arm body; counts
-  // resume call sites under control-flow ancestry; produces
-  // ResumeDiscipline. Same projection pattern as $collect_used_wasi_ops
-  // in the seed: walk + predicate-filter + project.
-  for_each((arm) => {
-    let kind = infer_resume_cardinality(arm.body)
-    graph_bind_resume_kind(arm.op_name, ename, kind,
-      Located(span_of_node(arm.body), Inferred("resume cardinality from arm body")))
-  }, arms)
+  // Resume cardinality is NOT bound here: the body IS the contract, so the
+  // cardinality is a pure projection of the arm body (infer_resume_cardinality)
+  // that lower reads LIVE at the resume site — no side-ledger between infer and
+  // lower (the deleted `resume_kinds` was write-only, zero readers; Anchor 1,
+  // Carried-Truth — the fix is LESS code). STEP 5 attaches it to the op's TCont
+  // for cross-context unification (E_ResumeWorldMismatch) — peer
+  // Hβ.types.tcont-carries-cardinality-and-world.
   // Typed-resume arm typing (SUBSTRATE.md primitive #2): every arm
   // body walks under the law with one per-decl handle-result S.
   // Config params bind through the SAME TParam handles the scheme

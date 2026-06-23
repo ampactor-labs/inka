@@ -286,14 +286,6 @@ handler graph_handler
     resume() with intent_index = push(intent_index, (handle, effs))
   },
 
-  // Typed-resume Phase B: per-arm resume cardinality, inferred from
-  // the arm body's resume-site count under control-flow, lands as a
-  // graph-resident ledger — the body IS the contract; the graph
-  // carries the proof for the gradient's tier selection.
-  graph_bind_resume_kind(op_name, effect_name, kind, reason) => {
-    resume() with resume_kinds = push(resume_kinds, (op_name, effect_name, kind, reason))
-  },
-
   graph_rollback(target_idx) => {
     let (new_nodes, new_next) =
       revert_trail(nodes, trail, trail_len, target_idx, next)

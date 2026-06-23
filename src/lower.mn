@@ -92,26 +92,35 @@ handler lower_state_default
 }
 
 /// Hβ.first-light.resume-with-state-mutation — handler-arm-state context.
-/// `lower_handler_arms_as_decls` installs `arm_state_ctx(state)` around
-/// each arm body's lower_expr call; ResumeExpr arm reads `current_state_
-/// fields()` to resolve `with field = NEW` updates' slot offsets.
-/// Config-param-only handler (no state-fields), so it works regardless
-/// of resume-with-state-update lowering — bootstrap-safe per
+/// `lower_handler_arms_as_decls` installs `arm_state_ctx(state, disc)` around
+/// each arm body's lower_expr call; ResumeExpr reads `current_state_fields()`
+/// to resolve `with field = NEW` updates' slot offsets AND
+/// `current_resume_discipline()` to pick its representation (OneShot →
+/// LReturn floor, byte-identical; MultiShot → the LMakeContinuation record).
+/// The discipline is carried LIVE on the context — read at the resume site,
+/// never re-derived from a side-ledger (the deleted `resume_kinds`, Anchor 1).
+/// Config-param-only handler (no state-fields), so it works regardless of
+/// resume-with-state-update lowering — bootstrap-safe per
 /// protocol_resume_state_mutation_substrate.md.
 
 effect ArmStateContext {
   current_state_fields() -> List
+  current_resume_discipline() -> ResumeDiscipline
 }
 
-handler arm_state_ctx(fields) {
-  current_state_fields() => resume(fields)
+handler arm_state_ctx(fields, disc) {
+  current_state_fields()     => resume(fields),
+  current_resume_discipline() => resume(disc)
 }
 
 /// Empty default for non-arm contexts (top-level fn bodies, lambdas).
-/// `current_state_fields()` returns [] — `resume() with X = Y` outside
-/// arm context resolves no slots and falls through to plain LReturn.
+/// `current_state_fields()` returns [] — `resume() with X = Y` outside arm
+/// context resolves no slots and falls through to plain LReturn — and the
+/// discipline defaults to OneShot, so a stray resume outside an arm keeps the
+/// byte-identical floor (a value-call with no continuation to reify).
 handler arm_state_default {
-  current_state_fields() => resume([])
+  current_state_fields()     => resume([]),
+  current_resume_discipline() => resume(OneShot)
 }
 
 /// The handler's static shape — config, state, arms — read LIVE from the
@@ -1030,18 +1039,25 @@ fn lower_expr_body(e, handle, span) = match e {
   },
 
   ResumeExpr(val, state_updates) =>
-    // Hβ.first-light.resume-with-state-mutation per SUBSTRATE.md L660-694,
-    // SNAPSHOT semantics: the resume value AND every update RHS read the
-    // PRE-update state. `resume(ctr + n) with ctr = ctr + 1` returns the
-    // OLD ctr + n. lower_resume_snapshot evaluates all of them into
-    // scratch locals in source order BEFORE any slot store commits.
-    // current_state_fields() returns the enclosing arm's state-fields
-    // list (or [] outside arm context).
-    if len(state_updates) == 0 {
-      LReturn(handle, lower_expr(val))
-    } else {
-      let fields = current_state_fields()   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
-      lower_resume_snapshot(handle, val, state_updates, fields)
+    // The cursor reads the op's proven cardinality LIVE (the body IS the
+    // contract; current_resume_discipline() projects it from the enclosing
+    // arm context) and picks the representation — the gradient at the resume
+    // site, the TIME-axis twin of the function-dispatch gradient. The
+    // continuation is the unified heap record's fifth role: minted ONLY when
+    // the body actually resumes more than once.
+    match current_resume_discipline() {   // drift-audit: ignore — sequenced effectful arm-context read (LowerScope)
+      // OneShot (~85%): the zero-cost stack return — BYTE-IDENTICAL to the
+      // pre-producer floor. Hβ.first-light.resume-with-state-mutation
+      // (SUBSTRATE.md L660-694): the resume value AND every `with field = NEW`
+      // RHS read the PRE-update state; lower_resume_snapshot commits the stores
+      // after evaluating all RHS into scratch locals in source order.
+      OneShot   => lower_resume_oneshot(handle, val, state_updates),
+      Either    => lower_resume_oneshot(handle, val, state_updates),
+      // MultiShot: reify the continuation record (lower.mn:246), capturing the
+      // arm's live locals + the SAME derive_ev_slots the closure path threads.
+      // resume(v) calling the record's fn_ptr@0 IS multi-shot; the catching
+      // handler (in-memory / oracle-rollback / persist) is the swap.
+      MultiShot => lower_resume_multishot(handle, val, state_updates)
     },
 
   FieldExpr(rec, field) => {
@@ -1656,8 +1672,14 @@ fn lower_one_arm_decl(arm, discriminator, config, state, fence) = {
   )
   // Hβ.first-light.resume-with-state-mutation: install arm_state_ctx
   // around arm body lowering so lower_expr's ResumeExpr arm resolves
-  // `with field = NEW` updates' slot offsets via current_state_fields().
-  let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
+  // `with field = NEW` updates' slot offsets via current_state_fields()
+  // AND its representation via current_resume_discipline(). The cardinality
+  // is READ LIVE from the arm body — `infer_resume_cardinality` is a pure
+  // graph projection (the body IS the contract, SYNTAX.md «Resume discipline»),
+  // so lower computes it at the site instead of reading the deleted write-only
+  // `resume_kinds` ledger (Anchor 1, Carried-Truth — the fix is LESS code).
+  let disc = infer_resume_cardinality(arm.body)
+  let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names, disc))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
   ls_exit_frame()
   // fence = nstate + total_arms; the arm's LEvPerform reads land on the
   // record's captured-ev region (past state AND arms).
@@ -1714,6 +1736,44 @@ fn bind_names_as_locals(names) = {
   // sentinel — capture-handle correctness here is bounded by
   // future reach into op-arg type plumbing (Phase D evidence).
   for_each((name) => ls_bind_local(name, 0), names)
+}
+
+/// OneShot resume — the zero-cost stack return, byte-identical to the
+/// pre-producer floor. No state updates: the value flows straight to
+/// LReturn (~85% of arms). With updates: the snapshot writeback, reading
+/// the enclosing arm's state-fields live from the ArmStateContext handler.
+fn lower_resume_oneshot(handle, val, state_updates) = {
+  if len(state_updates) == 0 {
+    LReturn(handle, lower_expr(val))
+  } else {
+    let fields = current_state_fields()   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
+    lower_resume_snapshot(handle, val, state_updates, fields)
+  }
+}
+
+/// MultiShot resume — reify the continuation as the unified heap record's
+/// fifth role (lower.mn:246, fully emittable at wasm.mn:1905). The record
+/// captures the arm's live locals + the SAME derive_ev_slots the closure
+/// path threads; its fn_ptr is a synthesized resumption function
+/// `$__k_<arm>_<site>` whose body IS the snapshot prologue (the resumed
+/// value committing any `with` state updates, then returning). Calling that
+/// record twice IS multi-shot — backtracking, generators, search: ONE
+/// LMakeContinuation, distinguished only by the catching handler. resume(v)
+/// dispatches call_indirect on fn_ptr@0 (the closure-call path, wasm.mn) —
+/// Koka evidence-passing, never a vtable.
+fn lower_resume_multishot(handle, val, state_updates) = {
+  let arm_name = ls_outer_fn_name()      // drift-audit: ignore — sequenced effectful frame read (LowerScope)
+  let resume_fn_name = "__k_{arm_name}_{int_to_str(handle)}"
+  let fields = current_state_fields()    // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
+  // The resumption prologue: commit the snapshot, return the resumed value.
+  // The resumed value is the resumption fn's single parameter `__resume_in`.
+  let prologue = lower_resume_snapshot(handle, val, state_updates, fields)
+  let resume_fn = LFn(resume_fn_name, 1, ["__resume_in"], [prologue], EfPure, 0)
+  // Captures = the arm's live locals (the continuation re-enters reading them);
+  // ev = the effects the resumed body still performs (the row already proves
+  // them — derive_ev_slots reads it live). state_idx = the perform-site
+  // discriminator (the resume handle); ret_slot reserves the resumed-value slot.
+  LMakeContinuation(handle, resume_fn, [], derive_ev_slots(handle), handle, 0)
 }
 
 /// Lower a ResumeExpr's value + state updates with SNAPSHOT semantics:

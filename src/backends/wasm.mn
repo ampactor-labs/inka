@@ -122,8 +122,9 @@ handler emit_memory_bump {
 // on scope exit, the pointer resets to the entry snapshot,
 // reclaiming the whole region in O(1). Here the emit is identical
 // to bump except for the pointer name — the region-enter/exit
-// emission is a future refinement once HandleExpr tracks region
-// identity (E3). The SHAPE is what matters: pipeline can swap
+// emission is a future refinement once a `~>` install that absorbs
+// Alloc opens a region (peer Hβ.infer.region-on-tee-alloc-absorb,
+// E3). The SHAPE is what matters: pipeline can swap
 // `~> emit_memory_bump` for `~> emit_memory_arena` with zero source
 // changes, producing different WAT. DESIGN Ch 7.3 "the handler IS
 // the backend" — memory strategy is a handler swap.
@@ -532,7 +533,6 @@ fn walk_lemit_expr(expr) = match expr {
     perform visit_wasi_op(op_name)
     walk_lemit_list(args)
   },
-  LHandle(_, b, _arms)      => walk_lemit_expr(b),
   LEvPerform(_, _, _, _, args) => walk_lemit_list(args),
   LEvSlotRef(_, _)          => (),
   LFieldLoad(_, rec, _)     => walk_lemit_expr(rec),
@@ -789,7 +789,6 @@ fn max_arity_expr(expr) = match expr {
   LRegion(_, _)             => 0,
   LHandleWith(_, _, _, _, _, _, _) => 0,
   LFeedback(_, _, _)        => 0,
-  LHandle(_, _, _)          => 0,
   LEvSlotRef(_, _)          => 0,
   LFieldLoad(_, _, _)       => 0,
   LStateSlotStore(_, _, _)  => 0
@@ -998,7 +997,6 @@ fn collect_fn_emit_records_expr(expr) = match expr {
                                   ++ collect_fn_emit_records_expr(s),
   LPerform(_h, _n, args, _)  => collect_fn_emit_records(args),
   LWasiCall(_h, _n, args)    => collect_fn_emit_records(args),
-  LHandle(_h, b, _arms)      => collect_fn_emit_records_expr(b),
   LEvPerform(_h, _n, _e, _s, a) => collect_fn_emit_records(a),
   LEvSlotRef(_h, _e)         => [],
   LFieldLoad(_h, rec, _off)  => collect_fn_emit_records_expr(rec),
@@ -1192,7 +1190,6 @@ fn emit_let_locals_expr(expr) = match expr {
   },
   LPerform(_h, _n, args, _) => emit_let_locals_list(args),
   LWasiCall(_h, _n, args)   => emit_let_locals_list(args),
-  LHandle(_h, b, _arms)     => emit_let_locals_expr(b),
   LEvPerform(_h, _n, _e, _s, a) => emit_let_locals_list(a),
   LEvSlotRef(_h, _e)        => (),
   LFieldLoad(_h, rec, _off) => emit_let_locals_expr(rec),
@@ -1950,11 +1947,6 @@ fn emit_expr(expr) = match expr {
     perform wat_emit("    (call $")
     perform wat_emit(import_name)
     perform wat_emit(")\n")
-  },
-
-  LHandle(_h, body, _arms) => {
-    emit_expr(body)
-    perform wat_emit("    ;; handle expression — arms emitted separately\n")
   },
 
   // Tier-2 evidence-dispatched perform. The ev-slot on __state holds a

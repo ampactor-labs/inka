@@ -123,11 +123,11 @@ fn take(xs, n)    = { iterate(xs); result() } ~> take_collector(n)
 fn drop(n, xs)    = { iterate(xs); result() } ~> drop_collector(n)
 
 // Scalar-producing operations — named handler + ~> pipe form.
-// Per Hβ.prelude-ultimate-form (2026-05-14): inline `handle { } { }`
-// was an imperative escape hatch that bypassed the handler-stack push
-// in $lower_handle / HandleExpr. Converting to named handlers + `~>`
-// pipe makes these uniform with map/filter/take/drop above, and the
-// `~>` PTee path already correctly pushes the handler stack. Zero
+// Per Hβ.prelude-ultimate-form (2026-05-14): the inline handle-block
+// escape hatch is dissolved into `~>`, the one install verb (SYNTAX.md
+// §«Installation»). Named handlers + `~>` make these uniform with
+// map/filter/take/drop above, and the PTee path pushes the handler
+// stack and carries the row algebra `(body − E) ⊕ R` live. Zero
 // call-site changes — function signatures unchanged.
 
 handler fold_handler(f, init) with acc = init {

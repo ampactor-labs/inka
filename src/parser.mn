@@ -962,12 +962,14 @@ fn parse_expr(ref tokens, pos) = {
   // The let-expression parses binding + continuation (after ; or newline).
   if at(tokens, p, TLet) {
     parse_let_expr(tokens, p + 1, span)
-  // Handle-expression dispatch at expression-top, NOT at operand level.
-  // Seed parity: $parse_handle_expr is called from parse_expr (before
-  // binop); $ident_at_p always maps THandle→"handle" (VarRef). Placing
-  // the dispatch here means `handle { body }` at expression start parses
-  // correctly, while `x == handle { ... }` treats `handle` as VarRef
-  // (the `{` belongs to the enclosing if-then block, not a handle body).
+  // `handle { body } with h` is the redundant spelling of `(body) ~> h`
+  // (SYNTAX.md §«Installation», E_RedundantHandleBlock): `~>` is the ONE
+  // install verb, drawing the one install edge to the handler's node.
+  // parse_handle parses the body, requires `with H`, and produces the
+  // identical PipeExpr(PTee, body, H) graph — there is no block-form vs
+  // pipe-form, one verb one edge. The keyword is recognized at
+  // expression-top (not operand level): `x == handle { ... }` treats
+  // `handle` as a VarRef, the `{` belonging to the enclosing block.
   } else if at(tokens, p, THandle) && at(tokens, skip_ws(tokens, p + 1), TLBrace) {
     parse_handle(tokens, p + 1, span)
   } else {
@@ -1833,6 +1835,18 @@ fn unclosed_eof(ref tokens, p, construct, own buf, count) = {
   (buf, count, p)
 }
 
+// `handle { body } with h` is the redundant spelling of `(body) ~> h`
+// (SYNTAX.md §«Installation», E_RedundantHandleBlock). `~>` is the ONE
+// install verb — it draws the one install edge to handler `h`'s node;
+// the handler's state and arms live at the handler DECLARATION, never at
+// the install site. So this parses the body, requires the `with H`
+// install clause, and produces the IDENTICAL PipeExpr(PTee, body, H)
+// graph that `(body) ~> H` produces — by no-redundant-form (Governing
+// Principle 2) there is no second AST node, no block-form-vs-pipe-form
+// choice. The double-`with` `handle {…} with h with s = 0 {…}` spelling
+// (inline state-init + arms) dissolves with the keyword: it only existed
+// to feed a separate HandleExpr node that re-derived the row absorption
+// `~>` already carries (the Carried-Truth violation, now deleted).
 fn parse_handle(ref tokens, pos, span: ValidSpan) = {
   let p = skip_ws(tokens, pos)
   let (body, p2) =
@@ -1842,71 +1856,12 @@ fn parse_handle(ref tokens, pos, span: ValidSpan) = {
       parse_expr(tokens, p)
     }
   let p3 = skip_ws(tokens, p2)
-  // Three handle-expr forms per seed $parse_handle_expr + SYNTAX.md §968-1003:
-  //   1. `with IDENT = INIT [, ...] { ARMS }` — state-init (anon handler)
-  //   2. `with EXPR`                          — install (named handler ref)
-  //   3. `{ ARMS }` (no `with`)               — anonymous arms
-  // Disambiguation: after TWith, peek TIdent + TEq → form 1; else → form 2.
-  let (arms, p4) =
-    if at(tokens, p3, TWith) {
-      let p_with = skip_ws(tokens, p3 + 1)
-      let is_state_init = is_param_name_tok(tokens, p_with) &&
-        at(tokens, skip_ws(tokens, p_with + 1), TEq)
-      if is_state_init {
-        // Form 1: state-init — parse fields, then expect `{ ARMS }`
-        let (state, p_after_state) =
-          parse_handle_state_fields(tokens, p_with)
-        let p_open = expect(tokens, skip_ws(tokens, p_after_state), TLBrace)
-        let (a, pa) = parse_handler_arms(tokens, skip_ws(tokens, p_open))
-        // State fields are consumed but not yet threaded into AST
-        // (seed parity: $parse_handle_expr stores state at offset 12;
-        // the wheel's HandleExpr(body, arms) is 2-field — state-init
-        // wiring is named peer Hβ.handle-expr-state-to-ast). The arms
-        // ARE lifted into HandleExpr — the parse position is correct.
-        (a, pa)
-      } else {
-        // Form 2: install — `with handler_name(args)` or `with expr`.
-        // Parse the install expression; no inline arms follow.
-        let (install_expr, p_install) = parse_expr(tokens, p_with)
-        // install_expr is not yet wired into HandleExpr (seed stores
-        // at offset 16; same named peer as above). For L1 parse
-        // position parity, the key is that subsequent top-level fns
-        // are NOT consumed as arms.
-        ([], p_install)
-      }
-    } else if at(tokens, p3, TLBrace) {
-      // Form 3: anonymous arms (no `with` clause)
-      parse_handler_arms(tokens, skip_ws(tokens, p3 + 1))
-    } else {
-      ([], p3)
-    }
-  (nexpr(HandleExpr(body, arms), span), p4)
-}
-
-/// Parse `FIELD = INIT [, FIELD = INIT]*` for handle-expr state-init.
-/// Same shape as parse_handler_state_fields but for handle-expr context
-/// (terminates at non-comma, not at `{`). Returns (state_list, next_pos).
-fn parse_handle_state_fields(ref tokens, pos) = {
-  let buf = make_list(4)
-  parse_handle_state_loop(tokens, pos, buf, 0)
-}
-
-fn parse_handle_state_loop(ref tokens, pos, own buf, count) = {
-  let name = ident_or_kw_at(tokens, pos)
-  if name == "" { (slice(buf, 0, count), pos) }
-  else {
-    let p2 = expect(tokens, skip_ws(tokens, pos + 1), TEq)
-    let (init, p3) = parse_expr(tokens, skip_ws(tokens, p2))
-    let field = {name: name, init: init}
-    let b1 = list_extend_to(buf, count + 1)
-    let b2 = list_set(b1, count, field)
-    let p4 = skip_ws(tokens, p3)
-    if at(tokens, p4, TComma) {
-      parse_handle_state_loop(tokens, skip_ws(tokens, p4 + 1), b2, count + 1)
-    } else {
-      (slice(b2, 0, count + 1), p4)
-    }
-  }
+  let p_with = expect(tokens, p3, TWith)
+  let (handler, p4) = parse_expr(tokens, skip_ws(tokens, p_with))
+  perform report("parser", "E_RedundantHandleBlock", "Warning",
+    "`handle { body } with h` is the redundant spelling of `(body) ~> h` — `~>` is the one install verb. Rewrite to the pipe form.",
+    span_join(span, span_at(tokens, p4 - 1)), "MachineApplicable")
+  (nexpr(PipeExpr(PTee, body, handler), span), p4)
 }
 
 fn skip_past_ident(ref tokens, pos) = {

@@ -285,7 +285,6 @@ type LowExpr
   // arm runs against ("" sentinel = use caller __state). Threads the handler's
   // STATE RECORD as the arm-call's __state per handler-IS-state.
   | LPerform(Int, String, List, String)
-  | LHandle(Int, LowExpr, List)                // body + arms (handle-expression)
   // Tier-2 evidence-dispatched perform (handler comes from the caller via
   // an evidence slot on __state — handler IS evidence). The ev-slot holds
   // a per-effect entry [record_ptr, base]; the arm runs against that RECORD
@@ -382,7 +381,6 @@ fn lexpr_handle(e) with Pure = match e {
   LHandleWith(h, _, _, _, _, _, _) => h,
   LFeedback(h, _, _)      => h,
   LPerform(h, _, _, _)    => h,
-  LHandle(h, _, _)        => h,
   LEvPerform(h, _, _, _, _) => h,
   LEvSlotRef(h, _)        => h,
   LFieldLoad(h, _, _)     => h,
@@ -1018,26 +1016,6 @@ fn lower_expr_body(e, handle, span) = match e {
     LMakeClosure(handle, fn_ir, captures_exprs, derive_ev_slots(handle))
   },
 
-  HandleExpr(body_node, arms) => {
-    // H1.4: inline handle expression. Lower body normally, lower
-    // arms BOTH as records (for LHandle's arm metadata, currently
-    // unused at emit but reserved for H1.6 evidence wiring) AND
-    // as LDeclareFn entries (so emit_fns_expr's deep walk picks
-    // up each arm body as a wasm function).
-    //
-    // Inline handlers are anonymous; discriminator is the handle-id
-    // stringified — graph-mint-unique per construction (every
-    // HandleExpr has a fresh handle).
-    // Inline anonymous handle-expression: no config-params or state
-    // at the AST level (HandleExpr's surface today is `handle body
-    // with H` — H is a handler value already constructed, so its
-    // config + state were captured at the named handler decl).
-    let arm_decls = lower_handler_arms_as_decls(arms, int_to_str(handle), [], [])
-    let arm_records = lower_handler_arms(arms)
-    let lo_body = lower_expr(body_node)
-    LBlock(handle, list_concat(arm_decls, [LHandle(handle, lo_body, arm_records)]))
-  },
-
   PerformExpr(op_name, args) => {
     // Row-guided dispatch — symmetric to the EffectOpScheme CallExpr
     // arm above. Stage 4a: WASI imports bridge directly.
@@ -1608,18 +1586,6 @@ fn lower_lit_value(v) with Pure = match v {
 
 fn lower_pats(pats) = map(lower_pat, pats)
 
-/// Each arm = `(op_name, arg_names, body)`. Lowered as a pair for emit
-/// to dispatch through the handler's state machine.
-fn lower_handler_arms(arms) = map((arm) => {
-  // Handler arm args bind into the arm body's scope — push a fresh
-  // locals checkpoint, register each arg, lower body, restore.
-  let cp = perform ls_push_scope()
-  bind_names_as_locals(arm.args)
-  let lo_body = mark_tail(lower_expr(arm.body))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
-  perform ls_pop_scope(cp)
-  {args: arm.args, body: lo_body, op_name: arm.op_name}
-}, arms)
-
 /// H1.4 — lower handler arms to `LDeclareFn` entries: pure module-level
 /// fn declarations, no runtime allocation. Each arm body becomes a wasm
 /// function `op_<op_name>` taking the arm's args (plus the implicit
@@ -1932,12 +1898,6 @@ fn free_vars_expr(e, bound) = match e {
     collect_free_vars(body, inner_bound)
   },
 
-  HandleExpr(body, arms) =>
-    free_vars_merge(
-      collect_free_vars(body, bound),
-      free_vars_handler_arms(arms, bound)
-    ),
-
   PerformExpr(_, args) => free_vars_list(args, bound),
   ResumeExpr(val, state_updates) =>
     free_vars_merge(collect_free_vars(val, bound),
@@ -2031,16 +1991,6 @@ fn free_vars_match_arms(arms, bound) = {
   fold(arms, [], (acc, arm) => {
     let (pat, body) = arm
     let arm_bound = free_vars_merge(bound, free_vars_pat_binds(pat))
-    free_vars_merge(acc, collect_free_vars(body, arm_bound))
-  })
-}
-
-/// Handler arm shape: `(op_name, arg_names, body)`. The `arg_names` bind
-/// inside `body`; `op_name` is the effect op being handled (global scope).
-fn free_vars_handler_arms(arms, bound) = {
-  fold(arms, [], (acc, arm) => {
-    let (op_name, arg_names, body) = arm
-    let arm_bound = free_vars_merge(bound, arg_names)
     free_vars_merge(acc, collect_free_vars(body, arm_bound))
   })
 }

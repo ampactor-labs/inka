@@ -51,11 +51,11 @@ effect InferCtx {
 }
 
 // handler_stack (W4 prep, C4) — insertion-ordered stack of handler
-// names currently installed at this inference point. HandleExpr and
-// PTee sites push when entering their body, pop on exit. W4's
-// monomorphic dispatch reads this to know which handler position
-// to target; today it's a bookkeeping surface with no consumer but
-// the shape it captures is load-bearing for evidence reification.
+// names currently installed at this inference point. PTee (`~>`) sites
+// push when entering their body, pop on exit. W4's monomorphic dispatch
+// reads this to know which handler position to target; today it's a
+// bookkeeping surface with no consumer but the shape it captures is
+// load-bearing for evidence reification.
 handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack = [] {
   // stack = [InferFrame, ...] where each InferFrame is a record:
   //   {accumulated_row: EffRow, fn_span: Span, row_handle: Int}
@@ -423,26 +423,13 @@ fn call_is_alloc_returning(func) = {
   }
 }
 
-// H4 helper — does an EffName list include the Alloc effect name?
-// region_enter fires only for HandleExprs that absorb Alloc (the
-// load-bearing alloc-tracking case; non-Alloc handlers don't open
-// regions).
-fn names_include_alloc(names) = {
-  names_include_alloc_loop(names, 0, len(names))
-}
-
-fn names_include_alloc_loop(names, i, n) = {
-  if i >= n { false }
-  else {
-    let name = list_index(names, i)
-    let s = match name {
-      ENamed(s)              => s,
-      EParameterized(s, _)   => s
-    }
-    if s == "Alloc" { true }   // drift-audit: ignore — real drift mode 8 (EffName should have EAlloc variant, not ENamed(string)); tracked for item 11.B EffName refactor
-    else { names_include_alloc_loop(names, i + 1, n) }
-  }
-}
+// H4 alloc-region tracking (region_enter/region_exit) opened a region
+// when a `handle` block absorbed Alloc. With `handle` dissolved into
+// `~>` (the one install verb), region-opening belongs on the PTee
+// install when the installed handler absorbs Alloc — the cursor reads
+// the handler's HandlerKind row live and opens a region iff Alloc ∈ E.
+// Positive-form peer: Hβ.infer.region-on-tee-alloc-absorb. Until then the
+// region effect + own.mn handler stand as dormant capability surface.
 
 /// Build an `EffRow` from a declared `(name, negated)` list. Negated
 /// names produce `EfNeg(EfClosed([name]))` and compose with intersection;
@@ -692,76 +679,6 @@ fn infer_expr(ref node) = {
     NExpr(PerformExpr(op_name, args)) => {
       infer_expr_list(args)
       infer_perform(op_name, args, handle, span)
-    },
-
-    NExpr(HandleExpr(body_node, arms)) => {
-      // ─── Gap 3: handler absorption ──────────────────────────────
-      // Push a nested row scope for the body so its effects do NOT
-      // leak into the enclosing function's accumulated row. After
-      // body inference, compute (body_row - handled_names) + arm_row
-      // via effects.mn's absorb_row, then add the RESULT to the
-      // outer fn's row tracker. The handler IS the subtraction gate.
-      //
-      // handler_stack (C4) — push an anonymous handler marker while
-      // the body is being inferred so W4's monomorphic dispatch can
-      // read the current handler position. The marker encodes the
-      // handled names so downstream consumers can look up which
-      // handler absorbs which effect.
-
-      let handled_names = collect_handled_effects(arms)
-      perform inf_push_handler(handler_stack_tag(handled_names))
-
-      // H4: HandleExprs that absorb Alloc open a new region. Every
-      // allocation inside the body is tagged with this region; on
-      // body exit the region pops, and any value that escapes to
-      // the enclosing scope must NOT be region-tagged with this
-      // popped id (check_escape catches it at fn return).
-      let opens_region = names_include_alloc(handled_names)
-      let region_id = if opens_region {
-        perform region_enter(span)
-      } else { 0 }
-
-      let body_row_h = perform graph_fresh_row(Inferred("handle body row"))
-      perform inf_enter_fn(body_row_h, span)
-      infer_expr(body_node)
-      perform inf_exit_fn()
-
-      if opens_region { perform region_exit(region_id) }
-
-      let N(_, _, bh) = body_node
-
-      // Arms inference in their own nested row scope
-      let arm_row_h = perform graph_fresh_row(Inferred("handle arms row"))
-      perform inf_enter_fn(arm_row_h, span)
-      infer_handler_arms(arms, bh, span)
-      perform inf_exit_fn()
-
-      let body_row = read_bound_row(body_row_h)
-      let arm_row  = read_bound_row(arm_row_h)
-      let result_row = absorb_row(body_row, mk_ef_closed(handled_names), arm_row)
-
-      // Handler-install subsumption (C4). If the enclosing FnStmt
-      // carries a declared row, the handler's arm_row must be ⊆
-      // declared (the arms execute in the enclosing context, so
-      // anything they perform must be admitted there). Emitting
-      // E_HandlerUninstallable at the install span gives a tighter
-      // diagnostic than waiting for E_EffectMismatch at fn exit.
-      let declared_effs = perform inf_declared_effs()
-      if len(declared_effs) > 0 {
-        let declared_row = build_declared_row(declared_effs)
-        if row_subsumes(arm_row, declared_row) { () }
-        else {
-          perform report("infer", "E_HandlerUninstallable", "error",
-            "handler arms require effects not admitted by the enclosing declaration ({show_effrow(arm_row)} ⊄ {show_effrow(declared_row)})",
-            span, "MachineApplicable")
-        }
-      }
-
-      perform inf_add_row(result_row)
-      perform inf_pop_handler()
-
-      // Handle expression's TYPE is the body's type.
-      perform graph_bind(handle, TVar(bh), Located(span, Inferred("handle result")))
     },
 
     NExpr(ResumeExpr(val, state_updates)) => {
@@ -1047,7 +964,7 @@ fn unify_args_to_params(args, params, span: ValidSpan) = {
 /// `~>` handler attachment — the row algebra's handler operator. A handler is
 /// (a ! E+r) ⟿ (a ! R+r): row(expr ~> h) = (row(expr) − E) ⊕ R. The body is
 /// inferred in a NESTED row scope so its effects do NOT leak (subtraction would
-/// be impossible once leaked — the HandleExpr discipline); the handler value is
+/// be impossible once leaked — the install discipline); the handler value is
 /// installed (binding its config args, so a config-param handler's R picks up
 /// the actual arg's effect); then (body_row − E) ⊕ R joins the caller's row.
 /// Reading the RHS handler's HandlerKind(E, R) is what completes the row algebra
@@ -2195,25 +2112,6 @@ fn arms_have_wildcard(arms) = any((arm) => {
   }
 }, arms)
 
-/// Handler arm inference — each arm's body is inferred; its type
-/// unifies with the body's type so the `handle` expression has a
-/// single consistent result type. The arms share ONE effect payload
-/// (the handled effect's op-payload type, Iterate(a) ⇒ a), exactly as
-/// register_handler mints one payload per declared handler. Passing it is
-/// REQUIRED: infer_one_handler_arm takes the arm, a result handle, then the
-/// payload handle, and unifies the op-payload through the last. The prior
-/// 2-arg call left the payload uninitialized → unify_op_payload corrupted the
-/// payload type into a junk handle (a sibling of the field-offset class —
-/// flagged by the first cross-unification workflow and left unfixed).
-fn infer_handler_arms(arms, body_h, span: ValidSpan) = {
-  let payload_h = perform mint(Inferred("inline handler arm payload"))
-  for_each((arm) => {
-    perform env_scope_enter()
-    infer_one_handler_arm(arm, body_h, payload_h)   // drift-audit: ignore — body_h (result) + payload_h (effect payload) are distinct handles, not parallel arrays
-    perform env_scope_exit()
-  }, arms)
-}
-
 /// One arm under the typed-resume law (SUBSTRATE.md primitive #2).
 /// `op(args) => body` for `op : (P...) -> R` under handle-result S:
 /// args bind to the op's DECLARED params (the graph already knows
@@ -3006,10 +2904,6 @@ fn collect_resume_walk(buf, node) with GraphRead = {
       collect_resume_walk(buf, l)
       collect_resume_walk(buf, r)
     },
-    NExpr(HandleExpr(b, h_arms)) => {
-      collect_resume_walk(buf, b)
-      for_each((a) => collect_resume_walk(buf, a.body), h_arms)
-    },
     NStmt(LetStmt(_, v)) => collect_resume_walk(buf, v),
     NStmt(ExprStmt(e)) => collect_resume_walk(buf, e),
     // Leaves: literals, var refs, holes, placeholders, unit — no
@@ -3288,8 +3182,6 @@ fn walk_refinement(map, node, path_pred) with GraphRead = {
       walk_refinement(map, b, path_pred),
     NExpr(PipeExpr(_, l, r)) =>
       walk_refinement(walk_refinement(map, l, path_pred), r, path_pred),
-    NExpr(HandleExpr(b, _)) =>
-      walk_refinement(map, b, path_pred),
     NStmt(LetStmt(_, v)) =>
       walk_refinement(map, v, path_pred),
     NStmt(ExprStmt(e)) =>
@@ -3462,49 +3354,8 @@ fn unify_string_fragments(fragments, span: ValidSpan) = {
   }, fragments)
 }
 
-// Handler absorption helpers — used by HandleExpr inference. The
-// "handled effects" are the effect NAMES whose ops the arms handle.
-// For each arm's op_name, we look up its declaring effect via env
-// (an effect op's TFun row carries its effect name, set by
-// register_one_op). Missing ops contribute nothing; the subtraction
-// is conservative.
-
-/// C4 — derives a short marker for the handler frame from its handled
-/// names, e.g. `[IO, Alloc]` → `"handle:IO|Alloc"`. The tag identifies
-/// the install position for W4's monomorphic dispatch. Concrete
-/// handler-value identity arrives with evidence reification; the
-/// handled-name set is the marker H1.4 preserves as a fallback.
-fn handler_stack_tag(handled_names) = {
-  "handle:{show_list(handled_names, show_eff_name, "|")}"
-}
-
-fn collect_handled_effects(arms) = {
-  collect_handled_from(arms, [])
-}
-
-fn collect_handled_from(arms, own acc) = {
-  if len(arms) == 0 { acc }
-  else {
-    let arm = list_head(arms)
-    let names = effect_names_of_op(arm.op_name)
-    collect_handled_from(list_tail(arms), acc ++ names)
-  }
-}
-
-fn effect_names_of_op(op_name) = {
-  match perform env_lookup(op_name) {
-    None => [],
-    Some(entry) => {
-      let (scheme, _, _) = entry
-      let Forall(_, ty) = scheme
-      match ty {
-        TFun(_, _, row) => row_names(row),
-        _               => []
-      }
-    }
-  }
-}
-
+// Effect-name projection of a row — the handled-name set read live from
+// a row's NRowBound. Used by pipeline.mn's reached-effect report.
 fn row_names(row) with Pure = match row {
   EfPure           => [],
   EfClosed(names)  => names,

@@ -339,7 +339,6 @@ fn expr_child_handles(e) with Pure = match e {
   IfExpr(c, t, f)          => [node_handle(c), node_handle(t), node_handle(f)],
   BlockExpr(stmts, fin)    => [node_handle(fin)] ++ map(node_handle, stmts),   // order-free: membership test only
   MatchExpr(scrut, _arms)  => [node_handle(scrut)],
-  HandleExpr(body, _arms)  => [node_handle(body)],
   PerformExpr(_, args)     => map(node_handle, args),
   ResumeExpr(v, updates)   => [node_handle(v)] ++ map(node_handle, updates),
   MakeListExpr(elems)      => map(node_handle, elems),

@@ -562,7 +562,6 @@ type Expr
   | IfExpr(Node, Node, Node)
   | BlockExpr(List, Node)          // stmts, final expr
   | MatchExpr(Node, List)          // scrutinee, arms
-  | HandleExpr(Node, List)         // body, handler arms
   | PerformExpr(String, List)      // op name, args
   | ResumeExpr(Node, List)         // value, state updates
   | MakeListExpr(List)

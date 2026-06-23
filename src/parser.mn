@@ -1951,7 +1951,11 @@ fn parse_pat(ref tokens, pos) = {
       let (flds, p) = parse_pat_record_fields(tokens, skip_ws(tokens, pos + 1))
       (PRecord(sort_pat_fields(flds)), p)
     },
-    _ => (PWild, pos + 1)
+    _ => {
+      perform report("parser", "P_UnexpectedToken", "Warning",
+        "unexpected token in pattern position", span_at(tokens, pos), "MaybeIncorrect")
+      (PWild, pos + 1)
+    }
   }
 }
 
@@ -2092,7 +2096,11 @@ fn parse_type_ty(ref tokens, pos) = match kind_at(tokens, pos) {
     let (elem, p) = parse_type_ty(tokens, skip_ws(tokens, pos + 1))
     (TList(elem), expect(tokens, skip_ws(tokens, p), TRBracket))
   },
-  _ => (TUnit, pos + 1)
+  _ => {
+    perform report("parser", "P_UnexpectedToken", "Warning",
+      "unexpected token in type position — expected a type", span_at(tokens, pos), "MaybeIncorrect")
+    (TUnit, pos + 1)
+  }
 }
 
 fn parse_type_ty_tail(ref tokens, pos, own buf, count) = {

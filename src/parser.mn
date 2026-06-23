@@ -591,10 +591,15 @@ fn parse_eff_args_tail(ref tokens, pos, own buf, count) = {
 }
 
 fn parse_one_eff_arg(ref tokens, pos) = match kind_at(tokens, pos) {
-  TIntLit(n)    => (EAInt(n), pos + 1),
-  TFloatLit(f)  => (EAFloat(f), pos + 1),
-  TStringLit(s) => (EAString(s), pos + 1),
-  _          => (EAInt(0), pos + 1)    // diagnostic deferred — see error catalog
+  TIntLit(n)     => (EAInt(n), pos + 1),
+  TFloatLit(f)   => (EAFloat(f), pos + 1),
+  TStringPart(s) => (EAString(s), pos + 1),
+  _              => {
+    report("E_EffArgNotLiteral",
+      "an effect argument must be an int, float, or string literal",
+      span_at(tokens, pos), "MaybeIncorrect")
+    (EAInt(0), pos + 1)
+  }
 }
 
 /// Parse `let pat [: ty] = expr`.
@@ -1158,7 +1163,7 @@ fn turbofish_lookahead(ref tokens, pos, depth) = {
     TGt => if depth == 1 { Some(p + 1) }
            else { turbofish_lookahead(tokens, p + 1, depth - 1) },
     TLt    => turbofish_lookahead(tokens, p + 1, depth + 1),
-    TIdent => turbofish_lookahead(tokens, p + 1, depth),
+    TIdent(_) => turbofish_lookahead(tokens, p + 1, depth),
     TComma => turbofish_lookahead(tokens, p + 1, depth),
     _      => None
   }
@@ -1868,13 +1873,6 @@ fn parse_handle(ref tokens, pos, span: ValidSpan) = {
     "`handle { body } with h` is the redundant spelling of `(body) ~> h` — `~>` is the one install verb. Rewrite to the pipe form.",
     span_join(span, span_at(tokens, p4 - 1)), "MachineApplicable")
   (nexpr(PipeExpr(PTee, body, handler), span), p4)
-}
-
-fn skip_past_ident(ref tokens, pos) = {
-  match kind_at(tokens, pos) {
-    TIdent(_) => pos + 1,
-    _         => pos
-  }
 }
 
 fn parse_perform(ref tokens, pos, span: ValidSpan) = {

@@ -473,7 +473,7 @@ fn serialize_array_inner(items, i, n, acc) with Memory + Alloc = {
 }
 
 fn serialize_object(fields) with Memory + Alloc = {
-  "{{{serialize_object_inner(fields, 0, len(fields), "")}}}"
+  "\{{serialize_object_inner(fields, 0, len(fields), "")}\}"
 }
 
 fn serialize_object_inner(fields, i, n, acc) with Memory + Alloc = {

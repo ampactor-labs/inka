@@ -248,16 +248,17 @@ fn sep_at(s, sep, i, seplen, j) with Memory = {
   else { false }
 }
 
-/// str_unescape — resolve SYNTAX.md §1077 escape codes in a string
-/// literal's raw source bytes: \n→LF \r→CR \t→TAB \0→NUL; \\ \" and
-/// any other \X → the second byte literally. A lone trailing `\`
-/// (no following byte) stays a literal backslash. Mirrors the seed
-/// arbiter bootstrap/src/runtime/str.wat $str_unescape exactly (the
-/// lexer projects source bytes → graph bytes, per
-/// Hβ.first-light.lexer-string-escape-substrate). Two-pass: count
-/// decoded length, then one alloc + byte-store fill. The two-pass IS
-/// the O(N²)-bomb avoidance the scan_string comment warns about — a
-/// single alloc, no per-byte str_concat.
+// str_unescape — resolve the SYNTAX.md Strings escape codes in a string
+// literal's raw source bytes: \n→LF \r→CR \t→TAB \0→NUL; \xHH→the byte
+// with that two-hex-digit value; \\ \" \{ \} and any other \X → the
+// second byte literally. A lone trailing `\` (no following byte) stays a
+// literal backslash. The lexer projects source bytes → graph bytes, per
+// Hβ.first-light.lexer-string-escape-substrate. Two-pass: count decoded
+// length, then one alloc + byte-store fill. The two-pass IS the
+// O(N²)-bomb avoidance the scan_string comment warns about — a single
+// alloc, no per-byte str_concat. A `\xHH` consumes four source bytes
+// (`\`, `x`, hex, hex) and decodes to one byte, so the count and fill
+// passes step by four and emit one byte for that form.
 fn str_unescape(s) with Memory + Alloc = {
   let n = byte_len(s)
   let dlen = str_unescape_count(s, 0, n, 0)
@@ -267,8 +268,30 @@ fn str_unescape(s) with Memory + Alloc = {
   ptr
 }
 
+// is_hex_byte / hex_val — hex-digit classification and value for the
+// `\xHH` escape. 0-9 → 0..9, A-F → 10..15, a-f → 10..15.
+fn is_hex_byte(b) with Pure = {
+  (b >= 48 && b <= 57) || (b >= 65 && b <= 70) || (b >= 97 && b <= 102)
+}
+
+fn hex_val(b) with Pure = {
+  if      b >= 48 && b <= 57  { b - 48 }
+  else if b >= 65 && b <= 70  { b - 55 }
+  else                        { b - 87 }
+}
+
+// is_hex_escape — true when source bytes at `i` begin a complete `\xHH`
+// (backslash, `x`, two hex digits) within `[i, n)`.
+fn is_hex_escape(s, i, n) with Memory = {
+  i + 3 < n && byte_at(s, i) == 92 && byte_at(s, i + 1) == 120
+    && is_hex_byte(byte_at(s, i + 2)) && is_hex_byte(byte_at(s, i + 3))
+}
+
 fn str_unescape_count(s, i, n, acc) with Memory =
   if i >= n { acc }
+  else if is_hex_escape(s, i, n) {
+    str_unescape_count(s, i + 4, n, acc + 1)
+  }
   else if byte_at(s, i) == 92 && i + 1 < n {
     str_unescape_count(s, i + 2, n, acc + 1)
   } else {
@@ -277,6 +300,11 @@ fn str_unescape_count(s, i, n, acc) with Memory =
 
 fn str_unescape_into(s, i, n, dest, w) with Memory + Alloc =
   if i >= n { () }
+  else if is_hex_escape(s, i, n) {
+    let decoded = hex_val(byte_at(s, i + 2)) * 16 + hex_val(byte_at(s, i + 3))
+    perform store_i8(dest + 4 + w, decoded)
+    str_unescape_into(s, i + 4, n, dest, w + 1)
+  }
   else if byte_at(s, i) == 92 && i + 1 < n {
     let esc = byte_at(s, i + 1)
     let decoded =

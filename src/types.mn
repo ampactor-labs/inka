@@ -974,9 +974,9 @@ fn show_type(ref ty) with GraphRead + !Mutate = {
     TVar(id) => show_handle(id),
     TName(name, args) =>
       "{name}{show_type_args(args)}",
-    TRecord(fields) => "{{ {show_list(fields, show_field, ", ")} }}",
+    TRecord(fields) => "\{ {show_list(fields, show_field, ", ")} \}",
     TRecordOpen(fields, v) =>
-      "{{ {show_list(fields, show_field, ", ")} | {show_handle(v)} }}",
+      "\{ {show_list(fields, show_field, ", ")} | {show_handle(v)} \}",
     TRefined(base, pred) => "{show_type(base)} where {show_predicate(pred)}",
     TCont(ret, disc) => "Cont({show_type(ret)}, {show_discipline(disc)})",
     // RN.1 — show the alias name (intent), not the resolved type

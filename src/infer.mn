@@ -570,7 +570,7 @@ fn infer_expr(ref node) = {
         match then_ty {
           TName("Unit", _) => (),
           _ => perform report("infer", "E_IfMissingElse", "TypeError",
-            "if-without-else expects unit-valued then-branch; add `else {{...}}` or make then-branch evaluate to unit",
+            "if-without-else expects unit-valued then-branch; add `else \{...\}` or make then-branch evaluate to unit",
             span, "MachineApplicable")
         }
       }

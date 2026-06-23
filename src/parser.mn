@@ -104,7 +104,7 @@ fn show_token_kind(k) with Pure = match k {
   TTildeGt => "~>", TLtTilde => "<~",
   TAndAnd => "&&", TOrOr => "||",
   TLParen => "(", TRParen => ")",
-  TLBrace => "{{", TRBrace => "}}",
+  TLBrace => "\{", TRBrace => "\}",
   TLBracket => "[", TRBracket => "]",
   TComma => ",", TDot => ".", TColon => ":", TSemicolon => ";",
   TPlus => "+", TMinus => "-", TStar => "*", TSlash => "/", TPercent => "%",
@@ -1330,7 +1330,8 @@ fn parse_string_interpolation(ref tokens, pos, first_chunk, start_span) = {
   //
   // If the lexer emitted no TStringSplice after the literal prefix, the
   // interpolation degenerates to a bare LitString. Adjacent TStringPart tokens
-  // are normal for doubled braces (`{{` / `}}`), so coalesce them before
+  // are normal for a multi-line `"""..."""` body (the lexer flushes one part
+  // per line as it strips the common indent), so coalesce them before
   // deciding whether the string is interpolating.
   let (prefix, p0) = consume_string_parts(tokens, pos, first_chunk)
   if at(tokens, p0, TStringSplice) {
@@ -1363,8 +1364,9 @@ fn parse_string_interpolation_loop(ref tokens, pos, own buf, count, start_span) 
 }
 
 // After a TStringSplice's inner expression, the next token must be one or more
-// TStringPart chunks. More than one chunk is normal when doubled braces split
-// the literal run. Returns (coalesced_chunk, advanced_pos).
+// TStringPart chunks. More than one chunk is normal in a multi-line
+// `"""..."""` body, where the lexer flushes one part per line. Returns
+// (coalesced_chunk, advanced_pos).
 fn consume_string_parts(ref tokens, pos, acc) = match kind_at(tokens, pos) {
   TStringPart(s) => consume_string_parts(tokens, pos + 1, acc |> str_concat(s)),
   _              => (acc, pos)
@@ -1525,7 +1527,7 @@ fn parse_block_body(ref tokens, pos, own buf, count) = {
     // diagnostic, exhausting heap).
     let start = span_at(tokens, p)
     perform report("parser", "P_UnclosedConstruct", "ParseError",
-      "unexpected end of input inside block; expected `}}` to close",
+      "unexpected end of input inside block; expected `\}` to close",
       start, "MaybeIncorrect")
     (buf, count, nexpr(LitUnit, start), p)
   } else {

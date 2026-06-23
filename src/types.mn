@@ -47,6 +47,86 @@ type Ty
   | TCont(Ty, ResumeDiscipline)   // handler continuation type
   | TAlias(String, Ty)            // RN.1 — authored alias name (e.g. "Port") wrapping resolved type
 
+// ─── Representation — the value-representation gradient (STEP 0) ─────
+// Repr is the SHARED READ all four deep axes ride: the cursor's answer
+// to "how wide, and in what machine class, does this Ty's value live?"
+// It is a PROJECTION of the type the graph already proved — never a
+// re-derivation from arity (the i32-from-arg-count floor is the
+// Carried-Truth violation STEP 1 deletes). `repr_of` is structurally a
+// peer of `ty_to_wasm_type` (the floor of representation), but it is the
+// FULL gradient: a handle IS a 32-bit word, so every pointer-kind AND
+// the unresolved floor share RI32 (the pointer-representation and the
+// productive-under-error floor are ONE fact). RF64 is TFloat's inferred
+// default (the live decider `ty_to_wasm_type` currently leaves unreached).
+// The pinned classes (RI64 / RF32 / RV128) are reachable once STEP 1
+// lands their gradient-INPUT surface (the `repr <width>` pin, a
+// fixed-point refinement, a homogeneous lane-sequence) — present here as
+// arms so STEP 1 ADDS a trigger, never a new type.
+type Repr
+  = RI32          // 32-bit word: TInt/TBool/TUnit/nullary-tag AND every
+                  //   pointer-kind (string/list/tuple/record/fun/cont) AND
+                  //   the unresolved-TVar floor (a handle is a 32-bit word)
+  | RI64          // 64-bit int: `repr i64` pin / fixed-point refinement /
+                  //   a literal exceeding i32 range (STEP 1 trigger)
+  | RF64          // 64-bit float: TFloat's inferred default (the live decider)
+  | RF32          // 32-bit float: TFloat pinned `repr f32` (STEP 1 trigger)
+  | RV128         // 128-bit lane vector: a homogeneous fixed-width
+                  //   lane-sequence (STEP 1 / STEP 4 SIMD cashout)
+
+// repr_of — the SHARED READ (STEP 0). The cursor projects a Ty to its
+// machine-representation class. H6-exhaustive over all 14 Ty constructors.
+// Alias-strip / refinement-unwrap FIRST (TAlias -> inner, TRefined -> base):
+// representation is a property of the underlying value, not the authored
+// name or the predicate, so we recurse into the carried type. A bare TVar
+// (lookup_ty already chased the top-level chain to root, so this is a
+// genuinely-unresolved handle) reads RI32 — a handle IS a 32-bit word, and
+// the unresolved floor IS the pointer representation (productive-under-error:
+// the value still occupies one word). Every pointer-kind (string, list,
+// tuple, record, fun, cont, variant — a tag is a word) is RI32. TFloat is
+// the one non-word default => RF64 (the live decider ty_to_wasm_type leaves
+// unreached today). RI64/RF32/RV128 are reachable only when STEP 1's
+// gradient-INPUT pins land — no arm fabricates them from the current Ty, so
+// the existing i32/f64 emit paths stay byte-identical (LAW 7).
+fn repr_of(ty) with Pure = match ty {
+  TAlias(_, inner)  => repr_of(inner),
+  TRefined(base, _) => repr_of(base),
+  TFloat            => RF64,    // inferred default; STEP 1's `repr f32` pin yields RF32
+  TInt              => RI32,    // STEP 1's `repr i64` pin / fixed-point / i64-literal yields RI64
+  TString           => RI32,    // pointer into linear memory
+  TUnit             => RI32,
+  TList(_)          => RI32,    // pointer (STEP 1/4: a fixed-width lane-sequence pins RV128)
+  TTuple(_)         => RI32,    // pointer
+  TFun(_, _, _)     => RI32,    // table index / closure ptr
+  TVar(_)           => RI32,    // genuinely-unresolved handle — a 32-bit word
+  TName(_, _)       => RI32,    // variant pointer (Bool lives here — a tag is a word)
+  TRecord(_)        => RI32,    // record pointer
+  TRecordOpen(_, _) => RI32,    // record pointer
+  TCont(_, _)       => RI32     // continuation pointer
+}
+
+// repr_width — the byte width of a representation class, by ADT match
+// (never `== 4`/`== 8` — drift mode 8). STEP 1's resolve_field_offset
+// prefix-sums this over a record's sorted fields; RV128 lanes pad to 16.
+fn repr_width(r) with Pure = match r {
+  RI32  => 4,
+  RI64  => 8,
+  RF64  => 8,
+  RF32  => 4,
+  RV128 => 16
+}
+
+// repr_wat — the WAT value-type token for a representation class. STEP 1's
+// emit slots project `repr_wat(repr_of(lookup_ty(handle)))` instead of
+// re-deriving i32 from arity. ty_to_wasm_type (backends/wasm.mn) is the
+// first reader: it becomes `ty |> repr_of |> repr_wat`.
+fn repr_wat(r) with Pure = match r {
+  RI32  => "i32",
+  RI64  => "i64",
+  RF64  => "f64",
+  RF32  => "f32",
+  RV128 => "v128"
+}
+
 // ─── Ownership (spec 02 · spec 07) ─────────────────────────────────
 // Every function parameter wraps Ty with an Ownership marker.
 // Inference fills unmarked parameters; Own/Ref are explicit commitments.

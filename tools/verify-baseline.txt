@@ -83,3 +83,8 @@ micro:ev4=57
 micro:ev8=57
 micro:ev5=21
 micro:ev16=18
+# STEP 0 (repr_of): the representation-class read's width arithmetic round-trips
+# through the seed (5-arm Repr ADT, exhaustive 4/8/16 width match — never == 4).
+# The value gate (repr_of(TFloat) == RF64) lands with STEP 1's first caller,
+# when the seed catches up to the wheel — peer Hβ.repr.read-value-gate.
+micro:repr-width=40

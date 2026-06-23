@@ -220,21 +220,14 @@ fn ty_to_wasm(handle) = {
     |> ty_to_wasm_type
 }
 
-fn ty_to_wasm_type(ty) with Pure = match ty {
-  TInt              => "i32",
-  TFloat            => "f64",
-  TString           => "i32",   // pointer into linear memory
-  TUnit             => "i32",
-  TList(_)          => "i32",   // pointer
-  TTuple(_)         => "i32",   // pointer
-  TFun(_, _, _)     => "i32",   // table index / closure ptr
-  TVar(_)           => "i32",   // unresolved — sentinel
-  TName(_, _)       => "i32",   // variant pointer
-  TRecord(_)        => "i32",   // record pointer
-  TRecordOpen(_, _) => "i32",
-  TRefined(base, _) => ty_to_wasm_type(base),
-  TCont(_, _)       => "i32"    // continuation pointer
-}
+// ty_to_wasm_type is a PROJECTION of repr_of (types.mn) — the WAT value
+// type IS the representation class rendered. The formerly-unreached
+// `TFloat => "f64"` now lives through repr_of's RF64 arm (the live decider).
+// Carried-Truth: one decision home (repr_of), this is a reader — never a
+// parallel per-Ty width table. STEP 1's emit slots read the same projection
+// for param/local/result widths, so the gradient has ONE source.
+fn ty_to_wasm_type(ty) with Pure =
+  ty |> repr_of |> repr_wat
 
 // Walks the lowered program, emitting the full WAT module structure:
 // imports, memory, globals, function table, functions, start. Every

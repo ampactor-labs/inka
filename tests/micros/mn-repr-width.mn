@@ -1,0 +1,29 @@
+// STEP 0 gate — the representation-class read round-trips through the seed.
+//
+// repr_of/repr_width/repr_wat live in the WHEEL (src/types.mn) with NO caller
+// yet (STEP 1 wires the first one), so they cannot be exercised by a seed micro
+// directly — the seed compiles a standalone .mn, not the wheel's env. This gate
+// proves the SHAPE the read depends on: a five-arm representation ADT, an
+// exhaustive width match (4/8/16 by ADT — never `== 4`, drift mode 8), and the
+// arithmetic that STEP 1's resolve_field_offset prefix-sums. When the seed
+// catches up to the wheel (post-first-light), the value gate becomes a direct
+// `repr_of(TFloat) == RF64` assertion — named peer: Hβ.repr.read-value-gate.
+//
+// Expected exit 40 = the five widths the wheel's repr_width returns, summed:
+// RI32(4) + RI64(8) + RF64(8) + RF32(4) + RV128(16) = 40.
+
+type RKind = KI32 | KI64 | KF64 | KF32 | KV128
+
+fn width(k) = match k {
+  KI32  => 4,
+  KI64  => 8,
+  KF64  => 8,
+  KF32  => 4,
+  KV128 => 16
+}
+
+fn main(q) = {
+  // The five widths the wheel's repr_width returns, summed:
+  // 4 + 8 + 8 + 4 + 16 = 40.
+  width(KI32) + width(KI64) + width(KF64) + width(KF32) + width(KV128)
+}

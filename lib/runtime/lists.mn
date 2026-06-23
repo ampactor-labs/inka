@@ -111,6 +111,29 @@ fn list_index(list, i) with Memory = {
   }
 }
 
+// Structural equality — the sequence case of the one == derivation.
+
+// list_eq — length-then-element structural equality over the sequence
+// node-kind (SYNTAX.md §Equality: "sequence ([a], incl. String = [Byte])
+// -> length-then-element recursion"). This is the [a] instance of the
+// single structural-eq derivation; the String case is str_eq (the [Byte]
+// instance), and both are the ONE sequence projection — not two operators.
+// Elements compare via i32.eq (the scalar/pointer word); deep element
+// recursion for nested sequences rides the element-typed emit dispatch.
+fn list_eq(a, b) -> Bool with Memory = {
+  let la = perform load_i32(a)
+  let lb = perform load_i32(b)
+  if la != lb { false }
+  else { list_eq_loop(a, b, la, 0) }
+}
+
+fn list_eq_loop(a, b, n, i) -> Bool with Memory =
+  if i >= n { true }
+  else {
+    if list_index(a, i) != list_index(b, i) { false }
+    else { list_eq_loop(a, b, n, i + 1) }
+  }
+
 // Push — O(1) snoc
 
 /// push — append val to list, returning a new snoc node (tag=1).

@@ -317,7 +317,7 @@ fn extended_kai_deserialize(bytes) with Memory + Alloc = {
 } ~> buffer_unpacker(bytes)
 
 fn kai_extended_path_for(module_name) with Pure = {
-  ".mentl/cache/" |> str_concat(module_name) |> str_concat(".kai+oracle")
+  ".mentl/cache/" ++ module_name ++ ".kai+oracle"
 }
 
 // ─── Pack — wire format for ExtendedKaiFile ─────────────────────────

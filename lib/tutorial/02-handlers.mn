@@ -51,8 +51,8 @@ handler counter_logged with count = 0 {
 
   inc() => {
     "[counter_logged] tick "
-      |> str_concat(int_to_str(count))
-      |> str_concat("\n")
+      ++ int_to_str(count)
+      ++ "\n"
       |> print_string
     resume() with count = count + 1
   },

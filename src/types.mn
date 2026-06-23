@@ -1382,8 +1382,8 @@ fn show_list(ref items, ref render, ref sep) with !Mutate = {
   else if len(items) == 1 { render(list_head(items)) }
   else {
     render(list_head(items))
-      |> str_concat(sep)
-      |> str_concat(show_list(list_tail(items), render, sep))
+      ++ sep
+      ++ show_list(list_tail(items), render, sep)
   }
 }
 

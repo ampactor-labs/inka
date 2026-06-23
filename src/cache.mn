@@ -91,9 +91,9 @@ fn cache_dir() with Pure = ".mentl/cache"
 
 fn cache_path_for(module_name) = {
   cache_dir()
-    |> str_concat("/")
-    |> str_concat(cache_flatten(module_name))
-    |> str_concat(".kai")
+    ++ "/"
+    ++ cache_flatten(module_name)
+    ++ ".kai"
 }
 
 // Replace `/` with `__` so cache filenames stay flat.
@@ -107,7 +107,7 @@ fn cache_flatten_loop(s, i, n, acc) with Memory + Alloc = {
     let b = byte_at(s, i)
     let segment = if b == 47 { "__" }     // '/' → '__'
                   else { str_of_single_byte(b) }
-    cache_flatten_loop(s, i + 1, n, str_concat(acc, segment))
+    cache_flatten_loop(s, i + 1, n, acc ++ segment)
   }
 }
 

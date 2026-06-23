@@ -380,7 +380,7 @@ fn show_joined(texts, sep) with Memory + Alloc = {
   if len(texts) == 0 { "" }
   else {
     fold(tail(texts), head(texts), (acc, t) =>
-      acc |> str_concat(sep) |> str_concat(t))
+      acc ++ sep ++ t)
   }
 }
 
@@ -437,13 +437,13 @@ fn render_branch_tuple(branches) with Format + !Mutate = {
     let tail = list_tail(branches)
     let head_str = format_chain(head)
     let head_line = spaces(indented_center())
-      |> str_concat(head_str)
-      |> str_concat(",")
+      ++ head_str
+      ++ ","
     if len(tail) == 0 { head_line }
     else {
       head_line
-        |> str_concat("\n")
-        |> str_concat(render_branch_tuple(tail))
+        ++ "\n"
+        ++ render_branch_tuple(tail)
     }
   }
 }
@@ -456,10 +456,10 @@ fn assemble_render(tokens, indent, line_break, comment, span, reason, sibling) w
   // The one comment renders as a leading block above the declaration (the
   // verbatim //-prefixed prose from the weave); then indent, tokens, glue.
   comment
-    |> str_concat(indent)
-    |> str_concat(tokens)
-    |> str_concat(line_break)
-    |> str_concat(sibling)
+    ++ indent
+    ++ tokens
+    ++ line_break
+    ++ sibling
 }
 
 fn format_one_stmt(stmt) with Format + !Mutate = {
@@ -489,5 +489,5 @@ type RenderContext
 
 fn show_node(node) with Pure = {
   let N(_body, _, h) = node
-  "node@" |> str_concat(int_to_str(h))
+  "node@" ++ int_to_str(h)
 }

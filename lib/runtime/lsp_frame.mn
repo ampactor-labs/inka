@@ -180,8 +180,8 @@ fn read_body_loop(buf, written, total) with Memory + Alloc + WASI = {
 fn write_lsp_frame(body) with Memory + Alloc + WASI = {
   let body_len = byte_len(body)
   let hdr = "Content-Length: "
-    |> str_concat(int_to_str(body_len))
-    |> str_concat("\r\n\r\n")
+    ++ int_to_str(body_len)
+    ++ "\r\n\r\n"
   print_string(hdr)
   print_string(body)
   ()

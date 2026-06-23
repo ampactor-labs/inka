@@ -168,25 +168,25 @@ handler terminal_transport with state = transport_state_init(Caret(0, Inferred("
 fn render_cursor_block(cursor, view) with GraphRead + !Mutate = {
   let CursorView(query, propose, topology, row, trace, verify, teach, why) = view
   "Mentl @ "
-    |> str_concat(show_handle_label(cursor))
-    |> str_concat("\n────────────────────────────────────────────\n")
-    |> str_concat("Query    │ ")
-    |> str_concat(show_node_kind(query))
-    |> str_concat("\nPropose  │ ")
-    |> str_concat(show_proposals(propose))
-    |> str_concat("\nTopology │ ")
-    |> str_concat(show_pipe_context(topology))
-    |> str_concat("\nRow      │ ")
-    |> str_concat(show_effrow(row))
-    |> str_concat("\nTrace    │ ")
-    |> str_concat(show_ownership(trace))
-    |> str_concat("\nVerify   │ ")
-    |> str_concat(show_verify_count(verify))
-    |> str_concat("\nTeach    │ ")
-    |> str_concat(show_suggestion(teach))
-    |> str_concat("\nWhy      │ ")
-    |> str_concat(show_reason(why))
-    |> str_concat("\n")
+    ++ show_handle_label(cursor)
+    ++ "\n────────────────────────────────────────────\n"
+    ++ "Query    │ "
+    ++ show_node_kind(query)
+    ++ "\nPropose  │ "
+    ++ show_proposals(propose)
+    ++ "\nTopology │ "
+    ++ show_pipe_context(topology)
+    ++ "\nRow      │ "
+    ++ show_effrow(row)
+    ++ "\nTrace    │ "
+    ++ show_ownership(trace)
+    ++ "\nVerify   │ "
+    ++ show_verify_count(verify)
+    ++ "\nTeach    │ "
+    ++ show_suggestion(teach)
+    ++ "\nWhy      │ "
+    ++ show_reason(why)
+    ++ "\n"
 }
 
 // ─── lsp_transport — JSON-RPC over stdio for IDE integration ────────

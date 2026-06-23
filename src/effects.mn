@@ -442,7 +442,7 @@ fn report_purity_mismatch(ref actual, ref span) with !Mutate = {
   report(
     "effects", "E_PurityViolated", "error",
     "expected Pure but found effects: "
-      |> str_concat(show_effrow(actual)),
+      ++ show_effrow(actual),
     span, "MachineApplicable"
   )
 }
@@ -451,9 +451,9 @@ fn report_effect_mismatch(ref a, ref b, ref span) with !Mutate = {
   report(
     "effects", "E_EffectMismatch", "error",
     "effect row mismatch: "
-      |> str_concat(show_effrow(a))
-      |> str_concat(" vs ")
-      |> str_concat(show_effrow(b)),
+      ++ show_effrow(a)
+      ++ " vs "
+      ++ show_effrow(b),
     span, "MachineApplicable"
   )
 }

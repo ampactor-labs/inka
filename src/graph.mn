@@ -229,9 +229,9 @@ handler graph_handler
       report(
         "graph", "E_OccursCheck", "error",
         "infinite type: "
-          |> str_concat(int_to_str(handle))
-          |> str_concat(" occurs in ")
-          |> str_concat(show_type(ty)),
+          ++ int_to_str(handle)
+          ++ " occurs in "
+          ++ show_type(ty),
         span_zero(), "MachineApplicable"
       )
       resume()

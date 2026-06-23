@@ -29,8 +29,8 @@ import runtime/io
 ///                       Why Engine walks them on demand via `mentl query reason name`.
 fn greet(ref name) with !Alloc = {
   "Hello, "
-    |> str_concat(name)
-    |> str_concat(". The medium is reading you back.\n")
+    ++ name
+    ++ ". The medium is reading you back.\n"
     |> print_string
 }
 

@@ -947,7 +947,7 @@ fn parse_import(ref tokens, pos) = {
 
 fn parse_import_path(ref tokens, pos, own acc) = {
   let name = ident_at(tokens, pos)
-  let joined = acc |> str_concat(name)
+  let joined = acc ++ name
   let p = pos + 1
   if at(tokens, p, TSlash) {
     parse_import_path(tokens, p + 1, "{joined}/")
@@ -1478,7 +1478,7 @@ fn parse_string_interpolation_loop(ref tokens, pos, own buf, count, start_span) 
 // `"""..."""` body, where the lexer flushes one part per line. Returns
 // (coalesced_chunk, advanced_pos).
 fn consume_string_parts(ref tokens, pos, acc) = match kind_at(tokens, pos) {
-  TStringPart(s) => consume_string_parts(tokens, pos + 1, acc |> str_concat(s)),
+  TStringPart(s) => consume_string_parts(tokens, pos + 1, acc ++ s),
   _              => (acc, pos)
 }
 

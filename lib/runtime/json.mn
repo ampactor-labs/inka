@@ -467,7 +467,7 @@ fn serialize_array_inner(items, i, n, acc) with Memory + Alloc = {
     let item = list_index(items, i)
     let item_str = json_serialize(item)
     let sep = if i == 0 { "" } else { "," }
-    let next_acc = acc |> str_concat(sep) |> str_concat(item_str)
+    let next_acc = acc ++ sep ++ item_str
     serialize_array_inner(items, i + 1, n, next_acc)
   }
 }
@@ -483,7 +483,7 @@ fn serialize_object_inner(fields, i, n, acc) with Memory + Alloc = {
     let (key, value) = pair
     let pair_str = "{serialize_string(key)}:{json_serialize(value)}"
     let sep = if i == 0 { "" } else { "," }
-    let next_acc = acc |> str_concat(sep) |> str_concat(pair_str)
+    let next_acc = acc ++ sep ++ pair_str
     serialize_object_inner(fields, i + 1, n, next_acc)
   }
 }

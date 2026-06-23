@@ -385,7 +385,7 @@ fn int_to_str(n) with Memory + Alloc = {
     let neg = str_of_single_byte(45)               // "-"
     let abs = 0 - n
     let digits = int_to_str_positive(abs)
-    str_concat(neg, digits)
+    neg ++ digits
   }
   else { int_to_str_positive(n) }
 }
@@ -469,7 +469,7 @@ fn float_to_str(f) with Memory + Alloc = {
     let rendered = float_render_positive(abs_f)
     if sign == 1 {
       let minus = str_of_single_byte(45)
-      str_concat(minus, rendered)
+      minus ++ rendered
     }
     else { rendered }
   }
@@ -548,16 +548,16 @@ fn float_format_fixed(digits, exp) with Memory + Alloc = {
     let leading = float_zero_pad(0 - int_digits)  // |int_digits| zeros // drift-audit: ignore
     let frac = float_digits_to_str(digits, 0, 17)
     zero
-      |> str_concat(dot)
-      |> str_concat(leading)
-      |> str_concat(frac)
+      ++ dot
+      ++ leading
+      ++ frac
   } else {
     let int_part = float_digits_to_str(digits, 0, int_digits)
     let frac_part = float_digits_to_str(digits, int_digits, 17)
     let dot = str_of_single_byte(46)
     int_part
-      |> str_concat(dot)
-      |> str_concat(frac_part)
+      ++ dot
+      ++ frac_part
   }
 }
 
@@ -585,8 +585,8 @@ fn float_format_scientific(digits, exp) with Memory + Alloc = {
   let e_char = str_of_single_byte(101)             // 'e'
   let exp_str = int_to_str(exp)
   mantissa
-    |> str_concat(e_char)
-    |> str_concat(exp_str)
+    ++ e_char
+    ++ exp_str
 }
 
 // float_digits_to_str: convert a slice of the digit list to a string.

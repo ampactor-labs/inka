@@ -510,7 +510,7 @@ fn render_gradients(gradients) = {
            let (name, result) = entry
            "{name}: {render_gradient_result(result)}\n"
          })
-      |> fold("", (acc, line) => acc |> str_concat(line))
+      |> fold("", (acc, line) => acc ++ line)
   }
 }
 
@@ -527,7 +527,7 @@ fn join_unlock_labels(labels) with Pure = {
   else {
     let first = head(labels)
     let rest = tail(labels)
-    fold(rest, first, (acc, label) => acc |> str_concat(", ") |> str_concat(label))
+    fold(rest, first, (acc, label) => acc ++ ", " ++ label)
   }
 }
 

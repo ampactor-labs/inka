@@ -583,7 +583,7 @@ fn indent_for(depth) = indent_for_loop(depth, "")
 
 fn indent_for_loop(n, acc) = {
   if n <= 0 { acc }
-  else { indent_for_loop(n - 1, str_concat(acc, "  ")) }
+  else { indent_for_loop(n - 1, acc ++ "  ") }
 }
 
 fn render_why(reason) = render_why_at(reason, 0)

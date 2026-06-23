@@ -252,7 +252,7 @@ fn sort(xs) = {
 // String type directly through the loop, no polymorphism, no ambiguity.
 fn join_loop(xs, sep, i, acc) = {
   if i >= len(xs) { acc }
-  else { join_loop(xs, sep, i + 1, str_concat(str_concat(acc, sep), xs[i])) }
+  else { join_loop(xs, sep, i + 1, acc ++ sep ++ xs[i]) }
 }
 fn join(xs, sep) = if len(xs) == 0 { "" } else { join_loop(xs, sep, 1, xs[0]) }
 fn words(s) = split(s, " ")

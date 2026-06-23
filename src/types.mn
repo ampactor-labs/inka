@@ -315,7 +315,6 @@ type Reason
   | InferredCallReturn(String, Reason)   // callee_name, inner — "return of call to 'process'"
   | InferredPipeResult(String, Reason)   // pipe_verb ("|>", "~>", "<~"), inner — verb identity in Why chain
   | FreshInContext(Int, String)          // handle, context_name — "fresh in 'process'" not "fresh 42"
-  | DocstringReason(String, Span)        // DS.1 — authored /// docstring as intent edge
   | DefaultReason(String, Span)          // a param defaulted from `= expr` at the
                                          // decl_site — the Why projection at a
                                          // defaulted call slot walks here ("`ratio`
@@ -461,9 +460,9 @@ fn span_contains(outer, inner) with Pure = {
 // `N(NodeBody, Span, Int)` for nodes; `Tok(TokenKind, Span)` for
 // tokens. Same shape, two layers. Accessors are uniform across both.
 //
-// TokenKind enumerates the 69 lexical forms specified in SYNTAX.md
-// — 24 keywords, 5 identifiers/literals (with payload), 15 two-char
-// operators, 23 single-char operators/punctuation, 2 layout. The
+// TokenKind enumerates the 64 lexical forms specified in SYNTAX.md
+// — 19 keywords, 7 identifiers/literals (with payload), 14 two-char
+// operators, 22 single-char operators/punctuation, 2 layout. The
 // parser dispatches via exhaustive `match Tok(kind, _) { … }`;
 // adding a TokenKind variant fails compilation across every match
 // site until the variant is handled (H6's discipline at the lexical
@@ -486,8 +485,8 @@ type TokenKind
   | TIntLit(Int)
   | TFloatLit(Float)
   | TStringLit(String)
-  | TDocComment(String)             // /// — emitted ONLY when triple-slash
-                                    //   detected; attaches to next decl
+  | TComment(String)                // // — every comment is graph content,
+                                    //   attached to the next decl / enclosing node
   | TStringPart(String)             // literal chunk of a "..." string
                                     //   (amendment C brace-interpolation)
   | TStringSplice                   // marks the start of a {expr} splice;
@@ -541,10 +540,10 @@ type NodeBody
   | NStmt(Stmt)
   | NPat(Pat)
   | NHole(Int)               // Hazel marked hole — inference populates with reason
-  /// Synthetic module entity — one per source file. Module-level `///`
-  /// attaches its DocstringReason here; decls lists every top-level Handle
-  /// so F.1's doc_handler and render_index can walk the module without
-  /// re-parsing source.
+  // Synthetic module entity — one per source file. An orphan module-level
+  // comment attaches to this handle in the comment weave (graph_attach_comment);
+  // decls lists every top-level Handle so F.1's doc_handler and render_index can
+  // walk the module without re-parsing source.
   | NModule({path: String, decls: List, span: Span})
 
 // ─── Expr (spec 03) ────────────────────────────────────────────────
@@ -743,8 +742,6 @@ type Stmt
                            // `|`-alternation). Infer registers TAlias(X, T); X and
                            // T unify transparently (SYNTAX.md §«Type aliases»). The
                            // authored name travels in the TAlias for Reason chains.
-  | Documented(String, Node)
-                           // DS.1 — /// docstring wrapping a declaration stmt
 
 // ─── Pat (spec 03) ─────────────────────────────────────────────────
 
@@ -825,12 +822,14 @@ effect GraphRead {
   graph_snapshot() -> Graph
   graph_push_checkpoint() -> Int
   graph_node_body(Int) -> NodeBody    // resolve a node's body by its handle from the parallel program weave — every AST node is registered there at construction (NHole if absent)
+  graph_comment_at(Int) -> String     // resolve a node's parse-attached comment prose from the parallel comment weave (empty string if absent); the Why engine / formatter / cursor project it
 }
 
 effect GraphWrite {
   graph_fresh_ty(Reason) -> Handle
   graph_fresh_row(Reason) -> Handle
   graph_register_node(Int, NodeBody) -> ()    // edge-link a node's body into the one graph at its handle (the parallel program weave); resolves via graph_node_body
+  graph_attach_comment(Int, String) -> ()      // attach parse-collected comment prose to a node's handle (the parallel comment weave); resolves via graph_comment_at — a comment is graph content
   graph_bind(Int, Ty, Reason) -> ()
   graph_bind_row(Int, EffRow, Reason) -> ()
   graph_fork(String) -> ()
@@ -1178,7 +1177,6 @@ fn show_reason(ref reason) with GraphRead + !Mutate = {
     InferredCallReturn(callee, inner) => "call to '{callee}' → {show_reason(inner)}",
     InferredPipeResult(verb, inner)   => "{verb} pipe → {show_reason(inner)}",
     FreshInContext(id, ctx)           => "fresh {show_handle(id)} in '{ctx}'",
-    DocstringReason(doc, span)        => "/// {doc} at {show_span(span)}",
     DefaultReason(pname, span)        => "{pname} defaulted at {show_span(span)}"
   }
 }

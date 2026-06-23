@@ -107,19 +107,18 @@ handler format_default with !Mutate {
     let kind = ast_kind_of(node)
     let ctx = render_context_at(handle)
     let pos = (node, kind, ctx)
-    let (tokens, indent, line_break, comment, span, doc, reason, sibling) =
+    let (tokens, indent, line_break, comment, span, reason, sibling) =
       pos
         <| (
           (n, _, _)  => render_tokens_for(n),                      // 1. tokens
           (_, k, c)  => render_indent_for(k, c),                   // 2. indent (canonical)
           (_, k, _)  => render_line_break_after(k),                // 3. line break
-          (n, _, _)  => render_comments_for(n),                    // 4. comments preserved
+          (n, _, _)  => render_comment_for(n),                     // 4. the one comment, read live from the weave
           (n, _, _)  => render_span_marker(n),                     // 5. span (debug only)
-          (n, _, _)  => render_doc_attached(n),                    // 6. /// doc preserved
-          (n, _, _)  => render_reason_chain(n),                    // 7. reason (debug)
-          (_, _, c)  => render_sibling_separator(c)                // 8. sibling glue
+          (n, _, _)  => render_reason_chain(n),                    // 6. reason (debug)
+          (_, _, c)  => render_sibling_separator(c)                // 7. sibling glue
         )
-    let assembled = assemble_render(tokens, indent, line_break, comment, span, doc, reason, sibling)
+    let assembled = assemble_render(tokens, indent, line_break, comment, span, reason, sibling)
     resume(assembled)
   },
 
@@ -323,23 +322,20 @@ fn render_line_break_after(kind) with Pure = match kind {
   NHole(_)              => ""
 }
 
-fn render_comments_for(node) with Pure = {
-  // // comments preserved verbatim with their attached span. The
-  // formatter strips trailing whitespace on comment-bearing lines but
-  // never re-flows comments themselves.
-  ""
+// The one comment, read LIVE from the comment weave at the node's handle
+// (graph_comment_at) — never a copied string. The weave stores the prose with
+// leading // stripped, contiguous lines joined by \n; render restores the //
+// prefix on every line (re-prefixing each internal newline via `replace`) and a
+// trailing newline so the block leads the declaration. Empty string when the
+// node carries no comment (an honest read, not a stub).
+fn render_comment_for(node) with GraphRead + Memory + Alloc + !Mutate = {
+  let N(_, _, h) = node
+  let text = perform graph_comment_at(h)
+  if text == "" { "" }
+  else { "//{replace(text, "\n", "\n//")}\n" }
 }
 
 fn render_span_marker(node) with Pure = ""
-
-fn render_doc_attached(node) with Pure = {
-  // /// doc comments attach to the next declaration per SYNTAX.md
-  // §1012. The formatter preserves the /// prefix and the doc-block's
-  // line breaks; full re-formatting of doc-block content is owned by
-  // the prose formatter (peer follow-up — separate concern from code
-  // formatting).
-  ""
-}
 
 // The reason aspect of the formatter's eight-fanout: the node's
 // handle chases to its GNode; the Reason renders compressed (the
@@ -421,7 +417,6 @@ fn show_reason_compressed(reason) with Memory + Alloc = match reason {
   InferredCallReturn(name, _) => "return of call to '{name}'",   // drift-audit: ignore (output literal contains the word)
   InferredPipeResult(verb, _) => "result of {verb}",
   FreshInContext(h, ctx) => "fresh #{int_to_str(h)} in '{ctx}'",
-  DocstringReason(text, _) => text,
   DefaultReason(pname, _) => "{pname} defaulted"
 }
 
@@ -454,11 +449,12 @@ fn render_non_chain(node) with Format + !Mutate = {
   perform format_at_handle(node_handle(node))
 }
 
-fn assemble_render(tokens, indent, line_break, comment, span, doc, reason, sibling) with Pure = {
-  doc
+fn assemble_render(tokens, indent, line_break, comment, span, reason, sibling) with Pure = {
+  // The one comment renders as a leading block above the declaration (the
+  // verbatim //-prefixed prose from the weave); then indent, tokens, glue.
+  comment
     |> str_concat(indent)
     |> str_concat(tokens)
-    |> str_concat(comment)
     |> str_concat(line_break)
     |> str_concat(sibling)
 }

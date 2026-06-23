@@ -69,18 +69,28 @@ fn kind_eq(a, b) with Pure = a == b
 // at: predicate form of kind_eq for a position-and-expected pair.
 fn at(ref tokens, pos, kind) = kind_eq(kind_at(tokens, pos), kind)
 
+// A comment is graph content attached at the decl / block-statement boundary
+// (parse_stmt / parse_block_body collect-and-attach BEFORE these skips run). At
+// every OTHER position — interior of a match / record / handler-arm list — the
+// comment's home is the enclosing block (SYNTAX.md Comments: "or, with none, the
+// enclosing block"), so the fine-grained list parsers pass over it as layout,
+// exactly as they pass over TNewline. Per-interior-position attachment to the
+// enclosing block is the positive-form refinement Hβ.parser.interior-comment-
+// to-enclosing-block.
 fn skip_ws(ref tokens, pos) = {
   match kind_at(tokens, pos) {
-    TNewline => skip_ws(tokens, pos + 1),
-    _        => pos
+    TNewline    => skip_ws(tokens, pos + 1),
+    TComment(_) => skip_ws(tokens, pos + 1),
+    _           => pos
   }
 }
 
 fn skip_sep(ref tokens, pos) = {
   match kind_at(tokens, pos) {
-    TSemicolon => skip_sep(tokens, pos + 1),
-    TNewline   => skip_sep(tokens, pos + 1),
-    _          => pos
+    TSemicolon  => skip_sep(tokens, pos + 1),
+    TNewline    => skip_sep(tokens, pos + 1),
+    TComment(_) => skip_sep(tokens, pos + 1),
+    _           => pos
   }
 }
 
@@ -95,7 +105,7 @@ fn show_token_kind(k) with Pure = match k {
   TTrue => "true", TFalse => "false",
   TIdent(s) => s,
   TIntLit(_) => "<int>", TFloatLit(_) => "<float>", TStringLit(_) => "<string>",
-  TDocComment(_) => "<doc-comment>",
+  TComment(_) => "<comment>",
   TStringPart(_) => "<string-part>",
   TStringSplice  => "<string-splice>",
   TEqEq => "==", TBangEq => "!=", TLtEq => "<=", TGtEq => ">=",   // drift-audit: ignore — TokenKind→display-text rendering for diagnostics; not runtime comparison; tracked for item 11.B token-rendering normalization
@@ -258,12 +268,15 @@ fn parse_program(ref tokens) = {
 }
 
 fn parse_stmt_list(ref tokens, pos, own buf, count) = {
-  let p = skip_ws(tokens, pos)
+  // skip_seps_only (not skip_ws/skip_sep) so a leading comment reaches
+  // parse_stmt's TComment arm to be collected-and-attached — never skipped as
+  // layout at the decl boundary.
+  let p = skip_seps_only(tokens, pos)
   if at(tokens, p, TEof) { (buf, count, p) }
   else {
     let (stmt, next) = parse_stmt(tokens, p)
     let (b1, c1) = push_node(buf, count, stmt)
-    parse_stmt_list(tokens, skip_sep(tokens, next), b1, c1)
+    parse_stmt_list(tokens, skip_seps_only(tokens, next), b1, c1)
   }
 }
 
@@ -276,15 +289,27 @@ fn parse_stmt(ref tokens, pos) = match kind_at(tokens, pos) {
   TEffect   => parse_effect_decl(tokens, pos + 1),
   THandler  => parse_handler_decl(tokens, pos + 1),
   TImport   => parse_import(tokens, pos + 1),
-  // DS.2 — docstring attachment: collect consecutive /// lines,
-  // parse the following declaration, wrap in Documented(doc, stmt).
-  TDocComment(first_line) => {
-    let doc_span = span_at(tokens, pos)
-    let (full_doc, p) = collect_docstring(tokens, pos + 1, first_line)
+  // A comment is graph content (SYNTAX.md Comments): collect the contiguous
+  // // run, parse the following declaration, and attach the joined prose to
+  // that decl's handle in the comment weave (graph_attach_comment) — the Why
+  // engine / formatter / cursor project it live. No wrapper node: the comment
+  // edge holds the prose, the decl node is returned directly. With no following
+  // decl (EOF), the orphan surfaces P_OrphanDocstring — never discarded.
+  TComment(first_line) => {
+    let comment_span = span_at(tokens, pos)
+    let (full_text, p) = collect_comment(tokens, pos + 1, first_line)
     let p2 = skip_sep(tokens, p)
-    let (inner_stmt, p3) = parse_stmt(tokens, p2)
-    let N(body, inner_span, h) = inner_stmt
-    (N(NStmt(Documented(full_doc, inner_stmt)), doc_span, h), p3)
+    if at(tokens, p2, TEof) {
+      perform report("parser", "P_OrphanDocstring", "Warning",
+        "comment with no following declaration; attach it to the next decl",
+        comment_span, "MaybeIncorrect")
+      (nstmt(ExprStmt(nexpr(LitUnit, comment_span)), comment_span), p2)
+    } else {
+      let (inner_stmt, p3) = parse_stmt(tokens, p2)
+      let N(_, _, h) = inner_stmt
+      perform graph_attach_comment(h, full_text)
+      (inner_stmt, p3)
+    }
   },
   _         => {
     let start_span = span_at(tokens, pos)
@@ -293,12 +318,26 @@ fn parse_stmt(ref tokens, pos) = match kind_at(tokens, pos) {
   }
 }
 
-/// DS.2 — concatenate consecutive `///` lines into one docstring.
-fn collect_docstring(ref tokens, pos, own acc) = {
-  let p = skip_sep(tokens, pos)
+// Skip only line separators (newline / semicolon) — NOT comments. collect_comment
+// needs this so the contiguous // run is gathered line-by-line; skip_sep (which
+// passes over comments as layout) would swallow the next comment before the run
+// could fold it in.
+fn skip_seps_only(ref tokens, pos) = {
+  match kind_at(tokens, pos) {
+    TSemicolon => skip_seps_only(tokens, pos + 1),
+    TNewline   => skip_seps_only(tokens, pos + 1),
+    _          => pos
+  }
+}
+
+// Concatenate the contiguous // run into one comment String. One intervening
+// newline keeps the run; any other token (incl. a non-comment after a blank
+// line) ends it.
+fn collect_comment(ref tokens, pos, own acc) = {
+  let p = skip_seps_only(tokens, pos)
   match kind_at(tokens, p) {
-    TDocComment(next_line) =>
-      collect_docstring(tokens, p + 1,
+    TComment(next_line) =>
+      collect_comment(tokens, p + 1,
         "{acc}\n{next_line}"),
     _ => (acc, p)
   }
@@ -675,12 +714,11 @@ fn parse_effect_ops(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) || at(tokens, p, TEof) { ([], p + 1) }
   else if !is_param_name_tok(tokens, p) {
-    // Not an op-name here — e.g. a `///` TDocComment preceding the op
-    // (doc ATTACHMENT is the DS substrate's separate, post-L1 concern;
-    // it is NOT an op-list structural node — the seed doesn't attach
-    // here either). Seed parity: $parse_effect_ops null-recovery
-    // (protocol_parser_fabrication_substrate) — advance past the
-    // token, skip separators, retry. TEof above bounds the recursion.
+    // Not an op-name here — e.g. a TComment preceding the op. An op is not a
+    // top-level decl handle in the comment weave, so the comment is not attached
+    // here; it advances past. Seed parity: $parse_effect_ops null-recovery
+    // (protocol_parser_fabrication_substrate) — advance past the token, skip
+    // separators, retry. TEof above bounds the recursion.
     parse_effect_ops(tokens, skip_sep(tokens, p + 1))
   } else {
     let op_name = ident_at(tokens, p)
@@ -1605,6 +1643,12 @@ fn parse_block_expr(ref tokens, pos, start_span) = {
 }
 
 fn parse_block_body(ref tokens, pos, own buf, count) = {
+  // skip_ws passes over block-interior comments as layout — their home is the
+  // enclosing block (SYNTAX.md Comments), and forcing them through parse_stmt
+  // here would corrupt a comment-before-final-expr block's semantics (the final
+  // value expr would become an ExprStmt and the block would return unit).
+  // Per-block-item attachment is the refinement Hβ.parser.interior-comment-to-
+  // enclosing-block; top-level decl comments attach via parse_stmt_list.
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) {
     let start = span_at(tokens, p)

@@ -1508,8 +1508,6 @@ fn lower_stmt_body(s, handle, span) = match s {
   // Transparent alias: type-level only, no runtime presence — the alias
   // and its underlying type unify at infer; emit erases (like RefineStmt).
   AliasStmt(_name, _ty)                     => LConst(handle, LInt(0)),
-  // DS — docstring wrapper: lower the inner declaration, discard doc
-  Documented(_, inner_node)                 => lower_stmt(inner_node),
 
   ExprStmt(expr) => lower_expr(expr)
 }
@@ -1974,9 +1972,7 @@ fn free_vars_stmt(s, bound) = match s {
   HandlerDeclStmt(_, _, _, _, _) => [],
   ImportStmt(_)                 => [],
   RefineStmt(_, _, _)           => [],
-  AliasStmt(_, _)               => [],
-  // DS — docstring wrapper: free vars come from the inner
-  Documented(_, inner_node)     => collect_free_vars(inner_node, bound)
+  AliasStmt(_, _)               => []
 }
 
 fn free_vars_list(nodes, bound) = {
@@ -2296,9 +2292,6 @@ fn collect_top_level_names_loop(stmts, i, n, buf, count) = {
     let (new_buf, new_count) = match body {
       NStmt(FnStmt(name, _, _, _, _))    => push_name(buf, count, name),
       NStmt(LetStmt(PVar(name), _))      => push_name(buf, count, name),
-      // DS — unwrap docstring to find the name inside
-      NStmt(Documented(_, N(NStmt(FnStmt(name, _, _, _, _)), _, _)))  => push_name(buf, count, name),
-      NStmt(Documented(_, N(NStmt(LetStmt(PVar(name), _)), _, _)))   => push_name(buf, count, name),
       _                                  => (buf, count)
     }
     collect_top_level_names_loop(stmts, i + 1, n, new_buf, new_count)

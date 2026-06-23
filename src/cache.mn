@@ -462,7 +462,7 @@ fn cache_pack_predicate(p) with Pack + !Unpack = match p {
 // 10=LetBinding, 11=Unified, 12=Instantiation, 13=UnifyFailed,
 // 14=Placeholder, 15=BinOpPlaceholder, 16=MissingVar, 17=Refinement,
 // 18=Located, 19=InferredCallReturn, 20=InferredPipeResult,
-// 21=FreshInContext, 22=DocstringReason
+// 21=FreshInContext, 23=DefaultReason (22 retired with DocstringReason)
 fn cache_pack_reason(r) with Pack + !Unpack = match r {
   Declared(s) => {
     pack_byte(0)
@@ -567,11 +567,6 @@ fn cache_pack_reason(r) with Pack + !Unpack = match r {
     pack_byte(21)
     pack_i32(h)
     pack_str(ctx)
-  },
-  DocstringReason(text, span) => {
-    pack_byte(22)
-    pack_str(text)
-    cache_pack_span(span)
   },
   DefaultReason(pname, span) => {
     pack_byte(23)
@@ -1029,11 +1024,6 @@ fn cache_unpack_reason() with Unpack + !Pack = {
     let h = unpack_i32()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let ctx = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     FreshInContext(h, ctx)
-  }
-  else if tag == 22 {
-    let text = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    let span = cache_unpack_span()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
-    DocstringReason(text, span)
   }
   else {
     let pname = unpack_str()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)

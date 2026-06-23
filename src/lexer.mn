@@ -3,7 +3,7 @@
 // The tokenizer. Emits `[Token]` where `Token = Tok(TokenKind, Span)`.
 // Mirrors the AST Node wrapper pattern: structured value + positional
 // metadata. Per SYNTAX.md, the parser dispatches via exhaustive
-// `match Tok(kind, _) { … }` over the 69 TokenKind variants — H6's
+// `match Tok(kind, _) { … }` over the 64 TokenKind variants — H6's
 // substrate-discipline applied at the lexical layer.
 //
 // Layout-sensitive `~>` disambiguation (DESIGN Ch 2) reads start
@@ -178,18 +178,15 @@ fn lex_from(ref source, n: ValidOffset, pos: ValidOffset, line, col, own buf, co
       let (b1, c1) = push_tok(buf, count, mk_tok(TNewline, line, col, line + 1, 1))
       lex_from(source, n, pos + 1, line + 1, 1, b1, c1, term_byte, depth)
     } else if b == 47 && pos + 1 < n && byte_at(source, pos + 1) == 47 {
-      // // or /// — line comment or doc comment
-      if pos + 2 < n && byte_at(source, pos + 2) == 47 {
-        // Doc comment: capture rest of line as TDocComment payload.
-        let after = scan_to_eol(source, n, pos + 3)
-        let doc_text = str_slice(source, pos + 3, after)
-        let end_col = col + (after - pos)
-        let (b1, c1) = push_tok(buf, count, mk_tok(TDocComment(doc_text), line, col, line, end_col))
-        lex_from(source, n, after, line, end_col, b1, c1, term_byte, depth)
-      } else {
-        let after = skip_line_comment(source, n, pos + 2)
-        lex_from(source, n, after, line, col, buf, count, term_byte, depth)
-      }
+      // One comment form // — graph content, never dropped (SYNTAX.md Comments).
+      // Capture the rest of the line as TComment payload (leading // stripped); a
+      // third slash is just prose. The parser attaches it to the node it precedes
+      // via graph_attach_comment; the Why engine / formatter / cursor project it.
+      let after = scan_to_eol(source, n, pos + 2)
+      let comment_text = str_slice(source, pos + 2, after)
+      let end_col = col + (after - pos)
+      let (b1, c1) = push_tok(buf, count, mk_tok(TComment(comment_text), line, col, line, end_col))
+      lex_from(source, n, after, line, end_col, b1, c1, term_byte, depth)
     } else if b == 34 && pos + 2 < n && byte_at(source, pos + 1) == 34 && byte_at(source, pos + 2) == 34 {
       // triple-quoted multi-line string `"""..."""` — the multi-line
       // variant of the ONE string form (SYNTAX.md Strings). Interpolation
@@ -268,11 +265,6 @@ fn scan_to_eol(ref source, n: ValidOffset, pos: ValidOffset) = {
   else if byte_at(source, pos) == 10 { pos }
   else { scan_to_eol(source, n, pos + 1) }
 }
-
-/// Alias for `scan_to_eol` — semantic clarity at the call site.
-/// Line comments skip until newline; the newline itself is consumed
-/// by the outer `lex_from` loop.
-fn skip_line_comment(ref source, n: ValidOffset, pos: ValidOffset) = scan_to_eol(source, n, pos)
 
 // The `"..."` / `"""..."""` string scanner. Emits
 // `TStringPart(literal_chunk)` for contiguous literal content. On `{`

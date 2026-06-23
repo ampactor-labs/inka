@@ -65,7 +65,8 @@ handler graph_handler
        span_index = [],
        intent_index = [],
        checkpoint_stack = [],
-       program = [] {
+       program = [],
+       comments = [] {
 
   // checkpoint_stack tracks active speculation depth. Each
   // graph_push_checkpoint pushes the current trail_len; each
@@ -172,6 +173,25 @@ handler graph_handler
       with program = program
         |> list_extend_to(handle + 1)
         |> list_set(handle, body)
+  },
+
+  // The comment weave — parse-attached prose, keyed by handle exactly like the
+  // program weave above. A comment is graph content (SYNTAX.md Comments): the
+  // parser attaches each contiguous // block to the handle of the decl it
+  // precedes; the Why engine / formatter / cursor project it live
+  // (graph_comment_at). A SEPARATE weave, not the node's single Reason slot:
+  // graph_bind overwrites that slot at infer with the inference Reason, so a
+  // parse-written comment Reason would be clobbered. One handle, co-indexed
+  // weaves. No trail — the weave only grows at parse, before speculation.
+  graph_attach_comment(handle, text) => {
+    resume()
+      with comments = comments
+        |> list_extend_to(handle + 1)
+        |> list_set(handle, text)
+  },
+
+  graph_comment_at(handle) => {
+    resume(if handle < len(comments) { list_index(comments, handle) } else { "" })
   },
 
   graph_bind(handle, ty, reason) => {

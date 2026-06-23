@@ -317,6 +317,12 @@ type LowExpr
   // derive_ev_slots' record-pointer entries.
   | LEvSlotRef(Int, Int)                       // handle, ev_index in this frame
   | LFieldLoad(Int, LowExpr, Int)              // W6: handle, record, offset_bytes
+  // W11: a REAL machine int<->float conversion — the gradient's coercion arm.
+  // float_of_int / float_to_int are NOT identity stubs that reinterpret bits
+  // (a silent miscompile); they are a value-changing convert: i32->f64 is
+  // f64.convert_i32_s, f64->i32 (truncating toward zero) is i32.trunc_f64_s.
+  // The kind is an ADT (never a string flag); emit projects the one WASM op.
+  | LConvert(Int, ConvertKind, LowExpr)        // handle, direction, operand
   // Hβ.first-light.resume-with-state-mutation: `resume(val) with field =
   // expr` per SUBSTRATE.md L660-694 lowers each (field, value) update to
   // an LStateSlotStore preceding the LReturn. slot_offset is field source-
@@ -333,6 +339,12 @@ type LowExpr
   // (which would require a wrapper fn). The import IS the bridge; no
   // wrapper. Per protocol_bootstrap_wasi_threads_substrate.md Stage 4.
   | LWasiCall(Int, String, List)               // handle, import name (no $ prefix), args
+
+// The two directions of int<->float conversion. An ADT, not a string/int flag
+// (drift 8): each direction projects exactly one signed WASM convert op.
+type ConvertKind
+  = IntToFloat       // f64.convert_i32_s — i32 value widened to its f64
+  | FloatToInt       // i32.trunc_f64_s   — f64 truncated toward zero to i32
 
 type LowValue
   = LInt(Int)
@@ -355,7 +367,11 @@ type LowPat
   = LPVar(String)
   | LPWild
   | LPCon(String, TagId, List)       // name, tag_id (from ConstructorScheme), sub-pats
-  | LPTuple(List)
+  | LPTuple(List)                    // [(offset_bytes: Int, elem_ty: Ty, sub_pat: LowPat)]
+                                     // positional product: width-summed offset +
+                                     // the element's proven Ty (emit reads
+                                     // repr_of(ty) for the leaf load width — RI32
+                                     // for a pointer element, RF64 for an f64)
   | LPLit(LowValue)
   | LPList(List, Option)             // prefix pats, optional rest name
   | LPRecord(List)                   // [(field_name: String, offset_bytes: Int, sub_pat: LowPat)]
@@ -398,6 +414,7 @@ fn lexpr_handle(e) with Pure = match e {
   LEvPerform(h, _, _, _, _) => h,
   LEvSlotRef(h, _)        => h,
   LFieldLoad(h, _, _)     => h,
+  LConvert(h, _, _)       => h,
   LStateSlotStore(h, _, _) => h,
   LWasiCall(h, _, _)      => h
 }
@@ -978,6 +995,14 @@ fn lower_expr_body(e, handle, span) = match e {
       NExpr(VarRef(name)) =>
         if name == "to_string" && len(args) == 1 {
           lower_to_string_dispatch(handle, list_head(lo_args), args)
+        } else if name == "float_of_int" && len(args) == 1 {
+          // W11: the gradient's coercion arm — a REAL i32->f64 widen
+          // (f64.convert_i32_s), never an identity stub reinterpreting bits.
+          LConvert(handle, IntToFloat, list_head(lo_args))
+        } else if name == "float_to_int" && len(args) == 1 {
+          // f64->i32 truncating toward zero (i32.trunc_f64_s) — the value-
+          // faithful inverse, replacing the bit-reinterpreting identity stub.
+          LConvert(handle, FloatToInt, list_head(lo_args))
         } else { match env_kind_of(name) {
         Some(ConstructorScheme(tag_id, _)) =>
           LMakeVariant(handle, tag_id, lo_args),
@@ -1017,8 +1042,10 @@ fn lower_expr_body(e, handle, span) = match e {
     LBlock(handle, list_concat(lo_stmts, [lo_final]))
   },
 
-  MatchExpr(scrutinee, arms) =>
-    LMatch(handle, lower_expr(scrutinee), lower_match_arms(arms)),
+  MatchExpr(scrutinee, arms) => {
+    let N(_, _, sh) = scrutinee
+    LMatch(handle, lower_expr(scrutinee), lower_match_arms(sh, arms))
+  },
 
   MakeListExpr(elems) =>
     LMakeList(handle, lower_expr_list(elems)),
@@ -1038,29 +1065,19 @@ fn lower_expr_body(e, handle, span) = match e {
     lower_string_interpolation(handle, lower_expr_list(fragments)),
 
   IndexExpr(receiver, index) =>
-    // Per #139: subscript dispatch at lower-time. Today's projection
-    // emits LCall(VarRef("list_index"), [receiver_lo, index_lo]) —
-    // matching the prior eager-parse form at the runtime layer.
-    // The ULTIMATE form: when receiver's chase-deep Ty is TTuple and the
-    // index is a constant int, lower emits LFieldLoad(receiver_lo,
-    // slot_offset) — slot_offset the width-summed prefix-sum to element i
-    // (the SAME field_byte_offset fold records now use), bounds discharged
-    // at compile time (ValidIndex). A tuple IS a positional product (L1);
-    // indexing it at a constant is a field load read live from the proven
-    // Ty — never a runtime list_index re-dispatch. This is BOUND to the
-    // tuple-as-product migration: the LFieldLoad reads a width-summed
-    // offset, so tuple CONSTRUCTION (emit_tuple_literal's $alloc_tuple
-    // uniform-i32 path) and the LPTuple match-bind must move to the same
-    // product machinery in lock-step — store-only (or read-only) would
-    // mis-offset an f64 tuple (Law 7); and the construction migration is
-    // not byte-identical to $alloc_tuple even for all-i32, so it cannot
-    // ride this batch without perturbing mn-fanout-seq. Named peer:
-    // Hβ.lower.tuple-as-product (construction + index + match-bind as ONE
-    // width-summed product, dissolving make_tuple/tuple_get/tuple_set into
-    // the record path — emit_field_stores_acc is the form it adopts).
-    // List index stays the genuinely-runtime-variable list_index call.
-    LCall(handle, LGlobal(handle, "list_index"),
-          [lower_expr(receiver), lower_expr(index)]),
+    // Subscript dispatch at lower-time — the proof becomes the dispatch.
+    // A tuple IS a positional product (L1); indexing it at a CONSTANT is a
+    // field load read live from the proven Ty: lower emits LFieldLoad at the
+    // width-summed prefix-sum to element i (tuple_elem_offset — the SAME fold
+    // records run), the load width is the index handle's own repr
+    // (LFieldLoad reads repr_of(lookup_ty(h)), so an f64 element loads f64).
+    // Bounds are discharged at compile time (the const is in range or the
+    // offset is -1 → the LFieldLoad unprovable floor, never a fabricated 0).
+    // Tuple construction (emit_field_stores_acc) and LPTuple match-bind read
+    // the SAME offset fold — the three move in lock-step (Law 7: a half-
+    // migration mis-offsets an f64 tuple). A genuinely-runtime-variable index,
+    // or a list receiver, stays the runtime list_index call.
+    lower_index(handle, receiver, index),
 
   MakeRecordExpr(fields) =>
     LMakeRecord(handle, lower_record_field_values(fields)),
@@ -1452,6 +1469,25 @@ fn align_for(off, r) with Pure = match r {
   _     => off
 }
 
+// tuple_elem_offset — a tuple IS a positional product (L1); element `i`'s byte
+// offset is the prefix-sum of repr_width over the elements 0..i, the IDENTICAL
+// width-summed fold field_byte_offset_acc runs for records. The elements are
+// the TTuple's positional Tys (each a resolved TVar — read live via
+// repr_of_resolved, the chase). For an all-i32 tuple this is exactly 4*i (Law 7
+// byte-identity with the old const-4 LIndex stride); an f64 element genuinely
+// occupies 8 inline bytes. Carried-Truth: construction (emit_field_stores_acc
+// over the tuple elems) and the index/match-bind read the SAME offset fold —
+// they cannot disagree on where element i lives.
+fn tuple_elem_offset(elems, target, i, off) = {
+  if i >= len(elems) { -1 }   // index out of range — unprovable, NOT a silent 0
+  else {
+    let r = repr_of_resolved(list_index(elems, i))
+    let here = align_for(off, r)
+    if i == target { here }
+    else { tuple_elem_offset(elems, target, i + 1, here + repr_width(r)) }
+  }
+}
+
 // Statement lowering
 
 fn lower_stmt_list(stmts) = {
@@ -1598,13 +1634,17 @@ fn lower_stmt_as_expr(s, handle, span) = {
 
 // Pattern lowering
 
-fn lower_match_arms(arms) = map((arm) => {
+fn lower_match_arms(scrut_h, arms) = map((arm) => {
   let (pat, body) = arm
   let cp = ls_push_scope()   // drift-audit: ignore — sequenced effectful scope checkpoint (LowerScope)
   bind_pat_locals(pat)
   let lo_body = lower_expr(body)
   ls_pop_scope(cp)
-  (lower_pat(pat), lo_body)
+  // The pattern's value type is the scrutinee's, read live — a tuple pattern
+  // resolves its element offsets as the width-summed prefix-sum (the SAME fold
+  // tuple construction + index run), not a uniform 4*i. Carried-Truth: the
+  // bind/predicate offsets and the construction stores read ONE offset fold.
+  (lower_pat_typed(pat, lookup_ty(scrut_h)), lo_body)
 }, arms)
 
 /// Bind every `PVar` in the pattern as a local in the current frame so
@@ -1649,6 +1689,64 @@ fn bind_pat_locals_fields(flds) = for_each((fld) => {
 
 fn bind_pat_locals_list(pats) = for_each(bind_pat_locals, pats)
 
+// lower_pat_typed — pattern lowering carrying the value's PROVEN type, so a
+// tuple pattern resolves its element offsets as the width-summed prefix-sum
+// (a tuple IS a positional product). The type is read live (chased through
+// TVar/alias/refinement); only PTuple consumes it (its element offsets depend
+// on element widths). Every other pattern's offsets are type-independent in the
+// current substrate (PCon variant-payload + PList use their own const strides —
+// the variant-payload-f64 width rides item (b)'s eq/store/bind agreement, a
+// named peer at the emit layer; PRecord pre-resolves field offsets), so they
+// delegate to lower_pat unchanged (Law 7 byte-identity).
+fn lower_pat_typed(pat, ty) = match pat {
+  PTuple(sub) => match tuple_pat_strip(ty) {
+    TTuple(elems) => LPTuple(lower_pat_tuple_elems(sub, elems, 0, 0)),
+    // Not a known tuple type (genuinely-unresolved scrutinee): fall back to the
+    // uniform stride — productive-under-error, not a fabricated width.
+    _             => LPTuple(lower_pat_tuple_uniform(sub, 0))
+  },
+  _ => lower_pat(pat)
+}
+
+// Strip alias/refinement and chase a top-level TVar to its bound type so a
+// tuple scrutinee typed as `TVar -> TTuple` resolves to its element list.
+fn tuple_pat_strip(ty) with GraphRead = match ty {
+  TVar(h)           => match graph_chase(h) {
+    GNode(NBound(inner), _) => tuple_pat_strip(inner),
+    _                       => ty
+  },
+  TAlias(_, inner)  => tuple_pat_strip(inner),
+  TRefined(base, _) => tuple_pat_strip(base),
+  _                 => ty
+}
+
+// Each sub-pattern lands at its element's width-summed offset (the SAME
+// tuple_elem_offset fold construction + index run) and recurses with its
+// element TYPE — so a tuple-of-tuples resolves offsets at every depth.
+fn lower_pat_tuple_elems(subs, elems, i, off) = {
+  if i >= len(subs) { [] }
+  else {
+    let elem_ty = if i < len(elems) { list_index(elems, i) } else { TVar(0) }
+    let r = repr_of_resolved(elem_ty)
+    let here = align_for(off, r)
+    [(here, elem_ty, lower_pat_typed(list_head_at(subs, i), elem_ty))]
+      ++ lower_pat_tuple_elems(subs, elems, i + 1, here + repr_width(r))
+  }
+}
+
+// Uniform-stride fallback when the tuple's element types are unresolved: 4*i,
+// the all-i32 instance (byte-identical to the pre-migration form). The element
+// type is TVar(0) — repr_of reads RI32, the word floor the uniform stride uses.
+fn lower_pat_tuple_uniform(subs, i) = {
+  if i >= len(subs) { [] }
+  else {
+    [(i * 4, TVar(0), lower_pat(list_head_at(subs, i)))]
+      ++ lower_pat_tuple_uniform(subs, i + 1)
+  }
+}
+
+fn list_head_at(xs, i) = list_index(xs, i)
+
 fn lower_pat(pat) = match pat {
   PVar(name)       => LPVar(name),
   PWild            => LPWild,
@@ -1664,7 +1762,7 @@ fn lower_pat(pat) = match pat {
     }
     LPCon(name, tag, lower_pats(sub))
   },
-  PTuple(sub)      => LPTuple(lower_pats(sub)),
+  PTuple(sub)      => LPTuple(lower_pat_tuple_uniform(sub, 0)),
   PList(sub, rest) => LPList(lower_pats(sub), rest),
   PRecord(flds)    => LPRecord(lower_pat_record_fields(flds, 0)),
   PAlt(branches)   => LPAlt(lower_pats(branches))
@@ -2308,6 +2406,33 @@ fn is_wasi_import_op(name) with Pure = {
     || name == "notify"
     || name == "fence"
 }
+
+// lower_index — `xs[i]` dispatched on the RECEIVER's proven type (the proof IS
+// the dispatch, the ++/== precedent). A TTuple receiver with a CONSTANT index
+// is a positional-product field load: LFieldLoad at the width-summed offset
+// (tuple_elem_offset). Everything else — a list receiver, or a runtime-variable
+// index — stays the genuinely-runtime list_index call. The index's constant-ness
+// is read live from its AST body (NExpr(LitInt n)); a tuple indexed by a non-
+// constant is still a list_index (an open question the type system would refine
+// to ValidIndex, but the const case is the one a positional product answers at
+// compile time).
+fn lower_index(handle, receiver, index) = {
+  let N(_, _, rh) = receiver
+  let N(idx_body, _, _) = index
+  match lookup_ty(rh) {
+    TTuple(elems) => match idx_body {
+      NExpr(LitInt(n)) =>
+        LFieldLoad(handle, lower_expr(receiver),
+                   tuple_elem_offset(elems, n, 0, 0)),
+      _ => lower_index_runtime(handle, receiver, index)
+    },
+    _ => lower_index_runtime(handle, receiver, index)
+  }
+}
+
+fn lower_index_runtime(handle, receiver, index) =
+  LCall(handle, LGlobal(handle, "list_index"),
+        [lower_expr(receiver), lower_expr(index)])
 
 // String interpolation lowering. Reduce a list of LowExpr fragments
 // (alternating literal-chunks + spliced-exprs) to a left-fold of

@@ -1,0 +1,31 @@
+// A2 gate (Hβ.lower.tuple-as-product) — a tuple IS a positional product, so
+// construction and match-bind read ONE width-summed offset fold (the SAME
+// field_byte_offset records use). This gate proves construct + match-bind AGREE
+// for the common all-i32 case END-TO-END through the seed: a tuple constructed
+// and destructured by pattern, flat and nested — the value reached must agree
+// (Carried-Truth across construct/match-bind).
+//
+// For an all-i32 tuple the width-summed offsets reduce to exactly 4*i, so this
+// is byte-identical to the pre-migration $alloc_tuple/const-4 form (Law 7) while
+// exercising the new record-machinery path (emit_field_stores_acc + the width-
+// summed LPTuple match-bind). The TUPLE-INDEX `t[i]` path (LFieldLoad at a
+// width-summed offset) and the f64-tuple round-trip (offsets genuinely widen)
+// are the wheel-leads gates mn-tuple-f64 — the seed lacks tuple-index AND lags
+// f64 (peer Hβ.seed.tuple-product), so their value-gates land when the seed
+// catches up; the wheel's lower/emit already carry them (m2 assembles).
+//
+// Expected exit 90: flat (a,b,c)=10+20+30=60; nested ((x,y),z)=5+15+10=30; sum 90.
+
+fn sum_bound(t) = match t {
+  (a, b, c) => a + b + c
+}
+
+fn sum_nested(t) = match t {
+  ((x, y), z) => x + y + z
+}
+
+fn main(q) = {
+  let bnd = sum_bound((10, 20, 30))        // 60 (LPTuple width-summed match-bind)
+  let nst = sum_nested(((5, 15), 10))      // 30 (nested product offsets agree)
+  bnd + nst                                 // 60 + 30 = 90
+}

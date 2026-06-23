@@ -1,0 +1,30 @@
+// W11 gate (the int<->float convert intrinsic) — float_of_int / float_to_int are
+// REAL machine conversions (the gradient's coercion arm), NOT identity stubs that
+// reinterpret bits. Lower recognizes them by name and emits LConvert(IntToFloat /
+// FloatToInt); emit projects the one signed WASM op:
+//   - float_of_int(n) -> f64.convert_i32_s  (i32 widened to its f64 value)
+//   - float_to_int(f) -> i32.trunc_f64_s    (f64 truncated toward zero to i32)
+// The boxed-float / bit-reinterpreting identity stubs (and the entire float_add/
+// sub/mul/div/neg/lt/ge wrapper family) are DISSOLVED — the operators ARE the
+// float ops (the repr gradient emits f64.* from TFloat operands).
+//
+// A round-trip proves both directions compose to identity for an exact value:
+// float_of_int(7) = 7.0 (a genuine f64, not the bits of 7), and float_to_int of
+// that = 7. A non-trivial path: float_of_int(3) * 2.5 = 7.5 (f64.mul on the
+// converted value), float_to_int(7.5) = 7 (truncation toward zero).
+//
+// THE SEED LAGS THIS FORM (the hand-WAT lower has no LConvert recognition and the
+// deleted float_of_int/float_to_int defs surface as E_MissingVariable in the
+// seed's view — the same census-shadow lag mn-float-arith documents). So the
+// VALUE gate runs through MENTL2 (the wheel compiled by the seed, carrying the
+// wheel's LConvert emit), NOT the seed directly. Named peer: Hβ.seed.float-convert
+// — the seed mirrors the convert intrinsic + the operator-as-float-op gradient
+// when next required, the .mn leading until then (PLAN §5).
+//
+// Expected exit 14: float_to_int(float_of_int(7))=7 + float_to_int(float_of_int(3) * 2.5)=7 = 14.
+
+fn main(q) = {
+  let a = float_to_int(float_of_int(7))            // 7  (round-trip identity)
+  let b = float_to_int(float_of_int(3) * 2.5)      // 7  (3.0*2.5=7.5 truncated)
+  a + b                                             // 14
+}

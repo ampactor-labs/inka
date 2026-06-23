@@ -429,7 +429,7 @@ fn float_to_str(f) with Memory + Alloc = {
   }
   else {
     let sign = float_is_negative(f)
-    let abs_f = if sign == 1 { float_neg(f) } else { f }
+    let abs_f = if sign == 1 { 0.0 - f } else { f }
     let rendered = float_render_positive(abs_f)
     if sign == 1 {
       let minus = str_of_single_byte(45)
@@ -465,9 +465,9 @@ fn float_render_positive(f) with Memory + Alloc = {
 // Accurate for the full f64 range (subnormals may take many steps
 // but the loop terminates because f is finite and positive).
 fn float_floor_log10(f) with Memory + Alloc = {
-  if float_ge(f, 1.0) && float_lt(f, 10.0) { 0 }
-  else if float_lt(f, 1.0) { 0 - 1 - float_floor_log10(float_mul(f, 10.0)) }
-  else { 1 + float_floor_log10(float_div(f, 10.0)) }
+  if f >= 1.0 && f < 10.0 { 0 }
+  else if f < 1.0 { 0 - 1 - float_floor_log10(f * 10.0) }
+  else { 1 + float_floor_log10(f / 10.0) }
 }
 
 // float_extract_digits: extract up to max_digits decimal digits from f,
@@ -477,14 +477,14 @@ fn float_floor_log10(f) with Memory + Alloc = {
 fn float_extract_digits(f, exp, count, max_digits) with Memory + Alloc = {
   if count >= max_digits { make_digit_list(0) }
   else {
-    let scaled = float_div(f, float_pow10(exp - count))
+    let scaled = f / float_pow10(exp - count)
     let digit = float_to_int(scaled)
     let d = digit - (digit / 10) * 10
-    let rest = float_sub(scaled, float_of_int(d))
-    let remainder = float_mul(rest, 10.0)
+    let rest = scaled - float_of_int(d)
+    let remainder = rest * 10.0
     if count == 0 && d == 0 { make_digit_list(0) }
     else {
-      let tail = float_extract_digits(float_mul(f, 10.0), exp, count + 1, max_digits)
+      let tail = float_extract_digits(f * 10.0, exp, count + 1, max_digits)
       push_digit(d, tail)
     }
   }
@@ -580,24 +580,23 @@ fn float_fill_digit_bytes(buf, digits, start, end, i) with Memory + Alloc = {
 // explicitly rather than overloading +/-/* so the emitter can
 // distinguish float ops from integer ops without a type pass.
 
-fn float_add(a, b) with Memory + Alloc = a + b
-fn float_sub(a, b) with Memory + Alloc = a - b
-fn float_mul(a, b) with Memory + Alloc = a * b
-// Hβ.first-light.wheel-float-div-zero-guard — productive-under-error per
-// protocol_kernel_uniform_placeholder_substrate.md (chain-link 6 below
-// cursor-is-the-substrate). Peer handle: #110 Hβ.emit.float-substrate-
-// handler swaps the kernel-uniform i32 substrate for typed f64 ops.
-fn float_div(a, b) with Memory + Alloc = if b == 0 { 0 } else { a / b }
-fn float_neg(f)    with Memory + Alloc = 0.0 - f
-fn float_lt(a, b)  with Memory + Alloc = if a < b { 1 } else { 0 }
-fn float_ge(a, b)  with Memory + Alloc = if a >= b { 1 } else { 0 }
-fn float_of_int(n) with Memory + Alloc = n
-fn float_to_int(f) with Memory + Alloc = f
+// DISSOLVED (W11): the float_add/sub/mul/div/neg/lt/ge arithmetic family and
+// the float_of_int/float_to_int identity stubs are GONE. The representation
+// gradient emits f64.add/f64.sub/f64.mul/f64.div/f64.neg directly from TFloat
+// operands (emit_binop_for's match lookup_ty), so the operators ARE the float
+// ops — `a + b`, `a < b`, `a / b`, `0.0 - f`. Comparison yields Bool natively
+// (no `== 1` Int dance). int<->float is the LConvert intrinsic (lower
+// recognizes float_of_int/float_to_int → f64.convert_i32_s / i32.trunc_f64_s,
+// the gradient's coercion arm — a REAL machine convert, never a bit-
+// reinterpreting identity stub). The float_div int-0 zero-guard is DELETED:
+// IEEE-754 NaN/Inf is the correct total semantics, and float_to_str renders
+// them (float_is_nan/float_is_inf below). The boxed-float indirection the
+// gradient dissolved is gone.
 
 fn float_pow10(exp) with Memory + Alloc = {
   if exp == 0 { 1.0 }
-  else if exp > 0 { float_mul(10.0, float_pow10(exp - 1)) }
-  else { float_div(1.0, float_pow10(0 - exp)) }
+  else if exp > 0 { 10.0 * float_pow10(exp - 1) }
+  else { 1.0 / float_pow10(0 - exp) }
 }
 
 fn float_is_nan(f)      = f != f
@@ -647,7 +646,7 @@ fn parse_float(s) with Memory + Alloc = {
     let start = if first == 45 { 1 } else { 0 }
     let sign   = if first == 45 { 0 - 1 } else { 1 }
     let result = parse_float_body(s, slen, start)
-    float_mul(float_of_int(sign), result)
+    float_of_int(sign) * result
   }
 }
 
@@ -659,8 +658,8 @@ fn parse_float_body(s, slen, i) with Memory + Alloc = {
   let e_pos = find_char_either(s, slen, i, 101, 69) // 'e' or 'E'
   let exp = if e_pos < 0 { 0 }
             else { parse_int_sign(s, slen, e_pos + 1) }
-  let base = float_add(float_of_int(int_part), frac)
-  float_mul(base, float_pow10(exp))
+  let base = float_of_int(int_part) + frac
+  base * float_pow10(exp)
 }
 
 fn parse_frac_digits(s, slen, i, scale) with Memory + Alloc = {
@@ -668,9 +667,9 @@ fn parse_frac_digits(s, slen, i, scale) with Memory + Alloc = {
   else {
     let ch = load_i8(s + 4 + i)
     if ch >= 48 && ch <= 57 {
-      let new_scale = float_mul(scale, 10.0)
-      let digit_f = float_div(float_of_int(ch - 48), new_scale)
-      float_add(digit_f, parse_frac_digits(s, slen, i + 1, new_scale))
+      let new_scale = scale * 10.0
+      let digit_f = float_of_int(ch - 48) / new_scale
+      digit_f + parse_frac_digits(s, slen, i + 1, new_scale)
     }
     else { 0.0 }
   }

@@ -605,6 +605,7 @@ fn walk_lemit_expr(expr) = match expr {
   LEvPerform(_, _, _, _, args) => walk_lemit_list(args),
   LEvSlotRef(_, _)          => (),
   LFieldLoad(_, rec, _)     => walk_lemit_expr(rec),
+  LConvert(_, _, operand)   => walk_lemit_expr(operand),
   LStateSlotStore(_, _, v)  => walk_lemit_expr(v)
 }
 
@@ -865,6 +866,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LWasiCall(_h, _n, args)   => collect_call_vectors_list(args, acc),
   LStateSet(_h, _s, v)  => collect_call_vectors_expr(v, acc),
   LFieldLoad(_h, rec, _o) => collect_call_vectors_expr(rec, acc),
+  LConvert(_h, _, operand) => collect_call_vectors_expr(operand, acc),
   LStateSlotStore(_h, _o, v) => collect_call_vectors_expr(v, acc),
   LConst(_, _)          => acc,
   LLocal(_, _)          => acc,
@@ -956,6 +958,7 @@ fn max_arity_expr(expr) = match expr {
   LFeedback(_, _, _)        => 0,
   LEvSlotRef(_, _)          => 0,
   LFieldLoad(_, _, _)       => 0,
+  LConvert(_, _, _)         => 0,
   LStateSlotStore(_, _, _)  => 0
 }
 
@@ -1239,6 +1242,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   LEvPerform(_h, _n, _e, _s, a) => collect_fn_emit_records(a),
   LEvSlotRef(_h, _e)         => [],
   LFieldLoad(_h, rec, _off)  => collect_fn_emit_records_expr(rec),
+  LConvert(_h, _, operand)   => collect_fn_emit_records_expr(operand),
   LStateSlotStore(_h, _o, v) => collect_fn_emit_records_expr(v),
   // H6: exhaustive LowExpr. Leaves with no fn-containing
   // descendants contribute no records.
@@ -1398,7 +1402,14 @@ fn emit_let_locals_expr(expr) = match expr {
   LReturn(_h, inner)        => emit_let_locals_expr(inner),
   LStore(_h, _s, val)       => emit_let_locals_expr(val),
   LMakeList(_h, elems)      => emit_let_locals_list(elems),
-  LMakeTuple(_h, elems)     => emit_let_locals_list(elems),
+  LMakeTuple(h, elems)      => {
+    if len(elems) > 0 {
+      wat_emit(" (local $tuple_")
+      wat_emit(int_to_str(h))
+      wat_emit(" i32)")
+    }
+    emit_let_locals_list(elems)
+  },
   LMakeRecord(_h, fs)       => emit_let_locals_list(fs),
   LMakeVariant(h, _t, fs)   => {
     if len(fs) > 0 {
@@ -1444,6 +1455,7 @@ fn emit_let_locals_expr(expr) = match expr {
   LEvPerform(_h, _n, _e, _s, a) => emit_let_locals_list(a),
   LEvSlotRef(_h, _e)        => (),
   LFieldLoad(_h, rec, _off) => emit_let_locals_expr(rec),
+  LConvert(_h, _, operand)  => emit_let_locals_expr(operand),
   LStateSlotStore(_h, _o, v) => emit_let_locals_expr(v),
   // H6: exhaustive LowExpr. Leaves declare no locals; LUpval,
   // LConst, LLocal, LGlobal, LStateGet are pure reads. New LIR
@@ -1475,7 +1487,7 @@ fn emit_let_locals_pat(pat) = match pat {
     wat_emit(" i32)")
   },
   LPCon(_, _, sub_pats) => emit_let_locals_pat_list(sub_pats),
-  LPTuple(sub_pats)     => emit_let_locals_pat_list(sub_pats),
+  LPTuple(elem_binds)   => emit_let_locals_pat_tuple(elem_binds),
   LPList(sub_pats, rest) => {
     emit_let_locals_pat_list(sub_pats)
     emit_let_locals_pat_rest(rest)
@@ -1511,6 +1523,13 @@ fn emit_let_locals_pat_record(field_binds) = {
 }
 
 fn emit_let_locals_pat_list(pats) = for_each(emit_let_locals_pat, pats)
+
+// A tuple pattern's elements are (offset_bytes, sub_pat) — the width-summed
+// positional product, same shape as the record pattern minus the field name.
+fn emit_let_locals_pat_tuple(elem_binds) = for_each((eb) => {
+  let (_, _, sub_pat) = eb
+  emit_let_locals_pat(sub_pat)
+}, elem_binds)
 
 // The repr of a fn body's result = the repr of the value its tail expression
 // leaves on the stack. The body is a stmt list; the result is the last stmt,
@@ -1631,6 +1650,7 @@ fn find_local_handle_expr(name, expr) = match expr {
   LWasiCall(_h, _n, args)   => find_local_handle_list(name, args),
   LEvPerform(_h, _n, _e, _s, a) => find_local_handle_list(name, a),
   LFieldLoad(_h, rec, _off) => find_local_handle_expr(name, rec),
+  LConvert(_h, _, operand)  => find_local_handle_expr(name, operand),
   LStateSlotStore(_h, _o, v) => find_local_handle_expr(name, v),
   LConst(_, _)              => 0,
   LGlobal(_, _)             => 0,
@@ -2068,7 +2088,7 @@ fn emit_expr(expr) = match expr {
 
   LMakeList(_h, elems) => emit_list_literal(elems),
 
-  LMakeTuple(_h, elems) => emit_tuple_literal(elems),
+  LMakeTuple(h, elems) => emit_tuple_literal(h, elems),
 
   LMakeRecord(_h, fields) => {
     // Untagged heap layout: fields at the width-summed offset in declaration
@@ -2426,6 +2446,16 @@ fn emit_expr(expr) = match expr {
     }
   },
 
+  LConvert(_h, kind, operand) => {
+    // W11: a REAL machine int<->float convert — the gradient's coercion arm.
+    // Emit the operand (which leaves an i32 or f64 on the stack), then the one
+    // signed WASM convert the kind names. Never an identity bit-reinterpret.
+    emit_expr(operand)
+    wat_emit("    (")
+    wat_emit(convert_op(kind))
+    wat_emit(")\n")
+  },
+
   LStateSlotStore(_h, slot_offset, value) => {
     // Hβ.first-light.resume-with-state-mutation: store VALUE into the
     // arm fn's __state record at slot_offset, mutating handler state
@@ -2764,6 +2794,32 @@ fn param_tys_of(params, i, n) with Pure =
     [pty] ++ param_tys_of(params, i + 1, n)
   }
 
+// ctor_payload_tys_of — the payload types of a constructor BY NAME, read live
+// from its env scheme (the same ConstructorScheme channel variant_specs_of uses,
+// keyed on the ctor name the LPCon match carries). The match-bind reads the SAME
+// payload types the store wrote, so the variant-payload offsets agree at one
+// width fold (Carried-Truth). A name with no constructor scheme → [] (a nullary
+// or unresolved ctor — the uniform-stride fallback is then byte-identical).
+fn ctor_payload_tys_of(ctor_name) with EnvRead = {
+  let Env(entries) = env_snapshot()
+  ctor_payload_tys_filter(entries, ctor_name)
+}
+
+fn ctor_payload_tys_filter(entries, ctor_name) with Pure = {
+  if len(entries) == 0 { [] }
+  else {
+    let (name, scheme, _reason, kind) = list_head(entries)
+    match kind {
+      ConstructorScheme(_, _) =>
+        if name == ctor_name {
+          let Forall(_, ty) = scheme
+          ctor_payload_tys(ty)
+        } else { ctor_payload_tys_filter(list_tail(entries), ctor_name) },
+      _ => ctor_payload_tys_filter(list_tail(entries), ctor_name)
+    }
+  }
+}
+
 // ─── The eq-leaf of the structural fold: generated recursive helpers ──────
 // A product == is a CALL to $eq_<sig>, generated once per distinct product
 // type and deduped (the e-graph canonicalizes equal folds). The generator
@@ -2891,33 +2947,23 @@ fn emit_eq_sum_tag_dispatch(specs, i, n) = {
 }
 
 // The payload conjunction for one variant: AND each payload field's structural
-// eq. Payload field i lives at byte offset 4+4*i (uniform i32 slots — variant
-// payloads are 4-byte-slotted regardless of repr, per emit_variant_field_stores
-// _at). Loads the pair, applies the five-node-kind leaf (emit_field_eq), ANDs.
+// eq. Payload field i lives at the width-summed offset (variant_payload_offset —
+// the SAME fold the store and the LPCon match-bind read), loaded at its PROVEN
+// repr (repr_of), so an f64 payload is genuinely 8 inline bytes loaded f64-wide
+// and compared with f64.eq. Carried-Truth: store, load, and eq project ONE
+// offset+width — they cannot disagree about where (or how wide) a payload is.
 fn emit_eq_variant_payload_conjunction(payloads, i, n) = {
   if n == 0 { wat_emit("                (i32.const 1)\n") }
   else if i >= n { () }
   else {
-    let pty = list_index(payloads, i)
-    let off = 4 + i * 4
-    emit_field_load_pair(off, RI32)
-    emit_variant_payload_eq(fold_strip(pty))
+    let pty = fold_strip(list_index(payloads, i))
+    let r = repr_of(pty)
+    let off = variant_payload_offset(payloads, i, 0, 4)
+    emit_field_load_pair(off, r)
+    emit_field_eq(pty)
     if i == 0 { () } else { wat_emit("    (i32.and)\n") }
     emit_eq_variant_payload_conjunction(payloads, i + 1, n)
   }
-}
-
-// The leaf eq over a variant PAYLOAD slot. Identical to emit_field_eq for
-// sequence / product / sum / word, but a variant payload is a UNIFORM 4-byte
-// i32 slot (emit_variant_field_stores_at stores every field via i32.store —
-// the variant has no repr-width packing), so the pair on the stack is two i32
-// (loaded i32.load), and a Float-typed payload compares as its stored 4-byte
-// word (i32.eq), NOT f64.eq (which would consume f64 the slot never held).
-// product/record packs floats f64-wide and so keeps emit_field_eq's f64.eq;
-// the variant's uniform slotting is the one structural difference.
-fn emit_variant_payload_eq(pty) = match pty {
-  TFloat => wat_emit("    (i32.eq)\n"),
-  _      => emit_field_eq(pty)
 }
 
 // The conjunction body: for field i, push eq(a.field_i, b.field_i) then AND
@@ -2973,6 +3019,14 @@ fn repr_store_op(r) with Pure = match r {
   RI64  => "i64.store",
   RV128 => "v128.store",
   RI32  => "i32.store"
+}
+
+// W11: the one signed WASM convert op per direction — the gradient's coercion
+// arm rendered. IntToFloat widens an i32 to its f64 value; FloatToInt truncates
+// an f64 toward zero to i32. Both are value-changing (never bit-reinterpreting).
+fn convert_op(k) with Pure = match k {
+  IntToFloat => "f64.convert_i32_s",
+  FloatToInt => "i32.trunc_f64_s"
 }
 
 // The leaf eq instruction over an already-stripped field type, with the two
@@ -3157,6 +3211,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LWasiCall(_h, _n, args)   => collect_eq_product_tys_list(args, acc),
   LStateSet(_h, _s, v)   => collect_eq_product_tys_expr(v, acc),
   LFieldLoad(_h, rec, _o) => collect_eq_product_tys_expr(rec, acc),
+  LConvert(_h, _, operand) => collect_eq_product_tys_expr(operand, acc),
   LStateSlotStore(_h, _o, v) => collect_eq_product_tys_expr(v, acc),
   LConst(_, _)           => acc,
   LLocal(_, _)           => acc,
@@ -3409,7 +3464,7 @@ fn emit_show_variant_payloads(payloads, i, n) = {
   if i >= n { emit_show_str_literal("") }
   else {
     let pty = fold_strip(list_index(payloads, i))
-    let off = 4 + i * 4
+    let off = variant_payload_offset(payloads, i, 0, 4)
     emit_show_concat_open()
     emit_show_str_literal(show_field_sep(i))
     emit_show_concat_open()
@@ -3420,32 +3475,38 @@ fn emit_show_variant_payloads(payloads, i, n) = {
   }
 }
 
-// A variant payload slot is uniform i32; a Float payload renders the stored word
-// via int_to_str (never float_to_str — the slot holds a 4-byte word, not an f64).
-// The renderer-name is the only degree of freedom; the i32 slot load is its arg.
+// A variant payload renders at its PROVEN repr (the width-summed migration): an
+// f64 payload loads f64-wide and renders via float_to_str (it is genuinely an
+// f64 now, not a reinterpreted word); a String is the stored pointer; aggregates
+// recurse the show fold; every other word renders via int_to_str. The load WIDTH
+// is the payload's repr (emit_show_variant_load reads repr_of), so the show
+// reads the SAME width the store wrote (Carried-Truth).
 fn emit_show_variant_payload_render(off, pty) = match pty {
-  TString => emit_show_variant_load(off),
-  TFloat            => emit_show_call_variant("int_to_str", off),
-  TList(_)          => emit_show_call_variant("show_{fold_sig(pty)}", off),
-  TRecord(_)        => emit_show_call_variant("show_{fold_sig(pty)}", off),
-  TRecordOpen(_, _) => emit_show_call_variant("show_{fold_sig(pty)}", off),
-  TTuple(_)         => emit_show_call_variant("show_{fold_sig(pty)}", off),
-  TName(_, _)       => emit_show_call_variant("show_{fold_sig(pty)}", off),
-  _                 => emit_show_call_variant("int_to_str", off)
+  TString => emit_show_variant_load(off, pty),
+  TFloat            => emit_show_call_variant("float_to_str", off, pty),
+  TList(_)          => emit_show_call_variant("show_{fold_sig(pty)}", off, pty),
+  TRecord(_)        => emit_show_call_variant("show_{fold_sig(pty)}", off, pty),
+  TRecordOpen(_, _) => emit_show_call_variant("show_{fold_sig(pty)}", off, pty),
+  TTuple(_)         => emit_show_call_variant("show_{fold_sig(pty)}", off, pty),
+  TName(_, _)       => emit_show_call_variant("show_{fold_sig(pty)}", off, pty),
+  _                 => emit_show_call_variant("int_to_str", off, pty)
 }
 
-// A folded `(call $name (local.get $__state) (i32.load offset=off (local.get $a)))`
-// — the variant-payload twin of emit_show_call_field (uniform i32 slot load).
-fn emit_show_call_variant(name, off) = {
+// A folded `(call $name (local.get $__state) (<repr>.load offset=off (local.get $a)))`
+// — the variant-payload twin of emit_show_call_field, loading at the payload's
+// proven width.
+fn emit_show_call_variant(name, off, pty) = {
   wat_emit("    (call $")
   wat_emit(name)
   wat_emit(" (local.get $__state) ")
-  emit_show_variant_load(off)
+  emit_show_variant_load(off, pty)
   wat_emit(")\n")
 }
 
-fn emit_show_variant_load(off) = {
-  wat_emit("(i32.load offset=")
+fn emit_show_variant_load(off, pty) = {
+  wat_emit("(")
+  wat_emit(repr_load_op(repr_of(pty)))
+  wat_emit(" offset=")
   wat_emit(int_to_str(off))
   wat_emit(" (local.get $a))")
 }
@@ -3664,6 +3725,7 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LWasiCall(_h, _n, args)   => collect_show_tys_list(args, acc),
   LStateSet(_h, _s, v)   => collect_show_tys_expr(v, acc),
   LFieldLoad(_h, rec, _o) => collect_show_tys_expr(rec, acc),
+  LConvert(_h, _, operand) => collect_show_tys_expr(operand, acc),
   LStateSlotStore(_h, _o, v) => collect_show_tys_expr(v, acc),
   LConst(_, _)           => acc,
   LLocal(_, _)           => acc,
@@ -3916,16 +3978,48 @@ fn emit_ev_slots_dynamic(ev_exprs, base_j) = {
 // Hβ.emit.variant-payload-repr-width — the coordinated store+eq+match-bind
 // migration; the record path (emit_field_stores_acc) is the form it adopts.
 fn emit_variant_field_stores_at(fields, base_i, local_name) = {
-  for_each((indexed) => {
-  let (i, fld) = indexed
-  wat_emit("    (local.get $")
-  wat_emit(local_name)
-  wat_emit(")\n")
-  emit_expr(fld)
-  wat_emit("    (i32.store offset=")
-  wat_emit(int_to_str(4 + (base_i + i) * 4))
-  wat_emit(")\n")
-  }, enumerate(fields))
+  emit_variant_stores_acc(fields, 0, len(fields), 4, local_name)
+}
+
+// The variant-payload store fold: each payload field lands at the width-summed
+// offset (align_for + repr_width) starting AFTER the tag word (base 4), and is
+// written at its PROVEN repr (repr_store_op) — an f64 payload is 8 inline bytes
+// via f64.store, every i32 payload i32.store at 4+4*i (byte-identical to the
+// pre-gradient uniform slotting, Law 7). The SAME fold the eq-leaf
+// (emit_eq_variant_payload_conjunction) and the LPCon match-bind read, so a
+// variant payload's store/load/eq agree at one width (Carried-Truth). The field
+// repr is read LIVE off each field expr's handle.
+fn emit_variant_stores_acc(fields, i, n, off, local_name) = {
+  if i >= n { () }
+  else {
+    let fld = list_index(fields, i)
+    let r = repr_of(lookup_ty(lexpr_handle(fld)))
+    let here = align_for(off, r)
+    wat_emit("    (local.get $")
+    wat_emit(local_name)
+    wat_emit(")\n")
+    emit_expr(fld)
+    wat_emit("    (")
+    wat_emit(repr_store_op(r))
+    wat_emit(" offset=")
+    wat_emit(int_to_str(here))
+    wat_emit(")\n")
+    emit_variant_stores_acc(fields, i + 1, n, here + repr_width(r), local_name)
+  }
+}
+
+// variant_payload_offset — the byte offset of payload field `target` in a
+// variant: the width-summed prefix-sum of repr_width over payloads 0..target,
+// starting at 4 (after the tag word). The ONE fold the store, the eq-leaf, and
+// the LPCon match-bind share so a variant's payload layout has one home.
+fn variant_payload_offset(ptys, target, i, off) = {
+  if i >= len(ptys) { 0 - 1 }   // out of range — unprovable, never a silent 0
+  else {
+    let r = repr_of(fold_strip(list_index(ptys, i)))
+    let here = align_for(off, r)
+    if i == target { here }
+    else { variant_payload_offset(ptys, target, i + 1, here + repr_width(r)) }
+  }
 }
 
 // Record field stores: the STORE twin of the read-side width-summed
@@ -4034,9 +4128,20 @@ fn pat_always_matches(pat) = match pat {
   LPLit(_)        => false,
   LPCon(_, _, _)  => false,
   LPList(_, _)    => false,
-  LPTuple(subs)   => pats_always_match(subs),
+  LPTuple(ebs)    => tuple_pats_always_match(ebs),
   LPRecord(fbs)   => record_pats_always_match(fbs),
   LPAlt(branches) => alt_any_always_matches(branches)
+}
+
+// A tuple pattern's elements are (offset, sub_pat); the tuple always matches
+// iff every refutable element does (structure is fixed at the type).
+fn tuple_pats_always_match(ebs) = {
+  if len(ebs) == 0 { true }
+  else {
+    let (_, _, sub_pat) = list_head(ebs)
+    if pat_always_matches(sub_pat) { tuple_pats_always_match(list_tail(ebs)) }
+    else { false }
+  }
 }
 
 fn pats_always_match(subs) = {
@@ -4065,9 +4170,17 @@ fn alt_any_always_matches(branches) = {
 // pattern's position; path_len 0 is the scrutinee itself. Ω.3
 // buffer-counter discipline: one 8-slot buffer per walk, slot D owned
 // by depth D, siblings overwrite cleanly.
-fn emit_scrut_at(path, path_len) = {
+// The scrutinee value at an offset path. Every step but the LAST is a pointer
+// chase (i32.load — an aggregate field/payload/element is a handle); the last
+// loads the value at its PROVEN repr (leaf_repr), so an f64 field/payload binds
+// f64-wide (the same width the store wrote). emit_scrut_at defaults leaf_repr to
+// RI32 — the word floor, byte-identical for pointer/i32 leaves (Law 7) — and the
+// width-typed leaves (a float payload/field bind) route through emit_scrut_at_repr.
+fn emit_scrut_at(path, path_len) = emit_scrut_at_repr(path, path_len, RI32)
+
+fn emit_scrut_at_repr(path, path_len, leaf_repr) = {
   wat_emit("    (local.get $scrut_tmp)\n")
-  emit_load_chain(path, 0, path_len)
+  emit_load_chain_repr(path, 0, path_len, leaf_repr)
 }
 
 // ── Predicate projection — ONE i32 on the stack ─────────────────────
@@ -4078,17 +4191,18 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
   LPVar(_) => wat_emit("    (i32.const 1)\n"),
   LPLit(lv) => {
     // The literal-pattern guard compares the scrutinee to the constant at the
-    // value's representation: a float literal is an (f64.const v) compared with
-    // f64.eq (the gradient at the match layer), every other value the i32.eq
-    // floor (byte-identical, Law 7). The const and the comparison project the
-    // same repr — they cannot disagree.
-    emit_scrut_at(path, path_len)
+    // value's representation: a float literal LOADS the scrutinee f64-wide
+    // (emit_scrut_at_repr at low_value_repr) and emits (f64.const v) compared
+    // with f64.eq (the gradient at the match layer); every other value the
+    // i32.load + i32.eq floor (byte-identical, Law 7). The leaf load, the const,
+    // and the comparison all project the SAME repr — they cannot disagree.
+    emit_scrut_at_repr(path, path_len, low_value_repr(lv))
     emit_low_value_const(lv)
     wat_emit("    (")
     wat_emit(repr_wat(low_value_repr(lv)))
     wat_emit(".eq)\n")
   },
-  LPCon(_, tag, sub_pats) => {
+  LPCon(name, tag, sub_pats) => {
     if len(sub_pats) == 0 {
       // Nullary constructor IS its sentinel (HB) — direct compare.
       emit_scrut_at(path, path_len)
@@ -4097,7 +4211,10 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
       wat_emit(")\n    (i32.eq)\n")
     } else {
       // Representation guard, then tag, then sub-predicates — each
-      // layer short-circuits so loads only fire on live paths.
+      // layer short-circuits so loads only fire on live paths. The payload
+      // sub-predicates read width-summed offsets (the SAME variant_payload_
+      // offset fold the store + eq + show run), so an f64 payload is matched
+      // at its genuine 8-byte slot.
       emit_scrut_at(path, path_len)
       wat_emit("    (i32.const ")
       wat_emit(int_to_str(heap_base()))
@@ -4108,15 +4225,16 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
       wat_emit("    (i32.const ")
       wat_emit(int_to_str(tag))
       wat_emit(")\n    (i32.eq)\n")
-      emit_pat_subs_predicate(sub_pats, 0, path, path_len, 4)
+      emit_pat_con_subs_predicate(ctor_payload_tys_of(name), sub_pats, 0, path, path_len)
       wat_emit("      )\n      (else (i32.const 0)))\n")
     }
   },
-  LPTuple(subs) => {
-    // Tuples are untagged (elements at 0, 4, ...); structure always
-    // matches — the predicate is the AND of refutable elements.
+  LPTuple(ebs) => {
+    // Tuples are untagged positional products; structure always matches —
+    // the predicate is the AND of refutable elements, each at its width-summed
+    // offset (the SAME offsets construction/index read, the record-pattern fold).
     wat_emit("    (i32.const 1)\n")
-    emit_pat_subs_predicate(subs, 0, path, path_len, 0)
+    emit_pat_tuple_subs_predicate(ebs, path, path_len)
   },
   LPRecord(fbs) => {
     wat_emit("    (i32.const 1)\n")
@@ -4176,6 +4294,25 @@ fn emit_pat_record_subs_predicate(fbs, path, path_len) = {
   }
 }
 
+// A tuple pattern's elements are (offset, sub_pat) — the IDENTICAL projection
+// as the record predicate, minus the field name. Each element's offset is the
+// width-summed one lower resolved; emit reads it, never re-derives a 4*i stride.
+fn emit_pat_tuple_subs_predicate(ebs, path, path_len) = {
+  if len(ebs) == 0 { () }
+  else {
+    let (offset, _ty, sub_pat) = list_head(ebs)
+    if pat_always_matches(sub_pat) {
+      emit_pat_tuple_subs_predicate(list_tail(ebs), path, path_len)
+    } else {
+      wat_emit("    (if (result i32)\n      (then\n")
+      let extended = list_set(path, path_len, offset)
+      emit_pat_predicate_at(sub_pat, extended, path_len + 1)
+      emit_pat_tuple_subs_predicate(list_tail(ebs), path, path_len)
+      wat_emit("      )\n      (else (i32.const 0)))\n")
+    }
+  }
+}
+
 // OR-composition over alternation branches, short-circuit: the first
 // matching branch yields 1 without evaluating the rest. All branches
 // read the SAME position (path unchanged).
@@ -4195,19 +4332,23 @@ fn emit_pat_alt_predicate(branches, path, path_len) = {
 }
 
 // ── Binds projection — local.set for every binder ───────────────────
-fn emit_pat_binds(pat) = emit_pat_binds_at(pat, make_list(8), 0)
+// The scrutinee root is a pointer/word (RI32); the per-element reprs flow in
+// from the con/tuple sub-binds (a payload/element's proven repr), so an f64
+// leaf binder loads f64-wide. RI32 is the byte-identical floor for every
+// pointer/word leaf (Law 7).
+fn emit_pat_binds(pat) = emit_pat_binds_at(pat, make_list(8), 0, RI32)
 
-fn emit_pat_binds_at(pat, path, path_len) = match pat {
+fn emit_pat_binds_at(pat, path, path_len, val_repr) = match pat {
   LPVar(name) => {
-    emit_scrut_at(path, path_len)
+    emit_scrut_at_repr(path, path_len, val_repr)
     wat_emit("    (local.set $")
     wat_emit(name)
     wat_emit(")\n")
   },
   LPWild   => (),
   LPLit(_) => (),
-  LPCon(_, _, sub_pats)  => emit_pat_subs_binds(sub_pats, 0, path, path_len, 4),
-  LPTuple(subs)          => emit_pat_subs_binds(subs, 0, path, path_len, 0),
+  LPCon(name, _, sub_pats) => emit_pat_con_subs_binds(ctor_payload_tys_of(name), sub_pats, 0, path, path_len),
+  LPTuple(ebs)           => emit_pat_tuple_binds(ebs, path, path_len),
   LPRecord(fbs)          => emit_pat_record_binds(fbs, path, path_len),
   LPList(sub_pats, rest) => {
     emit_pat_subs_binds(sub_pats, 0, path, path_len, 8)
@@ -4216,12 +4357,50 @@ fn emit_pat_binds_at(pat, path, path_len) = match pat {
   LPAlt(branches) => emit_pat_alt_binds(branches, path, path_len)
 }
 
+// List-element binders use uniform i32 slots (list elems are word-slotted; an
+// f64-element list rides the RV128 lane cash-out peer, not this path) — RI32
+// leaf load, byte-identical.
 fn emit_pat_subs_binds(subs, i, path, path_len, base) = {
   if len(subs) == 0 { () }
   else {
     let extended = list_set(path, path_len, base + i * 4)
-    emit_pat_binds_at(list_head(subs), extended, path_len + 1)
+    emit_pat_binds_at(list_head(subs), extended, path_len + 1, RI32)
     emit_pat_subs_binds(list_tail(subs), i + 1, path, path_len, base)
+  }
+}
+
+// con-payload binders: each sub-pattern at its width-summed payload offset
+// (variant_payload_offset — the SAME fold the store/eq/show run), binding at the
+// payload's PROVEN repr so an f64 payload loads f64-wide. Read live from the
+// constructor's payload types.
+fn emit_pat_con_subs_binds(ptys, subs, i, path, path_len) = {
+  if len(subs) == 0 { () }
+  else {
+    let pty = if i < len(ptys) { fold_strip(list_index(ptys, i)) } else { TVar(0) }
+    let off = variant_payload_offset(ptys, i, 0, 4)
+    let extended = list_set(path, path_len, off)
+    emit_pat_binds_at(list_head(subs), extended, path_len + 1, repr_of(pty))
+    emit_pat_con_subs_binds(ptys, list_tail(subs), i + 1, path, path_len)
+  }
+}
+
+// con-payload predicates: each refutable sub-pattern at its width-summed payload
+// offset. The leaf's own predicate (LPLit) loads at its repr; this only places
+// the offset, so no leaf-repr threading is needed here.
+fn emit_pat_con_subs_predicate(ptys, subs, i, path, path_len) = {
+  if len(subs) == 0 { () }
+  else {
+    let sub_pat = list_head(subs)
+    if pat_always_matches(sub_pat) {
+      emit_pat_con_subs_predicate(ptys, list_tail(subs), i + 1, path, path_len)
+    } else {
+      wat_emit("    (if (result i32)\n      (then\n")
+      let off = variant_payload_offset(ptys, i, 0, 4)
+      let extended = list_set(path, path_len, off)
+      emit_pat_predicate_at(sub_pat, extended, path_len + 1)
+      emit_pat_con_subs_predicate(ptys, list_tail(subs), i + 1, path, path_len)
+      wat_emit("      )\n      (else (i32.const 0)))\n")
+    }
   }
 }
 
@@ -4230,8 +4409,21 @@ fn emit_pat_record_binds(fbs, path, path_len) = {
   else {
     let (_, offset, sub_pat) = list_head(fbs)
     let extended = list_set(path, path_len, offset)
-    emit_pat_binds_at(sub_pat, extended, path_len + 1)
+    emit_pat_binds_at(sub_pat, extended, path_len + 1, RI32)
     emit_pat_record_binds(list_tail(fbs), path, path_len)
+  }
+}
+
+// Tuple-element binders read the stored width-summed offset directly and bind
+// at the element's PROVEN repr (repr_of(elem_ty)) — an f64 element loads f64,
+// a pointer/word loads i32. The SAME offset+width the construction stored.
+fn emit_pat_tuple_binds(ebs, path, path_len) = {
+  if len(ebs) == 0 { () }
+  else {
+    let (offset, elem_ty, sub_pat) = list_head(ebs)
+    let extended = list_set(path, path_len, offset)
+    emit_pat_binds_at(sub_pat, extended, path_len + 1, repr_of(fold_strip(elem_ty)))
+    emit_pat_tuple_binds(list_tail(ebs), path, path_len)
   }
 }
 
@@ -4279,7 +4471,7 @@ fn lowpat_has_binders(pat) = match pat {
   LPWild          => false,
   LPLit(_)        => false,
   LPCon(_, _, sub_pats) => lowpats_have_binders(sub_pats),
-  LPTuple(subs)   => lowpats_have_binders(subs),
+  LPTuple(ebs)    => tuple_pats_have_binders(ebs),
   LPRecord(fbs)   => record_pats_have_binders(fbs),
   LPList(sub_pats, rest) => {
     if lowpats_have_binders(sub_pats) { true }
@@ -4308,17 +4500,29 @@ fn record_pats_have_binders(fbs) = {
   }
 }
 
+fn tuple_pats_have_binders(ebs) = {
+  if len(ebs) == 0 { false }
+  else {
+    let (_, _, sub_pat) = list_head(ebs)
+    if lowpat_has_binders(sub_pat) { true }
+    else { tuple_pats_have_binders(list_tail(ebs)) }
+  }
+}
+
 fn emit_pat_alt_binds_dispatch(branches, path, path_len) = {
   if len(branches) == 0 { () }
   else {
     let rest = list_tail(branches)
     if len(rest) == 0 {
-      // Last branch: matched by elimination (the arm predicate held).
-      emit_pat_binds_at(list_head(branches), path, path_len)
+      // Last branch: matched by elimination (the arm predicate held). Alt
+      // branches bind at the scrutinee position; the leaf repr is RI32 (the
+      // branches bind the same names — an f64-alt-binder rides the same leaf
+      // path, RI32-byte-identical for the word case).
+      emit_pat_binds_at(list_head(branches), path, path_len, RI32)
     } else {
       emit_pat_predicate_at(list_head(branches), path, path_len)
       wat_emit("    (if\n      (then\n")
-      emit_pat_binds_at(list_head(branches), path, path_len)
+      emit_pat_binds_at(list_head(branches), path, path_len, RI32)
       wat_emit("      )\n      (else\n")
       emit_pat_alt_binds_dispatch(rest, path, path_len)
       wat_emit("      ))\n")
@@ -4326,10 +4530,16 @@ fn emit_pat_alt_binds_dispatch(branches, path, path_len) = {
   }
 }
 
-// emit_load_chain — emit (i32.load offset=path[k]) for k in 0..path_len.
-// Caller has already emitted (local.get $scrut_tmp); this chains the
-// field-traversal loads to reach the pattern's position.
-fn emit_load_chain(path, k, path_len) = {
+// emit_load_chain — chain the field-traversal loads to reach the pattern's
+// position. Every INTERMEDIATE step is a pointer chase (i32.load — the value at
+// a path step is a handle into a deeper aggregate); the FINAL step (k ==
+// path_len - 1) loads the matched value at its proven leaf_repr, so an f64
+// leaf binds f64-wide (the same width the store wrote — Carried-Truth across
+// store/load). Caller has already emitted (local.get $scrut_tmp).
+fn emit_load_chain(path, k, path_len) =
+  emit_load_chain_repr(path, k, path_len, RI32)
+
+fn emit_load_chain_repr(path, k, path_len, leaf_repr) = {
   if k == path_len { () }
   else {
     let off = list_index(path, k)
@@ -4342,10 +4552,16 @@ fn emit_load_chain(path, k, path_len) = {
     if off < 0 {
       wat_emit("    (unreachable)\n")
     } else {
-      wat_emit("    (i32.load offset=")
+      // The last step loads at leaf_repr; every prior step is an i32 pointer
+      // chase (intermediate aggregate handles are always words).
+      let is_last = k + 1 == path_len
+      let ld = if is_last { repr_load_op(leaf_repr) } else { "i32.load" }
+      wat_emit("    (")
+      wat_emit(ld)
+      wat_emit(" offset=")
       wat_emit(int_to_str(off))
       wat_emit(")\n")
-      emit_load_chain(path, k + 1, path_len)
+      emit_load_chain_repr(path, k + 1, path_len, leaf_repr)
     }
   }
 }
@@ -4442,9 +4658,22 @@ fn emit_list_stores(elems, base_idx) = {
   }, enumerate(elems))
 }
 
-fn emit_tuple_literal(elems) = {
-  emit_expr_list(elems)
-  wat_emit("    (i32.const ")
-  wat_emit(int_to_str(len(elems) * 4))
-  wat_emit(") (call $alloc_tuple)\n")
+// A tuple IS a positional product (L1) — construction is the record path: each
+// element lands at the width-summed offset (emit_field_stores_acc, the IDENTICAL
+// fold the index/match-bind read), the allocation size is the prefix-sum total
+// (product_byte_size), and an f64 element genuinely occupies 8 inline bytes via
+// f64.store. For an all-i32 tuple the offsets are exactly 4*i and the size is
+// len*4 — byte-identical to the old uniform-stride $alloc_tuple (Law 7), with
+// the difference that the store-side widths now MATCH the read-side
+// (tuple_elem_offset / LFieldLoad / LPTuple match-bind) so an f64 tuple
+// round-trips. Per-handle scratch ($tuple_<h>) avoids nested-tuple clobber, the
+// same discipline LMakeVariant uses.
+fn emit_tuple_literal(h, elems) = {
+  let size = product_byte_size(elems)
+  let local_name = "tuple_{int_to_str(h)}"
+  emit_alloc(size, local_name)
+  emit_field_stores_acc(elems, 0, len(elems), 0, local_name)
+  wat_emit("    (local.get $")
+  wat_emit(local_name)
+  wat_emit(")\n")
 }

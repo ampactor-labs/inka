@@ -1,0 +1,33 @@
+// A2 gate (Hβ.lower.tuple-as-product, f64) — a tuple-with-f64 round-trips at
+// FULL PRECISION through CONSTRUCT + INDEX + MATCH-BIND, the three reading ONE
+// width-summed offset fold (the SAME field_byte_offset records use). A half-
+// migration would miscompile: store f64 at a width-summed offset but index/
+// match-bind at the old const-4 i32 stride reads the wrong 4 bytes (Law 7), so
+// construction, indexing, and pattern destructure moved in LOCK-STEP:
+//   - construct: emit_field_stores_acc + product_byte_size (f64.store, 8 bytes)
+//   - index:     LFieldLoad at tuple_elem_offset (f64.load at the f64 width)
+//   - match-bind: the width-summed LPTuple carrying (offset, elem_ty, sub_pat),
+//                 emit_pat_tuple_binds binding at repr_of(elem_ty) = f64.load
+// All three project ONE offset+width fact — the boxed-float disease is unsayable
+// at the tuple layer.
+//
+// `t = (1.5, 2.25)`: 16 bytes (two f64, at offsets 0 and 8). t[0]=1.5 via index,
+// (a, _)=>a binds 1.5 via match-bind; both read the same f64 the store wrote.
+//
+// THE SEED LAGS THIS FORM (the hand-WAT lower has no tuple-index and floors f64
+// to i32 — the same lag mn-repr-record / mn-float-arith document). So the VALUE
+// gate runs through MENTL2 (the wheel compiled by the seed, carrying the wheel's
+// f64 product store/load), NOT the seed directly. Named peer: Hβ.seed.tuple-
+// product — the seed mirrors the width-summed tuple store/index/match-bind when
+// next required, the .mn leading until then (PLAN §5).
+//
+// Expected exit 3: t[0](1.5) + fst(t)(1.5) = 3.0, truncated to 3.
+
+fn fst(t) = match t {
+  (a, _) => a
+}
+
+fn main(q) = {
+  let t = (1.5, 2.25)
+  t[0] + fst(t)
+}

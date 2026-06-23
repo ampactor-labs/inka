@@ -1,0 +1,38 @@
+// A2 gate (Hβ.emit.variant-payload-repr-width) — a variant with an f64 payload
+// round-trips at FULL PRECISION through CONSTRUCT + MATCH-BIND + EQ + SHOW, the
+// four reading ONE width-summed payload-offset fold (variant_payload_offset,
+// starting after the 4-byte tag). A variant payload was UNIFORM-i32-slotted
+// (store/eq/match at 4+4*i i32) — so an f64 payload was truncated to its low 4
+// bytes. The migration makes all four agree at the payload's PROVEN repr:
+//   - store:     emit_variant_stores_acc (f64.store at the width-summed offset)
+//   - eq-leaf:   emit_eq_variant_payload_conjunction (f64.load + f64.eq)
+//   - match-bind: emit_pat_con_subs_binds reads ctor_payload_tys_of(name),
+//                 binds at repr_of(payload_ty) (f64.load via emit_load_chain_repr)
+//   - show:      emit_show_variant_payload_render (f64.load + float_to_str)
+// One offset+width fact, four projections — an f64 payload is genuinely 8 bytes.
+//
+// `Measure(2.5)` constructed; `Measure(v) => v` binds 2.5 via the width-aware
+// match-bind reading the same f64 the store wrote.
+//
+// THE SEED LAGS THIS FORM (the hand-WAT emit slots variant payloads uniform-i32
+// and floors f64 — the same lag mn-repr-record / mn-float-arith document). So the
+// VALUE gate runs through MENTL2 (the wheel compiled by the seed, carrying the
+// wheel's width-summed payload store/load), NOT the seed directly. Named peer:
+// Hβ.seed.variant-payload-repr — the seed mirrors the width-summed payload
+// store/eq/match/show when next required, the .mn leading until then (PLAN §5).
+//
+// Expected exit 5: Measure(2.5) destructured to 2.5, doubled = 5.0, truncated 5.
+
+type Reading
+  = Measure(Float)
+  | Empty
+
+fn value_of(r) = match r {
+  Measure(v) => v + v,
+  Empty      => 0.0
+}
+
+fn main(q) = {
+  let r = Measure(2.5)
+  value_of(r)
+}

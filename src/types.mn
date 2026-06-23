@@ -104,6 +104,26 @@ fn repr_of(ty) with Pure = match ty {
   TCont(_, _, _)    => RI32     // continuation pointer
 }
 
+// repr_of_resolved — repr_of through a graph chase. A TTuple's element Tys
+// are TVars (collect_tvar_types at infer.mn:585 binds each element to a fresh
+// TVar handle); repr_of(TVar(_)) reads RI32 because a bare unresolved handle
+// IS a word. But a tuple element's TVar is resolved — it points at the proven
+// element type — so its WIDTH must read the resolved type, not the handle's
+// word default. This is the tuple-element analogue of LFieldLoad's
+// repr_of(lookup_ty(h)): chase the handle to its NBound Ty, THEN project the
+// repr. An unresolved chain (NFree) honestly stays RI32 (a 32-bit word — the
+// productive-under-error floor, never a fabricated width). One chase per
+// element, read live; no parallel width table.
+fn repr_of_resolved(ty) with GraphRead = match ty {
+  TVar(h)           => match graph_chase(h) {
+    GNode(NBound(inner), _) => repr_of_resolved(inner),
+    _                       => RI32
+  },
+  TAlias(_, inner)  => repr_of_resolved(inner),
+  TRefined(base, _) => repr_of_resolved(base),
+  _                 => repr_of(ty)
+}
+
 // repr_width — the byte width of a representation class, by ADT match
 // (never `== 4`/`== 8` — drift mode 8). STEP 1's resolve_field_offset
 // prefix-sums this over a record's sorted fields; RV128 lanes pad to 16.

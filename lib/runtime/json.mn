@@ -535,19 +535,11 @@ fn json_str_or_default(v, default) with Pure = {
 
 fn json_int_or_default(v, default) with Pure = {
   match v {
-    JNum(n)           => float_to_int_truncate(n),
+    JNum(n)           => float_to_int(n),
     JNull             => default,
     JBool(_)          => default,
     JStr(_)           => default,
     JArr(_)           => default,
     JObj(_)           => default
   }
-}
-
-/// float_to_int_truncate — primitive Float → Int truncation. WASM
-/// has i32.trunc_f64_s; this fn lifts it. Honest substrate (no
-/// overflow check; LSP integers fit in i32 by spec).
-
-fn float_to_int_truncate(f) with Pure = {
-  f
 }

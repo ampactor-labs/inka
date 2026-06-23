@@ -188,3 +188,14 @@ micro:show-fold=40
 # cache_pack(kai)|>cache_unpack==kai lands when the seed catches up — peer
 # Hβ.fold.pack-roundtrip-seed-value-gate. Exit 40.
 micro:pack-roundtrip=40
+# A2 (Hβ.lower.tuple-as-product): a tuple IS a positional product — construction
+# and match-bind read ONE width-summed offset fold (emit_field_stores_acc + the
+# width-summed LPTuple carrying (offset, elem_ty, sub_pat)). This gate round-trips
+# the SEED for the all-i32 case (offsets reduce to 4*i, byte-identical to the old
+# $alloc_tuple, Law 7) — flat (a,b,c) + nested ((x,y),z) match-bind AGREE with
+# construction. The TUPLE-INDEX `t[i]` (LFieldLoad at tuple_elem_offset) and the
+# f64-tuple/variant-f64/float-convert round-trips are WHEEL-LEADS (the seed lacks
+# tuple-index, f64, and the LConvert intrinsic): mn-tuple-f64 / mn-variant-f64 /
+# mn-float-convert document them, their value-gates landing when the seed catches
+# up (peers Hβ.seed.tuple-product / .variant-payload-repr / .float-convert). Exit 90.
+micro:tuple-product=90

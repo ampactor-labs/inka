@@ -199,25 +199,25 @@ fn render_cursor_block(cursor, view) with GraphRead + !Mutate = {
 handler lsp_transport with state = transport_state_init(Caret(0, Inferred("lsp-init"))) {
 
   surface_handshake() => {
-    perform lsp_frame_write(lsp_initialize_response())
+    lsp_frame_write(lsp_initialize_response())
     resume()
   },
 
   surface_render(cursor, view) => {
     let CursorView(query, propose, topology, row, trace, verify, teach, why) = view
     let payload = lsp_textDocument_publishDiagnostics(cursor, view)
-    perform lsp_frame_write(payload)
+    lsp_frame_write(payload)
     // Hover / inlay-hint payloads: each tentacle becomes one
     // LSP message. The eight-aspect read maps directly to the
     // eight LSP methods that surface them.
-    perform lsp_frame_write(lsp_textDocument_hover(cursor, query, why))
-    perform lsp_frame_write(lsp_textDocument_codeAction(cursor, propose))
-    perform lsp_frame_write(lsp_workspace_diagnostic(verify))
+    lsp_frame_write(lsp_textDocument_hover(cursor, query, why))
+    lsp_frame_write(lsp_textDocument_codeAction(cursor, propose))
+    lsp_frame_write(lsp_workspace_diagnostic(verify))
     resume() with state = state_with_render(state, cursor)
   },
 
   surface_action() => {
-    let frame = perform lsp_frame_read()
+    let frame = lsp_frame_read()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let action = lsp_frame_to_action(frame)
     resume(action)
   }
@@ -234,8 +234,8 @@ handler lsp_transport with state = transport_state_init(Caret(0, Inferred("lsp-i
 handler web_transport with state = transport_state_init(Caret(0, Inferred("web-init"))) {
 
   surface_handshake() => {
-    perform web_dom_init("mentl-edit-root")
-    perform web_register_keystroke_listener()
+    web_dom_init("mentl-edit-root")
+    web_register_keystroke_listener()
     resume()
   },
 
@@ -244,12 +244,12 @@ handler web_transport with state = transport_state_init(Caret(0, Inferred("web-i
     // form. Each CursorView field projects to one DOM region; ghost-
     // text for proposals; inline annotation for teach; reason chain
     // shown on hover.
-    perform web_dom_render_cursorview(cursor, view)
+    web_dom_render_cursorview(cursor, view)
     resume() with state = state_with_render(state, cursor)
   },
 
   surface_action() => {
-    let event = perform web_next_input_event()
+    let event = web_next_input_event()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let action = web_event_to_action(event)
     resume(action)
   }
@@ -264,20 +264,20 @@ handler web_transport with state = transport_state_init(Caret(0, Inferred("web-i
 handler vim_transport with state = transport_state_init(Caret(0, Inferred("vim-init"))) {
 
   surface_handshake() => {
-    perform vim_register_neovim_rpc()
+    vim_register_neovim_rpc()
     resume()
   },
 
   surface_render(cursor, view) => {
     let CursorView(query, propose, topology, row, trace, verify, teach, why) = view
-    perform vim_set_virtual_text(cursor.handle, format_inline(teach))
-    perform vim_set_signs(verify)
-    perform vim_echo_at_cmdline(format_voice_line(view))
+    vim_set_virtual_text(cursor.handle, format_inline(teach))
+    vim_set_signs(verify)
+    vim_echo_at_cmdline(format_voice_line(view))
     resume() with state = state_with_render(state, cursor)
   },
 
   surface_action() => {
-    let key = perform vim_next_key()
+    let key = vim_next_key()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let action = vim_key_to_action(key)
     resume(action)
   }
@@ -292,7 +292,7 @@ handler vim_transport with state = transport_state_init(Caret(0, Inferred("vim-i
 // is visible in the substrate.
 
 fn cursor_session(initial_caret) with Surface + GraphRead + Cursor + !Mutate = {
-  perform surface_handshake()
+  surface_handshake()
   let initial_state = transport_state_init(initial_caret)
   cursor_loop(initial_state)
 }
@@ -300,13 +300,13 @@ fn cursor_session(initial_caret) with Surface + GraphRead + Cursor + !Mutate = {
 fn cursor_loop(state) with Surface + GraphRead + Cursor + !Mutate = {
   let TransportState(s) = state
   // Compute Cursor: gradient argmax with caret bias.
-  let cursor = perform cursor_argmax(s.caret)
+  let cursor = cursor_argmax(s.caret)
   // Project the eight-aspect CursorView at the cursor's position.
-  let view = perform cursor_at(span_of_cursor(cursor))
+  let view = cursor_at(span_of_cursor(cursor))
   // Render through the installed transport handler.
-  perform surface_render(cursor, view)
+  surface_render(cursor, view)
   // Receive an action from the human.
-  let action = perform surface_action()
+  let action = surface_action()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   // Apply action; continue the loop unless explicitly halted.
   match action {
     AccAccept => {
@@ -315,7 +315,7 @@ fn cursor_loop(state) with Surface + GraphRead + Cursor + !Mutate = {
     },
     AccDefer => cursor_loop(state_advance(state, cursor)),
     AccOverride(span) => {
-      let pinned = perform cursor_pinned(handle_at_span(span))
+      let pinned = cursor_pinned(handle_at_span(span))
       cursor_loop(state_with_caret(state, Caret(handle_at_span(span),
                                                 Inferred("?? override"))))
     },
@@ -378,7 +378,7 @@ fn apply_suggestion(view) with GraphRead + !Mutate = {
     None => (),
     Some(suggestion) => {
       let AnnotationSuggestion(_kind, ann_text, _unlocks, reason) = suggestion
-      perform apply_patch_at_cursor(span_of_reason(reason), ann_text)
+      apply_patch_at_cursor(span_of_reason(reason), ann_text)
     }
   }
 }
@@ -477,10 +477,10 @@ handler patch_to_file with target_module = "" {
 
   apply_patch_at_cursor(span, text) => {
     let path = driver_module_path(target_module)
-    let source = perform fs_read_file(path)
+    let source = fs_read_file(path)
     let Span(line, _, _, _) = span
     let edited = splice_before_line(source, line, indent_annotation(text))
-    perform fs_write_file(path, edited)
+    fs_write_file(path, edited)
     driver_check(target_module)
     resume()
   }

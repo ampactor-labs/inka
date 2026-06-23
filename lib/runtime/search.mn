@@ -87,7 +87,7 @@ effect Choice {
 
 handler pick_first {
   choose(options) =>
-    if len(options) == 0 { perform abort() }
+    if len(options) == 0 { abort() }
     else                 { resume(list_index(options, 0)) }
 }
 
@@ -134,13 +134,13 @@ fn try_with_abort_catch(try_fn, catch_fn) with Abort = {
 handler backtrack with Choice + GraphRead + GraphWrite + Abort {
   choose(options) => {
     fn try_each(i) =
-      if i >= len(options) { perform abort() }
+      if i >= len(options) { abort() }
       else {
-        let checkpoint = perform graph_push_checkpoint()
+        let checkpoint = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
         try_with_abort_catch(
           () => resume(list_index(options, i)),
           () => {
-            perform graph_rollback(checkpoint)
+            graph_rollback(checkpoint)
             try_each(i + 1)
           }
         )

@@ -99,13 +99,13 @@ handler cursor_default with !Mutate {
   // (CLAUDE.md red-flag table).
   cursor_at(span) => {
     let handle = handle_at_span(span)
-    let GNode(kind, _reason) = perform graph_chase(handle)
+    let GNode(kind, _reason) = graph_chase(handle)
     let pos = (handle, kind)
     let (query, propose, topology, row, trace, verify, teach, why) =
       pos
         <| (
           (_, k) => k,                                                       // 1. Graph + Env (Query)
-          (h, k) => perform synth_propose(                                   // 2. Handlers (Propose) — Synth's MultiShot
+          (h, k) => synth_propose(                                   // 2. Handlers (Propose) — Synth's MultiShot
                       ty_of_kind(h, k),
                       row_of_kind(k),
                       mentl_context_at(h)),
@@ -113,8 +113,8 @@ handler cursor_default with !Mutate {
           (_, k) => row_of_kind(k),                                          // 4. Boolean row (Unlock)
           (_, k) => ownership_of_kind(k),                                    // 5. Ownership-as-effect (Trace)
           (h, _) => verify_pending_at(h),                                    // 6. Refinement (Verify)
-          (h, _) => perform teach_gradient(h),                               // 7. Continuous gradient (Teach)
-          (h, _) => perform teach_why(h)                                     // 8. HM live + Reasons (Why)
+          (h, _) => teach_gradient(h),                               // 7. Continuous gradient (Teach)
+          (h, _) => teach_why(h)                                     // 8. HM live + Reasons (Why)
         )
     resume(CursorView(query, propose, topology, row, trace, verify, teach, why))
   },
@@ -124,7 +124,7 @@ handler cursor_default with !Mutate {
 
   cursor_pinned(handle) => {
     let span = span_of_handle(handle)
-    let GNode(_, _anchor) = perform graph_chase(handle)
+    let GNode(_, _anchor) = graph_chase(handle)
     resume(Cursor(
       handle,
       Located(span, Inferred("user pinned via ??")),
@@ -224,8 +224,8 @@ fn cursor_argmax_compute(caret) with GraphRead + !Mutate = {
 }
 
 fn enumerate_gradient_positions() with GraphRead + !Mutate = {
-  let Graph(_nodes, _epoch, next, _overlays, _spans, _intents) = perform graph_snapshot()
-  filter((i) => match perform teach_gradient(i) {
+  let Graph(_nodes, _epoch, next, _overlays, _spans, _intents) = graph_snapshot()
+  filter((i) => match teach_gradient(i) {
     None    => false,
     Some(_) => true
   }, range(0, next))
@@ -241,7 +241,7 @@ fn score_all_positions(handles, caret) with GraphRead + !Mutate = {
 }
 
 fn score_one_position(handle, caret) with GraphRead + !Mutate = {
-  let suggestion_opt = perform teach_gradient(handle)
+  let suggestion_opt = teach_gradient(handle)
   let gates = match suggestion_opt {
     None => 0,
     Some(suggestion) => {
@@ -251,7 +251,7 @@ fn score_one_position(handle, caret) with GraphRead + !Mutate = {
   }
   let target_span = span_of_handle(handle)
   let proximity = caret_proximity_weight(caret, target_span)
-  let GNode(_, reason) = perform graph_chase(handle)
+  let GNode(_, reason) = graph_chase(handle)
   Cursor(handle,
          Located(target_span, reason),
          float_of_int(gates) * proximity)
@@ -375,7 +375,7 @@ fn handle_at_span(span) with GraphRead + !Mutate = {
   // Spans are indexed in the graph via graph_index_span (types.mn:717).
   // Today this is a forward scan via graph_snapshot; the indexed
   // lookup is peer-handle territory (Hμ.cursor.cache).
-  let snapshot = perform graph_snapshot()
+  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let Graph(_nodes, _epoch, next, _overlays, _spans, _intents) = snapshot
   scan_for_span(span, 0, next)
 }
@@ -383,7 +383,7 @@ fn handle_at_span(span) with GraphRead + !Mutate = {
 fn scan_for_span(target, i, n) with GraphRead + !Mutate = {
   if i >= n { 0 }
   else {
-    let GNode(_, reason) = perform graph_chase(i)
+    let GNode(_, reason) = graph_chase(i)
     let candidate_span = caret_span_from_reason(reason)
     if span_eq(target, candidate_span) { i }
     else { scan_for_span(target, i + 1, n) }
@@ -391,7 +391,7 @@ fn scan_for_span(target, i, n) with GraphRead + !Mutate = {
 }
 
 fn span_of_handle(handle) with GraphRead + !Mutate = {
-  let GNode(_, reason) = perform graph_chase(handle)
+  let GNode(_, reason) = graph_chase(handle)
   caret_span_from_reason(reason)
 }
 
@@ -454,8 +454,8 @@ fn mentl_context_at(handle) with EnvRead + GraphRead + !Mutate = {
   // the row already bound at this handle. Carried-Truth: the env and
   // the node's row both already prove this; the cursor reads them, the
   // OneShot empty-Context stub is dissolved.
-  let Env(scope_bindings) = perform env_snapshot()
-  let GNode(kind, _) = perform graph_chase(handle)
+  let Env(scope_bindings) = env_snapshot()
+  let GNode(kind, _) = graph_chase(handle)
   Context(scope_bindings, active_effects_of_row(row_of_kind(kind)))
 }
 
@@ -481,7 +481,7 @@ fn active_effects_of_row(row) with Pure = match row {
 
 fn verify_pending_at(handle) with Verify + GraphRead + !Mutate = {
   let target_span = span_of_handle(handle)
-  filter_by_span(target_span, perform verify_debt())
+  filter_by_span(target_span, verify_debt())
 }
 
 fn filter_by_span(target, debt) with Pure = {

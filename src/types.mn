@@ -562,7 +562,6 @@ type Expr
   | IfExpr(Node, Node, Node)
   | BlockExpr(List, Node)          // stmts, final expr
   | MatchExpr(Node, List)          // scrutinee, arms
-  | PerformExpr(String, List)      // op name, args
   | ResumeExpr(Node, List)         // value, state updates
   | MakeListExpr(List)
   | MakeTupleExpr(List)
@@ -1032,7 +1031,7 @@ fn show_type(ref ty) with GraphRead + !Mutate = {
 // failure reason inline.
 
 fn show_handle(h) with GraphRead + !Mutate = {
-  let node = perform graph_chase(h)
+  let node = graph_chase(h)
   match node {
     GNode(NBound(ty), _)      => show_type(ty),
     GNode(NRowBound(row), _)  => show_effrow(row),
@@ -1133,7 +1132,7 @@ fn show_cmp_op(ref op) with !Mutate = match op {
 
 // Resolve a predicate operand HANDLE to its Expr live and render it.
 fn show_pred_operand(handle) with GraphRead = {
-  match perform graph_node_body(handle) {
+  match graph_node_body(handle) {
     NExpr(VarRef(name)) => name,
     NExpr(LitInt(n))    => int_to_str(n),
     NExpr(LitFloat(f))  => float_to_str(f),

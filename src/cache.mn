@@ -81,7 +81,7 @@ fn cache_hash_loop(s, i, n, h) with Memory = {
 // No bitwise operator in the language. No 64-op arithmetic
 // decomposition. One perform, one WASM instruction.
 fn i32_xor(a, b) with Memory = {
-  perform i32_xor(a, b)
+  i32_xor(a, b)
 }
 
 // Cache path conventions — all files under `.mentl/cache/`.
@@ -116,32 +116,32 @@ fn cache_flatten_loop(s, i, n, acc) with Memory + Alloc = {
 
 // Magic bytes: "IKAI" (0x49, 0x4B, 0x41, 0x49) — Mentl KAI binary.
 fn cache_pack_magic() with Pack + !Unpack = {
-  perform pack_byte(73)    // 'I'
-  perform pack_byte(75)    // 'K'
-  perform pack_byte(65)    // 'A'
-  perform pack_byte(73)    // 'I'
+  pack_byte(73)    // 'I'
+  pack_byte(75)    // 'K'
+  pack_byte(65)    // 'A'
+  pack_byte(73)    // 'I'
 }
 
 fn cache_pack(kai) with Pack + !Unpack = {
   cache_pack_magic()
-  perform pack_i32(kai.compiler_version)
-  perform pack_str(kai.module_name)
-  perform pack_i32(kai.source_hash)
+  pack_i32(kai.compiler_version)
+  pack_str(kai.module_name)
+  pack_i32(kai.source_hash)
   // Imports
-  perform pack_i32(len(kai.imports))
+  pack_i32(len(kai.imports))
   cache_pack_string_list(kai.imports, 0, len(kai.imports))
   // Import hashes
-  perform pack_i32(len(kai.imports_hashes))
+  pack_i32(len(kai.imports_hashes))
   cache_pack_int_list(kai.imports_hashes, 0, len(kai.imports_hashes))
   // Entries
-  perform pack_i32(len(kai.exported_entries))
+  pack_i32(len(kai.exported_entries))
   cache_pack_entries(kai.exported_entries, 0, len(kai.exported_entries))
 }
 
 fn cache_pack_string_list(lst, i, n) with Pack + !Unpack = {
   if i >= n { () }
   else {
-    perform pack_str(list_index(lst, i))
+    pack_str(list_index(lst, i))
     cache_pack_string_list(lst, i + 1, n)
   }
 }
@@ -149,7 +149,7 @@ fn cache_pack_string_list(lst, i, n) with Pack + !Unpack = {
 fn cache_pack_int_list(lst, i, n) with Pack + !Unpack = {
   if i >= n { () }
   else {
-    perform pack_i32(list_index(lst, i))
+    pack_i32(list_index(lst, i))
     cache_pack_int_list(lst, i + 1, n)
   }
 }
@@ -158,7 +158,7 @@ fn cache_pack_entries(entries, i, n) with Pack + !Unpack = {
   if i >= n { () }
   else {
     let (name, scheme, _reason, kind) = list_index(entries, i)
-    perform pack_str(name)
+    pack_str(name)
     cache_pack_scheme(scheme)
     cache_pack_kind(kind)
     cache_pack_entries(entries, i + 1, n)
@@ -167,7 +167,7 @@ fn cache_pack_entries(entries, i, n) with Pack + !Unpack = {
 
 fn cache_pack_scheme(scheme) with Pack + !Unpack = {
   let Forall(handles, ty) = scheme
-  perform pack_i32(len(handles))
+  pack_i32(len(handles))
   cache_pack_int_list(handles, 0, len(handles))
   cache_pack_ty(ty)
 }
@@ -176,24 +176,24 @@ fn cache_pack_scheme(scheme) with Pack + !Unpack = {
 //                  3=RecordSchemeKind, 5=EffectDeclKind, 6=HandlerKind
 //                  (byte 4 retired with the dissolved capability)
 fn cache_pack_kind(kind) with Pack + !Unpack = match kind {
-  FnScheme => perform pack_byte(0),
+  FnScheme => pack_byte(0),
   ConstructorScheme(tag, total) => {
-    perform pack_byte(1)
-    perform pack_i32(tag)
-    perform pack_i32(total)
+    pack_byte(1)
+    pack_i32(tag)
+    pack_i32(total)
   },
   EffectOpScheme(effect_name) => {
-    perform pack_byte(2)
-    perform pack_str(effect_name)
+    pack_byte(2)
+    pack_str(effect_name)
   },
   RecordSchemeKind(fields) => {
-    perform pack_byte(3)
-    perform pack_i32(len(fields))
+    pack_byte(3)
+    pack_i32(len(fields))
     cache_pack_fields(fields, 0, len(fields))
   },
   EffectDeclKind(op_names) => {
-    perform pack_byte(5)
-    perform pack_i32(len(op_names))
+    pack_byte(5)
+    pack_i32(len(op_names))
     cache_pack_string_list(op_names, 0, len(op_names))
   },
   // HandlerKind(handled_ename, residual_row_handle, config, state, arms). The
@@ -202,9 +202,9 @@ fn cache_pack_kind(kind) with Pack + !Unpack = match kind {
   // file first-light path never round-trips this, so the raw handle is sound
   // here; config/state/arms are live-only (see below).
   HandlerKind(ename, row_handle, _, _, _) => {
-    perform pack_byte(6)
-    perform pack_str(ename)
-    perform pack_i32(row_handle)
+    pack_byte(6)
+    pack_str(ename)
+    pack_i32(row_handle)
     // config/state/arms are live-only references to the decl (the env names the
     // node); not serialized — cross-file caching reconstructs them from source
     // (peer Hβ.cache.handler-decl-from-source, post-L1). First-light is single-
@@ -216,54 +216,54 @@ fn cache_pack_kind(kind) with Pack + !Unpack = match kind {
 //          6=TFun, 7=TVar, 8=TName, 9=TRecord, 10=TRecordOpen,
 //          11=TRefined, 12=TCont
 fn cache_pack_ty(ty) with Pack + !Unpack = match ty {
-  TInt    => perform pack_byte(0),
-  TFloat  => perform pack_byte(1),
-  TString => perform pack_byte(2),
-  TUnit   => perform pack_byte(3),
+  TInt    => pack_byte(0),
+  TFloat  => pack_byte(1),
+  TString => pack_byte(2),
+  TUnit   => pack_byte(3),
   TList(elem) => {
-    perform pack_byte(4)
+    pack_byte(4)
     cache_pack_ty(elem)
   },
   TTuple(elems) => {
-    perform pack_byte(5)
-    perform pack_i32(len(elems))
+    pack_byte(5)
+    pack_i32(len(elems))
     cache_pack_ty_list(elems, 0, len(elems))
   },
   TFun(params, ret, row) => {
-    perform pack_byte(6)
-    perform pack_i32(len(params))
+    pack_byte(6)
+    pack_i32(len(params))
     cache_pack_params(params, 0, len(params))
     cache_pack_ty(ret)
     cache_pack_effrow(row)
   },
   TVar(handle) => {
-    perform pack_byte(7)
-    perform pack_i32(handle)
+    pack_byte(7)
+    pack_i32(handle)
   },
   TName(name, args) => {
-    perform pack_byte(8)
-    perform pack_str(name)
-    perform pack_i32(len(args))
+    pack_byte(8)
+    pack_str(name)
+    pack_i32(len(args))
     cache_pack_ty_list(args, 0, len(args))
   },
   TRecord(fields) => {
-    perform pack_byte(9)
-    perform pack_i32(len(fields))
+    pack_byte(9)
+    pack_i32(len(fields))
     cache_pack_fields(fields, 0, len(fields))
   },
   TRecordOpen(fields, v) => {
-    perform pack_byte(10)
-    perform pack_i32(len(fields))
+    pack_byte(10)
+    pack_i32(len(fields))
     cache_pack_fields(fields, 0, len(fields))
-    perform pack_i32(v)
+    pack_i32(v)
   },
   TRefined(base, pred) => {
-    perform pack_byte(11)
+    pack_byte(11)
     cache_pack_ty(base)
     cache_pack_predicate(pred)
   },
   TCont(ret, disc) => {
-    perform pack_byte(12)
+    pack_byte(12)
     cache_pack_ty(ret)
     cache_pack_resume_disc(disc)
   }
@@ -281,7 +281,7 @@ fn cache_pack_fields(fields, i, n) with Pack + !Unpack = {
   if i >= n { () }
   else {
     let (name, ty) = list_index(fields, i)
-    perform pack_str(name)
+    pack_str(name)
     cache_pack_ty(ty)
     cache_pack_fields(fields, i + 1, n)
   }
@@ -291,7 +291,7 @@ fn cache_pack_params(params, i, n) with Pack + !Unpack = {
   if i >= n { () }
   else {
     let TParam(name, ty, authored, resolved, _) = list_index(params, i)
-    perform pack_str(name)
+    pack_str(name)
     cache_pack_ty(ty)
     cache_pack_ownership(authored)
     cache_pack_ownership(resolved)
@@ -301,44 +301,44 @@ fn cache_pack_params(params, i, n) with Pack + !Unpack = {
 
 // Ownership tags: 0=Unmarked, 1=Own, 2=Ref
 fn cache_pack_ownership(o) with Pack + !Unpack = match o {
-  Unmarked => perform pack_byte(0),
-  Own      => perform pack_byte(1),
-  Ref      => perform pack_byte(2)
+  Unmarked => pack_byte(0),
+  Own      => pack_byte(1),
+  Ref      => pack_byte(2)
 }
 
 // ResumeDiscipline tags: 0=OneShot, 1=MultiShot, 2=Either
 fn cache_pack_resume_disc(disc) with Pack + !Unpack = match disc {
-  OneShot   => perform pack_byte(0),
-  MultiShot => perform pack_byte(1),
-  Either    => perform pack_byte(2)
+  OneShot   => pack_byte(0),
+  MultiShot => pack_byte(1),
+  Either    => pack_byte(2)
 }
 
 // EffRow tags: 0=EfPure, 1=EfClosed, 2=EfOpen, 3=EfNeg,
 //              4=EfSub, 5=EfInter
 fn cache_pack_effrow(row) with Pack + !Unpack = match row {
-  EfPure => perform pack_byte(0),
+  EfPure => pack_byte(0),
   EfClosed(names) => {
-    perform pack_byte(1)
-    perform pack_i32(len(names))
+    pack_byte(1)
+    pack_i32(len(names))
     cache_pack_effnames(names, 0, len(names))
   },
   EfOpen(names, v) => {
-    perform pack_byte(2)
-    perform pack_i32(len(names))
+    pack_byte(2)
+    pack_i32(len(names))
     cache_pack_effnames(names, 0, len(names))
-    perform pack_i32(v)
+    pack_i32(v)
   },
   EfNeg(inner) => {
-    perform pack_byte(3)
+    pack_byte(3)
     cache_pack_effrow(inner)
   },
   EfSub(a, b) => {
-    perform pack_byte(4)
+    pack_byte(4)
     cache_pack_effrow(a)
     cache_pack_effrow(b)
   },
   EfInter(a, b) => {
-    perform pack_byte(5)
+    pack_byte(5)
     cache_pack_effrow(a)
     cache_pack_effrow(b)
   }
@@ -355,13 +355,13 @@ fn cache_pack_effnames(names, i, n) with Pack + !Unpack = {
 // EffName tags: 0=ENamed, 1=EParameterized
 fn cache_pack_effname(name) with Pack + !Unpack = match name {
   ENamed(s) => {
-    perform pack_byte(0)
-    perform pack_str(s)
+    pack_byte(0)
+    pack_str(s)
   },
   EParameterized(s, args) => {
-    perform pack_byte(1)
-    perform pack_str(s)
-    perform pack_i32(len(args))
+    pack_byte(1)
+    pack_str(s)
+    pack_i32(len(args))
     cache_pack_effargs(args, 0, len(args))
   }
 }
@@ -377,12 +377,12 @@ fn cache_pack_effargs(args, i, n) with Pack + !Unpack = {
 // EffArg tags: 0=EAInt, 1=EAString
 fn cache_pack_effarg(arg) with Pack + !Unpack = match arg {
   EAInt(n) => {
-    perform pack_byte(0)
-    perform pack_i32(n)
+    pack_byte(0)
+    pack_i32(n)
   },
   EAString(s) => {
-    perform pack_byte(1)
-    perform pack_str(s)
+    pack_byte(1)
+    pack_str(s)
   }
 }
 
@@ -579,26 +579,26 @@ fn cache_pack_reason(r) with Pack + !Unpack = match r {
 // bytes, dispatches on tag, reconstructs values.
 
 fn cache_unpack_magic() with Unpack + !Pack = {
-  let b0 = perform unpack_byte()
-  let b1 = perform unpack_byte()
-  let b2 = perform unpack_byte()
-  let b3 = perform unpack_byte()
+  let b0 = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let b1 = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let b2 = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let b3 = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   // "IKAI" = 73, 75, 65, 73
   b0 == 73 && b1 == 75 && b2 == 65 && b3 == 73
 }
 
 fn cache_unpack() with Unpack + !Pack = {
-  let version = perform unpack_i32()
-  let module_name = perform unpack_str()
-  let source_hash = perform unpack_i32()
+  let version = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let module_name = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let source_hash = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   // Imports
-  let n_imports = perform unpack_i32()
+  let n_imports = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let imports = cache_unpack_string_list(n_imports, 0, make_list(n_imports))
   // Import hashes
-  let n_hashes = perform unpack_i32()
+  let n_hashes = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let imports_hashes = cache_unpack_int_list(n_hashes, 0, make_list(n_hashes))
   // Entries
-  let n_entries = perform unpack_i32()
+  let n_entries = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let entries = cache_unpack_entries(n_entries, 0, make_list(n_entries))
   {
     compiler_version: version,
@@ -613,7 +613,7 @@ fn cache_unpack() with Unpack + !Pack = {
 fn cache_unpack_string_list(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
-    let s = perform unpack_str()
+    let s = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     cache_unpack_string_list(n, i + 1, list_set(buf, i, s))
   }
 }
@@ -621,7 +621,7 @@ fn cache_unpack_string_list(n, i, buf) with Unpack + !Pack = {
 fn cache_unpack_int_list(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
-    let v = perform unpack_i32()
+    let v = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     cache_unpack_int_list(n, i + 1, list_set(buf, i, v))
   }
 }
@@ -629,7 +629,7 @@ fn cache_unpack_int_list(n, i, buf) with Unpack + !Pack = {
 fn cache_unpack_entries(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
-    let name = perform unpack_str()
+    let name = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let scheme = cache_unpack_scheme()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let kind = cache_unpack_kind()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let reason = Inferred("loaded from cache")
@@ -638,37 +638,37 @@ fn cache_unpack_entries(n, i, buf) with Unpack + !Pack = {
 }
 
 fn cache_unpack_scheme() with Unpack + !Pack = {
-  let n_handles = perform unpack_i32()
+  let n_handles = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let handles = cache_unpack_int_list(n_handles, 0, make_list(n_handles))
   let ty = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
   Forall(handles, ty)
 }
 
 fn cache_unpack_kind() with Unpack + !Pack = {
-  let tag = perform unpack_byte()
+  let tag = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   if tag == 0 { FnScheme }
   else if tag == 1 {
-    let tag_id = perform unpack_i32()
-    let total = perform unpack_i32()
+    let tag_id = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+    let total = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     ConstructorScheme(tag_id, total)
   }
   else if tag == 2 {
-    let effect_name = perform unpack_str()
+    let effect_name = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     EffectOpScheme(effect_name)
   }
   else if tag == 3 {
-    let n_fields = perform unpack_i32()
+    let n_fields = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let fields = cache_unpack_fields(n_fields, 0, make_list(n_fields))
     RecordSchemeKind(fields)
   }
   else if tag == 5 {
-    let n_ops = perform unpack_i32()
+    let n_ops = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let op_names = cache_unpack_string_list(n_ops, 0, make_list(n_ops))
     EffectDeclKind(op_names)
   }
   else if tag == 6 {
-    let ename = perform unpack_str()
-    let row_handle = perform unpack_i32()
+    let ename = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+    let row_handle = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     // config/state/arms are live-only (reconstructed from source on cross-file
     // load — peer Hβ.cache.handler-decl-from-source); empty here, never read in
     // the single-file first-light path.
@@ -678,7 +678,7 @@ fn cache_unpack_kind() with Unpack + !Pack = {
 }
 
 fn cache_unpack_ty() with Unpack + !Pack = {
-  let tag = perform unpack_byte()
+  let tag = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   if tag == 0 { TInt }
   else if tag == 1 { TFloat }
   else if tag == 2 { TString }
@@ -688,36 +688,36 @@ fn cache_unpack_ty() with Unpack + !Pack = {
     TList(elem)
   }
   else if tag == 5 {
-    let n = perform unpack_i32()
+    let n = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let elems = cache_unpack_ty_list(n, 0, make_list(n))
     TTuple(elems)
   }
   else if tag == 6 {
-    let n = perform unpack_i32()
+    let n = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let params = cache_unpack_params(n, 0, make_list(n))
     let ret = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let row = cache_unpack_effrow()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     TFun(params, ret, row)
   }
   else if tag == 7 {
-    let handle = perform unpack_i32()
+    let handle = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     TVar(handle)
   }
   else if tag == 8 {
-    let name = perform unpack_str()
-    let n_args = perform unpack_i32()
+    let name = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+    let n_args = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let args = cache_unpack_ty_list(n_args, 0, make_list(n_args))
     TName(name, args)
   }
   else if tag == 9 {
-    let n = perform unpack_i32()
+    let n = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let fields = cache_unpack_fields(n, 0, make_list(n))
     TRecord(fields)
   }
   else if tag == 10 {
-    let n = perform unpack_i32()
+    let n = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let fields = cache_unpack_fields(n, 0, make_list(n))
-    let v = perform unpack_i32()
+    let v = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     TRecordOpen(fields, v)
   }
   else if tag == 11 {
@@ -744,7 +744,7 @@ fn cache_unpack_ty_list(n, i, buf) with Unpack + !Pack = {
 fn cache_unpack_fields(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
-    let name = perform unpack_str()
+    let name = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let ty = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     cache_unpack_fields(n, i + 1, list_set(buf, i, (name, ty)))
   }
@@ -753,7 +753,7 @@ fn cache_unpack_fields(n, i, buf) with Unpack + !Pack = {
 fn cache_unpack_params(n, i, buf) with Unpack + !Pack = {
   if i >= n { slice(buf, 0, n) }
   else {
-    let name = perform unpack_str()
+    let name = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let ty = cache_unpack_ty()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let authored = cache_unpack_ownership()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
     let resolved = cache_unpack_ownership()   // drift-audit: ignore (sequenced effectful read; CLAUDE.md Anchor 6)
@@ -769,31 +769,31 @@ fn cache_unpack_params(n, i, buf) with Unpack + !Pack = {
 }
 
 fn cache_unpack_ownership() with Unpack + !Pack = {
-  let tag = perform unpack_byte()
+  let tag = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   if tag == 0 { Unmarked }
   else if tag == 1 { Own }
   else { Ref }
 }
 
 fn cache_unpack_resume_disc() with Unpack + !Pack = {
-  let tag = perform unpack_byte()
+  let tag = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   if tag == 0 { OneShot }
   else if tag == 1 { MultiShot }
   else { Either }
 }
 
 fn cache_unpack_effrow() with Unpack + !Pack = {
-  let tag = perform unpack_byte()
+  let tag = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   if tag == 0 { EfPure }
   else if tag == 1 {
-    let n = perform unpack_i32()
+    let n = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let names = cache_unpack_effnames(n, 0, make_list(n))
     EfClosed(names)
   }
   else if tag == 2 {
-    let n = perform unpack_i32()
+    let n = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let names = cache_unpack_effnames(n, 0, make_list(n))
-    let v = perform unpack_i32()
+    let v = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     EfOpen(names, v)
   }
   else if tag == 3 {
@@ -822,14 +822,14 @@ fn cache_unpack_effnames(n, i, buf) with Unpack + !Pack = {
 }
 
 fn cache_unpack_effname() with Unpack + !Pack = {
-  let tag = perform unpack_byte()
+  let tag = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   if tag == 0 {
-    let s = perform unpack_str()
+    let s = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     ENamed(s)
   }
   else {
-    let s = perform unpack_str()
-    let n = perform unpack_i32()
+    let s = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+    let n = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let args = cache_unpack_effargs(n, 0, make_list(n))
     EParameterized(s, args)
   }
@@ -844,13 +844,13 @@ fn cache_unpack_effargs(n, i, buf) with Unpack + !Pack = {
 }
 
 fn cache_unpack_effarg() with Unpack + !Pack = {
-  let tag = perform unpack_byte()
+  let tag = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   if tag == 0 {
-    let n = perform unpack_i32()
+    let n = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     EAInt(n)
   }
   else {
-    let s = perform unpack_str()
+    let s = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     EAString(s)
   }
 }
@@ -1036,7 +1036,7 @@ fn cache_unpack_reason() with Unpack + !Pack = {
 
 fn cache_serialize(kai) with Memory + Alloc = {
   cache_pack(kai)
-  perform pack_finalize()
+  pack_finalize()
 } ~> buffer_packer
 
 fn cache_deserialize(bytes) with Memory + Alloc = {
@@ -1049,20 +1049,20 @@ fn cache_deserialize(bytes) with Memory + Alloc = {
 } ~> buffer_unpacker(bytes)
 
 fn cache_write(kai) with Memory + Alloc + Filesystem = {
-  if !perform fs_exists(cache_dir()) {
-    perform fs_mkdir(".mentl")
-    perform fs_mkdir(cache_dir())
+  if !fs_exists(cache_dir()) {
+    fs_mkdir(".mentl")
+    fs_mkdir(cache_dir())
   }
   let path = cache_path_for(kai.module_name)
   let bytes = cache_serialize(kai)
-  perform fs_write_file(path, bytes)
+  fs_write_file(path, bytes)
 }
 
 fn cache_read(module_name) with Memory + Alloc + Filesystem = {
   let path = cache_path_for(module_name)
-  if !perform fs_exists(path) { None }
+  if !fs_exists(path) { None }
   else {
-    let bytes = perform fs_read_file(path)
+    let bytes = fs_read_file(path)
     cache_deserialize(bytes)
   }
 }

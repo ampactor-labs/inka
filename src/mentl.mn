@@ -130,7 +130,7 @@ handler mentl_default with annotations = [] {
 /// text / unlocked-capability labels / Reason — the public shape Cursor
 /// reads off CursorView.teach.
 fn gradient_next(handle) = {
-  let node = perform graph_chase(handle)
+  let node = graph_chase(handle)
   let GNode(_, anchor_reason) = node
   let GNode(kind, _) = node
   match kind {
@@ -229,10 +229,10 @@ fn suggestion_kind_label(k) with Pure = match k {
 fn try_each_annotation(handle, candidates, base_ty) = {
   candidates
     |> parallel_map((ann) => {
-         let cp = perform graph_push_checkpoint()
+         let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
          apply_annotation_tentatively(handle, ann, base_ty)
          let ok = verify_after_apply(handle)
-         perform graph_rollback(cp)
+         graph_rollback(cp)
          (ann, ok)
        })
     |> filter((pair) => { let (_, ok) = pair; ok })
@@ -251,7 +251,7 @@ fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
     // Narrowing the type via refinement — perform verify against the
     // narrowed predicate. Ledger captures; rollback removes.
     let span = unwrap_source_span(sp)
-    perform verify(span, pred, Refinement(pred, PTrue))
+    verify(span, pred, Refinement(pred, PTrue))
   },
   AOwn(_, _) => (),    // parameter-level marker; type narrowing at call sites
   ARef(_, _) => (),
@@ -293,7 +293,7 @@ fn unwrap_source_span(opt) with Pure = match opt {
 // that binds no handler (not found, or a non-handler kind) absorbs
 // nothing.
 fn catalog_handled_effects(handler_name) with EnvRead + !Mutate = {
-  match perform env_lookup(handler_name) {
+  match env_lookup(handler_name) {
     None => [],
     Some(entry) => {
       let (_scheme, _reason, kind) = entry
@@ -339,7 +339,7 @@ fn narrow_row(handle, base_ty, narrow, source_span) = match base_ty {
     // quick-fix request); None for fully-internal speculation, in
     // which case we fall back to span_zero(). The Located wrapper
     // gives the Why Engine coordinates to render.
-    perform graph_bind(handle, narrowed,
+    graph_bind(handle, narrowed,
       Located(unwrap_source_span(source_span),
               Inferred("mentl speculative narrow")))
   },
@@ -357,7 +357,7 @@ fn narrow_row(handle, base_ty, narrow, source_span) = match base_ty {
 /// The trail-based rollback restores whatever state the handle held
 /// before the tentative apply, so this check is non-destructive.
 fn verify_after_apply(handle) = {
-  let GNode(kind, _) = perform graph_chase(handle)
+  let GNode(kind, _) = graph_chase(handle)
   match kind {
     NBound(_)     => true,
     NErrorHole(_) => false,
@@ -424,7 +424,7 @@ fn annotation_eq(a, b) with Pure = match a {
 /// subsumption wrote a Reason edge into the graph; `why_expand` recurses through the chain
 /// until leaf reasons (Declared, Unmarked, MissingVar) terminate. Depth-limited at 20.    // drift-audit: ignore — "cycles" referencing graph cycle detection, not deferred work
 fn why_from_handle(handle) = {
-  let GNode(_, reason) = perform graph_chase(handle)
+  let GNode(_, reason) = graph_chase(handle)
   why_expand(reason, 0)
 }
 
@@ -454,7 +454,7 @@ fn why_expand(reason, depth) = {
     Instantiation(name, inner) =>
       Instantiation(name, why_expand(inner, depth + 1)),
     Fresh(id) => {
-      let GNode(_, resolved) = perform graph_chase(id)
+      let GNode(_, resolved) = graph_chase(id)
       match resolved {
         Fresh(_) => reason,
         _        => why_expand(resolved, depth + 1)
@@ -469,11 +469,11 @@ fn why_expand(reason, depth) = {
 // synth_default handler (synth_proposer.mn). The dead duplicate handler
 // synth_enumerative + its private verify_each were dissolved (superseded).
 fn teach_synthesize(hole_handle, context) = {
-  let GNode(kind, _) = perform graph_chase(hole_handle)
+  let GNode(kind, _) = graph_chase(hole_handle)
   match kind {
     NBound(ty) => {
       let row = extract_row(ty)
-      let candidates = perform synth_propose(ty, row, context)
+      let candidates = synth_propose(ty, row, context)
       if len(candidates) == 0 { None }
       else { Some(list_index(candidates, 0)) }
     },
@@ -660,23 +660,23 @@ fn teach_why_string(handle) with GraphRead = {
 // 9 (all five bodied here; no "later").
 
 fn teach_session(handle) with Teach + GraphRead = {
-  let GNode(kind, _) = perform graph_chase(handle)
+  let GNode(kind, _) = graph_chase(handle)
   let span = caret_span_from_handle(handle)
   let pos = (handle, kind, span)
   let (_, gradient, why, _, _) =
     pos
       <| (
         (h, k, sp) => match k {
-          NBound(ty) => perform teach_here("at handle", sp, ty),
+          NBound(ty) => teach_here("at handle", sp, ty),
           _          => ()
         },
-        (h, _, _)  => perform teach_gradient(h),
-        (h, _, _)  => perform teach_why(h),
-        (h, _, sp) => perform teach_error("E_Position", sp,
+        (h, _, _)  => teach_gradient(h),
+        (h, _, _)  => teach_why(h),
+        (h, _, sp) => teach_error("E_Position", sp,
                                 Inferred("teach_session inquiry")),
         (_, k, _)  => match k {
           NBound(ty) => match annotation_inferred_for(ty) {
-            Some(ann) => perform teach_unlock(ann),
+            Some(ann) => teach_unlock(ann),
             None      => CMemoize
           },
           _          => CMemoize
@@ -689,7 +689,7 @@ type TeachSession
   = TeachSession(Option, Reason)
 
 fn caret_span_from_handle(handle) with GraphRead = {
-  let GNode(_, reason) = perform graph_chase(handle)
+  let GNode(_, reason) = graph_chase(handle)
   match reason {
     Located(sp, _) => sp,
     _              => span_zero()

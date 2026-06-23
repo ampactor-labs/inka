@@ -331,7 +331,7 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
           else { report_purity_mismatch(b, span) },
         EfOpen(names, v) =>
           if len(names) == 0 {
-            perform graph_bind_row(v, EfPure, Located(span, reason))
+            graph_bind_row(v, EfPure, Located(span, reason))
           } else {
             report_purity_mismatch(b, span)
           },
@@ -348,7 +348,7 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
         EfOpen(nb, v) => {
           // Closed(A) ~ Open(B, v) → bind v to Closed(A - B)
           let residual = list_diff_str(na, nb) |> closed_or_pure
-          perform graph_bind_row(v, residual, Located(span, reason))
+          graph_bind_row(v, residual, Located(span, reason))
         },
         _ => unify_row_canonical(a, normalize_row(b), span, reason)
       },
@@ -356,14 +356,14 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
       match b {
         EfPure =>
           if len(na) == 0 {
-            perform graph_bind_row(va, EfPure, Located(span, reason))
+            graph_bind_row(va, EfPure, Located(span, reason))
           } else {
             report_purity_mismatch(a, span)
           },
         EfClosed(nb) => {
           // Open(A, v) ~ Closed(B) → bind v to Closed(B - A)
           let residual = list_diff_str(nb, na) |> closed_or_pure
-          perform graph_bind_row(va, residual, Located(span, reason))
+          graph_bind_row(va, residual, Located(span, reason))
         },
         EfOpen(nb, vb) =>
           if va == vb {
@@ -371,7 +371,7 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
             else { report_effect_mismatch(a, b, span) }
           } else {
             let residual_names = list_diff_str(nb, na)
-            perform graph_bind_row(va, EfOpen(residual_names, vb), Located(span, reason))
+            graph_bind_row(va, EfOpen(residual_names, vb), Located(span, reason))
           },
         EfNeg(inner) =>
           // Open(A, v) ~ !B => v must not perform B. 
@@ -394,7 +394,7 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
 }
 
 fn report_purity_mismatch(ref actual, ref span) with !Mutate = {
-  perform report(
+  report(
     "effects", "E_PurityViolated", "error",
     "expected Pure but found effects: "
       |> str_concat(show_effrow(actual)),
@@ -403,7 +403,7 @@ fn report_purity_mismatch(ref actual, ref span) with !Mutate = {
 }
 
 fn report_effect_mismatch(ref a, ref b, ref span) with !Mutate = {
-  perform report(
+  report(
     "effects", "E_EffectMismatch", "error",
     "effect row mismatch: "
       |> str_concat(show_effrow(a))

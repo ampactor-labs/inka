@@ -407,7 +407,7 @@ effect Interact {
 // queue is empty.
 
 fn silence_predicate(situation) with OracleQuery = {
-  let queue = perform query_project_queue()
+  let queue = query_project_queue()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   match queue {
     []        => true,    // gradient at top — full silence
     [_, ..._] => false    // queue has items — Mentl surfaces something
@@ -839,11 +839,11 @@ fn render_for_tentacle(situation) with Pure = {
 fn voice_queue_walk(situation_seed) with OracleQuery = {
   let Situation(s) = situation_seed
   let queue_items = match s.handle {
-    None       => perform query_project_queue(),
+    None       => query_project_queue(),
     Some(h)    => {
-      let local = perform cursor_relevant(h, 200)
+      let local = cursor_relevant(h, 200)
       match local {
-        []           => perform query_project_queue(),
+        []           => query_project_queue(),
         [_, ..._]    => local
       }
     }
@@ -907,7 +907,7 @@ fn tier_to_tentacle(tier) with Pure = {
 // own. The handler declares its row honestly.
 
 fn unimplemented_arm(op_name) with Abort = {
-  perform abort()
+  abort()
 }
 
 // ─── MV.2.e.Q — Query tentacle helpers ────────────────────────────────
@@ -941,7 +941,7 @@ fn resolve_cursor_target(target, current_handle) with GraphRead = {
   match target {
     TargetHandle(h)    => h,
     TargetSpan(s)      => {
-      let g = perform graph_snapshot()
+      let g = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
       let Graph(_, _, _, _, span_index, _) = g
       match find_tightest(span_index, s, None, 999999999) {
         None       => current_handle,
@@ -1208,7 +1208,7 @@ handler mentl_voice_default
   // next-turn observation delta; the rendered VoiceLine for that turn is
   // the Answer projected back through render (Silence when AnsSilence).
   consult(question)     => {
-    let answer = perform ask(question)
+    let answer = ask(question)
     let new_turn = TurnRecord({
       tentacle: tentacle_for_question(question),
       topic:    TopicAsk(question),
@@ -1279,19 +1279,19 @@ handler mentl_voice_default
 
   // ─── Run ops (4) — MV.2.e.V (run_check) + MV.2.e.Run (rest) ──────
   run_compile(fh)       => {
-    let text = perform file_text(fh)
+    let text = file_text(fh)
     compile_source(text)
     resume(CompileOk(Path("emitted")))
   },
 
   run_check(fh)         => {
-    let text = perform file_text(fh)
+    let text = file_text(fh)
     check_source(text)
     resume(CheckOutcome([], []))
   },
 
   run_audit(fh)         => {
-    let text = perform file_text(fh)
+    let text = file_text(fh)
     audit(text)
     resume(AuditReport([]))
   },
@@ -1301,7 +1301,7 @@ handler mentl_voice_default
   // only difference from consult is the invocation surface, so the body
   // is the same render-only projection over the one proven result.
   run_query(question)   => {
-    let answer = perform ask(question)
+    let answer = ask(question)
     let new_turn = TurnRecord({
       tentacle: tentacle_for_question(question),
       topic:    TopicAsk(question),
@@ -1467,11 +1467,11 @@ handler mentl_voice_filesystem
   /// (caller distinguishes via fs_exists if needed).
   open_file(path)       => {
     let Path(s) = path
-    let fd = perform fs_open(s)
+    let fd = fs_open(s)
     if fd == 0 {
       resume(FileHandle(0))
     } else {
-      let text = perform fs_read_file(s)
+      let text = fs_read_file(s)
       let new_handle = FileHandle(next_handle_id)
       let new_table = [(new_handle, path, text)] ++ handles_table
       resume(new_handle)
@@ -1490,7 +1490,7 @@ handler mentl_voice_filesystem
       Some(triple)      => {
         let (_, path, text) = triple
         let Path(s) = path
-        perform fs_write_file(s, text)
+        fs_write_file(s, text)
         resume()
       }
     }
@@ -1500,8 +1500,8 @@ handler mentl_voice_filesystem
   /// FileHandle. On open failure, return invalid sentinel.
   create_file(p, text)  => {
     let Path(s) = p
-    perform fs_write_file(s, text)
-    let fd = perform fs_open(s)
+    fs_write_file(s, text)
+    let fd = fs_open(s)
     if fd == 0 {
       resume(FileHandle(0))
     } else {
@@ -1522,7 +1522,7 @@ handler mentl_voice_filesystem
   rename_path(old_p, new_p) => {
     let Path(o) = old_p
     let Path(n) = new_p
-    perform fs_rename(o, n)
+    fs_rename(o, n)
     resume()
   },
 
@@ -1531,7 +1531,7 @@ handler mentl_voice_filesystem
   /// entries (delete-while-open semantics owned by FX.5 close_file).
   delete_path(p)        => {
     let Path(s) = p
-    perform fs_unlink(s)
+    fs_unlink(s)
     resume()
   },
 
@@ -1559,7 +1559,7 @@ handler mentl_voice_filesystem
         let Patch(span, replacement) = patch
         let new_text = replace_span_in_text(old_text, span, replacement)
         let Path(s) = path
-        perform fs_write_file(s, new_text)
+        fs_write_file(s, new_text)
         let new_table = update_file_text(handles_table, fh, path, new_text)
         driver_check(path_to_module_name(s))
         resume(EditAccepted(fh))

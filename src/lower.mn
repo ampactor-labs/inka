@@ -125,7 +125,7 @@ handler arm_state_default {
 /// stores each state-init at offset 8+i*4 of the freshly-allocated state
 /// record per protocol_handler_is_state_is_closure_is_evidence.md.
 fn handler_decl_of(hname) =
-  match perform env_lookup(hname) {
+  match env_lookup(hname) {
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
@@ -397,7 +397,7 @@ fn lexpr_handle(e) with Pure = match e {
 /// Hβ.lower.to-string-show-derivation).
 fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic = {
   let N(_, _, ah) = list_head(args)
-  match perform lookup_ty(ah) {
+  match lookup_ty(ah) {
     TString            => arg_lo,
     TFloat             => LCall(handle, LGlobal(handle, "float_to_str"), [arg_lo]),
     TInt               => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
@@ -416,7 +416,7 @@ fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + Loo
 }
 
 fn lexpr_ty(e) with LookupTy = {
-  perform lookup_ty(lexpr_handle(e))
+  lookup_ty(lexpr_handle(e))
 }
 
 /// Hβ.lower.tail-call-mark-pass — rewrite LCall→LTailCall in tail position.
@@ -460,7 +460,7 @@ fn mark_tail_arms(arms) with Memory = map((arm) => {
 /// effects whose handler comes from the caller. The row IS the
 /// evidence contract: non-empty row → evidence threading required.
 fn monomorphic_at(h) with LookupTy = {
-  match perform lookup_ty(h) {
+  match lookup_ty(h) {
     TFun(_, _, row) => row_is_ground(row) && row_is_effectless(row),
     _               => true
   }
@@ -479,7 +479,7 @@ fn row_is_effectless(row) = match row {
 /// already fired at infer time; lower's path falls through to the
 /// default `LGlobal`/`LCall` shape).
 fn env_kind_of(name) = {
-  match perform env_lookup(name) {
+  match env_lookup(name) {
     None        => None,
     Some(entry) => {
       let (_, _, kind) = entry
@@ -505,11 +505,11 @@ fn lower_args_with_defaults(name, args, lo_args) = {
   }
 }
 
-fn callee_params_of(name) = match perform env_lookup(name) {
+fn callee_params_of(name) = match env_lookup(name) {
   Some(entry) => {
     let (scheme, _, _) = entry
     match scheme {
-      Forall(_, TVar(h)) => match perform graph_chase(h) {
+      Forall(_, TVar(h)) => match graph_chase(h) {
         GNode(NBound(TFun(params, _, _)), _) => params,
         _ => []
       },
@@ -572,7 +572,7 @@ fn effects_of_row(row) = match row {
 /// (`LEvSlotRef`). The shared canonical order makes caller→callee slot
 /// remapping correct WITHOUT a coercion table (Koka evidence coercion).
 fn derive_ev_slots(callee_handle) =
-  map(resolve_ev_for_ename, effects_of(perform lookup_ty(callee_handle)))
+  map(resolve_ev_for_ename, effects_of(lookup_ty(callee_handle)))
 
 /// One ev per effect-name: the installed handler's record (LLocal) when a
 /// handler is lexically in scope, else a forward of this frame's own slot
@@ -630,7 +630,7 @@ fn lower_compute_ev_slot_for_op(op_name) = match lookup_parent_effect(op_name) {
 /// its scheme body. (Was `perform inf_declared_effs()` — the declared `with`
 /// row, a CONSTRAINT, never the dispatch source: a spec violation now retired.)
 fn lower_compute_ev_index_for_effect(ename) =
-  match perform env_lookup(perform ls_outer_fn_name()) {
+  match env_lookup(ls_outer_fn_name()) {
     Some(entry) => {
       let (scheme, _, _) = entry
       let Forall(_, ty) = scheme
@@ -643,8 +643,8 @@ fn lower_compute_ev_index_for_effect(ename) =
 /// (first-encounter ledger order); everywhere else it is the fn's row
 /// (canonical order). One index space per frame shape.
 fn lower_ev_index_in_frame(ename) = {
-  if perform arm_ev_active() {
-    perform arm_ev_index_for(ename)
+  if arm_ev_active() {
+    arm_ev_index_for(ename)
   } else {
     lower_compute_ev_index_for_effect(ename)
   }
@@ -660,7 +660,7 @@ fn clamp_index(i) = if i < 0 { 0 } else { i }
 /// emit the `__hstate_<h>` record the arm runs against.
 fn lower_resolve_handler_for_op(op_name) = {
   let ename = lower_effect_name_of_op(op_name)
-  resolve_in_stack(op_name, ename, perform lower_handler_stack_now())
+  resolve_in_stack(op_name, ename, lower_handler_stack_now())
 }
 
 fn resolve_in_stack(op_name, ename, stack) = {
@@ -706,7 +706,7 @@ fn lower_resolve_handler_state_for_ename(ename) = {
 /// resolved at THIS install position. Emit writes these after the record's
 /// arm region; the arm fn's LowFn fence lands its LEvPerform reads on them.
 fn lower_captured_evs_for(hname) =
-  map(resolve_ev_for_ename, perform lookup_handler_arm_ev_names(hname))
+  map(resolve_ev_for_ename, lookup_handler_arm_ev_names(hname))
 
 /// Per-effect arm-fn-name groups [(ename, [arm_fn_name])], op-decl order
 /// within each effect. A handler can cover multiple effects (graph_handler:
@@ -768,7 +768,7 @@ fn grow_to_with_gaps(arms, n) = {
 /// EffectDeclKind(op_names) carries effect→ops as a first-class
 /// fact — registered at EffectDeclStmt by register_effect_ops.
 fn lookup_effect_op_names(eff_name) = {
-  match perform env_lookup(eff_name) {
+  match env_lookup(eff_name) {
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
@@ -802,7 +802,7 @@ fn lower_perform_dispatch(handle, op_name, lo_args) =
 
 /// Look up which effect an op belongs to via EffectOpScheme.
 fn lookup_parent_effect(op_name) = {
-  match perform env_lookup(op_name) {
+  match env_lookup(op_name) {
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
@@ -826,8 +826,8 @@ fn lookup_parent_effect(op_name) = {
 // the type (and, for a dropping rewrite, the effect row — the gate proved it).
 fn lower_expr(node) = {
   let N(obody, span, handle) = node
-  let canon = perform egraph_extract(handle)
-  let body = if canon == handle { obody } else { perform graph_node_body(canon) }
+  let canon = egraph_extract(handle)
+  let body = if canon == handle { obody } else { graph_node_body(canon) }
   match body {
     NExpr(e)     => lower_expr_body(e, canon, span),
     NStmt(s)     => lower_stmt_as_expr(s, canon, span),
@@ -850,7 +850,7 @@ fn lower_expr_body(e, handle, span) = match e {
   LitUnit      => LConst(handle, LInt(0)),
 
   VarRef(name) => {
-    let (res, local_h) = perform ls_resolve(name)
+    let (res, local_h) = ls_resolve(name)
     // For LLocal/LUpval the LowExpr's handle should describe the
     // captured value's type (the local's handle from binding time),
     // not the VarRef's own handle. Fall back to VarRef's handle for
@@ -883,9 +883,11 @@ fn lower_expr_body(e, handle, span) = match e {
     // env entry is a ConstructorScheme, the call is value-side
     // ADT instantiation — emit LMakeVariant with the registered
     // tag_id, not LCall through a non-existent fn-table entry.
-    // EffectOpScheme dispatch promotes a bare `op_name(args)` call
-    // to LPerform; explicit `perform op_name(args)` already takes
-    // the PerformExpr path. Plain function calls fall through.
+    // EffectOpScheme dispatch lowers an effect-op call. SYNTAX.md
+    // §«Invoking effect operations»: an op is a BARE call — there is
+    // no PerformExpr path (dissolved); `op(args)` IS the canonical and
+    // only form, dispatched here by the env's EffectOpScheme. Plain
+    // function calls fall through.
     let lo_args = lower_expr_list(args)
     let N(fbody, _, fh) = f
     match fbody {
@@ -902,7 +904,13 @@ fn lower_expr_body(e, handle, span) = match e {
           //     comes from caller via evidence slot on __state)
           //   - Effect NOT in row → Tier 1: LPerform (handler is
           //     locally installed, direct call)
-          lower_perform_dispatch(handle, name, lo_args),
+          // A WASI import op bridges directly to the WASM-level import
+          // (no $op_<name> handler arm) — the import IS the bridge.
+          if is_wasi_import_op(name) {
+            LWasiCall(handle, name, lo_args)
+          } else {
+            lower_perform_dispatch(handle, name, lo_args)
+          },
         // A plain function call fills any omitted trailing args from the
         // callee's param defaults (read live off its TFun) before the
         // direct/evidence call.
@@ -918,10 +926,10 @@ fn lower_expr_body(e, handle, span) = match e {
         [lower_expr(else_e)]),
 
   BlockExpr(stmts, final_e) => {
-    let cp = perform ls_push_scope()
+    let cp = ls_push_scope()   // drift-audit: ignore — sequenced effectful scope checkpoint (LowerScope)
     let lo_stmts = lower_stmt_list(stmts)
     let lo_final = lower_expr(final_e)
-    perform ls_pop_scope(cp)
+    ls_pop_scope(cp)
     LBlock(handle, list_concat(lo_stmts, [lo_final]))
   },
 
@@ -991,13 +999,13 @@ fn lower_expr_body(e, handle, span) = match e {
     let (captures_names, captures_exprs, captures_handles) =
       resolve_captures_outer(free_names, handle)
     // Lambda is anonymous — empty fn_name; ls_outer_fn_name skips it.
-    perform ls_enter_frame(
+    ls_enter_frame(
       "",
       param_names_list, param_handles_list,
       captures_names, captures_handles
     )
     let lo_body = mark_tail(lower_expr(body_node))   // Hβ.lower.tail-call-mark-pass — lambda body is in tail
-    perform ls_exit_frame()
+    ls_exit_frame()
     let fn_ir = LFn(
       lambda_name,
       len(params),
@@ -1016,17 +1024,6 @@ fn lower_expr_body(e, handle, span) = match e {
     LMakeClosure(handle, fn_ir, captures_exprs, derive_ev_slots(handle))
   },
 
-  PerformExpr(op_name, args) => {
-    // Row-guided dispatch — symmetric to the EffectOpScheme CallExpr
-    // arm above. Stage 4a: WASI imports bridge directly.
-    let lo_args = lower_expr_list(args)
-    if is_wasi_import_op(op_name) {
-      LWasiCall(handle, op_name, lo_args)
-    } else {
-      lower_perform_dispatch(handle, op_name, lo_args)
-    }
-  },
-
   ResumeExpr(val, state_updates) =>
     // Hβ.first-light.resume-with-state-mutation per SUBSTRATE.md L660-694,
     // SNAPSHOT semantics: the resume value AND every update RHS read the
@@ -1038,7 +1035,7 @@ fn lower_expr_body(e, handle, span) = match e {
     if len(state_updates) == 0 {
       LReturn(handle, lower_expr(val))
     } else {
-      let fields = perform current_state_fields()
+      let fields = current_state_fields()   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
       lower_resume_snapshot(handle, val, state_updates, fields)
     },
 
@@ -1118,9 +1115,9 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     // so they route to the enclosing scope, not self).
     let lo_r = lower_expr(right)
     let hname = extract_handler_name(right)
-    perform lower_handler_push(hname, handle)
+    lower_handler_push(hname, handle)
     let lo_l = lower_expr(left)
-    perform lower_handler_pop()
+    lower_handler_pop()
     let config_inits = map(lower_expr, extract_handler_config_args(right))
     let all_inits = config_inits ++ lookup_handler_state_inits_of(hname)
     LHandleWith(handle, lo_l, lo_r, hname, all_inits,
@@ -1295,9 +1292,9 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
   let (captures_names, captures_exprs, captures_handles) =
     resolve_captures_outer(free_names, parent_handle)
   // Synthetic parallel-thunk: empty fn_name; not a named fn declaration.
-  perform ls_enter_frame("", [], [], captures_names, captures_handles)
+  ls_enter_frame("", [], [], captures_names, captures_handles)
   let lo_body = mark_tail(lower_expr(branch_node))   // Hβ.lower.tail-call-mark-pass — synthesized thunk body is in tail
-  perform ls_exit_frame()
+  ls_exit_frame()
   let fn_ir = LFn(
     thunk_name,
     0,
@@ -1320,13 +1317,13 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
 /// the emit corruption. The ultimate form refuses to guess an offset it cannot
 /// prove; the loud trap names the unresolved receiver instead of masking it.
 fn resolve_field_offset(rec_handle, field_name) = {
-  match perform lookup_ty(rec_handle) {
+  match lookup_ty(rec_handle) {
     TRecord(fields)        => field_byte_offset(fields, field_name, 0, len(fields)),
     TRecordOpen(fields, _) => field_byte_offset(fields, field_name, 0, len(fields)),
     // H2.3: nominal records — chase TName through env to its
     // RecordSchemeKind for the field schema. Same offset arithmetic
     // (sorted-by-name, 4 bytes per i32-erased slot).
-    TName(name, _)         => match perform env_lookup(name) {
+    TName(name, _)         => match env_lookup(name) {
       Some(entry) => {
         let (_, _, kind) = entry
         match kind {
@@ -1398,7 +1395,7 @@ fn lower_stmt_body(s, handle, span) = match s {
         // Register the name in the current scope (a local for subsequent
         // VarRef lookups; the bound expr's handle IS the local's type handle).
         let N(_, _, expr_h) = expr
-        perform ls_bind_local(name, expr_h)
+        ls_bind_local(name, expr_h)
         LLet(handle, name, lo)
       },
       // PWild / PLit: evaluate for effect, no binding. DESTRUCTURE patterns
@@ -1415,7 +1412,7 @@ fn lower_stmt_body(s, handle, span) = match s {
   FnStmt(name, params, _ret_ann, _effs, body_node) => {
     // Bind the fn's name in the enclosing frame; the fn's handle is
     // the type handle (TFun bound to handle by infer).
-    perform ls_bind_local(name, handle)
+    ls_bind_local(name, handle)
     let param_names_list = lower_param_names(params)
     let param_handles_list = param_handles_of(handle, params)
     let free_names = collect_free_vars(body_node, param_names_list)
@@ -1433,16 +1430,16 @@ fn lower_stmt_body(s, handle, span) = match s {
     // composed name string, not a mode-int); 9 (lands the named
     // peer — symmetric with handler-arm-fn-name-discriminator's
     // third-instance abstraction-earned shape).
-    let outer = perform ls_outer_fn_name()
+    let outer = ls_outer_fn_name()   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope)
     let fn_name = if outer == "" { name }
       else { "{outer}_{name}" }
-    perform ls_enter_frame(
+    ls_enter_frame(
       fn_name,
       param_names_list, param_handles_list,
       captures_names, captures_handles
     )
     let lo_body = mark_tail(lower_expr(body_node))   // Hβ.lower.tail-call-mark-pass — fn body is in tail
-    perform ls_exit_frame()
+    ls_exit_frame()
     let fn_ir = LFn(
       fn_name,
       len(params),
@@ -1498,10 +1495,10 @@ fn lower_stmt_as_expr(s, handle, span) = {
 
 fn lower_match_arms(arms) = map((arm) => {
   let (pat, body) = arm
-  let cp = perform ls_push_scope()
+  let cp = ls_push_scope()   // drift-audit: ignore — sequenced effectful scope checkpoint (LowerScope)
   bind_pat_locals(pat)
   let lo_body = lower_expr(body)
-  perform ls_pop_scope(cp)
+  ls_pop_scope(cp)
   (lower_pat(pat), lo_body)
 }, arms)
 
@@ -1515,7 +1512,7 @@ fn lower_match_arms(arms) = map((arm) => {
 // must decide their binding.
 fn bind_pat_locals(pat) = match pat {
   PVar(name) => {
-    perform ls_bind_local(name, 0)
+    ls_bind_local(name, 0)
     ()
   },
   PCon(_, sub_pats) => bind_pat_locals_list(sub_pats),
@@ -1534,7 +1531,7 @@ fn bind_pat_rest(rest) = match rest {
   Some(name) => {
     if name == "_" { () }
     else {
-      perform ls_bind_local(name, 0)
+      ls_bind_local(name, 0)
       ()
     }
   }
@@ -1602,9 +1599,9 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = {
   // Open the arm-body evidence ledger: Tier-2 performs in the arm bodies
   // record their effects (first-encounter order); the indices ARE the
   // captured-ev slots the install writes after the arms.
-  perform arm_ev_begin()
+  arm_ev_begin()
   let decls = map((arm) => lower_one_arm_decl(arm, discriminator, config, state, fence), arms)
-  perform arm_ev_end(discriminator)
+  arm_ev_end(discriminator)
   decls
 }
 
@@ -1627,7 +1624,7 @@ fn lower_one_arm_decl(arm, discriminator, config, state, fence) = {
   let captures_names = config_names ++ state_field_names
   let captures_handles = zeros_of_len(len(captures_names))
   let locals_handles = zeros_of_len(len(arm.args))
-  perform ls_enter_frame(
+  ls_enter_frame(
     fn_name,
     arm.args, locals_handles,
     captures_names, captures_handles
@@ -1636,7 +1633,7 @@ fn lower_one_arm_decl(arm, discriminator, config, state, fence) = {
   // around arm body lowering so lower_expr's ResumeExpr arm resolves
   // `with field = NEW` updates' slot offsets via current_state_fields().
   let lo_body = mark_tail({ lower_expr(arm.body) } ~> arm_state_ctx(captures_names))   // Hβ.lower.tail-call-mark-pass — handler arm body is in tail
-  perform ls_exit_frame()
+  ls_exit_frame()
   // fence = nstate + total_arms; the arm's LEvPerform reads land on the
   // record's captured-ev region (past state AND arms).
   let fn_ir = LFn(fn_name, len(arm.args), arm.args, [lo_body], EfPure, fence)
@@ -1691,7 +1688,7 @@ fn bind_names_as_locals(names) = {
   // time; the op's signature gives them inferentially. 0 is the
   // sentinel — capture-handle correctness here is bounded by
   // future reach into op-arg type plumbing (Phase D evidence).
-  for_each((name) => perform ls_bind_local(name, 0), names)
+  for_each((name) => ls_bind_local(name, 0), names)
 }
 
 /// Lower a ResumeExpr's value + state updates with SNAPSHOT semantics:
@@ -1767,7 +1764,7 @@ fn free_vars_state_updates(updates, bound) = {
 /// Drift refused: 5 (state extracted from records, not parallel
 /// arrays); 9 (init-time lowering at install handled at install site).
 fn bind_state_field_names_as_locals(state) = {
-  for_each((field) => perform ls_bind_local(field.name, 0), state)
+  for_each((field) => ls_bind_local(field.name, 0), state)
 }
 
 // Parameter name lowering (for LFn metadata)
@@ -1787,7 +1784,7 @@ fn lower_param_names(params) = map((p) => {
 /// local then live-chases its type via lookup_ty, so type-dispatched ops
 /// (==, ++, to_string) see the type the graph proved. (Discipline: never
 /// cache the resolved Ty; carry the handle and chase — types.mn.)
-fn param_handles_of(fn_handle, params) = match perform lookup_ty(fn_handle) {
+fn param_handles_of(fn_handle, params) = match lookup_ty(fn_handle) {
   TFun(tparams, _, _) =>
     if len(tparams) == len(params) { map(tparam_handle, tparams) }
     else { lower_param_handles(params) },
@@ -1898,7 +1895,6 @@ fn free_vars_expr(e, bound) = match e {
     collect_free_vars(body, inner_bound)
   },
 
-  PerformExpr(_, args) => free_vars_list(args, bound),
   ResumeExpr(val, state_updates) =>
     free_vars_merge(collect_free_vars(val, bound),
               free_vars_state_updates(state_updates, bound)),
@@ -2142,10 +2138,10 @@ fn lower_record_update(handle, base, overrides) = {
 // The sorted field list of the record type inferred at a handle —
 // TRecord / TRecordOpen carry it directly; a nominal TName chases the
 // env to its RecordSchemeKind (same shape resolve_field_offset reads).
-fn record_fields_of_handle(handle) = match perform lookup_ty(handle) {
+fn record_fields_of_handle(handle) = match lookup_ty(handle) {
   TRecord(fields)        => fields,
   TRecordOpen(fields, _) => fields,
-  TName(name, _)         => match perform env_lookup(name) {
+  TName(name, _)         => match env_lookup(name) {
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
@@ -2185,7 +2181,7 @@ fn resolve_captures_outer(names, owner_h) = {
   if len(names) == 0 { ([], [], []) }
   else {
     let name = list_head(names)
-    let (res, local_h) = perform ls_resolve(name)
+    let (res, local_h) = ls_resolve(name)
     let (rest_names, rest_exprs, rest_handles) =
       resolve_captures_outer(list_tail(names), owner_h)
     match res {
@@ -2210,7 +2206,7 @@ fn resolve_captures_outer(names, owner_h) = {
 /// lambda bodies correctly distinguishes local/upval/global.
 fn lower_program(stmts) = {
   let globals = collect_top_level_names(stmts)
-  perform ls_register_globals(globals)
+  ls_register_globals(globals)
   // No pre-register pass: every handler decl's (config, state, arms) is
   // already in the env's HandlerKind (register_handler), so an install
   // resolves its handler's decl live (handler_decl_of) regardless of source

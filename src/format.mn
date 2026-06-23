@@ -103,7 +103,7 @@ handler format_default with !Mutate {
   // into the canonical String.
 
   format_at_handle(handle) => {
-    let node = perform graph_node_at(handle)
+    let node = graph_node_at(handle)
     let kind = ast_kind_of(node)
     let ctx = render_context_at(handle)
     let pos = (node, kind, ctx)
@@ -165,8 +165,8 @@ fn indented_center() with Pure = 4
 // the same line as their |>. The chain reads top-to-bottom = data flow.
 
 fn render_converge_chain(left, right) with Format + !Mutate = {
-  let left_str = perform format_chain(left)
-  let right_str = perform format_chain(right)
+  let left_str = format_chain(left)
+  let right_str = format_chain(right)
   "{left_str}\n{spaces(left_edge_indent())}|> {right_str}"
 }
 
@@ -186,7 +186,7 @@ fn render_converge_chain(left, right) with Format + !Mutate = {
 // at +2 indent (aligned with <|). The shape draws the fanout topology.
 
 fn render_diverge_chain(input, branches_tuple) with Format + !Mutate = {
-  let input_str = perform format_chain(input)
+  let input_str = format_chain(input)
   let branches = render_branch_tuple(branches_tuple)
   "{input_str}\n{spaces(left_edge_indent())}<| (\n{branches}\n{spaces(left_edge_indent())})"
 }
@@ -204,8 +204,8 @@ fn render_diverge_chain(input, branches_tuple) with Format + !Mutate = {
 // the parallel-merge topology.
 
 fn render_compose_chain(left, right) with Format + !Mutate = {
-  let left_str = perform format_chain(left)
-  let right_str = perform format_chain(right)
+  let left_str = format_chain(left)
+  let right_str = format_chain(right)
   "{parenthesize(left_str)}\n{spaces(indented_center())}><\n{parenthesize(right_str)}"
 }
 
@@ -226,8 +226,8 @@ fn render_compose_chain(left, right) with Format + !Mutate = {
 //   (try_fn()) ~> catch_abort
 
 fn render_tee(body, handler_expr) with Format + !Mutate = {
-  let body_str = perform format_chain(body)
-  let handler_str = perform format_chain(handler_expr)
+  let body_str = format_chain(body)
+  let handler_str = format_chain(handler_expr)
   match ast_kind_of(body) {
     NPipeExpr(_, _, _) =>
       "{body_str}\n{spaces(left_edge_indent())}~> {handler_str}",
@@ -248,8 +248,8 @@ fn render_tee(body, handler_expr) with Format + !Mutate = {
 // installed upstream); without it, parser rejects with E_FeedbackNoContext.
 
 fn render_feedback_chain(input, spec) with Format + !Mutate = {
-  let input_str = perform format_chain(input)
-  let spec_str = perform format_chain(spec)
+  let input_str = format_chain(input)
+  let spec_str = format_chain(spec)
   "{input_str}\n{spaces(indented_center())}<~ {spec_str}"
 }
 
@@ -272,7 +272,7 @@ fn render_feedback_chain(input, spec) with Format + !Mutate = {
 
 fn format_ic_loop(initial_ast) with Format + IC + !Mutate = {
   initial_ast
-    |> (ast) => perform format_program(ast)
+    |> (ast) => format_program(ast)
     ~> format_default
       <~ accumulate(empty_render())
 }
@@ -330,7 +330,7 @@ fn render_line_break_after(kind) with Pure = match kind {
 // node carries no comment (an honest read, not a stub).
 fn render_comment_for(node) with GraphRead + Memory + Alloc + !Mutate = {
   let N(_, _, h) = node
-  let text = perform graph_comment_at(h)
+  let text = graph_comment_at(h)
   if text == "" { "" }
   else { "//{replace(text, "\n", "\n//")}\n" }
 }
@@ -343,7 +343,7 @@ fn render_span_marker(node) with Pure = ""
 // decides placement.
 fn render_reason_chain(node) with GraphRead + !Mutate = {
   let N(_, _, h) = node
-  let GNode(_, reason) = perform graph_chase(h)
+  let GNode(_, reason) = graph_chase(h)
   show_reason_compressed(reason)
 }
 
@@ -432,7 +432,7 @@ fn render_branch_tuple(branches) with Format + !Mutate = {
   else {
     let head = list_head(branches)
     let tail = list_tail(branches)
-    let head_str = perform format_chain(head)
+    let head_str = format_chain(head)
     let head_line = spaces(indented_center())
       |> str_concat(head_str)
       |> str_concat(",")
@@ -446,7 +446,7 @@ fn render_branch_tuple(branches) with Format + !Mutate = {
 }
 
 fn render_non_chain(node) with Format + !Mutate = {
-  perform format_at_handle(node_handle(node))
+  format_at_handle(node_handle(node))
 }
 
 fn assemble_render(tokens, indent, line_break, comment, span, reason, sibling) with Pure = {
@@ -460,7 +460,7 @@ fn assemble_render(tokens, indent, line_break, comment, span, reason, sibling) w
 }
 
 fn format_one_stmt(stmt) with Format + !Mutate = {
-  perform format_at_handle(node_handle(stmt))
+  format_at_handle(node_handle(stmt))
 }
 
 fn ast_top_level_stmts(ast) with Pure = ast

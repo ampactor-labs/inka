@@ -87,7 +87,7 @@ effect HostClock {
 }
 
 handler clock_real {
-  clock_now() => resume(Instant(perform host_clock_ns())),
+  clock_now() => resume(Instant(host_clock_ns())),
   clock_sleep(_d) => resume()   // no-op in batch compilation
 }
 
@@ -156,7 +156,7 @@ handler deadline_test {
 
 handler clock_record with trace = [], trace_len = 0 {
   clock_now() => {
-    let now = perform host_clock_ns()
+    let now = host_clock_ns()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let new_trace = trace
       |> list_extend_to(trace_len + 1)
       |> list_set(trace_len, now)
@@ -186,7 +186,7 @@ handler tick_record with counter = 0, trace = [], trace_len = 0 {
 handler clock_replay with trace = [], read_idx = 0 {
   clock_now() =>
     if read_idx >= len(trace) {
-      perform report("clock", "E_ReplayExhausted", "error",
+      report("clock", "E_ReplayExhausted", "error",
         "clock replay trace exhausted",
         span_zero(), "MaybeIncorrect")
       resume(Instant(0))

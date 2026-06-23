@@ -74,7 +74,7 @@ fn rw_lookup(ref rw, handle, i, n) = {
 // dropped. Soundness over completeness — a missed optimization is free; a
 // dropped effect is a miscompile.
 fn is_pure(handle) with GraphRead = {
-  match perform graph_node_body(handle) {
+  match graph_node_body(handle) {
     NExpr(LitInt(_))    => true,
     NExpr(LitFloat(_))  => true,
     NExpr(LitString(_)) => true,
@@ -96,14 +96,14 @@ fn is_pure(handle) with GraphRead = {
 
 // x + 0 ≡ x  and  0 + x ≡ x  — the survivor is kept, never gated.
 fn rw_add_identity(handle) with GraphRead + EGraph = {
-  match perform graph_node_body(handle) {
+  match graph_node_body(handle) {
     NExpr(BinOpExpr(BAdd, l, r)) => {
       if is_zero(node_handle(r)) {
-        perform egraph_rewrite(handle, node_handle(l))
+        egraph_rewrite(handle, node_handle(l))
         true
       }
       else if is_zero(node_handle(l)) {
-        perform egraph_rewrite(handle, node_handle(r))
+        egraph_rewrite(handle, node_handle(r))
         true
       }
       else { false }
@@ -114,14 +114,14 @@ fn rw_add_identity(handle) with GraphRead + EGraph = {
 
 // x * 1 ≡ x  and  1 * x ≡ x  — survivor kept, never gated.
 fn rw_mul_identity(handle) with GraphRead + EGraph = {
-  match perform graph_node_body(handle) {
+  match graph_node_body(handle) {
     NExpr(BinOpExpr(BMul, l, r)) => {
       if is_one(node_handle(r)) {
-        perform egraph_rewrite(handle, node_handle(l))
+        egraph_rewrite(handle, node_handle(l))
         true
       }
       else if is_one(node_handle(l)) {
-        perform egraph_rewrite(handle, node_handle(r))
+        egraph_rewrite(handle, node_handle(r))
         true
       }
       else { false }
@@ -134,16 +134,16 @@ fn rw_mul_identity(handle) with GraphRead + EGraph = {
 // when that operand is provably pure (the effect gate). The canonical target
 // is the zero literal node, already in the fabric.
 fn rw_mul_absorb(handle) with GraphRead + EGraph = {
-  match perform graph_node_body(handle) {
+  match graph_node_body(handle) {
     NExpr(BinOpExpr(BMul, l, r)) => {
       let lh = node_handle(l)
       let rh = node_handle(r)
       if is_zero(rh) && is_pure(lh) {
-        perform egraph_rewrite(handle, rh)
+        egraph_rewrite(handle, rh)
         true
       }
       else if is_zero(lh) && is_pure(rh) {
-        perform egraph_rewrite(handle, lh)
+        egraph_rewrite(handle, lh)
         true
       }
       else { false }
@@ -152,12 +152,12 @@ fn rw_mul_absorb(handle) with GraphRead + EGraph = {
   }
 }
 
-fn is_zero(handle) with GraphRead = match perform graph_node_body(handle) {
+fn is_zero(handle) with GraphRead = match graph_node_body(handle) {
   NExpr(LitInt(n)) => n == 0,
   _                => false
 }
 
-fn is_one(handle) with GraphRead = match perform graph_node_body(handle) {
+fn is_one(handle) with GraphRead = match graph_node_body(handle) {
   NExpr(LitInt(n)) => n == 1,
   _                => false
 }
@@ -169,7 +169,7 @@ fn is_one(handle) with GraphRead = match perform graph_node_body(handle) {
 // program weave AND type-bound to Int — saturate runs after inference, so an
 // un-bound new node would be NFree at lower time. Div/mod by zero does NOT
 // fold: the trap is the program's meaning, not a constant.
-fn const_int(handle) with GraphRead = match perform graph_node_body(handle) {
+fn const_int(handle) with GraphRead = match graph_node_body(handle) {
   NExpr(LitInt(n)) => Some(n),
   _                => None
 }
@@ -184,7 +184,7 @@ fn fold_int(op, a, b) with Pure = match op {
 }
 
 fn rw_const_fold(handle) with GraphRead + GraphWrite + EGraph = {
-  match perform graph_node_body(handle) {
+  match graph_node_body(handle) {
     NExpr(BinOpExpr(op, l, r)) =>
       match const_int(node_handle(l)) {
         Some(a) =>
@@ -192,10 +192,10 @@ fn rw_const_fold(handle) with GraphRead + GraphWrite + EGraph = {
             Some(b) =>
               match fold_int(op, a, b) {
                 Some(v) => {
-                  let h = perform graph_fresh_ty(Inferred("const-fold"))
-                  perform graph_register_node(h, NExpr(LitInt(v)))
-                  perform graph_bind(h, TInt, Inferred("const-fold result : Int"))
-                  perform egraph_rewrite(handle, h)
+                  let h = graph_fresh_ty(Inferred("const-fold"))
+                  graph_register_node(h, NExpr(LitInt(v)))
+                  graph_bind(h, TInt, Inferred("const-fold result : Int"))
+                  egraph_rewrite(handle, h)
                   true
                 },
                 None => false
@@ -210,10 +210,10 @@ fn rw_const_fold(handle) with GraphRead + GraphWrite + EGraph = {
 
 // x - 0 ≡ x — survivor kept, never gated. (0 - x is NOT x, so left only.)
 fn rw_sub_identity(handle) with GraphRead + EGraph = {
-  match perform graph_node_body(handle) {
+  match graph_node_body(handle) {
     NExpr(BinOpExpr(BSub, l, r)) =>
       if is_zero(node_handle(r)) {
-        perform egraph_rewrite(handle, node_handle(l))
+        egraph_rewrite(handle, node_handle(l))
         true
       } else { false },
     _ => false
@@ -222,10 +222,10 @@ fn rw_sub_identity(handle) with GraphRead + EGraph = {
 
 // x / 1 ≡ x — survivor kept, never gated.
 fn rw_div_identity(handle) with GraphRead + EGraph = {
-  match perform graph_node_body(handle) {
+  match graph_node_body(handle) {
     NExpr(BinOpExpr(BDiv, l, r)) =>
       if is_one(node_handle(r)) {
-        perform egraph_rewrite(handle, node_handle(l))
+        egraph_rewrite(handle, node_handle(l))
         true
       } else { false },
     _ => false
@@ -247,7 +247,7 @@ fn saturate(bound) with GraphRead + GraphWrite + EGraph = saturate_until(bound, 
 // equivalences are the side effect lower reads via egraph_extract. A `|>`
 // stage between frontend and lower in the pipeline spine.
 fn saturate_pass(program) with GraphRead + GraphWrite + EGraph = {
-  saturate(perform graph_next())
+  saturate(graph_next())
   program
 }
 

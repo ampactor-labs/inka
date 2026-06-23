@@ -38,8 +38,8 @@ type LspFrame
 
 fn read_lsp_frame() with Memory + Alloc + WASI = {
   let initial_cap = 256
-  let hdr_buf = perform alloc(initial_cap)
-  perform store_i32(hdr_buf, 0)
+  let hdr_buf = alloc(initial_cap)
+  store_i32(hdr_buf, 0)
   let hdr_result = read_headers_until_blank(hdr_buf, 0, initial_cap)
   match hdr_result {
     None              => LspFrameEof,
@@ -63,14 +63,14 @@ fn read_headers_until_blank(buf, written, cap) with Memory + Alloc + WASI = {
     let (buf2, cap2) = if written < cap { (buf, cap) }
                        else {
                          let new_cap = cap * 2
-                         let new_buf = perform alloc(4 + new_cap)
-                         perform mem_copy(new_buf + 4, buf + 4, written)
+                         let new_buf = alloc(4 + new_cap)
+                         mem_copy(new_buf + 4, buf + 4, written)
                          (new_buf, new_cap)
                        }
-    perform store_i8(buf2 + 4 + written, b)
+    store_i8(buf2 + 4 + written, b)
     let new_written = written + 1
     if header_terminator_seen(buf2, new_written) {
-      perform store_i32(buf2, new_written - 4)
+      store_i32(buf2, new_written - 4)
       Some(buf2)
     } else {
       read_headers_until_blank(buf2, new_written, cap2)
@@ -84,10 +84,10 @@ fn read_headers_until_blank(buf, written, cap) with Memory + Alloc + WASI = {
 fn header_terminator_seen(buf, written) with Memory = {
   if written < 4 { false }
   else {
-    let b3 = perform load_i8(buf + 4 + written - 4)
-    let b2 = perform load_i8(buf + 4 + written - 3)
-    let b1 = perform load_i8(buf + 4 + written - 2)
-    let b0 = perform load_i8(buf + 4 + written - 1)
+    let b3 = load_i8(buf + 4 + written - 4)
+    let b2 = load_i8(buf + 4 + written - 3)
+    let b1 = load_i8(buf + 4 + written - 2)
+    let b0 = load_i8(buf + 4 + written - 1)
     b3 == 13 && b2 == 10 && b1 == 13 && b0 == 10
   }
 }
@@ -118,7 +118,7 @@ fn find_header(src, src_len, kw, kw_len, pos) with Memory = {
 
 fn header_matches_at(src, kw, kw_len, src_pos, i) with Memory = {
   if i >= kw_len { true }
-  else if perform load_i8(src + 4 + src_pos + i) == perform load_i8(kw + 4 + i) {
+  else if load_i8(src + 4 + src_pos + i) == load_i8(kw + 4 + i) {
     header_matches_at(src, kw, kw_len, src_pos, i + 1)
   } else {
     false
@@ -128,7 +128,7 @@ fn header_matches_at(src, kw, kw_len, src_pos, i) with Memory = {
 fn skip_header_spaces(src, src_len, pos) with Memory = {
   if pos >= src_len { pos }
   else {
-    let b = perform load_i8(src + 4 + pos)
+    let b = load_i8(src + 4 + pos)
     if b == 32 || b == 9 { skip_header_spaces(src, src_len, pos + 1) }
     else                 { pos }
   }
@@ -137,7 +137,7 @@ fn skip_header_spaces(src, src_len, pos) with Memory = {
 fn parse_int_from_pos(src, src_len, pos, acc) with Memory = {
   if pos >= src_len { acc }
   else {
-    let b = perform load_i8(src + 4 + pos)
+    let b = load_i8(src + 4 + pos)
     if b >= 48 && b <= 57 {
       parse_int_from_pos(src, src_len, pos + 1, acc * 10 + (b - 48))
     } else {
@@ -153,8 +153,8 @@ fn parse_int_from_pos(src, src_len, pos, acc) with Memory = {
 /// before N bytes received (truncated message; protocol error).
 
 fn read_body(n) with Memory + Alloc + WASI = {
-  let buf = perform alloc(4 + n)
-  perform store_i32(buf, n)
+  let buf = alloc(4 + n)
+  store_i32(buf, n)
   let total = read_body_loop(buf, 0, n)
   if total < n { LspFrameEof }
   else         { LspFrame(buf) }

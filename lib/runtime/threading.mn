@@ -247,7 +247,7 @@ fn ffi_spawn(ref task) with WasiThreads = {
   // The closure already exists in the heap (LMakeClosure emitted it).
   // wasi_thread_spawn(closure_ptr) gives the host the closure pointer;
   // host invokes $thread_start(closure_ptr) on a fresh OS thread.
-  Handle(perform wasi_thread_spawn(closure_ptr))
+  Handle(wasi_thread_spawn(closure_ptr))
 }
 
 fn ffi_join(handle) with WasiThreads + SharedMemory = {
@@ -258,14 +258,14 @@ fn ffi_join(handle) with WasiThreads + SharedMemory = {
   // emit_module.wat layout for spawnable closures (peer-extension).
   // done addr projection: closure_done_addr reads the layout.
   let done_addr = closure_done_addr(closure_ptr)
-  perform wait_i32(done_addr, 0, max_join_timeout())
-  perform atomic_load_i32(closure_result_addr(closure_ptr))
+  wait_i32(done_addr, 0, max_join_timeout())
+  atomic_load_i32(closure_result_addr(closure_ptr))
 }
 
 /// Compute done flag's absolute address in the closure record.
 /// Layout: [fn_idx@0][capture_count@4][captures@8..(8+4*nc)][done@8+4*nc]
 fn closure_done_addr(closure_ptr) with Memory = {
-  let nc = perform load_i32(closure_ptr + 4)
+  let nc = load_i32(closure_ptr + 4)
   closure_ptr + 8 + 4 * nc
 }
 
@@ -281,7 +281,7 @@ fn closure_result_addr(closure_ptr) with Memory = {
 /// (which equals the closure pointer — the thread's own state).
 fn ffi_current_thread_id() with WasiThreads = 0
 
-fn ffi_num_cores() with WasiThreads = perform wasi_num_cores()
+fn ffi_num_cores() with WasiThreads = wasi_num_cores()
 
 fn closure_pointer(ref task) with Pure = closure_pointer_intrinsic(task)
 

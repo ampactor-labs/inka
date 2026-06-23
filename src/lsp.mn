@@ -253,7 +253,7 @@ fn position_to_span(pos) with Pure = {
 /// rootUri or workspaceFolders.
 
 fn handle_initialize(_params) with Memory + Alloc + Interact = {
-  perform project_root()
+  project_root()
   let caps = JObj([
     ("textDocumentSync",   JNum(1.0)),                    // 1 = Full
     ("hoverProvider",      JBool(true)),
@@ -280,8 +280,8 @@ fn handle_hover(params) with Memory + Alloc + Interact = {
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
   ensure_doc_open(uri)
-  perform focus(TargetSpan(span))
-  let answer = perform consult(QTypeAt(span))
+  focus(TargetSpan(span))
+  let answer = consult(QTypeAt(span))
   match answer {
     AnsSilence              => LspHoverResp(None),
     AnsType(ty, reason)     => LspHoverResp(Some(hover_from_type(ty, reason))),
@@ -298,7 +298,7 @@ fn handle_completion(params) with Memory + Alloc + Interact = {
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
   ensure_doc_open(uri)
-  perform focus(TargetSpan(span))
+  focus(TargetSpan(span))
   // Voice projection of cursor's Propose tentacle.
   // Named peer Hβ.lsp.voice-propose-at-target: a 1-arg `voice_propose`
   // op on a Voice effect projects Synth's 3-arg propose through the
@@ -316,7 +316,7 @@ fn handle_code_action(params) with Memory + Alloc + Interact = {
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
   ensure_doc_open(uri)
-  perform focus(TargetSpan(span))
+  focus(TargetSpan(span))
   // Same Voice projection as handle_completion. Hβ.lsp.voice-propose-at-target.
   LspCodeActionResp([])
 }
@@ -339,7 +339,7 @@ fn handle_definition(params) with Memory + Alloc + Interact = {
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
   ensure_doc_open(uri)
-  perform focus(TargetSpan(span))
+  focus(TargetSpan(span))
   LspDefinitionResp(Some(Location(uri, line_of(pos), char_of(pos), line_of(pos), char_of(pos))))
 }
 
@@ -351,7 +351,7 @@ fn handle_references(params) with Memory + Alloc + Interact = {
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
   ensure_doc_open(uri)
-  perform focus(TargetSpan(span))
+  focus(TargetSpan(span))
   LspReferencesResp([])
 }
 
@@ -377,7 +377,7 @@ fn handle_did_change(params) with Memory + Alloc + Interact = {
 fn handle_did_save(params) with Memory + Alloc + Interact = {
   let uri = lsp_extract_uri(params)
   let fh = ensure_doc_open(uri)
-  perform save_file(fh)
+  save_file(fh)
   ()
 }
 
@@ -400,7 +400,7 @@ fn handle_did_close(_params) with Pure = {
 
 fn ensure_doc_open(uri) with Memory + Alloc + Interact = {
   let path = uri_to_path(uri)
-  perform open_file(path)
+  open_file(path)
 }
 
 /// uri_to_path — strip "file://" prefix; pass through other schemes.

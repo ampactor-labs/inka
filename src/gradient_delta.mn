@@ -92,14 +92,14 @@ effect Delta {
 handler delta_default with !Mutate {
 
   delta_pick(handle) => {
-    let row_delta = perform delta_effect_row(handle)
+    let row_delta = delta_effect_row(handle)
     match row_delta {
       Some(_) => resume(row_delta),
       None => {
-        let own_delta = perform delta_ownership(handle)
+        let own_delta = delta_ownership(handle)
         match own_delta {
           Some(_) => resume(own_delta),
-          None => resume(perform delta_refinement(handle))
+          None => resume(delta_refinement(handle))
         }
       }
     }
@@ -110,11 +110,11 @@ handler delta_default with !Mutate {
   // body row is inferred but never compared. Gradient step: "declare
   // `with <inferred_row>` to make the contract explicit."
   delta_effect_row(handle) => {
-    let GNode(kind, _) = perform graph_chase(handle)
+    let GNode(kind, _) = graph_chase(handle)
     match kind {
       NBound(ty) => match ty {
         TFun(_, _, body_row) => {
-          let declared_row = perform graph_declared_row(handle)
+          let declared_row = graph_declared_row(handle)
           match declared_row {
             None => {
               // No declaration; suggest the inferred row.
@@ -151,7 +151,7 @@ handler delta_default with !Mutate {
   // as Own at proof-time, the gradient suggests `own` to make the
   // consumption discipline explicit.
   delta_ownership(handle) => {
-    let GNode(kind, _) = perform graph_chase(handle)
+    let GNode(kind, _) = graph_chase(handle)
     match kind {
       NBound(ty) => match ty {
         TFun(params, _, _) =>

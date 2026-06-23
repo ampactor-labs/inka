@@ -81,7 +81,7 @@ fn compare_decide(op, lh, rh) with GraphRead = match node_const(lh) {
 /// Resolve an operand HANDLE to its literal value, reading the Expr LIVE
 /// from the graph (graph_node_body) — Some for a compile-time constant,
 /// None otherwise. Carry the handle, read live.
-fn node_const(handle) with GraphRead = match perform graph_node_body(handle) {
+fn node_const(handle) with GraphRead = match graph_node_body(handle) {
   NExpr(LitInt(n))    => Some(LVInt(n)),
   NExpr(LitFloat(f))  => Some(LVFloat(f)),
   NExpr(LitString(s)) => Some(LVString(s)),
@@ -166,7 +166,7 @@ fn not_decide(ref e) with Pure = match e {
 /// is invariant-violating by literal evidence. Span is the call site;
 /// reason carries the predicate-as-Why for the chain-walker.
 fn report_refinement_rejected(ref pred, ref span, ref reason) with !Mutate = {
-  perform report(
+  report(
     "verify", "E_RefinementRejected", "error",
     "refinement predicate proven false at compile time: {show_predicate(pred)}",
     span, "MaybeIncorrect"
@@ -178,7 +178,7 @@ fn report_refinement_rejected(ref pred, ref span, ref reason) with !Mutate = {
 fn report_verify_debt(debt) = {
   if len(debt) == 0 { () }
   else {
-    perform report("verify", "V_Pending", "VerificationPending",
+    report("verify", "V_Pending", "VerificationPending",
       "{int_to_str(len(debt))} verification obligations pending",
       span_zero(), "MaybeIncorrect")
   }
@@ -221,7 +221,7 @@ handler verify_smt with witnesses = [] {
         resume()
       },
       None        =>
-        match perform smt_solve(predicate_to_smt_lib(predicate)) {
+        match smt_solve(predicate_to_smt_lib(predicate)) {
           SmtSat(witness) =>
             resume()
               with witnesses = [(span, predicate, witness)] ++ witnesses,
@@ -265,7 +265,7 @@ fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc = {
 
 /// Resolve an operand HANDLE to its Expr (graph_node_body) and render it.
 fn handle_to_smt(handle) with GraphRead + Memory + Alloc = {
-  body_to_smt(perform graph_node_body(handle))
+  body_to_smt(graph_node_body(handle))
 }
 
 /// Render a nested operand NODE (a call's argument) as an SMT term.

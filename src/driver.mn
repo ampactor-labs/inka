@@ -27,7 +27,7 @@ import runtime/io
 ///   `"runtime/strings"` → `"lib/runtime/strings.mn"`.
 fn driver_module_path(ref module_name) with Memory + Alloc + Filesystem = {
   let src_path = "src/{module_name}.mn"
-  if perform fs_exists(src_path) {
+  if fs_exists(src_path) {
     src_path
   } else {
     "lib/{module_name}.mn"
@@ -54,7 +54,7 @@ fn driver_collect_visit(ref module_name, own collected, own visited)
   } else {
     let visited2 = set_insert(visited, module_name)
     let path = driver_module_path(module_name)
-    if !perform fs_exists(path) {
+    if !fs_exists(path) {
       // Module source missing — treat as terminal (no further deps).
       // Driver's per-module check will surface E_MissingModule when
       // it tries to process this name.
@@ -63,7 +63,7 @@ fn driver_collect_visit(ref module_name, own collected, own visited)
       let written  = list_set(extended, count, module_name)
       ((written, count + 1), visited2)
     } else {
-      let source = perform fs_read_file(path)
+      let source = fs_read_file(path)
       let imports = driver_extract_imports(source)
       // Visit dependencies first, then add self (post-order).
       let (after_deps_collected, after_deps_visited) =
@@ -112,13 +112,13 @@ fn driver_extract_imports_from_ast(ast) = {
 fn driver_check_module(ref module_name)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   let path = driver_module_path(module_name)
-  if !perform fs_exists(path) {
-    perform report("driver", "E_MissingModule", "MissingVariable",
+  if !fs_exists(path) {
+    report("driver", "E_MissingModule", "MissingVariable",
       "module source not found: {module_name} (expected at {path})",
       span_zero(), "MaybeIncorrect")
     []
   } else {
-    let source = perform fs_read_file(path)
+    let source = fs_read_file(path)
     let current_hash = hash_source(source)
     let cached = cache_read(module_name)
     match cached {
@@ -148,13 +148,13 @@ fn driver_infer_module(ref module_name, ref source, ref source_hash)
   let imports_hashes = driver_collect_dep_hashes(imports)
   // Snapshot env BEFORE inference so we can diff after to find
   // this module's exported entries.
-  let env_before = perform env_snapshot()
+  let env_before = env_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let Env(entries_before) = env_before
   let n_before = len(entries_before)
   // Run inference.
   infer_program(ast)
   // Snapshot env AFTER; the new entries are this module's exports.
-  let env_after = perform env_snapshot()
+  let env_after = env_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let Env(entries_after) = env_after
   let n_after = len(entries_after)
   // entries are prepended in env_handler, so the new ones are at
@@ -191,8 +191,8 @@ fn driver_collect_dep_hashes_loop(ref imports, i, n, own buf)
   else {
     let m = list_index(imports, i)
     let path = driver_module_path(m)
-    let h = if perform fs_exists(path) {
-      hash_source(perform fs_read_file(path))
+    let h = if fs_exists(path) {
+      hash_source(fs_read_file(path))
     } else { 0 }
     driver_collect_dep_hashes_loop(imports, i + 1, n, list_set(buf, i, h))
   }
@@ -218,10 +218,10 @@ fn driver_install_loop(ref short, ref entries, i, n) with Memory + Alloc + EnvWr
     let entry = list_index(entries, i)
     let (name, scheme, reason, kind) = entry
     // Flat short-name install (current behavior).
-    perform env_extend(name, scheme, reason, kind)
+    env_extend(name, scheme, reason, kind)
     // Qualified install — dotted name as env key.
     let dotted = "{short}.{name}"
-    perform env_extend(dotted, scheme, reason, kind)
+    env_extend(dotted, scheme, reason, kind)
     driver_install_loop(short, entries, i + 1, n)
   }
 }
@@ -258,7 +258,7 @@ fn driver_install_qualified_loop(ref short, ref entries, i, n) with Memory + All
   for_each((entry) => {
     let (name, scheme, reason, kind) = entry
     let dotted = "{short}.{name}"
-    perform env_extend(dotted, scheme, reason, kind)
+    env_extend(dotted, scheme, reason, kind)
   }, entries)
 }
 
@@ -308,9 +308,9 @@ fn driver_collect_dag_with_deps(ref entry_module)
 fn driver_module_in_dag_deps(ref module_name, ref dag_modules)
   with Memory + Alloc + Filesystem = {
   let path = driver_module_path(module_name)
-  if !perform fs_exists(path) { [] }
+  if !fs_exists(path) { [] }
   else {
-    let source = perform fs_read_file(path)
+    let source = fs_read_file(path)
     source
       |> driver_extract_imports
       |> filter((dep) => contains_module(dag_modules, dep))

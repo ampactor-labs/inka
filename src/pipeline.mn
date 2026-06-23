@@ -58,7 +58,7 @@ import driver
 fn compile(entry_module) = {
   {
     driver_check(entry_module)
-    let entry_source = perform fs_read_file(driver_module_path(entry_module))
+    let entry_source = fs_read_file(driver_module_path(entry_module))
     entry_source |> frontend |> infer_program |> saturate_pass |> lower_program |> emit_module
   }
     ~> wat_stdout
@@ -182,7 +182,7 @@ fn query(source, question) = {
     let ast = source |> frontend
     infer_program(ast)
     let q = parse_query_string(question)
-    let result = perform ask(q)
+    let result = ask(q)
     render_query_result(result)
   }
     ~> query_default
@@ -471,11 +471,11 @@ handler diagnostics_handler {
 
 handler fresh_for_inference {
   mint(reason) => {
-    let h = perform graph_fresh_ty(reason)
+    let h = graph_fresh_ty(reason)
     resume(h)
   }
   mint_row(reason) => {
-    let h = perform graph_fresh_row(reason)
+    let h = graph_fresh_row(reason)
     resume(h)
   }
 }
@@ -502,7 +502,7 @@ fn collect_gradients(ast) = {
          let N(body, _, handle) = node
          match body {
            NStmt(FnStmt(name, _, _, _, _)) =>
-             [(name, perform teach_gradient(handle))],
+             [(name, teach_gradient(handle))],
            _ => []
          }
        })
@@ -548,7 +548,7 @@ fn collect_fn_rows(ast) = {
          let N(body, _, handle) = node
          match body {
            NStmt(FnStmt(name, _, _, _, _)) =>
-             [build_audit_report(name, perform lookup_ty(handle))],
+             [build_audit_report(name, lookup_ty(handle))],
            _ => []
          }
        })

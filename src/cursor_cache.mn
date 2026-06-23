@@ -226,7 +226,7 @@ fn build_queue_loop(handles, i, n, buf, buf_len)
   else {
     let handle = list_index(handles, i)
     // Forward direction: gradient_next.
-    let forward_opt = perform teach_gradient(handle)
+    let forward_opt = teach_gradient(handle)
     let new_len_after_forward = match forward_opt {
       None => buf_len,
       Some(suggestion) => {
@@ -241,7 +241,7 @@ fn build_queue_loop(handles, i, n, buf, buf_len)
       }
     }
     // Inverse direction: delta_pick.
-    let inverse_opt = perform delta_pick(handle)
+    let inverse_opt = delta_pick(handle)
     let new_len_after_inverse = match inverse_opt {
       None => new_len_after_forward,
       Some(suggestion) => {
@@ -295,19 +295,19 @@ fn save_extended_kai_to_disk(module_name, extended)
     with Memory + Alloc + Filesystem = {
   let path = kai_extended_path_for(module_name)
   let bytes = extended_kai_serialize(extended)
-  perform fs_write_file(path, bytes)
+  fs_write_file(path, bytes)
 }
 
 fn extended_kai_serialize(extended) with Memory + Alloc = {
   cache_pack_extended_kai(extended)
-  perform pack_finalize()
+  pack_finalize()
 } ~> buffer_packer
 
 fn load_extended_kai_from_disk(module_name)
     with Memory + Alloc + Filesystem = {
   let path = kai_extended_path_for(module_name)
-  if perform fs_exists(path) {
-    let bytes = perform fs_read_file(path)
+  if fs_exists(path) {
+    let bytes = fs_read_file(path)
     extended_kai_deserialize(bytes)
   } else { None }
 }

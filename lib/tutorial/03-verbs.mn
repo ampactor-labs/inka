@@ -149,7 +149,7 @@ fn combine_normalized(pair) with Pure = match pair {
   (a, b) => a + b
 }
 fn tick_advance(x) with Sample = {
-  perform tick()
+  tick()
   x
 }
 

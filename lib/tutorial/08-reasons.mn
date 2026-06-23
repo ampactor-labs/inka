@@ -53,7 +53,7 @@ fn caller(x) = safe_call(x) + 1
 /// the Reason chain rooted at a graph handle; render_why walks it
 /// to indented text suitable for IDE hover or `mentl explain` CLI.
 fn walk_reason(handle) = {
-  perform teach_why(handle)
+  teach_why(handle)
     |> render_why
     |> print_string
 }

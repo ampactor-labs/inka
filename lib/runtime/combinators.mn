@@ -116,14 +116,14 @@ fn first_verified_wins(survivors, cursor) with GraphRead = {
 /// rollback discipline.
 
 fn race_internal(handlers) with GraphRead + GraphWrite = {
-  let race_checkpoint = perform graph_push_checkpoint()
+  let race_checkpoint = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let survivors       = collect_verified_survivors(handlers, race_checkpoint)
-  let cursor          = perform graph_cursor()
+  let cursor          = graph_cursor()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let winner          = first_verified_wins(survivors, cursor)
   // Roll back ALL forks' trails to shared checkpoint; replay
   // winner's mutations. Per Q-B.4.2 — shared rollback ensures
   // determinism + no fork's intermediate state leaks.
-  perform graph_rollback(race_checkpoint)
+  graph_rollback(race_checkpoint)
   replay_winner(winner)
 }
 

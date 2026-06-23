@@ -261,7 +261,7 @@ fn edit_run(target_opt) = {
 
 fn mentl_edit_session(entry_module) = {
   driver_check(entry_module)
-  perform patch_set_target(entry_module)
+  patch_set_target(entry_module)
   cursor_session(Caret(0, Inferred("mentl edit session start")))
 }
 
@@ -324,7 +324,7 @@ fn doc_project(entry_module) = {
   // render handlers (md / html / llms) gated on
   // Hβ.f1.doc-handler-substrate.
   driver_check(entry_module)
-  perform doc_emit_for_module(entry_module)
+  doc_emit_for_module(entry_module)
 }
 
 // ─── compile_run / run_run — emit WAT / compile + execute

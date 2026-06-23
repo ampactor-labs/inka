@@ -34,32 +34,32 @@ handler catch_abort {
 
 /// Look up a name in the environment. Wraps the EnvRead effect
 /// as a named graph node for |> pipelines.
-fn lookup_env(ref name) = perform env_lookup(name)
+fn lookup_env(ref name) = env_lookup(name)
 
 /// Unwrap an env lookup result, aborting if None.
 fn unwrap_env(opt) with Abort = match opt {
   Some((scheme, _, _)) => scheme,
-  None => perform abort()
+  None => abort()
 }
 
 /// Extract a parameter's owner name and index from a Scheme.
 /// Aborts if the scheme doesn't resolve to a function parameter.
 fn extract_param_owner(scheme) with Abort = match scheme {
-  Forall(_, TVar(h)) => match perform graph_chase(h) {
+  Forall(_, TVar(h)) => match graph_chase(h) {
     GNode(_, FnParam(owner_name, idx, _)) => (owner_name, idx),
-    _ => perform abort()
+    _ => abort()
   },
-  _ => perform abort()
+  _ => abort()
 }
 
 /// Extract function parameter list from an owner's Scheme.
 /// Aborts if the scheme doesn't resolve to a function type.
 fn extract_fn_params(scheme) with Abort = match scheme {
-  Forall(_, TVar(fn_h)) => match perform graph_chase(fn_h) {
+  Forall(_, TVar(fn_h)) => match graph_chase(fn_h) {
     GNode(NBound(TFun(params, _, _)), _) => params,
-    _ => perform abort()
+    _ => abort()
   },
-  _ => perform abort()
+  _ => abort()
 }
 
 /// Look up a name's authored ownership annotation.
@@ -94,7 +94,7 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
         Some(Unmarked) => " — it was inferred as 'own'"
         _ => ""
       }
-      perform report("ownership", "E_OwnershipViolation", "OwnershipViolation",
+      report("ownership", "E_OwnershipViolation", "OwnershipViolation",
         "'{name}' consumed twice (first at {show_span(first)}){auth_hint}",
         span, "MachineApplicable")
       resume()
@@ -258,7 +258,7 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
         if tag.region_id == 0 || region_on_stack(region_stack, tag.region_id) {
           resume()
         } else {
-          perform report("region", "E_RegionEscape", "OwnershipViolation",
+          report("region", "E_RegionEscape", "OwnershipViolation",
             "value allocated in a scope that ended before this return — region {int_to_str(tag.region_id)} no longer live",   // drift-audit: ignore
             escape_span, "MaybeIncorrect")
           // tag.install_span retained for future multi-span
@@ -298,7 +298,7 @@ fn join_field_regions(ref tags, ref fields, current) with !Mutate = {
 
 fn report_each_collision(ref names, ref span) with !Mutate = {
   for_each((name) => {
-    perform report("ownership", "E_OwnershipViolation", "OwnershipViolation",
+    report("ownership", "E_OwnershipViolation", "OwnershipViolation",
       "'{name}' consumed in two parallel branches",
       span, "MachineApplicable")
   }, names)
@@ -349,7 +349,7 @@ fn walk_return_positions(ref refs, ref node) with !Mutate = {
   match body {
     NExpr(VarRef(name)) =>
       if string_in_list(refs, name) {
-        perform report("ownership", "E_OwnershipViolation", "OwnershipViolation",
+        report("ownership", "E_OwnershipViolation", "OwnershipViolation",
           "ref binding '{name}' escapes its scope (returned)",
           span, "MachineApplicable")
       } else { () },
@@ -381,7 +381,6 @@ fn walk_return_positions(ref refs, ref node) with !Mutate = {
     NExpr(BinOpExpr(_, _, _)) => (),
     NExpr(UnaryOpExpr(_, _)) => (),
     NExpr(CallExpr(_, _))    => (),
-    NExpr(PerformExpr(_, _)) => (),
     NExpr(ResumeExpr(_, _))  => (),
     NExpr(MakeListExpr(_))   => (),
     NExpr(MakeTupleExpr(_))  => (),
@@ -449,8 +448,6 @@ fn count_uses(ref name, ref node) with !Mutate = {
       count_uses(name, l) + count_uses(name, r),
     NExpr(MatchExpr(s, arms)) =>
       count_uses(name, s) + count_match_arms(name, arms),
-    NExpr(PerformExpr(_, args)) =>
-      count_uses_list(name, args),
     NExpr(MakeListExpr(elems))  => count_uses_list(name, elems),
     NExpr(MakeTupleExpr(elems)) => count_uses_list(name, elems),
     NExpr(MakeStringExpr(fragments)) => count_uses_list(name, fragments),

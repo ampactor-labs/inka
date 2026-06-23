@@ -157,7 +157,7 @@ handler interrogate_default with !Mutate {
   // case); 7 (one record output, not parallel-arrays); 9 (all eight
   // bodied; no "later"); 11 (no acc-append in loop; <| outputs tuple).
   interrogate_at(handle) => {
-    let GNode(kind, reason) = perform graph_chase(handle)
+    let GNode(kind, reason) = graph_chase(handle)
     let span = span_of_handle(handle)
     let pos = (handle, kind, reason)
     let (graph_v, handler_v, verb_v, row_v, ownership_v, refinement_v, gradient_v, reason_v) =
@@ -175,7 +175,7 @@ handler interrogate_default with !Mutate {
           (h, k, r) => row_verdict_for(h, k, r),                                    // 4. Row
           (h, k, r) => ownership_verdict_for(h, k, r),                              // 5. Ownership
           (h, _, r) => refinement_verdict_for(h, r),                                // 6. Refinement
-          (h, _, r) => match perform teach_gradient(h) {                            // 7. Gradient
+          (h, _, r) => match teach_gradient(h) {                            // 7. Gradient
             None             => VerdictClears(r),
             Some(suggestion) => VerdictInvites(suggestion)
           },
@@ -207,12 +207,12 @@ handler interrogate_default with !Mutate {
   // parallel_map (across positions) compose — the project-wide audit
   // IS the cursor projection scaled to N handles.
   interrogate_all() => {
-    let snapshot = perform graph_snapshot()
+    let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let Graph(_nodes, _epoch, next, _overlays, _spans, _intents) = snapshot
     let positions = enumerate_handles(0, next)
     let reports =
       positions
-        |> parallel_map((h) => perform interrogate_at(h))
+        |> parallel_map((h) => interrogate_at(h))
     resume(reports)
   },
 
@@ -239,7 +239,7 @@ handler interrogate_default with !Mutate {
 
 fn audit_ic_fixpoint(initial_density) with Interrogate + IC + !Mutate = {
   initial_density
-    |> (_) => perform interrogate_all()
+    |> (_) => interrogate_all()
     ~> interrogate_default
       <~ accumulate(empty_density())
 }

@@ -63,10 +63,10 @@ handler counter_logged with count = 0 {
 /// User code — performs against the Counter effect; the chain
 /// decides what `inc` does.
 fn triple_inc() with Counter = {
-  perform inc()
-  perform inc()
-  perform inc()
-  perform read()
+  inc()
+  inc()
+  inc()
+  read()
 }
 
 /// `main` chooses the in-memory handler. Swap to `~> counter_logged`

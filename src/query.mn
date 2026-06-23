@@ -66,7 +66,7 @@ handler query_default {
   ask(q) => match q {
 
     QTypeOf(name) =>
-      match perform env_lookup(name) {
+      match env_lookup(name) {
         None => resume(QRError("not found: {name}")),
         Some(entry) => {
           let (scheme, reason, _kind) = entry
@@ -76,14 +76,14 @@ handler query_default {
       },
 
     QTypeAt(_span) => {
-      let Graph(_, _, _, _, span_index, _) = perform graph_snapshot()
+      let Graph(_, _, _, _, span_index, _) = graph_snapshot()
       match find_tightest(span_index, _span, None, 999999999) {
         None => resume(QRError("no enclosing span found in AST index")),
         Some(handle) => {
           let ty = chase_type_deep(TName("Unknown", [])) // We should chase the node's type. Wait!
           // We only have the handle to the node. The node is a GNode(NBound(ty) or NFree).
           // We can use graph_chase(handle) to get the node, then extract its type.
-          let GNode(kind, reason) = perform graph_chase(handle)
+          let GNode(kind, reason) = graph_chase(handle)
           match kind {
             NBound(ty) => resume(QRType(chase_type_deep(ty), reason)),
             NFree(_) => resume(QRType(TName("Unresolved", []), reason)),
@@ -94,7 +94,7 @@ handler query_default {
     },
 
     QIntentOf(handle) => {
-      let Graph(_, _, _, _, _, intent_index) = perform graph_snapshot()
+      let Graph(_, _, _, _, _, intent_index) = graph_snapshot()
       match find_intent(intent_index, handle, 0, len(intent_index)) {
         None => resume(QRError("no intent recorded for handle {int_to_str(handle)}")), // drift-audit: ignore
         Some(effs) => resume(QRIntent(effs))
@@ -102,7 +102,7 @@ handler query_default {
     },
 
     QUnresolved => {
-      let Env(entries) = perform env_snapshot()
+      let Env(entries) = env_snapshot()
       resume(QRUnresolved(find_unresolved(entries)))
     },
 
@@ -110,7 +110,7 @@ handler query_default {
       resume(QRChain(walk_chain(handle, 0))),
 
     QEffects(name) =>
-      match perform env_lookup(name) {
+      match env_lookup(name) {
         None => resume(QRError("not found: {name}")),
         Some(entry) => {
           let (scheme, _, _) = entry
@@ -123,7 +123,7 @@ handler query_default {
       },
 
     QOwnership(name) =>
-      match perform env_lookup(name) {
+      match env_lookup(name) {
         None => resume(QRError("not found: {name}")),
         Some(entry) => {
           let (scheme, _, _) = entry
@@ -136,7 +136,7 @@ handler query_default {
       },
 
     QWhy(name) =>
-      match perform env_lookup(name) {
+      match env_lookup(name) {
         None => resume(QRError("not found: {name}")),
         Some(entry) => {
           let (_, reason, _) = entry
@@ -148,7 +148,7 @@ handler query_default {
       resume(QRError("refs-of requires AST index (Arc F.2)")),
 
     QVerifyDebt => {
-      let debt = perform verify_debt()
+      let debt = verify_debt()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
       resume(QRVerifyDebt(debt))
     },
 
@@ -167,7 +167,7 @@ handler query_default {
 /// never raw handles.
 fn chase_type_deep(ref ty) with !Mutate = match ty {
   TVar(h) => {
-    let GNode(kind, _) = perform graph_chase(h)
+    let GNode(kind, _) = graph_chase(h)
     match kind {
       NBound(inner) => chase_type_deep(inner),
       _             => ty
@@ -228,7 +228,7 @@ fn find_unresolved(ref entries) with !Mutate = {
 
 fn has_free_tvar(ref ty) with !Mutate = match ty {
   TVar(h) => {
-    let GNode(kind, _) = perform graph_chase(h)
+    let GNode(kind, _) = graph_chase(h)
     match kind {
       NFree(_)      => true,
       NBound(inner) => has_free_tvar(inner),
@@ -278,7 +278,7 @@ fn has_free_tvar_fields(ref fields) with !Mutate = {
 fn walk_chain(handle, depth) with !Mutate = {
   if depth > 50 || handle < 0 { [] }
   else {
-    let node = perform graph_chase(handle)
+    let node = graph_chase(handle)
     let GNode(kind, _) = node
     match kind {
       NBound(ty) => match ty {

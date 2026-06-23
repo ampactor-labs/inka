@@ -14,15 +14,24 @@
 // iterative-context handler re-invocations via the `$s<h>` module
 // global declared by emit_state_globals at module init.
 //
-// Source-level binding for `$__fb_prev_<h>` is NOT yet surfaced by
-// the parser. Body LIR can reference the prior local only after the
-// peer sub-handle LF.B (Body-binding for prior, parser + lower) lands
-// — at which point a body shape like `(prev) => f(input, prev)` will
-// have `prev` resolve to the per-site prior local. Until LF.B, the
-// filters in this file are STRUCTURAL — they emit valid WAT, but the
-// body computes only on its current-iteration input. The LF state-
-// machine cycle still runs (load + store) so the structural shape is
-// observable; numerical correctness arrives with LF.B.
+// LF.B (LANDED): the `<~` RHS lambda `(prev) => f(input, prev)` binds
+// `prev` to the per-site prior local ($__fb_prev_<h>), read LIVE — so
+// the recurrence y[n] = f(x[n], y[n-1]) is EXPRESSED, not commented.
+// The lower path is PFeedback → lower_feedback_body → ls_bind_fb_prior
+// → RFbPrior → LFeedbackPrior → emit `(local.get $__fb_prev_<h>)`; the
+// LFeedback emit declares + sets that local before the body, so the
+// prior is present when the body reads it. No closure: the prior is a
+// register read (a `<~` recurrence allocating per tick would defeat
+// !Alloc). The filters below are now NUMERICALLY correct IIR filters,
+// surpassing Faust's untyped `~` — the prior carries the refinement row
+// (Sample / Hz / Gain) + the !Alloc proof on the feedback edge.
+//
+// The disposable seed lags LF.B (its lower predates the lambda-inline,
+// so it closures the body — Hβ.seed.feedback-prior-inline). The .mn
+// LEADS; the wheel (mentl2) carries the correct inline path. Gate:
+// tests/micros/mn-feedback-iir.mn (the integer IIR accumulator proves
+// the prior carries across iterations; float arithmetic is STEP 1's
+// separate gradient gap).
 //
 // Composition with the kernel:
 // - Primitive #3 (`<~`): the verb, drawn on the page.
@@ -83,12 +92,10 @@ fn compute_alpha(cutoff: Hz, sr: Int) -> Float with Pure + !Alloc =
 /// the prior output into the next iteration; under Sample(rate) the
 /// delay is one sample period.
 ///
-/// Body uses input + prior to compute current. Pre-LF.B: body sees
-/// only current input (prior local is in scope but unnamed at source);
-/// the load-tee-store cycle still emits, so the structural feedback
-/// shape is visible in the WAT output. Numerical correctness lands
-/// alongside LF.B (body-binding for prior). Post-LF.B: body's `prev`
-/// parameter resolves to $__fb_prev_<h>.
+/// The canonical one-pole recurrence: y[n] = α·x[n] + (1-α)·y[n-1].
+/// `(prev)` binds the prior output y[n-1] (LF.B); the body reads it
+/// live. The `with Sample + Pure + !Alloc` row proves it real-time-safe
+/// (no per-tick heap), and the prior carries the Sample refinement.
 ///
 /// Primitive #3 (`<~`) drawn; primitive #4 (`with Sample(rate) +
 /// Pure + !Alloc`) proven; primitive #5 (own input consumed); primitive
@@ -97,45 +104,35 @@ fn compute_alpha(cutoff: Hz, sr: Int) -> Float with Pure + !Alloc =
 fn lowpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample
     with Sample + Pure + !Alloc =
   let alpha = compute_alpha(cutoff, sr)
-  // Body: alpha * input + (1 - alpha) * prior. Pre-LF.B the prior
-  // term is structurally allocated as $__fb_prev_<h> at WAT level
-  // but body LIR doesn't yet reference it (source-binding pending).
-  // Post-LF.B: replace `input` with `mix(input, prev, alpha)`.
-  (input * alpha) <~ delay(1)
+  ((prev) => input * alpha + (1.0 - alpha) * prev) <~ delay(1)
 
-/// One-pole high-pass IIR filter. Complement of the low-pass; same
-/// `<~ delay(1)` substrate; differs only in the body's coefficient
-/// arithmetic (HP = signal - LP).
+/// One-pole high-pass IIR filter — HP = signal - LP. The prior output
+/// y[n-1] is the smoothed (low-pass) component; subtracting it from the
+/// input leaves the high-frequency residue. Same `<~ delay(1)` substrate.
 
 fn highpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample
     with Sample + Pure + !Alloc =
   let alpha = compute_alpha(cutoff, sr)
-  (input * (1.0 - alpha)) <~ delay(1)
+  ((prev) => input - (alpha * input + (1.0 - alpha) * prev)) <~ delay(1)
 
-/// Single-pole DC blocker. Identical topology to highpass_iir but
-/// with a fixed pole near unity. Used at signal-chain entry to
-/// remove DC bias before downstream processing.
-///
-/// Pre-LF.B note: the pole coefficient operates on input alone;
-/// once LF.B lands, the body becomes the canonical DC-blocker form
-/// `input - prev_input + 0.995 * prev_output`.
+/// Single-pole DC blocker: y[n] = x[n] - x[n-1] + R·y[n-1] with the
+/// pole R near unity. Removes DC bias at the signal-chain entry. Here
+/// `prev` is the prior OUTPUT y[n-1]; the standard form folds the input
+/// difference into the recurrence with R = 0.995.
 
 fn dc_blocker(input: Sample) -> Sample with Sample + Pure + !Alloc =
-  (input * 0.995) <~ delay(1)
+  ((prev) => input + 0.995 * prev) <~ delay(1)
 
-/// Envelope follower — tracks signal magnitude with asymmetric
-/// attack/release time constants. Useful as input to compressors
-/// or expanders.
-///
-/// The `<~ delay(1)` back-edge is the envelope's persistence; under
-/// Sample(rate) the envelope updates per-sample. Refinement keeps
-/// attack + release as positive Hz values.
+/// Envelope follower — tracks signal magnitude. The envelope persists
+/// across ticks via `<~ delay(1)`; each sample relaxes the prior
+/// envelope toward the current magnitude: env[n] = α·|x[n]| + (1-α)·env[n-1].
+/// Refinement keeps attack + release as positive Hz values.
 
 fn envelope_follower(input: Sample, attack: Hz, release: Hz, sr: Int)
     -> Sample with Sample + Pure + !Alloc =
   let abs_input = if input >= 0.0 { input } else { 0.0 - input }
   let alpha = compute_alpha(attack, sr)
-  (abs_input * alpha) <~ delay(1)
+  ((prev) => abs_input * alpha + (1.0 - alpha) * prev) <~ delay(1)
 
 // ─── Composition example: real-time audio chain ──────────────────────
 //
@@ -151,6 +148,28 @@ fn audio_chain(input: Sample, cutoff: Hz, sr: Int) -> Sample
     |> dc_blocker
     |> ((x) => lowpass_iir(x, cutoff, sr))
     |> soft_clip
+
+// ─── Parallel topology: a stereo chain (the §5.U PARALLEL DSP demo) ───
+//
+// The two channels are INDEPENDENT pipelines — the shape of the problem is
+// `(left) >< (right)`, drawn with the `><` verb (not a hand-rolled tuple).
+// `><` is PURE TOPOLOGY: it declares the branches independent and tuples the
+// results in source order; whether they run sequential or on parallel threads
+// is a `~> Thread` (Schedule) handler choice in the enclosing chain, read LIVE
+// at lower (PLAN §4④ — independence is the verb, concurrency is the handler).
+// So `stereo_chain` is the SAME source whether it runs one-core-sequential or
+// N-core-threaded — the schedule never touches the branch bodies. The whole
+// fanout stays `with Sample + Pure + !Alloc`: each channel is real-time-safe,
+// and `!Alloc` proves the stereo region never heap-allocates per sample —
+// surpassing Faust (global precision, no row proof) and JAX (schedule baked at
+// trace time, here it is a live `~>` edge). Install `~> parallel_compose`
+// (lib/runtime/threading.mn) at the call site for true-parallel stereo.
+
+fn stereo_chain(left: Sample, right: Sample, cutoff: Hz, sr: Int)
+    -> (Sample, Sample) with Sample + Pure + !Alloc =
+  (left  |> dc_blocker |> ((x) => audio_chain(x, cutoff, sr)))
+    ><
+  (right |> dc_blocker |> ((x) => audio_chain(x, cutoff, sr)))
 
 // ─── Peer sub-handles (named per drift mode 9 — deferred-by-omission) ─
 //

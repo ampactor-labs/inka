@@ -23,48 +23,50 @@ handler peak_tracker with state = 0.0 {
 }
 
 // ── Lowpass filter ──────────────────────────────────────────
+// The inline `handle {} with` spelling is format-lifted to a named handler
+// decl + `~>` install (SYNTAX.md §"Installing a handler in code": `~>` is the
+// ONE install verb; handler state + arms live at the DECLARATION). `alpha` is
+// a config param captured at install; `state` is the filter memory.
 
-fn process_lowpass(alpha, buffer) = {
-    let result = handle {
-        map((x) => process(x), buffer)
-    } with state = 0.0 {
-        process(x) => {
-            let y = state + alpha * (x - state)
-            resume(y) with state = y
-        },
-    }
-    result
+handler lowpass(alpha) with state = 0.0 {
+    process(x) => {
+        let y = state + alpha * (x - state)
+        resume(y) with state = y
+    },
 }
+
+fn process_lowpass(alpha, buffer) =
+    { map((x) => process(x), buffer) } ~> lowpass(alpha)
 
 // ── Biquad filter ───────────────────────────────────────────
+// Five config coefficients captured at install; four state cells (the two
+// prior inputs + two prior outputs) are the biquad's memory.
 
-fn process_biquad(b0, b1, b2, a1, a2, buffer) = {
-    let result = handle {
-        map((x) => process(x), buffer)
-    } with y1 = 0.0, y2 = 0.0, x1 = 0.0, x2 = 0.0 {
-        process(x) => {
-            let y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
-            resume(y) with y1 = y, y2 = y1, x1 = x, x2 = x1
-        },
-    }
-    result
+handler biquad(b0, b1, b2, a1, a2) with y1 = 0.0, y2 = 0.0, x1 = 0.0, x2 = 0.0 {
+    process(x) => {
+        let y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+        resume(y) with y1 = y, y2 = y1, x1 = x, x2 = x1
+    },
 }
+
+fn process_biquad(b0, b1, b2, a1, a2, buffer) =
+    { map((x) => process(x), buffer) } ~> biquad(b0, b1, b2, a1, a2)
 
 // ── Envelope follower ───────────────────────────────────────
+// Asymmetric attack/release captured at install; `state` is the running
+// envelope. coeff selects attack on a rising edge, release on a falling one.
 
-fn process_envelope(attack, release, buffer) = {
-    let result = handle {
-        map((x) => process(x), buffer)
-    } with state = 0.0 {
-        process(x) => {
-            let abs_x = abs(x)
-            let coeff = if abs_x > state { attack } else { release }
-            let env = state + coeff * (abs_x - state)
-            resume(env) with state = env
-        },
-    }
-    result
+handler envelope(attack, release) with state = 0.0 {
+    process(x) => {
+        let abs_x = abs(x)
+        let coeff = if abs_x > state { attack } else { release }
+        let env = state + coeff * (abs_x - state)
+        resume(env) with state = env
+    },
 }
+
+fn process_envelope(attack, release, buffer) =
+    { map((x) => process(x), buffer) } ~> envelope(attack, release)
 
 // ── Preset handlers ─────────────────────────────────────────
 

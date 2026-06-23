@@ -302,6 +302,12 @@ type LowExpr
   // Hβ.lower.multi-effect-ev-index-map (Part 2) + Hβ.emit.handler-record-ev-capture.
   | LHandleWith(Int, LowExpr, LowExpr, String, List, List, List)
   | LFeedback(Int, LowExpr, LowExpr)           // <~ desugaring (iterative ctx required)
+  // (LF.B) the prior-iteration output of feedback handle h, read LIVE from the
+  // $__fb_prev_<h> local the LFeedback emit declares + loads. A `<~` lambda
+  // param (`(prev) => ...`) lowers to THIS — the recurrence y[n]=f(x[n],y[n-1])
+  // is expressed, not commented. Carried-Truth: the feedback NODE is the value;
+  // no register copy, no snapshot — emit reads the one local the cycle writes.
+  | LFeedbackPrior(Int)                        // handle of the enclosing <~ site
   // effect op invocation — Tier-1 direct-call form. 4th = state_local: the
   // install-LOCAL name "__hstate_<h>" of the lexically-enclosing handler the
   // arm runs against ("" sentinel = use caller __state). Threads the handler's
@@ -418,6 +424,7 @@ fn lexpr_handle(e) with Pure = match e {
   LRegion(h, _)           => h,
   LHandleWith(h, _, _, _, _, _, _) => h,
   LFeedback(h, _, _)      => h,
+  LFeedbackPrior(h)       => h,
   LPerform(h, _, _, _)    => h,
   LEvPerform(h, _, _, _, _) => h,
   LEvSlotRef(h, _)        => h,
@@ -980,6 +987,9 @@ fn lower_expr_body(e, handle, span) = match e {
     match res {
       RLocal       => LLocal(local_h, name),
       RUpval(slot) => LUpval(local_h, slot),
+      // (LF.B) a `<~` lambda param resolves to the feedback site's prior local,
+      // read LIVE — the recurrence's y[n-1] term IS this node.
+      RFbPrior(fb_h) => LFeedbackPrior(fb_h),
       RGlobal      => match env_kind_of(name) {
         Some(ConstructorScheme(tag_id, _)) =>
           LMakeVariant(handle, tag_id, []),
@@ -1247,12 +1257,44 @@ fn lower_pipe(kind, left, right, handle) = match kind {
   },
 
   PFeedback => {
-    // <~ feedback — requires iterative context. Emit desugars to a
-    // stateful handler capturing previous output as state.
-    let lo_l = lower_expr(left)
+    // <~ feedback — requires iterative context. The LFeedback emit declares
+    // and loads $__fb_prev_<h> (the prior-iteration output), so the body can
+    // read it LIVE. (LF.B) When the LHS is `(prev) => body`, `prev` binds to
+    // THIS feedback handle's prior node and the recurrence y[n]=f(x[n],y[n-1])
+    // is expressed — not commented. The lambda is INLINED (its body lowers
+    // directly into the cycle), never a closure: the prior is a register read,
+    // and a `<~` recurrence allocating a closure per tick would defeat !Alloc.
+    let lo_l = lower_feedback_body(left, handle)
     let lo_r = lower_expr(right)
     LFeedback(handle, lo_l, lo_r)
   }
+}
+
+/// (LF.B) Lower the LHS of a `<~`. A single-param lambda `(prev) => body`
+/// binds `prev` to the feedback site's prior local and inlines the body —
+/// the recurrence reads y[n-1] live. Any other LHS lowers as-is (a bare
+/// expression computes on the current input only, the structural form).
+fn lower_feedback_body(left, fb_handle) = {
+  let N(lbody, _, _) = left
+  match lbody {
+    NExpr(LambdaExpr(params, body)) =>
+      if len(params) == 1 {
+        ls_bind_fb_prior(feedback_param_name(list_head(params)), fb_handle)
+        let lo = lower_expr(body)
+        ls_unbind_fb_prior()
+        lo
+      } else { lower_expr(left) },
+    _ => lower_expr(left)
+  }
+}
+
+/// The bound name of a `<~` lambda's single param (the prior-output binder).
+/// TParam's first field IS the name string (a wildcard `(_)` lowers it to "_",
+/// which never resolves — a feed-forward body simply leaves the prior
+/// unreferenced). One destructure, read live — no pattern re-classification.
+fn feedback_param_name(p) = {
+  let TParam(name, _, _, _, _) = p
+  name
 }
 
 /// Extract the handler-name string from the AST node on the right side
@@ -2700,7 +2742,7 @@ fn push_name(buf, count, name) = {
 // alphabetically, so the WAT layout is captures(0), capture_handles(4),
 // capture_order(8), locals(12), local_handles(16), local_order(20).
 // Mentl source reads via .field — physical layout irrelevant.
-handler lower_scope with frames = [], globals = [] {
+handler lower_scope with frames = [], globals = [], fb_priors = [] {
   ls_enter_frame(fn_name, locals_in, locals_h, captures_in, captures_h) => {
     // Per Hβ.first-light.nested-fn-name-discriminator (2026-05-06):
     // fn_name carries the named-fn discriminator for nested-fn naming
@@ -2774,8 +2816,24 @@ handler lower_scope with frames = [], globals = [] {
     }
   },
 
+  // (LF.B) The `<~` lambda param shadows everything for the recurrence body:
+  // it names the prior-iteration output, a feedback NODE read live. Pushed
+  // innermost-first so a nested `<~` resolves to its own prior. The pair is
+  // (name, fb_handle); resolution returns RFbPrior(fb_handle).
+  ls_bind_fb_prior(name, h) =>
+    resume() with fb_priors = [(name, h)] ++ fb_priors,
+
+  ls_unbind_fb_prior() =>
+    if len(fb_priors) == 0 { resume() }
+    else { resume() with fb_priors = list_tail(fb_priors) },
+
   ls_resolve(name) => {
-    if len(frames) == 0 {
+    // Feedback-prior bindings shadow frame locals (the recurrence body's
+    // `prev` IS the prior node — Carried-Truth, read live from $__fb_prev_<h>).
+    let prior_h = fb_prior_handle_of(fb_priors, name)
+    if prior_h >= 0 {
+      resume((RFbPrior(prior_h), 0))
+    } else if len(frames) == 0 {
       resume((RGlobal, 0))
     } else {
       let frame = list_head(frames)
@@ -2822,6 +2880,20 @@ fn ls_outer_fn_name_loop(frames) = {
     let frame = list_head(frames)
     if frame.fn_name == "" { ls_outer_fn_name_loop(list_tail(frames)) }
     else { frame.fn_name }
+  }
+}
+
+/// (LF.B) Resolve a name to its feedback-prior handle, innermost-first.
+/// Each entry is `(name, fb_handle)` — the `<~` site whose prior local this
+/// name binds. Returns the handle on match, -1 when the name is not a
+/// `<~`-bound prior (so `ls_resolve` falls through to frame locals). Read
+/// sequentially over one list (drift 7 refused); no parallel arrays.
+fn fb_prior_handle_of(priors, name) = {
+  if len(priors) == 0 { -1 }
+  else {
+    match list_head(priors) {
+      (n, h) => if n == name { h } else { fb_prior_handle_of(list_tail(priors), name) }
+    }
   }
 }
 

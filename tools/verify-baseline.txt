@@ -235,3 +235,18 @@ micro:fanout-persist=30
 # by r3-r0); the f32x4.replace_lane WAT form is validated to assemble (wat2wasm) —
 # peer Hβ.lower.fanout-simd-seed-value-gate. Exit 90 (head 33 + lanes-in-order 57).
 micro:fanout-simd=90
+
+# W25 / A4-domains — autodiff + DSP-character as algebraic-effect HANDLERS, both
+# seed-runnable (Int scalars; the float tensor/waveshaping gradient is STEP 1's
+# separate repr gap). mn-autodiff: d/dx x^2 at 3 = 6 via a Compute effect whose
+# compute_tape handler records the forward input + a backward fold reads it —
+# the autodiff topology of lib/ml/autodiff.mn (the multishot deepening is the
+# named peer Hβ.ml.autodiff-as-multishot). mn-distort: the SAME `~> distort`
+# chain under hard_clip vs gain2 = two characters from one source (the lib's
+# spectral_flux_distort / warm_distort / fold_distort topology) — clip(25)=10 +
+# gain2(4)=8 = 18. Proves handler=character: the DSP transfer function is a
+# `~>` install edge, never a hardcoded function (surpassing every fixed-transfer
+# DSP framework). The bound-`<~` IIR (mn-feedback-iir) is .mn-leads (the seed
+# closures the LF.B lambda; the wheel inlines it), so it is NOT in the run-set.
+micro:autodiff=6
+micro:distort=18

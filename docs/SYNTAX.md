@@ -574,6 +574,15 @@ signal
 
 **Type rule:** `<~` requires an **iterative context** — the structural presence of a cycle/iteration-resume handler (an `Iterate`-class effect) in the enclosing stack; `Sample`/`Tick`/`Clock` are *instances* of that class, not a hardcoded name-allowlist (a name-allowlist would be the string-keyed drift at the handler layer). Its RHS is a **state-element** — a value that performs the iterative effect (carries state across ticks); `delay(N)`, `accumulate(init)`, `filter_spec(N, coeffs)` are examples, and any user-defined register of that shape qualifies. Without an iterative context: `E_FeedbackNoContext` at the `<~` site.
 
+**Binding the prior — the recurrence form.** The LHS may be a single-param lambda `(prev) => body`; `prev` binds the **prior iteration's output**, read live, so a genuine IIR recurrence `y[n] = f(x[n], y[n-1])` is expressed (not approximated by a bare feed-forward LHS):
+
+```
+fn lowpass(x: Sample, a: Float) -> Sample with Sample + Pure + !Alloc =
+  ((prev) => a * x + (1.0 - a) * prev) <~ delay(1)
+```
+
+The prior is a **graph node** (the feedback site's own carried value), not a register copied into scope — `prev` resolves to `RFbPrior` → `LFeedbackPrior`, emitting a direct read of the site's prior local. The body is **inlined**, never a heap closure: a `<~` recurrence allocating per tick would defeat the `!Alloc` real-time row, so the prior is a register read. A bare-expression LHS (no lambda) is the feed-forward form — it computes on the current input only; the `(prev) =>` form is what carries `y[n-1]`. The surface surpasses Faust's untyped `~`: the prior carries the same refinement row (`Sample`/`Hz`/`Gain`) and the `!Alloc` proof as the forward path. (Surface kernel correspondence: primitive #3 the `<~` verb; primitive #5 the prior is owned-read, not aliased.)
+
 ---
 
 ## Records

@@ -1082,6 +1082,11 @@ type Resolution
   = RLocal          // name is a local of the current frame — emit references $<name>
   | RUpval(Int)     // name is captured at slot; emit offset-loads from __state
   | RGlobal         // top-level name — emit references $<name> as a global
+  | RFbPrior(Int)   // name is a `<~`-bound prior — emit references $__fb_prev_<h>
+                    // (LF.B): the `(prev) => body <~ delay(1)` lambda param resolves
+                    // to the feedback handle's prior-iteration local, read LIVE at
+                    // the body. The prior is the feedback NODE; no copy/snapshot —
+                    // the emit-declared $__fb_prev_<h> local IS the carried value.
 
 // `ls_resolve` returns (Resolution, type_handle) where type_handle is
 // the type handle the local was BOUND with (via ls_bind_local). For
@@ -1094,6 +1099,8 @@ effect LowerScope {
   ls_enter_frame(String, List, List, List, List) -> ()  // fn_name, locals_names, locals_handles, captures_names, captures_handles
   ls_exit_frame() -> ()
   ls_bind_local(String, Int) -> Int  // append (name, handle); returns slot
+  ls_bind_fb_prior(String, Int) -> ()  // (LF.B) push a `<~` lambda param → feedback handle's prior local
+  ls_unbind_fb_prior() -> ()           // (LF.B) pop the innermost `<~` prior binding after its body lowers
   ls_resolve(String) -> (Resolution, Int)
   ls_register_globals(List) -> ()
   ls_outer_fn_name() -> String  // closest enclosing named-fn frame; "" for top-level

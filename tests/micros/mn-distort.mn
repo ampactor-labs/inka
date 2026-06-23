@@ -1,0 +1,37 @@
+// mn-distort — W25 gate: DSP CHARACTER IS A HANDLER SWAP.
+//
+// The distortion is an EFFECT (`distort` — "shape this sample"); HOW it shapes
+// is the HANDLER. The SAME `~> distort` chain, a different handler installed,
+// is a different transfer function — the algebraic-effect leverage no hardcoded
+// DSP transfer function can express. This gate proves the swap: `process(x)`
+// performs Distort; `~> hard_clip` clamps, `~> gain2` amplifies — one source,
+// two characters.
+//
+// This is the topology of lib/dsp/spectral.mn's spectral_flux_distort /
+// warm_distort / fold_distort handlers (the real lib uses [Float] waveshaping
+// + per-sample spectral-flux state; this gate uses Int scalars so the SEED can
+// run it — the float waveshaping is STEP 1's separate representation gap, not
+// the distort-as-handler substrate).
+//
+// Run: tools/run-micro.sh tests/micros/mn-distort.mn 18
+// Expected exit 18: hard_clip(25)=10 (clamped to ±10) + gain2(4)=8 = 18.
+
+effect Distort { distort(x: Int) -> Int }
+
+// hard_clip — clamp the signal to ±10 (the saturation character).
+handler hard_clip {
+  distort(x) => resume(if x > 10 { 10 } else { if x < 0 - 10 { 0 - 10 } else { x } }),
+}
+
+// gain2 — double the signal (the amplification character).
+handler gain2 {
+  distort(x) => resume(x * 2),
+}
+
+fn process(x) -> Int with Distort = distort(x)
+
+fn main() -> Int = {
+  let clipped = { process(25) } ~> hard_clip
+  let gained = { process(4) } ~> gain2
+  clipped + gained
+}

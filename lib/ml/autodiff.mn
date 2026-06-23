@@ -24,6 +24,47 @@ effect Compute {
   get_tape() -> List
 }
 
+// ── compute_tape — the forward handler ──────────────────────
+// Each forward op COMPUTES the result (via tensor.mn) AND records a
+// TapeEntry, then resumes the value. `get_tape` resumes the state. The
+// tape is the growing handler state — the forward pass IS performing
+// Compute; the backward pass (below) is the reverse fold over this tape.
+//
+// THE GENERATIVE LEAP (W25, autodiff-as-multishot): the tape entries are
+// a hand-rolled re-derivation of what multi-shot ALREADY captures — each
+// forward op's continuation IS the resumable point the backward pass
+// re-enters. The unsurpassable form (peer Hβ.ml.autodiff-as-multishot)
+// drops the explicit TapeEntry: a MultiShot Compute handler captures each
+// forward continuation in the bump image (the unified record, B3), and
+// backward = resuming those continuations in reverse with the upstream
+// gradient. Because the continuations are contiguous handle-addressed
+// records, a training checkpoint is one memcpy (persistable via `~> Persist`,
+// W08) — surpassing JAX/PyTorch (host-language explicit tape, no persist).
+// The TapeEntry form below is the REAL, runnable today; the multishot form
+// is the same graph read at the TIME altitude, sequenced behind W07's
+// continuation producer (the .mn names it, the leap is not a hedge — it is
+// the deeper read of this exact handler once the producer lands).
+
+handler compute_tape with tape = [] {
+  forward_mat_vec_mul(w, x) => {
+    let out = mat_vec_mul(w, x)
+    resume(out) with tape = push(tape, TapeMatVecMul({w: w, x: x, out: out}))
+  },
+  forward_vec_add(a, b) => {
+    let out = vec_add(a, b)
+    resume(out) with tape = push(tape, TapeVecAdd({a: a, b: b}))
+  },
+  forward_relu(xs) => {
+    let out = relu_vec(xs)
+    resume(out) with tape = push(tape, TapeRelu({input: xs}))
+  },
+  forward_sigmoid(xs) => {
+    let out = sigmoid_vec(xs)
+    resume(out) with tape = push(tape, TapeSigmoid({out: out}))
+  },
+  get_tape() => resume(tape),
+}
+
 // ── Backward pass ───────────────────────────────────────────
 // Walks the tape in reverse, accumulating gradients.
 // Returns list of (dw, db) gradient pairs for weight layers.

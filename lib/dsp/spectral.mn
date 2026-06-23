@@ -89,3 +89,41 @@ fn adaptive_shape(x: Float, drive: Float, flux: Float) -> Float with Pure = {
 
     w * warm_amt + a * asym_amt + f * fold_amt
 }
+
+// ── spectral_flux_distort — the forward handler ─────────────
+// The handler IS the distortion character. State = a fast and a slow
+// envelope tracking spectral energy; each `distort` updates both, estimates
+// the per-sample flux (fast vs slow divergence = transient detection), and
+// applies adaptive_shape — so the transfer function MUTATES per-sample with
+// the signal's spectral flux. Same `~> distort` chain, a different handler =
+// a different physics: this is the algebraic-effect leverage no hardcoded
+// transfer function (every other DSP framework) can express.
+//
+// The envelopes relax toward the magnitude abs(x) with fixed attack/release
+// coefficients (0.7 fast, 0.05 slow) — fast chases transients, the slow one
+// holds the sustained level; their ratio IS the flux. `with Pure` (no heap):
+// the envelopes are the handler's own state, mutated in place per resume.
+
+handler spectral_flux_distort with fast_env = 0.0, slow_env = 0.0 {
+  distort(x, drive) => {
+    let mag = if x >= 0.0 { x } else { 0.0 - x }
+    let new_fast = fast_env + 0.7 * (mag - fast_env)
+    let new_slow = slow_env + 0.05 * (mag - slow_env)
+    let flux = estimate_flux(new_fast, new_slow)
+    resume(adaptive_shape(x, drive, flux))
+      with fast_env = new_fast, slow_env = new_slow
+  },
+}
+
+// ── warm / fold preset handlers ─────────────────────────────
+// Fixed-character handlers — same `~> distort` chain, hardcoded shape. The
+// preset IS the handler choice; swapping warm_distort for fold_distort
+// changes the entire character with no chain edit.
+
+handler warm_distort {
+  distort(x, drive) => resume(warm_shape(x, drive)),
+}
+
+handler fold_distort {
+  distort(x, drive) => resume(fold_shape(x, drive)),
+}

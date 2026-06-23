@@ -10,7 +10,13 @@
 //
 // Each series is genuine sequential recursion — term n+1 derives
 // from term n (no list to map/fold; the float_pow10 recursion shape
-// is the family precedent).
+// is the family precedent). Because the recursion carries scalars and
+// never touches the heap (float_of_int/float_to_int are lower-time
+// LConvert intrinsics with no row), every function here is `with Pure`
+// — which is what unlocks `!Alloc` real-time DSP callbacks downstream:
+// a one-pole filter calling exp() proves heap-free transitively. The
+// prior `Memory + Alloc` row was a stale over-declaration (W12); the
+// inferred row IS Pure, so the declared row now matches it.
 //
 // Named peer Hμ.lib.float-family-home: relocate the float_*
 // arithmetic family from strings.mn (where float_to_str's internals
@@ -31,12 +37,12 @@ fn two_pi() with Pure = 6.283185307179586
 
 // float_to_int truncates toward zero; floor differs only for
 // negative non-integers.
-fn float_floor(f) with Memory + Alloc = {
+fn float_floor(f) with Pure = {
   let t = float_of_int(float_to_int(f))
   if f < t { t - 1.0 } else { t }
 }
 
-fn float_pow2(k) with Memory + Alloc = {
+fn float_pow2(k) with Pure = {
   if k == 0 { 1.0 }
   else if k > 0 { 2.0 * float_pow2(k - 1) }
   else { 1.0 / float_pow2(0 - k) }
@@ -47,13 +53,13 @@ fn float_pow2(k) with Memory + Alloc = {
 // x = k·ln2 + r with r ∈ [0, ln2); exp(x) = 2^k · Σ rⁿ/n!.
 // 13 terms bound the series error below f64 epsilon on [0, ln2).
 
-fn exp(x) with Memory + Alloc = {
+fn exp(x) with Pure = {
   let k = float_to_int(float_floor(x / ln2()))
   let r = x - float_of_int(k) * ln2()
   float_pow2(k) * exp_series(r, 1, 1.0, 1.0)
 }
 
-fn exp_series(r, n, term, acc) with Memory + Alloc = {
+fn exp_series(r, n, term, acc) with Pure = {
   if n > 13 { acc }
   else {
     let t = (term * r) / float_of_int(n)
@@ -68,13 +74,13 @@ fn exp_series(r, n, term, acc) with Memory + Alloc = {
 // Non-positive input returns 0.0 — productive-under-error, same
 // guard discipline as float_div's zero case (strings.mn).
 
-fn log(x) with Memory + Alloc = {
+fn log(x) with Pure = {
   if x < 0.0 { 0.0 }
   else if x == 0.0 { 0.0 }
   else { log_normalized(x, 0) }
 }
 
-fn log_normalized(m, k) with Memory + Alloc = {
+fn log_normalized(m, k) with Pure = {
   if m >= 2.0 { log_normalized(m / 2.0, k + 1) }
   else if m < 1.0 { log_normalized(m * 2.0, k - 1) }
   else {
@@ -84,7 +90,7 @@ fn log_normalized(m, k) with Memory + Alloc = {
 }
 
 // atanh(t) = t + t³/3 + t⁵/5 + … ; term advances by t².
-fn atanh_series(t2, n, term, acc) with Memory + Alloc = {
+fn atanh_series(t2, n, term, acc) with Pure = {
   if n > 9 { acc }
   else {
     let next_term = term * t2
@@ -98,14 +104,14 @@ fn atanh_series(t2, n, term, acc) with Memory + Alloc = {
 // Reduce to [-π, π), then x - x³/3! + x⁵/5! - …; eight alternating
 // terms bound the error below f64 epsilon on the reduced range.
 
-fn sin(x) with Memory + Alloc = {
+fn sin(x) with Pure = {
   let r0 = x - two_pi() * float_floor(x / two_pi())
   let r = if r0 >= pi() { r0 - two_pi() } else { r0 }
   sin_series(r * r, 1, r, r)
 }
 
 // term advances by -r² / ((2n)(2n+1)).
-fn sin_series(r2, n, term, acc) with Memory + Alloc = {
+fn sin_series(r2, n, term, acc) with Pure = {
   if n > 8 { acc }
   else {
     let d = float_of_int(2 * n * (2 * n + 1))
@@ -120,7 +126,7 @@ fn sin_series(r2, n, term, acc) with Memory + Alloc = {
 // overflows the series' useful range while tanh is already 1.0
 // to f64 precision).
 
-fn tanh(x) with Memory + Alloc = {
+fn tanh(x) with Pure = {
   if x >= 20.0 { 1.0 }
   else if x < 0.0 - 20.0 { 0.0 - 1.0 }
   else {

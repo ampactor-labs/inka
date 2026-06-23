@@ -539,6 +539,7 @@ fn walk_lemit_expr(expr) = match expr {
   LConst(_, LString(s))     => visit_string(s),
   LConst(_, _)              => (),
   LLocal(_, _)              => (),
+  LFeedbackPrior(_)         => (),
   LGlobal(_, _)             => (),
   LUpval(_, _)              => (),
   LStore(_, _, v)           => walk_lemit_expr(v),
@@ -872,6 +873,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LStateSlotStore(_h, _o, v) => collect_call_vectors_expr(v, acc),
   LConst(_, _)          => acc,
   LLocal(_, _)          => acc,
+  LFeedbackPrior(_)     => acc,
   LGlobal(_, _)         => acc,
   LUpval(_, _)          => acc,
   LStateGet(_, _)       => acc,
@@ -939,6 +941,7 @@ fn max_arity_expr(expr) = match expr {
   // call-like variant can't silently slip through.
   LConst(_, _)              => 0,
   LLocal(_, _)              => 0,
+  LFeedbackPrior(_)         => 0,
   LGlobal(_, _)             => 0,
   LStore(_, _, _)           => 0,
   LUpval(_, _)              => 0,
@@ -1252,6 +1255,7 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   // descendants contribute no records.
   LConst(_, _)               => [],
   LLocal(_, _)               => [],
+  LFeedbackPrior(_)          => [],
   LGlobal(_, _)              => [],
   LUpval(_, _)               => [],
   LStateGet(_, _)            => []
@@ -1478,6 +1482,7 @@ fn emit_let_locals_expr(expr) = match expr {
   // validation fails.
   LConst(_, _)              => (),
   LLocal(_, _)              => (),
+  LFeedbackPrior(_)         => (),
   LGlobal(_, _)             => (),
   LUpval(_, _)              => (),
   LStateGet(_, _)           => ()
@@ -1668,6 +1673,7 @@ fn find_local_handle_expr(name, expr) = match expr {
   LConvert(_h, _, operand)  => find_local_handle_expr(name, operand),
   LStateSlotStore(_h, _o, v) => find_local_handle_expr(name, v),
   LConst(_, _)              => 0,
+  LFeedbackPrior(_)         => 0,
   LGlobal(_, _)             => 0,
   LUpval(_, _)              => 0,
   LStateGet(_, _)           => 0,
@@ -1870,6 +1876,14 @@ fn emit_expr(expr) = match expr {
   LLocal(_h, name) => {
     wat_emit("    (local.get $")
     wat_emit(name)
+    wat_emit(")\n")
+  },
+
+  // (LF.B) The `<~` prior-iteration output — read live from the local the
+  // LFeedback cycle declares + sets. The recurrence's y[n-1] term; no copy.
+  LFeedbackPrior(h) => {
+    wat_emit("    (local.get $__fb_prev_")
+    wat_emit(int_to_str(h))
     wat_emit(")\n")
   },
 
@@ -3233,6 +3247,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LStateSlotStore(_h, _o, v) => collect_eq_product_tys_expr(v, acc),
   LConst(_, _)           => acc,
   LLocal(_, _)           => acc,
+  LFeedbackPrior(_)      => acc,
   LGlobal(_, _)          => acc,
   LUpval(_, _)           => acc,
   LStateGet(_, _)        => acc,
@@ -3748,6 +3763,7 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LStateSlotStore(_h, _o, v) => collect_show_tys_expr(v, acc),
   LConst(_, _)           => acc,
   LLocal(_, _)           => acc,
+  LFeedbackPrior(_)      => acc,
   LGlobal(_, _)          => acc,
   LUpval(_, _)           => acc,
   LStateGet(_, _)        => acc,

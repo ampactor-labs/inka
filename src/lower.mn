@@ -405,33 +405,60 @@ fn lexpr_handle(e) with Pure = match e {
 /// to_string IS lower-time type dispatch — the same projection class
 /// as subscript (#139) and `++`'s string fold: the graph already
 /// proves the arg's type; lower picks the renderer; no runtime tag
-/// check. Ty enumerated exhaustively per H6 — every non-String,
-/// non-Float type renders its value word through the to_string
-/// default (kernel-uniform-i32; typed ADT show is the post-L1 peer
-/// Hβ.lower.to-string-show-derivation). The aggregate fall-throughs
-/// below are the SHOW leaf of the STEP 2 structural fold (the eq leaf
-/// landed in backends/wasm.mn emit_fold_eq_helpers): each becomes a
-/// generated recursive $show_<sig> helper — field-wise "{name: …}" /
-/// "[…]" / "Ctor(…)" assembly — peer Hβ.fold.show-leaf, riding the
-/// same emit generator once it threads the env's variant payload types.
+/// check. Ty enumerated exhaustively per H6 — fold_strip normalizes
+/// TAlias/TRefined FIRST (a `Port` renders as its Int base, a `Sample`
+/// as Float), so the renderer reads the underlying structural type, the
+/// SAME normalization the eq / show / compare / hash leaves share.
+///
+/// A SCALAR word renders through its primitive renderer (float_to_str /
+/// int_to_str). An AGGREGATE (sequence / product / sum) is the SHOW leaf
+/// of the structural fold — sibling of the eq leaf ($eq_<sig>): the
+/// ultimate form is a generated recursive `$show_<sig>` helper that
+/// assembles "{name: …}" / "[…]" / "Ctor(…)" from the proven shape (the
+/// type closure the graph already holds). That helper must be synthesized
+/// as LOWERED CODE (an LFn body of str_concat/int_to_str closure calls +
+/// recursive show_<sig> descent) so it flows through the closure-call
+/// convention emit_expr already drives — emitting it as raw WAT would
+/// mishandle the runtime-closure ($str_concat) call shape (a silent
+/// miscompile, Law 7). The synthesis-as-lowered-LFn is the named peer
+/// Hβ.fold.show-leaf-as-lowered-lfn; until it lands the aggregate renders
+/// through the runtime `to_string` (the structure-preserving renderer is
+/// the addition, never a regression — the word-leaf path is unchanged).
 fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic = {
   let N(_, _, ah) = list_head(args)
-  match lookup_ty(ah) {
+  match fold_strip(lookup_ty(ah)) {
     TString            => arg_lo,
     TFloat             => LCall(handle, LGlobal(handle, "float_to_str"), [arg_lo]),
     TInt               => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
     TUnit              => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
-    TList(_)           => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
-    TTuple(_)          => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
-    TFun(_, _, _)      => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
-    TVar(_)            => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
-    TName(_, _)        => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
-    TRecord(_)         => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
-    TRecordOpen(_, _)  => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
-    TRefined(base, _)  => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
-    TCont(_, _, _)     => LCall(handle, LGlobal(handle, "to_string"), [arg_lo]),
-    TAlias(_, _)       => LCall(handle, LGlobal(handle, "to_string"), [arg_lo])
+    // Aggregates — the generated $show_<sig> fold leaf (structural render),
+    // named by the operand's fold-signature (read live from the proven type).
+    TList(_)           => lower_show_call(handle, ah, arg_lo),
+    TTuple(_)          => lower_show_call(handle, ah, arg_lo),
+    TName(_, _)        => lower_show_call(handle, ah, arg_lo),
+    TRecord(_)         => lower_show_call(handle, ah, arg_lo),
+    TRecordOpen(_, _)  => lower_show_call(handle, ah, arg_lo),
+    // A genuinely-unresolved operand (TVar) / closure (TFun) / continuation
+    // pointer (TCont) is a word at this leaf — int_to_str renders the word (the
+    // same word-leaf the eq fold compares with i32.eq); no structure to descend.
+    TFun(_, _, _)      => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
+    TVar(_)            => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
+    TCont(_, _, _)     => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
+    TAlias(_, _)       => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo]),
+    TRefined(_, _)     => LCall(handle, LGlobal(handle, "int_to_str"), [arg_lo])
   }
+}
+
+/// The aggregate-show call: dispatch to the generated `$show_<sig>` recursive
+/// helper named by the operand's structural fold-signature (read live from the
+/// proven type at `ah`). The backend's emit_fold_show_helpers pre-pass generates
+/// each distinct helper once (the e-graph canonicalizes duplicates) — the SAME
+/// graph-IS-the-index dedup the eq leaf uses. One leaf, one traversal: the show
+/// helper is a sibling of $eq_<sig>, calling the runtime renderers ($str_concat /
+/// $int_to_str / $float_to_str) via the SAME W7 (__state, args) convention the eq
+/// helper calls $str_eq with — every emitted fn takes __state as its first param.
+fn lower_show_call(handle, ah, arg_lo) with LookupTy = {
+  LCall(handle, LGlobal(handle, "show_{fold_sig(lookup_ty(ah))}"), [arg_lo])
 }
 
 fn lexpr_ty(e) with LookupTy = {

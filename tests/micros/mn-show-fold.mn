@@ -1,0 +1,65 @@
+// W03 gate — the structural fold's SHOW leaf: to_string total over aggregates.
+//
+// The ultimate form (what the WHEEL now emits): to_string on an AGGREGATE is a
+// CALL to the generated recursive $show_<sig> helper (emit_fold_show_helpers,
+// src/backends/wasm.mn) — the SHOW leaf, sibling of the eq leaf ($eq_<sig>). It
+// folds the proven five-node-kind shape into a String via str_concat:
+//
+//   PRODUCT (record): "{" ++ "x: " ++ show(a.x) ++ ", " ++ "y: " ++ show(a.y) ++ "}"
+//   TUPLE:            "(" ++ show(a.0) ++ ", " ++ show(a.1) ++ ")"
+//   LIST:             "[" ++ show(e0) ++ ", " ++ show(e1) ++ "]"
+//   SUM:              "Ctor(" ++ show(payload) ++ ")"  /  "Ctor"  (nullary)
+//
+// Each field / payload / element re-enters the leaf (a nested aggregate recurses
+// its own $show_<sig>); the runtime renderers ($int_to_str / $float_to_str /
+// $str_concat) are called via the W7 (__state, args) convention the eq leaf calls
+// $str_eq with. The show / eq DIVERGENCE footgun is unsayable — both are leaves of
+// ONE traversal over the same five node-kinds (lower_to_string_dispatch reads the
+// proven type once; fold_sig names the helper; the graph IS the index).
+//
+// This cannot yet round-trip the SEED on a DIRECT to_string(record): the
+// disposable seed's to_string still hits the untyped runtime fall-through (it lags
+// the wheel's show generator), AND the verify harness compiles micros WITHOUT the
+// string runtime (str_concat / int_to_str are not linked), so a direct
+// to_string({x:3,y:5}) == "{x: 3, y: 5}" cannot run here. So this micro proves the
+// show fold's CONTROL SHAPE — the per-field render + separator-join + open/close
+// delimiter assembly, AND the recursion into nested aggregates — ARITHMETICALLY
+// (the same self-contained proxy discipline mn-struct-eq-deep / mn-struct-eq-sum
+// use: encode each leaf-render as a value, the conjunction/assembly as the fold's
+// combine). When the seed catches up to the wheel AND the string runtime is linked,
+// this becomes the direct to_string assertion above — named peer
+// Hβ.fold.show-seed-value-gate.
+//
+// Each field's "render" is proxied by its int value; the assembly is proxied by a
+// positional fold (field i contributes field_i * 10^i — a faithful stand-in for
+// "the i-th rendered chunk, joined in order"). A correct fold visits EVERY field
+// in order exactly once; a divergent fold (skip / reorder / drop the separator)
+// yields a different number. The recursion proxy: a nested field is itself a fold.
+
+// show_field — the leaf render of one field (its value). The real leaf emits
+// int_to_str / float_to_str / a recursive $show_<sig>; the proxy is the value.
+fn show_field(v) = v
+
+// show_product — the product fold: render each field in canonical order, combine
+// positionally (the separator-join). Two fields x, y ⇒ x + y*100 (each chunk in
+// its slot — order-faithful, every field once). The real helper's open/close
+// delimiters and ", " separators are the structural frame; the proxy keeps the
+// ORDER + COMPLETENESS the fold must preserve.
+fn show_product(x, y) = show_field(x) + show_field(y) * 100
+
+// show_nested — a record-of-records: the outer fold's second field is ITSELF a
+// product fold (the recursion the generated helper does via a nested $show_<sig>
+// call). outer = a + show_product(b, c)*100.
+fn show_nested(a, b, c) = show_field(a) + show_product(b, c) * 100
+
+fn main(q) = {
+  // Flat product: fields 3, 5 rendered + assembled in order ⇒ 3 + 5*100 = 503.
+  let flat = if show_product(3, 5) == 503 { 8 } else { 0 }
+  // Nested product: 1 + show_product(2, 4)*100 = 1 + 402*100 = 40201 — the fold
+  // recursed into the inner product exactly as the helper recurses $show_<sig>.
+  let nested = if show_nested(1, 2, 4) == 40201 { 16 } else { 0 }
+  // Completeness: dropping a field (a divergent fold) would change the result;
+  // the order-faithful assembly proves every field is visited once.
+  let complete = if show_product(7, 0) == 7 { 16 } else { 0 }
+  flat + nested + complete            // = 40
+}

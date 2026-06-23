@@ -269,6 +269,12 @@ fn emit_module(lowered) = {
   // the program's functions, before _start. A pure-scalar/sequence program
   // collects none (byte-identical to the pre-fold module, Law 7).
   emit_fold_eq_helpers(lowered)
+  // The show-leaf of the structural fold: one recursive $show_<sig> helper per
+  // distinct aggregate type rendered by to_string (the graph IS the index, the
+  // same dedup the eq leaf uses). Sibling generator, sibling leaf — six ops, one
+  // traversal. A program with no aggregate to_string collects none (byte-
+  // identical to the pre-show module, Law 7).
+  emit_fold_show_helpers(lowered)
   emit_start(top_fn_names)
   emit_footer()
 }
@@ -412,6 +418,14 @@ fn slot_already_recorded(entries, target, i, n) = {
 /// perform sites; each visit-op routes to its handler unambiguously.
 fn project_emit_state(lowered) = {
   walk_lemit(lowered)
+  // The SHOW leaf's helpers ($show_<sig>) assemble String literals not present
+  // in the user IR (delimiters "{" "}" "(" ")" "[" "]" ", ", each field name
+  // "name: ", each ctor "Ctor("). Register them through the SAME visit_string
+  // channel the user literals flow through — so emit_string_data lays them in
+  // the (data ...) section and string_offset resolves the helper's references.
+  // The set of literals is a projection of the collected show types (the graph
+  // IS the index — the same type closure emit_fold_show_helpers generates from).
+  register_show_literals(lowered)
   let names = drain_fn_names()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let tops  = drain_top_fn_names()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let strs  = drain_string_literals()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
@@ -420,6 +434,62 @@ fn project_emit_state(lowered) = {
   (names, tops, strs, slots, wasi)
 } ~> fn_names_collector ~> top_fn_names_collector
   ~> string_literal_collector ~> state_slots_collector ~> wasi_ops_collector
+
+/// register_show_literals — fire visit_string for every String literal the
+/// generated $show_<sig> helpers will emit. The literal set is a PROJECTION of
+/// the collected show types (the SAME type closure emit_fold_show_helpers folds):
+/// a record contributes its delimiters + each "name: "; a tuple its parens; a
+/// list its brackets + ", "; a sum each "Ctor("/")"/nullary name. Runs inside
+/// project_emit_state where string_literal_collector catches visit_string.
+fn register_show_literals(lowered) with EmitStringLiteralOp + EnvRead = {
+  let tys = collect_show_tys_list(lowered, [])
+  register_show_literals_list(tys, [])
+}
+
+fn register_show_literals_list(tys, seen) with EmitStringLiteralOp + EnvRead = {
+  if len(tys) == 0 { () }
+  else {
+    let ty = list_head(tys)
+    let sig = fold_sig(ty)
+    if ls_find_str_local(seen, sig, 0) >= 0 {
+      register_show_literals_list(list_tail(tys), seen)
+    } else {
+      register_one_show_literals(ty)
+      register_show_literals_list(list_tail(tys), [sig] ++ seen)
+    }
+  }
+}
+
+// The literal set of one type's $show_<sig> helper. The "" separator is always
+// registered (the join + the list-body's empty terminal). visit_string dedups
+// (string_entry_exists), so registering a literal twice is harmless.
+fn register_one_show_literals(ty) with EmitStringLiteralOp + EnvRead = match fold_strip(ty) {
+  TName(name, _) => register_show_sum_literals(variant_named_specs_of(name), 0),
+  TList(_)       => { visit_string("["); visit_string("]"); visit_string(", "); visit_string("") },
+  TTuple(_)      => { visit_string("("); visit_string(")"); visit_string(", ")
+                      register_show_field_name_literals(show_named_fields(fold_strip(ty)), 0, false) },
+  _              => { visit_string("{"); visit_string("}"); visit_string(", ")
+                      register_show_field_name_literals(show_named_fields(fold_strip(ty)), 0, true) }
+}
+
+fn register_show_field_name_literals(fields, i, is_record) with EmitStringLiteralOp = {
+  if i >= len(fields) { () }
+  else {
+    let (fname, _fty) = list_index(fields, i)
+    if is_record { visit_string("{fname}: ") } else { () }
+    register_show_field_name_literals(fields, i + 1, is_record)
+  }
+}
+
+fn register_show_sum_literals(specs, i) with EmitStringLiteralOp = {
+  if i >= len(specs) { visit_string(", ") }
+  else {
+    let (_tag, cname, payloads) = list_index(specs, i)
+    if len(payloads) == 0 { visit_string(cname) }
+    else { visit_string("{cname}("); visit_string(")") }
+    register_show_sum_literals(specs, i + 1)
+  }
+}
 
 /// walk_lemit — top-level entry. Iterates `lowered`'s direct children;
 /// fires `visit_top_fn(name)` for each LLet-bound closure/continuation
@@ -2558,18 +2628,12 @@ fn emit_struct_eq(left_h, neg) =
     if neg { wat_emit("    (i32.ne)\n") }
     else { wat_emit("    (i32.eq)\n") }
   } else {
-    emit_eq_for_ty(eq_strip(lookup_ty(left_h)), neg)
+    emit_eq_for_ty(fold_strip(lookup_ty(left_h)), neg)
   }
 
-// Alias-strip / refinement-unwrap FIRST (TAlias->inner, TRefined->base) — the
-// fold-through arms, structurally identical to repr_of's prologue. A `Port`
-// (= Int) folds as Int; a `Sample` (= Float where ..) folds as Float. The
-// predicate is erased at runtime, so eq reads the underlying value.
-fn eq_strip(ty) with Pure = match ty {
-  TAlias(_, inner)  => eq_strip(inner),
-  TRefined(base, _) => eq_strip(base),
-  _                 => ty
-}
+// fold_strip / fold_sig — the structural fold's shared skeleton — now live at
+// their Carried-Truth home in types.mn (a type's fold-signature is a property
+// OF THE TYPE, read identically by the eq / show / compare / hash / pack leaves).
 
 // The eq leaf over an ALREADY-STRIPPED type — H6-exhaustive over the five
 // node-kinds. Product (TRecord/TTuple/TRecordOpen) routes to its generated
@@ -2594,14 +2658,14 @@ fn emit_eq_for_ty(ty, neg) = match ty {
   // helper (emit_fold_eq_helpers) takes (__state, a, b) and ANDs each
   // field's eq at the canonical width-summed offset, recursing for nested
   // products. The eq/hash-disagreement footgun is unsayable: ONE traversal.
-  TRecord(fields)        => emit_eq_product_call(ty_fold_sig(ty), neg),
-  TRecordOpen(fields, _) => emit_eq_product_call(ty_fold_sig(ty), neg),
-  TTuple(elems)          => emit_eq_product_call(ty_fold_sig(ty), neg),
+  TRecord(fields)        => emit_eq_product_call(fold_sig(ty), neg),
+  TRecordOpen(fields, _) => emit_eq_product_call(fold_sig(ty), neg),
+  TTuple(elems)          => emit_eq_product_call(fold_sig(ty), neg),
   // Sum payload-ADT — per-variant tag-then-payload recursion via the generated
   // $eq_n<Name> helper (the fifth leaf, reading the env's ConstructorScheme
   // variant payload types). A purely-nullary ADT folds to a tag i32.eq inside
   // the helper; a fielded ADT loads tags then recurses each payload.
-  TName(_, _) => emit_eq_sum_call(ty_fold_sig(ty), neg),
+  TName(_, _) => emit_eq_sum_call(fold_sig(ty), neg),
   // Scalar word: Int / Unit / Float-as-word / unresolved TVar (a handle IS
   // a word) / fn-table index / continuation pointer. i32.eq IS structural
   // for a single value word (the f64 word-leaf rides STEP 1's repr at the
@@ -2710,38 +2774,8 @@ fn param_tys_of(params, i, n) with Pure =
 // to its own helper (recursive ADTs descend the value at runtime, finite);
 // inline expansion would not terminate on a self-referential type, a call does.
 
-// ty_fold_sig — a deterministic structural name for a type, the dedup key and
-// helper-name suffix. Two types share a sig iff they fold identically (the
-// same structural-eq the cursor derives for records — the proof IS the name).
-// Alias/refinement-stripped first, like every other fold-through.
-fn ty_fold_sig(ty) with Pure = match eq_strip(ty) {
-  TInt              => "i",
-  TFloat            => "d",
-  TUnit             => "u",
-  TString           => "s",
-  TVar(_)           => "i",          // unresolved handle — a word
-  TList(elem)       => "l{ty_fold_sig(elem)}",
-  TName(n, _)       => "n{n}",       // nominal — name carries identity
-  TTuple(elems)     => "t{ty_fold_sig_list(elems, 0, len(elems))}_",
-  TRecord(fs)       => "r{ty_fold_sig_fields(fs, 0, len(fs))}_",
-  TRecordOpen(fs,_) => "r{ty_fold_sig_fields(fs, 0, len(fs))}_",
-  TFun(_, _, _)     => "fn",         // closure — folds at the function leaf (identity)
-  TCont(_, _)       => "k",          // continuation pointer — a word here
-  // eq_strip already removed TAlias/TRefined; reaching them is impossible.
-  TAlias(_, inner)  => ty_fold_sig(inner),
-  TRefined(base, _) => ty_fold_sig(base)
-}
-
-fn ty_fold_sig_list(elems, i, n) =
-  if i >= n { "" }
-  else { "_{ty_fold_sig(list_index(elems, i))}{ty_fold_sig_list(elems, i + 1, n)}" }
-
-fn ty_fold_sig_fields(fields, i, n) =
-  if i >= n { "" }
-  else {
-    let (name, ty) = list_index(fields, i)
-    "_{name}{ty_fold_sig(ty)}{ty_fold_sig_fields(fields, i + 1, n)}"
-  }
+// fold_sig / fold_sig_list / fold_sig_fields moved to their Carried-Truth home
+// (types.mn) — the structural signature every fold leaf shares.
 
 // emit_fold_eq_helpers — the generator pre-pass. Collect the product types at
 // every BEq/BNe site, then emit each DISTINCT $eq_<sig> recursive helper once.
@@ -2756,7 +2790,7 @@ fn emit_distinct_eq_helpers(tys, seen) with EnvRead = {
   if len(tys) == 0 { () }
   else {
     let ty = list_head(tys)
-    let sig = ty_fold_sig(ty)
+    let sig = fold_sig(ty)
     if ls_find_str_local(seen, sig, 0) >= 0 {
       emit_distinct_eq_helpers(list_tail(tys), seen)
     } else {
@@ -2773,7 +2807,7 @@ fn emit_distinct_eq_helpers(tys, seen) with EnvRead = {
 // never a re-derived 4*i); a SUM (TName payload-ADT) reads the env's variant
 // specs and emits sentinel-guard + tag-compare + per-tag payload recursion.
 // One generator, two of the five leaves — divergence between them is unsayable.
-fn emit_one_eq_helper(sig, ty) with EnvRead = match eq_strip(ty) {
+fn emit_one_eq_helper(sig, ty) with EnvRead = match fold_strip(ty) {
   TName(name, _) => emit_one_eq_sum_helper(sig, name),
   _ => {
     wat_emit("  (func $eq_")
@@ -2867,7 +2901,7 @@ fn emit_eq_variant_payload_conjunction(payloads, i, n) = {
     let pty = list_index(payloads, i)
     let off = 4 + i * 4
     emit_field_load_pair(off, RI32)
-    emit_variant_payload_eq(eq_strip(pty))
+    emit_variant_payload_eq(fold_strip(pty))
     if i == 0 { () } else { wat_emit("    (i32.and)\n") }
     emit_eq_variant_payload_conjunction(payloads, i + 1, n)
   }
@@ -2898,7 +2932,7 @@ fn emit_eq_helper_conjunction(fields, i, n, off) = {
     let r = repr_of(fty)
     let here = align_for(off, r)
     emit_field_load_pair(here, r)
-    emit_field_eq(eq_strip(fty))
+    emit_field_eq(fold_strip(fty))
     if i == 0 { () } else { wat_emit("    (i32.and)\n") }
     emit_eq_helper_conjunction(fields, i + 1, n, here + repr_width(r))
   }
@@ -2953,14 +2987,14 @@ fn emit_field_eq(fty) = match fty {
   TList(_) => { wat_emit("    (local.get $__state)\n")
                 emit_swap_under_state()
                 wat_emit("    (call $list_eq)\n") },
-  TRecord(_)        => emit_field_product_eq(ty_fold_sig(fty)),
-  TRecordOpen(_, _) => emit_field_product_eq(ty_fold_sig(fty)),
-  TTuple(_)         => emit_field_product_eq(ty_fold_sig(fty)),
+  TRecord(_)        => emit_field_product_eq(fold_sig(fty)),
+  TRecordOpen(_, _) => emit_field_product_eq(fold_sig(fty)),
+  TTuple(_)         => emit_field_product_eq(fold_sig(fty)),
   // A sum-typed field: insert __state under the pair and recurse into the
   // variant's own generated $eq_n<Name> helper (same convention as a nested
   // product). Recursive ADTs descend the value at runtime — finite, the call
   // (never inline) is what makes a self-referential type well-founded.
-  TName(_, _)       => emit_field_product_eq(ty_fold_sig(fty)),
+  TName(_, _)       => emit_field_product_eq(fold_sig(fty)),
   TFloat            => wat_emit("    (f64.eq)\n"),
   // Int / Unit / resolved-TVar / nullary-tag / fn-idx / cont-ptr — word eq.
   _                 => wat_emit("    (i32.eq)\n")
@@ -2992,7 +3026,7 @@ fn emit_swap_under_state() = {
 // tuple) order — the field set the fold descends. Read live from the proven
 // type (the fields TRecord/TTuple already carry; a tuple's positional elems
 // ARE its product fields). Non-product types have no field set (empty).
-fn product_field_tys(ty) with Pure = match eq_strip(ty) {
+fn product_field_tys(ty) with Pure = match fold_strip(ty) {
   TRecord(fields)        => field_tys_of(fields, 0, len(fields)),
   TRecordOpen(fields, _) => field_tys_of(fields, 0, len(fields)),
   TTuple(elems)          => elems,
@@ -3026,7 +3060,7 @@ fn collect_eq_product_tys_list(stmts, acc) = {
 // helper recurses the value).
 fn eq_operand_contrib(left_h, acc) = {
   if left_h == 0 { acc }
-  else { eq_subtys(eq_strip(lookup_ty(left_h)), [], acc) }
+  else { eq_subtys(fold_strip(lookup_ty(left_h)), [], acc) }
 }
 
 // The aggregate types reachable from a type (itself if product/sum, plus the
@@ -3036,7 +3070,7 @@ fn eq_operand_contrib(left_h, acc) = {
 // payload types read LIVE from the env (variant_specs_of). `seen` guards
 // recursive ADTs so the COLLECTION terminates (the helper's runtime recursion
 // handles the unbounded value depth).
-fn eq_subtys(ty, seen, acc) = match eq_strip(ty) {
+fn eq_subtys(ty, seen, acc) = match fold_strip(ty) {
   TRecord(fields)        => eq_subtys_fields(fields, 0, len(fields), seen, [ty] ++ acc),
   TRecordOpen(fields, _) => eq_subtys_fields(fields, 0, len(fields), seen, [ty] ++ acc),
   TTuple(elems)          => eq_subtys_list(elems, 0, len(elems), seen, [ty] ++ acc),
@@ -3130,6 +3164,539 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LUpval(_, _)           => acc,
   LStateGet(_, _)        => acc,
   LEvSlotRef(_, _)       => acc
+}
+
+// ─── The SHOW leaf of the structural fold: generated recursive $show_<sig> ──
+// to_string on an AGGREGATE is a CALL to the generated recursive $show_<sig>
+// helper (lower_show_call named it by fold_sig; here the backend emits it). The
+// SAME fold-over-five-node-kinds the eq leaf walks, with a DIFFERENT leaf: eq
+// ANDs Bools, show CONCATS Strings (str_concat). Product → "{name: …, name: …}";
+// tuple → "(…, …)"; sum → "Ctor(…)" / "Ctor"; list → "[…, …]". Each field /
+// payload / element re-enters the five-node-kind leaf (show_field), so a nested
+// aggregate recurses its own $show_<sig> helper — finite on the value, the same
+// well-foundedness the eq leaf has. The env's variant payload types are read
+// LIVE (variant_specs_of) — never a re-derived shape at runtime when the graph
+// proved the type at the to_string site. The eq/show DIVERGENCE footgun is
+// unsayable: both are leaves of one traversal over the same five node-kinds.
+
+// emit_fold_show_helpers — the show generator pre-pass. Collect the aggregate
+// operand type at every `to_string` site (the LCall to a $show_<sig> global
+// lower emitted) and its nested-aggregate closure, then emit each DISTINCT
+// $show_<sig> recursive helper once (the e-graph canonicalizes duplicates — the
+// graph IS the index). A pure-scalar program collects none (byte-identical, Law 7).
+fn emit_fold_show_helpers(lowered) with EnvRead = {
+  let tys = collect_show_tys_list(lowered, [])
+  emit_distinct_show_helpers(tys, [])
+}
+
+fn emit_distinct_show_helpers(tys, seen) with EnvRead = {
+  if len(tys) == 0 { () }
+  else {
+    let ty = list_head(tys)
+    let sig = fold_sig(ty)
+    if ls_find_str_local(seen, sig, 0) >= 0 {
+      emit_distinct_show_helpers(list_tail(tys), seen)
+    } else {
+      emit_one_show_helper(sig, ty)
+      emit_distinct_show_helpers(list_tail(tys), [sig] ++ seen)
+    }
+  }
+}
+
+// emit_one_show_helper — the $show_<sig> recursive helper. Takes (__state, a)
+// — the W7 convention every emitted fn uses (the SAME __state-first shape the
+// eq helper calls $str_eq with), so a generated helper calls the runtime
+// renderers $str_concat / $int_to_str / $float_to_str directly. Returns a
+// String pointer. The node-kind selects the body (product / tuple / list / sum),
+// each assembling via FOLDED `(call $str_concat (local.get $__state) <l> <r>)`
+// s-expressions — the value, the field-loads, and the recursive show calls are
+// sub-expressions of the concat tree (correct stack discipline, no interleave).
+fn emit_one_show_helper(sig, ty) with EnvRead = match fold_strip(ty) {
+  TName(name, _) => emit_one_show_sum_helper(sig, name),
+  TList(elem)    => emit_one_show_list_helper(sig, elem),
+  _              => emit_one_show_product_helper(sig, ty)
+}
+
+// The helper header: (func $show_<sig> (param $__state i32) (param $a i32)
+// (result i32)). The body is one expression leaving the assembled String ptr.
+fn emit_show_header(sig) = {
+  wat_emit("  (func $show_")
+  wat_emit(sig)
+  wat_emit(" (param $__state i32) (param $a i32) (result i32)\n")
+}
+
+// PRODUCT / TUPLE show: open ++ field_0 ++ ", " ++ field_1 ++ … ++ close, a
+// right-nested str_concat tree. A record names its fields ("name: " prefix +
+// braces); a tuple is positional + parens. Delimiters are the node-kind's
+// structural projection. The fold runs over the canonically-sorted fields at
+// their width-summed offsets (the SAME align_for + repr_width the eq leaf and
+// the store side run — Carried-Truth).
+fn emit_one_show_product_helper(sig, ty) with EnvRead = {
+  emit_show_header(sig)
+  let is_record = ty_is_record(fold_strip(ty))
+  let open  = if is_record { "{" } else { "(" }
+  let close = if is_record { "}" } else { ")" }
+  // concat( open, concat( <fields-with-seps>, close ) )
+  emit_show_concat_open()
+  emit_show_str_literal(open)
+  emit_show_concat_open()
+  emit_show_product_fields(show_named_fields(fold_strip(ty)), 0, 0, is_record)
+  emit_show_str_literal(close)
+  emit_show_concat_close()
+  emit_show_concat_close()
+  wat_emit("  )\n")
+}
+
+// ty_is_record — the delimiter discriminator (record → braces+names, tuple →
+// parens+positional). Read from the proven node-kind.
+fn ty_is_record(ty) with Pure = match ty {
+  TRecord(_)        => true,
+  TRecordOpen(_, _) => true,
+  _                 => false
+}
+
+// The named field set the show fold descends: a record's (name, ty) pairs in
+// canonical sort order; a tuple's elements as positional ("" names). Read live
+// from the proven type — the SAME field set product_field_tys gives eq, plus
+// the names show prints.
+fn show_named_fields(ty) with Pure = match ty {
+  TRecord(fields)        => fields,
+  TRecordOpen(fields, _) => fields,
+  TTuple(elems)          => name_positional(elems, 0, len(elems)),
+  _                      => []
+}
+
+fn name_positional(elems, i, n) with Pure =
+  if i >= n { [] }
+  else { [("", list_index(elems, i))] ++ name_positional(elems, i + 1, n) }
+
+// Render the field set as a right-nested concat: each field is
+// concat( <name-prefix + ", " sep>, concat( show(field), <rest> ) ). The first
+// field has no leading ", "; a record field is prefixed "name: ". The byte
+// offset is width-summed (align_for + repr_width). Terminates with "" at the end.
+fn emit_show_product_fields(fields, i, off, is_record) with EnvRead = {
+  if i >= len(fields) { emit_show_str_literal("") }
+  else {
+    let (fname, fty) = list_index(fields, i)
+    let r = repr_of(fty)
+    let here = align_for(off, r)
+    // prefix = (", " when i>0) ++ ("name: " when record)
+    let prefix = "{show_field_sep(i)}{show_field_name(fname, is_record)}"
+    emit_show_concat_open()
+    emit_show_str_literal(prefix)
+    emit_show_concat_open()
+    emit_show_field_render(here, r, fold_strip(fty))
+    emit_show_product_fields(fields, i + 1, here + repr_width(r), is_record)
+    emit_show_concat_close()
+    emit_show_concat_close()
+  }
+}
+
+fn show_field_sep(i) with Pure = if i == 0 { "" } else { ", " }
+fn show_field_name(fname, is_record) with Pure = if is_record { "{fname}: " } else { "" }
+
+// Render one field value at `off`/width `r`: load the field, wrap it in its
+// leaf renderer. Word fields → int_to_str / float_to_str; string field → as-is;
+// aggregate field → recursive $show_<sig>. The runtime renderer takes __state
+// first (W7), so the folded call is (call $renderer (local.get $__state) <load>).
+// The leaf renderer for a product/tuple field at `off`/width `r`: the field's
+// node-kind picks the renderer name (a word → int_to_str/float_to_str, an
+// aggregate → its $show_<sig>, a string → as-is), and the field LOAD is the
+// renderer's argument. The renderer-name is the only degree of freedom; the
+// load is the SAME width-typed read the eq leaf and the store side use.
+fn emit_show_field_render(off, r, fty) = match fty {
+  TString => emit_show_field_load(off, r),
+  TFloat            => emit_show_call_field("float_to_str", off, r),
+  TList(_)          => emit_show_call_field("show_{fold_sig(fty)}", off, r),
+  TRecord(_)        => emit_show_call_field("show_{fold_sig(fty)}", off, r),
+  TRecordOpen(_, _) => emit_show_call_field("show_{fold_sig(fty)}", off, r),
+  TTuple(_)         => emit_show_call_field("show_{fold_sig(fty)}", off, r),
+  TName(_, _)       => emit_show_call_field("show_{fold_sig(fty)}", off, r),
+  // Int / Unit / resolved-TVar / closure / continuation — render the word.
+  _                 => emit_show_call_field("int_to_str", off, r)
+}
+
+// emit_show_call_field — a folded `(call $name (local.get $__state) <field-load>)`.
+// Every emitted fn takes __state first (W7), so this is the one call shape every
+// runtime renderer / recursive show uses. The field-load is the renderer's arg.
+fn emit_show_call_field(name, off, r) = {
+  wat_emit("    (call $")
+  wat_emit(name)
+  wat_emit(" (local.get $__state) ")
+  emit_show_field_load(off, r)
+  wat_emit(")\n")
+}
+
+// Load a.field at byte offset `off` at the field's proven width (f64 fields
+// load f64, every other width loads i32 — the SAME width-typed read the eq leaf
+// and store side use).
+fn emit_show_field_load(off, r) = {
+  wat_emit("(")
+  wat_emit(repr_load_op(r))
+  wat_emit(" offset=")
+  wat_emit(int_to_str(off))
+  wat_emit(" (local.get $a))")
+}
+
+// SUM show: sentinel-guard (a nullary variant is a bare tag word < heap_base,
+// rendered by its constructor name; a fielded variant a heap record [tag@0]
+// [f0@4]…). The tag selects the variant; a fielded variant renders
+// "Ctor(" ++ f0 ++ ", " ++ f1 ++ ")". The variant names + payload types are read
+// LIVE from the env (variant_named_specs_of). A recursive ADT re-enters
+// $show_n<Name> (finite on the value). Mirrors emit_one_eq_sum_helper's guard.
+fn emit_one_show_sum_helper(sig, type_name) with EnvRead = {
+  let specs = variant_named_specs_of(type_name)
+  wat_emit("  (func $show_")
+  wat_emit(sig)
+  wat_emit(" (param $__state i32) (param $a i32) (result i32) (local $ta i32)\n")
+  wat_emit("    (if (result i32)\n")
+  wat_emit("      (i32.lt_u (local.get $a) (i32.const ")
+  wat_emit(int_to_str(heap_base()))
+  wat_emit("))\n")
+  // Nullary arm: $a IS the tag word.
+  wat_emit("      (then\n")
+  emit_show_sum_tag_dispatch(specs, 0, len(specs), "$a")
+  wat_emit("      )\n")
+  // Heap arm: load tag@0, dispatch on it.
+  wat_emit("      (else\n")
+  wat_emit("        (local.set $ta (i32.load offset=0 (local.get $a)))\n")
+  emit_show_sum_tag_dispatch(specs, 0, len(specs), "$ta")
+  wat_emit("      ))\n")
+  wat_emit("  )\n")
+}
+
+// Per-variant tag switch. `scrutinee` is the local holding the runtime tag
+// ($a in the nullary arm, $ta in the heap arm). A nullary variant renders its
+// bare name; a fielded variant renders "Ctor(" ++ payloads ++ ")". The cascade
+// terminal is "" (the env enumerates every variant; control lands on one arm).
+fn emit_show_sum_tag_dispatch(specs, i, n, scrutinee) with EnvRead = {
+  if i >= n { emit_show_str_literal("") }
+  else {
+    let (tag_id, cname, payloads) = list_index(specs, i)
+    wat_emit("        (if (result i32)\n")
+    wat_emit("          (i32.eq (local.get ")
+    wat_emit(scrutinee)
+    wat_emit(") (i32.const ")
+    wat_emit(int_to_str(tag_id))
+    wat_emit("))\n")
+    wat_emit("          (then\n")
+    if len(payloads) == 0 {
+      emit_show_str_literal(cname)
+    } else {
+      // concat( "Ctor(", concat( <payloads-with-seps>, ")" ) )
+      emit_show_concat_open()
+      emit_show_str_literal("{cname}(")
+      emit_show_concat_open()
+      emit_show_variant_payloads(payloads, 0, len(payloads))
+      emit_show_str_literal(")")
+      emit_show_concat_close()
+      emit_show_concat_close()
+    }
+    wat_emit("          )\n")
+    wat_emit("          (else\n")
+    emit_show_sum_tag_dispatch(specs, i + 1, n, scrutinee)
+    wat_emit("          ))\n")
+  }
+}
+
+// The payload conjunction for one variant: each payload field at offset 4+4*i
+// (uniform i32 slots — the SAME layout emit_variant_field_stores_at writes and
+// the eq leaf reads), rendered + joined by ", ". A Float payload renders its
+// stored 4-byte word via int_to_str (the variant's uniform i32 slotting — never
+// float_to_str, which would consume an f64 the slot never held; mirror of
+// emit_variant_payload_eq). Right-nested concat, terminating with "".
+fn emit_show_variant_payloads(payloads, i, n) = {
+  if i >= n { emit_show_str_literal("") }
+  else {
+    let pty = fold_strip(list_index(payloads, i))
+    let off = 4 + i * 4
+    emit_show_concat_open()
+    emit_show_str_literal(show_field_sep(i))
+    emit_show_concat_open()
+    emit_show_variant_payload_render(off, pty)
+    emit_show_variant_payloads(payloads, i + 1, n)
+    emit_show_concat_close()
+    emit_show_concat_close()
+  }
+}
+
+// A variant payload slot is uniform i32; a Float payload renders the stored word
+// via int_to_str (never float_to_str — the slot holds a 4-byte word, not an f64).
+// The renderer-name is the only degree of freedom; the i32 slot load is its arg.
+fn emit_show_variant_payload_render(off, pty) = match pty {
+  TString => emit_show_variant_load(off),
+  TFloat            => emit_show_call_variant("int_to_str", off),
+  TList(_)          => emit_show_call_variant("show_{fold_sig(pty)}", off),
+  TRecord(_)        => emit_show_call_variant("show_{fold_sig(pty)}", off),
+  TRecordOpen(_, _) => emit_show_call_variant("show_{fold_sig(pty)}", off),
+  TTuple(_)         => emit_show_call_variant("show_{fold_sig(pty)}", off),
+  TName(_, _)       => emit_show_call_variant("show_{fold_sig(pty)}", off),
+  _                 => emit_show_call_variant("int_to_str", off)
+}
+
+// A folded `(call $name (local.get $__state) (i32.load offset=off (local.get $a)))`
+// — the variant-payload twin of emit_show_call_field (uniform i32 slot load).
+fn emit_show_call_variant(name, off) = {
+  wat_emit("    (call $")
+  wat_emit(name)
+  wat_emit(" (local.get $__state) ")
+  emit_show_variant_load(off)
+  wat_emit(")\n")
+}
+
+fn emit_show_variant_load(off) = {
+  wat_emit("(i32.load offset=")
+  wat_emit(int_to_str(off))
+  wat_emit(" (local.get $a))")
+}
+
+// LIST show: "[" ++ <element loop, joined by ", "> ++ "]". The element count is
+// runtime (len); $show_listbody_<sig> folds str_concat over list_index(a, i),
+// joining ", ". The element leaf is read from the proven element type.
+fn emit_one_show_list_helper(sig, elem) with EnvRead = {
+  emit_show_header(sig)
+  emit_show_concat_open()
+  emit_show_str_literal("[")
+  emit_show_concat_open()
+  wat_emit("    (call $show_listbody_")
+  wat_emit(sig)
+  wat_emit(" (local.get $__state) (local.get $a) (i32.const 0))\n")
+  emit_show_str_literal("]")
+  emit_show_concat_close()
+  emit_show_concat_close()
+  wat_emit("  )\n")
+  emit_show_list_body_helper(sig, elem)
+}
+
+// The recursive element loop: render element i (", " prefix when i>0), then
+// recurse to i+1; "" when i == len(a). Tail-recursive over the list length
+// (finite). The element leaf reads the proven element type (Carried-Truth).
+fn emit_show_list_body_helper(sig, elem) = {
+  wat_emit("  (func $show_listbody_")
+  wat_emit(sig)
+  wat_emit(" (param $__state i32) (param $a i32) (param $i i32) (result i32)\n")
+  wat_emit("    (if (result i32)\n")
+  wat_emit("      (i32.ge_s (local.get $i) (call $len (local.get $__state) (local.get $a)))\n")
+  wat_emit("      (then ")
+  emit_show_str_literal_inline("")
+  wat_emit(")\n")
+  wat_emit("      (else\n")
+  // concat( sep, concat( show(elem_i), recurse(i+1) ) )
+  wat_emit("        (call $str_concat (local.get $__state)\n")
+  wat_emit("          (if (result i32) (i32.gt_s (local.get $i) (i32.const 0))\n")
+  wat_emit("            (then ")
+  emit_show_str_literal_inline(", ")
+  wat_emit(") (else ")
+  emit_show_str_literal_inline("")
+  wat_emit("))\n")
+  wat_emit("          (call $str_concat (local.get $__state)\n")
+  emit_show_list_elem_render(fold_strip(elem))
+  wat_emit("            (call $show_listbody_")
+  wat_emit(sig)
+  wat_emit(" (local.get $__state) (local.get $a) (i32.add (local.get $i) (i32.const 1)))\n")
+  wat_emit("          )))\n")
+  wat_emit("  )\n")
+}
+
+// Render list element i: list_index(__state, a, i), wrapped in its leaf renderer.
+// The renderer-name is the only degree of freedom; the indexed load is its arg.
+fn emit_show_list_elem_render(elem) = match elem {
+  TString => emit_show_list_index(),
+  TFloat            => emit_show_call_listidx("float_to_str"),
+  TList(_)          => emit_show_call_listidx("show_{fold_sig(elem)}"),
+  TRecord(_)        => emit_show_call_listidx("show_{fold_sig(elem)}"),
+  TRecordOpen(_, _) => emit_show_call_listidx("show_{fold_sig(elem)}"),
+  TTuple(_)         => emit_show_call_listidx("show_{fold_sig(elem)}"),
+  TName(_, _)       => emit_show_call_listidx("show_{fold_sig(elem)}"),
+  _                 => emit_show_call_listidx("int_to_str")
+}
+
+// A folded `(call $name (local.get $__state) (call $list_index … i))` — the
+// list-element twin of emit_show_call_field.
+fn emit_show_call_listidx(name) = {
+  wat_emit("    (call $")
+  wat_emit(name)
+  wat_emit(" (local.get $__state) ")
+  emit_show_list_index()
+  wat_emit(")\n")
+}
+
+fn emit_show_list_index() =
+  wat_emit("(call $list_index (local.get $__state) (local.get $a) (local.get $i))")
+
+// ─── show literal/separator emit ──────────────────────────────────────────
+// A string literal in the helper body: emit the data-pointer load (the literal
+// was registered through visit_string by register_show_literals, so string_offset
+// resolves it). The helper assembles via str_concat, so each literal is a leaf
+// on the folded concat tree.
+fn emit_show_str_literal(s) = {
+  wat_emit("    ")
+  emit_expr(LConst(0, LString(s)))
+}
+
+fn emit_show_str_literal_inline(s) = emit_expr(LConst(0, LString(s)))
+
+// emit_show_concat_open / close — a folded `(call $str_concat (local.get $__state)
+// <left> <right> )`: open writes the call head + __state, the two operands follow
+// as sub-expressions, close writes the `)`. Right-nesting builds the N-ary concat.
+fn emit_show_concat_open() = wat_emit("    (call $str_concat (local.get $__state)\n")
+fn emit_show_concat_close() = wat_emit("    )\n")
+
+// ─── show collection pre-pass: aggregate types at every to_string site ─────
+// Walk the lowered IR for LCall to a $show_<sig> global (lower_show_call emitted
+// it) and contribute the arg's aggregate type closure (the type proved at `ah`).
+// Mirror of collect_eq_product_tys_expr's H6-exhaustive shape; the divergence is
+// only the trigger (a show_ call vs a BEq site) and that show DOES collect list
+// types (eq folds lists inline; show needs a $show_l<elem> helper).
+fn collect_show_tys_list(stmts, acc) = {
+  if len(stmts) == 0 { acc }
+  else {
+    collect_show_tys_list(list_tail(stmts),
+      collect_show_tys_expr(list_head(stmts), acc))
+  }
+}
+
+// The aggregate type closure for show: the type itself if aggregate, plus every
+// nested aggregate its fields / elements / variant payloads reach. Unlike eq,
+// the LIST arm contributes the LIST type (show needs $show_l<elem>), then
+// descends the element. `seen` guards recursive ADTs (collected once; the
+// runtime helper recurses the value).
+fn show_subtys(ty, seen, acc) = match fold_strip(ty) {
+  TRecord(fields)        => show_subtys_fields(fields, 0, len(fields), seen, [ty] ++ acc),
+  TRecordOpen(fields, _) => show_subtys_fields(fields, 0, len(fields), seen, [ty] ++ acc),
+  TTuple(elems)          => show_subtys_list(elems, 0, len(elems), seen, [ty] ++ acc),
+  TList(elem)            => show_subtys(elem, seen, [ty] ++ acc),
+  TName(name, _) =>
+    if ls_find_str_local(seen, name, 0) >= 0 { acc }
+    else {
+      let specs = variant_specs_of(name)
+      show_subtys_variants(specs, 0, len(specs), [name] ++ seen, [ty] ++ acc)
+    },
+  _                      => acc
+}
+
+fn show_subtys_fields(fields, i, n, seen, acc) = {
+  if i >= n { acc }
+  else {
+    let (_name, ty) = list_index(fields, i)
+    show_subtys_fields(fields, i + 1, n, seen, show_subtys(ty, seen, acc))
+  }
+}
+
+fn show_subtys_list(elems, i, n, seen, acc) = {
+  if i >= n { acc }
+  else {
+    show_subtys_list(elems, i + 1, n, seen, show_subtys(list_index(elems, i), seen, acc))
+  }
+}
+
+fn show_subtys_variants(specs, i, n, seen, acc) = {
+  if i >= n { acc }
+  else {
+    let (_tag, payloads) = list_index(specs, i)
+    show_subtys_variants(specs, i + 1, n, seen,
+      show_subtys_list(payloads, 0, len(payloads), seen, acc))
+  }
+}
+
+// show_operand_contrib — the arg of a $show_<sig> LCall contributes its
+// aggregate closure. The arg handle carries the proven type (AST-in-graph).
+fn show_operand_contrib(arg, acc) with LookupTy = {
+  let h = lexpr_handle(arg)
+  if h == 0 { acc }
+  else { show_subtys(fold_strip(lookup_ty(h)), [], acc) }
+}
+
+// A show-helper call target is an LGlobal whose name begins "show_" (lower_show_call
+// emitted it). Prefix-match via byte_at — the 5 bytes 's','h','o','w','_' — reusing
+// the one byte observer, adding no new runtime function.
+fn is_show_global(f) = match f {
+  LGlobal(_, name) =>
+    byte_len(name) >= 5
+      && byte_at(name, 0) == 115   // 's'
+      && byte_at(name, 1) == 104   // 'h'
+      && byte_at(name, 2) == 111   // 'o'
+      && byte_at(name, 3) == 119   // 'w'
+      && byte_at(name, 4) == 95,   // '_'
+  _ => false
+}
+
+fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
+  LCall(_h, f, args) =>
+    if is_show_global(f) && len(args) == 1 {
+      collect_show_tys_expr(f,
+        show_operand_contrib(list_head(args), collect_show_tys_list(args, acc)))
+    } else {
+      collect_show_tys_expr(f, collect_show_tys_list(args, acc))
+    },
+  LTailCall(_h, f, args) => collect_show_tys_expr(f, collect_show_tys_list(args, acc)),
+  LBinOp(_h, _op, l, r)  => collect_show_tys_expr(r, collect_show_tys_expr(l, acc)),
+  LSuspend(_h, _o, f, args, ev) => collect_show_tys_expr(f,
+                              collect_show_tys_list(args, collect_show_tys_list(ev, acc))),
+  LEvPerform(_h, _n, _e, _s, args) => collect_show_tys_list(args, acc),
+  LLet(_h, _n, inner)    => collect_show_tys_expr(inner, acc),
+  LStore(_h, _s, v)      => collect_show_tys_expr(v, acc),
+  LUnaryOp(_h, _op, i)   => collect_show_tys_expr(i, acc),
+  LReturn(_h, i)         => collect_show_tys_expr(i, acc),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
+    collect_show_tys_list(body,
+      collect_show_tys_list(caps, collect_show_tys_list(ev, acc))),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
+    collect_show_tys_list(body,
+      collect_show_tys_list(caps, collect_show_tys_list(ev, acc))),
+  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_show_tys_list(body, acc),
+  LIf(_h, c, t, e)       => collect_show_tys_list(e,
+                              collect_show_tys_list(t, collect_show_tys_expr(c, acc))),
+  LBlock(_h, stmts)      => collect_show_tys_list(stmts, acc),
+  LMakeList(_h, es)      => collect_show_tys_list(es, acc),
+  LMakeTuple(_h, es)     => collect_show_tys_list(es, acc),
+  LMakeRecord(_h, fs)    => collect_show_tys_list(fs, acc),
+  LMakeVariant(_h, _t, fs) => collect_show_tys_list(fs, acc),
+  LIndex(_h, b, i, _)    => collect_show_tys_expr(i, collect_show_tys_expr(b, acc)),
+  LMatch(_h, s, _arms)   => collect_show_tys_expr(s, acc),
+  LRegion(_h, body)      => collect_show_tys_list(body, acc),
+  LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
+    collect_show_tys_expr(b,
+      collect_show_tys_expr(hn,
+        collect_show_tys_list(inits, collect_show_tys_list(cevs, acc)))),
+  LFeedback(_h, b, s)    => collect_show_tys_expr(s, collect_show_tys_expr(b, acc)),
+  LPerform(_h, _n, args, _) => collect_show_tys_list(args, acc),
+  LWasiCall(_h, _n, args)   => collect_show_tys_list(args, acc),
+  LStateSet(_h, _s, v)   => collect_show_tys_expr(v, acc),
+  LFieldLoad(_h, rec, _o) => collect_show_tys_expr(rec, acc),
+  LStateSlotStore(_h, _o, v) => collect_show_tys_expr(v, acc),
+  LConst(_, _)           => acc,
+  LLocal(_, _)           => acc,
+  LGlobal(_, _)          => acc,
+  LUpval(_, _)           => acc,
+  LStateGet(_, _)        => acc,
+  LEvSlotRef(_, _)       => acc
+}
+
+// variant_named_specs_of — like variant_specs_of but ALSO carries each
+// variant's constructor NAME (show prints it; eq does not need it). Read live
+// from the env's ConstructorScheme — (tag_id, ctor_name, [payload_ty]) in
+// declaration (tag) order.
+fn variant_named_specs_of(type_name) with EnvRead = {
+  let Env(entries) = env_snapshot()
+  variant_named_specs_filter(entries, type_name)
+}
+
+fn variant_named_specs_filter(entries, type_name) with Pure = {
+  if len(entries) == 0 { [] }
+  else {
+    let (name, scheme, _reason, kind) = list_head(entries)
+    let rest = variant_named_specs_filter(list_tail(entries), type_name)
+    match kind {
+      ConstructorScheme(tag_id, _total) => {
+        let Forall(_, ty) = scheme
+        if ctor_result_is(ty, type_name) {
+          [(tag_id, name, ctor_payload_tys(ty))] ++ rest
+        } else { rest }
+      },
+      _ => rest
+    }
+  }
 }
 
 // emit_binop_repr — the arithmetic/comparison binop projected at the operand's

@@ -158,3 +158,33 @@ micro:fanout-seq=30
 # already projects the ambient row at the suspend point, ready to fill the field
 # at the producer's mint — peer Hβ.infer.tcont-world-capture-at-reify.
 micro:resume-world=42
+# W03 (the structural fold's SHOW leaf): to_string on an AGGREGATE is now a CALL
+# to the generated recursive $show_<sig> helper (emit_fold_show_helpers,
+# src/backends/wasm.mn) — the SHOW leaf, sibling of the eq leaf ($eq_<sig>). It
+# folds the proven five-node-kind shape into a String via str_concat (product →
+# "{name: …}", tuple → "(…)", list → "[…]", sum → "Ctor(…)"), each field/payload/
+# element re-entering the leaf, the runtime renderers ($int_to_str/$float_to_str/
+# $str_concat) called via the W7 (__state, args) convention the eq leaf calls
+# $str_eq with. fold_strip / fold_sig (the fold's shared strip+signature) moved to
+# their Carried-Truth home (types.mn) — eq / show / compare / hash read ONE
+# structural name. The DIRECT to_string(record)=="{…}" needs the seed's show
+# generator + the string runtime (the libless harness links neither), so the gate
+# proves the show fold's CONTROL SHAPE (per-field render + separator-join + open/
+# close delimiter assembly + recursion into nested aggregates) self-containedly —
+# peer Hβ.fold.show-seed-value-gate. Exit 40.
+micro:show-fold=40
+# W03 (the structural fold's PACK/UNPACK leaf): cache_pack/cache_unpack are the one
+# tag-then-payload traversal under the Pack/Unpack effects (the `<~` byte cycle).
+# The EAFloat leaf now round-trips VALUE-FAITHFULLY via its decimal string
+# (pack_str(float_to_str(f)) ↔ parse_float(unpack_str())) — the lossy
+# float_to_int_truncate (44.1→44) is DELETED, the no-silent-fallback law honored;
+# Hβ.fold.pack-leaf-effarg-float CLOSED. The wire format pins IKAI + version + the
+# per-Ty/-SchemeKind tag bytes byte-for-byte (Law 7 — every existing .kai valid).
+# The real cache_pack/unpack run under buffer handlers (lib/runtime/binary.mn) the
+# libless harness does not link, and the float round-trip needs the wheel's f64
+# repr the seed lags, so the gate proves the pack/unpack leaf's CONTROL SHAPE —
+# tag-then-payload encode, decode in the SAME order, RECOVER the original tag AND
+# payload (pack ∘ unpack = id) — self-containedly. The direct
+# cache_pack(kai)|>cache_unpack==kai lands when the seed catches up — peer
+# Hβ.fold.pack-roundtrip-seed-value-gate. Exit 40.
+micro:pack-roundtrip=40

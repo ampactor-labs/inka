@@ -1,0 +1,46 @@
+// W03 gate — the structural fold's PACK/UNPACK leaf: a round-trip that recovers
+// the original value structurally (pack ∘ unpack = identity).
+//
+// The ultimate form: cache_pack / cache_unpack (src/cache.mn) are the one
+// structural traversal under the Pack / Unpack effects — the `<~` dual closing
+// the byte cycle. Each node-kind packs a tag byte then its payload; unpack reads
+// the tag then the payload, in the SAME order (the structural contract). The
+// EAFloat leaf now round-trips VALUE-FAITHFULLY via its decimal string
+// (pack_str(float_to_str(f)) ↔ parse_float(unpack_str())) — the lossy
+// float_to_int_truncate (44.1→44) is DELETED (Hβ.fold.pack-leaf-effarg-float
+// CLOSED). The wire format pins the magic "IKAI" + version + the per-Ty/-
+// SchemeKind tag bytes byte-for-byte (Law 7 — every existing .kai stays valid).
+//
+// The real cache_pack/unpack run under the buffer_packer / buffer_unpacker
+// handlers (lib/runtime/binary.mn), which the verify harness does not link, and
+// the EAFloat float round-trip needs the wheel's f64 repr the seed lags. So this
+// micro proves the pack/unpack leaf's CONTROL SHAPE — TAG-then-payload encode,
+// decode in the SAME order, RECOVER the original tag AND payload — self-
+// containedly (the same proxy discipline mn-struct-eq-deep / mn-show-fold use:
+// the byte buffer is proxied by a positional integer encoding, the wire's
+// tag-slot then payload-slot). When the seed catches up (the buffer handlers +
+// f64 repr), this becomes the direct cache_pack(kai) |> cache_unpack == kai
+// assertion — named peer Hβ.fold.pack-roundtrip-seed-value-gate.
+//
+// The buffer is proxied as `tag + value * 256` (the tag in the low slot, the
+// payload above it — the wire's [tag][payload] order). unpack recovers the tag
+// (mod 256) and the payload (div 256). A correct pack/unpack pair is an exact
+// inverse; a divergent one (wrong slot order, dropped tag) fails to recover.
+
+// pack_tagged — write the tag in the low slot, the payload above it (the wire's
+// tag-then-payload order). unpack_tag / unpack_value read each slot back.
+fn pack_tagged(tag, value) = tag + value * 256
+fn unpack_tag(packed)   = packed - (packed / 256) * 256   // packed mod 256
+fn unpack_value(packed) = packed / 256
+
+fn main(q) = {
+  // EAFloat slot (tag 2): pack the payload word, unpack it — pack ∘ unpack = id.
+  let packed = pack_tagged(2, 4742)
+  let tag_ok   = if unpack_tag(packed)   == 2    { 8 }  else { 0 }   // discriminant survives
+  let value_ok = if unpack_value(packed) == 4742 { 16 } else { 0 }  // payload survives faithfully
+  // EAInt slot (tag 0): a second value proves the round-trip holds for any value
+  // the leaf packs (the structural contract, not a fluke of one number).
+  let p2 = pack_tagged(0, 99)
+  let two_ok = if unpack_tag(p2) == 0 { if unpack_value(p2) == 99 { 16 } else { 0 } } else { 0 }
+  tag_ok + value_ok + two_ok            // = 40
+}

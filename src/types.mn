@@ -127,6 +127,58 @@ fn repr_wat(r) with Pure = match r {
   RV128 => "v128"
 }
 
+// ─── The structural FOLD's shared skeleton: strip + signature ─────────────
+// ==/compare/hash/show/pack/unpack are ONE fold over the five node-kinds; the
+// LEAF is the only degree of freedom. fold_strip and fold_sig are the two
+// type-level reads EVERY leaf shares, so they live here — the type ontology's
+// home — not in any single backend (the eq leaf was the first reader; show /
+// compare / hash / pack join it, reading the SAME structural name). This is the
+// Carried-Truth home: a type's fold-signature is a property OF THE TYPE.
+
+// fold_strip — alias-strip / refinement-unwrap FIRST (TAlias->inner,
+// TRefined->base), structurally identical to repr_of's prologue. A `Port`
+// (= Int) folds as Int; a `Sample` (= Float where ..) folds as Float. The
+// predicate is erased at runtime, so the leaf reads the underlying value.
+fn fold_strip(ty) with Pure = match ty {
+  TAlias(_, inner)  => fold_strip(inner),
+  TRefined(base, _) => fold_strip(base),
+  _                 => ty
+}
+
+// fold_sig — a deterministic structural name for a type: the dedup key and the
+// generated helper-name suffix (the SAME suffix every leaf's $<leaf>_<sig> uses).
+// Two types share a sig iff they fold identically (the same structural-eq the
+// cursor derives for records — the proof IS the name). Alias/refinement-stripped
+// first, like every other fold-through.
+fn fold_sig(ty) with Pure = match fold_strip(ty) {
+  TInt              => "i",
+  TFloat            => "d",
+  TUnit             => "u",
+  TString           => "s",
+  TVar(_)           => "i",          // unresolved handle — a word
+  TList(elem)       => "l{fold_sig(elem)}",
+  TName(n, _)       => "n{n}",       // nominal — name carries identity
+  TTuple(elems)     => "t{fold_sig_list(elems, 0, len(elems))}_",
+  TRecord(fs)       => "r{fold_sig_fields(fs, 0, len(fs))}_",
+  TRecordOpen(fs,_) => "r{fold_sig_fields(fs, 0, len(fs))}_",
+  TFun(_, _, _)     => "fn",         // closure — folds at the function leaf
+  TCont(_, _, _)    => "k",          // continuation pointer — a word here
+  // fold_strip already removed TAlias/TRefined; reaching them is impossible.
+  TAlias(_, inner)  => fold_sig(inner),
+  TRefined(base, _) => fold_sig(base)
+}
+
+fn fold_sig_list(elems, i, n) with Pure =
+  if i >= n { "" }
+  else { "_{fold_sig(list_index(elems, i))}{fold_sig_list(elems, i + 1, n)}" }
+
+fn fold_sig_fields(fields, i, n) with Pure =
+  if i >= n { "" }
+  else {
+    let (name, ty) = list_index(fields, i)
+    "_{name}{fold_sig(ty)}{fold_sig_fields(fields, i + 1, n)}"
+  }
+
 // ─── Ownership (spec 02 · spec 07) ─────────────────────────────────
 // Every function parameter wraps Ty with an Ownership marker.
 // Inference fills unmarked parameters; Own/Ref are explicit commitments.

@@ -471,7 +471,7 @@ fn span_contains(outer, inner) with Pure = {
 type Token = Tok(TokenKind, Span)
 
 type TokenKind
-  // ─── Keywords (20) ───────────────────────────────────────────────
+  // ─── Keywords (19) ───────────────────────────────────────────────
   = TFn | TLet | TIf | TElse | TMatch | TType
   | TEffect | THandle | THandler | TWith
   | TResume | TPerform
@@ -500,7 +500,7 @@ type TokenKind
   | TPipeGt | TLtPipe | TGtLt | TTildeGt | TLtTilde   // five verbs
   | TAndAnd | TOrOr                          // logical
 
-  // ─── Single-character operators and punctuation (23) ─────────────
+  // ─── Single-character operators and punctuation (22) ─────────────
   | TLParen | TRParen | TLBrace | TRBrace | TLBracket | TRBracket
   | TComma | TDot | TColon | TSemicolon
   | TPlus | TMinus | TStar | TSlash | TPercent

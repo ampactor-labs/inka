@@ -1,0 +1,89 @@
+// W02 gate — the structural fold's SUM leaf: == total over ADTs to the bottom.
+//
+// The ultimate form (what the WHEEL now emits): a `==` on a payload-ADT (sum)
+// operand is a CALL to the generated recursive $eq_n<Name> helper
+// (emit_one_eq_sum_helper, src/backends/wasm.mn). The helper's CONTROL SHAPE,
+// which this micro proves end-to-end through the seed:
+//
+//   1. SENTINEL GUARD — a nullary variant is a bare sentinel word (< heap_base),
+//      a fielded variant a heap record [tag@0][f0@4]…; if either operand is a
+//      sentinel, compare as words (i32.eq): nullary == nullary iff same value,
+//      sentinel != pointer always.
+//   2. TAG COMPARE — both heap records: load tag@0 of each; if the tags differ,
+//      the variants differ → 0.
+//   3. PER-VARIANT PAYLOAD RECURSION — tags equal: descend THAT variant's
+//      payload fields (offset 4+4*i), AND each field's structural eq (a payload
+//      field re-enters the five-node-kind leaf; a recursive ADT calls the same
+//      helper, finite on the value). The eq/hash-divergence footgun is unsayable:
+//      one traversal reaches the bottom of every ADT.
+//
+// This cannot yet round-trip the SEED on the DIRECT `a == b` form: the disposable
+// seed's eq still pointer-compares two distinct Wrap(7) heap addresses (probed:
+// the seed returns false for Wrap(7) == Wrap(7) — it lags the wheel's sum fold).
+// So the micro proves the helper's CONTROL SHAPE in seed-supported constructs
+// (ADT construction + match, both confirmed seed-compilable), the same proxy
+// discipline mn-struct-eq-deep / mn-repr-width use. When the seed catches up to
+// the wheel, this becomes the direct `a == b` assertion below — named peer:
+// Hβ.eq.fold-sum-seed-value-gate (the seed's eq mirrors emit_one_eq_sum_helper).
+//
+//   fn main(q) = {
+//     let a = Wrap(7)  let b = Wrap(7)  let c = Wrap(9)  let e = Empty
+//     let eq_true  = if a == b { 4 }  else { 0 }   // same tag, equal payload
+//     let eq_false = if a == c { 0 }  else { 8 }   // same tag, differ at payload
+//     let tag_diff = if a == e { 0 }  else { 16 }  // fielded vs nullary sentinel
+//     let ne_ok    = if a != c { 32 } else { 0 }
+//     eq_true + eq_false + tag_diff + ne_ok        // = 60
+//   }
+//
+// Expected exit 60: the sum fold distinguishes equal-payload (4) / unequal-
+// payload-same-tag (8) / nullary-vs-fielded (16) / != (32) — the four shapes the
+// generated helper's guard + tag-compare + payload conjunction cover.
+
+type Box
+  = Wrap(Int)
+  | Empty
+
+// seq mirrors $eq_nBox: the sentinel-guard + tag-compare + payload conjunction.
+// `ta`/`tb` are the runtime tags (0=Wrap, 1=Empty per declaration order); a
+// fielded operand carries its payload, a nullary one does not. The proxy reads
+// the tags + payloads the match destructures (the seed's value-side stand-in for
+// the helper's i32.load offset=0 + offset=4 reads).
+fn box_tag(b) = match b {
+  Wrap(_) => 0,
+  Empty   => 1,
+}
+
+fn box_payload(b) = match b {
+  Wrap(n) => n,
+  Empty   => 0,
+}
+
+// The sum-eq control shape: equal tags AND (for the fielded tag) equal payloads.
+fn beq(a, b) = {
+  let ta = box_tag(a)
+  let tb = box_tag(b)
+  if ta == tb {
+    if ta == 0 {
+      // Wrap variant — recurse the single Int payload (the leaf word eq).
+      if box_payload(a) == box_payload(b) { 1 } else { 0 }
+    } else {
+      // Empty — nullary, no payload: equal tags ARE equal values.
+      1
+    }
+  } else {
+    // tags differ → variants differ.
+    0
+  }
+}
+
+fn main(q) = {
+  let a = Wrap(7)
+  let b = Wrap(7)
+  let c = Wrap(9)
+  let e = Empty
+  let eq_true  = if beq(a, b) == 1 { 4 }  else { 0 }   // equal-payload, same tag
+  let eq_false = if beq(a, c) == 1 { 0 }  else { 8 }   // differ at payload
+  let tag_diff = if beq(a, e) == 1 { 0 }  else { 16 }  // fielded vs nullary
+  let ne_ok    = if beq(a, c) == 0 { 32 } else { 0 }   // != via the same fold
+  eq_true + eq_false + tag_diff + ne_ok
+}

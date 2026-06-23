@@ -410,11 +410,28 @@ representation-host**, ONE contiguous handle-addressed shape:
 - **STRUCTURAL FOLD (the record's TYPE-node recursed by SHAPE, the read itself).**
   `==`/compare/hash/show/pack/unpack are one `fold(ty, leaf)` over the five
   node-kinds; the word-leaf reads the gradient (`f64.eq` for an f64 field), the
-  function-leaf serializes a continuation by memcpy. Retire the three hand-copies
-  (the `emit_struct_eq` product/sum floor, the `lower_to_string` fall-through, the
-  cache pack/unpack walk) into one projection — LESS code. Every type, the instant
-  it exists, HAS total `==`/`<`/hash/show/pack; the eq/hash-divergence footgun is
-  structurally unsayable.
+  function-leaf serializes a continuation by memcpy. **The eq leaf is total NOW**
+  (`emit_fold_eq_helpers`, `backends/wasm.mn`): word / sequence / product landed
+  earlier, and the SUM leaf (`emit_one_eq_sum_helper` — sentinel-guard + tag-
+  compare + per-variant payload recursion, the variant specs read LIVE from the
+  env's `ConstructorScheme` via `variant_specs_of`, the same channel synth's
+  `ctors_of_type` reads) closes the fifth node-kind — so `==` is total over every
+  ADT to the bottom, the eq/hash-divergence footgun structurally unsayable. The
+  remaining leaves (show / pack / unpack / compare / hash) generalize the SAME
+  generator into `fold(ty, leaf)`, retiring the three hand-copies (the
+  `lower_to_string` aggregate fall-through, the cache `pack`/`unpack` walk
+  PINNING its `IKAI` tag-byte wire format as a byte-parity invariant, a generated
+  `compare`/`hash` leaf) — LESS code, sequenced on STEP 0/1's repr word-leaf and
+  STEP 5's `TCont`-world (the function-leaf's serialized-closure world). The
+  cache's `EffArg` pack/unpack is now TOTAL over its three tags (0=EAInt /
+  1=EAString / 2=EAFloat, additive — existing `.kai` bytes unchanged); the
+  byte-faithful f64 round-trip for `EAFloat` rides STEP 1's f64 width (peer
+  `Hβ.fold.pack-leaf-effarg-float`). **BOUNDARY (do not mis-flag):** types.mn's
+  `show_type` / `show_reason` / `show_effrow` are the DOMAIN pretty-renderer — the
+  *mentl voice*, a `~> Format` projection of the compiler's own metaschema for the
+  Why engine and diagnostics — NOT the generic `show`-leaf of `fold(ty, leaf)`
+  (which renders an arbitrary USER value). They are a different fold over a fixed
+  ADT for a human reader, kept; never retired as a fold-copy.
 
 **THE BINDING KEYSTONE — `TCont(Ty, ResumeDiscipline, EffRow)`.** Today TCont is
 two-arg and unify DROPS the discipline. Carrying the **effect-WORLD** on the

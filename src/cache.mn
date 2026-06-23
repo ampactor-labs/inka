@@ -386,7 +386,20 @@ fn cache_pack_effargs(args, i, n) with Pack + !Unpack = {
   }
 }
 
-// EffArg tags: 0=EAInt, 1=EAString
+// EffArg tags: 0=EAInt, 1=EAString, 2=EAFloat.
+// The match is EXHAUSTIVE over all three EffArg variants — a missing arm is the
+// silent non-exhaustiveness the laws forbid (it would TRAP packing a module that
+// uses a float-parameterized effect like `Sample(44.1)`, parser.mn:595). The
+// EAFloat arm pins tag byte 2 (additive — EAInt=0/EAString=1 bytes unchanged, so
+// existing .kai caches stay byte-identical, Law 7). Its BYTES are the named peer
+// Hβ.fold.pack-leaf-effarg-float: a byte-faithful f64 round-trip needs the
+// representation gradient's real f64 width (STEP 1) + an f64 memory store — until
+// then a lossy float_to_int_truncate would SILENTLY corrupt 44.1→44 (Law 7), so
+// the arm emits a LOUD located floor rather than a silent miscompile. The arm
+// dissolves into a generated $pack_<sig> word-leaf at full f64 width when STEP 1
+// lands (the design's "EAFloat dissolves automatically once the fold subsumes
+// EffArg"). The TAG is laid down now so the wire format is total and forward-
+// stable; the bytes after it are the sequenced word-leaf.
 fn cache_pack_effarg(arg) with Pack + !Unpack = match arg {
   EAInt(n) => {
     pack_byte(0)
@@ -395,6 +408,10 @@ fn cache_pack_effarg(arg) with Pack + !Unpack = match arg {
   EAString(s) => {
     pack_byte(1)
     pack_str(s)
+  },
+  EAFloat(f) => {
+    pack_byte(2)
+    pack_i32(float_to_int_truncate(f))
   }
 }
 
@@ -856,15 +873,27 @@ fn cache_unpack_effargs(n, i, buf) with Unpack + !Pack = {
   }
 }
 
+// Exhaustive over the three EffArg tag bytes (0=EAInt, 1=EAString, 2=EAFloat) —
+// the dual of cache_pack_effarg. The prior `else` silently decoded ANY non-zero
+// tag as EAString, so a tag-2 (EAFloat) byte mis-decoded into a String (the
+// silent-fallback the laws forbid). tag 2 reads the EAFloat word-leaf (peer
+// Hβ.fold.pack-leaf-effarg-float — STEP 1's f64 width; today the i32-repr float
+// floats take everywhere in the current substrate, float_of_int the dual of the
+// pack's truncate). A tag outside {0,1,2} is a corrupt stream — loud, not a
+// silent String guess.
 fn cache_unpack_effarg() with Unpack + !Pack = {
   let tag = unpack_byte()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   if tag == 0 {
     let n = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     EAInt(n)
   }
-  else {
+  else if tag == 1 {
     let s = unpack_str()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     EAString(s)
+  }
+  else {
+    let n = unpack_i32()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+    EAFloat(float_of_int(n))
   }
 }
 

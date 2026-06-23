@@ -2569,11 +2569,11 @@ fn emit_eq_for_ty(ty, neg) = match ty {
   TRecord(fields)        => emit_eq_product_call(ty_fold_sig(ty), neg),
   TRecordOpen(fields, _) => emit_eq_product_call(ty_fold_sig(ty), neg),
   TTuple(elems)          => emit_eq_product_call(ty_fold_sig(ty), neg),
-  // Sum payload-ADT — per-variant tag-then-payload recursion is the named
-  // peer Hβ.eq.fold-sum-leaf (needs the env's ConstructorScheme variant
-  // payload types, the channel the next leaf-increment threads). A nullary
-  // ADT value is a bare tag word and folds at the scalar arm below.
-  TName(_, _) => emit_eq_sum_leaf_pending(neg),
+  // Sum payload-ADT — per-variant tag-then-payload recursion via the generated
+  // $eq_n<Name> helper (the fifth leaf, reading the env's ConstructorScheme
+  // variant payload types). A purely-nullary ADT folds to a tag i32.eq inside
+  // the helper; a fielded ADT loads tags then recurses each payload.
+  TName(_, _) => emit_eq_sum_call(ty_fold_sig(ty), neg),
   // Scalar word: Int / Unit / Float-as-word / unresolved TVar (a handle IS
   // a word) / fn-table index / continuation pointer. i32.eq IS structural
   // for a single value word (the f64 word-leaf rides STEP 1's repr at the
@@ -2606,17 +2606,71 @@ fn emit_eq_product_call(sig, neg) = {
   if neg { wat_emit("    (i32.eqz)\n") } else { () }
 }
 
-// Sum (TName payload-ADT) eq — the per-variant tag-then-payload fold reads
-// the env's ConstructorScheme for each variant's payload types, the channel
-// the next leaf-increment threads into emit (emit declares only GraphRead +
-// LookupTy today). Named peer Hβ.eq.fold-sum-leaf — a LOUD, LOCATABLE floor
-// (never a pointer-eq lie on the variant address), positive-form per Drift 9.
-fn emit_eq_sum_leaf_pending(_neg) = {
-  wat_emit("    ;; == on payload-ADT (sum) — per-variant tag-then-payload\n")
-  wat_emit("    ;; recursion is peer Hβ.eq.fold-sum-leaf (env variant types).\n")
-  wat_emit("    ;; pointer-eq would lie. (loud floor, named follow-up)\n")
-  wat_emit("    (unreachable)\n")
+// Sum (TName payload-ADT) eq — the FIFTH leaf of the structural fold, landed.
+// A `==` on a sum operand is a CALL to the generated recursive $eq_n<Name>
+// helper (mirror of the product $eq_<sig> call): the state-insert reorders the
+// stack to (__state, a, b), the helper returns Bool, != wraps i32.eqz. The
+// helper reads the env's ConstructorScheme entries for the type — per-variant
+// tag-then-payload recursion — never a pointer-eq lie on the variant address.
+// Hβ.eq.fold-sum-leaf, realized: == is total over all five node-kinds.
+fn emit_eq_sum_call(sig, neg) = {
+  emit_helper_state_insert()
+  wat_emit("    (call $eq_")
+  wat_emit(sig)
+  wat_emit(")\n")
+  if neg { wat_emit("    (i32.eqz)\n") } else { () }
 }
+
+// variant_specs_of — the env's ConstructorScheme entries for `type_name`, each
+// as (tag_id, [payload_ty]) in declaration (tag) order. Reads env_snapshot and
+// filters exactly as synth_proposer's ctors_of_type does (the ONE variant-
+// enumeration channel; the graph already proved which bindings are this type's
+// constructors). A nullary ctor's scheme is bare TName -> []; a fielded ctor's
+// is TFun(params, TName, _) -> the param types. Carried-Truth: the payload
+// types are read LIVE from the constructor's scheme, never re-derived.
+fn variant_specs_of(type_name) with EnvRead = {
+  let Env(entries) = env_snapshot()
+  variant_specs_filter(entries, type_name)
+}
+
+fn variant_specs_filter(entries, type_name) with Pure = {
+  if len(entries) == 0 { [] }
+  else {
+    let (_name, scheme, _reason, kind) = list_head(entries)
+    let rest = variant_specs_filter(list_tail(entries), type_name)
+    match kind {
+      ConstructorScheme(tag_id, _total) => {
+        let Forall(_, ty) = scheme
+        if ctor_result_is(ty, type_name) {
+          [(tag_id, ctor_payload_tys(ty))] ++ rest
+        } else { rest }
+      },
+      _ => rest
+    }
+  }
+}
+
+// A constructor's scheme result type is TName(type_name, _) (nullary, bare) or
+// TFun(_, TName(type_name, _), _) (fielded) — the same test synth uses.
+fn ctor_result_is(ty, type_name) with Pure = match ty {
+  TName(n, _)     => n == type_name,
+  TFun(_, ret, _) => ctor_result_is(ret, type_name),
+  _               => false
+}
+
+// The constructor's payload types, in field order: a fielded ctor's TFun params
+// (each TParam carries its ty); a nullary ctor (bare TName) has none.
+fn ctor_payload_tys(ty) with Pure = match ty {
+  TFun(params, _ret, _) => param_tys_of(params, 0, len(params)),
+  _                     => []
+}
+
+fn param_tys_of(params, i, n) with Pure =
+  if i >= n { [] }
+  else {
+    let TParam(_nm, pty, _o, _o2, _d) = list_index(params, i)
+    [pty] ++ param_tys_of(params, i + 1, n)
+  }
 
 // ─── The eq-leaf of the structural fold: generated recursive helpers ──────
 // A product == is a CALL to $eq_<sig>, generated once per distinct product
@@ -2665,12 +2719,12 @@ fn ty_fold_sig_fields(fields, i, n) =
 // every BEq/BNe site, then emit each DISTINCT $eq_<sig> recursive helper once.
 // Called from emit_module after emit_functions (the helpers are plain top-
 // level functions, called directly like $str_eq — no fn-table entry needed).
-fn emit_fold_eq_helpers(lowered) = {
+fn emit_fold_eq_helpers(lowered) with EnvRead = {
   let tys = collect_eq_product_tys_list(lowered, [])
   emit_distinct_eq_helpers(tys, [])
 }
 
-fn emit_distinct_eq_helpers(tys, seen) = {
+fn emit_distinct_eq_helpers(tys, seen) with EnvRead = {
   if len(tys) == 0 { () }
   else {
     let ty = list_head(tys)
@@ -2685,17 +2739,123 @@ fn emit_distinct_eq_helpers(tys, seen) = {
 }
 
 // emit_one_eq_helper — the $eq_<sig> recursive helper body. Takes (__state,
-// a, b) per W7, returns Bool. ANDs each field's structural eq at its canonical
-// width-summed offset (field_offsets, the SAME projection lower's
-// field_byte_offset computes — Carried-Truth, never a re-derived 4*i). An
-// empty product is trivially equal (i32.const 1).
-fn emit_one_eq_helper(sig, ty) = {
+// a, b) per W7, returns Bool. The node-kind selects the body: a PRODUCT
+// (record/tuple) ANDs each field's structural eq at its canonical width-summed
+// offset (the SAME field_byte_offset projection lower computes — Carried-Truth,
+// never a re-derived 4*i); a SUM (TName payload-ADT) reads the env's variant
+// specs and emits sentinel-guard + tag-compare + per-tag payload recursion.
+// One generator, two of the five leaves — divergence between them is unsayable.
+fn emit_one_eq_helper(sig, ty) with EnvRead = match eq_strip(ty) {
+  TName(name, _) => emit_one_eq_sum_helper(sig, name),
+  _ => {
+    wat_emit("  (func $eq_")
+    wat_emit(sig)
+    wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)\n")
+    let fields = product_field_tys(ty)
+    emit_eq_helper_conjunction(fields, 0, len(fields), 0)
+    wat_emit("  )\n")
+  }
+}
+
+// emit_one_eq_sum_helper — the $eq_n<Name> sum helper. Two equal values share
+// a runtime tag; the fold then descends THAT variant's payload fields. A
+// nullary variant is a bare sentinel WORD (< heap_base) and a fielded variant
+// a heap record [tag@0][f0@4][f1@8]…, so:
+//   - if a < heap_base OR b < heap_base : compare as words (i32.eq) — a
+//     nullary tag == another iff the same value; sentinel != pointer always.
+//   - else (both heap records) : load tags; if they differ → 0; if equal →
+//     dispatch to the matched variant's payload conjunction. A type with no
+//     fielded variant degenerates to the word arm (purely-nullary ADT).
+// The per-variant payload conjunction recurses each field (offset 4+4*i,
+// uniform i32 slots) via emit_field_eq — a sum payload field re-enters this
+// family. Recursive ADTs (Tree) call $eq_nTree again: a runtime call, finite
+// on the value, never inline-infinite. The env's variant specs are read LIVE.
+fn emit_one_eq_sum_helper(sig, type_name) with EnvRead = {
+  let specs = variant_specs_of(type_name)
   wat_emit("  (func $eq_")
   wat_emit(sig)
-  wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)\n")
-  let fields = product_field_tys(ty)
-  emit_eq_helper_conjunction(fields, 0, len(fields), 0)
+  wat_emit(" (param $__state i32) (param $a i32) (param $b i32) (result i32)")
+  wat_emit(" (local $ta i32) (local $tb i32)")
+  wat_emit(" (local $state_tmp i32) (local $callee_closure i32) (local $alloc_size i32)\n")
+  // Sentinel guard: either operand below heap_base ⇒ both are word-comparable
+  // (nullary-vs-nullary value-eq, nullary-vs-fielded always-unequal).
+  wat_emit("    (if (result i32)\n")
+  wat_emit("      (i32.or\n")
+  wat_emit("        (i32.lt_u (local.get $a) (i32.const ")
+  wat_emit(int_to_str(heap_base()))
+  wat_emit("))\n")
+  wat_emit("        (i32.lt_u (local.get $b) (i32.const ")
+  wat_emit(int_to_str(heap_base()))
+  wat_emit(")))\n")
+  wat_emit("      (then (i32.eq (local.get $a) (local.get $b)))\n")
+  wat_emit("      (else\n")
+  // Both heap records: load tags, unequal ⇒ 0, else per-tag payload recursion.
+  wat_emit("        (local.set $ta (i32.load offset=0 (local.get $a)))\n")
+  wat_emit("        (local.set $tb (i32.load offset=0 (local.get $b)))\n")
+  wat_emit("        (if (result i32)\n")
+  wat_emit("          (i32.ne (local.get $ta) (local.get $tb))\n")
+  wat_emit("          (then (i32.const 0))\n")
+  wat_emit("          (else\n")
+  emit_eq_sum_tag_dispatch(specs, 0, len(specs))
+  wat_emit("          )))))\n")
   wat_emit("  )\n")
+}
+
+// Per-variant tag dispatch: a cascade matching $ta against each fielded
+// variant's tag, emitting that variant's payload conjunction. A purely-nullary
+// variant (no payload) contributes nothing (its values never reach here — the
+// sentinel guard caught them). Tags equal but no fielded variant matched ⇒ the
+// values are nullary sentinels misrouted, impossible past the guard: the
+// terminal (i32.const 1) (tags already proven equal, no payload to compare).
+fn emit_eq_sum_tag_dispatch(specs, i, n) = {
+  if i >= n { wat_emit("            (i32.const 1)\n") }
+  else {
+    let (tag_id, payloads) = list_index(specs, i)
+    if len(payloads) == 0 {
+      emit_eq_sum_tag_dispatch(specs, i + 1, n)
+    } else {
+      wat_emit("            (if (result i32)\n")
+      wat_emit("              (i32.eq (local.get $ta) (i32.const ")
+      wat_emit(int_to_str(tag_id))
+      wat_emit("))\n")
+      wat_emit("              (then\n")
+      emit_eq_variant_payload_conjunction(payloads, 0, len(payloads))
+      wat_emit("              )\n")
+      wat_emit("              (else\n")
+      emit_eq_sum_tag_dispatch(specs, i + 1, n)
+      wat_emit("              ))\n")
+    }
+  }
+}
+
+// The payload conjunction for one variant: AND each payload field's structural
+// eq. Payload field i lives at byte offset 4+4*i (uniform i32 slots — variant
+// payloads are 4-byte-slotted regardless of repr, per emit_variant_field_stores
+// _at). Loads the pair, applies the five-node-kind leaf (emit_field_eq), ANDs.
+fn emit_eq_variant_payload_conjunction(payloads, i, n) = {
+  if n == 0 { wat_emit("                (i32.const 1)\n") }
+  else if i >= n { () }
+  else {
+    let pty = list_index(payloads, i)
+    let off = 4 + i * 4
+    emit_field_load_pair(off, RI32)
+    emit_variant_payload_eq(eq_strip(pty))
+    if i == 0 { () } else { wat_emit("    (i32.and)\n") }
+    emit_eq_variant_payload_conjunction(payloads, i + 1, n)
+  }
+}
+
+// The leaf eq over a variant PAYLOAD slot. Identical to emit_field_eq for
+// sequence / product / sum / word, but a variant payload is a UNIFORM 4-byte
+// i32 slot (emit_variant_field_stores_at stores every field via i32.store —
+// the variant has no repr-width packing), so the pair on the stack is two i32
+// (loaded i32.load), and a Float-typed payload compares as its stored 4-byte
+// word (i32.eq), NOT f64.eq (which would consume f64 the slot never held).
+// product/record packs floats f64-wide and so keeps emit_field_eq's f64.eq;
+// the variant's uniform slotting is the one structural difference.
+fn emit_variant_payload_eq(pty) = match pty {
+  TFloat => wat_emit("    (i32.eq)\n"),
+  _      => emit_field_eq(pty)
 }
 
 // The conjunction body: for field i, push eq(a.field_i, b.field_i) then AND
@@ -2755,7 +2915,11 @@ fn emit_field_eq(fty) = match fty {
   TRecord(_)        => emit_field_product_eq(ty_fold_sig(fty)),
   TRecordOpen(_, _) => emit_field_product_eq(ty_fold_sig(fty)),
   TTuple(_)         => emit_field_product_eq(ty_fold_sig(fty)),
-  TName(_, _)       => emit_eq_sum_leaf_pending(false),
+  // A sum-typed field: insert __state under the pair and recurse into the
+  // variant's own generated $eq_n<Name> helper (same convention as a nested
+  // product). Recursive ADTs descend the value at runtime — finite, the call
+  // (never inline) is what makes a self-referential type well-founded.
+  TName(_, _)       => emit_field_product_eq(ty_fold_sig(fty)),
   TFloat            => wat_emit("    (f64.eq)\n"),
   // Int / Unit / resolved-TVar / nullary-tag / fn-idx / cont-ptr — word eq.
   _                 => wat_emit("    (i32.eq)\n")
@@ -2813,37 +2977,60 @@ fn collect_eq_product_tys_list(stmts, acc) = {
   }
 }
 
-// A == operand contributes its product type AND the nested product types its
-// fields reach (a record-of-records needs a helper per level). product_subtys
-// flattens the type's product closure so every nested helper is generated.
+// A == operand contributes its aggregate type AND every nested aggregate its
+// fields / variant payloads reach (a record-of-records or a Tree needs a helper
+// per level). eq_subtys flattens the type's aggregate closure so every nested
+// helper is generated. The `seen` set of TName names terminates the descent on
+// recursive ADTs (Tree's payload reaches Tree — collected ONCE, the runtime
+// helper recurses the value).
 fn eq_operand_contrib(left_h, acc) = {
   if left_h == 0 { acc }
-  else { product_subtys(eq_strip(lookup_ty(left_h)), acc) }
+  else { eq_subtys(eq_strip(lookup_ty(left_h)), [], acc) }
 }
 
-// The product types reachable from a type (itself if product, plus the
-// products its fields/elements/list-element reach). Words and sequences-of-
-// words contribute nothing; a list-of-records contributes the record.
-fn product_subtys(ty, acc) = match eq_strip(ty) {
-  TRecord(fields)        => product_subtys_fields(fields, 0, len(fields), [ty] ++ acc),
-  TRecordOpen(fields, _) => product_subtys_fields(fields, 0, len(fields), [ty] ++ acc),
-  TTuple(elems)          => product_subtys_list(elems, 0, len(elems), [ty] ++ acc),
-  TList(elem)            => product_subtys(elem, acc),
+// The aggregate types reachable from a type (itself if product/sum, plus the
+// aggregates its fields / elements / list-element / variant payloads reach).
+// Words and sequences-of-words contribute nothing; a list-of-records
+// contributes the record; a sum contributes itself and descends each variant's
+// payload types read LIVE from the env (variant_specs_of). `seen` guards
+// recursive ADTs so the COLLECTION terminates (the helper's runtime recursion
+// handles the unbounded value depth).
+fn eq_subtys(ty, seen, acc) = match eq_strip(ty) {
+  TRecord(fields)        => eq_subtys_fields(fields, 0, len(fields), seen, [ty] ++ acc),
+  TRecordOpen(fields, _) => eq_subtys_fields(fields, 0, len(fields), seen, [ty] ++ acc),
+  TTuple(elems)          => eq_subtys_list(elems, 0, len(elems), seen, [ty] ++ acc),
+  TList(elem)            => eq_subtys(elem, seen, acc),
+  TName(name, _) =>
+    if ls_find_str_local(seen, name, 0) >= 0 { acc }
+    else {
+      let specs = variant_specs_of(name)
+      eq_subtys_variants(specs, 0, len(specs), [name] ++ seen, [ty] ++ acc)
+    },
   _                      => acc
 }
 
-fn product_subtys_fields(fields, i, n, acc) = {
+fn eq_subtys_fields(fields, i, n, seen, acc) = {
   if i >= n { acc }
   else {
     let (_name, ty) = list_index(fields, i)
-    product_subtys_fields(fields, i + 1, n, product_subtys(ty, acc))
+    eq_subtys_fields(fields, i + 1, n, seen, eq_subtys(ty, seen, acc))
   }
 }
 
-fn product_subtys_list(elems, i, n, acc) = {
+fn eq_subtys_list(elems, i, n, seen, acc) = {
   if i >= n { acc }
   else {
-    product_subtys_list(elems, i + 1, n, product_subtys(list_index(elems, i), acc))
+    eq_subtys_list(elems, i + 1, n, seen, eq_subtys(list_index(elems, i), seen, acc))
+  }
+}
+
+// Descend each variant's payload types (the (tag_id, [payload_ty]) specs).
+fn eq_subtys_variants(specs, i, n, seen, acc) = {
+  if i >= n { acc }
+  else {
+    let (_tag, payloads) = list_index(specs, i)
+    eq_subtys_variants(specs, i + 1, n, seen,
+      eq_subtys_list(payloads, 0, len(payloads), seen, acc))
   }
 }
 

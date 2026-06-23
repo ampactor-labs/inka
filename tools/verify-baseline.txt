@@ -97,6 +97,14 @@ micro:repr-width=40
 # (per-field eq + AND conjunction + recursion). The direct record-`==` value
 # gate lands when the seed catches up — peer Hβ.eq.fold-seed-value-gate.
 micro:struct-eq-deep=20
+# W02 (the structural fold's SUM leaf): the wheel's eq is now TOTAL over all five
+# node-kinds — emit_one_eq_sum_helper (src/backends/wasm.mn) generates the
+# per-variant tag-then-payload $eq_n<Name> helper, variant specs read live from
+# the env's ConstructorScheme (variant_specs_of). The micro proves the helper's
+# control shape (sentinel-guard + tag-compare + payload conjunction) end-to-end
+# through the seed in ADT-construction + match constructs; the DIRECT `a == b` on
+# ADTs awaits the seed catching up (peer Hβ.eq.fold-sum-seed-value-gate). Exit 60.
+micro:struct-eq-sum=60
 # STEP 3 (multi-shot producer): the wheel's ResumeExpr now reads the op's proven
 # cardinality LIVE (current_resume_discipline, the deleted write-only resume_kinds
 # ledger) and mints the dormant LMakeContinuation for MultiShot arms — the

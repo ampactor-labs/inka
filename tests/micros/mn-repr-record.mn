@@ -1,0 +1,33 @@
+// W09 gate — the REPRESENTATION GRADIENT at CONSTRUCTION: a record with an f64
+// field round-trips at FULL PRECISION through construct AND read.
+//
+// The read side was already width-summed (LFieldLoad reads the lower-resolved
+// prefix-sum offset + repr-typed f64.load; the eq-fold reads align_for+
+// repr_width). The STORE side was a flat 4*i + i32.store — so an f64 field was
+// TRUNCATED to i32 at construction, then loaded as a full f64 at the (larger)
+// width-summed offset: store and load disagreed on BOTH offset AND width. The
+// fix makes emit_record_field_stores project the SAME width-summed fold the
+// load side reads (emit_field_stores_acc → align_for + repr_width +
+// repr_store_op), and sizes the alloc by product_byte_size (the prefix-sum
+// total, never n*4). Carried-Truth: ONE offset+width fact, projected at both
+// ends — the boxed-float disease is unsayable at the record layer.
+//
+// `r = {hi: 3.5, lo: 1.25}`: the record is 16 bytes (two f64 fields, sorted
+// hi<lo), hi at offset 0, lo at offset 8 — f64.store at construction, f64.load
+// at read. `r.hi + r.lo` = 4.75 → exit 4 (the harness truncates the f64 result
+// to its integer exit code).
+//
+// THE SEED LAGS THIS FORM (the hand-WAT emit floors LFloat to i32.const 0 and
+// stores fields uniform-i32 — the same lag mn-float-arith / mn-struct-eq-deep
+// document). So this gate runs through MENTL2 (the wheel compiled by the seed,
+// carrying the wheel's f64 store), NOT the seed directly. Named peer:
+// Hβ.seed.repr-construction — the seed mirrors the width-summed product store
+// when next required (the coordinated seed edit), the .mn leading until the
+// mirror lands (PLAN §5: write the ultimate form, the seed catches up).
+//
+// Expected exit 4: r.hi(3.5) + r.lo(1.25) = 4.75, truncated to 4.
+
+fn main(q) = {
+  let r = {hi: 3.5, lo: 1.25}
+  r.hi + r.lo
+}

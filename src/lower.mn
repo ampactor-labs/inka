@@ -1009,11 +1009,24 @@ fn lower_expr_body(e, handle, span) = match e {
     // Per #139: subscript dispatch at lower-time. Today's projection
     // emits LCall(VarRef("list_index"), [receiver_lo, index_lo]) —
     // matching the prior eager-parse form at the runtime layer.
-    // Post-tuple-const-index (peer Hβ.lower.indexexpr-tuple-slot):
-    // when receiver's chase-deep Ty is TTuple, lower emits
-    // LFieldLoad(receiver_lo, slot_offset) with slot_offset computed
-    // from the constant integer index at compile time — no runtime
-    // dispatch, gradient-ascent-discharged bounds.
+    // The ULTIMATE form: when receiver's chase-deep Ty is TTuple and the
+    // index is a constant int, lower emits LFieldLoad(receiver_lo,
+    // slot_offset) — slot_offset the width-summed prefix-sum to element i
+    // (the SAME field_byte_offset fold records now use), bounds discharged
+    // at compile time (ValidIndex). A tuple IS a positional product (L1);
+    // indexing it at a constant is a field load read live from the proven
+    // Ty — never a runtime list_index re-dispatch. This is BOUND to the
+    // tuple-as-product migration: the LFieldLoad reads a width-summed
+    // offset, so tuple CONSTRUCTION (emit_tuple_literal's $alloc_tuple
+    // uniform-i32 path) and the LPTuple match-bind must move to the same
+    // product machinery in lock-step — store-only (or read-only) would
+    // mis-offset an f64 tuple (Law 7); and the construction migration is
+    // not byte-identical to $alloc_tuple even for all-i32, so it cannot
+    // ride this batch without perturbing mn-fanout-seq. Named peer:
+    // Hβ.lower.tuple-as-product (construction + index + match-bind as ONE
+    // width-summed product, dissolving make_tuple/tuple_get/tuple_set into
+    // the record path — emit_field_stores_acc is the form it adopts).
+    // List index stays the genuinely-runtime-variable list_index call.
     LCall(handle, LGlobal(handle, "list_index"),
           [lower_expr(receiver), lower_expr(index)]),
 

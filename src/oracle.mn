@@ -350,6 +350,7 @@ fn expr_child_handles(e) with Pure = match e {
   MakeStringExpr(frags)    => map(node_handle, frags),
   FieldExpr(recv, _)       => [node_handle(recv)],
   PipeExpr(_, l, r)        => [node_handle(l), node_handle(r)],
+  LabeledArg(_, v)         => [node_handle(v)],   // the labeled value is a child node
   _                        => []   // LitInt/LitFloat/LitString/LitBool/LitUnit/VarRef/ExprPlaceholder — no child Nodes
 }
 

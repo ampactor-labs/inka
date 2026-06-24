@@ -710,6 +710,16 @@ type Expr
   | BinOpExpr(BinOp, Node, Node)
   | UnaryOpExpr(UnaryOp, Node)
   | CallExpr(Node, List)
+  | LabeledArg(String, Node)       // a `name = value` call argument (SYNTAX.md
+                                   // §«Labeled call arguments»). The label is the
+                                   // PRODUCT-FIELD name of the parameter-list-as-
+                                   // product: a call constructs its arg product
+                                   // positionally, by field, or mixed — the SAME
+                                   // machinery as a record literal. resolve_call_args
+                                   // reorders these to positional against the callee's
+                                   // declared param names (one read, both infer + lower
+                                   // see the identical order). The wrapper never reaches
+                                   // infer_expr / lower_expr — it is resolved away first.
   | LambdaExpr(List, Node)         // params: List[TParam], body
   | IfExpr(Node, Node, Node)
   | BlockExpr(List, Node)          // stmts, final expr
@@ -1214,6 +1224,157 @@ fn show_handle(h) with GraphRead + !Mutate = {
     GNode(NFree(epoch), _)    => "t{int_to_str(h)}@e{int_to_str(epoch)}",
     GNode(NRowFree(epoch), _) => "r{int_to_str(h)}@e{int_to_str(epoch)}",
     GNode(NErrorHole(reason), _) => "!hole[{show_reason(reason)}]"
+  }
+}
+
+// ─── The parameter list IS a positional product (SYNTAX.md §«Labeled call
+// arguments», §«Defaults...as a product node-kind») ──────────────────────
+//
+// A call constructs its arg PRODUCT — positionally, by field (label), mixed,
+// or with defaults filling absent fields — ONE machinery, the same as a record
+// literal. resolve_call_args is the single read both infer AND lower call, so
+// they see the IDENTICAL positional order by construction (the seam pattern —
+// one truth, two consumers, no re-derivation). The LabeledArg wrappers and the
+// reorder are resolved away here; downstream sees only positional value nodes.
+
+/// The callee's declared param TParams, read LIVE off its TFun (the one home —
+/// no copy, no cache). [] when the callee's scheme isn't a ground function
+/// (an unbound forward ref, a param-position fn) — then there are no labels to
+/// resolve and the args pass through positionally.
+fn callee_params(name) with Env + GraphRead = match env_lookup(name) {
+  Some(entry) => {
+    let (scheme, _, _) = entry
+    match scheme {
+      Forall(_, TVar(h)) => match graph_chase(h) {
+        GNode(NBound(TFun(params, _, _)), _) => params,
+        _ => []
+      },
+      Forall(_, TFun(params, _, _)) => params,
+      _ => []
+    }
+  },
+  None => []
+}
+
+/// Resolve a call's arg list (carrying optional LabeledArg wrappers) to the
+/// callee's positional param order. Positional args fill the next un-claimed
+/// slot left-to-right; a labeled arg claims its named slot (skip-over); a slot
+/// no arg reaches is filled by the param's default node (the absent product
+/// field's fallback construction). An unknown label is E_UnknownArgLabel —
+/// Located, productive-under-error (the arg is dropped, parsing continues).
+fn resolve_call_args(cname, args) with Env + GraphRead + Memory + Alloc + Diagnostic = {
+  let params = callee_params(cname)
+  // No declared params (forward ref / fn-param callee / constructor): no labels
+  // to resolve against. Strip any stray LabeledArg wrappers to their value so
+  // downstream never meets the wrapper, and keep positional order.
+  if len(params) == 0 { map(unwrap_labeled_arg, args) }
+  else { fill_arg_slots(params, args, cname) }
+}
+
+/// Unwrap a LabeledArg to its value node; a positional arg passes through.
+fn unwrap_labeled_arg(arg) with GraphRead = {
+  let N(body, _, _) = arg
+  match body {
+    NExpr(LabeledArg(_, v)) => v,
+    _                       => arg
+  }
+}
+
+/// Build the positional slot buffer (one slot per declared param, 0 = unfilled
+/// sentinel — a real arg node is a non-zero handle). Two passes over the args:
+/// labeled args claim their named slot first (skip-over); positional args then
+/// fill the remaining unfilled slots left-to-right. Then collect each slot to
+/// its placed value or its param default.
+fn fill_arg_slots(params, args, cname) with Env + GraphRead + Memory + Alloc + Diagnostic = {
+  let n = len(params)
+  let claimed = place_labeled(params, args, 0, make_list(n), cname)
+  let filled = place_positional(args, 0, 0, claimed, n)
+  collect_slot_nodes(params, filled, 0, n, make_list(n), 0)
+}
+
+/// Pass 1 — place each LabeledArg at its named param slot; positional args are
+/// skipped here. An unknown label is E_UnknownArgLabel (Located, productive:
+/// the arg is dropped, the remaining args resolve). Returns the slot buffer.
+fn place_labeled(params, args, i, slots, cname) with GraphRead + Memory + Diagnostic = {
+  if i >= len(args) { slots }
+  else {
+    let arg = list_index(args, i)
+    let N(body, sp, _) = arg
+    let next = match body {
+      NExpr(LabeledArg(label, v)) => {
+        let idx = param_index(params, label, 0)
+        if idx < 0 {
+          report("infer", "E_UnknownArgLabel", "TypeError",
+            "no parameter named `{label}` on `{cname}`",
+            sp, "MaybeIncorrect")
+          slots
+        } else {
+          list_set(slots, idx, v)
+        }
+      },
+      _ => slots
+    }
+    place_labeled(params, args, i + 1, next, cname)
+  }
+}
+
+/// Pass 2 — fill positional (non-labeled) args into the next unfilled slot,
+/// left-to-right, skipping slots a label already claimed. `cur` is the arg
+/// cursor; `slot` advances past filled slots.
+fn place_positional(args, cur, slot, slots, n) with GraphRead + Memory = {
+  if cur >= len(args) { slots }
+  else {
+    let arg = list_index(args, cur)
+    let N(body, _, _) = arg
+    match body {
+      NExpr(LabeledArg(_, _)) => place_positional(args, cur + 1, slot, slots, n),
+      _ => {
+        let free = next_free_slot(slots, slot, n)
+        if free >= n {
+          // More positional args than params — arity is infer's concern; drop
+          // the overflow here (the prefix is already placed) and stop.
+          slots
+        } else {
+          place_positional(args, cur + 1, free + 1, list_set(slots, free, arg), n)
+        }
+      }
+    }
+  }
+}
+
+/// The first slot at or after `from` whose value is still the 0 sentinel; n
+/// when none remain.
+fn next_free_slot(slots, from, n) with Memory =
+  if from >= n { n }
+  else if list_index(slots, from) == 0 { from }
+  else { next_free_slot(slots, from + 1, n) }
+
+/// The param index whose name is `label`, or -1 when no param bears it.
+fn param_index(params, label, i) with Pure =
+  if i >= len(params) { -1 }
+  else {
+    let TParam(name, _, _, _, _) = list_index(params, i)
+    if name == label { i } else { param_index(params, label, i + 1) }
+  }
+
+/// Project each slot to its placed value node, or — when the slot is the 0
+/// sentinel — the param's default node. A sentinel slot with no default is
+/// dropped (a genuinely-missing required arg is infer's arity check, surfaced
+/// at the call). The contiguous prefix of present args is returned in order.
+fn collect_slot_nodes(params, slots, i, n, out, count) with Memory + Alloc = {
+  if i >= n { slice(out, 0, count) }
+  else {
+    let placed = list_index(slots, i)
+    if placed != 0 {
+      collect_slot_nodes(params, slots, i + 1, n, list_set(out, count, placed), count + 1)
+    } else {
+      let TParam(_, _, _, _, default) = list_index(params, i)
+      match default {
+        Some(expr) =>
+          collect_slot_nodes(params, slots, i + 1, n, list_set(out, count, expr), count + 1),
+        None => collect_slot_nodes(params, slots, i + 1, n, out, count)
+      }
+    }
   }
 }
 

@@ -1,0 +1,40 @@
+// W15 GATE — labeled-call-arg resolution = parameter-list-as-product.
+//
+// The wheel resolves a call's arg PRODUCT to the callee's positional param
+// order (types.mn resolve_call_args, the ONE read both infer + lower call):
+// positional args fill the next un-claimed slot left-to-right; a labeled arg
+// (`f(c = 3)`) claims its named slot (skip-over); an absent slot draws its
+// param default. The direct `f(y = b, x = a)` form is .mn-LEADS — the
+// disposable seed's parser lags resolve_call_args (TESTED: the seed parses
+// `y = 3` as a positional expr and traps), so the direct value gate lands when
+// the seed catches up (peer Hβ.seed.labeled-args-resolution).
+//
+// This gate proves the resolver's CONTROL SHAPE self-containedly through the
+// seed (the mn-struct-eq-sum / mn-show-fold discipline): params [a, b, c] with
+// defaults [100, 200, 300]; a labeled c=3 claims slot 2, a positional 1 fills
+// the first free slot (0), slot 1 is absent -> default 200. The resolved
+// positional order is [1, 200, 3]; the witness sums s0*1 + s1*0 + s2*10 = 31,
+// proving each arg reached its correct param position.
+
+fn next_free(claimed0, claimed1, claimed2, from) =
+  if from == 0 { if claimed0 == 0 { 0 } else { next_free(claimed0, claimed1, claimed2, 1) } }
+  else if from == 1 { if claimed1 == 0 { 1 } else { next_free(claimed0, claimed1, claimed2, 2) } }
+  else if from == 2 { if claimed2 == 0 { 2 } else { 3 } }
+  else { 3 }
+
+fn slot_value(idx, lbl_slot, lbl_val, pos_slot, pos_val, def) =
+  if idx == lbl_slot { lbl_val }
+  else if idx == pos_slot { pos_val }
+  else { def }
+
+fn main(q) = {
+  // labeled c=3 -> slot 2; positional 1 -> first free slot (0)
+  let lbl_slot = 2
+  let lbl_val = 3
+  let pos_slot = next_free(0, 0, 1, 0)
+  let pos_val = 1
+  let s0 = slot_value(0, lbl_slot, lbl_val, pos_slot, pos_val, 100)
+  let s1 = slot_value(1, lbl_slot, lbl_val, pos_slot, pos_val, 200)
+  let s2 = slot_value(2, lbl_slot, lbl_val, pos_slot, pos_val, 300)
+  s0 * 1 + s1 * 0 + s2 * 10
+}

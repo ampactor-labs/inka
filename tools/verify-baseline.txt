@@ -252,3 +252,30 @@ micro:autodiff=6
 micro:distort=18
 micro:compare-fold=47
 micro:hash-fold=50
+
+# W15 + W16 (the parameter list IS a positional product — SYNTAX.md §«Labeled
+# call arguments», §«Defaults...as a product node-kind», §«Anonymous functions»).
+# ONE product machinery unifies record-literal field-construction and call-arg
+# construction (surpassing Swift/Python's bolt-on labeled args + ML/Rust's
+# separate param-pattern grammar). W15: a labeled `f(c = 3, 1)` arg is a
+# LabeledArg(name, value) node; resolve_call_args (types.mn — the ONE read both
+# infer + lower call, identical positional order by construction) reorders by
+# field name and fills absent fields with their param defaults; the old lower-
+# only trailing-default fill (lower_args_with_defaults / callee_params_of /
+# lower_default_fills) DISSOLVED into it (less code, one home). W16: a
+# destructure param `((a,b)) => …`/`({x,y}) => …` desugars at fn entry to a
+# fresh-named param + a `let <pat> = <fresh>` prepended to the body — byte-
+# identical to a destructuring let, the SAME match projection desugar_block
+# gives (no TParam shape change, no new infer/lower path; expr_to_param deleted).
+# Both DIRECT value gates are .mn-LEADS (the disposable seed's parser lags
+# resolve_call_args AND the param desugar — TESTED: the seed parses `y = 3`
+# positionally and traps, and traps on a direct destructure param), so they land
+# when the seed catches up (peers Hβ.seed.labeled-args-resolution /
+# Hβ.seed.param-as-pattern). mn-labeled-args proves the resolver's reorder
+# CONTROL SHAPE (labeled skip-over + positional-fill-next-free + default-for-
+# absent) self-containedly through the seed: positional order [1, 200, 3] →
+# 1*1 + 200*0 + 3*10 = 31. mn-param-destructure proves param-bind == let-bind:
+# the fn body IS the prepend-let the param desugar emits, binding a tuple
+# positionally → 7*1 + 5*10 = 57.
+micro:labeled-args=31
+micro:param-destructure=57

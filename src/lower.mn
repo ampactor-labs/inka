@@ -608,45 +608,25 @@ fn env_kind_of(name) = {
   }
 }
 
-// Default-fill (SYNTAX.md §«Default parameter values»): a named call
-// that omits trailing args has those slots filled from the callee's
-// param defaults — read LIVE from the callee's TFun params (the one
-// home, build_param_types carries them). Each omitted param's default
-// node is lowered and appended; the call site only omitted an edge.
-// Params with no default (or a callee whose scheme isn't a ground
-// function) contribute nothing — arity is the infer pass's concern.
-fn lower_args_with_defaults(name, args, lo_args) = {
-  let params = callee_params_of(name)
-  let n_given = len(lo_args)
-  if len(params) <= n_given { lo_args }
-  else {
-    let extra = lower_default_fills(slice(params, n_given, len(params)))
-    list_concat(lo_args, extra)
-  }
-}
+// Default-fill, labeled-arg reorder, and label resolution are now ONE read —
+// resolve_call_args (types.mn), called by both infer and lower so they see the
+// identical positional product order. The former lower-only trailing-default
+// fill (lower_args_with_defaults / callee_params_of / lower_default_fills)
+// dissolved into it: a call constructs its arg product positionally, by field,
+// or mixed, with absent fields drawing their param default — one machinery.
 
-fn callee_params_of(name) = match env_lookup(name) {
-  Some(entry) => {
-    let (scheme, _, _) = entry
-    match scheme {
-      Forall(_, TVar(h)) => match graph_chase(h) {
-        GNode(NBound(TFun(params, _, _)), _) => params,
-        _ => []
-      },
-      _ => []
-    }
+/// The callee's name for resolve_call_args — a VarRef / field / nested config
+/// CallExpr names a declared fn with params; any other callee expr has no
+/// declared params (resolution is positional passthrough), so "" suffices.
+fn lower_callee_name(fbody) = match fbody {
+  NExpr(VarRef(name))        => name,
+  NExpr(FieldExpr(_, field)) => field,
+  NExpr(CallExpr(callee, _)) => {
+    let N(cb, _, _) = callee
+    lower_callee_name(cb)
   },
-  None => []
+  _ => ""
 }
-
-fn lower_default_fills(missing_params) =
-  fold(missing_params, [], (acc, p) => {
-    let TParam(_, _, _, _, default) = p
-    match default {
-      Some(expr) => list_concat(acc, [lower_expr(expr)]),
-      None       => acc
-    }
-  })
 
 /// The `CallExpr` dispatch falls back to this when the callee isn't a
 /// `SchemeKind`-recognized constructor or effect op. Monomorphic case:
@@ -1056,22 +1036,29 @@ fn lower_expr_body(e, handle, span) = match e {
     // no PerformExpr path (dissolved); `op(args)` IS the canonical and
     // only form, dispatched here by the env's EffectOpScheme. Plain
     // function calls fall through.
-    let lo_args = lower_expr_list(args)
     let N(fbody, _, fh) = f
+    // Resolve the arg PRODUCT to the callee's positional param order — labeled
+    // args reordered by field name, absent fields filled by their param
+    // defaults — the ONE read both infer + lower call (identical order by
+    // construction). For an intrinsic / constructor / fn-param callee with no
+    // declared params, resolution is positional passthrough (LabeledArg
+    // wrappers stripped). This subsumes the old trailing-only default fill.
+    let r_args = resolve_call_args(lower_callee_name(fbody), args)
+    let lo_args = lower_expr_list(r_args)
     match fbody {
       NExpr(VarRef(name)) =>
-        if name == "to_string" && len(args) == 1 {
-          lower_to_string_dispatch(handle, list_head(lo_args), args)
-        } else if name == "hash" && len(args) == 1 {
+        if name == "to_string" && len(r_args) == 1 {
+          lower_to_string_dispatch(handle, list_head(lo_args), r_args)
+        } else if name == "hash" && len(r_args) == 1 {
           // hash(x) IS the HASH leaf of the structural fold — lower-time type
           // dispatch (scalar word-identity / sequence str_hash·list_hash /
           // aggregate $hash_<sig>), the sibling of to_string's show leaf.
-          lower_hash_dispatch(handle, list_head(lo_args), args)
-        } else if name == "float_of_int" && len(args) == 1 {
+          lower_hash_dispatch(handle, list_head(lo_args), r_args)
+        } else if name == "float_of_int" && len(r_args) == 1 {
           // W11: the gradient's coercion arm — a REAL i32->f64 widen
           // (f64.convert_i32_s), never an identity stub reinterpreting bits.
           LConvert(handle, IntToFloat, list_head(lo_args))
-        } else if name == "float_to_int" && len(args) == 1 {
+        } else if name == "float_to_int" && len(r_args) == 1 {
           // f64->i32 truncating toward zero (i32.trunc_f64_s) — the value-
           // faithful inverse, replacing the bit-reinterpreting identity stub.
           LConvert(handle, FloatToInt, list_head(lo_args))
@@ -1092,10 +1079,7 @@ fn lower_expr_body(e, handle, span) = match e {
           } else {
             lower_perform_dispatch(handle, name, lo_args)
           },
-        // A plain function call fills any omitted trailing args from the
-        // callee's param defaults (read live off its TFun) before the
-        // direct/evidence call.
-        _ => lower_call_default(handle, f, fh, lower_args_with_defaults(name, args, lo_args))
+        _ => lower_call_default(handle, f, fh, lo_args)
       } },
       _ => lower_call_default(handle, f, fh, lo_args)
     }
@@ -1249,7 +1233,14 @@ fn lower_expr_body(e, handle, span) = match e {
     lower_pipe(kind, left, right, handle),
 
   ExprPlaceholder =>
-    LConst(handle, LInt(0))   // ? — emit lowers to unreachable via NHole check
+    LConst(handle, LInt(0)),   // ? — emit lowers to unreachable via NHole check
+
+  // A labeled arg is resolved to positional by resolve_call_args before
+  // lower_expr sees it; reaching here means one leaked outside a call's arg
+  // list. Lower the value through (productive-under-error) — infer has already
+  // surfaced the E_UnknownArgLabel diagnostic at this node.
+  LabeledArg(_, v) =>
+    lower_expr(v)
 }
 
 fn lower_pipe(kind, left, right, handle) = match kind {
@@ -2392,6 +2383,10 @@ fn free_vars_expr(e, bound) = match e {
     free_vars_merge(collect_free_vars(l, bound), collect_free_vars(r, bound)),
 
   ExprPlaceholder      => [],
+
+  // A labeled arg's value can reference free vars (closure capture must see
+  // them); the label is a param name, not a value-position var.
+  LabeledArg(_, v)     => collect_free_vars(v, bound),
 
   // H6: exhaustive Expr enumeration. Literals contribute no
   // free vars. Named explicitly so new Expr variants must decide

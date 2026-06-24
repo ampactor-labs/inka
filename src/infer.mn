@@ -506,15 +506,20 @@ fn infer_expr(ref node) = {
 
     NExpr(CallExpr(func, args)) => {
       infer_expr(func)
-      infer_expr_list(args)
-      infer_call(func, args, handle, span)
+      // The arg list is the callee's positional product: resolve labeled args
+      // to positional order and fill absent fields with param defaults (the ONE
+      // read both infer + lower call — they see the identical order). The
+      // LabeledArg wrappers never reach infer_expr — resolution strips them.
+      let pos_args = resolve_call_args(callee_name(func), args)
+      infer_expr_list(pos_args)
+      infer_call(func, pos_args, handle, span)
       // H4: constructor calls allocate a heap record. Tag the
       // resulting handle so check_escape at fn return can verify
       // the value doesn't outlive its region. H4.1: constructor
       // ARGS ARE the fields — the resulting record's region pins
       // to the deepest field region.
       if call_is_alloc_returning(func) {
-        tag_alloc_join(handle, collect_handles(args))
+        tag_alloc_join(handle, collect_handles(pos_args))
       }
     },
 
@@ -788,6 +793,17 @@ fn infer_expr(ref node) = {
     },
 
     NExpr(ExprPlaceholder) => (),  // ? — handle already NFree at parse
+
+    NExpr(LabeledArg(label, _)) => {
+      // A labeled call arg is resolved to positional by resolve_call_args
+      // BEFORE infer_expr ever sees it; reaching here means a LabeledArg leaked
+      // outside a call's arg list. Locate it (productive-under-error) rather
+      // than fabricate a type — the no-silent-fallback law over a load-bearing
+      // node-kind.
+      report("infer", "E_UnknownArgLabel", "TypeError",
+        "labeled argument `{label} = …` is only valid in a call's argument list",
+        span, "MaybeIncorrect")
+    },
 
     NHole(_)  => (),               // Hazel marked hole — inference leaves NFree
     NStmt(_)  => (),               // statement at expression position — parser
@@ -2929,6 +2945,7 @@ fn collect_resume_walk(buf, node) with GraphRead = {
     NExpr(LitUnit)      => (),
     NExpr(VarRef(_))    => (),
     NExpr(ExprPlaceholder) => (),
+    NExpr(LabeledArg(_, v)) => collect_resume_walk(buf, v),
     NHole(_) => (),
     NPat(_)  => (),
     NModule(_) => ()
@@ -3202,6 +3219,7 @@ fn walk_refinement(map, node, path_pred) with GraphRead = {
     NExpr(LitUnit)      => map,
     NExpr(VarRef(_))    => map,
     NExpr(ExprPlaceholder) => map,
+    NExpr(LabeledArg(_, v)) => walk_refinement(map, v, path_pred),
     NHole(_) => map,
     NPat(_)  => map,
     NModule(_) => map

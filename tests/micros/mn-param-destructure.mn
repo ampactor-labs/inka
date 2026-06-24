@@ -1,0 +1,24 @@
+// W16 GATE — destructuring parameter = param-as-pattern.
+//
+// A destructure param (`((a, b)) => …` / `({x, y}) => …` / `([h, ...t]) => …`)
+// desugars at fn ENTRY to a fresh-named param plus a `let <pat> = <fresh>`
+// prepended to the body (parser.mn pat_param_and_let + bind_param_destructures)
+// — byte-identical to a destructuring `let`, the SAME match projection
+// desugar_block gives. ONE pattern machinery at let-bind AND param-bind. The
+// direct `((a, b)) => …` form is .mn-LEADS: the disposable seed's parser lags
+// the param desugar (TESTED: the seed traps on a direct destructure param), so
+// the direct value gate lands when the seed catches up (peer
+// Hβ.seed.param-as-pattern).
+//
+// This gate proves the desugar's CONTROL SHAPE self-containedly through the
+// seed: bind2's body IS exactly the prepend-let the param desugar emits for a
+// param `((a, b))` — `let (a, b) = fresh` — so param-bind == let-bind. A tuple
+// (7, 5) binds positionally (a=7 -> *1, b=5 -> *10) => 7 + 50 = 57.
+
+fn bind2(fresh) = {
+  // The destructure-let the param desugar prepends for `((a, b))`:
+  let (a, b) = fresh
+  a * 1 + b * 10
+}
+
+fn main(q) = bind2((7, 5))

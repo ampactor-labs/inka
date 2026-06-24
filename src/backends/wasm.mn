@@ -27,12 +27,12 @@ effect WasmOut {
   wat_emit(String) -> ()
 }
 
-/// WatBuffer effect — collect_wat returns the accumulated buffer of a
-/// scoped emit. Used by row-aware-parallel-emit (per Hβ.emit.row-aware-
-/// parallel-emit): each fn body emits to a fresh wat_to_string handler
-/// in parallel, then the collected strings get sequential output
-/// preserving source order. parallel_map's per-branch handler isolation
-/// IS the substrate that makes per-fn emit safely parallel.
+// WatBuffer effect — collect_wat returns the accumulated buffer of a
+// scoped emit. Used by row-aware-parallel-emit (per Hβ.emit.row-aware-
+// parallel-emit): each fn body emits to a fresh wat_to_string handler
+// in parallel, then the collected strings get sequential output
+// preserving source order. parallel_map's per-branch handler isolation
+// IS the substrate that makes per-fn emit safely parallel.
 effect WatBuffer {
   wat_collect() -> String
 }
@@ -44,29 +44,29 @@ handler wat_stdout {
   }
 }
 
-/// wat_to_string — buffer wat_emit calls into a flat String; wat_collect
-/// materializes ONCE at the end via str_concat_all. Handles BOTH
-/// WasmOut.wat_emit AND WatBuffer.wat_collect — one handler, two effects.
-///
-/// Per the eight interrogations on the substrate-honest accumulator:
-///   Graph:      buf is a List<String-handle>; count tracks position.
-///   Handler:    one arm per op; resume OneShot.
-///   Verb:       `~>` install (per-fn parallel emit-to-string).
-///   Row:        +Memory (per-yield list_set) — NO Alloc per yield; +Alloc
-///               fires ONCE at wat_collect via str_concat_all.
-///   Ownership:  buf owned by handler state; refs to each emitted string
-///               are borrows (immutable). Materialized result is owned.
-///   Refinement: count <= len(buf) by buffer-counter discipline (Ω.3).
-///   Gradient:   O(1) amortized append per yield (doubling); O(B+N) one-
-///               time materialization at collect — locked. No narrower
-///               form exists. Drift-11 (acc ++ x in loop) closed.
-///   Reason:     each yield's source chains through unchanged; result's
-///               Reason = "concatenated emit stream from N wat_emit sites".
-///
-/// Pre-substrate (str_concat-in-resume) was O(B^2): per yield copied the
-/// growing buf bytes. For 1965-fn wheel emission, aggregate bump-allocator
-/// pressure exhausted memory mid-pass. Buffer-counter substrate cuts work
-/// to O(B+N) — millions-times speedup at wheel-scale.
+// wat_to_string — buffer wat_emit calls into a flat String; wat_collect
+// materializes ONCE at the end via str_concat_all. Handles BOTH
+// WasmOut.wat_emit AND WatBuffer.wat_collect — one handler, two effects.
+//
+// Per the eight interrogations on the substrate-honest accumulator:
+//   Graph:      buf is a List<String-handle>; count tracks position.
+//   Handler:    one arm per op; resume OneShot.
+//   Verb:       `~>` install (per-fn parallel emit-to-string).
+//   Row:        +Memory (per-yield list_set) — NO Alloc per yield; +Alloc
+//               fires ONCE at wat_collect via str_concat_all.
+//   Ownership:  buf owned by handler state; refs to each emitted string
+//               are borrows (immutable). Materialized result is owned.
+//   Refinement: count <= len(buf) by buffer-counter discipline (Ω.3).
+//   Gradient:   O(1) amortized append per yield (doubling); O(B+N) one-
+//               time materialization at collect — locked. No narrower
+//               form exists. Drift-11 (acc ++ x in loop) closed.
+//   Reason:     each yield's source chains through unchanged; result's
+//               Reason = "concatenated emit stream from N wat_emit sites".
+//
+// Pre-substrate (str_concat-in-resume) was O(B^2): per yield copied the
+// growing buf bytes. For 1965-fn wheel emission, aggregate bump-allocator
+// pressure exhausted memory mid-pass. Buffer-counter substrate cuts work
+// to O(B+N) — millions-times speedup at wheel-scale.
 handler wat_to_string with buf = make_list(64), count = 0 {
   wat_emit(s) => {
     let extended = list_extend_to(buf, count + 1)
@@ -76,12 +76,12 @@ handler wat_to_string with buf = make_list(64), count = 0 {
   wat_collect() => resume(str_concat_all(slice(buf, 0, count)))
 }
 
-/// heap_base is the threshold separating sentinel ADT values from heap
-/// pointers. The bump allocator's $heap_ptr starts at 1 MiB (1048576);
-/// sentinels live in [0, heap_base()). Mixed-variant match dispatch
-/// (each fielded constructor's predicate) compares scrutinee against this
-/// value to discriminate. Single source of truth — every other reference
-/// to "4096" is a comment crosslinked to this constant.
+// heap_base is the threshold separating sentinel ADT values from heap
+// pointers. The bump allocator's $heap_ptr starts at 1 MiB (1048576);
+// sentinels live in [0, heap_base()). Mixed-variant match dispatch
+// (each fielded constructor's predicate) compares scrutinee against this
+// value to discriminate. Single source of truth — every other reference
+// to "4096" is a comment crosslinked to this constant.
 fn heap_base() with Pure = 4096
 
 // EmitMemory effect — alloc strategy as a handler swap.
@@ -143,24 +143,24 @@ handler emit_memory_arena {
   }
 }
 
-/// Stage 4b: lock-free CAS-based bump allocator for multi-thread
-/// execution. Each alloc reads $heap_ptr from a fixed memory cell
-/// (atomic-accessible — globals don't support atomics), computes the
-/// next pointer, attempts atomic.rmw.cmpxchg; retries on contention.
-/// Per protocol_bootstrap_wasi_threads_substrate.md Stage 4b.
-///
-/// Swap surface: install `~> emit_memory_atomic_cas` in pipeline.mn
-/// instead of `~> emit_memory_bump` when the emitted program will
-/// run with parallel_compose (genuine multi-core dispatch). The wheel
-/// audit detects which programs need this via the Thread effect row
-/// — gradient cash-out at install-time.
-///
-/// HEAP_PTR_ADDR = 0x40 (64). Clear of WASI scratch [0x50, 0x250).
-/// Initialization: _start must set the memory cell to 0x100000 (1 MiB)
-/// before any allocation. Peer follow-up:
-/// Hβ.emit.cas-alloc-init-in-start — emit _start preamble for the
-/// memory-cell initialization when emit_memory_atomic_cas is the
-/// installed handler.
+// Stage 4b: lock-free CAS-based bump allocator for multi-thread
+// execution. Each alloc reads $heap_ptr from a fixed memory cell
+// (atomic-accessible — globals don't support atomics), computes the
+// next pointer, attempts atomic.rmw.cmpxchg; retries on contention.
+// Per protocol_bootstrap_wasi_threads_substrate.md Stage 4b.
+//
+// Swap surface: install `~> emit_memory_atomic_cas` in pipeline.mn
+// instead of `~> emit_memory_bump` when the emitted program will
+// run with parallel_compose (genuine multi-core dispatch). The wheel
+// audit detects which programs need this via the Thread effect row
+// — gradient cash-out at install-time.
+//
+// HEAP_PTR_ADDR = 0x40 (64). Clear of WASI scratch [0x50, 0x250).
+// Initialization: _start must set the memory cell to 0x100000 (1 MiB)
+// before any allocation. Peer follow-up:
+// Hβ.emit.cas-alloc-init-in-start — emit _start preamble for the
+// memory-cell initialization when emit_memory_atomic_cas is the
+// installed handler.
 handler emit_memory_atomic_cas {
   emit_alloc(size, target_local) => {
     // CAS loop: atomically claim `size` bytes from $heap_ptr cell.
@@ -418,13 +418,13 @@ fn slot_already_recorded(entries, target, i, n) = {
   else { slot_already_recorded(entries, target, i + 1, n) }
 }
 
-/// project_emit_state — single-tree-walk; four projections drained at end.
-/// Returns (all_fn_names, top_fn_names, string_entries, state_slots).
-/// Replaces the prior `<|` fan-out (four parallel walks of the same tree)
-/// with ONE walk and four visitor-handler accumulators. Order-preserving:
-/// per-projection encounter order matches the prior per-walk order. The
-/// chained `~>` install establishes the handler stack at the body's
-/// perform sites; each visit-op routes to its handler unambiguously.
+// project_emit_state — single-tree-walk; four projections drained at end.
+// Returns (all_fn_names, top_fn_names, string_entries, state_slots).
+// Replaces the prior `<|` fan-out (four parallel walks of the same tree)
+// with ONE walk and four visitor-handler accumulators. Order-preserving:
+// per-projection encounter order matches the prior per-walk order. The
+// chained `~>` install establishes the handler stack at the body's
+// perform sites; each visit-op routes to its handler unambiguously.
 fn project_emit_state(lowered) = {
   walk_lemit(lowered)
   // The SHOW leaf's helpers ($show_<sig>) assemble String literals not present
@@ -444,12 +444,12 @@ fn project_emit_state(lowered) = {
 } ~> fn_names_collector ~> top_fn_names_collector
   ~> string_literal_collector ~> state_slots_collector ~> wasi_ops_collector
 
-/// register_show_literals — fire visit_string for every String literal the
-/// generated $show_<sig> helpers will emit. The literal set is a PROJECTION of
-/// the collected show types (the SAME type closure emit_fold_show_helpers folds):
-/// a record contributes its delimiters + each "name: "; a tuple its parens; a
-/// list its brackets + ", "; a sum each "Ctor("/")"/nullary name. Runs inside
-/// project_emit_state where string_literal_collector catches visit_string.
+// register_show_literals — fire visit_string for every String literal the
+// generated $show_<sig> helpers will emit. The literal set is a PROJECTION of
+// the collected show types (the SAME type closure emit_fold_show_helpers folds):
+// a record contributes its delimiters + each "name: "; a tuple its parens; a
+// list its brackets + ", "; a sum each "Ctor("/")"/nullary name. Runs inside
+// project_emit_state where string_literal_collector catches visit_string.
 fn register_show_literals(lowered) with EmitStringLiteralOp + EnvRead = {
   let tys = collect_show_tys_list(lowered, [])
   register_show_literals_list(tys, [])
@@ -500,10 +500,10 @@ fn register_show_sum_literals(specs, i) with EmitStringLiteralOp = {
   }
 }
 
-/// walk_lemit — top-level entry. Iterates `lowered`'s direct children;
-/// fires `visit_top_fn(name)` for each LLet-bound closure/continuation
-/// (the original collect_top_level_fn_names semantic). Then recursive
-/// descent via walk_lemit_expr collects the per-node projections.
+// walk_lemit — top-level entry. Iterates `lowered`'s direct children;
+// fires `visit_top_fn(name)` for each LLet-bound closure/continuation
+// (the original collect_top_level_fn_names semantic). Then recursive
+// descent via walk_lemit_expr collects the per-node projections.
 fn walk_lemit(exprs) = walk_lemit_top(exprs, 0)
 
 fn walk_lemit_top(exprs, i) = {
@@ -523,11 +523,11 @@ fn walk_lemit_top_one(expr) = {
   }
 }
 
-/// walk_lemit_expr — recursive descent. EXHAUSTIVE over LowExpr variants.
-/// Fires visit_fn at fn-bearing variants (anywhere), visit_string at
-/// LConst(LString), visit_state_slot at LStateGet/LStateSet/LFeedback.
-/// Drift 9 closed: every arm explicit; no `_ =>` catch-all would silently
-/// miss projections for a new variant.
+// walk_lemit_expr — recursive descent. EXHAUSTIVE over LowExpr variants.
+// Fires visit_fn at fn-bearing variants (anywhere), visit_string at
+// LConst(LString), visit_state_slot at LStateGet/LStateSet/LFeedback.
+// Drift 9 closed: every arm explicit; no `_ =>` catch-all would silently
+// miss projections for a new variant.
 fn walk_lemit_expr(expr) = match expr {
   LMakeClosure(_, LFn(name, _, _, body, _, _), captures, ev) => {
     visit_fn(name)
@@ -630,19 +630,19 @@ fn walk_lemit_list_loop(exprs, i) = {
   }
 }
 
-/// Each lowered match arm is `(LowPat, LowExpr-body)`; the body carries the
-/// projections (fn defs, strings, state slots, WASI ops). The pattern is
-/// structural — nothing to collect. The let-IS-match dissolution routes
-/// destructure-let bodies through arms, so this descent is load-bearing.
+// Each lowered match arm is `(LowPat, LowExpr-body)`; the body carries the
+// projections (fn defs, strings, state slots, WASI ops). The pattern is
+// structural — nothing to collect. The let-IS-match dissolution routes
+// destructure-let bodies through arms, so this descent is load-bearing.
 fn walk_lemit_arms(arms) = for_each((arm) => {
   let (_, body) = arm
   walk_lemit_expr(body)
 }, arms)
 
-/// Emit `(global $s<n> (mut i32) (i32.const 0))` for each unique
-/// state slot. Globals initialize to 0 — the convention for "no
-/// prior iteration" at LFeedback's first entry. v1 single-threaded
-/// scope; LF.M migrates to per-handler-state offsets.
+// Emit `(global $s<n> (mut i32) (i32.const 0))` for each unique
+// state slot. Globals initialize to 0 — the convention for "no
+// prior iteration" at LFeedback's first entry. v1 single-threaded
+// scope; LF.M migrates to per-handler-state offsets.
 
 fn emit_state_globals(slots) = {
   for_each((slot) => {
@@ -677,10 +677,10 @@ fn emit_string_bytes(s, i, n) = {
   }
 }
 
-/// extract_top_fn_name — read the binding name from a top-level LLet
-/// that wraps a closure/continuation. Used by walk_lemit_top_one to
-/// fire visit_top_fn at the correct sites. Returns "" for non-binding
-/// shapes (caller treats "" as no-op).
+// extract_top_fn_name — read the binding name from a top-level LLet
+// that wraps a closure/continuation. Used by walk_lemit_top_one to
+// fire visit_top_fn at the correct sites. Returns "" for non-binding
+// shapes (caller treats "" as no-op).
 fn extract_top_fn_name(stmt) with Pure = match stmt {
   LLet(_, name, LMakeClosure(_, _, _, _))           => name,
   LLet(_, name, LMakeContinuation(_, _, _, _, _, _, _)) => name,
@@ -1081,11 +1081,11 @@ fn emit_footer() = {
   wat_emit(")\n")
 }
 
-/// emit_runtime_imports — the WASI import section, projected from the program's
-/// actual LWasiCall usage (project_emit_state's fifth projection). proc_exit is
-/// emitted by _start's epilogue (outside the program graph), so it's injected;
-/// every other import appears iff the program invokes its op. No hardcoded list:
-/// the graph IS the import set, so it can never drift from what is called.
+// emit_runtime_imports — the WASI import section, projected from the program's
+// actual LWasiCall usage (project_emit_state's fifth projection). proc_exit is
+// emitted by _start's epilogue (outside the program graph), so it's injected;
+// every other import appears iff the program invokes its op. No hardcoded list:
+// the graph IS the import set, so it can never drift from what is called.
 fn emit_runtime_imports(wasi_ops) = {
   emit_one_wasi_import("proc_exit")
   for_each((op) => {
@@ -1093,10 +1093,10 @@ fn emit_runtime_imports(wasi_ops) = {
   }, wasi_ops)
 }
 
-/// One `(import "wasi_snapshot_preview1" "<op>" (func $<op> <sig>))`. The
-/// internal name is `$<op>` (no prefix) — the import IS the bridge, matching
-/// LWasiCall's `(call $<op>)`. Ops with no preview1 signature (atomics,
-/// thread-spawn — WASM instructions or imported elsewhere) carry no import.
+// One `(import "wasi_snapshot_preview1" "<op>" (func $<op> <sig>))`. The
+// internal name is `$<op>` (no prefix) — the import IS the bridge, matching
+// LWasiCall's `(call $<op>)`. Ops with no preview1 signature (atomics,
+// thread-spawn — WASM instructions or imported elsewhere) carry no import.
 fn emit_one_wasi_import(op) = {
   let sig = wasi_import_sig(op)
   if sig == "" { () }
@@ -1111,8 +1111,8 @@ fn emit_one_wasi_import(op) = {
   }
 }
 
-/// The WASI preview1 ABI signatures — the FFI boundary's external facts, keyed
-/// on the op name LWasiCall carries. "" = not a preview1 import (skip).
+// The WASI preview1 ABI signatures — the FFI boundary's external facts, keyed
+// on the op name LWasiCall carries. "" = not a preview1 import (skip).
 fn wasi_import_sig(op) =
   if op == "proc_exit"                  { "(param i32)" }
   else if op == "fd_write"              { "(param i32 i32 i32 i32) (result i32)" }
@@ -1178,9 +1178,9 @@ fn emit_functions(lowered) = {
     |> for_each((s) => wat_emit(s))
 }
 
-/// Per-fn emit-to-buffer. Installs wat_to_string locally; emit_fn_body's
-/// perform wat_emit calls go to that handler's buffer; wat_collect
-/// returns the buffer when the scoped block completes.
+// Per-fn emit-to-buffer. Installs wat_to_string locally; emit_fn_body's
+// perform wat_emit calls go to that handler's buffer; wat_collect
+// returns the buffer when the scoped block completes.
 fn emit_one_fn_to_string(record) = {
   let (name, param_names, body, captures_count) = record
   {
@@ -1189,12 +1189,12 @@ fn emit_one_fn_to_string(record) = {
   } ~> wat_to_string
 }
 
-/// Deep-walk the lowered program, projecting every fn-bearing variant
-/// (LMakeClosure / LMakeContinuation / LDeclareFn) to an emit record
-/// (name, param_names, body, captures_count). flatten(map) over the
-/// recursive structure produces the records in tree-traversal order —
-/// matching the prior emit_fns_expr ordering byte-for-byte so
-/// $<name>_idx globals line up with the function table.
+// Deep-walk the lowered program, projecting every fn-bearing variant
+// (LMakeClosure / LMakeContinuation / LDeclareFn) to an emit record
+// (name, param_names, body, captures_count). flatten(map) over the
+// recursive structure produces the records in tree-traversal order —
+// matching the prior emit_fns_expr ordering byte-for-byte so
+// $<name>_idx globals line up with the function table.
 fn collect_fn_emit_records(exprs) =
   flatten(map(collect_fn_emit_records_expr, exprs))
 
@@ -1319,11 +1319,11 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   wat_emit("  )\n")
 }
 
-/// Hβ.emit.reason-chain-comments — project the first body expression's
-/// Reason chain (chased from the graph at the LowExpr's handle) as a
-/// SourceMap-style WAT comment. The Why-engine reads these to walk
-/// from WAT back to source. Empty body skipped; chase-failure (handle
-/// == 0) skipped.
+// Hβ.emit.reason-chain-comments — project the first body expression's
+// Reason chain (chased from the graph at the LowExpr's handle) as a
+// SourceMap-style WAT comment. The Why-engine reads these to walk
+// from WAT back to source. Empty body skipped; chase-failure (handle
+// == 0) skipped.
 fn emit_reason_comment_for_fn(name, body) = {
   if len(body) == 0 { () }
   else {
@@ -1340,9 +1340,9 @@ fn emit_reason_comment_for_fn(name, body) = {
   }
 }
 
-/// Render a Reason chain as a one-line comment string. The full
-/// structured walk lives in show_reason (types.mn); emit's variant
-/// truncates to a single line so WAT stays readable.
+// Render a Reason chain as a one-line comment string. The full
+// structured walk lives in show_reason (types.mn); emit's variant
+// truncates to a single line so WAT stays readable.
 fn emit_reason_summary(handle) with !Mutate = {
   let GNode(_, reason) = graph_chase(handle)
   emit_render_reason_oneline(reason)
@@ -1717,17 +1717,17 @@ fn emit_start(top_fn_names) = {
   emit_wasi_thread_start()
 }
 
-/// emit_wasi_thread_start — Stage 3 substrate per Hβ.runtime.wasi-thread-
-/// spawn-seed. The closure IS the thread record. WASI threads calls
-/// $wasi_thread_start(tid, start_arg) on a freshly-spawned thread;
-/// start_arg = closure pointer. The body reads fn_idx from closure[0],
-/// call_indirects with closure-as-__state, stores result at closure
-/// done_offset+4, atomic.store done=1, atomic.notify. Programs that
-/// don't spawn pay zero runtime cost — the entry is unreachable until
-/// wasi_thread_spawn is performed.
-///
-/// Layout precondition (per closure_done_addr in lib/runtime/threading.mn):
-///   [fn_idx@0][capture_count@4][captures@8..(8+4*nc)][done@8+4*nc][result@done+4]
+// emit_wasi_thread_start — Stage 3 substrate per Hβ.runtime.wasi-thread-
+// spawn-seed. The closure IS the thread record. WASI threads calls
+// $wasi_thread_start(tid, start_arg) on a freshly-spawned thread;
+// start_arg = closure pointer. The body reads fn_idx from closure[0],
+// call_indirects with closure-as-__state, stores result at closure
+// done_offset+4, atomic.store done=1, atomic.notify. Programs that
+// don't spawn pay zero runtime cost — the entry is unreachable until
+// wasi_thread_spawn is performed.
+//
+// Layout precondition (per closure_done_addr in lib/runtime/threading.mn):
+//   [fn_idx@0][capture_count@4][captures@8..(8+4*nc)][done@8+4*nc][result@done+4]
 fn emit_wasi_thread_start() = {
   wat_emit("  (func $wasi_thread_start (param $tid i32) (param $start_arg i32)\n")
   wat_emit("    (local $closure_ptr i32)\n")
@@ -1794,16 +1794,16 @@ fn emit_state_init_writes(state_local, inits, base_idx) = {
   }, enumerate(inits))
 }
 
-/// Total arm-slot count across a handler's per-effect groups — the record's
-/// contiguous arm region size.
+// Total arm-slot count across a handler's per-effect groups — the record's
+// contiguous arm region size.
 fn sum_arm_name_lens(groups) = fold(groups, 0, (acc, g) => acc + len(g.arms))
 
-/// Lay each effect-group's arm fn-indices contiguously in the ONE record
-/// (at 8+4*nstate+4*(base+op_slot)) with a running base, and alloc a thin
-/// per-effect [record, base] evidence-entry bound to "__hstate_<h>_<ename>"
-/// (= state_local ++ "_" ++ ename). The ev-slot forwards that entry;
-/// emit_levperform reads (record, base) from it. Mirrors the seed's
-/// $emit_handler_effect_entries.
+// Lay each effect-group's arm fn-indices contiguously in the ONE record
+// (at 8+4*nstate+4*(base+op_slot)) with a running base, and alloc a thin
+// per-effect [record, base] evidence-entry bound to "__hstate_<h>_<ename>"
+// (= state_local ++ "_" ++ ename). The ev-slot forwards that entry;
+// emit_levperform reads (record, base) from it. Mirrors the seed's
+// $emit_handler_effect_entries.
 fn emit_handler_effect_entries(state_local, nstate, groups) = {
   fold(groups, 0, (base, g) => {
     emit_arm_writes(state_local, nstate, base, g.arms, 0)
@@ -1827,11 +1827,11 @@ fn emit_handler_effect_entries(state_local, nstate, groups) = {
   ()
 }
 
-/// Write each non-gap arm fn-index into the record. The arm's fn-index lives
-/// in the global `$<arm_name>_idx` (emitted per LDeclareFn); the install
-/// copies it into the record so the perform reads the record, not a global —
-/// per-install evidence, not a static vtable. "" gaps (unimplemented ops)
-/// are skipped; their slot stays zero.
+// Write each non-gap arm fn-index into the record. The arm's fn-index lives
+// in the global `$<arm_name>_idx` (emitted per LDeclareFn); the install
+// copies it into the record so the perform reads the record, not a global —
+// per-install evidence, not a static vtable. "" gaps (unimplemented ops)
+// are skipped; their slot stays zero.
 fn emit_arm_writes(state_local, nstate, base, arms, k) = {
   if k >= len(arms) { () }
   else {
@@ -1850,9 +1850,9 @@ fn emit_arm_writes(state_local, nstate, base, arms, k) = {
   }
 }
 
-/// Write the arm-bodies' captured evidence after the arm region, at
-/// 8+4*(nstate+total_arms+i). Each is a LowExpr (an outer entry LLocal or an
-/// LEvSlotRef forward); emit_expr pushes it, then store into the record.
+// Write the arm-bodies' captured evidence after the arm region, at
+// 8+4*(nstate+total_arms+i). Each is a LowExpr (an outer entry LLocal or an
+// LEvSlotRef forward); emit_expr pushes it, then store into the record.
 fn emit_captured_evs(state_local, nstate, total_arms, cevs, i) = {
   if i >= len(cevs) { () }
   else {
@@ -1867,9 +1867,9 @@ fn emit_captured_evs(state_local, nstate, total_arms, cevs, i) = {
   }
 }
 
-/// Push the per-effect evidence ENTRY pointer from this fn's __state ev-slot:
-/// `(local.get $__state)(i32.load offset=<ev_off>)`. emit_levperform reads
-/// record=entry[0], base=entry[1] off it.
+// Push the per-effect evidence ENTRY pointer from this fn's __state ev-slot:
+// `(local.get $__state)(i32.load offset=<ev_off>)`. emit_levperform reads
+// record=entry[0], base=entry[1] off it.
 fn emit_ev_entry(ev_off) = {
   wat_emit("    (local.get $__state)\n")
   wat_emit("    (i32.load offset=")
@@ -2542,12 +2542,12 @@ fn emit_expr_list_at(exprs, i, n) = {
 }
 
 
-/// emit_const — productive-under-error per Hazel discipline: unknown
-/// LowValue shapes emit `(i32.const 0)` placeholder instead of trapping
-/// at the match-exhaustiveness fallthrough. The trap was a Hβ.lower
-/// drift surfacing here; named peer Hβ.lower.lconst-adt-canonical
-/// closes the upstream gap. Until then, the diagnostic is the
-/// wat-comment + sentinel — one mechanism, no silent failure.
+// emit_const — productive-under-error per Hazel discipline: unknown
+// LowValue shapes emit `(i32.const 0)` placeholder instead of trapping
+// at the match-exhaustiveness fallthrough. The trap was a Hβ.lower
+// drift surfacing here; named peer Hβ.lower.lconst-adt-canonical
+// closes the upstream gap. Until then, the diagnostic is the
+// wat-comment + sentinel — one mechanism, no silent failure.
 fn emit_const(v, h) = match v {
   LInt(n) => {
     wat_emit("    (i32.const ")
@@ -4601,12 +4601,12 @@ fn emit_ev_slot_stores(ev_exprs, nc, base_j) = {
   }, enumerate(ev_exprs))
 }
 
-/// emit_capture_stores_at_offset — H7 variant of emit_capture_stores
-/// with explicit base_offset parameter. LMakeContinuation's heap layout
-/// shifts capture storage to start at offset 12 (header is fn_ptr +
-/// state_index + capture_count = 12 bytes) instead of LMakeClosure's
-/// offset 8 (no state_index). The substrate is otherwise identical;
-/// only the base offset differs.
+// emit_capture_stores_at_offset — H7 variant of emit_capture_stores
+// with explicit base_offset parameter. LMakeContinuation's heap layout
+// shifts capture storage to start at offset 12 (header is fn_ptr +
+// state_index + capture_count = 12 bytes) instead of LMakeClosure's
+// offset 8 (no state_index). The substrate is otherwise identical;
+// only the base offset differs.
 
 fn emit_capture_stores_at_offset(captures, base_offset, base_i) = {
   for_each((indexed) => {
@@ -4619,10 +4619,10 @@ fn emit_capture_stores_at_offset(captures, base_offset, base_i) = {
   }, enumerate(captures))
 }
 
-/// emit_ev_slot_stores_at_offset — H7 variant of emit_ev_slot_stores
-/// with explicit base_offset (the offset where the first ev_slot lives,
-/// already past the captures). For LMakeContinuation: base_offset =
-/// 12 + 4 * nc.
+// emit_ev_slot_stores_at_offset — H7 variant of emit_ev_slot_stores
+// with explicit base_offset (the offset where the first ev_slot lives,
+// already past the captures). For LMakeContinuation: base_offset =
+// 12 + 4 * nc.
 
 fn emit_ev_slot_stores_at_offset(ev_exprs, base_offset, base_j) = {
   for_each((indexed) => {
@@ -4775,7 +4775,7 @@ fn product_byte_size(fields) =
 // HB substrate: nullary variants emit as (i32.const tag) sentinels;
 // fielded variants are heap pointers ≥ HEAP_BASE. The threshold
 // comparison `(scrut < HEAP_BASE)` discriminates without ambiguity.
-/// Pattern algebra — predicate ⊕ projection.
+// Pattern algebra — predicate ⊕ projection.
 //
 // A pattern is the Boolean algebra of value space — the row algebra's
 // mirror (SUBSTRATE.md §IV): nesting is intersection (short-circuit

@@ -38,62 +38,62 @@
 import types
 import runtime/lists
 
-/// Buffer<A> — mutable buffer with separate capacity and count.
-///
-/// `data: [A]` is the underlying storage; `count` is the logical
-/// fill. The data List grows by snoc-tag-1 append (`push`) on
-/// overflow; final freeze materializes to a flat tag-0 List via
-/// `list_to_flat`.
-///
-/// The refinement `where buf_invariant(self)` captures the
-/// structural invariant (primitive #6) — count never exceeds
-/// capacity. Verify discharges it at construction sites once
-/// verify_smt-witness-L2 lands; pre-L2 the predicate parses, the
-/// contract is documented, runtime enforcement is by convention.
-/// Per SYNTAX.md §664 type-with-where form.
-///
-/// Per drift mode 7 (parallel-arrays-instead-of-record): one record
-/// carries both fields, NOT two parallel collections.
+// Buffer<A> — mutable buffer with separate capacity and count.
+//
+// `data: [A]` is the underlying storage; `count` is the logical
+// fill. The data List grows by snoc-tag-1 append (`push`) on
+// overflow; final freeze materializes to a flat tag-0 List via
+// `list_to_flat`.
+//
+// The refinement `where buf_invariant(self)` captures the
+// structural invariant (primitive #6) — count never exceeds
+// capacity. Verify discharges it at construction sites once
+// verify_smt-witness-L2 lands; pre-L2 the predicate parses, the
+// contract is documented, runtime enforcement is by convention.
+// Per SYNTAX.md §664 type-with-where form.
+//
+// Per drift mode 7 (parallel-arrays-instead-of-record): one record
+// carries both fields, NOT two parallel collections.
 
 type Buffer = {data: List, count: Int}
 
-/// `buf_invariant(b)` — the structural invariant: count never
-/// exceeds the underlying capacity. Named so the refinement
-/// predicate composes cleanly + Mentl can surface it as the Why
-/// edge for any "buffer over-fill" diagnostic.
+// `buf_invariant(b)` — the structural invariant: count never
+// exceeds the underlying capacity. Named so the refinement
+// predicate composes cleanly + Mentl can surface it as the Why
+// edge for any "buffer over-fill" diagnostic.
 
 fn buf_invariant(b: Buffer) -> Bool with Pure =
   buf_count(b) <= len(buf_data(b))
 
-/// `buf_make()` — fresh empty buffer. Storage starts as the empty
-/// List; first `buf_push` snoc-appends. Wheel-canonical implementation
-/// uses snoc growth (O(1) push, O(N) freeze materialize). Seed-side
-/// (bootstrap/src/runtime/buffer.wat) uses flat-with-doubling for
-/// O(1) push + O(N) freeze in fewer cache lines.
+// `buf_make()` — fresh empty buffer. Storage starts as the empty
+// List; first `buf_push` snoc-appends. Wheel-canonical implementation
+// uses snoc growth (O(1) push, O(N) freeze materialize). Seed-side
+// (bootstrap/src/runtime/buffer.wat) uses flat-with-doubling for
+// O(1) push + O(N) freeze in fewer cache lines.
 
 fn buf_make() -> Buffer with Memory + Alloc =
   Buffer{data: make_list(0), count: 0}
 
-/// `buf_push(buf, x)` — append `x` to the buffer; bump count.
-/// Snoc-based: `push` allocates a tag-1 node wrapping the previous
-/// data. Amortized O(1) per push regardless of buffer size.
+// `buf_push(buf, x)` — append `x` to the buffer; bump count.
+// Snoc-based: `push` allocates a tag-1 node wrapping the previous
+// data. Amortized O(1) per push regardless of buffer size.
 
 fn buf_push(own buf: Buffer, x) -> Buffer with Memory + Alloc =
   Buffer{data: push(buf.data, x), count: buf.count + 1}
 
-/// `buf_count(buf)` — read the logical count (used slots).
+// `buf_count(buf)` — read the logical count (used slots).
 
 fn buf_count(ref buf: Buffer) -> Int with Pure = buf.count
 
-/// `buf_data(buf)` — read the underlying [A]. Note this may be
-/// snoc-shaped during the buffer's lifetime; use `buf_freeze` to
-/// materialize a clean flat List of just the valid prefix.
+// `buf_data(buf)` — read the underlying [A]. Note this may be
+// snoc-shaped during the buffer's lifetime; use `buf_freeze` to
+// materialize a clean flat List of just the valid prefix.
 
 fn buf_data(ref buf: Buffer) -> List with Pure = buf.data
 
-/// `buf_freeze(buf)` — materialize the underlying List as a flat
-/// tag-0 List, returning ownership. The buffer is consumed; after
-/// freeze, callers operate on the resulting List.
+// `buf_freeze(buf)` — materialize the underlying List as a flat
+// tag-0 List, returning ownership. The buffer is consumed; after
+// freeze, callers operate on the resulting List.
 
 fn buf_freeze(own buf: Buffer) -> List with Memory + Alloc =
   list_to_flat(buf.data)

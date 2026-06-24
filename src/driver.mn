@@ -22,9 +22,9 @@ import infer
 import runtime/strings
 import runtime/io
 
-/// Resolve a module name to a file path. Checks `src/` then `lib/`:
-///   `"infer"` → `"src/infer.mn"`,
-///   `"runtime/strings"` → `"lib/runtime/strings.mn"`.
+// Resolve a module name to a file path. Checks `src/` then `lib/`:
+//   `"infer"` → `"src/infer.mn"`,
+//   `"runtime/strings"` → `"lib/runtime/strings.mn"`.
 fn driver_module_path(ref module_name) with Memory + Alloc + Filesystem = {
   let src_path = "src/{module_name}.mn"
   if fs_exists(src_path) {
@@ -106,9 +106,9 @@ fn driver_extract_imports_from_ast(ast) = {
   }, ast))
 }
 
-/// Consult the cache; on miss run full inference for this module
-/// and write a fresh `.kai`. Returns the env entries this module
-/// publishes for the caller to install into `env_handler`.
+// Consult the cache; on miss run full inference for this module
+// and write a fresh `.kai`. Returns the env entries this module
+// publishes for the caller to install into `env_handler`.
 fn driver_check_module(ref module_name)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   let path = driver_module_path(module_name)
@@ -246,10 +246,10 @@ fn driver_install_loop(ref entries, i, n) with Memory + Alloc + EnvWrite = {
 //
 // Per `Hβ.driver.level-set-par-walk` peer follow-up closure.
 
-/// Process the entry module and all its transitive dependencies.
-/// Each module either loads from cache or re-infers; envs install in
-/// dependency order so every imported name is in `env_handler` before
-/// the entry module's inference runs.
+// Process the entry module and all its transitive dependencies.
+// Each module either loads from cache or re-infers; envs install in
+// dependency order so every imported name is in `env_handler` before
+// the entry module's inference runs.
 fn driver_check(ref entry_module)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   entry_module
@@ -258,13 +258,13 @@ fn driver_check(ref entry_module)
     |> for_each((layer) => parallel_map(driver_check_module, layer))
 }
 
-/// driver_check_entry — the compile path's check: infer every DEP of the
-/// entry (each installs into env_handler), then parse+infer the ENTRY
-/// ITSELF exactly ONCE and hand its inferred AST back so compile lowers
-/// the SAME graph it proved. The entry is never re-read or re-inferred
-/// downstream (Carried-Truth: compile's old second fs_read + frontend +
-/// infer_program was the canonical re-derivation this deletes — the entry
-/// is parsed+typed here, once, and lowered live).
+// driver_check_entry — the compile path's check: infer every DEP of the
+// entry (each installs into env_handler), then parse+infer the ENTRY
+// ITSELF exactly ONCE and hand its inferred AST back so compile lowers
+// the SAME graph it proved. The entry is never re-read or re-inferred
+// downstream (Carried-Truth: compile's old second fs_read + frontend +
+// infer_program was the canonical re-derivation this deletes — the entry
+// is parsed+typed here, once, and lowered live).
 fn driver_check_entry(ref entry_module)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   // Check the deps DAG (every module the entry imports) — not the entry.
@@ -279,19 +279,19 @@ fn driver_check_entry(ref entry_module)
   ast
 }
 
-/// Walk the post-order DAG and pair each module with its in-DAG deps.
-/// In-DAG: dep names that appear among the collected modules (filters
-/// out missing-module fallbacks that have no source). Returns
-/// `[(module_name, [dep_name])]` in post-order.
+// Walk the post-order DAG and pair each module with its in-DAG deps.
+// In-DAG: dep names that appear among the collected modules (filters
+// out missing-module fallbacks that have no source). Returns
+// `[(module_name, [dep_name])]` in post-order.
 fn driver_collect_dag_with_deps(ref entry_module)
   with Memory + Alloc + Filesystem = {
   let modules = driver_collect_dag(entry_module)
   map((m) => (m, driver_module_in_dag_deps(m, modules)), modules)
 }
 
-/// Extract the imports of one module, then filter to the in-DAG set.
-/// Out-of-DAG names (missing modules, stdlib aliases the driver doesn't
-/// process) contribute nothing to the layer-partition's wait condition.
+// Extract the imports of one module, then filter to the in-DAG set.
+// Out-of-DAG names (missing modules, stdlib aliases the driver doesn't
+// process) contribute nothing to the layer-partition's wait condition.
 fn driver_module_in_dag_deps(ref module_name, ref dag_modules)
   with Memory + Alloc + Filesystem = {
   let path = driver_module_path(module_name)
@@ -308,9 +308,9 @@ fn contains_module(ref modules, ref target) with Pure = {
   any((m) => m == target, modules)
 }
 
-/// Partition modules-with-deps into topological layers. Each pass
-/// peels off the "ready set" — modules whose deps are all processed.
-/// Iteration bound: DAG depth (typically ≤ 10 for a wheel-class graph).
+// Partition modules-with-deps into topological layers. Each pass
+// peels off the "ready set" — modules whose deps are all processed.
+// Iteration bound: DAG depth (typically ≤ 10 for a wheel-class graph).
 fn driver_partition_layers(ref modules_with_deps) with Memory + Alloc = {
   driver_partition_peel(modules_with_deps, [], [])
 }

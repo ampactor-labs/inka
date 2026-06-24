@@ -175,26 +175,26 @@ fn main(argv) = match parse_cli_args(argv) {
     dispatch_invocation(verb)
 }
 
-/// dispatch_invocation — the cargo-class default substrate. parallel_
-/// compose + wasi_threads install ONCE here at the outermost dispatch
-/// boundary; every verb inherits multi-threading without per-*_run
-/// repetition. The default IS parallelism — same as `cargo build` using
-/// all cores by default. Opt-out: install `~> sequential_compose`
-/// INSIDE a specific verb's chain to override (innermost handler wins).
-///
-/// Per protocol_parallelism_symmetry.md: parallel_compose IS the
-/// substrate-honest default; sequential_compose IS the deterministic-
-/// output override (test harness verbose mode, reproducible-bisect
-/// debugging, etc.). The medium's reflexive: parallelism is the WORLD;
-/// single-thread is the EXCEPTION.
-///
-/// The substrate handlers (env/graph/diagnostics) install at this SAME
-/// boundary: the program boundary IS an install site (EH). Every verb
-/// path — including import-parse, which runs BEFORE compile_source's
-/// per-compile chain — performs against a rooted handler stack; the
-/// evidence chain from main downward forwards real entries, never a
-/// bare closure record. Inner per-compile installs shadow these
-/// (innermost wins), giving each compile_source fresh graph state.
+// dispatch_invocation — the cargo-class default substrate. parallel_
+// compose + wasi_threads install ONCE here at the outermost dispatch
+// boundary; every verb inherits multi-threading without per-*_run
+// repetition. The default IS parallelism — same as `cargo build` using
+// all cores by default. Opt-out: install `~> sequential_compose`
+// INSIDE a specific verb's chain to override (innermost handler wins).
+//
+// Per protocol_parallelism_symmetry.md: parallel_compose IS the
+// substrate-honest default; sequential_compose IS the deterministic-
+// output override (test harness verbose mode, reproducible-bisect
+// debugging, etc.). The medium's reflexive: parallelism is the WORLD;
+// single-thread is the EXCEPTION.
+//
+// The substrate handlers (env/graph/diagnostics) install at this SAME
+// boundary: the program boundary IS an install site (EH). Every verb
+// path — including import-parse, which runs BEFORE compile_source's
+// per-compile chain — performs against a rooted handler stack; the
+// evidence chain from main downward forwards real entries, never a
+// bare closure record. Inner per-compile installs shadow these
+// (innermost wins), giving each compile_source fresh graph state.
 fn dispatch_invocation(verb) = {
   {
     match verb {

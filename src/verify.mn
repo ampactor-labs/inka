@@ -23,13 +23,13 @@
 
 import types
 
-/// Discharges the decidable subset compile-time; defers the rest to
-/// the ledger. The simplest demonstration that the handler-swap
-/// thesis works on the compiler's own core: the gap between "ledger
-/// only" and "full SMT solver" is hosted by the handler mechanism
-/// itself. Swap for `verify_smt` (Arc F.1) with zero source changes —
-/// the swap targets the undecidable arm; the decidable arm here stays
-/// load-bearing across the swap.
+// Discharges the decidable subset compile-time; defers the rest to
+// the ledger. The simplest demonstration that the handler-swap
+// thesis works on the compiler's own core: the gap between "ledger
+// only" and "full SMT solver" is hosted by the handler mechanism
+// itself. Swap for `verify_smt` (Arc F.1) with zero source changes —
+// the swap targets the undecidable arm; the decidable arm here stays
+// load-bearing across the swap.
 handler verify_ledger with debt = [] {
 
   verify(span, predicate, reason) =>
@@ -44,20 +44,32 @@ handler verify_ledger with debt = [] {
           with debt = [(span, predicate, reason)] ++ debt
     },
 
+  // ifc_check — the non-interference obligation arm (§4⑥).
+  // src is the expression's FlowLabel (computed by infer at the splice
+  // site via flow_join over all splices). dst is the sink's required
+  // label (Public for log/stderr/network handlers). If src ⊑ dst per
+  // flow_le, the value flows safely; otherwise accrue as IFC debt
+  // (never silent-resume, which would claim a proof not established).
+  ifc_check(span, src, dst, reason) =>
+    if flow_le(src, dst) { resume() }
+    else
+      resume()
+        with debt = [(span, PBoolNode(0), reason)] ++ debt,
+
   verify_debt() =>
     resume(debt)
 }
 
-/// Compile-time decidable discharge. Returns Some(true) when the
-/// predicate proves true on its constant operands alone; Some(false)
-/// when it proves false; None at the undecidable boundary (a variable,
-/// a call, a compound expr) — defers to ledger or solver. Pure.
-///
-/// A PCompare is decidable iff BOTH operand nodes are literal constants
-/// (read LIVE via node_const, never a PExpr copy); litval_compare folds
-/// them — cross-kind equality is Some(false) (type mismatch is a
-/// stronger refusal than undecidable), cross-kind ordering is None.
-/// PAnd / POr / PNot recurse with three-valued short-circuit.
+// Compile-time decidable discharge. Returns Some(true) when the
+// predicate proves true on its constant operands alone; Some(false)
+// when it proves false; None at the undecidable boundary (a variable,
+// a call, a compound expr) — defers to ledger or solver. Pure.
+//
+// A PCompare is decidable iff BOTH operand nodes are literal constants
+// (read LIVE via node_const, never a PExpr copy); litval_compare folds
+// them — cross-kind equality is Some(false) (type mismatch is a
+// stronger refusal than undecidable), cross-kind ordering is None.
+// PAnd / POr / PNot recurse with three-valued short-circuit.
 fn predicate_decide(ref pred) with GraphRead = match pred {
   PTrue              => Some(true),
   PCompare(op, l, r) => compare_decide(op, l, r),
@@ -68,8 +80,8 @@ fn predicate_decide(ref pred) with GraphRead = match pred {
   PPatternMatch(_, _) => None        // match-narrowing — the SMT tier evaluates
 }
 
-/// A comparison decides at compile time iff BOTH operand handles resolve
-/// to literal constants; otherwise None (defer to the solver).
+// A comparison decides at compile time iff BOTH operand handles resolve
+// to literal constants; otherwise None (defer to the solver).
 fn compare_decide(op, lh, rh) with GraphRead = match node_const(lh) {
   Some(lv) => match node_const(rh) {
     Some(rv) => litval_compare(op, lv, rv),
@@ -78,9 +90,9 @@ fn compare_decide(op, lh, rh) with GraphRead = match node_const(lh) {
   None => None
 }
 
-/// Resolve an operand HANDLE to its literal value, reading the Expr LIVE
-/// from the graph (graph_node_body) — Some for a compile-time constant,
-/// None otherwise. Carry the handle, read live.
+// Resolve an operand HANDLE to its literal value, reading the Expr LIVE
+// from the graph (graph_node_body) — Some for a compile-time constant,
+// None otherwise. Carry the handle, read live.
 fn node_const(handle) with GraphRead = match graph_node_body(handle) {
   NExpr(LitInt(n))    => Some(LVInt(n)),
   NExpr(LitFloat(f))  => Some(LVFloat(f)),
@@ -89,7 +101,7 @@ fn node_const(handle) with GraphRead = match graph_node_body(handle) {
   _                   => None
 }
 
-/// Fold a comparison over two constant operand values.
+// Fold a comparison over two constant operand values.
 fn litval_compare(ref op, ref a, ref b) with Pure = match op {
   BEq => litval_eq(a, b),
   BLt => litval_lt(a, b),
@@ -97,8 +109,8 @@ fn litval_compare(ref op, ref a, ref b) with Pure = match op {
   _   => None
 }
 
-/// Equality over constants. Same-kind compares; cross-kind is Some(false)
-/// (different-kind constants are unequal — a stronger refusal than None).
+// Equality over constants. Same-kind compares; cross-kind is Some(false)
+// (different-kind constants are unequal — a stronger refusal than None).
 fn litval_eq(ref a, ref b) with Pure = match a {
   LVInt(na)    => match b { LVInt(nb) => Some(na == nb), LVFloat(_) => Some(false), LVString(_) => Some(false), LVBool(_) => Some(false) },
   LVFloat(fa)  => match b { LVInt(_) => Some(false), LVFloat(fb) => Some(fa == fb), LVString(_) => Some(false), LVBool(_) => Some(false) },
@@ -106,8 +118,8 @@ fn litval_eq(ref a, ref b) with Pure = match a {
   LVBool(ba)   => match b { LVInt(_) => Some(false), LVFloat(_) => Some(false), LVString(_) => Some(false), LVBool(bb) => Some(ba == bb) }
 }
 
-/// Strict order over numeric constants; strings/bools carry no order
-/// here (None — defer); cross-kind numeric is None.
+// Strict order over numeric constants; strings/bools carry no order
+// here (None — defer); cross-kind numeric is None.
 fn litval_lt(ref a, ref b) with Pure = match a {
   LVInt(na)    => match b { LVInt(nb) => Some(na < nb), LVFloat(_) => None, LVString(_) => None, LVBool(_) => None },
   LVFloat(fa)  => match b { LVInt(_) => None, LVFloat(fb) => Some(fa < fb), LVString(_) => None, LVBool(_) => None },
@@ -122,11 +134,11 @@ fn litval_le(ref a, ref b) with Pure = match a {
   LVBool(_)    => None
 }
 
-/// Conjunction with three-valued short-circuit. Some(false) on either
-/// branch decides the conjunction false regardless; Some(true) on both
-/// decides true; mixed Some(true) + None defers to None (the unknown
-/// branch is still load-bearing); Some(true) + Some(true) is the only
-/// fully-decidable true.
+// Conjunction with three-valued short-circuit. Some(false) on either
+// branch decides the conjunction false regardless; Some(true) on both
+// decides true; mixed Some(true) + None defers to None (the unknown
+// branch is still load-bearing); Some(true) + Some(true) is the only
+// fully-decidable true.
 fn and_decide(ref ea, ref eb) with Pure = match ea {
   Some(false) => Some(false),
   Some(true)  => match eb {
@@ -161,15 +173,15 @@ fn not_decide(ref e) with Pure = match e {
   None        => None
 }
 
-/// Compile-time refusal at the construction site. The verifier proved
-/// the predicate false from constant inputs alone — the construction
-/// is invariant-violating by literal evidence. Span is the call site;
-/// reason carries the predicate-as-Why for the chain-walker.
+// Compile-time refusal at the construction site. The verifier proved
+// the predicate false from constant inputs alone — the construction
+// is invariant-violating by literal evidence. Span is the call site;
+// reason carries the predicate-as-Why for the chain-walker.
 fn report_refinement_rejected(ref pred, ref span, ref reason) with !Mutate =
   report(ERefinementRejected(pred, span))
 
-/// Emit a single diagnostic summarising pending verification debt.
-/// Called at compile end by the driver. Zero debt → no diagnostic.
+// Emit a single diagnostic summarising pending verification debt.
+// Called at compile end by the driver. Zero debt → no diagnostic.
 fn report_verify_debt(debt) = {
   if len(debt) == 0 { () }
   else {
@@ -177,9 +189,9 @@ fn report_verify_debt(debt) = {
   }
 }
 
-/// Classify verification debt by predicate shape. Consumed by
-/// `mentl query verification` so the developer sees at a glance
-/// which proof classes are pending.
+// Classify verification debt by predicate shape. Consumed by
+// `mentl query verification` so the developer sees at a glance
+// which proof classes are pending.
 fn debt_by_kind(debt) = map((entry) => {
   let (span, pred, reason) = entry
   (classify_predicate(pred), span, reason)
@@ -239,15 +251,28 @@ handler verify_smt with witnesses = [] {
   // the cursor surfaces (mentl-why walks to the model); SmtUnknown obligations
   // are retained debt. Both flow back as the residual, never dropped.
   verify_debt() =>
-    resume(verify_residual(debt, witnesses))
+    resume(verify_residual(debt, witnesses)),
+
+  // ifc_check in the SMT tier — static violations are caught at
+  // the ledger tier; the SMT tier handles taint-under-declassify
+  // (a declassify annotation must be proven invertibility-free by
+  // the non-interference theory solver). For now: same as the
+  // ledger tier (accumulate as debt). The Arc F.1 SMT swap
+  // replaces this arm with one that routes to an NI theory solver
+  // (property `src ⊑ dst` in the information-flow lattice theory).
+  ifc_check(span, src, dst, reason) =>
+    if flow_le(src, dst) { resume() }
+    else
+      resume()
+        with debt = [(span, PBoolNode(0), reason)] ++ debt
 }
 
-/// The SMT handler's residual: undischarged debt PLUS the SAT-witness ledger
-/// projected as proof-evidence entries (witness rendered into the reason via
-/// SVerifyWitness so the Why-walker reaches the counterexample/model). One
-/// list, read live — the cursor's projection of what the solver established
-/// and what it could not. (Surpasses Dafny/F*: the witness is a walkable Reason
-/// edge, not a separate counterexample dump.)
+// The SMT handler's residual: undischarged debt PLUS the SAT-witness ledger
+// projected as proof-evidence entries (witness rendered into the reason via
+// SVerifyWitness so the Why-walker reaches the counterexample/model). One
+// list, read live — the cursor's projection of what the solver established
+// and what it could not. (Surpasses Dafny/F*: the witness is a walkable Reason
+// edge, not a separate counterexample dump.)
 fn verify_residual(ref debt, ref witnesses) with Memory + Alloc = {
   debt ++ map((w) => {
     let (span, pred, model) = w
@@ -280,22 +305,22 @@ fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc = {
   "({op} {predicate_to_smt(a)} {predicate_to_smt(b)})"
 }
 
-/// ONE SMT-render projection, keyed on HANDLES throughout (Carried-Truth: the
-/// predicate's operands ARE handles into the one graph; every operand — top-
-/// level and nested call arg — is resolved via graph_node_body and rendered
-/// uniformly, never a second node-destructure path). Follow the edge, read the
-/// live node — the AST-in-graph fabric makes every sub-node a resolvable handle.
+// ONE SMT-render projection, keyed on HANDLES throughout (Carried-Truth: the
+// predicate's operands ARE handles into the one graph; every operand — top-
+// level and nested call arg — is resolved via graph_node_body and rendered
+// uniformly, never a second node-destructure path). Follow the edge, read the
+// live node — the AST-in-graph fabric makes every sub-node a resolvable handle.
 fn handle_to_smt(handle) with GraphRead + Memory + Alloc = {
   body_to_smt(graph_node_body(handle))
 }
 
-/// Render a NodeBody as an SMT term. Every node-kind that can appear in a
-/// refinement-predicate operand is enumerated; a genuinely non-encodable shape
-/// raises E_VerifyUnencodable (Located) and renders the unsat-forcing sentinel
-/// `false` — NEVER a fabricated `true` (a `true` fallback in a PROOF GATE claims
-/// proof of the unprovable — the most dangerous silent fallback in the compiler;
-/// the no-silent-fallback law, deleted not wrapped). A call's args are HANDLES
-/// (the AST-in-graph fabric), mapped through handle_to_smt — no i/n index loop.
+// Render a NodeBody as an SMT term. Every node-kind that can appear in a
+// refinement-predicate operand is enumerated; a genuinely non-encodable shape
+// raises E_VerifyUnencodable (Located) and renders the unsat-forcing sentinel
+// `false` — NEVER a fabricated `true` (a `true` fallback in a PROOF GATE claims
+// proof of the unprovable — the most dangerous silent fallback in the compiler;
+// the no-silent-fallback law, deleted not wrapped). A call's args are HANDLES
+// (the AST-in-graph fabric), mapped through handle_to_smt — no i/n index loop.
 fn body_to_smt(body) with GraphRead + Memory + Alloc = match body {
   NExpr(LitInt(n))    => int_to_str(n),
   NExpr(LitFloat(f))  => float_to_str(f),
@@ -311,10 +336,10 @@ fn body_to_smt(body) with GraphRead + Memory + Alloc = match body {
   }
 }
 
-/// A call renders as `(fname arg…)` with every arg resolved through its handle
-/// (the operand-Node channel PCompare already uses); the fname is the callee's
-/// name read live from its node body, or the unencodable sentinel if it is not a
-/// bare name reference.
+// A call renders as `(fname arg…)` with every arg resolved through its handle
+// (the operand-Node channel PCompare already uses); the fname is the callee's
+// name read live from its node body, or the unencodable sentinel if it is not a
+// bare name reference.
 fn smt_call(ref callee, ref args) with GraphRead + Memory + Alloc = {
   let N(cbody, _, _) = callee
   let fname = match cbody {
@@ -327,8 +352,8 @@ fn smt_call(ref callee, ref args) with GraphRead + Memory + Alloc = {
   "({fname}{smt_arg_terms(args)})"
 }
 
-/// Each arg is a handle — map through handle_to_smt and join (map/fold, never an
-/// imperative i/n counter; Anchor 6).
+// Each arg is a handle — map through handle_to_smt and join (map/fold, never an
+// imperative i/n counter; Anchor 6).
 fn smt_arg_terms(ref args) with GraphRead + Memory + Alloc =
   fold(args, "", (acc, arg) => {
     let N(_, _, h) = arg
@@ -349,9 +374,9 @@ fn smt_unop(ref op, ref x) with GraphRead + Memory + Alloc = {
   }
 }
 
-/// Every BinOp rendered to its SMT-LIB symbol — exhaustive over the ADT (no
-/// `_ => "="` fabrication that would mis-render `%`/`*` as equality in a
-/// predicate like `self % 2 == 0`).
+// Every BinOp rendered to its SMT-LIB symbol — exhaustive over the ADT (no
+// `_ => "="` fabrication that would mis-render `%`/`*` as equality in a
+// predicate like `self % 2 == 0`).
 fn smt_binop_sym(ref op) with Pure = match op {
   BAdd => "+", BSub => "-", BMul => "*", BDiv => "div", BMod => "mod",
   BEq  => "=", BNe => "distinct", BLt => "<", BGt => ">", BLe => "<=", BGe => ">=",

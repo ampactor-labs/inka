@@ -16,23 +16,23 @@
 
 import types
 
-/// CacheMap — sorted-list-of-(key, value) pairs. Generic over Value
-/// (consumers carry their own Value type — lower.mn stores per-function
-/// handler state). Key is Int (the function handle / content hash). Sorted
-/// invariant: every (key, _) precedes its successor by key < successor.
+// CacheMap — sorted-list-of-(key, value) pairs. Generic over Value
+// (consumers carry their own Value type — lower.mn stores per-function
+// handler state). Key is Int (the function handle / content hash). Sorted
+// invariant: every (key, _) precedes its successor by key < successor.
 
 type CacheMap
   = CacheMap(List)               // List<(Int, V)>, sorted by key ascending
 
-/// empty_cache — the identity element. Returns a fresh empty CacheMap.
-/// Pure; no allocation needed (uses the empty-list literal).
+// empty_cache — the identity element. Returns a fresh empty CacheMap.
+// Pure; no allocation needed (uses the empty-list literal).
 
 fn empty_cache() with Pure = {
   CacheMap([])
 }
 
-/// cache_lookup — O(log N) binary search by key. Returns Some(value)
-/// if found; None otherwise. Pure over the map.
+// cache_lookup — O(log N) binary search by key. Returns Some(value)
+// if found; None otherwise. Pure over the map.
 
 fn cache_lookup(map, key) with Pure = {
   let CacheMap(entries) = map
@@ -50,10 +50,10 @@ fn cache_lookup_loop(entries, key, lo, hi) with Pure = {
   }
 }
 
-/// cache_store — insert (key, value) into the map, maintaining sorted
-/// invariant. If the key exists, updates the value; otherwise inserts.
-/// Returns updated CacheMap. O(N) worst case (insertion shift); O(log N)
-/// for the find.
+// cache_store — insert (key, value) into the map, maintaining sorted
+// invariant. If the key exists, updates the value; otherwise inserts.
+// Returns updated CacheMap. O(N) worst case (insertion shift); O(log N)
+// for the find.
 
 fn cache_store(map, key, value) with Memory + Alloc = {
   let CacheMap(entries) = map
@@ -122,10 +122,10 @@ fn cache_copy_with_insert(entries, n, insert_at, new_key, new_val, buf, i) with 
   }
 }
 
-/// cache_invalidate_set — remove a set of keys from the map. The keys
-/// argument is a sorted [Int] (per the same invariant the map uses).
-/// O(N + M) merge-style — walk both lists, drop entries whose keys are
-/// in the invalidation set.
+// cache_invalidate_set — remove a set of keys from the map. The keys
+// argument is a sorted [Int] (per the same invariant the map uses).
+// O(N + M) merge-style — walk both lists, drop entries whose keys are
+// in the invalidation set.
 
 fn cache_invalidate_set(map, keys) with Memory + Alloc = {
   let CacheMap(entries) = map
@@ -160,15 +160,15 @@ fn cache_advance_ki(keys, m, ki, target) with Pure = {
   else { cache_advance_ki(keys, m, ki + 1, target) }
 }
 
-/// cache_size — number of entries in the map. O(1) — list_len-direct.
+// cache_size — number of entries in the map. O(1) — list_len-direct.
 
 fn cache_size(map) with Pure = {
   let CacheMap(entries) = map
   len(entries)
 }
 
-/// cache_keys — return [Int] of all keys in the map (sorted, by
-/// invariant). O(N). Used by surface-side debugging + by snapshotting.
+// cache_keys — return [Int] of all keys in the map (sorted, by
+// invariant). O(N). Used by surface-side debugging + by snapshotting.
 
 fn cache_keys(map) with Memory + Alloc = {
   let CacheMap(entries) = map
@@ -189,41 +189,41 @@ fn cache_keys_loop(entries, n, i, buf, count) with Memory + Alloc = {
 
 // ─── Connection to the kernel ─────────────────────────────────────────
 
-/// Primitive #1 (Graph + Env) — the cache itself is a pure data
-/// projection (sorted list of (key, value)); no graph state.
-///
-/// Primitive #2 (Handlers + resume discipline) — N/A; pure substrate.
-///
-/// Primitive #3 (Five verbs) — N/A at substrate-primitive layer.
-///
-/// Primitive #4 (Effect row algebra) — most ops `with Pure` (lookup,
-/// find, size, etc.); construction ops `with Memory + Alloc` for the
-/// list-extend pattern (Ω.3 substrate).
-///
-/// Primitive #5 (Ownership) — entries `own` to the map; map `ref` to
-/// readers; consumers receive new `own` map on store/invalidate (no
-/// in-place mutation).
-///
-/// Primitive #6 (Refinement) — could refine `CacheMap where
-/// sorted_by_key(self)`; V1 maintains the invariant by construction
-/// (sorted insertion + filter preserves order).
-///
-/// Primitive #7 (Annotation gradient) — `with Pure` on lookup unlocks
-/// memoization at consumers (e.g., project_queue_merger's
-/// last_merge_hash check).
-///
-/// Primitive #8 (HM inference + Reasons) — N/A at substrate-primitive
-/// layer; consumers carry their own Reasons.
+// Primitive #1 (Graph + Env) — the cache itself is a pure data
+// projection (sorted list of (key, value)); no graph state.
+//
+// Primitive #2 (Handlers + resume discipline) — N/A; pure substrate.
+//
+// Primitive #3 (Five verbs) — N/A at substrate-primitive layer.
+//
+// Primitive #4 (Effect row algebra) — most ops `with Pure` (lookup,
+// find, size, etc.); construction ops `with Memory + Alloc` for the
+// list-extend pattern (Ω.3 substrate).
+//
+// Primitive #5 (Ownership) — entries `own` to the map; map `ref` to
+// readers; consumers receive new `own` map on store/invalidate (no
+// in-place mutation).
+//
+// Primitive #6 (Refinement) — could refine `CacheMap where
+// sorted_by_key(self)`; V1 maintains the invariant by construction
+// (sorted insertion + filter preserves order).
+//
+// Primitive #7 (Annotation gradient) — `with Pure` on lookup unlocks
+// memoization at consumers (e.g., project_queue_merger's
+// last_merge_hash check).
+//
+// Primitive #8 (HM inference + Reasons) — N/A at substrate-primitive
+// layer; consumers carry their own Reasons.
 
 // ─── What this substrate refuses ──────────────────────────────────────
 
-/// - Hash maps with O(1) average lookup. Hash collisions + bucket
-///   complexity + non-deterministic iteration order. Sorted-list
-///   substrate gives O(log N) lookup with stable order; sufficient
-///   for per-module cache scales (dozens to hundreds of entries).
-/// - Mutation. Every store/invalidate returns a new CacheMap; consumers
-///   handle the with-state update via their handler's resume-with.
-/// - Generic type parameters. CacheMap is keyed by Int (cache hash
-///   per FNV-1a from src/cache.mn); Value is whatever the consumer
-///   stores. Generics arrive in F.X if/when multi-key-type maps are
-///   needed.
+// - Hash maps with O(1) average lookup. Hash collisions + bucket
+//   complexity + non-deterministic iteration order. Sorted-list
+//   substrate gives O(log N) lookup with stable order; sufficient
+//   for per-module cache scales (dozens to hundreds of entries).
+// - Mutation. Every store/invalidate returns a new CacheMap; consumers
+//   handle the with-state update via their handler's resume-with.
+// - Generic type parameters. CacheMap is keyed by Int (cache hash
+//   per FNV-1a from src/cache.mn); Value is whatever the consumer
+//   stores. Generics arrive in F.X if/when multi-key-type maps are
+//   needed.

@@ -203,7 +203,7 @@ fn find_handler_for_effect(stack, ename) = {
 }
 
 
-/// Entry point — wraps the walk in `infer_ctx` so row accumulation is automatic.
+// Entry point — wraps the walk in `infer_ctx` so row accumulation is automatic.
 fn infer_program(stmts) = {
   handle {
     pre_register_fn_sigs(stmts)
@@ -298,9 +298,9 @@ fn infer_stmt(ref node) = {
   }
 }
 
-/// Classic let-generalization: allocate fresh handles for params,
-/// bind them in env, enter `InferCtx` for row accumulation, infer body,
-/// exit (which binds the row), generalize, re-extend env with scheme.
+// Classic let-generalization: allocate fresh handles for params,
+// bind them in env, enter `InferCtx` for row accumulation, infer body,
+// exit (which binds the row), generalize, re-extend env with scheme.
 fn infer_fn(name, params, body_node, ret_ann, handle, span: ValidSpan) = {
   env_scope_enter()
 
@@ -465,9 +465,9 @@ fn call_is_alloc_returning(func) = {
 // Positive-form peer: Hβ.infer.region-on-tee-alloc-absorb. Until then the
 // region effect + own.mn handler stand as dormant capability surface.
 
-/// Build an `EffRow` from a declared `(name, negated)` list. Negated
-/// names produce `EfNeg(EfClosed([name]))` and compose with intersection;
-/// positive names union. Normalization reduces to canonical form.
+// Build an `EffRow` from a declared `(name, negated)` list. Negated
+// names produce `EfNeg(EfClosed([name]))` and compose with intersection;
+// positive names union. Normalization reduces to canonical form.
 // Fold the parsed surface effect terms — each (EffName, negated, EConn)
 // — into one EffRow, applying each term's connective via the existing
 // effects.mn Boolean algebra (union_row / diff_row / inter_row). The
@@ -823,10 +823,10 @@ fn infer_expr(ref node) = {
   }
 }
 
-/// Factored out of the `FieldExpr` match arm so the qualified-name
-/// fallback path (modules-as-env-entries) can share this without
-/// duplication. The record-open unification is unchanged from its
-/// original arm form.
+// Factored out of the `FieldExpr` match arm so the qualified-name
+// fallback path (modules-as-env-entries) can share this without
+// duplication. The record-open unification is unchanged from its
+// original arm form.
 fn infer_field_access_record(rec, field, handle, span: ValidSpan) = {
   infer_expr(rec)
   let N(_, _, rh) = rec
@@ -839,10 +839,10 @@ fn infer_field_access_record(rec, field, handle, span: ValidSpan) = {
   graph_bind(handle, TVar(field_h), Located(span, Inferred("field type")))
 }
 
-/// Instantiate the scheme from env, bind the handle, then consume
-/// if the binding is an `own` parameter. The affine-ledger handler
-/// in `own.mn` decides which names are own-marked; `check_consume_at_use`
-/// performs unconditionally and lets the handler decide.
+// Instantiate the scheme from env, bind the handle, then consume
+// if the binding is an `own` parameter. The affine-ledger handler
+// in `own.mn` decides which names are own-marked; `check_consume_at_use`
+// performs unconditionally and lets the handler decide.
 fn infer_var_ref(name, handle, span: ValidSpan) = {
   match env_lookup(name) {
     None => {
@@ -868,7 +868,7 @@ fn check_consume_at_use(name, span: ValidSpan) = {
   consume(name, span)
 }
 
-/// RX.4 — extract callee name from func node for Why chain.
+// RX.4 — extract callee name from func node for Why chain.
 fn callee_name(func_node) with Pure = {
   let N(body, _, _) = func_node
   match body {
@@ -920,13 +920,13 @@ fn infer_call(func, args, handle, span: ValidSpan) = {
 }
 
 // `~>` handler attachment — the row algebra's handler operator. A handler is
-/// (a ! E+r) ⟿ (a ! R+r): row(expr ~> h) = (row(expr) − E) ⊕ R. The body is
-/// inferred in a NESTED row scope so its effects do NOT leak (subtraction would
-/// be impossible once leaked — the install discipline); the handler value is
-/// installed (binding its config args, so a config-param handler's R picks up
-/// the actual arg's effect); then (body_row − E) ⊕ R joins the caller's row.
-/// Reading the RHS handler's HandlerKind(E, R) is what completes the row algebra
-/// — without it map/for_each lose every effect performed in their arms.
+// (a ! E+r) ⟿ (a ! R+r): row(expr ~> h) = (row(expr) − E) ⊕ R. The body is
+// inferred in a NESTED row scope so its effects do NOT leak (subtraction would
+// be impossible once leaked — the install discipline); the handler value is
+// installed (binding its config args, so a config-param handler's R picks up
+// the actual arg's effect); then (body_row − E) ⊕ R joins the caller's row.
+// Reading the RHS handler's HandlerKind(E, R) is what completes the row algebra
+// — without it map/for_each lose every effect performed in their arms.
 fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
   let body_row_h = graph_fresh_row(Inferred("~> body row"))
   inf_enter_fn(body_row_h, span)
@@ -960,9 +960,9 @@ fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
     Located(span, InferredPipeResult("~>", Inferred("handler attachment"))))
 }
 
-/// The RHS handler's (handled_effect, residual_row) from its HandlerKind env
-/// entry — read live from the graph, never re-derived. None when the RHS isn't
-/// a named handler decl.
+// The RHS handler's (handled_effect, residual_row) from its HandlerKind env
+// entry — read live from the graph, never re-derived. None when the RHS isn't
+// a named handler decl.
 fn handler_e_r(right) = match callee_name(right) {
   "" => None,
   name => match env_lookup(name) {
@@ -977,8 +977,8 @@ fn handler_e_r(right) = match callee_name(right) {
   }
 }
 
-/// Flow the op payload performer→handler at the install: the body performs
-/// `E(a)` (in its row), the handler value is `Handler<E(P)>`; unify a = P.
+// Flow the op payload performer→handler at the install: the body performs
+// `E(a)` (in its row), the handler value is `Handler<E(P)>`; unify a = P.
 fn unify_install_payload(body_row, handled, right, span: ValidSpan) = {
   let N(_, _, rh) = right
   match handler_payload_ty(lookup_ty(rh)) {
@@ -996,7 +996,7 @@ fn unify_install_payload(body_row, handled, right, span: ValidSpan) = {
   }
 }
 
-/// `P` from a `Handler<E(P)>` handler value type.
+// `P` from a `Handler<E(P)>` handler value type.
 fn handler_payload_ty(ty) = match ty {
   TName(n, args) =>
     if n == "Handler" {
@@ -1011,8 +1011,8 @@ fn handler_payload_ty(ty) = match ty {
   _ => None
 }
 
-/// `a` from a row's `E(a)` entry (the performed payload), None if E is
-/// absent or bare.
+// `a` from a row's `E(a)` entry (the performed payload), None if E is
+// absent or bare.
 fn row_effect_payload(row, ename) = match row {
   EfClosed(names)  => names_effect_payload(names, ename),
   EfOpen(names, _) => names_effect_payload(names, ename),
@@ -1033,9 +1033,9 @@ fn names_effect_payload(names, ename) = {
   if len(tys) == 0 { None } else { Some(list_head(tys)) }
 }
 
-/// The five verbs, each inferred by its topology.
-/// `PFanout` (`<|`/`><`) and `PTee` are handled BEFORE `infer_pipe` fires
-/// (see `PipeExpr` arm in `infer_expr`); their arms here are unreachable stubs.
+// The five verbs, each inferred by its topology.
+// `PFanout` (`<|`/`><`) and `PTee` are handled BEFORE `infer_pipe` fires
+// (see `PipeExpr` arm in `infer_expr`); their arms here are unreachable stubs.
 fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
   let N(_, _, lh) = left
   let N(_, _, rh) = right
@@ -1105,38 +1105,38 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
   }
 }
 
-/// Fanout-verb inference (W2 · W3) — ONE path for `<|` and `>< `, the
-/// two surfaces of the one parallel-fanout topology discriminated by
-/// input ownership (the `FanOwnership` aspect the glyph authors). Both
-/// run their sub-branches inside an `affine_ledger` branching frame
-/// (`branch_enter` / `branch_divider` / `branch_exit`); the handler
-/// pairwise-checks cross-branch consumes at `branch_exit`, reporting
-/// `E_OwnershipViolation` for any name consumed in two or more parallel
-/// branches.
-///
-/// A VERB DRAWS AN EDGE; IT DOES NOT SCHEDULE. The fanout contributes
-/// ZERO effects of its own — `effects_of(fanout) = ⋃ branch rows` — so
-/// there is NO injected `Thread` row (the deleted category error: a verb
-/// writing an EXECUTION fact into the topology layer). WHO runs the
-/// branches is a `~>` handler choice (Seq/Thread/Simd/Gpu), read LIVE at
-/// lower from the installed chain — never re-derived here. Closes peer
-/// Hβ.infer.pcompose-independence-not-thread (named at the old
-/// infer.mn:1131 Thread inject).
-///
-/// The two AST shapes are reconciled by the ownership aspect:
-///   `FanDistribute` (`><`) — BINARY: `left >< right`, two branches per
-///       node (N-ary `><` nests). Result `TTuple([left_ty, right_ty])`.
-///   `FanShare` (`<|`) — INPUT-vs-N-tuple: one input ref-borrowed into a
-///       `MakeTupleExpr` of N branches (degenerate single-branch + empty
-///       `<| ()` forms). Result `TTuple` of branch return types, or the
-///       single branch's type.
-/// Net-new follow-up (positive-form, NOT folded into this collapse):
-/// Hβ.infer.fanout-ownership-from-use-count — derive the share-vs-own
-/// reading from branch-input use-count (the 0/1/2+ inference that drives
-/// own/ref, §4⑤) and project the glyph at fmt, so an `own` value through
-/// `<|` surfaces E_OwnershipViolation and a shared input under `><`
-/// fmt-canonicalizes to `<|`. Today the aspect is authored by the glyph;
-/// ownership CHECKS coherence in that follow-up.
+// Fanout-verb inference (W2 · W3) — ONE path for `<|` and `>< `, the
+// two surfaces of the one parallel-fanout topology discriminated by
+// input ownership (the `FanOwnership` aspect the glyph authors). Both
+// run their sub-branches inside an `affine_ledger` branching frame
+// (`branch_enter` / `branch_divider` / `branch_exit`); the handler
+// pairwise-checks cross-branch consumes at `branch_exit`, reporting
+// `E_OwnershipViolation` for any name consumed in two or more parallel
+// branches.
+//
+// A VERB DRAWS AN EDGE; IT DOES NOT SCHEDULE. The fanout contributes
+// ZERO effects of its own — `effects_of(fanout) = ⋃ branch rows` — so
+// there is NO injected `Thread` row (the deleted category error: a verb
+// writing an EXECUTION fact into the topology layer). WHO runs the
+// branches is a `~>` handler choice (Seq/Thread/Simd/Gpu), read LIVE at
+// lower from the installed chain — never re-derived here. Closes peer
+// Hβ.infer.pcompose-independence-not-thread (named at the old
+// infer.mn:1131 Thread inject).
+//
+// The two AST shapes are reconciled by the ownership aspect:
+//   `FanDistribute` (`><`) — BINARY: `left >< right`, two branches per
+//       node (N-ary `><` nests). Result `TTuple([left_ty, right_ty])`.
+//   `FanShare` (`<|`) — INPUT-vs-N-tuple: one input ref-borrowed into a
+//       `MakeTupleExpr` of N branches (degenerate single-branch + empty
+//       `<| ()` forms). Result `TTuple` of branch return types, or the
+//       single branch's type.
+// Net-new follow-up (positive-form, NOT folded into this collapse):
+// Hβ.infer.fanout-ownership-from-use-count — derive the share-vs-own
+// reading from branch-input use-count (the 0/1/2+ inference that drives
+// own/ref, §4⑤) and project the glyph at fmt, so an `own` value through
+// `<|` surfaces E_OwnershipViolation and a shared input under `><`
+// fmt-canonicalizes to `<|`. Today the aspect is authored by the glyph;
+// ownership CHECKS coherence in that follow-up.
 fn infer_fanout(own, left, right, handle, span: ValidSpan) = match own {
   FanDistribute => {
     branch_enter()
@@ -1159,13 +1159,13 @@ fn infer_fanout(own, left, right, handle, span: ValidSpan) = match own {
   FanShare => infer_fanout_share(left, right, handle, span)
 }
 
-/// A `><` branch is stage-shaped iff it is a pipeline (PipeExpr — a
-/// chain of stages) or a function value (TFun — a stage applied to the
-/// composed input). A bare value (literal / non-function var / record)
-/// where a stage belongs is E_BranchNotStage, with a Reason back to the
-/// `><` site (SYNTAX.md §«>< branch typing»). The check reads the branch
-/// node shape AND its inferred type live — never a parse-time form
-/// commitment (the parser never inspects branch shape).
+// A `><` branch is stage-shaped iff it is a pipeline (PipeExpr — a
+// chain of stages) or a function value (TFun — a stage applied to the
+// composed input). A bare value (literal / non-function var / record)
+// where a stage belongs is E_BranchNotStage, with a Reason back to the
+// `><` site (SYNTAX.md §«>< branch typing»). The check reads the branch
+// node shape AND its inferred type live — never a parse-time form
+// commitment (the parser never inspects branch shape).
 fn check_branch_is_stage(branch, span: ValidSpan) = {
   let N(body, _, bh) = branch
   let is_pipe = match body {
@@ -1188,11 +1188,11 @@ fn check_branch_is_stage(branch, span: ValidSpan) = {
   }
 }
 
-/// The `FanShare` (`<|`) shape of fanout inference — one input
-/// ref-borrowed into N branches. Input is inferred once; each branch
-/// receives a BORROW of the input's value. Branches run under the
-/// branching ledger so any two branches that consume the same
-/// outer-scope own collide.
+// The `FanShare` (`<|`) shape of fanout inference — one input
+// ref-borrowed into N branches. Input is inferred once; each branch
+// receives a BORROW of the input's value. Branches run under the
+// branching ledger so any two branches that consume the same
+// outer-scope own collide.
 fn infer_fanout_share(left, right, handle, span: ValidSpan) = {
   infer_expr(left)
   let N(rbody, _, _) = right
@@ -1226,11 +1226,11 @@ fn infer_fanout_share_branches(branches, span: ValidSpan, i, n) = {
   }
 }
 
-/// Unification — graph-direct, Hazel-productive.
-/// Every unification carries the span of the AST site that triggered
-/// it. `span` threads through the recursive walk; `graph_bind` writes
-/// store `Located(span, reason)` so `graph_reason_edge` naturally
-/// returns `Unified(Located, Located)` per DESIGN Ch 8.
+// Unification — graph-direct, Hazel-productive.
+// Every unification carries the span of the AST site that triggered
+// it. `span` threads through the recursive walk; `graph_bind` writes
+// store `Located(span, reason)` so `graph_reason_edge` naturally
+// returns `Unified(Located, Located)` per DESIGN Ch 8.
 
 fn unify(h_a, h_b, span: ValidSpan, reason) = {
   // Union-find: find both ROOTS (graph_chase_handle follows the TVar
@@ -1451,12 +1451,12 @@ fn unify_type_lists(as_list, bs_list, span: ValidSpan, reason) = {
   }
 }
 
-/// Both field lists arrive sorted by name (parser invariant + smart
-/// constructor `mk_record_open`). Closed×closed: pointwise field
-/// equality (length match + name match + type unify). Closed×open:
-/// the closed record must include every open-side field; remaining
-/// fields bind the open's row variable. Open×open: intersect known
-/// fields; bind one variable to the residual relative to the other.
+// Both field lists arrive sorted by name (parser invariant + smart
+// constructor `mk_record_open`). Closed×closed: pointwise field
+// equality (length match + name match + type unify). Closed×open:
+// the closed record must include every open-side field; remaining
+// fields bind the open's row variable. Open×open: intersect known
+// fields; bind one variable to the residual relative to the other.
 fn unify_record_fields_closed(fa, fb, span: ValidSpan, reason) = {
   if len(fa) != len(fb) {
     type_mismatch(TRecord(fa), TRecord(fb), span, reason)
@@ -1599,8 +1599,8 @@ fn mk_record_row_residual(fields) = {
   else { TRecord(fields) }
 }
 
-/// Infer each field's value expression; result handles are used by
-/// callers to build `TRecord` field-type lists and region-join sets.
+// Infer each field's value expression; result handles are used by
+// callers to build `TRecord` field-type lists and region-join sets.
 fn infer_record_field_values(fields) = {
   if len(fields) == 0 { () }
   else {
@@ -1711,17 +1711,17 @@ fn unify_param_lists(ref a, ref b, span: ValidSpan, reason) = {
   }
 }
 
-/// Parameters ARE tuples (DESIGN Ch 2 Insight 7). The one unification
-/// rule that lets `|>` deliver a tuple to an N-ary function without a
-/// splat operator. Three cases:
-///
-///   `len(pa) == len(pb)`          — pair positionally (the ordinary path)
-///   `len(pa) == 1`, head is tuple — decompose, pair element-wise
-///   `len(pa) == 1`, head is TVar  — bind TVar to TTuple(pb param types)
-///   symmetric for pb; otherwise   — arity mismatch
-///
-/// Inference reads the shape and pairs structurally — the same discipline
-/// that pairs TInt with TInt or TList(a) with TList(b).
+// Parameters ARE tuples (DESIGN Ch 2 Insight 7). The one unification
+// rule that lets `|>` deliver a tuple to an N-ary function without a
+// splat operator. Three cases:
+//
+//   `len(pa) == len(pb)`          — pair positionally (the ordinary path)
+//   `len(pa) == 1`, head is tuple — decompose, pair element-wise
+//   `len(pa) == 1`, head is TVar  — bind TVar to TTuple(pb param types)
+//   symmetric for pb; otherwise   — arity mismatch
+//
+// Inference reads the shape and pairs structurally — the same discipline
+// that pairs TInt with TInt or TList(a) with TList(b).
 fn pair_fn_params(pa, pb, span: ValidSpan, reason) = {
   let la = len(pa)
   let lb = len(pb)
@@ -1731,11 +1731,11 @@ fn pair_fn_params(pa, pb, span: ValidSpan, reason) = {
   else { arity_mismatch(la, lb, span) }
 }
 
-/// Given a single param whose type is either a `TTuple` or a `TVar`,
-/// reconcile it against a multi-param list.
-///   `TTuple(elems)` of matching arity — pair element-wise with params
-///   `TVar(_)`                         — unify TVar with TTuple of param types
-///   otherwise                         — arity mismatch
+// Given a single param whose type is either a `TTuple` or a `TVar`,
+// reconcile it against a multi-param list.
+//   `TTuple(elems)` of matching arity — pair element-wise with params
+//   `TVar(_)`                         — unify TVar with TTuple of param types
+//   otherwise                         — arity mismatch
 fn try_tuple_decompose(single_param, many_params, span: ValidSpan, reason) = {
   let TParam(_, pty, _, _, _) = single_param
   let lm = len(many_params)
@@ -1754,8 +1754,8 @@ fn try_tuple_decompose(single_param, many_params, span: ValidSpan, reason) = {
   }
 }
 
-/// Pair tuple element i with param i, flat-indexed to avoid snoc-walk
-/// allocation on either input.
+// Pair tuple element i with param i, flat-indexed to avoid snoc-walk
+// allocation on either input.
 fn unify_tuple_elems_with_params(elems, params, span: ValidSpan, reason, i, n) = {
   if i >= n { () }
   else {
@@ -1766,9 +1766,9 @@ fn unify_tuple_elems_with_params(elems, params, span: ValidSpan, reason, i, n) =
   }
 }
 
-/// Extract param types into a fresh flat list — O(1) amortized per
-/// element via `list_set` into a pre-sized buffer. The resulting list
-/// is tag=0 (flat); any subsequent `list_index` on it is O(1).
+// Extract param types into a fresh flat list — O(1) amortized per
+// element via `list_set` into a pre-sized buffer. The resulting list
+// is tag=0 (flat); any subsequent `list_index` on it is O(1).
 fn param_types_flat(params) = {
   let n = len(params)
   param_types_loop(params, 0, n, make_list(n))
@@ -1788,13 +1788,13 @@ fn arity_mismatch(la, lb, span: ValidSpan) =
 fn type_mismatch(ref a, ref b, span: ValidSpan, reason) =
   report(ETypeMismatch(a, b, span))
 
-/// `BinOp` / `UnaryOp` inference — dispatched on `BinOpKind`.
-/// `binop_kind` (declared in `types.mn`) maps each `BinOp` to one of four
-/// `BinOpKind` variants — the behavior class used for inference rules.
-/// Two orthogonal axes: `BinOp` carries specific operator identity
-/// (14 variants, surfaced at Reason/emit boundaries); `BinOpKind`
-/// carries semantic behavior class (arith, cmp, bool, concat). No
-/// `String` intermediary at any dispatch site.
+// `BinOp` / `UnaryOp` inference — dispatched on `BinOpKind`.
+// `binop_kind` (declared in `types.mn`) maps each `BinOp` to one of four
+// `BinOpKind` variants — the behavior class used for inference rules.
+// Two orthogonal axes: `BinOp` carries specific operator identity
+// (14 variants, surfaced at Reason/emit boundaries); `BinOpKind`
+// carries semantic behavior class (arith, cmp, bool, concat). No
+// `String` intermediary at any dispatch site.
 
 fn infer_binop(handle, op, lh, rh, span: ValidSpan) = {
   let lbl = binop_to_str(op)
@@ -1909,8 +1909,8 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
   }
 }
 
-/// Walk one alternation branch, then snapshot its (name, type) binds
-/// while they are still the latest env entries.
+// Walk one alternation branch, then snapshot its (name, type) binds
+// while they are still the latest env entries.
 fn infer_pat_alt_branch(ref b, handle, span: ValidSpan) = {
   infer_pat(b, handle, span)
   map((n) => (n, alt_binder_ty(n, span)), pat_binders(b))
@@ -1930,9 +1930,9 @@ fn alt_binder_ty(ref n, span: ValidSpan) = match env_lookup(n) {
   }
 }
 
-/// SYNTAX.md §"Pattern alternation — rule": all branches bind the
-/// same name set; per-name types unify across branches (the body
-/// sees the unified type). Branch 0 is the reference set.
+// SYNTAX.md §"Pattern alternation — rule": all branches bind the
+// same name set; per-name types unify across branches (the body
+// sees the unified type). Branch 0 is the reference set.
 fn enforce_alt_binding_law(branch_binds, span: ValidSpan) = match branch_binds {
   [] => (),
   [first, ...rest] =>
@@ -1960,10 +1960,10 @@ fn alt_same_name_set(a, b) =
     && all((p) => { let (n, _) = p
                     any((q) => { let (m, _) = q; m == n }, b) }, a)
 
-/// pat_binders — the names a pattern binds (pure structural walk).
-/// Wildcards and literals bind nothing; a PList rest name binds
-/// unless `_`; a nested alternation's binders are branch 0's (its
-/// own law check fires on its own walk).
+// pat_binders — the names a pattern binds (pure structural walk).
+// Wildcards and literals bind nothing; a PList rest name binds
+// unless `_`; a nested alternation's binders are branch 0's (its
+// own law check fires on its own walk).
 fn pat_binders(ref pat) = match pat {
   PVar(name)        => [name],
   PWild             => [],
@@ -2122,12 +2122,12 @@ fn arms_have_wildcard(arms) = any((arm) => {
   }
 }, arms)
 
-/// One arm under the typed-resume law (SUBSTRATE.md primitive #2).
-/// `op(args) => body` for `op : (P...) -> R` under handle-result S:
-/// args bind to the op's DECLARED params (the graph already knows
-/// them — fresh vars would discard that); resume reads (R, S) from
-/// arm context; the body's own value unifies with S — the arm's
-/// value IS the handle result, whether it resumes or aborts.
+// One arm under the typed-resume law (SUBSTRATE.md primitive #2).
+// `op(args) => body` for `op : (P...) -> R` under handle-result S:
+// args bind to the op's DECLARED params (the graph already knows
+// them — fresh vars would discard that); resume reads (R, S) from
+// arm context; the body's own value unifies with S — the arm's
+// value IS the handle result, whether it resumes or aborts.
 fn infer_one_handler_arm(arm, result_h, payload_h) = {   // drift-audit: ignore — result_h (arm result) and payload_h (effect payload) are distinct handles
   let arm_span = span_of_node(arm.body)
   let op_ret_ty = match env_lookup(arm.op_name) {
@@ -2158,9 +2158,9 @@ fn infer_one_handler_arm(arm, result_h, payload_h) = {   // drift-audit: ignore 
   unify(abh, result_h, arm_span, Inferred("handler arm result"))
 }
 
-/// Arm params take the op's declared param types, positionally.
-/// zip truncates on arity mismatch — the aligned prefix still binds
-/// (productive-under-error; the arity diagnostic is the op's).
+// Arm params take the op's declared param types, positionally.
+// zip truncates on arity mismatch — the aligned prefix still binds
+// (productive-under-error; the arity diagnostic is the op's).
 fn bind_arm_args(args, params, op_name, span: ValidSpan) =
   for_each((pair) => {
     let (name, param_ty) = pair
@@ -2170,9 +2170,9 @@ fn bind_arm_args(args, params, op_name, span: ValidSpan) =
       Located(span, LetBinding(name, Declared(op_name))), FnScheme)
   }, zip(args, params))
 
-/// Unify a handler's payload var with the op's payload type carried in its
-/// (instantiated) row — Iterate(a) ⇒ unify a with P. This is the handler
-/// half of the payload flow; `~>` then unifies P with the body's E(performed).
+// Unify a handler's payload var with the op's payload type carried in its
+// (instantiated) row — Iterate(a) ⇒ unify a with P. This is the handler
+// half of the payload flow; `~>` then unifies P with the body's E(performed).
 fn unify_op_payload(op_row, payload_h, span: ValidSpan) = match op_row {
   EfClosed(names)  => unify_payload_in_names(names, payload_h, span),
   EfOpen(names, _) => unify_payload_in_names(names, payload_h, span),
@@ -2193,8 +2193,8 @@ fn unify_payload_in_names(names, payload_h, span: ValidSpan) =
     }, args)
   }, names)
 
-/// Generalization — Damas-Milner let-gen.
-/// Quantify handles that are free in the body but NOT free in env.
+// Generalization — Damas-Milner let-gen.
+// Quantify handles that are free in the body but NOT free in env.
 
 // H6: exhaustive NodeKind enumeration. Fabricated-value danger:
 // a wildcard arm returning Forall([], TVar(handle)) silently
@@ -2325,8 +2325,8 @@ fn free_in_row(eff) = match eff {
   EfInter(a, b) => free_in_row(a) ++ free_in_row(b)
 }
 
-/// The free type vars inside an effect-row's parameterized payloads
-/// (Iterate(a) ⇒ a's free vars). Bare ENamed effects carry none.
+// The free type vars inside an effect-row's parameterized payloads
+// (Iterate(a) ⇒ a's free vars). Bare ENamed effects carry none.
 fn free_in_eff_names(names) = flatten(map((n) => match n {
   ENamed(_)               => [],
   EPure                   => [],   // the identity carries no free vars
@@ -2345,10 +2345,10 @@ fn row_var_is_free(v) = match graph_chase(v) {
   _                     => false
 }
 
-/// Instantiation — one function, two handlers.
-/// inference handler: `mint(r) => resume(perform graph_fresh_ty(r))`
-/// query handler:     `mint(r) => resume(next_display_id(r))`
-/// Same function; different semantics via handler swap.
+// Instantiation — one function, two handlers.
+// inference handler: `mint(r) => resume(perform graph_fresh_ty(r))`
+// query handler:     `mint(r) => resume(next_display_id(r))`
+// Same function; different semantics via handler swap.
 
 fn instantiate(scheme) = {
   let Forall(qs, ty) = scheme
@@ -2485,8 +2485,8 @@ fn subst_row(eff, mapping) = match eff {
   EfInter(a, b) => EfInter(subst_row(a, mapping), subst_row(b, mapping))
 }
 
-/// Substitute parameterized payload types through an effect-name list
-/// (the row mirror of subst_ty over the row's carried types).
+// Substitute parameterized payload types through an effect-name list
+// (the row mirror of subst_ty over the row's carried types).
 fn subst_eff_names(names, mapping) = map((n) => match n {
   ENamed(s)               => ENamed(s),
   EParameterized(s, args) => EParameterized(s, map((arg) => match arg {
@@ -2550,8 +2550,8 @@ fn register_type_constructors(type_name, variants) = {
   }, enumerate(variants))
 }
 
-/// Pass 1 — convert + quantify each variant's field types, threading
-/// the decl-wide (name, handle) parameter map.
+// Pass 1 — convert + quantify each variant's field types, threading
+// the decl-wide (name, handle) parameter map.
 fn quantify_variants(variants, buf, i, n, qmap) = {
   if i >= n { (slice(buf, 0, n), qmap) }
   else {
@@ -2570,8 +2570,8 @@ fn quantify_ty_list(tys, qmap) = {
   }
 }
 
-/// Lowercase TName leaves become quantified TVars; capitalized names
-/// keep nominal identity (args recurse); compound forms recurse.
+// Lowercase TName leaves become quantified TVars; capitalized names
+// keep nominal identity (args recurse); compound forms recurse.
 fn quantify_ctor_ty(ty, qmap) = match ty {
   TName(name, args) =>
     if len(args) == 0 && first_char_code(name) >= 97 && first_char_code(name) <= 122 {
@@ -2700,8 +2700,8 @@ fn register_effect_ops(effect_name, ops) = {
   for_each((op) => register_one_op(effect_name, eff_name, op), ops)
 }
 
-/// The free type vars across all an effect's ops' signatures — the effect's
-/// type-parameter set (the instance's polymorphic dimensions).
+// The free type vars across all an effect's ops' signatures — the effect's
+// type-parameter set (the instance's polymorphic dimensions).
 fn effect_type_vars(ops) =
   flatten(map((op) => {
     let (_, ptys, rty) = op
@@ -2802,8 +2802,8 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   inf_exit_fn()
 }
 
-/// Walk each state field's init ONCE per decl; the init's inferred
-/// type IS the field's type in arm scope.
+// Walk each state field's init ONCE per decl; the init's inferred
+// type IS the field's type in arm scope.
 fn infer_handler_state_inits(state) = map((sf) => {
   infer_expr(sf.init)
   let N(_, _, ih) = sf.init
@@ -2824,24 +2824,24 @@ fn bind_handler_state_names(state_binds, hname, span: ValidSpan) =
       Located(span, LetBinding(name, Declared(hname))), FnScheme)
   }, state_binds)
 
-/// $infer_resume_cardinality — Phase B substrate. Replaces the
-/// @resume= annotation that was erased from all effect declarations
-/// across the wheel — cardinality is a graph property of the arm
-/// body, not an authored annotation. Per
-/// protocol_cursor_is_the_substrate.md (2026-05-07).
-///
-/// Walks the arm body collecting ResumeExpr handles; classifies via
-/// control-flow detection (loop ancestry) + branch disjointness:
-///
-///   • zero resume sites               → OneShot (catch_abort shape)
-///   • one site, not under loop        → OneShot
-///   • one site under loop ancestor    → MultiShot
-///   • multiple sites, branch-disjoint → OneShot (one per path)
-///   • multiple sites, not disjoint    → MultiShot
-///
-/// Drift refused: 1 (no vtable; structural NodeKind walk); 6 (no
-/// primitive-type-special-case for resume — every arm body classified
-/// uniformly); 8 (no count-as-string; ResumeDiscipline IS the ADT).
+// $infer_resume_cardinality — Phase B substrate. Replaces the
+// @resume= annotation that was erased from all effect declarations
+// across the wheel — cardinality is a graph property of the arm
+// body, not an authored annotation. Per
+// protocol_cursor_is_the_substrate.md (2026-05-07).
+//
+// Walks the arm body collecting ResumeExpr handles; classifies via
+// control-flow detection (loop ancestry) + branch disjointness:
+//
+//   • zero resume sites               → OneShot (catch_abort shape)
+//   • one site, not under loop        → OneShot
+//   • one site under loop ancestor    → MultiShot
+//   • multiple sites, branch-disjoint → OneShot (one per path)
+//   • multiple sites, not disjoint    → MultiShot
+//
+// Drift refused: 1 (no vtable; structural NodeKind walk); 6 (no
+// primitive-type-special-case for resume — every arm body classified
+// uniformly); 8 (no count-as-string; ResumeDiscipline IS the ADT).
 fn infer_resume_cardinality(arm_body) with GraphRead = {
   let resume_sites = collect_resume_sites(arm_body)
   if len(resume_sites) == 0 { OneShot }
@@ -2854,11 +2854,11 @@ fn infer_resume_cardinality(arm_body) with GraphRead = {
   else { MultiShot }
 }
 
-/// Walk arm body's NExpr collecting ResumeExpr handles. Buffer<Handle>
-/// per Hβ.runtime.buffer-substrate; freeze to clean List on return.
-/// Drift refused: 7 (one Buffer, not parallel arrays); 9 (every
-/// container NExpr arm enumerated explicitly, no _ wildcard
-/// fabricating ()).
+// Walk arm body's NExpr collecting ResumeExpr handles. Buffer<Handle>
+// per Hβ.runtime.buffer-substrate; freeze to clean List on return.
+// Drift refused: 7 (one Buffer, not parallel arrays); 9 (every
+// container NExpr arm enumerated explicitly, no _ wildcard
+// fabricating ()).
 fn collect_resume_sites(arm_body) with GraphRead = {
   let buf = buf_make()   // drift-audit: ignore (buf borrowed by walk then frozen — reuse, Anchor 6)
   collect_resume_walk(buf, arm_body)
@@ -2927,13 +2927,13 @@ fn collect_resume_walk(buf, node) with GraphRead = {
   }
 }
 
-/// Loop-ancestry detection. Mentl has LoopExpr (lib/runtime/iterate.mn
-/// surface) but in the type-graph it surfaces via tail-recursion in
-/// CallExpr — a fn that calls itself in tail position with the
-/// resume site inside its body produces effective MultiShot
-/// cardinality. Today: structural NLoopExpr ancestor; tail-recursion
-/// detection is the gradient-undecided case, peer follow-up
-/// `Hβ.infer.tail-recursion-resume-cardinality`.
+// Loop-ancestry detection. Mentl has LoopExpr (lib/runtime/iterate.mn
+// surface) but in the type-graph it surfaces via tail-recursion in
+// CallExpr — a fn that calls itself in tail position with the
+// resume site inside its body produces effective MultiShot
+// cardinality. Today: structural NLoopExpr ancestor; tail-recursion
+// detection is the gradient-undecided case, peer follow-up
+// `Hβ.infer.tail-recursion-resume-cardinality`.
 fn has_loop_ancestor(target_handle, node) with GraphRead = {
   let N(body, _, h) = node
   if h == target_handle { false }
@@ -2955,10 +2955,10 @@ fn has_loop_ancestor(target_handle, node) with GraphRead = {
   } }
 }
 
-/// Multiple resume sites — disjoint-branch check. Pairwise: each
-/// pair lies in disjoint branches of some common If/Match ancestor.
-/// O(N²) over resume sites; N is bounded small (typical handler
-/// arm has ≤ a few resume sites).
+// Multiple resume sites — disjoint-branch check. Pairwise: each
+// pair lies in disjoint branches of some common If/Match ancestor.
+// O(N²) over resume sites; N is bounded small (typical handler
+// arm has ≤ a few resume sites).
 fn all_disjoint_branches(sites, root) with GraphRead = {
   pairwise_disjoint_loop(sites, root)
 }
@@ -2990,12 +2990,12 @@ fn disjoint_branches(a, b, root) with GraphRead = {
   }
 }
 
-/// Helpers for branch-disjointness detection. Each is a small graph
-/// walk; named peer `Hβ.infer.resume-cardinality-helpers` covers the
-/// production substrate (lowest-common-ancestor + handle-containment +
-/// arm-index-containing). For Phase B today the helpers exist as
-/// dream-code interfaces; their bodies fold into named peers as the
-/// inference cascade matures past simple OneShot/MultiShot binary.
+// Helpers for branch-disjointness detection. Each is a small graph
+// walk; named peer `Hβ.infer.resume-cardinality-helpers` covers the
+// production substrate (lowest-common-ancestor + handle-containment +
+// arm-index-containing). For Phase B today the helpers exist as
+// dream-code interfaces; their bodies fold into named peers as the
+// inference cascade matures past simple OneShot/MultiShot binary.
 fn contains_handle(node, target_handle) with GraphRead = {
   let N(body, _, h) = node
   if h == target_handle { true }
@@ -3076,68 +3076,68 @@ fn arm_index_loop(arms, target_handle, idx) with GraphRead = {
   }
 }
 
-/// The inference primitive — every emergent property is cursor-
-/// projected from body structure, never authored as annotation. Per
-/// protocol_cursor_is_the_substrate.md: "annotations declare INPUTS
-/// to the cursor; never the emergent property itself."
-///
-/// Three companion substrates land alongside Phase B's resume-
-/// cardinality inference, completing the chain of cursor-projected
-/// emergent properties:
-///
-///   • Effect-row inference (Peer 1) — operational at infer_fn:343-420.
-///     Body's perform sites accumulate via inf_add_row; declared row
-///     compared against inferred via row_subsumes; T_OverDeclared
-///     warns when authored row is wider than inferred. Authored row
-///     is a CONSTRAINT (must contain inferred), never a contract.
-///
-///   • Ownership inference (Peer 2) — operational at own.mn's
-///     infer_ownership. `Unmarked`-marked params get classify_usage
-///     which counts var-uses in the body: 0 → Unmarked; 1 → Own
-///     (affine consume); ≥2 → Ref (borrowed). Authored `own`/`ref`
-///     is a constraint over the inferred form.
-///
-///   • Refinement narrowing (Peer 3 — this section) — flow-sensitive
-///     predicate inference. Each narrowing site (if/match/assert)
-///     adds a path-conditional predicate; the medium tracks per-
-///     program-point refinement maps so lower's verify obligations
-///     elide checks the path already proves.
-///
-/// All four (resume + row + ownership + refinement) follow the same
-/// substrate pattern: WALK body structure, PREDICATE-FILTER witness
-/// sites, PROJECT aggregated value. Same shape as
-/// $collect_used_wasi_ops in the seed. The cursor IS the inference
-/// primitive.
-///
-/// What this enables: the developer writes WHAT THEY MEAN — body
-/// structure + ground value types + effect names. Everything else
-/// (resume cardinality, effect rows, ownership, refinement bounds)
-/// is cursor-projected. Authored declarations BECOME CONSTRAINTS the
-/// inference verifies — never contracts the inference must reverse-
-/// engineer. The user-facing surface shrinks toward the irreducible.
+// The inference primitive — every emergent property is cursor-
+// projected from body structure, never authored as annotation. Per
+// protocol_cursor_is_the_substrate.md: "annotations declare INPUTS
+// to the cursor; never the emergent property itself."
+//
+// Three companion substrates land alongside Phase B's resume-
+// cardinality inference, completing the chain of cursor-projected
+// emergent properties:
+//
+//   • Effect-row inference (Peer 1) — operational at infer_fn:343-420.
+//     Body's perform sites accumulate via inf_add_row; declared row
+//     compared against inferred via row_subsumes; T_OverDeclared
+//     warns when authored row is wider than inferred. Authored row
+//     is a CONSTRAINT (must contain inferred), never a contract.
+//
+//   • Ownership inference (Peer 2) — operational at own.mn's
+//     infer_ownership. `Unmarked`-marked params get classify_usage
+//     which counts var-uses in the body: 0 → Unmarked; 1 → Own
+//     (affine consume); ≥2 → Ref (borrowed). Authored `own`/`ref`
+//     is a constraint over the inferred form.
+//
+//   • Refinement narrowing (Peer 3 — this section) — flow-sensitive
+//     predicate inference. Each narrowing site (if/match/assert)
+//     adds a path-conditional predicate; the medium tracks per-
+//     program-point refinement maps so lower's verify obligations
+//     elide checks the path already proves.
+//
+// All four (resume + row + ownership + refinement) follow the same
+// substrate pattern: WALK body structure, PREDICATE-FILTER witness
+// sites, PROJECT aggregated value. Same shape as
+// $collect_used_wasi_ops in the seed. The cursor IS the inference
+// primitive.
+//
+// What this enables: the developer writes WHAT THEY MEAN — body
+// structure + ground value types + effect names. Everything else
+// (resume cardinality, effect rows, ownership, refinement bounds)
+// is cursor-projected. Authored declarations BECOME CONSTRAINTS the
+// inference verifies — never contracts the inference must reverse-
+// engineer. The user-facing surface shrinks toward the irreducible.
 
-/// $infer_refinement_narrowing — Phase B.3 substrate. Flow-sensitive
-/// refinement inference; per-program-point refinement maps. Each
-/// narrowing site adds a path-conditional predicate to the relevant
-/// variable's refinement; downstream Verify obligations elide checks
-/// that the path already proves.
-///
-/// Narrowing sites:
-///   • `if pred { branch }`        — pred narrows scope of branch
-///   • `if pred { } else { branch }` — !pred narrows else branch
-///   • `match x { pat => body }`   — pat narrows x's type in body
-///   • `assert(pred); rest`        — pred narrows rest of block
-///   • function call with refinement-typed param — param's pred holds
-///     in the called body's scope
-///
-/// Result: Map<Handle, Predicate> per program-point. Lower's
-/// verify_obligations consult this to elide redundant checks.
-///
-/// Drift refused: 1 (no vtable; structural NodeKind walk); 6 (no
-/// primitive-type-special-case for refinement); 7 (one Map<H,Pred>,
-/// not parallel arrays); 8 (Predicate is the ADT — no string-keyed
-/// pred-name flag); 9 (every NarrowingSite NExpr arm enumerated;
-/// no wildcard fabricating ()).
+// $infer_refinement_narrowing — Phase B.3 substrate. Flow-sensitive
+// refinement inference; per-program-point refinement maps. Each
+// narrowing site adds a path-conditional predicate to the relevant
+// variable's refinement; downstream Verify obligations elide checks
+// that the path already proves.
+//
+// Narrowing sites:
+//   • `if pred { branch }`        — pred narrows scope of branch
+//   • `if pred { } else { branch }` — !pred narrows else branch
+//   • `match x { pat => body }`   — pat narrows x's type in body
+//   • `assert(pred); rest`        — pred narrows rest of block
+//   • function call with refinement-typed param — param's pred holds
+//     in the called body's scope
+//
+// Result: Map<Handle, Predicate> per program-point. Lower's
+// verify_obligations consult this to elide redundant checks.
+//
+// Drift refused: 1 (no vtable; structural NodeKind walk); 6 (no
+// primitive-type-special-case for refinement); 7 (one Map<H,Pred>,
+// not parallel arrays); 8 (Predicate is the ADT — no string-keyed
+// pred-name flag); 9 (every NarrowingSite NExpr arm enumerated;
+// no wildcard fabricating ()).
 fn infer_refinement_narrowing(body) with GraphRead + GraphWrite = {
   walk_refinement(empty_refinement_map(), body, PTrue)
 }
@@ -3216,10 +3216,10 @@ fn walk_refinement(map, node, path_pred) with GraphRead + GraphWrite = {
   }
 }
 
-/// Walk a Match — each arm gets its scrut narrowed by the arm's pattern
-/// before walking the arm body. The narrowing is per-arm-scope; once
-/// the arm body is walked, its refinement contributions don't leak
-/// to other arms (they're branch-disjoint; map-per-arm semantics).
+// Walk a Match — each arm gets its scrut narrowed by the arm's pattern
+// before walking the arm body. The narrowing is per-arm-scope; once
+// the arm body is walked, its refinement contributions don't leak
+// to other arms (they're branch-disjoint; map-per-arm semantics).
 fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead + GraphWrite = {
   if len(arms) == 0 { map }
   else {
@@ -3230,9 +3230,9 @@ fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead + GraphWrite
   }
 }
 
-/// Block walking — stmts may include `assert(pred)` which narrows the
-/// rest of the block. Threads path_pred through; each assert
-/// strengthens the predicate for subsequent stmts + final expression.
+// Block walking — stmts may include `assert(pred)` which narrows the
+// rest of the block. Threads path_pred through; each assert
+// strengthens the predicate for subsequent stmts + final expression.
 fn walk_refinement_block(map, stmts, final, path_pred) with GraphRead + GraphWrite = {
   if len(stmts) == 0 { walk_refinement(map, final, path_pred) }
   else {
@@ -3260,11 +3260,11 @@ fn strengthen_path_pred(path_pred, stmt) with GraphRead = {
   }
 }
 
-/// Function-arg walking — each arg's refinement type (if any) provides
-/// a predicate that holds in the called body's scope. The caller-side
-/// inference doesn't add the predicate to the caller's path_pred (the
-/// callee's body is independently walked); the relationship surfaces
-/// via signature unification at call site.
+// Function-arg walking — each arg's refinement type (if any) provides
+// a predicate that holds in the called body's scope. The caller-side
+// inference doesn't add the predicate to the caller's path_pred (the
+// callee's body is independently walked); the relationship surfaces
+// via signature unification at call site.
 fn walk_refinement_args_with_param_preds(map, f, args, path_pred) with GraphRead + GraphWrite = {
   walk_refinement_list(map, args, path_pred)
 }
@@ -3287,23 +3287,23 @@ fn walk_refinement_fields(map, fields, path_pred) with GraphRead + GraphWrite = 
   }
 }
 
-/// Helpers — peer-named substrate. Each is a small graph walk; the
-/// production-quality bodies fold into named peers as the inference
-/// cascade matures past the basic flow-narrowing form.
-///
-/// $predicate_of_bool_expr — extract Predicate from boolean expression.
-/// Operates on graph-typed Bool nodes; converts BinOpExpr (==, <, >,
-/// &&, ||) and CallExpr (refinement predicates returning Bool) into
-/// Predicate ADT instances. Peer follow-up
-/// `Hβ.infer.predicate-from-bool-expression` covers the full case
-/// enumeration.
+// Helpers — peer-named substrate. Each is a small graph walk; the
+// production-quality bodies fold into named peers as the inference
+// cascade matures past the basic flow-narrowing form.
+//
+// $predicate_of_bool_expr — extract Predicate from boolean expression.
+// Operates on graph-typed Bool nodes; converts BinOpExpr (==, <, >,
+// &&, ||) and CallExpr (refinement predicates returning Bool) into
+// Predicate ADT instances. Peer follow-up
+// `Hβ.infer.predicate-from-bool-expression` covers the full case
+// enumeration.
 fn predicate_of_bool_expr(node) = PBoolNode(node_handle(node))
 
-/// Extract the directly-consumable bool-node handle from a path predicate — the
-/// representative the narrowing weave stores. A leaf PBoolNode/PCompare carries
-/// its handle; a compound PAnd recurses to its left conjunct (the nearest
-/// path-condition); PTrue and the non-leaf forms carry no single narrowing node
-/// (0 = no narrowing recorded — lower elides nothing, byte-identical).
+// Extract the directly-consumable bool-node handle from a path predicate — the
+// representative the narrowing weave stores. A leaf PBoolNode/PCompare carries
+// its handle; a compound PAnd recurses to its left conjunct (the nearest
+// path-condition); PTrue and the non-leaf forms carry no single narrowing node
+// (0 = no narrowing recorded — lower elides nothing, byte-identical).
 fn narrowing_pred_handle(pred) with Pure = match pred {
   PBoolNode(h)        => h,
   PCompare(_, lh, _)  => lh,
@@ -3340,13 +3340,13 @@ fn node_handle(node) = {
   h
 }
 
-/// Mint TParam list for handler config-params. Each name gets a
-/// fresh tyvar handle (via mint), wrapped as TParam(name, TVar(h),
-/// Unmarked, Unmarked) — Ownership is Unmarked (no authored marker;
-/// arm-body usage may constrain). Per Hβ.first-light.handler-scheme-
-/// tfun-shape (2026-05-06). Drift refused: 7 (one list of TParam
-/// records, not (names, types) parallel arrays); 8 (TParam is the
-/// established positional shape, not name-keyed map).
+// Mint TParam list for handler config-params. Each name gets a
+// fresh tyvar handle (via mint), wrapped as TParam(name, TVar(h),
+// Unmarked, Unmarked) — Ownership is Unmarked (no authored marker;
+// arm-body usage may constrain). Per Hβ.first-light.handler-scheme-
+// tfun-shape (2026-05-06). Drift refused: 7 (one list of TParam
+// records, not (names, types) parallel arrays); 8 (TParam is the
+// established positional shape, not name-keyed map).
 fn mint_handler_config_tparams(config, hname, base_idx) = map((indexed) => {
   let (i, name) = indexed
   let idx = base_idx + i

@@ -456,15 +456,15 @@ fn count_invites_by_kind(reports, kind) with Pure = {
   count((report) => verdict_is_invite(extract_verdict(report, kind)), reports)
 }
 
-/// Project-wide eight-tentacle gradient density. Returns one Int per
-/// interrogation kind. The eight numbers ARE the project's
-/// "distance from ULTIMATE FORM" along each axis.
-///
-/// `<|` divergence: one source (reports) borrowed by eight parallel
-/// branches, each counting one kind's invites. Tuple output preserves
-/// kind ordering. parallel_compose dispatches the eight branches across
-/// cores; sequential_compose runs them on one thread. Same source,
-/// handler swap.
+// Project-wide eight-tentacle gradient density. Returns one Int per
+// interrogation kind. The eight numbers ARE the project's
+// "distance from ULTIMATE FORM" along each axis.
+//
+// `<|` divergence: one source (reports) borrowed by eight parallel
+// branches, each counting one kind's invites. Tuple output preserves
+// kind ordering. parallel_compose dispatches the eight branches across
+// cores; sequential_compose runs them on one thread. Same source,
+// handler swap.
 fn project_gradient_density(reports) with Pure = {
   let (g, h, v, r, o, ref, grad, why) =
     reports
@@ -481,8 +481,8 @@ fn project_gradient_density(reports) with Pure = {
   [g, h, v, r, o, ref, grad, why]
 }
 
-/// Total-clear count: positions where ALL EIGHT clear. Reading
-/// ULTIMATE FORM as the limit.
+// Total-clear count: positions where ALL EIGHT clear. Reading
+// ULTIMATE FORM as the limit.
 fn total_clear_positions(reports) with Pure = {
   count(all_eight_clear, reports)
 }

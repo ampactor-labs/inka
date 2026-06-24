@@ -21,20 +21,20 @@
 
 import runtime/io
 
-/// Counter — a tiny effect with two ops. `inc` returns Unit and
-/// updates handler state; `read` returns the current count. Both
-/// arm bodies invoke `resume` exactly once with no surrounding loop
-/// or recursion, so the medium infers cardinality `One` for both —
-/// linear control: each call resumes once, the body continues, no
-/// backtracking.
+// Counter — a tiny effect with two ops. `inc` returns Unit and
+// updates handler state; `read` returns the current count. Both
+// arm bodies invoke `resume` exactly once with no surrounding loop
+// or recursion, so the medium infers cardinality `One` for both —
+// linear control: each call resumes once, the body continues, no
+// backtracking.
 effect Counter {
   inc() -> ()
   read() -> Int
 }
 
-/// `counter_in_memory` — handler #1: keeps state in handler-local
-/// `count`. Pure with respect to the graph; no Alloc beyond the
-/// handler record itself.
+// `counter_in_memory` — handler #1: keeps state in handler-local
+// `count`. Pure with respect to the graph; no Alloc beyond the
+// handler record itself.
 handler counter_in_memory with count = 0 {
 
   inc() => resume() with count = count + 1,
@@ -42,11 +42,11 @@ handler counter_in_memory with count = 0 {
   read() => resume(count)
 }
 
-/// `counter_logged` — handler #2: SAME effect, different surface.
-/// Each `inc` writes a line to stdout in addition to bumping the
-/// counter. The user's code (`triple_inc` below) is unchanged
-/// across the swap; only the chain decides which arm the perform
-/// reaches. Drift 1 closure: handler-as-substrate, never a vtable.
+// `counter_logged` — handler #2: SAME effect, different surface.
+// Each `inc` writes a line to stdout in addition to bumping the
+// counter. The user's code (`triple_inc` below) is unchanged
+// across the swap; only the chain decides which arm the perform
+// reaches. Drift 1 closure: handler-as-substrate, never a vtable.
 handler counter_logged with count = 0 {
 
   inc() => {
@@ -60,8 +60,8 @@ handler counter_logged with count = 0 {
   read() => resume(count)
 }
 
-/// User code — performs against the Counter effect; the chain
-/// decides what `inc` does.
+// User code — performs against the Counter effect; the chain
+// decides what `inc` does.
 fn triple_inc() with Counter = {
   inc()
   inc()
@@ -69,8 +69,8 @@ fn triple_inc() with Counter = {
   read()
 }
 
-/// `main` chooses the in-memory handler. Swap to `~> counter_logged`
-/// to see the second reality with no source change.
+// `main` chooses the in-memory handler. Swap to `~> counter_logged`
+// to see the second reality with no source change.
 fn main() = {
   let total = triple_inc() ~> counter_in_memory
   total

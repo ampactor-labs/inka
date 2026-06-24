@@ -486,11 +486,11 @@ handler fresh_for_query with next_display = 0 {
 
 // Collection helpers — consumed by teach / audit
 
-/// Per-fn gradient projection. Each FnStmt's teach_gradient is
-/// independent of siblings (no shared state mutation among reads).
-/// parallel_map dispatches via the Thread effect handler; on a multi-
-/// core host with parallel_compose installed, the N functions' gradients
-/// compute on N threads. Same source, handler swap.
+// Per-fn gradient projection. Each FnStmt's teach_gradient is
+// independent of siblings (no shared state mutation among reads).
+// parallel_map dispatches via the Thread effect handler; on a multi-
+// core host with parallel_compose installed, the N functions' gradients
+// compute on N threads. Same source, handler swap.
 fn collect_gradients(ast) = {
   ast
     |> parallel_map((node) => {
@@ -534,9 +534,9 @@ fn join_unlock_labels(labels) with Pure = {
   }
 }
 
-/// Per-fn audit projection. Each FnStmt's row + capability set is
-/// independently computable from its handle's graph state. parallel_map
-/// dispatches via Thread; spatial dispatch lights up cores per N fns.
+// Per-fn audit projection. Each FnStmt's row + capability set is
+// independently computable from its handle's graph state. parallel_map
+// dispatches via Thread; spatial dispatch lights up cores per N fns.
 fn collect_fn_rows(ast) = {
   ast
     |> parallel_map((node) => {
@@ -639,7 +639,15 @@ fn render_query_result(result) = match result {
   QRWhy(reason) =>
     show_reason(reason),
   QRVerifyDebt(obligations) => "→ {int_to_str(len(obligations))} verification obligations pending",
+  QRFlowLabel(label, reason) =>
+    "→ {show_flow_label(label)}\n  Reason: {show_reason(reason)}",
   QRError(msg) => "error: {msg}"
+}
+
+fn show_flow_label(label) with Pure = match label {
+  Public  => "Public",
+  Tainted => "Tainted",
+  Secret  => "Secret"
 }
 
 // The query surface is a tiny grammar: <verb> [arg]. The query strings are
@@ -652,7 +660,7 @@ fn render_query_result(result) = match result {
 
 type QueryVerb
   = QVType | QVEffects | QVOwnership | QVWhy | QVRefs | QVProvider
-  | QVUnresolved | QVVerification | QVUnknownVerb
+  | QVUnresolved | QVVerification | QVFlow | QVUnknownVerb
 
 fn classify_query_verb(w) with Pure = {
   if      w == "type"         { QVType }
@@ -663,6 +671,7 @@ fn classify_query_verb(w) with Pure = {
   else if w == "provider"     { QVProvider }
   else if w == "unresolved"   { QVUnresolved }
   else if w == "verification" { QVVerification }
+  else if w == "flow"         { QVFlow }
   else                        { QVUnknownVerb }
 }
 
@@ -688,6 +697,7 @@ fn build_question(verb, arg, raw) with Pure = match verb {
   QVWhy          => QWhy(arg),
   QVRefs         => QRefsOf(arg),
   QVProvider     => QHandlerProvider(arg),
+  QVFlow         => QFlowOf(arg),
   QVUnknownVerb  => QUnknown(raw)
 }
 

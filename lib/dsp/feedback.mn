@@ -58,75 +58,75 @@
 import dsp/signal
 import dsp/clock
 
-/// Hz — audio frequency. Refinement type per DM §1.1; constrained
-/// to Nyquist-safe range (44.1kHz / 2 = 22050 Hz ceiling). Per
-/// DM-Q1 the ceiling is hard-coded for v1; dependent refinement on
-/// ambient Sample(rate) is post-first-light.
+// Hz — audio frequency. Refinement type per DM §1.1; constrained
+// to Nyquist-safe range (44.1kHz / 2 = 22050 Hz ceiling). Per
+// DM-Q1 the ceiling is hard-coded for v1; dependent refinement on
+// ambient Sample(rate) is post-first-light.
 
 type Hz = Float where 0.0 < self && self < 22050.0
 
-/// Sample — audio sample, normalized to [-1.0, 1.0]. Clipping is
-/// refinement-checked at primitive boundaries; verify_ledger logs
-/// pending obligations until verify_smt swap.
+// Sample — audio sample, normalized to [-1.0, 1.0]. Clipping is
+// refinement-checked at primitive boundaries; verify_ledger logs
+// pending obligations until verify_smt swap.
 
 type Sample = Float where 0.0 - 1.0 <= self && self <= 1.0
 
-/// Gain — linear gain factor. Unity = 1.0. Attenuation in [0, 1);
-/// amplification > 1.0 carries a clip-safety obligation on output.
+// Gain — linear gain factor. Unity = 1.0. Attenuation in [0, 1);
+// amplification > 1.0 carries a clip-safety obligation on output.
 
 type Gain = Float where 0.0 <= self
 
-/// Filter coefficient α derived from cutoff frequency + sample rate.
-/// One-pole low-pass formula: α = 1 - exp(-2π · cutoff / sr). The
-/// `with Pure + !Alloc` row asserts this is constant-time + heap-
-/// free per primitive #4 + primitive #5 ownership-as-effect.
-///
-/// Per H6: exhaustive over the cutoff range; refinement on Hz
-/// excludes invalid values upstream.
+// Filter coefficient α derived from cutoff frequency + sample rate.
+// One-pole low-pass formula: α = 1 - exp(-2π · cutoff / sr). The
+// `with Pure + !Alloc` row asserts this is constant-time + heap-
+// free per primitive #4 + primitive #5 ownership-as-effect.
+//
+// Per H6: exhaustive over the cutoff range; refinement on Hz
+// excludes invalid values upstream.
 
 fn compute_alpha(cutoff: Hz, sr: Int) -> Float with Pure + !Alloc =
   let omega = 6.283185307 * cutoff / float_of_int(sr)
   1.0 - exp(0.0 - omega)
 
-/// One-pole low-pass IIR filter. The `<~ delay(1)` back-edge feeds
-/// the prior output into the next iteration; under Sample(rate) the
-/// delay is one sample period.
-///
-/// The canonical one-pole recurrence: y[n] = α·x[n] + (1-α)·y[n-1].
-/// `(prev)` binds the prior output y[n-1] (LF.B); the body reads it
-/// live. The `with Sample + Pure + !Alloc` row proves it real-time-safe
-/// (no per-tick heap), and the prior carries the Sample refinement.
-///
-/// Primitive #3 (`<~`) drawn; primitive #4 (`with Sample(rate) +
-/// Pure + !Alloc`) proven; primitive #5 (own input consumed); primitive
-/// #6 (Sample / Hz refinements discharged at boundaries).
+// One-pole low-pass IIR filter. The `<~ delay(1)` back-edge feeds
+// the prior output into the next iteration; under Sample(rate) the
+// delay is one sample period.
+//
+// The canonical one-pole recurrence: y[n] = α·x[n] + (1-α)·y[n-1].
+// `(prev)` binds the prior output y[n-1] (LF.B); the body reads it
+// live. The `with Sample + Pure + !Alloc` row proves it real-time-safe
+// (no per-tick heap), and the prior carries the Sample refinement.
+//
+// Primitive #3 (`<~`) drawn; primitive #4 (`with Sample(rate) +
+// Pure + !Alloc`) proven; primitive #5 (own input consumed); primitive
+// #6 (Sample / Hz refinements discharged at boundaries).
 
 fn lowpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample
     with Sample + Pure + !Alloc =
   let alpha = compute_alpha(cutoff, sr)
   ((prev) => input * alpha + (1.0 - alpha) * prev) <~ delay(1)
 
-/// One-pole high-pass IIR filter — HP = signal - LP. The prior output
-/// y[n-1] is the smoothed (low-pass) component; subtracting it from the
-/// input leaves the high-frequency residue. Same `<~ delay(1)` substrate.
+// One-pole high-pass IIR filter — HP = signal - LP. The prior output
+// y[n-1] is the smoothed (low-pass) component; subtracting it from the
+// input leaves the high-frequency residue. Same `<~ delay(1)` substrate.
 
 fn highpass_iir(input: Sample, cutoff: Hz, sr: Int) -> Sample
     with Sample + Pure + !Alloc =
   let alpha = compute_alpha(cutoff, sr)
   ((prev) => input - (alpha * input + (1.0 - alpha) * prev)) <~ delay(1)
 
-/// Single-pole DC blocker: y[n] = x[n] - x[n-1] + R·y[n-1] with the
-/// pole R near unity. Removes DC bias at the signal-chain entry. Here
-/// `prev` is the prior OUTPUT y[n-1]; the standard form folds the input
-/// difference into the recurrence with R = 0.995.
+// Single-pole DC blocker: y[n] = x[n] - x[n-1] + R·y[n-1] with the
+// pole R near unity. Removes DC bias at the signal-chain entry. Here
+// `prev` is the prior OUTPUT y[n-1]; the standard form folds the input
+// difference into the recurrence with R = 0.995.
 
 fn dc_blocker(input: Sample) -> Sample with Sample + Pure + !Alloc =
   ((prev) => input + 0.995 * prev) <~ delay(1)
 
-/// Envelope follower — tracks signal magnitude. The envelope persists
-/// across ticks via `<~ delay(1)`; each sample relaxes the prior
-/// envelope toward the current magnitude: env[n] = α·|x[n]| + (1-α)·env[n-1].
-/// Refinement keeps attack + release as positive Hz values.
+// Envelope follower — tracks signal magnitude. The envelope persists
+// across ticks via `<~ delay(1)`; each sample relaxes the prior
+// envelope toward the current magnitude: env[n] = α·|x[n]| + (1-α)·env[n-1].
+// Refinement keeps attack + release as positive Hz values.
 
 fn envelope_follower(input: Sample, attack: Hz, release: Hz, sr: Int)
     -> Sample with Sample + Pure + !Alloc =

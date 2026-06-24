@@ -32,18 +32,18 @@ handler catch_abort {
   abort() => None
 }
 
-/// Look up a name in the environment. Wraps the EnvRead effect
-/// as a named graph node for |> pipelines.
+// Look up a name in the environment. Wraps the EnvRead effect
+// as a named graph node for |> pipelines.
 fn lookup_env(ref name) = env_lookup(name)
 
-/// Unwrap an env lookup result, aborting if None.
+// Unwrap an env lookup result, aborting if None.
 fn unwrap_env(opt) with Abort = match opt {
   Some((scheme, _, _)) => scheme,
   None => abort()
 }
 
-/// Extract a parameter's owner name and index from a Scheme.
-/// Aborts if the scheme doesn't resolve to a function parameter.
+// Extract a parameter's owner name and index from a Scheme.
+// Aborts if the scheme doesn't resolve to a function parameter.
 fn extract_param_owner(scheme) with Abort = match scheme {
   Forall(_, TVar(h)) => match graph_chase(h) {
     GNode(_, FnParam(owner_name, idx, _)) => (owner_name, idx),
@@ -52,8 +52,8 @@ fn extract_param_owner(scheme) with Abort = match scheme {
   _ => abort()
 }
 
-/// Extract function parameter list from an owner's Scheme.
-/// Aborts if the scheme doesn't resolve to a function type.
+// Extract function parameter list from an owner's Scheme.
+// Aborts if the scheme doesn't resolve to a function type.
 fn extract_fn_params(scheme) with Abort = match scheme {
   Forall(_, TVar(fn_h)) => match graph_chase(fn_h) {
     GNode(NBound(TFun(params, _, _)), _) => params,
@@ -62,9 +62,9 @@ fn extract_fn_params(scheme) with Abort = match scheme {
   _ => abort()
 }
 
-/// Look up a name's authored ownership annotation.
-/// Returns Some(auth) if the parameter has an explicit own/ref marker,
-/// None if not found or if the graph structure doesn't match.
+// Look up a name's authored ownership annotation.
+// Returns Some(auth) if the parameter has an explicit own/ref marker,
+// None if not found or if the graph structure doesn't match.
 fn get_authored_ownership(ref name) with !Mutate = {
   name
     |> lookup_env
@@ -148,20 +148,20 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
   }
 }
 
-/// Flat-array union across all branch deltas. Every delta is already
-/// a sorted set (maintained by set_insert during consume), so folding
-/// set_union across them preserves the invariant.
+// Flat-array union across all branch deltas. Every delta is already
+// a sorted set (maintained by set_insert during consume), so folding
+// set_union across them preserves the invariant.
 fn union_all_deltas(ref deltas) with !Mutate = {
   fold(deltas, [], (acc, delta) => set_union(acc, delta))
 }
 
-/// Pairwise collision check across branch deltas. For each pair
-/// (delta_i, delta_j) with i < j, any name in their intersection was
-/// consumed in TWO parallel branches — an affine violation. We report
-/// each colliding name once per pair; a name consumed in three
-/// branches surfaces as (1,2), (1,3), (2,3) triples, each naming the
-/// branch pair in its own diagnostic. Span is the branching verb's
-/// span — the site where the violation becomes observable.
+// Pairwise collision check across branch deltas. For each pair
+// (delta_i, delta_j) with i < j, any name in their intersection was
+// consumed in TWO parallel branches — an affine violation. We report
+// each colliding name once per pair; a name consumed in three
+// branches surfaces as (1,2), (1,3), (2,3) triples, each naming the
+// branch pair in its own diagnostic. Span is the branching verb's
+// span — the site where the violation becomes observable.
 fn report_branch_collisions(ref deltas, ref span) with !Mutate = {
   let n = len(deltas)
   for_each((i) => {
@@ -172,22 +172,22 @@ fn report_branch_collisions(ref deltas, ref span) with !Mutate = {
   }, range(0, n))
 }
 
-/// Tofte-Talpin region escape tracker (I12). Installed per-function
-/// body alongside `affine_ledger`. Arms react to Alloc/return
-/// surfaces to track region identity on each value:
-///
-/// - `region_enter` — fresh region id + span, pushed onto stack.
-/// - `region_exit` — pops the stack; values tagged with this region
-///   are checked against the ambient live region on escape.
-/// - `check_escape` — compares the value's tagged region against the
-///   stack; mismatches emit `E_RegionEscape` pointing at both alloc
-///   site and escape site.
-///
-/// The arms are wired to the Alloc effect surface; `tag_alloc` stamps
-/// every allocation with the current-top region id. `tag_alloc_join`
-/// takes the deepest (innermost) region across a composite value's
-/// fields — preventing inner-region pointers from escaping via the
-/// composite.
+// Tofte-Talpin region escape tracker (I12). Installed per-function
+// body alongside `affine_ledger`. Arms react to Alloc/return
+// surfaces to track region identity on each value:
+//
+// - `region_enter` — fresh region id + span, pushed onto stack.
+// - `region_exit` — pops the stack; values tagged with this region
+//   are checked against the ambient live region on escape.
+// - `check_escape` — compares the value's tagged region against the
+//   stack; mismatches emit `E_RegionEscape` pointing at both alloc
+//   site and escape site.
+//
+// The arms are wired to the Alloc effect surface; `tag_alloc` stamps
+// every allocation with the current-top region id. `tag_alloc_join`
+// takes the deepest (innermost) region across a composite value's
+// fields — preventing inner-region pointers from escaping via the
+// composite.
 handler region_tracker with region_stack = [], next_region = 0, tagged_values = [] {
 
   region_enter(span) => {
@@ -278,10 +278,10 @@ fn region_on_stack(ref stack, rid) with !Mutate = {
   }, stack)
 }
 
-/// H4.1: join field regions with current region — returns the MAX
-/// (innermost) region_id. Untagged fields (scalars, never alloc'd)
-/// contribute region 0 (global lifetime, doesn't bound the join).
-/// The result is the composite's pinning region.
+// H4.1: join field regions with current region — returns the MAX
+// (innermost) region_id. Untagged fields (scalars, never alloc'd)
+// contribute region 0 (global lifetime, doesn't bound the join).
+// The result is the composite's pinning region.
 fn join_field_regions(ref tags, ref fields, current) with !Mutate = {
   fold(fields, current, (acc, fh) => {
     let field_rid = match lookup_tag(tags, fh) {
@@ -315,10 +315,10 @@ fn find_first_span(ref sites, ref name) with !Mutate = {
 // O(log N) without boundary canonicalize. The local string_in_list
 // adapter is gone — call sites use set_contains directly.
 
-/// Check that ref bindings don't escape to return position or closures.
-/// A `ref`-annotated binding cannot appear in return position or be
-/// captured by a closure that outlives its scope. Called by infer.mn
-/// at every `FnStmt` body.
+// Check that ref bindings don't escape to return position or closures.
+// A `ref`-annotated binding cannot appear in return position or be
+// captured by a closure that outlives its scope. Called by infer.mn
+// at every `FnStmt` body.
 fn check_ref_escape(ref params, ref body) with !Mutate = {
   params
     |> collect_ref_params
@@ -327,9 +327,9 @@ fn check_ref_escape(ref params, ref body) with !Mutate = {
          else { walk_return_positions(refs, body) }
 }
 
-/// Phase-A4: filter Ref-discipline params, projecting their names.
-/// The prelude verbs filter + map cascade the substrate-honest residue;
-/// the prior buffer-counter loop was the foreign-fluency form.
+// Phase-A4: filter Ref-discipline params, projecting their names.
+// The prelude verbs filter + map cascade the substrate-honest residue;
+// the prior buffer-counter loop was the foreign-fluency form.
 fn collect_ref_params(ref params) with !Mutate = {
   map((p) => { let TParam(name, _, _, _, _) = p; name },
     filter((p) => {
@@ -398,10 +398,10 @@ fn walk_match_arms(ref refs, ref arms) with !Mutate = {
   }, arms)
 }
 
-/// Deduce `Own` vs `Ref` for `Unmarked`-marked parameters by counting
-/// uses in the function body: 0 uses → `Unmarked` (mark stays),
-/// 1 use → `Own` (consumed once — affine), ≥ 2 uses → `Ref`
-/// (borrowed multiple times).
+// Deduce `Own` vs `Ref` for `Unmarked`-marked parameters by counting
+// uses in the function body: 0 uses → `Unmarked` (mark stays),
+// 1 use → `Own` (consumed once — affine), ≥ 2 uses → `Ref`
+// (borrowed multiple times).
 fn infer_ownership(ref params, ref body) with !Mutate = {
   map((p) => {
     let TParam(name, ty, authored, _old_resolved, default) = p

@@ -24,11 +24,11 @@ import effects
 
 // Mentl-owned ADTs
 
-/// Each variant carries an Option(Span) — Some when the candidate
-/// originated from a user site (hovered hole, quick-fix request);
-/// None for fully-internal speculation. narrow_row threads this into
-/// the Located reason so the Why chain reads at the user's
-/// coordinates, not 0:0-0:0.
+// Each variant carries an Option(Span) — Some when the candidate
+// originated from a user site (hovered hole, quick-fix request);
+// None for fully-internal speculation. narrow_row threads this into
+// the Located reason so the Why chain reads at the user's
+// coordinates, not 0:0-0:0.
 type Annotation
   = APure(Option)
   | ANotAlloc(Option)
@@ -78,9 +78,9 @@ type Context
 type Candidate
   = Candidate(Node, Reason)  // AST fragment + why it was proposed
 
-/// Teach effect — the five tentacle entry points (DESIGN.md Ch 8). `mentl_default`
-/// projects the substrate for the developer: hover, gradient, why-chain, error catalog,
-/// unlock preview.
+// Teach effect — the five tentacle entry points (DESIGN.md Ch 8). `mentl_default`
+// projects the substrate for the developer: hover, gradient, why-chain, error catalog,
+// unlock preview.
 effect Teach {
   teach_here(String, Span, Ty) -> ()
   teach_gradient(Int) -> Option
@@ -100,9 +100,9 @@ effect Synth {
   enumerate_inhabitants(Ty, EffRow, Context) -> List
 }
 
-/// Default Teach handler — the substrate's self-projection. Reads the graph through
-/// GraphRead. Accumulates `teach_here` entries so the driver renders them as hover info.
-/// Gradient and why use the speculative oracle and reason DAG respectively.
+// Default Teach handler — the substrate's self-projection. Reads the graph through
+// GraphRead. Accumulates `teach_here` entries so the driver renders them as hover info.
+// Gradient and why use the speculative oracle and reason DAG respectively.
 handler mentl_default with annotations = [] {
 
   teach_here(name, span, ty) =>
@@ -128,15 +128,15 @@ handler mentl_default with annotations = [] {
     resume(unlock_capability(annotation))
 }
 
-/// Speculative oracle: for each candidate annotation, checkpoint → tentative apply →
-/// run unification → record → rollback. Only PROVEN annotations reach the user.
-/// The trail (graph.mn) makes the run O(M) where M = mutations recorded.
-///
-/// Returns Option(AnnotationSuggestion) per Hμ.cursor §2 + GR §3.2 (live).
-/// Internally pick_highest_leverage produces Option<(Annotation, Capability)>;
-/// `to_annotation_suggestion` wraps at the boundary with kind / annotation
-/// text / unlocked-capability labels / Reason — the public shape Cursor
-/// reads off CursorView.teach.
+// Speculative oracle: for each candidate annotation, checkpoint → tentative apply →
+// run unification → record → rollback. Only PROVEN annotations reach the user.
+// The trail (graph.mn) makes the run O(M) where M = mutations recorded.
+//
+// Returns Option(AnnotationSuggestion) per Hμ.cursor §2 + GR §3.2 (live).
+// Internally pick_highest_leverage produces Option<(Annotation, Capability)>;
+// `to_annotation_suggestion` wraps at the boundary with kind / annotation
+// text / unlocked-capability labels / Reason — the public shape Cursor
+// reads off CursorView.teach.
 fn gradient_next(handle) = {
   let node = graph_chase(handle)
   let GNode(_, anchor_reason) = node
@@ -162,13 +162,13 @@ fn gradient_next(handle) = {
   }
 }
 
-/// Boundary wrap — (Annotation, Capability) inside the speculative
-/// loop becomes the public AnnotationSuggestion shape Cursor reads.
-/// Per Hμ.cursor §2.1: kind comes from the Annotation tag (drift 8 —
-/// SuggestionKind ADT, never a string flag); annotation text is
-/// `show_annotation`'s residue; unlocks is `capabilities_for_annotation`'s
-/// list (multiple capabilities per annotation, not the lossy single
-/// `unlock_capability`); reason wraps the anchor with Located.
+// Boundary wrap — (Annotation, Capability) inside the speculative
+// loop becomes the public AnnotationSuggestion shape Cursor reads.
+// Per Hμ.cursor §2.1: kind comes from the Annotation tag (drift 8 —
+// SuggestionKind ADT, never a string flag); annotation text is
+// `show_annotation`'s residue; unlocks is `capabilities_for_annotation`'s
+// list (multiple capabilities per annotation, not the lossy single
+// `unlock_capability`); reason wraps the anchor with Located.
 fn to_annotation_suggestion(ann, anchor_reason) = {
   AnnotationSuggestion(
     suggestion_kind_of(ann),
@@ -178,9 +178,9 @@ fn to_annotation_suggestion(ann, anchor_reason) = {
   )
 }
 
-/// Map an Annotation variant to its SuggestionKind axis. Drift 8
-/// closure: SuggestionKind is the tagged dispatch surface; the
-/// match below is the only place the mapping lives.
+// Map an Annotation variant to its SuggestionKind axis. Drift 8
+// closure: SuggestionKind is the tagged dispatch surface; the
+// match below is the only place the mapping lives.
 fn suggestion_kind_of(ann) with Pure = match ann {
   APure(_)              => SuggestEffectRow,
   ANotAlloc(_)          => SuggestEffectRow,
@@ -192,14 +192,14 @@ fn suggestion_kind_of(ann) with Pure = match ann {
   AWrapHandler(_, _, _) => SuggestEffectRow
 }
 
-/// Capability ADT to display label list. Used by AnnotationSuggestion.unlocks.
-/// Composition over `show_capability` (already in mentl.mn).
+// Capability ADT to display label list. Used by AnnotationSuggestion.unlocks.
+// Composition over `show_capability` (already in mentl.mn).
 fn capability_labels(caps) with Pure = map(show_capability, caps)
 
-/// Suggestion's Reason edge. Wraps the candidate's anchor reason in a
-/// Located/Unmarked chain that the Why-tentacle walks. Span comes from
-/// the annotation's source-span field when present (user-originated
-/// candidate), span_zero otherwise (fully internal speculation).
+// Suggestion's Reason edge. Wraps the candidate's anchor reason in a
+// Located/Unmarked chain that the Why-tentacle walks. Span comes from
+// the annotation's source-span field when present (user-originated
+// candidate), span_zero otherwise (fully internal speculation).
 fn suggestion_reason(ann, anchor) = {
   let span = unwrap_source_span(annotation_source_span(ann))
   Located(span, Inferred(suggestion_kind_label(suggestion_kind_of(ann))))
@@ -223,17 +223,17 @@ fn suggestion_kind_label(k) with Pure = match k {
   SuggestReturnType  => "gradient: result-type annotation"
 }
 
-/// Try each candidate: checkpoint → tentative apply → verify → rollback.
-/// Per-candidate is the divergent-fanout topology — each ann's
-/// checkpoint isolates it from siblings, which IS the proof-search step.
-/// parallel_map dispatches the per-candidate proof through the Thread
-/// effect handler installed upstream; parallel_compose runs branches on
-/// distinct cores when per-thread graph is available (peer
-/// Hβ.cursor.speculative-compile), sequential_compose runs them on one
-/// thread today. Same source, handler swap. The verb is `><` (the
-/// binary parallel step parallel_map decomposes into) — symmetric with
-/// the oracle's per-position dispatch at src/oracle.mn:309.
-/// Returns [(Annotation, Capability)] for annotations that passed.
+// Try each candidate: checkpoint → tentative apply → verify → rollback.
+// Per-candidate is the divergent-fanout topology — each ann's
+// checkpoint isolates it from siblings, which IS the proof-search step.
+// parallel_map dispatches the per-candidate proof through the Thread
+// effect handler installed upstream; parallel_compose runs branches on
+// distinct cores when per-thread graph is available (peer
+// Hβ.cursor.speculative-compile), sequential_compose runs them on one
+// thread today. Same source, handler swap. The verb is `><` (the
+// binary parallel step parallel_map decomposes into) — symmetric with
+// the oracle's per-position dispatch at src/oracle.mn:309.
+// Returns [(Annotation, Capability)] for annotations that passed.
 fn try_each_annotation(handle, candidates, base_ty) = {
   candidates
     |> parallel_map((ann) => {
@@ -247,9 +247,9 @@ fn try_each_annotation(handle, candidates, base_ty) = {
     |> map((pair) => { let (ann, _) = pair; (ann, unlock_capability(ann)) })
 }
 
-/// Speculative apply: compute the narrowed type/row and graph_bind it.
-/// graph_bind is one-write; within a checkpoint, the narrowed bind is
-/// recorded in the trail and reverted on rollback.
+// Speculative apply: compute the narrowed type/row and graph_bind it.
+// graph_bind is one-write; within a checkpoint, the narrowed bind is
+// recorded in the trail and reverted on rollback.
 fn apply_annotation_tentatively(handle, ann, base_ty) = match ann {
   APure(sp)          => narrow_row(handle, base_ty, EfPure, sp),
   ANotAlloc(sp)      => narrow_row(handle, base_ty, EfNeg(mk_ef_closed([ENamed("Alloc")])), sp),    // drift-audit: ignore — real drift 8 (EffName should have EAlloc variant); tracked for item 11.B EffName refactor
@@ -313,9 +313,9 @@ fn catalog_handled_effects(handler_name) with EnvRead + !Mutate = {
   }
 }
 
-/// H5: capability unlocks for an annotation. !Alloc unlocks
-/// CRealTime; !IO + Pure unlock CCompileTimeEval; etc. The list is
-/// returned by render_audit's severance section.
+// H5: capability unlocks for an annotation. !Alloc unlocks
+// CRealTime; !IO + Pure unlock CCompileTimeEval; etc. The list is
+// returned by render_audit's severance section.
 fn capabilities_for_annotation(ann) with Pure = match ann {
   APure(_)        => [CMemoize, CCompileTimeEval, CParallelize],
   ANotAlloc(_)    => [CRealTime],
@@ -327,9 +327,9 @@ fn capabilities_for_annotation(ann) with Pure = match ann {
   AWrapHandler(_, _, _) => []     // unlocks depend on what's wrapped
 }
 
-/// H5: capability unlocks for a SEVERANCE — adding `!E` to an fn
-/// that doesn't perform E. Mirrors capabilities_for_annotation but
-/// keyed by EffName (severance candidate's name).
+// H5: capability unlocks for a SEVERANCE — adding `!E` to an fn
+// that doesn't perform E. Mirrors capabilities_for_annotation but
+// keyed by EffName (severance candidate's name).
 fn capabilities_for_severance(name) = match name {
   ENamed(n) =>
     if n == "Alloc"   { [CRealTime] }                          // drift-audit: ignore — capability-for-severance table; real drift 8 (should match on EAlloc/EIO variants); tracked for item 11.B EffName refactor
@@ -355,16 +355,16 @@ fn narrow_row(handle, base_ty, narrow, source_span) = match base_ty {
   _ => ()
 }
 
-/// Verify after tentative apply: read the target handle's state.
-/// A candidate is "proven" if the post-apply handle is NBound (the
-/// tentative narrowing stuck cleanly). Failure modes:
-///   NErrorHole — occurs check or a structural conflict caused
-///                inference to record failure on the handle.
-///   NFree     — the apply didn't bind (shouldn't happen for a
-///                well-formed apply_annotation_tentatively).
-///   row-kind  — handle was a row variable; not a narrow target.
-/// The trail-based rollback restores whatever state the handle held
-/// before the tentative apply, so this check is non-destructive.
+// Verify after tentative apply: read the target handle's state.
+// A candidate is "proven" if the post-apply handle is NBound (the
+// tentative narrowing stuck cleanly). Failure modes:
+//   NErrorHole — occurs check or a structural conflict caused
+//                inference to record failure on the handle.
+//   NFree     — the apply didn't bind (shouldn't happen for a
+//                well-formed apply_annotation_tentatively).
+//   row-kind  — handle was a row variable; not a narrow target.
+// The trail-based rollback restores whatever state the handle held
+// before the tentative apply, so this check is non-destructive.
 fn verify_after_apply(handle) = {
   let GNode(kind, _) = graph_chase(handle)
   match kind {
@@ -417,8 +417,8 @@ fn find_annotation(proven, target) = {
   if len(hits) == 0 { None } else { Some(head(hits)) }
 }
 
-/// Span-insensitive: two APure(_) compare equal regardless of source
-/// span. Priority comparison classifies by discriminator, not origin.
+// Span-insensitive: two APure(_) compare equal regardless of source
+// span. Priority comparison classifies by discriminator, not origin.
 fn annotation_eq(a, b) with Pure = match a {
   APure(_)       => match b { APure(_)       => true, _ => false },
   ANotAlloc(_)   => match b { ANotAlloc(_)   => true, _ => false },
@@ -429,9 +429,9 @@ fn annotation_eq(a, b) with Pure = match a {
   ARef(_, _)     => match b { ARef(_, _)     => true, _ => false }
 }
 
-/// Walk the reason DAG from a graph handle. Every unification, instantiation, and
-/// subsumption wrote a Reason edge into the graph; `why_expand` recurses through the chain
-/// until leaf reasons (Declared, Unmarked, MissingVar) terminate. Depth-limited at 20.    // drift-audit: ignore — "cycles" referencing graph cycle detection, not deferred work
+// Walk the reason DAG from a graph handle. Every unification, instantiation, and
+// subsumption wrote a Reason edge into the graph; `why_expand` recurses through the chain
+// until leaf reasons (Declared, Unmarked, MissingVar) terminate. Depth-limited at 20.    // drift-audit: ignore — "cycles" referencing graph cycle detection, not deferred work
 fn why_from_handle(handle) = {
   let GNode(_, reason) = graph_chase(handle)
   why_expand(reason, 0)
@@ -511,7 +511,7 @@ fn extract_row(ty) with Pure = match ty {
   TAlias(_, inner)  => extract_row(inner)
 }
 
-/// Map an annotation to the capability it unlocks: add this annotation, get this capability.
+// Map an annotation to the capability it unlocks: add this annotation, get this capability.
 fn unlock_capability(annotation) with Pure = match annotation {
   APure(_)          => CMemoize,
   ANotAlloc(_)      => CRealTime,
@@ -522,8 +522,8 @@ fn unlock_capability(annotation) with Pure = match annotation {
   ARef(_, _)        => CZeroCopy
 }
 
-/// One-line summary for an error code. Every code has a full entry at
-/// `docs/errors/<code>.md`; `teach_error` returns the full Explanation with that path.
+// One-line summary for an error code. Every code has a full entry at
+// `docs/errors/<code>.md`; `teach_error` returns the full Explanation with that path.
 fn catalog_summary(code) = match code {
   "E_MissingVariable"     => "Variable not found in scope",
   "E_TypeMismatch"        => "Type mismatch",

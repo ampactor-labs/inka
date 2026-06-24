@@ -58,12 +58,12 @@ fn span_at(ref tokens, pos) = {
 // kind_eq compares two TokenKind values for variant identity. Used
 // at the few sites where dispatch needs a passed-in kind value;
 // most sites just pattern-match directly via `match kind_at(...)`.
-/// Constructor identity IS the value word. Every nullary TokenKind compiles
-/// to a distinct sentinel (HB: "the value-level tag is the discriminant"),
-/// and `==` is structural — type-dispatched at emit to `i32.eq` for an ADT
-/// operand. The kernel proves variant identity; the comparison reads it.
-/// `at` only ever compares against nullary kind literals, so value-word
-/// equality IS constructor equality.
+// Constructor identity IS the value word. Every nullary TokenKind compiles
+// to a distinct sentinel (HB: "the value-level tag is the discriminant"),
+// and `==` is structural — type-dispatched at emit to `i32.eq` for an ADT
+// operand. The kernel proves variant identity; the comparison reads it.
+// `at` only ever compares against nullary kind literals, so value-word
+// equality IS constructor equality.
 fn kind_eq(a, b) with Pure = a == b
 
 // at: predicate form of kind_eq for a position-and-expected pair.
@@ -124,18 +124,18 @@ fn show_token_kind(k) with Pure = match k {
   TNewline => "<newline>", TEof => "<eof>"
 }
 
-/// expect: consume `kind`, or emit a Located P_ExpectedToken and recover.
-/// Productive-under-error (SYNTAX.md: diagnostics are teaching surfaces with
-/// coordinates + a Quick Fix) — on a mismatch the parser NARRATES the missing
-/// token (expected vs found, at the found token's span, MachineApplicable
-/// insert) and returns pos UNCHANGED so the surrounding production re-syncs
-/// from where it stood (no token swallowed). The .mn LEADS the seed: a silent
-/// expect was the no-diagnostic surrender shaped to the disposable hand-WAT
-/// arbiter (the named anti-pattern "never shape the .mn to the seed"); the
-/// ultimate form is MORE truth — the Why projection walks the P_ExpectedToken
-/// Reason back to this site. The recover-position is identical to the old
-/// behavior, so the parse TREE is byte-identical; only the diagnostic edge is
-/// added (the seed, downstream, simply does not emit it).
+// expect: consume `kind`, or emit a Located P_ExpectedToken and recover.
+// Productive-under-error (SYNTAX.md: diagnostics are teaching surfaces with
+// coordinates + a Quick Fix) — on a mismatch the parser NARRATES the missing
+// token (expected vs found, at the found token's span, MachineApplicable
+// insert) and returns pos UNCHANGED so the surrounding production re-syncs
+// from where it stood (no token swallowed). The .mn LEADS the seed: a silent
+// expect was the no-diagnostic surrender shaped to the disposable hand-WAT
+// arbiter (the named anti-pattern "never shape the .mn to the seed"); the
+// ultimate form is MORE truth — the Why projection walks the P_ExpectedToken
+// Reason back to this site. The recover-position is identical to the old
+// behavior, so the parse TREE is byte-identical; only the diagnostic edge is
+// added (the seed, downstream, simply does not emit it).
 fn expect(ref tokens, pos, kind) =
   if at(tokens, pos, kind) { pos + 1 }
   else {
@@ -211,8 +211,8 @@ fn op_prec(k) with Pure = match k {
   _          => 0
 }
 
-/// Pipe-verb token → PipeKind. One token, one kind — `~>` is PTee
-/// always; scope is precedence's job, layout is the formatter's.
+// Pipe-verb token → PipeKind. One token, one kind — `~>` is PTee
+// always; scope is precedence's job, layout is the formatter's.
 fn op_to_pipe_kind(k) with Pure = match k {
   TTildeGt => Some(PTee),
   TPipeGt  => Some(PForward),
@@ -228,16 +228,16 @@ fn op_to_pipe_kind(k) with Pure = match k {
   _        => None
 }
 
-/// Map a binop `TokenKind` to `Some(BinOp)`, or `None` if `k` is not
-/// a binop-producing token. Caller matches `Some`/`None` explicitly;
-/// `None` at that site is unreachable (caller has already filtered via
-/// `op_prec(k) > 0` + `op_to_pipe_kind == None`), but the
-/// unreachability is expressed at the call site — not fabricated here
-/// via a wildcard arm.
-///
-/// Future form (named peer 11.B.1.R): refinement-typed parameter
-///   `fn op_to_binop(k) -> BinOp where is_binop_token(k)`
-/// exercises primitive #6 and eliminates the `Option` entirely.
+// Map a binop `TokenKind` to `Some(BinOp)`, or `None` if `k` is not
+// a binop-producing token. Caller matches `Some`/`None` explicitly;
+// `None` at that site is unreachable (caller has already filtered via
+// `op_prec(k) > 0` + `op_to_pipe_kind == None`), but the
+// unreachability is expressed at the call site — not fabricated here
+// via a wildcard arm.
+//
+// Future form (named peer 11.B.1.R): refinement-typed parameter
+//   `fn op_to_binop(k) -> BinOp where is_binop_token(k)`
+// exercises primitive #6 and eliminates the `Option` entirely.
 fn op_to_binop(k) with Pure = match k {
   TPlus      => Some(BAdd),
   TMinus     => Some(BSub),
@@ -258,10 +258,10 @@ fn op_to_binop(k) with Pure = match k {
 
 // Program — top-level loop
 
-/// Buffer-pattern helper for recursive parse loops. Each parse loop
-/// allocates an initial buffer, threads `(buf, count)` through tail-
-/// recursion, and slices at the end. O(N) total allocation per loop
-/// regardless of element count.
+// Buffer-pattern helper for recursive parse loops. Each parse loop
+// allocates an initial buffer, threads `(buf, count)` through tail-
+// recursion, and slices at the end. O(N) total allocation per loop
+// regardless of element count.
 fn push_node(own buf, count, node) = {
   let extended = list_extend_to(buf, count + 1)
   let written  = list_set(extended, count, node)
@@ -348,7 +348,7 @@ fn collect_comment(ref tokens, pos, own acc) = {
   }
 }
 
-/// Parse `fn name(params) [-> retty] [with effects] = body`.
+// Parse `fn name(params) [-> retty] [with effects] = body`.
 fn parse_fn(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)
@@ -385,11 +385,11 @@ fn parse_fn(ref tokens, pos) = {
   (stmt_node, p9)
 }
 
-/// A param-name token: TIdent or the contextual keywords
-/// own/ref/handle (SYNTAX.md — contextual keywords are idents outside
-/// keyword-role position; #117 class). Pure structural match — no
-/// string, no .len-on-call (the canonical projection mirroring seed
-/// $ident_at_p; one predicate, both call sites).
+// A param-name token: TIdent or the contextual keywords
+// own/ref/handle (SYNTAX.md — contextual keywords are idents outside
+// keyword-role position; #117 class). Pure structural match — no
+// string, no .len-on-call (the canonical projection mirroring seed
+// $ident_at_p; one predicate, both call sites).
 fn is_param_name_tok(ref tokens, p) = match kind_at(tokens, p) {
   TIdent(_) => true,
   TOwn      => true,
@@ -398,14 +398,14 @@ fn is_param_name_tok(ref tokens, p) = match kind_at(tokens, p) {
   _         => false
 }
 
-/// Lexeme of an ident-shaped token: TIdent payload, or the contextual
-/// keyword's spelling (own/ref/handle). The canonical contextual-ident
-/// LEXEME projection (paired with is_param_name_tok, the Bool gate) —
-/// mirrors seed $ident_at_p (TIdent payload; THandle→"handle",
-/// TOwn→"own", TRef→"ref"). "" = not an ident-shaped token (seed-
-/// canonical null; surfaces downstream, not a masked ADT). Used for
-/// record-field names: SYNTAX.md §572 admits keyword-named fields
-/// (s.handle, e.with, r.ref) — record construction is symmetric.
+// Lexeme of an ident-shaped token: TIdent payload, or the contextual
+// keyword's spelling (own/ref/handle). The canonical contextual-ident
+// LEXEME projection (paired with is_param_name_tok, the Bool gate) —
+// mirrors seed $ident_at_p (TIdent payload; THandle→"handle",
+// TOwn→"own", TRef→"ref"). "" = not an ident-shaped token (seed-
+// canonical null; surfaces downstream, not a masked ADT). Used for
+// record-field names: SYNTAX.md §572 admits keyword-named fields
+// (s.handle, e.with, r.ref) — record construction is symmetric.
 fn ident_or_kw_at(ref tokens, p) = match kind_at(tokens, p) {
   TIdent(s) => s,
   TOwn      => "own",
@@ -414,12 +414,12 @@ fn ident_or_kw_at(ref tokens, p) = match kind_at(tokens, p) {
   _         => ""
 }
 
-/// Does a real param start at p? TIdent → yes. `own`/`ref` → yes ONLY
-/// when a param name follows (`own x`); a bare `own`/`ref` (next is
-/// `)`/`,`/`:`/`with`) is NOT a param start — seed parity: seed
-/// parse_one_param returns null there → parse_fn_params `br $done`,
-/// the param-list terminates (verified empirically: `fn f(own)` → 0
-/// params; `fn f(own,b)` → 0 params; `fn f(a,own)` → [a]).
+// Does a real param start at p? TIdent → yes. `own`/`ref` → yes ONLY
+// when a param name follows (`own x`); a bare `own`/`ref` (next is
+// `)`/`,`/`:`/`with`) is NOT a param start — seed parity: seed
+// parse_one_param returns null there → parse_fn_params `br $done`,
+// the param-list terminates (verified empirically: `fn f(own)` → 0
+// params; `fn f(own,b)` → 0 params; `fn f(a,own)` → [a]).
 fn param_starts_here(ref tokens, p) = match kind_at(tokens, p) {
   TIdent(_) => true,
   TOwn      => is_param_name_tok(tokens, skip_ws(tokens, p + 1)),
@@ -427,20 +427,20 @@ fn param_starts_here(ref tokens, p) = match kind_at(tokens, p) {
   _         => false
 }
 
-/// Advance to the token after the next TRParen. Param lists are flat
-/// (no nested parens), so a linear scan is exact. TEof-bounded
-/// (substrate-honest, like the seed's skip_to_eq_or_brace bound).
+// Advance to the token after the next TRParen. Param lists are flat
+// (no nested parens), so a linear scan is exact. TEof-bounded
+// (substrate-honest, like the seed's skip_to_eq_or_brace bound).
 fn skip_to_rparen(ref tokens, p) =
   if at(tokens, p, TRParen) { p + 1 }
   else if at(tokens, p, TEof) { p }
   else { skip_to_rparen(tokens, p + 1) }
 
-/// Advance to (not past) the next TLBrace. For handler `with !E` /
-/// `with E [+ E]` effect-row guards, which the seed skips to the arms
-/// block. Structural effect-row extraction is the seed's own named
-/// post-L1 peer Hβ.parser-handler-effect-row-record; effects are
-/// WAT-invisible so skip-vs-parse is byte-equivalent at L1. TEof-
-/// bounded, mirrors skip_to_rparen.
+// Advance to (not past) the next TLBrace. For handler `with !E` /
+// `with E [+ E]` effect-row guards, which the seed skips to the arms
+// block. Structural effect-row extraction is the seed's own named
+// post-L1 peer Hβ.parser-handler-effect-row-record; effects are
+// WAT-invisible so skip-vs-parse is byte-equivalent at L1. TEof-
+// bounded, mirrors skip_to_rparen.
 fn skip_to_lbrace(ref tokens, p) =
   if at(tokens, p, TLBrace) { p }
   else if at(tokens, p, TEof) { p }
@@ -469,9 +469,9 @@ fn parse_fn_params(ref tokens, pos) = {
   }
 }
 
-/// Push an Option(let) into the lets buffer-counter: Some appends, None is a
-/// no-op (the buffer is unchanged). The parallel of push_node for the optional
-/// prepend-bindings a destructure param yields.
+// Push an Option(let) into the lets buffer-counter: Some appends, None is a
+// no-op (the buffer is unchanged). The parallel of push_node for the optional
+// prepend-bindings a destructure param yields.
 fn push_opt_let(own buf, count, opt) = match opt {
   Some(letstmt) => push_node(buf, count, letstmt),
   None          => (buf, count)
@@ -572,10 +572,10 @@ fn parse_effect_list_from(ref tokens, pos, conn) = {
   }
 }
 
-/// Parse a single effect entry — bare `IO`, negated `!IO`,
-/// parameterized `Sample(44100)`, or negated parameterized
-/// `!Sample(44100)`. Args are scalar literals (int/float/string);
-/// identifier / expression args land in a v2 walkthrough.
+// Parse a single effect entry — bare `IO`, negated `!IO`,
+// parameterized `Sample(44100)`, or negated parameterized
+// `!Sample(44100)`. Args are scalar literals (int/float/string);
+// identifier / expression args land in a v2 walkthrough.
 fn parse_one_effect(ref tokens, pos) = {
   let (negated, p) =
     if at(tokens, pos, TBang) { (true, pos + 1) }
@@ -644,7 +644,7 @@ fn parse_one_eff_arg(ref tokens, pos) = match kind_at(tokens, pos) {
   }
 }
 
-/// Parse `let pat [: ty] = expr`.
+// Parse `let pat [: ty] = expr`.
 fn parse_let(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let (pat, p) = parse_pat(tokens, pos)
@@ -658,7 +658,7 @@ fn parse_let(ref tokens, pos) = {
   (nstmt(LetStmt(pat, val), start), p5)
 }
 
-/// Parse `type X = V1 | V2(fields) | ...` or `type X = T where P`.
+// Parse `type X = V1 | V2(fields) | ...` or `type X = T where P`.
 fn parse_type_decl(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)
@@ -750,9 +750,9 @@ fn parse_variant_fields(ref tokens, pos) = {
   }
 }
 
-/// Parse `effect X { op(args) -> ret }`. Resume discipline is
-/// INFERRED from each handler arm body (no annotation in the
-/// effect declaration); see types.mn:ResumeDiscipline.
+// Parse `effect X { op(args) -> ret }`. Resume discipline is
+// INFERRED from each handler arm body (no annotation in the
+// effect declaration); see types.mn:ResumeDiscipline.
 fn parse_effect_decl(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)
@@ -788,13 +788,13 @@ fn parse_effect_ops(ref tokens, pos) = {
   }
 }
 
-/// Parse a single op-param: either bare `Type` (positional) or
-/// `name: Type` (named — SYNTAX.md §678 `print(msg: String)`). Skips
-/// the optional `<ident> :` prefix; returns the parsed Ty + new pos.
-/// Per Hβ.parser.effect-op-typed-arg-substrate (2026-05-10): the wheel
-/// parser accepts both forms; the seed-side substrate already does the
-/// same via the `if at p2 TColon` check at parse_one_param shape, so
-/// this stays SYNTAX.md-aligned.
+// Parse a single op-param: either bare `Type` (positional) or
+// `name: Type` (named — SYNTAX.md §678 `print(msg: String)`). Skips
+// the optional `<ident> :` prefix; returns the parsed Ty + new pos.
+// Per Hβ.parser.effect-op-typed-arg-substrate (2026-05-10): the wheel
+// parser accepts both forms; the seed-side substrate already does the
+// same via the `if at p2 TColon` check at parse_one_param shape, so
+// this stays SYNTAX.md-aligned.
 fn parse_op_param_one(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   // peek `<ident> :` — if present, skip the name + colon and parse the
@@ -828,24 +828,24 @@ fn parse_op_params(ref tokens, pos) = {
   }
 }
 
-/// Parse `handler X[(config_params)] [with field = init [, ...]] { arms }`
-/// per SYNTAX.md §"Handler declarations" — three optional sections before arms:
-///   - config-params `(p1, p2, ...)` closure-captured at install site
-///   - state `with field = init [, ...]` per-arm-scope mutable bindings
-///   - arms `{ op_name(args) => body, ... }` op handler bodies
-///
-/// Per Hβ.first-light.handler-config-state-substrate (2026-05-06):
-/// config + state extracted at parse time so infer/lower can bind them
-/// in arm scope. Reuses parse_arg_names (line 668) for config-params
-/// and parse_handler_state_fields (below) for the state clause.
-/// Eight: Graph (HandlerDeclStmt carries config+state lists). Handler
-/// (Pure parse). Verb (|> through ident → optional config → optional
-/// state → arms). Row (Memory + Alloc for AST). Ownership (ref tokens;
-/// own per fresh nstmt). Refinement (Stmt where stmt_well_formed(self)).
-/// Gradient (bottom: name only; top: full surface). Reason (span +
-/// Declared(name)). Drift refused: 7 (no parallel arrays — config and
-/// state are separate concerns with distinct shapes); 9 (config + state
-/// land whole, not deferred).
+// Parse `handler X[(config_params)] [with field = init [, ...]] { arms }`
+// per SYNTAX.md §"Handler declarations" — three optional sections before arms:
+//   - config-params `(p1, p2, ...)` closure-captured at install site
+//   - state `with field = init [, ...]` per-arm-scope mutable bindings
+//   - arms `{ op_name(args) => body, ... }` op handler bodies
+//
+// Per Hβ.first-light.handler-config-state-substrate (2026-05-06):
+// config + state extracted at parse time so infer/lower can bind them
+// in arm scope. Reuses parse_arg_names (line 668) for config-params
+// and parse_handler_state_fields (below) for the state clause.
+// Eight: Graph (HandlerDeclStmt carries config+state lists). Handler
+// (Pure parse). Verb (|> through ident → optional config → optional
+// state → arms). Row (Memory + Alloc for AST). Ownership (ref tokens;
+// own per fresh nstmt). Refinement (Stmt where stmt_well_formed(self)).
+// Gradient (bottom: name only; top: full surface). Reason (span +
+// Declared(name)). Drift refused: 7 (no parallel arrays — config and
+// state are separate concerns with distinct shapes); 9 (config + state
+// land whole, not deferred).
 fn parse_handler_decl(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let name = ident_at(tokens, pos)
@@ -881,10 +881,10 @@ fn parse_handler_decl(ref tokens, pos) = {
   (nstmt(HandlerDeclStmt(name, "", config, state, arms), start), p_close)
 }
 
-/// Parse `field = init [, field = init]*` until TLBrace. Each state
-/// entry is a record `{name, init}` per Ω.5 record-shape discipline
-/// (drift mode 7 refusal — no (names_list, inits_list) parallel arrays).
-/// Reuses parse_expr for inits.
+// Parse `field = init [, field = init]*` until TLBrace. Each state
+// entry is a record `{name, init}` per Ω.5 record-shape discipline
+// (drift mode 7 refusal — no (names_list, inits_list) parallel arrays).
+// Reuses parse_expr for inits.
 fn parse_handler_state_fields(ref tokens, pos) = {
   let name = ident_at(tokens, pos)
   let p_eq = expect(tokens, skip_ws(tokens, pos + 1), TEq)
@@ -899,17 +899,17 @@ fn parse_handler_state_fields(ref tokens, pos) = {
   }
 }
 
-/// Parse `field = init [, field = init]*` for a `resume(v) with ...`
-/// clause. Distinct terminator from parse_handler_state_fields: a comma
-/// is a field separator ONLY when followed by `IDENT =`. A comma
-/// followed by anything else is the match-arm separator (consumed by
-/// parse_handler_arms via skip_sep), so the list ends BEFORE it.
-/// Canonical predicate mirrors seed bootstrap/src/parser_compound.wat
-/// $parse_resume_state_updates — the arbiter, since pass-2 proves it.
-/// Same {name, init} record shape as parse_handler_state_fields (drift
-/// 7 refused); a separate fn, not a context flag (drift 8 refused —
-/// mirrors the seed's $parse_handler_state / $parse_resume_state_updates
-/// two-function split).
+// Parse `field = init [, field = init]*` for a `resume(v) with ...`
+// clause. Distinct terminator from parse_handler_state_fields: a comma
+// is a field separator ONLY when followed by `IDENT =`. A comma
+// followed by anything else is the match-arm separator (consumed by
+// parse_handler_arms via skip_sep), so the list ends BEFORE it.
+// Canonical predicate mirrors seed bootstrap/src/parser_compound.wat
+// $parse_resume_state_updates — the arbiter, since pass-2 proves it.
+// Same {name, init} record shape as parse_handler_state_fields (drift
+// 7 refused); a separate fn, not a context flag (drift 8 refused —
+// mirrors the seed's $parse_handler_state / $parse_resume_state_updates
+// two-function split).
 fn parse_resume_state_updates(ref tokens, pos) = {
   let name = ident_at(tokens, pos)
   let p_eq = expect(tokens, skip_ws(tokens, pos + 1), TEq)
@@ -983,7 +983,7 @@ fn parse_arg_names(ref tokens, pos) = {
   }
 }
 
-/// Parse `import path/to/module`.
+// Parse `import path/to/module`.
 fn parse_import(ref tokens, pos) = {
   let start = span_at(tokens, pos)
   let (path, p) = parse_import_path(tokens, pos, "")
@@ -1096,7 +1096,7 @@ fn binop_loop(ref tokens, left, pos, min_prec) = {
   }
 }
 
-/// Postfix: call, field access, indexing.
+// Postfix: call, field access, indexing.
 fn parse_postfix(ref tokens, pos) = {
   let (e, p) = parse_primary(tokens, pos)
   postfix_loop(tokens, e, p)
@@ -1177,10 +1177,10 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
   _ => (e, pos)
 }
 
-/// Parse the body of a nominal record literal — same shape as
-/// `parse_record_fields` but invoked from a different surface
-/// (postfix-suffix vs primary). Sorts fields by name at parse time
-/// to maintain the substrate-wide invariant.
+// Parse the body of a nominal record literal — same shape as
+// `parse_record_fields` but invoked from a different surface
+// (postfix-suffix vs primary). Sorts fields by name at parse time
+// to maintain the substrate-wide invariant.
 fn parse_named_record_body(ref tokens, pos) = {
   let buf = make_list(4)
   let (final_buf, final_count, p) = parse_record_fields(tokens, pos, buf, 0)
@@ -1213,10 +1213,10 @@ fn parse_call_args(ref tokens, pos) = {
   }
 }
 
-/// One call argument: a labeled `name = value` (LabeledArg) when an ident is
-/// immediately followed by `=` (not `==`), else a positional expression. The
-/// `name =` lookahead is the product-field-naming surface; the value parses as
-/// an ordinary expression. (`==` is comparison — a positional arg `a == b`.)
+// One call argument: a labeled `name = value` (LabeledArg) when an ident is
+// immediately followed by `=` (not `==`), else a positional expression. The
+// `name =` lookahead is the product-field-naming surface; the value parses as
+// an ordinary expression. (`==` is comparison — a positional arg `a == b`.)
 fn parse_one_call_arg(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   match kind_at(tokens, p) {
@@ -1354,13 +1354,13 @@ fn parse_primary(ref tokens, pos) = {
 // desugar_block turns a destructuring let into a `match`. ONE pattern machinery
 // at let-bind AND param-bind; no new infer/lower path, no TParam shape change.
 
-/// A unique parameter name for a desugared destructure slot — keyed on the
-/// pattern's fresh handle so it never collides with a source name.
+// A unique parameter name for a desugared destructure slot — keyed on the
+// pattern's fresh handle so it never collides with a source name.
 fn fresh_param_name(span: ValidSpan) = "__dp{int_to_str(fresh_handle(span))}"
 
-/// Convert a parsed expr (a lambda param, already parsed as an expression) to a
-/// pattern: a record/tuple/list literal IS the corresponding destructure
-/// pattern; a bare var is PVar; anything else is PWild (productive-under-error).
+// Convert a parsed expr (a lambda param, already parsed as an expression) to a
+// pattern: a record/tuple/list literal IS the corresponding destructure
+// pattern; a bare var is PVar; anything else is PWild (productive-under-error).
 fn expr_to_pat(e) = {
   let N(eb, _, _) = e
   match eb {
@@ -1372,15 +1372,15 @@ fn expr_to_pat(e) = {
   }
 }
 
-/// Record literal fields `[(name, value_node)]` → pattern fields
-/// `[(name, sub_pat)]` — the value node's pattern (field punning `{x}` parses
-/// as `x: x`, so the sub-pat is the value's pattern).
+// Record literal fields `[(name, value_node)]` → pattern fields
+// `[(name, sub_pat)]` — the value node's pattern (field punning `{x}` parses
+// as `x: x`, so the sub-pat is the value's pattern).
 fn record_fields_to_pat(flds) =
   map((f) => { let (nm, v) = f; (nm, expr_to_pat(v)) }, flds)
 
-/// A param drawn from a Pat: PVar is the bare-name degenerate (no desugar);
-/// any destructure pattern yields a fresh-named param plus the prepend-let
-/// `let <pat> = <fresh>` that binds it at fn entry. Returns (TParam, Option(let)).
+// A param drawn from a Pat: PVar is the bare-name degenerate (no desugar);
+// any destructure pattern yields a fresh-named param plus the prepend-let
+// `let <pat> = <fresh>` that binds it at fn entry. Returns (TParam, Option(let)).
 fn pat_param_and_let(pat, span: ValidSpan) = match pat {
   PVar(nm) => (TParam(nm, TVar(fresh_handle(span)), Unmarked, Unmarked, None), None),
   PWild    => (TParam("_", TVar(fresh_handle(span)), Unmarked, Unmarked, None), None),
@@ -1392,19 +1392,19 @@ fn pat_param_and_let(pat, span: ValidSpan) = match pat {
   }
 }
 
-/// Prepend the collected destructure-let bindings to a body and run them
-/// through desugar_block — so each `let <pat> = <fresh>` becomes the same
-/// `match` a destructuring let would. No lets → the body is untouched
-/// (byte-identical to a fn whose params are all bare names).
+// Prepend the collected destructure-let bindings to a body and run them
+// through desugar_block — so each `let <pat> = <fresh>` becomes the same
+// `match` a destructuring let would. No lets → the body is untouched
+// (byte-identical to a fn whose params are all bare names).
 fn bind_param_destructures(lets, body, span: ValidSpan) =
   if len(lets) == 0 { body }
   else { nexpr(desugar_block(lets, body, span), span) }
 
-/// Convert a list of parsed expr nodes (paren-lambda params) into a TParam list
-/// PLUS the destructure-let bindings — each elem's pattern (expr_to_pat) drives
-/// pat_param_and_let, so `((x, y)) => …` / `({a, b}) => …` bind their pattern at
-/// fn entry. Parallel buffer-counter build (params + lets); returns
-/// (params, lets).
+// Convert a list of parsed expr nodes (paren-lambda params) into a TParam list
+// PLUS the destructure-let bindings — each elem's pattern (expr_to_pat) drives
+// pat_param_and_let, so `((x, y)) => …` / `({a, b}) => …` bind their pattern at
+// fn entry. Parallel buffer-counter build (params + lets); returns
+// (params, lets).
 fn exprs_to_params(elems, i, n, own buf, count, own lbuf, lcount) = {
   if i >= n { (slice(buf, 0, count), slice(lbuf, 0, lcount)) }
   else {
@@ -1576,11 +1576,11 @@ fn parse_list_elems(ref tokens, pos, own buf, count) = {
   }
 }
 
-/// Disambiguate `{`: record literal vs block. Per SYNTAX.md, after the
-/// opening brace + whitespace, an `Identifier` followed by `:` (typed
-/// field) or `,`/`}` (puned field) signals a record literal.
-/// Anything else is a block. Lookahead is bounded to two tokens past
-/// the brace — no backtracking, no ambiguity that escapes the parser.
+// Disambiguate `{`: record literal vs block. Per SYNTAX.md, after the
+// opening brace + whitespace, an `Identifier` followed by `:` (typed
+// field) or `,`/`}` (puned field) signals a record literal.
+// Anything else is a block. Lookahead is bounded to two tokens past
+// the brace — no backtracking, no ambiguity that escapes the parser.
 fn parse_brace_expr(ref tokens, pos, start_span) = {
   let p = skip_ws(tokens, pos)
   // A record literal opens with an ident-shaped field name (incl. the
@@ -1630,9 +1630,9 @@ fn parse_record_update(ref tokens, pos, start_span) = {
   }
 }
 
-/// Record literal: `{name: expr, age: expr, ...}` or with field
-/// puning `{name, age}` ≡ `{name: name, age: age}`. Fields sort by
-/// name at parse time so downstream sees one canonical layout.
+// Record literal: `{name: expr, age: expr, ...}` or with field
+// puning `{name, age}` ≡ `{name: name, age: age}`. Fields sort by
+// name at parse time so downstream sees one canonical layout.
 fn parse_record_literal(ref tokens, pos, start_span) = {
   let buf = make_list(4)
   let (final_buf, final_count, p) = parse_record_fields(tokens, pos, buf, 0)
@@ -1667,8 +1667,8 @@ fn parse_record_fields(ref tokens, pos, own buf, count) = {
   }
 }
 
-/// Insertion sort by field name. N≤~16 in practice; insertion is the
-/// natural shape and keeps the parser dependency-free.
+// Insertion sort by field name. N≤~16 in practice; insertion is the
+// natural shape and keeps the parser dependency-free.
 fn sort_record_fields(fields) = {
   sort_record_fields_loop(fields, 0, len(fields), [])
 }
@@ -1769,14 +1769,14 @@ fn parse_block_body(ref tokens, pos, own buf, count) = {
   }
 }
 
-/// `let pat = v; rest` IS `match v { pat => rest }`. A destructuring let in a
-/// block is the match projection wearing let's syntax — split the block at the
-/// first one, wrapping the remainder (and final) as its single match arm, so the
-/// node is born a `match` and INFERENCE types it (lowering merely projects it).
-/// PVar/PWild/PLit lets stay direct, so `LetStmt` carries only PVar by
-/// construction. The audit: a let-destructure RE-DERIVES match; unify it INTO
-/// match at the node's birth, never re-derive it downstream.
-/// (protocol_one_graph_two_operations.)
+// `let pat = v; rest` IS `match v { pat => rest }`. A destructuring let in a
+// block is the match projection wearing let's syntax — split the block at the
+// first one, wrapping the remainder (and final) as its single match arm, so the
+// node is born a `match` and INFERENCE types it (lowering merely projects it).
+// PVar/PWild/PLit lets stay direct, so `LetStmt` carries only PVar by
+// construction. The audit: a let-destructure RE-DERIVES match; unify it INTO
+// match at the node's birth, never re-derive it downstream.
+// (protocol_one_graph_two_operations.)
 fn desugar_block(stmts, final_e, span) = match find_destructure_let(stmts, 0) {
   None    => BlockExpr(stmts, final_e),
   Some(i) => {
@@ -1866,11 +1866,11 @@ fn parse_match_arms(ref tokens, pos, own buf, count) = {
   }
 }
 
-/// Pattern alternation at the match-arm grammar (SYNTAX.md §1605:
-/// `|` is TPipe — variant separator in `type` body + pattern
-/// alternation in match arm body). One pat, then a TPipe loop;
-/// single-branch stays the bare pat (no degenerate PAlt — walkthrough
-/// §7 "Single-branch alternation").
+// Pattern alternation at the match-arm grammar (SYNTAX.md §1605:
+// `|` is TPipe — variant separator in `type` body + pattern
+// alternation in match arm body). One pat, then a TPipe loop;
+// single-branch stays the bare pat (no degenerate PAlt — walkthrough
+// §7 "Single-branch alternation").
 fn parse_pat_alt(ref tokens, pos) = {
   let (first, p) = parse_pat(tokens, pos)
   if at(tokens, skip_ws(tokens, p), TPipe) {
@@ -2125,8 +2125,8 @@ fn parse_pat(ref tokens, pos) = {
   }
 }
 
-/// Parse `{name, age}` or `{name: sub_pat, age: sub_pat}`. Field
-/// puning is the default — `{name}` ≡ `{name: PVar("name")}`.
+// Parse `{name, age}` or `{name: sub_pat, age: sub_pat}`. Field
+// puning is the default — `{name}` ≡ `{name: PVar("name")}`.
 fn parse_pat_record_fields(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   if at(tokens, p, TRBrace) { ([], p + 1) }

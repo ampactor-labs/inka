@@ -21,9 +21,9 @@ import types
 import runtime/io
 import runtime/strings
 
-/// LspFrame — one parsed JSON-RPC message body. EOF distinguishes
-/// stdin-closed (clean session termination) from empty body. Per
-/// drift mode 6: structural ADT, not a sentinel String.
+// LspFrame — one parsed JSON-RPC message body. EOF distinguishes
+// stdin-closed (clean session termination) from empty body. Per
+// drift mode 6: structural ADT, not a sentinel String.
 
 type LspFrame
   = LspFrame(String)               // body text, length-prefixed Mentl String
@@ -32,9 +32,9 @@ type LspFrame
 // ─── Header parsing — accumulate bytes into a String until \r\n\r\n ───
 // Byte-at-a-time reads compose on read_one_byte (lib/runtime/io.mn).
 
-/// read_lsp_frame — entry point. Read header section (until \r\n\r\n),
-/// parse Content-Length, read body bytes. Returns LspFrameEof if stdin
-/// closes during header read.
+// read_lsp_frame — entry point. Read header section (until \r\n\r\n),
+// parse Content-Length, read body bytes. Returns LspFrameEof if stdin
+// closes during header read.
 
 fn read_lsp_frame() with Memory + Alloc + WASI = {
   let initial_cap = 256
@@ -51,10 +51,10 @@ fn read_lsp_frame() with Memory + Alloc + WASI = {
   }
 }
 
-/// read_headers_until_blank — accumulate stdin bytes into hdr_buf until
-/// the sequence \r\n\r\n is observed. Returns Some(header_string) on
-/// success; None on EOF mid-header. Header string carries the bytes
-/// up to (not including) the terminating \r\n\r\n.
+// read_headers_until_blank — accumulate stdin bytes into hdr_buf until
+// the sequence \r\n\r\n is observed. Returns Some(header_string) on
+// success; None on EOF mid-header. Header string carries the bytes
+// up to (not including) the terminating \r\n\r\n.
 
 fn read_headers_until_blank(buf, written, cap) with Memory + Alloc + WASI = {
   let b = read_one_byte()  // drift-audit: ignore — sequenced effectful stream-read; b consumed by 2 sites (EOF/store)
@@ -78,8 +78,8 @@ fn read_headers_until_blank(buf, written, cap) with Memory + Alloc + WASI = {
   }
 }
 
-/// header_terminator_seen — does the buffer end in \r\n\r\n (4 bytes)?
-/// Used as the terminator detector in the header read loop.
+// header_terminator_seen — does the buffer end in \r\n\r\n (4 bytes)?
+// Used as the terminator detector in the header read loop.
 
 fn header_terminator_seen(buf, written) with Memory = {
   if written < 4 { false }
@@ -94,9 +94,9 @@ fn header_terminator_seen(buf, written) with Memory = {
 
 // ─── parse_content_length — find "Content-Length: N" header value ─────
 
-/// parse_content_length — scan headers (case-sensitive Content-Length
-/// per LSP spec). Returns the integer value or -1 if not found.
-/// Honest substrate: doesn't validate other headers; ignores them.
+// parse_content_length — scan headers (case-sensitive Content-Length
+// per LSP spec). Returns the integer value or -1 if not found.
+// Honest substrate: doesn't validate other headers; ignores them.
 
 fn parse_content_length(hdr_str) with Memory = {
   let hdr_len = byte_len(hdr_str)
@@ -148,9 +148,9 @@ fn parse_int_from_pos(src, src_len, pos, acc) with Memory = {
 
 // ─── read_body — read exactly N bytes from stdin ──────────────────────
 
-/// read_body — accumulate exactly N bytes into a flat Mentl String.
-/// Returns LspFrame(body) on success; LspFrameEof if stdin closes
-/// before N bytes received (truncated message; protocol error).
+// read_body — accumulate exactly N bytes into a flat Mentl String.
+// Returns LspFrame(body) on success; LspFrameEof if stdin closes
+// before N bytes received (truncated message; protocol error).
 
 fn read_body(n) with Memory + Alloc + WASI = {
   let buf = alloc(4 + n)
@@ -172,10 +172,10 @@ fn read_body_loop(buf, written, total) with Memory + Alloc + WASI = {
 
 // ─── write_lsp_frame — write Content-Length-framed body to stdout ─────
 
-/// write_lsp_frame — emit "Content-Length: N\r\n\r\n<N bytes>" to fd 1.
-/// Per LSP spec the header is ASCII-only; body is the raw JSON bytes.
-/// Builds the header as a String, writes header then body via
-/// fd_write through the existing print_string substrate.
+// write_lsp_frame — emit "Content-Length: N\r\n\r\n<N bytes>" to fd 1.
+// Per LSP spec the header is ASCII-only; body is the raw JSON bytes.
+// Builds the header as a String, writes header then body via
+// fd_write through the existing print_string substrate.
 
 fn write_lsp_frame(body) with Memory + Alloc + WASI = {
   let body_len = byte_len(body)

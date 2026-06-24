@@ -18,15 +18,15 @@ import runtime/strings
 import runtime/binary
 import runtime/io
 
-/// Per-module cache record. Fields sorted alphabetically (post-H2
-/// parser invariant). Adding fields is additive — version mismatch
-/// causes the cache entry to be treated as a miss and rebuilt.
-///
-/// - `compiler_version` — bumps when the binary format changes.
-/// - `exported_entries` — `List<(String, Scheme, Reason, SchemeKind)>`.
-/// - `imports` / `imports_hashes` — transitive dep paths + their hashes.
-/// - `module_name` — qualified module path.
-/// - `source_hash` — FNV-1a 32-bit hash of the source bytes.
+// Per-module cache record. Fields sorted alphabetically (post-H2
+// parser invariant). Adding fields is additive — version mismatch
+// causes the cache entry to be treated as a miss and rebuilt.
+//
+// - `compiler_version` — bumps when the binary format changes.
+// - `exported_entries` — `List<(String, Scheme, Reason, SchemeKind)>`.
+// - `imports` / `imports_hashes` — transitive dep paths + their hashes.
+// - `module_name` — qualified module path.
+// - `source_hash` — FNV-1a 32-bit hash of the source bytes.
 type KaiFile = {
   compiler_version: Int,
   exported_entries: List,
@@ -55,8 +55,8 @@ type KaiFile = {
 //        Why chain persists with the value (handler IS evidence)
 fn cache_compiler_version() with Pure = 8
 
-/// 32-bit FNV-1a hash of the source bytes. Non-cryptographic;
-/// collision resistance is sufficient for cache invalidation.
+// 32-bit FNV-1a hash of the source bytes. Non-cryptographic;
+// collision resistance is sufficient for cache invalidation.
 fn hash_source(s) with Memory = {
   let n = byte_len(s)
   cache_hash_loop(s, 0, n, 2166136261)

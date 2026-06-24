@@ -22,13 +22,13 @@ effect Iterate {
 
 fn iterate(xs) with Iterate = iterate_from(xs, 0, len(xs))
 
-/// Top-level tail-recursive iteration — no nested closure. Lower's
-/// tail-call-mark-pass recognizes `iterate_from(xs, i+1, n)` as the
-/// tail call of the then-branch; emit produces `return_call`, the
-/// frame doesn't accumulate. For wheel-class lists (hundreds of
-/// elements), this keeps the wasm stack bounded — without this form,
-/// mentl2's self-compile traps via `op_map_h_yield` recursion (one
-/// frame per element × handler-stack-depth).
+// Top-level tail-recursive iteration — no nested closure. Lower's
+// tail-call-mark-pass recognizes `iterate_from(xs, i+1, n)` as the
+// tail call of the then-branch; emit produces `return_call`, the
+// frame doesn't accumulate. For wheel-class lists (hundreds of
+// elements), this keeps the wasm stack bounded — without this form,
+// mentl2's self-compile traps via `op_map_h_yield` recursion (one
+// frame per element × handler-stack-depth).
 fn iterate_from(xs, i, n) with Iterate =
   if i < n { yield(xs[i]); iterate_from(xs, i + 1, n) }
   else { () }

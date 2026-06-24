@@ -14,9 +14,9 @@
 // This is the single source of truth for substrate operations.
 // If an operation isn't declared here, it doesn't exist.
 
-/// Memory — linear memory read/write. Operations on WASM's linear
-/// memory. Each maps to one instruction. The developer writes the
-/// intent; the substrate emits the opcode.
+// Memory — linear memory read/write. Operations on WASM's linear
+// memory. Each maps to one instruction. The developer writes the
+// intent; the substrate emits the opcode.
 effect Memory {
   // 32-bit store/load — full i32 word at address
   store_i32(Int, Int) -> ()   // (addr, value)
@@ -35,15 +35,15 @@ effect Memory {
   i32_xor(Int, Int) -> Int   // (a, b) -> a XOR b
 }
 
-/// Alloc — heap allocation. Bump allocator in WASM linear memory.
-/// alloc(n) advances the heap pointer by n bytes (8-byte aligned)
-/// and returns the old pointer. No free. No GC. Region-based
-/// lifetime via ownership effects.
-///
-/// Alloc is separate from Memory because a function can read/write
-/// existing memory without allocating (with Memory + !Alloc), and
-/// this distinction is load-bearing for real-time audio paths where
-/// allocation is forbidden.
+// Alloc — heap allocation. Bump allocator in WASM linear memory.
+// alloc(n) advances the heap pointer by n bytes (8-byte aligned)
+// and returns the old pointer. No free. No GC. Region-based
+// lifetime via ownership effects.
+//
+// Alloc is separate from Memory because a function can read/write
+// existing memory without allocating (with Memory + !Alloc), and
+// this distinction is load-bearing for real-time audio paths where
+// allocation is forbidden.
 effect Alloc {
   alloc(Int) -> Int   // (size) -> ptr
 }

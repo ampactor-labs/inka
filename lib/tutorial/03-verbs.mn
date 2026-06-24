@@ -23,8 +23,8 @@ import dsp/clock
 
 // ─── |> sequential flow ─────────────────────────────────────────────
 
-/// Pipe the input through three transforms. Each |> is one step;
-/// reading top-to-bottom is reading the data flow direction.
+// Pipe the input through three transforms. Each |> is one step;
+// reading top-to-bottom is reading the data flow direction.
 fn pipeline_demo(n) = {
   n
     |> double
@@ -37,9 +37,9 @@ fn add_one(x) = x + 1
 
 // ─── <| divergence — one input, many branches, tupled output ────────
 
-/// `branch_demo` borrows `x` to each branch (no ownership transfer).
-/// The result is a tuple of branch outputs. Drift 1 closure: no
-/// vtable; the `<|` IS the dispatch.
+// `branch_demo` borrows `x` to each branch (no ownership transfer).
+// The result is a tuple of branch outputs. Drift 1 closure: no
+// vtable; the `<|` IS the dispatch.
 fn branch_demo(x) =
   x <|
     ( double,
@@ -83,8 +83,8 @@ fn capability_demo() = {
 // ambient clock. Requires `Clock` (or `Sample` / `Tick`) handler in
 // scope; absence is a type error at this site (E_FeedbackNoContext).
 
-/// Lowpass filter — classic <~ shape. Each tick, `output` becomes
-/// `0.9 * previous_output + 0.1 * input`. The verb DRAWS the cycle.
+// Lowpass filter — classic <~ shape. Each tick, `output` becomes
+// `0.9 * previous_output + 0.1 * input`. The verb DRAWS the cycle.
 fn lowpass(input) with Sample = {
   input
     <~
@@ -112,9 +112,9 @@ fn lowpass(input) with Sample = {
 // computation graph — the developer reads the topology by reading
 // the indent.
 
-/// `live_session_demo` — one position projected through four lenses
-/// simultaneously, normalized, combined with another position's
-/// projection (parallel composition), feedback-closed under a clock.
+// `live_session_demo` — one position projected through four lenses
+// simultaneously, normalized, combined with another position's
+// projection (parallel composition), feedback-closed under a clock.
 fn live_session_demo(input_a, input_b) with Sample = {
   let projection_a =
     input_a

@@ -19,7 +19,7 @@
 import types
 import runtime/strings
 
-/// Pack — byte output direction.
+// Pack — byte output direction.
 effect Pack {
   pack_byte(Int) -> ()
   pack_i32(Int) -> ()
@@ -27,16 +27,16 @@ effect Pack {
   pack_finalize() -> String
 }
 
-/// Unpack — byte input direction.
+// Unpack — byte input direction.
 effect Unpack {
   unpack_byte() -> Int
   unpack_i32() -> Int
   unpack_str() -> String
 }
 
-/// buffer_packer — Pack handler that accumulates into a buffer.
-/// Grow-on-demand: doubles capacity when approaching limit.
-/// After the body completes, call finalize_packed to stamp the length.
+// buffer_packer — Pack handler that accumulates into a buffer.
+// Grow-on-demand: doubles capacity when approaching limit.
+// After the body completes, call finalize_packed to stamp the length.
 handler buffer_packer with buf = 0, offset = 0, capacity = 0 {
 
   pack_byte(b) => {
@@ -79,9 +79,9 @@ handler buffer_packer with buf = 0, offset = 0, capacity = 0 {
   }
 }
 
-/// buffer_unpacker — Unpack handler that reads from a byte string.
-/// Tracks a read offset through the source bytes. The caller's read
-/// order must match the writer's write order (structural contract).
+// buffer_unpacker — Unpack handler that reads from a byte string.
+// Tracks a read offset through the source bytes. The caller's read
+// order must match the writer's write order (structural contract).
 handler buffer_unpacker(source) with pos = 0 {
 
   unpack_byte() => {
@@ -116,7 +116,7 @@ handler buffer_unpacker(source) with pos = 0 {
   }
 }
 
-/// ensure_capacity — grow-on-demand buffer management.
+// ensure_capacity — grow-on-demand buffer management.
 fn ensure_capacity(buf, offset, capacity, needed) with Memory + Alloc = {
   if capacity == 0 {
     let initial = if needed > 4096 { needed * 2 } else { 4096 }
@@ -136,8 +136,8 @@ fn ensure_capacity(buf, offset, capacity, needed) with Memory + Alloc = {
   else { (buf, capacity) }
 }
 
-/// Stamp the final length into the buffer header, returning a proper
-/// Mentl string [len:i32][bytes...].
+// Stamp the final length into the buffer header, returning a proper
+// Mentl string [len:i32][bytes...].
 fn finalize_packed(buf, offset) with Memory = {
   store_i32(buf, offset)
   buf

@@ -19,39 +19,39 @@
 import runtime/io
 import mentl
 
-/// `safe_call` — clean inference; one Reason edge per unification.
-/// Run `mentl query reason safe_call` to walk the chain:
-///
-///   safe_call's row chases to:
-///     Pure (Located src/tutorial/08-reasons.mn:24:1-26:1)
-///       Inferred("body has no perform calls")
+// `safe_call` — clean inference; one Reason edge per unification.
+// Run `mentl query reason safe_call` to walk the chain:
+//
+//   safe_call's row chases to:
+//     Pure (Located src/tutorial/08-reasons.mn:24:1-26:1)
+//       Inferred("body has no perform calls")
 fn safe_call(x) = x + 1
 
-/// `mistake` — would produce E_TypeMismatch in normal HM and STOP.
-/// Mentl's productive-under-error continues: `mistake` gets an
-/// NErrorHole at the conflict; downstream `caller` still
-/// typechecks. The Reason chain on the error is queryable:
-///
-///   mentl query reason mistake
-///     E_TypeMismatch (Located :30:?)
-///       Unified(
-///         Located(:30:?, Declared("Int"))
-///         Located(:30:?, Inferred("StringLit body"))
-///       )
-///
-/// Commented out so the file remains compilable; uncomment to see
-/// the productive-under-error behavior in `mentl edit`.
+// `mistake` — would produce E_TypeMismatch in normal HM and STOP.
+// Mentl's productive-under-error continues: `mistake` gets an
+// NErrorHole at the conflict; downstream `caller` still
+// typechecks. The Reason chain on the error is queryable:
+//
+//   mentl query reason mistake
+//     E_TypeMismatch (Located :30:?)
+//       Unified(
+//         Located(:30:?, Declared("Int"))
+//         Located(:30:?, Inferred("StringLit body"))
+//       )
+//
+// Commented out so the file remains compilable; uncomment to see
+// the productive-under-error behavior in `mentl edit`.
 // fn mistake() = "this is a string but the body type is Int"
 
-/// `caller` — even with `mistake` having an error, this typechecks.
-/// The error reaches the diagnostics handler at the chain boundary;
-/// the build emits BOTH the diagnostic AND the WAT for healthy
-/// fragments. Mentl stays productive while telling you what's wrong.
+// `caller` — even with `mistake` having an error, this typechecks.
+// The error reaches the diagnostics handler at the chain boundary;
+// the build emits BOTH the diagnostic AND the WAT for healthy
+// fragments. Mentl stays productive while telling you what's wrong.
 fn caller(x) = safe_call(x) + 1
 
-/// `walk_reason` — explicit Why query. Mentl's teach_why returns
-/// the Reason chain rooted at a graph handle; render_why walks it
-/// to indented text suitable for IDE hover or `mentl explain` CLI.
+// `walk_reason` — explicit Why query. Mentl's teach_why returns
+// the Reason chain rooted at a graph handle; render_why walks it
+// to indented text suitable for IDE hover or `mentl explain` CLI.
 fn walk_reason(handle) = {
   teach_why(handle)
     |> render_why

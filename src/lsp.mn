@@ -31,20 +31,20 @@ import runtime/io
 
 // ─── LspMessage — incoming JSON-RPC message shape ─────────────────────
 
-/// LspMessage — request (id + method + params), notification (method
-/// + params, no id), or response (id + result + optional error).
-/// Per drift mode 6 + H6: structural ADT, not flag-keyed.
+// LspMessage — request (id + method + params), notification (method
+// + params, no id), or response (id + result + optional error).
+// Per drift mode 6 + H6: structural ADT, not flag-keyed.
 
 type LspMessage
   = LspRequest(Int, String, JsonValue)
   | LspNotification(String, JsonValue)
   | LspResponse(Int, JsonValue, Option)
 
-/// LspMethodKind — classification ADT. LSP method strings come from
-/// the protocol (unavoidable string-keyed input); classify_method
-/// projects to this ADT IMMEDIATELY at the dispatch boundary;
-/// downstream code matches on LspMethodKind only. Per drift mode 8
-/// mitigation per MV-LSP-adapter §2.1.
+// LspMethodKind — classification ADT. LSP method strings come from
+// the protocol (unavoidable string-keyed input); classify_method
+// projects to this ADT IMMEDIATELY at the dispatch boundary;
+// downstream code matches on LspMethodKind only. Per drift mode 8
+// mitigation per MV-LSP-adapter §2.1.
 
 type LspMethodKind
   = LspInitialize
@@ -63,9 +63,9 @@ type LspMethodKind
   | LspTextDocReferences
   | LspUnknown(String)
 
-/// LspResponseBody — typed shape of an LSP response payload. Each
-/// variant projects to JsonValue via response_to_json. Variants cover
-/// the 12 v1 LSP method response shapes per MV-LSP-adapter §1.3.
+// LspResponseBody — typed shape of an LSP response payload. Each
+// variant projects to JsonValue via response_to_json. Variants cover
+// the 12 v1 LSP method response shapes per MV-LSP-adapter §1.3.
 
 type LspResponseBody
   = LspNullResp
@@ -87,10 +87,10 @@ type Location = Location(String, Int, Int, Int, Int)
 
 // ─── parse_lsp_message — JsonValue → LspMessage ───────────────────────
 
-/// parse_lsp_message — extract id / method / params from JsonValue.
-/// Per drift mode 6: explicit shape detection (request has id+method;
-/// notification has method no id; response has id+result no method).
-/// Anything else is an LspUnknown notification with empty params.
+// parse_lsp_message — extract id / method / params from JsonValue.
+// Per drift mode 6: explicit shape detection (request has id+method;
+// notification has method no id; response has id+result no method).
+// Anything else is an LspUnknown notification with empty params.
 
 fn parse_lsp_message(v) with Memory = {
   let method_opt = json_obj_get(v, "method")
@@ -126,10 +126,10 @@ fn parse_lsp_message(v) with Memory = {
 
 // ─── classify_method — String → LspMethodKind ─────────────────────────
 
-/// classify_method — project the LSP method string to LspMethodKind
-/// ADT. The ONE place where strings cross into the dispatch substrate;
-/// downstream is ADT-only. Per drift mode 8: input strings are
-/// projected, not stored.
+// classify_method — project the LSP method string to LspMethodKind
+// ADT. The ONE place where strings cross into the dispatch substrate;
+// downstream is ADT-only. Per drift mode 8: input strings are
+// projected, not stored.
 
 fn classify_method(method) with Memory = {
   if      method == "initialize"               { LspInitialize }
@@ -151,9 +151,9 @@ fn classify_method(method) with Memory = {
 
 // ─── dispatch_request / dispatch_notification ─────────────────────────
 
-/// dispatch_request — request methods (require response). H6
-/// exhaustive over LspMethodKind. Notification-shaped methods that
-/// arrive as requests get LspNullResp (graceful protocol tolerance).
+// dispatch_request — request methods (require response). H6
+// exhaustive over LspMethodKind. Notification-shaped methods that
+// arrive as requests get LspNullResp (graceful protocol tolerance).
 
 fn dispatch_request(kind, params) with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate = {
   match kind {
@@ -175,9 +175,9 @@ fn dispatch_request(kind, params) with Memory + Alloc + WASI + Filesystem + Inte
   }
 }
 
-/// dispatch_notification — notification methods (no response). H6
-/// exhaustive. Request-shaped methods that arrive as notifications
-/// are silently ignored.
+// dispatch_notification — notification methods (no response). H6
+// exhaustive. Request-shaped methods that arrive as notifications
+// are silently ignored.
 
 fn dispatch_notification(kind, params) with Memory + Alloc + WASI + Filesystem + Interact = {
   match kind {
@@ -201,8 +201,8 @@ fn dispatch_notification(kind, params) with Memory + Alloc + WASI + Filesystem +
 
 // ─── LSP param extraction helpers ─────────────────────────────────────
 
-/// lsp_extract_uri — pull `params.textDocument.uri` String. Default
-/// empty when missing.
+// lsp_extract_uri — pull `params.textDocument.uri` String. Default
+// empty when missing.
 
 fn lsp_extract_uri(params) with Memory = {
   match json_obj_get(params, "textDocument") {
@@ -214,8 +214,8 @@ fn lsp_extract_uri(params) with Memory = {
   }
 }
 
-/// lsp_extract_position — pull `params.position.{line, character}`.
-/// Returns (line, character) Ints. Default (0, 0) on missing.
+// lsp_extract_position — pull `params.position.{line, character}`.
+// Returns (line, character) Ints. Default (0, 0) on missing.
 
 fn lsp_extract_position(params) with Memory = {
   match json_obj_get(params, "position") {
@@ -235,10 +235,10 @@ fn json_obj_get_unwrap(v, key) with Memory = {
   }
 }
 
-/// position_to_span — LSP (line, character) → Mentl Span. LSP positions
-/// are 0-indexed; Mentl spans 1-indexed. v1 produces a zero-width span
-/// at (line+1, char+1); refined ranges (selection-aware) land as
-/// MV-LSP.range peer sub-handle.
+// position_to_span — LSP (line, character) → Mentl Span. LSP positions
+// are 0-indexed; Mentl spans 1-indexed. v1 produces a zero-width span
+// at (line+1, char+1); refined ranges (selection-aware) land as
+// MV-LSP.range peer sub-handle.
 
 fn position_to_span(pos) with Pure = {
   let (line, ch) = pos
@@ -247,10 +247,10 @@ fn position_to_span(pos) with Pure = {
 
 // ─── handle_* — LSP method bodies ─────────────────────────────────────
 
-/// handle_initialize — capability negotiation. v1 declares fixed
-/// capabilities (text-sync = full; hover; completion; codeAction;
-/// diagnostic; definition; references). Project root extracted from
-/// rootUri or workspaceFolders.
+// handle_initialize — capability negotiation. v1 declares fixed
+// capabilities (text-sync = full; hover; completion; codeAction;
+// diagnostic; definition; references). Project root extracted from
+// rootUri or workspaceFolders.
 
 fn handle_initialize(_params) with Memory + Alloc + Interact = {
   project_root()
@@ -274,7 +274,7 @@ fn handle_initialize(_params) with Memory + Alloc + Interact = {
   LspInitializeResp(result)
 }
 
-/// handle_hover — focus + ask(QTypeAt) → HoverContent. Per MV §2.8 AT1.
+// handle_hover — focus + ask(QTypeAt) → HoverContent. Per MV §2.8 AT1.
 fn handle_hover(params) with Memory + Alloc + Interact = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
@@ -291,10 +291,10 @@ fn handle_hover(params) with Memory + Alloc + Interact = {
   }
 }
 
-/// handle_completion — propose at the cursor position; project the
-/// returned VoiceLine's slots to CompletionItems. The cursor's Propose
-/// tentacle IS the completion source (PLAN §2 proposing-cursor): one
-/// propose, the SIdent slots become items. Silence → empty list.
+// handle_completion — propose at the cursor position; project the
+// returned VoiceLine's slots to CompletionItems. The cursor's Propose
+// tentacle IS the completion source (PLAN §2 proposing-cursor): one
+// propose, the SIdent slots become items. Silence → empty list.
 fn handle_completion(params) with Memory + Alloc + Interact + GraphRead + !Mutate = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
@@ -307,10 +307,10 @@ fn handle_completion(params) with Memory + Alloc + Interact + GraphRead + !Mutat
   }
 }
 
-/// handle_code_action — propose at the cursor; project the VoiceLine's
-/// offering slots to CodeActions. Same propose path as completion (MV
-/// §2.7.6: codeAction and completion both surface Propose-tentacle
-/// voice). SLit slots (offering closers) become the quick-fix actions.
+// handle_code_action — propose at the cursor; project the VoiceLine's
+// offering slots to CodeActions. Same propose path as completion (MV
+// §2.7.6: codeAction and completion both surface Propose-tentacle
+// voice). SLit slots (offering closers) become the quick-fix actions.
 fn handle_code_action(params) with Memory + Alloc + Interact + GraphRead + !Mutate = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
@@ -323,10 +323,10 @@ fn handle_code_action(params) with Memory + Alloc + Interact + GraphRead + !Muta
   }
 }
 
-/// handle_diagnostic — consult(QVerifyDebt) for the live pending
-/// obligations the graph holds; project each (span, predicate, reason)
-/// to an LSP Diagnostic. The verify-debt IS the diagnostic set (the
-/// graph proved it) — read live, never an empty []-fabrication.
+// handle_diagnostic — consult(QVerifyDebt) for the live pending
+// obligations the graph holds; project each (span, predicate, reason)
+// to an LSP Diagnostic. The verify-debt IS the diagnostic set (the
+// graph proved it) — read live, never an empty []-fabrication.
 fn handle_diagnostic(params) with Memory + Alloc + Interact = {
   let uri = lsp_extract_uri(params)
   ensure_doc_open(uri)
@@ -340,10 +340,10 @@ fn handle_diagnostic(params) with Memory + Alloc + Interact = {
   }
 }
 
-/// handle_definition — resolve the identifier at the cursor, then read
-/// its binding span LIVE from the env entry's Located Reason (the graph
-/// proved where the name lives). No echo of the cursor's own position;
-/// the defining span IS the goto target. None when unresolved.
+// handle_definition — resolve the identifier at the cursor, then read
+// its binding span LIVE from the env entry's Located Reason (the graph
+// proved where the name lives). No echo of the cursor's own position;
+// the defining span IS the goto target. None when unresolved.
 fn handle_definition(params) with Memory + Alloc + Interact + GraphRead + !Mutate = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
@@ -359,10 +359,10 @@ fn handle_definition(params) with Memory + Alloc + Interact + GraphRead + !Mutat
   }
 }
 
-/// handle_references — resolve the identifier at the cursor, then
-/// consult(QRefsOf(name)) for the live use-edge set (every VarRef the
-/// parser wove). Each span projects to a Location. This [Location] IS
-/// the rename edit set — read live, never an empty []-fabrication.
+// handle_references — resolve the identifier at the cursor, then
+// consult(QRefsOf(name)) for the live use-edge set (every VarRef the
+// parser wove). Each span projects to a Location. This [Location] IS
+// the rename edit set — read live, never an empty []-fabrication.
 fn handle_references(params) with Memory + Alloc + Interact + GraphRead + !Mutate = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
@@ -421,25 +421,25 @@ fn map_debt_to_diagnostics(debt, i, n, acc_rev) with Memory + Alloc + GraphRead 
   }
 }
 
-/// handle_did_open — open_file the URI's path; bind to handles_table.
-/// URI → Path conversion strips "file://" prefix (v1 file scheme only).
+// handle_did_open — open_file the URI's path; bind to handles_table.
+// URI → Path conversion strips "file://" prefix (v1 file scheme only).
 fn handle_did_open(params) with Memory + Alloc + Interact = {
   let uri = lsp_extract_uri(params)
   ensure_doc_open(uri)
   ()
 }
 
-/// handle_did_change — text-sync = Full; replace cached text via edit.
-/// v1 uses re-open semantics as the honest fallback (edit substrate
-/// gates on MV.2.e.P.edit peer sub-handle which lands separately).
+// handle_did_change — text-sync = Full; replace cached text via edit.
+// v1 uses re-open semantics as the honest fallback (edit substrate
+// gates on MV.2.e.P.edit peer sub-handle which lands separately).
 fn handle_did_change(params) with Memory + Alloc + Interact = {
   let uri = lsp_extract_uri(params)
   ensure_doc_open(uri)
   ()
 }
 
-/// handle_did_save — save_file on the cached FileHandle. The
-/// mentl_voice_filesystem handler's save arm writes cached text to disk.
+// handle_did_save — save_file on the cached FileHandle. The
+// mentl_voice_filesystem handler's save arm writes cached text to disk.
 fn handle_did_save(params) with Memory + Alloc + Interact = {
   let uri = lsp_extract_uri(params)
   let fh = ensure_doc_open(uri)
@@ -447,8 +447,8 @@ fn handle_did_save(params) with Memory + Alloc + Interact = {
   ()
 }
 
-/// handle_did_close — close_file; gates on FX.5 close_file Interact op.
-/// v1 no-op.
+// handle_did_close — close_file; gates on FX.5 close_file Interact op.
+// v1 no-op.
 fn handle_did_close(_params) with Pure = {
   ()
 }
@@ -469,9 +469,9 @@ fn ensure_doc_open(uri) with Memory + Alloc + Interact = {
   open_file(path)
 }
 
-/// uri_to_path — strip "file://" prefix; pass through other schemes.
-/// v1 supports file: scheme only; richer URI parsing (file:///host/...,
-/// percent-encoding) is MV-LSP.uri-parse peer.
+// uri_to_path — strip "file://" prefix; pass through other schemes.
+// v1 supports file: scheme only; richer URI parsing (file:///host/...,
+// percent-encoding) is MV-LSP.uri-parse peer.
 
 fn uri_to_path(uri) with Memory + Alloc = {
   let prefix = "file://"
@@ -508,9 +508,9 @@ fn hover_from_reason(reason) with Memory + Alloc + GraphRead + !Mutate = {
   HoverContent("Reason: {show_reason(reason)}")
 }
 
-/// completion_items_from_slots — project VoiceLine slots to LSP
-/// CompletionItems. SIdent slots become items (label = ident,
-/// kind=14 = Keyword as v1 placeholder). Other slot kinds skipped.
+// completion_items_from_slots — project VoiceLine slots to LSP
+// CompletionItems. SIdent slots become items (label = ident,
+// kind=14 = Keyword as v1 placeholder). Other slot kinds skipped.
 
 fn completion_items_from_slots(slots) with Memory + Alloc = {
   flatten(map((s) => match s {
@@ -525,8 +525,8 @@ fn completion_items_from_slots(slots) with Memory + Alloc = {
   }, slots))
 }
 
-/// code_actions_from_slots — project VoiceLine slots to LSP
-/// CodeActions. SLit slots carrying suggestion text become actions.
+// code_actions_from_slots — project VoiceLine slots to LSP
+// CodeActions. SLit slots carrying suggestion text become actions.
 
 fn code_actions_from_slots(slots) with Memory + Alloc = {
   flatten(map((s) => match s {
@@ -553,8 +553,8 @@ fn char_of(pos) with Pure = {
 
 // ─── response_to_json — LspResponseBody → JsonValue ───────────────────
 
-/// response_to_json — project the typed response shape to JsonValue
-/// for serialization. H6 over LspResponseBody.
+// response_to_json — project the typed response shape to JsonValue
+// for serialization. H6 over LspResponseBody.
 
 fn response_to_json(body) with Memory + Alloc = {
   match body {
@@ -651,10 +651,10 @@ fn range_to_json(sl, sc, el, ec) with Memory + Alloc = {
 
 // ─── lsp_adapter handler + session loop ───────────────────────────────
 
-/// lsp_adapter — outermost handler in the Mentl chain. Subscribes to
-/// graph_mutated for push diagnostics (MV-LSP.push peer extends this).
-/// State carries msg_id_counter for outgoing notifications and
-/// initialized flag for protocol state machine.
+// lsp_adapter — outermost handler in the Mentl chain. Subscribes to
+// graph_mutated for push diagnostics (MV-LSP.push peer extends this).
+// State carries msg_id_counter for outgoing notifications and
+// initialized flag for protocol state machine.
 
 handler lsp_adapter
   with msg_id_counter   = 0,
@@ -664,10 +664,10 @@ handler lsp_adapter
   graph_mutated(_epoch, _mutation) => resume()
 }
 
-/// lsp_session — the session loop entry. Reads frames from stdin
-/// in a tail-recursive loop terminating on LspFrameEof; dispatches each
-/// message; writes responses to stdout. Composes through the full
-/// Mentl handler chain at install per MV-LSP-adapter §3.
+// lsp_session — the session loop entry. Reads frames from stdin
+// in a tail-recursive loop terminating on LspFrameEof; dispatches each
+// message; writes responses to stdout. Composes through the full
+// Mentl handler chain at install per MV-LSP-adapter §3.
 
 fn lsp_session() with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate = {
   match read_lsp_frame() {

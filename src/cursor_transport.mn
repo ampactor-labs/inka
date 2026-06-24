@@ -86,13 +86,13 @@ effect Surface {
 
 // ─── ADTs the transport reads + writes ──────────────────────────────
 
-/// What the human can do at a Cursor's surfaced proposal. The four
-/// arms are exhaustive per Hμ-cursor.md §5.3:
-///
-///   Accept  — apply the gradient_next suggestion; commit the patch
-///   Defer  — skip; cursor advances to next argmax
-///   Override(span) — pin cursor to user-chosen position (`??`)
-///   CaretMove(span) — text-caret moved; argmax may shift
+// What the human can do at a Cursor's surfaced proposal. The four
+// arms are exhaustive per Hμ-cursor.md §5.3:
+//
+//   Accept  — apply the gradient_next suggestion; commit the patch
+//   Defer  — skip; cursor advances to next argmax
+//   Override(span) — pin cursor to user-chosen position (`??`)
+//   CaretMove(span) — text-caret moved; argmax may shift
 
 type Action
   = AccAccept
@@ -100,8 +100,8 @@ type Action
   | AccOverride(Span)
   | AccCaretMove(Span)
 
-/// Cadence — when the transport surfaces Cursor updates.
-/// Drift 8 closure: tagged ADT, not string flag.
+// Cadence — when the transport surfaces Cursor updates.
+// Drift 8 closure: tagged ADT, not string flag.
 
 type Cadence
   = CadRealtime                  // every keystroke
@@ -109,7 +109,7 @@ type Cadence
   | CadOnSave                    // explicit save events
   | CadOnAsk                     // user invokes "what's next?"
 
-/// Default cadence per Hμ-cursor.md §10.4: ~250ms idle-debounced.
+// Default cadence per Hμ-cursor.md §10.4: ~250ms idle-debounced.
 fn default_cadence() with Pure = CadDebounced(250)
 
 // ─── TransportState — one record-shape carried by all handlers ──────
@@ -160,11 +160,11 @@ handler terminal_transport with state = transport_state_init(Caret(0, Inferred("
   }
 }
 
-/// render_cursor_block — project the eight-aspect CursorView to its
-/// terminal block form. Pure of I/O: the projection composes the
-/// labeled aspects into ONE string; the transport arm writes it at
-/// the WASI boundary in one print_string. Any text-mode surface
-/// (terminal, CI log, doc snapshot) reads the same projection.
+// render_cursor_block — project the eight-aspect CursorView to its
+// terminal block form. Pure of I/O: the projection composes the
+// labeled aspects into ONE string; the transport arm writes it at
+// the WASI boundary in one print_string. Any text-mode surface
+// (terminal, CI log, doc snapshot) reads the same projection.
 fn render_cursor_block(cursor, view) with GraphRead + !Mutate = {
   let CursorView(query, propose, topology, row, trace, verify, teach, why) = view
   "Mentl @ "

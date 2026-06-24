@@ -33,10 +33,10 @@ fn mk_ef_closed(ref names) with !Mutate = EfClosed(name_set_canonicalize(names))
 
 fn mk_ef_open(ref names, v) with !Mutate = EfOpen(name_set_canonicalize(names), v)
 
-/// Record-field smart constructor: sort (field_name, ty) pairs by
-/// field name, dedup by name (last write wins). Empty list → empty
-/// (caller chooses TRecord vs TRecordOpen). Maintains the analog of
-/// the EffRow invariant for record types.
+// Record-field smart constructor: sort (field_name, ty) pairs by
+// field name, dedup by name (last write wins). Empty list → empty
+// (caller chooses TRecord vs TRecordOpen). Maintains the analog of
+// the EffRow invariant for record types.
 fn mk_record_open(ref fields, v) with !Mutate = {
   TRecordOpen(field_canonicalize(fields), v)
 }
@@ -54,8 +54,8 @@ fn field_canonicalize_loop(ref fields, i, n, own acc) with !Mutate = {
   }
 }
 
-/// Insert (name, ty) into sorted-by-name list; if name already present,
-/// replace (last write wins).
+// Insert (name, ty) into sorted-by-name list; if name already present,
+// replace (last write wins).
 fn field_insert(ref sorted, ref name, ref ty) with !Mutate = {
   let n = len(sorted)
   let pos = field_find_pos(sorted, name, 0, n)
@@ -192,7 +192,7 @@ fn closed_or_pure(ref names) with !Mutate = {
   else { EfClosed(names) }
 }
 
-/// Union row (`+`): E + F = the row of all effects in E or F.
+// Union row (`+`): E + F = the row of all effects in E or F.
 fn union_row(ref a, ref b) with !Mutate = {
   match a {
     EfPure => b,
@@ -235,34 +235,34 @@ fn union_row(ref a, ref b) with !Mutate = {
   }
 }
 
-/// Difference row (`-`): handler absorption uses this — `(body_row - handled_row) + arm_row`.
+// Difference row (`-`): handler absorption uses this — `(body_row - handled_row) + arm_row`.
 fn diff_row(ref a, ref b) with !Mutate = {
   EfSub(a, b)
     |> normalize_row
 }
 
-/// Intersection row (`&`).
+// Intersection row (`&`).
 fn inter_row(ref a, ref b) with !Mutate = {
   EfInter(a, b)
     |> normalize_row
 }
 
-/// Negation row (`!`): `!E` proves absence — the load-bearing novelty of Mentl's algebra.
+// Negation row (`!`): `!E` proves absence — the load-bearing novelty of Mentl's algebra.
 fn neg_row(ref a) with !Mutate = {
   EfNeg(a)
     |> normalize_row
 }
 
-/// Subsumption check: `body_row ⊆ gate_row`? One call services every compilation gate
-/// and every handler installation. No per-gate bit-flags. No intrinsic knowledge of
-/// effect-name semantics. The gates are subsumption queries applied at codegen:
-///
-///   Pure     → memoize / parallelize / compile-time evaluate
-///   !IO      → safe for compile-time evaluation
-///   !Alloc   → real-time / GPU / kernel
-///   !Network → sandbox
-///
-/// The same call services user-defined negations: `with !Logging` is one call away.
+// Subsumption check: `body_row ⊆ gate_row`? One call services every compilation gate
+// and every handler installation. No per-gate bit-flags. No intrinsic knowledge of
+// effect-name semantics. The gates are subsumption queries applied at codegen:
+//
+//   Pure     → memoize / parallelize / compile-time evaluate
+//   !IO      → safe for compile-time evaluation
+//   !Alloc   → real-time / GPU / kernel
+//   !Network → sandbox
+//
+// The same call services user-defined negations: `with !Logging` is one call away.
 fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
   match gate_row {
     EfPure =>
@@ -306,17 +306,17 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
   }
 }
 
-/// Unify two effect rows, writing bindings through `graph_bind_row` (spec 04 / spec 01).
-/// Spec 01 unification table:
-///
-///   Pure/Pure           → ok
-///   Pure/Closed(∅)      → ok
-///   Pure/Closed(≠∅)     → E_PurityViolated
-///   Pure/Open(∅,v)      → bind v to EfPure
-///   Closed(A)/Closed(B) → ok iff A = B as sets
-///   Closed(A)/Open(B,v) → bind v to Closed(A - B)
-///   Open(A,v1)/Open(B,v2) → if v1=v2, unify names; else bind v1 to Open(B-A, v2)
-///   Neg / Sub / Inter   → normalize first, re-dispatch
+// Unify two effect rows, writing bindings through `graph_bind_row` (spec 04 / spec 01).
+// Spec 01 unification table:
+//
+//   Pure/Pure           → ok
+//   Pure/Closed(∅)      → ok
+//   Pure/Closed(≠∅)     → E_PurityViolated
+//   Pure/Open(∅,v)      → bind v to EfPure
+//   Closed(A)/Closed(B) → ok iff A = B as sets
+//   Closed(A)/Open(B,v) → bind v to Closed(A - B)
+//   Open(A,v1)/Open(B,v2) → if v1=v2, unify names; else bind v1 to Open(B-A, v2)
+//   Neg / Sub / Inter   → normalize first, re-dispatch
 fn unify_row(ref a, ref b, ref span, ref reason) with !Mutate = {
   unify_row_canonical(normalize_row(a), normalize_row(b), span, reason)
 }
@@ -408,13 +408,13 @@ fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {
   }
 }
 
-/// `Open(known, v) ~ !inner`: bind the open row var to the negation so the
-/// var CARRIES the forbidden set forward (the modal lexical-capability stance,
-/// PLAN §4③, threaded through the existing EfOpen var — the graph is the
-/// ROUTE). The known names must be disjoint from inner's forbidden set, else
-/// the row already holds an effect `!inner` forbids — surface it, never bind a
-/// contradictory capability. `inner` is normalized before reading its names so
-/// EfSub/EfInter reduce to the forbidden closed set first.
+// `Open(known, v) ~ !inner`: bind the open row var to the negation so the
+// var CARRIES the forbidden set forward (the modal lexical-capability stance,
+// PLAN §4③, threaded through the existing EfOpen var — the graph is the
+// ROUTE). The known names must be disjoint from inner's forbidden set, else
+// the row already holds an effect `!inner` forbids — surface it, never bind a
+// contradictory capability. `inner` is normalized before reading its names so
+// EfSub/EfInter reduce to the forbidden closed set first.
 fn bind_open_to_neg(va, ref known, ref inner, ref span, ref reason) with !Mutate = {
   let forbidden = row_forbidden_names(normalize_row(inner))
   if list_disjoint(known, forbidden) {
@@ -424,9 +424,9 @@ fn bind_open_to_neg(va, ref known, ref inner, ref span, ref reason) with !Mutate
   }
 }
 
-/// The effect names a negation `!inner` forbids. EfPure forbids none (`!Pure`
-/// is the universe); a closed/open inner forbids its known names. A nested
-/// negation (`!!E`) double-collapses in normalize before this is reached.
+// The effect names a negation `!inner` forbids. EfPure forbids none (`!Pure`
+// is the universe); a closed/open inner forbids its known names. A nested
+// negation (`!!E`) double-collapses in normalize before this is reached.
 fn row_forbidden_names(ref inner) with !Mutate = {
   match inner {
     EfPure          => [],
@@ -438,13 +438,13 @@ fn row_forbidden_names(ref inner) with !Mutate = {
   }
 }
 
-/// The effect names a row ADMITS at a position — the positive companion to
-/// row_forbidden_names. A closed/open row admits its known names; a negation
-/// `!inner` admits NONE of inner's names (it forbids them — read those via
-/// row_forbidden_names); a difference/intersection reduces in normalize_row
-/// before this is reached. The synth gate (Context's live row, PLAN §4⑥) reads
-/// admit via this and forbid via row_forbidden_names — both projections of the
-/// ONE row the graph bound, no lossy [EffName] re-derivation at the cursor.
+// The effect names a row ADMITS at a position — the positive companion to
+// row_forbidden_names. A closed/open row admits its known names; a negation
+// `!inner` admits NONE of inner's names (it forbids them — read those via
+// row_forbidden_names); a difference/intersection reduces in normalize_row
+// before this is reached. The synth gate (Context's live row, PLAN §4⑥) reads
+// admit via this and forbid via row_forbidden_names — both projections of the
+// ONE row the graph bound, no lossy [EffName] re-derivation at the cursor.
 fn row_admits(ref row) with !Mutate = {
   match normalize_row(row) {
     EfPure          => [],
@@ -462,23 +462,23 @@ fn report_purity_mismatch(ref actual, ref span) with !Mutate =
 fn report_effect_mismatch(ref a, ref b, ref span) with !Mutate =
   report(EEffectMismatch(a, b, span))
 
-/// Handler absorption: `handle { body with E } { arms for F }` normalizes to
-/// `(E - F) + arm_row`. Algebra falls out.
-///
-/// Flow-edge: `union_row` keeps the FIRST open arg's rowvar. `extra_row` (the
-/// handler's residual) carries the polymorphic escaping tail (its config effects);
-/// `(body − handled)`'s rowvar carries the now-HANDLED body effects. The residual
-/// goes FIRST so the poly tail survives and the handled-effect rowvar is dropped —
-/// else the installing fn's row reads live as the handled effect and loses its
-/// argument's effect (the higher-order-effect trap).
+// Handler absorption: `handle { body with E } { arms for F }` normalizes to
+// `(E - F) + arm_row`. Algebra falls out.
+//
+// Flow-edge: `union_row` keeps the FIRST open arg's rowvar. `extra_row` (the
+// handler's residual) carries the polymorphic escaping tail (its config effects);
+// `(body − handled)`'s rowvar carries the now-HANDLED body effects. The residual
+// goes FIRST so the poly tail survives and the handled-effect rowvar is dropped —
+// else the installing fn's row reads live as the handled effect and loses its
+// argument's effect (the higher-order-effect trap).
 fn absorb_row(ref body_row, ref handled_row, ref extra_row) with !Mutate = {
   body_row
     |> diff_row(handled_row)
     |> (handled_residue) => union_row(extra_row, handled_residue)
 }
 
-/// Ground-row predicate: a row with no unresolved row variables. Ground rows let lowering
-/// emit direct `call $h_op` (spec 05); non-ground rows take the evidence-passing path.
+// Ground-row predicate: a row with no unresolved row variables. Ground rows let lowering
+// emit direct `call $h_op` (spec 05); non-ground rows take the evidence-passing path.
 fn row_is_ground(ref row) with Pure = {
   match row {
     EfPure           => true,
@@ -615,9 +615,9 @@ fn eff_arg_eq(ref a, ref b) with !Mutate = match a {
   }
 }
 
-/// Total order: ENamed < EParameterized when names differ; same name
-/// orders by arg list. Bare ENamed("Sample") < EParameterized("Sample",
-/// _) so a bare/parameterized mix has a stable canonical order.
+// Total order: ENamed < EParameterized when names differ; same name
+// orders by arg list. Bare ENamed("Sample") < EParameterized("Sample",
+// _) so a bare/parameterized mix has a stable canonical order.
 fn eff_name_lt(ref a, ref b) with !Mutate = match a {
   ENamed(an) => match b {
     ENamed(bn)               => str_lt(an, bn),
@@ -837,7 +837,7 @@ fn name_set_contains_loop(ref set, ref name, i, n) with !Mutate = {
   else { name_set_contains_loop(set, name, i + 1, n) }
 }
 
-/// Statically proves FV.1.γ (Lone Effect Negation). Declares `with !Mutate`; the
-/// compiler's own type inference infers its row as EfNeg(Closed([Mutate])) rather than
-/// collapsing to EfPure. The compiler type-checking itself is the test.
+// Statically proves FV.1.γ (Lone Effect Negation). Declares `with !Mutate`; the
+// compiler's own type inference infers its row as EfNeg(Closed([Mutate])) rather than
+// collapsing to EfPure. The compiler type-checking itself is the test.
 fn test_mutate_freeze(buffer: ValidSpan) with !Mutate = buffer

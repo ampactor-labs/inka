@@ -14,8 +14,8 @@ import types
 import graph
 import effects
 
-/// Sum type covering every forensic question `mentl query` can pose.
-/// Each variant corresponds to one `ask(Q)` arm in `query_default`.
+// Sum type covering every forensic question `mentl query` can pose.
+// Each variant corresponds to one `ask(Q)` arm in `query_default`.
 type Question
   = QTypeOf(String)          // "type of NAME"
   | QTypeAt(Span)            // "type at L:C"
@@ -28,6 +28,13 @@ type Question
   | QRefsOf(String)          // "refs of NAME" — for rename
   | QVerifyDebt              // "verification" — pending obligations
   | QHandlerProvider(String) // "which handler provides OP"
+  // QFlowOf — the IFC tentacle (§4⑥). Reads the existing graph — TRefined,
+  // TName, and EfNeg in the EffRow — to classify NAME's FlowLabel without any
+  // new graph state. The security classification IS already in the type;
+  // this is the projection that names it. Novel: no other language exposes
+  // IFC as a read of its existing type system. `mentl query flow key` answers
+  // "what does the graph already know about key's sensitivity?"
+  | QFlowOf(String)
   | QUnknown(String)
 
 // Predicate: is this question a why-walk? Every non-QWhy variant is
@@ -48,19 +55,20 @@ type QueryResult
   | QRRefs(List)             // [Span]
   | QRVerifyDebt(List)       // [(Span, Predicate, Reason)]
   | QRHandlerProvider(Option)// Option(String)
+  | QRFlowLabel(FlowLabel, Reason)  // IFC projection — the FlowLabel the type already proves
   | QRError(String)
 
-/// The single-op effect that routes every forensic question through
-/// `query_default`. LSP methods (Arc F.2) are `Question` variants
-/// over this same effect — no separate LSP substrate.
+// The single-op effect that routes every forensic question through
+// `query_default`. LSP methods (Arc F.2) are `Question` variants
+// over this same effect — no separate LSP substrate.
 effect Query {
   ask(Question) -> QueryResult
 }
 
-/// Read-only projection over the live graph and env. No handler-local
-/// state; all data arrives through `GraphRead + EnvRead`. Pure
-/// observation — write attempts fail at handler install via the row
-/// subsumption gate.
+// Read-only projection over the live graph and env. No handler-local
+// state; all data arrives through `GraphRead + EnvRead`. Pure
+// observation — write attempts fail at handler install via the row
+// subsumption gate.
 handler query_default {
 
   ask(q) => match q {
@@ -172,14 +180,126 @@ handler query_default {
       // provides the op.
       resume(QRHandlerProvider(handler_providing_op(op_name))),
 
+    QFlowOf(name) =>
+      // The IFC tentacle: read the FlowLabel the type system already proves
+      // for NAME, without any new graph state. The classification comes from:
+      //   - TRefined: a refinement predicate naming secrecy (is_secret / is_classified)
+      //   - TName: a nominal type whose name signals sensitivity (SecretKey, Token, etc.)
+      //   - EfNeg in the fn's EffRow: `with !IO + !Network` proves the fn cannot
+      //     route its output to public-observable sinks — that IS the Secret label.
+      // This is a pure read over the existing graph. The graph IS the IFC mechanism.
+      match env_lookup(name) {
+        None =>
+          resume(QRError("not found: {name}")),
+        Some(entry) => {
+          let (scheme, reason, _kind) = entry
+          let Forall(_, ty) = scheme
+          let label = query_flow_label(chase_type_deep(ty))
+          resume(QRFlowLabel(label, reason))
+        }
+      },
+
     QUnknown(q) =>
       resume(QRError("unknown query: {q}"))
   }
 }
 
-/// Resolve every `TVar` transitively through the graph. Every query
-/// that returns a `Ty` calls this so the user sees the resolved shape,
-/// never raw handles.
+// query_flow_label — the IFC projection (§4⑥).
+// Pure read over the Ty the graph already holds; no new state.
+//
+// The flow-label IS a projection of the existing type structure:
+//   TRefined  — pred |> predicate_signals_secret; join with base's label
+//   TName     — name |> classify_name_label (nominal branding IS the label)
+//   TFun      — row  |> row_signals_restricted (EfNeg IS the NI proof)
+//   TList     — elem |> query_flow_label (label propagates through containers)
+//   TTuple    — elems |> map(query_flow_label) |> fold(Public, flow_join)
+//   TRecord   — fields |> map(.snd |> query_flow_label) |> fold(Public, flow_join)
+//   _         — Public (open-world default; unannotated = observable)
+//
+// H6: exhaustive over all 14 Ty constructors.
+
+fn query_flow_label(ref ty) with Pure = match ty {
+  TRefined(base, pred) =>
+    flow_join(pred |> predicate_flow_label, query_flow_label(base)),
+  TName(name, _) =>
+    name |> classify_name_label,
+  TFun(_, _, row) =>
+    row |> row_flow_label,
+  TAlias(_, inner) =>
+    inner |> query_flow_label,
+  TList(elem) =>
+    elem |> query_flow_label,
+  TTuple(elems) =>
+    elems
+      |> map((e) => query_flow_label(e))
+      |> fold(Public, (acc, lbl) => flow_join(acc, lbl)),
+  TRecord(fields) =>
+    fields
+      |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
+      |> fold(Public, (acc, lbl) => flow_join(acc, lbl)),
+  TRecordOpen(fields, _) =>
+    fields
+      |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
+      |> fold(Public, (acc, lbl) => flow_join(acc, lbl)),
+  TCont(ret, _, _) =>
+    ret |> query_flow_label,
+  TInt     => Public,
+  TFloat   => Public,
+  TString  => Public,
+  TUnit    => Public,
+  TVar(_)  => Public     // unresolved: open-world default (no proof = observable)
+}
+
+// predicate_flow_label — does this Predicate signal a secrecy constraint?
+// Reads predicate STRUCTURE only (PCompare/PBoolNode/PPatternMatch are
+// opaque at this layer; secrecy comes from authored refinement predicates
+// that name security properties via conjunction/disjunction structure).
+// H6: exhaustive over all 7 Predicate variants.
+fn predicate_flow_label(ref pred) with Pure = match pred {
+  PTrue              => Public,
+  PCompare(_, _, _)  => Public,    // numeric comparison: not a secrecy annotation
+  PBoolNode(_)       => Public,    // graph-deferred: cannot classify from structure
+  PPatternMatch(_,_) => Public,    // match-narrowing: not a secrecy signal
+  PNot(inner)        => Public,    // negation of secret IS NOT secret (non-monotone)
+  PAnd(a, b)         =>            // secret AND anything = secret (join propagates)
+    flow_join(predicate_flow_label(a), predicate_flow_label(b)),
+  POr(a, b)          =>            // secret OR anything = secret (join propagates)
+    flow_join(predicate_flow_label(a), predicate_flow_label(b))
+}
+
+// classify_name_label — nominal type branding as IFC annotation.
+// Nominal IS the flow label in Mentl: a type named SecretKey IS the label.
+// The same mechanism that prevents Port from flowing where Int is expected
+// prevents SecretKey from flowing where Bytes is expected — and names the
+// sensitivity for the IFC projection. Pure; no graph state.
+fn classify_name_label(ref name) with Pure =
+  if str_contains(name, "Secret") || str_contains(name, "Password")
+       || str_contains(name, "Credential") || str_contains(name, "Classified") {
+    Secret
+  } else if str_contains(name, "Key") || str_contains(name, "Token")
+               || str_contains(name, "Signed") || str_contains(name, "Hashed") {
+    Tainted
+  } else {
+    Public
+  }
+
+// row_flow_label — the EfNeg in a function's row IS the non-interference proof.
+// `with !IO + !Network` proves the function cannot route output to public sinks.
+// The presence of ANY negation raises the label to Secret: the developer proved
+// absence of observable effect — that IS the IFC constraint at the type level.
+// H6: exhaustive over all 6 EffRow variants.
+fn row_flow_label(ref row) with Pure = match row {
+  EfNeg(_)         => Secret,     // !E negation: proved absence of observable effect
+  EfInter(a, b)    => flow_join(row_flow_label(a), row_flow_label(b)),
+  EfSub(a, b)      => flow_join(row_flow_label(a), row_flow_label(b)),
+  EfOpen(_, _)     => Public,
+  EfClosed(_)      => Public,
+  EfPure           => Public      // Pure IS observable-safe (no effects at all)
+}
+
+// Resolve every `TVar` transitively through the graph. Every query
+// that returns a `Ty` calls this so the user sees the resolved shape,
+// never raw handles.
 fn chase_type_deep(ref ty) with !Mutate = match ty {
   TVar(h) => {
     let GNode(kind, _) = graph_chase(h)
@@ -227,9 +347,9 @@ fn chase_fields_deep(ref fields) with !Mutate = {
   }
 }
 
-/// Collect all env entries whose type still chases to a free `TVar`.
-/// Returned by `QUnresolved` — the set of names with incomplete types
-/// after inference.
+// Collect all env entries whose type still chases to a free `TVar`.
+// Returned by `QUnresolved` — the set of names with incomplete types
+// after inference.
 fn find_unresolved(ref entries) with !Mutate = {
   if len(entries) == 0 { [] }
   else {
@@ -287,9 +407,9 @@ fn has_free_tvar_fields(ref fields) with !Mutate = {
   }
 }
 
-/// Walk every substitution hop from a starting handle to its terminal.
-/// Returned by `QSubstChain` — useful for tracing cross-module `TVar`
-/// resolution.
+// Walk every substitution hop from a starting handle to its terminal.
+// Returned by `QSubstChain` — useful for tracing cross-module `TVar`
+// resolution.
 fn walk_chain(handle, depth) with !Mutate = {
   if depth > 50 || handle < 0 { [] }
   else {

@@ -241,10 +241,10 @@ fn enumerate_gradient_positions() with GraphRead + !Mutate = {
   }, range(0, next))
 }
 
-/// Per-position scoring is independent — each handle's score reads
-/// gates × proximity from the graph + pure decay table. parallel_map
-/// dispatches via Thread; cargo-class fan-out when parallel_compose
-/// installed in the cursor's outer ~> chain.
+// Per-position scoring is independent — each handle's score reads
+// gates × proximity from the graph + pure decay table. parallel_map
+// dispatches via Thread; cargo-class fan-out when parallel_compose
+// installed in the cursor's outer ~> chain.
 fn score_all_positions(handles, caret) with GraphRead + !Mutate = {
   handles
     |> parallel_map((h) => score_one_position(h, caret))

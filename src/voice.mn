@@ -18,11 +18,11 @@ import pipeline
 import driver
 import runtime/strings
 
-/// Topic is the focus of one voice turn. Caret-of-attention projects
-/// onto a Topic; Mentl reads the graph at that topic. Five variants
-/// cover the four load-bearing attention surfaces (identifier / graph
-/// handle / cursor position / named error) plus the explicit ask path.
-/// Primitive: #1 (Query tentacle reads the graph at a Topic).
+// Topic is the focus of one voice turn. Caret-of-attention projects
+// onto a Topic; Mentl reads the graph at that topic. Five variants
+// cover the four load-bearing attention surfaces (identifier / graph
+// handle / cursor position / named error) plus the explicit ask path.
+// Primitive: #1 (Query tentacle reads the graph at a Topic).
 
 type Topic
   = TopicIdent(String)                   // hover on identifier
@@ -31,9 +31,9 @@ type Topic
   | TopicError(String, Span)             // specific diagnostic (code, span)
   | TopicAsk(Question)                   // user asked explicitly (via query.mn's Question)
 
-/// One tentacle per kernel primitive. Eight primitives · eight
-/// tentacles · eight interrogations — the octopus IS the kernel made
-/// voice. Never a ninth; never a seventh.
+// One tentacle per kernel primitive. Eight primitives · eight
+// tentacles · eight interrogations — the octopus IS the kernel made
+// voice. Never a ninth; never a seventh.
 
 type Tentacle
   = TentQuery       // #1 — graph state at topic
@@ -45,41 +45,41 @@ type Tentacle
   | TentTeach       // #7 — gradient's one next step
   | TentWhy         // #8 — Reason chain walks
 
-/// Three registers. V1 default is RPlayful — warm but sparse.
-/// RTerse is the keyboard-shortcut register. RExplain opens the
-/// Reason chain (multi-sentence, used when user asked QWhy).
-/// The register is a rendering input; it does not change what's
-/// surfaced, only how densely.
+// Three registers. V1 default is RPlayful — warm but sparse.
+// RTerse is the keyboard-shortcut register. RExplain opens the
+// Reason chain (multi-sentence, used when user asked QWhy).
+// The register is a rendering input; it does not change what's
+// surfaced, only how densely.
 
 type Register
   = RTerse
   | RPlayful
   | RExplain
 
-/// Every gradient step is a theorem: Mentl has proved (via the
-/// speculative oracle at src/mentl.mn:134) that annotating a site
-/// with the suggestion's text unlocks the listed capabilities.
-/// Reason walks the Why-tentacle chain on demand.
-/// Primitive: #7 (annotation gradient), with #8 (Reason) carrying proof.
-///
-/// Substrate per Hμ.cursor §2 + GR §3.2 (live): the public shape IS
-/// `AnnotationSuggestion(SuggestionKind, String, List, Reason)` from
-/// types.mn — kind / annotation_text / unlocks_labels / reason. The
-/// site span lives inside the Reason's outer Located wrapper.
+// Every gradient step is a theorem: Mentl has proved (via the
+// speculative oracle at src/mentl.mn:134) that annotating a site
+// with the suggestion's text unlocks the listed capabilities.
+// Reason walks the Why-tentacle chain on demand.
+// Primitive: #7 (annotation gradient), with #8 (Reason) carrying proof.
+//
+// Substrate per Hμ.cursor §2 + GR §3.2 (live): the public shape IS
+// `AnnotationSuggestion(SuggestionKind, String, List, Reason)` from
+// types.mn — kind / annotation_text / unlocks_labels / reason. The
+// site span lives inside the Reason's outer Located wrapper.
 
-/// Env-entries reach Mentl as snapshots so a turn is stateless w.r.t.
-/// env updates. Name + Scheme + Reason + SchemeKind mirrors Env's
-/// existing shape (per types.mn SchemeKind).
+// Env-entries reach Mentl as snapshots so a turn is stateless w.r.t.
+// env updates. Name + Scheme + Reason + SchemeKind mirrors Env's
+// existing shape (per types.mn SchemeKind).
 
 type EnvEntry
   = EnvEntry(String, Scheme, Reason, SchemeKind)
 
-/// The ~> chain is a capability stack (SUBSTRATE.md "The Handler Chain
-/// Is a Capability Stack"). HandlerEntry captures one position in it:
-/// handler name, the effects it absorbs, and the Reason that placed
-/// it here. Mentl's Unlock tentacle reads this to surface "this
-/// handler is why `Alloc` is absorbed here."
-/// Primitive: #2 + #4.
+// The ~> chain is a capability stack (SUBSTRATE.md "The Handler Chain
+// Is a Capability Stack"). HandlerEntry captures one position in it:
+// handler name, the effects it absorbs, and the Reason that placed
+// it here. Mentl's Unlock tentacle reads this to surface "this
+// handler is why `Alloc` is absorbed here."
+// Primitive: #2 + #4.
 
 type HandlerEntry
   = HandlerEntry({
@@ -89,15 +89,15 @@ type HandlerEntry
       install_span:      Span
     })
 
-/// Every speak op receives a Situation. All 13 fields are load-bearing.
-/// No external state consulted — stateless-per-turn except
-/// prior_turn_topic (silence predicate input) and register (rendering).
-/// The Situation IS the graph read: composing it invokes every
-/// relevant effect op (graph_chase, env_snapshot, refinement_query,
-/// ownership_at, gradient_next) and freezes their results for this
-/// turn.
-/// Primitives: #1 (graph), #2 (handlers_installed), #4 (rows),
-/// #5 (ownership), #6 (refinements), #7 (gradient_next), #8 (reason).
+// Every speak op receives a Situation. All 13 fields are load-bearing.
+// No external state consulted — stateless-per-turn except
+// prior_turn_topic (silence predicate input) and register (rendering).
+// The Situation IS the graph read: composing it invokes every
+// relevant effect op (graph_chase, env_snapshot, refinement_query,
+// ownership_at, gradient_next) and freezes their results for this
+// turn.
+// Primitives: #1 (graph), #2 (handlers_installed), #4 (rows),
+// #5 (ownership), #6 (refinements), #7 (gradient_next), #8 (reason).
 
 type Situation
   = Situation({
@@ -118,21 +118,21 @@ type Situation
       register:              Register
     })
 
-/// §2.7.5's silence predicate references helpers (handle_is_hole,
-/// error_at, nested_calls_at_span, unlocks_capability,
-/// ownership_violation_at, row_subsumption_fails_at,
-/// refinement_obligation_at) that would each require an effect read
-/// on graph / ledger state. TopicFacts hoists those reads into
-/// Situation composition: the handler that builds the Situation
-/// performs the effect queries once and freezes results here, so
-/// silence_predicate itself is pure over (Situation, which contains
-/// facts).
-///
-/// The fields that can be derived from existing Situation fields
-/// (reason_at_topic, refinements, gradient_next, row_at_topic vs
-/// row_declared) are NOT duplicated here — those stay on Situation
-/// and silence_predicate reads them directly. TopicFacts holds only
-/// the three truly-new computations.
+// §2.7.5's silence predicate references helpers (handle_is_hole,
+// error_at, nested_calls_at_span, unlocks_capability,
+// ownership_violation_at, row_subsumption_fails_at,
+// refinement_obligation_at) that would each require an effect read
+// on graph / ledger state. TopicFacts hoists those reads into
+// Situation composition: the handler that builds the Situation
+// performs the effect queries once and freezes results here, so
+// silence_predicate itself is pure over (Situation, which contains
+// facts).
+//
+// The fields that can be derived from existing Situation fields
+// (reason_at_topic, refinements, gradient_next, row_at_topic vs
+// row_declared) are NOT duplicated here — those stay on Situation
+// and silence_predicate reads them directly. TopicFacts holds only
+// the three truly-new computations.
 
 type TopicFacts
   = TopicFacts({
@@ -141,10 +141,10 @@ type TopicFacts
       nested_call_depth:      Int                   // TentTopology → nested_calls_at_span(topic)
     })
 
-/// Eight shapes, one per default-tentacle. Tone is NOT a separate
-/// enum: tentacle + FormKind + Modifier compose the register-shape
-/// of each VoiceLine. Tentacle→FormKind is the §2.7.3 mapping;
-/// users rarely override.
+// Eight shapes, one per default-tentacle. Tone is NOT a separate
+// enum: tentacle + FormKind + Modifier compose the register-shape
+// of each VoiceLine. Tentacle→FormKind is the §2.7.3 mapping;
+// users rarely override.
 
 type FormKind
   = FFactual          // "`x` is Pure." (Query)
@@ -156,11 +156,11 @@ type FormKind
   | FGradient         // "Next: `with Pure` on line 12." (Teach)
   | FTrace            // "Bound L18; `+` at L42 said `Int`." (Why)
 
-/// Each slot renders through a canonical renderer (show_type,
-/// show_row, show_reason). No ad-hoc formatting at the voice layer —
-/// the graph's own self-projection is the source of strings.
-/// Backtick-wrapping lives in the slot's render, not in handwritten
-/// prose.
+// Each slot renders through a canonical renderer (show_type,
+// show_row, show_reason). No ad-hoc formatting at the voice layer —
+// the graph's own self-projection is the source of strings.
+// Backtick-wrapping lives in the slot's render, not in handwritten
+// prose.
 
 type Slot
   = SIdent(String)         // backtick-wrapped at render
@@ -172,11 +172,11 @@ type Slot
   | SAnnot(String)         // annotation, backtick-wrapped
   | SLit(String)           // literal text (for offering closers)
 
-/// RPlayful picks AT MOST ONE modifier per VoiceLine. RTerse → NoMod.
-/// RExplain allows one per sentence max. Modifier selection is
-/// deterministic — same Situation hash → same modifier — so
-/// repeated renders are reproducible (§2.7.4 applicable subsets
-/// live in the handler's render path, MV.2.d).
+// RPlayful picks AT MOST ONE modifier per VoiceLine. RTerse → NoMod.
+// RExplain allows one per sentence max. Modifier selection is
+// deterministic — same Situation hash → same modifier — so
+// repeated renders are reproducible (§2.7.4 applicable subsets
+// live in the handler's render path, MV.2.d).
 
 type Modifier
   = NoMod
@@ -184,28 +184,28 @@ type Modifier
   | ParenQualifier(String)    // " (L40)"
   | EmphasisClose(String)     // " — can't have it both ways."
 
-/// Silence is the default. When a turn produces nothing proven-worth-
-/// surfacing (silence_predicate returns false), the surface handler
-/// renders null — hover returns empty, inlayHint is not emitted,
-/// status bar stays empty. Mentl does NOT fill space to fill space.
-///
-/// Non-silence is a four-part composition: which tentacle speaks,
-/// what grammar shape, the typed slots it fills, one optional
-/// modifier. Every non-Silence VoiceLine carries a Reason edge in
-/// the graph that supports its assertion (acceptance criterion #4
-/// per MV §2.8).
-/// Primitives: #2 (tentacle's resume discipline), #8 (Reason on every
-/// non-Silence VoiceLine).
+// Silence is the default. When a turn produces nothing proven-worth-
+// surfacing (silence_predicate returns false), the surface handler
+// renders null — hover returns empty, inlayHint is not emitted,
+// status bar stays empty. Mentl does NOT fill space to fill space.
+//
+// Non-silence is a four-part composition: which tentacle speaks,
+// what grammar shape, the typed slots it fills, one optional
+// modifier. Every non-Silence VoiceLine carries a Reason edge in
+// the graph that supports its assertion (acceptance criterion #4
+// per MV §2.8).
+// Primitives: #2 (tentacle's resume discipline), #8 (Reason on every
+// non-Silence VoiceLine).
 
 type VoiceLine
   = Silence
   | VoiceLine(Tentacle, FormKind, List, Modifier)   // slots: [Slot]
 
-/// History feeds the silence predicate's
-/// observation_new_since_last_turn check. Bounded ring — the session
-/// keeps the last N turns, older entries drop. Ring size is a
-/// handler-install parameter, not a substrate constant (configured
-/// at handler install per H3.1 parameterized effects).
+// History feeds the silence predicate's
+// observation_new_since_last_turn check. Bounded ring — the session
+// keeps the last N turns, older entries drop. Ring size is a
+// handler-install parameter, not a substrate constant (configured
+// at handler install per H3.1 parameterized effects).
 
 type TurnRecord
   = TurnRecord({
@@ -215,55 +215,55 @@ type TurnRecord
       span_at:   Span
     })
 
-/// Path wraps a String. Nominal — distinguishes file-system paths from
-/// arbitrary strings at the type layer. Construction is explicit:
-/// `Path(s)`. Refinement (self has no `..` / resolved / within project
-/// root) arrives as a `where` clause when the project-sandbox handler
-/// lands (post-first-light territory).
-/// Primitive: #6 (Path is a refinement-ready alias — today without
-/// predicate; tomorrow with).
+// Path wraps a String. Nominal — distinguishes file-system paths from
+// arbitrary strings at the type layer. Construction is explicit:
+// `Path(s)`. Refinement (self has no `..` / resolved / within project
+// root) arrives as a `where` clause when the project-sandbox handler
+// lands (post-first-light territory).
+// Primitive: #6 (Path is a refinement-ready alias — today without
+// predicate; tomorrow with).
 
 type Path
   = Path(String)
 
-/// FileHandle wraps an integer index into the session's open-file
-/// table. Opaque at the user surface — the handler that holds the
-/// table projects handles back to Path / text on demand via file_text
-/// + save_file. The distinction from Path is lifecycle: Path is the
-/// addressing scheme; FileHandle is the live resource Mentl holds
-/// while editing.
+// FileHandle wraps an integer index into the session's open-file
+// table. Opaque at the user surface — the handler that holds the
+// table projects handles back to Path / text on demand via file_text
+// + save_file. The distinction from Path is lifecycle: Path is the
+// addressing scheme; FileHandle is the live resource Mentl holds
+// while editing.
 
 type FileHandle
   = FileHandle(Int)
 
-/// tree_list projects the on-disk tree. Each entry is file or
-/// directory; lazy (directories expand on demand).
+// tree_list projects the on-disk tree. Each entry is file or
+// directory; lazy (directories expand on demand).
 
 type TreeEntry
   = TreeFile(Path)
   | TreeDir(Path)                   // expand via another tree_list call
 
-/// Caret is the human's attention at a moment. Handle + Reason —
-/// which graph node, and why Mentl thinks so (last focus op / last
-/// edit's mutation site / last ask's target — the Reason traces
-/// back).
-/// Primitives: #1 (Handle) + #8 (Reason).
+// Caret is the human's attention at a moment. Handle + Reason —
+// which graph node, and why Mentl thinks so (last focus op / last
+// edit's mutation site / last ask's target — the Reason traces
+// back).
+// Primitives: #1 (Handle) + #8 (Reason).
 
 
-/// CaretTarget is the input to `focus` — the various ways a surface
-/// can name what to attend to. Maps to a Caret by resolving through
-/// the graph (span → handle lookup via span_index).
+// CaretTarget is the input to `focus` — the various ways a surface
+// can name what to attend to. Maps to a Caret by resolving through
+// the graph (span → handle lookup via span_index).
 
 type CaretTarget
   = TargetHandle(Int)
   | TargetSpan(Span)
   | TargetIdent(String)
 
-/// Question (declared in query.mn) is structured: QTypeAt, QWhy,
-/// QRefsOf, etc. Answer is the response — always carries the Reason
-/// supporting it (acceptance criterion: no Answer without Reason).
-/// Silence is a valid Answer when the question is ill-posed or
-/// unprovable.
+// Question (declared in query.mn) is structured: QTypeAt, QWhy,
+// QRefsOf, etc. Answer is the response — always carries the Reason
+// supporting it (acceptance criterion: no Answer without Reason).
+// Silence is a valid Answer when the question is ill-posed or
+// unprovable.
 
 type Answer
   = AnsType(Ty, Reason)
@@ -273,19 +273,19 @@ type Answer
   | AnsDebt(List, Reason)           // [(Span, Predicate, Reason)] pending obligations
   | AnsSilence
 
-/// Edit is a Patch applied to a FileHandle. Outcome is either
-/// accepted (graph re-projected, new handle set) or rejected (the
-/// resulting text failed to parse / lower / type-check).
-/// Rejection carries the diagnostic so the surface can render it.
+// Edit is a Patch applied to a FileHandle. Outcome is either
+// accepted (graph re-projected, new handle set) or rejected (the
+// resulting text failed to parse / lower / type-check).
+// Rejection carries the diagnostic so the surface can render it.
 
 type EditOutcome
   = EditAccepted(FileHandle)        // graph re-projected; new live handle
   | EditRejected(String, Span)      // code, span — diagnostic for surface to render
 
-/// run_compile returns a binary's Path (or diagnostic).
-/// run_check returns the diagnostic list from inference + verify.
-/// run_audit is the drift-audit + plan-audit + effect-registry-audit
-/// projection — the substrate that F.1/F.2/F.3 dissolve docs/ into.
+// run_compile returns a binary's Path (or diagnostic).
+// run_check returns the diagnostic list from inference + verify.
+// run_audit is the drift-audit + plan-audit + effect-registry-audit
+// projection — the substrate that F.1/F.2/F.3 dissolve docs/ into.
 
 type CompileOutcome
   = CompileOk(Path)                 // emitted binary
@@ -297,12 +297,12 @@ type CheckOutcome
 type AuditReport
   = AuditReport(List)               // [AuditFinding] — drift + plan + effect-registry surfaces
 
-/// `declare_intent` lets the human say "I'm targeting embedded; keep
-/// me honest" — a constraint the silence predicate and Trace
-/// tentacle weigh against subsequent edits. IntentId is opaque; the
-/// handler that holds the intent table projects it.
-/// Primitive: #7 (gradient — intents are user-side gradient
-/// declarations).
+// `declare_intent` lets the human say "I'm targeting embedded; keep
+// me honest" — a constraint the silence predicate and Trace
+// tentacle weigh against subsequent edits. IntentId is opaque; the
+// handler that holds the intent table projects it.
+// Primitive: #7 (gradient — intents are user-side gradient
+// declarations).
 
 type Intent
   = IntEmbedded                     // !Alloc + !IO sought on real-time paths
@@ -319,23 +319,23 @@ type Intent
 type IntentId
   = IntentId(Int)
 
-/// Every surface that Mentl speaks through — LSP adapter, batch CLI,
-/// terminal IDE, web playground, desktop client — is a peer handler
-/// on Interact. The Interact effect is what the surfaces speak; the
-/// surfaces decide transport. LSP is ONE transport, not the paradigm.
-///
-/// Handlers on Interact compose the Situation from graph reads,
-/// apply silence_predicate, render VoiceLine per §2.7.3's
-/// Tentacle→FormKind mapping. mentl_voice_default is the canonical
-/// implementation (MV.2.e peer sub-handle).
-///
-/// All ops are OneShot: each Interact op is one human gesture → one
-/// handler response. Multi-shot lives deeper, inside Synth and the
-/// speculative oracle, not at this surface.
-///
-/// Primitives: #2 (this effect), #1 (ops read the graph),
-/// #4 (handler rows compose with Interact via `~>`),
-/// #7 (gradient surfaces through propose + speak).
+// Every surface that Mentl speaks through — LSP adapter, batch CLI,
+// terminal IDE, web playground, desktop client — is a peer handler
+// on Interact. The Interact effect is what the surfaces speak; the
+// surfaces decide transport. LSP is ONE transport, not the paradigm.
+//
+// Handlers on Interact compose the Situation from graph reads,
+// apply silence_predicate, render VoiceLine per §2.7.3's
+// Tentacle→FormKind mapping. mentl_voice_default is the canonical
+// implementation (MV.2.e peer sub-handle).
+//
+// All ops are OneShot: each Interact op is one human gesture → one
+// handler response. Multi-shot lives deeper, inside Synth and the
+// speculative oracle, not at this surface.
+//
+// Primitives: #2 (this effect), #1 (ops read the graph),
+// #4 (handler rows compose with Interact via `~>`),
+// #7 (gradient surfaces through propose + speak).
 
 effect Interact {
   // ─── Project / file ops (8) ─────────────────────────────────────
@@ -420,12 +420,12 @@ fn silence_predicate(situation) with OracleQuery = {
 // retired. The queue-empty gate (silence_predicate) is the one silence
 // read; Topic / Tentacle equality is no longer a voice-layer fact.
 
-/// tentacle_to_form_kind — per MV §2.7.3, eight-variant exhaustive
-/// mapping from Tentacle to its default FormKind. The §2.7.3 table
-/// is the authority: Query→FFactual, Propose→FOffering,
-/// Topology→FOffering, Unlock→FCapability, Trace→FRefutation,
-/// Verify→FRefinement, Teach→FGradient, Why→FTrace. H6 discipline:
-/// no wildcard arm; every Tentacle variant's mapping is named.
+// tentacle_to_form_kind — per MV §2.7.3, eight-variant exhaustive
+// mapping from Tentacle to its default FormKind. The §2.7.3 table
+// is the authority: Query→FFactual, Propose→FOffering,
+// Topology→FOffering, Unlock→FCapability, Trace→FRefutation,
+// Verify→FRefinement, Teach→FGradient, Why→FTrace. H6 discipline:
+// no wildcard arm; every Tentacle variant's mapping is named.
 
 fn tentacle_to_form_kind(tentacle) with Pure = {
   match tentacle {
@@ -440,12 +440,12 @@ fn tentacle_to_form_kind(tentacle) with Pure = {
   }
 }
 
-/// applicable_modifiers_for_tentacle — per MV §2.7.4, the per-tentacle
-/// subset of Modifier instances RPlayful selects from. Returns
-/// [Modifier] of concrete TailConsequence / EmphasisClose /
-/// ParenQualifier instances with their canonical phrase strings.
-/// Keyed on Tentacle (not FormKind — three tentacles share FOffering
-/// but have distinct subsets per §2.7.4 lines 559-567). H6 discipline.
+// applicable_modifiers_for_tentacle — per MV §2.7.4, the per-tentacle
+// subset of Modifier instances RPlayful selects from. Returns
+// [Modifier] of concrete TailConsequence / EmphasisClose /
+// ParenQualifier instances with their canonical phrase strings.
+// Keyed on Tentacle (not FormKind — three tentacles share FOffering
+// but have distinct subsets per §2.7.4 lines 559-567). H6 discipline.
 
 fn applicable_modifiers_for_tentacle(tentacle) with Pure = {
   match tentacle {
@@ -490,11 +490,11 @@ fn applicable_modifiers_for_tentacle(tentacle) with Pure = {
   }
 }
 
-/// tentacle_tag — pure projection from Tentacle to a small Int. Used
-/// by situation_hash; not exposed as dispatch. The integer space is
-/// internal to hashing; downstream consumers always use the Tentacle
-/// ADT directly. (Structural projection, not drift mode 8 int-coded
-/// dispatch.) H6 discipline.
+// tentacle_tag — pure projection from Tentacle to a small Int. Used
+// by situation_hash; not exposed as dispatch. The integer space is
+// internal to hashing; downstream consumers always use the Tentacle
+// ADT directly. (Structural projection, not drift mode 8 int-coded
+// dispatch.) H6 discipline.
 
 fn tentacle_tag(tentacle) with Pure = {
   match tentacle {
@@ -509,10 +509,10 @@ fn tentacle_tag(tentacle) with Pure = {
   }
 }
 
-/// topic_discriminant — pure projection from Topic to a small Int.
-/// Payload values are intentionally NOT folded in; per-tentacle
-/// rotation supplies the dominant variation source for modifier
-/// selection. H6 discipline.
+// topic_discriminant — pure projection from Topic to a small Int.
+// Payload values are intentionally NOT folded in; per-tentacle
+// rotation supplies the dominant variation source for modifier
+// selection. H6 discipline.
 
 fn topic_discriminant(topic) with Pure = {
   match topic {
@@ -524,23 +524,23 @@ fn topic_discriminant(topic) with Pure = {
   }
 }
 
-/// situation_hash — pure deterministic Int hash over Situation's
-/// load-bearing fields. Same Situation → same hash, reproducible
-/// across runs (per MV §2.8 acceptance criterion 6). Pure integer
-/// arithmetic over ADT tag projections — no Memory effect, no FNV
-/// primitive needed at this scale (modulo'd by applicable-subset
-/// length, which is at most 6 per §2.7.4). Prime multipliers
-/// minimize collision over the small index space we modulo into.
+// situation_hash — pure deterministic Int hash over Situation's
+// load-bearing fields. Same Situation → same hash, reproducible
+// across runs (per MV §2.8 acceptance criterion 6). Pure integer
+// arithmetic over ADT tag projections — no Memory effect, no FNV
+// primitive needed at this scale (modulo'd by applicable-subset
+// length, which is at most 6 per §2.7.4). Prime multipliers
+// minimize collision over the small index space we modulo into.
 
 fn situation_hash(situation) with Pure = {
   let Situation(s) = situation
   tentacle_tag(s.tentacle) * 31 + topic_discriminant(s.topic) * 17
 }
 
-/// pick_from_pool — index into the tentacle's applicable-modifier list
-/// via hash mod pool length. Empty pool returns NoMod (defensive — no
-/// pool is empty per §2.7.4, but the substrate refuses to fabricate
-/// when the invariant ever shifts).
+// pick_from_pool — index into the tentacle's applicable-modifier list
+// via hash mod pool length. Empty pool returns NoMod (defensive — no
+// pool is empty per §2.7.4, but the substrate refuses to fabricate
+// when the invariant ever shifts).
 
 fn pick_from_pool(tentacle, hash) with Pure = {
   let pool = applicable_modifiers_for_tentacle(tentacle)
@@ -549,11 +549,11 @@ fn pick_from_pool(tentacle, hash) with Pure = {
   else      { list_index(pool, hash % n) }
 }
 
-/// select_modifier — composes hash + applicable-subset to pick one
-/// Modifier deterministically. RTerse always returns NoMod (per MV
-/// §2.7.4 line 532). RPlayful and RExplain pick from the per-tentacle
-/// applicable subset via hash-mod-len. Same Situation + same Register
-/// → same Modifier, every call. H6 discipline on Register match.
+// select_modifier — composes hash + applicable-subset to pick one
+// Modifier deterministically. RTerse always returns NoMod (per MV
+// §2.7.4 line 532). RPlayful and RExplain pick from the per-tentacle
+// applicable subset via hash-mod-len. Same Situation + same Register
+// → same Modifier, every call. H6 discipline on Register match.
 
 fn select_modifier(situation, register) with Pure = {
   let Situation(s) = situation
@@ -564,12 +564,12 @@ fn select_modifier(situation, register) with Pure = {
   }
 }
 
-/// with_tentacle — pure update of Situation's tentacle field. Used by
-/// voice_queue_walk's fold to retarget the same Situation snapshot
-/// at each of the 8 tentacles in turn. All other Situation fields
-/// (topic, handle, env_snapshot, reasons, rows, ownership, refinements,
-/// gradient_next, handlers_installed, prior_turn_topic, facts,
-/// register) survive unchanged — only the tentacle perspective shifts.
+// with_tentacle — pure update of Situation's tentacle field. Used by
+// voice_queue_walk's fold to retarget the same Situation snapshot
+// at each of the 8 tentacles in turn. All other Situation fields
+// (topic, handle, env_snapshot, reasons, rows, ownership, refinements,
+// gradient_next, handlers_installed, prior_turn_topic, facts,
+// register) survive unchanged — only the tentacle perspective shifts.
 
 fn with_tentacle(situation, tentacle) with Pure = {
   let Situation(s) = situation
@@ -592,11 +592,11 @@ fn with_tentacle(situation, tentacle) with Pure = {
   })
 }
 
-/// topic_ident_or_empty — pure projection of a Topic to its identifier
-/// string when applicable. TopicIdent yields the name; TopicError
-/// yields the code; other variants yield empty string. Used by render
-/// arms to populate SIdent slots without re-routing through graph.
-/// H6 exhaustive over Topic.
+// topic_ident_or_empty — pure projection of a Topic to its identifier
+// string when applicable. TopicIdent yields the name; TopicError
+// yields the code; other variants yield empty string. Used by render
+// arms to populate SIdent slots without re-routing through graph.
+// H6 exhaustive over Topic.
 
 fn topic_ident_or_empty(topic) with Pure = {
   match topic {
@@ -608,10 +608,10 @@ fn topic_ident_or_empty(topic) with Pure = {
   }
 }
 
-/// topic_span_or_zero — pure projection of a Topic to a Span. Variants
-/// without a natural span (TopicIdent / TopicHandle / TopicAsk) yield
-/// the zero-Span sentinel. Used for SSpan slot construction at render
-/// time. H6 exhaustive over Topic.
+// topic_span_or_zero — pure projection of a Topic to a Span. Variants
+// without a natural span (TopicIdent / TopicHandle / TopicAsk) yield
+// the zero-Span sentinel. Used for SSpan slot construction at render
+// time. H6 exhaustive over Topic.
 
 fn topic_span_or_zero(topic) with Pure = {
   match topic {
@@ -623,11 +623,11 @@ fn topic_span_or_zero(topic) with Pure = {
   }
 }
 
-/// render_query_arm — TentQuery's render. Per MV §2.7.3 form FFactual,
-/// per AT1: `` `name` runs `Type`. Row. ``. Slots compose the
-/// identifier from topic, the inferred type from row_at_topic context,
-/// and the row itself. silence_predicate gated upstream — fires only
-/// when reason_at_topic is Some (per MV §2.7.5 TentQuery arm).
+// render_query_arm — TentQuery's render. Per MV §2.7.3 form FFactual,
+// per AT1: `` `name` runs `Type`. Row. ``. Slots compose the
+// identifier from topic, the inferred type from row_at_topic context,
+// and the row itself. silence_predicate gated upstream — fires only
+// when reason_at_topic is Some (per MV §2.7.5 TentQuery arm).
 
 fn render_query_arm(situation) with Pure = {
   let Situation(s) = situation
@@ -646,11 +646,11 @@ fn render_query_arm(situation) with Pure = {
   ], select_modifier(situation, s.register))
 }
 
-/// render_propose_arm — TentPropose's render. Per MV §2.7.3 form
-/// FOffering, per AT8 + AT10: hole completion / typo codeAction.
-/// Topic discriminates: TopicHandle (hole at handle) → "Hole expects
-/// `Type`"; TopicError (typo / missing) → "Did you mean ...?";
-/// TopicAsk (explicit ask) → echoes ask. silence_predicate gated.
+// render_propose_arm — TentPropose's render. Per MV §2.7.3 form
+// FOffering, per AT8 + AT10: hole completion / typo codeAction.
+// Topic discriminates: TopicHandle (hole at handle) → "Hole expects
+// `Type`"; TopicError (typo / missing) → "Did you mean ...?";
+// TopicAsk (explicit ask) → echoes ask. silence_predicate gated.
 
 fn render_propose_arm(situation) with Pure = {
   let Situation(s) = situation
@@ -669,10 +669,10 @@ fn render_propose_arm(situation) with Pure = {
   VoiceLine(TentPropose, FOffering, body, select_modifier(situation, s.register))
 }
 
-/// render_topology_arm — TentTopology's render. Per MV §2.7.3 form
-/// FOffering with STYLE_NUDGE stance. Per AT4: nested-call depth >= 3
-/// surfaces a "use |> instead" suggestion. silence_predicate gated on
-/// nested_call_depth >= 3 (TopicFacts substrate from D.1.c).
+// render_topology_arm — TentTopology's render. Per MV §2.7.3 form
+// FOffering with STYLE_NUDGE stance. Per AT4: nested-call depth >= 3
+// surfaces a "use |> instead" suggestion. silence_predicate gated on
+// nested_call_depth >= 3 (TopicFacts substrate from D.1.c).
 
 fn render_topology_arm(situation) with Pure = {
   let Situation(s) = situation
@@ -684,10 +684,10 @@ fn render_topology_arm(situation) with Pure = {
   ], select_modifier(situation, s.register))
 }
 
-/// render_unlock_arm — TentUnlock's render. Per MV §2.7.3 form
-/// FCapability with EXCITED stance. Surfaces a capability that the
-/// gradient_next would unlock. silence_predicate gated on gradient_next
-/// AND gradient_unlocks_capability(gradient_next).
+// render_unlock_arm — TentUnlock's render. Per MV §2.7.3 form
+// FCapability with EXCITED stance. Surfaces a capability that the
+// gradient_next would unlock. silence_predicate gated on gradient_next
+// AND gradient_unlocks_capability(gradient_next).
 
 fn render_unlock_arm(situation) with Pure = {
   let Situation(s) = situation
@@ -706,11 +706,11 @@ fn render_unlock_arm(situation) with Pure = {
   VoiceLine(TentUnlock, FCapability, body, select_modifier(situation, s.register))
 }
 
-/// render_trace_arm — TentTrace's render. Per MV §2.7.3 form
-/// FRefutation with FIRM stance. Per AT3 + AT9 + AT10: ownership
-/// violation / dropped capability / missing import — Trace surfaces
-/// the violation site. silence_predicate gated on ownership_at_topic
-/// being Some OR row_subsumption_fails.
+// render_trace_arm — TentTrace's render. Per MV §2.7.3 form
+// FRefutation with FIRM stance. Per AT3 + AT9 + AT10: ownership
+// violation / dropped capability / missing import — Trace surfaces
+// the violation site. silence_predicate gated on ownership_at_topic
+// being Some OR row_subsumption_fails.
 
 fn render_trace_arm(situation) with Pure = {
   let Situation(s) = situation
@@ -728,10 +728,10 @@ fn render_trace_arm(situation) with Pure = {
   VoiceLine(TentTrace, FRefutation, body, select_modifier(situation, s.register))
 }
 
-/// render_verify_arm — TentVerify's render. Per MV §2.7.3 form
-/// FRefinement with THE-MATH-SAYS stance. Per AT2: refinement
-/// obligations + discharges. silence_predicate gated on
-/// list_non_empty(refinements).
+// render_verify_arm — TentVerify's render. Per MV §2.7.3 form
+// FRefinement with THE-MATH-SAYS stance. Per AT2: refinement
+// obligations + discharges. silence_predicate gated on
+// list_non_empty(refinements).
 
 fn render_verify_arm(situation) with Pure = {
   let Situation(s) = situation
@@ -744,11 +744,11 @@ fn render_verify_arm(situation) with Pure = {
   ], select_modifier(situation, s.register))
 }
 
-/// render_teach_arm — TentTeach's render. Per MV §2.7.3 form
-/// FGradient with PATIENT-BUT-POINTED stance. Per AT1 + AT5 + AT9: the
-/// canonical "next step" voice — surface gradient_next as one
-/// annotation that unlocks one capability. silence_predicate gated on
-/// gradient_next being Some.
+// render_teach_arm — TentTeach's render. Per MV §2.7.3 form
+// FGradient with PATIENT-BUT-POINTED stance. Per AT1 + AT5 + AT9: the
+// canonical "next step" voice — surface gradient_next as one
+// annotation that unlocks one capability. silence_predicate gated on
+// gradient_next being Some.
 
 fn render_teach_arm(situation) with Pure = {
   let Situation(s) = situation
@@ -767,10 +767,10 @@ fn render_teach_arm(situation) with Pure = {
   VoiceLine(TentTeach, FGradient, body, select_modifier(situation, s.register))
 }
 
-/// render_why_arm — TentWhy's render. Per MV §2.7.3 form FTrace with
-/// REFLECTIVE stance. Per AT6: walks the Reason chain when the user
-/// explicitly asked a Why question. silence_predicate gated on
-/// TopicAsk(QWhy(_)) — only fires for explicit asks per MV §2.7.5.
+// render_why_arm — TentWhy's render. Per MV §2.7.3 form FTrace with
+// REFLECTIVE stance. Per AT6: walks the Reason chain when the user
+// explicitly asked a Why question. silence_predicate gated on
+// TopicAsk(QWhy(_)) — only fires for explicit asks per MV §2.7.5.
 
 fn render_why_arm(situation) with Pure = {
   let Situation(s) = situation
@@ -784,9 +784,9 @@ fn render_why_arm(situation) with Pure = {
   VoiceLine(TentWhy, FTrace, body, select_modifier(situation, s.register))
 }
 
-/// render_for_tentacle — dispatches to the right per-tentacle render
-/// arm. H6 exhaustive 8-arm match. Each arm produces a VoiceLine
-/// (assumed silence_predicate has already passed for this tentacle).
+// render_for_tentacle — dispatches to the right per-tentacle render
+// arm. H6 exhaustive 8-arm match. Each arm produces a VoiceLine
+// (assumed silence_predicate has already passed for this tentacle).
 
 fn render_for_tentacle(situation) with Pure = {
   let Situation(s) = situation
@@ -813,29 +813,29 @@ fn render_for_tentacle(situation) with Pure = {
 // silence machinery to maintain — the queue-empty gate is the one silence
 // gate, and the tier→tentacle read is the one fold.
 
-/// voice_queue_walk — queue-projection per insight #11. Queries the
-/// project queue via OracleQuery (cursor-relevance filtered when the
-/// situation has a cursor; project-wide otherwise); for each
-/// QueueItem, dispatches to the per-tentacle render arm based on
-/// tier_to_tentacle(item.impact.tier); accumulates VoiceLines.
-///
-/// Same machinery cursor-time MV + batch F.1: LSP picks the first
-/// VoiceLine for the cursor surface; F.1 mentl doc renders all.
-/// Surface-side cursor-relevance projection (cursor_relevant op) +
-/// project-wide fallback (query_project_queue) compose at the
-/// surface; voice_queue_walk just projects the queue items it
-/// receives.
-///
-/// Per the realization-loop discipline (insight #12): this fn replaces
-/// the prior fold-over-8-tentacles approach (artifact of the per-Topic
-/// silence framing that insight #11 superseded). The new fold is over
-/// the QUEUE; tentacles are VIEWS on queue items, not separate
-/// handlers.
-///
-/// Renamed from `mentl_voice_default` 2026-04-24 (MV.2.e.scaffold) to
-/// free that name for the actual `Interact` handler declared at
-/// end-of-file. The handler internally folds the project queue via
-/// this projector.
+// voice_queue_walk — queue-projection per insight #11. Queries the
+// project queue via OracleQuery (cursor-relevance filtered when the
+// situation has a cursor; project-wide otherwise); for each
+// QueueItem, dispatches to the per-tentacle render arm based on
+// tier_to_tentacle(item.impact.tier); accumulates VoiceLines.
+//
+// Same machinery cursor-time MV + batch F.1: LSP picks the first
+// VoiceLine for the cursor surface; F.1 mentl doc renders all.
+// Surface-side cursor-relevance projection (cursor_relevant op) +
+// project-wide fallback (query_project_queue) compose at the
+// surface; voice_queue_walk just projects the queue items it
+// receives.
+//
+// Per the realization-loop discipline (insight #12): this fn replaces
+// the prior fold-over-8-tentacles approach (artifact of the per-Topic
+// silence framing that insight #11 superseded). The new fold is over
+// the QUEUE; tentacles are VIEWS on queue items, not separate
+// handlers.
+//
+// Renamed from `mentl_voice_default` 2026-04-24 (MV.2.e.scaffold) to
+// free that name for the actual `Interact` handler declared at
+// end-of-file. The handler internally folds the project queue via
+// this projector.
 
 fn voice_queue_walk(situation_seed) with OracleQuery = {
   let Situation(s) = situation_seed
@@ -853,11 +853,11 @@ fn voice_queue_walk(situation_seed) with OracleQuery = {
   fold_queue_items(situation_seed, queue_items, 0, n, make_list(n), 0)
 }
 
-/// fold_queue_items — walk the queue items in priority order; per item,
-/// retarget the Situation at the item's tentacle (per tier_to_tentacle
-/// mapping) and call the per-tentacle render arm. Tail-recursive
-/// accumulator pattern; flat-buffer-plus-counter substrate (Ω.3 —
-/// list_extend_to + list_set + counter + slice).
+// fold_queue_items — walk the queue items in priority order; per item,
+// retarget the Situation at the item's tentacle (per tier_to_tentacle
+// mapping) and call the per-tentacle render arm. Tail-recursive
+// accumulator pattern; flat-buffer-plus-counter substrate (Ω.3 —
+// list_extend_to + list_set + counter + slice).
 
 fn fold_queue_items(situation, items, i, n, acc, count) with OracleQuery = {
   if i >= n { slice(acc, 0, count) }
@@ -874,14 +874,14 @@ fn fold_queue_items(situation, items, i, n, acc, count) with OracleQuery = {
   }
 }
 
-/// tier_to_tentacle — map a PriorityTier (per src/oracle.mn)
-/// to the tentacle that renders it. H6 exhaustive over PriorityTier.
-///
-/// - TBlocking → TentTrace (compile error; refutation form)
-/// - TViolation → TentTrace (declared row contradicted; refutation)
-/// - TPending → TentVerify (V_Pending refinement obligation)
-/// - TUnlock → TentUnlock (capability available; the gradient surface)
-/// - TStyle → TentTopology (topology nudge; FOffering / STYLE_NUDGE)
+// tier_to_tentacle — map a PriorityTier (per src/oracle.mn)
+// to the tentacle that renders it. H6 exhaustive over PriorityTier.
+//
+// - TBlocking → TentTrace (compile error; refutation form)
+// - TViolation → TentTrace (declared row contradicted; refutation)
+// - TPending → TentVerify (V_Pending refinement obligation)
+// - TUnlock → TentUnlock (capability available; the gradient surface)
+// - TStyle → TentTopology (topology nudge; FOffering / STYLE_NUDGE)
 
 fn tier_to_tentacle(tier) with Pure = {
   match tier {
@@ -928,15 +928,15 @@ fn unimplemented_arm(op_name) with Abort = {
 //   Gradient? each arm = one step toward LSP usability
 //   Reason?  — every cursor write threads a Reason per CaretTarget
 
-/// resolve_cursor_target — project a CaretTarget into a graph Handle.
-/// TargetHandle: identity. TargetSpan: span_index lookup via
-/// graph_snapshot (per query.mn find_tightest substrate). TargetIdent:
-/// env entries don't carry handles directly per current Env shape (the
-/// entry's Scheme's underlying TVar holds the handle, but extracting
-/// it isn't yet wired). Fallback for that variant: cursor unchanged.
-/// The MV.2.e.Q.ident peer sub-handle wires env→handle resolution.
-///
-/// H6 exhaustive over CaretTarget — no `_` wildcard.
+// resolve_cursor_target — project a CaretTarget into a graph Handle.
+// TargetHandle: identity. TargetSpan: span_index lookup via
+// graph_snapshot (per query.mn find_tightest substrate). TargetIdent:
+// env entries don't carry handles directly per current Env shape (the
+// entry's Scheme's underlying TVar holds the handle, but extracting
+// it isn't yet wired). Fallback for that variant: cursor unchanged.
+// The MV.2.e.Q.ident peer sub-handle wires env→handle resolution.
+//
+// H6 exhaustive over CaretTarget — no `_` wildcard.
 
 fn resolve_cursor_target(target, current_handle) with GraphRead = {
   match target {
@@ -953,10 +953,10 @@ fn resolve_cursor_target(target, current_handle) with GraphRead = {
   }
 }
 
-/// focus_reason — synthesize the Caret's Reason from the focus
-/// gesture. Per MV §2 Q5 + primitive #8: every cursor write threads a
-/// Reason so the Why tentacle can later answer "why this cursor?". H6
-/// exhaustive over CaretTarget.
+// focus_reason — synthesize the Caret's Reason from the focus
+// gesture. Per MV §2 Q5 + primitive #8: every cursor write threads a
+// Reason so the Why tentacle can later answer "why this cursor?". H6
+// exhaustive over CaretTarget.
 
 fn focus_reason(target) with Pure = {
   match target {
@@ -966,12 +966,12 @@ fn focus_reason(target) with Pure = {
   }
 }
 
-/// tentacle_for_question — Question variant decides the tentacle that
-/// renders the ask. Most Questions are Query-tentacle (read graph
-/// state); QWhy / QSubstChain are Why-tentacle (walk reason chain);
-/// QOwnership is Trace-tentacle (ownership trail); QVerifyDebt is
-/// Verify-tentacle (refinement obligations). H6 exhaustive over
-/// Question's 12 variants via pattern alternation per SYNTAX.md L956.
+// tentacle_for_question — Question variant decides the tentacle that
+// renders the ask. Most Questions are Query-tentacle (read graph
+// state); QWhy / QSubstChain are Why-tentacle (walk reason chain);
+// QOwnership is Trace-tentacle (ownership trail); QVerifyDebt is
+// Verify-tentacle (refinement obligations). H6 exhaustive over
+// Question's 12 variants via pattern alternation per SYNTAX.md L956.
 
 fn tentacle_for_question(question) with Pure = {
   match question {
@@ -985,10 +985,10 @@ fn tentacle_for_question(question) with Pure = {
   }
 }
 
-/// question_span — extract Span from Question. Only QTypeAt carries a
-/// natural Span; other variants project to span_zero. The TurnRecord's
-/// span_at field captures this for next-turn observation deltas. H6
-/// exhaustive over Question via pattern alternation.
+// question_span — extract Span from Question. Only QTypeAt carries a
+// natural Span; other variants project to span_zero. The TurnRecord's
+// span_at field captures this for next-turn observation deltas. H6
+// exhaustive over Question via pattern alternation.
 
 fn question_span(question) with Pure = {
   match question {
@@ -1000,23 +1000,23 @@ fn question_span(question) with Pure = {
   }
 }
 
-/// compose_propose_situation — sparse Situation for a propose gesture.
-/// Parallel to compose_minimal_ask_situation but with TentPropose
-/// tentacle and TopicHandle topic. Carries target_reason in
-/// reason_at_topic so the Why tentacle can later answer "why this
-/// proposal?". The full multi-shot oracle composition (Synth.propose
-/// + verify + rank) is the MV.2.e.P.synth peer sub-handle; this sparse
-/// form ships the structural composition while that oracle plumbing
-/// lands separately.
-///
-/// Per MV §2.7.3: TentPropose's default FormKind is FOffering;
-/// render_propose_arm handles the sparse Situation gracefully when
-/// is_hole / error_code_at are absent (returns short-form offering).
-///
-/// Per Insight #10 ("Row Algebra Is One Mechanism"): this is the
-/// second instance of sparse Situation composition; one more (likely
-/// run_query for batch path) earns the abstraction. Until then,
-/// parallel forms honest about not-yet-generic.
+// compose_propose_situation — sparse Situation for a propose gesture.
+// Parallel to compose_minimal_ask_situation but with TentPropose
+// tentacle and TopicHandle topic. Carries target_reason in
+// reason_at_topic so the Why tentacle can later answer "why this
+// proposal?". The full multi-shot oracle composition (Synth.propose
+// + verify + rank) is the MV.2.e.P.synth peer sub-handle; this sparse
+// form ships the structural composition while that oracle plumbing
+// lands separately.
+//
+// Per MV §2.7.3: TentPropose's default FormKind is FOffering;
+// render_propose_arm handles the sparse Situation gracefully when
+// is_hole / error_code_at are absent (returns short-form offering).
+//
+// Per Insight #10 ("Row Algebra Is One Mechanism"): this is the
+// second instance of sparse Situation composition; one more (likely
+// run_query for batch path) earns the abstraction. Until then,
+// parallel forms honest about not-yet-generic.
 
 fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure = {
   let (prior_topic, prior_tent) = match prior_turn {
@@ -1167,8 +1167,8 @@ fn render_modifier(modif) with Pure = match modif {
 // drift mode 8: IntentId is a structured ADT (Int wrapper), not a
 // raw integer.
 
-/// intent_id_eq — IntentId equality. IntentId wraps an Int; compare
-/// via destructure + integer compare. H6 implicit (single-variant ADT).
+// intent_id_eq — IntentId equality. IntentId wraps an Int; compare
+// via destructure + integer compare. H6 implicit (single-variant ADT).
 
 fn intent_id_eq(a, b) with Pure = {
   let IntentId(ai) = a
@@ -1176,12 +1176,12 @@ fn intent_id_eq(a, b) with Pure = {
   ai == bi
 }
 
-/// intents_without — return intents list with the entry whose id
-/// matches removed. Single-pass recursion; allocates one cons cell
-/// per kept entry. Tail-recursive in the keep-and-recurse case;
-/// length is bounded by user-declared intent count (small N typical),
-/// so the simple form is honest. Substrate idiom (list_extend_to +
-/// counter) reserved for genuinely-large N — this is not it.
+// intents_without — return intents list with the entry whose id
+// matches removed. Single-pass recursion; allocates one cons cell
+// per kept entry. Tail-recursive in the keep-and-recurse case;
+// length is bounded by user-declared intent count (small N typical),
+// so the simple form is honest. Substrate idiom (list_extend_to +
+// counter) reserved for genuinely-large N — this is not it.
 
 fn intents_without(intents, id) with Pure = {
   filter((intent) => {
@@ -1479,10 +1479,10 @@ handler mentl_voice_default
 // adds fs_list_dir + dirent parsing) + FX.1 (which adds
 // fs_filestat_is_dir for TreeFile vs TreeDir projection).
 
-/// handles_table_lookup — find the (FileHandle, Path, String) entry
-/// matching a target FileHandle. Returns Option<(FileHandle, Path,
-/// String)>. Single-pass cons recursion; small N typical (handles
-/// table holds open editor sessions, not arbitrary file enumerations).
+// handles_table_lookup — find the (FileHandle, Path, String) entry
+// matching a target FileHandle. Returns Option<(FileHandle, Path,
+// String)>. Single-pass cons recursion; small N typical (handles
+// table holds open editor sessions, not arbitrary file enumerations).
 
 fn handles_table_lookup(table, target_handle) with Pure = {
   if len(table) == 0 { None }
@@ -1498,8 +1498,8 @@ fn handles_table_lookup(table, target_handle) with Pure = {
   }
 }
 
-/// file_handle_eq — FileHandle equality. Single-variant ADT wrapping Int;
-/// destructure + integer compare. H6 implicit (single variant).
+// file_handle_eq — FileHandle equality. Single-variant ADT wrapping Int;
+// destructure + integer compare. H6 implicit (single variant).
 
 fn file_handle_eq(a, b) with Pure = {
   let FileHandle(ai) = a
@@ -1507,11 +1507,11 @@ fn file_handle_eq(a, b) with Pure = {
   ai == bi
 }
 
-/// join_capability_labels — fold [String] into a comma-joined
-/// String for FCapability rendering. Tail-recursive; allocation
-/// bounded by total label length. The capabilities_for_annotation
-/// substrate produces lists of size ≤ 3 today, so a flat fold is
-/// honest.
+// join_capability_labels — fold [String] into a comma-joined
+// String for FCapability rendering. Tail-recursive; allocation
+// bounded by total label length. The capabilities_for_annotation
+// substrate produces lists of size ≤ 3 today, so a flat fold is
+// honest.
 
 fn join_capability_labels(labels) with Pure = {
   if len(labels) == 0 { "" }
@@ -1523,12 +1523,12 @@ fn join_capability_labels(labels) with Pure = {
   }
 }
 
-/// suggestion_site_from_reason — extract the source Span from an
-/// AnnotationSuggestion's Reason. Per Hμ.cursor §3.5 + mentl.mn
-/// `suggestion_reason`: the outer wrapper IS Located(span, _),
-/// so the span is one peel away. Falls back to span_zero on
-/// non-Located reasons (theoretical; suggestion_reason always
-/// produces Located).
+// suggestion_site_from_reason — extract the source Span from an
+// AnnotationSuggestion's Reason. Per Hμ.cursor §3.5 + mentl.mn
+// `suggestion_reason`: the outer wrapper IS Located(span, _),
+// so the span is one peel away. Falls back to span_zero on
+// non-Located reasons (theoretical; suggestion_reason always
+// produces Located).
 
 fn suggestion_site_from_reason(reason) with Pure = match reason {
   Located(sp, _) => sp,

@@ -44,20 +44,20 @@
 
 import types
 
-/// Handle — opaque thread/task identity. Handler-held; consumers
-/// don't decode the Int. Per primitive #5 ownership: each Handle
-/// is `own` to the spawn site; passed `ref` to join.
+// Handle — opaque thread/task identity. Handler-held; consumers
+// don't decode the Int. Per primitive #5 ownership: each Handle
+// is `own` to the spawn site; passed `ref` to join.
 
 type Handle = Handle(Int)
 
-/// Thread — the spawn/join/identity effect. spawn launches a
-/// task as a separate OS thread; join joins. current_id returns
-/// the running thread's id; num_cores returns runtime CPU count
-/// for tuning parallelism degree.
-///
-/// Per primitive #2: both spawn and join are OneShot. Multi-shot
-/// would imply forking the continuation across multiple resumes —
-/// a different topology (race per HC2), not Thread.
+// Thread — the spawn/join/identity effect. spawn launches a
+// task as a separate OS thread; join joins. current_id returns
+// the running thread's id; num_cores returns runtime CPU count
+// for tuning parallelism degree.
+//
+// Per primitive #2: both spawn and join are OneShot. Multi-shot
+// would imply forking the continuation across multiple resumes —
+// a different topology (race per HC2), not Thread.
 
 effect Thread {
   spawn(task: () -> A) -> Handle
@@ -66,13 +66,13 @@ effect Thread {
   num_cores() -> Int
 }
 
-/// SharedMemory — atomics + wait/notify. Separate effect so
-/// `!SharedMemory` proves single-threaded-memory (can still call
-/// spawn via Thread; tracks' local memory is unshared). `Pure +
-/// !SharedMemory` is the strictest parallelizable-no-sync contract.
-///
-/// Per Q-B.7.1: runtime SharedArrayBuffer detection; graceful
-/// sequential fallback when SAB unavailable in browser context.
+// SharedMemory — atomics + wait/notify. Separate effect so
+// `!SharedMemory` proves single-threaded-memory (can still call
+// spawn via Thread; tracks' local memory is unshared). `Pure +
+// !SharedMemory` is the strictest parallelizable-no-sync contract.
+//
+// Per Q-B.7.1: runtime SharedArrayBuffer detection; graceful
+// sequential fallback when SAB unavailable in browser context.
 
 effect SharedMemory {
   atomic_load_i32(addr: Int) -> Int
@@ -83,10 +83,10 @@ effect SharedMemory {
   fence() -> ()
 }
 
-/// RmwOp — read-modify-write opcodes per WASM atomic instructions.
-/// ADT not strings (drift mode 3 — Python-dict effect-name-set).
-/// WASM's atomic.rmw.<op>.<type> opcodes map from this ADT in
-/// emission.
+// RmwOp — read-modify-write opcodes per WASM atomic instructions.
+// ADT not strings (drift mode 3 — Python-dict effect-name-set).
+// WASM's atomic.rmw.<op>.<type> opcodes map from this ADT in
+// emission.
 
 type RmwOp
   = RmwAdd
@@ -97,24 +97,24 @@ type RmwOp
   | RmwXchg
   | RmwCmpxchg
 
-/// WaitResult — outcome of wait_i32. WOk = notified; WTimedOut =
-/// timeout fired; WNotEqual = expected mismatch at wait time. ADT
-/// for H6 exhaustive matching downstream.
+// WaitResult — outcome of wait_i32. WOk = notified; WTimedOut =
+// timeout fired; WNotEqual = expected mismatch at wait time. ADT
+// for H6 exhaustive matching downstream.
 
 type WaitResult
   = WOk
   | WTimedOut
   | WNotEqual
 
-/// parallel_compose — the `><` multi-core semantics handler. When
-/// installed, intercepts spawn/join effects from `><` branches and
-/// dispatches them to distinct OS threads via ffi_spawn / ffi_join.
-/// Per Q-B.7.3, output tuple order is preserved regardless of
-/// completion order — multi-core determinism by construction.
-///
-/// Per drift mode 7 + kernel crystallization #9 (Records-Are-Handler-
-/// State-Shape): threads is [Handle], NOT ([Int],
-/// [ThreadState]) parallel arrays.
+// parallel_compose — the `><` multi-core semantics handler. When
+// installed, intercepts spawn/join effects from `><` branches and
+// dispatches them to distinct OS threads via ffi_spawn / ffi_join.
+// Per Q-B.7.3, output tuple order is preserved regardless of
+// completion order — multi-core determinism by construction.
+//
+// Per drift mode 7 + kernel crystallization #9 (Records-Are-Handler-
+// State-Shape): threads is [Handle], NOT ([Int],
+// [ThreadState]) parallel arrays.
 
 handler parallel_compose with threads = [] {
   spawn(task) => {
@@ -129,10 +129,10 @@ handler parallel_compose with threads = [] {
   num_cores() => resume(ffi_num_cores())
 }
 
-/// sequential_compose — fallback handler when SharedArrayBuffer
-/// isn't available (browser without cross-origin isolation, etc.).
-/// spawn runs the task synchronously; join is a no-op (the result
-/// is already computed). Per Q-B.7.1 graceful degradation.
+// sequential_compose — fallback handler when SharedArrayBuffer
+// isn't available (browser without cross-origin isolation, etc.).
+// spawn runs the task synchronously; join is a no-op (the result
+// is already computed). Per Q-B.7.1 graceful degradation.
 
 handler sequential_compose with results = [] {
   spawn(task) => {
@@ -231,17 +231,17 @@ effect WasiThreads {
   wasi_num_cores() -> Int
 }
 
-/// ffi_spawn — Stage 3 substrate: the CLOSURE IS the thread record.
-/// Per the realize protocol's collapse: spawnable closures carry
-/// done/result fields after captures+ev_slots. The host's
-/// wasi_thread_spawn receives the closure pointer as start_arg;
-/// $thread_start (exported by the wheel-emit module) reads fn_idx
-/// from closure[0], call_indirect with closure-as-__state, stores
-/// result at closure[done_offset+4], atomic.store done=1 at
-/// closure[done_offset], atomic.notify on done addr. NO separate
-/// thread-record table, NO next_tid counter, NO partition arithmetic.
-/// One record, four roles, four-and-a-half (closure + thread context).
-/// Per protocol_handler_is_state_is_closure_is_evidence.md.
+// ffi_spawn — Stage 3 substrate: the CLOSURE IS the thread record.
+// Per the realize protocol's collapse: spawnable closures carry
+// done/result fields after captures+ev_slots. The host's
+// wasi_thread_spawn receives the closure pointer as start_arg;
+// $thread_start (exported by the wheel-emit module) reads fn_idx
+// from closure[0], call_indirect with closure-as-__state, stores
+// result at closure[done_offset+4], atomic.store done=1 at
+// closure[done_offset], atomic.notify on done addr. NO separate
+// thread-record table, NO next_tid counter, NO partition arithmetic.
+// One record, four roles, four-and-a-half (closure + thread context).
+// Per protocol_handler_is_state_is_closure_is_evidence.md.
 fn ffi_spawn(ref task) with WasiThreads = {
   let closure_ptr = closure_pointer(task)
   // The closure already exists in the heap (LMakeClosure emitted it).
@@ -262,23 +262,23 @@ fn ffi_join(handle) with WasiThreads + SharedMemory = {
   atomic_load_i32(closure_result_addr(closure_ptr))
 }
 
-/// Compute done flag's absolute address in the closure record.
-/// Layout: [fn_idx@0][capture_count@4][captures@8..(8+4*nc)][done@8+4*nc]
+// Compute done flag's absolute address in the closure record.
+// Layout: [fn_idx@0][capture_count@4][captures@8..(8+4*nc)][done@8+4*nc]
 fn closure_done_addr(closure_ptr) with Memory = {
   let nc = load_i32(closure_ptr + 4)
   closure_ptr + 8 + 4 * nc
 }
 
-/// Result slot sits at done+4.
+// Result slot sits at done+4.
 fn closure_result_addr(closure_ptr) with Memory = {
   closure_done_addr(closure_ptr) + 4
 }
 
-/// Current thread identity — within Mentl, the closure-IS-state
-/// substrate makes "current thread" identical to "current closure
-/// __state pointer". For Thread-effect callers that want an Int tid,
-/// we project the start-arg the host passed when invoking $thread_start
-/// (which equals the closure pointer — the thread's own state).
+// Current thread identity — within Mentl, the closure-IS-state
+// substrate makes "current thread" identical to "current closure
+// __state pointer". For Thread-effect callers that want an Int tid,
+// we project the start-arg the host passed when invoking $thread_start
+// (which equals the closure pointer — the thread's own state).
 fn ffi_current_thread_id() with WasiThreads = 0
 
 fn ffi_num_cores() with WasiThreads = wasi_num_cores()
@@ -340,72 +340,72 @@ fn wasi_num_cores_intrinsic()                    with Pure = 1
 
 // ─── Connection to the kernel ─────────────────────────────────────────
 
-/// Primitive #1 (Graph + Env) — Thread + SharedMemory effects
-/// register in the effect catalog (per src/types.mn EffName).
-///
-/// Primitive #2 (Handlers + resume discipline) — parallel_compose +
-/// sequential_compose are peer handlers; both are OneShot per the
-/// Thread effect's resume discipline. Per Q-B.7.2: OS threads
-/// direct for v1; pool_compose is peer handler post-first-light.
-///
-/// Primitive #3 (Five verbs) — `><` AND `<|` are the parallel
-/// topologies (SUBSTRATE.md §"`<|` vs `><`: Ownership Is the
-/// Structural Difference"); parallel_compose is the handler that
-/// gives BOTH verbs multi-core semantics. Same source — single-
-/// threaded baseline OR multi-core scale-out — depending only
-/// on the installed handler. The two glyphs are ONE PFanout verb,
-/// discriminated by input ownership (`<|` = FanShare, ref-borrowed
-/// shared; `><` = FanDistribute, own-consumed independent), not a
-/// dispatch story. The Schedule (Seq default / Thread / Simd / Gpu)
-/// is read LIVE from the `~>` chain at lower; with this Thread
-/// handler installed, `lower_fanout` projects spawn-all-then-join-
-/// all over the strategy-neutral branch thunks in source order.
-///
-/// Primitive #4 (Effect row algebra) — `Thread + !SharedMemory` for
-/// isolated tracks; `SharedMemory` for atomic-sync ops. `!Thread`
-/// proves single-threaded; `Pure + !SharedMemory` proves
-/// parallelizable-no-sync (the strictest contract).
-///
-/// Primitive #5 (Ownership) — thread-local bump_allocator per spawn
-/// (TH §3); cross-thread data via Pack/Unpack bytes only (TH §4 —
-/// no shared mutable memory between threads except via SharedMemory's
-/// atomics + per-Handle ownership). Per kernel crystallization #8 —
-/// the heap has one story; per-thread heaps each go through
-/// emit_alloc with thread-local bump_ptr.
-///
-/// Primitive #6 (Refinement) — could refine `Handle where 0 <= self
-/// < num_cores()` post-first-light; V1 leaves Handle opaque.
-///
-/// Primitive #7 (Annotation gradient) — `~> parallel_compose`
-/// unlocks CParallelize capability; Mentl Teach surfaces when
-/// cursor's body has `><` and `parallel_compose` not yet installed.
-///
-/// Primitive #8 (Reasons) — each spawn records
-/// Reason::ThreadSpawned(span); thread identity traceable through
-/// the Reason chain. Per Q-B.7.3 determinism: same source + same
-/// inputs → same outputs regardless of timing; Reason chains
-/// preserve "why this thread won the race?" for Why Engine.
+// Primitive #1 (Graph + Env) — Thread + SharedMemory effects
+// register in the effect catalog (per src/types.mn EffName).
+//
+// Primitive #2 (Handlers + resume discipline) — parallel_compose +
+// sequential_compose are peer handlers; both are OneShot per the
+// Thread effect's resume discipline. Per Q-B.7.2: OS threads
+// direct for v1; pool_compose is peer handler post-first-light.
+//
+// Primitive #3 (Five verbs) — `><` AND `<|` are the parallel
+// topologies (SUBSTRATE.md §"`<|` vs `><`: Ownership Is the
+// Structural Difference"); parallel_compose is the handler that
+// gives BOTH verbs multi-core semantics. Same source — single-
+// threaded baseline OR multi-core scale-out — depending only
+// on the installed handler. The two glyphs are ONE PFanout verb,
+// discriminated by input ownership (`<|` = FanShare, ref-borrowed
+// shared; `><` = FanDistribute, own-consumed independent), not a
+// dispatch story. The Schedule (Seq default / Thread / Simd / Gpu)
+// is read LIVE from the `~>` chain at lower; with this Thread
+// handler installed, `lower_fanout` projects spawn-all-then-join-
+// all over the strategy-neutral branch thunks in source order.
+//
+// Primitive #4 (Effect row algebra) — `Thread + !SharedMemory` for
+// isolated tracks; `SharedMemory` for atomic-sync ops. `!Thread`
+// proves single-threaded; `Pure + !SharedMemory` proves
+// parallelizable-no-sync (the strictest contract).
+//
+// Primitive #5 (Ownership) — thread-local bump_allocator per spawn
+// (TH §3); cross-thread data via Pack/Unpack bytes only (TH §4 —
+// no shared mutable memory between threads except via SharedMemory's
+// atomics + per-Handle ownership). Per kernel crystallization #8 —
+// the heap has one story; per-thread heaps each go through
+// emit_alloc with thread-local bump_ptr.
+//
+// Primitive #6 (Refinement) — could refine `Handle where 0 <= self
+// < num_cores()` post-first-light; V1 leaves Handle opaque.
+//
+// Primitive #7 (Annotation gradient) — `~> parallel_compose`
+// unlocks CParallelize capability; Mentl Teach surfaces when
+// cursor's body has `><` and `parallel_compose` not yet installed.
+//
+// Primitive #8 (Reasons) — each spawn records
+// Reason::ThreadSpawned(span); thread identity traceable through
+// the Reason chain. Per Q-B.7.3 determinism: same source + same
+// inputs → same outputs regardless of timing; Reason chains
+// preserve "why this thread won the race?" for Why Engine.
 
 // ─── What this substrate refuses ──────────────────────────────────────
 
-/// - Special concurrency keywords. Mentl has no language-level
-///   keyword for spawning, joining, or yielding to other threads;
-///   threading IS the effect; handlers compose. Per drift mode 24 —
-///   concurrent execution is an effect, not a keyword.
-/// - Class-based threads (drift mode 21 — OOP / Python class).
-///   Thread is an effect; Handle is an opaque ADT; no `class
-///   Thread { ... }`.
-/// - Shared-mutable-state-by-default (Rust's Send/Sync trait reach,
-///   Java's synchronized). SharedMemory is OPT-IN via row;
-///   `!SharedMemory` is single-threaded-memory PROOF.
-/// - Hardcoded thread count. parallel_compose's degree comes from
-///   num_cores() at install time; sequential_compose's degree is 1.
-/// - String-keyed RmwOp dispatch (drift mode 3). ADT-discriminated
-///   per primitive #4 row algebra discipline.
-/// - Per-thread state via parallel arrays (drift mode 7). threads
-///   is [Handle]; per-Handle state lives in the runtime's
-///   thread-local-storage substrate (per TH §3).
-/// - Foreign-language drift — NOT Goroutines (Go's syntax-level
-///   construct); NOT Java's synchronized; NOT Python's threading.
-///   Threading in Mentl IS Thread + SharedMemory effects + the
-///   parallel_compose handler over `><` topology.
+// - Special concurrency keywords. Mentl has no language-level
+//   keyword for spawning, joining, or yielding to other threads;
+//   threading IS the effect; handlers compose. Per drift mode 24 —
+//   concurrent execution is an effect, not a keyword.
+// - Class-based threads (drift mode 21 — OOP / Python class).
+//   Thread is an effect; Handle is an opaque ADT; no `class
+//   Thread { ... }`.
+// - Shared-mutable-state-by-default (Rust's Send/Sync trait reach,
+//   Java's synchronized). SharedMemory is OPT-IN via row;
+//   `!SharedMemory` is single-threaded-memory PROOF.
+// - Hardcoded thread count. parallel_compose's degree comes from
+//   num_cores() at install time; sequential_compose's degree is 1.
+// - String-keyed RmwOp dispatch (drift mode 3). ADT-discriminated
+//   per primitive #4 row algebra discipline.
+// - Per-thread state via parallel arrays (drift mode 7). threads
+//   is [Handle]; per-Handle state lives in the runtime's
+//   thread-local-storage substrate (per TH §3).
+// - Foreign-language drift — NOT Goroutines (Go's syntax-level
+//   construct); NOT Java's synchronized; NOT Python's threading.
+//   Threading in Mentl IS Thread + SharedMemory effects + the
+//   parallel_compose handler over `><` topology.

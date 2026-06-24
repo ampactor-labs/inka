@@ -33,15 +33,15 @@ import runtime/memory
 import runtime/binary
 import runtime/io
 
-/// Persist — the durable catch. `persist` writes a continuation record to a
-/// path; `rehydrate` reads it back, checking the captured world against the
-/// live world the caller resumes under. The catching handler decides WHERE
-/// (disk path here; a network/object-store handler is a swap, same wire).
-///
-/// `k` is the continuation record pointer (LMakeContinuation's heap value).
-/// `size` is its total byte length (the producer knows nc+ne at construct;
-/// rehydrate recovers it from the wire — fully self-describing). `world_tag`
-/// is the record's frozen-world hash, read from the record's final field.
+// Persist — the durable catch. `persist` writes a continuation record to a
+// path; `rehydrate` reads it back, checking the captured world against the
+// live world the caller resumes under. The catching handler decides WHERE
+// (disk path here; a network/object-store handler is a swap, same wire).
+//
+// `k` is the continuation record pointer (LMakeContinuation's heap value).
+// `size` is its total byte length (the producer knows nc+ne at construct;
+// rehydrate recovers it from the wire — fully self-describing). `world_tag`
+// is the record's frozen-world hash, read from the record's final field.
 effect Persist {
   persist(k: Int, size: Int, world_tag: Int, path: String) -> ()
   rehydrate(path: String, live_world_tag: Int) -> Int
@@ -57,9 +57,9 @@ effect Persist {
   join_persist(branch: Int) -> Int
 }
 
-/// persist_to_disk — the default durable handler. The wire is the B1 pack-leaf
-/// format, so a different destination (network, object store) is purely a
-/// handler swap with the SAME wire. memcpy is the whole serializer.
+// persist_to_disk — the default durable handler. The wire is the B1 pack-leaf
+// format, so a different destination (network, object store) is purely a
+// handler swap with the SAME wire. memcpy is the whole serializer.
 handler persist_to_disk with branch_results = [] {
 
   persist(k, size, world_tag, path) => {
@@ -108,25 +108,25 @@ handler persist_to_disk with branch_results = [] {
   }
 }
 
-/// persist_checkpoint_thunk — memcpy the branch thunk's continuation record to a
-/// per-branch disk path BEFORE the branch runs, so a crash mid-branch re-runs
-/// from the checkpoint. The thunk is the unified heap record (fn_ptr@0, nstate@4,
-/// state@8…, captured_evs) — its size is read from its own header (nstate gives
-/// the field count), so the checkpoint is a single memcpy with no field-walking
-/// (durable execution falls out of the memory model, PLAN §6). world_tag 0 (the
-/// EfPure / unconstrained world) — a fanout branch carries the enclosing fn's
-/// world, which the lower-side schedule has already proven uniform across
-/// branches; pinning it here is the per-branch peer Hβ.persist.branch-world-tag.
+// persist_checkpoint_thunk — memcpy the branch thunk's continuation record to a
+// per-branch disk path BEFORE the branch runs, so a crash mid-branch re-runs
+// from the checkpoint. The thunk is the unified heap record (fn_ptr@0, nstate@4,
+// state@8…, captured_evs) — its size is read from its own header (nstate gives
+// the field count), so the checkpoint is a single memcpy with no field-walking
+// (durable execution falls out of the memory model, PLAN §6). world_tag 0 (the
+// EfPure / unconstrained world) — a fanout branch carries the enclosing fn's
+// world, which the lower-side schedule has already proven uniform across
+// branches; pinning it here is the per-branch peer Hβ.persist.branch-world-tag.
 fn persist_checkpoint_thunk(thunk, idx) with Memory + Alloc + Filesystem = {
   let nstate = load_i32(thunk + 4)
   let size = 8 + nstate * 4
   persist(thunk, size, 0, "/tmp/mn-persist-branch-{int_to_str(idx)}.k")
 }
 
-/// persist_pack_record — lay the self-describing wire: [world_tag][size][bytes].
-/// The record bytes are mem_copy'd whole; no field-walking. The leading two i32
-/// headers make rehydrate fully self-describing (it never needs the producer's
-/// nc/ne). This IS the pack-leaf wire (binary.mn) at the record granularity.
+// persist_pack_record — lay the self-describing wire: [world_tag][size][bytes].
+// The record bytes are mem_copy'd whole; no field-walking. The leading two i32
+// headers make rehydrate fully self-describing (it never needs the producer's
+// nc/ne). This IS the pack-leaf wire (binary.mn) at the record granularity.
 fn persist_pack_record(world_tag, k, size) with Memory + Alloc = {
   let wire = alloc(4 + 4 + 4 + size)
   store_i32(wire, 4 + 4 + size)         // [len] header for the [len][bytes] view

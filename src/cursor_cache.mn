@@ -269,9 +269,9 @@ fn collect_all_entries(cached) with Pure = {
   }, cached))
 }
 
-/// Per-entry scoring is independent (read-only graph chase from each
-/// entry's handle + pure caret_proximity_weight). parallel_map dispatches
-/// via Thread; spatial multi-core when parallel_compose installed.
+// Per-entry scoring is independent (read-only graph chase from each
+// entry's handle + pure caret_proximity_weight). parallel_map dispatches
+// via Thread; spatial multi-core when parallel_compose installed.
 fn score_all_entries(entries, caret) with GraphRead + !Mutate = {
   parallel_map((entry) => score_one_entry(entry, caret), entries)
 }

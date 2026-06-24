@@ -362,6 +362,17 @@ type NodeKind
   | NRowBound(EffRow)   // resolved effect row
   | NRowFree(Int)       // unresolved effect row variable
   | NErrorHole(Reason)  // inference observed failure (Hazel marked hole)
+  // IFC (§4⑥): no separate NFlowBound/NFlowFree dimension needed. The existing
+  // graph already encodes information-flow constraints through two mechanisms:
+  //   1. EfNeg in the EffRow (`!IO + !Network`) — a function proved to carry !IO
+  //      cannot let its return value reach a Log/stderr handler; the row unification
+  //      catches the violation structurally (not through a parallel label lattice).
+  //   2. TRefined(Ty, Predicate) + TName — `type SecretKey = Bytes where is_secret(self)`
+  //      brands values at the type level; the type checker refuses to pass SecretKey
+  //      where Bytes is expected. Nominal branding IS the flow label.
+  // FlowLabel (below) remains as a pure lattice for use in annotations and the
+  // mentl-voice projection (`mentl query flow name`) — a read over the type the graph
+  // already holds, not a new graph dimension.
 
 type GNode
   = GNode(NodeKind, Reason)   // every node carries its justification
@@ -984,6 +995,66 @@ type Predicate
 // `_ => PEVar("?")` surrender). The predicate now carries the live operand Node
 // and Verify reads its Expr live — carry the handle, read live, delete the copy.
 
+// ─── FlowLabel — the IFC frontier (PLAN.md §4⑥, SYNTAX.md §4⑥) ──────────
+//
+// The three-level information-flow lattice. Every expression node in the graph
+// carries a FlowLabel alongside its Ty and EffRow; infer accumulates it at
+// MakeStringExpr splice sites and at handler-install boundaries.
+//
+// Lattice: Public ⊑ Tainted ⊑ Secret.
+//   Public  — safe to observe and log. Default for all unannotated expressions.
+//   Tainted — derived from a Secret via a computation (e.g. hash(secret)) — the
+//             result is not the secret itself, but the path touched it. Tainted
+//             stays tainted through further transformations until an explicit
+//             declassify annotation proves the result provably non-invertible
+//             (arc F.1 SMT discharge).
+//   Secret  — must not flow into any Public observable (log, network, stderr).
+//             `"msg: {secret}" ~> Log` is E_IFCFlowViolation: the string splice
+//             carries secret's label UP into the string literal, which then
+//             flows into the IO-row Log handler — a non-interference violation
+//             the type system proves before runtime.
+//
+// Why a 3-level lattice instead of 2? Tainted models the realistic case where
+// secrets MUST be used in computation (signing keys, HMAC) — the output of
+// those computations is not the secret, but tracing taint through them is
+// necessary for IFC completeness. The lattice has a meet (Public) and a join
+// (Secret); Tainted is the intermediate that lets us distinguish "used secret"
+// from "IS secret".
+//
+// Per SYNTAX.md §4⑥: the IFC flow-constraint is sequenced after first-light.
+// The ADT is real now; infer.mn's MakeStringExpr arm emits ifc_check when the
+// splice is Secret or Tainted into a Public-bound context (Arc F.1 discharge).
+// The handler swap is verify_smt (not verify_ledger). No new surface form.
+
+type FlowLabel
+  = Public     // safe to observe; default for all unannotated expressions
+  | Tainted    // derived from Secret through computation — carries the taint
+  | Secret     // must not flow into any Public-observable (log/net/stderr)
+
+// flow_join — lattice join: the label of a derived expression reaches the
+// join of its operands' labels. Pure — the lattice is a compile-time fact.
+// H6: exhaustive over all 3×3 pairs; no wildcard arms on a load-bearing ADT.
+fn flow_join(a, b) with Pure = match a {
+  Secret  => Secret,
+  Tainted => match b {
+    Secret  => Secret,
+    Tainted => Tainted,
+    Public  => Tainted
+  },
+  Public  => match b {
+    Secret  => Secret,
+    Tainted => Tainted,
+    Public  => Public
+  }
+}
+
+// flow_le — lattice order: a ⊑ b (a is at least as restrictive as b).
+// Public ⊑ Public ⊑ Tainted ⊑ Secret. H6: exhaustive over both dimensions.
+fn flow_le(a, b) with Pure = match a {
+  Secret  => match b { Secret => true,  Tainted => false, Public => false },
+  Tainted => match b { Secret => true,  Tainted => true,  Public => false },
+  Public  => match b { Secret => true,  Tainted => true,  Public => true  }
+}
 
 type Option
   = None
@@ -1028,7 +1099,7 @@ effect GraphRead {
   graph_node_body(Int) -> NodeBody    // resolve a node's body by its handle from the parallel program weave — every AST node is registered there at construction (NHole if absent)
   graph_comment_at(Int) -> String     // resolve a node's parse-attached comment prose from the parallel comment weave (empty string if absent); the Why engine / formatter / cursor project it
   graph_canon_at(Int) -> Int          // the e-graph canonical pointer at a handle — the equivalence weave's `find` step (returns the handle itself if it is its own e-class root). One co-indexed weave, exactly like `nodes`' TVar union-find; egraph_extract chases it live.
-  graph_narrow_at(Int) -> Int         // the refinement-narrowing pointer at a handle — the path-predicate's bool-node handle proven to hold AT this program point (0 = no narrowing). One co-indexed weave like `canon`; lower's verify-obligation read chases it live to elide a check the path already proves (§4⑥). Never re-derived per consumer.
+  graph_narrow_at(Int) -> Int         // the refinement-narrowing pointer at a handle — the path-predicate's bool-node handle proven to hold AT this program point (0 = no narrowing). One co-indexed weave like `canon`; lower's verify-obligation read chases it live to elide a check the path already proves (§4⑥). Appropriate as a side-table: narrowing is a per-program-point boolean fact, not a unifiable variable.
 }
 
 effect GraphWrite {
@@ -1393,37 +1464,37 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
   EResumeWorldMismatchWorld(captured, live, _) => "continuation frozen under world {int_to_str(captured)} cannot resume under world {int_to_str(live)}"
 }
 
-/// Universal short-circuit / early return.
-/// Flattens the "Option Monad" into the topological pipeline.
-/// `abort` is inferred OneShot despite `-> !`: OneShot's semantics
-/// is "at most once" (zero ≤ 1) and "continuation on stack, no
-/// heap capture" — both true for a handler arm that never calls
-/// resume. The infer pass counts zero resume sites in `catch_abort`-
-/// shape arms and produces `OneShot` (count ≤ 1 → OneShot).
+// Universal short-circuit / early return.
+// Flattens the "Option Monad" into the topological pipeline.
+// `abort` is inferred OneShot despite `-> !`: OneShot's semantics
+// is "at most once" (zero ≤ 1) and "continuation on stack, no
+// heap capture" — both true for a handler arm that never calls
+// resume. The infer pass counts zero resume sites in `catch_abort`-
+// shape arms and produces `OneShot` (count ≤ 1 → OneShot).
 effect Abort {
   abort() -> !
 }
 
-/// Mutation capability marker.
-/// !Mutate on a function proves read-only access to all parameters.
-/// Vale-style region-freeze: "N parallel readers, no writers" through
-/// the same Boolean algebra that proves !Alloc and !IO.
-/// Mutate carries the graph_mutated event — performed by graph_handler
-/// at the OUTERMOST commit boundary so the IC fixpoint (the oracle's
-/// project_queue_merger, src/oracle.mn) re-projects only on real graph
-/// state changes. Speculative writes between graph_push_checkpoint /
-/// graph_rollback never reach this op — Mentl's own oracle would
-/// otherwise subscribe to her speculations and recursively explore
-/// forever.
-///
-/// epoch — graph epoch at which the mutation committed. The epoch IS the
-/// one cache key: the IC projection memoizes by it, re-deriving the queue
-/// only when the epoch bumps (PLAN §2: read live is the meaning, cached
-/// by epoch is the mechanism).
-/// Mutation — MSetNode | MSetRow | MFreshNode (per the Mutation type at
-/// src/types.mn:163). The event carries enough for the projection to
-/// re-derive over the changed graph (Q-2 (B) scope: transitive dependents
-/// via Reason chain).
+// Mutation capability marker.
+// !Mutate on a function proves read-only access to all parameters.
+// Vale-style region-freeze: "N parallel readers, no writers" through
+// the same Boolean algebra that proves !Alloc and !IO.
+// Mutate carries the graph_mutated event — performed by graph_handler
+// at the OUTERMOST commit boundary so the IC fixpoint (the oracle's
+// project_queue_merger, src/oracle.mn) re-projects only on real graph
+// state changes. Speculative writes between graph_push_checkpoint /
+// graph_rollback never reach this op — Mentl's own oracle would
+// otherwise subscribe to her speculations and recursively explore
+// forever.
+//
+// epoch — graph epoch at which the mutation committed. The epoch IS the
+// one cache key: the IC projection memoizes by it, re-deriving the queue
+// only when the epoch bumps (PLAN §2: read live is the meaning, cached
+// by epoch is the mechanism).
+// Mutation — MSetNode | MSetRow | MFreshNode (per the Mutation type at
+// src/types.mn:163). The event carries enough for the projection to
+// re-derive over the changed graph (Q-2 (B) scope: transitive dependents
+// via Reason chain).
 
 effect Mutate {
   graph_mutated(Int, Mutation) -> ()
@@ -1488,6 +1559,18 @@ effect LowerScope {
 effect Verify {
   verify(Span, Predicate, Reason) -> ()
   verify_debt() -> List
+  // ifc_check — the IFC non-interference obligation (§4⑥).
+  // The caller resolves src and dst FlowLabel from the existing graph:
+  //   src — derived by query_flow_label(handle): chases the handle's
+  //          Ty through TRefined/TName to classify Public/Tainted/Secret.
+  //   dst — derived from the sink handler's declared row: an IO-row
+  //          sink requires Public; an !IO-row context admits Secret.
+  // If src ⊑ dst per flow_le, the value flows safely. Otherwise:
+  // verify_ledger accumulates V_Pending; verify_smt (Arc F.1) routes
+  // to the NI theory solver. The graph IS the mechanism — EfNeg +
+  // TRefined + TName already encode the constraint; ifc_check is the
+  // Verify-layer read that names the violation as a diagnostic.
+  ifc_check(Span, FlowLabel, FlowLabel, Reason) -> ()
 }
 
 // Every use of an own-parameter performs consume(name, span).
@@ -1600,10 +1683,10 @@ fn show_handle(h) with GraphRead + !Mutate = {
 // one truth, two consumers, no re-derivation). The LabeledArg wrappers and the
 // reorder are resolved away here; downstream sees only positional value nodes.
 
-/// The callee's declared param TParams, read LIVE off its TFun (the one home —
-/// no copy, no cache). [] when the callee's scheme isn't a ground function
-/// (an unbound forward ref, a param-position fn) — then there are no labels to
-/// resolve and the args pass through positionally.
+// The callee's declared param TParams, read LIVE off its TFun (the one home —
+// no copy, no cache). [] when the callee's scheme isn't a ground function
+// (an unbound forward ref, a param-position fn) — then there are no labels to
+// resolve and the args pass through positionally.
 fn callee_params(name) with Env + GraphRead = match env_lookup(name) {
   Some(entry) => {
     let (scheme, _, _) = entry
@@ -1619,12 +1702,12 @@ fn callee_params(name) with Env + GraphRead = match env_lookup(name) {
   None => []
 }
 
-/// Resolve a call's arg list (carrying optional LabeledArg wrappers) to the
-/// callee's positional param order. Positional args fill the next un-claimed
-/// slot left-to-right; a labeled arg claims its named slot (skip-over); a slot
-/// no arg reaches is filled by the param's default node (the absent product
-/// field's fallback construction). An unknown label is E_UnknownArgLabel —
-/// Located, productive-under-error (the arg is dropped, parsing continues).
+// Resolve a call's arg list (carrying optional LabeledArg wrappers) to the
+// callee's positional param order. Positional args fill the next un-claimed
+// slot left-to-right; a labeled arg claims its named slot (skip-over); a slot
+// no arg reaches is filled by the param's default node (the absent product
+// field's fallback construction). An unknown label is E_UnknownArgLabel —
+// Located, productive-under-error (the arg is dropped, parsing continues).
 fn resolve_call_args(cname, args) with Env + GraphRead + Memory + Alloc + Diagnostic = {
   let params = callee_params(cname)
   // No declared params (forward ref / fn-param callee / constructor): no labels
@@ -1634,7 +1717,7 @@ fn resolve_call_args(cname, args) with Env + GraphRead + Memory + Alloc + Diagno
   else { fill_arg_slots(params, args, cname) }
 }
 
-/// Unwrap a LabeledArg to its value node; a positional arg passes through.
+// Unwrap a LabeledArg to its value node; a positional arg passes through.
 fn unwrap_labeled_arg(arg) with GraphRead = {
   let N(body, _, _) = arg
   match body {
@@ -1643,11 +1726,11 @@ fn unwrap_labeled_arg(arg) with GraphRead = {
   }
 }
 
-/// Build the positional slot buffer (one slot per declared param, 0 = unfilled
-/// sentinel — a real arg node is a non-zero handle). Two passes over the args:
-/// labeled args claim their named slot first (skip-over); positional args then
-/// fill the remaining unfilled slots left-to-right. Then collect each slot to
-/// its placed value or its param default.
+// Build the positional slot buffer (one slot per declared param, 0 = unfilled
+// sentinel — a real arg node is a non-zero handle). Two passes over the args:
+// labeled args claim their named slot first (skip-over); positional args then
+// fill the remaining unfilled slots left-to-right. Then collect each slot to
+// its placed value or its param default.
 fn fill_arg_slots(params, args, cname) with Env + GraphRead + Memory + Alloc + Diagnostic = {
   let n = len(params)
   let claimed = place_labeled(params, args, 0, make_list(n), cname)
@@ -1655,9 +1738,9 @@ fn fill_arg_slots(params, args, cname) with Env + GraphRead + Memory + Alloc + D
   collect_slot_nodes(params, filled, 0, n, make_list(n), 0)
 }
 
-/// Pass 1 — place each LabeledArg at its named param slot; positional args are
-/// skipped here. An unknown label is E_UnknownArgLabel (Located, productive:
-/// the arg is dropped, the remaining args resolve). Returns the slot buffer.
+// Pass 1 — place each LabeledArg at its named param slot; positional args are
+// skipped here. An unknown label is E_UnknownArgLabel (Located, productive:
+// the arg is dropped, the remaining args resolve). Returns the slot buffer.
 fn place_labeled(params, args, i, slots, cname) with GraphRead + Memory + Diagnostic = {
   if i >= len(args) { slots }
   else {
@@ -1679,9 +1762,9 @@ fn place_labeled(params, args, i, slots, cname) with GraphRead + Memory + Diagno
   }
 }
 
-/// Pass 2 — fill positional (non-labeled) args into the next unfilled slot,
-/// left-to-right, skipping slots a label already claimed. `cur` is the arg
-/// cursor; `slot` advances past filled slots.
+// Pass 2 — fill positional (non-labeled) args into the next unfilled slot,
+// left-to-right, skipping slots a label already claimed. `cur` is the arg
+// cursor; `slot` advances past filled slots.
 fn place_positional(args, cur, slot, slots, n) with GraphRead + Memory = {
   if cur >= len(args) { slots }
   else {
@@ -1703,14 +1786,14 @@ fn place_positional(args, cur, slot, slots, n) with GraphRead + Memory = {
   }
 }
 
-/// The first slot at or after `from` whose value is still the 0 sentinel; n
-/// when none remain.
+// The first slot at or after `from` whose value is still the 0 sentinel; n
+// when none remain.
 fn next_free_slot(slots, from, n) with Memory =
   if from >= n { n }
   else if list_index(slots, from) == 0 { from }
   else { next_free_slot(slots, from + 1, n) }
 
-/// The param index whose name is `label`, or -1 when no param bears it.
+// The param index whose name is `label`, or -1 when no param bears it.
 fn param_index(params, label, i) with Pure =
   if i >= len(params) { -1 }
   else {
@@ -1718,10 +1801,10 @@ fn param_index(params, label, i) with Pure =
     if name == label { i } else { param_index(params, label, i + 1) }
   }
 
-/// Project each slot to its placed value node, or — when the slot is the 0
-/// sentinel — the param's default node. A sentinel slot with no default is
-/// dropped (a genuinely-missing required arg is infer's arity check, surfaced
-/// at the call). The contiguous prefix of present args is returned in order.
+// Project each slot to its placed value node, or — when the slot is the 0
+// sentinel — the param's default node. A sentinel slot with no default is
+// dropped (a genuinely-missing required arg is infer's arity check, surfaced
+// at the call). The contiguous prefix of present args is returned in order.
 fn collect_slot_nodes(params, slots, i, n, out, count) with Memory + Alloc = {
   if i >= n { slice(out, 0, count) }
   else {

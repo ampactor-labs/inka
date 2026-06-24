@@ -1,0 +1,50 @@
+// W20 gate — Pure is the union-identity EffName variant, not a string key.
+//
+// The ultimate form (what the WHEEL now is): `with Pure` lexes to TPure and the
+// parser emits the `EPure` EffName variant directly (src/parser.mn
+// parse_one_effect); build_declared_row maps EPure to EfPure — the union
+// identity — so `with Pure + IO` simplifies to `with IO`, and is_pure_eff_name /
+// has_pure_declared read the VARIANT (EPure => true), never a string compare
+// (drift-3 / drift-8 closed). EPure never enters a row name-set (it IS the empty
+// row), so it is seed-coherent: the evidence layout is unchanged (ev2/4/8 stay
+// byte-identical).
+//
+// This micro proves the build-declared-row CONTROL SHAPE through the seed: an
+// EffName-shaped ADT whose Pure variant folds to the identity under a union
+// accumulator, exactly as build_declared_row folds the parsed terms. The proxy
+// uses an Int accumulator as the row stand-in (Pure adds 0 = identity; a named
+// effect adds its weight), in seed-supported constructs (ADT + match).
+//
+// Expected exit 18: union over (Named(10), Pure, Named(8)) = 10 + 0 + 8 = 18 —
+// Pure contributes the identity, the named terms their weights. (The old string
+// drift would mis-classify; the variant match cannot.)
+
+type EName
+  = ENamed(Int)     // a named effect, weighted (the row stand-in)
+  | EPure           // the union identity — `with Pure` IS the empty row
+
+// is_pure_eff_name reads the VARIANT (the wheel's exact shape), never a string.
+fn is_pure(n) = match n {
+  EPure  => true,
+  _      => false
+}
+
+// build_declared_row's per-term map: Pure ⇒ the identity (0), a named effect ⇒
+// its row term (its weight). apply_connective(EcUnion, acc, term) is `acc + w`.
+fn term_weight(n) = match n {
+  EPure     => 0,        // identity: `+ Pure` adds nothing
+  ENamed(w) => w
+}
+
+// the union fold over three terms — the build_declared_row accumulator starting
+// at the identity (0), applying union per term.
+fn union3(a, b, c) = term_weight(a) + term_weight(b) + term_weight(c)
+
+fn main(q) = {
+  // the union identity is preserved: Pure drops out, named terms accumulate
+  let row = union3(ENamed(10), EPure, ENamed(8))
+  // and the variant predicate is exact (Pure is Pure; a named effect is not)
+  let pure_ok    = if is_pure(EPure) { 0 } else { 99 }
+  let named_ok   = if is_pure(ENamed(10)) { 99 } else { 0 }
+  row + pure_ok + named_ok
+}

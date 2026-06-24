@@ -438,25 +438,11 @@ fn row_forbidden_names(ref inner) with !Mutate = {
   }
 }
 
-fn report_purity_mismatch(ref actual, ref span) with !Mutate = {
-  report(
-    "effects", "E_PurityViolated", "error",
-    "expected Pure but found effects: "
-      ++ show_effrow(actual),
-    span, "MachineApplicable"
-  )
-}
+fn report_purity_mismatch(ref actual, ref span) with !Mutate =
+  report(EPurityViolated(actual, span))
 
-fn report_effect_mismatch(ref a, ref b, ref span) with !Mutate = {
-  report(
-    "effects", "E_EffectMismatch", "error",
-    "effect row mismatch: "
-      ++ show_effrow(a)
-      ++ " vs "
-      ++ show_effrow(b),
-    span, "MachineApplicable"
-  )
-}
+fn report_effect_mismatch(ref a, ref b, ref span) with !Mutate =
+  report(EEffectMismatch(a, b, span))
 
 /// Handler absorption: `handle { body with E } { arms for F }` normalizes to
 /// `(E - F) + arm_row`. Algebra falls out.
@@ -532,11 +518,19 @@ fn string_in_list(ref lst, ref s) with !Mutate = name_set_contains(lst, s)
 fn eff_name_eq(ref a, ref b) with !Mutate = match a {
   ENamed(an) => match b {
     ENamed(bn)               => an == bn,
-    EParameterized(_, _)     => false
+    EParameterized(_, _)     => false,
+    EPure                    => false
   },
   EParameterized(an, aa) => match b {
     ENamed(_)                => false,
-    EParameterized(bn, ba)   => an == bn && eff_args_eq(aa, ba)
+    EParameterized(bn, ba)   => an == bn && eff_args_eq(aa, ba),
+    EPure                    => false
+  },
+  // EPure is the union identity — equal only to itself. It never enters a row
+  // name-set (consumed to EfPure), so this is the total-comparator boundary.
+  EPure => match b {
+    EPure                    => true,
+    _                        => false
   }
 }
 
@@ -590,13 +584,21 @@ fn eff_name_lt(ref a, ref b) with !Mutate = match a {
   ENamed(an) => match b {
     ENamed(bn)               => str_lt(an, bn),
     EParameterized(bn, _)    =>
-      if an == bn { true } else { str_lt(an, bn) }
+      if an == bn { true } else { str_lt(an, bn) },
+    EPure                    => false   // EPure is least; nothing is < EPure
   },
   EParameterized(an, aa) => match b {
     ENamed(bn) =>
       if an == bn { false } else { str_lt(an, bn) },
     EParameterized(bn, ba) =>
-      if an == bn { eff_args_lt(aa, ba) } else { str_lt(an, bn) }
+      if an == bn { eff_args_lt(aa, ba) } else { str_lt(an, bn) },
+    EPure                    => false
+  },
+  // EPure is the union identity — ordered least (it never enters a row
+  // name-set; this is the total-order boundary).
+  EPure => match b {
+    EPure                    => false,
+    _                        => true
   }
 }
 

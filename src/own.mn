@@ -94,9 +94,7 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
         Some(Unmarked) => " — it was inferred as 'own'"
         _ => ""
       }
-      report("ownership", "E_OwnershipViolation", "OwnershipViolation",
-        "'{name}' consumed twice (first at {show_span(first)}){auth_hint}",
-        span, "MachineApplicable")
+      report(EOwnershipViolation("'{name}' consumed twice (first at {show_span(first)}){auth_hint}", span))
       resume()
     } else {
       // `used` maintains sort invariant via set_insert — every read
@@ -258,9 +256,7 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
         if tag.region_id == 0 || region_on_stack(region_stack, tag.region_id) {
           resume()
         } else {
-          report("region", "E_RegionEscape", "OwnershipViolation",
-            "value allocated in a scope that ended before this return — region {int_to_str(tag.region_id)} no longer live",   // drift-audit: ignore
-            escape_span, "MaybeIncorrect")
+          report(ERegionEscape("value allocated in a scope that ended before this return — region {int_to_str(tag.region_id)} no longer live", escape_span))   // drift-audit: ignore
           // tag.install_span retained for future multi-span
           // diagnostic (Located secondary at the alloc site).
           resume()
@@ -298,9 +294,7 @@ fn join_field_regions(ref tags, ref fields, current) with !Mutate = {
 
 fn report_each_collision(ref names, ref span) with !Mutate = {
   for_each((name) => {
-    report("ownership", "E_OwnershipViolation", "OwnershipViolation",
-      "'{name}' consumed in two parallel branches",
-      span, "MachineApplicable")
+    report(EOwnershipViolation("'{name}' consumed in two parallel branches", span))
   }, names)
 }
 
@@ -349,9 +343,7 @@ fn walk_return_positions(ref refs, ref node) with !Mutate = {
   match body {
     NExpr(VarRef(name)) =>
       if string_in_list(refs, name) {
-        report("ownership", "E_OwnershipViolation", "OwnershipViolation",
-          "ref binding '{name}' escapes its scope (returned)",
-          span, "MachineApplicable")
+        report(EOwnershipViolation("ref binding '{name}' escapes its scope (returned)", span))
       } else { () },
 
     NExpr(BlockExpr(_, final_e)) =>

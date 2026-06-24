@@ -226,14 +226,7 @@ handler graph_handler
 
   graph_bind(handle, ty, reason) => {
     if occurs_in(handle, ty) {
-      report(
-        "graph", "E_OccursCheck", "error",
-        "infinite type: "
-          ++ int_to_str(handle)
-          ++ " occurs in "
-          ++ show_type(ty),
-        span_zero(), "MachineApplicable"
-      )
+      report(EOccursCheck(handle, ty, span_zero()))
       resume()
     } else {
       let old_node = graph_node_at(nodes, handle)

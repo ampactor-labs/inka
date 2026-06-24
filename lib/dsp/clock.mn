@@ -186,9 +186,7 @@ handler tick_record with counter = 0, trace = [], trace_len = 0 {
 handler clock_replay with trace = [], read_idx = 0 {
   clock_now() =>
     if read_idx >= len(trace) {
-      report("clock", "E_ReplayExhausted", "error",
-        "clock replay trace exhausted",
-        span_zero(), "MaybeIncorrect")
+      report(EReplayExhausted(span_zero()))
       resume(Instant(0))
     } else {
       let val = list_index(trace, read_idx)

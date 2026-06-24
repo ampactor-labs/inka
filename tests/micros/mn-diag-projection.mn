@@ -1,0 +1,81 @@
+// W19 gate — the diagnostic catalog AS a projection of the DiagKind ADT.
+//
+// The ultimate form (what the WHEEL now is): `report` takes ONE DiagKind
+// constructor carrying the structured operands + its Located Span; the
+// `source`/`code`/`severity`/`applicability`/`message` are all PROJECTIONS of
+// the constructor (diag_source / diag_code / diag_applicability / diag_message,
+// src/types.mn) — never string-literal codes copied at the ~61 call sites.
+// Applicability is the four-value ADT (MachineApplicable | MaybeIncorrect |
+// HasPlaceholders | Unspecified), never a string (drift-8 closed). The catalog
+// (`mentl diagnostics`) is those projections walking the constructors.
+//
+// This micro proves the projection CONTROL SHAPE end-to-end through the seed: a
+// DiagKind-shaped ADT, a match-based projection to (a) a stable `code` tag and
+// (b) an `Applicability` ADT variant, and the equality the catalog reads back.
+// The wheel's diag_code / diag_applicability are exactly this shape over 40
+// constructors; the proxy exercises three representative arms (a Warning with
+// MachineApplicable, a hard error with Unspecified, one with HasPlaceholders) in
+// seed-supported constructs (ADT construct + match + Int discriminant) — the
+// same proxy discipline mn-struct-eq-sum uses (the seed lags String `==` →
+// $str_eq and list slicing, so the code is read as its stable ordinal, the
+// String wire code being the wheel's projection of that same identity). When the
+// seed catches up, this becomes the direct `report(ERedundantBraces(s))` round-
+// trip — named peer Hβ.diag.catalog-as-projection.
+//
+// Expected exit 30: code-ordinal match (2) + applicability-weight fold over the
+// three arms (MachineApplicable=4, Unspecified=8, HasPlaceholders=16) = 2 + 28.
+
+type Applicability
+  = MachineApplicable
+  | MaybeIncorrect
+  | HasPlaceholders
+  | Unspecified
+
+// A DiagKind-shaped ADT: one constructor per code, carrying its operands. (The
+// real ADT carries Spans/EffRow/Ty; the proxy carries the wire data the seed
+// can round-trip — the projection shape is identical.)
+type Diag
+  = DRedundantBraces                 // format-liftable Warning
+  | DTypeMismatch(Int, Int)          // hard error, two type operands
+  | DPatternInexhaustive(Int, Int)   // hard error, missing/total
+
+// diag_code_ord — the code's stable ordinal, a PROJECTION read live from the
+// constructor (the wheel's diag_code returns the String wire code "E_…"; this is
+// the same identity projected to the seed-runnable ordinal).
+fn diag_code_ord(d) = match d {
+  DRedundantBraces           => 1,    // E_RedundantBraces
+  DTypeMismatch(_, _)        => 2,    // E_TypeMismatch
+  DPatternInexhaustive(_, _) => 3     // E_PatternInexhaustive
+}
+
+// diag_applicability — the automation axis as an ADT, projected (never a string).
+fn diag_applicability(d) = match d {
+  DRedundantBraces           => MachineApplicable,
+  DTypeMismatch(_, _)        => Unspecified,
+  DPatternInexhaustive(_, _) => HasPlaceholders
+}
+
+// the applicability ADT's own weight (a four-way projection — the catalog read)
+fn applicability_weight(a) = match a {
+  MachineApplicable => 4,
+  MaybeIncorrect    => 2,
+  HasPlaceholders   => 16,
+  Unspecified       => 8
+}
+
+fn main(q) = {
+  let braces = DRedundantBraces
+  let tymis  = DTypeMismatch(11, 22)
+  let inexh  = DPatternInexhaustive(2, 3)
+
+  // (a) the code projection round-trips the constructor's identity
+  let code_ok = if diag_code_ord(braces) == 1 { 2 } else { 0 }
+
+  // (b) the applicability projection folds each arm's four-value ADT variant
+  let app_fold =
+    applicability_weight(diag_applicability(braces))   // MachineApplicable = 4
+      + applicability_weight(diag_applicability(tymis))  // Unspecified       = 8
+      + applicability_weight(diag_applicability(inexh))  // HasPlaceholders   = 16
+
+  code_ok + app_fold
+}

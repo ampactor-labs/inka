@@ -165,22 +165,15 @@ fn not_decide(ref e) with Pure = match e {
 /// the predicate false from constant inputs alone — the construction
 /// is invariant-violating by literal evidence. Span is the call site;
 /// reason carries the predicate-as-Why for the chain-walker.
-fn report_refinement_rejected(ref pred, ref span, ref reason) with !Mutate = {
-  report(
-    "verify", "E_RefinementRejected", "error",
-    "refinement predicate proven false at compile time: {show_predicate(pred)}",
-    span, "MaybeIncorrect"
-  )
-}
+fn report_refinement_rejected(ref pred, ref span, ref reason) with !Mutate =
+  report(ERefinementRejected(pred, span))
 
 /// Emit a single diagnostic summarising pending verification debt.
 /// Called at compile end by the driver. Zero debt → no diagnostic.
 fn report_verify_debt(debt) = {
   if len(debt) == 0 { () }
   else {
-    report("verify", "V_Pending", "VerificationPending",
-      "{int_to_str(len(debt))} verification obligations pending",
-      span_zero(), "MaybeIncorrect")
+    report(VPending(len(debt), span_zero()))
   }
 }
 

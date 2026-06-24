@@ -139,9 +139,7 @@ fn show_token_kind(k) with Pure = match k {
 fn expect(ref tokens, pos, kind) =
   if at(tokens, pos, kind) { pos + 1 }
   else {
-    report("parser", "P_ExpectedToken", "Warning",
-      "expected `{show_token_kind(kind)}`, found `{show_token_kind(kind_at(tokens, pos))}`",
-      span_at(tokens, pos), "MachineApplicable")
+    report(PExpectedToken("expected `{show_token_kind(kind)}`, found `{show_token_kind(kind_at(tokens, pos))}`", span_at(tokens, pos)))
     pos
   }
 
@@ -309,9 +307,7 @@ fn parse_stmt(ref tokens, pos) = match kind_at(tokens, pos) {
     let (full_text, p) = collect_comment(tokens, pos + 1, first_line)
     let p2 = skip_sep(tokens, p)
     if at(tokens, p2, TEof) {
-      report("parser", "P_OrphanDocstring", "Warning",
-        "comment with no following declaration; attach it to the next decl",
-        comment_span, "MaybeIncorrect")
+      report(POrphanDocstring(comment_span))
       (nstmt(ExprStmt(nexpr(LitUnit, comment_span)), comment_span), p2)
     } else {
       let (inner_stmt, p3) = parse_stmt(tokens, p2)
@@ -583,14 +579,21 @@ fn parse_one_effect(ref tokens, pos) = {
   let (negated, p) =
     if at(tokens, pos, TBang) { (true, pos + 1) }
     else { (false, pos) }
-  let name = ident_at(tokens, p)
-  let p1 = p + 1
-  let p2 = skip_ws(tokens, p1)
-  if at(tokens, p2, TLParen) {
-    let (args, p3) = parse_eff_args(tokens, skip_ws(tokens, p2 + 1))
-    (EParameterized(name, args), negated, p3)
+  // `Pure` lexes to TPure (a reserved word) — it IS the union identity, so the
+  // parser emits the EPure EffName directly. build_declared_row maps it to
+  // EfPure; the EPure variant replaces the old string-keyed Pure term (drift-3).   // drift-audit: ignore — describes the dissolution
+  if at(tokens, p, TPure) {
+    (EPure, negated, p + 1)
   } else {
-    (ENamed(name), negated, p1)
+    let name = ident_at(tokens, p)
+    let p1 = p + 1
+    let p2 = skip_ws(tokens, p1)
+    if at(tokens, p2, TLParen) {
+      let (args, p3) = parse_eff_args(tokens, skip_ws(tokens, p2 + 1))
+      (EParameterized(name, args), negated, p3)
+    } else {
+      (ENamed(name), negated, p1)
+    }
   }
 }
 
@@ -623,9 +626,7 @@ fn parse_one_eff_arg(ref tokens, pos) = match kind_at(tokens, pos) {
   TFloatLit(f)   => (EAFloat(f), pos + 1),
   TStringPart(s) => (EAString(s), pos + 1),
   _              => {
-    report("E_EffArgNotLiteral",
-      "an effect argument must be an int, float, or string literal",
-      span_at(tokens, pos), "MaybeIncorrect")
+    report(EEffArgNotLiteral(span_at(tokens, pos)))
     (EAInt(0), pos + 1)
   }
 }
@@ -699,9 +700,7 @@ fn parse_variants(ref tokens, pos) = {
     // empty-named variant list that lower/infer would walk into
     // garbage paths. Drift mode 9 refused: empty-name variant IS
     // structurally NOT what the source said.
-    report("parser", "P_UnclosedConstruct", "ParseError",
-      "unexpected end of input inside type-decl variants; expected a variant name or `|`",
-      span_at(tokens, p), "MaybeIncorrect")
+    report(PUnclosedConstruct("unexpected end of input inside type-decl variants; expected a variant name or `|`", span_at(tokens, p)))
     ([], p)
   } else {
     let vname = ident_at(tokens, p)
@@ -1073,9 +1072,7 @@ fn binop_loop(ref tokens, left, pos, min_prec) = {
           // IS a binop token. ICE rather than fabricate a BinOp —
           // if this ever fires, op_prec and op_to_binop have
           // drifted out of sync.
-          report("parser", "E_InternalInvariant", "Internal",
-            "op_to_binop returned None for token with op_prec > 0", // drift-audit: ignore
-            op_span, "Unspecified")
+          report(EInternalInvariant("op_to_binop returned None for token with op_prec > 0", op_span))   // drift-audit: ignore
           nexpr(BinOpExpr(BAdd, left, right), combined_span)
         }
       }
@@ -1243,9 +1240,7 @@ fn parse_primary(ref tokens, pos) = {
       // infer time). Diagnostic gives the user the gradient toward
       // Mentl idiom.
       if is_foreign_keyword(name) {
-        report("parser", "E_NotAKeyword", "Warning",
-          "this is not a Mentl keyword — Mentl uses verb forms (iterate / perform / resume / etc.) per substrate",
-          span, "MaybeIncorrect")
+        report(ENotAKeyword(name, span))
       } else { () }
       (nexpr(VarRef(name), span), pos + 1)
     },
@@ -1285,9 +1280,7 @@ fn parse_primary(ref tokens, pos) = {
       // REJECTED. Canonical is parenthesized-params + fat-arrow body. // drift-audit: ignore
       // Parse continues via parse_lambda; the diagnostic surfaces the
       // Quick-Fix rewrite.
-      report("parser", "E_LambdaFence", "Warning",
-        "pipe-fenced params syntax is rejected — use parenthesized params with fat-arrow body per SYNTAX.md:309-313", // drift-audit: ignore
-        span, "MachineApplicable")
+      report(ELambdaFence(span))
       parse_lambda(tokens, pos + 1, span)
     },
     // SYNTAX.md §148-190 + §317-322: anonymous lambda via the fn-keyword // drift-audit: ignore
@@ -1295,9 +1288,7 @@ fn parse_primary(ref tokens, pos) = {
     // on named declarations; anonymous lambdas use parenthesized params
     // + fat-arrow body. Parse continues; diagnostic surfaces Quick-Fix.
     TFn          => {
-      report("parser", "E_RedundantFnOnLambda", "Warning",
-        "the fn-keyword is reserved on named declarations — anonymous lambdas use parenthesized params with fat-arrow body per SYNTAX.md:318-322",
-        span, "MachineApplicable")
+      report(ERedundantFnOnLambda(span))
       let p = skip_ws(tokens, pos + 1)
       let p2 = expect(tokens, p, TLParen)
       let (params, dlets, p3) = parse_fn_params(tokens, p2)
@@ -1319,9 +1310,7 @@ fn parse_primary(ref tokens, pos) = {
     // lambda. Canonical zero-arg lambda is `() => body`. Parse continues
     // as `() => <next-expr>` per the Quick-Fix.
     TOrOr        => {
-      report("parser", "E_LambdaAsOrOr", "Warning",
-        "the double-pipe is logical-OR, not a zero-arg lambda — use parenthesized-empty with fat-arrow body per SYNTAX.md:324-329",
-        span, "MachineApplicable")
+      report(ELambdaAsOrOr(span))
       let (body, p) = parse_expr(tokens, pos + 1)
       (nexpr(LambdaExpr([], body), span), p)
     },
@@ -1330,16 +1319,12 @@ fn parse_primary(ref tokens, pos) = {
     // delete the tee-arrow OR supply a body. Parser recovery: emit
     // diagnostic, return hole, advance past the tee-arrow token.
     TTildeGt     => {
-      report("parser", "E_OrphanHandlerAttach", "ParseError",
-        "the tee-arrow has no preceding chain — supply a body before it or remove the tee-arrow",
-        span, "Unspecified")
+      report(EOrphanHandlerAttach(span))
       let id = fresh_handle(span)
       (nhole(id, span), pos + 1)
     },
     _ => {
-      report("parser", "P_UnexpectedToken", "ParseError",
-        "unexpected token: {show_token_kind(kind_at(tokens, pos))}",
-        span, "MaybeIncorrect")
+      report(PUnexpectedToken("unexpected token: {show_token_kind(kind_at(tokens, pos))}", span))
       let id = fresh_handle(span)
       (nhole(id, span), pos + 1)
     }
@@ -1745,9 +1730,7 @@ fn parse_block_body(ref tokens, pos, own buf, count) = {
     // recurse forever (each iteration emitting one P_ExpectedToken
     // diagnostic, exhausting heap).
     let start = span_at(tokens, p)
-    report("parser", "P_UnclosedConstruct", "ParseError",
-      "unexpected end of input inside block; expected `\}` to close",
-      start, "MaybeIncorrect")
+    report(PUnclosedConstruct("unexpected end of input inside block; expected `\}` to close", start))
     (buf, count, nexpr(LitUnit, start), p)
   } else {
     let is_decl = match kind_at(tokens, p) {
@@ -1910,9 +1893,7 @@ fn parse_pat_alt_branches(ref tokens, pos, own buf, count) = {
 // with span at EOF and applicability MaybeIncorrect (the developer's
 // intent is unrecoverable without more input).
 fn unclosed_eof(ref tokens, p, construct, own buf, count) = {
-  report("parser", "P_UnclosedConstruct", "ParseError",
-    "unexpected end of input inside {construct}; the construct was never closed",
-    span_at(tokens, p), "MaybeIncorrect")
+  report(PUnclosedConstruct("unexpected end of input inside {construct}; the construct was never closed", span_at(tokens, p)))
   (buf, count, p)
 }
 
@@ -1939,9 +1920,7 @@ fn parse_handle(ref tokens, pos, span: ValidSpan) = {
   let p3 = skip_ws(tokens, p2)
   let p_with = expect(tokens, p3, TWith)
   let (handler, p4) = parse_expr(tokens, skip_ws(tokens, p_with))
-  report("parser", "E_RedundantHandleBlock", "Warning",
-    "`handle { body } with h` is the redundant spelling of `(body) ~> h` — `~>` is the one install verb. Rewrite to the pipe form.",
-    span_join(span, span_at(tokens, p4 - 1)), "MachineApplicable")
+  report(ERedundantHandleBlock(span_join(span, span_at(tokens, p4 - 1))))
   (nexpr(PipeExpr(PTee, body, handler), span), p4)
 }
 
@@ -1957,9 +1936,7 @@ fn parse_perform(ref tokens, pos, span: ValidSpan) = {
   let op_name = ident_at(tokens, pos)
   let p = expect(tokens, skip_ws(tokens, pos + 1), TLParen)
   let (args, p2) = parse_call_args(tokens, skip_ws(tokens, p))
-  report("parser", "E_RedundantPerform", "Warning",
-    "`perform` is the redundant spelling of a bare effect-op call — `{op_name}(...)`. The op's row proves its effect-ness; remove the keyword.",
-    span_join(span, span_at(tokens, p2 - 1)), "MachineApplicable")
+  report(ERedundantPerform(span_join(span, span_at(tokens, p2 - 1))))
   (nexpr(CallExpr(nexpr(VarRef(op_name), op_span), args),
          span_join(span, span_at(tokens, p2 - 1))), p2)
 }
@@ -2052,9 +2029,7 @@ fn parse_body(ref tokens, pos) = {
 fn parse_block_expr_checked(ref tokens, pos, start_span) = {
   let (block_node, p_end) = parse_block_expr(tokens, pos, start_span)
   if is_empty_block(block_node) {
-    report("parser", "E_RedundantBraces", "Warning",
-      "these braces wrap a single expression (no statements) — remove them; braces are the BlockExpr literal, not a line-count rule.",
-      span_join(start_span, span_at(tokens, p_end - 1)), "MachineApplicable")
+    report(ERedundantBraces(span_join(start_span, span_at(tokens, p_end - 1))))
   } else { () }
   (block_node, p_end)
 }
@@ -2131,8 +2106,7 @@ fn parse_pat(ref tokens, pos) = {
       (PRecord(sort_pat_fields(flds)), p)
     },
     _ => {
-      report("parser", "P_UnexpectedToken", "Warning",
-        "unexpected token in pattern position", span_at(tokens, pos), "MaybeIncorrect")
+      report(PUnexpectedToken("unexpected token in pattern position", span_at(tokens, pos)))
       (PWild, pos + 1)
     }
   }
@@ -2289,8 +2263,7 @@ fn parse_type_ty(ref tokens, pos) = match kind_at(tokens, pos) {
     (TList(elem), expect(tokens, skip_ws(tokens, p), TRBracket))
   },
   _ => {
-    report("parser", "P_UnexpectedToken", "Warning",
-      "unexpected token in type position — expected a type", span_at(tokens, pos), "MaybeIncorrect")
+    report(PUnexpectedToken("unexpected token in type position — expected a type", span_at(tokens, pos)))
     (TUnit, pos + 1)
   }
 }
@@ -2415,9 +2388,7 @@ fn parse_predicate(ref tokens, pos) = {
   let N(_, span, _) = expr_node
   let pred = node_to_predicate(expr_node, span)
   match pred {
-    PTrue => report("parser", "W_RedundantWhere", "Warning",
-      "`where true` or vacuous predicate — the refinement adds no constraint over the base type",
-      span, "MachineApplicable"),
+    PTrue => report(WRedundantWhere(span)),
     _     => ()
   }
   (pred, p)

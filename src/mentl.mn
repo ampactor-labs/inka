@@ -328,7 +328,8 @@ fn capabilities_for_severance(name) = match name {
     else if n == "IO" { [CCompileTimeEval, CSandbox] }          // drift-audit: ignore — same as above
     else if n == "Network" { [CSandbox] }
     else { [] },
-  EParameterized(_, _) => []
+  EParameterized(_, _) => [],
+  EPure => []                  // the identity severs no capability
 }
 
 fn narrow_row(handle, base_ty, narrow, source_span) = match base_ty {

@@ -37,7 +37,7 @@ import types
 effect InferCtx {
   inf_enter_fn(Int, Span) -> ()
   inf_exit_fn() -> ()
-  inf_add_effect(String) -> ()
+  inf_add_effect(EffName) -> ()
   inf_add_row(EffRow) -> ()
   inf_current_row() -> EffRow
   inf_set_declared(List) -> ()
@@ -89,9 +89,9 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
     if len(stack) == 0 { resume() }
     else {
       let frame = list_head(stack)
-      // `name` is a String (legacy callers); wrap as bare ENamed.
-      // Parameterized effects flow through inf_add_row instead.
-      let extended = union_row(frame.accumulated_row, mk_ef_closed([ENamed(name)]))
+      // `name` is an EffName — joined into the row directly. The single-name
+      // case of inf_add_row; parameterized effects flow through inf_add_row.
+      let extended = union_row(frame.accumulated_row, mk_ef_closed([name]))
       let updated = {
         accumulated_row: extended,
         fn_span: frame.fn_span,
@@ -387,20 +387,16 @@ fn infer_fn(name, params, body_node, ret_ann, handle, span: ValidSpan) = {
           // for !Alloc, etc.).
           if row_subsumes(declared_row, body_row) { () }
           else {
-            report("infer", "T_OverDeclared", "warning",
-              "function '{name}' declares {show_effrow(declared_row)} but body only uses {show_effrow(body_row)} — tighten the signature to unlock capabilities",
-              span, "MachineApplicable")
+            report(TOverDeclared(declared_row, body_row, name, span))
           }
           graph_bind_row(row_handle, declared_row,
             Located(span, Declared(name)))
         } else {
-          let code = if has_pure { "E_PurityViolated" } else { "E_EffectMismatch" }
-          let summary = if has_pure {
-            "function '{name}' declares Pure but body performs {show_effrow(body_row)}"
+          if has_pure {
+            report(EPurityViolated(body_row, span))
           } else {
-            "function '{name}' declares {show_effrow(declared_row)} but body inferred {show_effrow(body_row)}"
+            report(EEffectMismatch(declared_row, body_row, span))
           }
-          report("infer", code, "error", summary, span, "MachineApplicable")
         }
       },
       _ => ()
@@ -472,8 +468,8 @@ fn build_declared_row(effs) =
   })
 
 fn is_pure_eff_name(name) = match name {
-  ENamed(s) => s == "Pure",   // drift-audit: ignore — same shape as has_pure_declared; the EPure variant (vs ENamed("Pure")) is the tracked item 11.B EffName refactor
-  _         => false
+  EPure => true,
+  _     => false
 }
 
 fn apply_connective(conn, own acc, own term) = match conn {
@@ -485,10 +481,7 @@ fn apply_connective(conn, own acc, own term) = match conn {
 fn has_pure_declared(effs) =
   any((eff) => {
     let (name, _, _) = eff
-    match name {
-      ENamed(s) => s == "Pure",   // drift-audit: ignore — real drift mode 8 (EffName should have EPure variant, not ENamed(string)); tracked for item 11.B EffName refactor
-      _         => false
-    }
+    is_pure_eff_name(name)
   }, effs)
 
 // Expression inference
@@ -560,9 +553,7 @@ fn infer_expr(ref node) = {
         let then_ty = lookup_ty(th)
         match then_ty {
           TName("Unit", _) => (),
-          _ => report("infer", "E_IfMissingElse", "TypeError",
-            "if-without-else expects unit-valued then-branch; add `else \{...\}` or make then-branch evaluate to unit",
-            span, "MachineApplicable")
+          _ => report(EIfMissingElse(span))
         }
       }
       unify(th, eh, span, IfBranch(Inferred("branches must match")))
@@ -675,9 +666,7 @@ fn infer_expr(ref node) = {
       infer_record_field_values(fields)
       match env_lookup(type_name) {
         None =>
-          report("infer", "E_MissingVariable", "MissingVariable",
-            "record type: {type_name}",
-            span, "MaybeIncorrect"),
+          report(EMissingVariable("record type: {type_name}", span)),
         Some(entry) => {
           let (_, _, kind) = entry
           match kind {
@@ -687,9 +676,7 @@ fn infer_expr(ref node) = {
                 Located(span, Inferred("nominal record literal")))
             },
             _ =>
-              report("infer", "E_NotARecordType", "TypeError",
-                "{type_name} is not a record type",
-                span, "MaybeIncorrect")
+              report(ENotARecordType(type_name, span))
           }
         }
       }
@@ -717,9 +704,7 @@ fn infer_expr(ref node) = {
         None =>
           // resume outside any arm — parse admitted it; surface the
           // structural fact rather than fabricating a type.
-          report("infer", "E_ResumeOutsideArm", "ResumeOutsideArm",
-            "resume used outside a handler arm",
-            span, "MaybeIncorrect")
+          report(EResumeOutsideArm(span))
       }
       // State updates: each `with name = expr` EVOLVES the handler state, so the
       // update's type MUST unify with the state field's type (carried in arm
@@ -814,9 +799,7 @@ fn infer_expr(ref node) = {
       // outside a call's arg list. Locate it (productive-under-error) rather
       // than fabricate a type — the no-silent-fallback law over a load-bearing
       // node-kind.
-      report("infer", "E_UnknownArgLabel", "TypeError",
-        "labeled argument `{label} = …` is only valid in a call's argument list",
-        span, "MaybeIncorrect")
+      report(EUnknownArgLabel("labeled argument `{label} = …` is only valid in a call's argument list", span))
     },
 
     NHole(_)  => (),               // Hazel marked hole — inference leaves NFree
@@ -851,7 +834,7 @@ fn infer_field_access_record(rec, field, handle, span: ValidSpan) = {
 fn infer_var_ref(name, handle, span: ValidSpan) = {
   match env_lookup(name) {
     None => {
-      report("infer", "E_MissingVariable", "MissingVariable", name, span, "MaybeIncorrect")
+      report(EMissingVariable(name, span))
       graph_bind(handle, TVar(handle), Located(span, MissingVar(name)))
     },
     Some(entry) => {
@@ -1103,9 +1086,7 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
         unify(lh, rh, span, InferredPipeResult("<~", Inferred("feedback wiring")))
         graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("feedback"))))
       } else {
-        report("infer", "E_FeedbackNoContext", "error",
-          "<~ requires an iterative context (install an Iterate-class handler)",
-          span, "MaybeIncorrect")
+        report(EFeedbackNoContext(span))
         graph_bind(handle, TVar(lh), Located(span, InferredPipeResult("<~", Inferred("no context"))))
       }
     }
@@ -1190,9 +1171,7 @@ fn check_branch_is_stage(branch, span: ValidSpan) = {
     }
     if is_fn { () }
     else {
-      report("infer", "E_BranchNotStage", "error",
-        ">< branch is a value, not a stage — rewrite the branch as a pipeline",
-        span, "MaybeIncorrect")
+      report(EBranchNotStage(span))
     }
   }
 }
@@ -1285,8 +1264,7 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
         TVar(hb) => unify(ha, hb, span, reason),
         _ => {
           if occurs_in(ha, b) {
-            report("infer", "E_OccursCheck", "error",
-              "circular type", span, "MaybeIncorrect")
+            report(EOccursCheck(ha, b, span))
           } else {
             graph_bind(ha, b, Located(span, reason))
           }
@@ -1383,9 +1361,7 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
           unify_types(ra, rb, span, reason)
           if disciplines_compatible(da, db) { () }
           else {
-            report("infer", "E_ResumeWorldMismatch", "error",
-              "resume cardinality mismatch: {show_discipline(da)} vs {show_discipline(db)}",
-              span, "MaybeIncorrect")
+            report(EResumeWorldMismatch(da, db, span))
           }
           unify_row(wa, wb, span, reason)
         },
@@ -1456,10 +1432,7 @@ fn unify_type_lists(as_list, bs_list, span: ValidSpan, reason) = {
   if len(as_list) == 0 && len(bs_list) == 0 { () }
   else if len(as_list) == 0 || len(bs_list) == 0 {
     // Arity mismatch: tuple/list lengths differ.
-    report(
-      "infer", "E_TypeMismatch", "error",
-      "type list arity mismatch: {int_to_str(len(as_list))} vs {int_to_str(len(bs_list))}",
-      span, "MachineApplicable")
+    report(ETypeArityMismatch(len(as_list), len(bs_list), span))
   } else {
     unify_types(list_head(as_list), list_head(bs_list), span, reason)
     unify_type_lists(list_tail(as_list), list_tail(bs_list), span, reason)
@@ -1689,15 +1662,11 @@ fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, 
   else if i >= ni {
     // Provided has extras
     let (extra, _) = list_index(provided, j)
-    report("infer", "E_RecordFieldExtra", "TypeError",
-      "record literal has unknown field '{extra}' for type {type_name}", // drift-audit: ignore — diagnostic message string, not a control keyword
-      span, "MaybeIncorrect")
+    report(ERecordFieldExtra(extra, type_name, span))
     check_nominal_record_loop(declared, provided, type_name, span, i, j + 1, ni, nj)
   } else if j >= nj {
     let (missing, _) = list_index(declared, i)
-    report("infer", "E_RecordFieldMissing", "TypeError",
-      "record literal missing field '{missing}' for type {type_name}", // drift-audit: ignore — diagnostic message string, not a control keyword
-      span, "MaybeIncorrect")
+    report(ERecordFieldMissing(missing, type_name, span))
     check_nominal_record_loop(declared, provided, type_name, span, i + 1, j, ni, nj)
   } else {
     let (dn, dt) = list_index(declared, i)
@@ -1711,14 +1680,10 @@ fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, 
         OpConstraint("record field", Inferred("declared"), Inferred("provided")))
       check_nominal_record_loop(declared, provided, type_name, span, i + 1, j + 1, ni, nj)
     } else if str_lt(dn, pn) {
-      report("infer", "E_RecordFieldMissing", "TypeError",
-        "record literal missing field '{dn}' for type {type_name}", // drift-audit: ignore — diagnostic message string, not a control keyword
-        span, "MaybeIncorrect")
+      report(ERecordFieldMissing(dn, type_name, span))
       check_nominal_record_loop(declared, provided, type_name, span, i + 1, j, ni, nj)
     } else {
-      report("infer", "E_RecordFieldExtra", "TypeError",
-        "record literal has unknown field '{pn}' for type {type_name}", // drift-audit: ignore — diagnostic message string, not a control keyword
-        span, "MaybeIncorrect")
+      report(ERecordFieldExtra(pn, type_name, span))
       check_nominal_record_loop(declared, provided, type_name, span, i, j + 1, ni, nj)
     }
   }
@@ -1805,17 +1770,11 @@ fn param_types_loop(params, i, n, own acc) = {
   }
 }
 
-fn arity_mismatch(la, lb, span: ValidSpan) = {
-  report("infer", "E_TypeMismatch", "TypeMismatch",
-    "function arity mismatch: {int_to_str(la)} param(s) vs {int_to_str(lb)} param(s)",
-    span, "MachineApplicable")
-}
+fn arity_mismatch(la, lb, span: ValidSpan) =
+  report(EFnArityMismatch(la, lb, span))
 
-fn type_mismatch(ref a, ref b, span: ValidSpan, reason) = {
-  report("infer", "E_TypeMismatch", "TypeMismatch",
-    "{show_type(a)} vs {show_type(b)}",
-    span, "MachineApplicable")
-}
+fn type_mismatch(ref a, ref b, span: ValidSpan, reason) =
+  report(ETypeMismatch(a, b, span))
 
 /// `BinOp` / `UnaryOp` inference — dispatched on `BinOpKind`.
 /// `binop_kind` (declared in `types.mn`) maps each `BinOp` to one of four
@@ -1882,9 +1841,7 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
   PCon(name, sub_pats) =>
     match env_lookup(name) {
       None =>
-        report("infer", "E_MissingVariable", "MissingVariable",
-          "constructor: {name}",
-          span, "MaybeIncorrect"),
+        report(EMissingVariable("constructor: {name}", span)),
       Some(entry) => {
         // ConstructorScheme bindings carry one of two ty shapes:
         //   nullary  → TName(type_name, args)         — bind scrutinee to it
@@ -1956,10 +1913,7 @@ fn alt_binder_ty(ref n, span: ValidSpan) = match env_lookup(n) {
     // pat_binders said n binds, the walk did not extend it — the
     // branch's binding genuinely failed; surface as the law's
     // diagnostic rather than fabricating a type.
-    report("infer", "E_PatternAlternationBindingMismatch",
-      "PatternAlternationBindingMismatch",
-      "alternation binder never bound: {n}",
-      span, "MaybeIncorrect")
+    report(EPatternAlternationBindingMismatch("alternation binder never bound: {n}", span))
     TVar(mint(Located(span, Inferred("alternation binder lost"))))
   }
 }
@@ -1984,10 +1938,7 @@ fn enforce_alt_binding_law(branch_binds, span: ValidSpan) = match branch_binds {
           }
         }, bi)
       } else {
-        report("infer", "E_PatternAlternationBindingMismatch",
-          "PatternAlternationBindingMismatch",
-          "alternation branches bind different names",
-          span, "MaybeIncorrect")
+        report(EPatternAlternationBindingMismatch("alternation branches bind different names", span))
       }
     }, rest)
 }
@@ -2087,9 +2038,7 @@ fn infer_match_arms(arms, scrut, result_h, span: ValidSpan) = {
   let total = arms_total_variants(arms)
   let has_wild = arms_have_wildcard(arms)
   if total > 0 && len(covered) < total && !has_wild {
-    report("infer", "E_PatternInexhaustive", "PatternInexhaustive",
-      "match misses {int_to_str(total - len(covered))} of {int_to_str(total)} variants — add the missing arms or a wildcard",
-      span, "MachineApplicable")
+    report(EPatternInexhaustive(total - len(covered), total, span))
   }
 }
 
@@ -2186,9 +2135,7 @@ fn infer_one_handler_arm(arm, result_h, payload_h) = {   // drift-audit: ignore 
       }
     },
     None => {
-      report("infer", "E_MissingVariable", "MissingVariable",
-        "handler arm op: {arm.op_name}",
-        arm_span, "MaybeIncorrect")
+      report(EMissingVariable("handler arm op: {arm.op_name}", arm_span))
       TVar(mint(Inferred("undeclared op result")))
     }
   }
@@ -2223,6 +2170,7 @@ fn unify_op_payload(op_row, payload_h, span: ValidSpan) = match op_row {
 fn unify_payload_in_names(names, payload_h, span: ValidSpan) =
   for_each((n) => match n {
     ENamed(_)               => (),
+    EPure                   => (),   // the identity carries no payload
     EParameterized(_, args) => for_each((arg) => match arg {
       EAType(ty) => {
         let th = mint(Located(span, Inferred("op payload")))
@@ -2369,6 +2317,7 @@ fn free_in_row(eff) = match eff {
 /// (Iterate(a) ⇒ a's free vars). Bare ENamed effects carry none.
 fn free_in_eff_names(names) = flatten(map((n) => match n {
   ENamed(_)               => [],
+  EPure                   => [],   // the identity carries no free vars
   EParameterized(_, args) => flatten(map(free_in_eff_arg, args))
 }, names))
 

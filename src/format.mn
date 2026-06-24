@@ -373,7 +373,8 @@ fn show_effarg(arg) with Memory + Alloc = match arg {
 fn show_effname(name) with Memory + Alloc = match name {
   ENamed(s) => s,
   EParameterized(s, args) =>
-    "{s}({show_joined(map(show_effarg, args), ", ")})"
+    "{s}({show_joined(map(show_effarg, args), ", ")})",
+  EPure => "Pure"   // drift-audit: ignore — variant→surface-label render, not a name key
 }
 
 fn show_joined(texts, sep) with Memory + Alloc = {

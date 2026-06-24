@@ -95,9 +95,7 @@ handler persist_to_disk with branch_results = [] {
     // silent miscompile. world_tag 0 (EfPure) is the unconstrained world and
     // unifies with anything (the empty world is a subset of every world).
     if captured_world != 0 && captured_world != live_world_tag {
-      report("persist", "E_ResumeWorldMismatch", "error",
-             "continuation frozen under world {int_to_str(captured_world)} cannot resume under world {int_to_str(live_world_tag)}",
-             span_zero(), "MaybeIncorrect")
+      report(EResumeWorldMismatchWorld(captured_world, live_world_tag, span_zero()))
       resume(0)
     } else {
       // memcpy the record back into a fresh heap region — relocation-stable

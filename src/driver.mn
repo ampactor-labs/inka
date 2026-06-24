@@ -113,9 +113,7 @@ fn driver_check_module(ref module_name)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   let path = driver_module_path(module_name)
   if !fs_exists(path) {
-    report("driver", "E_MissingModule", "MissingVariable",
-      "module source not found: {module_name} (expected at {path})",
-      span_zero(), "MaybeIncorrect")
+    report(EMissingModule(module_name, path, span_zero()))
     []
   } else {
     let source = fs_read_file(path)

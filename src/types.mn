@@ -316,6 +316,10 @@ type EffRow
 type EffName
   = ENamed(String)
   | EParameterized(String, List)    // name + [EffArg]
+  | EPure                           // the union identity — `with Pure` IS the
+                                    // empty row, made an ADT variant (drift-3:
+                                    // not a string key). build_declared_row   // drift-audit: ignore — describes the dissolution
+                                    // maps it to EfPure; it never enters a name-set.
 
 type EffArg
   = EAInt(Int)
@@ -1030,13 +1034,343 @@ effect GraphWrite {
   graph_index_intent(Int, List) -> ()
 }
 
-// Every perform report names a code whose docs/errors/<CODE>.md entry
-// exists. applicability ∈ { MachineApplicable, MaybeIncorrect }.
-// The !Diagnostic gate lives on the handler, not the effect.
+// ─── Diagnostics as a graph projection (SYNTAX.md §Diagnostic catalog) ──
+//
+// A diagnostic's IDENTITY lives on the DiagKind ADT — one constructor per
+// E_/V_/W_/T_/P_ code, each carrying ONLY the structured operands its
+// message needs (an EffRow, a Ty, a name) plus its Located Span. The
+// `source`, `kind` (severity class), `applicability`, and the rendered
+// `message` are all PROJECTIONS of the constructor (diag_source / diag_kind
+// / diag_applicability / diag_message below) — never string literals copied
+// at the call site. So `mentl diagnostics` is `diag_*` walking the DiagKind
+// constructors; the SYNTAX.md catalog tables are worked examples of THIS
+// ADT, not a parallel hand-maintained registry (drift-8 closed). The
+// hover-text and the stderr error-text are byte-identical projections of one
+// graph — the Carried-Truth Law at the diagnostic layer (read the operand
+// live; never pre-render and copy the String).
+//
+// Applicability is the four-value automation axis (SYNTAX.md): an ADT, never
+// a string. MachineApplicable auto-applies; MaybeIncorrect confirms;
+// HasPlaceholders fills in; Unspecified is text-only.
+
+type Applicability
+  = MachineApplicable
+  | MaybeIncorrect
+  | HasPlaceholders
+  | Unspecified
+
+// Severity is the error-vs-narration axis. The category (format-liftable /
+// hard error / gradient narration) is the PRODUCT of severity × applicability
+// (SYNTAX.md: "the category is their product, not a third column"), read by
+// the consumer, never a stored third field.
+type Severity
+  = SError                          // a substrate violation
+  | SWarning                        // gradient narration / format-liftable
+  | SVerificationPending            // accrued proof debt (V_Pending)
+
+type DiagKind
+  // ─── parser (P_/E_) ──────────────────────────────────────────────
+  = PExpectedToken(String, Span)                 // expected one kind, found another
+  | POrphanDocstring(Span)
+  | PUnclosedConstruct(String, Span)             // construct name
+  | PUnexpectedToken(String, Span)               // context note
+  | ERedundantBraces(Span)
+  | EBlockNeedsBraces(Span)
+  | ERedundantHandleBlock(Span)
+  | ERedundantPerform(Span)
+  | ELambdaFence(Span)
+  | ERedundantFnOnLambda(Span)
+  | ELambdaAsOrOr(Span)
+  | EOrphanHandlerAttach(Span)
+  | ENotAKeyword(String, Span)                   // the typed keyword
+  | EEffArgNotLiteral(Span)
+  | EInternalInvariant(String, Span)             // invariant note
+  | WRedundantWhere(Span)
+  // ─── infer (E_/T_) ───────────────────────────────────────────────
+  | ETypeMismatch(Ty, Ty, Span)                  // a vs b — operands carried live
+  | ETypeArityMismatch(Int, Int, Span)           // type-list arity a vs b
+  | EFnArityMismatch(Int, Int, Span)             // fn param-count a vs b
+  | EOccursCheck(Int, Ty, Span)                  // handle occurs in ty
+  | EMissingVariable(String, Span)               // the unresolved context (name / "constructor: X" / ...)
+  | ENotARecordType(String, Span)                // the type name
+  | EResumeOutsideArm(Span)
+  | EResumeWorldMismatch(ResumeDiscipline, ResumeDiscipline, Span)
+  | EUnknownArgLabel(String, Span)               // the label-resolution detail
+  | EFeedbackNoContext(Span)
+  | EBranchNotStage(Span)
+  | ERecordFieldExtra(String, String, Span)      // field, type_name
+  | ERecordFieldMissing(String, String, Span)    // field, type_name
+  | EPatternInexhaustive(Int, Int, Span)         // missing, total
+  | EPatternAlternationBindingMismatch(String, Span)  // the binding-conflict detail
+  | EIfMissingElse(Span)
+  | TOverDeclared(EffRow, EffRow, String, Span)  // declared, used, fn name
+  | EEffectMismatch(EffRow, EffRow, Span)        // declared vs inferred
+  | EPurityViolated(EffRow, Span)                // the offending row
+  // ─── verify / own / graph / driver ───────────────────────────────
+  | ERefinementRejected(Predicate, Span)
+  | VPending(Int, Span)                          // obligation count
+  | EOwnershipViolation(String, Span)            // the violated-name detail
+  | ERegionEscape(String, Span)
+  | EMissingModule(String, String, Span)         // module name, expected path
+  | EUnresolvedType(Int, Int, Span)              // unresolved handle, epoch (lower-time NFree)
+  | EReplayExhausted(Span)                        // clock-replay trace ran out
+  | EResumeWorldMismatchWorld(Int, Int, Span)    // captured vs live world-tag (persist)
+
+// report takes ONE DiagKind — the structured fact. The handler PROJECTS
+// every surface (source/code/kind/message/span/applicability) from it.
+// !Diagnostic gates the handler, not the effect.
 
 effect Diagnostic {
-  report(String, String, String, String, Span, String) -> ()
-  // source, code, kind, msg, span, applicability
+  report(DiagKind) -> ()
+}
+
+// ─── The catalog AS projections of the DiagKind constructors ───────────
+// `mentl diagnostics` walks these. No hand-maintained code registry —
+// the constructor IS the identity; source/code/kind/applicability/message
+// are READS of it.
+
+fn diag_span(d) with Pure = match d {
+  PExpectedToken(_, s) => s,
+  POrphanDocstring(s) => s,
+  PUnclosedConstruct(_, s) => s,
+  PUnexpectedToken(_, s) => s,
+  ERedundantBraces(s) => s,
+  EBlockNeedsBraces(s) => s,
+  ERedundantHandleBlock(s) => s,
+  ERedundantPerform(s) => s,
+  ELambdaFence(s) => s,
+  ERedundantFnOnLambda(s) => s,
+  ELambdaAsOrOr(s) => s,
+  EOrphanHandlerAttach(s) => s,
+  ENotAKeyword(_, s) => s,
+  EEffArgNotLiteral(s) => s,
+  EInternalInvariant(_, s) => s,
+  WRedundantWhere(s) => s,
+  ETypeMismatch(_, _, s) => s,
+  ETypeArityMismatch(_, _, s) => s,
+  EFnArityMismatch(_, _, s) => s,
+  EOccursCheck(_, _, s) => s,
+  EMissingVariable(_, s) => s,
+  ENotARecordType(_, s) => s,
+  EResumeOutsideArm(s) => s,
+  EResumeWorldMismatch(_, _, s) => s,
+  EUnknownArgLabel(_, s) => s,
+  EFeedbackNoContext(s) => s,
+  EBranchNotStage(s) => s,
+  ERecordFieldExtra(_, _, s) => s,
+  ERecordFieldMissing(_, _, s) => s,
+  EPatternInexhaustive(_, _, s) => s,
+  EPatternAlternationBindingMismatch(_, s) => s,
+  EIfMissingElse(s) => s,
+  TOverDeclared(_, _, _, s) => s,
+  EEffectMismatch(_, _, s) => s,
+  EPurityViolated(_, s) => s,
+  ERefinementRejected(_, s) => s,
+  VPending(_, s) => s,
+  EOwnershipViolation(_, s) => s,
+  ERegionEscape(_, s) => s,
+  EMissingModule(_, _, s) => s,
+  EUnresolvedType(_, _, s) => s,
+  EReplayExhausted(s) => s,
+  EResumeWorldMismatchWorld(_, _, s) => s
+}
+
+// The originating tentacle/stage — a projection, not a copied label.
+fn diag_source(d) with Pure = match d {
+  PExpectedToken(_, _) => "parser",
+  POrphanDocstring(_) => "parser",
+  PUnclosedConstruct(_, _) => "parser",
+  PUnexpectedToken(_, _) => "parser",
+  ERedundantBraces(_) => "parser",
+  EBlockNeedsBraces(_) => "parser",
+  ERedundantHandleBlock(_) => "parser",
+  ERedundantPerform(_) => "parser",
+  ELambdaFence(_) => "parser",
+  ERedundantFnOnLambda(_) => "parser",
+  ELambdaAsOrOr(_) => "parser",
+  EOrphanHandlerAttach(_) => "parser",
+  ENotAKeyword(_, _) => "parser",
+  EEffArgNotLiteral(_) => "parser",
+  EInternalInvariant(_, _) => "parser",
+  WRedundantWhere(_) => "parser",
+  ETypeMismatch(_, _, _) => "infer",
+  ETypeArityMismatch(_, _, _) => "infer",
+  EFnArityMismatch(_, _, _) => "infer",
+  EOccursCheck(_, _, _) => "graph",
+  EMissingVariable(_, _) => "infer",
+  ENotARecordType(_, _) => "infer",
+  EResumeOutsideArm(_) => "infer",
+  EResumeWorldMismatch(_, _, _) => "infer",
+  EUnknownArgLabel(_, _) => "infer",
+  EFeedbackNoContext(_) => "infer",
+  EBranchNotStage(_) => "infer",
+  ERecordFieldExtra(_, _, _) => "infer",
+  ERecordFieldMissing(_, _, _) => "infer",
+  EPatternInexhaustive(_, _, _) => "infer",
+  EPatternAlternationBindingMismatch(_, _) => "infer",
+  EIfMissingElse(_) => "infer",
+  TOverDeclared(_, _, _, _) => "infer",
+  EEffectMismatch(_, _, _) => "effects",
+  EPurityViolated(_, _) => "effects",
+  ERefinementRejected(_, _) => "verify",
+  VPending(_, _) => "verify",
+  EOwnershipViolation(_, _) => "ownership",
+  ERegionEscape(_, _) => "region",
+  EMissingModule(_, _, _) => "driver",
+  EUnresolvedType(_, _, _) => "lower",
+  EReplayExhausted(_) => "clock",
+  EResumeWorldMismatchWorld(_, _, _) => "persist"
+}
+
+// The wire code — the stable identifier (`docs/errors/<CODE>.md`).
+fn diag_code(d) with Pure = match d {
+  PExpectedToken(_, _) => "P_ExpectedToken",
+  POrphanDocstring(_) => "P_OrphanDocstring",
+  PUnclosedConstruct(_, _) => "P_UnclosedConstruct",
+  PUnexpectedToken(_, _) => "P_UnexpectedToken",
+  ERedundantBraces(_) => "E_RedundantBraces",
+  EBlockNeedsBraces(_) => "E_BlockNeedsBraces",
+  ERedundantHandleBlock(_) => "E_RedundantHandleBlock",
+  ERedundantPerform(_) => "E_RedundantPerform",
+  ELambdaFence(_) => "E_LambdaFence",
+  ERedundantFnOnLambda(_) => "E_RedundantFnOnLambda",
+  ELambdaAsOrOr(_) => "E_LambdaAsOrOr",
+  EOrphanHandlerAttach(_) => "E_OrphanHandlerAttach",
+  ENotAKeyword(_, _) => "E_NotAKeyword",
+  EEffArgNotLiteral(_) => "E_EffArgNotLiteral",
+  EInternalInvariant(_, _) => "E_InternalInvariant",
+  WRedundantWhere(_) => "W_RedundantWhere",
+  ETypeMismatch(_, _, _) => "E_TypeMismatch",
+  ETypeArityMismatch(_, _, _) => "E_TypeMismatch",
+  EFnArityMismatch(_, _, _) => "E_TypeMismatch",
+  EOccursCheck(_, _, _) => "E_OccursCheck",
+  EMissingVariable(_, _) => "E_MissingVariable",
+  ENotARecordType(_, _) => "E_NotARecordType",
+  EResumeOutsideArm(_) => "E_ResumeOutsideArm",
+  EResumeWorldMismatch(_, _, _) => "E_ResumeWorldMismatch",
+  EUnknownArgLabel(_, _) => "E_UnknownArgLabel",
+  EFeedbackNoContext(_) => "E_FeedbackNoContext",
+  EBranchNotStage(_) => "E_BranchNotStage",
+  ERecordFieldExtra(_, _, _) => "E_RecordFieldExtra",
+  ERecordFieldMissing(_, _, _) => "E_RecordFieldMissing",
+  EPatternInexhaustive(_, _, _) => "E_PatternInexhaustive",
+  EPatternAlternationBindingMismatch(_, _) => "E_PatternAlternationBindingMismatch",
+  EIfMissingElse(_) => "E_IfMissingElse",
+  TOverDeclared(_, _, _, _) => "T_OverDeclared",
+  EEffectMismatch(_, _, _) => "E_EffectMismatch",
+  EPurityViolated(_, _) => "E_PurityViolated",
+  ERefinementRejected(_, _) => "E_RefinementRejected",
+  VPending(_, _) => "V_Pending",
+  EOwnershipViolation(_, _) => "E_OwnershipViolation",
+  ERegionEscape(_, _) => "E_RegionEscape",
+  EMissingModule(_, _, _) => "E_MissingModule",
+  EUnresolvedType(_, _, _) => "E_UnresolvedType",
+  EReplayExhausted(_) => "E_ReplayExhausted",
+  EResumeWorldMismatchWorld(_, _, _) => "E_ResumeWorldMismatch"
+}
+
+// Severity — the error-vs-narration axis (a projection).
+fn diag_severity(d) with Pure = match d {
+  POrphanDocstring(_) => SWarning,
+  ERedundantBraces(_) => SWarning,
+  EBlockNeedsBraces(_) => SWarning,
+  ERedundantHandleBlock(_) => SWarning,
+  ERedundantPerform(_) => SWarning,
+  ELambdaFence(_) => SWarning,
+  ERedundantFnOnLambda(_) => SWarning,
+  ELambdaAsOrOr(_) => SWarning,
+  ENotAKeyword(_, _) => SWarning,
+  WRedundantWhere(_) => SWarning,
+  PExpectedToken(_, _) => SWarning,
+  PUnexpectedToken(_, _) => SWarning,
+  TOverDeclared(_, _, _, _) => SWarning,
+  VPending(_, _) => SVerificationPending,
+  _ => SError
+}
+
+// The severity-class label the stderr line prints (the legacy `kind`
+// string position) — a projection of severity + code family.
+fn diag_kind(d) with Pure = match diag_severity(d) {
+  SWarning => "Warning",
+  SVerificationPending => "VerificationPending",
+  SError => "error"
+}
+
+// Applicability — the automation axis (SYNTAX.md table), a projection.
+fn diag_applicability(d) with Pure = match d {
+  ERedundantBraces(_) => MachineApplicable,
+  EBlockNeedsBraces(_) => MachineApplicable,
+  ERedundantHandleBlock(_) => MachineApplicable,
+  ERedundantPerform(_) => MachineApplicable,
+  WRedundantWhere(_) => MachineApplicable,
+  TOverDeclared(_, _, _, _) => MachineApplicable,
+  EPatternInexhaustive(_, _, _) => HasPlaceholders,
+  ERefinementRejected(_, _) => Unspecified,
+  ETypeMismatch(_, _, _) => Unspecified,
+  ETypeArityMismatch(_, _, _) => Unspecified,
+  EFnArityMismatch(_, _, _) => Unspecified,
+  EOccursCheck(_, _, _) => Unspecified,
+  EOwnershipViolation(_, _) => Unspecified,
+  EOrphanHandlerAttach(_) => Unspecified,
+  EResumeOutsideArm(_) => Unspecified,
+  _ => MaybeIncorrect
+}
+
+// Applicability code — the stable identifier the stderr line carries.
+fn applicability_code(a) with Pure = match a {
+  MachineApplicable => "MachineApplicable",
+  MaybeIncorrect => "MaybeIncorrect",
+  HasPlaceholders => "HasPlaceholders",
+  Unspecified => "Unspecified"
+}
+
+// The rendered message — operands read LIVE from the constructor, never a
+// String copied at the call site. This is the Carried-Truth win: the fact
+// is structured; the prose is its projection.
+fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
+  PExpectedToken(note, _) => "expected token: {note}",
+  POrphanDocstring(_) => "comment has no following declaration to attach to",
+  PUnclosedConstruct(detail, _) => detail,
+  PUnexpectedToken(detail, _) => detail,
+  ERedundantBraces(_) => "redundant braces around a non-block body",
+  EBlockNeedsBraces(_) => "statements require braces",
+  ERedundantHandleBlock(_) => "`handle … with h` is the redundant spelling of `(body) ~> h`",
+  ERedundantPerform(_) => "`perform` is redundant — effect ops are bare calls",
+  ELambdaFence(_) => "`|params|` lambda fence — use `(params) => body`",   // drift-audit: ignore — diagnostic message prose, not Mentl syntax
+  ERedundantFnOnLambda(_) => "`fn` is reserved for named declarations — remove it for a lambda",   // drift-audit: ignore — diagnostic message prose
+  ELambdaAsOrOr(_) => "`||` is logical or — use `() => expr` for a zero-arg lambda",   // drift-audit: ignore — diagnostic message prose
+  EOrphanHandlerAttach(_) => "`~>` with no preceding chain",
+  ENotAKeyword(kw, _) => "`{kw}` is not a Mentl keyword — use the verb form",
+  EEffArgNotLiteral(_) => "parameterized-effect argument must be a literal",
+  EInternalInvariant(note, _) => "internal invariant: {note}",
+  WRedundantWhere(_) => "`where true` is a vacuous predicate — drop it",
+  ETypeMismatch(a, b, _) => "{show_type(a)} vs {show_type(b)}",
+  ETypeArityMismatch(a, b, _) => "type list arity mismatch: {int_to_str(a)} vs {int_to_str(b)}",
+  EFnArityMismatch(a, b, _) => "function arity mismatch: {int_to_str(a)} param(s) vs {int_to_str(b)} param(s)",
+  EOccursCheck(h, ty, _) => "infinite type: {int_to_str(h)} occurs in {show_type(ty)}",
+  EMissingVariable(what, _) => what,
+  ENotARecordType(name, _) => "{name} is not a record type",
+  EResumeOutsideArm(_) => "`resume` outside a handler arm",
+  EResumeWorldMismatch(da, db, _) => "resume cardinality mismatch: {show_discipline(da)} vs {show_discipline(db)}",
+  EUnknownArgLabel(detail, _) => detail,
+  EFeedbackNoContext(_) => "`<~` used outside an iterative context",
+  EBranchNotStage(_) => "`><` branch is a value, not a stage",
+  ERecordFieldExtra(field, tn, _) => "record literal has unknown field '{field}' for type {tn}",   // drift-audit: ignore — diagnostic message string, not a control keyword
+  ERecordFieldMissing(field, tn, _) => "record literal missing field '{field}' for type {tn}",   // drift-audit: ignore — diagnostic message string, not a control keyword
+  EPatternInexhaustive(missing, total, _) => "match misses {int_to_str(missing)} of {int_to_str(total)} variants — add the missing arms or a wildcard",
+  EPatternAlternationBindingMismatch(detail, _) => detail,
+  EIfMissingElse(_) => "`if` without `else` requires a unit body",
+  TOverDeclared(declared, used, name, _) => "function '{name}' declares {show_effrow(declared)} but body only uses {show_effrow(used)} — tighten the signature to unlock capabilities",
+  EEffectMismatch(declared, inferred, _) => "effect row mismatch: {show_effrow(declared)} vs {show_effrow(inferred)}",
+  EPurityViolated(row, _) => "expected Pure but found effects: {show_effrow(row)}",
+  ERefinementRejected(pred, _) => "refinement predicate proven false at compile time: {show_predicate(pred)}",
+  VPending(count, _) => "{int_to_str(count)} verification obligations pending",
+  EOwnershipViolation(detail, _) => detail,
+  ERegionEscape(detail, _) => detail,
+  EMissingModule(name, path, _) => "module source not found: {name} (expected at {path})",
+  EUnresolvedType(h, epoch, _) => "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",
+  EReplayExhausted(_) => "clock replay trace exhausted",
+  EResumeWorldMismatchWorld(captured, live, _) => "continuation frozen under world {int_to_str(captured)} cannot resume under world {int_to_str(live)}"
 }
 
 /// Universal short-circuit / early return.
@@ -1313,9 +1647,7 @@ fn place_labeled(params, args, i, slots, cname) with GraphRead + Memory + Diagno
       NExpr(LabeledArg(label, v)) => {
         let idx = param_index(params, label, 0)
         if idx < 0 {
-          report("infer", "E_UnknownArgLabel", "TypeError",
-            "no parameter named `{label}` on `{cname}`",
-            sp, "MaybeIncorrect")
+          report(EUnknownArgLabel("no parameter named `{label}` on `{cname}`", sp))
           slots
         } else {
           list_set(slots, idx, v)
@@ -1447,7 +1779,8 @@ fn show_effrow(ref row) with GraphRead + !Mutate = {
 
 fn show_eff_name(ref name) with !Mutate = match name {
   ENamed(n)               => n,
-  EParameterized(n, args) => "{n}({show_list(args, show_eff_arg, ", ")})"
+  EParameterized(n, args) => "{n}({show_list(args, show_eff_arg, ", ")})",
+  EPure                   => "Pure"   // drift-audit: ignore — variant→surface-label render, not a name key
 }
 
 fn show_eff_arg(ref arg) with !Mutate = match arg {

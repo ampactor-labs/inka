@@ -433,9 +433,7 @@ handler lookup_ty_graph {
         // proves WHERE this handle was minted (its caret) — reporting at
         // span_zero discards the truth the graph holds. The Why projection in
         // proto form: a diagnostic positions itself by the graph, not 0:0.
-        report("pipeline", "E_UnresolvedType", "UnresolvedType",
-          "handle {int_to_str(h)} @epoch={int_to_str(epoch)}",
-          caret_span_from_reason(reason), "MaybeIncorrect")
+        report(EUnresolvedType(h, epoch, caret_span_from_reason(reason)))
         resume(TName("UNRESOLVED", []))
       },
       NRowBound(_)     => resume(TUnit),
@@ -451,8 +449,11 @@ handler lookup_ty_graph {
 
 handler diagnostics_handler {
 
-  report(source, code, kind, msg, span, applicability) => {
-    eprint_string("{source}: {code} {kind}: {msg} at {show_span(span)}\n")
+  report(diag) => {
+    // Every surface is a PROJECTION of the one DiagKind — source, code,
+    // severity-class, message, span, applicability are read live, never
+    // copied. The stderr line and the IDE hover are the same graph read.
+    eprint_string("{diag_source(diag)}: {diag_code(diag)} {diag_kind(diag)}: {diag_message(diag)} at {show_span(diag_span(diag))}\n")
     resume()
   }
 }

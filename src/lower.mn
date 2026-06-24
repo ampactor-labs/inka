@@ -688,9 +688,13 @@ fn resolve_ev_for_ename(ename) = {
 }
 
 /// Effect-row names as bare strings, in the row's (already-canonical) order.
+/// EPure is the union identity and never enters a row name-set (consumed to
+/// EfPure at build_declared_row), so its arm is the unreachable-but-total case:
+/// the empty name (it contributes no evidence slot — it is never present here).
 fn eff_names_of(names) = map((name) => match name {
   ENamed(s)            => s,
-  EParameterized(s, _) => s
+  EParameterized(s, _) => s,
+  EPure                => ""
 }, names)
 
 /// Builtin effects have no handler record — the raw substrate IS their

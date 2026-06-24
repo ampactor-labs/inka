@@ -44,18 +44,6 @@ handler verify_ledger with debt = [] {
           with debt = [(span, predicate, reason)] ++ debt
     },
 
-  // ifc_check — the non-interference obligation arm (§4⑥).
-  // src is the expression's FlowLabel (computed by infer at the splice
-  // site via flow_join over all splices). dst is the sink's required
-  // label (Public for log/stderr/network handlers). If src ⊑ dst per
-  // flow_le, the value flows safely; otherwise accrue as IFC debt
-  // (never silent-resume, which would claim a proof not established).
-  ifc_check(span, src, dst, reason) =>
-    if flow_le(src, dst) { resume() }
-    else
-      resume()
-        with debt = [(span, PBoolNode(0), reason)] ++ debt,
-
   verify_debt() =>
     resume(debt)
 }
@@ -77,7 +65,8 @@ fn predicate_decide(ref pred) with GraphRead = match pred {
   POr(a, b)          => or_decide(predicate_decide(a), predicate_decide(b)),
   PNot(inner)        => not_decide(predicate_decide(inner)),
   PBoolNode(_)       => None,        // a bool expr node — the SMT tier resolves it live
-  PPatternMatch(_, _) => None        // match-narrowing — the SMT tier evaluates
+  PPatternMatch(_, _) => None,       // match-narrowing — the SMT tier evaluates
+  PFlowLe(a, b)      => Some(flow_le(a, b))  // IFC: finite lattice, always decidable
 }
 
 // A comparison decides at compile time iff BOTH operand handles resolve
@@ -204,7 +193,8 @@ fn classify_predicate(pred) with Pure = match pred {
   POr(_, _)    => "disjunction",
   PCompare(_, _, _) => "comparison",
   PBoolNode(_) => "graph-deferred",
-  PPatternMatch(_, _) => "match-narrowing"
+  PPatternMatch(_, _) => "match-narrowing",
+  PFlowLe(_, _) => "ifc-flow"  // IFC: always decides at compile time via flow_le
 }
 
 type SmtResult
@@ -251,20 +241,7 @@ handler verify_smt with witnesses = [] {
   // the cursor surfaces (mentl-why walks to the model); SmtUnknown obligations
   // are retained debt. Both flow back as the residual, never dropped.
   verify_debt() =>
-    resume(verify_residual(debt, witnesses)),
-
-  // ifc_check in the SMT tier — static violations are caught at
-  // the ledger tier; the SMT tier handles taint-under-declassify
-  // (a declassify annotation must be proven invertibility-free by
-  // the non-interference theory solver). For now: same as the
-  // ledger tier (accumulate as debt). The Arc F.1 SMT swap
-  // replaces this arm with one that routes to an NI theory solver
-  // (property `src ⊑ dst` in the information-flow lattice theory).
-  ifc_check(span, src, dst, reason) =>
-    if flow_le(src, dst) { resume() }
-    else
-      resume()
-        with debt = [(span, PBoolNode(0), reason)] ++ debt
+    resume(verify_residual(debt, witnesses))
 }
 
 // The SMT handler's residual: undischarged debt PLUS the SAT-witness ledger
@@ -291,7 +268,8 @@ fn predicate_to_smt(ref pred) with GraphRead + Memory + Alloc = match pred {
   POr(a, b)          => smt_logop("or", a, b),
   PNot(inner)        => "(not {predicate_to_smt(inner)})",
   PBoolNode(n)       => handle_to_smt(n),
-  PPatternMatch(_, n) => handle_to_smt(n)
+  PPatternMatch(_, n) => handle_to_smt(n),
+  PFlowLe(a, b)      => if flow_le(a, b) { "true" } else { "false" }  // finite lattice: literal
 }
 
 fn smt_cmp_op(ref op) with Pure = match op {

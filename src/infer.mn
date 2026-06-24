@@ -639,16 +639,9 @@ fn infer_expr(ref node) = {
     },
 
     NExpr(MakeStringExpr(fragments)) => {
-      // Per #138 — interpolation fragments alternate literal-strings
-      // + splice-exprs. Infer each fragment; each splice must be
-      // Showable. Today: the substrate concretizes Show as TString
-      // (every fragment's type unifies to TString) which matches the
-      // bootstrap str_concat lowering. Post-L1 (peer Hβ.infer.show-
-      // typeclass): non-String splices register a Show obligation
-      // discharged via verify_ledger; gradient narrates each splice's
-      // ascent toward Show-able.
       infer_expr_list(fragments)
       unify_string_fragments(fragments, span)
+      check_splice_flow_labels(fragments, span)
       graph_bind(handle, TString, Located(span, Inferred("string interpolation")))
     },
 
@@ -3383,6 +3376,33 @@ fn unify_string_fragments(fragments, span: ValidSpan) = {
   for_each((frag) => {
     let N(_, _, fh) = frag
     graph_bind(fh, TString, Located(span, Inferred("interpolation fragment")))
+  }, fragments)
+}
+
+// IFC enforcement at string interpolation sites (§4⑥).
+// For each splice (non-literal fragment), read the inferred Ty from the graph,
+// classify its FlowLabel via query_flow_label, then emit verify(PFlowLe(label, Public)).
+// predicate_decide(PFlowLe(label, Public)) = Some(flow_le(label, Public)) — the
+// finite lattice makes this ALWAYS compile-time decidable. A Secret or Tainted
+// splice surfaces as ERefinementRejected("Secret ⊑ Public") at compile time.
+// Literal parts (LitString nodes) are always Public — no check needed.
+fn check_splice_flow_labels(fragments, span: ValidSpan) = {
+  for_each((frag) => {
+    let N(body, fspan, fh) = frag
+    match body {
+      NExpr(LitString(_)) => (),  // literal part: always Public, no IFC check
+      _ => {
+        // splice: read the bound type from the graph, classify its label
+        match graph_chase(fh) {
+          GNode(NBound(ty), _) => {
+            let label = query_flow_label(ty)
+            verify(fspan, PFlowLe(label, Public),
+              Located(fspan, Inferred("ifc: string splice flow label")))
+          },
+          _ => ()  // unresolved: open-world default = Public, no check needed
+        }
+      }
+    }
   }, fragments)
 }
 

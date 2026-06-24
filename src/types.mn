@@ -989,6 +989,11 @@ type Predicate
   | PNot(Predicate)
   | PBoolNode(Int)               // predicate IS a bool expr node, by handle (a boolean call or bare bool var folds in here)
   | PPatternMatch(Pat, Int)      // scrutinee node handle matches pat — match-narrowing
+  | PFlowLe(FlowLabel, FlowLabel) // IFC obligation (§4⑥): src ⊑ dst in the flow lattice.
+                                 // Compile-time decidable by flow_le — ALWAYS Some(true/false),
+                                 // never deferred. verify(span, PFlowLe(src, dst), reason)
+                                 // IS the ifc_check; ERefinementRejected carries the violation.
+                                 // No new effect op, no new diagnostic, no new handler arm.
 
 // PExpr is GONE: its leaves (PSelf/PInt/PEVar/PApp) were a lossy COPY of the
 // expression the AST node already holds (`node_to_pexpr` re-derived it with a
@@ -1054,6 +1059,12 @@ fn flow_le(a, b) with Pure = match a {
   Secret  => match b { Secret => true,  Tainted => false, Public => false },
   Tainted => match b { Secret => true,  Tainted => true,  Public => false },
   Public  => match b { Secret => true,  Tainted => true,  Public => true  }
+}
+
+fn show_flow_label(label) with Pure = match label {
+  Public  => "Public",
+  Tainted => "Tainted",
+  Secret  => "Secret"
 }
 
 type Option
@@ -1559,18 +1570,10 @@ effect LowerScope {
 effect Verify {
   verify(Span, Predicate, Reason) -> ()
   verify_debt() -> List
-  // ifc_check — the IFC non-interference obligation (§4⑥).
-  // The caller resolves src and dst FlowLabel from the existing graph:
-  //   src — derived by query_flow_label(handle): chases the handle's
-  //          Ty through TRefined/TName to classify Public/Tainted/Secret.
-  //   dst — derived from the sink handler's declared row: an IO-row
-  //          sink requires Public; an !IO-row context admits Secret.
-  // If src ⊑ dst per flow_le, the value flows safely. Otherwise:
-  // verify_ledger accumulates V_Pending; verify_smt (Arc F.1) routes
-  // to the NI theory solver. The graph IS the mechanism — EfNeg +
-  // TRefined + TName already encode the constraint; ifc_check is the
-  // Verify-layer read that names the violation as a diagnostic.
-  ifc_check(Span, FlowLabel, FlowLabel, Reason) -> ()
+  // ifc non-interference: verify(span, PFlowLe(src, dst), reason)
+  // predicate_decide(PFlowLe(a,b)) = Some(flow_le(a,b)) — always compile-time decidable.
+  // ERefinementRejected carries the violation; show_predicate renders "Secret ⊑ Public".
+  // No separate op. No separate handler arm. No separate diagnostic.
 }
 
 // Every use of an own-parameter performs consume(name, span).
@@ -1902,7 +1905,8 @@ fn show_predicate(ref pred) with GraphRead = {
     POr(a, b)  => "{show_predicate(a)} || {show_predicate(b)}",
     PNot(p)    => "!{show_predicate(p)}",
     PBoolNode(n) => show_pred_operand(n),
-    PPatternMatch(_, n) => "{show_pred_operand(n)} matches _"
+    PPatternMatch(_, n) => "{show_pred_operand(n)} matches _",
+    PFlowLe(src, dst)   => "{show_flow_label(src)} ⊑ {show_flow_label(dst)}"  // IFC: src must not exceed dst in the lattice
   }
 }
 

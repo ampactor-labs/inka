@@ -644,11 +644,7 @@ fn render_query_result(result) = match result {
   QRError(msg) => "error: {msg}"
 }
 
-fn show_flow_label(label) with Pure = match label {
-  Public  => "Public",
-  Tainted => "Tainted",
-  Secret  => "Secret"
-}
+// show_flow_label — defined in types.mn alongside flow_join/flow_le.
 
 // The query surface is a tiny grammar: <verb> [arg]. The query strings are
 // unavoidable external input (like LSP method strings, lsp.mn classify_method)

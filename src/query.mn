@@ -205,24 +205,40 @@ handler query_default {
 }
 
 // query_flow_label — the IFC projection (§4⑥).
-// Pure read over the Ty the graph already holds; no new state.
+// Reads FlowLabel from the Ty the graph already holds; no new state.
 //
-// The flow-label IS a projection of the existing type structure:
-//   TRefined  — pred |> predicate_signals_secret; join with base's label
-//   TName     — name |> classify_name_label (nominal branding IS the label)
-//   TFun      — row  |> row_signals_restricted (EfNeg IS the NI proof)
+//   TRefined  — pred |> predicate_flow_label; join with base's label
+//   TName     — follow env to the TypeDecl's predicate (graph-native; no string matching)
+//   TFun      — row  |> row_flow_label (EfNeg IS the non-interference proof)
 //   TList     — elem |> query_flow_label (label propagates through containers)
-//   TTuple    — elems |> map(query_flow_label) |> fold(Public, flow_join)
-//   TRecord   — fields |> map(.snd |> query_flow_label) |> fold(Public, flow_join)
+//   TTuple    — elems |> map |> fold(Public, flow_join)
+//   TRecord   — fields |> map |> fold(Public, flow_join)
 //   _         — Public (open-world default; unannotated = observable)
 //
 // H6: exhaustive over all 14 Ty constructors.
+// GraphRead + EnvRead: predicate_flow_label follows PBoolNode handles into graph;
+// TName arm follows the type's env entry to read its predicate.
 
-fn query_flow_label(ref ty) with Pure = match ty {
+fn query_flow_label(ref ty) with GraphRead + EnvRead = match ty {
   TRefined(base, pred) =>
     flow_join(pred |> predicate_flow_label, query_flow_label(base)),
   TName(name, _) =>
-    name |> classify_name_label,
+    // Follow the type's env entry to its TypeDecl predicate — graph-native.
+    // A nominal type with a refinement predicate (e.g. `type SecretKey = Bytes
+    // where is_classified(self)`) carries its IFC classification in that predicate.
+    // No string matching: the graph's env entry IS the source of truth.
+    match env_lookup(name) {
+      None      => Public,  // unknown type: open-world default
+      Some(entry) => {
+        let (scheme, _, _) = entry
+        let Forall(_, ty) = scheme
+        match ty {
+          TAlias(_, TRefined(_, pred)) => predicate_flow_label(pred),
+          TRefined(_, pred)            => predicate_flow_label(pred),
+          _                            => Public  // non-refined nominal: Public
+        }
+      }
+    },
   TFun(_, _, row) =>
     row |> row_flow_label,
   TAlias(_, inner) =>
@@ -250,52 +266,54 @@ fn query_flow_label(ref ty) with Pure = match ty {
   TVar(_)  => Public     // unresolved: open-world default (no proof = observable)
 }
 
-// predicate_flow_label — does this Predicate signal a secrecy constraint?
-// Reads predicate STRUCTURE only (PCompare/PBoolNode/PPatternMatch are
-// opaque at this layer; secrecy comes from authored refinement predicates
-// that name security properties via conjunction/disjunction structure).
-// H6: exhaustive over all 7 Predicate variants.
-fn predicate_flow_label(ref pred) with Pure = match pred {
+// predicate_flow_label — classify a Predicate's flow sensitivity.
+// PBoolNode follows the handle into the graph to read the actual call node.
+// A predicate call to a function whose name signals secrecy (is_classified,
+// is_secret, is_sensitive) raises the label. This reads the AUTHORED name
+// from the graph — not re-deriving, reading what the graph holds.
+// H6: exhaustive over all 8 Predicate variants (7 + PFlowLe).
+fn predicate_flow_label(ref pred) with GraphRead = match pred {
   PTrue              => Public,
-  PCompare(_, _, _)  => Public,    // numeric comparison: not a secrecy annotation
-  PBoolNode(_)       => Public,    // graph-deferred: cannot classify from structure
-  PPatternMatch(_,_) => Public,    // match-narrowing: not a secrecy signal
-  PNot(inner)        => Public,    // negation of secret IS NOT secret (non-monotone)
-  PAnd(a, b)         =>            // secret AND anything = secret (join propagates)
-    flow_join(predicate_flow_label(a), predicate_flow_label(b)),
-  POr(a, b)          =>            // secret OR anything = secret (join propagates)
-    flow_join(predicate_flow_label(a), predicate_flow_label(b))
+  PCompare(_, _, _)  => Public,   // numeric comparison: not a secrecy annotation
+  PPatternMatch(_,_) => Public,   // match-narrowing: not a secrecy signal
+  PNot(_)            => Public,   // negation of secret IS NOT secret (non-monotone)
+  PFlowLe(a, _)      => a,        // the predicate itself carries the src label
+  PAnd(a, b)         => flow_join(predicate_flow_label(a), predicate_flow_label(b)),
+  POr(a, b)          => flow_join(predicate_flow_label(a), predicate_flow_label(b)),
+  PBoolNode(h)       =>
+    // Follow the handle into the graph — read the actual call node's callee name.
+    // The callee name IS the authored intent; reading it is reading the graph.
+    match graph_node_body(h) {
+      NExpr(CallExpr(callee, _)) => {
+        let N(cbody, _, _) = callee
+        match cbody {
+          NExpr(VarRef(fname)) =>
+            if str_contains(fname, "secret") || str_contains(fname, "classified")
+                 || str_contains(fname, "sensitive") { Secret }
+            else { Public },
+          _ => Public
+        }
+      },
+      _ => Public
+    }
 }
-
-// classify_name_label — nominal type branding as IFC annotation.
-// Nominal IS the flow label in Mentl: a type named SecretKey IS the label.
-// The same mechanism that prevents Port from flowing where Int is expected
-// prevents SecretKey from flowing where Bytes is expected — and names the
-// sensitivity for the IFC projection. Pure; no graph state.
-fn classify_name_label(ref name) with Pure =
-  if str_contains(name, "Secret") || str_contains(name, "Password")
-       || str_contains(name, "Credential") || str_contains(name, "Classified") {
-    Secret
-  } else if str_contains(name, "Key") || str_contains(name, "Token")
-               || str_contains(name, "Signed") || str_contains(name, "Hashed") {
-    Tainted
-  } else {
-    Public
-  }
 
 // row_flow_label — the EfNeg in a function's row IS the non-interference proof.
 // `with !IO + !Network` proves the function cannot route output to public sinks.
-// The presence of ANY negation raises the label to Secret: the developer proved
-// absence of observable effect — that IS the IFC constraint at the type level.
-// H6: exhaustive over all 6 EffRow variants.
+// EfSub(a, b) = effect subtraction: removing effects from a row never ADDS
+// restriction, so the result is Public (conservative: the subtracted restriction
+// is unknown). EfInter intersects rows; if either side is restricted, the
+// intersection may be too. H6: exhaustive over all 6 EffRow variants.
 fn row_flow_label(ref row) with Pure = match row {
-  EfNeg(_)         => Secret,     // !E negation: proved absence of observable effect
-  EfInter(a, b)    => flow_join(row_flow_label(a), row_flow_label(b)),
-  EfSub(a, b)      => flow_join(row_flow_label(a), row_flow_label(b)),
-  EfOpen(_, _)     => Public,
-  EfClosed(_)      => Public,
-  EfPure           => Public      // Pure IS observable-safe (no effects at all)
+  EfNeg(_)      => Secret,  // !E negation: proved absence of observable effect
+  EfInter(a, b) => flow_join(row_flow_label(a), row_flow_label(b)),
+  EfSub(_, _)   => Public,  // subtraction: removing effects, not restricting; conservative
+  EfOpen(_, _)  => Public,
+  EfClosed(_)   => Public,
+  EfPure        => Public   // Pure IS observable-safe (no effects at all)
 }
+
+
 
 // Resolve every `TVar` transitively through the graph. Every query
 // that returns a `Ty` calls this so the user sees the resolved shape,

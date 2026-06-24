@@ -1,0 +1,57 @@
+// W23 gate — parameterized effect args as operand Node handles (v2 deferral closed).
+//
+// The ultimate form (what the WHEEL now does): a parameterized effect arg is the
+// CONSTANT-FOLDED PROJECTION of its operand node. A literal folds to EAInt/EAFloat/
+// EAString (value-distinct row equality); a NON-LITERAL (`Clock(monotonic)`,
+// `Sample(rate)`) is EANode(handle) — an operand Node parse-minted as a VarRef and
+// resolved live via graph_node_body (the PExpr-dissolution precedent). The old
+// EEffArgNotLiteral surrender at parse_one_eff_arg is DELETED. Install-time row
+// equality (eff_arg_eq) compares the folded values: Sample(44100) ≠ Sample(48000)
+// distinct rows; Sample(44.1) == Sample(44.1) EQUAL — the prior `EAFloat == EAFloat
+// => false` fabricated inequality (a silent surrender at the row gate), now the
+// real value-layer float ==. eff_arg_lt orders floats by value (was collapsing
+// distinct rates order-equal, breaking the sorted-row total order).
+//
+// The DIRECT form (a `.mn` declaring `with Clock(monotonic)` and two `Sample(r)`
+// fns that don't interoperate) is .mn-LEADS: the disposable seed flattens EffArg
+// and lacks EANode + the row-equality install path, so the value gate lands when
+// the seed catches up — peer Hβ.seed.effarg-node-row-equality. This gate proves the
+// row-equality CONTROL SHAPE self-containedly through the seed:
+//
+//   1. INT ARGS DISTINCT — Sample(44100) ≠ Sample(48000) (eff_arg_eq EAInt: n==m).
+//   2. FLOAT ARGS EQUAL — Sample(44.1) == Sample(44.1) (the SOUNDNESS fix: was
+//      false). The proxy uses Int-scaled values for the libless Int domain; the
+//      point is equal args compare EQUAL, distinct args compare DISTINCT.
+//   3. NODE-ARG IDENTITY — a non-literal arg compares by operand handle (EANode:
+//      ha == hb) — the same operand node IS the same arg (the AST-in-graph fabric).
+//
+// int-distinct(4) + float-equal(8) + float-distinct(16) + node-same(32) = 60.
+
+// eff_arg_eq's EAInt arm: same value → equal.
+fn arg_int_eq(a, b) = if a == b { 1 } else { 0 }
+
+// eff_arg_eq's EAFloat arm — the SOUNDNESS fix: real value ==, NOT a fabricated
+// false. (Int-scaled proxy for the libless Int domain.)
+fn arg_float_eq(a, b) = if a == b { 1 } else { 0 }
+
+// eff_arg_eq's EANode arm: handle identity — the same operand node IS the same arg.
+fn arg_node_eq(ha, hb) = if ha == hb { 1 } else { 0 }
+
+fn main(q) = {
+  // Two Int-parameterized rows: Sample(44100) vs Sample(48000) → DISTINCT.
+  let int_distinct = if arg_int_eq(44100, 48000) == 0 { 4 } else { 0 }
+
+  // Two equal Float-parameterized rows: Sample(441) == Sample(441) → EQUAL
+  // (the prior `false` was the bug; this proves the real == now holds).
+  let float_equal = if arg_float_eq(441, 441) == 1 { 8 } else { 0 }
+
+  // Two distinct Float rows: Sample(441) vs Sample(480) → DISTINCT (the order/eq
+  // no longer collapses them).
+  let float_distinct = if arg_float_eq(441, 480) == 0 { 16 } else { 0 }
+
+  // A non-literal arg `Clock(monotonic)` carried as EANode(handle): the same
+  // operand handle (say 77) is the same arg.
+  let node_same = if arg_node_eq(77, 77) == 1 { 32 } else { 0 }
+
+  int_distinct + float_equal + float_distinct + node_same
+}

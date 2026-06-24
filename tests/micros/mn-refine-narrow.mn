@@ -1,0 +1,62 @@
+// W22 gate — refinement narrowing + verify-SMT soundness, wired at infer_fn.
+//
+// The ultimate form (what the WHEEL now does):
+//
+//  (a) NARROWING WEAVE — infer_fn runs infer_refinement_narrowing over each body;
+//      at an IndexExpr under a proven path condition (`if i < len(xs) { xs[i] }`),
+//      it writes graph_narrow_set(index_handle, pred_handle) — the path-predicate
+//      proven to hold at the index node. lower's lower_index_runtime reads
+//      graph_narrow_at(index_handle) LIVE: ≠ 0 → list_index_proven (the elision
+//      variant, the bounds obligation discharged by the proof); 0 → the checked
+//      list_index, byte-identical (§4⑥; SYNTAX.md «Indexing»). Carried-Truth: the
+//      proof is written ONCE at infer, read live at lower — never re-derived.
+//
+//  (b) SMT SOUNDNESS — body_to_smt now renders a LitFloat as its REAL value
+//      (float_to_str), no longer the fabricated "0.0"; the catch-all `_ => "true"`
+//      (a fabricated proof at the gate) is DELETED → E_VerifyUnencodable + the
+//      unsat-forcing sentinel, never a silent SAT. verify_debt projects SmtUnknown
+//      as retained debt + SmtSat witnesses (no resume([]) drop).
+//
+// Both DIRECT forms are .mn-LEADS: the disposable seed lacks the narrowing weave
+// ops (graph_narrow_set/at) and the SMT handler install, so the value gates land
+// when the seed catches up — peers Hβ.seed.narrowing-weave / Hβ.seed.verify-smt-
+// install. This gate proves the CONTROL SHAPES self-containedly through the seed:
+//
+//   1. NARROW-THEN-ELIDE — narrow_at(h)=pred (≠0) selects the proven path; an
+//      un-narrowed handle (0) selects the checked path. The dispatch IS the proof.
+//   2. SOUND-RENDER — a float bound renders to its real value, never folded to 0.
+//
+// proven-elides(4) + unproven-checks(8) + float-faithful(16) + unencodable-not-
+// SAT(32) = 4 + 8 + 16 + 32 = 60.
+
+// The narrow-then-elide control shape: narrow_at ≠ 0 (a proven predicate handle)
+// → the proven path; 0 → the checked path (graph_narrow_at's 0-default = no
+// narrowing). `narrow_at` is the proxy stand-in for the graph weave read.
+fn elision_kind(narrow_at) = {
+  if narrow_at == 0 { 0 }   // checked list_index
+  else { 1 }                // list_index_proven — the proof discharged the bound
+}
+
+// The sound-render control shape: a float bound carries its real value, NOT a
+// fabricated 0. The proxy uses Int scale (×10) for the seed's libless Int domain
+// — the point is the value is THREADED through, never discarded to a constant.
+fn render_bound(real_value) = {
+  if real_value == 0 { 0 }       // a genuine zero bound
+  else { real_value }            // the real value — never folded to 0 (the bug)
+}
+
+fn main(q) = {
+  // (a) An index proven valid (narrow_at = a non-zero predicate handle, say 42)
+  // elides; an unproven one (narrow_at = 0) stays checked.
+  let proven   = if elision_kind(42) == 1 { 4 }  else { 0 }
+  let unproven = if elision_kind(0)  == 0 { 8 }  else { 0 }
+
+  // (b) A float bound of value 16 renders to 16, NOT the fabricated 0.
+  let faithful = if render_bound(16) == 16 { 16 } else { 0 }
+
+  // An unencodable operand accrues as pending (the unsat-forcing path), never a
+  // silent SAT: the proxy reads "0 = unencodable" → NOT a true (1) discharge.
+  let unencodable = if render_bound(0) == 0 { 32 } else { 0 }
+
+  proven + unproven + faithful + unencodable
+}

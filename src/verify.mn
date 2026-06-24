@@ -222,13 +222,37 @@ handler verify_smt with witnesses = [] {
             report_refinement_rejected(predicate, span, reason)
             resume()
           },
+          // SmtUnknown is a GENUINELY undischarged obligation — accrue it as
+          // pending debt (never silently resume, which would discharge an
+          // obligation the solver could not prove; the no-silent-fallback law
+          // at the proof gate). It lives in the SAME debt ledger verify_ledger
+          // keeps, so verify_debt projects it live.
           SmtUnknown =>
             resume()
+              with debt = [(span, predicate, reason)] ++ debt
         }
     },
 
+  // verify_debt projects the SMT handler's residual LIVE (Carried-Truth — the
+  // witnesses + the unknown-debt are graph state the handler proved; reading
+  // resume([]) fabricated an empty ledger). SmtSat witnesses are proof-evidence
+  // the cursor surfaces (mentl-why walks to the model); SmtUnknown obligations
+  // are retained debt. Both flow back as the residual, never dropped.
   verify_debt() =>
-    resume([])
+    resume(verify_residual(debt, witnesses))
+}
+
+/// The SMT handler's residual: undischarged debt PLUS the SAT-witness ledger
+/// projected as proof-evidence entries (witness rendered into the reason via
+/// SVerifyWitness so the Why-walker reaches the counterexample/model). One
+/// list, read live — the cursor's projection of what the solver established
+/// and what it could not. (Surpasses Dafny/F*: the witness is a walkable Reason
+/// edge, not a separate counterexample dump.)
+fn verify_residual(ref debt, ref witnesses) with Memory + Alloc = {
+  debt ++ map((w) => {
+    let (span, pred, model) = w
+    (span, pred, VerifyWitness(model))
+  }, witnesses)
 }
 
 fn predicate_to_smt_lib(ref pred) with Memory + Alloc = {
@@ -256,38 +280,81 @@ fn smt_logop(ref op, ref a, ref b) with GraphRead + Memory + Alloc = {
   "({op} {predicate_to_smt(a)} {predicate_to_smt(b)})"
 }
 
-/// Resolve an operand HANDLE to its Expr (graph_node_body) and render it.
+/// ONE SMT-render projection, keyed on HANDLES throughout (Carried-Truth: the
+/// predicate's operands ARE handles into the one graph; every operand — top-
+/// level and nested call arg — is resolved via graph_node_body and rendered
+/// uniformly, never a second node-destructure path). Follow the edge, read the
+/// live node — the AST-in-graph fabric makes every sub-node a resolvable handle.
 fn handle_to_smt(handle) with GraphRead + Memory + Alloc = {
   body_to_smt(graph_node_body(handle))
 }
 
-/// Render a nested operand NODE (a call's argument) as an SMT term.
-fn node_to_smt(ref node) with Memory + Alloc = {
-  let N(body, _, _) = node
-  body_to_smt(body)
-}
-
-fn body_to_smt(body) with Memory + Alloc = match body {
+/// Render a NodeBody as an SMT term. Every node-kind that can appear in a
+/// refinement-predicate operand is enumerated; a genuinely non-encodable shape
+/// raises E_VerifyUnencodable (Located) and renders the unsat-forcing sentinel
+/// `false` — NEVER a fabricated `true` (a `true` fallback in a PROOF GATE claims
+/// proof of the unprovable — the most dangerous silent fallback in the compiler;
+/// the no-silent-fallback law, deleted not wrapped). A call's args are HANDLES
+/// (the AST-in-graph fabric), mapped through handle_to_smt — no i/n index loop.
+fn body_to_smt(body) with GraphRead + Memory + Alloc = match body {
   NExpr(LitInt(n))    => int_to_str(n),
-  NExpr(LitFloat(_))  => "0.0",
+  NExpr(LitFloat(f))  => float_to_str(f),
   NExpr(LitString(s)) => "\"{s}\"",
+  NExpr(LitBool(b))   => if b { "true" } else { "false" },
   NExpr(VarRef(name)) => name,
-  NExpr(CallExpr(callee, args)) => smt_node_call(callee, args),
-  _                   => "true"
+  NExpr(CallExpr(callee, args)) => smt_call(callee, args),
+  NExpr(BinOpExpr(op, l, r)) => smt_binop(op, l, r),
+  NExpr(UnaryOpExpr(op, x)) => smt_unop(op, x),
+  _                   => {
+    report(EVerifyUnencodable(span_zero()))
+    "false"
+  }
 }
 
-fn smt_node_call(ref callee, ref args) with Memory + Alloc = {
+/// A call renders as `(fname arg…)` with every arg resolved through its handle
+/// (the operand-Node channel PCompare already uses); the fname is the callee's
+/// name read live from its node body, or the unencodable sentinel if it is not a
+/// bare name reference.
+fn smt_call(ref callee, ref args) with GraphRead + Memory + Alloc = {
   let N(cbody, _, _) = callee
   let fname = match cbody {
     NExpr(VarRef(n)) => n,
-    _                => "_"
+    _                => {
+      report(EVerifyUnencodable(span_zero()))
+      "false"
+    }
   }
-  "({fname}{smt_args(args, 0, len(args))})"
+  "({fname}{smt_arg_terms(args)})"
 }
 
-fn smt_args(ref args, i, n) with Memory + Alloc = {
-  if i >= n { "" }
-  else {
-    " {node_to_smt(list_index(args, i))}{smt_args(args, i + 1, n)}"
+/// Each arg is a handle — map through handle_to_smt and join (map/fold, never an
+/// imperative i/n counter; Anchor 6).
+fn smt_arg_terms(ref args) with GraphRead + Memory + Alloc =
+  fold(args, "", (acc, arg) => {
+    let N(_, _, h) = arg
+    "{acc} {handle_to_smt(h)}"
+  })
+
+fn smt_binop(ref op, ref l, ref r) with GraphRead + Memory + Alloc = {
+  let N(_, _, lh) = l
+  let N(_, _, rh) = r
+  "({smt_binop_sym(op)} {handle_to_smt(lh)} {handle_to_smt(rh)})"
+}
+
+fn smt_unop(ref op, ref x) with GraphRead + Memory + Alloc = {
+  let N(_, _, xh) = x
+  match op {
+    UNot => "(not {handle_to_smt(xh)})",
+    UNeg => "(- {handle_to_smt(xh)})"
   }
+}
+
+/// Every BinOp rendered to its SMT-LIB symbol — exhaustive over the ADT (no
+/// `_ => "="` fabrication that would mis-render `%`/`*` as equality in a
+/// predicate like `self % 2 == 0`).
+fn smt_binop_sym(ref op) with Pure = match op {
+  BAdd => "+", BSub => "-", BMul => "*", BDiv => "div", BMod => "mod",
+  BEq  => "=", BNe => "distinct", BLt => "<", BGt => ">", BLe => "<=", BGe => ">=",
+  BAnd => "and", BOr => "or",
+  BConcat => "str.++"
 }

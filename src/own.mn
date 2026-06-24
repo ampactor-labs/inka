@@ -404,12 +404,15 @@ fn walk_match_arms(ref refs, ref arms) with !Mutate = {
 /// (borrowed multiple times).
 fn infer_ownership(ref params, ref body) with !Mutate = {
   map((p) => {
-    let TParam(name, ty, authored, _old_resolved, _) = p
+    let TParam(name, ty, authored, _old_resolved, default) = p
     let inferred = match authored {
       Unmarked => classify_usage(name, body),
       _        => authored
     }
-    TParam(name, ty, authored, inferred, None)
+    // Preserve the default (Carried-Truth — dropping it loses the param's
+    // `= expr` fallback at every call site). Only the resolved-ownership slot
+    // is written; type, authored marker, and default travel unchanged.
+    TParam(name, ty, authored, inferred, default)
   }, list_to_flat(params))
 }
 

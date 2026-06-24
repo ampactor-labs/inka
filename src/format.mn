@@ -367,7 +367,8 @@ fn show_effarg(arg) with Memory + Alloc = match arg {
   EAInt(n)    => int_to_str(n),
   EAFloat(f)  => float_to_str(f),
   EAString(s) => s,
-  EAType(_)   => "<type>"
+  EAType(_)   => "<type>",
+  EANode(h)   => "<operand #{int_to_str(h)}>"
 }
 
 fn show_effname(name) with Memory + Alloc = match name {

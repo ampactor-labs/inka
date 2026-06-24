@@ -551,19 +551,26 @@ fn eff_arg_eq(ref a, ref b) with !Mutate = match a {
     EAInt(m)    => n == m,
     EAFloat(_)  => false,
     EAString(_) => false,
-    EAType(_)   => false
+    EAType(_)   => false,
+    EANode(_)   => false
   },
-  EAFloat(_)  => match b {
+  EAFloat(fa) => match b {
     EAInt(_)    => false,
-    EAFloat(_)  => false,    // float equality at compile time deferred
+    EAFloat(fb) => fa == fb,   // Sample(44.1) IS Sample(44.1) — the constant-
+                               // folded projection of the operand-Node's literal,
+                               // compared by the value layer's structural float ==
+                               // (the prior `false` fabricated inequality — a silent
+                               // surrender at the install-time row gate, deleted)
     EAString(_) => false,
-    EAType(_)   => false
+    EAType(_)   => false,
+    EANode(_)   => false
   },
   EAString(s) => match b {
     EAInt(_)    => false,
     EAFloat(_)  => false,
     EAString(t) => s == t,
-    EAType(_)   => false
+    EAType(_)   => false,
+    EANode(_)   => false
   },
   // Type args identify the SAME effect (Iterate(a) IS Iterate(b)); the
   // payloads are unified at the install, not value-compared. So they
@@ -573,7 +580,20 @@ fn eff_arg_eq(ref a, ref b) with !Mutate = match a {
     EAInt(_)    => false,
     EAFloat(_)  => false,
     EAString(_) => false,
-    EAType(_)   => true
+    EAType(_)   => true,
+    EANode(_)   => false
+  },
+  // A non-literal operand arg: the SAME operand node IS the same arg (the AST-
+  // in-graph fabric — distinct nodes for one literal would have folded to
+  // EAInt/EAFloat at parse). Handle identity is the structural compare; distinct
+  // handles stay distinct row entries (conservative — Sample(rate1) ≠ Sample(rate2);
+  // install-time unification reconciles their node bodies at the row gate).
+  EANode(ha)  => match b {
+    EANode(hb)  => ha == hb,
+    EAInt(_)    => false,
+    EAFloat(_)  => false,
+    EAString(_) => false,
+    EAType(_)   => false
   }
 }
 
@@ -625,26 +645,40 @@ fn eff_arg_lt(ref a, ref b) with !Mutate = match a {
     EAInt(m)    => n < m,
     EAFloat(_)  => true,
     EAString(_) => true,
-    EAType(_)   => true
+    EAType(_)   => true,
+    EANode(_)   => true
   },
-  EAFloat(_)  => match b {
+  EAFloat(fa) => match b {
     EAInt(_)    => false,
-    EAFloat(_)  => false,
+    EAFloat(fb) => fa < fb,   // real float order — two distinct Sample rates sort
+                              // distinctly (the prior `false` collapsed them order-
+                              // equal, breaking the sorted-row total order)
     EAString(_) => true,
-    EAType(_)   => true
+    EAType(_)   => true,
+    EANode(_)   => true
   },
   EAString(s) => match b {
     EAInt(_)    => false,
     EAFloat(_)  => false,
     EAString(t) => str_lt(s, t),
-    EAType(_)   => true
+    EAType(_)   => true,
+    EANode(_)   => true
   },
   // EAType sorts last and is order-equal to any EAType (one effect entry).
   EAType(_)   => match b {
     EAInt(_)    => false,
     EAFloat(_)  => false,
     EAString(_) => false,
-    EAType(_)   => false
+    EAType(_)   => false,
+    EANode(_)   => true
+  },
+  // EANode sorts after every literal/type kind, ordered by operand handle.
+  EANode(ha)  => match b {
+    EAInt(_)    => false,
+    EAFloat(_)  => false,
+    EAString(_) => false,
+    EAType(_)   => false,
+    EANode(hb)  => ha < hb
   }
 }
 

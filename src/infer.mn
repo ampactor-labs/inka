@@ -355,6 +355,29 @@ fn infer_fn(name, params, body_node, ret_ann, handle, span: ValidSpan) = {
   // E_RegionEscape with the install-span.
   check_escape(body_handle, span)
 
+  // ─── Ownership inference (§4⑤, arm 5) — the Hylo-quiet bar ──────
+  // After the body is inferred, classify each Unmarked param's ownership
+  // from its body use-count (0/1/2+ → Unmarked/Own/Ref); an authored own/ref
+  // becomes a CONSTRAINT the inferred is checked against. The inferred params
+  // are written BACK into the fn's TFun node (over the SAME param handles, so
+  // types stay live as TVar(h)) — so lower's Consume-elision and affine_ledger
+  // read the inferred ownership LIVE (Carried-Truth: written once at infer, read
+  // live everywhere, never re-derived per consumer). Then check_ref_escape walks
+  // return positions, surfacing E_OwnershipViolation when a ref binding escapes —
+  // how Mentl expresses borrows via !E without a separate borrow-checker pass.
+  let inferred_params = infer_ownership(build_param_types(params, param_handles), body_node)
+  graph_bind(handle, TFun(inferred_params, TVar(ret_handle), mk_ef_open([], row_handle)),
+    Located(span, Inferred("ownership-resolved params of '{name}'")))
+  check_ref_escape(inferred_params, body_node)
+
+  // ─── Refinement narrowing (§4⑥, arm 6) — the verified cursor ────
+  // Walk the body's if/match/assert sites; at each index site under a proven
+  // path condition, write the narrowing edge into the graph (graph_narrow_set).
+  // lower's bounds-check read (graph_narrow_at) elides any check the path already
+  // proves (Carried-Truth: the narrowing is written ONCE here, read live at
+  // lower — never re-derived; the elision is a PROJECTION, not a recomputation).
+  infer_refinement_narrowing(body_node)
+
   // ─── Declared effects enforcement (gap 1 + 2) ──────────────────
   // If the FnStmt carries a declared effect row, verify the inferred
   // body's row is subsumed by it. If so, rebind row_handle to the
@@ -3126,11 +3149,11 @@ fn arm_index_loop(arms, target_handle, idx) with GraphRead = {
 /// not parallel arrays); 8 (Predicate is the ADT — no string-keyed
 /// pred-name flag); 9 (every NarrowingSite NExpr arm enumerated;
 /// no wildcard fabricating ()).
-fn infer_refinement_narrowing(body) with GraphRead = {
+fn infer_refinement_narrowing(body) with GraphRead + GraphWrite = {
   walk_refinement(empty_refinement_map(), body, PTrue)
 }
 
-fn walk_refinement(map, node, path_pred) with GraphRead = {
+fn walk_refinement(map, node, path_pred) with GraphRead + GraphWrite = {
   let N(body, _, _) = node
   match body {
     NExpr(IfExpr(c, t, e)) => {
@@ -3161,6 +3184,21 @@ fn walk_refinement(map, node, path_pred) with GraphRead = {
       walk_refinement_list(map, elems, path_pred),
     NExpr(MakeTupleExpr(elems)) =>
       walk_refinement_list(map, elems, path_pred),
+    NExpr(MakeStringExpr(frags)) =>
+      walk_refinement_list(map, frags, path_pred),
+    // An index site under a non-trivial path: record the path-predicate proven
+    // to hold at the index node (graph_narrow_set), so lower's bounds-check read
+    // (graph_narrow_at) elides the check the path already discharged (§4⑥:
+    // "When i is refined to a proven-valid index, the compiler elides the bounds
+    // check"). Carried-Truth: the narrowing is written ONCE here, read live at
+    // lower — never re-derived. A trivial path (PTrue) records nothing (the 0
+    // default = no narrowing = byte-identical un-elided load).
+    NExpr(IndexExpr(receiver, index)) => {
+      let N(_, _, ih) = index
+      let ph = narrowing_pred_handle(path_pred)
+      if ph != 0 { graph_narrow_set(ih, ph) } else { () }
+      walk_refinement(walk_refinement(map, receiver, path_pred), index, path_pred)
+    },
     NExpr(MakeRecordExpr(fields)) =>
       walk_refinement_fields(map, fields, path_pred),
     NExpr(RecordUpdateExpr(base, fields)) =>
@@ -3193,7 +3231,7 @@ fn walk_refinement(map, node, path_pred) with GraphRead = {
 /// before walking the arm body. The narrowing is per-arm-scope; once
 /// the arm body is walked, its refinement contributions don't leak
 /// to other arms (they're branch-disjoint; map-per-arm semantics).
-fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead = {
+fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead + GraphWrite = {
   if len(arms) == 0 { map }
   else {
     let arm = list_head(arms)
@@ -3206,7 +3244,7 @@ fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead = {
 /// Block walking — stmts may include `assert(pred)` which narrows the
 /// rest of the block. Threads path_pred through; each assert
 /// strengthens the predicate for subsequent stmts + final expression.
-fn walk_refinement_block(map, stmts, final, path_pred) with GraphRead = {
+fn walk_refinement_block(map, stmts, final, path_pred) with GraphRead + GraphWrite = {
   if len(stmts) == 0 { walk_refinement(map, final, path_pred) }
   else {
     let stmt = list_head(stmts)
@@ -3238,11 +3276,11 @@ fn strengthen_path_pred(path_pred, stmt) with GraphRead = {
 /// inference doesn't add the predicate to the caller's path_pred (the
 /// callee's body is independently walked); the relationship surfaces
 /// via signature unification at call site.
-fn walk_refinement_args_with_param_preds(map, f, args, path_pred) with GraphRead = {
+fn walk_refinement_args_with_param_preds(map, f, args, path_pred) with GraphRead + GraphWrite = {
   walk_refinement_list(map, args, path_pred)
 }
 
-fn walk_refinement_list(map, nodes, path_pred) with GraphRead = {
+fn walk_refinement_list(map, nodes, path_pred) with GraphRead + GraphWrite = {
   if len(nodes) == 0 { map }
   else {
     let head = list_head(nodes)
@@ -3251,7 +3289,7 @@ fn walk_refinement_list(map, nodes, path_pred) with GraphRead = {
   }
 }
 
-fn walk_refinement_fields(map, fields, path_pred) with GraphRead = {
+fn walk_refinement_fields(map, fields, path_pred) with GraphRead + GraphWrite = {
   if len(fields) == 0 { map }
   else {
     let field = list_head(fields)
@@ -3271,6 +3309,21 @@ fn walk_refinement_fields(map, fields, path_pred) with GraphRead = {
 /// `Hβ.infer.predicate-from-bool-expression` covers the full case
 /// enumeration.
 fn predicate_of_bool_expr(node) = PBoolNode(node_handle(node))
+
+/// Extract the directly-consumable bool-node handle from a path predicate — the
+/// representative the narrowing weave stores. A leaf PBoolNode/PCompare carries
+/// its handle; a compound PAnd recurses to its left conjunct (the nearest
+/// path-condition); PTrue and the non-leaf forms carry no single narrowing node
+/// (0 = no narrowing recorded — lower elides nothing, byte-identical).
+fn narrowing_pred_handle(pred) with Pure = match pred {
+  PBoolNode(h)        => h,
+  PCompare(_, lh, _)  => lh,
+  PAnd(a, _)          => narrowing_pred_handle(a),
+  PTrue               => 0,
+  PNot(_)             => 0,
+  POr(_, _)           => 0,
+  PPatternMatch(_, h) => h
+}
 
 fn negation_of(pred) = PNot(pred)
 

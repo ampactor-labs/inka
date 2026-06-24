@@ -67,7 +67,8 @@ handler graph_handler
        checkpoint_stack = [],
        program = [],
        comments = [],
-       canon = [] {
+       canon = [],
+       narrowing = [] {
 
   // checkpoint_stack tracks active speculation depth. Each
   // graph_push_checkpoint pushes the current trail_len; each
@@ -222,6 +223,24 @@ handler graph_handler
       let to = list_index(canon, handle)
       if to == 0 { handle } else { to }
     } else { handle })
+  },
+
+  // The refinement-narrowing weave — co-indexed by handle exactly like `canon`.
+  // graph_narrow_set(handle, pred_handle) records that the path-predicate at
+  // bool-node `pred_handle` is proven to hold AT program-point `handle` (§4⑥).
+  // graph_narrow_at reads it back — 0 = no narrowing proven (the default for
+  // every handle, so an un-narrowed program is byte-identical: lower elides
+  // nothing). One cell per handle (idempotent), no side-ledger, no trail — the
+  // narrowing is a `|>` stage at infer, read by lower's verify-obligation.
+  graph_narrow_set(handle, pred_handle) => {
+    resume()
+      with narrowing = narrowing
+        |> list_extend_to(handle + 1)
+        |> list_set(handle, pred_handle)
+  },
+
+  graph_narrow_at(handle) => {
+    resume(if handle < len(narrowing) { list_index(narrowing, handle) } else { 0 })
   },
 
   graph_bind(handle, ty, reason) => {

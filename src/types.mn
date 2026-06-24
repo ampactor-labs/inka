@@ -309,9 +309,14 @@ type EffRow
 // Sample(44100) ≠ Sample(48000). The distinction lives at the type
 // level only; emit erases the args.
 //
-// EffArg covers scalar literal arguments. Identifier / expression
-// arguments (`Clock(monotonic)`) are a v2 extension — out of scope
-// for the H3.1 substrate landing.
+// EffArg's scalar variants (EAInt/EAFloat/EAString) are the CONSTANT-FOLDED
+// PROJECTION of a parameterized-effect argument's operand node — the literal the
+// AST already holds, folded for value-distinct row equality (Sample(44100) ≠
+// Sample(48000)). A non-literal argument (`Clock(monotonic)`, `Sample(rate)`) is
+// EANode(handle) — an operand Node resolved LIVE via graph_node_body, the
+// PExpr-dissolution precedent (predicate operands are handles too, PCompare). The
+// EffArg ADT is thus the projection channel, never a parallel re-derivation of the
+// literal; row equality unifies node-bodies, not flattened literals.
 
 type EffName
   = ENamed(String)
@@ -328,6 +333,11 @@ type EffArg
   | EAType(Ty)                     // type payload — the effect's op payload type
                                    // (Iterate(a)). Flows performer→handler at the
                                    // install; unified, not value-compared. Emit erases.
+  | EANode(Int)                    // a non-literal arg (`Clock(monotonic)`,
+                                   // `Sample(rate)`) — an operand Node handle resolved
+                                   // LIVE via graph_node_body (the PExpr-dissolution
+                                   // precedent). Row equality compares the resolved
+                                   // node bodies, not a flattened literal; emit erases.
 
 // The Boolean connective joining a surface effect term to the row
 // accumulated to its left — the topology the surface `+ - &` draws
@@ -476,6 +486,11 @@ type Reason
                                          // defaulted call slot walks here ("`ratio`
                                          // defaulted to its declaration; annotate to
                                          // pin"). SYNTAX.md §«Default parameter values».
+  | VerifyWitness(String)                // the SAT model the SMT handler produced
+                                         // for a discharged obligation — proof-
+                                         // evidence the Why-walker reaches (the
+                                         // counterexample/model, surpassing Dafny/F*'s
+                                         // separate dump: the witness IS a Reason edge).
 
 
 // Caret — the user's text-attention position. ONE input among many to
@@ -1012,6 +1027,7 @@ effect GraphRead {
   graph_node_body(Int) -> NodeBody    // resolve a node's body by its handle from the parallel program weave — every AST node is registered there at construction (NHole if absent)
   graph_comment_at(Int) -> String     // resolve a node's parse-attached comment prose from the parallel comment weave (empty string if absent); the Why engine / formatter / cursor project it
   graph_canon_at(Int) -> Int          // the e-graph canonical pointer at a handle — the equivalence weave's `find` step (returns the handle itself if it is its own e-class root). One co-indexed weave, exactly like `nodes`' TVar union-find; egraph_extract chases it live.
+  graph_narrow_at(Int) -> Int         // the refinement-narrowing pointer at a handle — the path-predicate's bool-node handle proven to hold AT this program point (0 = no narrowing). One co-indexed weave like `canon`; lower's verify-obligation read chases it live to elide a check the path already proves (§4⑥). Never re-derived per consumer.
 }
 
 effect GraphWrite {
@@ -1020,6 +1036,7 @@ effect GraphWrite {
   graph_register_node(Int, NodeBody) -> ()    // edge-link a node's body into the one graph at its handle (the parallel program weave); resolves via graph_node_body
   graph_attach_comment(Int, String) -> ()      // attach parse-collected comment prose to a node's handle (the parallel comment weave); resolves via graph_comment_at — a comment is graph content
   graph_canon_set(Int, Int) -> ()              // draw the e-graph equivalence edge `from ≡ to` — point `from`'s canonical pointer at the cheaper `to`. The union-find `union` over the equivalence weave; saturation reads it back via graph_canon_at (find). Idempotent: re-pointing an already-rooted `from` overwrites in place (one cell), never grows a ledger.
+  graph_narrow_set(Int, Int) -> ()             // draw the refinement-narrowing edge — point program-point `handle`'s narrowing pointer at the path-predicate's bool-node `pred_handle` proven to hold there (§4⑥). One co-indexed weave like `canon`; idempotent (one cell per handle), read back via graph_narrow_at by lower's check-elision.
   graph_bind(Int, Ty, Reason) -> ()
   graph_bind_row(Int, EffRow, Reason) -> ()
   graph_fork(String) -> ()
@@ -1108,6 +1125,9 @@ type DiagKind
   | EPurityViolated(EffRow, Span)                // the offending row
   // ─── verify / own / graph / driver ───────────────────────────────
   | ERefinementRejected(Predicate, Span)
+  | EVerifyUnencodable(Span)                     // a predicate operand the SMT renderer
+                                                 // cannot encode — accrues as undischarged
+                                                 // (never a fabricated `true` at the proof gate)
   | VPending(Int, Span)                          // obligation count
   | EOwnershipViolation(String, Span)            // the violated-name detail
   | ERegionEscape(String, Span)
@@ -1166,6 +1186,7 @@ fn diag_span(d) with Pure = match d {
   EEffectMismatch(_, _, s) => s,
   EPurityViolated(_, s) => s,
   ERefinementRejected(_, s) => s,
+  EVerifyUnencodable(s) => s,
   VPending(_, s) => s,
   EOwnershipViolation(_, s) => s,
   ERegionEscape(_, s) => s,
@@ -1213,6 +1234,7 @@ fn diag_source(d) with Pure = match d {
   EEffectMismatch(_, _, _) => "effects",
   EPurityViolated(_, _) => "effects",
   ERefinementRejected(_, _) => "verify",
+  EVerifyUnencodable(_) => "verify",
   VPending(_, _) => "verify",
   EOwnershipViolation(_, _) => "ownership",
   ERegionEscape(_, _) => "region",
@@ -1260,6 +1282,7 @@ fn diag_code(d) with Pure = match d {
   EEffectMismatch(_, _, _) => "E_EffectMismatch",
   EPurityViolated(_, _) => "E_PurityViolated",
   ERefinementRejected(_, _) => "E_RefinementRejected",
+  EVerifyUnencodable(_) => "E_VerifyUnencodable",
   VPending(_, _) => "V_Pending",
   EOwnershipViolation(_, _) => "E_OwnershipViolation",
   ERegionEscape(_, _) => "E_RegionEscape",
@@ -1285,6 +1308,7 @@ fn diag_severity(d) with Pure = match d {
   PUnexpectedToken(_, _) => SWarning,
   TOverDeclared(_, _, _, _) => SWarning,
   VPending(_, _) => SVerificationPending,
+  EVerifyUnencodable(_) => SVerificationPending,
   _ => SError
 }
 
@@ -1306,6 +1330,7 @@ fn diag_applicability(d) with Pure = match d {
   TOverDeclared(_, _, _, _) => MachineApplicable,
   EPatternInexhaustive(_, _, _) => HasPlaceholders,
   ERefinementRejected(_, _) => Unspecified,
+  EVerifyUnencodable(_) => Unspecified,
   ETypeMismatch(_, _, _) => Unspecified,
   ETypeArityMismatch(_, _, _) => Unspecified,
   EFnArityMismatch(_, _, _) => Unspecified,
@@ -1364,6 +1389,7 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
   EEffectMismatch(declared, inferred, _) => "effect row mismatch: {show_effrow(declared)} vs {show_effrow(inferred)}",
   EPurityViolated(row, _) => "expected Pure but found effects: {show_effrow(row)}",
   ERefinementRejected(pred, _) => "refinement predicate proven false at compile time: {show_predicate(pred)}",
+  EVerifyUnencodable(_) => "refinement predicate operand cannot be encoded for the solver — obligation accrued as pending",   // drift-audit: ignore — diagnostic message string
   VPending(count, _) => "{int_to_str(count)} verification obligations pending",
   EOwnershipViolation(detail, _) => detail,
   ERegionEscape(detail, _) => detail,
@@ -1785,9 +1811,10 @@ fn show_eff_name(ref name) with !Mutate = match name {
 
 fn show_eff_arg(ref arg) with !Mutate = match arg {
   EAInt(n)    => int_to_str(n),
-  EAFloat(_)  => "<float>",
+  EAFloat(f)  => float_to_str(f),
   EAString(s) => "\"{s}\"",
-  EAType(_)   => "<type>"
+  EAType(_)   => "<type>",
+  EANode(h)   => "<operand #{int_to_str(h)}>"
 }
 
 fn show_predicate(ref pred) with GraphRead = {
@@ -1854,7 +1881,8 @@ fn show_reason(ref reason) with GraphRead + !Mutate = {
     InferredCallReturn(callee, inner) => "call to '{callee}' → {show_reason(inner)}",
     InferredPipeResult(verb, inner)   => "{verb} pipe → {show_reason(inner)}",
     FreshInContext(id, ctx)           => "fresh {show_handle(id)} in '{ctx}'",
-    DefaultReason(pname, span)        => "{pname} defaulted at {show_span(span)}"
+    DefaultReason(pname, span)        => "{pname} defaulted at {show_span(span)}",
+    VerifyWitness(model)              => "proved by SMT witness: {model}"
   }
 }
 

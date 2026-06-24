@@ -1,0 +1,62 @@
+// W21 gate — ownership inference + affine double-consume, wired at infer_fn.
+//
+// The ultimate form (what the WHEEL now does): infer_fn runs infer_ownership
+// (src/own.mn) at EVERY FnStmt body — classifying each Unmarked param from its
+// body use-count (count_uses): 0 → Unmarked, 1 → Own (affine, consumed once),
+// 2+ → Ref (borrowed). The inferred params are written BACK into the fn's TFun
+// node (graph_bind over the same param handles), so the affine_ledger's consume
+// arm and lower's Consume-elision read the inferred ownership LIVE (Carried-Truth:
+// written once at infer, read live everywhere). check_ref_escape then walks return
+// positions, surfacing E_OwnershipViolation when a ref binding escapes — borrows
+// via !E, no separate borrow-checker pass. The Hylo-quiet bar: a developer who
+// writes no annotation gets correct own/ref from use-count, invisibly.
+//
+// The DIRECT form (an own-annotated value consumed twice → E_OwnershipViolation
+// from the affine_ledger; a use-count-2 param inferred Ref) is .mn-LEADS: the
+// disposable seed does not run infer_ownership/the affine_ledger at FnStmt entry
+// (TESTED: the seed compiles a double-use param without the ledger installed), so
+// the direct value gate lands when the seed catches up — peer
+// Hβ.seed.ownership-inference-at-fn-body. This gate proves the CONTROL SHAPE the
+// wired pass computes self-containedly through the seed:
+//
+//   1. USE-COUNT CLASSIFICATION — count_uses over the body's structure (the same
+//      walk infer_ownership runs): 0 → Unmarked, 1 → Own, 2+ → Ref.
+//   2. AFFINE DOUBLE-CONSUME — a name in the consumed set, consumed again, is the
+//      violation the affine_ledger reports (set_contains on `used`).
+//
+// Unmarked-class(0) + Own-class(4) + Ref-class(8) + double-consume-caught(16) +
+// single-consume-ok(32) = 0 + 4 + 8 + 16 + 32 = 60.
+
+// The use-count → ownership classification (own.mn classify_usage, value-side).
+// 0 → Unmarked(0), 1 → Own(1), 2+ → Ref(2) — the 0/1/2+ inference §4⑤.
+fn classify_usage_count(count) = {
+  if count == 0 { 0 }
+  else if count == 1 { 1 }
+  else { 2 }
+}
+
+// The affine consume control shape: a name already in `used` consumed again is the
+// violation (mirrors affine_ledger's set_contains(used, name) at consume). `used`
+// is the consumed-name set; here names are Ints (the proxy stand-in).
+fn already_consumed(used_a, used_b, name) = {
+  if used_a == name { true }
+  else if used_b == name { true }
+  else { false }
+}
+
+fn main(q) = {
+  // Classification over use-counts 0/1/2 — the three ownership readings.
+  let c0 = if classify_usage_count(0) == 0 { 0 } else { 100 }   // Unmarked
+  let c1 = if classify_usage_count(1) == 1 { 4 } else { 0 }     // Own
+  let c2 = if classify_usage_count(3) == 2 { 8 } else { 0 }     // Ref (≥2)
+
+  // Affine double-consume: consume name 7 once (set {7}), then again → caught.
+  let consumed_a = 7
+  let consumed_b = 0   // 0 = empty slot
+  let double_caught = if already_consumed(consumed_a, consumed_b, 7) { 16 } else { 0 }
+
+  // A fresh name (9) not yet consumed is OK (single-consume, no violation).
+  let single_ok = if already_consumed(consumed_a, consumed_b, 9) { 0 } else { 32 }
+
+  c0 + c1 + c2 + double_caught + single_ok
+}

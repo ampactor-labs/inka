@@ -289,3 +289,31 @@ micro:ret-pin=42
 micro:expect-recover=21
 micro:diag-projection=30
 micro:effname-pure=18
+# W21 + W22 + W23 (B13-ownership-refinement): the dormant-but-built type machinery
+# is WIRED into infer_fn (Carried-Truth — read live what is already inferred).
+# W21: infer_ownership runs at every FnStmt body (use-count 0/1/2+ → Unmarked/Own/
+# Ref, written back into the fn's TFun node, read live by lower's Consume-elision +
+# affine_ledger); check_ref_escape walks return positions (E_OwnershipViolation on
+# escape). W22: infer_refinement_narrowing writes the per-program-point narrowing
+# edge (graph_narrow_set, a co-indexed weave like canon) at index sites under a
+# proven path; lower_index_runtime reads graph_narrow_at LIVE → list_index_proven
+# elision; verify-SMT renders the REAL float (not "0.0"), DELETES the `_ => "true"`
+# fabrication (→ E_VerifyUnencodable, never a silent SAT), and verify_debt projects
+# SmtUnknown debt + SmtSat witnesses (no resume([]) drop). W23: a parameterized
+# effect arg is the constant-folded projection of its operand node; a non-literal
+# (`Clock(monotonic)`) is EANode(handle) resolved live (EEffArgNotLiteral deleted);
+# eff_arg_eq's EAFloat arm now compares REAL values (Sample(44.1)==Sample(44.1),
+# the prior `false` fabrication deleted) + eff_arg_lt orders floats by value. The
+# DIRECT value gates are .mn-LEADS (the disposable seed lacks the narrowing weave,
+# the affine_ledger-at-fn-body, the SMT install, and the EANode row-equality path),
+# so each proves its CONTROL SHAPE self-containedly through the seed (the established
+# proxy discipline, mn-struct-eq-sum precedent): mn-ownership-infer — use-count
+# classification + affine double-consume caught (exit 60); mn-refine-narrow —
+# narrow-then-elide dispatch + sound float render + unencodable-not-SAT (exit 60);
+# mn-effarg-node — Int args distinct / Float args equal+distinct / EANode handle
+# identity (exit 60). Peers when the seed catches up: Hβ.seed.ownership-inference-
+# at-fn-body, Hβ.seed.narrowing-weave, Hβ.seed.verify-smt-install,
+# Hβ.seed.effarg-node-row-equality.
+micro:ownership-infer=60
+micro:refine-narrow=60
+micro:effarg-node=60

@@ -622,9 +622,21 @@ fn parse_eff_args_tail(ref tokens, pos, own buf, count) = {
 }
 
 fn parse_one_eff_arg(ref tokens, pos) = match kind_at(tokens, pos) {
+  // Scalar literals are the CONSTANT-FOLDED PROJECTION of the operand node —
+  // the literal the AST already holds, folded for value-distinct row equality.
   TIntLit(n)     => (EAInt(n), pos + 1),
   TFloatLit(f)   => (EAFloat(f), pos + 1),
   TStringPart(s) => (EAString(s), pos + 1),
+  // A non-literal argument (`Clock(monotonic)`, `Sample(rate)`) is an operand
+  // Node — minted into the one graph as a VarRef and carried by HANDLE
+  // (EANode), resolved live via graph_node_body (the PExpr-dissolution
+  // precedent). The old EEffArgNotLiteral surrender is DELETED: a parameterized
+  // effect over a bound name is first-class, not an error.
+  TIdent(name)   => {
+    let sp = span_at(tokens, pos)
+    let N(_, _, h) = nexpr(VarRef(name), sp)
+    (EANode(h), pos + 1)
+  },
   _              => {
     report(EEffArgNotLiteral(span_at(tokens, pos)))
     (EAInt(0), pos + 1)

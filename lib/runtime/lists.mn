@@ -111,6 +111,15 @@ fn list_index(list, i) with Memory = {
   }
 }
 
+/// list_index_proven — the elision variant lower selects when the refinement-
+/// narrowing weave proved the index in-range (graph_narrow_at ≠ 0; §4⑥). The
+/// proof discharges the bounds obligation, so a bounds-checking backend emits the
+/// raw load with NO check; on this trap-on-OOB substrate it is list_index's
+/// behavior with the obligation already proven (the proof IS the dispatch — the
+/// ++/== precedent at the index layer). One home: the proven path delegates, so
+/// there is no duplicated traversal to drift apart.
+fn list_index_proven(list, i) with Memory = list_index(list, i)
+
 // Structural equality — the sequence case of the one == derivation.
 
 // list_eq — length-then-element structural equality over the sequence

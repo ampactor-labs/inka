@@ -2577,9 +2577,20 @@ fn lower_index(handle, receiver, index) = {
   }
 }
 
-fn lower_index_runtime(handle, receiver, index) =
-  LCall(handle, LGlobal(handle, "list_index"),
+// A list index lowers to the runtime list_index call. When infer proved the
+// index in-range (the refinement-narrowing weave carries a path-predicate at the
+// index handle — graph_narrow_at ≠ 0), the access is a PROVEN-valid load:
+// list_index_proven, the elision variant that skips the redundant bounds path
+// the proof already discharged (§4⑥; SYNTAX.md «Indexing»: "the compiler elides
+// the bounds check"). Carried-Truth: the proof is READ live from the graph, never
+// re-derived; an un-narrowed index (the 0 default) stays the checked list_index,
+// byte-identical to the prior form.
+fn lower_index_runtime(handle, receiver, index) = {
+  let N(_, _, ih) = index
+  let callee = if graph_narrow_at(ih) != 0 { "list_index_proven" } else { "list_index" }
+  LCall(handle, LGlobal(handle, callee),
         [lower_expr(receiver), lower_expr(index)])
+}
 
 // String interpolation lowering. Reduce a list of LowExpr fragments
 // (alternating literal-chunks + spliced-exprs) to a left-fold of

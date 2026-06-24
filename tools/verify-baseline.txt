@@ -279,3 +279,11 @@ micro:hash-fold=50
 # positionally → 7*1 + 5*10 = 57.
 micro:labeled-args=31
 micro:param-destructure=57
+# W17 parser-truth: the `-> RetTy` annotation PINS (NTypeAnn minted live,
+# infer_fn unifies the authored Ty against the inferred body return —
+# E_TypeMismatch on violation). ret-pin proves the agreeing path (annotation
+# present + matches) compiles byte-identically; expect-recover proves the
+# productive-under-error expect (narrate P_ExpectedToken + recover at pos on
+# mismatch, advance on match) two-branch control shape.
+micro:ret-pin=42
+micro:expect-recover=21

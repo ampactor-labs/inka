@@ -261,7 +261,7 @@ fn infer_stmt(ref node) = {
 
     NStmt(FnStmt(name, params, ret_ann, effs, body_node)) => {
       inf_set_declared(effs)
-      infer_fn(name, params, body_node, handle, span)
+      infer_fn(name, params, body_node, ret_ann, handle, span)
       inf_set_declared([])
     },
 
@@ -301,7 +301,7 @@ fn infer_stmt(ref node) = {
 /// Classic let-generalization: allocate fresh handles for params,
 /// bind them in env, enter `InferCtx` for row accumulation, infer body,
 /// exit (which binds the row), generalize, re-extend env with scheme.
-fn infer_fn(name, params, body_node, handle, span: ValidSpan) = {
+fn infer_fn(name, params, body_node, ret_ann, handle, span: ValidSpan) = {
   env_scope_enter()
 
   let param_handles = mint_params(params, name)
@@ -333,6 +333,20 @@ fn infer_fn(name, params, body_node, handle, span: ValidSpan) = {
   // Unify body's type with the declared return.
   let N(_, _, body_handle) = body_node
   unify(body_handle, ret_handle, span, FnReturn(name, Inferred("body")))
+
+  // PIN the `-> RetTy` annotation (SYNTAX.md «Return type omission»): absent =
+  // inferred; PRESENT = a CONSTRAINT. The source's return type travels live in
+  // ret_ann as NTypeAnn(ty) — read it back and unify the authored Ty against
+  // the inferred return (which body_handle was just unified into). A body whose
+  // inferred return disagrees surfaces E_TypeMismatch through unify_types, with
+  // a Reason walking back to the annotation (the Why projection). No NTypeAnn ⇒ the
+  // annotation is absent ⇒ inferred, no pin (byte-identical to the old form).
+  let N(ret_body, ret_span, _) = ret_ann
+  match ret_body {
+    NTypeAnn(ann_ty) =>
+      unify_types(TVar(ret_handle), ann_ty, ret_span, Declared(name)),
+    _ => ()
+  }
 
   // H4: every fn return is an escape boundary. The body's return
   // value (and its embedded fields, recursively) must not carry a

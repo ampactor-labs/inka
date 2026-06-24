@@ -1,0 +1,35 @@
+// W17 GATE — the `-> RetTy` return annotation PINS (SYNTAX.md «Return type
+// omission»: absent = inferred; PRESENT = a CONSTRAINT unified against the
+// inferred body return). The wheel now mints NTypeAnn(ty) at parse
+// (parse_type_expr) carrying the REAL parsed Ty — never the old dummy LitUnit
+// that discarded it — and infer_fn reads it back live and unifies the authored
+// Ty against the inferred return (E_TypeMismatch with a Reason on a violation).
+//
+// This gate proves the PASS-THROUGH path end-to-end through the seed: every
+// function below carries a return annotation that AGREES with its inferred body
+// type, so the pin unifies cleanly and the program computes its result. The
+// annotation present-and-agreeing is the common case the medium must compile
+// byte-identically to the un-annotated form (the constraint is satisfied, no
+// diagnostic). The VIOLATION path (a body whose inferred type contradicts the
+// annotation -> E_TypeMismatch) is a compile-time diagnostic, not a runtime
+// exit, so it is exercised by the wheel's own infer over a mismatched source,
+// not assertable as a micro exit; this gate locks the agreeing path which is
+// where a regression (the pin firing a spurious mismatch) would surface.
+//
+//   add(a, b) -> Int  with body a + b : Int   -> pin agrees
+//   pick(c)   -> Int  with body (if c>0 {c*2} else {0}) : Int -> pin agrees
+//   main sums the annotated calls; exit 42.
+
+fn add(a, b) -> Int = a + b
+
+fn pick(c) -> Int =
+  if c > 0 { c * 2 } else { 0 }
+
+fn triple(x) -> Int = x + x + x
+
+fn main(q) = {
+  let s0 = add(10, 5)      // 15
+  let s1 = pick(6)         // 12
+  let s2 = triple(5)       // 15
+  s0 + s1 + s2             // 42
+}

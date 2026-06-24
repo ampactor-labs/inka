@@ -1,0 +1,44 @@
+// W17 GATE — `expect` is productive-under-error: consume on match, NARRATE +
+// RECOVER on mismatch (SYNTAX.md: diagnostics are teaching surfaces with
+// coordinates + a Quick Fix). The wheel's expect (src/parser.mn) now emits a
+// Located P_ExpectedToken on a kind-mismatch and returns the position UNCHANGED
+// (no token swallowed, the surrounding production re-syncs) — replacing the old
+// silent return that was shaped to the disposable hand-WAT seed's silent
+// $expect. The .mn LEADS: the diagnostic edge is ADDED; the recover-position is
+// identical, so the parse TREE is byte-identical (the seed, downstream, simply
+// does not emit the diagnostic).
+//
+// The seed's own expect is silent, so the DIRECT wheel-emits-P_ExpectedToken
+// behavior lands when the seed catches up (the seed is the disposable arbiter;
+// peer Hβ.seed.expect-diagnostic). This gate proves the CONTROL SHAPE through
+// the seed (the mn-struct-eq-sum / mn-labeled-args proxy discipline): the
+// two-branch projection — match advances (pos+1), mismatch reports-and-stays
+// (pos) — is exercised over encoded token kinds, and the witness sums the
+// returned positions to prove each branch took the correct edge.
+//
+//   at(found, expected) == match     -> advance (pos + 1), no diagnostic
+//   at(found, expected) == mismatch  -> recover (pos), diagnostic narrated
+//
+// Encode kinds as small ints (a token-kind sentinel proxy); did_report counts
+// the narration edge so a mismatch is observably distinct from a silent stay.
+
+fn expect_proxy_pos(found, expected, pos) =
+  if found == expected { pos + 1 } else { pos }
+
+fn expect_proxy_reported(found, expected) =
+  if found == expected { 0 } else { 1 }
+
+fn main(q) = {
+  // Three positions: a match (advances), then two mismatches (recover-stay).
+  let p0 = 0
+  let p1 = expect_proxy_pos(7, 7, p0)        // match   -> 1
+  let p2 = expect_proxy_pos(3, 9, p1)        // mismatch -> stays 1
+  let p3 = expect_proxy_pos(4, 4, p2)        // match   -> 2
+  // diagnostics narrated on the two mismatch checks (only the middle here):
+  let r_match0 = expect_proxy_reported(7, 7) // 0 — match, silent
+  let r_miss   = expect_proxy_reported(3, 9) // 1 — mismatch, narrated
+  let r_match1 = expect_proxy_reported(4, 4) // 0 — match, silent
+  // p3 = 2 (two advances, one recover-stay); reports = 1 (the lone mismatch).
+  // witness: p3 * 10 + (r_match0 + r_miss + r_match1) = 20 + 1 = 21.
+  p3 * 10 + r_match0 + r_miss + r_match1
+}

@@ -182,7 +182,7 @@ map(double, [1, 2, 3])   // correct — A=Int, B=Int inferred
 // REJECTED:
 map<Int, Int>(double, [1, 2, 3])
 ```
-Diagnostic: **`E_ExplicitTypeParams`**: "type parameters are inferred at call sites; remove the explicit annotation." The same diagnostic covers angle-bracket parameter lists in ANY declaration position (`type Box<A>`, `fn f<T>`, `effect E<S>`) — the list is retired; the case rule carries the meaning.
+There is **no bespoke turbofish recognizer** — a per-foreign-form scanner does not scale, and the parser has ONE precedence table. `map<Int, Int>(...)` parses as the comparison chain `<` draws (`map < Int`, `Int > (...)`), and the **general** unexpected-token / type-mismatch diagnostic teaches in context (a `TBool` where a callable was expected, with a Located Reason and a Quick Fix to the paren-free `map(double, [1,2,3])`). The retirement of angle-bracket parameter lists in ANY declaration position (`type Box<A>`, `fn f<T>`, `effect E<S>`) is carried by the case rule; the teaching is the one general diagnostic path, never a Rust-specific lookahead.
 
 ### With-clauses for effects
 
@@ -1701,7 +1701,7 @@ type TokenKind
 | `TSlash`        | `/`              | —         | division; module-path separator                |
 | `TPercent`      | `%`              | —         | modulo                                         |
 | `TEq`           | `=`              | —         | binding (let / fn / type)                      |
-| `TLt`           | `<`              | —         | less-than comparison (no generic-param role — angle brackets retired; a call-site `ident<...>(` is recognized only to emit format-liftable `E_ExplicitTypeParams`) |
+| `TLt`           | `<`              | —         | less-than comparison (no generic-param role — angle brackets retired; `f<T>(...)` parses as a comparison chain and the general unexpected-token / type-mismatch diagnostic teaches, never a bespoke turbofish lookahead) |
 | `TGt`           | `>`              | —         | greater-than comparison (no generic-param role; see `TLt`) |
 | `TBang`         | `!`              | —         | logical not; effect negation                   |
 | `TPipe`         | `\|`             | —         | type-variant separator; pattern alternation in match arms (the `\|x\|` lambda fence is rejected — `E_LambdaFence`) |
@@ -1724,7 +1724,7 @@ type TokenKind
 
 - **Match on `Token` must be exhaustive.** No wildcard arms over `TokenKind` without explicit per-variant enumeration. H6's discipline: `_ => …` on a load-bearing ADT is rejected by code review and substrate convention.
 - **Span propagation.** Every parsed AST node is constructed with the joined span of its constituent tokens. Use `span_join(token_span(first), token_span(last))`.
-- **Angle brackets are retired; `<`/`>` are always comparison.** `<` and `>` are TLt/TGt everywhere. Generic type parameters are the lowercase-identifier convention (the case rule IS the declaration — §«Generic type parameters»); there is no angle-bracket parameter list in any declaration position. The parser recognizes a call-site `ident<...>(` pattern ONLY to emit the format-liftable `E_ExplicitTypeParams` (strip the turbofish), turning a stale-fluency keystroke into a teaching surface — never parsing it as a generic-application form.
+- **Angle brackets are retired; `<`/`>` are always comparison.** `<` and `>` are TLt/TGt everywhere. Generic type parameters are the lowercase-identifier convention (the case rule IS the declaration — §«Generic type parameters»); there is no angle-bracket parameter list in any declaration position. The parser does NOT carry a bespoke `ident<...>(` recognizer — a per-foreign-form scanner does not scale, and the parser has ONE precedence table + productive-under-error. A stale-fluency `f<T>(args)` parses as the comparison chain the precedence table draws (`<` is TLt), and the **general** unexpected-token / type-mismatch diagnostic teaches in context (a `TBool` where a callable was expected, with a Located Reason). The teaching surface is the one general diagnostic path, not a Rust-specific lookahead.
 - **Pipe-vs-or disambiguation.** `|` is TPipe (variant separator in `type` body + pattern alternation in match arm body); `||` is TOrOr (logical or). No `|x|` lambda fence — lambdas use `(params) => body`.
 
 ### `if` without `else` — unit-returning conditional
@@ -1786,7 +1786,6 @@ un-normalized source the formatter has not yet touched).
 | `E_RedundantBraces`   | braces wrapping a non-`BlockExpr` (no statements)       | drop the braces; user sees no diagnostic         |
 | `E_BlockNeedsBraces`  | statements (a `BlockExpr`) written without braces       | wrap the statements in `{ }`; user sees no diagnostic |
 | `E_RedundantHandleBlock` | the `handle { body } with h` spelling                | rewrite to `(body) ~> h` — `~>` is the one install verb |
-| `E_ExplicitTypeParams`| turbofish `f<T>(...)` at a call site                    | strip the type params (the case rule infers them) |
 | `E_RedundantPerform`  | `perform` before an op call                             | strip the keyword; ops are bare calls            |
 | `E_StatementSemicolon`| `;` between statements                                  | lift to newline layout; canonical text has no `;` |
 

@@ -124,23 +124,26 @@ fn show_token_kind(k) with Pure = match k {
   TNewline => "<newline>", TEof => "<eof>"
 }
 
-// expect: consume the given kind or report a parse error.
-/// expect: consume `kind` or stay. Lenient — returns pos unchanged on
-/// mismatch, NO diagnostic. This is the seed arbiter's exact $expect
-/// (bootstrap/src/parser_infra.wat): `if at(pos,kind) {pos+1} else
-/// {pos}`. L1 requires mentl2 parse == seed parse byte-identically;
-/// the seed's expect is silent, so the wheel's must be too — the
-/// return behavior was already identical (pos on mismatch); only the
-/// P_ExpectedToken `perform report` side-effect diverged, making
-/// mentl2 noisier than the seed. SYNTAX.md-conformant parse
-/// diagnostics are the named post-L1 peer #142
-/// (Hβ.parser.syntax-md-conformance-cascade) — they mature when the
-/// medium narrates via the gradient, not via parser eprint, after
-/// first-light. Not silent-failure drift: the seed IS the pre-L1
-/// arbiter; the diagnostic is explicitly deferred with a structural
-/// reason (byte-identity), not omitted.
+/// expect: consume `kind`, or emit a Located P_ExpectedToken and recover.
+/// Productive-under-error (SYNTAX.md: diagnostics are teaching surfaces with
+/// coordinates + a Quick Fix) — on a mismatch the parser NARRATES the missing
+/// token (expected vs found, at the found token's span, MachineApplicable
+/// insert) and returns pos UNCHANGED so the surrounding production re-syncs
+/// from where it stood (no token swallowed). The .mn LEADS the seed: a silent
+/// expect was the no-diagnostic surrender shaped to the disposable hand-WAT
+/// arbiter (the named anti-pattern "never shape the .mn to the seed"); the
+/// ultimate form is MORE truth — the Why projection walks the P_ExpectedToken
+/// Reason back to this site. The recover-position is identical to the old
+/// behavior, so the parse TREE is byte-identical; only the diagnostic edge is
+/// added (the seed, downstream, simply does not emit it).
 fn expect(ref tokens, pos, kind) =
-  if at(tokens, pos, kind) { pos + 1 } else { pos }
+  if at(tokens, pos, kind) { pos + 1 }
+  else {
+    report("parser", "P_ExpectedToken", "Warning",
+      "expected `{show_token_kind(kind)}`, found `{show_token_kind(kind_at(tokens, pos))}`",
+      span_at(tokens, pos), "MachineApplicable")
+    pos
+  }
 
 // Payload extractors — return defaults if the kind doesn't match.
 // Most call sites should pattern-match directly via `match
@@ -1153,45 +1156,15 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
         p2)
     } else { (e, pos) }
   },
-  // Turbofish at call site `f<T>(args)` — angle-bracket generics are
-  // retired everywhere (the case rule IS the declaration; types apply
-  // with parens); this detector keeps the teaching surface alive.
-  // Detection: peek for balanced `<...>` followed by `(`.
-  // If turbofish: emit E_ExplicitTypeParams, strip type args, continue
-  // as plain call. If not: return (e, pos) so the infix parser sees
-  // `<` as comparison.
-  TLt => match turbofish_lookahead(tokens, pos + 1, 1) {
-    Some(p_after_gt) => {
-      if at(tokens, p_after_gt, TLParen) {
-        report("parser", "E_ExplicitTypeParams", "Warning",
-          "type parameters are inferred at call sites; remove the explicit annotation",
-          span_at(tokens, pos), "MachineApplicable")
-        postfix_loop(tokens, e, p_after_gt)
-      } else {
-        (e, pos)
-      }
-    },
-    None => (e, pos)
-  },
+  // No postfix suffix here. `<` is ALWAYS comparison (TLt) — angle-bracket
+  // generics are retired everywhere (the case rule IS the declaration; types
+  // apply with parens). The parser has ONE precedence table + productive-
+  // under-error, so a stale `f<T>(args)` keystroke parses as the comparison
+  // chain the precedence table draws, and the general unexpected-token /
+  // type-mismatch diagnostic teaches in context — NOT a Rust-specific
+  // balanced-`<...>` lookahead. A bespoke recognizer per foreign syntax does
+  // not scale (the owner's point); the general diagnostic path is the one home.
   _ => (e, pos)
-}
-
-// Scan from `pos` (just after an opening TLt — caller passes depth=1)
-// across a balanced type-arg sequence. Returns Some(pos-after-matching-TGt)
-// when balance reaches 0 without hitting a structural barrier; else None.
-// Accepts: TIdent, TComma, TLt (depth+1), TGt (depth-1), nested whitespace.
-// Rejects (returns None): TLParen, TLBrace, TLBracket, TNewline, TEof,
-// keywords — these structural tokens never appear inside a type arg list.
-fn turbofish_lookahead(ref tokens, pos, depth) = {
-  let p = skip_ws(tokens, pos)
-  match kind_at(tokens, p) {
-    TGt => if depth == 1 { Some(p + 1) }
-           else { turbofish_lookahead(tokens, p + 1, depth - 1) },
-    TLt    => turbofish_lookahead(tokens, p + 1, depth + 1),
-    TIdent(_) => turbofish_lookahead(tokens, p + 1, depth),
-    TComma => turbofish_lookahead(tokens, p + 1, depth),
-    _      => None
-  }
 }
 
 /// Parse the body of a nominal record literal — same shape as
@@ -2415,8 +2388,12 @@ fn sort_record_type_fields_loop(fields, i, n, own acc) = {
 fn parse_type_expr(ref tokens, pos) = {
   let (ty, p) = parse_type_ty(tokens, pos)
   let span = span_at(tokens, pos)
-  // Return as a dummy node holding the annotation type.
-  (nexpr(LitUnit, span), p)
+  // Mint a node carrying the REAL annotation Ty (NTypeAnn) — the source wrote
+  // a return type, so the graph holds that type live (Carried-Truth). infer's
+  // FnStmt arm reads it back and unifies the inferred body return against it
+  // (present = a CONSTRAINT, E_TypeMismatch on violation; SYNTAX.md «Return
+  // type omission»). Never the old dummy LitUnit that discarded the parsed Ty.
+  (mint_node(NTypeAnn(ty), span), p)
 }
 
 // Predicates — minimal (expressions after `where`)

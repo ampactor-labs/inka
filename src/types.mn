@@ -697,6 +697,15 @@ type NodeBody
   // decls lists every top-level Handle so F.1's doc_handler and render_index can
   // walk the module without re-parsing source.
   | NModule({path: String, decls: List, span: Span})
+  // An authored type annotation carried live in the graph — the `-> RetTy`
+  // return annotation (SYNTAX.md «Return type omission»: absent = inferred,
+  // present = a CONSTRAINT). parse_type_expr mints this carrying the real Ty
+  // it parsed; infer reads the Ty LIVE and unifies the inferred body return
+  // against it (E_TypeMismatch on violation). The Carried-Truth form: the
+  // source wrote a type, so the node holds that type — never fabricated away
+  // into a dummy LitUnit. Appended last so existing NodeBody tags (the seed's
+  // 110-114 view) stay byte-identical.
+  | NTypeAnn(Ty)
 
 // ─── Expr (spec 03) ────────────────────────────────────────────────
 

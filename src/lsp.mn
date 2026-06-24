@@ -155,7 +155,7 @@ fn classify_method(method) with Memory = {
 /// exhaustive over LspMethodKind. Notification-shaped methods that
 /// arrive as requests get LspNullResp (graceful protocol tolerance).
 
-fn dispatch_request(kind, params) with Memory + Alloc + WASI + Filesystem + OracleQuery + Mutate = {
+fn dispatch_request(kind, params) with Memory + Alloc + WASI + Filesystem + Interact + GraphRead + !Mutate = {
   match kind {
     LspInitialize           => handle_initialize(params),
     LspShutdown             => LspNullResp,
@@ -291,68 +291,134 @@ fn handle_hover(params) with Memory + Alloc + Interact = {
   }
 }
 
-/// handle_completion — propose at the cursor position; project
-/// VoiceLine slots to CompletionItems. Empty list when Silence.
-fn handle_completion(params) with Memory + Alloc + Interact = {
+/// handle_completion — propose at the cursor position; project the
+/// returned VoiceLine's slots to CompletionItems. The cursor's Propose
+/// tentacle IS the completion source (PLAN §2 proposing-cursor): one
+/// propose, the SIdent slots become items. Silence → empty list.
+fn handle_completion(params) with Memory + Alloc + Interact + GraphRead + !Mutate = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
   ensure_doc_open(uri)
   focus(TargetSpan(span))
-  // Voice projection of cursor's Propose tentacle.
-  // Named peer Hβ.lsp.voice-propose-at-target: a 1-arg `voice_propose`
-  // op on a Voice effect projects Synth's 3-arg propose through the
-  // span (ty inferred from span_handle, row from ambient, context from
-  // LSP request shape). Until that effect-decl lands, the cursor's
-  // completion projection stays at Silence.
-  LspCompletionResp([])
+  match propose(TargetSpan(span)) {
+    Silence                   => LspCompletionResp([]),
+    VoiceLine(_, _, slots, _) => LspCompletionResp(completion_items_from_slots(slots))
+  }
 }
 
-/// handle_code_action — propose at the cursor; project VoiceLine to
-/// CodeActions. Same propose path as completion (per MV §2.7.6:
-/// codeAction and completion both surface Propose-tentacle voice).
-fn handle_code_action(params) with Memory + Alloc + Interact = {
+/// handle_code_action — propose at the cursor; project the VoiceLine's
+/// offering slots to CodeActions. Same propose path as completion (MV
+/// §2.7.6: codeAction and completion both surface Propose-tentacle
+/// voice). SLit slots (offering closers) become the quick-fix actions.
+fn handle_code_action(params) with Memory + Alloc + Interact + GraphRead + !Mutate = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
   ensure_doc_open(uri)
   focus(TargetSpan(span))
-  // Same Voice projection as handle_completion. Hβ.lsp.voice-propose-at-target.
-  LspCodeActionResp([])
+  match propose(TargetSpan(span)) {
+    Silence                   => LspCodeActionResp([]),
+    VoiceLine(_, _, slots, _) => LspCodeActionResp(code_actions_from_slots(slots))
+  }
 }
 
-/// handle_diagnostic — run_check on the file; project CheckOutcome
-/// to LSP Diagnostics. Stubbed when run_check arm is itself stubbed
-/// (gated on MV.2.e.Run substrate); returns empty list.
+/// handle_diagnostic — consult(QVerifyDebt) for the live pending
+/// obligations the graph holds; project each (span, predicate, reason)
+/// to an LSP Diagnostic. The verify-debt IS the diagnostic set (the
+/// graph proved it) — read live, never an empty []-fabrication.
 fn handle_diagnostic(params) with Memory + Alloc + Interact = {
   let uri = lsp_extract_uri(params)
   ensure_doc_open(uri)
-  LspDiagnosticResp([])
+  match consult(QVerifyDebt) {
+    AnsDebt(debt, _)          => LspDiagnosticResp(diagnostics_from_debt_lsp(debt, uri)),
+    AnsSilence                => LspDiagnosticResp([]),
+    AnsType(_, _)             => LspDiagnosticResp([]),
+    AnsRow(_, _)              => LspDiagnosticResp([]),
+    AnsReason(_)              => LspDiagnosticResp([]),
+    AnsRefs(_, _)             => LspDiagnosticResp([])
+  }
 }
 
-/// handle_definition — focus + ask(QWhy) → Location. v1 returns the
-/// cursor's own position as the definition site (echo); refined
-/// resolution (handle → defining-span lookup) is MV-LSP.def-resolve
-/// peer sub-handle.
-fn handle_definition(params) with Memory + Alloc + Interact = {
+/// handle_definition — resolve the identifier at the cursor, then read
+/// its binding span LIVE from the env entry's Located Reason (the graph
+/// proved where the name lives). No echo of the cursor's own position;
+/// the defining span IS the goto target. None when unresolved.
+fn handle_definition(params) with Memory + Alloc + Interact + GraphRead + !Mutate = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
   ensure_doc_open(uri)
   focus(TargetSpan(span))
-  LspDefinitionResp(Some(Location(uri, line_of(pos), char_of(pos), line_of(pos), char_of(pos))))
+  match name_at_span(span) {
+    None       => LspDefinitionResp(None),
+    Some(name) => match defining_span_of(name) {
+      None     => LspDefinitionResp(None),
+      Some(def_span) => LspDefinitionResp(Some(span_to_location(uri, def_span)))
+    }
+  }
 }
 
-/// handle_references — focus + ask(QRefsOf(name)) → [Location].
-/// Identifier-at-position resolution (span → name) is MV-LSP.refs-resolve
-/// peer; v1 returns empty list when name extraction unwired.
-fn handle_references(params) with Memory + Alloc + Interact = {
+/// handle_references — resolve the identifier at the cursor, then
+/// consult(QRefsOf(name)) for the live use-edge set (every VarRef the
+/// parser wove). Each span projects to a Location. This [Location] IS
+/// the rename edit set — read live, never an empty []-fabrication.
+fn handle_references(params) with Memory + Alloc + Interact + GraphRead + !Mutate = {
   let uri = lsp_extract_uri(params)
   let pos = lsp_extract_position(params)
   let span = position_to_span(pos)
   ensure_doc_open(uri)
   focus(TargetSpan(span))
-  LspReferencesResp([])
+  match name_at_span(span) {
+    None       => LspReferencesResp([]),
+    Some(name) => match consult(QRefsOf(name)) {
+      AnsRefs(spans, _) => LspReferencesResp(spans_to_locations(spans, uri)),
+      AnsSilence        => LspReferencesResp([]),
+      AnsType(_, _)     => LspReferencesResp([]),
+      AnsRow(_, _)      => LspReferencesResp([]),
+      AnsReason(_)      => LspReferencesResp([]),
+      AnsDebt(_, _)     => LspReferencesResp([])
+    }
+  }
+}
+
+// span_to_location — project a Mentl Span to an LSP Location at the doc URI.
+fn span_to_location(uri, span) with Pure = {
+  let Span(sl, sc, el, ec) = span
+  Location(uri, sl, sc, el, ec)
+}
+
+// spans_to_locations — project each reference Span to a Location (buffer-rev
+// accumulate; the projection is order-stable over the use-edge set).
+fn spans_to_locations(spans, uri) with Memory + Alloc = {
+  map_spans_to_locations(spans, uri, 0, len(spans), [])
+}
+
+fn map_spans_to_locations(spans, uri, i, n, acc_rev) with Memory + Alloc = {
+  if i >= n { reverse(acc_rev) }
+  else {
+    let loc = span_to_location(uri, list_index(spans, i))
+    map_spans_to_locations(spans, uri, i + 1, n, [loc] ++ acc_rev)
+  }
+}
+
+// diagnostics_from_debt_lsp — project each pending obligation (span,
+// predicate, reason) to an LSP Diagnostic. severity 1 = Error (a refinement
+// the path could not discharge). The predicate's text is the message; the
+// span is the obligation site (read live from the debt the graph holds).
+fn diagnostics_from_debt_lsp(debt, uri) with Memory + Alloc + GraphRead + !Mutate = {
+  map_debt_to_diagnostics(debt, 0, len(debt), [])
+}
+
+fn map_debt_to_diagnostics(debt, i, n, acc_rev) with Memory + Alloc + GraphRead + !Mutate = {
+  if i >= n { reverse(acc_rev) }
+  else {
+    let (span, predicate, reason) = list_index(debt, i)
+    let Span(sl, sc, el, ec) = span
+    let diag = Diagnostic(sl, sc, el, ec, 1, "E_RefinementRejected",
+                          "{show_predicate(predicate)}: {show_reason(reason)}")
+    map_debt_to_diagnostics(debt, i + 1, n, [diag] ++ acc_rev)
+  }
 }
 
 /// handle_did_open — open_file the URI's path; bind to handles_table.

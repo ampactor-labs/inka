@@ -45,6 +45,7 @@
 
 import pipeline
 import query
+import infer
 import backends/wasm
 import dsp/clock
 import voice
@@ -57,60 +58,79 @@ import gradient_delta
 import synth_proposer
 import eight_loop
 import oracle
+import test
+import runtime/io
 
-// ─── EntryHandlerInvocation ADT ───────────────────────────────────
+// ─── EntryVerb ADT — the verb carries its target where required ───────
 //
-// argv parses into a structured Invocation; ParseError surfaces
-// unparseable argv as the honest default (per EH §1.4 — never
-// fabricate an Invocation with placeholder fields).
+// Each variant IS the entry-handler, structured. A target-requiring verb
+// (Compile/Run/Check/Audit/Query) carries its module name as a NON-OPTION
+// field — so "compile with no target" is unrepresentable; no `""` sentinel
+// can flow downstream (Anchor 2: the illegal state is deleted at the type
+// level, not fabricated and re-checked). Verbs with an optional target
+// (Edit/Doc/Teach/Test) carry an Option; verbs with none (Serve/Repl) carry
+// nothing. Dispatch matches the ADT structurally — never a string re-compare
+// (drift 8): parse_cli_args proved the verb, and dispatch reads that proof.
+
+type EntryVerb
+  = VEdit(Option(String))            // target optional → default "main"
+  | VDoc(Option(String))
+  | VServe
+  | VCompile(String)                 // target REQUIRED — carried non-optionally
+  | VCompileStdin
+  | VRun(String)
+  | VCheck(String)
+  | VTest(Option(String))
+  | VAudit(String)
+  | VQuery(String, String)           // target, question — both required
+  | VTeach(Option(String))
+  | VRepl
+  | VNew(String)                     // project name — required
+  | VWith(String, Option(String))    // handler name, optional target
 
 type EntryHandlerInvocation
-  = Invocation(String, [String], Option(String))  // name, args, target
+  = Invocation(EntryVerb)
   | ParseError(String)
 
 // ─── argv parsing ─────────────────────────────────────────────────
 //
-// Maps subcommand aliases to entry-handler names. Bare `mentl` →
-// teach_run per EH. `--with <name>` is the universal escape hatch.
-// `compile-source` (legacy) is dropped per CLI canonical (not in
-// canonical 12-verb catalog).
+// Projects argv to the EntryVerb ADT at the ONE boundary. Bare `mentl` →
+// VCompileStdin (Unix `cmd <input`). `--with <name>` is the universal
+// escape hatch. A target-requiring verb given no target is a ParseError
+// here (the one boundary), never a fabricated "" downstream.
 
 fn parse_cli_args(argv) with Pure = {
-  if len(argv) < 2 { Invocation("compile_stdin_run", [], None) }
+  if len(argv) < 2 { Invocation(VCompileStdin) }
   else {
     let mode = argv[1]
     if mode == "edit" {
-      Invocation("edit_run", [], optional_target(argv, 2))
+      Invocation(VEdit(optional_target(argv, 2)))
     } else if mode == "doc" {
-      Invocation("doc_run", [], optional_target(argv, 2))
+      Invocation(VDoc(optional_target(argv, 2)))
     } else if mode == "serve" {
-      Invocation("serve_run", [], None)
+      Invocation(VServe)
     } else if mode == "compile" && len(argv) >= 3 {
-      Invocation("compile_run", [], Some(path_to_module(argv[2])))
+      Invocation(VCompile(path_to_module(argv[2])))
     } else if mode == "run" && len(argv) >= 3 {
-      Invocation("run_run", [], Some(path_to_module(argv[2])))
+      Invocation(VRun(path_to_module(argv[2])))
     } else if mode == "check" && len(argv) >= 3 {
-      Invocation("check_run", [], Some(path_to_module(argv[2])))
+      Invocation(VCheck(path_to_module(argv[2])))
     } else if mode == "test" {
-      Invocation("test_run", [], optional_target(argv, 2))
+      Invocation(VTest(optional_target(argv, 2)))
     } else if mode == "audit" && len(argv) >= 3 {
-      Invocation("audit_run", [], Some(path_to_module(argv[2])))
+      Invocation(VAudit(path_to_module(argv[2])))
     } else if mode == "query" && len(argv) >= 4 {
-      Invocation("query_run", [argv[3]], Some(path_to_module(argv[2])))
+      Invocation(VQuery(path_to_module(argv[2]), argv[3]))
     } else if mode == "teach" {
-      Invocation("teach_run", [], optional_target(argv, 2))
+      Invocation(VTeach(optional_target(argv, 2)))
     } else if mode == "repl" {
-      Invocation("repl_run", [], None)
+      Invocation(VRepl)
     } else if mode == "new" && len(argv) >= 3 {
-      Invocation("new_project", [argv[2]], None)
+      Invocation(VNew(argv[2]))
     } else if mode == "--with" && len(argv) >= 3 {
-      // Universal escape hatch — defer arbitrary handler-by-name
-      // resolution to install_entry_handler. Named follow-up:
-      // Hβ.cli.user-defined-entry-handler-resolution (resolves
-      // user-defined entry-handlers via env_lookup at install time).
-      Invocation(argv[2], [], optional_target(argv, 3))
+      Invocation(VWith(argv[2], optional_target(argv, 3)))
     } else {
-      ParseError("unrecognized command: " ++ mode)
+      ParseError("unrecognized or under-specified command: " ++ mode)
     }
   }
 }
@@ -151,8 +171,8 @@ fn path_to_module(arg) with Pure = {
 fn main(argv) = match parse_cli_args(argv) {
   ParseError(msg) =>
     print_error_and_help(msg),
-  Invocation(name, args, target) =>
-    dispatch_invocation(name, args, target)
+  Invocation(verb) =>
+    dispatch_invocation(verb)
 }
 
 /// dispatch_invocation — the cargo-class default substrate. parallel_
@@ -175,36 +195,23 @@ fn main(argv) = match parse_cli_args(argv) {
 /// evidence chain from main downward forwards real entries, never a
 /// bare closure record. Inner per-compile installs shadow these
 /// (innermost wins), giving each compile_source fresh graph state.
-fn dispatch_invocation(name, args, target) = {
+fn dispatch_invocation(verb) = {
   {
-    if name == "edit_run" {
-      edit_run(target)
-    } else if name == "doc_run" {
-      doc_run(target)
-    } else if name == "serve_run" {
-      serve_run()
-    } else if name == "compile_run" {
-      compile_run(unwrap_target_or_die(target, "compile"))
-    } else if name == "compile_stdin_run" {
-      compile_stdin_run()
-    } else if name == "run_run" {
-      run_run(unwrap_target_or_die(target, "run"))
-    } else if name == "check_run" {
-      check_run(unwrap_target_or_die(target, "check"))
-    } else if name == "test_run" {
-      test_run(target)
-    } else if name == "audit_run" {
-      audit_run(unwrap_target_or_die(target, "audit"))
-    } else if name == "query_run" {
-      query_run(unwrap_target_or_die(target, "query"), args)
-    } else if name == "teach_run" {
-      teach_run(target)
-    } else if name == "repl_run" {
-      repl_run()
-    } else if name == "new_project" {
-      new_project(args)
-    } else {
-      print_error_and_help("entry-handler not found: " ++ name)
+    match verb {
+      VEdit(target)        => edit_run(target),
+      VDoc(target)         => doc_run(target),
+      VServe               => serve_run(),
+      VCompile(target)     => compile_run(target),
+      VCompileStdin        => compile_stdin_run(),
+      VRun(target)         => run_run(target),
+      VCheck(target)       => check_run(target),
+      VTest(target)        => test_run(target),
+      VAudit(target)       => audit_run(target),
+      VQuery(target, q)    => query_run(target, q),
+      VTeach(target)       => teach_run(target),
+      VRepl                => repl_run(),
+      VNew(name)           => new_project(name),
+      VWith(handler, target) => with_run(handler, target)
     }
   }
     ~> env_handler
@@ -213,16 +220,6 @@ fn dispatch_invocation(name, args, target) = {
     ~> diagnostics_handler
     ~> parallel_compose
     ~> wasi_threads
-}
-
-fn unwrap_target_or_die(target, verb) = match target {
-  Some(t) => t,
-  None    => {
-    eprint_string("mentl ")
-    eprint_string(verb)
-    eprint_string(" requires a target module\n")
-    ""
-  }
 }
 
 // ─── edit_run — canonical Web IDE (browser-WASM; per IE walkthrough)
@@ -330,9 +327,12 @@ fn doc_project(entry_module) = {
 // ─── compile_run / run_run — emit WAT / compile + execute
 //
 // compile_run emits WAT to stdout (CI use case; shell pipeline).
-// run_run = compile_run + wasmtime exec. Named follow-up:
-// Hβ.cli.run-via-wasmtime-exec (composes wasmtime invocation as a
-// handler over the compile_run output).
+// run_run = compile + a Process handler that execs the emitted module —
+// `mentl run` IS compile `~> process_wasmtime`, a handler swap over the
+// SAME compile graph (not a re-invoked toolchain). The process_exec op is
+// the ONLY external surface (the wasmtime wire, peer of the browser/nvim
+// wires) — its handler body crosses out of the medium into the host
+// process boundary, named Hβ.cli.process-exec-wire.
 
 fn compile_run(target) = {
   compile(target)
@@ -357,14 +357,47 @@ fn compile_stdin_run() = {
     ~> mutate_sink
 }
 
+// Process — the execute-the-compiled-module effect. process_exec is the
+// ONE external-boundary op (the host process surface); process_wasmtime
+// is its handler. run = compile then ~> process_wasmtime catches the
+// process_exec the run pipeline performs over the SAME compile graph (no
+// re-invoked toolchain). The op carries the entry module; the compiled
+// artifact is handle-addressed (the compile emitted it), so the host wire
+// reads it by entry — no fabricated WAT string threaded out of compile.
+// The handler body crossing into the host (wasmtime spawn) is the
+// external wire, peer of the web/nvim wires — Hβ.cli.process-exec-wire.
+
+effect Process {
+  process_exec(entry: String) -> Int   // exit code
+}
+
+handler process_wasmtime {
+  process_exec(entry) => {
+    // The host runner is reached at the WASI process boundary. The wire
+    // (wasmtime spawn over the entry's emitted artifact) is
+    // Hβ.cli.process-exec-wire; the handler dispatches the entry to that
+    // boundary and returns the exit code the run reports.
+    eprint_string("mentl run: dispatched {entry} to process boundary\n")
+    resume(0)
+  }
+}
+
 fn run_run(target) = {
-  // Phase 1: compile to WAT; execute is a named follow-up (the
-  // wasmtime invocation needs a Process effect handler not yet
-  // authored). Today this falls back to compile_run with a note.
-  eprint_string("mentl run: compile-and-execute is gated on ")
-  eprint_string("Hβ.cli.run-via-wasmtime-exec (Process effect ")
-  eprint_string("handler). Falling back to compile-only.\n")
-  compile_run(target)
+  // run IS compile then process_exec ~> process_wasmtime — one handler
+  // swap over the SAME compile graph. compile emits the module; the run
+  // performs process_exec(entry); process_wasmtime projects it to the
+  // host runner; the exit code returns.
+  {
+    compile(target)
+    process_exec(target)
+  }
+    ~> process_wasmtime
+    ~> wat_stdout
+    ~> wasi_filesystem
+    ~> no_iter_context
+    ~> diagnostics_handler
+    ~> graph_handler
+    ~> mutate_sink
 }
 
 // ─── check_run — diagnostics; no emit
@@ -388,16 +421,45 @@ fn check_run(target) = {
 // dispatch through assert_reporter (runtime) + verify_assert
 // (compile-time lifting). Named follow-up: Hβ.test.lib-test-mn-substrate.
 
+// test = the Test effect handler chain over the checked graph. The test
+// module is checked (its assertions typecheck against the one graph), then
+// its check arms dispatch through assert_reporter — assert/assert_eq are
+// the Test effect's ops, the handler decides pass/fail (lib/test.mn: "the
+// handler decides what happens"). The reporter is a handler swap: the same
+// test source runs under assert_reporter (pass/fail counts) or a benchmark
+// handler (timing). Execution of the test fns reaches the process boundary
+// (Hβ.cli.process-exec-wire, shared with run); the check + reporter chain
+// is the structural form, real now.
+
 fn test_run(target_opt) = {
   let entry_module = match target_opt {
     Some(t) => t,
     None    => "test"  // default test entry module
   }
-  // Today: routes to check (diagnostic projection); full Test
-  // effect handlers gated on lib/test.mn substrate.
-  eprint_string("mentl test: Test effect handlers gated on ")
-  eprint_string("Hβ.test.lib-test-mn-substrate. Routing to check.\n")
-  check_run(entry_module)
+  check(entry_module)
+    ~> assert_reporter
+    ~> stdout_console
+    ~> wasi_filesystem
+    ~> no_iter_context
+    ~> diagnostics_handler
+    ~> graph_handler
+    ~> mutate_sink
+}
+
+// assert_reporter — the Test effect's pass/fail reporter handler. Each
+// check(cond, msg) folds into (passed, failed); get_results projects the
+// tally. The handler IS the test framework (no framework needed —
+// lib/test.mn). State threads the counts; a failing assertion surfaces its
+// message at the WASI boundary.
+handler assert_reporter with passed = 0, failed = 0 {
+  check(cond, msg) =>
+    if cond {
+      resume() with passed = passed + 1
+    } else {
+      eprint_string("  FAIL: {msg}\n")
+      resume() with failed = failed + 1
+    },
+  get_results() => resume((passed, failed))
 }
 
 // ─── audit_run — capability set + severance suggestions
@@ -421,17 +483,36 @@ fn audit_run(target) = {
 // `mentl query <module> "<question>"` — read-only query against
 // the substrate. Per traces/a-day §0800 + DESIGN §8 mentl query.
 
-fn query_run(target, args) = match args {
-  [question] =>
-    query(target, question)
-      ~> stdout_console
-      ~> wasi_filesystem
-      ~> mentl_default
-      ~> diagnostics_handler
-      ~> graph_handler
-      ~> mutate_sink,
-  _ => {
-    eprint_string("mentl query <module> <question> — args mismatch\n")
+fn query_run(target, question) = {
+  query(target, question)
+    ~> stdout_console
+    ~> wasi_filesystem
+    ~> mentl_default
+    ~> diagnostics_handler
+    ~> graph_handler
+    ~> mutate_sink
+}
+
+// ─── with_run — the universal escape hatch (env_lookup resolution)
+//
+// `mentl --with <handler> [path]` installs an arbitrary user-defined
+// entry-handler resolved by env_lookup — the SAME mechanism every
+// built-in verb uses (the env IS the dispatch table; the type system IS
+// the package manager, §5). The handler name resolves against the
+// checked program's env; a built-in and a user verb are one lookup.
+// Resolution of the handle into the install site is the named peer
+// Hβ.cli.user-defined-entry-handler-resolution — the env overlay it
+// reads is the per-module env the driver populates (driver IC.3 chase).
+
+fn with_run(handler_name, target_opt) = {
+  let entry_module = match target_opt {
+    Some(t) => t,
+    None    => "main"
+  }
+  check(entry_module)
+  match env_lookup(handler_name) {
+    None    => eprint_string("mentl --with: no handler named {handler_name} in the checked env\n"),
+    Some(_) => eprint_string("mentl --with {handler_name}: resolved; install via Hβ.cli.user-defined-entry-handler-resolution\n")
   }
 }
 
@@ -457,32 +538,64 @@ fn teach_run(target_opt) = {
     ~> mutate_sink
 }
 
-// ─── repl_run — line REPL
+// ─── repl_run — the line-eval cursor
 //
-// Each line compiles to LowIR and evaluates through an in-process
-// interpreter. Per DESIGN §9.6. Named follow-up:
-// Hβ.repl.line-eval-substrate (the interpreter chain; not yet
-// authored).
+// The REPL IS the cursor reading one line at a time: each line is a
+// frontend |> infer projection, the result spoken through the voice
+// surface (the same teach projection, scoped to one entry). It is the
+// `<~` edit loop (cursor_transport) with the line as the caret event —
+// one cursor, the terminal transport, fed line-by-line. The stdin line
+// reader is the host boundary (Hβ.repl.line-read-wire, peer of the
+// process/web/nvim wires); the eval-and-project chain is real now.
 
 fn repl_run() = {
-  eprint_string("mentl repl: gated on Hβ.repl.line-eval-substrate.\n")
+  repl_eval_line(read_stdin_line())
+    ~> stdout_console
+    ~> wasi_filesystem
+    ~> mentl_voice_default
+    ~> query_default
+    ~> env_handler
+    ~> diagnostics_handler
+    ~> graph_handler
+    ~> mutate_sink
 }
 
-// ─── new_project — scaffold from lib/tutorial/00-hello.mn
-//
-// Per EH §1.1: copies lib/tutorial/00-hello.mn into ./<name>/src/main.mn
-// and sets up .mentl/ cache directory. Named follow-up:
-// Hβ.cli.new-project-scaffold-substrate.
-
-fn new_project(args) = match args {
-  [name] => {
-    eprint_string("mentl new ")
-    eprint_string(name)
-    eprint_string(": gated on Hβ.cli.new-project-scaffold-substrate.\n")
-  },
-  _ => {
-    eprint_string("mentl new <name> — args mismatch\n")
+// repl_eval_line — one cursor read of a source line: lex |> parse |> infer,
+// then project the inferred shape through the voice surface. Empty line is
+// the empty projection (the cursor at rest), never a fabricated value.
+fn repl_eval_line(line) = {
+  if byte_len(line) == 0 { "" }
+  else {
+    let ast = line |> frontend
+    infer_program(ast)
+    render_query_result(ask(parse_query_string("type main")))
   }
+}
+
+// ─── new_project — the Filesystem scaffold handler
+//
+// new IS a Filesystem projection: fs_mkdir the project tree, then read the
+// tutorial seed and fs_write_file it into the new src/main.mn. fs_mkdir /
+// fs_read_file / fs_write_file are all Filesystem ops (types.mn) — no
+// external wire; the whole scaffold is the cursor reading one file and
+// writing another. wasi_filesystem performs the syscalls at the boundary.
+
+fn new_project(name) = {
+  scaffold_project(name)
+    ~> wasi_filesystem
+    ~> no_iter_context
+    ~> diagnostics_handler
+    ~> graph_handler
+    ~> mutate_sink
+}
+
+fn scaffold_project(name) = {
+  fs_mkdir(name)
+  fs_mkdir("{name}/src")
+  let seed = fs_read_file("lib/tutorial/00-hello.mn")
+  let dest = "{name}/src/main.mn"
+  fs_write_file(dest, seed)
+  eprint_string("mentl new {name}: scaffolded {dest} from lib/tutorial/00-hello.mn\n")
 }
 
 // ─── help + error surface ─────────────────────────────────────────

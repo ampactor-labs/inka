@@ -642,24 +642,56 @@ fn render_query_result(result) = match result {
   QRError(msg) => "error: {msg}"
 }
 
+// The query surface is a tiny grammar: <verb> [arg]. The query strings are
+// unavoidable external input (like LSP method strings, lsp.mn classify_method)
+// — projected to the QueryVerb ADT at ONE boundary (classify_query_verb),
+// downstream ADT-only. build_question reads the verb structurally and pairs it
+// with its argument arity; no nested string-literal cascade scattered across
+// arities (drift 8). An ill-formed query is QUnknown(q) — the honest Silence,
+// never a fabricated Question.
+
+type QueryVerb
+  = QVType | QVEffects | QVOwnership | QVWhy | QVRefs | QVProvider
+  | QVUnresolved | QVVerification | QVUnknownVerb
+
+fn classify_query_verb(w) with Pure = {
+  if      w == "type"         { QVType }
+  else if w == "effects"      { QVEffects }
+  else if w == "ownership"    { QVOwnership }
+  else if w == "why"          { QVWhy }
+  else if w == "refs"         { QVRefs }
+  else if w == "provider"     { QVProvider }
+  else if w == "unresolved"   { QVUnresolved }
+  else if w == "verification" { QVVerification }
+  else                        { QVUnknownVerb }
+}
+
 fn parse_query_string(q) = {
   match split(q, " ") {
-    []     => QUnknown(q),
-    [w0]   => match w0 {
-      "unresolved"   => QUnresolved,
-      "verification" => QVerifyDebt,
-      _              => QUnknown(q)
-    },
-    [w0, w1] => match w0 {
-      "why" => QWhy(w1),
-      _     => QUnknown(q)
-    },
-    [w0, w1, w2] => match w0 {
-      "type"      => QTypeOf(w2),
-      "effects"   => QEffects(w2),
-      "ownership" => QOwnership(w2),
-      _           => QUnknown(q)
-    },
-    _ => QUnknown(q)
+    []       => QUnknown(q),
+    [w0]     => build_question(classify_query_verb(w0), "", q),
+    [w0, w1] => build_question(classify_query_verb(w0), w1, q),
+    _        => build_question(classify_query_verb(query_head(split(q, " "))),
+                               query_last(split(q, " ")), q)
   }
 }
+
+// build_question — pair the classified verb with its argument. Nullary verbs
+// (unresolved/verification) ignore the arg; unary verbs carry it. A verb whose
+// arity its arg cannot satisfy projects to QUnknown(raw) — the honest unknown.
+fn build_question(verb, arg, raw) with Pure = match verb {
+  QVUnresolved   => QUnresolved,
+  QVVerification => QVerifyDebt,
+  QVType         => QTypeOf(arg),
+  QVEffects      => QEffects(arg),
+  QVOwnership    => QOwnership(arg),
+  QVWhy          => QWhy(arg),
+  QVRefs         => QRefsOf(arg),
+  QVProvider     => QHandlerProvider(arg),
+  QVUnknownVerb  => QUnknown(raw)
+}
+
+fn query_head(ws) with Pure = if len(ws) == 0 { "" } else { list_head(ws) }
+
+fn query_last(ws) with Pure =
+  if len(ws) == 0 { "" } else { list_index(ws, len(ws) - 1) }

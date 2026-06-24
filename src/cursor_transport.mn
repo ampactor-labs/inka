@@ -189,99 +189,29 @@ fn render_cursor_block(cursor, view) with GraphRead + !Mutate = {
     ++ "\n"
 }
 
-// ─── lsp_transport — JSON-RPC over stdio for IDE integration ────────
+// ─── LSP / web / vim transports — peer frame-adapters ───────────────
 //
-// One handler; one effect; the entire LSP protocol falls out as a
-// projection of CursorView through JSON-RPC framing per
-// `lib/runtime/lsp_frame.mn`. Drift 4 closure: NOT an LSP framework
-// wrapping the kernel; the kernel's CursorView IS the protocol payload.
-
-handler lsp_transport with state = transport_state_init(Caret(0, Inferred("lsp-init"))) {
-
-  surface_handshake() => {
-    lsp_frame_write(lsp_initialize_response())
-    resume()
-  },
-
-  surface_render(cursor, view) => {
-    let CursorView(query, propose, topology, row, trace, verify, teach, why) = view
-    let payload = lsp_textDocument_publishDiagnostics(cursor, view)
-    lsp_frame_write(payload)
-    // Hover / inlay-hint payloads: each tentacle becomes one
-    // LSP message. The eight-aspect read maps directly to the
-    // eight LSP methods that surface them.
-    lsp_frame_write(lsp_textDocument_hover(cursor, query, why))
-    lsp_frame_write(lsp_textDocument_codeAction(cursor, propose))
-    lsp_frame_write(lsp_workspace_diagnostic(verify))
-    resume() with state = state_with_render(state, cursor)
-  },
-
-  surface_action() => {
-    let frame = lsp_frame_read()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-    let action = lsp_frame_to_action(frame)
-    resume(action)
-  }
-}
-
-// ─── web_transport — browser-WASM playground (mentl edit canonical) ──
+// The terminal_transport above IS the live cursor projection. LSP, web,
+// and vim are PEER transports: the SAME Surface effect, the SAME
+// CursorView projection, only the outermost frame-adapter differs (LSP =
+// JSON-RPC, web = DOM, vim = nvim-RPC). The LSP transport's canonical
+// home is `src/lsp.mn` — it routes JSON-RPC frames through the Interact/
+// Query projection (consult/propose over the live graph), the rust-
+// analyzer-surpassing form where one cursor read answers hover /
+// completion / references / diagnostics. No second LSP stack lives here;
+// duplicating its `LspMessage`/bridges was the two-parallel-mechanisms
+// drift (the file failing its own one-cursor-N-transports thesis).
 //
-// Per IE-mentl-edit.md §0: `mentl edit` is the canonical Mentl IDE; the
-// browser-WASM compile is the lowest-friction path between thought
-// and Mentl. Surface events flow through DOM bindings to WASI shims;
-// rendering goes through canvas / DOM layout per the Holographic
-// Lens design (IE §0.c).
-
-handler web_transport with state = transport_state_init(Caret(0, Inferred("web-init"))) {
-
-  surface_handshake() => {
-    web_dom_init("mentl-edit-root")
-    web_register_keystroke_listener()
-    resume()
-  },
-
-  surface_render(cursor, view) => {
-    // The Holographic Lens IS the eight-tentacle voice in browser
-    // form. Each CursorView field projects to one DOM region; ghost-
-    // text for proposals; inline annotation for teach; reason chain
-    // shown on hover.
-    web_dom_render_cursorview(cursor, view)
-    resume() with state = state_with_render(state, cursor)
-  },
-
-  surface_action() => {
-    let event = web_next_input_event()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-    let action = web_event_to_action(event)
-    resume(action)
-  }
-}
-
-// ─── vim_transport — vim-compatible terminal IDE plugin ─────────────
-//
-// vim users get the medium through their existing surface. Same effect,
-// different transport. Ghost-text via Neovim's virtual text API;
-// eight-tentacle voice in the cmdline; ?? at cursor invokes Synth.
-
-handler vim_transport with state = transport_state_init(Caret(0, Inferred("vim-init"))) {
-
-  surface_handshake() => {
-    vim_register_neovim_rpc()
-    resume()
-  },
-
-  surface_render(cursor, view) => {
-    let CursorView(query, propose, topology, row, trace, verify, teach, why) = view
-    vim_set_virtual_text(cursor.handle, format_inline(teach))
-    vim_set_signs(verify)
-    vim_echo_at_cmdline(format_voice_line(view))
-    resume() with state = state_with_render(state, cursor)
-  },
-
-  surface_action() => {
-    let key = vim_next_key()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-    let action = vim_key_to_action(key)
-    resume(action)
-  }
-}
+// The browser-WASM DOM wire and the nvim-RPC wire are the ONLY
+// genuinely-external boundary — they cross out of the medium into the
+// host's event surface. Named positive-form peers (the external-transport
+// boundary, peer of the web IDE), each a thin frame-adapter that consults
+// the SAME Interact projection terminal_transport and src/lsp.mn share:
+//   Hμ.cursor.transport.web-dom-wire   — browser keystroke/DOM event ↔ Surface
+//   Hμ.cursor.transport.nvim-rpc-wire  — Neovim virtual-text/RPC ↔ Surface
+// Their absence is the statement: the projection is one; only the wire is
+// per-host, and a wire is implemented at the host boundary, not fabricated
+// as dead Mentl that never installs.
 
 // ─── The bus-compressor loop — `<~` at the human boundary ───────────
 //
@@ -436,44 +366,11 @@ fn parse_action(line) with Pure =
   else if line == "n" { AccDefer }
   else { AccDefer }
 
-fn format_inline(teach_opt) with Pure = match teach_opt {
-  None => "",
-  Some(suggestion) => {
-    let AnnotationSuggestion(_, ann_text, _, _) = suggestion
-    " ⟜ {ann_text}"
-  }
-}
-
-fn format_voice_line(view) with Pure = {
-  let CursorView(_, _, _, _, _, _, teach, _) = view
-  show_suggestion(teach)
-}
-
-// ─── Effect declarations consumed by transport handlers ─────────────
+// ─── Patch — the apply-suggestion-to-file effect ────────────────────
 //
-// These effects compose on the existing kernel + lib/runtime substrate.
-// Each transport handler is a peer-handle that lands as substrate
-// when its target surface is exercised in production.
-
-effect WebSurface {
-  web_dom_init(String) -> ()
-  web_register_keystroke_listener() -> ()
-  web_dom_render_cursorview(Cursor, CursorView) -> ()
-  web_next_input_event() -> WebEvent
-}
-
-effect VimSurface {
-  vim_register_neovim_rpc() -> ()
-  vim_set_virtual_text(Handle, String) -> ()
-  vim_set_signs(signs: [Predicate]) -> ()
-  vim_echo_at_cmdline(String) -> ()
-  vim_next_key() -> Int
-}
-
-effect LspSurface {
-  lsp_frame_read() -> LspMessage
-  lsp_frame_write(LspMessage) -> ()
-}
+// The Surface effect's terminal_transport projects the cursor; Patch is
+// how an Accept lands a suggestion into the source. One effect, one
+// handler (patch_to_file), composed in edit_run's chain.
 
 effect Patch {
   patch_set_target(String) -> ()
@@ -520,51 +417,3 @@ fn span_of_reason(ref reason) with Pure = match reason {
   Located(span, _) => span,
   _                => span_zero()
 }
-
-// ─── ADTs the transport surface uses ────────────────────────────────
-
-type WebEvent
-  = WebKeystroke(String)
-  | WebMouseMove(Int, Int)
-  | WebSelection(Span)
-  | WebHoverEnd
-
-type LspMessage
-  = LspMessage(String, String)   // method, json-payload
-
-// ─── Bridges (declared; bodies land in transport-specific peers) ────
-
-fn lsp_initialize_response() with Pure = LspMessage("initialize", "\{\}")
-
-fn lsp_textDocument_publishDiagnostics(cursor, view) with Pure = {
-  let CursorView(_, _, _, _, _, verify, _, _) = view
-  LspMessage("textDocument/publishDiagnostics", show_verify_count(verify))
-}
-
-fn lsp_textDocument_hover(cursor, query, why) with Pure =
-  LspMessage("textDocument/hover", show_node_kind(query))
-
-fn lsp_textDocument_codeAction(cursor, propose) with Pure =
-  LspMessage("textDocument/codeAction", show_proposals(propose))
-
-fn lsp_workspace_diagnostic(verify) with Pure =
-  LspMessage("workspace/diagnostic", show_verify_count(verify))
-
-fn lsp_frame_to_action(frame) with Pure = {
-  let LspMessage(method, _) = frame
-  if method == "textDocument/didChange" { AccCaretMove(span_zero()) }
-  else if method == "textDocument/codeAction/resolve" { AccAccept }
-  else { AccDefer }
-}
-
-fn web_event_to_action(event) with Pure = match event {
-  WebKeystroke(_) => AccCaretMove(span_zero()),
-  WebMouseMove(_, _) => AccDefer,
-  WebSelection(span) => AccCaretMove(span),
-  WebHoverEnd => AccDefer
-}
-
-fn vim_key_to_action(key) with Pure =
-  if key == 13 { AccAccept }       // Enter
-  else if key == 27 { AccDefer }   // Esc
-  else { AccDefer }

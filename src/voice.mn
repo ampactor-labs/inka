@@ -270,6 +270,7 @@ type Answer
   | AnsRow(EffRow, Reason)
   | AnsReason(Reason)               // full Reason chain for QWhy
   | AnsRefs(List, Reason)           // [Span] of references
+  | AnsDebt(List, Reason)           // [(Span, Predicate, Reason)] pending obligations
   | AnsSilence
 
 /// Edit is a Patch applied to a FileHandle. Outcome is either
@@ -1058,24 +1059,29 @@ fn compose_propose_situation(target_handle, target_reason, prior_turn) with Pure
 //
 // Answer's contract (no Answer without Reason, voice.mn:264) decides the
 // total mapping: the reason-carrying results project to their Answer
-// counterparts; results lacking provenance (QREffects discards its scheme
-// reason; QRRefs carries none) and the non-hover forensic results
-// (QRUnresolved / QRChain / QRIntent / QROwnership / QRVerifyDebt /
-// QRHandlerProvider) project to AnsSilence — the honest "no provable hover
-// answer here" rather than a fabricated Reason. QRError → AnsSilence: an
-// ill-posed or unprovable question is a valid Silence (voice.mn:265).
-// H6 exhaustive over QueryResult's 11 variants — no wildcard.
+// counterparts. QRRefs and QRVerifyDebt carry a forensic LIST the graph
+// proved — refs-of is the live use-edge set, verify-debt the live obligation
+// set — so they project to AnsRefs/AnsDebt carrying that list, NOT discarded
+// to Silence (the §7 registry-trap shape: computing a fact then dropping it).
+// Their Reason is the projection's own provenance (Inferred), satisfying the
+// no-Answer-without-Reason contract. The remaining forensic results
+// (QREffects / QRUnresolved / QRChain / QRIntent / QROwnership /
+// QRHandlerProvider) have no Answer variant to carry them and no hover-shaped
+// payload, so they project to AnsSilence — the honest "no provable hover here"
+// rather than a fabricated Reason. QRError → AnsSilence: an ill-posed or
+// unprovable question is a valid Silence (voice.mn:265). H6 exhaustive over
+// QueryResult's 11 variants — no wildcard.
 
 fn query_result_to_answer(result) with Pure = match result {
   QRType(ty, reason)      => AnsType(ty, reason),
   QRWhy(reason)           => AnsReason(reason),
+  QRRefs(spans)           => AnsRefs(spans, Inferred("refs-of: {int_to_str(len(spans))} reference(s)")),
+  QRVerifyDebt(debt)      => AnsDebt(debt, Inferred("verify-debt: {int_to_str(len(debt))} obligation(s)")),
   QREffects(_)            => AnsSilence,
-  QRRefs(_)               => AnsSilence,
   QRUnresolved(_)         => AnsSilence,
   QRChain(_)              => AnsSilence,
   QRIntent(_)             => AnsSilence,
   QROwnership(_)          => AnsSilence,
-  QRVerifyDebt(_)         => AnsSilence,
   QRHandlerProvider(_)    => AnsSilence,
   QRError(_)              => AnsSilence
 }

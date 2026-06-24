@@ -373,6 +373,43 @@ fn arms_include_op(arms, op_name) with Pure = {
   }
 }
 
+// ─── Span → name — the inverse use-edge read (goto/rename anchor) ──
+//
+// The tightest node enclosing a span is a VarRef whose name the parser wrote
+// live; name_at_span reads it (one find_tightest + one graph_node_body), the
+// inverse of refs_of_name. None when the span encloses no identifier. This is
+// the resolution goto-definition / find-references start from — read live, no
+// position→symbol side-index.
+
+fn name_at_span(span) with GraphRead + !Mutate = {
+  let Graph(_, _, _, _, span_index) = graph_snapshot()
+  match find_tightest(span_index, span, None, 999999999) {
+    None         => None,
+    Some(handle) => match graph_node_body(handle) {
+      NExpr(VarRef(name)) => Some(name),
+      _                   => None
+    }
+  }
+}
+
+// defining_span_of — the span where NAME is bound, read from its env entry's
+// Reason (the parser/infer wrote Located(span,_) at the binding). The graph
+// already proved where each name lives; goto-definition follows that edge, it
+// does not re-scan. None when the name is unbound or its reason is unlocated.
+
+fn defining_span_of(name) with GraphRead + !Mutate = {
+  match env_lookup(name) {
+    None        => None,
+    Some(entry) => {
+      let (_, reason, _) = entry
+      match reason {
+        Located(sp, _) => Some(sp),
+        _              => None
+      }
+    }
+  }
+}
+
 // ─── Span Index Search (Arc F.2) ───────────────────────────────────
 
 fn span_area(s: ValidSpan) with Pure = {

@@ -96,11 +96,14 @@ handler format_default with !Mutate {
 
   // ─── format_at_handle — render one node ───────────────────────────
   //
-  // The eight aspects of the formatter at one position fan out via <|.
-  // `(node, kind, ctx)` is borrowed (read-only) to eight render-aspect
-  // branches: tokens, indent, line_break, comment, span, doc, reason,
-  // sibling. Outputs tuple together; the assembly_step composes them
-  // into the canonical String.
+  // The render-aspects of the formatter at one position fan out via <|.
+  // `(node, kind, ctx)` is borrowed (read-only) to SEVEN render-aspect
+  // branches: tokens, indent, line_break, comment, span, reason, sibling.
+  // "doc" is NOT a separate aspect — `//`-vs-`///` dissolved to ONE comment
+  // (SYNTAX.md comment-dissolution), so prose is the single `comment` aspect.
+  // This IS the eight-arms-of-one-read (PLAN §2) projected to render: not
+  // every kernel arm produces a distinct render branch. Outputs tuple
+  // together; assemble_render composes them into the canonical String.
 
   format_at_handle(handle) => {
     let node = graph_node_at(handle)
@@ -303,13 +306,103 @@ fn join_lines(lines) with Pure = {
 
 // ─── Render-aspect helpers — one per cursor-projection lens ────────
 
-fn render_tokens_for(node) with Pure = {
-  // Tokens render via the lexer's inverse projection. Today returns a
-  // structural placeholder; full token-emit substrate lands as the
-  // wheel-side companion to the seed's lexer.wat — the formatter's
-  // canonical token stream IS the lexer's input form, normalized.
-  show_node(node)
+// render_tokens_for IS the parser's inverse: a per-NodeBody projection that
+// emits the canonical token text the parser would re-consume to the SAME graph
+// (format∘parse = identity). Each AST variant reads its child nodes live and
+// renders them recursively — the formatter shares the surface SYNTAX.md binds,
+// so the bytes round-trip. No "node@42" placeholder.
+fn render_tokens_for(node) with GraphRead + Memory + Alloc + !Mutate = {
+  let N(body, _, _) = node
+  render_body_tokens(body)
 }
+
+fn render_body_tokens(body) with GraphRead + Memory + Alloc + !Mutate = match body {
+  NExpr(e)   => render_expr_tokens(e),
+  NStmt(s)   => render_stmt_tokens(s),
+  NPat(p)    => render_pat_tokens(p),
+  NHole(_)   => "??",
+  NModule(m) => "// module {m.path}"
+}
+
+fn render_expr_tokens(e) with GraphRead + Memory + Alloc + !Mutate = match e {
+  LitInt(n)        => int_to_str(n),
+  LitFloat(f)      => float_to_str(f),
+  LitString(s)     => "\"{s}\"",
+  LitBool(b)       => if b { "true" } else { "false" },
+  LitUnit          => "()",
+  VarRef(name)     => name,
+  BinOpExpr(op, l, r) =>
+    "{render_tokens_for(l)} {binop_to_str(op)} {render_tokens_for(r)}",
+  UnaryOpExpr(op, x) => "{unary_op_glyph(op)}{render_tokens_for(x)}",
+  CallExpr(callee, args) =>
+    "{render_tokens_for(callee)}({render_node_list(args, ", ")})",
+  LabeledArg(label, v) => "{label} = {render_tokens_for(v)}",
+  FieldExpr(recv, field) => "{render_tokens_for(recv)}.{field}",
+  IndexExpr(recv, idx)   => "{render_tokens_for(recv)}[{render_tokens_for(idx)}]",
+  PipeExpr(verb, l, r) =>
+    "{render_tokens_for(l)} {show_pipe_kind(verb)} {render_tokens_for(r)}",
+  IfExpr(c, t, el) =>
+    "if {render_tokens_for(c)} {{ {render_tokens_for(t)} }} else {{ {render_tokens_for(el)} }}",
+  MakeListExpr(elems)  => "[{render_node_list(elems, ", ")}]",
+  MakeTupleExpr(elems) => "({render_node_list(elems, ", ")})",
+  ExprPlaceholder      => "??",
+  _                    => "<expr>"
+}
+
+fn render_stmt_tokens(s) with GraphRead + Memory + Alloc + !Mutate = match s {
+  FnStmt(name, params, _retty, effs, body) =>
+    "fn {name}({render_param_list(params)}){render_with_clause(effs)} = {render_tokens_for(body)}",
+  ImportStmt(path)   => "import {path}",
+  ExprStmt(e)        => render_tokens_for(e),
+  AliasStmt(name, ty) => "type {name} = {show_type(ty)}",
+  _                  => "<stmt>"
+}
+
+fn render_pat_tokens(p) with GraphRead + Memory + Alloc + !Mutate = match p {
+  PVar(name)     => name,
+  PWild          => "_",
+  PCon(name, ps) => "{name}({render_pat_list(ps, ", ")})",
+  _              => "<pat>"
+}
+
+fn render_node_list(nodes, sep) with GraphRead + Memory + Alloc + !Mutate = {
+  if len(nodes) == 0 { "" }
+  else if len(nodes) == 1 { render_tokens_for(list_head(nodes)) }
+  else {
+    "{render_tokens_for(list_head(nodes))}{sep}{render_node_list(list_tail(nodes), sep)}"
+  }
+}
+
+fn render_pat_list(pats, sep) with GraphRead + Memory + Alloc + !Mutate = {
+  if len(pats) == 0 { "" }
+  else if len(pats) == 1 { render_pat_tokens(list_head(pats)) }
+  else {
+    "{render_pat_tokens(list_head(pats))}{sep}{render_pat_list(list_tail(pats), sep)}"
+  }
+}
+
+// A param renders its name; its authored ownership + intent-boundary type are
+// surface annotations the cursor projects, not always in the canonical text.
+fn render_param_list(params) with Memory + Alloc = {
+  if len(params) == 0 { "" }
+  else if len(params) == 1 {
+    let TParam(name, _, _, _, _) = list_head(params)
+    name
+  } else {
+    let TParam(name, _, _, _, _) = list_head(params)
+    "{name}, {render_param_list(list_tail(params))}"
+  }
+}
+
+// The declared with-clause, rendered via the ONE canonical show_effrow. A Pure
+// row carries no clause (the identity element — SYNTAX.md §175).
+fn render_with_clause(effs) with GraphRead + Memory + Alloc + !Mutate = {
+  if len(effs) == 0 { "" }
+  else { " with {show_effrow(build_row_from_effs(effs))}" }
+}
+
+// effs is the parser's [EffName] list; the canonical row is EfClosed over it.
+fn build_row_from_effs(effs) with Pure = EfClosed(effs)
 
 fn render_indent_for(kind, ctx) with Pure = {
   // Canonical indent depth per node kind. Match-arm bodies +2; let-
@@ -340,14 +433,14 @@ fn render_comment_for(node) with GraphRead + Memory + Alloc + !Mutate = {
 
 fn render_span_marker(node) with Pure = ""
 
-// The reason aspect of the formatter's eight-fanout: the node's
-// handle chases to its GNode; the Reason renders compressed (the
-// leaf-most informative edge). Debug aspect — assemble_render
-// decides placement.
+// The reason aspect of the formatter's eight-fanout: the node's handle chases
+// to its GNode; the Reason renders via the ONE canonical show_reason
+// (types.mn) — never a second compressed walk of the 25-variant Reason ADT.
+// Debug aspect — assemble_render decides placement.
 fn render_reason_chain(node) with GraphRead + !Mutate = {
   let N(_, _, h) = node
   let GNode(_, reason) = graph_chase(h)
-  show_reason_compressed(reason)
+  show_reason(reason)
 }
 
 // Sibling glue is a projection of RenderContext; the default context
@@ -357,79 +450,63 @@ fn render_sibling_separator(ctx) with Pure = match ctx {
   RenderContextDefault => ""
 }
 
-// ─── Row + Reason renderers — the Why surface's text projections ───
-//
-// One renderer per vocabulary record, at the formatter's home.
-// Consumed by LSP hover (show_row / show_reason_compressed) and the
-// reason aspect above.
+// The row + Reason text projections are the ONE canonical renderers in
+// types.mn (show_effrow / show_reason / show_eff_name / show_eff_arg /
+// show_list) — never a second, weaker copy here. The format.mn duplicates
+// (show_row / show_reason_compressed / show_effname / show_effarg /
+// show_joined) were DELETED: two renderers for one graph fact is the
+// Carried-Truth violation at the render layer. LSP hover reads the canonical
+// pair directly; the reason aspect above reads show_reason. "Compressed" is
+// show_reason at a tighter register, not a second walk.
 
-fn show_effarg(arg) with Memory + Alloc = match arg {
-  EAInt(n)    => int_to_str(n),
-  EAFloat(f)  => float_to_str(f),
-  EAString(s) => s,
-  EAType(_)   => "<type>",
-  EANode(h)   => "<operand #{int_to_str(h)}>"
+// render_context_at reads the node's PARENT live from the AST-in-graph fabric:
+// the enclosing node is the weave entry whose body references this handle, so
+// the chain/block/tuple depth is a live read of that edge chain (the parent IS
+// an edge, not a missing index). canonical_indent_depth / sibling_separator
+// project the 2-/4-space layout from this real position.
+fn render_context_at(handle) with GraphRead + !Mutate = {
+  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
+  scan_for_render_parent(handle, 0, next)
 }
 
-fn show_effname(name) with Memory + Alloc = match name {
-  ENamed(s) => s,
-  EParameterized(s, args) =>
-    "{s}({show_joined(map(show_effarg, args), ", ")})",
-  EPure => "Pure"   // drift-audit: ignore — variant→surface-label render, not a name key
-}
-
-fn show_joined(texts, sep) with Memory + Alloc = {
-  if len(texts) == 0 { "" }
+fn scan_for_render_parent(target, i, n) with GraphRead + !Mutate = {
+  if i >= n { RenderContextDefault }
   else {
-    fold(tail(texts), head(texts), (acc, t) =>
-      acc ++ sep ++ t)
+    match render_context_from_parent(target, graph_node_body(i)) {
+      RenderContextDefault => scan_for_render_parent(target, i + 1, n),
+      found                => found
+    }
   }
 }
 
-fn show_row(row) with Memory + Alloc = match row {
-  EfPure => "Pure",   // drift-audit: ignore (renderer output literal — the match is on the ADT)
-  EfClosed(names) => show_joined(map(show_effname, names), " + "),
-  EfOpen(names, _) =>
-    if len(names) == 0 { "?" }
-    else { "{show_joined(map(show_effname, names), " + ")} + ?" },
-  EfNeg(inner) => "!{show_row(inner)}",
-  EfSub(a, b) => "{show_row(a)} - {show_row(b)}",
-  EfInter(a, b) => "{show_row(a)} & {show_row(b)}"
+// Project the render context from a candidate parent body: a PipeExpr parent
+// puts the target in a chain; a BlockExpr in a block; a tuple/list literal in
+// a tuple. Depth is the parent's own enclosing depth + 1 (read by recursion at
+// render time; the first enclosing edge is sufficient for the indent step).
+fn render_context_from_parent(target, body) with Pure = match body {
+  NExpr(PipeExpr(_, l, r)) =>
+    if child_is(target, l) || child_is(target, r) {
+      RenderContextChain(1)
+    } else { RenderContextDefault },
+  NExpr(BlockExpr(_, final)) =>
+    if child_is(target, final) { RenderContextBlock(1) }
+    else { RenderContextDefault },
+  NExpr(MakeTupleExpr(elems)) =>
+    if any_child_is(target, elems) { RenderContextTuple(1) }
+    else { RenderContextDefault },
+  _ => RenderContextDefault
 }
 
-// Compressed = the leaf-most informative edge of the Reason chain;
-// wrapper edges (Located / Unified / MatchBranch) descend.
-fn show_reason_compressed(reason) with Memory + Alloc = match reason {
-  Declared(s)    => "declared: {s}",
-  Inferred(s)    => s,
-  Fresh(h)       => "fresh #{int_to_str(h)}",
-  OpConstraint(name, _, _) => "op '{name}'",
-  VarLookup(name, _)  => "from '{name}'",
-  FnReturn(name, _)   => "return of '{name}'",   // drift-audit: ignore (output literal contains the word)
-  FnParam(name, i, _) => "param {int_to_str(i)} of '{name}'",
-  MatchBranch(a, _)   => show_reason_compressed(a),
-  ListElement(_)      => "list element",
-  IfBranch(_)         => "if branch",
-  LetBinding(name, _) => "let '{name}'",
-  Unified(a, _)       => show_reason_compressed(a),
-  Instantiation(name, _) => "instantiation of '{name}'",
-  UnifyFailed(_, _)   => "unification failure",
-  Placeholder(_)      => "placeholder",
-  BinOpPlaceholder(_) => "operator",
-  MissingVar(name)    => "missing '{name}'",
-  Refinement(_, _)    => "refinement obligation",
-  Located(_, inner)   => show_reason_compressed(inner),
-  InferredCallReturn(name, _) => "return of call to '{name}'",   // drift-audit: ignore (output literal contains the word)
-  InferredPipeResult(verb, _) => "result of {verb}",
-  FreshInContext(h, ctx) => "fresh #{int_to_str(h)} in '{ctx}'",
-  DefaultReason(pname, _) => "{pname} defaulted"
+fn child_is(target, node) with Pure = {
+  let N(_, _, h) = node
+  h == target
 }
 
-fn render_context_at(handle) with GraphRead + !Mutate = {
-  // Render context = parent kind + sibling position + indent depth.
-  // Today returns RenderContextDefault; full parent-walk substrate
-  // lands when the wheel grows full AST-parent indexing.
-  RenderContextDefault
+fn any_child_is(target, nodes) with Pure = {
+  if len(nodes) == 0 { false }
+  else if child_is(target, list_head(nodes)) { true }
+  else { any_child_is(target, list_tail(nodes)) }
 }
 
 fn render_branch_tuple(branches) with Format + !Mutate = {
@@ -489,7 +566,8 @@ type RenderContext
   | RenderContextBlock(Int)        // inside { ... } at depth
   | RenderContextTuple(Int)        // inside (...) at depth
 
-fn show_node(node) with Pure = {
-  let N(_body, _, h) = node
-  "node@" ++ int_to_str(h)
+// The unary operator glyph per SYNTAX.md — `-` negate, `!` logical-not.
+fn unary_op_glyph(op) with Pure = match op {
+  UNeg => "-",
+  UNot => "!"
 }

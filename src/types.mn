@@ -512,8 +512,10 @@ type Caret
 // biases the locus via proximity weighting; the caret does NOT define
 // the locus. `impact` carries the argmax score: 0.0 for "no
 // suggestion" / fully-annotated positions; positive finite for ranked
-// auto-argmax; 1e308 sentinel for developer-pinned `??` positions per
-// Hμ-cursor.md §6.
+// auto-argmax. A developer-pinned `??` position is STRUCTURAL — its
+// Reason IS Located(span, "user pinned via ??"), read by case
+// (reason_is_pinned) and followed as an override edge BEFORE the
+// auto-scored reduce — never a magic-float impact magnitude.
 //
 // See SUBSTRATE.md §VI "Cursor: The Gradient's Global Argmax" and
 // `protocol_cursor_is_argmax.md`.

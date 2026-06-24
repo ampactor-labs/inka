@@ -1080,6 +1080,79 @@ fn query_result_to_answer(result) with Pure = match result {
   QRError(_)              => AnsSilence
 }
 
+// ─── Live forensic-result projections — the run ops read the graph ────
+//
+// The pending verify obligations the graph holds (verify_debt) ARE the
+// diagnostics a compile/check failed on — read live, never fabricated. Each
+// obligation (span, predicate, reason) is the refinement the path could not
+// discharge statically: ERefinementRejected IS its canonical DiagKind. The
+// audit findings are the same obligations — the forensic surface is one read.
+
+fn diagnostics_from_debt(debt) with Pure = {
+  if len(debt) == 0 { [] }
+  else {
+    let (span, predicate, _reason) = list_head(debt)
+    [ERefinementRejected(predicate, span)]
+      ++ diagnostics_from_debt(list_tail(debt))
+  }
+}
+
+// The audit findings are the live pending obligations (AuditReport's [list]
+// is the forensic surface; each obligation is one finding). One read, no
+// AuditReport([]) fabrication.
+fn findings_from_debt(debt) with Pure = debt
+
+// The emitted artifact's path is handle-addressed: the FileHandle IS the
+// addressing scheme (voice.mn §FileHandle), so the artifact path is derived
+// from the handle deterministically — a stable address tied to the real
+// handle, not a fabricated "emitted" literal.
+fn emitted_artifact_path(fh) with Memory + Alloc = {
+  let FileHandle(i) = fh
+  Path(".build/unit-{int_to_str(i)}.wasm")
+}
+
+// ─── render_voiceline / render_slot — the ONE terminal voice projection ─
+//
+// The cursor projecting the graph as the human-facing string. A VoiceLine's
+// [Slot] folds to text via render_slot, each slot dispatching to the ONE
+// canonical renderer (show_type / show_effrow / show_reason / show_span) — the
+// SAME renderers the compiler reads. So LSP hover / inlay / doc and a compile
+// error are byte-identical projections of one graph (PLAN §0: one cursor
+// projection, surpassing every LSP). Silence renders empty (the medium does
+// not fill space). The slots a hover should show are NO LONGER computed then
+// discarded — this fn is the terminal read every voice surface shares.
+
+fn render_voiceline(line) with GraphRead + Memory + Alloc + !Mutate = match line {
+  Silence                       => "",
+  VoiceLine(_, _, slots, modif) =>
+    "{render_slots(slots)}{render_modifier(modif)}"
+}
+
+fn render_slots(slots) with GraphRead + Memory + Alloc + !Mutate = {
+  if len(slots) == 0 { "" }
+  else {
+    "{render_slot(list_head(slots))}{render_slots(list_tail(slots))}"
+  }
+}
+
+fn render_slot(slot) with GraphRead + Memory + Alloc + !Mutate = match slot {
+  SIdent(name)   => "`{name}`",
+  SType(ty)      => show_type(ty),
+  SRow(row)      => show_effrow(row),
+  SSpan(span)    => "({show_span(span)})",
+  SReason(reason) => show_reason(reason),
+  SCap(name)     => name,
+  SAnnot(text)   => "`{text}`",
+  SLit(text)     => text
+}
+
+fn render_modifier(modif) with Pure = match modif {
+  NoMod                => "",
+  TailConsequence(s)   => s,
+  ParenQualifier(s)    => s,
+  EmphasisClose(s)     => s
+}
+
 // ─── MV.2.e.Session — Session-tentacle helpers ────────────────────────
 //
 // Two pure helpers for intent management. Per drift mode 7 prevention:
@@ -1278,22 +1351,34 @@ handler mentl_voice_default
   },
 
   // ─── Run ops (4) — MV.2.e.V (run_check) + MV.2.e.Run (rest) ──────
+  // The outcomes are READ LIVE from the graph the pipeline wrote, never
+  // fabricated. compile_source/check_source/audit run the pipeline for effect
+  // (inference + verify write their results into the live ledger); the arm
+  // then projects the LIVE verify-debt — the pending obligations the graph
+  // proves it could NOT discharge statically — into the outcome. Compilation
+  // failed iff obligations remain; success carries the emitted path. No
+  // CompileOk(Path("emitted")) literal, no empty-list-regardless.
   run_compile(fh)       => {
     let text = file_text(fh)
     compile_source(text)
-    resume(CompileOk(Path("emitted")))
+    let debt = verify_debt()   // drift-audit: ignore — sequenced effectful read (verify-ledger stream-consumer), reused by match + diagnostics (a <| reuse), CLAUDE.md Anchor 6 exclusion
+    match debt {
+      []        => resume(CompileOk(emitted_artifact_path(fh))),
+      [_, ..._] => resume(CompileFailed(diagnostics_from_debt(debt)))
+    }
   },
 
   run_check(fh)         => {
     let text = file_text(fh)
     check_source(text)
-    resume(CheckOutcome([], []))
+    let debt = verify_debt()   // drift-audit: ignore — sequenced effectful read (verify-ledger stream-consumer), reused as diagnostics + obligations (a <| reuse), CLAUDE.md Anchor 6 exclusion
+    resume(CheckOutcome(diagnostics_from_debt(debt), debt))
   },
 
   run_audit(fh)         => {
     let text = file_text(fh)
     audit(text)
-    resume(AuditReport([]))
+    resume(AuditReport(findings_from_debt(verify_debt())))
   },
   // run_query — batch/CLI surface of consult. Same live forensic path:
   // `perform ask` reads query.mn's QueryResult, query_result_to_answer

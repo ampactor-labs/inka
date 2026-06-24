@@ -172,17 +172,34 @@ handler delta_default with !Mutate {
   },
 
   // ── Refinement delta ──────────────────────────────────────────────
-  // Per GR §2 refinement delta site: when call sites always pass
-  // values in a sub-range, suggest a refinement type. Today the wheel
-  // does not yet thread call-site value tracking; this arm reads the
-  // verify ledger's pending predicates and surfaces them as
-  // candidate refinements (delta-7-safe seed).
+  // The inverse-gradient's refinement axis reads the LIVE value-flow the
+  // graph already proves: infer_refinement_narrowing wrote a path-predicate
+  // at every program-point it could narrow (graph_narrow_set), and
+  // graph_narrow_at reads it back — the inference value-lattice projected as
+  // a bool-node handle (0 = nothing proven). When the fn's body return-point
+  // carries a proven narrowing, THAT predicate is a genuinely NEW tightening
+  // (the developer hasn't written it; Verify discharges it statically) — read
+  // it live, never re-present the Verify backlog (verify_pending was the
+  // re-derivation this dissolves). The predicate IS the Expr the narrowing
+  // edge points at — read via graph_node_body, no PExpr re-walk.
   delta_refinement(handle) => {
-    let pending = verify_pending_at(handle)
-    if len(pending) == 0 { resume(None) }
-    else {
-      let predicate = list_head(pending)
-      resume(Some(refinement_suggestion(handle, predicate)))
+    let GNode(kind, _) = graph_chase(handle)
+    match kind {
+      NBound(ty) => match ty {
+        TFun(_, _, _) => {
+          let body_handle = fn_body_handle(handle)
+          let narrow_pred = graph_narrow_at(body_handle)
+          if narrow_pred == 0 { resume(None) }
+          else {
+            // The narrowing pointer is a bool-node handle: PBoolNode(h) is the
+            // predicate that IS that Expr (show_predicate reads it live). Reuse
+            // the one refinement_suggestion projection — no second walk.
+            resume(Some(refinement_suggestion(handle, PBoolNode(narrow_pred))))
+          }
+        },
+        _ => resume(None)
+      },
+      _ => resume(None)
     }
   }
 }
@@ -220,6 +237,20 @@ fn refinement_suggestion(handle, predicate) with Pure = {
 }
 
 // ─── Helpers — walking the graph for delta candidates ──────────────
+
+// The fn's body Node handle, read LIVE from the FnStmt the handle names. The
+// narrowing weave (graph_narrow_at) is keyed by program-point handle, so the
+// refinement proven at the fn's return is read at its body handle. The fn
+// handle itself when no FnStmt body is registered (a non-fn or bare node).
+fn fn_body_handle(handle) with GraphRead + !Mutate = {
+  match graph_node_body(handle) {
+    NStmt(FnStmt(_, _, _, _, body)) => {
+      let N(_, _, bh) = body
+      bh
+    },
+    _ => handle
+  }
+}
 
 fn first_inferred_with_classification(params, fn_handle) with Pure = {
   if len(params) == 0 { None }

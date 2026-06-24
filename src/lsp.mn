@@ -434,12 +434,12 @@ fn hover_from_type(ty, _reason) with Memory + Alloc + GraphRead + !Mutate = {
 }
 
 fn hover_from_row(row, _reason) with Memory + Alloc + GraphRead + !Mutate = {
-  let row_text = show_row(row)
+  let row_text = show_effrow(row)
   HoverContent("Effect row: `{row_text}`")
 }
 
 fn hover_from_reason(reason) with Memory + Alloc + GraphRead + !Mutate = {
-  HoverContent("Reason: {show_reason_compressed(reason)}")
+  HoverContent("Reason: {show_reason(reason)}")
 }
 
 /// completion_items_from_slots — project VoiceLine slots to LSP

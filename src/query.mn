@@ -75,19 +75,23 @@ handler query_default {
         }
       },
 
-    QTypeAt(_span) => {
+    QTypeAt(span) => {
+      // One live cursor read: tightest enclosing span → handle → the node's
+      // bound type, chased deep. No throwaway TName("Unknown") chase — the
+      // graph_chase below IS the live read; an unbound node's type IS its own
+      // TVar (the chase terminated there), so the projection is total over the
+      // NodeKind without a fabricated "Unresolved" name.
       let Graph(_, _, _, _, span_index) = graph_snapshot()
-      match find_tightest(span_index, _span, None, 999999999) {
+      match find_tightest(span_index, span, None, 999999999) {
         None => resume(QRError("no enclosing span found in AST index")),
         Some(handle) => {
-          let ty = chase_type_deep(TName("Unknown", [])) // We should chase the node's type. Wait!
-          // We only have the handle to the node. The node is a GNode(NBound(ty) or NFree).
-          // We can use graph_chase(handle) to get the node, then extract its type.
           let GNode(kind, reason) = graph_chase(handle)
           match kind {
-            NBound(ty) => resume(QRType(chase_type_deep(ty), reason)),
-            NFree(_) => resume(QRType(TName("Unresolved", []), reason)),
-            _ => resume(QRError("AST node is not a type handle"))
+            NBound(ty)    => resume(QRType(chase_type_deep(ty), reason)),
+            NFree(_)      => resume(QRType(TVar(handle), reason)),
+            NRowBound(_)  => resume(QRType(TVar(handle), reason)),
+            NRowFree(_)   => resume(QRType(TVar(handle), reason)),
+            NErrorHole(_) => resume(QRType(TVar(handle), reason))
           }
         }
       }
@@ -146,18 +150,27 @@ handler query_default {
         }
       },
 
-    QRefsOf(_name) =>
-      resume(QRError("refs-of requires AST index (Arc F.2)")),
+    QRefsOf(name) =>
+      // Every reference to NAME is a VarRef node in the one graph (the parser
+      // wrote each use into the program weave). refs-of is the projection of
+      // the inbound use-edges: scan the weave for NExpr(VarRef(name)) and
+      // collect each node's span — read live, never an "AST index required"
+      // surrender. This IS rename: the [Span] is exactly the edit set.
+      resume(QRRefs(refs_of_name(name))),
 
     QVerifyDebt => {
       let debt = verify_debt()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
       resume(QRVerifyDebt(debt))
     },
 
-    QHandlerProvider(_op_name) =>
-      // Post-pass query cannot access transient handler_stack.
-      // Arc F.2 will wire this into an active inference context.
-      resume(QRError("handler_provider requires active inference context")),
+    QHandlerProvider(op_name) =>
+      // The handler stack IS graph content (PLAN §2 — "the handler chain IS
+      // the capability stack"): each handler decl is a HandlerDeclStmt in the
+      // weave whose arms name the ops it provides. Which handler provides OP is
+      // the decl whose arms include an arm for OP — read live, never a
+      // "requires active inference context" surrender. None when no handler
+      // provides the op.
+      resume(QRHandlerProvider(handler_providing_op(op_name))),
 
     QUnknown(q) =>
       resume(QRError("unknown query: {q}"))
@@ -289,6 +302,74 @@ fn walk_chain(handle, depth) with !Mutate = {
       },
       _ => [(handle, node)]
     }
+  }
+}
+
+// ─── Live use-edge projection — refs-of (rename) ───────────────────
+//
+// Every reference to NAME is a VarRef node the parser wrote into the program
+// weave. refs_of_name walks the weave and collects the span of each
+// NExpr(VarRef(name)) — the inbound use-edge set, read live. No AST side-index.
+
+fn refs_of_name(name) with GraphRead + !Mutate = {
+  let Graph(_, _, next, _, _) = graph_snapshot()
+  collect_var_ref_spans(name, 0, next)
+}
+
+fn collect_var_ref_spans(name, i, n) with GraphRead + !Mutate = {
+  if i >= n { [] }
+  else {
+    let rest = collect_var_ref_spans(name, i + 1, n)
+    match graph_node_body(i) {
+      NExpr(VarRef(ref_name)) =>
+        if ref_name == name { [span_of_handle(i)] ++ rest } else { rest },
+      _ => rest
+    }
+  }
+}
+
+// span_of_handle — the node's source span, read live from its Reason chain
+// (the parser/infer wrote Located(span, _) at the node). One graph_chase, the
+// span peeled from the located reason — no parallel span-index re-lookup.
+fn span_of_handle(handle) with GraphRead + !Mutate = {
+  let GNode(_, reason) = graph_chase(handle)
+  span_of_reason(reason)
+}
+
+fn span_of_reason(reason) with Pure = match reason {
+  Located(sp, _) => sp,
+  _              => span_zero()
+}
+
+// ─── Live install-edge projection — which handler provides OP ──────
+//
+// Each handler decl is a HandlerDeclStmt in the weave whose arms name the ops
+// it provides (the handler chain IS the capability stack, PLAN §2). Scan the
+// weave for the decl whose arms include OP; project its handler name.
+
+fn handler_providing_op(op_name) with GraphRead + !Mutate = {
+  let Graph(_, _, next, _, _) = graph_snapshot()
+  scan_handler_for_op(op_name, 0, next)
+}
+
+fn scan_handler_for_op(op_name, i, n) with GraphRead + !Mutate = {
+  if i >= n { None }
+  else {
+    match graph_node_body(i) {
+      NStmt(HandlerDeclStmt(hname, _eff, _cfg, _state, arms)) =>
+        if arms_include_op(arms, op_name) { Some(hname) }
+        else { scan_handler_for_op(op_name, i + 1, n) },
+      _ => scan_handler_for_op(op_name, i + 1, n)
+    }
+  }
+}
+
+fn arms_include_op(arms, op_name) with Pure = {
+  if len(arms) == 0 { false }
+  else {
+    let arm = list_head(arms)
+    if arm.op_name == op_name { true }
+    else { arms_include_op(list_tail(arms), op_name) }
   }
 }
 

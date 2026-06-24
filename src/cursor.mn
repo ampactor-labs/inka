@@ -109,7 +109,7 @@ handler cursor_default with !Mutate {
                       ty_of_kind(h, k),
                       row_of_kind(k),
                       mentl_context_at(h)),
-          (_, k) => pipe_context_of_kind(k),                                 // 3. Five verbs (Topology)
+          (h, _) => pipe_context_of_handle(h),                               // 3. Five verbs (Topology)
           (_, k) => row_of_kind(k),                                          // 4. Boolean row (Unlock)
           (_, k) => ownership_of_kind(k),                                    // 5. Ownership-as-effect (Trace)
           (h, _) => verify_pending_at(h),                                    // 6. Refinement (Verify)
@@ -125,10 +125,16 @@ handler cursor_default with !Mutate {
   cursor_pinned(handle) => {
     let span = span_of_handle(handle)
     let GNode(_, _anchor) = graph_chase(handle)
+    // Pinned-ness is STRUCTURAL — the Reason IS Located(span, "user pinned"),
+    // read by case (reason_is_pinned), never a 1e308 float magnitude that
+    // argmax can't distinguish from "scored absurdly high." The pin is an
+    // override edge the cursor follows FIRST (argmax_or_default checks it
+    // before the auto-scored reduce); impact stays 0.0 because the pin does
+    // not compete on the gradient's score axis — it dominates by structure.
     resume(Cursor(
       handle,
       Located(span, Inferred("user pinned via ??")),
-      pinned_impact_sentinel()
+      0.0
     ))
   }
 }
@@ -138,9 +144,11 @@ handler cursor_default with !Mutate {
 // `cursor_pair_at` (binary special-case) was erased per
 // `feedback_fully_as_early.md`: pair-forms ARE the tell that an N-arity
 // peer is missing. Multi-cursor projection IS
-// `parallel_map((s) => perform cursor_at(s), spans)` directly at the
-// call site; `parallel_compose` handler upstream dispatches each
-// projection to a separate thread. The shape on the page IS the
+// `spans |> parallel_map((s) => cursor_at(s))` directly at the call
+// site — list-first via the pipe (matching threading.mn's
+// `parallel_map(xs, f)`), the op invoked as a BARE call (`perform`
+// dissolved, SYNTAX.md); `parallel_compose` handler upstream dispatches
+// each projection to a separate thread. The shape on the page IS the
 // topology — the cursor reading N positions simultaneously. Drift 6
 // erasure: small-arity special-case removed; N-arity primitive
 // (`lib/runtime/threading.mn:parallel_map`) carries the substrate.
@@ -270,7 +278,7 @@ fn score_one_position(handle, caret) with GraphRead + !Mutate = {
 // configurable via Hμ.cursor.transport's `cursor_weights` handler
 // (peer handle); the defaults below are the project residue.
 
-fn caret_proximity_weight(caret, target_span) with Pure = {
+fn caret_proximity_weight(caret, target_span) with GraphRead + !Mutate = {
   let Caret(_, caret_reason) = caret
   let caret_span = caret_span_from_reason(caret_reason)
   scope_distance_decay(caret_span, target_span)
@@ -281,7 +289,10 @@ fn caret_span_from_reason(reason) with Pure = match reason {
   _              => span_zero()
 }
 
-fn scope_distance_decay(caret_span, target_span) with Pure = {
+// The decay reads the live module graph (same_module / transitive_dep walk
+// the import DAG in the weave), so it carries GraphRead — the spatial weight
+// is a projection of the graph's module structure, never a Pure constant.
+fn scope_distance_decay(caret_span, target_span) with GraphRead + !Mutate = {
   if span_eq(caret_span, target_span) { same_handle_weight() }
   else if same_enclosing_decl(caret_span, target_span) { same_decl_weight() }
   else if same_module(caret_span, target_span) { same_module_weight() }
@@ -313,19 +324,111 @@ fn same_enclosing_decl(caret_span, target_span) with Pure = {
   span_overlaps(caret_span, target_span)
 }
 
-fn same_module(caret_span, target_span) with Pure = {
-  // Spans within the same source file share start/end line ranges
-  // bounded by the file's extent. Today: assume single-file program;
-  // returns true unless cross-module signals fire elsewhere. The
-  // module-aware proxy lands with Hμ.cursor.transport when multi-file
-  // sources are surfaced.
-  true
+fn same_module(caret_span, target_span) with GraphRead + !Mutate = {
+  // Module membership is read LIVE from the AST-in-graph fabric: each span's
+  // enclosing module is the NModule weave entry whose span contains it. Two
+  // spans are same-module iff they resolve to the SAME module path — a
+  // projection of the import DAG the graph already holds, never an "assume
+  // single-file" constant. When neither span sits under a NModule (a bare
+  // single-unit weave with no module wrapper), both resolve to "" and are
+  // same-module — the honest single-unit reading, read not assumed.
+  module_path_of_span(caret_span) == module_path_of_span(target_span)
 }
 
-fn transitive_dep(caret_span, target_span) with Pure = {
-  // Hμ.cursor.cache promotes this to a real IC dependency-hash
-  // walk. Today: false unless same_module ruled out.
-  false
+fn transitive_dep(caret_span, target_span) with GraphRead + !Mutate = {
+  // Cross-module-but-reachable: the target's module is imported (transitively)
+  // by the caret's module. Read the live import edges — the caret module's
+  // ImportStmt decls in the weave — and walk them. The decay then ranks a
+  // cross-module-but-depended-on impact (0.4) above an unrelated cross-module
+  // one (0.2), truthfully, from the import DAG.
+  let caret_mod  = module_path_of_span(caret_span)
+  let target_mod = module_path_of_span(target_span)
+  if caret_mod == target_mod { false }
+  else { module_imports(caret_mod, target_mod, []) }
+}
+
+// The module path enclosing a span: the NModule weave entry whose span
+// contains this span. "" when no module wraps it (single-unit weave).
+fn module_path_of_span(span) with GraphRead + !Mutate = {
+  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
+  scan_for_enclosing_module(span, 0, next)
+}
+
+fn scan_for_enclosing_module(target, i, n) with GraphRead + !Mutate = {
+  if i >= n { "" }
+  else {
+    match graph_node_body(i) {
+      NModule(m) =>
+        if span_contains(m.span, target) { m.path }
+        else { scan_for_enclosing_module(target, i + 1, n) },
+      _ => scan_for_enclosing_module(target, i + 1, n)
+    }
+  }
+}
+
+// Does module `from` import `target` (transitively)? Reads the live
+// ImportStmt edges in `from`'s NModule decls; the `seen` accumulator
+// breaks import cycles. The module graph IS graph content — no side-ledger.
+fn module_imports(from, target, seen) with GraphRead + !Mutate = {
+  if from == "" || contains_path(seen, from) { false }
+  else {
+    let direct = module_import_paths(from)
+    if contains_path(direct, target) { true }
+    else { any_imports(direct, target, [from] ++ seen) }
+  }
+}
+
+fn any_imports(paths, target, seen) with GraphRead + !Mutate = {
+  if len(paths) == 0 { false }
+  else if module_imports(list_head(paths), target, seen) { true }
+  else { any_imports(list_tail(paths), target, seen) }
+}
+
+// The direct import paths declared in module `path`'s NModule decls.
+fn module_import_paths(path) with GraphRead + !Mutate = {
+  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
+  scan_module_imports(path, 0, next)
+}
+
+fn scan_module_imports(path, i, n) with GraphRead + !Mutate = {
+  if i >= n { [] }
+  else {
+    match graph_node_body(i) {
+      NModule(m) =>
+        if m.path == path { import_paths_of_decls(m.decls) }
+        else { scan_module_imports(path, i + 1, n) },
+      _ => scan_module_imports(path, i + 1, n)
+    }
+  }
+}
+
+fn import_paths_of_decls(decls) with Pure = {
+  decls
+    |> filter_map_imports
+}
+
+fn filter_map_imports(decls) with Pure = {
+  if len(decls) == 0 { [] }
+  else {
+    let head_imports = match node_body_of(list_head(decls)) {
+      NStmt(ImportStmt(p)) => [p],
+      _                    => []
+    }
+    head_imports ++ filter_map_imports(list_tail(decls))
+  }
+}
+
+fn node_body_of(node) with Pure = {
+  let N(body, _, _) = node
+  body
+}
+
+fn contains_path(paths, target) with Pure = {
+  if len(paths) == 0 { false }
+  else if list_head(paths) == target { true }
+  else { contains_path(list_tail(paths), target) }
 }
 
 // ─── Argmax with default ────────────────────────────────────────────
@@ -336,8 +439,15 @@ fn transitive_dep(caret_span, target_span) with Pure = {
 // primitive-type-special-case).
 
 fn argmax_or_default(scored, caret) with Pure = {
-  if len(scored) == 0 {
-    let Caret(handle, reason) = caret
+  // The pin is an OVERRIDE edge, followed FIRST: if the caret's Reason marks
+  // a `??`-pinned position, that position dominates the argmax by STRUCTURE
+  // (reason_is_pinned), never by a float magnitude. Only when no pin is set
+  // does the auto-scored reduce run. No 1e308 sentinel — the override is a
+  // case, not a comparison.
+  let Caret(handle, reason) = caret
+  if reason_is_pinned(reason) {
+    Cursor(handle, reason, 0.0)
+  } else if len(scored) == 0 {
     Cursor(handle,
            Located(caret_span_from_reason(reason),
                    Inferred("fully annotated")),
@@ -347,6 +457,14 @@ fn argmax_or_default(scored, caret) with Pure = {
   }
 }
 
+// The pin override is read by case from the Reason chain: a `??`-pinned
+// cursor carries Located(span, Inferred("user pinned via ??")). Structural
+// projection — no magic float.
+fn reason_is_pinned(reason) with Pure = match reason {
+  Located(_, Inferred(ctx)) => contains(ctx, "user pinned"),
+  _                         => false
+}
+
 fn reduce_max_by_score(scored) with Pure = {
   reduce(scored, (best, candidate) => {
     let Cursor(_, _, c_impact) = candidate
@@ -354,17 +472,6 @@ fn reduce_max_by_score(scored) with Pure = {
     if c_impact > b_impact { candidate } else { best }
   })
 }
-
-// ─── Pinned impact sentinel ─────────────────────────────────────────
-//
-// The `??`-pinned cursor uses a sentinel-large impact so
-// argmax_or_default's reduce_max always picks it. Using a literal
-// 1e308 (close to f64 max) keeps the substrate uniform — same Cursor
-// record, same argmax code path — and the sentinel never collides
-// with auto-argmax scores (gates × proximity is bounded by capability
-// count × 1.0, in single digits).
-
-fn pinned_impact_sentinel() with Pure = 1e308
 
 // ─── Local pure helpers — one read each from the graph ──────────────
 //
@@ -440,11 +547,42 @@ fn ownership_of_ty(ty) with Pure = match ty {
   _ => Unmarked
 }
 
-fn pipe_context_of_kind(kind) with Pure = match kind {
-  // Pipe surroundings live in the parent chain via NodeBody (NPipeExpr).
-  // Today the local helper returns NoPipe; the parent-walk landing is
-  // Hμ.cursor.transport's render-time concern (the IDE's pipe-graph
-  // visualization renders directly from the AST PipeExpr nodes).
+// Pipe surroundings are read LIVE from the AST-in-graph fabric: every node
+// edge-links its body into the program weave at its handle (graph.mn
+// graph_register_node), so the enclosing PipeExpr is the weave entry whose
+// left/right child handle IS this node's handle. Scan the weave for that
+// parent; project the position from which side this node sits on:
+//   left child  → StartingPipe (this node feeds the verb)
+//   right child → InsidePipe(verb) (this node is the verb's stage)
+//   no parent pipe → NoPipe (a leaf, or the chain's outermost result)
+// The verb tentacle then actually fires — "you are mid-|> chain" is a live
+// read, never the old constant NoPipe.
+fn pipe_context_of_handle(handle) with GraphRead + !Mutate = {
+  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
+  scan_for_pipe_parent(handle, 0, next)
+}
+
+fn scan_for_pipe_parent(target, i, n) with GraphRead + !Mutate = {
+  if i >= n { NoPipe }
+  else {
+    match pipe_position_in(target, graph_node_body(i)) {
+      NoPipe => scan_for_pipe_parent(target, i + 1, n),
+      found  => found
+    }
+  }
+}
+
+// Is `target` a stage of the PipeExpr at this weave entry? Project the
+// PipeKind verb and which side the target sits on. Non-pipe bodies → NoPipe.
+fn pipe_position_in(target, body) with Pure = match body {
+  NExpr(PipeExpr(verb, left, right)) => {
+    let N(_, _, lh) = left
+    let N(_, _, rh) = right
+    if lh == target { StartingPipe }
+    else if rh == target { InsidePipe(verb) }
+    else { NoPipe }
+  },
   _ => NoPipe
 }
 
@@ -458,21 +596,13 @@ fn mentl_context_at(handle) with EnvRead + GraphRead + !Mutate = {
   // OneShot empty-Context stub is dissolved.
   let Env(scope_bindings) = env_snapshot()
   let GNode(kind, _) = graph_chase(handle)
-  Context(scope_bindings, active_effects_of_row(row_of_kind(kind)))
-}
-
-// The effect names live at this position: an EffRow's name set. Closed
-// and open rows carry their names directly; a negated/pure row admits
-// none at the cursor (the synth gate reads the FORBIDDEN set from the
-// row algebra, not this positive list). One read of the row the graph
-// already bound — no re-derivation.
-fn active_effects_of_row(row) with Pure = match row {
-  EfPure          => [],
-  EfClosed(names) => names,
-  EfOpen(names, _) => names,
-  EfNeg(_)        => [],
-  EfSub(_, _)     => [],
-  EfInter(_, _)   => []
+  // Carry the LIVE row, not a flattened positive name-list. The Boolean
+  // structure (EfNeg / EfSub / EfInter) survives intact to the synth gate,
+  // so the negative capability (`!E`, PLAN §4⑥) reaches Synth and it never
+  // proposes a candidate performing a forbidden effect. row_admits /
+  // row_forbidden_names (effects.mn) project admit/forbid from the row the
+  // graph already bound — no [EffName] re-derivation, no lossy `_ => []`.
+  Context(scope_bindings, row_of_kind(kind))
 }
 
 // verify_pending_at — Verify ledger holds ALL pending refinement

@@ -65,7 +65,15 @@ type Explanation
     )
 
 type Context
-  = Context(List, List)   // scope bindings, active effects
+  = Context(List, EffRow)   // scope bindings, the LIVE active-effect row.
+                            // The full Boolean row reaches synth — not a
+                            // flattened positive [EffName]. So `!E` (the
+                            // negative capability, PLAN §4⑥) is readable at
+                            // the synth gate: row_forbidden_names projects
+                            // the FORBIDDEN set from the one row the graph
+                            // already bound. The cursor carries the row
+                            // handle, never a lossy name-list re-derived
+                            // from it (Carried-Truth).
 
 type Candidate
   = Candidate(Node, Reason)  // AST fragment + why it was proposed

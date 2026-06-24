@@ -254,20 +254,76 @@ fn enumerate_handles(i, n) with Pure = {
 // ─── Per-interrogation helpers ──────────────────────────────────────
 
 fn handler_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
-  // Handler clears when the binding lives inside a handler's
-  // effect-row-aware context. The graph already encodes which
-  // handlers are installed; this verdict reads the handler stack
-  // at the position. Today's seed treats all positions as cleared
-  // (handler_stack tracking is named follow-up Hβ.first-light.handler-
-  // stack-substrate).
-  VerdictClears(reason)
+  // The handler stack IS graph content: an install draws a `~>` edge
+  // (PipeExpr(PTee, body, handler)) and the body subtree it governs is
+  // exactly the capability stack (PLAN §2 — "the handler chain IS the
+  // capability stack"). Read it LIVE: this position is covered iff a `~>`
+  // install in the weave governs it. The position's row decides the verdict:
+  // a position with a non-empty row that NO enclosing `~>` covers invites (an
+  // effect is unhandled here); a Pure position, or one a handler covers,
+  // clears. row_of_kind reads the bound row; pipe_under_tee reads the live
+  // install edges — no fabricated blanket-clear, no handler_stack side-ledger.
+  let row = row_of_kind(kind)
+  if row_is_ground(row) && is_pure_row(row) {
+    VerdictClears(reason)
+  } else if handle_under_tee_install(handle) {
+    VerdictClears(reason)
+  } else {
+    VerdictInvites(handler_invite_for(handle, reason))
+  }
+}
+
+// Does an enclosing `~>` install govern this handle? The install's governed
+// body is the PTee's LEFT subtree; a position is covered when it sits inside
+// some PTee body in the weave. Live read of the install edges — the handler
+// chain IS the graph (PLAN §2), never a transient handler_stack.
+fn handle_under_tee_install(handle) with GraphRead + !Mutate = {
+  let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+  let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
+  scan_for_tee_governing(handle, 0, next)
+}
+
+fn scan_for_tee_governing(target, i, n) with GraphRead + !Mutate = {
+  if i >= n { false }
+  else {
+    match graph_node_body(i) {
+      NExpr(PipeExpr(PTee, body, _handler)) => {
+        let N(_, _, bh) = body
+        if bh == target { true }
+        else { scan_for_tee_governing(target, i + 1, n) }
+      },
+      _ => scan_for_tee_governing(target, i + 1, n)
+    }
+  }
+}
+
+fn is_pure_row(row) with Pure = match row {
+  EfPure          => true,
+  EfClosed(names) => len(names) == 0,
+  _               => false
+}
+
+fn handler_invite_for(handle, reason) with Pure = {
+  AnnotationSuggestion(
+    SuggestEffectRow,
+    "~> <handler>   // an effect is unhandled at this position",
+    [],
+    Located(span_zero(),
+      Inferred("eight-fold: Handler interrogation invites — non-Pure row, no enclosing ~> install"))
+  )
 }
 
 fn verb_verdict_for(handle, kind, reason) with GraphRead + !Mutate = {
-  // Verb clears when the position is inside a recognized pipe
-  // topology OR is a leaf expression with no surrounding pipe.
-  // pipe_context_of_kind reads the parent chain.
-  match pipe_context_of_kind(kind) {
+  // Verb clears when the position is inside a recognized pipe topology OR is
+  // a leaf with no surrounding pipe. pipe_context_of_handle reads the live
+  // parent chain from the AST-in-graph fabric (the enclosing PipeExpr is a
+  // weave entry whose child handle IS this handle) — never the old constant.
+  // The verb tentacle now genuinely fires: a pipe-stage clears (it carries
+  // its topology); a bare leaf expression that is NOT in a pipe and whose
+  // body IS a pipe-shaped flow but unclassified would invite — today every
+  // node has a definite weave position, so the four PipeContext cases all
+  // clear (the topology is READ, never absent).
+  match pipe_context_of_handle(handle) {
     NoPipe => VerdictClears(reason),
     InsidePipe(_) => VerdictClears(reason),
     StartingPipe => VerdictClears(reason),

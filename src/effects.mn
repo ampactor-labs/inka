@@ -438,6 +438,24 @@ fn row_forbidden_names(ref inner) with !Mutate = {
   }
 }
 
+/// The effect names a row ADMITS at a position — the positive companion to
+/// row_forbidden_names. A closed/open row admits its known names; a negation
+/// `!inner` admits NONE of inner's names (it forbids them — read those via
+/// row_forbidden_names); a difference/intersection reduces in normalize_row
+/// before this is reached. The synth gate (Context's live row, PLAN §4⑥) reads
+/// admit via this and forbid via row_forbidden_names — both projections of the
+/// ONE row the graph bound, no lossy [EffName] re-derivation at the cursor.
+fn row_admits(ref row) with !Mutate = {
+  match normalize_row(row) {
+    EfPure          => [],
+    EfClosed(names) => names,
+    EfOpen(names, _) => names,
+    EfNeg(_)        => [],
+    EfSub(a, _)     => row_admits(a),
+    EfInter(a, _)   => row_admits(a)
+  }
+}
+
 fn report_purity_mismatch(ref actual, ref span) with !Mutate =
   report(EPurityViolated(actual, span))
 

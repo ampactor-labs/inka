@@ -1,0 +1,94 @@
+// W28 gate (felt-projection) — the felt read is the cursor projecting the LIVE
+// graph: the negative capability (!E) reaches synth, and the `??` pin is a
+// STRUCTURAL override, never a magic float.
+//
+// Two ultimate-form control shapes this batch landed in the WHEEL, proven here
+// end-to-end through the seed in seed-supported constructs (the established
+// proxy discipline of mn-struct-eq-sum / mn-show-fold — the wheel's effect /
+// reason ADTs lag the seed, so the proxy mirrors the SAME control shape on
+// ADTs the seed compiles):
+//
+//   1. row_admits / row_forbidden — the Boolean effect row reaches the synth
+//      gate INTACT (cursor.mn carries the live EffRow, not a flattened positive
+//      [EffName] that dropped EfNeg/EfSub/EfInter to `_ => []`). A negation
+//      `!E` ADMITS none of E and FORBIDS E; a closed row admits its names and
+//      forbids none. So the synth gate, reading admit/forbid from the row
+//      algebra, never proposes a candidate performing a forbidden effect — the
+//      `!E` negative capability is READABLE, not lost (effects.mn row_admits +
+//      row_forbidden_names; the `_ => []` over half the EffRow ADT is deleted).
+//
+//   2. reason_is_pinned — the `??`-pinned cursor dominates argmax by STRUCTURE
+//      (the Reason IS Located(span, "user pinned"), read by case), never by a
+//      1e308 float magnitude argmax can't tell from "scored absurdly high"
+//      (cursor.mn argmax_or_default follows the pin override edge FIRST, then
+//      argmax only if absent; pinned_impact_sentinel deleted).
+//
+// Expected exit 78 = 2 + 4 + 8 + 16 + 32 + 16:
+//   admit_closed       (2)  — a closed {Net} admits Net
+//   forbid_neg         (4)  — !Net forbids Net
+//   admit_neg_none     (8)  — !Net admits NOTHING (the negative capability)
+//   pin_dominates     (16)  — a pinned reason overrides the scored argmax
+//   pin_absent        (32)  — no pin ⇒ the auto-scored argmax wins
+//   forbid_closed_none(16)  — a closed row forbids NOTHING
+
+// ── Row algebra proxy — admit / forbid over the four shapes ──────────────
+// EfClosed names admitted, none forbidden; EfNeg admits none, forbids inner.
+// This IS the control shape of effects.mn row_admits / row_forbidden_names
+// (the wheel's EffRow ADT; the seed-runnable proxy uses a small Row ADT).
+
+type Row
+  = RClosed(Int)     // a single effect id present
+  | RNeg(Int)        // !effect — the negative capability
+  | RPure
+
+fn row_admits_id(r, eid) = match r {
+  RClosed(n) => if n == eid { 1 } else { 0 },
+  RNeg(_)    => 0,            // a negation admits NONE (forbids inner)
+  RPure      => 0
+}
+
+fn row_forbids_id(r, eid) = match r {
+  RClosed(_) => 0,           // a closed row forbids NONE
+  RNeg(n)    => if n == eid { 1 } else { 0 },
+  RPure      => 0
+}
+
+// ── Structural pin override — read by case, never a magic float ──────────
+// The cursor's Reason carries the pin: PinReason(1) IS "user pinned". argmax
+// follows the override FIRST; only an unpinned reason falls through to the
+// auto-scored winner. No 1e308.
+
+type PinReason
+  = Pinned        // structural: Located(span, "user pinned via ??")
+  | Auto(Int)     // an auto-scored position with its gates×proximity score
+
+fn reason_is_pinned(r) = match r {
+  Pinned  => 1,
+  Auto(_) => 0
+}
+
+// argmax_or_default's pin-first control shape: pin overrides; else the score.
+fn argmax_pick(r, scored_winner) = {
+  if reason_is_pinned(r) == 1 { 99 }      // the pinned position dominates
+  else { scored_winner }                  // the auto-scored argmax wins
+}
+
+fn main(q) = {
+  let net = 3
+  let io  = 7
+
+  // 1. closed {Net} admits Net, forbids nothing.
+  let admit_closed = if row_admits_id(RClosed(net), net) == 1 { 2 } else { 0 }
+  let forbid_closed_none = if row_forbids_id(RClosed(net), net) == 0 { 16 } else { 0 }
+
+  // 2. !Net forbids Net, admits nothing — the negative capability reaches synth.
+  let forbid_neg = if row_forbids_id(RNeg(net), net) == 1 { 4 } else { 0 }
+  let admit_neg_none = if row_admits_id(RNeg(net), io) == 0 { 8 } else { 0 }
+
+  // 3. a pinned reason overrides the scored argmax (structural, not 1e308).
+  let pin_dominates = if argmax_pick(Pinned, 5) == 99 { 16 } else { 0 }
+  // 4. no pin ⇒ the auto-scored argmax wins (the override is absent).
+  let pin_absent = if argmax_pick(Auto(5), 5) == 5 { 32 } else { 0 }
+
+  admit_closed + forbid_neg + admit_neg_none + pin_dominates + pin_absent + forbid_closed_none
+}

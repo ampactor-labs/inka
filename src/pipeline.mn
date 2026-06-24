@@ -57,9 +57,11 @@ import driver
 
 fn compile(entry_module) = {
   {
-    driver_check(entry_module)
-    let entry_source = fs_read_file(driver_module_path(entry_module))
-    entry_source |> frontend |> infer_program |> saturate_pass |> lower_program |> emit_module
+    // driver_check_entry infers the deps DAG + the entry ONCE and returns
+    // the entry's already-typed AST — compile lowers that live graph, no
+    // second fs_read / frontend / infer_program (Carried-Truth: the entry
+    // is proven once and read live, never re-derived).
+    entry_module |> driver_check_entry |> saturate_pass |> lower_program |> emit_module
   }
     ~> wat_stdout
     ~> wasi_filesystem       // FS — per-file byte I/O for driver / cache

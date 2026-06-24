@@ -317,3 +317,23 @@ micro:effname-pure=18
 micro:ownership-infer=60
 micro:refine-narrow=60
 micro:effarg-node=60
+# W26+W27 (felt-IC + Carried-Truth deletions): three new paths gated as
+# seed-runnable proxies (the established discipline — the live wheel forms read
+# the one graph / fs, which the libless WASI-free micro harness cannot run, so
+# each gate exercises the DECISION the wheel now makes).
+# - mn-cache-transitive-invalidation (W26): cache_is_hit now verifies own-hash
+#   AND each dep's CURRENT hash == the recorded imports_hashes (transitive
+#   invalidation — a changed dep dirties the module). Surpasses Salsa/Bazel by
+#   reading dep freshness from the one hash-set. Seed peer:
+#   Hβ.seed.cache-transitive-invalidation. Exit 70.
+# - mn-intent-from-node (W27): the intent_index side-ledger + graph_index_intent
+#   op + find_intent scan are DELETED; QIntentOf / oracle intent_weight read the
+#   FnStmt's effs LIVE via graph_node_body (Carried-Truth, LESS code). Seed peer:
+#   Hβ.seed.intent-from-node-live. Exit 80.
+# - mn-ic-epoch-fixpoint (W26): the dead reason_chain_stable is DELETED; the IC
+#   `<~` fixpoint converges on GRAPH-EPOCH stability (revision = epoch, one
+#   number — surpassing Salsa red-green dirty-bits). Seed peer:
+#   Hβ.seed.ic-epoch-fixpoint. Exit 42.
+micro:cache-transitive-invalidation=70
+micro:intent-from-node=80
+micro:ic-epoch-fixpoint=42

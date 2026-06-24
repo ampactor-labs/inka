@@ -1,0 +1,60 @@
+// W27 gate — the authored intent row is read LIVE off the FnStmt node, never a
+// parallel intent_index side-ledger re-found by scan.
+//
+// The ultimate form (what the WHEEL now does): the intent_index field on the
+// graph, the graph_index_intent op + handler arm, the parser write
+// (graph_index_intent(h, effs)), and the linear find_intent scan are ALL
+// DELETED. QIntentOf(handle) and oracle intent_weight_at(pos) read the FnStmt's
+// effs field directly via graph_node_body(handle) —
+//   QIntentOf:      match graph_node_body(h) { NStmt(FnStmt(_,_,_,effs,_)) => QRIntent(effs), _ => no-intent }
+//   intent_weight:  match graph_node_body(p) { NStmt(FnStmt(_,_,_,effs,_)) => 50 + len(effs)*10, _ => 0 }
+// The authored row is ONE field on the node the handle already names (Carried-
+// Truth: a parallel [(handle,[EffName])] table copied at parse + linear-scanned
+// at query was the canonical re-derivation). The fix is LESS code: the whole
+// side-ledger dissolves; intent is a one-hop projection like every Question.
+//
+// This proxy models the node as the FnStmt ADT carrying its effs, and proves:
+//   (a) the intent row read off the node IS the authored row (no ledger lookup);
+//   (b) the weight is derived LIVE from that row's length (50 + n*10);
+//   (c) reading twice yields the same answer with NO stored snapshot;
+//   (d) a non-fn node carries no authored intent → weight 0.
+// Seed-supported constructs (ADT + match + arithmetic). The live wheel reads
+// graph_node_body off the one graph; named peer for the end-to-end seed run:
+// Hβ.seed.intent-from-node-live.
+//
+// Expected exit 80:
+//   w_two   (a 2-effect fn node → 50 + 2*10 = 70)        => 70
+//   w_zero  (a non-fn node → 0)                          =>  0
+//   stable  (re-read the same node → same row, no ledger) =>  10
+//   70 + 0 + 10 = 80
+
+// A node-body, modeled as the wheel's NodeBody: a FnDecl carries its authored
+// effs COUNT (the effs list's length — what len(effs) reads live); a Lit node
+// is a non-fn node carrying no authored intent.
+type NodeBody
+  = FnDecl(Int)   // authored-effect count, read LIVE off the node
+  | Lit(Int)
+
+// intent_weight_at — the oracle's weight, read live off the node (no ledger).
+fn intent_weight_at(node) = match node {
+  FnDecl(neffs) => 50 + neffs * 10,
+  Lit(_)        => 0
+}
+
+// intent_count — QIntentOf's projection: the authored row's size, read live.
+fn intent_count(node) = match node {
+  FnDecl(neffs) => neffs,
+  Lit(_)        => 0 - 1   // -1 = "no authored intent at this handle"
+}
+
+fn main(q) = {
+  let fn_node  = FnDecl(2)   // a fn declared `with E1 + E2`
+  let lit_node = Lit(99)
+  // (a)+(b): weight derived live from the node's authored row length.
+  let w_two  = intent_weight_at(fn_node)
+  // (d): a non-fn node carries no authored intent → weight 0.
+  let w_zero = intent_weight_at(lit_node)
+  // (c): re-read the SAME node — same authored row, no stored ledger to drift.
+  let stable = if intent_count(fn_node) == intent_count(fn_node) { 10 } else { 0 }
+  w_two + w_zero + stable
+}

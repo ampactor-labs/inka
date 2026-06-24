@@ -13,6 +13,7 @@
 // Walkthrough: docs/specs/simulations/IC-incremental-compilation.md.
 
 import types
+import runtime/memory
 import runtime/strings
 import runtime/binary
 import runtime/io
@@ -65,23 +66,11 @@ fn cache_hash_loop(s, i, n, h) with Memory = {
   if i >= n { h }
   else {
     let b = byte_at(s, i)
-    // XOR via Memory scratch — no ^ operator in SYNTAX.md.
+    // XOR is the Memory effect op (runtime/memory.mn) — one i32.xor at emit.
     let xored = i32_xor(h, b)
     let mixed = xored * 16777619
     cache_hash_loop(s, i + 1, n, mixed)
   }
-}
-
-// XOR two integers. perform i32_xor(a, b) is a Memory-level
-// intrinsic — the emitter recognizes it by name and lowers
-// directly to WASM's `i32.xor` instruction. Same pattern as
-// store_i32, load_i8, alloc, mem_copy: the developer writes
-// the intent, the substrate emits the instruction.
-//
-// No bitwise operator in the language. No 64-op arithmetic
-// decomposition. One perform, one WASM instruction.
-fn i32_xor(a, b) with Memory = {
-  i32_xor(a, b)
 }
 
 // Cache path conventions — all files under `.mentl/cache/`.
@@ -1119,7 +1108,18 @@ fn cache_read(module_name) with Memory + Alloc + Filesystem = {
   }
 }
 
-fn cache_is_hit(kai, current_source) with Memory = {
+// A cache hit is a LIVE projection of the import DAG's current hash-set,
+// not just the module's own hash. The module is clean IFF: the compiler
+// version matches, the module's own source hash matches, AND every dep's
+// CURRENT hash equals the hash recorded when this .kai was written
+// (transitive invalidation — a changed dependency invalidates this
+// module). current_dep_hashes is read LIVE from disk by the driver
+// (driver_collect_dep_hashes over kai.imports); == is the structural
+// list equality over the recorded snapshot. Surpasses Salsa/Bazel
+// transitive-digest by reading dep freshness from the one hash-set the
+// graph already proved, never a stale module-only check.
+fn cache_is_hit(kai, current_source, current_dep_hashes) with Memory = {
   kai.compiler_version == cache_compiler_version() &&
-  kai.source_hash == hash_source(current_source)
+  kai.source_hash == hash_source(current_source) &&
+  kai.imports_hashes == current_dep_hashes
 }

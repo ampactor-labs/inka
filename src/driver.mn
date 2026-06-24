@@ -121,15 +121,19 @@ fn driver_check_module(ref module_name)
     let cached = cache_read(module_name)
     match cached {
       Some(kai) => {
-        if cache_is_hit(kai, source) {
+        // Read each dep's CURRENT hash live so cache_is_hit can verify
+        // transitive freshness — a changed dependency invalidates this
+        // module's cache (Carried-Truth: dep freshness read live from the
+        // import DAG, not assumed from the module's own hash alone).
+        let current_dep_hashes = driver_collect_dep_hashes(kai.imports)
+        if cache_is_hit(kai, source, current_dep_hashes) {
           // Cache hit — install cached entries into env_handler.
-          // No re-inference for this module. Diagnostics emitted
-          // at compile time of THIS module are also skipped; if
-          // they mattered, the cache wouldn't have been written.
-          driver_install_entries(module_name, kai.exported_entries)
+          // No re-inference for this module: its source AND every dep
+          // are byte-identical to the cache-write moment.
+          driver_install_entries(kai.exported_entries)
           kai.exported_entries
         } else {
-          // Cache miss (source hash differs) — re-infer.
+          // Cache miss (this module's source OR a dep changed) — re-infer.
           driver_infer_module(module_name, source, current_hash)
         }
       },
@@ -159,9 +163,11 @@ fn driver_infer_module(ref module_name, ref source, ref source_hash)
   // the head; take the first (n_after - n_before).
   let new_count = n_after - n_before
   let exported = driver_take_first(entries_after, new_count)
-  // Flat names already in env from infer_program. Add qualified
-  // `module.export` aliases so importing modules can dot-access.
-  driver_install_qualified_only(module_name, exported)
+  // The flat export names are already in env from infer_program. A
+  // qualified `module.name` reference follows the import edge to the
+  // module env node and reads `.name` there (SYNTAX.md §Imports) — no
+  // dotted-string-key side-ledger to pre-mint (Carried-Truth; the dotted
+  // key was the canonical re-derivation the surface explicitly rejects).
   // Write cache.
   let kai = {
     compiler_version: cache_compiler_version(),
@@ -201,64 +207,26 @@ fn driver_take_first(ref entries, count) = {
   else { [list_head(entries)] ++ driver_take_first(list_tail(entries), count - 1) }
 }
 
-// Env install — push entries into env_handler for importing modules.
-// Dual-install: flat short name AND qualified `module.export` key.
-// Both point to the same Scheme (dotted-names-as-env entries).
+// Env install — push entries into env_handler for importing modules
+// under their flat names. A qualified `module.name` reference resolves
+// by following the import edge to the module env node (SYNTAX.md
+// §Imports) — never a dotted-string-key alias re-resolved by name at
+// each call site (Carried-Truth: that is the canonical re-derivation).
 
-fn driver_install_entries(ref module_name, ref entries) with Memory + Alloc + EnvWrite = {
-  let short = module_short_name(module_name)
-  driver_install_loop(short, entries, 0, len(entries))
+fn driver_install_entries(ref entries) with Memory + Alloc + EnvWrite = {
+  driver_install_loop(entries, 0, len(entries))
 }
 
-fn driver_install_loop(ref short, ref entries, i, n) with Memory + Alloc + EnvWrite = {
+fn driver_install_loop(ref entries, i, n) with Memory + Alloc + EnvWrite = {
   if i >= n { () }
   else {
     let entry = list_index(entries, i)
     let (name, scheme, reason, kind) = entry
-    // Flat short-name install (current behavior).
     env_extend(name, scheme, reason, kind)
-    // Qualified install — dotted name as env key.
-    let dotted = "{short}.{name}"
-    env_extend(dotted, scheme, reason, kind)
-    driver_install_loop(short, entries, i + 1, n)
+    driver_install_loop(entries, i + 1, n)
   }
 }
 
-// module_short_name: last path segment of an import path.
-//   "compiler/graph"  -> "graph"
-//   "dsp/signal"      -> "signal"
-//   "prelude"         -> "prelude"
-
-fn module_short_name(ref path) with Memory + Alloc = {
-  let n = byte_len(path)
-  let last_slash = module_find_last_slash(path, 0, n, 0 - 1)
-  if last_slash < 0 { path }
-  else { str_slice(path, last_slash + 1, n) }
-}
-
-fn module_find_last_slash(ref path, i, n, last) = {
-  if i >= n { last }
-  else if byte_at(path, i) == 47 { module_find_last_slash(path, i + 1, n, i) }
-  else { module_find_last_slash(path, i + 1, n, last) }
-}
-
-// Install only qualified `module.export` aliases. Used on the
-// fresh-infer path where `infer_program` has already env_extended each
-// export under its flat short name; only the dotted aliases remain
-// to be registered.
-
-fn driver_install_qualified_only(ref module_name, ref entries) with Memory + Alloc + EnvWrite = {
-  let short = module_short_name(module_name)
-  driver_install_qualified_loop(short, entries, 0, len(entries))
-}
-
-fn driver_install_qualified_loop(ref short, ref entries, i, n) with Memory + Alloc + EnvWrite = {
-  for_each((entry) => {
-    let (name, scheme, reason, kind) = entry
-    let dotted = "{short}.{name}"
-    env_extend(dotted, scheme, reason, kind)
-  }, entries)
-}
 
 // ─── Topological-layer parallel walk (cargo-class) ──────────────────
 //
@@ -288,6 +256,27 @@ fn driver_check(ref entry_module)
     |> driver_collect_dag_with_deps
     |> driver_partition_layers
     |> for_each((layer) => parallel_map(driver_check_module, layer))
+}
+
+/// driver_check_entry — the compile path's check: infer every DEP of the
+/// entry (each installs into env_handler), then parse+infer the ENTRY
+/// ITSELF exactly ONCE and hand its inferred AST back so compile lowers
+/// the SAME graph it proved. The entry is never re-read or re-inferred
+/// downstream (Carried-Truth: compile's old second fs_read + frontend +
+/// infer_program was the canonical re-derivation this deletes — the entry
+/// is parsed+typed here, once, and lowered live).
+fn driver_check_entry(ref entry_module)
+  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
+  // Check the deps DAG (every module the entry imports) — not the entry.
+  entry_module
+    |> driver_collect_dag_with_deps
+    |> filter((m_with_deps) => { let (m, _) = m_with_deps; m != entry_module })
+    |> driver_partition_layers
+    |> for_each((layer) => parallel_map(driver_check_module, layer))
+  // Parse + infer the entry ONCE; its AST is what compile lowers live.
+  let ast = parse_program(lex(fs_read_file(driver_module_path(entry_module))))
+  infer_program(ast)
+  ast
 }
 
 /// Walk the post-order DAG and pair each module with its in-DAG deps.

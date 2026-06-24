@@ -378,9 +378,10 @@ fn parse_fn(ref tokens, pos) = {
   // IS the same match projection a destructuring `let` is.
   let body = bind_param_destructures(dlets, raw_body, start)
 
+  // The authored intent row IS the FnStmt's effs field on the node —
+  // read live by QIntentOf / oracle intent_weight via graph_node_body.
+  // No parallel intent_index ledger to write (Carried-Truth).
   let stmt_node = nstmt(FnStmt(name, params, ret_node, effs, body), start)
-  let N(_, _, h) = stmt_node
-  graph_index_intent(h, effs)
   (stmt_node, p9)
 }
 

@@ -54,6 +54,7 @@
 import types
 import graph
 import effects
+import infer
 import own
 import mentl
 import cursor
@@ -114,7 +115,15 @@ handler delta_default with !Mutate {
     match kind {
       NBound(ty) => match ty {
         TFun(_, _, body_row) => {
-          let declared_row = graph_declared_row(handle)
+          // The declared with-clause lives on the FnStmt node the same
+          // handle names — read it LIVE via graph_node_body, never a
+          // phantom DeltaQuery effect re-deriving what parse already proved
+          // (Carried-Truth). An empty effs list = no declaration.
+          let declared_row = match graph_node_body(handle) {
+            NStmt(FnStmt(_, _, _, effs, _)) =>
+              if len(effs) > 0 { Some(build_declared_row(effs)) } else { None },
+            _ => None
+          }
           match declared_row {
             None => {
               // No declaration; suggest the inferred row.
@@ -318,18 +327,6 @@ fn capabilities_unlocked_by_tightening(declared, body) with Pure = {
   // Capabilities the developer gains by writing the tighter row in
   // place of the declared one. The set IS the tighter-row's caps.
   capabilities_unlocked_by(body)
-}
-
-// ─── Effects this file declares (graph readers we depend on) ────────
-//
-// graph_declared_row reads the FnStmt's declared with-clause from
-// graph metadata. Today the wheel keeps it in env's binding-Reason
-// chain (Declared(name) per types.mn Reason ADT); this effect is the
-// substrate-honest reader for that piece. Lands as part of the wheel-
-// canonical when the env-binding-extended-shape lands.
-
-effect DeltaQuery {
-  graph_declared_row(Handle) -> Option(EffRow)
 }
 
 // ─── Composition with cursor_default ───────────────────────────────

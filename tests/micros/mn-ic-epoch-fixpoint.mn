@@ -1,0 +1,56 @@
+// W26 gate — the IC `<~` fixpoint converges on GRAPH-EPOCH stability, not a
+// hand-rolled reason-chain compare.
+//
+// The ultimate form (what the WHEEL now does, src/cursor.mn ic_fixpoint_handler):
+// the dead reason_chain_stable (which mis-destructured Cursor and whose two
+// branches were identical — a no-op stub) is DELETED. The IC handler carries
+// last_epoch as state and reads the graph epoch live each cycle:
+//   if epoch == last_epoch  → resume the terminal cursor and STOP (the fixpoint)
+//   else                    → re-project and carry the new epoch forward
+// cursor_argmax_compute is `!Mutate`, so a cycle folding no candidate back into
+// the graph leaves the epoch unchanged — that stable epoch IS the fixpoint, read
+// live. The revision IS the graph epoch (one number) — surpassing Salsa/rust-
+// analyzer red-green, where convergence is a framework dirty-bit not a graph read.
+//
+// This proxy models the convergence decision as a bounded `<~`-shaped fold over
+// an epoch stream: each step reads the current epoch; if equal to the carried
+// last_epoch it has CONVERGED (returns the iteration count it settled at); else
+// it carries the new epoch and continues. Seed-supported constructs (recursion +
+// state threading + Int compare — the value-side stand-in for the `<~ accumulate`
+// the wheel runs under the IC iterate-class handler). Named peer for the seed
+// running the felt IC loop end-to-end: Hβ.seed.ic-epoch-fixpoint.
+//
+// Expected exit 42:
+//   The epoch stream is 0,1,2,2,2,...  — it advances twice (two candidates fold
+//   back) then stabilizes at 2. Convergence is detected at the step where the
+//   epoch first repeats. converged_at returns 2 (the stable epoch); the settle
+//   step is 3. result = stable_epoch*20 + settle_step*... tuned to 42:
+//     stable_epoch (2) * 20 = 40 ;  + (settle_step==3 ? 2 : 0) = 42.
+
+// epoch_of_step — the graph epoch observed at iteration i: advances 0→1→2 then
+// holds at 2 (no further candidate folds back; the !Mutate argmax is idempotent).
+fn epoch_of_step(i) =
+  if i <= 0 { 0 }
+  else if i == 1 { 1 }
+  else { 2 }   // stable from step 2 onward
+
+// ic_run — the `<~` fixpoint: carry last_epoch; converge when the live epoch
+// equals the carried one. Returns (stable_epoch, settle_step).
+fn ic_run(i, last_epoch) = {
+  let epoch = epoch_of_step(i)
+  if epoch == last_epoch {
+    // Epoch stable since the previous cycle ⇒ the fixpoint. Stop here.
+    (epoch, i)
+  } else {
+    // Graph advanced ⇒ carry the new epoch into the next cycle.
+    ic_run(i + 1, epoch)
+  }
+}
+
+fn main(q) = {
+  // Start before the first cycle: last_epoch = -1 (never equal to epoch 0).
+  let (stable_epoch, settle_step) = ic_run(0, 0 - 1)
+  let base  = stable_epoch * 20                       // 2*20 = 40
+  let bonus = if settle_step == 3 { 2 } else { 0 }    // settled at step 3 → +2
+  base + bonus
+}

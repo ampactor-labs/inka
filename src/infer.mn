@@ -754,26 +754,15 @@ fn infer_expr(ref node) = {
       }, state_updates)
     },
 
-    NExpr(FieldExpr(rec, field)) => {
-      // Dotted-name resolution: when the left side is a bare VarRef
-      // AND the assembled dotted name resolves in env, treat the
-      // FieldExpr as a qualified env lookup (e.g., `graph.chase`).
-      // This is how dot-access on imported modules works — driver
-      // installs each export under BOTH flat and `module.export`
-      // keys at load time. On miss, fall through to the
-      // record-field-access path for struct-record dot-access.
-      let N(rbody, _, _) = rec
-      match rbody {
-        NExpr(VarRef(left_name)) => {
-          let qualified = "{left_name}.{field}"
-          match env_lookup(qualified) {
-            Some(_) => infer_var_ref(qualified, handle, span),
-            None    => infer_field_access_record(rec, field, handle, span)
-          }
-        },
-        _ => infer_field_access_record(rec, field, handle, span)
-      }
-    },
+    NExpr(FieldExpr(rec, field)) =>
+      // `a.b` is structural field access on the record `a`'s type, read
+      // live from the graph. A qualified `module.name` reference resolves
+      // by following the import edge to the module env node (SYNTAX.md
+      // §Imports) — never a flattened `module.name` env key (Carried-Truth:
+      // the dotted-string lookup was the canonical re-derivation, now
+      // deleted with its write side; edge-following overlay = peer
+      // Hβ.driver.per-module-env-overlay).
+      infer_field_access_record(rec, field, handle, span),
 
     NExpr(LambdaExpr(params, body_node)) => {
       env_scope_enter()

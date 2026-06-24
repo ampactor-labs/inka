@@ -179,29 +179,31 @@ fn cursor_ic_fixpoint(initial_caret) with Cursor + IC + !Mutate = {
       <~ accumulate(initial_caret)
 }
 
-// `ic_fixpoint_handler` — handler-attach point. Installed via `~>`
-// in the chain above. Decides per cycle: continue iterating vs.
-// return at convergence. The body reads the cursor; the convergence
-// predicate compares reason-chains between cycles. Implemented in
-// `src/eight_loop.mn` as the canonical IC fixpoint substrate.
+// `ic_fixpoint_handler` — the `<~` feedback closure's handler-attach
+// point. Installed via `~>` above. Each cycle reads the cursor argmax
+// LIVE off the graph and decides continue-vs-terminate by the GRAPH
+// EPOCH: the revision IS the epoch (no separate counter — surpassing
+// Salsa/rust-analyzer red-green, where convergence is a framework
+// dirty-bit). cursor_argmax_compute is `!Mutate`, so a cycle that folds
+// no accepted candidate back into the graph leaves the epoch unchanged
+// — that stable epoch IS the fixpoint, read live, never a hand-rolled
+// reason-compare. The handler carries `last_epoch` as state; on a stable
+// epoch it resumes the terminal cursor and STOPS re-projecting (the
+// argmax is idempotent over an unchanged graph, protocol_oracle_is_ic).
 
-handler ic_fixpoint_handler {
+handler ic_fixpoint_handler with last_epoch = 0 - 1 {
   cursor_argmax(caret) => {
-    let next = cursor_argmax_compute(caret)
-    if reason_chain_stable(caret, next) { resume(next) }
-    else { resume(next) }
+    let epoch = graph_epoch()   // drift-audit: ignore — epoch reused twice (compare + state carry); a `<|` reuse, not a `|>` chain
+    if epoch == last_epoch {
+      // Epoch stable since the previous cycle ⇒ the fixpoint. Resume the
+      // terminal cursor (re-projection would reproduce it) and stop.
+      resume(cursor_argmax_compute(caret))
+    } else {
+      // Graph advanced (a candidate folded back) ⇒ re-project and carry
+      // the new epoch into the next `<~` cycle.
+      resume(cursor_argmax_compute(caret)) with last_epoch = epoch
+    }
   }
-}
-
-// `reason_chain_stable` — reads the Reason chain at both caret
-// positions; equal by structural identity ⇒ fixpoint. Pure.
-
-fn reason_chain_stable(a, b) with Pure = {
-  let Cursor(_, located_a, _) = a
-  let Cursor(_, located_b, _) = b
-  let Located(_, reason_a) = located_a
-  let Located(_, reason_b) = located_b
-  reason_a == reason_b
 }
 
 // ─── Argmax computation — pure transform on the live graph ──────────
@@ -224,7 +226,7 @@ fn cursor_argmax_compute(caret) with GraphRead + !Mutate = {
 }
 
 fn enumerate_gradient_positions() with GraphRead + !Mutate = {
-  let Graph(_nodes, _epoch, next, _overlays, _spans, _intents) = graph_snapshot()
+  let Graph(_nodes, _epoch, next, _overlays, _spans) = graph_snapshot()
   filter((i) => match teach_gradient(i) {
     None    => false,
     Some(_) => true
@@ -376,7 +378,7 @@ fn handle_at_span(span) with GraphRead + !Mutate = {
   // Today this is a forward scan via graph_snapshot; the indexed
   // lookup is peer-handle territory (Hμ.cursor.cache).
   let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Graph(_nodes, _epoch, next, _overlays, _spans, _intents) = snapshot
+  let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
   scan_for_span(span, 0, next)
 }
 

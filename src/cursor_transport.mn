@@ -291,13 +291,25 @@ handler vim_transport with state = transport_state_init(Caret(0, Inferred("vim-i
 // medium boundary. Pipe verbs are visible on the page; the loop
 // is visible in the substrate.
 
+// The edit session IS the `<~` feedback verb at the human-medium
+// boundary (SYNTAX.md §`<~`): one cycle's output state loops back as the
+// next cycle's input under the Surface iterate-class context. The former
+// hand-rolled tail-recursion (cursor_loop calling itself per arm) was the
+// `<~` verb un-named — the exact drift the prime directive forbids. The
+// state threads through `<~ accumulate`; cursor_step is one cycle.
+
 fn cursor_session(initial_caret) with Surface + GraphRead + Cursor + !Mutate = {
   surface_handshake()
-  let initial_state = transport_state_init(initial_caret)
-  cursor_loop(initial_state)
+  transport_state_init(initial_caret)
+    |> cursor_step
+      <~ accumulate(transport_state_init(initial_caret))
 }
 
-fn cursor_loop(state) with Surface + GraphRead + Cursor + !Mutate = {
+// cursor_step — ONE feedback cycle: project the cursor + view, render,
+// read the human action, fold it into the next state. The `<~` closure
+// feeds this next state back as the cycle's input (no self-recursion —
+// the feedback verb carries the loop).
+fn cursor_step(state) with Surface + GraphRead + Cursor + !Mutate = {
   let TransportState(s) = state
   // Compute Cursor: gradient argmax with caret bias.
   let cursor = cursor_argmax(s.caret)
@@ -305,23 +317,21 @@ fn cursor_loop(state) with Surface + GraphRead + Cursor + !Mutate = {
   let view = cursor_at(span_of_cursor(cursor))
   // Render through the installed transport handler.
   surface_render(cursor, view)
-  // Receive an action from the human.
-  let action = surface_action()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  // Apply action; continue the loop unless explicitly halted.
-  match action {
+  // Receive an action from the human, fold into the next state.
+  match surface_action() {
     AccAccept => {
       apply_suggestion(view)
-      cursor_loop(state_advance(state, cursor))
+      state_advance(state, cursor)
     },
-    AccDefer => cursor_loop(state_advance(state, cursor)),
+    AccDefer => state_advance(state, cursor),
     AccOverride(span) => {
       let pinned = cursor_pinned(handle_at_span(span))
-      cursor_loop(state_with_caret(state, Caret(handle_at_span(span),
-                                                Inferred("?? override"))))
+      state_with_caret(state, Caret(handle_at_span(span),
+                                    Inferred("?? override")))
     },
     AccCaretMove(span) =>
-      cursor_loop(state_with_caret(state, Caret(handle_at_span(span),
-                                                Inferred("text-caret-move"))))
+      state_with_caret(state, Caret(handle_at_span(span),
+                                    Inferred("text-caret-move")))
   }
 }
 

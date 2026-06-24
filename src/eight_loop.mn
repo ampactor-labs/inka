@@ -208,7 +208,7 @@ handler interrogate_default with !Mutate {
   // IS the cursor projection scaled to N handles.
   interrogate_all() => {
     let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-    let Graph(_nodes, _epoch, next, _overlays, _spans, _intents) = snapshot
+    let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
     let positions = enumerate_handles(0, next)
     let reports =
       positions

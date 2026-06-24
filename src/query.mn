@@ -76,7 +76,7 @@ handler query_default {
       },
 
     QTypeAt(_span) => {
-      let Graph(_, _, _, _, span_index, _) = graph_snapshot()
+      let Graph(_, _, _, _, span_index) = graph_snapshot()
       match find_tightest(span_index, _span, None, 999999999) {
         None => resume(QRError("no enclosing span found in AST index")),
         Some(handle) => {
@@ -93,13 +93,15 @@ handler query_default {
       }
     },
 
-    QIntentOf(handle) => {
-      let Graph(_, _, _, _, _, intent_index) = graph_snapshot()
-      match find_intent(intent_index, handle, 0, len(intent_index)) {
-        None => resume(QRError("no intent recorded for handle {int_to_str(handle)}")), // drift-audit: ignore
-        Some(effs) => resume(QRIntent(effs))
-      }
-    },
+    QIntentOf(handle) =>
+      // The authored intent row is a field on the FnStmt node the handle
+      // names — read it LIVE (graph_node_body), never a parallel
+      // intent_index re-found by scan (Carried-Truth). A non-fn node
+      // carries no authored intent.
+      match graph_node_body(handle) {
+        NStmt(FnStmt(_, _, _, effs, _)) => resume(QRIntent(effs)),
+        _ => resume(QRError("no authored intent at handle {int_to_str(handle)}")) // drift-audit: ignore
+      },
 
     QUnresolved => {
       let Env(entries) = env_snapshot()
@@ -315,11 +317,3 @@ fn find_tightest(ref idx, target, best_h, best_area) with Pure = {
   }
 }
 
-fn find_intent(ref intent_index, handle, i, n) with !Mutate = {
-  if i >= n { None }
-  else {
-    let (h, effs) = list_index(intent_index, i)
-    if h == handle { Some(effs) }
-    else { find_intent(intent_index, handle, i + 1, n) }
-  }
-}

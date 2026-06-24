@@ -261,16 +261,17 @@ fn proven_to_item(pos, pair, anchor) with GraphRead = {
 // (Carried-Truth: no stored counts, no snapshot). tier from the
 // annotation's gradient axis (the cursor's classification of what the
 // candidate fixes); intent_weight from the position's authored intent
-// row in the graph's intent_index; surface_area from a live walk of the
-// positions that depend on this one (graph edges, not a count field);
-// locality_bias from the span_index byte position. Reads `graph_snapshot`
-// once — the single live read of (intent_index, span_index).
+// row read LIVE off the FnStmt node (graph_node_body — never a parallel
+// intent_index ledger); surface_area from a live walk of the positions
+// that depend on this one (graph edges, not a count field); locality_bias
+// from the span_index byte position. Reads `graph_snapshot` once for the
+// span_index; the intent row is read per-handle from the node itself.
 
 fn compute_priority(pos, ann) with GraphRead = {
-  let Graph(_nodes, _epoch, _next, _overlays, span_index, intent_index) = graph_snapshot()
+  let Graph(_nodes, _epoch, _next, _overlays, span_index) = graph_snapshot()
   OraclePriority({
     tier:          tier_of_annotation(ann),
-    intent_weight: intent_weight_at(intent_index, pos),
+    intent_weight: intent_weight_at(pos),
     surface_area:  surface_area_at(pos),
     locality_bias: locality_at(span_index, pos)
   })
@@ -291,14 +292,14 @@ fn tier_of_annotation(ann) with Pure = match suggestion_kind_of(ann) {
 
 // intent_weight_at — the position's authored intent row drives the
 // weight: a position carrying an authored intent (e.g. a `!Alloc`
-// real-time row) weights heavier than an un-annotated one. Read live
-// from intent_index ([(handle, [EffName])]); absent -> baseline 0.
+// real-time row) weights heavier than an un-annotated one. Read LIVE
+// off the FnStmt node the handle names (graph_node_body) — the effs
+// field IS the authored row; no parallel intent_index to walk. A node
+// that is not a fn declaration carries no authored intent -> baseline 0.
 
-fn intent_weight_at(intent_index, pos) with Pure = match intent_index {
-  []        => 0,
-  [(h, effs), ...t] =>
-    if h == pos { 50 + (len(effs) * 10) }
-    else        { intent_weight_at(t, pos) }
+fn intent_weight_at(pos) with GraphRead = match graph_node_body(pos) {
+  NStmt(FnStmt(_, _, _, effs, _)) => 50 + (len(effs) * 10),
+  _                               => 0
 }
 
 // surface_area_at — count of positions that depend on this one, walked
@@ -397,7 +398,7 @@ fn collect_bound_positions(h, bound, acc) with GraphRead + Memory + Alloc = {
 // snapshot's overlays; the unowned position belongs to "global".
 
 fn current_overlay_of(pos) with GraphRead = {
-  let Graph(_nodes, _epoch, _next, overlays, _spans, _intents) = graph_snapshot()
+  let Graph(_nodes, _epoch, _next, overlays, _spans) = graph_snapshot()
   overlay_owning(overlays, pos)
 }
 

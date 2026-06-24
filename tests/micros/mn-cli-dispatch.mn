@@ -1,0 +1,122 @@
+// W29+W30 gate (transports-cli) — the CLI dispatch and query grammar are
+// fully ADT-keyed, never string-keyed downstream. Two control shapes:
+//
+//   1. EntryVerb ADT (main.mn): argv[1] is projected to a typed variant at
+//      ONE parse_cli_args boundary; dispatch_invocation matches the ADT
+//      structurally. "compile with no target" is unrepresentable (illegal
+//      state deleted at the type level — Anchor 2). Per drift mode 8 closure.
+//
+//   2. QueryVerb ADT (pipeline.mn): a query string word is projected to a
+//      QueryVerb at ONE classify_query_verb boundary; build_question pairs
+//      the verb with its argument structurally. QVUnknownVerb is the honest
+//      unknown — never a fabricated fallback. Per drift mode 8 closure.
+//
+// Expected exit = 1 + 2 + 4 + 8 + 16 + 32 = 63
+//   verb_compile     (1)  — Compile + target → VCompile; route correct
+//   verb_run         (2)  — Run + target → VRun; route correct
+//   verb_no_target   (4)  — Compile + no target → ParseError (illegal state)
+//   verb_serve       (8)  — Serve → VServe; no payload required
+//   query_type       (16) — QVType → QTypeOf; arg threaded through
+//   query_unresolved (32) — QVUnresolved → QUnresolved; arg discarded
+
+// ── EntryVerb ADT — proxy for main.mn's control shape ────────────────────
+// Int tags stand in for string modes (seed handles int literals without
+// string imports). ONE parse boundary, structural dispatch downstream,
+// illegal state (compile with no target) unrepresentable at the type level.
+
+type EntryVerb
+  = VCompile(Int)    // target id REQUIRED — carried non-optionally
+  | VRun(Int)        // target id REQUIRED
+  | VServe           // no payload
+
+type Invocation
+  = Invoke(EntryVerb)
+  | ParseError
+
+fn parse_verb(mode, has_target, target_id) with Pure =
+  if mode == 1 {
+    if has_target == 1 { Invoke(VCompile(target_id)) }
+    else { ParseError }
+  } else if mode == 2 {
+    if has_target == 1 { Invoke(VRun(target_id)) }
+    else { ParseError }
+  } else if mode == 3 {
+    Invoke(VServe)
+  } else {
+    ParseError
+  }
+
+fn dispatch_invocation(verb) with Pure = match verb {
+  VCompile(tid) => tid + 100,
+  VRun(tid)     => tid + 200,
+  VServe        => 999
+}
+
+fn invocation_val(inv) with Pure = match inv {
+  Invoke(v)  => dispatch_invocation(v),
+  ParseError => 0
+}
+
+fn is_parse_error(inv) with Pure = match inv {
+  ParseError => 1,
+  Invoke(_)  => 0
+}
+
+// ── QueryVerb ADT — proxy for pipeline.mn's control shape ────────────────
+
+type QueryVerb
+  = QVType | QVUnresolved | QVUnknownVerb
+
+type Question
+  = QTypeOf(Int)
+  | QUnresolved
+  | QUnknown(Int)
+
+fn classify_verb(w) with Pure =
+  if w == 0 { QVType }
+  else if w == 1 { QVUnresolved }
+  else { QVUnknownVerb }
+
+fn build_question(verb, arg, raw) with Pure = match verb {
+  QVUnresolved  => QUnresolved,
+  QVType        => QTypeOf(arg),
+  QVUnknownVerb => QUnknown(raw)
+}
+
+fn is_type_of(q, expected) with Pure = match q {
+  QTypeOf(n)  => if n == expected { 1 } else { 0 },
+  _           => 0
+}
+
+fn is_unresolved(q) with Pure = match q {
+  QUnresolved => 1,
+  _           => 0
+}
+
+fn main(argv) = {
+  // 1. Compile + target=7 → VCompile(7); dispatch = 107 (correct route)
+  let r1 = parse_verb(1, 1, 7)
+  let verb_compile = if invocation_val(r1) == 107 { 1 } else { 0 }
+
+  // 2. Run + target=3 → VRun(3); dispatch = 203 (correct route)
+  let r2 = parse_verb(2, 1, 3)
+  let verb_run = if invocation_val(r2) == 203 { 2 } else { 0 }
+
+  // 3. Compile + no target → ParseError (illegal state at type level)
+  let r3 = parse_verb(1, 0, 0)
+  let verb_no_target = if is_parse_error(r3) == 1 { 4 } else { 0 }
+
+  // 4. Serve → VServe; dispatch = 999 (no payload needed)
+  let r4 = parse_verb(3, 0, 0)
+  let verb_serve = if invocation_val(r4) == 999 { 8 } else { 0 }
+
+  // 5. classify(0)=QVType + arg=42 → QTypeOf(42) (arg threaded through)
+  let q1 = build_question(classify_verb(0), 42, 0)
+  let query_type = if is_type_of(q1, 42) == 1 { 16 } else { 0 }
+
+  // 6. classify(1)=QVUnresolved + arg=99 → QUnresolved (arg discarded; nullary)
+  let q2 = build_question(classify_verb(1), 99, 0)
+  let query_unresolved = if is_unresolved(q2) == 1 { 32 } else { 0 }
+
+  verb_compile + verb_run + verb_no_target + verb_serve + query_type + query_unresolved
+}

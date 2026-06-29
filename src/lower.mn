@@ -671,8 +671,17 @@ fn effects_of_row(row) = match row {
 // record (`LLocal "__hstate_<h>"`) or a forward of THIS fn's own ev-slot
 // (`LEvSlotRef`). The shared canonical order makes caller→callee slot
 // remapping correct WITHOUT a coercion table (Koka evidence coercion).
+// THE SEAM, caller side. Read the callee's FLOW-CLOSURE by name (the live
+// call-edge row, not the frozen call-site instantiation lookup_ty froze) so a
+// forward-ref-dropped effect (emit_module's WasmOut) is recovered and threaded.
+// An anonymous callee (lambda/resume — no name in the esc map) carries its own
+// evidence: read its definition-site row via lookup_ty, byte-identical to the
+// pre-flow-closure path.
 fn derive_ev_slots(callee_handle) =
-  map(resolve_ev_for_ename, effects_of(lookup_ty(callee_handle)))
+  match ls_escaping_of(callee_name_of_handle(callee_handle)) {
+    Some(row) => map(resolve_ev_for_ename, row),
+    None      => map(resolve_ev_for_ename, effects_of(lookup_ty(callee_handle)))
+  }
 
 // One ev per effect-name: the installed handler's record (LLocal) when a
 // handler is lexically in scope, else a forward of this frame's own slot
@@ -733,15 +742,12 @@ fn lower_compute_ev_slot_for_op(op_name) = match lookup_parent_effect(op_name) {
 // by construction. The current fn is `ls_outer_fn_name`; its inferred type is
 // its scheme body. (Was `perform inf_declared_effs()` — the declared `with`
 // row, a CONSTRAINT, never the dispatch source: a spec violation now retired.)
+// THE SEAM, callee side. Index ename in THIS fn's FLOW-CLOSURE — the SAME
+// projection derive_ev_slots placed against, so the read slot == the placed
+// slot by construction. (Was effects_of(scheme) — the frozen generalized row
+// that dropped forward-ref effects; escaping_row recovers them off call-edges.)
 fn lower_compute_ev_index_for_effect(ename) =
-  match env_lookup(ls_outer_fn_name()) {
-    Some(entry) => {
-      let (scheme, _, _) = entry
-      let Forall(_, ty) = scheme
-      clamp_index(index_of_name(effects_of(ty), ename, 0))
-    },
-    None => 0
-  }
+  clamp_index(index_of_name(escaping_row(ls_outer_fn_name()), ename, 0))
 
 // Inside a handler arm body the frame's evidence is the captured set
 // (first-encounter ledger order); everywhere else it is the fn's row
@@ -755,6 +761,247 @@ fn lower_ev_index_in_frame(ename) = {
 }
 
 fn clamp_index(i) = if i < 0 { 0 } else { i }
+
+// ─── THE FLOW-CLOSURE (master plan §6 1★ Stage 1) ───────────────────────
+// escaping_row(name): the dispatched effects that ESCAPE fn `name` — the
+// ones a caller must thread evidence for. The forward-ref class (a mutually-
+// recursive callee bound AFTER `name` generalized, so its effect never
+// entered `name`'s row — `emit_module` losing `WasmOut` via `emit_header`)
+// is recovered by reading the effect off the CALL-EDGES live, not off the
+// frozen generalized scheme. THE SEAM's two consumers (derive_ev_slots,
+// lower_compute_ev_index_for_effect) BOTH read THIS one projection, so a
+// caller-placed slot and the callee-read slot agree by construction
+// (docs/specs/simulations/polymorphism-as-flow-edges.md §8 Step 1).
+//
+//   escaping(name) = ( own_dispatched(name)
+//                      ∪ ⋃ { escaping(c) | c ∈ static_callees(name) } )
+//                    − handled_locally(name)
+//
+// `own_dispatched` is the leaf (today's `effects_of` of the generalized
+// scheme — RETAINED, never deleted). `handled_locally` subtracts every
+// effect a `~> h` install in the body absorbs (so `WasmOut` does NOT escape
+// `compile_stdin`, which installs `~> wat_stdout`). Monotone union over the
+// finite dispatched-effect lattice ⇒ the fixpoint converges (mutual
+// recursion included); precomputed ONCE per program at lower_program (the
+// cached cursor / IC), then read by name.
+
+// own_dispatched leaf: the fn's generalized-scheme dispatched row. The SAME
+// read the old seam used — never deleted; it is the flow-closure's base case.
+fn own_dispatched_row(name) = match env_lookup(name) {
+  Some(entry) => {
+    let (scheme, _, _) = entry
+    let Forall(_, ty) = scheme
+    effects_of(ty)
+  },
+  None => []
+}
+
+fn set_difference(a, b) = filter((x) => !set_contains(b, x), a)
+
+// The flow-closure read at a use site: the precomputed escaping row by name
+// (Some for a top-level fn), else the leaf (nested fn / lambda / unknown —
+// identical to the pre-flow-closure behaviour, so closures stay byte-stable).
+fn escaping_row(name) = match ls_escaping_of(name) {
+  Some(row) => row,
+  None      => own_dispatched_row(name)
+}
+
+// callee name for derive_ev_slots' handle: the AST fabric resolves any
+// handle to its node body live; a VarRef/CallExpr callee yields its name, an
+// anonymous lambda/resume body yields "" (→ the lookup_ty own-evidence path).
+fn callee_name_of_handle(h) = lower_callee_name(graph_node_body(h))
+
+// Static call + install edges of a fn body, walked once: (callee_names,
+// installed_handled_enames). A `~> h` records the effect h's HandlerKind
+// absorbs; every other node just unions its children's edges.
+fn flow_edges(node) = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(e) => flow_edges_expr(e),
+    NStmt(s) => flow_edges_stmt(s),
+    NPat(_)  => ([], []),
+    NHole(_) => ([], [])
+  }
+}
+
+fn flow_join(a, b) = {
+  let (ca, ha) = a
+  let (cb, hb) = b
+  (ca ++ cb, ha ++ hb)
+}
+
+fn flow_edges_list(nodes) =
+  fold(nodes, ([], []), (acc, n) => flow_join(acc, flow_edges(n)))
+
+fn flow_edges_expr(e) = match e {
+  LitInt(_)    => ([], []),
+  LitFloat(_)  => ([], []),
+  LitString(_) => ([], []),
+  LitBool(_)   => ([], []),
+  LitUnit      => ([], []),
+  VarRef(_)    => ([], []),
+  BinOpExpr(_, l, r) => flow_join(flow_edges(l), flow_edges(r)),
+  UnaryOpExpr(_, inner) => flow_edges(inner),
+  CallExpr(f, args) => {
+    let N(fbody, _, _) = f
+    let nm = lower_callee_name(fbody)
+    let here = if nm == "" { ([], []) } else { ([nm], []) }
+    flow_join(here, flow_join(flow_edges(f), flow_edges_list(args)))
+  },
+  IfExpr(c, t, el) =>
+    flow_join(flow_edges(c), flow_join(flow_edges(t), flow_edges(el))),
+  BlockExpr(stmts, final_e) =>
+    flow_join(flow_edges_list(stmts), flow_edges(final_e)),
+  MatchExpr(scrut, arms) =>
+    flow_join(flow_edges(scrut), flow_edges_match_arms(arms)),
+  MakeListExpr(elems)  => flow_edges_list(elems),
+  MakeTupleExpr(elems) => flow_edges_list(elems),
+  MakeStringExpr(frags) => flow_edges_list(frags),
+  IndexExpr(r, i) => flow_join(flow_edges(r), flow_edges(i)),
+  MakeRecordExpr(flds) => flow_edges_fields(flds),
+  RecordUpdateExpr(base, flds) =>
+    flow_join(flow_edges(base), flow_edges_fields(flds)),
+  NamedRecordExpr(_, flds) => flow_edges_fields(flds),
+  LambdaExpr(_, b) => flow_edges(b),
+  ResumeExpr(v, su) => flow_join(flow_edges(v), flow_edges_state_updates(su)),
+  FieldExpr(rec, _) => flow_edges(rec),
+  PipeExpr(kind, l, r) => {
+    let inner = flow_join(flow_edges(l), flow_edges(r))
+    match kind {
+      PTee => {
+        let N(rbody, _, _) = r
+        let hd = installed_handled_ename(rbody)
+        if hd == "" { inner } else {
+          let (cs, hs) = inner
+          (cs, hs ++ [hd])   // drift-audit: ignore — one append per ~> node (visited once), not a loop accumulator; set_canonicalize dedupes at collect_fn_bases
+        }
+      },
+      _ => inner
+    }
+  },
+  ExprPlaceholder  => ([], []),
+  LabeledArg(_, v) => flow_edges(v)
+}
+
+fn flow_edges_stmt(s) = match s {
+  LetStmt(_, expr)               => flow_edges(expr),
+  FnStmt(_, _, _, _, body_node)  => flow_edges(body_node),
+  ExprStmt(expr)                 => flow_edges(expr),
+  TypeDefStmt(_, _)              => ([], []),
+  EffectDeclStmt(_, _)           => ([], []),
+  HandlerDeclStmt(_, _, _, _, _) => ([], []),
+  ImportStmt(_)                  => ([], []),
+  RefineStmt(_, _, _)            => ([], []),
+  AliasStmt(_, _)                => ([], [])
+}
+
+fn flow_edges_match_arms(arms) =
+  fold(arms, ([], []), (acc, arm) => {
+    let (_, body) = arm
+    flow_join(acc, flow_edges(body))
+  })
+
+fn flow_edges_fields(flds) =
+  fold(flds, ([], []), (acc, fld) => {
+    let (_, value) = fld
+    flow_join(acc, flow_edges(value))
+  })
+
+fn flow_edges_state_updates(updates) =
+  fold(updates, ([], []), (acc, upd) => flow_join(acc, flow_edges(upd.init)))
+
+// The effect a `~> h` install absorbs: h's HandlerKind handled_ename. "" when
+// the RHS is not a named handler decl (a value-forwarded handler — the row
+// passes through, nothing subtracted).
+fn installed_handled_ename(handler_body) = {
+  let hname = lower_callee_name(handler_body)
+  if hname == "" { "" } else {
+    match env_lookup(hname) {
+      Some(entry) => {
+        let (_, _, kind) = entry
+        match kind {
+          HandlerKind(ename, _, _, _, _) => ename,
+          _                              => ""
+        }
+      },
+      None => ""
+    }
+  }
+}
+
+// One base per top-level fn: (name, own-leaf, sorted callees, sorted handled).
+fn collect_fn_bases(stmts) =
+  flatten(map((stmt) => {
+    let N(sb, _, _) = stmt
+    match sb {
+      NStmt(FnStmt(name, _, _, _, body_node)) => {
+        let (callees, handled) = flow_edges(body_node)
+        [(name, own_dispatched_row(name),
+          set_canonicalize(callees), set_canonicalize(handled))]
+      },
+      _ => []
+    }
+  }, stmts))
+
+fn assoc_row(cur, name) =
+  if len(cur) == 0 { [] }
+  else {
+    let (n, row) = list_head(cur)
+    if n == name { row } else { assoc_row(list_tail(cur), name) }
+  }
+
+// Option-returning map lookup for ls_escaping_of: None distinguishes "not a
+// top-level fn" (→ the leaf) from "a fn whose flow-closure is empty" (Some []).
+fn esc_assoc(map, name) =
+  if len(map) == 0 { None }
+  else {
+    let (n, row) = list_head(map)
+    if n == name { Some(row) } else { esc_assoc(list_tail(map), name) }
+  }
+
+// One monotone round: each fn's row = (own ∪ ⋃ callee rows) − handled.
+fn escaping_round(bases, cur) =
+  map((b) => {
+    let (name, own, callees, handled) = b
+    let propagated = flatten(map((c) => assoc_row(cur, c), callees))
+    (name, set_difference(set_canonicalize(own ++ propagated), handled))
+  }, bases)
+
+fn rows_equal(a, b) =
+  len(a) == len(b) && fold2_equal(a, b, 0)
+
+fn fold2_equal(a, b, i) =
+  if i >= len(a) { true }
+  else if list_index(a, i) == list_index(b, i) { fold2_equal(a, b, i + 1) }
+  else { false }
+
+fn esc_maps_equal(cur, next) =
+  if len(cur) == 0 { true }
+  else {
+    let (_, ra) = list_head(cur)
+    let (_, rb) = list_head(next)
+    if rows_equal(ra, rb) { esc_maps_equal(list_tail(cur), list_tail(next)) }
+    else { false }
+  }
+
+// Fixpoint over the finite dispatched-effect lattice. Early-stops on a
+// stable round; the cap is the safety bound (effect chains are shallow).
+fn escaping_fixpoint(bases, cur, iters) =
+  if iters >= 32 { cur }
+  else {
+    let next = escaping_round(bases, cur)
+    if esc_maps_equal(cur, next) { next }
+    else { escaping_fixpoint(bases, next, iters + 1) }
+  }
+
+fn compute_escaping_rows(stmts) = {
+  let bases = collect_fn_bases(stmts)
+  let seed = map((b) => {
+    let (name, own, _, handled) = b
+    (name, set_difference(set_canonicalize(own), handled))
+  }, bases)
+  escaping_fixpoint(bases, seed, 0)
+}
 
 // ─── Lexical handler resolution (lower-phase, install-handle-bearing) ──
 // Walk the lower-handler-stack innermost-first; return the discriminated
@@ -2732,6 +2979,10 @@ fn resolve_captures_outer(names, owner_h) = {
 fn lower_program(stmts) = {
   let globals = collect_top_level_names(stmts)
   ls_register_globals(globals)
+  // The flow-closure, computed ONCE (the cached cursor): name → escaping row.
+  // Read live by THE SEAM's two consumers; the env is fully typed here (infer
+  // ran), so own_dispatched + the call-edge fixpoint are both available.
+  ls_register_escaping(compute_escaping_rows(stmts))
   // No pre-register pass: every handler decl's (config, state, arms) is
   // already in the env's HandlerKind (register_handler), so an install
   // resolves its handler's decl live (handler_decl_of) regardless of source
@@ -2799,7 +3050,14 @@ fn push_name(buf, count, name) = {
 // alphabetically, so the WAT layout is captures(0), capture_handles(4),
 // capture_order(8), locals(12), local_handles(16), local_order(20).
 // Mentl source reads via .field — physical layout irrelevant.
-handler lower_scope with frames = [], globals = [], fb_priors = [] {
+handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [] {
+  // THE FLOW-CLOSURE map (name → escaping row), computed once at lower_program
+  // and read live by THE SEAM. Some(row) for a top-level fn; None (→ the leaf)
+  // for a nested fn / lambda / unknown name.
+  ls_register_escaping(map) => resume() with esc_rows = map,
+
+  ls_escaping_of(name) => resume(esc_assoc(esc_rows, name)),
+
   ls_enter_frame(fn_name, locals_in, locals_h, captures_in, captures_h) => {
     // Per Hβ.first-light.nested-fn-name-discriminator (2026-05-06):
     // fn_name carries the named-fn discriminator for nested-fn naming

@@ -214,6 +214,12 @@
     ;; before any stmt lowers, so install sites resolve handlers declared
     ;; in later-sorted modules.
     (call $lower_pre_register_handler_decls (local.get $stmts))
+    ;; THE FLOW-CLOSURE (master plan §6 1★ Stage 1): precompute the whole-program
+    ;; escaping rows ONCE (the cached cursor / IC) before any stmt lowers, so the
+    ;; three seam readers resolve forward-ref-dropped effects off the live
+    ;; call-edges (emit_module's WasmOut via emit_header). Reads the env schemes
+    ;; inference wrote — available now (infer ran before lower).
+    (call $escaping_compute (local.get $stmts))
     (call $lower_stmt_list (local.get $stmts)))
 
   ;; ─── Top-level name collection ────────────────────────────────────

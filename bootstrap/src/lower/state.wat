@@ -745,6 +745,66 @@
         (br $scope_loop)))
     (i32.const 0))
 
+  ;; ─── $handler_count_for_ename — how many handlers cover $ename (memoized) ──
+  ;; The singleton-home gate (EDIT 2): the no-config `$<h>_state_g` HOME read is
+  ;; only sound when EXACTLY ONE handler covers the effect (one graph, installed
+  ;; once). With ≥2 covering handlers the home is ambiguous — fall through to the
+  ;; loud unresolved path rather than silently pick the first. Counts ALL handler
+  ;; decls in the env (every scope) whose arm-groups cover $ename, the same
+  ;; graph-derived coverage $handler_covers_ename reads. Memoized per ename across
+  ;; the compile (the cached cursor — the env is immutable at lower-time).
+  (global $hcount_cache_g (mut i32) (i32.const 0))   ;; assoc list [ename@0][count@1]
+  (func $handler_count_for_ename (param $ename i32) (result i32)
+    (local $cache i32) (local $cn i32) (local $ci i32) (local $entry i32)
+    (local $scope_idx i32) (local $frame i32) (local $buf i32)
+    (local $binding_idx i32) (local $binding i32) (local $kind i32) (local $hname i32)
+    (local $count i32)
+    (call $env_init)
+    (if (i32.eqz (global.get $hcount_cache_g))
+      (then (global.set $hcount_cache_g (call $make_list (i32.const 0)))))
+    (local.set $cache (global.get $hcount_cache_g))
+    (local.set $cn (call $len (local.get $cache)))
+    (local.set $ci (i32.const 0))
+    (block $cdone (loop $cit
+      (br_if $cdone (i32.ge_u (local.get $ci) (local.get $cn)))
+      (local.set $entry (call $list_index (local.get $cache) (local.get $ci)))
+      (if (call $str_eq (call $record_get (local.get $entry) (i32.const 0)) (local.get $ename))
+        (then (return (call $record_get (local.get $entry) (i32.const 1)))))
+      (local.set $ci (i32.add (local.get $ci) (i32.const 1))) (br $cit)))
+    ;; not cached — count over the whole env
+    (local.set $count (i32.const 0))
+    (local.set $scope_idx (global.get $env_scope_count_g))
+    (block $outer_done
+      (loop $scope_loop
+        (br_if $outer_done (i32.eqz (local.get $scope_idx)))
+        (local.set $scope_idx (i32.sub (local.get $scope_idx) (i32.const 1)))
+        (local.set $frame (call $list_index (global.get $env_scopes_ptr) (local.get $scope_idx)))
+        (local.set $buf (call $env_frame_buf (local.get $frame)))
+        (local.set $binding_idx (call $env_frame_len (local.get $frame)))
+        (block $inner_done
+          (loop $binding_loop
+            (br_if $inner_done (i32.eqz (local.get $binding_idx)))
+            (local.set $binding_idx (i32.sub (local.get $binding_idx) (i32.const 1)))
+            (local.set $binding (call $list_index (local.get $buf) (local.get $binding_idx)))
+            (local.set $kind (call $env_binding_kind (local.get $binding)))
+            (if (i32.and (i32.ge_u (local.get $kind) (global.get $heap_base))
+                  (i32.eq (call $tag_of (local.get $kind)) (global.get $schemekind_handler_tag)))
+              (then
+                (local.set $hname (call $env_binding_name (local.get $binding)))
+                (if (call $handler_covers_ename (local.get $hname) (local.get $ename))
+                  (then (local.set $count (i32.add (local.get $count) (i32.const 1)))))))
+            (br $binding_loop)))
+        (br $scope_loop)))
+    ;; memoize
+    (local.set $entry (call $make_record (i32.const 218) (i32.const 2)))
+    (call $record_set (local.get $entry) (i32.const 0) (local.get $ename))
+    (call $record_set (local.get $entry) (i32.const 1) (local.get $count))
+    (local.set $cache (call $list_extend_to (local.get $cache) (i32.add (local.get $cn) (i32.const 1))))
+    (i32.store (local.get $cache) (i32.add (local.get $cn) (i32.const 1)))
+    (drop (call $list_set (local.get $cache) (local.get $cn) (local.get $entry)))
+    (global.set $hcount_cache_g (local.get $cache))
+    (local.get $count))
+
   ;; ─── Arm-body evidence ledger (Hβ.emit.handler-record-ev-capture) ────
   ;; A handler record is also the closure of its arm bodies — and a
   ;; closure captures the evidence its body performs through (handler IS

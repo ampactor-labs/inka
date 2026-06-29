@@ -20971,6 +20971,66 @@
         (br $scope_loop)))
     (i32.const 0))
 
+  ;; ─── $handler_count_for_ename — how many handlers cover $ename (memoized) ──
+  ;; The singleton-home gate (EDIT 2): the no-config `$<h>_state_g` HOME read is
+  ;; only sound when EXACTLY ONE handler covers the effect (one graph, installed
+  ;; once). With ≥2 covering handlers the home is ambiguous — fall through to the
+  ;; loud unresolved path rather than silently pick the first. Counts ALL handler
+  ;; decls in the env (every scope) whose arm-groups cover $ename, the same
+  ;; graph-derived coverage $handler_covers_ename reads. Memoized per ename across
+  ;; the compile (the cached cursor — the env is immutable at lower-time).
+  (global $hcount_cache_g (mut i32) (i32.const 0))   ;; assoc list [ename@0][count@1]
+  (func $handler_count_for_ename (param $ename i32) (result i32)
+    (local $cache i32) (local $cn i32) (local $ci i32) (local $entry i32)
+    (local $scope_idx i32) (local $frame i32) (local $buf i32)
+    (local $binding_idx i32) (local $binding i32) (local $kind i32) (local $hname i32)
+    (local $count i32)
+    (call $env_init)
+    (if (i32.eqz (global.get $hcount_cache_g))
+      (then (global.set $hcount_cache_g (call $make_list (i32.const 0)))))
+    (local.set $cache (global.get $hcount_cache_g))
+    (local.set $cn (call $len (local.get $cache)))
+    (local.set $ci (i32.const 0))
+    (block $cdone (loop $cit
+      (br_if $cdone (i32.ge_u (local.get $ci) (local.get $cn)))
+      (local.set $entry (call $list_index (local.get $cache) (local.get $ci)))
+      (if (call $str_eq (call $record_get (local.get $entry) (i32.const 0)) (local.get $ename))
+        (then (return (call $record_get (local.get $entry) (i32.const 1)))))
+      (local.set $ci (i32.add (local.get $ci) (i32.const 1))) (br $cit)))
+    ;; not cached — count over the whole env
+    (local.set $count (i32.const 0))
+    (local.set $scope_idx (global.get $env_scope_count_g))
+    (block $outer_done
+      (loop $scope_loop
+        (br_if $outer_done (i32.eqz (local.get $scope_idx)))
+        (local.set $scope_idx (i32.sub (local.get $scope_idx) (i32.const 1)))
+        (local.set $frame (call $list_index (global.get $env_scopes_ptr) (local.get $scope_idx)))
+        (local.set $buf (call $env_frame_buf (local.get $frame)))
+        (local.set $binding_idx (call $env_frame_len (local.get $frame)))
+        (block $inner_done
+          (loop $binding_loop
+            (br_if $inner_done (i32.eqz (local.get $binding_idx)))
+            (local.set $binding_idx (i32.sub (local.get $binding_idx) (i32.const 1)))
+            (local.set $binding (call $list_index (local.get $buf) (local.get $binding_idx)))
+            (local.set $kind (call $env_binding_kind (local.get $binding)))
+            (if (i32.and (i32.ge_u (local.get $kind) (global.get $heap_base))
+                  (i32.eq (call $tag_of (local.get $kind)) (global.get $schemekind_handler_tag)))
+              (then
+                (local.set $hname (call $env_binding_name (local.get $binding)))
+                (if (call $handler_covers_ename (local.get $hname) (local.get $ename))
+                  (then (local.set $count (i32.add (local.get $count) (i32.const 1)))))))
+            (br $binding_loop)))
+        (br $scope_loop)))
+    ;; memoize
+    (local.set $entry (call $make_record (i32.const 218) (i32.const 2)))
+    (call $record_set (local.get $entry) (i32.const 0) (local.get $ename))
+    (call $record_set (local.get $entry) (i32.const 1) (local.get $count))
+    (local.set $cache (call $list_extend_to (local.get $cache) (i32.add (local.get $cn) (i32.const 1))))
+    (i32.store (local.get $cache) (i32.add (local.get $cn) (i32.const 1)))
+    (drop (call $list_set (local.get $cache) (local.get $cn) (local.get $entry)))
+    (global.set $hcount_cache_g (local.get $cache))
+    (local.get $count))
+
   ;; ─── Arm-body evidence ledger (Hβ.emit.handler-record-ev-capture) ────
   ;; A handler record is also the closure of its arm bodies — and a
   ;; closure captures the evidence its body performs through (handler IS
@@ -24564,7 +24624,10 @@
     (if (i32.eqz (local.get $binding)) (then (return (i32.const -1))))
     (local.set $scheme (call $env_binding_scheme (local.get $binding)))
     (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const -1))))
-    (local.set $names (call $effects_of (call $scheme_body (local.get $scheme))))
+    ;; THE FLOW-CLOSURE (master plan §6 1★ Stage 1): read the live escaping row
+    ;; by name (recovers forward-ref-dropped effects), not the frozen
+    ;; effects_of(scheme) leaf. SAME projection $derive_ev_slots places against.
+    (local.set $names (call $escaping_row (local.get $fn_name)))
     (local.set $n (call $len (local.get $names)))
     (local.set $j (i32.const 0))
     (block $found
@@ -24654,13 +24717,23 @@
                 (drop (call $list_set (local.get $evs) (local.get $i)
                         (call $lexpr_make_levslotref (i32.const 0) (local.get $raw)))))
               (else
-                (local.set $hname (call $lower_lookup_default_handler_for_ename (local.get $ename)))
+                ;; step 3 — singleton home, GATED on EXACTLY ONE covering handler
+                ;; (EDIT 2): the `$<h>_state_g` HOME is sound only when one graph
+                ;; node is installed once for the effect. ≥2 covering handlers →
+                ;; ambiguous → fall to step 4 rather than silently pick the first.
+                (local.set $hname
+                  (if (result i32) (i32.eq (call $handler_count_for_ename (local.get $ename)) (i32.const 1))
+                    (then (call $lower_lookup_default_handler_for_ename (local.get $ename)))
+                    (else (i32.const 0))))
                 (if (i32.ne (local.get $hname) (i32.const 0))
                   (then
                     (drop (call $list_set (local.get $evs) (local.get $i)
                             (call $lexpr_make_lglobal (i32.const 0)
                               (call $str_concat (local.get $hname) (i32.const 5424))))))
                   (else
+                    ;; step 4 — genuinely unresolved: SPEAK it (delete the silence),
+                    ;; emit slot 0 only so downstream emit composes (PUE).
+                    (call $esc_eprint_unresolved_evidence (local.get $ename))
                     (drop (call $list_set (local.get $evs) (local.get $i)
                             (call $lexpr_make_levslotref (i32.const 0) (i32.const 0))))))))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -24683,8 +24756,11 @@
     (local.set $scheme (call $env_binding_scheme (local.get $binding)))
     (if (i32.lt_u (local.get $scheme) (global.get $heap_base))
       (then (return (call $make_list (i32.const 0)))))
+    ;; THE FLOW-CLOSURE: thread the callee's LIVE escaping row (recovers the
+    ;; forward-ref-dropped effects effects_of(scheme) lost). The callee reads
+    ;; its own slot through the SAME $escaping_row(name) — slots agree.
     (call $resolve_evs_for_names
-      (call $effects_of (call $scheme_body (local.get $scheme)))))
+      (call $escaping_row (local.get $name))))
 
   ;; ─── $derive_closure_evs — a closure's OWN evidence (its handle's row) ───────
   ;; The effects THIS closure's body performs, from its inferred type at the
@@ -25111,12 +25187,12 @@
     (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
     (local.set $scheme (call $env_binding_scheme (local.get $binding)))
     (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const 0))))
-    ;; THE SEAM: one $effects_of read — the SAME projection $derive_ev_slots uses,
-    ;; from the SAME source (the fn's inferred TFun row), so this READ index ==
-    ;; the PLACED index by construction (no re-derivation contract, no declared-
-    ;; vs-inferred-row divergence). Stage 1 swaps $effects_of to the live
-    ;; flow-closure and this consumer does not change.
-    (local.set $names (call $effects_of (call $scheme_body (local.get $scheme))))
+    ;; THE SEAM: one $escaping_row read — the SAME projection $derive_ev_slots
+    ;; places against, so this READ index == the PLACED index by construction
+    ;; (no re-derivation contract, no declared-vs-inferred-row divergence). The
+    ;; live flow-closure (Stage 1) recovers forward-ref-dropped effects the
+    ;; frozen effects_of(scheme) leaf lost (emit_module's WasmOut via emit_header).
+    (local.set $names (call $escaping_row (local.get $fn_name)))
     (local.set $n (call $len (local.get $names)))
     (local.set $j (i32.const 0))
     (block $found
@@ -25138,6 +25214,500 @@
     (call $eprint_string (local.get $effect_name))
     (call $eprint_string (local.get $nl))
     (i32.const 0))
+
+  ;; ════════════════════════════════════════════════════════════════════════
+  ;; THE FLOW-CLOSURE (seed half — mirror of src/lower.mn escaping_row block).
+  ;; escaping(name) = ( own_dispatched(name)
+  ;;                    ∪ ⋃ { escaping(c) | c ∈ static_callees(name) } )
+  ;;                  − handled_locally(name)
+  ;; Recovers the forward-ref class (a mutually-recursive callee bound AFTER
+  ;; `name` generalized — emit_module losing WasmOut via emit_header) by reading
+  ;; the effect off the CALL-EDGES live. The seam's three readers (above) all
+  ;; read THIS one projection, so caller-placed slot == callee-read slot.
+  ;; Precomputed ONCE at $lower_program (the cached cursor / IC), read by name.
+  ;; NB: the seed's escaping row need NOT byte-match the wheel's order — m2 only
+  ;; needs internal consistency (same fn → same row); m3==m4 runs the wheel's.
+  ;; So the slot is the iteration index, consistent per-fn → order is free, no
+  ;; lex-sort needed (the seed has no string compare). Dedup-preserving-order.
+  ;; ════════════════════════════════════════════════════════════════════════
+  (global $escaping_map_g (mut i32) (i32.const 0))   ;; list of [name@0][row@1] pairs
+  (global $esc_cbuf_g   (mut i32) (i32.const 0))     ;; walker callee buffer (capacity = len(buf))
+  (global $esc_ccount_g (mut i32) (i32.const 0))     ;; walker callee logical count
+  (global $esc_hbuf_g   (mut i32) (i32.const 0))     ;; walker handled-ename buffer
+  (global $esc_hcount_g (mut i32) (i32.const 0))     ;; walker handled logical count
+
+  ;; ── buffer-counter primitives. THE LAW (PLAN §9 `acc ++ [x]`): list_extend_to's
+  ;; realloc path stores count=capacity (the count/cap conflation), so a len()-keyed
+  ;; append is O(N²) AND mis-counts under interleaved allocation. The buffer-counter
+  ;; is the ultimate form: capacity == len(make_list) (never extended, so it stays
+  ;; the cap), the LOGICAL count tracked separately, list_set in place, double on
+  ;; full, slice(buf,0,count) materializes the exact list. Amortized O(1), O(N) mem.
+
+  ;; membership over a finished list (len() == real count — sliced producers only)
+  (func $esc_str_in (param $list i32) (param $name i32) (result i32)
+    (local $n i32) (local $i i32)
+    (if (i32.eqz (local.get $list)) (then (return (i32.const 0))))
+    (local.set $n (call $len (local.get $list)))
+    (local.set $i (i32.const 0))
+    (block $done (loop $it
+      (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+      (if (call $str_eq (call $list_index (local.get $list) (local.get $i)) (local.get $name))
+        (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (i32.const 0))
+
+  ;; membership over the first $count slots of an in-progress buffer
+  (func $esc_str_in_n (param $buf i32) (param $count i32) (param $name i32) (result i32)
+    (local $i i32)
+    (local.set $i (i32.const 0))
+    (block $done (loop $it
+      (br_if $done (i32.ge_u (local.get $i) (local.get $count)))
+      (if (call $str_eq (call $list_index (local.get $buf) (local.get $i)) (local.get $name))
+        (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (i32.const 0))
+
+  ;; push $val into slot $count of $buf, doubling capacity (= len(buf)) when full.
+  ;; Caller owns the count and increments it; this returns the (possibly grown) buf.
+  (func $esc_push (param $buf i32) (param $count i32) (param $val i32) (result i32)
+    (local $cap i32) (local $nb i32) (local $i i32)
+    (local.set $cap (call $len (local.get $buf)))
+    (if (i32.ge_u (local.get $count) (local.get $cap)) (then
+      (local.set $nb (call $make_list (i32.mul (local.get $cap) (i32.const 2))))
+      (local.set $i (i32.const 0))
+      (block $d (loop $c
+        (br_if $d (i32.ge_u (local.get $i) (local.get $count)))
+        (drop (call $list_set (local.get $nb) (local.get $i)
+          (call $list_index (local.get $buf) (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $c)))
+      (local.set $buf (local.get $nb))))
+    (drop (call $list_set (local.get $buf) (local.get $count) (local.get $val)))
+    (local.get $buf))
+
+  ;; dedup preserving first-encounter order → a fresh sliced list
+  (func $esc_canon (param $list i32) (result i32)
+    (local $n i32) (local $i i32) (local $buf i32) (local $count i32) (local $name i32)
+    (local.set $buf (call $make_list (i32.const 8)))
+    (local.set $count (i32.const 0))
+    (if (i32.eqz (local.get $list)) (then (return (call $slice (local.get $buf) (i32.const 0) (i32.const 0)))))
+    (local.set $n (call $len (local.get $list)))
+    (local.set $i (i32.const 0))
+    (block $done (loop $it
+      (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $name (call $list_index (local.get $list) (local.get $i)))
+      (if (i32.eqz (call $esc_str_in_n (local.get $buf) (local.get $count) (local.get $name)))
+        (then
+          (local.set $buf (call $esc_push (local.get $buf) (local.get $count) (local.get $name)))
+          (local.set $count (i32.add (local.get $count) (i32.const 1)))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
+
+  ;; set difference a − b (b is a finished list, len-keyed membership is correct)
+  (func $esc_diff (param $a i32) (param $b i32) (result i32)
+    (local $n i32) (local $i i32) (local $buf i32) (local $count i32) (local $name i32)
+    (local.set $buf (call $make_list (i32.const 8)))
+    (local.set $count (i32.const 0))
+    (if (i32.eqz (local.get $a)) (then (return (call $slice (local.get $buf) (i32.const 0) (i32.const 0)))))
+    (local.set $n (call $len (local.get $a)))
+    (local.set $i (i32.const 0))
+    (block $done (loop $it
+      (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $name (call $list_index (local.get $a) (local.get $i)))
+      (if (i32.eqz (call $esc_str_in (local.get $b) (local.get $name)))
+        (then
+          (local.set $buf (call $esc_push (local.get $buf) (local.get $count) (local.get $name)))
+          (local.set $count (i32.add (local.get $count) (i32.const 1)))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
+
+  ;; list concat a ++ b → a fresh sliced list
+  (func $esc_concat (param $a i32) (param $b i32) (result i32)
+    (local $buf i32) (local $count i32) (local $n i32) (local $i i32)
+    (local.set $buf (call $make_list (i32.const 8)))
+    (local.set $count (i32.const 0))
+    (local.set $n (call $len (local.get $a)))
+    (local.set $i (i32.const 0))
+    (block $da (loop $ia
+      (br_if $da (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $buf (call $esc_push (local.get $buf) (local.get $count) (call $list_index (local.get $a) (local.get $i))))
+      (local.set $count (i32.add (local.get $count) (i32.const 1)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $ia)))
+    (local.set $n (call $len (local.get $b)))
+    (local.set $i (i32.const 0))
+    (block $db (loop $ib
+      (br_if $db (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $buf (call $esc_push (local.get $buf) (local.get $count) (call $list_index (local.get $b) (local.get $i))))
+      (local.set $count (i32.add (local.get $count) (i32.const 1)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $ib)))
+    (call $slice (local.get $buf) (i32.const 0) (local.get $count)))
+
+  ;; own_dispatched leaf: the fn's generalized-scheme dispatched row (the SAME
+  ;; read the old seam used — never deleted; it is the flow-closure's base case
+  ;; AND the fallback for non-fn globals, so those stay byte-identical).
+  (func $esc_own_dispatched_row (param $name i32) (result i32)
+    (local $binding i32) (local $scheme i32)
+    (local.set $binding (call $env_lookup_value (local.get $name)))
+    (if (i32.eqz (local.get $binding)) (then (return (call $make_list (i32.const 0)))))
+    (local.set $scheme (call $env_binding_scheme (local.get $binding)))
+    (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (call $make_list (i32.const 0)))))
+    (call $effects_of (call $scheme_body (local.get $scheme))))
+
+  ;; callee name from an N-wrapper node: VarRef → name, FieldExpr → field,
+  ;; CallExpr → recurse on its callee. Else 0 (anonymous lambda/resume).
+  ;; Mirror of src/lower.mn lower_callee_name.
+  (func $flow_callee_name (param $node i32) (result i32)
+    (local $body i32) (local $inner i32) (local $tag i32)
+    (if (i32.lt_u (local.get $node) (global.get $heap_base)) (then (return (i32.const 0))))
+    (local.set $body (i32.load offset=4 (local.get $node)))
+    (if (i32.lt_u (local.get $body) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.ne (i32.load (local.get $body)) (i32.const 110)) (then (return (i32.const 0)))) ;; not NExpr
+    (local.set $inner (i32.load offset=4 (local.get $body)))
+    (local.set $tag (call $tag_of (local.get $inner)))
+    (if (i32.eq (local.get $tag) (i32.const 85))   ;; VarRef name@4
+      (then (return (i32.load offset=4 (local.get $inner)))))
+    (if (i32.eq (local.get $tag) (i32.const 100))  ;; FieldExpr field@8
+      (then (return (i32.load offset=8 (local.get $inner)))))
+    (if (i32.eq (local.get $tag) (i32.const 88))   ;; CallExpr callee@4 — recurse
+      (then (return (call $flow_callee_name (i32.load offset=4 (local.get $inner))))))
+    (i32.const 0))
+
+  ;; The effect a `~> h` install absorbs: h's HandlerKind handled_ename (field 0).
+  ;; 0 when the RHS is not a named handler decl. Mirror of installed_handled_ename.
+  (func $flow_installed_handled_ename (param $right_node i32) (result i32)
+    (local $hname i32) (local $binding i32) (local $kind i32)
+    (local.set $hname (call $flow_callee_name (local.get $right_node)))
+    (if (i32.eqz (local.get $hname)) (then (return (i32.const 0))))
+    (local.set $binding (call $env_lookup_value (local.get $hname)))
+    (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
+    (local.set $kind (call $env_binding_kind (local.get $binding)))
+    (if (i32.lt_u (local.get $kind) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.ne (call $tag_of (local.get $kind)) (global.get $schemekind_handler_tag))
+      (then (return (i32.const 0))))
+    (call $record_get (local.get $kind) (i32.const 0)))
+
+  ;; W_UnresolvedEvidence: the genuinely-unresolved evidence path speaks (`<ename>`
+  ;; per line on stderr) rather than silently fabricating slot 0 — the surrender-
+  ;; fallback the no-silent-fallback law forbids. Value stays LEvSlotRef(0,0) so
+  ;; downstream emit composes (productive-under-error); the SILENCE is deleted.
+  (func $esc_eprint_unresolved_evidence (param $ename i32)
+    (local $nl i32)
+    (local.set $nl (call $str_alloc (i32.const 1)))
+    (i32.store8 (i32.add (local.get $nl) (i32.const 4)) (i32.const 10))
+    (call $eprint_string (i32.const 4400))      ;; "_" marker prefix
+    (call $eprint_string (local.get $ename))
+    (call $eprint_string (local.get $nl)))
+
+  (func $esc_emit_callee (param $name i32)
+    (if (i32.eqz (local.get $name)) (then (return)))
+    (global.set $esc_cbuf_g (call $esc_push (global.get $esc_cbuf_g) (global.get $esc_ccount_g) (local.get $name)))
+    (global.set $esc_ccount_g (i32.add (global.get $esc_ccount_g) (i32.const 1))))
+  (func $esc_emit_handled (param $name i32)
+    (if (i32.eqz (local.get $name)) (then (return)))
+    (global.set $esc_hbuf_g (call $esc_push (global.get $esc_hbuf_g) (global.get $esc_hcount_g) (local.get $name)))
+    (global.set $esc_hcount_g (i32.add (global.get $esc_hcount_g) (i32.const 1))))
+
+  ;; ── the AST walker: collect (callee_names, handled_enames) off the body.
+  ;; COMPLETE over every parser node tag (a missed tag = a missed callee = a
+  ;; wrong row = a silent miscompile). $escaping_walk takes the N-wrapper and
+  ;; dispatches NExpr(110)/NStmt(111); leaves (NPat/NHole) bottom out.
+  (func $escaping_walk (param $node i32)
+    (local $body i32) (local $bt i32)
+    (if (i32.lt_u (local.get $node) (global.get $heap_base)) (then (return)))
+    (local.set $body (i32.load offset=4 (local.get $node)))
+    (if (i32.lt_u (local.get $body) (global.get $heap_base)) (then (return)))
+    (local.set $bt (i32.load (local.get $body)))
+    (if (i32.eq (local.get $bt) (i32.const 110))
+      (then (call $escaping_walk_expr (i32.load offset=4 (local.get $body)))))
+    (if (i32.eq (local.get $bt) (i32.const 111))
+      (then (call $escaping_walk_stmt (i32.load offset=4 (local.get $body))))))
+
+  (func $escaping_walk_list (param $list i32)
+    (local $n i32) (local $i i32)
+    (if (i32.eqz (local.get $list)) (then (return)))
+    (local.set $n (call $len (local.get $list)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (call $escaping_walk (call $list_index (local.get $list) (local.get $i)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $it))))
+
+  ;; match/handle arms — each arm is a 2-list [pat, body]; recurse the body.
+  (func $escaping_walk_arms (param $arms i32)
+    (local $n i32) (local $i i32) (local $arm i32)
+    (if (i32.eqz (local.get $arms)) (then (return)))
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $arm (call $list_index (local.get $arms) (local.get $i)))
+      (call $escaping_walk (call $list_index (local.get $arm) (i32.const 1)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $it))))
+
+  ;; record fields — each field is a record, value at index 1 (sorted name<value).
+  (func $escaping_walk_fields (param $fields i32)
+    (local $n i32) (local $i i32) (local $fld i32)
+    (if (i32.eqz (local.get $fields)) (then (return)))
+    (local.set $n (call $len (local.get $fields)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $fld (call $list_index (local.get $fields) (local.get $i)))
+      (call $escaping_walk (call $record_get (local.get $fld) (i32.const 1)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $it))))
+
+  ;; resume state-updates — each is a 2-list [name, init]; recurse the init.
+  (func $escaping_walk_updates (param $ups i32)
+    (local $n i32) (local $i i32) (local $u i32)
+    (if (i32.eqz (local.get $ups)) (then (return)))
+    (local.set $n (call $len (local.get $ups)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $u (call $list_index (local.get $ups) (local.get $i)))
+      (call $escaping_walk (call $list_index (local.get $u) (i32.const 1)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $it))))
+
+  (func $escaping_walk_expr (param $e i32)
+    (local $tag i32) (local $callee i32)
+    (local.set $tag (call $tag_of (local.get $e)))
+    (if (i32.eq (local.get $tag) (i32.const 86)) (then   ;; BinOpExpr op@4 l@8 r@12
+      (call $escaping_walk (i32.load offset=8 (local.get $e)))
+      (call $escaping_walk (i32.load offset=12 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 87)) (then   ;; UnaryOpExpr op@4 inner@8
+      (call $escaping_walk (i32.load offset=8 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 88)) (then   ;; CallExpr callee@4 args@8
+      (local.set $callee (i32.load offset=4 (local.get $e)))
+      (call $esc_emit_callee (call $flow_callee_name (local.get $callee)))
+      (call $escaping_walk (local.get $callee))
+      (call $escaping_walk_list (i32.load offset=8 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 89)) (then   ;; LambdaExpr params@4 body@8
+      (call $escaping_walk (i32.load offset=8 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 90)) (then   ;; IfExpr cond@4 then@8 else@12
+      (call $escaping_walk (i32.load offset=4 (local.get $e)))
+      (call $escaping_walk (i32.load offset=8 (local.get $e)))
+      (call $escaping_walk (i32.load offset=12 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 91)) (then   ;; BlockExpr stmts@4 final@8
+      (call $escaping_walk_list (i32.load offset=4 (local.get $e)))
+      (call $escaping_walk (i32.load offset=8 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 92)) (then   ;; MatchExpr scrut@4 arms@8
+      (call $escaping_walk (i32.load offset=4 (local.get $e)))
+      (call $escaping_walk_arms (i32.load offset=8 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 93)) (then   ;; HandleExpr body@4 arms@8
+      (call $escaping_walk (i32.load offset=4 (local.get $e)))
+      (call $escaping_walk_arms (i32.load offset=8 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 94)) (then   ;; PerformExpr op@4 args@8 (op not a fn callee)
+      (call $escaping_walk_list (i32.load offset=8 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 95)) (then   ;; ResumeExpr val@4 updates@8
+      (call $escaping_walk (i32.load offset=4 (local.get $e)))
+      (call $escaping_walk_updates (i32.load offset=8 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 96)) (then   ;; MakeListExpr elems@4
+      (call $escaping_walk_list (i32.load offset=4 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 97)) (then   ;; MakeTupleExpr elems@4
+      (call $escaping_walk_list (i32.load offset=4 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 98)) (then   ;; MakeRecordExpr fields@4
+      (call $escaping_walk_fields (i32.load offset=4 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 99)) (then   ;; NamedRecordExpr name@4 fields@8
+      (call $escaping_walk_fields (i32.load offset=8 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 100)) (then  ;; FieldExpr rec@4 field@8
+      (call $escaping_walk (i32.load offset=4 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 101)) (then  ;; PipeExpr kind@4 left@8 right@12
+      (call $escaping_walk (i32.load offset=8 (local.get $e)))
+      (call $escaping_walk (i32.load offset=12 (local.get $e)))
+      (if (i32.eq (i32.load offset=4 (local.get $e)) (i32.const 163))   ;; PTee → subtract handled
+        (then (call $esc_emit_handled
+          (call $flow_installed_handled_ename (i32.load offset=12 (local.get $e))))))
+      (return)))
+    (if (i32.eq (local.get $tag) (i32.const 103)) (then  ;; MakeStringExpr frags@4
+      (call $escaping_walk_list (i32.load offset=4 (local.get $e))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 104)) (then  ;; IndexExpr rec@4 idx@8
+      (call $escaping_walk (i32.load offset=4 (local.get $e)))
+      (call $escaping_walk (i32.load offset=8 (local.get $e))) (return))))
+    ;; 80-85 lits/var, 102 NErrorExpr → leaves (no children, no callee)
+
+  (func $escaping_walk_stmt (param $s i32)
+    (local $tag i32)
+    (local.set $tag (call $tag_of (local.get $s)))
+    (if (i32.eq (local.get $tag) (i32.const 120)) (then  ;; LetStmt pat@4 val@8
+      (call $escaping_walk (i32.load offset=8 (local.get $s))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 121)) (then  ;; FnStmt name@4 .. body@20
+      (call $escaping_walk (i32.load offset=20 (local.get $s))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 125)) (then  ;; ExprStmt node@4
+      (call $escaping_walk (i32.load offset=4 (local.get $s))) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 128)) (then  ;; Documented inner_node@8
+      (call $escaping_walk (i32.load offset=8 (local.get $s))) (return))))
+    ;; 122 TypeDef / 123 EffectDecl / 124 HandlerDecl / 126 Import / 127 Refine /
+    ;; 129 NErrorStmt → leaves (mirror wheel flow_edges_stmt — a handler decl's
+    ;; arm bodies are NOT top-level fns, so they contribute no escaping edges)
+
+  ;; ── one base per top-level FnStmt: (name, own-leaf, canon callees, canon handled)
+  (func $esc_collect_bases (param $stmts i32) (result i32)
+    (local $n i32) (local $i i32) (local $bases i32) (local $count i32)
+    (local $node i32) (local $body i32) (local $inner i32) (local $name i32)
+    (local $bnode i32) (local $base i32)
+    (local.set $n (call $len (local.get $stmts)))
+    (local.set $bases (call $make_list (i32.const 0)))
+    (local.set $count (i32.const 0))
+    (local.set $i (i32.const 0))
+    (block $done (loop $it
+      (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $node (call $list_index (local.get $stmts) (local.get $i)))
+      (local.set $body (i32.load offset=4 (local.get $node)))
+      (if (i32.ge_u (local.get $body) (global.get $heap_base)) (then
+        (if (i32.eq (i32.load (local.get $body)) (i32.const 111)) (then   ;; NStmt
+          (local.set $inner (i32.load offset=4 (local.get $body)))
+          (if (i32.eq (call $tag_of (local.get $inner)) (i32.const 121)) (then   ;; FnStmt
+            (local.set $name (i32.load offset=4 (local.get $inner)))
+            (local.set $bnode (i32.load offset=20 (local.get $inner)))
+            (global.set $esc_cbuf_g (call $make_list (i32.const 8)))
+            (global.set $esc_ccount_g (i32.const 0))
+            (global.set $esc_hbuf_g (call $make_list (i32.const 8)))
+            (global.set $esc_hcount_g (i32.const 0))
+            (call $escaping_walk (local.get $bnode))
+            (local.set $base (call $make_record (i32.const 217) (i32.const 4)))
+            (call $record_set (local.get $base) (i32.const 0) (local.get $name))
+            (call $record_set (local.get $base) (i32.const 1) (call $esc_own_dispatched_row (local.get $name)))
+            (call $record_set (local.get $base) (i32.const 2)
+              (call $esc_canon (call $slice (global.get $esc_cbuf_g) (i32.const 0) (global.get $esc_ccount_g))))
+            (call $record_set (local.get $base) (i32.const 3)
+              (call $esc_canon (call $slice (global.get $esc_hbuf_g) (i32.const 0) (global.get $esc_hcount_g))))
+            (local.set $bases (call $list_extend_to (local.get $bases) (i32.add (local.get $count) (i32.const 1))))
+            (drop (call $list_set (local.get $bases) (local.get $count) (local.get $base)))
+            (local.set $count (i32.add (local.get $count) (i32.const 1)))))))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $it)))
+    (local.get $bases))
+
+  (func $esc_make_pair (param $name i32) (param $row i32) (result i32)
+    (local $p i32)
+    (local.set $p (call $make_record (i32.const 216) (i32.const 2)))
+    (call $record_set (local.get $p) (i32.const 0) (local.get $name))
+    (call $record_set (local.get $p) (i32.const 1) (local.get $row))
+    (local.get $p))
+
+  ;; assoc_row over the cur map; [] when not found (the round's propagation).
+  (func $esc_assoc_row (param $map i32) (param $name i32) (result i32)
+    (local $n i32) (local $i i32) (local $pair i32)
+    (local.set $n (call $len (local.get $map)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $pair (call $list_index (local.get $map) (local.get $i)))
+      (if (call $str_eq (call $record_get (local.get $pair) (i32.const 0)) (local.get $name))
+        (then (return (call $record_get (local.get $pair) (i32.const 1)))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $it)))
+    (call $make_list (i32.const 0)))
+
+  ;; one monotone round: each fn's row = diff(canon(own ∪ ⋃ callee rows), handled).
+  (func $esc_round (param $bases i32) (param $cur i32) (result i32)
+    (local $n i32) (local $i i32) (local $out i32)
+    (local $base i32) (local $name i32) (local $own i32) (local $callees i32) (local $handled i32)
+    (local $prop i32) (local $cn i32) (local $ci i32) (local $row i32)
+    (local.set $n (call $len (local.get $bases)))
+    (local.set $out (call $make_list (i32.const 0)))
+    (local.set $out (call $list_extend_to (local.get $out) (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done (loop $it
+      (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $base (call $list_index (local.get $bases) (local.get $i)))
+      (local.set $name (call $record_get (local.get $base) (i32.const 0)))
+      (local.set $own (call $record_get (local.get $base) (i32.const 1)))
+      (local.set $callees (call $record_get (local.get $base) (i32.const 2)))
+      (local.set $handled (call $record_get (local.get $base) (i32.const 3)))
+      (local.set $prop (call $make_list (i32.const 0)))
+      (local.set $cn (call $len (local.get $callees)))
+      (local.set $ci (i32.const 0))
+      (block $cd (loop $cit
+        (br_if $cd (i32.ge_u (local.get $ci) (local.get $cn)))
+        (local.set $prop (call $esc_concat (local.get $prop)
+          (call $esc_assoc_row (local.get $cur) (call $list_index (local.get $callees) (local.get $ci)))))
+        (local.set $ci (i32.add (local.get $ci) (i32.const 1))) (br $cit)))
+      (local.set $row (call $esc_diff
+        (call $esc_canon (call $esc_concat (local.get $own) (local.get $prop)))
+        (local.get $handled)))
+      (drop (call $list_set (local.get $out) (local.get $i) (call $esc_make_pair (local.get $name) (local.get $row))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $it)))
+    (local.get $out))
+
+  (func $esc_rows_equal (param $a i32) (param $b i32) (result i32)
+    (local $n i32) (local $i i32)
+    (local.set $n (call $len (local.get $a)))
+    (if (i32.ne (local.get $n) (call $len (local.get $b))) (then (return (i32.const 0))))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (if (i32.eqz (call $str_eq (call $list_index (local.get $a) (local.get $i))
+                                 (call $list_index (local.get $b) (local.get $i))))
+        (then (return (i32.const 0))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $it)))
+    (i32.const 1))
+
+  (func $esc_maps_equal (param $cur i32) (param $next i32) (result i32)
+    (local $n i32) (local $i i32)
+    (local.set $n (call $len (local.get $cur)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (if (i32.eqz (call $esc_rows_equal
+            (call $record_get (call $list_index (local.get $cur) (local.get $i)) (i32.const 1))
+            (call $record_get (call $list_index (local.get $next) (local.get $i)) (i32.const 1))))
+        (then (return (i32.const 0))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $it)))
+    (i32.const 1))
+
+  ;; fixpoint over the finite dispatched-effect lattice; early-stop, cap 32.
+  (func $esc_fixpoint (param $bases i32) (param $cur i32) (result i32)
+    (local $iters i32) (local $next i32)
+    (local.set $iters (i32.const 0))
+    (block $done (loop $it
+      (br_if $done (i32.ge_s (local.get $iters) (i32.const 32)))
+      (local.set $next (call $esc_round (local.get $bases) (local.get $cur)))
+      (if (call $esc_maps_equal (local.get $cur) (local.get $next))
+        (then (return (local.get $next))))
+      (local.set $cur (local.get $next))
+      (local.set $iters (i32.add (local.get $iters) (i32.const 1)))
+      (br $it)))
+    (local.get $cur))
+
+  ;; precompute the whole-program flow-closure ONCE; install into $escaping_map_g.
+  (func $escaping_compute (export "escaping_compute") (param $stmts i32)
+    (local $bases i32) (local $seed i32) (local $n i32) (local $i i32)
+    (local $base i32) (local $own i32) (local $handled i32) (local $row i32)
+    (local.set $bases (call $esc_collect_bases (local.get $stmts)))
+    (local.set $n (call $len (local.get $bases)))
+    (local.set $seed (call $make_list (i32.const 0)))
+    (local.set $seed (call $list_extend_to (local.get $seed) (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $base (call $list_index (local.get $bases) (local.get $i)))
+      (local.set $own (call $record_get (local.get $base) (i32.const 1)))
+      (local.set $handled (call $record_get (local.get $base) (i32.const 3)))
+      (local.set $row (call $esc_diff (call $esc_canon (local.get $own)) (local.get $handled)))
+      (drop (call $list_set (local.get $seed) (local.get $i)
+        (call $esc_make_pair (call $record_get (local.get $base) (i32.const 0)) (local.get $row))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $it)))
+    (global.set $escaping_map_g (call $esc_fixpoint (local.get $bases) (local.get $seed))))
+
+  ;; the flow-closure read at a use site: precomputed escaping row by name (a
+  ;; top-level fn), else the own-leaf (nested fn / lambda / non-fn global —
+  ;; identical to the pre-flow-closure behaviour, so those stay byte-stable).
+  (func $escaping_row (export "escaping_row") (param $name i32) (result i32)
+    (local $map i32) (local $n i32) (local $i i32) (local $pair i32)
+    (if (i32.eqz (local.get $name)) (then (return (call $make_list (i32.const 0)))))
+    (local.set $map (global.get $escaping_map_g))
+    (if (local.get $map) (then
+      (local.set $n (call $len (local.get $map)))
+      (local.set $i (i32.const 0))
+      (block $d (loop $it
+        (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $pair (call $list_index (local.get $map) (local.get $i)))
+        (if (call $str_eq (call $record_get (local.get $pair) (i32.const 0)) (local.get $name))
+          (then (return (call $record_get (local.get $pair) (i32.const 1)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1))) (br $it)))))
+    (call $esc_own_dispatched_row (local.get $name)))
 
   ;; ─── $lower_perform — PerformExpr arm (parser tag 94) ──────────────
   ;; Per src/lower.mn:442-443 + Lock #2 (wheel-parity LPerform for ALL
@@ -29131,6 +29701,12 @@
     ;; before any stmt lowers, so install sites resolve handlers declared
     ;; in later-sorted modules.
     (call $lower_pre_register_handler_decls (local.get $stmts))
+    ;; THE FLOW-CLOSURE (master plan §6 1★ Stage 1): precompute the whole-program
+    ;; escaping rows ONCE (the cached cursor / IC) before any stmt lowers, so the
+    ;; three seam readers resolve forward-ref-dropped effects off the live
+    ;; call-edges (emit_module's WasmOut via emit_header). Reads the env schemes
+    ;; inference wrote — available now (infer ran before lower).
+    (call $escaping_compute (local.get $stmts))
     (call $lower_stmt_list (local.get $stmts)))
 
   ;; ─── Top-level name collection ────────────────────────────────────

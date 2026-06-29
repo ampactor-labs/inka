@@ -878,10 +878,20 @@
                                           (local.get $h) (local.get $name)
                                           (local.get $tag_id) (local.get $lo_args)))))
                         ;; Tier 2: evidence-passing per graph EffectDeclKind.
+                        ;; Route the ev-index through $lower_ev_index_in_frame
+                        ;; (NOT $lower_compute_ev_index_for_effect directly) so a
+                        ;; bare op-call inside a handler ARM body registers its
+                        ;; captured-evidence slot via $lower_arm_ev_index_for —
+                        ;; the install's $lower_captured_evs_for then sizes the
+                        ;; record and writes the forward at that offset. Matches
+                        ;; the perform path (line ~1178) and the wheel
+                        ;; (src/lower.mn lower_perform_dispatch). Outside an arm
+                        ;; ($lower_arm_ev_active = 0) this is byte-identical to
+                        ;; the prior direct call (Law 7).
                         (return (call $lexpr_make_levperform
                                       (local.get $h)
                                       (local.get $name)
-                                      (call $lower_compute_ev_index_for_effect
+                                      (call $lower_ev_index_in_frame
                                         (call $lower_effect_name_of_op (local.get $name)))
                                       (call $lower_compute_ev_slot_for_op (local.get $name))
                                       (local.get $lo_args)))))))))))))

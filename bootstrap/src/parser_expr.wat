@@ -1,9 +1,29 @@
   ;; ─── Expression Parsing ─────────────────────────────────────────────
 
-  ;; parse_expr: entry point — calls binop with min_prec=1
-  ;; Returns (node, new_pos) as 2-tuple [count=2][tag=0][node][pos]
+  ;; parse_expr: entry point. Returns (node, new_pos) as 2-tuple
+  ;; [count=2][tag=0][node][pos].
+  ;; EXPRESSION-TOP recognition of the `handle { body } with h` install
+  ;; spelling (wheel parity, src/parser.mn:1024) — recognized ONLY here,
+  ;; never as a binop operand ($parse_primary demotes THandle to VarRef),
+  ;; so `if canon == handle { obody } else { ... }` reads `handle` as a
+  ;; variable and the `{` as the enclosing if-then block, not as a
+  ;; handle-expr body. The install spelling is format-lifted to
+  ;; `(body) ~> h` (E_RedundantHandleBlock); `~>` is the one install verb.
+  ;; Else: precedence-climb from min_prec=1.
   (func $parse_expr (param $tokens i32) (param $pos i32) (result i32)
-    (call $parse_binop (local.get $tokens) (local.get $pos) (i32.const 1)))
+    (local $p i32) (local $span i32)
+    (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
+    (if (result i32)
+        (i32.and
+          (i32.eq (call $kind_at (local.get $tokens) (local.get $p)) (i32.const 7))   ;; THandle
+          (call $at (local.get $tokens)
+            (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p) (i32.const 1)))
+            (i32.const 47)))                                                          ;; TLBrace
+      (then
+        (local.set $span (call $span_at_p (local.get $tokens) (local.get $p)))
+        (call $parse_handle_expr (local.get $tokens) (i32.add (local.get $p) (i32.const 1)) (local.get $span)))
+      (else
+        (call $parse_binop (local.get $tokens) (local.get $p) (i32.const 1)))))
 
   ;; parse_binop: precedence climbing
   (func $parse_binop (param $tokens i32) (param $pos i32) (param $min_prec i32) (result i32)
@@ -312,31 +332,22 @@
         ;; Wheel `fold`, `any`, `all`, `count`, `find` use this form for
         ;; their accumulator state; arm bodies reference state-fields.
         ;;
-        ;; Contextual disambiguation: the wheel ALSO uses `handle` as a
-        ;; variable name (graph.mn handler arms `graph_chase(handle) =>
-        ;; ...`; chase_node(nodes, handle, ...) body refs). The lexer
-        ;; always tokenizes `handle` as kind 7 (no contextual lex), so
-        ;; the parser must distinguish handle-expr from handle-as-var.
-        ;; Discriminator: handle-expr is ALWAYS followed by `{` (block
-        ;; body); handle-as-var is followed by anything else (TComma,
-        ;; TRParen, TPlus, etc). Peek at pos+1 — if TLBrace, parse as
-        ;; handle-expr; else fall through to TIdent path below treating
-        ;; "handle" as a variable reference.
-        ;; Drift refused: 8 (peek for TLBrace is structural, not a
-        ;; mode-flag); 9 (the handle-as-var path lands here, not as
-        ;; deferred peer — wheel-canonical "handle is keyword" cleanup
-        ;; is named follow-up Hβ.wheel.handle-keyword-cleanup).
+        ;; THandle at OPERAND level is ALWAYS a VarRef "handle" — the
+        ;; `handle { body } with h` install spelling is recognized only at
+        ;; EXPRESSION-TOP ($parse_expr), never as a binop operand. Wheel
+        ;; parity (src/parser.mn:1269, explicit comment): demoting `handle`
+        ;; to a VarRef here is what prevents `if x == handle { 1 }` from
+        ;; consuming the then-block as a handle-expr body — the `{` belongs
+        ;; to the enclosing block. The wheel ALSO uses `handle` as an
+        ;; ordinary variable name (graph.mn `graph_chase(handle) => ...`,
+        ;; chase_node(nodes, handle, ...) body refs); the lexer always
+        ;; tokenizes it as kind 7, so the parser carries the demotion.
+        ;; Reuse the lexer's "handle" keyword data segment at offset 310
+        ;; (lexer_data.wat:41) — same length-prefixed string.
+        ;; Drift refused: 9 (the wheel-canonical "handle is keyword"
+        ;; cleanup is named follow-up Hβ.wheel.handle-keyword-cleanup).
         (if (i32.eq (local.get $k) (i32.const 7))
           (then
-            (if (call $at (local.get $tokens)
-                  (call $skip_ws_p (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)))
-                  (i32.const 47))   ;; TLBrace
-              (then
-                (return (call $parse_handle_expr (local.get $tokens) (i32.add (local.get $pos) (i32.const 1)) (local.get $span)))))
-            ;; handle-as-var — emit VarRef "handle". Reuse the lexer's
-            ;; existing "handle" keyword data segment at offset 310
-            ;; (lexer_data.wat:41) — same length-prefixed string the
-            ;; lexer probes for keyword recognition.
             (local.set $tup (call $make_list (i32.const 2)))
             (drop (call $list_set (local.get $tup) (i32.const 0)
               (call $nexpr (call $mk_VarRef (i32.const 310)) (local.get $span))))

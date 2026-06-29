@@ -736,7 +736,11 @@ bash tools/state.sh --quick    # census + micros only (one wasmtime pass)
 tools/faithful.sh <file.mn>    # proto-`mentl verify`: does mentl2 agree with the seed?
 tools/faithful.sh --wheel      # live L1 status   ·   --bisect: ddmin to the minimal failing file-set
 wat2wasm m2.wat -o m2.wasm --debug-names --enable-threads --enable-tail-call
-wasm-validate / wasm-objdump -d / wasm2wat / wasm-stats / wasm-interp   # WABT, per task
+# WABT (per task) — EVERY tool needs --enable-tail-call --enable-threads or it chokes on
+# opcode 0x13 (return_call_indirect); with the flags ALL work on m2:  objdump -d (disasm,
+# the trap-pin workhorse) · -h (section sizes: Code ≈1.18MB/2532fn = the runaway-emit
+# baseline) · wasm-stats (opcode distribution — fat/runaway-emit diagnosis) · wasm2wat
+# --fold-exprs (readable canonical WAT — NEVER the raw 12MB m2.wat) · wasm-validate · wasm-decompile (C-like)
 ```
 
 `.build/` (luks-backed) holds intermediates, not the 6 GB tmpfs (the `TMPDIR`

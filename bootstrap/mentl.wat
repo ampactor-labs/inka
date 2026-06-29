@@ -22133,6 +22133,31 @@
   (func $lexpr_lmakeclosure_evs (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 3)))
 
+  ;; ─── 340 = LFnRef(handle, name, evs) — arity 3 ────────────────────
+  ;; Per src/lower.mn LFnRef(Int, String, List). The VALUE-position twin of
+  ;; LGlobal (which has NO ev region) and the dispatch-less twin of LSuspend:
+  ;; a named-fn reference passed as a VALUE that DISPATCHES effects, carrying
+  ;; its evidence into the unified record [fn_ptr@0][ne@4][ev_slot_j@8+4*j].
+  ;; Field 0 is the source handle ($lexpr_handle's default arm reads it).
+  ;; emit emits NO body (offset 0 reads $<name>_idx). The CALLEE position
+  ;; collapses LFnRef back to bare LGlobal ($lower_callee_bare). Tag 340: the
+  ;; seed's 335-339 are LUnresolved/LStateSlotStore/LEvSlotRef/LTailSuspend/
+  ;; LConvert, so LFnRef extends the contiguous LowExpr region at 340.
+  (func $lexpr_make_lfnref (param $h i32) (param $name i32) (param $evs i32)
+                            (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 340) (i32.const 3)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $name))
+    (call $record_set (local.get $r) (i32.const 2) (local.get $evs))
+    (local.get $r))
+
+  (func $lexpr_lfnref_name (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 1)))
+
+  (func $lexpr_lfnref_evs (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 2)))
+
   ;; ─── 312 = LMakeContinuation — arity 6 (H7 multi-shot) ────────────
   ;; Per src/lower.mn:110-119 LMakeContinuation(Int, LowFn, List, List,
   ;; Int, Int) + H7-multishot-runtime.md §1.2. Heap-allocated through
@@ -24051,6 +24076,7 @@
     (local $local_h i32)
     (local $binding i32)
     (local $kind i32)
+    (local $evs i32)
     (local $scheme i32)
     (local $ctor_ty i32)
     (local $ctor_ty_tag i32)
@@ -24110,7 +24136,25 @@
     ;; honest: if name is in $ls_is_global set → LGlobal; otherwise
     ;; LUnresolved (emit translates to (unreachable)).
     (if (call $ls_is_global (local.get $name))
-      (then (return (call $lexpr_make_lglobal (local.get $h) (local.get $name)))))
+      (then
+        ;; A named-fn VALUE ref that DISPATCHES effects captures its evidence
+        ;; into the unified record (LFnRef), mirror of the wheel's VarRef
+        ;; FnScheme consumer. FnScheme tag 131 (env.wat); a non-empty escaping
+        ;; row means handler-dispatched effects to thread. Pure fn-value (empty
+        ;; row) or non-FnScheme global stays bare LGlobal (Law 7). The CALLEE
+        ;; position collapses LFnRef back to LGlobal ($lower_callee_bare).
+        (local.set $binding (call $env_lookup_value (local.get $name)))
+        (if (i32.ne (local.get $binding) (i32.const 0))
+          (then
+            (local.set $kind (call $env_binding_kind (local.get $binding)))
+            (if (i32.eq (call $schemekind_tag (local.get $kind)) (i32.const 131))
+              (then
+                (local.set $evs (call $resolve_evs_for_names
+                                  (call $escaping_row (local.get $name))))
+                (if (call $len (local.get $evs))
+                  (then (return (call $lexpr_make_lfnref
+                                  (local.get $h) (local.get $name) (local.get $evs)))))))))
+        (return (call $lexpr_make_lglobal (local.get $h) (local.get $name)))))
     (call $lexpr_make_lunresolved (local.get $h) (local.get $name)))
 
   ;; ═══ walk_call.wat — Hβ.lower CallExpr/PerformExpr/ResumeExpr arms (Tier 7) ═══
@@ -24807,10 +24851,25 @@
   ;; Avoids Drift 1: LSuspend tag 325 carries fn_index as a FIELD on
   ;;   the closure record (lexpr.wat:625-657); emit's call_indirect
   ;;   site at H1.4 reads the field — NOT a vtable / op_table.
+  ;; ─── $lower_callee_bare — the callee stays BARE (mirror lower_callee_ref) ──
+  ;; The value-position consumer ($lower_var_ref) mints LFnRef (tag 335) for an
+  ;; effectful named-fn VALUE. A CALLEE provides its evidence through __state
+  ;; threading (LSuspend) or is monomorphic (LCall), so it must NOT carry a
+  ;; value-record. Collapse an LFnRef callee back to the bare LGlobal it was
+  ;; before — byte-identical (LFnRef carries the SAME handle+name). Every other
+  ;; lo_f (LGlobal / LLocal / LMakeClosure / ...) passes through unchanged.
+  (func $lower_callee_bare (param $lo_f i32) (result i32)
+    (if (i32.eq (call $tag_of (local.get $lo_f)) (i32.const 340))
+      (then (return (call $lexpr_make_lglobal
+                      (call $lexpr_handle (local.get $lo_f))
+                      (call $lexpr_lfnref_name (local.get $lo_f))))))
+    (local.get $lo_f))
+
   (func $lower_call_default (export "lower_call_default")
         (param $handle i32) (param $lo_f i32) (param $fh i32) (param $lo_args i32)
         (result i32)
     (local $evs i32)
+    (local.set $lo_f (call $lower_callee_bare (local.get $lo_f)))
     ;; Per Hβ-perform-evidence-dispatch.md §4.7: $derive_ev_slots IS the gate
     ;; (canonical projection — one source of truth). A callee needs evidence
     ;; iff its row carries a handler-dispatched effect; if so the call must
@@ -25441,6 +25500,7 @@
     (if (i32.eqz (local.get $name)) (then (return)))
     (global.set $esc_cbuf_g (call $esc_push (global.get $esc_cbuf_g) (global.get $esc_ccount_g) (local.get $name)))
     (global.set $esc_ccount_g (i32.add (global.get $esc_ccount_g) (i32.const 1))))
+
   (func $esc_emit_handled (param $name i32)
     (if (i32.eqz (local.get $name)) (then (return)))
     (global.set $esc_hbuf_g (call $esc_push (global.get $esc_hbuf_g) (global.get $esc_hcount_g) (local.get $name)))
@@ -25510,6 +25570,16 @@
   (func $escaping_walk_expr (param $e i32)
     (local $tag i32) (local $callee i32)
     (local.set $tag (call $tag_of (local.get $e)))
+    ;; VarRef (tag 85) is a LEAF here. The AVAILABILITY flow-edge — adding a
+    ;; value-referenced global FnScheme so the enclosing fn's escaping row gains
+    ;; the slot the LFnRef forwards — is the blocked peer
+    ;; Hβ.lower.value-fn-availability-edge: enabling it inflates the transitive
+    ;; fixpoint enough that the seed's arm-ev collection accumulates an unbounded
+    ;; captured_evs list (~46k entries) for nested-handler fns (edit_run's
+    ;; 13-deep ~> chain), overflowing the 4 MiB per-fn emit scratch. The LFnRef
+    ;; record-sizing (the table-OOB fix) lands WITHOUT this edge; the evidence-
+    ;; CONTENT correctness it provides is gated on first rooting the arm-ev
+    ;; accumulation bug in lower_arm_ev_index_for / lower_ev_slot_raw.
     (if (i32.eq (local.get $tag) (i32.const 86)) (then   ;; BinOpExpr op@4 l@8 r@12
       (call $escaping_walk (i32.load offset=8 (local.get $e)))
       (call $escaping_walk (i32.load offset=12 (local.get $e))) (return)))
@@ -27081,7 +27151,9 @@
     (local.set $args (call $list_extend_to (local.get $args) (i32.const 1)))
     (drop (call $list_set (local.get $args) (i32.const 0) (local.get $lo_l)))
     (local.set $single_call (call $lexpr_make_lcall
-                              (i32.const 0) (local.get $lo_r) (local.get $args)))
+                              (i32.const 0)
+                              (call $lower_callee_bare (local.get $lo_r))
+                              (local.get $args)))
     (local.set $fallback (call $make_list (i32.const 0)))
     (local.set $fallback (call $list_extend_to (local.get $fallback) (i32.const 1)))
     (drop (call $list_set (local.get $fallback) (i32.const 0) (local.get $single_call)))
@@ -27103,9 +27175,10 @@
         (local.set $args   (call $make_list (i32.const 0)))
         (local.set $args   (call $list_extend_to (local.get $args) (i32.const 1)))
         (drop (call $list_set (local.get $args) (i32.const 0) (local.get $lo_input)))
+        ;; branch IS the callee (applied to input) — stays bare LGlobal.
         (local.set $call (call $lexpr_make_lcall
                            (i32.const 0)
-                           (local.get $branch)
+                           (call $lower_callee_bare (local.get $branch))
                            (local.get $args)))
         (drop (call $list_set (local.get $buf) (local.get $i) (local.get $call)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
@@ -31683,6 +31756,8 @@
       (then (call $emit_levslotref   (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 339))
       (then (call $emit_lconvert     (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 340))         ;; LFnRef
+      (then (call $emit_lfnref       (local.get $r)) (return)))
     (unreachable))
 
   ;; ─── $emit_lstateslotstore — LStateSlotStore tag 336 emit arm ──────
@@ -35317,6 +35392,36 @@
     (call $ec8_emit_cap_stores (local.get $evs)
       (i32.add (i32.const 8) (i32.mul (local.get $nc) (i32.const 4))))
     ;; Result: closure pointer on stack.
+    (call $ec8_emit_local_get_state_tmp))
+
+  ;; ─── $emit_lfnref — LFnRef tag 340 emit arm ────────────────────────
+  ;; Per src/backends/wasm.mn $emit_expr LFnRef arm. The unified record for an
+  ;; EXISTING named fn referenced as a VALUE — LMakeClosure's shape with ZERO
+  ;; captures: [fn_ptr@0][ne@4][ev_slot_j@8+4*j]. NO body emit (the fn lives at
+  ;; its declaration; offset 0 reads $<name>_idx). The callee reads its evidence
+  ;; at 8+4*ev_slot off its own (zero) compile-time fence, so the ev region
+  ;; starts at offset 8. fn_name is the raw name string ($lexpr_lfnref_name),
+  ;; not a LowFn — emit references $<name>_idx directly.
+  (func $emit_lfnref (param $r i32)
+    (local $name i32) (local $evs i32) (local $ne i32)
+    (local.set $name (call $lexpr_lfnref_name (local.get $r)))
+    (local.set $evs  (call $lexpr_lfnref_evs  (local.get $r)))
+    (local.set $ne   (call $len (local.get $evs)))
+    ;; Alloc 8 + 4*ne → $state_tmp (nc=0; the ev region starts at 8).
+    (call $emit_alloc
+      (i32.add (i32.const 8) (i32.mul (i32.const 4) (local.get $ne)))
+      (i32.const 2244))
+    ;; Store fn_ptr ($<name>_idx) at offset 0.
+    (call $ec8_emit_local_get_state_tmp)
+    (call $ec8_emit_global_get_name_idx (local.get $name))
+    (call $ec_emit_i32_store_offset (i32.const 0))
+    ;; Store ne at offset 4 — the unified-record fence field.
+    (call $ec8_emit_local_get_state_tmp)
+    (call $emit_i32_const (local.get $ne))
+    (call $ec_emit_i32_store_offset (i32.const 4))
+    ;; Store ev_slots at offsets 8, 12, ... (nc=0).
+    (call $ec8_emit_cap_stores (local.get $evs) (i32.const 8))
+    ;; Result: record pointer on stack.
     (call $ec8_emit_local_get_state_tmp))
 
   ;; ─── $emit_lmakecontinuation — LMakeContinuation tag 312 emit arm ───

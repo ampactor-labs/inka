@@ -1153,6 +1153,36 @@
     ;; Result: closure pointer on stack.
     (call $ec8_emit_local_get_state_tmp))
 
+  ;; ─── $emit_lfnref — LFnRef tag 340 emit arm ────────────────────────
+  ;; Per src/backends/wasm.mn $emit_expr LFnRef arm. The unified record for an
+  ;; EXISTING named fn referenced as a VALUE — LMakeClosure's shape with ZERO
+  ;; captures: [fn_ptr@0][ne@4][ev_slot_j@8+4*j]. NO body emit (the fn lives at
+  ;; its declaration; offset 0 reads $<name>_idx). The callee reads its evidence
+  ;; at 8+4*ev_slot off its own (zero) compile-time fence, so the ev region
+  ;; starts at offset 8. fn_name is the raw name string ($lexpr_lfnref_name),
+  ;; not a LowFn — emit references $<name>_idx directly.
+  (func $emit_lfnref (param $r i32)
+    (local $name i32) (local $evs i32) (local $ne i32)
+    (local.set $name (call $lexpr_lfnref_name (local.get $r)))
+    (local.set $evs  (call $lexpr_lfnref_evs  (local.get $r)))
+    (local.set $ne   (call $len (local.get $evs)))
+    ;; Alloc 8 + 4*ne → $state_tmp (nc=0; the ev region starts at 8).
+    (call $emit_alloc
+      (i32.add (i32.const 8) (i32.mul (i32.const 4) (local.get $ne)))
+      (i32.const 2244))
+    ;; Store fn_ptr ($<name>_idx) at offset 0.
+    (call $ec8_emit_local_get_state_tmp)
+    (call $ec8_emit_global_get_name_idx (local.get $name))
+    (call $ec_emit_i32_store_offset (i32.const 0))
+    ;; Store ne at offset 4 — the unified-record fence field.
+    (call $ec8_emit_local_get_state_tmp)
+    (call $emit_i32_const (local.get $ne))
+    (call $ec_emit_i32_store_offset (i32.const 4))
+    ;; Store ev_slots at offsets 8, 12, ... (nc=0).
+    (call $ec8_emit_cap_stores (local.get $evs) (i32.const 8))
+    ;; Result: record pointer on stack.
+    (call $ec8_emit_local_get_state_tmp))
+
   ;; ─── $emit_lmakecontinuation — LMakeContinuation tag 312 emit arm ───
   ;; Per src/backends/wasm.mn:1247-1308 + H7 §4.2 multi-shot layout.
   ;;

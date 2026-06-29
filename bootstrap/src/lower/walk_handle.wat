@@ -1006,7 +1006,9 @@
     (local.set $args (call $list_extend_to (local.get $args) (i32.const 1)))
     (drop (call $list_set (local.get $args) (i32.const 0) (local.get $lo_l)))
     (local.set $single_call (call $lexpr_make_lcall
-                              (i32.const 0) (local.get $lo_r) (local.get $args)))
+                              (i32.const 0)
+                              (call $lower_callee_bare (local.get $lo_r))
+                              (local.get $args)))
     (local.set $fallback (call $make_list (i32.const 0)))
     (local.set $fallback (call $list_extend_to (local.get $fallback) (i32.const 1)))
     (drop (call $list_set (local.get $fallback) (i32.const 0) (local.get $single_call)))
@@ -1028,9 +1030,10 @@
         (local.set $args   (call $make_list (i32.const 0)))
         (local.set $args   (call $list_extend_to (local.get $args) (i32.const 1)))
         (drop (call $list_set (local.get $args) (i32.const 0) (local.get $lo_input)))
+        ;; branch IS the callee (applied to input) — stays bare LGlobal.
         (local.set $call (call $lexpr_make_lcall
                            (i32.const 0)
-                           (local.get $branch)
+                           (call $lower_callee_bare (local.get $branch))
                            (local.get $args)))
         (drop (call $list_set (local.get $buf) (local.get $i) (local.get $call)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))

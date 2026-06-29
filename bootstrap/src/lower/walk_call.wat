@@ -692,10 +692,25 @@
   ;; Avoids Drift 1: LSuspend tag 325 carries fn_index as a FIELD on
   ;;   the closure record (lexpr.wat:625-657); emit's call_indirect
   ;;   site at H1.4 reads the field — NOT a vtable / op_table.
+  ;; ─── $lower_callee_bare — the callee stays BARE (mirror lower_callee_ref) ──
+  ;; The value-position consumer ($lower_var_ref) mints LFnRef (tag 335) for an
+  ;; effectful named-fn VALUE. A CALLEE provides its evidence through __state
+  ;; threading (LSuspend) or is monomorphic (LCall), so it must NOT carry a
+  ;; value-record. Collapse an LFnRef callee back to the bare LGlobal it was
+  ;; before — byte-identical (LFnRef carries the SAME handle+name). Every other
+  ;; lo_f (LGlobal / LLocal / LMakeClosure / ...) passes through unchanged.
+  (func $lower_callee_bare (param $lo_f i32) (result i32)
+    (if (i32.eq (call $tag_of (local.get $lo_f)) (i32.const 340))
+      (then (return (call $lexpr_make_lglobal
+                      (call $lexpr_handle (local.get $lo_f))
+                      (call $lexpr_lfnref_name (local.get $lo_f))))))
+    (local.get $lo_f))
+
   (func $lower_call_default (export "lower_call_default")
         (param $handle i32) (param $lo_f i32) (param $fh i32) (param $lo_args i32)
         (result i32)
     (local $evs i32)
+    (local.set $lo_f (call $lower_callee_bare (local.get $lo_f)))
     ;; Per Hβ-perform-evidence-dispatch.md §4.7: $derive_ev_slots IS the gate
     ;; (canonical projection — one source of truth). A callee needs evidence
     ;; iff its row carries a handler-dispatched effect; if so the call must
@@ -1326,6 +1341,7 @@
     (if (i32.eqz (local.get $name)) (then (return)))
     (global.set $esc_cbuf_g (call $esc_push (global.get $esc_cbuf_g) (global.get $esc_ccount_g) (local.get $name)))
     (global.set $esc_ccount_g (i32.add (global.get $esc_ccount_g) (i32.const 1))))
+
   (func $esc_emit_handled (param $name i32)
     (if (i32.eqz (local.get $name)) (then (return)))
     (global.set $esc_hbuf_g (call $esc_push (global.get $esc_hbuf_g) (global.get $esc_hcount_g) (local.get $name)))
@@ -1395,6 +1411,16 @@
   (func $escaping_walk_expr (param $e i32)
     (local $tag i32) (local $callee i32)
     (local.set $tag (call $tag_of (local.get $e)))
+    ;; VarRef (tag 85) is a LEAF here. The AVAILABILITY flow-edge — adding a
+    ;; value-referenced global FnScheme so the enclosing fn's escaping row gains
+    ;; the slot the LFnRef forwards — is the blocked peer
+    ;; Hβ.lower.value-fn-availability-edge: enabling it inflates the transitive
+    ;; fixpoint enough that the seed's arm-ev collection accumulates an unbounded
+    ;; captured_evs list (~46k entries) for nested-handler fns (edit_run's
+    ;; 13-deep ~> chain), overflowing the 4 MiB per-fn emit scratch. The LFnRef
+    ;; record-sizing (the table-OOB fix) lands WITHOUT this edge; the evidence-
+    ;; CONTENT correctness it provides is gated on first rooting the arm-ev
+    ;; accumulation bug in lower_arm_ev_index_for / lower_ev_slot_raw.
     (if (i32.eq (local.get $tag) (i32.const 86)) (then   ;; BinOpExpr op@4 l@8 r@12
       (call $escaping_walk (i32.load offset=8 (local.get $e)))
       (call $escaping_walk (i32.load offset=12 (local.get $e))) (return)))

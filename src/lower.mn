@@ -252,6 +252,17 @@ type LowExpr
   | LTailCall(Int, LowExpr, List)
   | LReturn(Int, LowExpr)
   | LMakeClosure(Int, LowFn, List, List)         // handle, fn, captures, ev_slots
+  // VALUE-position reference to an EXISTING named fn that DISPATCHES effects —
+  // the evidence-capturing twin of LGlobal (which carries NO ev region) and the
+  // dispatch-less twin of LSuspend (which CALLS). Builds the unified record
+  // [fn_ptr@0][ne@4][ev_slot_j@8+4*j] for `$<name>_idx` so a fn passed as a
+  // value (`for_each(infer_stmt, stmts)`) carries its evidence into the record
+  // the callee reads as __state — Carried-Truth: the two divergent fn-value
+  // paths (bare LGlobal vs evidence-bearing LMakeClosure) unified into ONE
+  // capture. Emits NO body (the fn is emitted at its own declaration). A pure
+  // fn-value stays bare LGlobal (len(ev)==0, Law 7); the CALLEE position stays
+  // bare LGlobal (lower_callee_ref collapses an LFnRef callee).
+  | LFnRef(Int, String, List)                    // handle, fn-name, ev_slots
   | LMakeContinuation(Int, LowFn, List, List, Int, Int, Int)
   // H7 — multi-shot continuation record per the H7 walkthrough §1.2.
   // handle, resume_fn, captures_exprs, ev_slots, state_index, ret_slot,
@@ -408,6 +419,7 @@ fn lexpr_handle(e) with Pure = match e {
   LTailCall(h, _, _)      => h,
   LReturn(h, _)           => h,
   LMakeClosure(h, _, _, _) => h,
+  LFnRef(h, _, _)         => h,
   LMakeContinuation(h, _, _, _, _, _, _) => h,
   LDeclareFn(_)            => 0,
   LIf(h, _, _, _)         => h,
@@ -634,8 +646,20 @@ fn lower_callee_name(fbody) = match fbody {
 // Polymorphic case: `LSuspend` with `ev_slots` derived from the callee's
 // row — each unground op resolves to the global handler arm's `fn_idx`
 // via the `op_<name>` naming convention H1.4 established.
+// THE callee-position read: a fn being CALLED stays BARE. The value-position
+// consumer (VarRef RGlobal arm) now mints LFnRef for an effectful named-fn
+// VALUE; a CALLEE provides its evidence through __state threading (LSuspend) or
+// is monomorphic (LCall), so it must NOT carry a value-record. Collapse an
+// LFnRef callee back to the bare LGlobal it was before — byte-identical (LFnRef
+// carries the SAME handle+name the pre-split LGlobal held). The split that keeps
+// every effectful direct call's bytes untouched (Law 7).
+fn lower_callee_ref(f) = match lower_expr(f) {
+  LFnRef(h, n, _) => LGlobal(h, n),
+  lo              => lo
+}
+
 fn lower_call_default(handle, f, fh, lo_args) = {
-  let lo_f = lower_expr(f)
+  let lo_f = lower_callee_ref(f)
   if monomorphic_at(handle) {
     LCall(handle, lo_f, lo_args)
   } else {
@@ -848,7 +872,17 @@ fn flow_edges_expr(e) = match e {
   LitString(_) => ([], []),
   LitBool(_)   => ([], []),
   LitUnit      => ([], []),
-  VarRef(_)    => ([], []),
+  // VarRef is a LEAF. The AVAILABILITY flow-edge — adding a value-referenced
+  // global FnScheme so the enclosing fn's escaping row gains the slot LFnRef
+  // forwards — is the blocked peer Hβ.lower.value-fn-availability-edge: enabling
+  // it inflates the transitive flow-closure enough that the arm-ev capture
+  // machinery accumulates an unbounded captured_evs list for nested-handler fns
+  // (edit_run's 13-deep ~> chain), a real emit blowup (the seed overflows its
+  // 4 MiB per-fn scratch; the wheel's heap-buffer emit would emit a 46k-slot
+  // handler record — a miscompile either way). The LFnRef record-sizing (the
+  // table-OOB fix) lands WITHOUT this edge; the evidence-CONTENT correctness it
+  // provides is gated on first rooting the arm-ev accumulation bug.
+  VarRef(_) => ([], []),
   BinOpExpr(_, l, r) => flow_join(flow_edges(l), flow_edges(r)),
   UnaryOpExpr(_, inner) => flow_edges(inner),
   CallExpr(f, args) => {
@@ -1275,6 +1309,17 @@ fn lower_expr_body(e, handle, span) = match e {
       RGlobal      => match env_kind_of(name) {
         Some(ConstructorScheme(tag_id, _)) =>
           LMakeVariant(handle, tag_id, []),
+        // A named-fn VALUE reference (FnScheme tag-0 — excludes HandlerKind,
+        // the PTee guard). When the fn DISPATCHES effects, capture its evidence
+        // into the unified record (LFnRef) so the consumer (`for_each(f, xs)`)
+        // reads it live as __state — the asymmetry with LambdaExpr's
+        // LMakeClosure(..., derive_ev_slots) closed. A PURE fn-value stays bare
+        // LGlobal (len(evs)==0 → byte-identical, Law 7).
+        Some(FnScheme) => {
+          let evs = derive_ev_slots(handle)
+          if len(evs) == 0 { LGlobal(handle, name) }
+          else { LFnRef(handle, name, evs) }
+        },
         _ => LGlobal(handle, name)
       }
     }
@@ -1527,7 +1572,7 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     // (no auto-currying in seed). When lo_r is LCall, unfold its args
     // and prepend lo_l. Bare-fn case stays `LCall(lo_r, [lo_l])`.
     let lo_l = lower_expr(left)
-    let lo_r = lower_expr(right)
+    let lo_r = lower_callee_ref(right)   // right IS the callee (applied to left) — stays bare
     match lo_r {
       LCall(_, fn_, args) => LCall(handle, fn_, list_concat([lo_l], args)),
       _                   => LCall(handle, lo_r, [lo_l])
@@ -1773,7 +1818,7 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   let (i, branch_node) = indexed
   let N(_, _, branch_h) = branch_node
   let thunk_name = "diverge_{int_to_str(base_idx + i)}_{int_to_str(parent_handle)}"
-  let lo_branch = lower_expr(branch_node)
+  let lo_branch = lower_callee_ref(branch_node)   // branch IS the callee (applied to input) — stays bare
   let input_ref = LLocal(input_h, input_local_name)
   let thunk_body = LCall(branch_h, lo_branch, [input_ref])
   let captures_exprs = [LLocal(input_h, input_local_name)]

@@ -759,6 +759,8 @@
       (then (call $emit_levslotref   (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 339))
       (then (call $emit_lconvert     (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 340))         ;; LFnRef
+      (then (call $emit_lfnref       (local.get $r)) (return)))
     (unreachable))
 
   ;; ─── $emit_lstateslotstore — LStateSlotStore tag 336 emit arm ──────

@@ -337,6 +337,7 @@
     (local $local_h i32)
     (local $binding i32)
     (local $kind i32)
+    (local $evs i32)
     (local $scheme i32)
     (local $ctor_ty i32)
     (local $ctor_ty_tag i32)
@@ -396,5 +397,23 @@
     ;; honest: if name is in $ls_is_global set → LGlobal; otherwise
     ;; LUnresolved (emit translates to (unreachable)).
     (if (call $ls_is_global (local.get $name))
-      (then (return (call $lexpr_make_lglobal (local.get $h) (local.get $name)))))
+      (then
+        ;; A named-fn VALUE ref that DISPATCHES effects captures its evidence
+        ;; into the unified record (LFnRef), mirror of the wheel's VarRef
+        ;; FnScheme consumer. FnScheme tag 131 (env.wat); a non-empty escaping
+        ;; row means handler-dispatched effects to thread. Pure fn-value (empty
+        ;; row) or non-FnScheme global stays bare LGlobal (Law 7). The CALLEE
+        ;; position collapses LFnRef back to LGlobal ($lower_callee_bare).
+        (local.set $binding (call $env_lookup_value (local.get $name)))
+        (if (i32.ne (local.get $binding) (i32.const 0))
+          (then
+            (local.set $kind (call $env_binding_kind (local.get $binding)))
+            (if (i32.eq (call $schemekind_tag (local.get $kind)) (i32.const 131))
+              (then
+                (local.set $evs (call $resolve_evs_for_names
+                                  (call $escaping_row (local.get $name))))
+                (if (call $len (local.get $evs))
+                  (then (return (call $lexpr_make_lfnref
+                                  (local.get $h) (local.get $name) (local.get $evs)))))))))
+        (return (call $lexpr_make_lglobal (local.get $h) (local.get $name)))))
     (call $lexpr_make_lunresolved (local.get $h) (local.get $name)))

@@ -541,6 +541,10 @@ fn walk_lemit_expr(expr) = match expr {
     walk_lemit_list(captures)
     walk_lemit_list(ev)
   },
+  // LFnRef references an ALREADY-emitted named fn — NO visit_fn (the fn is
+  // collected at its own declaration; visiting here would double-register it).
+  // Walk only its ev region (the forwarded evidence LowExprs).
+  LFnRef(_, _, ev)          => walk_lemit_list(ev),
   LDeclareFn(LFn(name, _, _, body, _, _)) => {
     visit_fn(name)
     walk_lemit_list(body)
@@ -857,6 +861,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_call_vectors_list(body,
       collect_call_vectors_list(caps, collect_call_vectors_list(ev, acc))),
+  LFnRef(_h, _n, ev)    => collect_call_vectors_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_call_vectors_list(body, acc),
   LIf(_h, c, t, e)      => collect_call_vectors_list(e,
                              collect_call_vectors_list(t, collect_call_vectors_expr(c, acc))),
@@ -943,6 +948,7 @@ fn max_arity_expr(expr) = match expr {
   LEvPerform(_, _, _, _, args) => len(args) + 1,
   LLet(_, _, inner)         => max_arity_expr(inner),
   LMakeClosure(_, _, _, _)         => 0,
+  LFnRef(_, _, _)                  => 0,   // record-build, not a call — no $ft entry
   LMakeContinuation(_, _, _, _, _, _, _) => 0,
   LDeclareFn(_)                    => 0,
 
@@ -1219,6 +1225,10 @@ fn collect_fn_emit_records_expr(expr) = match expr {
     [(name, param_names, body, fence)]
       ++ collect_fn_emit_records(body)
   },
+  // LFnRef references an EXISTING named fn — it emits NO body record (the fn is
+  // collected at its declaration; a record here would re-emit it → dup-fn
+  // corruption). Only its ev region carries nested LowExprs to descend.
+  LFnRef(_h, _n, ev)         => collect_fn_emit_records(ev),
   LLet(_h, _n, inner)        => collect_fn_emit_records_expr(inner),
   LStore(_h, _s, val)        => collect_fn_emit_records_expr(val),
   LBinOp(_h, _op, l, r)      => collect_fn_emit_records_expr(l)
@@ -1394,6 +1404,7 @@ fn emit_let_locals_expr(expr) = match expr {
     emit_let_locals_expr(inner)
   },
   LMakeClosure(_, _, _, _)         => (),  // function boundary — its locals are its own
+  LFnRef(_h, _n, ev)        => emit_let_locals_list(ev),  // record reuses $state_tmp; ev forwards declare no locals
   LMakeContinuation(_, _, _, _, _, _, _) => (),  // resume_fn boundary — its locals are its own (H7)
   LDeclareFn(_)                    => (),  // module-level fn declaration — its body has its own locals
   LBlock(_h, stmts)         => emit_let_locals_list(stmts),
@@ -1617,6 +1628,7 @@ fn find_local_handle_list(name, stmts) = {
 fn find_local_handle_expr(name, expr) = match expr {
   LLocal(h, n)              => if n == name { h } else { 0 },
   LMakeClosure(_, _, _, _)         => 0,
+  LFnRef(_h, _n, ev)        => find_local_handle_list(name, ev),
   LMakeContinuation(_, _, _, _, _, _, _) => 0,
   LDeclareFn(_)                    => 0,
   LLet(_h, _n, inner)       => find_local_handle_expr(name, inner),
@@ -2027,6 +2039,32 @@ fn emit_expr(expr) = match expr {
     // Store each ev_slot at offset 8 + 4*nc + 4*j.
     emit_ev_slot_stores(ev_exprs, nc, 0)
     // Result: closure pointer on stack.
+    wat_emit("    (local.get $state_tmp)\n")
+  },
+
+  LFnRef(_h, fn_name, ev_exprs) => {
+    // The unified record for an EXISTING named fn referenced as a VALUE —
+    // LMakeClosure's shape with ZERO captures: [fn_ptr@0][ne@4][ev_slot_j@8+4*j].
+    // No body emit (the fn lives at its declaration; offset 0 reads its
+    // $<name>_idx). The callee reads its evidence at 8+4*ev_slot off its own
+    // (zero) compile-time fence, so the ev region starts at offset 8.
+    let ne = len(ev_exprs)
+    let size = 8 + 4 * ne
+    emit_alloc(size, "state_tmp")
+    // Store fn_ptr (table index) at offset 0.
+    wat_emit("    (local.get $state_tmp)\n")
+    wat_emit("    (global.get $")
+    wat_emit(fn_name)
+    wat_emit("_idx)\n")
+    wat_emit("    (i32.store offset=0)\n")
+    // Store the slot count at offset 4 — the unified-record fence field.
+    wat_emit("    (local.get $state_tmp)\n")
+    wat_emit("    (i32.const ")
+    wat_emit(int_to_str(ne))
+    wat_emit(") (i32.store offset=4)\n")
+    // Store each ev_slot at offset 8 + 4*j (nc=0).
+    emit_ev_slot_stores(ev_exprs, 0, 0)
+    // Result: record pointer on stack.
     wat_emit("    (local.get $state_tmp)\n")
   },
 
@@ -3469,6 +3507,7 @@ fn collect_cmp_agg_tys_expr(expr, acc) = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_cmp_agg_tys_list(body,
       collect_cmp_agg_tys_list(caps, collect_cmp_agg_tys_list(ev, acc))),
+  LFnRef(_h, _n, ev)     => collect_cmp_agg_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_cmp_agg_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_cmp_agg_tys_list(e,
                               collect_cmp_agg_tys_list(t,
@@ -3616,6 +3655,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_eq_product_tys_list(body,
       collect_eq_product_tys_list(caps, collect_eq_product_tys_list(ev, acc))),
+  LFnRef(_h, _n, ev)     => collect_eq_product_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_eq_product_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_eq_product_tys_list(e,
                               collect_eq_product_tys_list(t,
@@ -4135,6 +4175,7 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_show_tys_list(body,
       collect_show_tys_list(caps, collect_show_tys_list(ev, acc))),
+  LFnRef(_h, _n, ev)     => collect_show_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_show_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_show_tys_list(e,
                               collect_show_tys_list(t, collect_show_tys_expr(c, acc))),
@@ -4398,6 +4439,7 @@ fn collect_hash_tys_expr(expr, acc) with LookupTy = match expr {
   LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
     collect_hash_tys_list(body,
       collect_hash_tys_list(caps, collect_hash_tys_list(ev, acc))),
+  LFnRef(_h, _n, ev)     => collect_hash_tys_list(ev, acc),
   LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => collect_hash_tys_list(body, acc),
   LIf(_h, c, t, e)       => collect_hash_tys_list(e,
                               collect_hash_tys_list(t, collect_hash_tys_expr(c, acc))),

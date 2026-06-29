@@ -410,6 +410,31 @@
   (func $lexpr_lmakeclosure_evs (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 3)))
 
+  ;; ─── 340 = LFnRef(handle, name, evs) — arity 3 ────────────────────
+  ;; Per src/lower.mn LFnRef(Int, String, List). The VALUE-position twin of
+  ;; LGlobal (which has NO ev region) and the dispatch-less twin of LSuspend:
+  ;; a named-fn reference passed as a VALUE that DISPATCHES effects, carrying
+  ;; its evidence into the unified record [fn_ptr@0][ne@4][ev_slot_j@8+4*j].
+  ;; Field 0 is the source handle ($lexpr_handle's default arm reads it).
+  ;; emit emits NO body (offset 0 reads $<name>_idx). The CALLEE position
+  ;; collapses LFnRef back to bare LGlobal ($lower_callee_bare). Tag 340: the
+  ;; seed's 335-339 are LUnresolved/LStateSlotStore/LEvSlotRef/LTailSuspend/
+  ;; LConvert, so LFnRef extends the contiguous LowExpr region at 340.
+  (func $lexpr_make_lfnref (param $h i32) (param $name i32) (param $evs i32)
+                            (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 340) (i32.const 3)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $name))
+    (call $record_set (local.get $r) (i32.const 2) (local.get $evs))
+    (local.get $r))
+
+  (func $lexpr_lfnref_name (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 1)))
+
+  (func $lexpr_lfnref_evs (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 2)))
+
   ;; ─── 312 = LMakeContinuation — arity 6 (H7 multi-shot) ────────────
   ;; Per src/lower.mn:110-119 LMakeContinuation(Int, LowFn, List, List,
   ;; Int, Int) + H7-multishot-runtime.md §1.2. Heap-allocated through

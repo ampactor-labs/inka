@@ -119,6 +119,43 @@
 > routines, or offer `/schedule`. Make one more substrate-honest commit and
 > continue.
 
+## ⟐ The bug IS the non-ultimate form — the first-light law ⟐
+
+> **First-light is `!Outside`, not self-compilation.** The medium reproduces
+> ITSELF (`m_n == m_{n+1}`) AND stays correct (micros + repro) — a buggy compiler
+> reaches a *wrong* fixpoint (`PLAN.md §6`). So a **surpassable first-light is a
+> contradiction**: a band-aid is precisely an external lever to improve the
+> medium, and a wheel that canonizes one becomes a medium-WITH-an-outside — the
+> one thing the whole project exists to make impossible.
+>
+> **You cannot "ship faster" with a band-aid — the non-ultimate form IS the bug
+> that breaks the fixpoint** (the Carried-Truth Law at the development scale:
+> every bug is a re-derivation, and the re-derivation is the non-ultimate form).
+> The dirtier path is not faster; it does not *arrive*. The discipline is the ROAD
+> to first-light, never a tax on it. When a faster-dirtier path tempts, that
+> feeling is the lie.
+>
+> **The three filters — run at every change, in BOTH directions:**
+> 1. **Seed ≠ wheel.** Inelegant-but-CORRECT seed → fine (it is deleted at
+>    first-light; the seed never had to be pretty). Silently-MISCOMPILING seed
+>    (`_=>0`, a fabricated value) → NOT fine — it produces a *wrong* wheel. A
+>    band-aid in the WHEEL (`.mn`) → never fine; it is canonized forever.
+> 2. **Ultimate ≠ complete.** The frontier (modal §4③, IFC §4⑥, native, the
+>    deepest optimizations) sequenced after first-light and named in POSITIVE FORM
+>    is ultimate (`PLAN.md §5`). A hidden gap or a silent fabrication is drift.
+> 3. **Honest-and-sequenced, never hidden.** A named positive-form peer IS the
+>    ultimate form; a silent fallback is the betrayal — at the exact moment it is
+>    cheapest to betray.
+>
+> **The inverse trap — perfectionism-as-paralysis — is drift too.** "Ultimate" is
+> NOT "every frontier feature built before first-light." The REAL aspect (`§5`) is
+> reachable NOW: wheel honest + correct, seed correctly caught up, frontier named.
+> Insisting on ultimate is never the slower path — the non-ultimate form is the
+> blocker itself. (Crystallized 2026-06-28: a fleet's confident root-cause was
+> refuted by the binary; the bug WAS the re-derivation, exactly as the law says.
+> Verify against the artifact — a rigorous-looking claim is a claim until a tool
+> shows it.)
+
 ## ⊘ Report, don't perform ⊘
 
 > A turn ends with what CHANGED and the MEASURED result.
@@ -162,6 +199,39 @@
 > Skills are tools, not ceremony — apply the discipline silently; never invoke a
 > skill as a reflexive preamble. (`mentl-implementer`/`mentl-planner` are deleted;
 > dispatch is ad-hoc Workflow/Agent fan-out under this criterion.)
+
+---
+
+## ⟲ The proven pipeline — every label is a hypothesis until the BINARY confirms it ⟲
+
+> The loop that closed the dead-end-flanked central blocker (2026-06-29, after many
+> sessions failed it): **diagnose → converge → build → verify → RE-DERIVE.** One law
+> above the rest: **a label is a HYPOTHESIS until the ARTIFACT confirms it — the
+> VERIFIER's included.** Three were refuted in a row this session: the orchestrator's
+> own ev-index theory (a dropped effect, not a bad index), a "multi-handler" root (a
+> seed PARSER bug), and an independent verifier's "regression" verdict (a stale tree,
+> caught only by re-deriving the gate by hand). The last, load-bearing check is the
+> orchestrator running the gate ITSELF and committing only on a self-confirmed
+> result — never on a build's or a verifier's word.
+>
+> - **Diagnose-first**, binary-arbitrated, with an **adversarial pin** told to refute
+>   the leading hypothesis — kill the ghost before a fix chases it.
+> - **Adversarial design-convergence BEFORE a byte changes.** Propose N mechanisms;
+>   refute each against the dead-ends / blast-radius / layering. When N independent
+>   proposals collapse onto ONE attractor, that convergence IS the truth signal — and
+>   it catches the dead-end (the eager-pass that reproduces the 200-site regression)
+>   in design, not in production.
+> - **Gated build UNCOMMITTED → independent verify → orchestrator RE-DERIVES** the
+>   ground truth. Three checks, none trusted on faith; the build stops HONESTLY at a
+>   verified state rather than forcing (no band-aid).
+> - **Synthesis stays INLINE** (the design is the orchestrator's, holding the
+>   altitude); diagnosis, refutation, breadth dispatch out (power × anti-drift, ⧗).
+>
+> This loop IS `mentl audit` + the multi-shot oracle in larval form (`PLAN.md §0`) —
+> the human-catches-the-drift safeguard run as machinery. **As Mentl becomes real the
+> loop converges INTO the medium**, so the discipline doesn't merely repeat — it
+> EVOLVES with the project: every blocker closed this way sharpens what the kernel's
+> own Verify will one day enforce unsayably.
 
 ---
 

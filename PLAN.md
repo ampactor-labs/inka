@@ -271,20 +271,25 @@ topology + handlers.** Five verbs, settled.
 
 **③ THE CROWN — the effect system: rows-with-negation; modal is the TARGET, the
 graph is the ROUTE.** Three forms exist (current PL research): **rows** (Koka —
-parametric row variables; gives negation `!E`; *leaks* through higher-order
-functions — this session's L1 trap is the textbook failure mode, not a bug);
-**capabilities** (Effekt — lexical/second-class, no effect variables, so the leak
-*cannot occur*, but negation isn't native AND effects can't escape — fatal to
-first-class continuations); **modal** (Tang–Lindley, *Modal Effect Types*, POPL
-2025 — rows *and* capabilities unified by a modality that re-admits first-class
-escape *under proof*; cited live at `src/effects.mn:12`). **Decision: keep
+parametric row variables: the row FORM Mentl adopts. Koka itself OMITS Boolean
+negation — its scoped duplicate-labeled rows were chosen *to avoid* absence/lacks
+constraints — so `!E` is Mentl-NATIVE, not inherited from Koka; the form *leaks*
+through higher-order functions, this session's L1 trap, the textbook failure mode
+not a bug); **capabilities** (Effekt — lexical/second-class, no effect variables,
+so the leak *cannot occur*, but negation isn't native AND effects can't escape —
+fatal to first-class continuations); **modal** (Tang–Lindley, *Modal Effect Types*,
+POPL 2025 — rows *and* capabilities unified by a modality that re-admits first-class
+escape *under proof*; the follow-up *Rows and Capabilities as Modal Effects* (POPL
+2026, arXiv 2507.10301) PROVES both macro-encode into the one modal frame, types
+and semantics preserved; cited live at `src/effects.mn:12`). **Decision: keep
 rows-with-negation — never trade away `!E`** (Mentl's unique power and humanity's
 proving-the-negative need) — and hold the **modal synthesis as the
 unsurpassable-tier TARGET** (the strongest published candidate); the defining
 question — *can capabilities' no-leak threading coexist with rows' Boolean
-negation?* — is its burden to discharge, **and any rival's, including Mentl's own
-graph-native route** (interrogate, don't absorb: name the frontier, don't crown a
-destination). Two artifact-grounded reasons it is correctly targeted — not a hedge
+negation?* — now has its rows≡capabilities HALF discharged in the literature (POPL
+2026), leaving the **NEGATION half** the open burden — **its, any rival's, and
+Mentl's own graph-native route's** (interrogate, don't absorb: name the frontier,
+don't crown a destination). Two artifact-grounded reasons it is correctly targeted — not a hedge
 (adversarially verified 2026-06-21): **(a) `!E` under polymorphism is currently
 UNSOUND** — `unify_row` punts `EfOpen ~ EfNeg` ("exact match or error for
 universe-minus open rows", `effects.mn:378`) and `free_in_row`/`subst_row` cross
@@ -473,6 +478,52 @@ Write the ultimate form in FULL — all three aspects at once. A leap that advan
 *unsurpassable* (the e-graph, the value layer) before the seed can self-host is
 NOT premature: the seed catches up, and the census it raises is a SHADOW (§8),
 never a reason to hedge the wheel against the seed (the one named drift, §9.6).
+
+### §5.R · The post-first-light roadmap — the named remainder (so first-light's focus cannot erase it)
+
+> Every unsurpassable item NAMED in positive form and SEQUENCED, so the work
+> survives first-light's all-consuming focus (gathered 2026-06-28: the SOTA fleet +
+> the three docs + the codebase `Hβ.*` peers + an adversarial completeness critic;
+> 95 items / 15 bands; **full detail with SOTA refs + file:line anchors in
+> `docs/research/post-first-light-roadmap.md`**, the SOTA map in
+> `docs/research/sota-convergence.md`). Each is a positive-form named peer — a
+> hidden gap is drift (the bug IS the non-ultimate form, `CLAUDE.md ⟐`). Sequenced
+> AFTER first-light unless marked NOW; the gate that unblocks dependents leads each
+> band. **THE SPINE:** `Hβ.effects.sound-neg-under-poly` is the dependency ROOT —
+> ownership-as-effect, `!Thread`/`!Alloc` transitivity, and IFC non-interference ALL
+> inherit the EfNeg-under-instantiation unsoundness, so none can be VERIFIED (only
+> built) until the crown closes; the `TCont` world-index is the second spine (TIME).
+> STEP 0–5 + W31 are LANDED — this is the remainder.
+
+**A · Effects & the modal crown (arm 4) — gates ownership, !Thread, IFC negation.** `Hβ.effects.sound-neg-under-poly` (sound transitive `!E` under polymorphism; unify_row punts EfOpen~EfNeg, effects.mn:378 — build the soundness GATE, never claim "already modal", the 4/4-refuted 2026-06-21 trap) · `Hβ.effects.modal-world-index` (rows+capabilities+negation sound simultaneously, as a graph fact; POPL-2026 cite at effects.mn:12) · `Hβ.infer.modal-capability-at-tee` (the modal rule: a row var becomes a lexical capability handle at the `~>` edge, no new surface form) · `Hβ.syntax.perform-dissolution`.
+
+**B · Continuations & TIME (arm 2, §4④) — the binding keystone.** `Hβ.types.tcont-world-binding-keystone` (STEP 5 landed the 3-arg arity; the world is INERT on OneShot — ENFORCE it) · `Hβ.types.resume-world-mismatch-value-gate` (the runnable gate; layout-in-world coupling; DEP persist resume-catcher + STEP 1) · `Hβ.infer.tcont-world-capture-at-reify` (infer.mn:2714) · `Hβ.continuations.world-widening-resume` (typed superset-resume) · `Hβ.continuations.persist-equals-memcpy-handler` (= `Hβ.lower.fanout-durable-persist-handler`; `~> Persist`, zero serializer; STEP 3 producer landed) · `Hβ.persist.cross-machine-resume` *(new)* · `Hβ.persist.branch-world-tag` (persist.mn:119) · `Hβ.continuations.wasmfx-lowering-tier` · `Hβ.infer.tail-recursion-resume-cardinality` (infer.mn:3061) · `Hβ.lower.either-install-negotiation` · `Hβ.felt.time-travel-debug-forked-cursor` *(new)* · `Hβ.ml.autodiff-as-multishot` (autodiff.mn:36).
+
+**C · IFC — flow in the row (arm 4/6, §4⑥; W31 scaffold landed).** `Hβ.verify.ifc-noninterference` (umbrella; code `Hβ.types.ifc-flow-constraint`, types.mn:1029) ← `Hβ.ifc.dcc-noninterference-gate` → `.flowlabel-inference-in-hm` → `.pc-label-implicit-flow` → `.integrity-dual-lattice` (prompt-injection IS an integrity-flow violation) → `.declassify-robust` → `.flow-world-on-tcont` → `.agentic-fides-target`. DEP-rooted on `sound-neg-under-poly`.
+
+**D · The value layer — fold & repr (arms 1/7, §5.U; STEP 0/1/2 landed).** `Hβ.fold.show-leaf` (synthesize as a lowered LFn, not raw WAT; lower.mn:455) · `.pack-unpack-leaf` · `.pack-leaf-effarg-float` · `.compare-hash-leaf` · gate `Hβ.eq.fold-seed-value-gate` · `Hβ.repr.arrow-layout-interop` · `Hβ.emit.variant-payload-repr-width` (wasm.mn:4672) · `.plit-handle-repr` (wasm.mn:5296) · `Hβ.value.ontology-derivation-complete` · `Hβ.runtime.zero-copy-string-view` (lexer.mn:316).
+
+**E · Parallelism & accelerators (arm 3, §4④; STEP 4 collapse landed).** `Hβ.lower.fanout-simd-lane-cashout` (RV128) · `.fanout-gpu-backend-handler` (lower.mn:1475) · `.fanout-durable-persist-handler` (SPACE=TIME) · `Hβ.parallel.thread-alloc-transitive-proof` (verify ONLY after the leak closes) · `.race-freedom-ownership-proof` · `Hβ.infer.fanout-ownership-from-use-count` (infer.mn:1228) · `Hβ.runtime.wasi-thread-spawn-seed` (threading.mn:296) · `Hβ.driver.level-set-par-walk` (driver.mn:247) · `Hβ.cursor.speculative-compile`.
+
+**F · Verification & proof (arm 6/8).** `Hβ.types.predicate-is-expr` (dissolve PExpr) → `Hβ.verify.smt-handler-swap` (Z3+CVC5; NAME the external-SMT residual !Outside if it persists) → `.higher-order-refinement` · `Hβ.verify.ledger-soundness` (no silent assume-true; the Dafny `{:axiom}` cautionary) · `.proof-incrementality-cached-cursor` · `.reason-edge-pcc-certificate` · `Hβ.dsp.hz-ceiling-ambient-sample-rate` · `Hβ.refine.buffer-invariant` · `Hβ.infer.predicate-from-bool-expression`.
+
+**G · Graph & e-graph (arm 1) — highest-leverage incompleteness first.** `Hβ.egraph.per-expr-effect-row` (egraph.mn:70 — reduces is_pure to effs_at alone, generalizing the effect-gate to every rewrite) · `Hβ.lower.egraph-saturation-deepen` · `.typed-rulecyclic` (the depth-1000 cap → a typed E_RuleSetCyclic via the Why chain, unreachable-by-construction) · `.rule-as-query` · `.extraction-cost-composes-repr` · `.const-fold-minted-node-full-edges`.
+
+**H · Ownership (arm 5, §4⑤).** `Hβ.ownership.fractional-uniqueness-ref-borrow` (Granule ICFP 2024) · `.quiet-empirical-gate` (the Hylo bar — a corpus test counting authored own/ref markers; a rising count IS inference failing §4⑤).
+
+**I · Dataflow & DSP (arm 3/6).** `Hβ.dataflow.causality-compile-error` (wasm.mn:2344) · `.clock-calculus-sample-rate` · `.point-free-fusion-via-egraph`.
+
+**J · Self-hosting & !Outside hardening (L7, §1).** `Hβ.closure.diverse-double-compilation` (Thompson/Wheeler 2009 — a second disposable seed converging to identical m3 closes trusting-trust, which the byte-fixpoint alone cannot; DEP native backend) · `.correctness-oracle-internal` (the external micro-battery → the wheel's own Verify; until then first-light's correctness half is itself an !Outside) · `.reflexive-over-proposers` (code `Hβ.synth.proposer-gauntlet`).
+
+**K · AI-proposer / Synth (arm 2, §0/§1).** `Hβ.proposer.constraint-not-token-worked-example` (Lahiri 2026 — answer the spec-oracle problem with a worked example, not a claim) · `.synth-handler-error-fed-back` (the lossless constraint, not the lossy token).
+
+**L · The Why-engine & `mentl audit` (arm 8/1, §0 — the medium enforcing its own discipline).** `Hβ.audit.carried-truth-projection` *(new — the §0 keystone: project a Carried-Truth violation BEFORE a line is written, making the wrong move unsayable)* · `Hβ.diag.minimal-inconsistent-core` (= `.why.minimal-cause-set`) · `Hβ.infer.marked-lambda-totality-invariant` (POPL 2024) · `Hβ.diag.catalog-as-projection` (report takes a DiagKind ADT) · `Hβ.query.graph-projection-surface` *(new)*.
+
+**M · The felt surface / `mentl edit` (L6, §4⑦, §0 pt 5 — oversight is survival, NOT garnish; the thinnest-swept band, most at risk of erasure).** `Hβ.felt.mentl-edit-runtime` *(new — the canonical IDE as a running keystroke→parse→format→render loop)* · `.reactivity-typed-demand-driven` · `.lsp-transport-projection` *(new)* · `.collab-grove-cmrdt-semantic` (Grove POPL 2025, over the TYPED graph) · `.legibility-derived-not-molded` · `.verification-dashboard` *(new — live V_Pending / transitive-!E / Why-chain for oversight)* · `.hole-is-dormant-continuation` (Hazel fill-and-resume = the multishot record).
+
+**N · Backends — the handler IS the backend (§5 stage 3).** `Hβ.backend.native-codegen-handler` (retire wasmtime/WABT) · `Hβ.native.wasm64-backend-handler` *(new)* · `Hβ.emit.memory-gc-handler`.
+
+**O · Self-hosting infra (resolves AT/around first-light; captured so it is not forgotten — NOT post-first-light work).** `Hβ.seed.float-gradient` · `Hβ.seed.multishot-producer` (both dissolve at first-light) · `Hβ.cache.cross-file-resolved-row` · `Hβ.driver.per-module-env-overlay` · `Hβ.f1.handler-substrates`.
 
 ---
 

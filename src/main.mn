@@ -407,7 +407,7 @@ fn run_run(target) = {
 // pipeline is the value; emission is suppressed.
 
 fn check_run(target) = {
-  check(target)
+  pipeline_check(target)
     ~> wasi_filesystem
     ~> no_iter_context
     ~> diagnostics_handler
@@ -436,7 +436,7 @@ fn test_run(target_opt) = {
     Some(t) => t,
     None    => "test"  // default test entry module
   }
-  check(entry_module)
+  pipeline_check(entry_module)
     ~> assert_reporter
     ~> stdout_console
     ~> wasi_filesystem
@@ -509,7 +509,7 @@ fn with_run(handler_name, target_opt) = {
     Some(t) => t,
     None    => "main"
   }
-  check(entry_module)
+  pipeline_check(entry_module)
   match env_lookup(handler_name) {
     None    => eprint_string("mentl --with: no handler named {handler_name} in the checked env\n"),
     Some(_) => eprint_string("mentl --with {handler_name}: resolved; install via Hβ.cli.user-defined-entry-handler-resolution\n")

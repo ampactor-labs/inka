@@ -275,11 +275,6 @@ fn slice(list, start, end) with Memory + Alloc = {
 // This matches env_lookup traversal: the innermost binding is at the
 // head of the snoc stack.
 
-// list_head — return the last element. O(1) for snoc nodes.
-// Per Hazel productive-under-error: unknown tag returns 0 sentinel
-// rather than trapping. Substrate gap surfaces upstream (whoever
-// passed a non-list pointer); the runtime degrades gracefully so
-// the cursor's diagnostic chain can walk back to source via Reason.
 // list_head — the head element. Read through the kernel sequence-index
 // projection `xs[i]`, which CARRIES the element type `a` from the sequence's
 // `TList(a)` (the Carried-Truth Law at the value-ontology layer), rather than
@@ -288,10 +283,9 @@ fn slice(list, start, end) with Memory + Alloc = {
 // subscript lowers to `list_index`, which tag-dispatches every representation
 // (snoc/flat/concat/slice), so one projection covers all; the head sits at
 // index `len-1`. No `_ => 0` silent fallback: head-of-empty is undefined.
-fn list_head(list) with Memory = {
-  let list_len = load_i32(list)
-  list[list_len - 1]
-}
+fn list_head(xs) with Memory = xs[len(xs) - 1]
+
+
 
 // list_tail — return the list without its last element.
 // O(1) for snoc nodes (reads the left pointer). Creates a slice for

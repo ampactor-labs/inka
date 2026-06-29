@@ -118,7 +118,7 @@ fn compile_stdin() = {
     ~> wasi_threads
     ~> diagnostics_handler
 
-fn check(entry_module) = {
+fn pipeline_check(entry_module) = {
   driver_check(entry_module)
     ~> wasi_filesystem
     ~> mentl_default

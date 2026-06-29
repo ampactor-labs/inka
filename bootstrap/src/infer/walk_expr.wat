@@ -287,6 +287,20 @@
   (data (i32.const 3696) "\07\00\00\00effects")              ;;  7 bytes
   (data (i32.const 3720) "\08\00\00\00expected")             ;;  8 bytes
   (data (i32.const 3744) "\0b\00\00\00unification")          ;; 11 bytes
+  (data (i32.const 6640) "\03\00\00\00len")                  ;;  3 bytes — sequence-projection cname compares
+  (data (i32.const 6648) "\09\00\00\00list_head")            ;;  9 bytes
+  (data (i32.const 6664) "\09\00\00\00list_tail")            ;;  9 bytes
+  (data (i32.const 6680) "\08\00\00\00list_set")             ;;  8 bytes
+  (data (i32.const 6696) "\0b\00\00\00list_concat")          ;; 11 bytes
+  (data (i32.const 6712) "\09\00\00\00make_list")            ;;  9 bytes
+  (data (i32.const 6728) "\05\00\00\00slice")                ;;  5 bytes
+  (data (i32.const 6740) "\04\00\00\00push")                 ;;  4 bytes
+  (data (i32.const 6752) "\03\00\00\00map")                  ;;  3 bytes — functor projections
+  (data (i32.const 6768) "\06\00\00\00filter")               ;;  6 bytes
+  (data (i32.const 6784) "\07\00\00\00flatten")              ;;  7 bytes
+  (data (i32.const 6800) "\04\00\00\00fold")                 ;;  4 bytes
+  (data (i32.const 6816) "\08\00\00\00for_each")             ;;  8 bytes
+  ;; "list_index" reuses the parser desugar target at 4288.
   (data (i32.const 3768) "\0c\00\00\00if condition")         ;; 12 bytes
   (data (i32.const 3792) "\0b\00\00\00if branches")          ;; 11 bytes
   (data (i32.const 3816) "\09\00\00\00if result")            ;;  9 bytes
@@ -778,7 +792,7 @@
     (local $arg_handles i32) (local $params i32)
     (local $ret_h i32) (local $row_h i32)
     (local $expected i32) (local $expected_h i32)
-    (local $cname i32) (local $row_nk i32)
+    (local $cname i32) (local $row_nk i32) (local $elem_h i32) (local $list_ty_h i32)
     ;; Layout: [tag=88][callee][args]
     (local.set $func (i32.load offset=4 (local.get $expr)))
     (local.set $args (i32.load offset=8 (local.get $expr)))
@@ -786,6 +800,15 @@
     (local.set $fh (call $infer_walk_expr (local.get $func)))
     (local.set $arg_handles (call $walk_expr_collect_arg_handles (local.get $args)))
     (local.set $cname (call $walk_expr_callee_name (local.get $func)))
+    ;; The sequence node-kind's projections (len / list_index / list_head /
+    ;; list_tail / list_set / list_concat / make_list / slice / push) — typed by
+    ;; the ELEMENT, the cursor reading or building a sequence, NOT by their
+    ;; load_i32/alloc substrate bodies (whose inferred type erases [a] to Int —
+    ;; the §4① value-ontology poison that made the whole compiler's list
+    ;; handling Int). Mirrors src/infer.mn infer_seq_op.
+    (if (call $is_seq_op (local.get $cname))
+      (then (return (call $infer_seq_op (local.get $cname)
+        (local.get $arg_handles) (local.get $handle) (local.get $span)))))
     ;; Mint fresh return handle + row handle
     (local.set $ret_h (call $graph_fresh_ty
       (call $reason_make_inferredcallreturn (local.get $cname)
@@ -835,6 +858,170 @@
     (if (i32.eq (call $node_kind_tag (local.get $row_nk)) (i32.const 63))   ;; NRowFree
       (then (call $walk_expr_inf_add_row
         (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h)))))
+    (local.get $handle))
+
+  ;; ─── The sequence node-kind's projections (mirror src/infer.mn) ──────────
+  ;; A sequence is ONE kernel node-kind (§4①); these type by the ELEMENT, the
+  ;; cursor reading/building it, NOT by the load_i32/alloc substrate body whose
+  ;; inferred type erases [a] to Int. lower still emits the lib calls; only the
+  ;; TYPE moves here, to the node-kind that owns it.
+
+  ;; seq_force — unify the i-th argument with `ty` (a no-op past the end). UNIFY
+  ;; (not graph_bind) so a param VarRef receiver propagates.
+  (func $seq_force (param $ah i32) (param $i i32) (param $ty i32) (param $span i32)
+    (local $th i32)
+    (if (i32.gt_u (call $len (local.get $ah)) (local.get $i))
+      (then
+        (local.set $th (call $graph_fresh_ty (call $reason_make_inferred (i32.const 3672))))
+        (call $graph_bind (local.get $th) (local.get $ty)
+          (call $reason_make_located (local.get $span)
+            (call $reason_make_inferred (i32.const 3672))))
+        (call $unify (call $list_index (local.get $ah) (local.get $i))
+          (local.get $th) (local.get $span)
+          (call $reason_make_inferred (i32.const 3672))))))
+
+  ;; seq_force_fn — force the i-th arg to (param_tys) -> ret with an open effect
+  ;; row (the transform's own effects flow separately). The functor projections
+  ;; use it to relate f : a -> b so the result element IS the transform's range,
+  ;; read live — never re-derived from map's buffer body.
+  (func $seq_force_fn (param $ah i32) (param $i i32) (param $param_tys i32)
+        (param $ret i32) (param $span i32)
+    (local $n i32) (local $j i32) (local $params i32) (local $tf i32) (local $th i32)
+    (if (i32.le_u (call $len (local.get $ah)) (local.get $i)) (then (return)))
+    (local.set $n (call $len (local.get $param_tys)))
+    (local.set $params (call $list_extend_to (call $make_list (local.get $n)) (local.get $n)))
+    (local.set $j (i32.const 0))
+    (block $d (loop $e
+      (br_if $d (i32.ge_u (local.get $j) (local.get $n)))
+      (drop (call $list_set (local.get $params) (local.get $j)
+        (call $tparam_make (call $str_alloc (i32.const 0))
+          (call $list_index (local.get $param_tys) (local.get $j))
+          (call $ownership_make_inferred) (call $ownership_make_inferred))))
+      (local.set $j (i32.add (local.get $j) (i32.const 1)))
+      (br $e)))
+    (local.set $tf (call $ty_make_tfun (local.get $params) (local.get $ret)
+      (call $row_make_open (call $make_list (i32.const 0))
+        (call $graph_fresh_row (call $reason_make_inferred (i32.const 3672))))))
+    (local.set $th (call $graph_fresh_ty (call $reason_make_inferred (i32.const 3672))))
+    (call $graph_bind (local.get $th) (local.get $tf)
+      (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
+    (call $unify (call $list_index (local.get $ah) (local.get $i)) (local.get $th)
+      (local.get $span) (call $reason_make_inferred (i32.const 3672))))
+
+  ;; tylist1 / tylist2 — small Ty lists for seq_force_fn's param-type argument.
+  (func $tylist1 (param $t i32) (result i32)
+    (local $l i32)
+    (local.set $l (call $list_extend_to (call $make_list (i32.const 1)) (i32.const 1)))
+    (drop (call $list_set (local.get $l) (i32.const 0) (local.get $t)))
+    (local.get $l))
+  (func $tylist2 (param $t1 i32) (param $t2 i32) (result i32)
+    (local $l i32)
+    (local.set $l (call $list_extend_to (call $make_list (i32.const 2)) (i32.const 2)))
+    (drop (call $list_set (local.get $l) (i32.const 0) (local.get $t1)))
+    (drop (call $list_set (local.get $l) (i32.const 1) (local.get $t2)))
+    (local.get $l))
+
+  (func $is_seq_op (param $cname i32) (result i32)
+    (i32.or
+      (i32.or
+        (i32.or
+          (i32.or (call $str_eq (local.get $cname) (i32.const 6640))    ;; len
+                  (call $str_eq (local.get $cname) (i32.const 4288)))   ;; list_index
+          (i32.or (call $str_eq (local.get $cname) (i32.const 6648))    ;; list_head
+                  (call $str_eq (local.get $cname) (i32.const 6664))))  ;; list_tail
+        (i32.or
+          (i32.or (call $str_eq (local.get $cname) (i32.const 6680))    ;; list_set
+                  (call $str_eq (local.get $cname) (i32.const 6696)))   ;; list_concat
+          (i32.or
+            (i32.or (call $str_eq (local.get $cname) (i32.const 6712))  ;; make_list
+                    (call $str_eq (local.get $cname) (i32.const 6728))) ;; slice
+            (call $str_eq (local.get $cname) (i32.const 6740)))))       ;; push
+      (i32.or
+        (i32.or (call $str_eq (local.get $cname) (i32.const 6752))      ;; map
+                (call $str_eq (local.get $cname) (i32.const 6768)))     ;; filter
+        (i32.or
+          (i32.or (call $str_eq (local.get $cname) (i32.const 6784))    ;; flatten
+                  (call $str_eq (local.get $cname) (i32.const 6800)))   ;; fold
+          (call $str_eq (local.get $cname) (i32.const 6816))))))        ;; for_each
+
+  (func $infer_seq_op (param $cname i32) (param $ah i32) (param $handle i32)
+        (param $span i32) (result i32)
+    (local $elem i32) (local $res i32) (local $elem_b i32)
+    (local.set $elem (call $ty_make_tvar
+      (call $graph_fresh_ty (call $reason_make_inferred (i32.const 3672)))))
+    ;; ─── Functor projections — the cursor in transform/fold/filter mode ───
+    ;; Typed by element + transform's range, read live; NOT from the buffer body.
+    (if (call $str_eq (local.get $cname) (i32.const 6752))           ;; map(f,xs):(a->b,[a])->[b]
+      (then
+        (local.set $elem_b (call $ty_make_tvar (call $graph_fresh_ty (call $reason_make_inferred (i32.const 3672)))))
+        (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
+        (call $seq_force_fn (local.get $ah) (i32.const 0) (call $tylist1 (local.get $elem)) (local.get $elem_b) (local.get $span))
+        (call $graph_bind (local.get $handle) (call $ty_make_tlist (local.get $elem_b))
+          (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
+        (return (local.get $handle))))
+    (if (call $str_eq (local.get $cname) (i32.const 6768))           ;; filter(p,xs):(a->_,[a])->[a]
+      (then
+        (local.set $elem_b (call $ty_make_tvar (call $graph_fresh_ty (call $reason_make_inferred (i32.const 3672)))))
+        (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
+        (call $seq_force_fn (local.get $ah) (i32.const 0) (call $tylist1 (local.get $elem)) (local.get $elem_b) (local.get $span))
+        (call $graph_bind (local.get $handle) (call $ty_make_tlist (local.get $elem))
+          (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
+        (return (local.get $handle))))
+    (if (call $str_eq (local.get $cname) (i32.const 6784))           ;; flatten([[a]]):[a]
+      (then
+        (call $seq_force (local.get $ah) (i32.const 0)
+          (call $ty_make_tlist (call $ty_make_tlist (local.get $elem))) (local.get $span))
+        (call $graph_bind (local.get $handle) (call $ty_make_tlist (local.get $elem))
+          (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
+        (return (local.get $handle))))
+    (if (call $str_eq (local.get $cname) (i32.const 6800))           ;; fold(xs,init,f):([a],b,(b,a)->b)->b
+      (then
+        (local.set $elem_b (call $ty_make_tvar (call $graph_fresh_ty (call $reason_make_inferred (i32.const 3672)))))
+        (call $seq_force (local.get $ah) (i32.const 0) (call $ty_make_tlist (local.get $elem)) (local.get $span))
+        (call $seq_force (local.get $ah) (i32.const 1) (local.get $elem_b) (local.get $span))
+        (call $seq_force_fn (local.get $ah) (i32.const 2) (call $tylist2 (local.get $elem_b) (local.get $elem)) (local.get $elem_b) (local.get $span))
+        (call $graph_bind (local.get $handle) (local.get $elem_b)
+          (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
+        (return (local.get $handle))))
+    (if (call $str_eq (local.get $cname) (i32.const 6816))           ;; for_each(f,xs):(a->(),[a])->()
+      (then
+        (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
+        (call $seq_force_fn (local.get $ah) (i32.const 0) (call $tylist1 (local.get $elem)) (call $ty_make_tunit) (local.get $span))
+        (call $graph_bind (local.get $handle) (call $ty_make_tunit)
+          (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
+        (return (local.get $handle))))
+    ;; arg0 is a sequence for every op except make_list (arg0 = count Int).
+    (if (call $str_eq (local.get $cname) (i32.const 6712))            ;; make_list
+      (then (call $seq_force (local.get $ah) (i32.const 0) (call $ty_make_tint) (local.get $span)))
+      (else (call $seq_force (local.get $ah) (i32.const 0)
+        (call $ty_make_tlist (local.get $elem)) (local.get $span))))
+    ;; extra operand forces
+    (if (call $str_eq (local.get $cname) (i32.const 4288))            ;; list_index(_, Int)
+      (then (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tint) (local.get $span))))
+    (if (call $str_eq (local.get $cname) (i32.const 6680))            ;; list_set(_, Int, elem)
+      (then (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tint) (local.get $span))
+            (call $seq_force (local.get $ah) (i32.const 2) (local.get $elem) (local.get $span))))
+    (if (call $str_eq (local.get $cname) (i32.const 6696))            ;; list_concat(_, [elem])
+      (then (call $seq_force (local.get $ah) (i32.const 1)
+        (call $ty_make_tlist (local.get $elem)) (local.get $span))))
+    (if (call $str_eq (local.get $cname) (i32.const 6728))            ;; slice(_, Int, Int)
+      (then (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tint) (local.get $span))
+            (call $seq_force (local.get $ah) (i32.const 2) (call $ty_make_tint) (local.get $span))))
+    (if (call $str_eq (local.get $cname) (i32.const 6740))            ;; push(_, elem)
+      (then (call $seq_force (local.get $ah) (i32.const 1) (local.get $elem) (local.get $span))))
+    ;; result: head/index → elem; len → Int; everything else → [elem]
+    (local.set $res
+      (if (result i32)
+        (i32.or (call $str_eq (local.get $cname) (i32.const 6648))    ;; list_head
+                (call $str_eq (local.get $cname) (i32.const 4288)))   ;; list_index
+        (then (local.get $elem))
+        (else
+          (if (result i32) (call $str_eq (local.get $cname) (i32.const 6640))  ;; len
+            (then (call $ty_make_tint))
+            (else (call $ty_make_tlist (local.get $elem)))))))
+    (call $graph_bind (local.get $handle) (local.get $res)
+      (call $reason_make_located (local.get $span)
+        (call $reason_make_inferred (i32.const 3672))))
     (local.get $handle))
 
   ;; LambdaExpr arm — src/infer.mn:724-740. Builds TFun([], TVar(body_h),

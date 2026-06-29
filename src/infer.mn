@@ -876,9 +876,110 @@ fn callee_name(func_node) with Pure = {
   }
 }
 
+// is_seq_op — the names of the sequence node-kind's projections. A sequence is
+// ONE kernel node-kind (§4①); these are the cursor reading or building it.
+// Routed to `infer_seq_op` so each types by the ELEMENT, never by its
+// `load_i32`/`alloc` substrate body (whose inferred type erases `[a]` to `Int`
+// — the value-ontology violation that poisoned the whole compiler's list
+// handling). Strings are `[byte]`: `byte_at` IS `list_index`, `byte_len` IS
+// `len`, `str_concat` IS `list_concat` — the same projections over a different
+// element, so the string ops route here too (the §IX four-set unification).
+fn is_seq_op(cname) with Pure =
+  cname == "len"      || cname == "list_index"  || cname == "list_head"
+  || cname == "list_tail"  || cname == "list_set"    || cname == "list_concat"
+  || cname == "make_list"  || cname == "slice"       || cname == "push"
+  // The functor projections — the cursor reading a sequence in transform/fold/
+  // filter mode. Typed by the element intrinsically, NOT inferred from their
+  // handler+buffer bodies (the foreign-fluency encoding of a pure functor as an
+  // effectful iteration). The body stays as lowered substrate; the TYPE is the
+  // projection. This is what dissolves map_collector's S/P handler gaps.
+  || cname == "map"        || cname == "filter"      || cname == "flatten"
+  || cname == "fold"       || cname == "for_each"
+
+// seq_force — bind the i-th argument's type to `ty` (a no-op past the end).
+// `graph_bind` on a VarRef handle propagates to the bound variable (the same
+// mechanism the `xs[i]` IndexExpr arm uses to force its receiver).
+fn seq_force(ah, i, ty, span: ValidSpan) =
+  if len(ah) > i {
+    perform graph_bind(list_index(ah, i), ty, Located(span, Inferred("sequence operand")))
+  } else { () }
+
+// seq_force_fn — force the i-th argument to `param_tys -> ret_ty` with an open
+// effect row (the transform's own effects flow separately). The functor
+// projections use this to relate `f : a -> b` so the result element `b` is the
+// transform's return, read live — never re-derived from map's buffer body.
+fn seq_force_fn(ah, i, param_tys, ret_ty, span: ValidSpan) =
+  if len(ah) > i {
+    let params = map((t) => TParam("_", t, Unmarked, Unmarked), param_tys)
+    let row_h = perform graph_fresh_row(Inferred("functor transform effects"))
+    perform graph_bind(list_index(ah, i),
+      TFun(params, ret_ty, mk_ef_open([], row_h)),
+      Located(span, Inferred("functor transform")))
+  } else { () }
+
+// The sequence node-kind's projections — typed by the element, the cursor
+// reading or building a sequence. A sequence is `[a]`; the i32 pointer is
+// substrate BELOW the type. These REPLACE the load_i32 library typing: the
+// body is what `lower` emits (the rope walk, the offset load), the TYPE is THIS
+// projection. One fresh `a` per call binds the receiver(s) to `[a]`, indices to
+// `Int`, values to `a`. `lower` still calls the lib fns; only their TYPE moves
+// here, to the node-kind that owns it.
+fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
+  let ah = collect_handles(args)
+  let elem = TVar(perform mint(Inferred("sequence element")))
+  match cname {
+    // Reads that project the element.
+    "list_head"  => { seq_force(ah, 0, TList(elem), span); perform graph_bind(handle, elem, Located(span, Inferred("head element"))) },
+    "list_index" => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); perform graph_bind(handle, elem, Located(span, Inferred("element at index"))) },
+    // The length read.
+    "len"        => { seq_force(ah, 0, TList(elem), span); perform graph_bind(handle, TInt, Located(span, Inferred("sequence length"))) },
+    // Builders/transforms that return a sequence of the same element.
+    "list_tail"  => { seq_force(ah, 0, TList(elem), span); perform graph_bind(handle, TList(elem), Located(span, Inferred("tail sequence"))) },
+    "list_set"   => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, elem, span); perform graph_bind(handle, TList(elem), Located(span, Inferred("set element"))) },
+    "push"       => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, elem, span); perform graph_bind(handle, TList(elem), Located(span, Inferred("push element"))) },
+    "slice"      => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); perform graph_bind(handle, TList(elem), Located(span, Inferred("slice"))) },
+    "list_concat"=> { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TList(elem), span); perform graph_bind(handle, TList(elem), Located(span, Inferred("concat"))) },
+    "make_list"  => { seq_force(ah, 0, TInt, span); perform graph_bind(handle, TList(elem), Located(span, Inferred("fresh sequence"))) },
+    // Functor projections — the cursor in transform/fold/filter mode. The
+    // element type flows through f, read live; the result is the transform's
+    // range, NEVER re-derived from the buffer body that lowers underneath.
+    "map"        => {
+      let bm = TVar(perform mint(Inferred("map range element")))
+      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
+      seq_force_fn(ah, 0, [elem], bm, span)               // f  : a -> b
+      perform graph_bind(handle, TList(bm), Located(span, Inferred("map : [b]")))
+    },
+    "filter"     => {
+      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
+      seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
+      perform graph_bind(handle, TList(elem), Located(span, Inferred("filter : [a]")))
+    },
+    "flatten"    => {
+      seq_force(ah, 0, TList(TList(elem)), span)          // xss : [[a]]
+      perform graph_bind(handle, TList(elem), Located(span, Inferred("flatten : [a]")))
+    },
+    "fold"       => {
+      let bm = TVar(perform mint(Inferred("fold accumulator")))
+      seq_force(ah, 0, TList(elem), span)                 // xs   : [a]
+      seq_force(ah, 1, bm, span)                          // init : b
+      seq_force_fn(ah, 2, [bm, elem], bm, span)           // f    : (b, a) -> b
+      perform graph_bind(handle, bm, Located(span, Inferred("fold : b")))
+    },
+    "for_each"   => {
+      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
+      seq_force_fn(ah, 0, [elem], TUnit, span)            // f  : a -> ()
+      perform graph_bind(handle, TUnit, Located(span, Inferred("for_each : ()")))
+    },
+    _            => perform graph_bind(handle, TList(elem), Located(span, Inferred("sequence")))
+  }
+  perform inf_add_row(mk_ef_closed([ENamed("Memory")]))
+}
+
 fn infer_call(func, args, handle, span: ValidSpan) = {
   let N(_, _, fh) = func
   let cname = callee_name(func)
+  if is_seq_op(cname) { infer_seq_op(cname, args, handle, span) }
+  else {
   let arg_handles = collect_handles(args)
   let ret_h = mint(InferredCallReturn(cname, Inferred("return"))) // drift-audit: ignore — "return" is a Reason string, not an imperative keyword
   let row_h = graph_fresh_row(InferredCallReturn(cname, Inferred("effects")))
@@ -909,6 +1010,7 @@ fn infer_call(func, args, handle, span: ValidSpan) = {
     GNode(NRowBound(row), _) => inf_add_row(row),
     GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], row_h)),
     _ => ()
+  }
   }
 }
 
@@ -2684,17 +2786,48 @@ fn register_effect_ops(effect_name, ops) = {
   // EParameterized(E, the vars) — so yield(a)/result() both carry Iterate(a)
   // (the SAME a); the install unifies the whole instance per-position. This
   // is per-EFFECT-instance carrying ALL its vars — NOT one-payload-per-effect.
-  let eff_vars = unique(effect_type_vars(ops))
+  // Quantify the ops' lowercase type-var leaves (the case rule) BEFORE reading
+  // their free vars. Raw, `yield(element)`'s `element` is a TName leaf;
+  // effect_type_vars finds no var; Iterate stays a bare ENamed; the payload
+  // type never flows performer→handler, so every collector handler (map/fold/
+  // iterate's buffer) goes `[free]` and the iteration machinery ERASES the
+  // element — the §4① value-ontology violation at the effect boundary, and the
+  // root of both the list-as-Int erasure and the emitter's heap-dump.
+  let qops = quantify_effect_ops(ops)
+  let eff_vars = unique(effect_type_vars(qops))
   let eff_name = if len(eff_vars) == 0 {
     ENamed(effect_name)
   } else {
     EParameterized(effect_name, map((v) => EAType(TVar(v)), eff_vars))
   }
-  for_each((op) => register_one_op(effect_name, eff_name, op), ops)
+  for_each((op) => register_one_op(effect_name, eff_name, op), qops)
 }
 
 // The free type vars across all an effect's ops' signatures — the effect's
 // type-parameter set (the instance's polymorphic dimensions).
+
+// quantify_effect_ops — convert each op's lowercase TName leaves to quantified
+// TVars, sharing by NAME across the effect's ops (so `get() -> s` and
+// `set(v: s)` share the one `s`) via a threaded qmap. The SAME quantify_ctor_ty
+// the type-constructor path uses — one case-rule primitive for ctors AND effect
+// ops (Mentl solves Mentl). Uppercase leaves (`Int`) stay nominal, so Memory's
+// `load_i32(Int)` correctly does NOT parameterize.
+fn quantify_effect_ops(ops) = {
+  let (qops, _) = quantify_effect_ops_loop(ops, [], 0)
+  qops
+}
+
+fn quantify_effect_ops_loop(ops, qmap, i) =
+  if i >= len(ops) { ([], qmap) }
+  else {
+    let (name, ptys, rty) = list_index(ops, i)
+    let (qptys, q1) = quantify_ty_list(ptys, qmap)
+    let (qrty, q2)  = quantify_ctor_ty(rty, q1)
+    let (rest, q3)  = quantify_effect_ops_loop(ops, q2, i + 1)
+    ([(name, qptys, qrty)] ++ rest, q3)
+  }
+
+
 fn effect_type_vars(ops) =
   flatten(map((op) => {
     let (_, ptys, rty) = op

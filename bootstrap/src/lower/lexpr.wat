@@ -968,3 +968,19 @@
 
   (func $lexpr_lfieldload_offset_bytes (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
+
+  ;; ─── 339 = LConvert(handle, kind, x) — arity 3 ───────────────────────
+  ;; Per src/lower.mn LConvert(Int, ConvertKind, LowExpr)
+  (func $lexpr_make_lconvert (export "lexpr_make_lconvert") (param $h i32) (param $kind i32) (param $x i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 339) (i32.const 3)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $kind))
+    (call $record_set (local.get $r) (i32.const 2) (local.get $x))
+    (local.get $r))
+
+  (func $lexpr_lconvert_kind (export "lexpr_lconvert_kind") (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 1)))
+
+  (func $lexpr_lconvert_x (export "lexpr_lconvert_x") (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 2)))

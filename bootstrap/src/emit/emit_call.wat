@@ -301,6 +301,28 @@
     (call $emit_lexpr (local.get $left_lexpr))
     (call $emit_lexpr (call $lexpr_lbinop_r (local.get $r)))
     (local.set $op (call $lexpr_lbinop_op (local.get $r)))
+    
+    ;; BOOTSTRAP STABILIZATION: Intercept f64 operators and emit inert
+    ;; placeholders. The f64 ops use the i32 stack substrate in the seed,
+    ;; meaning a / b is compiled as i32.div_s, which TRAPS on 0 / 0.
+    (local.set $left_h (call $lexpr_handle (local.get $left_lexpr)))
+    (if (i32.ne (local.get $left_h) (i32.const 0))
+      (then
+        (local.set $left_ty (call $lookup_ty (local.get $left_h)))
+        (local.set $left_ty_tag (call $ty_tag (local.get $left_ty)))
+        (if (i32.eq (local.get $left_ty_tag) (i32.const 101)) ;; TFloat
+          (then
+            (call $emit_indent)
+            (call $emit_cstr (i32.const 578) (i32.const 6)) ;; "(drop "
+            (call $emit_close)
+            (call $emit_nl)
+            (call $emit_indent)
+            (call $emit_cstr (i32.const 578) (i32.const 6)) ;; "(drop "
+            (call $emit_close)
+            (call $emit_nl)
+            (call $emit_i32_const (i32.const 0))
+            (return)))))
+
     ;; BConcat (153): operand-Ty dispatch.
     ;; Per Hβ.emit.runtime-helper-state-push: str_concat / list_concat
     ;; are W7-compiled fns expecting (state, a, b). Stack here has
@@ -571,9 +593,25 @@
   ;; BConcat at line 309+ uses the same scratch-local pattern; fully
   ;; reuses fn-preamble locals (no new state).
   (func $emit_lunaryop (param $r i32)
-    (local $op i32)
-    (call $emit_lexpr (call $lexpr_lunaryop_x (local.get $r)))
+    (local $op i32) (local $x i32) (local $x_h i32) (local $x_ty i32) (local $x_ty_tag i32)
+    (local.set $x (call $lexpr_lunaryop_x (local.get $r)))
+    (call $emit_lexpr (local.get $x))
     (local.set $op (call $lexpr_lunaryop_op (local.get $r)))
+    
+    (local.set $x_h (call $lexpr_handle (local.get $x)))
+    (if (i32.ne (local.get $x_h) (i32.const 0))
+      (then
+        (local.set $x_ty (call $lookup_ty (local.get $x_h)))
+        (local.set $x_ty_tag (call $ty_tag (local.get $x_ty)))
+        (if (i32.eq (local.get $x_ty_tag) (i32.const 101)) ;; TFloat
+          (then
+            (call $emit_indent)
+            (call $emit_cstr (i32.const 578) (i32.const 6)) ;; "(drop "
+            (call $emit_close)
+            (call $emit_nl)
+            (call $emit_i32_const (i32.const 0))
+            (return)))))
+
     (if (i32.eq (local.get $op) (i32.const 160))   ;; UNeg
       (then (call $ec6_emit_neg) (return)))
     (if (i32.eq (local.get $op) (i32.const 161))   ;; UNot

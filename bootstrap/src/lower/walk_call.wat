@@ -738,6 +738,38 @@
   ;; - Drift 9 (deferred): All branches bodied; closes
   ;;                      Hβ.lower.varref-schemekind-dispatch.
 
+  (func $is_str_float_of_int (param $s i32) (result i32)
+    (if (i32.ne (i32.load (local.get $s)) (i32.const 12)) (then (return (i32.const 0))))
+    (if (i32.ne (i32.load8_u offset=4 (local.get $s)) (i32.const 102)) (then (return (i32.const 0)))) ;; f
+    (if (i32.ne (i32.load8_u offset=5 (local.get $s)) (i32.const 108)) (then (return (i32.const 0)))) ;; l
+    (if (i32.ne (i32.load8_u offset=6 (local.get $s)) (i32.const 111)) (then (return (i32.const 0)))) ;; o
+    (if (i32.ne (i32.load8_u offset=7 (local.get $s)) (i32.const 97)) (then (return (i32.const 0))))  ;; a
+    (if (i32.ne (i32.load8_u offset=8 (local.get $s)) (i32.const 116)) (then (return (i32.const 0)))) ;; t
+    (if (i32.ne (i32.load8_u offset=9 (local.get $s)) (i32.const 95)) (then (return (i32.const 0))))  ;; _
+    (if (i32.ne (i32.load8_u offset=10 (local.get $s)) (i32.const 111)) (then (return (i32.const 0)))) ;; o
+    (if (i32.ne (i32.load8_u offset=11 (local.get $s)) (i32.const 102)) (then (return (i32.const 0)))) ;; f
+    (if (i32.ne (i32.load8_u offset=12 (local.get $s)) (i32.const 95)) (then (return (i32.const 0))))  ;; _
+    (if (i32.ne (i32.load8_u offset=13 (local.get $s)) (i32.const 105)) (then (return (i32.const 0)))) ;; i
+    (if (i32.ne (i32.load8_u offset=14 (local.get $s)) (i32.const 110)) (then (return (i32.const 0)))) ;; n
+    (if (i32.ne (i32.load8_u offset=15 (local.get $s)) (i32.const 116)) (then (return (i32.const 0)))) ;; t
+    (return (i32.const 1)))
+
+  (func $is_str_float_to_int (param $s i32) (result i32)
+    (if (i32.ne (i32.load (local.get $s)) (i32.const 12)) (then (return (i32.const 0))))
+    (if (i32.ne (i32.load8_u offset=4 (local.get $s)) (i32.const 102)) (then (return (i32.const 0)))) ;; f
+    (if (i32.ne (i32.load8_u offset=5 (local.get $s)) (i32.const 108)) (then (return (i32.const 0)))) ;; l
+    (if (i32.ne (i32.load8_u offset=6 (local.get $s)) (i32.const 111)) (then (return (i32.const 0)))) ;; o
+    (if (i32.ne (i32.load8_u offset=7 (local.get $s)) (i32.const 97)) (then (return (i32.const 0))))  ;; a
+    (if (i32.ne (i32.load8_u offset=8 (local.get $s)) (i32.const 116)) (then (return (i32.const 0)))) ;; t
+    (if (i32.ne (i32.load8_u offset=9 (local.get $s)) (i32.const 95)) (then (return (i32.const 0))))  ;; _
+    (if (i32.ne (i32.load8_u offset=10 (local.get $s)) (i32.const 116)) (then (return (i32.const 0)))) ;; t
+    (if (i32.ne (i32.load8_u offset=11 (local.get $s)) (i32.const 111)) (then (return (i32.const 0)))) ;; o
+    (if (i32.ne (i32.load8_u offset=12 (local.get $s)) (i32.const 95)) (then (return (i32.const 0))))  ;; _
+    (if (i32.ne (i32.load8_u offset=13 (local.get $s)) (i32.const 105)) (then (return (i32.const 0)))) ;; i
+    (if (i32.ne (i32.load8_u offset=14 (local.get $s)) (i32.const 110)) (then (return (i32.const 0)))) ;; n
+    (if (i32.ne (i32.load8_u offset=15 (local.get $s)) (i32.const 116)) (then (return (i32.const 0)))) ;; t
+    (return (i32.const 1)))
+
   (func $lower_call (export "lower_call") (param $node i32) (result i32)
     (local $h i32) (local $body i32) (local $call_struct i32)
     (local $callee_node i32) (local $args_list i32)
@@ -762,6 +794,23 @@
         (if (i32.eq (i32.load (local.get $cb_expr)) (i32.const 85))
           (then
             (local.set $name (i32.load offset=4 (local.get $cb_expr)))
+            
+            ;; Intercept float_of_int / float_to_int per Hβ.seed.float-convert
+            (if (call $is_str_float_of_int (local.get $name))
+              (then
+                (local.set $lo_args (call $lower_args (local.get $args_list)))
+                (return (call $lexpr_make_lconvert
+                          (local.get $h)
+                          (i32.const 0) ;; IntToFloat
+                          (call $list_index (local.get $lo_args) (i32.const 0))))))
+            (if (call $is_str_float_to_int (local.get $name))
+              (then
+                (local.set $lo_args (call $lower_args (local.get $args_list)))
+                (return (call $lexpr_make_lconvert
+                          (local.get $h)
+                          (i32.const 1) ;; FloatToInt
+                          (call $list_index (local.get $lo_args) (i32.const 0))))))
+
             (local.set $binding (call $env_lookup_value (local.get $name)))
             (if (i32.ne (local.get $binding) (i32.const 0))
               (then

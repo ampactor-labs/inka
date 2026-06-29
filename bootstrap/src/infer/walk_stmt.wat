@@ -1102,6 +1102,29 @@
     ;; in ctor field positions for these in declared wheel source.
     (local.get $ty))
 
+  ;; quantify_tparam_list — apply ty_quantify_params to each TParam's ty in a
+  ;; list (the case rule over an effect op's params), preserving name/ownership.
+  ;; Mirrors ty_quantify_params's TFun arm (the same primitive for ctors AND
+  ;; effect ops — Mentl solves Mentl).
+  (func $quantify_tparam_list (param $tparams i32) (result i32)
+    (local $n i32) (local $i i32) (local $out i32) (local $tp i32)
+    (local.set $n (call $len (local.get $tparams)))
+    (local.set $out (call $make_list (local.get $n)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $tp (call $list_index (local.get $tparams) (local.get $i)))
+        (drop (call $list_set (local.get $out) (local.get $i)
+          (call $tparam_make
+            (call $tparam_name (local.get $tp))
+            (call $ty_quantify_params (call $tparam_ty (local.get $tp)))
+            (call $tparam_authored (local.get $tp))
+            (call $tparam_resolved (local.get $tp)))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each)))
+    (local.get $out))
+
     (func $infer_register_typedef_ctors
         (param $type_name i32) (param $variants i32) (param $span i32)
     (local $total i32)
@@ -1225,6 +1248,10 @@
     (local.set $op_names (call $make_list (i32.const 0)))
     (local.set $op_names
       (call $list_extend_to (local.get $op_names) (local.get $n_ops)))
+    ;; Fresh qmap per effect (the case rule): lowercase type-var leaves are
+    ;; shared by NAME within the effect (State's get()->s and set(v:s) share one
+    ;; `s`) but never across effects. Mirrors register_typedef_ctors (1120).
+    (global.set $typedef_qmap_g (call $make_list (i32.const 2)))
     (local.set $i (i32.const 0))
     (block $done
       (loop $each
@@ -1241,6 +1268,12 @@
           (call $walk_stmt_build_field_tparams (local.get $param_tys_parser)))
         (local.set $ret_ty
           (call $walk_stmt_parser_ty_to_ty (local.get $ret_ty_parser)))
+        ;; QUANTIFY (the case rule): lowercase TName param/ret leaves → TVars,
+        ;; shared by name via typedef_qmap, so yield(element) carries element as a
+        ;; TVar and the effect parameterizes (Iterate(element)) — the payload
+        ;; flows performer→handler and the iteration machinery keeps the element.
+        (local.set $param_tys (call $quantify_tparam_list (local.get $param_tys)))
+        (local.set $ret_ty (call $ty_quantify_params (local.get $ret_ty)))
         ;; THE FUNDAMENTAL BINDING (Hβ.infer.perform-effect-row-propagation):
         ;; the op's effect row IS Closed[E(payload)] — the op is bound to its
         ;; effect in its very type, at declaration, definitionally. `perform

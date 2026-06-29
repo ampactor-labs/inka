@@ -757,6 +757,8 @@
       (then (call $emit_lstateslotstore (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 337))
       (then (call $emit_levslotref   (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 339))
+      (then (call $emit_lconvert     (local.get $r)) (return)))
     (unreachable))
 
   ;; ─── $emit_lstateslotstore — LStateSlotStore tag 336 emit arm ──────
@@ -842,3 +844,8 @@
     (call $emit_byte (i32.const 101))  ;; 'e'
     (call $emit_byte (i32.const 41))   ;; ')'
     )
+
+  (func $emit_lconvert (param $r i32)
+    ;; INERT PLACEHOLDER: seed compiler is i32-uniform, no native float needed.
+    ;; We just emit the inner expression (index 2).
+    (call $emit_lexpr (call $lexpr_lconvert_x (local.get $r))))

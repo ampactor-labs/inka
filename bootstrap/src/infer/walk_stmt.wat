@@ -376,10 +376,20 @@
         (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
     (local.set $tparam_list
       (call $walk_stmt_build_inferred_params (local.get $param_handles)))
+    ;; Carry the declared effect names (the parser-captured `with` row at
+    ;; FnStmt offset 16) into the pre-registered OPEN row, instead of the
+    ;; empty name-set. Mirrors the wheel's mk_ef_open(declared_names_of(effs),
+    ;; row_handle) (src/infer.mn pre_register_fn_sig): a FORWARD-REF
+    ;; (iterate→iterate_from) then instantiates a scheme already carrying
+    ;; [Iterate], so $effects_of reads it (open-row names are read identically
+    ;; to closed, runtime/row.wat $row_names) and threads Iterate evidence.
+    ;; Carried-Truth: the declared contract known at parse, read live here,
+    ;; never re-derived. (For a fn with no `with`, offset 16 is the empty
+    ;; list the parser stored — byte-identical to the prior make_list(0).)
     (local.set $fn_ty (call $ty_make_tfun
       (local.get $tparam_list)
       (call $ty_make_tvar (local.get $ret_h))
-      (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
+      (call $row_make_open (i32.load offset=16 (local.get $stmt)) (local.get $row_h))))
     (local.set $reason (call $reason_make_located
       (local.get $span)
       (call $reason_make_declared (local.get $name))))

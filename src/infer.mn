@@ -217,20 +217,37 @@ fn pre_register_fn_sigs(stmts) = for_each(pre_register_stmt, stmts)
 fn pre_register_stmt(ref node) = {
   let N(body, span, handle) = node
   match body {
-    NStmt(FnStmt(name, params, _ret_ann, _effs, _body_node)) =>
-      pre_register_fn_sig(name, params, handle, span),
+    NStmt(FnStmt(name, params, _ret_ann, effs, _body_node)) =>
+      pre_register_fn_sig(name, params, declared_names_of(effs), handle, span),
     _ => ()
   }
 }
 
-fn pre_register_fn_sig(name, params, handle, span: ValidSpan) = {
+// The POSITIVE, non-Pure declared effect names — the inline-known half of a
+// forward-ref's row, carried into pre_register so a fn used before its body is
+// inferred (iterate → iterate_from; src/ inferred before lib/prelude) instantiates
+// a scheme ALREADY carrying its declared effects, order-independently. Negated
+// names (`!Alloc`) assert ABSENCE — never present-names; EPure is the union
+// identity and never enters a name-set. The tail row-var stays free (still
+// quantified by free_in_ty), so the KNOWN names are carried without closing the
+// row — the declared contract read live at pre-register, not re-derived.
+fn declared_names_of(effs) =
+  fold(effs, [], (acc, eff) => {
+    let (name, negated, _conn) = eff
+    match name {
+      EPure => acc,
+      _     => if negated { acc } else { name_set_insert(acc, name) }
+    }
+  })
+
+fn pre_register_fn_sig(name, params, declared_names, handle, span: ValidSpan) = {
   let param_handles = mint_param_placeholders(params, name)
   let ret_handle = mint(FnReturn(name, Inferred("return of '{name}'"))) // drift-audit: ignore — Reason string, not a control keyword
   let row_handle = graph_fresh_row(Inferred("effects of '{name}'"))
   let fn_ty = TFun(
     build_param_types(params, param_handles),
     TVar(ret_handle),
-    mk_ef_open([], row_handle)
+    mk_ef_open(declared_names, row_handle)
   )
   graph_bind(handle, fn_ty, Located(span, Declared(name)))
   // Quantify the fresh param/return/row vars so a FORWARD reference — a fn used

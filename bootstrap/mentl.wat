@@ -6368,6 +6368,7 @@
     (local $name i32) (local $p i32) (local $params_r i32) (local $params i32)
     (local $p2 i32) (local $ret i32) (local $p3 i32)
     (local $p4 i32) (local $body_r i32) (local $tup i32)
+    (local $effs i32) (local $effs_r i32)
     ;; Get function name
     (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
     ;; Null return per protocol_parser_fabrication_substrate.md means
@@ -6397,11 +6398,19 @@
         (local.set $p3 (call $skip_ws_p (local.get $tokens) (i32.add (local.get $p2) (i32.const 1))))
         ;; We just skip the return type annotation for now (type is in the TParam)
         (local.set $p2 (call $skip_to_eq_or_brace (local.get $tokens) (local.get $p3)))))
-    ;; Skip optional 'with effects'
+    ;; Capture optional `with effects` row into FnStmt.effs (offset 16).
+    ;; The declared POSITIVE effect names are carried so $infer_pre_register_fn_sig
+    ;; seeds the open row with the declared contract (Carried-Truth) — closing the
+    ;; forward-ref declared-row drop (lib/prelude.mn iterate→iterate_from): iterate's
+    ;; `with Iterate` now reaches infer's pre_register instead of being skipped, so
+    ;; the forward call instantiates a scheme already carrying [Iterate].
+    (local.set $effs (call $make_list (i32.const 0)))
     (if (call $at (local.get $tokens) (local.get $p2) (i32.const 9)) ;; TWith
       (then
-        (local.set $p2 (call $skip_to_eq_or_brace (local.get $tokens)
-          (i32.add (local.get $p2) (i32.const 1))))))
+        (local.set $effs_r (call $parse_fn_with_effs (local.get $tokens)
+          (i32.add (local.get $p2) (i32.const 1))))
+        (local.set $effs (call $list_index (local.get $effs_r) (i32.const 0)))
+        (local.set $p2 (call $list_index (local.get $effs_r) (i32.const 1)))))
     ;; Skip = if present
     (if (call $at (local.get $tokens) (local.get $p2) (i32.const 60)) ;; TEq
       (then (local.set $p2 (i32.add (local.get $p2) (i32.const 1)))))
@@ -6435,7 +6444,7 @@
     (drop (call $list_set (local.get $tup) (i32.const 0)
       (call $nstmt
         (call $mk_FnStmt (local.get $name) (local.get $params)
-          (local.get $ret) (call $make_list (i32.const 0))
+          (local.get $ret) (local.get $effs)
           (call $list_index (local.get $body_r) (i32.const 0)))
         (local.get $span))))
     (drop (call $list_set (local.get $tup) (i32.const 1)
@@ -6465,6 +6474,85 @@
       (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
       (br $scan)))
     (local.get $pos))
+
+  ;; ─── parse_fn_with_effs ───────────────────────────────────────────
+  ;; Capture the `with E1 + E2 + ...` effect ROW into a positive
+  ;; effect-NAME list (bare ENamed string ptrs — the seed row name-set
+  ;; element form: $row_names / $eff_name_str canonicalize a bare string
+  ;; ptr as its own name, runtime/row.wat). Mirrors the wheel
+  ;; declared_names_of (src/infer.mn) flattened to the declared POSITIVE
+  ;; names: `Pure` (TPure=22, a keyword token, not a TIdent → contributes
+  ;; nothing), a negated term `!E` (an absence-constraint, NOT a performed
+  ;; effect → dropped), and a parameterized `E(args)` (capture E, skip the
+  ;; scalar-literal args). Connectives (`+`/`-`/`&`) continue the scan.
+  ;; Carrying these names into FnStmt.effs (offset 16) lets
+  ;; $infer_pre_register_fn_sig seed the open row with the declared
+  ;; contract, so a FORWARD-REF (iterate→iterate_from) instantiates a
+  ;; scheme ALREADY carrying [Iterate] and binds it order-independently
+  ;; (Carried-Truth: the declared row is known at parse, never re-derived).
+  ;; Terminus matches $skip_to_eq_or_brace: TEq / TLBrace / TEof.
+  ;; Returns (names_list, next_pos).
+  (func $parse_fn_with_effs (param $tokens i32) (param $pos i32) (result i32)
+    (local $k i32) (local $neg i32) (local $name i32)
+    (local $buf i32) (local $count i32) (local $depth i32) (local $tup i32)
+    (local.set $buf   (call $make_list (i32.const 0)))
+    (local.set $count (i32.const 0))
+    (local.set $neg   (i32.const 0))
+    (block $done (loop $scan
+      (local.set $k (call $kind_tag_at (local.get $tokens) (local.get $pos)))
+      (br_if $done (i32.eq (local.get $k) (i32.const 60)))  ;; TEq
+      (br_if $done (i32.eq (local.get $k) (i32.const 47)))  ;; TLBrace
+      (br_if $done (i32.eq (local.get $k) (i32.const 69)))  ;; TEof
+      ;; TBang → mark the next term negated (absence-constraint; dropped).
+      (if (i32.eq (local.get $k) (i32.const 63))            ;; TBang
+        (then
+          (local.set $neg (i32.const 1))
+          (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+          (br $scan)))
+      ;; TLParen → parameterized args (scalar literals); skip to the
+      ;; matching TRParen so args are never collected as names.
+      (if (i32.eq (local.get $k) (i32.const 45))            ;; TLParen
+        (then
+          (local.set $depth (i32.const 1))
+          (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+          (block $pdone (loop $pscan
+            (local.set $k (call $kind_tag_at (local.get $tokens) (local.get $pos)))
+            (br_if $pdone (i32.eq (local.get $k) (i32.const 69)))  ;; TEof guard
+            (if (i32.eq (local.get $k) (i32.const 45))
+              (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
+            (if (i32.eq (local.get $k) (i32.const 46))            ;; TRParen
+              (then
+                (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))
+                (br_if $pdone (i32.eqz (local.get $depth)))))
+            (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+            (br $pscan)))
+          (local.set $pos (i32.add (local.get $pos) (i32.const 1)))  ;; past TRParen
+          (br $scan)))
+      ;; TIdent (tag 25) → an effect NAME. Collect unless negated.
+      (if (i32.eq (local.get $k) (i32.const 25))            ;; TIdent
+        (then
+          (if (i32.eqz (local.get $neg))
+            (then
+              (local.set $name (call $ident_at_p (local.get $tokens) (local.get $pos)))
+              (if (local.get $name)
+                (then
+                  (local.set $buf (call $list_extend_to (local.get $buf)
+                    (i32.add (local.get $count) (i32.const 1))))
+                  (drop (call $list_set (local.get $buf) (local.get $count)
+                    (local.get $name)))
+                  (local.set $count (i32.add (local.get $count) (i32.const 1)))))))
+          (local.set $neg (i32.const 0))
+          (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+          (br $scan)))
+      ;; Any other token inside the row (connective `+`/`-`/`&`, TPure,
+      ;; newline): step over. neg is cleared at each captured name, so a
+      ;; stray connective never leaks a negation flag into the next term.
+      (local.set $pos (i32.add (local.get $pos) (i32.const 1)))
+      (br $scan)))
+    (local.set $tup (call $make_list (i32.const 2)))
+    (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $buf)))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $pos)))
+    (local.get $tup))
 
   ;; ═══ Type Declaration Parser (Complete) ═════════════════════════════
   ;; Hand-transcribed from src/parser.mn lines 525-586.
@@ -18127,10 +18215,20 @@
         (call $reason_make_inferred (i32.const 4080)))))   ;; "effects"
     (local.set $tparam_list
       (call $walk_stmt_build_inferred_params (local.get $param_handles)))
+    ;; Carry the declared effect names (the parser-captured `with` row at
+    ;; FnStmt offset 16) into the pre-registered OPEN row, instead of the
+    ;; empty name-set. Mirrors the wheel's mk_ef_open(declared_names_of(effs),
+    ;; row_handle) (src/infer.mn pre_register_fn_sig): a FORWARD-REF
+    ;; (iterate→iterate_from) then instantiates a scheme already carrying
+    ;; [Iterate], so $effects_of reads it (open-row names are read identically
+    ;; to closed, runtime/row.wat $row_names) and threads Iterate evidence.
+    ;; Carried-Truth: the declared contract known at parse, read live here,
+    ;; never re-derived. (For a fn with no `with`, offset 16 is the empty
+    ;; list the parser stored — byte-identical to the prior make_list(0).)
     (local.set $fn_ty (call $ty_make_tfun
       (local.get $tparam_list)
       (call $ty_make_tvar (local.get $ret_h))
-      (call $row_make_open (call $make_list (i32.const 0)) (local.get $row_h))))
+      (call $row_make_open (i32.load offset=16 (local.get $stmt)) (local.get $row_h))))
     (local.set $reason (call $reason_make_located
       (local.get $span)
       (call $reason_make_declared (local.get $name))))

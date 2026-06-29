@@ -209,6 +209,7 @@ fn infer_program(stmts) = {
     pre_register_fn_sigs(stmts)
     infer_stmt_list(stmts)
   } with infer_ctx
+  stmts
 }
 
 fn pre_register_fn_sigs(stmts) = for_each(pre_register_stmt, stmts)

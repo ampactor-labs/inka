@@ -339,3 +339,9 @@ micro:intent-from-node=80
 micro:ic-epoch-fixpoint=42
 micro:felt-live-read=78
 micro:cli-dispatch=63
+# Fix B (captured-lambda ev-slot PLACE/READ unification): a captured lambda
+# performing a threaded effect at own-row index 0 inside a fn whose row carries
+# it at index 1. Before the fix the in-lambda READ used the enclosing fn's row
+# (offset 12) → wrong dispatch (47); the fix reads the lambda's own row
+# (offset 8 = the PLACE slot) → 79. Two Zzz handlers force the ev-slot path.
+micro:lambda-evrow=79

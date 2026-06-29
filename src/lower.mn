@@ -746,8 +746,17 @@ fn lower_compute_ev_slot_for_op(op_name) = match lookup_parent_effect(op_name) {
 // projection derive_ev_slots placed against, so the read slot == the placed
 // slot by construction. (Was effects_of(scheme) — the frozen generalized row
 // that dropped forward-ref effects; escaping_row recovers them off call-edges.)
-fn lower_compute_ev_index_for_effect(ename) =
-  clamp_index(index_of_name(escaping_row(ls_outer_fn_name()), ename, 0))
+fn lower_compute_ev_index_for_effect(ename) = {
+  // A captured/anonymous lambda READS against its OWN definition-site row —
+  // effects_of(lookup_ty(lambda_handle)), the SAME projection derive_ev_slots
+  // PLACED against (the None branch). place==read by construction; order-stable
+  // (the lambda's own-row index is invariant to enclosing-fn row growth). The
+  // else is the named-fn/block/thunk path verbatim — byte-identical.
+  let lh = ls_current_lambda_handle()   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope); lh is reused in the conditional below
+  let row = if lh >= 0 { effects_of(lookup_ty(lh)) }
+            else { escaping_row(ls_outer_fn_name()) }
+  clamp_index(index_of_name(row, ename, 0))
+}
 
 // Inside a handler arm body the frame's evidence is the captured set
 // (first-encounter ledger order); everywhere else it is the fn's row
@@ -1420,10 +1429,14 @@ fn lower_expr_body(e, handle, span) = match e {
     let (captures_names, captures_exprs, captures_handles) =
       resolve_captures_outer(free_names, handle)
     // Lambda is anonymous — empty fn_name; ls_outer_fn_name skips it.
+    // lambda_h = THIS lambda's own handle (the SAME handle derive_ev_slots /
+    // LMakeClosure use below), so the in-body ev READ indexes the lambda's own
+    // row — read==place by construction.
     ls_enter_frame(
       "",
       param_names_list, param_handles_list,
-      captures_names, captures_handles
+      captures_names, captures_handles,
+      handle
     )
     let lo_body = mark_tail(lower_expr(body_node))   // Hβ.lower.tail-call-mark-pass — lambda body is in tail
     ls_exit_frame()
@@ -1783,8 +1796,9 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
   let free_names = collect_free_vars(branch_node, [])
   let (captures_names, captures_exprs, captures_handles) =
     resolve_captures_outer(free_names, parent_handle)
-  // Synthetic parallel-thunk: empty fn_name; not a named fn declaration.
-  ls_enter_frame("", [], [], captures_names, captures_handles)
+  // Synthetic parallel-thunk: empty fn_name; not a named fn declaration; not a
+  // lambda (lambda_h = -1 → ev READ falls through to the named-fn/block path).
+  ls_enter_frame("", [], [], captures_names, captures_handles, -1)
   let lo_body = mark_tail(lower_expr(branch_node))   // Hβ.lower.tail-call-mark-pass — synthesized thunk body is in tail
   ls_exit_frame()
   let fn_ir = LFn(
@@ -1967,7 +1981,8 @@ fn lower_stmt_body(s, handle, span) = match s {
     ls_enter_frame(
       fn_name,
       param_names_list, param_handles_list,
-      captures_names, captures_handles
+      captures_names, captures_handles,
+      -1   // named fn — not a lambda; the ev READ uses escaping_row(fn_name)
     )
     let lo_body = mark_tail(lower_expr(body_node))   // Hβ.lower.tail-call-mark-pass — fn body is in tail
     ls_exit_frame()
@@ -2220,7 +2235,8 @@ fn lower_one_arm_decl(arm, discriminator, config, state, fence) = {
   ls_enter_frame(
     fn_name,
     arm.args, locals_handles,
-    captures_names, captures_handles
+    captures_names, captures_handles,
+    -1   // handler arm — not a lambda; the ev READ uses the arm's captured set / escaping_row
   )
   // Hβ.first-light.resume-with-state-mutation: install arm_state_ctx
   // around arm body lowering so lower_expr's ResumeExpr arm resolves
@@ -3058,17 +3074,21 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
 
   ls_escaping_of(name) => resume(esc_assoc(esc_rows, name)),
 
-  ls_enter_frame(fn_name, locals_in, locals_h, captures_in, captures_h) => {
+  ls_enter_frame(fn_name, locals_in, locals_h, captures_in, captures_h, lambda_h) => {   // drift-audit: ignore — pre-existing frame-record paired-arrays (locals_h/captures_h); same restructure tracked for 11.C.2
     // Per Hβ.first-light.nested-fn-name-discriminator (2026-05-06):
     // fn_name carries the named-fn discriminator for nested-fn naming
-    // (lambda + synthetic frames pass ""). Field-sort discipline keeps
-    // the frame record alphabetical: capture_handles, capture_order,
-    // captures, fn_name, local_handles, local_order, locals.
+    // (lambda + synthetic frames pass ""). lambda_h carries the LambdaExpr's
+    // own handle for an anonymous-lambda frame (-1 otherwise), so the in-body
+    // ev-slot READ indexes the lambda's OWN row — the SAME effects_of(lookup_ty)
+    // projection derive_ev_slots PLACED against (place==read by construction).
+    // Field-sort discipline keeps the frame record alphabetical: capture_handles,
+    // capture_order, captures, fn_name, lambda_h, local_handles, local_order, locals.
     let frame = {
       capture_handles: captures_h,
       capture_order: captures_in,
       captures: set_canonicalize(captures_in),
       fn_name: fn_name,
+      lambda_h: lambda_h,
       local_handles: locals_h,
       local_order: locals_in,
       locals: set_canonicalize(locals_in)
@@ -3103,6 +3123,7 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
         capture_order: frame.capture_order,
         captures: frame.captures,
         fn_name: frame.fn_name,
+        lambda_h: frame.lambda_h,
         local_handles: truncated_handles,
         local_order: truncated_order,
         locals: set_canonicalize(truncated_order)
@@ -3122,6 +3143,7 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
         capture_order: frame.capture_order,
         captures: frame.captures,
         fn_name: frame.fn_name,
+        lambda_h: frame.lambda_h,
         local_handles: frame.local_handles ++ [h],   // drift-audit: ignore — real drift 11 in frame record; buffer-counter conversion requires frame-record field restructure (local_handles + local_order both paired lists indexed by same slot); tracked for 11.C.2 frame-record substrate walkthrough
         local_order: frame.local_order ++ [name],    // drift-audit: ignore — paired with line 1177 local_handles; same frame-record restructure; tracked for 11.C.2
         locals: set_insert(frame.locals, name)
@@ -3181,7 +3203,14 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
   // not a mode-keyed lookup); 9 (lands the discriminator-as-name
   // peer alongside the handler-arm fn-name-discriminator's
   // third-instance abstraction-earned shape).
-  ls_outer_fn_name() => resume(ls_outer_fn_name_loop(frames))
+  ls_outer_fn_name() => resume(ls_outer_fn_name_loop(frames)),
+
+  // The innermost enclosing lambda frame's own handle (-1 if a named-fn
+  // frame is hit first, or none). The in-lambda ev-slot READ uses this to
+  // index the lambda's OWN row (effects_of(lookup_ty(lh))) — the SAME
+  // projection derive_ev_slots PLACED against, so read==place by construction.
+  // Peer of ls_outer_fn_name; ls_outer_fn_name itself stays untouched.
+  ls_current_lambda_handle() => resume(ls_current_lambda_handle_loop(frames))
 }
 
 // Walk frames innermost-first; return first non-empty fn_name.
@@ -3195,6 +3224,23 @@ fn ls_outer_fn_name_loop(frames) = {
     let frame = list_head(frames)
     if frame.fn_name == "" { ls_outer_fn_name_loop(list_tail(frames)) }
     else { frame.fn_name }
+  }
+}
+
+// Walk frames innermost-first; return the first lambda frame's own handle.
+// A named-fn frame hit before any lambda stops the walk at -1 (named fns read
+// escaping_row(fn_name), not their own lookup_ty row). Block / synthetic-thunk
+// frames are transparent (lambda_h = -1, fn_name = "") and recurse. -1 when no
+// enclosing lambda. Peer of ls_outer_fn_name_loop; one list, read sequentially
+// (drift 7 refused). The handle indexes the lambda's own row at the ev READ —
+// the SAME effects_of(lookup_ty) projection PLACE used (read==place by build).
+fn ls_current_lambda_handle_loop(frames) = {
+  if len(frames) == 0 { -1 }
+  else {
+    let frame = list_head(frames)
+    if frame.lambda_h >= 0 { frame.lambda_h }
+    else if frame.fn_name != "" { -1 }
+    else { ls_current_lambda_handle_loop(list_tail(frames)) }
   }
 }
 

@@ -175,6 +175,16 @@
   ;; granularity per the seed's substrate.
   (global $lower_current_fn_name_g (mut i32) (i32.const 0))
 
+  ;; The innermost enclosing lambda's own handle (0 = not inside a lambda),
+  ;; the seed mirror of the wheel's frame.lambda_h / ls_current_lambda_handle.
+  ;; $lower_lambda save/sets/restores it (the $ls_set_fn_name idiom); the
+  ;; in-lambda ev READ indexes the lambda's OWN row — effects_of(lookup_ty(h))
+  ;; — the SAME projection $derive_ev_slots PLACED against (read==place by
+  ;; construction). A named fn nested in a lambda clears it (FnStmt window) so
+  ;; it uses $escaping_row(fn_name). NB seed uses 0 (not -1) for the absent
+  ;; sentinel — handles are >0, so 0 is unambiguously "no enclosing lambda".
+  (global $lower_current_lambda_h_g (mut i32) (i32.const 0))
+
   ;; Hβ.first-light.tier2-perform-or-env-scan — default-handler-per-op
   ;; map populated at HandlerDeclStmt-time. Each entry is a 2-record
   ;; {op_name, handler_name}. lower_resolve_handler_for_op falls back
@@ -236,6 +246,7 @@
         (global.set $lower_handler_stack_ptr (call $make_list (i32.const 8)))
         (global.set $lower_handler_count_g (i32.const 0))
         (global.set $lower_current_fn_name_g (i32.const 0))
+        (global.set $lower_current_lambda_h_g (i32.const 0))
         (global.set $lower_default_op_handler_map_ptr (call $make_list (i32.const 8)))
         (global.set $lower_default_op_handler_map_len_g (i32.const 0))
         (global.set $lower_state_inits_ledger_ptr (call $make_list (i32.const 8)))

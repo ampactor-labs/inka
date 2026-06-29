@@ -1551,7 +1551,7 @@ type Resolution
 // fallback). This is the W7 + A1 capture-handle correctness fix.
 
 effect LowerScope {
-  ls_enter_frame(String, List, List, List, List) -> ()  // fn_name, locals_names, locals_handles, captures_names, captures_handles
+  ls_enter_frame(String, List, List, List, List, Int) -> ()  // fn_name, locals_names, locals_handles, captures_names, captures_handles, lambda_h (-1 = not a lambda frame)
   ls_exit_frame() -> ()
   ls_bind_local(String, Int) -> Int  // append (name, handle); returns slot
   ls_bind_fb_prior(String, Int) -> ()  // (LF.B) push a `<~` lambda param → feedback handle's prior local
@@ -1559,6 +1559,7 @@ effect LowerScope {
   ls_resolve(String) -> (Resolution, Int)
   ls_register_globals(List) -> ()
   ls_outer_fn_name() -> String  // closest enclosing named-fn frame; "" for top-level
+  ls_current_lambda_handle() -> Int  // innermost-first: the enclosing lambda frame's handle, or -1 if a named-fn frame is hit first / none
   ls_push_scope() -> Int  // checkpoint = current frame's local count
   ls_pop_scope(Int) -> ()  // truncate frame locals back to checkpoint
   ls_register_escaping(List) -> ()  // install the flow-closure map (name → escaping row)

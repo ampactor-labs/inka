@@ -1529,7 +1529,7 @@
     (local $caps_snapshot i32) (local $caps_post i32)
     (local $i i32) (local $cap_entry i32) (local $cap_name i32)
     (local $cap_lexpr i32) (local $caps_count i32)
-    (local $prev_frame i32)
+    (local $prev_frame i32) (local $prev_lh i32)
     (local.set $h             (call $walk_expr_node_handle (local.get $node)))
     (local.set $body          (i32.load offset=4 (local.get $node)))
     (local.set $lambda_struct (i32.load offset=4 (local.get $body)))
@@ -1542,10 +1542,18 @@
     (local.set $caps_snapshot (call $lower_captures_len))
     (local.set $cp            (call $ls_push_scope))
     (local.set $prev_frame    (call $ls_enter_frame))
+    ;; Mark THIS lambda's frame as the active lambda (its own handle $h), the
+    ;; $ls_set_fn_name save/set/restore idiom. The in-body ev READ
+    ;; ($lower_compute_ev_index_for_effect / $lower_ev_slot_raw) indexes the
+    ;; lambda's OWN row — effects_of(lookup_ty($h)) — the SAME projection
+    ;; $derive_ev_slots PLACED against (read==place by construction).
+    (local.set $prev_lh       (global.get $lower_current_lambda_h_g))
+    (global.set $lower_current_lambda_h_g (local.get $h))
     (call $bind_names_as_locals (local.get $param_names) (local.get $param_handles))
     (local.set $lo_body       (call $lower_expr (local.get $body_node)))
     ;; Hβ.lower.tail-call-mark-pass — lambda body is in tail position.
     (local.set $lo_body       (call $lower_mark_tail (local.get $lo_body)))
+    (global.set $lower_current_lambda_h_g (local.get $prev_lh))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     ;; H.2.e step 5: materialize caps_exprs from new captures.

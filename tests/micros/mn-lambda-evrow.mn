@@ -1,0 +1,50 @@
+// mn-lambda-evrow — Fix B: the captured-lambda ev-slot PLACE/READ unification.
+//
+// A captured/anonymous lambda's evidence region is PLACED against the lambda's
+// OWN row (effects_of(lookup_ty(lambda)) = [Zzz], so Zzz sits at slot 0, a
+// 1-entry region at record offset 8). The in-body READ must index that SAME
+// row. Before Fix B the READ indexed escaping_row(ls_outer_fn_name()) = the
+// ENCLOSING `wrapper` fn's row, which is WIDER: `wrapper` performs Aaa (idx 0)
+// AND Zzz (idx 1) DIRECTLY, so its row is [Aaa, Zzz] with Zzz at index 1. The
+// lambda's Zzz perform then read slot 1 (offset 12) of its 1-entry region
+// (offset 8) → it dispatched Aaa instead of Zzz → aop(42)=47, not zop(42)=79.
+//
+// Fix B aligns the READ onto the lambda's own row (Zzz @ 0, offset 8) = the
+// PLACE slot. Two handlers DECLARE Zzz (zzz_h, zzz_h2), so dispatch CANNOT
+// collapse to a `$zzz_h_state_g` singleton — Zzz is genuinely evidence-threaded
+// through the lambda's `__state` record via call_indirect, the only shape where
+// the slot index is load-bearing (this IS the wheel's WasmOut shape: two
+// handlers wat_stdout + wat_test_collector). The lambda is the emit_functions
+// `(s) => wat_emit(s)` shape (place@8 / read@12-before-fix) in miniature.
+//
+// The lambda is bound and called directly (`let f = ...; f(direct)`) so its
+// effect row stays concrete; routing it through a GENERIC higher-order fn would
+// additionally hit the orthogonal effect-poly generalization gap (the row var
+// drops Zzz → no PLACE region), masking Fix B rather than isolating it.
+//
+// Run: tools/run-micro.sh tests/micros/mn-lambda-evrow.mn 79
+// Expected exit 79: aop(0)=5; zop(5)=42 (direct, wrapper's Zzz @ idx 1);
+//   f(42) = zop(42) = 79 (via the lambda's own Zzz @ idx 0). Before Fix B: 47.
+
+effect Aaa { aop(k) -> Int }
+effect Zzz { zop(k) -> Int }
+
+handler aaa_h { aop(k) => resume(k + 5) }
+handler zzz_h { zop(k) => resume(k + 37) }
+// A second Zzz handler defeats the static-singleton dispatch tier, forcing the
+// genuine ev-slot threading that makes the captured-lambda slot index matter.
+handler zzz_h2 { zop(k) => resume(k + 1000) }
+
+// wrapper performs Aaa AND Zzz directly → row [Aaa, Zzz], Zzz at index 1. The
+// captured lambda performs Zzz only → own row [Zzz], Zzz at index 0. That
+// index divergence is the whole test.
+fn wrapper(n) = {
+  let a = aop(n)
+  let direct = zop(a)
+  let f = (y) => zop(y)
+  f(direct)
+}
+
+fn run() = { wrapper(0) } ~> aaa_h ~> zzz_h
+
+fn main(q) = run()

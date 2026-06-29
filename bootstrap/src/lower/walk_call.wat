@@ -514,16 +514,26 @@
     (if (call $lower_arm_ev_active)
       (then (return (call $lower_arm_ev_index_for (local.get $ename)))))
     (if (i32.eqz (local.get $ename)) (then (return (i32.const -1))))
-    (local.set $fn_name (call $ls_outer_fn_name))
-    (if (i32.eqz (local.get $fn_name)) (then (return (i32.const -1))))
-    (local.set $binding (call $env_lookup_value (local.get $fn_name)))
-    (if (i32.eqz (local.get $binding)) (then (return (i32.const -1))))
-    (local.set $scheme (call $env_binding_scheme (local.get $binding)))
-    (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const -1))))
-    ;; THE FLOW-CLOSURE (master plan §6 1★ Stage 1): read the live escaping row
-    ;; by name (recovers forward-ref-dropped effects), not the frozen
-    ;; effects_of(scheme) leaf. SAME projection $derive_ev_slots places against.
-    (local.set $names (call $escaping_row (local.get $fn_name)))
+    ;; A captured/anonymous lambda READS against its OWN row —
+    ;; effects_of(lookup_ty(lambda_h)) — the SAME projection $derive_closure_evs
+    ;; PLACED against (read==place; the dispatch-gradient raw read agrees with
+    ;; the clamped $lower_compute_ev_index_for_effect for lambdas). Else the
+    ;; named-fn path verbatim, BYTE-IDENTICAL.
+    (if (global.get $lower_current_lambda_h_g)
+      (then
+        (local.set $names
+          (call $effects_of (call $lookup_ty (global.get $lower_current_lambda_h_g)))))
+      (else
+        (local.set $fn_name (call $ls_outer_fn_name))
+        (if (i32.eqz (local.get $fn_name)) (then (return (i32.const -1))))
+        (local.set $binding (call $env_lookup_value (local.get $fn_name)))
+        (if (i32.eqz (local.get $binding)) (then (return (i32.const -1))))
+        (local.set $scheme (call $env_binding_scheme (local.get $binding)))
+        (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const -1))))
+        ;; THE FLOW-CLOSURE (master plan §6 1★ Stage 1): read the live escaping row
+        ;; by name (recovers forward-ref-dropped effects), not the frozen
+        ;; effects_of(scheme) leaf. SAME projection $derive_ev_slots places against.
+        (local.set $names (call $escaping_row (local.get $fn_name)))))
     (local.set $n (call $len (local.get $names)))
     (local.set $j (i32.const 0))
     (block $found
@@ -1077,18 +1087,28 @@
     (local $names i32) (local $n i32) (local $j i32)
     (local $nl i32)
     (if (i32.eqz (local.get $effect_name)) (then (return (i32.const 0))))
-    (local.set $fn_name (call $ls_outer_fn_name))
-    (if (i32.eqz (local.get $fn_name)) (then (return (i32.const 0))))
-    (local.set $binding (call $env_lookup_value (local.get $fn_name)))
-    (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
-    (local.set $scheme (call $env_binding_scheme (local.get $binding)))
-    (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const 0))))
-    ;; THE SEAM: one $escaping_row read — the SAME projection $derive_ev_slots
-    ;; places against, so this READ index == the PLACED index by construction
-    ;; (no re-derivation contract, no declared-vs-inferred-row divergence). The
-    ;; live flow-closure (Stage 1) recovers forward-ref-dropped effects the
-    ;; frozen effects_of(scheme) leaf lost (emit_module's WasmOut via emit_header).
-    (local.set $names (call $escaping_row (local.get $fn_name)))
+    ;; A captured/anonymous lambda READS against its OWN definition-site row —
+    ;; effects_of(lookup_ty(lambda_h)) — the SAME projection $derive_closure_evs
+    ;; PLACED against (read==place by construction; order-stable, invariant to
+    ;; enclosing-fn row growth). Else the named-fn/block path verbatim, BYTE-
+    ;; IDENTICAL. Mirror of src/lower.mn lower_compute_ev_index_for_effect.
+    (if (global.get $lower_current_lambda_h_g)
+      (then
+        (local.set $names
+          (call $effects_of (call $lookup_ty (global.get $lower_current_lambda_h_g)))))
+      (else
+        (local.set $fn_name (call $ls_outer_fn_name))
+        (if (i32.eqz (local.get $fn_name)) (then (return (i32.const 0))))
+        (local.set $binding (call $env_lookup_value (local.get $fn_name)))
+        (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
+        (local.set $scheme (call $env_binding_scheme (local.get $binding)))
+        (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const 0))))
+        ;; THE SEAM: one $escaping_row read — the SAME projection $derive_ev_slots
+        ;; places against, so this READ index == the PLACED index by construction
+        ;; (no re-derivation contract, no declared-vs-inferred-row divergence). The
+        ;; live flow-closure (Stage 1) recovers forward-ref-dropped effects the
+        ;; frozen effects_of(scheme) leaf lost (emit_module's WasmOut via emit_header).
+        (local.set $names (call $escaping_row (local.get $fn_name)))))
     (local.set $n (call $len (local.get $names)))
     (local.set $j (i32.const 0))
     (block $found
@@ -1103,12 +1123,17 @@
     ;; searched it, yet $effect_name is absent — something forwards/performs an
     ;; effect the row never accumulated. The silent slot-0 clamp masked it; make
     ;; it speak. `<fn>_<effect>` per line on stderr (uncounted by the census).
-    (local.set $nl (call $str_alloc (i32.const 1)))
-    (i32.store8 (i32.add (local.get $nl) (i32.const 4)) (i32.const 10))
-    (call $eprint_string (local.get $fn_name))
-    (call $eprint_string (i32.const 4400))
-    (call $eprint_string (local.get $effect_name))
-    (call $eprint_string (local.get $nl))
+    ;; Guarded on $fn_name: the lambda branch leaves it 0 (no enclosing-fn name);
+    ;; for a lambda read==place by construction so not-found is unreachable, but
+    ;; eprint_string(0) would read a bogus length — skip the leak line there.
+    (if (local.get $fn_name)
+      (then
+        (local.set $nl (call $str_alloc (i32.const 1)))
+        (i32.store8 (i32.add (local.get $nl) (i32.const 4)) (i32.const 10))
+        (call $eprint_string (local.get $fn_name))
+        (call $eprint_string (i32.const 4400))
+        (call $eprint_string (local.get $effect_name))
+        (call $eprint_string (local.get $nl))))
     (i32.const 0))
 
   ;; ════════════════════════════════════════════════════════════════════════

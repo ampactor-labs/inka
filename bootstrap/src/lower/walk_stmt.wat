@@ -280,7 +280,7 @@
     (local $fn_ir i32) (local $caps i32) (local $evs i32) (local $closure i32)
     (local $outer i32) (local $fn_name i32) (local $prev_fn_name i32)
     (local $caps_snapshot i32) (local $caps_post i32) (local $caps_count i32)
-    (local $prev_frame i32) (local $i i32)
+    (local $prev_frame i32) (local $i i32) (local $prev_lh_fn i32)
     (local $cap_entry i32) (local $cap_name i32) (local $cap_lexpr i32)
     (local.set $name      (i32.load offset=4  (local.get $stmt)))
     (local.set $params    (i32.load offset=8  (local.get $stmt)))
@@ -382,11 +382,19 @@
     ;; call type mismatch` trap when the resolved fn-ptr is read from the
     ;; wrong slot. Reset puts both views in 0-based agreement.
     (global.set $lower_captures_len_g (i32.const 0))
+    ;; A named fn nested inside a lambda must NOT inherit the lambda's
+    ;; lambda-h: its body reads its OWN row via $escaping_row(fn_name), not the
+    ;; enclosing lambda's. Clear the active-lambda marker across this body
+    ;; (the $ls_set_fn_name save/restore idiom); restore on exit. Mirror of the
+    ;; wheel's ls_current_lambda_handle_loop stopping at a named-fn frame.
+    (local.set $prev_lh_fn (global.get $lower_current_lambda_h_g))
+    (global.set $lower_current_lambda_h_g (i32.const 0))
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
     ;; Hβ.lower.tail-call-mark-pass — fn body IS in tail position.
     ;; Without this, lex_from / scan_decimal recursive calls compile as
     ;; regular call_indirect and exhaust the WASM stack on long inputs.
     (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
+    (global.set $lower_current_lambda_h_g (local.get $prev_lh_fn))
     (call $ls_exit_function)
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))

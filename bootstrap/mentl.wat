@@ -20401,6 +20401,16 @@
   ;; granularity per the seed's substrate.
   (global $lower_current_fn_name_g (mut i32) (i32.const 0))
 
+  ;; The innermost enclosing lambda's own handle (0 = not inside a lambda),
+  ;; the seed mirror of the wheel's frame.lambda_h / ls_current_lambda_handle.
+  ;; $lower_lambda save/sets/restores it (the $ls_set_fn_name idiom); the
+  ;; in-lambda ev READ indexes the lambda's OWN row — effects_of(lookup_ty(h))
+  ;; — the SAME projection $derive_ev_slots PLACED against (read==place by
+  ;; construction). A named fn nested in a lambda clears it (FnStmt window) so
+  ;; it uses $escaping_row(fn_name). NB seed uses 0 (not -1) for the absent
+  ;; sentinel — handles are >0, so 0 is unambiguously "no enclosing lambda".
+  (global $lower_current_lambda_h_g (mut i32) (i32.const 0))
+
   ;; Hβ.first-light.tier2-perform-or-env-scan — default-handler-per-op
   ;; map populated at HandlerDeclStmt-time. Each entry is a 2-record
   ;; {op_name, handler_name}. lower_resolve_handler_for_op falls back
@@ -20462,6 +20472,7 @@
         (global.set $lower_handler_stack_ptr (call $make_list (i32.const 8)))
         (global.set $lower_handler_count_g (i32.const 0))
         (global.set $lower_current_fn_name_g (i32.const 0))
+        (global.set $lower_current_lambda_h_g (i32.const 0))
         (global.set $lower_default_op_handler_map_ptr (call $make_list (i32.const 8)))
         (global.set $lower_default_op_handler_map_len_g (i32.const 0))
         (global.set $lower_state_inits_ledger_ptr (call $make_list (i32.const 8)))
@@ -24618,16 +24629,26 @@
     (if (call $lower_arm_ev_active)
       (then (return (call $lower_arm_ev_index_for (local.get $ename)))))
     (if (i32.eqz (local.get $ename)) (then (return (i32.const -1))))
-    (local.set $fn_name (call $ls_outer_fn_name))
-    (if (i32.eqz (local.get $fn_name)) (then (return (i32.const -1))))
-    (local.set $binding (call $env_lookup_value (local.get $fn_name)))
-    (if (i32.eqz (local.get $binding)) (then (return (i32.const -1))))
-    (local.set $scheme (call $env_binding_scheme (local.get $binding)))
-    (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const -1))))
-    ;; THE FLOW-CLOSURE (master plan §6 1★ Stage 1): read the live escaping row
-    ;; by name (recovers forward-ref-dropped effects), not the frozen
-    ;; effects_of(scheme) leaf. SAME projection $derive_ev_slots places against.
-    (local.set $names (call $escaping_row (local.get $fn_name)))
+    ;; A captured/anonymous lambda READS against its OWN row —
+    ;; effects_of(lookup_ty(lambda_h)) — the SAME projection $derive_closure_evs
+    ;; PLACED against (read==place; the dispatch-gradient raw read agrees with
+    ;; the clamped $lower_compute_ev_index_for_effect for lambdas). Else the
+    ;; named-fn path verbatim, BYTE-IDENTICAL.
+    (if (global.get $lower_current_lambda_h_g)
+      (then
+        (local.set $names
+          (call $effects_of (call $lookup_ty (global.get $lower_current_lambda_h_g)))))
+      (else
+        (local.set $fn_name (call $ls_outer_fn_name))
+        (if (i32.eqz (local.get $fn_name)) (then (return (i32.const -1))))
+        (local.set $binding (call $env_lookup_value (local.get $fn_name)))
+        (if (i32.eqz (local.get $binding)) (then (return (i32.const -1))))
+        (local.set $scheme (call $env_binding_scheme (local.get $binding)))
+        (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const -1))))
+        ;; THE FLOW-CLOSURE (master plan §6 1★ Stage 1): read the live escaping row
+        ;; by name (recovers forward-ref-dropped effects), not the frozen
+        ;; effects_of(scheme) leaf. SAME projection $derive_ev_slots places against.
+        (local.set $names (call $escaping_row (local.get $fn_name)))))
     (local.set $n (call $len (local.get $names)))
     (local.set $j (i32.const 0))
     (block $found
@@ -25181,18 +25202,28 @@
     (local $names i32) (local $n i32) (local $j i32)
     (local $nl i32)
     (if (i32.eqz (local.get $effect_name)) (then (return (i32.const 0))))
-    (local.set $fn_name (call $ls_outer_fn_name))
-    (if (i32.eqz (local.get $fn_name)) (then (return (i32.const 0))))
-    (local.set $binding (call $env_lookup_value (local.get $fn_name)))
-    (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
-    (local.set $scheme (call $env_binding_scheme (local.get $binding)))
-    (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const 0))))
-    ;; THE SEAM: one $escaping_row read — the SAME projection $derive_ev_slots
-    ;; places against, so this READ index == the PLACED index by construction
-    ;; (no re-derivation contract, no declared-vs-inferred-row divergence). The
-    ;; live flow-closure (Stage 1) recovers forward-ref-dropped effects the
-    ;; frozen effects_of(scheme) leaf lost (emit_module's WasmOut via emit_header).
-    (local.set $names (call $escaping_row (local.get $fn_name)))
+    ;; A captured/anonymous lambda READS against its OWN definition-site row —
+    ;; effects_of(lookup_ty(lambda_h)) — the SAME projection $derive_closure_evs
+    ;; PLACED against (read==place by construction; order-stable, invariant to
+    ;; enclosing-fn row growth). Else the named-fn/block path verbatim, BYTE-
+    ;; IDENTICAL. Mirror of src/lower.mn lower_compute_ev_index_for_effect.
+    (if (global.get $lower_current_lambda_h_g)
+      (then
+        (local.set $names
+          (call $effects_of (call $lookup_ty (global.get $lower_current_lambda_h_g)))))
+      (else
+        (local.set $fn_name (call $ls_outer_fn_name))
+        (if (i32.eqz (local.get $fn_name)) (then (return (i32.const 0))))
+        (local.set $binding (call $env_lookup_value (local.get $fn_name)))
+        (if (i32.eqz (local.get $binding)) (then (return (i32.const 0))))
+        (local.set $scheme (call $env_binding_scheme (local.get $binding)))
+        (if (i32.lt_u (local.get $scheme) (global.get $heap_base)) (then (return (i32.const 0))))
+        ;; THE SEAM: one $escaping_row read — the SAME projection $derive_ev_slots
+        ;; places against, so this READ index == the PLACED index by construction
+        ;; (no re-derivation contract, no declared-vs-inferred-row divergence). The
+        ;; live flow-closure (Stage 1) recovers forward-ref-dropped effects the
+        ;; frozen effects_of(scheme) leaf lost (emit_module's WasmOut via emit_header).
+        (local.set $names (call $escaping_row (local.get $fn_name)))))
     (local.set $n (call $len (local.get $names)))
     (local.set $j (i32.const 0))
     (block $found
@@ -25207,12 +25238,17 @@
     ;; searched it, yet $effect_name is absent — something forwards/performs an
     ;; effect the row never accumulated. The silent slot-0 clamp masked it; make
     ;; it speak. `<fn>_<effect>` per line on stderr (uncounted by the census).
-    (local.set $nl (call $str_alloc (i32.const 1)))
-    (i32.store8 (i32.add (local.get $nl) (i32.const 4)) (i32.const 10))
-    (call $eprint_string (local.get $fn_name))
-    (call $eprint_string (i32.const 4400))
-    (call $eprint_string (local.get $effect_name))
-    (call $eprint_string (local.get $nl))
+    ;; Guarded on $fn_name: the lambda branch leaves it 0 (no enclosing-fn name);
+    ;; for a lambda read==place by construction so not-found is unreachable, but
+    ;; eprint_string(0) would read a bogus length — skip the leak line there.
+    (if (local.get $fn_name)
+      (then
+        (local.set $nl (call $str_alloc (i32.const 1)))
+        (i32.store8 (i32.add (local.get $nl) (i32.const 4)) (i32.const 10))
+        (call $eprint_string (local.get $fn_name))
+        (call $eprint_string (i32.const 4400))
+        (call $eprint_string (local.get $effect_name))
+        (call $eprint_string (local.get $nl))))
     (i32.const 0))
 
   ;; ════════════════════════════════════════════════════════════════════════
@@ -28674,7 +28710,7 @@
     (local $caps_snapshot i32) (local $caps_post i32)
     (local $i i32) (local $cap_entry i32) (local $cap_name i32)
     (local $cap_lexpr i32) (local $caps_count i32)
-    (local $prev_frame i32)
+    (local $prev_frame i32) (local $prev_lh i32)
     (local.set $h             (call $walk_expr_node_handle (local.get $node)))
     (local.set $body          (i32.load offset=4 (local.get $node)))
     (local.set $lambda_struct (i32.load offset=4 (local.get $body)))
@@ -28687,10 +28723,18 @@
     (local.set $caps_snapshot (call $lower_captures_len))
     (local.set $cp            (call $ls_push_scope))
     (local.set $prev_frame    (call $ls_enter_frame))
+    ;; Mark THIS lambda's frame as the active lambda (its own handle $h), the
+    ;; $ls_set_fn_name save/set/restore idiom. The in-body ev READ
+    ;; ($lower_compute_ev_index_for_effect / $lower_ev_slot_raw) indexes the
+    ;; lambda's OWN row — effects_of(lookup_ty($h)) — the SAME projection
+    ;; $derive_ev_slots PLACED against (read==place by construction).
+    (local.set $prev_lh       (global.get $lower_current_lambda_h_g))
+    (global.set $lower_current_lambda_h_g (local.get $h))
     (call $bind_names_as_locals (local.get $param_names) (local.get $param_handles))
     (local.set $lo_body       (call $lower_expr (local.get $body_node)))
     ;; Hβ.lower.tail-call-mark-pass — lambda body is in tail position.
     (local.set $lo_body       (call $lower_mark_tail (local.get $lo_body)))
+    (global.set $lower_current_lambda_h_g (local.get $prev_lh))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     ;; H.2.e step 5: materialize caps_exprs from new captures.
@@ -29022,7 +29066,7 @@
     (local $fn_ir i32) (local $caps i32) (local $evs i32) (local $closure i32)
     (local $outer i32) (local $fn_name i32) (local $prev_fn_name i32)
     (local $caps_snapshot i32) (local $caps_post i32) (local $caps_count i32)
-    (local $prev_frame i32) (local $i i32)
+    (local $prev_frame i32) (local $i i32) (local $prev_lh_fn i32)
     (local $cap_entry i32) (local $cap_name i32) (local $cap_lexpr i32)
     (local.set $name      (i32.load offset=4  (local.get $stmt)))
     (local.set $params    (i32.load offset=8  (local.get $stmt)))
@@ -29124,11 +29168,19 @@
     ;; call type mismatch` trap when the resolved fn-ptr is read from the
     ;; wrong slot. Reset puts both views in 0-based agreement.
     (global.set $lower_captures_len_g (i32.const 0))
+    ;; A named fn nested inside a lambda must NOT inherit the lambda's
+    ;; lambda-h: its body reads its OWN row via $escaping_row(fn_name), not the
+    ;; enclosing lambda's. Clear the active-lambda marker across this body
+    ;; (the $ls_set_fn_name save/restore idiom); restore on exit. Mirror of the
+    ;; wheel's ls_current_lambda_handle_loop stopping at a named-fn frame.
+    (local.set $prev_lh_fn (global.get $lower_current_lambda_h_g))
+    (global.set $lower_current_lambda_h_g (i32.const 0))
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
     ;; Hβ.lower.tail-call-mark-pass — fn body IS in tail position.
     ;; Without this, lex_from / scan_decimal recursive calls compile as
     ;; regular call_indirect and exhaust the WASM stack on long inputs.
     (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
+    (global.set $lower_current_lambda_h_g (local.get $prev_lh_fn))
     (call $ls_exit_function)
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))

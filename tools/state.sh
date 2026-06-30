@@ -58,12 +58,14 @@ else
 fi
 
 echo "▸ MICRO BATTERY  (gates the seed; each exit code captured directly)"
-# String-using micros (eq/interp) need the runtime trio that defines str_concat;
-# the seed emits helpers on demand, so the call without its definition is an
-# assembly-time lie, not a regression. Pass the libs (marker `rt`) so the tool
-# tells the truth.
+# Runtime-dependent micros need the trio. Two real deps the lower emits CALLS to
+# but whose bodies live in the lib (not the seed): string micros (eq/interp) call
+# str_concat/str_eq; handler-dispatch micros (ev*) call ev_lookup — the keyed-
+# evidence scan (runtime/memory.mn), the identity-key dispatch the keying lowers
+# to. A call without its def is an assembly-time lie, not a regression. Pass the
+# libs (marker `rt`) so the tool tells the truth.
 RTLIBS="lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn"
-for spec in "ev2 57" "ev4 57" "ev8 57" "ev5 21" "ev16 18" "eq 73 rt" "interp 59 rt"; do
+for spec in "ev2 57 rt" "ev4 57 rt" "ev8 57 rt" "ev5 21 rt" "ev16 18 rt" "eq 73 rt" "interp 59 rt"; do
   set -- $spec; m=$1; want=$2; needrt="${3:-}"; f="tests/micros/mn-$m.mn"
   [ -f "$f" ] || { printf "      %-7s (no file)\n" "$m"; continue; }
   if [ "$needrt" = "rt" ]; then

@@ -74,9 +74,9 @@
   ;;             (the record's evidence sits after state AND arms);
   ;;             plain top-level fns pass 0. $emit_fn_body installs it
   ;;             via $emit_set_body_context so $emit_levperform /
-  ;;             $emit_levslotref read 8+4*fence+4*slot — one uniform
-  ;;             rule across all three record shapes.
-  ;;             Hβ.emit.handler-record-ev-capture.)
+  ;;             $emit_levref KEY-SCAN the captured_evs region based at
+  ;;             8+4*fence ($ev_lookup) — one uniform rule across all three
+  ;;             record shapes. Hβ.emit.handler-record-ev-capture.)
   (func $lowfn_make (export "lowfn_make")
         (param $name i32) (param $arity i32) (param $params i32)
         (param $body i32) (param $row i32) (param $fence i32)

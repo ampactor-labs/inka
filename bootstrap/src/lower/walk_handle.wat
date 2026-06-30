@@ -1062,40 +1062,18 @@
       (local.get $lo_r)))
 
   ;; ─── $lower_captured_evs_for — install-site evidence capture ───────
-  ;; Per Hβ.emit.handler-record-ev-capture (handler IS closure IS
-  ;; evidence): the effects this handler's ARM BODIES perform (the
-  ;; decl's first-encounter ledger) resolve at THIS install position —
-  ;; an outer install's entry local (LLocal) when one covers the
-  ;; effect, else a forward of the installing fn's own slot
-  ;; (LEvSlotRef via $lower_ev_index_in_frame). Same per-ename
-  ;; resolution as $derive_ev_slots — one truth, two record shapes.
-  ;; Emit writes these after the record's arm region; the arm fn's
-  ;; LowFn fence makes its LEvPerform reads land on them.
+  ;; Per Hβ.emit.handler-record-ev-capture (handler IS closure IS evidence):
+  ;; the effects this handler's ARM BODIES perform (the arm-ev SET) resolve at
+  ;; THIS install position to keyed LEvEntry(ename, evidence) — an outer
+  ;; install's entry local (LLocal) when one covers the effect, else a forward
+  ;; of THIS frame's own evidence by IDENTITY (LEvRef). The SAME per-ename
+  ;; resolution as $derive_ev_slots ($resolve_evs_for_names) — one truth. Emit
+  ;; writes these as the self-describing [key][record][base] region after the
+  ;; arms; the arm fn's LowFn fence makes its LEvPerform KEY-SCANS land on them.
+  ;; Mirror of src/lower.mn lower_captured_evs_for.
   (func $lower_captured_evs_for (param $hname i32) (result i32)
-    (local $names i32) (local $n i32) (local $i i32) (local $ename i32)
-    (local $evs i32) (local $state_local i32)
-    (local.set $names (call $lower_handler_arm_ev_names (local.get $hname)))
-    (local.set $n (call $len (local.get $names)))
-    (local.set $evs (call $list_extend_to (call $make_list (i32.const 0))
-                      (local.get $n)))
-    (local.set $i (i32.const 0))
-    (block $done
-      (loop $each
-        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (local.set $ename (call $list_index (local.get $names) (local.get $i)))
-        (local.set $state_local
-          (call $lower_resolve_handler_state_for_ename (local.get $ename)))
-        (if (i32.ne (local.get $state_local) (i32.const 0))
-          (then
-            (drop (call $list_set (local.get $evs) (local.get $i)
-                    (call $lexpr_make_llocal (i32.const 0) (local.get $state_local)))))
-          (else
-            (drop (call $list_set (local.get $evs) (local.get $i)
-                    (call $lexpr_make_levslotref (i32.const 0)
-                      (call $lower_ev_index_in_frame (local.get $ename)))))))
-        (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $each)))
-    (local.get $evs))
+    (call $resolve_evs_for_names
+      (call $lower_handler_arm_ev_names (local.get $hname))))
 
   ;; ─── $lower_pipe_feedback — `<~` arm per Lock #5 ──────────────────
   ;; Per src/lower.mn:501-502: PFeedback => LFeedback(handle, lo_l, lo_r).

@@ -203,12 +203,18 @@ fn find_handler_for_effect(stack, ename) = {
 }
 
 
-// Entry point — wraps the walk in `infer_ctx` so row accumulation is automatic.
+// Entry point — wraps the walk in `infer_ctx` (row accumulation) and
+// `fresh_for_inference` (the FreshHandle install: `mint` resolves to real graph
+// handles, not display ids). The install EDGE was missing — `fresh_for_inference`
+// was declared but never `~>`-installed, so every `mint` in the inference extent
+// floored its FreshHandle evidence (the slot-0 fabrication). Drawing the edge
+// roots the chain at the handler the graph now connects; the query/teach entry
+// installs `fresh_for_query` for ephemeral display ids (the swappable peer).
 fn infer_program(stmts) = {
-  handle {
+  {
     pre_register_fn_sigs(stmts)
     infer_stmt_list(stmts)
-  } with infer_ctx
+  } ~> infer_ctx ~> fresh_for_inference
   stmts
 }
 
@@ -928,7 +934,7 @@ fn seq_force(ah, i, ty, span: ValidSpan) =
 // transform's return, read live — never re-derived from map's buffer body.
 fn seq_force_fn(ah, i, param_tys, ret_ty, span: ValidSpan) =
   if len(ah) > i {
-    let params = map((t) => TParam("_", t, Unmarked, Unmarked), param_tys)
+    let params = map((t) => mk_param("_", t), param_tys)
     let row_h = perform graph_fresh_row(Inferred("functor transform effects"))
     perform graph_bind(list_index(ah, i),
       TFun(params, ret_ty, mk_ef_open([], row_h)),
@@ -1159,7 +1165,7 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
       let ret_h = mint(InferredPipeResult("|>", Inferred("return"))) // drift-audit: ignore — "return" is a Reason string; "|>" is a string literal key, not a pipe verb
       let row_h = graph_fresh_row(InferredPipeResult("|>", Inferred("effects")))
       let expected = TFun(
-        [TParam("_", TVar(lh), Unmarked, Unmarked, None)],
+        [mk_param("_", TVar(lh))],
         TVar(ret_h),
         mk_ef_open([], row_h)
       )
@@ -1817,8 +1823,8 @@ fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, 
 fn unify_param_lists(ref a, ref b, span: ValidSpan, reason) = {
   if len(a) == 0 || len(b) == 0 { () }
   else {
-    let TParam(_, ta, _, _, _) = list_head(a)
-    let TParam(_, tb, _, _, _) = list_head(b)
+    let ta = param_ty(list_head(a))
+    let tb = param_ty(list_head(b))
     unify_types(ta, tb, span, reason)
     unify_param_lists(list_tail(a), list_tail(b), span, reason)
   }
@@ -1850,7 +1856,7 @@ fn pair_fn_params(pa, pb, span: ValidSpan, reason) = {
 //   `TVar(_)`                         — unify TVar with TTuple of param types
 //   otherwise                         — arity mismatch
 fn try_tuple_decompose(single_param, many_params, span: ValidSpan, reason) = {
-  let TParam(_, pty, _, _, _) = single_param
+  let pty = param_ty(single_param)
   let lm = len(many_params)
   match pty {
     TTuple(elems) =>
@@ -1873,7 +1879,7 @@ fn unify_tuple_elems_with_params(elems, params, span: ValidSpan, reason, i, n) =
   if i >= n { () }
   else {
     let e = list_index(elems, i)
-    let TParam(_, pt, _, _, _) = list_index(params, i)
+    let pt = param_ty(list_index(params, i))
     unify_types(e, pt, span, reason)
     unify_tuple_elems_with_params(elems, params, span, reason, i + 1, n)
   }
@@ -1890,7 +1896,7 @@ fn param_types_flat(params) = {
 fn param_types_loop(params, i, n, own acc) = {
   if i >= n { acc }
   else {
-    let TParam(_, t, _, _, _) = list_index(params, i)
+    let t = param_ty(list_index(params, i))
     param_types_loop(params, i + 1, n, list_set(acc, i, t))
   }
 }
@@ -2145,9 +2151,9 @@ fn infer_pat_list(pats, rest, parent_handle, span: ValidSpan) = {
 // through silently — surfaced separately as E_ConstructorArity (TODO).
 fn bind_pcon_subpats(params, sub_pats, span: ValidSpan, reason, ctor_name) = {
   for_each((pair) => {
-    let (TParam(_, pty, _, _, _), sub_pat) = pair
+    let (param, sub_pat) = pair
     let sub_h = mint(VarLookup(ctor_name, reason))
-    graph_bind(sub_h, pty,
+    graph_bind(sub_h, param_ty(param),
       Located(span, VarLookup(ctor_name, reason)))
     infer_pat(sub_pat, sub_h, span)
   }, zip(params, sub_pats))
@@ -2276,9 +2282,9 @@ fn infer_one_handler_arm(arm, result_h, payload_h) = {   // drift-audit: ignore 
 // (productive-under-error; the arity diagnostic is the op's).
 fn bind_arm_args(args, params, op_name, span: ValidSpan) =
   for_each((pair) => {
-    let (name, param_ty) = pair
+    let (name, param) = pair
     let h = mint(Located(span, LetBinding(name, Declared(op_name))))
-    graph_bind(h, param_ty, Located(span, Declared(op_name)))
+    graph_bind(h, param_ty(param), Located(span, Declared(op_name)))
     env_extend(name, Forall([], TVar(h)),
       Located(span, LetBinding(name, Declared(op_name))), FnScheme)
   }, zip(args, params))
@@ -2366,10 +2372,7 @@ fn chase_deep(ty) = match ty {
 
 fn map_chase_ty(tys) = map(chase_deep, tys)
 
-fn chase_params(params) = map((p) => {
-  let TParam(name, ty, auth, res, default) = p
-  TParam(name, chase_deep(ty), auth, res, default)
-}, params)
+fn chase_params(params) = map((p) => param_with_ty(p, chase_deep(param_ty(p))), params)
 
 fn chase_fields(fields) = map((fld) => {
   let (name, ty) = fld
@@ -2399,10 +2402,7 @@ fn free_in_ty(ty) = match ty {
 
 fn free_in_list(tys) = flatten(map(free_in_ty, tys))
 
-fn free_in_params(params) = flatten(map((p) => {
-  let TParam(_, ty, _, _, _) = p
-  free_in_ty(ty)
-}, params))
+fn free_in_params(params) = flatten(map((p) => free_in_ty(param_ty(p)), params))
 
 fn free_in_fields(fields) = flatten(map((fld) => {
   let (_, ty) = fld
@@ -2551,10 +2551,8 @@ fn subst_ty(ty, mapping) = match ty {
 
 fn subst_list(tys, mapping) = map((t) => subst_ty(t, mapping), tys)
 
-fn subst_params(params, mapping) = map((p) => {
-  let TParam(name, ty, auth, res, default) = p
-  TParam(name, subst_ty(ty, mapping), auth, res, default)
-}, params)
+fn subst_params(params, mapping) =
+  map((p) => param_with_ty(p, subst_ty(param_ty(p), mapping)), params)
 
 fn subst_fields(fields, mapping) = map((fld) => {
   let (name, ty) = fld
@@ -2629,7 +2627,7 @@ fn mint_param_placeholders(params, owner_name) = map((indexed) => {
 
 fn mint_params(params, owner_name) = map((indexed) => {
   let (idx, p) = indexed
-  let TParam(name, _, _, _, _) = p
+  let name = param_name(p)
   let h = mint(FnParam(owner_name, idx, Inferred("param of '{owner_name}'")))
   env_extend(name, Forall([], TVar(h)), Declared(name), FnScheme)
   h
@@ -2647,15 +2645,14 @@ fn build_param_types(params, handles) = map((pair) => {
   // Preserve the default — it travels with the param's type into the
   // generalized scheme so call sites resolving against TFun's params can read
   // it to fill an omitted arg (SYNTAX.md §«Default parameter values»).
-  let param_ty = match declared {
+  let chosen_ty = match declared {
     TVar(_) => TVar(h),
     _       => declared
   }
-  TParam(name, param_ty, auth, res, default)
+  TParam(name, chosen_ty, auth, res, default)
 }, zip(params, handles))
 
-fn build_inferred_params(handles) = map((h) =>
-  TParam("_", TVar(h), Unmarked, Unmarked, None), handles)
+fn build_inferred_params(handles) = map((h) => mk_param("_", TVar(h)), handles)
 
 fn register_type_constructors(type_name, variants) = {
   let total = len(variants)
@@ -2732,10 +2729,13 @@ fn quantify_ctor_ty(ty, qmap) = match ty {
 fn quantify_tparam_list(params, qmap) = {
   if len(params) == 0 { ([], qmap) }
   else {
-    let TParam(pname, pty, auth, res, _) = list_index(params, 0)
-    let (pty2, q1) = quantify_ctor_ty(pty, qmap)
+    let p0 = list_index(params, 0)
+    let (pty2, q1) = quantify_ctor_ty(param_ty(p0), qmap)
     let (rest2, q2) = quantify_tparam_list(slice(params, 1, len(params)), q1)
-    ([TParam(pname, pty2, auth, res, None)] ++ rest2, q2)
+    // default→None is a DELIBERATE quantification reset (NOT a Carried-Truth
+    // drop): a generalized ctor scheme carries no call-site default. The other
+    // three aspects are projected live; only the default slot is cleared.
+    ([TParam(param_name(p0), pty2, param_authored(p0), param_resolved(p0), None)] ++ rest2, q2)
   }
 }
 
@@ -2794,7 +2794,7 @@ fn is_record_ty(ty) with Pure = match ty {
 
 fn build_ctor_params(field_types, base_idx) = map((indexed) => {
   let (i, ty) = indexed
-  TParam("_{int_to_str(base_idx + i)}", ty, Unmarked, Unmarked, None)
+  mk_param("_{int_to_str(base_idx + i)}", ty)
 }, enumerate(field_types))
 
 fn register_effect_ops(effect_name, ops) = {
@@ -2966,7 +2966,8 @@ fn infer_handler_state_inits(state) = map((sf) => {
 
 fn bind_handler_config_params(config_tparams, hname) =
   for_each((tp) => {
-    let TParam(name, ty, _, _, _) = tp
+    let name = param_name(tp)
+    let ty = param_ty(tp)
     env_extend(name, Forall([], ty),
       Located(span_zero(), LetBinding(name, Declared(hname))), FnScheme)
   }, config_tparams)
@@ -3505,7 +3506,7 @@ fn mint_handler_config_tparams(config, hname, base_idx) = map((indexed) => {
   let (i, name) = indexed
   let idx = base_idx + i
   let h = mint(FnParam(hname, idx, Inferred("config-param of '{hname}'")))
-  TParam(name, TVar(h), Unmarked, Unmarked, None)
+  mk_param(name, TVar(h))
 }, enumerate(config))
 
 // Utilities

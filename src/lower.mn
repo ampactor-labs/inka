@@ -192,31 +192,28 @@ handler lower_handler_stack_ctx with stack = [] {
 }
 
 // ─── Arm-body evidence ledger ──────────────────────────────────────
-// While a handler's arm bodies lower, their Tier-2 performs record the
-// effects they dispatch through (first-encounter order). The recorded
-// names ARE the captured-ev slots the install writes after the arms; the
-// arm fn's LowFn fence makes its LEvPerform reads land there. Closed per
-// discriminator into the hev registry so install sites read them back.
+// While a handler's arm bodies lower, their Tier-2 performs NOTE the effects
+// they dispatch through — the SET, never an order (keying made order
+// meaningless). The install threads a keyed [effect][record][base] entry per
+// noted effect; the arm fn's LEvPerform KEY-SCANS for it. Closed per
+// discriminator into the hev registry so install sites read the set back.
 // Hβ.emit.handler-record-ev-capture, the seed's $lower_arm_ev_* globals.
 effect ArmEvLedger {
   arm_ev_begin() -> Int
-  arm_ev_active() -> Bool
-  arm_ev_index_for(String) -> Int
+  arm_ev_note(String) -> Int
   arm_ev_end(String) -> Int
   lookup_handler_arm_ev_names(String) -> List
 }
 
 handler arm_ev_ledger_ctx with active = false, names = [], entries = [] {
   arm_ev_begin()  => resume(0) with active = true, names = [],
-  arm_ev_active() => resume(active),
-  arm_ev_index_for(ename) => {
-    // Append-or-get: indices already handed out never shift, so the
-    // first-encounter slot the install writes and the arm's LEvSlotRef
-    // read agree by construction. Append is structural (prepend would
-    // renumber prior indices); the seed's list_extend_to+list_set residue.
-    let idx = index_of_name(names, ename, 0)
-    if idx >= 0 { resume(idx) }
-    else { resume(len(names)) with names = list_concat(names, [ename]) }
+  arm_ev_note(ename) => {
+    // Append-once into the SET the install threads keyed entries for. The
+    // arm's read key-scans, so no positional index must be kept stable (the
+    // cure for position-as-the-bug). Outside an arm (inactive) → no-op.
+    if active && index_of_name(names, ename, 0) < 0 {
+      resume(0) with names = list_concat(names, [ename])
+    } else { resume(0) }
   },
   arm_ev_end(discriminator) => {
     resume(0)
@@ -327,20 +324,34 @@ type LowExpr
   // Tier-2 evidence-dispatched perform (handler comes from the caller via
   // an evidence slot on __state — handler IS evidence). The ev-slot holds
   // a per-effect entry [record_ptr, base]; the arm runs against that RECORD
-  // as its __state. ev_slot = the effect's index in this fn's row (the
-  // Boolean row projected as evidence layout); op_slot = the op's index
-  // within its effect (op-decl order). emit reads:
-  //   entry  = __state[8 + 4*fence + 4*ev_slot]
-  //   record = entry[0];  base = entry[1]
+  // as its __state. The effect is addressed by its decl-IDENTITY (the effect
+  // name as key), NEVER by a position in this fn's row — position shifts under
+  // any row delta (the mn-eq→str_concat miscompile, proven). op_slot stays a
+  // position: it indexes the effect's OWN immutable decl-order op-list (a
+  // stable identity, not a row position). emit reads via a KEY-SCAN of the
+  // self-describing captured_evs region [key@0][record@4][base@8] entries:
+  //   entry  = scan __state captured_evs for str_eq(entry.key, effect_key)
+  //   record = entry[record];  base = entry[base]
   //   arm    = record[8 + 4*record[4] + 4*(base + op_slot)]  (fence-relative
   //            off the record's OWN nstate@4) — an interior read, never a
   //            static body-captures guess (protocol_reflexive_interiority).
-  | LEvPerform(Int, String, Int, Int, List)    // handle, op_name, ev_slot, op_slot, args
-  // Forward THIS fn's own ev-slot for an effect (the handler record the
-  // caller threaded into __state) by reference into a deeper callee's record
-  // or an install's captured-ev region. The polymorphic-scope companion of
-  // derive_ev_slots' record-pointer entries.
-  | LEvSlotRef(Int, Int)                       // handle, ev_index in this frame
+  | LEvPerform(Int, String, String, Int, List) // handle, op_name, effect_key, op_slot, args
+  // Forward THIS fn's evidence for an effect (the handler record the caller
+  // threaded into __state) by IDENTITY (effect_key) into a deeper callee's
+  // record or an install's captured-ev region — the caller fills the SAME key,
+  // so adding/removing a sibling effect shuffles nothing (the position-as-the-
+  // -bug cure). The polymorphic-scope companion of derive_ev_slots' keyed entries.
+  | LEvRef(Int, String)                        // handle, effect_key (the effect name)
+  // The typed-absence bottom: an effect with NO resolvable handler anywhere up
+  // the install chain (a genuine E_HandlerUninstallable). NOT slot-0 — slots no
+  // longer exist, so the fabrication is unsayable; this carries a Located Reason.
+  | LUnresolvedEvidence(Int, String)           // handle, effect_key
+  // A keyed captured-ev entry: the effect's IDENTITY (key) paired with its
+  // resolved evidence (LLocal / LGlobal / LEvRef). emit writes [key][record][base];
+  // a perform's key-scan matches `key` by str_eq. The list of these IS the
+  // self-describing captured_evs region — its ORDER carries no meaning (the cure
+  // for position-as-the-bug: a sibling effect appearing shuffles no key).
+  | LEvEntry(String, LowExpr)                  // effect_key, resolved evidence
   | LFieldLoad(Int, LowExpr, Int)              // W6: handle, record, offset_bytes
   // W11: a REAL machine int<->float conversion — the gradient's coercion arm.
   // float_of_int / float_to_int are NOT identity stubs that reinterpret bits
@@ -385,8 +396,8 @@ type LowFn
                   // capture count; handler arm fns pass nstate+total_arms
                   // (the record's captured-evs sit after state AND arms);
                   // plain top-level fns pass 0. emit_fn_body installs it as
-                  // the body-context so every LEvPerform/LEvSlotRef reads
-                  // 8+4*fence+4*slot — one rule across all three fn shapes.
+                  // the body-context so every LEvPerform/LEvRef key-scans the
+                  // captured_evs region based at 8+4*fence — one rule across all three fn shapes.
 
 type LowPat
   = LPVar(String)
@@ -439,7 +450,9 @@ fn lexpr_handle(e) with Pure = match e {
   LFeedbackPrior(h)       => h,
   LPerform(h, _, _, _)    => h,
   LEvPerform(h, _, _, _, _) => h,
-  LEvSlotRef(h, _)        => h,
+  LEvRef(h, _)            => h,
+  LUnresolvedEvidence(h, _) => h,
+  LEvEntry(_, ev)         => lower_handle_of(ev),
   LFieldLoad(h, _, _)     => h,
   LConvert(h, _, _)       => h,
   LStateSlotStore(h, _, _) => h,
@@ -668,15 +681,14 @@ fn lower_call_default(handle, f, fh, lo_args) = {
   }
 }
 
-// THE SEAM (master plan §6 1★ Stage 0). The single projection of a fn's
-// dispatched effect-row names — canonical order, builtins filtered. The
-// CALLER building a callee's __state (`derive_ev_slots`, via the callee's
-// type) and the CALLEE reading its own slot (`lower_compute_ev_index_for_effect`,
-// via its own scheme) BOTH read through THIS ONE truth, so their slots agree
-// by construction — the dual re-derivation collapses to one read. Today reads
-// the inferred TFun row; Stage 1 swaps THIS BODY to the live flow-closure
-// (walk the fn's body / call-edges, subtract installs) and neither consumer
-// changes (docs/specs/simulations/polymorphism-as-flow-edges.md §8 Step 0/1).
+// THE DISPATCHED-ROW PROJECTION (master plan §6 1★). The single read of a fn's
+// dispatched effect-row names — canonical order, builtins filtered. `derive_ev_slots`
+// (caller, building a callee's __state) and the keyed captured_evs read (callee)
+// both project through THIS ONE truth; evidence is then addressed by effect
+// IDENTITY (a key-scan over [key][record][base]), so the two sides agree BY THE
+// KEY, never a positional slot. The live form reads the flow-closure (escaping_row
+// — walk the body/call-edges, subtract installs), recovering forward-ref-dropped
+// effects the frozen TFun row lost (docs/specs/simulations/polymorphism-as-flow-edges.md §8).
 fn effects_of(fn_ty) = match fn_ty {
   TFun(_, _, row) => effects_of_row(row),
   _               => []
@@ -691,30 +703,34 @@ fn effects_of_row(row) = match row {
 // The per-effect evidence the caller threads into a polymorphic callee's
 // __state record. ONE ev per effect in the callee's row — the ev is a RECORD
 // POINTER (handler IS state IS closure IS evidence), NOT a fn-index global
-// (drift 5). Each effect resolves to the lexically-installed handler's state
-// record (`LLocal "__hstate_<h>"`) or a forward of THIS fn's own ev-slot
-// (`LEvSlotRef`). The shared canonical order makes caller→callee slot
-// remapping correct WITHOUT a coercion table (Koka evidence coercion).
-// THE SEAM, caller side. Read the callee's FLOW-CLOSURE by name (the live
-// call-edge row, not the frozen call-site instantiation lookup_ty froze) so a
-// forward-ref-dropped effect (emit_module's WasmOut) is recovered and threaded.
-// An anonymous callee (lambda/resume — no name in the esc map) carries its own
-// evidence: read its definition-site row via lookup_ty, byte-identical to the
-// pre-flow-closure path.
-fn derive_ev_slots(callee_handle) =
-  match ls_escaping_of(callee_name_of_handle(callee_handle)) {
-    Some(row) => map(resolve_ev_for_ename, row),
-    None      => map(resolve_ev_for_ename, effects_of(lookup_ty(callee_handle)))
+// (drift 5), PAIRED with the effect's IDENTITY (the key). Each effect resolves
+// to the lexically-installed handler's state record (`LLocal "__hstate_<h>"`)
+// or a forward of THIS frame's own evidence by IDENTITY (`LEvRef` carries the
+// key, never a row position). The callee reads each back by KEY-SCAN, so the
+// row is consumed as a SET — order carries no meaning; a sibling effect shuffles
+// nothing (the cure for position-as-the-bug). Read the callee's FLOW-CLOSURE by
+// name (escaping_row — the live call-edge row, not the frozen call-site
+// instantiation) so a forward-ref-dropped effect (emit_module's WasmOut) is
+// recovered and threaded. An anonymous callee (lambda/resume — no esc-map name)
+// carries its own evidence via lambda_escaping_row.
+fn derive_ev_slots(callee_handle) = {
+  let row = match ls_escaping_of(callee_name_of_handle(callee_handle)) {
+    Some(r) => r,
+    None    => lambda_escaping_row(callee_handle)
   }
+  map((ename) => LEvEntry(ename, resolve_ev_for_ename(ename)), row)
+}
 
-// One ev per effect-name: the installed handler's record (LLocal) when a
-// handler is lexically in scope, else a forward of this frame's own slot
-// (LEvSlotRef). Both derive_ev_slots and an install's captured_evs read
-// through this one projection — one truth, two record shapes.
+// One ev per effect: the installed handler's record (LLocal) when a handler is
+// lexically in scope on the live `~>` stack, else a forward of THIS frame's own
+// evidence for the effect — by IDENTITY (LEvRef carries the key), never a row
+// position. The caller fills the same key; the chain bottoms at the `~>` install
+// where the handler resolves lexically. Both derive_ev_slots and an install's
+// captured_evs read through this one projection.
 fn resolve_ev_for_ename(ename) = {
   let state_local = lower_resolve_handler_state_for_ename(ename)
   if state_local == "" {
-    LEvSlotRef(0, lower_ev_index_in_frame(ename))
+    LEvRef(0, ename)
   } else {
     LLocal(0, state_local)
   }
@@ -760,39 +776,14 @@ fn lower_compute_ev_slot_for_op(op_name) = match lookup_parent_effect(op_name) {
   None        => 0
 }
 
-// The effect's index in the CURRENT fn's row — read through THE SEAM
-// (`effects_of`), from the SAME source `derive_ev_slots` reads (the fn's
-// inferred TFun row), so the callee's READ index == the caller's PLACED index
-// by construction. The current fn is `ls_outer_fn_name`; its inferred type is
-// its scheme body. (Was `perform inf_declared_effs()` — the declared `with`
-// row, a CONSTRAINT, never the dispatch source: a spec violation now retired.)
-// THE SEAM, callee side. Index ename in THIS fn's FLOW-CLOSURE — the SAME
-// projection derive_ev_slots placed against, so the read slot == the placed
-// slot by construction. (Was effects_of(scheme) — the frozen generalized row
-// that dropped forward-ref effects; escaping_row recovers them off call-edges.)
-fn lower_compute_ev_index_for_effect(ename) = {
-  // A captured/anonymous lambda READS against its OWN definition-site row —
-  // effects_of(lookup_ty(lambda_handle)), the SAME projection derive_ev_slots
-  // PLACED against (the None branch). place==read by construction; order-stable
-  // (the lambda's own-row index is invariant to enclosing-fn row growth). The
-  // else is the named-fn/block/thunk path verbatim — byte-identical.
-  let lh = ls_current_lambda_handle()   // drift-audit: ignore — sequenced effectful handler-state read (LowerScope); lh is reused in the conditional below
-  let row = if lh >= 0 { effects_of(lookup_ty(lh)) }
-            else { escaping_row(ls_outer_fn_name()) }
-  clamp_index(index_of_name(row, ename, 0))
-}
-
-// Inside a handler arm body the frame's evidence is the captured set
-// (first-encounter ledger order); everywhere else it is the fn's row
-// (canonical order). One index space per frame shape.
-fn lower_ev_index_in_frame(ename) = {
-  if arm_ev_active() {
-    arm_ev_index_for(ename)
-  } else {
-    lower_compute_ev_index_for_effect(ename)
-  }
-}
-
+// The positional ev-INDEX apparatus is DELETED — evidence is now read by
+// effect IDENTITY (a key-scan over the self-describing captured_evs region),
+// so there is no row index to compute, dispatch on, or keep place==read stable
+// (the cure for position-as-the-bug: a sibling effect shuffles no key). What
+// remains is the op-DECL index (op_slot), a STABLE position into an effect's
+// immutable op-list — never a row position. `clamp_index` is its defensive
+// floor: an op absent from its own effect's op-list is structurally impossible
+// (the op→effect edge proves membership), so -1 never arises here.
 fn clamp_index(i) = if i < 0 { 0 } else { i }
 
 // ─── THE FLOW-CLOSURE (master plan §6 1★ Stage 1) ───────────────────────
@@ -801,10 +792,10 @@ fn clamp_index(i) = if i < 0 { 0 } else { i }
 // recursive callee bound AFTER `name` generalized, so its effect never
 // entered `name`'s row — `emit_module` losing `WasmOut` via `emit_header`)
 // is recovered by reading the effect off the CALL-EDGES live, not off the
-// frozen generalized scheme. THE SEAM's two consumers (derive_ev_slots,
-// lower_compute_ev_index_for_effect) BOTH read THIS one projection, so a
-// caller-placed slot and the callee-read slot agree by construction
-// (docs/specs/simulations/polymorphism-as-flow-edges.md §8 Step 1).
+// frozen generalized scheme. derive_ev_slots (caller) reads THIS projection to
+// place keyed [key][ev] entries; the callee reads them back by KEY-SCAN, so the
+// two sides agree BY THE EFFECT KEY, never a positional slot
+// (docs/specs/simulations/polymorphism-as-flow-edges.md §8).
 //
 //   escaping(name) = ( own_dispatched(name)
 //                      ∪ ⋃ { escaping(c) | c ∈ static_callees(name) } )
@@ -837,6 +828,33 @@ fn set_difference(a, b) = filter((x) => !set_contains(b, x), a)
 fn escaping_row(name) = match ls_escaping_of(name) {
   Some(row) => row,
   None      => own_dispatched_row(name)
+}
+
+// An anonymous lambda has no name in the esc map, so its closure-evidence row
+// would be read off the LEAF (`effects_of(lookup_ty(h))` — the frozen
+// generalized own-row), which suffers EXACTLY the forward-ref drop escaping_row
+// exists to fix. The named-fn seam already reads the flow-closure; the lambda
+// seam must too, or its PLACE/READ are internally consistent but TOO SMALL —
+// the body forwards a callee's full escaping row while only the leaf's slots
+// were placed, reading __state past the fence into uninitialized bump-heap.
+// So route the lambda's own-row through its body's flow-closure, read LIVE off
+// the already-precomputed top-level escaping map in ONE union round (a lambda
+// is anonymous ⇒ cannot sit in a name-cycle ⇒ no new fixpoint, no snapshot).
+// Carried-Truth: delete the frozen-leaf re-derivation in favour of the
+// flow-closure the graph already proves. The `_` arm is NOT a degraded path —
+// it is the flow-closure's BASE CASE: a non-lambda-seam handle has no
+// body-callees to propagate, so its escaping row IS its own row. (The deeper
+// ultimate form dissolves this fn entirely: with order-free live inference the
+// own-row leaf would already equal the flow-closure — escaping_row exists only
+// to recover what generalize() snapshots away; peer Hβ.infer.order-free-live-row.)
+fn lambda_escaping_row(h) = match graph_node_body(h) {
+  NExpr(LambdaExpr(_, body_node)) => {
+    let (callees, handled) = flow_edges(body_node)
+    let own        = effects_of(lookup_ty(h))
+    let propagated = flatten(map(escaping_row, set_canonicalize(callees)))
+    set_difference(set_canonicalize(own ++ propagated), set_canonicalize(handled))
+  },
+  _ => effects_of(lookup_ty(h))
 }
 
 // callee name for derive_ev_slots' handle: the AST fabric resolves any
@@ -1142,10 +1160,15 @@ fn lower_resolve_handler_state_for_ename(ename) = {
 }
 
 // The install-site evidence a handler's arm bodies perform through,
-// resolved at THIS install position. Emit writes these after the record's
-// arm region; the arm fn's LowFn fence lands its LEvPerform reads on them.
+// resolved at THIS install position, PAIRED with each effect's IDENTITY (the
+// key). Emit writes these after the record's arm region as the self-describing
+// [key][record][base] captured_evs region; the arm fn's LEvPerform KEY-SCANS
+// it for the effect-key. Symmetric with derive_ev_slots — both the install's
+// captured_evs and a callee's threaded ev_slots are ONE keyed-entry shape, so
+// a sibling effect appearing shuffles no key (the position-as-the-bug cure).
 fn lower_captured_evs_for(hname) =
-  map(resolve_ev_for_ename, lookup_handler_arm_ev_names(hname))
+  map((ename) => LEvEntry(ename, resolve_ev_for_ename(ename)),
+      lookup_handler_arm_ev_names(hname))
 
 // Per-effect arm-fn-name groups [(ename, [arm_fn_name])], op-decl order
 // within each effect. A handler can cover multiple effects (graph_handler:
@@ -1224,19 +1247,21 @@ fn lookup_effect_op_names(eff_name) = {
 //     install's OWN state record (`__hstate_<h>`), the SAME record the arm
 //     was installed against.
 //   - Else → Tier 2: LEvPerform, evidence-passing. The caller threads the
-//     handler record via an ev-slot on __state; ev_slot = the effect's
-//     index in this fn's row, op_slot = the op's index within its effect.
-// Lexical install wins over the row (a nested handler shadows the caller's
-// evidence) — the seed's $lower_perform order, byte-faithful.
+//     handler record into __state's captured_evs keyed by the effect's
+//     IDENTITY; the read KEY-SCANS for it (no row position to shift). op_slot
+//     stays a position — the op's index in its effect's IMMUTABLE decl-order
+//     op-list (a stable identity, not a row position).
+// Lexical install wins over the keyed forward (a nested handler shadows the
+// caller's evidence) — the seed's $lower_perform order, byte-faithful.
 fn lower_perform_dispatch(handle, op_name, lo_args) =
   match lower_resolve_handler_for_op(op_name) {
     Some(r) =>
       LPerform(handle, r.target, lo_args, "__hstate_{int_to_str(r.handle)}"),
-    None =>
-      LEvPerform(handle, op_name,
-                 lower_ev_index_in_frame(lower_effect_name_of_op(op_name)),
-                 lower_compute_ev_slot_for_op(op_name),
-                 lo_args)
+    None => {
+      let ename = lower_effect_name_of_op(op_name)
+      arm_ev_note(ename)
+      LEvPerform(handle, op_name, ename, lower_compute_ev_slot_for_op(op_name), lo_args)
+    }
   }
 
 // Look up which effect an op belongs to via EffectOpScheme.
@@ -1639,10 +1664,7 @@ fn lower_feedback_body(left, fb_handle) = {
 // TParam's first field IS the name string (a wildcard `(_)` lowers it to "_",
 // which never resolves — a feed-forward body simply leaves the prior
 // unreferenced). One destructure, read live — no pattern re-classification.
-fn feedback_param_name(p) = {
-  let TParam(name, _, _, _, _) = p
-  name
-}
+fn feedback_param_name(p) = param_name(p)
 
 // Extract the handler-name string from the AST node on the right side
 // of a `body ~> handler` pipe. Recognized shapes:
@@ -2447,7 +2469,7 @@ fn lower_resume_multishot(handle, val, state_updates) = {
 
 // The effect-world a continuation is frozen under, read LIVE from the
 // enclosing arm fn's inferred row — the SAME source derive_ev_slots reads
-// (the fn's TFun row, lower_compute_ev_index_for_effect), so the world IS the
+// (the fn's TFun row via escaping_row), so the world IS the
 // effects the resumed body performs, by construction. Carried-Truth: the
 // graph already proves this row; reading it here (not re-binding the resume
 // handle to TCont, which would corrupt the typed-resume value S) is the
@@ -2580,10 +2602,7 @@ fn bind_state_field_names_as_locals(state) = {
 
 // Parameter name lowering (for LFn metadata)
 
-fn lower_param_names(params) = map((p) => {
-  let TParam(name, _, _, _, _) = p
-  name
-}, params)
+fn lower_param_names(params) = map(param_name, params)
 
 // Each param's graph handle for the LowerScope frame — read from the fn's
 // INFERRED type, the live graph proof. infer mints a fresh handle per param
@@ -2602,19 +2621,16 @@ fn param_handles_of(fn_handle, params) = match lookup_ty(fn_handle) {
   _ => lower_param_handles(params)
 }
 
-fn tparam_handle(tp) = {
-  let TParam(_, ty, _, _, _) = tp
-  match ty {
-    TVar(h) => h,
-    _       => 0
-  }
+fn tparam_handle(tp) = match param_ty(tp) {
+  TVar(h) => h,
+  _       => 0
 }
 
 // Fallback when the fn's type isn't a resolved TFun: a param's parsed type
 // is `TVar(handle)` only while still un-ground; ground types carry no handle
 // (0 sentinel). param_handles_of reads the inferred TFun instead.
 fn lower_param_handles(params) = map((p) => {
-  let TParam(_, ty, _, _, _) = p
+  let ty = param_ty(p)
   match ty {
     TVar(handle)        => handle,
     TInt                => 0,
@@ -2806,10 +2822,7 @@ fn free_vars_match_arms(arms, bound) = {
   })
 }
 
-fn free_vars_param_names(params) = map((p) => {
-  let TParam(name, _, _, _, _) = p
-  name
-}, params)
+fn free_vars_param_names(params) = map(param_name, params)
 
 // H6: exhaustive Pat enumeration. PVar is the only leaf that
 // binds a name; compound patterns recurse into sub-patterns.

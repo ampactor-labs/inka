@@ -222,6 +222,40 @@ type Ownership
   | Own          // affine: consumed at use (performs Consume)
   | Ref          // borrowed: cannot escape return position
 
+// ─── TParam projections — the §2 'project' operation made literal ──
+// A param is a PRODUCT node CARRIED whole; every aspect is read through
+// a TOTAL named projection defined ONCE here, never a positional
+// destructure at a consumer (THE CARRIED-TRUTH LAW — §4①: a product's
+// fields are projections read live). The single destructure of the
+// 5-tuple lives in each function below; reviewed once against the decl
+// (TParam(name, ty, authored, resolved, default) = slots 0..4).
+//
+// Consumers split into three roles:
+//   LEAF       — read one aspect via param_{name,ty,authored,resolved,default}
+//   PROPAGATOR — transform one aspect via param_with_ty / param_with_resolved,
+//                which carry the other four BY CONSTRUCTION (dropping a
+//                sibling field becomes unsayable — it is never named)
+//   PRODUCER   — mint via mk_param (the inferred/synthetic shape: no
+//                authored aspect, no default)
+//
+// Deepening (NAMED, sequenced post-first-light — §4⑤): a param projects to
+// {type, row} — ownership IS a Consume in the param's ROW, refinement IS a
+// refined type — and the 5-tuple DISSOLVES. These accessor bodies are that
+// collapse's larval seam: the {type,row} form swaps behind them with no
+// consumer touched (peer Hβ.types.param-projects-to-type-row).
+fn param_name(p)     = let TParam(n, _, _, _, _) = p; n
+fn param_ty(p)       = let TParam(_, t, _, _, _) = p; t
+fn param_authored(p) = let TParam(_, _, a, _, _) = p; a
+fn param_resolved(p) = let TParam(_, _, _, r, _) = p; r
+fn param_default(p)  = let TParam(_, _, _, _, d) = p; d
+
+// Structure-preserving updaters for PROPAGATORS — carry the other four.
+fn param_with_ty(p, t)        = let TParam(n, _, a, r, d) = p; TParam(n, t, a, r, d)
+fn param_with_resolved(p, r2) = let TParam(n, t, a, _, d) = p; TParam(n, t, a, r2, d)
+
+// Smart constructor for inferred/synthetic PRODUCERS — no authored aspect.
+fn mk_param(name, ty) = TParam(name, ty, Unmarked, Unmarked, None)
+
 // ─── Resume discipline (spec 02 · Affect POPL 2025) ────────────────
 // Continuations discriminated at the type level so handler elimination
 // (spec 05) and multi-shot × arena (Arc F.4) have the type hook. The
@@ -1693,7 +1727,7 @@ fn show_handle(h) with GraphRead + !Mutate = {
 // no copy, no cache). [] when the callee's scheme isn't a ground function
 // (an unbound forward ref, a param-position fn) — then there are no labels to
 // resolve and the args pass through positionally.
-fn callee_params(name) with Env + GraphRead = match env_lookup(name) {
+fn callee_params(name) with EnvRead + GraphRead = match env_lookup(name) {
   Some(entry) => {
     let (scheme, _, _) = entry
     match scheme {
@@ -1714,7 +1748,7 @@ fn callee_params(name) with Env + GraphRead = match env_lookup(name) {
 // no arg reaches is filled by the param's default node (the absent product
 // field's fallback construction). An unknown label is E_UnknownArgLabel —
 // Located, productive-under-error (the arg is dropped, parsing continues).
-fn resolve_call_args(cname, args) with Env + GraphRead + Memory + Alloc + Diagnostic = {
+fn resolve_call_args(cname, args) with EnvRead + GraphRead + Memory + Alloc + Diagnostic = {
   let params = callee_params(cname)
   // No declared params (forward ref / fn-param callee / constructor): no labels
   // to resolve against. Strip any stray LabeledArg wrappers to their value so
@@ -1737,7 +1771,7 @@ fn unwrap_labeled_arg(arg) with GraphRead = {
 // labeled args claim their named slot first (skip-over); positional args then
 // fill the remaining unfilled slots left-to-right. Then collect each slot to
 // its placed value or its param default.
-fn fill_arg_slots(params, args, cname) with Env + GraphRead + Memory + Alloc + Diagnostic = {
+fn fill_arg_slots(params, args, cname) with EnvRead + GraphRead + Memory + Alloc + Diagnostic = {
   let n = len(params)
   let claimed = place_labeled(params, args, 0, make_list(n), cname)
   let filled = place_positional(args, 0, 0, claimed, n)
@@ -1803,8 +1837,8 @@ fn next_free_slot(slots, from, n) with Memory =
 fn param_index(params, label, i) with Pure =
   if i >= len(params) { -1 }
   else {
-    let TParam(name, _, _, _, _) = list_index(params, i)
-    if name == label { i } else { param_index(params, label, i + 1) }
+    if param_name(list_index(params, i)) == label { i }
+    else { param_index(params, label, i + 1) }
   }
 
 // Project each slot to its placed value node, or — when the slot is the 0
@@ -1818,8 +1852,7 @@ fn collect_slot_nodes(params, slots, i, n, out, count) with Memory + Alloc = {
     if placed != 0 {
       collect_slot_nodes(params, slots, i + 1, n, list_set(out, count, placed), count + 1)
     } else {
-      let TParam(_, _, _, _, default) = list_index(params, i)
-      match default {
+      match param_default(list_index(params, i)) {
         Some(expr) =>
           collect_slot_nodes(params, slots, i + 1, n, list_set(out, count, expr), count + 1),
         None => collect_slot_nodes(params, slots, i + 1, n, out, count)
@@ -1829,14 +1862,13 @@ fn collect_slot_nodes(params, slots, i, n, out, count) with Memory + Alloc = {
 }
 
 fn show_tparam(ref tp) with GraphRead + !Mutate = {
-  let TParam(name, ty, authored, resolved, _) = tp
-  let base = "{name}: {show_type(ty)}"
-  match authored {
-    Unmarked => match resolved {
+  let base = "{param_name(tp)}: {show_type(param_ty(tp))}"
+  match param_authored(tp) {
+    Unmarked => match param_resolved(tp) {
       Unmarked => base,
-      _        => "{base}{show_ownership(resolved)} — inferred"
+      _        => "{base}{show_ownership(param_resolved(tp))} — inferred"
     },
-    _ => "{base}{show_ownership(authored)} — declared"
+    _ => "{base}{show_ownership(param_authored(tp))} — declared"
   }
 }
 

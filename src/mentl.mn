@@ -378,12 +378,9 @@ fn verify_after_apply(handle) = {
 
 fn ownership_candidates(params) = {
   list_to_flat(params)
-    |> filter((p) => {
-         let TParam(_, _, _, res, _) = p
-         match res { Unmarked => true, _ => false }
-       })
+    |> filter((p) => match param_resolved(p) { Unmarked => true, _ => false })
     |> (inferred_params) => flatten(map((p) => {
-         let TParam(name, _, _, _, _) = p
+         let name = param_name(p)
          [AOwn(name, None), ARef(name, None)]
        }, inferred_params))
 }

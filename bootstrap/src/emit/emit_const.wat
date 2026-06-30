@@ -755,12 +755,16 @@
       (then (call $emit_lunresolved  (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 336))
       (then (call $emit_lstateslotstore (local.get $r)) (return)))
-    (if (i32.eq (local.get $tag) (i32.const 337))
-      (then (call $emit_levslotref   (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 337))         ;; LEvRef
+      (then (call $emit_levref       (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 339))
       (then (call $emit_lconvert     (local.get $r)) (return)))
     (if (i32.eq (local.get $tag) (i32.const 340))         ;; LFnRef
       (then (call $emit_lfnref       (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 341))         ;; LEvEntry
+      (then (call $emit_leventry     (local.get $r)) (return)))
+    (if (i32.eq (local.get $tag) (i32.const 342))         ;; LUnresolvedEvidence
+      (then (call $emit_lunresolvedevidence (local.get $r)) (return)))
     (unreachable))
 
   ;; ─── $emit_lstateslotstore — LStateSlotStore tag 336 emit arm ──────

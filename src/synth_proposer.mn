@@ -524,8 +524,7 @@ fn synth_param_names(params) with Pure = {
 fn synth_param_loop(params, i, n, buf) with Pure = {
   if i >= n { buf }
   else {
-    let TParam(name, _, _, _, _) = list_index(params, i)
-    list_set(buf, i, name)
+    list_set(buf, i, param_name(list_index(params, i)))
     synth_param_loop(params, i + 1, n, buf)
   }
 }

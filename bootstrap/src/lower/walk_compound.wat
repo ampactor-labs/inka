@@ -1587,6 +1587,7 @@
     (local $i i32) (local $cap_entry i32) (local $cap_name i32)
     (local $cap_lexpr i32) (local $caps_count i32)
     (local $prev_frame i32) (local $prev_lh i32)
+    (local $lam_row i32) (local $prev_lh_row i32)
     (local.set $h             (call $walk_expr_node_handle (local.get $node)))
     (local.set $body          (i32.load offset=4 (local.get $node)))
     (local.set $lambda_struct (i32.load offset=4 (local.get $body)))
@@ -1604,13 +1605,22 @@
     ;; ($lower_compute_ev_index_for_effect / $lower_ev_slot_raw) indexes the
     ;; lambda's OWN row — effects_of(lookup_ty($h)) — the SAME projection
     ;; $derive_ev_slots PLACED against (read==place by construction).
+    ;; Compute THIS lambda's flow-closure ONCE — body+handle both in scope here —
+    ;; and carry it as frame state beside the handle. The body's seam READs
+    ;; ($lower_ev_slot_raw / $lower_compute_ev_index_for_effect) and the PLACE below
+    ;; both consume this one value, so place==read by construction (no cache to
+    ;; desync). Mirror of the wheel's lambda_escaping_row read live at both seams.
+    (local.set $lam_row       (call $lambda_flow_closure (local.get $h) (local.get $body_node)))
     (local.set $prev_lh       (global.get $lower_current_lambda_h_g))
+    (local.set $prev_lh_row   (global.get $lower_current_lambda_row_g))
     (global.set $lower_current_lambda_h_g (local.get $h))
+    (global.set $lower_current_lambda_row_g (local.get $lam_row))
     (call $bind_names_as_locals (local.get $param_names) (local.get $param_handles))
     (local.set $lo_body       (call $lower_expr (local.get $body_node)))
     ;; Hβ.lower.tail-call-mark-pass — lambda body is in tail position.
     (local.set $lo_body       (call $lower_mark_tail (local.get $lo_body)))
     (global.set $lower_current_lambda_h_g (local.get $prev_lh))
+    (global.set $lower_current_lambda_row_g (local.get $prev_lh_row))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     ;; H.2.e step 5: materialize caps_exprs from new captures.
@@ -1647,13 +1657,14 @@
                         (local.get $body_list)
                         (call $row_make_pure)
                         (call $len (local.get $caps))))
-    ;; A closure IS state IS evidence: capture the evidence for the effects
-    ;; THIS lambda's body performs ($derive_ev_slots over the lambda's row),
-    ;; resolved at the definition site. Without it the closure's evidence
-    ;; region is empty and a perform inside the lambda reads a bad slot when
-    ;; the closure is called elsewhere (a higher-order fn's arm calling f(x)).
-    ;; Mirror of src/lower.mn LambdaExpr.
-    (local.set $evs  (call $derive_closure_evs (local.get $h)))
+    ;; A closure IS state IS evidence: PLACE the evidence against the SAME
+    ;; flow-closure row the body READ (carried in $lam_row) — not the frozen
+    ;; effects_of(lookup_ty) leaf, which dropped forward-ref effects and under-sized
+    ;; the frame (the body forwarded a callee's full escaping row past the fence).
+    ;; resolve_evs_for_names is the mirror of map(resolve_ev_for_ename, row); this
+    ;; is the lambda peer of $derive_ev_slots' $escaping_row place. Mirror of
+    ;; src/lower.mn LambdaExpr (derive_ev_slots None → lambda_escaping_row).
+    (local.set $evs  (call $resolve_evs_for_names (local.get $lam_row)))
     (call $lexpr_make_lmakeclosure
       (local.get $h)
       (local.get $fn_ir)

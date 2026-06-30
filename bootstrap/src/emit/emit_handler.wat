@@ -330,6 +330,88 @@
       (local.set $i (i32.add (local.get $i) (i32.const 1)))
       (br $loop))))
 
+  ;; ─── $emit_ev_entry_keyed — push the per-effect evidence ENTRY by KEY ──
+  ;; emits: (call $ev_lookup (local.get $__state) (local.get $__state) (i32.const <base>) (i32.const <key_off>))
+  ;; 4 args: every Mentl fn carries the leading convention __state (cf. $str_concat);
+  ;; ev_lookup ignores it (Memory is builtin), the 2nd __state IS the record to scan.
+  ;; Mirror of wheel emit_ev_entry_keyed. ev_lookup (lib runtime/memory.mn,
+  ;; present in the compiled module + memory.mn-bearing micros) key-scans
+  ;; __state's captured_evs region (based at `base`) for `key_off` — the effect-
+  ;; key's interned data offset (W5 dedup: the place wrote the SAME offset, so
+  ;; the scan's i32.eq matches) — returning the [record][base_field] entry. The
+  ;; key-scan replaces the old positional __state[8+4*fence+4*ev_slot] load: a
+  ;; sibling effect appearing shuffles no key (the position-as-the-bug cure).
+  (func $emit_ev_entry_keyed (param $base i32) (param $key_off i32)
+    (call $emit_byte (i32.const 40))   ;; (
+    (call $emit_byte (i32.const 99))   ;; c
+    (call $emit_byte (i32.const 97))   ;; a
+    (call $emit_byte (i32.const 108))  ;; l
+    (call $emit_byte (i32.const 108))  ;; l
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $emit_byte (i32.const 36))   ;; $
+    (call $emit_byte (i32.const 101))  ;; e
+    (call $emit_byte (i32.const 118))  ;; v
+    (call $emit_byte (i32.const 95))   ;; _
+    (call $emit_byte (i32.const 108))  ;; l
+    (call $emit_byte (i32.const 111))  ;; o
+    (call $emit_byte (i32.const 111))  ;; o
+    (call $emit_byte (i32.const 107))  ;; k
+    (call $emit_byte (i32.const 117))  ;; u
+    (call $emit_byte (i32.const 112))  ;; p
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $el_emit_local_get_state)                       ;; (local.get $__state) — convention slot (ev_lookup ignores it)
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $el_emit_local_get_state)                       ;; (local.get $__state) — the `state` arg (the record to scan)
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $ec6_emit_i32_const_lit (local.get $base))      ;; (i32.const base)
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $ec6_emit_i32_const_lit (local.get $key_off))   ;; (i32.const key_off)
+    (call $emit_byte (i32.const 41))   ;; )
+    (call $emit_byte (i32.const 10)))  ;; \n
+
+  ;; ─── $emit_one_keyed_ev — store ONE keyed entry: [key@off][ev@off+4] ──
+  ;; Mirror of wheel emit_one_keyed_ev. key = the effect-key's interned offset
+  ;; ($emit_string_intern — W5 dedup, the SAME offset the perform's $ev_lookup
+  ;; targets); ev = the resolved evidence (emit_lexpr). Entries are LEvEntry
+  ;; (tag 341) by construction; a non-LEvEntry is the unsayable wrong move — a
+  ;; loud (unreachable), never a fabricated key.
+  (func $emit_one_keyed_ev (param $state_name i32) (param $entry i32) (param $off i32)
+    (if (i32.ne (call $tag_of (local.get $entry)) (i32.const 341))
+      (then (call $ec_emit_unreachable) (return)))
+    ;; key @ off
+    (call $ec_emit_local_get_dollar (local.get $state_name))
+    (call $emit_i32_const
+      (call $emit_string_intern (call $lexpr_leventry_key (local.get $entry))))
+    (call $ec_emit_i32_store_offset (local.get $off))
+    ;; ev @ off+4
+    (call $ec_emit_local_get_dollar (local.get $state_name))
+    (call $emit_lexpr (call $lexpr_leventry_ev (local.get $entry)))
+    (call $ec_emit_i32_store_offset (i32.add (local.get $off) (i32.const 4))))
+
+  ;; ─── $emit_keyed_ev_region — keyed [key][ev] PAIRS + key=0 SENTINEL ───
+  ;; Mirror of wheel emit_keyed_ev_region. Writes the self-describing
+  ;; captured_evs region into record `state_name` (a length-prefixed local-name
+  ;; str_ptr): per LEvEntry j, [key@base+8*j][ev@base+8*j+4] (STRIDE 8),
+  ;; terminated by a key=0 sentinel at base+8*n so a perform's $ev_lookup
+  ;; key-scan finds each effect and stops. ORDER carries no meaning. The ONE
+  ;; region writer the install / closure / value-fn / continuation places share.
+  (func $emit_keyed_ev_region (param $state_name i32) (param $evs i32) (param $base i32)
+    (local $j i32) (local $n i32)
+    (local.set $n (call $len (local.get $evs)))
+    (local.set $j (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $j) (local.get $n)))
+        (call $emit_one_keyed_ev (local.get $state_name)
+          (call $list_index (local.get $evs) (local.get $j))
+          (i32.add (local.get $base) (i32.mul (i32.const 8) (local.get $j))))
+        (local.set $j (i32.add (local.get $j) (i32.const 1)))
+        (br $each)))
+    ;; SENTINEL key=0 @ base + 8*n
+    (call $ec_emit_local_get_dollar (local.get $state_name))
+    (call $emit_i32_const (i32.const 0))
+    (call $ec_emit_i32_store_offset
+      (i32.add (local.get $base) (i32.mul (i32.const 8) (local.get $n)))))
 
   ;; ─── $emit_llet — LLet tag 304 emit arm per §2.5 ───────────────────
   ;; Per src/backends/wasm.mn:1147-1152: sub-emit value + "(local.set
@@ -369,10 +451,13 @@
     (local.set $evs     (call $lexpr_lmakeclosure_evs  (local.get $r)))
     (local.set $nc (call $len (local.get $caps)))
     (local.set $ne (call $len (local.get $evs)))
-    ;; Alloc 8 + 4*(nc+ne) bytes → $state_tmp.
+    ;; Alloc 8 + 4*(nc + 2*ne + 1): captures + the keyed ev region (2 words/entry
+    ;; + a key=0 sentinel = 2*ne+1 words) → $state_tmp.
     (call $emit_alloc
       (i32.add (i32.const 8)
-               (i32.mul (i32.const 4) (i32.add (local.get $nc) (local.get $ne))))
+               (i32.mul (i32.const 4)
+                 (i32.add (local.get $nc)
+                          (i32.add (i32.mul (i32.const 2) (local.get $ne)) (i32.const 1)))))
       (i32.const 2244))
     ;; Assign $name = $state_tmp BEFORE storing captures, so self-ref
     ;; LLocal($name) in caps reads the closure record under construction.
@@ -388,8 +473,8 @@
     (call $ec_emit_i32_store_offset (i32.const 4))
     ;; Store captures at offsets 8, 12, 16, ...
     (call $ec8_emit_cap_stores (local.get $caps) (i32.const 8))
-    ;; Store ev_slots at offsets 8+4*nc, 8+4*nc+4, ...
-    (call $ec8_emit_cap_stores (local.get $evs)
+    ;; Store the keyed [key][ev] PAIRS + key=0 sentinel ev region at 8+4*nc.
+    (call $emit_keyed_ev_region (i32.const 2244) (local.get $evs)
       (i32.add (i32.const 8) (i32.mul (local.get $nc) (i32.const 4)))))
 
   ;; ─── $emit_ldeclarefn — LDeclareFn tag 313 emit arm per §2.5 ───────
@@ -459,11 +544,13 @@
     ;; LEvPerform reads land here.
     (local.set $cevs (call $lexpr_lhandlewith_captured_evs (local.get $r)))
     (local.set $n_cevs (call $len (local.get $cevs)))
+    ;; Keyed captured_evs region: 2 words/entry + a key=0 sentinel = 2*n_cevs+1
+    ;; words past the arms (the arm fn's LEvPerform $ev_lookup key-scans it).
     (call $emit_alloc
       (i32.add (i32.const 8)
         (i32.mul (i32.const 4)
           (i32.add (i32.add (local.get $nstate) (local.get $total_arms))
-                   (local.get $n_cevs))))
+                   (i32.add (i32.mul (i32.const 2) (local.get $n_cevs)) (i32.const 1)))))
       (local.get $hstate_name))
     ;; Write the nstate FENCE at offset 4 so dispatch locates arms fence-relative.
     (call $ec_emit_local_get_dollar (local.get $hstate_name))
@@ -473,20 +560,13 @@
     ;; Lay each effect-group's arms contiguously + build its [record, base] entry.
     (call $emit_handler_effect_entries
       (local.get $hstate_name) (local.get $nstate) (local.get $groups))
-    ;; Write the captured evidence entries after the arms.
-    (local.set $ci (i32.const 0))
-    (block $cev_done
-      (loop $cev_each
-        (br_if $cev_done (i32.ge_u (local.get $ci) (local.get $n_cevs)))
-        (call $ec_emit_local_get_dollar (local.get $hstate_name))
-        (call $emit_lexpr (call $list_index (local.get $cevs) (local.get $ci)))
-        (call $el_emit_i32_store_offset
-          (i32.add (i32.const 8)
-            (i32.mul (i32.const 4)
-              (i32.add (i32.add (local.get $nstate) (local.get $total_arms))
-                       (local.get $ci)))))
-        (local.set $ci (i32.add (local.get $ci) (i32.const 1)))
-        (br $cev_each)))
+    ;; Write the captured evidence as the self-describing keyed [key][ev]+sentinel
+    ;; region after the arms (base = 8 + 4*(nstate+total_arms)). The ONE region
+    ;; writer the install / closure / value-fn / continuation places share.
+    (call $emit_keyed_ev_region (local.get $hstate_name) (local.get $cevs)
+      (i32.add (i32.const 8)
+        (i32.mul (i32.const 4)
+          (i32.add (local.get $nstate) (local.get $total_arms)))))
     ;; Per-handler GLOBAL state-ptr write (record) for env-scan Tier-1 resolution.
     (call $emit_hstate_global_set (call $lexpr_lhandlewith_handler_name (local.get $r))
                                    (local.get $hstate_name))
@@ -1044,46 +1124,40 @@
   ;; guess (protocol_reflexive_interiority.md). Drift 1 refusal preserved:
   ;; arm_fn is an i32 field on a graph-derived record, NOT a vtable.
   (func $emit_levperform (param $r i32)
-    (local $args i32) (local $ev_off i32) (local $arm_const i32)
+    (local $args i32) (local $base i32) (local $key_off i32) (local $arm_const i32)
     (local.set $args (call $lexpr_levperform_args (local.get $r)))
-    ;; ev_off selects WHICH forwarded handler record: __state[8 + 4*captures
-    ;; + 4*ev_slot]. ev_slot = the effect's index in this fn's row (the row
-    ;; projected as evidence layout). Pre-fix this read a FIXED ev-slot 0, so
-    ;; every distinct effect collided on one record — the multi-effect trap.
-    (local.set $ev_off
+    ;; base = 8 + 4*fence (fence = this fn's body-captures, the evidence-region
+    ;; start). key_off = the effect-key's interned data offset ($emit_string_intern
+    ;; — W5 dedup, so the place wrote the SAME offset and the scan's i32.eq
+    ;; matches). $ev_lookup key-scans __state's captured_evs region for this key,
+    ;; returning the per-effect ENTRY [record@0, base_field@4] — a sibling effect
+    ;; appearing shuffles no key (the position-as-the-bug cure). arm_const =
+    ;; 8 + 4*op_slot (op-decl index within the effect); the full arm address adds
+    ;; 4*base_field (the effect's contiguous sub-region) + 4*nstate (state fence).
+    (local.set $base
       (i32.add (i32.const 8)
-        (i32.add
-          (i32.mul (i32.const 4) (call $emit_body_captures_count))
-          (i32.mul (i32.const 4) (call $lexpr_levperform_ev_slot (local.get $r))))))
-    ;; __state[ev_off] is the per-effect evidence-ENTRY [record@0, base@4]
-    ;; (Part 2). record = entry[0]; base = entry[1] (this effect's contiguous
-    ;; arm sub-region offset within the record). arm_const = 8 + 4*op_slot
-    ;; (op-decl index within the effect); the full arm address adds 4*base
-    ;; (the effect's sub-region) + 4*nstate (the state fence). This is what
-    ;; lets one shared record serve multiple effects without op-slot collision.
+        (i32.mul (i32.const 4) (call $emit_body_captures_count))))
+    (local.set $key_off
+      (call $emit_string_intern (call $lexpr_levperform_ekey (local.get $r))))
     (local.set $arm_const
       (i32.add (i32.const 8)
         (i32.mul (i32.const 4) (call $lexpr_levperform_op_slot (local.get $r)))))
-    ;; (1) arm __state = record = entry[0] = (__state[ev_off])[0]
-    (call $el_emit_local_get_state)
-    (call $el_emit_i32_load_offset (local.get $ev_off))         ;; entry
+    ;; (1) arm __state = record = entry[0] = ev_lookup(__state, base, key)[0]
+    (call $emit_ev_entry_keyed (local.get $base) (local.get $key_off))
     (call $ec6_emit_i32_load_offset_0)                          ;; record = entry[0]
     ;; (2) user args
     (call $ec6_emit_args (local.get $args))
-    ;; (3) arm fn_idx = record[arm_const + 4*base + 4*nstate]
-    (call $el_emit_local_get_state)
-    (call $el_emit_i32_load_offset (local.get $ev_off))         ;; entry
+    ;; (3) arm fn_idx = record[arm_const + 4*base_field + 4*nstate]
+    (call $emit_ev_entry_keyed (local.get $base) (local.get $key_off))
     (call $ec6_emit_i32_load_offset_0)                          ;; record = entry[0]
     (call $ec6_emit_i32_const_lit (local.get $arm_const))       ;; 8 + 4*op_slot
     (call $ec6_emit_i32_add)                                     ;; record + arm_const
-    (call $el_emit_local_get_state)
-    (call $el_emit_i32_load_offset (local.get $ev_off))         ;; entry
-    (call $ec6_emit_i32_load_offset_4)                          ;; base = entry[1]
+    (call $emit_ev_entry_keyed (local.get $base) (local.get $key_off))
+    (call $ec6_emit_i32_load_offset_4)                          ;; base_field = entry[1]
     (call $ec6_emit_i32_const_lit (i32.const 4))
-    (call $ec6_emit_i32_mul)                                     ;; 4*base
-    (call $ec6_emit_i32_add)                                     ;; + 4*base
-    (call $el_emit_local_get_state)
-    (call $el_emit_i32_load_offset (local.get $ev_off))         ;; entry
+    (call $ec6_emit_i32_mul)                                     ;; 4*base_field
+    (call $ec6_emit_i32_add)                                     ;; + 4*base_field
+    (call $emit_ev_entry_keyed (local.get $base) (local.get $key_off))
     (call $ec6_emit_i32_load_offset_0)                          ;; record = entry[0]
     (call $ec6_emit_i32_load_offset_4)                          ;; nstate = record[4]
     (call $ec6_emit_i32_const_lit (i32.const 4))
@@ -1093,21 +1167,36 @@
     ;; (4) dispatch
     (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
 
-  ;; ─── $emit_levslotref — LEvSlotRef tag 337: forward own ev-slot ─────
-  ;; Per Hβ-perform-evidence-dispatch.md §4.7. The polymorphic-scope forward
-  ;; of derive_ev_slots: emit a load of the current fn's own ev-slot (the
-  ;; handler record pointer threaded into __state by the caller's LSuspend),
-  ;; to be re-threaded by reference into a deeper callee's record.
-  ;;   (local.get $__state)(i32.load offset=8 + 4*body_capture_count + 4*ev_index)
-  (func $emit_levslotref (param $r i32)
-    (local $off i32)
-    (local.set $off
+  ;; ─── $emit_levref — LEvRef tag 337: forward own evidence by KEY ──────
+  ;; The polymorphic-scope forward of derive_ev_slots: push the per-effect ENTRY
+  ;; the caller threaded into __state, found by $ev_lookup KEY-SCAN (not a
+  ;; positional slot), to be re-threaded by IDENTITY into a deeper callee's
+  ;; record or an install's keyed captured_evs region. The SAME scan
+  ;; emit_levperform reads it from, so a sibling effect appearing shuffles no
+  ;; key (the position-as-the-bug cure). base = 8+4*fence; key = the effect-key's
+  ;; interned offset. Mirror of wheel LEvRef emit.
+  (func $emit_levref (param $r i32)
+    (call $emit_ev_entry_keyed
       (i32.add (i32.const 8)
-        (i32.add
-          (i32.mul (i32.const 4) (call $emit_body_captures_count))
-          (i32.mul (i32.const 4) (call $lexpr_levslotref_ev_index (local.get $r))))))
-    (call $el_emit_local_get_state)
-    (call $el_emit_i32_load_offset (local.get $off)))
+        (i32.mul (i32.const 4) (call $emit_body_captures_count)))
+      (call $emit_string_intern (call $lexpr_levref_ename (local.get $r)))))
+
+  ;; ─── $emit_leventry — LEvEntry tag 341 (H6 total-coverage residue) ───
+  ;; The place helpers ($emit_keyed_ev_region / $ec6_emit_ev_slot_stores)
+  ;; destructure LEvEntry directly (key + ev) and never route it here; this arm
+  ;; is the H6 residue if an LEvEntry ever reaches emit_expr in value position —
+  ;; push its resolved evidence. Mirror of wheel LEvEntry emit arm.
+  (func $emit_leventry (param $r i32)
+    (call $emit_lexpr (call $lexpr_leventry_ev (local.get $r))))
+
+  ;; ─── $emit_lunresolvedevidence — LUnresolvedEvidence tag 342 ─────────
+  ;; The typed-absence bottom (E_HandlerUninstallable): an effect with NO
+  ;; resolvable handler anywhere up the install chain. Emit a loud (unreachable)
+  ;; — the wrong move is unsayable (PLAN §0), never a fabricated evidence read
+  ;; that would dispatch through a foreign record. Mirror of wheel LUnresolved-
+  ;; Evidence emit arm.
+  (func $emit_lunresolvedevidence (param $r i32)
+    (call $ec_emit_unreachable))
 
   ;; ─── $emit_lmakeclosure — LMakeClosure tag 311 emit arm ─────────────
   ;; Hβ.emit.handler-fnref-substrate — Phase D closed here.
@@ -1132,10 +1221,13 @@
     (local.set $evs     (call $lexpr_lmakeclosure_evs  (local.get $r)))
     (local.set $nc (call $len (local.get $caps)))
     (local.set $ne (call $len (local.get $evs)))
-    ;; Alloc 8 + 4*(nc+ne) bytes → $state_tmp.
+    ;; Alloc 8 + 4*(nc + 2*ne + 1): captures + the keyed ev region (2 words/entry
+    ;; + a key=0 sentinel = 2*ne+1 words) → $state_tmp.
     (call $emit_alloc
       (i32.add (i32.const 8)
-               (i32.mul (i32.const 4) (i32.add (local.get $nc) (local.get $ne))))
+               (i32.mul (i32.const 4)
+                 (i32.add (local.get $nc)
+                          (i32.add (i32.mul (i32.const 2) (local.get $ne)) (i32.const 1)))))
       (i32.const 2244))
     ;; Store fn_ptr at offset 0.
     (call $ec8_emit_local_get_state_tmp)
@@ -1147,8 +1239,8 @@
     (call $ec_emit_i32_store_offset (i32.const 4))
     ;; Store captures at offsets 8, 12, 16, ...
     (call $ec8_emit_cap_stores (local.get $caps) (i32.const 8))
-    ;; Store ev_slots at offsets 8+4*nc, 8+4*nc+4, ...
-    (call $ec8_emit_cap_stores (local.get $evs)
+    ;; Store the keyed [key][ev] PAIRS + key=0 sentinel ev region at 8+4*nc.
+    (call $emit_keyed_ev_region (i32.const 2244) (local.get $evs)
       (i32.add (i32.const 8) (i32.mul (local.get $nc) (i32.const 4))))
     ;; Result: closure pointer on stack.
     (call $ec8_emit_local_get_state_tmp))
@@ -1166,9 +1258,12 @@
     (local.set $name (call $lexpr_lfnref_name (local.get $r)))
     (local.set $evs  (call $lexpr_lfnref_evs  (local.get $r)))
     (local.set $ne   (call $len (local.get $evs)))
-    ;; Alloc 8 + 4*ne → $state_tmp (nc=0; the ev region starts at 8).
+    ;; Alloc 8 + 4*(2*ne + 1) → $state_tmp (nc=0; the keyed ev region — 2 words/
+    ;; entry + a key=0 sentinel — starts at offset 8).
     (call $emit_alloc
-      (i32.add (i32.const 8) (i32.mul (i32.const 4) (local.get $ne)))
+      (i32.add (i32.const 8)
+        (i32.mul (i32.const 4)
+          (i32.add (i32.mul (i32.const 2) (local.get $ne)) (i32.const 1))))
       (i32.const 2244))
     ;; Store fn_ptr ($<name>_idx) at offset 0.
     (call $ec8_emit_local_get_state_tmp)
@@ -1178,8 +1273,8 @@
     (call $ec8_emit_local_get_state_tmp)
     (call $emit_i32_const (local.get $ne))
     (call $ec_emit_i32_store_offset (i32.const 4))
-    ;; Store ev_slots at offsets 8, 12, ... (nc=0).
-    (call $ec8_emit_cap_stores (local.get $evs) (i32.const 8))
+    ;; Store the keyed [key][ev] PAIRS + key=0 sentinel ev region at 8 (nc=0).
+    (call $emit_keyed_ev_region (i32.const 2244) (local.get $evs) (i32.const 8))
     ;; Result: record pointer on stack.
     (call $ec8_emit_local_get_state_tmp))
 
@@ -1191,9 +1286,9 @@
   ;;     offset 0:             fn_ptr — resume_fn table index
   ;;     offset 4:             state_index — perform-site discriminator
   ;;     offset 8:             capture_count — nc, evidence fence
-  ;;     offset 12+4*i:        capture_i
-  ;;     offset 12+4*nc+4*j:   ev_slot_j
-  ;;     offset 12+4*(nc+ne):  ret_slot — landing slot for resumed value
+  ;;     offset 12+4*i:                capture_i
+  ;;     offset 12+4*nc + 8*j:         keyed [key][ev] pair j (then key=0 sentinel)
+  ;;     offset 12+4*(nc+2*ne+1):      ret_slot — landing slot for resumed value
   ;;
   ;; Multi-shot: same record resumed multiple times. Mentl's exploration
   ;; forks here. Evidence-safe: ev_slots are fields, read at call_indirect.
@@ -1210,10 +1305,13 @@
     (local.set $ret_slot  (call $lexpr_lmakecontinuation_ret_slot  (local.get $r)))
     (local.set $nc (call $len (local.get $caps)))
     (local.set $ne (call $len (local.get $evs)))
-    ;; Alloc 16 + 4*(nc+ne) bytes (12 header + ret_slot = 16 base).
+    ;; Alloc 16 + 4*(nc + 2*ne + 1) bytes: 12 header + captures + the keyed ev
+    ;; region (2 words/entry + a key=0 sentinel = 2*ne+1 words) + ret_slot.
     (call $emit_alloc
       (i32.add (i32.const 16)
-               (i32.mul (i32.const 4) (i32.add (local.get $nc) (local.get $ne))))
+               (i32.mul (i32.const 4)
+                 (i32.add (local.get $nc)
+                          (i32.add (i32.mul (i32.const 2) (local.get $ne)) (i32.const 1)))))
       (i32.const 2244))
     ;; Store fn_ptr at offset 0.
     (call $ec8_emit_local_get_state_tmp)
@@ -1229,14 +1327,16 @@
     (call $ec_emit_i32_store_offset (i32.const 8))
     ;; Store captures at offsets 12, 16, 20, ...
     (call $ec8_emit_cap_stores (local.get $caps) (i32.const 12))
-    ;; Store ev_slots at offsets 12+4*nc, ...
-    (call $ec8_emit_cap_stores (local.get $evs)
+    ;; Store the keyed [key][ev] PAIRS + key=0 sentinel ev region at 12+4*nc.
+    (call $emit_keyed_ev_region (i32.const 2244) (local.get $evs)
       (i32.add (i32.const 12) (i32.mul (local.get $nc) (i32.const 4))))
-    ;; Store ret_slot at offset 12+4*(nc+ne).
+    ;; Store ret_slot AFTER the keyed ev region: offset 12 + 4*(nc + 2*ne + 1).
     (call $ec8_emit_local_get_state_tmp)
     (call $emit_i32_const (local.get $ret_slot))
     (call $ec_emit_i32_store_offset
       (i32.add (i32.const 12)
-               (i32.mul (i32.const 4) (i32.add (local.get $nc) (local.get $ne)))))
+               (i32.mul (i32.const 4)
+                 (i32.add (local.get $nc)
+                          (i32.add (i32.mul (i32.const 2) (local.get $ne)) (i32.const 1))))))
     ;; Result: continuation pointer on stack.
     (call $ec8_emit_local_get_state_tmp))

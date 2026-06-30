@@ -255,9 +255,10 @@ fn fn_body_handle(handle) with GraphRead + !Mutate = {
 fn first_inferred_with_classification(params, fn_handle) with Pure = {
   if len(params) == 0 { None }
   else {
-    let TParam(name, _, authored, resolved, _) = list_head(params)
-    match authored {
-      Unmarked => match resolved {
+    let p = list_head(params)
+    let name = param_name(p)
+    match param_authored(p) {
+      Unmarked => match param_resolved(p) {
         Own => Some(ownership_suggestion(name, "own",
                                           ["CDeterministicDrop", "CZeroCopy"])),
         Ref => Some(ownership_suggestion(name, "ref",

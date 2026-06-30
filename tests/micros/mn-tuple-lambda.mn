@@ -1,0 +1,8 @@
+// mn-tuple-lambda.mn — a tuple-PATTERN lambda param (SYNTAX.md §Anonymous
+// functions: `((a, b)) => …`), piped a pair. This is the exact shape of
+// get_authored_ownership (own.mn:73) — `x |> ((owner_name, idx)) => {…}` — the
+// first-light blocker the projection form unmasked. Proactive coverage so the
+// seed's PTuple-lambda-param lowering can never silently regress again.
+// Expected exit 7.
+fn add_pair(p) = p |> ((a, b)) => a + b
+fn main() = add_pair((3, 4))

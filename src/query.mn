@@ -350,8 +350,8 @@ fn chase_list_deep(ref tys) with !Mutate = {
 fn chase_params_deep(ref params) with !Mutate = {
   if len(params) == 0 { [] }
   else {
-    let TParam(name, ty, auth, res, default) = list_head(params)
-    [TParam(name, chase_type_deep(ty), auth, res, default)]
+    let p = list_head(params)
+    [param_with_ty(p, chase_type_deep(param_ty(p)))]
       ++ chase_params_deep(list_tail(params))
   }
 }
@@ -412,8 +412,7 @@ fn has_free_tvar_list(ref tys) with !Mutate = {
 fn has_free_tvar_params(ref params) with !Mutate = {
   if len(params) == 0 { false }
   else {
-    let TParam(_, ty, _, _, _) = list_head(params)
-    has_free_tvar(ty) || has_free_tvar_params(list_tail(params))
+    has_free_tvar(param_ty(list_head(params))) || has_free_tvar_params(list_tail(params))
   }
 }
 

@@ -540,10 +540,7 @@ fn ownership_of_kind(kind) with Pure = match kind {
 fn ownership_of_ty(ty) with Pure = match ty {
   TFun(params, _, _) =>
     if len(params) == 0 { Unmarked }
-    else {
-      let TParam(_, _, _, resolved, _) = list_index(params, 0)
-      resolved
-    },
+    else { param_resolved(list_index(params, 0)) },
   _ => Unmarked
 }
 

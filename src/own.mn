@@ -77,8 +77,7 @@ fn get_authored_ownership(ref name) with !Mutate = {
            |> extract_fn_params
 
          if idx < len(params) {
-           let TParam(_, _, auth, _, _) = list_index(params, idx)
-           Some(auth)
+           Some(param_authored(list_index(params, idx)))
          } else { None }
        }
     ~> catch_abort
@@ -331,11 +330,9 @@ fn check_ref_escape(ref params, ref body) with !Mutate = {
 // The prelude verbs filter + map cascade the substrate-honest residue;
 // the prior buffer-counter loop was the foreign-fluency form.
 fn collect_ref_params(ref params) with !Mutate = {
-  map((p) => { let TParam(name, _, _, _, _) = p; name },
-    filter((p) => {
-      let TParam(_, _, _, res, _) = p
-      match res { Ref => true, _ => false }
-    }, list_to_flat(params)))
+  map(param_name,
+    filter((p) => match param_resolved(p) { Ref => true, _ => false },
+      list_to_flat(params)))
 }
 
 fn walk_return_positions(ref refs, ref node) with !Mutate = {
@@ -404,15 +401,15 @@ fn walk_match_arms(ref refs, ref arms) with !Mutate = {
 // (borrowed multiple times).
 fn infer_ownership(ref params, ref body) with !Mutate = {
   map((p) => {
-    let TParam(name, ty, authored, _old_resolved, default) = p
-    let inferred = match authored {
-      Unmarked => classify_usage(name, body),
-      _        => authored
+    let inferred = match param_authored(p) {
+      Unmarked => classify_usage(param_name(p), body),
+      _        => param_authored(p)
     }
-    // Preserve the default (Carried-Truth — dropping it loses the param's
-    // `= expr` fallback at every call site). Only the resolved-ownership slot
-    // is written; type, authored marker, and default travel unchanged.
-    TParam(name, ty, authored, inferred, default)
+    // Only the resolved-ownership slot is written; type, name, authored
+    // marker, and default travel unchanged BY CONSTRUCTION via the updater
+    // (Carried-Truth — dropping the default would lose the param's `= expr`
+    // fallback at every call site; param_with_resolved cannot drop it).
+    param_with_resolved(p, inferred)
   }, list_to_flat(params))
 }
 

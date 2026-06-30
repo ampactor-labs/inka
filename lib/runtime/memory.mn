@@ -62,3 +62,25 @@ effect Alloc {
 // fn add(a, b) with Pure = a + b
 //   → performs nothing; row is EfClosed([]); type checker enforces
 //     that the body contains no perform statements.
+
+// ─── ev_lookup — the keyed-evidence scan ────────────────────────────────
+// The identity-addressed evidence READ that replaces positional ev-slot
+// indexing. A fn's captured_evs region (based at `base` in its __state record)
+// holds [key][entry-ptr] pairs terminated by a key=0 sentinel; `target` is the
+// effect's INTERNED name offset (string constants dedup — W5 — so the key the
+// caller PLACED and the key the callee SEEKS are the SAME offset, an i32.eq
+// match). Returns the entry-ptr: the [record][base] view the perform dispatches
+// through. A sibling effect appearing shuffles NO key — the cure for
+// position-as-the-bug. ONE tested helper: emit emits `call ev_lookup`, never an
+// inline scan loop, so the key-scan lives in exactly one place. The sentinel
+// arm is dead for resolved effects (the escaping_row guarantees the key is
+// placed; a genuinely-unresolved effect emits LUnresolvedEvidence → unreachable
+// at lower, never reaching here) — its 0 is a loud-downstream-trap backstop.
+fn ev_lookup(state, base, target) with Memory = ev_scan(state, base, target, 0)
+
+fn ev_scan(state, base, target, j) with Memory = {
+  let key = load_i32(state + base + 8 * j)
+  if key == target { load_i32(state + base + 8 * j + 4) }
+  else if key == 0 { 0 }
+  else { ev_scan(state, base, target, j + 1) }
+}

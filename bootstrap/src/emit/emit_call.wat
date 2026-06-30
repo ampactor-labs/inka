@@ -760,11 +760,13 @@
     ;; Save callee closure to $callee_closure.
     (call $emit_lexpr (call $lexpr_lsuspend_fn (local.get $r)))
     (call $ec6_emit_local_set_callee_closure)
-    ;; Compute alloc_size = 8 + 4*ne + (callee.capture_count * 4) into
-    ;; $alloc_size local. Each operand pushed in order; final i32.add
-    ;; folds, local.set $alloc_size stores the runtime size.
+    ;; Compute alloc_size = 8 + (8*ne + 4) + (callee.capture_count * 4) into
+    ;; $alloc_size local: header + the keyed ev region (2 words/entry + a key=0
+    ;; sentinel = 2*ne+1 words) + the copied captures (runtime nc). Each operand
+    ;; pushed in order; final i32.add folds, local.set $alloc_size stores it.
     (call $ec6_emit_i32_const_lit (i32.const 8))
-    (call $ec6_emit_i32_const_lit (i32.mul (local.get $ne) (i32.const 4)))
+    (call $ec6_emit_i32_const_lit
+      (i32.add (i32.mul (local.get $ne) (i32.const 8)) (i32.const 4)))
     (call $ec6_emit_i32_add)
     (call $ec6_emit_local_get_callee_closure)
     (call $ec6_emit_i32_load_offset_4)
@@ -1069,38 +1071,54 @@
     (call $emit_byte (i32.const 114)) (call $emit_byte (i32.const 101))
     (call $emit_byte (i32.const 41)))
 
-  ;; ─── $ec6_emit_ev_slot_stores — emit per-ev_slot store sequence ────
-  ;; For each ev_slot expr at index j: emit stores at runtime-computed
-  ;; offset state_tmp + 8 + 4*nc + 4*j. nc is loaded dynamically from
-  ;; callee_closure.offset(4); j is the static index.
-  ;;
-  ;; Each j emits:
-  ;;   (local.get $state_tmp)
-  ;;   (i32.const 8) (i32.add)
-  ;;   (local.get $callee_closure) (i32.load offset=4)
-  ;;   (i32.const 4) (i32.mul) (i32.add)
-  ;;   (i32.const 4*j) (i32.add)
-  ;;   <ev_slot expr>
-  ;;   (i32.store)
+  ;; ─── $ec6_emit_dynamic_ev_addr — runtime addr sname + 8 + 4*nc + extra ──
+  ;; nc is runtime-known (callee_closure[4]); `extra` is the static byte offset
+  ;; into the keyed ev region. Leaves the address on the stack for an (i32.store).
+  ;; Mirror of wheel emit_dynamic_ev_addr.
+  (func $ec6_emit_dynamic_ev_addr (param $sname i32) (param $extra i32)
+    (call $ec_emit_local_get_dollar (local.get $sname))
+    (call $ec6_emit_i32_const_lit (i32.const 8))
+    (call $ec6_emit_i32_add)
+    (call $ec6_emit_local_get_callee_closure)
+    (call $ec6_emit_i32_load_offset_4)
+    (call $ec6_emit_i32_const_lit (i32.const 4))
+    (call $ec6_emit_i32_mul)
+    (call $ec6_emit_i32_add)
+    (call $ec6_emit_i32_const_lit (local.get $extra))
+    (call $ec6_emit_i32_add))
+
+  ;; ─── $ec6_emit_ev_slot_stores — keyed [key][ev] PAIRS + sentinel (runtime nc) ──
+  ;; Mirror of wheel emit_ev_slots_dynamic. Per LEvEntry j: key (the interned
+  ;; ename offset) @ sname+8+4*nc+8*j, ev @ +4; then a key=0 sentinel @ +8*n. nc
+  ;; is runtime (callee_closure[4]). The callee's LEvPerform $ev_lookup key-scans
+  ;; it identically — one entry shape; the fence agrees by construction. Entries
+  ;; are LEvEntry (tag 341) by construction; a non-LEvEntry is a loud trap.
   (func $ec6_emit_ev_slot_stores (param $evs i32) (param $sname i32)
-    (local $j i32) (local $n i32) (local $ev i32)
+    (local $j i32) (local $n i32) (local $entry i32)
     (local.set $n (call $len (local.get $evs)))
     (local.set $j (i32.const 0))
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $j) (local.get $n)))
-        (local.set $ev (call $list_index (local.get $evs) (local.get $j)))
-        (call $ec_emit_local_get_dollar (local.get $sname))
-        (call $ec6_emit_i32_const_lit (i32.const 8))
-        (call $ec6_emit_i32_add)
-        (call $ec6_emit_local_get_callee_closure)
-        (call $ec6_emit_i32_load_offset_4)
-        (call $ec6_emit_i32_const_lit (i32.const 4))
-        (call $ec6_emit_i32_mul)
-        (call $ec6_emit_i32_add)
-        (call $ec6_emit_i32_const_lit (i32.mul (local.get $j) (i32.const 4)))
-        (call $ec6_emit_i32_add)
-        (call $emit_lexpr (local.get $ev))
-        (call $ec6_emit_i32_store)
+        (local.set $entry (call $list_index (local.get $evs) (local.get $j)))
+        (if (i32.ne (call $tag_of (local.get $entry)) (i32.const 341))
+          (then (call $ec_emit_unreachable))
+          (else
+            ;; key @ sname + 8 + 4*nc + 8*j
+            (call $ec6_emit_dynamic_ev_addr (local.get $sname)
+              (i32.mul (i32.const 8) (local.get $j)))
+            (call $ec6_emit_i32_const_lit
+              (call $emit_string_intern (call $lexpr_leventry_key (local.get $entry))))
+            (call $ec6_emit_i32_store)
+            ;; ev @ + 4
+            (call $ec6_emit_dynamic_ev_addr (local.get $sname)
+              (i32.add (i32.mul (i32.const 8) (local.get $j)) (i32.const 4)))
+            (call $emit_lexpr (call $lexpr_leventry_ev (local.get $entry)))
+            (call $ec6_emit_i32_store)))
         (local.set $j (i32.add (local.get $j) (i32.const 1)))
-        (br $iter))))
+        (br $iter)))
+    ;; SENTINEL key=0 @ sname + 8 + 4*nc + 8*n
+    (call $ec6_emit_dynamic_ev_addr (local.get $sname)
+      (i32.mul (i32.const 8) (local.get $n)))
+    (call $ec6_emit_i32_const_lit (i32.const 0))
+    (call $ec6_emit_i32_store))

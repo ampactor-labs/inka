@@ -185,6 +185,17 @@
   ;; sentinel — handles are >0, so 0 is unambiguously "no enclosing lambda".
   (global $lower_current_lambda_h_g (mut i32) (i32.const 0))
 
+  ;; The enclosing lambda's FLOW-CLOSURE row, carried as frame state beside its
+  ;; handle (the $ls_set_fn_name save/set/restore idiom). The lambda seam's PLACE
+  ;; ($lower_lambda's closure-evidence) and READ ($lower_ev_slot_raw /
+  ;; $lower_compute_ev_index_for_effect, while this is the active lambda) both read
+  ;; THIS one value — computed ONCE at frame entry where body+handle are in scope —
+  ;; so place==read by construction with no handle→row cache to desync (the seed
+  ;; has no program fabric to re-resolve the body from the handle, so the row is
+  ;; carried, not re-derived; Carried-Truth — the seed mirror of the wheel's
+  ;; on-demand lambda_escaping_row(graph_node_body(h))).
+  (global $lower_current_lambda_row_g (mut i32) (i32.const 0))
+
   ;; Hβ.first-light.tier2-perform-or-env-scan — default-handler-per-op
   ;; map populated at HandlerDeclStmt-time. Each entry is a 2-record
   ;; {op_name, handler_name}. lower_resolve_handler_for_op falls back
@@ -765,6 +776,16 @@
   ;; graph-derived coverage $handler_covers_ename reads. Memoized per ename across
   ;; the compile (the cached cursor — the env is immutable at lower-time).
   (global $hcount_cache_g (mut i32) (i32.const 0))   ;; assoc list [ename@0][count@1]
+
+  ;; The INSTALL SET — handler names that actually appear in a `~> h` install
+  ;; edge across the program (collected during the escaping pre-pass at each PTee
+  ;; node). The singleton-home gate counts INSTALLED coverers, not DECLARED ones:
+  ;; `emit_memory_bump` + `emit_memory_arena` both DECLARE coverage of EmitMemory,
+  ;; but only one is `~>`-installed — so the decl-count is 2 (ambiguous → floor)
+  ;; while the install-count is 1 (resolve to its home). Follow the edge the `~>`
+  ;; drew (Carried-Truth), never the declaration census.
+  (global $lower_install_set_g (mut i32) (i32.const 0))     ;; buffer of installed handler names
+  (global $lower_install_count_g (mut i32) (i32.const 0))   ;; logical count (buffer-counter: len() is CAPACITY, not count)
   (func $handler_count_for_ename (param $ename i32) (result i32)
     (local $cache i32) (local $cn i32) (local $ci i32) (local $entry i32)
     (local $scope_idx i32) (local $frame i32) (local $buf i32)
@@ -802,7 +823,11 @@
                   (i32.eq (call $tag_of (local.get $kind)) (global.get $schemekind_handler_tag)))
               (then
                 (local.set $hname (call $env_binding_name (local.get $binding)))
-                (if (call $handler_covers_ename (local.get $hname) (local.get $ename))
+                ;; Count INSTALLED coverers only (the `~>` edge), not every decl:
+                ;; emit_memory_bump + emit_memory_arena both DECLARE EmitMemory
+                ;; coverage, but only the installed one resolves to a home.
+                (if (i32.and (call $handler_covers_ename (local.get $hname) (local.get $ename))
+                             (call $is_installed (local.get $hname)))
                   (then (local.set $count (i32.add (local.get $count) (i32.const 1)))))))
             (br $binding_loop)))
         (br $scope_loop)))
@@ -869,6 +894,18 @@
     (global.set $lower_arm_ev_names_g (local.get $names))
     (global.set $lower_arm_ev_len_g (i32.add (local.get $n) (i32.const 1)))
     (local.get $n))
+
+  ;; ─── $lower_arm_ev_note — record an effect into the arm-ev SET ────────
+  ;; Mirror of src/lower.mn arm_ev_note. Append-once (membership, no index) the
+  ;; effect an arm body performs, so the enclosing install's
+  ;; $lower_captured_evs_for threads a keyed entry for it. The arm's LEvPerform
+  ;; KEY-SCANS that region, so only membership matters — no positional index is
+  ;; kept (the position-as-the-bug cure). $lower_arm_ev_index_for is the
+  ;; append-once primitive; its returned index is now vestigial (dropped).
+  ;; Active-gated: outside an arm body (inactive) → no-op.
+  (func $lower_arm_ev_note (export "lower_arm_ev_note") (param $ename i32)
+    (if (i32.eqz (call $lower_arm_ev_active)) (then (return)))
+    (drop (call $lower_arm_ev_index_for (local.get $ename))))
 
   ;; Close the collection: register (discriminator → names), deactivate.
   (func $lower_arm_ev_end (param $discriminator i32)

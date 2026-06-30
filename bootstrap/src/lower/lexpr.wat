@@ -101,14 +101,16 @@
   ;;   330 = LFeedback          arity 3  (handle, body, spec)           [<~ verb; LF substrate]
   ;;   331 = LPerform           arity 3  (handle, op_name, args)        [direct-call form; H1 monomorphic]
   ;;   332 = LHandle            arity 3  (handle, body, arms)
-  ;;   333 = LEvPerform         arity 4  (handle, op_name, slot_idx, args)
+  ;;   333 = LEvPerform         arity 5  (handle, op_name, effect_key, op_slot, args)  [keyed evidence dispatch]
   ;;   334 = LFieldLoad         arity 3  (handle, record, offset_bytes)
+  ;;   337 = LEvRef             arity 2  (handle, effect_key)                          [forward own evidence by KEY]
+  ;;   341 = LEvEntry           arity 2  (effect_key, ev)                              [a keyed captured-ev entry]
+  ;;   342 = LUnresolvedEvidence arity 2 (handle, effect_key)                          [typed-absence bottom → (unreachable)]
   ;;
-  ;;   335-349 reserved for future LowExpr variants (15 slots; per
-  ;;          Anchor 6 substrate-vocabulary discipline — every future
-  ;;          LowIR shape lands inside this contiguous region so
-  ;;          $tag_of dispatch on `300 <= t && t <= 349` cleanly
-  ;;          identifies a LowExpr without per-variant scan).
+  ;;   343-349 reserved for future LowExpr variants (per Anchor 6
+  ;;          substrate-vocabulary discipline — every future LowIR shape
+  ;;          lands inside this contiguous region so $tag_of dispatch on
+  ;;          `300 <= t && t <= 349` cleanly identifies a LowExpr).
   ;;
   ;; Tag uniqueness across the heap — extends ty.wat:131-145:
   ;;   0-99       runtime sentinels (list/record/etc.)
@@ -121,8 +123,9 @@
   ;;   260-262    Ownership sentinels
   ;;   280-281    lower-private LOCAL_ENTRY / CAPTURE_ENTRY (state.wat)
   ;;   282-299    reserved future lower-private
-  ;;   300-334    LowExpr variants (this chunk)
-  ;;   335-349    reserved future LowExpr
+  ;;   300-342    LowExpr variants (this chunk; 337=LEvRef, 341=LEvEntry,
+  ;;              342=LUnresolvedEvidence are the keyed-evidence additions)
+  ;;   343-349    reserved future LowExpr
   ;;
   ;; Forbidden patterns audited (per Hβ-lower-substrate.md §6 +
   ;; project-wide drift modes):
@@ -179,6 +182,11 @@
   (func $lexpr_handle (export "lexpr_handle") (param $r i32) (result i32)
     (if (i32.eq (call $tag_of (local.get $r)) (i32.const 313))
       (then (return (i32.const 0))))
+    ;; LEvEntry(341) field 0 is the effect-KEY (string), not a handle — the
+    ;; source handle lives on the resolved evidence (field 1). Mirror of the
+    ;; wheel's `LEvEntry(_, ev) => lower_handle_of(ev)`.
+    (if (i32.eq (call $tag_of (local.get $r)) (i32.const 341))
+      (then (return (call $lexpr_handle (call $record_get (local.get $r) (i32.const 1))))))
     (call $record_get (local.get $r) (i32.const 0)))
 
   ;; ─── 300 = LConst(handle, value) — arity 2 ────────────────────────
@@ -838,30 +846,67 @@
         (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
 
-  ;; ─── 337 = LEvSlotRef(handle, ev_index) — arity 2 ───────────────────
-  ;; Forward the current fn's evidence slot `ev_index` by reference. Emits
-  ;; a load of __state's ev region:
-  ;;   (local.get $__state)(i32.load offset=8 + 4*body_capture_count + 4*ev_index)
-  ;; body_capture_count is resolved at emit time ($emit_body_captures_count,
-  ;; the evidence fence at __state[4]); ev_index is the effect's slot among
-  ;; the current fn's open-row effects (0 in the single-open-effect L1 scope;
-  ;; the multi-effect ev_index→effect map is the named peer
-  ;; Hβ.lower.multi-effect-ev-index-map). This IS the polymorphic-scope
-  ;; forward of $derive_ev_slots: by the row-typing invariant, a perform
-  ;; whose effect has no lexical handler is open in the current fn's row, so
-  ;; its evidence (the handler record pointer) already sits in the current
-  ;; fn's own ev-slot — forwarded by reference into the callee's record.
-  ;; Per protocol_reflexive_interiority.md: the forward is an interior read
-  ;; of the record threaded into __state, never a global default guess.
-  (func $lexpr_make_levslotref (export "lexpr_make_levslotref")
-        (param $h i32) (param $ev_index i32) (result i32)
+  ;; ─── 337 = LEvRef(handle, effect_key) — arity 2 ─────────────────────
+  ;; Forward THIS fn's evidence for an effect by IDENTITY (the effect-name
+  ;; KEY string), never a positional slot. emit's $ev_lookup key-scans
+  ;; __state's captured_evs region (based at 8+4*fence) for the key's interned
+  ;; offset, returning the [record][base] entry the caller threaded in. The
+  ;; caller fills the SAME key, so adding/removing a sibling effect shuffles
+  ;; nothing (the position-as-the-bug cure). Mirror of src/lower.mn
+  ;; LEvRef(Int, String) — the polymorphic-scope companion of $derive_ev_slots'
+  ;; keyed LEvEntry. Field 0 = handle, field 1 = effect_key (string).
+  (func $lexpr_make_levref (export "lexpr_make_levref")
+        (param $h i32) (param $ename i32) (result i32)
     (local $r i32)
     (local.set $r (call $make_record (i32.const 337) (i32.const 2)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
-    (call $record_set (local.get $r) (i32.const 1) (local.get $ev_index))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $ename))
     (local.get $r))
 
-  (func $lexpr_levslotref_ev_index (export "lexpr_levslotref_ev_index")
+  (func $lexpr_levref_ename (export "lexpr_levref_ename")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 1)))
+
+  ;; ─── 341 = LEvEntry(effect_key, ev) — arity 2 ───────────────────────
+  ;; A keyed captured-ev entry: the effect's IDENTITY (key, a string) paired
+  ;; with its resolved evidence (LLocal / LGlobal / LEvRef). emit writes the
+  ;; self-describing [key][record][base] region by walking these; a perform's
+  ;; $ev_lookup key-scan matches `key` by interned-offset i32.eq. The list of
+  ;; these IS the captured_evs region — its ORDER carries no meaning (a sibling
+  ;; effect appearing shuffles no key). Field 0 = key (String), 1 = ev (LowExpr).
+  ;; Mirror of src/lower.mn LEvEntry(String, LowExpr). Tag 341: next free past
+  ;; LFnRef(340) in the contiguous LowExpr region.
+  (func $lexpr_make_leventry (export "lexpr_make_leventry")
+        (param $key i32) (param $ev i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 341) (i32.const 2)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $key))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $ev))
+    (local.get $r))
+
+  (func $lexpr_leventry_key (export "lexpr_leventry_key")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 0)))
+
+  (func $lexpr_leventry_ev (export "lexpr_leventry_ev")
+        (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 1)))
+
+  ;; ─── 342 = LUnresolvedEvidence(handle, effect_key) — arity 2 ────────
+  ;; The typed-absence bottom: an effect with NO resolvable handler anywhere
+  ;; up the install chain (a genuine E_HandlerUninstallable). NOT a slot-0
+  ;; fabrication — slots no longer exist, so the wrong move is unsayable; emit
+  ;; projects it to (unreachable) (PLAN §0). Mirror of src/lower.mn
+  ;; LUnresolvedEvidence(Int, String). Field 0 = handle, 1 = effect_key.
+  (func $lexpr_make_lunresolvedevidence (export "lexpr_make_lunresolvedevidence")
+        (param $h i32) (param $ename i32) (result i32)
+    (local $r i32)
+    (local.set $r (call $make_record (i32.const 342) (i32.const 2)))
+    (call $record_set (local.get $r) (i32.const 0) (local.get $h))
+    (call $record_set (local.get $r) (i32.const 1) (local.get $ename))
+    (local.get $r))
+
+  (func $lexpr_lunresolvedevidence_ename (export "lexpr_lunresolvedevidence_ename")
         (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 1)))
 
@@ -935,30 +980,30 @@
   (func $lexpr_lhandle_arms (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
 
-  ;; ─── 333 = LEvPerform(handle, op_name, ev_slot, op_slot, args) — arity 5 ─
-  ;; Per src/lower.mn LEvPerform(Int, String, Int, Int, List). Two indices,
-  ;; both projected from the effect ROW (the Boolean effect algebra cashing
-  ;; out as the runtime evidence layout — Hβ.lower.multi-effect-ev-index-map):
-  ;;   - ev_slot: WHICH forwarded handler record (= which effect). The
-  ;;     effect's canonical index in the CURRENT fn's row (row_names is
-  ;;     sorted-lex, so caller and callee agree by construction). Emit reads
-  ;;     the record from __state[8 + 4*captures + 4*ev_slot].
-  ;;   - op_slot: WHICH arm within that record. The op's index in its
-  ;;     effect's EffectDeclKind op list. Emit reads the arm fn-idx fence-
-  ;;     relative: record[8 + 4*nstate + 4*op_slot].
-  ;; This is Koka-style evidence-vector indexing (JFP 2022) derived from a
-  ;; richer row (+ - & ! proves effect ABSENCE) and dispatched O(1) (vs
-  ;; OCaml-5 multicore's O(depth) handler-stack search). Only polymorphic
-  ;; perform sites (handler not lexically in scope) become LEvPerform;
-  ;; lexically-resolved sites stay LPerform-with-state (tag 331).
+  ;; ─── 333 = LEvPerform(handle, op_name, effect_key, op_slot, args) — arity 5 ─
+  ;; Per src/lower.mn LEvPerform(Int, String, String, Int, List). The dispatch
+  ;; reads evidence by IDENTITY, not position:
+  ;;   - effect_key: the effect NAME (a string). emit's $ev_lookup key-scans
+  ;;     __state's captured_evs region for this key's interned offset, returning
+  ;;     the [record][base] ENTRY the caller threaded in. A sibling effect
+  ;;     appearing shuffles no key (the position-as-the-bug cure) — there is no
+  ;;     row index to keep stable across instantiation.
+  ;;   - op_slot: WHICH arm within that record. A STABLE position — the op's
+  ;;     index in its effect's IMMUTABLE decl-order op-list (NOT a row position).
+  ;;     Emit reads the arm fn-idx fence-relative: record[8 + 4*nstate +
+  ;;     4*(base + op_slot)].
+  ;; Koka-style evidence indexing (JFP 2022) over a richer row (+ - & ! proves
+  ;; effect ABSENCE), dispatched O(1). Only polymorphic perform sites (handler
+  ;; not lexically in scope) become LEvPerform; lexically-resolved sites stay
+  ;; LPerform-with-state (tag 331).
   (func $lexpr_make_levperform (param $h i32) (param $op_name i32)
-                                (param $ev_slot i32) (param $op_slot i32) (param $args i32)
+                                (param $ekey i32) (param $op_slot i32) (param $args i32)
                                 (result i32)
     (local $r i32)
     (local.set $r (call $make_record (i32.const 333) (i32.const 5)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
     (call $record_set (local.get $r) (i32.const 1) (local.get $op_name))
-    (call $record_set (local.get $r) (i32.const 2) (local.get $ev_slot))
+    (call $record_set (local.get $r) (i32.const 2) (local.get $ekey))
     (call $record_set (local.get $r) (i32.const 3) (local.get $op_slot))
     (call $record_set (local.get $r) (i32.const 4) (local.get $args))
     (local.get $r))
@@ -966,8 +1011,8 @@
   (func $lexpr_levperform_op_name (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 1)))
 
-  ;; ev_slot — which forwarded handler record (effect's index in the fn's row).
-  (func $lexpr_levperform_ev_slot (param $r i32) (result i32)
+  ;; effect_key — the effect NAME (string); emit's $ev_lookup key-scans for it.
+  (func $lexpr_levperform_ekey (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 2)))
 
   ;; op_slot — which arm within the handler record (op's index in its effect).

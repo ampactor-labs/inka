@@ -386,11 +386,9 @@ fn render_pat_list(pats, sep) with GraphRead + Memory + Alloc + !Mutate = {
 fn render_param_list(params) with Memory + Alloc = {
   if len(params) == 0 { "" }
   else if len(params) == 1 {
-    let TParam(name, _, _, _, _) = list_head(params)
-    name
+    param_name(list_head(params))
   } else {
-    let TParam(name, _, _, _, _) = list_head(params)
-    "{name}, {render_param_list(list_tail(params))}"
+    "{param_name(list_head(params))}, {render_param_list(list_tail(params))}"
   }
 }
 

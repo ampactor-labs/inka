@@ -313,9 +313,16 @@
       (then
         (drop (call $list_set (local.get $tup) (i32.const 1)
           (call $nexpr
-            (call $mk_BlockExpr
+            ;; Route through $desugar_block (NOT raw $mk_BlockExpr): a
+            ;; destructure-let `let (a,b) = binder` becomes `match binder {
+            ;; (a,b) => … }`, the ONE pattern-binding projection the seed lowers
+            ;; (LetStmt is PVar-only by construction — Lock #5). Mirrors the
+            ;; wheel's exprs_to_params (parser.mn:1401). Without it the synthesized
+            ;; PTuple let drops its binders → tuple-pattern lambda params trap.
+            (call $desugar_block
               (call $slice (local.get $lets) (i32.const 0) (local.get $lets_count))
-              (local.get $body))
+              (local.get $body)
+              (local.get $span))
             (local.get $span)))))
       (else
         (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $body)))))

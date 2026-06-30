@@ -1114,9 +1114,9 @@
     (call $emit_fn_reset)
     ;; Install this fn's ev fence (Hβ.emit.handler-record-ev-capture):
     ;; closures pass their captures count, handler arm fns pass
-    ;; nstate+total_arms, plain fns 0. $emit_levperform/$emit_levslotref
-    ;; read 8+4*fence+4*slot — the first caller of the until-now-dormant
-    ;; $emit_set_body_context.
+    ;; nstate+total_arms, plain fns 0. $emit_levperform/$emit_levref
+    ;; KEY-SCAN the captured_evs region based at 8+4*fence ($ev_lookup) —
+    ;; the first caller of the until-now-dormant $emit_set_body_context.
     (call $emit_set_body_context
       (call $lowfn_fence (local.get $fn_r)) (i32.const 0) (i32.const 0))
     ;; Register param names in fn-local ledger so emit_let_locals's

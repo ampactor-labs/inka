@@ -82,16 +82,50 @@
   (func $row_make_pure (result i32)
     (i32.const 150))   ;; sentinel; < HEAP_BASE
 
+  ;; $name_set_canonicalize — establish the name-set invariant the row algebra
+  ;; ($name_set_union / _diff / _inter — all sorted-merges) assumes: SORTED,
+  ;; UNIQUE, and NON-EMPTY names. The wheel maintains it via smart constructors
+  ;; (src/effects.mn mk_ef_open = EfOpen(name_set_canonicalize(names), v)) with a
+  ;; correct union-find row algebra that never mints an empty name; the seed's raw
+  ;; constructors skipped it AND its weaker inference can mint an empty-named entry
+  ;; while resolving a recursive fn's self-referential row. Left in, that empty
+  ;; name became a keyed evidence entry $ev_lookup resolved to 0 → a call_indirect
+  ;; through a null record (the occurs_in/op_each_handler_yield OOB). Fold union
+  ;; over singletons (each insert lands sorted + dedups) and DROP empty names: an
+  ;; effect with no name is structurally non-dispatchable (no handler can resolve
+  ;; it). i32.load(eff_name_str(e)) is the name string's length word; 0 ⇒ empty.
+  (func $name_set_canonicalize (param $names i32) (result i32)
+    (local $n i32) (local $i i32) (local $acc i32) (local $single i32) (local $elem i32)
+    (if (i32.eqz (local.get $names)) (then (return (call $make_list (i32.const 0)))))
+    (local.set $n (call $len (local.get $names)))
+    (local.set $acc (call $make_list (i32.const 0)))
+    (local.set $i (i32.const 0))
+    (block $done (loop $each
+      (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+      (local.set $elem (call $list_index (local.get $names) (local.get $i)))
+      (if (i32.eqz (i32.load (call $eff_name_str (local.get $elem))))
+        (then
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br $each)))
+      (local.set $single (call $make_list (i32.const 1)))
+      (drop (call $list_set (local.get $single) (i32.const 0) (local.get $elem)))
+      (local.set $acc (call $name_set_union (local.get $acc) (local.get $single)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $each)))
+    (local.get $acc))
+
   (func $row_make_closed (param $names i32) (result i32)
     (local $r i32)
     (local.set $r (call $make_record (i32.const 151) (i32.const 1)))
-    (call $record_set (local.get $r) (i32.const 0) (local.get $names))
+    (call $record_set (local.get $r) (i32.const 0)
+      (call $name_set_canonicalize (local.get $names)))
     (local.get $r))
 
   (func $row_make_open (param $names i32) (param $rowvar i32) (result i32)
     (local $r i32)
     (local.set $r (call $make_record (i32.const 152) (i32.const 2)))
-    (call $record_set (local.get $r) (i32.const 0) (local.get $names))
+    (call $record_set (local.get $r) (i32.const 0)
+      (call $name_set_canonicalize (local.get $names)))
     (call $record_set (local.get $r) (i32.const 1) (local.get $rowvar))
     (local.get $r))
 

@@ -22,6 +22,13 @@ cd "$ROOT"
 BASELINE="tools/verify-baseline.txt"
 WT="${WASMTIME_BIN:-$HOME/.wasmtime/bin/wasmtime}"
 WTFLAGS=(run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y)
+# The runtime trio IS the standard library — every real .mn program links it, so
+# a micro compiled WITHOUT it is the abnormal case, not the default. Link it for
+# every micro: a micro that calls str_concat/str_eq (strings) or ev_lookup (the
+# keyed-evidence dispatch scan, runtime/memory.mn) gets its def; one that uses
+# neither pays nothing (reachability-from-main drops the unused). A micro failing
+# only because the stdlib was withheld is the harness lying, not a regression.
+RTLIBS=(lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn)
 
 say() { printf '%s\n' "$*"; }
 fail=0
@@ -38,7 +45,7 @@ say "✓ seed builds"
 # 2. Micro battery — each line `micro:NAME=EXPECTED_EXIT` in the baseline.
 while IFS= read -r line; do
   name=${line#micro:}; m=${name%%=*}; want=${name#*=}
-  out=$(tools/run-micro.sh "tests/micros/mn-${m}.mn" "$want" 2>/dev/null | tail -1)
+  out=$(tools/run-micro.sh "tests/micros/mn-${m}.mn" "$want" "${RTLIBS[@]}" 2>/dev/null | tail -1)
   if [[ "$out" == PASS* ]]; then say "✓ micro $m=$want"; else say "✗ micro $m: ${out:-no output}"; fail=1; fi
 done < <(grep -E '^micro:' "$BASELINE")
 

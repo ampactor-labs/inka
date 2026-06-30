@@ -2939,7 +2939,7 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   for_each((arm) => {
     env_scope_enter()
     bind_handler_config_params(config_tparams, hname)
-    bind_handler_state_names(state_binds, hname, span_of_node(arm.body))
+    bind_handler_state_names(state_binds, hname, span)
     infer_one_handler_arm(arm, s_h, payload_h)   // drift-audit: ignore — s_h (result) and payload_h (effect payload) are distinct, not parallel arrays
     env_scope_exit()
   }, arms)

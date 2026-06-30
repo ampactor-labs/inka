@@ -1369,17 +1369,11 @@
             (return (call $field_byte_offset
                       (local.get $merged) (local.get $field_name)
                       (i32.const 0) (call $len (local.get $merged))))))))
-    ;; NRowFree (63) / any non-NRowBound row — mirror the WHEEL exactly
-    ;; (src/lower.mn:1873): the TRecordOpen arm DISCARDS the rowvar and uses the
-    ;; PARTIAL accessed-field list directly. For a fully-accessed record (every
-    ;; field read — e.g. `arm`'s args/body/op_name) the partial list IS the
-    ;; complete sorted set, so the offset is exact. The rowvar-chase (NRowBound
-    ;; merge above) is a seed-only enhancement; the wheel never had it. This
-    ;; deletes the divergent -1 floor that made m2's register_handler emit an
-    ;; unconditional (unreachable) at `arm.body`.
-    (return_call $field_byte_offset
-      (local.get $partial) (local.get $field_name)
-      (i32.const 0) (call $len (local.get $partial))))
+    ;; NRowFree (63) — row not yet resolved → the FULL field list is unknown,
+    ;; so NO offset is provable (a residual field could sort before this one).
+    ;; Return -1 (loud (unreachable) at emit), never a silent 0 that reads word 0
+    ;; (a graph pointer). Mirrors src/lower.mn's no-silent-fallback discipline.
+    (i32.const -1))
 
   ;; $merge_sorted_fields — merge two alphabetically-sorted field-pair
   ;; lists into one. Both inputs are List of field_pair records (tag 203)

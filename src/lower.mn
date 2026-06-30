@@ -872,17 +872,17 @@ fn flow_edges_expr(e) = match e {
   LitString(_) => ([], []),
   LitBool(_)   => ([], []),
   LitUnit      => ([], []),
-  // VarRef is a LEAF. The AVAILABILITY flow-edge — adding a value-referenced
-  // global FnScheme so the enclosing fn's escaping row gains the slot LFnRef
-  // forwards — is the blocked peer Hβ.lower.value-fn-availability-edge: enabling
-  // it inflates the transitive flow-closure enough that the arm-ev capture
-  // machinery accumulates an unbounded captured_evs list for nested-handler fns
-  // (edit_run's 13-deep ~> chain), a real emit blowup (the seed overflows its
-  // 4 MiB per-fn scratch; the wheel's heap-buffer emit would emit a 46k-slot
-  // handler record — a miscompile either way). The LFnRef record-sizing (the
-  // table-OOB fix) lands WITHOUT this edge; the evidence-CONTENT correctness it
-  // provides is gated on first rooting the arm-ev accumulation bug.
-  VarRef(_) => ([], []),
+  // VarRef contributes its name to the availability set — a value-referenced
+  // global FnScheme makes the enclosing fn's escaping row gain the slot the
+  // committed LFnRef forwards, so derive_ev_slots resolves to REAL evidence
+  // content (the §7-thread availability half, peer
+  // Hβ.lower.value-fn-availability-edge, now LIVE). Names that resolve to a
+  // local or a non-effecting global add nothing (the env lookup is empty), so
+  // the set stays bounded by distinct effect-forwarding fns. The transitive-
+  // fixpoint inflation that once overflowed the seed's arm-ev capture is rooted:
+  // lower_arm_ev_index_for reads its own logical counter, not the
+  // capacity-as-length list header (the Carried-Truth substrate fix).
+  VarRef(name) => ([name], []),
   BinOpExpr(_, l, r) => flow_join(flow_edges(l), flow_edges(r)),
   UnaryOpExpr(_, inner) => flow_edges(inner),
   CallExpr(f, args) => {

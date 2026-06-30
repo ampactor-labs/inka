@@ -21054,12 +21054,21 @@
   ;; to every install site of that handler.
   (global $lower_arm_ev_active_g (mut i32) (i32.const 0))
   (global $lower_arm_ev_names_g  (mut i32) (i32.const 0))
+  ;; Own logical-length counter for the arm-ev names buffer — the sibling
+  ;; of $lower_hev_len_g for $lower_hev_entries_g. The names buffer is a
+  ;; len()-as-counter caller of $list_extend_to, whose realloc-doubling
+  ;; path leaves the list's count field at CAPACITY (the load-bearing
+  ;; amortization the graph weaves depend on, never to be "fixed" there).
+  ;; Reading len(names) as the logical count is the Carried-Truth bug —
+  ;; track the real count here, the same way the entries buffer does.
+  (global $lower_arm_ev_len_g    (mut i32) (i32.const 0))
   (global $lower_hev_entries_g   (mut i32) (i32.const 0))
   (global $lower_hev_len_g       (mut i32) (i32.const 0))
 
   (func $lower_arm_ev_begin
     (global.set $lower_arm_ev_active_g (i32.const 1))
-    (global.set $lower_arm_ev_names_g (call $make_list (i32.const 0))))
+    (global.set $lower_arm_ev_names_g (call $make_list (i32.const 0)))
+    (global.set $lower_arm_ev_len_g (i32.const 0)))
 
   (func $lower_arm_ev_active (export "lower_arm_ev_active") (result i32)
     (global.get $lower_arm_ev_active_g))
@@ -21070,7 +21079,7 @@
         (param $ename i32) (result i32)
     (local $names i32) (local $n i32) (local $i i32)
     (local.set $names (global.get $lower_arm_ev_names_g))
-    (local.set $n (call $len (local.get $names)))
+    (local.set $n (global.get $lower_arm_ev_len_g))
     (local.set $i (i32.const 0))
     (block $found
       (loop $iter
@@ -21084,6 +21093,7 @@
                         (i32.add (local.get $n) (i32.const 1))))
     (drop (call $list_set (local.get $names) (local.get $n) (local.get $ename)))
     (global.set $lower_arm_ev_names_g (local.get $names))
+    (global.set $lower_arm_ev_len_g (i32.add (local.get $n) (i32.const 1)))
     (local.get $n))
 
   ;; Close the collection: register (discriminator → names), deactivate.
@@ -21093,6 +21103,12 @@
       (then (global.set $lower_hev_entries_g (call $make_list (i32.const 0)))))
     (local.set $entry (call $make_record (i32.const 215) (i32.const 2)))
     (call $record_set (local.get $entry) (i32.const 0) (local.get $discriminator))
+    ;; Truncate the names buffer's header to its LOGICAL length before it
+    ;; escapes to install sites — $list_extend_to's doubling path may have
+    ;; left the count field at capacity, but only the first $lower_arm_ev_len_g
+    ;; entries are real. Now every downstream len(names) (e.g.
+    ;; $lower_captured_evs_for) reads the true count.
+    (i32.store (global.get $lower_arm_ev_names_g) (global.get $lower_arm_ev_len_g))
     (call $record_set (local.get $entry) (i32.const 1)
       (global.get $lower_arm_ev_names_g))
     (local.set $n (global.get $lower_hev_len_g))
@@ -21103,7 +21119,8 @@
       (local.get $entry)))
     (global.set $lower_hev_len_g (i32.add (local.get $n) (i32.const 1)))
     (global.set $lower_arm_ev_active_g (i32.const 0))
-    (global.set $lower_arm_ev_names_g (i32.const 0)))
+    (global.set $lower_arm_ev_names_g (i32.const 0))
+    (global.set $lower_arm_ev_len_g (i32.const 0)))
 
   ;; The effects a handler's arm bodies perform — read at install sites.
   ;; hname 0 (anonymous handle-expr) → empty list.
@@ -25570,16 +25587,18 @@
   (func $escaping_walk_expr (param $e i32)
     (local $tag i32) (local $callee i32)
     (local.set $tag (call $tag_of (local.get $e)))
-    ;; VarRef (tag 85) is a LEAF here. The AVAILABILITY flow-edge — adding a
-    ;; value-referenced global FnScheme so the enclosing fn's escaping row gains
-    ;; the slot the LFnRef forwards — is the blocked peer
-    ;; Hβ.lower.value-fn-availability-edge: enabling it inflates the transitive
-    ;; fixpoint enough that the seed's arm-ev collection accumulates an unbounded
-    ;; captured_evs list (~46k entries) for nested-handler fns (edit_run's
-    ;; 13-deep ~> chain), overflowing the 4 MiB per-fn emit scratch. The LFnRef
-    ;; record-sizing (the table-OOB fix) lands WITHOUT this edge; the evidence-
-    ;; CONTENT correctness it provides is gated on first rooting the arm-ev
-    ;; accumulation bug in lower_arm_ev_index_for / lower_ev_slot_raw.
+    ;; VarRef (tag 85): contribute the name to the availability set — mirror of
+    ;; the wheel's `VarRef(name) => ([name], [])`. A value-referenced global
+    ;; FnScheme makes the enclosing fn's escaping row gain the slot the committed
+    ;; LFnRef forwards, so its evidence resolves to REAL content (the §7-thread
+    ;; availability half, peer Hβ.lower.value-fn-availability-edge, now LIVE).
+    ;; The name is at offset 4 of the unwrapped VarRef expr (this $e is already
+    ;; the inner expr, not an N-wrapper — so a direct load, not flow_callee_name
+    ;; which unwraps). Non-effecting names add nothing (bounded). The transitive-
+    ;; fixpoint inflation that once overflowed arm-ev capture is rooted by the
+    ;; lower_arm_ev_index_for own-counter fix (Carried-Truth: capacity != length).
+    (if (i32.eq (local.get $tag) (i32.const 85)) (then   ;; VarRef name@4
+      (call $esc_emit_callee (i32.load offset=4 (local.get $e))) (return)))
     (if (i32.eq (local.get $tag) (i32.const 86)) (then   ;; BinOpExpr op@4 l@8 r@12
       (call $escaping_walk (i32.load offset=8 (local.get $e)))
       (call $escaping_walk (i32.load offset=12 (local.get $e))) (return)))

@@ -1411,16 +1411,18 @@
   (func $escaping_walk_expr (param $e i32)
     (local $tag i32) (local $callee i32)
     (local.set $tag (call $tag_of (local.get $e)))
-    ;; VarRef (tag 85) is a LEAF here. The AVAILABILITY flow-edge — adding a
-    ;; value-referenced global FnScheme so the enclosing fn's escaping row gains
-    ;; the slot the LFnRef forwards — is the blocked peer
-    ;; Hβ.lower.value-fn-availability-edge: enabling it inflates the transitive
-    ;; fixpoint enough that the seed's arm-ev collection accumulates an unbounded
-    ;; captured_evs list (~46k entries) for nested-handler fns (edit_run's
-    ;; 13-deep ~> chain), overflowing the 4 MiB per-fn emit scratch. The LFnRef
-    ;; record-sizing (the table-OOB fix) lands WITHOUT this edge; the evidence-
-    ;; CONTENT correctness it provides is gated on first rooting the arm-ev
-    ;; accumulation bug in lower_arm_ev_index_for / lower_ev_slot_raw.
+    ;; VarRef (tag 85): contribute the name to the availability set — mirror of
+    ;; the wheel's `VarRef(name) => ([name], [])`. A value-referenced global
+    ;; FnScheme makes the enclosing fn's escaping row gain the slot the committed
+    ;; LFnRef forwards, so its evidence resolves to REAL content (the §7-thread
+    ;; availability half, peer Hβ.lower.value-fn-availability-edge, now LIVE).
+    ;; The name is at offset 4 of the unwrapped VarRef expr (this $e is already
+    ;; the inner expr, not an N-wrapper — so a direct load, not flow_callee_name
+    ;; which unwraps). Non-effecting names add nothing (bounded). The transitive-
+    ;; fixpoint inflation that once overflowed arm-ev capture is rooted by the
+    ;; lower_arm_ev_index_for own-counter fix (Carried-Truth: capacity != length).
+    (if (i32.eq (local.get $tag) (i32.const 85)) (then   ;; VarRef name@4
+      (call $esc_emit_callee (i32.load offset=4 (local.get $e))) (return)))
     (if (i32.eq (local.get $tag) (i32.const 86)) (then   ;; BinOpExpr op@4 l@8 r@12
       (call $escaping_walk (i32.load offset=8 (local.get $e)))
       (call $escaping_walk (i32.load offset=12 (local.get $e))) (return)))

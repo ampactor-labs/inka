@@ -2636,12 +2636,22 @@ fn mint_params(params, owner_name) = map((indexed) => {
 }, enumerate(params))
 
 fn build_param_types(params, handles) = map((pair) => {
-  let (TParam(name, _, auth, res, default), h) = pair
+  let (TParam(name, declared, auth, res, default), h) = pair
+  // A DECLARED concrete annotation (`name: String`, a refinement, a repr pin)
+  // is an Intent Boundary (SYNTAX.md §"The Intent Boundary Rule") — carry it
+  // into the registered sig so the body reads the pinned type LIVE. env_find's
+  // `name: String` makes `k == name` resolve to str_eq, not polymorphic
+  // pointer-eq (the op-name lookup that gates register_handler). A bare TVar
+  // (unannotated, or a type-param `x: a`) keeps the fresh placeholder h —
+  // quantified, so HM inference is preserved for the un-pinned case.
   // Preserve the default — it travels with the param's type into the
-  // generalized scheme so call sites resolving against TFun's params
-  // can read it to fill an omitted arg (SYNTAX.md §«Default parameter
-  // values»). Dropping it here would lose the default at every call.
-  TParam(name, TVar(h), auth, res, default)
+  // generalized scheme so call sites resolving against TFun's params can read
+  // it to fill an omitted arg (SYNTAX.md §«Default parameter values»).
+  let param_ty = match declared {
+    TVar(_) => TVar(h),
+    _       => declared
+  }
+  TParam(name, param_ty, auth, res, default)
 }, zip(params, handles))
 
 fn build_inferred_params(handles) = map((h) =>

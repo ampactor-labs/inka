@@ -357,7 +357,7 @@ handler env_handler with entries = [], scopes = [] {
     }
 }
 
-fn env_find(entries, name) = {
+fn env_find(entries, name: String) = {
   if len(entries) == 0 { None }
   else {
     let (k, scheme, reason, kind) = list_head(entries)

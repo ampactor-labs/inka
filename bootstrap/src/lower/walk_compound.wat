@@ -461,43 +461,99 @@
       (loop $each
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $entry (call $list_index (local.get $fields) (local.get $i)))
-        (call $bind_pat_locals (call $record_get (local.get $entry) (i32.const 1)))
+        ;; PRecord field sub-pattern types floor (Hβ.lower.bind-handle-typed-subpattern)
+        (call $bind_pat_locals (call $record_get (local.get $entry) (i32.const 1)) (i32.const 0))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each))))
 
-  (func $bind_pat_locals_list (param $pats i32)
+  ;; $ty_handle_of — TVar(h) -> h, else 0 (robust to null/non-heap). The local
+  ;; carries a handle whose $lookup_ty resolves its element type, so ==/++/
+  ;; to_string dispatch structurally (str_eq for String). Mirrors fn-param
+  ;; $map_tparam_handles' tparam_handle.
+  (func $ty_handle_of (param $ty i32) (result i32)
+    (if (i32.lt_u (local.get $ty) (global.get $heap_base))
+      (then (return (i32.const 0))))
+    (if (i32.eq (call $ty_tag (local.get $ty)) (i32.const 104))   ;; TVar
+      (then (return (call $ty_tvar_handle (local.get $ty)))))
+    (i32.const 0))
+
+  ;; $ty_strip_to_tuple — chase a TVar Ty to its bound type (mirror the wheel's
+  ;; tuple_pat_strip). env_find's `list_head(entries)` types to a TVar bound to
+  ;; the entry TTuple; $lookup_ty resolves one NBound level but the bound Ty can
+  ;; itself be a TVar — chase until non-TVar (cycle-guarded at 32).
+  (func $ty_strip_to_tuple (param $ty i32) (result i32)
+    (local $guard i32)
+    (local.set $guard (i32.const 0))
+    (block $done
+      (loop $chase
+        (br_if $done (i32.ge_u (local.get $guard) (i32.const 32)))
+        (br_if $done (i32.lt_u (local.get $ty) (global.get $heap_base)))
+        (br_if $done (i32.ne (call $ty_tag (local.get $ty)) (i32.const 104)))   ;; not TVar
+        (local.set $ty (call $lookup_ty (call $ty_tvar_handle (local.get $ty))))
+        (local.set $guard (i32.add (local.get $guard) (i32.const 1)))
+        (br $chase)))
+    (local.get $ty))
+
+  ;; $bind_pat_locals_zip — each PTuple sub-pattern lands with its element TYPE
+  ;; (read live from the TTuple element list); elements past the list floor to 0.
+  (func $bind_pat_locals_zip (param $subs i32) (param $elems i32)
+    (local $n i32) (local $i i32) (local $elem_ty i32)
+    (local.set $n (call $len (local.get $subs)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $elem_ty (i32.const 0))
+        (if (i32.lt_u (local.get $i) (call $len (local.get $elems)))
+          (then (local.set $elem_ty (call $list_index (local.get $elems) (local.get $i)))))
+        (call $bind_pat_locals (call $list_index (local.get $subs) (local.get $i)) (local.get $elem_ty))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each))))
+
+  ;; $bind_pat_locals_floor — PCon-payload / PList-element sub-pattern types are
+  ;; the named peer Hβ.lower.bind-handle-typed-subpattern (additive); they floor
+  ;; to type 0 = i32.eq, byte-identical to the prior sentinel.
+  (func $bind_pat_locals_floor (param $pats i32)
     (local $n i32) (local $i i32)
     (local.set $n (call $len (local.get $pats)))
     (local.set $i (i32.const 0))
     (block $done
       (loop $each
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
-        (call $bind_pat_locals (call $list_index (local.get $pats) (local.get $i)))
+        (call $bind_pat_locals (call $list_index (local.get $pats) (local.get $i)) (i32.const 0))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each))))
 
-  (func $bind_pat_locals (param $pat i32)
-    (local $tag i32) (local $rest_opt i32) (local $rest_var i32)
+  (func $bind_pat_locals (param $pat i32) (param $ty i32)
+    (local $tag i32) (local $rest_opt i32) (local $rest_var i32) (local $strip i32)
     (if (i32.eq (local.get $pat) (i32.const 131))
       (then (return)))
     (if (i32.lt_u (local.get $pat) (global.get $heap_base))
       (then (unreachable)))
     (local.set $tag (call $tag_of (local.get $pat)))
+    ;; PVar (130) — carry the element type handle (the env_find str_eq fix).
     (if (i32.eq (local.get $tag) (i32.const 130))
       (then
-        (drop (call $ls_bind_local (i32.load offset=4 (local.get $pat)) (i32.const 0)))
+        (drop (call $ls_bind_local (i32.load offset=4 (local.get $pat))
+                                   (call $ty_handle_of (local.get $ty))))
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 133))
       (then
-        (call $bind_pat_locals_list (i32.load offset=8 (local.get $pat)))
+        (call $bind_pat_locals_floor (i32.load offset=8 (local.get $pat)))
         (return)))
+    ;; PTuple (134) — recurse each sub with its element TYPE from the (chased) TTuple.
     (if (i32.eq (local.get $tag) (i32.const 134))
       (then
-        (call $bind_pat_locals_list (i32.load offset=4 (local.get $pat)))
+        (local.set $strip (call $ty_strip_to_tuple (local.get $ty)))
+        (if (i32.and (i32.ge_u (local.get $strip) (global.get $heap_base))
+                     (i32.eq (call $ty_tag (local.get $strip)) (i32.const 106)))   ;; TTuple
+          (then (call $bind_pat_locals_zip (i32.load offset=4 (local.get $pat))
+                                           (call $ty_ttuple_elems (local.get $strip))))
+          (else (call $bind_pat_locals_floor (i32.load offset=4 (local.get $pat)))))
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 135))
       (then
-        (call $bind_pat_locals_list (i32.load offset=4 (local.get $pat)))
+        (call $bind_pat_locals_floor (i32.load offset=4 (local.get $pat)))
         ;; ALSO bind the `...rest` tail (offset 8 = Option<String>). The pattern
         ;; PROVED this binding; binding the element subs but not the tail left
         ;; every `rest` use UNRESOLVED (insert_descending, enforce_alt_binding_law).
@@ -526,7 +582,8 @@
           (then
             (call $bind_pat_locals
               (call $list_index (i32.load offset=4 (local.get $pat))
-                (i32.const 0)))))
+                (i32.const 0))
+              (i32.const 0))))
         (return))))
 
   (func $lower_pat_record_fields (param $fields i32) (param $field_idx i32) (param $scrut_h i32) (result i32)
@@ -702,7 +759,7 @@
         (local.set $pat      (call $list_index (local.get $arm) (i32.const 0)))
         (local.set $body_node(call $list_index (local.get $arm) (i32.const 1)))
         (local.set $cp       (call $ls_push_scope))
-        (call $bind_pat_locals (local.get $pat))
+        (call $bind_pat_locals (local.get $pat) (call $lookup_ty (local.get $scrut_h)))
         (local.set $lo_body  (call $lower_expr (local.get $body_node)))
         (call $ls_pop_scope (local.get $cp))
         (local.set $lo_pat   (call $lower_pat (local.get $pat) (local.get $scrut_h)))

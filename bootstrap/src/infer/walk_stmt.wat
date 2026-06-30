@@ -347,7 +347,7 @@
     (local $param_h i32) (local $param_handles i32)
     (local $ret_h i32) (local $row_h i32)
     (local $tparam_list i32) (local $fn_ty i32)
-    (local $reason i32)
+    (local $reason i32) (local $param_ann i32) (local $do_bind i32)
     ;; FnStmt: [tag=121][name][params][ret][effs][body]
     (local.set $name   (i32.load offset=4 (local.get $stmt)))
     (local.set $params (i32.load offset=8 (local.get $stmt)))
@@ -363,6 +363,26 @@
         (local.set $param_h (call $graph_fresh_ty
           (call $reason_make_located (local.get $span)
             (call $reason_make_inferred (i32.const 4056)))))   ;; "param"
+        ;; A DECLARED param annotation (`name: String`) is an Intent Boundary
+        ;; (SYNTAX.md §"The Intent Boundary Rule") — bind the placeholder to it
+        ;; so the REGISTERED sig carries the concrete type and the body reads it
+        ;; live (env_find's `name: String` makes `k == name` resolve to str_eq,
+        ;; not polymorphic pointer-eq — the op-lookup that gates register_handler).
+        ;; The no-annotation case is a TyVar parser-node (tag 206); leave it
+        ;; fresh so it quantifies (stays polymorphic). The heap-base guard keeps
+        ;; the tag-read off the nullary parser-types (TString=202 et al < heap).
+        (local.set $param_ann (i32.load offset=8
+          (call $list_index (local.get $params) (local.get $i))))
+        (local.set $do_bind (i32.const 1))
+        (if (i32.ge_u (local.get $param_ann) (global.get $heap_base))
+          (then
+            (if (i32.eq (i32.load (local.get $param_ann)) (i32.const 206))   ;; TyVar
+              (then (local.set $do_bind (i32.const 0))))))
+        (if (local.get $do_bind)
+          (then (call $graph_bind (local.get $param_h)
+                  (call $walk_stmt_parser_ty_to_ty (local.get $param_ann))
+                  (call $reason_make_located (local.get $span)
+                    (call $reason_make_declared (local.get $name))))))
         (drop (call $list_set (local.get $param_handles) (local.get $i)
                               (local.get $param_h)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))

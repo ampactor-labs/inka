@@ -362,6 +362,19 @@
             (return)))
         (local.set $left_ty (call $lookup_ty (local.get $left_h)))
         (local.set $left_ty_tag (call $ty_tag (local.get $left_ty)))
+        ;; CONSULT BOTH operands — `==` is symmetric. env_find's `k == name`
+        ;; carries the String on `name` (the param annotation), not the
+        ;; polymorphic destructure-local `k`. If the left didn't resolve to a
+        ;; sequence (TString/TList), adopt the RIGHT operand's type. str_eq if
+        ;; EITHER side is TString; a free TVar on both falls to flat i32.eq
+        ;; (never silent pointer-eq for a KNOWN sequence — no-silent-fallback).
+        (if (i32.and (i32.ne (local.get $left_ty_tag) (i32.const 102))
+                     (i32.ne (local.get $left_ty_tag) (i32.const 105)))
+          (then
+            (local.set $left_h (call $lexpr_handle (call $lexpr_lbinop_r (local.get $r))))
+            (if (i32.ne (local.get $left_h) (i32.const 0))
+              (then (local.set $left_ty_tag
+                      (call $ty_tag (call $lookup_ty (local.get $left_h))))))))
         (if (i32.eq (local.get $left_ty_tag) (i32.const 102))   ;; TString
           (then
             (call $ec6_emit_local_set_callee_closure)    ;; pop right → scratch

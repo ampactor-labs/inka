@@ -2087,7 +2087,7 @@ fn lower_stmt_as_expr(s, handle, span) = {
 fn lower_match_arms(scrut_h, arms) = map((arm) => {
   let (pat, body) = arm
   let cp = ls_push_scope()   // drift-audit: ignore — sequenced effectful scope checkpoint (LowerScope)
-  bind_pat_locals(pat)
+  bind_pat_locals(pat, lookup_ty(scrut_h))
   let lo_body = lower_expr(body)
   ls_pop_scope(cp)
   // The pattern's value type is the scrutinee's, read live — a tuple pattern
@@ -2097,29 +2097,51 @@ fn lower_match_arms(scrut_h, arms) = map((arm) => {
   (lower_pat_typed(pat, lookup_ty(scrut_h)), lo_body)
 }, arms)
 
-// Bind every `PVar` in the pattern as a local in the current frame so
-// arm-body `VarRef` resolution sees pattern-introduced names. Pattern
-// vars don't carry their own type handle at lower time (value type is
-// the scrutinee's; sub-pattern types are scrutinee-derived via inference);
-// `0` stands as a sentinel — consumers chase the scrutinee's type if needed.
-// H6: exhaustive Pat enumeration. PVar binds the local; compound
-// patterns recurse. PWild and PLit bind nothing. New Pat variants
-// must decide their binding.
-fn bind_pat_locals(pat) = match pat {
+// Bind every `PVar` in the pattern as a local, carrying its element's TYPE
+// HANDLE read live from the scrutinee's type — so a String destructure local's
+// `==` dispatches to str_eq, not pointer i32.eq. (The env_find self-host
+// blocker: handle-0 made `k == name` compare op-key POINTERS, so byte-equal
+// distinct Strings never matched.) Mirrors `param_handles_of` for fn params
+// (TVar(h) -> h, else 0): the graph already proved the element type; carry it,
+// never re-derive at the consumer. H6: exhaustive Pat enumeration.
+fn ty_handle_of(ty) = match ty { TVar(h) => h, _ => 0 }
+
+fn bind_pat_locals(pat, ty) = match pat {
   PVar(name) => {
-    ls_bind_local(name, 0)
+    ls_bind_local(name, ty_handle_of(ty))
     ()
   },
-  PCon(_, sub_pats) => bind_pat_locals_list(sub_pats),
-  PTuple(sub_pats)  => bind_pat_locals_list(sub_pats),
+  PCon(_, sub_pats) => bind_pat_locals_floor(sub_pats),
+  PTuple(sub_pats)  => match tuple_pat_strip(ty) {
+    TTuple(elems) => bind_pat_locals_zip(sub_pats, elems, 0),
+    _             => bind_pat_locals_floor(sub_pats)
+  },
   PList(sub_pats, rest) => {
-    bind_pat_locals_list(sub_pats)
+    bind_pat_locals_floor(sub_pats)
     bind_pat_rest(rest)
   },
   PRecord(flds)     => bind_pat_locals_fields(flds),
   PWild             => (),
   PLit(_)           => ()
 }
+
+// Each PTuple sub-pattern lands with its element TYPE (read live from the
+// stripped TTuple); a String element's local then carries a String-resolving
+// handle. Elements past the known list floor to unresolved TVar(0).
+fn bind_pat_locals_zip(subs, elems, i) = {
+  if i >= len(subs) { () }
+  else {
+    let elem_ty = if i < len(elems) { list_index(elems, i) } else { TVar(0) }
+    bind_pat_locals(list_index(subs, i), elem_ty)
+    bind_pat_locals_zip(subs, elems, i + 1)
+  }
+}
+
+// PCon-payload / PList-element / PRecord-field sub-pattern types are the named
+// peer Hβ.lower.bind-handle-typed-subpattern (additive, same TVar->handle
+// carry); they floor to TVar(0) = i32.eq, byte-identical to the prior sentinel
+// — never a silent wrong type.
+fn bind_pat_locals_floor(pats) = for_each((p) => bind_pat_locals(p, TVar(0)), pats)
 
 fn bind_pat_rest(rest) = match rest {
   None => (),
@@ -2134,10 +2156,8 @@ fn bind_pat_rest(rest) = match rest {
 
 fn bind_pat_locals_fields(flds) = for_each((fld) => {
   let (_, sub_pat) = fld
-  bind_pat_locals(sub_pat)
+  bind_pat_locals(sub_pat, TVar(0))
 }, flds)
-
-fn bind_pat_locals_list(pats) = for_each(bind_pat_locals, pats)
 
 // lower_pat_typed — pattern lowering carrying the value's PROVEN type, so a
 // tuple pattern resolves its element offsets as the width-summed prefix-sum

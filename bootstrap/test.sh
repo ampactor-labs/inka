@@ -18,6 +18,7 @@
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source tools/wt-env.sh   # WT, WT_RUN_FLAGS, W2W — the one home
 
 source bootstrap/CHUNKS.sh
 
@@ -114,7 +115,7 @@ assemble_harness() {
   echo "" >> "$out_wat"
   echo ")" >> "$out_wat"
 
-  wat2wasm "$out_wat" -o "$out_wasm" --debug-names --enable-threads --enable-tail-call
+  wt_asm "$out_wat" "$out_wasm"
   wasm-validate "$out_wasm"
   local objdump_output
   objdump_output=$(wasm-objdump -x "$out_wasm")
@@ -129,7 +130,7 @@ assemble_harness() {
 execute_harness() {
   local wasm="$1"
   local stderr_file="$2"
-  wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$wasm" 2> "$stderr_file" || true
+  wt_run "$wasm" 2> "$stderr_file" || true
 }
 
 TOTAL=0

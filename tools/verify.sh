@@ -20,8 +20,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 BASELINE="tools/verify-baseline.txt"
-WT="${WASMTIME_BIN:-$HOME/.wasmtime/bin/wasmtime}"
-WTFLAGS=(run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y)
+source "$ROOT/tools/wt-env.sh"   # WT, WT_RUN_FLAGS, W2W — the one home
 # The runtime trio IS the standard library — every real .mn program links it, so
 # a micro compiled WITHOUT it is the abnormal case, not the default. Link it for
 # every micro: a micro that calls str_concat/str_eq (strings) or ev_lookup (the
@@ -56,7 +55,7 @@ done < <(grep -E '^micro:' "$BASELINE")
 #    shadow.
 { find src -name '*.mn' | sort | xargs cat; \
   find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; } > /tmp/verify_wheel.mn
-if "$WT" "${WTFLAGS[@]}" bootstrap/mentl.wasm < /tmp/verify_wheel.mn \
+if wt_run bootstrap/mentl.wasm < /tmp/verify_wheel.mn \
       > /tmp/verify_m2.wat 2>/tmp/verify_m2.err; then
   census=$(grep -cE '^(E_|W_)' /tmp/verify_m2.err)
   say "· census $census (shadow — the seed's view of the wheel; informational)"

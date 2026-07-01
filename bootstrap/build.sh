@@ -32,6 +32,7 @@
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source tools/wt-env.sh   # W2W — the one home for the toolchain flags
 
 OUT="bootstrap/mentl.wat"
 WASM="bootstrap/mentl.wasm"
@@ -202,7 +203,7 @@ echo "Assembled: $LINES lines"
 
 # ─── Compile ─────────────────────────────────────────────────────────
 echo "Compiling WAT → WASM..."
-wat2wasm "$OUT" -o "$WASM" --debug-names --enable-threads --enable-tail-call
+wt_asm "$OUT" "$WASM"
 echo "Built: $WASM ($(wc -c < "$WASM") bytes)"
 
 # ─── Optional: run tests ─────────────────────────────────────────────

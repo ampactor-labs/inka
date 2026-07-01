@@ -8,6 +8,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+source tools/wt-env.sh   # WT, WT_RUN_FLAGS, W2W — the one home
 
 WAT="bootstrap/mentl.wat"
 WASM="bootstrap/mentl.wasm"
@@ -49,14 +50,14 @@ compile_sample() {
   local sections="$WORKDIR/$name.sections"
   local disasm="$WORKDIR/$name.disasm"
 
-  printf "%s" "$source" | wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$WASM" > "$out_wat"
-  wat2wasm "$out_wat" -o "$out_wasm" --debug-names --enable-threads --enable-tail-call
+  printf "%s" "$source" | wt_run "$WASM" > "$out_wat"
+  wt_asm "$out_wat" "$out_wasm"
   wasm-validate --enable-threads --enable-tail-call "$out_wasm"
   wasm-objdump -x "$out_wasm" > "$sections"
   wasm-objdump -d "$out_wasm" > "$disasm"
   # Compiled program's exit code IS its `main()` return value (proc_exit).
   # Don't let set -e mistake a non-zero exit for a compile failure.
-  wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$out_wasm" >/dev/null || true
+  wt_run "$out_wasm" >/dev/null || true
 
   printf "%s|%s|%s|%s\n" "$out_wat" "$out_wasm" "$sections" "$disasm"
 }
@@ -71,7 +72,7 @@ require_tool wasmtime
 echo "       ok: WABT + wasmtime available"
 
 echo "[1/7] Assembling seed WAT with wat2wasm..."
-wat2wasm "$WAT" -o "$WASM" --debug-names --enable-threads --enable-tail-call
+wt_asm "$WAT" "$WASM"
 echo "       ok: built $WASM ($(wc -c < "$WASM") bytes)"
 
 echo "[2/7] Validating seed WASM..."
@@ -142,7 +143,7 @@ L1_STATUS_MSG="not yet probed"
 } > "$L1_INPUT"
 
 # Pass 2: seed → wheel → mentl2.wat
-wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$WASM" < "$L1_INPUT" > "$L1_OUT_2" 2> "$L1_ERR_2" || true
+wt_run "$WASM" < "$L1_INPUT" > "$L1_OUT_2" 2> "$L1_ERR_2" || true
 PASS2_FNS=$(grep -c "^  (func " "$L1_OUT_2" || true)
 PASS2_LINES=$(wc -l < "$L1_OUT_2")
 PASS2_NFRE=$(tr -d '\0' < "$L1_ERR_2" | grep -c "E_UnresolvedType" || true)
@@ -161,7 +162,7 @@ if [ "$PASS2_FNS" -le "2" ]; then
   L1_STATUS_MSG="not ready — pass-2 emits only seed scaffolding"
 else
   # Pass 2 produced real wheel output. Compile it and run pass 3.
-  if ! wat2wasm "$L1_OUT_2" -o "$L1_WASM_2" --debug-names --enable-threads --enable-tail-call 2>/dev/null; then
+  if ! wt_asm "$L1_OUT_2" "$L1_WASM_2" 2>/dev/null; then
     echo "       pass-2 WAT failed wat2wasm — wheel substrate produced invalid WASM"
     L1_STATUS=1
     L1_STATUS_MSG="not closed — pass-2 WAT failed wat2wasm"
@@ -172,7 +173,7 @@ else
   else
     # Pass 3: pass-2.wasm → wheel → mentl3.wat. Keep stderr: when pass-3
     # collapses to 0 funcs, parser diagnostics are the active evidence.
-    wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$L1_WASM_2" < "$L1_INPUT" > "$L1_OUT_3" 2> "$L1_ERR_3" || true
+    wt_run "$L1_WASM_2" < "$L1_INPUT" > "$L1_OUT_3" 2> "$L1_ERR_3" || true
     PASS3_FNS=$(grep -c "^  (func " "$L1_OUT_3" || true)
     PASS3_LINES=$(wc -l < "$L1_OUT_3")
     PASS3_PARSE_ERRORS=$(tr -d '\0' < "$L1_ERR_3" | grep -c "P_" || true)

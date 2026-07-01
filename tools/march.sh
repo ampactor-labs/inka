@@ -15,9 +15,7 @@
 # box (it did, 2026-06-30). .build is on disk; override with MARCH_OUT=<dir>.
 set -u
 cd "$(dirname "$0")/.." || exit 2
-WT="${WT:-$HOME/.wasmtime/bin/wasmtime}"
-WTFLAGS=(-W threads=y -W shared-memory=y -W tail-call=y -S threads=y)
-W2W=(wat2wasm --debug-names --enable-threads --enable-tail-call)
+source "$(dirname "$0")/wt-env.sh"   # WT, WT_RUN_FLAGS, W2W — the one home
 OUT="${MARCH_OUT:-$(pwd)/.build/march}"; mkdir -p "$OUT"
 WHEEL="$OUT/wheel.mn"
 BUILD=1; FIXPOINT=0
@@ -30,7 +28,9 @@ esac; done
 # trap signatures: a wasmtime runtime trap OR a name-section frame of the known
 # trap site. Empty match = the gate is GREEN.
 trap_lines() { grep -nE 'out of bounds|wasm trap|undefined element|unreachable|op_each_handler_yield' "$1" 2>/dev/null; }
-gen() { timeout 480 "$WT" run "${WTFLAGS[@]}" "$1" < "$WHEEL" > "$2" 2> "$3"; }  # gen <wasm> <out.wat> <out.err>
+# timeout execs a real binary (not the wt_run function), so it uses the same
+# constants wt_run projects from — WT + WT_RUN_FLAGS, the one home (wt-env.sh).
+gen() { timeout 480 "$WT" run "${WT_RUN_FLAGS[@]}" "$1" < "$WHEEL" > "$2" 2> "$3"; }  # gen <wasm> <out.wat> <out.err>
 
 # WABT disassembly, cached on the wasm's mtime (objdump on 1.7MB is slow; the
 # 500k-line dump is reused across runs until m2.wasm is rebuilt). PLAN §8: pin the

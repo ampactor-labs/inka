@@ -21,8 +21,8 @@
 
 set -u
 cd "$(dirname "$0")/.." || exit 1
-WT="$HOME/.wasmtime/bin/wasmtime"
-WTRUN="$WT run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y"
+source "$(dirname "$0")/wt-env.sh"   # WT, WT_RUN_FLAGS, W2W — the one home
+WTRUN="$WT run ${WT_RUN_FLAGS[*]}"
 QUICK="${1:-}"
 # Intermediates + wasmtime's temp belong on disk, NOT the RAM-backed tmpfs
 # (/tmp is a ~6G quota; the wheel WAT + wasmtime's ~2G shared-memory partition
@@ -81,7 +81,7 @@ if [ "$QUICK" = "--quick" ]; then hr; echo "  (--quick: two-pass skipped)"; hr; 
 echo "▸ PASS-2  (the FIXED POINT: m3 == m4, the medium reproduced BY ITSELF — NOT m2==m3)"
 echo "    m2 is the wheel compiled by the DISPOSABLE seed; its bytes are the seed's, not the wheel's."
 echo "    First-light = diff(m3,m4) empty AND correctness (the micros above green). m2 may differ from m3."
-if wat2wasm $B/state_m2.wat -o $B/state_m2.wasm --debug-names --enable-threads --enable-tail-call 2>$B/state_w2w.err; then
+if "${W2W[@]}" $B/state_m2.wat -o $B/state_m2.wasm 2>$B/state_w2w.err; then
   echo "    m2.wat assembles: OK"
   # CAP: a sane m3/m4 is a few MB; cap at 500MB so a wat-emission RUNAWAY
   # (the emit corruption dumps 150GB) is FLAGGED, not written to disk. The
@@ -94,7 +94,7 @@ if wat2wasm $B/state_m2.wat -o $B/state_m2.wasm --debug-names --enable-threads -
     echo "    *** m2 EMIT RUNAWAY — m3 hit the $((CAP/1048576))MB cap (wat-emission corruption; NOT a clean compile). ***"
   elif [ "$m2rc" -eq 0 ]; then
     echo "    m2 → m3.wat = $(wc -l < $B/state_m3.wat) lines  (m2==m3 is NOT the check; m2's bytes are disposable)"
-    if wat2wasm $B/state_m3.wat -o $B/state_m3.wasm --debug-names --enable-threads --enable-tail-call 2>$B/state_w3w.err; then
+    if "${W2W[@]}" $B/state_m3.wat -o $B/state_m3.wasm 2>$B/state_w3w.err; then
       echo "    m3.wat assembles: OK"
       timeout 300 $WTRUN $B/state_m3.wasm < $B/state_wheel.mn 2>$B/state_m4.err | head -c $CAP > $B/state_m4.wat
       m3rc=${PIPESTATUS[0]}; m4sz=$(wc -c < $B/state_m4.wat)

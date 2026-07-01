@@ -36,8 +36,10 @@ if [[ ! -f "$MENTL_BIN" ]]; then
 fi
 
 # The seed's wasmtime invocation needs threads + shared-memory + tail-call
-# (WASI-threads substrate); without them wasmtime refuses the module.
-WTFLAGS="-W threads=y -W shared-memory=y -W tail-call=y -S threads=y"
+# (WASI-threads substrate); without them wasmtime refuses the module. The flag
+# quartet has ONE home (wt-env.sh); flatten the array to a string for bash -c.
+source "$(dirname "$0")/wt-env.sh"
+WTFLAGS="${WT_RUN_FLAGS[*]}"
 
 # Determine inputs: arg-given file, or full tree (src/*.mn + lib/**/*.mn).
 if [[ $# -ge 1 ]]; then

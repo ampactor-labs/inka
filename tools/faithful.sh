@@ -20,9 +20,9 @@
 set -u
 cd "$(dirname "$0")/.." || exit 1
 B="${MENTL_BUILD:-$PWD/.build}"; mkdir -p "$B"; export TMPDIR="$B"
-wt() { wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y "$@"; }
+source "$(dirname "$0")/wt-env.sh"   # wt_run, wt_asm, wt_wheel — the one home
 
-wheel_cat() { find src -name '*.mn' | sort | xargs cat; find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; }
+wheel_cat() { wt_wheel src lib; }
 
 ensure_mentl2() {
   # Rebuild only if a wheel source out-dates the cached binary (or it's absent).
@@ -32,8 +32,8 @@ ensure_mentl2() {
   echo "▸ (re)building mentl2 — wheel changed…" >&2
   bash bootstrap/build.sh >/dev/null 2>&1 || { echo "✗ seed build failed" >&2; exit 1; }
   wheel_cat > "$B/wheel.mn"
-  wt bootstrap/mentl.wasm < "$B/wheel.mn" > "$B/m2.wat" 2>/dev/null
-  wat2wasm "$B/m2.wat" -o "$B/mentl2.wasm" --debug-names --enable-threads --enable-tail-call 2>/dev/null \
+  wt_run bootstrap/mentl.wasm < "$B/wheel.mn" > "$B/m2.wat" 2>/dev/null
+  wt_asm "$B/m2.wat" "$B/mentl2.wasm" 2>/dev/null \
     || { echo "✗ mentl2 failed to assemble (the seed mis-compiled the wheel)" >&2; exit 1; }
 }
 
@@ -44,8 +44,8 @@ ensure_mentl2() {
 # legitimately differs — so divergence there is informational, not a failure.
 probe() {
   local in="$1" mode="${2:-construct}"
-  wt bootstrap/mentl.wasm < "$in" > "$B/seed.out" 2>"$B/seed.err"; local se=$?
-  wt "$B/mentl2.wasm"      < "$in" > "$B/m2.out"   2>"$B/m2.err";   local me=$?
+  wt_run bootstrap/mentl.wasm < "$in" > "$B/seed.out" 2>"$B/seed.err"; local se=$?
+  wt_run "$B/mentl2.wasm"      < "$in" > "$B/m2.out"   2>"$B/m2.err";   local me=$?
   local sd md; sd=$(grep -cE '^[EPW]_' "$B/seed.err" 2>/dev/null); md=$(grep -cE '^[EPW]_' "$B/m2.err" 2>/dev/null)
   printf '  seed   exit=%-3s diag=%-4s wat=%s\n' "$se" "$sd" "$(wc -l < "$B/seed.out")"
   printf '  mentl2 exit=%-3s diag=%-4s wat=%s\n' "$me" "$md" "$(wc -l < "$B/m2.out")"
@@ -82,7 +82,7 @@ case "${1:-}" in
     for f in $files; do
       cand=$(printf '%s\n' $keep | grep -v "^$f$")
       printf '%s\n' $cand | xargs cat > "$B/probe_in.mn" 2>/dev/null
-      wt "$B/mentl2.wasm" < "$B/probe_in.mn" >/dev/null 2>"$B/m2.err"
+      wt_run "$B/mentl2.wasm" < "$B/probe_in.mn" >/dev/null 2>"$B/m2.err"
       if [ $? -ne 0 ]; then keep=$cand; echo "  drop $f — still fails (minimizing)"; fi
     done
     echo "▸ minimal failing file-set:"; printf '%s\n' $keep | sed 's/^/    /'

@@ -25,6 +25,7 @@
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
+source "$(dirname "$0")/wt-env.sh"   # wt_run, wt_asm — the one home
 
 SEED="bootstrap/mentl.wasm"
 if [[ ! -f "$SEED" ]]; then
@@ -43,7 +44,7 @@ categorize_file() {
   local stderr_log="$TMPDIR/$(basename "$nx_file" .mn).stderr"
 
   # Run seed; capture stdout to .wat + stderr separately
-  if ! cat "$nx_file" | wasmtime run "$SEED" > "$out_wat" 2> "$stderr_log"; then
+  if ! cat "$nx_file" | wt_run "$SEED" > "$out_wat" 2> "$stderr_log"; then
     echo "SEED-CRASH:exited non-zero ($(head -1 "$stderr_log" | head -c 80))"
     return
   fi
@@ -58,7 +59,7 @@ categorize_file() {
 
   # Try to assemble; categorize per failure shape
   local wat2wasm_log="$TMPDIR/$(basename "$nx_file" .mn).wat2wasm.log"
-  if wat2wasm "$out_wat" -o "$out_wasm" --debug-names --enable-tail-call \
+  if wt_asm "$out_wat" "$out_wasm" \
        2> "$wat2wasm_log"; then
     # wat2wasm succeeded; try wasm-validate
     local validate_log="$TMPDIR/$(basename "$nx_file" .mn).validate.log"

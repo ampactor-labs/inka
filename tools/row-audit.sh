@@ -16,7 +16,7 @@
 #        tools/row-audit.sh <file.mn>  # audit one source (+ the libs)
 set -u
 SEED="bootstrap/mentl.wasm"
-WT=(wasmtime run -W threads=y -W shared-memory=y -W tail-call=y -S threads=y)
+source "$(dirname "$0")/wt-env.sh"   # wt_run — the one home
 SRC="${1:-}"
 if [ -n "$SRC" ]; then
   { find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; cat "$SRC"; } > /tmp/row-audit.mn
@@ -24,7 +24,7 @@ else
   { find src -name '*.mn' | sort | xargs cat; \
     find lib -name '*.mn' -not -path '*/tutorial/*' | sort | xargs cat; } > /tmp/row-audit.mn
 fi
-"${WT[@]}" "$SEED" < /tmp/row-audit.mn > /dev/null 2>/tmp/row-audit.err
+wt_run "$SEED" < /tmp/row-audit.mn > /dev/null 2>/tmp/row-audit.err
 
 # A leak line is `<fn>_<Effect>` (fn lowercase_underscored, Effect Capitalized),
 # alone on the line. Builtin effects (WASI/Memory/Alloc) carry no ev-slot — a

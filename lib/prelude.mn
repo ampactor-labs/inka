@@ -149,9 +149,12 @@ handler all_handler(pred) with ok = true {
   result() => resume(ok)
 }
 
-handler find_handler(pred) with acc = [] {
-  yield(elem) => if pred(elem) { resume() with acc = [elem] } else { resume() },
-  result() => resume(acc)
+handler find_handler(pred) with found = None {
+  yield(elem) => match found {
+    Some(_) => resume(),
+    None    => if pred(elem) { resume() with found = Some(elem) } else { resume() },
+  },
+  result() => resume(found)
 }
 
 handler count_handler(pred) with n = 0 {

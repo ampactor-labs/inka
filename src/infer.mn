@@ -919,6 +919,9 @@ fn is_seq_op(cname) with Pure =
   // projection. This is what dissolves map_collector's S/P handler gaps.
   || cname == "map"        || cname == "filter"      || cname == "flatten"
   || cname == "fold"       || cname == "for_each"
+  || cname == "take"       || cname == "drop"
+  || cname == "any"        || cname == "all"
+  || cname == "find"       || cname == "count"
 
 // seq_force — bind the i-th argument's type to `ty` (a no-op past the end).
 // `graph_bind` on a VarRef handle propagates to the bound variable (the same
@@ -993,6 +996,36 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
       seq_force(ah, 1, TList(elem), span)                 // xs : [a]
       seq_force_fn(ah, 0, [elem], TUnit, span)            // f  : a -> ()
       perform graph_bind(handle, TUnit, Located(span, Inferred("for_each : ()")))
+    },
+    "take"       => {
+      seq_force(ah, 0, TList(elem), span)                 // xs : [a]
+      seq_force(ah, 1, TInt, span)                        // n  : Int
+      perform graph_bind(handle, TList(elem), Located(span, Inferred("take : [a]")))
+    },
+    "drop"       => {
+      seq_force(ah, 0, TInt, span)                        // n  : Int
+      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
+      perform graph_bind(handle, TList(elem), Located(span, Inferred("drop : [a]")))
+    },
+    "any"        => {
+      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
+      seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
+      perform graph_bind(handle, TName("Bool", []), Located(span, Inferred("any : Bool")))
+    },
+    "all"        => {
+      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
+      seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
+      perform graph_bind(handle, TName("Bool", []), Located(span, Inferred("all : Bool")))
+    },
+    "find"       => {
+      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
+      seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
+      perform graph_bind(handle, TName("Option", [elem]), Located(span, Inferred("find : Option(a)")))
+    },
+    "count"      => {
+      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
+      seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
+      perform graph_bind(handle, TInt, Located(span, Inferred("count : Int")))
     },
     _            => perform graph_bind(handle, TList(elem), Located(span, Inferred("sequence")))
   }

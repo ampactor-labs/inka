@@ -15747,6 +15747,13 @@
   (data (i32.const 6784) "\07\00\00\00flatten")              ;;  7 bytes
   (data (i32.const 6800) "\04\00\00\00fold")                 ;;  4 bytes
   (data (i32.const 6816) "\08\00\00\00for_each")             ;;  8 bytes
+  (data (i32.const 6832) "\04\00\00\00take")                 ;;  4 bytes
+  (data (i32.const 6848) "\04\00\00\00drop")                 ;;  4 bytes
+  (data (i32.const 6864) "\03\00\00\00any")                  ;;  3 bytes
+  (data (i32.const 6880) "\03\00\00\00all")                  ;;  3 bytes
+  (data (i32.const 6896) "\04\00\00\00find")                 ;;  4 bytes
+  (data (i32.const 6912) "\05\00\00\00count")                ;;  5 bytes
+  (data (i32.const 6928) "\06\00\00\00Option")               ;;  6 bytes
   ;; "list_index" reuses the parser desugar target at 4288.
   (data (i32.const 3768) "\0c\00\00\00if condition")         ;; 12 bytes
   (data (i32.const 3792) "\0b\00\00\00if branches")          ;; 11 bytes
@@ -16369,27 +16376,27 @@
     (local.get $l))
 
   (func $is_seq_op (param $cname i32) (result i32)
-    (i32.or
-      (i32.or
-        (i32.or
-          (i32.or (call $str_eq (local.get $cname) (i32.const 6640))    ;; len
-                  (call $str_eq (local.get $cname) (i32.const 4288)))   ;; list_index
-          (i32.or (call $str_eq (local.get $cname) (i32.const 6648))    ;; list_head
-                  (call $str_eq (local.get $cname) (i32.const 6664))))  ;; list_tail
-        (i32.or
-          (i32.or (call $str_eq (local.get $cname) (i32.const 6680))    ;; list_set
-                  (call $str_eq (local.get $cname) (i32.const 6696)))   ;; list_concat
-          (i32.or
-            (i32.or (call $str_eq (local.get $cname) (i32.const 6712))  ;; make_list
-                    (call $str_eq (local.get $cname) (i32.const 6728))) ;; slice
-            (call $str_eq (local.get $cname) (i32.const 6740)))))       ;; push
-      (i32.or
-        (i32.or (call $str_eq (local.get $cname) (i32.const 6752))      ;; map
-                (call $str_eq (local.get $cname) (i32.const 6768)))     ;; filter
-        (i32.or
-          (i32.or (call $str_eq (local.get $cname) (i32.const 6784))    ;; flatten
-                  (call $str_eq (local.get $cname) (i32.const 6800)))   ;; fold
-          (call $str_eq (local.get $cname) (i32.const 6816))))))        ;; for_each
+    (if (call $str_eq (local.get $cname) (i32.const 6640)) (then (return (i32.const 1)))) ;; len
+    (if (call $str_eq (local.get $cname) (i32.const 4288)) (then (return (i32.const 1)))) ;; list_index
+    (if (call $str_eq (local.get $cname) (i32.const 6648)) (then (return (i32.const 1)))) ;; list_head
+    (if (call $str_eq (local.get $cname) (i32.const 6664)) (then (return (i32.const 1)))) ;; list_tail
+    (if (call $str_eq (local.get $cname) (i32.const 6680)) (then (return (i32.const 1)))) ;; list_set
+    (if (call $str_eq (local.get $cname) (i32.const 6696)) (then (return (i32.const 1)))) ;; list_concat
+    (if (call $str_eq (local.get $cname) (i32.const 6712)) (then (return (i32.const 1)))) ;; make_list
+    (if (call $str_eq (local.get $cname) (i32.const 6728)) (then (return (i32.const 1)))) ;; slice
+    (if (call $str_eq (local.get $cname) (i32.const 6740)) (then (return (i32.const 1)))) ;; push
+    (if (call $str_eq (local.get $cname) (i32.const 6752)) (then (return (i32.const 1)))) ;; map
+    (if (call $str_eq (local.get $cname) (i32.const 6768)) (then (return (i32.const 1)))) ;; filter
+    (if (call $str_eq (local.get $cname) (i32.const 6784)) (then (return (i32.const 1)))) ;; flatten
+    (if (call $str_eq (local.get $cname) (i32.const 6800)) (then (return (i32.const 1)))) ;; fold
+    (if (call $str_eq (local.get $cname) (i32.const 6816)) (then (return (i32.const 1)))) ;; for_each
+    (if (call $str_eq (local.get $cname) (i32.const 6832)) (then (return (i32.const 1)))) ;; take
+    (if (call $str_eq (local.get $cname) (i32.const 6848)) (then (return (i32.const 1)))) ;; drop
+    (if (call $str_eq (local.get $cname) (i32.const 6864)) (then (return (i32.const 1)))) ;; any
+    (if (call $str_eq (local.get $cname) (i32.const 6880)) (then (return (i32.const 1)))) ;; all
+    (if (call $str_eq (local.get $cname) (i32.const 6896)) (then (return (i32.const 1)))) ;; find
+    (if (call $str_eq (local.get $cname) (i32.const 6912)) (then (return (i32.const 1)))) ;; count
+    (i32.const 0))
 
   (func $infer_seq_op (param $cname i32) (param $ah i32) (param $handle i32)
         (param $span i32) (result i32)
@@ -16406,11 +16413,11 @@
         (call $graph_bind (local.get $handle) (call $ty_make_tlist (local.get $elem_b))
           (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
         (return (local.get $handle))))
-    (if (call $str_eq (local.get $cname) (i32.const 6768))           ;; filter(p,xs):(a->_,[a])->[a]
+    (if (call $str_eq (local.get $cname) (i32.const 6768))           ;; filter(p,xs):(a->Bool,[a])->[a]
       (then
-        (local.set $elem_b (call $ty_make_tvar (call $graph_fresh_ty (call $reason_make_inferred (i32.const 3672)))))
         (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
-        (call $seq_force_fn (local.get $ah) (i32.const 0) (call $tylist1 (local.get $elem)) (local.get $elem_b) (local.get $span))
+        (call $seq_force_fn (local.get $ah) (i32.const 0) (call $tylist1 (local.get $elem))
+          (call $ty_make_tname (i32.const 3504) (call $make_list (i32.const 0))) (local.get $span))
         (call $graph_bind (local.get $handle) (call $ty_make_tlist (local.get $elem))
           (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
         (return (local.get $handle))))
@@ -16435,6 +16442,42 @@
         (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
         (call $seq_force_fn (local.get $ah) (i32.const 0) (call $tylist1 (local.get $elem)) (call $ty_make_tunit) (local.get $span))
         (call $graph_bind (local.get $handle) (call $ty_make_tunit)
+          (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
+        (return (local.get $handle))))
+    (if (call $str_eq (local.get $cname) (i32.const 6832))           ;; take(xs,n):([a],Int)->[a]
+      (then
+        (call $seq_force (local.get $ah) (i32.const 0) (call $ty_make_tlist (local.get $elem)) (local.get $span))
+        (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tint) (local.get $span))
+        (call $graph_bind (local.get $handle) (call $ty_make_tlist (local.get $elem))
+          (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
+        (return (local.get $handle))))
+    (if (call $str_eq (local.get $cname) (i32.const 6848))           ;; drop(n,xs):(Int,[a])->[a]
+      (then
+        (call $seq_force (local.get $ah) (i32.const 0) (call $ty_make_tint) (local.get $span))
+        (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
+        (call $graph_bind (local.get $handle) (call $ty_make_tlist (local.get $elem))
+          (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
+        (return (local.get $handle))))
+    (if (i32.or (i32.or (call $str_eq (local.get $cname) (i32.const 6864))   ;; any
+                        (call $str_eq (local.get $cname) (i32.const 6880)))  ;; all
+                (call $str_eq (local.get $cname) (i32.const 6912)))          ;; count
+      (then
+        (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
+        (call $seq_force_fn (local.get $ah) (i32.const 0) (call $tylist1 (local.get $elem))
+          (call $ty_make_tname (i32.const 3504) (call $make_list (i32.const 0))) (local.get $span))
+        (call $graph_bind (local.get $handle)
+          (if (result i32) (call $str_eq (local.get $cname) (i32.const 6912))
+            (then (call $ty_make_tint))
+            (else (call $ty_make_tname (i32.const 3504) (call $make_list (i32.const 0)))))
+          (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
+        (return (local.get $handle))))
+    (if (call $str_eq (local.get $cname) (i32.const 6896))           ;; find(p,xs):(a->Bool,[a])->Option(a)
+      (then
+        (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
+        (call $seq_force_fn (local.get $ah) (i32.const 0) (call $tylist1 (local.get $elem))
+          (call $ty_make_tname (i32.const 3504) (call $make_list (i32.const 0))) (local.get $span))
+        (call $graph_bind (local.get $handle)
+          (call $ty_make_tname (i32.const 6928) (call $tylist1 (local.get $elem)))
           (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
         (return (local.get $handle))))
     ;; arg0 is a sequence for every op except make_list (arg0 = count Int).

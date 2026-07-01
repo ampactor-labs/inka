@@ -238,6 +238,40 @@ spawn_task(priority = 5, config = current, timeout_ms = 5000)   // all labeled
 
 **Defaults and labeled args are not two features — they are the parameter list AS a product node-kind.** A parameter list is a positional product (`PLAN.md §2`, L1); like every product it may be constructed positionally (`f(a, b)`), by field (`f(x = a, y = b)`), or mixed (`f(a, y = b)`) — the identical machinery as record literals `{a, b}` / `{x: a, y: b}` (punning + field-naming), and a default is a product field's fallback construction (the identical machinery as a record-field default). There is no second call-site feature; the product node-kind mandates all four forms. Labels resolve against the declared parameter names; an unknown label is `E_UnknownArgLabel`. (Under threading/multi-shot a labeled call is order-independent at the product level — the cursor may fill fields in any order.)
 
+**Identity, not position — the field's NAME is the key; the order is a projection.** A parameter product is not the position-keyed disease (`CLAUDE.md` drift-8, evidence-by-row-slot, `mode == 0/1/2`, parallel arrays): those use position as a *fragile proxy* for an identity. A product's fields *have* identity — their names — exactly as record fields do (sorted by name at parse, source order irrelevant). `spawn_task(priority = 5, config = c)` resolves by name; the positional `spawn_task(5, c)` is a *convenience* that fills fields in declaration order and resolves immediately *to* the names. Position is a deterministic layout over an identity-keyed set, never the key itself.
+
+### Partial application — the product with a hole
+
+A parameter product may be constructed with a **hole** — a field left unsupplied. The result is not an error; it is a **value**: the function *awaiting* that field. This is partial application, and it is not a distinct feature — it is the product node-kind constructed with one field absent.
+
+```
+let adults = filter(.age > 18)        // xs is a hole → adults : [Person] -> [Person]
+adults(users)                          // fill the hole → the filtered list
+adults(new_signups)                    // reuse — a hole-product is a first-class value
+```
+
+**The hole is keyed by IDENTITY, never by position.** `filter(.age > 18)` leaves *the parameter `xs`* unfilled — "the parameter `xs`," not "slot 2." When exactly one field is a hole, it is unambiguous. When several are, the hole is named explicitly with `??` at the field it marks:
+
+```
+between(??, 100)      // the FIRST field is the hole: (x) => between(x, 100)
+clamp(0, ??, 255)     // the MIDDLE field is the hole: (x) => clamp(0, x, 255)
+```
+
+`??` is the same absence marker as the gradient's hole (§«Token enumeration», `THole`): a field the cursor reads as *unsupplied*. What fills it depends on context — Synth proposes a candidate, a call supplies a value, the `|>` pipe supplies the flowing datum, a resumption supplies it later — but the marker is one, and it names *which* field, never a slot.
+
+**The `|>` pipe is hole-completion, not a rewrite.** `x |> f(a)` fills `f(a)`'s remaining hole with `x`:
+
+```
+users |> filter(.age > 18)            // fills xs → equals filter(.age > 18, users)
+users |> filter(.age > 18) |> map(.name) |> sort
+```
+
+The pipe's type rule (§«`|>` — converge») requires `right : A -> B` — a product with exactly one hole — and a partial application *is* exactly that. So the pipe is not a syntactic append; it is the product's one remaining hole filled by the piped value. This is why the five verbs compose: every stage is a product pre-filled with its configuration, its data field a hole the pipe completes. A stage with more than one hole must name the pipe's target with `??` (`x |> clamp(0, ??, 255)`); a stage with none is a complete value and `E_PipeIntoComplete` teaches the missing hole.
+
+**One primitive, five surfaces.** Positional construction, field/labeled construction, defaults, the hole (partial application), and pipe-completion are ONE thing — the parameter-list product constructed by identity with any subset of fields supplied, defaulted, or left as holes. There is no currying mechanism distinct from the product: a "curried function" is a product-with-holes, and the arity is never fuzzy, because the holes are named fields, not a hidden nesting of one-argument functions.
+
+**The hole is the suspension point — SPACE and TIME are one.** A hole-product is a computation *suspended at its argument*; filling the hole *resumes* it. On the SPACE axis this is partial application — the field filled by a value, or by the pipe's flowing datum. On the TIME axis it is the multi-shot continuation (`PLAN.md §4④`): a `??` hole reified as a resumable record is a continuation awaiting its argument, fillable now, later, or many times. Partial application and continuation-resumption are the same operation — hole-filling keyed by identity — distinguished only by whether the hole is filled at the call site or captured and resumed. `??` is one absence marker across the whole medium: the gradient's synth-hole, the argument hole, and the continuation's resume-slot are the cursor reading *the same absence* at three altitudes.
+
 ### Nested function declarations
 
 `fn` declarations may appear inside another function's body. Nested fns are local to the enclosing body's scope.
@@ -1806,6 +1840,8 @@ un-normalized source the formatter has not yet touched).
 | `E_TypeMismatch`      | unification failed                            | `Unspecified`        | adjust types; widen / narrow                   |
 | `E_OccursCheck`       | infinite type                                 | `Unspecified`        | restructure to break cycle                     |
 | `E_OrphanHandlerAttach` | `~>` with no preceding chain                | `Unspecified`        | delete `~>` or supply body                     |
+| `E_PipeIntoComplete`  | `x \|> f(…)` where `f(…)` has no hole (already a complete value, not a `A -> B`) | `MaybeIncorrect` | leave a hole for the piped value (drop an arg or mark it `??`) |
+| `E_PipeHoleAmbiguous` | `x \|> f(…)` where `f(…)` has more than one hole and none is marked `??` | `MaybeIncorrect` | mark the pipe's target field with `??` (`x \|> clamp(0, ??, 255)`) |
 | `E_BranchNotStage`    | `><` branch is a value, not a stage (infer-time; peer `Hβ.infer.pcompose-branch-stage-type`) | `MaybeIncorrect` | rewrite branch as a pipeline |
 | `E_NotAKeyword`       | user typed `for`/`while`/`loop`/`break`/`continue`/`return` | `MaybeIncorrect` | rewrite as verb form per substrate             |
 | `E_PatternAlternationBindingMismatch` | branches in `\|` bind different names or types | `MaybeIncorrect` | adjust patterns to bind same names with unifiable types |

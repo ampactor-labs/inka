@@ -9,6 +9,7 @@
 #   Usage (source, never execute):   source "$(dirname "$0")/wt-env.sh"
 #   Then:  wt_run <wasm> [args…]              # run with the canonical flags
 #          wt_asm <in.wat> <out.wasm>         # assemble with the canonical flags
+#          wt_validate <wasm>                 # validate with the canonical flags
 #          wt_func <wasm> <fn-name>           # WABT disasm of ONE function
 #          wt_offsets <wat> <fn> <local>      # field-load offsets for a local
 #          wt_wheel <src|lib> [src|lib] > f   # canonical wheel input (find-order)
@@ -23,7 +24,8 @@
 # instantiate. This quartet is the invariant, proven across the whole toolchain.
 WT="${WASMTIME_BIN:-$HOME/.wasmtime/bin/wasmtime}"
 WT_RUN_FLAGS=(-W threads=y -W shared-memory=y -W tail-call=y -S threads=y)
-W2W=(wat2wasm --debug-names --enable-threads --enable-tail-call)
+WABT_FEATURE_FLAGS=(--enable-threads --enable-tail-call)
+W2W=(wat2wasm --debug-names "${WABT_FEATURE_FLAGS[@]}")
 
 # wt_run <wasm> [args…] — run a wasm module under the canonical flags. Stdin/
 # stdout/stderr pass through untouched, so callers pipe the wheel in and capture
@@ -33,6 +35,10 @@ wt_run() { "$WT" run "${WT_RUN_FLAGS[@]}" "$@"; }
 # wt_asm <in.wat> <out.wasm> — assemble WAT→WASM under the canonical flags.
 # Returns wat2wasm's own exit code; caller redirects stderr as it likes.
 wt_asm() { "${W2W[@]}" "$1" -o "$2"; }
+
+# wt_validate <wasm> — validate a WASM module under the same feature set used
+# for assembly. Threads/tail-call are substrate facts, not per-script choices.
+wt_validate() { wasm-validate "${WABT_FEATURE_FLAGS[@]}" "$1"; }
 
 # ── WABT probes (the trap-pin workhorses; PLAN §8 — never grep the minified
 #    emit). All read a *.wasm assembled by wt_asm, so the name section is live

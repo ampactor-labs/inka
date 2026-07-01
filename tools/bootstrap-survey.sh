@@ -25,7 +25,7 @@
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
-source "$(dirname "$0")/wt-env.sh"   # wt_run, wt_asm — the one home
+source "$(dirname "$0")/wt-env.sh"   # wt_run, wt_asm, wt_validate — the one home
 
 SEED="bootstrap/mentl.wasm"
 if [[ ! -f "$SEED" ]]; then
@@ -63,7 +63,7 @@ categorize_file() {
        2> "$wat2wasm_log"; then
     # wat2wasm succeeded; try wasm-validate
     local validate_log="$TMPDIR/$(basename "$nx_file" .mn).validate.log"
-    if wasm-validate "$out_wasm" 2> "$validate_log"; then
+    if wt_validate "$out_wasm" 2> "$validate_log"; then
       echo "VALIDATES:$line_count lines"
     else
       local first_err

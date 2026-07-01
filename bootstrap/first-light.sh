@@ -8,7 +8,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-source tools/wt-env.sh   # WT, WT_RUN_FLAGS, W2W — the one home
+source tools/wt-env.sh   # WT, WT_RUN_FLAGS, W2W, wt_validate — the one home
 
 WAT="bootstrap/mentl.wat"
 WASM="bootstrap/mentl.wasm"
@@ -52,7 +52,7 @@ compile_sample() {
 
   printf "%s" "$source" | wt_run "$WASM" > "$out_wat"
   wt_asm "$out_wat" "$out_wasm"
-  wasm-validate --enable-threads --enable-tail-call "$out_wasm"
+  wt_validate "$out_wasm"
   wasm-objdump -x "$out_wasm" > "$sections"
   wasm-objdump -d "$out_wasm" > "$disasm"
   # Compiled program's exit code IS its `main()` return value (proc_exit).
@@ -76,7 +76,7 @@ wt_asm "$WAT" "$WASM"
 echo "       ok: built $WASM ($(wc -c < "$WASM") bytes)"
 
 echo "[2/7] Validating seed WASM..."
-wasm-validate --enable-threads --enable-tail-call "$WASM"
+wt_validate "$WASM"
 echo "       ok: wasm-validate accepted seed"
 
 echo "[3/7] Inspecting seed sections with wasm-objdump..."
@@ -166,7 +166,7 @@ else
     echo "       pass-2 WAT failed wat2wasm — wheel substrate produced invalid WASM"
     L1_STATUS=1
     L1_STATUS_MSG="not closed — pass-2 WAT failed wat2wasm"
-  elif ! wasm-validate --enable-threads --enable-tail-call "$L1_WASM_2"; then
+  elif ! wt_validate "$L1_WASM_2"; then
     echo "       pass-2 WASM failed wasm-validate — runtime correctness gap"
     L1_STATUS=1
     L1_STATUS_MSG="not closed — pass-2 WASM failed validation"

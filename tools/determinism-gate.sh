@@ -37,9 +37,8 @@ fi
 
 # The seed's wasmtime invocation needs threads + shared-memory + tail-call
 # (WASI-threads substrate); without them wasmtime refuses the module. The flag
-# quartet has ONE home (wt-env.sh); flatten the array to a string for bash -c.
+# quartet has ONE home (wt-env.sh), and stays as an argv array at the call site.
 source "$(dirname "$0")/wt-env.sh"
-WTFLAGS="${WT_RUN_FLAGS[*]}"
 
 # Determine inputs: arg-given file, or full tree (src/*.mn + lib/**/*.mn).
 if [[ $# -ge 1 ]]; then
@@ -76,7 +75,7 @@ DET_TIMEOUT_S="${DET_TIMEOUT_S:-60}"
 # in bounded time); the gate's CONTRACT stands but the runtime check
 # can't fire. `timeout` exits 124 on cap; bash `if !` catches both
 # non-zero exit AND timeout uniformly.
-if ! timeout "${DET_TIMEOUT_S}s" bash -c "cat \"\$@\" | wasmtime run $WTFLAGS \"$MENTL_BIN\"" _ "${INPUTS[@]}" > "$FIRST" 2>/dev/null; then
+if ! timeout "${DET_TIMEOUT_S}s" "$WT" run "${WT_RUN_FLAGS[@]}" "$MENTL_BIN" < <(cat "${INPUTS[@]}") > "$FIRST" 2>/dev/null; then
   echo "determinism-gate: $MENTL_BIN didn't compile Mentl within ${DET_TIMEOUT_S}s" >&2
   echo "  (pre-bootstrap: this gate is contract-only until item 27 lands hand-WAT" >&2
   echo "   AND the wheel-through-seed runtime is bounded; today the seed's wheel" >&2
@@ -86,7 +85,7 @@ fi
 
 # Compile run #2 (separate process; cache state may differ).
 # Same DET_TIMEOUT_S cap; symmetric escape.
-if ! timeout "${DET_TIMEOUT_S}s" bash -c "cat \"\$@\" | wasmtime run $WTFLAGS \"$MENTL_BIN\"" _ "${INPUTS[@]}" > "$SECOND" 2>/dev/null; then
+if ! timeout "${DET_TIMEOUT_S}s" "$WT" run "${WT_RUN_FLAGS[@]}" "$MENTL_BIN" < <(cat "${INPUTS[@]}") > "$SECOND" 2>/dev/null; then
   echo "determinism-gate: run #2 exceeded ${DET_TIMEOUT_S}s after run #1 succeeded" >&2
   echo "  (non-deterministic timing: run #1 fit the cap; run #2 didn't)" >&2
   exit 2

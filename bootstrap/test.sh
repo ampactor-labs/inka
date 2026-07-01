@@ -18,7 +18,7 @@
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
-source tools/wt-env.sh   # WT, WT_RUN_FLAGS, W2W — the one home
+source tools/wt-env.sh   # WT, WT_RUN_FLAGS, W2W, wt_validate — the one home
 
 source bootstrap/CHUNKS.sh
 
@@ -116,7 +116,7 @@ assemble_harness() {
   echo ")" >> "$out_wat"
 
   wt_asm "$out_wat" "$out_wasm"
-  wasm-validate "$out_wasm"
+  wt_validate "$out_wasm"
   local objdump_output
   objdump_output=$(wasm-objdump -x "$out_wasm")
   if ! grep -q '"_start"' <<< "$objdump_output"; then

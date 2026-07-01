@@ -1,0 +1,19 @@
+// Rung 3b: cross-arm state flow with a RECORD state (no list). If this works
+// but rung 3 (list state) traps, the break is the list element flowing through
+// state. If this ALSO traps, it's cross-arm state flow in general.
+effect P {
+  set(x) -> ()
+  rd() -> a
+}
+
+handler h with s = {alpha: 0, beta: 0, gamma: 0} {
+  set(v) => resume() with s = v,
+  rd() => resume(s)
+}
+
+fn run() with P = {
+  set({alpha: 1, beta: 2, gamma: 3})
+  rd()
+}
+
+fn main(q) = (run() ~> h).beta

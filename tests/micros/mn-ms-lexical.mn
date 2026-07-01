@@ -1,0 +1,20 @@
+// mn-ms-lexical — multi-shot gating test, LEXICAL dispatch: the perform sits
+// DIRECTLY under `~> both` (not in a called fn), so the handler resolves
+// lexically at lower time → Tier-3 continuation producer. The handler resumes
+// TWICE; the continuation is λx. x * 10. resume(1) = 10, resume(2) = 20,
+// arm returns 10 + 20 = 30.
+//
+// Pre-producer (one-shot collapse): only the first resume fires → exit 10.
+// Post-producer (lexical multi-shot wired): both fire → exit 30.
+
+effect Choose { choose() -> Int }
+
+handler both {
+  choose() => {
+    let a = resume(1)
+    let b = resume(2)
+    a + b
+  }
+}
+
+fn main(q) = { perform choose() * 10 } ~> both

@@ -1,0 +1,16 @@
+// Rung 2: TRANSITIVE perform — the payload must survive being carried through
+// a function-call edge (run -> helper -> emit), i.e. through helper's effect
+// row. This is the map -> iterate -> yield shape, minus the buffer.
+effect Probe {
+  emit(x) -> Int
+}
+
+handler collect {
+  emit(v) => resume(v.beta)
+}
+
+fn helper() with Probe = emit({alpha: 1, beta: 2, gamma: 3})
+
+fn run() with Probe = helper()
+
+fn main(q) = run() ~> collect

@@ -1,0 +1,42 @@
+// mn-multicap-effect — the pass-2 closure-capture trap, shrunk. Mirrors
+// lower_handler_arms_as_decls' `map((arm) => lower_one_arm_decl(arm, discriminator,
+// config, state, fence), arms)`: an EFFECTFUL lambda with MULTIPLE captures, applied
+// through a handler whose config IS the lambda. The wrapper variant (0 captures)
+// PASSES; this adds 3 captures (a, b, c) to find whether multi-capture is the
+// trigger. collect(g) captures g and applies it in its emit arm — the map_collector
+// shape, no lists/make_list needed.
+//
+// Run: tools/run-micro.sh tests/micros/mn-multicap-effect.mn 48 \
+//        $(find lib -name '*.mn' -not -path '*/tutorial/*' | sort)
+// Expected exit 48: lookup2(2)=42, + a(1) + b(2) + c(3) = 48 (kept < 126
+// for the exit-code ceiling so the actual value is readable).
+
+effect Env2 { lookup2(k) -> Int }
+
+handler env2_handler {
+  lookup2(k) => resume(k + 40)
+}
+
+effect Step {
+  emit(v) -> ()
+  done() -> Int
+}
+
+handler collect(g) with total = 0 {
+  emit(v) => {
+    let r = g(v)
+    resume() with total = total + r
+  },
+  done() => resume(total)
+}
+
+fn source(v, n) with Step = if n > 0 { emit(v); source(v, n - 1) }
+
+fn apply_each(g, v) = { source(v, 1); done() } ~> collect(g)
+
+// The multi-capture effectful lambda: captures a, b, c AND performs lookup2.
+fn use_each(v, a, b, c) = apply_each((x) => perform lookup2(x) + a + b + c, v)
+
+fn run() = { use_each(2, 1, 2, 3) } ~> env2_handler
+
+fn main(q) = run()

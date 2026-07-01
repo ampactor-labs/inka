@@ -1,0 +1,33 @@
+// mn-nested-depth3-full — the MAXIMAL depth-3 variant, mirroring the real
+// first-light trap chain's distinguishing features all at once:
+//   - callbacks passed BY NAME (level1/2/3 = LFnRef named-fn values, the
+//     §7-thread the recent commits worked) rather than inline lambdas;
+//   - STATEFUL handlers with `resume() with …` state updates (like map_collector
+//     / the infer_ctx handlers), not stateless;
+//   - MULTI-element iteration (source emits twice → a deeper resume stack);
+//   - TWO user effects threaded (Base + Base2, like Graph + Env in 33905).
+// Three nested apply_each (each installs a config handler) + two top handlers.
+// If THIS traps (non-zero exit / out of bounds) it is the depth-3 §7-thread bug
+// reproduced at seed speed; I then bisect features out to the minimal trigger.
+// Expected when CORRECT: exit 0.
+
+effect Base  { baseop(k) -> Int }
+effect Base2 { baseop2(k) -> Int }
+
+handler base_handler  with bt = 0 { baseop(k)  => resume(k + 40) with bt = bt + 1 }
+handler base2_handler with ct = 0 { baseop2(k) => resume(k + 1)  with ct = ct + 1 }
+
+effect Step { emit(v) -> () }
+
+handler collect(g) with total = 0 {
+  emit(v) => { g(v); resume() with total = total + 1 }
+}
+
+fn source(v, n) with Step = if n > 0 { emit(v); source(v, n - 1) } else { () }
+fn apply_each(g, v) = { source(v, 2) } ~> collect(g)
+
+fn level3(x) = { baseop(x); baseop2(x) }
+fn level2(y) = apply_each(level3, y)
+fn level1(z) = apply_each(level2, z)
+
+fn main(q) = { { apply_each(level1, 2) } ~> base_handler } ~> base2_handler

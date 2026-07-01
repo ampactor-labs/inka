@@ -1,0 +1,22 @@
+// ISOLATION (first-light blocker, 2026-07-01): payload → config-function param.
+//
+// This TRAPS (exit 134); mn-payloaddirect.mn (identical but the arm reads the
+// payload DIRECTLY, `resume(v.beta)`) PASSES with 2. The ONLY difference is the
+// arm applying a CONFIG FUNCTION `f` to the payload `v` instead of reading it.
+//
+// MEASURED root: `f`'s param `r` lowers as `{beta | ρ}` (TRecordOpen) with ρ
+// (the row rest) UNRESOLVED, so `r.beta`'s byte offset is genuinely ambiguous
+// (offset depends on how many fields precede beta alphabetically = depends on ρ)
+// → resolve_field_offset returns -1 → emit `(unreachable)`.
+//
+// The concrete {record} flows to the arm's `v` (proven by mn-payloaddirect), but
+// NOT through `f(v)` to `f`'s parameter — the live flow edge severs at the
+// config-function application. `find_handler(pred)` doing `pred(elem)` is the
+// SAME shape, so this blocks lookup_tag / find / filter / every HOF whose lambda
+// field-accesses its element. Every function in the infer chain reads CORRECT —
+// the divergence is a primitive behaving unlike its code (needs per-primitive
+// instrumentation to pin). Expected value when fixed: 2.
+effect Probe { emit(x) -> Int }
+handler collect(f) { emit(v) => resume(f(v)) }
+fn run() with Probe = emit({alpha: 1, beta: 2, gamma: 3})
+fn main(q) = run() ~> collect((r) => r.beta)

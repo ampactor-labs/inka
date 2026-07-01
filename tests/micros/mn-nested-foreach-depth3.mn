@@ -1,0 +1,37 @@
+// mn-nested-foreach-depth3 — minimal SELF-CONTAINED repro of the first-light
+// m2→m3 trap: a config-closure handler nested 3 deep, where the innermost
+// config performs a USER effect that must thread up through all three handlers.
+// This is each_handler/for_each distilled (no lists/make_list): `collect(g)` IS
+// `each_handler(f)` (one op, arm calls the closure config g), `source` IS
+// `iterate` (one yield), `apply_each` IS `for_each` (install + drive).
+//
+// Mirrors the trap chain infer_program →apply_each(level1)→ ... →apply_each(level3)
+// →baseop: collect#3's config g3=(x)=>level3(x) is the analog of fn 33905, called
+// at handler-nesting depth 3, forwarding `baseop` past collect#3/#2/#1 to
+// base_handler. If 33905's garbage-closure trap is a depth-3 §7-thread evidence
+// bug, THIS reproduces it at seed speed (~10s) instead of the 6-min m2→m3 march.
+// Expected when CORRECT: exit 0 (the chain runs clean).
+
+effect Base { baseop(k) -> Int }
+
+handler base_handler {
+  baseop(k) => resume(k + 40)
+}
+
+effect Step { emit(v) -> () }
+
+handler collect(g) {
+  emit(v) => { g(v); resume() }
+}
+
+fn source(v) with Step = { emit(v); () }
+fn apply_each(g, v) = { source(v) } ~> collect(g)
+
+// Captures: each config lambda closes over a local (c1/c2), mirroring 35866
+// (6 captures) and 33905 (span/op_name) — captures shift the [caps][evs] layout
+// the evidence fence depends on, the likely depth-3 differentiator.
+fn level3(x, cap) = { baseop(x + cap); () }
+fn level2(y, c2) = apply_each((x) => level3(x, c2), y)
+fn level1(z, c1) = apply_each((y) => level2(y, c1), z)
+
+fn main(q) = { apply_each((z) => level1(z, 7), 2) } ~> base_handler

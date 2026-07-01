@@ -1,0 +1,9 @@
+// Isolate: does field access on a free param resolve via the call-site record?
+// r : ?free; r.alpha/beta/gamma make r TRecordOpen; the call unifies r with the
+// record literal {alpha:1,beta:2,gamma:3} -> alpha@0 beta@4 gamma@8 -> 1+2+3=6.
+// If this returns 6, field access works and the lower_scope trap is the
+// list_head element-flow; if it traps (-1 -> unreachable), field access itself
+// fails to resolve a free receiver from the graph.
+fn getb(r) = r.alpha + r.beta + r.gamma
+
+fn main(q) = getb({alpha: 1, beta: 2, gamma: 3})

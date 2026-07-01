@@ -1,0 +1,7 @@
+// EXACT wheel shape: record annotation with an ADT-typed field (install_span: Span).
+// If the record annotation fails to resolve because a field is an ADT (TName),
+// tag stays poly → tag.handle unreachable.
+type Span = Span(Int, Int, Int, Int)
+fn pick(ref tags: [{handle: Int, install_span: Span, region_id: Int}], h) with !Mutate =
+  find((tag) => tag.handle == h, tags)
+fn main(q) = 0

@@ -1,0 +1,24 @@
+// Faithful repro of the lower_scope ls_push_scope trap: a LIST handler-state
+// field, where one arm BUILDS A RECORD from its op args and pushes it via
+// `[{...}] ++ state` (like ls_enter_frame), and another arm reads
+// `list_head(state).field` with a SINGLE field access (like ls_push_scope).
+// If frames' element type resolves to the record, fr.beta is offset 4 (sorted:
+// alpha=0, beta=1, gamma=2) and this returns 2. If not, the load is -1 ->
+// (unreachable) -> trap. This isolates whether the resume-state-update
+// unification makes the list element a record.
+effect Scope {
+  push(a, b, c) -> ()
+  readb() -> Int
+}
+
+handler scope with frames = [] {
+  push(a, b, c) => resume() with frames = [{alpha: a, beta: b, gamma: c}] ++ frames,
+  readb() => resume(list_head(frames).alpha + list_head(frames).beta + list_head(frames).gamma)
+}
+
+fn run() with Scope = {
+  push(1, 2, 3)
+  readb()
+}
+
+fn main(q) = run() ~> scope

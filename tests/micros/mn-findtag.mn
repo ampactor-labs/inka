@@ -1,0 +1,8 @@
+// EXACT lookup_tag shape: find + field-access lambda + annotated list PARAM.
+// tag.handle must resolve via the annotation flowing through find's element. →7.
+fn pick(ref tags: [{handle: Int, region_id: Int}], h) with !Mutate =
+  find((tag) => tag.handle == h, tags)
+fn main(q) = match pick([{handle: 7, region_id: 1}, {handle: 9, region_id: 2}], 7) {
+  Some(t) => t.handle,
+  None    => 0
+}

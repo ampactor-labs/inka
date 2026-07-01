@@ -1,0 +1,27 @@
+// Minimal reproduction: ONE handler handling TWO distinct effects (the
+// wat_to_string shape — wat_emit/WasmOut + wat_collect/WatBuffer). The wheel's
+// register_handler derives ONE ename from the first arm; the second arm's op
+// belongs to a DIFFERENT effect. If the multi-effect handler is the eff_name_lt
+// root, the seed traps inferring `buffer` (exit != 0, no clean run).
+effect Emit { emit(s: String) -> () }
+effect Collect { collect() -> String }
+
+handler buffer with buf = make_list(4), count = 0 {
+  emit(s) => {
+    let ext = list_extend_to(buf, count + 1)
+    let w   = list_set(ext, count, s)
+    resume() with buf = w, count = count + 1
+  },
+  collect() => resume(str_concat_all(slice(buf, 0, count)))
+}
+
+fn run() with Emit + Collect = {
+  emit("a")
+  emit("b")
+  collect()
+}
+
+fn main() = {
+  let result = run() ~> buffer
+  if result == "ab" { 42 } else { 1 }
+}

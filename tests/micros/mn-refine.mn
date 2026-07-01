@@ -1,0 +1,8 @@
+// mn-refine — minimal refinement-type decl, to isolate the pass-2
+// expr_to_predicate OOB (mentl2 faults parsing `type X = Int where <pred>`).
+// No handler, so lowering can't hit the producer/pre-register path —
+// this isolates the PARSE of the where-predicate.
+
+type Pos = Int where 0 <= self
+
+fn main(q) = 42

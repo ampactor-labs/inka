@@ -1,0 +1,20 @@
+// mn-ms-both — multi-shot gating test. The handler resumes TWICE;
+// the continuation is λx. x * 10. resume(1) = 10, resume(2) = 20,
+// arm returns 10 + 20 = 30.
+//
+// Pre-H7 (one-shot collapse): only the first resume fires → exit 10.
+// Post-H7 (multi-shot wired):  both resumes fire → exit 30.
+
+effect Choose { choose() -> Int }
+
+handler both {
+  choose() => {
+    let a = resume(1)
+    let b = resume(2)
+    a + b
+  }
+}
+
+fn body() = perform choose() * 10
+
+fn main(q) = { body() } ~> both

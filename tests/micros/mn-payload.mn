@@ -1,0 +1,16 @@
+// Bottom-up probe of the ONE primitive: does ~> read the performed value's
+// type into the handler arm? No map, no buffer, no iterate. emit carries a
+// record; the arm reads v.beta. If the payload edge works, v : the record,
+// v.beta = 2 (sorted alpha=0,beta=1,gamma=2 -> offset 4). If the arm re-derives
+// a fresh var (the drift, foreign-fluency "fresh per binding"), v.beta traps.
+effect Probe {
+  emit(x) -> Int
+}
+
+handler collect {
+  emit(v) => resume(v.beta)
+}
+
+fn run() with Probe = emit({alpha: 1, beta: 2, gamma: 3})
+
+fn main(q) = run() ~> collect

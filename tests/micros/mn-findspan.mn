@@ -1,0 +1,7 @@
+type Span = { lo: Int, hi: Int }
+fn pick(ref tags: [{handle: Int, install_span: Span, region_id: Int}], h) with !Mutate =
+  find((tag) => tag.handle == h, tags)
+fn main(q) = match pick([{handle: 7, install_span: {lo: 0, hi: 1}, region_id: 1}], 7) {
+  Some(t) => t.handle,
+  None    => 0
+}

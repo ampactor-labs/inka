@@ -1,0 +1,3 @@
+// Field-access lambda through map over a list literal. r.beta must resolve from
+// the element {alpha,beta} flowing through map's element type. head→first elem→2.
+fn main(q) = list_head(map((r) => r.beta, [{alpha: 1, beta: 2}]))

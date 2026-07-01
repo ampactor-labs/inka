@@ -1,0 +1,21 @@
+// Rung 3c: same as rung 3b but ops renamed so the WRITER (aset) sorts BEFORE
+// the reader (zrd). If alphabetical arm-typing order is the cause — the read
+// snapshotting the state type before the write lands — this passes while
+// rung 3b (rd<set, reader-first) traps. That would pin the root: the state
+// READ re-derives a snapshot instead of carrying the live handle (#7).
+effect P {
+  aset(x) -> ()
+  zrd() -> a
+}
+
+handler h with s = {alpha: 0, beta: 0, gamma: 0} {
+  aset(v) => resume() with s = v,
+  zrd() => resume(s)
+}
+
+fn run() with P = {
+  aset({alpha: 1, beta: 2, gamma: 3})
+  zrd()
+}
+
+fn main(q) = (run() ~> h).beta

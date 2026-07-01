@@ -1,0 +1,21 @@
+// Rung 3: the element must flow through HANDLER STATE — put writes the record
+// into the slot list; get reads it back. This is map_collector's buf, minus
+// iterate/f/count. If state's element type flows from list_set's value, slot :
+// [record], list_head(slot) : record, .beta = 2. If the state stays [free]
+// (re-derived at the decl, not read live from the arm), it traps.
+effect Probe {
+  put(x) -> ()
+  get() -> a
+}
+
+handler hold with slot = make_list(2) {
+  put(v) => resume() with slot = list_set(slot, 0, v),
+  get() => resume(list_head(slot))
+}
+
+fn run() with Probe = {
+  put({alpha: 1, beta: 2, gamma: 3})
+  get()
+}
+
+fn main(q) = (run() ~> hold).beta

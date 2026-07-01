@@ -1,0 +1,6 @@
+// Span defined AFTER pick — a FORWARD type reference (like own.mn before types.mn).
+// If the annotation can't resolve Span, tag stays poly → tag.handle unreachable.
+fn pick(ref tags: [{handle: Int, install_span: Span, region_id: Int}], h) with !Mutate =
+  find((tag) => tag.handle == h, tags)
+type Span = { lo: Int, hi: Int }
+fn main(q) = 0

@@ -1,0 +1,24 @@
+// Hypothesis test (dep-free): does the seed mis-construct a FIELDED variant of a
+// MIXED nullary+fielded ADT as a nullary 0 (dropping its field)? Mirrors EffName
+// (ENamed(_) | EParameterized(_,_) | EPure) + eff_name_lt's shape, with Int
+// fields so NO runtime lib is needed (uses built-in `<`). If Nn(1) is a real
+// record, nm_lt(Nn(1), Nn(2)) reads the field and returns true → exit 42. If the
+// seed drops the field and builds Nn(1) as 0, the match on `a` falls through →
+// trap — the same shape as the eff_name_lt first-light blocker, isolated to
+// construction of a mixed ADT's fielded variant.
+type Nm
+  = Nn(Int)
+  | Np(Int, Int)
+  | Nz
+
+fn nm_lt(a, b) = match a {
+  Nn(x)    => match b { Nn(y) => x < y, Np(y, _) => true,  Nz => false },
+  Np(x, _) => match b { Nn(y) => false, Np(y, _) => x < y, Nz => false },
+  Nz       => match b { Nz => false,    Nn(_) => true,     Np(_, _) => true }
+}
+
+fn main() = {
+  let a = Nn(1)
+  let b = Nn(2)
+  if nm_lt(a, b) { 42 } else { 1 }
+}

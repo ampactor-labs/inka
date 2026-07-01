@@ -1,0 +1,4 @@
+fn main(q) = {
+  let r = list_head([{alpha: 1, beta: 2, gamma: 3}])
+  r.alpha + r.beta + r.gamma
+}

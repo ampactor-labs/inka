@@ -1,0 +1,21 @@
+// Single-var (eff_vars={x}), but the result flows via the HANDLE RESULT S — the
+// result-arm resumes with a value, like map_collector's result()=>resume(slice
+// buf). done() -> () so there's NO return var; the record reaches main only via
+// S. This is map's actual shape. If it traps, the gap is S (handle result),
+// not multi-var P.
+effect P {
+  add(x) -> ()
+  done() -> ()
+}
+
+handler h with buf = make_list(2) {
+  add(v) => resume() with buf = list_set(buf, 0, v),
+  done() => resume(list_head(buf))
+}
+
+fn run() with P = {
+  add({alpha: 1, beta: 2, gamma: 3})
+  done()
+}
+
+fn main(q) = (run() ~> h).beta

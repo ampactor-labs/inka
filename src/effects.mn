@@ -518,7 +518,6 @@ fn row_is_ground(ref row) with Pure = {
 // (string-set adapters retained for non-row callers — none today)
 
 fn sort_unique(ref names) with !Mutate = name_set_canonicalize(names)
-fn insert_sorted(ref sorted, ref x) with !Mutate = name_set_insert(sorted, x)
 
 fn list_intersect(ref a, ref b) with !Mutate = name_set_intersect(a, b)
 fn list_diff_str(ref a, ref b) with !Mutate = name_set_diff(a, b)
@@ -527,187 +526,29 @@ fn list_disjoint(ref a, ref b) with !Mutate = name_set_disjoint(a, b)
 fn list_eq_str(ref a, ref b) with !Mutate = name_set_eq(a, b)
 fn string_in_list(ref lst, ref s) with !Mutate = name_set_contains(lst, s)
 
-// EffName comparators
-// Effect-name equality = name match AND (parameterized) arg lists
-// pointwise equal. Ordering = name lex order; ties broken by arg
-// list lex order. The substrate-wide sorted-deduped invariant on
-// row entries depends on these two functions producing total order.
-
-fn eff_name_eq(ref a, ref b) with !Mutate = match a {
-  ENamed(an) => match b {
-    ENamed(bn)               => an == bn,
-    EParameterized(_, _)     => false,
-    EPure                    => false
-  },
-  EParameterized(an, aa) => match b {
-    ENamed(_)                => false,
-    EParameterized(bn, ba)   => an == bn && eff_args_eq(aa, ba),
-    EPure                    => false
-  },
-  // EPure is the union identity — equal only to itself. It never enters a row
-  // name-set (consumed to EfPure), so this is the total-comparator boundary.
-  EPure => match b {
-    EPure                    => true,
-    _                        => false
-  }
-}
-
-fn eff_args_eq(ref a, ref b) with !Mutate = {
-  if len(a) != len(b) { false }
-  else { eff_args_eq_loop(a, b, 0, len(a)) }
-}
-
-fn eff_args_eq_loop(ref a, ref b, i, n) with !Mutate = {
-  if i >= n { true }
-  else if eff_arg_eq(list_index(a, i), list_index(b, i)) {
-    eff_args_eq_loop(a, b, i + 1, n)
-  } else { false }
-}
-
-fn eff_arg_eq(ref a, ref b) with !Mutate = match a {
-  EAInt(n)    => match b {
-    EAInt(m)    => n == m,
-    EAFloat(_)  => false,
-    EAString(_) => false,
-    EAType(_)   => false,
-    EANode(_)   => false
-  },
-  EAFloat(fa) => match b {
-    EAInt(_)    => false,
-    EAFloat(fb) => fa == fb,   // Sample(44.1) IS Sample(44.1) — the constant-
-                               // folded projection of the operand-Node's literal,
-                               // compared by the value layer's structural float ==
-                               // (the prior `false` fabricated inequality — a silent
-                               // surrender at the install-time row gate, deleted)
-    EAString(_) => false,
-    EAType(_)   => false,
-    EANode(_)   => false
-  },
-  EAString(s) => match b {
-    EAInt(_)    => false,
-    EAFloat(_)  => false,
-    EAString(t) => s == t,
-    EAType(_)   => false,
-    EANode(_)   => false
-  },
-  // Type args identify the SAME effect (Iterate(a) IS Iterate(b)); the
-  // payloads are unified at the install, not value-compared. So they
-  // match for row-canonicalization — one Iterate entry, payload reconciled
-  // by unify_row. (Value args like Sample(44100) stay value-distinct.)
-  EAType(_)   => match b {
-    EAInt(_)    => false,
-    EAFloat(_)  => false,
-    EAString(_) => false,
-    EAType(_)   => true,
-    EANode(_)   => false
-  },
-  // A non-literal operand arg: the SAME operand node IS the same arg (the AST-
-  // in-graph fabric — distinct nodes for one literal would have folded to
-  // EAInt/EAFloat at parse). Handle identity is the structural compare; distinct
-  // handles stay distinct row entries (conservative — Sample(rate1) ≠ Sample(rate2);
-  // install-time unification reconciles their node bodies at the row gate).
-  EANode(ha)  => match b {
-    EANode(hb)  => ha == hb,
-    EAInt(_)    => false,
-    EAFloat(_)  => false,
-    EAString(_) => false,
-    EAType(_)   => false
-  }
-}
-
-// Total order: ENamed < EParameterized when names differ; same name
-// orders by arg list. Bare ENamed("Sample") < EParameterized("Sample",
-// _) so a bare/parameterized mix has a stable canonical order.
-fn eff_name_lt(ref a, ref b) with !Mutate = match a {
-  ENamed(an) => match b {
-    ENamed(bn)               => str_lt(an, bn),
-    EParameterized(bn, _)    =>
-      if an == bn { true } else { str_lt(an, bn) },
-    EPure                    => false   // EPure is least; nothing is < EPure
-  },
-  EParameterized(an, aa) => match b {
-    ENamed(bn) =>
-      if an == bn { false } else { str_lt(an, bn) },
-    EParameterized(bn, ba) =>
-      if an == bn { eff_args_lt(aa, ba) } else { str_lt(an, bn) },
-    EPure                    => false
-  },
-  // EPure is the union identity — ordered least (it never enters a row
-  // name-set; this is the total-order boundary).
-  EPure => match b {
-    EPure                    => false,
-    _                        => true
-  }
-}
-
-fn eff_args_lt(ref a, ref b) with !Mutate = {
-  eff_args_lt_loop(a, b, 0, len(a), len(b))
-}
-
-fn eff_args_lt_loop(ref a, ref b, i, na, nb) with !Mutate = {
-  if i >= na { na < nb }
-  else if i >= nb { false }
-  else {
-    let ai = list_index(a, i)
-    let bi = list_index(b, i)
-    if eff_arg_eq(ai, bi) {
-      eff_args_lt_loop(a, b, i + 1, na, nb)
-    } else {
-      eff_arg_lt(ai, bi)
-    }
-  }
-}
-
-fn eff_arg_lt(ref a, ref b) with !Mutate = match a {
-  EAInt(n)    => match b {
-    EAInt(m)    => n < m,
-    EAFloat(_)  => true,
-    EAString(_) => true,
-    EAType(_)   => true,
-    EANode(_)   => true
-  },
-  EAFloat(fa) => match b {
-    EAInt(_)    => false,
-    EAFloat(fb) => fa < fb,   // real float order — two distinct Sample rates sort
-                              // distinctly (the prior `false` collapsed them order-
-                              // equal, breaking the sorted-row total order)
-    EAString(_) => true,
-    EAType(_)   => true,
-    EANode(_)   => true
-  },
-  EAString(s) => match b {
-    EAInt(_)    => false,
-    EAFloat(_)  => false,
-    EAString(t) => str_lt(s, t),
-    EAType(_)   => true,
-    EANode(_)   => true
-  },
-  // EAType sorts last and is order-equal to any EAType (one effect entry).
-  EAType(_)   => match b {
-    EAInt(_)    => false,
-    EAFloat(_)  => false,
-    EAString(_) => false,
-    EAType(_)   => false,
-    EANode(_)   => true
-  },
-  // EANode sorts after every literal/type kind, ordered by operand handle.
-  EANode(ha)  => match b {
-    EAInt(_)    => false,
-    EAFloat(_)  => false,
-    EAString(_) => false,
-    EAType(_)   => false,
-    EANode(hb)  => ha < hb
-  }
-}
+// EffName equality is the ONE structural `==` (the value-layer fold's sum-eq
+// leaf, §5.U) — type-dispatched at emit, total over the five node-kinds, so
+// `ENamed`'s string / `EParameterized`'s (name, args) / `EPure` all compare by
+// shape with no hand-rolled comparator. The former eff_name_eq / eff_args_eq /
+// eff_arg_eq were its drift-7 twins (and their `match a` fell through to a trap
+// on a null the fold tag-compares past). One equality; per SYNTAX §Parameterized
+// effect (structural for compound args). A parameterized effect carries ONE
+// shared type var per instance (register_one_op / register_effect_ops), so a row
+// never holds two different-var `Iterate` entries — `==` dedups them exactly as
+// the old EAType-always-equal boundary did. (peer Hβ.effects.parameterized-
+// effect-row-dedup verifies the shared-var invariant at the value gate.)
 
 // Row-name set algebra
-// Sorted-flat [EffName] set ops. Mirror runtime/strings.mn's
-// set_* surface but compare with eff_name_eq / eff_name_lt. Local to
-// effects.mn because EffName is row-internal vocabulary.
-//
-// All functions assume sorted input; canonicalize at the row's
-// construction boundary (mk_ef_closed / mk_ef_open) the same way the
-// string-set substrate handles boundary canonicalization.
+// [EffName] SET ops — a row IS a set, so membership (name_set_contains, a
+// linear eff_name_eq scan) is the ONE operation: subset / subsumption /
+// equality (len + mutual-subset) and dedup all read through it, order-
+// independent. No canonical order is imposed because no consumer reads one —
+// equality is order-free (name_set_eq) and ev-slots are key-addressed, not
+// positional (lower.mn derive_ev_slots). So the sorted insert (make_list(n+1)
+// + copy + shift + eff_name_lt — the null's trap site) is DISSOLVED: the
+// drift-7 twin of runtime/strings.mn's string-set collapses to one membership,
+// and the sort — a canonical order no reader consumes — is the re-derivation
+// the Carried-Truth Law deletes (§4①: one ordered-keyed-set operation).
 
 fn name_set_canonicalize(ref names) with !Mutate = {
   name_set_canonicalize_loop(names, 0, len(names), [])
@@ -721,44 +562,17 @@ fn name_set_canonicalize_loop(ref names, i, n, own acc) with !Mutate = {
   }
 }
 
-fn name_set_insert(ref sorted, ref name) with !Mutate = {
-  let n = len(sorted)
-  let pos = name_find_pos(sorted, name, 0, n)
-  if pos < n {
-    let existing = list_index(sorted, pos)
-    if eff_name_eq(existing, name) { sorted }
-    else {
-      let buf = make_list(n + 1)
-      let prefix = list_copy_into(sorted, buf, 0, pos)
-      let with_ins = list_set(prefix, pos, name)
-      name_copy_suffix_shifted(sorted, with_ins, pos, pos, n)
-    }
-  } else {
-    let buf = make_list(n + 1)
-    let copied = list_copy_into(sorted, buf, 0, n)
-    list_set(copied, n, name)
-  }
-}
-
-fn name_find_pos(ref sorted, ref name, i, n) with !Mutate = {
-  if i >= n { n }
+// Insert into the set = dedup-then-append: present already (membership) ⇒
+// unchanged; else copy the flat prefix and write `name` at the end. No sorted
+// position to find, no suffix to shift — the tail append is the whole write.
+// The set stays a FLAT tag-0 list (the representation every consumer + the
+// concat traversal already expect), so no new node-tag enters the row path.
+fn name_set_insert(ref sorted, ref name) with !Mutate =
+  if name_set_contains(sorted, name) { sorted }
   else {
-    let existing = list_index(sorted, i)
-    if eff_name_lt(existing, name) {
-      name_find_pos(sorted, name, i + 1, n)
-    } else { i }
+    let n = len(sorted)
+    list_set(list_copy_into(sorted, make_list(n + 1), 0, n), n, name)
   }
-}
-
-fn name_copy_suffix_shifted(ref src, own dst, src_idx, dst_idx, n) with !Mutate = {
-  if src_idx >= n { dst }
-  else {
-    name_copy_suffix_shifted(
-      src, list_set(dst, dst_idx + 1, list_index(src, src_idx)),
-      src_idx + 1, dst_idx + 1, n
-    )
-  }
-}
 
 fn name_set_union(ref a, ref b) with !Mutate = {
   name_set_union_loop(a, b, 0, len(b), name_set_canonicalize(a))
@@ -833,7 +647,12 @@ fn name_set_contains(ref set, ref name) with !Mutate = {
 
 fn name_set_contains_loop(ref set, ref name, i, n) with !Mutate = {
   if i >= n { false }
-  else if eff_name_eq(list_index(set, i), name) { true }
+  // Structural `==` (the value-layer fold's sum-eq leaf, §5.U) — the ONE
+  // equality, type-dispatched at emit; the hand-rolled eff_name_eq was its
+  // drift-7 twin (and its `match a` fell through to a trap on a null, where the
+  // fold tag-compares). EffName IS a sum; `==` recurses ENamed's string /
+  // EParameterized's args / EPure by shape.
+  else if list_index(set, i) == name { true }
   else { name_set_contains_loop(set, name, i + 1, n) }
 }
 

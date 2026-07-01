@@ -2111,6 +2111,11 @@
     (local $new_ty_tag i32) (local $new_fields i32)
     (local $merged_fields i32)
     (call $graph_init)
+    ;; CARRIED-TRUTH: bind the union-find ROOT, never a raw alias. A rowvar that
+    ;; was unified is an alias chasing to its root; binding the alias's slot leaves
+    ;; the root NRowFree, and every consumer that reads the canonical root sees an
+    ;; open row. Bind by identity (root), not position.
+    (local.set $handle (call $graph_chase_handle (local.get $handle)))
 
     (local.set $old_nk (call $gnode_kind (call $graph_node_at (local.get $handle))))
     (local.set $old_tag (call $node_kind_tag (local.get $old_nk)))
@@ -13838,7 +13843,21 @@
             (call $unify (local.get $ha) (local.get $hb)
                           (local.get $span) (local.get $reason))
             (return)))
-        ;; b is non-TVar: occurs-check, then bind or emit
+        ;; CARRIED-TRUTH: `ha` may ALREADY be bound (a use-site handle the graph
+        ;; proved — e.g. a lambda arg's `(r)->ret`). Chase it live: if NBound,
+        ;; unify `b` AGAINST that existing type — never $graph_bind over it. The
+        ;; raw bind would discard the proof and orphan its inner vars (the
+        ;; config-fn/HOF field-access disconnect: `f`'s resolved `(P)->R` bound
+        ;; onto the lambda handle erased `(r)->ret`, so `P` never met `r` and
+        ;; `r.field` floored on an open row). A genuinely-free var still binds.
+        (local.set $resolved_a (call $graph_chase (local.get $ha)))
+        (if (i32.eq (call $node_kind_tag (call $gnode_kind (local.get $resolved_a))) (i32.const 60))
+          (then
+            (call $unify_types
+              (call $node_kind_payload (call $gnode_kind (local.get $resolved_a)))
+              (local.get $b) (local.get $span) (local.get $reason))
+            (return)))
+        ;; b is non-TVar and ha is free: occurs-check, then bind or emit
         (if (call $occurs_in (local.get $ha) (local.get $b))
           (then
             (call $infer_emit_occurs_check
@@ -28759,8 +28778,11 @@
     ;; Get partial fields and rowvar handle.
     (local.set $partial (call $ty_trecordopen_fields (local.get $trecordopen)))
     (local.set $rowvar_h (call $ty_trecordopen_rowvar (local.get $trecordopen)))
-    ;; Chase the rowvar handle through the graph.
-    (local.set $g (call $graph_chase (local.get $rowvar_h)))
+    ;; CARRIED-TRUTH: read the union-find ROOT's node. graph_chase is the Tier-3
+    ;; base that stops short of transitive TVar/row aliases; graph_chase_handle
+    ;; follows the full chain to the canonical, where the install bound the
+    ;; residual. Read by identity (root), never the incomplete direct chase.
+    (local.set $g (call $graph_node_at (call $graph_chase_handle (local.get $rowvar_h))))
     (local.set $nk (call $gnode_kind (local.get $g)))
     (local.set $nk_tag (call $node_kind_tag (local.get $nk)))
     ;; NRowBound (62) — payload is the residual Ty (TRecord).

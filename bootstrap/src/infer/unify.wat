@@ -395,7 +395,21 @@
             (call $unify (local.get $ha) (local.get $hb)
                           (local.get $span) (local.get $reason))
             (return)))
-        ;; b is non-TVar: occurs-check, then bind or emit
+        ;; CARRIED-TRUTH: `ha` may ALREADY be bound (a use-site handle the graph
+        ;; proved — e.g. a lambda arg's `(r)->ret`). Chase it live: if NBound,
+        ;; unify `b` AGAINST that existing type — never $graph_bind over it. The
+        ;; raw bind would discard the proof and orphan its inner vars (the
+        ;; config-fn/HOF field-access disconnect: `f`'s resolved `(P)->R` bound
+        ;; onto the lambda handle erased `(r)->ret`, so `P` never met `r` and
+        ;; `r.field` floored on an open row). A genuinely-free var still binds.
+        (local.set $resolved_a (call $graph_chase (local.get $ha)))
+        (if (i32.eq (call $node_kind_tag (call $gnode_kind (local.get $resolved_a))) (i32.const 60))
+          (then
+            (call $unify_types
+              (call $node_kind_payload (call $gnode_kind (local.get $resolved_a)))
+              (local.get $b) (local.get $span) (local.get $reason))
+            (return)))
+        ;; b is non-TVar and ha is free: occurs-check, then bind or emit
         (if (call $occurs_in (local.get $ha) (local.get $b))
           (then
             (call $infer_emit_occurs_check

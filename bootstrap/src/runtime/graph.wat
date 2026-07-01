@@ -423,6 +423,11 @@
     (local $new_ty_tag i32) (local $new_fields i32)
     (local $merged_fields i32)
     (call $graph_init)
+    ;; CARRIED-TRUTH: bind the union-find ROOT, never a raw alias. A rowvar that
+    ;; was unified is an alias chasing to its root; binding the alias's slot leaves
+    ;; the root NRowFree, and every consumer that reads the canonical root sees an
+    ;; open row. Bind by identity (root), not position.
+    (local.set $handle (call $graph_chase_handle (local.get $handle)))
 
     (local.set $old_nk (call $gnode_kind (call $graph_node_at (local.get $handle))))
     (local.set $old_tag (call $node_kind_tag (local.get $old_nk)))

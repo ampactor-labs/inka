@@ -265,10 +265,8 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
   }
 }
 
-fn lookup_tag(ref tags, handle) with !Mutate = {
-  let hits = filter((tag) => tag.handle == handle, tags)
-  if len(hits) == 0 { None } else { Some(head(hits)) }
-}
+fn lookup_tag(ref tags: [{handle: Int, install_span: Span, region_id: Int}], handle) with !Mutate =
+  find((tag) => tag.handle == handle, tags)
 
 fn region_on_stack(ref stack, rid) with !Mutate = {
   any((r) => {

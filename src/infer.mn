@@ -1147,7 +1147,12 @@ fn names_effect_payload(names, ename) = {
           _         => []
         }, args))
       } else { [] },
-    ENamed(_) => []
+    ENamed(_) => [],
+    // EffName is ENamed | EParameterized | EPure — TOTAL. EPure carries no
+    // payload; without this arm the seed-compiled wheel's non-exhaustive match
+    // falls through to a garbage value (nothing-drops law: a missing arm IS a
+    // drop to 0 — the eff_name_lt-detonating class, peer subst_eff_names).
+    EPure     => []
   }, names))
   if len(tys) == 0 { None } else { Some(list_head(tys)) }
 }
@@ -1393,12 +1398,21 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
     TVar(ha) =>
       match b {
         TVar(hb) => unify(ha, hb, span, reason),
-        _ => {
-          if occurs_in(ha, b) {
-            report(EOccursCheck(ha, b, span))
-          } else {
-            graph_bind(ha, b, Located(span, reason))
-          }
+        // CARRIED-TRUTH: `ha` may ALREADY be bound (a use-site handle the graph
+        // proved — e.g. a lambda arg's `(r) -> ret`). Read it live: if NBound,
+        // unify `b` AGAINST that existing type, never `graph_bind` over it. The
+        // raw bind discards the proof and orphans its inner vars — the config-fn
+        // /HOF field-access disconnect (`f`'s resolved `(P) -> R` bound onto the
+        // lambda handle erased `(r) -> ret`, so `P` never met `r` and `r.field`
+        // floored on an open row). A genuinely-free var still binds.
+        _ => match graph_chase(ha) {
+          GNode(NBound(inner), _) => unify_types(inner, b, span, reason),
+          _ =>
+            if occurs_in(ha, b) {
+              report(EOccursCheck(ha, b, span))
+            } else {
+              graph_bind(ha, b, Located(span, reason))
+            }
         }
       },
 
@@ -2599,11 +2613,21 @@ fn subst_row(eff, mapping) = match eff {
 // Substitute parameterized payload types through an effect-name list
 // (the row mirror of subst_ty over the row's carried types).
 fn subst_eff_names(names, mapping) = map((n) => match n {
-  ENamed(s)               => ENamed(s),
+  // ONLY EParameterized carries substitutable payload TYPES (Iterate(a) ⇒
+  // Iterate(fresh)) — reconstruct it with the fresh args.
   EParameterized(s, args) => EParameterized(s, map((arg) => match arg {
     EAType(ty) => EAType(subst_ty(ty, mapping)),
     _          => arg
-  }, args))
+  }, args)),
+  // ENamed and EPure carry NOTHING to substitute — carry the live value `n`,
+  // NEVER re-derive it. `ENamed(s) => ENamed(s)` was a Carried-Truth violation:
+  // it deconstructs then reconstructs a record identical to `n`, and that
+  // reconstruction is exactly the construction the seed can miscompile to a raw
+  // 0 on the op-call instantiation path (instantiate → subst_row → here) that
+  // detonates eff_name_eq. Carrying `n` is less code AND sidesteps the copy.
+  // Totality preserved over EffName — a missing arm IS a drop (nothing-drops).
+  ENamed(_)               => n,
+  EPure                   => n
 }, names)
 
 fn find_mapping(mapping, id) = {
@@ -2902,6 +2926,16 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   // and `~>` unifies it with the body's performed E(a) — so the arm's op
   // param (elem : P) becomes the performer's value type. The data-twin of
   // the dispatch gradient: a fact fixed at the install, not the decl.
+  // The handler's effect IS the effect that DECLARES its arm ops, read LIVE from
+  // the env (§2 follow-the-edge: the op→effect edge carries the identity; the
+  // parser names no effect, leaving ename "" — parser.mn:881). Derived HERE, not
+  // via a helper: only register_handler's scope holds `arms` at its concrete
+  // arm-record type (the loop below closes {args,body,op_name} via
+  // infer_one_handler_arm), so op_name's field offset resolves here where a
+  // generic helper's open record floors it. Mirrors the seed's
+  // $derive_effect_name_from_arms; a handler that is its own effect's sole
+  // declaration falls back to its own name. (ename is vestigial once this is
+  // live — peer Hβ.infer.handler-effect-name-is-live-edge.)
   let payload_h = mint(Inferred("effect '{ename}' payload type"))
   let handler_ty = TName("Handler", [TName(ename, [TVar(payload_h)])])
   let config_tparams = mint_handler_config_tparams(config, hname, 0)
@@ -3190,7 +3224,7 @@ fn lowest_common_ancestor(a, b, root) with GraphRead = {
       lca_among_children(push(stmts, final), a, b),
     NExpr(IfExpr(c, t, e)) => lca_among_children([c, t, e], a, b),
     NExpr(MatchExpr(scrut, arms)) =>
-      lca_among_children([scrut] ++ map(arms, (arm) => arm.body), a, b),
+      lca_among_children([scrut] ++ map(arms, (arm) => { let (_, body) = arm; body }), a, b),
     NExpr(CallExpr(f, args)) => lca_among_children([f] ++ args, a, b),
     NExpr(BinOpExpr(_, l, r)) => lca_among_children([l, r], a, b),
     NExpr(UnaryOpExpr(_, x)) => lca_among_children([x], a, b),
@@ -3225,8 +3259,8 @@ fn arm_index_containing(arms, target_handle) with GraphRead = {
 fn arm_index_loop(arms, target_handle, idx) with GraphRead = {
   if len(arms) == 0 { -1 }
   else {
-    let arm = list_head(arms)
-    if contains_handle(arm.body, target_handle) { idx }
+    let (_, body) = list_head(arms)   // match arm is a (pat, body) tuple — positional, not a named record
+    if contains_handle(body, target_handle) { idx }
     else { arm_index_loop(list_tail(arms), target_handle, idx + 1) }
   }
 }
@@ -3367,7 +3401,20 @@ fn walk_refinement(map, node, path_pred) with GraphRead + GraphWrite = {
     NExpr(LabeledArg(_, v)) => walk_refinement(map, v, path_pred),
     NHole(_) => map,
     NPat(_)  => map,
-    NModule(_) => map
+    NModule(_) => map,
+    // TOTAL over NodeBody/Stmt — a missing arm IS a drop to the loud
+    // `unreachable` (the walk_refinement floor that blocked m3). A nested fn is
+    // walked like a lambda: its body under a FRESH path (the enclosing path
+    // predicate does not hold inside the callee). Declaration statements carry
+    // no narrowable runtime expression; a type annotation is a Ty, not an expr.
+    NStmt(FnStmt(_, _, _, _, fbody))      => walk_refinement(map, fbody, PTrue),
+    NStmt(TypeDefStmt(_, _))              => map,
+    NStmt(EffectDeclStmt(_, _))           => map,
+    NStmt(HandlerDeclStmt(_, _, _, _, _)) => map,
+    NStmt(ImportStmt(_))                  => map,
+    NStmt(RefineStmt(_, _, _))            => map,
+    NStmt(AliasStmt(_, _))                => map,
+    NTypeAnn(_)                           => map
   }
 }
 
@@ -3378,9 +3425,13 @@ fn walk_refinement(map, node, path_pred) with GraphRead + GraphWrite = {
 fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead + GraphWrite = {
   if len(arms) == 0 { map }
   else {
-    let arm = list_head(arms)
-    let arm_pred = pattern_predicate_for(arm.pat, scrut)
-    let arm_map = walk_refinement(map, arm.body, conjunction(path_pred, arm_pred))
+    // A match arm is a (pat, body) TUPLE (parser push_node (pat, body); the
+    // canonical destructure infer_match_arms uses) — positional, NOT a named
+    // record. `arm.pat`/`arm.body` field-access floors resolve_field_offset on a
+    // TTuple (→ the loud `unreachable` / a garbage slot). Destructure positionally.
+    let (pat, body) = list_head(arms)
+    let arm_pred = pattern_predicate_for(pat, scrut)
+    let arm_map = walk_refinement(map, body, conjunction(path_pred, arm_pred))
     walk_refinement_arms(arm_map, scrut, list_tail(arms), path_pred)
   }
 }
@@ -3466,7 +3517,12 @@ fn narrowing_pred_handle(pred) with Pure = match pred {
   PTrue               => 0,
   PNot(_)             => 0,
   POr(_, _)           => 0,
-  PPatternMatch(_, h) => h
+  PPatternMatch(_, h) => h,
+  // An IFC flow obligation (src ⊑ dst) carries no value-narrowing bool node —
+  // 0, like PTrue/PNot/POr. TOTAL over Predicate; without this arm the inlined
+  // match falls through to the loud `unreachable` in walk_refinement (nothing
+  // drops — a missing arm IS a drop; the m3 floor after the NodeBody one).
+  PFlowLe(_, _)       => 0
 }
 
 fn negation_of(pred) = PNot(pred)

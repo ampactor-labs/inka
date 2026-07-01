@@ -1408,8 +1408,11 @@
     ;; Get partial fields and rowvar handle.
     (local.set $partial (call $ty_trecordopen_fields (local.get $trecordopen)))
     (local.set $rowvar_h (call $ty_trecordopen_rowvar (local.get $trecordopen)))
-    ;; Chase the rowvar handle through the graph.
-    (local.set $g (call $graph_chase (local.get $rowvar_h)))
+    ;; CARRIED-TRUTH: read the union-find ROOT's node. graph_chase is the Tier-3
+    ;; base that stops short of transitive TVar/row aliases; graph_chase_handle
+    ;; follows the full chain to the canonical, where the install bound the
+    ;; residual. Read by identity (root), never the incomplete direct chase.
+    (local.set $g (call $graph_node_at (call $graph_chase_handle (local.get $rowvar_h))))
     (local.set $nk (call $gnode_kind (local.get $g)))
     (local.set $nk_tag (call $node_kind_tag (local.get $nk)))
     ;; NRowBound (62) — payload is the residual Ty (TRecord).

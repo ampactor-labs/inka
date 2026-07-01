@@ -1921,7 +1921,18 @@ fn show_effrow(ref row) with GraphRead + !Mutate = {
 fn show_eff_name(ref name) with !Mutate = match name {
   ENamed(n)               => n,
   EParameterized(n, args) => "{n}({show_list(args, show_eff_arg, ", ")})",
-  EPure                   => "Pure"   // drift-audit: ignore — variant→surface-label render, not a name key
+  EPure                   => "Pure",   // drift-audit: ignore — variant→surface-label render, not a name key
+  // DISPLAY-TOTALITY, not a data-drop. The mentl voice must be TOTAL — it can
+  // never crash while REPORTING a diagnostic (a renderer that traps mid-report
+  // is the worst failure). A malformed name-slot (a non-EffName the seed's
+  // incomplete inference minted into a FAILED-type's row — E_OccursCheck — that
+  // reaches only STDERR, never the WAT) is SHOWN honestly here, never hidden:
+  // Carried-Truth governs DATA carrying truth; this is DISPLAY, which must
+  // render every input. The mint is the seed catching up — peer
+  // Hβ.infer.effect-row-no-null-name shrinks the census (§7 shadow) toward 0;
+  // this is the voice's total floor, on the m3-produced (productive-under-error)
+  // half of first-light, orthogonal to the m3==m4 fixpoint (WAT-only).
+  _                       => "«invalid-effect»"   // drift-audit: ignore — display-totality floor; honest placeholder, not data classification
 }
 
 fn show_eff_arg(ref arg) with !Mutate = match arg {

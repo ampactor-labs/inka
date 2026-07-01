@@ -595,7 +595,7 @@ fn name_in_list(names, target) = {
 
 fn name_in_list_loop(names, target, i, n) = {
   if i >= n { false }
-  else if eff_name_eq(list_index(names, i), target) { true }
+  else if list_index(names, i) == target { true }   // structural fold-eq, not the hand-rolled twin
   else { name_in_list_loop(names, target, i + 1, n) }
 }
 

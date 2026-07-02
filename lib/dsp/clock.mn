@@ -158,8 +158,8 @@ handler clock_record with trace = [], trace_len = 0 {
   clock_now() => {
     let now = host_clock_ns()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let new_trace = trace
-      |> list_extend_to(trace_len + 1)
-      |> list_set(trace_len, now)
+      |> list_extend_to(??, trace_len + 1)
+      |> list_set(??, trace_len, now)
     resume(Instant(now))
       with trace = new_trace, trace_len = trace_len + 1
   },
@@ -169,8 +169,8 @@ handler clock_record with trace = [], trace_len = 0 {
 handler tick_record with counter = 0, trace = [], trace_len = 0 {
   tick() => {
     let new_trace = trace
-      |> list_extend_to(trace_len + 1)
-      |> list_set(trace_len, counter)
+      |> list_extend_to(??, trace_len + 1)
+      |> list_set(??, trace_len, counter)
     resume()
       with counter = counter + 1,
            trace = new_trace,

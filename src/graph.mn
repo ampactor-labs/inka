@@ -125,8 +125,8 @@ handler graph_handler
   graph_fresh_ty(reason) => {
     let handle = next
     let new_nodes = nodes
-      |> graph_extend_to(handle + 1)
-      |> list_set(handle, GNode(NFree(epoch), reason))
+      |> graph_extend_to(??, handle + 1)
+      |> list_set(??, handle, GNode(NFree(epoch), reason))
     let (new_bufs, new_lens) =
       overlay_register_at(overlay_bufs, overlay_lens, current_overlay_idx, handle)
     let new_trail = trail_append(trail, trail_len, MFreshNode(handle))
@@ -145,8 +145,8 @@ handler graph_handler
   graph_fresh_row(reason) => {
     let handle = next
     let new_nodes = nodes
-      |> graph_extend_to(handle + 1)
-      |> list_set(handle, GNode(NRowFree(epoch), reason))
+      |> graph_extend_to(??, handle + 1)
+      |> list_set(??, handle, GNode(NRowFree(epoch), reason))
     let (new_bufs, new_lens) =
       overlay_register_at(overlay_bufs, overlay_lens, current_overlay_idx, handle)
     let new_trail = trail_append(trail, trail_len, MFreshNode(handle))
@@ -172,8 +172,8 @@ handler graph_handler
   graph_register_node(handle, body) => {
     resume()
       with program = program
-        |> list_extend_to(handle + 1)
-        |> list_set(handle, body)
+        |> list_extend_to(??, handle + 1)
+        |> list_set(??, handle, body)
   },
 
   // The comment weave — parse-attached prose, keyed by handle exactly like the
@@ -187,8 +187,8 @@ handler graph_handler
   graph_attach_comment(handle, text) => {
     resume()
       with comments = comments
-        |> list_extend_to(handle + 1)
-        |> list_set(handle, text)
+        |> list_extend_to(??, handle + 1)
+        |> list_set(??, handle, text)
   },
 
   graph_comment_at(handle) => {
@@ -209,8 +209,8 @@ handler graph_handler
   graph_canon_set(from, to) => {
     resume()
       with canon = canon
-        |> list_extend_to(from + 1)
-        |> list_set(from, to)
+        |> list_extend_to(??, from + 1)
+        |> list_set(??, from, to)
   },
 
   // A handle with no edge (absent, or a self-pointer) is its own e-class root —
@@ -234,8 +234,8 @@ handler graph_handler
   graph_narrow_set(handle, pred_handle) => {
     resume()
       with narrowing = narrowing
-        |> list_extend_to(handle + 1)
-        |> list_set(handle, pred_handle)
+        |> list_extend_to(??, handle + 1)
+        |> list_set(??, handle, pred_handle)
   },
 
   graph_narrow_at(handle) => {
@@ -290,14 +290,14 @@ handler graph_handler
              current_overlay = module_name
     } else {
       let new_names = overlay_names
-        |> list_extend_to(overlay_count + 1)
-        |> list_set(overlay_count, module_name)
+        |> list_extend_to(??, overlay_count + 1)
+        |> list_set(??, overlay_count, module_name)
       let new_bufs = overlay_bufs
-        |> list_extend_to(overlay_count + 1)
-        |> list_set(overlay_count, make_list(0))
+        |> list_extend_to(??, overlay_count + 1)
+        |> list_set(??, overlay_count, make_list(0))
       let new_lens = overlay_lens
-        |> list_extend_to(overlay_count + 1)
-        |> list_set(overlay_count, 0)
+        |> list_extend_to(??, overlay_count + 1)
+        |> list_set(??, overlay_count, 0)
       resume()
         with overlay_names = new_names,
              overlay_bufs = new_bufs,
@@ -368,7 +368,7 @@ fn chase_node(ref nodes, handle, depth) with !Mutate = {
         match row {
           EfOpen(names, next) =>
             chase_node(nodes, next, depth + 1)
-              |> merge_chased_row(names, next),
+              |> merge_chased_row(??, names, next),
           _ => GNode(kind, reason)
         },
       _ => GNode(kind, reason)
@@ -592,8 +592,8 @@ fn revert_trail(own nodes, ref trail, current, target, next_handle) = {
 
 fn trail_append(own trail, trail_len, own mutation) = {
   trail
-    |> list_extend_to(trail_len + 1)
-    |> list_set(trail_len, mutation)
+    |> list_extend_to(??, trail_len + 1)
+    |> list_set(??, trail_len, mutation)
 }
 
 // Overlay registration — flat-substrate per-module handle set
@@ -608,8 +608,8 @@ fn overlay_register_at(own overlay_bufs, own overlay_lens, idx, handle) = {
   let handles_buf = list_index(overlay_bufs, idx)
   let handles_len = list_index(overlay_lens, idx)
   let new_handles = handles_buf
-    |> list_extend_to(handles_len + 1)
-    |> list_set(handles_len, handle)
+    |> list_extend_to(??, handles_len + 1)
+    |> list_set(??, handles_len, handle)
   let new_bufs = list_set(overlay_bufs, idx, new_handles)
   let new_lens = list_set(overlay_lens, idx, handles_len + 1)
   (new_bufs, new_lens)

@@ -513,7 +513,7 @@ fn render_gradients(gradients) = {
            let (name, result) = entry
            "{name}: {render_gradient_result(result)}\n"
          })
-      |> fold("", (acc, line) => acc ++ line)
+      |> fold(??, "", (acc, line) => acc ++ line)
   }
 }
 

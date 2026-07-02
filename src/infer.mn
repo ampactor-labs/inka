@@ -1038,6 +1038,70 @@ fn infer_call(func, args, handle, span: ValidSpan) = {
   let cname = callee_name(func)
   if is_seq_op(cname) { infer_seq_op(cname, args, handle, span) }
   else {
+  // HOLE-COMPLETION (SYNTAX §«Partial application — the product with a
+  // hole»): a call whose args leave declaration-order params unfilled — a
+  // positional-prefix k<n, or an authored `??` slot — IS the product with
+  // holes: its type is the fn of the UNFILLED params. The callee's TParam
+  // nodes are reused whole (the param product's identity carries); the row
+  // rides the result fn — a partial performs nothing.
+  match graph_chase(fh) {
+    GNode(NBound(TFun(ps, pret, prow)), _) =>
+      if len(args) < len(ps) || call_hole_index(args, 0) >= 0 {
+        infer_call_partial(args, ps, pret, prow, handle, span, cname)
+      } else { infer_call_saturated(args, fh, handle, span, cname) },
+    _ => infer_call_saturated(args, fh, handle, span, cname)
+  }
+  }
+}
+
+// The `??` hole's declaration-order index among a call's raw args (-1: none).
+fn call_hole_index(args, i) =
+  if i >= len(args) { -1 }
+  else {
+    let N(b, _, _) = list_index(args, i)
+    match b {
+      NHole(_) => i,
+      _        => call_hole_index(args, i + 1)
+    }
+  }
+
+// Each arg — the `??` holes included, so a hole learns its expected type
+// (the gradient's food at the absence) — unifies with its declaration-
+// position param; the call's type is the fn of the params left unfilled.
+fn infer_call_partial(args, params, pret, prow, handle, span: ValidSpan, cname) = {
+  unify_args_positionally(args, params, 0, span)
+  let remaining = unfilled_params(args, params)
+  graph_bind(handle, TFun(remaining, pret, prow),
+    Located(span, InferredCallReturn(cname, Inferred("partial application — the product with a hole"))))
+}
+
+fn unify_args_positionally(args, params, i, span: ValidSpan) =
+  if i >= len(args) || i >= len(params) { () }
+  else {
+    let N(_, _, ah) = list_index(args, i)
+    let pty_h = mint(Inferred("declared param at partial call"))
+    graph_bind(pty_h, param_ty(list_index(params, i)),
+      Located(span, Inferred("declaration-order param")))
+    unify(ah, pty_h, span, Inferred("argument fills its declaration-order param"))
+    unify_args_positionally(args, params, i + 1, span)
+  }
+
+// The unfilled params: the authored `??` slots among the given prefix, then
+// every param past the given count — declaration order preserved.
+fn unfilled_params(args, params) =
+  hole_params(args, params, 0) ++ slice(params, len(args), len(params))
+
+fn hole_params(args, params, i) =
+  if i >= len(args) { [] }
+  else {
+    let N(b, _, _) = list_index(args, i)
+    match b {
+      NHole(_) => [list_index(params, i)] ++ hole_params(args, params, i + 1),
+      _        => hole_params(args, params, i + 1)
+    }
+  }
+
+fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
   let arg_handles = collect_handles(args)
   let ret_h = mint(InferredCallReturn(cname, Inferred("return"))) // drift-audit: ignore — "return" is a Reason string, not an imperative keyword
   let row_h = graph_fresh_row(InferredCallReturn(cname, Inferred("effects")))
@@ -1068,7 +1132,6 @@ fn infer_call(func, args, handle, span: ValidSpan) = {
     GNode(NRowBound(row), _) => inf_add_row(row),
     GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], row_h)),
     _ => ()
-  }
   }
 }
 

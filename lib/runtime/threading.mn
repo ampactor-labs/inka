@@ -177,7 +177,7 @@ handler sequential_compose with results = [] {
 //
 // Drift refused: 1 (no thread-pool / scheduler object — `><` IS the
 // fanout); 6 (uniform N=0 to ∞; pair-forms collapse to
-// `parallel_map([a, b], f)`); 9 (no "sequential fallback for now" —
+// `parallel_map(f, [a, b])`); 9 (no "sequential fallback for now" —
 // sequential_compose is a peer HANDLER, not a deferred mode).
 //
 // Peer follow-ups (positive-form, structurally orthogonal):
@@ -196,7 +196,7 @@ handler sequential_compose with results = [] {
 //   handles and ask "what next?", the cursor's gradient returns
 //   argmax. The gradient IS the priority queue; no scheduler module.
 
-fn parallel_map(xs, f) with Thread = {
+fn parallel_map(f, xs) with Thread = {
   if len(xs) == 0 { [] }
   else {
     let h = list_head(xs)
@@ -204,7 +204,7 @@ fn parallel_map(xs, f) with Thread = {
     let (head_result, tail_results) =
       (f(h))
           ><
-      (parallel_map(t, f))
+      (parallel_map(f, t))
     [head_result] ++ tail_results
   }
 }

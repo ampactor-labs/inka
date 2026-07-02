@@ -134,9 +134,9 @@ fn race_internal(handlers) with GraphRead + GraphWrite = {
 
 fn collect_verified_survivors(handlers, checkpoint) with GraphRead + GraphWrite = {
   handlers
-    |> take(8)
-    |> map_list((h) => try_handler_with_rollback(h, checkpoint))
-    |> filter_list((outcome) => outcome_verified(outcome))
+    |> take(??, 8)
+    |> map_list(??, (h) => try_handler_with_rollback(h, checkpoint))
+    |> filter_list(??, (outcome) => outcome_verified(outcome))
 }
 
 // ─── Helper interfaces (subordinate; bodies inline or stubbed) ───────

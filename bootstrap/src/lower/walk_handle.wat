@@ -838,11 +838,14 @@
     ;; Non-handle pipes — lower left+right normally.
     (local.set $lo_l (call $lower_expr (local.get $left_node)))
     (local.set $lo_r (call $lower_expr (local.get $right_node)))
-    ;; PForward (160) — `left |> right` → LCall/LSuspend(h, right, [left]).
+    ;; PForward (160) — `left |> right` hole-completion: the piped value
+    ;; fills the right call's `??` slot (index from the RAW args) or the
+    ;; first unfilled declaration-order param (append).
     (if (i32.eq (local.get $kind) (i32.const 160))
       (then (return (call $lower_pipe_forward
                       (local.get $h) (local.get $lo_l) (local.get $lo_r)
-                      (call $walk_expr_node_handle (local.get $right_node))))))
+                      (call $walk_expr_node_handle (local.get $right_node))
+                      (call $pipe_raw_hole_index (local.get $right_node))))))
     ;; PDiverge (161) — `<|` per Lock #3.
     (if (i32.eq (local.get $kind) (i32.const 161))
       (then (return (call $lower_pipe_diverge
@@ -940,12 +943,48 @@
   ;; callee must LSuspend to thread the handler record, exactly like a
   ;; CallExpr. Without this, every `|>` chain (pervasive in the wheel) emits
   ;; LCall and the evidence never threads.
+  ;; ─── $pipe_raw_hole_index — the `??` slot among a pipe-right call's RAW
+  ;; args (-1: none). AST navigation per $lower_call: node → NodeBody@4
+  ;; (NExpr=110) → expr@4 (CallExpr=88) → args list@8; each arg node's
+  ;; NodeBody tag NHole=113 marks the authored hole (parser_infra tag map).
+  (func $pipe_raw_hole_index (param $right_node i32) (result i32)
+    (local $body i32) (local $expr i32) (local $rargs i32)
+    (local $n i32) (local $i i32) (local $arg i32)
+    (local.set $body (i32.load offset=4 (local.get $right_node)))
+    (if (i32.ne (i32.load (local.get $body)) (i32.const 110))
+      (then (return (i32.const -1))))
+    (local.set $expr (i32.load offset=4 (local.get $body)))
+    (if (i32.ne (i32.load (local.get $expr)) (i32.const 88))
+      (then (return (i32.const -1))))
+    (local.set $rargs (i32.load offset=8 (local.get $expr)))
+    (local.set $n (call $len (local.get $rargs)))
+    (local.set $i (i32.const 0))
+    (block $scan_done
+      (loop $scan
+        (br_if $scan_done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arg (call $list_index (local.get $rargs) (local.get $i)))
+        (if (i32.eq (i32.load (i32.load offset=4 (local.get $arg)))
+                    (i32.const 113))
+          (then (return (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $scan)))
+    (i32.const -1))
+
+  ;; HOLE-COMPLETION (SYNTAX §«Partial application — the product with a
+  ;; hole»), mirroring src/lower.mn's PForward: the piped value fills the
+  ;; authored `??` slot ($hole_at >= 0, computed from the RAW right-call args
+  ;; by $pipe_raw_hole_index at the call site), else it fills the first
+  ;; unfilled declaration-order param — APPENDED after the given prefix,
+  ;; never prepended. The seed compiles ONLY the wheel, whose pipe sites are
+  ;; all bare / partial-prefix / ??-marked (the wheel's own lower carries the
+  ;; general saturated-stage rule for programs m2 compiles).
   (func $lower_pipe_forward (export "lower_pipe_forward")
-        (param $h i32) (param $lo_l i32) (param $lo_r i32) (param $fh i32) (result i32)
+        (param $h i32) (param $lo_l i32) (param $lo_r i32) (param $fh i32)
+        (param $hole_at i32) (result i32)
     (local $args i32) (local $r_args i32) (local $r_args_n i32)
     (local $i i32) (local $r_fn i32) (local $r_tag i32)
     (local.set $r_tag (call $tag_of (local.get $lo_r)))
-    ;; Flatten works on both LCall (monomorphic, tag 308) and LSuspend
+    ;; Completion works on both LCall (monomorphic, tag 308) and LSuspend
     ;; (polymorphic evidence-passing, tag 325). For both, lo_r contains
     ;; an args list at slot 2 (LCall) / slot 3 (LSuspend), and a fn at
     ;; slot 1 / slot 2. Read the right slot per tag.
@@ -960,19 +999,35 @@
             (local.set $r_fn   (call $lexpr_lsuspend_fn (local.get $lo_r)))
             (local.set $r_args (call $lexpr_lsuspend_args (local.get $lo_r)))))
         (local.set $r_args_n (call $len (local.get $r_args)))
-        (local.set $args (call $make_list (i32.const 0)))
-        (local.set $args (call $list_extend_to (local.get $args)
-                          (i32.add (local.get $r_args_n) (i32.const 1))))
-        (drop (call $list_set (local.get $args) (i32.const 0) (local.get $lo_l)))
-        (local.set $i (i32.const 0))
-        (block $copy_done
-          (loop $copy_iter
-            (br_if $copy_done (i32.ge_u (local.get $i) (local.get $r_args_n)))
+        (if (i32.ge_s (local.get $hole_at) (i32.const 0))
+          (then
+            ;; `??` completion — same length, the hole's slot replaced.
+            (local.set $args (call $make_list (local.get $r_args_n)))
+            (local.set $i (i32.const 0))
+            (block $h_done
+              (loop $h_iter
+                (br_if $h_done (i32.ge_u (local.get $i) (local.get $r_args_n)))
+                (drop (call $list_set (local.get $args) (local.get $i)
+                        (call $list_index (local.get $r_args) (local.get $i))))
+                (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                (br $h_iter)))
             (drop (call $list_set (local.get $args)
-                                  (i32.add (local.get $i) (i32.const 1))
-                                  (call $list_index (local.get $r_args) (local.get $i))))
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br $copy_iter)))
+                    (local.get $hole_at) (local.get $lo_l))))
+          (else
+            ;; partial-prefix completion — the piped value fills the first
+            ;; unfilled declaration-order param: APPEND after the prefix.
+            (local.set $args (call $make_list
+                               (i32.add (local.get $r_args_n) (i32.const 1))))
+            (local.set $i (i32.const 0))
+            (block $copy_done
+              (loop $copy_iter
+                (br_if $copy_done (i32.ge_u (local.get $i) (local.get $r_args_n)))
+                (drop (call $list_set (local.get $args) (local.get $i)
+                        (call $list_index (local.get $r_args) (local.get $i))))
+                (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                (br $copy_iter)))
+            (drop (call $list_set (local.get $args)
+                    (local.get $r_args_n) (local.get $lo_l)))))
         ;; Preserve evidence when flattening: an already-LSuspend right side
         ;; keeps its evs + callee-handle (slot 1); LCall stays LCall.
         (if (i32.eq (local.get $r_tag) (i32.const 325))

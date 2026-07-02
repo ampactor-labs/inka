@@ -2403,9 +2403,15 @@
     (local.set $handle (call $walk_expr_node_handle (local.get $node)))
     ;; Span-index append for query-layer consumers post-walk.
     (call $infer_span_index_append (local.get $span) (local.get $handle))
-    ;; Body MUST be NExpr (tag 110). Non-NExpr at expression position is
-    ;; parser-bug surface; trap to surface (consistent with H6 wildcard
-    ;; discipline + Anchor 0 dream-code stance).
+    ;; NHole (113) — `??` at expression position IS legitimate (the
+    ;; gradient's absence marker; the pipe's completion target). Mirror
+    ;; the wheel (src/infer.mn `NHole(_) => ()`): leave the handle NFree,
+    ;; contribute nothing.
+    (if (i32.eq (i32.load (local.get $body)) (i32.const 113))
+      (then (return (i32.const 0))))
+    ;; Body MUST otherwise be NExpr (tag 110). Non-NExpr at expression
+    ;; position is parser-bug surface; trap to surface (consistent with H6
+    ;; wildcard discipline + Anchor 0 dream-code stance).
     (if (i32.ne (i32.load (local.get $body)) (i32.const 110))
       (then (unreachable)))
     (local.set $expr (i32.load offset=4 (local.get $body)))

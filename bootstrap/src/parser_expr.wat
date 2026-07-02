@@ -270,6 +270,18 @@
     (local.set $span (call $span_at_p (local.get $tokens) (local.get $pos)))
     (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
 
+    ;; THole (67) — `??`, the gradient's absence marker → NHole node.
+    ;; In call-arg position it names the pipe's completion target
+    ;; (SYNTAX §«Partial application — the product with a hole»).
+    (if (i32.eq (local.get $k) (i32.const 67))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nhole (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
+
     ;; Sentinel kinds
     (if (call $is_sentinel (local.get $k))
       (then

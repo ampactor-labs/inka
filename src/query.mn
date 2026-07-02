@@ -248,15 +248,15 @@ fn query_flow_label(ref ty) with GraphRead + EnvRead = match ty {
   TTuple(elems) =>
     elems
       |> map((e) => query_flow_label(e))
-      |> fold(Public, (acc, lbl) => flow_join(acc, lbl)),
+      |> fold(??, Public, (acc, lbl) => flow_join(acc, lbl)),
   TRecord(fields) =>
     fields
       |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
-      |> fold(Public, (acc, lbl) => flow_join(acc, lbl)),
+      |> fold(??, Public, (acc, lbl) => flow_join(acc, lbl)),
   TRecordOpen(fields, _) =>
     fields
       |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
-      |> fold(Public, (acc, lbl) => flow_join(acc, lbl)),
+      |> fold(??, Public, (acc, lbl) => flow_join(acc, lbl)),
   TCont(ret, _, _) =>
     ret |> query_flow_label,
   TInt     => Public,

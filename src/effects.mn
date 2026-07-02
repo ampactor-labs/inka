@@ -147,18 +147,18 @@ fn normalize_inter(ref a, ref b) with !Mutate = {
         EfPure => EfPure,
         EfClosed(nb) =>
           na
-            |> list_intersect(nb)
+            |> list_intersect(??, nb)
             |> closed_or_pure,
         EfOpen(nb, _) =>
           na
-            |> list_intersect(nb)
+            |> list_intersect(??, nb)
             |> closed_or_pure,
         EfNeg(inner) =>
           match inner {
             EfClosed(neg_names) =>
               // Closed(A) & !Closed(B) = Closed(A - B)
               na
-                |> list_diff_str(neg_names)
+                |> list_diff_str(??, neg_names)
                 |> closed_or_pure,
             _ => EfInter(a, b)
           },
@@ -169,7 +169,7 @@ fn normalize_inter(ref a, ref b) with !Mutate = {
         EfPure => EfPure,
         EfClosed(nb) =>
           na
-            |> list_intersect(nb)
+            |> list_intersect(??, nb)
             |> closed_or_pure,
         EfOpen(nb, vb) =>
           // Both open: intersect known names, keep first var.
@@ -210,7 +210,7 @@ fn union_row(ref a, ref b) with !Mutate = {
         _ =>
           b
             |> normalize_row
-            |> union_row(a)
+            |> union_row(??, a)
       },
     EfOpen(na, va) =>
       match b {
@@ -226,7 +226,7 @@ fn union_row(ref a, ref b) with !Mutate = {
         _ =>
           b
             |> normalize_row
-            |> union_row(a)
+            |> union_row(??, a)
       },
     _ =>
       a
@@ -473,7 +473,7 @@ fn report_effect_mismatch(ref a, ref b, ref span) with !Mutate =
 // argument's effect (the higher-order-effect trap).
 fn absorb_row(ref body_row, ref handled_row, ref extra_row) with !Mutate = {
   body_row
-    |> diff_row(handled_row)
+    |> diff_row(??, handled_row)
     |> (handled_residue) => union_row(extra_row, handled_residue)
 }
 

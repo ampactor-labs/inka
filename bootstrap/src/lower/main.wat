@@ -275,6 +275,14 @@
         (local.set $pat (i32.load offset=4 (local.get $stmt)))
         (if (i32.eq (call $tag_of (local.get $pat)) (i32.const 130))
           (then (return (i32.load offset=4 (local.get $pat)))))))
+    ;; HandlerDeclStmt(name, ...) — a handler decl IS a top-level name;
+    ;; `~> h` references it as a global. Without this arm each install's
+    ;; handler name fell through $ls_lookup_or_capture path (c) into the
+    ;; captures ledger, inflating the LowFn fence by 4×installs while every
+    ;; caller built the record at ncap=0 — the ev-region base disagreement
+    ;; that zeroed EnvRead down the compute_escaping_rows chain.
+    (if (i32.eq (local.get $tag) (i32.const 124))
+      (then (return (i32.load offset=4 (local.get $stmt)))))
     ;; Documented(_, inner_node)
     (if (i32.eq (local.get $tag) (i32.const 128))
       (then

@@ -64,6 +64,22 @@
       (local.get $span)
       (call $fresh_handle)))
 
+  ;; NHole(id) → [tag=113][id] — the `??` absence marker's NodeBody.
+  (func $mk_NHole (param $id i32) (result i32)
+    (local $ptr i32)
+    (local.set $ptr (call $alloc (i32.const 8)))
+    (i32.store (local.get $ptr) (i32.const 113))
+    (i32.store offset=4 (local.get $ptr) (local.get $id))
+    (local.get $ptr))
+
+  ;; nhole(span) = N(NHole(h), span, h) — the node's fresh handle IS the
+  ;; hole id (wheel src/parser.mn THole arm). A `??` in call-arg position
+  ;; is the pipe's completion target ($pipe_raw_hole_index).
+  (func $nhole (param $span i32) (result i32)
+    (local $h i32)
+    (local.set $h (call $fresh_handle))
+    (call $mk_node (call $mk_NHole (local.get $h)) (local.get $span) (local.get $h)))
+
   ;; nstmt(s, span) = N(NStmt(s), span, fresh_handle())
   (func $nstmt (param $s i32) (param $span i32) (result i32)
     (call $mk_node

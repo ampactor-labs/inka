@@ -563,7 +563,7 @@ fn float_format_fixed(digits, exp) with Memory + Alloc = {
 
 // Build a string of n '0' characters for fractional padding.
 fn float_zero_pad(n) with Memory + Alloc = {
-  if n <= 0 { str_of_single_byte(48) |> str_slice(0, 0) }
+  if n <= 0 { str_of_single_byte(48) |> str_slice(??, 0, 0) }
   else {
     let dest = alloc(4 + n)
     store_i32(dest, n)

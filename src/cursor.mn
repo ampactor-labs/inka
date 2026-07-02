@@ -146,7 +146,7 @@ handler cursor_default with !Mutate {
 // peer is missing. Multi-cursor projection IS
 // `spans |> parallel_map((s) => cursor_at(s))` directly at the call
 // site — list-first via the pipe (matching threading.mn's
-// `parallel_map(xs, f)`), the op invoked as a BARE call (`perform`
+// `parallel_map(f, xs)`), the op invoked as a BARE call (`perform`
 // dissolved, SYNTAX.md); `parallel_compose` handler upstream dispatches
 // each projection to a separate thread. The shape on the page IS the
 // topology — the cursor reading N positions simultaneously. Drift 6

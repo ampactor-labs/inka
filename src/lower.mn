@@ -875,10 +875,20 @@ fn flow_edges(node) = {
   }
 }
 
+// The escaping-path's name-list concat, its element type PINNED (an
+// Intent Boundary, SYNTAX §"The Intent Boundary Rule"): the operands
+// arrive through tuple destructures whose bare type vars carry no
+// sequence constructor, so an unpinned `++` cannot prove its
+// representation to the emit dispatch — the silent string-path
+// miscompile (count-valid, tag-garbage lists). The pin IS the proof;
+// the proof becomes the dispatch. Dissolves with the one-sequence
+// ontology (PLAN §4①, roadmap band D).
+fn names_concat(xs: [String], ys: [String]) -> [String] = xs ++ ys
+
 fn flow_join(a, b) = {
   let (ca, ha) = a
   let (cb, hb) = b
-  (ca ++ cb, ha ++ hb)
+  (names_concat(ca, cb), names_concat(ha, hb))
 }
 
 fn flow_edges_list(nodes) =
@@ -934,7 +944,7 @@ fn flow_edges_expr(e) = match e {
         let hd = installed_handled_ename(rbody)
         if hd == "" { inner } else {
           let (cs, hs) = inner
-          (cs, hs ++ [hd])   // drift-audit: ignore — one append per ~> node (visited once), not a loop accumulator; set_canonicalize dedupes at collect_fn_bases
+          (cs, names_concat(hs, [hd]))   // drift-audit: ignore — one append per ~> node (visited once), not a loop accumulator; set_canonicalize dedupes at collect_fn_bases
         }
       },
       _ => inner
@@ -1025,7 +1035,7 @@ fn escaping_round(bases, cur) =
   map((b) => {
     let (name, own, callees, handled) = b
     let propagated = flatten(map((c) => assoc_row(cur, c), callees))
-    (name, set_difference(set_canonicalize(own ++ propagated), handled))
+    (name, set_difference(set_canonicalize(names_concat(own, propagated)), handled))
   }, bases)
 
 fn rows_equal(a, b) =
@@ -1592,15 +1602,39 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     lower_fanout(handle, own, left, right),
 
   PForward => {
-    // Hβ.first-light.pipe-forward-flatten — `x |> f(a, b)` flattens to
-    // `LCall(f, [x, a, b])` per "Parameters ARE tuples" semantics
-    // (no auto-currying in seed). When lo_r is LCall, unfold its args
-    // and prepend lo_l. Bare-fn case stays `LCall(lo_r, [lo_l])`.
+    // `|>` is HOLE-COMPLETION (SYNTAX.md §«Partial application — the product
+    // with a hole»), never a positional rewrite: the piped value fills the
+    // right call's one remaining hole — the authored `??` slot when present,
+    // else the first unfilled declaration-order param (the trailing hole of a
+    // positional-prefix partial). A SATURATED call is a closure-producing
+    // stage; the piped value applies to its result. The callee's arity is
+    // read LIVE from its graph type (lookup_ty → TFun) — Carried-Truth,
+    // never a second arity table.
     let lo_l = lower_expr(left)
-    let lo_r = lower_callee_ref(right)   // right IS the callee (applied to left) — stays bare
+    let lo_r = lower_callee_ref(right)
+    let N(rbody, _, _) = right
+    let hole_at = match rbody {
+      NExpr(CallExpr(_, cargs)) => pipe_hole_index(cargs, 0),
+      _                         => -1
+    }
+    let is_partial = match rbody {
+      NExpr(CallExpr(f, cargs)) => len(cargs) < callee_arity_of(f),
+      _                         => false
+    }
     match lo_r {
-      LCall(_, fn_, args) => LCall(handle, fn_, list_concat([lo_l], args)),
-      _                   => LCall(handle, lo_r, [lo_l])
+      LCall(ch, fn_, args) =>
+        if hole_at >= 0      { LCall(ch, fn_, splice_at(args, hole_at, lo_l)) }
+        else if is_partial   { LCall(ch, fn_, args ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node, not a loop accumulator
+        else                 { LCall(handle, lo_r, [lo_l]) },
+      LSuspend(sh, oph, fnx, args, evs) =>
+        if hole_at >= 0      { LSuspend(sh, oph, fnx, splice_at(args, hole_at, lo_l), evs) }
+        else if is_partial   { LSuspend(sh, oph, fnx, args ++ [lo_l], evs) }   // drift-audit: ignore — one completion per pipe node
+        else                 { LCall(handle, lo_r, [lo_l]) },
+      LMakeVariant(vh, tag, vargs) =>
+        if hole_at >= 0      { LMakeVariant(vh, tag, splice_at(vargs, hole_at, lo_l)) }
+        else if is_partial   { LMakeVariant(vh, tag, vargs ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node
+        else                 { LCall(handle, lo_r, [lo_l]) },
+      _ => LCall(handle, lo_r, [lo_l])
     }
   },
 
@@ -1643,6 +1677,36 @@ fn lower_pipe(kind, left, right, handle) = match kind {
 }
 
 // (LF.B) Lower the LHS of a `<~`. A single-param lambda `(prev) => body`
+// The `??` hole's declaration-order index among a call's RAW args — the
+// pipe's completion target (SYNTAX §«Partial application»: `x |> clamp(0,
+// ??, 255)` names the hole; the first authored hole is the one completed).
+fn pipe_hole_index(args, i) =
+  if i >= len(args) { -1 }
+  else {
+    let N(b, _, _) = list_index(args, i)
+    match b {
+      NHole(_) => i,
+      _        => pipe_hole_index(args, i + 1)
+    }
+  }
+
+// The callee's declared arity, read LIVE from its inferred TFun (the graph
+// already proves it — never a second arity table). -1 when the graph holds
+// no fn type at the callee (the unresolved callee already carries its own
+// diagnostic); the pipe then treats the right side as a saturated stage.
+fn callee_arity_of(f) = {
+  let N(_, _, fh) = f
+  match lookup_ty(fh) {
+    TFun(ps, _, _) => len(ps),
+    _              => -1
+  }
+}
+
+// Replace the completed hole's slot in a lowered args list — the product's
+// one absent field filled by the piped value.
+fn splice_at(xs, i, v) =
+  slice(xs, 0, i) ++ [v] ++ slice(xs, i + 1, len(xs))   // drift-audit: ignore — one three-way splice per completed hole, not a loop accumulator
+
 // binds `prev` to the feedback site's prior local and inlines the body —
 // the recurrence reads y[n-1] live. Any other LHS lowers as-is (a bare
 // expression computes on the current input only, the structural form).
@@ -3106,9 +3170,14 @@ fn collect_top_level_names_loop(stmts, i, n, buf, count) = {
   else {
     let N(body, _, _) = list_index(stmts, i)
     let (new_buf, new_count) = match body {
-      NStmt(FnStmt(name, _, _, _, _))    => push_name(buf, count, name),
-      NStmt(LetStmt(PVar(name), _))      => push_name(buf, count, name),
-      _                                  => (buf, count)
+      NStmt(FnStmt(name, _, _, _, _))            => push_name(buf, count, name),
+      NStmt(LetStmt(PVar(name), _))              => push_name(buf, count, name),
+      // A handler decl IS a top-level name — `~> h` references it as a
+      // global, never a captured upvalue (the phantom-capture fence lie:
+      // each install counted as a capture inflated the ev-region base by
+      // 4×installs while every caller built the record at ncap=0).
+      NStmt(HandlerDeclStmt(name, _, _, _, _))   => push_name(buf, count, name),
+      _                                          => (buf, count)
     }
     collect_top_level_names_loop(stmts, i + 1, n, new_buf, new_count)
   }

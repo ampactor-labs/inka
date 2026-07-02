@@ -159,10 +159,12 @@ fn driver_infer_module(ref module_name, ref source, ref source_hash)
   let env_after = env_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let Env(entries_after) = env_after
   let n_after = len(entries_after)
-  // env_handler appends at the stack head (Mentl last reads the last
-  // element), so the new exports are the newest entries.
-  let new_count = n_after - n_before
-  let exported = driver_take_first(entries_after, new_count)
+  // env_handler appends at the end (the stack law), so this module's
+  // exports are exactly entries_after[n_before..n_after) — an
+  // order-preserving slice of the indices already in hand. (The prior
+  // read walked last+drop_last, persisting the exports REVERSED into
+  // the .kai — declaration order is the canonical order.)
+  let exported = slice(entries_after, n_before, n_after)
   // The flat export names are already in env from infer_program. A
   // qualified `module.name` reference follows the import edge to the
   // module env node and reads `.name` there (SYNTAX.md §Imports) — no
@@ -200,12 +202,6 @@ fn driver_collect_dep_hashes_loop(ref imports, i, n, own buf)
     } else { 0 }
     driver_collect_dep_hashes_loop(imports, i + 1, n, list_set(buf, i, h))
   }
-
-fn driver_take_first(ref entries, count) = {
-  if count <= 0 { [] }
-  else if len(entries) == 0 { [] }
-  else { [last(entries)] ++ driver_take_first(drop_last(entries), count - 1) }
-}
 
 // Env install — push entries into env_handler for importing modules
 // under their flat names. A qualified `module.name` reference resolves

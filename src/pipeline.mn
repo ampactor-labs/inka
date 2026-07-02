@@ -349,7 +349,7 @@ handler env_handler with entries = [], scopes = [] {
     else {
       let mark = last(scopes)
       resume()
-        with entries = take_last(entries, mark),
+        with entries = truncate_to(mark, entries),
              scopes = drop_last(scopes)
     }
 }
@@ -363,9 +363,13 @@ fn env_find(entries, name: String) = {
   }
 }
 
-fn take_last(lst, n) = {
+// take(n)'s contract realized by end-pops: keep the first n by popping
+// the snoc end (O(1) each) — the right algorithm when n is near len,
+// which is what a scope-exit truncate always is. The name says what it
+// returns; prelude's take walks the front and rebuilds.
+fn truncate_to(n, lst) = {
   if len(lst) <= n { lst }
-  else { take_last(drop_last(lst), n) }
+  else { truncate_to(n, drop_last(lst)) }
 }
 
 // body_context — H1 emit-time per-fn-body metadata
@@ -693,7 +697,10 @@ fn build_question(verb, arg, raw) with Pure = match verb {
   QVUnknownVerb  => QUnknown(raw)
 }
 
-fn query_head(ws) with Pure = if len(ws) == 0 { "" } else { last(ws) }
+// The verb is the FIRST word (`<verb> [arg]` — the documented query
+// grammar); the prior read of last(ws) made every 3+-word query's verb
+// and argument the SAME final word.
+fn query_head(ws) with Pure = if len(ws) == 0 { "" } else { head(ws) }
 
 fn query_last(ws) with Pure =
   if len(ws) == 0 { "" } else { list_index(ws, len(ws) - 1) }

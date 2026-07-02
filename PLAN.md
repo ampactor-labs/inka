@@ -420,8 +420,8 @@ representation-host**, ONE contiguous handle-addressed shape:
   `==`/compare/hash/show/pack/unpack are one `fold(ty, leaf)` over the five
   node-kinds; the word-leaf reads the gradient (`f64.eq` for an f64 field), the
   function-leaf serializes a continuation by memcpy. **The eq leaf is total NOW**
-  (`emit_fold_eq_helpers`, `backends/wasm.mn`): word / sequence / product landed
-  earlier, and the SUM leaf (`emit_one_eq_sum_helper` — sentinel-guard + tag-
+  (`emit_eq_leaves`, `backends/wasm.mn`): word / sequence / product landed
+  earlier, and the SUM leaf (`emit_eq_leaf_sum` — sentinel-guard + tag-
   compare + per-variant payload recursion, the variant specs read LIVE from the
   env's `ConstructorScheme` via `variant_specs_of`, the same channel synth's
   `ctors_of_type` reads) closes the fifth node-kind — so `==` is total over every

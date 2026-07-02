@@ -696,7 +696,7 @@ handler gradient_queue_default with caret = Caret(0, Inferred("queue init")) {
 
 fn top_n_by_score(scored, n) with Pure = {
   let sorted = sort_by_score_desc(scored)
-  take_first_n(sorted, n)
+  take(n, sorted)
 }
 
 fn sort_by_score_desc(scored) with Pure = {
@@ -717,8 +717,6 @@ fn insert_descending(item, sorted) with Pure = match sorted {
     else                        { [head] ++ insert_descending(item, rest) }
   }
 }
-
-fn take_first_n(list, n) with Pure = slice(list, 0, n)
 
 // reason_of_located — extracts the Reason from a Located wrapper.
 // Pure helper for gradient_step's caret advance.

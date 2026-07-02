@@ -240,7 +240,6 @@ type LowExpr
   = LConst(Int, LowValue)
   | LLocal(Int, String)                        // handle, local name (matches LLet storage)
   | LGlobal(Int, String)                       // handle, name
-  | LStore(Int, Int, LowExpr)                  // handle, slot, value
   | LLet(Int, String, LowExpr)
   | LUpval(Int, Int)
   | LBinOp(Int, BinOp, LowExpr, LowExpr)
@@ -290,12 +289,8 @@ type LowExpr
   | LSimdLanes(Int, List)                      // handle, [lane_value] (≤4 f32 branch results → v128)
   | LMakeRecord(Int, List)                     // handle, [field_value] sorted by field name
   | LMakeVariant(Int, TagId, List)             // handle, tag_id, field exprs
-  | LIndex(Int, LowExpr, LowExpr, Bool)
   | LMatch(Int, LowExpr, List)
   | LSuspend(Int, Int, LowExpr, List, List)    // handle, op_h, fn_expr, args, ev_slots
-  | LStateGet(Int, Int)
-  | LStateSet(Int, Int, LowExpr)
-  | LRegion(Int, List)                         // arena scope
   // ~> desugaring. ONE handler record (handler IS state IS closure IS
   // evidence): [_@0][nstate FENCE@4][state@8..][arms per-effect-contiguous][captured_evs].
   //   4th = handler_name ("" for anonymous — no `_state_g` global).
@@ -421,7 +416,6 @@ fn lexpr_handle(e) with Pure = match e {
   LConst(h, _)            => h,
   LLocal(h, _)            => h,
   LGlobal(h, _)           => h,
-  LStore(h, _, _)         => h,
   LLet(h, _, _)           => h,
   LUpval(h, _)            => h,
   LBinOp(h, _, _, _)      => h,
@@ -439,12 +433,8 @@ fn lexpr_handle(e) with Pure = match e {
   LMakeTuple(h, _)        => h,
   LMakeRecord(h, _)       => h,
   LMakeVariant(h, _, _)   => h,
-  LIndex(h, _, _, _)      => h,
   LMatch(h, _, _)         => h,
   LSuspend(h, _, _, _, _) => h,
-  LStateGet(h, _)         => h,
-  LStateSet(h, _, _)      => h,
-  LRegion(h, _)           => h,
   LHandleWith(h, _, _, _, _, _, _) => h,
   LFeedback(h, _, _)      => h,
   LFeedbackPrior(h)       => h,
@@ -508,7 +498,7 @@ fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + Loo
 
 // The aggregate-show call: dispatch to the generated `$show_<sig>` recursive
 // helper named by the operand's structural fold-signature (read live from the
-// proven type at `ah`). The backend's emit_fold_show_helpers pre-pass generates
+// proven type at `ah`). The backend's emit_show_leaves pre-pass generates
 // each distinct helper once (the e-graph canonicalizes duplicates) — the SAME
 // graph-IS-the-index dedup the eq leaf uses. One leaf, one traversal: the show
 // helper is a sibling of $eq_<sig>, calling the runtime renderers ($str_concat /
@@ -566,7 +556,7 @@ fn lexpr_ty(e) with LookupTy = {
 
 // Hβ.lower.tail-call-mark-pass — rewrite LCall→LTailCall in tail position.
 // Tail position is a structural property: branches of LIf, last stmt of
-// LBlock, arm bodies of LMatch. LRegion / LHandleWith / LFeedback do NOT
+// LBlock, arm bodies of LMatch. LHandleWith / LFeedback do NOT
 // propagate tail (their cleanup runs after the body's last expression).
 // Without this, lex_from / scan_decimal recursive calls compile as
 // regular call_indirect and exhaust the WASM stack on long inputs.
@@ -2020,9 +2010,8 @@ fn align_for(off, r) with Pure = match r {
 // offset is the prefix-sum of repr_width over the elements 0..i, the IDENTICAL
 // width-summed fold field_byte_offset_acc runs for records. The elements are
 // the TTuple's positional Tys (each a resolved TVar — read live via
-// repr_of_resolved, the chase). For an all-i32 tuple this is exactly 4*i (Law 7
-// byte-identity with the old const-4 LIndex stride); an f64 element genuinely
-// occupies 8 inline bytes. Carried-Truth: construction (emit_field_stores_acc
+// repr_of_resolved, the chase). For an all-i32 tuple this is exactly 4*i (Law 7);
+// an f64 element genuinely occupies 8 inline bytes. Carried-Truth: construction (emit_field_stores_acc
 // over the tuple elems) and the index/match-bind read the SAME offset fold —
 // they cannot disagree on where element i lives.
 fn tuple_elem_offset(elems, target, i, off) = {
@@ -2297,7 +2286,7 @@ fn lower_pat_tuple_elems(subs, elems, i, off) = {
     let elem_ty = if i < len(elems) { list_index(elems, i) } else { TVar(0) }
     let r = repr_of_resolved(elem_ty)
     let here = align_for(off, r)
-    [(here, elem_ty, lower_pat_typed(list_head_at(subs, i), elem_ty))]
+    [(here, elem_ty, lower_pat_typed(list_index(subs, i), elem_ty))]
       ++ lower_pat_tuple_elems(subs, elems, i + 1, here + repr_width(r))
   }
 }
@@ -2308,12 +2297,10 @@ fn lower_pat_tuple_elems(subs, elems, i, off) = {
 fn lower_pat_tuple_uniform(subs, i) = {
   if i >= len(subs) { [] }
   else {
-    [(i * 4, TVar(0), lower_pat(list_head_at(subs, i)))]
+    [(i * 4, TVar(0), lower_pat(list_index(subs, i)))]
       ++ lower_pat_tuple_uniform(subs, i + 1)
   }
 }
-
-fn list_head_at(xs, i) = list_index(xs, i)
 
 fn lower_pat(pat) = match pat {
   PVar(name)       => LPVar(name),
@@ -3280,8 +3267,8 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
     if len(frames) == 0 { resume() }
     else {
       let frame = last(frames)
-      let truncated_order = list_take_n(frame.local_order, checkpoint)
-      let truncated_handles = list_take_n(frame.local_handles, checkpoint)
+      let truncated_order = take(checkpoint, frame.local_order)
+      let truncated_handles = take(checkpoint, frame.local_handles)
       let updated = {
         capture_handles: frame.capture_handles,
         capture_order: frame.capture_order,
@@ -3437,5 +3424,3 @@ fn ls_find_in_order_loop(lst, target: String, i, n) = {
   else if list_index(lst, i) == target { i }
   else { ls_find_in_order_loop(lst, target, i + 1, n) }
 }
-
-fn list_take_n(lst, n) = slice(lst, 0, n)

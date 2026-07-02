@@ -106,7 +106,7 @@ fn cache_flatten_loop(s, i, n, acc) with Memory + Alloc = {
 // exhaustive match, no text assembly.
 //
 // This hand-written per-Ty fold IS the PACK leaf of the STEP 2 structural fold
-// (the eq leaf landed in backends/wasm.mn emit_fold_eq_helpers): cache_pack /
+// (the eq leaf landed in backends/wasm.mn emit_eq_leaves): cache_pack /
 // cache_unpack are the one structural traversal under the Pack / Unpack effects
 // (the `<~` dual closing the byte cycle). Collapsing them into a generated
 // $pack_<sig> / $unpack_<sig> on the same emit generator is peer

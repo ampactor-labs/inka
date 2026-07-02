@@ -422,6 +422,7 @@ fn ident_or_kw_at(ref tokens, p) = match kind_at(tokens, p) {
 // params; `fn f(own,b)` → 0 params; `fn f(a,own)` → [a]).
 fn param_starts_here(ref tokens, p) = match kind_at(tokens, p) {
   TIdent(_) => true,
+  THandle   => true,
   TOwn      => is_param_name_tok(tokens, skip_ws(tokens, p + 1)),
   TRef      => is_param_name_tok(tokens, skip_ws(tokens, p + 1)),
   _         => false
@@ -520,7 +521,7 @@ fn parse_one_param(ref tokens, pos) = {
     let bind = nstmt(LetStmt(pat, nexpr(VarRef(fresh), psp)), psp)
     (param, Some(bind), p_pat)
   } else {
-    let name = ident_at(tokens, p)
+    let name = ident_or_kw_at(tokens, p)
     let p2 = skip_ws(tokens, p + 1)
     // Optional `: Ty` annotation (the Intent Boundary), then optional
     // `= default` (SYNTAX.md §«Default parameter values»). The default
@@ -684,14 +685,14 @@ fn parse_type_decl(ref tokens, pos) = {
     let variant = (name, [body])     // single variant named after the type
     (nstmt(TypeDefStmt(name, [variant]), start), p3)
   } else {
-    // Transparent alias vs ADT (SYNTAX.md §«Type aliases»): a RHS that is
-    // a single type-expression with no `|`-alternation is a transparent
-    // alias (`type Port = Int`, `type Bytes = [Int]`, `type H = Option(Int)`);
-    // a `|` after the first term marks a multi-variant ADT. A trailing
-    // row operator (`+ - &`) is the named-effect-row form (out of this
-    // form's scope) — left to parse_variants unchanged. Parse the RHS as
-    // a type and read the terminator live; the token decides, never a
-    // line-count or a pre-commitment.
+    // Transparent alias vs ADT (SYNTAX.md §«Type aliases» + §«Token
+    // wrapper»): a bare RHS type-expression with no `|` is an alias
+    // (`type Port = Int`, `type Bytes = [Int]`). A constructor-shaped RHS
+    // with fields (`type Token = Tok(TokenKind, Span)`, `type LowFn =
+    // LFn(...)`) is a single-variant ADT. The RHS shape is the carried
+    // truth: fields mean a constructor payload; no fields mean alias.
+    // Multi-variant ADTs and named effect rows still route through
+    // parse_variants below.
     let (alias_ty, p_alias) = parse_type_ty(tokens, p2)
     let term = skip_ws(tokens, p_alias)
     if at(tokens, term, TPipe) || at(tokens, term, TPlus)
@@ -699,7 +700,15 @@ fn parse_type_decl(ref tokens, pos) = {
       let (variants, p3) = parse_variants(tokens, p2)
       (nstmt(TypeDefStmt(name, variants), start), p3)
     } else {
-      (nstmt(AliasStmt(name, alias_ty), start), p_alias)
+      match alias_ty {
+        TName(vname, fields) =>
+          if len(fields) > 0 {
+            (nstmt(TypeDefStmt(name, [(vname, fields)]), start), p_alias)
+          } else {
+            (nstmt(AliasStmt(name, alias_ty), start), p_alias)
+          },
+        _ => (nstmt(AliasStmt(name, alias_ty), start), p_alias)
+      }
     }
   }
 }
@@ -2213,11 +2222,14 @@ fn first_char_code(s) = {
 fn parse_type_ty(ref tokens, pos) = match kind_at(tokens, pos) {
   TIdent(v) => {
     let base_pos = pos + 1
-    let base = if v == "Int"        { TInt }
-               else if v == "Float"  { TFloat }
-               else if v == "String" { TString }
-               else if v == "Bool"   { TName("Bool", []) }
-               else if v == "Unit"   { TUnit }
+    // Type-name recognition must be byte-structural. The m2 backend can lower
+    // bare string `==` as pointer equality here, which turns `Int` into the
+    // nominal TName("Int", []) and later reports equal-looking `Int vs Int`.
+    let base = if str_eq(v, "Int")        { TInt }
+               else if str_eq(v, "Float")  { TFloat }
+               else if str_eq(v, "String") { TString }
+               else if str_eq(v, "Bool")   { TName("Bool", []) }
+               else if str_eq(v, "Unit")   { TUnit }
                else                        { TName(v, []) }
     // Parens application — the one-application-syntax law: types
     // apply like effects apply (`Sample(44100)`) and values apply
@@ -2433,4 +2445,3 @@ fn node_to_predicate(node, span: ValidSpan) = {
 
 // A comparison carries its two operand handles (resolved live via graph_node_body).
 fn compare_pred(op, l, r) = PCompare(op, node_handle(l), node_handle(r))
-

@@ -341,11 +341,11 @@ handler env_handler with entries = [], scopes = [] {
 
   env_extend(name, scheme, reason, kind) =>
     resume()
-      with entries = [(name, scheme, reason, kind)] ++ entries,
+      with entries = entries ++ [(name, scheme, reason, kind)],   // drift-audit: ignore — O(1) lazy concat push onto the scope stack (tag-3 node, no copy); head/tail read the same end
 
   env_scope_enter() =>
     resume()
-      with scopes = [len(entries)] ++ scopes,
+      with scopes = scopes ++ [len(entries)],   // drift-audit: ignore — O(1) mark push, one per scope enter, popped by scope exit
 
   env_scope_exit() =>
     if len(scopes) == 0 { resume() }

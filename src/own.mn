@@ -6,9 +6,9 @@
 // is E_OwnershipViolation. A ref-annotated value cannot escape return position —
 // checked structurally on the body.
 //
-// No separate ownership pass. The Consume effect piggybacks on the
-// inference walk (spec 04). Handler install is per-FnStmt. Fallout
-// from the same Boolean algebra that proves !Alloc, !IO, !Network.
+// Explicit own is enforced by the Consume handler during inference. Unmarked
+// params are resolved after the body walk by the structural use-count pass, then
+// written back into the function type for lower/query to read live.
 
 import types
 import runtime/strings
@@ -32,77 +32,25 @@ handler catch_abort {
   abort() => None
 }
 
-// Look up a name in the environment. Wraps the EnvRead effect
-// as a named graph node for |> pipelines.
-fn lookup_env(ref name) = env_lookup(name)
-
-// Unwrap an env lookup result, aborting if None.
-fn unwrap_env(opt) with Abort = match opt {
-  Some((scheme, _, _)) => scheme,
-  None => abort()
-}
-
-// Extract a parameter's owner name and index from a Scheme.
-// Aborts if the scheme doesn't resolve to a function parameter.
-fn extract_param_owner(scheme) with Abort = match scheme {
-  Forall(_, TVar(h)) => match graph_chase(h) {
-    GNode(_, FnParam(owner_name, idx, _)) => (owner_name, idx),
-    _ => abort()
-  },
-  _ => abort()
-}
-
-// Extract function parameter list from an owner's Scheme.
-// Aborts if the scheme doesn't resolve to a function type.
-fn extract_fn_params(scheme) with Abort = match scheme {
-  Forall(_, TVar(fn_h)) => match graph_chase(fn_h) {
-    GNode(NBound(TFun(params, _, _)), _) => params,
-    _ => abort()
-  },
-  _ => abort()
-}
-
-// Look up a name's authored ownership annotation.
-// Returns Some(auth) if the parameter has an explicit own/ref marker,
-// None if not found or if the graph structure doesn't match.
-fn get_authored_ownership(ref name) with !Mutate = {
-  name
-    |> lookup_env
-    |> unwrap_env
-    |> extract_param_owner
-    |> ((owner_name, idx)) => {
-         let params = owner_name
-           |> lookup_env
-           |> unwrap_env
-           |> extract_fn_params
-
-         if idx < len(params) {
-           Some(param_authored(list_index(params, idx)))
-         } else { None }
-       }
-    ~> catch_abort
-}
-
 handler affine_ledger with used = [], used_sites = [], branches = [] {
 
-  consume(name, span) => {
-    if set_contains(used, name) {
-      let first = find_first_span(used_sites, name)
-      let auth_hint = match get_authored_ownership(name) {
-        Some(Own) => " — you explicitly declared it 'own'"
-        Some(Unmarked) => " — it was inferred as 'own'"
-        _ => ""
-      }
-      report(EOwnershipViolation("'{name}' consumed twice (first at {show_span(first)}){auth_hint}", span))
-      resume()
-    } else {
-      // `used` maintains sort invariant via set_insert — every read
-      // (set_contains above) is O(log N) without boundary normalization.
-      // `used_sites` keeps insertion order so find_first_span returns
-      // the actual first-use span (sorting it would lose temporal order).
-      resume()
-        with used = set_insert(used, name),
-             used_sites = [(name, span)] ++ used_sites
+  consume(name, ownership, span) => {
+    match ownership {
+      Own =>
+        if set_contains(used, name) {
+          let first = find_first_span(used_sites, name)
+          report(EOwnershipViolation("'{name}' consumed twice (first at {show_span(first)})", span))
+          resume()
+        } else {
+          // `used` maintains sort invariant via set_insert — every read
+          // (set_contains above) is O(log N) without boundary normalization.
+          // `used_sites` keeps insertion order so find_first_span returns
+          // the actual first-use span (sorting it would lose temporal order).
+          resume()
+            with used = set_insert(used, name),
+                 used_sites = [(name, span)] ++ used_sites
+        },
+      _ => resume()
     }
   },
 

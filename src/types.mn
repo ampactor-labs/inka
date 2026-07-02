@@ -302,6 +302,10 @@ type Scheme
 // derive_ev_slots can produce per-op evidence at call sites,
 // and the Cursor can project effect structure at any position.
 //
+// ParamScheme(authored) is a local parameter binding. VarRef inference reads it
+// at the same env edge that resolved the name and passes authored ownership to
+// Consume. Inferred ownership is written later into the owning TFun's params.
+//
 type SchemeKind
   = FnScheme                                     // tag 0
   | ConstructorScheme(TagId, Int)                // tag 1
@@ -309,6 +313,7 @@ type SchemeKind
   | RecordSchemeKind(List)                       // tag 3 — [(field_name, ty)]
   | EffectDeclKind(List)                         // tag 5 — [op_name: String]  (cache byte 5; byte 4 retired with the dissolved capability)
   | HandlerKind(String, Int, List, List, List)   // tag 6 — (handled_ename, residual_row_handle, config, state, arms)
+  | ParamScheme(Ownership)                       // tag 7 — parameter binding carries authored ownership at the env edge
   // HandlerKind (tag 6) is the full handler-effect type AND the handler's
   // identity: a handler is
   // (a ! E+r) ⟿ (a ! R+r) — it REMOVES the handled effect (handled_ename) AND
@@ -1613,9 +1618,10 @@ effect Verify {
   // No separate op. No separate handler arm. No separate diagnostic.
 }
 
-// Every use of an own-parameter performs consume(name, span).
-// affine_ledger enforces linearity; declares with !Consume so its
-// own arms cannot recurse through consume. Structural gate.
+// Every VarRef performs consume(name, ownership, span), carrying authored
+// parameter ownership from the env lookup that already happened at the use-site.
+// affine_ledger enforces linearity only for authored Own. Unmarked params are
+// resolved later by the structural use-count pass and written into the TFun.
 //
 // Branching ops (W2) implement the `><` / `<|` branching ledger:
 // at branch_enter, the handler stashes `used` as a base; branch_divider
@@ -1625,7 +1631,7 @@ effect Verify {
 // E_OwnershipViolation), unions all deltas into used, pops the frame.
 
 effect Consume {
-  consume(String, Span) -> ()
+  consume(String, Ownership, Span) -> ()
   branch_enter() -> ()
   branch_divider(Span) -> ()
   branch_exit(Span) -> ()

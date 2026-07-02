@@ -159,8 +159,8 @@ fn driver_infer_module(ref module_name, ref source, ref source_hash)
   let env_after = env_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let Env(entries_after) = env_after
   let n_after = len(entries_after)
-  // entries are prepended in env_handler, so the new ones are at
-  // the head; take the first (n_after - n_before).
+  // env_handler appends at the stack head (Mentl list_head reads the last
+  // element), so the new exports are the newest entries.
   let new_count = n_after - n_before
   let exported = driver_take_first(entries_after, new_count)
   // The flat export names are already in env from infer_program. A

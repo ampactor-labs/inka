@@ -212,19 +212,23 @@ fn find_handler_for_effect(stack, ename) = {
 // installs `fresh_for_query` for ephemeral display ids (the swappable peer).
 fn infer_program(stmts) = {
   {
-    pre_register_fn_sigs(stmts)
+    pre_register_decls(stmts)
     infer_stmt_list(stmts)
   } ~> infer_ctx ~> fresh_for_inference
   stmts
 }
 
-fn pre_register_fn_sigs(stmts) = for_each(pre_register_stmt, stmts)
+fn pre_register_decls(stmts) = for_each(pre_register_stmt, stmts)
 
 fn pre_register_stmt(ref node) = {
   let N(body, span, handle) = node
   match body {
     NStmt(FnStmt(name, params, _ret_ann, effs, _body_node)) =>
       pre_register_fn_sig(name, params, declared_names_of(effs), handle, span),
+    NStmt(TypeDefStmt(name, variants)) =>
+      register_type_constructors(name, variants),
+    NStmt(EffectDeclStmt(name, ops)) =>
+      register_effect_ops(name, ops),
     _ => ()
   }
 }
@@ -289,11 +293,9 @@ fn infer_stmt(ref node) = {
       inf_set_declared([])
     },
 
-    NStmt(TypeDefStmt(name, variants)) =>
-      register_type_constructors(name, variants),
+    NStmt(TypeDefStmt(_, _)) => (),
 
-    NStmt(EffectDeclStmt(name, ops)) =>
-      register_effect_ops(name, ops),
+    NStmt(EffectDeclStmt(_, _)) => (),
 
     NStmt(HandlerDeclStmt(hname, ename, config, state, arms)) =>
       register_handler(hname, ename, config, state, arms, span),
@@ -867,22 +869,21 @@ fn infer_var_ref(name, handle, span: ValidSpan) = {
       graph_bind(handle, TVar(handle), Located(span, MissingVar(name)))
     },
     Some(entry) => {
-      let (scheme, reason, _kind) = entry
+      let (scheme, reason, kind) = entry
       let ty = instantiate(scheme)
       graph_bind(handle, ty, Located(span, VarLookup(name, reason)))
-      // If this binding is an `own` parameter, performing consume.
-      // The affine_ledger handler enforces linearity.
-      check_consume_at_use(name, span)
+      // Carry parameter ownership from the env edge into Consume. No recovery
+      // lookup: SchemeKind names the binding's construction origin.
+      check_consume_at_use(name, kind, span)
     }
   }
 }
 
-fn check_consume_at_use(name, span: ValidSpan) = {
-  // Convention: consume is always performed at VarRef; affine_ledger
-  // in own.mn distinguishes which bindings are own-marked via its
-  // own state (populated at FnStmt entry). Performing unconditionally
-  // lets the handler make the decision.
-  consume(name, span)
+fn check_consume_at_use(name, kind, span: ValidSpan) = {
+  match kind {
+    ParamScheme(authored) => consume(name, authored, span),
+    _                     => consume(name, Unmarked, span)
+  }
 }
 
 // RX.4 — extract callee name from func node for Why chain.
@@ -2686,7 +2687,7 @@ fn mint_params(params, owner_name) = map((indexed) => {
   let (idx, p) = indexed
   let name = param_name(p)
   let h = mint(FnParam(owner_name, idx, Inferred("param of '{owner_name}'")))
-  env_extend(name, Forall([], TVar(h)), Declared(name), FnScheme)
+  env_extend(name, Forall([], TVar(h)), Declared(name), ParamScheme(param_authored(p)))
   h
 }, enumerate(params))
 
@@ -3036,7 +3037,7 @@ fn bind_handler_config_params(config_tparams, hname) =
     let name = param_name(tp)
     let ty = param_ty(tp)
     env_extend(name, Forall([], ty),
-      Located(span_zero(), LetBinding(name, Declared(hname))), FnScheme)
+      Located(span_zero(), LetBinding(name, Declared(hname))), ParamScheme(param_authored(tp)))
   }, config_tparams)
 
 fn bind_handler_state_names(state_binds, hname, span: ValidSpan) =

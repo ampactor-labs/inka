@@ -53,7 +53,9 @@ type KaiFile = {
 //   v8 — TRefined serializes its Predicate (placeholder retired);
 //        Reason/Predicate/PExpr/Span/BinOp serializers added — the
 //        Why chain persists with the value (handler IS evidence)
-fn cache_compiler_version() with Pure = 8
+//   v9 — ParamScheme(Ownership) added so parameter env bindings carry
+//        authored ownership at the edge instead of re-deriving it.
+fn cache_compiler_version() with Pure = 9
 
 // 32-bit FNV-1a hash of the source bytes. Non-cryptographic;
 // collision resistance is sufficient for cache invalidation.
@@ -173,7 +175,8 @@ fn cache_pack_scheme(scheme) with Pack + !Unpack = {
 }
 
 // SchemeKind cache bytes: 0=FnScheme, 1=ConstructorScheme, 2=EffectOpScheme,
-//                  3=RecordSchemeKind, 5=EffectDeclKind, 6=HandlerKind
+//                  3=RecordSchemeKind, 5=EffectDeclKind, 6=HandlerKind,
+//                  7=ParamScheme
 //                  (byte 4 retired with the dissolved capability)
 fn cache_pack_kind(kind) with Pack + !Unpack = match kind {
   FnScheme => pack_byte(0),
@@ -209,6 +212,10 @@ fn cache_pack_kind(kind) with Pack + !Unpack = match kind {
     // node); not serialized — cross-file caching reconstructs them from source
     // (peer Hβ.cache.handler-decl-from-source, post-L1). First-light is single-
     // file and never round-trips this.
+  },
+  ParamScheme(authored) => {
+    pack_byte(7)
+    cache_pack_ownership(authored)
   }
 }
 
@@ -698,6 +705,10 @@ fn cache_unpack_kind() with Unpack + !Pack = {
     // load — peer Hβ.cache.handler-decl-from-source); empty here, never read in
     // the single-file first-light path.
     HandlerKind(ename, row_handle, [], [], [])
+  }
+  else if tag == 7 {
+    let authored = cache_unpack_ownership()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
+    ParamScheme(authored)
   }
   else { FnScheme }
 }

@@ -2510,14 +2510,17 @@ fn free_in_ty(ty) = match ty {
   TAlias(_, inner)       => free_in_ty(inner)
 }
 
-fn free_in_list(tys) = flatten(map(free_in_ty, tys))
+fn free_in_list(tys) = tys |> map(free_in_ty) |> flatten
 
-fn free_in_params(params) = flatten(map((p) => free_in_ty(param_ty(p)), params))
+fn free_in_params(params) = params |> map((p) => free_in_ty(param_ty(p))) |> flatten
 
-fn free_in_fields(fields) = flatten(map((fld) => {
-  let (_, ty) = fld
-  free_in_ty(ty)
-}, fields))
+fn free_in_fields(fields) =
+  fields
+    |> map((fld) => {
+         let (_, ty) = fld
+         free_in_ty(ty)
+       })
+    |> flatten
 
 // A row's free variable is its open tail — the same first-class graph
 // node a type variable is. Effect-polymorphism IS value-polymorphism over
@@ -2550,11 +2553,14 @@ fn free_in_row(eff) = match eff {
 
 // The free type vars inside an effect-row's parameterized payloads
 // (Iterate(a) ⇒ a's free vars). Bare ENamed effects carry none.
-fn free_in_eff_names(names) = flatten(map((n) => match n {
-  ENamed(_)               => [],
-  EPure                   => [],   // the identity carries no free vars
-  EParameterized(_, args) => flatten(map(free_in_eff_arg, args))
-}, names))
+fn free_in_eff_names(names) =
+  names
+    |> map((n) => match n {
+         ENamed(_)               => [],
+         EPure                   => [],   // the identity carries no free vars
+         EParameterized(_, args) => args |> map(free_in_eff_arg) |> flatten
+       })
+    |> flatten
 
 fn free_in_eff_arg(arg) = match arg {
   EAInt(_)    => [],
@@ -2977,10 +2983,12 @@ fn quantify_effect_ops_loop(ops, qmap, i) =
 
 
 fn effect_type_vars(ops) =
-  flatten(map((op) => {
-    let (_, ptys, rty) = op
-    flatten(map(free_in_ty, ptys)) ++ free_in_ty(rty)
-  }, ops))
+  ops
+    |> map((op) => {
+         let (_, ptys, rty) = op
+         flatten(map(free_in_ty, ptys)) ++ free_in_ty(rty)
+       })
+    |> flatten
 
 fn register_one_op(effect_name, eff_name, op) = {
   let (op_name, param_types, ret_type) = op

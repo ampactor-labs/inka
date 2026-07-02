@@ -717,12 +717,14 @@ fn extract_top_fn_name(stmt) with Pure = match stmt {
 // ONE projection over lowered's direct children feeds both consumers
 // (declaration + init) — never two walks of one tree.
 fn collect_top_value_lets(stmts) =
-  flatten(map((stmt) => match stmt {
-    LLet(_, _, LMakeClosure(_, _, _, _))               => [],
-    LLet(_, _, LMakeContinuation(_, _, _, _, _, _, _)) => [],
-    LLet(_, name, init)                                => [(name, init)],
-    _                                                  => []
-  }, stmts))
+  stmts
+    |> map((stmt) => match stmt {
+         LLet(_, _, LMakeClosure(_, _, _, _))               => [],
+         LLet(_, _, LMakeContinuation(_, _, _, _, _, _, _)) => [],
+         LLet(_, name, init)                                => [(name, init)],
+         _                                                  => []
+       })
+    |> flatten
 
 // Emit the function table and elem mapping indices to function
 // labels. Every closure's fn_ptr slot stores the i32 index into
@@ -1244,7 +1246,7 @@ fn emit_one_fn_to_string(record) = {
 // matching the prior emit_fns_expr ordering byte-for-byte so
 // $<name>_idx globals line up with the function table.
 fn collect_fn_emit_records(exprs) =
-  flatten(map(collect_fn_emit_records_expr, exprs))
+  exprs |> map(collect_fn_emit_records_expr) |> flatten
 
 fn collect_fn_emit_records_expr(expr) = match expr {
   // The LowFn fence IS the body-context every fn shape carries: closures

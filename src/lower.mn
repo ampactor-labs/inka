@@ -1667,7 +1667,7 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     lower_handler_push(hname, handle)
     let lo_l = lower_expr(left)
     lower_handler_pop()
-    let config_inits = map(lower_expr, extract_handler_config_args(right))
+    let config_inits = extract_handler_config_args(right) |> map(lower_expr)
     let all_inits = config_inits ++ lookup_handler_state_inits_of(hname)
     LHandleWith(handle, lo_l, lo_r, hname, all_inits,
                 lookup_handler_arm_names_of(hname),

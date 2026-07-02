@@ -179,8 +179,7 @@ fn query(source, question) = {
     let ast = source |> frontend
     infer_program(ast)
     let q = parse_query_string(question)
-    let result = ask(q)
-    render_query_result(result)
+    ask(q) |> render_query_result
   }
     ~> query_default
     ~> mentl_default
@@ -198,8 +197,7 @@ fn teach(source) = {
   {
     let ast = source |> frontend
     infer_program(ast)
-    let gradients = collect_gradients(ast)
-    render_gradients(gradients)
+    collect_gradients(ast) |> render_gradients
   }
     ~> mentl_default
     ~> verify_ledger
@@ -216,8 +214,7 @@ fn audit(source) = {
   {
     let ast = source |> frontend
     infer_program(ast)
-    let entries = collect_fn_rows(ast)
-    render_audit(entries)
+    collect_fn_rows(ast) |> render_audit
   }
     ~> mentl_default
     ~> verify_ledger

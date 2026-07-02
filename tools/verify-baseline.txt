@@ -173,21 +173,6 @@ micro:resume-world=42
 # close delimiter assembly + recursion into nested aggregates) self-containedly —
 # peer Hβ.fold.show-seed-value-gate. Exit 40.
 micro:show-fold=40
-# W03 (the structural fold's PACK/UNPACK leaf): cache_pack/cache_unpack are the one
-# tag-then-payload traversal under the Pack/Unpack effects (the `<~` byte cycle).
-# The EAFloat leaf now round-trips VALUE-FAITHFULLY via its decimal string
-# (pack_str(float_to_str(f)) ↔ parse_float(unpack_str())) — the lossy
-# float_to_int_truncate (44.1→44) is DELETED, the no-silent-fallback law honored;
-# Hβ.fold.pack-leaf-effarg-float CLOSED. The wire format pins IKAI + version + the
-# per-Ty/-SchemeKind tag bytes byte-for-byte (Law 7 — every existing .kai valid).
-# The real cache_pack/unpack run under buffer handlers (lib/runtime/binary.mn) the
-# libless harness does not link, and the float round-trip needs the wheel's f64
-# repr the seed lags, so the gate proves the pack/unpack leaf's CONTROL SHAPE —
-# tag-then-payload encode, decode in the SAME order, RECOVER the original tag AND
-# payload (pack ∘ unpack = id) — self-containedly. The direct
-# cache_pack(kai)|>cache_unpack==kai lands when the seed catches up — peer
-# Hβ.fold.pack-roundtrip-seed-value-gate. Exit 40.
-micro:pack-roundtrip=40
 # A2 (Hβ.lower.tuple-as-product): a tuple IS a positional product — construction
 # and match-bind read ONE width-summed offset fold (emit_field_stores_acc + the
 # width-summed LPTuple carrying (offset, elem_ty, sub_pat)). This gate round-trips
@@ -321,11 +306,6 @@ micro:effarg-node=60
 # seed-runnable proxies (the established discipline — the live wheel forms read
 # the one graph / fs, which the libless WASI-free micro harness cannot run, so
 # each gate exercises the DECISION the wheel now makes).
-# - mn-cache-transitive-invalidation (W26): cache_is_hit now verifies own-hash
-#   AND each dep's CURRENT hash == the recorded imports_hashes (transitive
-#   invalidation — a changed dep dirties the module). Surpasses Salsa/Bazel by
-#   reading dep freshness from the one hash-set. Seed peer:
-#   Hβ.seed.cache-transitive-invalidation. Exit 70.
 # - mn-intent-from-node (W27): the intent_index side-ledger + graph_index_intent
 #   op + find_intent scan are DELETED; QIntentOf / oracle intent_weight read the
 #   FnStmt's effs LIVE via graph_node_body (Carried-Truth, LESS code). Seed peer:
@@ -334,7 +314,6 @@ micro:effarg-node=60
 #   `<~` fixpoint converges on GRAPH-EPOCH stability (revision = epoch, one
 #   number — surpassing Salsa red-green dirty-bits). Seed peer:
 #   Hβ.seed.ic-epoch-fixpoint. Exit 42.
-micro:cache-transitive-invalidation=70
 micro:intent-from-node=80
 micro:ic-epoch-fixpoint=42
 micro:felt-live-read=78

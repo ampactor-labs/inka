@@ -41,7 +41,6 @@ import verify
 import mentl
 import query
 import dsp/clock
-import cache
 import driver
 
 // The spine — entry points as |> + ~> topology
@@ -49,11 +48,12 @@ import driver
 // OUTWARD through `~>`. Outermost handler is the sandbox boundary.
 //
 // IC.4: compile / check now route through driver_check when invoked
-// with an entry-MODULE name (incremental). The legacy single-source
-// entry compile/check_source remain for tests that pass a raw
-// source string. The driver path consults .kai caches via FS;
-// every module either loads cached entries or re-infers + writes
-// fresh cache.
+// with an entry-MODULE name. The single-source entry compile/
+// check_source remain for tests that pass a raw source string. The
+// driver path reads module sources via FS and infers each in
+// dependency order; within-run incrementality IS the epoch cursor
+// (§2 cached-cursor mode), and cross-run skip is the image-persist
+// peer (Hβ.persist.module-image-cache).
 
 fn compile(entry_module) = {
   {
@@ -387,7 +387,7 @@ handler body_context with captures = 0, evidence = [] {
 
 // wasi_filesystem — FS substrate (IC prerequisite)
 // Four-arm stateless handler delegating to runtime/io.mn primitives.
-// Grants Filesystem capability to IC's cache layer. Installed in
+// Grants Filesystem capability to the driver's module reads. Installed in
 // `compile`'s ~> chain between wat_stdout and the compiler-internal
 // handlers — fs stays a driver-level capability, not something the
 // compiler's own code accidentally reaches for.

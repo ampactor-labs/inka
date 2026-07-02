@@ -5,8 +5,10 @@
 // IS the package manager.
 //
 // IC.4: compile / check / etc take entry-MODULE names (e.g.
-// "compiler/main") instead of raw sources. The driver walks
-// imports, consults .kai caches, re-infers only what changed.
+// "compiler/main") instead of raw sources. The driver walks the
+// import DAG in dependency layers and infers each module; cross-run
+// module skip is the §4④ image-persist peer
+// (Hβ.persist.module-image-cache), never a side-file serializer.
 //
 // CLI canonical vocabulary (per docs/specs/simulations/CLI-canonical-vocabulary.md):
 //
@@ -53,7 +55,6 @@ import lsp
 import driver
 import cursor
 import cursor_transport
-import cursor_cache
 import gradient_delta
 import synth_proposer
 import eight_loop
@@ -244,7 +245,6 @@ fn edit_run(target_opt) = {
   mentl_edit_session(entry_module)
     ~> patch_to_file
     ~> terminal_transport
-    ~> cursor_cache_default
     ~> delta_default
     ~> synth_default
     ~> interrogate_default
@@ -402,7 +402,6 @@ fn run_run(target) = {
 
 // ─── check_run — diagnostics; no emit
 //
-// Incremental cache hits via .mentl/cache/*.kai (per IC walkthrough).
 // Same handler chain as compile_run minus wat_stdout — the diagnostic
 // pipeline is the value; emission is suppressed.
 
@@ -626,7 +625,6 @@ fn print_help() = {
   eprint_string("  mentl --with <handler> [path]  — universal escape hatch (env_lookup)\n")
   eprint_string("\n")
   eprint_string("module names map to src/ or lib/ paths — paths accepted too.\n")
-  eprint_string("incremental modes consult .mentl/cache/*.kai for cache hits.\n")
   eprint_string("\n")
   eprint_string("see docs/specs/simulations/CLI-canonical-vocabulary.md for the full catalog\n")
   eprint_string("see docs/specs/simulations/EH-entry-handlers.md for substrate (--with resolution)\n")

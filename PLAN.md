@@ -426,16 +426,17 @@ representation-host**, ONE contiguous handle-addressed shape:
   env's `ConstructorScheme` via `variant_specs_of`, the same channel synth's
   `ctors_of_type` reads) closes the fifth node-kind — so `==` is total over every
   ADT to the bottom, the eq/hash-divergence footgun structurally unsayable. The
-  remaining leaves (show / pack / unpack / compare / hash) generalize the SAME
-  generator into `fold(ty, leaf)`, retiring the three hand-copies (the
-  `lower_to_string` aggregate fall-through, the cache `pack`/`unpack` walk
-  PINNING its `IKAI` tag-byte wire format as a byte-parity invariant, a generated
-  `compare`/`hash` leaf) — LESS code, sequenced on STEP 0/1's repr word-leaf and
-  STEP 5's `TCont`-world (the function-leaf's serialized-closure world). The
-  cache's `EffArg` pack/unpack is now TOTAL over its three tags (0=EAInt /
-  1=EAString / 2=EAFloat, additive — existing `.kai` bytes unchanged); the
-  byte-faithful f64 round-trip for `EAFloat` rides STEP 1's f64 width (peer
-  `Hβ.fold.pack-leaf-effarg-float`). **BOUNDARY (do not mis-flag):** types.mn's
+  remaining leaves (show / compare / hash) generalize the SAME generator into
+  `fold(ty, leaf)`, retiring the two hand-copies (the `lower_to_string`
+  aggregate fall-through; a generated `compare`/`hash` leaf) — LESS code,
+  sequenced on STEP 0/1's repr word-leaf and STEP 5's `TCont`-world (the
+  function-leaf's serialized-closure world). There is NO pack/unpack leaf: the
+  `.kai` cache layer and its `IKAI` tag-byte serializer were DELETED whole
+  (2026-07-02 — the Inka-era incremental-compilation side-file; it snapshotted
+  env entries lossily, DROPPING Reason chains, and pinned an archaeology wire
+  format the fold was contorting around). Durability is persist-as-memcpy of
+  the image (§4④) — a serializer leaf has nothing to serialize.
+  **BOUNDARY (do not mis-flag):** types.mn's
   `show_type` / `show_reason` / `show_effrow` are the DOMAIN pretty-renderer — the
   *mentl voice*, a `~> Format` projection of the compiler's own metaschema for the
   Why engine and diagnostics — NOT the generic `show`-leaf of `fold(ty, leaf)`
@@ -508,7 +509,7 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 **C · IFC — flow in the row (arm 4/6, §4⑥; W31 scaffold landed).** `Hβ.verify.ifc-noninterference` (umbrella; code `Hβ.types.ifc-flow-constraint`, types.mn:1029) ← `Hβ.ifc.dcc-noninterference-gate` → `.flowlabel-inference-in-hm` → `.pc-label-implicit-flow` → `.integrity-dual-lattice` (prompt-injection IS an integrity-flow violation) → `.declassify-robust` → `.flow-world-on-tcont` → `.agentic-fides-target`. DEP-rooted on `sound-neg-under-poly`.
 
-**D · The value layer — fold & repr (arms 1/7, §5.U; STEP 0/1/2 landed).** `Hβ.fold.show-leaf` (synthesize as a lowered LFn, not raw WAT; lower.mn:481) · `.pack-unpack-leaf` · `.pack-leaf-effarg-float` · `.compare-hash-leaf` · gate `Hβ.eq.fold-seed-value-gate` · `Hβ.repr.arrow-layout-interop` · `Hβ.emit.variant-payload-repr-width` (wasm.mn:4913) · `.plit-handle-repr` (wasm.mn:5537) · `Hβ.value.ontology-derivation-complete` · `Hβ.runtime.zero-copy-string-view` (lexer.mn:316).
+**D · The value layer — fold & repr (arms 1/7, §5.U; STEP 0/1/2 landed).** `Hβ.fold.show-leaf` (synthesize as a lowered LFn, not raw WAT; lower.mn:481) · `.compare-hash-leaf` · gate `Hβ.eq.fold-seed-value-gate` · `Hβ.repr.arrow-layout-interop` · `Hβ.emit.variant-payload-repr-width` (wasm.mn:4913) · `.plit-handle-repr` (wasm.mn:5537) · `Hβ.value.ontology-derivation-complete` · `Hβ.runtime.zero-copy-string-view` (lexer.mn:316).
 
 **E · Parallelism & accelerators (arm 3, §4④; STEP 4 collapse landed).** `Hβ.lower.fanout-simd-lane-cashout` (RV128) · `.fanout-gpu-backend-handler` (lower.mn:1475) · `.fanout-durable-persist-handler` (SPACE=TIME) · `Hβ.parallel.thread-alloc-transitive-proof` (verify ONLY after the leak closes) · `.race-freedom-ownership-proof` · `Hβ.infer.fanout-ownership-from-use-count` (infer.mn:1288) · `Hβ.runtime.wasi-thread-spawn-seed` (threading.mn:296) · `Hβ.driver.level-set-par-walk` *(the topological layer-partition is LIVE in driver.mn — 7165bbb; the open half is the multi-core `>< ~> Thread` at the layer site)* · `Hβ.cursor.speculative-compile` · `Hβ.cursor.work-stealing-via-gradient` *(idle cores ask the cursor "what next?"; the gradient's argmax IS the priority queue — no scheduler module)* · `Hβ.lower.schedule-specialized-callee` *(new — the parallel_map dissolution's open remainder: whether a reusable fn's internal `><`/`<|` should EVER inherit a caller-installed `Schedule` across a call boundary. The only sound route is compile-time specialization of the callee per install-context, preserving `Seq`'s zero-cost/`!Thread`-provable property — the §5.3 dispatch gradient's sibling on the INSTALLED-HANDLER axis (vs the known-argument axis; shares callee-specialization infra). The ambient/evidence-passed-runtime `Schedule` alternative is the wrong direction — it taxes every `Seq` fanout to buy portability only a rare `Thread` caller needs. Scoped skeptically: direct `>< + ~> Thread` at the use site is sufficient and simpler; build only when a real consumer needs one fanout helper serving callers wanting different schedules. Sequenced behind `Hβ.driver.level-set-par-walk`, DEP-gated on band-A `sound-neg-under-poly`)*.
 
@@ -530,7 +531,7 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 **N · Backends — the handler IS the backend (§5 stage 3).** `Hβ.backend.native-codegen-handler` (retire wasmtime/WABT) · `Hβ.native.wasm64-backend-handler` *(new)* · `Hβ.emit.memory-gc-handler`.
 
-**O · Self-hosting infra (resolves AT/around first-light; captured so it is not forgotten — NOT post-first-light work).** `Hβ.seed.float-gradient` · `Hβ.seed.multishot-producer` (both dissolve at first-light) · `Hβ.cache.cross-file-resolved-row` · `Hβ.driver.per-module-env-overlay` · `Hβ.f1.handler-substrates`.
+**O · Self-hosting infra (resolves AT/around first-light; captured so it is not forgotten — NOT post-first-light work).** `Hβ.seed.float-gradient` · `Hβ.seed.multishot-producer` (both dissolve at first-light) · `Hβ.persist.module-image-cache` *(cross-run module skip as §4④ image-persist: the graph image memcpy'd whole — env entries, oracle queue, Reason chains intact — keyed by source hash + transitive dep hashes, the invalidation design the deleted .kai layer proved; rides band B's persist-equals-memcpy substrate; supersedes the deleted `Hβ.cache.cross-file-resolved-row`)* · `Hβ.driver.per-module-env-overlay` · `Hβ.f1.handler-substrates`.
 
 ---
 

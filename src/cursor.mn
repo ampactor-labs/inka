@@ -221,10 +221,10 @@ handler ic_fixpoint_handler with last_epoch = 0 - 1 {
 // classification.
 //
 // Today: O(N · K) where N = handles in the live graph, K = candidates
-// per handle. Acceptable for small programs. Hμ.cursor.cache (peer
-// handle) extends the IC cache to `(env, oracle_queue)` so this
-// becomes O(N) read on cached results — same semantics, better
-// latency.
+// per handle. Acceptable for small programs. The O(N) form reads the
+// oracle queue as graph content persisted with the module image
+// (Hβ.persist.module-image-cache) — same semantics, better latency,
+// never a side-file.
 
 fn cursor_argmax_compute(caret) with GraphRead + !Mutate = {
   enumerate_gradient_positions()

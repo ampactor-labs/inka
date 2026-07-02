@@ -15,7 +15,6 @@
 // Walkthrough: docs/specs/simulations/IC-incremental-compilation.md
 
 import types
-import cache
 import parser
 import lexer
 import infer
@@ -106,123 +105,32 @@ fn driver_extract_imports_from_ast(ast) = {
   }, ast))
 }
 
-// Consult the cache; on miss run full inference for this module
-// and write a fresh `.kai`. Returns the env entries this module
-// publishes for the caller to install into `env_handler`.
+// Infer one module: its exports install into env_handler as
+// infer_program walks (the graph IS the record of what this module
+// publishes — no snapshot, no side-file). Cross-run module skip is
+// the §4④ image-persist peer (Hβ.persist.module-image-cache): the
+// graph image memcpy'd whole, keyed by source + transitive dep
+// hashes — never a second serializer.
 fn driver_check_module(ref module_name)
   with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
   let path = driver_module_path(module_name)
   if !fs_exists(path) {
     report(EMissingModule(module_name, path, span_zero()))
-    []
   } else {
-    let source = fs_read_file(path)
-    let current_hash = hash_source(source)
-    let cached = cache_read(module_name)
-    match cached {
-      Some(kai) => {
-        // Read each dep's CURRENT hash live so cache_is_hit can verify
-        // transitive freshness — a changed dependency invalidates this
-        // module's cache (Carried-Truth: dep freshness read live from the
-        // import DAG, not assumed from the module's own hash alone).
-        let current_dep_hashes = driver_collect_dep_hashes(kai.imports)
-        if cache_is_hit(kai, source, current_dep_hashes) {
-          // Cache hit — install cached entries into env_handler.
-          // No re-inference for this module: its source AND every dep
-          // are byte-identical to the cache-write moment.
-          driver_install_entries(kai.exported_entries)
-          kai.exported_entries
-        } else {
-          // Cache miss (this module's source OR a dep changed) — re-infer.
-          driver_infer_module(module_name, source, current_hash)
-        }
-      },
-      None => driver_infer_module(module_name, source, current_hash)
-    }
+    fs_read_file(path)
+      |> lex
+      |> parse_program
+      |> infer_program
   }
 }
 
-fn driver_infer_module(ref module_name, ref source, ref source_hash)
-  with Memory + Alloc + Filesystem + EnvRead + EnvWrite + GraphRead + GraphWrite + Diagnostic + LookupTy + Verify + InferCtx = {
-  let tokens = lex(source)
-  let ast = parse_program(tokens)
-  let imports = driver_extract_imports_from_ast(ast)
-  let imports_hashes = driver_collect_dep_hashes(imports)
-  // Snapshot env BEFORE inference so we can diff after to find
-  // this module's exported entries.
-  let env_before = env_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Env(entries_before) = env_before
-  let n_before = len(entries_before)
-  // Run inference.
-  infer_program(ast)
-  // Snapshot env AFTER; the new entries are this module's exports.
-  let env_after = env_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
-  let Env(entries_after) = env_after
-  let n_after = len(entries_after)
-  // env_handler appends at the end (the stack law), so this module's
-  // exports are exactly entries_after[n_before..n_after) — an
-  // order-preserving slice of the indices already in hand. (The prior
-  // read walked last+drop_last, persisting the exports REVERSED into
-  // the .kai — declaration order is the canonical order.)
-  let exported = slice(entries_after, n_before, n_after)
-  // The flat export names are already in env from infer_program. A
-  // qualified `module.name` reference follows the import edge to the
-  // module env node and reads `.name` there (SYNTAX.md §Imports) — no
-  // dotted-string-key side-ledger to pre-mint (Carried-Truth; the dotted
-  // key was the canonical re-derivation the surface explicitly rejects).
-  // Write cache.
-  let kai = {
-    compiler_version: cache_compiler_version(),
-    exported_entries: exported,
-    imports: imports,
-    imports_hashes: imports_hashes,
-    module_name: module_name,
-    source_hash: source_hash
-  }
-  cache_write(kai)
-  exported
-}
-
-// Collect each dep's CURRENT source hash (used to record the
-// cache-write moment so future invalidation can compare). For
-// caches written now, "now's" hash is what we record.
-fn driver_collect_dep_hashes(ref imports) with Memory + Alloc + Filesystem = {
-  let n = len(imports)
-  driver_collect_dep_hashes_loop(imports, 0, n, make_list(n))
-}
-
-fn driver_collect_dep_hashes_loop(ref imports, i, n, own buf)
-  with Memory + Alloc + Filesystem =
-  if i >= n { buf }
-  else {
-    let m = list_index(imports, i)
-    let path = driver_module_path(m)
-    let h = if fs_exists(path) {
-      hash_source(fs_read_file(path))
-    } else { 0 }
-    driver_collect_dep_hashes_loop(imports, i + 1, n, list_set(buf, i, h))
-  }
-
-// Env install — push entries into env_handler for importing modules
-// under their flat names. A qualified `module.name` reference resolves
-// by following the import edge to the module env node (SYNTAX.md
-// §Imports) — never a dotted-string-key alias re-resolved by name at
-// each call site (Carried-Truth: that is the canonical re-derivation).
-
-fn driver_install_entries(ref entries) with Memory + Alloc + EnvWrite = {
-  driver_install_loop(entries, 0, len(entries))
-}
-
-fn driver_install_loop(ref entries, i, n) with Memory + Alloc + EnvWrite = {
-  if i >= n { () }
-  else {
-    let entry = list_index(entries, i)
-    let (name, scheme, reason, kind) = entry
-    env_extend(name, scheme, reason, kind)
-    driver_install_loop(entries, i + 1, n)
-  }
-}
-
+// A module's exports live in env_handler because infer_program put
+// them there — the graph carries them; there is no install step and
+// no exported-entries snapshot. A qualified `module.name` reference
+// resolves by following the import edge to the module env node
+// (SYNTAX.md §Imports) — never a dotted-string-key alias re-resolved
+// by name at each call site (Carried-Truth: that is the canonical
+// re-derivation).
 
 // ─── Topological-layer walk (cargo-class) ───────────────────────────
 //

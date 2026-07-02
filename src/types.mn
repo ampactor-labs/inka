@@ -1649,8 +1649,8 @@ effect Consume {
   branch_exit(Span) -> ()
 }
 
-// Four ops cover the incremental-compilation cache layer (.kai
-// read/write, mkdir, exists). Operates relative to a preopen fd
+// Generic file I/O (read/write, mkdir, exists) — the driver's module
+// reads and any build output. Operates relative to a preopen fd
 // (wasmtime's --dir=. grants preopen fd 3 by convention).
 //
 // Row semantics: `with Filesystem` declares the function MAY touch

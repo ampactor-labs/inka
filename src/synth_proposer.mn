@@ -528,29 +528,29 @@ fn synth_param_loop(params, i, n, buf) with Pure = {
   }
 }
 
-// ─── Composition with cursor_default + delta_default + cursor_cache_default ─
+// ─── Composition with cursor_default + delta_default ────────────────
 //
 // The full Phase μ chain composes here:
 //
 //   cursor_session(initial_caret)
-//       ~> cursor_cache_default       -- cached oracle_queue (Hμ.cursor.cache)
 //       ~> delta_default              -- inverse-direction gradient (Hμ.gradient-delta)
 //       ~> synth_default              -- proposer chain (this file)
 //       ~> mentl_default              -- Teach + Why tentacles
 //       ~> interrogate_default        -- automated eight-fold (Hμ.eight-interrogation-loop)
 //       ~> terminal_transport         -- the human surface (Hμ.cursor.transport)
 //
-// Six Phase μ peer handles + cursor + the kernel = the full Mentl
+// The Phase μ peer handles + cursor + the kernel = the full Mentl
 // active surface. ULTIMATE FORM is the medium running this chain
 // continuously while the developer types — the bus-compressor closed
 // at the human boundary, with proposers exploring and the gradient
-// narrowing in real time.
+// narrowing in real time. (The oracle-queue cache re-enters as graph
+// content persisting with the module image — Hβ.persist.module-image-
+// cache — read live by argmax, never a side-file.)
 
 fn cursor_session_with_full_phaseu(initial_caret)
-    with Surface + GraphRead + Cursor + Delta + CursorCache + Synth
+    with Surface + GraphRead + Cursor + Delta + Synth
        + Interrogate + Teach + !Mutate = {
   cursor_session(initial_caret)
-    ~> cursor_cache_default
     ~> delta_default
     ~> synth_default
     ~> interrogate_default

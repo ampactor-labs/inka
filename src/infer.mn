@@ -42,26 +42,15 @@ effect InferCtx {
   inf_current_row() -> EffRow
   inf_set_declared(List) -> ()
   inf_declared_effs() -> List
-  inf_push_handler(String) -> ()
-  inf_pop_handler() -> ()
-  inf_handler_stack() -> List
-  inf_handler_provider(String) -> Option
   inf_enter_arm(Ty, Int) -> ()
   inf_exit_arm() -> ()
   inf_arm_tys() -> Option
 }
 
-// handler_stack (W4 prep, C4) — insertion-ordered stack of handler
-// names currently installed at this inference point. PTee (`~>`) sites
-// push when entering their body, pop on exit. W4's monomorphic dispatch
-// reads this to know which handler position to target; today it's a
-// bookkeeping surface with no consumer but the shape it captures is
-// load-bearing for evidence reification.
-handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack = [] {
+handler infer_ctx with stack = [], declared = [], arm_stack = [] {
   // stack = [InferFrame, ...] where each InferFrame is a record:
   //   {accumulated_row: EffRow, fn_span: Span, row_handle: Int}
   // declared = [(EffName, negated)] — the current FnStmt's annotation
-  // handler_stack = [handler_name, ...] — outer-to-inner installation order
   // arm_stack = [(op_return_ty, handle_result_h), ...] — the typed-resume
   //   context (SUBSTRATE.md primitive #2): inside `op(args) => body` for
   //   `op : (P...) -> R` under a handler whose handle-result is S,
@@ -133,19 +122,6 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
     resume(declared)
   },
 
-  inf_push_handler(name) => {
-    resume() with handler_stack = [name] ++ handler_stack
-  },
-
-  inf_pop_handler() => {
-    if len(handler_stack) == 0 { resume() }
-    else { resume() with handler_stack = drop_last(handler_stack) }
-  },
-
-  inf_handler_stack() => {
-    resume(handler_stack)
-  },
-
   inf_enter_arm(op_ret_ty, result_h) => {
     resume() with arm_stack = [(op_ret_ty, result_h)] ++ arm_stack
   },
@@ -158,47 +134,6 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
   inf_arm_tys() => {
     if len(arm_stack) == 0 { resume(None) }
     else { resume(Some(last(arm_stack))) }
-  },
-
-  inf_handler_provider(op_name) => {
-    match env_lookup(op_name) {
-      None => resume(None),
-      Some(entry) => {
-        let (_, _, kind) = entry
-        match kind {
-          EffectOpScheme(ename) =>
-            resume(find_handler_for_effect(handler_stack, ename)),
-          _ => resume(None)
-        }
-      }
-    }
-  }
-}
-
-fn find_handler_for_effect(stack, ename: String) = {
-  if len(stack) == 0 { None }
-  else {
-    let hname = last(stack)
-    match env_lookup(hname) {
-      Some(entry) => {
-        let (scheme, _, _) = entry
-        let Forall(_, ty) = scheme
-        match ty {
-          TName("Handler", args) => {
-            if len(args) == 1 {
-              match last(args) {
-                TName(hename, _) =>
-                  if hename == ename { Some(hname) }
-                  else { find_handler_for_effect(drop_last(stack), ename) },
-                _ => find_handler_for_effect(drop_last(stack), ename)
-              }
-            } else { find_handler_for_effect(drop_last(stack), ename) }
-          },
-          _ => find_handler_for_effect(drop_last(stack), ename)
-        }
-      },
-      None => find_handler_for_effect(drop_last(stack), ename)
-    }
   }
 }
 
@@ -691,6 +626,15 @@ fn infer_expr(ref node) = {
       // The base's proven record type IS the source of truth — the
       // result is derived from it, never fabricated.
       infer_expr(base)
+      // The spread base MUST be record-shaped — the same open-record
+      // constraint field access erects, so `{...5, f: v}` is a type
+      // error at the spread, never a zero-field fabrication.
+      let N(_, _, bh) = base
+      let base_row_h = graph_fresh_row(Inferred("record update row"))
+      let expected_h = mint(Inferred("record update base"))
+      graph_bind(expected_h, mk_record_open([], base_row_h),
+        Located(span, Inferred("expected record")))
+      unify(bh, expected_h, span, Inferred("record spread base"))
       infer_record_field_values(overrides)
       let base_fields = record_fields_of_node(base)
       let override_types = build_record_field_types(overrides)
@@ -1148,7 +1092,6 @@ fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
   infer_expr(left)
   inf_exit_fn()
 
-  inf_push_handler(callee_name(right))
   infer_expr(right)
   let body_row = read_bound_row(body_row_h)
   match handler_e_r(right) {
@@ -1168,7 +1111,6 @@ fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
     // graph proves the handler identity at a decl; a value forwards.
     None => inf_add_row(body_row)
   }
-  inf_pop_handler()
 
   let N(_, _, lh) = left
   graph_bind(handle, TVar(lh),
@@ -1295,17 +1237,9 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
     // from RHS; the result-type binding is the same for both block
     // and inline forms (the parser has already built the correct
     // tree shape — block wraps whole chain, inline wraps one stage).
-    // handler_stack push/pop (C4) tracks the installation site for
-    // W4's monomorphic dispatch — the RHS handler value's name isn't
-    // resolvable here without handler-value typing, so the generic
-    // "pipe_tee" tag marks the frame. W4 will refine this to carry
-    // the concrete handler identity once evidence reification lands.
-    PTee => {
-      inf_push_handler(callee_name(right))
+    PTee =>
       graph_bind(handle, TVar(lh),
-        Located(span, InferredPipeResult("~>", Inferred("handler attachment"))))
-      inf_pop_handler()
-    },
+        Located(span, InferredPipeResult("~>", Inferred("handler attachment")))),
 
     // <~ feedback — requires an iterative context: the structural
     // presence of an Iterate-class handler (a cycle/iteration-resume
@@ -2230,10 +2164,16 @@ fn infer_pat_record_subs(flds, specs, span: ValidSpan) = {
 }
 
 fn infer_pat_tuple(pats, parent_handle, span: ValidSpan) = {
-  each((p) => {
+  let elem_tys = map((p) => {
     let sub_h = mint(Inferred("tuple pattern element"))
     infer_pat(p, sub_h, span)
+    TVar(sub_h)
   }, pats)
+  // The scrutinee's proven element types flow into the bound vars, and
+  // an arity mismatch is a unification failure at this edge — the exact
+  // bind the sibling infer_pat_list draws for lists.
+  graph_bind(parent_handle, TTuple(elem_tys),
+    Located(span, Inferred("tuple pattern")))
 }
 
 fn infer_pat_list(pats, rest, parent_handle, span: ValidSpan) = {
@@ -3198,6 +3138,10 @@ fn collect_resume_walk(buf, node) with GraphRead = {
     NExpr(NamedRecordExpr(_, fields)) =>
       each((f) => collect_resume_walk(buf, f.value), fields),
     NExpr(FieldExpr(b, _)) => collect_resume_walk(buf, b),
+    NExpr(IndexExpr(receiver, index)) => {
+      collect_resume_walk(buf, receiver)
+      collect_resume_walk(buf, index)
+    },
     NExpr(PipeExpr(_, l, r)) => {
       collect_resume_walk(buf, l)
       collect_resume_walk(buf, r)
@@ -3216,7 +3160,8 @@ fn collect_resume_walk(buf, node) with GraphRead = {
     NExpr(LabeledArg(_, v)) => collect_resume_walk(buf, v),
     NHole(_) => (),
     NPat(_)  => (),
-    NModule(_) => ()
+    NModule(_) => (),
+    NTypeAnn(_) => ()    // a Ty, not an expr — no child to carry a resume
   }
 }
 
@@ -3242,6 +3187,9 @@ fn has_loop_ancestor(target_handle, node) with GraphRead = {
       has_loop_ancestor(target_handle, scrut) ||
       any(arms, (a) => has_loop_ancestor(target_handle, a.body)),
     NExpr(LambdaExpr(_, body)) => has_loop_ancestor(target_handle, body),
+    NExpr(IndexExpr(receiver, index)) =>
+      has_loop_ancestor(target_handle, receiver) ||
+      has_loop_ancestor(target_handle, index),
     NStmt(LetStmt(_, v)) => has_loop_ancestor(target_handle, v),
     NStmt(ExprStmt(e)) => has_loop_ancestor(target_handle, e),
     _ => false
@@ -3311,6 +3259,9 @@ fn contains_handle(node, target_handle) with GraphRead = {
       contains_handle(r, target_handle),
     NExpr(UnaryOpExpr(_, x)) => contains_handle(x, target_handle),
     NExpr(LambdaExpr(_, body)) => contains_handle(body, target_handle),
+    NExpr(IndexExpr(receiver, index)) =>
+      contains_handle(receiver, target_handle) ||
+      contains_handle(index, target_handle),
     NExpr(ResumeExpr(_, _)) => false,   // leaf for our purposes
     NStmt(LetStmt(_, v)) => contains_handle(v, target_handle),
     NStmt(ExprStmt(e)) => contains_handle(e, target_handle),
@@ -3333,6 +3284,8 @@ fn lowest_common_ancestor(a, b, root) with GraphRead = {
     NExpr(BinOpExpr(_, l, r)) => lca_among_children([l, r], a, b),
     NExpr(UnaryOpExpr(_, x)) => lca_among_children([x], a, b),
     NExpr(LambdaExpr(_, body)) => lca_among_children([body], a, b),
+    NExpr(IndexExpr(receiver, index)) =>
+      lca_among_children([receiver, index], a, b),
     NStmt(LetStmt(_, v)) => lca_among_children([v], a, b),
     NStmt(ExprStmt(e)) => lca_among_children([e], a, b),
     _ => None
@@ -3423,51 +3376,53 @@ fn arm_index_loop(arms, target_handle, idx) with GraphRead = {
 //   • function call with refinement-typed param — param's pred holds
 //     in the called body's scope
 //
-// Result: Map<Handle, Predicate> per program-point. Lower's
-// verify_obligations consult this to elide redundant checks.
+// The narrowing WRITE is graph_narrow_set at the index site — one
+// write, consumed live by lower's graph_narrow_at (Carried-Truth: no
+// side-map re-deriving what the graph carries).
 //
 // Drift refused: 1 (no vtable; structural NodeKind walk); 6 (no
-// primitive-type-special-case for refinement); 7 (one Map<H,Pred>,
-// not parallel arrays); 8 (Predicate is the ADT — no string-keyed
-// pred-name flag); 9 (every NarrowingSite NExpr arm enumerated;
-// no wildcard fabricating ()).
+// primitive-type-special-case for refinement); 8 (Predicate is the
+// ADT — no string-keyed pred-name flag); 9 (every NarrowingSite
+// NExpr arm enumerated; no wildcard fabricating ()).
 fn infer_refinement_narrowing(body) with GraphRead + GraphWrite = {
-  walk_refinement(empty_refinement_map(), body, PTrue)
+  walk_refinement(body, PTrue)
 }
 
-fn walk_refinement(map, node, path_pred) with GraphRead + GraphWrite = {
+fn walk_refinement(node, path_pred) with GraphRead + GraphWrite = {
   let N(body, _, _) = node
   match body {
     NExpr(IfExpr(c, t, e)) => {
       let cond_pred = predicate_of_bool_expr(c)
-      let map_c = walk_refinement(map, c, path_pred)
-      let map_t = walk_refinement(map_c, t, conjunction(path_pred, cond_pred))
-      walk_refinement(map_t, e, conjunction(path_pred, negation_of(cond_pred)))
+      walk_refinement(c, path_pred)
+      walk_refinement(t, conjunction(path_pred, cond_pred))
+      walk_refinement(e, conjunction(path_pred, negation_of(cond_pred)))
     },
     NExpr(MatchExpr(scrut, arms)) => {
-      let map_s = walk_refinement(map, scrut, path_pred)
-      walk_refinement_arms(map_s, scrut, arms, path_pred)
+      walk_refinement(scrut, path_pred)
+      walk_refinement_arms(scrut, arms, path_pred)
     },
     NExpr(BlockExpr(stmts, final)) =>
-      walk_refinement_block(map, stmts, final, path_pred),
+      walk_refinement_block(stmts, final, path_pred),
     NExpr(CallExpr(f, args)) => {
-      let map_f = walk_refinement(map, f, path_pred)
-      walk_refinement_args_with_param_preds(map_f, f, args, path_pred)
+      walk_refinement(f, path_pred)
+      walk_refinement_args_with_param_preds(f, args, path_pred)
     },
-    NExpr(BinOpExpr(_, l, r)) =>
-      walk_refinement(walk_refinement(map, l, path_pred), r, path_pred),
+    NExpr(BinOpExpr(_, l, r)) => {
+      walk_refinement(l, path_pred)
+      walk_refinement(r, path_pred)
+    },
     NExpr(UnaryOpExpr(_, x)) =>
-      walk_refinement(map, x, path_pred),
+      walk_refinement(x, path_pred),
     NExpr(LambdaExpr(_, lb)) =>
-      walk_refinement(map, lb, PTrue),
+      walk_refinement(lb, PTrue),
     NExpr(ResumeExpr(v, _)) =>
-      walk_refinement(map, v, path_pred),
+      walk_refinement(v, path_pred),
     NExpr(MakeListExpr(elems)) =>
-      walk_refinement_list(map, elems, path_pred),
+      walk_refinement_list(elems, path_pred),
     NExpr(MakeTupleExpr(elems)) =>
-      walk_refinement_list(map, elems, path_pred),
+      walk_refinement_list(elems, path_pred),
     NExpr(MakeStringExpr(frags)) =>
-      walk_refinement_list(map, frags, path_pred),
+      walk_refinement_list(frags, path_pred),
     // An index site under a non-trivial path: record the path-predicate proven
     // to hold at the index node (graph_narrow_set), so lower's bounds-check read
     // (graph_narrow_at) elides the check the path already discharged (§4⑥:
@@ -3478,47 +3433,52 @@ fn walk_refinement(map, node, path_pred) with GraphRead + GraphWrite = {
     NExpr(IndexExpr(receiver, index)) => {
       let N(_, _, ih) = index
       let ph = narrowing_pred_handle(path_pred)
-      if ph != 0 { graph_narrow_set(ih, ph) } else { () }
-      walk_refinement(walk_refinement(map, receiver, path_pred), index, path_pred)
+      if ph != 0 { graph_narrow_set(ih, ph) }
+      walk_refinement(receiver, path_pred)
+      walk_refinement(index, path_pred)
     },
     NExpr(MakeRecordExpr(fields)) =>
-      walk_refinement_fields(map, fields, path_pred),
-    NExpr(RecordUpdateExpr(base, fields)) =>
-      walk_refinement_fields(walk_refinement(map, base, path_pred), fields, path_pred),
+      walk_refinement_fields(fields, path_pred),
+    NExpr(RecordUpdateExpr(base, fields)) => {
+      walk_refinement(base, path_pred)
+      walk_refinement_fields(fields, path_pred)
+    },
     NExpr(NamedRecordExpr(_, fields)) =>
-      walk_refinement_fields(map, fields, path_pred),
+      walk_refinement_fields(fields, path_pred),
     NExpr(FieldExpr(b, _)) =>
-      walk_refinement(map, b, path_pred),
-    NExpr(PipeExpr(_, l, r)) =>
-      walk_refinement(walk_refinement(map, l, path_pred), r, path_pred),
+      walk_refinement(b, path_pred),
+    NExpr(PipeExpr(_, l, r)) => {
+      walk_refinement(l, path_pred)
+      walk_refinement(r, path_pred)
+    },
     NStmt(LetStmt(_, v)) =>
-      walk_refinement(map, v, path_pred),
+      walk_refinement(v, path_pred),
     NStmt(ExprStmt(e)) =>
-      walk_refinement(map, e, path_pred),
-    NExpr(LitInt(_))    => map,
-    NExpr(LitFloat(_))  => map,
-    NExpr(LitString(_)) => map,
-    NExpr(LitBool(_))   => map,
-    NExpr(LitUnit)      => map,
-    NExpr(VarRef(_))    => map,
-    NExpr(ExprPlaceholder) => map,
-    NExpr(LabeledArg(_, v)) => walk_refinement(map, v, path_pred),
-    NHole(_) => map,
-    NPat(_)  => map,
-    NModule(_) => map,
+      walk_refinement(e, path_pred),
+    NExpr(LitInt(_))    => (),
+    NExpr(LitFloat(_))  => (),
+    NExpr(LitString(_)) => (),
+    NExpr(LitBool(_))   => (),
+    NExpr(LitUnit)      => (),
+    NExpr(VarRef(_))    => (),
+    NExpr(ExprPlaceholder) => (),
+    NExpr(LabeledArg(_, v)) => walk_refinement(v, path_pred),
+    NHole(_) => (),
+    NPat(_)  => (),
+    NModule(_) => (),
     // TOTAL over NodeBody/Stmt — a missing arm IS a drop to the loud
     // `unreachable` (the walk_refinement floor that blocked m3). A nested fn is
     // walked like a lambda: its body under a FRESH path (the enclosing path
     // predicate does not hold inside the callee). Declaration statements carry
     // no narrowable runtime expression; a type annotation is a Ty, not an expr.
-    NStmt(FnStmt(_, _, _, _, fbody))      => walk_refinement(map, fbody, PTrue),
-    NStmt(TypeDefStmt(_, _))              => map,
-    NStmt(EffectDeclStmt(_, _))           => map,
-    NStmt(HandlerDeclStmt(_, _, _, _, _)) => map,
-    NStmt(ImportStmt(_))                  => map,
-    NStmt(RefineStmt(_, _, _))            => map,
-    NStmt(AliasStmt(_, _))                => map,
-    NTypeAnn(_)                           => map
+    NStmt(FnStmt(_, _, _, _, fbody))      => walk_refinement(fbody, PTrue),
+    NStmt(TypeDefStmt(_, _))              => (),
+    NStmt(EffectDeclStmt(_, _))           => (),
+    NStmt(HandlerDeclStmt(_, _, _, _, _)) => (),
+    NStmt(ImportStmt(_))                  => (),
+    NStmt(RefineStmt(_, _, _))            => (),
+    NStmt(AliasStmt(_, _))                => (),
+    NTypeAnn(_)                           => ()
   }
 }
 
@@ -3526,8 +3486,8 @@ fn walk_refinement(map, node, path_pred) with GraphRead + GraphWrite = {
 // before walking the arm body. The narrowing is per-arm-scope; once
 // the arm body is walked, its refinement contributions don't leak
 // to other arms (they're branch-disjoint; map-per-arm semantics).
-fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead + GraphWrite = {
-  if len(arms) == 0 { map }
+fn walk_refinement_arms(scrut, arms, path_pred) with GraphRead + GraphWrite = {
+  if len(arms) == 0 { () }
   else {
     // A match arm is a (pat, body) TUPLE (parser push_node (pat, body); the
     // canonical destructure infer_match_arms uses) — positional, NOT a named
@@ -3535,21 +3495,21 @@ fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead + GraphWrite
     // TTuple (→ the loud `unreachable` / a garbage slot). Destructure positionally.
     let (pat, body) = last(arms)
     let arm_pred = pattern_predicate_for(pat, scrut)
-    let arm_map = walk_refinement(map, body, conjunction(path_pred, arm_pred))
-    walk_refinement_arms(arm_map, scrut, drop_last(arms), path_pred)
+    walk_refinement(body, conjunction(path_pred, arm_pred))
+    walk_refinement_arms(scrut, drop_last(arms), path_pred)
   }
 }
 
 // Block walking — stmts may include `assert(pred)` which narrows the
 // rest of the block. Threads path_pred through; each assert
 // strengthens the predicate for subsequent stmts + final expression.
-fn walk_refinement_block(map, stmts, final, path_pred) with GraphRead + GraphWrite = {
-  if len(stmts) == 0 { walk_refinement(map, final, path_pred) }
+fn walk_refinement_block(stmts, final, path_pred) with GraphRead + GraphWrite = {
+  if len(stmts) == 0 { walk_refinement(final, path_pred) }
   else {
     let stmt = last(stmts)
     let strengthened = strengthen_path_pred(path_pred, stmt)
-    let map_s = walk_refinement(map, stmt, path_pred)
-    walk_refinement_block(map_s, drop_last(stmts), final, strengthened)
+    walk_refinement(stmt, path_pred)
+    walk_refinement_block(drop_last(stmts), final, strengthened)
   }
 }
 
@@ -3575,25 +3535,24 @@ fn strengthen_path_pred(path_pred, stmt) with GraphRead = {
 // inference doesn't add the predicate to the caller's path_pred (the
 // callee's body is independently walked); the relationship surfaces
 // via signature unification at call site.
-fn walk_refinement_args_with_param_preds(map, f, args, path_pred) with GraphRead + GraphWrite = {
-  walk_refinement_list(map, args, path_pred)
+fn walk_refinement_args_with_param_preds(f, args, path_pred) with GraphRead + GraphWrite = {
+  walk_refinement_list(args, path_pred)
 }
 
-fn walk_refinement_list(map, nodes, path_pred) with GraphRead + GraphWrite = {
-  if len(nodes) == 0 { map }
+fn walk_refinement_list(nodes, path_pred) with GraphRead + GraphWrite = {
+  if len(nodes) == 0 { () }
   else {
-    let head = last(nodes)
-    let map_h = walk_refinement(map, head, path_pred)
-    walk_refinement_list(map_h, drop_last(nodes), path_pred)
+    walk_refinement(last(nodes), path_pred)
+    walk_refinement_list(drop_last(nodes), path_pred)
   }
 }
 
-fn walk_refinement_fields(map, fields, path_pred) with GraphRead + GraphWrite = {
-  if len(fields) == 0 { map }
+fn walk_refinement_fields(fields, path_pred) with GraphRead + GraphWrite = {
+  if len(fields) == 0 { () }
   else {
     let field = last(fields)
-    let map_f = walk_refinement(map, field.value, path_pred)
-    walk_refinement_fields(map_f, drop_last(fields), path_pred)
+    walk_refinement(field.value, path_pred)
+    walk_refinement_fields(drop_last(fields), path_pred)
   }
 }
 
@@ -3632,8 +3591,6 @@ fn narrowing_pred_handle(pred) with Pure = match pred {
 fn negation_of(pred) = PNot(pred)
 
 fn conjunction(p, q) = PAnd(p, q)
-
-fn empty_refinement_map() = []
 
 fn pattern_predicate_for(pat, scrut) = PPatternMatch(pat, node_handle(scrut))
 

@@ -2197,9 +2197,12 @@ fn infer_pat_list(pats, rest, parent_handle, span: ValidSpan) = {
 
 // Bind each PCon sub-pattern to its corresponding constructor param
 // type. Mints a fresh handle per sub-pat so PVar bindings carry a
-// distinct entry into env. Param-list / sub-pat length mismatch falls
-// through silently — surfaced separately as E_ConstructorArity (TODO).
+// distinct entry into env. An arity mismatch reports EConstructorArity
+// FIRST; the aligned prefix still binds (productive-under-error).
 fn bind_pcon_subpats(params, sub_pats, span: ValidSpan, reason, ctor_name) = {
+  if len(params) != len(sub_pats) {
+    report(EConstructorArity(ctor_name, len(params), len(sub_pats), span))
+  }
   each((pair) => {
     let (param, sub_pat) = pair
     let sub_h = mint(VarLookup(ctor_name, reason))
@@ -2327,10 +2330,13 @@ fn infer_one_handler_arm(arm, result_h, payload_h) = {   // drift-audit: ignore 
   unify(abh, result_h, arm_span, Inferred("handler arm result"))
 }
 
-// Arm params take the op's declared param types, positionally.
-// zip truncates on arity mismatch — the aligned prefix still binds
-// (productive-under-error; the arity diagnostic is the op's).
-fn bind_arm_args(args, params, op_name, span: ValidSpan) =
+// Arm params take the op's declared param types, positionally. An
+// arity mismatch reports EHandlerArmArity FIRST; the aligned prefix
+// still binds (productive-under-error).
+fn bind_arm_args(args, params, op_name, span: ValidSpan) = {
+  if len(args) != len(params) {
+    report(EHandlerArmArity(op_name, len(params), len(args), span))
+  }
   each((pair) => {
     let (name, param) = pair
     let h = mint(Located(span, LetBinding(name, Declared(op_name))))
@@ -2338,6 +2344,7 @@ fn bind_arm_args(args, params, op_name, span: ValidSpan) =
     env_extend(name, Forall([], TVar(h)),
       Located(span, LetBinding(name, Declared(op_name))), FnScheme)
   }, zip(args, params))
+}
 
 // Unify a handler's payload var with the op's payload type carried in its
 // (instantiated) row — Iterate(a) ⇒ unify a with P. This is the handler

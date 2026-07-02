@@ -1221,6 +1221,8 @@ type DiagKind
   // ─── infer (E_/T_) ───────────────────────────────────────────────
   | ETypeMismatch(Ty, Ty, Span)                  // a vs b — operands carried live
   | ETypeArityMismatch(Int, Int, Span)           // type-list arity a vs b
+  | EConstructorArity(String, Int, Int, Span)    // ctor name, declared fields, pattern binds
+  | EHandlerArmArity(String, Int, Int, Span)     // op name, declared params, arm binds
   | EFnArityMismatch(Int, Int, Span)             // fn param-count a vs b
   | EOccursCheck(Int, Ty, Span)                  // handle occurs in ty
   | EMissingVariable(String, Span)               // the unresolved context (name / "constructor: X" / ...)
@@ -1283,6 +1285,8 @@ fn diag_span(d) with Pure = match d {
   WRedundantWhere(s) => s,
   ETypeMismatch(_, _, s) => s,
   ETypeArityMismatch(_, _, s) => s,
+  EConstructorArity(_, _, _, s) => s,
+  EHandlerArmArity(_, _, _, s) => s,
   EFnArityMismatch(_, _, s) => s,
   EOccursCheck(_, _, s) => s,
   EMissingVariable(_, s) => s,
@@ -1331,6 +1335,8 @@ fn diag_source(d) with Pure = match d {
   WRedundantWhere(_) => "parser",
   ETypeMismatch(_, _, _) => "infer",
   ETypeArityMismatch(_, _, _) => "infer",
+  EConstructorArity(_, _, _, _) => "infer",
+  EHandlerArmArity(_, _, _, _) => "infer",
   EFnArityMismatch(_, _, _) => "infer",
   EOccursCheck(_, _, _) => "graph",
   EMissingVariable(_, _) => "infer",
@@ -1379,6 +1385,8 @@ fn diag_code(d) with Pure = match d {
   WRedundantWhere(_) => "W_RedundantWhere",
   ETypeMismatch(_, _, _) => "E_TypeMismatch",
   ETypeArityMismatch(_, _, _) => "E_TypeMismatch",
+  EConstructorArity(_, _, _, _) => "E_ConstructorArity",
+  EHandlerArmArity(_, _, _, _) => "E_HandlerArmArity",
   EFnArityMismatch(_, _, _) => "E_TypeMismatch",
   EOccursCheck(_, _, _) => "E_OccursCheck",
   EMissingVariable(_, _) => "E_MissingVariable",
@@ -1448,6 +1456,8 @@ fn diag_applicability(d) with Pure = match d {
   EVerifyUnencodable(_) => Unspecified,
   ETypeMismatch(_, _, _) => Unspecified,
   ETypeArityMismatch(_, _, _) => Unspecified,
+  EConstructorArity(_, _, _, _) => MaybeIncorrect,
+  EHandlerArmArity(_, _, _, _) => MaybeIncorrect,
   EFnArityMismatch(_, _, _) => Unspecified,
   EOccursCheck(_, _, _) => Unspecified,
   EOwnershipViolation(_, _) => Unspecified,
@@ -1486,6 +1496,8 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
   WRedundantWhere(_) => "`where true` is a vacuous predicate — drop it",
   ETypeMismatch(a, b, _) => "{show_type(a)} vs {show_type(b)}",
   ETypeArityMismatch(a, b, _) => "type list arity mismatch: {int_to_str(a)} vs {int_to_str(b)}",
+  EConstructorArity(name, declared, got, _) => "constructor {name} takes {int_to_str(declared)} fields; the pattern binds {int_to_str(got)}",
+  EHandlerArmArity(name, declared, got, _) => "op {name} declares {int_to_str(declared)} params; the arm binds {int_to_str(got)}",
   EFnArityMismatch(a, b, _) => "function arity mismatch: {int_to_str(a)} param(s) vs {int_to_str(b)} param(s)",
   EOccursCheck(h, ty, _) => "infinite type: {int_to_str(h)} occurs in {show_type(ty)}",
   EMissingVariable(what, _) => what,

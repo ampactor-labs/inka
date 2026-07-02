@@ -1097,9 +1097,9 @@ fn query_result_to_answer(result) with Pure = match result {
 fn diagnostics_from_debt(debt) with Pure = {
   if len(debt) == 0 { [] }
   else {
-    let (span, predicate, _reason) = list_head(debt)
+    let (span, predicate, _reason) = last(debt)
     [ERefinementRejected(predicate, span)]
-      ++ diagnostics_from_debt(list_tail(debt))
+      ++ diagnostics_from_debt(drop_last(debt))
   }
 }
 
@@ -1137,7 +1137,7 @@ fn render_voiceline(line) with GraphRead + Memory + Alloc + !Mutate = match line
 fn render_slots(slots) with GraphRead + Memory + Alloc + !Mutate = {
   if len(slots) == 0 { "" }
   else {
-    "{render_slot(list_head(slots))}{render_slots(list_tail(slots))}"
+    "{render_slot(last(slots))}{render_slots(drop_last(slots))}"
   }
 }
 
@@ -1487,8 +1487,8 @@ handler mentl_voice_default
 fn handles_table_lookup(table, target_handle) with Pure = {
   if len(table) == 0 { None }
   else {
-    let head = list_head(table)
-    let rest = list_tail(table)
+    let head = last(table)
+    let rest = drop_last(table)
     let (entry_handle, _, _) = head
     if file_handle_eq(entry_handle, target_handle) {
       Some(head)
@@ -1516,8 +1516,8 @@ fn file_handle_eq(a, b) with Pure = {
 fn join_capability_labels(labels) with Pure = {
   if len(labels) == 0 { "" }
   else {
-    let head = list_head(labels)
-    let tail = list_tail(labels)
+    let head = last(labels)
+    let tail = drop_last(labels)
     if len(tail) == 0 { head }
     else { "{head}, {join_capability_labels(tail)}" }
   }

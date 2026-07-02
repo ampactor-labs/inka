@@ -313,7 +313,11 @@ name that adds machinery-gloss over the topology is drift. Three rulings:
   the borrowed cons-vocabulary asserts the opposite and has already billed
   the project one real bug (the env-orientation truncation). The true names
   are **`last`** and **`drop_last`** (symmetric with `take`/`drop`); the
-  283-site sweep is the named peer `Hβ.lib.snoc-end-true-names`.
+  sweep is EXECUTED across all layers (283 sites): the primitives are
+  `last`/`drop_last`; prelude's drop-first is **`rest`**, the pattern
+  surface's own word (`[head, ...rest]`), and `tail` is no name at all.
+  One home per truth: the positional `last` duplicate dissolved into the
+  O(1) representation read.
 
 ### Nested function declarations
 

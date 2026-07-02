@@ -255,7 +255,7 @@ fn fn_body_handle(handle) with GraphRead + !Mutate = {
 fn first_inferred_with_classification(params, fn_handle) with Pure = {
   if len(params) == 0 { None }
   else {
-    let p = list_head(params)
+    let p = last(params)
     let name = param_name(p)
     match param_authored(p) {
       Unmarked => match param_resolved(p) {
@@ -264,10 +264,10 @@ fn first_inferred_with_classification(params, fn_handle) with Pure = {
         Ref => Some(ownership_suggestion(name, "ref",
                                           ["CZeroCopy"])),
         Unmarked =>
-          first_inferred_with_classification(list_tail(params), fn_handle)
+          first_inferred_with_classification(drop_last(params), fn_handle)
       },
       _ =>
-        first_inferred_with_classification(list_tail(params), fn_handle)
+        first_inferred_with_classification(drop_last(params), fn_handle)
     }
   }
 }
@@ -307,9 +307,9 @@ fn row_to_with_clause_inner(row) with Pure = match row {
 
 fn eff_names_to_str(names) with Pure = {
   if len(names) == 0 { "Pure" }                   // drift-audit: ignore — empty-list label is the canonical Pure-row source-text per SYNTAX.md §175 ("Pure is the identity element of +"); not effect-name string-keying
-  else if len(names) == 1 { eff_name_label(list_head(names)) }
+  else if len(names) == 1 { eff_name_label(last(names)) }
   else {
-    "{eff_name_label(list_head(names))} + {eff_names_to_str(list_tail(names))}"
+    "{eff_name_label(last(names))} + {eff_names_to_str(drop_last(names))}"
   }
 }
 

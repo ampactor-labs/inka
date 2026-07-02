@@ -350,25 +350,25 @@ handler env_handler with entries = [], scopes = [] {
   env_scope_exit() =>
     if len(scopes) == 0 { resume() }
     else {
-      let mark = list_head(scopes)
+      let mark = last(scopes)
       resume()
         with entries = take_last(entries, mark),
-             scopes = list_tail(scopes)
+             scopes = drop_last(scopes)
     }
 }
 
 fn env_find(entries, name: String) = {
   if len(entries) == 0 { None }
   else {
-    let (k, scheme, reason, kind) = list_head(entries)
+    let (k, scheme, reason, kind) = last(entries)
     if k == name { Some((scheme, reason, kind)) }
-    else { env_find(list_tail(entries), name) }
+    else { env_find(drop_last(entries), name) }
   }
 }
 
 fn take_last(lst, n) = {
   if len(lst) <= n { lst }
-  else { take_last(list_tail(lst), n) }
+  else { take_last(drop_last(lst), n) }
 }
 
 // body_context — H1 emit-time per-fn-body metadata
@@ -529,7 +529,7 @@ fn join_unlock_labels(labels) with Pure = {
   if len(labels) == 0 { "(no capabilities)" }
   else {
     let first = head(labels)
-    let rest = tail(labels)
+    let rest = rest(labels)
     fold(first, (acc, label) => acc ++ ", " ++ label, rest)
   }
 }
@@ -617,14 +617,14 @@ fn severance_unlocks_loop(severable, i, n, acc) = {
 fn render_audit(entries) = {
   if len(entries) == 0 { "" }
   else {
-    let report = list_head(entries)
+    let report = last(entries)
     let header = "{report.fn_name} : {report.row_str}\n"
     let severance_section =
       if len(report.severable) == 0 { "" }
       else {
         "  severable: {show_list(report.severable, show_eff_name, " + ")} — unlocks {show_list(report.unlocks, show_capability, ", ")}\n"
       }
-    "{header}{severance_section}{render_audit(list_tail(entries))}"
+    "{header}{severance_section}{render_audit(drop_last(entries))}"
   }
 }
 
@@ -697,7 +697,7 @@ fn build_question(verb, arg, raw) with Pure = match verb {
   QVUnknownVerb  => QUnknown(raw)
 }
 
-fn query_head(ws) with Pure = if len(ws) == 0 { "" } else { list_head(ws) }
+fn query_head(ws) with Pure = if len(ws) == 0 { "" } else { last(ws) }
 
 fn query_last(ws) with Pure =
   if len(ws) == 0 { "" } else { list_index(ws, len(ws) - 1) }

@@ -342,26 +342,26 @@ fn chase_type_deep(ref ty) with !Mutate = match ty {
 fn chase_list_deep(ref tys) with !Mutate = {
   if len(tys) == 0 { [] }
   else {
-    [chase_type_deep(list_head(tys))]
-      ++ chase_list_deep(list_tail(tys))
+    [chase_type_deep(last(tys))]
+      ++ chase_list_deep(drop_last(tys))
   }
 }
 
 fn chase_params_deep(ref params) with !Mutate = {
   if len(params) == 0 { [] }
   else {
-    let p = list_head(params)
+    let p = last(params)
     [param_with_ty(p, chase_type_deep(param_ty(p)))]
-      ++ chase_params_deep(list_tail(params))
+      ++ chase_params_deep(drop_last(params))
   }
 }
 
 fn chase_fields_deep(ref fields) with !Mutate = {
   if len(fields) == 0 { [] }
   else {
-    let (name, ty) = list_head(fields)
+    let (name, ty) = last(fields)
     [(name, chase_type_deep(ty))]
-      ++ chase_fields_deep(list_tail(fields))
+      ++ chase_fields_deep(drop_last(fields))
   }
 }
 
@@ -371,9 +371,9 @@ fn chase_fields_deep(ref fields) with !Mutate = {
 fn find_unresolved(ref entries) with !Mutate = {
   if len(entries) == 0 { [] }
   else {
-    let (name, scheme, _reason, _kind) = list_head(entries)
+    let (name, scheme, _reason, _kind) = last(entries)
     let Forall(_, ty) = scheme
-    let rest = find_unresolved(list_tail(entries))
+    let rest = find_unresolved(drop_last(entries))
     if has_free_tvar(ty) { [(name, ty, [])] ++ rest }
     else { rest }
   }
@@ -404,23 +404,23 @@ fn has_free_tvar(ref ty) with !Mutate = match ty {
 fn has_free_tvar_list(ref tys) with !Mutate = {
   if len(tys) == 0 { false }
   else {
-    has_free_tvar(list_head(tys))
-      || has_free_tvar_list(list_tail(tys))
+    has_free_tvar(last(tys))
+      || has_free_tvar_list(drop_last(tys))
   }
 }
 
 fn has_free_tvar_params(ref params) with !Mutate = {
   if len(params) == 0 { false }
   else {
-    has_free_tvar(param_ty(list_head(params))) || has_free_tvar_params(list_tail(params))
+    has_free_tvar(param_ty(last(params))) || has_free_tvar_params(drop_last(params))
   }
 }
 
 fn has_free_tvar_fields(ref fields) with !Mutate = {
   if len(fields) == 0 { false }
   else {
-    let (_, ty) = list_head(fields)
-    has_free_tvar(ty) || has_free_tvar_fields(list_tail(fields))
+    let (_, ty) = last(fields)
+    has_free_tvar(ty) || has_free_tvar_fields(drop_last(fields))
   }
 }
 
@@ -504,9 +504,9 @@ fn scan_handler_for_op(op_name, i, n) with GraphRead + !Mutate = {
 fn arms_include_op(arms, op_name) with Pure = {
   if len(arms) == 0 { false }
   else {
-    let arm = list_head(arms)
+    let arm = last(arms)
     if arm.op_name == op_name { true }
-    else { arms_include_op(list_tail(arms), op_name) }
+    else { arms_include_op(drop_last(arms), op_name) }
   }
 }
 
@@ -558,16 +558,16 @@ fn span_area(s: ValidSpan) with Pure = {
 fn find_tightest(ref idx, target, best_h, best_area) with Pure = {
   if len(idx) == 0 { best_h }
   else {
-    let (s, h) = list_head(idx)
+    let (s, h) = last(idx)
     if span_contains(s, target) {
       let area = span_area(s)
       if area < best_area {
-        find_tightest(list_tail(idx), target, Some(h), area)
+        find_tightest(drop_last(idx), target, Some(h), area)
       } else {
-        find_tightest(list_tail(idx), target, best_h, best_area)
+        find_tightest(drop_last(idx), target, best_h, best_area)
       }
     } else {
-      find_tightest(list_tail(idx), target, best_h, best_area)
+      find_tightest(drop_last(idx), target, best_h, best_area)
     }
   }
 }

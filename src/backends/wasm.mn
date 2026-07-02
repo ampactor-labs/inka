@@ -463,13 +463,13 @@ fn register_show_literals(lowered) with EmitStringLiteralOp + EnvRead = {
 fn register_show_literals_list(tys, seen) with EmitStringLiteralOp + EnvRead = {
   if len(tys) == 0 { () }
   else {
-    let ty = list_head(tys)
+    let ty = last(tys)
     let sig = fold_sig(ty)
     if ls_find_str_local(seen, sig, 0) >= 0 {
-      register_show_literals_list(list_tail(tys), seen)
+      register_show_literals_list(drop_last(tys), seen)
     } else {
       register_one_show_literals(ty)
-      register_show_literals_list(list_tail(tys), [sig] ++ seen)
+      register_show_literals_list(drop_last(tys), [sig] ++ seen)
     }
   }
 }
@@ -917,9 +917,9 @@ fn emit_type_section(lowered) = {
 fn max_i32_vector_arity(vectors, acc) = {
   if len(vectors) == 0 { acc }
   else {
-    let (param_reprs, result_repr) = list_head(vectors)
+    let (param_reprs, result_repr) = last(vectors)
     let n = if all_ri32(param_reprs) && repr_is_i32(result_repr) { len(param_reprs) } else { 0 }
-    max_i32_vector_arity(list_tail(vectors), max_int(acc, n))
+    max_i32_vector_arity(drop_last(vectors), max_int(acc, n))
   }
 }
 
@@ -929,8 +929,8 @@ fn max_i32_vector_arity(vectors, acc) = {
 fn collect_call_vectors_list(stmts, acc) = {
   if len(stmts) == 0 { acc }
   else {
-    collect_call_vectors_list(list_tail(stmts),
-      collect_call_vectors_expr(list_head(stmts), acc))
+    collect_call_vectors_list(drop_last(stmts),
+      collect_call_vectors_expr(last(stmts), acc))
   }
 }
 
@@ -1003,15 +1003,15 @@ fn vec_push(args, result_h, acc) =
 fn emit_distinct_repr_ft_types(vectors, seen) = {
   if len(vectors) == 0 { () }
   else {
-    let (param_reprs, result_repr) = list_head(vectors)
+    let (param_reprs, result_repr) = last(vectors)
     let nm = ft_name(param_reprs, result_repr)
     let skip = (all_ri32(param_reprs) && repr_is_i32(result_repr))
                  || ls_find_str_local(seen, nm, 0) >= 0
     if skip {
-      emit_distinct_repr_ft_types(list_tail(vectors), seen)
+      emit_distinct_repr_ft_types(drop_last(vectors), seen)
     } else {
       emit_repr_ft_type(param_reprs, result_repr)
-      emit_distinct_repr_ft_types(list_tail(vectors), [nm] ++ seen)
+      emit_distinct_repr_ft_types(drop_last(vectors), [nm] ++ seen)
     }
   }
 }
@@ -1064,7 +1064,7 @@ fn repr_is_i32(r) with Pure = match r { RI32 => true, _ => false }
 
 fn all_ri32(reprs) = {
   if len(reprs) == 0 { true }
-  else if repr_is_i32(list_head(reprs)) { all_ri32(list_tail(reprs)) }
+  else if repr_is_i32(last(reprs)) { all_ri32(drop_last(reprs)) }
   else { false }
 }
 
@@ -1075,7 +1075,7 @@ fn repr_code(r) with Pure = match r {
 
 fn repr_codes(reprs) = {
   if len(reprs) == 0 { "" }
-  else { repr_code(list_head(reprs)) ++ repr_codes(list_tail(reprs)) }
+  else { repr_code(last(reprs)) ++ repr_codes(drop_last(reprs)) }
 }
 
 // call_ft_name — the $ft name a call site references, computed from the live
@@ -1090,8 +1090,8 @@ fn call_ft_name(args, result_h) =
 fn arg_reprs(args) = {
   if len(args) == 0 { [] }
   else {
-    [repr_of(lookup_ty(lexpr_handle(list_head(args))))]
-      ++ arg_reprs(list_tail(args))
+    [repr_of(lookup_ty(lexpr_handle(last(args))))]
+      ++ arg_reprs(drop_last(args))
   }
 }
 
@@ -1372,7 +1372,7 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
 fn emit_reason_comment_for_fn(name, body) = {
   if len(body) == 0 { () }
   else {
-    let first = list_head(body)
+    let first = last(body)
     let h = lexpr_handle(first)
     if h == 0 { () }
     else {
@@ -1673,8 +1673,8 @@ fn param_repr_from_body(name, body) = {
 fn find_local_handle_list(name, stmts) = {
   if len(stmts) == 0 { 0 }
   else {
-    let h = find_local_handle_expr(name, list_head(stmts))
-    if h != 0 { h } else { find_local_handle_list(name, list_tail(stmts)) }
+    let h = find_local_handle_expr(name, last(stmts))
+    if h != 0 { h } else { find_local_handle_list(name, drop_last(stmts)) }
   }
 }
 
@@ -1840,8 +1840,8 @@ fn emit_wasi_thread_start() = {
 // resolve_state_slot_offset in lower.mn:1195 so arm-body reads match.
 //
 // Drift refused:
-// - 11 list-accumulator concat in loop: recursion uses list_head /
-//   list_tail directly; no append-by-one accumulator pattern.
+// - 11 list-accumulator concat in loop: recursion uses last /
+//   drop_last directly; no append-by-one accumulator pattern.
 // - 9 deferred-by-omission: closes #145 in this commit alongside the
 //   lower-side threading.
 fn emit_state_init_writes(state_local, inits, base_idx) = {
@@ -3002,8 +3002,8 @@ fn variant_specs_of(type_name) with EnvRead = {
 fn variant_specs_filter(entries, type_name) with Pure = {
   if len(entries) == 0 { [] }
   else {
-    let (_name, scheme, _reason, kind) = list_head(entries)
-    let rest = variant_specs_filter(list_tail(entries), type_name)
+    let (_name, scheme, _reason, kind) = last(entries)
+    let rest = variant_specs_filter(drop_last(entries), type_name)
     match kind {
       ConstructorScheme(tag_id, _total) => {
         let Forall(_, ty) = scheme
@@ -3051,14 +3051,14 @@ fn ctor_payload_tys_of(ctor_name) with EnvRead = {
 fn ctor_payload_tys_filter(entries, ctor_name) with Pure = {
   if len(entries) == 0 { [] }
   else {
-    let (name, scheme, _reason, kind) = list_head(entries)
+    let (name, scheme, _reason, kind) = last(entries)
     match kind {
       ConstructorScheme(_, _) =>
         if name == ctor_name {
           let Forall(_, ty) = scheme
           ctor_payload_tys(ty)
-        } else { ctor_payload_tys_filter(list_tail(entries), ctor_name) },
-      _ => ctor_payload_tys_filter(list_tail(entries), ctor_name)
+        } else { ctor_payload_tys_filter(drop_last(entries), ctor_name) },
+      _ => ctor_payload_tys_filter(drop_last(entries), ctor_name)
     }
   }
 }
@@ -3088,13 +3088,13 @@ fn emit_fold_eq_helpers(lowered) with EnvRead = {
 fn emit_distinct_eq_helpers(tys, seen) with EnvRead = {
   if len(tys) == 0 { () }
   else {
-    let ty = list_head(tys)
+    let ty = last(tys)
     let sig = fold_sig(ty)
     if ls_find_str_local(seen, sig, 0) >= 0 {
-      emit_distinct_eq_helpers(list_tail(tys), seen)
+      emit_distinct_eq_helpers(drop_last(tys), seen)
     } else {
       emit_one_eq_helper(sig, ty)
-      emit_distinct_eq_helpers(list_tail(tys), [sig] ++ seen)
+      emit_distinct_eq_helpers(drop_last(tys), [sig] ++ seen)
     }
   }
 }
@@ -3402,13 +3402,13 @@ fn emit_fold_compare_helpers(lowered) with EnvRead = {
 fn emit_distinct_compare_helpers(tys, seen) with EnvRead = {
   if len(tys) == 0 { () }
   else {
-    let ty = list_head(tys)
+    let ty = last(tys)
     let sig = fold_sig(ty)
     if ls_find_str_local(seen, sig, 0) >= 0 {
-      emit_distinct_compare_helpers(list_tail(tys), seen)
+      emit_distinct_compare_helpers(drop_last(tys), seen)
     } else {
       emit_one_compare_helper(sig, ty)
-      emit_distinct_compare_helpers(list_tail(tys), [sig] ++ seen)
+      emit_distinct_compare_helpers(drop_last(tys), [sig] ++ seen)
     }
   }
 }
@@ -3627,8 +3627,8 @@ fn cmp_agg_operand_contrib(left_h, acc) = {
 fn collect_cmp_agg_tys_list(stmts, acc) = {
   if len(stmts) == 0 { acc }
   else {
-    collect_cmp_agg_tys_list(list_tail(stmts),
-      collect_cmp_agg_tys_expr(list_head(stmts), acc))
+    collect_cmp_agg_tys_list(drop_last(stmts),
+      collect_cmp_agg_tys_expr(last(stmts), acc))
   }
 }
 
@@ -3724,8 +3724,8 @@ fn field_tys_of(fields, i, n) =
 fn collect_eq_product_tys_list(stmts, acc) = {
   if len(stmts) == 0 { acc }
   else {
-    collect_eq_product_tys_list(list_tail(stmts),
-      collect_eq_product_tys_expr(list_head(stmts), acc))
+    collect_eq_product_tys_list(drop_last(stmts),
+      collect_eq_product_tys_expr(last(stmts), acc))
   }
 }
 
@@ -3875,13 +3875,13 @@ fn emit_fold_show_helpers(lowered) with EnvRead = {
 fn emit_distinct_show_helpers(tys, seen) with EnvRead = {
   if len(tys) == 0 { () }
   else {
-    let ty = list_head(tys)
+    let ty = last(tys)
     let sig = fold_sig(ty)
     if ls_find_str_local(seen, sig, 0) >= 0 {
-      emit_distinct_show_helpers(list_tail(tys), seen)
+      emit_distinct_show_helpers(drop_last(tys), seen)
     } else {
       emit_one_show_helper(sig, ty)
-      emit_distinct_show_helpers(list_tail(tys), [sig] ++ seen)
+      emit_distinct_show_helpers(drop_last(tys), [sig] ++ seen)
     }
   }
 }
@@ -4240,8 +4240,8 @@ fn emit_show_concat_close() = wat_emit("    )\n")
 fn collect_show_tys_list(stmts, acc) = {
   if len(stmts) == 0 { acc }
   else {
-    collect_show_tys_list(list_tail(stmts),
-      collect_show_tys_expr(list_head(stmts), acc))
+    collect_show_tys_list(drop_last(stmts),
+      collect_show_tys_expr(last(stmts), acc))
   }
 }
 
@@ -4314,7 +4314,7 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LCall(_h, f, args) =>
     if is_show_global(f) && len(args) == 1 {
       collect_show_tys_expr(f,
-        show_operand_contrib(list_head(args), collect_show_tys_list(args, acc)))
+        show_operand_contrib(last(args), collect_show_tys_list(args, acc)))
     } else {
       collect_show_tys_expr(f, collect_show_tys_list(args, acc))
     },
@@ -4387,13 +4387,13 @@ fn emit_fold_hash_helpers(lowered) with EnvRead = {
 fn emit_distinct_hash_helpers(tys, seen) with EnvRead = {
   if len(tys) == 0 { () }
   else {
-    let ty = list_head(tys)
+    let ty = last(tys)
     let sig = fold_sig(ty)
     if ls_find_str_local(seen, sig, 0) >= 0 {
-      emit_distinct_hash_helpers(list_tail(tys), seen)
+      emit_distinct_hash_helpers(drop_last(tys), seen)
     } else {
       emit_one_hash_helper(sig, ty)
-      emit_distinct_hash_helpers(list_tail(tys), [sig] ++ seen)
+      emit_distinct_hash_helpers(drop_last(tys), [sig] ++ seen)
     }
   }
 }
@@ -4571,8 +4571,8 @@ fn hash_operand_contrib(arg, acc) with LookupTy = {
 fn collect_hash_tys_list(stmts, acc) with LookupTy = {
   if len(stmts) == 0 { acc }
   else {
-    collect_hash_tys_list(list_tail(stmts),
-      collect_hash_tys_expr(list_head(stmts), acc))
+    collect_hash_tys_list(drop_last(stmts),
+      collect_hash_tys_expr(last(stmts), acc))
   }
 }
 
@@ -4580,7 +4580,7 @@ fn collect_hash_tys_expr(expr, acc) with LookupTy = match expr {
   LCall(_h, f, args) =>
     if is_hash_global(f) && len(args) == 1 {
       collect_hash_tys_expr(f,
-        hash_operand_contrib(list_head(args), collect_hash_tys_list(args, acc)))
+        hash_operand_contrib(last(args), collect_hash_tys_list(args, acc)))
     } else {
       collect_hash_tys_expr(f, collect_hash_tys_list(args, acc))
     },
@@ -4646,8 +4646,8 @@ fn variant_named_specs_of(type_name) with EnvRead = {
 fn variant_named_specs_filter(entries, type_name) with Pure = {
   if len(entries) == 0 { [] }
   else {
-    let (name, scheme, _reason, kind) = list_head(entries)
-    let rest = variant_named_specs_filter(list_tail(entries), type_name)
+    let (name, scheme, _reason, kind) = last(entries)
+    let rest = variant_named_specs_filter(drop_last(entries), type_name)
     match kind {
       ConstructorScheme(tag_id, _total) => {
         let Forall(_, ty) = scheme
@@ -5012,7 +5012,7 @@ fn emit_match_arms(arms) = {
   if len(arms) == 0 {
     wat_emit("    (unreachable)\n")
   } else {
-    let (pat, body) = list_head(arms)
+    let (pat, body) = last(arms)
     if pat_always_matches(pat) {
       emit_pat_binds(pat)
       emit_expr(body)
@@ -5022,7 +5022,7 @@ fn emit_match_arms(arms) = {
       emit_pat_binds(pat)
       emit_expr(body)
       wat_emit("      )\n      (else\n")
-      emit_match_arms(list_tail(arms))
+      emit_match_arms(drop_last(arms))
       wat_emit("      ))\n")
     }
   }
@@ -5046,31 +5046,31 @@ fn pat_always_matches(pat) = match pat {
 fn tuple_pats_always_match(ebs) = {
   if len(ebs) == 0 { true }
   else {
-    let (_, _, sub_pat) = list_head(ebs)
-    if pat_always_matches(sub_pat) { tuple_pats_always_match(list_tail(ebs)) }
+    let (_, _, sub_pat) = last(ebs)
+    if pat_always_matches(sub_pat) { tuple_pats_always_match(drop_last(ebs)) }
     else { false }
   }
 }
 
 fn pats_always_match(subs) = {
   if len(subs) == 0 { true }
-  else if pat_always_matches(list_head(subs)) { pats_always_match(list_tail(subs)) }
+  else if pat_always_matches(last(subs)) { pats_always_match(drop_last(subs)) }
   else { false }
 }
 
 fn record_pats_always_match(fbs) = {
   if len(fbs) == 0 { true }
   else {
-    let (_, _, sub_pat) = list_head(fbs)
-    if pat_always_matches(sub_pat) { record_pats_always_match(list_tail(fbs)) }
+    let (_, _, sub_pat) = last(fbs)
+    if pat_always_matches(sub_pat) { record_pats_always_match(drop_last(fbs)) }
     else { false }
   }
 }
 
 fn alt_any_always_matches(branches) = {
   if len(branches) == 0 { false }
-  else if pat_always_matches(list_head(branches)) { true }
-  else { alt_any_always_matches(list_tail(branches)) }
+  else if pat_always_matches(last(branches)) { true }
+  else { alt_any_always_matches(drop_last(branches)) }
 }
 
 // ── emit_scrut_at — the value at an offset path ─────────────────────
@@ -5172,14 +5172,14 @@ fn emit_pat_predicate_at(pat, path, path_len) = match pat {
 fn emit_pat_subs_predicate(subs, i, path, path_len, base) = {
   if len(subs) == 0 { () }
   else {
-    let p = list_head(subs)
+    let p = last(subs)
     if pat_always_matches(p) {
-      emit_pat_subs_predicate(list_tail(subs), i + 1, path, path_len, base)
+      emit_pat_subs_predicate(drop_last(subs), i + 1, path, path_len, base)
     } else {
       wat_emit("    (if (result i32)\n      (then\n")
       let extended = list_set(path, path_len, base + i * 4)
       emit_pat_predicate_at(p, extended, path_len + 1)
-      emit_pat_subs_predicate(list_tail(subs), i + 1, path, path_len, base)
+      emit_pat_subs_predicate(drop_last(subs), i + 1, path, path_len, base)
       wat_emit("      )\n      (else (i32.const 0)))\n")
     }
   }
@@ -5189,14 +5189,14 @@ fn emit_pat_subs_predicate(subs, i, path, path_len, base) = {
 fn emit_pat_record_subs_predicate(fbs, path, path_len) = {
   if len(fbs) == 0 { () }
   else {
-    let (_, offset, sub_pat) = list_head(fbs)
+    let (_, offset, sub_pat) = last(fbs)
     if pat_always_matches(sub_pat) {
-      emit_pat_record_subs_predicate(list_tail(fbs), path, path_len)
+      emit_pat_record_subs_predicate(drop_last(fbs), path, path_len)
     } else {
       wat_emit("    (if (result i32)\n      (then\n")
       let extended = list_set(path, path_len, offset)
       emit_pat_predicate_at(sub_pat, extended, path_len + 1)
-      emit_pat_record_subs_predicate(list_tail(fbs), path, path_len)
+      emit_pat_record_subs_predicate(drop_last(fbs), path, path_len)
       wat_emit("      )\n      (else (i32.const 0)))\n")
     }
   }
@@ -5208,14 +5208,14 @@ fn emit_pat_record_subs_predicate(fbs, path, path_len) = {
 fn emit_pat_tuple_subs_predicate(ebs, path, path_len) = {
   if len(ebs) == 0 { () }
   else {
-    let (offset, _ty, sub_pat) = list_head(ebs)
+    let (offset, _ty, sub_pat) = last(ebs)
     if pat_always_matches(sub_pat) {
-      emit_pat_tuple_subs_predicate(list_tail(ebs), path, path_len)
+      emit_pat_tuple_subs_predicate(drop_last(ebs), path, path_len)
     } else {
       wat_emit("    (if (result i32)\n      (then\n")
       let extended = list_set(path, path_len, offset)
       emit_pat_predicate_at(sub_pat, extended, path_len + 1)
-      emit_pat_tuple_subs_predicate(list_tail(ebs), path, path_len)
+      emit_pat_tuple_subs_predicate(drop_last(ebs), path, path_len)
       wat_emit("      )\n      (else (i32.const 0)))\n")
     }
   }
@@ -5228,8 +5228,8 @@ fn emit_pat_alt_predicate(branches, path, path_len) = {
   if len(branches) == 0 {
     wat_emit("    (i32.const 0)\n")
   } else {
-    emit_pat_predicate_at(list_head(branches), path, path_len)
-    let rest = list_tail(branches)
+    emit_pat_predicate_at(last(branches), path, path_len)
+    let rest = drop_last(branches)
     if len(rest) == 0 { () }
     else {
       wat_emit("    (if (result i32)\n      (then (i32.const 1))\n      (else\n")
@@ -5272,8 +5272,8 @@ fn emit_pat_subs_binds(subs, i, path, path_len, base) = {
   if len(subs) == 0 { () }
   else {
     let extended = list_set(path, path_len, base + i * 4)
-    emit_pat_binds_at(list_head(subs), extended, path_len + 1, RI32)
-    emit_pat_subs_binds(list_tail(subs), i + 1, path, path_len, base)
+    emit_pat_binds_at(last(subs), extended, path_len + 1, RI32)
+    emit_pat_subs_binds(drop_last(subs), i + 1, path, path_len, base)
   }
 }
 
@@ -5287,8 +5287,8 @@ fn emit_pat_con_subs_binds(ptys, subs, i, path, path_len) = {
     let pty = if i < len(ptys) { fold_strip(list_index(ptys, i)) } else { TVar(0) }
     let off = variant_payload_offset(ptys, i, 0, 4)
     let extended = list_set(path, path_len, off)
-    emit_pat_binds_at(list_head(subs), extended, path_len + 1, repr_of(pty))
-    emit_pat_con_subs_binds(ptys, list_tail(subs), i + 1, path, path_len)
+    emit_pat_binds_at(last(subs), extended, path_len + 1, repr_of(pty))
+    emit_pat_con_subs_binds(ptys, drop_last(subs), i + 1, path, path_len)
   }
 }
 
@@ -5298,15 +5298,15 @@ fn emit_pat_con_subs_binds(ptys, subs, i, path, path_len) = {
 fn emit_pat_con_subs_predicate(ptys, subs, i, path, path_len) = {
   if len(subs) == 0 { () }
   else {
-    let sub_pat = list_head(subs)
+    let sub_pat = last(subs)
     if pat_always_matches(sub_pat) {
-      emit_pat_con_subs_predicate(ptys, list_tail(subs), i + 1, path, path_len)
+      emit_pat_con_subs_predicate(ptys, drop_last(subs), i + 1, path, path_len)
     } else {
       wat_emit("    (if (result i32)\n      (then\n")
       let off = variant_payload_offset(ptys, i, 0, 4)
       let extended = list_set(path, path_len, off)
       emit_pat_predicate_at(sub_pat, extended, path_len + 1)
-      emit_pat_con_subs_predicate(ptys, list_tail(subs), i + 1, path, path_len)
+      emit_pat_con_subs_predicate(ptys, drop_last(subs), i + 1, path, path_len)
       wat_emit("      )\n      (else (i32.const 0)))\n")
     }
   }
@@ -5315,10 +5315,10 @@ fn emit_pat_con_subs_predicate(ptys, subs, i, path, path_len) = {
 fn emit_pat_record_binds(fbs, path, path_len) = {
   if len(fbs) == 0 { () }
   else {
-    let (_, offset, sub_pat) = list_head(fbs)
+    let (_, offset, sub_pat) = last(fbs)
     let extended = list_set(path, path_len, offset)
     emit_pat_binds_at(sub_pat, extended, path_len + 1, RI32)
-    emit_pat_record_binds(list_tail(fbs), path, path_len)
+    emit_pat_record_binds(drop_last(fbs), path, path_len)
   }
 }
 
@@ -5328,10 +5328,10 @@ fn emit_pat_record_binds(fbs, path, path_len) = {
 fn emit_pat_tuple_binds(ebs, path, path_len) = {
   if len(ebs) == 0 { () }
   else {
-    let (offset, elem_ty, sub_pat) = list_head(ebs)
+    let (offset, elem_ty, sub_pat) = last(ebs)
     let extended = list_set(path, path_len, offset)
     emit_pat_binds_at(sub_pat, extended, path_len + 1, repr_of(fold_strip(elem_ty)))
-    emit_pat_tuple_binds(list_tail(ebs), path, path_len)
+    emit_pat_tuple_binds(drop_last(ebs), path, path_len)
   }
 }
 
@@ -5370,8 +5370,8 @@ fn emit_pat_alt_binds(branches, path, path_len) = {
 
 fn alt_has_binders(branches) = {
   if len(branches) == 0 { false }
-  else if lowpat_has_binders(list_head(branches)) { true }
-  else { alt_has_binders(list_tail(branches)) }
+  else if lowpat_has_binders(last(branches)) { true }
+  else { alt_has_binders(drop_last(branches)) }
 }
 
 fn lowpat_has_binders(pat) = match pat {
@@ -5395,42 +5395,42 @@ fn lowpat_has_binders(pat) = match pat {
 
 fn lowpats_have_binders(subs) = {
   if len(subs) == 0 { false }
-  else if lowpat_has_binders(list_head(subs)) { true }
-  else { lowpats_have_binders(list_tail(subs)) }
+  else if lowpat_has_binders(last(subs)) { true }
+  else { lowpats_have_binders(drop_last(subs)) }
 }
 
 fn record_pats_have_binders(fbs) = {
   if len(fbs) == 0 { false }
   else {
-    let (_, _, sub_pat) = list_head(fbs)
+    let (_, _, sub_pat) = last(fbs)
     if lowpat_has_binders(sub_pat) { true }
-    else { record_pats_have_binders(list_tail(fbs)) }
+    else { record_pats_have_binders(drop_last(fbs)) }
   }
 }
 
 fn tuple_pats_have_binders(ebs) = {
   if len(ebs) == 0 { false }
   else {
-    let (_, _, sub_pat) = list_head(ebs)
+    let (_, _, sub_pat) = last(ebs)
     if lowpat_has_binders(sub_pat) { true }
-    else { tuple_pats_have_binders(list_tail(ebs)) }
+    else { tuple_pats_have_binders(drop_last(ebs)) }
   }
 }
 
 fn emit_pat_alt_binds_dispatch(branches, path, path_len) = {
   if len(branches) == 0 { () }
   else {
-    let rest = list_tail(branches)
+    let rest = drop_last(branches)
     if len(rest) == 0 {
       // Last branch: matched by elimination (the arm predicate held). Alt
       // branches bind at the scrutinee position; the leaf repr is RI32 (the
       // branches bind the same names — an f64-alt-binder rides the same leaf
       // path, RI32-byte-identical for the word case).
-      emit_pat_binds_at(list_head(branches), path, path_len, RI32)
+      emit_pat_binds_at(last(branches), path, path_len, RI32)
     } else {
-      emit_pat_predicate_at(list_head(branches), path, path_len)
+      emit_pat_predicate_at(last(branches), path, path_len)
       wat_emit("    (if\n      (then\n")
-      emit_pat_binds_at(list_head(branches), path, path_len, RI32)
+      emit_pat_binds_at(last(branches), path, path_len, RI32)
       wat_emit("      )\n      (else\n")
       emit_pat_alt_binds_dispatch(rest, path, path_len)
       wat_emit("      ))\n")
@@ -5619,7 +5619,7 @@ fn emit_simd_replace_lanes(lanes, i, local_name) =
     wat_emit(" (local.get $")
     wat_emit(local_name)
     wat_emit(")\n")
-    emit_expr(list_head(lanes))
+    emit_expr(last(lanes))
     wat_emit("    ))\n")
-    emit_simd_replace_lanes(list_tail(lanes), i + 1, local_name)
+    emit_simd_replace_lanes(drop_last(lanes), i + 1, local_name)
   }

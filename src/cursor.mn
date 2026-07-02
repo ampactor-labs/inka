@@ -381,8 +381,8 @@ fn module_imports(from, target, seen) with GraphRead + !Mutate = {
 
 fn any_imports(paths, target, seen) with GraphRead + !Mutate = {
   if len(paths) == 0 { false }
-  else if module_imports(list_head(paths), target, seen) { true }
-  else { any_imports(list_tail(paths), target, seen) }
+  else if module_imports(last(paths), target, seen) { true }
+  else { any_imports(drop_last(paths), target, seen) }
 }
 
 // The direct import paths declared in module `path`'s NModule decls.
@@ -412,11 +412,11 @@ fn import_paths_of_decls(decls) with Pure = {
 fn filter_map_imports(decls) with Pure = {
   if len(decls) == 0 { [] }
   else {
-    let head_imports = match node_body_of(list_head(decls)) {
+    let head_imports = match node_body_of(last(decls)) {
       NStmt(ImportStmt(p)) => [p],
       _                    => []
     }
-    head_imports ++ filter_map_imports(list_tail(decls))
+    head_imports ++ filter_map_imports(drop_last(decls))
   }
 }
 
@@ -427,8 +427,8 @@ fn node_body_of(node) with Pure = {
 
 fn contains_path(paths, target) with Pure = {
   if len(paths) == 0 { false }
-  else if list_head(paths) == target { true }
-  else { contains_path(list_tail(paths), target) }
+  else if last(paths) == target { true }
+  else { contains_path(drop_last(paths), target) }
 }
 
 // ─── Argmax with default ────────────────────────────────────────────
@@ -703,8 +703,8 @@ fn top_n_by_score(scored, n) with Pure = {
 fn sort_by_score_desc(scored) with Pure = {
   if len(scored) <= 1 { scored }
   else {
-    let head = list_head(scored)
-    let tail = list_tail(scored)
+    let head = last(scored)
+    let tail = drop_last(scored)
     insert_descending(head, sort_by_score_desc(tail))
   }
 }

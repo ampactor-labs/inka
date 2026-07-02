@@ -298,9 +298,9 @@ fn parenthesize(s) with Pure = {
 
 fn join_lines(lines) with Pure = {
   if len(lines) == 0 { "" }
-  else if len(lines) == 1 { list_head(lines) }
+  else if len(lines) == 1 { last(lines) }
   else {
-    "{list_head(lines)}\n{join_lines(list_tail(lines))}"
+    "{last(lines)}\n{join_lines(drop_last(lines))}"
   }
 }
 
@@ -367,17 +367,17 @@ fn render_pat_tokens(p) with GraphRead + Memory + Alloc + !Mutate = match p {
 
 fn render_node_list(nodes, sep) with GraphRead + Memory + Alloc + !Mutate = {
   if len(nodes) == 0 { "" }
-  else if len(nodes) == 1 { render_tokens_for(list_head(nodes)) }
+  else if len(nodes) == 1 { render_tokens_for(last(nodes)) }
   else {
-    "{render_tokens_for(list_head(nodes))}{sep}{render_node_list(list_tail(nodes), sep)}"
+    "{render_tokens_for(last(nodes))}{sep}{render_node_list(drop_last(nodes), sep)}"
   }
 }
 
 fn render_pat_list(pats, sep) with GraphRead + Memory + Alloc + !Mutate = {
   if len(pats) == 0 { "" }
-  else if len(pats) == 1 { render_pat_tokens(list_head(pats)) }
+  else if len(pats) == 1 { render_pat_tokens(last(pats)) }
   else {
-    "{render_pat_tokens(list_head(pats))}{sep}{render_pat_list(list_tail(pats), sep)}"
+    "{render_pat_tokens(last(pats))}{sep}{render_pat_list(drop_last(pats), sep)}"
   }
 }
 
@@ -386,9 +386,9 @@ fn render_pat_list(pats, sep) with GraphRead + Memory + Alloc + !Mutate = {
 fn render_param_list(params) with Memory + Alloc = {
   if len(params) == 0 { "" }
   else if len(params) == 1 {
-    param_name(list_head(params))
+    param_name(last(params))
   } else {
-    "{param_name(list_head(params))}, {render_param_list(list_tail(params))}"
+    "{param_name(last(params))}, {render_param_list(drop_last(params))}"
   }
 }
 
@@ -503,15 +503,15 @@ fn child_is(target, node) with Pure = {
 
 fn any_child_is(target, nodes) with Pure = {
   if len(nodes) == 0 { false }
-  else if child_is(target, list_head(nodes)) { true }
-  else { any_child_is(target, list_tail(nodes)) }
+  else if child_is(target, last(nodes)) { true }
+  else { any_child_is(target, drop_last(nodes)) }
 }
 
 fn render_branch_tuple(branches) with Format + !Mutate = {
   if len(branches) == 0 { "" }
   else {
-    let head = list_head(branches)
-    let tail = list_tail(branches)
+    let head = last(branches)
+    let tail = drop_last(branches)
     let head_str = format_chain(head)
     let head_line = spaces(indented_center())
       ++ head_str

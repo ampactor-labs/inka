@@ -364,7 +364,7 @@ fn refinement_verdict_for(handle, reason) with Verify + !Mutate = {
   if len(pending) == 0 {
     VerdictClears(reason)
   } else {
-    VerdictInvites(refinement_invite_for(handle, reason, list_head(pending)))
+    VerdictInvites(refinement_invite_for(handle, reason, last(pending)))
   }
 }
 

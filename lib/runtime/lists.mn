@@ -7,7 +7,7 @@
 //   tag 0 (flat):   [count:i32][tag:i32][elem0:i32][elem1:i32]...
 //                   length = count, O(1) indexed at offset 8+i*4
 //   tag 1 (snoc):   [count:i32][tag:i32][left:ptr][last:i32]
-//                   push appends via snoc; list_head reads last in O(1)
+//                   push appends via snoc; last reads last in O(1)
 //   tag 3 (concat): [count:i32][tag:i32][left:ptr][right:ptr]
 //                   list_concat returns this node without copying
 //   tag 4 (slice):  [count:i32][tag:i32][base:ptr][start:i32]
@@ -207,13 +207,13 @@ fn list_pop(list) with Memory + Alloc = {
   if n == 0 {
     (make_list(0), 0)
   } else {
-    let last = list_index(list, n - 1)
+    let end_val = list_index(list, n - 1)
     let rest = if n == 1 { make_list(0) }
                else {
                  let buf = make_list(n - 1)
                  list_copy_into(list, buf, 0, n - 1)
                }
-    (rest, last)
+    (rest, end_val)
   }
 }
 
@@ -275,25 +275,25 @@ fn slice(list, start, end) with Memory + Alloc = {
 // This matches env_lookup traversal: the innermost binding is at the
 // head of the snoc stack.
 
-// list_head — the head element. Read through the kernel sequence-index
+// last — the head element. Read through the kernel sequence-index
 // projection `xs[i]`, which CARRIES the element type `a` from the sequence's
 // `TList(a)` (the Carried-Truth Law at the value-ontology layer), rather than
 // re-deriving `Int` from a raw `load_i32` (which discards the element type the
-// graph already proves — `list_head : [a] -> Int` was that violation). The
+// graph already proves — `last : [a] -> Int` was that violation). The
 // subscript lowers to `list_index`, which tag-dispatches every representation
 // (snoc/flat/concat/slice), so one projection covers all; the head sits at
 // index `len-1`. No `_ => 0` silent fallback: head-of-empty is undefined.
-fn list_head(xs) with Memory = xs[len(xs) - 1]
+fn last(xs) with Memory = xs[len(xs) - 1]
 
 
 
-// list_tail — return the list without its last element.
+// drop_last — return the list without its last element.
 // O(1) for snoc nodes (reads the left pointer). Creates a slice for
 // other tag variants — still O(1) allocation, O(1) by-reference.
 // Per Hazel productive-under-error: unknown tag returns make_list(0)
 // rather than trapping. Substrate gap surfaces upstream; runtime
 // degrades gracefully.
-fn list_tail(list) with Memory + Alloc = {
+fn drop_last(list) with Memory + Alloc = {
   let list_len = load_i32(list)
   let tag      = load_i32(list + 4)
   match tag {

@@ -159,7 +159,7 @@ fn driver_infer_module(ref module_name, ref source, ref source_hash)
   let env_after = env_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
   let Env(entries_after) = env_after
   let n_after = len(entries_after)
-  // env_handler appends at the stack head (Mentl list_head reads the last
+  // env_handler appends at the stack head (Mentl last reads the last
   // element), so the new exports are the newest entries.
   let new_count = n_after - n_before
   let exported = driver_take_first(entries_after, new_count)
@@ -204,7 +204,7 @@ fn driver_collect_dep_hashes_loop(ref imports, i, n, own buf)
 fn driver_take_first(ref entries, count) = {
   if count <= 0 { [] }
   else if len(entries) == 0 { [] }
-  else { [list_head(entries)] ++ driver_take_first(list_tail(entries), count - 1) }
+  else { [last(entries)] ++ driver_take_first(drop_last(entries), count - 1) }
 }
 
 // Env install — push entries into env_handler for importing modules

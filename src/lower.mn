@@ -181,11 +181,11 @@ effect LowerHandlerStack {
 
 handler lower_handler_stack_ctx with stack = [] {
   lower_handler_push(name, install_handle) => {
-    resume(0) with stack = [{name: name, handle: install_handle}] ++ stack
+    resume(0) with stack = stack ++ [{name: name, handle: install_handle}]   // drift-audit: ignore — O(1) push at the end last/drop_last read (the one stack law)
   },
   lower_handler_pop() => {
     if len(stack) == 0 { resume(0) }
-    else { resume(0) with stack = list_tail(stack) }
+    else { resume(0) with stack = drop_last(stack) }
   },
   // Head-first = innermost-first; resolution walks it as a plain fn.
   lower_handler_stack_now() => resume(stack)
@@ -217,7 +217,7 @@ handler arm_ev_ledger_ctx with active = false, names = [], entries = [] {
   },
   arm_ev_end(discriminator) => {
     resume(0)
-      with entries = [{name: discriminator, evs: names}] ++ entries,
+      with entries = entries ++ [{name: discriminator, evs: names}],   // drift-audit: ignore — O(1) push at the end last/drop_last read
            active  = false,
            names   = []
   },
@@ -482,7 +482,7 @@ fn lexpr_handle(e) with Pure = match e {
 // through the runtime `to_string` (the structure-preserving renderer is
 // the addition, never a regression — the word-leaf path is unchanged).
 fn lower_to_string_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic = {
-  let N(_, _, ah) = list_head(args)
+  let N(_, _, ah) = last(args)
   match fold_strip(lookup_ty(ah)) {
     TString            => arg_lo,
     TFloat             => LCall(handle, LGlobal(handle, "float_to_str"), [arg_lo]),
@@ -528,7 +528,7 @@ fn lower_show_call(handle, ah, arg_lo) with LookupTy = {
 // its decimal-string bytes (str_hash(float_to_str)) so two equal f64s hash
 // equal regardless of bit-noise — the value-faithful leaf, never the raw bits.
 fn lower_hash_dispatch(handle, arg_lo, args) with GraphRead + EnvRead + LookupTy + Diagnostic = {
-  let N(_, _, ah) = list_head(args)
+  let N(_, _, ah) = last(args)
   match fold_strip(lookup_ty(ah)) {
     TString            => lower_hash_call(handle, ah, arg_lo, "str_hash"),
     TList(_)           => lower_hash_call(handle, ah, arg_lo, "list_hash"),
@@ -1017,8 +1017,8 @@ fn collect_fn_bases(stmts) =
 fn assoc_row(cur, name: String) =
   if len(cur) == 0 { [] }
   else {
-    let (n, row) = list_head(cur)
-    if n == name { row } else { assoc_row(list_tail(cur), name) }
+    let (n, row) = last(cur)
+    if n == name { row } else { assoc_row(drop_last(cur), name) }
   }
 
 // Option-returning map lookup for ls_escaping_of: None distinguishes "not a
@@ -1026,8 +1026,8 @@ fn assoc_row(cur, name: String) =
 fn esc_assoc(map, name: String) =
   if len(map) == 0 { None }
   else {
-    let (n, row) = list_head(map)
-    if n == name { Some(row) } else { esc_assoc(list_tail(map), name) }
+    let (n, row) = last(map)
+    if n == name { Some(row) } else { esc_assoc(drop_last(map), name) }
   }
 
 // One monotone round: each fn's row = (own ∪ ⋃ callee rows) − handled.
@@ -1049,9 +1049,9 @@ fn fold2_equal(a, b, i) =
 fn esc_maps_equal(cur, next) =
   if len(cur) == 0 { true }
   else {
-    let (_, ra) = list_head(cur)
-    let (_, rb) = list_head(next)
-    if rows_equal(ra, rb) { esc_maps_equal(list_tail(cur), list_tail(next)) }
+    let (_, ra) = last(cur)
+    let (_, rb) = last(next)
+    if rows_equal(ra, rb) { esc_maps_equal(drop_last(cur), drop_last(next)) }
     else { false }
   }
 
@@ -1088,11 +1088,11 @@ fn lower_resolve_handler_for_op(op_name) = {
 fn resolve_in_stack(op_name, ename, stack) = {
   if ename == "" || len(stack) == 0 { None }
   else {
-    let e = list_head(stack)
+    let e = last(stack)
     if handler_covers_effect(e.name, ename) {
       Some({target: "{e.name}_{op_name}", handle: e.handle})
     } else {
-      resolve_in_stack(op_name, ename, list_tail(stack))
+      resolve_in_stack(op_name, ename, drop_last(stack))
     }
   }
 }
@@ -1139,12 +1139,12 @@ fn lower_fanout_schedule() = schedule_in_stack(lower_handler_stack_now())
 fn schedule_in_stack(stack) =
   if len(stack) == 0 { Seq }
   else {
-    let e = list_head(stack)
+    let e = last(stack)
     if handler_covers_effect(e.name, "Thread") { Thread }
     else if handler_covers_effect(e.name, "Simd") { Simd }
     else if handler_covers_effect(e.name, "Gpu") { Gpu }
     else if handler_covers_effect(e.name, "Persist") { Persist }
-    else { schedule_in_stack(list_tail(stack)) }
+    else { schedule_in_stack(drop_last(stack)) }
   }
 
 // The handler-state record local "__hstate_<h>" for the innermost handler
@@ -1162,7 +1162,7 @@ fn lower_resolve_handler_state_for_ename(ename) = {
   let ops = lookup_effect_op_names(ename)
   if len(ops) == 0 { "" }
   else {
-    match lower_resolve_handler_for_op(list_head(ops)) {
+    match lower_resolve_handler_for_op(last(ops)) {
       Some(r) => "__hstate_{int_to_str(r.handle)}_{ename}",
       None    => ""
     }
@@ -1224,10 +1224,10 @@ fn split_group_by_ename(groups: [{arms: [String], ename: String}], ename: String
 fn split_group_loop(before: [{arms: [String], ename: String}], rest: [{arms: [String], ename: String}], ename: String) = {
   if len(rest) == 0 {
     (before, {ename: ename, arms: []}, [])
-  } else if list_head(rest).ename == ename {
-    (before, list_head(rest), list_tail(rest))
+  } else if last(rest).ename == ename {
+    (before, last(rest), drop_last(rest))
   } else {
-    split_group_loop(list_concat(before, [list_head(rest)]), list_tail(rest), ename)
+    split_group_loop(list_concat(before, [last(rest)]), drop_last(rest), ename)
   }
 }
 
@@ -1400,20 +1400,20 @@ fn lower_expr_body(e, handle, span) = match e {
     match fbody {
       NExpr(VarRef(name)) =>
         if name == "to_string" && len(r_args) == 1 {
-          lower_to_string_dispatch(handle, list_head(lo_args), r_args)
+          lower_to_string_dispatch(handle, last(lo_args), r_args)
         } else if name == "hash" && len(r_args) == 1 {
           // hash(x) IS the HASH leaf of the structural fold — lower-time type
           // dispatch (scalar word-identity / sequence str_hash·list_hash /
           // aggregate $hash_<sig>), the sibling of to_string's show leaf.
-          lower_hash_dispatch(handle, list_head(lo_args), r_args)
+          lower_hash_dispatch(handle, last(lo_args), r_args)
         } else if name == "float_of_int" && len(r_args) == 1 {
           // W11: the gradient's coercion arm — a REAL i32->f64 widen
           // (f64.convert_i32_s), never an identity stub reinterpreting bits.
-          LConvert(handle, IntToFloat, list_head(lo_args))
+          LConvert(handle, IntToFloat, last(lo_args))
         } else if name == "float_to_int" && len(r_args) == 1 {
           // f64->i32 truncating toward zero (i32.trunc_f64_s) — the value-
           // faithful inverse, replacing the bit-reinterpreting identity stub.
-          LConvert(handle, FloatToInt, list_head(lo_args))
+          LConvert(handle, FloatToInt, last(lo_args))
         } else { match env_kind_of(name) {
         Some(ConstructorScheme(tag_id, _)) =>
           LMakeVariant(handle, tag_id, lo_args),
@@ -1727,7 +1727,7 @@ fn lower_feedback_body(left, fb_handle) = {
   match lbody {
     NExpr(LambdaExpr(params, body)) =>
       if len(params) == 1 {
-        ls_bind_fb_prior(feedback_param_name(list_head(params)), fb_handle)
+        ls_bind_fb_prior(feedback_param_name(last(params)), fb_handle)
         let lo = lower_expr(body)
         ls_unbind_fb_prior()
         lo
@@ -2864,14 +2864,14 @@ fn free_vars_record_fields(flds, bound) = {
 fn free_vars_stmts(stmts, bound, acc_frees) = {
   if len(stmts) == 0 { (acc_frees, bound) }
   else {
-    let stmt = list_head(stmts)
+    let stmt = last(stmts)
     let N(stmt_body, _, _) = stmt
     match stmt_body {
       NStmt(LetStmt(pat, expr)) => {
         let frees = collect_free_vars(expr, bound)
         let new_bound = free_vars_merge(bound, free_vars_pat_binds(pat))
         free_vars_stmts(
-          list_tail(stmts),
+          drop_last(stmts),
           new_bound,
           free_vars_merge(acc_frees, frees)
         )
@@ -2882,14 +2882,14 @@ fn free_vars_stmts(stmts, bound, acc_frees) = {
         let frees = collect_free_vars(body_node, bound)
         let new_bound = free_vars_merge(bound, [name])
         free_vars_stmts(
-          list_tail(stmts),
+          drop_last(stmts),
           new_bound,
           free_vars_merge(acc_frees, frees)
         )
       },
       _ => {
         let frees = collect_free_vars(stmt, bound)
-        free_vars_stmts(list_tail(stmts), bound, free_vars_merge(acc_frees, frees))
+        free_vars_stmts(drop_last(stmts), bound, free_vars_merge(acc_frees, frees))
       }
     }
   }
@@ -2941,8 +2941,8 @@ fn free_vars_pat_binds_list(pats) = {
 fn free_vars_merge(a, b) = {
   if len(b) == 0 { a }
   else {
-    let x = list_head(b)
-    let rest = list_tail(b)
+    let x = last(b)
+    let rest = drop_last(b)
     if free_vars_contains(a, x) { free_vars_merge(a, rest) }
     else { free_vars_merge(list_concat(a, [x]), rest) }   // drift-audit: ignore — real drift 11 in free_vars_* set-union family; buffer-counter rewrite adds Memory+Alloc to row rippling through callers; tracked for item 11.B buffer-counter sweep. Explicit list_concat (was `a ++ [x]`) — BConcat's emit dispatches via lookup_ty which returned NFree at infer-time, falling to str_concat and trapping in mentl2's runtime when list arms walked the bytes as elements. Direct call avoids the dispatch.
   }
@@ -3030,10 +3030,10 @@ fn lower_string_interpolation(handle, lowered_fragments) = {
   if len(fragments) == 0 {
     LConst(handle, LString(""))
   } else if len(fragments) == 1 {
-    list_head(fragments)
+    last(fragments)
   } else {
-    let head = list_head(fragments)
-    let rest = list_tail(fragments)
+    let head = last(fragments)
+    let rest = drop_last(fragments)
     fold(head, (acc, frag) =>
       LCall(handle, LGlobal(handle, "str_concat"), [acc, frag]), rest)
   }
@@ -3127,10 +3127,10 @@ fn find_override(overrides, target) = match overrides {
 fn resolve_captures_outer(names, owner_h) = {
   if len(names) == 0 { ([], [], []) }
   else {
-    let name = list_head(names)
+    let name = last(names)
     let (res, local_h) = ls_resolve(name)
     let (rest_names, rest_exprs, rest_handles) =
-      resolve_captures_outer(list_tail(names), owner_h)
+      resolve_captures_outer(drop_last(names), owner_h)
     match res {
       RGlobal => (rest_names, rest_exprs, rest_handles),
       RLocal => (
@@ -3257,21 +3257,21 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
       local_order: locals_in,
       locals: set_canonicalize(locals_in)
     }
-    resume() with frames = [frame] ++ frames
+    resume() with frames = frames ++ [frame]   // drift-audit: ignore — O(1) push at the end last/drop_last read
   },
 
   ls_exit_frame() => {
     if len(frames) == 0 { resume() }
     else {
       resume()
-        with frames = list_tail(frames)
+        with frames = drop_last(frames)
     }
   },
 
   ls_push_scope() => {
     if len(frames) == 0 { resume(0) }
     else {
-      let frame = list_head(frames)
+      let frame = last(frames)
       resume(len(frame.local_order))
     }
   },
@@ -3279,7 +3279,7 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
   ls_pop_scope(checkpoint) => {
     if len(frames) == 0 { resume() }
     else {
-      let frame = list_head(frames)
+      let frame = last(frames)
       let truncated_order = list_take_n(frame.local_order, checkpoint)
       let truncated_handles = list_take_n(frame.local_handles, checkpoint)
       let updated = {
@@ -3293,14 +3293,14 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
         locals: set_canonicalize(truncated_order)
       }
       resume()
-        with frames = [updated] ++ list_tail(frames)
+        with frames = drop_last(frames) ++ [updated]   // drift-audit: ignore — replace the END frame last() read
     }
   },
 
   ls_bind_local(name, h) => {
     if len(frames) == 0 { resume(0) }
     else {
-      let frame = list_head(frames)
+      let frame = last(frames)
       let slot = len(frame.local_order)
       let updated = {
         capture_handles: frame.capture_handles,
@@ -3313,7 +3313,7 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
         locals: set_insert(frame.locals, name)
       }
       resume(slot)
-        with frames = [updated] ++ list_tail(frames)
+        with frames = drop_last(frames) ++ [updated]   // drift-audit: ignore — replace the END frame last() read
     }
   },
 
@@ -3322,11 +3322,11 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
   // innermost-first so a nested `<~` resolves to its own prior. The pair is
   // (name, fb_handle); resolution returns RFbPrior(fb_handle).
   ls_bind_fb_prior(name, h) =>
-    resume() with fb_priors = [(name, h)] ++ fb_priors,
+    resume() with fb_priors = fb_priors ++ [(name, h)],   // drift-audit: ignore — O(1) push at the end last/drop_last read
 
   ls_unbind_fb_prior() =>
     if len(fb_priors) == 0 { resume() }
-    else { resume() with fb_priors = list_tail(fb_priors) },
+    else { resume() with fb_priors = drop_last(fb_priors) },
 
   ls_resolve(name) => {
     // Feedback-prior bindings shadow frame locals (the recurrence body's
@@ -3337,7 +3337,7 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
     } else if len(frames) == 0 {
       resume((RGlobal, 0))
     } else {
-      let frame = list_head(frames)
+      let frame = last(frames)
       // O(log N) membership; slot lookup falls back to the order list
       // only when the name is actually present (the common case for
       // an enclosed reference is local-or-capture, not global).
@@ -3385,8 +3385,8 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
 fn ls_outer_fn_name_loop(frames) = {
   if len(frames) == 0 { "" }
   else {
-    let frame = list_head(frames)
-    if frame.fn_name == "" { ls_outer_fn_name_loop(list_tail(frames)) }
+    let frame = last(frames)
+    if frame.fn_name == "" { ls_outer_fn_name_loop(drop_last(frames)) }
     else { frame.fn_name }
   }
 }
@@ -3401,10 +3401,10 @@ fn ls_outer_fn_name_loop(frames) = {
 fn ls_current_lambda_handle_loop(frames) = {
   if len(frames) == 0 { -1 }
   else {
-    let frame = list_head(frames)
+    let frame = last(frames)
     if frame.lambda_h >= 0 { frame.lambda_h }
     else if frame.fn_name != "" { -1 }
-    else { ls_current_lambda_handle_loop(list_tail(frames)) }
+    else { ls_current_lambda_handle_loop(drop_last(frames)) }
   }
 }
 
@@ -3416,8 +3416,8 @@ fn ls_current_lambda_handle_loop(frames) = {
 fn fb_prior_handle_of(priors, name) = {
   if len(priors) == 0 { -1 }
   else {
-    match list_head(priors) {
-      (n, h) => if n == name { h } else { fb_prior_handle_of(list_tail(priors), name) }
+    match last(priors) {
+      (n, h) => if n == name { h } else { fb_prior_handle_of(drop_last(priors), name) }
     }
   }
 }

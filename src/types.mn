@@ -2043,11 +2043,11 @@ fn show_pipe_kind(pk) with Pure = {
 
 fn show_list(ref items, ref render, ref sep) with !Mutate = {
   if len(items) == 0 { "" }
-  else if len(items) == 1 { render(list_head(items)) }
+  else if len(items) == 1 { render(last(items)) }
   else {
-    render(list_head(items))
+    render(last(items))
       ++ sep
-      ++ show_list(list_tail(items), render, sep)
+      ++ show_list(drop_last(items), render, sep)
   }
 }
 

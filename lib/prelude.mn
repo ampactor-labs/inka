@@ -174,18 +174,17 @@ fn count(pred, xs)   = { iterate(xs); result() } ~> count_handler(pred)
 // ─── Derived (built on the handlers above) ──────────────────
 
 fn head(xs) = xs[0]
-fn tail(xs) = slice(xs, 1, len(xs))
-fn last(xs) = xs[len(xs) - 1]
+fn rest(xs) = slice(xs, 1, len(xs))
 fn reverse(xs) = fold([], (acc, x) => [x] ++ acc, xs)
 fn flatten(xss) = fold([], (acc, xs) => acc ++ xs, xss)
 fn flat_map(f, xs) = flatten(map(f, xs))
 fn sum(xs) = fold(0, (acc, x) => acc + x, xs)
 fn product(xs) = fold(1, (acc, x) => acc * x, xs)
 fn concat(xss) = flatten(xss)
-fn reduce(xs, f) = fold(head(xs), f, tail(xs))
+fn reduce(xs, f) = fold(head(xs), f, rest(xs))
 
 fn zip_with(f, xs, ys) = if len(xs) == 0 || len(ys) == 0 { [] }
-  else { [f(xs[0], ys[0])] ++ zip_with(f, tail(xs), tail(ys)) }
+  else { [f(xs[0], ys[0])] ++ zip_with(f, rest(xs), rest(ys)) }
 fn zip(xs, ys) = zip_with((a, b) => (a, b), xs, ys)
 
 fn enumerate(xs) = zip(range(0, len(xs)), xs)
@@ -193,8 +192,8 @@ fn unique(xs) = fold([], (acc, x) => if any((a) => a == x, acc) { acc } else { p
 
 fn partition(pred, xs) = (filter(pred, xs), filter((x) => !pred(x), xs))
 fn range_inclusive(start, end) = range(start, end + 1)
-fn intersperse(sep, xs) = if len(xs) <= 1 { xs } else { [xs[0], sep] ++ intersperse(sep, tail(xs)) }
-fn scanl(xs, init, f) = if len(xs) == 0 { [init] } else { let next = f(init, xs[0]); [init] ++ scanl(tail(xs), next, f) }
+fn intersperse(sep, xs) = if len(xs) <= 1 { xs } else { [xs[0], sep] ++ intersperse(sep, rest(xs)) }
+fn scanl(xs, init, f) = if len(xs) == 0 { [init] } else { let next = f(init, xs[0]); [init] ++ scanl(rest(xs), next, f) }
 fn repeat(n, x) = if n <= 0 { [] } else { [x] ++ repeat(n - 1, x) }
 fn chunk(n, xs) = if len(xs) == 0 { [] } else { [take(n, xs)] ++ chunk(n, drop(n, xs)) }
 
@@ -235,8 +234,8 @@ fn abs(x) with Pure = if x < 0 { 0 - x } else { x }
 fn merge(xs, ys) = {
   if len(xs) == 0 { ys }
   else { if len(ys) == 0 { xs }
-  else { if xs[0] <= ys[0] { [xs[0]] ++ merge(tail(xs), ys) }
-  else { [ys[0]] ++ merge(xs, tail(ys)) } } }
+  else { if xs[0] <= ys[0] { [xs[0]] ++ merge(rest(xs), ys) }
+  else { [ys[0]] ++ merge(xs, rest(ys)) } } }
 }
 
 fn sort(xs) = {

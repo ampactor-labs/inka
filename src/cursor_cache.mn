@@ -183,9 +183,9 @@ handler cursor_cache_default with cached_kai_files = [] {
 fn lookup_module_in_cache(cached, target) with Pure = {
   if len(cached) == 0 { None }
   else {
-    let (name, extended) = list_head(cached)
+    let (name, extended) = last(cached)
     if name == target { Some(extended) }
-    else { lookup_module_in_cache(list_tail(cached), target) }
+    else { lookup_module_in_cache(drop_last(cached), target) }
   }
 }
 

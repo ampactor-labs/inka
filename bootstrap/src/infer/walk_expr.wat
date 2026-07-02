@@ -288,8 +288,8 @@
   (data (i32.const 3720) "\08\00\00\00expected")             ;;  8 bytes
   (data (i32.const 3744) "\0b\00\00\00unification")          ;; 11 bytes
   (data (i32.const 6640) "\03\00\00\00len")                  ;;  3 bytes — sequence-projection cname compares
-  (data (i32.const 6648) "\09\00\00\00list_head")            ;;  9 bytes
-  (data (i32.const 6664) "\09\00\00\00list_tail")            ;;  9 bytes
+  (data (i32.const 6648) "\04\00\00\00last")                 ;;  4 bytes — true name (SYNTAX §Vocabulary)
+  (data (i32.const 6664) "\09\00\00\00drop_last")            ;;  9 bytes — true name (SYNTAX §Vocabulary)
   (data (i32.const 6680) "\08\00\00\00list_set")             ;;  8 bytes
   (data (i32.const 6696) "\0b\00\00\00list_concat")          ;; 11 bytes
   (data (i32.const 6712) "\09\00\00\00make_list")            ;;  9 bytes
@@ -808,7 +808,7 @@
     (local.set $arg_handles (call $walk_expr_collect_arg_handles (local.get $args)))
     (local.set $cname (call $walk_expr_callee_name (local.get $func)))
     ;; The sequence node-kind's projections (len / list_index / list_head /
-    ;; list_tail / list_set / list_concat / make_list / slice / push) — typed by
+    ;; drop_last / list_set / list_concat / make_list / slice / push) — typed by
     ;; the ELEMENT, the cursor reading or building a sequence, NOT by their
     ;; load_i32/alloc substrate bodies (whose inferred type erases [a] to Int —
     ;; the §4① value-ontology poison that made the whole compiler's list
@@ -931,8 +931,8 @@
   (func $is_seq_op (param $cname i32) (result i32)
     (if (call $str_eq (local.get $cname) (i32.const 6640)) (then (return (i32.const 1)))) ;; len
     (if (call $str_eq (local.get $cname) (i32.const 4288)) (then (return (i32.const 1)))) ;; list_index
-    (if (call $str_eq (local.get $cname) (i32.const 6648)) (then (return (i32.const 1)))) ;; list_head
-    (if (call $str_eq (local.get $cname) (i32.const 6664)) (then (return (i32.const 1)))) ;; list_tail
+    (if (call $str_eq (local.get $cname) (i32.const 6648)) (then (return (i32.const 1)))) ;; last
+    (if (call $str_eq (local.get $cname) (i32.const 6664)) (then (return (i32.const 1)))) ;; drop_last
     (if (call $str_eq (local.get $cname) (i32.const 6680)) (then (return (i32.const 1)))) ;; list_set
     (if (call $str_eq (local.get $cname) (i32.const 6696)) (then (return (i32.const 1)))) ;; list_concat
     (if (call $str_eq (local.get $cname) (i32.const 6712)) (then (return (i32.const 1)))) ;; make_list
@@ -1056,7 +1056,7 @@
     ;; result: head/index → elem; len → Int; everything else → [elem]
     (local.set $res
       (if (result i32)
-        (i32.or (call $str_eq (local.get $cname) (i32.const 6648))    ;; list_head
+        (i32.or (call $str_eq (local.get $cname) (i32.const 6648))    ;; last
                 (call $str_eq (local.get $cname) (i32.const 4288)))   ;; list_index
         (then (local.get $elem))
         (else

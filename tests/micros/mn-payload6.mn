@@ -10,7 +10,7 @@ effect P {
 
 handler h with buf = make_list(2) {
   add(v) => resume() with buf = list_set(buf, 0, v),
-  done() => resume(list_head(buf))
+  done() => resume(last(buf))
 }
 
 fn run() with P = {

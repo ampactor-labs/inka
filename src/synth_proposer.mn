@@ -212,8 +212,8 @@ fn ctors_of_type(entries, type_name, context)
     with GraphRead + GraphWrite + !Mutate = {
   if len(entries) == 0 { [] }
   else {
-    let binding = list_head(entries)
-    let rest = ctors_of_type(list_tail(entries), type_name, context)
+    let binding = last(entries)
+    let rest = ctors_of_type(drop_last(entries), type_name, context)
     let (name, scheme, reason, kind) = binding
     if is_ctor_of(kind, scheme, type_name) {
       [ctor_to_enriched_candidate(name, scheme, reason)] ++ rest

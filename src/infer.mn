@@ -77,18 +77,18 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
   inf_exit_fn() => {
     if len(stack) == 0 { resume() }
     else {
-      let frame = list_head(stack)
+      let frame = last(stack)
       graph_bind_row(frame.row_handle, frame.accumulated_row,
         Located(frame.fn_span, Inferred("fn effect row")))
       resume()
-        with stack = list_tail(stack)
+        with stack = drop_last(stack)
     }
   },
 
   inf_add_effect(name) => {
     if len(stack) == 0 { resume() }
     else {
-      let frame = list_head(stack)
+      let frame = last(stack)
       // `name` is an EffName — joined into the row directly. The single-name
       // case of inf_add_row; parameterized effects flow through inf_add_row.
       let extended = union_row(frame.accumulated_row, mk_ef_closed([name]))
@@ -98,14 +98,14 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
         row_handle: frame.row_handle
       }
       resume()
-        with stack = [updated] ++ list_tail(stack)
+        with stack = [updated] ++ drop_last(stack)
     }
   },
 
   inf_add_row(row) => {
     if len(stack) == 0 { resume() }
     else {
-      let frame = list_head(stack)
+      let frame = last(stack)
       let extended = union_row(frame.accumulated_row, row)
       let updated = {
         accumulated_row: extended,
@@ -113,14 +113,14 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
         row_handle: frame.row_handle
       }
       resume()
-        with stack = [updated] ++ list_tail(stack)
+        with stack = [updated] ++ drop_last(stack)
     }
   },
 
   inf_current_row() => {
     if len(stack) == 0 { resume(EfPure) }
     else {
-      let frame = list_head(stack)
+      let frame = last(stack)
       resume(frame.accumulated_row)
     }
   },
@@ -139,7 +139,7 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
 
   inf_pop_handler() => {
     if len(handler_stack) == 0 { resume() }
-    else { resume() with handler_stack = list_tail(handler_stack) }
+    else { resume() with handler_stack = drop_last(handler_stack) }
   },
 
   inf_handler_stack() => {
@@ -152,12 +152,12 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
 
   inf_exit_arm() => {
     if len(arm_stack) == 0 { resume() }
-    else { resume() with arm_stack = list_tail(arm_stack) }
+    else { resume() with arm_stack = drop_last(arm_stack) }
   },
 
   inf_arm_tys() => {
     if len(arm_stack) == 0 { resume(None) }
-    else { resume(Some(list_head(arm_stack))) }
+    else { resume(Some(last(arm_stack))) }
   },
 
   inf_handler_provider(op_name) => {
@@ -178,7 +178,7 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
 fn find_handler_for_effect(stack, ename) = {
   if len(stack) == 0 { None }
   else {
-    let hname = list_head(stack)
+    let hname = last(stack)
     match env_lookup(hname) {
       Some(entry) => {
         let (scheme, _, _) = entry
@@ -186,18 +186,18 @@ fn find_handler_for_effect(stack, ename) = {
         match ty {
           TName("Handler", args) => {
             if len(args) == 1 {
-              match list_head(args) {
+              match last(args) {
                 TName(hename, _) =>
                   if hename == ename { Some(hname) }
-                  else { find_handler_for_effect(list_tail(stack), ename) },
-                _ => find_handler_for_effect(list_tail(stack), ename)
+                  else { find_handler_for_effect(drop_last(stack), ename) },
+                _ => find_handler_for_effect(drop_last(stack), ename)
               }
-            } else { find_handler_for_effect(list_tail(stack), ename) }
+            } else { find_handler_for_effect(drop_last(stack), ename) }
           },
-          _ => find_handler_for_effect(list_tail(stack), ename)
+          _ => find_handler_for_effect(drop_last(stack), ename)
         }
       },
-      None => find_handler_for_effect(list_tail(stack), ename)
+      None => find_handler_for_effect(drop_last(stack), ename)
     }
   }
 }
@@ -630,9 +630,9 @@ fn infer_expr(ref node) = {
         let elem_h = mint(Inferred("empty list element"))
         graph_bind(handle, TList(TVar(elem_h)), Located(span, Inferred("empty list")))
       } else {
-        let first = list_head(elems)
+        let first = last(elems)
         let N(_, _, fh) = first
-        unify_list_elems(list_tail(elems), fh, span)
+        unify_list_elems(drop_last(elems), fh, span)
         graph_bind(handle, TList(TVar(fh)), Located(span, Inferred("list literal")))
       }
       // H4.1: list elements may carry inner-region pointers; join.
@@ -910,8 +910,8 @@ fn callee_name(func_node) with Pure = {
 // `len`, `str_concat` IS `list_concat` — the same projections over a different
 // element, so the string ops route here too (the §IX four-set unification).
 fn is_seq_op(cname) with Pure =
-  cname == "len"      || cname == "list_index"  || cname == "list_head"
-  || cname == "list_tail"  || cname == "list_set"    || cname == "list_concat"
+  cname == "len"      || cname == "list_index"  || cname == "last"
+  || cname == "drop_last"  || cname == "list_set"    || cname == "list_concat"
   || cname == "make_list"  || cname == "slice"       || cname == "push"
   // The functor projections — the cursor reading a sequence in transform/fold/
   // filter mode. Typed by the element intrinsically, NOT inferred from their
@@ -957,12 +957,12 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
   let elem = TVar(perform mint(Inferred("sequence element")))
   match cname {
     // Reads that project the element.
-    "list_head"  => { seq_force(ah, 0, TList(elem), span); perform graph_bind(handle, elem, Located(span, Inferred("head element"))) },
+    "last"  => { seq_force(ah, 0, TList(elem), span); perform graph_bind(handle, elem, Located(span, Inferred("head element"))) },
     "list_index" => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); perform graph_bind(handle, elem, Located(span, Inferred("element at index"))) },
     // The length read.
     "len"        => { seq_force(ah, 0, TList(elem), span); perform graph_bind(handle, TInt, Located(span, Inferred("sequence length"))) },
     // Builders/transforms that return a sequence of the same element.
-    "list_tail"  => { seq_force(ah, 0, TList(elem), span); perform graph_bind(handle, TList(elem), Located(span, Inferred("tail sequence"))) },
+    "drop_last"  => { seq_force(ah, 0, TList(elem), span); perform graph_bind(handle, TList(elem), Located(span, Inferred("tail sequence"))) },
     "list_set"   => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, elem, span); perform graph_bind(handle, TList(elem), Located(span, Inferred("set element"))) },
     "push"       => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, elem, span); perform graph_bind(handle, TList(elem), Located(span, Inferred("push element"))) },
     "slice"      => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); perform graph_bind(handle, TList(elem), Located(span, Inferred("slice"))) },
@@ -1250,7 +1250,7 @@ fn names_effect_payload(names, ename) = {
     // drop to 0 — the eff_name_lt-detonating class, peer subst_eff_names).
     EPure     => []
   }, names))
-  if len(tys) == 0 { None } else { Some(list_head(tys)) }
+  if len(tys) == 0 { None } else { Some(last(tys)) }
 }
 
 // The five verbs, each inferred by its topology.
@@ -1675,8 +1675,8 @@ fn unify_type_lists(as_list, bs_list, span: ValidSpan, reason) = {
     // Arity mismatch: tuple/list lengths differ.
     report(ETypeArityMismatch(len(as_list), len(bs_list), span))
   } else {
-    unify_types(list_head(as_list), list_head(bs_list), span, reason)
-    unify_type_lists(list_tail(as_list), list_tail(bs_list), span, reason)
+    unify_types(last(as_list), last(bs_list), span, reason)
+    unify_type_lists(drop_last(as_list), drop_last(bs_list), span, reason)
   }
 }
 
@@ -1720,14 +1720,14 @@ fn unify_record_open_against_closed(closed_fields, open_fields, open_var, span: 
 fn unify_record_open_subset(needed, available, span: ValidSpan, reason) = {
   if len(needed) == 0 { () }
   else {
-    let (n, t) = list_head(needed)
+    let (n, t) = last(needed)
     let pos = find_record_field_pos(available, n)
     if pos < 0 {
       type_mismatch(TRecord(needed), TRecord(available), span, reason)
     } else {
       let (_, t2) = list_index(available, pos)
       unify_types(t, t2, span, reason)
-      unify_record_open_subset(list_tail(needed), available, span, reason)
+      unify_record_open_subset(drop_last(needed), available, span, reason)
     }
   }
 }
@@ -1755,7 +1755,7 @@ fn unify_two_open_records(fa, va, fb, vb, span: ValidSpan, reason) = {
 fn unify_record_fields_loop_shared(fa, fb, names, span: ValidSpan, reason) = {
   if len(names) == 0 { () }
   else {
-    let n = list_head(names)
+    let n = last(names)
     let pa = find_record_field_pos(fa, n)
     let pb = find_record_field_pos(fb, n)
     if pa >= 0 && pb >= 0 {
@@ -1763,7 +1763,7 @@ fn unify_record_fields_loop_shared(fa, fb, names, span: ValidSpan, reason) = {
       let (_, tb) = list_index(fb, pb)
       unify_types(ta, tb, span, reason)
     }
-    unify_record_fields_loop_shared(fa, fb, list_tail(names), span, reason)
+    unify_record_fields_loop_shared(fa, fb, drop_last(names), span, reason)
   }
 }
 
@@ -1833,9 +1833,9 @@ fn mk_record_row_residual(fields) = {
 fn infer_record_field_values(fields) = {
   if len(fields) == 0 { () }
   else {
-    let (_, value) = list_head(fields)
+    let (_, value) = last(fields)
     infer_expr(value)
-    infer_record_field_values(list_tail(fields))
+    infer_record_field_values(drop_last(fields))
   }
 }
 
@@ -1933,10 +1933,10 @@ fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, 
 fn unify_param_lists(ref a, ref b, span: ValidSpan, reason) = {
   if len(a) == 0 || len(b) == 0 { () }
   else {
-    let ta = param_ty(list_head(a))
-    let tb = param_ty(list_head(b))
+    let ta = param_ty(last(a))
+    let tb = param_ty(last(b))
     unify_types(ta, tb, span, reason)
-    unify_param_lists(list_tail(a), list_tail(b), span, reason)
+    unify_param_lists(drop_last(a), drop_last(b), span, reason)
   }
 }
 
@@ -1955,8 +1955,8 @@ fn pair_fn_params(pa, pb, span: ValidSpan, reason) = {
   let la = len(pa)
   let lb = len(pb)
   if la == lb { unify_param_lists(pa, pb, span, reason) }
-  else if la == 1 { try_tuple_decompose(list_head(pa), pb, span, reason) }
-  else if lb == 1 { try_tuple_decompose(list_head(pb), pa, span, reason) }
+  else if la == 1 { try_tuple_decompose(last(pa), pb, span, reason) }
+  else if lb == 1 { try_tuple_decompose(last(pb), pa, span, reason) }
   else { arity_mismatch(la, lb, span) }
 }
 
@@ -2323,19 +2323,19 @@ fn collect_arm_tags(arms, own init) = {
 fn arms_total_variants(arms) = {
   if len(arms) == 0 { 0 }
   else {
-    let (pat, _body) = list_head(arms)
+    let (pat, _body) = last(arms)
     match pat {
       PCon(name, _) => match env_lookup(name) {
         Some(entry) => {
           let (_, _, kind) = entry
           match kind {
             ConstructorScheme(_, total) => total,
-            _                           => arms_total_variants(list_tail(arms))
+            _                           => arms_total_variants(drop_last(arms))
           }
         },
-        None => arms_total_variants(list_tail(arms))
+        None => arms_total_variants(drop_last(arms))
       },
-      _ => arms_total_variants(list_tail(arms))
+      _ => arms_total_variants(drop_last(arms))
     }
   }
 }
@@ -3131,7 +3131,7 @@ fn infer_resume_cardinality(arm_body) with GraphRead = {
   let resume_sites = collect_resume_sites(arm_body)
   if len(resume_sites) == 0 { OneShot }
   else if len(resume_sites) == 1 {
-    let site = list_head(resume_sites)
+    let site = last(resume_sites)
     if has_loop_ancestor(site, arm_body) { MultiShot }
     else { OneShot }
   }
@@ -3251,8 +3251,8 @@ fn all_disjoint_branches(sites, root) with GraphRead = {
 fn pairwise_disjoint_loop(sites, root) with GraphRead = {
   if len(sites) <= 1 { true }
   else {
-    let head = list_head(sites)
-    let tail = list_tail(sites)
+    let head = last(sites)
+    let tail = drop_last(sites)
     all(tail, (s) => disjoint_branches(head, s, root)) &&
     pairwise_disjoint_loop(tail, root)
   }
@@ -3338,8 +3338,8 @@ fn lowest_common_ancestor(a, b, root) with GraphRead = {
 fn lca_among_children(children, a, b) with GraphRead = {
   if len(children) == 0 { None }
   else {
-    let head = list_head(children)
-    let tail = list_tail(children)
+    let head = last(children)
+    let tail = drop_last(children)
     if contains_handle(head, a) && contains_handle(head, b) {
       Some(lowest_common_ancestor(a, b, head))
     } else {
@@ -3355,9 +3355,9 @@ fn arm_index_containing(arms, target_handle) with GraphRead = {
 fn arm_index_loop(arms, target_handle, idx) with GraphRead = {
   if len(arms) == 0 { -1 }
   else {
-    let (_, body) = list_head(arms)   // match arm is a (pat, body) tuple — positional, not a named record
+    let (_, body) = last(arms)   // match arm is a (pat, body) tuple — positional, not a named record
     if contains_handle(body, target_handle) { idx }
-    else { arm_index_loop(list_tail(arms), target_handle, idx + 1) }
+    else { arm_index_loop(drop_last(arms), target_handle, idx + 1) }
   }
 }
 
@@ -3525,10 +3525,10 @@ fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead + GraphWrite
     // canonical destructure infer_match_arms uses) — positional, NOT a named
     // record. `arm.pat`/`arm.body` field-access floors resolve_field_offset on a
     // TTuple (→ the loud `unreachable` / a garbage slot). Destructure positionally.
-    let (pat, body) = list_head(arms)
+    let (pat, body) = last(arms)
     let arm_pred = pattern_predicate_for(pat, scrut)
     let arm_map = walk_refinement(map, body, conjunction(path_pred, arm_pred))
-    walk_refinement_arms(arm_map, scrut, list_tail(arms), path_pred)
+    walk_refinement_arms(arm_map, scrut, drop_last(arms), path_pred)
   }
 }
 
@@ -3538,10 +3538,10 @@ fn walk_refinement_arms(map, scrut, arms, path_pred) with GraphRead + GraphWrite
 fn walk_refinement_block(map, stmts, final, path_pred) with GraphRead + GraphWrite = {
   if len(stmts) == 0 { walk_refinement(map, final, path_pred) }
   else {
-    let stmt = list_head(stmts)
+    let stmt = last(stmts)
     let strengthened = strengthen_path_pred(path_pred, stmt)
     let map_s = walk_refinement(map, stmt, path_pred)
-    walk_refinement_block(map_s, list_tail(stmts), final, strengthened)
+    walk_refinement_block(map_s, drop_last(stmts), final, strengthened)
   }
 }
 
@@ -3574,18 +3574,18 @@ fn walk_refinement_args_with_param_preds(map, f, args, path_pred) with GraphRead
 fn walk_refinement_list(map, nodes, path_pred) with GraphRead + GraphWrite = {
   if len(nodes) == 0 { map }
   else {
-    let head = list_head(nodes)
+    let head = last(nodes)
     let map_h = walk_refinement(map, head, path_pred)
-    walk_refinement_list(map_h, list_tail(nodes), path_pred)
+    walk_refinement_list(map_h, drop_last(nodes), path_pred)
   }
 }
 
 fn walk_refinement_fields(map, fields, path_pred) with GraphRead + GraphWrite = {
   if len(fields) == 0 { map }
   else {
-    let field = list_head(fields)
+    let field = last(fields)
     let map_f = walk_refinement(map, field.value, path_pred)
-    walk_refinement_fields(map_f, list_tail(fields), path_pred)
+    walk_refinement_fields(map_f, drop_last(fields), path_pred)
   }
 }
 
@@ -3639,7 +3639,7 @@ fn is_assert_call(callee) with GraphRead = {
 
 fn predicate_of_assert_arg(args) with GraphRead = {
   if len(args) == 0 { PTrue }
-  else { predicate_of_bool_expr(list_head(args)) }
+  else { predicate_of_bool_expr(last(args)) }
 }
 
 fn node_handle(node) = {

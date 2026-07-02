@@ -69,11 +69,11 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
   branch_divider(_span) => {
     if len(branches) == 0 { resume() }
     else {
-      let (base, deltas) = list_head(branches)
+      let (base, deltas) = last(branches)
       let delta = set_diff(used, base)
       resume()
         with used = base,
-             branches = [(base, [delta] ++ deltas)] ++ list_tail(branches)
+             branches = [(base, [delta] ++ deltas)] ++ drop_last(branches)
     }
   },
 
@@ -84,13 +84,13 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
   branch_exit(span) => {
     if len(branches) == 0 { resume() }
     else {
-      let (base, prior_deltas) = list_head(branches)
+      let (base, prior_deltas) = last(branches)
       let last_delta = set_diff(used, base)
       let all_deltas = [last_delta] ++ prior_deltas
       report_branch_collisions(all_deltas, span)
       resume()
         with used = set_union(base, union_all_deltas(all_deltas)),
-             branches = list_tail(branches)
+             branches = drop_last(branches)
     }
   }
 }
@@ -146,13 +146,13 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
 
   region_exit(_rid) => {
     if len(region_stack) == 0 { resume() }
-    else { resume() with region_stack = list_tail(region_stack) }
+    else { resume() with region_stack = drop_last(region_stack) }
   },
 
   current_region() => {
     if len(region_stack) == 0 { resume(0) }
     else {
-      let Region(rid, _) = list_head(region_stack)
+      let Region(rid, _) = last(region_stack)
       resume(rid)
     }
   },
@@ -164,9 +164,9 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
     // for record/variant fields per H4 addendum) is additive
     // without breaking lookup_tag's destructure.
     let rid = if len(region_stack) == 0 { 0 }
-              else { let Region(r, _) = list_head(region_stack); r }
+              else { let Region(r, _) = last(region_stack); r }
     let install_span = if len(region_stack) == 0 { span_zero() }
-                       else { let Region(_, s) = list_head(region_stack); s }
+                       else { let Region(_, s) = last(region_stack); s }
     let tag = {handle: value_handle, install_span: install_span, region_id: rid}
     resume()
       with tagged_values = [tag] ++ tagged_values
@@ -181,9 +181,9 @@ handler region_tracker with region_stack = [], next_region = 0, tagged_values = 
     // inner-region pointer field. The escape check at fn return
     // uses this max-region tag.
     let cur_rid = if len(region_stack) == 0 { 0 }
-                  else { let Region(r, _) = list_head(region_stack); r }
+                  else { let Region(r, _) = last(region_stack); r }
     let install_span = if len(region_stack) == 0 { span_zero() }
-                       else { let Region(_, s) = list_head(region_stack); s }
+                       else { let Region(_, s) = last(region_stack); s }
     let joined = join_field_regions(tagged_values, field_handles, cur_rid)
     let tag = {handle: value_handle, install_span: install_span, region_id: joined}
     resume()

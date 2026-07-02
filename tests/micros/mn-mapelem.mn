@@ -1,1 +1,1 @@
-fn main(q) = list_head(map((x) => x, [{alpha: 1, beta: 2, gamma: 3}])).beta
+fn main(q) = last(map((x) => x, [{alpha: 1, beta: 2, gamma: 3}])).beta

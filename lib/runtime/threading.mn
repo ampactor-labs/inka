@@ -199,8 +199,8 @@ handler sequential_compose with results = [] {
 fn parallel_map(f, xs) with Thread = {
   if len(xs) == 0 { [] }
   else {
-    let h = list_head(xs)
-    let t = list_tail(xs)
+    let h = last(xs)
+    let t = drop_last(xs)
     let (head_result, tail_results) =
       (f(h))
           ><

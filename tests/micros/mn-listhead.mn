@@ -1,1 +1,1 @@
-fn main(q) = list_head([{alpha: 1, beta: 2, gamma: 3}]).beta
+fn main(q) = last([{alpha: 1, beta: 2, gamma: 3}]).beta

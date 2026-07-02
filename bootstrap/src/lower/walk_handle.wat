@@ -472,10 +472,10 @@
         (param $config i32) (param $state i32) (result i32)
     (local $cp i32) (local $prev_frame i32) (local $lo_body i32)
     (local $prev_captures_len i32) (local $prev_state_fields i32)
+    (local $prev_cap_base i32)
     (local.set $cp (call $ls_push_scope))
     (local.set $prev_frame (call $ls_enter_frame))
-    (local.set $prev_captures_len (global.get $lower_captures_len_g))
-    (global.set $lower_captures_len_g (i32.const 0))
+    (local.set $prev_cap_base (call $ls_cap_frame_enter))
     ;; Hβ.seed.resume-with-state-update-mirror: install the arm's
     ;; state-fields list as the active context. $lower_resume queries
     ;; this when threading `resume() with field = expr` updates into
@@ -500,7 +500,8 @@
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
     ;; Hβ.lower.tail-call-mark-pass — handler arm body is in tail position.
     (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
-    (global.set $lower_captures_len_g (local.get $prev_captures_len))
+    (call $ls_truncate_captures (global.get $lower_cap_base_g))
+    (call $ls_cap_frame_exit (local.get $prev_cap_base))
     (call $lower_set_active_state_fields (local.get $prev_state_fields))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))

@@ -280,6 +280,7 @@
     (local $fn_ir i32) (local $caps i32) (local $evs i32) (local $closure i32)
     (local $outer i32) (local $fn_name i32) (local $prev_fn_name i32)
     (local $caps_snapshot i32) (local $caps_post i32) (local $caps_count i32)
+    (local $prev_cap_base i32) (local $cap_names i32)
     (local $prev_frame i32) (local $i i32) (local $prev_lh_fn i32)
     (local $cap_entry i32) (local $cap_name i32) (local $cap_lexpr i32)
     (local.set $name      (i32.load offset=4  (local.get $stmt)))
@@ -368,20 +369,16 @@
     ;; resolve_captures_outer + ls_enter_frame). Drift refused: 9
     ;; (mirrors existing lambda substrate, not deferred).
     (local.set $caps_snapshot (call $lower_captures_len))
+    (local.set $prev_cap_base (call $ls_cap_frame_enter))
     (local.set $cp            (call $ls_push_scope))
     (local.set $prev_frame    (call $ls_enter_frame))
     (call $ls_enter_function)
     (call $bind_names_as_locals (local.get $param_names) (local.get $param_handles))
-    ;; Per Hβ.first-light.fnstmt-fresh-captures-len: each fn body owns its
-    ;; captures-len ledger 0-based, mirrors $lower_handler_arm_body_capturing
-    ;; (walk_handle.wat:449-455). Without the reset, a leaked captures-len_g
-    ;; from a malformed-parse sibling stmt produces body LUpval(global_idx)
-    ;; offsets that disagree with the closure-record's local-offset storage —
-    ;; e.g. parse_int_go's `n` resolves to LUpval(1) → __state[12], but the
-    ;; closure stored capture[1] = digit. Body→record disagreement = `indirect
-    ;; call type mismatch` trap when the resolved fn-ptr is read from the
-    ;; wrong slot. Reset puts both views in 0-based agreement.
-    (global.set $lower_captures_len_g (i32.const 0))
+    ;; The captures FRAME BASE gives this body 0-based slot indices without
+    ;; destroying the enclosing frame's physical entries (the reset it
+    ;; replaces clobbered them — the multi-level-nesting gap this site's
+    ;; prior comment named as Hβ.first-light.fnstmt-nested-captures-isolation,
+    ;; now CLOSED by the segment discipline in $ls_lookup_or_capture).
     ;; A named fn nested inside a lambda must NOT inherit the lambda's
     ;; lambda-h: its body reads its OWN row via $escaping_row(fn_name), not the
     ;; enclosing lambda's. Clear the active-lambda marker across this body
@@ -414,24 +411,37 @@
     ;; Hβ.first-light.fnstmt-nested-captures-isolation (frame-stack
     ;; ports the wheel's per-frame captures records, replacing the flat
     ;; global ptr).
+    ;; copy this frame's capture NAMES [base, post), truncate the segment,
+    ;; restore the enclosing base, THEN materialize — pass-through captures
+    ;; appended for the OUTER frame land in its live segment and survive
+    ;; (the same order $lower_lambda's tail runs; one discipline, three sites).
     (local.set $caps_post (call $lower_captures_len))
-    (local.set $caps_count (local.get $caps_post))
-    (local.set $caps (call $make_list (i32.const 0)))
-    (local.set $caps (call $list_extend_to (local.get $caps) (local.get $caps_count)))
+    (local.set $caps_count (i32.sub (local.get $caps_post) (local.get $caps_snapshot)))
+    (local.set $cap_names (call $make_list (local.get $caps_count)))
+    (local.set $i (local.get $caps_snapshot))
+    (block $copy_done
+      (loop $copy_iter
+        (br_if $copy_done (i32.ge_u (local.get $i) (local.get $caps_post)))
+        (local.set $cap_entry
+          (call $list_index (call $lower_captures_ptr_get) (local.get $i)))
+        (drop (call $list_set (local.get $cap_names)
+                              (i32.sub (local.get $i) (local.get $caps_snapshot))
+                              (call $record_get (local.get $cap_entry) (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $copy_iter)))
+    (call $ls_truncate_captures (local.get $caps_snapshot))
+    (call $ls_cap_frame_exit (local.get $prev_cap_base))
+    (local.set $caps (call $make_list (local.get $caps_count)))
     (local.set $i (i32.const 0))
     (block $caps_done
       (loop $caps_iter
-        (br_if $caps_done (i32.ge_u (local.get $i) (local.get $caps_post)))
-        (local.set $cap_entry
-          (call $list_index (call $lower_captures_ptr_get) (local.get $i)))
-        (local.set $cap_name (call $record_get (local.get $cap_entry) (i32.const 0)))
+        (br_if $caps_done (i32.ge_u (local.get $i) (local.get $caps_count)))
         (local.set $cap_lexpr
-          (call $lower_cap_materialize (local.get $cap_name)))
+          (call $lower_cap_materialize
+            (call $list_index (local.get $cap_names) (local.get $i))))
         (drop (call $list_set (local.get $caps) (local.get $i) (local.get $cap_lexpr)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $caps_iter)))
-    (call $ls_truncate_captures (local.get $caps_snapshot))
-    (global.set $lower_captures_len_g (local.get $caps_snapshot))
     (local.set $body_list (call $make_list (i32.const 0)))
     (local.set $body_list (call $list_extend_to (local.get $body_list) (i32.const 1)))
     (drop (call $list_set (local.get $body_list) (i32.const 0) (local.get $lo_body)))
@@ -491,13 +501,13 @@
     (local $n i32) (local $i i32) (local $buf i32)
     (local $field i32) (local $init_node i32) (local $lo i32)
     (local $cp i32) (local $prev_frame i32) (local $prev_captures_len i32)
+    (local $prev_cap_base i32)
     (local.set $n   (call $len (local.get $state_fields)))
     (local.set $buf (call $make_list (i32.const 0)))
     (local.set $buf (call $list_extend_to (local.get $buf) (local.get $n)))
     (local.set $cp (call $ls_push_scope))
     (local.set $prev_frame (call $ls_enter_frame))
-    (local.set $prev_captures_len (global.get $lower_captures_len_g))
-    (global.set $lower_captures_len_g (i32.const 0))
+    (local.set $prev_cap_base (call $ls_cap_frame_enter))
     (call $pre_allocate_config_captures (local.get $config))
     (local.set $i   (i32.const 0))
     (block $done
@@ -509,7 +519,8 @@
         (drop (call $list_set (local.get $buf) (local.get $i) (local.get $lo)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
-    (global.set $lower_captures_len_g (local.get $prev_captures_len))
+    (call $ls_truncate_captures (global.get $lower_cap_base_g))
+    (call $ls_cap_frame_exit (local.get $prev_cap_base))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     (local.get $buf))

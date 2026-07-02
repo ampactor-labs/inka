@@ -131,6 +131,16 @@
   ;; captures from enclosing scopes.
   (global $lower_captures_ptr      (mut i32) (i32.const 0))
   (global $lower_captures_len_g    (mut i32) (i32.const 0))
+  ;; The current frame's segment base in the captures ledger — the peer of
+  ;; $lower_frame_start_g for captures (Hβ.lower.lambda-nested-frame /
+  ;; Hβ.first-light.fnstmt-nested-captures-isolation, CLOSED): the ledger is
+  ;; ONE flat array; each body-lowering frame owns [base, len). The dedup
+  ;; scan stays inside the segment and every returned index is
+  ;; frame-RELATIVE (record slot = ledger idx − base), so a nested lambda
+  ;; can no longer alias an enclosing frame's entry, and pass-through
+  ;; captures appended for the OUTER frame during a lambda's materialize
+  ;; land in the outer's live segment instead of being truncated away.
+  (global $lower_cap_base_g        (mut i32) (i32.const 0))
 
   ;; Top-level names registered by $lower_program before walking. VarRef
   ;; resolution uses this set to emit LGlobal instead of capturing or
@@ -1047,6 +1057,22 @@
   ;; Question O.2 / Hβ.lower.upval-slot-resolution follow-up) and return
   ;; the capture's index in $lower_captures_ptr. If neither, return -1
   ;; (caller emits LGlobal — wheel parity, src/lower.mn:336-337).
+  ;; ─── captures frame discipline — enter/exit the current segment ─────
+  ;; Enter at every body-lowering frame (lambda / nested fn / handler arm /
+  ;; state inits): returns the enclosing base, sets base := len (the new
+  ;; frame's segment starts empty). Exit restores the enclosing base.
+  ;; Callers that materialize captures copy the segment's names FIRST,
+  ;; truncate to base, exit, THEN materialize — so outer-frame appends made
+  ;; during materialization land in the OUTER segment and survive.
+  (func $ls_cap_frame_enter (result i32)
+    (local $old i32)
+    (local.set $old (global.get $lower_cap_base_g))
+    (global.set $lower_cap_base_g (global.get $lower_captures_len_g))
+    (local.get $old))
+
+  (func $ls_cap_frame_exit (param $old i32)
+    (global.set $lower_cap_base_g (local.get $old)))
+
   (func $ls_lookup_or_capture (param $name i32) (result i32)
     (local $local_slot i32) (local $i i32) (local $entry i32)
     (local $entry_name i32) (local $cap_entry i32) (local $cap_idx i32)
@@ -1056,18 +1082,21 @@
     (local.set $local_slot (call $ls_lookup_local (local.get $name)))
     (if (i32.ge_s (local.get $local_slot) (i32.const 0))
       (then (return (local.get $local_slot))))
-    ;; Not local — scan existing captures (avoid duplicates; one
-    ;; CAPTURE_ENTRY per upvalue name per function lowering).
+    ;; Not local — scan the CURRENT FRAME's capture segment [base, len)
+    ;; only (one CAPTURE_ENTRY per upvalue name per frame; an enclosing
+    ;; frame's same-named entry is a DIFFERENT slot in a DIFFERENT record).
+    ;; Every index returned from this fn is frame-RELATIVE — the closure
+    ;; record's slot i is ledger index base+i.
     (local.set $i (global.get $lower_captures_len_g))
     (block $cap_done
       (loop $cap_iter
-        (br_if $cap_done (i32.eqz (local.get $i)))
+        (br_if $cap_done (i32.le_u (local.get $i) (global.get $lower_cap_base_g)))
         (local.set $i (i32.sub (local.get $i) (i32.const 1)))
         (local.set $entry
           (call $list_index (global.get $lower_captures_ptr) (local.get $i)))
         (local.set $entry_name (call $record_get (local.get $entry) (i32.const 0)))
         (if (call $str_eq (local.get $entry_name) (local.get $name))
-          (then (return (local.get $i))))
+          (then (return (i32.sub (local.get $i) (global.get $lower_cap_base_g)))))
         (br $cap_iter)))
     ;; Not local, not yet a capture — check outer-scope reachability
     ;; via three paths (any positive → capture):
@@ -1114,7 +1143,8 @@
                           (local.get $cap_idx)
                           (local.get $cap_entry)))
     (global.set $lower_captures_len_g (local.get $new_len))
-    (local.get $cap_idx))
+    ;; frame-RELATIVE: the record's slot, not the ledger's absolute index.
+    (i32.sub (local.get $cap_idx) (global.get $lower_cap_base_g)))
 
   ;; ─── $ls_push_scope / $ls_pop_scope — lexical-scope checkpoints ───
   ;; The seed's LowerCtx is still a flat locals ledger, but block / arm /

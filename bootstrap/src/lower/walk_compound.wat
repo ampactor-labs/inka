@@ -1617,6 +1617,7 @@
     (local $cap_lexpr i32) (local $caps_count i32)
     (local $prev_frame i32) (local $prev_lh i32)
     (local $lam_row i32) (local $prev_lh_row i32)
+    (local $prev_cap_base i32) (local $cap_names i32)
     (local.set $h             (call $walk_expr_node_handle (local.get $node)))
     (local.set $body          (i32.load offset=4 (local.get $node)))
     (local.set $lambda_struct (i32.load offset=4 (local.get $body)))
@@ -1627,6 +1628,7 @@
     ;; H.2.e step 1: snapshot captures-ledger AND push frame so lookups
     ;; in body see ONLY lambda-local names.
     (local.set $caps_snapshot (call $lower_captures_len))
+    (local.set $prev_cap_base (call $ls_cap_frame_enter))
     (local.set $cp            (call $ls_push_scope))
     (local.set $prev_frame    (call $ls_enter_frame))
     ;; Mark THIS lambda's frame as the active lambda (its own handle $h), the
@@ -1652,30 +1654,42 @@
     (global.set $lower_current_lambda_row_g (local.get $prev_lh_row))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
-    ;; H.2.e step 5: materialize caps_exprs from new captures.
+    ;; H.2.e steps 5+6, in the ORDER the nested-frame discipline demands:
+    ;; copy this frame's capture NAMES, truncate the segment, restore the
+    ;; enclosing frame's base, and ONLY THEN materialize — so a pass-through
+    ;; capture (a name the outer frame itself must capture) appended by
+    ;; $lower_cap_materialize lands in the OUTER frame's live segment and
+    ;; SURVIVES (the nested-lambda destruction that fed find_mapping an
+    ;; interned effect-name string as its mapping list).
     (local.set $caps_post (call $lower_captures_len))
     (local.set $caps_count (i32.sub (local.get $caps_post) (local.get $caps_snapshot)))
-    (local.set $caps (call $make_list (i32.const 0)))
-    (local.set $caps (call $list_extend_to (local.get $caps) (local.get $caps_count)))
+    (local.set $cap_names (call $make_list (local.get $caps_count)))
     (local.set $i (local.get $caps_snapshot))
-    (block $caps_done
-      (loop $caps_iter
-        (br_if $caps_done (i32.ge_u (local.get $i) (local.get $caps_post)))
+    (block $copy_done
+      (loop $copy_iter
+        (br_if $copy_done (i32.ge_u (local.get $i) (local.get $caps_post)))
         (local.set $cap_entry
           (call $list_index (call $lower_captures_ptr_get) (local.get $i)))
-        (local.set $cap_name (call $record_get (local.get $cap_entry) (i32.const 0)))
+        (drop (call $list_set (local.get $cap_names)
+                              (i32.sub (local.get $i) (local.get $caps_snapshot))
+                              (call $record_get (local.get $cap_entry) (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $copy_iter)))
+    (call $ls_truncate_captures (local.get $caps_snapshot))
+    (call $ls_cap_frame_exit (local.get $prev_cap_base))
+    (local.set $caps (call $make_list (local.get $caps_count)))
+    (local.set $i (i32.const 0))
+    (block $caps_done
+      (loop $caps_iter
+        (br_if $caps_done (i32.ge_u (local.get $i) (local.get $caps_count)))
         ;; Triage via $lower_cap_materialize: LGlobal / LLocal / LUpval
         ;; per the OUTER fn's view of the captured name.
         (local.set $cap_lexpr
-          (call $lower_cap_materialize (local.get $cap_name)))
-        (drop (call $list_set (local.get $caps)
-                              (i32.sub (local.get $i) (local.get $caps_snapshot))
-                              (local.get $cap_lexpr)))
+          (call $lower_cap_materialize
+            (call $list_index (local.get $cap_names) (local.get $i))))
+        (drop (call $list_set (local.get $caps) (local.get $i) (local.get $cap_lexpr)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $caps_iter)))
-    ;; H.2.e step 6: restore captures_len to snapshot — lambda owns its
-    ;; caps; outer fn's ledger stays clean.
-    (call $ls_truncate_captures (local.get $caps_snapshot))
     (local.set $body_list (call $make_list (i32.const 0)))
     (local.set $body_list (call $list_extend_to (local.get $body_list) (i32.const 1)))
     (drop (call $list_set (local.get $body_list) (i32.const 0) (local.get $lo_body)))

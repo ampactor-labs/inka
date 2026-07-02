@@ -1076,8 +1076,7 @@ fn infer_call_partial(args, params, pret, prow, handle, span: ValidSpan, cname) 
 }
 
 fn unify_args_positionally(args, params, i, span: ValidSpan) =
-  if i >= len(args) || i >= len(params) { () }
-  else {
+  if i < len(args) && i < len(params) {
     let N(_, _, ah) = list_index(args, i)
     let pty_h = mint(Inferred("declared param at partial call"))
     graph_bind(pty_h, param_ty(list_index(params, i)),

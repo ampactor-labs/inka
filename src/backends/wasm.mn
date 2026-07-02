@@ -262,6 +262,10 @@ fn emit_module(lowered) = {
   emit_fn_table(all_fn_names)
   emit_fn_index_globals(all_fn_names, 0)
   emit_static_top_closures(top_fn_names, all_fn_names, 0)
+  // Module VALUE bindings: ONE projection feeds the declaration half and
+  // the init half (never two walks of one tree).
+  let value_lets = collect_top_value_lets(lowered)
+  emit_top_let_globals(value_lets)
   emit_functions(lowered)
   // The eq-leaf of the structural fold: one recursive $eq_<sig> helper per
   // distinct product type appearing at a `==`/`!=` site (the graph IS the
@@ -284,7 +288,8 @@ fn emit_module(lowered) = {
   // traversal. A program with no aggregate to_string collects none (byte-
   // identical to the pre-show module, Law 7).
   emit_fold_show_helpers(lowered)
-  emit_start(top_fn_names)
+  emit_init_lets(value_lets)
+  emit_start(top_fn_names, value_lets)
   emit_footer()
 }
 
@@ -706,6 +711,19 @@ fn extract_top_fn_name(stmt) with Pure = match stmt {
   _                                                  => ""
 }
 
+// The VALUE peer of extract_top_fn_name: a top-level LLet whose init is
+// NOT a closure/continuation is a module VALUE binding — it needs a
+// (global $<name>) declaration and an init-before-main write ($__init_lets).
+// ONE projection over lowered's direct children feeds both consumers
+// (declaration + init) — never two walks of one tree.
+fn collect_top_value_lets(stmts) =
+  flatten(map((stmt) => match stmt {
+    LLet(_, _, LMakeClosure(_, _, _, _))               => [],
+    LLet(_, _, LMakeContinuation(_, _, _, _, _, _, _)) => [],
+    LLet(_, name, init)                                => [(name, init)],
+    _                                                  => []
+  }, stmts))
+
 // Emit the function table and elem mapping indices to function
 // labels. Every closure's fn_ptr slot stores the i32 index into
 // this table; `call_indirect (type $ftK)` dispatches by index.
@@ -765,6 +783,47 @@ fn emit_fn_index_globals(names, base_idx) = {
 // lexical frame at lower time. Inline lambdas still construct
 // closure records dynamically at LMakeClosure emit (their captures
 // are non-empty in general).
+
+// Module VALUE bindings — the declaration half of the edge whose reference
+// half (VarRef → LGlobal → `(global.get $<name>)`) always existed. One
+// mutable global per top-level value let, zero-initialized; $__init_lets
+// writes the real value before main runs.
+fn emit_top_let_globals(value_lets) = {
+  value_lets
+    |> for_each(((name, _)) => {
+      wat_emit("  (global $")
+      wat_emit(name)
+      wat_emit(" (mut i32) (i32.const 0))\n")
+    })
+}
+
+// The module init fn — every top-level value let's init expression runs in
+// SOURCE ORDER, each result stored to its global, before _start invokes
+// main (effectful initializers still run for library-shape modules). The
+// pairs are iterated directly — the top-level LLet node itself never
+// reaches emit_expr (its arm emits local.set, wrong at module level).
+fn emit_init_lets(value_lets) = {
+  if len(value_lets) > 0 {
+    wat_emit("  (func $__init_lets (param $__state i32) (result i32)")
+    wat_emit(" (local $state_tmp i32)")
+    wat_emit(" (local $variant_tmp i32)")
+    wat_emit(" (local $record_tmp i32)")
+    wat_emit(" (local $scrut_tmp i32)")
+    wat_emit(" (local $callee_closure i32)")
+    wat_emit(" (local $alloc_size i32)")
+    wat_emit(" (local $loop_i i32)")
+    value_lets |> for_each(((_, init)) => emit_let_locals_expr(init))
+    wat_emit("\n")
+    value_lets
+      |> for_each(((name, init)) => {
+        emit_expr(init)
+        wat_emit("(global.set $")
+        wat_emit(name)
+        wat_emit(")\n")
+      })
+    wat_emit("    (i32.const 0)\n  )\n")
+  }
+}
 
 fn emit_static_top_closures(top_names, all_names, base_slot) = {
   for_each((indexed) => {
@@ -1069,7 +1128,7 @@ fn emit_footer() = {
 fn emit_runtime_imports(wasi_ops) = {
   emit_one_wasi_import("proc_exit")
   for_each((op) => {
-    if op == "proc_exit" { () } else { emit_one_wasi_import(op) }
+    if op != "proc_exit" { emit_one_wasi_import(op) }
   }, wasi_ops)
 }
 
@@ -1451,7 +1510,7 @@ fn emit_let_locals_expr(expr) = match expr {
     wat_emit(int_to_str(h))
     wat_emit(" i32)")
     // the scoped-singleton save local (named installs only)
-    if hname == "" { () } else {
+    if hname != "" {
       wat_emit(" (local $__hstate_")
       wat_emit(int_to_str(h))
       wat_emit("_prev i32)")
@@ -1703,12 +1762,16 @@ fn find_local_handle_expr(name, expr) = match expr {
 
 fn emit_body(stmts) = for_each(emit_expr, stmts)
 
-fn emit_start(top_fn_names) = {
-  // Top-level closures are static data — no init routine. _start
-  // invokes main through its static closure when main exists; for
-  // programs with no `main` (libraries, test fragments, REPL slices)
-  // _start is a no-op exit so the module still validates.
+fn emit_start(top_fn_names, value_lets) = {
+  // Top-level closures are static data; top-level VALUE lets initialize
+  // through $__init_lets, run FIRST in program order — before main's
+  // invocation AND before a library-shape module's clean exit (effectful
+  // initializers still run). _start invokes main through its static
+  // closure when main exists.
   wat_emit("  (func $_start\n")
+  if len(value_lets) > 0 {
+    wat_emit("    (call $__init_lets (i32.const 0))\n    (drop)\n")
+  }
   if ls_find_str_local(top_fn_names, "main", 0) >= 0 {
     // main exists → load $main static closure, push as __state, load
     // fn_idx from offset 0, call_indirect. main's result IS the exit
@@ -2431,7 +2494,7 @@ fn emit_expr(expr) = match expr {
     // stack). Without the restore, any NESTED same-handler session — map
     // inside map, the collector family — leaves the OUTER session's
     // Tier-1 reads pointing at the INNER exhausted record.
-    if hname == "" { () } else {
+    if hname != "" {
       wat_emit("(global.get $")
       wat_emit(hname)
       wat_emit("_state_g)(local.set $")
@@ -2444,7 +2507,7 @@ fn emit_expr(expr) = match expr {
       wat_emit("_state_g)\n")
     }
     emit_expr(body)
-    if hname == "" { () } else {
+    if hname != "" {
       wat_emit("(local.get $")
       wat_emit(local_name)
       wat_emit("_prev)(global.set $")
@@ -3141,7 +3204,7 @@ fn emit_eq_variant_payload_conjunction(payloads, i, n) = {
     let off = variant_payload_offset(payloads, i, 0, 4)
     emit_field_load_pair(off, r)
     emit_field_eq(pty)
-    if i == 0 { () } else { wat_emit("    (i32.and)\n") }
+    if i > 0 { wat_emit("    (i32.and)\n") }
     emit_eq_variant_payload_conjunction(payloads, i + 1, n)
   }
 }
@@ -3159,7 +3222,7 @@ fn emit_eq_helper_conjunction(fields, i, n, off) = {
     let here = align_for(off, r)
     emit_field_load_pair(here, r)
     emit_field_eq(fold_strip(fty))
-    if i == 0 { () } else { wat_emit("    (i32.and)\n") }
+    if i > 0 { wat_emit("    (i32.and)\n") }
     emit_eq_helper_conjunction(fields, i + 1, n, here + repr_width(r))
   }
 }

@@ -658,7 +658,7 @@ fn walk_lemit_list_loop(exprs, i) = {
 // projections (fn defs, strings, state slots, WASI ops). The pattern is
 // structural — nothing to collect. The let-IS-match dissolution routes
 // destructure-let bodies through arms, so this descent is load-bearing.
-fn walk_lemit_arms(arms) = for_each((arm) => {
+fn walk_lemit_arms(arms) = each((arm) => {
   let (_, body) = arm
   walk_lemit_expr(body)
 }, arms)
@@ -669,7 +669,7 @@ fn walk_lemit_arms(arms) = for_each((arm) => {
 // scope; LF.M migrates to per-handler-state offsets.
 
 fn emit_state_globals(slots) = {
-  for_each((slot) => {
+  each((slot) => {
   wat_emit("  (global $s")
   wat_emit(int_to_str(slot))
   wat_emit(" (mut i32) (i32.const 0))\n")
@@ -682,7 +682,7 @@ fn emit_state_globals(slots) = {
 // by the UTF-8 bytes (each byte emitted as \xx so the WAT parser
 // accepts the whole payload uniformly regardless of byte values).
 fn emit_string_data(entries) = {
-  for_each((entry) => {
+  each((entry) => {
   let (s, offset) = entry
   wat_emit("  (data (i32.const ")
   wat_emit(int_to_str(offset))
@@ -741,7 +741,7 @@ fn emit_fn_table(fn_names) = {
 }
 
 fn emit_fn_refs(names) = {
-  for_each((name) => {
+  each((name) => {
   wat_emit(" $")
   wat_emit(name)
   }, names)
@@ -751,7 +751,7 @@ fn emit_fn_refs(names) = {
 // `(global.get $<name>_idx)` to get the i32 table index — no list
 // lookup needed at emit time. One global per top-level function.
 fn emit_fn_index_globals(names, base_idx) = {
-  for_each((indexed) => {
+  each((indexed) => {
   let (i, name) = indexed
   wat_emit("  (global $")
   wat_emit(name)
@@ -790,7 +790,7 @@ fn emit_fn_index_globals(names, base_idx) = {
 // writes the real value before main runs.
 fn emit_top_let_globals(value_lets) = {
   value_lets
-    |> for_each(((name, _)) => {
+    |> each(((name, _)) => {
       wat_emit("  (global $")
       wat_emit(name)
       wat_emit(" (mut i32) (i32.const 0))\n")
@@ -812,10 +812,10 @@ fn emit_init_lets(value_lets) = {
     wat_emit(" (local $callee_closure i32)")
     wat_emit(" (local $alloc_size i32)")
     wat_emit(" (local $loop_i i32)")
-    value_lets |> for_each(((_, init)) => emit_let_locals_expr(init))
+    value_lets |> each(((_, init)) => emit_let_locals_expr(init))
     wat_emit("\n")
     value_lets
-      |> for_each(((name, init)) => {
+      |> each(((name, init)) => {
         emit_expr(init)
         wat_emit("(global.set $")
         wat_emit(name)
@@ -826,7 +826,7 @@ fn emit_init_lets(value_lets) = {
 }
 
 fn emit_static_top_closures(top_names, all_names, base_slot) = {
-  for_each((indexed) => {
+  each((indexed) => {
   let (i, name) = indexed
   let fn_idx = ls_find_str_local(all_names, name, 0)
   let addr = 256 + (base_slot + i) * 8
@@ -1102,7 +1102,7 @@ fn emit_repr_ft_type(param_reprs, result_repr) = {
   wat_emit("  (type ")
   wat_emit(ft_name(param_reprs, result_repr))
   wat_emit(" (func")
-  for_each((r) => {
+  each((r) => {
     wat_emit(" (param ")
     wat_emit(repr_wat(r))
     wat_emit(")")
@@ -1127,7 +1127,7 @@ fn emit_footer() = {
 // the graph IS the import set, so it can never drift from what is called.
 fn emit_runtime_imports(wasi_ops) = {
   emit_one_wasi_import("proc_exit")
-  for_each((op) => {
+  each((op) => {
     if op != "proc_exit" { emit_one_wasi_import(op) }
   }, wasi_ops)
 }
@@ -1214,7 +1214,7 @@ fn emit_functions(lowered) = {
   let fn_records = collect_fn_emit_records(lowered)
   fn_records
     |> parallel_map(emit_one_fn_to_string)
-    |> for_each((s) => wat_emit(s))
+    |> each((s) => wat_emit(s))
 }
 
 // Per-fn emit-to-buffer. Installs wat_to_string locally; emit_fn_body's
@@ -1424,7 +1424,7 @@ fn emit_render_reason_oneline(reason) with !Mutate = match reason {
 // as a function-level local. Stops at LMakeClosure boundaries
 // (those are other functions with their own locals). Must cover
 // every LowExpr container that can hold LLet descendants.
-fn emit_let_locals_list(stmts) = for_each(emit_let_locals_expr, stmts)
+fn emit_let_locals_list(stmts) = each(emit_let_locals_expr, stmts)
 
 fn emit_let_locals_expr(expr) = match expr {
   LLet(h, name, inner) => {
@@ -1515,7 +1515,7 @@ fn emit_let_locals_expr(expr) = match expr {
       wat_emit(int_to_str(h))
       wat_emit("_prev i32)")
     }
-    for_each((g) => {
+    each((g) => {
       wat_emit(" (local $__hstate_")
       wat_emit(int_to_str(h))
       wat_emit("_")
@@ -1568,7 +1568,7 @@ fn emit_let_locals_expr(expr) = match expr {
 // local so the (local.set $name) inside emit_match_arms validates.
 // Bodies are walked for nested LLet locals as usual.
 fn emit_let_locals_arms(arms) = {
-  for_each((arm) => {
+  each((arm) => {
   let (pat, body) = arm
   emit_let_locals_pat(pat)
   emit_let_locals_expr(body)
@@ -1611,17 +1611,17 @@ fn emit_let_locals_pat_rest(rest) = match rest {
 }
 
 fn emit_let_locals_pat_record(field_binds) = {
-  for_each((fb) => {
+  each((fb) => {
   let (_, _, sub_pat) = fb
   emit_let_locals_pat(sub_pat)
   }, field_binds)
 }
 
-fn emit_let_locals_pat_list(pats) = for_each(emit_let_locals_pat, pats)
+fn emit_let_locals_pat_list(pats) = each(emit_let_locals_pat, pats)
 
 // A tuple pattern's elements are (offset_bytes, sub_pat) — the width-summed
 // positional product, same shape as the record pattern minus the field name.
-fn emit_let_locals_pat_tuple(elem_binds) = for_each((eb) => {
+fn emit_let_locals_pat_tuple(elem_binds) = each((eb) => {
   let (_, _, sub_pat) = eb
   emit_let_locals_pat(sub_pat)
 }, elem_binds)
@@ -1654,7 +1654,7 @@ fn tail_expr_repr(expr) = match expr {
 // body use-site (genuinely unread) projects RI32 — the word floor, correct for
 // an unconstrained slot. For an all-i32 fn this is byte-identical (Law 7).
 fn emit_params(names, body) = {
-  for_each((name) => {
+  each((name) => {
   wat_emit(" (param $")
   wat_emit(name)
   wat_emit(" ")
@@ -1760,7 +1760,7 @@ fn find_local_handle_expr(name, expr) = match expr {
   LUnresolvedEvidence(_, _) => 0
 }
 
-fn emit_body(stmts) = for_each(emit_expr, stmts)
+fn emit_body(stmts) = each(emit_expr, stmts)
 
 fn emit_start(top_fn_names, value_lets) = {
   // Top-level closures are static data; top-level VALUE lets initialize
@@ -1845,7 +1845,7 @@ fn emit_wasi_thread_start() = {
 // - 9 deferred-by-omission: closes #145 in this commit alongside the
 //   lower-side threading.
 fn emit_state_init_writes(state_local, inits, base_idx) = {
-  for_each((indexed) => {
+  each((indexed) => {
   let (i, init) = indexed
   wat_emit("(local.get $")
   wat_emit(state_local)
@@ -1872,7 +1872,7 @@ fn emit_state_init_writes(state_local, inits, base_idx) = {
 
 // Total arm-slot count across a handler's per-effect groups — the record's
 // contiguous arm region size.
-fn sum_arm_name_lens(groups) = fold(groups, 0, (acc, g) => acc + len(g.arms))
+fn sum_arm_name_lens(groups) = fold(0, (acc, g) => acc + len(g.arms), groups)
 
 // Lay each effect-group's arm fn-indices contiguously in the ONE record
 // (at 8+4*nstate+4*(base+op_slot)) with a running base, and alloc a thin
@@ -1881,7 +1881,7 @@ fn sum_arm_name_lens(groups) = fold(groups, 0, (acc, g) => acc + len(g.arms))
 // emit_levperform reads (record, base) from it. Mirrors the seed's
 // $emit_handler_effect_entries.
 fn emit_handler_effect_entries(state_local, nstate, groups) = {
-  fold(groups, 0, (base, g) => {
+  fold(0, (base, g) => {
     emit_arm_writes(state_local, nstate, base, g.arms, 0)
     let entry_name = "{state_local}_{g.ename}"
     // alloc the 8-byte [record, base] entry (bump pattern)
@@ -1899,7 +1899,7 @@ fn emit_handler_effect_entries(state_local, nstate, groups) = {
     wat_emit(int_to_str(base))
     wat_emit(")(i32.store offset=4)\n")            // entry[1] = base
     base + len(g.arms)
-  })
+  }, groups)
   ()
 }
 
@@ -1965,7 +1965,7 @@ fn emit_ev_entry_keyed(base, key_off) = {
 // position-as-the-bug: a sibling effect appearing shuffles no key). The ONE
 // region writer the install / closure / value-fn / continuation places share.
 fn emit_keyed_ev_region(state_local, ev_exprs, base, base_j) = {
-  for_each((indexed) => {
+  each((indexed) => {
     let (j, entry) = indexed
     emit_one_keyed_ev(state_local, entry, base + 8 * (base_j + j))
   }, enumerate(ev_exprs))
@@ -4778,7 +4778,7 @@ fn emit_unaryop(op) = match op {
 // Emit the stores for each capture in the closure record.
 // Captures are indexed from 0; each stored at offset 8 + 4*i.
 fn emit_capture_stores(captures, base_i) = {
-  for_each((indexed) => {
+  each((indexed) => {
   let (i, capture) = indexed
   wat_emit("    (local.get $state_tmp)\n")
   emit_expr(capture)
@@ -4806,7 +4806,7 @@ fn emit_ev_slot_stores(ev_exprs, nc, base_j) =
 // only the base offset differs.
 
 fn emit_capture_stores_at_offset(captures, base_offset, base_i) = {
-  for_each((indexed) => {
+  each((indexed) => {
   let (i, capture) = indexed
   wat_emit("    (local.get $state_tmp)\n")
   emit_expr(capture)
@@ -4830,7 +4830,7 @@ fn emit_ev_slot_stores_at_offset(ev_exprs, base_offset, base_j) =
 // only its base offset is computed at runtime. The callee's LEvPerform key-scan
 // reads it identically (one entry shape; the fence agrees by construction).
 fn emit_ev_slots_dynamic(ev_exprs, base_j) = {
-  for_each((indexed) => {
+  each((indexed) => {
     let (j, entry) = indexed
     match entry {
       LEvEntry(key, ev) => {
@@ -5553,7 +5553,7 @@ fn emit_list_literal(elems) = {
 }
 
 fn emit_list_stores(elems, base_idx) = {
-  for_each((indexed) => {
+  each((indexed) => {
   let (i, elem) = indexed
   wat_emit("    (local.set $callee_closure)\n")
   wat_emit("    (local.get $__state)\n")

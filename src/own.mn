@@ -99,7 +99,7 @@ handler affine_ledger with used = [], used_sites = [], branches = [] {
 // a sorted set (maintained by set_insert during consume), so folding
 // set_union across them preserves the invariant.
 fn union_all_deltas(ref deltas) with !Mutate = {
-  fold(deltas, [], (acc, delta) => set_union(acc, delta))
+  fold([], (acc, delta) => set_union(acc, delta), deltas)
 }
 
 // Pairwise collision check across branch deltas. For each pair
@@ -111,8 +111,8 @@ fn union_all_deltas(ref deltas) with !Mutate = {
 // span — the site where the violation becomes observable.
 fn report_branch_collisions(ref deltas, ref span) with !Mutate = {
   let n = len(deltas)
-  for_each((i) => {
-    for_each((j) => {
+  each((i) => {
+    each((j) => {
       let collisions = set_intersect(list_index(deltas, i), list_index(deltas, j))
       report_each_collision(collisions, span)
     }, range(i + 1, n))
@@ -228,17 +228,17 @@ fn region_on_stack(ref stack, rid) with !Mutate = {
 // contribute region 0 (global lifetime, doesn't bound the join).
 // The result is the composite's pinning region.
 fn join_field_regions(ref tags, ref fields, current) with !Mutate = {
-  fold(fields, current, (acc, fh) => {
+  fold(current, (acc, fh) => {
     let field_rid = match lookup_tag(tags, fh) {
       None     => 0,
       Some(t)  => t.region_id
     }
     if field_rid > acc { field_rid } else { acc }
-  })
+  }, fields)
 }
 
 fn report_each_collision(ref names, ref span) with !Mutate = {
-  for_each((name) => {
+  each((name) => {
     report(EOwnershipViolation("'{name}' consumed in two parallel branches", span))
   }, names)
 }
@@ -335,7 +335,7 @@ fn walk_return_positions(ref refs, ref node) with !Mutate = {
 }
 
 fn walk_match_arms(ref refs, ref arms) with !Mutate = {
-  for_each((arm) => {
+  each((arm) => {
     let (_, body) = arm
     walk_return_positions(refs, body)
   }, arms)
@@ -417,19 +417,19 @@ fn count_uses(ref name, ref node) with !Mutate = {
 }
 
 fn count_uses_list(ref name, ref nodes) with !Mutate = {
-  fold(nodes, 0, (acc, node) => acc + count_uses(name, node))
+  fold(0, (acc, node) => acc + count_uses(name, node), nodes)
 }
 
 fn count_uses_record_fields(ref name, ref flds) with !Mutate = {
-  fold(flds, 0, (acc, fld) => {
+  fold(0, (acc, fld) => {
     let (_, value) = fld
     acc + count_uses(name, value)
-  })
+  }, flds)
 }
 
 fn count_match_arms(ref name, ref arms) with !Mutate = {
-  fold(arms, 0, (acc, arm) => {
+  fold(0, (acc, arm) => {
     let (_, body) = arm
     acc + count_uses(name, body)
-  })
+  }, arms)
 }

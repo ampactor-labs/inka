@@ -13,7 +13,7 @@ fn vec_add(a, b) = zip_with((x, y) => x + y, a, b)
 fn vec_sub(a, b) = zip_with((x, y) => x - y, a, b)
 fn vec_mul(a, b) = zip_with((x, y) => x * y, a, b)
 fn scalar_mul(s, xs) = map((x) => s * x, xs)
-fn sumf(xs) = fold(xs, 0.0, (acc, x) => acc + x)
+fn sumf(xs) = fold(0.0, (acc, x) => acc + x, xs)
 fn dot(a, b) = sumf(zip_with((x, y) => x * y, a, b))
 
 // ── Matrix operations ───────────────────────────────────────

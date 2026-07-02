@@ -299,7 +299,7 @@
   (data (i32.const 6768) "\06\00\00\00filter")               ;;  6 bytes
   (data (i32.const 6784) "\07\00\00\00flatten")              ;;  7 bytes
   (data (i32.const 6800) "\04\00\00\00fold")                 ;;  4 bytes
-  (data (i32.const 6816) "\08\00\00\00for_each")             ;;  8 bytes
+  (data (i32.const 6816) "\04\00\00\00each")                 ;;  4 bytes — the true name (SYNTAX §Vocabulary)
   (data (i32.const 6832) "\04\00\00\00take")                 ;;  4 bytes
   (data (i32.const 6848) "\04\00\00\00drop")                 ;;  4 bytes
   (data (i32.const 6864) "\03\00\00\00any")                  ;;  3 bytes
@@ -942,7 +942,7 @@
     (if (call $str_eq (local.get $cname) (i32.const 6768)) (then (return (i32.const 1)))) ;; filter
     (if (call $str_eq (local.get $cname) (i32.const 6784)) (then (return (i32.const 1)))) ;; flatten
     (if (call $str_eq (local.get $cname) (i32.const 6800)) (then (return (i32.const 1)))) ;; fold
-    (if (call $str_eq (local.get $cname) (i32.const 6816)) (then (return (i32.const 1)))) ;; for_each
+    (if (call $str_eq (local.get $cname) (i32.const 6816)) (then (return (i32.const 1)))) ;; each
     (if (call $str_eq (local.get $cname) (i32.const 6832)) (then (return (i32.const 1)))) ;; take
     (if (call $str_eq (local.get $cname) (i32.const 6848)) (then (return (i32.const 1)))) ;; drop
     (if (call $str_eq (local.get $cname) (i32.const 6864)) (then (return (i32.const 1)))) ;; any
@@ -984,23 +984,24 @@
     (if (call $str_eq (local.get $cname) (i32.const 6800))           ;; fold(xs,init,f):([a],b,(b,a)->b)->b
       (then
         (local.set $elem_b (call $ty_make_tvar (call $graph_fresh_ty (call $reason_make_inferred (i32.const 3672)))))
-        (call $seq_force (local.get $ah) (i32.const 0) (call $ty_make_tlist (local.get $elem)) (local.get $span))
-        (call $seq_force (local.get $ah) (i32.const 1) (local.get $elem_b) (local.get $span))
-        (call $seq_force_fn (local.get $ah) (i32.const 2) (call $tylist2 (local.get $elem_b) (local.get $elem)) (local.get $elem_b) (local.get $span))
+        ;; fold(init, f, xs) — the Stage Law: configuration first, datum last.
+        (call $seq_force (local.get $ah) (i32.const 0) (local.get $elem_b) (local.get $span))
+        (call $seq_force_fn (local.get $ah) (i32.const 1) (call $tylist2 (local.get $elem_b) (local.get $elem)) (local.get $elem_b) (local.get $span))
+        (call $seq_force (local.get $ah) (i32.const 2) (call $ty_make_tlist (local.get $elem)) (local.get $span))
         (call $graph_bind (local.get $handle) (local.get $elem_b)
           (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
         (return (local.get $handle))))
-    (if (call $str_eq (local.get $cname) (i32.const 6816))           ;; for_each(f,xs):(a->(),[a])->()
+    (if (call $str_eq (local.get $cname) (i32.const 6816))           ;; each(f,xs):(a->(),[a])->()
       (then
         (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
         (call $seq_force_fn (local.get $ah) (i32.const 0) (call $tylist1 (local.get $elem)) (call $ty_make_tunit) (local.get $span))
         (call $graph_bind (local.get $handle) (call $ty_make_tunit)
           (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
         (return (local.get $handle))))
-    (if (call $str_eq (local.get $cname) (i32.const 6832))           ;; take(xs,n):([a],Int)->[a]
+    (if (call $str_eq (local.get $cname) (i32.const 6832))           ;; take(n,xs):(Int,[a])->[a] — the Stage Law
       (then
-        (call $seq_force (local.get $ah) (i32.const 0) (call $ty_make_tlist (local.get $elem)) (local.get $span))
-        (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tint) (local.get $span))
+        (call $seq_force (local.get $ah) (i32.const 0) (call $ty_make_tint) (local.get $span))
+        (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
         (call $graph_bind (local.get $handle) (call $ty_make_tlist (local.get $elem))
           (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
         (return (local.get $handle))))

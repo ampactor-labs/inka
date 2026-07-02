@@ -78,10 +78,10 @@ fn driver_collect_visit(ref module_name, own collected, own visited)
 
 fn driver_collect_visit_list(ref modules, own collected, own visited)
   with Memory + Alloc + Filesystem = {
-  fold(modules, (collected, visited), (acc, m) => {
+  fold((collected, visited), (acc, m) => {
     let (c, v) = acc
     driver_collect_visit(m, c, v)
-  })
+  }, modules)
 }
 
 // Lex + parse just enough of a source to extract its ImportStmt
@@ -238,7 +238,7 @@ fn driver_install_loop(ref entries, i, n) with Memory + Alloc + EnvWrite = {
 // module's exports install into env) BEFORE layer N+1 starts (so
 // dependents see all their deps).
 //
-// for_each over layers (sequential gates dep-installation) × per-layer
+// each over layers (sequential gates dep-installation) × per-layer
 // parallel_map (genuine parallelism via Thread effect + parallel_compose)
 // IS the cargo-equivalent topology. Handler swap decides spatial
 // (parallel_compose → OS threads) vs temporal (sequential_compose → one
@@ -255,7 +255,7 @@ fn driver_check(ref entry_module)
   entry_module
     |> driver_collect_dag_with_deps
     |> driver_partition_layers
-    |> for_each((layer) => parallel_map(driver_check_module, layer))
+    |> each((layer) => parallel_map(driver_check_module, layer))
 }
 
 // driver_check_entry — the compile path's check: infer every DEP of the
@@ -272,7 +272,7 @@ fn driver_check_entry(ref entry_module)
     |> driver_collect_dag_with_deps
     |> filter((m_with_deps) => { let (m, _) = m_with_deps; m != entry_module })
     |> driver_partition_layers
-    |> for_each((layer) => parallel_map(driver_check_module, layer))
+    |> each((layer) => parallel_map(driver_check_module, layer))
   // Parse + infer the entry ONCE; its AST is what compile lowers live.
   let ast = parse_program(lex(fs_read_file(driver_module_path(entry_module))))
   infer_program(ast)

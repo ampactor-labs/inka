@@ -319,7 +319,7 @@ type SchemeKind
   // (a ! E+r) ⟿ (a ! R+r) — it REMOVES the handled effect (handled_ename) AND
   // ADDS its arms' residual row (residual_row_handle, a live row var, config-
   // polymorphic). `~>` reads it: row(expr ~> h) = (row(expr) − E) ⊕ R. Without R
-  // the handler-attachment can't transform the row and every map/for_each loses
+  // the handler-attachment can't transform the row and every map/each loses
   // the effects performed in its arms (protocol_handler_effect_typing).
   // ONE-GRAPH: the binding also carries the decl's (config, state, arms) — the
   // env NAMES the handler's node, so lower reads its arms/state LIVE here and

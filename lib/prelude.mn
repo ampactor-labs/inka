@@ -52,7 +52,7 @@ fn iterate_from(xs, i, n) with Iterate =
 // substrate via list_extend_to + list_set + slice keeps O(N) total
 // vs the O(N²) concat-plus-element pattern (drift mode 11).
 //
-// Scalar-producing operations (fold, any, all, find, count, for_each)
+// Scalar-producing operations (fold, any, all, find, count, each)
 // use named handlers + ~> pipe — uniform with map/filter/take/drop.
 // Per Hβ.prelude-ultimate-form (2026-05-14): all iteration operations
 // use the canonical ~> pipe verb form per SYNTAX.md §1466-1468.
@@ -119,7 +119,7 @@ handler collector with buf = make_list(16), count = 0 {
 
 fn map(f, xs)     = { iterate(xs); result() } ~> map_collector(f)
 fn filter(p, xs)  = { iterate(xs); result() } ~> filter_collector(p)
-fn take(xs, n)    = { iterate(xs); result() } ~> take_collector(n)
+fn take(n, xs)    = { iterate(xs); result() } ~> take_collector(n)
 fn drop(n, xs)    = { iterate(xs); result() } ~> drop_collector(n)
 
 // Scalar-producing operations — named handler + ~> pipe form.
@@ -164,8 +164,8 @@ handler count_handler(pred) with n = 0 {
 
 // Scalar-producing operations — ~> pipe with named handlers.
 
-fn fold(xs, init, f) = { iterate(xs); result() } ~> fold_handler(f, init)
-fn for_each(f, xs)   = { iterate(xs) } ~> each_handler(f)
+fn fold(init, f, xs) = { iterate(xs); result() } ~> fold_handler(f, init)
+fn each(f, xs)   = { iterate(xs) } ~> each_handler(f)
 fn any(pred, xs)     = { iterate(xs); result() } ~> any_handler(pred)
 fn all(pred, xs)     = { iterate(xs); result() } ~> all_handler(pred)
 fn find(pred, xs)    = { iterate(xs); result() } ~> find_handler(pred)
@@ -176,31 +176,31 @@ fn count(pred, xs)   = { iterate(xs); result() } ~> count_handler(pred)
 fn head(xs) = xs[0]
 fn tail(xs) = slice(xs, 1, len(xs))
 fn last(xs) = xs[len(xs) - 1]
-fn reverse(xs) = fold(xs, [], (acc, x) => [x] ++ acc)
-fn flatten(xss) = fold(xss, [], (acc, xs) => acc ++ xs)
+fn reverse(xs) = fold([], (acc, x) => [x] ++ acc, xs)
+fn flatten(xss) = fold([], (acc, xs) => acc ++ xs, xss)
 fn flat_map(f, xs) = flatten(map(f, xs))
-fn sum(xs) = fold(xs, 0, (acc, x) => acc + x)
-fn product(xs) = fold(xs, 1, (acc, x) => acc * x)
+fn sum(xs) = fold(0, (acc, x) => acc + x, xs)
+fn product(xs) = fold(1, (acc, x) => acc * x, xs)
 fn concat(xss) = flatten(xss)
-fn reduce(xs, f) = fold(tail(xs), head(xs), f)
+fn reduce(xs, f) = fold(head(xs), f, tail(xs))
 
 fn zip_with(f, xs, ys) = if len(xs) == 0 || len(ys) == 0 { [] }
   else { [f(xs[0], ys[0])] ++ zip_with(f, tail(xs), tail(ys)) }
 fn zip(xs, ys) = zip_with((a, b) => (a, b), xs, ys)
 
 fn enumerate(xs) = zip(range(0, len(xs)), xs)
-fn unique(xs) = fold(xs, [], (acc, x) => if any((a) => a == x, acc) { acc } else { push(acc, x) })
+fn unique(xs) = fold([], (acc, x) => if any((a) => a == x, acc) { acc } else { push(acc, x) }, xs)
 
 fn partition(pred, xs) = (filter(pred, xs), filter((x) => !pred(x), xs))
 fn range_inclusive(start, end) = range(start, end + 1)
 fn intersperse(sep, xs) = if len(xs) <= 1 { xs } else { [xs[0], sep] ++ intersperse(sep, tail(xs)) }
 fn scanl(xs, init, f) = if len(xs) == 0 { [init] } else { let next = f(init, xs[0]); [init] ++ scanl(tail(xs), next, f) }
 fn repeat(n, x) = if n <= 0 { [] } else { [x] ++ repeat(n - 1, x) }
-fn chunk(n, xs) = if len(xs) == 0 { [] } else { [take(xs, n)] ++ chunk(n, drop(n, xs)) }
+fn chunk(n, xs) = if len(xs) == 0 { [] } else { [take(n, xs)] ++ chunk(n, drop(n, xs)) }
 
 // ─── Aggregation with projection ────────────────────────────
 
-fn sum_by(f, xs) = fold(xs, 0, (acc, x) => acc + f(x))
+fn sum_by(f, xs) = fold(0, (acc, x) => acc + f(x), xs)
 fn max_by(f, xs) = reduce(xs, (a, b) => if f(a) >= f(b) { a } else { b })
 fn min_by(f, xs) = reduce(xs, (a, b) => if f(a) <= f(b) { a } else { b })
 
@@ -217,7 +217,7 @@ fn not(x) with Pure = if x { false } else { true }
 
 // Build a pipeline from a list of functions. Fold with compose.
 // build_pipeline([f, g, h]) = f <> g <> h
-fn build_pipeline(steps) = fold(steps, id, (acc, step) => (x) => step(acc(x)))
+fn build_pipeline(steps) = fold(id, (acc, step) => (x) => step(acc(x)), steps)
 
 // ─── Safe access ────────────────────────────────────────────
 

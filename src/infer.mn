@@ -218,7 +218,7 @@ fn infer_program(stmts) = {
   stmts
 }
 
-fn pre_register_decls(stmts) = for_each(pre_register_stmt, stmts)
+fn pre_register_decls(stmts) = each(pre_register_stmt, stmts)
 
 fn pre_register_stmt(ref node) = {
   let N(body, span, handle) = node
@@ -242,13 +242,13 @@ fn pre_register_stmt(ref node) = {
 // quantified by free_in_ty), so the KNOWN names are carried without closing the
 // row — the declared contract read live at pre-register, not re-derived.
 fn declared_names_of(effs) =
-  fold(effs, [], (acc, eff) => {
+  fold([], (acc, eff) => {
     let (name, negated, _conn) = eff
     match name {
       EPure => acc,
       _     => if negated { acc } else { name_set_insert(acc, name) }
     }
-  })
+  }, effs)
 
 fn pre_register_fn_sig(name, params, declared_names, handle, span: ValidSpan) = {
   let param_handles = mint_param_placeholders(params, name)
@@ -274,7 +274,7 @@ fn pre_register_fn_sig(name, params, declared_names, handle, span: ValidSpan) = 
   env_extend(name, Forall(free_in_ty(fn_ty), fn_ty), Declared(name), FnScheme)
 }
 
-fn infer_stmt_list(stmts) = for_each(infer_stmt, stmts)
+fn infer_stmt_list(stmts) = each(infer_stmt, stmts)
 
 // Statement inference
 
@@ -502,7 +502,7 @@ fn call_is_alloc_returning(func) = {
 // The accumulator starts at EfPure (the union identity); the first
 // term carries EcUnion so `acc = Pure ∪ term = term`.
 fn build_declared_row(effs) =
-  fold(effs, EfPure, (acc, eff) => {
+  fold(EfPure, (acc, eff) => {
     let (name, negated, conn) = eff
     // `Pure` is the union identity (SYNTAX.md: `with Pure + IO`
     // simplifies to `with IO`) — its term IS EfPure, so a `+ Pure`
@@ -514,7 +514,7 @@ fn build_declared_row(effs) =
       else if negated           { neg_row(mk_ef_closed([name])) }
       else                      { mk_ef_closed([name]) }
     apply_connective(conn, acc, term)
-  })
+  }, effs)
 
 fn is_pure_eff_name(name) = match name {
   EPure => true,
@@ -756,7 +756,7 @@ fn infer_expr(ref node) = {
       // element is exactly the lower_scope ls_push_scope trap (resolve_field_offset
       // returns -1 → unreachable). Carry the update's type into the field; never
       // discard what the graph could prove (Carried-Truth).
-      for_each((upd) => {
+      each((upd) => {
         infer_expr(upd.init)
         let N(_, _, uh) = upd.init
         match env_lookup(upd.name) {
@@ -919,7 +919,7 @@ fn is_seq_op(cname) with Pure =
   // effectful iteration). The body stays as lowered substrate; the TYPE is the
   // projection. This is what dissolves map_collector's S/P handler gaps.
   || cname == "map"        || cname == "filter"      || cname == "flatten"
-  || cname == "fold"       || cname == "for_each"
+  || cname == "fold"       || cname == "each"
   || cname == "take"       || cname == "drop"
   || cname == "any"        || cname == "all"
   || cname == "find"       || cname == "count"
@@ -993,10 +993,10 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
       seq_force_fn(ah, 2, [bm, elem], bm, span)           // f    : (b, a) -> b
       perform graph_bind(handle, bm, Located(span, Inferred("fold : b")))
     },
-    "for_each"   => {
+    "each"   => {
       seq_force(ah, 1, TList(elem), span)                 // xs : [a]
       seq_force_fn(ah, 0, [elem], TUnit, span)            // f  : a -> ()
-      perform graph_bind(handle, TUnit, Located(span, Inferred("for_each : ()")))
+      perform graph_bind(handle, TUnit, Located(span, Inferred("each : ()")))
     },
     "take"       => {
       seq_force(ah, 0, TList(elem), span)                 // xs : [a]
@@ -1141,7 +1141,7 @@ fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
 // installed (binding its config args, so a config-param handler's R picks up
 // the actual arg's effect); then (body_row − E) ⊕ R joins the caller's row.
 // Reading the RHS handler's HandlerKind(E, R) is what completes the row algebra
-// — without it map/for_each lose every effect performed in their arms.
+// — without it map/each lose every effect performed in their arms.
 fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
   let body_row_h = graph_fresh_row(Inferred("~> body row"))
   inf_enter_fn(body_row_h, span)
@@ -1870,10 +1870,10 @@ fn record_fields_of_node(node) = {
 // — the sort has ONE home, not re-derived here). The override wins by
 // name (last-writer over the base copy) — the spread semantics.
 fn merge_override_fields(base_fields, overrides) =
-  fold(overrides, base_fields, (acc, ov) => {
+  fold(base_fields, (acc, ov) => {
     let (oname, _) = ov
     record_field_insert(reject_field(acc, oname), ov)
-  })
+  }, overrides)
 
 fn reject_field(fields, target) =
   filter((f) => { let (n, _) = f; n != target }, fields)
@@ -2165,9 +2165,9 @@ fn alt_binder_ty(ref n, span: ValidSpan) = match env_lookup(n) {
 fn enforce_alt_binding_law(branch_binds, span: ValidSpan) = match branch_binds {
   [] => (),
   [first, ...rest] =>
-    for_each((bi) => {
+    each((bi) => {
       if alt_same_name_set(first, bi) {
-        for_each((p) => {
+        each((p) => {
           let (n, ty_i) = p
           match find((q) => { let (m, _) = q; m == n }, first) {
             Some(q0) => {
@@ -2220,7 +2220,7 @@ fn build_pat_record_field_specs(flds, span: ValidSpan) = map((fld) => {
 }, flds)
 
 fn infer_pat_record_subs(flds, specs, span: ValidSpan) = {
-  for_each((pair) => {
+  each((pair) => {
     let ((_, sub_pat), (_, ty)) = pair
     match ty {
       TVar(h) => infer_pat(sub_pat, h, span),
@@ -2230,7 +2230,7 @@ fn infer_pat_record_subs(flds, specs, span: ValidSpan) = {
 }
 
 fn infer_pat_tuple(pats, parent_handle, span: ValidSpan) = {
-  for_each((p) => {
+  each((p) => {
     let sub_h = mint(Inferred("tuple pattern element"))
     infer_pat(p, sub_h, span)
   }, pats)
@@ -2238,7 +2238,7 @@ fn infer_pat_tuple(pats, parent_handle, span: ValidSpan) = {
 
 fn infer_pat_list(pats, rest, parent_handle, span: ValidSpan) = {
   let elem_h = mint(Inferred("list pattern element"))
-  for_each((p) => infer_pat(p, elem_h, span), pats)
+  each((p) => infer_pat(p, elem_h, span), pats)
   let list_ty = TList(TVar(elem_h))
   graph_bind(parent_handle, list_ty,
     Located(span, Inferred("list pattern")))
@@ -2260,7 +2260,7 @@ fn infer_pat_list(pats, rest, parent_handle, span: ValidSpan) = {
 // distinct entry into env. Param-list / sub-pat length mismatch falls
 // through silently — surfaced separately as E_ConstructorArity (TODO).
 fn bind_pcon_subpats(params, sub_pats, span: ValidSpan, reason, ctor_name) = {
-  for_each((pair) => {
+  each((pair) => {
     let (param, sub_pat) = pair
     let sub_h = mint(VarLookup(ctor_name, reason))
     graph_bind(sub_h, param_ty(param),
@@ -2284,7 +2284,7 @@ fn infer_match_arms(arms, scrut, result_h, span: ValidSpan) = {
 }
 
 fn infer_match_arm_iter(arms, scrut, result_h, span: ValidSpan) = {
-  for_each((arm) => {
+  each((arm) => {
     let (pat, body) = arm
     env_scope_enter()
     infer_pat(pat, scrut, span)
@@ -2298,7 +2298,7 @@ fn infer_match_arm_iter(arms, scrut, result_h, span: ValidSpan) = {
 // Walk arms, gathering each PCon's tag_id (deduped via set_insert).
 // Non-PCon arms (wildcards, vars, lits) contribute no tag.
 fn collect_arm_tags(arms, own init) = {
-  fold(arms, init, (acc, arm) => {
+  fold(init, (acc, arm) => {
     let (pat, _body) = arm
     match pat {
       PCon(name, _) => match env_lookup(name) {
@@ -2313,7 +2313,7 @@ fn collect_arm_tags(arms, own init) = {
       },
       _ => acc
     }
-  })
+  }, arms)
 }
 
 // Read total_variants from any one PCon arm's ConstructorScheme.
@@ -2391,7 +2391,7 @@ fn infer_one_handler_arm(arm, result_h, payload_h) = {   // drift-audit: ignore 
 // zip truncates on arity mismatch — the aligned prefix still binds
 // (productive-under-error; the arity diagnostic is the op's).
 fn bind_arm_args(args, params, op_name, span: ValidSpan) =
-  for_each((pair) => {
+  each((pair) => {
     let (name, param) = pair
     let h = mint(Located(span, LetBinding(name, Declared(op_name))))
     graph_bind(h, param_ty(param), Located(span, Declared(op_name)))
@@ -2409,10 +2409,10 @@ fn unify_op_payload(op_row, payload_h, span: ValidSpan) = match op_row {
 }
 
 fn unify_payload_in_names(names, payload_h, span: ValidSpan) =
-  for_each((n) => match n {
+  each((n) => match n {
     ENamed(_)               => (),
     EPure                   => (),   // the identity carries no payload
-    EParameterized(_, args) => for_each((arg) => match arg {
+    EParameterized(_, args) => each((arg) => match arg {
       EAType(ty) => {
         let th = mint(Located(span, Inferred("op payload")))
         graph_bind(th, ty, Located(span, Inferred("op payload")))
@@ -2783,7 +2783,7 @@ fn register_type_constructors(type_name, variants) = {
   let (converted, qmap) = quantify_variants(variants, make_list(total), 0, total, [])
   let result_ty = TName(type_name, map((pair) => { let (_, h) = pair TVar(h) }, qmap))
   let qhandles = map((pair) => { let (_, h) = pair h }, qmap)
-  for_each((indexed) => {
+  each((indexed) => {
     let (tag_id, variant) = indexed
     register_one_variant(type_name, result_ty, qhandles,
       list_index(converted, tag_id), variant, tag_id, total)
@@ -2948,7 +2948,7 @@ fn register_effect_ops(effect_name, ops) = {
   } else {
     EParameterized(effect_name, map((v) => EAType(TVar(v)), eff_vars))
   }
-  for_each((op) => register_one_op(effect_name, eff_name, op), qops)
+  each((op) => register_one_op(effect_name, eff_name, op), qops)
 }
 
 // The free type vars across all an effect's ops' signatures — the effect's
@@ -3076,7 +3076,7 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   // to a config arg `f`) into r_handle via inf_add_effect/inf_add_row. On
   // exit, r_handle binds to R — the row `~> h` adds to the caller.
   inf_enter_fn(r_handle, span)
-  for_each((arm) => {
+  each((arm) => {
     env_scope_enter()
     bind_handler_config_params(config_tparams, hname)
     bind_handler_state_names(state_binds, hname, span)
@@ -3095,7 +3095,7 @@ fn infer_handler_state_inits(state) = map((sf) => {
 }, state)
 
 fn bind_handler_config_params(config_tparams, hname) =
-  for_each((tp) => {
+  each((tp) => {
     let name = param_name(tp)
     let ty = param_ty(tp)
     env_extend(name, Forall([], ty),
@@ -3103,7 +3103,7 @@ fn bind_handler_config_params(config_tparams, hname) =
   }, config_tparams)
 
 fn bind_handler_state_names(state_binds, hname, span: ValidSpan) =
-  for_each((p) => {
+  each((p) => {
     let (name, ih) = p
     env_extend(name, Forall([], TVar(ih)),
       Located(span, LetBinding(name, Declared(hname))), FnScheme)
@@ -3155,7 +3155,7 @@ fn collect_resume_walk(buf, node) with GraphRead = {
   match body {
     NExpr(ResumeExpr(_, _)) => buf_push(buf, h),
     NExpr(BlockExpr(stmts, final)) => {
-      for_each((s) => collect_resume_walk(buf, s), stmts)
+      each((s) => collect_resume_walk(buf, s), stmts)
       collect_resume_walk(buf, final)
     },
     NExpr(IfExpr(c, t, e)) => {
@@ -3165,11 +3165,11 @@ fn collect_resume_walk(buf, node) with GraphRead = {
     },
     NExpr(MatchExpr(scrut, arms)) => {
       collect_resume_walk(buf, scrut)
-      for_each((a) => collect_resume_walk(buf, a.body), arms)
+      each((a) => collect_resume_walk(buf, a.body), arms)
     },
     NExpr(CallExpr(f, args)) => {
       collect_resume_walk(buf, f)
-      for_each((a) => collect_resume_walk(buf, a), args)
+      each((a) => collect_resume_walk(buf, a), args)
     },
     NExpr(BinOpExpr(_, l, r)) => {
       collect_resume_walk(buf, l)
@@ -3178,17 +3178,17 @@ fn collect_resume_walk(buf, node) with GraphRead = {
     NExpr(UnaryOpExpr(_, x)) => collect_resume_walk(buf, x),
     NExpr(LambdaExpr(_, body)) => collect_resume_walk(buf, body),
     NExpr(MakeListExpr(elems)) =>
-      for_each((e) => collect_resume_walk(buf, e), elems),
+      each((e) => collect_resume_walk(buf, e), elems),
     NExpr(MakeTupleExpr(elems)) =>
-      for_each((e) => collect_resume_walk(buf, e), elems),
+      each((e) => collect_resume_walk(buf, e), elems),
     NExpr(MakeRecordExpr(fields)) =>
-      for_each((f) => collect_resume_walk(buf, f.value), fields),
+      each((f) => collect_resume_walk(buf, f.value), fields),
     NExpr(RecordUpdateExpr(base, fields)) => {
       collect_resume_walk(buf, base)
-      for_each((f) => collect_resume_walk(buf, f.value), fields)
+      each((f) => collect_resume_walk(buf, f.value), fields)
     },
     NExpr(NamedRecordExpr(_, fields)) =>
-      for_each((f) => collect_resume_walk(buf, f.value), fields),
+      each((f) => collect_resume_walk(buf, f.value), fields),
     NExpr(FieldExpr(b, _)) => collect_resume_walk(buf, b),
     NExpr(PipeExpr(_, l, r)) => {
       collect_resume_walk(buf, l)
@@ -3663,7 +3663,7 @@ fn mint_handler_config_tparams(config, hname, base_idx) = map((indexed) => {
 
 // Utilities
 
-fn infer_expr_list(ref nodes) = for_each(infer_expr, nodes)
+fn infer_expr_list(ref nodes) = each(infer_expr, nodes)
 
 fn collect_handles(ref nodes) = map((node) => {
   let N(_, _, h) = node
@@ -3676,7 +3676,7 @@ fn collect_tvar_types(ref nodes) = map((node) => {
 }, nodes)
 
 fn unify_list_elems(elems, target_h, span: ValidSpan) = {
-  for_each((elem) => {
+  each((elem) => {
     let N(_, _, eh) = elem
     unify(eh, target_h, span, ListElement(Inferred("list element")))
   }, elems)
@@ -3687,7 +3687,7 @@ fn unify_list_elems(elems, target_h, span: ValidSpan) = {
 // post-Show-typeclass (peer Hβ.infer.show-typeclass), non-String
 // splices register a Show obligation that verify_ledger discharges.
 fn unify_string_fragments(fragments, span: ValidSpan) = {
-  for_each((frag) => {
+  each((frag) => {
     let N(_, _, fh) = frag
     graph_bind(fh, TString, Located(span, Inferred("interpolation fragment")))
   }, fragments)
@@ -3701,7 +3701,7 @@ fn unify_string_fragments(fragments, span: ValidSpan) = {
 // splice surfaces as ERefinementRejected("Secret ⊑ Public") at compile time.
 // Literal parts (LitString nodes) are always Public — no check needed.
 fn check_splice_flow_labels(fragments, span: ValidSpan) = {
-  for_each((frag) => {
+  each((frag) => {
     let N(body, fspan, fh) = frag
     match body {
       NExpr(LitString(_)) => (),  // literal part: always Public, no IFC check

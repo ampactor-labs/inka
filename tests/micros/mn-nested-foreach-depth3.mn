@@ -1,9 +1,9 @@
 // mn-nested-foreach-depth3 — minimal SELF-CONTAINED repro of the first-light
 // m2→m3 trap: a config-closure handler nested 3 deep, where the innermost
 // config performs a USER effect that must thread up through all three handlers.
-// This is each_handler/for_each distilled (no lists/make_list): `collect(g)` IS
+// This is each_handler/each distilled (no lists/make_list): `collect(g)` IS
 // `each_handler(f)` (one op, arm calls the closure config g), `source` IS
-// `iterate` (one yield), `apply_each` IS `for_each` (install + drive).
+// `iterate` (one yield), `apply_each` IS `each` (install + drive).
 //
 // Mirrors the trap chain infer_program →apply_each(level1)→ ... →apply_each(level3)
 // →baseop: collect#3's config g3=(x)=>level3(x) is the analog of fn 33905, called

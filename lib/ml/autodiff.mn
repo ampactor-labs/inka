@@ -92,10 +92,10 @@ fn backward_step(upstream, grad_pairs, entry) = {
 }
 
 fn backward(tape, loss_grad) = {
-  let result = fold(reverse(tape), (loss_grad, []), (acc, entry) =>
+  let result = fold((loss_grad, []), (acc, entry) =>
     match acc {
       (upstream, grad_pairs) => backward_step(upstream, grad_pairs, entry)
-    })
+    }, reverse(tape))
   match result {
     (final_grad, pairs) => pairs
   }

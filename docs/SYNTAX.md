@@ -272,6 +272,49 @@ The pipe's type rule (§«`|>` — converge») requires `right : A -> B` — a p
 
 **The hole is the suspension point — SPACE and TIME are one.** A hole-product is a computation *suspended at its argument*; filling the hole *resumes* it. On the SPACE axis this is partial application — the field filled by a value, or by the pipe's flowing datum. On the TIME axis it is the multi-shot continuation (`PLAN.md §4④`): a `??` hole reified as a resumable record is a continuation awaiting its argument, fillable now, later, or many times. Partial application and continuation-resumption are the same operation — hole-filling keyed by identity — distinguished only by whether the hole is filled at the call site or captured and resumed. `??` is one absence marker across the whole medium: the gradient's synth-hole, the argument hole, and the continuation's resume-slot are the cursor reading *the same absence* at three altitudes.
 
+### The Stage Law — signatures serve the pipe
+
+A consequence of hole-completion, elevated to the signature convention: **a
+stage-shaped fn (any fn meant to stand in a `|>` chain) declares its
+CONFIGURATION parameters first and the flowing DATUM last.** Declaration-order
+fill then completes every stage with zero ceremony:
+
+```
+xs |> map(f) |> filter(p) |> take(3) |> fold(0, add)
+```
+
+No `??`, no wrapper lambdas, no argument gymnastics — the page reads as the
+graph. Under this law a `??` inside a pipe becomes a SIGNAL, never noise:
+either the callee is genuinely not a stage (the `??` says so, explicitly —
+`nodes |> list_set(??, i, v)` pipes into a substrate fn whose subject is not
+a chain datum), or the signature violates the law — and the fix is the
+SIGNATURE, never decoration at N call sites. The standard vocabulary obeys
+it: `map(f, xs)` · `filter(p, xs)` · `each(f, xs)` · `fold(init, f, xs)` ·
+`take(n, xs)` · `drop(n, xs)` · `any/all/find/count(p, xs)`.
+
+### Vocabulary — names are read as intent, never as ceremony
+
+The developer writes what they mean, not what a computer wants to see; a
+name that adds machinery-gloss over the topology is drift. Three rulings:
+
+- **A banished keyword never returns as a name.** Mentl removed `for`; a fn
+  named `for_each` smuggled the loop back into the reader's mouth — worse,
+  the `E_NotAKeyword` Quick Fix was teaching people OUT of `for` by handing
+  them `for`. The iteration-for-effect stage is **`each`** (`xs |> each(f)` —
+  read it aloud); its handler was named `each_handler` all along, the
+  substrate already carrying the true name.
+- **Execution strategy never lives in a name.** HOW a stage runs is a `~>`
+  handler fact (`>< [Thread ×4]` is a derived badge, §`><`), so
+  `parallel_map` is vocabulary drift over `map ~> Schedule` — a named
+  dissolution (`Hβ.prelude.parallel-map-dissolves-into-schedule`), kept only
+  until map's fanout substrate lands.
+- **A name must not lie about the representation.** `list_head`/`list_tail`
+  read and remove the LAST element (the snoc end — O(1) by construction);
+  the borrowed cons-vocabulary asserts the opposite and has already billed
+  the project one real bug (the env-orientation truncation). The true names
+  are **`last`** and **`drop_last`** (symmetric with `take`/`drop`); the
+  283-site sweep is the named peer `Hβ.lib.snoc-end-true-names`.
+
 ### Nested function declarations
 
 `fn` declarations may appear inside another function's body. Nested fns are local to the enclosing body's scope.
@@ -349,7 +392,7 @@ Identical to named-fn bodies (§"Function declarations"): the brace requirement 
 
 ```
 map((x) => x + 1, xs)
-fold(xs, 0, (acc, x) => acc + x)
+fold(0, (acc, x) => acc + x, xs)
 filter((x) => x > 0, xs)
 zip_with((a, b) => a * b, xs, ys)
 ```
@@ -1627,7 +1670,7 @@ type TokenKind
   // Early-exit is via `Abort` effect + `catch_abort` handler.
   // The gradient teaches the substrate at the friction-point: when a user
   // types `for x in xs`, `E_NotAKeyword` surfaces a Quick Fix to the
-  // verb form `xs |> for_each((x) => ...)`. See
+  // verb form `xs |> each((x) => ...)`. See
   // `docs/specs/simulations/syntax/iteration-substrate.md` for the
   // canonical iteration patterns and gradient teaching.
 

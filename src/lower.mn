@@ -253,7 +253,7 @@ type LowExpr
   // the evidence-capturing twin of LGlobal (which carries NO ev region) and the
   // dispatch-less twin of LSuspend (which CALLS). Builds the unified record
   // [fn_ptr@0][ne@4][ev_slot_j@8+4*j] for `$<name>_idx` so a fn passed as a
-  // value (`for_each(infer_stmt, stmts)`) carries its evidence into the record
+  // value (`each(infer_stmt, stmts)`) carries its evidence into the record
   // the callee reads as __state — Carried-Truth: the two divergent fn-value
   // paths (bare LGlobal vs evidence-bearing LMakeClosure) unified into ONE
   // capture. Emits NO body (the fn is emitted at its own declaration). A pure
@@ -892,7 +892,7 @@ fn flow_join(a, b) = {
 }
 
 fn flow_edges_list(nodes) =
-  fold(nodes, ([], []), (acc, n) => flow_join(acc, flow_edges(n)))
+  fold(([], []), (acc, n) => flow_join(acc, flow_edges(n)), nodes)
 
 fn flow_edges_expr(e) = match e {
   LitInt(_)    => ([], []),
@@ -967,19 +967,19 @@ fn flow_edges_stmt(s) = match s {
 }
 
 fn flow_edges_match_arms(arms) =
-  fold(arms, ([], []), (acc, arm) => {
+  fold(([], []), (acc, arm) => {
     let (_, body) = arm
     flow_join(acc, flow_edges(body))
-  })
+  }, arms)
 
 fn flow_edges_fields(flds) =
-  fold(flds, ([], []), (acc, fld) => {
+  fold(([], []), (acc, fld) => {
     let (_, value) = fld
     flow_join(acc, flow_edges(value))
-  })
+  }, flds)
 
 fn flow_edges_state_updates(updates) =
-  fold(updates, ([], []), (acc, upd) => flow_join(acc, flow_edges(upd.init)))
+  fold(([], []), (acc, upd) => flow_join(acc, flow_edges(upd.init)), updates)
 
 // The effect a `~> h` install absorbs: h's HandlerKind handled_ename. "" when
 // the RHS is not a named handler decl (a value-forwarded handler — the row
@@ -1193,7 +1193,7 @@ fn build_handler_arm_names(hname, arms) = {
      slot:  lower_compute_ev_slot_for_op(arm.op_name),
      name:  "op_{hname}_{arm.op_name}"}
   }, arms)
-  fold(placements, [], place_arm_in_groups)
+  fold([], place_arm_in_groups, placements)
 }
 
 // Place one arm at its op-slot in its effect-group's arm_list, find-or-
@@ -1358,7 +1358,7 @@ fn lower_expr_body(e, handle, span) = match e {
           LMakeVariant(handle, tag_id, []),
         // A named-fn VALUE reference (FnScheme tag-0 — excludes HandlerKind,
         // the PTee guard). When the fn DISPATCHES effects, capture its evidence
-        // into the unified record (LFnRef) so the consumer (`for_each(f, xs)`)
+        // into the unified record (LFnRef) so the consumer (`each(f, xs)`)
         // reads it live as __state — the asymmetry with LambdaExpr's
         // LMakeClosure(..., derive_ev_slots) closed. A PURE fn-value stays bare
         // LGlobal (len(evs)==0 → byte-identical, Law 7).
@@ -2239,7 +2239,7 @@ fn bind_pat_locals_zip(subs, elems, i) = {
 // peer Hβ.lower.bind-handle-typed-subpattern (additive, same TVar->handle
 // carry); they floor to TVar(0) = i32.eq, byte-identical to the prior sentinel
 // — never a silent wrong type.
-fn bind_pat_locals_floor(pats) = for_each((p) => bind_pat_locals(p, TVar(0)), pats)
+fn bind_pat_locals_floor(pats) = each((p) => bind_pat_locals(p, TVar(0)), pats)
 
 fn bind_pat_rest(rest) = match rest {
   None => (),
@@ -2252,7 +2252,7 @@ fn bind_pat_rest(rest) = match rest {
   }
 }
 
-fn bind_pat_locals_fields(flds) = for_each((fld) => {
+fn bind_pat_locals_fields(flds) = each((fld) => {
   let (_, sub_pat) = fld
   bind_pat_locals(sub_pat, TVar(0))
 }, flds)
@@ -2420,7 +2420,7 @@ fn lower_one_arm_decl(arm: {args: [String], body: N, op_name: String}, discrimin
 
 // Sum each effect-group's arm-list length — the handler record's total
 // arm-slot count, contiguous per effect.
-fn sum_group_arm_lens(groups: [{arms: [String], ename: String}]) = fold(groups, 0, (acc, g) => acc + len(group_arms(g)))
+fn sum_group_arm_lens(groups: [{arms: [String], ename: String}]) = fold(0, (acc, g) => acc + len(group_arms(g)), groups)
 
 // Extract just the `name` field from each state-fields record.
 // Per parse_handler_state_fields, each entry is `{name, init}`.
@@ -2471,7 +2471,7 @@ fn bind_names_as_locals(names) = {
   // time; the op's signature gives them inferentially. 0 is the
   // sentinel — capture-handle correctness here is bounded by
   // future reach into op-arg type plumbing (Phase D evidence).
-  for_each((name) => ls_bind_local(name, 0), names)
+  each((name) => ls_bind_local(name, 0), names)
 }
 
 // OneShot resume — the zero-cost stack return, byte-identical to the
@@ -2663,8 +2663,8 @@ fn resolve_state_slot_offset(name, fields) = {
 // `[frame] ++ frames` where `frame` is a let-bound local in the arm
 // body). cfv reports those that aren't in `bound`.
 fn free_vars_state_updates(updates, bound) = {
-  fold(updates, [], (acc, upd) =>
-    free_vars_merge(acc, collect_free_vars(upd.init, bound)))
+  fold([], (acc, upd) =>
+    free_vars_merge(acc, collect_free_vars(upd.init, bound)), updates)
 }
 
 // Bind handler state-field names as arm-scope locals. Per
@@ -2678,7 +2678,7 @@ fn free_vars_state_updates(updates, bound) = {
 // Drift refused: 5 (state extracted from records, not parallel
 // arrays); 9 (init-time lowering at install handled at install site).
 fn bind_state_field_names_as_locals(state) = {
-  for_each((field) => ls_bind_local(field.name, 0), state)
+  each((field) => ls_bind_local(field.name, 0), state)
 }
 
 // Parameter name lowering (for LFn metadata)
@@ -2844,18 +2844,18 @@ fn free_vars_stmt(s, bound) = match s {
 }
 
 fn free_vars_list(nodes, bound) = {
-  fold(nodes, [], (acc, node) =>
-    free_vars_merge(acc, collect_free_vars(node, bound)))
+  fold([], (acc, node) =>
+    free_vars_merge(acc, collect_free_vars(node, bound)), nodes)
 }
 
 // Free variables in a record-literal expression: union of frees in
 // each field's value. Field names are not value-position references
 // (the parser already desugared pun-syntax to `VarRef` nodes).
 fn free_vars_record_fields(flds, bound) = {
-  fold(flds, [], (acc, fld) => {
+  fold([], (acc, fld) => {
     let (_, value) = fld
     free_vars_merge(acc, collect_free_vars(value, bound))
-  })
+  }, flds)
 }
 
 // Walk a statement list, threading `bound` through `LetStmt`s so
@@ -2896,11 +2896,11 @@ fn free_vars_stmts(stmts, bound, acc_frees) = {
 }
 
 fn free_vars_match_arms(arms, bound) = {
-  fold(arms, [], (acc, arm) => {
+  fold([], (acc, arm) => {
     let (pat, body) = arm
     let arm_bound = free_vars_merge(bound, free_vars_pat_binds(pat))
     free_vars_merge(acc, collect_free_vars(body, arm_bound))
-  })
+  }, arms)
 }
 
 fn free_vars_param_names(params) = map(param_name, params)
@@ -2928,14 +2928,14 @@ fn free_vars_pat_rest_binds(rest) = match rest {
 // Extract binder names from record-pattern fields `[(name, Pat)]`.
 // Each field contributes its sub-pat's binders.
 fn free_vars_pat_binds_fields(flds) = {
-  fold(flds, [], (acc, fld) => {
+  fold([], (acc, fld) => {
     let (_, sub_pat) = fld
     free_vars_merge(acc, free_vars_pat_binds(sub_pat))
-  })
+  }, flds)
 }
 
 fn free_vars_pat_binds_list(pats) = {
-  fold(pats, [], (acc, p) => free_vars_merge(acc, free_vars_pat_binds(p)))
+  fold([], (acc, p) => free_vars_merge(acc, free_vars_pat_binds(p)), pats)
 }
 
 fn free_vars_merge(a, b) = {
@@ -3034,8 +3034,8 @@ fn lower_string_interpolation(handle, lowered_fragments) = {
   } else {
     let head = list_head(fragments)
     let rest = list_tail(fragments)
-    fold(rest, head, (acc, frag) =>
-      LCall(handle, LGlobal(handle, "str_concat"), [acc, frag]))
+    fold(head, (acc, frag) =>
+      LCall(handle, LGlobal(handle, "str_concat"), [acc, frag]), rest)
   }
 }
 

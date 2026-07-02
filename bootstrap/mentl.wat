@@ -4896,6 +4896,22 @@
       (local.get $span)
       (call $fresh_handle)))
 
+  ;; NHole(id) → [tag=113][id] — the `??` absence marker's NodeBody.
+  (func $mk_NHole (param $id i32) (result i32)
+    (local $ptr i32)
+    (local.set $ptr (call $alloc (i32.const 8)))
+    (i32.store (local.get $ptr) (i32.const 113))
+    (i32.store offset=4 (local.get $ptr) (local.get $id))
+    (local.get $ptr))
+
+  ;; nhole(span) = N(NHole(h), span, h) — the node's fresh handle IS the
+  ;; hole id (wheel src/parser.mn THole arm). A `??` in call-arg position
+  ;; is the pipe's completion target ($pipe_raw_hole_index).
+  (func $nhole (param $span i32) (result i32)
+    (local $h i32)
+    (local.set $h (call $fresh_handle))
+    (call $mk_node (call $mk_NHole (local.get $h)) (local.get $span) (local.get $h)))
+
   ;; nstmt(s, span) = N(NStmt(s), span, fresh_handle())
   (func $nstmt (param $s i32) (param $span i32) (result i32)
     (call $mk_node
@@ -7355,6 +7371,18 @@
     (local $result i32) (local $name i32) (local $n i32)
     (local.set $span (call $span_at_p (local.get $tokens) (local.get $pos)))
     (local.set $k (call $kind_at (local.get $tokens) (local.get $pos)))
+
+    ;; THole (67) — `??`, the gradient's absence marker → NHole node.
+    ;; In call-arg position it names the pipe's completion target
+    ;; (SYNTAX §«Partial application — the product with a hole»).
+    (if (i32.eq (local.get $k) (i32.const 67))
+      (then
+        (local.set $tup (call $make_list (i32.const 2)))
+        (drop (call $list_set (local.get $tup) (i32.const 0)
+          (call $nhole (local.get $span))))
+        (drop (call $list_set (local.get $tup) (i32.const 1)
+          (i32.add (local.get $pos) (i32.const 1))))
+        (return (local.get $tup))))
 
     ;; Sentinel kinds
     (if (call $is_sentinel (local.get $k))
@@ -15746,7 +15774,7 @@
   (data (i32.const 6768) "\06\00\00\00filter")               ;;  6 bytes
   (data (i32.const 6784) "\07\00\00\00flatten")              ;;  7 bytes
   (data (i32.const 6800) "\04\00\00\00fold")                 ;;  4 bytes
-  (data (i32.const 6816) "\08\00\00\00for_each")             ;;  8 bytes
+  (data (i32.const 6816) "\04\00\00\00each")                 ;;  4 bytes — the true name (SYNTAX §Vocabulary)
   (data (i32.const 6832) "\04\00\00\00take")                 ;;  4 bytes
   (data (i32.const 6848) "\04\00\00\00drop")                 ;;  4 bytes
   (data (i32.const 6864) "\03\00\00\00any")                  ;;  3 bytes
@@ -16389,7 +16417,7 @@
     (if (call $str_eq (local.get $cname) (i32.const 6768)) (then (return (i32.const 1)))) ;; filter
     (if (call $str_eq (local.get $cname) (i32.const 6784)) (then (return (i32.const 1)))) ;; flatten
     (if (call $str_eq (local.get $cname) (i32.const 6800)) (then (return (i32.const 1)))) ;; fold
-    (if (call $str_eq (local.get $cname) (i32.const 6816)) (then (return (i32.const 1)))) ;; for_each
+    (if (call $str_eq (local.get $cname) (i32.const 6816)) (then (return (i32.const 1)))) ;; each
     (if (call $str_eq (local.get $cname) (i32.const 6832)) (then (return (i32.const 1)))) ;; take
     (if (call $str_eq (local.get $cname) (i32.const 6848)) (then (return (i32.const 1)))) ;; drop
     (if (call $str_eq (local.get $cname) (i32.const 6864)) (then (return (i32.const 1)))) ;; any
@@ -16431,23 +16459,24 @@
     (if (call $str_eq (local.get $cname) (i32.const 6800))           ;; fold(xs,init,f):([a],b,(b,a)->b)->b
       (then
         (local.set $elem_b (call $ty_make_tvar (call $graph_fresh_ty (call $reason_make_inferred (i32.const 3672)))))
-        (call $seq_force (local.get $ah) (i32.const 0) (call $ty_make_tlist (local.get $elem)) (local.get $span))
-        (call $seq_force (local.get $ah) (i32.const 1) (local.get $elem_b) (local.get $span))
-        (call $seq_force_fn (local.get $ah) (i32.const 2) (call $tylist2 (local.get $elem_b) (local.get $elem)) (local.get $elem_b) (local.get $span))
+        ;; fold(init, f, xs) — the Stage Law: configuration first, datum last.
+        (call $seq_force (local.get $ah) (i32.const 0) (local.get $elem_b) (local.get $span))
+        (call $seq_force_fn (local.get $ah) (i32.const 1) (call $tylist2 (local.get $elem_b) (local.get $elem)) (local.get $elem_b) (local.get $span))
+        (call $seq_force (local.get $ah) (i32.const 2) (call $ty_make_tlist (local.get $elem)) (local.get $span))
         (call $graph_bind (local.get $handle) (local.get $elem_b)
           (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
         (return (local.get $handle))))
-    (if (call $str_eq (local.get $cname) (i32.const 6816))           ;; for_each(f,xs):(a->(),[a])->()
+    (if (call $str_eq (local.get $cname) (i32.const 6816))           ;; each(f,xs):(a->(),[a])->()
       (then
         (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
         (call $seq_force_fn (local.get $ah) (i32.const 0) (call $tylist1 (local.get $elem)) (call $ty_make_tunit) (local.get $span))
         (call $graph_bind (local.get $handle) (call $ty_make_tunit)
           (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
         (return (local.get $handle))))
-    (if (call $str_eq (local.get $cname) (i32.const 6832))           ;; take(xs,n):([a],Int)->[a]
+    (if (call $str_eq (local.get $cname) (i32.const 6832))           ;; take(n,xs):(Int,[a])->[a] — the Stage Law
       (then
-        (call $seq_force (local.get $ah) (i32.const 0) (call $ty_make_tlist (local.get $elem)) (local.get $span))
-        (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tint) (local.get $span))
+        (call $seq_force (local.get $ah) (i32.const 0) (call $ty_make_tint) (local.get $span))
+        (call $seq_force (local.get $ah) (i32.const 1) (call $ty_make_tlist (local.get $elem)) (local.get $span))
         (call $graph_bind (local.get $handle) (call $ty_make_tlist (local.get $elem))
           (call $reason_make_located (local.get $span) (call $reason_make_inferred (i32.const 3672))))
         (return (local.get $handle))))
@@ -17850,9 +17879,15 @@
     (local.set $handle (call $walk_expr_node_handle (local.get $node)))
     ;; Span-index append for query-layer consumers post-walk.
     (call $infer_span_index_append (local.get $span) (local.get $handle))
-    ;; Body MUST be NExpr (tag 110). Non-NExpr at expression position is
-    ;; parser-bug surface; trap to surface (consistent with H6 wildcard
-    ;; discipline + Anchor 0 dream-code stance).
+    ;; NHole (113) — `??` at expression position IS legitimate (the
+    ;; gradient's absence marker; the pipe's completion target). Mirror
+    ;; the wheel (src/infer.mn `NHole(_) => ()`): leave the handle NFree,
+    ;; contribute nothing.
+    (if (i32.eq (i32.load (local.get $body)) (i32.const 113))
+      (then (return (i32.const 0))))
+    ;; Body MUST otherwise be NExpr (tag 110). Non-NExpr at expression
+    ;; position is parser-bug surface; trap to surface (consistent with H6
+    ;; wildcard discipline + Anchor 0 dream-code stance).
     (if (i32.ne (i32.load (local.get $body)) (i32.const 110))
       (then (unreachable)))
     (local.set $expr (i32.load offset=4 (local.get $body)))
@@ -20480,6 +20515,16 @@
   ;; captures from enclosing scopes.
   (global $lower_captures_ptr      (mut i32) (i32.const 0))
   (global $lower_captures_len_g    (mut i32) (i32.const 0))
+  ;; The current frame's segment base in the captures ledger — the peer of
+  ;; $lower_frame_start_g for captures (Hβ.lower.lambda-nested-frame /
+  ;; Hβ.first-light.fnstmt-nested-captures-isolation, CLOSED): the ledger is
+  ;; ONE flat array; each body-lowering frame owns [base, len). The dedup
+  ;; scan stays inside the segment and every returned index is
+  ;; frame-RELATIVE (record slot = ledger idx − base), so a nested lambda
+  ;; can no longer alias an enclosing frame's entry, and pass-through
+  ;; captures appended for the OUTER frame during a lambda's materialize
+  ;; land in the outer's live segment instead of being truncated away.
+  (global $lower_cap_base_g        (mut i32) (i32.const 0))
 
   ;; Top-level names registered by $lower_program before walking. VarRef
   ;; resolution uses this set to emit LGlobal instead of capturing or
@@ -21396,6 +21441,22 @@
   ;; Question O.2 / Hβ.lower.upval-slot-resolution follow-up) and return
   ;; the capture's index in $lower_captures_ptr. If neither, return -1
   ;; (caller emits LGlobal — wheel parity, src/lower.mn:336-337).
+  ;; ─── captures frame discipline — enter/exit the current segment ─────
+  ;; Enter at every body-lowering frame (lambda / nested fn / handler arm /
+  ;; state inits): returns the enclosing base, sets base := len (the new
+  ;; frame's segment starts empty). Exit restores the enclosing base.
+  ;; Callers that materialize captures copy the segment's names FIRST,
+  ;; truncate to base, exit, THEN materialize — so outer-frame appends made
+  ;; during materialization land in the OUTER segment and survive.
+  (func $ls_cap_frame_enter (result i32)
+    (local $old i32)
+    (local.set $old (global.get $lower_cap_base_g))
+    (global.set $lower_cap_base_g (global.get $lower_captures_len_g))
+    (local.get $old))
+
+  (func $ls_cap_frame_exit (param $old i32)
+    (global.set $lower_cap_base_g (local.get $old)))
+
   (func $ls_lookup_or_capture (param $name i32) (result i32)
     (local $local_slot i32) (local $i i32) (local $entry i32)
     (local $entry_name i32) (local $cap_entry i32) (local $cap_idx i32)
@@ -21405,18 +21466,21 @@
     (local.set $local_slot (call $ls_lookup_local (local.get $name)))
     (if (i32.ge_s (local.get $local_slot) (i32.const 0))
       (then (return (local.get $local_slot))))
-    ;; Not local — scan existing captures (avoid duplicates; one
-    ;; CAPTURE_ENTRY per upvalue name per function lowering).
+    ;; Not local — scan the CURRENT FRAME's capture segment [base, len)
+    ;; only (one CAPTURE_ENTRY per upvalue name per frame; an enclosing
+    ;; frame's same-named entry is a DIFFERENT slot in a DIFFERENT record).
+    ;; Every index returned from this fn is frame-RELATIVE — the closure
+    ;; record's slot i is ledger index base+i.
     (local.set $i (global.get $lower_captures_len_g))
     (block $cap_done
       (loop $cap_iter
-        (br_if $cap_done (i32.eqz (local.get $i)))
+        (br_if $cap_done (i32.le_u (local.get $i) (global.get $lower_cap_base_g)))
         (local.set $i (i32.sub (local.get $i) (i32.const 1)))
         (local.set $entry
           (call $list_index (global.get $lower_captures_ptr) (local.get $i)))
         (local.set $entry_name (call $record_get (local.get $entry) (i32.const 0)))
         (if (call $str_eq (local.get $entry_name) (local.get $name))
-          (then (return (local.get $i))))
+          (then (return (i32.sub (local.get $i) (global.get $lower_cap_base_g)))))
         (br $cap_iter)))
     ;; Not local, not yet a capture — check outer-scope reachability
     ;; via three paths (any positive → capture):
@@ -21463,7 +21527,8 @@
                           (local.get $cap_idx)
                           (local.get $cap_entry)))
     (global.set $lower_captures_len_g (local.get $new_len))
-    (local.get $cap_idx))
+    ;; frame-RELATIVE: the record's slot, not the ledger's absolute index.
+    (i32.sub (local.get $cap_idx) (global.get $lower_cap_base_g)))
 
   ;; ─── $ls_push_scope / $ls_pop_scope — lexical-scope checkpoints ───
   ;; The seed's LowerCtx is still a flat locals ledger, but block / arm /
@@ -26798,10 +26863,10 @@
         (param $config i32) (param $state i32) (result i32)
     (local $cp i32) (local $prev_frame i32) (local $lo_body i32)
     (local $prev_captures_len i32) (local $prev_state_fields i32)
+    (local $prev_cap_base i32)
     (local.set $cp (call $ls_push_scope))
     (local.set $prev_frame (call $ls_enter_frame))
-    (local.set $prev_captures_len (global.get $lower_captures_len_g))
-    (global.set $lower_captures_len_g (i32.const 0))
+    (local.set $prev_cap_base (call $ls_cap_frame_enter))
     ;; Hβ.seed.resume-with-state-update-mirror: install the arm's
     ;; state-fields list as the active context. $lower_resume queries
     ;; this when threading `resume() with field = expr` updates into
@@ -26826,7 +26891,8 @@
     (local.set $lo_body (call $lower_expr (local.get $body_node)))
     ;; Hβ.lower.tail-call-mark-pass — handler arm body is in tail position.
     (local.set $lo_body (call $lower_mark_tail (local.get $lo_body)))
-    (global.set $lower_captures_len_g (local.get $prev_captures_len))
+    (call $ls_truncate_captures (global.get $lower_cap_base_g))
+    (call $ls_cap_frame_exit (local.get $prev_cap_base))
     (call $lower_set_active_state_fields (local.get $prev_state_fields))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
@@ -26981,6 +27047,10 @@
   ;; handler-state-record substrate (one heap record, four roles).
   (data (i32.const 5408) "\09\00\00\00__hstate_")
   (data (i32.const 5424) "\08\00\00\00_state_g")
+  ;; "_prev" — the scoped-singleton save local's suffix ($emit_lhandlewith):
+  ;; the <hname>_state_g global is the INNERMOST live install's record, so
+  ;; every install saves the enclosing record and restores it after its body.
+  (data (i32.const 5440) "\05\00\00\00_prev")
 
   ;; ─── $lower_handler_effect_arm_names — op-slot-indexed arm fn-names ──
   ;; Per Hβ-perform-evidence-dispatch.md §4.7. Looks up the arm-name list
@@ -27164,11 +27234,14 @@
     ;; Non-handle pipes — lower left+right normally.
     (local.set $lo_l (call $lower_expr (local.get $left_node)))
     (local.set $lo_r (call $lower_expr (local.get $right_node)))
-    ;; PForward (160) — `left |> right` → LCall/LSuspend(h, right, [left]).
+    ;; PForward (160) — `left |> right` hole-completion: the piped value
+    ;; fills the right call's `??` slot (index from the RAW args) or the
+    ;; first unfilled declaration-order param (append).
     (if (i32.eq (local.get $kind) (i32.const 160))
       (then (return (call $lower_pipe_forward
                       (local.get $h) (local.get $lo_l) (local.get $lo_r)
-                      (call $walk_expr_node_handle (local.get $right_node))))))
+                      (call $walk_expr_node_handle (local.get $right_node))
+                      (call $pipe_raw_hole_index (local.get $right_node))))))
     ;; PDiverge (161) — `<|` per Lock #3.
     (if (i32.eq (local.get $kind) (i32.const 161))
       (then (return (call $lower_pipe_diverge
@@ -27266,12 +27339,48 @@
   ;; callee must LSuspend to thread the handler record, exactly like a
   ;; CallExpr. Without this, every `|>` chain (pervasive in the wheel) emits
   ;; LCall and the evidence never threads.
+  ;; ─── $pipe_raw_hole_index — the `??` slot among a pipe-right call's RAW
+  ;; args (-1: none). AST navigation per $lower_call: node → NodeBody@4
+  ;; (NExpr=110) → expr@4 (CallExpr=88) → args list@8; each arg node's
+  ;; NodeBody tag NHole=113 marks the authored hole (parser_infra tag map).
+  (func $pipe_raw_hole_index (param $right_node i32) (result i32)
+    (local $body i32) (local $expr i32) (local $rargs i32)
+    (local $n i32) (local $i i32) (local $arg i32)
+    (local.set $body (i32.load offset=4 (local.get $right_node)))
+    (if (i32.ne (i32.load (local.get $body)) (i32.const 110))
+      (then (return (i32.const -1))))
+    (local.set $expr (i32.load offset=4 (local.get $body)))
+    (if (i32.ne (i32.load (local.get $expr)) (i32.const 88))
+      (then (return (i32.const -1))))
+    (local.set $rargs (i32.load offset=8 (local.get $expr)))
+    (local.set $n (call $len (local.get $rargs)))
+    (local.set $i (i32.const 0))
+    (block $scan_done
+      (loop $scan
+        (br_if $scan_done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $arg (call $list_index (local.get $rargs) (local.get $i)))
+        (if (i32.eq (i32.load (i32.load offset=4 (local.get $arg)))
+                    (i32.const 113))
+          (then (return (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $scan)))
+    (i32.const -1))
+
+  ;; HOLE-COMPLETION (SYNTAX §«Partial application — the product with a
+  ;; hole»), mirroring src/lower.mn's PForward: the piped value fills the
+  ;; authored `??` slot ($hole_at >= 0, computed from the RAW right-call args
+  ;; by $pipe_raw_hole_index at the call site), else it fills the first
+  ;; unfilled declaration-order param — APPENDED after the given prefix,
+  ;; never prepended. The seed compiles ONLY the wheel, whose pipe sites are
+  ;; all bare / partial-prefix / ??-marked (the wheel's own lower carries the
+  ;; general saturated-stage rule for programs m2 compiles).
   (func $lower_pipe_forward (export "lower_pipe_forward")
-        (param $h i32) (param $lo_l i32) (param $lo_r i32) (param $fh i32) (result i32)
+        (param $h i32) (param $lo_l i32) (param $lo_r i32) (param $fh i32)
+        (param $hole_at i32) (result i32)
     (local $args i32) (local $r_args i32) (local $r_args_n i32)
     (local $i i32) (local $r_fn i32) (local $r_tag i32)
     (local.set $r_tag (call $tag_of (local.get $lo_r)))
-    ;; Flatten works on both LCall (monomorphic, tag 308) and LSuspend
+    ;; Completion works on both LCall (monomorphic, tag 308) and LSuspend
     ;; (polymorphic evidence-passing, tag 325). For both, lo_r contains
     ;; an args list at slot 2 (LCall) / slot 3 (LSuspend), and a fn at
     ;; slot 1 / slot 2. Read the right slot per tag.
@@ -27286,19 +27395,35 @@
             (local.set $r_fn   (call $lexpr_lsuspend_fn (local.get $lo_r)))
             (local.set $r_args (call $lexpr_lsuspend_args (local.get $lo_r)))))
         (local.set $r_args_n (call $len (local.get $r_args)))
-        (local.set $args (call $make_list (i32.const 0)))
-        (local.set $args (call $list_extend_to (local.get $args)
-                          (i32.add (local.get $r_args_n) (i32.const 1))))
-        (drop (call $list_set (local.get $args) (i32.const 0) (local.get $lo_l)))
-        (local.set $i (i32.const 0))
-        (block $copy_done
-          (loop $copy_iter
-            (br_if $copy_done (i32.ge_u (local.get $i) (local.get $r_args_n)))
+        (if (i32.ge_s (local.get $hole_at) (i32.const 0))
+          (then
+            ;; `??` completion — same length, the hole's slot replaced.
+            (local.set $args (call $make_list (local.get $r_args_n)))
+            (local.set $i (i32.const 0))
+            (block $h_done
+              (loop $h_iter
+                (br_if $h_done (i32.ge_u (local.get $i) (local.get $r_args_n)))
+                (drop (call $list_set (local.get $args) (local.get $i)
+                        (call $list_index (local.get $r_args) (local.get $i))))
+                (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                (br $h_iter)))
             (drop (call $list_set (local.get $args)
-                                  (i32.add (local.get $i) (i32.const 1))
-                                  (call $list_index (local.get $r_args) (local.get $i))))
-            (local.set $i (i32.add (local.get $i) (i32.const 1)))
-            (br $copy_iter)))
+                    (local.get $hole_at) (local.get $lo_l))))
+          (else
+            ;; partial-prefix completion — the piped value fills the first
+            ;; unfilled declaration-order param: APPEND after the prefix.
+            (local.set $args (call $make_list
+                               (i32.add (local.get $r_args_n) (i32.const 1))))
+            (local.set $i (i32.const 0))
+            (block $copy_done
+              (loop $copy_iter
+                (br_if $copy_done (i32.ge_u (local.get $i) (local.get $r_args_n)))
+                (drop (call $list_set (local.get $args) (local.get $i)
+                        (call $list_index (local.get $r_args) (local.get $i))))
+                (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                (br $copy_iter)))
+            (drop (call $list_set (local.get $args)
+                    (local.get $r_args_n) (local.get $lo_l)))))
         ;; Preserve evidence when flattening: an already-LSuspend right side
         ;; keeps its evs + callee-handle (slot 1); LCall stays LCall.
         (if (i32.eq (local.get $r_tag) (i32.const 325))
@@ -28490,6 +28615,7 @@
         (param $ty i32) (param $field_name i32) (result i32)
     (local $tag i32) (local $fields i32)
     (local $binding i32) (local $kind i32)
+    (local $ctor_body i32) (local $ctor_params i32) (local $ctor_pty i32)
     (local.set $tag (call $ty_tag (local.get $ty)))
     ;; TVar (104) — chase to inner handle, then resolve from that handle.
     (if (i32.eq (local.get $tag) (i32.const 104))
@@ -28512,7 +28638,13 @@
       (then
         (return (call $resolve_from_record_open
                   (local.get $ty) (local.get $field_name)))))
-    ;; TName (108) — chase env to RecordSchemeKind.
+    ;; TName (108) — chase env. Two homes for the record shape:
+    ;;   RecordSchemeKind (134) — the direct registration, when present.
+    ;;   ConstructorScheme (132) — the nominal-record encoding: `type X =
+    ;;   {…}` parses as the single-variant ctor `X : TRecord(fields) ->
+    ;;   TName(X)`, so the ctor's scheme ALREADY carries the field list.
+    ;;   Read the fact where it lives (Carried-Truth) — never mint a
+    ;;   second registration that would shadow-fight the ctor binding.
     (if (i32.eq (local.get $tag) (i32.const 108))
       (then
         (local.set $binding (call $env_lookup_value (call $ty_tname_name (local.get $ty))))
@@ -28525,7 +28657,26 @@
                 (local.set $fields (call $schemekind_record_fields (local.get $kind)))
                 (return (call $field_byte_offset
                           (local.get $fields) (local.get $field_name)
-                          (i32.const 0) (call $len (local.get $fields))))))))))
+                          (i32.const 0) (call $len (local.get $fields))))))
+            ;; ConstructorScheme (132): scheme body TFun(107) with ONE
+            ;; param whose ty is TRecord(109) — the nominal record.
+            (if (i32.eq (call $schemekind_tag (local.get $kind)) (i32.const 132))
+              (then
+                (local.set $ctor_body
+                  (call $scheme_body (call $env_binding_scheme (local.get $binding))))
+                (if (i32.eq (call $ty_tag (local.get $ctor_body)) (i32.const 107))
+                  (then
+                    (local.set $ctor_params (call $ty_tfun_params (local.get $ctor_body)))
+                    (if (i32.eq (call $len (local.get $ctor_params)) (i32.const 1))
+                      (then
+                        (local.set $ctor_pty
+                          (call $tparam_ty (call $list_index (local.get $ctor_params) (i32.const 0))))
+                        (if (i32.eq (call $ty_tag (local.get $ctor_pty)) (i32.const 109))
+                          (then
+                            (local.set $fields (call $ty_trecord_fields (local.get $ctor_pty)))
+                            (return (call $field_byte_offset
+                                      (local.get $fields) (local.get $field_name)
+                                      (i32.const 0) (call $len (local.get $fields))))))))))))))))
     ;; NO silent fallback: a field whose receiver type is non-record / unresolved
     ;; returns -1, and $emit_lfieldload (offset < 0) emits a LOUD (unreachable) —
     ;; never a silent offset-0 read of the node's word 0 (a graph pointer) that
@@ -29004,6 +29155,7 @@
     (local $cap_lexpr i32) (local $caps_count i32)
     (local $prev_frame i32) (local $prev_lh i32)
     (local $lam_row i32) (local $prev_lh_row i32)
+    (local $prev_cap_base i32) (local $cap_names i32)
     (local.set $h             (call $walk_expr_node_handle (local.get $node)))
     (local.set $body          (i32.load offset=4 (local.get $node)))
     (local.set $lambda_struct (i32.load offset=4 (local.get $body)))
@@ -29014,6 +29166,7 @@
     ;; H.2.e step 1: snapshot captures-ledger AND push frame so lookups
     ;; in body see ONLY lambda-local names.
     (local.set $caps_snapshot (call $lower_captures_len))
+    (local.set $prev_cap_base (call $ls_cap_frame_enter))
     (local.set $cp            (call $ls_push_scope))
     (local.set $prev_frame    (call $ls_enter_frame))
     ;; Mark THIS lambda's frame as the active lambda (its own handle $h), the
@@ -29039,30 +29192,42 @@
     (global.set $lower_current_lambda_row_g (local.get $prev_lh_row))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
-    ;; H.2.e step 5: materialize caps_exprs from new captures.
+    ;; H.2.e steps 5+6, in the ORDER the nested-frame discipline demands:
+    ;; copy this frame's capture NAMES, truncate the segment, restore the
+    ;; enclosing frame's base, and ONLY THEN materialize — so a pass-through
+    ;; capture (a name the outer frame itself must capture) appended by
+    ;; $lower_cap_materialize lands in the OUTER frame's live segment and
+    ;; SURVIVES (the nested-lambda destruction that fed find_mapping an
+    ;; interned effect-name string as its mapping list).
     (local.set $caps_post (call $lower_captures_len))
     (local.set $caps_count (i32.sub (local.get $caps_post) (local.get $caps_snapshot)))
-    (local.set $caps (call $make_list (i32.const 0)))
-    (local.set $caps (call $list_extend_to (local.get $caps) (local.get $caps_count)))
+    (local.set $cap_names (call $make_list (local.get $caps_count)))
     (local.set $i (local.get $caps_snapshot))
-    (block $caps_done
-      (loop $caps_iter
-        (br_if $caps_done (i32.ge_u (local.get $i) (local.get $caps_post)))
+    (block $copy_done
+      (loop $copy_iter
+        (br_if $copy_done (i32.ge_u (local.get $i) (local.get $caps_post)))
         (local.set $cap_entry
           (call $list_index (call $lower_captures_ptr_get) (local.get $i)))
-        (local.set $cap_name (call $record_get (local.get $cap_entry) (i32.const 0)))
+        (drop (call $list_set (local.get $cap_names)
+                              (i32.sub (local.get $i) (local.get $caps_snapshot))
+                              (call $record_get (local.get $cap_entry) (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $copy_iter)))
+    (call $ls_truncate_captures (local.get $caps_snapshot))
+    (call $ls_cap_frame_exit (local.get $prev_cap_base))
+    (local.set $caps (call $make_list (local.get $caps_count)))
+    (local.set $i (i32.const 0))
+    (block $caps_done
+      (loop $caps_iter
+        (br_if $caps_done (i32.ge_u (local.get $i) (local.get $caps_count)))
         ;; Triage via $lower_cap_materialize: LGlobal / LLocal / LUpval
         ;; per the OUTER fn's view of the captured name.
         (local.set $cap_lexpr
-          (call $lower_cap_materialize (local.get $cap_name)))
-        (drop (call $list_set (local.get $caps)
-                              (i32.sub (local.get $i) (local.get $caps_snapshot))
-                              (local.get $cap_lexpr)))
+          (call $lower_cap_materialize
+            (call $list_index (local.get $cap_names) (local.get $i))))
+        (drop (call $list_set (local.get $caps) (local.get $i) (local.get $cap_lexpr)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $caps_iter)))
-    ;; H.2.e step 6: restore captures_len to snapshot — lambda owns its
-    ;; caps; outer fn's ledger stays clean.
-    (call $ls_truncate_captures (local.get $caps_snapshot))
     (local.set $body_list (call $make_list (i32.const 0)))
     (local.set $body_list (call $list_extend_to (local.get $body_list) (i32.const 1)))
     (drop (call $list_set (local.get $body_list) (i32.const 0) (local.get $lo_body)))
@@ -29369,6 +29534,7 @@
     (local $fn_ir i32) (local $caps i32) (local $evs i32) (local $closure i32)
     (local $outer i32) (local $fn_name i32) (local $prev_fn_name i32)
     (local $caps_snapshot i32) (local $caps_post i32) (local $caps_count i32)
+    (local $prev_cap_base i32) (local $cap_names i32)
     (local $prev_frame i32) (local $i i32) (local $prev_lh_fn i32)
     (local $cap_entry i32) (local $cap_name i32) (local $cap_lexpr i32)
     (local.set $name      (i32.load offset=4  (local.get $stmt)))
@@ -29457,20 +29623,16 @@
     ;; resolve_captures_outer + ls_enter_frame). Drift refused: 9
     ;; (mirrors existing lambda substrate, not deferred).
     (local.set $caps_snapshot (call $lower_captures_len))
+    (local.set $prev_cap_base (call $ls_cap_frame_enter))
     (local.set $cp            (call $ls_push_scope))
     (local.set $prev_frame    (call $ls_enter_frame))
     (call $ls_enter_function)
     (call $bind_names_as_locals (local.get $param_names) (local.get $param_handles))
-    ;; Per Hβ.first-light.fnstmt-fresh-captures-len: each fn body owns its
-    ;; captures-len ledger 0-based, mirrors $lower_handler_arm_body_capturing
-    ;; (walk_handle.wat:449-455). Without the reset, a leaked captures-len_g
-    ;; from a malformed-parse sibling stmt produces body LUpval(global_idx)
-    ;; offsets that disagree with the closure-record's local-offset storage —
-    ;; e.g. parse_int_go's `n` resolves to LUpval(1) → __state[12], but the
-    ;; closure stored capture[1] = digit. Body→record disagreement = `indirect
-    ;; call type mismatch` trap when the resolved fn-ptr is read from the
-    ;; wrong slot. Reset puts both views in 0-based agreement.
-    (global.set $lower_captures_len_g (i32.const 0))
+    ;; The captures FRAME BASE gives this body 0-based slot indices without
+    ;; destroying the enclosing frame's physical entries (the reset it
+    ;; replaces clobbered them — the multi-level-nesting gap this site's
+    ;; prior comment named as Hβ.first-light.fnstmt-nested-captures-isolation,
+    ;; now CLOSED by the segment discipline in $ls_lookup_or_capture).
     ;; A named fn nested inside a lambda must NOT inherit the lambda's
     ;; lambda-h: its body reads its OWN row via $escaping_row(fn_name), not the
     ;; enclosing lambda's. Clear the active-lambda marker across this body
@@ -29503,24 +29665,37 @@
     ;; Hβ.first-light.fnstmt-nested-captures-isolation (frame-stack
     ;; ports the wheel's per-frame captures records, replacing the flat
     ;; global ptr).
+    ;; copy this frame's capture NAMES [base, post), truncate the segment,
+    ;; restore the enclosing base, THEN materialize — pass-through captures
+    ;; appended for the OUTER frame land in its live segment and survive
+    ;; (the same order $lower_lambda's tail runs; one discipline, three sites).
     (local.set $caps_post (call $lower_captures_len))
-    (local.set $caps_count (local.get $caps_post))
-    (local.set $caps (call $make_list (i32.const 0)))
-    (local.set $caps (call $list_extend_to (local.get $caps) (local.get $caps_count)))
+    (local.set $caps_count (i32.sub (local.get $caps_post) (local.get $caps_snapshot)))
+    (local.set $cap_names (call $make_list (local.get $caps_count)))
+    (local.set $i (local.get $caps_snapshot))
+    (block $copy_done
+      (loop $copy_iter
+        (br_if $copy_done (i32.ge_u (local.get $i) (local.get $caps_post)))
+        (local.set $cap_entry
+          (call $list_index (call $lower_captures_ptr_get) (local.get $i)))
+        (drop (call $list_set (local.get $cap_names)
+                              (i32.sub (local.get $i) (local.get $caps_snapshot))
+                              (call $record_get (local.get $cap_entry) (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $copy_iter)))
+    (call $ls_truncate_captures (local.get $caps_snapshot))
+    (call $ls_cap_frame_exit (local.get $prev_cap_base))
+    (local.set $caps (call $make_list (local.get $caps_count)))
     (local.set $i (i32.const 0))
     (block $caps_done
       (loop $caps_iter
-        (br_if $caps_done (i32.ge_u (local.get $i) (local.get $caps_post)))
-        (local.set $cap_entry
-          (call $list_index (call $lower_captures_ptr_get) (local.get $i)))
-        (local.set $cap_name (call $record_get (local.get $cap_entry) (i32.const 0)))
+        (br_if $caps_done (i32.ge_u (local.get $i) (local.get $caps_count)))
         (local.set $cap_lexpr
-          (call $lower_cap_materialize (local.get $cap_name)))
+          (call $lower_cap_materialize
+            (call $list_index (local.get $cap_names) (local.get $i))))
         (drop (call $list_set (local.get $caps) (local.get $i) (local.get $cap_lexpr)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $caps_iter)))
-    (call $ls_truncate_captures (local.get $caps_snapshot))
-    (global.set $lower_captures_len_g (local.get $caps_snapshot))
     (local.set $body_list (call $make_list (i32.const 0)))
     (local.set $body_list (call $list_extend_to (local.get $body_list) (i32.const 1)))
     (drop (call $list_set (local.get $body_list) (i32.const 0) (local.get $lo_body)))
@@ -29580,13 +29755,13 @@
     (local $n i32) (local $i i32) (local $buf i32)
     (local $field i32) (local $init_node i32) (local $lo i32)
     (local $cp i32) (local $prev_frame i32) (local $prev_captures_len i32)
+    (local $prev_cap_base i32)
     (local.set $n   (call $len (local.get $state_fields)))
     (local.set $buf (call $make_list (i32.const 0)))
     (local.set $buf (call $list_extend_to (local.get $buf) (local.get $n)))
     (local.set $cp (call $ls_push_scope))
     (local.set $prev_frame (call $ls_enter_frame))
-    (local.set $prev_captures_len (global.get $lower_captures_len_g))
-    (global.set $lower_captures_len_g (i32.const 0))
+    (local.set $prev_cap_base (call $ls_cap_frame_enter))
     (call $pre_allocate_config_captures (local.get $config))
     (local.set $i   (i32.const 0))
     (block $done
@@ -29598,7 +29773,8 @@
         (drop (call $list_set (local.get $buf) (local.get $i) (local.get $lo)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each)))
-    (global.set $lower_captures_len_g (local.get $prev_captures_len))
+    (call $ls_truncate_captures (global.get $lower_cap_base_g))
+    (call $ls_cap_frame_exit (local.get $prev_cap_base))
     (call $ls_exit_frame (local.get $prev_frame))
     (call $ls_pop_scope (local.get $cp))
     (local.get $buf))
@@ -30117,6 +30293,14 @@
         (local.set $pat (i32.load offset=4 (local.get $stmt)))
         (if (i32.eq (call $tag_of (local.get $pat)) (i32.const 130))
           (then (return (i32.load offset=4 (local.get $pat)))))))
+    ;; HandlerDeclStmt(name, ...) — a handler decl IS a top-level name;
+    ;; `~> h` references it as a global. Without this arm each install's
+    ;; handler name fell through $ls_lookup_or_capture path (c) into the
+    ;; captures ledger, inflating the LowFn fence by 4×installs while every
+    ;; caller built the record at ncap=0 — the ev-region base disagreement
+    ;; that zeroed EnvRead down the compute_escaping_rows chain.
+    (if (i32.eq (local.get $tag) (i32.const 124))
+      (then (return (i32.load offset=4 (local.get $stmt)))))
     ;; Documented(_, inner_node)
     (if (i32.eq (local.get $tag) (i32.const 128))
       (then
@@ -35014,6 +35198,7 @@
     (local $groups i32) (local $nstate i32) (local $total_arms i32)
     (local $gi i32) (local $gn i32) (local $g i32) (local $arm_list i32)
     (local $cevs i32) (local $n_cevs i32) (local $ci i32)
+    (local $prev_name i32)
     ;; Per protocol_handler_is_state_is_closure_is_evidence.md + Part 2 of
     ;; Hβ.lower.multi-effect-ev-index-map: ONE state record holds state slots
     ;; + the arm fn-idxs of ALL the handler's effects, laid out CONTIGUOUSLY
@@ -35073,10 +35258,29 @@
       (i32.add (i32.const 8)
         (i32.mul (i32.const 4)
           (i32.add (local.get $nstate) (local.get $total_arms)))))
-    ;; Per-handler GLOBAL state-ptr write (record) for env-scan Tier-1 resolution.
+    ;; Per-handler GLOBAL state-ptr write (record) for env-scan Tier-1
+    ;; resolution — SCOPED: the global is the INNERMOST live install's
+    ;; record, so save the enclosing install's record first and restore it
+    ;; after the body (global.set pops only its operand; the body's result
+    ;; stays on the stack). Without the restore, any NESTED same-handler
+    ;; session — map inside map, the collector family — leaves the OUTER
+    ;; session's Tier-1 reads pointing at the INNER exhausted record.
+    (if (i32.ne (call $lexpr_lhandlewith_handler_name (local.get $r)) (i32.const 0))
+      (then
+        (local.set $prev_name
+          (call $str_concat (local.get $hstate_name) (i32.const 5440)))   ;; "_prev"
+        (drop (call $emit_fn_local_check (local.get $prev_name)))
+        (call $emit_handler_state_global_get
+          (call $lexpr_lhandlewith_handler_name (local.get $r)))
+        (call $ec_emit_local_set_dollar (local.get $prev_name))))
     (call $emit_hstate_global_set (call $lexpr_lhandlewith_handler_name (local.get $r))
                                    (local.get $hstate_name))
-    (call $emit_lexpr (call $lexpr_lhandlewith_body (local.get $r))))
+    (call $emit_lexpr (call $lexpr_lhandlewith_body (local.get $r)))
+    (if (i32.ne (call $lexpr_lhandlewith_handler_name (local.get $r)) (i32.const 0))
+      (then
+        (call $ec_emit_local_get_dollar (local.get $prev_name))
+        (call $emit_hstate_global_set_raw
+          (call $lexpr_lhandlewith_handler_name (local.get $r))))))
 
   ;; ─── $emit_state_init_writes — populate state record slots ──────────
   ;; For each LowExpr in inits at index i, emit:
@@ -35212,11 +35416,17 @@
   ;; the arm-call. For Tier 3 multishot the global becomes a stack-of-
   ;; records (post-L1 per Hβ.lower.handler-state-multi-instance).
   (func $emit_hstate_global_set (param $handler_name i32) (param $hstate_local i32)
-    (local $global_name i32)
     (if (i32.eqz (local.get $handler_name)) (then (return)))
+    (call $ec_emit_local_get_dollar (local.get $hstate_local))
+    (call $emit_hstate_global_set_raw (local.get $handler_name)))
+
+  ;; Emit just `(global.set $<handler>_state_g)` — the operand is already on
+  ;; the emitted stack (the install's record local, or the scoped-singleton
+  ;; restore's saved prev).
+  (func $emit_hstate_global_set_raw (param $handler_name i32)
+    (local $global_name i32)
     (local.set $global_name
       (call $str_concat (local.get $handler_name) (i32.const 5424)))   ;; "_state_g"
-    (call $ec_emit_local_get_dollar (local.get $hstate_local))
     ;; emits: (global.set $<global_name>)
     (call $emit_byte (i32.const 40))
     (call $emit_byte (i32.const 103)) (call $emit_byte (i32.const 108))

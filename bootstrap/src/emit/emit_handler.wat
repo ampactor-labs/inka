@@ -508,6 +508,7 @@
     (local $groups i32) (local $nstate i32) (local $total_arms i32)
     (local $gi i32) (local $gn i32) (local $g i32) (local $arm_list i32)
     (local $cevs i32) (local $n_cevs i32) (local $ci i32)
+    (local $prev_name i32)
     ;; Per protocol_handler_is_state_is_closure_is_evidence.md + Part 2 of
     ;; Hβ.lower.multi-effect-ev-index-map: ONE state record holds state slots
     ;; + the arm fn-idxs of ALL the handler's effects, laid out CONTIGUOUSLY
@@ -567,10 +568,29 @@
       (i32.add (i32.const 8)
         (i32.mul (i32.const 4)
           (i32.add (local.get $nstate) (local.get $total_arms)))))
-    ;; Per-handler GLOBAL state-ptr write (record) for env-scan Tier-1 resolution.
+    ;; Per-handler GLOBAL state-ptr write (record) for env-scan Tier-1
+    ;; resolution — SCOPED: the global is the INNERMOST live install's
+    ;; record, so save the enclosing install's record first and restore it
+    ;; after the body (global.set pops only its operand; the body's result
+    ;; stays on the stack). Without the restore, any NESTED same-handler
+    ;; session — map inside map, the collector family — leaves the OUTER
+    ;; session's Tier-1 reads pointing at the INNER exhausted record.
+    (if (i32.ne (call $lexpr_lhandlewith_handler_name (local.get $r)) (i32.const 0))
+      (then
+        (local.set $prev_name
+          (call $str_concat (local.get $hstate_name) (i32.const 5440)))   ;; "_prev"
+        (drop (call $emit_fn_local_check (local.get $prev_name)))
+        (call $emit_handler_state_global_get
+          (call $lexpr_lhandlewith_handler_name (local.get $r)))
+        (call $ec_emit_local_set_dollar (local.get $prev_name))))
     (call $emit_hstate_global_set (call $lexpr_lhandlewith_handler_name (local.get $r))
                                    (local.get $hstate_name))
-    (call $emit_lexpr (call $lexpr_lhandlewith_body (local.get $r))))
+    (call $emit_lexpr (call $lexpr_lhandlewith_body (local.get $r)))
+    (if (i32.ne (call $lexpr_lhandlewith_handler_name (local.get $r)) (i32.const 0))
+      (then
+        (call $ec_emit_local_get_dollar (local.get $prev_name))
+        (call $emit_hstate_global_set_raw
+          (call $lexpr_lhandlewith_handler_name (local.get $r))))))
 
   ;; ─── $emit_state_init_writes — populate state record slots ──────────
   ;; For each LowExpr in inits at index i, emit:
@@ -706,11 +726,17 @@
   ;; the arm-call. For Tier 3 multishot the global becomes a stack-of-
   ;; records (post-L1 per Hβ.lower.handler-state-multi-instance).
   (func $emit_hstate_global_set (param $handler_name i32) (param $hstate_local i32)
-    (local $global_name i32)
     (if (i32.eqz (local.get $handler_name)) (then (return)))
+    (call $ec_emit_local_get_dollar (local.get $hstate_local))
+    (call $emit_hstate_global_set_raw (local.get $handler_name)))
+
+  ;; Emit just `(global.set $<handler>_state_g)` — the operand is already on
+  ;; the emitted stack (the install's record local, or the scoped-singleton
+  ;; restore's saved prev).
+  (func $emit_hstate_global_set_raw (param $handler_name i32)
+    (local $global_name i32)
     (local.set $global_name
       (call $str_concat (local.get $handler_name) (i32.const 5424)))   ;; "_state_g"
-    (call $ec_emit_local_get_dollar (local.get $hstate_local))
     ;; emits: (global.set $<global_name>)
     (call $emit_byte (i32.const 40))
     (call $emit_byte (i32.const 103)) (call $emit_byte (i32.const 108))

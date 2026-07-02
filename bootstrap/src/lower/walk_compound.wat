@@ -1077,6 +1077,7 @@
         (param $ty i32) (param $field_name i32) (result i32)
     (local $tag i32) (local $fields i32)
     (local $binding i32) (local $kind i32)
+    (local $ctor_body i32) (local $ctor_params i32) (local $ctor_pty i32)
     (local.set $tag (call $ty_tag (local.get $ty)))
     ;; TVar (104) — chase to inner handle, then resolve from that handle.
     (if (i32.eq (local.get $tag) (i32.const 104))
@@ -1099,7 +1100,13 @@
       (then
         (return (call $resolve_from_record_open
                   (local.get $ty) (local.get $field_name)))))
-    ;; TName (108) — chase env to RecordSchemeKind.
+    ;; TName (108) — chase env. Two homes for the record shape:
+    ;;   RecordSchemeKind (134) — the direct registration, when present.
+    ;;   ConstructorScheme (132) — the nominal-record encoding: `type X =
+    ;;   {…}` parses as the single-variant ctor `X : TRecord(fields) ->
+    ;;   TName(X)`, so the ctor's scheme ALREADY carries the field list.
+    ;;   Read the fact where it lives (Carried-Truth) — never mint a
+    ;;   second registration that would shadow-fight the ctor binding.
     (if (i32.eq (local.get $tag) (i32.const 108))
       (then
         (local.set $binding (call $env_lookup_value (call $ty_tname_name (local.get $ty))))
@@ -1112,7 +1119,26 @@
                 (local.set $fields (call $schemekind_record_fields (local.get $kind)))
                 (return (call $field_byte_offset
                           (local.get $fields) (local.get $field_name)
-                          (i32.const 0) (call $len (local.get $fields))))))))))
+                          (i32.const 0) (call $len (local.get $fields))))))
+            ;; ConstructorScheme (132): scheme body TFun(107) with ONE
+            ;; param whose ty is TRecord(109) — the nominal record.
+            (if (i32.eq (call $schemekind_tag (local.get $kind)) (i32.const 132))
+              (then
+                (local.set $ctor_body
+                  (call $scheme_body (call $env_binding_scheme (local.get $binding))))
+                (if (i32.eq (call $ty_tag (local.get $ctor_body)) (i32.const 107))
+                  (then
+                    (local.set $ctor_params (call $ty_tfun_params (local.get $ctor_body)))
+                    (if (i32.eq (call $len (local.get $ctor_params)) (i32.const 1))
+                      (then
+                        (local.set $ctor_pty
+                          (call $tparam_ty (call $list_index (local.get $ctor_params) (i32.const 0))))
+                        (if (i32.eq (call $ty_tag (local.get $ctor_pty)) (i32.const 109))
+                          (then
+                            (local.set $fields (call $ty_trecord_fields (local.get $ctor_pty)))
+                            (return (call $field_byte_offset
+                                      (local.get $fields) (local.get $field_name)
+                                      (i32.const 0) (call $len (local.get $fields))))))))))))))))
     ;; NO silent fallback: a field whose receiver type is non-record / unresolved
     ;; returns -1, and $emit_lfieldload (offset < 0) emits a LOUD (unreachable) —
     ;; never a silent offset-0 read of the node's word 0 (a graph pointer) that

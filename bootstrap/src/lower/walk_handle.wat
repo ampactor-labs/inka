@@ -655,6 +655,10 @@
   ;; handler-state-record substrate (one heap record, four roles).
   (data (i32.const 5408) "\09\00\00\00__hstate_")
   (data (i32.const 5424) "\08\00\00\00_state_g")
+  ;; "_prev" — the scoped-singleton save local's suffix ($emit_lhandlewith):
+  ;; the <hname>_state_g global is the INNERMOST live install's record, so
+  ;; every install saves the enclosing record and restores it after its body.
+  (data (i32.const 5440) "\05\00\00\00_prev")
 
   ;; ─── $lower_handler_effect_arm_names — op-slot-indexed arm fn-names ──
   ;; Per Hβ-perform-evidence-dispatch.md §4.7. Looks up the arm-name list

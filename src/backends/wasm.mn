@@ -1443,7 +1443,26 @@ fn emit_let_locals_expr(expr) = match expr {
   },
   LStateSet(_h, _s, v)      => emit_let_locals_expr(v),
   LRegion(_h, body)         => emit_let_locals_list(body),
-  LHandleWith(_h, b, hn, _hname, inits, _arm_names, captured_evs) => {
+  LHandleWith(h, b, hn, hname, inits, arm_names, captured_evs) => {
+    // The install's OWN minted locals — the handler record plus one
+    // [record, base] entry per effect group — mirror-true to what the
+    // LHandleWith emit arm + emit_handler_effect_entries local.set.
+    wat_emit(" (local $__hstate_")
+    wat_emit(int_to_str(h))
+    wat_emit(" i32)")
+    // the scoped-singleton save local (named installs only)
+    if hname == "" { () } else {
+      wat_emit(" (local $__hstate_")
+      wat_emit(int_to_str(h))
+      wat_emit("_prev i32)")
+    }
+    for_each((g) => {
+      wat_emit(" (local $__hstate_")
+      wat_emit(int_to_str(h))
+      wat_emit("_")
+      wat_emit(g.ename)
+      wat_emit(" i32)")
+    }, arm_names)
     emit_let_locals_expr(b)
     emit_let_locals_expr(hn)
     emit_let_locals_list(inits)
@@ -2405,8 +2424,19 @@ fn emit_expr(expr) = match expr {
     emit_handler_effect_entries(local_name, nstate, arm_names)
     // the arm-bodies' captured evidence, after the arms
     emit_captured_evs(local_name, nstate, total_arms, captured_evs)
-    // bind the record to $<hname>_state_g for env-scan Tier-1 resolution
+    // bind the record to $<hname>_state_g for env-scan Tier-1 resolution —
+    // SCOPED: the global is the INNERMOST live install's record, so save
+    // the enclosing install's record first and restore it after the body
+    // (global.set pops only its operand; the body's result stays on the
+    // stack). Without the restore, any NESTED same-handler session — map
+    // inside map, the collector family — leaves the OUTER session's
+    // Tier-1 reads pointing at the INNER exhausted record.
     if hname == "" { () } else {
+      wat_emit("(global.get $")
+      wat_emit(hname)
+      wat_emit("_state_g)(local.set $")
+      wat_emit(local_name)
+      wat_emit("_prev)\n")
       wat_emit("(local.get $")
       wat_emit(local_name)
       wat_emit(")(global.set $")
@@ -2414,6 +2444,13 @@ fn emit_expr(expr) = match expr {
       wat_emit("_state_g)\n")
     }
     emit_expr(body)
+    if hname == "" { () } else {
+      wat_emit("(local.get $")
+      wat_emit(local_name)
+      wat_emit("_prev)(global.set $")
+      wat_emit(hname)
+      wat_emit("_state_g)\n")
+    }
   },
 
   LFeedback(h, body, _spec) => {

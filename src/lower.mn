@@ -1014,7 +1014,7 @@ fn collect_fn_bases(stmts) =
     }
   }, stmts))
 
-fn assoc_row(cur, name) =
+fn assoc_row(cur, name: String) =
   if len(cur) == 0 { [] }
   else {
     let (n, row) = list_head(cur)
@@ -1023,7 +1023,7 @@ fn assoc_row(cur, name) =
 
 // Option-returning map lookup for ls_escaping_of: None distinguishes "not a
 // top-level fn" (→ the leaf) from "a fn whose flow-closure is empty" (Some []).
-fn esc_assoc(map, name) =
+fn esc_assoc(map, name: String) =
   if len(map) == 0 { None }
   else {
     let (n, row) = list_head(map)
@@ -1200,16 +1200,28 @@ fn build_handler_arm_names(hname, arms) = {
 // create the group. The arm_list is dense [0, max_slot] with the empty-
 // string gap sentinel for ops this handler doesn't implement; emit skips
 // gaps but counts the length, so the per-effect base advances correctly.
-fn place_arm_in_groups(groups, arm) = {
+// The group/arm record types are Intent Boundaries: they arrive as the
+// fold's generic state, and unresolved record types hit the emit's loud
+// field-load floor (the place_arm_in_groups unreachable). The pin is the
+// proof — same class as names_concat / ls_find_str_local.
+fn place_arm_in_groups(groups: [{arms: [String], ename: String}], arm: {ename: String, name: String, slot: Int}) = {
   let (before, grp, after) = split_group_by_ename(groups, arm.ename)
-  let filled = set_at_extend(grp.arms, arm.slot, arm.name)
+  let filled = set_at_extend(group_arms(grp), arm.slot, arm.name)
   list_concat(before, [{ename: arm.ename, arms: filled}] ++ after)
 }
 
-fn split_group_by_ename(groups, ename) =
+// The group's arms, read through an annotated projection: `grp` arrives
+// off a tuple destructure whose element type the seed's inference does
+// not carry across the return boundary, so a direct `grp.arms` hits the
+// emit's loud unresolved-field floor. The call-site unification with the
+// declared param IS the pin (the env_find precedent at the record layer).
+fn group_arms(grp: {arms: [String], ename: String}) -> [String] = grp.arms
+
+// ename: String pins — the same pointer-eq-lie class as ls_find_str_local.
+fn split_group_by_ename(groups: [{arms: [String], ename: String}], ename: String) =
   split_group_loop([], groups, ename)
 
-fn split_group_loop(before, rest, ename) = {
+fn split_group_loop(before: [{arms: [String], ename: String}], rest: [{arms: [String], ename: String}], ename: String) = {
   if len(rest) == 0 {
     (before, {ename: ename, arms: []}, [])
   } else if list_head(rest).ename == ename {
@@ -1222,7 +1234,7 @@ fn split_group_loop(before, rest, ename) = {
 // Functional set arms[slot] = name. Replace in place when slot is in
 // range; else grow with "" gaps and append. Tree-safe (slice + concat,
 // not flat list_set) — the arm_list may be a concat-tree.
-fn set_at_extend(arms, slot, name) = {
+fn set_at_extend(arms: [String], slot: Int, name: String) = {
   if slot < len(arms) {
     list_concat(slice(arms, 0, slot),
                 [name] ++ slice(arms, slot + 1, len(arms)))
@@ -1231,7 +1243,7 @@ fn set_at_extend(arms, slot, name) = {
   }
 }
 
-fn grow_to_with_gaps(arms, n) = {
+fn grow_to_with_gaps(arms: [String], n: Int) = {
   if len(arms) >= n { arms }
   else { grow_to_with_gaps(list_concat(arms, [""]), n) }
 }
@@ -2364,7 +2376,7 @@ fn lower_handler_arms_as_decls(arms, discriminator, config, state) = {
   decls
 }
 
-fn lower_one_arm_decl(arm, discriminator, config, state, fence) = {
+fn lower_one_arm_decl(arm: {args: [String], body: N, op_name: String}, discriminator, config, state, fence) = {
   let fn_name = "op_{discriminator}_{arm.op_name}"
   // Hβ.first-light.arm-body-fresh-frame: each handler-arm body is
   // its own WASM function with __state IS the handler state record
@@ -2408,11 +2420,16 @@ fn lower_one_arm_decl(arm, discriminator, config, state, fence) = {
 
 // Sum each effect-group's arm-list length — the handler record's total
 // arm-slot count, contiguous per effect.
-fn sum_group_arm_lens(groups) = fold(groups, 0, (acc, g) => acc + len(g.arms))
+fn sum_group_arm_lens(groups: [{arms: [String], ename: String}]) = fold(groups, 0, (acc, g) => acc + len(group_arms(g)))
 
 // Extract just the `name` field from each state-fields record.
 // Per parse_handler_state_fields, each entry is `{name, init}`.
-fn state_field_names_of(state) = map((field) => field.name, state)
+fn state_field_names_of(state: [{init: N, name: String}]) = map(state_field_name, state)
+
+// Typed projection — the map lambda's param would be a bare generic, and
+// an unresolved receiver's field access hits the loud emit floor; the
+// call-site unification with the declared param IS the pin.
+fn state_field_name(f: {init: N, name: String}) -> String = f.name
 
 // Lower each state-field's init expression to LowExpr in source order.
 // The returned list[i] is the LowExpr for the i-th state field's init.

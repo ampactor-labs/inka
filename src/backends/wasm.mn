@@ -789,11 +789,17 @@ fn emit_static_top_closures(top_names, all_names, base_slot) = {
 }
 
 // Find the index of a string in a list. Returns -1 if not found.
-fn ls_find_str_local(lst, target, i) = {
+// target: String is an Intent Boundary (SYNTAX §"The Intent Boundary Rule"):
+// the elements arrive as bare generic vars, and an unpinned `==` cannot
+// prove String to the emit dispatch — it silently emitted POINTER-eq, so
+// the interned "main" constant never matched the heap-parsed "main"
+// (emit_start's find_main=-1 while the list held it). The pin is the
+// proof; env_find(name: String) is the standing precedent.
+fn ls_find_str_local(lst: [String], target: String, i) = {
   ls_find_str_local_loop(lst, target, i, len(lst))
 }
 
-fn ls_find_str_local_loop(lst, target, i, n) = {
+fn ls_find_str_local_loop(lst: [String], target: String, i, n) = {
   if i >= n { -1 }
   else if list_index(lst, i) == target { i }
   else { ls_find_str_local_loop(lst, target, i + 1, n) }
@@ -828,21 +834,34 @@ fn hex_digit(d) with Pure = match d {
 // is a normal i32 slot, so effectful calls of arity K use $ft(K+1).
 
 fn emit_type_section(lowered) = {
-  // _start calls main via $ft1 (__state alone); ensure the table
-  // always contains at least that entry even for programs with no
-  // multi-arg calls. The arity-keyed all-i32 types stay byte-identical
-  // (Law 7) — they are the all-RI32 instance of the repr-vector key.
-  let observed = max_arity_in(lowered, 0)
+  // ONE walk (the Universal Audit): the repr-vector collection visits every
+  // indirect-dispatch site, and the arity-keyed all-i32 $ftN types ARE the
+  // all-RI32 instances of those SAME vectors (PLAN §5.U — the arity-$ftN
+  // fork dissolves into the repr-vector key). The max arity is therefore a
+  // PROJECTION of the collected vectors; the prior shallow parallel arity
+  // walk — a second reader of the same fact that missed every call nested
+  // inside a fn body — is DELETED. _start calls main via $ft1 (__state
+  // alone); floor 1 keeps that entry for call-free programs.
+  let vectors = collect_call_vectors_list(lowered, [])
+  let observed = max_i32_vector_arity(vectors, 0)
   let max_arity = if observed < 1 { 1 } else { observed }
   emit_type_decls(0, max_arity)
-  // Then the DISTINCT non-i32 repr-vectors the program's call sites use —
-  // each a structural function-type the gradient reached (an f64 arg, an
-  // f64 result). Collected from the lowered IR (the graph IS the index),
-  // deduped by ft_name (structural function-type equality), and emitted so
-  // every call_indirect's repr-vector type resolves. A pure-i32 program
-  // collects none — the type section is byte-identical to today.
-  let vectors = collect_call_vectors_list(lowered, [])
+  // Then the DISTINCT non-i32 repr-vectors — each a structural function-
+  // type the gradient reached (an f64 arg, an f64 result), deduped by
+  // ft_name (structural function-type equality). A pure-i32 program
+  // collects none.
   emit_distinct_repr_ft_types(vectors, [])
+}
+
+// The all-i32 vectors' max param count — the $ftN ceiling, read off the one
+// collected vector set (param_reprs already carries the __state RI32 slot).
+fn max_i32_vector_arity(vectors, acc) = {
+  if len(vectors) == 0 { acc }
+  else {
+    let (param_reprs, result_repr) = list_head(vectors)
+    let n = if all_ri32(param_reprs) && repr_is_i32(result_repr) { len(param_reprs) } else { 0 }
+    max_i32_vector_arity(list_tail(vectors), max_int(acc, n))
+  }
 }
 
 // Walk the lowered program collecting the repr-vector (param_reprs,
@@ -936,70 +955,6 @@ fn emit_distinct_repr_ft_types(vectors, seen) = {
       emit_distinct_repr_ft_types(list_tail(vectors), [nm] ++ seen)
     }
   }
-}
-
-fn max_arity_in(stmts, acc) = {
-  if len(stmts) == 0 { acc }
-  else {
-    let bigger = max_int(acc, max_arity_expr(list_head(stmts)))
-    max_arity_in(list_tail(stmts), bigger)
-  }
-}
-
-// Arity counting accounts for W7's implicit `__state` param: every
-// emitted function takes `__state` as its first parameter, and
-// every LCall pushes the closure pointer before the user args, so
-// the effective call arity is len(args)+1.
-// H6: exhaustive LowExpr enumeration. Call-producing variants
-// contribute their arity (+1 for the implicit __state slot when
-// relevant). Every other variant's own arity is 0; they need
-// enumeration because a new LIR variant that introduces a new
-// call form must decide whether to add a $ft entry — silent
-// `_ => 0` would emit a WASM module with missing type signatures.
-fn max_arity_expr(expr) = match expr {
-  LCall(_, _, args)         => len(args) + 1,
-  LTailCall(_, _, args)     => len(args) + 1,
-  LSuspend(_, _, _, args, _) => len(args) + 1,
-  LPerform(_, _, args, _)   => len(args),
-  LWasiCall(_, _, args)     => len(args),
-  LEvPerform(_, _, _, _, args) => len(args) + 1,
-  LLet(_, _, inner)         => max_arity_expr(inner),
-  LMakeClosure(_, _, _, _)         => 0,
-  LFnRef(_, _, _)                  => 0,   // record-build, not a call — no $ft entry
-  LMakeContinuation(_, _, _, _, _, _, _) => 0,
-  LDeclareFn(_)                    => 0,
-
-  // Non-call LIR variants contribute 0. Explicit so a new
-  // call-like variant can't silently slip through.
-  LConst(_, _)              => 0,
-  LLocal(_, _)              => 0,
-  LFeedbackPrior(_)         => 0,
-  LGlobal(_, _)             => 0,
-  LStore(_, _, _)           => 0,
-  LUpval(_, _)              => 0,
-  LBinOp(_, _, _, _)        => 0,
-  LUnaryOp(_, _, _)         => 0,
-  LReturn(_, _)             => 0,
-  LIf(_, _, _, _)           => 0,
-  LBlock(_, _)              => 0,
-  LMakeList(_, _)           => 0,
-  LMakeTuple(_, _)          => 0,
-  LSimdLanes(_, _)          => 0,
-  LMakeRecord(_, _)         => 0,
-  LMakeVariant(_, _, _)     => 0,
-  LIndex(_, _, _, _)        => 0,
-  LMatch(_, _, _)           => 0,
-  LStateGet(_, _)           => 0,
-  LStateSet(_, _, _)        => 0,
-  LRegion(_, _)             => 0,
-  LHandleWith(_, _, _, _, _, _, _) => 0,
-  LFeedback(_, _, _)        => 0,
-  LEvRef(_, _)              => 0,
-  LEvEntry(_, ev)           => max_arity_expr(ev),
-  LUnresolvedEvidence(_, _) => 0,
-  LFieldLoad(_, _, _)       => 0,
-  LConvert(_, _, _)         => 0,
-  LStateSlotStore(_, _, _)  => 0
 }
 
 fn max_int(a, b) with Pure = if a > b { a } else { b }
@@ -1737,16 +1692,18 @@ fn emit_start(top_fn_names) = {
   wat_emit("  (func $_start\n")
   if ls_find_str_local(top_fn_names, "main", 0) >= 0 {
     // main exists → load $main static closure, push as __state, load
-    // fn_idx from offset 0, call_indirect.
+    // fn_idx from offset 0, call_indirect. main's result IS the exit
+    // code (Unix vocabulary; the seed's _start and the whole micro
+    // battery key on it — the wheel mirrors, never drops).
     wat_emit("    (global.get $main)\n")
     wat_emit("    (global.get $main) (i32.load offset=0)\n")
     wat_emit("    (call_indirect (type $ft1))\n")
-    wat_emit("    (drop)\n")
+    wat_emit("    (call $proc_exit)\n")
   } else {
     // No main; the module is library-shape. Exit cleanly.
     wat_emit("    ;; no `main` defined — _start is a clean exit\n")
+    wat_emit("    (call $proc_exit (i32.const 0))\n")
   }
-  wat_emit("    (call $proc_exit (i32.const 0))\n")
   wat_emit("  )\n")
   wat_emit("  (export \"_start\" (func $_start))\n")
   // Emit the WASI threads entry point — closes the Stage 3 substrate

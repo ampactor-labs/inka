@@ -232,6 +232,29 @@
 > loop converges INTO the medium**, so the discipline doesn't merely repeat — it
 > EVOLVES with the project: every blocker closed this way sharpens what the kernel's
 > own Verify will one day enforce unsayably.
+>
+> **Two mechanical moves, proven across eight roots in two days (2026-07-01→02) —
+> run them BY PROCEDURE, they need no depth:**
+> - **CENSUS, never moles.** The moment a second trap shares a first trap's shape,
+>   STOP fixing per-site. Enumerate the WHOLE class in one measurement: (a) every
+>   loud floor is an inline `(unreachable);; H<handle>` in m2.wat — one grep = the
+>   complete site list with enclosing fns; (b) for silent classes, instrument the
+>   ONE choke-point (the seed's `-1` floor, an emit dispatch's fallback arm) with
+>   an eprint census, rebuild ONCE, compile the wheel ONCE — the full inventory
+>   falls out of stderr (the 21-failure/all-TName census that turned nine
+>   hand-pins into one reader fix). Then treat the CLASS: prefer deletion
+>   (the $ftN fork) or reading the fact where it already lives (the ctor-scheme
+>   record read) over per-site pins; pins are last-resort NAMED residue.
+> - **BINARY-PATCH PROBES, never wheel-eprint probes, for evidence-layer
+>   questions.** Editing wheel source to eprint changes the very rows/ev-layout
+>   under test (Heisenberg — proven: a probe flipped a garbage-write into an OOB).
+>   Instead patch `.build/probe/m2.wat` directly (python block-replace on the one
+>   fn), print via `(call $eprint_string (i32.const 0) <str>)` and
+>   `(call $int_to_str (i32.const 0) <n>)`, separator = a REAL interned string
+>   constant read from the SAME build's data section (offsets shift per build —
+>   never reuse yesterday's), `wt_asm` + run = seconds per cycle vs minutes.
+>   `bash tools/march-gate.sh` runs the whole m2 rung battery as one scoreboard —
+>   iterate against IT, not against hand-typed probes.
 
 ---
 

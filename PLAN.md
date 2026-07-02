@@ -584,6 +584,43 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > is a SHADOW it reports (the seed lagging the wheel), never enforced. Prose
 > drifts; artifacts do not. On a runtime bug the first move is a PROBE.
 
+- **THE m2 MARCH (2026-07-01→02, 38c6835→e791bf3) — pass-2's road has
+  pavement; `bash tools/march-gate.sh` IS the live rung scoreboard.** The
+  pipe law realized: `|>` is HOLE-COMPLETION in BOTH layers (SYNTAX
+  §«Partial application» — the prepend convention DELETED; it passed the
+  piped value as arg 1, so every piped partial into an (f, xs) fn
+  dispatched a LIST as a CLOSURE, fn_idx = load(count) — the whole m2 trap
+  zoo: 10MB heap dumps to stdout, "no main defined", wrong-type/OOB
+  call_indirects). `??` now parses/types/lowers in wheel AND seed (NHole =
+  typed absence; infer: k<n or `??` = the product-with-holes,
+  `TFun(unfilled, ret, row)`); 42 subject-first sites carry the explicit
+  `??` first slot; `parallel_map` = (f, xs). MEASURED FIRSTS: m2 compiles
+  AND RUNS one-main / call / branch rungs with CORRECT exits (`id(7)` → 7
+  through seed → m2 → program). Roots closed en route, each pinned in the
+  binary before a byte changed: the phantom-capture FENCE (handler decl
+  names ARE top-level globals — both collectors; each `~>` name had become
+  a capture, inflating the ev-region base 8+4×installs vs records built at
+  ncap=0); the POINTER-EQ lie (generic `==` with no String proof silently
+  emitted i32.eq — interned "main" ≠ heap "main"; pinned at
+  ls_find_str_local/assoc_row/esc_assoc/split_group — dissolves with band
+  D); str-concat-on-lists (bare-TVar `++`; names_concat pin at
+  flow_join/PTee/escaping_round); the $ftN fork DELETED into the one
+  repr-vector walk (§5.U realized — max_arity was a shallow second reader
+  that missed every call inside a fn body; net −40 lines); exit-code canon
+  (main's result IS the exit code — the wheel dropped it); the
+  NOMINAL-RECORD read (`type X = {…}` = the single-variant ctor
+  `X : TRecord → TName`, so the ctor scheme ALREADY carries the shape —
+  the seed's TName arm now reads kind-132's body; RecordSchemeKind had
+  four readers, zero writers); the SCOPED SINGLETON (`$<hname>_state_g`
+  save/restore around every named install, both layers — a nested
+  same-handler session no longer leaves the outer session's Tier-1 reads
+  on the inner exhausted record). OPEN RUNGS (the gate names them live):
+  two-lets (top-level `let` emits an undefined global); match-adt and all
+  +rt rungs (find_mapping's list_index under infer_one_handler_arm's
+  captured-mapping lambdas — the 35xxx seam family; the mapping slice
+  header is HEALTHY — count 6, tag 4, flat base — the corruption is one
+  level deeper). The method that closed eight roots in two days is
+  crystallized in `CLAUDE.md ⟲` (census-not-moles; binary-patch probes).
 - **THE CURSOR — the value layer (2026-06-23, design VERIFIED, six-step build
   LANDED — all 6 commits in, Law 7 held).** The four deep value-layer axes —
   representation gradient, multi-shot continuation reification, parallel-topology

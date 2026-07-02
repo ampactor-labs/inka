@@ -289,18 +289,20 @@ question — *can capabilities' no-leak threading coexist with rows' Boolean
 negation?* — now has its rows≡capabilities HALF discharged in the literature (POPL
 2026), leaving the **NEGATION half** the open burden — **its, any rival's, and
 Mentl's own graph-native route's** (interrogate, don't absorb: name the frontier,
-don't crown a destination). Two artifact-grounded reasons it is correctly targeted — not a hedge
-(adversarially verified 2026-06-21): **(a) `!E` under polymorphism is currently
-UNSOUND** — `unify_row` punts `EfOpen ~ EfNeg` ("exact match or error for
-universe-minus open rows", `effects.mn:378`) and `free_in_row`/`subst_row` cross
-`EfNeg` unguarded, so an open row var can be instantiated to include the very
-effect a `!E` forbade — exactly why Koka omits negation, exactly what a modality
-fixes; **(b) the TIME axis needs it irreducibly** — a continuation persisted under
-handler-set H1 and resumed under H2 (or across a recompile) is the canonical
-world-change, but `TCont(Ty, ResumeDiscipline)` carries cardinality and NO
-effect-world (`types.mn:47`), so neither the type nor the memcpy'd evidence-record
-can detect a now-unhandled or layout-shifted resume (the silent multi-shot
-miscompile, Law 7). **The graph is the ROUTE, never the replacement:** Mentl's
+don't crown a destination). Two artifact-grounded reasons it was correctly targeted
+(adversarially verified 2026-06-21) — and the STATE of each, trued 2026-07-02
+against the lines they cite: **(a) `!E` under polymorphism** — the one unify_row
+punt (`EfOpen ~ EfNeg` errored instead of unifying) is CLOSED (b4b1989,
+2026-06-23): `bind_open_to_neg` binds the open var to the NEGATION itself so the
+var carries the forbidden set forward through generalize/instantiate, and
+`free_in_row`/`subst_row` cross `EfNeg` — the mechanism Koka omitted negation to
+avoid, realized through the row representation. What remains open in band A is
+the PROOF tier, not the mechanism: the adversarial soundness GATE that tries to
+smuggle a forbidden effect through instantiation, and the full modal world-index.
+**(b) the TIME axis** — `TCont(Ty, ResumeDiscipline, EffRow)` carries the
+effect-WORLD since STEP 5 (27edc30): the type CAN now detect a cross-world
+resume; band B's open work is ENFORCEMENT (the world is inert on OneShot; the
+`E_ResumeWorldMismatch` value gate and capture-at-reify remain). **The graph is the ROUTE, never the replacement:** Mentl's
 first-class unified-evidence substrate — dispatch decoupled from the type-row
 (413bdc2) — is a degree of freedom Koka/Effekt/the modal calculus lack; it lets
 the modality be **inferred and cursor-projected** (a graph fact, §4⑤ quiet, never
@@ -366,7 +368,9 @@ ultimate form?"; the disposable seed's weaker inference catches up afterward
    that arrives when the wheel is complete, never a gate chased ahead of the form.
 2. **FELT — the human surface (L6).** The felt experience *falls out as
    projections*: `mentl where/why/edit`, the gradient, the Why button,
-   reactivity. The founding's payoff and the point.
+   reactivity. The founding's payoff and the point. (Working brand/IDE design
+   brief: `docs/DESIGN_SYSTEM.md` — a draft ARTIFACT of this aspect, not
+   read-path; the three-doc contract stands.)
 3. **UNSURPASSABLE — the frontier.** The modal effect synthesis (§4③), the IFC
    frontier (§4⑥), durable-execution-as-handler (§4④), the value-ontology
    derivation (§4①), Verify→SMT, native/GPU backends (handler swaps), the
@@ -438,14 +442,16 @@ representation-host**, ONE contiguous handle-addressed shape:
   (which renders an arbitrary USER value). They are a different fold over a fixed
   ADT for a human reader, kept; never retired as a fold-copy.
 
-**THE BINDING KEYSTONE — `TCont(Ty, ResumeDiscipline, EffRow)`.** Today TCont is
-two-arg and unify DROPS the discipline. Carrying the **effect-WORLD** on the
-continuation lifts `!E` to TIME (the modal frontier §4③ lands HERE): a persisted
-`k` resumed under a changed handler-set is `E_ResumeWorldMismatch` — a
-compile-time error, not a 3am production corruption. ONE arity change (the
-coordinated edit across ~14 destructure sites — a representation change, not a
-patch, per the unpatchability theorem) closes the multi-shot Law-7 gap AND types
-the fold's hardest leaf. One edge, two arms.
+**THE BINDING KEYSTONE — `TCont(Ty, ResumeDiscipline, EffRow)` — LANDED
+(27edc30, STEP 5).** Carrying the **effect-WORLD** on the continuation lifts
+`!E` to TIME (the modal frontier §4③ lands HERE): a persisted `k` resumed under
+a changed handler-set is `E_ResumeWorldMismatch` — a compile-time error, not a
+3am production corruption. The one arity change (the coordinated edit across
+~14 destructure sites — a representation change, not a patch, per the
+unpatchability theorem) went in with the seed mirrored in lockstep; the world
+is INERT on the single-world OneShot path (resume-world micro = 42), and band
+B's enforcement tier (the value gate, capture-at-reify) is the named remainder.
+One edge, two arms.
 
 **The six-step build arc** (each a Carried-Truth deletion the artifact already
 names): **(0)** `repr_of(Ty) -> Repr` — the shared read, built once. **(1)** the
@@ -466,9 +472,10 @@ widths or the persisted f64 state corrupts); you cannot persist a thunk without
 the unified record (no other serializer to write); you cannot type the fold's
 function-leaf without TCont's world; you cannot schedule a fanout without the
 record's portability (thunk = closure = continuation). The medium's own comments
-name every fix — `infer.mn:1122` names the Thread-drift peer; `infer.mn:2714`
-comments "attach to TCont"; `wasm.mn:2079` names the `$ftN` blocker but surrenders
-to heap-boxing; `emit_struct_eq` refuses product/sum at a loud floor. This is
+named every fix, and every one is CLOSED: the Thread-drift peer (STEP 4,
+600bc88), attach-to-TCont (STEP 5, 27edc30), the `$ftN` fork (deleted into the
+one repr-vector walk, the m2 march), the product/sum eq floor (STEP 2 + the
+sum leaf). This is
 `!Outside` at the value layer: a better representation is a deeper `repr_of` arm;
 a better schedule is a different `~>` handler; a sixth structural operation is
 another leaf; stronger persistence is a different `Persist` catcher. Every lever
@@ -497,13 +504,13 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 **A · Effects & the modal crown (arm 4) — gates ownership, !Thread, IFC negation.** `Hβ.effects.sound-neg-under-poly` (sound transitive `!E` under polymorphism; unify_row punts EfOpen~EfNeg, effects.mn:378 — build the soundness GATE, never claim "already modal", the 4/4-refuted 2026-06-21 trap) · `Hβ.effects.modal-world-index` (rows+capabilities+negation sound simultaneously, as a graph fact; POPL-2026 cite at effects.mn:12) · `Hβ.infer.modal-capability-at-tee` (the modal rule: a row var becomes a lexical capability handle at the `~>` edge, no new surface form) · `Hβ.syntax.perform-dissolution`.
 
-**B · Continuations & TIME (arm 2, §4④) — the binding keystone.** `Hβ.types.tcont-world-binding-keystone` (STEP 5 landed the 3-arg arity; the world is INERT on OneShot — ENFORCE it) · `Hβ.types.resume-world-mismatch-value-gate` (the runnable gate; layout-in-world coupling; DEP persist resume-catcher + STEP 1) · `Hβ.infer.tcont-world-capture-at-reify` (infer.mn:2714) · `Hβ.continuations.world-widening-resume` (typed superset-resume) · `Hβ.continuations.persist-equals-memcpy-handler` (= `Hβ.lower.fanout-durable-persist-handler`; `~> Persist`, zero serializer; STEP 3 producer landed) · `Hβ.persist.cross-machine-resume` *(new)* · `Hβ.persist.branch-world-tag` (persist.mn:119) · `Hβ.continuations.wasmfx-lowering-tier` · `Hβ.infer.tail-recursion-resume-cardinality` (infer.mn:3061) · `Hβ.lower.either-install-negotiation` · `Hβ.felt.time-travel-debug-forked-cursor` *(new)* · `Hβ.ml.autodiff-as-multishot` (autodiff.mn:36).
+**B · Continuations & TIME (arm 2, §4④) — the binding keystone.** `Hβ.types.tcont-world-binding-keystone` (STEP 5 landed the 3-arg arity; the world is INERT on OneShot — ENFORCE it) · `Hβ.types.resume-world-mismatch-value-gate` (the runnable gate; layout-in-world coupling; DEP persist resume-catcher + STEP 1) · `Hβ.infer.tcont-world-capture-at-reify` (at the multi-shot producer's reify site) · `Hβ.continuations.world-widening-resume` (typed superset-resume) · `Hβ.continuations.persist-equals-memcpy-handler` (= `Hβ.lower.fanout-durable-persist-handler`; `~> Persist`, zero serializer; STEP 3 producer landed) · `Hβ.persist.cross-machine-resume` *(new)* · `Hβ.persist.branch-world-tag` (persist.mn:119) · `Hβ.continuations.wasmfx-lowering-tier` · `Hβ.infer.tail-recursion-resume-cardinality` (infer.mn:3174) · `Hβ.lower.either-install-negotiation` · `Hβ.felt.time-travel-debug-forked-cursor` *(new)* · `Hβ.ml.autodiff-as-multishot` (autodiff.mn:36).
 
 **C · IFC — flow in the row (arm 4/6, §4⑥; W31 scaffold landed).** `Hβ.verify.ifc-noninterference` (umbrella; code `Hβ.types.ifc-flow-constraint`, types.mn:1029) ← `Hβ.ifc.dcc-noninterference-gate` → `.flowlabel-inference-in-hm` → `.pc-label-implicit-flow` → `.integrity-dual-lattice` (prompt-injection IS an integrity-flow violation) → `.declassify-robust` → `.flow-world-on-tcont` → `.agentic-fides-target`. DEP-rooted on `sound-neg-under-poly`.
 
-**D · The value layer — fold & repr (arms 1/7, §5.U; STEP 0/1/2 landed).** `Hβ.fold.show-leaf` (synthesize as a lowered LFn, not raw WAT; lower.mn:455) · `.pack-unpack-leaf` · `.pack-leaf-effarg-float` · `.compare-hash-leaf` · gate `Hβ.eq.fold-seed-value-gate` · `Hβ.repr.arrow-layout-interop` · `Hβ.emit.variant-payload-repr-width` (wasm.mn:4672) · `.plit-handle-repr` (wasm.mn:5296) · `Hβ.value.ontology-derivation-complete` · `Hβ.runtime.zero-copy-string-view` (lexer.mn:316).
+**D · The value layer — fold & repr (arms 1/7, §5.U; STEP 0/1/2 landed).** `Hβ.fold.show-leaf` (synthesize as a lowered LFn, not raw WAT; lower.mn:481) · `.pack-unpack-leaf` · `.pack-leaf-effarg-float` · `.compare-hash-leaf` · gate `Hβ.eq.fold-seed-value-gate` · `Hβ.repr.arrow-layout-interop` · `Hβ.emit.variant-payload-repr-width` (wasm.mn:4913) · `.plit-handle-repr` (wasm.mn:5537) · `Hβ.value.ontology-derivation-complete` · `Hβ.runtime.zero-copy-string-view` (lexer.mn:316).
 
-**E · Parallelism & accelerators (arm 3, §4④; STEP 4 collapse landed).** `Hβ.lower.fanout-simd-lane-cashout` (RV128) · `.fanout-gpu-backend-handler` (lower.mn:1475) · `.fanout-durable-persist-handler` (SPACE=TIME) · `Hβ.parallel.thread-alloc-transitive-proof` (verify ONLY after the leak closes) · `.race-freedom-ownership-proof` · `Hβ.infer.fanout-ownership-from-use-count` (infer.mn:1228) · `Hβ.runtime.wasi-thread-spawn-seed` (threading.mn:296) · `Hβ.driver.level-set-par-walk` (driver.mn:247) · `Hβ.cursor.speculative-compile` · `Hβ.cursor.work-stealing-via-gradient` *(idle cores ask the cursor "what next?"; the gradient's argmax IS the priority queue — no scheduler module)* · `Hβ.lower.schedule-specialized-callee` *(new — the parallel_map dissolution's open remainder: whether a reusable fn's internal `><`/`<|` should EVER inherit a caller-installed `Schedule` across a call boundary. The only sound route is compile-time specialization of the callee per install-context, preserving `Seq`'s zero-cost/`!Thread`-provable property — the §5.3 dispatch gradient's sibling on the INSTALLED-HANDLER axis (vs the known-argument axis; shares callee-specialization infra). The ambient/evidence-passed-runtime `Schedule` alternative is the wrong direction — it taxes every `Seq` fanout to buy portability only a rare `Thread` caller needs. Scoped skeptically: direct `>< + ~> Thread` at the use site is sufficient and simpler; build only when a real consumer needs one fanout helper serving callers wanting different schedules. Sequenced behind `Hβ.driver.level-set-par-walk`, DEP-gated on band-A `sound-neg-under-poly`)*.
+**E · Parallelism & accelerators (arm 3, §4④; STEP 4 collapse landed).** `Hβ.lower.fanout-simd-lane-cashout` (RV128) · `.fanout-gpu-backend-handler` (lower.mn:1475) · `.fanout-durable-persist-handler` (SPACE=TIME) · `Hβ.parallel.thread-alloc-transitive-proof` (verify ONLY after the leak closes) · `.race-freedom-ownership-proof` · `Hβ.infer.fanout-ownership-from-use-count` (infer.mn:1288) · `Hβ.runtime.wasi-thread-spawn-seed` (threading.mn:296) · `Hβ.driver.level-set-par-walk` *(the topological layer-partition is LIVE in driver.mn — 7165bbb; the open half is the multi-core `>< ~> Thread` at the layer site)* · `Hβ.cursor.speculative-compile` · `Hβ.cursor.work-stealing-via-gradient` *(idle cores ask the cursor "what next?"; the gradient's argmax IS the priority queue — no scheduler module)* · `Hβ.lower.schedule-specialized-callee` *(new — the parallel_map dissolution's open remainder: whether a reusable fn's internal `><`/`<|` should EVER inherit a caller-installed `Schedule` across a call boundary. The only sound route is compile-time specialization of the callee per install-context, preserving `Seq`'s zero-cost/`!Thread`-provable property — the §5.3 dispatch gradient's sibling on the INSTALLED-HANDLER axis (vs the known-argument axis; shares callee-specialization infra). The ambient/evidence-passed-runtime `Schedule` alternative is the wrong direction — it taxes every `Seq` fanout to buy portability only a rare `Thread` caller needs. Scoped skeptically: direct `>< + ~> Thread` at the use site is sufficient and simpler; build only when a real consumer needs one fanout helper serving callers wanting different schedules. Sequenced behind `Hβ.driver.level-set-par-walk`, DEP-gated on band-A `sound-neg-under-poly`)*.
 
 **F · Verification & proof (arm 6/8).** `Hβ.types.predicate-is-expr` (dissolve PExpr) → `Hβ.verify.smt-handler-swap` (Z3+CVC5; NAME the external-SMT residual !Outside if it persists) → `.higher-order-refinement` · `Hβ.verify.ledger-soundness` (no silent assume-true; the Dafny `{:axiom}` cautionary) · `.proof-incrementality-cached-cursor` · `.reason-edge-pcc-certificate` · `Hβ.dsp.hz-ceiling-ambient-sample-rate` · `Hβ.refine.buffer-invariant` · `Hβ.infer.predicate-from-bool-expression`.
 
@@ -511,7 +518,7 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 **H · Ownership (arm 5, §4⑤).** `Hβ.ownership.fractional-uniqueness-ref-borrow` (Granule ICFP 2024) · `.quiet-empirical-gate` (the Hylo bar — a corpus test counting authored own/ref markers; a rising count IS inference failing §4⑤).
 
-**I · Dataflow & DSP (arm 3/6).** `Hβ.dataflow.causality-compile-error` (wasm.mn:2344) · `.clock-calculus-sample-rate` · `.point-free-fusion-via-egraph`.
+**I · Dataflow & DSP (arm 3/6).** `Hβ.dataflow.causality-compile-error` (a zero-delay `<~` cycle is a compile error, Faust's causality rule; no code anchor yet — the peer is named here, not in a comment) · `.clock-calculus-sample-rate` · `.point-free-fusion-via-egraph`.
 
 **J · Self-hosting & !Outside hardening (L7, §1).** `Hβ.closure.diverse-double-compilation` (Thompson/Wheeler 2009 — a second disposable seed converging to identical m3 closes trusting-trust, which the byte-fixpoint alone cannot; DEP native backend) · `.correctness-oracle-internal` (the external micro-battery → the wheel's own Verify; until then first-light's correctness half is itself an !Outside) · `.reflexive-over-proposers` (code `Hβ.synth.proposer-gauntlet`).
 
@@ -577,11 +584,14 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-06-22; verify with `verify.sh`)
+## §7 · Current state (grounded 2026-07-02; gates: `verify.sh` + `march-gate.sh`)
 
-> **GROUND IN REALITY FIRST.** Run `bash tools/verify.sh` before any theory or
-> edit — the gate is the wheel WORKING (micros) + coherence (drift-audit). Census
-> is a SHADOW it reports (the seed lagging the wheel), never enforced. Prose
+> **GROUND IN REALITY FIRST — three commands, three purposes.** `bash
+> tools/verify.sh` is the FLOOR (seed builds + the 36-micro battery); `bash
+> tools/march-gate.sh` is the LIVE m2 rung scoreboard (compile→assemble→run→exit
+> per rung — the march iterates against IT); `bash tools/state.sh` adds census +
+> the m3==m4 fixpoint check (§8). Run verify + march-gate before any theory or
+> edit. Census is a SHADOW (the seed lagging the wheel), never enforced. Prose
 > drifts; artifacts do not. On a runtime bug the first move is a PROBE.
 
 - **THE m2 MARCH (2026-07-01→02, 38c6835→e791bf3) — pass-2's road has
@@ -618,12 +628,21 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   four readers, zero writers); the SCOPED SINGLETON (`$<hname>_state_g`
   save/restore around every named install, both layers — a nested
   same-handler session no longer leaves the outer session's Tier-1 reads
-  on the inner exhausted record). OPEN RUNGS (the gate names them live):
-  two-lets (top-level `let` emits an undefined global); match-adt and all
-  +rt rungs (find_mapping's list_index under infer_one_handler_arm's
-  captured-mapping lambdas — the 35xxx seam family; the mapping slice
-  header is HEALTHY — count 6, tag 4, flat base — the corruption is one
-  level deeper). The method that closed eight roots in two days is
+  on the inner exhausted record). SCOREBOARD 2026-07-02: 5 pass / 3 fail —
+  two-lets CLOSED (declaration/init path); match-adt CLOSED (two stacked
+  wheel roots: fn-body emit_alloc leaked module-scope WAT past the per-fn
+  buffer — emit_memory_bump now installs inner to wat_to_string — and the
+  ctor payload read's pointer-eq lie, d5c13b6). The three +rt rungs all
+  COMPILE-trap at !float_floor_log10: the seed's TFloat-binop floor
+  (`(drop)(drop)(i32.const 0)`) makes float_to_str recurse forever the
+  moment m2's emit renders a float literal — the named seed-lag
+  `Hβ.seed.float-gradient`, needing a dedicated seed-f64 cycle (literal
+  f64.const, real f64 binops, f64 stack typing for params/locals/results,
+  i32↔f64 boundaries — all-or-nothing; partial f64 = stack-type mismatch).
+  NEXT FACE after float (measured, censusFix 2026-07-02): m2 traps in the
+  wheel's walk_refinement_fields on ANY record literal in a fn body — the
+  record/aggregate-through-generic-list-op class, independent of the
+  string fixes. The method that closed eight roots in two days is
   crystallized in `CLAUDE.md ⟲` (census-not-moles; binary-patch probes).
 - **THE CURSOR — the value layer (2026-06-23, design VERIFIED, six-step build
   LANDED — all 6 commits in, Law 7 held).** The four deep value-layer axes —
@@ -631,9 +650,9 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   execution, total structural fold — are FOUR PROJECTIONS OF ONE CURSOR ON ONE
   HEAP RECORD joined at `match lookup_ty(h)` (full design + arc: §5.U). Verified
   by a 21-agent adversarial workflow; each step a Carried-Truth deletion the
-  artifact already named (`infer.mn:1122` Thread-drift peer; `infer.mn:2714`
-  "attach to TCont"; `wasm.mn:2079` `$ftN` blocker; `emit_struct_eq` product/sum
-  floor). **Landed:** STEP 0 `repr_of` (46e4801); STEP 1 the representation
+  artifact had named in its own comments (the Thread-drift peer, the
+  attach-to-TCont note, the `$ftN` blocker, the `emit_struct_eq` product/sum
+  floor — every one since closed). **Landed:** STEP 0 `repr_of` (46e4801); STEP 1 the representation
   gradient, i32-floor + boxed-f64 peer DELETED (2cf717b); STEP 2 the structural
   fold's eq leaf, the loud product/sum floor dissolved (d138274); STEP 3 the
   multi-shot producer minting the dormant `LMakeContinuation`, the write-only
@@ -874,7 +893,18 @@ WAT for archaeology. `wasm-interp` CANNOT run m2 (no WASI — fails on the
 top-level fn names (emitter picks one silently) · flat-array ops in Snoc paths
 (O(N²)) · `println`/`report` in `report(...)` arms corrupting WAT stdout ·
 `acc ++ [X]` in a loop (O(N²); use buffer-counter) · flag-as-int (→ ADT) · a
-diagnostic's NAME can lie.
+diagnostic's NAME can lie · **wrong-end stack ops** (push at one end, pop/read
+the other — six sites in one commit, b93978f; every Mentl stack pushes at the
+END) · **phantom captures** (handler-decl names are top-level globals; a
+collector that counts them as captures inflates the ev-region base, e791bf3) ·
+**pointer-eq on names** (`==` with no String proof emits i32.eq; byte-equal
+strings interned by different passes never match — annotate the name param
+`: String`, the Intent Boundary carrying the proof) · **one-operand dispatch**
+(a binop's emit reading only ONE operand's type proof; read EITHER, 4fb8e68) ·
+**the seed's name-keyed intrinsic table** (bootstrap/src/infer/walk_expr.wat
+types prelude stages BY NAME with byte-pinned offsets — ANY prelude rename or
+re-signature is a same-cut three-layer edit: wheel decl, wheel callers, seed
+table; miss it and the seed silently mistypes every call).
 
 ---
 
@@ -882,7 +912,7 @@ diagnostic's NAME can lie.
 
 1. **Read `CLAUDE.md`, `PLAN.md`, `SYNTAX.md`.** That is the entire required
    context. Reference nothing else unless debugging a specific artifact.
-2. **Run `bash tools/verify.sh`.** The gate is the wheel WORKING (the micros
+2. **Run `bash tools/verify.sh` + `bash tools/march-gate.sh`.** The gate is the wheel WORKING (the micros
    compile-and-run) + coherence (the drift-audit). Census is a SHADOW it reports,
    never enforces — a rising count is the seed lagging the ultimate wheel,
    expected progress. Trust the micros + the artifact over any prose here; if

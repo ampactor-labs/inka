@@ -56,7 +56,7 @@ fn field_canonicalize_loop(ref fields, i, n, own acc) with !Mutate = {
 
 // Insert (name, ty) into sorted-by-name list; if name already present,
 // replace (last write wins).
-fn field_insert(ref sorted, ref name, ref ty) with !Mutate = {
+fn field_insert(ref sorted, ref name: String, ref ty) with !Mutate = {
   let n = len(sorted)
   let pos = field_find_pos(sorted, name, 0, n)
   if pos < n {

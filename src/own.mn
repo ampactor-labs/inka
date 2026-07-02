@@ -243,7 +243,7 @@ fn report_each_collision(ref names, ref span) with !Mutate = {
   }, names)
 }
 
-fn find_first_span(ref sites, ref name) with !Mutate = {
+fn find_first_span(ref sites, ref name: String) with !Mutate = {
   let hits = filter((entry) => {
     let (entry_name, _) = entry
     entry_name == name
@@ -366,7 +366,7 @@ fn classify_usage(ref name, ref body) with !Mutate = {
   else               { Ref }
 }
 
-fn count_uses(ref name, ref node) with !Mutate = {
+fn count_uses(ref name: String, ref node) with !Mutate = {
   let N(body, _, _) = node
   match body {
     NExpr(VarRef(n)) =>

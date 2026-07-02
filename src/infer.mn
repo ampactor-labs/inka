@@ -175,7 +175,7 @@ handler infer_ctx with stack = [], declared = [], handler_stack = [], arm_stack 
   }
 }
 
-fn find_handler_for_effect(stack, ename) = {
+fn find_handler_for_effect(stack, ename: String) = {
   if len(stack) == 0 { None }
   else {
     let hname = last(stack)
@@ -1234,7 +1234,7 @@ fn row_effect_payload(row, ename) = match row {
   _                => None
 }
 
-fn names_effect_payload(names, ename) = {
+fn names_effect_payload(names, ename: String) = {
   let tys = flatten(map((n) => match n {
     EParameterized(nm, args) =>
       if nm == ename {
@@ -1814,7 +1814,7 @@ fn find_record_field_pos(fields, name) = {
   find_record_field_pos_loop(fields, name, 0, len(fields))
 }
 
-fn find_record_field_pos_loop(fields, name, i, n) = {
+fn find_record_field_pos_loop(fields, name: String, i, n) = {
   if i >= n { -1 }
   else {
     let (existing, _) = list_index(fields, i)
@@ -2869,7 +2869,7 @@ fn quantify_field_list(fields, qmap) = {
   }
 }
 
-fn qmap_find(qmap, name) = {
+fn qmap_find(qmap, name: String) = {
   if len(qmap) == 0 { None }
   else {
     let (n, h) = list_index(qmap, 0)
@@ -2878,7 +2878,7 @@ fn qmap_find(qmap, name) = {
   }
 }
 
-fn register_one_variant(type_name, result_ty, qhandles, field_types, variant, tag_id, total) = {
+fn register_one_variant(type_name: String, result_ty, qhandles, field_types, variant, tag_id, total) = {
   let (ctor_name, _) = variant
   // H2.3 nominal record: a single-variant type whose body is a
   // TRecord registers as RecordSchemeKind, not ConstructorScheme.

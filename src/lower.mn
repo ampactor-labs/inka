@@ -2646,7 +2646,7 @@ fn lower_resume_snapshot(handle, val, updates, fields) = {
 // config param's slot — and the next dispatch called the buffer as
 // a closure. Returns -1 when name is not in fields
 // (productive-under-error).
-fn resolve_state_slot_offset(name, fields) = {
+fn resolve_state_slot_offset(name: String, fields) = {
   let hits = filter((indexed) => {
     let (_, field) = indexed
     field == name
@@ -3109,7 +3109,7 @@ fn resolve_field_offset_in(base, field) = {
   resolve_field_offset(bh, field)
 }
 
-fn find_override(overrides, target) = match overrides {
+fn find_override(overrides, target: String) = match overrides {
   []            => None,
   [(n, v), ...t] => if n == target { Some(v) } else { find_override(t, target) }
 }
@@ -3413,7 +3413,7 @@ fn ls_current_lambda_handle_loop(frames) = {
 // name binds. Returns the handle on match, -1 when the name is not a
 // `<~`-bound prior (so `ls_resolve` falls through to frame locals). Read
 // sequentially over one list (drift 7 refused); no parallel arrays.
-fn fb_prior_handle_of(priors, name) = {
+fn fb_prior_handle_of(priors, name: String) = {
   if len(priors) == 0 { -1 }
   else {
     match last(priors) {
@@ -3428,11 +3428,11 @@ fn fb_prior_handle_of(priors, name) = {
 // is insertion-keyed, not sort-keyed; bounded by frame size in practice.
 // Only fires after a positive `set_contains`, so worst case is O(N)
 // but expected case hits early since recently-bound names dominate.
-fn ls_find_in_order(lst, target, i) = {
+fn ls_find_in_order(lst, target: String, i) = {
   ls_find_in_order_loop(lst, target, i, len(lst))
 }
 
-fn ls_find_in_order_loop(lst, target, i, n) = {
+fn ls_find_in_order_loop(lst, target: String, i, n) = {
   if i >= n { -1 }
   else if list_index(lst, i) == target { i }
   else { ls_find_in_order_loop(lst, target, i + 1, n) }

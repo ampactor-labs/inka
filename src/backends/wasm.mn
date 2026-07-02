@@ -408,7 +408,7 @@ handler wasi_ops_collector with buf = make_list(8), count = 0 {
   drain_wasi_ops() => resume(slice(buf, 0, count))
 }
 
-fn string_entry_exists(entries, target, i, n) = {
+fn string_entry_exists(entries, target: String, i, n) = {
   if i >= n { false }
   else {
     let (s, _) = list_index(entries, i)
@@ -1690,7 +1690,7 @@ fn find_local_handle_list(name, stmts) = {
 // Walk a LowExpr for the first `LLocal(h, name)` matching `name`. Stops at
 // nested fn boundaries (LMakeClosure/LMakeContinuation/LDeclareFn) — an inner
 // fn's `name` is its own binding, not this param. Returns 0 if absent.
-fn find_local_handle_expr(name, expr) = match expr {
+fn find_local_handle_expr(name: String, expr) = match expr {
   LLocal(h, n)              => if n == name { h } else { 0 },
   LMakeClosure(_, _, _, _)         => 0,
   LFnRef(_h, _n, ev)        => find_local_handle_list(name, ev),
@@ -3027,7 +3027,7 @@ fn variant_specs_filter(entries, type_name) with Pure = {
 
 // A constructor's scheme result type is TName(type_name, _) (nullary, bare) or
 // TFun(_, TName(type_name, _), _) (fielded) — the same test synth uses.
-fn ctor_result_is(ty, type_name) with Pure = match ty {
+fn ctor_result_is(ty, type_name: String) with Pure = match ty {
   TName(n, _)     => n == type_name,
   TFun(_, ret, _) => ctor_result_is(ret, type_name),
   _               => false

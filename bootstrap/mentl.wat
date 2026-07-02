@@ -33862,6 +33862,7 @@
   (func $emit_lbinop (param $r i32)
     (local $op i32) (local $left_lexpr i32)
     (local $left_h i32) (local $left_ty i32) (local $left_ty_tag i32)
+    (local $right_h i32) (local $right_ty_tag i32)
     (local.set $left_lexpr (call $lexpr_lbinop_l (local.get $r)))
     (call $emit_lexpr (local.get $left_lexpr))
     (call $emit_lexpr (call $lexpr_lbinop_r (local.get $r)))
@@ -33888,7 +33889,14 @@
             (call $emit_i32_const (i32.const 0))
             (return)))))
 
-    ;; BConcat (153): operand-Ty dispatch.
+    ;; BConcat (153): operand-Ty dispatch — the proof becomes the dispatch,
+    ;; read from EITHER operand. The graph often proves the RIGHT operand
+    ;; (a constructed list literal `xs ++ [x]`) where the LEFT is a floored
+    ;; pattern/param binding (h=0 or a junk TName from lookup_ty(0)).
+    ;; Reading only the left DISCARDED that proof: `frame.local_order ++
+    ;; [name]` emitted str_concat-on-lists — the 6-byte overlapping allocs
+    ;; whose bleed-through bytes read as the !list_index "span" trap
+    ;; (2026-07-02, the four red march-gate rungs, one root).
     ;; Per Hβ.emit.runtime-helper-state-push: str_concat / list_concat
     ;; are W7-compiled fns expecting (state, a, b). Stack here has
     ;; [a, b]; insert state UNDER via save-reload through $state_tmp +
@@ -33900,12 +33908,36 @@
         (call $el_emit_local_get_state)              ;; push state
         (call $ec6_emit_local_get_state_tmp)         ;; push left
         (call $ec6_emit_local_get_callee_closure)    ;; push right
+        (local.set $left_ty_tag (i32.const 0))
         (local.set $left_h (call $lexpr_handle (local.get $left_lexpr)))
-        (local.set $left_ty (call $lookup_ty (local.get $left_h)))
-        (local.set $left_ty_tag (call $ty_tag (local.get $left_ty)))
-        (if (i32.eq (local.get $left_ty_tag) (i32.const 105))   ;; TList
+        (if (i32.ne (local.get $left_h) (i32.const 0))
+          (then (local.set $left_ty_tag
+                  (call $ty_tag (call $lookup_ty (local.get $left_h))))))
+        (local.set $right_ty_tag (i32.const 0))
+        (local.set $right_h (call $lexpr_handle (call $lexpr_lbinop_r (local.get $r))))
+        (if (i32.ne (local.get $right_h) (i32.const 0))
+          (then (local.set $right_ty_tag
+                  (call $ty_tag (call $lookup_ty (local.get $right_h))))))
+        ;; A proven TList (105) on either side decides list_concat.
+        (if (i32.or (i32.eq (local.get $left_ty_tag) (i32.const 105))
+                    (i32.eq (local.get $right_ty_tag) (i32.const 105)))
           (then (call $ec6_emit_call_list_alloc_concat) (return)))
-        ;; Fall-through (TString, unresolved, or other): str_concat.
+        ;; A proven TString (102) on either side decides str_concat.
+        (if (i32.or (i32.eq (local.get $left_ty_tag) (i32.const 102))
+                    (i32.eq (local.get $right_ty_tag) (i32.const 102)))
+          (then (call $ec6_emit_call_str_concat) (return)))
+        ;; NEITHER side proves — the LOUD residue, never a silent guess.
+        ;; Census 2026-07-02 (whole-wheel): 17 such sites, every one
+        ;; measured string-true (int_to_str / float_format_* / join_loop /
+        ;; replace / assemble_render — TVar/TInt-junk operand types the
+        ;; seed's no-instantiation inference cannot resolve). str_concat
+        ;; is the measured-correct default for that class; the eprint
+        ;; keeps each site visible in every build log, so a NEW unproven
+        ;; list-concat can never hide behind this arm again. Dissolves
+        ;; with the seed at first-light.
+        (call $eprint_string (i32.const 8000))    ;; "W_ConcatUnproven h="
+        (call $eprint_string (call $int_to_str (local.get $left_h)))
+        (call $eprint_string (i32.const 8048))    ;; "\n"
         (call $ec6_emit_call_str_concat)
         (return)))
     ;; BEq (145) / BNe (146): == IS structural — operand-Ty dispatch
@@ -34303,6 +34335,10 @@
   ;;              [2241, 2263) gap post-2216 "handler uninstallable"
   ;;              pre-2264 "over-declared")
   (data (i32.const 1856) "\0a\00\00\00alloc_size")
+  ;; ── BConcat loud-residue strings (emit_lbinop unproven-operand arm).
+  ;;    [8000, 8060) claimed; free region continues at 8064. ──
+  (data (i32.const 8000) "\13\00\00\00W_ConcatUnproven h=")
+  (data (i32.const 8048) "\01\00\00\00\0a")
   (data (i32.const 2244) "\09\00\00\00state_tmp")
   ;;   6480-6487: "sst_" per-handle LSuspend state prefix (4 hdr + 4
   ;;              body = 8 bytes; 6000+ relocation band, post-6456 ":")

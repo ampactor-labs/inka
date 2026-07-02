@@ -225,18 +225,17 @@ fn suggestion_kind_label(k) with Pure = match k {
 
 // Try each candidate: checkpoint → tentative apply → verify → rollback.
 // Per-candidate is the divergent-fanout topology — each ann's
-// checkpoint isolates it from siblings, which IS the proof-search step.
-// parallel_map dispatches the per-candidate proof through the Thread
-// effect handler installed upstream; parallel_compose runs branches on
-// distinct cores when per-thread graph is available (peer
-// Hβ.cursor.speculative-compile), sequential_compose runs them on one
-// thread today. Same source, handler swap. The verb is `><` (the
-// binary parallel step parallel_map decomposes into) — symmetric with
-// the oracle's per-position dispatch at src/oracle.mn:309.
+// checkpoint isolates it from siblings, which IS the proof-search step;
+// map's tail loop runs them. Per-candidate proof on distinct cores
+// (peer Hβ.cursor.speculative-compile, needs per-thread graph) is a
+// `><` fanout under its own `~> Thread` at this site — the schedule is
+// read at the fanout's install, never across a call
+// (Hβ.lower.schedule-specialized-callee). Symmetric with the oracle's
+// per-position dispatch at src/oracle.mn:309.
 // Returns [(Annotation, Capability)] for annotations that passed.
 fn try_each_annotation(handle, candidates, base_ty) = {
   candidates
-    |> parallel_map((ann) => {
+    |> map((ann) => {
          let cp = graph_push_checkpoint()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
          apply_annotation_tentatively(handle, ann, base_ty)
          let ok = verify_after_apply(handle)
@@ -707,15 +706,14 @@ fn annotation_inferred_for(ty) with Pure = match ty {
   _             => None
 }
 
-// ─── Multi-position teach — `parallel_map` over a handle list ────────
+// ─── Multi-position teach — map over a handle list ───────────────────
 //
 // `teach_pair` (binary special-case) was erased per
 // `feedback_fully_as_early.md`: callers compose
-// `parallel_map(teach_session, handles)` directly; `parallel_compose`
-// handler upstream dispatches each Teach session to a separate thread.
-// Drift 6 erasure: small-arity special-case removed; the N-arity
-// primitive (`lib/runtime/threading.mn:parallel_map`) carries the
-// substrate.
+// `map(teach_session, handles)` directly; teaching each handle on its
+// own core is a `><` fanout under its own `~> Thread` at the call site
+// (Hβ.lower.schedule-specialized-callee). Drift 6 erasure: small-arity
+// special-case removed.
 
 // ─── teach_ic_loop — `<~` IC fixpoint on teach knowledge stability ────
 //

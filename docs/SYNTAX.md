@@ -305,9 +305,18 @@ name that adds machinery-gloss over the topology is drift. Three rulings:
   substrate already carrying the true name.
 - **Execution strategy never lives in a name.** HOW a stage runs is a `~>`
   handler fact (`>< [Thread ×4]` is a derived badge, §`><`), so
-  `parallel_map` is vocabulary drift over `map ~> Schedule` — a named
-  dissolution (`Hβ.prelude.parallel-map-dissolves-into-schedule`), kept only
-  until map's fanout substrate lands.
+  `parallel_map` was vocabulary drift over `map ~> Schedule` — DISSOLVED
+  2026-07-02 (`Hβ.prelude.parallel-map-dissolves-into-schedule`). The blocker
+  was never map's fanout substrate landing (that landed at PLAN §5.U STEP 4);
+  it was that a standalone helper can never reach `Thread` scheduling at all:
+  the schedule is read LIVE at the fanout's own install site (§`><` — the
+  same `resolve_in_stack` every op uses), never across a call boundary, so a
+  `><` inside a reusable fn is permanently `Seq` while its name promises
+  parallelism. `map` is sequential by construction (one tail loop); genuine
+  multi-core map is written `(map(f, a)) >< (map(f, b)) ~> Thread` at the
+  site where the schedule installs. Caller-selectable fanout inside a
+  reusable helper is the open peer `Hβ.lower.schedule-specialized-callee`
+  (PLAN §5.R band E).
 - **A name must not lie about the representation.** `list_head`/`list_tail`
   read and remove the LAST element (the snoc end — O(1) by construction);
   the borrowed cons-vocabulary asserts the opposite and has already billed

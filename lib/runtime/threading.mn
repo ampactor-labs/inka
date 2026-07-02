@@ -151,64 +151,6 @@ handler sequential_compose with results = [] {
   num_cores() => resume(1)
 }
 
-// ─── parallel_map — runtime-list parallel fold via `><` ─────────────
-//
-// The N-arity primitive that pair-forms (compile_pair_modules,
-// format_pair, teach_pair, cursor_pair_at) accreted around the absence
-// of. Per `feedback_fully_as_early.md`: binary pair-forms ARE the tell
-// that an N-arity peer is missing; this IS that peer.
-//
-// Per Layer 3 framing (cursor IS the scheduler): parallelism IS handler
-// interpretation of continuation-capture (kernel primitive #2). `><` IS
-// the multi-cont OneShot fork at the kernel layer; parallel_map IS the
-// runtime-list fold via binary `><`; `parallel_compose` interprets the
-// forks SPATIALLY (across cores), `sequential_compose` interprets them
-// TEMPORALLY. Same source — handler swap.
-//
-// Per CLAUDE.md ⌁ eight interrogations:
-//   Graph?     recursive list-fold → LMatch + LCall(spawn/join) + LCons
-//   Handler?   parallel_compose (or sequential_compose) installed upstream
-//   Verb?      `><` is the binary step of the fold; `|>` is chain glue
-//   Row?       Thread + (caller's row); HM widens at instantiation
-//   Ownership? each list element consumed (`own`); list itself ref-borrowed
-//   Refinement? length-preserving — peer follow-up (post-L1)
-//   Gradient?  unlocks "sequential map → parallel_map for free" suggestion
-//   Reason?    each spawn leaves Reason::ParallelComposeSpawn(branch_idx)
-//
-// Drift refused: 1 (no thread-pool / scheduler object — `><` IS the
-// fanout); 6 (uniform N=0 to ∞; pair-forms collapse to
-// `parallel_map(f, [a, b])`); 9 (no "sequential fallback for now" —
-// sequential_compose is a peer HANDLER, not a deferred mode).
-//
-// Peer follow-ups (positive-form, structurally orthogonal):
-// - Hβ.runtime.wasi-thread-spawn-seed — bootstrap/src/* substrate
-//   importing wasi_thread_spawn + per-thread bump arena partition.
-//   Without it, parallel_compose runs single-threaded via the
-//   intrinsics below; with it, OS threads pin all cores cargo-style.
-// - Hβ.driver.level-set-par-walk — Kahn-style topological levels in
-//   src/driver.mn; modules in same level parallel_map; cross-level
-//   sequential gates dep-installation.
-// - Hβ.cursor.speculative-compile — Axis 2 multi-shot dispatched
-//   spatially: Synth's MultiShot proposer captures cursor at "what
-//   type for this hole?"; per-candidate compile on different cores;
-//   results bubble back as gradient suggestions with full Reason chains.
-// - Hβ.cursor.work-stealing-via-gradient — when N cores finish their
-//   handles and ask "what next?", the cursor's gradient returns
-//   argmax. The gradient IS the priority queue; no scheduler module.
-
-fn parallel_map(f, xs) with Thread = {
-  if len(xs) == 0 { [] }
-  else {
-    let h = last(xs)
-    let t = drop_last(xs)
-    let (head_result, tail_results) =
-      (f(h))
-          ><
-      (parallel_map(f, t))
-    [head_result] ++ tail_results
-  }
-}
-
 // ─── FFI surface ────────────────────────────────────────────────────
 //
 // wasi-threads provides thread-spawn(start_arg) -> tid as the only

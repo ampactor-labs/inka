@@ -139,19 +139,18 @@ handler cursor_default with !Mutate {
   }
 }
 
-// ─── Multi-cursor projection — `parallel_map` over a span list ──────
+// ─── Multi-cursor projection — map over a span list ─────────────────
 //
 // `cursor_pair_at` (binary special-case) was erased per
 // `feedback_fully_as_early.md`: pair-forms ARE the tell that an N-arity
 // peer is missing. Multi-cursor projection IS
-// `spans |> parallel_map((s) => cursor_at(s))` directly at the call
-// site — list-first via the pipe (matching threading.mn's
-// `parallel_map(f, xs)`), the op invoked as a BARE call (`perform`
-// dissolved, SYNTAX.md); `parallel_compose` handler upstream dispatches
-// each projection to a separate thread. The shape on the page IS the
-// topology — the cursor reading N positions simultaneously. Drift 6
-// erasure: small-arity special-case removed; N-arity primitive
-// (`lib/runtime/threading.mn:parallel_map`) carries the substrate.
+// `spans |> map((s) => cursor_at(s))` directly at the call site, the
+// op invoked as a BARE call (`perform` dissolved, SYNTAX.md). The
+// shape on the page IS the topology — the cursor reading N positions.
+// N cores reading simultaneously is a `><` fanout under its own
+// `~> Thread` at the call site — the schedule is read at the fanout's
+// install, never across a call (Hβ.lower.schedule-specialized-callee).
+// Drift 6 erasure: small-arity special-case removed.
 
 // ─── IC fixpoint — `<~` feedback closure on the cursor ────────────────
 //
@@ -174,7 +173,7 @@ handler cursor_default with !Mutate {
 //   `|>` sequential through cursor_argmax_compute
 //   `~>` handler-attach for IC + ic_fixpoint_handler
 //   `<~` feedback closing on stability
-//   `><` parallel multi-cursor (via `parallel_map` over a span list)
+//   `><` parallel multi-cursor (a span-list fanout under ~> Thread)
 //   `<|` divergence into the eight aspects (inside cursor_at)
 //
 // This IS what mentl does. Not "compile" as a separate phase — the
@@ -242,12 +241,12 @@ fn enumerate_gradient_positions() with GraphRead + !Mutate = {
 }
 
 // Per-position scoring is independent — each handle's score reads
-// gates × proximity from the graph + pure decay table. parallel_map
-// dispatches via Thread; cargo-class fan-out when parallel_compose
-// installed in the cursor's outer ~> chain.
+// gates × proximity from the graph + pure decay table; map's tail
+// loop walks them. Cargo-class fan-out is a `><` under its own
+// `~> Thread` at this site (Hβ.lower.schedule-specialized-callee).
 fn score_all_positions(handles, caret) with GraphRead + !Mutate = {
   handles
-    |> parallel_map((h) => score_one_position(h, caret))
+    |> map((h) => score_one_position(h, caret))
 }
 
 fn score_one_position(handle, caret) with GraphRead + !Mutate = {

@@ -228,23 +228,21 @@ fn driver_install_loop(ref entries, i, n) with Memory + Alloc + EnvWrite = {
 }
 
 
-// ─── Topological-layer parallel walk (cargo-class) ──────────────────
+// ─── Topological-layer walk (cargo-class) ───────────────────────────
 //
 // `driver_collect_dag` produces modules in post-order; this layer
 // peels them into topological levels. Layer 0 = leaves (no in-DAG
 // deps); layer N = modules whose deepest in-DAG dep is in layer N-1.
-// Modules WITHIN a layer are dep-independent — parallel_map fans them
-// out via `><`. Layers process sequentially: layer N completes (every
-// module's exports install into env) BEFORE layer N+1 starts (so
-// dependents see all their deps).
+// Modules WITHIN a layer are dep-independent; each walks a layer, and
+// layers process sequentially: layer N completes (every module's
+// exports install into env) BEFORE layer N+1 starts (so dependents
+// see all their deps).
 //
-// each over layers (sequential gates dep-installation) × per-layer
-// parallel_map (genuine parallelism via Thread effect + parallel_compose)
-// IS the cargo-equivalent topology. Handler swap decides spatial
-// (parallel_compose → OS threads) vs temporal (sequential_compose → one
-// thread) — same source.
-//
-// Per `Hβ.driver.level-set-par-walk` peer follow-up closure.
+// The layer partition IS the topological half of
+// `Hβ.driver.level-set-par-walk`; the multi-core half is a `><`
+// fanout under its own `~> Thread` written at this site — the
+// schedule is read at the fanout's install, never across a call
+// (Hβ.lower.schedule-specialized-callee).
 
 // Process the entry module and all its transitive dependencies.
 // Each module either loads from cache or re-infers; envs install in
@@ -255,7 +253,7 @@ fn driver_check(ref entry_module)
   entry_module
     |> driver_collect_dag_with_deps
     |> driver_partition_layers
-    |> each((layer) => parallel_map(driver_check_module, layer))
+    |> each((layer) => each(driver_check_module, layer))
 }
 
 // driver_check_entry — the compile path's check: infer every DEP of the
@@ -272,7 +270,7 @@ fn driver_check_entry(ref entry_module)
     |> driver_collect_dag_with_deps
     |> filter((m_with_deps) => { let (m, _) = m_with_deps; m != entry_module })
     |> driver_partition_layers
-    |> each((layer) => parallel_map(driver_check_module, layer))
+    |> each((layer) => each(driver_check_module, layer))
   // Parse + infer the entry ONCE; its AST is what compile lowers live.
   let ast = parse_program(lex(fs_read_file(driver_module_path(entry_module))))
   infer_program(ast)

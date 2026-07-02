@@ -273,14 +273,14 @@ type CursorSessionResult
       query_default_view: String
     })
 
-// ─── Multi-module compilation — `parallel_map` over a module list ────
+// ─── Multi-module compilation — map over a module list ──────────────
 //
 // `compile_pair_modules` (binary special-case) was erased per
-// `feedback_fully_as_early.md`: when the driver's topological-layer
-// par-walk lands (`Hβ.driver.level-set-par-walk` peer), each
-// dep-independent layer composes as `parallel_map(compile, layer)`
-// directly. `parallel_compose` handler in main's `~>` chain dispatches
-// each module's compile to a separate thread; render targets attach
+// `feedback_fully_as_early.md`: the driver's topological-layer walk
+// (`Hβ.driver.level-set-par-walk`, layer partition live in driver.mn)
+// composes each dep-independent layer as `map(compile, layer)`; the
+// multi-core half is a `><` fanout under `~> Thread` at the layer
+// site (Hβ.lower.schedule-specialized-callee). Render targets attach
 // via `~>` to the per-module wat output. Drift 6 erasure.
 
 // ─── ic_compile_loop — `<~` feedback closing on queue stability ───────
@@ -484,13 +484,12 @@ handler fresh_for_query with next_display = 0 {
 // Collection helpers — consumed by teach / audit
 
 // Per-fn gradient projection. Each FnStmt's teach_gradient is
-// independent of siblings (no shared state mutation among reads).
-// parallel_map dispatches via the Thread effect handler; on a multi-
-// core host with parallel_compose installed, the N functions' gradients
-// compute on N threads. Same source, handler swap.
+// independent of siblings (no shared state mutation among reads);
+// map's tail loop walks them. N-core gradients are a `><` under its
+// own `~> Thread` at this site (Hβ.lower.schedule-specialized-callee).
 fn collect_gradients(ast) = {
   ast
-    |> parallel_map((node) => {
+    |> map((node) => {
          let N(body, _, handle) = node
          match body {
            NStmt(FnStmt(name, _, _, _, _)) =>
@@ -532,11 +531,11 @@ fn join_unlock_labels(labels) with Pure = {
 }
 
 // Per-fn audit projection. Each FnStmt's row + capability set is
-// independently computable from its handle's graph state. parallel_map
-// dispatches via Thread; spatial dispatch lights up cores per N fns.
+// independently computable from its handle's graph state; map's tail
+// loop walks them (N-core = `><` + `~> Thread` at this site).
 fn collect_fn_rows(ast) = {
   ast
-    |> parallel_map((node) => {
+    |> map((node) => {
          let N(body, _, handle) = node
          match body {
            NStmt(FnStmt(name, _, _, _, _)) =>

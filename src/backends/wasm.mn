@@ -29,10 +29,10 @@ effect WasmOut {
 
 // WatBuffer effect — collect_wat returns the accumulated buffer of a
 // scoped emit. Used by row-aware-parallel-emit (per Hβ.emit.row-aware-
-// parallel-emit): each fn body emits to a fresh wat_to_string handler
-// in parallel, then the collected strings get sequential output
-// preserving source order. parallel_map's per-branch handler isolation
-// IS the substrate that makes per-fn emit safely parallel.
+// parallel-emit): each fn body emits to a fresh wat_to_string handler,
+// then the collected strings get sequential output preserving source
+// order. Per-fn handler isolation IS the substrate that makes per-fn
+// emit safely parallel (a `><` fanout under `~> Thread` at the site).
 effect WatBuffer {
   wat_collect() -> String
 }
@@ -1209,13 +1209,15 @@ fn emit_memory_decl() = {
 // Cargo-class per-fn parallel emit (Hβ.emit.row-aware-parallel-emit):
 // each (name, params, body, captures_count) record is INDEPENDENT —
 // no shared state across fn bodies once the string-table / fn-index
-// pre-passes have run. parallel_map dispatches each to its own
-// wat_to_string handler instance; resulting strings emit sequentially
-// to wat_stdout preserving source order (Q-B.7.3 determinism guarantee).
+// pre-passes have run. map walks each to its own wat_to_string handler
+// instance; resulting strings emit sequentially to wat_stdout
+// preserving source order (Q-B.7.3 determinism guarantee). N-core emit
+// is a `><` fanout under `~> Thread` at this site
+// (Hβ.lower.schedule-specialized-callee).
 fn emit_functions(lowered) = {
   let fn_records = collect_fn_emit_records(lowered)
   fn_records
-    |> parallel_map(emit_one_fn_to_string)
+    |> map(emit_one_fn_to_string)
     |> each((s) => wat_emit(s))
 }
 

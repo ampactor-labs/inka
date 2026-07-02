@@ -270,10 +270,12 @@ fn collect_all_entries(cached) with Pure = {
 }
 
 // Per-entry scoring is independent (read-only graph chase from each
-// entry's handle + pure caret_proximity_weight). parallel_map dispatches
-// via Thread; spatial multi-core when parallel_compose installed.
+// entry's handle + pure caret_proximity_weight); map's tail loop walks
+// them. Multi-core scoring is a `><` fanout under its own `~> Thread`
+// at this site — the schedule is read at the fanout's install, never
+// across a call (Hβ.lower.schedule-specialized-callee).
 fn score_all_entries(entries, caret) with GraphRead + !Mutate = {
-  parallel_map((entry) => score_one_entry(entry, caret), entries)
+  map((entry) => score_one_entry(entry, caret), entries)
 }
 
 fn score_one_entry(entry, caret) with GraphRead + !Mutate = {

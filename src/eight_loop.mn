@@ -200,19 +200,20 @@ handler interrogate_default with !Mutate {
     }))
   },
 
-  // interrogate_all walks every binding-bearing node concurrently
-  // via parallel_map; the Thread effect handler installed upstream
-  // dispatches the parallelism. Per protocol_parallelism_symmetry.md:
-  // <| (per-position eight-aspect fanout, inside interrogate_at) +
-  // parallel_map (across positions) compose — the project-wide audit
-  // IS the cursor projection scaled to N handles.
+  // interrogate_all walks every binding-bearing node — map's tail
+  // loop across positions, `<|` per-position eight-aspect fanout
+  // inside interrogate_at: the project-wide audit IS the cursor
+  // projection scaled to N handles. N-core interrogation is a `><`
+  // fanout under its own `~> Thread` at this site (the schedule is
+  // read at the fanout's install, never across a call —
+  // Hβ.lower.schedule-specialized-callee).
   interrogate_all() => {
     let snapshot = graph_snapshot()   // drift-audit: ignore — sequenced effectful read (stream-consumer/checkpoint), CLAUDE.md Anchor 6 exclusion
     let Graph(_nodes, _epoch, next, _overlays, _spans) = snapshot
     let positions = enumerate_handles(0, next)
     let reports =
       positions
-        |> parallel_map((h) => interrogate_at(h))
+        |> map((h) => interrogate_at(h))
     resume(reports)
   },
 
@@ -230,8 +231,8 @@ handler interrogate_default with !Mutate {
 //
 // This composition exhibits all FIVE verbs:
 //   <|  inside interrogate_at — eight verdicts per position
-//   ><  multi-cursor (via `parallel_map` over a span list upstream)
-//   |>  positions through parallel_map → reports
+//   ><  multi-cursor (a span-list fanout under its own ~> install)
+//   |>  positions through map → reports
 //   ~>  interrogate_default attached as handler
 //   <~  feedback closing on gradient density stability
 //

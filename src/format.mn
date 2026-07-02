@@ -90,7 +90,7 @@ handler format_default with !Mutate {
     let stmts = ast_top_level_stmts(ast)
     let rendered =
       stmts
-        |> parallel_map((s) => format_one_stmt(s))
+        |> map((s) => format_one_stmt(s))
     resume(join_lines(rendered))
   },
 
@@ -259,14 +259,13 @@ fn render_feedback_chain(input, spec) with Format + !Mutate = {
   "{input_str}\n{spaces(indented_center())}<~ {spec_str}"
 }
 
-// ─── Multi-source format — `parallel_map` over an AST list ──────────
+// ─── Multi-source format — map over an AST list ─────────────────────
 //
 // `format_pair` (binary special-case) was erased per
 // `feedback_fully_as_early.md`: callers compose
-// `parallel_map(format_program, asts)` directly. `format_program`
-// itself already uses `parallel_map` over top-level statements
-// (line 93); the same primitive composes at the multi-source level.
-// Drift 6 erasure.
+// `map(format_program, asts)` directly. `format_program` itself
+// already maps over top-level statements (line 93); the same stage
+// composes at the multi-source level. Drift 6 erasure.
 
 // ─── format_ic_loop — `<~` IC fixpoint on canonical-form stability ─
 //

@@ -38,15 +38,14 @@ fn expect_false(value) = {
 
 fn run_tests(tests) = {
   // Each test is independent — its assertion counts compose by fold-sum
-  // and its failure messages have no order dependency. parallel_map
-  // dispatches the N tests to N OS threads via parallel_compose; per-
-  // test (passed, failed) tuples accumulate via fold. Test output stays
-  // honest because the println happens inside the check arm at test
-  // execution time — interleaved messages from concurrent tests are a
-  // tolerable cost for cargo-class test parallelism (peer follow-up
-  // Hβ.test.per-test-output-buffer routes per-thread println through a
-  // wat_to_string-style buffer for sequential surface).
-  let results = parallel_map((test) => {
+  // and its failure messages have no order dependency; map's tail loop
+  // runs them, per-test (passed, failed) tuples accumulate via fold.
+  // Cargo-class test parallelism is a `><` fanout under its own
+  // `~> Thread` at this site (Hβ.lower.schedule-specialized-callee);
+  // per-test output buffering rides peer Hβ.test.per-test-output-buffer
+  // (a wat_to_string-style per-thread println buffer for a sequential
+  // surface).
+  let results = map((test) => {
     let (name, test_fn) = test
     handle {
       test_fn()

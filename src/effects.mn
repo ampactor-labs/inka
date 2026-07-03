@@ -318,7 +318,33 @@ fn row_subsumes(ref body_row, ref gate_row) with !Mutate = {
 //   Open(A,v1)/Open(B,v2) → if v1=v2, unify names; else bind v1 to Open(B-A, v2)
 //   Neg / Sub / Inter   → normalize first, re-dispatch
 fn unify_row(ref a, ref b, ref span, ref reason) with !Mutate = {
-  unify_row_canonical(normalize_row(a), normalize_row(b), span, reason)
+  unify_row_canonical(normalize_row(resolve_row(a)),
+                      normalize_row(resolve_row(b)), span, reason)
+}
+
+// UNIFY IS UNION-FIND at the row sort too (b4a98e2 landed the law for
+// types; rows never got it). An EfOpen whose var is already BOUND must
+// resolve to its ROOT before any arm runs — the old surface-bind
+// OVERWROTE a bound var's row (walk3's 8629: Closed[It3] from the
+// declared enforcement, clobbered at drive3's call-site unification
+// with a residual built from inline names only — It3 discarded, chase
+// running to a free terminal, escaping rows empty, bare calls, the
+// strict scan's trap). Resolution folds the chain's names forward and
+// lands on the terminal var, so binds only ever hit FREE terminals.
+fn resolve_row(row) with !Mutate = match row {
+  EfOpen(names, v) => {
+    let GNode(kind, _) = graph_chase(v)
+    match kind {
+      NRowBound(inner) => match resolve_row(inner) {
+        EfPure           => closed_or_pure(names),
+        EfClosed(more)   => closed_or_pure(name_set_canonicalize(names ++ more)),   // drift-audit: ignore — one union per resolve step, not a loop accumulator
+        EfOpen(more, v2) => EfOpen(name_set_canonicalize(names ++ more), v2),   // drift-audit: ignore — one union per resolve step
+        other            => other
+      },
+      _ => row
+    }
+  },
+  _ => row
 }
 
 fn unify_row_canonical(ref a, ref b, ref span, ref reason) with !Mutate = {

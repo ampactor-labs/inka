@@ -10,6 +10,13 @@
 // Both compile to (i32.const N); zero allocation. The substrate
 // has ONE story for tagged values; Bool is its canonical instance.
 
+// The vocabulary's own carrier type — ONE home (the wheel's types.mn
+// points here; a rung linking the prelude gets the constructors the
+// stage fns speak in).
+type Option
+  = None
+  | Some(a)
+
 type Bool = False | True
 
 // ─── The Iterate Effect ─────────────────────────────────────

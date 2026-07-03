@@ -1106,9 +1106,9 @@ fn show_flow_label(label) with Pure = match label {
   Secret  => "Secret"
 }
 
-type Option
-  = None
-  | Some(a)
+// Option lives in lib/prelude.mn — the vocabulary type at the vocabulary
+// home, ONE declaration serving the wheel's self-build (src+lib) and every
+// program that links the prelude.
 
 // Scoped bindings via push/pop mark. Env is never passed as argument.
 // Every read performs env_lookup; every write performs env_extend.

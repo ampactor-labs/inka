@@ -745,6 +745,35 @@ let c = Customer{name: "Morgan", age: 30}
 // p and c have different types; cannot be unified
 ```
 
+**Brace-header slots close at `{` — the construction never extends a header.**
+Three grammar slots parse an expression whose own terminator is `{`: an `if`
+condition, a `match` scrutinee, and a handler declaration's state inits
+(`with x = init {`). In those slots a capitalized name followed by `{` is the
+name alone — the brace opens the form's block, never a record body:
+
+```
+handler find(pred) with found = None {   // `None {` — the `{` opens the arms
+  ...
+}
+match acquired { ... }                    // scrutinee ends at `{`
+if owner == None { fallback() }           // `None {` — the then-block
+```
+
+This is forced, not chosen: the slot's follow-set contains `{`, so a greedy
+record-continuation is ambiguous by construction (`None { x }` — a punned
+single-field record or a block holding `x`? — no lookahead resolves it), and
+principle 3 makes the grammar pay that debt here. The common case (a nullary
+constructor as init or scrutinee) is free; the rare record-literal-in-header
+parenthesizes, and the general unexpected-token diagnostic teaches it:
+
+```
+match (Person{name: n}) { ... }           // record literal in a header slot
+```
+
+Everywhere else — bindings, arguments, arm bodies, operands — `TypeName{...}`
+extends as written. Layout is never consulted (principle 1); the slot, not
+whitespace, decides.
+
 ### Pattern syntax for records
 
 ```

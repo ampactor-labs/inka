@@ -894,10 +894,22 @@ fn parse_handler_decl(ref tokens, pos) = {
 // entry is a record `{name, init}` per Ω.5 record-shape discipline
 // (drift mode 7 refusal — no (names_list, inits_list) parallel arrays).
 // Reuses parse_expr for inits.
+// Typed projections for the {init, name} record this file mints (state
+// fields + resume updates share the shape). A map/fold lambda's param is
+// a bare generic under the seed, and an unproven receiver's field access
+// hits the loud emit floor; the call-site unification with the declared
+// param IS the pin. One home — the mint — every consumer reads through.
+fn state_field_name(f: {init: N, name: String}) -> String = f.name
+fn state_field_init(f: {init: N, name: String}) -> N = f.init
+
+// The handler-arm record's typed projection ({args, body, op_name},
+// minted in parse_handler_arm) — same pin, same discipline.
+fn handler_arm_op_name(a: {args: List, body: N, op_name: String}) -> String = a.op_name
+
 fn parse_handler_state_fields(ref tokens, pos) = {
   let name = ident_at(tokens, pos)
   let p_eq = expect(tokens, skip_ws(tokens, pos + 1), TEq)
-  let (init, p_after_init) = parse_expr(tokens, skip_ws(tokens, p_eq))
+  let (init, p_after_init) = parse_header_expr(tokens, skip_ws(tokens, p_eq))
   let field = {name: name, init: init}
   let p_next = skip_ws(tokens, p_after_init)
   if at(tokens, p_next, TComma) {
@@ -973,6 +985,7 @@ fn parse_handler_arms(ref tokens, pos) = {
     // arms are records keyed by field name. New fields (e.g.,
     // arm_fn_idx for handler arm fn indexing) land additively.
     let arm = {args: args, body: body, op_name: op_name}
+    // (handler_arm_op_name below is this record's typed projection)
     ([arm] ++ rest, p7)
   }
 }
@@ -1012,6 +1025,23 @@ fn parse_import_path(ref tokens, pos, own acc) = {
 
 // Expressions — precedence-climbing
 
+// The two expression slots the grammar distinguishes (SYNTAX §Nominal
+// record types, the brace-header rule). FreeExpr admits every postfix
+// continuation. BraceHeader is a slot whose OWN terminator is `{` — an
+// `if` condition, a `match` scrutinee, a handler decl's state inits —
+// where a capitalized name followed by `{` is the name alone (the brace
+// opens the form's block; `None { x }` is otherwise unresolvable against
+// the punned single-field record). Threaded through the binop spine;
+// every bracketed recursion re-enters through parse_expr = FreeExpr, so
+// `match (Person{name: n}) { ... }` stays available by parenthesizing.
+type ExprSlot = FreeExpr | BraceHeader
+
+// The brace-header entry — the operand ladder in the BraceHeader slot.
+// `let` / `handle` top-forms are not header material (a header is a
+// plain operand chain ending at the form's `{`).
+fn parse_header_expr(ref tokens, pos) =
+  parse_binop(tokens, skip_ws(tokens, pos), 1, BraceHeader)
+
 fn parse_expr(ref tokens, pos) = {
   let p = skip_ws(tokens, pos)
   let span = span_at(tokens, p)
@@ -1033,7 +1063,7 @@ fn parse_expr(ref tokens, pos) = {
   } else if at(tokens, p, THandle) && at(tokens, skip_ws(tokens, p + 1), TLBrace) {
     parse_handle(tokens, p + 1, span)
   } else {
-    parse_binop(tokens, p, 1)
+    parse_binop(tokens, p, 1, FreeExpr)
   }
 }
 
@@ -1064,12 +1094,12 @@ fn parse_let_expr(ref tokens, pos, start_span) = {
   (nexpr(desugar_block([let_stmt], body, start_span), start_span), p7)
 }
 
-fn parse_binop(ref tokens, pos, min_prec) = {
-  let (left, p) = parse_postfix(tokens, pos)
-  binop_loop(tokens, left, p, min_prec)
+fn parse_binop(ref tokens, pos, min_prec, slot) = {
+  let (left, p) = parse_postfix(tokens, pos, slot)
+  binop_loop(tokens, left, p, min_prec, slot)
 }
 
-fn binop_loop(ref tokens, left, pos, min_prec) = {
+fn binop_loop(ref tokens, left, pos, min_prec, slot) = {
   let p = skip_ws(tokens, pos)
   let k = kind_at(tokens, p)
   let prec = op_prec(k)
@@ -1081,7 +1111,7 @@ fn binop_loop(ref tokens, left, pos, min_prec) = {
     // trailing newline) → parse_primary truncates the chain. Newlines
     // around a binop are transparent in BOTH directions (SYNTAX.md —
     // layout is never semantics; the table is the only scope law).
-    let (right, p2) = parse_binop(tokens, skip_ws(tokens, p + 1), prec + 1)
+    let (right, p2) = parse_binop(tokens, skip_ws(tokens, p + 1), prec + 1, slot)
     let N(_, left_span, _) = left
     let combined_span = span_join(left_span, op_span)
     let node = match op_to_pipe_kind(k) {
@@ -1099,26 +1129,26 @@ fn binop_loop(ref tokens, left, pos, min_prec) = {
         }
       }
     }
-    binop_loop(tokens, node, p2, min_prec)
+    binop_loop(tokens, node, p2, min_prec, slot)
   } else {
     (left, p)
   }
 }
 
 // Postfix: call, field access, indexing.
-fn parse_postfix(ref tokens, pos) = {
-  let (e, p) = parse_primary(tokens, pos)
-  postfix_loop(tokens, e, p)
+fn parse_postfix(ref tokens, pos, slot) = {
+  let (e, p) = parse_primary(tokens, pos, slot)
+  postfix_loop(tokens, e, p, slot)
 }
 
-fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
+fn postfix_loop(ref tokens, e, pos, slot) = match kind_at(tokens, pos) {
   TLParen => {
     let (args, p2) = parse_call_args(tokens, skip_ws(tokens, pos + 1))
     let N(_, start_span, _) = e
     let end_span = span_at(tokens, p2 - 1)
     postfix_loop(tokens,
       nexpr(CallExpr(e, args), span_join(start_span, end_span)),
-      p2)
+      p2, slot)
   },
   // Subscript `xs[i]` per SYNTAX.md:611-632 + #139. The parser
   // produces IndexExpr(receiver, index) as a semantic AST node;
@@ -1138,7 +1168,7 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
     let end_span = span_at(tokens, p3 - 1)
     postfix_loop(tokens,
       nexpr(IndexExpr(e, idx_expr), span_join(start_span, end_span)),
-      p3)
+      p3, slot)
   },
   TDot => {
     let field = ident_at(tokens, pos + 1)
@@ -1146,22 +1176,26 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
     let field_span = span_at(tokens, pos + 1)
     postfix_loop(tokens,
       nexpr(FieldExpr(e, field), span_join(start_span, field_span)),
-      pos + 2)
+      pos + 2, slot)
   },
   TLBrace => {
     // H2.3 nominal record literal: `Person{name: "Morgan", ...}`.
-    // The brace must immediately follow a type-name VarRef (no
-    // whitespace between — postfix_loop is called with pos at the
-    // very next token). Type names are capitalized; lowercase
-    // identifiers fall through and the brace stays a separate
-    // construct (block at expr position, not a record literal).
+    // Type names are capitalized; lowercase identifiers fall through
+    // and the brace stays a separate construct. In a BraceHeader slot
+    // the `{` is the FORM's own opener (SYNTAX §Nominal record types,
+    // brace-header rule): `with found = None {`, `match acquired {`,
+    // `if x == None {` — the continuation never fires there; a record
+    // literal in a header parenthesizes.
     let N(body, start_span, _) = e
-    let is_named_record = match body {
-      NExpr(VarRef(name)) =>
-        byte_len(name) > 0 &&
-        first_char_code(name) >= 65 &&
-        first_char_code(name) <= 90,
-      _ => false
+    let is_named_record = match slot {
+      BraceHeader => false,
+      FreeExpr => match body {
+        NExpr(VarRef(name)) =>
+          byte_len(name) > 0 &&
+          first_char_code(name) >= 65 &&
+          first_char_code(name) <= 90,
+        _ => false
+      }
     }
     if is_named_record {
       let type_name = match body {
@@ -1172,7 +1206,7 @@ fn postfix_loop(ref tokens, e, pos) = match kind_at(tokens, pos) {
       let end_span = span_at(tokens, p2 - 1)
       postfix_loop(tokens,
         nexpr(NamedRecordExpr(type_name, sorted), span_join(start_span, end_span)),
-        p2)
+        p2, slot)
     } else { (e, pos) }
   },
   // No postfix suffix here. `<` is ALWAYS comparison (TLt) — angle-bracket
@@ -1245,7 +1279,7 @@ fn parse_one_call_arg(ref tokens, pos) = {
 
 // Primary expressions
 
-fn parse_primary(ref tokens, pos) = {
+fn parse_primary(ref tokens, pos, slot) = {
   let span = span_at(tokens, pos)
   match kind_at(tokens, pos) {
     TIntLit(n)      => (nexpr(LitInt(n), span), pos + 1),
@@ -1320,11 +1354,11 @@ fn parse_primary(ref tokens, pos) = {
       (nexpr(LambdaExpr(params, body), span), p5)
     },
     TMinus       => {
-      let (inner, p) = parse_postfix(tokens, pos + 1)
+      let (inner, p) = parse_postfix(tokens, pos + 1, slot)
       (nexpr(UnaryOpExpr(UNeg, inner), span), p)
     },
     TBang        => {
-      let (inner, p) = parse_postfix(tokens, pos + 1)
+      let (inner, p) = parse_postfix(tokens, pos + 1, slot)
       (nexpr(UnaryOpExpr(UNot, inner), span), p)
     },
     // SYNTAX.md:324-329 — E_LambdaAsOrOr: the double-pipe at expression
@@ -1824,7 +1858,7 @@ fn is_destructure_pat(pat) = match pat {
 }
 
 fn parse_if(ref tokens, pos, span: ValidSpan) = {
-  let (cond, p) = parse_expr(tokens, pos)
+  let (cond, p) = parse_header_expr(tokens, pos)
   let p2 = skip_ws(tokens, p)
   let (then_e, p3) =
     if at(tokens, p2, TLBrace) {
@@ -1850,7 +1884,7 @@ fn parse_if(ref tokens, pos, span: ValidSpan) = {
 }
 
 fn parse_match(ref tokens, pos, span: ValidSpan) = {
-  let (scrutinee, p) = parse_expr(tokens, pos)
+  let (scrutinee, p) = parse_header_expr(tokens, pos)
   let p2 = expect(tokens, skip_ws(tokens, p), TLBrace)
   let buf = make_list(4)
   let (final_buf, final_count, p3) =
@@ -2031,7 +2065,7 @@ fn parse_body(ref tokens, pos) = {
     // the brace path to the seed's "route through parse_expr ALWAYS".
     let (block, p_block) =
       parse_block_expr_checked(tokens, p + 1, span_at(tokens, p))
-    binop_loop(tokens, block, p_block, 1)
+    binop_loop(tokens, block, p_block, 1, FreeExpr)
   } else {
     // SYNTAX.md «Function declarations»: braces are required EXACTLY when the
     // body is a BlockExpr (it introduces let-bindings/statements) — NEVER keyed

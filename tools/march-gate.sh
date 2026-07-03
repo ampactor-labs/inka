@@ -37,7 +37,11 @@ if [ "${1:-}" != "--no-build" ]; then
 fi
 [ -f "$OUT/m2.wasm" ] || { echo "✗ no m2.wasm — run without --no-build"; exit 1; }
 
-RT="lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn"
+# The trio + prelude: strings.mn's parse_int_base calls prelude's
+# parse_int, so the honest link set includes it — m2 emits the whole
+# input (no reachability-from-main yet, unlike the seed), so an
+# under-linked dependency surfaces as an undefined global at assemble.
+RT="lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn lib/prelude.mn"
 pass=0; fail=0
 
 # rung <name> <expected-exit> <<'EOF' ... source ... EOF

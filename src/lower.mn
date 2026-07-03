@@ -232,7 +232,7 @@ handler arm_ev_ledger_ctx with active = false, names = [], entries = [] {
   }
 }
 
-fn index_of_name(names, target, i) = {
+fn index_of_name(names: [String], target: String, i) = {
   if i >= len(names) { -1 }
   else if names[i] == target { i }
   else { index_of_name(names, target, i + 1) }
@@ -779,6 +779,11 @@ fn lower_compute_ev_slot_for_op(op_name) = match lookup_parent_effect(op_name) {
 // immutable op-list — never a row position. `clamp_index` is its defensive
 // floor: an op absent from its own effect's op-list is structurally impossible
 // (the op→effect edge proves membership), so -1 never arises here.
+// A -1 here means an op missing from its own effect's registered list —
+// with index_of_name's String proof landed the live cause (pointer-eq on
+// the op name: every multi-op effect's ops all clamped to slot 0, result
+// overwriting yield in the install record) is gone; the clamp's floor is
+// named residue until the diagnostic path reaches this site.
 fn clamp_index(i) = if i < 0 { 0 } else { i }
 
 // ─── THE FLOW-CLOSURE (master plan §6 1★ Stage 1) ───────────────────────

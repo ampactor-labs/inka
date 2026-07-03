@@ -267,6 +267,7 @@ fn emit_module(lowered) = {
   emit_runtime_imports(wasi_ops)
   emit_memory_decl()
   emit_state_globals(state_slots)
+  emit_singleton_globals(lowered)
   emit_string_data(string_entries)
   emit_fn_table(all_fn_names)
   emit_fn_index_globals(all_fn_names, 0)
@@ -672,6 +673,82 @@ fn emit_state_globals(slots) = {
   wat_emit(int_to_str(slot))
   wat_emit(" (mut i32) (i32.const 0))\n")
   }, slots)
+}
+
+// ─── The scoped-singleton globals — one `$<hname>_state_g` per NAMED
+// install in the module. The install binds its record here (the Tier-1
+// env-scan home, the scoped-singleton save/restore around every named
+// install); the DECLARATION projects from the same LowIR the binds do —
+// a pure walk collecting every LHandleWith's hname, deduped. Anonymous
+// installs ("" — an inline handler expression) bind no singleton.
+fn emit_singleton_globals(lowered) = {
+  each((h) => {
+    wat_emit("  (global $")
+    wat_emit(h)
+    wat_emit("_state_g (mut i32) (i32.const 0))\n")
+  }, singleton_hnames_list(lowered, []))
+}
+
+fn singleton_hnames_list(stmts, acc) = {
+  if len(stmts) == 0 { acc }
+  else { singleton_hnames_list(drop_last(stmts), singleton_hnames_expr(last(stmts), acc)) }
+}
+
+fn singleton_hnames_expr(expr, acc) = match expr {
+  LHandleWith(_h, b, hn, hname, inits, _an, evs) => {
+    let deeper = singleton_hnames_list(evs,
+      singleton_hnames_list(inits,
+        singleton_hnames_expr(hn, singleton_hnames_expr(b, acc))))
+    if hname == "" { deeper }
+    else if ls_find_str_local(deeper, hname, 0) >= 0 { deeper }
+    else { [hname] ++ deeper }
+  },
+  LLet(_h, _n, inner)       => singleton_hnames_expr(inner, acc),
+  LMakeClosure(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev) =>
+    singleton_hnames_list(ev, singleton_hnames_list(caps, singleton_hnames_list(body, acc))),
+  LMakeContinuation(_h, LFn(_n, _a, _p, body, _r, _f), caps, ev, _, _, _) =>
+    singleton_hnames_list(ev, singleton_hnames_list(caps, singleton_hnames_list(body, acc))),
+  LDeclareFn(LFn(_n, _a, _p, body, _r, _f)) => singleton_hnames_list(body, acc),
+  LBlock(_h, stmts)         => singleton_hnames_list(stmts, acc),
+  LIf(_h, c, t, e)          =>
+    singleton_hnames_list(e, singleton_hnames_list(t, singleton_hnames_expr(c, acc))),
+  LBinOp(_h, _op, lx, r)    => singleton_hnames_expr(r, singleton_hnames_expr(lx, acc)),
+  LUnaryOp(_h, _op, x)      => singleton_hnames_expr(x, acc),
+  LCall(_h, f, args)        => singleton_hnames_list(args, singleton_hnames_expr(f, acc)),
+  LTailCall(_h, f, args)    => singleton_hnames_list(args, singleton_hnames_expr(f, acc)),
+  LReturn(_h, x)            => singleton_hnames_expr(x, acc),
+  LMakeList(_h, elems)      => singleton_hnames_list(elems, acc),
+  LMakeTuple(_h, elems)     => singleton_hnames_list(elems, acc),
+  LSimdLanes(_h, lanes)     => singleton_hnames_list(lanes, acc),
+  LMakeRecord(_h, fs)       => singleton_hnames_list(fs, acc),
+  LMakeVariant(_h, _t, fs)  => singleton_hnames_list(fs, acc),
+  LMatch(_h, s, arms)       => singleton_hnames_arms(arms, singleton_hnames_expr(s, acc)),
+  LSuspend(_h, _o, f, args, ev) =>
+    singleton_hnames_list(ev, singleton_hnames_list(args, singleton_hnames_expr(f, acc))),
+  LFeedback(_h, b, s)       => singleton_hnames_expr(s, singleton_hnames_expr(b, acc)),
+  LPerform(_h, _n, args, _) => singleton_hnames_list(args, acc),
+  LWasiCall(_h, _n, args)   => singleton_hnames_list(args, acc),
+  LEvPerform(_h, _n, _e, _s, a) => singleton_hnames_list(a, acc),
+  LEvRef(_h, _e)            => acc,
+  LEvEntry(_, ev)           => singleton_hnames_expr(ev, acc),
+  LUnresolvedEvidence(_, _) => acc,
+  LFieldLoad(_h, rec, _off) => singleton_hnames_expr(rec, acc),
+  LConvert(_h, _, operand)  => singleton_hnames_expr(operand, acc),
+  LStateSlotStore(_h, _o, v) => singleton_hnames_expr(v, acc),
+  LFnRef(_h, _n, ev)        => singleton_hnames_list(ev, acc),
+  LConst(_, _)              => acc,
+  LLocal(_, _)              => acc,
+  LFeedbackPrior(_)         => acc,
+  LGlobal(_, _)             => acc,
+  LUpval(_, _)              => acc,
+}
+
+fn singleton_hnames_arms(arms, acc) = {
+  if len(arms) == 0 { acc }
+  else {
+    let (_, body) = last(arms)
+    singleton_hnames_arms(drop_last(arms), singleton_hnames_expr(body, acc))
+  }
 }
 
 // Emit `(data (i32.const <offset>) "<escaped-bytes>")` for each

@@ -451,7 +451,8 @@
                         (local.get $param_names)
                         (local.get $body_list)
                         (call $row_make_pure)
-                        (call $len (local.get $caps))))
+                        (call $len (local.get $caps))
+                        (local.get $param_handles)))
     ;; A closure IS state IS evidence: capture the evidence for the effects
     ;; this closure's body performs (the let-bound mirror of the inline-lambda
     ;; path at walk_compound.wat + src/lower.mn LambdaExpr).

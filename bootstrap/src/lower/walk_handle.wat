@@ -431,13 +431,19 @@
         (local.set $fn_body   (call $make_list (i32.const 0)))
         (local.set $fn_body   (call $list_extend_to (local.get $fn_body) (i32.const 1)))
         (drop (call $list_set (local.get $fn_body) (i32.const 0) (local.get $lo_body)))
+        ;; Empty param_handles → arm args floor to i32 (handle 0). A handler
+        ;; op arg's type lives on the op declaration, not read here; effect
+        ;; ops taking a float arg are the edge case, so the i32 floor holds
+        ;; until a float-arg op forces it (emit_fn_body bounds-checks the
+        ;; index). Peer: Hβ.seed.handler-arm-float-arg-repr.
         (local.set $fn_ir (call $lowfn_make
                             (local.get $fn_name)
                             (call $len (local.get $arg_names))
                             (local.get $arg_names)
                             (local.get $fn_body)
                             (call $row_make_pure)
-                            (local.get $fence)))
+                            (local.get $fence)
+                            (call $make_list (i32.const 0))))
         (drop (call $list_set (local.get $buf) (local.get $i)
                 (call $lexpr_make_ldeclarefn (local.get $fn_ir))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))

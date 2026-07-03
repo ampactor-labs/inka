@@ -202,6 +202,24 @@
   (global $emit_state_handles_ptr        (mut i32) (i32.const 0))
   (global $emit_state_handles_len_g      (mut i32) (i32.const 0))
 
+  ;; Fn-result-width registry: (name, is_f64) per emitted fn, filled by the
+  ;; pre-pass ($emit_prepass_fn_results) to a fixpoint. A call's produced
+  ;; width is the CALLEE's declared result, read here — the cross-fn half of
+  ;; the f64 consistency keystone. Program-wide (a fn's result width is
+  ;; fixed); never reset per-fn.
+  (global $emit_fn_result_ptr            (mut i32) (i32.const 0))
+  (global $emit_fn_result_len_g          (mut i32) (i32.const 0))
+  ;; Set when a pre-pass iteration changed a result/param bit — the fixpoint.
+  (global $emit_fr_changed_g             (mut i32) (i32.const 0))
+
+  ;; Fn-PARAM-width registry: (name, [is_f64…]) per fn. A param passed to a
+  ;; call gets its width from the callee's param bit here — the arg-flow half
+  ;; of the f64 keystone (a Float arg reaches lower type-less when the seed
+  ;; stubs effect-op types, so the callee's own param width is the witness).
+  ;; Filled by the same pre-pass fixpoint as the result registry.
+  (global $emit_fn_param_ptr             (mut i32) (i32.const 0))
+  (global $emit_fn_param_len_g           (mut i32) (i32.const 0))
+
   ;; ─── Idempotent initializer (mirrors $lower_init / $infer_init) ────
   ;; Per the seed's discipline for module-level state chunks: every
   ;; public entry calls $emit_init first; subsequent calls no-op.
@@ -224,7 +242,127 @@
         (global.set $emit_fn_locals_len_g       (i32.const 0))
         (global.set $emit_state_handles_ptr     (call $make_list (i32.const 8)))
         (global.set $emit_state_handles_len_g   (i32.const 0))
+        (global.set $emit_fn_result_ptr         (call $make_list (i32.const 8)))
+        (global.set $emit_fn_result_len_g       (i32.const 0))
+        (global.set $emit_fn_param_ptr          (call $make_list (i32.const 8)))
+        (global.set $emit_fn_param_len_g        (i32.const 0))
         (global.set $emit_initialized           (i32.const 1)))))
+
+  ;; ─── Fn-param registry — lookup / bit / set ──────────────────────
+  (func $emit_fn_param_lookup (param $name i32) (result i32)
+    (local $i i32) (local $n i32)
+    (call $emit_init)
+    (local.set $n (global.get $emit_fn_param_len_g))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (if (call $str_eq
+              (call $record_get
+                (call $list_index (global.get $emit_fn_param_ptr) (local.get $i))
+                (i32.const 0))
+              (local.get $name))
+          (then (return (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const -1))
+
+  (func $emit_fn_param_is_f64 (export "emit_fn_param_is_f64") (param $name i32) (param $idx i32) (result i32)
+    (local $e i32) (local $bits i32)
+    (local.set $e (call $emit_fn_param_lookup (local.get $name)))
+    (if (i32.lt_s (local.get $e) (i32.const 0)) (then (return (i32.const 0))))
+    (local.set $bits (call $record_get
+      (call $list_index (global.get $emit_fn_param_ptr) (local.get $e)) (i32.const 1)))
+    (if (i32.ge_u (local.get $idx) (call $len (local.get $bits))) (then (return (i32.const 0))))
+    (call $list_index (local.get $bits) (local.get $idx)))
+
+  ;; Register/refresh a fn's param-width vector; returns 1 if any bit CHANGED
+  ;; (drives the pre-pass fixpoint). New names append; existing replace.
+  (func $emit_fn_param_set (export "emit_fn_param_set") (param $name i32) (param $bits i32) (result i32)
+    (local $e i32) (local $entry i32) (local $old i32) (local $n i32) (local $i i32)
+    (local $changed i32) (local $new_len i32)
+    (call $emit_init)
+    (local.set $e (call $emit_fn_param_lookup (local.get $name)))
+    (if (i32.ge_s (local.get $e) (i32.const 0))
+      (then
+        (local.set $entry (call $list_index (global.get $emit_fn_param_ptr) (local.get $e)))
+        (local.set $old (call $record_get (local.get $entry) (i32.const 1)))
+        (local.set $changed (i32.const 0))
+        (local.set $n (call $len (local.get $bits)))
+        (local.set $i (i32.const 0))
+        (block $d (loop $it
+          (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+          (if (i32.ne (call $list_index (local.get $bits) (local.get $i))
+                      (call $list_index (local.get $old) (local.get $i)))
+            (then (local.set $changed (i32.const 1))))
+          (local.set $i (i32.add (local.get $i) (i32.const 1)))
+          (br $it)))
+        (call $record_set (local.get $entry) (i32.const 1) (local.get $bits))
+        (return (local.get $changed))))
+    (local.set $new_len (i32.add (global.get $emit_fn_param_len_g) (i32.const 1)))
+    (global.set $emit_fn_param_ptr
+      (call $list_extend_to (global.get $emit_fn_param_ptr) (local.get $new_len)))
+    (local.set $entry (call $make_record (i32.const 287) (i32.const 2)))
+    (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
+    (call $record_set (local.get $entry) (i32.const 1) (local.get $bits))
+    (drop (call $list_set (global.get $emit_fn_param_ptr)
+            (global.get $emit_fn_param_len_g) (local.get $entry)))
+    (global.set $emit_fn_param_len_g (local.get $new_len))
+    (i32.const 1))
+
+  ;; ─── Fn-result registry — lookup / bit / register ─────────────────
+  (func $emit_fn_result_lookup (export "emit_fn_result_lookup") (param $name i32) (result i32)
+    (local $i i32) (local $n i32)
+    (call $emit_init)
+    (local.set $n (global.get $emit_fn_result_len_g))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $iter
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (if (call $str_eq
+              (call $record_get
+                (call $list_index (global.get $emit_fn_result_ptr) (local.get $i))
+                (i32.const 0))
+              (local.get $name))
+          (then (return (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $iter)))
+    (i32.const -1))
+
+  (func $emit_fn_result_bit (export "emit_fn_result_bit") (param $idx i32) (result i32)
+    (call $record_get
+      (call $list_index (global.get $emit_fn_result_ptr) (local.get $idx))
+      (i32.const 1)))
+
+  (func $emit_fn_result_is_f64 (export "emit_fn_result_is_f64") (param $name i32) (result i32)
+    (local $idx i32)
+    (local.set $idx (call $emit_fn_result_lookup (local.get $name)))
+    (if (i32.lt_s (local.get $idx) (i32.const 0)) (then (return (i32.const 0))))
+    (call $emit_fn_result_bit (local.get $idx)))
+
+  ;; Register/refresh a fn's result width. Returns 1 if the bit CHANGED
+  ;; (drives the pre-pass fixpoint). New names append; existing update.
+  (func $emit_fn_result_set (export "emit_fn_result_set") (param $name i32) (param $is_f64 i32) (result i32)
+    (local $idx i32) (local $entry i32) (local $new_len i32)
+    (call $emit_init)
+    (local.set $idx (call $emit_fn_result_lookup (local.get $name)))
+    (if (i32.ge_s (local.get $idx) (i32.const 0))
+      (then
+        (local.set $entry (call $list_index (global.get $emit_fn_result_ptr) (local.get $idx)))
+        (if (i32.eq (call $record_get (local.get $entry) (i32.const 1)) (local.get $is_f64))
+          (then (return (i32.const 0))))
+        (call $record_set (local.get $entry) (i32.const 1) (local.get $is_f64))
+        (return (i32.const 1))))
+    (local.set $new_len (i32.add (global.get $emit_fn_result_len_g) (i32.const 1)))
+    (global.set $emit_fn_result_ptr
+      (call $list_extend_to (global.get $emit_fn_result_ptr) (local.get $new_len)))
+    (local.set $entry (call $make_record (i32.const 286) (i32.const 2)))
+    (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
+    (call $record_set (local.get $entry) (i32.const 1) (local.get $is_f64))
+    (drop (call $list_set (global.get $emit_fn_result_ptr)
+            (global.get $emit_fn_result_len_g) (local.get $entry)))
+    (global.set $emit_fn_result_len_g (local.get $new_len))
+    (i32.const 1))
 
   ;; ─── $emit_funcref_register — append name; return assigned index ───
   ;; Per Hβ-emit-substrate.md §3 H1.4 + wheel src/backends/wasm.mn:444-475
@@ -299,25 +437,58 @@
     (global.set $emit_funcref_table_len_g (local.get $new_len))
     (i32.const 1))
 
+  ;; A ledger entry is a 2-field record {name, is_f64} (tag 285). The
+  ;; DECIDED width rides with the name (never a parallel type-array): a
+  ;; local's WAT width is decided ONCE, from its RHS's emitted type
+  ;; ($emit_expr_is_f64) at the bind, and every use (local.get) reads back
+  ;; the same bit — decl and use agree by construction. The bare
+  ;; $emit_fn_local_check(name) keeps every width-less caller (scratch
+  ;; names) unchanged — is_f64 0 → i32.
   (func $emit_fn_local_check (param $name i32) (result i32)
-    (local $existing i32) (local $new_idx i32) (local $new_len i32)
+    (call $emit_fn_local_check_f64 (local.get $name) (i32.const 0)))
+
+  (func $emit_fn_local_check_f64 (param $name i32) (param $is_f64 i32) (result i32)
+    (local $existing i32) (local $new_idx i32) (local $new_len i32) (local $entry i32)
     (call $emit_init)
     (local.set $existing (call $emit_fn_local_lookup (local.get $name)))
     (if (i32.ge_s (local.get $existing) (i32.const 0))
-      (then (return (i32.const 0))))
+      (then
+        ;; Upgrade a width-less entry (a read seen before its typed bind).
+        ;; 0 → 1 only; a proven f64 is never downgraded to the i32 floor.
+        (if (local.get $is_f64)
+          (then
+            (local.set $entry
+              (call $list_index (global.get $emit_fn_locals_ptr) (local.get $existing)))
+            (call $record_set (local.get $entry) (i32.const 1) (i32.const 1))))
+        (return (i32.const 0))))
     (local.set $new_idx (global.get $emit_fn_locals_len_g))
     (local.set $new_len (i32.add (local.get $new_idx) (i32.const 1)))
     (global.set $emit_fn_locals_ptr
       (call $list_extend_to (global.get $emit_fn_locals_ptr) (local.get $new_len)))
+    (local.set $entry (call $make_record (i32.const 285) (i32.const 2)))
+    (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
+    (call $record_set (local.get $entry) (i32.const 1) (local.get $is_f64))
     (drop (call $list_set (global.get $emit_fn_locals_ptr)
                           (local.get $new_idx)
-                          (local.get $name)))
+                          (local.get $entry)))
     (global.set $emit_fn_locals_len_g (local.get $new_len))
     (i32.const 1))
 
+  ;; $emit_fn_local_is_f64 — the ledger's decided width for a local/param
+  ;; name (0 = i32 floor when absent). The read $emit_expr_is_f64 uses for
+  ;; every (local.get $name) so uses match the decl.
+  (func $emit_fn_local_is_f64 (export "emit_fn_local_is_f64") (param $name i32) (result i32)
+    (local $idx i32)
+    (local.set $idx (call $emit_fn_local_lookup (local.get $name)))
+    (if (i32.lt_s (local.get $idx) (i32.const 0)) (then (return (i32.const 0))))
+    (call $record_get
+      (call $list_index (global.get $emit_fn_locals_ptr) (local.get $idx))
+      (i32.const 1)))
+
   ;; ─── $emit_fn_local_lookup — idx if registered; -1 otherwise ───────
-  ;; Mirrors $emit_funcref_lookup. Linear $str_eq scan. Insertion-order
-  ;; preservation is incidental — only presence matters for the dedupe.
+  ;; Mirrors $emit_funcref_lookup. Linear $str_eq scan over entry NAMES
+  ;; (record field 0). Insertion-order preservation is incidental — only
+  ;; presence matters for the dedupe.
   (func $emit_fn_local_lookup (param $name i32) (result i32)
     (local $i i32) (local $n i32) (local $entry_name i32)
     (call $emit_init)
@@ -327,7 +498,9 @@
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $entry_name
-          (call $list_index (global.get $emit_fn_locals_ptr) (local.get $i)))
+          (call $record_get
+            (call $list_index (global.get $emit_fn_locals_ptr) (local.get $i))
+            (i32.const 0)))
         (if (call $str_eq (local.get $entry_name) (local.get $name))
           (then (return (local.get $i))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))

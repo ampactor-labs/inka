@@ -1050,12 +1050,380 @@
     (call $emit_local_decl_str (i32.const 1856))      ;; alloc_size
     (call $emit_local_decl_cstr (i32.const 4260) (i32.const 6))) ;; loop_i
 
+  ;; ─── $emit_find_local_handle — a param's type-handle from a body use ──
+  ;; Mirror of the wheel's find_local_handle_expr (wasm.mn:1670): scan the
+  ;; body for the first LLocal(h, name) matching `name` and return its h,
+  ;; so a fn whose params carry no explicit handle (a handler arm — the op
+  ;; declares the arg type, not the pattern) recovers each param's width
+  ;; from its use. Stops at nested-fn boundaries (an inner fn's `name` is
+  ;; its own binding). 0 when unread.
+  (func $emit_find_local_handle_list (param $items i32) (param $name i32) (result i32)
+    (local $i i32) (local $n i32) (local $h i32)
+    (local.set $n (call $len (local.get $items)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $it
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $h (call $emit_find_local_handle
+          (call $list_index (local.get $items) (local.get $i)) (local.get $name)))
+        (if (local.get $h) (then (return (local.get $h))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $it)))
+    (i32.const 0))
+
+  (func $emit_find_local_handle (param $e i32) (param $name i32) (result i32)
+    (local $tag i32) (local $h i32)
+    (if (i32.lt_u (local.get $e) (global.get $heap_base)) (then (return (i32.const 0))))
+    (local.set $tag (call $tag_of (local.get $e)))
+    (if (i32.eq (local.get $tag) (i32.const 301))   ;; LLocal
+      (then
+        (if (call $str_eq (call $lexpr_llocal_name (local.get $e)) (local.get $name))
+          (then (return (call $lexpr_handle (local.get $e)))))
+        (return (i32.const 0))))
+    ;; Nested-fn boundaries (311/312/313) shadow `name` — do not descend.
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 311))
+          (i32.or (i32.eq (local.get $tag) (i32.const 312))
+                  (i32.eq (local.get $tag) (i32.const 313))))
+      (then (return (i32.const 0))))
+    (if (i32.eq (local.get $tag) (i32.const 306))   ;; LBinOp
+      (then
+        (local.set $h (call $emit_find_local_handle (call $lexpr_lbinop_l (local.get $e)) (local.get $name)))
+        (if (local.get $h) (then (return (local.get $h))))
+        (return (call $emit_find_local_handle (call $lexpr_lbinop_r (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 307))   ;; LUnaryOp
+      (then (return (call $emit_find_local_handle (call $lexpr_lunaryop_x (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 339))   ;; LConvert
+      (then (return (call $emit_find_local_handle (call $lexpr_lconvert_x (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 304))   ;; LLet
+      (then (return (call $emit_find_local_handle (call $lexpr_llet_value (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 310))   ;; LReturn
+      (then (return (call $emit_find_local_handle (call $lexpr_lreturn_x (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 303))   ;; LStore
+      (then (return (call $emit_find_local_handle (call $lexpr_lstore_value (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 327))   ;; LStateSet
+      (then (return (call $emit_find_local_handle (call $lexpr_lstateset_value (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 334))   ;; LFieldLoad
+      (then (return (call $emit_find_local_handle (call $lexpr_lfieldload_record (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 308))   ;; LCall
+      (then
+        (local.set $h (call $emit_find_local_handle (call $lexpr_lcall_fn (local.get $e)) (local.get $name)))
+        (if (local.get $h) (then (return (local.get $h))))
+        (return (call $emit_find_local_handle_list (call $lexpr_lcall_args (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 309))   ;; LTailCall
+      (then
+        (local.set $h (call $emit_find_local_handle (call $lexpr_ltailcall_fn (local.get $e)) (local.get $name)))
+        (if (local.get $h) (then (return (local.get $h))))
+        (return (call $emit_find_local_handle_list (call $lexpr_ltailcall_args (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 314))   ;; LIf
+      (then
+        (local.set $h (call $emit_find_local_handle (call $lexpr_lif_cond (local.get $e)) (local.get $name)))
+        (if (local.get $h) (then (return (local.get $h))))
+        (local.set $h (call $emit_find_local_handle_list (call $lexpr_lif_then (local.get $e)) (local.get $name)))
+        (if (local.get $h) (then (return (local.get $h))))
+        (return (call $emit_find_local_handle_list (call $lexpr_lif_else (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 315))   ;; LBlock
+      (then (return (call $emit_find_local_handle_list (call $lexpr_lblock_stmts (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 331))   ;; LPerform
+      (then (return (call $emit_find_local_handle_list (call $lexpr_lperform_args (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 333))   ;; LEvPerform
+      (then (return (call $emit_find_local_handle_list (call $lexpr_levperform_args (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 319))   ;; LMakeVariant
+      (then (return (call $emit_find_local_handle_list (call $lexpr_lmakevariant_args (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 316))   ;; LMakeList
+      (then (return (call $emit_find_local_handle_list (call $lexpr_lmakelist_elems (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 317))   ;; LMakeTuple
+      (then (return (call $emit_find_local_handle_list (call $lexpr_lmaketuple_elems (local.get $e)) (local.get $name)))))
+    (i32.const 0))
+
+  ;; $emit_param_h_resolve — param_handles[i] when present, else the
+  ;; handle a body use of the param carries (handler arms, whose op-typed
+  ;; args reach lower as bare names).
+  (func $emit_param_h_resolve (param $param_handles i32) (param $i i32)
+        (param $param_name i32) (param $body i32) (result i32)
+    (local $h i32)
+    (local.set $h (i32.const 0))
+    (if (i32.lt_u (local.get $i) (call $len (local.get $param_handles)))
+      (then (local.set $h (call $list_index (local.get $param_handles) (local.get $i)))))
+    (if (local.get $h) (then (return (local.get $h))))
+    (call $emit_find_local_handle_list (local.get $body) (local.get $param_name)))
+
+  (func $emit_is_llocal_named (param $e i32) (param $name i32) (result i32)
+    (if (i32.lt_u (local.get $e) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.ne (call $tag_of (local.get $e)) (i32.const 301)) (then (return (i32.const 0))))
+    (call $str_eq (call $lexpr_llocal_name (local.get $e)) (local.get $name)))
+
+  ;; $emit_param_used_as_f64 — a param the seed left type-less (a handler
+  ;; arm's op-declared Float arg, since infer stubs effect-op types) is f64
+  ;; when the body USES it as f64: an operand of a binop whose sibling is
+  ;; f64 (`x * 2.0`, `x > 0.0`). The float use is the witness the missing
+  ;; op-type would have carried. Peer: Hβ.infer.effect-op-param-types.
+  (func $emit_param_used_as_f64_list (param $items i32) (param $name i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $items)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (if (call $emit_param_used_as_f64 (call $list_index (local.get $items) (local.get $i)) (local.get $name))
+        (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (i32.const 0))
+
+  (func $emit_param_used_as_f64 (param $e i32) (param $name i32) (result i32)
+    (local $tag i32) (local $l i32) (local $r i32)
+    (if (i32.lt_u (local.get $e) (global.get $heap_base)) (then (return (i32.const 0))))
+    (local.set $tag (call $tag_of (local.get $e)))
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 311))
+          (i32.or (i32.eq (local.get $tag) (i32.const 312))
+                  (i32.eq (local.get $tag) (i32.const 313))))
+      (then (return (i32.const 0))))
+    (if (i32.eq (local.get $tag) (i32.const 306))   ;; LBinOp
+      (then
+        (local.set $l (call $lexpr_lbinop_l (local.get $e)))
+        (local.set $r (call $lexpr_lbinop_r (local.get $e)))
+        (if (i32.and (call $emit_is_llocal_named (local.get $l) (local.get $name))
+                     (call $emit_expr_is_f64 (local.get $r)))
+          (then (return (i32.const 1))))
+        (if (i32.and (call $emit_is_llocal_named (local.get $r) (local.get $name))
+                     (call $emit_expr_is_f64 (local.get $l)))
+          (then (return (i32.const 1))))
+        (if (call $emit_param_used_as_f64 (local.get $l) (local.get $name)) (then (return (i32.const 1))))
+        (return (call $emit_param_used_as_f64 (local.get $r) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 304)) (then (return (call $emit_param_used_as_f64 (call $lexpr_llet_value (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 307)) (then (return (call $emit_param_used_as_f64 (call $lexpr_lunaryop_x (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 310)) (then (return (call $emit_param_used_as_f64 (call $lexpr_lreturn_x (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 303)) (then (return (call $emit_param_used_as_f64 (call $lexpr_lstore_value (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 327)) (then (return (call $emit_param_used_as_f64 (call $lexpr_lstateset_value (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 339)) (then (return (call $emit_param_used_as_f64 (call $lexpr_lconvert_x (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 308)) (then
+      (if (call $emit_arg_flows_f64 (local.get $e) (local.get $name)) (then (return (i32.const 1))))
+      (if (call $emit_param_used_as_f64 (call $lexpr_lcall_fn (local.get $e)) (local.get $name)) (then (return (i32.const 1))))
+      (return (call $emit_param_used_as_f64_list (call $lexpr_lcall_args (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 309)) (then
+      (if (call $emit_arg_flows_f64 (local.get $e) (local.get $name)) (then (return (i32.const 1))))
+      (if (call $emit_param_used_as_f64 (call $lexpr_ltailcall_fn (local.get $e)) (local.get $name)) (then (return (i32.const 1))))
+      (return (call $emit_param_used_as_f64_list (call $lexpr_ltailcall_args (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 314)) (then
+      (if (call $emit_param_used_as_f64 (call $lexpr_lif_cond (local.get $e)) (local.get $name)) (then (return (i32.const 1))))
+      (if (call $emit_param_used_as_f64_list (call $lexpr_lif_then (local.get $e)) (local.get $name)) (then (return (i32.const 1))))
+      (return (call $emit_param_used_as_f64_list (call $lexpr_lif_else (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 315)) (then (return (call $emit_param_used_as_f64_list (call $lexpr_lblock_stmts (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 331)) (then (return (call $emit_param_used_as_f64_list (call $lexpr_lperform_args (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 333)) (then (return (call $emit_param_used_as_f64_list (call $lexpr_levperform_args (local.get $e)) (local.get $name)))))
+    (if (i32.eq (local.get $tag) (i32.const 319)) (then (return (call $emit_param_used_as_f64_list (call $lexpr_lmakevariant_args (local.get $e)) (local.get $name)))))
+    (i32.const 0))
+
+  ;; $emit_param_is_f64 — the param's decided width: its proven handle, or
+  ;; its float use (the handler-arm witness). One decider, read by the decl
+  ;; token AND the ledger so decl and every use agree.
+  (func $emit_param_is_f64 (param $param_handles i32) (param $i i32)
+        (param $param_name i32) (param $body i32) (result i32)
+    (if (call $emit_repr_is_f64
+          (call $emit_param_h_resolve (local.get $param_handles) (local.get $i)
+                (local.get $param_name) (local.get $body)))
+      (then (return (i32.const 1))))
+    (call $emit_param_used_as_f64_list (local.get $body) (local.get $param_name)))
+
+  ;; $emit_arg_flows_f64 — is `name` a direct LLocal arg to a call at a
+  ;; position the callee (LGlobal) types f64? The param-registry read that
+  ;; closes the arg-flow gap (`adaptive_shape`'s x → `warm_shape(x,…)`).
+  (func $emit_arg_flows_f64 (param $call i32) (param $name i32) (result i32)
+    (local $fn i32) (local $args i32) (local $fname i32) (local $n i32) (local $i i32)
+    (local.set $fn
+      (if (result i32) (i32.eq (call $tag_of (local.get $call)) (i32.const 308))
+        (then (call $lexpr_lcall_fn (local.get $call)))
+        (else (call $lexpr_ltailcall_fn (local.get $call)))))
+    (if (i32.lt_u (local.get $fn) (global.get $heap_base)) (then (return (i32.const 0))))
+    (if (i32.ne (call $tag_of (local.get $fn)) (i32.const 302)) (then (return (i32.const 0))))
+    (local.set $fname (call $lexpr_lglobal_name (local.get $fn)))
+    (local.set $args
+      (if (result i32) (i32.eq (call $tag_of (local.get $call)) (i32.const 308))
+        (then (call $lexpr_lcall_args (local.get $call)))
+        (else (call $lexpr_ltailcall_args (local.get $call)))))
+    (local.set $n (call $len (local.get $args)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (if (i32.and
+            (call $emit_is_llocal_named (call $list_index (local.get $args) (local.get $i)) (local.get $name))
+            (call $emit_fn_param_is_f64 (local.get $fname) (local.get $i)))
+        (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (i32.const 0))
+
+  ;; $emit_compute_param_bits — the fn's per-param f64 vector (for the
+  ;; param registry). Each bit is $emit_param_is_f64 (handle, float-use, or
+  ;; arg-flow via the registry — the fixpoint deepens it one call per pass).
+  (func $emit_compute_param_bits (param $fn_r i32) (result i32)
+    (local $arity i32) (local $params i32) (local $body i32) (local $ph i32)
+    (local $bits i32) (local $i i32)
+    (local.set $arity  (call $lowfn_arity (local.get $fn_r)))
+    (local.set $params (call $lowfn_params (local.get $fn_r)))
+    (local.set $body   (call $lowfn_body (local.get $fn_r)))
+    (local.set $ph     (call $lowfn_param_handles (local.get $fn_r)))
+    (local.set $bits (call $make_list (i32.const 0)))
+    (local.set $bits (call $list_extend_to (local.get $bits) (local.get $arity)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $arity)))
+      (drop (call $list_set (local.get $bits) (local.get $i)
+        (call $emit_param_is_f64 (local.get $ph) (local.get $i)
+          (call $list_index (local.get $params) (local.get $i)) (local.get $body))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (local.get $bits))
+
+  ;; ─── $emit_prescan_fn — populate the ledger with a fn's param+let
+  ;; widths so $body_result_is_f64 (and any tail referencing a local) reads
+  ;; real widths. The body's declare-at-emission only registers locals AS
+  ;; the body emits — too late for the result, which sits in the signature
+  ;; BEFORE the body. The pre-pass runs this per fn (the result is read from
+  ;; the registry at emit), so the ledger dance stays out of emission.
+  (func $emit_prescan_fn (param $fn_r i32)
+    (local $arity i32) (local $params i32) (local $body i32) (local $ph i32) (local $i i32)
+    (global.set $emit_fn_locals_len_g (i32.const 0))
+    (local.set $arity  (call $lowfn_arity (local.get $fn_r)))
+    (local.set $params (call $lowfn_params (local.get $fn_r)))
+    (local.set $ph     (call $lowfn_param_handles (local.get $fn_r)))
+    (local.set $body   (call $lowfn_body (local.get $fn_r)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $arity)))
+      (drop (call $emit_fn_local_check_f64 (call $list_index (local.get $params) (local.get $i))
+        (call $emit_param_is_f64 (local.get $ph) (local.get $i)
+          (call $list_index (local.get $params) (local.get $i)) (local.get $body))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (call $emit_prescan_lets_list (local.get $body)))
+
+  (func $emit_prescan_lets_list (param $items i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $items)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (call $emit_prescan_lets (call $list_index (local.get $items) (local.get $i)))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it))))
+
+  ;; Register each LLet(name) in the fn's own scope with its value's width,
+  ;; source order (a later let sees earlier ones). Stops at nested fns.
+  (func $emit_prescan_lets (param $e i32)
+    (local $tag i32)
+    (if (i32.lt_u (local.get $e) (global.get $heap_base)) (then (return)))
+    (local.set $tag (call $tag_of (local.get $e)))
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 311))
+          (i32.or (i32.eq (local.get $tag) (i32.const 312))
+                  (i32.eq (local.get $tag) (i32.const 313))))
+      (then (return)))
+    (if (i32.eq (local.get $tag) (i32.const 304))   ;; LLet
+      (then
+        (call $emit_prescan_lets (call $lexpr_llet_value (local.get $e)))
+        (drop (call $emit_fn_local_check_f64 (call $lexpr_llet_name (local.get $e))
+          (call $emit_expr_is_f64 (call $lexpr_llet_value (local.get $e)))))
+        (return)))
+    (if (i32.eq (local.get $tag) (i32.const 315))   ;; LBlock
+      (then (return (call $emit_prescan_lets_list (call $lexpr_lblock_stmts (local.get $e))))))
+    (if (i32.eq (local.get $tag) (i32.const 314))   ;; LIf
+      (then
+        (call $emit_prescan_lets_list (call $lexpr_lif_then (local.get $e)))
+        (return (call $emit_prescan_lets_list (call $lexpr_lif_else (local.get $e))))))
+    (if (i32.eq (local.get $tag) (i32.const 310))   ;; LReturn
+      (then (return (call $emit_prescan_lets (call $lexpr_lreturn_x (local.get $e)))))))
+
+  ;; ─── $body_result_is_f64 — the fn's result width ─────────────────────
+  ;; The result is what the body's tail expression PRODUCES on the stack
+  ;; ($emit_expr_is_f64, which already descends LReturn/LBlock/LIf to the
+  ;; producing leaf). Because the body's return emits that same produced
+  ;; type, decl and return agree by construction. Empty body → i32.
+  (func $body_result_is_f64 (param $body i32) (result i32)
+    (local $n i32)
+    (local.set $n (call $len (local.get $body)))
+    (if (i32.eqz (local.get $n)) (then (return (i32.const 0))))
+    (call $emit_expr_is_f64
+      (call $list_index (local.get $body) (i32.sub (local.get $n) (i32.const 1)))))
+
+  ;; ─── $emit_prepass_fn_results — fill the fn-result registry ──────────
+  ;; A call's produced width is the callee's declared result, so every fn's
+  ;; result width must be known before any body emits. Each top-level fn
+  ;; (LLet-wrapped LMakeClosure, or bare LMakeClosure/LDeclareFn) registers
+  ;; $lowfn_name → $body_result_is_f64. A result that is itself a call
+  ;; reads the registry, so a call-chain of depth d resolves in d passes —
+  ;; iterate to a fixpoint (bounded; the seed's float chain is ~4 deep).
+  (func $emit_prepass_fn_results (param $lowexprs i32)
+    (local $pass i32) (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $lowexprs)))
+    (local.set $pass (i32.const 0))
+    (block $done
+      (loop $fixpoint
+        (br_if $done (i32.ge_u (local.get $pass) (i32.const 16)))
+        (global.set $emit_fr_changed_g (i32.const 0))
+        (local.set $i (i32.const 0))
+        (block $d
+          (loop $it
+            (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+            (call $fr_register (call $list_index (local.get $lowexprs) (local.get $i)))
+            (local.set $i (i32.add (local.get $i) (i32.const 1)))
+            (br $it)))
+        (br_if $done (i32.eqz (global.get $emit_fr_changed_g)))
+        (local.set $pass (i32.add (local.get $pass) (i32.const 1)))
+        (br $fixpoint))))
+
+  (func $fr_register (param $e i32)
+    (local $tag i32) (local $fn_r i32)
+    (if (i32.lt_u (local.get $e) (global.get $heap_base)) (then (return)))
+    (local.set $tag (call $tag_of (local.get $e)))
+    ;; LLet (304) wrapping a top-level fn → unwrap to the closure value.
+    (if (i32.eq (local.get $tag) (i32.const 304))
+      (then (return (call $fr_register (call $lexpr_llet_value (local.get $e))))))
+    (local.set $fn_r (i32.const 0))
+    (if (i32.eq (local.get $tag) (i32.const 311))
+      (then (local.set $fn_r (call $lexpr_lmakeclosure_fn (local.get $e)))))
+    (if (i32.eq (local.get $tag) (i32.const 312))
+      (then (local.set $fn_r (call $lexpr_lmakecontinuation_fn (local.get $e)))))
+    (if (i32.eq (local.get $tag) (i32.const 313))
+      (then (local.set $fn_r (call $lexpr_ldeclarefn_fn (local.get $e)))))
+    (if (i32.eqz (local.get $fn_r)) (then (return)))
+    ;; Populate the ledger with this fn's param+let widths so the result
+    ;; (whose tail may reference those locals) reads real widths.
+    (call $emit_prescan_fn (local.get $fn_r))
+    (if (call $emit_fn_result_set
+          (call $lowfn_name (local.get $fn_r))
+          (call $body_result_is_f64 (call $lowfn_body (local.get $fn_r))))
+      (then (global.set $emit_fr_changed_g (i32.const 1))))
+    (if (call $emit_fn_param_set
+          (call $lowfn_name (local.get $fn_r))
+          (call $emit_compute_param_bits (local.get $fn_r)))
+      (then (global.set $emit_fr_changed_g (i32.const 1)))))
+
+  ;; $emit_f64_residual_floor — a LOUD (unreachable) after a fn body whose
+  ;; declared (result f64) cannot match its tail's emission: an op-invocation
+  ;; (LPerform 331 / LEvPerform 333) whose arm the seed floors to i32 (the op
+  ;; returns a Sample the graph types f64 — `(x) => op_lowpass_process(x)`).
+  ;; (unreachable) is stack-polymorphic, so the produced i32 stays valid and
+  ;; the fn traps if it returns — never a silent i32-as-f64. Gate ops return
+  ;; unit (i32, result_h 0), so no gate fn floors here. Peer Hβ.seed.arm-
+  ;; result-registry: typing the arm result f64 (and its dispatch index)
+  ;; dissolves this; until then the redesign is not attempted blind.
+  (func $emit_f64_residual_floor (param $body i32) (param $result_h i32)
+    (local $tag i32)
+    (if (i32.eqz (local.get $result_h)) (then (return)))
+    (if (i32.eqz (call $len (local.get $body))) (then (return)))
+    (local.set $tag (call $tag_of (call $list_index (local.get $body)
+      (i32.sub (call $len (local.get $body)) (i32.const 1)))))
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 331))
+                (i32.eq (local.get $tag) (i32.const 333)))
+      (then (call $ec_emit_unreachable))))
+
   ;; $emit_fn_body — emit a single (func $name (param $__state i32) ...)
   ;; Per wasm.mn:930-962 emit_fn_body. W7 calling convention.
   (func $emit_fn_body (param $fn_r i32)
     (local $name i32) (local $params i32) (local $body i32)
     (local $arity i32) (local $i i32) (local $param_name i32)
     (local $locals_start i32)
+    (local $param_handles i32) (local $param_h i32) (local $result_h i32)
+    (local $param_widths i32)
     (local.set $name (call $lowfn_emit_name (local.get $fn_r)))
     ;; Idempotent emission per LFn name — closure-capture dedup via
     ;; the existing funcref ledger. $emit_funcref_register dedups
@@ -1069,6 +1437,20 @@
     (local.set $arity  (call $lowfn_arity  (local.get $fn_r)))
     (local.set $params (call $lowfn_params (local.get $fn_r)))
     (local.set $body   (call $lowfn_body   (local.get $fn_r)))
+    (local.set $param_handles (call $lowfn_param_handles (local.get $fn_r)))
+    ;; The param-width vector, computed ONCE and read by BOTH the signature
+    ;; and the body ledger. $emit_param_is_f64 reads the mutable fn-local
+    ;; ledger (a param's f64-ness can rest on a sibling's ledger bit — the
+    ;; use-witness), so calling it separately at signature-time and at
+    ;; body-time diverged: exp_series's `term` declared (param f64) but the
+    ;; body ledger read it i32, so `term * r` emitted i32.mul on an f64
+    ;; operand. One vector, two consumers — decl and every use agree by
+    ;; construction; a residual mixed-width binop the seed cannot type hits
+    ;; the LOUD floor in $emit_lbinop, never a silent i32.mul. Peer
+    ;; Hβ.seed.float-forward-arg-type (the seed's no-instantiation inference
+    ;; can't forward the Float argument into a recursive param; dissolves at
+    ;; first-light when the wheel's own HM types it).
+    (local.set $param_widths (call $emit_compute_param_bits (local.get $fn_r)))
     ;; (func $name
     (call $emit_indent)
     (call $emit_cstr (i32.const 924) (i32.const 5)) ;; "(func"
@@ -1098,43 +1480,57 @@
             (call $emit_int (local.get $i)))
           (else
             (call $emit_str (local.get $param_name))))
-        (call $emit_cstr (i32.const 4155) (i32.const 5)) ;; " i32)"
+        ;; " <repr>)" — the param's decided width (its handle, or its float
+        ;; use for a handler arm the seed left type-less).
+        (call $emit_byte (i32.const 32))   ;; ' '
+        (call $emit_ty_token (call $list_index (local.get $param_widths) (local.get $i)))
+        (call $emit_byte (i32.const 41))   ;; ')'
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $piter)))
-    ;; (result i32)
-    (call $emit_cstr (i32.const 4133) (i32.const 13)) ;; " (result i32)"
-    ;; Standard locals per W7 + emit arms that lower into scratch slots.
-    (call $emit_standard_locals)
-    ;; Per-fn ledger reset — $emit_standard_locals' fixed scratch names
-    ;; are emitted unconditionally above; the ledger tracks only
-    ;; LowPat-bound names that emit_let_locals + emit_pat_locals project.
-    ;; Per Hβ.first-light.match-arm-binding-name-uniqueness Lock #3 —
-    ;; this is the first wiring of $emit_fn_reset (state.wat exports it
-    ;; but no caller existed pre-this-commit).
+    ;; (result <repr>) — the fn's result width from the registry (computed
+    ;; in the pre-pass with the ledger populated; the body's return produces
+    ;; the same width since both derive from the same structural read).
+    ;; A top-level fn's result is the fixpoint-converged registry (recursion
+    ;; needs it known before the body emits). A NESTED lambda is never
+    ;; registered — the fixpoint walks only top-level lowexprs — so its
+    ;; registry read defaults to i32 even when its body produces f64 (a
+    ;; lambda whose tail is a float `if`). Read the unregistered case LIVE
+    ;; from the body: body_result_is_f64 descends the tail to its produced
+    ;; width, so signature and body agree. Registered fns are unchanged.
+    ;; Reset the fn ledger and register THIS fn's params (via $param_widths)
+    ;; BEFORE the result width is decided: an unregistered fn's result is its
+    ;; body-tail's produced width, and a tail binop/match over f64 params
+    ;; (66806's `acc + x`, number_from_substring's match) reads those params
+    ;; from the ledger — so the params must be live before body_result_is_f64,
+    ;; exactly as they must be live before the body emits. One ledger, set
+    ;; once, read by the result decl AND every body use — decl/body agree by
+    ;; construction. (Was set AFTER result_h, so the tail read stale widths.)
     (call $emit_fn_reset)
-    ;; Install this fn's ev fence (Hβ.emit.handler-record-ev-capture):
-    ;; closures pass their captures count, handler arm fns pass
-    ;; nstate+total_arms, plain fns 0. $emit_levperform/$emit_levref
-    ;; KEY-SCAN the captured_evs region based at 8+4*fence ($ev_lookup) —
-    ;; the first caller of the until-now-dormant $emit_set_body_context.
     (call $emit_set_body_context
       (call $lowfn_fence (local.get $fn_r)) (i32.const 0) (i32.const 0))
-    ;; Register param names in fn-local ledger so emit_let_locals's
-    ;; emit_fn_local_check skips re-declaring locals that shadow
-    ;; params (per the eight: a name appearing as both param and
-    ;; let-bound IS shadowing in user-source; WAT can't express
-    ;; shadowing in same scope, so the local.set in body writes to
-    ;; the param's slot directly — semantically equivalent for the
-    ;; immediate use, no preamble redef). Closes the $e/$q
-    ;; redef-of-parameter wat2wasm rejects.
     (local.set $i (i32.const 0))
-    (block $pdone2
-      (loop $piter2
-        (br_if $pdone2 (i32.ge_u (local.get $i) (local.get $arity)))
-        (local.set $param_name (call $list_index (local.get $params) (local.get $i)))
-        (drop (call $emit_fn_local_check (local.get $param_name)))
+    (block $pdone0
+      (loop $piter0
+        (br_if $pdone0 (i32.ge_u (local.get $i) (local.get $arity)))
+        (drop (call $emit_fn_local_check_f64 (call $list_index (local.get $params) (local.get $i))
+                (call $list_index (local.get $param_widths) (local.get $i))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
-        (br $piter2)))
+        (br $piter0)))
+    (local.set $result_h
+      (if (result i32) (i32.ge_s (call $emit_fn_result_lookup (local.get $name)) (i32.const 0))
+        (then (call $emit_fn_result_is_f64 (local.get $name)))
+        (else (call $body_result_is_f64 (local.get $body)))))
+    ;; Publish the result width so $emit_lreturn coerces a returned value to
+    ;; it (the arm-result vs f64 resume-value boundary).
+    (global.set $emit_cur_result_f64 (local.get $result_h))
+    (call $emit_cstr (i32.const 4133) (i32.const 9)) ;; " (result "
+    (call $emit_ty_token (local.get $result_h))
+    (call $emit_byte (i32.const 41))   ;; ')'
+    ;; Standard locals per W7 + emit arms that lower into scratch slots.
+    ;; The fn ledger was reset and the params registered ABOVE (before the
+    ;; result width), so it already carries this fn's params + ev fence
+    ;; (Hβ.emit.handler-record-ev-capture, Lock #3 binding-name uniqueness).
+    (call $emit_standard_locals)
     ;; Declare-at-emission (Hβ.emit.declare-at-emission): the body emits
     ;; into the scratch buffer while every minted local registers in the
     ;; fn ledger AT its local.set/local.tee projection; the preamble is
@@ -1156,6 +1552,7 @@
     (call $emit_scratch_begin)
     (call $indent_inc)
     (call $emit_lowir_program (local.get $body))
+    (call $emit_f64_residual_floor (local.get $body) (local.get $result_h))
     (call $indent_dec)
     (call $emit_scratch_end)
     (call $emit_fn_locals_dump (local.get $locals_start))
@@ -1166,19 +1563,24 @@
     (call $emit_nl))
 
   ;; ─── $emit_fn_locals_dump — preamble FROM the ledger ──────────────
-  ;; Emits ` (local $<name> i32)` for every fn-ledger entry from index
-  ;; $from (params + shadows registered before the body sit below it).
+  ;; Emits ` (local $<name> <repr>)` for every fn-ledger entry from index
+  ;; $from (params + shadows registered before the body sit below it). The
+  ;; repr is a LIVE projection of the entry's carried ty_handle (i32 floor
+  ;; when handle-less) — the representation gradient at the local-decl site.
   (func $emit_fn_locals_dump (param $from i32)
-    (local $i i32) (local $n i32)
+    (local $i i32) (local $n i32) (local $entry i32)
     (local.set $n (global.get $emit_fn_locals_len_g))
     (local.set $i (local.get $from))
     (block $done
       (loop $iter
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $entry
+          (call $list_index (global.get $emit_fn_locals_ptr) (local.get $i)))
         (call $emit_cstr (i32.const 4146) (i32.const 9))   ;; " (local $"
-        (call $emit_str (call $list_index
-          (global.get $emit_fn_locals_ptr) (local.get $i)))
-        (call $emit_cstr (i32.const 4155) (i32.const 5))   ;; " i32)"
+        (call $emit_str (call $record_get (local.get $entry) (i32.const 0)))
+        (call $emit_byte (i32.const 32))   ;; ' '
+        (call $emit_ty_token (call $record_get (local.get $entry) (i32.const 1)))
+        (call $emit_byte (i32.const 41))   ;; ')'
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $iter))))
 
@@ -1967,6 +2369,10 @@
 
   (func $mentl_emit (export "mentl_emit")
         (param $lowexprs i32)
+    ;; Fill the fn-result registry so every call's result width is known
+    ;; before the first body emits — the cross-fn half of the f64
+    ;; consistency keystone (a call produces its callee's declared result).
+    (call $emit_prepass_fn_results (local.get $lowexprs))
     (call $emit_cstr (i32.const 831) (i32.const 7))  ;; "(module"
     (call $emit_nl)
     (call $indent_inc)

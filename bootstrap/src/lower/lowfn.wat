@@ -77,19 +77,31 @@
   ;;             $emit_levref KEY-SCAN the captured_evs region based at
   ;;             8+4*fence ($ev_lookup) — one uniform rule across all three
   ;;             record shapes. Hβ.emit.handler-record-ev-capture.)
+  ;;   field_6 = param_handles (List of graph handle — each param's TVar
+  ;;             handle from the fn's inferred TFun, from param_handles_of;
+  ;;             emit reads $lookup_ty(handle) to type the (param $x <repr>)
+  ;;             decl f64-vs-i32, the representation gradient at the
+  ;;             signature. Parallel-indexed with params (field 2) by
+  ;;             construction — ONE record, the handle IS the param's
+  ;;             identity, not a second name-array (drift-7 refusal).
   (func $lowfn_make (export "lowfn_make")
         (param $name i32) (param $arity i32) (param $params i32)
         (param $body i32) (param $row i32) (param $fence i32)
+        (param $param_handles i32)
         (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 350) (i32.const 6)))
+    (local.set $r (call $make_record (i32.const 350) (i32.const 7)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $name))
     (call $record_set (local.get $r) (i32.const 1) (local.get $arity))
     (call $record_set (local.get $r) (i32.const 2) (local.get $params))
     (call $record_set (local.get $r) (i32.const 3) (local.get $body))
     (call $record_set (local.get $r) (i32.const 4) (local.get $row))
     (call $record_set (local.get $r) (i32.const 5) (local.get $fence))
+    (call $record_set (local.get $r) (i32.const 6) (local.get $param_handles))
     (local.get $r))
+
+  (func $lowfn_param_handles (export "lowfn_param_handles") (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 6)))
 
   (func $lowfn_fence (export "lowfn_fence") (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 5)))

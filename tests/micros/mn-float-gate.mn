@@ -1,0 +1,13 @@
+// mn-float-gate — the f64 representation gradient's seed-runnable value gate.
+//
+// 2.5 * 2.0 = 5.0 >= 4.9 → exit 3. The old i32-floor emitted every float
+// literal as (i32.const 0), so all three ops collapsed to 0 and the branch
+// took the else (exit 0); a 3 is only reachable through real f64 literals,
+// f64.mul, and f64.ge. This runs through the seed directly (no call, no f64
+// param slots), so it locks the substrate's floor into the verify gate.
+//
+// The complex mn-float-arith.mn (mix with f64 params + f64 result via a call)
+// is the m2-lead peer: it needs the wheel's f64 call convention, which the
+// seed lags (Hβ.seed.float-gradient), so it traps through the seed and belongs
+// on the m2 rung path, not this battery.
+fn main() = if 2.5 * 2.0 >= 4.9 { 3 } else { 0 }

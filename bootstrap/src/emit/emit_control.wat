@@ -180,6 +180,18 @@
     (call $emit_byte (i32.const 105)) (call $emit_byte (i32.const 51))
     (call $emit_byte (i32.const 50)) (call $emit_byte (i32.const 41)))
 
+  (func $ec5_emit_if_open_with_result (param $is_f64 i32)
+    ;; emits: (if (result <token>) — the branch value's produced width, so
+    ;; a float-valued if declares (result f64) and its branches match.
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 105))
+    (call $emit_byte (i32.const 102)) (call $emit_byte (i32.const 32))
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 114))
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 115))
+    (call $emit_byte (i32.const 117)) (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 116)) (call $emit_byte (i32.const 32))
+    (call $emit_ty_token (local.get $is_f64))
+    (call $emit_byte (i32.const 41)))
+
   (func $ec5_emit_then_open
     ;; emits: (then
     (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 116))
@@ -278,13 +290,32 @@
     (call $emit_byte (i32.const 112))
     (call $emit_byte (i32.const 41)))
 
+  ;; The current fn's declared result width, set by $emit_fn_body before its
+  ;; body emits. $emit_lreturn reads it to coerce a returned value whose width
+  ;; disagrees with the signature — a handler arm returns an f64 __resume_val
+  ;; but the arm is (result i32); a float fn returns an i32 branch.
+  (global $emit_cur_result_f64 (mut i32) (i32.const 0))
+
   ;; ─── $emit_lreturn — LReturn tag 310 emit arm per §2.3 ─────────────
   ;; Per src/backends/wasm.mn:1220-1223. LReturn carries the resumed
   ;; value of an OneShot `resume(value)` per Hβ.lower walk_call.wat
   ;; Lock #6. WAT-level `(return)` hands the value back to the
   ;; suspended `perform` call site.
   (func $emit_lreturn (param $r i32)
+    (local $vf i32)
+    (local.set $vf (call $emit_expr_is_f64 (call $lexpr_lreturn_x (local.get $r))))
     (call $emit_lexpr (call $lexpr_lreturn_x (local.get $r)))
+    ;; Coerce to the fn's declared result when the returned value disagrees.
+    ;; __resume_val / branch values are declared-width locals/literals, so
+    ;; is_f64 is reliable here. f64→i32 truncates (the seed's i32-result arm
+    ;; convention meeting an f64 resume-value — peer Hβ.seed.resume-value-
+    ;; repr, the ultimate form threads f64 through the arm result); i32→f64
+    ;; is the exact int-in-float-position convert. Same-width returns coerce
+    ;; nothing (byte-identical). Dissolves at first-light.
+    (if (i32.and (local.get $vf) (i32.eqz (global.get $emit_cur_result_f64)))
+      (then (call $ec6_emit_i32_trunc_f64_s)))
+    (if (i32.and (i32.eqz (local.get $vf)) (global.get $emit_cur_result_f64))
+      (then (call $ec6_emit_f64_convert_i32_s)))
     (call $ec5_emit_return))
 
   ;; ─── $emit_lif — LIf tag 314 emit arm per §2.3 ─────────────────────
@@ -294,14 +325,37 @@
   ;;     (then <then_body>)
   ;;     (else <else_body>))
   ;; Both branches are stmt lists; $ec5_emit_body iterates each.
+  ;; $emit_branch_tail_is_f64 — a branch's produced width = its tail stmt's
+  ;; is_f64 (empty branch → i32 floor). The read $emit_lif uses to decide the
+  ;; if's result token and which arm to coerce.
+  (func $emit_branch_tail_is_f64 (param $stmts i32) (result i32)
+    (local $n i32)
+    (local.set $n (call $len (local.get $stmts)))
+    (if (i32.eqz (local.get $n)) (then (return (i32.const 0))))
+    (call $emit_expr_is_f64
+      (call $list_index (local.get $stmts) (i32.sub (local.get $n) (i32.const 1)))))
+
   (func $emit_lif (param $r i32)
+    (local $tf i32) (local $ef i32)
     (call $emit_lexpr (call $lexpr_lif_cond (local.get $r)))
-    (call $ec5_emit_if_open_with_result_i32)
+    ;; Each arm's produced width. The if is (result f64) if EITHER is f64;
+    ;; the i32 arm is then coerced up (f64.convert_i32_s) so both arms and the
+    ;; declared result agree — matching $emit_expr_is_f64's LIf arm (the OR).
+    ;; Same-typed arms (the rung-critical float chain, every int if) coerce
+    ;; nothing — behavior byte-identical. A then-i32/else-f64 if (float_at's
+    ;; TFloatLit payload arm) becomes consistent instead of the two mismatches.
+    (local.set $tf (call $emit_branch_tail_is_f64 (call $lexpr_lif_then (local.get $r))))
+    (local.set $ef (call $emit_branch_tail_is_f64 (call $lexpr_lif_else (local.get $r))))
+    (call $ec5_emit_if_open_with_result (i32.or (local.get $tf) (local.get $ef)))
     (call $ec5_emit_then_open)
     (call $ec5_emit_body (call $lexpr_lif_then (local.get $r)))
+    (if (i32.and (local.get $ef) (i32.eqz (local.get $tf)))
+      (then (call $ec6_emit_f64_convert_i32_s)))
     (call $emit_close)
     (call $ec5_emit_else_open)
     (call $ec5_emit_body (call $lexpr_lif_else (local.get $r)))
+    (if (i32.and (local.get $tf) (i32.eqz (local.get $ef)))
+      (then (call $ec6_emit_f64_convert_i32_s)))
     (call $emit_close)
     (call $emit_close))
 
@@ -333,14 +387,35 @@
   (func $emit_lmatch (param $r i32)
     (call $emit_lexpr (call $lexpr_lmatch_scrut (local.get $r)))
     (call $ec5_emit_local_set_scrut_tmp)
+    ;; A match is a fold of arms; all arm bodies share one type, so if ANY
+    ;; body's tail is f64 the whole match is f64 (an i32 arm is coerced up).
+    ;; The arm-dispatch ifs then declare (result f64) and agree — a match
+    ;; returning a float (float_at's TFloatLit arm, else 0.0) is consistent
+    ;; instead of the hardcoded-i32 vs f64-else mismatch.
     (call $ec5_emit_match_arms_from
-      (call $lexpr_lmatch_arms (local.get $r)) (i32.const 0)))
+      (call $lexpr_lmatch_arms (local.get $r)) (i32.const 0)
+      (call $ec5_match_arms_any_f64 (call $lexpr_lmatch_arms (local.get $r)))))
+
+  ;; $ec5_match_arms_any_f64 — 1 iff any arm body's tail is f64 (the match's
+  ;; produced width; all arms share one type by inference).
+  (func $ec5_match_arms_any_f64 (param $arms i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (if (call $emit_expr_is_f64
+            (call $lowpat_lparm_body (call $list_index (local.get $arms) (local.get $i))))
+        (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (i32.const 0))
 
   ;; ─── $ec5_emit_match_arms_from — ordered OR-ELSE fold over arms ─────
   ;; Per src/backends/wasm.mn emit_match_arms (pattern algebra). Each
   ;; arm: predicate → (if (result i32) (then binds body) (else rest)).
   ;; Always-matching arms (wild/var/irrefutable structure) are terminal.
-  (func $ec5_emit_match_arms_from (param $arms i32) (param $idx i32)
+  (func $ec5_emit_match_arms_from (param $arms i32) (param $idx i32) (param $result_f64 i32)
     (local $arm i32) (local $pat i32) (local $body i32)
     ;; Base case: no more arms → unreachable (exhaustiveness trap).
     (if (i32.ge_u (local.get $idx) (call $len (local.get $arms)))
@@ -353,18 +428,25 @@
         (call $ec5_emit_pat_binds_at (local.get $pat)
           (call $make_list (i32.const 0)) (i32.const 0))
         (call $emit_lexpr (local.get $body))
+        ;; Coerce this terminal arm up to the match's width if it emits i32.
+        (if (i32.and (local.get $result_f64)
+                     (i32.eqz (call $emit_expr_is_f64 (local.get $body))))
+          (then (call $ec6_emit_f64_convert_i32_s)))
         (return)))
     (call $ec5_emit_pat_predicate_at (local.get $pat)
       (call $make_list (i32.const 0)) (i32.const 0))
-    (call $ec5_emit_if_open_with_result_i32)
+    (call $ec5_emit_if_open_with_result (local.get $result_f64))
     (call $ec5_emit_then_open)
     (call $ec5_emit_pat_binds_at (local.get $pat)
       (call $make_list (i32.const 0)) (i32.const 0))
     (call $emit_lexpr (local.get $body))
+    (if (i32.and (local.get $result_f64)
+                 (i32.eqz (call $emit_expr_is_f64 (local.get $body))))
+      (then (call $ec6_emit_f64_convert_i32_s)))
     (call $emit_close)   ;; close then
     (call $ec5_emit_else_open)
     (call $ec5_emit_match_arms_from
-      (local.get $arms) (i32.add (local.get $idx) (i32.const 1)))
+      (local.get $arms) (i32.add (local.get $idx) (i32.const 1)) (local.get $result_f64))
     (call $emit_close)   ;; close else
     (call $emit_close))  ;; close if
 

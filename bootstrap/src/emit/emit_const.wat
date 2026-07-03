@@ -174,25 +174,26 @@
 
     (local.set $ty_tag_v (call $ty_tag (local.get $ty)))
 
-    ;; TFloat (101) → "(i32.const 0)" placeholder per kernel uniform-i32
-    ;; (DESIGN.md §0.5 / SUBSTRATE.md §IX "the heap has one story").
-    ;; Pre-fix this arm emitted (f64.const <text>) — partial f64 dream-
-    ;; code that created cascading type-mismatch chains because every
-    ;; downstream emit site (i32.store / i32.gt_s / i32.add / fn-result
-    ;; / call_indirect) is i32-uniform per the kernel. f64 needs a
-    ;; coordinated cascade across emit (typed binops, typed stores,
-    ;; typed call-signatures, typed fn results, closure-record float
-    ;; encoding via i64-reinterpret-or-box). Per CLAUDE.md "delete dead
-    ;; substrate; do not explain absence" — partial f64 emit IS dead
-    ;; substrate at the kernel layer; replace with i32-uniform placeholder.
-    ;; Cursor scoring values are 0 at runtime; cursor-scoring proximity
-    ;; functions become functionally inert until float-substrate handler
-    ;; lands. Named follow-up: Hβ.emit.float-substrate-handler closes
-    ;; the f64 cascade post-L1 (when wheel-side handler-on-row swap
-    ;; routes float-row-tagged values through f64 emit naturally).
+    ;; TFloat (101) → "(f64.const <raw-text>)". The LConst value IS the
+    ;; literal's raw decimal source slice (lower_lit_float carries
+    ;; walk_const_payload_i32 = the LitFloat text; lexer $mk_TFloat kept
+    ;; the str_slice — lex_main.wat:165). A native unboxed f64 flowing
+    ;; into an f64 slot the coordinated cascade (typed params/results/
+    ;; locals + typed call_indirect + f64 binops) now makes f64 — the
+    ;; representation gradient's float arm realized (Hβ.emit.float-
+    ;; substrate). WASM f64.const parses decimal + scientific notation,
+    ;; so the source slice ("3.14", "1.7e308") emits verbatim.
     (if (i32.eq (local.get $ty_tag_v) (i32.const 101))
       (then
-        (call $emit_i32_const (i32.const 0))
+        ;; "(f64.const "
+        (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 102))
+        (call $emit_byte (i32.const 54)) (call $emit_byte (i32.const 52))
+        (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 99))
+        (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 110))
+        (call $emit_byte (i32.const 115)) (call $emit_byte (i32.const 116))
+        (call $emit_byte (i32.const 32))
+        (call $emit_str (local.get $value))
+        (call $emit_byte (i32.const 41))   ;; ')'
         (return)))
 
     ;; TString (102) → intern + emit "(i32.const <offset>)".
@@ -470,6 +471,8 @@
     (local $elems i32) (local $n i32) (local $i i32) (local $elem i32)
     (local.set $elems (call $lexpr_lmakelist_elems (local.get $r)))
     (local.set $n     (call $len (local.get $elems)))
+    (if (call $emit_any_f64_in (local.get $elems))
+      (then (call $ec_emit_f64_heap_crossing) (return)))
     (call $el_emit_local_get_state)
     (call $emit_i32_const (local.get $n))
     (call $ec_emit_call_make_list)
@@ -503,6 +506,8 @@
     (local $local_name i32)
     (local.set $elems (call $lexpr_lmaketuple_elems (local.get $r)))
     (local.set $n     (call $len (local.get $elems)))
+    (if (call $emit_any_f64_in (local.get $elems))
+      (then (call $ec_emit_f64_heap_crossing) (return)))
     ;; Per Hβ.first-light.alloc-handle-locals — per-handle local name.
     (local.set $local_name
       (call $str_concat (i32.const 1632)                  ;; "tuple_"
@@ -532,6 +537,8 @@
     (local $local_name i32)
     (local.set $fields (call $lexpr_lmakerecord_fields (local.get $r)))
     (local.set $n      (call $len (local.get $fields)))
+    (if (call $emit_any_f64_in (local.get $fields))
+      (then (call $ec_emit_f64_heap_crossing) (return)))
     ;; Per Hβ.first-light.alloc-handle-locals — per-handle local name.
     (local.set $local_name
       (call $str_concat (i32.const 1616)                  ;; "record_"
@@ -567,6 +574,50 @@
   ;; region; fielded variants heap-allocate at $heap_ptr ≥ 1 MiB. The
   ;; threshold check `(scrut < HEAP_BASE)` at LMatch (post-L1) cleanly
   ;; discriminates without ambiguity per HB substrate.
+  ;; ─── f64 heap-crossing floor ──────────────────────────────────────
+  ;; A TFloat value lives native unboxed f64 for its STACK life; a generic
+  ;; i32 heap slot (variant payload, record field, tuple/list element,
+  ;; closure capture) cannot hold it without the unified-record f64 field
+  ;; (post-real, §5.U). Where a float would cross, emit a LOUD floor — a
+  ;; runtime trap, never a silent (i32.const 0) that fabricates the
+  ;; developer's value as zero (no-silent-fallback). Peer:
+  ;; Hβ.emit.f64-heap-slot-field.
+  (func $emit_any_f64_in (param $items i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $items)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (if (call $emit_expr_is_f64 (call $list_index (local.get $items) (local.get $i)))
+        (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (i32.const 0))
+
+  (func $ec_emit_f64_heap_crossing
+    ;; emits: (unreachable) ;; F64-HEAP-CROSSING
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 117))
+    (call $emit_byte (i32.const 110)) (call $emit_byte (i32.const 114))
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 97))
+    (call $emit_byte (i32.const 99)) (call $emit_byte (i32.const 104))
+    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 98))
+    (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 101))
+    (call $emit_byte (i32.const 41))
+    (call $emit_byte (i32.const 32)) (call $emit_byte (i32.const 59))
+    (call $emit_byte (i32.const 59)) (call $emit_byte (i32.const 32))
+    (call $emit_byte (i32.const 70)) (call $emit_byte (i32.const 54))
+    (call $emit_byte (i32.const 52)) (call $emit_byte (i32.const 45))
+    (call $emit_byte (i32.const 72)) (call $emit_byte (i32.const 69))
+    (call $emit_byte (i32.const 65)) (call $emit_byte (i32.const 80))
+    (call $emit_byte (i32.const 45)) (call $emit_byte (i32.const 67))
+    (call $emit_byte (i32.const 82)) (call $emit_byte (i32.const 79))
+    (call $emit_byte (i32.const 83)) (call $emit_byte (i32.const 83))
+    (call $emit_byte (i32.const 73)) (call $emit_byte (i32.const 78))
+    (call $emit_byte (i32.const 71))
+    ;; NEWLINE — `;;` comments run to end-of-line; without it the rest of
+    ;; the single-line emission (closing parens) would be eaten.
+    (call $emit_byte (i32.const 10)))
+
   (func $emit_lmakevariant (param $r i32)
     (local $tag_id i32) (local $args i32) (local $n i32) (local $i i32)
     (local $arg i32) (local $local_name i32)
@@ -575,6 +626,8 @@
     (local.set $n      (call $len (local.get $args)))
     (if (i32.eqz (local.get $n))
       (then (call $emit_i32_const (local.get $tag_id)) (return)))
+    (if (call $emit_any_f64_in (local.get $args))
+      (then (call $ec_emit_f64_heap_crossing) (return)))
     ;; Per Hβ.first-light.alloc-handle-locals (2026-05-07): mint
     ;; per-handle local name `$variant_<handle>` from the LowExpr's
     ;; graph handle. Without this, nested LMakeVariant emissions
@@ -788,8 +841,18 @@
     (local.set $value  (call $lexpr_lstateslotstore_value  (local.get $r)))
     ;; (local.get $__state)
     (call $el_emit_local_get_state)
-    ;; Emit the value expression.
-    (call $emit_lexpr (local.get $value))
+    ;; Emit the value expression — unless it is f64, which the i32-word state
+    ;; slot cannot hold (the resume-with-state update of an f64 DSP field;
+    ;; peer Hβ.seed.f64-state-field). Store a 0 placeholder and census the
+    ;; offset. The f64-state DSP arms are in no gate; a floored slot never
+    ;; runs. Dissolves at first-light when the wheel compiles the f64 layout.
+    (if (call $emit_expr_is_f64 (local.get $value))
+      (then
+        (call $eprint_string (call $int_to_str (local.get $offset)))
+        (call $eprint_string (i32.const 8048))          ;; "\n"
+        (call $emit_i32_const (i32.const 0)))
+      (else
+        (call $emit_lexpr (local.get $value))))
     ;; (i32.store offset=<offset>)
     (call $el_emit_i32_store_offset (local.get $offset))
     ;; Push i32.const 0 sentinel — emit_lblock's per-stmt (drop) needs
@@ -852,6 +915,24 @@
     )
 
   (func $emit_lconvert (param $r i32)
-    ;; INERT PLACEHOLDER: seed compiler is i32-uniform, no native float needed.
-    ;; We just emit the inner expression (index 2).
-    (call $emit_lexpr (call $lexpr_lconvert_x (local.get $r))))
+    ;; The gradient's coercion arm — a REAL machine convert (never a bit-
+    ;; reinterpreting identity). lower recognized float_of_int/float_to_int
+    ;; → LConvert(kind, x); kind 0 = IntToFloat (i32 widened to f64),
+    ;; kind 1 = FloatToInt (f64 truncated toward zero to i32). Mirror of
+    ;; the wheel's ConvertKind → f64.convert_i32_s / i32.trunc_f64_s
+    ;; (src/backends/wasm.mn:3223-3224).
+    (call $emit_lexpr (call $lexpr_lconvert_x (local.get $r)))
+    ;; Convert only when the operand's EMITTED width differs from the target
+    ;; (the emit_lreturn coercion law): kind 0 IntToFloat needs an i32 operand
+    ;; → f64.convert_i32_s, but if the operand ALREADY emits f64 the convert is
+    ;; identity, skip it; kind 1 FloatToInt needs an f64 operand →
+    ;; i32.trunc_f64_s, but a variant payload / heap field the seed floors to
+    ;; i32 (json_int_or_default's `JNum(n) => float_to_int(n)`) is ALREADY int,
+    ;; so trunc-ing it is the i32.trunc_f64_s-on-i32 type error — skip it.
+    (if (i32.eqz (call $lexpr_lconvert_kind (local.get $r)))
+      (then
+        (if (i32.eqz (call $emit_expr_is_f64 (call $lexpr_lconvert_x (local.get $r))))
+          (then (call $ec6_emit_f64_convert_i32_s))))
+      (else
+        (if (call $emit_expr_is_f64 (call $lexpr_lconvert_x (local.get $r)))
+          (then (call $ec6_emit_i32_trunc_f64_s))))))

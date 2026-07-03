@@ -211,6 +211,113 @@
     (call $emit_int  (i32.add (local.get $arity) (i32.const 1)))
     (call $emit_byte (i32.const 41)) (call $emit_byte (i32.const 41)))
 
+  ;; ─── $ec6_emit_call_indirect_typed — the call ABI, typed by the args ─
+  ;; The call_indirect type MUST match the callee's real signature. When
+  ;; every arg + the result is i32 (the >99% case) this IS the arity-keyed
+  ;; $ftN — byte-identical to the pre-f64 emit (Law 7). When any arg or the
+  ;; result is f64, the arity key is insufficient (a float in slot k needs
+  ;; f64 in the type), so emit the signature INLINE:
+  ;;   (call_indirect (param i32) (param <repr>)* (result <repr>))
+  ;; the implicit __state (always i32) + one param per arg at its proven
+  ;; repr + the result repr. The callee (emit_fn_body) types its params
+  ;; and result from the SAME graph, so the two agree by construction —
+  ;; the wheel's repr-vector ft (wasm.mn:979-1013) realized inline (no ft
+  ;; naming/dedup table needed; the type IS read from the args).
+  ;; $ec6_args_any_f64 — 1 iff any user arg emits f64. The fixed-i32 ev
+  ;; dispatch ($ftN) carries only word args; this is the gate that floors a
+  ;; native-f64 arg it cannot type (emit_levperform).
+  (func $ec6_args_any_f64 (param $args i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $args)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (if (call $emit_expr_is_f64 (call $list_index (local.get $args) (local.get $i)))
+        (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (i32.const 0))
+
+  (func $ec6_emit_call_indirect_typed (param $args i32) (param $result_is_f64 i32) (param $is_tail i32)
+    (local $n i32) (local $i i32) (local $any_f64 i32)
+    (local.set $n (call $len (local.get $args)))
+    (local.set $any_f64 (local.get $result_is_f64))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (if (call $emit_expr_is_f64 (call $list_index (local.get $args) (local.get $i)))
+        (then (local.set $any_f64 (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
+    (if (i32.eqz (local.get $any_f64))
+      (then
+        (if (local.get $is_tail)
+          (then (call $ec6_emit_return_call_indirect_ftN (local.get $n)))
+          (else (call $ec6_emit_call_indirect_ftN (local.get $n))))
+        (return)))
+    (if (local.get $is_tail)
+      (then (call $ec6_emit_return_call_indirect_open))
+      (else (call $ec6_emit_call_indirect_open)))
+    ;; (param i32) — the implicit __state
+    (call $ec6_emit_param_open)
+    (call $emit_byte (i32.const 105)) (call $emit_byte (i32.const 51)) (call $emit_byte (i32.const 50))
+    (call $emit_byte (i32.const 41))
+    ;; (param <repr>) per user arg, in push order
+    (local.set $i (i32.const 0))
+    (block $d2 (loop $it2
+      (br_if $d2 (i32.ge_u (local.get $i) (local.get $n)))
+      (call $ec6_emit_param_open)
+      (call $emit_ty_token
+        (call $emit_expr_is_f64 (call $list_index (local.get $args) (local.get $i))))
+      (call $emit_byte (i32.const 41))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it2)))
+    ;; (result <repr>)
+    (call $ec6_emit_result_open)
+    (call $emit_ty_token (local.get $result_is_f64))
+    (call $emit_byte (i32.const 41))
+    ;; close the call_indirect
+    (call $emit_byte (i32.const 41)))
+
+  (func $ec6_emit_call_indirect_open
+    ;; emits: "(call_indirect "
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 99))
+    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 95))
+    (call $emit_byte (i32.const 105)) (call $emit_byte (i32.const 110))
+    (call $emit_byte (i32.const 100)) (call $emit_byte (i32.const 105))
+    (call $emit_byte (i32.const 114)) (call $emit_byte (i32.const 101))
+    (call $emit_byte (i32.const 99)) (call $emit_byte (i32.const 116))
+    (call $emit_byte (i32.const 32)))
+
+  (func $ec6_emit_return_call_indirect_open
+    ;; emits: "(return_call_indirect "
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 114))
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 116))
+    (call $emit_byte (i32.const 117)) (call $emit_byte (i32.const 114))
+    (call $emit_byte (i32.const 110)) (call $emit_byte (i32.const 95))
+    (call $emit_byte (i32.const 99)) (call $emit_byte (i32.const 97))
+    (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 95)) (call $emit_byte (i32.const 105))
+    (call $emit_byte (i32.const 110)) (call $emit_byte (i32.const 100))
+    (call $emit_byte (i32.const 105)) (call $emit_byte (i32.const 114))
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 99))
+    (call $emit_byte (i32.const 116)) (call $emit_byte (i32.const 32)))
+
+  (func $ec6_emit_param_open
+    ;; emits: "(param "
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 112))
+    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 114))
+    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 109))
+    (call $emit_byte (i32.const 32)))
+
+  (func $ec6_emit_result_open
+    ;; emits: "(result "
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 114))
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 115))
+    (call $emit_byte (i32.const 117)) (call $emit_byte (i32.const 108))
+    (call $emit_byte (i32.const 116)) (call $emit_byte (i32.const 32)))
+
   ;; ─── $ec6_emit_args — emit each LowExpr in args list via $emit_lexpr ─
   (func $ec6_emit_args (param $args i32)
     (local $i i32) (local $n i32)
@@ -257,7 +364,8 @@
     (call $ec6_emit_args (local.get $args))
     (call $ec_emit_local_get_dollar (local.get $local_name))
     (call $ec6_emit_i32_load_offset_0)
-    (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
+    (call $ec6_emit_call_indirect_typed
+      (local.get $args) (call $emit_expr_is_f64 (local.get $r)) (i32.const 0)))
 
   ;; ─── $emit_ltailcall — LTailCall tag 309 emit arm per §2.4 ─────────
   ;; Per src/backends/wasm.mn:1191-1200. Same shape as LCall but with
@@ -275,7 +383,15 @@
     (call $ec6_emit_args (local.get $args))
     (call $ec_emit_local_get_dollar (local.get $local_name))
     (call $ec6_emit_i32_load_offset_0)
-    (call $ec6_emit_return_call_indirect_ftN (call $len (local.get $args))))
+    ;; A tail call's result IS the enclosing fn's result — WASM requires the
+    ;; return_call_indirect's result type to equal it (else "return signatures
+    ;; inconsistent"). Read the enclosing result live ($emit_cur_result_f64,
+    ;; published at the fn's (result …) decl), never the callee's predicted
+    ;; result — the two diverge whenever the seed types the tail target's
+    ;; result differently from the fn it returns from (estimate_flux's f64
+    ;; body tail-calling an i32-predicted callee).
+    (call $ec6_emit_call_indirect_typed
+      (local.get $args) (global.get $emit_cur_result_f64) (i32.const 1)))
 
   ;; ─── $emit_lbinop — LBinOp tag 306 emit arm per §2.4 ───────────────
   ;; Per src/backends/wasm.mn:1163-1167 + emit_binop at 1646-1661.
@@ -302,27 +418,42 @@
     (call $emit_lexpr (local.get $left_lexpr))
     (call $emit_lexpr (call $lexpr_lbinop_r (local.get $r)))
     (local.set $op (call $lexpr_lbinop_op (local.get $r)))
-    
-    ;; BOOTSTRAP STABILIZATION: Intercept f64 operators and emit inert
-    ;; placeholders. The f64 ops use the i32 stack substrate in the seed,
-    ;; meaning a / b is compiled as i32.div_s, which TRAPS on 0 / 0.
-    (local.set $left_h (call $lexpr_handle (local.get $left_lexpr)))
-    (if (i32.ne (local.get $left_h) (i32.const 0))
+
+    ;; f64 arithmetic/comparison — the representation gradient's float arm.
+    ;; The op IS a native f64 instruction iff the operands are f64: 140-143
+    ;; → f64.add/sub/mul/div, 145-150 → f64.eq/ne/lt/gt/le/ge (comparison
+    ;; yields i32 — Bool stays a word). Both operands are already emitted
+    ;; (native f64 on the stack). $emit_expr_is_f64 predicts each operand's
+    ;; EMITTED type (the same structural read the operand's own emission
+    ;; used), so op and operands agree. Read from EITHER side — a resolved
+    ;; literal vs an unresolved-float binding, the BConcat precedent below.
+    (if (i32.or
+          (call $emit_expr_is_f64 (local.get $left_lexpr))
+          (call $emit_expr_is_f64 (call $lexpr_lbinop_r (local.get $r))))
       (then
-        (local.set $left_ty (call $lookup_ty (local.get $left_h)))
-        (local.set $left_ty_tag (call $ty_tag (local.get $left_ty)))
-        (if (i32.eq (local.get $left_ty_tag) (i32.const 101)) ;; TFloat
+        ;; The f64 arm fires when EITHER operand is f64. If they DISAGREE
+        ;; (one f64, one i32) the seed's no-instantiation inference left a
+        ;; mixed-width binop it can't emit consistently — a float accumulator
+        ;; meeting an int index (exp_series `term * r`), a heap-f64 the
+        ;; predictor floored to i32. Floor the op LOUD: (unreachable) is
+        ;; stack-polymorphic, so the already-emitted operands stay valid and
+        ;; the minimal expression traps if reached. The rung-critical float
+        ;; chain (float_to_str/float_floor_log10) pairs an f64 var with an f64
+        ;; literal — operands AGREE — so it never floors here. Censused to
+        ;; stderr; gates arbitrate (a live floored op fails a rung, never a
+        ;; silent wrong value). Peer Hβ.seed.f64-binop-mixed-width. Dissolves
+        ;; at first-light when the wheel's own inference types both operands.
+        (if (i32.ne
+              (call $emit_expr_is_f64 (local.get $left_lexpr))
+              (call $emit_expr_is_f64 (call $lexpr_lbinop_r (local.get $r))))
           (then
-            (call $emit_indent)
-            (call $emit_cstr (i32.const 578) (i32.const 6)) ;; "(drop "
-            (call $emit_close)
-            (call $emit_nl)
-            (call $emit_indent)
-            (call $emit_cstr (i32.const 578) (i32.const 6)) ;; "(drop "
-            (call $emit_close)
-            (call $emit_nl)
-            (call $emit_i32_const (i32.const 0))
-            (return)))))
+            (call $eprint_string (call $int_to_str (local.get $op)))
+            (call $eprint_string (i32.const 8048))          ;; "\n"
+            (call $ec_emit_unreachable)
+            (call $emit_byte (i32.const 10))                ;; "\n"
+            (return)))
+        (call $ec6_emit_f64_binop_op (local.get $op))
+        (return)))
 
     ;; BConcat (153): operand-Ty dispatch — the proof becomes the dispatch,
     ;; read from EITHER operand. The graph often proves the RIGHT operand
@@ -473,6 +604,51 @@
     (if (i32.eq (local.get $op) (i32.const 153))
       (then (call $ec6_emit_call_str_concat) (return)))
     (unreachable))
+
+  ;; ─── $ec6_emit_f64_binop_op — f64 arm of the BinOp ADT dispatch ────
+  ;; Parallel to $ec6_emit_binop_op: the same integer-tag chain, the f64
+  ;; instructions. 140-143 arithmetic (f64 result), 145-150 comparison
+  ;; (i32/Bool result). 144 (BRem) has no f64 instruction — the wheel's
+  ;; float path never takes `%` on a float, so it is a LOUD floor, never a
+  ;; silent i32.rem_s fabrication (no-silent-fallback). 151/152 (BAnd/BOr)
+  ;; and 153 (BConcat) are not float ops — handled by the caller before
+  ;; this dispatch (a bitwise/concat op never has a TFloat operand).
+  (func $ec6_emit_f64_binop_op (param $op i32)
+    (if (i32.eq (local.get $op) (i32.const 140))
+      (then (call $ec6_emit_f64_add) (return)))
+    (if (i32.eq (local.get $op) (i32.const 141))
+      (then (call $ec6_emit_f64_sub) (return)))
+    (if (i32.eq (local.get $op) (i32.const 142))
+      (then (call $ec6_emit_f64_mul) (return)))
+    (if (i32.eq (local.get $op) (i32.const 143))
+      (then (call $ec6_emit_f64_div) (return)))
+    (if (i32.eq (local.get $op) (i32.const 145))
+      (then (call $ec6_emit_f64_eq) (return)))
+    (if (i32.eq (local.get $op) (i32.const 146))
+      (then (call $ec6_emit_f64_ne) (return)))
+    (if (i32.eq (local.get $op) (i32.const 147))
+      (then (call $ec6_emit_f64_lt) (return)))
+    (if (i32.eq (local.get $op) (i32.const 148))
+      (then (call $ec6_emit_f64_gt) (return)))
+    (if (i32.eq (local.get $op) (i32.const 149))
+      (then (call $ec6_emit_f64_le) (return)))
+    (if (i32.eq (local.get $op) (i32.const 150))
+      (then (call $ec6_emit_f64_ge) (return)))
+    ;; 144 BRem or any non-f64 op reaching here: loud floor.
+    ;; emits: (unreachable) ;; F64-REM
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 117))
+    (call $emit_byte (i32.const 110)) (call $emit_byte (i32.const 114))
+    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 97))
+    (call $emit_byte (i32.const 99)) (call $emit_byte (i32.const 104))
+    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 98))
+    (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 101))
+    (call $emit_byte (i32.const 41))
+    (call $emit_byte (i32.const 32)) (call $emit_byte (i32.const 59))
+    (call $emit_byte (i32.const 59)) (call $emit_byte (i32.const 32))
+    (call $emit_byte (i32.const 70)) (call $emit_byte (i32.const 54))
+    (call $emit_byte (i32.const 52)) (call $emit_byte (i32.const 45))
+    (call $emit_byte (i32.const 82)) (call $emit_byte (i32.const 69))
+    (call $emit_byte (i32.const 77)))
 
   ;; ─── BinOp WAT-instruction emitters — inline byte sequences ────────
 
@@ -643,19 +819,14 @@
     (call $emit_lexpr (local.get $x))
     (local.set $op (call $lexpr_lunaryop_op (local.get $r)))
     
-    (local.set $x_h (call $lexpr_handle (local.get $x)))
-    (if (i32.ne (local.get $x_h) (i32.const 0))
+    ;; f64 negation — the operand is already emitted (native f64 on the
+    ;; stack); UNeg is the single native f64.neg instruction (no 0-x
+    ;; scratch dance the i32 arm needs, and the recurrence's `0.0 - f`
+    ;; would parse as a binop anyway). Read the operand's proven type.
+    (if (call $emit_expr_is_f64 (local.get $x))
       (then
-        (local.set $x_ty (call $lookup_ty (local.get $x_h)))
-        (local.set $x_ty_tag (call $ty_tag (local.get $x_ty)))
-        (if (i32.eq (local.get $x_ty_tag) (i32.const 101)) ;; TFloat
-          (then
-            (call $emit_indent)
-            (call $emit_cstr (i32.const 578) (i32.const 6)) ;; "(drop "
-            (call $emit_close)
-            (call $emit_nl)
-            (call $emit_i32_const (i32.const 0))
-            (return)))))
+        (if (i32.eq (local.get $op) (i32.const 160))   ;; UNeg
+          (then (call $ec6_emit_f64_neg) (return)))))
 
     (if (i32.eq (local.get $op) (i32.const 160))   ;; UNeg
       (then (call $ec6_emit_neg) (return)))
@@ -832,11 +1003,21 @@
     (call $ec6_emit_args (local.get $args))
     (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_i32_load_offset_0)
-    (if (i32.ne (local.get $tail) (i32.const 0))
-      (then (call $ec6_emit_return_call_indirect_ftN
-        (call $len (local.get $args))))
-      (else (call $ec6_emit_call_indirect_ftN
-        (call $len (local.get $args))))))
+    ;; The evidence-capturing closure dispatch is the fixed-i32 $ftN — a
+    ;; native f64 arg (a Float into an effectful fn: enumerate_float_literals'
+    ;; `float_literal_candidate(0.0)`) cannot ride it without typing the
+    ;; callee's param f64 AND its dispatch index (peer Hβ.seed.typed-ev-
+    ;; dispatch). Floor LOUD — (unreachable) is stack-polymorphic, the
+    ;; emitted sst/args/fn_ptr stay valid, the dispatch traps if reached
+    ;; (never a silent wrong call). Dissolves at first-light.
+    (if (call $ec6_args_any_f64 (local.get $args))
+      (then (call $ec_emit_unreachable))
+      (else
+        (if (i32.ne (local.get $tail) (i32.const 0))
+          (then (call $ec6_emit_return_call_indirect_ftN
+            (call $len (local.get $args))))
+          (else (call $ec6_emit_call_indirect_ftN
+            (call $len (local.get $args))))))))
 
   ;; ─── LSuspend support helpers ──────────────────────────────────────
 

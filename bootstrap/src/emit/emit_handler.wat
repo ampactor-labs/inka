@@ -434,7 +434,13 @@
         (call $emit_lmakeclosure_into_local (local.get $value) (local.get $name))
         (return)))
     (call $emit_lexpr (local.get $value))
-    (call $ec_emit_local_set_dollar (local.get $name)))
+    (call $ec_emit_local_set_dollar (local.get $name))
+    ;; Decide the local's width from the value's EMITTED type (the local
+    ;; holds the value; $emit_expr_is_f64 predicts what emit just pushed).
+    ;; Upgrades the width-less entry $ec_emit_local_set_dollar just made, so
+    ;; the decl (dump) and every (local.get) use read the same bit.
+    (drop (call $emit_fn_local_check_f64 (local.get $name)
+            (call $emit_expr_is_f64 (local.get $value)))))
 
   ;; ─── $emit_lmakeclosure_into_local — closure assigned before caps ──
   ;; Same shape as $emit_lmakeclosure but assigns $<name> immediately
@@ -453,6 +459,14 @@
     (local.set $ne (call $len (local.get $evs)))
     ;; Alloc 8 + 4*(nc + 2*ne + 1): captures + the keyed ev region (2 words/entry
     ;; + a key=0 sentinel = 2*ne+1 words) → $state_tmp.
+    ;; A float capture crosses into the closure record's i32 slot (post-real
+    ;; §5.U). LOUD floor the whole closure — a call traps, never a silent
+    ;; i32-fabrication. Not reached by the rungs.
+    (if (call $emit_any_f64_in (local.get $caps))
+      (then
+        (call $ec_emit_f64_heap_crossing)
+        (call $ec_emit_local_set_dollar (local.get $name))
+        (return)))
     (call $emit_alloc
       (i32.add (i32.const 8)
                (i32.mul (i32.const 4)
@@ -620,7 +634,22 @@
               (i32.add (i32.const 8) (i32.mul (i32.const 4)
                 (call $lexpr_lupval_slot (local.get $init))))))
           (else
-            (call $emit_lexpr (local.get $init))))
+            ;; An f64 init into an i32-word state slot is a layout the
+            ;; disposable seed can't express (the record is i32-word; an
+            ;; unboxed f64 needs an 8-byte slot). Floor to a 0 placeholder
+            ;; and census the slot to stderr (peer Hβ.seed.f64-state-field).
+            ;; No gate installs an f64-state handler (verify.sh's distort
+            ;; micro is Int-scalar; the DSP processors are in no micro), so a
+            ;; floored slot never runs; if one ever does, the gate reads 0.0
+            ;; and fails loud — never a silent-correct claim. Dissolves at
+            ;; first-light when the wheel compiles the real f64 layout.
+            (if (call $emit_expr_is_f64 (local.get $init))
+              (then
+                (call $eprint_string (local.get $state_local))
+                (call $eprint_string (i32.const 8048))          ;; "\n"
+                (call $emit_i32_const (i32.const 0)))
+              (else
+                (call $emit_lexpr (local.get $init))))))
         ;; Emit (i32.store offset=<offset>)
         (call $emit_byte (i32.const 40))   ;; '('
         (call $emit_byte (i32.const 105))  ;; 'i'
@@ -1190,8 +1219,18 @@
     (call $ec6_emit_i32_mul)                                     ;; 4*nstate
     (call $ec6_emit_i32_add)                                     ;; full arm-field address
     (call $ec6_emit_i32_load_offset_0)                          ;; arm_fn idx
-    ;; (4) dispatch
-    (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))
+    ;; (4) dispatch. The fixed-i32 $ftN carries only WORD args; a native f64
+    ;; arg (a Float into an effectful fn — enumerate_float_literals'
+    ;; `float_literal_candidate(0.0)`) cannot ride the all-i32 ev-dispatch
+    ;; without typing the arm's param f64 AND every $ftN index that dispatches
+    ;; it — the typed-ev-dispatch redesign (peer Hβ.seed.typed-ev-dispatch,
+    ;; the LEvPerform half of Hβ.seed.arm-result-registry). Until then floor
+    ;; LOUD: (unreachable) is stack-polymorphic, so the emitted args/fn_idx
+    ;; stay valid and the dispatch traps if reached (never a silent wrong
+    ;; call). Dissolves at first-light when the wheel types both.
+    (if (call $ec6_args_any_f64 (local.get $args))
+      (then (call $ec_emit_unreachable))
+      (else (call $ec6_emit_call_indirect_ftN (call $len (local.get $args))))))
 
   ;; ─── $emit_levref — LEvRef tag 337: forward own evidence by KEY ──────
   ;; The polymorphic-scope forward of derive_ev_slots: push the per-effect ENTRY
@@ -1249,6 +1288,10 @@
     (local.set $ne (call $len (local.get $evs)))
     ;; Alloc 8 + 4*(nc + 2*ne + 1): captures + the keyed ev region (2 words/entry
     ;; + a key=0 sentinel = 2*ne+1 words) → $state_tmp.
+    ;; Float capture → closure i32 slot crossing (post-real §5.U): LOUD
+    ;; floor the whole closure (leaves an unreachable value on the stack).
+    (if (call $emit_any_f64_in (local.get $caps))
+      (then (call $ec_emit_f64_heap_crossing) (return)))
     (call $emit_alloc
       (i32.add (i32.const 8)
                (i32.mul (i32.const 4)

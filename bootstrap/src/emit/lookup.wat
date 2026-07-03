@@ -173,3 +173,159 @@
   ;; funcref-table.
   (func $emit_op_symbol (param $op_name i32) (result i32)
     (call $str_concat (i32.const 496) (local.get $op_name)))
+
+  ;; ─── $emit_repr_is_f64 — THE ONE HOME for "is this handle's value f64" ─
+  ;; Hβ.emit.float-substrate (closed 2026-07-02). Mirror of the wheel's
+  ;; repr_of(lookup_ty(h)) == RF64 decision (src/backends/wasm.mn:2698,
+  ;; types.mn:93 TFloat => RF64). The seed carries no representation
+  ;; gradient beyond the i32-floor and this f64 arm — a TFloat value lives
+  ;; native unboxed f64 for its STACK life (literals/params/locals/results/
+  ;; arithmetic/comparisons); handles/pointers stay the uniform i32 word.
+  ;; Every f64-vs-i32 emit decision (param/result/local decl, binop op,
+  ;; call_indirect signature) reads THIS — Carried-Truth: one decider, N
+  ;; readers. Handle 0 (unread / no graph address) → i32 floor.
+  (func $emit_repr_is_f64 (export "emit_repr_is_f64") (param $h i32) (result i32)
+    (if (i32.eqz (local.get $h)) (then (return (i32.const 0))))
+    (i32.eq (call $ty_tag (call $lookup_ty (local.get $h))) (i32.const 101)))
+
+  ;; ─── $emit_ty_token — emit "f64" or "i32" (3 raw bytes) from a bool ─
+  ;; No data segment — the two tokens are three bytes each, emitted inline.
+  (func $emit_ty_token (export "emit_ty_token") (param $is_f64 i32)
+    (if (local.get $is_f64)
+      (then
+        (call $emit_byte (i32.const 102))   ;; 'f'
+        (call $emit_byte (i32.const 54))    ;; '6'
+        (call $emit_byte (i32.const 52)))    ;; '4'
+      (else
+        (call $emit_byte (i32.const 105))   ;; 'i'
+        (call $emit_byte (i32.const 51))    ;; '3'
+        (call $emit_byte (i32.const 50)))))  ;; '2'
+
+  (func $emit_ty_token_for_handle (export "emit_ty_token_for_handle") (param $h i32)
+    (call $emit_ty_token (call $emit_repr_is_f64 (local.get $h))))
+
+  ;; ─── $emit_expr_is_f64 — the WAT type EMISSION PRODUCES for a LowExpr ─
+  ;; THE consistency keystone. The seed's inference resolves a value's type
+  ;; at some handles and not others, so a raw $lookup_ty on a use-handle
+  ;; disagrees with the decl. This function instead predicts the type
+  ;; emission ACTUALLY produces, structurally — so decl and every use agree
+  ;; by construction. It bottoms out at the RELIABLE leaves: a float literal
+  ;; (LConst binds its own TFloat), an IntToFloat convert (structurally f64),
+  ;; a local's declared type (the ledger, itself set by this function on the
+  ;; RHS). Arithmetic carries operand width; comparison/logical/concat are
+  ;; i32 (Bool/pointer). LCall/LField/LUpval fall to $lookup_ty (the callee-
+  ;; result residue — named peer Hβ.seed.fn-result-repr-registry).
+  (func $emit_expr_is_f64 (export "emit_expr_is_f64") (param $e i32) (result i32)
+    (local $tag i32) (local $op i32) (local $stmts i32) (local $n i32)
+    (if (i32.lt_u (local.get $e) (global.get $heap_base)) (then (return (i32.const 0))))
+    (local.set $tag (call $tag_of (local.get $e)))
+    ;; LLocal (301) → the local/param's declared width (ledger by name).
+    (if (i32.eq (local.get $tag) (i32.const 301))
+      (then (return (call $emit_fn_local_is_f64 (call $lexpr_llocal_name (local.get $e))))))
+    ;; LConvert (339) → IntToFloat (kind 0) produces f64; FloatToInt i32.
+    (if (i32.eq (local.get $tag) (i32.const 339))
+      (then (return (i32.eqz (call $lexpr_lconvert_kind (local.get $e))))))
+    ;; LConst (300) → the literal's own bound type (reliable leaf).
+    (if (i32.eq (local.get $tag) (i32.const 300))
+      (then (return (call $emit_repr_is_f64 (call $lexpr_handle (local.get $e))))))
+    ;; LBinOp (306) → arithmetic (140-144) carries operand width; every
+    ;; other op (comparison 145-150, logical 151-152, concat 153) is i32.
+    (if (i32.eq (local.get $tag) (i32.const 306))
+      (then
+        (local.set $op (call $lexpr_lbinop_op (local.get $e)))
+        (if (i32.and (i32.ge_s (local.get $op) (i32.const 140))
+                     (i32.le_s (local.get $op) (i32.const 144)))
+          (then (return (i32.or
+                          (call $emit_expr_is_f64 (call $lexpr_lbinop_l (local.get $e)))
+                          (call $emit_expr_is_f64 (call $lexpr_lbinop_r (local.get $e)))))))
+        (return (i32.const 0))))
+    ;; LUnaryOp (307) → f64 iff its operand is (UNeg on a float).
+    (if (i32.eq (local.get $tag) (i32.const 307))
+      (then (return (call $emit_expr_is_f64 (call $lexpr_lunaryop_x (local.get $e))))))
+    ;; LReturn (310) → the returned value.
+    (if (i32.eq (local.get $tag) (i32.const 310))
+      (then (return (call $emit_expr_is_f64 (call $lexpr_lreturn_x (local.get $e))))))
+    ;; LStore (303) → the stored value's width.
+    (if (i32.eq (local.get $tag) (i32.const 303))
+      (then (return (call $emit_expr_is_f64 (call $lexpr_lstore_value (local.get $e))))))
+    ;; LBlock (315) → the block's final statement.
+    (if (i32.eq (local.get $tag) (i32.const 315))
+      (then
+        (local.set $stmts (call $lexpr_lblock_stmts (local.get $e)))
+        (local.set $n (call $len (local.get $stmts)))
+        (if (i32.eqz (local.get $n)) (then (return (i32.const 0))))
+        (return (call $emit_expr_is_f64
+          (call $list_index (local.get $stmts) (i32.sub (local.get $n) (i32.const 1)))))))
+    ;; LIf (314) → f64 iff EITHER branch's tail is f64. emit_lif declares
+    ;; (result f64) and coerces the i32 branch up when the branches disagree,
+    ;; so the produced width IS this OR. Reading only the then-branch (the
+    ;; prior form) mispredicted a then-i32/else-f64 if (float_at's TFloatLit
+    ;; arm: then = the payload word, else = 0.0) as i32 — the two-branch
+    ;; mismatch. Carried-Truth: the prediction reads what emission produces.
+    (if (i32.eq (local.get $tag) (i32.const 314))
+      (then
+        (local.set $stmts (call $lexpr_lif_then (local.get $e)))
+        (local.set $n (call $len (local.get $stmts)))
+        (if (local.get $n)
+          (then
+            (if (call $emit_expr_is_f64
+                  (call $list_index (local.get $stmts) (i32.sub (local.get $n) (i32.const 1))))
+              (then (return (i32.const 1))))))
+        (local.set $stmts (call $lexpr_lif_else (local.get $e)))
+        (local.set $n (call $len (local.get $stmts)))
+        (if (i32.eqz (local.get $n)) (then (return (i32.const 0))))
+        (return (call $emit_expr_is_f64
+          (call $list_index (local.get $stmts) (i32.sub (local.get $n) (i32.const 1)))))))
+    ;; LMatch (321) → the SAME width $emit_lmatch emits: f64 iff ANY arm tail
+    ;; is f64 ($ec5_match_arms_any_f64, which coerces an i32 arm up). Without
+    ;; this the read fell to the graph handle (a float scrutinee's Ty), which
+    ;; the seed types f64 while the arms floor to i32 — the number_from_
+    ;; substring implicit-return mismatch. The prediction reads what emission
+    ;; produces (the LIf case's law, one node-kind over).
+    (if (i32.eq (local.get $tag) (i32.const 321))
+      (then (return (call $ec5_match_arms_any_f64 (call $lexpr_lmatch_arms (local.get $e))))))
+    ;; Heap / state / capture loads emit an i32.load (the uniform i32 word
+    ;; world); a float there is a crossing (floored), so the PRODUCED stack
+    ;; type is i32. LFieldLoad (334), LStateGet (326), LUpval (305).
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 334))
+          (i32.or (i32.eq (local.get $tag) (i32.const 326))
+                  (i32.eq (local.get $tag) (i32.const 305))))
+      (then (return (i32.const 0))))
+    ;; LCall/LTailCall → the callee's declared result width (the registry,
+    ;; populated by the pre-pass). Falls to the seed's proven type when the
+    ;; callee is unregistered (indirect callee, builtin).
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 308))
+                (i32.eq (local.get $tag) (i32.const 309)))
+      (then (return (call $emit_call_result_is_f64 (local.get $e)))))
+    (call $emit_repr_is_f64 (call $lexpr_handle (local.get $e))))
+
+  ;; $emit_call_result_is_f64 — a call's produced width is the CALLEE's
+  ;; declared result. The callee is an LGlobal(name) in the fn field; the
+  ;; fn-result registry ($emit_fn_result_is_f64, filled by the pre-pass)
+  ;; holds each fn's body-tail width. Unregistered (an indirect/local
+  ;; callee, or a runtime builtin) → the seed's proven type on the call
+  ;; handle. This is the cross-fn half of the consistency keystone.
+  (func $emit_call_result_is_f64 (param $e i32) (result i32)
+    (local $fn i32) (local $name i32) (local $idx i32)
+    (local.set $fn
+      (if (result i32) (i32.eq (call $tag_of (local.get $e)) (i32.const 308))
+        (then (call $lexpr_lcall_fn (local.get $e)))
+        (else (call $lexpr_ltailcall_fn (local.get $e)))))
+    ;; LGlobal (302) callee → its name; look up the registry.
+    (if (i32.eq (call $tag_of (local.get $fn)) (i32.const 302))
+      (then
+        (local.set $name (call $lexpr_lglobal_name (local.get $fn)))
+        (local.set $idx (call $emit_fn_result_lookup (local.get $name)))
+        (if (i32.ge_s (local.get $idx) (i32.const 0))
+          (then (return (call $emit_fn_result_bit (local.get $idx)))))
+        ;; Unregistered direct callee — a handler arm, which the fixpoint
+        ;; walks past (it registers only top-level fns). Its EMITTED result
+        ;; is i32 (the arm-result convention meeting an f64 resume-value the
+        ;; seed floors), which the graph type (f64 Sample) diverges from.
+        ;; Read the EMISSION, not the graph: a caller `(x) => arm(x)` is then
+        ;; (result i32) — consistent with the i32 arm — instead of the graph's
+        ;; f64 view. Every f64-returning direct callee is top-level (registered
+        ;; above); closures fall to the handle read below. Peer
+        ;; Hβ.seed.arm-result-registry (the ultimate form registers the arms).
+        (return (i32.const 0))))
+    (call $emit_repr_is_f64 (call $lexpr_handle (local.get $e))))

@@ -1699,7 +1699,8 @@
                         (local.get $param_names)
                         (local.get $body_list)
                         (call $row_make_pure)
-                        (call $len (local.get $caps))))
+                        (call $len (local.get $caps))
+                        (local.get $param_handles)))
     ;; A closure IS state IS evidence: PLACE the evidence against the SAME
     ;; flow-closure row the body READ (carried in $lam_row) — not the frozen
     ;; effects_of(lookup_ty) leaf, which dropped forward-ref effects and under-sized

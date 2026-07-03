@@ -324,3 +324,9 @@ micro:cli-dispatch=63
 # (offset 12) → wrong dispatch (47); the fix reads the lambda's own row
 # (offset 8 = the PLACE slot) → 79. Two Zzz handlers force the ev-slot path.
 micro:lambda-evrow=79
+# The f64 representation gradient's seed-runnable floor: 2.5 * 2.0 >= 4.9 → 3
+# (the i32-floor of floats gives 0). Real f64 literal + f64.mul + f64.ge + if
+# through the seed. The mix-with-f64-params form (mn-float-arith.mn) is the
+# m2-lead peer — it traps through the seed, needing the wheel's f64 call
+# convention (Hβ.seed.float-gradient).
+micro:float-gate=3

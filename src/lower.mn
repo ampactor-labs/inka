@@ -691,6 +691,21 @@ fn effects_of(fn_ty) = match fn_ty {
 
 fn effects_of_row(row) = match row {
   EfClosed(names)  => row_dispatched_names(eff_names_of(names)),
+  // THE SEAM'S BODY, PINNED (2026-07-03): the row-var carries the rest
+  // of the row (declared enforcement binds it; generalize does not
+  // quantify it) and the discard here reads [] — empty escaping rows,
+  // bare calls, the strict scan's trap two frames down (thread3.mn,
+  // 25 lines, reproduces). THE CHASE IS THE FIX and its 2026-06-20
+  // fence is obsolete (keyed identity dissolved both killers: rows are
+  // consumed as SETS; over-placement is forward-tolerant) — but the
+  // chase EXPOSED the layer beneath: row NAME-SETS mix representations
+  // (register_one_op mints EffName ADTs into sets unify's residual
+  // builders treat as strings — list_diff_str; eff_names_of is the
+  // patch-reader), and the recursion makes the two realities meet in
+  // eff_names_of's match (m2 compile trap !37519 on prelude). The
+  // chase re-lands WITH the name-set unification as ONE band:
+  //   EfOpen(names, v) => union inline with graph_chase(v)'s
+  //   NRowBound(inner) via effects_of_row(inner), floor = inline.
   EfOpen(names, _) => row_dispatched_names(eff_names_of(names)),
   _                => []
 }

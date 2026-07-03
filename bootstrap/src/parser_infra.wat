@@ -227,13 +227,12 @@
     (local.get $p))
 
   ;; ResumeExpr(val, state_updates) → [tag=95][val_node][state_updates_ptr]
-  ;; Per Hβ.first-light.resume-expr-substrate: $lower_resume reads val_node
-  ;; at offset 4 and ignores state_updates per Lock #6 (named follow-up
-  ;; Hβ.lower.resume-state-updates-threading lifts the state-mutation arm).
-  ;; state_updates_ptr is reserved (sentinel 0); the seed-side
-  ;; $skip_to_arm_terminator already absorbs trailing `with field = expr`
-  ;; tokens at the handler-arm boundary. Layout matches wheel src/parser.mn
-  ;; line 1208 ResumeExpr(val, []).
+  ;; Per Hβ.first-light.resume-expr-substrate. state_updates is LIVE end to
+  ;; end: $parse_resume_expr (parser_compound.wat) consumes `with field =
+  ;; expr, ...` after resume's close-paren via $parse_resume_state_updates
+  ;; and passes the parsed field list here; $lower_resume (lower/
+  ;; walk_call.wat:1777) reads offset=8 and emits the state store-backs.
+  ;; Layout matches wheel src/parser.mn ResumeExpr(val, updates).
   (func $mk_ResumeExpr (param $val i32) (param $state_updates i32) (result i32)
     (local $p i32) (local.set $p (call $alloc (i32.const 12)))
     (i32.store (local.get $p) (i32.const 95))

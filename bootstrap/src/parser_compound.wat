@@ -946,15 +946,15 @@
   ;; address 0 → trapped at table[0] (wat_stdout's $ft2 vs caller's
   ;; $ft1). Substrate fix: produce ResumeExpr (tag 95) so $lower_resume
   ;; emits LReturn(handle, lo_val) per H7 Tier-1 tail-resumptive form.
-  ;; State-update `with field = expr` after the close-paren is absorbed
-  ;; by $skip_to_arm_terminator at the handler-arm boundary; AST
-  ;; state_updates field stays empty per wheel src/parser.mn:1208
-  ;; canonical (`ResumeExpr(val, [])`).
+  ;; State-update `with field = expr, ...` after the close-paren is
+  ;; consumed HERE (the TWith check below → $parse_resume_state_updates)
+  ;; and carried in the AST's state_updates field; $lower_resume
+  ;; (lower/walk_call.wat:1777) reads it and emits the store-backs.
   ;;
   ;; Forms:
   ;;   resume()          val = LitUnit
   ;;   resume(value)     val = parsed expr
-  ;;   resume(v) with .. trailing absorbed by handler-arm boundary
+  ;;   resume(v) with .. val + parsed state_updates list
   (func $parse_resume_expr (param $tokens i32) (param $pos i32) (param $span i32) (result i32)
     (local $p i32) (local $val i32) (local $val_r i32) (local $p2 i32)
     (local $tup i32) (local $state_updates i32) (local $p_after_with i32)

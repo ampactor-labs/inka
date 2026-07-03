@@ -40,10 +40,17 @@
   ;; Drift modes refused at edit sites:
   ;;   - Drift 9 (deferred-by-omission): $skip_to_rbrace was the canonical
   ;;     instance. This chunk lands the parser whole. Resume-with-update
-  ;;     post-body (`resume() with debt = ...`) is robustly absorbed by
-  ;;     $skip_to_arm_terminator below — the seed does not lift it into
-  ;;     AST yet (named follow-up Hβ.handler-arm-resume-with-update-substrate),
-  ;;     but consumption is correct and total.
+  ;;     (`resume() with debt = ...`) is parsed INTO AST by parser_compound's
+  ;;     $parse_resume_expr → $parse_resume_state_updates at the resume site,
+  ;;     so an arm body's $parse_expr returns at the true arm boundary —
+  ;;     there is nothing to absorb after it. The prior $skip_to_arm_terminator
+  ;;     blind-walked to the next `,`/`}` at depth 0 and ATE every comma-less
+  ;;     following arm (fresh_for_inference / fresh_for_query lost `mint_row`;
+  ;;     its slot-1 word stayed 0 = table idx 0 = op_wat_stdout_wat_emit, so
+  ;;     inference printed Instantiation reason records to stdout and the +rt
+  ;;     rungs failed assembly). The walk is DELETED, not guarded: the wheel
+  ;;     (src/parser.mn:945) has no terminator walk — parse_expr then the
+  ;;     arms loop's optional-comma skip; both layers stop at the same token.
   ;;   - Drift 8 (string-keyed-when-structured): arm record uses positional
   ;;     i32 indices (record_set on tag-0 chunk-private record), NOT a
   ;;     string-keyed field-name map.
@@ -52,46 +59,6 @@
   ;;   - Drift 1 (rust vtable): arms_list IS a list of arm-records; downstream
   ;;     dispatch is by lower/walk_handle.wat's $lower_handler_arm_body, NOT
   ;;     a closure-as-vtable.
-
-  ;; ─── $skip_to_arm_terminator ─────────────────────────────────────
-  ;; Walks tokens at brace/paren/bracket-depth 0 until hitting `,` `}`
-  ;; or EOF. Used after $parse_expr returns the arm body — if the wheel
-  ;; produced a `resume() with debt = ...` clause that the seed's
-  ;; $parse_expr does not yet absorb (TWith is not an operator), this
-  ;; function steps past the trailing `with FIELD = EXPR ...` chunk
-  ;; without descending into its sub-expressions. Per the named
-  ;; follow-up Hβ.handler-arm-resume-with-update-substrate the seed
-  ;; does not lift the update into AST yet; consumption is what matters
-  ;; for first-light.
-  (func $skip_to_arm_terminator (param $tokens i32) (param $pos i32) (result i32)
-    (local $p i32) (local $depth i32) (local $k i32)
-    (local.set $p     (local.get $pos))
-    (local.set $depth (i32.const 0))
-    (block $done
-      (loop $skip
-        (local.set $k (call $kind_at (local.get $tokens) (local.get $p)))
-        ;; EOF → done
-        (br_if $done (i32.eq (local.get $k) (i32.const 69)))
-        ;; At depth 0, comma or `}` ends
-        (if (i32.eqz (local.get $depth))
-          (then
-            (br_if $done (i32.eq (local.get $k) (i32.const 51)))   ;; TComma
-            (br_if $done (i32.eq (local.get $k) (i32.const 48))))) ;; TRBrace
-        ;; Track opens
-        (if (i32.or
-              (i32.or (i32.eq (local.get $k) (i32.const 47))   ;; TLBrace
-                      (i32.eq (local.get $k) (i32.const 45)))  ;; TLParen
-              (i32.eq (local.get $k) (i32.const 49)))          ;; TLBracket
-          (then (local.set $depth (i32.add (local.get $depth) (i32.const 1)))))
-        ;; Track closes
-        (if (i32.or
-              (i32.or (i32.eq (local.get $k) (i32.const 48))   ;; TRBrace
-                      (i32.eq (local.get $k) (i32.const 46)))  ;; TRParen
-              (i32.eq (local.get $k) (i32.const 50)))          ;; TRBracket
-          (then (local.set $depth (i32.sub (local.get $depth) (i32.const 1)))))
-        (local.set $p (i32.add (local.get $p) (i32.const 1)))
-        (br $skip)))
-    (local.get $p))
 
   ;; ─── $skip_to_rparen_p ───────────────────────────────────────────
   ;; Walks tokens forward consuming TLParen at depth 0 (first call only)
@@ -221,12 +188,13 @@
   ;; ─── $parse_handler_arm ──────────────────────────────────────────
   ;; OP_NAME(arg, ...) => BODY. Returns [arm_record, next_pos] where
   ;; arm_record = make_record(tag=0, arity=3) with {args, body, op_name}
-  ;; at field indices 0/1/2. Body absorbed via $parse_expr; trailing
-  ;; resume-with-update absorbed via $skip_to_arm_terminator.
+  ;; at field indices 0/1/2. $parse_expr consumes the WHOLE body — a
+  ;; trailing `resume(v) with field = ...` included, via parser_compound's
+  ;; $parse_resume_expr — so its return position IS the arm boundary.
   (func $parse_handler_arm (param $tokens i32) (param $pos i32) (result i32)
     (local $p i32) (local $op_name i32) (local $p2 i32)
     (local $args_r i32) (local $args i32) (local $p3 i32) (local $p4 i32)
-    (local $body_r i32) (local $body i32) (local $p5 i32) (local $p6 i32)
+    (local $body_r i32) (local $body i32) (local $p5 i32)
     (local $arm i32) (local $tup i32)
     (local.set $p (call $skip_ws_p (local.get $tokens) (local.get $pos)))
     ;; Doc-comment block before the arm — drop-and-continue, same
@@ -263,18 +231,15 @@
       (call $skip_ws_p (local.get $tokens) (local.get $p4))))
     (local.set $body (call $list_index (local.get $body_r) (i32.const 0)))
     (local.set $p5 (call $list_index (local.get $body_r) (i32.const 1)))
-    ;; Absorb any trailing tokens before the arm terminator (e.g. the
-    ;; resume-with-update form not yet lifted into parse_expr).
-    (local.set $p6 (call $skip_to_arm_terminator (local.get $tokens) (local.get $p5)))
     ;; Build arm record (tag=0, arity=3, alphabetical {args, body, op_name})
     (local.set $arm (call $make_record (i32.const 0) (i32.const 3)))
     (call $record_set (local.get $arm) (i32.const 0) (local.get $args))
     (call $record_set (local.get $arm) (i32.const 1) (local.get $body))
     (call $record_set (local.get $arm) (i32.const 2) (local.get $op_name))
-    ;; Return [arm_record, p6]
+    ;; Return [arm_record, p5]
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0) (local.get $arm)))
-    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p6)))
+    (drop (call $list_set (local.get $tup) (i32.const 1) (local.get $p5)))
     (local.get $tup))
 
   ;; ─── $parse_handler_arms ─────────────────────────────────────────

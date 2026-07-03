@@ -91,7 +91,7 @@
   ;;                                        NOT silent TODOs.
   ;;
   ;; Tag region: lower-private 280-299.
-  ;;   280   LOCAL_ENTRY_TAG       — (name, slot_idx, ty_handle) 3-field
+  ;;   280   LOCAL_ENTRY_TAG       — (name, slot_idx, ty_handle, is_f64) 4-field
   ;;   281   CAPTURE_ENTRY_TAG     — (upvalue_name, src_slot_idx) 2-field
   ;;   282-299 reserved for future lower-substrate records
   ;;
@@ -1007,13 +1007,24 @@
   ;; (bind_names_as_locals). Appends a LOCAL_ENTRY record to the locals
   ;; ledger; bumps $lower_next_slot_g; returns the slot.
   (func $ls_bind_local (param $name i32) (param $ty_handle i32) (result i32)
+    (call $ls_bind_local_f64 (local.get $name) (local.get $ty_handle) (i32.const 0)))
+
+  ;; $ls_bind_local_f64 — bind with an explicit f64 width bit (LOCAL_ENTRY
+  ;; field 3). A ctor sub-binder whose payload is TFloat sets it 1 so
+  ;; $lower_local_ref mangles the binder's WASM local name (`.f64` suffix): an
+  ;; f64 binder must not share a WASM local with a same-named i32 binder in a
+  ;; sibling match arm (the LitInt(v)/LitFloat(v) collision — WASM gives one
+  ;; local one type). Field 3 is read only by $lower_local_ref; every other
+  ;; caller binds is_f64 0 through $ls_bind_local unchanged.
+  (func $ls_bind_local_f64 (param $name i32) (param $ty_handle i32) (param $is_f64 i32) (result i32)
     (local $entry i32) (local $slot i32) (local $new_len i32)
     (call $lower_init)
     (local.set $slot (global.get $lower_next_slot_g))
-    (local.set $entry (call $make_record (i32.const 280) (i32.const 3)))
+    (local.set $entry (call $make_record (i32.const 280) (i32.const 4)))
     (call $record_set (local.get $entry) (i32.const 0) (local.get $name))
     (call $record_set (local.get $entry) (i32.const 1) (local.get $slot))
     (call $record_set (local.get $entry) (i32.const 2) (local.get $ty_handle))
+    (call $record_set (local.get $entry) (i32.const 3) (local.get $is_f64))
     (local.set $new_len (i32.add (global.get $lower_locals_len_g) (i32.const 1)))
     (global.set $lower_locals_ptr
       (call $list_extend_to (global.get $lower_locals_ptr) (local.get $new_len)))

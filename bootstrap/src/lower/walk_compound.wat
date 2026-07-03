@@ -524,6 +524,42 @@
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each))))
 
+  ;; $bind_pat_locals_ctor — bind a PCon's sub-patterns for the arm body's scope,
+  ;; marking each direct TFloat PVar sub-binder f64 (LOCAL_ENTRY field 3) so
+  ;; $lower_local_ref mangles its uses to the `.f64` local — the SAME channel the
+  ;; ctor-payload read uses everywhere ($ctor_payload_params). Non-float subs
+  ;; floor to type 0, byte-identical to the prior $bind_pat_locals_floor; nested
+  ;; subs recurse (their own PCon level marks their direct binders).
+  (func $bind_pat_locals_ctor (param $name i32) (param $subs i32)
+    (local $binding i32) (local $params i32) (local $n i32) (local $np i32)
+    (local $i i32) (local $sub i32) (local $pty i32)
+    (local.set $params (i32.const 0))
+    (local.set $binding (call $env_lookup_ctor (local.get $name)))
+    (if (i32.ne (local.get $binding) (i32.const 0))
+      (then
+        (local.set $params
+          (call $ctor_payload_params (call $env_binding_scheme (local.get $binding))))))
+    (local.set $n  (call $len (local.get $subs)))
+    (local.set $np (call $len (local.get $params)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $sub (call $list_index (local.get $subs) (local.get $i)))
+        (local.set $pty (i32.const 0))
+        (if (i32.lt_u (local.get $i) (local.get $np))
+          (then (local.set $pty
+                  (call $tparam_ty (call $list_index (local.get $params) (local.get $i))))))
+        (if (i32.and (i32.eq (call $tag_of (local.get $sub)) (i32.const 130))    ;; PVar
+                     (i32.eq (call $ty_tag (local.get $pty)) (i32.const 101)))   ;; TFloat
+          (then
+            (drop (call $ls_bind_local_f64 (i32.load offset=4 (local.get $sub))
+                    (i32.const 0) (i32.const 1))))
+          (else
+            (call $bind_pat_locals (local.get $sub) (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each))))
+
   (func $bind_pat_locals (param $pat i32) (param $ty i32)
     (local $tag i32) (local $rest_opt i32) (local $rest_var i32) (local $strip i32)
     (if (i32.eq (local.get $pat) (i32.const 131))
@@ -539,7 +575,9 @@
         (return)))
     (if (i32.eq (local.get $tag) (i32.const 133))
       (then
-        (call $bind_pat_locals_floor (i32.load offset=8 (local.get $pat)))
+        (call $bind_pat_locals_ctor
+          (i32.load offset=4 (local.get $pat))
+          (i32.load offset=8 (local.get $pat)))
         (return)))
     ;; PTuple (134) — recurse each sub with its element TYPE from the (chased) TTuple.
     (if (i32.eq (local.get $tag) (i32.const 134))
@@ -632,10 +670,64 @@
         (br $each)))
     (local.get $buf))
 
+  ;; $f64_local_mangle — the deterministic `.f64` suffix for an f64 pattern
+  ;; binder's WASM local name. Applied IDENTICALLY at the bind
+  ;; ($stamp_lpcon_sub_reprs) and every use ($lower_local_ref), so decl and uses
+  ;; agree; the `.` cannot appear in a source identifier, so the mangled name
+  ;; never collides with a real binder — only with another f64 binder of the same
+  ;; name (which shares its width, so one local is correct).
+  (data (i32.const 8064) "\04\00\00\00.f64")
+  (func $f64_local_mangle (param $name i32) (result i32)
+    (call $str_concat (local.get $name) (i32.const 8064)))
+
+  ;; $ctor_payload_params — the ConstructorScheme's payload type list (the
+  ;; TFun body's params); 0 for a nullary ctor (a TName body has no payloads).
+  ;; Reuses the walk_const.wat:363 / $resolve_field_offset:1128 channel exactly:
+  ;; scheme_body → (TFun ? its params : none).
+  (func $ctor_payload_params (param $scheme i32) (result i32)
+    (local $body i32)
+    (local.set $body (call $scheme_body (local.get $scheme)))
+    (if (i32.eq (call $ty_tag (local.get $body)) (i32.const 107))   ;; TFun
+      (then (return (call $ty_tfun_params (local.get $body)))))
+    (i32.const 0))
+
+  ;; $stamp_lpcon_sub_reprs — positional walk of the ctor's payload types over
+  ;; the lowered sub-patterns. Each bare-binder (LPVar) sub whose payload type
+  ;; is TFloat (101) gets its repr stamped f64 — the pattern node had no handle
+  ;; to carry it. Multi-payload ctors fall out of the positional walk; nested
+  ;; ctor/tuple sub-patterns are NOT stamped here (they are not LPVar) — they
+  ;; recurse through $lower_pat and stamp their OWN direct binders.
+  (func $stamp_lpcon_sub_reprs (param $subs i32) (param $params i32)
+    (local $n i32) (local $np i32) (local $i i32) (local $sub i32) (local $pty i32)
+    (if (i32.eqz (local.get $params)) (then (return)))
+    (local.set $n  (call $len (local.get $subs)))
+    (local.set $np (call $len (local.get $params)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $each
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (br_if $done (i32.ge_u (local.get $i) (local.get $np)))
+        (local.set $sub (call $list_index (local.get $subs) (local.get $i)))
+        (if (i32.eq (call $tag_of (local.get $sub)) (i32.const 360))   ;; LPVar
+          (then
+            (local.set $pty
+              (call $tparam_ty (call $list_index (local.get $params) (local.get $i))))
+            (if (i32.eq (call $ty_tag (local.get $pty)) (i32.const 101))   ;; TFloat
+              (then
+                (call $lowpat_lpvar_set_repr (local.get $sub) (i32.const 1))
+                ;; Mangle the bind name to match $lower_local_ref's mangled uses
+                ;; (both `.f64`), so this f64 binder never shares a WASM local
+                ;; with a same-named i32 binder in a sibling arm.
+                (call $lowpat_lpvar_set_name (local.get $sub)
+                  (call $f64_local_mangle (call $lowpat_lpvar_name (local.get $sub))))))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $each))))
+
   (func $lower_pat (param $pat i32) (param $scrut_h i32) (result i32)
     (local $tag i32) (local $lit i32) (local $lit_tag i32)
     (local $name i32) (local $subs i32) (local $rest_opt i32) (local $rest_var i32)
     (local $binding i32) (local $kind i32) (local $ctor_tag_id i32)
+    (local $payload_params i32) (local $lowered_subs i32)
     (if (i32.eq (local.get $pat) (i32.const 131))
       (then (return (call $lowpat_make_lpwild (local.get $scrut_h)))))
     (if (i32.lt_u (local.get $pat) (global.get $heap_base))
@@ -643,9 +735,12 @@
     (local.set $tag (call $tag_of (local.get $pat)))
     (if (i32.eq (local.get $tag) (i32.const 130))
       (then
+        ;; repr 0 here (the i32 floor / handle-read default); the PCon arm
+        ;; below stamps f64 onto a TFloat payload sub-binder from the ctor scheme.
         (return (call $lowpat_make_lpvar
                   (local.get $scrut_h)
-                  (i32.load offset=4 (local.get $pat))))))
+                  (i32.load offset=4 (local.get $pat))
+                  (i32.const 0)))))
     (if (i32.eq (local.get $tag) (i32.const 132))
       (then
         (local.set $lit     (i32.load offset=4 (local.get $pat)))
@@ -685,6 +780,7 @@
         (local.set $name (i32.load offset=4 (local.get $pat)))
         (local.set $subs (i32.load offset=8 (local.get $pat)))
         (local.set $ctor_tag_id (i32.const -1))
+        (local.set $payload_params (i32.const 0))
         (local.set $binding (call $env_lookup_ctor (local.get $name)))
         (if (i32.ne (local.get $binding) (i32.const 0))
           (then
@@ -692,11 +788,22 @@
             (if (i32.eq (call $schemekind_tag (local.get $kind)) (i32.const 132))
               (then
                 (local.set $ctor_tag_id
-                  (call $schemekind_ctor_tag_id (local.get $kind)))))))
+                  (call $schemekind_ctor_tag_id (local.get $kind)))
+                ;; The payload types ride the ConstructorScheme — the SAME channel
+                ;; the nominal-record read and variant-payload offsets use
+                ;; ($resolve_field_offset:1128, walk_const.wat:363). An N-ary ctor
+                ;; body is TFun(107); its params ARE the payload types. Read them
+                ;; live so a TFloat payload's f64 width stamps onto its sub-binder
+                ;; below (Carried-Truth: one channel, never a second resolver).
+                (local.set $payload_params
+                  (call $ctor_payload_params
+                    (call $env_binding_scheme (local.get $binding))))))))
+        (local.set $lowered_subs (call $lower_pats (local.get $subs) (local.get $scrut_h)))
+        (call $stamp_lpcon_sub_reprs (local.get $lowered_subs) (local.get $payload_params))
         (return (call $lowpat_make_lpcon
                   (local.get $scrut_h)
                   (local.get $ctor_tag_id)
-                  (call $lower_pats (local.get $subs) (local.get $scrut_h))))))
+                  (local.get $lowered_subs)))))
     (if (i32.eq (local.get $tag) (i32.const 134))
       (then
         (return (call $lowpat_make_lptuple

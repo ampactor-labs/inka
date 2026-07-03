@@ -713,7 +713,12 @@
         ;; the payload slot (§5.U seed); UNBOX to the native f64 and mark the
         ;; local f64 so its decl (the dump) and every (local.get) use read the
         ;; same width — the consistency keystone at the pattern-bind site.
-        (if (call $emit_repr_is_f64 (call $lowpat_handle (local.get $pat)))
+        ;; f64 iff the scrutinee handle proves it (a top-level binder of an f64
+        ;; value) OR the stamped payload repr does (a ctor sub-binder — its
+        ;; pattern node had no handle, so lower stamped the ConstructorScheme's
+        ;; TFloat payload width onto the LPVar). One width, two partial oracles.
+        (if (i32.or (call $emit_repr_is_f64 (call $lowpat_handle (local.get $pat)))
+                    (call $lowpat_lpvar_repr (local.get $pat)))
           (then
             (call $ec6_emit_f64_load)
             (drop (call $emit_fn_local_check_f64

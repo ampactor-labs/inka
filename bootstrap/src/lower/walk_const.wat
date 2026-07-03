@@ -380,7 +380,14 @@
             (global.get $lower_locals_ptr)
             (local.get $local_slot)))
         (local.set $local_h (call $record_get (local.get $entry) (i32.const 2)))
-        (return (call $lexpr_make_llocal (local.get $local_h) (local.get $name)))))
+        ;; An f64 ctor-payload binder (LOCAL_ENTRY field 3) reads back through a
+        ;; `.f64`-mangled WASM local name — the bind side ($stamp_lpcon_sub_reprs)
+        ;; mangles the LPVar identically, so decl and every use agree, and the
+        ;; binder never collides with a same-named i32 binder in a sibling arm.
+        (return (call $lexpr_make_llocal (local.get $local_h)
+                  (if (result i32) (call $record_get (local.get $entry) (i32.const 3))
+                    (then (call $f64_local_mangle (local.get $name)))
+                    (else (local.get $name)))))))
     ;; Lock #2 step 2: try capture / outer-scope lookup.
     ;; $ls_lookup_or_capture returns >= 0 if name is a captured upvalue, else -1.
     (local.set $cap_idx (call $ls_lookup_or_capture (local.get $name)))

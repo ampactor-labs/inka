@@ -82,18 +82,43 @@
       (then (return (i32.const 0))))
     (call $record_get (local.get $r) (i32.const 0)))
 
-  ;; ─── 360 = LPVar(handle, name) — arity 2 ──────────────────────────
-  ;; Binds the matched value to `name` in the arm body's scope.
+  ;; ─── 360 = LPVar(handle, name, repr) — arity 3 ────────────────────
+  ;; Binds the matched value to `name` in the arm body's scope. `repr` is
+  ;; the binder's REPRESENTATION width (0 = i32 floor, 1 = f64). A pattern
+  ;; node carries no handle (parser_pat.wat: PVar is [tag][name_ptr]), so a
+  ;; constructor sub-binder's payload width — proved in the ConstructorScheme,
+  ;; never on the scrutinee handle — rides HERE (the §5.U gradient at the
+  ;; pattern-bind site). Top-level binders leave it 0; emit reads the
+  ;; scrutinee handle for those. Carried-Truth: the width lives in the ctor
+  ;; scheme; $lower_pat reads it once (the walk_const.wat:363 channel) and
+  ;; stamps it, and emit never re-derives it from the wrong (scrutinee) handle.
   (func $lowpat_make_lpvar (export "lowpat_make_lpvar")
-        (param $h i32) (param $name i32) (result i32)
+        (param $h i32) (param $name i32) (param $repr i32) (result i32)
     (local $r i32)
-    (local.set $r (call $make_record (i32.const 360) (i32.const 2)))
+    (local.set $r (call $make_record (i32.const 360) (i32.const 3)))
     (call $record_set (local.get $r) (i32.const 0) (local.get $h))
     (call $record_set (local.get $r) (i32.const 1) (local.get $name))
+    (call $record_set (local.get $r) (i32.const 2) (local.get $repr))
     (local.get $r))
 
   (func $lowpat_lpvar_name (export "lowpat_lpvar_name") (param $r i32) (result i32)
     (call $record_get (local.get $r) (i32.const 1)))
+
+  ;; $lowpat_lpvar_repr — the binder's f64 width bit (field 2). 0 = i32 floor.
+  (func $lowpat_lpvar_repr (export "lowpat_lpvar_repr") (param $r i32) (result i32)
+    (call $record_get (local.get $r) (i32.const 2)))
+
+  ;; $lowpat_lpvar_set_repr — stamp the width after the sub-pattern is lowered
+  ;; ($lower_pat's PCon arm walks the ctor payload types positionally and marks
+  ;; each TFloat sub-binder f64).
+  (func $lowpat_lpvar_set_repr (export "lowpat_lpvar_set_repr") (param $r i32) (param $repr i32)
+    (call $record_set (local.get $r) (i32.const 2) (local.get $repr)))
+
+  ;; $lowpat_lpvar_set_name — rename the binder (field 1) after lowering. The
+  ;; PCon stamp mangles an f64 sub-binder to its `.f64` WASM local name so it
+  ;; never shares a local with a same-named i32 binder in a sibling arm.
+  (func $lowpat_lpvar_set_name (export "lowpat_lpvar_set_name") (param $r i32) (param $name i32)
+    (call $record_set (local.get $r) (i32.const 1) (local.get $name)))
 
   ;; ─── 361 = LPWild(handle) — arity 1 ───────────────────────────────
   ;; Matches anything, binds nothing. The `_` pattern.

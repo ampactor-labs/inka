@@ -1009,21 +1009,17 @@
     (call $ec6_emit_args (local.get $args))
     (call $ec_emit_local_get_dollar (local.get $sname))
     (call $ec6_emit_i32_load_offset_0)
-    ;; The evidence-capturing closure dispatch is the fixed-i32 $ftN — a
-    ;; native f64 arg (a Float into an effectful fn: enumerate_float_literals'
-    ;; `float_literal_candidate(0.0)`) cannot ride it without typing the
-    ;; callee's param f64 AND its dispatch index (peer Hβ.seed.typed-ev-
-    ;; dispatch). Floor LOUD — (unreachable) is stack-polymorphic, the
-    ;; emitted sst/args/fn_ptr stay valid, the dispatch traps if reached
-    ;; (never a silent wrong call). Dissolves at first-light.
-    (if (call $ec6_args_any_f64 (local.get $args))
-      (then (call $ec_emit_unreachable))
-      (else
-        (if (i32.ne (local.get $tail) (i32.const 0))
-          (then (call $ec6_emit_return_call_indirect_ftN
-            (call $len (local.get $args))))
-          (else (call $ec6_emit_call_indirect_ftN
-            (call $len (local.get $args))))))))
+    ;; The evidence-capturing closure dispatch types its call_indirect by the
+    ;; args (Hβ.seed.typed-ev-dispatch, realized). The all-i32 case IS the
+    ;; arity-keyed $ftN — byte-identical to the pre-f64 emit (Law 7). A native
+    ;; f64 arg (a Float into an effectful fn: the wheel's own emit_float_const(f,
+    ;; r) dispatched via WasmOut evidence) rides an INLINE (param i32)(param
+    ;; f64…)(result …) signature instead; the callee (emit_fn_body) types its
+    ;; params/result from the SAME graph, so the two agree by construction. The
+    ;; result repr is the LSuspend handle's own — the effectful call's result.
+    (call $ec6_emit_call_indirect_typed (local.get $args)
+      (call $emit_repr_is_f64 (call $lexpr_handle (local.get $r)))
+      (local.get $tail)))
 
   ;; ─── LSuspend support helpers ──────────────────────────────────────
 

@@ -34788,14 +34788,17 @@
                 (i32.eq (local.get $op) (i32.const 146)))
       (then
         (local.set $left_h (call $lexpr_handle (local.get $left_lexpr)))
-        ;; Handle-less LowExpr (no graph address) → flat scalar compare;
-        ;; only graph-addressed operands consult $lookup_ty.
-        (if (i32.eqz (local.get $left_h))
+        ;; A handle-less LEFT (a match binder's LLocal is minted h=0) says
+        ;; NOTHING about the comparison — the RIGHT operand may carry the
+        ;; String proof (`name == "float_to_int"`, the m2 intercept chain).
+        ;; Tag 0 = unknown; the adopt-right block below consults the other
+        ;; side, honoring the symmetric law this arm states. Flat i32.eq
+        ;; remains the fallthrough only when NEITHER side proves sequence.
+        (local.set $left_ty_tag (i32.const 0))
+        (if (i32.ne (local.get $left_h) (i32.const 0))
           (then
-            (call $ec6_emit_binop_op (local.get $op))
-            (return)))
-        (local.set $left_ty (call $lookup_ty (local.get $left_h)))
-        (local.set $left_ty_tag (call $ty_tag (local.get $left_ty)))
+            (local.set $left_ty (call $lookup_ty (local.get $left_h)))
+            (local.set $left_ty_tag (call $ty_tag (local.get $left_ty)))))
         ;; CONSULT BOTH operands — `==` is symmetric. env_find's `k == name`
         ;; carries the String on `name` (the param annotation), not the
         ;; polymorphic destructure-local `k`. If the left didn't resolve to a

@@ -61,7 +61,7 @@ fn compile(entry_module) = {
     // the entry's already-typed AST — compile lowers that live graph, no
     // second fs_read / frontend / infer_program (Carried-Truth: the entry
     // is proven once and read live, never re-derived).
-    entry_module |> driver_check_entry |> saturate_pass |> lower_program |> emit_module
+    entry_module |> driver_check_entry |> saturate_pass |> lower_program |> reachable_from_main |> emit_module
   }
     ~> wat_stdout
     ~> wasi_filesystem       // FS — per-file byte I/O for driver / cache
@@ -97,7 +97,7 @@ fn compile(entry_module) = {
 // produce byte-identical output when the wheel-source emit is
 // deterministic AND substrate-aligned across seed + wheel.
 fn compile_stdin() = {
-  read_stdin() |> frontend |> infer_program |> saturate_pass |> lower_program |> emit_module
+  read_stdin() |> frontend |> infer_program |> saturate_pass |> lower_program |> reachable_from_main |> emit_module
 }
     ~> wat_stdout
     ~> wasi_filesystem
@@ -139,6 +139,7 @@ fn compile_source(source) = {
     |> frontend
     |> infer_program
     |> lower_program
+    |> reachable_from_main
     |> emit_module
     ~> wat_stdout
     ~> string_table

@@ -701,14 +701,14 @@ fn infer_expr(ref node) = {
       // returns -1 → unreachable). Carry the update's type into the field; never
       // discard what the graph could prove (Carried-Truth).
       each((upd) => {
-        infer_expr(upd.init)
-        let N(_, _, uh) = upd.init
-        match env_lookup(upd.name) {
+        infer_expr(state_field_init(upd))
+        let N(_, _, uh) = state_field_init(upd)
+        match env_lookup(state_field_name(upd)) {
           Some(entry) => {
             let (scheme, reason, _) = entry
             let fh = mint(Inferred("resume state field type"))
             graph_bind(fh, instantiate(scheme),
-              Located(span, VarLookup(upd.name, reason)))
+              Located(span, VarLookup(state_field_name(upd), reason)))
             unify(uh, fh, span,
               Inferred("resume state update carries the state field's type"))
           },
@@ -2300,7 +2300,7 @@ fn arms_have_wildcard(arms) = any((arm) => {
 // them — fresh vars would discard that); resume reads (R, S) from
 // arm context; the body's own value unifies with S — the arm's
 // value IS the handle result, whether it resumes or aborts.
-fn infer_one_handler_arm(arm, result_h, payload_h) = {   // drift-audit: ignore — result_h (arm result) and payload_h (effect payload) are distinct handles
+fn infer_one_handler_arm(arm: {args: List, body: N, op_name: String}, result_h, payload_h) = {   // drift-audit: ignore — result_h (arm result) and payload_h (effect payload) are distinct handles
   let arm_span = span_of_node(arm.body)
   let op_ret_ty = match env_lookup(arm.op_name) {
     Some(entry) => {
@@ -3044,9 +3044,9 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
 // Walk each state field's init ONCE per decl; the init's inferred
 // type IS the field's type in arm scope.
 fn infer_handler_state_inits(state) = map((sf) => {
-  infer_expr(sf.init)
-  let N(_, _, ih) = sf.init
-  (sf.name, ih)
+  infer_expr(state_field_init(sf))
+  let N(_, _, ih) = state_field_init(sf)
+  (state_field_name(sf), ih)
 }, state)
 
 fn bind_handler_config_params(config_tparams, hname) =
@@ -3120,7 +3120,9 @@ fn collect_resume_walk(buf, node) with GraphRead = {
     },
     NExpr(MatchExpr(scrut, arms)) => {
       collect_resume_walk(buf, scrut)
-      each((a) => collect_resume_walk(buf, a.body), arms)
+      // arms are (pat, body) tuples (parse_match_arms) — destructure,
+      // never a field read on the pair
+      each(((_, b)) => collect_resume_walk(buf, b), arms)
     },
     NExpr(CallExpr(f, args)) => {
       collect_resume_walk(buf, f)
@@ -3137,13 +3139,13 @@ fn collect_resume_walk(buf, node) with GraphRead = {
     NExpr(MakeTupleExpr(elems)) =>
       each((e) => collect_resume_walk(buf, e), elems),
     NExpr(MakeRecordExpr(fields)) =>
-      each((f) => collect_resume_walk(buf, f.value), fields),
+      each(((_, v)) => collect_resume_walk(buf, v), fields),
     NExpr(RecordUpdateExpr(base, fields)) => {
       collect_resume_walk(buf, base)
-      each((f) => collect_resume_walk(buf, f.value), fields)
+      each(((_, v)) => collect_resume_walk(buf, v), fields)
     },
     NExpr(NamedRecordExpr(_, fields)) =>
-      each((f) => collect_resume_walk(buf, f.value), fields),
+      each(((_, v)) => collect_resume_walk(buf, v), fields),
     NExpr(FieldExpr(b, _)) => collect_resume_walk(buf, b),
     NExpr(IndexExpr(receiver, index)) => {
       collect_resume_walk(buf, receiver)
@@ -3192,7 +3194,7 @@ fn has_loop_ancestor(target_handle, node) with GraphRead = {
       has_loop_ancestor(target_handle, e),
     NExpr(MatchExpr(scrut, arms)) =>
       has_loop_ancestor(target_handle, scrut) ||
-      any(arms, (a) => has_loop_ancestor(target_handle, a.body)),
+      any(arms, ((_, b)) => has_loop_ancestor(target_handle, b)),
     NExpr(LambdaExpr(_, body)) => has_loop_ancestor(target_handle, body),
     NExpr(IndexExpr(receiver, index)) =>
       has_loop_ancestor(target_handle, receiver) ||
@@ -3257,7 +3259,7 @@ fn contains_handle(node, target_handle) with GraphRead = {
       contains_handle(e, target_handle),
     NExpr(MatchExpr(scrut, arms)) =>
       contains_handle(scrut, target_handle) ||
-      any(arms, (a) => contains_handle(a.body, target_handle)),
+      any(arms, ((_, b)) => contains_handle(b, target_handle)),
     NExpr(CallExpr(f, args)) =>
       contains_handle(f, target_handle) ||
       any(args, (a) => contains_handle(a, target_handle)),

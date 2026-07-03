@@ -225,6 +225,29 @@ fn ty_to_wasm_type(ty) with Pure =
 // the index and uses `call_indirect` with `$ft(N+1)` type (arity
 // includes the `__state` slot).
 
+// The emit layer's substrate contract — every runtime fn an emit arm
+// dispatches to BY NAME as it cashes a proof ("the proof becomes the
+// dispatch": a String == mints `call $str_eq`, a perform's strict scan
+// mints `call $ev_perform_entry`). These references are minted at emit,
+// after reachability projected the input, so the projection seeds its
+// frontier from this set — one home, maintained beside the arms that
+// mint the calls; an arm that gains a `call $<fn>` adds the name here.
+// A name absent from the input dissolves (nothing to reach). The
+// visitor-walk projection of this set is the deeper form, gated on the
+// ev-slot seam close.
+fn emit_runtime_contract() =
+  ["ev_lookup", "ev_perform_entry", "len",
+   "list_compare", "list_concat", "list_eq", "list_index", "list_set",
+   "make_list", "slice", "str_compare", "str_concat", "str_eq",
+   "str_hash"]
+// float_to_str is deliberately absent: to_string on a PROVEN float is
+// lower-minted (LGlobal — the walk sees it); only the emit-minted f64
+// show-fold leaf references it blind, and a program reaching that leaf
+// without the proof fails LOUD at assembly (undefined $float_to_str) —
+// the named floor of the m2 call-site result-width frontier
+// (Hβ.m2.callsite-result-width), not a reason to drag the whole float
+// family into every float-free rung.
+
 fn emit_module(lowered) = {
   // Single-walk multi-projection pre-pass. project_emit_state walks the
   // LowExpr tree ONCE; four visitor-handlers chained via `~>` accumulate
@@ -789,7 +812,8 @@ fn emit_init_lets(value_lets) = {
     wat_emit(" (local $callee_closure i32)")
     wat_emit(" (local $alloc_size i32)")
     wat_emit(" (local $loop_i i32)")
-    value_lets |> each(((_, init)) => emit_let_locals_expr(init))
+    emit_named_locals(
+      walk_locals_list(map(((_, init)) => init, value_lets), []), [])
     wat_emit("\n")
     value_lets
       |> each(((name, init)) => {
@@ -1343,7 +1367,8 @@ fn emit_fn_body(name, param_names, body, captures_count) = {
   wat_emit(" (local $callee_closure i32)")
   wat_emit(" (local $alloc_size i32)")
   wat_emit(" (local $loop_i i32)")
-  emit_let_locals_list(body)
+  emit_named_locals(walk_locals_list(body, []),
+    param_local_entries(param_names, body, []))
   wat_emit("\n")
   emit_body(body)
   wat_emit("  )\n")
@@ -1378,6 +1403,15 @@ fn emit_reason_summary(handle) with !Mutate = {
   emit_render_reason_oneline(reason)
 }
 
+// The HEAD projection of a Reason chain — one level, for the fn-boundary
+// WAT comment. The full chain walk is show_reason (types.mn), the mentl
+// voice; this is a DIFFERENT projection (summary, no recursion past
+// Located), never a copy — and it enumerates the REAL Reason ADT
+// totally. The prior arm set matched nine constructors that do not
+// exist in Reason (GeneralizationOver, NFree, …: GNode kinds and
+// phantoms) while missing nine that do — the seed compiled the phantom
+// patterns without membership checking and the sentinel guard trapped
+// the first LetBinding-reasoned node (a match inside a handler arm).
 fn emit_render_reason_oneline(reason) with !Mutate = match reason {
   Declared(n)                     => "declared as {n}",
   Inferred(ctx)                   => "inferred from {ctx}",
@@ -1386,76 +1420,93 @@ fn emit_render_reason_oneline(reason) with !Mutate = match reason {
   FnParam(n, idx, _)              => "param {int_to_str(idx)} of {n}",
   VarLookup(n, _)                 => "lookup {n}",
   Fresh(_)                        => "fresh tyvar",
+  FreshInContext(_, ctx)          => "fresh in {ctx}",
   InferredCallReturn(n, _)        => "call return of {n}",  // drift-audit: ignore — output literal
   InferredPipeResult(n, _)        => "pipe result of {n}",
   IfBranch(_)                     => "if branch",
   MatchBranch(_, _)               => "match branch",
   OpConstraint(op, _, _)          => "op {op}",
   ListElement(_)                  => "list element",
+  LetBinding(n, _)                => "let {n}",
+  Unified(_, _)                   => "unified",
   Refinement(_, _)                => "refinement",
   Instantiation(_, _)             => "instantiation",
-  GeneralizationOver(_, _)        => "generalization",
-  NFree(_)                        => "free",
-  AppArgument(_, _, _)            => "app argument",
-  Subsumption(_, _)               => "subsumption",
-  HandlerAbsorbs(_)               => "handler absorbs",
-  PipeStage(_, _)                 => "pipe stage",
-  RowAssignment(_, _)             => "row assignment",
-  GraphChase(_)                   => "graph chase",
-  RefinementCheck(_, _)           => "refinement check"
+  UnifyFailed(_, _)               => "unify failed",
+  Placeholder(_)                  => "placeholder",
+  BinOpPlaceholder(_)             => "binop placeholder",
+  MissingVar(n)                   => "missing {n}",
+  DefaultReason(n, _)             => "defaulted {n}",
+  VerifyWitness(_)                => "verify witness"
 }
 
-// Walk the function body to collect every LLet name and declare it
-// as a function-level local. Stops at LMakeClosure boundaries
-// (those are other functions with their own locals). Must cover
-// every LowExpr container that can hold LLet descendants.
-fn emit_let_locals_list(stmts) = each(emit_let_locals_expr, stmts)
+// Walk the function body once, projecting its locals row. Two local
+// families, two disciplines. Handle-suffixed locals ($call_<h>,
+// $tuple_<h>, $__hstate_<h>, …) are unique by construction — streamed
+// inline during the walk, exactly as before. NAMED locals (an LLet's
+// binding, a match arm's LPVar, a list-rest bind) are a SET keyed by
+// name: the walk collects them as "name width" entries (O(1) cons —
+// declaration order is immaterial to WAT) and emit_named_locals emits
+// each distinct entry once. Two `let grown` in disjoint branches share
+// one fn-scoped register; the per-occurrence stream declared it twice
+// and wat2wasm rejected split_walk / str_unescape_into on all three
+// +rt rungs. A name recurring at a DIFFERENT width still emits
+// both declarations — wat2wasm rejects that loud (the cross-width
+// collision is the seed's .f64-mangle case; named, never merged).
+// Stops at LMakeClosure boundaries (their locals are their own). Must
+// cover every LowExpr container that can hold LLet descendants.
+fn walk_locals_list(stmts, acc) = {
+  if len(stmts) == 0 { acc }
+  else { walk_locals_list(drop_last(stmts), walk_locals_expr(last(stmts), acc)) }
+}
 
-fn emit_let_locals_expr(expr) = match expr {
+fn walk_locals_expr(expr, acc) = match expr {
   LLet(h, name, inner) => {
-    // The local's WIDTH is the bound value's proven repr (repr_of at the
-    // LLet handle) — i32 byte-identical for the floor (Law 7), f64 for a
-    // float-typed let. The handle the graph already drew, read live.
-    wat_emit(" (local $")
-    wat_emit(name)
-    wat_emit(" ")
-    wat_emit(repr_wat(repr_of(lookup_ty(h))))
-    wat_emit(")")
-    emit_let_locals_expr(inner)
+    // The local's WIDTH: the graph's proof at the LLet handle joined
+    // with the init's own computed width (tail_expr_repr) — the floor
+    // yields to either. A float-computing if bound by a let whose
+    // handle the weak seed-era infer left free still declares f64,
+    // because the init's emission proves it (one width, decl and store
+    // agreeing by the same read).
+    walk_locals_expr(inner,
+      [name ++ " " ++
+       repr_wat(repr_join(repr_of(lookup_ty(h)), tail_expr_repr(inner)))] ++ acc)
   },
-  LMakeClosure(_, _, _, _)         => (),  // function boundary — its locals are its own
-  LFnRef(_h, _n, ev)        => emit_let_locals_list(ev),  // record reuses $state_tmp; ev forwards declare no locals
-  LMakeContinuation(_, _, _, _, _, _, _) => (),  // resume_fn boundary — its locals are its own (H7)
-  LDeclareFn(_)                    => (),  // module-level fn declaration — its body has its own locals
-  LBlock(_h, stmts)         => emit_let_locals_list(stmts),
-  LIf(_h, c, t, e)          => {
-    emit_let_locals_expr(c)
-    emit_let_locals_list(t)
-    emit_let_locals_list(e)
-  },
-  LBinOp(_h, _op, l, r)     => { emit_let_locals_expr(l); emit_let_locals_expr(r) },
-  LUnaryOp(_h, _op, inner)  => emit_let_locals_expr(inner),
+  LMakeClosure(_, _, _, _)         => acc,  // function boundary — its locals are its own
+  LFnRef(_h, _n, ev)        => walk_locals_list(ev, acc),  // record reuses $state_tmp; ev forwards declare no locals
+  LMakeContinuation(_, _, _, _, _, _, _) => acc,  // resume_fn boundary — its locals are its own (H7)
+  LDeclareFn(_)                    => acc,  // module-level fn declaration — its body has its own locals
+  LBlock(_h, stmts)         => walk_locals_list(stmts, acc),
+  LIf(_h, c, t, e)          =>
+    walk_locals_list(e, walk_locals_list(t, walk_locals_expr(c, acc))),
+  LBinOp(_h, _op, l, r)     => walk_locals_expr(r, walk_locals_expr(l, acc)),
+  LUnaryOp(_h, _op, inner)  => walk_locals_expr(inner, acc),
   LCall(h, f, args)         => {
+    // $call_<h> parks the CALLEE RECORD pointer — a handle IS a word,
+    // i32 invariantly; the call's RESULT rides the stack at the ft's
+    // width, never through this scratch.
     wat_emit(" (local $call_")
     wat_emit(int_to_str(h))
     wat_emit(" i32)")
-    emit_let_locals_expr(f); emit_let_locals_list(args)
+    walk_locals_list(args, walk_locals_expr(f, acc))
   },
   LTailCall(h, f, args)     => {
+    // $call_<h> parks the CALLEE RECORD pointer — a handle IS a word,
+    // i32 invariantly; the call's RESULT rides the stack at the ft's
+    // width, never through this scratch.
     wat_emit(" (local $call_")
     wat_emit(int_to_str(h))
     wat_emit(" i32)")
-    emit_let_locals_expr(f); emit_let_locals_list(args)
+    walk_locals_list(args, walk_locals_expr(f, acc))
   },
-  LReturn(_h, inner)        => emit_let_locals_expr(inner),
-  LMakeList(_h, elems)      => emit_let_locals_list(elems),
+  LReturn(_h, inner)        => walk_locals_expr(inner, acc),
+  LMakeList(_h, elems)      => walk_locals_list(elems, acc),
   LMakeTuple(h, elems)      => {
     if len(elems) > 0 {
       wat_emit(" (local $tuple_")
       wat_emit(int_to_str(h))
       wat_emit(" i32)")
     }
-    emit_let_locals_list(elems)
+    walk_locals_list(elems, acc)
   },
   // SIMD lanes need a v128 accumulator local — replace_lane reads-modifies the
   // running vector. No heap local (the value is pure stack v128, not a pointer).
@@ -1465,24 +1516,20 @@ fn emit_let_locals_expr(expr) = match expr {
       wat_emit(int_to_str(h))
       wat_emit(" v128)")
     }
-    emit_let_locals_list(lanes)
+    walk_locals_list(lanes, acc)
   },
-  LMakeRecord(_h, fs)       => emit_let_locals_list(fs),
+  LMakeRecord(_h, fs)       => walk_locals_list(fs, acc),
   LMakeVariant(h, _t, fs)   => {
     if len(fs) > 0 {
       wat_emit(" (local $variant_")
       wat_emit(int_to_str(h))
       wat_emit(" i32)")
     }
-    emit_let_locals_list(fs)
+    walk_locals_list(fs, acc)
   },
-  LMatch(_h, s, arms)       => {
-    emit_let_locals_expr(s)
-    emit_let_locals_arms(arms)
-  },
-  LSuspend(_h, _o, f, args, ev) => {
-    emit_let_locals_expr(f); emit_let_locals_list(args); emit_let_locals_list(ev)
-  },
+  LMatch(_h, s, arms)       => walk_locals_arms(arms, walk_locals_expr(s, acc)),
+  LSuspend(_h, _o, f, args, ev) =>
+    walk_locals_list(ev, walk_locals_list(args, walk_locals_expr(f, acc))),
   LHandleWith(h, b, hn, hname, inits, arm_names, captured_evs) => {
     // The install's OWN minted locals — the handler record plus one
     // [record, base] entry per effect group — mirror-true to what the
@@ -1503,14 +1550,11 @@ fn emit_let_locals_expr(expr) = match expr {
       wat_emit(g.ename)
       wat_emit(" i32)")
     }, arm_names)
-    emit_let_locals_expr(b)
-    emit_let_locals_expr(hn)
-    emit_let_locals_list(inits)
-    emit_let_locals_list(captured_evs)
+    walk_locals_list(captured_evs,
+      walk_locals_list(inits,
+        walk_locals_expr(hn, walk_locals_expr(b, acc))))
   },
   LFeedback(h, b, s)        => {
-    emit_let_locals_expr(b)
-    emit_let_locals_expr(s)
     // LF walkthrough §4.5: declare both per-site locals for the
     // load-tee-store state-machine emitted at the LFeedback arm.
     // $__fb_prev_<h> holds the prior iteration's output (loaded
@@ -1522,89 +1566,127 @@ fn emit_let_locals_expr(expr) = match expr {
     wat_emit("    (local $__fb_")
     wat_emit(int_to_str(h))
     wat_emit(" i32)\n")
+    walk_locals_expr(s, walk_locals_expr(b, acc))
   },
-  LPerform(_h, _n, args, _) => emit_let_locals_list(args),
-  LWasiCall(_h, _n, args)   => emit_let_locals_list(args),
-  LEvPerform(_h, _n, _e, _s, a) => emit_let_locals_list(a),
-  LEvRef(_h, _e)            => (),
-  LEvEntry(_, ev)           => emit_let_locals_expr(ev),
-  LUnresolvedEvidence(_, _) => (),
-  LFieldLoad(_h, rec, _off) => emit_let_locals_expr(rec),
-  LConvert(_h, _, operand)  => emit_let_locals_expr(operand),
-  LStateSlotStore(_h, _o, v) => emit_let_locals_expr(v),
+  LPerform(_h, _n, args, _) => walk_locals_list(args, acc),
+  LWasiCall(_h, _n, args)   => walk_locals_list(args, acc),
+  LEvPerform(_h, _n, _e, _s, a) => walk_locals_list(a, acc),
+  LEvRef(_h, _e)            => acc,
+  LEvEntry(_, ev)           => walk_locals_expr(ev, acc),
+  LUnresolvedEvidence(_, _) => acc,
+  LFieldLoad(_h, rec, _off) => walk_locals_expr(rec, acc),
+  LConvert(_h, _, operand)  => walk_locals_expr(operand, acc),
+  LStateSlotStore(_h, _o, v) => walk_locals_expr(v, acc),
   // H6: exhaustive LowExpr. Leaves declare no locals; LUpval,
   // LConst, LLocal, LGlobal are pure reads. New LIR
   // variants with let-bindings inside must add their recursion
   // explicitly — silent fall-through misses locals and WAT
   // validation fails.
-  LConst(_, _)              => (),
-  LLocal(_, _)              => (),
-  LFeedbackPrior(_)         => (),
-  LGlobal(_, _)             => (),
-  LUpval(_, _)              => (),
+  LConst(_, _)              => acc,
+  LLocal(_, _)              => acc,
+  LFeedbackPrior(_)         => acc,
+  LGlobal(_, _)             => acc,
+  LUpval(_, _)              => acc,
 }
 
-// LMatch arm walker: each pattern-bound LPVar becomes a function-level
-// local so the (local.set $name) inside emit_match_arms validates.
-// Bodies are walked for nested LLet locals as usual.
-fn emit_let_locals_arms(arms) = {
-  each((arm) => {
-  let (pat, body) = arm
-  emit_let_locals_pat(pat)
-  emit_let_locals_expr(body)
-  }, arms)
-}
-
-fn emit_let_locals_pat(pat) = match pat {
-  LPVar(name) => {
-    wat_emit(" (local $")
-    wat_emit(name)
-    wat_emit(" i32)")
-  },
-  LPCon(_, _, sub_pats) => emit_let_locals_pat_list(sub_pats),
-  LPTuple(elem_binds)   => emit_let_locals_pat_tuple(elem_binds),
-  LPList(sub_pats, rest) => {
-    emit_let_locals_pat_list(sub_pats)
-    emit_let_locals_pat_rest(rest)
-  },
-  LPRecord(field_binds) => emit_let_locals_pat_record(field_binds),
-  LPWild                => (),
-  LPLit(_)              => (),
-  // Branches bind the same names (infer's alternation law) — declare
-  // branch 0's set once; declaring per-branch would duplicate locals.
-  LPAlt(branches)       => match branches {
-    []         => (),
-    [b0, ..._] => emit_let_locals_pat(b0)
-  }
-}
-
-fn emit_let_locals_pat_rest(rest) = match rest {
-  None => (),
-  Some(name) => {
-    if name == "_" { () }
-    else {
+// Emit each DISTINCT named local once — the dedupe walk that makes the
+// locals row a set (mirror of emit_distinct_repr_ft_types: end-first
+// recursion over the cons-collected entries, seen-list skip). `seen`
+// arrives seeded with the fn's param entries: a `let` rebinding a
+// param re-uses the param register (a WASM param IS a local), so its
+// declaration is skipped rather than duplicated. The seven scratch
+// preamble names are NOT seeded — a user binding colliding with
+// $state_tmp must stay a loud assemble error, never a silent merge
+// into a register the emitter clobbers between statements.
+fn emit_named_locals(entries, seen: [String]) = {
+  if len(entries) == 0 { () }
+  else {
+    let e = last(entries)
+    if ls_find_str_local(seen, e, 0) >= 0 {
+      emit_named_locals(drop_last(entries), seen)
+    } else {
       wat_emit(" (local $")
-      wat_emit(name)
-      wat_emit(" i32)")
+      wat_emit(e)
+      wat_emit(")")
+      emit_named_locals(drop_last(entries), [e] ++ seen)
     }
   }
 }
 
-fn emit_let_locals_pat_record(field_binds) = {
-  each((fb) => {
-  let (_, _, sub_pat) = fb
-  emit_let_locals_pat(sub_pat)
-  }, field_binds)
+// The fn's param entries in the same "name width" spelling the walk
+// collects — the seed set for emit_named_locals, widths read from the
+// same live projection emit_params renders.
+fn param_local_entries(names, body, acc) = {
+  if len(names) == 0 { acc }
+  else {
+    param_local_entries(drop_last(names), body,
+      [last(names) ++ " " ++ repr_wat(param_repr_from_body(last(names), body))] ++ acc)
+  }
 }
 
-fn emit_let_locals_pat_list(pats) = each(emit_let_locals_pat, pats)
+// LMatch arm walker: each pattern-bound LPVar becomes a function-level
+// local entry so the (local.set $name) inside emit_match_arms validates.
+// Two arms binding the same name share one register — the entry set
+// dedupes at emit_named_locals. Bodies are walked for nested LLet
+// locals as usual.
+fn walk_locals_arms(arms, acc) = {
+  if len(arms) == 0 { acc }
+  else {
+    let (pat, body) = last(arms)
+    walk_locals_arms(drop_last(arms),
+      walk_locals_expr(body, walk_locals_pat(pat, acc)))
+  }
+}
+
+fn walk_locals_pat(pat, acc) = match pat {
+  LPVar(name) => [name ++ " i32"] ++ acc,
+  LPCon(_, _, sub_pats) => walk_locals_pat_list(sub_pats, acc),
+  LPTuple(elem_binds)   => walk_locals_pat_tuple(elem_binds, acc),
+  LPList(sub_pats, rest) =>
+    walk_locals_pat_rest(rest, walk_locals_pat_list(sub_pats, acc)),
+  LPRecord(field_binds) => walk_locals_pat_record(field_binds, acc),
+  LPWild                => acc,
+  LPLit(_)              => acc,
+  // Branches bind the same names (infer's alternation law) — branch 0's
+  // set carries the whole alternation's bindings.
+  LPAlt(branches)       => match branches {
+    []         => acc,
+    [b0, ..._] => walk_locals_pat(b0, acc)
+  }
+}
+
+fn walk_locals_pat_rest(rest, acc) = match rest {
+  None => acc,
+  Some(name) => {
+    if name == "_" { acc }
+    else { [name ++ " i32"] ++ acc }
+  }
+}
+
+fn walk_locals_pat_record(field_binds, acc) = {
+  if len(field_binds) == 0 { acc }
+  else {
+    let (_, _, sub_pat) = last(field_binds)
+    walk_locals_pat_record(drop_last(field_binds),
+      walk_locals_pat(sub_pat, acc))
+  }
+}
+
+fn walk_locals_pat_list(pats, acc) = {
+  if len(pats) == 0 { acc }
+  else { walk_locals_pat_list(drop_last(pats), walk_locals_pat(last(pats), acc)) }
+}
 
 // A tuple pattern's elements are (offset_bytes, sub_pat) — the width-summed
 // positional product, same shape as the record pattern minus the field name.
-fn emit_let_locals_pat_tuple(elem_binds) = each((eb) => {
-  let (_, _, sub_pat) = eb
-  emit_let_locals_pat(sub_pat)
-}, elem_binds)
+fn walk_locals_pat_tuple(elem_binds, acc) = {
+  if len(elem_binds) == 0 { acc }
+  else {
+    let (_, _, sub_pat) = last(elem_binds)
+    walk_locals_pat_tuple(drop_last(elem_binds),
+      walk_locals_pat(sub_pat, acc))
+  }
+}
 
 // The repr of a fn body's result = the repr of the value its tail expression
 // leaves on the stack. The body is a stmt list; the result is the last stmt,
@@ -1612,6 +1694,13 @@ fn emit_let_locals_pat_tuple(elem_binds) = each((eb) => {
 // LIf via its then-branch tail — both branches unify to one type). An empty
 // body or an unresolved tail projects RI32 (the floor). Read live from the
 // tail handle, never re-derived.
+// Two branch widths joined: the RI32 floor yields to any proof; equal
+// proofs pass through; unequal proofs keep the left (loud at assembly).
+fn repr_join(a, b) = match a {
+  RI32 => b,
+  _    => a
+}
+
 fn body_result_repr(body) = {
   if len(body) == 0 { RI32 }
   else { tail_expr_repr(list_index(body, len(body) - 1)) }
@@ -1620,7 +1709,10 @@ fn body_result_repr(body) = {
 fn tail_expr_repr(expr) = match expr {
   LReturn(_h, inner) => tail_expr_repr(inner),
   LBlock(_h, stmts)  => if len(stmts) == 0 { RI32 } else { tail_expr_repr(list_index(stmts, len(stmts) - 1)) },
-  LIf(_h, _c, t, _e) => if len(t) == 0 { RI32 } else { tail_expr_repr(list_index(t, len(t) - 1)) },
+  // Both branches joined — the floor yields to either side's proof,
+  // the same join the LIf emission declares (one width, two readers).
+  LIf(_h, _c, t, e)  => repr_join(body_result_repr(t), body_result_repr(e)),
+  LMatch(_h, _s, arms) => match_arms_repr(arms),
   other              => {
     let h = lexpr_handle(other)
     if h == 0 { RI32 } else { repr_of(lookup_ty(h)) }
@@ -1732,7 +1824,39 @@ fn find_local_handle_expr(name: String, expr) = match expr {
   LUnresolvedEvidence(_, _) => 0
 }
 
-fn emit_body(stmts) = each(emit_expr, stmts)
+// A statement is a value used ZERO times — the kernel-uniform word
+// every expression yields is DROPPED between statements; only the
+// final statement's word is the block's value. Non-yielding forms (a
+// let's local.set, a state-slot store, a nested decl, a diverging
+// return) emit no word, so no drop. A unit-typed op's Tier-2 perform
+// still yields the uniform i32 (every $ft results i32), so a
+// statement-position perform is exactly this law's instance — the
+// two scratch stores in ev_perform_entry's postmortem window were the
+// first on the m2 path and left [i32, i32] at an if-branch end.
+fn emit_body(stmts) = emit_body_seq(stmts, 0)
+
+fn emit_body_seq(stmts, i) = {
+  if i >= len(stmts) { () }
+  else {
+    let s = list_index(stmts, i)
+    emit_expr(s)
+    if i < len(stmts) - 1 && lexpr_leaves_value(s) {
+      wat_emit("    (drop)\n")
+    } else { () }
+    emit_body_seq(stmts, i + 1)
+  }
+}
+
+// The default IS the law — every expression emission yields one word;
+// the arms enumerated here are the forms whose emission consumes its
+// own result (local.set / store / decl) or never falls through.
+fn lexpr_leaves_value(e) = match e {
+  LLet(_, _, _)            => false,
+  LStateSlotStore(_, _, _) => false,
+  LDeclareFn(_)            => false,
+  LReturn(_, _)            => false,
+  _                        => true
+}
 
 fn emit_start(top_fn_names, value_lets) = {
   // Top-level closures are static data; top-level VALUE lets initialize
@@ -2253,8 +2377,17 @@ fn emit_expr(expr) = match expr {
   },
 
   LIf(_h, cond, then_body, else_body) => {
+    // The if's result WIDTH is the branches' proven join, read live
+    // from the tails (body_result_repr) — the i32 floor loses to any
+    // proof (an f64-computing branch types the if f64); two DISAGREEING
+    // proofs keep the then's width and fail loud at assembly (a real
+    // width frontier is named, never silently truncated). The baked
+    // `(result i32)` was the arity-keyed-decider class STEP 1 deleted.
+    let w = repr_join(body_result_repr(then_body), body_result_repr(else_body))
     emit_expr(cond)
-    wat_emit("    (if (result i32)\n      (then\n")
+    wat_emit("    (if (result ")
+    wat_emit(repr_wat(w))
+    wat_emit(")\n      (then\n")
     emit_body(then_body)
     wat_emit("      )\n      (else\n")
     emit_body(else_body)
@@ -2326,7 +2459,7 @@ fn emit_expr(expr) = match expr {
     // at runtime, complementing the inference-time check.
     emit_expr(scrutinee)
     wat_emit("    (local.set $scrut_tmp)\n")
-    emit_match_arms(arms)
+    emit_match_arms(arms, match_arms_repr(arms))
   },
 
   LSuspend(h, _op_h, func, args, ev_slots) => {
@@ -4944,7 +5077,7 @@ fn product_byte_size(fields) =
 // fork, no filtered cascades, no dropped pattern forms. Eliding the
 // guard when the scrutinee's type proves every constructor fielded is
 // a gradient cash-out (graph-driven), not a shape system.
-fn emit_match_arms(arms) = {
+fn emit_match_arms(arms, w) = {
   if len(arms) == 0 {
     wat_emit("    (unreachable)\n")
   } else {
@@ -4954,13 +5087,25 @@ fn emit_match_arms(arms) = {
       emit_expr(body)
     } else {
       emit_pat_predicate(pat)
-      wat_emit("    (if (result i32)\n      (then\n")
+      wat_emit("    (if (result ")
+      wat_emit(repr_wat(w))
+      wat_emit(")\n      (then\n")
       emit_pat_binds(pat)
       emit_expr(body)
       wat_emit("      )\n      (else\n")
-      emit_match_arms(drop_last(arms))
+      emit_match_arms(drop_last(arms), w)
       wat_emit("      ))\n")
     }
+  }
+}
+
+// The match's result width — every arm tail's repr joined (the same
+// live read the if's branches take; one width types the whole cascade).
+fn match_arms_repr(arms) = {
+  if len(arms) == 0 { RI32 }
+  else {
+    let (_, body) = last(arms)
+    repr_join(tail_expr_repr(body), match_arms_repr(drop_last(arms)))
   }
 }
 
@@ -5528,7 +5673,7 @@ fn emit_tuple_literal(h, elems) = {
 // The result is one v128 the lane ops (emit_binop_v128: f32x4.add/mul) process
 // four-at-once — the value layer's RV128 repr meeting the `><` parallel verb at
 // the SPACE axis. NOT a heap allocation: a v128 is a stack/register value, so
-// the accumulator is the $simd_<h> v128 local (declared in emit_let_locals).
+// the accumulator is the $simd_<h> v128 local (declared in walk_locals_expr).
 fn emit_simd_lanes(h, lanes) = {
   let local_name = "simd_{int_to_str(h)}"
   wat_emit("    (local.set $")

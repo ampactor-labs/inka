@@ -1926,8 +1926,22 @@ fn emit_ev_entry_keyed(base, key_off) = {
   // `call $str_concat (local.get $__state)`), so this is 4 args: <conv __state>
   // <state = the record to scan> <base> <target>. ev_lookup ignores the
   // convention slot (Memory is builtin, no evidence read); the record to scan
-  // IS this frame's __state — passed as the explicit `state` arg.
+  // IS this frame's __state — passed as the explicit `state` arg. This is the
+  // FORWARD-side read (LEvRef building a callee's pair): a miss returns 0 by
+  // design — capture sets over-approximate, so an unfilled pair is routine.
   wat_emit("    (call $ev_lookup (local.get $__state) (local.get $__state) (i32.const ")
+  wat_emit(int_to_str(base))
+  wat_emit(") (i32.const ")
+  wat_emit(int_to_str(key_off))
+  wat_emit("))\n")
+}
+
+// The PERFORM-side read: dispatching an op through a missing or unfilled
+// entry is the broken promise that dispatched through scratch memory (the
+// 2026-07-03 pin), so ev_perform_entry traps AT the read — sentinel-miss
+// and found-but-0 alike — with the sought key in the postmortem window.
+fn emit_ev_entry_perform(base, key_off) = {
+  wat_emit("    (call $ev_perform_entry (local.get $__state) (local.get $__state) (i32.const ")
   wat_emit(int_to_str(base))
   wat_emit(") (i32.const ")
   wat_emit(int_to_str(key_off))
@@ -2548,20 +2562,20 @@ fn emit_expr(expr) = match expr {
     let key_off = string_offset(ekey)     // the effect-key's interned data offset (W5 dedup)
     let arm_const = 8 + 4 * op_slot
     // (1) arm __state = record = entry[0]
-    emit_ev_entry_keyed(base, key_off)
+    emit_ev_entry_perform(base, key_off)
     wat_emit("    (i32.load offset=0)\n")
     // (2) user args
     emit_expr_list(args)
     // (3) arm fn_idx = record[arm_const + 4*base + 4*nstate]
-    emit_ev_entry_keyed(base, key_off)
+    emit_ev_entry_perform(base, key_off)
     wat_emit("    (i32.load offset=0)\n")             // record
     wat_emit("    (i32.const ")
     wat_emit(int_to_str(arm_const))
     wat_emit(")(i32.add)\n")                          // + arm_const
-    emit_ev_entry_keyed(base, key_off)
+    emit_ev_entry_perform(base, key_off)
     wat_emit("    (i32.load offset=4)\n")             // base_field
     wat_emit("    (i32.const 4)(i32.mul)(i32.add)\n") // + 4*base_field
-    emit_ev_entry_keyed(base, key_off)
+    emit_ev_entry_perform(base, key_off)
     wat_emit("    (i32.load offset=0)(i32.load offset=4)\n")  // nstate = record[4]
     wat_emit("    (i32.const 4)(i32.mul)(i32.add)\n") // + 4*nstate
     wat_emit("    (i32.load offset=0)\n")             // arm_fn idx

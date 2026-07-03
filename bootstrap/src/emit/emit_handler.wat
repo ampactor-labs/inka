@@ -369,6 +369,52 @@
     (call $emit_byte (i32.const 41))   ;; )
     (call $emit_byte (i32.const 10)))  ;; \n
 
+  ;; ─── $emit_ev_entry_perform — the PERFORM-side entry read ────────────
+  ;; emits: (call $ev_perform_entry (local.get $__state) (local.get $__state)
+  ;;         (i32.const <base>) (i32.const <key_off>))
+  ;; Mirror of wheel emit_ev_entry_perform. Dispatching an op through a
+  ;; missing or unfilled entry is the broken promise that dispatched through
+  ;; scratch memory (the 2026-07-03 pin: instantiate's mint performing
+  ;; wat_stdout's wat_emit), so the perform-side scan (ev_perform_entry,
+  ;; lib/runtime/memory.mn) traps AT the read — sentinel-miss and found-but-0
+  ;; alike — with the sought key in the postmortem window (scratch words 0/4).
+  ;; The forward-side read ($emit_ev_entry_keyed → $ev_lookup) stays tolerant:
+  ;; capture sets over-approximate, so an unfilled pair is routine THERE.
+  (func $emit_ev_entry_perform (param $base i32) (param $key_off i32)
+    (call $emit_byte (i32.const 40))   ;; (
+    (call $emit_byte (i32.const 99))   ;; c
+    (call $emit_byte (i32.const 97))   ;; a
+    (call $emit_byte (i32.const 108))  ;; l
+    (call $emit_byte (i32.const 108))  ;; l
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $emit_byte (i32.const 36))   ;; $
+    (call $emit_byte (i32.const 101))  ;; e
+    (call $emit_byte (i32.const 118))  ;; v
+    (call $emit_byte (i32.const 95))   ;; _
+    (call $emit_byte (i32.const 112))  ;; p
+    (call $emit_byte (i32.const 101))  ;; e
+    (call $emit_byte (i32.const 114))  ;; r
+    (call $emit_byte (i32.const 102))  ;; f
+    (call $emit_byte (i32.const 111))  ;; o
+    (call $emit_byte (i32.const 114))  ;; r
+    (call $emit_byte (i32.const 109))  ;; m
+    (call $emit_byte (i32.const 95))   ;; _
+    (call $emit_byte (i32.const 101))  ;; e
+    (call $emit_byte (i32.const 110))  ;; n
+    (call $emit_byte (i32.const 116))  ;; t
+    (call $emit_byte (i32.const 114))  ;; r
+    (call $emit_byte (i32.const 121))  ;; y
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $el_emit_local_get_state)                       ;; convention slot
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $el_emit_local_get_state)                       ;; the record to scan
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $ec6_emit_i32_const_lit (local.get $base))      ;; (i32.const base)
+    (call $emit_byte (i32.const 32))   ;; ' '
+    (call $ec6_emit_i32_const_lit (local.get $key_off))   ;; (i32.const key_off)
+    (call $emit_byte (i32.const 41))   ;; )
+    (call $emit_byte (i32.const 10)))  ;; \n
+
   ;; ─── $emit_one_keyed_ev — store ONE keyed entry: [key@off][ev@off+4] ──
   ;; Mirror of wheel emit_one_keyed_ev. key = the effect-key's interned offset
   ;; ($emit_string_intern — W5 dedup, the SAME offset the perform's $ev_lookup
@@ -1198,21 +1244,21 @@
       (i32.add (i32.const 8)
         (i32.mul (i32.const 4) (call $lexpr_levperform_op_slot (local.get $r)))))
     ;; (1) arm __state = record = entry[0] = ev_lookup(__state, base, key)[0]
-    (call $emit_ev_entry_keyed (local.get $base) (local.get $key_off))
+    (call $emit_ev_entry_perform (local.get $base) (local.get $key_off))
     (call $ec6_emit_i32_load_offset_0)                          ;; record = entry[0]
     ;; (2) user args
     (call $ec6_emit_args (local.get $args))
     ;; (3) arm fn_idx = record[arm_const + 4*base_field + 4*nstate]
-    (call $emit_ev_entry_keyed (local.get $base) (local.get $key_off))
+    (call $emit_ev_entry_perform (local.get $base) (local.get $key_off))
     (call $ec6_emit_i32_load_offset_0)                          ;; record = entry[0]
     (call $ec6_emit_i32_const_lit (local.get $arm_const))       ;; 8 + 4*op_slot
     (call $ec6_emit_i32_add)                                     ;; record + arm_const
-    (call $emit_ev_entry_keyed (local.get $base) (local.get $key_off))
+    (call $emit_ev_entry_perform (local.get $base) (local.get $key_off))
     (call $ec6_emit_i32_load_offset_4)                          ;; base_field = entry[1]
     (call $ec6_emit_i32_const_lit (i32.const 4))
     (call $ec6_emit_i32_mul)                                     ;; 4*base_field
     (call $ec6_emit_i32_add)                                     ;; + 4*base_field
-    (call $emit_ev_entry_keyed (local.get $base) (local.get $key_off))
+    (call $emit_ev_entry_perform (local.get $base) (local.get $key_off))
     (call $ec6_emit_i32_load_offset_0)                          ;; record = entry[0]
     (call $ec6_emit_i32_load_offset_4)                          ;; nstate = record[4]
     (call $ec6_emit_i32_const_lit (i32.const 4))

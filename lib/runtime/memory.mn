@@ -71,11 +71,26 @@ effect Alloc {
 // caller PLACED and the key the callee SEEKS are the SAME offset, an i32.eq
 // match). Returns the entry-ptr: the [record][base] view the perform dispatches
 // through. A sibling effect appearing shuffles NO key — the cure for
-// position-as-the-bug. ONE tested helper: emit emits `call ev_lookup`, never an
-// inline scan loop, so the key-scan lives in exactly one place. The sentinel
-// arm is dead for resolved effects (the escaping_row guarantees the key is
-// placed; a genuinely-unresolved effect emits LUnresolvedEvidence → unreachable
-// at lower, never reaching here) — its 0 is a loud-downstream-trap backstop.
+// position-as-the-bug. The scan serves TWO callers with DIFFERENT miss
+// semantics (measured 2026-07-03, the 0/8 board that taught it):
+//
+// FORWARD (ev_lookup — LEvRef building a callee's pair from this frame):
+// a miss is ROUTINE — capture sets over-approximate (escaping_row), so a
+// caller legitimately lacks keys its callee never fires. Returns 0: the
+// pair is written unfilled. Tolerant by design.
+//
+// PERFORM (ev_perform_entry — LEvPerform dispatching an op): a miss is a
+// BROKEN PROMISE, and so is a FOUND key whose entry is 0 (the unfilled
+// pair from a forward-miss — the promised evidence never materialized up
+// the chain). The old silent 0 made the perform read record=load(0)/
+// base=load(4) and dispatch through the int_to_str/iovec scratch words,
+// calling whichever VALID table fn their bytes named at that instant
+// (measured: instantiate's mint performing wat_stdout's wat_emit —
+// garbage WAT on stdout during INFERENCE). Both perform-side failures
+// trap HERE, where the key is still in hand: the sought key's interned
+// offset goes to scratch word 0, the scanned base to word 4 (the
+// postmortem window), then a deterministic out-of-bounds load traps —
+// the backtrace names the perform site, the scratch words the effect.
 fn ev_lookup(state, base, target) with Memory = ev_scan(state, base, target, 0)
 
 fn ev_scan(state, base, target, j) with Memory = {
@@ -83,4 +98,14 @@ fn ev_scan(state, base, target, j) with Memory = {
   if key == target { load_i32(state + base + 8 * j + 4) }
   else if key == 0 { 0 }
   else { ev_scan(state, base, target, j + 1) }
+}
+
+fn ev_perform_entry(state, base, target) with Memory = {
+  let entry = ev_lookup(state, base, target)
+  if entry == 0 {
+    store_i32(0, target)
+    store_i32(4, base)
+    load_i32(0 - 8)
+  }
+  else { entry }
 }

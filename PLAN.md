@@ -660,16 +660,43 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   3-refuter adversarial verify (1/3 refuted: the proposed replacement
   with-absorb loop was proven unreachable dead code re-deriving
   parse_resume_state_updates — deleted before commit, the ⟲ loop
-  working as designed). NEXT FACE (measured 2026-07-03, all three +rt
-  rungs): ASSEMBLE fails on `redefinition of local $grown` — the
-  wheel's split_walk declares (local $grown i32) at emission per
-  grow-in-place list op, so a fn with two such ops double-declares;
-  behind it a second class, undefined conversion globals
-  ($float_to_int referenced as a global). Both wheel EMIT classes,
-  seam-independent. Residual band peers: `Hβ.seed.arm-result-registry`
-  (arm sigs + remaining $ft flips — adversarial design first); the
-  walk_refinement_fields record-literal trap (censusFix 2026-07-02)
-  remains after those. The method that closed eight roots in two days
+  working as designed). **THE ULTIMATE-SYSTEM ARC (2026-07-03, f786f93 + 6cc5721 + da65f62 —
+  BOARD 6/2, pipe-hole(+rt)=15 the FIRST green runtime rung; handler /
+  hof-map now parse, infer, lower, emit, assemble, and RUN, trapping at
+  runtime exit 134 — the deepest the +rt frontier has ever stood).**
+  Eleven roots closed in one continuous dig, each pinned in the
+  artifact first: the locals-row SET (dup `$grown`/`$decoded` decls);
+  the seed's symmetric `==` (a match binder's LLocal is minted h=0 —
+  the handle-less-left early exit forced pointer-eq past the
+  adopt-right read; 23 i32.eq-against-intern sites censused, one law);
+  the march-gate link set (prelude was always the true scope —
+  hof-map calls `map`); the brace-header grammar ruling (SYNTAX
+  §Nominal records: `with found = None {` — the { closes the header;
+  ExprSlot mode through the parser spine, seed already agreed); the
+  field-proof projections (typed projections at each record's mint —
+  state fields, stack entries, resolve results, ledger entries, arm
+  records; match arms and record fields are TUPLES, destructured);
+  the Reason head-renderer trued (nine phantom arms deleted, nine real
+  variants added); Option to prelude (one home); the statement-drop
+  law (every expression yields the kernel-uniform word; a statement
+  drops it); the if/match width JOIN (`repr_join` — the i32 floor
+  yields to either branch's proof; baked `(result i32)` deleted); and
+  **REACHABILITY-FROM-MAIN (da65f62)** — `lower_program |>
+  reachable_from_main |> emit_module`: emission projects the
+  main-rooted subgraph over LowIR's own edges + the emit layer's
+  substrate contract (`emit_runtime_contract`, one home beside the
+  arms that mint the calls); arm fns reach through their containers;
+  libraries emit whole; both compilers now converge on the same
+  emitted set. NAMED NEXT FACES: (1) the handler/hof-map RUNTIME trap
+  (exit 134 — the first m2-emitted handler installs to ever execute);
+  (2) `Hβ.m2.callsite-result-width` — a call site's ft result width
+  under the weak seed-era infer needs the callee's declared result
+  repr (the f64 show leaf's undefined-`$float_to_str` is its loud
+  floor; the float rungs land with this band); (3)
+  `Hβ.emit.match-arms-call-vectors` — collect_call_vectors' LMatch arm
+  skips the arms' calls (latent $ft gap); (4)
+  `Hβ.seed.arm-result-registry` and the walk_refinement_fields
+  record-literal trap remain behind those. The method that closed eight roots in two days
   is crystallized in `CLAUDE.md ⟲` (census-not-moles; binary-patch
   probes). ALLOCATOR CONSOLIDATED (7027f60): the inline-bump category
   deleted — ~5996 per-family unaligned bump groups → 5720 `call $alloc`

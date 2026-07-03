@@ -101,17 +101,25 @@ effect EmitMemory {
   emit_alloc(Int, String) -> ()
 }
 
+// The allocation call site is strategy-INVARIANT: (local.set $<target>
+// (call $alloc (i32.const size))) against the single aligned allocator $alloc,
+// whose body emit_memory_decl emits. No inline bump — the bump pattern's
+// 5707-spelling re-derivation is deleted, read live from the one $alloc fn.
+//
+// The emission is inlined in each arm (not factored to a shared fn) because the
+// call sites emit inside fn-body buffers where a fn boundary would thread the
+// WatOut evidence across the ev_perform_entry seam (PLAN §7); the arm performs
+// wat_emit directly, exactly as before. Per-strategy $alloc BODIES chosen by the
+// installed handler are the seam-gated follow-up Hβ.emit.memory-strategy-body-swap
+// (a body-emitting `~>` perform trips the same evidence seam today); until it
+// closes the body is bump, emitted directly, and the swap is a one-fn-body change.
 handler emit_memory_bump {
   emit_alloc(size, target_local) => {
-    wat_emit("    (global.get $heap_ptr)\n")
     wat_emit("    (local.set $")
     wat_emit(target_local)
-    wat_emit(")\n")
-    wat_emit("    (global.get $heap_ptr)\n")
-    wat_emit("    (i32.const ")
+    wat_emit(" (call $alloc (i32.const ")
     wat_emit(int_to_str(size))
-    wat_emit(") (i32.add)\n")
-    wat_emit("    (global.set $heap_ptr)\n")
+    wat_emit(")))\n")
     resume()
   }
 }
@@ -130,15 +138,13 @@ handler emit_memory_bump {
 // the backend" — memory strategy is a handler swap.
 handler emit_memory_arena {
   emit_alloc(size, target_local) => {
-    wat_emit("    (global.get $arena_ptr)\n")
+    // Same strategy-invariant call site; the arena's region-reset semantics live
+    // in its $alloc body (the seam-gated body-swap follow-up above).
     wat_emit("    (local.set $")
     wat_emit(target_local)
-    wat_emit(")\n")
-    wat_emit("    (global.get $arena_ptr)\n")
-    wat_emit("    (i32.const ")
+    wat_emit(" (call $alloc (i32.const ")
     wat_emit(int_to_str(size))
-    wat_emit(") (i32.add)\n")
-    wat_emit("    (global.set $arena_ptr)\n")
+    wat_emit(")))\n")
     resume()
   }
 }
@@ -163,33 +169,13 @@ handler emit_memory_arena {
 // installed handler.
 handler emit_memory_atomic_cas {
   emit_alloc(size, target_local) => {
-    // CAS loop: atomically claim `size` bytes from $heap_ptr cell.
-    wat_emit("    (block $alloc_done\n")
-    wat_emit("      (loop $alloc_retry\n")  // drift-audit: ignore — WAT-literal loop keyword (target output), not Mentl-source iteration
-    wat_emit("        ;; load current heap_ptr\n")
-    wat_emit("        (local.tee $")
+    // Same strategy-invariant call site; the lock-free CAS claim lives in this
+    // strategy's $alloc body (the seam-gated body-swap follow-up above).
+    wat_emit("    (local.set $")
     wat_emit(target_local)
-    wat_emit(" (i32.atomic.load (i32.const 64)))\n")
-    wat_emit("        ;; cmpxchg(addr, expected, replacement) returns old value\n")
-    wat_emit("        (i32.const 64)\n")
-    wat_emit("        (local.get ")
-    wat_emit(target_local)
-    wat_emit(")\n")
-    wat_emit("        (local.get ")
-    wat_emit(target_local)
-    wat_emit(")\n")
-    wat_emit("        (i32.const ")
+    wat_emit(" (call $alloc (i32.const ")
     wat_emit(int_to_str(size))
-    wat_emit(")\n")
-    wat_emit("        (i32.add)\n")
-    wat_emit("        (i32.atomic.rmw.cmpxchg)\n")
-    wat_emit("        ;; if witness == expected, we won; br_if exits\n")  // drift-audit: ignore — WAT-literal br_if pattern, not Mentl-source early-exit
-    wat_emit("        (local.get ")
-    wat_emit(target_local)
-    wat_emit(")\n")
-    wat_emit("        (i32.eq)\n")
-    wat_emit("        (br_if $alloc_done)\n")
-    wat_emit("        (br $alloc_retry)))\n")
+    wat_emit(")))\n")
     resume()
   }
 }
@@ -1173,6 +1159,14 @@ fn emit_memory_decl() = {
   // bump heap; only one strategy is active per emit (the installed
   // EmitMemory handler decides which pointer moves).
   wat_emit("  (global $arena_ptr (mut i32) (i32.const 1048576))\n")
+  // The ONE allocator, emitted once — every construction, closure record, and
+  // handler-state alloc is a `(call $alloc SIZE)` against this fn. The bump body:
+  // return $heap_ptr, advance it by (size+7)&-8 so every record starts 8-byte
+  // aligned and the heap image stays memcpy-serializable (§5.U). Emitted directly
+  // (not through a `~>` perform) because a body-emitting perform trips the
+  // ev_perform_entry evidence seam today; the arena/CAS body-swap is the named
+  // follow-up Hβ.emit.memory-strategy-body-swap (gated on the seam, PLAN §7).
+  wat_emit("  (func $alloc (param $size i32) (result i32)(local $ptr i32)(local.set $ptr (global.get $heap_ptr))(global.set $heap_ptr (i32.add (global.get $heap_ptr)(i32.and (i32.add (local.get $size)(i32.const 7))(i32.const -8))))(local.get $ptr))\n")
   // Thread record region: [0x800, 0x1000) = 2KB / 16 bytes per record
   // = 128 thread slots. Layout per record (16 bytes):
   //   offset 0: closure_ptr (i32)
@@ -1862,10 +1856,10 @@ fn emit_handler_effect_entries(state_local, nstate, groups) = {
   fold(0, (base, g) => {
     emit_arm_writes(state_local, nstate, base, g.arms, 0)
     let entry_name = "{state_local}_{g.ename}"
-    // alloc the 8-byte [record, base] entry (bump pattern)
-    wat_emit("(global.get $heap_ptr)(local.set $")
+    // alloc the 8-byte [record, base] entry through the one aligned $alloc
+    wat_emit("    (local.set $")
     wat_emit(entry_name)
-    wat_emit(")(global.get $heap_ptr)(i32.const 8)(i32.add)(global.set $heap_ptr)\n")
+    wat_emit(" (call $alloc (i32.const 8)))\n")
     wat_emit("(local.get $")
     wat_emit(entry_name)
     wat_emit(")(local.get $")
@@ -2364,12 +2358,10 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (i32.const 4) (i32.mul)\n")
     wat_emit("    (i32.add)\n")
     wat_emit("    (local.set $alloc_size)\n")
-    // emit_alloc with dynamic size: route through emit_alloc_dyn
-    // (variant of emit_alloc taking i32 from local.get $alloc_size).
-    // Bump-alloc inlines: allocate $alloc_size bytes, store base
-    // into $state_tmp, advance $heap_ptr.
-    wat_emit("    (global.get $heap_ptr) (local.set $state_tmp)\n")
-    wat_emit("    (global.get $heap_ptr) (local.get $alloc_size) (i32.add) (global.set $heap_ptr)\n")
+    // Dynamic-size alloc: the runtime-computed $alloc_size feeds the one aligned
+    // $alloc; the pointer binds to $state_tmp. Same fn as every static-size site,
+    // the size operand a local instead of a const.
+    wat_emit("    (local.set $state_tmp (call $alloc (local.get $alloc_size)))\n")
     // Copy header (fn_ptr + capture_count = 8 bytes).
     wat_emit("    (local.get $state_tmp) (local.get $callee_closure) (i32.load offset=0) (i32.store offset=0)\n")
     wat_emit("    (local.get $state_tmp) (local.get $callee_closure) (i32.load offset=4) (i32.store offset=4)\n")
@@ -2421,12 +2413,12 @@ fn emit_expr(expr) = match expr {
     let n_cevs = len(captured_evs)
     // captured_evs region is keyed: 2 words/entry ([key][ev]) + 1 sentinel.
     let size = 8 + 4 * (nstate + total_arms + 2 * n_cevs + 1)
-    // alloc (mirrors seed $emit_alloc 5-piece bump pattern)
-    wat_emit("(global.get $heap_ptr)(local.set $")
+    // alloc the handler-state record through the one aligned $alloc
+    wat_emit("    (local.set $")
     wat_emit(local_name)
-    wat_emit(")(global.get $heap_ptr)(i32.const ")
+    wat_emit(" (call $alloc (i32.const ")
     wat_emit(int_to_str(size))
-    wat_emit(")(i32.add)(global.set $heap_ptr)\n")
+    wat_emit(")))\n")
     // FENCE @ offset 4 = nstate — dispatch locates arms fence-relative.
     wat_emit("(local.get $")
     wat_emit(local_name)

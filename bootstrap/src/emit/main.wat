@@ -2454,6 +2454,12 @@
     (call $emit_close)
     (call $emit_nl)
 
+    ;; ── The ONE aligned allocator ──
+    ;; Every construction, handler-state record, closure, and the `alloc`
+    ;; intrinsic emit `(call $alloc SIZE)`; this writes the single 8-byte-
+    ;; aligned bump fn they all call (the EmitMemory swap surface, §3.5.1).
+    (call $emit_alloc_runtime_fn)
+
     ;; ── Per-handler state globals (LHandleWith `~>` substrate) ──
     ;; Per protocol_handler_is_state_is_closure_is_evidence.md.
     ;; Walk both the LowExpr tree (for `~>` installs) AND the

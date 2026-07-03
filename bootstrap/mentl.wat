@@ -32120,33 +32120,10 @@
   ;; bump pattern as direct byte calls preserves the EmitMemory handler
   ;; abstraction without requiring static-data infrastructure.
 
-  (func $ec_emit_global_get_heap_ptr
-    ;; emits: (global.get $heap_ptr)
-    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 103))
-    (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 111))
-    (call $emit_byte (i32.const 98))  (call $emit_byte (i32.const 97))
-    (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 46))
-    (call $emit_byte (i32.const 103)) (call $emit_byte (i32.const 101))
-    (call $emit_byte (i32.const 116)) (call $emit_byte (i32.const 32))
-    (call $emit_byte (i32.const 36))  (call $emit_byte (i32.const 104))
-    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 97))
-    (call $emit_byte (i32.const 112)) (call $emit_byte (i32.const 95))
-    (call $emit_byte (i32.const 112)) (call $emit_byte (i32.const 116))
-    (call $emit_byte (i32.const 114)) (call $emit_byte (i32.const 41)))
-
-  (func $ec_emit_global_set_heap_ptr
-    ;; emits: (global.set $heap_ptr)
-    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 103))
-    (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 111))
-    (call $emit_byte (i32.const 98))  (call $emit_byte (i32.const 97))
-    (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 46))
-    (call $emit_byte (i32.const 115)) (call $emit_byte (i32.const 101))
-    (call $emit_byte (i32.const 116)) (call $emit_byte (i32.const 32))
-    (call $emit_byte (i32.const 36))  (call $emit_byte (i32.const 104))
-    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 97))
-    (call $emit_byte (i32.const 112)) (call $emit_byte (i32.const 95))
-    (call $emit_byte (i32.const 112)) (call $emit_byte (i32.const 116))
-    (call $emit_byte (i32.const 114)) (call $emit_byte (i32.const 41)))
+  ;; ($ec_emit_global_get_heap_ptr / $ec_emit_global_set_heap_ptr deleted:
+  ;;  the inline-bump category is gone — every allocation is `(call $alloc)`
+  ;;  against the one aligned $alloc fn, so nothing emits a raw heap_ptr
+  ;;  read/write anymore. The global lives only in $alloc's body.)
 
   (func $ec_emit_local_set_dollar (param $name i32)
     ;; emits: (local.set $<name>)  — name is length-prefixed str_ptr
@@ -32163,6 +32140,17 @@
     (call $emit_str (local.get $name))
     (call $emit_byte (i32.const 41)))
 
+  (func $ec_emit_local_set_open (param $name i32)
+    ;; emits: (local.set $<name>   — the OPEN form (no closing paren); the
+    ;; caller emits the value then closes. Registers the local at its store
+    ;; projection, exactly as $ec_emit_local_set_dollar. The one primitive
+    ;; behind `(local.set $t (call $alloc …))` at both alloc emitters.
+    (drop (call $emit_fn_local_check (local.get $name)))
+    (call $emit_cstr (i32.const 548) (i32.const 11))   ;; "(local.set "
+    (call $emit_byte (i32.const 36))                   ;; "$"
+    (call $emit_str (local.get $name))
+    (call $emit_byte (i32.const 32)))                  ;; " "
+
   (func $ec_emit_local_get_dollar (param $name i32)
     ;; emits: (local.get $<name>) — registers too: the emission declares
     ;; what it TOUCHES. A read whose bind path was skipped (alternation
@@ -32178,13 +32166,8 @@
     (call $emit_str (local.get $name))
     (call $emit_byte (i32.const 41)))
 
-  (func $ec_emit_i32_add
-    ;; emits: (i32.add)
-    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 105))
-    (call $emit_byte (i32.const 51)) (call $emit_byte (i32.const 50))
-    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 97))
-    (call $emit_byte (i32.const 100)) (call $emit_byte (i32.const 100))
-    (call $emit_byte (i32.const 41)))
+  ;; ($ec_emit_i32_add deleted with the inline-bump category — its only
+  ;;  callers were the three alloc emitters, now `(call $alloc)`.)
 
   (func $ec_emit_i32_store_offset (param $off i32)
     ;; emits: (i32.store offset=<off>)
@@ -32300,12 +32283,16 @@
   ;;     arena/gc swap NAMED follow-up Hβ.emit.memory-arena-handler /
   ;;     Hβ.emit.memory-gc-handler.
   (func $emit_alloc (param $size i32) (param $target i32)
-    (call $ec_emit_global_get_heap_ptr)
-    (call $ec_emit_local_set_dollar (local.get $target))
-    (call $ec_emit_global_get_heap_ptr)
+    ;; emits: (local.set $<target> (call $alloc (i32.const <size>)))
+    ;; The inline bump is deleted: every allocation reads the ONE aligned
+    ;; $alloc fn ($emit_alloc_runtime_fn) live. Carried-Truth at the emitter
+    ;; layer — the swap surface is $alloc's body, not this spelling.
+    (call $ec_emit_local_set_open (local.get $target))
+    (call $emit_call_open (call $str_from_mem (i32.const 1055) (i32.const 5)))  ;; "(call $alloc"
+    (call $emit_space)
     (call $emit_i32_const (local.get $size))
-    (call $ec_emit_i32_add)
-    (call $ec_emit_global_set_heap_ptr))
+    (call $emit_close)     ;; close alloc call
+    (call $emit_close))    ;; close local.set
 
   ;; ─── $emit_alloc_dyn — bump-pattern with runtime-computed size ────
   ;; Per Hβ-emit-substrate.md §3.5 + wheel canonical "emit_alloc with
@@ -32326,12 +32313,33 @@
   ;; gc swap is named follow-up Hβ.emit.memory-arena-handler /
   ;; Hβ.emit.memory-gc-handler at the same swap surface.
   (func $emit_alloc_dyn (param $size_local i32) (param $target i32)
-    (call $ec_emit_global_get_heap_ptr)
-    (call $ec_emit_local_set_dollar (local.get $target))
-    (call $ec_emit_global_get_heap_ptr)
-    (call $ec_emit_local_get_dollar (local.get $size_local))
-    (call $ec_emit_i32_add)
-    (call $ec_emit_global_set_heap_ptr))
+    ;; emits: (local.set $<target> (call $alloc (local.get $<size_local>)))
+    ;; Runtime-computed size read from a named local; same aligned $alloc,
+    ;; same swap surface as $emit_alloc.
+    (call $ec_emit_local_set_open (local.get $target))
+    (call $emit_call_open (call $str_from_mem (i32.const 1055) (i32.const 5)))  ;; "(call $alloc"
+    (call $emit_space)
+    (call $ec_emit_local_get_dollar (local.get $size_local))   ;; "(local.get $<size_local>)"
+    (call $emit_close)     ;; close alloc call
+    (call $emit_close))    ;; close local.set
+
+  ;; ─── $emit_alloc_runtime_fn — the ONE aligned allocator, emitted into m2 ──
+  ;; Every allocation the seed emits is now `(call $alloc SIZE)`; this writes
+  ;; the single fn they all call. Bump-pointer with 8-byte alignment
+  ;; ((size+7)&-8) — the ONE swap surface (§3.5.1, Anchor 5): an arena/gc
+  ;; handler swaps THIS body, not 5707 inline spellings. The aligned body is
+  ;; the canned WAT at data 1275 (190 bytes, mask-carrying). Emitted once into
+  ;; the module preamble ($mentl_emit, after the heap_ptr global).
+  (func $emit_alloc_runtime_fn
+    (call $emit_indent)
+    (call $emit_cstr (i32.const 584) (i32.const 6))    ;; "(func "
+    (call $emit_byte (i32.const 36))                   ;; "$"
+    (call $emit_cstr (i32.const 1055) (i32.const 5))   ;; "alloc"
+    (call $emit_cstr (i32.const 1256) (i32.const 18))  ;; " (param $size i32)"
+    (call $emit_cstr (i32.const 597) (i32.const 13))   ;; " (result i32)"
+    (call $emit_cstr (i32.const 1275) (i32.const 190)) ;; canned aligned bump body
+    (call $emit_close)                                 ;; ")"
+    (call $emit_nl))
 
   ;; ─── $emit_boxed_field_store — store one aggregate slot, boxing f64 ────
   ;; The ONE home for a record-field / tuple-slot / variant-payload store.
@@ -36721,33 +36729,14 @@
   ;; Uses $alloc_size local (declared in $emit_standard_locals). Stack
   ;; in: [size]. Stack out: [old_heap_ptr].
   (func $emit_alloc_wasm_inline
-    ;; (local.set $alloc_size)
-    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 108))   ;; '(' 'l'
-    (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 99))   ;; 'o' 'c'
-    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))   ;; 'a' 'l'
-    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 115))   ;; '.' 's'
-    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 116))  ;; 'e' 't'
-    (call $emit_byte (i32.const 32))                                     ;; ' '
-    (call $emit_byte (i32.const 36))                                     ;; '$'
-    (call $emit_cstr (i32.const 1860) (i32.const 10))                   ;; "alloc_size" payload (past 4-byte length prefix at 1856)
-    (call $emit_byte (i32.const 41))                                     ;; ')'
-    ;; (global.get $heap_ptr) — return value (old ptr)
-    (call $ec_emit_global_get_heap_ptr)
-    ;; (global.get $heap_ptr)
-    (call $ec_emit_global_get_heap_ptr)
-    ;; (local.get $alloc_size)
-    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 108))
-    (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 99))
-    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))
-    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 103))   ;; '.' 'g'
-    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 116))  ;; 'e' 't'
-    (call $emit_byte (i32.const 32))
-    (call $emit_byte (i32.const 36))
-    (call $emit_cstr (i32.const 1860) (i32.const 10))   ;; past length prefix
-    (call $emit_byte (i32.const 41))
-    ;; (i32.add)(global.set $heap_ptr)
-    (call $ec_emit_i32_add)
-    (call $ec_emit_global_set_heap_ptr))
+    ;; The `alloc` intrinsic. Stack in: [size] (the arg the caller already
+    ;; emitted). Emit `(call $alloc)` — folded form with no folded operands
+    ;; takes $size from the operand stack and returns the ptr. The ONE aligned
+    ;; allocator ($emit_alloc_runtime_fn); the inline bump is deleted, so this
+    ;; intrinsic and every construction share the same 8-byte-aligned body.
+    ;; Stack out: [old_heap_ptr].
+    (call $emit_call_open (call $str_from_mem (i32.const 1055) (i32.const 5)))  ;; "(call $alloc"
+    (call $emit_close))   ;; ')'
 
   (func $emit_str_lit_memory_copy
     (call $emit_byte (i32.const 40))                                     ;; '('
@@ -39568,6 +39557,12 @@
     (call $emit_i32_const (i32.const 1048576))
     (call $emit_close)
     (call $emit_nl)
+
+    ;; ── The ONE aligned allocator ──
+    ;; Every construction, handler-state record, closure, and the `alloc`
+    ;; intrinsic emit `(call $alloc SIZE)`; this writes the single 8-byte-
+    ;; aligned bump fn they all call (the EmitMemory swap surface, §3.5.1).
+    (call $emit_alloc_runtime_fn)
 
     ;; ── Per-handler state globals (LHandleWith `~>` substrate) ──
     ;; Per protocol_handler_is_state_is_closure_is_evidence.md.

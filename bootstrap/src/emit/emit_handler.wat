@@ -1064,33 +1064,14 @@
   ;; Uses $alloc_size local (declared in $emit_standard_locals). Stack
   ;; in: [size]. Stack out: [old_heap_ptr].
   (func $emit_alloc_wasm_inline
-    ;; (local.set $alloc_size)
-    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 108))   ;; '(' 'l'
-    (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 99))   ;; 'o' 'c'
-    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))   ;; 'a' 'l'
-    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 115))   ;; '.' 's'
-    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 116))  ;; 'e' 't'
-    (call $emit_byte (i32.const 32))                                     ;; ' '
-    (call $emit_byte (i32.const 36))                                     ;; '$'
-    (call $emit_cstr (i32.const 1860) (i32.const 10))                   ;; "alloc_size" payload (past 4-byte length prefix at 1856)
-    (call $emit_byte (i32.const 41))                                     ;; ')'
-    ;; (global.get $heap_ptr) — return value (old ptr)
-    (call $ec_emit_global_get_heap_ptr)
-    ;; (global.get $heap_ptr)
-    (call $ec_emit_global_get_heap_ptr)
-    ;; (local.get $alloc_size)
-    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 108))
-    (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 99))
-    (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 108))
-    (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 103))   ;; '.' 'g'
-    (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 116))  ;; 'e' 't'
-    (call $emit_byte (i32.const 32))
-    (call $emit_byte (i32.const 36))
-    (call $emit_cstr (i32.const 1860) (i32.const 10))   ;; past length prefix
-    (call $emit_byte (i32.const 41))
-    ;; (i32.add)(global.set $heap_ptr)
-    (call $ec_emit_i32_add)
-    (call $ec_emit_global_set_heap_ptr))
+    ;; The `alloc` intrinsic. Stack in: [size] (the arg the caller already
+    ;; emitted). Emit `(call $alloc)` — folded form with no folded operands
+    ;; takes $size from the operand stack and returns the ptr. The ONE aligned
+    ;; allocator ($emit_alloc_runtime_fn); the inline bump is deleted, so this
+    ;; intrinsic and every construction share the same 8-byte-aligned body.
+    ;; Stack out: [old_heap_ptr].
+    (call $emit_call_open (call $str_from_mem (i32.const 1055) (i32.const 5)))  ;; "(call $alloc"
+    (call $emit_close))   ;; ')'
 
   (func $emit_str_lit_memory_copy
     (call $emit_byte (i32.const 40))                                     ;; '('

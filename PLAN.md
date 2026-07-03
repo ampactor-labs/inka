@@ -647,15 +647,39 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   scaled). float-gate=3 is the 35th micro; every remaining untypable
   f64 boundary is a LOUD censused floor (closure captures,
   Hβ.emit.f64-closure-capture-box). NO float fault remains anywhere on
-  the rung path. The three +rt rungs are blocked SOLELY by the ev-slot
-  SEAM (below — garbage on stdout during INFERENCE breaks assembly).
-  Residual band peers: `Hβ.seed.arm-result-registry` (arm sigs +
-  remaining $ft flips — adversarial design first). NEXT FACE
-  after float (measured, censusFix 2026-07-02): m2 traps in the
-  wheel's walk_refinement_fields on ANY record literal in a fn body —
-  the record/aggregate-through-generic-list-op class, independent of
-  the string fixes. The method that closed eight roots in two days is
-  crystallized in `CLAUDE.md ⟲` (census-not-moles; binary-patch probes).
+  the rung path. **THE STDOUT-GARBAGE BLOCKER IS CLOSED (837948c,
+  2026-07-03 — a seed PARSER root, not the seam):** the +rt rungs'
+  "garbage before (module" was mint_row's arm swallowed by
+  $skip_to_arm_terminator's depth-0 blind walk (comma-less newline-
+  separated arms lost every arm after the first; the one-arm record's
+  slot-1 word 0 = table idx 0 = wat_emit, so inference printed 289
+  Instantiation reason records to stdout). The walk is DELETED —
+  parse_resume_expr already lifts `resume(v) with …` into AST and
+  lower reads the updates (walk_call.wat:1777), so parse_expr's return
+  IS the arm boundary, both layers stopping at the same token. Dig +
+  3-refuter adversarial verify (1/3 refuted: the proposed replacement
+  with-absorb loop was proven unreachable dead code re-deriving
+  parse_resume_state_updates — deleted before commit, the ⟲ loop
+  working as designed). NEXT FACE (measured 2026-07-03, all three +rt
+  rungs): ASSEMBLE fails on `redefinition of local $grown` — the
+  wheel's split_walk declares (local $grown i32) at emission per
+  grow-in-place list op, so a fn with two such ops double-declares;
+  behind it a second class, undefined conversion globals
+  ($float_to_int referenced as a global). Both wheel EMIT classes,
+  seam-independent. Residual band peers: `Hβ.seed.arm-result-registry`
+  (arm sigs + remaining $ft flips — adversarial design first); the
+  walk_refinement_fields record-literal trap (censusFix 2026-07-02)
+  remains after those. The method that closed eight roots in two days
+  is crystallized in `CLAUDE.md ⟲` (census-not-moles; binary-patch
+  probes). ALLOCATOR CONSOLIDATED (7027f60): the inline-bump category
+  deleted — ~5996 per-family unaligned bump groups → 5720 `call $alloc`
+  against ONE aligned (size+7)&-8 body; the wheel emits the same form,
+  so m3 inherits one allocator; m2 has exactly two heap_ptr writers
+  (the $alloc body + the data-string emitting m3's); −32160 wasm
+  bytes; per-strategy body-swap = named peer
+  `Hβ.emit.memory-strategy-body-swap`, gated on the seam close (two
+  reverted experiments re-pinned the seam: a NEW perform's evidence is
+  unplaced; an arm→fn boundary threads WatOut evidence across it).
 - **THE CURSOR — the value layer (2026-06-23, design VERIFIED, six-step build
   LANDED — all 6 commits in, Law 7 held).** The four deep value-layer axes —
   representation gradient, multi-shot continuation reification, parallel-topology
@@ -730,21 +754,28 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   SEAM computes. `lookup_ty` succeeds thousands of times (the 75 E_UnresolvedType
   ARE its NFree arm) — only ONE call misroutes ⇒ a per-row ev-slot DISAGREEMENT,
   not a blanket dispatch break, and NOT a seed funcref bug.
-  **THE 2026-07-03 LIVE PIN (the f64 march's byproduct — the seam caught
-  red-handed in m2, trap-probe on print_string):** `build_inst_mapping`
-  (infer.mn:2543) maps `(old) => { … mint/mint_row(Instantiation("inst",
-  Fresh(root))) … }` over quantified vars; under the deep compile_stdin
-  handler stack that map-closure's `mint` MISROUTES to `wat_emit` — the
-  12-byte record dumped to stdout IS `Instantiation("inst", Fresh(root))`
-  verbatim (word0 = the interned "inst"), landing BEFORE `(module` so
-  wat2wasm rejects m2's output for the +rt rungs (ASSEMBLE: unexpected
-  char). Reproduced with memory.mn + lists.mn alone — zero float code.
-  Backtrace: `print_string ← op_wat_stdout_wat_emit ← [map-closure] ←
-  op_map_collector_yield ← map ← instantiate ← infer_var_ref`. Child peer:
-  `Hβ.infer.instantiate-mint-ev-slot-misroute`. This is the FIRST live
-  in-m2 pin of the seam with payload decode + minimal repro — the next
-  dedicated dig starts HERE, against the singleton-tier route (§5.3,
-  viability-CONFIRMED below), never the two proven dead ends.
+  **THE 2026-07-03 LIVE PIN — RESOLVED, and it was NOT the seam (837948c):**
+  the mint_row→wat_emit misroute (Instantiation records on stdout, the +rt
+  ASSEMBLE failure) decoded one layer deeper than the pin: the captured_evs
+  chain `instantiate → build_inst_mapping → map-closure` was CORRECT and
+  identity-keyed all the way down (binary-patch probe on ev_perform_entry:
+  the FreshHandle entry's record is ALWAYS fresh_for_inference, 0 misroute
+  hits) — the handler RECORD ITSELF was built one arm short. The seed
+  parser's $skip_to_arm_terminator blind-walked to the next `,`/`}` and
+  swallowed every comma-less following arm: fresh_for_inference lost
+  `mint_row`, its slot-1 word stayed 0, table idx 0 = wat_emit. A label is
+  a hypothesis until the artifact confirms it — the pin's SEAM attribution
+  was the refuted label; the walk is deleted (the wheel parser was already
+  correct). Child peer `Hβ.infer.instantiate-mint-ev-slot-misroute` CLOSED.
+  **The seam itself REMAINS OPEN** — re-pinned twice during the allocator
+  consolidation (2026-07-03): a NEW perform on an existing effect leaves
+  its evidence unplaced (strict ev_perform_entry trap at emit_memory_decl),
+  and factoring an arm's call site into a shared fn threads WatOut evidence
+  across the fn boundary (match-adt regressed; both experiments reverted).
+  The strict two-population scan (949ac34) now makes every seam hit LOUD.
+  The next dedicated dig starts from those two reproducible pins, against
+  the singleton-tier route (§5.3, viability-CONFIRMED below), never the
+  two proven dead ends.
 - **THE ROOT — `effects_of_row` drops the EfOpen row-var (lower.mn:528-621).** The
   seam's two consumers must agree: `derive_ev_slots` (caller — PLACES evidence)
   reads the callee's type AT THE CALL SITE, where effects are often INLINE
@@ -932,7 +963,12 @@ strings interned by different passes never match — annotate the name param
 **the seed's name-keyed intrinsic table** (bootstrap/src/infer/walk_expr.wat
 types prelude stages BY NAME with byte-pinned offsets — ANY prelude rename or
 re-signature is a same-cut three-layer edit: wheel decl, wheel callers, seed
-table; miss it and the seed silently mistypes every call).
+table; miss it and the seed silently mistypes every call) · **blind token-walk
+absorbers** (a parser "skip-to-terminator" that walks tokens instead of parsing
+structure eats every comma-less sibling — the mint_row arm-drop, 837948c; the
+symptom surfaces LAYERS away as a dispatch misroute. Parse structurally or
+delete the walk; and a dropped ARM means the record's next slot reads 0 =
+table idx 0, so "prints WAT mid-inference" can mean "the parser ate my arm").
 
 ---
 

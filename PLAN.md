@@ -633,26 +633,24 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   two-lets CLOSED (declaration/init path); match-adt CLOSED (two stacked
   wheel roots: fn-body emit_alloc leaked module-scope WAT past the per-fn
   buffer — emit_memory_bump now installs inner to wat_to_string — and the
-  ctor payload read's pointer-eq lie, d5c13b6). THE SEED-F64 SUBSTRATE
-  LANDED (f11daa8, three ratcheted agent cycles, error ladder
-  159→70→10→0): real f64 literals/arithmetic/comparisons/conversions,
-  f64-typed params/locals/results (widths computed ONCE, feeding
-  signature AND body ledger), tail-call results typed as the ENCLOSING
-  fn's result (the WASM invariant), inline-typed call_indirect;
-  float-gate=3 is the 35th micro (real f64 math through the seed — the
-  floored seed gave 0); m2.wat ASSEMBLES. Every f64 boundary the seed
-  cannot yet type is a LOUD censused (unreachable) floor, never a
-  silent zero: 27 heap-crossing sites, the fixed-i32 ev-dispatch ×2,
-  three DSP op-lambdas. The three +rt rungs now trap at !lex_from —
-  the heap-crossing floor at the lexer's TFloatLit(Float) variant
-  payload (the trap marched THROUGH the fake into the real substrate).
-  Remaining, both named: `Hβ.seed.f64-in-heap-record` (BLOCKS the +rt
-  rungs — f64 values in variant payloads/records/lists need 8-byte
-  mixed layout or seed-boxed f64 cells; seed-only, dissolves at
-  first-light; the wheel's TFloatLit(Float) stays — Mentl never yields
-  to the bootstrap) and `Hβ.seed.arm-result-registry` /
-  `.typed-ev-dispatch` (flipping arm sigs + $ft indices to f64 —
-  wants adversarial design convergence before a byte). NEXT FACE
+  ctor payload read's pointer-eq lie, d5c13b6). THE SEED-F64 BAND IS
+  COMPLETE (five ratcheted cycles, 2026-07-02→03: f11daa8 the stack-life
+  substrate, error ladder 159→70→10→0; 26e4e28 heap boxing — f64 crosses
+  into aggregates as 8-byte cells behind word pointers, unbox at typed
+  loads; f62b468 pattern binders carry payload repr — LPVar(handle,
+  name, repr) stamped from the ConstructorScheme channel, `.f64` mangle
+  for the measured two-width collision, typed-ev-dispatch realized;
+  3edf51b + 02929b2 wheel truths the first real f64 execution exposed:
+  the Float pins on the render predicates, and float_extract_digits
+  NEVER WORKED — it minted the correct next value into `remainder` and
+  DISCARDED it, recursing unbounded; fixed by carrying the bounded
+  scaled). float-gate=3 is the 35th micro; every remaining untypable
+  f64 boundary is a LOUD censused floor (closure captures,
+  Hβ.emit.f64-closure-capture-box). NO float fault remains anywhere on
+  the rung path. The three +rt rungs are blocked SOLELY by the ev-slot
+  SEAM (below — garbage on stdout during INFERENCE breaks assembly).
+  Residual band peers: `Hβ.seed.arm-result-registry` (arm sigs +
+  remaining $ft flips — adversarial design first). NEXT FACE
   after float (measured, censusFix 2026-07-02): m2 traps in the
   wheel's walk_refinement_fields on ANY record literal in a fn body —
   the record/aggregate-through-generic-list-op class, independent of
@@ -720,17 +718,33 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   lesson is §9.6's own rule, paid for: the prior backtrace was trusted from prose,
   not re-pulled with a tool at session start.
 - **THE VERIFIED BLOCKER — the effect-row→ev-slot SEAM (compiled-WAT read,
-  2026-06-20).** The prior 2026-06-19 entry ("parse-path `node_to_pexpr → map →
-  iterate_from`, nondeterministic OOB, funcref-floor corruption") was a STALE read
-  of a MASKED trap — DISPROVEN by reading `m2.wat`. The live FIRST trap is a
-  DETERMINISTIC `unreachable` in `op_lookup_ty_graph_lookup_ty ← param_handles_of
-  ← lower_stmt_body` (LOWER, not parse). At `m2.wat:50735/50796` it is the
-  `let GNode(kind,_) = graph_chase(h)` destructure's `(else (unreachable))`: it
-  fires because `graph_chase(h)` returns a NON-GNode. graph_chase is an evidence
+  2026-06-20; FRESH LIVE PIN 2026-07-03).** The prior 2026-06-19 entry
+  ("parse-path `node_to_pexpr → map → iterate_from`, nondeterministic OOB,
+  funcref-floor corruption") was a STALE read of a MASKED trap — DISPROVEN by
+  reading `m2.wat`. The live FIRST trap is a DETERMINISTIC `unreachable` in
+  `op_lookup_ty_graph_lookup_ty ← param_handles_of ← lower_stmt_body` (LOWER,
+  not parse). At `m2.wat:50735/50796` it is the `let GNode(kind,_) =
+  graph_chase(h)` destructure's `(else (unreachable))`: it fires because
+  `graph_chase(h)` returns a NON-GNode. graph_chase is an evidence
   `call_indirect` whose handler pointer is read from `__state` at an ev-slot THE
   SEAM computes. `lookup_ty` succeeds thousands of times (the 75 E_UnresolvedType
   ARE its NFree arm) — only ONE call misroutes ⇒ a per-row ev-slot DISAGREEMENT,
   not a blanket dispatch break, and NOT a seed funcref bug.
+  **THE 2026-07-03 LIVE PIN (the f64 march's byproduct — the seam caught
+  red-handed in m2, trap-probe on print_string):** `build_inst_mapping`
+  (infer.mn:2543) maps `(old) => { … mint/mint_row(Instantiation("inst",
+  Fresh(root))) … }` over quantified vars; under the deep compile_stdin
+  handler stack that map-closure's `mint` MISROUTES to `wat_emit` — the
+  12-byte record dumped to stdout IS `Instantiation("inst", Fresh(root))`
+  verbatim (word0 = the interned "inst"), landing BEFORE `(module` so
+  wat2wasm rejects m2's output for the +rt rungs (ASSEMBLE: unexpected
+  char). Reproduced with memory.mn + lists.mn alone — zero float code.
+  Backtrace: `print_string ← op_wat_stdout_wat_emit ← [map-closure] ←
+  op_map_collector_yield ← map ← instantiate ← infer_var_ref`. Child peer:
+  `Hβ.infer.instantiate-mint-ev-slot-misroute`. This is the FIRST live
+  in-m2 pin of the seam with payload decode + minimal repro — the next
+  dedicated dig starts HERE, against the singleton-tier route (§5.3,
+  viability-CONFIRMED below), never the two proven dead ends.
 - **THE ROOT — `effects_of_row` drops the EfOpen row-var (lower.mn:528-621).** The
   seam's two consumers must agree: `derive_ev_slots` (caller — PLACES evidence)
   reads the callee's type AT THE CALL SITE, where effects are often INLINE

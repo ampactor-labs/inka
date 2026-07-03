@@ -492,7 +492,7 @@ fn str_literal_5(s) with Memory + Alloc = {
 //   3. Format with decimal point or scientific notation as appropriate.
 fn float_render_positive(f) with Memory + Alloc = {
   let exp = float_floor_log10(f)
-  let digits = float_extract_digits(f, exp, 0, 17)
+  let digits = float_extract_digits(f / float_pow10(exp), 0, 17)
   float_format_digits(digits, exp)
 }
 
@@ -506,23 +506,20 @@ fn float_floor_log10(f) with Memory + Alloc = {
   else { 1 + float_floor_log10(f / 10.0) }
 }
 
-// float_extract_digits: extract up to max_digits decimal digits from f,
-// given that f / 10^exp is in [1, 10). Returns a flat list of digit values
-// (0-9), most significant first. Stops when the remaining value rounds to
-// zero or max_digits is exhausted.
-fn float_extract_digits(f: Float, exp, count, max_digits) with Memory + Alloc = {
+// float_extract_digits: extract up to max_digits decimal digits, most
+// significant first, from a value already normalized so that `scaled` is in
+// [1, 10). The leading digit is floor(scaled); the remaining fraction times
+// ten is the next step's scaled, so scaled stays in [0, 10) for the whole
+// recursion. That bound is load-bearing: float_to_int is an i32 truncation,
+// so a scaled allowed to grow past 2^31 traps (integer overflow). Returns a
+// flat list of digit values (0-9).
+fn float_extract_digits(scaled: Float, count, max_digits) with Memory + Alloc = {
   if count >= max_digits { make_digit_list(0) }
   else {
-    let scaled = f / float_pow10(exp - count)
     let digit = float_to_int(scaled)
-    let d = digit - (digit / 10) * 10
-    let rest = scaled - float_of_int(d)
-    let remainder = rest * 10.0
-    if count == 0 && d == 0 { make_digit_list(0) }
-    else {
-      let tail = float_extract_digits(f * 10.0, exp, count + 1, max_digits)
-      push_digit(d, tail)
-    }
+    let next = (scaled - float_of_int(digit)) * 10.0
+    let tail = float_extract_digits(next, count + 1, max_digits)
+    push_digit(digit, tail)
   }
 }
 

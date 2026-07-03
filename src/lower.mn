@@ -706,7 +706,16 @@ fn effects_of_row(row) = match row {
   // chase re-lands WITH the name-set unification as ONE band:
   //   EfOpen(names, v) => union inline with graph_chase(v)'s
   //   NRowBound(inner) via effects_of_row(inner), floor = inline.
-  EfOpen(names, _) => row_dispatched_names(eff_names_of(names)),
+  EfOpen(names, v) => {
+    let inline = row_dispatched_names(eff_names_of(names))
+    let GNode(kind, _) = graph_chase(v)
+    match kind {
+      NRowBound(inner) =>
+        set_canonicalize(names_concat(inline, effects_of_row(inner))),
+      NRowFree(_) => inline,
+      _           => inline
+    }
+  },
   _                => []
 }
 
@@ -750,11 +759,23 @@ fn resolve_ev_for_ename(ename) = {
 // EPure is the union identity and never enters a row name-set (consumed to
 // EfPure at build_declared_row), so its arm is the unreachable-but-total case:
 // the empty name (it contributes no evidence slot — it is never present here).
-fn eff_names_of(names) = map((name) => match name {
-  ENamed(s)            => s,
-  EParameterized(s, _) => s,
-  EPure                => ""
-}, names)
+// Total over the row's REAL population: graph-stored rows carry null
+// elements (0 — the absence a failed/absent effect mint leaves; the
+// name-set ops tag-compare-tolerate them, so they survive to this
+// projection). A null projects to "" and row_dispatched_names' builtin
+// filter is not consulted for it — "" never names a dispatchable
+// effect. The null's BIRTH is the upstream census peer
+// (Hβ.infer.effname-null-mint); flattening the absence here is the
+// projection's totality, not a fix for the mint.
+fn eff_names_of(names) = flatten(map((name) =>
+  if name == 0 { [] }
+  else {
+    match name {
+      ENamed(s)            => [s],
+      EParameterized(s, _) => [s],
+      EPure                => []
+    }
+  }, names))
 
 // Builtin effects have no handler record — the raw substrate IS their
 // handler (wasm instruction / WASI import). Drop them from the evidence
@@ -826,7 +847,7 @@ fn clamp_index(i) = if i < 0 { 0 } else { i }
 
 // own_dispatched leaf: the fn's generalized-scheme dispatched row. The SAME
 // read the old seam used — never deleted; it is the flow-closure's base case.
-fn own_dispatched_row(name) = match env_lookup(name) {
+fn own_dispatched_row(name: String) = match env_lookup(name) {
   Some(entry) => {
     let (scheme, _, _) = entry
     let Forall(_, ty) = scheme

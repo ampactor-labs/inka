@@ -1547,7 +1547,7 @@ fn walk_locals_expr(expr, acc) = match expr {
       wat_emit(" (local $__hstate_")
       wat_emit(int_to_str(h))
       wat_emit("_")
-      wat_emit(g.ename)
+      wat_emit(group_ename(g))
       wat_emit(" i32)")
     }, arm_names)
     walk_locals_list(captured_evs,
@@ -1968,7 +1968,7 @@ fn emit_state_init_writes(state_local, inits, base_idx) = {
 
 // Total arm-slot count across a handler's per-effect groups — the record's
 // contiguous arm region size.
-fn sum_arm_name_lens(groups) = fold(0, (acc, g) => acc + len(g.arms), groups)
+fn sum_arm_name_lens(groups) = fold(0, (acc, g) => acc + len(group_arms(g)), groups)
 
 // Lay each effect-group's arm fn-indices contiguously in the ONE record
 // (at 8+4*nstate+4*(base+op_slot)) with a running base, and alloc a thin
@@ -1978,8 +1978,8 @@ fn sum_arm_name_lens(groups) = fold(0, (acc, g) => acc + len(g.arms), groups)
 // $emit_handler_effect_entries.
 fn emit_handler_effect_entries(state_local, nstate, groups) = {
   fold(0, (base, g) => {
-    emit_arm_writes(state_local, nstate, base, g.arms, 0)
-    let entry_name = "{state_local}_{g.ename}"
+    emit_arm_writes(state_local, nstate, base, group_arms(g), 0)
+    let entry_name = "{state_local}_{group_ename(g)}"
     // alloc the 8-byte [record, base] entry through the one aligned $alloc
     wat_emit("    (local.set $")
     wat_emit(entry_name)
@@ -1994,7 +1994,7 @@ fn emit_handler_effect_entries(state_local, nstate, groups) = {
     wat_emit(")(i32.const ")
     wat_emit(int_to_str(base))
     wat_emit(")(i32.store offset=4)\n")            // entry[1] = base
-    base + len(g.arms)
+    base + len(group_arms(g))
   }, groups)
   ()
 }
@@ -2660,14 +2660,34 @@ fn emit_expr(expr) = match expr {
   },
 
   LWasiCall(_h, import_name, args) => {
-    // Stage 4a: direct WASM-level import call. NO __state push
-    // (WASI imports don't take a closure record); NO $op_ prefix
-    // (the import IS the bridge). Per
+    // Stage 4a: direct substrate dispatch. Memory/Alloc ops project to
+    // their instructions (the name IS the op identity, declared in
+    // memory.mn — never an evidence round-trip); a unit-returning
+    // store/copy pushes the kernel-uniform zero word so the statement
+    // law holds. Everything else is a WASM-level import call: NO
+    // __state push (imports don't take a closure record), NO $op_
+    // prefix (the import IS the bridge). Per
     // protocol_bootstrap_wasi_threads_substrate.md.
     emit_expr_list(args)
-    wat_emit("    (call $")
-    wat_emit(import_name)
-    wat_emit(")\n")
+    if import_name == "store_i32" {
+      wat_emit("    (i32.store)(i32.const 0)\n")
+    } else if import_name == "load_i32" {
+      wat_emit("    (i32.load)\n")
+    } else if import_name == "store_i8" {
+      wat_emit("    (i32.store8)(i32.const 0)\n")
+    } else if import_name == "load_i8" {
+      wat_emit("    (i32.load8_u)\n")
+    } else if import_name == "mem_copy" {
+      wat_emit("    (memory.copy)(i32.const 0)\n")
+    } else if import_name == "i32_xor" {
+      wat_emit("    (i32.xor)\n")
+    } else if import_name == "alloc" {
+      wat_emit("    (call $alloc)\n")
+    } else {
+      wat_emit("    (call $")
+      wat_emit(import_name)
+      wat_emit(")\n")
+    }
   },
 
   // Tier-2 evidence-dispatched perform. The per-effect entry [record_ptr, base]

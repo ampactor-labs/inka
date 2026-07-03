@@ -1419,6 +1419,15 @@ fn lower_expr_body(e, handle, span) = match e {
           // f64->i32 truncating toward zero (i32.trunc_f64_s) — the value-
           // faithful inverse, replacing the bit-reinterpreting identity stub.
           LConvert(handle, FloatToInt, last(lo_args))
+        } else if is_substrate_mem_op(name) {
+          // Memory / Alloc ops ARE the instruction set — "the WASM runtime
+          // IS the handler" (lib/runtime/memory.mn). They project to raw
+          // instructions, never through evidence: routing them Tier-2 made
+          // the evidence scan's own loads dispatch through the evidence
+          // scan (ev_perform_entry ⇄ ev_scan, the handler rung's runtime
+          // stack overflow). LWasiCall is the direct-substrate node; emit
+          // dispatches the name to its instruction.
+          LWasiCall(handle, name, lo_args)
         } else { match env_kind_of(name) {
         Some(ConstructorScheme(tag_id, _)) =>
           LMakeVariant(handle, tag_id, lo_args),
@@ -1763,21 +1772,37 @@ fn feedback_param_name(p) = param_name(p)
 //   (handler symbol resolved at install); this is NOT a mode-int.
 // - 9 deferred-by-omission: the wheel-side mirror of seed's
 //   $extract_handler_name (bootstrap/src/lower/walk_handle.wat:638).
-fn extract_handler_name(node) = match node {
-  VarRef(name) => name,
-  CallExpr(callee, _args) => match callee {
-    VarRef(name) => name,
+// The install's handler NAME, read through the node wrapper (every AST
+// node is N(body, span, h); the body carries NExpr(...) — matching
+// VarRef against the bare N record silently fell to the "" sentinel,
+// so every install m2 lowered was anonymous: no arm groups, no lexical
+// Tier-1 resolve, the arm container unreached, the record's arm slot
+// zero, and the perform's strict scan trapping in main). "" remains
+// the MEANINGFUL sentinel for a genuinely anonymous install expression.
+fn extract_handler_name(node) = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(VarRef(name)) => name,
+    NExpr(CallExpr(callee, _args)) => {
+      let N(cb, _, _) = callee
+      match cb {
+        NExpr(VarRef(name)) => name,
+        _ => ""
+      }
+    },
     _ => ""
-  },
-  _ => ""
+  }
 }
 
 // Config args from `~> handler(arg1, arg2)` — the parameterized-handler
 // factory's arguments, lowered and written FIRST into the install record
 // (before state inits). A bare `~> handler` (VarRef) has none.
-fn extract_handler_config_args(node) = match node {
-  CallExpr(_callee, args) => args,
-  _                       => []
+fn extract_handler_config_args(node) = {
+  let N(body, _, _) = node
+  match body {
+    NExpr(CallExpr(_callee, args)) => args,
+    _                              => []
+  }
 }
 
 // Fanout lowering — ONE path for `<|` and `>< `, discriminated by the
@@ -2960,6 +2985,19 @@ fn free_vars_contains(lst, s) = any((x) => x == s, lst)
 // $op_<name> handler-arm dispatch. Per
 // protocol_bootstrap_wasi_threads_substrate.md — the import IS the
 // bridge; no wrapper function required.
+// The seven substrate ops memory.mn declares — the boundary where the
+// language meets the instruction set (the wasi-import list's sibling;
+// the op names ARE the identity, declared in one home).
+fn is_substrate_mem_op(name: String) with Pure = {
+  name == "store_i32"
+    || name == "load_i32"
+    || name == "store_i8"
+    || name == "load_i8"
+    || name == "mem_copy"
+    || name == "i32_xor"
+    || name == "alloc"
+}
+
 fn is_wasi_import_op(name) with Pure = {
   name == "wasi_thread_spawn"
     || name == "wasi_num_cores"

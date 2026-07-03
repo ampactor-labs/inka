@@ -31279,12 +31279,15 @@
     ;; produces (the LIf case's law, one node-kind over).
     (if (i32.eq (local.get $tag) (i32.const 321))
       (then (return (call $ec5_match_arms_any_f64 (call $lexpr_lmatch_arms (local.get $e))))))
-    ;; Heap / state / capture loads emit an i32.load (the uniform i32 word
-    ;; world); a float there is a crossing (floored), so the PRODUCED stack
-    ;; type is i32. LFieldLoad (334), LStateGet (326), LUpval (305).
-    (if (i32.or (i32.eq (local.get $tag) (i32.const 334))
-          (i32.or (i32.eq (local.get $tag) (i32.const 326))
-                  (i32.eq (local.get $tag) (i32.const 305))))
+    ;; State (326) and closure-capture (305) loads stay in the uniform i32
+    ;; word world: state slots are never boxed, and an f64 closure capture
+    ;; still FLOORS (LUpval handle resolution is a named follow-up —
+    ;; Hβ.emit.f64-closure-capture-box), so their PRODUCED stack type is i32.
+    ;; LFieldLoad (334) now UNBOXES an f64 field (i32.load pointer → f64.load
+    ;; cell, §5.U seed), so it falls through to the handle read below — its
+    ;; produced type IS emit_repr_is_f64(the field type).
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 326))
+                (i32.eq (local.get $tag) (i32.const 305)))
       (then (return (i32.const 0))))
     ;; LCall/LTailCall → the callee's declared result width (the registry,
     ;; populated by the pre-pass). Falls to the seed's proven type when the
@@ -32143,6 +32146,16 @@
   ;; site uniqueness; emit projects through it."
   ;;   1680 — "call_" (5 chars; 4+5=9 bytes; 1680-1688)
   (data (i32.const 1680) "\05\00\00\00call_")
+  ;; The seed-boxed-f64 scratch: one shared i32 local holding a heap-cell
+  ;; pointer at the f64 heap membrane (§5.U seed). Declare-at-emission
+  ;; registers it (i32 floor — a pointer IS a word) the first time a fn
+  ;; boxes a float; fns without float crossings never name it. Both cell
+  ;; reads at each box site PRECEDE emit_lexpr(value), so a nested boxing
+  ;; construction inside the value cannot clobber the pointer already on the
+  ;; WASM stack — a shared name is safe (proven at $emit_boxed_field_store).
+  ;;   5456 — "f64box" (6 chars; 4+6=10 bytes; 5456-5466) — verified-free
+  ;;          gap [5450, 6000), above walk_stmt.wat's 4320 segment.
+  (data (i32.const 5456) "\06\00\00\00f64box")
 
   ;; ─── $emit_alloc — bump-pattern emitter (EmitMemory swap surface) ─
   ;; Per Hβ-emit-substrate.md §3.5 + wheel canonical src/backends/wasm.mn:
@@ -32206,6 +32219,38 @@
     (call $ec_emit_i32_add)
     (call $ec_emit_global_set_heap_ptr))
 
+  ;; ─── $emit_boxed_field_store — store one aggregate slot, boxing f64 ────
+  ;; The ONE home for a record-field / tuple-slot / variant-payload store.
+  ;; A word slot cannot hold a native f64, so when the value's emitted type
+  ;; is f64 the seed boxes it (§5.U seed, $ec6_emit_f64_store/_load): alloc an
+  ;; 8-byte cell, store the cell POINTER in the slot, store the f64 in the
+  ;; cell. The dual UNBOX rides every f64-typed load (emit_lfieldload,
+  ;; emit_lindex, the LPVar payload bind) — read as the SAME emit_expr_is_f64
+  ;; the predictor uses, so decl and use agree by construction.
+  ;;
+  ;; Clobber-immunity (why a SHARED $f64box is safe): both f64box reads
+  ;; happen BEFORE emit_lexpr(value). A nested boxing construction inside the
+  ;; value reassigns the f64box LOCAL, but the cell POINTER is already
+  ;; materialized on the WASM stack, so f64.store lands on the right cell.
+  ;; The i32 slot is written FIRST (pointer), the f64 cell SECOND — order-
+  ;; free since construction is atomic (no read before the aggregate is done).
+  ;;   Precondition: empty stack; the fn pushes the aggregate ptr itself.
+  ;;   Postcondition: empty stack; the slot holds the value (word or box ptr).
+  (func $emit_boxed_field_store (param $agg_name i32) (param $field i32) (param $offset i32)
+    (if (call $emit_expr_is_f64 (local.get $field))
+      (then
+        (call $ec_emit_local_get_dollar (local.get $agg_name))  ;; [aggptr]
+        (call $emit_alloc (i32.const 8) (i32.const 5456))        ;; $f64box=cell; [aggptr]
+        (call $ec_emit_local_get_dollar (i32.const 5456))        ;; [aggptr, cell]
+        (call $ec_emit_i32_store_offset (local.get $offset))     ;; slot=cell; []
+        (call $ec_emit_local_get_dollar (i32.const 5456))        ;; [cell]
+        (call $emit_lexpr (local.get $field))                    ;; [cell, f64val]
+        (call $ec6_emit_f64_store)                               ;; []
+        (return)))
+    (call $ec_emit_local_get_dollar (local.get $agg_name))      ;; [aggptr]
+    (call $emit_lexpr (local.get $field))                       ;; [aggptr, val]
+    (call $ec_emit_i32_store_offset (local.get $offset)))       ;; []
+
   ;; ─── $emit_lmakelist — LMakeList tag 316 emit arm per §2.1 ─────────
   ;; Per src/backends/wasm.mn:2068-2098 emit_list_literal. Emits:
   ;;   (i32.const N) (call $make_list) (i32.const 0) <elem 0> (call $list_set)
@@ -32231,8 +32276,6 @@
     (local $elems i32) (local $n i32) (local $i i32) (local $elem i32)
     (local.set $elems (call $lexpr_lmakelist_elems (local.get $r)))
     (local.set $n     (call $len (local.get $elems)))
-    (if (call $emit_any_f64_in (local.get $elems))
-      (then (call $ec_emit_f64_heap_crossing) (return)))
     (call $el_emit_local_get_state)
     (call $emit_i32_const (local.get $n))
     (call $ec_emit_call_make_list)
@@ -32241,12 +32284,30 @@
       (loop $store_loop
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $elem (call $list_index (local.get $elems) (local.get $i)))
-        (call $ec6_emit_local_set_callee_closure)   ;; pop list_ptr → scratch
-        (call $el_emit_local_get_state)              ;; push state
-        (call $ec6_emit_local_get_callee_closure)   ;; push list_ptr
-        (call $emit_i32_const (local.get $i))
-        (call $emit_lexpr (local.get $elem))
-        (call $ec_emit_call_list_set)
+        (if (call $emit_expr_is_f64 (local.get $elem))
+          (then
+            ;; f64 element boxes into a cell; the slot holds the pointer
+            ;; (§5.U seed). list_set stores the cell POINTER, then the f64
+            ;; lands in the cell. Both $f64box reads precede emit_lexpr, so a
+            ;; nested boxing in the element cannot clobber the cell already on
+            ;; the stack; [list] stays underneath for the next iteration.
+            (call $ec6_emit_local_set_callee_closure)   ;; pop list → scratch; []
+            (call $emit_alloc (i32.const 8) (i32.const 5456))  ;; $f64box=cell; []
+            (call $el_emit_local_get_state)             ;; [state]
+            (call $ec6_emit_local_get_callee_closure)   ;; [state, list]
+            (call $emit_i32_const (local.get $i))       ;; [state, list, i]
+            (call $ec_emit_local_get_dollar (i32.const 5456))  ;; [state, list, i, cell]
+            (call $ec_emit_call_list_set)               ;; [list]  slot i = cell
+            (call $ec_emit_local_get_dollar (i32.const 5456))  ;; [list, cell]
+            (call $emit_lexpr (local.get $elem))        ;; [list, cell, f64val]
+            (call $ec6_emit_f64_store))                 ;; [list]  cell = f64val
+          (else
+            (call $ec6_emit_local_set_callee_closure)   ;; pop list_ptr → scratch
+            (call $el_emit_local_get_state)              ;; push state
+            (call $ec6_emit_local_get_callee_closure)   ;; push list_ptr
+            (call $emit_i32_const (local.get $i))
+            (call $emit_lexpr (local.get $elem))
+            (call $ec_emit_call_list_set)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $store_loop))))
 
@@ -32266,8 +32327,6 @@
     (local $local_name i32)
     (local.set $elems (call $lexpr_lmaketuple_elems (local.get $r)))
     (local.set $n     (call $len (local.get $elems)))
-    (if (call $emit_any_f64_in (local.get $elems))
-      (then (call $ec_emit_f64_heap_crossing) (return)))
     ;; Per Hβ.first-light.alloc-handle-locals — per-handle local name.
     (local.set $local_name
       (call $str_concat (i32.const 1632)                  ;; "tuple_"
@@ -32279,9 +32338,8 @@
       (loop $store_loop
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $elem (call $list_index (local.get $elems) (local.get $i)))
-        (call $ec_emit_local_get_dollar (local.get $local_name))
-        (call $emit_lexpr (local.get $elem))
-        (call $ec_emit_i32_store_offset (i32.mul (local.get $i) (i32.const 4)))
+        (call $emit_boxed_field_store (local.get $local_name) (local.get $elem)
+                                      (i32.mul (local.get $i) (i32.const 4)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $store_loop)))
     (call $ec_emit_local_get_dollar (local.get $local_name)))
@@ -32297,8 +32355,6 @@
     (local $local_name i32)
     (local.set $fields (call $lexpr_lmakerecord_fields (local.get $r)))
     (local.set $n      (call $len (local.get $fields)))
-    (if (call $emit_any_f64_in (local.get $fields))
-      (then (call $ec_emit_f64_heap_crossing) (return)))
     ;; Per Hβ.first-light.alloc-handle-locals — per-handle local name.
     (local.set $local_name
       (call $str_concat (i32.const 1616)                  ;; "record_"
@@ -32310,9 +32366,8 @@
       (loop $store_loop
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $field (call $list_index (local.get $fields) (local.get $i)))
-        (call $ec_emit_local_get_dollar (local.get $local_name))
-        (call $emit_lexpr (local.get $field))
-        (call $ec_emit_i32_store_offset (i32.mul (local.get $i) (i32.const 4)))
+        (call $emit_boxed_field_store (local.get $local_name) (local.get $field)
+                                      (i32.mul (local.get $i) (i32.const 4)))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $store_loop)))
     (call $ec_emit_local_get_dollar (local.get $local_name)))
@@ -32386,8 +32441,6 @@
     (local.set $n      (call $len (local.get $args)))
     (if (i32.eqz (local.get $n))
       (then (call $emit_i32_const (local.get $tag_id)) (return)))
-    (if (call $emit_any_f64_in (local.get $args))
-      (then (call $ec_emit_f64_heap_crossing) (return)))
     ;; Per Hβ.first-light.alloc-handle-locals (2026-05-07): mint
     ;; per-handle local name `$variant_<handle>` from the LowExpr's
     ;; graph handle. Without this, nested LMakeVariant emissions
@@ -32412,9 +32465,7 @@
       (loop $store_loop
         (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
         (local.set $arg (call $list_index (local.get $args) (local.get $i)))
-        (call $ec_emit_local_get_dollar (local.get $local_name))
-        (call $emit_lexpr (local.get $arg))
-        (call $ec_emit_i32_store_offset
+        (call $emit_boxed_field_store (local.get $local_name) (local.get $arg)
           (i32.add (i32.const 4) (i32.mul (local.get $i) (i32.const 4))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $store_loop)))
@@ -33022,7 +33073,14 @@
       (then (call $ec_emit_unreachable))
       (else
         (call $emit_lexpr (call $lexpr_lfieldload_record (local.get $r)))
-        (call $el_emit_i32_load_offset (local.get $off)))))
+        (call $el_emit_i32_load_offset (local.get $off))
+        ;; An f64 field's word slot holds a boxed-cell POINTER (§5.U seed);
+        ;; UNBOX it — the i32.load read the pointer, (f64.load) reads the cell.
+        ;; emit_expr_is_f64(r) IS the predictor's own read (LFieldLoad falls to
+        ;; emit_repr_is_f64(lexpr_handle) = the field type), so the produced
+        ;; f64 matches what every consumer already expects.
+        (if (call $emit_expr_is_f64 (local.get $r))
+          (then (call $ec6_emit_f64_load))))))
 
   ;; ═══ emit_control.wat — Hβ.emit control family (Tier 6, chunk #5) ═══
   ;; Implements: Hβ-emit-substrate.md §2.3 (control family — LIf tag 314 +
@@ -33735,6 +33793,15 @@
     (if (i32.eq (local.get $tag) (i32.const 360))
       (then
         (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
+        ;; An f64 binder (e.g. TFloatLit(f)) reads a boxed-cell POINTER from
+        ;; the payload slot (§5.U seed); UNBOX to the native f64 and mark the
+        ;; local f64 so its decl (the dump) and every (local.get) use read the
+        ;; same width — the consistency keystone at the pattern-bind site.
+        (if (call $emit_repr_is_f64 (call $lowpat_handle (local.get $pat)))
+          (then
+            (call $ec6_emit_f64_load)
+            (drop (call $emit_fn_local_check_f64
+                    (call $lowpat_lpvar_name (local.get $pat)) (i32.const 1)))))
         (call $ec_emit_local_set_dollar
           (call $lowpat_lpvar_name (local.get $pat)))
         (return)))
@@ -34957,8 +35024,14 @@
     (call $ec6_emit_local_get_state_tmp)         ;; push base
     (call $ec6_emit_local_get_callee_closure)    ;; push idx
     (if (call $lexpr_lindex_is_str (local.get $r))
-      (then (call $ec6_emit_call_byte_at) (return)))
-    (call $ec6_emit_call_list_index))
+      (then (call $ec6_emit_call_byte_at) (return)))   ;; a string byte is i32, never boxed
+    (call $ec6_emit_call_list_index)
+    ;; An f64 list element's word slot holds a boxed-cell POINTER (§5.U seed);
+    ;; UNBOX it. Past the is_str return this is a list; LIndex falls through to
+    ;; emit_repr_is_f64(lexpr_handle) = the element type, so the produced f64
+    ;; matches what every consumer already expects.
+    (if (call $emit_expr_is_f64 (local.get $r))
+      (then (call $ec6_emit_f64_load))))
 
   (func $ec6_emit_call_list_index
     ;; emits: (call $list_index)
@@ -35448,6 +35521,24 @@
   (func $ec6_emit_i32_trunc_f64_s
     ;; emits: (i32.trunc_f64_s)
     (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 105)) (call $emit_byte (i32.const 51)) (call $emit_byte (i32.const 50)) (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 116)) (call $emit_byte (i32.const 114)) (call $emit_byte (i32.const 117)) (call $emit_byte (i32.const 110)) (call $emit_byte (i32.const 99)) (call $emit_byte (i32.const 95)) (call $emit_byte (i32.const 102)) (call $emit_byte (i32.const 54)) (call $emit_byte (i32.const 52)) (call $emit_byte (i32.const 95)) (call $emit_byte (i32.const 115)) (call $emit_byte (i32.const 41)))
+  ;; ─── f64 heap membrane: the seed-boxed f64 cell (§5.U seed) ─────────
+  ;; A native unboxed f64 cannot ride a uniform i32 heap slot (record field,
+  ;; tuple/list element, variant payload). At the crossing the seed BOXES:
+  ;; bump-alloc an 8-byte cell, (f64.store) the value, store the cell POINTER
+  ;; (a word) in the slot — layout stays uniform i32, handle-uniformity
+  ;; untouched. At every f64-typed LOAD it UNBOXES: i32.load the pointer,
+  ;; then (f64.load) the cell. Box/unbox appear ONLY at the heap membrane;
+  ;; a boxed float re-entering the stack world is a plain f64 again. 4-aligned
+  ;; addresses are legal for f64 access in wasm (alignment is a hint, never a
+  ;; trap), so the bump base's 4-alignment needs no 8-byte rounding. Seed-only,
+  ;; inelegant-but-CORRECT — the wheel's own emit width-folds the real layout
+  ;; and this dissolves at first-light (peer Hβ.emit.f64-heap-slot-field).
+  (func $ec6_emit_f64_store
+    ;; emits: (f64.store)
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 102)) (call $emit_byte (i32.const 54)) (call $emit_byte (i32.const 52)) (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 115)) (call $emit_byte (i32.const 116)) (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 114)) (call $emit_byte (i32.const 101)) (call $emit_byte (i32.const 41)))
+  (func $ec6_emit_f64_load
+    ;; emits: (f64.load)
+    (call $emit_byte (i32.const 40)) (call $emit_byte (i32.const 102)) (call $emit_byte (i32.const 54)) (call $emit_byte (i32.const 52)) (call $emit_byte (i32.const 46)) (call $emit_byte (i32.const 108)) (call $emit_byte (i32.const 111)) (call $emit_byte (i32.const 97)) (call $emit_byte (i32.const 100)) (call $emit_byte (i32.const 41)))
 
   ;; ═══ emit_handler.wat — Hβ.emit handler family (Tier 6, chunk #7) ═══
   ;; The chunk where `~>` and `<~` become physical at WAT.
@@ -37996,6 +38087,27 @@
       (then (return (call $emit_find_local_handle_list (call $lexpr_lmakelist_elems (local.get $e)) (local.get $name)))))
     (if (i32.eq (local.get $tag) (i32.const 317))   ;; LMakeTuple
       (then (return (call $emit_find_local_handle_list (call $lexpr_lmaketuple_elems (local.get $e)) (local.get $name)))))
+    ;; LMatch (321) — a use of the param may sit in the scrutinee or an arm
+    ;; BODY (its handle carries the resolved width for the param decl).
+    (if (i32.eq (local.get $tag) (i32.const 321))
+      (then
+        (local.set $h (call $emit_find_local_handle (call $lexpr_lmatch_scrut (local.get $e)) (local.get $name)))
+        (if (local.get $h) (then (return (local.get $h))))
+        (return (call $emit_find_local_handle_arms (call $lexpr_lmatch_arms (local.get $e)) (local.get $name)))))
+    (i32.const 0))
+
+  (func $emit_find_local_handle_arms (param $arms i32) (param $name i32) (result i32)
+    (local $i i32) (local $n i32) (local $h i32)
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $it
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $h (call $emit_find_local_handle
+          (call $lowpat_lparm_body (call $list_index (local.get $arms) (local.get $i))) (local.get $name)))
+        (if (local.get $h) (then (return (local.get $h))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $it)))
     (i32.const 0))
 
   ;; $emit_param_h_resolve — param_handles[i] when present, else the
@@ -38074,6 +38186,28 @@
     (if (i32.eq (local.get $tag) (i32.const 331)) (then (return (call $emit_param_used_as_f64_list (call $lexpr_lperform_args (local.get $e)) (local.get $name)))))
     (if (i32.eq (local.get $tag) (i32.const 333)) (then (return (call $emit_param_used_as_f64_list (call $lexpr_levperform_args (local.get $e)) (local.get $name)))))
     (if (i32.eq (local.get $tag) (i32.const 319)) (then (return (call $emit_param_used_as_f64_list (call $lexpr_lmakevariant_args (local.get $e)) (local.get $name)))))
+    ;; LMatch (321) — a param used as f64 lives inside an arm BODY (a match
+    ;; scrutinee's arms), e.g. emit_float_const's `f` in
+    ;; `match r { RF64 => wat_emit(float_to_str(f)) }`. Descend the scrutinee
+    ;; and every arm body, or the param floors to i32 and its call_indirect
+    ;; type mismatches the f64-param callee (float_to_str).
+    (if (i32.eq (local.get $tag) (i32.const 321)) (then
+      (if (call $emit_param_used_as_f64 (call $lexpr_lmatch_scrut (local.get $e)) (local.get $name)) (then (return (i32.const 1))))
+      (return (call $emit_param_used_as_f64_arms (call $lexpr_lmatch_arms (local.get $e)) (local.get $name)))))
+    (i32.const 0))
+
+  (func $emit_param_used_as_f64_arms (param $arms i32) (param $name i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (if (call $emit_param_used_as_f64
+            (call $lowpat_lparm_body (call $list_index (local.get $arms) (local.get $i)))
+            (local.get $name))
+        (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
     (i32.const 0))
 
   ;; $emit_param_is_f64 — the param's decided width: its proven handle, or

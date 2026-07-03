@@ -284,12 +284,15 @@
     ;; produces (the LIf case's law, one node-kind over).
     (if (i32.eq (local.get $tag) (i32.const 321))
       (then (return (call $ec5_match_arms_any_f64 (call $lexpr_lmatch_arms (local.get $e))))))
-    ;; Heap / state / capture loads emit an i32.load (the uniform i32 word
-    ;; world); a float there is a crossing (floored), so the PRODUCED stack
-    ;; type is i32. LFieldLoad (334), LStateGet (326), LUpval (305).
-    (if (i32.or (i32.eq (local.get $tag) (i32.const 334))
-          (i32.or (i32.eq (local.get $tag) (i32.const 326))
-                  (i32.eq (local.get $tag) (i32.const 305))))
+    ;; State (326) and closure-capture (305) loads stay in the uniform i32
+    ;; word world: state slots are never boxed, and an f64 closure capture
+    ;; still FLOORS (LUpval handle resolution is a named follow-up —
+    ;; Hβ.emit.f64-closure-capture-box), so their PRODUCED stack type is i32.
+    ;; LFieldLoad (334) now UNBOXES an f64 field (i32.load pointer → f64.load
+    ;; cell, §5.U seed), so it falls through to the handle read below — its
+    ;; produced type IS emit_repr_is_f64(the field type).
+    (if (i32.or (i32.eq (local.get $tag) (i32.const 326))
+                (i32.eq (local.get $tag) (i32.const 305)))
       (then (return (i32.const 0))))
     ;; LCall/LTailCall → the callee's declared result width (the registry,
     ;; populated by the pre-pass). Falls to the seed's proven type when the

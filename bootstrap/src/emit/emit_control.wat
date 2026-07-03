@@ -709,6 +709,15 @@
     (if (i32.eq (local.get $tag) (i32.const 360))
       (then
         (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
+        ;; An f64 binder (e.g. TFloatLit(f)) reads a boxed-cell POINTER from
+        ;; the payload slot (§5.U seed); UNBOX to the native f64 and mark the
+        ;; local f64 so its decl (the dump) and every (local.get) use read the
+        ;; same width — the consistency keystone at the pattern-bind site.
+        (if (call $emit_repr_is_f64 (call $lowpat_handle (local.get $pat)))
+          (then
+            (call $ec6_emit_f64_load)
+            (drop (call $emit_fn_local_check_f64
+                    (call $lowpat_lpvar_name (local.get $pat)) (i32.const 1)))))
         (call $ec_emit_local_set_dollar
           (call $lowpat_lpvar_name (local.get $pat)))
         (return)))

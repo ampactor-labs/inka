@@ -1133,6 +1133,27 @@
       (then (return (call $emit_find_local_handle_list (call $lexpr_lmakelist_elems (local.get $e)) (local.get $name)))))
     (if (i32.eq (local.get $tag) (i32.const 317))   ;; LMakeTuple
       (then (return (call $emit_find_local_handle_list (call $lexpr_lmaketuple_elems (local.get $e)) (local.get $name)))))
+    ;; LMatch (321) — a use of the param may sit in the scrutinee or an arm
+    ;; BODY (its handle carries the resolved width for the param decl).
+    (if (i32.eq (local.get $tag) (i32.const 321))
+      (then
+        (local.set $h (call $emit_find_local_handle (call $lexpr_lmatch_scrut (local.get $e)) (local.get $name)))
+        (if (local.get $h) (then (return (local.get $h))))
+        (return (call $emit_find_local_handle_arms (call $lexpr_lmatch_arms (local.get $e)) (local.get $name)))))
+    (i32.const 0))
+
+  (func $emit_find_local_handle_arms (param $arms i32) (param $name i32) (result i32)
+    (local $i i32) (local $n i32) (local $h i32)
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $done
+      (loop $it
+        (br_if $done (i32.ge_u (local.get $i) (local.get $n)))
+        (local.set $h (call $emit_find_local_handle
+          (call $lowpat_lparm_body (call $list_index (local.get $arms) (local.get $i))) (local.get $name)))
+        (if (local.get $h) (then (return (local.get $h))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $it)))
     (i32.const 0))
 
   ;; $emit_param_h_resolve — param_handles[i] when present, else the
@@ -1211,6 +1232,28 @@
     (if (i32.eq (local.get $tag) (i32.const 331)) (then (return (call $emit_param_used_as_f64_list (call $lexpr_lperform_args (local.get $e)) (local.get $name)))))
     (if (i32.eq (local.get $tag) (i32.const 333)) (then (return (call $emit_param_used_as_f64_list (call $lexpr_levperform_args (local.get $e)) (local.get $name)))))
     (if (i32.eq (local.get $tag) (i32.const 319)) (then (return (call $emit_param_used_as_f64_list (call $lexpr_lmakevariant_args (local.get $e)) (local.get $name)))))
+    ;; LMatch (321) — a param used as f64 lives inside an arm BODY (a match
+    ;; scrutinee's arms), e.g. emit_float_const's `f` in
+    ;; `match r { RF64 => wat_emit(float_to_str(f)) }`. Descend the scrutinee
+    ;; and every arm body, or the param floors to i32 and its call_indirect
+    ;; type mismatches the f64-param callee (float_to_str).
+    (if (i32.eq (local.get $tag) (i32.const 321)) (then
+      (if (call $emit_param_used_as_f64 (call $lexpr_lmatch_scrut (local.get $e)) (local.get $name)) (then (return (i32.const 1))))
+      (return (call $emit_param_used_as_f64_arms (call $lexpr_lmatch_arms (local.get $e)) (local.get $name)))))
+    (i32.const 0))
+
+  (func $emit_param_used_as_f64_arms (param $arms i32) (param $name i32) (result i32)
+    (local $i i32) (local $n i32)
+    (local.set $n (call $len (local.get $arms)))
+    (local.set $i (i32.const 0))
+    (block $d (loop $it
+      (br_if $d (i32.ge_u (local.get $i) (local.get $n)))
+      (if (call $emit_param_used_as_f64
+            (call $lowpat_lparm_body (call $list_index (local.get $arms) (local.get $i)))
+            (local.get $name))
+        (then (return (i32.const 1))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $it)))
     (i32.const 0))
 
   ;; $emit_param_is_f64 — the param's decided width: its proven handle, or

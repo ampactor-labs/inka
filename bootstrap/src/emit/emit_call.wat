@@ -880,8 +880,14 @@
     (call $ec6_emit_local_get_state_tmp)         ;; push base
     (call $ec6_emit_local_get_callee_closure)    ;; push idx
     (if (call $lexpr_lindex_is_str (local.get $r))
-      (then (call $ec6_emit_call_byte_at) (return)))
-    (call $ec6_emit_call_list_index))
+      (then (call $ec6_emit_call_byte_at) (return)))   ;; a string byte is i32, never boxed
+    (call $ec6_emit_call_list_index)
+    ;; An f64 list element's word slot holds a boxed-cell POINTER (§5.U seed);
+    ;; UNBOX it. Past the is_str return this is a list; LIndex falls through to
+    ;; emit_repr_is_f64(lexpr_handle) = the element type, so the produced f64
+    ;; matches what every consumer already expects.
+    (if (call $emit_expr_is_f64 (local.get $r))
+      (then (call $ec6_emit_f64_load))))
 
   (func $ec6_emit_call_list_index
     ;; emits: (call $list_index)

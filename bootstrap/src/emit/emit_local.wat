@@ -323,4 +323,11 @@
       (then (call $ec_emit_unreachable))
       (else
         (call $emit_lexpr (call $lexpr_lfieldload_record (local.get $r)))
-        (call $el_emit_i32_load_offset (local.get $off)))))
+        (call $el_emit_i32_load_offset (local.get $off))
+        ;; An f64 field's word slot holds a boxed-cell POINTER (§5.U seed);
+        ;; UNBOX it — the i32.load read the pointer, (f64.load) reads the cell.
+        ;; emit_expr_is_f64(r) IS the predictor's own read (LFieldLoad falls to
+        ;; emit_repr_is_f64(lexpr_handle) = the field type), so the produced
+        ;; f64 matches what every consumer already expects.
+        (if (call $emit_expr_is_f64 (local.get $r))
+          (then (call $ec6_emit_f64_load))))))

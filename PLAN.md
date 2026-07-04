@@ -585,7 +585,30 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-04 evening, HEAD 91eb654 — **march-gate 8/8, the first all-green board; micros-through-m2 28/34**; gates: `verify.sh` + `march-gate.sh`)
+## §7 · Current state (grounded 2026-07-04 night, HEAD dc62df4 — **march-gate 8/8 AND micros-through-m2 34/34: the FULL battery green through the wheel's own emit**; gates: `verify.sh` + `march-gate.sh`)
+
+> **PHASE 1 CLOSED (plans/noble-brewing-rose.md) — 0/34 → 34/34 in one day,
+> sixteen bands.** After the 28/34 entry below, the closing arc: the match
+> cascade tested arms from the WRONG END (8606e47 — any wildcard-last match
+> collapsed to the wildcard's body; is_pure ≡ false); the pattern sub-walkers
+> paired last(subs) with a climbing index (713dddd — every multi-sub pattern
+> bound REVERSED; compare-fold's 23 reproduced arithmetically from the
+> fst/snd swap); the pipe's bare-stage completion never ran the evidence
+> fork (de94902 — ev4 vs ev2, one line apart); identifiers wearing the
+> ownership-marker keyword derailed the seed's param parser (65e6b27 —
+> infer_fanout emitted with ZERO params; renamed fan_own/own_effs, zero
+> own-as-ident sites remain); branch thunks minted with the parent fanout's
+> handle declared duplicate scratch locals (65e6b27 — a thunk's identity is
+> its branch); and float_extract_digits pushed significant digits onto the
+> recursion's result — push appends, so every digit list read REVERSED and
+> 2.5 rendered "0.000…" (dc62df4 — accumulate-forward; floor_log10's f<1
+> branch also negated its recursion, fixed). PASS-2 fired the same night on
+> the completed wheel. Residue named peers: `Hβ.emit.int-splice-empty`
+> ("{n}" for Int renders empty through m2; String splices fine) ·
+> `Hβ.seed.ftNf-result-width` (the seed's indirect-call fts are arity-keyed
+> all-i32 while 140 signatures carry (result f64); f64-result calls ride
+> inline fts today — the pass-2 gate arbitrates whether the class needs the
+> full repr-vector mint).
 
 > **THE 8/8 DAY (2026-07-04, nine bands).** The exit-134 floor that gated the
 > whole runtime battery fell in one continuous dig: the raw-0 root (b73748c —

@@ -800,9 +800,38 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   and factoring an arm's call site into a shared fn threads WatOut evidence
   across the fn boundary (match-adt regressed; both experiments reverted).
   The strict two-population scan (949ac34) now makes every seam hit LOUD.
-  The next dedicated dig starts from those two reproducible pins, against
-  the singleton-tier route (§5.3, viability-CONFIRMED below), never the
-  two proven dead ends.
+  **THE SEAM CONFIRMED TO A CLEAN NUMBER (2026-07-04, non-Heisenberg
+  binary-patch at show_eff_name's `«invalid-effect»` arm — the diagnostic
+  render path, reads an already-built value, does NOT shift the
+  accumulation layout under test):** a body-accumulated name-set element
+  is a raw `0` (null pointer), NOT a record with a corrupt tag — the
+  immediate 0 where an `ENamed` record belongs. show_eff_name(0) fails
+  its `>=4096` heap check → `«invalid-effect»`; eff_names_of masks the
+  SAME 0 (`name==0 => []`) → empty escaping row → bare call → the strict
+  ev-scan floor (exit 134). BOTH the render symptom and the runtime trap
+  are ONE root: a 0 in the name set. The 0 hits rows added by DIRECT
+  LITERAL construction (`inf_add_row(mk_ef_closed([ENamed("Memory")]))`,
+  infer.mn:977 — no evidence read), so it is a CONSTRUCTION miscompile,
+  exactly subst_eff_names' own warning (infer.mn:2672: the seed can
+  miscompile an ENamed reconstruction to a raw 0). Layout-dependent
+  (wf_00fe3588's two perturbation tests: eprint probes flip 0↔It3;
+  union_row→name_set_union flips the immediate 0↔1) ⇒ the SEED's codegen
+  for the EffName construction / name-set path emits a wrong immediate
+  under certain ev-slot layouts. The unbind-witness (I-BOUND→FREE) was
+  REFUTED 3/3 — the var stays bound; the NAME inside is 0. GENUINE
+  SEED-LAYER FORK (the workflow's own verdict, refuter-confirmed): fix
+  the seed's ev-slot/codegen for the EffName-name-set functions, OR a
+  coordinated seed+wheel EffName representation change (large blast
+  radius). The harness (march-gate --micros, 8867e04) proves the blast
+  reward: 0/34 micros, 32 at this exact floor — closing it greens the
+  whole runtime battery + unblocks pass-2 (m2 compiling the full wheel
+  traps here too). NEXT DIG (clean-probe method, NEVER wheel-eprint —
+  Heisenberg): binary-patch the name-set construction sites in the
+  baseline m2 to pin which seed-emitted variant-construction yields 0,
+  then correct the seed's emission (bootstrap/src) for that shape. The
+  singleton-tier route (§5.3) is REFUTED for the multi-handler-op case
+  (prelude has many Iterate handlers — no static pick); the two dead
+  ends (naive var-chase, snapshot-at-generalize) still stand fenced.
 - **THE ROOT — `effects_of_row` drops the EfOpen row-var (lower.mn:528-621).** The
   seam's two consumers must agree: `derive_ev_slots` (caller — PLACES evidence)
   reads the callee's type AT THE CALL SITE, where effects are often INLINE

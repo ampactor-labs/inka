@@ -492,7 +492,7 @@ fn str_literal_5(s) with Memory + Alloc = {
 //   3. Format with decimal point or scientific notation as appropriate.
 fn float_render_positive(f) with Memory + Alloc = {
   let exp = float_floor_log10(f)
-  let digits = float_extract_digits(f / float_pow10(exp), 0, 17)
+  let digits = float_extract_digits(f / float_pow10(exp), 0, 17, make_list(0))
   float_format_digits(digits, exp)
 }
 
@@ -502,7 +502,10 @@ fn float_render_positive(f) with Memory + Alloc = {
 // but the loop terminates because f is finite and positive).
 fn float_floor_log10(f) with Memory + Alloc = {
   if f >= 1.0 && f < 10.0 { 0 }
-  else if f < 1.0 { 0 - 1 - float_floor_log10(f * 10.0) }
+  // The recurrence is floor_log10(f) = floor_log10(f·10) − 1; the prior
+  // `−1 − recurse` negated the recursion (wrong below 0.1: log10(0.05)
+  // computed 0 instead of −2).
+  else if f < 1.0 { float_floor_log10(f * 10.0) - 1 }
   else { 1 + float_floor_log10(f / 10.0) }
 }
 
@@ -513,13 +516,17 @@ fn float_floor_log10(f) with Memory + Alloc = {
 // recursion. That bound is load-bearing: float_to_int is an i32 truncation,
 // so a scaled allowed to grow past 2^31 traps (integer overflow). Returns a
 // flat list of digit values (0-9).
-fn float_extract_digits(scaled: Float, count, max_digits) with Memory + Alloc = {
-  if count >= max_digits { make_digit_list(0) }
+fn float_extract_digits(scaled: Float, count, max_digits, acc) with Memory + Alloc = {
+  // Accumulate FORWARD: each digit appends at the END (the one push law),
+  // so the list reads most-significant first exactly as every consumer
+  // indexes it. The prior shape pushed the significant digit onto the
+  // RECURSION's result — push appends, so the whole list came out
+  // REVERSED and 2.5 rendered "0.000…" (the digits read backward).
+  if count >= max_digits { acc }
   else {
     let digit = float_to_int(scaled)
     let next = (scaled - float_of_int(digit)) * 10.0
-    let tail = float_extract_digits(next, count + 1, max_digits)
-    push_digit(digit, tail)
+    float_extract_digits(next, count + 1, max_digits, push(acc, digit))
   }
 }
 
@@ -642,18 +649,6 @@ fn float_is_negative_zero(f) = f == 0.0 - 0.0 && 1.0 / f < 0.0
 
 // ─── Digit list helpers ───────────────────────────────────────────
 // A digit list is a flat Mentl list of Int (values 0-9).
-
-fn make_digit_list(d) with Memory + Alloc = {
-  let lst = alloc(8 + 4)
-  store_i32(lst, 1)
-  store_i32(lst + 4, 0)
-  store_i32(lst + 8, d)
-  lst
-}
-
-fn push_digit(d, tail) with Memory + Alloc = {
-  push(tail, d)
-}
 
 fn digit_at(digits, i) with Memory = {
   list_index(digits, i)

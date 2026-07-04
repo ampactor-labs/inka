@@ -1686,7 +1686,7 @@ fn lower_pipe(kind, left, right, handle) = match kind {
     // never a second arity table.
     let lo_l = lower_expr(left)
     let lo_r = lower_callee_ref(right)
-    let N(rbody, _, _) = right
+    let N(rbody, _, rfh) = right
     let hole_at = match rbody {
       NExpr(CallExpr(_, cargs)) => pipe_hole_index(cargs, 0),
       _                         => -1
@@ -1708,7 +1708,16 @@ fn lower_pipe(kind, left, right, handle) = match kind {
         if hole_at >= 0      { LMakeVariant(vh, tag, splice_at(vargs, hole_at, lo_l)) }
         else if is_partial   { LMakeVariant(vh, tag, vargs ++ [lo_l]) }   // drift-audit: ignore — one completion per pipe node
         else                 { LCall(handle, lo_r, [lo_l]) },
-      _ => LCall(handle, lo_r, [lo_l])
+      _ => {
+        // A bare fn-VALUE stage (`7 |> outer`): the completion call runs the
+        // SAME evidence fork every call runs — this arm minted a bare LCall
+        // and an effectful piped stage's callee starved (ev4's 134; ev2's
+        // block spelling of the same program was green). The already-lowered
+        // callee is reused; the fork reads the stage node's own type.
+        let evs = derive_ev_slots(rfh)
+        if len(evs) == 0 { LCall(handle, lo_r, [lo_l]) }
+        else             { LSuspend(handle, rfh, lo_r, [lo_l], evs) }
+      }
     }
   },
 

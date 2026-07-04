@@ -39592,13 +39592,15 @@
     (call $emit_byte (i32.const 34))
     (call $emit_close)
     (call $emit_space)
-    (call $emit_int (i32.const 8192))   ;; 8192 pages × 64KB = 512MB
-                                         ;; — bump allocator headroom for
-                                         ;; full-wheel self-compile through
-                                         ;; mentl2; the 512-page (32MB)
-                                         ;; bootstrap default exhausts on
-                                         ;; accumulated string operations
-                                         ;; across many compile stages.
+    (call $emit_int (i32.const 32768))  ;; 32768 pages × 64KB = 2GB — the
+                                         ;; wheel's own memory convention
+                                         ;; (src/backends/wasm.mn emits
+                                         ;; 32768 for m3). The prior 8192
+                                         ;; (512MB) was sized to an older,
+                                         ;; smaller wheel: pass-2 on the
+                                         ;; completed wheel bump-allocated
+                                         ;; past 0x20000000 and faulted at
+                                         ;; the memory boundary mid-infer.
     (call $emit_close)
     (call $emit_nl)
 

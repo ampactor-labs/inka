@@ -190,7 +190,13 @@ handler string_table with entries = [] {
   set_string_entries(es) => resume() with entries = es
 }
 
-fn string_offset_lookup(entries, target, i, n) = {
+// target: String — the Intent Boundary carrying the proof: both compare
+// operands are tuple-destructure binders (h=0 under the seed), so an
+// unpinned `==` emits pointer-eq and a content-equal COPY of a registered
+// string (an instantiated row's ename, a perform's key) missed the table
+// and keyed the evidence region 0 — the sentinel. The annotation proves
+// the RIGHT operand; the symmetric dispatch adopts it → str_eq.
+fn string_offset_lookup(entries, target: String, i, n) = {
   if i >= n { 0 }
   else {
     let (s, offset) = list_index(entries, i)
@@ -1605,8 +1611,14 @@ fn walk_locals_expr(expr, acc) = match expr {
     walk_locals_list(fs, acc)
   },
   LMatch(_h, s, arms)       => walk_locals_arms(arms, walk_locals_expr(s, acc)),
-  LSuspend(_h, _o, f, args, ev) =>
-    walk_locals_list(ev, walk_locals_list(args, walk_locals_expr(f, acc))),
+  LSuspend(h, _o, f, args, ev) => {
+    // The transient's per-site scratch (the variant_{h} precedent): the
+    // suspend must survive its args' own emission.
+    wat_emit(" (local $sst_")
+    wat_emit(int_to_str(h))
+    wat_emit(" i32)")
+    walk_locals_list(ev, walk_locals_list(args, walk_locals_expr(f, acc)))
+  },
   LHandleWith(h, b, hn, hname, inits, arm_names, captured_evs) => {
     // The install's OWN minted locals — the handler record plus one
     // [record, base] entry per effect group — mirror-true to what the
@@ -2563,6 +2575,14 @@ fn emit_expr(expr) = match expr {
     //   offset 8 + 4*nc + 8*j       : [key_j][ev_j] keyed pair (newly stored)
     //   offset 8 + 4*nc + 8*ne      : key=0 sentinel (terminates the scan)
     let ne = len(ev_slots)
+    // The transient's scratch is PER-SITE, named by the node's handle
+    // (the LMakeVariant variant_{h} precedent): the shared $state_tmp
+    // died here — emit_expr_list(args) below reuses it (an LMakeClosure
+    // argument parks its record there), so the dispatch's fn-idx load
+    // read the ARGUMENT's record and call_indirect'ed the wrong fn
+    // (hof-map's type mismatch: main suspended map but called the
+    // lambda's index with map's arity).
+    let sst = "sst_{int_to_str(h)}"
     // Save callee closure pointer for header read + capture copy.
     emit_expr(func)
     wat_emit("    (local.set $callee_closure)\n")
@@ -2577,15 +2597,14 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (i32.const 4) (i32.mul)\n")
     wat_emit("    (i32.add)\n")
     wat_emit("    (local.set $alloc_size)\n")
-    // Dynamic-size alloc: the runtime-computed $alloc_size feeds the one aligned
-    // $alloc; the pointer binds to $state_tmp. Same fn as every static-size site,
-    // the size operand a local instead of a const.
-    wat_emit("    (local.set $state_tmp (call $alloc (local.get $alloc_size)))\n")
+    // Dynamic-size alloc: the runtime-computed $alloc_size feeds the one
+    // aligned $alloc; the pointer binds to the per-site sst local.
+    wat_emit("    (local.set ${sst} (call $alloc (local.get $alloc_size)))\n")
     // Copy header (fn_ptr + capture_count = 8 bytes).
-    wat_emit("    (local.get $state_tmp) (local.get $callee_closure) (i32.load offset=0) (i32.store offset=0)\n")
-    wat_emit("    (local.get $state_tmp) (local.get $callee_closure) (i32.load offset=4) (i32.store offset=4)\n")
+    wat_emit("    (local.get ${sst}) (local.get $callee_closure) (i32.load offset=0) (i32.store offset=0)\n")
+    wat_emit("    (local.get ${sst}) (local.get $callee_closure) (i32.load offset=4) (i32.store offset=4)\n")
     // Copy each capture from callee_closure[8 + 4*i] to
-    // state_tmp[8 + 4*i] via runtime loop driven by capture_count.
+    // sst[8 + 4*i] via runtime loop driven by capture_count.
     wat_emit("    (i32.const 0) (local.set $loop_i)\n")
     wat_emit("    (block $copy_done\n")
     wat_emit("      (loop $copy_loop\n") // drift-audit: ignore
@@ -2593,8 +2612,8 @@ fn emit_expr(expr) = match expr {
     wat_emit("        (local.get $callee_closure) (i32.load offset=4)\n")
     wat_emit("        (i32.ge_u)\n")
     wat_emit("        (br_if $copy_done)\n")
-    // dst = state_tmp + 8 + 4*i
-    wat_emit("        (local.get $state_tmp)\n")
+    // dst = sst + 8 + 4*i
+    wat_emit("        (local.get ${sst})\n")
     wat_emit("        (local.get $loop_i) (i32.const 4) (i32.mul) (i32.add)\n")
     wat_emit("        (i32.const 8) (i32.add)\n")
     // src = callee_closure + 8 + 4*i, loaded
@@ -2607,13 +2626,14 @@ fn emit_expr(expr) = match expr {
     wat_emit("        (br $copy_loop)\n")
     wat_emit("      )\n")
     wat_emit("    )\n")
-    // Store each ev_slot at offset 8 + 4*nc + 4*j.
-    // Computed at runtime: base_offset = 8 + 4*nc; slot j adds 4*j.
-    emit_ev_slots_dynamic(ev_slots, 0)
-    // Dispatch: (state_tmp, args..., fn_ptr) → call_indirect
-    wat_emit("    (local.get $state_tmp)\n")
+    // Store the keyed [key][ev] pairs + sentinel past the copied captures.
+    emit_ev_slots_dynamic(sst, ev_slots, 0)
+    // Dispatch: (sst, args..., fn_ptr) → call_indirect. The per-site
+    // local survives the args' own emission (they may park records in
+    // the shared scratch), so the fn-idx load reads the TRANSIENT.
+    wat_emit("    (local.get ${sst})\n")
     emit_expr_list(args)
-    wat_emit("    (local.get $state_tmp) (i32.load offset=0)\n")
+    wat_emit("    (local.get ${sst}) (i32.load offset=0)\n")
     wat_emit("    (call_indirect (type ")
     wat_emit(call_ft_name(args, h))
     wat_emit("))\n")
@@ -5004,27 +5024,27 @@ fn emit_ev_slot_stores_at_offset(ev_exprs, base_offset, base_j) =
 // the key=0 sentinel — the SAME self-describing region the static places write,
 // only its base offset is computed at runtime. The callee's LEvPerform key-scan
 // reads it identically (one entry shape; the fence agrees by construction).
-fn emit_ev_slots_dynamic(ev_exprs, base_j) = {
+fn emit_ev_slots_dynamic(sst, ev_exprs, base_j) = {
   each((indexed) => {
     let (j, entry) = indexed
     match entry {
       LEvEntry(key, ev) => {
-        // key @ state_tmp + 8 + 4*nc + 8*(base_j+j)
-        emit_dynamic_ev_addr(8 * (base_j + j))
+        // key @ sst + 8 + 4*nc + 8*(base_j+j)
+        emit_dynamic_ev_addr(sst, 8 * (base_j + j))
         wat_emit("    (i32.const ")
         wat_emit(int_to_str(string_offset(key)))
         wat_emit(")\n")
         wat_emit("    (i32.store)\n")
         // ev @ + 4
-        emit_dynamic_ev_addr(8 * (base_j + j) + 4)
+        emit_dynamic_ev_addr(sst, 8 * (base_j + j) + 4)
         emit_expr(ev)
         wat_emit("    (i32.store)\n")
       },
       _other => wat_emit("    (unreachable)  ;; ev region holds only LEvEntry\n")
     }
   }, enumerate(ev_exprs))
-  // SENTINEL key=0 @ state_tmp + 8 + 4*nc + 8*ne — terminates the key-scan.
-  emit_dynamic_ev_addr(8 * (base_j + len(ev_exprs)))
+  // SENTINEL key=0 @ sst + 8 + 4*nc + 8*ne — terminates the key-scan.
+  emit_dynamic_ev_addr(sst, 8 * (base_j + len(ev_exprs)))
   wat_emit("    (i32.const 0)\n")
   wat_emit("    (i32.store)\n")
 }
@@ -5033,8 +5053,8 @@ fn emit_ev_slots_dynamic(ev_exprs, base_j) = {
 // region, where nc is the callee's runtime capture_count ($callee_closure[4]).
 // `extra` selects the key (8*j), ev (8*j+4), or sentinel (8*ne) byte within the
 // 8-strided pairs. The address is left on the stack for a following `(i32.store)`.
-fn emit_dynamic_ev_addr(extra) = {
-  wat_emit("    (local.get $state_tmp)\n")
+fn emit_dynamic_ev_addr(sst, extra) = {
+  wat_emit("    (local.get ${sst})\n")
   wat_emit("    (i32.const 8) (i32.add)\n")
   wat_emit("    (local.get $callee_closure) (i32.load offset=4)\n")
   wat_emit("    (i32.const 4) (i32.mul) (i32.add)\n")

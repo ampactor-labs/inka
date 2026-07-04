@@ -192,6 +192,19 @@ fn closed_or_pure(ref names) with !Mutate = {
   else { EfClosed(names) }
 }
 
+// A recursive fn's row equation R = names ∪ R takes its LEAST solution: the
+// self-edge contributes nothing (μR. names ∪ R = names), so a var-tail that
+// lands on the fn's OWN row handle cuts to the closed names at exit-bind.
+// Without the cut the bind writes a row containing its own handle; every
+// reader's chase cycles out empty and call sites see a BARE callee — the
+// recursive-callee evidence miss (t-rec exit 134; iterate_from's shape).
+// resolve_row folds bound tails first, so the compare sees the terminal var.
+fn row_without_self(row, self_h) with !Mutate = match resolve_row(row) {
+  EfOpen(names, v) => if v == self_h { closed_or_pure(names) }
+                      else { EfOpen(names, v) },
+  other            => other
+}
+
 // Union row (`+`): E + F = the row of all effects in E or F.
 fn union_row(ref a, ref b) with !Mutate = {
   match a {

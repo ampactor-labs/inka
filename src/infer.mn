@@ -69,7 +69,8 @@ handler infer_ctx with stack = [], arm_stack = [] {
     if len(stack) == 0 { resume([]) }
     else {
       let frame = last(stack)
-      graph_bind_row(frame.row_handle, frame.accumulated_row,
+      graph_bind_row(frame.row_handle,
+        row_without_self(frame.accumulated_row, frame.row_handle),
         Located(frame.fn_span, Inferred("fn effect row")))
       // The popped frame's declaration comes back to the closer — the
       // enforcement site reads it from the resume value, no ambient read.
@@ -1067,11 +1068,21 @@ fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
   // site instantiates it (subst_row), and ev-capture threads f's actual
   // effects. Without this arm the higher-order fn's row is missing its
   // argument's effects entirely.
-  let row_node = graph_chase(row_h)
-  match row_node {
-    GNode(NRowBound(row), _) => inf_add_row(row),
-    GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], row_h)),
-    _ => ()
+  // Read the CALLEE's OWN row expression — names AND tail — never the
+  // call's fresh row var alone: open-open unification can leave the fresh
+  // var free with the inline names on the far side of the union edge (the
+  // recursive-callee case), and the var-only chase then dropped the names —
+  // the caller's row accumulated empty and every call INTO the caller went
+  // bare (t-rec's 134; hof-map's shape). The fallback keeps the
+  // effect-polymorphic param case (an f whose type is still a TVar).
+  match graph_chase(fh) {
+    GNode(NBound(TFun(_, _, crow)), _) => inf_add_row(crow),
+    _ =>
+      match graph_chase(row_h) {
+        GNode(NRowBound(row), _) => inf_add_row(row),
+        GNode(NRowFree(_), _)    => inf_add_row(mk_ef_open([], row_h)),
+        _ => ()
+      }
   }
 }
 

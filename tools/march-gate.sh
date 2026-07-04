@@ -8,8 +8,22 @@
 # by hand since 2026-07-01 — one invocation, one scoreboard, zero re-derived
 # probe incantations.
 #
-#   bash tools/march-gate.sh            # build seed + m2, run all rungs
-#   bash tools/march-gate.sh --no-build # reuse .build/probe/m2.wasm
+#   bash tools/march-gate.sh                     # build seed + m2, run all rungs
+#   bash tools/march-gate.sh --no-build          # reuse .build/probe/m2.wasm
+#   bash tools/march-gate.sh --micros            # rungs, THEN the full micro
+#                                                 # battery compiled through m2
+#   bash tools/march-gate.sh --no-build --micros # reuse m2.wasm, rungs + micros
+#
+# The --micros tier promotes every tests/micros/mn-NAME.mn carrying a
+# `micro:NAME=EXIT` line in tools/verify-baseline.txt from "the SEED compiles
+# and runs it" (verify.sh's claim) to "m2 — the WHEEL, compiled BY the seed —
+# compiles and runs it" (a strictly stronger claim: m2 is the wheel's own
+# emit, seed-sparked). It is a SCOREBOARD, not a gate: a ✗ here names a dig
+# site for the next session, never a wheel bug to chase inline (CLAUDE.md ⟲
+# — census, don't chase moles). Same RT link set as the +rt rungs
+# (memory+strings+lists+prelude) for every micro — m2 has reachability-from-
+# main, so an unused stdlib fn drops silently; withholding it would be the
+# harness lying, not a regression (verify.sh's own reasoning, carried here).
 #
 # Reading a FAIL:
 #   compile-trap → wasmtime backtrace names the m2 fn; binary-patch probe it
@@ -29,7 +43,17 @@ OUT="${PROBE_OUT:-$(pwd)/.build/probe}"; mkdir -p "$OUT"
 export TMPDIR="$OUT"
 G="$OUT/gate"; mkdir -p "$G"
 
-if [ "${1:-}" != "--no-build" ]; then
+DO_BUILD=1
+DO_MICROS=0
+for a in "$@"; do
+  case "$a" in
+    --no-build) DO_BUILD=0 ;;
+    --micros)   DO_MICROS=1 ;;
+    *) echo "march-gate: unknown flag '$a' (want --no-build / --micros)" >&2; exit 2 ;;
+  esac
+done
+
+if [ "$DO_BUILD" = 1 ]; then
   echo "── seed ──"
   bash bootstrap/build.sh >/dev/null 2>&1 || { echo "✗ seed build FAILED"; exit 1; }
   echo "── m2 (seed compiles the wheel) ──"
@@ -137,7 +161,40 @@ EOF
 echo "── scoreboard: $pass pass / $fail fail ──"
 if [ $fail = 0 ]; then
   echo "ALL RUNGS CLEAR — next gate: the micro battery through m2, then full pass-2:"
-  echo "  for m in \$(sed 's/micro://;s/=.*//' tools/verify-baseline.txt); do ...run tests/micros/mn-\$m.mn through m2...; done"
+  echo "  bash tools/march-gate.sh --no-build --micros"
   echo "  bash tools/march.sh   # the m2→m3 fixed-point march"
 fi
+
+# ── micros-through-m2 — the promoted stress tier (--micros only) ──────────
+# Same harness shape as rung()/rungrt() above: compile through m2.wasm,
+# assemble, run, compare exit. A named dig site per ✗ — not fixed here.
+if [ "$DO_MICROS" = 1 ]; then
+  echo "── micros-through-m2 (each: m2-compile → wat2wasm → run → exit, +rt) ──"
+  pass_m=0; fail_m=0
+  while IFS= read -r line; do
+    name=${line#micro:}; m=${name%%=*}; want=${name#*=}
+    mf="tests/micros/mn-${m}.mn"
+    if [ ! -f "$mf" ]; then
+      echo "✗ micro $m: MISSING $mf"; fail_m=$((fail_m+1)); continue
+    fi
+    src="$G/micro-$m.mn"
+    { cat $RT; cat "$mf"; } > "$src"
+    "$WT" run "${WT_RUN_FLAGS[@]}" "$OUT/m2.wasm" < "$src" > "$G/micro-$m.wat" 2> "$G/micro-$m.err"
+    rc=$?
+    if [ $rc -ne 0 ]; then
+      echo "✗ micro $m: m2 COMPILE trap=$(grep -m1 -oE '!\S+' "$G/micro-$m.err" | head -1)"
+      fail_m=$((fail_m+1)); continue
+    fi
+    if ! wt_asm "$G/micro-$m.wat" "$G/micro-$m.wasm" 2> "$G/micro-$m.w2e"; then
+      echo "✗ micro $m: ASSEMBLE — $(head -1 "$G/micro-$m.w2e" | sed 's/.*error/error/')"
+      fail_m=$((fail_m+1)); continue
+    fi
+    "$WT" run "${WT_RUN_FLAGS[@]}" "$G/micro-$m.wasm" > /dev/null 2> "$G/micro-$m.run.err"
+    got=$?
+    if [ "$got" = "$want" ]; then echo "✓ micro $m = $got"; pass_m=$((pass_m+1))
+    else echo "✗ micro $m: RUN exit=$got want=$want"; fail_m=$((fail_m+1)); fi
+  done < <(grep -E '^micro:' tools/verify-baseline.txt)
+  echo "── micros-through-m2: $pass_m pass / $fail_m fail ──"
+fi
+
 exit $fail

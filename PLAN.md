@@ -585,7 +585,34 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-04, HEAD 2456137; gates: `verify.sh` + `march-gate.sh`)
+## §7 · Current state (grounded 2026-07-04 evening, HEAD 91eb654 — **march-gate 8/8, the first all-green board; micros-through-m2 28/34**; gates: `verify.sh` + `march-gate.sh`)
+
+> **THE 8/8 DAY (2026-07-04, nine bands).** The exit-134 floor that gated the
+> whole runtime battery fell in one continuous dig: the raw-0 root (b73748c —
+> union_row's `na ++ nb` emitted as str_concat via h=0 binders; the "corrupt
+> element" was virgin zero memory inside a 2-byte string wearing a list's
+> clothes; census 23→17, h=0 RATCHETED at 0) · the wrong-end frame stacks
+> flipped (ea7bdd3) · declared-rides-the-frame, both ambient ops dissolved
+> (23b1af4) · the call fork reads derive_ev_slots and derive reads THE GRAPH
+> at the call site, the esc-map side-ledger query deleted (b46aa7c — first
+> two micros ever green through m2) · _start calls main DIRECT with zeroed
+> declared params (60d880d — 2→28 in one build) · the evidence-chain
+> completion (91eb654): the call edge carries the CALLEE's whole row
+> expression (names AND tail — the var-only chase dropped inline names
+> whenever open-open unification left the call's fresh var free: the
+> RECURSIVE-CALLEE class, t-rec's oracle); row_without_self (μR. names∪R =
+> names — no row ever contains its own handle); LSuspend's transient in a
+> per-site `sst_{h}` local (the shared $state_tmp was clobbered by argument
+> emission — the dispatch called the ARGUMENT's fn index); string_offset_
+> lookup's target pinned `: String` (pointer-eq zeroed every COPIED evidence
+> key — the intern-table gate). **SIX RESIDUE FACES on the micros tier:**
+> ev4 (134, one evidence shape) · fanout-seq (COMPILE `!infer_expr`) ·
+> compare-fold 23≠47 / effname-pure 117≠18 / cli-dispatch 15≠63 (the
+> wrong-value silent-miscompile class, now RUNNABLE) · float-gate 0≠3
+> (`Hβ.m2.callsite-result-width`). Plus one new named face:
+> `Hβ.emit.int-splice-empty` — `"{n}"` for an Int renders EMPTY through m2
+> (String splices work; two-line repro). Pass-2 (march.sh) fired the same
+> evening. The full arc: plans/noble-brewing-rose.md.
 
 > **GROUND IN REALITY FIRST — the commands and their purposes.** `bash
 > tools/verify.sh` is the FLOOR (seed builds + the micro battery — 34 `micro:`

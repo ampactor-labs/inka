@@ -668,10 +668,18 @@ fn lower_callee_ref(f) = match lower_expr(f) {
 
 fn lower_call_default(handle, f, fh, lo_args) = {
   let lo_f = lower_callee_ref(f)
-  if monomorphic_at(handle) {
+  // The fork reads the SAME projection the threading fills: derive_ev_slots
+  // (the callee's escaping row, resolved in this caller's scope). Entries
+  // present ⇒ the callee's performs key-scan for them ⇒ thread the transient
+  // (LSuspend). Empty ⇒ bare call. The old monomorphic_at fork read the CALL
+  // node's type (the result — rarely a TFun) and called GROUND rows
+  // "monomorphic", so every effectful prelude call (Closed[Iterate]) went
+  // BARE and the callee's strict scan met an empty region — the 0/34 floor.
+  // Groundness is a row-VARIABLE fact; evidence need is an ESCAPING-ROW fact.
+  let ev_slots = derive_ev_slots(fh)
+  if len(ev_slots) == 0 {
     LCall(handle, lo_f, lo_args)
   } else {
-    let ev_slots = derive_ev_slots(fh)
     LSuspend(handle, fh, lo_f, lo_args, ev_slots)
   }
 }
@@ -727,17 +735,16 @@ fn effects_of_row(row) = match row {
 // or a forward of THIS frame's own evidence by IDENTITY (`LEvRef` carries the
 // key, never a row position). The callee reads each back by KEY-SCAN, so the
 // row is consumed as a SET — order carries no meaning; a sibling effect shuffles
-// nothing (the cure for position-as-the-bug). Read the callee's FLOW-CLOSURE by
-// name (escaping_row — the live call-edge row, not the frozen call-site
-// instantiation) so a forward-ref-dropped effect (emit_module's WasmOut) is
-// recovered and threaded. An anonymous callee (lambda/resume — no esc-map name)
-// carries its own evidence via lambda_escaping_row.
+// nothing (the cure for position-as-the-bug). The row is read from THE GRAPH
+// at the call site: lookup_ty(callee_handle) is the callee expression's
+// instantiated TFun, whose row the EfOpen chase reads through bound vars —
+// per-call-site precision (an effect-polymorphic callee's row var is bound to
+// THIS call's concrete row by the time lower runs; inference is complete).
+// Named fn or lambda, ONE read; the name-keyed esc-map query this replaces
+// was a side-ledger re-derivation of the same live fact (Anchor 1).
 fn derive_ev_slots(callee_handle) = {
-  let row = match ls_escaping_of(callee_name_of_handle(callee_handle)) {
-    Some(r) => r,
-    None    => lambda_escaping_row(callee_handle)
-  }
-  map((ename) => LEvEntry(ename, resolve_ev_for_ename(ename)), row)
+  map((ename) => LEvEntry(ename, resolve_ev_for_ename(ename)),
+      effects_of(lookup_ty(callee_handle)))
 }
 
 // One ev per effect: the installed handler's record (LLocal) when a handler is

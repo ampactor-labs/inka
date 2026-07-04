@@ -839,6 +839,35 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   singleton-tier route (§5.3) is REFUTED for the multi-handler-op case
   (prelude has many Iterate handlers — no static pick); the two dead
   ends (naive var-chase, snapshot-at-generalize) still stand fenced.
+- **THE RAW-0 ROOT CLOSED (2026-07-04, b73748c — the probe ladder ran
+  ghost→root in seven binary-patch rounds, one sitting):** the corrupt
+  element was never a corrupted pointer. union_row's `na ++ nb` was
+  EMITTED AS str_concat — the seed's BConcat dispatch fell to its string
+  default because match-binder LLocals carry handle 0 — and str_concat
+  on a flat list mints a 2-byte "string" whose fresh-zero bytes read
+  back as a flat list holding element 0. One emission = every symptom:
+  the «invalid-effect» renders, eff_names_of masking to empty escaping
+  rows, the exit-134 floor, the layout-dependent 0↔1 flips (the "corrupt
+  immediate" was the sides' byte-count, not a variant tag). FIX at the
+  seed layer: `$bind_pat_locals_ctor` mints a bound proof handle per
+  declared ctor payload (`$graph_fresh_ty` + `$graph_bind`);
+  `$pty_canon_seq` canonicalizes the NAMED sequence spellings
+  (`EfClosed(List)`, `ENamed(String)`) to structural tags; nested
+  patterns inherit the payload type. CENSUS CLOSED: W_ConcatUnproven
+  23→17, h=0 count 0 (union_row×4 + resolve_row×2 all proven) —
+  RATCHETED in march-gate (h=0 must stay 0, fail-loud). verify 34/34;
+  rungs 7/1 unchanged; micros-through-m2 STILL 0/34 — the conjunction
+  law: the corruption root is closed, the EMPTY-ROW face stands alone.
+  **THE ACTIVE CURSOR — the infer_ctx NESTING DISCIPLINE (hypothesis
+  carrying a 3-edit test; the §9 wrong-end class IN THE WHEEL):**
+  `inf_enter_fn` / `inf_enter_arm` push at the FRONT (`[frame] ++
+  stack`) while `last`/`drop_last` and the add-arms' rebuilds
+  (`[updated] ++ drop_last(stack)`) work the END; third limb, `declared`
+  is a SCALAR nested fns overwrite. Depth-1 is coherent (why 7 rungs
+  pass); nesting scrambles — inner frames accumulate into outer, inner
+  rows come out EMPTY (hof-map's exact pin), and lambdas DO push frames
+  (infer.mn:32). The full arc from here: plans/noble-brewing-rose.md
+  (the gate-coupled line to first-light and through it).
 - **PRIOR ROOT THESIS — `effects_of_row` drops the EfOpen row-var
   (lower.mn:528-621).** (The EfOpen-var chase LANDED be2502e — the read reads
   the var now; the CONFIRMED deeper root is the raw-0 name-set element, §7

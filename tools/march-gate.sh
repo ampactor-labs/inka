@@ -61,6 +61,16 @@ if [ "$DO_BUILD" = 1 ]; then
 fi
 [ -f "$OUT/m2.wasm" ] || { echo "✗ no m2.wasm — run without --no-build"; exit 1; }
 
+# Ratchet (2026-07-04): the h=0 concat class is CLOSED — the str_concat-on-lists
+# root (union_row's match binders) died with the seed's ctor-payload proof
+# channel (b73748c). A proof-less list-`++` reappearing is a NEW silent-
+# miscompile site; fail loud here, never let it rejoin the string default.
+H0=$(grep -c 'W_ConcatUnproven h=0' "$OUT/m2.err" 2>/dev/null)
+if [ "${H0:-0}" != "0" ]; then
+  echo "✗ RATCHET: W_ConcatUnproven h=0 count=$H0 (must be 0 — a binder ++ lost its List/String proof)"
+  exit 1
+fi
+
 # The trio + prelude: strings.mn's parse_int_base calls prelude's
 # parse_int, so the honest link set includes it — m2 emits the whole
 # input (no reachability-from-main yet, unlike the seed), so an

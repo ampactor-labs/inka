@@ -323,7 +323,7 @@ fn wasi_num_cores_intrinsic()                    with Pure = 1
 // cursor's body has `><` and `parallel_compose` not yet installed.
 //
 // Primitive #8 (Reasons) — each spawn records
-// Reason::ThreadSpawned(span); thread identity traceable through
+// a ThreadSpawned(span) Reason; thread identity traceable through
 // the Reason chain. Per Q-B.7.3 determinism: same source + same
 // inputs → same outputs regardless of timing; Reason chains
 // preserve "why this thread won the race?" for Why Engine.

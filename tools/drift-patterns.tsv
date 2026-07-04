@@ -14,7 +14,7 @@
 # the medium. Post-L1 the patterns become predicates over graph shapes.
 #
 1	Rust vtable (closure-as-vtable)	\{\s*(fn|handler)_\w+\s*:\s*(fn|\|)	ka	A record of functions named like a vtable is Mentl drawn as Rust. Use graph + handler.
-2	Scheme env frame (scope-as-frame-stack)	\b(parent_env|env_stack|push_frame|pop_frame|env_chain)\b	ka	Env lookup is an effect. `perform env_lookup(name)` — no parent-pointer frame walk.
+2	Scheme env frame (scope-as-frame-stack)	\b(parent_env|env_stack|push_frame|pop_frame|env_chain)\b	ka	Env lookup is an effect op — the bare call `env_lookup(name)` — no parent-pointer frame walk.
 3	Python dict (effect-name-set-as-strings)	perform\s+"[A-Z]	ka	Effect names are EffName ADTs. Raw strings flatten parameterization.
 3	Python dict (string-keyed effect match)	"Pure"|"Alloc"|"IO"|"State"|"Console"	ka	Flat effect names. Post-H3.1, EffName is parameterized ADT. These strings signal the old shape.
 4	Haskell monad transformer (nested handle chain)	handle\s*\(\s*handle\s*\(\s*handle	ka	Compose with ~> chains, not stacked handle(handle(handle(...))).
@@ -42,7 +42,7 @@
 20	Rust keyword drift (impl)	^\s*impl\b|\bimpl\s+\w+\s+for\b	ka	`impl` is Rust. Mentl has handlers on the graph.
 20	Rust keyword drift (trait/struct/enum/pub/mod)	^\s*(trait|struct|enum|pub|mod|crate)\s	ka	Rust keywords. ADTs are declared with Mentl's own grammar.
 21	Python keyword drift (def/class)	^\s*(def|class)\s+\w+\s*[:(]	ka	`def`/`class` are Python. Functions in Mentl are `fn`, structure is ADT.
-21	Python keyword drift (lambda)	\blambda\s+\w+\s*:	ka	Lambda is a Python keyword. Use Mentl's `|x| expr` closure.
+21	Python keyword drift (lambda)	\blambda\s+\w+\s*:	ka	Lambda is a Python keyword. Canonical Mentl closure: (params) => body (the `|x|` fence is itself drift — mode 36).
 22	Haskell/OCaml drift (do-notation / typeclass)	\bdo\s*\{|\binstance\s+\w+\s+where\b	ka	Do-notation is monad-transformer drift (mode 4). Use ~> chains.
 23	C/Go drift (typedef/void/sizeof)	\b(typedef|void|sizeof)\s*\(	ka	C primitives. Mentl has ADTs + refinement types.
 24	JS drift (async/await/Promise)	\b(async|await|Promise\b)	ka	Async is an effect in Mentl, handled — not a keyword.
@@ -51,7 +51,7 @@
 # --- Mentl-native shape violations (residue discipline) ---
 30	Imperative-loop-where-verb-exists (for/while)	^\s*(for|while)\s	ka	Loops are rarely the Mentl shape. Use |> transforms or <~ feedback. If truly needed, justify in a comment and suppress.
 31	Tuple-return-where-record-fits (multi-arg with _h suffix)	->\s*\([^)]*_h[^)]*,	ka	Anchor 6 + H1.3: if components carry _h suffix, reach for a record.
-32	Handler-as-function-argument (plain env param)	\(\s*env\s*:\s*\w+|\bctx\.env\.	ka	Env is effect-mediated. `perform env_lookup(name)` — not a function parameter.
+32	Handler-as-function-argument (plain env param)	\(\s*env\s*:\s*\w+|\bctx\.env\.	ka	Env is effect-mediated — the bare op call `env_lookup(name)` — not a function parameter.
 # --- Mode 33: sequential-let-where-pipe-chain-is-residue ---
 # Locked 2026-05-07 by Morgan: "I find it strange that there are places in
 # mentl code where `|>` is... optional." Per CLAUDE.md Anchor 6 strengthening:
@@ -84,3 +84,23 @@
 #
 # --- Ship-gate drift (agile/scrum vocabulary; project-management drift) ---
 39	Ship-gate vocab (N sessions / timebox / pivot)	\b(\d+\s*sessions?|N\s*sessions?|timebox|pivot criterion|ship[- ]gate|sprint goal)\b	all	No temporal budgets. Progress measured in walkthrough-paragraph → substrate mapping clarity. Scope emerges from substrate necessity. (Scope: all files.) drift-audit: ignore (self-reference: this line defines the pattern it matches)
+#
+# --- Mode 40: SYNTAX-surface dissolutions (SYNTAX.md is the authority) ---
+# At-zero ratchets over the wheel read-path: each names a form SYNTAX.md
+# dissolved. Out-of-band archaeology (crucibles/, tools/editor samples,
+# bootstrap/test repros) may still carry these — the ratchet flags them on
+# touch; the wheel (src/ lib/ tests/) is clean.
+40	SYNTAX-surface drift (/// dissolved — one comment form)	^///	ka	SYNTAX.md §Comments: the //-vs-/// split is dissolved. One comment form: //. Every comment is graph content attached to the next decl.
+40	SYNTAX-surface drift (import rename)	^\s*import\s+.*\s+as\s+	ka	SYNTAX.md §Imports: no `import X as Y`. An alias is a redundant second name for an edge the import already drew; narrow the selective set.
+40	SYNTAX-surface drift (:: is not a token)	^[^/]*::	ka	SYNTAX.md §Imports one-separator law: `.` is the one access operator; `/` only at import position. `::` is not a Mentl token.
+40	SYNTAX-surface drift (turbofish / angle-bracket generics)	^[^/]*\b[a-z_]\w*<[A-Z]\w*(,\s*[A-Z]\w*)*>\(	ka	SYNTAX.md §Generic type parameters: no turbofish, no angle brackets anywhere. The case rule IS the declaration (lowercase in type position = type param).
+40	SYNTAX-surface drift (perform dissolved — bare op call)	^[^/]*\bperform\s+[a-z_]	ka	SYNTAX.md §Invoking effect operations: an effect op is a BARE CALL. `perform` is format-lifted (E_RedundantPerform); the env binding proves op-ness.
+40	SYNTAX-surface drift (handle keyword install)	^\s*handle\s*\{|^[^/]*\bhandle\s+\w+\s+with\b	ka	SYNTAX.md §tee: `~>` is the one install verb. The `handle { body } with h` block spelling and the `handle expr with h` inline spelling both format-lift to `(body) ~> h`; state and arms live at the handler DECLARATION.
+#
+# --- Mode 10 (cont.): empty/zero surrender-fallbacks (fabrication tells) ---
+# Comment-guarded (^[^/]*) so a doc example does not false-positive. A GENUINE
+# null sentinel is either enumerated per-variant (ty_handle_of) or documented +
+# suppressed inline (`// drift-audit: ignore — <why>`); an undocumented one is a
+# surrender-fallback to delete/restructure, never wrap.
+10	Wildcard-fabricates (_ arm returning "")	^[^/]*_\s*=>\s*""	ka	Empty-string surrender-fallback. Document + suppress a genuine String-null sentinel inline; otherwise delete/restructure — never wrap.
+10	Wildcard-fabricates (_ arm returning 0)	^[^/]*_\s*=>\s*0\s*[,}]	ka	Zero-handle surrender-fallback. Enumerate the ADT (ty_handle_of reads the handle live per-variant, 0 only for ground types) — a wildcard 0 masks a missing case.

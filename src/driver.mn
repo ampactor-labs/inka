@@ -228,10 +228,10 @@ fn driver_partition_peel(ref remaining, ref processed, ref layers_rev)
     if len(layer_pairs) == 0 {
       // Cycle or unsatisfiable dep — process remaining sequentially
       // as a final layer to surface diagnostics at driver_check_module.
-      let leftover_names = map((p) => { let (m, _) = p; m }, remaining)
+      let leftover_names = map(((m, _)) => m, remaining)
       reverse([leftover_names] ++ layers_rev)
     } else {
-      let layer_names = map((p) => { let (m, _) = p; m }, layer_pairs)
+      let layer_names = map(((m, _)) => m, layer_pairs)
       let next_remaining = filter((m_with_deps) => {
         let (m, _) = m_with_deps
         !contains_module(layer_names, m)

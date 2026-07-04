@@ -783,7 +783,7 @@ fn emit_string_bytes(s, i, n) = {
 fn extract_top_fn_name(stmt) with Pure = match stmt {
   LLet(_, name, LMakeClosure(_, _, _, _))           => name,
   LLet(_, name, LMakeContinuation(_, _, _, _, _, _, _)) => name,
-  _                                                  => ""
+  _                                                  => ""  // drift-audit: ignore — "" = non-binding shape (caller treats "" as no-op)
 }
 
 // The VALUE peer of extract_top_fn_name: a top-level LLet whose init is

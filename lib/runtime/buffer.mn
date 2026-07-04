@@ -135,7 +135,7 @@ fn buf_freeze(own buf: Buffer) -> List with Memory + Alloc =
 //   counter pattern in user code.
 //
 // Primitive #8 (Reasons) — each push leaves
-//   Reason::BufPush(handle, span) for the Why Engine to walk back
+//   a BufPush(handle, span) Reason for the Why Engine to walk back
 //   from a final List to its construction history. Useful for
 //   "where did this entry come from?" diagnostics on collected lists.
 

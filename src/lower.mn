@@ -645,7 +645,7 @@ fn lower_callee_name(fbody) = match fbody {
     let N(cb, _, _) = callee
     lower_callee_name(cb)
   },
-  _ => ""
+  _ => ""  // drift-audit: ignore — "" = callee has no declared name (positional passthrough)
 }
 
 // The `CallExpr` dispatch falls back to this when the callee isn't a
@@ -1028,7 +1028,7 @@ fn installed_handled_ename(handler_body) = {
         let (_, _, kind) = entry
         match kind {
           HandlerKind(ename, _, _, _, _) => ename,
-          _                              => ""
+          _                              => ""  // drift-audit: ignore — "" = RHS is not a named handler decl (nothing absorbed)
         }
       },
       None => ""
@@ -1828,10 +1828,10 @@ fn extract_handler_name(node) = {
       let N(cb, _, _) = callee
       match cb {
         NExpr(VarRef(name)) => name,
-        _ => ""
+        _ => ""  // drift-audit: ignore — "" = genuinely anonymous install (the meaningful sentinel)
       }
     },
-    _ => ""
+    _ => ""  // drift-audit: ignore — "" = genuinely anonymous install (the meaningful sentinel)
   }
 }
 
@@ -2267,12 +2267,29 @@ fn lower_match_arms(scrut_h, arms) = map((arm) => {
 
 // Bind every `PVar` in the pattern as a local, carrying its element's TYPE
 // HANDLE read live from the scrutinee's type — so a String destructure local's
-// `==` dispatches to str_eq, not pointer i32.eq. (The env_find self-host
-// blocker: handle-0 made `k == name` compare op-key POINTERS, so byte-equal
-// distinct Strings never matched.) Mirrors `param_handles_of` for fn params
-// (TVar(h) -> h, else 0): the graph already proved the element type; carry it,
-// never re-derive at the consumer. H6: exhaustive Pat enumeration.
-fn ty_handle_of(ty) = match ty { TVar(h) => h, _ => 0 }
+// THE one "handle of a Ty (0 if ground)" projection — read by tparam_handle
+// and lower_param_handles (Carried-Truth: one home, N readers, never a
+// re-derived copy). A Ty is TVar(handle) only while un-ground; every ground
+// type carries no handle, so the 0 sentinel is EXPLICIT per variant, not a
+// wildcard that would silently absorb a future Ty. (The env_find self-host
+// blocker: handle-0 made `k == name` compare op-key POINTERS, so `==`
+// dispatches to str_eq, never pointer i32.eq.) H6: exhaustive Ty enumeration.
+fn ty_handle_of(ty) = match ty {
+  TVar(handle)        => handle,
+  TInt                => 0,
+  TFloat              => 0,
+  TString             => 0,
+  TUnit               => 0,
+  TList(_)            => 0,
+  TTuple(_)           => 0,
+  TFun(_, _, _)       => 0,
+  TName(_, _)         => 0,
+  TRecord(_)          => 0,
+  TRecordOpen(_, _)   => 0,
+  TRefined(_, _)      => 0,
+  TCont(_, _, _)      => 0,
+  TAlias(_, _)        => 0
+}
 
 fn bind_pat_locals(pat, ty) = match pat {
   PVar(name) => {
@@ -2773,32 +2790,12 @@ fn param_handles_of(fn_handle, params) = match lookup_ty(fn_handle) {
   _ => lower_param_handles(params)
 }
 
-fn tparam_handle(tp) = match param_ty(tp) {
-  TVar(h) => h,
-  _       => 0
-}
+fn tparam_handle(tp) = ty_handle_of(param_ty(tp))
 
-// Fallback when the fn's type isn't a resolved TFun: a param's parsed type
-// is `TVar(handle)` only while still un-ground; ground types carry no handle
-// (0 sentinel). param_handles_of reads the inferred TFun instead.
-fn lower_param_handles(params) = map((p) => {
-  let ty = param_ty(p)
-  match ty {
-    TVar(handle)        => handle,
-    TInt                => 0,
-    TFloat              => 0,
-    TString             => 0,
-    TUnit               => 0,
-    TList(_)            => 0,
-    TTuple(_)           => 0,
-    TFun(_, _, _)       => 0,
-    TName(_, _)         => 0,
-    TRecord(_)          => 0,
-    TRecordOpen(_, _)   => 0,
-    TRefined(_, _)      => 0,
-    TCont(_, _, _)      => 0
-  }
-}, params)
+// Fallback when the fn's type isn't a resolved TFun: reads each param's parsed
+// type through the one ty_handle_of projection (TVar → handle; ground → 0).
+// param_handles_of reads the inferred TFun instead.
+fn lower_param_handles(params) = map((p) => ty_handle_of(param_ty(p)), params)
 
 // W7 phase 1 — walks a lambda body collecting every `VarRef` whose
 // name is not in the lambda's local scope. Nested lambdas augment
@@ -3606,7 +3603,7 @@ fn reach_decl_name(stmt) = match stmt {
   LDeclareFn(LFn(n, _, _, _, _, _))                  => n,
   LLet(_, n, LMakeClosure(_, _, _, _))               => n,
   LLet(_, n, LMakeContinuation(_, _, _, _, _, _, _)) => n,
-  _                                                  => ""
+  _                                                  => ""  // drift-audit: ignore — "" = stmt is not a named fn (module value lets run in __init_lets)
 }
 
 // The reached set and the frontier are flat buffer-counter pairs —

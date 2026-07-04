@@ -10,7 +10,7 @@
 // `join_persist(i)` to collect in source order — the SAME strategy-neutral thunks
 // Seq/Thread run, only the CATCHER differs (persist_to_disk, lib/runtime/persist.mn).
 //
-// The seed lags both the new Schedule::Persist lowering arm AND the
+// The seed lags both the new Persist lowering arm AND the
 // persist_branch/join_persist handler ops (the disk memcpy round-trip needs the
 // continuation-record layout the seed has not caught up to — TESTED: the direct
 // op-call form traps in the seed's closure-header read). So this gate proves the

@@ -34,6 +34,38 @@ fn expect_false(value) = {
   check(!value, "expected false")
 }
 
+// ─── The per-test counter handlers ───────────────────────────
+// Testing IS a handler swap: the SAME test body performs `check`;
+// the installed counter decides pass/fail accounting and output.
+// `~> test_counter(name)` is the one install verb (SYNTAX §tee).
+
+handler test_counter(name) with counts = (0, 0) {
+  check(cond, msg) => {
+    let (passed, failed) = counts
+    if cond {
+      resume() with counts = (passed + 1, failed)
+    } else {
+      println("  FAIL [" ++ name ++ "]: " ++ msg)
+      resume() with counts = (passed, failed + 1)
+    }
+  },
+  get_results() => resume(counts),
+}
+
+handler suite_counter with counts = (0, 0) {
+  check(cond, msg) => {
+    let (passed, failed) = counts
+    if cond {
+      println("  ✓ " ++ msg)
+      resume() with counts = (passed + 1, failed)
+    } else {
+      println("  ✗ " ++ msg)
+      resume() with counts = (passed, failed + 1)
+    }
+  },
+  get_results() => resume(counts),
+}
+
 // ─── run_tests: compact output ───────────────────────────────
 
 fn run_tests(tests) = {
@@ -47,21 +79,10 @@ fn run_tests(tests) = {
   // surface).
   let results = map((test) => {
     let (name, test_fn) = test
-    handle {
+    {
       test_fn()
       get_results()
-    } with counts = (0, 0) {
-      check(cond, msg) => {
-        let (passed, failed) = counts
-        if cond {
-          resume() with counts = (passed + 1, failed)
-        } else {
-          println("  FAIL [" ++ name ++ "]: " ++ msg)
-          resume() with counts = (passed, failed + 1)
-        }
-      },
-      get_results() => resume(counts),
-    }
+    } ~> test_counter(name)
   }, tests)
   let totals = fold((0, 0), (acc, r) => {
     let (tp, tf) = acc
@@ -84,22 +105,10 @@ fn run_suite(tests) = {
   let totals = fold((0, 0), (acc, test) => {
     let (name, test_fn) = test
     println("── " ++ name ++ " ──")
-    let (p, f) = handle {
+    let (p, f) = {
       test_fn()
       get_results()
-    } with counts = (0, 0) {
-      check(cond, msg) => {
-        let (passed, failed) = counts
-        if cond {
-          println("  ✓ " ++ msg)
-          resume() with counts = (passed + 1, failed)
-        } else {
-          println("  ✗ " ++ msg)
-          resume() with counts = (passed, failed + 1)
-        }
-      },
-      get_results() => resume(counts),
-    }
+    } ~> suite_counter
     let (tp, tf) = acc
     (tp + p, tf + f)
   }, tests)

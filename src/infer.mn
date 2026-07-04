@@ -873,7 +873,7 @@ fn is_seq_op(cname) with Pure =
 // mechanism the `xs[i]` IndexExpr arm uses to force its receiver).
 fn seq_force(ah, i, ty, span: ValidSpan) =
   if len(ah) > i {
-    perform graph_bind(list_index(ah, i), ty, Located(span, Inferred("sequence operand")))
+    graph_bind(list_index(ah, i), ty, Located(span, Inferred("sequence operand")))
   } else { () }
 
 // seq_force_fn — force the i-th argument to `param_tys -> ret_ty` with an open
@@ -883,8 +883,8 @@ fn seq_force(ah, i, ty, span: ValidSpan) =
 fn seq_force_fn(ah, i, param_tys, ret_ty, span: ValidSpan) =
   if len(ah) > i {
     let params = map((t) => mk_param("_", t), param_tys)
-    let row_h = perform graph_fresh_row(Inferred("functor transform effects"))
-    perform graph_bind(list_index(ah, i),
+    let row_h = graph_fresh_row(Inferred("functor transform effects"))
+    graph_bind(list_index(ah, i),
       TFun(params, ret_ty, mk_ef_open([], row_h)),
       Located(span, Inferred("functor transform")))
   } else { () }
@@ -898,83 +898,83 @@ fn seq_force_fn(ah, i, param_tys, ret_ty, span: ValidSpan) =
 // here, to the node-kind that owns it.
 fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
   let ah = collect_handles(args)
-  let elem = TVar(perform mint(Inferred("sequence element")))
+  let elem = TVar(mint(Inferred("sequence element")))
   match cname {
     // Reads that project the element.
-    "last"  => { seq_force(ah, 0, TList(elem), span); perform graph_bind(handle, elem, Located(span, Inferred("head element"))) },
-    "list_index" => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); perform graph_bind(handle, elem, Located(span, Inferred("element at index"))) },
+    "last"  => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, elem, Located(span, Inferred("head element"))) },
+    "list_index" => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); graph_bind(handle, elem, Located(span, Inferred("element at index"))) },
     // The length read.
-    "len"        => { seq_force(ah, 0, TList(elem), span); perform graph_bind(handle, TInt, Located(span, Inferred("sequence length"))) },
+    "len"        => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, TInt, Located(span, Inferred("sequence length"))) },
     // Builders/transforms that return a sequence of the same element.
-    "drop_last"  => { seq_force(ah, 0, TList(elem), span); perform graph_bind(handle, TList(elem), Located(span, Inferred("tail sequence"))) },
-    "list_set"   => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, elem, span); perform graph_bind(handle, TList(elem), Located(span, Inferred("set element"))) },
-    "push"       => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, elem, span); perform graph_bind(handle, TList(elem), Located(span, Inferred("push element"))) },
-    "slice"      => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); perform graph_bind(handle, TList(elem), Located(span, Inferred("slice"))) },
-    "list_concat"=> { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TList(elem), span); perform graph_bind(handle, TList(elem), Located(span, Inferred("concat"))) },
-    "make_list"  => { seq_force(ah, 0, TInt, span); perform graph_bind(handle, TList(elem), Located(span, Inferred("fresh sequence"))) },
+    "drop_last"  => { seq_force(ah, 0, TList(elem), span); graph_bind(handle, TList(elem), Located(span, Inferred("tail sequence"))) },
+    "list_set"   => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, elem, span); graph_bind(handle, TList(elem), Located(span, Inferred("set element"))) },
+    "push"       => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, elem, span); graph_bind(handle, TList(elem), Located(span, Inferred("push element"))) },
+    "slice"      => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); graph_bind(handle, TList(elem), Located(span, Inferred("slice"))) },
+    "list_concat"=> { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TList(elem), span); graph_bind(handle, TList(elem), Located(span, Inferred("concat"))) },
+    "make_list"  => { seq_force(ah, 0, TInt, span); graph_bind(handle, TList(elem), Located(span, Inferred("fresh sequence"))) },
     // Functor projections — the cursor in transform/fold/filter mode. The
     // element type flows through f, read live; the result is the transform's
     // range, NEVER re-derived from the buffer body that lowers underneath.
     "map"        => {
-      let bm = TVar(perform mint(Inferred("map range element")))
+      let bm = TVar(mint(Inferred("map range element")))
       seq_force(ah, 1, TList(elem), span)                 // xs : [a]
       seq_force_fn(ah, 0, [elem], bm, span)               // f  : a -> b
-      perform graph_bind(handle, TList(bm), Located(span, Inferred("map : [b]")))
+      graph_bind(handle, TList(bm), Located(span, Inferred("map : [b]")))
     },
     "filter"     => {
       seq_force(ah, 1, TList(elem), span)                 // xs : [a]
       seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
-      perform graph_bind(handle, TList(elem), Located(span, Inferred("filter : [a]")))
+      graph_bind(handle, TList(elem), Located(span, Inferred("filter : [a]")))
     },
     "flatten"    => {
       seq_force(ah, 0, TList(TList(elem)), span)          // xss : [[a]]
-      perform graph_bind(handle, TList(elem), Located(span, Inferred("flatten : [a]")))
+      graph_bind(handle, TList(elem), Located(span, Inferred("flatten : [a]")))
     },
     "fold"       => {
-      let bm = TVar(perform mint(Inferred("fold accumulator")))
+      let bm = TVar(mint(Inferred("fold accumulator")))
       seq_force(ah, 0, TList(elem), span)                 // xs   : [a]
       seq_force(ah, 1, bm, span)                          // init : b
       seq_force_fn(ah, 2, [bm, elem], bm, span)           // f    : (b, a) -> b
-      perform graph_bind(handle, bm, Located(span, Inferred("fold : b")))
+      graph_bind(handle, bm, Located(span, Inferred("fold : b")))
     },
     "each"   => {
       seq_force(ah, 1, TList(elem), span)                 // xs : [a]
       seq_force_fn(ah, 0, [elem], TUnit, span)            // f  : a -> ()
-      perform graph_bind(handle, TUnit, Located(span, Inferred("each : ()")))
+      graph_bind(handle, TUnit, Located(span, Inferred("each : ()")))
     },
     "take"       => {
       seq_force(ah, 0, TList(elem), span)                 // xs : [a]
       seq_force(ah, 1, TInt, span)                        // n  : Int
-      perform graph_bind(handle, TList(elem), Located(span, Inferred("take : [a]")))
+      graph_bind(handle, TList(elem), Located(span, Inferred("take : [a]")))
     },
     "drop"       => {
       seq_force(ah, 0, TInt, span)                        // n  : Int
       seq_force(ah, 1, TList(elem), span)                 // xs : [a]
-      perform graph_bind(handle, TList(elem), Located(span, Inferred("drop : [a]")))
+      graph_bind(handle, TList(elem), Located(span, Inferred("drop : [a]")))
     },
     "any"        => {
       seq_force(ah, 1, TList(elem), span)                 // xs : [a]
       seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
-      perform graph_bind(handle, TName("Bool", []), Located(span, Inferred("any : Bool")))
+      graph_bind(handle, TName("Bool", []), Located(span, Inferred("any : Bool")))
     },
     "all"        => {
       seq_force(ah, 1, TList(elem), span)                 // xs : [a]
       seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
-      perform graph_bind(handle, TName("Bool", []), Located(span, Inferred("all : Bool")))
+      graph_bind(handle, TName("Bool", []), Located(span, Inferred("all : Bool")))
     },
     "find"       => {
       seq_force(ah, 1, TList(elem), span)                 // xs : [a]
       seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
-      perform graph_bind(handle, TName("Option", [elem]), Located(span, Inferred("find : Option(a)")))
+      graph_bind(handle, TName("Option", [elem]), Located(span, Inferred("find : Option(a)")))
     },
     "count"      => {
       seq_force(ah, 1, TList(elem), span)                 // xs : [a]
       seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
-      perform graph_bind(handle, TInt, Located(span, Inferred("count : Int")))
+      graph_bind(handle, TInt, Located(span, Inferred("count : Int")))
     },
-    _            => perform graph_bind(handle, TList(elem), Located(span, Inferred("sequence")))
+    _            => graph_bind(handle, TList(elem), Located(span, Inferred("sequence")))
   }
-  perform inf_add_row(mk_ef_closed([ENamed("Memory")]))
+  inf_add_row(mk_ef_closed([ENamed("Memory")]))
 }
 
 fn infer_call(func, args, handle, span: ValidSpan) = {
@@ -2875,7 +2875,7 @@ fn register_effect_ops(effect_name, ops) = {
   // EffectDeclKind is the graph's vocabulary for "this is an effect
   // declaration carrying these ops." derive_ev_slots reads it;
   // the Cursor can project it at any position mentioning the effect.
-  let op_names = map((op) => { let (n, _, _) = op; n }, ops)
+  let op_names = map(((n, _, _)) => n, ops)
   env_extend(effect_name,
     Forall([], TTuple([])),
     Declared(effect_name),

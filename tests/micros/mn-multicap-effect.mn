@@ -35,7 +35,7 @@ fn source(v, n) with Step = if n > 0 { emit(v); source(v, n - 1) }
 fn apply_each(g, v) = { source(v, 1); done() } ~> collect(g)
 
 // The multi-capture effectful lambda: captures a, b, c AND performs lookup2.
-fn use_each(v, a, b, c) = apply_each((x) => perform lookup2(x) + a + b + c, v)
+fn use_each(v, a, b, c) = apply_each((x) => lookup2(x) + a + b + c, v)
 
 fn run() = { use_each(2, 1, 2, 3) } ~> env2_handler
 

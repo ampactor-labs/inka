@@ -7,7 +7,7 @@
 //
 // Run: tools/run-micro.sh tests/micros/mn-higher-order-effect.mn 42 \
 //        $(find lib -name '*.mn' -not -path '*/tutorial/*' | sort)
-// Expected exit 42: map((x)=>perform lookup2(x), [2]) = [2+40]; head = 42.
+// Expected exit 42: map((x)=>lookup2(x), [2]) = [2+40]; head = 42.
 
 effect Env2 { lookup2(k) -> Int }
 
@@ -15,7 +15,7 @@ handler env2_handler {
   lookup2(k) => resume(k + 40)
 }
 
-fn use_each(xs) = map((x) => perform lookup2(x), xs)
+fn use_each(xs) = map((x) => lookup2(x), xs)
 
 fn run() = { use_each([2]) } ~> env2_handler
 

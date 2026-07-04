@@ -152,7 +152,7 @@ fn expect(ref tokens, pos, kind) =
 fn ident_at(ref tokens, pos) = {
   match kind_at(tokens, pos) {
     TIdent(s) => s,
-    _         => ""
+    _         => ""  // drift-audit: ignore — "" = non-ident payload null (parent already verified the variant; surfaces downstream, SYNTAX §414)
   }
 }
 
@@ -173,7 +173,7 @@ fn float_at(ref tokens, pos) = {
 fn string_at(ref tokens, pos) = {
   match kind_at(tokens, pos) {
     TStringLit(s) => s,
-    _          => ""
+    _          => ""  // drift-audit: ignore — "" = non-string payload null (parent already verified the variant)
   }
 }
 
@@ -411,7 +411,7 @@ fn ident_or_kw_at(ref tokens, p) = match kind_at(tokens, p) {
   TOwn      => "own",
   TRef      => "ref",
   THandle   => "handle",
-  _         => ""
+  _         => ""  // drift-audit: ignore — "" = not an ident-shaped token (seed-canonical null; surfaces downstream, not a masked ADT)
 }
 
 // Does a real param start at p? TIdent → yes. `own`/`ref` → yes ONLY
@@ -1200,7 +1200,7 @@ fn postfix_loop(ref tokens, e, pos, slot) = match kind_at(tokens, pos) {
     if is_named_record {
       let type_name = match body {
         NExpr(VarRef(n)) => n,
-        _                => ""
+        _                => ""  // drift-audit: ignore — unreachable: is_named_record proved body is VarRef; "" defensive
       }
       let (sorted, p2) = parse_named_record_body(tokens, pos + 1)
       let end_span = span_at(tokens, p2 - 1)

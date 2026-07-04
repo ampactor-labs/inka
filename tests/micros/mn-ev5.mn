@@ -10,8 +10,8 @@ handler ha { opa() => resume(1) }
 handler hb { opb() => resume(20) }
 handler hc { opc() => resume(300) }
 
-fn deep() = perform opb()
-fn deeper() = deep() + perform opa()
+fn deep() = opb()
+fn deeper() = deep() + opa()
 
 fn stage(x) = x + deeper()
 

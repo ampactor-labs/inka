@@ -15,6 +15,6 @@ handler both {
   }
 }
 
-fn body() = perform choose() * 10
+fn body() = choose() * 10
 
 fn main(q) = { body() } ~> both

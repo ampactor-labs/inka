@@ -17,4 +17,4 @@ handler both {
   }
 }
 
-fn main(q) = { perform choose() * 10 } ~> both
+fn main(q) = { choose() * 10 } ~> both

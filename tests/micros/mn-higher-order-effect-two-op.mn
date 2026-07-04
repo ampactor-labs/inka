@@ -29,6 +29,6 @@ fn source(v, n) with Step = if n > 0 { emit(v); source(v, n - 1) }
 
 fn apply_each(g, v) = { source(v, 1); done() } ~> collect(g)
 
-fn run() = { apply_each((x) => perform lookup2(x), 2) } ~> env2_handler
+fn run() = { apply_each((x) => lookup2(x), 2) } ~> env2_handler
 
 fn main(q) = run()

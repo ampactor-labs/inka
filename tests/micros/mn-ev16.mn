@@ -17,12 +17,12 @@ handler hb_alt {
 
 handler ha with k = 5 {
   opa() => {
-    let w = perform note(3)
+    let w = note(3)
     resume(w + k)
   }
 }
 
-fn deep() = perform opa()
+fn deep() = opa()
 
 fn main(q) = {
   deep()

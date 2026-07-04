@@ -191,7 +191,7 @@ handler backtrack with Choice + GraphRead + GraphWrite + Abort {
 // row contains Choice and no terminal handler is yet installed.
 //
 // Primitive #8 (Reasons) — each fork's `perform choose` records a
-// Reason (Reason::ChoiceFork(option_index)); the Why Engine walks
+// Reason (ChoiceFork(option_index)); the Why Engine walks
 // to "why this option won?" through the surviving fork's Reason
 // chain.
 

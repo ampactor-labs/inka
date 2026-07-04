@@ -15,7 +15,7 @@ fn deep(span) with G + D = {
   g_mint(span)
 }
 fn mid(e) with G + D + Memory = {
-  perform store_i32(0, 0)
+  store_i32(0, 0)
   deep(e)
 }
 fn outer(x) with G + D = mid(x)

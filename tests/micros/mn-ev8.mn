@@ -17,8 +17,8 @@ handler counter with ctr = 50 {
   mint(n) => resume(ctr + n) with ctr = ctr + 1
 }
 
-fn deep(a)  = perform mint(a)
-fn stage(q) = deep(7) + perform mint(7) - 58
+fn deep(a)  = mint(a)
+fn stage(q) = deep(7) + mint(7) - 58
 
 fn main(q) = {
   stage(q)

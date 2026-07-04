@@ -112,17 +112,13 @@ _Absorb information-flow control into the same Boolean algebra: the row carries 
 
 ## The value layer — representation gradient & structural fold (arms 1/7, §5.U)
 
-_Four projections of one cursor on one heap record. STEP 0/1/2 LANDED (repr_of, the representation gradient with boxed-f64 deleted, the eq leaf total over five node-kinds). The post-first-light remainder generalizes the eq generator into fold(ty,leaf) for show/pack/compare/hash, widens variant payloads, and verifies Arrow-layout interop — LESS code, retiring three hand-copies._
+_Four projections of one cursor on one heap record. STEP 0/1/2 LANDED (repr_of, the representation gradient with boxed-f64 deleted, the eq leaf total over five node-kinds). The post-first-light remainder generalizes the eq generator into fold(ty,leaf) for show/compare/hash, widens variant payloads, and verifies Arrow-layout interop — LESS code, retiring the two hand-copies (there is NO pack/unpack leaf: the .kai serializer was deleted whole, so durability is persist=memcpy, PLAN §5.U)._
 
 - **Hβ.fold.show-leaf** — Generalize the SHOW leaf into fold(ty,leaf), retiring the lower_to_string aggregate fall-through. Code anchor Hβ.fold.show-leaf-as-lowered-lfn (lower.mn:455): synthesize as LOWERED CODE (an LFn of str_concat/int_to_str + recursive descent) so it flows through the closure-call convention — raw WAT would silently miscompile (Law 7). BOUNDARY: types.mn's show_type/show_reason/show_effrow are the DOMAIN renderer (mentl voice), NEVER retired.
   - depends on: STEP 2 eq leaf (landed); STEP 0/1 repr word-leaf; closure-call emit convention.
   - SOTA: Generic/derivable Show (no Show trait-bound — the proof becomes the dispatch)
-- **Hβ.fold.pack-unpack-leaf** — Generalize pack/unpack into fold(ty,leaf), retiring the cache walk that PINS the IKAI tag-byte wire format. The function-leaf serializes a continuation by memcpy. EffArg pack/unpack already TOTAL over 3 tags (additive).
-  - depends on: STEP 1 f64 width (EAFloat round-trip); STEP 5 TCont world (function-leaf).
-  - SOTA: Durable-execution serializers (Temporal oplog) — escaped by the memcpy function-leaf
-- **Hβ.fold.pack-leaf-effarg-float** — Byte-faithful f64 round-trip for the cache's EAFloat tag in the pack/unpack fold-leaf — rides STEP 1's f64 width so a persisted float never loses precision; additive (existing .kai bytes unchanged).
-  - depends on: STEP 1 f64 representation gradient (landed).
-  - SOTA: IEEE-754 round-trip fidelity
+- **Hβ.fold.pack-unpack-leaf** — RETIRED (dd26ffd, 2026-07-02). PLAN §5.U: there is NO pack/unpack leaf — the .kai/IKAI tag-byte serializer was deleted whole with src/cache.mn (the epoch cursor was always the one cache), so durability is persist-as-memcpy of the image (§4④), not a serialized fold. The one surviving point — the function-leaf serializes a continuation by memcpy — lives in the persist=memcpy peers (band B: Hβ.continuations.persist-equals-memcpy-handler).
+- **Hβ.fold.pack-leaf-effarg-float** — RETIRED (dd26ffd, 2026-07-02). The "cache's EAFloat tag" and ".kai bytes" were the deleted .kai serializer; there is no pack/unpack leaf to carry an EAFloat round-trip (PLAN §5.U: persist=memcpy leaves nothing to serialize). STEP 1's f64-width persistence fidelity is subsumed by persist=memcpy of the image (STEP 3 record / band B Hβ.persist.*). (EAFloat as an EffArg scalar variant is unrelated and stays live — parser.mn:630, types.mn:370.)
 - **Hβ.fold.compare-hash-leaf** — Generalize compare/hash into fold(ty,leaf), retiring the hand-copied generated leaf (word-leaf reads the gradient: f64.eq for an f64 field). Makes the eq/hash-divergence footgun structurally unsayable.
   - depends on: STEP 2 eq leaf (landed); STEP 0/1 repr word-leaf.
   - SOTA: Derivable Ord/Hash; eq/hash coherence
@@ -171,7 +167,7 @@ _<| and >< are two surfaces of ONE PFanout topology read through ownership; STEP
 - **Hβ.runtime.wasi-thread-spawn-seed** — Bootstrap-side substrate importing wasi_thread_spawn + per-thread bump-arena partition + thread-record allocation. Stages landed; Stage 3 is emit-side recognition bridging wasi_thread_spawn_intrinsic to the $wasi_thread_spawn import. threading.mn:296.
   - depends on: first-light; the wasi_threads handler (present).
   - SOTA: Rayon/Faust (cannot state !Thread)
-- **Hβ.driver.level-set-par-walk** — Kahn-style topological levels in driver (driver.mn:247): same-level modules parallel_map, cross-level sequential — the compiler itself as parallel cursors on the shared graph. Felt-tier projection: Hμ.driver.topological-layer-par-map.
+- **Hβ.driver.level-set-par-walk** — Kahn-style topological levels in driver (driver.mn:145): same-level modules fan out via `>< ~> Thread` (the schedule read live at the fanout's own install site, never across a call — parallel_map was DISSOLVED into map ~> Schedule 2026-07-02, SYNTAX §Vocabulary), cross-level sequential — the compiler itself as parallel cursors on the shared graph. PLAN §5.R band E: the topological layer-partition is LIVE (7165bbb, the sequential `each((layer) => each(driver_check_module, layer))` at driver.mn:159); the open half is the multi-core `>< ~> Thread` at the layer site. Felt-tier projection: Hμ.driver.topological-layer-par-map.
   - depends on: first-light; Hβ.runtime.wasi-thread-spawn-seed.
 - **Hβ.cursor.speculative-compile** — Multi-shot dispatched spatially: Synth's MultiShot proposer captures the cursor at 'what type for this hole?'; per-candidate compile runs on different cores; results bubble back as gradient suggestions with Reason chains. The oracle fusing TIME (fork) and SPACE (threads). threading.mn:198; mentl.mn:232.
   - depends on: first-light; multi-shot continuation producer; wasi-threads.
@@ -357,21 +353,21 @@ _infer/lower/emit/native/GPU is the projected cursor — each aspect → a targe
   - depends on: first-light; the emit_alloc handler-swap substrate (landed); !Alloc row inference.
 
 
-## Self-hosting infrastructure: seed catch-up, cross-file cache, driver, doc/test (out-of-read-path durable record)
+## Self-hosting infrastructure: seed catch-up, module image cache, driver, doc/test (out-of-read-path durable record)
 
-_The non-read-path remainder that first-light's focus must not erase: the seed-lag gates (resolve AT first-light by seed dissolution), the cross-file cache trio (resolved-row packing — single-file first-light never round-trips it), per-module env overlay, and the doc/test handler substrates. Captured as positive-form peers so the live gates and host boundaries are not forgotten._
+_The non-read-path remainder that first-light's focus must not erase: the seed-lag gates (resolve AT first-light by seed dissolution), the module image cache (cross-run skip via persist=memcpy — single-file first-light never round-trips it), per-module env overlay, and the doc/test handler substrates. Captured as positive-form peers so the live gates and host boundaries are not forgotten._
 
 - **Hβ.seed.float-gradient** — Seed-lag gate: mn-float-arith needs the wheel's f64 emit (exit 3); the seed still floors LFloat to i32 (exit 0). The .mn leads, the seed catches up; resolves AT first-light (seed dissolution). Captured so it is not forgotten as a live gate.
   - depends on: Resolves BY first-light (the wheel's f64 emit is the one that compiles it).
 - **Hβ.seed.multishot-producer** — Seed-lag gate: mn-multishot needs the LMakeContinuation producer in the compiler that compiles it (exit 30); the seed lowers OneShot (exit 10). STEP 3 producer landed in the wheel; the seed lags. Resolves AT first-light.
   - depends on: Resolves BY first-light (seed dissolution); STEP 3 producer (landed).
   - SOTA: Effekt ICFP-2025 (multiple resumptions + local state)
-- **Hβ.cache.cross-file-resolved-row** — Cross-compile caching must pack the RESOLVED effect row, not the graph-relative handle (cache.mn:201); handler config/state/arms reconstructed from source on unpack (cache.mn:210); parameter defaults reconstructed from source (cache.mn:790). First-light is single-file and never round-trips these. Unifies Hβ.cache.handler-residual-row + handler-decl-from-source + param-default-from-source.
-  - depends on: first-light (single-file) closed; cross-file/multi-module compilation path active.
+- **Hβ.persist.module-image-cache** — Cross-run module skip as §4④ image-persist: the graph image memcpy'd whole (env entries, oracle queue, Reason chains intact), keyed by source hash + transitive dep hashes — the invalidation design the deleted .kai layer proved. Rides band B's persist=memcpy substrate. Supersedes the deleted Hβ.cache.cross-file-resolved-row (src/cache.mn deleted whole at dd26ffd, 2026-07-02 — 1136 lines of separate cache layer that snapshotted env entries lossily; the epoch cursor was always the one cache, PLAN §5.R band O).
+  - depends on: first-light (single-file) closed; cross-file/multi-module compilation path active; band B persist=memcpy substrate.
 - **Hβ.driver.per-module-env-overlay** — Per-module env overlay the driver populates (IC.3 chase; infer.mn:757, main.mn:503) — the env layering that user-defined-entry-handler-resolution and cross-module lookup read live. Pairs with Hβ.cli.user-defined-entry-handler-resolution (main.mn:503: mentl --with <handler> installs an arbitrary entry handler via env_lookup, the SAME mechanism every built-in verb uses).
   - depends on: first-light; multi-module compilation.
 - **Hβ.f1.handler-substrates** — The F.1 projection handlers: doc_handler + lib/doc/ chunks (main.mn:298, today routed through mentl_default+diagnostics), the Test effect handler chain (main.mn:422, assert/assert_eq/assert_near via assert_reporter + verify_assert lifting), and per-thread test output buffering (lib/test.mn:46) so concurrent tests have a sequential surface.
-  - depends on: first-light; Verify effect; parallel_map/wasi-threads.
+  - depends on: first-light; Verify effect; >< ~> Thread (map ~> Schedule) / wasi-threads.
   - SOTA: cargo test (parallel harness)
 
 

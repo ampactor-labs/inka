@@ -15,10 +15,12 @@
 #      L1), so the disposable layer is NOT exempt.
 #
 #   2. tools/verify.sh when any compiler source is staged (src/*.mn,
-#      lib/**/*.mn, bootstrap/src/**/*.wat) — seed builds + micro battery
-#      green + wheel census non-regressed past tools/verify-baseline.txt.
-#      This makes it impossible to COMMIT a state that breaks the medium or
-#      regresses the ratchet toward first-light.
+#      lib/**/*.mn, bootstrap/src/**/*.wat) — seed builds + the micro
+#      battery compiles-and-runs green + drift-audit clean (the
+#      Carried-Truth Law). This makes it impossible to COMMIT a state that
+#      breaks the medium. The wheel census is an informational SHADOW
+#      (the seed lagging the wheel — a rising count is expected progress),
+#      reported by verify.sh, enforced by nothing.
 #
 # The L1 byte-identity check (mentl2.wat == mentl3.wat) is the milestone gate,
 # observed via tools/state.sh / tools/determinism-gate.sh — not per-commit

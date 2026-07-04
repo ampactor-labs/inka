@@ -57,7 +57,9 @@ else
   echo "    seed compiles wheel: ✗ TRAP — see $B/state_m2.err"; tail -3 $B/state_m2.err | sed 's/^/      /'
 fi
 
-echo "▸ MICRO BATTERY  (gates the seed; each exit code captured directly)"
+echo "▸ MICRO SPOT-CHECK  (a QUICK 7-micro sample, each exit code captured directly; the FULL"
+echo "                     34-micro gate is  bash tools/verify.sh , the live rung + through-m2"
+echo "                     scoreboard is  bash tools/march-gate.sh )"
 # Runtime-dependent micros need the trio. Two real deps the lower emits CALLS to
 # but whose bodies live in the lib (not the seed): string micros (eq/interp) call
 # str_concat/str_eq; handler-dispatch micros (ev*) call ev_lookup — the keyed-
@@ -125,6 +127,7 @@ else
 fi
 
 hr
-echo "  THE CURSOR is the first un-checked item in ~/.claude/plans/composed-questing-feather.md §6."
+echo "  THE CURSOR is PLAN.md §7 (the m2 march / the ev-slot seam) + §5 (real·felt·unsurpassable);"
+echo "  the live rung scoreboard is  bash tools/march-gate.sh  (add --micros for the through-m2 tier)."
 echo "  Trust THIS output over any prose. Observe before theorizing. Trace to bedrock before acting."
 hr; echo

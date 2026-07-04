@@ -3,7 +3,7 @@
 #
 # Per DET walkthrough §2.6 (commit 'docs/specs/simulations/DET-determinism-audit.md'):
 # the compiler must produce byte-identical WAT on double-compile of the
-# same input. Any difference is a first-light blocker in ROADMAP.md.
+# same input. Any difference is a first-light blocker.
 #
 # Usage:
 #   tools/determinism-gate.sh                  # full src/ + lib/ tree
@@ -22,16 +22,17 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-# Resolve the mentl binary. Pre-bootstrap (today): no mentl binary yet
-# exists, so this script's full functional form arrives with hand-WAT
-# (item 27). Until then, the script's PRESENCE is substrate — it
-# defines the contract; pre-commit hook installation is straight-line.
+# Resolve the mentl binary. The seed (bootstrap/mentl.wasm) self-hosts the
+# wheel through m2/m3, so the binary exists once bootstrap/build.sh has run;
+# the not-found branch below only fires when it hasn't. The runtime double-
+# compile check is gated by wall-clock, not by a missing binary (see the cap
+# below).
 MENTL_BIN="${MENTL_BIN:-./bootstrap/mentl.wasm}"
 
 if [[ ! -f "$MENTL_BIN" ]]; then
   echo "determinism-gate: mentl binary not found at $MENTL_BIN" >&2
-  echo "  (pre-bootstrap: this gate is contract-only until item 27 lands hand-WAT)" >&2
-  echo "  set MENTL_BIN env var to override; otherwise this is a no-op exit-2" >&2
+  echo "  (run bootstrap/build.sh to assemble the seed; without it this is a no-op exit-2)" >&2
+  echo "  set MENTL_BIN env var to override" >&2
   exit 2
 fi
 
@@ -77,9 +78,9 @@ DET_TIMEOUT_S="${DET_TIMEOUT_S:-60}"
 # non-zero exit AND timeout uniformly.
 if ! timeout "${DET_TIMEOUT_S}s" "$WT" run "${WT_RUN_FLAGS[@]}" "$MENTL_BIN" < <(cat "${INPUTS[@]}") > "$FIRST" 2>/dev/null; then
   echo "determinism-gate: $MENTL_BIN didn't compile Mentl within ${DET_TIMEOUT_S}s" >&2
-  echo "  (pre-bootstrap: this gate is contract-only until item 27 lands hand-WAT" >&2
-  echo "   AND the wheel-through-seed runtime is bounded; today the seed's wheel" >&2
-  echo "   compile is single-threaded under perm-pressure and exceeds the cap)" >&2
+  echo "  (contract-only under the cap: the seed's wheel compile is single-threaded" >&2
+  echo "   under perm-pressure and exceeds ${DET_TIMEOUT_S}s, so the double-compile check" >&2
+  echo "   can't fire until that runtime is bounded. Override via DET_TIMEOUT_S)" >&2
   exit 2
 fi
 

@@ -585,15 +585,20 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-02; gates: `verify.sh` + `march-gate.sh`)
+## §7 · Current state (grounded 2026-07-04, HEAD 2456137; gates: `verify.sh` + `march-gate.sh`)
 
-> **GROUND IN REALITY FIRST — three commands, three purposes.** `bash
-> tools/verify.sh` is the FLOOR (seed builds + the 36-micro battery); `bash
-> tools/march-gate.sh` is the LIVE m2 rung scoreboard (compile→assemble→run→exit
-> per rung — the march iterates against IT); `bash tools/state.sh` adds census +
-> the m3==m4 fixpoint check (§8). Run verify + march-gate before any theory or
-> edit. Census is a SHADOW (the seed lagging the wheel), never enforced. Prose
-> drifts; artifacts do not. On a runtime bug the first move is a PROBE.
+> **GROUND IN REALITY FIRST — the commands and their purposes.** `bash
+> tools/verify.sh` is the FLOOR (seed builds + the micro battery — 34 `micro:`
+> lines in `verify-baseline.txt`, run through the SEED); `bash tools/march-gate.sh`
+> is the LIVE m2 rung scoreboard (compile→assemble→run→exit per rung — the march
+> iterates against IT), now **7 pass / 1 fail** (hof-map(+rt) the one open rung,
+> RUN exit=134 = the seam); `bash tools/march-gate.sh --micros` adds the
+> micros-through-m2 tier (every baseline micro compiled by the WHEEL's own emit —
+> a SCOREBOARD, first reading **0/34**: 32 at the exit-134 ev-scan floor, proving
+> the ONE seam gates the whole runtime-linked battery); `bash tools/state.sh`
+> adds census + the m3==m4 fixpoint check (§8). Run verify + march-gate before any
+> theory or edit. Census is a SHADOW (the seed lagging the wheel), never enforced.
+> Prose drifts; artifacts do not. On a runtime bug the first move is a PROBE.
 
 - **THE m2 MARCH (2026-07-01→02, 38c6835→e791bf3) — pass-2's road has
   pavement; `bash tools/march-gate.sh` IS the live rung scoreboard.** The
@@ -644,7 +649,7 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   the Float pins on the render predicates, and float_extract_digits
   NEVER WORKED — it minted the correct next value into `remainder` and
   DISCARDED it, recursing unbounded; fixed by carrying the bounded
-  scaled). float-gate=3 is the 35th micro; every remaining untypable
+  scaled). float-gate=3 is the 34th (last) micro; every remaining untypable
   f64 boundary is a LOUD censused floor (closure captures,
   Hβ.emit.f64-closure-capture-box). NO float fault remains anywhere on
   the rung path. **THE STDOUT-GARBAGE BLOCKER IS CLOSED (837948c,
@@ -661,7 +666,9 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   with-absorb loop was proven unreachable dead code re-deriving
   parse_resume_state_updates — deleted before commit, the ⟲ loop
   working as designed). **THE ULTIMATE-SYSTEM ARC (2026-07-03, f786f93 + 6cc5721 + da65f62 —
-  BOARD 6/2, pipe-hole(+rt)=15 the FIRST green runtime rung; handler /
+  BOARD 6/2 at the time, now 7/1: handler(+rt)=5 has since GREENED
+  (167d7f0/92cefe3), hof-map(+rt) the sole open +rt rung;
+  pipe-hole(+rt)=15 the FIRST green runtime rung; handler /
   hof-map now parse, infer, lower, emit, assemble, and RUN, trapping at
   runtime exit 134 — the deepest the +rt frontier has ever stood).**
   Eleven roots closed in one continuous dig, each pinned in the
@@ -743,8 +750,8 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   persist); `Hβ.types.resume-world-mismatch-value-gate` + `Hβ.infer.tcont-world-
   capture-at-reify` (cross-world boundary needs STEP 3's persist resume-catcher);
   `Hβ.eq.fold-seed-value-gate`. The m3==m4 fixed point stays blocked on the
-  pre-existing parse-path ev-slot seam (`fresh_ty ← mint_node ← parse_import`,
-  below) — UNTOUCHED by the value layer.
+  pre-existing effect-row→ev-slot seam (the raw-0 name-set element,
+  confirmed §7 below) — UNTOUCHED by the value layer.
 - **THE CURSOR — the ultimate-form arc (2026-06-22, all landed + pushed):**
   SYNTAX.md to ultimate form; PExpr dissolved into live operand nodes; the whole
   AST in the one graph (the fabric — `mint_node` edge-links every node's body at
@@ -832,7 +839,12 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   singleton-tier route (§5.3) is REFUTED for the multi-handler-op case
   (prelude has many Iterate handlers — no static pick); the two dead
   ends (naive var-chase, snapshot-at-generalize) still stand fenced.
-- **THE ROOT — `effects_of_row` drops the EfOpen row-var (lower.mn:528-621).** The
+- **PRIOR ROOT THESIS — `effects_of_row` drops the EfOpen row-var
+  (lower.mn:528-621).** (The EfOpen-var chase LANDED be2502e — the read reads
+  the var now; the CONFIRMED deeper root is the raw-0 name-set element, §7
+  header above. This entry is the mechanism history that led there, kept
+  because the two-consumer disagreement it documents is the shape the raw-0
+  detonates through.) The
   seam's two consumers must agree: `derive_ev_slots` (caller — PLACES evidence)
   reads the callee's type AT THE CALL SITE, where effects are often INLINE
   (post-instantiation); `lower_compute_ev_index_for_effect` (callee — READS its
@@ -908,13 +920,16 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 ```
 bash tools/state.sh            # seed build · wheel census · micro battery · FIXED-POINT m3==m4 (run FIRST)
 bash tools/state.sh --quick    # census + micros only (one wasmtime pass)
+bash tools/march-gate.sh       # the LIVE m2 rung scoreboard (7 pass / 1 fail; hof-map the open rung)
+bash tools/march-gate.sh --micros   # + micros-through-m2 (the wheel's own emit runs the battery — 0/34, the seam's blast radius)
 tools/faithful.sh <file.mn>    # proto-`mentl verify`: does mentl2 agree with the seed?
 tools/faithful.sh --wheel      # live L1 status   ·   --bisect: ddmin to the minimal failing file-set
 wat2wasm m2.wat -o m2.wasm --debug-names --enable-threads --enable-tail-call
 # WABT (per task) — EVERY tool needs --enable-tail-call --enable-threads or it chokes on
 # opcode 0x13 (return_call_indirect); with the flags ALL work on m2:  objdump -d (disasm,
-# the trap-pin workhorse) · -h (section sizes: Code ≈1.18MB/2532fn = the runaway-emit
-# baseline) · wasm-stats (opcode distribution — fat/runaway-emit diagnosis) · wasm2wat
+# the trap-pin workhorse) · -h (section sizes — the runaway-emit diagnostic;
+# read the live Code-section size, never a hard-coded number) · wasm-stats
+# (opcode distribution — fat/runaway-emit diagnosis) · wasm2wat
 # --fold-exprs (readable canonical WAT — NEVER the raw 12MB m2.wat) · wasm-validate · wasm-decompile (C-like)
 ```
 

@@ -1,27 +1,30 @@
 #!/usr/bin/env bash
-# bootstrap-survey.sh — per-file failure-shape categorization for BT.A.0.
+# bootstrap-survey.sh — per-file failure-shape categorization.
 #
-# Per docs/specs/simulations/BT-bootstrap-triage.md §11.4 BT.A.0 +
-# Hβ-bootstrap.md §13 step 3 (commit 95fdc3c).
+# RETIRED-ERA framing: this per-module VALIDATES survey predates the current
+# bootstrap reality, where the seed compiles the WHOLE wheel to m2 in one pass
+# and the live gate is the rung battery (tools/march-gate.sh), not a per-file
+# standalone-compile triage. The mechanism still works as an ad-hoc per-file
+# probe; the workflow it once drove (BT.A.0/A.1/A.2, link.py) is archaeology,
+# and link.py never landed.
 #
 # Runs the seed compiler (bootstrap/mentl.wasm) against each src/*.mn
 # + lib/**/*.mn file. Categorizes each file's failure shape:
 #
 #   VALIDATES        — output passes wat2wasm + wasm-validate cleanly;
-#                       module compiles standalone (1/15 per BT §1; verify.mn)
-#   PARSE-INCOMPLETE — output references undefined locals from import-as-
-#                       identifier handling (per BT §11.1 finding for graph.mn)
+#                       module compiles standalone
+#   PARSE-INCOMPLETE — output references undefined locals from import-
+#                       identifier handling
 #   WAT-MALFORMED    — wat2wasm rejects on syntactic grounds beyond imports
 #   CROSS-MODULE-REF — wat2wasm accepts; wasm-validate rejects on missing
-#                       function/symbol references to sibling modules (BT §1
-#                       stated failure shape; verify when reached)
+#                       function/symbol references to sibling modules
 #   STDIN-EMPTY-OUT  — seed produced no output (stdin issue or seed crash)
 #   SEED-CRASH       — wasmtime exited non-zero (seed itself trapped)
 #
 # Output: TSV summary on stdout — file<TAB>line_count<TAB>category<TAB>note
 #
-# Per BT §11.6: this script's output drives BT.A.1 substrate-extension
-# work — failure category by failure category.
+# The output is a per-file seed probe, read category by category; the live
+# gate over the whole wheel is the m2 rung battery (tools/march-gate.sh).
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -122,9 +125,7 @@ done
     fi
   done
   echo ""
-  echo "Per BT §11.4: each non-VALIDATES category drives a BT.A.1"
-  echo "substrate-extension sub-handle. PARSE-INCOMPLETE files block on"
-  echo "Hβ §1 parser conventions; CROSS-MODULE-REF files block on"
-  echo "BT.A.2 link.py; WAT-MALFORMED + SEED-CRASH need per-file"
-  echo "investigation."
+  echo "Each non-VALIDATES category is a per-file seed probe; the live gate"
+  echo "over the whole wheel is the m2 rung battery (tools/march-gate.sh),"
+  echo "not this standalone-compile survey."
 } >&2

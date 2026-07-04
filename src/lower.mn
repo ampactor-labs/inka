@@ -893,9 +893,9 @@ fn escaping_row(name) = match ls_escaping_of(name) {
 fn lambda_escaping_row(h) = match graph_node_body(h) {
   NExpr(LambdaExpr(_, body_node)) => {
     let (callees, handled) = flow_edges(body_node)
-    let own        = effects_of(lookup_ty(h))
+    let own_effs   = effects_of(lookup_ty(h))
     let propagated = flatten(map(escaping_row, set_canonicalize(callees)))
-    set_difference(set_canonicalize(own ++ propagated), set_canonicalize(handled))
+    set_difference(set_canonicalize(own_effs ++ propagated), set_canonicalize(handled))
   },
   _ => effects_of(lookup_ty(h))
 }
@@ -1076,9 +1076,9 @@ fn esc_assoc(map, name: String) =
 // One monotone round: each fn's row = (own ∪ ⋃ callee rows) − handled.
 fn escaping_round(bases, cur) =
   map((b) => {
-    let (name, own, callees, handled) = b
+    let (name, own_effs, callees, handled) = b
     let propagated = flatten(map((c) => assoc_row(cur, c), callees))
-    (name, set_difference(set_canonicalize(names_concat(own, propagated)), handled))
+    (name, set_difference(set_canonicalize(names_concat(own_effs, propagated)), handled))
   }, bases)
 
 fn rows_equal(a, b) =
@@ -1111,8 +1111,8 @@ fn escaping_fixpoint(bases, cur, iters) =
 fn compute_escaping_rows(stmts) = {
   let bases = collect_fn_bases(stmts)
   let seed = map((b) => {
-    let (name, own, _, handled) = b
-    (name, set_difference(set_canonicalize(own), handled))
+    let (name, own_effs, _, handled) = b
+    (name, set_difference(set_canonicalize(own_effs), handled))
   }, bases)
   escaping_fixpoint(bases, seed, 0)
 }
@@ -1672,8 +1672,8 @@ fn lower_pipe(kind, left, right, handle) = match kind {
   // Drift 1 closure: the handler chain IS the dispatch; no vtable. Drift
   // 5 closure: any per-thread state lives in the chosen handler's `with`,
   // never an ad-hoc parallel struct.
-  PFanout(own) =>
-    lower_fanout(handle, own, left, right),
+  PFanout(fan_own) =>
+    lower_fanout(handle, fan_own, left, right),
 
   PForward => {
     // `|>` is HOLE-COMPLETION (SYNTAX.md §«Partial application — the product
@@ -1890,7 +1890,7 @@ fn extract_handler_config_args(node) = {
 // each branch thunk to disk via persist_branch/join_persist for crash-
 // survivable parallel execution (§4④ — parallelism and durable execution are
 // the same arm). Each is a `~> handler` choice over the one pure-topology verb.
-fn lower_fanout(handle, own, left, right) = match own {
+fn lower_fanout(handle, fan_own, left, right) = match fan_own {
   FanDistribute => {
     let thunks = [ synthesize_branch_thunk(handle, "l", left),
                    synthesize_branch_thunk(handle, "r", right) ]
@@ -1928,7 +1928,11 @@ fn lower_fanout(handle, own, left, right) = match own {
 // checkpoints each branch thunk to disk (persist_branch/join_persist). All
 // read the SAME strategy-neutral thunks — only the collector differs.
 fn run_fanout_thunks(handle, thunks) = match lower_fanout_schedule() {
-  Seq    => LMakeTuple(handle, map((thunk) => LCall(handle, thunk, []), thunks)),
+  // Each inline invocation's identity is ITS THUNK's handle, never the
+  // shared fanout handle: an L-node's identity IS its graph handle, and
+  // two LCalls carrying the same handle minted the same $call_<h> scratch
+  // local twice (fanout-seq's redefinition at assemble).
+  Seq    => LMakeTuple(handle, map((thunk) => LCall(lexpr_handle(thunk), thunk, []), thunks)),
   Thread => {
     // Spawn ALL branches, THEN join ALL — true parallelism with
     // source-order collection (the spawn-join-each interleave
@@ -2008,7 +2012,9 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   let thunk_body = LCall(branch_h, lo_branch, [input_ref])
   let captures_exprs = [LLocal(input_h, input_local_name)]
   let fn_ir = LFn(thunk_name, 0, [], [thunk_body], EfPure, len(captures_exprs))
-  LMakeClosure(parent_handle, fn_ir, captures_exprs, [])
+  // The thunk's identity is ITS BRANCH's handle — N thunks sharing the
+  // parent's handle minted N identical scratch locals downstream.
+  LMakeClosure(branch_h, fn_ir, captures_exprs, [])
 }, enumerate(branch_nodes))
 
 // Branch-as-thunk synthesis. Mirrors LambdaExpr's lowering above —
@@ -2022,6 +2028,7 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
 // Drift 6 closure: same closure substrate — no special-case for
 // "compiler-synthesized" thunks vs. user-written ones.
 fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
+  let N(_, _, branch_h) = branch_node
   let thunk_name = "compose_{side_label}_{int_to_str(parent_handle)}"
   let free_names = collect_free_vars(branch_node, [])
   let (captures_names, captures_exprs, captures_handles) =
@@ -2039,7 +2046,9 @@ fn synthesize_branch_thunk(parent_handle, side_label, branch_node) = {
     EfPure,
     len(captures_exprs)   // closure fence = capture count
   )
-  LMakeClosure(parent_handle, fn_ir, captures_exprs, [])
+  // The thunk's identity is ITS BRANCH's handle (the l/r thunks sharing the
+  // fanout's handle minted the same $call_<h> scratch twice at invocation).
+  LMakeClosure(branch_h, fn_ir, captures_exprs, [])
 }
 
 // W6 — resolve a field's byte offset from the record's live type.

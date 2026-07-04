@@ -757,7 +757,7 @@ fn infer_expr(ref node) = {
       // same own-name. Non-branching verbs use the straight-through
       // infer-both-sides / then-infer_pipe pattern.
       match kind {
-        PFanout(own) => infer_fanout(own, left, right, handle, span),
+        PFanout(fan_own) => infer_fanout(fan_own, left, right, handle, span),
         PForward    => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) },
         PTee        => infer_pipe_tee(left, right, handle, span),
         PFeedback   => { infer_expr(left); infer_expr(right); infer_pipe(kind, left, right, handle, span) }
@@ -1299,7 +1299,7 @@ fn infer_pipe(kind, left, right, handle, span: ValidSpan) = {
 // `<|` surfaces E_OwnershipViolation and a shared input under `><`
 // fmt-canonicalizes to `<|`. Today the aspect is authored by the glyph;
 // ownership CHECKS coherence in that follow-up.
-fn infer_fanout(own, left, right, handle, span: ValidSpan) = match own {
+fn infer_fanout(fan_own, left, right, handle, span: ValidSpan) = match fan_own {
   FanDistribute => {
     branch_enter()
     infer_expr(left)

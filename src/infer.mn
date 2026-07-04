@@ -35,41 +35,45 @@ import types
 // it live and inf_add_row joins it). On scope exit, the accumulated row
 // binds to the handle via `graph_bind_row`. One write; no conflict.
 effect InferCtx {
-  inf_enter_fn(Int, Span) -> ()
-  inf_exit_fn() -> ()
+  inf_enter_fn(Int, Span, List) -> ()
+  inf_exit_fn() -> List
   inf_add_effect(EffName) -> ()
   inf_add_row(EffRow) -> ()
   inf_current_row() -> EffRow
-  inf_set_declared(List) -> ()
-  inf_declared_effs() -> List
   inf_enter_arm(Ty, Int) -> ()
   inf_exit_arm() -> ()
   inf_arm_tys() -> Option
 }
 
-handler infer_ctx with stack = [], declared = [], arm_stack = [] {
+handler infer_ctx with stack = [], arm_stack = [] {
   // stack = [InferFrame, ...] where each InferFrame is a record:
-  //   {accumulated_row: EffRow, fn_span: Span, row_handle: Int}
-  // declared = [(EffName, negated)] — the current FnStmt's annotation
+  //   {accumulated_row: EffRow, declared: List, fn_span: Span, row_handle: Int}
+  //   declared = [(EffName, negated)] — the fn's authored annotation, born
+  //   with the frame and returned by inf_exit_fn (nested fns get their own)
   // arm_stack = [(op_return_ty, handle_result_h), ...] — the typed-resume
   //   context (SUBSTRATE.md primitive #2): inside `op(args) => body` for
   //   `op : (P...) -> R` under a handler whose handle-result is S,
   //   `resume : R -> S`. ResumeExpr reads the top frame; a stack because
   //   handler decls nest inside arm bodies.
 
-  inf_enter_fn(h, fn_span) => {
-    let frame = {accumulated_row: EfPure, fn_span: fn_span, row_handle: h}
+  inf_enter_fn(h, fn_span, effs) => {
+    // The frame is BORN with its declaration: `effs` = the FnStmt's authored
+    // [(EffName, negated)] list (empty for lambdas / tee bodies / arm scopes).
+    // No ambient declared-scalar to clobber — a nested fn gets its own.
+    let frame = {accumulated_row: EfPure, declared: effs, fn_span: fn_span, row_handle: h}
     resume()
       with stack = stack ++ [frame]   // drift-audit: ignore — bounded-depth frame PUSH (one per fn nesting level, popped at exit; §9 push-at-END), not a loop accumulator
   },
 
   inf_exit_fn() => {
-    if len(stack) == 0 { resume() }
+    if len(stack) == 0 { resume([]) }
     else {
       let frame = last(stack)
       graph_bind_row(frame.row_handle, frame.accumulated_row,
         Located(frame.fn_span, Inferred("fn effect row")))
-      resume()
+      // The popped frame's declaration comes back to the closer — the
+      // enforcement site reads it from the resume value, no ambient read.
+      resume(frame.declared)
         with stack = drop_last(stack)
     }
   },
@@ -83,6 +87,7 @@ handler infer_ctx with stack = [], declared = [], arm_stack = [] {
       let extended = union_row(frame.accumulated_row, mk_ef_closed([name]))
       let updated = {
         accumulated_row: extended,
+        declared: frame.declared,
         fn_span: frame.fn_span,
         row_handle: frame.row_handle
       }
@@ -98,6 +103,7 @@ handler infer_ctx with stack = [], declared = [], arm_stack = [] {
       let extended = union_row(frame.accumulated_row, row)
       let updated = {
         accumulated_row: extended,
+        declared: frame.declared,
         fn_span: frame.fn_span,
         row_handle: frame.row_handle
       }
@@ -112,14 +118,6 @@ handler infer_ctx with stack = [], declared = [], arm_stack = [] {
       let frame = last(stack)
       resume(frame.accumulated_row)
     }
-  },
-
-  inf_set_declared(effs) => {
-    resume() with declared = effs
-  },
-
-  inf_declared_effs() => {
-    resume(declared)
   },
 
   inf_enter_arm(op_ret_ty, result_h) => {
@@ -223,9 +221,7 @@ fn infer_stmt(ref node) = {
     },
 
     NStmt(FnStmt(name, params, ret_ann, effs, body_node)) => {
-      inf_set_declared(effs)
-      infer_fn(name, params, body_node, ret_ann, handle, span)
-      inf_set_declared([])
+      infer_fn(name, params, body_node, ret_ann, effs, handle, span)
     },
 
     NStmt(TypeDefStmt(_, _)) => (),
@@ -262,7 +258,7 @@ fn infer_stmt(ref node) = {
 // Classic let-generalization: allocate fresh handles for params,
 // bind them in env, enter `InferCtx` for row accumulation, infer body,
 // exit (which binds the row), generalize, re-extend env with scheme.
-fn infer_fn(name, params, body_node, ret_ann, handle, span: ValidSpan) = {
+fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   env_scope_enter()
 
   let param_handles = mint_params(params, name)
@@ -286,10 +282,11 @@ fn infer_fn(name, params, body_node, ret_ann, handle, span: ValidSpan) = {
     }
   }
 
-  // Enter the row-accumulation scope and infer body.
-  inf_enter_fn(row_handle, span)
+  // Enter the row-accumulation scope and infer body. The frame is born with
+  // the authored declaration; the exit hands it back for enforcement below.
+  inf_enter_fn(row_handle, span, effs)
   infer_expr(body_node)
-  inf_exit_fn()
+  let declared_effs = inf_exit_fn()   // drift-audit: ignore — sequenced effectful handler-state read (the popped frame's declaration, consumed at the enforcement below)
 
   // Unify body's type with the declared return.
   let N(_, _, body_handle) = body_node
@@ -345,8 +342,8 @@ fn infer_fn(name, params, body_node, ret_ann, handle, span: ValidSpan) = {
   // declared row so callers see the API contract. If not, emit
   // E_EffectMismatch (body does more than the declaration admits).
   // The declared row IS the gate — row_subsumes is the proof engine.
-
-  let declared_effs = inf_declared_effs()   // drift-audit: ignore — sequenced effectful handler-state read (InferCtx)
+  // `declared_effs` arrived with inf_exit_fn's return above: the popped
+  // frame's own declaration, so a nested fn can never clobber this one's.
   if len(declared_effs) > 0 {
     // D3 — `with Pure` is absolute: body row must be EfPure (not
     // merely ⊆ some sugar row named Pure). When Pure appears
@@ -731,7 +728,7 @@ fn infer_expr(ref node) = {
       env_scope_enter()
       let param_handles = mint_params(params, "lambda")
       let row_handle = graph_fresh_row(Inferred("lambda effects"))
-      inf_enter_fn(row_handle, span)
+      inf_enter_fn(row_handle, span, [])
       infer_expr(body_node)
       inf_exit_fn()
       // CREATE-CAPTURES-EVIDENCE flow edge: a closure created here captures THIS
@@ -1088,7 +1085,7 @@ fn infer_call_saturated(args, fh, handle, span: ValidSpan, cname) = {
 // — without it map/each lose every effect performed in their arms.
 fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
   let body_row_h = graph_fresh_row(Inferred("~> body row"))
-  inf_enter_fn(body_row_h, span)
+  inf_enter_fn(body_row_h, span, [])
   infer_expr(left)
   inf_exit_fn()
 
@@ -3030,7 +3027,7 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   // body under this row scope routes every effect it performs (incl. a call
   // to a config arg `f`) into r_handle via inf_add_effect/inf_add_row. On
   // exit, r_handle binds to R — the row `~> h` adds to the caller.
-  inf_enter_fn(r_handle, span)
+  inf_enter_fn(r_handle, span, [])
   each((arm) => {
     env_scope_enter()
     bind_handler_config_params(config_tparams, hname)

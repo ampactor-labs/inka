@@ -532,7 +532,7 @@
   ;; subs recurse (their own PCon level marks their direct binders).
   (func $bind_pat_locals_ctor (param $name i32) (param $subs i32)
     (local $binding i32) (local $params i32) (local $n i32) (local $np i32)
-    (local $i i32) (local $sub i32) (local $pty i32)
+    (local $i i32) (local $sub i32) (local $pty i32) (local $sub_h i32)
     (local.set $params (i32.const 0))
     (local.set $binding (call $env_lookup_ctor (local.get $name)))
     (if (i32.ne (local.get $binding) (i32.const 0))
@@ -549,16 +549,66 @@
         (local.set $pty (i32.const 0))
         (if (i32.lt_u (local.get $i) (local.get $np))
           (then (local.set $pty
-                  (call $tparam_ty (call $list_index (local.get $params) (local.get $i))))))
-        (if (i32.and (i32.eq (call $tag_of (local.get $sub)) (i32.const 130))    ;; PVar
-                     (i32.eq (call $ty_tag (local.get $pty)) (i32.const 101)))   ;; TFloat
+                  (call $pty_canon_seq
+                    (call $tparam_ty (call $list_index (local.get $params) (local.get $i)))))))
+        (if (i32.eq (call $tag_of (local.get $sub)) (i32.const 130))             ;; PVar
           (then
-            (drop (call $ls_bind_local_f64 (i32.load offset=4 (local.get $sub))
-                    (i32.const 0) (i32.const 1))))
+            ;; Mint a live proof for the DECLARED payload type: the binder's
+            ;; LLocal carries this handle (lower_var_ref Lock #1), so the emit
+            ;; dispatches reach it via lookup_ty — BConcat's list/str pick and
+            ;; BEq's str_eq stop falling to the h=0 W_ConcatUnproven default.
+            ;; (union_row's `na ++ nb` emitted str_concat-on-lists: a 2-byte
+            ;; string whose fresh-zero bytes read back as a flat list holding
+            ;; element 0 — the m2 effect-row corruption, 2026-07-04.)
+            (local.set $sub_h (i32.const 0))
+            (if (i32.ne (local.get $pty) (i32.const 0))
+              (then
+                (local.set $sub_h (call $graph_fresh_ty (i32.const 0)))
+                (call $graph_bind (local.get $sub_h) (local.get $pty) (i32.const 0))))
+            (if (i32.eq (call $ty_tag (local.get $pty)) (i32.const 101))         ;; TFloat
+              (then
+                (drop (call $ls_bind_local_f64 (i32.load offset=4 (local.get $sub))
+                        (local.get $sub_h) (i32.const 1))))
+              (else
+                (drop (call $ls_bind_local (i32.load offset=4 (local.get $sub))
+                        (local.get $sub_h))))))
           (else
-            (call $bind_pat_locals (local.get $sub) (i32.const 0))))
+            (call $bind_pat_locals (local.get $sub) (local.get $pty))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $each))))
+
+  ;; $pty_canon_seq — canonicalize NAMED sequence types from ctor decls to
+  ;; their structural tags: the wheel spells `EfClosed(List)` / `ENamed(String)`
+  ;; by NAME, so the scheme carries TName (108) where the emit dispatches prove
+  ;; by tag (TList 105 / TString 102). One name-read at the bind; the dispatches
+  ;; stay tag-keyed. Everything else passes through untouched.
+  (func $pty_canon_seq (param $pty i32) (result i32)
+    (local $nm i32)
+    (if (i32.lt_u (local.get $pty) (global.get $heap_base))
+      (then (return (local.get $pty))))
+    (if (i32.ne (call $ty_tag (local.get $pty)) (i32.const 108))    ;; TName only
+      (then (return (local.get $pty))))
+    (if (i32.ne (call $len (call $record_get (local.get $pty) (i32.const 1)))
+                (i32.const 0))
+      (then (return (local.get $pty))))                             ;; args must be []
+    (local.set $nm (call $record_get (local.get $pty) (i32.const 0)))
+    ;; "List"
+    (if (i32.and (i32.eq (call $str_len (local.get $nm)) (i32.const 4))
+          (i32.and (i32.eq (call $byte_at (local.get $nm) (i32.const 0)) (i32.const 76))
+            (i32.and (i32.eq (call $byte_at (local.get $nm) (i32.const 1)) (i32.const 105))
+              (i32.and (i32.eq (call $byte_at (local.get $nm) (i32.const 2)) (i32.const 115))
+                       (i32.eq (call $byte_at (local.get $nm) (i32.const 3)) (i32.const 116))))))
+      (then (return (call $ty_make_tlist (i32.const 0)))))
+    ;; "String"
+    (if (i32.and (i32.eq (call $str_len (local.get $nm)) (i32.const 6))
+          (i32.and (i32.eq (call $byte_at (local.get $nm) (i32.const 0)) (i32.const 83))
+            (i32.and (i32.eq (call $byte_at (local.get $nm) (i32.const 1)) (i32.const 116))
+              (i32.and (i32.eq (call $byte_at (local.get $nm) (i32.const 2)) (i32.const 114))
+                (i32.and (i32.eq (call $byte_at (local.get $nm) (i32.const 3)) (i32.const 105))
+                  (i32.and (i32.eq (call $byte_at (local.get $nm) (i32.const 4)) (i32.const 110))
+                           (i32.eq (call $byte_at (local.get $nm) (i32.const 5)) (i32.const 103))))))))
+      (then (return (i32.const 102))))                              ;; TString sentinel
+    (local.get $pty))
 
   (func $bind_pat_locals (param $pat i32) (param $ty i32)
     (local $tag i32) (local $rest_opt i32) (local $rest_var i32) (local $strip i32)

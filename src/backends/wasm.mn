@@ -5207,7 +5207,14 @@ fn emit_match_arms(arms, w) = {
   if len(arms) == 0 {
     wat_emit("    (unreachable)\n")
   } else {
-    let (pat, body) = last(arms)
+    // FIRST-match-wins: the cascade tests arms in SOURCE order. The prior
+    // form recursed from last(arms) — the wrong-end class (§9, b93978f) at
+    // the emit layer: the LAST arm tested FIRST, so any match whose final
+    // arm is a wildcard collapsed to that arm's body alone (is_pure ≡
+    // false — effname-pure's 117; the wrong-value trio). Disjoint-ctor
+    // matches survived because their arm order is semantically free,
+    // which is how 28 micros stayed green over the inversion.
+    let (pat, body) = list_index(arms, 0)
     if pat_always_matches(pat) {
       emit_pat_binds(pat)
       emit_expr(body)
@@ -5219,7 +5226,7 @@ fn emit_match_arms(arms, w) = {
       emit_pat_binds(pat)
       emit_expr(body)
       wat_emit("      )\n      (else\n")
-      emit_match_arms(drop_last(arms), w)
+      emit_match_arms(rest(arms), w)
       wat_emit("      ))\n")
     }
   }

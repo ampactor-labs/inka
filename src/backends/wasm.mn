@@ -299,7 +299,7 @@ fn emit_module(lowered) = {
   // identical to the pre-show module, Law 7).
   emit_show_leaves(lowered)
   emit_init_lets(value_lets)
-  emit_start(top_fn_names, value_lets)
+  emit_start(top_fn_names, value_lets, main_param_count(lowered))
   emit_footer()
 }
 
@@ -1935,24 +1935,33 @@ fn lexpr_leaves_value(e) = match e {
   _                        => true
 }
 
-fn emit_start(top_fn_names, value_lets) = {
+// main's declared param count, read from the same records emit walks —
+// _start must supply every declared param or the call's type mismatches
+// (mn-ev2's `fn main(q)`: the hardwired $ft1 met a two-param main). A
+// parameterized main runs with zeroed args (the battery convention).
+fn main_param_count(lowered) =
+  fold(0, (acc, rec) => {
+    let (name, param_names, _, _) = rec
+    if name == "main" { len(param_names) } else { acc }
+  }, collect_fn_emit_records(lowered))
+
+fn emit_start(top_fn_names, value_lets, main_params) = {
   // Top-level closures are static data; top-level VALUE lets initialize
   // through $__init_lets, run FIRST in program order — before main's
   // invocation AND before a library-shape module's clean exit (effectful
-  // initializers still run). _start invokes main through its static
-  // closure when main exists.
+  // initializers still run). _start invokes main when main exists.
   wat_emit("  (func $_start\n")
   if len(value_lets) > 0 {
     wat_emit("    (call $__init_lets (i32.const 0))\n    (drop)\n")
   }
   if ls_find_str_local(top_fn_names, "main", 0) >= 0 {
-    // main exists → load $main static closure, push as __state, load
-    // fn_idx from offset 0, call_indirect. main's result IS the exit
-    // code (Unix vocabulary; the seed's _start and the whole micro
-    // battery key on it — the wheel mirrors, never drops).
-    wat_emit("    (global.get $main)\n")
-    wat_emit("    (global.get $main) (i32.load offset=0)\n")
-    wat_emit("    (call_indirect (type $ft1))\n")
+    // main is graph-known → DIRECT call (never virtualize a known
+    // operator): static closure as __state, one zeroed arg per declared
+    // param. main's result IS the exit code (Unix vocabulary; the seed's
+    // _start and the whole micro battery key on it — never dropped).
+    wat_emit("    (call $main (global.get $main)")
+    each((_) => wat_emit(" (i32.const 0)"), range(0, main_params))
+    wat_emit(")\n")
     wat_emit("    (call $proc_exit)\n")
   } else {
     // No main; the module is library-shape. Exit cleanly.

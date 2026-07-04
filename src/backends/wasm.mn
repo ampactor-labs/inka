@@ -5485,9 +5485,12 @@ fn emit_pat_binds_at(pat, path, path_len, val_repr) = match pat {
 fn emit_pat_subs_binds(subs, i, path, path_len, base) = {
   if len(subs) == 0 { () }
   else {
+    // Sub i pairs with slot i — the walker consumes from the FRONT. The
+    // prior last(subs)+i pairing gave the LAST sub index 0's offset:
+    // every multi-element pattern bound REVERSED (the wrong-end class).
     let extended = list_set(path, path_len, base + i * 4)
-    emit_pat_binds_at(last(subs), extended, path_len + 1, RI32)
-    emit_pat_subs_binds(drop_last(subs), i + 1, path, path_len, base)
+    emit_pat_binds_at(list_index(subs, 0), extended, path_len + 1, RI32)
+    emit_pat_subs_binds(rest(subs), i + 1, path, path_len, base)
   }
 }
 
@@ -5498,11 +5501,14 @@ fn emit_pat_subs_binds(subs, i, path, path_len, base) = {
 fn emit_pat_con_subs_binds(ptys, subs, i, path, path_len) = {
   if len(subs) == 0 { () }
   else {
+    // Sub i pairs with payload i (offset AND repr) — consume from the
+    // FRONT. The last(subs)+i pairing bound MkPair(a, b)'s a at b's slot
+    // and b at a's (compare-fold's 23: fst/snd swapped end to end).
     let pty = if i < len(ptys) { fold_strip(list_index(ptys, i)) } else { TVar(0) }
     let off = variant_payload_offset(ptys, i, 0, 4)
     let extended = list_set(path, path_len, off)
-    emit_pat_binds_at(last(subs), extended, path_len + 1, repr_of(pty))
-    emit_pat_con_subs_binds(ptys, drop_last(subs), i + 1, path, path_len)
+    emit_pat_binds_at(list_index(subs, 0), extended, path_len + 1, repr_of(pty))
+    emit_pat_con_subs_binds(ptys, rest(subs), i + 1, path, path_len)
   }
 }
 
@@ -5512,15 +5518,16 @@ fn emit_pat_con_subs_binds(ptys, subs, i, path, path_len) = {
 fn emit_pat_con_subs_predicate(ptys, subs, i, path, path_len) = {
   if len(subs) == 0 { () }
   else {
-    let sub_pat = last(subs)
+    // Sub i guards payload i — front-consumed, the binds walker's twin.
+    let sub_pat = list_index(subs, 0)
     if pat_always_matches(sub_pat) {
-      emit_pat_con_subs_predicate(ptys, drop_last(subs), i + 1, path, path_len)
+      emit_pat_con_subs_predicate(ptys, rest(subs), i + 1, path, path_len)
     } else {
       wat_emit("    (if (result i32)\n      (then\n")
       let off = variant_payload_offset(ptys, i, 0, 4)
       let extended = list_set(path, path_len, off)
       emit_pat_predicate_at(sub_pat, extended, path_len + 1)
-      emit_pat_con_subs_predicate(ptys, drop_last(subs), i + 1, path, path_len)
+      emit_pat_con_subs_predicate(ptys, rest(subs), i + 1, path, path_len)
       wat_emit("      )\n      (else (i32.const 0)))\n")
     }
   }

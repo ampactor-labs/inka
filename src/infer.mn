@@ -60,7 +60,7 @@ handler infer_ctx with stack = [], declared = [], arm_stack = [] {
   inf_enter_fn(h, fn_span) => {
     let frame = {accumulated_row: EfPure, fn_span: fn_span, row_handle: h}
     resume()
-      with stack = [frame] ++ stack
+      with stack = stack ++ [frame]   // drift-audit: ignore — bounded-depth frame PUSH (one per fn nesting level, popped at exit; §9 push-at-END), not a loop accumulator
   },
 
   inf_exit_fn() => {
@@ -87,7 +87,7 @@ handler infer_ctx with stack = [], declared = [], arm_stack = [] {
         row_handle: frame.row_handle
       }
       resume()
-        with stack = [updated] ++ drop_last(stack)
+        with stack = drop_last(stack) ++ [updated]   // drift-audit: ignore — top-frame REPLACE on a bounded-depth stack (§9 push-at-END), not a loop accumulator
     }
   },
 
@@ -102,7 +102,7 @@ handler infer_ctx with stack = [], declared = [], arm_stack = [] {
         row_handle: frame.row_handle
       }
       resume()
-        with stack = [updated] ++ drop_last(stack)
+        with stack = drop_last(stack) ++ [updated]   // drift-audit: ignore — top-frame REPLACE on a bounded-depth stack (§9 push-at-END), not a loop accumulator
     }
   },
 
@@ -123,7 +123,7 @@ handler infer_ctx with stack = [], declared = [], arm_stack = [] {
   },
 
   inf_enter_arm(op_ret_ty, result_h) => {
-    resume() with arm_stack = [(op_ret_ty, result_h)] ++ arm_stack
+    resume() with arm_stack = arm_stack ++ [(op_ret_ty, result_h)]   // drift-audit: ignore — bounded-depth arm-frame PUSH (§9 push-at-END), not a loop accumulator
   },
 
   inf_exit_arm() => {

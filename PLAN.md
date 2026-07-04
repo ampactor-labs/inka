@@ -858,16 +858,40 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
   RATCHETED in march-gate (h=0 must stay 0, fail-loud). verify 34/34;
   rungs 7/1 unchanged; micros-through-m2 STILL 0/34 — the conjunction
   law: the corruption root is closed, the EMPTY-ROW face stands alone.
-  **THE ACTIVE CURSOR — the infer_ctx NESTING DISCIPLINE (hypothesis
-  carrying a 3-edit test; the §9 wrong-end class IN THE WHEEL):**
-  `inf_enter_fn` / `inf_enter_arm` push at the FRONT (`[frame] ++
-  stack`) while `last`/`drop_last` and the add-arms' rebuilds
-  (`[updated] ++ drop_last(stack)`) work the END; third limb, `declared`
-  is a SCALAR nested fns overwrite. Depth-1 is coherent (why 7 rungs
-  pass); nesting scrambles — inner frames accumulate into outer, inner
-  rows come out EMPTY (hof-map's exact pin), and lambdas DO push frames
-  (infer.mn:32). The full arc from here: plans/noble-brewing-rose.md
-  (the gate-coupled line to first-light and through it).
+  **The nesting-discipline flips LANDED (the §9 wrong-end class in the
+  wheel, 4 sites: enter_fn/enter_arm pushed FRONT while last/drop_last
+  read END):** semantically forced, verified no-regression (rungs hold
+  7/1), measured INSUFFICIENT alone — micros stayed 0/34. Depth-1 was
+  coherent either way; the flip matters for nested inference (the
+  wheel's own lambdas at pass-2). Remaining limb SPECCED, not landed:
+  `declared` rides the frame — `inf_enter_fn(h, span, effs)` born-with
+  + `inf_exit_fn() -> List` returns the popped frame's declared;
+  BOTH ambient ops (inf_set_declared / inf_declared_effs) dissolve
+  (nested FnStmts currently wipe the outer's enforcement list via the
+  set_declared([]) bracket — silent enforcement skip).
+  **THE ACTIVE CURSOR — the 0/34 floor DECODED (2026-07-04, artifact-
+  read end to end): the WHEEL'S EMIT HAS NO CALLER-SIDE EVIDENCE
+  MECHANISM.** The exit-134s are the strict scan working as designed:
+  `ev_perform_entry` = `entry==0 → postmortem(key@0,base@4) → load(-8)`
+  — a genuine MISS every time, because m2-emitted callers call
+  effectful callees BARE (iterate → return_call iterate_from passing
+  the RAW $iterate_from global record; the scan walks record+8 for the
+  key = the INTERNED EFFECT-NAME ADDRESS, e.g. "Iterate"@65536, and
+  nobody ever wrote the pair). The SEED's working convention, decoded
+  at hm-seed.wat:4305: at each effectful call boundary the caller
+  CLONES the callee's record (alloc 8+12+ncap·4), copies fn_ptr/ncap/
+  captured_evs, APPENDS [key=intern_addr, entry=[hstate,base] record],
+  and passes the EXTENDED CLONE as __state — the sst_ family (48 sites
+  in the seed's emit of the hof-map source; 0 in m2's; `sst` absent
+  from src/lower.mn + src/backends/wasm.mn entirely). Rung `handler`
+  passes because Tier-1 (direct perform under the install, scoped
+  singleton) never needs the extension; EVERY Tier-2 micro converges
+  on this one absence. NOT a patch — a missing subsystem: the wheel
+  needs its evidence-passing call convention (lower derives the
+  callee's needed [ename→entry] set at the call site; emit extends).
+  Design-first: build it as ONE projection both consumers read (the
+  original two-consumer seam dissolves by construction). The full arc:
+  plans/noble-brewing-rose.md (phase 1's center).
 - **PRIOR ROOT THESIS — `effects_of_row` drops the EfOpen row-var
   (lower.mn:528-621).** (The EfOpen-var chase LANDED be2502e — the read reads
   the var now; the CONFIRMED deeper root is the raw-0 name-set element, §7

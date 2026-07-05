@@ -3586,8 +3586,13 @@ fn walk_refinement_list(nodes, path_pred) with GraphRead + GraphWrite = {
 fn walk_refinement_fields(fields, path_pred) with GraphRead + GraphWrite = {
   if len(fields) == 0 { () }
   else {
-    let field = last(fields)
-    walk_refinement(field.value, path_pred)
+    // A record-literal field is a (name, value) TUPLE (types.mn
+    // MakeRecordExpr — sorted at parse), not a record — destructure it.
+    // `.value` here was a field access on a tuple; the seed's weak
+    // inference passed it silently and m2 trapped at the first record
+    // literal under a refinement walk (the named record-literal face).
+    let (_, value) = last(fields)
+    walk_refinement(value, path_pred)
     walk_refinement_fields(drop_last(fields), path_pred)
   }
 }

@@ -44,11 +44,11 @@
 
 import types
 
-// Handle — opaque thread/task identity. Handler-held; consumers
-// don't decode the Int. Per primitive #5 ownership: each Handle
+// ThreadHandle — opaque thread/task identity. Handler-held; consumers
+// don't decode the Int. Per primitive #5 ownership: each ThreadHandle
 // is `own` to the spawn site; passed `ref` to join.
 
-type Handle = Handle(Int)
+type ThreadHandle = ThreadHandle(Int)
 
 // Thread — the spawn/join/identity effect. spawn launches a
 // task as a separate OS thread; join joins. current_id returns
@@ -60,8 +60,8 @@ type Handle = Handle(Int)
 // a different topology (race per HC2), not Thread.
 
 effect Thread {
-  spawn(task: () -> a) -> Handle
-  thread_join(handle: Handle) -> a
+  spawn(task: () -> a) -> ThreadHandle
+  thread_join(handle: ThreadHandle) -> a
   current_id() -> Int
   num_cores() -> Int
 }
@@ -113,7 +113,7 @@ type WaitResult
 // completion order — multi-core determinism by construction.
 //
 // Per drift mode 7 + kernel crystallization #9 (Records-Are-Handler-
-// State-Shape): threads is [Handle], NOT ([Int],
+// State-Shape): threads is [ThreadHandle], NOT ([Int],
 // [ThreadState]) parallel arrays.
 
 handler parallel_compose with threads = [] {
@@ -137,12 +137,12 @@ handler parallel_compose with threads = [] {
 handler sequential_compose with results = [] {
   spawn(task) => {
     let result = task()  // drift-audit: ignore — task() is effectful; result feeds the with-clause's push, not chain-position
-    let handle = Handle(len(results))
+    let handle = ThreadHandle(len(results))
     resume(handle) with results = push(results, result)
   },
 
   thread_join(handle) => {
-    let Handle(idx) = handle
+    let ThreadHandle(idx) = handle
     resume(list_index(results, idx))
   },
 
@@ -189,11 +189,11 @@ fn ffi_spawn(ref task) with WasiThreads = {
   // The closure already exists in the heap (LMakeClosure emitted it).
   // wasi_thread_spawn(closure_ptr) gives the host the closure pointer;
   // host invokes $thread_start(closure_ptr) on a fresh OS thread.
-  Handle(wasi_thread_spawn(closure_ptr))
+  ThreadHandle(wasi_thread_spawn(closure_ptr))
 }
 
 fn ffi_join(handle) with WasiThreads + SharedMemory = {
-  let Handle(closure_ptr) = handle
+  let ThreadHandle(closure_ptr) = handle
   // done_offset is layout-dependent: closure has 8 bytes header
   // (fn_idx + capture_count) + 4 * (captures+ev_slots) bytes; the
   // done_flag sits at the first slot past the captures region. Per
@@ -262,7 +262,7 @@ handler wasi_threads {
 // wasi_thread_spawn_intrinsic to the WASM-level $wasi_thread_spawn
 // import via emit-side recognition. Sentinel return keeps the
 // parallel_compose handler's ffi_spawn / ffi_join runtime-correct
-// under sequential dispatch (closure_ptr passes through as the Handle
+// under sequential dispatch (closure_ptr passes through as the ThreadHandle
 // payload; ffi_join's atomic-wait on closure_done_addr returns
 // immediately because no thread ever writes done=1 — single-thread
 // degraded mode produces correct results because each parallel branch
@@ -311,12 +311,12 @@ fn wasi_num_cores_intrinsic()                    with Pure = 1
 // Primitive #5 (Ownership) — thread-local bump_allocator per spawn
 // (TH §3); cross-thread data via Pack/Unpack bytes only (TH §4 —
 // no shared mutable memory between threads except via SharedMemory's
-// atomics + per-Handle ownership). Per kernel crystallization #8 —
+// atomics + per-ThreadHandle ownership). Per kernel crystallization #8 —
 // the heap has one story; per-thread heaps each go through
 // emit_alloc with thread-local bump_ptr.
 //
-// Primitive #6 (Refinement) — could refine `Handle where 0 <= self
-// < num_cores()` post-first-light; V1 leaves Handle opaque.
+// Primitive #6 (Refinement) — could refine `ThreadHandle where 0 <= self
+// < num_cores()` post-first-light; V1 leaves ThreadHandle opaque.
 //
 // Primitive #7 (Annotation gradient) — `~> parallel_compose`
 // unlocks CParallelize capability; Mentl Teach surfaces when
@@ -335,7 +335,7 @@ fn wasi_num_cores_intrinsic()                    with Pure = 1
 //   threading IS the effect; handlers compose. Per drift mode 24 —
 //   concurrent execution is an effect, not a keyword.
 // - Class-based threads (drift mode 21 — OOP / Python class).
-//   Thread is an effect; Handle is an opaque ADT; no `class
+//   Thread is an effect; ThreadHandle is an opaque ADT; no `class
 //   Thread { ... }`.
 // - Shared-mutable-state-by-default (Rust's Send/Sync trait reach,
 //   Java's synchronized). SharedMemory is OPT-IN via row;
@@ -345,7 +345,7 @@ fn wasi_num_cores_intrinsic()                    with Pure = 1
 // - String-keyed RmwOp dispatch (drift mode 3). ADT-discriminated
 //   per primitive #4 row algebra discipline.
 // - Per-thread state via parallel arrays (drift mode 7). threads
-//   is [Handle]; per-Handle state lives in the runtime's
+//   is [ThreadHandle]; per-ThreadHandle state lives in the runtime's
 //   thread-local-storage substrate (per TH §3).
 // - Foreign-language drift — NOT Goroutines (Go's syntax-level
 //   construct); NOT Java's synchronized; NOT Python's threading.

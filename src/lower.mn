@@ -1479,6 +1479,14 @@ fn lower_expr_body(e, handle, span) = match e {
         } else { match env_kind_of(name) {
         Some(ConstructorScheme(tag_id, _)) =>
           LMakeVariant(handle, tag_id, lo_args),
+        Some(RecordSchemeKind(_)) =>
+          // Nominal-record CALL-form construction `Pri({...})`: the runtime
+          // representation IS the bare record (NamedRecordExpr's own arm
+          // lowers to LMakeRecord — type identity is type-system-only, no
+          // tag). The single argument already IS that record; the wrapper
+          // is the identity at this layer. Arity is the infer gate's
+          // business (the ctor-pattern arrow view unifies one param).
+          list_index(lo_args, 0),
         Some(EffectOpScheme(_)) =>
           // Row-guided dispatch per SUBSTRATE.md §"Three Tiers of
           // Effect Compilation". The row IS the evidence contract:
@@ -2095,7 +2103,7 @@ fn field_byte_offset_acc(fields, target, i, n, acc) = {
   if i >= n { -1 }   // field absent — unprovable offset, NOT a silent 0
   else {
     let (name, ty) = list_index(fields, i)
-    if name == target { align_for(acc, repr_of(ty)) }
+    if field_name_eq(name, target) { align_for(acc, repr_of(ty)) }
     else {
       let here = align_for(acc, repr_of(ty))
       field_byte_offset_acc(fields, target, i + 1, n,
@@ -2434,11 +2442,17 @@ fn lower_pat(pat) = match pat {
     // on the int tag without re-walking the env. A name without an
     // env entry (already a missing-var diagnostic from infer) gets
     // tag = -1; emit treats that arm as never-match.
-    let tag = match env_kind_of(name) {
-      Some(ConstructorScheme(t, _)) => t,
-      _                             => -1
+    match env_kind_of(name) {
+      Some(ConstructorScheme(t, _)) => LPCon(name, t, lower_pats(sub)),
+      Some(RecordSchemeKind(_)) =>
+        // Nominal-record pattern `Pri(pa)`: the runtime value IS the bare
+        // record (no tag word) — the ctor wrapper is the identity in
+        // pattern position exactly as in construction (the call-form arm
+        // above). The single sub-pattern matches the scrutinee itself:
+        // always-match, no tag test, the record layout untouched.
+        lower_pat(list_index(sub, 0)),
+      _ => LPCon(name, -1, lower_pats(sub))
     }
-    LPCon(name, tag, lower_pats(sub))
   },
   PTuple(sub)      => LPTuple(lower_pat_tuple_uniform(sub, 0)),
   PList(sub, rest) => LPList(lower_pats(sub), rest),

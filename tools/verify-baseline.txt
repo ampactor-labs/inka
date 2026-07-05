@@ -335,3 +335,4 @@ micro:lambda-evrow=79
 micro:float-gate=3
 micro:negation-declared=42
 micro:let-handle=37
+micro:nominal-ctor=42

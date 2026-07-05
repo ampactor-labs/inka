@@ -81,6 +81,15 @@ fn field_insert(ref sorted, ref name: String, ref ty) with !Mutate = {
   }
 }
 
+// Field-NAME equality with the String proof pinned at the boundary. The
+// bare `==` on two tuple-destructured names carries no type proof through
+// the seed's weak inference, so it emitted POINTER-eq — decl-pass-interned
+// "tier" never matched literal-pass-interned "tier", and byte-identical
+// records refused to unify ({ w, tier } vs { w, tier }, the rp2 pin).
+// One home for the compare; every record-field walk routes through it.
+// Dissolves with band D (== reads the operand proof at the eq-fold).
+fn field_name_eq(a: String, b: String) with Pure = a == b
+
 fn field_find_pos(ref sorted, ref name, i, n) with !Mutate = {
   if i >= n { n }
   else {

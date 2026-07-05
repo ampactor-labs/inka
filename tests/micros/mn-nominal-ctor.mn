@@ -1,0 +1,11 @@
+type Pri = Pri({tier: Int, w: Int})
+
+fn cmp(a, b) with Pure = {
+  let Pri(pa) = a
+  let Pri(pb) = b
+  if pa.tier != pb.tier { pa.tier + pb.w } else { pa.w + pb.w }
+}
+
+fn main() = {
+  cmp(Pri({tier: 30, w: 5}), Pri({tier: 7, w: 12}))
+}

@@ -1660,7 +1660,7 @@ fn unify_record_fields_loop(fa, fb, i, n, span: ValidSpan, reason) = {
   else {
     let (na, ta) = list_index(fa, i)
     let (nb, tb) = list_index(fb, i)
-    if na == nb {
+    if field_name_eq(na, nb) {
       unify_types(ta, tb, span, reason)
       unify_record_fields_loop(fa, fb, i + 1, n, span, reason)
     } else {
@@ -1779,7 +1779,7 @@ fn find_record_field_pos_loop(fields, name: String, i, n) = {
   if i >= n { -1 }
   else {
     let (existing, _) = list_index(fields, i)
-    if existing == name { i }
+    if field_name_eq(existing, name) { i }
     else { find_record_field_pos_loop(fields, name, i + 1, n) }
   }
 }
@@ -1873,7 +1873,7 @@ fn check_nominal_record_loop(declared, provided, type_name, span: ValidSpan, i, 
   } else {
     let (dn, dt) = list_index(declared, i)
     let (pn, pv) = list_index(provided, j)
-    if dn == pn {
+    if field_name_eq(dn, pn) {
       let N(_, _, vh) = pv
       let expect_h = mint(Inferred("record field type"))
       graph_bind(expect_h, dt,
@@ -2049,11 +2049,26 @@ fn infer_pat(ref pat, handle, span: ValidSpan) = match pat {
         //   nullary  → TName(type_name, args)         — bind scrutinee to it
         //   fielded  → TFun(params, TName(...), Pure) — bind scrutinee to RETURN,
         //                                                 sub_pats to PARAMS.
+        // A nominal record's entry (RecordSchemeKind) binds the bare TName —
+        // the construction view for `Pri{...}` literals, no arrow. Its
+        // ctor-PATTERN view is the single-field arrow
+        // `Pri : TRecord(declared) → TName`: rebuild the arrow AROUND the
+        // scheme's body so ONE instantiate substitutes both halves, and the
+        // shared TFun path below binds scrutinee + the sub-pattern. (The
+        // seed's kind-132 arm has read this view since the m2 march; the
+        // wheel lagged its own seed — every `let Pri(pa) = a` lost pa.)
         // FnScheme bindings reaching here are user-level matches on a
         // plain function value — degenerate but harmless; bind the
         // scrutinee to the looked-up type and skip sub-pat plumbing.
-        let (scheme, reason, _kind) = entry
-        let ty = instantiate(scheme)
+        let (scheme, reason, kind) = entry
+        let ty = match kind {
+          RecordSchemeKind(declared_fields) => {
+            let Forall(q, body) = scheme
+            instantiate(Forall(q,
+              TFun(build_ctor_params([TRecord(declared_fields)], 0), body, EfPure)))
+          },
+          _ => instantiate(scheme)
+        }
         match ty {
           TFun(params, ret_ty, _row) => {
             graph_bind(handle, ret_ty,

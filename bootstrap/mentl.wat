@@ -39592,15 +39592,18 @@
     (call $emit_byte (i32.const 34))
     (call $emit_close)
     (call $emit_space)
-    (call $emit_int (i32.const 32768))  ;; 32768 pages × 64KB = 2GB — the
-                                         ;; wheel's own memory convention
-                                         ;; (src/backends/wasm.mn emits
-                                         ;; 32768 for m3). The prior 8192
-                                         ;; (512MB) was sized to an older,
-                                         ;; smaller wheel: pass-2 on the
-                                         ;; completed wheel bump-allocated
-                                         ;; past 0x20000000 and faulted at
-                                         ;; the memory boundary mid-infer.
+    (call $emit_int (i32.const 65536))  ;; 65536 pages × 64KB = 4GB — the
+                                         ;; wasm32 ceiling, all of it. The
+                                         ;; monotonic bump allocator never
+                                         ;; frees, and pass-2 on the
+                                         ;; completed wheel burned through
+                                         ;; 512MB (fault at 0x20000000) and
+                                         ;; then 2GB (fault at 0x80000000)
+                                         ;; mid-compile. The allocation
+                                         ;; PROFILE is the named face
+                                         ;; (Hβ.m2.compile-alloc-profile);
+                                         ;; the ceiling stops being part
+                                         ;; of the question.
     (call $emit_close)
     (call $emit_nl)
 

@@ -1157,6 +1157,20 @@ wat2wasm m2.wat -o m2.wasm --debug-names --enable-threads --enable-tail-call
 # --fold-exprs (readable canonical WAT — NEVER the raw 12MB m2.wat) · wasm-validate · wasm-decompile (C-like)
 ```
 
+**Modern toolkit (2026-07-05, measured):** `wasmtime --profile=guest` writes a
+Firefox-profiler JSON with per-fn guest time (name-section names — the
+alloc-profile band's measurement; incompatible with `--allow-precompiled`,
+profile the plain module). `wasmtime compile` (AOT → .cwasm, run with
+`--allow-precompiled`) removes the ~seconds-per-invocation JIT cost — worth it
+for the 37-invocation micro battery, required for fair guest-speed timing.
+`wasm-opt -O2 -all` was MEASURED A 4% REGRESSION on real guest work (82.7s vs
+86.0s AOT on a 2k-line slice): the wheel's cost is ALGORITHMIC (bump-image
+allocation churn, linear scans), not instruction slop — wasm-opt stays OUT of
+the march loop (module-size hygiene only: −41%). `wasm-tools` (1.252+, the
+maintained WABT successor) adds `shrink` (predicate-driven module reduction —
+the seed-miscompile pinning tool) and `validate --features all`; WABT's
+objdump/wasm2wat remain fine with the tail-call/threads flags.
+
 `.build/` (luks-backed) holds intermediates, not the 6 GB tmpfs (the `TMPDIR`
 fix stops EDQUOT). Tooling can lie: a diagnostic's NAME can lie (instrument the
 actual emit site); diagnostics print to STDERR not the wat; verify before

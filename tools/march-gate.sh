@@ -60,6 +60,11 @@ if [ "$DO_BUILD" = 1 ]; then
   bash tools/probe.sh m2 | tail -2 || exit 1
 fi
 [ -f "$OUT/m2.wasm" ] || { echo "✗ no m2.wasm — run without --no-build"; exit 1; }
+# GATE_WASM: the compiler-under-test. Default m2 (seed-sparked wheel); point it
+# at an assembled m3 to run the SAME rung+micro battery through the wheel's own
+# child — the phase-3 correctness half (a buggy compiler self-reproduces to a
+# WRONG fixpoint, so diff-empty alone proves nothing; PLAN §6).
+GATE_WASM="${GATE_WASM:-$OUT/m2.wasm}"
 
 # Ratchet (2026-07-04): the h=0 concat class is CLOSED — the str_concat-on-lists
 # root (union_row's match binders) died with the seed's ctor-payload proof
@@ -82,7 +87,7 @@ pass=0; fail=0
 rung() {
   local name="$1" want="$2" src="$G/$1.mn"
   cat > "$src"
-  "$WT" run "${WT_RUN_FLAGS[@]}" "$OUT/m2.wasm" < "$src" > "$G/$1.wat" 2> "$G/$1.err"
+  "$WT" run "${WT_RUN_FLAGS[@]}" "$GATE_WASM" < "$src" > "$G/$1.wat" 2> "$G/$1.err"
   local rc=$?
   if [ $rc -ne 0 ]; then
     echo "✗ $name: m2 COMPILE trap=$(grep -m1 -oE '!\S+' "$G/$1.err" | head -1) (backtrace: $G/$1.err)"
@@ -133,7 +138,7 @@ EOF
 rungrt() {
   local name="$1" want="$2" src="$G/$1.mn"
   { cat $RT; cat; } > "$src"
-  "$WT" run "${WT_RUN_FLAGS[@]}" "$OUT/m2.wasm" < "$src" > "$G/$1.wat" 2> "$G/$1.err"
+  "$WT" run "${WT_RUN_FLAGS[@]}" "$GATE_WASM" < "$src" > "$G/$1.wat" 2> "$G/$1.err"
   local rc=$?
   if [ $rc -ne 0 ]; then
     echo "✗ $name(+rt): m2 COMPILE trap=$(grep -m1 -oE '!\S+' "$G/$1.err" | head -1)"
@@ -189,7 +194,7 @@ if [ "$DO_MICROS" = 1 ]; then
     fi
     src="$G/micro-$m.mn"
     { cat $RT; cat "$mf"; } > "$src"
-    "$WT" run "${WT_RUN_FLAGS[@]}" "$OUT/m2.wasm" < "$src" > "$G/micro-$m.wat" 2> "$G/micro-$m.err"
+    "$WT" run "${WT_RUN_FLAGS[@]}" "$GATE_WASM" < "$src" > "$G/micro-$m.wat" 2> "$G/micro-$m.err"
     rc=$?
     if [ $rc -ne 0 ]; then
       echo "✗ micro $m: m2 COMPILE trap=$(grep -m1 -oE '!\S+' "$G/micro-$m.err" | head -1)"

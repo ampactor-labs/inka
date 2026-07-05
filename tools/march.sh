@@ -34,7 +34,7 @@ trap_lines() { grep -nE 'out of bounds|wasm trap|undefined element|unreachable|o
 # ~300 wheel-lines/min, ~19MB/min; the profile is Hβ.m2.compile-alloc-profile,
 # instantiate tree-clones the prime suspect). The old 480s cap predates the
 # union_row-divergence fix, when every long run meant the infinite loop.
-gen() { timeout 9000 "$WT" run "${WT_RUN_FLAGS[@]}" "$1" < "$WHEEL" > "$2" 2> "$3"; }  # gen <wasm> <out.wat> <out.err>
+gen() { timeout 9000 "$WT" run -D coredump="$OUT/$(basename "$2" .wat).coredump" "${WT_RUN_FLAGS[@]}" "$1" < "$WHEEL" > "$2" 2> "$3"; }  # coredump: one trap buys the whole heap autopsy (face 7 lesson)  # gen <wasm> <out.wat> <out.err>
 
 # WABT disassembly, cached on the wasm's mtime (objdump on 1.7MB is slow; the
 # 500k-line dump is reused across runs until m2.wasm is rebuilt). PLAN §8: pin the

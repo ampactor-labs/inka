@@ -333,3 +333,4 @@ micro:lambda-evrow=79
 # m2-lead peer — it traps through the seed, needing the wheel's f64 call
 # convention (Hβ.seed.float-gradient).
 micro:float-gate=3
+micro:negation-declared=42

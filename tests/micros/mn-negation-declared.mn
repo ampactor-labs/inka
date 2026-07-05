@@ -1,0 +1,6 @@
+effect CurX { cx() -> Int }
+effect IcX { ix() -> Int }
+
+fn victim(v) with CurX + IcX + !Mutate = v + 1
+
+fn main() = victim(41)

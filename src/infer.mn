@@ -353,9 +353,7 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
     // single warning surfaces them precisely in the contradiction
     // diagnostic).
     let has_pure = has_pure_declared(declared_effs)
-    let declared_row =
-      if has_pure { EfPure }
-      else        { build_declared_row(declared_effs) }
+    let declared_row = build_declared_row(declared_effs)
     let bound = graph_chase(row_handle)
     match bound {
       GNode(NRowBound(body_row), _) => {
@@ -371,7 +369,17 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
           else {
             report(TOverDeclared(declared_row, body_row, name, span))
           }
-          graph_bind_row(row_handle, declared_row,
+          // Publish: a positive declared row IS the API contract callers
+          // read (evidence threads from its names). A negation-bearing row
+          // (solo `with !N`) is a GATE, not a callee row — publishing ¬N
+          // would union near-universe into every caller's accumulation.
+          // The published truth is the meet the gate just proved:
+          // body ∩ ¬N (= the body row with N provably absent).
+          let published = match declared_row {
+            EfNeg(_) => normalize_inter(body_row, declared_row),
+            _        => declared_row
+          }
+          graph_bind_row(row_handle, published,
             Located(span, Declared(name)))
         } else {
           if has_pure {
@@ -424,30 +432,41 @@ fn call_is_alloc_returning(func) = {
 // Positive-form peer: Hβ.infer.region-on-tee-alloc-absorb. Until then the
 // region effect + own.mn handler stand as dormant capability surface.
 
-// Build an `EffRow` from a declared `(name, negated)` list. Negated
-// names produce `EfNeg(EfClosed([name]))` and compose with intersection;
-// positive names union. Normalization reduces to canonical form.
-// Fold the parsed surface effect terms — each (EffName, negated, EConn)
-// — into one EffRow, applying each term's connective via the existing
-// effects.mn Boolean algebra (union_row / diff_row / inter_row). The
-// parser named the topology (`+ - &`) and the per-term negation (`!`);
-// here the row is BUILT by reading that algebra live, never re-derived.
-// The accumulator starts at EfPure (the union identity); the first
-// term carries EcUnion so `acc = Pure ∪ term = term`.
-fn build_declared_row(effs) =
-  fold(EfPure, (acc, eff) => {
+// Build an `EffRow` from the authored effect terms — each (EffName,
+// negated, EConn). The with-clause is a SIGNED SET, not a running union:
+// positive terms name what the body may perform (composed by the authored
+// connective via the effects.mn algebra); negated terms name what it
+// provably must NOT (one forbidden set — complements compose by
+// intersection). The row is their meet:
+//
+//   P only       → Closed[P]
+//   !N only      → ¬Closed[N]                       (the universe-minus stance)
+//   P + !N mixed → Closed[P] ∩ ¬Closed[N] = Closed[P ∖ N]
+//
+// A raw union would collapse `Cursor + IC + !Mutate` to ¬Mutate — set-true
+// but contract-false: the positives ARE the published API (callers thread
+// evidence from them); the negation is the GATE. An authored `Pure` is
+// absolute (D3) and dominates the clause at every caller, not only those
+// that pre-check has_pure_declared. A name both admitted and forbidden
+// drops out of the meet, so the body's own perform fails the subsumption
+// gate LOUDLY (E_EffectMismatch) — never a silent contradiction.
+fn build_declared_row(effs) = {
+  let (pos, neg_names, saw_pure) = fold((EfPure, [], false), (acc, eff) => {
+    let (pos, negs, saw) = acc
     let (name, negated, conn) = eff
-    // `Pure` is the union identity (SYNTAX.md: `with Pure + IO`
-    // simplifies to `with IO`) — its term IS EfPure, so a `+ Pure`
-    // adds nothing and `acc` is preserved by union_row. This keeps
-    // build_declared_row correct at every caller, not only those that
-    // pre-check has_pure_declared.
-    let term =
-      if is_pure_eff_name(name) { EfPure }
-      else if negated           { neg_row(mk_ef_closed([name])) }
-      else                      { mk_ef_closed([name]) }
-    apply_connective(conn, acc, term)
+    if is_pure_eff_name(name) { (pos, negs, true) }
+    else if negated           { (pos, negs ++ [name], saw) }   // drift-audit: ignore — bounded by the authored clause length, not a loop accumulator
+    else                      { (apply_connective(conn, pos, mk_ef_closed([name])), negs, saw) }
   }, effs)
+  if saw_pure { EfPure }
+  else if len(neg_names) == 0 { pos }
+  else {
+    match pos {
+      EfPure => neg_row(closed_or_pure(sort_unique(neg_names))),
+      _      => normalize_inter(pos, EfNeg(closed_or_pure(sort_unique(neg_names))))
+    }
+  }
+}
 
 fn is_pure_eff_name(name) = match name {
   EPure => true,

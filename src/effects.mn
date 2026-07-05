@@ -205,7 +205,19 @@ fn row_without_self(row, self_h) with !Mutate = match resolve_row(row) {
   other            => other
 }
 
-// Union row (`+`): E + F = the row of all effects in E or F.
+// Union row (`+`): E + F = the row of all effects in E or F. TOTAL over the
+// six row forms — negation IS a normal form (¬X survives normalize_row), so
+// the old "normalize b and retry" arms re-entered themselves forever on any
+// Closed ∪ Neg pair: the pass-2 512MB/2GB OOB deaths and the 4GB
+// wrapped-allocator `unreachable` were ONE loop here, detonating at the
+// wheel's first mixed declared row (`Cursor + IC + !Mutate`). Every arm now
+// REDUCES: Sub rewrites once by De Morgan, Inter distributes over strictly
+// smaller operands, Neg meets its unions in closed form:
+//
+//   Closed[a] ∪ ¬X = ¬(X ∖ a)            (the complement absorbs the names)
+//   ¬X ∪ ¬Y        = ¬(X ∩ Y)
+//   c ∪ (P ∩ Q)    = (c ∪ P) ∩ (c ∪ Q)   (distribute, then re-reduce)
+//   c ∪ (P − Q)    = (c ∪ P) ∩ (c ∪ ¬Q)  (De Morgan, then distribute)
 fn union_row(ref a, ref b) with !Mutate = {
   match a {
     EfPure => b,
@@ -220,10 +232,15 @@ fn union_row(ref a, ref b) with !Mutate = {
           na ++ nb
             |> sort_unique
             |> (merged) => EfOpen(merged, v),
-        _ =>
-          b
-            |> normalize_row
-            |> union_row(??, a)
+        EfNeg(x) => neg_minus_names(x, na),
+        EfSub(p, q) =>
+          a
+            |> union_row(??, neg_row(q))
+            |> normalize_inter(??, union_row(a, p)),
+        EfInter(p, q) =>
+          a
+            |> union_row(??, q)
+            |> normalize_inter(??, union_row(a, p))
       },
     EfOpen(na, va) =>
       match b {
@@ -236,15 +253,55 @@ fn union_row(ref a, ref b) with !Mutate = {
           na ++ nb
             |> sort_unique
             |> (merged) => EfOpen(merged, va),
-        _ =>
-          b
-            |> normalize_row
-            |> union_row(??, a)
+        EfNeg(x) => neg_minus_names(x, na),
+        EfSub(p, q) =>
+          a
+            |> union_row(??, neg_row(q))
+            |> normalize_inter(??, union_row(a, p)),
+        EfInter(p, q) =>
+          a
+            |> union_row(??, q)
+            |> normalize_inter(??, union_row(a, p))
       },
-    _ =>
+    EfNeg(x) =>
+      match b {
+        EfPure => a,
+        EfClosed(nb) => neg_minus_names(x, nb),
+        EfOpen(nb, _) => neg_minus_names(x, nb),
+        EfNeg(y) => EfNeg(normalize_inter(normalize_row(x), normalize_row(y))),
+        EfSub(p, q) =>
+          a
+            |> union_row(??, neg_row(q))
+            |> normalize_inter(??, union_row(a, p)),
+        EfInter(p, q) =>
+          a
+            |> union_row(??, q)
+            |> normalize_inter(??, union_row(a, p))
+      },
+    EfSub(_, _) =>
       a
         |> normalize_row
-        |> (na) => union_row(na, b)
+        |> union_row(??, b),
+    EfInter(p, q) =>
+      p
+        |> union_row(??, b)
+        |> normalize_inter(??, union_row(q, b))
+  }
+}
+
+// ¬X ∪ names = ¬(X ∖ names): names already admitted leave the forbidden set;
+// an empty remainder is ¬Pure (the universe — {IO} ∪ !IO admits everything).
+// A non-closed X keeps its whole ban: dropping admitted names from an open
+// forbidden set would shrink the ban unsoundly, and the conservative form
+// only ever makes the subsumption gate LOUDER. An open ADMITTED tail under
+// negation likewise takes its least solution here — the band-A world-index
+// owns the refined form (PLAN §5.R).
+fn neg_minus_names(ref x, ref names) with !Mutate = {
+  match normalize_row(x) {
+    EfPure => EfNeg(EfPure),
+    EfClosed(nx) =>
+      EfNeg(closed_or_pure(list_diff_str(nx, names))),
+    other => EfNeg(other)
   }
 }
 

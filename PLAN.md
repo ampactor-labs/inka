@@ -585,7 +585,51 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-04 night, HEAD dc62df4 — **march-gate 8/8 AND micros-through-m2 34/34: the FULL battery green through the wheel's own emit**; gates: `verify.sh` + `march-gate.sh`)
+## §7 · Current state (grounded 2026-07-05, HEAD dc62df4+ — **march-gate 8/8 AND micros-through-m2 35/35**; gates: `verify.sh` + `march-gate.sh`)
+
+> **THE UNION_ROW DIVERGENCE CLOSED (2026-07-05) — pass-2's three
+> memory-ceiling deaths were ONE infinite loop.** union_row's `_ =>` arms
+> normalize-and-retried on the assumption normalization yields
+> Pure/Closed/Open — but ¬X IS a normal form, so `Closed ∪ Neg` re-entered
+> itself forever, allocating per cycle (sort_unique copies + fresh EfNeg
+> mints) in the never-freeing bump image: 512MB OOB, 2GB OOB, and at 4GB the
+> bump pointer WRAPPED past 2^32, minting sub-4096 "records" →
+> normalize_row's exhaustive-match floor (`unreachable`). Detonated at the
+> wheel's FIRST mixed declared row (cursor_ic_fixpoint,
+> `with Cursor + IC + !Mutate`, input line ~6014 of 35687 — solo-neg rows
+> never touch the path via the `EfPure => b` arm, which is why 34 micros and
+> 8 rungs never saw it; mn-negation-declared=42 is the 35th micro, the
+> ratchet). THREE CUTS, one band: (1) **union_row TOTAL over the six row
+> forms** — `Closed[a] ∪ ¬X = ¬(X∖a)` (neg_minus_names), `¬X ∪ ¬Y = ¬(X∩Y)`,
+> union DISTRIBUTES over Inter (`c ∪ (P∩Q) = (c∪P) ∩ (c∪Q)`), Sub reduces
+> once by De Morgan; the surrender arms deleted. (2) **build_declared_row is
+> a SIGNED SET** — positives compose by the authored connective, negations
+> pool into ONE forbidden set; mixed = `Closed[P] ∩ ¬Closed[N] = Closed[P∖N]`
+> via normalize_inter, so the positives SURVIVE for evidence threading (a raw
+> ∪ would collapse `Cursor + IC + !Mutate` to ¬Mutate and starve callers of
+> Cursor/IC evidence); authored Pure dominates INSIDE the build (infer_fn's
+> pre-collapse ternary deleted — less code). (3) **infer_fn publishes the
+> MEET for neg-bearing declared rows** (body ∩ ¬N = the body row, gate-
+> proven) — publishing raw ¬N would union near-universe into every caller's
+> accumulation. Board after: verify 34/34 through the seed, rungs 8/8,
+> micros-through-m2 **35/35**; the mixed-row oracle compiles in 6s through m2
+> and runs exit 42.
+>
+> **SEED GAP NAMED — `Hβ.seed.recursive-scheme-without-selfpartial`.** The
+> seed mis-schemes union_row's total-matrix body when it contains ZERO
+> `union_row(??, _)` self-partials: a 16-variant bisect lattice over the four
+> wildcard arms proved death ⇔ all three inner `_ => … |> union_row(??, a)`
+> arms removed (any ONE saves it; the outer is irrelevant), detonating as a
+> unify `unreachable` in graph_handler's arms-walk — the first
+> ??-partial-heavy consumer downstream. An isolated micro of the same shape
+> PASSES, so the trigger needs file-scale context: pinned to the shape, not
+> reduced. MOOT for the corridor: the ultimate form was the PIPE form all
+> along (`|>` is never optional) — the total matrix written natively
+> (`a |> union_row(??, neg_row(q)) |> normalize_inter(??, union_row(a, p))`,
+> operand order preserving the flow-edge first-var law) carries slot-1
+> self-partials in every distribution arm and the seed digests it. The
+> C-style nested-call draft was the drift; the medium's own idiom is what the
+> seed compiles.
 
 > **PHASE 1 CLOSED (plans/noble-brewing-rose.md) — 0/34 → 34/34 in one day,
 > sixteen bands.** After the 28/34 entry below, the closing arc: the match

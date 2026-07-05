@@ -1273,7 +1273,7 @@ fn emit_memory_decl() = {
   // (not through a `~>` perform) because a body-emitting perform trips the
   // ev_perform_entry evidence seam today; the arena/CAS body-swap is the named
   // follow-up Hβ.emit.memory-strategy-body-swap (gated on the seam, PLAN §7).
-  wat_emit("  (func $alloc (param $size i32) (result i32)(local $ptr i32)(local.set $ptr (global.get $heap_ptr))(global.set $heap_ptr (i32.add (global.get $heap_ptr)(i32.and (i32.add (local.get $size)(i32.const 7))(i32.const -8))))(local.get $ptr))\n")
+  wat_emit("  (func $alloc (param $size i32) (result i32)(local $ptr i32)(local.set $ptr (global.get $heap_ptr))(global.set $heap_ptr (i32.add (local.get $ptr)(i32.and (i32.add (local.get $size)(i32.const 7))(i32.const -8))))(local.get $ptr)(br_if 0 (i32.ge_u (global.get $heap_ptr)(local.get $ptr)))(unreachable))\n")
   // Thread record region: [0x800, 0x1000) = 2KB / 16 bytes per record
   // = 128 thread slots. Layout per record (16 bytes):
   //   offset 0: closure_ptr (i32)

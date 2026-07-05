@@ -187,8 +187,13 @@
   (data (i32.const 1230) "wasi_proc_exit")
   (data (i32.const 1244) " (param i32)")
   (data (i32.const 1256) " (param $size i32)")
-  ;; Alloc body as raw WAT (padded to 200 bytes with spaces)
-  (data (i32.const 1275) "(local $ptr i32)(local.set $ptr (global.get $heap_ptr))(global.set $heap_ptr (i32.add (global.get $heap_ptr)(i32.and (i32.add (local.get $size)(i32.const 7))(i32.const -8))))(local.get $ptr)                  ")
+  ;; Alloc body as raw WAT — WRAP-TRAPPING (face 7, the 4GB coredump
+  ;; autopsy): a bump past 2^32 leaves heap_ptr BELOW the returned ptr,
+  ;; so the sane path br_if-0-returns $ptr and the wrapped path falls
+  ;; through to a LOUD unreachable AT $alloc — never a silent sub-4096
+  ;; mint painting records over the init region (the assoc_row clobber).
+  ;; Relocated 1275→8080 for the larger body; 1275-1491 is now free.
+  (data (i32.const 8080) "(local $ptr i32)(local.set $ptr (global.get $heap_ptr))(global.set $heap_ptr (i32.add (local.get $ptr)(i32.and (i32.add (local.get $size)(i32.const 7))(i32.const -8))))(local.get $ptr)(br_if 0 (i32.ge_u (global.get $heap_ptr)(local.get $ptr)))(unreachable)")
   (data (i32.const 6336) " (param $v i32)")
 
   ;; 1491: "_start_fn" (9) → 1500

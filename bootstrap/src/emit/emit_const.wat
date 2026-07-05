@@ -460,7 +460,7 @@
     (call $emit_cstr (i32.const 1055) (i32.const 5))   ;; "alloc"
     (call $emit_cstr (i32.const 1256) (i32.const 18))  ;; " (param $size i32)"
     (call $emit_cstr (i32.const 597) (i32.const 13))   ;; " (result i32)"
-    (call $emit_cstr (i32.const 1275) (i32.const 190)) ;; canned aligned bump body
+    (call $emit_cstr (i32.const 8080) (i32.const 256)) ;; canned aligned wrap-trapping bump body
     (call $emit_close)                                 ;; ")"
     (call $emit_nl))
 

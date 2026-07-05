@@ -1057,29 +1057,53 @@ fn collect_fn_bases(stmts) =
     }
   }, stmts))
 
-fn assoc_row(cur, name: String) =
-  if len(cur) == 0 { [] }
-  else {
-    let (n, row) = last(cur)
-    if n == name { row } else { assoc_row(drop_last(cur), name) }
-  }
-
 // Option-returning map lookup for ls_escaping_of: None distinguishes "not a
 // top-level fn" (→ the leaf) from "a fn whose flow-closure is empty" (Some []).
-fn esc_assoc(map, name: String) =
-  if len(map) == 0 { None }
+// Index-walk, zero allocation — the drop_last form minted a 16-byte slice
+// view PER STEP, and at 2,500 entries per scan that was the face-7 fuel.
+fn esc_assoc(map, name: String) = esc_assoc_from(map, name, 0)
+
+fn esc_assoc_from(map, name: String, i) =
+  if i >= len(map) { None }
   else {
-    let (n, row) = last(map)
-    if n == name { Some(row) } else { esc_assoc(drop_last(map), name) }
+    let (n, row) = list_index(map, i)
+    if n == name { Some(row) } else { esc_assoc_from(map, name, i + 1) }
   }
 
-// One monotone round: each fn's row = (own ∪ ⋃ callee rows) − handled.
-fn escaping_round(bases, cur) =
+// The name→index edge, drawn ONCE (Carried-Truth): each base's callee names
+// resolve to base POSITIONS at collect time, so the fixpoint rounds read
+// rows by list_index — no name scan, no allocation in the hot loop. The old
+// per-round assoc_row scan allocated ~2GB PER ROUND on the full wheel
+// (2,500 fns × ~20 callees × a 2,500-step drop_last scan minting a slice
+// per step) and wrapped the bump pointer past 2^32 — face 7's root. A
+// callee with no base (a prelude intrinsic, an effect op) contributed the
+// empty row on every lookup of every round; now it is dropped once, here.
+fn base_index_find(bases, name: String, i) =
+  if i >= len(bases) { None }
+  else {
+    let (n, _, _, _) = list_index(bases, i)
+    if n == name { Some(i) } else { base_index_find(bases, name, i + 1) }
+  }
+
+fn resolve_callee_indices(bases, callees) =
+  flatten(map((c) => match base_index_find(bases, c, 0) {
+    Some(i) => [i],
+    None    => []
+  }, callees))
+
+fn indexed_bases(bases) =
   map((b) => {
     let (name, own_effs, callees, handled) = b
-    let propagated = flatten(map((c) => assoc_row(cur, c), callees))
-    (name, set_difference(set_canonicalize(names_concat(own_effs, propagated)), handled))
+    (name, own_effs, resolve_callee_indices(bases, callees), handled)
   }, bases)
+
+// One monotone round over rows-only (base order): row = (own ∪ ⋃ callee rows) − handled.
+fn escaping_round(ibases, cur) =
+  map((b) => {
+    let (_, own_effs, callee_idxs, handled) = b
+    let propagated = flatten(map((ci) => list_index(cur, ci), callee_idxs))
+    set_difference(set_canonicalize(names_concat(own_effs, propagated)), handled)
+  }, ibases)
 
 fn rows_equal(a, b) =
   len(a) == len(b) && fold2_equal(a, b, 0)
@@ -1089,32 +1113,32 @@ fn fold2_equal(a, b, i) =
   else if list_index(a, i) == list_index(b, i) { fold2_equal(a, b, i + 1) }
   else { false }
 
-fn esc_maps_equal(cur, next) =
-  if len(cur) == 0 { true }
-  else {
-    let (_, ra) = last(cur)
-    let (_, rb) = last(next)
-    if rows_equal(ra, rb) { esc_maps_equal(drop_last(cur), drop_last(next)) }
-    else { false }
-  }
+fn esc_rows_lists_equal(cur, next, i) =
+  if i >= len(cur) { true }
+  else if rows_equal(list_index(cur, i), list_index(next, i)) { esc_rows_lists_equal(cur, next, i + 1) }
+  else { false }
 
 // Fixpoint over the finite dispatched-effect lattice. Early-stops on a
 // stable round; the cap is the safety bound (effect chains are shallow).
-fn escaping_fixpoint(bases, cur, iters) =
+fn escaping_fixpoint(ibases, cur, iters) =
   if iters >= 32 { cur }
   else {
-    let next = escaping_round(bases, cur)
-    if esc_maps_equal(cur, next) { next }
-    else { escaping_fixpoint(bases, next, iters + 1) }
+    let next = escaping_round(ibases, cur)
+    if esc_rows_lists_equal(cur, next, 0) { next }
+    else { escaping_fixpoint(ibases, next, iters + 1) }
   }
 
 fn compute_escaping_rows(stmts) = {
   let bases = collect_fn_bases(stmts)
+  let ibases = indexed_bases(bases)
   let seed = map((b) => {
-    let (name, own_effs, _, handled) = b
-    (name, set_difference(set_canonicalize(own_effs), handled))
-  }, bases)
-  escaping_fixpoint(bases, seed, 0)
+    let (_, own_effs, _, handled) = b
+    set_difference(set_canonicalize(own_effs), handled)
+  }, ibases)
+  let final_rows = escaping_fixpoint(ibases, seed, 0)
+  // The name-keyed view the ls_escaping_of consumer reads — rebuilt ONCE
+  // at the end, never per round.
+  zip(map((b) => { let (n, _, _, _) = b n }, bases), final_rows)
 }
 
 // ─── Lexical handler resolution (lower-phase, install-handle-bearing) ──

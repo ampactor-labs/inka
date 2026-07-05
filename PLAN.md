@@ -505,7 +505,7 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 **A · Effects & the modal crown (arm 4) — gates ownership, !Thread, IFC negation.** `Hβ.effects.sound-neg-under-poly` (sound transitive `!E` under polymorphism; unify_row punts EfOpen~EfNeg, effects.mn:378 — build the soundness GATE, never claim "already modal", the 4/4-refuted 2026-06-21 trap) · `Hβ.effects.modal-world-index` (rows+capabilities+negation sound simultaneously, as a graph fact; POPL-2026 cite at effects.mn:12) · `Hβ.infer.modal-capability-at-tee` (the modal rule: a row var becomes a lexical capability handle at the `~>` edge, no new surface form) · `Hβ.syntax.perform-dissolution`.
 
-**B · Continuations & TIME (arm 2, §4④) — the binding keystone.** `Hβ.types.tcont-world-binding-keystone` (STEP 5 landed the 3-arg arity; the world is INERT on OneShot — ENFORCE it) · `Hβ.types.resume-world-mismatch-value-gate` (the runnable gate; layout-in-world coupling; DEP persist resume-catcher + STEP 1) · `Hβ.infer.tcont-world-capture-at-reify` (at the multi-shot producer's reify site) · `Hβ.continuations.world-widening-resume` (typed superset-resume) · `Hβ.continuations.persist-equals-memcpy-handler` (= `Hβ.lower.fanout-durable-persist-handler`; `~> Persist`, zero serializer; STEP 3 producer landed) · `Hβ.persist.cross-machine-resume` *(new)* · `Hβ.persist.branch-world-tag` (persist.mn:119) · `Hβ.continuations.wasmfx-lowering-tier` · `Hβ.infer.tail-recursion-resume-cardinality` (infer.mn:3174) · `Hβ.lower.either-install-negotiation` · `Hβ.felt.time-travel-debug-forked-cursor` *(new)* · `Hβ.ml.autodiff-as-multishot` (autodiff.mn:36).
+**B · Continuations & TIME (arm 2, §4④) — the binding keystone.** `Hβ.types.tcont-world-binding-keystone` (STEP 5 landed the 3-arg arity; the world is INERT on OneShot — ENFORCE it) · `Hβ.types.resume-world-mismatch-value-gate` (the runnable gate; layout-in-world coupling; DEP persist resume-catcher + STEP 1) · `Hβ.infer.tcont-world-capture-at-reify` (at the multi-shot producer's reify site) · `Hβ.continuations.world-widening-resume` (typed superset-resume) · `Hβ.continuations.persist-equals-memcpy-handler` (= `Hβ.lower.fanout-durable-persist-handler`; `~> Persist`, zero serializer; STEP 3 producer landed; the standardized multiple-memories proposal is this peer's substrate cash-out — a dedicated IMAGE memory snapshots whole while scratch lives apart, the memcpy boundary drawn by the module format itself) · `Hβ.persist.cross-machine-resume` *(new)* · `Hβ.persist.branch-world-tag` (persist.mn:119) · `Hβ.continuations.wasmfx-lowering-tier` · `Hβ.infer.tail-recursion-resume-cardinality` (infer.mn:3174) · `Hβ.lower.either-install-negotiation` · `Hβ.felt.time-travel-debug-forked-cursor` *(new)* · `Hβ.ml.autodiff-as-multishot` (autodiff.mn:36).
 
 **C · IFC — flow in the row (arm 4/6, §4⑥; W31 scaffold landed).** `Hβ.verify.ifc-noninterference` (umbrella; code `Hβ.types.ifc-flow-constraint`, types.mn:1029) ← `Hβ.ifc.dcc-noninterference-gate` → `.flowlabel-inference-in-hm` → `.pc-label-implicit-flow` → `.integrity-dual-lattice` (prompt-injection IS an integrity-flow violation) → `.declassify-robust` → `.flow-world-on-tcont` → `.agentic-fides-target`. DEP-rooted on `sound-neg-under-poly`.
 
@@ -525,7 +525,7 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 **K · AI-proposer / Synth (arm 2, §0/§1).** `Hβ.proposer.constraint-not-token-worked-example` (Lahiri 2026 — answer the spec-oracle problem with a worked example, not a claim) · `.synth-handler-error-fed-back` (the lossless constraint, not the lossy token).
 
-**L · The Why-engine & `mentl audit` (arm 8/1, §0 — the medium enforcing its own discipline).** `Hβ.audit.carried-truth-projection` *(new — the §0 keystone: project a Carried-Truth violation BEFORE a line is written, making the wrong move unsayable)* · `Hβ.diag.minimal-inconsistent-core` (= `.why.minimal-cause-set`) · `Hβ.infer.marked-lambda-totality-invariant` (POPL 2024) · `Hβ.diag.catalog-as-projection` (report takes a DiagKind ADT) · `Hβ.diag.duplicate-type-name` *(new — two `type X` decls in one namespace shadow silently today (the Handle collision, 2026-07-05); the decl site deserves the refusal, per the E_ImportNameCollision precedent)* · `Hβ.diag.declared-row-contradiction` *(new — `with IO + !IO` today surfaces only downstream when the body performs the dropped effect (the subsumption gate, loud); the ultimate teaching surface is a decl-site diagnostic at the signed-set build, MachineApplicable. Named 2026-07-05 so the gate doesn't silently stand in for it)* · `Hβ.query.graph-projection-surface` *(new)*.
+**L · The Why-engine & `mentl audit` (arm 8/1, §0 — the medium enforcing its own discipline).** `Hβ.audit.carried-truth-projection` *(new — the §0 keystone: project a Carried-Truth violation BEFORE a line is written, making the wrong move unsayable)* · `Hβ.diag.minimal-inconsistent-core` (= `.why.minimal-cause-set`) · `Hβ.infer.marked-lambda-totality-invariant` (POPL 2024) · `Hβ.diag.catalog-as-projection` (report takes a DiagKind ADT) · `Hβ.diag.duplicate-type-name` *(new — two `type X` decls in one namespace shadow silently today (the Handle collision, 2026-07-05); the decl site deserves the refusal, per the E_ImportNameCollision precedent)* · `Hβ.diag.declared-row-contradiction` *(new — `with IO + !IO` today surfaces only downstream when the body performs the dropped effect (the subsumption gate, loud); the ultimate teaching surface is a decl-site diagnostic at the signed-set build, MachineApplicable. Named 2026-07-05 so the gate doesn't silently stand in for it)* · `Hβ.query.graph-projection-surface` *(new)* · `Hβ.emit.trap-as-exception-postmortem` *(new 2026-07-05 — wasm exception-handling (exnref, standardized) lets a BUG-trap unwind with a payload instead of `unreachable`+stderr: the payload is the graph state at death, projected — the coredump autopsy face 7 needed, as a structured projection instead of a heap read; zero steady-state cost, diagnostics-tier only)*.
 
 **M · The felt surface / `mentl edit` (L6, §4⑦, §0 pt 5 — oversight is survival, NOT garnish; the thinnest-swept band, most at risk of erasure).** `Hβ.felt.mentl-edit-runtime` *(new — the canonical IDE as a running keystroke→parse→format→render loop)* · `.reactivity-typed-demand-driven` · `.lsp-transport-projection` *(new)* · `.collab-grove-cmrdt-semantic` (Grove POPL 2025, over the TYPED graph) · `.legibility-derived-not-molded` · `.verification-dashboard` *(new — live V_Pending / transitive-!E / Why-chain for oversight)* · `.hole-is-dormant-continuation` (Hazel fill-and-resume = the multishot record).
 
@@ -585,7 +585,28 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-05, HEAD 7fe2f64 — **march-gate 8/8 AND micros-through-m2 37/37**; gates: `verify.sh` + `march-gate.sh`)
+## §7 · Current state (grounded 2026-07-05, HEAD ef842ff — **march-gate 8/8 AND micros-through-m2 37/37**; gates: `verify.sh` + `march-gate.sh`)
+
+> **FACE 7 (ef842ff) — pass-2 reached LOWER for the first time, and the
+> escaping fixpoint wrapped the heap.** Runs #8/#9 completed INFER over the
+> whole wheel (the first in history), then died in lower at assoc_row with
+> an indirect-call type mismatch. The first coredump autopsy (wasmtime
+> `-D coredump`, 4.0GB image; march.sh gen() now always arms it) read the
+> corpse directly: heap_ptr = 0x2250 — the bump pointer had crossed 2^32
+> and was minting records OVER the init-built fn-record region; assoc_row's
+> own record held [1839][4][8752] where [fn_idx][0] belonged. The fuel:
+> assoc_row/esc_assoc scanned a 2,500-entry assoc list via drop_last,
+> minting a 16-byte slice per step — ~2GB PER ROUND of escaping_round on
+> top of infer's ~2GB. TWO CUTS: (1) the Carried-Truth index form — callee
+> names resolve to base POSITIONS once at collect; rounds are rows-only
+> list_index reads (zero allocation, zero name scans); the name-keyed view
+> is zipped once at the end; assoc_row DELETED. (2) the allocator RATCHET —
+> the emitted $alloc traps LOUDLY on wrap (br_if-0 return on the sane path,
+> fallthrough unreachable), both layers byte-identical (seed template
+> relocated 1275→8080), so every future ceiling is a clean trap AT $alloc,
+> never a corrupted dispatch three fns later. Also measured en route:
+> wasm-opt -O2 is a 4% guest-time REGRESSION (§8 toolkit block) — the cost
+> is algorithmic, exactly this class of fix, never module-level polish.
 
 > **FACES 5+6 (4ababd7, 7fe2f64) — the seed's leniency was hiding authored
 > source bugs.** (5) threading.mn's Thread effect carried uppercase `A` in

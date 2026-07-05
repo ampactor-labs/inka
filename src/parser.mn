@@ -98,7 +98,7 @@ fn skip_sep(ref tokens, pos) = {
 fn show_token_kind(k) with Pure = match k {
   TFn => "fn", TLet => "let", TIf => "if", TElse => "else",
   TMatch => "match", TType => "type", TEffect => "effect",
-  THandle => "handle", THandler => "handler", TWith => "with",
+  THandler => "handler", TWith => "with",
   TResume => "resume", TPerform => "perform",
   TImport => "import", TWhere => "where",
   TOwn => "own", TRef => "ref", TPure => "Pure",   // drift-audit: ignore — human-facing token-display rendering, not effect keying; tracked for item 11.B token-rendering normalization
@@ -394,23 +394,24 @@ fn is_param_name_tok(ref tokens, p) = match kind_at(tokens, p) {
   TIdent(_) => true,
   TOwn      => true,
   TRef      => true,
-  THandle   => true,
   _         => false
 }
 
 // Lexeme of an ident-shaped token: TIdent payload, or the contextual
-// keyword's spelling (own/ref/handle). The canonical contextual-ident
+// keyword's spelling (own/ref). The canonical contextual-ident
 // LEXEME projection (paired with is_param_name_tok, the Bool gate) —
-// mirrors seed $ident_at_p (TIdent payload; THandle→"handle",
-// TOwn→"own", TRef→"ref"). "" = not an ident-shaped token (seed-
-// canonical null; surfaces downstream, not a masked ADT). Used for
-// record-field names: SYNTAX.md §572 admits keyword-named fields
-// (s.handle, e.with, r.ref) — record construction is symmetric.
+// mirrors seed $ident_at_p (TIdent payload; TOwn→"own", TRef→"ref").
+// "" = not an ident-shaped token (seed-canonical null; surfaces
+// downstream, not a masked ADT). Used for record-field names:
+// SYNTAX.md admits keyword-named fields (e.with, r.ref) — record
+// construction is symmetric. (`handle` is NOT a keyword — it is the
+// medium's own domain noun; the legacy `handle {…} with h` spelling
+// retired with THandle, the turbofish precedent: no bespoke
+// recognizer, the general diagnostic teaches.)
 fn ident_or_kw_at(ref tokens, p) = match kind_at(tokens, p) {
   TIdent(s) => s,
   TOwn      => "own",
   TRef      => "ref",
-  THandle   => "handle",
   _         => ""  // drift-audit: ignore — "" = not an ident-shaped token (seed-canonical null; surfaces downstream, not a masked ADT)
 }
 
@@ -422,7 +423,6 @@ fn ident_or_kw_at(ref tokens, p) = match kind_at(tokens, p) {
 // params; `fn f(own,b)` → 0 params; `fn f(a,own)` → [a]).
 fn param_starts_here(ref tokens, p) = match kind_at(tokens, p) {
   TIdent(_) => true,
-  THandle   => true,
   TOwn      => is_param_name_tok(tokens, skip_ws(tokens, p + 1)),
   TRef      => is_param_name_tok(tokens, skip_ws(tokens, p + 1)),
   _         => false
@@ -1052,16 +1052,6 @@ fn parse_expr(ref tokens, pos) = {
   // The let-expression parses binding + continuation (after ; or newline).
   if at(tokens, p, TLet) {
     parse_let_expr(tokens, p + 1, span)
-  // `handle { body } with h` is the redundant spelling of `(body) ~> h`
-  // (SYNTAX.md §«Installation», E_RedundantHandleBlock): `~>` is the ONE
-  // install verb, drawing the one install edge to the handler's node.
-  // parse_handle parses the body, requires `with H`, and produces the
-  // identical PipeExpr(PTee, body, H) graph — there is no block-form vs
-  // pipe-form, one verb one edge. The keyword is recognized at
-  // expression-top (not operand level): `x == handle { ... }` treats
-  // `handle` as a VarRef, the `{` belonging to the enclosing block.
-  } else if at(tokens, p, THandle) && at(tokens, skip_ws(tokens, p + 1), TLBrace) {
-    parse_handle(tokens, p + 1, span)
   } else {
     parse_binop(tokens, p, 1, FreeExpr)
   }
@@ -1309,17 +1299,9 @@ fn parse_primary(ref tokens, pos, slot) = {
     TLBrace      => parse_brace_expr(tokens, pos + 1, span),
     TIf          => parse_if(tokens, pos + 1, span),
     TMatch       => parse_match(tokens, pos + 1, span),
-    THandle      =>
-      // Seed parity: $ident_at_p always maps THandle→"handle" (VarRef)
-      // at the operand level. Handle-expression dispatch lives at
-      // parse_expr (expression top), not here in parse_primary. This
-      // prevents `if x == handle { 1 }` from consuming the then-block
-      // as a handle body — the `{` is the if's then-block, not a
-      // handle-expr body.
-      (nexpr(VarRef("handle"), span), pos + 1),
     // `own`/`ref` are contextual keywords (ownership prefixes in
     // param position only); in expression position they are idents
-    // (`match own { }`, `= ref`). Exact #117 THandle-arm clone; seed
+    // (`match own { }`, `= ref`). Seed
     // parity ($ident_at_p maps TOwn→"own"/TRef→"ref" — the seed parses
     // `match own {}` as a VarRef scrutinee, verified empirically).
     TOwn         => (nexpr(VarRef("own"), span), pos + 1),
@@ -1327,7 +1309,7 @@ fn parse_primary(ref tokens, pos, slot) = {
     // `handler` is a contextual keyword (handler declarations in
     // parse_stmt); in expression position it is an ident
     // (`return handler`, `handler` as param name). Same treatment as
-    // THandle/TOwn/TRef — seed $ident_at_p maps THandler→"handler".
+    // TOwn/TRef — seed $ident_at_p maps THandler→"handler".
     THandler     => (nexpr(VarRef("handler"), span), pos + 1),
     TPerform     => parse_perform(tokens, pos + 1, span),
     TResume      => parse_resume(tokens, pos + 1, span),
@@ -1951,33 +1933,6 @@ fn parse_pat_alt_branches(ref tokens, pos, own buf, count) = {
 fn unclosed_eof(ref tokens, p, construct, own buf, count) = {
   report(PUnclosedConstruct("unexpected end of input inside {construct}; the construct was never closed", span_at(tokens, p)))
   (buf, count, p)
-}
-
-// `handle { body } with h` is the redundant spelling of `(body) ~> h`
-// (SYNTAX.md §«Installation», E_RedundantHandleBlock). `~>` is the ONE
-// install verb — it draws the one install edge to handler `h`'s node;
-// the handler's state and arms live at the handler DECLARATION, never at
-// the install site. So this parses the body, requires the `with H`
-// install clause, and produces the IDENTICAL PipeExpr(PTee, body, H)
-// graph that `(body) ~> H` produces — by no-redundant-form (Governing
-// Principle 2) there is no second AST node, no block-form-vs-pipe-form
-// choice. The double-`with` `handle {…} with h with s = 0 {…}` spelling
-// (inline state-init + arms) dissolves with the keyword: it only existed
-// to feed a separate HandleExpr node that re-derived the row absorption
-// `~>` already carries (the Carried-Truth violation, now deleted).
-fn parse_handle(ref tokens, pos, span: ValidSpan) = {
-  let p = skip_ws(tokens, pos)
-  let (body, p2) =
-    if at(tokens, p, TLBrace) {
-      parse_block_expr(tokens, p + 1, span_at(tokens, p))
-    } else {
-      parse_expr(tokens, p)
-    }
-  let p3 = skip_ws(tokens, p2)
-  let p_with = expect(tokens, p3, TWith)
-  let (handler, p4) = parse_expr(tokens, skip_ws(tokens, p_with))
-  report(ERedundantHandleBlock(span_join(span, span_at(tokens, p4 - 1))))
-  (nexpr(PipeExpr(PTee, body, handler), span), p4)
 }
 
 fn parse_perform(ref tokens, pos, span: ValidSpan) = {

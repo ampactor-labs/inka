@@ -55,7 +55,6 @@ fn keyword_kind(ref word) with !Mutate = {
   else if word == "match"     { Some(TMatch) }
   else if word == "type"      { Some(TType) }
   else if word == "effect"    { Some(TEffect) }
-  else if word == "handle"    { Some(THandle) }
   else if word == "handler"   { Some(THandler) }
   else if word == "with"      { Some(TWith) }
   else if word == "resume"    { Some(TResume) }

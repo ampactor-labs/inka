@@ -199,7 +199,7 @@ fn audio_stage(samples) with Sample(44100) + !Alloc + IO =
 
 `Pure` is the identity element of `+`. Writing `with Pure` is allowed (and an explicit purity declaration); `with Pure + IO` simplifies to `with IO`.
 
-**`with` is one keyword, not three.** It reads identically everywhere it appears — *"this construct is accompanied by / carries X"* — and the three surfaces are one concept, not overload: a function carries effects (`fn f() with E`); a handler carries state (`handler h with s = init`); a resume carries a state update (`resume(v) with s = s + 1`). The grammar disambiguates by position (a row after a signature, or `name = init` bindings after a handler/resume); the meaning is constant. (Handler *installation* is not a `with`-surface — it is the `~>` verb; the `handle body with h` spelling is format-lifted to `(body) ~> h`.)
+**`with` is one keyword, not three.** It reads identically everywhere it appears — *"this construct is accompanied by / carries X"* — and the three surfaces are one concept, not overload: a function carries effects (`fn f() with E`); a handler carries state (`handler h with s = init`); a resume carries a state update (`resume(v) with s = s + 1`). The grammar disambiguates by position (a row after a signature, or `name = init` bindings after a handler/resume); the meaning is constant. (Handler *installation* is not a `with`-surface — it is the `~>` verb.)
 
 ### Return type omission
 
@@ -603,7 +603,7 @@ eager-form-commitment drift (`protocol_parse_is_eager_graph_projection.md`).
 
 ### `~>` — tee (handler-attach)
 
-`expr ~> h` installs handler `h` over `expr` — drawing the install edge to `h`'s node and intercepting the effects `expr` performs. (The `handle expr with h` keyword spelling is format-lifted to `~>`, the one install verb.)
+`expr ~> h` installs handler `h` over `expr` — drawing the install edge to `h`'s node and intercepting the effects `expr` performs. `~>` is the one install verb; there is no keyword spelling (`handle` is not a keyword — see §«Installation»).
 
 **The one law:** `~>` has ONE precedence — **1, the loosest binary
 operator** (see §Precedence). The handler at the foot of a chain
@@ -1181,10 +1181,15 @@ A sub-scope is a brace-block — a first-class `BlockExpr` — installed the sam
 { let a = setup(); work(a) } ~> handler_name(cfg_args)
 ```
 
-The `handle { body } with h` keyword spelling produces the *identical* graph
-(`(body) ~> h`), so by no-redundant-form (Governing Principle 2) it is not a second
-form — it lexes but is format-lifted to `~>` (**`E_RedundantHandleBlock`**,
-MachineApplicable). There is no "block form vs pipe form" choice: one verb, one edge.
+There is no `handle { body } with h` keyword spelling — `handle` is NOT a
+keyword. It is the medium's own domain noun (the graph's node pointer), and
+keywording it collided with the codebase's most common identifier: the wheel's
+own `let handle = …` binders degraded to `_` under its own lexer (the 2026-07-05
+pass-2 face — 106 lost binders). The retirement follows the turbofish precedent
+(§«Generic type parameters»): no bespoke keyword for a foreign spelling; a
+stale-fluency `handle { body } with h` parses as ordinary expressions and the
+general unexpected-token diagnostic teaches `(body) ~> h` in context. One verb,
+one edge — and the vocabulary word stays a word.
 
 ### Negation guards on handlers
 
@@ -1256,10 +1261,9 @@ let result = { let x = setup(); work(x) } ~> state_handler
 let log    = { work() } ~> bounded_log("INFO")
 ```
 
-(The `handle { body } with h` keyword spelling — and the double-`with`
-`handle {…} with h with s = 0 {…}` it enabled — are format-lifted to `(body) ~> h`;
-handler state and arms live at the handler *declaration*, never at the install
-site.)
+(There is no keyword install spelling — `handle` is not a keyword
+(§«Installation»); handler state and arms live at the handler *declaration*,
+never at the install site.)
 
 ### Multi-handler chain (capability stack)
 
@@ -1701,7 +1705,7 @@ fn token_span(t) = let Tok(_, s) = t; s
 type TokenKind
   // ─── Keywords ─────────────────────────────────────────────────────
   = TFn | TLet | TIf | TElse | TMatch | TType
-  | TEffect | THandle | THandler | TWith
+  | TEffect | THandler | TWith
   | TResume | TPerform
   | TImport | TWhere
   | TOwn | TRef | TPure
@@ -1759,7 +1763,7 @@ type TokenKind
 
 | Variant         | Lexical form     | Payload   | Where parser expects it                       |
 |-----------------|------------------|-----------|------------------------------------------------|
-| **Keywords (19)** |                |           |                                                |
+| **Keywords (18)** |                |           |                                                |
 | `TFn`           | `fn`             | —         | start of function declaration / lambda         |
 | `TLet`          | `let`            | —         | start of let-binding                           |
 | `TIf`           | `if`             | —         | start of if-expression                         |
@@ -1767,7 +1771,6 @@ type TokenKind
 | `TMatch`        | `match`          | —         | start of match-expression                      |
 | `TType`         | `type`           | —         | start of type declaration                      |
 | `TEffect`       | `effect`         | —         | start of effect declaration                    |
-| `THandle`       | `handle`         | —         | start of handle-expression                     |
 | `THandler`      | `handler`        | —         | start of handler declaration                   |
 | `TWith`         | `with`           | —         | effect clauses, handler state, handle-with     |
 | `TResume`       | `resume`         | —         | inside handler arm body                        |
@@ -1830,7 +1833,7 @@ type TokenKind
 | `TNewline`      | `\n`             | —         | statement separator; transparent around binops (layout is never semantics) |
 | `TEof`          | (end of input)   | —         | always last token; parser uses to terminate    |
 
-**Checksum: 64 variants** (19 keywords + 7 identifiers/literals + 14 two-char operators + 22 single-char operators/punctuation + 2 layout) — a reviewer cross-check that the `TokenKind` declaration and this catalog enumerate the SAME set; the hand-maintained stand-in for `mentl audit` until the cursor projects it from the graph. Exhaustiveness over the ADT (§Lexer/Parser obligations) IS the cardinality guarantee — the number is its shadow, not its source. (`TColonColon`, `TCapability`, and `TTilde` are absent: a token with no kernel correspondence is speculative inventory. `TStringPart`/`TStringSplice` carry the interpolation substrate.)
+**Checksum: 63 variants** (18 keywords + 7 identifiers/literals + 14 two-char operators + 22 single-char operators/punctuation + 2 layout) — a reviewer cross-check that the `TokenKind` declaration and this catalog enumerate the SAME set; the hand-maintained stand-in for `mentl audit` until the cursor projects it from the graph. Exhaustiveness over the ADT (§Lexer/Parser obligations) IS the cardinality guarantee — the number is its shadow, not its source. (`TColonColon`, `TCapability`, `TTilde`, and `THandle` are absent: a token with no kernel correspondence is speculative inventory — and `handle` is the medium's own domain noun, not a keyword (§«Installation»). `TStringPart`/`TStringSplice` carry the interpolation substrate.)
 
 ### Lexer obligations
 
@@ -1904,7 +1907,6 @@ un-normalized source the formatter has not yet touched).
 |-----------------------|---------------------------------------------------------|--------------------------------------------------|
 | `E_RedundantBraces`   | braces wrapping a non-`BlockExpr` (no statements)       | drop the braces; user sees no diagnostic         |
 | `E_BlockNeedsBraces`  | statements (a `BlockExpr`) written without braces       | wrap the statements in `{ }`; user sees no diagnostic |
-| `E_RedundantHandleBlock` | the `handle { body } with h` spelling                | rewrite to `(body) ~> h` — `~>` is the one install verb |
 | `E_RedundantPerform`  | `perform` before an op call                             | strip the keyword; ops are bare calls            |
 | `E_StatementSemicolon`| `;` between statements                                  | lift to newline layout; canonical text has no `;` |
 

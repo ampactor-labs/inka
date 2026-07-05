@@ -1,0 +1,16 @@
+fn hof(handle) = handle + 1
+
+effect Pk { pk() -> Int }
+
+handler pd {
+  pk() => {
+    let handle = 30
+    resume(handle + 4)
+  }
+}
+
+fn main() = {
+  let handle = hof(2)
+  let arm = pk() ~> pd
+  handle + arm
+}

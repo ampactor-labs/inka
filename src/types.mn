@@ -695,7 +695,7 @@ type Token = Tok(TokenKind, Span)
 type TokenKind
   // ─── Keywords (19) ───────────────────────────────────────────────
   = TFn | TLet | TIf | TElse | TMatch | TType
-  | TEffect | THandle | THandler | TWith
+  | TEffect | THandler | TWith
   | TResume | TPerform
 
   | TImport | TWhere
@@ -1208,7 +1208,6 @@ type DiagKind
   | PUnexpectedToken(String, Span)               // context note
   | ERedundantBraces(Span)
   | EBlockNeedsBraces(Span)
-  | ERedundantHandleBlock(Span)
   | ERedundantPerform(Span)
   | ELambdaFence(Span)
   | ERedundantFnOnLambda(Span)
@@ -1273,7 +1272,6 @@ fn diag_span(d) with Pure = match d {
   PUnexpectedToken(_, s) => s,
   ERedundantBraces(s) => s,
   EBlockNeedsBraces(s) => s,
-  ERedundantHandleBlock(s) => s,
   ERedundantPerform(s) => s,
   ELambdaFence(s) => s,
   ERedundantFnOnLambda(s) => s,
@@ -1323,7 +1321,6 @@ fn diag_source(d) with Pure = match d {
   PUnexpectedToken(_, _) => "parser",
   ERedundantBraces(_) => "parser",
   EBlockNeedsBraces(_) => "parser",
-  ERedundantHandleBlock(_) => "parser",
   ERedundantPerform(_) => "parser",
   ELambdaFence(_) => "parser",
   ERedundantFnOnLambda(_) => "parser",
@@ -1373,7 +1370,6 @@ fn diag_code(d) with Pure = match d {
   PUnexpectedToken(_, _) => "P_UnexpectedToken",
   ERedundantBraces(_) => "E_RedundantBraces",
   EBlockNeedsBraces(_) => "E_BlockNeedsBraces",
-  ERedundantHandleBlock(_) => "E_RedundantHandleBlock",
   ERedundantPerform(_) => "E_RedundantPerform",
   ELambdaFence(_) => "E_LambdaFence",
   ERedundantFnOnLambda(_) => "E_RedundantFnOnLambda",
@@ -1420,7 +1416,6 @@ fn diag_severity(d) with Pure = match d {
   POrphanDocstring(_) => SWarning,
   ERedundantBraces(_) => SWarning,
   EBlockNeedsBraces(_) => SWarning,
-  ERedundantHandleBlock(_) => SWarning,
   ERedundantPerform(_) => SWarning,
   ELambdaFence(_) => SWarning,
   ERedundantFnOnLambda(_) => SWarning,
@@ -1447,7 +1442,6 @@ fn diag_kind(d) with Pure = match diag_severity(d) {
 fn diag_applicability(d) with Pure = match d {
   ERedundantBraces(_) => MachineApplicable,
   EBlockNeedsBraces(_) => MachineApplicable,
-  ERedundantHandleBlock(_) => MachineApplicable,
   ERedundantPerform(_) => MachineApplicable,
   WRedundantWhere(_) => MachineApplicable,
   TOverDeclared(_, _, _, _) => MachineApplicable,
@@ -1484,7 +1478,6 @@ fn diag_message(d) with GraphRead + Memory + Alloc + !Mutate = match d {
   PUnexpectedToken(detail, _) => detail,
   ERedundantBraces(_) => "redundant braces around a non-block body",
   EBlockNeedsBraces(_) => "statements require braces",
-  ERedundantHandleBlock(_) => "`handle … with h` is the redundant spelling of `(body) ~> h`",
   ERedundantPerform(_) => "`perform` is redundant — effect ops are bare calls",
   ELambdaFence(_) => "`|params|` lambda fence — use `(params) => body`",   // drift-audit: ignore — diagnostic message prose, not Mentl syntax
   ERedundantFnOnLambda(_) => "`fn` is reserved for named declarations — remove it for a lambda",   // drift-audit: ignore — diagnostic message prose

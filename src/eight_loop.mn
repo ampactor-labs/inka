@@ -467,7 +467,7 @@ fn count_invites_by_kind(reports, kind) with Pure = {
 // cores; sequential_compose runs them on one thread. Same source,
 // handler swap.
 fn project_gradient_density(reports) with Pure = {
-  let (g, h, v, r, o, ref, grad, why) =
+  let (g, h, v, r, o, refn, grad, why) =
     reports
       <| (
         (rs) => count_invites_by_kind(rs, IntGraph),
@@ -479,7 +479,7 @@ fn project_gradient_density(reports) with Pure = {
         (rs) => count_invites_by_kind(rs, IntGradient),
         (rs) => count_invites_by_kind(rs, IntReason)
       )
-  [g, h, v, r, o, ref, grad, why]
+  [g, h, v, r, o, refn, grad, why]
 }
 
 // Total-clear count: positions where ALL EIGHT clear. Reading

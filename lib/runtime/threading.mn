@@ -60,8 +60,8 @@ type Handle = Handle(Int)
 // a different topology (race per HC2), not Thread.
 
 effect Thread {
-  spawn(task: () -> A) -> Handle
-  thread_join(handle: Handle) -> A
+  spawn(task: () -> a) -> Handle
+  thread_join(handle: Handle) -> a
   current_id() -> Int
   num_cores() -> Int
 }

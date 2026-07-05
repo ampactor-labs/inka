@@ -525,7 +525,7 @@ never a reason to hedge the wheel against the seed (the one named drift, §9.6).
 
 **K · AI-proposer / Synth (arm 2, §0/§1).** `Hβ.proposer.constraint-not-token-worked-example` (Lahiri 2026 — answer the spec-oracle problem with a worked example, not a claim) · `.synth-handler-error-fed-back` (the lossless constraint, not the lossy token).
 
-**L · The Why-engine & `mentl audit` (arm 8/1, §0 — the medium enforcing its own discipline).** `Hβ.audit.carried-truth-projection` *(new — the §0 keystone: project a Carried-Truth violation BEFORE a line is written, making the wrong move unsayable)* · `Hβ.diag.minimal-inconsistent-core` (= `.why.minimal-cause-set`) · `Hβ.infer.marked-lambda-totality-invariant` (POPL 2024) · `Hβ.diag.catalog-as-projection` (report takes a DiagKind ADT) · `Hβ.query.graph-projection-surface` *(new)*.
+**L · The Why-engine & `mentl audit` (arm 8/1, §0 — the medium enforcing its own discipline).** `Hβ.audit.carried-truth-projection` *(new — the §0 keystone: project a Carried-Truth violation BEFORE a line is written, making the wrong move unsayable)* · `Hβ.diag.minimal-inconsistent-core` (= `.why.minimal-cause-set`) · `Hβ.infer.marked-lambda-totality-invariant` (POPL 2024) · `Hβ.diag.catalog-as-projection` (report takes a DiagKind ADT) · `Hβ.diag.duplicate-type-name` *(new — two `type X` decls in one namespace shadow silently today (the Handle collision, 2026-07-05); the decl site deserves the refusal, per the E_ImportNameCollision precedent)* · `Hβ.diag.declared-row-contradiction` *(new — `with IO + !IO` today surfaces only downstream when the body performs the dropped effect (the subsumption gate, loud); the ultimate teaching surface is a decl-site diagnostic at the signed-set build, MachineApplicable. Named 2026-07-05 so the gate doesn't silently stand in for it)* · `Hβ.query.graph-projection-surface` *(new)*.
 
 **M · The felt surface / `mentl edit` (L6, §4⑦, §0 pt 5 — oversight is survival, NOT garnish; the thinnest-swept band, most at risk of erasure).** `Hβ.felt.mentl-edit-runtime` *(new — the canonical IDE as a running keystroke→parse→format→render loop)* · `.reactivity-typed-demand-driven` · `.lsp-transport-projection` *(new)* · `.collab-grove-cmrdt-semantic` (Grove POPL 2025, over the TYPED graph) · `.legibility-derived-not-molded` · `.verification-dashboard` *(new — live V_Pending / transitive-!E / Why-chain for oversight)* · `.hole-is-dormant-continuation` (Hazel fill-and-resume = the multishot record).
 
@@ -585,7 +585,84 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-05, HEAD dc62df4+ — **march-gate 8/8 AND micros-through-m2 35/35**; gates: `verify.sh` + `march-gate.sh`)
+## §7 · Current state (grounded 2026-07-05, HEAD 7fe2f64 — **march-gate 8/8 AND micros-through-m2 37/37**; gates: `verify.sh` + `march-gate.sh`)
+
+> **FACES 5+6 (4ababd7, 7fe2f64) — the seed's leniency was hiding authored
+> source bugs.** (5) threading.mn's Thread effect carried uppercase `A` in
+> type position — pre-case-rule archaeology; by the case rule that is an
+> UNDECLARED NOMINAL, not a parameter (`a` IS the declaration; censused: no
+> other single-uppercase type refs remain). (6) TWO types named `Handle` in
+> the one concatenated namespace: types.mn's refined alias (`Int where
+> 0 <= self`, the graph handle — the kernel's noun) and threading.mn's ADT
+> (the thread token). src registers before lib, so the alias shadowed the
+> ctor in-order; `Handle(len(results))` instantiated
+> TRefined(TAlias(…)) instead of an arrow, and occurs_in — exhaustive over
+> Ty but MISSING the TAlias arm — floored walking it (the sixth run died at
+> the same 35399 span as the fifth). The token renames ThreadHandle (the
+> kernel's claim on the noun wins — the de-keywording's own reasoning);
+> occurs_in gains the transparent-alias recursion (unify_types / subst_ty /
+> free_in_ty / repr_of censused, already total). NAMED PEER:
+> `E_DuplicateTypeName` (band L) — same-name type decls shadow SILENTLY
+> today; the decl site deserves the refusal, per the import-collision
+> precedent. Pass-2 runs died, in order, at: line 6014 (union_row loop) →
+> 6700 (refinement tuple) → 35414 (handle keyword) → 35399 (nominal-ctor
+> binders) → 35399 (Handle collision) — each run STRICTLY deeper or a
+> deeper root at the same line. #8 runs with all six closed.
+
+> **THE NOMINAL-RECORD CTOR IS THE IDENTITY (4cdd820) — three limbs, one
+> face, a 2×2 micro matrix as the pin.** After the de-keyworded run died at
+> 99% in occurs_in under sequential_compose's arms, the s/r/pa/pb
+> missing-binder census led to `type Pri = Pri({…})` — the wheel's OWN
+> idiom (OraclePriority, TransportState). (1) infer's PCon arm DISCARDED
+> the entry's kind: RecordSchemeKind binds the bare TName (construction
+> view, no arrow), so instantiate returned non-TFun and sub-pat binding
+> silently skipped — every `let Pri(pa) = a` lost pa; the arm now rebuilds
+> the single-field arrow AROUND the scheme (one instantiate, both halves).
+> (2) unify_record_fields_loop's proof-less `==` on field names emitted
+> POINTER-eq — decl-interned "tier" ≠ literal-interned "tier", so
+> byte-identical records refused to unify and 136 unresolved types cascaded
+> into `field offset unprovable` unreachables; `field_name_eq(a: String,
+> b: String)` is the ONE pinned compare home (effects.mn, beside the field
+> family; unify / check_nominal_record_fields / field_byte_offset /
+> find_record_field_pos route through it; dissolves with band D). (3)
+> lower had NO RecordSchemeKind arm at either value site: call-form
+> construction `Pri({…})` fell to LGlobal (undefined `$Pri`), the pattern
+> fell to tag −1 (never-match). Both are now the IDENTITY — the runtime
+> value IS the bare record (NamedRecordExpr's own LMakeRecord law):
+> construction lowers to its argument, the pattern to its sub-pattern.
+> mn-nominal-ctor=42 is the 37th micro. The matrix that pinned it:
+> ctor==type × Int/record payload — Int cells always passed; the record
+> column carried all three limbs.
+
+> **`handle` IS NOT A KEYWORD (55e60de) — the medium's own noun collided
+> with its own lexer.** THandle existed solely so the legacy
+> `handle { body } with h` spelling could be format-lifted to `~>` — but
+> `handle` is the codebase's most common identifier (the graph's node
+> pointer), and the wheel's lexer keyworded it: every `let handle = …`
+> binder parsed to PWild through m2 (the parser's contextual-recovery arms
+> covered params/fields/operands but NOT binders — the half-patched
+> bespoke-recognizer disease), losing 106 bindings across the wheel compile
+> and detonating as occurs_in's exhaustive floor at 99% of pass-2. The seed
+> never keyworded it — pass-1 was blind to the face. Pinned by
+> branch-marker binary-patch probes on m2's lower_stmt_body (215 lets; 214
+> → PVar; exactly ONE → wildcard, as immediate 1 = PWild's sentinel).
+> Retired per the turbofish precedent: no bespoke keyword for a foreign
+> spelling — the lexer line, THandle, ERedundantHandleBlock (7 arms),
+> parse_handle, and every recovery arm DELETED; SYNTAX.md now 18 keywords /
+> checksum 63 with the ruling at §«Installation». mn-let-handle=37 is the
+> 36th micro (fn-let + arm-let + param, all named `handle`). En route the
+> refinement walk's record-literal face closed too (6b1e6b7:
+> walk_refinement_fields read `.value` on the (name, value) TUPLES
+> MakeRecordExpr carries — one-site census, destructured). Pass-2 now
+> marches to 99% of the wheel input (~65min, peak <1GB — the alloc-profile
+> face never gated at 4GB; Hβ.m2.compile-alloc-profile stays a wall-time
+> band, not a correctness band). Residue faces from the 99% run's
+> diagnostics, to re-measure on the post-dekeyword run: E_MissingVariable
+> `r`/`s`/`l` (×21/×11/×5 — likely collateral of the handle corruption;
+> `let r` micros pass in isolation both tiers), the `e308`-as-identifier
+> lex face in the float-render prelude, occurs-check spam (t_N occurs in
+> t_N), and forward `~> handler` refs (×2 — pre_register_decls has no
+> HandlerDeclStmt arm; needs the infer_fn-style two-phase register split).
 
 > **THE UNION_ROW DIVERGENCE CLOSED (2026-07-05) — pass-2's three
 > memory-ceiling deaths were ONE infinite loop.** union_row's `_ =>` arms

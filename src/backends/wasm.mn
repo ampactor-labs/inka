@@ -1018,6 +1018,18 @@ fn collect_call_vectors_list(stmts, acc) = {
   }
 }
 
+// Match-arm bodies carry calls too — skipping them starved the $ft table
+// of every vector that appears only inside an arm (the face-9 pre-empt:
+// seven collectors shared this hole; census 2026-07-06).
+fn collect_call_vectors_arms(arms, acc) = collect_call_vectors_arms_from(arms, acc, 0)
+
+fn collect_call_vectors_arms_from(arms, acc, i) =
+  if i >= len(arms) { acc }
+  else {
+    let (_, body) = list_index(arms, i)
+    collect_call_vectors_arms_from(arms, collect_call_vectors_expr(body, acc), i + 1)
+  }
+
 fn collect_call_vectors_expr(expr, acc) = match expr {
   LCall(h, f, args)     => collect_call_vectors_expr(f,
                              collect_call_vectors_list(args, vec_push(args, h, acc))),
@@ -1047,7 +1059,7 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
   LSimdLanes(_h, lanes) => collect_call_vectors_list(lanes, acc),
   LMakeRecord(_h, fs)   => collect_call_vectors_list(fs, acc),
   LMakeVariant(_h, _t, fs) => collect_call_vectors_list(fs, acc),
-  LMatch(_h, s, _arms)  => collect_call_vectors_expr(s, acc),
+  LMatch(_h, s, arms)   => collect_call_vectors_arms(arms, collect_call_vectors_expr(s, acc)),
   LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
     collect_call_vectors_expr(b,
       collect_call_vectors_expr(hn,
@@ -1335,6 +1347,13 @@ fn emit_one_fn_to_string(record) = {
 fn collect_fn_emit_records(exprs) =
   exprs |> map(collect_fn_emit_records_expr) |> flatten
 
+fn fn_emit_records_arms(arms, i) =
+  if i >= len(arms) { [] }
+  else {
+    let (_, body) = list_index(arms, i)
+    collect_fn_emit_records_expr(body) ++ fn_emit_records_arms(arms, i + 1)
+  }
+
 fn collect_fn_emit_records_expr(expr) = match expr {
   // The LowFn fence IS the body-context every fn shape carries: closures
   // pass their capture count, handler arm fns nstate+total_arms, plain fns
@@ -1378,7 +1397,8 @@ fn collect_fn_emit_records_expr(expr) = match expr {
   LSimdLanes(_h, lanes)      => collect_fn_emit_records(lanes),
   LMakeRecord(_h, fs)        => collect_fn_emit_records(fs),
   LMakeVariant(_h, _t, fs)   => collect_fn_emit_records(fs),
-  LMatch(_h, s, _arms)       => collect_fn_emit_records_expr(s),
+  LMatch(_h, s, arms)        => collect_fn_emit_records_expr(s)
+                                  ++ fn_emit_records_arms(arms, 0),
   LSuspend(_h, _o, f, args, ev) => collect_fn_emit_records_expr(f)
                                      ++ collect_fn_emit_records(args)
                                      ++ collect_fn_emit_records(ev),
@@ -1842,6 +1862,14 @@ fn find_local_handle_list(name, stmts) = {
 // Walk a LowExpr for the first `LLocal(h, name)` matching `name`. Stops at
 // nested fn boundaries (LMakeClosure/LMakeContinuation/LDeclareFn) — an inner
 // fn's `name` is its own binding, not this param. Returns 0 if absent.
+fn find_local_handle_arms(name, arms, i) =
+  if i >= len(arms) { 0 }
+  else {
+    let (_, body) = list_index(arms, i)
+    let h = find_local_handle_expr(name, body)
+    if h != 0 { h } else { find_local_handle_arms(name, arms, i + 1) }
+  }
+
 fn find_local_handle_expr(name: String, expr) = match expr {
   LLocal(h, n)              => if n == name { h } else { 0 },
   LMakeClosure(_, _, _, _)         => 0,
@@ -1877,7 +1905,10 @@ fn find_local_handle_expr(name: String, expr) = match expr {
   LSimdLanes(_h, lanes)     => find_local_handle_list(name, lanes),
   LMakeRecord(_h, fs)       => find_local_handle_list(name, fs),
   LMakeVariant(_h, _t, fs)  => find_local_handle_list(name, fs),
-  LMatch(_h, s, _arms)      => find_local_handle_expr(name, s),
+  LMatch(_h, s, arms)       => {
+    let sh = find_local_handle_expr(name, s)
+    if sh != 0 { sh } else { find_local_handle_arms(name, arms, 0) }
+  },
   LSuspend(_h, _o, f, args, ev) => {
     let fh = find_local_handle_expr(name, f)
     if fh != 0 { fh } else { find_local_handle_list(name, args) }
@@ -3849,6 +3880,15 @@ fn collect_cmp_agg_tys_list(stmts, acc) = {
   }
 }
 
+fn collect_cmp_agg_tys_arms(arms, acc) = collect_cmp_agg_tys_arms_from(arms, acc, 0)
+
+fn collect_cmp_agg_tys_arms_from(arms, acc, i) =
+  if i >= len(arms) { acc }
+  else {
+    let (_, body) = list_index(arms, i)
+    collect_cmp_agg_tys_arms_from(arms, collect_cmp_agg_tys_expr(body, acc), i + 1)
+  }
+
 fn collect_cmp_agg_tys_expr(expr, acc) = match expr {
   LBinOp(_h, BLt, l, _r) => collect_cmp_agg_tys_expr(l,
                               cmp_agg_operand_contrib(lexpr_handle(l), acc)),
@@ -3888,7 +3928,7 @@ fn collect_cmp_agg_tys_expr(expr, acc) = match expr {
   LSimdLanes(_h, lanes)  => collect_cmp_agg_tys_list(lanes, acc),
   LMakeRecord(_h, fs)    => collect_cmp_agg_tys_list(fs, acc),
   LMakeVariant(_h, _t, fs) => collect_cmp_agg_tys_list(fs, acc),
-  LMatch(_h, s, _arms)   => collect_cmp_agg_tys_expr(s, acc),
+  LMatch(_h, s, arms)    => collect_cmp_agg_tys_arms(arms, collect_cmp_agg_tys_expr(s, acc)),
   LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
     collect_cmp_agg_tys_expr(b,
       collect_cmp_agg_tys_expr(hn,
@@ -3997,6 +4037,15 @@ fn eq_subtys_variants(specs, i, n, seen, acc) = {
   }
 }
 
+fn collect_eq_product_tys_arms(arms, acc) = collect_eq_product_tys_arms_from(arms, acc, 0)
+
+fn collect_eq_product_tys_arms_from(arms, acc, i) =
+  if i >= len(arms) { acc }
+  else {
+    let (_, body) = list_index(arms, i)
+    collect_eq_product_tys_arms_from(arms, collect_eq_product_tys_expr(body, acc), i + 1)
+  }
+
 fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LBinOp(_h, BEq, l, _r) => collect_eq_product_tys_expr(l,
                               eq_operand_contrib(lexpr_handle(l), acc)),
@@ -4032,7 +4081,7 @@ fn collect_eq_product_tys_expr(expr, acc) = match expr {
   LSimdLanes(_h, lanes)  => collect_eq_product_tys_list(lanes, acc),
   LMakeRecord(_h, fs)    => collect_eq_product_tys_list(fs, acc),
   LMakeVariant(_h, _t, fs) => collect_eq_product_tys_list(fs, acc),
-  LMatch(_h, s, _arms)   => collect_eq_product_tys_expr(s, acc),
+  LMatch(_h, s, arms)    => collect_eq_product_tys_arms(arms, collect_eq_product_tys_expr(s, acc)),
   LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
     collect_eq_product_tys_expr(b,
       collect_eq_product_tys_expr(hn,
@@ -4515,6 +4564,15 @@ fn is_show_global(f) = match f {
   _ => false
 }
 
+fn collect_show_tys_arms(arms, acc) = collect_show_tys_arms_from(arms, acc, 0)
+
+fn collect_show_tys_arms_from(arms, acc, i) =
+  if i >= len(arms) { acc }
+  else {
+    let (_, body) = list_index(arms, i)
+    collect_show_tys_arms_from(arms, collect_show_tys_expr(body, acc), i + 1)
+  }
+
 fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LCall(_h, f, args) =>
     if is_show_global(f) && len(args) == 1 {
@@ -4547,7 +4605,7 @@ fn collect_show_tys_expr(expr, acc) with LookupTy = match expr {
   LSimdLanes(_h, lanes)  => collect_show_tys_list(lanes, acc),
   LMakeRecord(_h, fs)    => collect_show_tys_list(fs, acc),
   LMakeVariant(_h, _t, fs) => collect_show_tys_list(fs, acc),
-  LMatch(_h, s, _arms)   => collect_show_tys_expr(s, acc),
+  LMatch(_h, s, arms)    => collect_show_tys_arms(arms, collect_show_tys_expr(s, acc)),
   LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
     collect_show_tys_expr(b,
       collect_show_tys_expr(hn,
@@ -4776,6 +4834,15 @@ fn collect_hash_tys_list(stmts, acc) with LookupTy = {
   }
 }
 
+fn collect_hash_tys_arms(arms, acc) = collect_hash_tys_arms_from(arms, acc, 0)
+
+fn collect_hash_tys_arms_from(arms, acc, i) =
+  if i >= len(arms) { acc }
+  else {
+    let (_, body) = list_index(arms, i)
+    collect_hash_tys_arms_from(arms, collect_hash_tys_expr(body, acc), i + 1)
+  }
+
 fn collect_hash_tys_expr(expr, acc) with LookupTy = match expr {
   LCall(_h, f, args) =>
     if is_hash_global(f) && len(args) == 1 {
@@ -4808,7 +4875,7 @@ fn collect_hash_tys_expr(expr, acc) with LookupTy = match expr {
   LSimdLanes(_h, lanes)  => collect_hash_tys_list(lanes, acc),
   LMakeRecord(_h, fs)    => collect_hash_tys_list(fs, acc),
   LMakeVariant(_h, _t, fs) => collect_hash_tys_list(fs, acc),
-  LMatch(_h, s, _arms)   => collect_hash_tys_expr(s, acc),
+  LMatch(_h, s, arms)    => collect_hash_tys_arms(arms, collect_hash_tys_expr(s, acc)),
   LHandleWith(_h, b, hn, _hn2, inits, _arms, cevs) =>
     collect_hash_tys_expr(b,
       collect_hash_tys_expr(hn,

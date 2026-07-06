@@ -337,3 +337,4 @@ micro:negation-declared=42
 micro:let-handle=37
 micro:nominal-ctor=42
 micro:resume-splice=8
+micro:listpat-stage=42

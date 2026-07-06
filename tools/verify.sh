@@ -27,7 +27,7 @@ source "$ROOT/tools/wt-env.sh"   # WT, WT_RUN_FLAGS, W2W — the one home
 # keyed-evidence dispatch scan, runtime/memory.mn) gets its def; one that uses
 # neither pays nothing (reachability-from-main drops the unused). A micro failing
 # only because the stdlib was withheld is the harness lying, not a regression.
-RTLIBS=(lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn)
+RTLIBS=(lib/runtime/memory.mn lib/runtime/strings.mn lib/runtime/lists.mn lib/prelude.mn)
 
 say() { printf '%s\n' "$*"; }
 fail=0

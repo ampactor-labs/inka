@@ -71,7 +71,7 @@ handler map_collector(f) with buf = make_list(16), count = 0 {
     let written  = list_set(extended, count, v)
     resume() with buf = written, count = count + 1
   },
-  result() => resume(slice(buf, 0, count))
+  result() => resume(list_to_flat(slice(buf, 0, count)))
 }
 
 handler filter_collector(pred) with buf = make_list(16), count = 0 {
@@ -83,7 +83,7 @@ handler filter_collector(pred) with buf = make_list(16), count = 0 {
     } else {
       resume()
     },
-  result() => resume(slice(buf, 0, count))
+  result() => resume(list_to_flat(slice(buf, 0, count)))
 }
 
 handler take_collector(n) with buf = make_list(16), count = 0, remaining = n {
@@ -95,7 +95,7 @@ handler take_collector(n) with buf = make_list(16), count = 0, remaining = n {
     } else {
       resume()
     },
-  result() => resume(slice(buf, 0, count))
+  result() => resume(list_to_flat(slice(buf, 0, count)))
 }
 
 handler drop_collector(n) with buf = make_list(16), count = 0, skipped = 0 {
@@ -107,7 +107,7 @@ handler drop_collector(n) with buf = make_list(16), count = 0, skipped = 0 {
       let written  = list_set(extended, count, elem)
       resume() with buf = written, count = count + 1
     },
-  result() => resume(slice(buf, 0, count))
+  result() => resume(list_to_flat(slice(buf, 0, count)))
 }
 
 // General collector — for direct user use when materializing arbitrary
@@ -119,7 +119,7 @@ handler collector with buf = make_list(16), count = 0 {
     let written  = list_set(extended, count, elem)
     resume() with buf = written, count = count + 1
   },
-  result() => resume(slice(buf, 0, count))
+  result() => resume(list_to_flat(slice(buf, 0, count)))
 }
 
 // List-producing operations — single fused handler per op.

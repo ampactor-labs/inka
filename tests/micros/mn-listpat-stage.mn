@@ -1,0 +1,8 @@
+fn first_plus(xs) = match xs {
+  []         => 0,
+  [b0, ..._] => b0 + 1
+}
+
+fn main() = {
+  first_plus(map((x) => x + 20, [21]))
+}

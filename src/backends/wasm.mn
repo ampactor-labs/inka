@@ -433,7 +433,7 @@ fn string_entry_exists(entries, target: String, i, n) = {
   }
 }
 
-fn slot_already_recorded(entries, target, i, n) = {
+fn slot_already_recorded(entries, target: String, i, n) = {   // the String proof: bare == was pointer-eq through m2 — dedup dead, triple fd_write imports in m3
   if i >= n { false }
   else if list_index(entries, i) == target { true }
   else { slot_already_recorded(entries, target, i + 1, n) }

@@ -3197,8 +3197,27 @@ fn collect_resume_walk(buf, node) with GraphRead = {
       collect_resume_walk(buf, l)
       collect_resume_walk(buf, r)
     },
+    NExpr(MakeStringExpr(frags)) =>
+      // Interpolation fragments are nodes (literal chunks + splice
+      // exprs) — a splice carries any expression, so the walk
+      // descends. This was face 8's floor: handler-arm bodies render
+      // through "{…}" splices constantly, and the missing arm hit the
+      // exhaustive-match unreachable at the wheel's first such arm.
+      each((f) => collect_resume_walk(buf, f), frags),
     NStmt(LetStmt(_, v)) => collect_resume_walk(buf, v),
     NStmt(ExprStmt(e)) => collect_resume_walk(buf, e),
+    // A nested fn's body walks like a lambda's: a resume inside it
+    // resolves to the enclosing arm's continuation.
+    NStmt(FnStmt(_, _, _, _, b)) => collect_resume_walk(buf, b),
+    // Decl statements nested in an arm block carry no resume of THIS
+    // arm's continuation — a nested handler's resumes are its own
+    // cardinality question, answered at its own decl walk.
+    NStmt(TypeDefStmt(_, _))              => (),
+    NStmt(EffectDeclStmt(_, _))           => (),
+    NStmt(HandlerDeclStmt(_, _, _, _, _)) => (),
+    NStmt(ImportStmt(_))                  => (),
+    NStmt(RefineStmt(_, _, _))            => (),
+    NStmt(AliasStmt(_, _))                => (),
     // Leaves: literals, var refs, holes, placeholders, unit — no
     // children carry a body that could contain ResumeExpr.
     NExpr(LitInt(_))    => (),

@@ -1,0 +1,13 @@
+effect Rp { rp() -> Int }
+
+handler rd {
+  rp() => {
+    let tag = "42"
+    let msg = "count {tag}"
+    resume(len(msg))
+  }
+}
+
+fn main() = {
+  rp() ~> rd
+}

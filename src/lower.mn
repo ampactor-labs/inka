@@ -2363,6 +2363,11 @@ fn bind_pat_locals(pat, ty) = match pat {
     bind_pat_rest(rest)
   },
   PRecord(flds)     => bind_pat_locals_fields(flds),
+  // Alternation branches bind the same names (the alternation law);
+  // the first branch's binds are the arm's. Face 10 — the inner
+  // PTuple-match's wildcard fooled the flat census; this outer match
+  // had no PAlt arm.
+  PAlt(branches)    => bind_pat_locals(list_index(branches, 0), ty),
   PWild             => (),
   PLit(_)           => ()
 }

@@ -211,8 +211,8 @@ handler query_default {
 //   TName     — follow env to the TypeDecl's predicate (graph-native; no string matching)
 //   TFun      — row  |> row_flow_label (EfNeg IS the non-interference proof)
 //   TList     — elem |> query_flow_label (label propagates through containers)
-//   TTuple    — elems |> map |> fold(Public, flow_join)
-//   TRecord   — fields |> map |> fold(Public, flow_join)
+//   TTuple    — elems |> map |> fold(Public, flow_label_join)
+//   TRecord   — fields |> map |> fold(Public, flow_label_join)
 //   _         — Public (open-world default; unannotated = observable)
 //
 // H6: exhaustive over all 14 Ty constructors.
@@ -221,7 +221,7 @@ handler query_default {
 
 fn query_flow_label(ref ty) with GraphRead + EnvRead = match ty {
   TRefined(base, pred) =>
-    flow_join(pred |> predicate_flow_label, query_flow_label(base)),
+    flow_label_join(pred |> predicate_flow_label, query_flow_label(base)),
   TName(name, _) =>
     // Follow the type's env entry to its TypeDecl predicate — graph-native.
     // A nominal type with a refinement predicate (e.g. `type SecretKey = Bytes
@@ -248,15 +248,15 @@ fn query_flow_label(ref ty) with GraphRead + EnvRead = match ty {
   TTuple(elems) =>
     elems
       |> map((e) => query_flow_label(e))
-      |> fold(Public, (acc, lbl) => flow_join(acc, lbl)),
+      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
   TRecord(fields) =>
     fields
       |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
-      |> fold(Public, (acc, lbl) => flow_join(acc, lbl)),
+      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
   TRecordOpen(fields, _) =>
     fields
       |> map((f) => { let (_, fty) = f; query_flow_label(fty) })
-      |> fold(Public, (acc, lbl) => flow_join(acc, lbl)),
+      |> fold(Public, (acc, lbl) => flow_label_join(acc, lbl)),
   TCont(ret, _, _) =>
     ret |> query_flow_label,
   TInt     => Public,
@@ -278,8 +278,8 @@ fn predicate_flow_label(ref pred) with GraphRead = match pred {
   PPatternMatch(_,_) => Public,   // match-narrowing: not a secrecy signal
   PNot(_)            => Public,   // negation of secret IS NOT secret (non-monotone)
   PFlowLe(a, _)      => a,        // the predicate itself carries the src label
-  PAnd(a, b)         => flow_join(predicate_flow_label(a), predicate_flow_label(b)),
-  POr(a, b)          => flow_join(predicate_flow_label(a), predicate_flow_label(b)),
+  PAnd(a, b)         => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
+  POr(a, b)          => flow_label_join(predicate_flow_label(a), predicate_flow_label(b)),
   PBoolNode(h)       =>
     // Follow the handle into the graph — read the actual call node's callee name.
     // The callee name IS the authored intent; reading it is reading the graph.
@@ -306,7 +306,7 @@ fn predicate_flow_label(ref pred) with GraphRead = match pred {
 // intersection may be too. H6: exhaustive over all 6 EffRow variants.
 fn row_flow_label(ref row) with Pure = match row {
   EfNeg(_)      => Secret,  // !E negation: proved absence of observable effect
-  EfInter(a, b) => flow_join(row_flow_label(a), row_flow_label(b)),
+  EfInter(a, b) => flow_label_join(row_flow_label(a), row_flow_label(b)),
   EfSub(_, _)   => Public,  // subtraction: removing effects, not restricting; conservative
   EfOpen(_, _)  => Public,
   EfClosed(_)   => Public,

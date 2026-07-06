@@ -123,7 +123,7 @@ handler cursor_default with !Mutate {
     resume(cursor_argmax_compute(caret)),
 
   cursor_pinned(handle) => {
-    let span = span_of_handle(handle)
+    let span = caret_span_of_handle(handle)
     let GNode(_, _anchor) = graph_chase(handle)
     // Pinned-ness is STRUCTURAL — the Reason IS Located(span, "user pinned"),
     // read by case (reason_is_pinned), never a 1e308 float magnitude that
@@ -258,7 +258,7 @@ fn score_one_position(handle, caret) with GraphRead + !Mutate = {
       len(unlocks)
     }
   }
-  let target_span = span_of_handle(handle)
+  let target_span = caret_span_of_handle(handle)
   let proximity = caret_proximity_weight(caret, target_span)
   let GNode(_, reason) = graph_chase(handle)
   Cursor(handle,
@@ -498,7 +498,11 @@ fn scan_for_span(target, i, n) with GraphRead + !Mutate = {
   }
 }
 
-fn span_of_handle(handle) with GraphRead + !Mutate = {
+// The CARET-flavored span read (caret_span_from_reason, not the plain
+// Located-or-zero of query.mn's span_of_handle) — renamed apart from it:
+// two different truths shared one name and the seed silently picked one
+// (§9 dup-fn class); the wheel's own emit refused the collision (face 16).
+fn caret_span_of_handle(handle) with GraphRead + !Mutate = {
   let GNode(_, reason) = graph_chase(handle)
   caret_span_from_reason(reason)
 }
@@ -608,7 +612,7 @@ fn mentl_context_at(handle) with EnvRead + GraphRead + !Mutate = {
 // Reason) triples; filter by span overlap with the handle's span.
 
 fn verify_pending_at(handle) with Verify + GraphRead + !Mutate = {
-  let target_span = span_of_handle(handle)
+  let target_span = caret_span_of_handle(handle)
   filter_by_span(target_span, verify_debt())
 }
 

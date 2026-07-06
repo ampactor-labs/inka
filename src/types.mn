@@ -1075,10 +1075,10 @@ type FlowLabel
   | Tainted    // derived from Secret through computation — carries the taint
   | Secret     // must not flow into any Public-observable (log/net/stderr)
 
-// flow_join — lattice join: the label of a derived expression reaches the
+// flow_label_join — lattice join: the label of a derived expression reaches the
 // join of its operands' labels. Pure — the lattice is a compile-time fact.
 // H6: exhaustive over all 3×3 pairs; no wildcard arms on a load-bearing ADT.
-fn flow_join(a, b) with Pure = match a {
+fn flow_label_join(a, b) with Pure = match a {
   Secret  => Secret,
   Tainted => match b {
     Secret  => Secret,

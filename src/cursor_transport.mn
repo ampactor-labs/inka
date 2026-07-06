@@ -413,7 +413,3 @@ fn find_line_start(ref source, target, current, idx, n) with Memory = {
   }
 }
 
-fn span_of_reason(ref reason) with Pure = match reason {
-  Located(span, _) => span,
-  _                => span_zero()
-}

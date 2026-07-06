@@ -653,7 +653,7 @@ fn render_query_result(result) = match result {
   QRError(msg) => "error: {msg}"
 }
 
-// show_flow_label — defined in types.mn alongside flow_join/flow_le.
+// show_flow_label — defined in types.mn alongside flow_label_join/flow_le.
 
 // The query surface is a tiny grammar: <verb> [arg]. The query strings are
 // unavoidable external input (like LSP method strings, lsp.mn classify_method)

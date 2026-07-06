@@ -338,3 +338,5 @@ micro:let-handle=37
 micro:nominal-ctor=42
 micro:resume-splice=8
 micro:listpat-stage=42
+micro:rest-wild=44
+micro:palt-arms=42

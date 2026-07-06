@@ -1,0 +1,13 @@
+fn first_plus(xs) = match xs {
+  []         => 0,
+  [b0, ..._] => b0 + 1
+}
+
+fn named_rest(xs) = match xs {
+  []            => 0,
+  [b0, ...rest] => b0 + len(rest)
+}
+
+fn main() = {
+  first_plus([40, 9]) + named_rest([1, 2, 3])
+}

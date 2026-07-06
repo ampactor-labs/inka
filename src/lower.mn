@@ -2395,7 +2395,7 @@ fn bind_pat_locals_floor(pats) = each((p) => bind_pat_locals(p, TVar(0)), pats)
 fn bind_pat_rest(rest) = match rest {
   None => (),
   Some(name) => {
-    if name == "_" { () }
+    if field_name_eq(name, "_") { () }
     else {
       ls_bind_local(name, 0)
       ()
@@ -3070,7 +3070,7 @@ fn free_vars_pat_binds(pat) = match pat {
 
 fn free_vars_pat_rest_binds(rest) = match rest {
   None => [],
-  Some(name) => if name == "_" { [] } else { [name] }
+  Some(name) => if field_name_eq(name, "_") { [] } else { [name] }
 }
 
 // Extract binder names from record-pattern fields `[(name, Pat)]`.

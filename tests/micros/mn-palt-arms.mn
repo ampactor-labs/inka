@@ -1,0 +1,20 @@
+type Q
+  = QA(Int)
+  | QB(Int)
+  | QC(Int)
+  | QD
+  | QE(Int)
+  | QF(Int)
+  | QG(Int)
+  | QH(Int)
+
+fn tq(q) = match q {
+  QA(_) | QB(_) | QC(_) | QD
+  | QE(_) | QF(_) | QG(_) | QH(_)
+                        => 40,
+  _                     => 1
+}
+
+fn main() = {
+  tq(QD) + 2
+}

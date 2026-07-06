@@ -869,12 +869,13 @@
               (i32.ge_u (local.get $rest_opt) (global.get $heap_base))
               (i32.eq (call $tag_of (local.get $rest_opt)) (i32.const 1)))
           (then
-            (local.set $rest_var (i32.load offset=4 (local.get $rest_opt)))
-            (if (i32.and
-                  (i32.eq (call $str_len (local.get $rest_var)) (i32.const 1))
-                  (i32.eq (call $byte_at (local.get $rest_var) (i32.const 0)) (i32.const 95)))
-              (then
-                (local.set $rest_var (i32.const 0))))))
+            ;; `..._` keeps its "_" string: rest_var carries BOTH facts —
+            ;; presence (predicate: ge_u, never exact-eq) and bind name.
+            ;; Zeroing "_" here conflated "don't bind" with "no rest": the
+            ;; predicate then demanded EXACT length and every longer list
+            ;; failed all arms (the walk_locals_pat inner floor, faces
+            ;; 12-14). The bind side skips "_" instead (emit_control).
+            (local.set $rest_var (i32.load offset=4 (local.get $rest_opt)))))
         (return (call $lowpat_make_lplist
                   (local.get $scrut_h)
                   (call $lower_pats

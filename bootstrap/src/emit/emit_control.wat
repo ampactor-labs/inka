@@ -752,7 +752,13 @@
           (local.get $subs) (i32.const 0)
           (local.get $path) (local.get $path_len) (i32.const 8))
         (local.set $rest (call $lowpat_lplist_rest (local.get $pat)))
-        (if (i32.ne (local.get $rest) (i32.const 0))
+        ;; Bind the rest ONLY when named: "_" is presence-without-binding
+        ;; (the wheel's bind_pat_rest law: `if name == "_" { () }`).
+        (if (i32.and
+              (i32.ne (local.get $rest) (i32.const 0))
+              (i32.eqz (i32.and
+                (i32.eq (call $str_len (local.get $rest)) (i32.const 1))
+                (i32.eq (call $byte_at (local.get $rest) (i32.const 0)) (i32.const 95)))))
           (then
             ;; $slice is the W7 runtime fn (state-first; builtin-only
             ;; row → const-0 state is honest, never read).

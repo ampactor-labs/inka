@@ -2178,11 +2178,14 @@ fn parse_pat_list_args(ref tokens, pos) = {
     let name_pos = skip_ws(tokens, p + 3)
     let rest_name = ident_at(tokens, name_pos)
     let p_after_name = skip_ws(tokens, name_pos + 1)
-    // `..._` accepts any remaining tail WITHOUT binding it (the discard
-    // convention, SYNTAX.md §«Pattern syntax»): a rest name of `_` is the
-    // no-bind rest, distinct from `...rest`'s named binder. None ≠ a
-    // binder named "_".
-    let rest = if rest_name == "_" { None } else { Some(rest_name) }
+    // `..._` accepts any remaining tail WITHOUT binding it — but the rest
+    // slot carries TWO facts: PRESENCE (the predicate: length ≥ prefix,
+    // never exact) and the BIND name. Mapping "_" to None destroyed
+    // presence to answer binding — the exact-length lie that floored
+    // walk_locals on every multi-element list (faces 12-14; the seed had
+    // the same conflation, independently rationalized). Presence always
+    // survives here; the bind side skips "_" (bind_pat_rest's law).
+    let rest = Some(rest_name)
     ([], rest, expect(tokens, p_after_name, TRBracket))
   }
   else {

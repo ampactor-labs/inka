@@ -2186,7 +2186,7 @@ fn pat_binders(ref pat) = match pat {
 
 fn plist_rest_binders(rest) = match rest {
   None    => [],
-  Some(n) => if n == "_" { [] } else { [n] }
+  Some(n) => if field_name_eq(n, "_") { [] } else { [n] }
 }
 
 fn build_pat_record_field_specs(flds, span: ValidSpan) = map((fld) => {
@@ -2227,7 +2227,7 @@ fn infer_pat_list(pats, rest, parent_handle, span: ValidSpan) = {
   match rest {
     None => (),
     Some(name) => {
-      if name == "_" { () }
+      if field_name_eq(name, "_") { () }
       else {
         env_extend(name, Forall([], list_ty),
           Located(span, LetBinding(name, Inferred("list rest pattern"))),

@@ -3047,6 +3047,12 @@ fn free_vars_pat_binds(pat) = match pat {
   PList(sub_pats, rest) =>
     free_vars_merge(free_vars_pat_binds_list(sub_pats), free_vars_pat_rest_binds(rest)),
   PRecord(flds)      => free_vars_pat_binds_fields(flds),
+  // Alternation branches bind the SAME name set by law (SYNTAX
+  // §"Pattern alternation" — E_PatternAlternationBindingMismatch
+  // enforces it), so the first branch's binders ARE the arm's.
+  // Face 9: this was the one Pat walker missing the arm; the testing
+  // lib's alternation matches hit the floor at the input's tail.
+  PAlt(branches)     => free_vars_pat_binds(list_index(branches, 0)),
   PWild              => [],
   PLit(_)            => []
 }

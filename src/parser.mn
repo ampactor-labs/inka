@@ -1836,7 +1836,11 @@ fn is_destructure_pat(pat) = match pat {
   PTuple(_)   => true,
   PCon(_, _)  => true,
   PList(_, _) => true,
-  PRecord(_)  => true
+  PRecord(_)  => true,
+  // An alternation destructures iff its branches do; by the same-binders
+  // law the first branch decides (a PAlt of bare PVars would be
+  // nonsensical — but the read stays total, not assumed).
+  PAlt(branches) => is_destructure_pat(list_index(branches, 0))
 }
 
 fn parse_if(ref tokens, pos, span: ValidSpan) = {

@@ -655,23 +655,41 @@ fn string_in_list(ref lst, ref s) with !Mutate = name_set_contains(lst, s)
 // and the sort — a canonical order no reader consumes — is the re-derivation
 // the Carried-Truth Law deletes (§4①: one ordered-keyed-set operation).
 
+// Set builds are BUFFER-COUNTER (§9): one make_list at the max size, a
+// write-cursor appends, one slice at the end. The insert-per-element form
+// copied the whole accumulator per step — at row sizes the asymptotics are
+// moot (rows are small), but the copy VOLUME ran millions of times per
+// pass; this family is on the inf_add_row hot path.
 fn name_set_canonicalize(ref names) with !Mutate = {
-  name_set_canonicalize_loop(names, 0, len(names), [])
+  let n = len(names)
+  name_set_dedup_into(names, 0, n, make_list(n), 0)
 }
 
-fn name_set_canonicalize_loop(ref names, i, n, own acc) with !Mutate = {
-  if i >= n { acc }
+fn name_set_dedup_into(ref names, i, n, own buf, count) with !Mutate = {
+  if i >= n { slice(buf, 0, count) }
   else {
-    name_set_canonicalize_loop(names, i + 1, n,
-      name_set_insert(acc, list_index(names, i)))
+    let x = list_index(names, i)
+    if name_set_prefix_contains(buf, count, x) {
+      name_set_dedup_into(names, i + 1, n, buf, count)
+    } else {
+      name_set_dedup_into(names, i + 1, n, list_set(buf, count, x), count + 1)
+    }
   }
 }
 
-// Insert into the set = dedup-then-append: present already (membership) ⇒
-// unchanged; else copy the flat prefix and write `name` at the end. No sorted
-// position to find, no suffix to shift — the tail append is the whole write.
-// The set stays a FLAT tag-0 list (the representation every consumer + the
-// concat traversal already expect), so no new node-tag enters the row path.
+// Membership against the WRITTEN PREFIX of a buffer under construction.
+fn name_set_prefix_contains(ref buf, count, ref name) with !Mutate = {
+  name_set_prefix_contains_loop(buf, name, 0, count)
+}
+
+fn name_set_prefix_contains_loop(ref buf, ref name, i, n) with !Mutate = {
+  if i >= n { false }
+  else if list_index(buf, i) == name { true }
+  else { name_set_prefix_contains_loop(buf, name, i + 1, n) }
+}
+
+// Insert = dedup-then-append; the one remaining single-element write (the
+// bulk paths below build whole sets in one buffer).
 fn name_set_insert(ref sorted, ref name) with !Mutate =
   if name_set_contains(sorted, name) { sorted }
   else {
@@ -680,43 +698,70 @@ fn name_set_insert(ref sorted, ref name) with !Mutate =
   }
 
 fn name_set_union(ref a, ref b) with !Mutate = {
-  name_set_union_loop(a, b, 0, len(b), name_set_canonicalize(a))
+  let na = len(a)
+  let nb = len(b)
+  let buf = make_list(na + nb)
+  let ca = name_set_dedup_count(a, 0, na, buf, 0)
+  name_set_union_rest(b, 0, nb, buf, ca)
 }
 
-fn name_set_union_loop(ref a, ref b, i, n, own acc) with !Mutate = {
-  if i >= n { acc }
+// Phase 1 of union: dedup a into the buffer, RETURN the raw (buf-mutating)
+// count — the caller continues appending into the same buffer.
+fn name_set_dedup_count(ref names, i, n, own buf, count) with !Mutate = {
+  if i >= n { count }
   else {
-    name_set_union_loop(a, b, i + 1, n,
-      name_set_insert(acc, list_index(b, i)))
+    let x = list_index(names, i)
+    if name_set_prefix_contains(buf, count, x) {
+      name_set_dedup_count(names, i + 1, n, buf, count)
+    } else {
+      name_set_dedup_count(names, i + 1, n, list_set(buf, count, x), count + 1)
+    }
+  }
+}
+
+fn name_set_union_rest(ref b, i, n, own buf, count) with !Mutate = {
+  if i >= n { slice(buf, 0, count) }
+  else {
+    let x = list_index(b, i)
+    if name_set_prefix_contains(buf, count, x) {
+      name_set_union_rest(b, i + 1, n, buf, count)
+    } else {
+      name_set_union_rest(b, i + 1, n, list_set(buf, count, x), count + 1)
+    }
   }
 }
 
 fn name_set_intersect(ref a, ref b) with !Mutate = {
-  name_set_intersect_loop(a, b, 0, len(a), [])
+  let n = len(a)
+  name_set_intersect_into(a, b, 0, n, make_list(n), 0)
 }
 
-fn name_set_intersect_loop(ref a, ref b, i, n, own acc) with !Mutate = {
-  if i >= n { acc }
+fn name_set_intersect_into(ref a, ref b, i, n, own buf, count) with !Mutate = {
+  if i >= n { slice(buf, 0, count) }
   else {
     let x = list_index(a, i)
-    let next = if name_set_contains(b, x) {
-      name_set_insert(acc, x)
-    } else { acc }
-    name_set_intersect_loop(a, b, i + 1, n, next)
+    if name_set_contains(b, x) {
+      name_set_intersect_into(a, b, i + 1, n, list_set(buf, count, x), count + 1)
+    } else {
+      name_set_intersect_into(a, b, i + 1, n, buf, count)
+    }
   }
 }
 
 fn name_set_diff(ref a, ref b) with !Mutate = {
-  name_set_diff_loop(a, b, 0, len(a), [])
+  let n = len(a)
+  name_set_diff_into(a, b, 0, n, make_list(n), 0)
 }
 
-fn name_set_diff_loop(ref a, ref b, i, n, own acc) with !Mutate = {
-  if i >= n { acc }
+fn name_set_diff_into(ref a, ref b, i, n, own buf, count) with !Mutate = {
+  if i >= n { slice(buf, 0, count) }
   else {
     let x = list_index(a, i)
-    let next = if name_set_contains(b, x) { acc }
-    else { name_set_insert(acc, x) }
-    name_set_diff_loop(a, b, i + 1, n, next)
+    if name_set_contains(b, x) {
+      name_set_diff_into(a, b, i + 1, n, buf, count)
+    } else {
+      name_set_diff_into(a, b, i + 1, n, list_set(buf, count, x), count + 1)
+    }
   }
 }
 

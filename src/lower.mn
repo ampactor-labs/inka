@@ -1509,8 +1509,10 @@ fn lower_expr_body(e, handle, span) = match e {
           // lowers to LMakeRecord — type identity is type-system-only, no
           // tag). The single argument already IS that record; the wrapper
           // is the identity at this layer. Arity is the infer gate's
-          // business (the ctor-pattern arrow view unifies one param).
-          list_index(lo_args, 0),
+          // business (the ctor-pattern arrow view unifies one param); a
+          // zero-arg call (already reported there) lowers to the empty
+          // record, never a garbage read past an empty args list.
+          if len(lo_args) == 0 { LMakeRecord(handle, []) } else { list_index(lo_args, 0) },
         Some(EffectOpScheme(_)) =>
           // Row-guided dispatch per SUBSTRATE.md §"Three Tiers of
           // Effect Compilation". The row IS the evidence contract:
@@ -2478,8 +2480,12 @@ fn lower_pat(pat) = match pat {
         // record (no tag word) — the ctor wrapper is the identity in
         // pattern position exactly as in construction (the call-form arm
         // above). The single sub-pattern matches the scrutinee itself:
-        // always-match, no tag test, the record layout untouched.
-        lower_pat(list_index(sub, 0)),
+        // always-match, no tag test, the record layout untouched. The
+        // BARE spelling `Pri =>` carries no sub-pattern — it matches any
+        // value of the type and binds nothing: LPWild (face 12 — the
+        // unguarded list_index read garbage and fed a non-LowPat to
+        // emit's walk_locals).
+        if len(sub) == 0 { LPWild } else { lower_pat(list_index(sub, 0)) },
       _ => LPCon(name, -1, lower_pats(sub))
     }
   },

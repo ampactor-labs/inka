@@ -208,16 +208,24 @@ fn enumerate_constructors(type_name, args, context)
 // when its kind is ConstructorScheme AND its scheme's result type is
 // TName(type_name, _) (nullary ctors carry TName directly; fielded ctors
 // carry TFun(_, TName(type_name, _), _)) — per infer.mn:1878-1881.
+// Forward walk preserves the enrichment's effect order (oldest entry
+// enriched first, exactly as the rest-before-head recursion ran);
+// reverse restores the newest-first result order consumers saw.
 fn ctors_of_type(entries, type_name, context)
     with GraphRead + GraphWrite + !Mutate = {
-  if len(entries) == 0 { [] }
+  let n = len(entries)
+  reverse(ctors_of_type_from(entries, type_name, 0, n, make_list(n), 0))
+}
+
+fn ctors_of_type_from(entries, type_name, i, n, own buf, count)
+    with GraphRead + GraphWrite + !Mutate = {
+  if i >= n { slice(buf, 0, count) }
   else {
-    let binding = last(entries)
-    let rest = ctors_of_type(drop_last(entries), type_name, context)
-    let (name, scheme, reason, kind) = binding
+    let (name, scheme, reason, kind) = list_index(entries, i)
     if is_ctor_of(kind, scheme, type_name) {
-      [ctor_to_enriched_candidate(name, scheme, reason)] ++ rest
-    } else { rest }
+      ctors_of_type_from(entries, type_name, i + 1, n,
+        list_set(buf, count, ctor_to_enriched_candidate(name, scheme, reason)), count + 1)
+    } else { ctors_of_type_from(entries, type_name, i + 1, n, buf, count) }
   }
 }
 

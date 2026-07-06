@@ -585,7 +585,43 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-05, HEAD ef842ff — **march-gate 8/8 AND micros-through-m2 37/37**; gates: `verify.sh` + `march-gate.sh`)
+## §7 · Current state (grounded 2026-07-06, HEAD d56a417 — **march-gate 8/8 AND micros-through-m2 41/41; PASS-2 COMPLETED — the first whole m3.wat in history (10.57MB / 313,193 lines, #19, no trap)**; gates: `verify.sh` + `march-gate.sh`)
+
+> **FACES 8–15, the emit corridor (2026-07-06).** After face 7's indexed
+> fixpoint, the sub-hour run cadence let eight more faces close in one
+> sitting: (8) collect_resume_walk lacked MakeStringExpr + nested-Stmt
+> arms (0b1883a; census: the ONE walker with the hole). (9+10)
+> free_vars_pat_binds and bind_pat_locals lacked PAlt (3c745b5, 2cc3896 —
+> the flat census was fooled by an INNER match's wildcard; the census is
+> now brace-depth-aware and reports zero missing Pat arms). (11) the
+> flat-buffer env made snapshots slice views and four consumers still
+> drop_last-walked them — slice-of-slice stacking killed the stack inside
+> `last` (07d9457; all index-walks now). (12) face 10's own identity arm
+> read list_index(sub, 0) unguarded on bare nominal patterns (b269c59;
+> zero-guards both identity arms; Hβ.seed.bare-nominal-pattern named).
+> (13) collector drains returned slice VIEWS while both layers' list-
+> pattern emission assumes the flat contract — [b0, ..._] on any map
+> result misread the slice's buf field as the element (3cf04cb; drains
+> return list_to_flat; Hβ.emit.list-pattern-shape-honest named as the
+> ultimate reader; verify's RTLIBS now link prelude like march-gate).
+> (14) THE TRIPLE-KILLER: `..._` compiled as an EXACT-LENGTH pattern in
+> BOTH layers — each independently mapped the "_" rest to None to answer
+> binding, destroying the PRESENCE fact the predicate reads; runs
+> #16/#17/#18 died byte-identically at walk_locals_pat's inner floor on
+> the wheel's first 2+-branch alternation (fba6995; presence survives
+> both layers, the four _-skips route through field_name_eq — they were
+> pointer-eq dead code under m2). (15) the wasi-ops dedup
+> (slot_already_recorded) was proof-less == — pointer-eq dead through
+> m2, triple fd_write imports in m3 (d56a417; the String pin).
+> METHOD NOTES banked: the probe pattern (victim-name eprint at
+> emit_one_fn entry + class ladders at floors) pins an emit face in ONE
+> ~40min run; micro-scale extraction (palt-arms) turns it into seconds;
+> a ladder MUST cover tag-0 explicitly (the "str_eq" misread cost one
+> cycle). RATCHETS: mn-resume-splice=8, mn-nominal-ctor=42,
+> mn-listpat-stage=42, mn-rest-wild=44, mn-palt-arms=42 (41 micros).
+> NEXT: m3 assembly (face-15 fix in flight on #20) → GATE_WASM=m3.wasm
+> march-gate --no-build --micros (the battery through the wheel's CHILD)
+> → march.sh --fixpoint (m4, the diff).
 
 > **FACE 7 (ef842ff) — pass-2 reached LOWER for the first time, and the
 > escaping fixpoint wrapped the heap.** Runs #8/#9 completed INFER over the

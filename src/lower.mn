@@ -1195,10 +1195,10 @@ fn handler_covers_effect(hname: String, ename: String) =
 // chain — never baked into the verb.
 type Schedule
   = Seq
-  | Thread
+  | Threaded
   | Simd
   | Gpu
-  | Persist
+  | Persisted
 
 // Read the fanout's execution strategy from the installed `~>` chain —
 // the SAME `lower_handler_stack_now()` + `handler_covers_effect`
@@ -1215,10 +1215,10 @@ fn schedule_in_stack(stack) =
   if len(stack) == 0 { Seq }
   else {
     let e = last(stack)
-    if handler_covers_effect(stack_entry_name(e), "Thread") { Thread }
+    if handler_covers_effect(stack_entry_name(e), "Thread") { Threaded }
     else if handler_covers_effect(stack_entry_name(e), "Simd") { Simd }
     else if handler_covers_effect(stack_entry_name(e), "Gpu") { Gpu }
-    else if handler_covers_effect(stack_entry_name(e), "Persist") { Persist }
+    else if handler_covers_effect(stack_entry_name(e), "Persist") { Persisted }
     else { schedule_in_stack(drop_last(stack)) }
   }
 
@@ -1967,7 +1967,7 @@ fn run_fanout_thunks(handle, thunks) = match lower_fanout_schedule() {
   // two LCalls carrying the same handle minted the same $call_<h> scratch
   // local twice (fanout-seq's redefinition at assemble).
   Seq    => LMakeTuple(handle, map((thunk) => LCall(lexpr_handle(thunk), thunk, []), thunks)),
-  Thread => {
+  Threaded => {
     // Spawn ALL branches, THEN join ALL — true parallelism with
     // source-order collection (the spawn-join-each interleave
     // serialized). The spawn handles bind as let-locals so the joins
@@ -2013,7 +2013,7 @@ fn run_fanout_thunks(handle, thunks) = match lower_fanout_schedule() {
   // The thunks are the same strategy-neutral closures — only the CATCHER differs
   // (a persisting handler vs a thread pool vs inline), the §4④ unification made
   // real at the fanout layer.
-  Persist => {
+  Persisted => {
     let spawn_lets = map((indexed) => {
       let (i, thunk) = indexed
       LLet(handle, "__fanout_persist_{int_to_str(i)}_{int_to_str(handle)}",

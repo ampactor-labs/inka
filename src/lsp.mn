@@ -72,7 +72,7 @@ type LspResponseBody
   | LspHoverResp(Option)            // Option(HoverContent)
   | LspCompletionResp(List)         // [CompletionItem]
   | LspCodeActionResp(List)         // [CodeAction]
-  | LspDiagnosticResp(List)         // [Diagnostic]
+  | LspDiagnosticResp(List)         // [LspDiagnostic]
   | LspDefinitionResp(Option)       // Option(Location)
   | LspReferencesResp(List)         // [Location]
   | LspInitializeResp(JsonValue)    // server capabilities + serverInfo
@@ -80,7 +80,7 @@ type LspResponseBody
 type HoverContent = HoverContent(String)        // markdown text
 type CompletionItem = CompletionItem(String, String, Int)   // label, detail, kind
 type CodeAction = CodeAction(String, String)    // title, edit_text
-type Diagnostic = Diagnostic(Int, Int, Int, Int, Int, String, String)
+type LspDiagnostic = LspDiagnostic(Int, Int, Int, Int, Int, String, String)
                                                 // sl, sc, el, ec, severity, code, message
 type Location = Location(String, Int, Int, Int, Int)
                                                 // uri, sl, sc, el, ec
@@ -325,7 +325,7 @@ fn handle_code_action(params) with Memory + Alloc + Interact + GraphRead + !Muta
 
 // handle_diagnostic — consult(QVerifyDebt) for the live pending
 // obligations the graph holds; project each (span, predicate, reason)
-// to an LSP Diagnostic. The verify-debt IS the diagnostic set (the
+// to an LSP LspDiagnostic. The verify-debt IS the diagnostic set (the
 // graph proved it) — read live, never an empty []-fabrication.
 fn handle_diagnostic(params) with Memory + Alloc + Interact = {
   let uri = lsp_extract_uri(params)
@@ -403,7 +403,7 @@ fn map_spans_to_locations(spans, uri, i, n, acc_rev) with Memory + Alloc = {
 }
 
 // diagnostics_from_debt_lsp — project each pending obligation (span,
-// predicate, reason) to an LSP Diagnostic. severity 1 = Error (a refinement
+// predicate, reason) to an LSP LspDiagnostic. severity 1 = Error (a refinement
 // the path could not discharge). The predicate's text is the message; the
 // span is the obligation site (read live from the debt the graph holds).
 fn diagnostics_from_debt_lsp(debt, uri) with Memory + Alloc + GraphRead + !Mutate = {
@@ -415,7 +415,7 @@ fn map_debt_to_diagnostics(debt, i, n, acc_rev) with Memory + Alloc + GraphRead 
   else {
     let (span, predicate, reason) = list_index(debt, i)
     let Span(sl, sc, el, ec) = span
-    let diag = Diagnostic(sl, sc, el, ec, 1, "E_RefinementRejected",
+    let diag = LspDiagnostic(sl, sc, el, ec, 1, "E_RefinementRejected",
                           "{show_predicate(predicate)}: {show_reason(reason)}")
     map_debt_to_diagnostics(debt, i + 1, n, [diag] ++ acc_rev)
   }
@@ -615,7 +615,7 @@ fn map_diagnostics_to_json(diags, i, n, acc_rev) with Memory + Alloc = {
   if i >= n { reverse(acc_rev) }
   else {
     let d = list_index(diags, i)
-    let Diagnostic(sl, sc, el, ec, severity, code, msg) = d
+    let LspDiagnostic(sl, sc, el, ec, severity, code, msg) = d
     let json = JObj([
       ("range",    range_to_json(sl, sc, el, ec)),
       ("severity", JNum(severity)),

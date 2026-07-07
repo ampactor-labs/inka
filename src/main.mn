@@ -212,7 +212,7 @@ fn dispatch_invocation(verb) = {
       VTeach(target)       => teach_run(target),
       VRepl                => repl_run(),
       VNew(name)           => new_project(name),
-      VWith(handler, target) => with_run(handler, target)
+      VWith(hname, target) => with_run(hname, target)
     }
   }
     ~> env_handler

@@ -1796,13 +1796,25 @@ fn tail_expr_repr(expr) = match expr {
 // body use-site (genuinely unread) projects RI32 — the word floor, correct for
 // an unconstrained slot. For an all-i32 fn this is byte-identical (Law 7).
 fn emit_params(names, body) = {
-  each((name) => {
-  wat_emit(" (param $")
-  wat_emit(name)
-  wat_emit(" ")
-  wat_emit(repr_wat(param_repr_from_body(name, body)))
-  wat_emit(")")
-  }, names)
+  each((indexed) => {
+    let (i, name) = indexed
+    // `_` is not a name — it is the absence of one. A wildcard param binds
+    // nothing and is never referenced, so it gets a UNIQUE WAT identifier
+    // (`_<i>`); WASM params must be uniquely named, and two `_` params (a
+    // `(_, _, r) => …` lambda, or inferred params all mk_param'd "_") else
+    // both emit `$_` and wat2wasm rejects the redefinition. Real names are
+    // unique (a duplicate binding is a prior error) and ARE referenced by
+    // the body, so they stay verbatim. field_name_eq carries the String
+    // proof — a bare `== "_"` is pointer-eq through m2 (the parsed name and
+    // the interned literal never match), so the rename would silently never
+    // fire and the collision would stand.
+    let wat_name = if field_name_eq(name, "_") { "_{int_to_str(i)}" } else { name }
+    wat_emit(" (param $")
+    wat_emit(wat_name)
+    wat_emit(" ")
+    wat_emit(repr_wat(param_repr_from_body(name, body)))
+    wat_emit(")")
+  }, enumerate(names))
 }
 
 // Find the repr of `name` by locating its first `LLocal(h, name)` read in the

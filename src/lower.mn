@@ -3132,8 +3132,13 @@ fn is_substrate_mem_op(name: String) with Pure = {
 }
 
 fn is_wasi_import_op(name) with Pure = {
+  // wasi_num_cores is ABSENT by design: it has a wasi_threads handler arm
+  // (threading.mn — `wasi_num_cores() => resume(wasi_num_cores_intrinsic())`),
+  // so it is an effect-op PERFORM routed through the handler (the else branch,
+  // lower_perform_dispatch), never a raw import. Listing it here bridged it to
+  // a `(call $wasi_num_cores)` with no import and no arm — a dangling call.
+  // Only ops with NO handler arm (raw host imports + atomic instructions) belong.
   name == "wasi_thread_spawn"
-    || name == "wasi_num_cores"
     || name == "fd_write"
     || name == "fd_read"
     || name == "fd_close"

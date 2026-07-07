@@ -7,10 +7,10 @@ import ml/tensor
 // ── Tape entries ────────────────────────────────────────────
 
 type TapeEntry =
-    TapeMatVecMul { w: [Float], x: [Float], out: [Float] }
-  | TapeVecAdd { a: [Float], b: [Float] }
-  | TapeRelu { input: [Float] }
-  | TapeSigmoid { out: [Float] }
+    TapeMatVecMul({ w: [Float], x: [Float], out: [Float] })
+  | TapeVecAdd({ a: [Float], b: [Float] })
+  | TapeRelu({ input: [Float] })
+  | TapeSigmoid({ out: [Float] })
 
 // ── Compute effect ──────────────────────────────────────────
 // Type annotations are nominal — the checker uses them for

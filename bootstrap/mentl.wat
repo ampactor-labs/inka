@@ -28432,12 +28432,13 @@
               (i32.ge_u (local.get $rest_opt) (global.get $heap_base))
               (i32.eq (call $tag_of (local.get $rest_opt)) (i32.const 1)))
           (then
-            (local.set $rest_var (i32.load offset=4 (local.get $rest_opt)))
-            (if (i32.and
-                  (i32.eq (call $str_len (local.get $rest_var)) (i32.const 1))
-                  (i32.eq (call $byte_at (local.get $rest_var) (i32.const 0)) (i32.const 95)))
-              (then
-                (local.set $rest_var (i32.const 0))))))
+            ;; `..._` keeps its "_" string: rest_var carries BOTH facts —
+            ;; presence (predicate: ge_u, never exact-eq) and bind name.
+            ;; Zeroing "_" here conflated "don't bind" with "no rest": the
+            ;; predicate then demanded EXACT length and every longer list
+            ;; failed all arms (the walk_locals_pat inner floor, faces
+            ;; 12-14). The bind side skips "_" instead (emit_control).
+            (local.set $rest_var (i32.load offset=4 (local.get $rest_opt)))))
         (return (call $lowpat_make_lplist
                   (local.get $scrut_h)
                   (call $lower_pats
@@ -31681,8 +31682,13 @@
   (data (i32.const 1230) "wasi_proc_exit")
   (data (i32.const 1244) " (param i32)")
   (data (i32.const 1256) " (param $size i32)")
-  ;; Alloc body as raw WAT (padded to 200 bytes with spaces)
-  (data (i32.const 1275) "(local $ptr i32)(local.set $ptr (global.get $heap_ptr))(global.set $heap_ptr (i32.add (global.get $heap_ptr)(i32.and (i32.add (local.get $size)(i32.const 7))(i32.const -8))))(local.get $ptr)                  ")
+  ;; Alloc body as raw WAT — WRAP-TRAPPING (face 7, the 4GB coredump
+  ;; autopsy): a bump past 2^32 leaves heap_ptr BELOW the returned ptr,
+  ;; so the sane path br_if-0-returns $ptr and the wrapped path falls
+  ;; through to a LOUD unreachable AT $alloc — never a silent sub-4096
+  ;; mint painting records over the init region (the assoc_row clobber).
+  ;; Relocated 1275→8080 for the larger body; 1275-1491 is now free.
+  (data (i32.const 8080) "(local $ptr i32)(local.set $ptr (global.get $heap_ptr))(global.set $heap_ptr (i32.add (local.get $ptr)(i32.and (i32.add (local.get $size)(i32.const 7))(i32.const -8))))(local.get $ptr)(br_if 0 (i32.ge_u (global.get $heap_ptr)(local.get $ptr)))(unreachable)")
   (data (i32.const 6336) " (param $v i32)")
 
   ;; 1491: "_start_fn" (9) → 1500
@@ -32387,7 +32393,7 @@
     (call $emit_cstr (i32.const 1055) (i32.const 5))   ;; "alloc"
     (call $emit_cstr (i32.const 1256) (i32.const 18))  ;; " (param $size i32)"
     (call $emit_cstr (i32.const 597) (i32.const 13))   ;; " (result i32)"
-    (call $emit_cstr (i32.const 1275) (i32.const 190)) ;; canned aligned bump body
+    (call $emit_cstr (i32.const 8080) (i32.const 256)) ;; canned aligned wrap-trapping bump body
     (call $emit_close)                                 ;; ")"
     (call $emit_nl))
 
@@ -34008,7 +34014,13 @@
           (local.get $subs) (i32.const 0)
           (local.get $path) (local.get $path_len) (i32.const 8))
         (local.set $rest (call $lowpat_lplist_rest (local.get $pat)))
-        (if (i32.ne (local.get $rest) (i32.const 0))
+        ;; Bind the rest ONLY when named: "_" is presence-without-binding
+        ;; (the wheel's bind_pat_rest law: `if name == "_" { () }`).
+        (if (i32.and
+              (i32.ne (local.get $rest) (i32.const 0))
+              (i32.eqz (i32.and
+                (i32.eq (call $str_len (local.get $rest)) (i32.const 1))
+                (i32.eq (call $byte_at (local.get $rest) (i32.const 0)) (i32.const 95)))))
           (then
             ;; $slice is the W7 runtime fn (state-first; builtin-only
             ;; row → const-0 state is honest, never read).

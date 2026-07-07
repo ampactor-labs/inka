@@ -2793,6 +2793,21 @@ fn emit_expr(expr) = match expr {
       wat_emit("    (i32.xor)\n")
     } else if import_name == "alloc" {
       wat_emit("    (call $alloc)\n")
+    } else if import_name == "atomic_load_i32" {
+      // The atomics have NO handler arm (unlike wasi_num_cores) — they ARE
+      // the wasm atomic instruction set on shared memory, the threading peer
+      // of the Memory/Alloc projections above. The name IS the op identity.
+      wat_emit("    (i32.atomic.load)\n")
+    } else if import_name == "atomic_store_i32" {
+      wat_emit("    (i32.atomic.store)(i32.const 0)\n")
+    } else if import_name == "wait_i32" {
+      // memory.atomic.wait32 takes an i64 timeout; the op declares it i32
+      // (timeout_ns: Int), so extend the top-of-stack timeout in place.
+      wat_emit("    (i64.extend_i32_u)(memory.atomic.wait32)\n")
+    } else if import_name == "notify" {
+      wat_emit("    (memory.atomic.notify)\n")
+    } else if import_name == "fence" {
+      wat_emit("    (atomic.fence)(i32.const 0)\n")
     } else {
       wat_emit("    (call $")
       wat_emit(import_name)
@@ -3392,7 +3407,13 @@ fn emit_eq_leaf_sum(sig, type_name) with EnvRead = {
   wat_emit("          (then (i32.const 0))\n")
   wat_emit("          (else\n")
   emit_eq_sum_tag_dispatch(specs, 0, len(specs))
-  wat_emit("          )))))\n")
+  // Close the four body forms (inner else, inner if, outer else, outer if);
+  // the func itself is closed by the "  )" below. The prior )))))  emitted
+  // FIVE — one over — so the first generated $eq_<sum> helper's stray paren
+  // closed the MODULE and orphaned every emit after it (the fold-helper tail,
+  // the doubled _start): m3 had no entry point at all. No micro caught it —
+  // the eq micros compare types that inline rather than generate a sum helper.
+  wat_emit("          ))))\n")
   wat_emit("  )\n")
 }
 
@@ -3702,7 +3723,11 @@ fn emit_one_compare_sum_helper(sig, type_name) with EnvRead = {
   wat_emit(")\n")
   wat_emit("          (else\n")
   emit_compare_sum_tag_dispatch(specs, 0, len(specs))
-  wat_emit("          )))))\n")
+  // Four body closes (the func is closed by "  )" below) — the same
+  // one-over )))))  the eq sum helper had (emit_eq_leaf_sum): the extra paren
+  // closed the module and orphaned the emit tail. Sibling generator, sibling
+  // fix. sum-compare micro proves it (module balance 0, exit correct).
+  wat_emit("          ))))\n")
   wat_emit("  )\n")
 }
 

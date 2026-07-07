@@ -1002,7 +1002,7 @@ fn max_i32_vector_arity(vectors, acc) = {
   if len(vectors) == 0 { acc }
   else {
     let (param_reprs, result_repr) = last(vectors)
-    let n = if all_ri32(param_reprs) && repr_is_i32(result_repr) { len(param_reprs) } else { 0 }
+    let n = if all(repr_is_i32, param_reprs) && repr_is_i32(result_repr) { len(param_reprs) } else { 0 }
     max_i32_vector_arity(drop_last(vectors), max_int(acc, n))
   }
 }
@@ -1096,7 +1096,7 @@ fn emit_distinct_repr_ft_types(vectors, seen) = {
   else {
     let (param_reprs, result_repr) = last(vectors)
     let nm = ft_name(param_reprs, result_repr)
-    let skip = (all_ri32(param_reprs) && repr_is_i32(result_repr))
+    let skip = (all(repr_is_i32, param_reprs) && repr_is_i32(result_repr))
                  || ls_find_str_local(seen, nm, 0) >= 0
     if skip {
       emit_distinct_repr_ft_types(drop_last(vectors), seen)
@@ -1145,7 +1145,7 @@ fn emit_param_types(n) = {
 // structural signature, two functions sharing a name iff their repr-products
 // are structurally equal (which is exactly when they ARE the same signature).
 fn ft_name(param_reprs, result_repr) =
-  if all_ri32(param_reprs) && repr_is_i32(result_repr) {
+  if all(repr_is_i32, param_reprs) && repr_is_i32(result_repr) {
     "$ft{int_to_str(len(param_reprs))}"
   } else {
     "$ft_{repr_codes(param_reprs)}_{repr_code(result_repr)}"
@@ -1153,20 +1153,20 @@ fn ft_name(param_reprs, result_repr) =
 
 fn repr_is_i32(r) with Pure = match r { RI32 => true, _ => false }
 
-fn all_ri32(reprs) = {
-  if len(reprs) == 0 { true }
-  else if repr_is_i32(last(reprs)) { all_ri32(drop_last(reprs)) }
-  else { false }
-}
-
 // A one-character structural code per repr — the canonical signature alphabet.
 fn repr_code(r) with Pure = match r {
   RI32 => "i", RI64 => "l", RF64 => "d", RF32 => "f", RV128 => "v"
 }
 
+// Render the vector's codes in CANONICAL (source) order — the same order
+// emit_repr_ft_type walks and the caller pushes. The prior last-first walk
+// rendered the name REVERSED relative to the definition, so $ft_iiidi_i
+// named a (i,d,i,i,i) definition while the caller pushed (i,i,i,i,d):
+// three projections of one product, each with its own traversal. One
+// order, four readers (name, definition, callee params, caller stack).
 fn repr_codes(reprs) = {
   if len(reprs) == 0 { "" }
-  else { repr_code(last(reprs)) ++ repr_codes(drop_last(reprs)) }
+  else { repr_codes(drop_last(reprs)) ++ repr_code(last(reprs)) }
 }
 
 // call_ft_name — the $ft name a call site references, computed from the live
@@ -1178,11 +1178,20 @@ fn repr_codes(reprs) = {
 fn call_ft_name(args, result_h) =
   ft_name([RI32] ++ arg_reprs(args), repr_of(lookup_ty(result_h)))
 
-fn arg_reprs(args) = {
-  if len(args) == 0 { [] }
+// Each arg's repr in SOURCE order — the canonical vector order every ft
+// projection reads (name, definition, callee params, caller stack). The
+// prior last-first cons REVERSED the vector at birth. Structural recursion
+// (recurse front-part, append last) rather than a map-lambda: lookup_ty is
+// a PERFORM, and the seed drops a lambda-captured effect's evidence
+// (px/h2 repro: every float call-arg vector floored to `i` while the arg
+// emit pushed f64) — named peer Hβ.seed.effectful-lambda-ev-capture.
+fn arg_reprs(args) = arg_reprs_from(args, 0)
+
+fn arg_reprs_from(args, i) = {
+  if i >= len(args) { [] }
   else {
-    [repr_of(lookup_ty(lexpr_handle(last(args))))]
-      ++ arg_reprs(drop_last(args))
+    [repr_of(lookup_ty(lexpr_handle(list_index(args, i))))]
+      ++ arg_reprs_from(args, i + 1)
   }
 }
 
@@ -1241,20 +1250,54 @@ fn emit_one_wasi_import(op) = {
   }
 }
 
-// The WASI preview1 ABI signatures — the FFI boundary's external facts, keyed
-// on the op name LWasiCall carries. "" = not a preview1 import (skip).
-fn wasi_import_sig(op) =
-  if op == "proc_exit"                  { "(param i32)" }
-  else if op == "fd_write"              { "(param i32 i32 i32 i32) (result i32)" }
-  else if op == "fd_read"               { "(param i32 i32 i32 i32) (result i32)" }
-  else if op == "fd_close"              { "(param i32) (result i32)" }
-  else if op == "path_open"             { "(param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)" }
-  else if op == "path_create_directory" { "(param i32 i32 i32) (result i32)" }
-  else if op == "path_filestat_get"     { "(param i32 i32 i32 i32 i32) (result i32)" }
-  else if op == "path_unlink_file"      { "(param i32 i32 i32) (result i32)" }
-  else if op == "path_rename"           { "(param i32 i32 i32 i32 i32 i32) (result i32)" }
-  else if op == "fd_readdir"            { "(param i32 i32 i32 i64 i32) (result i32)" }
-  else { "" }
+// The WASI preview1 ABI signatures — the FFI boundary's external facts as
+// DATA (Repr vectors), keyed on the op name LWasiCall carries. ONE home,
+// two projections: the import-decl string (wasi_import_sig) and the
+// call-site arg widths (emit_wasi_args_at_widths — a word arg filling an
+// i64 param extends at the boundary). None = not a preview1 import.
+fn wasi_import_reprs(op) =
+  if op == "proc_exit"                  { Some(([RI32], None)) }
+  else if op == "fd_write"              { Some(([RI32, RI32, RI32, RI32], Some(RI32))) }
+  else if op == "fd_read"               { Some(([RI32, RI32, RI32, RI32], Some(RI32))) }
+  else if op == "fd_close"              { Some(([RI32], Some(RI32))) }
+  else if op == "path_open"             { Some(([RI32, RI32, RI32, RI32, RI32, RI64, RI64, RI32, RI32], Some(RI32))) }
+  else if op == "path_create_directory" { Some(([RI32, RI32, RI32], Some(RI32))) }
+  else if op == "path_filestat_get"     { Some(([RI32, RI32, RI32, RI32, RI32], Some(RI32))) }
+  else if op == "path_unlink_file"      { Some(([RI32, RI32, RI32], Some(RI32))) }
+  else if op == "path_rename"           { Some(([RI32, RI32, RI32, RI32, RI32, RI32], Some(RI32))) }
+  else if op == "fd_readdir"            { Some(([RI32, RI32, RI32, RI64, RI32], Some(RI32))) }
+  else { None }
+
+// The import-decl string — a PROJECTION of wasi_import_reprs.
+// "" = not a preview1 import (skip), the emitter's existing contract.
+fn wasi_import_sig(op) = match wasi_import_reprs(op) {
+  None => "",
+  Some((preprs, res)) => {
+    let params = (preprs |> map(repr_wat) |> fold("(param", (acc, w) => acc ++ " " ++ w)) ++ ")"
+    match res {
+      None    => params,
+      Some(r) => params ++ " (result " ++ repr_wat(r) ++ ")"
+    }
+  }
+}
+
+// Each preview1 arg at its declared ABI width — the call-site projection of
+// wasi_import_reprs. An RI64 param takes the word arg zero-extended (rights
+// bitmasks / directory cookies are bit-carries, wait_i32's extend precedent);
+// every other param passes at its own width.
+fn emit_wasi_args_at_widths(args, preprs, i) = {
+  if i >= len(args) { () }
+  else {
+    emit_expr(list_index(args, i))
+    if i < len(preprs) {
+      match list_index(preprs, i) {
+        RI64 => wat_emit("    (i64.extend_i32_u)\n"),
+        _    => ()
+      }
+    } else { () }
+    emit_wasi_args_at_widths(args, preprs, i + 1)
+  }
+}
 
 fn emit_memory_decl() = {
   // Shared memory + WASI thread-spawn import: every emitted program
@@ -1704,13 +1747,21 @@ fn walk_locals_arms(arms, acc) = {
   else {
     let (pat, body) = last(arms)
     walk_locals_arms(drop_last(arms),
-      walk_locals_expr(body, walk_locals_pat(pat, acc)))
+      walk_locals_expr(body, walk_locals_pat(pat, RI32, acc)))
   }
 }
 
-fn walk_locals_pat(pat, acc) = match pat {
-  LPVar(name) => [name ++ " i32"] ++ acc,
-  LPCon(_, _, sub_pats) => walk_locals_pat_list(sub_pats, acc),
+// The DECL walk reads the SAME live channels the BIND emit reads
+// (emit_pat_binds_at: ctor_payload_tys_of for con payloads, the tuple
+// bind's carried elem_ty, word floors for list/record slots), so a
+// binder's declared width and its local.set's value width CANNOT
+// disagree — the one decider, two readers. The prior hardcoded " i32"
+// leaf declared every Float payload binder a word while the bind
+// loaded it f64-wide: the m3 assembly's 20-site local.set class.
+fn walk_locals_pat(pat, r, acc) = match pat {
+  LPVar(name) => [name ++ " " ++ repr_wat(r)] ++ acc,
+  LPCon(name, _, sub_pats) =>
+    walk_locals_pat_con(ctor_payload_tys_of(name), sub_pats, acc),
   LPTuple(elem_binds)   => walk_locals_pat_tuple(elem_binds, acc),
   LPList(sub_pats, rest) =>
     walk_locals_pat_rest(rest, walk_locals_pat_list(sub_pats, acc)),
@@ -1721,7 +1772,19 @@ fn walk_locals_pat(pat, acc) = match pat {
   // set carries the whole alternation's bindings.
   LPAlt(branches)       => match branches {
     []         => acc,
-    [b0, ..._] => walk_locals_pat(b0, acc)
+    [b0, ..._] => walk_locals_pat(b0, r, acc)
+  }
+}
+
+// Each con-payload sub declares at its payload's PROVEN repr — sub i pairs
+// with payload i, front-consumed (emit_pat_con_subs_binds' twin).
+fn walk_locals_pat_con(ptys, subs, acc) = {
+  if len(subs) == 0 { acc }
+  else {
+    let pty = if len(ptys) > 0 { fold_strip(list_index(ptys, 0)) } else { TVar(0) }
+    let ptys2 = if len(ptys) > 0 { rest(ptys) } else { ptys }
+    walk_locals_pat_con(ptys2, rest(subs),
+      walk_locals_pat(list_index(subs, 0), repr_of(pty), acc))
   }
 }
 
@@ -1733,28 +1796,33 @@ fn walk_locals_pat_rest(rest, acc) = match rest {
   }
 }
 
+// Record-field binders are word slots today (emit_pat_record_binds binds
+// RI32) — the f64 record-field pattern rides the same named peer as the
+// f64 list element (Hβ.emit.f64-aggregate-pattern-width).
 fn walk_locals_pat_record(field_binds, acc) = {
   if len(field_binds) == 0 { acc }
   else {
     let (_, _, sub_pat) = last(field_binds)
     walk_locals_pat_record(drop_last(field_binds),
-      walk_locals_pat(sub_pat, acc))
+      walk_locals_pat(sub_pat, RI32, acc))
   }
 }
 
+// List elements are word-slotted (emit_pat_subs_binds' RI32 leaf).
 fn walk_locals_pat_list(pats, acc) = {
   if len(pats) == 0 { acc }
-  else { walk_locals_pat_list(drop_last(pats), walk_locals_pat(last(pats), acc)) }
+  else { walk_locals_pat_list(drop_last(pats), walk_locals_pat(last(pats), RI32, acc)) }
 }
 
-// A tuple pattern's elements are (offset_bytes, sub_pat) — the width-summed
-// positional product, same shape as the record pattern minus the field name.
+// A tuple pattern's elements are (offset_bytes, elem_ty, sub_pat) — the
+// width-summed positional product. Each sub declares at repr_of(elem_ty),
+// the SAME proven width emit_pat_tuple_binds loads at.
 fn walk_locals_pat_tuple(elem_binds, acc) = {
   if len(elem_binds) == 0 { acc }
   else {
-    let (_, _, sub_pat) = last(elem_binds)
+    let (_, elem_ty, sub_pat) = last(elem_binds)
     walk_locals_pat_tuple(drop_last(elem_binds),
-      walk_locals_pat(sub_pat, acc))
+      walk_locals_pat(sub_pat, repr_of(fold_strip(elem_ty)), acc))
   }
 }
 
@@ -2778,7 +2846,14 @@ fn emit_expr(expr) = match expr {
     // __state push (imports don't take a closure record), NO $op_
     // prefix (the import IS the bridge). Per
     // protocol_bootstrap_wasi_threads_substrate.md.
-    emit_expr_list(args)
+    // A preview1 import's args emit at their DECLARED ABI widths — the
+    // same wasi_import_reprs home the import decl projects from, so a
+    // word arg filling an i64 param (path_open's rights, fd_readdir's
+    // cookie) extends at the boundary instead of type-mismatching.
+    match wasi_import_reprs(import_name) {
+      Some((preprs, _)) => emit_wasi_args_at_widths(args, preprs, 0),
+      None              => emit_expr_list(args)
+    }
     if import_name == "store_i32" {
       wat_emit("    (i32.store)(i32.const 0)\n")
     } else if import_name == "load_i32" {
@@ -3162,10 +3237,17 @@ fn emit_eq_for_ty(ty, neg) = match ty {
   // variant payload types). A purely-nullary ADT folds to a tag i32.eq inside
   // the helper; a fielded ADT loads tags then recurses each payload.
   TName(_, _) => emit_eq_sum_call(fold_sig(ty), neg),
-  // Scalar word: Int / Unit / Float-as-word / unresolved TVar (a handle IS
-  // a word) / fn-table index / continuation pointer. i32.eq IS structural
-  // for a single value word (the f64 word-leaf rides STEP 1's repr at the
-  // operand binop, not here — `==` leaves a Bool regardless of operand width).
+  // The word leaf READS THE GRADIENT (§5.U: "the word-leaf reads the
+  // gradient — f64.eq for an f64 field"): a proven-Float operand compares
+  // at its native width. i32.eq on two f64 operands was the one leaf the
+  // cmp twin (emit_cmp_for_ty's TFloat arm) had and this one lacked —
+  // float_is_zero's `f == 0.0` emitted (f64.const 0.0)(i32.eq).
+  TFloat =>
+    if neg { wat_emit("    (f64.ne)\n") }
+    else { wat_emit("    (f64.eq)\n") },
+  // Scalar word: Int / Unit / unresolved TVar (a handle IS a word) /
+  // fn-table index / continuation pointer. i32.eq IS structural for a
+  // single value word; `==` leaves a Bool regardless of operand width.
   _ =>
     if neg { wat_emit("    (i32.ne)\n") }
     else { wat_emit("    (i32.eq)\n") }

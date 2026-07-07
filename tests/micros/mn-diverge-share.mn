@@ -1,0 +1,7 @@
+fn double(x) = x * 2
+fn triple(x) = x * 3
+
+fn main() = {
+  let (a, b) = 21 <| (double, triple)
+  a + b
+}

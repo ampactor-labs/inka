@@ -2041,10 +2041,25 @@ fn synthesize_diverge_thunks(parent_handle, input_h, input_local_name, branch_no
   let (i, branch_node) = indexed
   let N(_, _, branch_h) = branch_node
   let thunk_name = "diverge_{int_to_str(base_idx + i)}_{int_to_str(parent_handle)}"
-  let lo_branch = lower_callee_ref(branch_node)   // branch IS the callee (applied to input) — stays bare
-  let input_ref = LLocal(input_h, input_local_name)
-  let thunk_body = LCall(branch_h, lo_branch, [input_ref])
-  let captures_exprs = [LLocal(input_h, input_local_name)]
+  // A diverge thunk is a closure exactly like a branch thunk (`><`,
+  // synthesize_branch_thunk) — ONE closure-synthesis discipline, not two.
+  // It captures EVERY free var it needs: the shared input (a synthetic
+  // capture with no source VarRef, riding slot 0) AND every free var the
+  // branch itself references (a lambda branch's `k`), resolved against the
+  // parent frame. Inside the thunk each reads as an upval off __state. The
+  // old form captured only the input and referenced it as a bare local —
+  // the parent's let-local, undefined in the thunk (the input miss); and it
+  // captured NONE of the branch's frees (the `k` miss). Both were invisible
+  // because no micro exercised `<|` — only `><`.
+  let free_names = collect_free_vars(branch_node, [])
+  let (b_names, b_exprs, b_handles) = resolve_captures_outer(free_names, parent_handle)
+  let captures_names   = [input_local_name] ++ b_names
+  let captures_exprs   = [LLocal(input_h, input_local_name)] ++ b_exprs
+  let captures_handles = [input_h] ++ b_handles
+  ls_enter_frame("", [], [], captures_names, captures_handles, -1)
+  let lo_branch  = lower_callee_ref(branch_node)   // branch's frees → upvals under the frame
+  let thunk_body = LCall(branch_h, lo_branch, [LUpval(input_h, 0)])
+  ls_exit_frame()
   let fn_ir = LFn(thunk_name, 0, [], [thunk_body], EfPure, len(captures_exprs))
   // The thunk's identity is ITS BRANCH's handle — N thunks sharing the
   // parent's handle minted N identical scratch locals downstream.

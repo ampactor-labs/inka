@@ -340,3 +340,5 @@ micro:resume-splice=8
 micro:listpat-stage=42
 micro:rest-wild=44
 micro:palt-arms=42
+micro:diverge-share=105
+micro:diverge-lambda=125

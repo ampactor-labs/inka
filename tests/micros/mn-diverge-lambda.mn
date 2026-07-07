@@ -1,0 +1,5 @@
+fn main() = {
+  let k = 10
+  let (a, b) = 21 <| ((x) => x * 2 + k, (x) => x * 3 + k)
+  a + b
+}

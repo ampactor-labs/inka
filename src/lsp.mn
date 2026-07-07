@@ -592,7 +592,7 @@ fn map_completion_items_to_json(items, i, n, acc_rev) with Memory + Alloc = {
     let json = JObj([
       ("label",  JStr(label)),
       ("detail", JStr(detail)),
-      ("kind",   JNum(kind))
+      ("kind",   JNum(float_of_int(kind)))
     ])
     map_completion_items_to_json(items, i + 1, n, [json] ++ acc_rev)
   }
@@ -618,7 +618,7 @@ fn map_diagnostics_to_json(diags, i, n, acc_rev) with Memory + Alloc = {
     let LspDiagnostic(sl, sc, el, ec, severity, code, msg) = d
     let json = JObj([
       ("range",    range_to_json(sl, sc, el, ec)),
-      ("severity", JNum(severity)),
+      ("severity", JNum(float_of_int(severity))),
       ("code",     JStr(code)),
       ("message",  JStr(msg))
     ])
@@ -644,8 +644,8 @@ fn location_to_json(loc) with Memory + Alloc = {
 
 fn range_to_json(sl, sc, el, ec) with Memory + Alloc = {
   JObj([
-    ("start", JObj([("line", JNum(sl - 1)), ("character", JNum(sc - 1))])),
-    ("end",   JObj([("line", JNum(el - 1)), ("character", JNum(ec - 1))]))
+    ("start", JObj([("line", JNum(float_of_int(sl - 1))), ("character", JNum(float_of_int(sc - 1)))])),
+    ("end",   JObj([("line", JNum(float_of_int(el - 1))), ("character", JNum(float_of_int(ec - 1)))]))
   ])
 }
 
@@ -692,7 +692,7 @@ fn handle_message(msg) with Memory + Alloc + WASI + Filesystem + Interact + Grap
       let resp = dispatch_request(kind, params)
       let resp_json = JObj([
         ("jsonrpc", JStr("2.0")),
-        ("id",      JNum(id)),
+        ("id",      JNum(float_of_int(id))),
         ("result",  response_to_json(resp))
       ])
       write_lsp_frame(json_serialize(resp_json))

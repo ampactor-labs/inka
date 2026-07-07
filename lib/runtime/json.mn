@@ -191,7 +191,7 @@ fn scan_int_part(src, pos, end, acc) with Memory + Alloc = {
     let b = byte_at(src, pos)
     if json_is_digit(b) {
       let d = b - 48
-      scan_int_part(src, pos + 1, end, acc * 10.0 + d)
+      scan_int_part(src, pos + 1, end, acc * 10.0 + float_of_int(d))
     } else {
       (acc, pos)
     }
@@ -204,7 +204,7 @@ fn scan_frac_part(src, pos, end, acc, place) with Memory + Alloc = {
     let b = byte_at(src, pos)
     if json_is_digit(b) {
       let d = b - 48
-      scan_frac_part(src, pos + 1, end, acc + d * place, place * 0.1)
+      scan_frac_part(src, pos + 1, end, acc + float_of_int(d) * place, place * 0.1)
     } else {
       (acc, pos)
     }

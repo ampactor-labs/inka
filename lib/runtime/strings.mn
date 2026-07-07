@@ -140,29 +140,24 @@ fn str_compare(a, b) -> Int with Memory =
   let lb = byte_len(b)
   str_compare_loop(a, b, la, lb, 0)
 
-// str_contains — is `needle` a byte-substring of `haystack`? The [Byte]
-// substring scan: try each start position where `needle` still fits, and
-// at each, byte-match the whole needle. Empty needle is contained; a needle
-// longer than the haystack is not. Used by the IFC flow-label heuristic
+// str_contains — is `needle` a byte-substring of `haystack`? One read: at
+// each start position where the needle still fits, the O(1) [Byte] VIEW of
+// that window compares by the structural `==` (the str_eq instance) — the
+// one sequence-eq derivation reused, no second byte-matcher. Empty needle
+// is contained; a needle longer than the haystack is not. The row carries
+// +Alloc honestly (each window is a 16-byte view record) until band-I
+// fusion tightens the view away. Used by the IFC flow-label heuristic
 // (query.mn: a `secret`/`classified`/`sensitive` name flows Secret).
-fn str_contains(haystack, needle) -> Bool with Memory = {
+fn str_contains(haystack: String, needle: String) -> Bool with Memory + Alloc = {
   let hlen = byte_len(haystack)
   let nlen = byte_len(needle)
   if nlen == 0 { true }
   else if nlen > hlen { false }
-  else { str_contains_scan(haystack, needle, 0, hlen - nlen, nlen) }
+  else {
+    range(0, hlen - nlen + 1)
+      |> any((i) => needle == str_slice(haystack, i, i + nlen))
+  }
 }
-
-fn str_contains_scan(haystack, needle, i, last, nlen) -> Bool with Memory =
-  if i > last { false }
-  else if str_matches_at(haystack, needle, i, 0, nlen) { true }
-  else { str_contains_scan(haystack, needle, i + 1, last, nlen) }
-
-fn str_matches_at(haystack, needle, base, j, nlen) -> Bool with Memory =
-  if j >= nlen { true }
-  else if byte_at(haystack, base + j) == byte_at(needle, j) {
-    str_matches_at(haystack, needle, base, j + 1, nlen)
-  } else { false }
 
 // str_hash — FNV-1a over the bytes: the [Byte] instance of the ONE hash leaf.
 // Structural-equal strings (byte-equal) hash equal by construction (str_eq ⇒
@@ -633,7 +628,14 @@ fn float_digits_to_str(digits, start, end) with Memory + Alloc = {
 fn float_fill_digit_bytes(buf, digits, start, end, i) with Memory + Alloc = {
   if i >= end { () }
   else {
-    let d = digit_at(digits, i - start)
+    // digits[i], NOT digits[i - start]: i already walks [start, end) over
+    // the digit list; subtracting start re-read from digit 0, so every
+    // fraction after a nonzero integer part duplicated the integer digits
+    // ("1.5" rendered "1.15", "2.0" "2.2" — every f64 constant m2 emitted
+    // into m3 was textually corrupt; 0.25-class values masked it because
+    // their int part IS digit-empty, start=0). The buffer index (i - start)
+    // stays relative.
+    let d = digit_at(digits, i)
     store_i8(buf + (i - start), 48 + d)
     float_fill_digit_bytes(buf, digits, start, end, i + 1)
   }

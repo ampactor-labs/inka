@@ -585,7 +585,61 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-07, HEAD e44afd9 — **the f64 CENSUS CLOSED AT SEVEN ROOTS, the deepest being DEAD LET-POLYMORPHISM (a seed capture-shadowing inversion) and a corrupt FLOAT RENDER in every m2-emitted constant; board 45/45 verify + 45/45 micros-through-m2, 8/8 rungs; `march.sh --fixpoint` RUNNING (log: .build/march/march-0707.log)**; gates: `verify.sh` + `march-gate.sh --micros`)
+## §7 · Current state (grounded 2026-07-07, HEAD 986ae46 — **the STRING-PATTERN POINTER-EQ class and the SELF-RECURSIVE-CLOSURE self-capture bug both CLOSED; the m3 self-compile trap MARCHED help → lexer → PARSE, now an `ev_perform_entry` OOB minting a node during `parse_import` — the deep evidence-seam; board 45/45 verify + 45/45 micros-through-m2**; gates: `verify.sh` + `march-gate.sh --micros`)
+
+> **THE TRAP IS MARCHING — three faces closed, each let m3 run FURTHER into
+> its own self-compile (2026-07-07, 80234c5→986ae46).** The trajectory is the
+> proof of progress: m3 went from dispatching the wheel-input to CLI-help
+> (empty m4) → running the lexer and trapping there → running the PARSER and
+> trapping there. Each fix a wheel-emit divergence from the seed (m2 works,
+> m3 = m2-emitted-wheel traps), each reproduced + fixed in the FAST m2 LOOP
+> (no discovery-march), each confirmed by the next march marching the trap
+> deeper.
+> **(1) STRING-LITERAL PATTERNS → str_eq, not pointer-eq (80234c5).** A
+> `match s { "lit" => }` is `s == "lit"`, so it must be the structural
+> sequence-eq — but LPLit(LVString) emitted `(i32.eq)` on the two string
+> POINTERS in BOTH layers. The token's interned "len" and the pattern
+> literal's "len" share an address only when interned together, so every
+> string pattern was a layout lottery: m2 lucked `infer_seq_op`'s
+> `match cname { "len" }` right, m3 did not → m3 mistyped `len(argv)` as
+> List → emitted `list_compare` for `len(argv) < 2` → the CLI dispatched
+> every stdin compile (incl. the wheel → m4) to help. Closes
+> `Hβ.lower.lpat-typed-equality`. Fixed at wheel emit (LVString → str_eq),
+> seed lower (LPLit stores the whole LowValue record so the kind survives),
+> seed emit (dispatch the LV tag; intern the const via emit_string_intern —
+> the static-data path, NOT the broken emit_string_lit `$str_alloc` stub;
+> scalars byte-identical). The refutation ladder was the method working:
+> is_seq_op-dispatch and the e-graph were each PROBED and refuted before the
+> pattern layer; the decisive fact was `IC cname=[len] seq=Y` firing 35× while
+> `SEQOP-LEN` fired 0× — the `==` pin worked, the `match` did not.
+> **(2) SELF-RECURSIVE CLOSURE self-capture (986ae46).** `parse_int`'s nested
+> `go` captures itself; the wheel filled its self-capture (offset 8) with
+> `(local.get $go)` BEFORE the LLet set `$go` — a null fn_ptr, so `go`'s
+> recursive `call_indirect (type $ft3)` on 0 trapped "indirect call type
+> mismatch" the first time m3 ran the lexer (parse_int lexes number literals).
+> The seed binds every let-bound closure's local right after alloc; the wheel
+> filled captures first. LMakeClosure now binds `$fn_name` to the record
+> before `emit_capture_stores` when `captures_self` (a capture is an LLocal on
+> fn_name → `$fn_name` is the declared let-binding, always safe). Reproduced
+> in the fast loop: `parse_int("42")` trapped exit 134, now = 42.
+>
+> **NEXT — THE `ev_perform_entry` OOB (the deep evidence-seam, PLAN §7's
+> central open blocker).** m3 now parses, and traps: `_start → … →
+> parse_import → nstmt → mint_node → fresh_handle → ev_perform_entry`, an
+> OUT-OF-BOUNDS memory access. `fresh_handle` performs `graph_fresh_ty` (a
+> Graph effect handled at the compile boundary, ~10 frames up); the OOB means
+> the evidence didn't reach the perform — a mid-chain evidence-drop the
+> shallow micros (45/45) don't exercise. NOT reproduced by simple constructs:
+> a 4-frame deep-chain perform (exit 5) and a stacked-handler deep perform of
+> the outer effect (exit 10) both PASS — the trigger is subtler (the wheel's
+> specific graph_fresh_ty-during-parse shape, many effects threaded, the
+> outermost install). This is an EVIDENCE-LAYER question → binary-patch-probe
+> `ev_perform_entry` in the built m3.wasm (the ⟲ method; wheel-eprints are
+> Heisenberg here), print the key/base/scan-bounds at the OOB to pin WHICH
+> effect's evidence is missing and WHERE in the chain it dropped. m2's
+> fresh_handle (seed-emitted) works, so it is again the WHEEL's emit of the
+> perform's evidence dispatch that diverges. First-light = diff(m3,m4) empty
+> AND battery green through m3; m4 is still empty (m3 traps before emitting).
 
 > **THE f64 CENSUS DECOMPOSED INTO SEVEN ROOTS (2026-07-07, e7b4623→e44afd9)
 > — the "~44 type mismatches" were never one class; probing them end to end

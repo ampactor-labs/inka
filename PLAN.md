@@ -619,25 +619,31 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > perform` (`LBlock([LLet(rec, LGlobal("<hname>_state_g")), LPerform("<hname>_<op>",
 > args, rec)])`, all existing LowIR) → evidence.
 >
-> **THE ONE STANDING FRONTIER (m3 assembly): `cursor_default`.** m3 does not yet
-> assemble — `$cursor_default_state_g` + `$op_cursor_default_cursor_at` undefined.
-> cursor_default is DECLARED (cursor.mn:82) but NEVER installed (`~>`); its
-> `cursor_at` is performed (cursor_transport.mn:247, reachable). draw_op_edges
-> marks cursor_at → cursor_default (unique declarer) → singleton dispatch emits
-> DIRECT refs to a handler whose `_state_g` isn't declared and whose arm fn isn't
-> kept reachable. **The SEED does BOTH** (m2.wat: 3 `cursor_default_state_g` + 5
-> `op_cursor_default_cursor_at` refs, assembles): it declares `_state_g` for EVERY
-> DECLARED handler (the state's one home is a property of the DECL, not the
-> install) AND `reachable_from_main` keeps every handler's arm fns. The wheel must
-> mirror: (a) `emit_singleton_globals` declares `_state_g` per declared handler —
-> find the seed's mechanism in `bootstrap/src/emit/` and mirror it (the
-> `LGlobal`-read proxy in `singleton_hnames_expr` did NOT land — m3 has the 2 reads
-> but no decl; either a seed-miscompile of the new ends_with/str_slice arm or the
-> wrong walk; DELETE it and mirror the seed's declared-handler walk instead); (b)
-> `reachable_from_main` follows the singleton `LPerform`'s `$op_<hname>_<op>` target
-> (or keeps all handler-arm `LDeclareFn`s). Then m3 assembles → `GATE_WASM=m3.wasm
-> march-gate --no-build --micros` → `import a/b` through m3 (the original repro) →
-> `march.sh --fixpoint`. Repro: `printf 'import a/b\nfn main() = 0\n' | m3`.
+> **THE STANDING FRONTIER (m3 assembly) — the PROVEN-SINGLETON cut, NOT more
+> mole-chasing (9a03abd).** The `_state_g`-per-declared-handler + arm-fn
+> reachability completions LANDED, m2-green (emit_singleton_globals unions the
+> installed set with every no-config declared handler read live from the env via
+> `noconfig_handler_names`, index-walking the snapshot; `reach_names_expr` marks
+> the perform's arm fn by its emitted name `op_<target>`). They cleared
+> cursor_default's `_state_g` + arm fn — and m3 assembly then MARCHED into the dead
+> `cursor_default` SUBSYSTEM the singleton dispatch force-links: `$cursor_argmax_
+> compute` / `$filter_at_position` undefined, because the wheel emits those as
+> fn-VALUES (`global.get $<fn>`) where the SEED emits direct CALLS (m2.wat declares
+> NEITHER global, yet assembles). **The root is not another symbol: a handler
+> DECLARED but NEVER installed (cursor_default, cursor.mn:82; its cursor_at
+> performed at cursor_transport.mn:247) is NOT a proven singleton (§5.3 step 3) and
+> must NOT singleton-dispatch — it should stay evidence-dispatched (as pre-tier),
+> leaving its subsystem dead/indirect.** Forcing the wheel's emit to be COMPLETE on
+> dead code (chase every fn-value-vs-call divergence to match the seed) is the
+> wrong direction. THE CLEAN CUT: gate `lower_op_default_handler` (or draw_op_edges)
+> on the handler being INSTALLED — compute the install set once from the program's
+> `LHandleWith`/`~>` sites (a lower-scope context, like `lower_handler_stack_ctx`),
+> and return the default only when the handler is in it; else evidence. Then m3
+> assembles → `GATE_WASM=m3.wasm march-gate --micros` → `printf 'import a/b\nfn
+> main()=0\n' | m3` (the original repro, expect no ev_perform_entry) →
+> `march.sh --fixpoint`. (The fn-value-vs-call divergence IS a real wheel-emit bug
+> worth its own peer — `Hβ.emit.pipe-stage-fnvalue-vs-call` — but it is NOT on the
+> first-light path once the proven-singleton cut stops force-linking dead code.)
 >
 > **THE USER-CHOSEN DEEP FRONTIER (the arm-internal / each-with-effects gap).**
 > Once the singleton tier lands, `draw_op_edges` should become `arms |> each(draw)`

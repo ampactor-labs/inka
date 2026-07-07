@@ -1111,16 +1111,25 @@
         (br $cap_iter)))
     ;; Not local, not yet a capture — check outer-scope reachability
     ;; via three paths (any positive → capture):
-    ;;   (a) top-level globals set → return -1 (caller emits LGlobal)
     ;;   (b) OUTER FRAMES of lower's locals ledger (indices
-    ;;       [0, frame_start)) — H.2.e closure-capture path.
+    ;;       [0, frame_start)) — H.2.e closure-capture path. Scanned FIRST:
+    ;;       an enclosing param/let SHADOWS a same-named top-level global
+    ;;       (lexical scope; infer's env resolves the same VarRef newest-
+    ;;       first). Deciding the global fence BEFORE this scan re-derived
+    ;;       infer's resolution by name and INVERTED it: find_mapping's
+    ;;       lambda read `id` as the prelude fn's closure record
+    ;;       (global.get $id) instead of capturing the param — so
+    ;;       instantiate never freshened a free quantified var and let-
+    ;;       polymorphism was dead program-wide, masked at i32 word width
+    ;;       until the f64 gradient exposed it (9 corpus sites: id, rest,
+    ;;       count, handler_name).
+    ;;   (a) top-level globals set → return -1 (caller emits LGlobal) —
+    ;;       un-shadowed names only.
     ;;   (c) infer's env (env_contains) — preserves the contract used
     ;;       by lower/state_init.wat harness + standalone lookups.
     ;; If neither (b) nor (c), return -1 (productive-under-error per
     ;; Hazel — caller emits LGlobal; emit_diag fires if genuinely
     ;; missing).
-    (if (call $ls_is_global (local.get $name))
-      (then (return (i32.const -1))))
     ;; (b) Outer-frame locals scan.
     (local.set $local_slot (i32.const -1))   ;; reuse as "found" flag
     (local.set $i (global.get $lower_frame_start_g))
@@ -1136,6 +1145,11 @@
             (local.set $local_slot (i32.const 0))   ;; sentinel "found"
             (br $outer_done)))
         (br $outer_iter)))
+    ;; (a) global fence — un-shadowed names only.
+    (if (i32.lt_s (local.get $local_slot) (i32.const 0))
+      (then
+        (if (call $ls_is_global (local.get $name))
+          (then (return (i32.const -1))))))
     ;; (c) env fallback if outer-frame scan didn't find it.
     (if (i32.lt_s (local.get $local_slot) (i32.const 0))
       (then

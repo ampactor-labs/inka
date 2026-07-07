@@ -1748,14 +1748,19 @@
   ;; $lower_lambda's prior comment block.
   (func $lower_cap_materialize (param $name i32) (result i32)
     (local $local_slot i32) (local $cap_idx i32)
-    (if (call $ls_is_global (local.get $name))
-      (then (return (call $lexpr_make_lglobal (i32.const 0) (local.get $name)))))
+    ;; LEXICAL FIRST — the outer fn's locals/params SHADOW a same-named
+    ;; top-level global (the $ls_lookup_or_capture ordering law, mirrored:
+    ;; global-first here initialized find_mapping's `id` capture slot from
+    ;; (global.get $id) — the prelude fn's closure record — while the lambda
+    ;; body correctly read its capture slot; the slot held the wrong value).
     (local.set $local_slot (call $ls_lookup_local (local.get $name)))
     (if (i32.ge_s (local.get $local_slot) (i32.const 0))
       (then (return (call $lexpr_make_llocal (i32.const 0) (local.get $name)))))
     (local.set $cap_idx (call $ls_lookup_or_capture (local.get $name)))
     (if (i32.ge_s (local.get $cap_idx) (i32.const 0))
       (then (return (call $lexpr_make_lupval (i32.const 0) (local.get $cap_idx)))))
+    (if (call $ls_is_global (local.get $name))
+      (then (return (call $lexpr_make_lglobal (i32.const 0) (local.get $name)))))
     ;; Per protocol_no_silent_fallback.md: name truly unresolved at
     ;; outer-fn level (not global, not local, not capture-able). Emit
     ;; LUnresolved sentinel; emit translates to (unreachable). Was

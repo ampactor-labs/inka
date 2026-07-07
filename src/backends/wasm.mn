@@ -1613,15 +1613,12 @@ fn walk_locals_list(stmts, acc) = {
 
 fn walk_locals_expr(expr, acc) = match expr {
   LLet(h, name, inner) => {
-    // The local's WIDTH: the graph's proof at the LLet handle joined
-    // with the init's own computed width (tail_expr_repr) — the floor
-    // yields to either. A float-computing if bound by a let whose
-    // handle the weak seed-era infer left free still declares f64,
-    // because the init's emission proves it (one width, decl and store
-    // agreeing by the same read).
+    // The local's WIDTH: llet_repr — the ONE projection this decl and the
+    // LLet store both read, so they cannot disagree. The NAME is
+    // local_wat_name(name, r) — the repr decides the register name too.
+    let r = llet_repr(h, inner)
     walk_locals_expr(inner,
-      [name ++ " " ++
-       repr_wat(repr_join(repr_of(lookup_ty(h)), tail_expr_repr(inner)))] ++ acc)
+      [local_wat_name(name, r) ++ " " ++ repr_wat(r)] ++ acc)
   },
   LMakeClosure(_, _, _, _)         => acc,  // function boundary — its locals are its own
   LFnRef(_h, _n, ev)        => walk_locals_list(ev, acc),  // record reuses $state_tmp; ev forwards declare no locals
@@ -1759,7 +1756,7 @@ fn walk_locals_arms(arms, acc) = {
 // leaf declared every Float payload binder a word while the bind
 // loaded it f64-wide: the m3 assembly's 20-site local.set class.
 fn walk_locals_pat(pat, r, acc) = match pat {
-  LPVar(name) => [name ++ " " ++ repr_wat(r)] ++ acc,
+  LPVar(name) => [local_wat_name(name, r) ++ " " ++ repr_wat(r)] ++ acc,
   LPCon(name, _, sub_pats) =>
     walk_locals_pat_con(ctor_payload_tys_of(name), sub_pats, acc),
   LPTuple(elem_binds)   => walk_locals_pat_tuple(elem_binds, acc),
@@ -1839,6 +1836,28 @@ fn repr_join(a, b) = match a {
   _    => a
 }
 
+// The ONE width read a let's DECL and its STORE share — the graph's proof at
+// the LLet handle joined with the init's computed width (the floor yields to
+// either; a float-computing init bound by a let whose handle the weak
+// seed-era infer left free still declares f64).
+fn llet_repr(h, inner) =
+  repr_join(repr_of(lookup_ty(h)), tail_expr_repr(inner))
+
+// The WASM register NAME of a named slot is a projection of (source name,
+// proven repr): a non-word slot is `name.<width>`, so two same-named binders
+// of DIFFERENT widths (lower_expr_body's LitInt(v)/LitFloat(v) arms — the
+// one m3 redefinition) are two registers, deterministically. Decl and every
+// use read THIS one projection — params included (a param's WAT name is
+// fn-internal, so no param/local discrimination exists anywhere). The
+// repr decides the width AND the name: one decider, extended.
+fn local_wat_name(name, r) = match r {
+  RI32  => name,
+  RI64  => name ++ ".i64",
+  RF64  => name ++ ".f64",
+  RF32  => name ++ ".f32",
+  RV128 => name ++ ".v128"
+}
+
 fn body_result_repr(body) = {
   if len(body) == 0 { RI32 }
   else { tail_expr_repr(list_index(body, len(body) - 1)) }
@@ -1877,10 +1896,11 @@ fn emit_params(names, body) = {
     // the interned literal never match), so the rename would silently never
     // fire and the collision would stand.
     let wat_name = if field_name_eq(name, "_") { "_{int_to_str(i)}" } else { name }
+    let r = param_repr_from_body(name, body)
     wat_emit(" (param $")
-    wat_emit(wat_name)
+    wat_emit(local_wat_name(wat_name, r))
     wat_emit(" ")
-    wat_emit(repr_wat(param_repr_from_body(name, body)))
+    wat_emit(repr_wat(r))
     wat_emit(")")
   }, enumerate(names))
 }
@@ -2291,9 +2311,12 @@ fn emit_one_keyed_ev(state_local, entry, off) = match entry {
 fn emit_expr(expr) = match expr {
   LConst(h, val) => emit_const(val, h),
 
-  LLocal(_h, name) => {
+  LLocal(h, name) => {
+    // The register name reads the SAME (name, repr) projection the decl
+    // wrote — an f64 local's get is $name.f64 (params included).
+    let r = if h == 0 { RI32 } else { repr_of(lookup_ty(h)) }
     wat_emit("    (local.get $")
-    wat_emit(name)
+    wat_emit(local_wat_name(name, r))
     wat_emit(")\n")
   },
 
@@ -2311,10 +2334,10 @@ fn emit_expr(expr) = match expr {
     wat_emit(")\n")
   },
 
-  LLet(_h, name, val) => {
+  LLet(h, name, val) => {
     emit_expr(val)
     wat_emit("    (local.set $")
-    wat_emit(name)
+    wat_emit(local_wat_name(name, llet_repr(h, val)))
     wat_emit(")\n")
   },
 
@@ -5633,7 +5656,7 @@ fn emit_pat_binds_at(pat, path, path_len, val_repr) = match pat {
   LPVar(name) => {
     emit_scrut_at_repr(path, path_len, val_repr)
     wat_emit("    (local.set $")
-    wat_emit(name)
+    wat_emit(local_wat_name(name, val_repr))
     wat_emit(")\n")
   },
   LPWild   => (),

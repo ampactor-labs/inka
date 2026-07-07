@@ -662,14 +662,47 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > param-ann` (w6 probe: SYNTAX's documented `f: a -> b` param form does not
 > parse — E_MissingVariable x/a/b; the lathe lags the spec).
 >
-> **NEXT — the march is RUNNING** (`march.sh --fixpoint`, detached, log
-> `.build/march/march-0707.log`): m2 (all seven roots in) compiles the
-> wheel → m3; expect the 2370-mismatch flood to collapse and zip_with
-> all-word. Then `wat2wasm m3.wat` (the 44-error census should be zero or
-> a residue to census again) → `GATE_WASM=$PWD/.build/march/m3.wasm bash
-> tools/march-gate.sh --no-build --micros` (the battery through the
-> wheel's CHILD — the correctness half) → the m4 diff. First-light =
-> diff(m3,m4) empty AND battery green through m3.
+> **THE MARCH'S VERDICT (five iterations, 2026-07-07 00:30→01:45) — m3
+> ASSEMBLES AND RUNS for the first time in the project's history; the m4
+> gate stands on ONE pinned face.** The census trajectory, each iteration
+> a whole-class measurement then one root fix: 44 type errors → 1
+> structural paren (the generated $show_listbody helper emitted four
+> closers for five opens — the whole-file paren census measured exactly
+> −1; df43d69) → 1 duplicate local (lower_expr_body binds `v` at f64 AND
+> i32 in sibling arms — the register NAME is now a projection of (source
+> name, proven repr): local_wat_name, one decider for width AND name,
+> params included since a param's WAT name is fn-internal) → 1 starved
+> param (float_render_positive's f: every float contact was a FORWARD
+> call, so the body inferred against pre-scheme free vars and f floored —
+> pinned : Float per the Intent-Boundary precedent; the inference-order
+> completion is the named band `Hβ.infer.scc-ordered-walk`) → **wat2wasm
+> exit 0, 283,787 lines, zero errors** → m3 RAN over the wheel (exit 0)
+> but emitted NOTHING: the CLI dispatched to help because _start passed
+> literal 0 as argv and `len(0)` read address 0's scratch (0 in m2's
+> layout, ≥2 in m3's — undefined-by-luck); _start now passes a fresh
+> alloc'd word (virgin-zero = a len-0 flat list; real WASI argv is
+> `Hβ.emit.wasi-argv-in-start`).
+>
+> **THE STANDING FACE (the m4 blocker, banked with its repro + method):**
+> even with a true empty argv, m3's `parse_cli_args` lands in
+> ParseError/help — its `len(argv) < 2` is emitted as `(call
+> $list_compare)`: the len-CALL node is BOUND TO A LIST in the graph
+> (binary-probe: type tag 4 at node 6436) while the len-VarRef child sits
+> at epoch 0 — NEVER INFERRED. 6-line repro: `let xs = [1,2,3]; if
+> len(xs) < 2 {3} else {7}` through m2 emits list_compare(len-result, 2)
+> — a garbage compare that lucks RIGHT in the micro (exit 7) and lucked
+> WRONG in m3's dispatch (help). LAYOUT-SENSITIVE: adding one
+> wheel-eprint flips the emission (the handle numbering shifts the
+> lottery) — so probe it ONLY with binary patches on the built m2.wat
+> (the ⟲ method; the working patch shape is banked in the handoff). The
+> epoch-0 VarRef says the INFER WALK never reached these nodes — find
+> which walk skips them (the if-condition path? the e-graph's canonical
+> read feeding lower a node infer never visited?), fix the walk, and the
+> `List(tN) vs Int` flood class (×245 — the runtime's word-idiom
+> signatures meeting healed inference) likely shrinks with it. THEN:
+> `GATE_WASM=$PWD/.build/march/m3.wasm bash tools/march-gate.sh
+> --no-build --micros` (the battery through the wheel's CHILD) → the m4
+> diff. First-light = diff(m3,m4) empty AND battery green through m3.
 
 > **THE UNDEFINED-REFERENCE LADDER CLOSED (4e3faa7, 2026-07-06) — the paren
 > band gave the first WHOLE m3.wat, then ONE census closed the whole undefined

@@ -2060,11 +2060,18 @@ fn emit_start(top_fn_names, value_lets, main_params) = {
   }
   if ls_find_str_local(top_fn_names, "main", 0) >= 0 {
     // main is graph-known → DIRECT call (never virtualize a known
-    // operator): static closure as __state, one zeroed arg per declared
-    // param. main's result IS the exit code (Unix vocabulary; the seed's
-    // _start and the whole micro battery key on it — never dropped).
+    // operator): static closure as __state, one EMPTY-LIST arg per
+    // declared param. main's result IS the exit code (Unix vocabulary;
+    // the seed's _start and the whole micro battery key on it — never
+    // dropped). The arg is a fresh alloc'd word — virgin-zero in the
+    // bump image = a len-0 flat list — NOT the literal 0: a main that
+    // READS its param (the CLI's len(argv)) on address 0 read whatever
+    // the process's scratch held — 0 in m2's layout, ≥2 in m3's, so m3
+    // dispatched every stdin compile to ParseError/help and emitted
+    // NOTHING (the 0/45 battery, the empty m4). Real WASI argv is the
+    // named peer Hβ.emit.wasi-argv-in-start.
     wat_emit("    (call $main (global.get $main)")
-    each((_) => wat_emit(" (i32.const 0)"), range(0, main_params))
+    each((_) => wat_emit(" (call $alloc (i32.const 4))"), range(0, main_params))
     wat_emit(")\n")
     wat_emit("    (call $proc_exit)\n")
   } else {

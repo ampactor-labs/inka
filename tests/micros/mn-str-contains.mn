@@ -1,0 +1,6 @@
+fn main() = {
+  let a = if str_contains("hello world", "wor") { 10 } else { 0 }
+  let b = if str_contains("hello", "xyz") { 100 } else { 0 }
+  let c = if str_contains("abc", "abc") { 5 } else { 0 }
+  a + b + c
+}

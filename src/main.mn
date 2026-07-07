@@ -316,12 +316,13 @@ fn doc_run(target_opt) = {
 }
 
 fn doc_project(entry_module) = {
-  // Today: minimal projection — module signature + `///` Reasons
-  // surfaced verbatim per DS-docstring-edge substrate. Full F.1
-  // render handlers (md / html / llms) gated on
-  // Hβ.f1.doc-handler-substrate.
+  // Today the doc projection IS driver_check: it validates the module and
+  // surfaces its `///` Reasons through the diagnostics handler. The dedicated
+  // render step (md / html / llms handlers over the module signature) is a
+  // NAMED gated peer — Hβ.f1.doc-handler-substrate — not a phantom call:
+  // `doc_emit_for_module` was referenced but never defined (reachable_from_main
+  // emitted the dangling global), so the honest form names the peer and stops.
   driver_check(entry_module)
-  doc_emit_for_module(entry_module)
 }
 
 // ─── compile_run / run_run — emit WAT / compile + execute

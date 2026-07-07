@@ -140,6 +140,30 @@ fn str_compare(a, b) -> Int with Memory =
   let lb = byte_len(b)
   str_compare_loop(a, b, la, lb, 0)
 
+// str_contains — is `needle` a byte-substring of `haystack`? The [Byte]
+// substring scan: try each start position where `needle` still fits, and
+// at each, byte-match the whole needle. Empty needle is contained; a needle
+// longer than the haystack is not. Used by the IFC flow-label heuristic
+// (query.mn: a `secret`/`classified`/`sensitive` name flows Secret).
+fn str_contains(haystack, needle) -> Bool with Memory = {
+  let hlen = byte_len(haystack)
+  let nlen = byte_len(needle)
+  if nlen == 0 { true }
+  else if nlen > hlen { false }
+  else { str_contains_scan(haystack, needle, 0, hlen - nlen, nlen) }
+}
+
+fn str_contains_scan(haystack, needle, i, last, nlen) -> Bool with Memory =
+  if i > last { false }
+  else if str_matches_at(haystack, needle, i, 0, nlen) { true }
+  else { str_contains_scan(haystack, needle, i + 1, last, nlen) }
+
+fn str_matches_at(haystack, needle, base, j, nlen) -> Bool with Memory =
+  if j >= nlen { true }
+  else if byte_at(haystack, base + j) == byte_at(needle, j) {
+    str_matches_at(haystack, needle, base, j + 1, nlen)
+  } else { false }
+
 // str_hash — FNV-1a over the bytes: the [Byte] instance of the ONE hash leaf.
 // Structural-equal strings (byte-equal) hash equal by construction (str_eq ⇒
 // str_hash equal — the eq/hash agreement the whole fold enforces). The SAME

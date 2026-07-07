@@ -1542,21 +1542,27 @@ fn emit_render_reason_oneline(reason) with !Mutate = match reason {
   VerifyWitness(_)                => "verify witness"
 }
 
-// Walk the function body once, projecting its locals row. Two local
-// families, two disciplines. Handle-suffixed locals ($call_<h>,
-// $tuple_<h>, $__hstate_<h>, …) are unique by construction — streamed
-// inline during the walk, exactly as before. NAMED locals (an LLet's
-// binding, a match arm's LPVar, a list-rest bind) are a SET keyed by
-// name: the walk collects them as "name width" entries (O(1) cons —
-// declaration order is immaterial to WAT) and emit_named_locals emits
-// each distinct entry once. Two `let grown` in disjoint branches share
-// one fn-scoped register; the per-occurrence stream declared it twice
-// and wat2wasm rejected split_walk / str_unescape_into on all three
-// +rt rungs. A name recurring at a DIFFERENT width still emits
-// both declarations — wat2wasm rejects that loud (the cross-width
-// collision is the seed's .f64-mangle case; named, never merged).
-// Stops at LMakeClosure boundaries (their locals are their own). Must
-// cover every LowExpr container that can hold LLet descendants.
+// Walk the function body once, projecting its locals row. ONE local
+// family, ONE discipline: the preamble IS a SET. Every local — a named
+// LLet binding AND a handle-suffixed scratch ($call_<h>, $tuple_<h>,
+// $__hstate_<h>, …) — collects into `acc` as a "name width" entry, and
+// emit_named_locals declares each distinct entry once. The old split
+// (handle-suffixed streamed inline as "unique by construction", named
+// set-deduped) was a two-disciplines-for-one-thing seam, and the seam
+// was the bug: the e-graph shares pure nodes, so one $call_<h> node
+// emitted at three DAG positions declared its register three times and
+// wat2wasm rejected the redefinition (ft_name, m3 assembly). A handle
+// keys ONE register no matter how many positions reach it — the atomic
+// set-then-use per occurrence makes sharing safe — so declaring it once
+// is the ONLY correct form. (The deeper ultimate: emit a shared pure
+// node ONCE and bind it, retiring the re-emission entirely — the named
+// peer Hβ.emit.shared-node-cse. Dedup-the-decl is its correct floor:
+// pure re-emission is redundant, never wrong; the e-graph gates sharing
+// on purity, so no effect is ever duplicated.) A name recurring at a
+// DIFFERENT width still emits both declarations — wat2wasm rejects that
+// loud (the seed's .f64-mangle cross-width case; never merged). Stops at
+// LMakeClosure boundaries (their locals are their own). Must cover every
+// LowExpr container that can hold a scratch or LLet descendant.
 fn walk_locals_list(stmts, acc) = {
   if len(stmts) == 0 { acc }
   else { walk_locals_list(drop_last(stmts), walk_locals_expr(last(stmts), acc)) }
@@ -1583,100 +1589,55 @@ fn walk_locals_expr(expr, acc) = match expr {
     walk_locals_list(e, walk_locals_list(t, walk_locals_expr(c, acc))),
   LBinOp(_h, _op, l, r)     => walk_locals_expr(r, walk_locals_expr(l, acc)),
   LUnaryOp(_h, _op, inner)  => walk_locals_expr(inner, acc),
-  LCall(h, f, args)         => {
+  LCall(h, f, args)         =>
     // $call_<h> parks the CALLEE RECORD pointer — a handle IS a word,
     // i32 invariantly; the call's RESULT rides the stack at the ft's
-    // width, never through this scratch.
-    wat_emit(" (local $call_")
-    wat_emit(int_to_str(h))
-    wat_emit(" i32)")
-    walk_locals_list(args, walk_locals_expr(f, acc))
-  },
-  LTailCall(h, f, args)     => {
-    // $call_<h> parks the CALLEE RECORD pointer — a handle IS a word,
-    // i32 invariantly; the call's RESULT rides the stack at the ft's
-    // width, never through this scratch.
-    wat_emit(" (local $call_")
-    wat_emit(int_to_str(h))
-    wat_emit(" i32)")
-    walk_locals_list(args, walk_locals_expr(f, acc))
-  },
+    // width, never through this scratch. One entry into the set (deduped).
+    walk_locals_list(args, walk_locals_expr(f, ["call_{int_to_str(h)} i32"] ++ acc)),
+  LTailCall(h, f, args)     =>
+    walk_locals_list(args, walk_locals_expr(f, ["call_{int_to_str(h)} i32"] ++ acc)),
   LReturn(_h, inner)        => walk_locals_expr(inner, acc),
   LMakeList(_h, elems)      => walk_locals_list(elems, acc),
-  LMakeTuple(h, elems)      => {
-    if len(elems) > 0 {
-      wat_emit(" (local $tuple_")
-      wat_emit(int_to_str(h))
-      wat_emit(" i32)")
-    }
-    walk_locals_list(elems, acc)
-  },
+  LMakeTuple(h, elems)      =>
+    walk_locals_list(elems,
+      if len(elems) > 0 { ["tuple_{int_to_str(h)} i32"] ++ acc } else { acc }),
   // SIMD lanes need a v128 accumulator local — replace_lane reads-modifies the
   // running vector. No heap local (the value is pure stack v128, not a pointer).
-  LSimdLanes(h, lanes)      => {
-    if len(lanes) > 0 {
-      wat_emit(" (local $simd_")
-      wat_emit(int_to_str(h))
-      wat_emit(" v128)")
-    }
-    walk_locals_list(lanes, acc)
-  },
+  LSimdLanes(h, lanes)      =>
+    walk_locals_list(lanes,
+      if len(lanes) > 0 { ["simd_{int_to_str(h)} v128"] ++ acc } else { acc }),
   LMakeRecord(_h, fs)       => walk_locals_list(fs, acc),
-  LMakeVariant(h, _t, fs)   => {
-    if len(fs) > 0 {
-      wat_emit(" (local $variant_")
-      wat_emit(int_to_str(h))
-      wat_emit(" i32)")
-    }
-    walk_locals_list(fs, acc)
-  },
+  LMakeVariant(h, _t, fs)   =>
+    walk_locals_list(fs,
+      if len(fs) > 0 { ["variant_{int_to_str(h)} i32"] ++ acc } else { acc }),
   LMatch(_h, s, arms)       => walk_locals_arms(arms, walk_locals_expr(s, acc)),
-  LSuspend(h, _o, f, args, ev) => {
+  LSuspend(h, _o, f, args, ev) =>
     // The transient's per-site scratch (the variant_{h} precedent): the
-    // suspend must survive its args' own emission.
-    wat_emit(" (local $sst_")
-    wat_emit(int_to_str(h))
-    wat_emit(" i32)")
-    walk_locals_list(ev, walk_locals_list(args, walk_locals_expr(f, acc)))
-  },
+    // suspend must survive its args' own emission. One entry (deduped).
+    walk_locals_list(ev, walk_locals_list(args,
+      walk_locals_expr(f, ["sst_{int_to_str(h)} i32"] ++ acc))),
   LHandleWith(h, b, hn, hname, inits, arm_names, captured_evs) => {
-    // The install's OWN minted locals — the handler record plus one
-    // [record, base] entry per effect group — mirror-true to what the
-    // LHandleWith emit arm + emit_handler_effect_entries local.set.
-    wat_emit(" (local $__hstate_")
-    wat_emit(int_to_str(h))
-    wat_emit(" i32)")
-    // the scoped-singleton save local (named installs only)
-    if hname != "" {
-      wat_emit(" (local $__hstate_")
-      wat_emit(int_to_str(h))
-      wat_emit("_prev i32)")
-    }
-    each((g) => {
-      wat_emit(" (local $__hstate_")
-      wat_emit(int_to_str(h))
-      wat_emit("_")
-      wat_emit(group_ename(g))
-      wat_emit(" i32)")
-    }, arm_names)
+    // The install's OWN minted locals — the handler record, the scoped-
+    // singleton save (named installs only), and one [record, base] entry
+    // per effect group — mirror-true to the LHandleWith emit arm +
+    // emit_handler_effect_entries local.set. All collect into the set.
+    let base = ["__hstate_{int_to_str(h)} i32"] ++ acc
+    let with_prev =
+      if hname != "" { ["__hstate_{int_to_str(h)}_prev i32"] ++ base }
+      else           { base }
+    let with_groups = fold(with_prev,
+      (a, g) => ["__hstate_{int_to_str(h)}_{group_ename(g)} i32"] ++ a,
+      arm_names)
     walk_locals_list(captured_evs,
       walk_locals_list(inits,
-        walk_locals_expr(hn, walk_locals_expr(b, acc))))
+        walk_locals_expr(hn, walk_locals_expr(b, with_groups))))
   },
-  LFeedback(h, b, s)        => {
-    // LF walkthrough §4.5: declare both per-site locals for the
-    // load-tee-store state-machine emitted at the LFeedback arm.
-    // $__fb_prev_<h> holds the prior iteration's output (loaded
-    // from $s<h> at iteration entry); $__fb_<h> holds the current
-    // iteration's output (tee'd before storing back to $s<h>).
-    wat_emit("    (local $__fb_prev_")
-    wat_emit(int_to_str(h))
-    wat_emit(" i32)\n")
-    wat_emit("    (local $__fb_")
-    wat_emit(int_to_str(h))
-    wat_emit(" i32)\n")
-    walk_locals_expr(s, walk_locals_expr(b, acc))
-  },
+  LFeedback(h, b, s)        =>
+    // LF walkthrough §4.5: both per-site locals for the load-tee-store
+    // state-machine at the LFeedback arm. $__fb_prev_<h> holds the prior
+    // iteration's output; $__fb_<h> holds the current. Both into the set.
+    walk_locals_expr(s, walk_locals_expr(b,
+      ["__fb_prev_{int_to_str(h)} i32", "__fb_{int_to_str(h)} i32"] ++ acc)),
   LPerform(_h, _n, args, _) => walk_locals_list(args, acc),
   LWasiCall(_h, _n, args)   => walk_locals_list(args, acc),
   LEvPerform(_h, _n, _e, _s, a) => walk_locals_list(a, acc),

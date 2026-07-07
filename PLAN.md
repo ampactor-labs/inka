@@ -585,7 +585,92 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-06, HEAD d56a417 — **march-gate 8/8 AND micros-through-m2 41/41; PASS-2 COMPLETED — the first whole m3.wat in history (10.57MB / 313,193 lines, #19, no trap)**; gates: `verify.sh` + `march-gate.sh`)
+## §7 · Current state (grounded 2026-07-06, HEAD 4e3faa7 — **the m3 UNDEFINED-REFERENCE CLASS is CLOSED; m2+m3 build clean and m3.wat parses WHOLE (~313k lines) with ZERO undefined funcs/globals; the trap marched to the f64/i64 REPRESENTATION GRADIENT (§5.U STEP 1, ~44 type mismatches in compiler-core float/FFI emit)**; gates: `verify.sh` + `march-gate.sh` + `wat2wasm .build/march/m3.wat`)
+
+> **THE UNDEFINED-REFERENCE LADDER CLOSED (4e3faa7, 2026-07-06) — the paren
+> band gave the first WHOLE m3.wat, then ONE census closed the whole undefined
+> class at root.** After the eq/compare sum-fold helpers stopped emitting
+> `)))))` (one paren over — the stray paren closed the module early and orphaned
+> the entire emit tail, the phantom-undefined wall), m3.wat parsed whole and
+> wat2wasm's undefined-ref census came back COMPLETE at four refs / two classes,
+> each fixed at its STRUCTURE, not its symptom:
+> **($Float)** the parser accepts a variant payload only after `(`, so
+> `TapeVecAdd { … }` orphaned the record-type brace → the outer parser misread
+> it as a value literal → the field TYPE `[Float]` lowered as a VALUE whose
+> element is the bare type-name `Float` → `global.get $Float`. autodiff's
+> variants now use the canonical parenthesized payload `TapeVecAdd({ … })`,
+> matching their own construction sites. (The prior-session `List`→`[Float]`
+> edit was a BAND-AID — it only renamed the leaked global from `$List` to
+> `$Float`; the root was the missing parens. Caught and reversed — the exact
+> no-band-aid discipline, self-applied.)
+> **(wasi_num_cores)** it has a wasi_threads handler arm → it is an effect-op
+> PERFORM, not a raw import; removed from `is_wasi_import_op`, it routes through
+> `lower_perform_dispatch` (the handler), matching the seed's op-index dispatch.
+> **(atomic_load_i32 / wait_i32)** direct-substrate atomic instructions with NO
+> handler arm, emitted as dangling calls → they project to `i32.atomic.load` /
+> `memory.atomic.wait32` (the latter extending the i32 timeout to the
+> instruction's i64), the threading peer of the existing memory-op instruction
+> projections. `is_wasi_import_op` had conflated THREE substrates (host imports,
+> effect-ops-with-handlers, atomic instructions), all emitting `call $op`; each
+> emits its true form now. `atomic_rmw` is unreached (0 sites; its RmwOp arg
+> needs static dispatch) — named peer `Hβ.emit.atomic-rmw-op-dispatch`.
+>
+> **NEXT — the f64/i64 REPRESENTATION GRADIENT (§5.U STEP 1).** m3.wat now has
+> ZERO undefined refs but ~44 TYPE mismatches on wat2wasm, all in compiler-core
+> float/FFI emit (`emit_const`, `emit_low_value_const`, `lower_lit_value`,
+> `path_open` FFI): 18 `local.set $f expected [i32] got [f64]`, 8 `f64.store got
+> [i32,i32]`, plus f64/i32 call-arg mismatches and `path_open`'s two i64 params
+> passed as i32. The seed FLOORS floats to i32 (`Hβ.seed.float-gradient`) so m2
+> assembles; the wheel's REAL f64/i64 emit is internally INCONSISTENT — the
+> local DECLARATION (`walk_locals`, backends/wasm.mn) and the VALUE emit disagree
+> on width. THE ROOT (Carried-Truth): `repr_of` (types.mn) must be the SINGLE
+> width-decider read live at BOTH the local decl AND the value emit, so they
+> cannot disagree; and the i64 FFI args (`path_open`) extend like `wait_i32`'s
+> timeout now does. Then reassemble m3 → `GATE_WASM=$PWD/.build/march/m3.wasm
+> bash tools/march-gate.sh --no-build --micros` (correctness half) →
+> `bash tools/march.sh --fixpoint` (m4, diff). First-light = diff(m3,m4) empty
+> AND battery green through m3. **QUEUED BAND:** str_contains
+> (lib/runtime/strings.mn) → `str_eq(needle, str_slice(haystack, i, i+nlen))`
+> over the O(1) [Byte] view + `range |> any`, DELETING str_matches_at +
+> str_contains_scan (Carried-Truth: reuse the one structural `==`; row honestly
+> widens to +Alloc until band-I fusion tightens it — the ultimate form, seed
+> catches up).
+
+> **THE ASSEMBLY LADDER (faces 15-22, 2026-07-06) — every one the wheel's
+> own emit refusing a disparateness the seed tolerated; each fix collapses
+> two mechanisms into one (Morgan's "elegantly whole, not disparate", paid
+> down in code).** Pass-2 completing gave the first whole m3.wat (#19);
+> wat2wasm then walked it, refusing one lie at a time, each named by its
+> line so each cost minutes not the hours the trap-faces did:
+> **(15)** triple fd_write imports — the wasi-ops dedup was pointer-eq (String
+> pin). **(16)** span_of_handle defined twice — three name collisions across
+> files (§9 dup-fn class the seed silently one-of'd); one deleted, two
+> renamed to their honest truths (caret_span_of_handle, flow_label_join).
+> **(17)** ft_name: $call_2503 declared 3× — the locals preamble carried TWO
+> disciplines (named set-deduped, handle-suffixed streamed-inline "unique by
+> construction"); the e-graph shares pure nodes so one node declared its
+> register 3×. Now ONE set (walk_locals purely accumulative);
+> Hβ.emit.shared-node-cse the deeper peer (emit a shared pure node once).
+> **(18)** $__fanout_input at diverge_0 — the `<|` diverge thunk captured its
+> input wrong (bare LLocal, not upval) AND none of the branch's frees; two
+> thunk-synthesis disciplines for one thing. Now `<|` captures exactly like
+> `><` (collect_free_vars + resolve_captures_outer + frame; input a synthetic
+> slot-0 upval). The `<|` path had ZERO micro coverage — mn-diverge-share=105,
+> mn-diverge-lambda=125 close it. **(19)** $_ redefined at lambda_19470 — two
+> wildcard params both emitted `$_`; `_` is the ABSENCE of a name, so it gets
+> a positional `$_<i>` (never referenced; String-proof on the check).
+> mn-wildcard-params=42. **(20)** $lower_handle_of undefined — lexpr_handle's
+> LEvEntry arm called a phantom (stale rename); recurses to lexpr_handle(ev).
+> **(21+22)** a CENSUS of called-but-undefined names (census-not-moles, before
+> waiting a pass-2 per face) preempted the whole phantom class: str_contains
+> (IFC flow-label, defined now as a [Byte] substring scan; mn-str-contains=15)
+> and doc_emit_for_module (the `doc` verb's phantom render — removed, the
+> md/html render named as Hβ.f1.doc-handler-substrate). float_of_int dismissed
+> (lowers to LConvert, never a global ref). **NEXT: pass-2 #26 → m3 assembles
+> clean → `GATE_WASM=$PWD/.build/march/m3.wasm bash tools/march-gate.sh
+> --no-build --micros` (the 45-micro battery through the wheel's CHILD, the
+> correctness half) → `march.sh --fixpoint` (m4, the diff). First-light =
+> diff(m3,m4) empty AND battery green through m3.**
 
 > **FACES 8–15, the emit corridor (2026-07-06).** After face 7's indexed
 > fixpoint, the sub-hour run cadence let eight more faces close in one

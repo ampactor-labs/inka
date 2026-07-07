@@ -2455,6 +2455,18 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (i32.const ")
     wat_emit(int_to_str(nc))
     wat_emit(") (i32.store offset=4)\n")
+    // A self-recursive closure binds its OWN local to the record BEFORE
+    // filling captures, so the self-capture (an LLocal on fn_name) reads the
+    // record, not the LLet's not-yet-set local — which is a null fn_ptr, the
+    // parse_int `go` indirect-call-type-mismatch that trapped m3 in the lexer.
+    // Guarded on captures_self so $fn_name is a declared in-scope local
+    // exactly when we bind it; the LLet's own local.set re-binds harmlessly.
+    // Mirrors the seed, which binds every let-bound closure's local early.
+    if captures_self(captures_exprs, fn_name) {
+      wat_emit("    (local.set $")
+      wat_emit(local_wat_name(fn_name, RI32))
+      wat_emit(" (local.get $state_tmp))\n")
+    } else { () }
     // Store each capture at offset 8 + 4*i.
     emit_capture_stores(captures_exprs, 0)
     // Store each ev_slot at offset 8 + 4*nc + 4*j.
@@ -5181,6 +5193,19 @@ fn emit_capture_stores(captures, base_i) = {
   wat_emit(")\n")
   }, enumerate(captures))
 }
+
+// Does this closure capture ITSELF — a self-recursive nested function (`go`
+// whose body calls `go`)? Its self-capture is an LLocal referencing fn_name, filled from
+// the enclosing scope where fn_name is the closure's own let-binding. That
+// binding is the local the LLet sets AFTER the closure is built, so the
+// self-capture must be bound to the record early or it reads a null fn_ptr
+// (the parse_int `go` indirect-call-type-mismatch). field_name_eq carries the
+// String proof (a bare `==` would pointer-eq the names — this session's class).
+fn captures_self(captures, fn_name) =
+  any((c) => match c {
+    LLocal(_, nm) => field_name_eq(nm, fn_name),
+    _             => false
+  }, captures)
 
 // Emit the keyed captured_evs region for the closure record `$state_tmp`.
 // The region lives AFTER the captures, based at 8 + 4*nc, and holds the

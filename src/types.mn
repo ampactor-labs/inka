@@ -292,9 +292,15 @@ type Scheme
 //   total_variants is the count over the declaring type — enables
 //     pattern-exhaustiveness as a graph read at infer_match_arms.
 //
-// EffectOpScheme(effect_name) is the declaring effect's name.
-// `perform op_name(args)` reads this to know which effect this op
-// participates in without re-inspecting the row.
+// EffectOpScheme(effect_name, default_handler, ambiguous): the op binding
+// IS the dispatch fact. effect_name is the declaring effect — read to know
+// which effect this op participates in without re-inspecting the row.
+// default_handler is the UNIQUE handler that declares an arm for this op,
+// drawn as an edge at register_handler ("" until then); ambiguous is True
+// once a SECOND distinct handler also declares it. lower reads them to cash
+// a non-lexical perform of a uniquely-handled op to a direct call against
+// the singleton's $<hname>_state_g home (never a threaded ev-slot copy —
+// Carried-Truth); an ambiguous op threads evidence instead.
 //
 // EffectDeclKind(op_names) is the effect declaration itself.
 // `env_lookup("Iterate")` reads this to know the effect's ops
@@ -309,7 +315,7 @@ type Scheme
 type SchemeKind
   = FnScheme                                     // tag 0
   | ConstructorScheme(TagId, Int)                // tag 1
-  | EffectOpScheme(String)                       // tag 2
+  | EffectOpScheme(String, String, Bool)         // tag 2 — (effect_name, default_handler, ambiguous)
   | RecordSchemeKind(List)                       // tag 3 — [(field_name, ty)]
   | EffectDeclKind(List)                         // tag 5 — [op_name: String]  (cache byte 5; byte 4 retired with the dissolved capability)
   | HandlerKind(String, Int, List, List, List)   // tag 6 — (handled_ename, residual_row_handle, config, state, arms)

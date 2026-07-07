@@ -745,7 +745,15 @@ fn singleton_hnames_expr(expr, acc) = match expr {
   LConst(_, _)              => acc,
   LLocal(_, _)              => acc,
   LFeedbackPrior(_)         => acc,
-  LGlobal(_, _)             => acc,
+  // A singleton dispatch (lower_singleton_perform) reads `$<hname>_state_g`; its
+  // home must be DECLARED even when <hname> is a handler declared but never
+  // installed in THIS program (the state's one home is a property of the decl,
+  // not the install). Collect the bare hname, deduped like the install path.
+  LGlobal(_, name) =>
+    if ends_with(name, "_state_g") {
+      let hname = str_slice(name, 0, byte_len(name) - byte_len("_state_g"))
+      if ls_find_str_local(acc, hname, 0) >= 0 { acc } else { [hname] ++ acc }
+    } else { acc },
   LUpval(_, _)              => acc,
 }
 

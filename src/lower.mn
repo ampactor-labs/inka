@@ -1356,12 +1356,54 @@ fn lower_perform_dispatch(handle, op_name, lo_args) =
   match lower_resolve_handler_for_op(op_name) {
     Some(r) =>
       LPerform(handle, resolve_target(r), lo_args, "__hstate_{int_to_str(resolve_handle(r))}"),
-    None => {
-      let ename = lower_effect_name_of_op(op_name)
-      arm_ev_note(ename)
-      LEvPerform(handle, op_name, ename, lower_compute_ev_slot_for_op(op_name), lo_args)
-    }
+    None =>
+      // Tier 1-GLOBAL — no lexical install covers the op, but a UNIQUE handler
+      // declares it (the op→handler edge drawn at register_handler). Read that
+      // singleton's record LIVE from its $<hname>_state_g home and direct-call
+      // the arm, never thread a copy of a once-installed record through the
+      // ev-region (Carried-Truth). The route-infra handlers (graph/env/…) land
+      // here; it dissolves the deep-chain evidence trap at fresh_handle. Only a
+      // genuinely unknown or ambiguous handler keeps the evidence floor below.
+      match lower_op_default_handler(op_name) {
+        Some(hname) => lower_singleton_perform(handle, op_name, hname, lo_args),
+        None => {
+          let ename = lower_effect_name_of_op(op_name)
+          arm_ev_note(ename)
+          LEvPerform(handle, op_name, ename, lower_compute_ev_slot_for_op(op_name), lo_args)
+        }
+      }
   }
+
+// The op's UNIQUE default handler, read from the EffectOpScheme edge drawn at
+// register_handler — None when unset (no handler declares it) or ambiguous
+// (≥2 do → thread evidence, no static singleton to read).
+fn lower_op_default_handler(op_name) =
+  match env_lookup(op_name) {
+    Some(entry) => {
+      let (_, _, kind) = entry
+      match kind {
+        EffectOpScheme(_, default_handler, ambiguous) =>
+          // field_name_eq forces str_eq (a bare `== ""` is pointer-eq under the
+          // seed — §9 name-compare class); default_handler "" ⇒ unset.
+          if ambiguous || field_name_eq(default_handler, "") { None } else { Some(default_handler) },
+        _ => None
+      }
+    },
+    None => None
+  }
+
+// Read the singleton's record from its $<hname>_state_g home into a per-node
+// local, then direct-call $op_<hname>_<op> against it — the SAME record the arm
+// was installed with (handler IS state), reached live at its one home instead
+// of via a threaded ev-slot. Reuses LPerform's Tier-1 emit with the global read
+// standing in for the lexical __hstate local.
+fn lower_singleton_perform(handle, op_name, hname, lo_args) = {
+  let rec_local = "_{int_to_str(handle)}"
+  LBlock(handle, [
+    LLet(handle, rec_local, LGlobal(handle, "{hname}_state_g")),
+    LPerform(handle, "{hname}_{op_name}", lo_args, rec_local)
+  ])
+}
 
 // Look up which effect an op belongs to via EffectOpScheme.
 fn lookup_parent_effect(op_name) = {
@@ -1369,7 +1411,7 @@ fn lookup_parent_effect(op_name) = {
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
-        EffectOpScheme(ename) => Some(ename),
+        EffectOpScheme(ename, _, _) => Some(ename),
         _ => None
       }
     },
@@ -1521,7 +1563,7 @@ fn lower_expr_body(e, handle, span) = match e {
           // zero-arg call (already reported there) lowers to the empty
           // record, never a garbage read past an empty args list.
           if len(lo_args) == 0 { LMakeRecord(handle, []) } else { list_index(lo_args, 0) },
-        Some(EffectOpScheme(_)) =>
+        Some(EffectOpScheme(_, _, _)) =>
           // Row-guided dispatch per SUBSTRATE.md §"Three Tiers of
           // Effect Compilation". The row IS the evidence contract:
           //   - Effect in declared row → Tier 2: LEvPerform (handler

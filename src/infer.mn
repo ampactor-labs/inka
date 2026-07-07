@@ -3016,7 +3016,7 @@ fn register_one_op(effect_name, eff_name, op) = {
   env_extend(op_name,
     Forall(qvars, TFun(params, ret_type, row)),
     Declared(op_name),
-    EffectOpScheme(effect_name))
+    EffectOpScheme(effect_name, "", false))
 }
 
 fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
@@ -3106,6 +3106,51 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
     env_scope_exit()
   }, arms)
   inf_exit_fn()
+  // Draw the op→handler edge onto each op's EffectOpScheme HERE — in the body,
+  // OUTSIDE the arm `each` and inf_enter_fn's InferCtx install. An env_extend
+  // performed inside those (an arm-internal perform) never reaches the outer
+  // env_handler and silently vanishes before lower (the not-yet-substrate gap,
+  // prelude.mn); the same env_extend at this body level persists, exactly as the
+  // HandlerKind bind above does. `arms` are read via handler_arm_op_name, whose
+  // annotated param type resolves op_name from any context (no in-scope type
+  // closure needed). The op binding IS the dispatch fact — lower reads it to cash
+  // a non-lexical perform of a uniquely-handled op to a direct call against the
+  // singleton's $<hname>_state_g home (Carried-Truth: read the once-installed
+  // record live, never thread a copy through the deep chain that trapped at
+  // fresh_handle).
+  draw_op_edges(arms, hname)
+}
+
+// Recur over a handler's arms, drawing op→handler onto each op's EffectOpScheme.
+// A top-level recursive definition, never an each-lambda, so the env_extend
+// writes through a fn body and reaches env_handler. The FIRST handler to name an
+// op sets default_handler; a SECOND distinct handler marks it ambiguous;
+// a SECOND distinct handler marks it ambiguous (no static singleton — lower
+// threads evidence); the same handler or an already-ambiguous op is a no-op.
+// field_name_eq forces str_eq (a bare `== ""`/`== hname` is pointer-eq under the
+// seed — §9 name-compare class).
+fn draw_op_edges(arms, hname) = {
+  if len(arms) == 0 { () }
+  else {
+    let op_name = handler_arm_op_name(last(arms))
+    match env_lookup(op_name) {
+      Some(entry) => {
+        let (scheme, reason, kind) = entry
+        match kind {
+          EffectOpScheme(ename, cur_default, ambiguous) =>
+            if ambiguous || field_name_eq(cur_default, hname) { () }
+            else if field_name_eq(cur_default, "") {
+              env_extend(op_name, scheme, reason, EffectOpScheme(ename, hname, false))
+            } else {
+              env_extend(op_name, scheme, reason, EffectOpScheme(ename, cur_default, true))
+            },
+          _ => ()
+        }
+      },
+      None => ()
+    }
+    draw_op_edges(drop_last(arms), hname)
+  }
 }
 
 // Walk each state field's init ONCE per decl; the init's inferred

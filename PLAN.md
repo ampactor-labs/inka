@@ -585,7 +585,74 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-07, HEAD 986ae46 — **the STRING-PATTERN POINTER-EQ class and the SELF-RECURSIVE-CLOSURE self-capture bug both CLOSED; the m3 self-compile trap MARCHED help → lexer → PARSE, now an `ev_perform_entry` OOB minting a node during `parse_import` — the deep evidence-seam; board 45/45 verify + 45/45 micros-through-m2**; gates: `verify.sh` + `march-gate.sh --micros`)
+## §7 · Current state (grounded 2026-07-07 — **the SINGLETON DISPATCH TIER built and m2-GREEN: ev_perform_entry 6401→4209 (2200 route-ops now direct-dispatch), rungs 7/1→8/0 (hof-map CLEARED), micros-through-m2 45/45. The m3 parse_import trap's ROOT is CLOSED at the dispatch layer; m3 assembly now gated on ONE frontier — cursor_default, a declared-but-uninstalled handler**; gates: `verify.sh` + `march-gate.sh --micros`)
+
+> **THE SINGLETON DISPATCH TIER — the m3 `ev_perform_entry` trap's ROOT, closed
+> at the dispatch layer (2026-07-07).** The trap (m3 traps at `ev_perform_entry`
+> during `parse_import`: `fresh_handle` performs `graph_fresh_ty`, evidence never
+> reaches the perform ~10 frames down) was NOT a threading bug to patch — it was a
+> MISSING TIER. The wheel's `lower_perform_dispatch` had only TWO tiers: lexical
+> (`LPerform` vs `__hstate_<h>`) → evidence (`LEvPerform`, the deep chain that
+> drops). It LACKED the seed's THIRD, MIDDLE tier (§5.3, "viability-CONFIRMED BOTH
+> layers" but never built in the wheel): the **static-singleton** — a route-infra
+> handler (graph/env/…) installed ONCE at the compile boundary is read LIVE from
+> its `$<hname>_state_g` home, direct-call `$op_<hname>_<op>`, never a threaded
+> copy (Carried-Truth: read the once-installed record; the seed's `lower_direct_
+> from_evidence`). graph_fresh_ty fell to evidence → the parse chain dropped it →
+> trap. The seed reads the global. **MEASURED after building it: ev_perform_entry
+> 6401→4209 (2200 ops singleton-dispatch), `graph_handler_state_g` reads 0→290,
+> rungs 7/1→**8/0** (the hof-map map-with-effects rung CLEARED), micros 45/45.**
+>
+> **The build (all m2-green):** (1) `EffectOpScheme(String)` → `EffectOpScheme(
+> String, String, Bool)` = (effect_name, default_handler, ambiguous) — "the op
+> binding IS the dispatch fact" (types.mn:318). (2) `register_one_op` constructs
+> it default="", not-ambiguous. (3) `register_handler` DRAWS the op→handler edge
+> via `draw_op_edges(arms, hname)` — a top-level RECURSION in the fn BODY, AFTER
+> `inf_exit_fn`, NOT inside the arm `each`-lambda: an `env_extend` performed inside
+> an Iterate-yield arm body does NOT reach the outer `env_handler` (the
+> arm-internal-perform gap, prelude.mn — proven: inline/set_op_edge-in-lambda both
+> left ev_perform_entry at ~6401; body-level draw_op_edges dropped it to 4209).
+> `handler_arm_op_name` (annotated param) reads op_name from any context.
+> `field_name_eq` for the `""` compares (a bare `==` is pointer-eq under the seed,
+> §9). (4) `lower_perform_dispatch` gains the middle tier: lexical → `lower_op_
+> default_handler` (reads the edge; None if ambiguous or unset) → `lower_singleton_
+> perform` (`LBlock([LLet(rec, LGlobal("<hname>_state_g")), LPerform("<hname>_<op>",
+> args, rec)])`, all existing LowIR) → evidence.
+>
+> **THE ONE STANDING FRONTIER (m3 assembly): `cursor_default`.** m3 does not yet
+> assemble — `$cursor_default_state_g` + `$op_cursor_default_cursor_at` undefined.
+> cursor_default is DECLARED (cursor.mn:82) but NEVER installed (`~>`); its
+> `cursor_at` is performed (cursor_transport.mn:247, reachable). draw_op_edges
+> marks cursor_at → cursor_default (unique declarer) → singleton dispatch emits
+> DIRECT refs to a handler whose `_state_g` isn't declared and whose arm fn isn't
+> kept reachable. **The SEED does BOTH** (m2.wat: 3 `cursor_default_state_g` + 5
+> `op_cursor_default_cursor_at` refs, assembles): it declares `_state_g` for EVERY
+> DECLARED handler (the state's one home is a property of the DECL, not the
+> install) AND `reachable_from_main` keeps every handler's arm fns. The wheel must
+> mirror: (a) `emit_singleton_globals` declares `_state_g` per declared handler —
+> find the seed's mechanism in `bootstrap/src/emit/` and mirror it (the
+> `LGlobal`-read proxy in `singleton_hnames_expr` did NOT land — m3 has the 2 reads
+> but no decl; either a seed-miscompile of the new ends_with/str_slice arm or the
+> wrong walk; DELETE it and mirror the seed's declared-handler walk instead); (b)
+> `reachable_from_main` follows the singleton `LPerform`'s `$op_<hname>_<op>` target
+> (or keeps all handler-arm `LDeclareFn`s). Then m3 assembles → `GATE_WASM=m3.wasm
+> march-gate --no-build --micros` → `import a/b` through m3 (the original repro) →
+> `march.sh --fixpoint`. Repro: `printf 'import a/b\nfn main() = 0\n' | m3`.
+>
+> **THE USER-CHOSEN DEEP FRONTIER (the arm-internal / each-with-effects gap).**
+> Once the singleton tier lands, `draw_op_edges` should become `arms |> each(draw)`
+> (verb-idiomatic) — blocked TODAY by the arm-internal-perform gap: lower's lexical
+> handler stack (`lower_handler_stack_ctx`) is NOT scoped to closure boundaries, so
+> a perform inside a lambda (`[..] |> each((x) => inc())`) resolves Tier-1 lexical
+> to the enclosing install's OUT-OF-SCOPE `__hstate` (undefined-local at assembly —
+> reproduced: the each-micro fails, the direct-nested-handler micro returns 3). This
+> IS the hof-map frontier (the singleton tier CLEARED the rung, but the general
+> user-lambda-with-effects case remains). FIX (user's pick): reset the handler
+> stack at `LMakeClosure` so a lambda-internal perform uses the CAPTURED evidence
+> (`derive_ev_slots` already captures it) — transparent effect-forwarding with
+> state, the SOTA capability. Micros banked in scratch: ai.mn (each), ai2.mn
+> (direct-nested, =3).
+
 
 > **THE TRAP IS MARCHING — three faces closed, each let m3 run FURTHER into
 > its own self-compile (2026-07-07, 80234c5→986ae46).** The trajectory is the

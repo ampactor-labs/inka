@@ -529,7 +529,7 @@
   ;; fielded LPCon guards (scrut >= heap_base) before its tag load.
   (func $ec5_emit_pat_predicate_at
         (param $pat i32) (param $path i32) (param $path_len i32)
-    (local $tag i32) (local $subs i32) (local $rest i32)
+    (local $tag i32) (local $subs i32) (local $rest i32) (local $lv i32)
     (if (i32.eq (local.get $pat) (i32.const 131))
       (then (call $emit_i32_const (i32.const 1)) (return)))
     (if (i32.lt_u (local.get $pat) (global.get $heap_base))
@@ -539,12 +539,34 @@
     (if (i32.or (i32.eq (local.get $tag) (i32.const 360))
                 (i32.eq (local.get $tag) (i32.const 361)))
       (then (call $emit_i32_const (i32.const 1)) (return)))
-    ;; LPLit (362) — scalar equality.
+    ;; LPLit (362) — value equality, STRUCTURAL for strings. lowpat_lplit_value
+    ;; now yields the LowValue record [tag@0][scalar@4]. A STRING pattern
+    ;; (LVString=182) is `scrutinee == "lit"`, so it emits str_eq over the
+    ;; [Byte] views with the __state insert (mirror of emit_call's `==` path),
+    ;; NEVER the i32.eq pointer-compare that made string patterns a layout
+    ;; lottery. Int/Float/Bool keep the scalar@4 + i32.eq floor byte-identical.
     (if (i32.eq (local.get $tag) (i32.const 362))
       (then
+        (local.set $lv (call $lowpat_lplit_value (local.get $pat)))
         (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
-        (call $emit_i32_const (call $lowpat_lplit_value (local.get $pat)))
-        (call $ec5_emit_i32_eq)
+        (if (i32.eq (i32.load (local.get $lv)) (i32.const 182))   ;; LVString
+          (then
+            ;; The const via $emit_string_intern → (i32.const <data_offset>),
+            ;; the SAME static-data path the `==` string operand + every wheel
+            ;; string literal use (emit_const.wat:203). NOT $emit_string_lit —
+            ;; that stub emits a runtime (call $str_alloc), undefined in the
+            ;; compiled output (the m2 assemble failure this fix first hit).
+            (call $emit_i32_const
+              (call $emit_string_intern (i32.load offset=4 (local.get $lv))))
+            (call $ec6_emit_local_set_callee_closure)   ;; pop const → scratch
+            (call $ec6_emit_local_set_state_tmp)        ;; pop scrut → scratch
+            (call $el_emit_local_get_state)             ;; push __state
+            (call $ec6_emit_local_get_state_tmp)        ;; push scrut
+            (call $ec6_emit_local_get_callee_closure)   ;; push const
+            (call $ec6_emit_call_str_eq))
+          (else
+            (call $emit_i32_const (i32.load offset=4 (local.get $lv)))
+            (call $ec5_emit_i32_eq)))
         (return)))
     ;; LPCon (363) — nullary: sentinel compare; fielded: guard+tag+subs.
     (if (i32.eq (local.get $tag) (i32.const 363))

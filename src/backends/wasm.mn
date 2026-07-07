@@ -5510,18 +5510,34 @@ fn emit_pat_predicate(pat) = emit_pat_predicate_at(pat, make_list(8), 0)
 fn emit_pat_predicate_at(pat, path, path_len) = match pat {
   LPWild   => wat_emit("    (i32.const 1)\n"),
   LPVar(_) => wat_emit("    (i32.const 1)\n"),
-  LPLit(lv) => {
-    // The literal-pattern guard compares the scrutinee to the constant at the
-    // value's representation: a float literal LOADS the scrutinee f64-wide
-    // (emit_scrut_at_repr at low_value_repr) and emits (f64.const v) compared
-    // with f64.eq (the gradient at the match layer); every other value the
-    // i32.load + i32.eq floor (byte-identical, Law 7). The leaf load, the const,
-    // and the comparison all project the SAME repr — they cannot disagree.
-    emit_scrut_at_repr(path, path_len, low_value_repr(lv))
-    emit_low_value_const(lv)
-    wat_emit("    (")
-    wat_emit(repr_wat(low_value_repr(lv)))
-    wat_emit(".eq)\n")
+  LPLit(lv) => match lv {
+    // A STRING-literal pattern is `scrutinee == "literal"` at the match layer,
+    // so it is the SAME structural sequence-eq `==` derives — str_eq over the
+    // [Byte] view, NEVER the i32.eq the scalar floor below emits on the two
+    // POINTERS. The pointer-eq floored every `match s { "lit" => }` in the
+    // wheel to a LAYOUT LOTTERY (the token's interned "len" vs the pattern
+    // literal's "len" collide by address only when interned together): m2's
+    // layout lucked the seq-op `match cname { "len" }` right, m3's did not, so
+    // m3 mistyped `len(argv)` as List and emitted list_compare — the m4
+    // blocker. The W7 state-insert (scrut, const → __state, scrut, const),
+    // then str_eq → Bool (a drop-in for the i32.eq the predicate expects).
+    LVString(_) => {
+      emit_scrut_at_repr(path, path_len, RI32)
+      emit_low_value_const(lv)
+      emit_fold_state_insert()
+      wat_emit("    (call $str_eq)\n")
+    },
+    // Scalars: value-eq IS structural. A float LOADS the scrutinee f64-wide
+    // (emit_scrut_at_repr at low_value_repr) and compares f64.eq (the gradient
+    // at the match layer); Int/Bool/Unit take the i32.eq floor (byte-identical,
+    // Law 7). The leaf load, the const, and the compare project the SAME repr.
+    _ => {
+      emit_scrut_at_repr(path, path_len, low_value_repr(lv))
+      emit_low_value_const(lv)
+      wat_emit("    (")
+      wat_emit(repr_wat(low_value_repr(lv)))
+      wat_emit(".eq)\n")
+    }
   },
   LPCon(name, tag, sub_pats) => {
     if len(sub_pats) == 0 {

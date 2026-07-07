@@ -870,7 +870,20 @@ fn callee_name(func_node) with Pure = {
 // handling). Strings are `[byte]`: `byte_at` IS `list_index`, `byte_len` IS
 // `len`, `str_concat` IS `list_concat` — the same projections over a different
 // element, so the string ops route here too (the §IX four-set unification).
-fn is_seq_op(cname) with Pure =
+// cname pins : String — the Intent Boundary that proves ALL sixteen `==`
+// below STRUCTURAL (str_eq), not the pointer-eq i32.eq an unproven operand
+// floors to. Unproven, whether `len` was recognized as a sequence op was a
+// LAYOUT LOTTERY (interned "len" in the data section vs the heap cname from
+// the token): m2's allocation happened to recognize it, m3's did not, so
+// m3 routed `len(argv)` through the normal path, mistyped the compare, and
+// `len(argv) < 2` emitted `list_compare` — m3 dispatched every stdin
+// compile (incl. the wheel → m4) to CLI help. The mint_params handle-bind
+// (this session) is what makes this pin propagate. The by-name fork itself
+// is drift-8; its ultimate dissolution — the seq ops carry authored
+// signatures (`len(xs: [a]) -> Int`) so inference reads the signature not
+// the load_i32 word-idiom body, retiring is_seq_op — is the named peer
+// Hβ.infer.seq-op-signature-driven (DEP Hβ.infer.authored-typaram-rigid).
+fn is_seq_op(cname: String) with Pure =
   cname == "len"      || cname == "list_index"  || cname == "last"
   || cname == "drop_last"  || cname == "list_set"    || cname == "list_concat"
   || cname == "make_list"  || cname == "slice"       || cname == "push"

@@ -28378,21 +28378,16 @@
                       (local.get $scrut_h)
                       (i32.load offset=4 (local.get $lit))
                       (call $make_list (i32.const 0))))))
-        ;; Per Hβ.lower.lpat-extract-lit-scalar (2026-05-09): LPLit's
-        ;; value field stores the OPAQUE-i32 scalar (LowValue convention
-        ;; per Lock #4) — mirroring $lower_lit_int's $walk_const_payload_i32
-        ;; pattern. Pre-fix the LV-NODE pointer leaked into the value
-        ;; field; emit's `(i32.const $lowpat_lplit_value)` then compared
-        ;; the scrutinee against a heap pointer (e.g. 23889432) instead
-        ;; of the actual scalar (e.g. 0). list_index's `match tag { 0
-        ;; => ... }` failed all arms → unreachable trap.
-        ;;
-        ;; LV tags 180/181/182 (LVInt/LVFloat/LVString) all store the
-        ;; scalar at offset 4 (parser_pat.wat $mk_LVInt etc.). Extract
-        ;; uniformly. LVBool (183) handled above as LPCon. LVFloat /
-        ;; LVString store str_ptr — opaque-i32 today; named follow-up
-        ;; Hβ.lower.lpat-typed-equality routes through (call $str_eq)
-        ;; for string patterns at the emit layer.
+        ;; Hβ.lower.lpat-typed-equality (CLOSED 2026-07-07): LPLit stores the
+        ;; whole LowValue RECORD ([tag@0][scalar@4]), matching the WHEEL's
+        ;; LPLit(lv) — so the KIND survives to emit, which reads the tag and
+        ;; routes a STRING pattern through str_eq (structural), never the
+        ;; i32.eq pointer-compare that made `match cname { "len" }` a layout
+        ;; lottery (m3's list_compare on len(argv), the m4 blocker). The old
+        ;; scalar-extract discarded the kind; the earlier "LV-node leaked"
+        ;; trap it warned of was emit reading the record as a scalar — now
+        ;; fixed at BOTH sides (emit uses the tag; scalar@4 for non-strings
+        ;; stays byte-identical). LVBool (183) is handled above as LPCon.
         (if (i32.or
               (i32.or (i32.eq (local.get $lit_tag) (i32.const 180))  ;; LVInt
                       (i32.eq (local.get $lit_tag) (i32.const 181))) ;; LVFloat
@@ -28400,7 +28395,7 @@
           (then
             (return (call $lowpat_make_lplit
                       (local.get $scrut_h)
-                      (i32.load offset=4 (local.get $lit))))))
+                      (local.get $lit)))))
         (return (call $lowpat_make_lplit (local.get $scrut_h) (i32.const 0)))))
     (if (i32.eq (local.get $tag) (i32.const 133))
       (then
@@ -33810,7 +33805,7 @@
   ;; fielded LPCon guards (scrut >= heap_base) before its tag load.
   (func $ec5_emit_pat_predicate_at
         (param $pat i32) (param $path i32) (param $path_len i32)
-    (local $tag i32) (local $subs i32) (local $rest i32)
+    (local $tag i32) (local $subs i32) (local $rest i32) (local $lv i32)
     (if (i32.eq (local.get $pat) (i32.const 131))
       (then (call $emit_i32_const (i32.const 1)) (return)))
     (if (i32.lt_u (local.get $pat) (global.get $heap_base))
@@ -33820,12 +33815,34 @@
     (if (i32.or (i32.eq (local.get $tag) (i32.const 360))
                 (i32.eq (local.get $tag) (i32.const 361)))
       (then (call $emit_i32_const (i32.const 1)) (return)))
-    ;; LPLit (362) — scalar equality.
+    ;; LPLit (362) — value equality, STRUCTURAL for strings. lowpat_lplit_value
+    ;; now yields the LowValue record [tag@0][scalar@4]. A STRING pattern
+    ;; (LVString=182) is `scrutinee == "lit"`, so it emits str_eq over the
+    ;; [Byte] views with the __state insert (mirror of emit_call's `==` path),
+    ;; NEVER the i32.eq pointer-compare that made string patterns a layout
+    ;; lottery. Int/Float/Bool keep the scalar@4 + i32.eq floor byte-identical.
     (if (i32.eq (local.get $tag) (i32.const 362))
       (then
+        (local.set $lv (call $lowpat_lplit_value (local.get $pat)))
         (call $ec5_emit_scrut_at (local.get $path) (local.get $path_len))
-        (call $emit_i32_const (call $lowpat_lplit_value (local.get $pat)))
-        (call $ec5_emit_i32_eq)
+        (if (i32.eq (i32.load (local.get $lv)) (i32.const 182))   ;; LVString
+          (then
+            ;; The const via $emit_string_intern → (i32.const <data_offset>),
+            ;; the SAME static-data path the `==` string operand + every wheel
+            ;; string literal use (emit_const.wat:203). NOT $emit_string_lit —
+            ;; that stub emits a runtime (call $str_alloc), undefined in the
+            ;; compiled output (the m2 assemble failure this fix first hit).
+            (call $emit_i32_const
+              (call $emit_string_intern (i32.load offset=4 (local.get $lv))))
+            (call $ec6_emit_local_set_callee_closure)   ;; pop const → scratch
+            (call $ec6_emit_local_set_state_tmp)        ;; pop scrut → scratch
+            (call $el_emit_local_get_state)             ;; push __state
+            (call $ec6_emit_local_get_state_tmp)        ;; push scrut
+            (call $ec6_emit_local_get_callee_closure)   ;; push const
+            (call $ec6_emit_call_str_eq))
+          (else
+            (call $emit_i32_const (i32.load offset=4 (local.get $lv)))
+            (call $ec5_emit_i32_eq)))
         (return)))
     ;; LPCon (363) — nullary: sentinel compare; fielded: guard+tag+subs.
     (if (i32.eq (local.get $tag) (i32.const 363))

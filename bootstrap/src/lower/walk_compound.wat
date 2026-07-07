@@ -801,21 +801,16 @@
                       (local.get $scrut_h)
                       (i32.load offset=4 (local.get $lit))
                       (call $make_list (i32.const 0))))))
-        ;; Per Hβ.lower.lpat-extract-lit-scalar (2026-05-09): LPLit's
-        ;; value field stores the OPAQUE-i32 scalar (LowValue convention
-        ;; per Lock #4) — mirroring $lower_lit_int's $walk_const_payload_i32
-        ;; pattern. Pre-fix the LV-NODE pointer leaked into the value
-        ;; field; emit's `(i32.const $lowpat_lplit_value)` then compared
-        ;; the scrutinee against a heap pointer (e.g. 23889432) instead
-        ;; of the actual scalar (e.g. 0). list_index's `match tag { 0
-        ;; => ... }` failed all arms → unreachable trap.
-        ;;
-        ;; LV tags 180/181/182 (LVInt/LVFloat/LVString) all store the
-        ;; scalar at offset 4 (parser_pat.wat $mk_LVInt etc.). Extract
-        ;; uniformly. LVBool (183) handled above as LPCon. LVFloat /
-        ;; LVString store str_ptr — opaque-i32 today; named follow-up
-        ;; Hβ.lower.lpat-typed-equality routes through (call $str_eq)
-        ;; for string patterns at the emit layer.
+        ;; Hβ.lower.lpat-typed-equality (CLOSED 2026-07-07): LPLit stores the
+        ;; whole LowValue RECORD ([tag@0][scalar@4]), matching the WHEEL's
+        ;; LPLit(lv) — so the KIND survives to emit, which reads the tag and
+        ;; routes a STRING pattern through str_eq (structural), never the
+        ;; i32.eq pointer-compare that made `match cname { "len" }` a layout
+        ;; lottery (m3's list_compare on len(argv), the m4 blocker). The old
+        ;; scalar-extract discarded the kind; the earlier "LV-node leaked"
+        ;; trap it warned of was emit reading the record as a scalar — now
+        ;; fixed at BOTH sides (emit uses the tag; scalar@4 for non-strings
+        ;; stays byte-identical). LVBool (183) is handled above as LPCon.
         (if (i32.or
               (i32.or (i32.eq (local.get $lit_tag) (i32.const 180))  ;; LVInt
                       (i32.eq (local.get $lit_tag) (i32.const 181))) ;; LVFloat
@@ -823,7 +818,7 @@
           (then
             (return (call $lowpat_make_lplit
                       (local.get $scrut_h)
-                      (i32.load offset=4 (local.get $lit))))))
+                      (local.get $lit)))))
         (return (call $lowpat_make_lplit (local.get $scrut_h) (i32.const 0)))))
     (if (i32.eq (local.get $tag) (i32.const 133))
       (then

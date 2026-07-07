@@ -585,7 +585,91 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-06, HEAD 4e3faa7 — **the m3 UNDEFINED-REFERENCE CLASS is CLOSED; m2+m3 build clean and m3.wat parses WHOLE (~313k lines) with ZERO undefined funcs/globals; the trap marched to the f64/i64 REPRESENTATION GRADIENT (§5.U STEP 1, ~44 type mismatches in compiler-core float/FFI emit)**; gates: `verify.sh` + `march-gate.sh` + `wat2wasm .build/march/m3.wat`)
+## §7 · Current state (grounded 2026-07-07, HEAD e44afd9 — **the f64 CENSUS CLOSED AT SEVEN ROOTS, the deepest being DEAD LET-POLYMORPHISM (a seed capture-shadowing inversion) and a corrupt FLOAT RENDER in every m2-emitted constant; board 45/45 verify + 45/45 micros-through-m2, 8/8 rungs; `march.sh --fixpoint` RUNNING (log: .build/march/march-0707.log)**; gates: `verify.sh` + `march-gate.sh --micros`)
+
+> **THE f64 CENSUS DECOMPOSED INTO SEVEN ROOTS (2026-07-07, e7b4623→e44afd9)
+> — the "~44 type mismatches" were never one class; probing them end to end
+> surfaced two catastrophic pre-existing invisibles the i32 word-width had
+> masked.** Each root, its fix, and its proof:
+> **(1) DEAD LET-POLYMORPHISM — the seed's capture-shadowing inversion.** A
+> lambda's free name that was BOTH a top-level global and an enclosing
+> param/let resolved to the GLOBAL: `$ls_lookup_or_capture` ran its global
+> fence before the outer-frame scan; `$lower_cap_materialize` likewise
+> (bootstrap/src/lower). find_mapping's predicate read its captured `id` as
+> the prelude fn's closure record → instantiate NEVER freshened a free
+> quantified var → every generic fn's callers collided on shared vars (the
+> m3 build's 2370 E_TypeMismatch; zip_with's body emitted `$ft_iii_d`
+> against list_index). Nine corpus sites censused (id/rest/count/
+> handler_name across infer/lexer/parser/types/emit/main/voice). Pinned by
+> a 5-line micro (two callers, Int+Float) + probe eprints (qs=2 at both
+> generalize and instantiate, `out==in` from subst) + the m2.wat binary
+> (`global.get $id` where the capture init belonged). Fixed at BOTH seed
+> deciders: lexical scan first, fence for un-shadowed names only.
+> **(2) THE FABRICATION SENTINELS.** Healing (1) regressed effarg-node:
+> lookup_ty's NFree/NErrorHole arms resumed `TName("UNRESOLVED")`/
+> `TName("ERROR_HOLE")` — fabricated nominals for provably-unresolved
+> nodes; the eq dispatch minted `$eq_nUNRESOLVED` and read Int 44100 as a
+> variant pointer. Both arms resume `TVar(h)` — carry the handle; every
+> consumer already floors a free var honestly (repr RI32, fold_sig "i",
+> word eq).
+> **(3) THE FLOAT RENDER OFF-BY-START.** `float_fill_digit_bytes` read
+> `digit_at(digits, i - start)` — i already walks [start, end), so every
+> fraction after a nonzero int part re-copied the integer digits: 1.5
+> rendered "1.15", 2.0 "2.2" — EVERY f64 constant m2 emitted into m3 was
+> textually corrupt, and float-gate passed by luck (2.25*2.2 >= 4.49).
+> One word: `digit_at(digits, i)`. m2 now emits `1.5` as `1.5`.
+> **(4) THE ft PRODUCT'S THREE TRAVERSAL ORDERS.** arg_reprs consed
+> last-first, repr_codes rendered last-first, emit_repr_ft_type walked list
+> order: `$ft_iiidi_i` NAMED an (i,d,i,i,i) definition while callers pushed
+> (i,i,i,i,d). One canonical order (state, args source-order, result), four
+> readers; all_ri32 dissolved into `all(repr_is_i32, ...)`.
+> **(5) BINDER WIDTHS + THE HANDLE CARRIERS.** walk_locals_pat hardcoded
+> `" i32"` while the bind emit loaded ctor payloads f64-wide (the 20-site
+> local.set class) — the decl walk now reads the SAME channels
+> (ctor_payload_tys_of, the tuple's carried elem_ty). lower's VarRef arm
+> falls back to the USE node's handle when the binding-time handle is 0
+> (ground types) — dissolving Hβ.lower.bind-handle-typed-subpattern (zero
+> writes; infer already bound the use node). mint_params graph_binds an
+> authored CONCRETE annotation onto the param HANDLE (it lived only in the
+> signature; `a: String` params compared by pointer, `scaled: Float`
+> declared i32 — the annotation was inert on every body read).
+> **(6) THE WASI WIDTHS AS DATA.** wasi_import_reprs: the preview1 ABI as
+> Repr vectors, ONE home with two projections — the import-decl string and
+> per-arg call-site widths (path_open's rights + fd_readdir's cookie extend
+> i32→i64; the wait_i32 precedent generalized). The eq word-leaf gained the
+> TFloat arm (f64.eq/ne — the cmp twin had it; float_is_zero emitted
+> i32.eq on f64s).
+> **(7) SOURCE Int/Float LIES.** json's scan parts mixed Int digits into
+> Float math; lsp built JNum(Float) from Int line/col/id/severity/kind —
+> explicit float_of_int at each edge (the seed's floor had hidden them; the
+> wheel's honest f64.store refused). Plus the QUEUED str_contains band:
+> each candidate window is an O(1) [Byte] view compared by structural `==`
+> via `range |> any` (params pinned `: String` — the Intent Boundary the eq
+> dispatch reads); str_matches_at + str_contains_scan DELETED.
+>
+> **NAMED PEERS from this dig (each artifact-pinned):**
+> `Hβ.seed.effectful-lambda-ev-capture` (the seed drops a lambda-captured
+> effect's evidence — a `map((a) => ... lookup_ty ...)` form floored every
+> read; px/h2 repro) · `Hβ.emit.view-splice-following-chunk` (the
+> interpolation chunk AFTER a view-string splice is dropped through m2 —
+> "slice=[1.5" lost its "]") · `Hβ.emit.f64-aggregate-pattern-width`
+> (record/list sub-binders stay word slots, both walk + bind) ·
+> `Hβ.emit.generic-boundary-repr-coercion` (a proven-f64 value/closure
+> crossing a word-generic edge boxes/wraps — the vec_add lambda-into-
+> zip_with case; latent, zero battery paths) · `Hβ.infer.authored-typaram-
+> rigid` (w5 probe: `xs: [a]` refuses to unify — "Int vs a"; the case-rule
+> lowercase param must be a fresh quantifiable var) · `Hβ.parser.fn-type-
+> param-ann` (w6 probe: SYNTAX's documented `f: a -> b` param form does not
+> parse — E_MissingVariable x/a/b; the lathe lags the spec).
+>
+> **NEXT — the march is RUNNING** (`march.sh --fixpoint`, detached, log
+> `.build/march/march-0707.log`): m2 (all seven roots in) compiles the
+> wheel → m3; expect the 2370-mismatch flood to collapse and zip_with
+> all-word. Then `wat2wasm m3.wat` (the 44-error census should be zero or
+> a residue to census again) → `GATE_WASM=$PWD/.build/march/m3.wasm bash
+> tools/march-gate.sh --no-build --micros` (the battery through the
+> wheel's CHILD — the correctness half) → the m4 diff. First-light =
+> diff(m3,m4) empty AND battery green through m3.
 
 > **THE UNDEFINED-REFERENCE LADDER CLOSED (4e3faa7, 2026-07-06) — the paren
 > band gave the first WHOLE m3.wat, then ONE census closed the whole undefined

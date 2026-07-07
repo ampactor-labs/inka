@@ -687,12 +687,42 @@ fn emit_state_globals(slots) = {
 // install); the DECLARATION projects from the same LowIR the binds do —
 // a pure walk collecting every LHandleWith's hname, deduped. Anonymous
 // installs ("" — an inline handler expression) bind no singleton.
+// Declare `$<hname>_state_g` — the state's ONE HOME — for every handler the
+// singleton dispatch may read: the INSTALLED handlers (from the LowExpr tree's
+// LHandleWith, SET at install) UNION every no-config DECLARED handler in the env
+// (uninstalled ones stay 0 — never read, but the home reference assembles).
+// emit and lower's singleton dispatch MUST agree on which handlers have a home,
+// so BOTH read the env live (one criterion, two readers — never a registry on
+// one side; mirror of the seed's $emit_noconfig_handler_globals).
 fn emit_singleton_globals(lowered) = {
+  let installed = singleton_hnames_list(lowered, [])
+  let all_names = match env_snapshot() {
+    Env(entries) => noconfig_handler_names(entries, installed)
+  }
   each((h) => {
     wat_emit("  (global $")
     wat_emit(h)
     wat_emit("_state_g (mut i32) (i32.const 0))\n")
-  }, singleton_hnames_list(lowered, []))
+  }, all_names)
+}
+
+// Add each no-config declared handler's name (a HandlerKind with empty config)
+// to acc, deduped — the home-dispatch set lower reads via lower_op_default_handler.
+// INDEX-walk, never drop_last: `entries` is an env_snapshot slice view, and
+// drop_last-walking a slice stacks slice-of-slice and corrupts the walk (§7).
+fn noconfig_handler_names(entries, acc) = noconfig_handler_names_at(entries, len(entries), acc)
+
+fn noconfig_handler_names_at(entries, i, acc) = {
+  if i == 0 { acc }
+  else {
+    let (name, _scheme, _reason, kind) = list_index(entries, i - 1)
+    let acc2 = match kind {
+      HandlerKind(_ename, _row, config, _state, _arms) =>
+        if len(config) == 0 && ls_find_str_local(acc, name, 0) < 0 { [name] ++ acc } else { acc },
+      _ => acc
+    }
+    noconfig_handler_names_at(entries, i - 1, acc2)
+  }
 }
 
 fn singleton_hnames_list(stmts, acc) = {
@@ -745,15 +775,7 @@ fn singleton_hnames_expr(expr, acc) = match expr {
   LConst(_, _)              => acc,
   LLocal(_, _)              => acc,
   LFeedbackPrior(_)         => acc,
-  // A singleton dispatch (lower_singleton_perform) reads `$<hname>_state_g`; its
-  // home must be DECLARED even when <hname> is a handler declared but never
-  // installed in THIS program (the state's one home is a property of the decl,
-  // not the install). Collect the bare hname, deduped like the install path.
-  LGlobal(_, name) =>
-    if ends_with(name, "_state_g") {
-      let hname = str_slice(name, 0, byte_len(name) - byte_len("_state_g"))
-      if ls_find_str_local(acc, hname, 0) >= 0 { acc } else { [hname] ++ acc }
-    } else { acc },
+  LGlobal(_, _)             => acc,
   LUpval(_, _)              => acc,
 }
 

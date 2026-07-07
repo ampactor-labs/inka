@@ -3703,7 +3703,11 @@ fn reach_match_arms(arms, acc) = {
 fn reach_names_expr(expr, acc) = match expr {
   LGlobal(_, n)             => [n] ++ acc,
   LFnRef(_h, n, ev)         => reach_names_list(ev, [n] ++ acc),
-  LPerform(_h, target, args, _) => reach_names_list(args, [target] ++ acc),
+  // emit calls `$op_<target>` (the arm fn), so reach the arm fn by its emitted
+  // name — the un-prefixed `target` matched nothing (installed handlers survived
+  // via their reached decl-container, but a singleton dispatch to an UNINSTALLED
+  // handler is the arm fn's only reference).
+  LPerform(_h, target, args, _) => reach_names_list(args, ["op_{target}"] ++ acc),
   LHandleWith(_h, b, hn, _hname, inits, arm_names, evs) =>
     reach_names_list(evs,
       reach_names_list(inits,

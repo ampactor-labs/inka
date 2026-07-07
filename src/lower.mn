@@ -1419,14 +1419,22 @@ fn lower_expr_body(e, handle, span) = match e {
     // not the VarRef's own handle. Fall back to VarRef's handle for
     // RGlobal where there's no separate local-binding handle.
     //
+    // A GROUND binding (ty_handle_of returns 0 — a ctor's TFloat
+    // payload, a tuple's TString element) has no binding-time handle;
+    // the USE node's own handle carries the same truth (infer_var_ref
+    // bound it to the resolved type, and a local is monomorphic), so
+    // the type-directed reads (the eq/binop gradient, ++'s element
+    // dispatch) read the graph instead of the h=0 word floor — zero
+    // new writes, the handle the graph already holds.
+    //
     // SchemeKind dispatch (H3): a VarRef whose env entry is a
     // nullary ConstructorScheme is a value-position constructor
     // reference (`None`, `True`, `False`). Lower it as
     // LMakeVariant(handle, tag, []) — emit emits the sentinel
     // i32.const form for nullary tags.
     match res {
-      RLocal       => LLocal(local_h, name),
-      RUpval(slot) => LUpval(local_h, slot),
+      RLocal       => LLocal(if local_h == 0 { handle } else { local_h }, name),
+      RUpval(slot) => LUpval(if local_h == 0 { handle } else { local_h }, slot),
       // (LF.B) a `<~` lambda param resolves to the feedback site's prior local,
       // read LIVE — the recurrence's y[n-1] term IS this node.
       RFbPrior(fb_h) => LFeedbackPrior(fb_h),

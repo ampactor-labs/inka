@@ -2744,6 +2744,18 @@ fn mint_params(params, owner_name) = map((indexed) => {
   let (idx, p) = indexed
   let name = param_name(p)
   let h = mint(FnParam(owner_name, idx, Inferred("param of '{owner_name}'")))
+  // An authored CONCRETE annotation (the Intent Boundary) binds the param's
+  // HANDLE, not only the signature: build_param_types carries the concrete
+  // ty into TFun's param slot, so unification never touches h — every body
+  // read through the env's TVar(h) (the eq/binop/++ dispatch, the param
+  // emit's width) saw a FREE var and floored to word (`a: String` params
+  // compared by pointer; `scaled: Float` params declared i32). graph_bind,
+  // not unify: h is fresh by construction, and the ann IS its declaration.
+  match param_ty(p) {
+    TVar(_) => (),
+    declared => graph_bind(h, declared,
+      Located(span_zero(), FnParam(owner_name, idx, Declared(name))))
+  }
   env_extend(name, Forall([], TVar(h)), Declared(name), ParamScheme(param_authored(p)))
   h
 }, enumerate(params))

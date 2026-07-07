@@ -439,14 +439,27 @@ handler lookup_ty_graph {
     let GNode(kind, reason) = graph_chase(h)
     match kind {
       NBound(t)        => resume(t),
-      NErrorHole(_)    => resume(TName("ERROR_HOLE", [])),
+      // An error hole / free var resumes TVar(h) — CARRY THE HANDLE. The
+      // prior TName("ERROR_HOLE")/TName("UNRESOLVED") sentinels fabricated
+      // a NOMINAL type for a node the graph proves is unresolved: every
+      // downstream type-directed read then trusted the lie — the eq
+      // dispatch minted a structural-sum helper $eq_nUNRESOLVED that read
+      // a raw Int operand as a variant pointer (memory at address 44100 as
+      // a tag word). TVar(h) is the truth: repr_of reads the word floor,
+      // fold_sig reads "i", eq reads word identity — the honest
+      // productive-under-error floor at every consumer, no second sentinel
+      // channel. (A quantified var's == at a GENERIC body is word identity
+      // by the same floor; the type-directed eq for a generic operand at
+      // its instantiated width is the evidence-passing band —
+      // Hβ.emit.generic-boundary-repr-coercion.)
+      NErrorHole(_)    => resume(TVar(h)),
       NFree(epoch) => {
         // Carry the handle, read its span LIVE. The node's Reason already
         // proves WHERE this handle was minted (its caret) — reporting at
         // span_zero discards the truth the graph holds. The Why projection in
         // proto form: a diagnostic positions itself by the graph, not 0:0.
         report(EUnresolvedType(h, epoch, caret_span_from_reason(reason)))
-        resume(TName("UNRESOLVED", []))
+        resume(TVar(h))
       },
       NRowBound(_)     => resume(TUnit),
       NRowFree(_)      => resume(TUnit)

@@ -4531,6 +4531,10 @@ fn emit_show_list_body_helper(sig, elem) = {
   wat_emit(sig)
   wat_emit(" (local.get $__state) (local.get $a) (i32.add (local.get $i) (i32.const 1)))\n")
   wat_emit("          )))\n")
+  // TWO closers: the if, THEN the func — the single ")" left the func open
+  // (m3's one structural break: "(func $_start" where an instr belonged;
+  // the whole-file paren census counted exactly one missing close).
+  wat_emit("  )\n")
   wat_emit("  )\n")
 }
 

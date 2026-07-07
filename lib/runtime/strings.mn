@@ -509,7 +509,14 @@ fn str_literal_5(s) with Memory + Alloc = {
 //   1. Find the base-10 exponent e such that 1 <= f / 10^e < 10.
 //   2. Extract up to 17 significant decimal digits by repeated multiply.
 //   3. Format with decimal point or scientific notation as appropriate.
-fn float_render_positive(f) with Memory + Alloc = {
+// f pins : Float (the scaled: Float precedent below): every float contact in
+// this body is a FORWARD call (floor_log10/pow10/extract_digits all sit
+// after this fn in file order), so the body inferred against pre-scheme
+// free vars and f starved to the word floor — `f / pow10(exp)` emitted
+// i32.div_s against extract_digits' f64 slot (m3's one residual mismatch).
+// The inference-order completion is the named band
+// Hβ.infer.scc-ordered-walk; the pin is the Intent Boundary bridging it.
+fn float_render_positive(f: Float) with Memory + Alloc = {
   let exp = float_floor_log10(f)
   let digits = float_extract_digits(f / float_pow10(exp), 0, 17, make_list(0))
   float_format_digits(digits, exp)

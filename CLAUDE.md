@@ -272,6 +272,35 @@
 >   never reuse yesterday's), `wt_asm` + run = seconds per cycle vs minutes.
 >   `bash tools/march-gate.sh` runs the whole m2 rung battery as one scoreboard —
 >   iterate against IT, not against hand-typed probes.
+> - **wasm-tools FIRST — the mechanical instruments, before any hand-reading of a
+>   backtrace (proven 2026-07-08; the emit-diff was the biggest under-use).** The
+>   self-hosting bug class is ALWAYS "m2 works, m2's emit of the wheel (m3)
+>   diverges" — a MECHANICAL question, never an archaeology one:
+>   - **`python3 tools/emit-diff.py A.wat B.wat` — the divergence pinner (run it
+>     FIRST on any m3 trap).** Handle-anchored, provenance-normalized per-function
+>     diff: named wheel fns match by name, lambdas by normalized body. `--trap`
+>     surfaces m3-side `unreachable` bodies m2 lacks. But a bare `(else
+>     (unreachable))` is a BENIGN exhaustive-match else (SYNTAX §exhaustiveness —
+>     the impossible branch), NOT a floor; the REAL floors carry an emit
+>     comment-marker (`;; ++ on unresolved element type`, `;; field offset
+>     unprovable`). CENSUS them: `grep -B3 '(unreachable)' m3.wat | grep ';;' |
+>     sort | uniq -c` gives the whole floor class in one measurement (2026-07-08:
+>     24 concat + 5 field-offset floors, one root — not 662 raw unreachables).
+>   - **`wasm-tools shrink --predicate <script> m3.wasm` — mechanical minimal
+>     repro.** Predicate = "traps in the fold lambda"; it ddmins 515k lines to a
+>     minimal module still exhibiting it — census-not-moles done by tool, never a
+>     hand-written repro (which forgets to link the prelude, as flat.mn did).
+>   - **`wasm-tools validate --features all` after EVERY assemble** — a larval
+>     `mentl verify`.
+>   - **Speed hunches → `wasmtime --profile=guest` (the per-fn guest-time
+>     flamegraph) + `wasm-opt --metrics` (analysis only), NEVER wasm-opt passes.**
+>     wasm-opt -O2 -all is a MEASURED 4% guest-time REGRESSION (the wheel's cost is
+>     ALGORITHMIC — bump-image churn, instantiate tree-clones — not instruction
+>     slop). wasm-opt stays OUT of the march loop; module-size hygiene only (−41%
+>     bytes). The optimizer is NOT where the juice is; the profiler is.
+>   - **These are §5-stage-3 scaffolding — validate=larval-verify, shrink=the
+>     multi-shot oracle minimizing, emit-diff=the graph projecting its own
+>     divergence. Building the debugging loop well IS building `mentl audit`.**
 
 ---
 

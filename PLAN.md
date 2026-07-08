@@ -1724,6 +1724,9 @@ bash tools/march-gate.sh       # the LIVE m2 rung scoreboard (7 pass / 1 fail; h
 bash tools/march-gate.sh --micros   # + micros-through-m2 (the wheel's own emit runs the battery — 0/34, the seam's blast radius)
 tools/faithful.sh <file.mn>    # proto-`mentl verify`: does mentl2 agree with the seed?
 tools/faithful.sh --wheel      # live L1 status   ·   --bisect: ddmin to the minimal failing file-set
+python3 tools/emit-diff.py m2.wat m3.wat        # the divergence pinner — run FIRST on any m3 trap (CLAUDE.md ⟲)
+python3 tools/emit-diff.py m2.wat m3.wat --trap # m3-side unreachable bodies m2 lacks (filter to comment-marked floors — bare else-unreachable is benign, SYNTAX §exhaustiveness)
+grep -B3 '(unreachable)' m3.wat | grep ';;' | sort | uniq -c   # the floor CENSUS in one measurement (concat / field-offset markers)
 wat2wasm m2.wat -o m2.wasm --debug-names --enable-threads --enable-tail-call
 # WABT (per task) — EVERY tool needs --enable-tail-call --enable-threads or it chokes on
 # opcode 0x13 (return_call_indirect); with the flags ALL work on m2:  objdump -d (disasm,

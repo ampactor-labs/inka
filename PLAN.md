@@ -585,7 +585,7 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-07 — **the SINGLETON DISPATCH TIER built and m2-GREEN (ev_perform_entry 6401→4209, 2200 route-ops direct-dispatch, hof-map rung CLEARED). The m3-ASSEMBLY reachability-consistency root CLOSED (dcac3b8): the four undefined fn-value globals were NOT the dead cursor_default subsystem — 3 of 4 belong to the INSTALLED project_queue_merger; the wheel walked only individually-reached arms while the container-keep filter emits the whole container. `reach_decl_refs` now walks every arm the filter emits (emission == reachability). rungs 8/0, micros-through-m2 45/0; the detached fixpoint march is the oracle confirming m3 assembles**; gates: `verify.sh` + `march-gate.sh --micros`)
+## §7 · Current state (grounded 2026-07-07 — **m3 ASSEMBLY marching, THREE roots down to TWO. The reachability-consistency root CLOSED+CONFIRMED (dcac3b8): the march regenerated m3, the four undefined fn-value globals are GONE. The trap marched to 3 wat2wasm errors; the noreturn root CLOSED (e1899f9 — proc_exit needs a following `(unreachable)`). REMAINING: 2 f64/i32 type mismatches in `score_one_position` (`float_of_int(gates) * proximity` emits i32.mul — proximity floored to Int; the scc-ordered-walk class). #1 proven-singleton (Approach B) was REFUTED — abort_exit is a LIVE uninstalled default handler (fail via unwrap). rungs 8/0, micros-through-m2 45/0**; gates: `verify.sh` + `march-gate.sh --micros`)
 
 > **THE SINGLETON DISPATCH TIER — the m3 `ev_perform_entry` trap's ROOT, closed
 > at the dispatch layer (2026-07-07).** The trap (m3 traps at `ev_perform_entry`
@@ -640,44 +640,45 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > derivation): `reach_decl_refs` returns the found arm's refs PLUS the container's
 > full nested-name set (`reach_nested_names(d, [])`), so the frontier walks every
 > arm the filter will emit — emission == reachability, one truth.** rungs 8/0,
-> micros-through-m2 45/0, m2 +5 lines (the newly-walked arms); the detached
-> `march.sh --fixpoint` is the oracle confirming m3 now assembles (the four globals
-> defined) → `GATE_WASM=m3.wasm march-gate --micros` → `march.sh --fixpoint` (m4).
+> micros-through-m2 45/0, m2 +5 lines (the newly-walked arms). CONFIRMED: the
+> march regenerated m3 and the four undefined globals are GONE.
 >
-> **THE CO-EQUAL CORRECTNESS FOLLOW-UP — proven-singleton dispatch (`Hβ.lower.
-> singleton-dispatch-gated-on-install`), NOT the assembly blocker but a real bug.**
-> The reachability fix makes m3 assemble WITH cursor_default's dead subsystem
-> emitted (force-linked because its `cursor_at`, performed at
-> cursor_transport.mn:247, singleton-dispatches even though cursor_default is
-> NEVER `~>`-installed, cursor.mn:82). Singleton-dispatching an UNINSTALLED handler
-> is SEMANTICALLY WRONG independent of assembly: `lower_singleton_perform` reads
-> `$cursor_default_state_g`, a state record NO install ever initialized — garbage
-> if that perform executes. THE CUT (resolved to the cleaner form): the op→handler
-> dispatch edge (`EffectOpScheme.default_handler`) must mean "installed =
-> dispatchable," so DRAW IT AT THE INSTALL, not the decl. Move `draw_op_edges` out
-> of `register_handler` (the pre-register DECL pass, where it fires for every
-> declared handler incl. the never-installed cursor_default) and INTO
-> `infer_pipe_tee` (the `~>` install): read the installed handler's arms from its
-> `HandlerKind`'s 5th field (already registered — `pre_register_decls`, infer.mn:149,
-> runs before any body/install is inferred, so no ordering gap) and draw the edges
-> there. Then `lower_op_default_handler` reads the edge UNCHANGED — no install-set
-> scan, no lower gate, the edge itself carries the install fact live (Carried-Truth).
-> An uninstalled handler gets NO edge → `lower_op_default_handler` None → evidence
-> (which correctly finds no handler → a genuine unhandled effect, not garbage) →
-> reaches NO arm (evidence dispatch has no static arm target) → its container is
-> dropped → cursor_default's dead subsystem no longer emits (LESS
-> code, and it retires the `noconfig_handler_names` union 9a03abd added ONLY to
-> serve dead handlers' `_state_g`). HIGH-RISK per Law 7 (moving the edge silently
-> changes dispatch for every op — if a currently-singleton route-infra handler
-> graph/env is installed by a NON-`~>`-PTee path, its edge would vanish and the
-> deep-chain `ev_perform_entry` trap b00e94c fixed RETURNS), so the ONE
-> pre-implementation check: confirm every singleton-dispatched route-infra handler
-> reaches `infer_pipe_tee` (a `~>` install), and land it as its own gated commit
-> AFTER the reachability fix march-confirms. Named future refinement (not a
-> blocker — no handler is loop-installed today): a `~>` inside a loop/recursion is
-> NOT a proven singleton (§5.3 step 3 "installed exactly once"), so Approach B's
-> draw-at-install eventually needs the not-under-loop guard. Not required for
-> first-light.
+> **THE TRAP MARCHED to 3 wat2wasm errors (m3.wat, 284730 lines); ONE closed, TWO
+> remain.** (1) `op_abort_exit_fail` — `(call $proc_exit)` with no following
+> `(unreachable)`, leaving `(result i32)` unsatisfied. CLOSED (e1899f9): proc_exit
+> is noreturn, the LWasiCall emit now appends `(unreachable)` (the seed's form).
+> (2+3) `score_one_position` (cursor.mn:252) — `float_of_int(gates) * proximity`
+> emits `(f64.convert_i32_s)…(i32.mul)`: the LEFT operand is f64 but the multiply
+> is i32.mul and `proximity` loads as i32. **THE OPEN CURSOR — the f64 floor.**
+> `proximity = caret_proximity_weight(…) = scope_distance_decay(…)`, which returns
+> Float (weight fns 1.0/0.85/… at cursor.mn:305+), but both are FORWARD-refs from
+> score_one_position (283/294 > 252), so proximity floors to Int and the multiply
+> node's repr is RI32 → `i32.mul` against an f64 left operand. **THE RETURN-PIN
+> DOES NOT WORK (refuted at the artifact): `pre_register_fn_sig` (infer.mn:189)
+> ALWAYS builds the return as a fresh `TVar(ret_handle)`, IGNORING the declared
+> `-> RetTy`** (it is inferred from the body, checked later) — so `-> Float` is
+> inert at forward-ref time. NEXT: reproduce in a fast-loop micro (a fn multiplying
+> `float_of_int(x)` by a forward-declared-Float-returning call) and pin whether the
+> root is (a) `*` not unifying its operands (proximity stays a fresh var → i32
+> floor — fix: arithmetic binops unify operand types, or the binop emit takes the
+> repr JOIN of both operands, the `repr_join` peer the if/match branches already
+> use) or (b) the scc-ordered-walk inference order (Hβ.infer.scc-ordered-walk —
+> infer callees before callers within an SCC). The binop-join route (b) is the
+> more Carried-Truth: `Float * Int` should promote to the wider repr, read live
+> from both operand handles, never floored to one.
+>
+> **REFUTED — proven-singleton dispatch gated on install (the prior "Approach B").**
+> The artifact killed it: `fail` (Abort) is performed in LIVE code — `unwrap`
+> (prelude.mn:335) calls `fail`, and unwrap is pervasive. So `abort_exit`
+> (io.mn:83) is a LEGITIMATE uninstalled DEFAULT handler (the last-resort
+> print+exit), NEVER `~>`-installed yet correctly singleton-dispatched. Gating
+> singleton dispatch on `~>`-install would drop abort_exit → break unwrap
+> program-wide. The proven-singleton property is NOT "installed via `~>`"; abort_exit
+> and cursor_default are both uninstalled stateless handlers, and the distinction
+> (one live, one felt-dead) is reachability of the PERFORM site, not the install.
+> So dead-cursor emission is a reachability question, not a dispatch-gating one —
+> and it is NOT a blocker (m3's cursor code is emitted but the f64 floor there is a
+> real repr bug worth fixing regardless). The `noconfig_handler_names` union stays.
 >
 > **THE USER-CHOSEN DEEP FRONTIER (the arm-internal / each-with-effects gap).**
 > Once the singleton tier lands, `draw_op_edges` should become `arms |> each(draw)`

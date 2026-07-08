@@ -920,20 +920,29 @@ fn is_seq_op(cname: String) with Pure =
 // mechanism the `xs[i]` IndexExpr arm uses to force its receiver).
 fn seq_force(ah, i, ty, span: ValidSpan) =
   if len(ah) > i {
-    graph_bind(list_index(ah, i), ty, Located(span, Inferred("sequence operand")))
+    // Force = UNIFY, never overwrite. graph_bind would DISCARD the arg's proven
+    // type (a Carried-Truth violation — `fold([], …)` loses that `[]` is a list,
+    // so the accumulator var never learns `[a]`); unify unions the arg's root
+    // with the expected type, reading BOTH truths and propagating structurally
+    // into a lambda's params / an empty literal's element.
+    let expected = mint(Inferred("sequence operand"))
+    graph_bind(expected, ty, Located(span, Inferred("sequence operand")))
+    unify(list_index(ah, i), expected, span, Inferred("sequence operand"))
   } else { () }
 
-// seq_force_fn — force the i-th argument to `param_tys -> ret_ty` with an open
-// effect row (the transform's own effects flow separately). The functor
-// projections use this to relate `f : a -> b` so the result element `b` is the
-// transform's return, read live — never re-derived from map's buffer body.
+// seq_force_fn — unify the i-th argument with `param_tys -> ret_ty` (open effect
+// row; the transform's own effects flow separately). Unify (not graph_bind) so
+// the forced param types propagate INTO the lambda's actual param handles — a
+// bare `acc` in `(acc, xs) => acc ++ xs` unions with the accumulator element,
+// exactly as a normal call unifies its argument against a declared param type.
 fn seq_force_fn(ah, i, param_tys, ret_ty, span: ValidSpan) =
   if len(ah) > i {
     let params = map((t) => mk_param("_", t), param_tys)
     let row_h = graph_fresh_row(Inferred("functor transform effects"))
-    graph_bind(list_index(ah, i),
-      TFun(params, ret_ty, mk_ef_open([], row_h)),
+    let expected = mint(Inferred("functor transform"))
+    graph_bind(expected, TFun(params, ret_ty, mk_ef_open([], row_h)),
       Located(span, Inferred("functor transform")))
+    unify(list_index(ah, i), expected, span, Inferred("functor transform"))
   } else { () }
 
 // The sequence node-kind's projections — typed by the element, the cursor
@@ -978,10 +987,13 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
       graph_bind(handle, TList(elem), Located(span, Inferred("flatten : [a]")))
     },
     "fold"       => {
+      // fold(init, f, xs) — config first, flowing datum LAST (SYNTAX.md Stage
+      // Law; prelude.mn `fn fold(init, f, xs)`). The arg SLOTS are read from
+      // that one signature, never a re-derived order: init=0, f=1, xs=2.
       let bm = TVar(mint(Inferred("fold accumulator")))
-      seq_force(ah, 0, TList(elem), span)                 // xs   : [a]
-      seq_force(ah, 1, bm, span)                          // init : b
-      seq_force_fn(ah, 2, [bm, elem], bm, span)           // f    : (b, a) -> b
+      seq_force(ah, 0, bm, span)                          // init : b
+      seq_force_fn(ah, 1, [bm, elem], bm, span)           // f    : (b, a) -> b
+      seq_force(ah, 2, TList(elem), span)                 // xs   : [a]
       graph_bind(handle, bm, Located(span, Inferred("fold : b")))
     },
     "each"   => {
@@ -990,8 +1002,10 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
       graph_bind(handle, TUnit, Located(span, Inferred("each : ()")))
     },
     "take"       => {
-      seq_force(ah, 0, TList(elem), span)                 // xs : [a]
-      seq_force(ah, 1, TInt, span)                        // n  : Int
+      // take(n, xs) — count first, flowing datum LAST (prelude.mn
+      // `fn take(n, xs)`, the Stage Law twin of drop(n, xs)): n=0, xs=1.
+      seq_force(ah, 0, TInt, span)                        // n  : Int
+      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
       graph_bind(handle, TList(elem), Located(span, Inferred("take : [a]")))
     },
     "drop"       => {

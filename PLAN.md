@@ -652,19 +652,32 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > NEVER `~>`-installed, cursor.mn:82). Singleton-dispatching an UNINSTALLED handler
 > is SEMANTICALLY WRONG independent of assembly: `lower_singleton_perform` reads
 > `$cursor_default_state_g`, a state record NO install ever initialized — garbage
-> if that perform executes. THE CUT: gate `lower_op_default_handler` on the handler
-> being INSTALLED — compute the install set once from the program's `~>`/
-> `LHandleWith` sites (a lower-scope context, like `lower_handler_stack_ctx`), and
-> return the default only when `hname` is in it; else evidence (which correctly
-> finds no handler → a genuine unhandled effect, not garbage). An uninstalled
-> handler then reaches NO arm (evidence dispatch has no static arm target) → its
-> container is dropped → cursor_default's dead subsystem no longer emits (LESS
+> if that perform executes. THE CUT (resolved to the cleaner form): the op→handler
+> dispatch edge (`EffectOpScheme.default_handler`) must mean "installed =
+> dispatchable," so DRAW IT AT THE INSTALL, not the decl. Move `draw_op_edges` out
+> of `register_handler` (the pre-register DECL pass, where it fires for every
+> declared handler incl. the never-installed cursor_default) and INTO
+> `infer_pipe_tee` (the `~>` install): read the installed handler's arms from its
+> `HandlerKind`'s 5th field (already registered — `pre_register_decls`, infer.mn:149,
+> runs before any body/install is inferred, so no ordering gap) and draw the edges
+> there. Then `lower_op_default_handler` reads the edge UNCHANGED — no install-set
+> scan, no lower gate, the edge itself carries the install fact live (Carried-Truth).
+> An uninstalled handler gets NO edge → `lower_op_default_handler` None → evidence
+> (which correctly finds no handler → a genuine unhandled effect, not garbage) →
+> reaches NO arm (evidence dispatch has no static arm target) → its container is
+> dropped → cursor_default's dead subsystem no longer emits (LESS
 > code, and it retires the `noconfig_handler_names` union 9a03abd added ONLY to
-> serve dead handlers' `_state_g`). High-risk per Law 7 (a wrong install-set breaks
-> route-infra dispatch — graph/env — silently), so land it as its own gated commit
-> AFTER the reachability fix march-confirms. Not required for first-light; the
-> §5.3-step-3 proven-singleton property (installed exactly once, not under
-> loop/recursion) realized at the dispatch layer.
+> serve dead handlers' `_state_g`). HIGH-RISK per Law 7 (moving the edge silently
+> changes dispatch for every op — if a currently-singleton route-infra handler
+> graph/env is installed by a NON-`~>`-PTee path, its edge would vanish and the
+> deep-chain `ev_perform_entry` trap b00e94c fixed RETURNS), so the ONE
+> pre-implementation check: confirm every singleton-dispatched route-infra handler
+> reaches `infer_pipe_tee` (a `~>` install), and land it as its own gated commit
+> AFTER the reachability fix march-confirms. Named future refinement (not a
+> blocker — no handler is loop-installed today): a `~>` inside a loop/recursion is
+> NOT a proven singleton (§5.3 step 3 "installed exactly once"), so Approach B's
+> draw-at-install eventually needs the not-under-loop guard. Not required for
+> first-light.
 >
 > **THE USER-CHOSEN DEEP FRONTIER (the arm-internal / each-with-effects gap).**
 > Once the singleton tier lands, `draw_op_edges` should become `arms |> each(draw)`

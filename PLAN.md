@@ -661,28 +661,41 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > Int and Float are DISTINCT types; there is NO mixed `Float * Int` arithmetic** —
 > `float_of_int` IS the explicit convert, so `float_of_int(gates) * proximity` is
 > `Float * Float` and the "promote/repr-join over mixed operands" idea is DRIFT.
-> **ROOT CONFIRMED by fast-loop micro (the FORWARD-REF GENERALIZATION FLOOR):** the
-> minimal repro `fn caller(x) = float_of_int(x) * weight()` / `fn weight() = 0.85`
-> emits `i32.mul` on `[f64,i32]` (fails) when weight is defined AFTER caller, but
-> `f64.mul` (assembles clean) when weight is defined BEFORE — source order = the
-> decisive variable. MECHANISM: `infer_binop`'s BKArith DOES unify operands and
-> binds result `TVar(lh)` (infer.mn:2005); but `infer_stmt_list` walks SOURCE ORDER
-> (infer.mn:211) and `infer_fn` GENERALIZES PER-FN (infer.mn:399), so caller
-> generalizes over weight()'s still-unresolved return var (weight's body not yet
-> inferred) → the var quantifies into caller's scheme → floors to i32 at caller's
-> monomorphic emit; weight's own func is correctly `(result f64)`, but caller calls
-> it via `$ft1 (result i32)`. **THE FIX — `Hβ.infer.scc-ordered-walk`: infer
-> callees before callers.** Two candidate implementations for a FRESH context (both
-> reorder whole-program inference — Law-7 risky, gate hard): (A) topo-sort the fn
-> stmts by call-dependency in `infer_program` before `infer_stmt_list`, infer in
-> that order; (B) two-phase — infer ALL fn bodies (calls use the pre_register
-> polymorphic scheme), THEN generalize all, so a forward-ref's body resolves before
-> its caller generalizes. **DO NOT reorder the wheel's source (cursor.mn) to put
-> the weight fns first — that hedges the wheel against the seed's bug (forbidden,
-> §9.6); the source order is ultimate-form-free, the inference must catch up.**
-> Micros banked: scratch/f64repro.mn (forward-ref, fails), f64repro2.mn
-> (weight-first, f64.mul, assembles). m3 assembly stands on THIS one root — 2
-> errors, both `score_one_position`.
+> **ROOT — the SEED TEST refutes scc-ordered-walk; the fix is the EMIT structural
+> width-predictor the seed HAS and the wheel LACKS.** The minimal repro `fn
+> caller(x) = float_of_int(x) * weight()` / `fn weight() = 0.85` compiled through
+> BOTH layers: **the SEED emits `(call_indirect (param i32)(result f64))(f64.mul)`
+> — CORRECT, assembles**; m2 (the wheel's emit) emits `i32.mul` on `[f64,i32]` —
+> WRONG. So source-order is NOT the problem (the seed handles the forward-ref in
+> source order) — `Hβ.infer.scc-ordered-walk` is REFUTED as the fix. The seed's
+> inference ALSO floors the width (its own comment: a graph handle's inference type
+> "often DISAGREES with the decl"); it compensates at EMIT with **`emit_expr_is_f64`
+> (bootstrap/src/emit/lookup.wat:218)** — a STRUCTURAL width predictor that reads
+> RELIABLE LEAVES and never trusts the floored inference: `LConvert(IntToFloat)`→f64
+> by construction, a float literal→f64, `LBinOp(arith)`→f64 iff EITHER operand is
+> f64, `LCall`→the callee's result width from a **fn-result-repr registry**
+> (`Hβ.seed.fn-result-repr-registry`, populated by a pre-pass). "The prediction
+> reads what emission ACTUALLY produces, so decl and every use agree by
+> construction." **THE WHEEL LACKS ALL OF THIS:** `tail_expr_repr` (wasm.mn:1896) is
+> a PARTIAL predictor — it handles LReturn/LBlock/LIf/LMatch but falls to the
+> floored `repr_of(lookup_ty(h))` for LConvert/LConst/LBinOp/LCall; `emit_binop_for`
+> (wasm.mn:3251) reads `repr_of(lookup_ty(left_h))` (floored) not the structural
+> repr; `vec_push` (wasm.mn:1119) reads the floored `result_h` for the call ft; and
+> there is NO fn-result-repr registry. **THE FIX (fresh context — mirror the seed's
+> emit design, substantial + Law-7 risky):** (1) complete `tail_expr_repr` — LConvert
+> IntToFloat→RF64, LConst(LVFloat)→RF64, LBinOp arith→`repr_join`(l,r), LCall→the
+> registry; (2) add the fn-result-repr registry (pre-pass over fn decls recording
+> each fn's STRUCTURAL result repr = `tail_expr_repr(body tail)`; the registry has
+> its OWN forward-ref so compute in dependency order OR iterate to fixpoint OR
+> fall-to-floor-then-second-pass, as the seed does); (3) rewire `emit_binop_for` and
+> `vec_push` (and check `llet_repr`, param widths) to read the structural predictor.
+> proximity needs BOTH the LConvert-left (→ f64.mul) AND its own local declared f64
+> (llet_repr reads `tail_expr_repr(LCall)`→registry) or its store truncates. **DO
+> NOT reorder cursor.mn** (hedges wheel vs seed, §9.6) and **DO NOT scc-ordered-walk**
+> (the seed proves source-order works). Micros: `.build/probe/f64repro-*.mn` (seed
+> f64.mul, m2 i32.mul). m3 assembly stands on THIS one root — 2 errors, both
+> `score_one_position`. Peers: `Hβ.m2.callsite-result-width`, `Hβ.emit.structural-
+> width-predictor`.
 >
 > **REFUTED — proven-singleton dispatch gated on install (the prior "Approach B").**
 > The artifact killed it: `fail` (Abort) is performed in LIVE code — `unwrap`

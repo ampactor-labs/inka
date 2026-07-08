@@ -657,15 +657,23 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > DOES NOT WORK (refuted at the artifact): `pre_register_fn_sig` (infer.mn:189)
 > ALWAYS builds the return as a fresh `TVar(ret_handle)`, IGNORING the declared
 > `-> RetTy`** (it is inferred from the body, checked later) — so `-> Float` is
-> inert at forward-ref time. NEXT: reproduce in a fast-loop micro (a fn multiplying
-> `float_of_int(x)` by a forward-declared-Float-returning call) and pin whether the
-> root is (a) `*` not unifying its operands (proximity stays a fresh var → i32
-> floor — fix: arithmetic binops unify operand types, or the binop emit takes the
-> repr JOIN of both operands, the `repr_join` peer the if/match branches already
-> use) or (b) the scc-ordered-walk inference order (Hβ.infer.scc-ordered-walk —
-> infer callees before callers within an SCC). The binop-join route (b) is the
-> more Carried-Truth: `Float * Int` should promote to the wider repr, read live
-> from both operand handles, never floored to one.
+> inert at forward-ref time. **THE SURFACE IS CORRECT (SYNTAX.md re-read, §4①):
+> Int and Float are DISTINCT types (Word + a repr gradient); there is NO mixed
+> `Float * Int` arithmetic** — `float_of_int` exists precisely because you cannot
+> multiply an Int by a Float, so `float_of_int(gates) * proximity` is `Float *
+> Float` and `proximity` IS Float (the weights are native unboxed f64). So the
+> "promote/repr-join over mixed operands" idea is DRIFT (repr_join is for if/match
+> branch JOINs of the SAME type, not for coercing distinct-typed operands). The
+> lowering must catch up to the surface (proximity: Float); the surface is never
+> lowered to the buggy inference. NEXT: reproduce in a fast-loop micro (`fn
+> f(x) = float_of_int(x) * fwd()` where `fwd()` returns a forward-declared Float)
+> and pin the ROOT — either (a) `*`'s type rule does NOT unify its operands, so
+> proximity's instantiated fresh return-var never meets the Float left operand and
+> floors to i32 (fix: arithmetic binops unify operands to ONE type — the
+> Carried-Truth form, since §4① forbids mixed arithmetic, so both operands MUST be
+> one type), or (b) `*` unifies but proximity's fresh var floored to Int BEFORE the
+> multiply (fix: `Hβ.infer.scc-ordered-walk` — infer callees before callers within
+> an SCC so scope_distance_decay's Float return is known at score_one_position).
 >
 > **REFUTED — proven-singleton dispatch gated on install (the prior "Approach B").**
 > The artifact killed it: `fail` (Abort) is performed in LIVE code — `unwrap`

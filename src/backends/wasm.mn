@@ -2955,6 +2955,12 @@ fn emit_expr(expr) = match expr {
       wat_emit("    (memory.atomic.notify)\n")
     } else if import_name == "fence" {
       wat_emit("    (atomic.fence)(i32.const 0)\n")
+    } else if import_name == "proc_exit" {
+      // proc_exit is NORETURN — it terminates the process, so the code
+      // after it is unreachable. Emit (unreachable) so the enclosing fn's
+      // result type is satisfied (op_abort_exit_fail is `(result i32)` but
+      // its body ends here). Matches the seed's `(call $proc_exit)(unreachable)`.
+      wat_emit("    (call $proc_exit)(unreachable)\n")
     } else {
       wat_emit("    (call $")
       wat_emit(import_name)

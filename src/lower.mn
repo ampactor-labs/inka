@@ -744,7 +744,27 @@ fn effects_of_row(row) = match row {
 // was a side-ledger re-derivation of the same live fact (Anchor 1).
 fn derive_ev_slots(callee_handle) = {
   map((ename) => LEvEntry(ename, resolve_ev_for_ename(ename)),
-      effects_of(lookup_ty(callee_handle)))
+      evidence_effects_of(callee_handle))
+}
+
+// The effects a caller threads evidence for: the per-call-site instantiated row
+// (`effects_of(lookup_ty)` — concrete, a higher-order arg's effect is bound
+// here) UNIONED with the callee's FLOW-CLOSURE (`escaping_row` — recovering the
+// forward-ref effects the frozen leaf drops: a callee bound AFTER its caller
+// generalized never entered the row, so the leaf reads [] and the callee's
+// strict `ev_perform_entry` key-scan meets an empty region → the ev-seam). Both
+// are needed — the leaf alone drops the forward-ref first-order case
+// (mint_param_placeholders, the m3 pre_register trap); the flow-closure alone
+// drops a higher-order arg whose effect is per-call-site. Keyed identity
+// (a key-scan, not a positional slot) makes over-placement forward-tolerant, so
+// the union never harms. This COMPLETES escaping_row's own seam (its doc names
+// derive_ev_slots as the consumer that was never wired). The deeper ultimate
+// form (order-free live inference) makes the leaf equal the flow-closure and
+// dissolves the union — peer Hβ.infer.order-free-live-row.
+fn evidence_effects_of(callee_handle) = {
+  let name = callee_name_of_handle(callee_handle)
+  let flow = if len(name) == 0 { lambda_escaping_row(callee_handle) } else { escaping_row(name) }
+  set_canonicalize(names_concat(effects_of(lookup_ty(callee_handle)), flow))
 }
 
 // One ev per effect: the installed handler's record (LLocal) when a handler is

@@ -622,14 +622,47 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > restored: the hang WAS that law failing (a diagnostic path looping instead of
 > recovering); now broken input → diagnostic, never a hang.
 >
-> **NEXT: the march (running) re-derives m3** with the dissolved infer_seq_op + the
-> position-wise instance flow. The §7 m3-frontier BELOW (inf_exit_fn handler-state
-> flood, the ev-seam, float_of_int) is the PRE-result()->r state — RE-MEASURE it
-> against the new m3: result()->r changed inference substantially, so m3's trap may
-> have marched, moved, or cleared. first-light = diff(m3,m4) empty AND battery
-> through m3. Named efficiency follow-ups: `effect_instance_arity` re-reads an op
-> per handler (cache on EffectDeclKind); `Hβ.infer.order-free-live-row` still the
-> deeper endpoint. Crucibles unchanged.
+> **THE MARCH RE-DERIVED m3 — the inf_exit_fn wall is GONE; m3 GENERATES + ASSEMBLES
+> + `wasm-tools validate`s clean (515073 lines). The trap MARCHED to a new, deeper
+> frontier: `++` never grounds its operands (2026-07-08).** With result()->r the
+> pass-2 march ran end-to-end: seed → m2 (45/45, 8/8) → m3 (exit 0, clean generation,
+> assembles, validates). The PRE-result()->r m3-frontier below (inf_exit_fn
+> handler-state flood, ev-seam, float_of_int) is CLEARED/archaeology — the changed
+> inference dissolved it. **BUT the battery THROUGH m3 is 0/45**: m3 assembles+
+> validates yet TRAPS at runtime compiling anything — `unreachable` in
+> `lower_program → compute_escaping_rows → collect_fn_bases → flatten → fold →
+> op_fold_handler_yield → lambda` (flatten's `acc ++ xs`). The classic self-hosting
+> gap: m2 works, m2's EMIT of the wheel (m3) diverges.
+>
+> **THE ROOT (fast-loop reproduced, `.build/probe/flat.mn` =
+> `fn myflat(xss) = fold([], (acc, xs) => acc ++ xs, xss)`): `++` does not ground
+> its operands.** `myflat`'s `acc ++ xs` emits `(unreachable)` ("no element type
+> proven"); `mysum` (`fold(0, (acc,x) => acc + x, …)`) emits `(i32.add)` — SAME
+> fold, so it is `++`-SPECIFIC. `++`'s inference (infer.mn:1979) is
+> `graph_bind(handle, TVar(lh))` — binds result = left operand and NOTHING else: it
+> never proves the operands are sequences nor unifies their element types, contra
+> SYNTAX §"Concatenation" ("typecheck that the operands' element types unify").
+> `+` grounds its accumulator; `++` drops it. Surfaced now because dissolving
+> infer_seq_op removed the `seq_force` (the name-keyed side-ledger, infer.mn:951)
+> that used to ground fold's accumulator from OUTSIDE — the general inference must
+> carry that truth itself, and at `++` it doesn't. NOT an emit bug: defaulting the
+> emit floor to list_concat is the forbidden side-car (Morgan 2026-07-08: no
+> subversion disguised as a fallback).
+>
+> **THE ULTIMATE FORM — §4① String=[Byte].** `++` must prove sequence-ness + unify
+> elements, exactly as list_concat (951) forces TList(elem) and `+` establishes
+> numeric. The deepest form: String = [Byte] (one sequence node-kind), so `++`
+> uniformly forces `[elem]` and BOTH the list_concat-vs-str_concat dispatch AND the
+> emit_concat_unresolved floor dissolve together (SYNTAX §4① mandates exactly this).
+> The wheel still carries String as a distinct TString, so forcing `[elem]` today
+> breaks every `"a" ++ "b"` until that unification lands — the real design step, not
+> a floor-guess. NEXT: the §4①-aligned `++` completion (prove operands are sequences,
+> unify elements; sequence word-floor = list_concat per §4①, symmetric with `+`'s
+> i32 floor) — carefully, whole. first-light = diff(m3,m4) empty AND battery through
+> m3 green. Crucible: `.build/probe/flat.mn` (generic `acc ++ xs` → unreachable) vs
+> `.build/probe/sum.mn` (arith fold → i32.add, the grounded control). Named
+> efficiency follow-up: `effect_instance_arity` re-reads an op per handler (cache on
+> EffectDeclKind); `Hβ.infer.order-free-live-row` the deeper endpoint.
 
 > **THE SINGLETON DISPATCH TIER — the m3 `ev_perform_entry` trap's ROOT, closed
 > at the dispatch layer (2026-07-07).** The trap (m3 traps at `ev_perform_entry`

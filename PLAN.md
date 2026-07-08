@@ -697,6 +697,37 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > `score_one_position`. Peers: `Hβ.m2.callsite-result-width`, `Hβ.emit.structural-
 > width-predictor`.
 >
+> **EXECUTION ANCHORS (scoped to mechanical — mirror `string_table` EXACTLY, a
+> proven compile-time registry read deep via a boundary handler; the ev-seam does
+> NOT break it):** (a) `effect FnResultRegistry { lookup_fn_result(String) -> Repr,
+> set_fn_result_registry(List) -> () }` in types.mn beside `StringTable` (types.mn:934;
+> `Repr` is types.mn:65, in scope; effect FORWARD-ref works — string_table's handler
+> in wasm.mn precedes its effect in types.mn). (b) `handler fn_result_registry with
+> entries = [] { lookup_fn_result(name) => resume(fn_result_lookup(entries, name, 0,
+> len(entries))), set_fn_result_registry(es) => resume() with entries = es }` +
+> `fn fn_result_lookup(entries, target: String, i, n)` (mirror `string_offset_lookup`
+> wasm.mn:196 — the `target: String` pin makes `name == target` str_eq, floor RI32
+> when absent). (c) `~> fn_result_registry` at pipeline.mn:68/104/145 (beside
+> `~> string_table`). (d) `tail_expr_repr` (wasm.mn:1896) new arms BEFORE `other`:
+> `LConvert(_h, IntToFloat, _) => RF64`, `LConvert(_h, FloatToInt, _) => RI32`,
+> `LBinOp(_h, op, l, r) => match binop_kind(op) { BKArith => repr_join(tail_expr_repr(l),
+> tail_expr_repr(r)), _ => RI32 }` (binop_kind types.mn:478), `LCall(_h, LGlobal(_,
+> name), _) => lookup_fn_result(name)` + same for `LTailCall`. (e) `seed_fn_result_
+> registry(lowered)` = collect TOP-LEVEL `(name, body)` from `LDeclareFn(LFn(name,…,
+> body,…))` (top-level only — the seed floors arm callees, `Hβ.seed.arm-result-
+> registry`), seed all `(name, RI32)`, then a FIXPOINT as a fn-BODY RECURSION (NOT a
+> map-lambda — the arm-internal-perform gap): `recompute` each fn's
+> `body_result_repr(body)` (performs lookup_fn_result, reads the current registry),
+> `set_fn_result_registry(next)`, repeat until the repr-list is unchanged (MONOTONE —
+> repr_join only raises RI32→RF64, so it converges). (f) call `seed_fn_result_registry`
+> at the TOP of `emit_module` BEFORE `emit_type_section` (vec_push runs there). (g)
+> rewire `emit_binop_for`: pass `l, r` (not just `left_h`); arith arm →
+> `emit_binop_repr(op, repr_join(tail_expr_repr(l), tail_expr_repr(r)))` (keep left_h
+> for the BConcat/BEq/cmp arms). (h) rewire `vec_push` (wasm.mn:1119) / the LCall ft
+> to read `lookup_fn_result(callee_name)` for a direct `LGlobal` callee, else the
+> floored `result_h`. Gate: micro `.build/probe/f64repro-forwardref-fails.mn` through
+> m2 → f64.mul + assembles; then verify.sh + march-gate --micros; then march.
+>
 > **REFUTED — proven-singleton dispatch gated on install (the prior "Approach B").**
 > The artifact killed it: `fail` (Abort) is performed in LIVE code — `unwrap`
 > (prelude.mn:335) calls `fail`, and unwrap is pervasive. So `abort_exit`

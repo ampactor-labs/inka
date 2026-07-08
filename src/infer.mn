@@ -283,11 +283,10 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   let ret_handle = mint(FnReturn(name, Inferred("return of '{name}'"))) // drift-audit: ignore — Reason string, not a control keyword
   let row_handle = graph_fresh_row(Inferred("effects of '{name}'"))
 
-  let fn_ty = TFun(
-    build_param_types(params, param_handles),
-    TVar(ret_handle),
-    mk_ef_open([], row_handle)
-  )
+  // Resolve params to shared identities ONCE (binds the handles); reused below
+  // for the ownership pass — never re-derived per consumer (Carried-Truth).
+  let resolved_params = build_param_types(params, param_handles)
+  let fn_ty = TFun(resolved_params, TVar(ret_handle), mk_ef_open([], row_handle))
 
   // Bind the name BEFORE body so recursive calls resolve.
   let existing = graph_chase(handle)
@@ -341,7 +340,7 @@ fn infer_fn(name, params, body_node, ret_ann, effs, handle, span: ValidSpan) = {
   // live everywhere, never re-derived per consumer). Then check_ref_escape walks
   // return positions, surfacing E_OwnershipViolation when a ref binding escapes —
   // how Mentl expresses borrows via !E without a separate borrow-checker pass.
-  let inferred_params = infer_ownership(build_param_types(params, param_handles), body_node)
+  let inferred_params = infer_ownership(resolved_params, body_node)
   graph_bind(handle, TFun(inferred_params, TVar(ret_handle), mk_ef_open([], row_handle)),
     Located(span, Inferred("ownership-resolved params of '{name}'")))
   check_ref_escape(inferred_params, body_node)
@@ -2788,40 +2787,47 @@ fn mint_params(params, owner_name) = map((indexed) => {
   let (idx, p) = indexed
   let name = param_name(p)
   let h = mint(FnParam(owner_name, idx, Inferred("param of '{owner_name}'")))
-  // An authored CONCRETE annotation (the Intent Boundary) binds the param's
-  // HANDLE, not only the signature: build_param_types carries the concrete
-  // ty into TFun's param slot, so unification never touches h — every body
-  // read through the env's TVar(h) (the eq/binop/++ dispatch, the param
-  // emit's width) saw a FREE var and floored to word (`a: String` params
-  // compared by pointer; `scaled: Float` params declared i32). graph_bind,
-  // not unify: h is fresh by construction, and the ann IS its declaration.
-  match param_ty(p) {
-    TVar(_) => (),
-    declared => graph_bind(h, declared,
-      Located(span_zero(), FnParam(owner_name, idx, Declared(name))))
-  }
+  // Mint the handle and bind the NAME to it in the body env; the handle's TYPE
+  // (the shared identity for a type-param, the pinned Intent Boundary for a
+  // concrete annotation) is bound ONCE by build_param_types, read live here —
+  // never re-derived per consumer. A body read through the env's TVar(h) then
+  // chases to the resolved param type (the eq/binop/++ dispatch, the emit width).
   env_extend(name, Forall([], TVar(h)), Declared(name), ParamScheme(param_authored(p)))
   h
 }, enumerate(params))
 
-fn build_param_types(params, handles) = map((pair) => {
-  let (TParam(name, declared, auth, res, default), h) = pair
-  // A DECLARED concrete annotation (`name: String`, a refinement, a repr pin)
-  // is an Intent Boundary (SYNTAX.md §"The Intent Boundary Rule") — carry it
-  // into the registered sig so the body reads the pinned type LIVE. env_find's
-  // `name: String` makes `k == name` resolve to str_eq, not polymorphic
-  // pointer-eq (the op-name lookup that gates register_handler). A bare TVar
-  // (unannotated, or a type-param `x: a`) keeps the fresh placeholder h —
-  // quantified, so HM inference is preserved for the un-pinned case.
-  // Preserve the default — it travels with the param's type into the
-  // generalized scheme so call sites resolving against TFun's params can read
-  // it to fill an omitted arg (SYNTAX.md §«Default parameter values»).
-  let chosen_ty = match declared {
-    TVar(_) => TVar(h),
-    _       => declared
+// build_param_types — resolve a signature's params to ONE shared identity each,
+// binding the param HANDLE to that identity so the body read (the handle's
+// bound TVar) and the generalized scheme share one node (Carried-Truth).
+// Threads ONE qmap across the whole signature, so the case rule (lowercase TName
+// leaf → a shared quantified TVar, via quantify_ctor_ty's TFun/TList recursion)
+// makes `init: b` and the `b` inside `f: (b,a) -> b` the SAME var — `fold`'s
+// accumulator propagates. A concrete annotation (`name: String`, a refinement,
+// a repr pin) binds the handle too (the Intent Boundary read live). An
+// unannotated param is a bare TVar; its handle IS its fresh var (quantified).
+// Without the shared conversion a lowercase TName is a RIGID nominal that
+// mismatches every concrete arg (recovered, word-floored) — the pureElem class.
+fn build_param_types(params, handles) = {
+  let (tys, _qmap) = build_param_types_loop(params, handles, [], 0)
+  tys
+}
+
+fn build_param_types_loop(params, handles, qmap, i) =
+  if i >= len(params) { ([], qmap) }
+  else {
+    let TParam(name, declared, auth, res, default) = list_index(params, i)
+    let h = list_index(handles, i)
+    let (chosen, qmap1) = match declared {
+      TVar(_) => (TVar(h), qmap),
+      _       => {
+        let (conv, q) = quantify_ctor_ty(declared, qmap)
+        graph_bind(h, conv, Located(span_zero(), Declared(name)))
+        (conv, q)
+      }
+    }
+    let (rest, qmap2) = build_param_types_loop(params, handles, qmap1, i + 1)
+    ([TParam(name, chosen, auth, res, default)] ++ rest, qmap2)
   }
-  TParam(name, chosen_ty, auth, res, default)
-}, zip(params, handles))
 
 fn build_inferred_params(handles) = map((h) => mk_param("_", TVar(h)), handles)
 

@@ -585,7 +585,7 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ---
 
-## §7 · Current state (grounded 2026-07-07 — **the SINGLETON DISPATCH TIER built and m2-GREEN: ev_perform_entry 6401→4209 (2200 route-ops now direct-dispatch), rungs 7/1→8/0 (hof-map CLEARED), micros-through-m2 45/45. The m3 parse_import trap's ROOT is CLOSED at the dispatch layer; m3 assembly now gated on ONE frontier — cursor_default, a declared-but-uninstalled handler**; gates: `verify.sh` + `march-gate.sh --micros`)
+## §7 · Current state (grounded 2026-07-07 — **the SINGLETON DISPATCH TIER built and m2-GREEN (ev_perform_entry 6401→4209, 2200 route-ops direct-dispatch, hof-map rung CLEARED). The m3-ASSEMBLY reachability-consistency root CLOSED (dcac3b8): the four undefined fn-value globals were NOT the dead cursor_default subsystem — 3 of 4 belong to the INSTALLED project_queue_merger; the wheel walked only individually-reached arms while the container-keep filter emits the whole container. `reach_decl_refs` now walks every arm the filter emits (emission == reachability). rungs 8/0, micros-through-m2 45/0; the detached fixpoint march is the oracle confirming m3 assembles**; gates: `verify.sh` + `march-gate.sh --micros`)
 
 > **THE SINGLETON DISPATCH TIER — the m3 `ev_perform_entry` trap's ROOT, closed
 > at the dispatch layer (2026-07-07).** The trap (m3 traps at `ev_perform_entry`
@@ -619,31 +619,52 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > perform` (`LBlock([LLet(rec, LGlobal("<hname>_state_g")), LPerform("<hname>_<op>",
 > args, rec)])`, all existing LowIR) → evidence.
 >
-> **THE STANDING FRONTIER (m3 assembly) — the PROVEN-SINGLETON cut, NOT more
-> mole-chasing (9a03abd).** The `_state_g`-per-declared-handler + arm-fn
-> reachability completions LANDED, m2-green (emit_singleton_globals unions the
-> installed set with every no-config declared handler read live from the env via
-> `noconfig_handler_names`, index-walking the snapshot; `reach_names_expr` marks
-> the perform's arm fn by its emitted name `op_<target>`). They cleared
-> cursor_default's `_state_g` + arm fn — and m3 assembly then MARCHED into the dead
-> `cursor_default` SUBSYSTEM the singleton dispatch force-links: `$cursor_argmax_
-> compute` / `$filter_at_position` undefined, because the wheel emits those as
-> fn-VALUES (`global.get $<fn>`) where the SEED emits direct CALLS (m2.wat declares
-> NEITHER global, yet assembles). **The root is not another symbol: a handler
-> DECLARED but NEVER installed (cursor_default, cursor.mn:82; its cursor_at
-> performed at cursor_transport.mn:247) is NOT a proven singleton (§5.3 step 3) and
-> must NOT singleton-dispatch — it should stay evidence-dispatched (as pre-tier),
-> leaving its subsystem dead/indirect.** Forcing the wheel's emit to be COMPLETE on
-> dead code (chase every fn-value-vs-call divergence to match the seed) is the
-> wrong direction. THE CLEAN CUT: gate `lower_op_default_handler` (or draw_op_edges)
-> on the handler being INSTALLED — compute the install set once from the program's
-> `LHandleWith`/`~>` sites (a lower-scope context, like `lower_handler_stack_ctx`),
-> and return the default only when the handler is in it; else evidence. Then m3
-> assembles → `GATE_WASM=m3.wasm march-gate --micros` → `printf 'import a/b\nfn
-> main()=0\n' | m3` (the original repro, expect no ev_perform_entry) →
-> `march.sh --fixpoint`. (The fn-value-vs-call divergence IS a real wheel-emit bug
-> worth its own peer — `Hβ.emit.pipe-stage-fnvalue-vs-call` — but it is NOT on the
-> first-light path once the proven-singleton cut stops force-linking dead code.)
+> **THE m3-ASSEMBLY ROOT — REACHABILITY == EMISSION, closed (dcac3b8, 2026-07-07;
+> march confirming).** The prior framing — "proven-singleton is the cut, the four
+> undefined globals are the dead cursor_default subsystem" — was REFUTED by the
+> artifact (the exact lesson of reading the last-20 commits: ground, don't absorb).
+> The census: m3 assembly failed on FOUR undefined fn-value globals —
+> `cursor_argmax_compute`, `filter_at_position`, `filter_by_module`,
+> `filter_by_locality` — and only ONE (`cursor_argmax_compute`) belongs to the
+> uninstalled `cursor_default`. The other THREE belong to **`project_queue_merger`,
+> a handler INSTALLED twice** (oracle.mn:438, pipeline.mn:315) — LIVE code, so the
+> proven-singleton cut would have left them undefined. The real root was a
+> Carried-Truth split in the wheel's own reachability: `reachable_from_main`'s
+> container-keep filter emits the WHOLE handler container the moment ANY arm is
+> reached (install makes every arm dispatchable), but `reach_grow` walked only the
+> INDIVIDUALLY-reached arms' bodies. Both handlers emit ALL their arms; only the
+> arm actually performed (query_project_queue; cursor_at) had its refs walked, so
+> the container-kept siblings' fn-value edges dangled. The seed proved the
+> contrast: m2 had 10 `project_queue_merger_state_g` refs to m3's 5 — the seed
+> walks the whole container the wheel left partial. **FIX (wheel-only, LESS
+> derivation): `reach_decl_refs` returns the found arm's refs PLUS the container's
+> full nested-name set (`reach_nested_names(d, [])`), so the frontier walks every
+> arm the filter will emit — emission == reachability, one truth.** rungs 8/0,
+> micros-through-m2 45/0, m2 +5 lines (the newly-walked arms); the detached
+> `march.sh --fixpoint` is the oracle confirming m3 now assembles (the four globals
+> defined) → `GATE_WASM=m3.wasm march-gate --micros` → `march.sh --fixpoint` (m4).
+>
+> **THE CO-EQUAL CORRECTNESS FOLLOW-UP — proven-singleton dispatch (`Hβ.lower.
+> singleton-dispatch-gated-on-install`), NOT the assembly blocker but a real bug.**
+> The reachability fix makes m3 assemble WITH cursor_default's dead subsystem
+> emitted (force-linked because its `cursor_at`, performed at
+> cursor_transport.mn:247, singleton-dispatches even though cursor_default is
+> NEVER `~>`-installed, cursor.mn:82). Singleton-dispatching an UNINSTALLED handler
+> is SEMANTICALLY WRONG independent of assembly: `lower_singleton_perform` reads
+> `$cursor_default_state_g`, a state record NO install ever initialized — garbage
+> if that perform executes. THE CUT: gate `lower_op_default_handler` on the handler
+> being INSTALLED — compute the install set once from the program's `~>`/
+> `LHandleWith` sites (a lower-scope context, like `lower_handler_stack_ctx`), and
+> return the default only when `hname` is in it; else evidence (which correctly
+> finds no handler → a genuine unhandled effect, not garbage). An uninstalled
+> handler then reaches NO arm (evidence dispatch has no static arm target) → its
+> container is dropped → cursor_default's dead subsystem no longer emits (LESS
+> code, and it retires the `noconfig_handler_names` union 9a03abd added ONLY to
+> serve dead handlers' `_state_g`). High-risk per Law 7 (a wrong install-set breaks
+> route-infra dispatch — graph/env — silently), so land it as its own gated commit
+> AFTER the reachability fix march-confirms. Not required for first-light; the
+> §5.3-step-3 proven-singleton property (installed exactly once, not under
+> loop/recursion) realized at the dispatch layer.
 >
 > **THE USER-CHOSEN DEEP FRONTIER (the arm-internal / each-with-effects gap).**
 > Once the singleton tier lands, `draw_op_edges` should become `arms |> each(draw)`

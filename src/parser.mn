@@ -2215,7 +2215,26 @@ fn first_char_code(s) = {
 
 // Type expressions
 
-fn parse_type_ty(ref tokens, pos) = match kind_at(tokens, pos) {
+// parse_type_ty — an atomic type, then an OPTIONAL `-> ret` making it a
+// function type (SYNTAX.md «The Intent Boundary», «Generic type parameters»:
+// the `f: a -> b` param annotation). Right-associative: `a -> b -> c` is
+// `a -> (b -> c)`. A leading parenthesized tuple is the parameter list
+// (`(a, b) -> c`); `()` is the zero-arg list; any other base is one parameter.
+// The function's effect row is an OPEN row var — the annotation names the
+// shape, and the bound value's effects flow in by a normal-call unify (the
+// mechanism that lets declared functor signatures replace infer_seq_op).
+fn parse_type_ty(ref tokens, pos) = {
+  let (base, p) = parse_type_atom(tokens, pos)
+  let pa = skip_ws(tokens, p)
+  if at(tokens, pa, TArrow) {
+    let (ret, p2) = parse_type_ty(tokens, skip_ws(tokens, pa + 1))
+    let param_tys = match base { TTuple(elems) => elems, TUnit => [], _ => [base] }
+    (TFun(map((t) => mk_param("_", t), param_tys), ret,
+          mk_ef_open([], fresh_handle(span_at(tokens, pos)))), p2)
+  } else { (base, p) }
+}
+
+fn parse_type_atom(ref tokens, pos) = match kind_at(tokens, pos) {
   TIdent(v) => {
     let base_pos = pos + 1
     // Type-name recognition must be byte-structural. The m2 backend can lower

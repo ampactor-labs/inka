@@ -263,18 +263,30 @@ handler graph_handler
   },
 
   graph_bind_row(handle, row, reason) => {
-    let old_node = graph_node_at(nodes, handle)
-    let new_nodes = graph_set_node(nodes, handle, GNode(NRowBound(row), reason))
-    let new_trail = trail_append(trail, trail_len, MSetRow(handle, old_node))
-    let new_epoch = epoch + 1
-    if len(checkpoint_stack) == 0 {
-      graph_mutated(new_epoch, MSetRow(handle, old_node))
+    // A row is a SET, so a row var referencing itself (v = names ∪ v) is
+    // idempotent — the least fixed point is `names`, v contributes nothing new,
+    // and there is no infinite row (the effect universe is finite). Binding the
+    // growing self-reference is what spins subst_row/subst_ty forever (the
+    // result()->r cycle: r's Iterate payload names r's own row). Union-find never
+    // unions a root with itself; the row sort is no different — leave the tail
+    // free, resolve_row folds the names forward. NOT reported: unlike a type
+    // occurs (a real infinite type), a row self-loop is benign set-idempotence.
+    if occurs_in_row(handle, row) {
+      resume()
+    } else {
+      let old_node = graph_node_at(nodes, handle)
+      let new_nodes = graph_set_node(nodes, handle, GNode(NRowBound(row), reason))
+      let new_trail = trail_append(trail, trail_len, MSetRow(handle, old_node))
+      let new_epoch = epoch + 1
+      if len(checkpoint_stack) == 0 {
+        graph_mutated(new_epoch, MSetRow(handle, old_node))
+      }
+      resume()
+        with nodes = new_nodes,
+             epoch = new_epoch,
+             trail = new_trail,
+             trail_len = trail_len + 1
     }
-    resume()
-      with nodes = new_nodes,
-           epoch = new_epoch,
-           trail = new_trail,
-           trail_len = trail_len + 1
   },
 
   graph_fork(module_name) => {
@@ -508,14 +520,14 @@ fn occurs_in(handle, ref ty) with !Mutate = {
     TVar(id)         => id == handle,
     TList(elem)      => occurs_in(handle, elem),
     TTuple(elems)    => occurs_in_list(handle, elems),
-    TFun(params, ret, _) =>
-      occurs_in_params(handle, params) || occurs_in(handle, ret),
+    TFun(params, ret, eff) =>
+      occurs_in_params(handle, params) || occurs_in(handle, ret) || occurs_in_row(handle, eff),
     TName(_, args)   => occurs_in_list(handle, args),
     TRecord(fields)  => occurs_in_fields(handle, fields),
     TRecordOpen(fields, v) =>
       v == handle || occurs_in_fields(handle, fields),
     TRefined(base, _) => occurs_in(handle, base),
-    TCont(ret, _, _) => occurs_in(handle, ret),
+    TCont(ret, _, world) => occurs_in(handle, ret) || occurs_in_row(handle, world),
     TAlias(_, inner)  => occurs_in(handle, inner)
   }
 }
@@ -558,6 +570,67 @@ fn occurs_in_fields_loop(handle, ref fields, i, n) with !Mutate = {
     let (_, ty) = list_index(fields, i)
     if occurs_in(handle, ty) { true }
     else { occurs_in_fields_loop(handle, fields, i + 1, n) }
+  }
+}
+
+// The occurs-check twin of free_in_row: does `handle` appear in the row's
+// parameterized-effect payload types (Iterate(a) carries a)? subst_ty freshens
+// these payloads via subst_row, so the check MUST see them or a var bound to a
+// type carrying itself in a row (result() -> r) escapes the check and subst_ty
+// loops. One traversal shape across free_in_row / subst_row / here — they read
+// the SAME structure; drift between them IS the bug this closes.
+fn occurs_in_row(handle, ref eff) with !Mutate = {
+  match eff {
+    EfPure           => false,
+    EfClosed(names)  => occurs_in_eff_names(handle, names),
+    EfOpen(names, v) => v == handle || occurs_in_eff_names(handle, names),
+    EfNeg(inner)     => occurs_in_row(handle, inner),
+    EfSub(a, b)      => occurs_in_row(handle, a) || occurs_in_row(handle, b),
+    EfInter(a, b)    => occurs_in_row(handle, a) || occurs_in_row(handle, b),
+    // graph_bind_row binds effect rows AND record-row residuals (a TRecord Ty
+    // from mk_record_row_residual) under one NRowBound, so `eff` may be a Ty
+    // here. A residual's self-reference is a TYPE occurs — delegate to occurs_in
+    // (occurs_in and occurs_in_row are the mutually-recursive halves of "does
+    // handle occur in this graph structure"; occurs_in's TFun/TCont arms call
+    // back here). NOT a fabricated fallback: the real occurs-check for the Ty case.
+    _                => occurs_in(handle, eff)
+  }
+}
+
+fn occurs_in_eff_names(handle, ref names) with !Mutate = {
+  let flat = list_to_flat(names)
+  occurs_in_eff_names_loop(handle, flat, 0, len(flat))
+}
+
+fn occurs_in_eff_names_loop(handle, ref names, i, n) with !Mutate = {
+  if i >= n { false }
+  else {
+    let occ = match list_index(names, i) {
+      ENamed(_)               => false,
+      EPure                   => false,
+      EParameterized(_, args) => occurs_in_eff_args(handle, args)
+    }
+    if occ { true }
+    else { occurs_in_eff_names_loop(handle, names, i + 1, n) }
+  }
+}
+
+fn occurs_in_eff_args(handle, ref args) with !Mutate = {
+  let flat = list_to_flat(args)
+  occurs_in_eff_args_loop(handle, flat, 0, len(flat))
+}
+
+fn occurs_in_eff_args_loop(handle, ref args, i, n) with !Mutate = {
+  if i >= n { false }
+  else {
+    let occ = match list_index(args, i) {
+      EAInt(_)    => false,
+      EAFloat(_)  => false,
+      EAString(_) => false,
+      EAType(ty)  => occurs_in(handle, ty)
+    }
+    if occ { true }
+    else { occurs_in_eff_args_loop(handle, args, i + 1, n) }
   }
 }
 

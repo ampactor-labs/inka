@@ -900,19 +900,16 @@ fn callee_name(func_node) with Pure = {
 // the load_i32 word-idiom body, retiring is_seq_op — is the named peer
 // Hβ.infer.seq-op-signature-driven (DEP Hβ.infer.authored-typaram-rigid).
 fn is_seq_op(cname: String) with Pure =
+  // The SUBSTRATE primitives only — their bodies do pointer arithmetic
+  // (load_i32(list + 4)) that erases [a] to Int, so inference reads the element
+  // type here instead (the value-ontology boundary, §4①, named peer
+  // Hβ.value.repr-projection-primitives). The FUNCTORS are GONE from here: they
+  // DERIVE their own types from their bodies now that Iterate.result returns the
+  // handler-delivered value (result() -> r, prelude.mn) instead of a fabricated
+  // (). Zero re-derivation — the type is read from the one place it lives.
   cname == "len"      || cname == "list_index"  || cname == "last"
   || cname == "drop_last"  || cname == "list_set"    || cname == "list_concat"
   || cname == "make_list"  || cname == "slice"       || cname == "push"
-  // The functor projections — the cursor reading a sequence in transform/fold/
-  // filter mode. Typed by the element intrinsically, NOT inferred from their
-  // handler+buffer bodies (the foreign-fluency encoding of a pure functor as an
-  // effectful iteration). The body stays as lowered substrate; the TYPE is the
-  // projection. This is what dissolves map_collector's S/P handler gaps.
-  || cname == "map"        || cname == "filter"      || cname == "flatten"
-  || cname == "fold"       || cname == "each"
-  || cname == "take"       || cname == "drop"
-  || cname == "any"        || cname == "all"
-  || cname == "find"       || cname == "count"
 
 // seq_force — bind the i-th argument's type to `ty` (a no-op past the end).
 // `graph_bind` on a VarRef handle propagates to the bound variable (the same
@@ -929,20 +926,6 @@ fn seq_force(ah, i, ty, span: ValidSpan) =
     unify(list_index(ah, i), expected, span, Inferred("sequence operand"))
   } else { () }
 
-// seq_force_fn — unify the i-th argument with `param_tys -> ret_ty` (open effect
-// row; the transform's own effects flow separately). Unify (not graph_bind) so
-// the forced param types propagate INTO the lambda's actual param handles — a
-// bare `acc` in `(acc, xs) => acc ++ xs` unions with the accumulator element,
-// exactly as a normal call unifies its argument against a declared param type.
-fn seq_force_fn(ah, i, param_tys, ret_ty, span: ValidSpan) =
-  if len(ah) > i {
-    let params = map((t) => mk_param("_", t), param_tys)
-    let row_h = graph_fresh_row(Inferred("functor transform effects"))
-    let expected = mint(Inferred("functor transform"))
-    graph_bind(expected, TFun(params, ret_ty, mk_ef_open([], row_h)),
-      Located(span, Inferred("functor transform")))
-    unify(list_index(ah, i), expected, span, Inferred("functor transform"))
-  } else { () }
 
 // The sequence node-kind's projections — typed by the element, the cursor
 // reading or building a sequence. A sequence is `[a]`; the i32 pointer is
@@ -967,71 +950,9 @@ fn infer_seq_op(cname, args, handle, span: ValidSpan) = {
     "slice"      => { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TInt, span); seq_force(ah, 2, TInt, span); graph_bind(handle, TList(elem), Located(span, Inferred("slice"))) },
     "list_concat"=> { seq_force(ah, 0, TList(elem), span); seq_force(ah, 1, TList(elem), span); graph_bind(handle, TList(elem), Located(span, Inferred("concat"))) },
     "make_list"  => { seq_force(ah, 0, TInt, span); graph_bind(handle, TList(elem), Located(span, Inferred("fresh sequence"))) },
-    // Functor projections — the cursor in transform/fold/filter mode. The
-    // element type flows through f, read live; the result is the transform's
-    // range, NEVER re-derived from the buffer body that lowers underneath.
-    "map"        => {
-      let bm = TVar(mint(Inferred("map range element")))
-      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
-      seq_force_fn(ah, 0, [elem], bm, span)               // f  : a -> b
-      graph_bind(handle, TList(bm), Located(span, Inferred("map : [b]")))
-    },
-    "filter"     => {
-      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
-      seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
-      graph_bind(handle, TList(elem), Located(span, Inferred("filter : [a]")))
-    },
-    "flatten"    => {
-      seq_force(ah, 0, TList(TList(elem)), span)          // xss : [[a]]
-      graph_bind(handle, TList(elem), Located(span, Inferred("flatten : [a]")))
-    },
-    "fold"       => {
-      // fold(init, f, xs) — config first, flowing datum LAST (SYNTAX.md Stage
-      // Law; prelude.mn `fn fold(init, f, xs)`). The arg SLOTS are read from
-      // that one signature, never a re-derived order: init=0, f=1, xs=2.
-      let bm = TVar(mint(Inferred("fold accumulator")))
-      seq_force(ah, 0, bm, span)                          // init : b
-      seq_force_fn(ah, 1, [bm, elem], bm, span)           // f    : (b, a) -> b
-      seq_force(ah, 2, TList(elem), span)                 // xs   : [a]
-      graph_bind(handle, bm, Located(span, Inferred("fold : b")))
-    },
-    "each"   => {
-      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
-      seq_force_fn(ah, 0, [elem], TUnit, span)            // f  : a -> ()
-      graph_bind(handle, TUnit, Located(span, Inferred("each : ()")))
-    },
-    "take"       => {
-      // take(n, xs) — count first, flowing datum LAST (prelude.mn
-      // `fn take(n, xs)`, the Stage Law twin of drop(n, xs)): n=0, xs=1.
-      seq_force(ah, 0, TInt, span)                        // n  : Int
-      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
-      graph_bind(handle, TList(elem), Located(span, Inferred("take : [a]")))
-    },
-    "drop"       => {
-      seq_force(ah, 0, TInt, span)                        // n  : Int
-      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
-      graph_bind(handle, TList(elem), Located(span, Inferred("drop : [a]")))
-    },
-    "any"        => {
-      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
-      seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
-      graph_bind(handle, TName("Bool", []), Located(span, Inferred("any : Bool")))
-    },
-    "all"        => {
-      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
-      seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
-      graph_bind(handle, TName("Bool", []), Located(span, Inferred("all : Bool")))
-    },
-    "find"       => {
-      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
-      seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
-      graph_bind(handle, TName("Option", [elem]), Located(span, Inferred("find : Option(a)")))
-    },
-    "count"      => {
-      seq_force(ah, 1, TList(elem), span)                 // xs : [a]
-      seq_force_fn(ah, 0, [elem], TName("Bool", []), span) // p : a -> Bool
-      graph_bind(handle, TInt, Located(span, Inferred("count : Int")))
-    },
+    // The FUNCTOR arms are DELETED — they derive their own types from their
+    // bodies (Iterate.result -> r, prelude.mn); only substrate primitives route
+    // here. seq_force_fn went with them.
     _            => graph_bind(handle, TList(elem), Located(span, Inferred("sequence")))
   }
   inf_add_row(mk_ef_closed([ENamed("Memory")]))
@@ -1204,65 +1125,73 @@ fn handler_e_r(right) = match callee_name(right) {
   }
 }
 
-// Flow the op payload performer→handler at the install: the body performs
-// `E(a)` (in its row), the handler value is `Handler<E(P)>`; unify a = P.
+// Flow the effect INSTANCE performer→handler at the install: the body performs
+// `E(a1..an)` (in its row), the handler value is `Handler<E(P1..Pn)>`; unify the
+// WHOLE instance POSITION-WISE (a1=P1 .. an=Pn) by carrying it as the nominal
+// type `TName(E, [a..])` and letting unify_types walk the args. The old flow
+// unified EVERY payload to ONE var (unify_payload_in_names) — fine when an effect
+// had a single payload, but result()->r gives Iterate two (element, r), and
+// collapsing them cross-wires the element to the result var: `a ~ r ~ [b] ~
+// [f(a)] ~ …`, the infinite type the occurs-check then rejects. One instance,
+// one unify; the positions never cross (register_effect_ops names this: "the
+// install unifies the whole instance per-position").
 fn unify_install_payload(body_row, handled, right, span: ValidSpan) = {
   let N(_, _, rh) = right
   match handler_payload_ty(lookup_ty(rh)) {
     None      => (),
-    Some(pty) => match row_effect_payload(body_row, handled) {
+    Some(pty) => match instance_ty_in_row(body_row, handled) {
       None      => (),
       Some(aty) => {
-        let h1 = mint(Located(span, Inferred("handler payload")))
-        graph_bind(h1, pty, Located(span, Inferred("handler payload")))
-        let h2 = mint(Located(span, Inferred("performed payload")))
-        graph_bind(h2, aty, Located(span, Inferred("performed payload")))
-        unify(h1, h2, span, Inferred("effect payload performer→handler"))
+        let h1 = mint(Located(span, Inferred("handler instance")))
+        graph_bind(h1, pty, Located(span, Inferred("handler instance")))
+        let h2 = mint(Located(span, Inferred("performed instance")))
+        graph_bind(h2, aty, Located(span, Inferred("performed instance")))
+        unify(h1, h2, span, Inferred("effect instance performer→handler"))
       }
     }
   }
 }
 
-// `P` from a `Handler<E(P)>` handler value type.
+// The handler's instance type from a `Handler<P>` value type. P is the WHOLE
+// effect instance (bound by unify_op_payload to `TName(E, [args])`), so
+// unify_types walks it per-position against the body's performed instance.
 fn handler_payload_ty(ty) = match ty {
   TName(n, args) =>
     if n == "Handler" {
       match args {
-        [inner] => match inner {
-          TName(_, [pty]) => Some(pty),
-          _               => None
-        },
-        _ => None
+        [inner] => Some(inner),
+        _       => None
       }
     } else { None },
   _ => None
 }
 
-// `a` from a row's `E(a)` entry (the performed payload), None if E is
-// absent or bare.
-fn row_effect_payload(row, ename) = match row {
-  EfClosed(names)  => names_effect_payload(names, ename),
-  EfOpen(names, _) => names_effect_payload(names, ename),
+// The type args of a parameterized effect's payload (EAType only; a scalar
+// effect arg like Sample(44100) carries no type).
+fn eparam_arg_tys(args) = flatten(map((arg) => match arg {
+  EAType(t) => [t],
+  _         => []
+}, args))
+
+// The performed effect INSTANCE `E(a1..an)` in a row, as the nominal type
+// `TName(E, [a1..an])` — so unify_types matches it position-wise against the
+// handler's. None if E is absent or bare (ENamed carries no instance args).
+fn instance_ty_in_row(row, ename) = match row {
+  EfClosed(names)  => instance_ty_in_names(names, ename),
+  EfOpen(names, _) => instance_ty_in_names(names, ename),
   _                => None
 }
 
-fn names_effect_payload(names, ename: String) = {
-  let tys = flatten(map((n) => match n {
+fn instance_ty_in_names(names, ename: String) = {
+  let insts = flatten(map((n) => match n {
     EParameterized(nm, args) =>
-      if nm == ename {
-        flatten(map((arg) => match arg {
-          EAType(t) => [t],
-          _         => []
-        }, args))
-      } else { [] },
+      if nm == ename { [TName(ename, eparam_arg_tys(args))] } else { [] },
     ENamed(_) => [],
     // EffName is ENamed | EParameterized | EPure — TOTAL. EPure carries no
-    // payload; without this arm the seed-compiled wheel's non-exhaustive match
-    // falls through to a garbage value (nothing-drops law: a missing arm IS a
-    // drop to 0 — the eff_name_lt-detonating class, peer subst_eff_names).
+    // instance (nothing-drops law, peer subst_eff_names).
     EPure     => []
   }, names))
-  if len(tys) == 0 { None } else { Some(last(tys)) }
+  if len(insts) == 0 { None } else { Some(last(insts)) }
 }
 
 // The five verbs, each inferred by its topology.
@@ -2385,7 +2314,7 @@ fn arms_have_wildcard(arms) = any((arm) => {
 // them — fresh vars would discard that); resume reads (R, S) from
 // arm context; the body's own value unifies with S — the arm's
 // value IS the handle result, whether it resumes or aborts.
-fn infer_one_handler_arm(arm: {args: List, body: N, op_name: String}, result_h, payload_h) = {   // drift-audit: ignore — result_h (arm result) and payload_h (effect payload) are distinct handles
+fn infer_one_handler_arm(arm: {args: List, body: N, op_name: String}, result_h, inst_h) = {   // drift-audit: ignore — result_h (arm result) and inst_h (effect instance) are distinct handles
   let arm_span = span_of_node(arm.body)
   let op_ret_ty = match env_lookup(arm.op_name) {
     Some(entry) => {
@@ -2395,7 +2324,7 @@ fn infer_one_handler_arm(arm: {args: List, body: N, op_name: String}, result_h, 
           // The op's instantiated payload (Iterate(a) ⇒ a) IS this handler's
           // P, so the arm param binds the var `~>` unifies with the body's
           // performed E. Payload flows performer→handler through P.
-          unify_op_payload(op_row, payload_h, arm_span)
+          unify_op_payload(op_row, inst_h, arm_span)
           bind_arm_args(arm.args, params, arm.op_name, arm_span)
           ret_ty
         },
@@ -2434,25 +2363,72 @@ fn bind_arm_args(args, params, op_name, span: ValidSpan) = {
 // Unify a handler's payload var with the op's payload type carried in its
 // (instantiated) row — Iterate(a) ⇒ unify a with P. This is the handler
 // half of the payload flow; `~>` then unifies P with the body's E(performed).
-fn unify_op_payload(op_row, payload_h, span: ValidSpan) = match op_row {
-  EfClosed(names)  => unify_payload_in_names(names, payload_h, span),
-  EfOpen(names, _) => unify_payload_in_names(names, payload_h, span),
-  _                => ()
+// Bind the handler's instance var to the op's instance `TName(E, [args])`, read
+// from the (instantiated) op row — so every arm of the handler shares ONE instance
+// (yield/result share `element`; get()/set(v:s) share `s`) and `~>` unifies it
+// per-position with the body's performed instance. Was: unify EACH arg to one
+// payload_h, which crossed positions on a multi-payload effect (the result()->r
+// element~result cycle). One instance, one unify; positions never cross.
+fn unify_op_payload(op_row, inst_h, span: ValidSpan) =
+  match op_instance_ty(op_row) {
+    None       => (),
+    Some(inst) => {
+      let ih = mint(Located(span, Inferred("op instance")))
+      graph_bind(ih, inst, Located(span, Inferred("op instance")))
+      unify(ih, inst_h, span, Inferred("effect instance to handler"))
+    }
+  }
+
+// The op's OWN instance `TName(E, [args])` from its single-effect row — the
+// effect name is read LIVE from the row's EParameterized (Carried-Truth: the
+// name is already there, never passed in), so `~>` unifies it per-position with
+// the body's performed instance and every arm of the handler shares one instance.
+fn op_instance_ty(row) = match row {
+  EfClosed(names)  => op_instance_in_names(names),
+  EfOpen(names, _) => op_instance_in_names(names),
+  _                => None
 }
 
-fn unify_payload_in_names(names, payload_h, span: ValidSpan) =
-  each((n) => match n {
-    ENamed(_)               => (),
-    EPure                   => (),   // the identity carries no payload
-    EParameterized(_, args) => each((arg) => match arg {
-      EAType(ty) => {
-        let th = mint(Located(span, Inferred("op payload")))
-        graph_bind(th, ty, Located(span, Inferred("op payload")))
-        unify(th, payload_h, span, Inferred("effect payload to handler"))
-      },
-      _          => ()
-    }, args)
-  }, names)
+fn op_instance_in_names(names) = {
+  let insts = flatten(map((n) => match n {
+    EParameterized(nm, args) => [TName(nm, eparam_arg_tys(args))],
+    ENamed(_) => [],
+    EPure     => []
+  }, names))
+  if len(insts) == 0 { None } else { Some(last(insts)) }
+}
+
+// The effect's payload arity — the number of type positions in its instance
+// (register_effect_ops' eff_vars). Read LIVE from its first op's row; 0 for a
+// bare (unparameterized) effect. The handler exposes one fresh var per position
+// so generalize quantifies each and every install freshens the whole instance.
+fn effect_instance_arity(ename) = {
+  let ops = match env_lookup(ename) {
+    Some(entry) => match entry { (_, _, EffectDeclKind(o)) => o, _ => [] },
+    None        => []
+  }
+  match ops {
+    []          => 0,
+    [op0, ..._] => match env_lookup(op0) {
+      Some(oe) => match oe { (sch, _, _) => op_scheme_arity(sch) },
+      None     => 0
+    }
+  }
+}
+
+fn op_scheme_arity(sch) = match sch {
+  Forall(_, TFun(_, _, row)) => match op_instance_ty(row) {
+    Some(TName(_, args)) => len(args),
+    _                    => 0
+  },
+  _ => 0
+}
+
+// n fresh instance vars for a handler's `Handler<E(v1..vn)>` — one per the
+// effect's payload position, exposed so generalize quantifies each.
+fn mint_instance_vars(ename, n, i) =
+  if i >= n { [] }
+  else { [mint(Inferred("effect '{ename}' instance {i}"))] ++ mint_instance_vars(ename, n, i + 1) }
 
 // Generalization — Damas-Milner let-gen.
 // Quantify handles that are free in the body but NOT free in env.
@@ -2538,7 +2514,7 @@ fn free_in_ty(ty) = match ty {
   TRecord(fields)        => free_in_fields(fields),
   TRecordOpen(fields, v) => [v] ++ free_in_fields(fields),
   TRefined(base, _)      => free_in_ty(base),
-  TCont(ret, _, _)       => free_in_ty(ret),
+  TCont(ret, _, world)   => free_in_ty(ret) ++ free_in_row(world),
   TAlias(_, inner)       => free_in_ty(inner)
 }
 
@@ -3091,8 +3067,17 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   // $derive_effect_name_from_arms; a handler that is its own effect's sole
   // declaration falls back to its own name. (ename is vestigial once this is
   // live — peer Hβ.infer.handler-effect-name-is-live-edge.)
-  let payload_h = mint(Inferred("effect '{ename}' payload type"))
-  let handler_ty = TName("Handler", [TName(ename, [TVar(payload_h)])])
+  // The handler carries the effect's WHOLE INSTANCE `E(v1..vn)` — one fresh var
+  // per payload position (arity read LIVE from the effect), exposed in the value
+  // type so generalize quantifies each and every install freshens the whole
+  // instance. `~>` and each arm unify their performed/op instance against it
+  // POSITION-WISE (unify_types walks the TName args) — never all-payloads-to-one
+  // (which crossed a multi-payload effect's positions: the result()->r cycle).
+  let inst_vars = mint_instance_vars(ename, effect_instance_arity(ename), 0)
+  let inst_ty = TName(ename, map((v) => TVar(v), inst_vars))
+  let inst_h = mint(Inferred("effect '{ename}' instance"))
+  graph_bind(inst_h, inst_ty, Inferred("effect '{ename}' instance"))
+  let handler_ty = TName("Handler", [inst_ty])
   let config_tparams = mint_handler_config_tparams(config, hname, 0)
   let scheme_body = if len(config) == 0 {
     handler_ty
@@ -3112,7 +3097,7 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   // (handler_decl_of) — no handler_state_inits_registry side-ledger
   // re-deriving what the graph already holds (Anchor 1, Carried-Truth).
   env_extend(hname,
-    Forall([payload_h], scheme_body),
+    Forall(inst_vars, scheme_body),
     Declared(hname),
     HandlerKind(ename, r_handle, config, state, arms))
   // Resume cardinality is NOT bound here: the body IS the contract, so the
@@ -3139,7 +3124,7 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
     env_scope_enter()
     bind_handler_config_params(config_tparams, hname)
     bind_handler_state_names(state_binds, hname, span)
-    infer_one_handler_arm(arm, s_h, payload_h)   // drift-audit: ignore — s_h (result) and payload_h (effect payload) are distinct, not parallel arrays
+    infer_one_handler_arm(arm, s_h, inst_h)   // drift-audit: ignore — s_h (arm result) and inst_h (effect instance) are distinct, not parallel arrays
     env_scope_exit()
   }, arms)
   inf_exit_fn()

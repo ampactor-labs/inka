@@ -24,7 +24,13 @@ type Bool = False | True
 
 effect Iterate {
   yield(element) -> ()
-  result() -> ()
+  // result() DELIVERS the handler's collected value — the accumulator for
+  // fold, [b] for map, the count for count — so its return type IS the
+  // handler's result, polymorphic in `r` (the case rule; `r` = a type param).
+  // Declared `-> ()` it forced every `resume(<value>)` arm to Unit, collapsing
+  // fold's accumulator to () — the bug infer_seq_op existed to override. With
+  // `-> r` each collection op DERIVES its own type from its handler's resume.
+  result() -> r
 }
 
 fn iterate(xs) with Iterate = iterate_from(xs, 0, len(xs))

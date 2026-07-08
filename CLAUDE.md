@@ -233,6 +233,23 @@
 > EVOLVES with the project: every blocker closed this way sharpens what the kernel's
 > own Verify will one day enforce unsayably.
 >
+> **A HANG is productive-under-error FAILING — the fastest signpost to the root
+> (2026-07-08).** When the compiler LOOPS instead of erroring (subst_ty stack-
+> exhausts on an infinite type `unify` just built), an error path is recovering by
+> LOOPING instead of by DIAGNOSTIC. Complete THAT path — the occurs-check must
+> traverse everything subst_ty does (the three "vars of a type" walks
+> `free_in_ty`/`occurs_in`/`subst_ty` must AGREE, over rows AND `TCont` worlds),
+> and `graph_bind_row` gets the row-set idempotence (a row is a SET; `v = names ∪ v`
+> never grows, so never bind the self-loop) — and the hang becomes a legible `E_*`
+> at the exact site, which usually NAMES the real root (here the multi-payload
+> cross-wire `element ~ r` behind the `result()->r` cycle, not the occurs-check
+> itself). "Broken input → diagnostic, never a hang" is BOTH the fix and the
+> endpoint (`PLAN.md §0` systems-explain-themselves, at the compiler's own
+> construction). Corollary: when fixing forward reveals a cascade, check first if
+> it is the design's OWN promise unbuilt — `unify_payload_in_names` never did the
+> "install unifies the whole instance per-position" its sibling comment claimed;
+> building it WAS the fix, not a new bug.
+>
 > **Two mechanical moves, proven across eight roots in two days (2026-07-01→02) —
 > run them BY PROCEDURE, they need no depth:**
 > - **CENSUS, never moles.** The moment a second trap shares a first trap's shape,

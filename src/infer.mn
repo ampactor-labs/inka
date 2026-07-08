@@ -1089,7 +1089,7 @@ fn infer_pipe_tee(left, right, handle, span: ValidSpan) = {
     Some(er) => {
       let (handled, resid_h) = er
       // THE INSTALL CONNECTION: flow the op payload performer→handler.
-      // The body performs E(a); the handler is Handler<E(P)>; unify a = P,
+      // The body performs E(a); the handler is Handler(E(P)); unify a = P,
       // so the handler's arm param (elem : P) becomes the performed value
       // type. This is what makes `field` in `map((field)=>field.name, xs)`
       // resolve to xs's element. The dispatch gradient applied to data.
@@ -1126,7 +1126,7 @@ fn handler_e_r(right) = match callee_name(right) {
 }
 
 // Flow the effect INSTANCE performer→handler at the install: the body performs
-// `E(a1..an)` (in its row), the handler value is `Handler<E(P1..Pn)>`; unify the
+// `E(a1..an)` (in its row), the handler value is `Handler(E(P1..Pn))`; unify the
 // WHOLE instance POSITION-WISE (a1=P1 .. an=Pn) by carrying it as the nominal
 // type `TName(E, [a..])` and letting unify_types walk the args. The old flow
 // unified EVERY payload to ONE var (unify_payload_in_names) — fine when an effect
@@ -1152,7 +1152,7 @@ fn unify_install_payload(body_row, handled, right, span: ValidSpan) = {
   }
 }
 
-// The handler's instance type from a `Handler<P>` value type. P is the WHOLE
+// The handler's instance type from a `Handler(P)` value type. P is the WHOLE
 // effect instance (bound by unify_op_payload to `TName(E, [args])`), so
 // unify_types walks it per-position against the body's performed instance.
 fn handler_payload_ty(ty) = match ty {
@@ -2424,7 +2424,7 @@ fn op_scheme_arity(sch) = match sch {
   _ => 0
 }
 
-// n fresh instance vars for a handler's `Handler<E(v1..vn)>` — one per the
+// n fresh instance vars for a handler's `Handler(E(v1..vn))` — one per the
 // effect's payload position, exposed so generalize quantifies each.
 fn mint_instance_vars(ename, n, i) =
   if i >= n { [] }
@@ -3035,14 +3035,14 @@ fn register_one_op(effect_name, eff_name, op) = {
 fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   // Handlers are first-class values. Per Hβ.first-light.handler-
   // scheme-tfun-shape (2026-05-06): when the handler decl has
-  // config-params, its scheme is `TFun([config_tys], Handler<E>,
+  // config-params, its scheme is `TFun([config_tys], Handler(E),
   // pure_row)` so install-site calls `~> h(arg1, arg2)` unify
   // each arg's type against the corresponding config-param tyvar.
-  // Without the TFun shape, `let h: Handler<E>` mismatches
+  // Without the TFun shape, `let h: Handler(E)` mismatches
   // `h(args): fn(...) -> ?` at install — the bug surfaced by the
   // minimal `handler h(x) { op() => x }; perform op() ~> h(42)`
   // empirical (E_TypeMismatch at handle 20). Empty-config handlers
-  // keep the bare Handler<E> scheme since `~> h` (no parens) is
+  // keep the bare Handler(E) scheme since `~> h` (no parens) is
   // direct application without intermediate call.
   //
   // Per protocol_cursor_is_the_substrate.md (2026-05-07) Phase B:
@@ -3052,11 +3052,6 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   // Tier 1 (OneShot direct call) vs Tier 3 (heap continuation) per
   // proven cardinality. There is no @resume= annotation; the body
   // IS the contract.
-  // The handler carries the effect's op-payload type P as a quantified
-  // var: Handler<E(P)>. At each install the scheme instantiates a FRESH P,
-  // and `~>` unifies it with the body's performed E(a) — so the arm's op
-  // param (elem : P) becomes the performer's value type. The data-twin of
-  // the dispatch gradient: a fact fixed at the install, not the decl.
   // The handler's effect IS the effect that DECLARES its arm ops, read LIVE from
   // the env (§2 follow-the-edge: the op→effect edge carries the identity; the
   // parser names no effect, leaving ename "" — parser.mn:881). Derived HERE, not
@@ -3071,7 +3066,9 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   // per payload position (arity read LIVE from the effect), exposed in the value
   // type so generalize quantifies each and every install freshens the whole
   // instance. `~>` and each arm unify their performed/op instance against it
-  // POSITION-WISE (unify_types walks the TName args) — never all-payloads-to-one
+  // POSITION-WISE (unify_types walks the TName args), so the arm's op params
+  // become the performer's value types — the data-twin of the dispatch gradient,
+  // a fact fixed at the install, not the decl. NEVER all-payloads-to-one-var
   // (which crossed a multi-payload effect's positions: the result()->r cycle).
   let inst_vars = mint_instance_vars(ename, effect_instance_arity(ename), 0)
   let inst_ty = TName(ename, map((v) => TVar(v), inst_vars))

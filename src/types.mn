@@ -936,6 +936,17 @@ effect StringTable {
   set_string_entries(List) -> ()
 }
 
+// The fn-result-repr registry (Hβ.emit.structural-width-predictor): each
+// top-level fn's PROVEN result repr, computed structurally so a call's
+// emitted width reads the callee's truth, never the floored inference type
+// (the seed's emit_expr_is_f64). `set_fn_result_registry` seeds it once
+// (a monotone fixpoint — reprs only rise via repr_join); `lookup_fn_result`
+// reads it at every LCall from tail_expr_repr. Mirrors StringTable.
+effect FnResultRegistry {
+  lookup_fn_result(String) -> Repr
+  set_fn_result_registry(List) -> ()
+}
+
 // Evidence (spec W4) — runtime witness of an effect-to-handler-arm
 // binding. A polymorphic function that performs `op_name` dispatches
 // via an evidence slot: the caller threads the evidence record into

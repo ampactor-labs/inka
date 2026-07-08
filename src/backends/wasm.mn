@@ -190,6 +190,16 @@ handler string_table with entries = [] {
   set_string_entries(es) => resume() with entries = es
 }
 
+// The fn-result-repr registry: each top-level fn name → its PROVEN result
+// repr (RI32/RF64/…), read at every LCall so a call's emitted width is the
+// callee's structural truth, not the floored inference type (the seed's
+// emit_call_result_is_f64). Seeded once by a monotone fixpoint (seed_fn_
+// result_registry) BEFORE the sections that emit calls; mirrors string_table.
+handler fn_result_registry with entries = [] {
+  lookup_fn_result(name) => resume(fn_result_lookup(entries, name, 0, len(entries))),
+  set_fn_result_registry(es) => resume() with entries = es
+}
+
 // target: String — the Intent Boundary carrying the proof: both compare
 // operands are tuple-destructure binders (h=0 under the seed), so an
 // unpinned `==` emits pointer-eq and a content-equal COPY of a registered
@@ -202,6 +212,20 @@ fn string_offset_lookup(entries, target: String, i, n) = {
     let (s, offset) = list_index(entries, i)
     if s == target { offset }
     else { string_offset_lookup(entries, target, i + 1, n) }
+  }
+}
+
+// The fn's registered result repr, or RI32 (the floor) for an unregistered
+// callee (a handler arm, a builtin, an indirect closure — the seed floors
+// those too). `target: String` pins the Intent Boundary so `name == target`
+// is str_eq, not pointer-eq on tuple-binder names (the string_offset_lookup
+// class).
+fn fn_result_lookup(entries, target: String, i, n) = {
+  if i >= n { RI32 }
+  else {
+    let (name, r) = list_index(entries, i)
+    if name == target { r }
+    else { fn_result_lookup(entries, target, i + 1, n) }
   }
 }
 
@@ -268,6 +292,10 @@ fn emit_module(lowered) = {
   // W5 string interning — seed the string_table handler so downstream
   // LString emits can look up the offset via perform string_offset.
   set_string_entries(string_entries)
+  // Seed the fn-result-repr registry (the monotone fixpoint) BEFORE any
+  // section emits a call — emit_type_section's ft vectors and every
+  // emit_binop_for read the callee's registered result width from it.
+  seed_fn_result_registry(lowered)
   emit_header()
   emit_type_section(lowered)
   emit_runtime_imports(wasi_ops)
@@ -1062,13 +1090,13 @@ fn collect_call_vectors_arms_from(arms, acc, i) =
 
 fn collect_call_vectors_expr(expr, acc) = match expr {
   LCall(h, f, args)     => collect_call_vectors_expr(f,
-                             collect_call_vectors_list(args, vec_push(args, h, acc))),
+                             collect_call_vectors_list(args, vec_push(args, call_result_repr(f, h), acc))),
   LTailCall(h, f, args) => collect_call_vectors_expr(f,
-                             collect_call_vectors_list(args, vec_push(args, h, acc))),
+                             collect_call_vectors_list(args, vec_push(args, call_result_repr(f, h), acc))),
   LSuspend(h, _o, f, args, ev) => collect_call_vectors_expr(f,
                              collect_call_vectors_list(args,
-                               collect_call_vectors_list(ev, vec_push(args, h, acc)))),
-  LEvPerform(h, _n, _e, _s, args) => collect_call_vectors_list(args, vec_push(args, h, acc)),
+                               collect_call_vectors_list(ev, vec_push(args, call_result_repr(f, h), acc)))),
+  LEvPerform(h, _n, _e, _s, args) => collect_call_vectors_list(args, vec_push(args, repr_of(lookup_ty(h)), acc)),
   LLet(_h, _n, inner)   => collect_call_vectors_expr(inner, acc),
   LBinOp(_h, _op, l, r) => collect_call_vectors_expr(r, collect_call_vectors_expr(l, acc)),
   LUnaryOp(_h, _op, i)  => collect_call_vectors_expr(i, acc),
@@ -1115,8 +1143,19 @@ fn collect_call_vectors_expr(expr, acc) = match expr {
 // Prepended (cons), not appended: the emit order of distinct function types is
 // immaterial (call_indirect matches by structural type, not declaration
 // order), so the O(1) cons is the residue form of the O(N²) append.
-fn vec_push(args, result_h, acc) =
-  [( [RI32] ++ arg_reprs(args), repr_of(lookup_ty(result_h)) )] ++ acc
+fn vec_push(args, result_repr, acc) =
+  [( [RI32] ++ arg_reprs(args), result_repr )] ++ acc
+
+// A call's result repr: a DIRECT call to a top-level fn reads the callee's
+// registered result width (the fixpoint truth); everything else — an indirect
+// closure, an evidence perform — falls to the call node's proven type. The ft
+// the type-decl declares (vec_push) and the ft the call site references
+// (call_ft_name) MUST read this same value, or the call_indirect names a $ft
+// no decl emitted.
+fn call_result_repr(f, result_h) = match f {
+  LGlobal(_gh, name) => lookup_fn_result(name),
+  _                  => repr_of(lookup_ty(result_h))
+}
 
 // Emit each DISTINCT non-i32 repr-vector once. `seen` carries the ft_names
 // already emitted; an all-i32 vector is skipped (its $ftN already exists from
@@ -1205,8 +1244,8 @@ fn repr_codes(reprs) = {
 // own repr (read at result_h). The structural function-type the callee was
 // emitted with (emit_fn_body's param/result widths) is THE SAME vector, so the
 // names coincide and call_indirect's runtime structural match succeeds.
-fn call_ft_name(args, result_h) =
-  ft_name([RI32] ++ arg_reprs(args), repr_of(lookup_ty(result_h)))
+fn call_ft_name(args, result_repr) =
+  ft_name([RI32] ++ arg_reprs(args), result_repr)
 
 // Each arg's repr in SOURCE order — the canonical vector order every ft
 // projection reads (name, definition, callee params, caller stack). The
@@ -1900,9 +1939,91 @@ fn tail_expr_repr(expr) = match expr {
   // the same join the LIf emission declares (one width, two readers).
   LIf(_h, _c, t, e)  => repr_join(body_result_repr(t), body_result_repr(e)),
   LMatch(_h, _s, arms) => match_arms_repr(arms),
+  // The reliable STRUCTURAL leaves — the width emission ACTUALLY produces,
+  // read here so decl and every use agree by construction, never trusting a
+  // floored inference type (the seed's emit_expr_is_f64). An IntToFloat
+  // convert IS f64 by construction; an arithmetic binop carries operand width
+  // (f64 iff either operand is — same-typed operands, §4①, so the join reads
+  // the truth); a direct call reads the callee's registered result repr.
+  LConvert(_h, kind, _)         => match kind { IntToFloat => RF64, FloatToInt => RI32 },
+  LBinOp(_h, op, l, r)          => match binop_kind(op) {
+    BKArith => repr_join(tail_expr_repr(l), tail_expr_repr(r)),
+    _       => RI32
+  },
+  LCall(ch, callee, _)          => call_result_repr(callee, ch),
+  LTailCall(ch, callee, _)      => call_result_repr(callee, ch),
   other              => {
     let h = lexpr_handle(other)
     if h == 0 { RI32 } else { repr_of(lookup_ty(h)) }
+  }
+}
+
+// ─── The fn-result-repr registry (the seed's emit_call_result_is_f64) ───
+// Seed each top-level fn's PROVEN result repr, so tail_expr_repr(LCall) reads
+// the callee's structural width instead of the floored inference type. A
+// MONOTONE FIXPOINT: reprs only rise (repr_join RI32→RF64), so recomputing
+// each fn's body_result_repr (reading the current registry for its LCalls)
+// to a STABLE list converges in ≤ the deepest f64 call-chain. Top-level fns
+// only — an arm/closure/builtin callee floors to RI32 (Hβ.seed.arm-result-
+// registry), the same as the seed.
+fn seed_fn_result_registry(lowered) = {
+  let tails = collect_top_fn_result_tails(lowered, [])
+  let init = seed_floor_reprs(tails, [])
+  set_fn_result_registry(init)
+  fix_fn_result(tails, init)
+}
+
+// (name, body) per top-level LDeclareFn — the body's structural result repr is
+// what a caller reads. Nested arm fns (inside a handler container) are NOT
+// collected: they floor, per the seed.
+fn collect_top_fn_result_tails(stmts, acc) = {
+  if len(stmts) == 0 { acc }
+  else {
+    let d = last(stmts)
+    let acc2 = match d {
+      LDeclareFn(LFn(name, _a, _p, body, _r, _f)) => [(name, body)] ++ acc,
+      _ => acc
+    }
+    collect_top_fn_result_tails(drop_last(stmts), acc2)
+  }
+}
+
+fn seed_floor_reprs(tails, acc) = {
+  if len(tails) == 0 { acc }
+  else {
+    let (name, _body) = last(tails)
+    seed_floor_reprs(drop_last(tails), [(name, RI32)] ++ acc)
+  }
+}
+
+// One fixpoint round: recompute every fn's result repr against the CURRENT
+// registry, re-seed, and repeat until the list is stable. body_result_repr
+// performs lookup_fn_result (via tail_expr_repr's LCall arm) — the recompute
+// is a fn-BODY recursion so that perform reaches the installed handler (a
+// map-lambda would strand it, the arm-internal-perform gap).
+fn fix_fn_result(tails, cur) = {
+  let next = recompute_fn_reprs(tails, [])
+  if reprs_list_equal(cur, next, 0) { () }
+  else { set_fn_result_registry(next); fix_fn_result(tails, next) }
+}
+
+fn recompute_fn_reprs(tails, acc) = {
+  if len(tails) == 0 { acc }
+  else {
+    let (name, body) = last(tails)
+    let r = body_result_repr(body)
+    recompute_fn_reprs(drop_last(tails), [(name, r)] ++ acc)
+  }
+}
+
+// Both lists are built from the same `tails` (equal length, same order), so an
+// element-wise repr compare suffices. `==` on Repr is structural (an ADT).
+fn reprs_list_equal(a, b, i) = {
+  if i >= len(a) { true }
+  else {
+    let (_, ra) = list_index(a, i)
+    let (_, rb) = list_index(b, i)
+    if ra == rb { reprs_list_equal(a, b, i + 1) } else { false }
   }
 }
 
@@ -2390,7 +2511,7 @@ fn emit_expr(expr) = match expr {
   LBinOp(_h, op, l, r) => {
     emit_expr(l)
     emit_expr(r)
-    emit_binop_for(op, lexpr_handle(l))
+    emit_binop_for(op, l, r)
   },
 
   LUnaryOp(_h, op, inner) => {
@@ -2427,7 +2548,7 @@ fn emit_expr(expr) = match expr {
     // function-type equality at the indirect site (call_indirect's own runtime
     // match) makes this sound; an all-i32 vector renders $ft<N+1>, byte-identical.
     wat_emit("    (call_indirect (type ")
-    wat_emit(call_ft_name(args, h))
+    wat_emit(call_ft_name(args, call_result_repr(func, h)))
     wat_emit("))\n")
   },
 
@@ -2443,7 +2564,7 @@ fn emit_expr(expr) = match expr {
     wat_emit(int_to_str(h))
     wat_emit(") (i32.load offset=0)\n")
     wat_emit("    (return_call_indirect (type ")
-    wat_emit(call_ft_name(args, h))
+    wat_emit(call_ft_name(args, call_result_repr(func, h)))
     wat_emit("))\n")
   },
 
@@ -2779,7 +2900,7 @@ fn emit_expr(expr) = match expr {
     emit_expr_list(args)
     wat_emit("    (local.get ${sst}) (i32.load offset=0)\n")
     wat_emit("    (call_indirect (type ")
-    wat_emit(call_ft_name(args, h))
+    wat_emit(call_ft_name(args, call_result_repr(func, h)))
     wat_emit("))\n")
   },
 
@@ -3002,9 +3123,11 @@ fn emit_expr(expr) = match expr {
     wat_emit("    (i32.load offset=0)(i32.load offset=4)\n")  // nstate = record[4]
     wat_emit("    (i32.const 4)(i32.mul)(i32.add)\n") // + 4*nstate
     wat_emit("    (i32.load offset=0)\n")             // arm_fn idx
-    // (4) dispatch — the arm's repr-vector (record-i32, args..., result)
+    // (4) dispatch — the arm's repr-vector (record-i32, args..., result).
+    // An evidence perform has no static callee — the result width is the
+    // call node's proven type (matches vec_push's LEvPerform arm).
     wat_emit("    (call_indirect (type ")
-    wat_emit(call_ft_name(args, h))
+    wat_emit(call_ft_name(args, repr_of(lookup_ty(h))))
     wat_emit("))\n")
   },
 
@@ -3193,7 +3316,9 @@ fn emit_float_const(f, r) = match r {
 // graph (perform lookup_ty) only to PROJECT the representation cash-out,
 // never to select between surface operators. The non-aggregate binops
 // (arithmetic/comparison/logical) fall through to emit_binop.
-fn emit_binop_for(op, left_h) = match op {
+fn emit_binop_for(op, l, r) = {
+  let left_h = lexpr_handle(l)
+  match op {
   // ++ is ONE seq_concat over the unified sequence node-kind (SYNTAX.md
   // §Concatenation: "no String-vs-List dispatch because there is no
   // split"). The element/representation cash-out (byte-buffer vs
@@ -3242,13 +3367,16 @@ fn emit_binop_for(op, left_h) = match op {
   BGt => emit_struct_cmp(op, left_h),
   BLe => emit_struct_cmp(op, left_h),
   BGe => emit_struct_cmp(op, left_h),
-  // Arithmetic/logical: the representation gradient at the binop layer. The
-  // operand's PROVEN type (read live, never re-derived) projects the machine-
-  // width instruction — the same "proof becomes the dispatch" move ++/== make
-  // above. RI32 emits the i32.* floor byte-identical to the pre-gradient form
-  // (Law 7); RF64/RF32/RI64/RV128 are the cash-outs a float/wide/lane operand
-  // reaches with no surface-operator split (+ stays + for every width).
-  _ => emit_binop_repr(op, repr_of(lookup_ty(left_h)))
+  // Arithmetic: the representation gradient at the binop layer, read
+  // STRUCTURALLY from both operands (the seed's emit_expr_is_f64) — f64 iff
+  // EITHER operand's emitted width is f64, so a floored operand handle yields
+  // to a structural proof (an IntToFloat convert, a float-returning call).
+  // The operands are one type (§4①, no mixed arithmetic), so the join reads
+  // the truth both emit; reading only left_h's floored inference type emitted
+  // i32.mul against an f64 operand (the score_one_position floor). RI32 keeps
+  // the i32.* floor byte-identical (Law 7).
+  _ => emit_binop_repr(op, repr_join(tail_expr_repr(l), tail_expr_repr(r)))
+  }
 }
 
 // Insert the runtime-helper state argument UNDER [a, b] on the stack

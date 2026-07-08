@@ -66,6 +66,7 @@ fn compile(entry_module) = {
     ~> wat_stdout
     ~> wasi_filesystem       // FS — per-file byte I/O for driver / cache
     ~> string_table          // W5 — compile-time interned string offsets
+    ~> fn_result_registry    // structural fn-result-repr widths (emit)
     ~> emit_memory_bump      // swap for emit_memory_arena to prove surface
     ~> body_context          // H1 — per-fn-body emit metadata
     ~> mentl_default
@@ -102,6 +103,7 @@ fn compile_stdin() = {
     ~> wat_stdout
     ~> wasi_filesystem
     ~> string_table
+    ~> fn_result_registry
     ~> emit_memory_bump
     ~> body_context
     ~> mentl_default
@@ -143,6 +145,7 @@ fn compile_source(source) = {
     |> emit_module
     ~> wat_stdout
     ~> string_table
+    ~> fn_result_registry
     ~> emit_memory_bump
     ~> body_context
     ~> mentl_default

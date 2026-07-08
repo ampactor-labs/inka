@@ -658,22 +658,31 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > ALWAYS builds the return as a fresh `TVar(ret_handle)`, IGNORING the declared
 > `-> RetTy`** (it is inferred from the body, checked later) — so `-> Float` is
 > inert at forward-ref time. **THE SURFACE IS CORRECT (SYNTAX.md re-read, §4①):
-> Int and Float are DISTINCT types (Word + a repr gradient); there is NO mixed
-> `Float * Int` arithmetic** — `float_of_int` exists precisely because you cannot
-> multiply an Int by a Float, so `float_of_int(gates) * proximity` is `Float *
-> Float` and `proximity` IS Float (the weights are native unboxed f64). So the
-> "promote/repr-join over mixed operands" idea is DRIFT (repr_join is for if/match
-> branch JOINs of the SAME type, not for coercing distinct-typed operands). The
-> lowering must catch up to the surface (proximity: Float); the surface is never
-> lowered to the buggy inference. NEXT: reproduce in a fast-loop micro (`fn
-> f(x) = float_of_int(x) * fwd()` where `fwd()` returns a forward-declared Float)
-> and pin the ROOT — either (a) `*`'s type rule does NOT unify its operands, so
-> proximity's instantiated fresh return-var never meets the Float left operand and
-> floors to i32 (fix: arithmetic binops unify operands to ONE type — the
-> Carried-Truth form, since §4① forbids mixed arithmetic, so both operands MUST be
-> one type), or (b) `*` unifies but proximity's fresh var floored to Int BEFORE the
-> multiply (fix: `Hβ.infer.scc-ordered-walk` — infer callees before callers within
-> an SCC so scope_distance_decay's Float return is known at score_one_position).
+> Int and Float are DISTINCT types; there is NO mixed `Float * Int` arithmetic** —
+> `float_of_int` IS the explicit convert, so `float_of_int(gates) * proximity` is
+> `Float * Float` and the "promote/repr-join over mixed operands" idea is DRIFT.
+> **ROOT CONFIRMED by fast-loop micro (the FORWARD-REF GENERALIZATION FLOOR):** the
+> minimal repro `fn caller(x) = float_of_int(x) * weight()` / `fn weight() = 0.85`
+> emits `i32.mul` on `[f64,i32]` (fails) when weight is defined AFTER caller, but
+> `f64.mul` (assembles clean) when weight is defined BEFORE — source order = the
+> decisive variable. MECHANISM: `infer_binop`'s BKArith DOES unify operands and
+> binds result `TVar(lh)` (infer.mn:2005); but `infer_stmt_list` walks SOURCE ORDER
+> (infer.mn:211) and `infer_fn` GENERALIZES PER-FN (infer.mn:399), so caller
+> generalizes over weight()'s still-unresolved return var (weight's body not yet
+> inferred) → the var quantifies into caller's scheme → floors to i32 at caller's
+> monomorphic emit; weight's own func is correctly `(result f64)`, but caller calls
+> it via `$ft1 (result i32)`. **THE FIX — `Hβ.infer.scc-ordered-walk`: infer
+> callees before callers.** Two candidate implementations for a FRESH context (both
+> reorder whole-program inference — Law-7 risky, gate hard): (A) topo-sort the fn
+> stmts by call-dependency in `infer_program` before `infer_stmt_list`, infer in
+> that order; (B) two-phase — infer ALL fn bodies (calls use the pre_register
+> polymorphic scheme), THEN generalize all, so a forward-ref's body resolves before
+> its caller generalizes. **DO NOT reorder the wheel's source (cursor.mn) to put
+> the weight fns first — that hedges the wheel against the seed's bug (forbidden,
+> §9.6); the source order is ultimate-form-free, the inference must catch up.**
+> Micros banked: scratch/f64repro.mn (forward-ref, fails), f64repro2.mn
+> (weight-first, f64.mul, assembles). m3 assembly stands on THIS one root — 2
+> errors, both `score_one_position`.
 >
 > **REFUTED — proven-singleton dispatch gated on install (the prior "Approach B").**
 > The artifact killed it: `fail` (Abort) is performed in LIVE code — `unwrap`

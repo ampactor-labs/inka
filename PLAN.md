@@ -587,6 +587,50 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ## §7 · Current state (grounded 2026-07-08 — **m3 ASSEMBLES (wat2wasm 0 errors) for the first time this arc, AND PARSES — the trap has marched all the way to the FIRST INFER PERFORM. Two Carried-Truth roots closed this session: (1) the fn-result-repr REGISTRY DELETED (8e… earlier: cfbdf8e's "wheel trusts the floored inference type" was REFUTED — the `$w.f64` USE node proved `repr_of(lookup_ty)` holds Float LIVE; the registry was a §2 side-ledger AND inert via the ev-seam; deleted whole, every call/ft width now reads `repr_of(lookup_ty(call_node))` live; m3 9→1 errors). (2) `float_of_int`/`float_to_int` TYPED AS ENV PRIMITIVES (8e9f7f3): they were recognized ONLY at lower (→ f64.convert_i32_s / i32.trunc_f64_s), UNTYPED at inference → 175 E_MissingVariable → a FREE VAR that cannot force `float_of_int(n) * x` to Float, so x floored to i32 and the product emitted `f64.mul [f64, i32]` (the standing score_one_position error). `register_primitives()` in infer_program registers `float_of_int : Int→Float`, `float_to_int : Float→Int` (pure, monomorphic) before pre_register → the multiply unifies its operand to Float. m3 wat2wasm 1→0 errors, E_MissingVariable 175→148 (the rest are OTHER recovered undefined names, pre-existing), rungs 8/0, micros-through-m2 45/0 (NO regression). THE SCORE ERROR WAS NOT A FORWARD-REF FLOOR (that framing was a partial picture — the multiply WOULD resolve proximity once float_of_int is Float). A dependency-order inference reorder (Hβ.infer.scc-ordered-walk) WAS built + verified (fbare/lit/chain forward-ref micros fixed, 45/0 no regression) then REVERTED: not needed for m3 (float_of_int typing fixes the site), and the naive `driver_partition_layers` peel is O(n²) over ~1605 decls (too slow — m3 gen ~8min). Kept as a NAMED future improvement — the ULTIMATE form is the call graph as REAL GRAPH EDGES (fn handle→dep handles, in-degree a node field, topo-order a graph traversal, composes with the IC cursor); build it ONLY when a bare-forward-float case (no forcing multiply) actually bites. **THE ev-seam FIXED (10124f1) — and the root was NOT "emit lacks sst_".** The wheel's emit HAS the sst_ evidence-clone (for LSuspend, walk_locals wasm.mn:1688 + emit). The real root was in LOWER: `lower_call_default` (lower.mn:669) produces `LCall` (bare, no evidence) vs `LSuspend` (sst_) by `len(derive_ev_slots(fh))==0`, and `derive_ev_slots` read the FROZEN LEAF `effects_of(lookup_ty(callee_handle))` — which DROPS a forward-ref callee's effect (mint_param_placeholders, defined AFTER pre_register_fn_sig at infer.mn:2768>204 — its Graph effect never entered the frozen instantiated row). So the effectful call lowered to a bare LCall, no evidence, and the callee's strict `ev_perform_entry` key-scan met an empty region → OOB. `escaping_row` (the flow-closure `own∪callees_escaping−handled`, precomputed at `lower_program` via `ls_register_escaping`) was BUILT precisely to recover forward-ref-dropped effects and its own doc names `derive_ev_slots` as the consumer — but derive_ev_slots was never wired to it. FIX: `evidence_effects_of` unions the per-call-site leaf with the flow-closure (`escaping_row(callee name)` / `lambda_escaping_row`). Verified: `.build/probe/evfwd.mn` (caller→forward-ref deep(), both `with Poke`) threads sst_, runs exit 9; m2 rungs 8/0 + micros 45/0 (NO regression). m3 wat2wasm 0 errors, RUNS PAST the pre_register seam — the trap MARCHED (progress) to `infer_fn`'s `inf_exit_fn`. m3.wat 285k→513k lines = the correct forward-ref evidence threading (previously dropped); the escaping_row `esc_assoc` O(n) lookup + the per-call sst_ clone are named efficiency follow-ups, and `Hβ.infer.order-free-live-row` (leaf==flow-closure, the union dissolves) is the deeper form. **THE NEW WALL — inf_exit_fn HANDLER-STATE RECORD-TYPE FLOOD (a THIRD freeze class, NOT forward-ref, NOT ev-seam).** m3 traps `unreachable` (`field offset unprovable`): `inf_exit_fn` reads `frame.row_handle` where `frame = last(stack)`, `stack` = the `infer_ctx` handler's list-state of ANONYMOUS records `{accumulated_row: EffRow, declared: List, fn_span: Span, row_handle: Int}`; the wheel's inference has LOST the frame's record type by the READ, so the field offset is unprovable. `bind_handler_state_names` (infer.mn) binds `stack` as a SHARED `Forall([], TVar(ih))` (state_binds computed ONCE at infer.mn:3111), so it SHOULD ground across arms (inf_enter_fn's `stack ++ [frame]` unifies ih=[frame_type]) — yet it floors, so the model is incomplete. NOT reproduced by the simple micro (`.build/probe/hstate.mn`: 2-arm list-of-records, one push + one field-read → runs CLEAN, exit 0). The trigger is SPECIFIC: the frame field flows into an EFFECTFUL call (`graph_bind_row`, now LSuspend via the ev-seam fix), AND/OR the multi-arm construction (inf_enter_fn/inf_add_effect/inf_add_row each build/update the frame), AND/OR the `EffRow`-typed field. NEXT: a FAITHFUL minimal repro (field-of-`last(state)` → effectful-call arg; ≥3 record-constructing arms; an EffRow field), then ground the frame record type live at the read — the next freeze→live. THE SYNTHESIS (Morgan 2026-07-08): there is NO single freeze — the wheel floors in distinct ways (forward-ref call-order; handler-state arm-propagation; missing primitives), unified only by "frozen where it should be live"; the trap-march DONE RIGHT (each fix a genuine snapshot→live conversion, never a patch) IS the incremental dissolution, converging on order-free-live inference at first-light. **CRUCIBLES to promote: `.build/probe/evfwd.mn` (forward-ref effectful call, the ev-seam) + `ffwd.mn`/`fbare.mn`/`fback.mn`/`lit.mn` (forward-ref float).** first-light = diff(m3,m4) empty AND battery green THROUGH m3. #1 proven-singleton (Approach B) REFUTED — abort_exit is a LIVE uninstalled default handler**; gates: `verify.sh` + `march-gate.sh --micros`)
 
+> **▶▶▶ result()->r LANDED — infer_seq_op DISSOLVED, the multi-payload effect-
+> instance flow fixed, m2 45/45 micros + 8/8 rungs (2026-07-08, 7adada9). The
+> order-free-live inference arc's Increment 2.** `Iterate.result()` returned a
+> fabricated `()`, which FORCED `infer_seq_op` — a name-keyed table re-deriving each
+> functor's real return BY NAME (the §2 side-ledger at the functor layer).
+> `result() -> r` (the handler-delivered value, prelude.mn) dissolves it:
+> map/fold/filter/each/take/… DERIVE their types from their bodies; `is_seq_op`
+> keeps only the 9 substrate primitives (len/list_index/…, the §4① repr-projection
+> boundary). Carried-Truth: the type is read from the one place it lives.
+>
+> **The cascade result()->r forced (the real depth).** `result() -> r` makes
+> `Iterate` a TWO-payload instance `(element, r)`. The effect-instance flow
+> (`unify_op_payload`/`unify_install_payload` → the deleted `unify_payload_in_names`)
+> unified EVERY payload arg to ONE var — fine for a single-payload effect, but it
+> cross-wired `element ~ r`, so `map`'s type became `a ~ [b] ~ [f(a)] ~ …`, an
+> INFINITE type. FIX (the design's own promise, register_effect_ops: "the install
+> unifies the whole instance per-position"): carry the effect instance as the
+> nominal type `TName(E, [a1..an])` and unify POSITION-WISE via `unify_types` (it
+> walks TName args); the handler exposes `Handler<E(v1..vn)>` with the arity read
+> LIVE from the effect (`effect_instance_arity`), each var quantified so every
+> install freshens the whole instance. Single-payload effects byte-identical (zero
+> regression) — that is why the 8 rungs held while the +rt battery went 0→45.
+>
+> **The occurs-check completion (why it HUNG before the fix).** The cycle escaped
+> because `occurs_in` skipped the `TFun` row + `TCont` world that `free_in_ty` and
+> `subst_ty` BOTH traverse — so `unify` built the cyclic type and `subst_ty` spun
+> forever (the three "vars of a type" traversals must AGREE). Completed `occurs_in`
+> (`occurs_in_row` over parameterized payloads, delegating the record-residual Ty
+> case — `graph_bind_row` is dual-use, EffRow AND a TRecord residual — to
+> `occurs_in`) and `free_in_ty`'s TCont world. `graph_bind_row` gains the union-find
+> law at the ROW sort: a row is a SET, so `v = names ∪ v` is idempotent (never an
+> infinite row) — leave the tail free, never bind the cycle. PRODUCTIVE-UNDER-ERROR
+> restored: the hang WAS that law failing (a diagnostic path looping instead of
+> recovering); now broken input → diagnostic, never a hang.
+>
+> **NEXT: the march (running) re-derives m3** with the dissolved infer_seq_op + the
+> position-wise instance flow. The §7 m3-frontier BELOW (inf_exit_fn handler-state
+> flood, the ev-seam, float_of_int) is the PRE-result()->r state — RE-MEASURE it
+> against the new m3: result()->r changed inference substantially, so m3's trap may
+> have marched, moved, or cleared. first-light = diff(m3,m4) empty AND battery
+> through m3. Named efficiency follow-ups: `effect_instance_arity` re-reads an op
+> per handler (cache on EffectDeclKind); `Hβ.infer.order-free-live-row` still the
+> deeper endpoint. Crucibles unchanged.
+
 > **THE SINGLETON DISPATCH TIER — the m3 `ev_perform_entry` trap's ROOT, closed
 > at the dispatch layer (2026-07-07).** The trap (m3 traps at `ev_perform_entry`
 > during `parse_import`: `fresh_handle` performs `graph_fresh_ty`, evidence never

@@ -146,10 +146,27 @@ handler infer_ctx with stack = [], arm_stack = [] {
 // installs `fresh_for_query` for ephemeral display ids (the swappable peer).
 fn infer_program(stmts) = {
   {
+    register_primitives()
     pre_register_decls(stmts)
     infer_stmt_list(stmts)
   } ~> infer_ctx ~> fresh_for_inference
   stmts
+}
+
+// float_of_int / float_to_int are PRIMITIVES — the Int↔Float conversions lower
+// recognizes (→ f64.convert_i32_s / i32.trunc_f64_s) that no .mn body can
+// express. Their TYPES belong in the env like any scheme, read live by a call
+// site, instead of flooring to E_MissingVariable (175 in the wheel) — the free
+// var an untyped float_of_int leaves cannot force `float_of_int(n) * x` to
+// Float, so the product's other operand floors to i32. Registered before
+// pre_register so every module sees them; pure, monomorphic.
+fn register_primitives() = {
+  env_extend("float_of_int",
+    Forall([], TFun([mk_param("_", TInt)], TFloat, EfPure)),
+    Declared("float_of_int"), FnScheme)
+  env_extend("float_to_int",
+    Forall([], TFun([mk_param("_", TFloat)], TInt, EfPure)),
+    Declared("float_to_int"), FnScheme)
 }
 
 fn pre_register_decls(stmts) = each(pre_register_stmt, stmts)

@@ -1117,7 +1117,9 @@ fn handler_e_r(right) = match callee_name(right) {
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
-        HandlerKind(e, r, _, _, _) => Some((e, r)),
+        // The handled effect is a live projection of the arms (§2 follow-the-
+        // edge), never a stored field — arms→op→EffectOpScheme carries it.
+        HandlerKind(r, _, _, arms) => Some((derive_handler_ename(arms, name), r)),
         _                          => None
       }
     },
@@ -1139,18 +1141,61 @@ fn unify_install_payload(body_row, handled, right, span: ValidSpan) = {
   let N(_, _, rh) = right
   match handler_payload_ty(lookup_ty(rh)) {
     None      => (),
-    Some(pty) => match instance_ty_in_row(body_row, handled) {
-      None      => (),
-      Some(aty) => {
-        let h1 = mint(Located(span, Inferred("handler instance")))
-        graph_bind(h1, pty, Located(span, Inferred("handler instance")))
-        let h2 = mint(Located(span, Inferred("performed instance")))
-        graph_bind(h2, aty, Located(span, Inferred("performed instance")))
-        unify(h1, h2, span, Inferred("effect instance performer→handler"))
-      }
-    }
+    // Unify the handler's ONE instance with EVERY same-named instance the body
+    // performed — not just the last. A multi-payload effect fragments across its
+    // perform sites (yield's Iterate(el,r), result's Iterate(el',r')); the
+    // handler is where the single instance is established (§4③), so every
+    // fragment collapses to it HERE. Reading `last(insts)` left the others
+    // floating — result()->r's accumulator never threaded, so the `++` operand
+    // floored to emit_concat_unresolved (the m3 concat census). This is the
+    // Carried-Truth read at the install: the row already knows Iterate's
+    // instances; the install unifies them all to the handler, never a side-car
+    // reconcile pass re-deriving the fact after the fact.
+    Some(pty) => unify_instances_to(pty, instances_in_row(body_row, handled), 0, span)
   }
 }
+
+// Unify a target instance `pty` with each of `insts`, collapsing every fragment
+// of one effect to a single identity. The arg positions are unified by joining
+// their HANDLES directly (ty_arg_handle) — a `TVar`'s handle IS its graph node,
+// so union-find needs no wrapper. Minting a wrapper node per pair was the
+// allocation that wrapped the never-freeing bump image (the old reconcile's
+// wild-write); this join is allocation-free on the common var-arg case, so it is
+// safe even on the hot per-add seam. Top-level recursion (never `each`): unify
+// performs Graph and an effectful lambda under a functor hits the arm-internal-
+// perform gap.
+fn unify_instances_to(pty, insts, i, span: ValidSpan) =
+  if i >= len(insts) { () }
+  else {
+    unify_instance_args(tname_args(pty), tname_args(list_index(insts, i)), 0, span)
+    unify_instances_to(pty, insts, i + 1, span)
+  }
+
+// Unify two instances' arg Tys position-wise by their handles (union-find join).
+fn unify_instance_args(args_a, args_b, i, span: ValidSpan) =
+  if i >= len(args_a) || i >= len(args_b) { () }
+  else {
+    unify(ty_arg_handle(list_index(args_a, i)), ty_arg_handle(list_index(args_b, i)),
+          span, Inferred("effect instance position"))
+    unify_instance_args(args_a, args_b, i + 1, span)
+  }
+
+// A Ty's graph handle: a TVar IS its handle (join directly, no allocation); a
+// concrete arg is minted+bound once (rare — instance args are fresh vars).
+fn ty_arg_handle(ty) = match ty {
+  TVar(h) => h,
+  _       => {
+    let h = mint(Inferred("instance arg"))
+    graph_bind(h, ty, Inferred("instance arg"))
+    h
+  }
+}
+
+fn tname_args(ty) = match ty {
+  TName(_, args) => args,
+  _              => []
+}
+
 
 // The handler's instance type from a `Handler(P)` value type. P is the WHOLE
 // effect instance (bound by unify_op_payload to `TName(E, [args])`), so
@@ -1173,26 +1218,26 @@ fn eparam_arg_tys(args) = flatten(map((arg) => match arg {
   _         => []
 }, args))
 
-// The performed effect INSTANCE `E(a1..an)` in a row, as the nominal type
-// `TName(E, [a1..an])` — so unify_types matches it position-wise against the
-// handler's. None if E is absent or bare (ENamed carries no instance args).
-fn instance_ty_in_row(row, ename) = match row {
-  EfClosed(names)  => instance_ty_in_names(names, ename),
-  EfOpen(names, _) => instance_ty_in_names(names, ename),
-  _                => None
+// EVERY performed instance of effect `ename` in a row, each as the nominal type
+// `TName(E, [a1..an])` (so unify walks it position-wise). A multi-payload effect
+// yields one entry per perform site; the install (unify_instances_to) collapses
+// them to the handler's one instance. list_to_flat so the caller's list_index is
+// O(1). Bare ENamed / EPure carry no instance and contribute nothing.
+fn instances_in_row(row, ename) = match row {
+  EfClosed(names)  => instances_in_names(names, ename),
+  EfOpen(names, _) => instances_in_names(names, ename),
+  _                => []
 }
 
-fn instance_ty_in_names(names, ename: String) = {
-  let insts = flatten(map((n) => match n {
+fn instances_in_names(names, ename: String) =
+  list_to_flat(flatten(map((n) => match n {
     EParameterized(nm, args) =>
       if nm == ename { [TName(ename, eparam_arg_tys(args))] } else { [] },
     ENamed(_) => [],
     // EffName is ENamed | EParameterized | EPure — TOTAL. EPure carries no
     // instance (nothing-drops law, peer subst_eff_names).
     EPure     => []
-  }, names))
-  if len(insts) == 0 { None } else { Some(last(insts)) }
-}
+  }, names)))
 
 // The five verbs, each inferred by its topology.
 // `PFanout` (`<|`/`><`) and `PTee` are handled BEFORE `infer_pipe` fires
@@ -3032,7 +3077,32 @@ fn register_one_op(effect_name, eff_name, op) = {
     EffectOpScheme(effect_name, "", false))
 }
 
-fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
+// The handler's effect name, read LIVE from the op→effect edge (§2 follow-the-
+// edge): each arm handles an op, and that op's EffectOpScheme carries the effect
+// that declared it. The parser names no effect (leaves ename ""), so reading the
+// real name here is what makes the whole instance flow — unify_op_payload (the
+// arm half) and unify_install_payload (the `~>` half) — key on the true effect
+// `Iterate` instead of a blank `""` that matches nothing (the m3 concat floors:
+// the accumulator's fragments never found each other through a nameless
+// instance). Falls back to the handler's own name when it is its own effect's
+// sole declaration (Hβ.infer.handler-effect-name-is-live-edge, now live).
+fn derive_handler_ename(arms, fallback: String) =
+  if len(arms) == 0 { fallback }
+  else match env_lookup(handler_arm_op_name(last(arms))) {
+    Some(entry) => {
+      let (_, _, kind) = entry
+      match kind {
+        EffectOpScheme(en, _, _) => en,
+        _                        => derive_handler_ename(drop_last(arms), fallback)
+      }
+    },
+    None => derive_handler_ename(drop_last(arms), fallback)
+  }
+
+fn register_handler(hname, ename_parsed, config, state, arms, span: ValidSpan) = {
+  // The parser leaves the effect name blank (it names no effect); read it LIVE
+  // from the arms' op→effect edges so the instance flow keys on the true effect.
+  let ename = derive_handler_ename(arms, hname)
   // Handlers are first-class values. Per Hβ.first-light.handler-
   // scheme-tfun-shape (2026-05-06): when the handler decl has
   // config-params, its scheme is `TFun([config_tys], Handler(E),
@@ -3096,7 +3166,7 @@ fn register_handler(hname, ename, config, state, arms, span: ValidSpan) = {
   env_extend(hname,
     Forall(inst_vars, scheme_body),
     Declared(hname),
-    HandlerKind(ename, r_handle, config, state, arms))
+    HandlerKind(r_handle, config, state, arms))
   // Resume cardinality is NOT bound here: the body IS the contract, so the
   // cardinality is a pure projection of the arm body (infer_resume_cardinality)
   // that lower reads LIVE at the resume site — no side-ledger between infer and

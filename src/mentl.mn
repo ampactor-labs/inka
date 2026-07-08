@@ -305,7 +305,8 @@ fn catalog_handled_effects(handler_name) with EnvRead + !Mutate = {
     Some(entry) => {
       let (_scheme, _reason, kind) = entry
       match kind {
-        HandlerKind(handled_ename, _, _, _, _) => [ENamed(handled_ename)],
+        // The handled effect is a live projection of the arms (§2), not a field.
+        HandlerKind(_, _, _, arms) => [ENamed(derive_handler_ename(arms, handler_name))],
         _ => []
       }
     }

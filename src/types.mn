@@ -318,15 +318,21 @@ type SchemeKind
   | EffectOpScheme(String, String, Bool)         // tag 2 — (effect_name, default_handler, ambiguous)
   | RecordSchemeKind(List)                       // tag 3 — [(field_name, ty)]
   | EffectDeclKind(List)                         // tag 5 — [op_name: String]  (cache byte 5; byte 4 retired with the dissolved capability)
-  | HandlerKind(String, Int, List, List, List)   // tag 6 — (handled_ename, residual_row_handle, config, state, arms)
+  | HandlerKind(Int, List, List, List)           // tag 6 — (residual_row_handle, config, state, arms)
   | ParamScheme(Ownership)                       // tag 7 — parameter binding carries authored ownership at the env edge
   // HandlerKind (tag 6) is the full handler-effect type AND the handler's
   // identity: a handler is
-  // (a ! E+r) ⟿ (a ! R+r) — it REMOVES the handled effect (handled_ename) AND
+  // (a ! E+r) ⟿ (a ! R+r) — it REMOVES the handled effect E AND
   // ADDS its arms' residual row (residual_row_handle, a live row var, config-
   // polymorphic). `~>` reads it: row(expr ~> h) = (row(expr) − E) ⊕ R. Without R
   // the handler-attachment can't transform the row and every map/each loses
   // the effects performed in its arms (protocol_handler_effect_typing).
+  // The handled effect E is NOT stored: it is a PROJECTION of `arms` — each arm
+  // handles an op, and the op's EffectOpScheme carries the effect that declared
+  // it (§2 follow-the-edge). `derive_handler_ename(arms, hname)` reads it live at
+  // every use; storing it here was a snapshot of a fact `arms` already holds
+  // (Carried-Truth: read live, never copy). Realizes Hβ.infer.handler-effect-
+  // name-is-live-edge.
   // ONE-GRAPH: the binding also carries the decl's (config, state, arms) — the
   // env NAMES the handler's node, so lower reads its arms/state LIVE here and
   // projects on demand (no registry, no pre-register pass). These are references

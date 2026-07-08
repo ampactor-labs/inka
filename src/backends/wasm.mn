@@ -717,7 +717,7 @@ fn noconfig_handler_names_at(entries, i, acc) = {
   else {
     let (name, _scheme, _reason, kind) = list_index(entries, i - 1)
     let acc2 = match kind {
-      HandlerKind(_ename, _row, config, _state, _arms) =>
+      HandlerKind(_row, config, _state, _arms) =>
         if len(config) == 0 && ls_find_str_local(acc, name, 0) < 0 { [name] ++ acc } else { acc },
       _ => acc
     }

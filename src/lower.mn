@@ -138,7 +138,7 @@ fn handler_decl_of(hname) =
     Some(entry) => {
       let (_, _, kind) = entry
       match kind {
-        HandlerKind(_, _, config, state, arms) => Some((config, state, arms)),
+        HandlerKind(_, config, state, arms) => Some((config, state, arms)),
         _                                      => None
       }
     },
@@ -1054,8 +1054,9 @@ fn installed_handled_ename(handler_body) = {
       Some(entry) => {
         let (_, _, kind) = entry
         match kind {
-          HandlerKind(ename, _, _, _, _) => ename,
-          _                              => ""  // drift-audit: ignore — "" = RHS is not a named handler decl (nothing absorbed)
+          // The absorbed effect is a live projection of the arms (§2), not a field.
+          HandlerKind(_, _, _, arms) => derive_handler_ename(arms, hname),
+          _                          => ""  // drift-audit: ignore — "" = RHS is not a named handler decl (nothing absorbed)
         }
       },
       None => ""

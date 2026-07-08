@@ -649,20 +649,37 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 > emit floor to list_concat is the forbidden side-car (Morgan 2026-07-08: no
 > subversion disguised as a fallback).
 >
-> **THE ULTIMATE FORM — §4① String=[Byte].** `++` must prove sequence-ness + unify
-> elements, exactly as list_concat (951) forces TList(elem) and `+` establishes
-> numeric. The deepest form: String = [Byte] (one sequence node-kind), so `++`
-> uniformly forces `[elem]` and BOTH the list_concat-vs-str_concat dispatch AND the
-> emit_concat_unresolved floor dissolve together (SYNTAX §4① mandates exactly this).
-> The wheel still carries String as a distinct TString, so forcing `[elem]` today
-> breaks every `"a" ++ "b"` until that unification lands — the real design step, not
-> a floor-guess. NEXT: the §4①-aligned `++` completion (prove operands are sequences,
-> unify elements; sequence word-floor = list_concat per §4①, symmetric with `+`'s
-> i32 floor) — carefully, whole. first-light = diff(m3,m4) empty AND battery through
-> m3 green. Crucible: `.build/probe/flat.mn` (generic `acc ++ xs` → unreachable) vs
-> `.build/probe/sum.mn` (arith fold → i32.add, the grounded control). Named
-> efficiency follow-up: `effect_instance_arity` re-reads an op per handler (cache on
-> EffectDeclKind); `Hβ.infer.order-free-live-row` the deeper endpoint.
+> **§4① REFUTED as the root (the binary spoke) — the real gap is fold's ACCUMULATOR
+> never reaching the lambda's `acc` param.** Probe ladder through m2: `a ++ [1,2]`
+> (bare left, known right) → **list_concat** (grounds!); `[] ++ [1,2]` → list_concat;
+> `[9] ++ [1,2]` → list_concat. So `++` DOES propagate from a known operand — it is
+> NOT the §4① sequence-proof that flatten needs. BUT `fold([9], (acc,xs) => acc ++
+> xs, xss)` (concrete init) AND `fold([], …)` BOTH floor the lambda → the fold
+> ACCUMULATOR (init) never grounds the lambda's `acc`, regardless of init. THE TELL:
+> `map` works (hof-map 8/8) — its config-`f` is applied to the PAYLOAD element
+> (`f(elem)`, grounds via the position-wise payload flow); `fold` applies `f` to the
+> HANDLER-STATE accumulator (`f(acc, elem)`, `acc = init` state), and THAT grounding
+> is the gap. A config-fn applied to a handler-STATE value does not ground its param
+> to the state's type, while one applied to a PAYLOAD value does. Exposed by
+> dissolving infer_seq_op's `seq_force` (which used to ground fold's accumulator from
+> outside); the general inference must now carry it, and the state→f-param link is
+> missing. Likely kin to `config-fn/HOF field-access` (memory: unify_types
+> chase-first). NOT §4①, NOT an emit floor-default (the forbidden side-car).
+>
+> **NEXT: ground the config-fn's param from the handler-state value it is applied
+> to.** `f(acc, elem)` in fold_handler must unify f's first param with `acc`'s state
+> type (= init), the way `f(elem)` grounds via the payload. Root-fix the state→f-param
+> link (Carried-Truth: acc's type is init's; read it live), NOT the `++` emit. Then
+> `acc` is TList → `++` reads it → list_concat, no floor. (SYNTAX §"Concatenation"
+> completeness — `++` proving sequence-ness for a genuinely-bare BOTH-operand concat —
+> stays a separate, rarer item; the §4① String=[Byte] unification is the eventual
+> value-ontology endpoint, 80 TString sites, sequenced whole, NOT this trap's fix.)
+> first-light = diff(m3,m4) empty AND battery through m3 green. Crucibles:
+> `.build/probe/flat.mn` (fold acc ++ xs → unreachable) · `sum.mn` (arith fold →
+> i32.add, grounded control) · `f-initconcrete.mn` (concrete-init fold STILL floors —
+> proves it is the state→param link, not the element type). Named efficiency
+> follow-up: `effect_instance_arity` caches on EffectDeclKind; `Hβ.infer.order-free-
+> live-row` the deeper endpoint.
 
 > **THE SINGLETON DISPATCH TIER — the m3 `ev_perform_entry` trap's ROOT, closed
 > at the dispatch layer (2026-07-07).** The trap (m3 traps at `ev_perform_entry`

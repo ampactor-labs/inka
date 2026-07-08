@@ -3787,6 +3787,18 @@ fn reach_grow(lowered, rbuf, rn, fbuf, fcount) = {
 // (the lowered handler decl), so a top-level miss falls through to the
 // nested scan: the arm reaches through its container, dormant until an
 // install or a perform names it.
+//
+// Reaching ONE arm reaches ALL its siblings — because the container-keep
+// filter (reachable_from_main) emits the WHOLE container the moment any
+// arm is reached (installing a handler makes every arm dispatchable). So
+// the sibling arms are EMITTED regardless; if their bodies are not walked
+// here, their outgoing edges (a fn-value `LGlobal`, a callee) dangle as
+// undefined references — emission ⊋ reachability, the exact split that
+// left project_queue_merger's cursor_relevant/query_at_position arms
+// emitted while filter_by_locality/filter_at_position went undefined.
+// Return the arm's own refs PLUS the container's full nested-name set so
+// the frontier walks every arm the filter will emit: reachability == the
+// emitted set, one truth (Carried-Truth).
 fn reach_decl_refs(lowered, name: String) = {
   if len(lowered) == 0 { [] }
   else {
@@ -3794,7 +3806,7 @@ fn reach_decl_refs(lowered, name: String) = {
     if reach_decl_name(d) == name { reach_names_expr(d, []) }
     else {
       match reach_nested_refs(d, name) {
-        Some(refs) => refs,
+        Some(refs) => refs ++ reach_nested_names(d, []),
         None       => reach_decl_refs(drop_last(lowered), name)
       }
     }

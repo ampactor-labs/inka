@@ -1639,6 +1639,8 @@ fn unify_types(ref a, ref b, span: ValidSpan, reason) = {
   }
 }
 
+}
+
 fn expect_same(ref a, ref b, span: ValidSpan, reason) = {
   match b {
     TVar(hb) => graph_bind(hb, a, Located(span, reason)),

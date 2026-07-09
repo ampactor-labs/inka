@@ -2409,7 +2409,13 @@
     ;; the wheel (src/infer.mn `NHole(_) => ()`): leave the handle NFree,
     ;; contribute nothing.
     (if (i32.eq (i32.load (local.get $body)) (i32.const 113))
-      (then (return (i32.const 0))))
+      (then
+        (call $graph_bind_kind
+          (local.get $handle)
+          (call $node_kind_make_nfree (call $graph_epoch))
+          (call $reason_make_located (local.get $span)
+            (call $reason_make_inferred (i32.const 0))))
+        (return (local.get $handle))))
     ;; Body MUST otherwise be NExpr (tag 110). Non-NExpr at expression
     ;; position is parser-bug surface; trap to surface (consistent with H6
     ;; wildcard discipline + Anchor 0 dream-code stance).

@@ -282,7 +282,6 @@
     ;; in graph.wat:55-59 is enumerated above. Unknown ka is a graph
     ;; corruption — surface it.
     (unreachable))
-
   ;; ─── $unify_types — 14-arm shape dispatcher ──────────────────────
   ;;
   ;; Per src/infer.mn:1060-1175. Dispatches on Ty's tag (100-113) for
@@ -356,6 +355,28 @@
     (local $resolved_a i32) (local $resolved_b i32)
 
     (local.set $ta (call $ty_tag (local.get $a)))
+
+    ;; Catch-all for TAlias (113) and TRefined (111) on the right side
+    ;; when left is concrete. Mirrors the catch-all in src/infer.mn.
+    (if (i32.ne (local.get $ta) (i32.const 104))
+      (then
+        (if (i32.ne (local.get $ta) (i32.const 113))
+          (then
+            (if (i32.ne (local.get $ta) (i32.const 111))
+              (then
+                (local.set $tb (call $ty_tag (local.get $b)))
+                (if (i32.eq (local.get $tb) (i32.const 113))
+                  (then
+                    (call $unify_types
+                      (local.get $a) (call $ty_talias_resolved (local.get $b))
+                      (local.get $span) (local.get $reason))
+                    (return)))
+                (if (i32.eq (local.get $tb) (i32.const 111))
+                  (then
+                    (call $unify_types
+                      (local.get $a) (call $ty_trefined_base (local.get $b))
+                      (local.get $span) (local.get $reason))
+                    (return)))))))))
 
     ;; ── 100 TInt / 101 TFloat / 102 TString / 103 TUnit ─────────────
     ;; Ground scalars: $expect_same handles TVar-on-right + ground-match.

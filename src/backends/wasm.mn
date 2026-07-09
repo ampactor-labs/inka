@@ -694,7 +694,7 @@ fn emit_state_globals(slots) = {
 // emit and lower's singleton dispatch MUST agree on which handlers have a home,
 // so BOTH read the env live (one criterion, two readers — never a registry on
 // one side; mirror of the seed's $emit_noconfig_handler_globals).
-fn emit_singleton_globals(lowered) = {
+fn emit_singleton_globals(lowered) with WasmOut + EnvRead = {
   let installed = singleton_hnames_list(lowered, [])
   let all_names = match env_snapshot() {
     Env(entries) => noconfig_handler_names(entries, installed)
@@ -1298,15 +1298,26 @@ fn wasi_import_reprs(op) =
   else if op == "fd_readdir"            { Some(([RI32, RI32, RI32, RI64, RI32], Some(RI32))) }
   else { None }
 
+fn wat_frag_concat(a: String, b: String) -> String = a ++ b
+
 // The import-decl string — a PROJECTION of wasi_import_reprs.
 // "" = not a preview1 import (skip), the emitter's existing contract.
 fn wasi_import_sig(op) = match wasi_import_reprs(op) {
   None => "",
   Some((preprs, res)) => {
-    let params = (preprs |> map(repr_wat) |> fold("(param", (acc, w) => acc ++ " " ++ w)) ++ ")"
+    let params = wat_frag_concat(
+      preprs
+        |> map(repr_wat)
+        |> fold("(param", (acc, w) => wat_frag_concat(wat_frag_concat(acc, " "), w)),
+      ")")
     match res {
       None    => params,
-      Some(r) => params ++ " (result " ++ repr_wat(r) ++ ")"
+      Some(r) =>
+        wat_frag_concat(
+          wat_frag_concat(
+            wat_frag_concat(params, " (result "),
+            repr_wat(r)),
+          ")")
     }
   }
 }

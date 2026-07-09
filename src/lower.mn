@@ -948,6 +948,13 @@ fn flow_edges(node) = {
 // ontology (PLAN §4①, roadmap band D).
 fn names_concat(xs: [String], ys: [String]) -> [String] = xs ++ ys
 
+// LowerScope frame fields are projected out of an untyped record value at the
+// handler boundary. Pin the element proof before appending, so `++` emits the
+// list representation instead of the unresolved concat floor.
+fn handle_list_append(xs: [Int], x: Int) -> [Int] = xs ++ [x]   // drift-audit: ignore — real drift 11, pre-existing at the frame appends; buffer-counter needs the frame-record restructure (local_handles + local_order paired by slot), tracked for 11.C.2; this fn adds only the element proof
+
+fn name_list_append(xs: [String], x: String) -> [String] = xs ++ [x]   // drift-audit: ignore — paired with handle_list_append; same 11.C.2 frame-record restructure
+
 fn flow_join(a, b) = {
   let (ca, ha) = a
   let (cb, hb) = b
@@ -3560,8 +3567,8 @@ handler lower_scope with frames = [], globals = [], fb_priors = [], esc_rows = [
         captures: frame.captures,
         fn_name: frame.fn_name,
         lambda_h: frame.lambda_h,
-        local_handles: frame.local_handles ++ [h],   // drift-audit: ignore — real drift 11 in frame record; buffer-counter conversion requires frame-record field restructure (local_handles + local_order both paired lists indexed by same slot); tracked for 11.C.2 frame-record substrate walkthrough
-        local_order: frame.local_order ++ [name],    // drift-audit: ignore — paired with line 1177 local_handles; same frame-record restructure; tracked for 11.C.2
+        local_handles: handle_list_append(frame.local_handles, h),
+        local_order: name_list_append(frame.local_order, name),
         locals: set_insert(frame.locals, name)
       }
       resume(slot)

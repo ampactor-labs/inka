@@ -180,6 +180,17 @@ fn pre_register_stmt(ref node) = {
       register_type_constructors(name, variants),
     NStmt(EffectDeclStmt(name, ops)) =>
       register_effect_ops(name, ops),
+    // Transparent / refined aliases are pure env writes with no body
+    // dependence — pre-pass citizens. An annotation converted ANYWHERE
+    // (src/ sorts before types.mn in the concatenated wheel, so lexer.mn's
+    // `pos: ValidOffset` precedes the RefineStmt that declares it) reads
+    // the live alias edge. Registration's ONE home is here; the main walk
+    // keeps only RefineStmt's predicate Verify obligation.
+    NStmt(RefineStmt(name, base_ty, pred)) =>
+      env_extend(name, Forall([], TAlias(name, TRefined(base_ty, pred))),
+        Declared(name), FnScheme),
+    NStmt(AliasStmt(name, ty)) =>
+      env_extend(name, Forall([], TAlias(name, ty)), Declared(name), FnScheme),
     _ => ()
   }
 }
@@ -254,20 +265,17 @@ fn infer_stmt(ref node) = {
 
     NStmt(ImportStmt(_)) => (),
 
-    NStmt(RefineStmt(name, base_ty, pred)) => {
-      // RN.1 — wrap in TAlias so the authored name travels with the type
-      let aliased = TAlias(name, TRefined(base_ty, pred))
-      env_extend(name, Forall([], aliased), Declared(name), FnScheme)
-      verify(span, pred, Refinement(pred, PTrue))
-    },
+    NStmt(RefineStmt(_, _, pred)) =>
+      // Registered at pre_register_stmt (the one home — TAlias(name,
+      // TRefined(base, pred)), so X and its base unify transparently and
+      // the authored name travels for Reason chains). Here only the
+      // predicate's Verify obligation discharges.
+      verify(span, pred, Refinement(pred, PTrue)),
 
-    // Transparent alias `type X = T`: register TAlias(X, T) so X and T
-    // unify transparently (unify_types' TAlias arm reads the inner live),
-    // the authored name travelling in the wrapper for Reason chains. No
-    // predicate, no Verify — the difference from RefineStmt is exactly
+    // Transparent alias `type X = T`: registered at pre_register_stmt.
+    // No predicate, no Verify — the difference from RefineStmt is exactly
     // the absent `where` (SYNTAX.md §«Type aliases»).
-    NStmt(AliasStmt(name, ty)) =>
-      env_extend(name, Forall([], TAlias(name, ty)), Declared(name), FnScheme),
+    NStmt(AliasStmt(_, _)) => (),
 
     _ => ()
   }
@@ -2935,6 +2943,26 @@ fn quantify_ctor_ty(ty, qmap) = match ty {
           let h = graph_fresh_ty(Declared(name))
           (TVar(h), push(qmap, (name, h)))
         }
+      }
+    } else if len(args) == 0 {
+      // A capitalized nullary name resolves through the env edge its type
+      // declaration drew (§2 follow-the-edge): a transparent / refined
+      // alias binds as its LIVE TAlias, so unification sees through it and
+      // fold_strip / repr_of reach the base scalar. Binding the raw
+      // syntactic TName instead minted a nominal sum-compare for a refined
+      // Int — $compare_nValidOffset tag-compared byte POSITIONS ≥ heap_base,
+      // so m3's lexer cut every input at 4096 bytes (2026-07-09). A nominal
+      // record / ADT / not-yet-declared name stays TName: its identity IS
+      // nominal; only a TAlias-bodied entry is transparent.
+      match env_lookup(name) {
+        Some(entry) => {
+          let (scheme, _, _) = entry
+          match scheme {
+            Forall(_, TAlias(an, inner)) => (TAlias(an, inner), qmap),
+            _ => (TName(name, []), qmap)
+          }
+        },
+        None => (TName(name, []), qmap)
       }
     } else {
       let (args2, q2) = quantify_ty_list(args, qmap)

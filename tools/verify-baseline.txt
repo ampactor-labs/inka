@@ -350,3 +350,4 @@ micro:diverge-share=105
 micro:diverge-lambda=125
 micro:wildcard-params=42
 micro:str-contains=15
+micro:refined-cmp=3

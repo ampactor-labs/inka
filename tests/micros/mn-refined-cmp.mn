@@ -1,0 +1,18 @@
+// Refined-alias annotations keep SCALAR comparisons — the compare dispatch
+// chases TAlias/TRefined to the base type (fold_strip), never minting a
+// nominal sum-compare for a refined Int. The regression this gates: with
+// `pos: ValidOffset` bound as a raw TName, m3's lex_from compared positions
+// via $compare_nValidOffset — scalar below heap_base (4096), TAG-COMPARE of
+// dereferenced garbage above it — so every input larger than 4096 bytes
+// lexed as if it ended at 4096 (the 2026-07-09 m4 collapse). Operands 4200
+// and 5000 sit above heap_base by construction: the broken path returns 7,
+// the honest scalar compare returns 3.
+// The alias is declared LAST — the wheel's own order (types.mn sorts after
+// lexer.mn in the concatenated wheel), so this also gates the pre-pass
+// registration: the alias must exist in the env BEFORE the main walk
+// converts vcmp's annotations, regardless of file order.
+fn vcmp(a: VO, b: VO) = if a >= b { 7 } else { 3 }
+
+fn main() = vcmp(4200, 5000)
+
+type VO = Int where 0 <= self

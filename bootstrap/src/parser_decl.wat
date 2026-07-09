@@ -99,10 +99,13 @@
         (local.set $p (call $skip_predicate_to_stmt_end
                             (local.get $tokens)
                             (i32.add (local.get $p) (i32.const 1))))
-        ;; Refinement form — discard the greedily-parsed variants list.
-        (local.set $variants_r (call $make_list (i32.const 2)))
-        (drop (call $list_set (local.get $variants_r) (i32.const 0)
-          (call $make_list (i32.const 0))))
+        ;; Refinement form: `type X = Y where pred`. $parse_variants consumed
+        ;; Y as a 1-variant list [("Y", [])]. PRESERVE it — the infer side
+        ;; detects (1 variant, 0 fields, variant_name != type_name) as a
+        ;; refinement alias and registers X → TName("Y", []) transparently.
+        ;; No constructors are registered; Y keeps its own tag_id. The
+        ;; predicate is still pragmatically skipped per the named follow-up
+        ;; Hβ.first-light.refine-predicate-parser.
         (drop (call $list_set (local.get $variants_r) (i32.const 1) (local.get $p)))))
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)

@@ -6709,10 +6709,13 @@
         (local.set $p (call $skip_predicate_to_stmt_end
                             (local.get $tokens)
                             (i32.add (local.get $p) (i32.const 1))))
-        ;; Refinement form — discard the greedily-parsed variants list.
-        (local.set $variants_r (call $make_list (i32.const 2)))
-        (drop (call $list_set (local.get $variants_r) (i32.const 0)
-          (call $make_list (i32.const 0))))
+        ;; Refinement form: `type X = Y where pred`. $parse_variants consumed
+        ;; Y as a 1-variant list [("Y", [])]. PRESERVE it — the infer side
+        ;; detects (1 variant, 0 fields, variant_name != type_name) as a
+        ;; refinement alias and registers X → TName("Y", []) transparently.
+        ;; No constructors are registered; Y keeps its own tag_id. The
+        ;; predicate is still pragmatically skipped per the named follow-up
+        ;; Hβ.first-light.refine-predicate-parser.
         (drop (call $list_set (local.get $variants_r) (i32.const 1) (local.get $p)))))
     (local.set $tup (call $make_list (i32.const 2)))
     (drop (call $list_set (local.get $tup) (i32.const 0)
@@ -19184,11 +19187,54 @@
   (func $infer_walk_stmt_typedef
         (export "infer_walk_stmt_typedef")
         (param $stmt i32) (param $handle i32) (param $span i32)
+    (local $type_name i32) (local $variants i32)
+    (local $variant i32) (local $vname i32) (local $vfields i32)
+    (local $alias_ty i32) (local $scheme i32) (local $reason i32)
     (drop (local.get $handle))
+    (local.set $type_name (i32.load offset=4 (local.get $stmt)))
+    (local.set $variants (i32.load offset=8 (local.get $stmt)))
+    ;; Refinement alias detection: `type X = Y where pred` arrives as
+    ;; TypeDefStmt("X", [("Y", [])]) — 1 variant, 0 fields, variant
+    ;; name != type name. Register X → TAlias("X", TName("Y", [])) so
+    ;; ValidSpan unifies transparently with Span.  No constructors —
+    ;; Y keeps its own env entry. Mirrors wheel RefineStmt (infer.mn:257).
+    (if (i32.eq (call $len (local.get $variants)) (i32.const 1))
+      (then
+        (local.set $variant
+          (call $list_index (local.get $variants) (i32.const 0)))
+        (local.set $vname
+          (call $list_index (local.get $variant) (i32.const 0)))
+        (local.set $vfields
+          (call $list_index (local.get $variant) (i32.const 1)))
+        (if (i32.and
+              (i32.eqz (call $len (local.get $vfields)))
+              (i32.eqz (call $str_eq (local.get $type_name)
+                                     (local.get $vname))))
+          (then
+            ;; Refinement alias: register X → TAlias(X, TName(Y, []))
+            (local.set $alias_ty
+              (call $ty_make_talias
+                (local.get $type_name)
+                (call $ty_make_tname
+                  (local.get $vname)
+                  (call $make_list (i32.const 0)))))
+            (local.set $scheme
+              (call $scheme_make_forall
+                (call $make_list (i32.const 0))
+                (local.get $alias_ty)))
+            (local.set $reason
+              (call $reason_make_located
+                (local.get $span)
+                (call $reason_make_declared (local.get $type_name))))
+            (call $env_extend
+              (local.get $type_name)
+              (local.get $scheme)
+              (local.get $reason)
+              (call $schemekind_make_fn))
+            (return)))))
+    ;; Normal ADT: register constructors.
     (call $infer_register_typedef_ctors
-      (i32.load offset=4 (local.get $stmt))
-      (i32.load offset=8 (local.get $stmt))
-      (local.get $span)))
+      (local.get $type_name) (local.get $variants) (local.get $span)))
 
   ;; ─── EffectDeclStmt arm (tag 123) — Phase B.3 ultimate-form ──────
   ;;

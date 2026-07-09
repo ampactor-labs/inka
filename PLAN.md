@@ -587,6 +587,75 @@ non-ultimate thing in the repo *by design* — it dissolves at first-light.
 
 ## §7 · Current state (grounded 2026-07-08 — **m3 ASSEMBLES (wat2wasm 0 errors) for the first time this arc, AND PARSES — the trap has marched all the way to the FIRST INFER PERFORM. Two Carried-Truth roots closed this session: (1) the fn-result-repr REGISTRY DELETED (8e… earlier: cfbdf8e's "wheel trusts the floored inference type" was REFUTED — the `$w.f64` USE node proved `repr_of(lookup_ty)` holds Float LIVE; the registry was a §2 side-ledger AND inert via the ev-seam; deleted whole, every call/ft width now reads `repr_of(lookup_ty(call_node))` live; m3 9→1 errors). (2) `float_of_int`/`float_to_int` TYPED AS ENV PRIMITIVES (8e9f7f3): they were recognized ONLY at lower (→ f64.convert_i32_s / i32.trunc_f64_s), UNTYPED at inference → 175 E_MissingVariable → a FREE VAR that cannot force `float_of_int(n) * x` to Float, so x floored to i32 and the product emitted `f64.mul [f64, i32]` (the standing score_one_position error). `register_primitives()` in infer_program registers `float_of_int : Int→Float`, `float_to_int : Float→Int` (pure, monomorphic) before pre_register → the multiply unifies its operand to Float. m3 wat2wasm 1→0 errors, E_MissingVariable 175→148 (the rest are OTHER recovered undefined names, pre-existing), rungs 8/0, micros-through-m2 45/0 (NO regression). THE SCORE ERROR WAS NOT A FORWARD-REF FLOOR (that framing was a partial picture — the multiply WOULD resolve proximity once float_of_int is Float). A dependency-order inference reorder (Hβ.infer.scc-ordered-walk) WAS built + verified (fbare/lit/chain forward-ref micros fixed, 45/0 no regression) then REVERTED: not needed for m3 (float_of_int typing fixes the site), and the naive `driver_partition_layers` peel is O(n²) over ~1605 decls (too slow — m3 gen ~8min). Kept as a NAMED future improvement — the ULTIMATE form is the call graph as REAL GRAPH EDGES (fn handle→dep handles, in-degree a node field, topo-order a graph traversal, composes with the IC cursor); build it ONLY when a bare-forward-float case (no forcing multiply) actually bites. **THE ev-seam FIXED (10124f1) — and the root was NOT "emit lacks sst_".** The wheel's emit HAS the sst_ evidence-clone (for LSuspend, walk_locals wasm.mn:1688 + emit). The real root was in LOWER: `lower_call_default` (lower.mn:669) produces `LCall` (bare, no evidence) vs `LSuspend` (sst_) by `len(derive_ev_slots(fh))==0`, and `derive_ev_slots` read the FROZEN LEAF `effects_of(lookup_ty(callee_handle))` — which DROPS a forward-ref callee's effect (mint_param_placeholders, defined AFTER pre_register_fn_sig at infer.mn:2768>204 — its Graph effect never entered the frozen instantiated row). So the effectful call lowered to a bare LCall, no evidence, and the callee's strict `ev_perform_entry` key-scan met an empty region → OOB. `escaping_row` (the flow-closure `own∪callees_escaping−handled`, precomputed at `lower_program` via `ls_register_escaping`) was BUILT precisely to recover forward-ref-dropped effects and its own doc names `derive_ev_slots` as the consumer — but derive_ev_slots was never wired to it. FIX: `evidence_effects_of` unions the per-call-site leaf with the flow-closure (`escaping_row(callee name)` / `lambda_escaping_row`). Verified: `.build/probe/evfwd.mn` (caller→forward-ref deep(), both `with Poke`) threads sst_, runs exit 9; m2 rungs 8/0 + micros 45/0 (NO regression). m3 wat2wasm 0 errors, RUNS PAST the pre_register seam — the trap MARCHED (progress) to `infer_fn`'s `inf_exit_fn`. m3.wat 285k→513k lines = the correct forward-ref evidence threading (previously dropped); the escaping_row `esc_assoc` O(n) lookup + the per-call sst_ clone are named efficiency follow-ups, and `Hβ.infer.order-free-live-row` (leaf==flow-closure, the union dissolves) is the deeper form. **THE NEW WALL — inf_exit_fn HANDLER-STATE RECORD-TYPE FLOOD (a THIRD freeze class, NOT forward-ref, NOT ev-seam).** m3 traps `unreachable` (`field offset unprovable`): `inf_exit_fn` reads `frame.row_handle` where `frame = last(stack)`, `stack` = the `infer_ctx` handler's list-state of ANONYMOUS records `{accumulated_row: EffRow, declared: List, fn_span: Span, row_handle: Int}`; the wheel's inference has LOST the frame's record type by the READ, so the field offset is unprovable. `bind_handler_state_names` (infer.mn) binds `stack` as a SHARED `Forall([], TVar(ih))` (state_binds computed ONCE at infer.mn:3111), so it SHOULD ground across arms (inf_enter_fn's `stack ++ [frame]` unifies ih=[frame_type]) — yet it floors, so the model is incomplete. NOT reproduced by the simple micro (`.build/probe/hstate.mn`: 2-arm list-of-records, one push + one field-read → runs CLEAN, exit 0). The trigger is SPECIFIC: the frame field flows into an EFFECTFUL call (`graph_bind_row`, now LSuspend via the ev-seam fix), AND/OR the multi-arm construction (inf_enter_fn/inf_add_effect/inf_add_row each build/update the frame), AND/OR the `EffRow`-typed field. NEXT: a FAITHFUL minimal repro (field-of-`last(state)` → effectful-call arg; ≥3 record-constructing arms; an EffRow field), then ground the frame record type live at the read — the next freeze→live. THE SYNTHESIS (Morgan 2026-07-08): there is NO single freeze — the wheel floors in distinct ways (forward-ref call-order; handler-state arm-propagation; missing primitives), unified only by "frozen where it should be live"; the trap-march DONE RIGHT (each fix a genuine snapshot→live conversion, never a patch) IS the incremental dissolution, converging on order-free-live inference at first-light. **CRUCIBLES to promote: `.build/probe/evfwd.mn` (forward-ref effectful call, the ev-seam) + `ffwd.mn`/`fbare.mn`/`fback.mn`/`lit.mn` (forward-ref float).** first-light = diff(m3,m4) empty AND battery green THROUGH m3. #1 proven-singleton (Approach B) REFUTED — abort_exit is a LIVE uninstalled default handler**; gates: `verify.sh` + `march-gate.sh --micros`)
 
+> **▶▶▶ THE 4096-BYTE LEXER CUT = RAW-TNAME ANNOTATIONS — CLOSED (f320f97,
+> 2026-07-09); m3 now reads WHOLE inputs; the trap MARCHED into m3's own emit /
+> e-graph layers, three faces named.** The GPT/Gemini days (b9aec57→2eea30b) were
+> triaged against the artifact and KEPT: the instance-flow root (derive_handler_ename
+> live from arms; unify-ALL-instances at the install — the banked "(B) at a non-hot
+> seam", realized as allocation-free handle joins), the fold-accumulator threading
+> (type_name_eq String pin, chase-to-root, config-before-state + post-arms
+> re-generalize; crucible fold-accumulator=4 GREEN through m2), the seed TAlias
+> registration (pass-2 E_MissingVariable 139→46), and the NHole handle fix — 2eea30b
+> was committed one brace short (infer.mn 694/693, did not parse standalone) with the
+> repair sitting uncommitted; completed (839680c), the mixed working tree split into
+> per-concern gated commits (acef612 io read_stdin 64KB/alloc-iov, 4597fce
+> name_set_union one-home, 2026d49 the three concat pins as NAMED residue + stray
+> file dropped). m2-tier after: **8/8 rungs, 47/47 micros-through-m2**.
+>
+> **THE ROOT (this session's dig, probe chain in f320f97): `pos: ValidOffset`
+> annotations bound the raw SYNTACTIC TName onto the param handle — the env's
+> TAlias(name, TRefined(base, pred)) edge was never read** (build_param_types →
+> quantify_ctor_ty kept capitalized names verbatim; aliases registered only in the
+> MAIN walk, which in the sorted wheel runs AFTER src/'s annotations convert). The
+> compare dispatch (emit_one_compare_helper keying on fold_strip) saw a bare nominal
+> → minted $compare_nValidOffset, the SUM compare: scalar below heap_base(4096),
+> TAG-COMPARE OF DEREFERENCED OPERANDS above — so m3's lex_from `pos >= n` went to
+> garbage the moment the input crossed 4096 BYTES and the lexer took the EOF branch.
+> Every m3 compile saw ≤4KB: lib/ (sorted after src/) never registered — m4.err's
+> six E_MissingVariable (print_string/make_list/list_extend_to/list_set/
+> str_concat_all/slice) are ALL lib fns — reachability collapsed 2560→2129 fns, m4 =
+> 6KB scaffolding. Surfaced BY 8042ea2 (before it the annotation was an inert free
+> var → scalar compares by default). FIX (three cuts, one home each):
+> pre_register_stmt gains RefineStmt/AliasStmt arms (aliases are pure env writes —
+> order-free registration); the main walk keeps only the Verify obligation;
+> quantify_ctor_ty's uppercase-nullary leaf resolves through env_lookup (a
+> Forall(_, TAlias(..)) entry binds as the LIVE alias; nominal records / ADTs /
+> undeclared names stay TName). Crucible mn-refined-cmp=3 (operands 4200/5000 above
+> heap_base, alias declared LAST = the wheel's hostile order; broken path returns 7).
+> Method note: the probes ran against the EXISTING m3.wasm in seconds each
+> (blank-line ladder bracketing [4015,4109] bytes → byte-content map proving the
+> source intact → value probes total/n/final_count → lex_from's first compare read
+> in the extraction) — no wheel-eprints, no re-marches, exactly the ⟲ toolkit.
+>
+> **THE MARCH AFTER (2026-07-09): m2 103,601 lines; m3 409,553 lines, exit 0, NO
+> trap. m4 generation now TRAPS exit 134 — call stack exhausted in iterate_from —
+> and the battery-through-m3 is 0/47 on TWO NEW faces (not the old concat wall):**
+> - **Face A — EVIDENCE-TAIL (the m4 blocker, pinned by one measurement):** m2's
+>   iterate_from carries 1× return_call_indirect (the seed builds the sst_ evidence
+>   clone, then TAIL-calls); m3's carries 0 (three plain call_indirects) — **the
+>   wheel's LSuspend / evidence-threading call is never emitted in tail form**, so
+>   the Iterate resume chain burns a frame per element and the wheel's 36,743-line
+>   stmt list exhausts the stack. New peer: `Hβ.emit.evidence-tail-call` — emit the
+>   clone-then-return_call the seed already proves; Law-7 gate: tail-dropping a
+>   MultiShot resume frame is forbidden (cardinality read live at the site).
+> - **Face B — EMITTED-TEXT FRAGMENT GLUE:** m3-as-compiler emits malformed WAT for
+>   even pure rungs — `unexpected token "i32call_7"` (a locals decl and the next
+>   fragment glued, separator lost). The view-splice-following-chunk class
+>   (`Hβ.emit.view-splice-following-chunk`, named 2026-07-07) detonating inside the
+>   emit strings themselves; the same scrambling garbles m3's diagnostic spans
+>   (`0handle 25 @epoch=`). Likely the cheapest face — it gates the pure rungs
+>   through m3.
+> - **Face C — rw_const_fold trap:** every +rt compile through m3 traps in the
+>   e-graph's const-fold rewrite. Un-dug; census after B.
+> Floor census UNCHANGED at 14 concat + 5 field-offset — the alias fix neither grew
+> nor shrank the ++ class, so the three pins stand as named residue and the class
+> still belongs to the state→param root (band D). m2-gen diagnostics: E_UnresolvedType
+> 26,898 / E_MissingVariable 139, top names = HANDLER decls (diagnostics_handler ×22,
+> env_handler ×12, verify_ledger, wasi_filesystem, wasi_threads) = the KNOWN
+> pre_register HandlerDeclStmt gap — now the top m2-tier cut. SEQUENCE: A (m4
+> blocker) → B (pure rungs through m3) → C → handler pre-registration.
+> first-light = diff(m3,m4) empty AND battery green through m3.**
+
 > **▶▶▶ THE m3 CONCAT FLOORS = MULTI-PAYLOAD EFFECT FRAGMENTATION; the fix is PROVEN
 > (E_UnresolvedType 332→4) but the accumulation SEAM corrupts the heap — reverted to
 > HEAD, banked for a clean re-seam (2026-07-08, HEAD bcf67fd).** The march re-derived

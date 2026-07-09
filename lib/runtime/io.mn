@@ -144,8 +144,9 @@ fn eprint_string(s) with Memory + WASI = {
 // Stdin
 
 // read_stdin — slurp all of stdin into a heap-allocated flat string.
-// Reads in 4 KB chunks using a temporary 64 KB buffer (one alloc).
-// Returns a flat Mentl string [len:i32][bytes...].
+// Reads into a raw growing byte buffer, then materializes one flat String.
+// Keeping the stream state as bytes avoids depending on list/string
+// materialization while this function is bootstrapping the compiler itself.
 fn read_stdin() with Memory + Alloc + WASI = {
   let initial_cap = 65536
   let buf = alloc(initial_cap)
@@ -157,25 +158,27 @@ fn read_stdin() with Memory + Alloc + WASI = {
 }
 
 fn read_stdin_loop(buf, offset, capacity) with Memory + Alloc + WASI = {
-  // Grow if less than one chunk of headroom remains.
-  let (cur_buf, cur_cap) = if offset + 4096 > capacity {
+  let chunk_size = 65536
+  let (cur_buf, cur_cap) = if offset + chunk_size > capacity {
     let new_cap = capacity * 2
     let new_buf = alloc(new_cap)
     mem_copy(new_buf, buf, offset)
     (new_buf, new_cap)
   } else { (buf, capacity) }
-  let nread = read_chunk(cur_buf + offset, 4096)
+  let nread = read_chunk(cur_buf + offset, chunk_size)
   if nread == 0 { (cur_buf, offset) }
   else { read_stdin_loop(cur_buf, offset + nread, cur_cap) }
 }
 
-// read_chunk — fill iov at scratch and call fd_read(0 = stdin).
+// read_chunk — allocate an iov + nread cell and call fd_read(0 = stdin).
 // Returns the number of bytes actually read (0 = EOF).
-fn read_chunk(buf, size) with Memory + WASI = {
-  store_i32(80, buf)
-  store_i32(84, size)
-  fd_read(0, 80, 1, 88)
-  load_i32(88)
+fn read_chunk(buf, size) with Memory + Alloc + WASI = {
+  let iov = alloc(8)
+  let nread_ptr = alloc(4)
+  store_i32(iov, buf)
+  store_i32(iov + 4, size)
+  fd_read(0, iov, 1, nread_ptr)
+  load_i32(nread_ptr)
 }
 
 // read_one_byte — read exactly 1 byte from stdin. Returns the byte

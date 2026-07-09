@@ -234,12 +234,10 @@ fn union_row(ref a, ref b) with !Mutate = {
       match b {
         EfPure => a,
         EfClosed(nb) =>
-          na ++ nb
-            |> sort_unique
+          name_set_union(na, nb)
             |> closed_or_pure,
         EfOpen(nb, v) =>
-          na ++ nb
-            |> sort_unique
+          name_set_union(na, nb)
             |> (merged) => EfOpen(merged, v),
         EfNeg(x) => neg_minus_names(x, na),
         EfSub(p, q) =>
@@ -255,12 +253,10 @@ fn union_row(ref a, ref b) with !Mutate = {
       match b {
         EfPure => a,
         EfClosed(nb) =>
-          na ++ nb
-            |> sort_unique
+          name_set_union(na, nb)
             |> (merged) => EfOpen(merged, va),
         EfOpen(nb, _) =>
-          na ++ nb
-            |> sort_unique
+          name_set_union(na, nb)
             |> (merged) => EfOpen(merged, va),
         EfNeg(x) => neg_minus_names(x, na),
         EfSub(p, q) =>
@@ -416,8 +412,8 @@ fn resolve_row(row) with !Mutate = match row {
     match kind {
       NRowBound(inner) => match resolve_row(inner) {
         EfPure           => closed_or_pure(names),
-        EfClosed(more)   => closed_or_pure(name_set_canonicalize(names ++ more)),   // drift-audit: ignore — one union per resolve step, not a loop accumulator
-        EfOpen(more, v2) => EfOpen(name_set_canonicalize(names ++ more), v2),   // drift-audit: ignore — one union per resolve step
+        EfClosed(more)   => closed_or_pure(name_set_union(names, more)),
+        EfOpen(more, v2) => EfOpen(name_set_union(names, more), v2),
         other            => other
       },
       _ => row

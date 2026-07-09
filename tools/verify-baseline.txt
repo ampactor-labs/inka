@@ -240,6 +240,12 @@ micro:autodiff=6
 micro:distort=18
 micro:compare-fold=47
 micro:hash-fold=50
+# Fold's accumulator is carried through handler config, state, resume update,
+# result(), and the higher-order lambda argument. This is the direct regression
+# for the multi-payload Iterate/fold_handler seam: [[1], [2,3]] flattens to
+# [1,2,3], so first+last exits 4. Requires the standard runtime/prelude linked
+# by verify.sh.
+micro:fold-accumulator=4
 
 # W15 + W16 (the parameter list IS a positional product — SYNTAX.md §«Labeled
 # call arguments», §«Defaults...as a product node-kind», §«Anonymous functions»).

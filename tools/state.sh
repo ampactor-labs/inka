@@ -58,7 +58,7 @@ else
 fi
 
 echo "▸ MICRO SPOT-CHECK  (a QUICK 7-micro sample, each exit code captured directly; the FULL"
-echo "                     34-micro gate is  bash tools/verify.sh , the live rung + through-m2"
+echo "                     baseline-backed gate is  bash tools/verify.sh , the live rung + through-m2"
 echo "                     scoreboard is  bash tools/march-gate.sh )"
 # Runtime-dependent micros need the trio. Two real deps the lower emits CALLS to
 # but whose bodies live in the lib (not the seed): string micros (eq/interp) call
@@ -116,11 +116,25 @@ if "${W2W[@]}" $B/state_m2.wat -o $B/state_m2.wasm 2>$B/state_w2w.err; then
     else
       echo "    m3.wat assembles: ✗ $(wc -l < $B/state_w3w.err) wat2wasm error(s)"; head -2 $B/state_w3w.err | sed 's/^/      /'
     fi
-  else
-    echo "    mentl2 TRAPPED compiling the wheel (exit) — pass-2 blocked (the seed did not spark a correct m2)."
+  elif [ "$m2rc" -eq 124 ]; then
+    diag_count=$(grep -cE '^[a-z]+:' $B/state_m3.err)
+    err_count=$(grep -c 'error:' $B/state_m3.err)
+    echo "    m2 TIMED OUT compiling the wheel (300s cap) — pass-2 blocked."
+    echo "    ─ diagnostics: $diag_count total, $err_count errors  (m3.wat = $(wc -c < $B/state_m3.wat) bytes)"
+    echo "    ─ error breakdown:"
+    grep '^[a-z]*:' $B/state_m3.err | grep 'error:' | sed 's/: .*//' | sort | uniq -c | sort -rn | head -8 | sed 's/^/        /'
+  elif grep -qE 'wasm trap:|memory fault' $B/state_m3.err; then
+    echo "    m2 TRAPPED compiling the wheel (exit $m2rc) — pass-2 blocked."
     echo "    ─ WASM TRAP + backtrace (innermost first — THIS is the cursor):"
     grep -E '<unknown>!|wasm trap:|memory fault|error while executing' $B/state_m3.err | tail -20 | sed 's/^/      /'
     echo "    ─ diagnostics emitted before the trap: $(grep -cE '^[EPW]_|^parser:' $B/state_m3.err)  (P_UnexpectedToken: $(grep -c 'P_UnexpectedToken' $B/state_m3.err))"
+  else
+    diag_count=$(grep -cE '^[a-z]+:' $B/state_m3.err)
+    err_count=$(grep -c 'error:' $B/state_m3.err)
+    echo "    m2 exited nonzero (exit $m2rc) compiling the wheel — pass-2 blocked."
+    echo "    ─ diagnostics: $diag_count total, $err_count errors  (m3.wat = $(wc -c < $B/state_m3.wat) bytes)"
+    echo "    ─ error breakdown:"
+    grep '^[a-z]*:' $B/state_m3.err | grep 'error:' | sed 's/: .*//' | sort | uniq -c | sort -rn | head -8 | sed 's/^/        /'
   fi
 else
   echo "    m2.wat assembles: ✗ $(wc -l < $B/state_w2w.err) wat2wasm error(s)"; head -2 $B/state_w2w.err | sed 's/^/      /'

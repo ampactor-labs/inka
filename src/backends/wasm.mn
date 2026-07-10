@@ -2705,7 +2705,15 @@ fn emit_expr(expr) = match expr {
       wat_emit(int_to_str(tag_id))
       wat_emit(")\n")
     } else {
-      let size = 4 + n * 4
+      // The allocation is the SAME width-summed fold the stores walk
+      // (product_byte_size_acc from off=4, after the tag word) — never
+      // 4 + n*4: the store fold writes an f64 payload as 8 inline bytes at
+      // its aligned offset, so the word-slot size under-allocated and the
+      // NEXT record clobbered the payload's high half — every float literal
+      // m3 lexed collapsed to ~0.0 (TFloatLit's payload died at birth;
+      // 2026-07-10). One fold, three readers: store, size, and the
+      // eq/match-bind offsets (variant_payload_offset).
+      let size = product_byte_size_acc(fields, 0, n, 4)
       let local_name = "variant_{int_to_str(h)}"
       emit_alloc(size, local_name)
       wat_emit("    (local.get $")
